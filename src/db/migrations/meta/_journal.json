@@ -8,6 +8,13 @@
       "when": 1793184541353,
       "tag": "0000_grunnmur",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793211983057,
+      "tag": "0001_prove-uten-nett",
+      "breakpoints": true
     }
   ]
 }

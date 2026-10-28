@@ -2,7 +2,7 @@
 
 - **Fase:** 1 – Prøve uten nett
 - **Modul:** `src/modules/offline-trial` (fra oppgave 3) og `src/db/schema` (tre nye tabeller bare for prøven)
-- **Status:** klart til koding (oppgavekort 28.10.2026, oppdatert samme dag etter runde 1 fra forenkler, arkitekt, sikkerhet-personvern og test-leder; avgjørelsene står nederst under «Avgjørelser etter runde 1»)
+- **Status:** klart til koding; skjema, migrering `0001_prove-uten-nett` og grensesnitt ligger på branchen (arkitekt 28.10.2026). (Oppgavekort 28.10.2026, oppdatert samme dag etter runde 1 fra forenkler, arkitekt, sikkerhet-personvern og test-leder; avgjørelsene står nederst under «Avgjørelser etter runde 1»)
 - **Branch:** `fase1-kandidat-powersync` (bygger på `main` etter PR #6)
 - **Dato:** 28.10.2026
 - **Plan:** `docs/07-utviklingsplan.md` fase 1, punktet «Kandidater satt opp mot samme testskjema: PowerSync, ElectricSQL og eventuelt andre … Tekstfletting med Yjs eller tilsvarende». Dette kortet dekker **første kandidat, PowerSync**. ElectricSQL og egenbygd kommer som egne oppgaver på samme skjema. Punktet krysses av først når alle kandidatene er satt opp.
@@ -117,7 +117,7 @@ Tre nye tabeller, alle med `baseColumns` (id laget på enheten med uuidv7, `orga
 |---|---|---|
 | `trial_forms` | `name` text | Ett testskjema (én «rapport» i prøven). Lages på enheten. |
 | `trial_answers` | `trial_form_id` uuid (FK), `field_key` text, `value` jsonb (`TrialValue` som JSON; for tekst selve teksten; for bilde alltid tom), `text_state` text null (base64 Yjs-tilstand, bare tekstfelt), `device_id` text | Unik på `(trial_form_id, field_key)`. Én rad per felt, endringer per felt. Serveren upserter på den unike nøkkelen og beholder sin egen `id` ved konflikt. |
-| `trial_photos` | `trial_form_id` uuid (FK), `field_key` text, `name` text, `size_bytes` integer, `sha256` text null, `storage_path` text null, `uploaded_at` timestamptz null, `device_id` text | `id` er `TrialPhoto.id` fra enheten. `uploaded_at`, `sha256` og `storage_path` settes bare av serveren; `storage_path` synkes ikke til enheten. |
+| `trial_photos` | `trial_form_id` uuid (FK), `field_key` text, `name` text, `size_bytes` integer, `sha256` text null, `storage_path` text null, `uploaded_at` timestamptz null, `device_id` text | `id` er `TrialPhoto.id` fra enheten. `uploaded_at`, `sha256` og `storage_path` settes bare av serveren; `storage_path` synkes ikke til enheten. `device_id` kan være null når opplastingsruten lager raden selv (pkt. 11). |
 
 **Ruter (kontrakt mellom bit 1 og 2):**
 
@@ -127,19 +127,25 @@ Tre nye tabeller, alle med `baseColumns` (id laget på enheten med uuidv7, `orga
 | `POST /api/prove/synk/endringer` | `{ organizationId, operations: [{ op: "PUT" \| "PATCH", table, id, data }] }` | `200 { applied }`, `400` ukjent tabell/felt/op, fremmed skjema eller utenfor grensene, `401`, `403`, `409` id finnes i annen organisasjon |
 | `PUT /api/prove/bilder/[id]?organisasjon=<id>&skjema=<trial_form_id>&felt=<field_key>&navn=<name>&bytes=<size_bytes>` | filen som kropp (`Content-Type: image/*`) | `200 { sha256 }`, `400` ugyldig innholdstype eller fremmed skjema, `404` ugyldig id eller bilde i annen organisasjon, `413` for stor, `401`, `403` |
 
-**Klientgrensesnitt (`src/modules/offline-trial/sync/types.ts`, bare typer; PowerSync-utgaven ligger i `sync/powersync/`):**
+**Klientgrensesnitt (`src/modules/offline-trial/sync/types.ts`, bare typer; PowerSync-utgaven ligger i `sync/powersync/`). Filen ligger klar fra arkitekt 28.10.2026 og er fasit; den har også signaturene for de rene funksjonene i pkt. 7, 17, 19 og 22 (`TextMerge`, `DetectForeignChanges`, `AnswerRows`, `ShouldReleaseLocalPhoto`, `GetTrialDeviceId`):**
 
 ```ts
+export interface TrialFormSnapshot { answers: TrialAnswerRow[]; photos: TrialPhotoRow[] }
+
 export interface TrialSyncStore {
   listForms(): Promise<TrialFormSummary[]>;
   createForm(name: string): Promise<string>; // uuidv7 fra enheten
   getAnswers(formId: string): Promise<TrialAnswers>;
   setAnswer(formId: string, fieldKey: string, value: TrialValue): Promise<void>;
   addPhoto(formId: string, fieldKey: string, file: Blob, photo: TrialPhoto): Promise<void>;
-  subscribe(formId: string, listener: (rows: TrialAnswerRow[]) => void): () => void;
+  subscribe(formId: string, listener: (snapshot: TrialFormSnapshot) => void): () => void;
   status(): Promise<{ online: boolean; pendingChanges: number; pendingPhotos: number }>;
 }
 ```
+
+`subscribe` leverer både svar- og bilderader (arkitekt 28.10.2026): bildefeltene bygges av `trial_photos` (pkt. 7), så bildefeltet må oppdateres når en annen enhet tar bilder i samme felt. `value` i `TrialAnswerRow` er JSON-tekst slik den ligger i SQLite.
+
+**Serverkontrakt (`src/modules/offline-trial/server/types.ts` og `server/errors.ts`, ligger klar fra arkitekt):** typene `TrialChangeOperation`, `TrialChangesRequest`, `SyncTokenClaims`, `TrialPhotoMeta` (med `contentType`), grensene `TRIAL_SYNC_LIMITS`, og signaturene `IssueSyncToken`, `ApplyTrialChanges`, `ListTrialForms`, `ListTrialAnswers`, `StoreTrialPhoto`. Feilklasser: `InvalidTrialChangeError` (400), `TrialIdConflictError` (409), `TrialPhotoNotFoundError` (404), `TrialPhotoTooLargeError` (413). Filnavn utvikler bruker: `server/sync-token.ts`, `server/apply-changes.ts`, `server/queries.ts`, `server/photo-storage.ts`.
 
 **Miljøvariabler:** `POWERSYNC_URL`, `POWERSYNC_JWT_SECRET` (minst 32 byte), `TRIAL_UPLOAD_DIR`, `TRIAL_PHOTO_MAX_BYTES` (valgfri, standard 25 MB). Alle med forklaring i `.env.example`. `NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS` bare i `playwright.config.ts` og CI.
 
