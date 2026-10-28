@@ -19,9 +19,21 @@ export type TrialChangeOp = "PUT" | "PATCH";
 /**
  * Én endring fra enheten (én rad). `data` har kolonnenavn i snake_case som i PostgreSQL, med
  * verdiene slik de lå i den lokale databasen (`value` som JSON-tekst, tidsstempler som tekst).
- * Serverstyrte kolonner (`organization_id`, `created_by`, `updated_by`, `row_version`,
- * `uploaded_at`, `sha256`, `storage_path`, `text_state`) overses uten feil. `text_state` godtas som
- * null eller streng, men skrives aldri (tekstfletting er egen oppgave).
+ * Serverstyrte kolonner (`organization_id`, `created_by`, `updated_by`, `deleted_at`, `deleted_by`,
+ * `row_version`, `uploaded_at`, `sha256`, `storage_path`, `text_state`) overses uten feil.
+ * `text_state` godtas som null eller streng, men skrives aldri (tekstfletting er egen oppgave).
+ * `deleted_at`/`deleted_by` er med i listen fordi `DELETE` er kuttet: enheten kan verken slette
+ * eller gjenopprette en rad i prøven. `created_at` fra enheten beholdes ved første innsetting
+ * (bilderekkefølgen bygger på den) og endres aldri etterpå.
+ *
+ * **`PUT` med hele raden, alltid** (arkitekt, forhåndsvurdering runde 2, 28.10.2026): PowerSync
+ * lager `PATCH` med bare de endrede kolonnene ved lokal `UPDATE`, og da mangler
+ * `trial_form_id`/`field_key` som serveren upserter `trial_answers` på. Enhetens `id` kan dessuten
+ * være forkastet av serveren (serverens id vinner på nøkkelen), så `PATCH` på `id` ville gått i
+ * tomme. Derfor leser `connector.ts` hele den lokale raden i `uploadData` (raden ligger lokalt til
+ * bunten er fullført) og sender alltid `op: "PUT"` med alle kolonner. Serveren godtar fortsatt
+ * `PATCH`, men bare når raden finnes på `id` i `grant.organizationId` (ellers
+ * `InvalidTrialChangeError`); den brukes ikke av PowerSync-utgaven.
  */
 export interface TrialChangeOperation {
   op: TrialChangeOp;
@@ -53,8 +65,20 @@ export interface TrialChangesResult {
   applied: number;
 }
 
-/** JWT-en synktjenesten godtar: HS256, bare disse claimene, aldri e-post eller navn. */
+/**
+ * JWT-en synktjenesten godtar: HS256, bare disse claimene, aldri e-post eller navn.
+ *
+ * Nøkkelen (arkitekt, 28.10.2026): `POWERSYNC_JWT_SECRET` er en **base64url-streng** (minst 43
+ * tegn = 32 byte dekodet). Tjenesten leser den som JWK `{ kty: "oct", alg: "HS256", kid: "trial",
+ * k: <strengen> }` i `config.yaml`, og JWK-feltet `k` er per definisjon base64url av nøkkelbytene.
+ * Serveren må derfor signere med nøyaktig samme byte: `jose.importJWK({ kty: "oct", alg: "HS256",
+ * k: process.env.POWERSYNC_JWT_SECRET })`, aldri `new TextEncoder().encode(secret)` (da ville
+ * tjenesten og serveren bruke ulike byte, og alle token ble avvist). `SYNC_TOKEN_SECRET_MIN_BYTES`
+ * gjelder de dekodede bytene. Token-hodet får `kid: SYNC_TOKEN_KEY_ID`, så tjenesten finner
+ * nøkkelen i JWKS-en uten å prøve alle.
+ */
 export const SYNC_TOKEN_AUDIENCE = "powersync";
+export const SYNC_TOKEN_KEY_ID = "trial";
 export const SYNC_TOKEN_TTL_SECONDS = 60 * 60;
 export const SYNC_TOKEN_SECRET_MIN_BYTES = 32;
 
@@ -111,4 +135,3 @@ export type ListTrialAnswers = (
   organizationId: string,
   trialFormId: string,
 ) => Promise<TrialAnswerRecord[]>;
-

@@ -70,7 +70,14 @@ export interface TrialSyncStore {
   /** Lager et nytt skjema lokalt. Returnerer id laget på enheten (uuidv7). */
   createForm(name: string): Promise<string>;
   getAnswers(formId: string): Promise<TrialAnswers>;
-  /** Upsert av én `trial_answers`-rad på `(trial_form_id, field_key)`. Bildefelt skrives aldri her. */
+  /**
+   * Upsert av én `trial_answers`-rad på `(trial_form_id, field_key)`. Bildefelt skrives aldri her.
+   * Merk (arkitekt, 28.10.2026): PowerSyncs lokale tabeller er SQLite-visninger uten unik-indeks,
+   * så `INSERT OR REPLACE` gir to rader (og `DELETE`-operasjoner, som serveren avviser). Gjør det i
+   * én `writeTransaction`: `UPDATE … WHERE trial_form_id = ? AND field_key = ?`, og `INSERT` bare
+   * når ingen rad ble endret. Ved opplasting sender `connector.ts` alltid hele raden som `PUT`
+   * (se `server/types.ts`).
+   */
   setAnswer(formId: string, fieldKey: string, value: TrialValue): Promise<void>;
   /**
    * Skriver `trial_photos`-raden (navn, størrelse). `file` lagres ikke i denne oppgaven; parameteren

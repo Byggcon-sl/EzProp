@@ -20,7 +20,9 @@ import { baseColumns } from "./common";
  * (bare disse tre, aldri `FOR ALL TABLES`), se migreringen.
  *
  * Kolonner serveren eier og klienten aldri får skrive: `organization_id`, `created_by`,
- * `updated_by`, `row_version`, og på bilder `uploaded_at`, `sha256`, `storage_path`.
+ * `updated_by`, `deleted_at`, `deleted_by`, `row_version`, `text_state`, og på bilder
+ * `uploaded_at`, `sha256`, `storage_path`. Unik-indeksen på `trial_answers` er ikke delvis
+ * (`deleted_at IS NULL`) fordi ingenting slettes i prøven; ADR-en tar stilling til det.
  */
 
 /** Ett testskjema («én rapport» i prøven). Lages på enheten. */
@@ -52,9 +54,12 @@ export const trialAnswers = pgTable(
      * `trial_photos`). SQL NULL betyr «ikke besvart»; JSON `null` brukes ikke.
      */
     value: jsonb("value"),
-    /** Base64-kodet Yjs-tilstand for tekstfelt. Sannheten for tekst; `value` er avledet av den. */
+    /**
+     * Reservert for tekstfletting (oppfølgingsoppgaven «Prøve B: tekstfletting og varsel»).
+     * Ubrukt i oppgave 4: serveren skriver den aldri, og den synkes ikke til enheten.
+     */
     textState: text("text_state"),
-    /** Fast id per nettleser-installasjon (`trial_device_id`). Bare for varselet i prøve B. */
+    /** Fast id per nettleser-installasjon (`trial_device_id`). Brukes først av varselet i prøve B (egen oppgave). */
     deviceId: text("device_id").notNull(),
   },
   (table) => [
@@ -65,9 +70,10 @@ export const trialAnswers = pgTable(
 export type TrialAnswerRecord = typeof trialAnswers.$inferSelect;
 
 /**
- * Ett bilde i et bildefelt. `id` er `TrialPhoto.id` fra enheten. Raden kan lages av synk eller av
- * opplastingsruten (derfor kan `device_id` mangle). `uploaded_at`, `sha256` og `storage_path`
- * settes bare av serveren, og `storage_path` synkes aldri til enheten.
+ * Ett bilde i et bildefelt. `id` er `TrialPhoto.id` fra enheten. I oppgave 4 lages raden bare av
+ * synk (navn og størrelse); `device_id` er nullbar fordi bildekø-oppgaven (egen oppgave) kan lage
+ * raden fra opplastingsruten. `uploaded_at`, `sha256` og `storage_path` settes bare av serveren
+ * (bildekø-oppgaven), og `storage_path` synkes aldri til enheten.
  */
 export const trialPhotos = pgTable(
   "trial_photos",
