@@ -28,7 +28,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 ## Venter på Ståle
 
-- **PR #6:** les planen for prøvene A–F og kriteriene i PR-teksten, prøv skjemaet, og merge.
+- **PR #6:** les planen for prøvene A–F og kriteriene i PR-teksten, prøv skjemaet, og merge med **«Squash and merge»** (commit-meldingene på branchen inneholder modellnavn, og det kan ikke rettes fra skyen).
 - **Gi rutinene tilgang** (se `docs/agenter/rutiner.md`): åpne hver rutine på claude.ai/code/routines → Edit → Advanced settings → Repository `Byggcon-sl/EzProp`, miljø «Byggcon», koblingen «Claude Code Remote». Før det gjør hovedløkken ingenting.
 - Spørsmålene i `docs/09-apne-sporsmal.md`: nr. 6 (adresse og e-post for testmiljøet i Azure, trengs for neste oppgave) og nr. 8 (GPS-posisjon i bildene fra iPaden, trengs før prøve D).
 
@@ -42,7 +42,7 @@ Ingen.
 
 ## Siste kjøring
 
-28.10.2026: oppgave 3 fra oppgavekort til PR #6 (arbeidsflyten «oppgave»: forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver). Sesjon: https://claude.ai/code/session_01JqwntzbzRrrZa27xqnubtP
+28.10.2026 kl. 14:45–16:00: hovedløkken kjørte oppgave 3 fra oppgavekort til PR #6 (arbeidsflyten «oppgave»: forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver). Fase 0a krysset av i planen. Læringsløkken kjørt for PR #4 og #5 (`erfaringer.md`). Sesjon: https://claude.ai/code/session_01JqwntzbzRrrZa27xqnubtP
 
 28.10.2026 kl. 13:44: hovedløkken startet, men stoppet uten GitHub-tilgang. Ingen endringer gjort.
 
