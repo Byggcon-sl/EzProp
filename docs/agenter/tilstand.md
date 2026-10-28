@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 28.10.2026 (rutinene laget)
+Sist oppdatert: 28.10.2026 (rutinene laget; første kjøring stoppet uten tilgang)
 
 ## Gjeldende fase
 
@@ -21,7 +21,7 @@ Ingen pågående oppgave.
 
 ## Venter på Ståle
 
-- Ingenting akkurat nå. Rutinene er laget (`docs/agenter/rutiner.md`).
+- **Gi rutinene tilgang** (se `docs/agenter/rutiner.md`): åpne hver rutine på claude.ai/code/routines → Edit → Advanced settings → Repository `Byggcon-sl/EzProp`, miljø «Byggcon», koblingen «Claude Code Remote». Før det gjør hovedløkken ingenting.
 - Spørsmålene i `docs/09-apne-sporsmal.md`.
 
 ## Oppgaver fra nattløkken
@@ -33,5 +33,7 @@ Ingen ennå.
 Ingen.
 
 ## Siste kjøring
+
+28.10.2026 kl. 13:44: hovedløkken startet, men stoppet uten GitHub-tilgang. Ingen endringer gjort.
 
 28.10.2026: første kjøring (fase 0a). Sesjon: https://claude.ai/code/session_01Jqwnu2ZDo3evvV7iSgdvQZ
