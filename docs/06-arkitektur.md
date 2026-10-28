@@ -1,6 +1,6 @@
 # 06 – Arkitektur
 
-Sist oppdatert: 28.10.2026. Begrunnelse for teknologivalg: [ADR 0001](adr/0001-teknologivalg.md).
+Sist oppdatert: 28.10.2026. Begrunnelse for teknologivalg: [ADR 0001](adr/0001-teknologivalg.md). Testmiljø i Azure: [ADR 0002](adr/0002-testmiljo-azure.md).
 
 ## Teknologi
 
@@ -13,11 +13,11 @@ Sist oppdatert: 28.10.2026. Begrunnelse for teknologivalg: [ADR 0001](adr/0001-t
 | ORM / migrering | Drizzle ORM + drizzle-kit |
 | Innlogging | Better Auth med e-post-engangskode (OTP), som Optiplan |
 | Validering | Zod |
-| E-post | Utviklings-postkasse lokalt. Microsoft 365 (Graph) som Optiplan fra fase 0b |
+| E-post | Utviklings-postkasse lokalt (`DEV_MAILBOX=1`). I drift før e-post er koblet til: engangskoden for første admin skrives i serverloggen (bare den, ingen andre kan logge inn). Microsoft 365 (Graph) som Optiplan kobles til i fase 0b; valget skjer automatisk når de fire `MS_GRAPH`/`MAIL_FROM`-verdiene er satt |
 | Uten nett | PWA på iPad Pro, lokal lagring og synk per felt. Verktøy velges i fase 1 (ADR) |
 | Test | Vitest (enhet og integrasjon), Playwright (PC og iPad-størrelse) |
 | CI | GitHub Actions: format, lint, typesjekk, migrering i takt med skjema, test, bygg, e2e |
-| Hosting | Avgjøres i «Minimum før ekte data». EU/EØS. Samme mønster som Optiplan (Azure) er nærliggende |
+| Hosting | Azure App Service + PostgreSQL Flexible Server, Sweden Central (ADR 0002). Testmiljø fra fase 1, rulles ut fra GitHub Actions ved merge til `main` (`infra/azure/main.bicep`, `.github/workflows/deploy-azure.yml`). Bare oppdiktede data til «Minimum før ekte data» er på plass |
 
 ## Mappestruktur
 

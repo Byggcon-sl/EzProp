@@ -1,6 +1,9 @@
 import { getEnv, type Env } from "@/shared/config/env";
+import { createServerLogSender } from "./server-log";
 
-export type Email = { to: string; subject: string; text: string };
+/** logLine: én linje som er trygg i serverloggen, uten personopplysninger, satt av avsenderen. */
+export type Email = { to: string; subject: string; text: string; logLine?: string };
+export type EmailSender = (email: Email) => Promise<void>;
 export type StoredEmail = Email & { id: number; sentAt: Date };
 
 const globalForMailbox = globalThis as unknown as { ezpropDevMailbox?: StoredEmail[] };
@@ -15,9 +18,10 @@ function devMailbox(): StoredEmail[] {
  * Hvordan e-post sendes:
  * - `devMailbox`: utviklings-postkassen på /dev/epost (`DEV_MAILBOX=1`, bare lokalt)
  * - `graph`: Microsoft Graph fra Byggcons postboks, som i Optiplan. Kobles til i fase 0b.
- * - `none`: ikke satt opp. Gir feil når e-post skal sendes.
+ * - `serverLog`: e-post er ikke satt opp ennå. Engangskoden til første admin (SEED_ADMIN_EMAIL)
+ *   skrives i serverloggen til e-post er satt opp. Alle andre mottakere gir feil.
  */
-export type EmailTransport = "devMailbox" | "graph" | "none";
+export type EmailTransport = "devMailbox" | "graph" | "serverLog";
 
 export function emailTransport(env: Env = getEnv()): EmailTransport {
   if (env.DEV_MAILBOX) return "devMailbox";
@@ -29,15 +33,12 @@ export function emailTransport(env: Env = getEnv()): EmailTransport {
   ) {
     return "graph";
   }
-  return "none";
+  return "serverLog";
 }
 
-export const EMAIL_NOT_CONFIGURED =
-  "Ingen e-posttjeneste er satt opp. Sett DEV_MAILBOX=1 i utvikling. E-post via Microsoft 365 kommer i fase 0b.";
-
 /** Sender e-post med tjenesten som er satt opp (se `emailTransport`). */
-export async function sendEmail(email: Email): Promise<void> {
-  switch (emailTransport()) {
+export async function sendEmail(email: Email, env: Env = getEnv()): Promise<void> {
+  switch (emailTransport(env)) {
     case "devMailbox": {
       const mailbox = devMailbox();
       mailbox.unshift({ ...email, id: Date.now() + mailbox.length, sentAt: new Date() });
@@ -48,8 +49,8 @@ export async function sendEmail(email: Email): Promise<void> {
     case "graph":
       // Fase 0b: samme Graph-sender som Optiplan (src/core/email/graph.ts der)
       throw new Error("E-post via Microsoft 365 er ikke koblet til ennå (fase 0b).");
-    case "none":
-      throw new Error(EMAIL_NOT_CONFIGURED);
+    case "serverLog":
+      return createServerLogSender(env.SEED_ADMIN_EMAIL)(email);
   }
 }
 

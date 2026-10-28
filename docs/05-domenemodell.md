@@ -1678,6 +1678,9 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Avtale med oppdragsgiver | `client_agreements` | For eksempel Fremtind |
 | Prøve uten nett (fase 1) | `offline-trial` | Modulen med testskjemaet for fase 1. Kastes eller gjøres om til feltkomponenter i fase 2b |
 | Testskjema | `trial form` (`trialForm`, `TrialAnswers`) | Skjemaet med 40 felt som kandidatene i fase 1 prøves mot. Ikke en systemmal |
+| Testmiljø | `test environment` (`environmentName: test`) | Appen og databasen i Azure (Sweden Central) som prøvene i fase 1 kjøres mot. Bare oppdiktede data |
+| Utrulling | `deploy` (`deploy-azure.yml`) | Automatisk oppdatering av testmiljøet ved merge til `main` |
+| Serverlogg | `server log` (`serverLog`) | Loggen i App Service. Innloggingskoden til første admin skrives der til e-post er satt opp |
 | Rapportprofil | `report_profiles` | Utseende på PDF |
 | Premissetekst / forutsetninger | `premise_text` | |
 | Eiendom | `properties` | |
