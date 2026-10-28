@@ -39,6 +39,15 @@ export default defineConfig({
     url: `${baseURL}/api/helse`,
     timeout: 180_000,
     reuseExistingServer: !process.env.CI,
-    env: { BETTER_AUTH_URL: baseURL, DEV_MAILBOX: "1" },
+    env: {
+      BETTER_AUTH_URL: baseURL,
+      DEV_MAILBOX: "1",
+      // Prøve uten nett (fase 1). Ingen synktjeneste i e2e; den lokale databasen virker uten.
+      POWERSYNC_URL: "http://localhost:8080",
+      POWERSYNC_JWT_SECRET: "e2e-synknokkel-bare-for-automatiske-tester-0123456789",
+      TRIAL_UPLOAD_DIR: "var/uploads/trial",
+      // Testkroken window.__offlineTrial. Aldri i .env.example.
+      NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS: "1",
+    },
   },
 });

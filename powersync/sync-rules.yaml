@@ -1,0 +1,13 @@
+# Prøve fase 1, kastes eller gjøres om etter ADR.
+#
+# Synkregler: hver iPad får bare radene til organisasjonen i JWT-en (`organization_id` er alltid
+# `grant.organizationId` fra tilgangssjekken). Myk slettede rader forlater bøtta og fjernes på
+# enheten; serveren beholder dem. `storage_path` synkes aldri til enheten.
+
+bucket_definitions:
+  by_organization:
+    parameters: SELECT request.jwt() ->> 'organization_id' AS organization_id
+    data:
+      - SELECT * FROM trial_forms WHERE organization_id = bucket.organization_id AND deleted_at IS NULL
+      - SELECT * FROM trial_answers WHERE organization_id = bucket.organization_id AND deleted_at IS NULL
+      - SELECT id, organization_id, created_at, created_by, updated_at, updated_by, deleted_at, deleted_by, row_version, trial_form_id, field_key, name, size_bytes, sha256, uploaded_at, device_id FROM trial_photos WHERE organization_id = bucket.organization_id AND deleted_at IS NULL

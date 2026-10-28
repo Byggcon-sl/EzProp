@@ -1,7 +1,10 @@
-# PostgreSQL for lokal utvikling på Mac (Docker Desktop): `docker compose up -d`
+# PostgreSQL og synktjenesten (PowerSync) for lokal utvikling på Mac (Docker Desktop).
+# Start med ./start.sh. Verdiene her er bare for utvikling på egen maskin.
 services:
   db:
     image: postgres:16
+    # Logisk replikering trengs av synktjenesten (prøve fase 1)
+    command: postgres -c wal_level=logical
     environment:
       POSTGRES_USER: ezprop
       POSTGRES_PASSWORD: ezprop
@@ -15,6 +18,28 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ezprop"]
       interval: 5s
       retries: 10
+
+  # Prøve fase 1: synktjenesten, selvdrevet utgave. Fast versjon, aldri «latest».
+  # Bare tilgjengelig fra Macen selv (127.0.0.1). Se docs/drift/powersync.md.
+  powersync:
+    image: journeyapps/powersync-service:1.27.2
+    command: ["start", "-r", "unified"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./powersync/config.yaml:/config/config.yaml:ro
+      - ./powersync/sync-rules.yaml:/config/sync-rules.yaml:ro
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/config.yaml
+      PS_DATA_SOURCE_URI: ${PS_DATA_SOURCE_URI:-postgresql://ezprop:ezprop@db:5432/ezprop}
+      PS_STORAGE_URI: ${PS_STORAGE_URI:-postgresql://ezprop:ezprop@db:5432/powersync_storage}
+      PS_PG_SSLMODE: ${PS_PG_SSLMODE:-disable}
+      # POWERSYNC_JWT_SECRET kodet som base64url. start.sh lager den fra .env.
+      PS_JWT_SECRET_BASE64: ${PS_JWT_SECRET_BASE64:-}
 
 volumes:
   pgdata:
