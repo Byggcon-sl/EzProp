@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import type { ReactNode } from "react";
 import { brand } from "@/shared/config/brand";
 import "./globals.css";
+import { ServiceWorkerRegistration } from "./service-worker-registration";
 
 // Roboto fra prosjektets egne filer. Ingen kall til Google, så byggingen virker uten internett.
 const roboto = localFont({
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <div className="aurora-bar" aria-hidden="true" />
         {children}
+        <ServiceWorkerRegistration />
       </body>
     </html>
   );
