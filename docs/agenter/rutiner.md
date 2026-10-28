@@ -1,8 +1,17 @@
-# Rutiner (forslag, ikke laget ennå)
+# Rutiner
 
-Rutinene lages med `create_trigger` **først når Ståle har godkjent PR-en for fase 0a** og sagt ja til rutinene. Begge kjører i samme skymiljø som denne sesjonen, med `create_new_session_on_fire = true` og tag `ezprop-utvikling`.
+**Laget 28.10.2026** etter at Ståle merget PR #2 og #1 og sa ja til rutinene. Begge starter en ny sesjon i skymiljøet (`create_new_session_on_fire = true`), merker seg selv med taggen `ezprop-utvikling`, og sender varsel til Ståles telefon når en kjøring har noe å melde.
 
-## 1. Hovedløkken (løkke A)
+| Rutine | ID | Når | Første kjøring |
+|---|---|---|---|
+| EzProp hovedløkke | `trig_01PjEi1FmH6JzevEdpMoX7hp` | annenhver time, minutt 42 (`42 */2 * * *`, UTC) | 28.10.2026 kl. 13:42 norsk tid |
+| EzProp nattløkke | `trig_01HAksdUvEXW6rRLmPVraJMN` | hver natt kl. 02:17 norsk tid | 29.10.2026 |
+
+Rutinene kan pauses, endres eller slettes i Claude under «Routines», eller av en sesjon med `update_trigger`. Sesjonene rutinene starter, har ikke SharePoint-koblingen; det de trenger ligger i repoet.
+
+## Slik ble de foreslått
+
+### 1. Hovedløkken (løkke A)
 
 - **Når:** annenhver time (`0 */2 * * *`).
 - **Hva:** ny sesjon leser `CLAUDE.md` og `docs/agenter/tilstand.md`, sjekker at ingen annen sesjon med tag `ezprop-utvikling` er i gang, sjekker åpne PR-er (merget → læringsløkken F; kommentar fra Ståle → ny oppgave), og kjører arbeidsflyten `oppgave` for neste punkt i gjeldende fase. Venter 3 PR-er eller flere på Ståle, rettes bare kommentarer og nattløkkens funn, og sesjonen avslutter.
@@ -17,7 +26,7 @@ Du er prosjektlederen i EzProp (se .claude/agents/prosjektleder.md). Kjør hoved
 Commit og push etter hvert ferdige steg. Oppdater tilstand.md før du avslutter.
 ```
 
-## 2. Nattløkken (løkke E)
+### 2. Nattløkken (løkke E)
 
 - **Når:** hver natt kl. 02:17 Oslo-tid (`CRON_TZ=Europe/Oslo 17 2 * * *`).
 - **Hva:** kjører arbeidsflyten `natt`: hele testpakken, e2e på iPad-størrelse (også uten nett når det finnes), universell utforming, sårbare pakker (`pnpm audit`), appstørrelse og trege spørringer. Funn blir oppgaver i `tilstand.md`. Trygg rydding samles i én egen PR.
@@ -27,8 +36,8 @@ Commit og push etter hvert ferdige steg. Oppdater tilstand.md før du avslutter.
 Du er prosjektlederen i EzProp. Kjør nattløkken: Workflow «natt». Skriv funnene inn under «Oppgaver fra nattløkken» i docs/agenter/tilstand.md. Rydding som er trygg (formatering, utdaterte pakker uten brudd, døde filer) samles i én PR med PR-malen. Commit og push. Ingen nye funksjoner.
 ```
 
-## Hva Ståle må gjøre
+## Hva Ståle kan gjøre
 
-1. Merge PR-en for fase 0a.
-2. Svare «ja til rutinene» i en ny sesjon (eller i prosjektsamtalen). Da lages begge rutinene, og han får navn og tidspunkt tilbake.
-3. Eventuelt øke «Dynamic workflow size» i `/config` hvis flere enn ca. 10 agenter skal kjøre samtidig.
+- Følge med i Claude under «Routines» og i GitHub (PR-er).
+- Øke «Dynamic workflow size» i `/config` hvis flere enn ca. 10 agenter skal kjøre samtidig.
+- Pause rutinene hvis noe går galt. Tilstanden ligger alltid i `docs/agenter/tilstand.md`.
