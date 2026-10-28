@@ -1,0 +1,2693 @@
+<!doctype html>
+<html lang="nb">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EzProp – Retning A «Fjord»</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --brand: #326ca1;
+        --brand-700: #285786;
+        --brand-900: #16314d;
+        --brand-50: #eef4fa;
+        --brand-100: #d6e4f2;
+        --canvas: #eef2f7;
+        --ink: #0f172a;
+        --ink-2: #334155;
+        --muted: #64748b;
+        --line: #e2e8f0;
+        --field: #8391a5;
+        --ok: #1f8a5b;
+        --ok-fill: #d9f2e6;
+        --watch: #a86a12;
+        --watch-fill: #fbe7b5;
+        --urgent: #c0392b;
+        --urgent-fill: #f8d0cc;
+        --unk: #64748b;
+        --unk-fill: #e2e8f0;
+        --teal: #4fc3d9;
+        --green: #3ccf91;
+        --violet: #833ca3;
+        --shadow: 0 1px 2px rgb(15 23 42/0.04), 0 2px 8px rgb(15 23 42/0.06);
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: Roboto, system-ui, sans-serif;
+        background: #cfd6df;
+        color: var(--ink);
+        padding: 40px;
+        -webkit-font-smoothing: antialiased;
+      }
+      .doc-h {
+        max-width: 1440px;
+        margin: 0 auto 28px;
+      }
+      .doc-h h1 {
+        font-size: 28px;
+        font-weight: 700;
+      }
+      .doc-h p {
+        font-size: 15px;
+        color: var(--ink-2);
+        max-width: 900px;
+        margin-top: 6px;
+        line-height: 1.5;
+      }
+      .cap {
+        max-width: 1440px;
+        margin: 36px auto 10px;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--ink-2);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .frame {
+        position: relative;
+        overflow: hidden;
+        background: var(--canvas);
+        margin: 0 auto;
+        box-shadow: 0 20px 50px rgb(15 23 42/0.25);
+        border-radius: 6px;
+      }
+      .pc {
+        width: 1440px;
+        height: 900px;
+      }
+      .ipl {
+        width: 1180px;
+        height: 820px;
+        border-radius: 22px;
+      }
+      .ipp {
+        width: 820px;
+        height: 1180px;
+        border-radius: 22px;
+      }
+      svg.i {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex: none;
+      }
+      .aurora {
+        height: 4px;
+        background: linear-gradient(90deg, var(--brand), var(--teal), var(--green), var(--violet));
+      }
+      /* topbar + nav */
+      .top {
+        height: 56px;
+        background: #fff;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        padding: 0 20px;
+        gap: 16px;
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-weight: 700;
+        font-size: 19px;
+        letter-spacing: -0.02em;
+        color: var(--brand-900);
+      }
+      .logo b {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        background: var(--brand);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 15px;
+      }
+      .switch {
+        display: flex;
+        background: var(--canvas);
+        border-radius: 9px;
+        padding: 3px;
+        font-size: 13px;
+      }
+      .switch span {
+        padding: 5px 11px;
+        border-radius: 7px;
+        color: var(--muted);
+      }
+      .switch span.on {
+        background: #fff;
+        color: var(--ink);
+        font-weight: 500;
+        box-shadow: var(--shadow);
+      }
+      .search {
+        flex: 1;
+        max-width: 460px;
+        height: 36px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        color: var(--muted);
+        font-size: 14px;
+        background: #f8fafc;
+      }
+      .search kbd {
+        margin-left: auto;
+        font-family: inherit;
+        font-size: 12px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 1px 6px;
+        background: #fff;
+      }
+      .sp {
+        flex: 1;
+      }
+      .sync {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+        color: var(--ok);
+        font-weight: 500;
+        background: var(--ok-fill);
+        padding: 6px 11px;
+        border-radius: 99px;
+      }
+      .sync.off {
+        color: #7a4b06;
+        background: var(--watch-fill);
+      }
+      .iconbtn {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        color: var(--ink-2);
+        position: relative;
+      }
+      .dot {
+        position: absolute;
+        top: 6px;
+        right: 7px;
+        width: 8px;
+        height: 8px;
+        border-radius: 9px;
+        background: var(--urgent);
+        border: 2px solid #fff;
+      }
+      .av {
+        width: 32px;
+        height: 32px;
+        border-radius: 99px;
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        font-weight: 700;
+        color: #fff;
+        flex: none;
+      }
+      .a1 {
+        background: #326ca1;
+      }
+      .a2 {
+        background: #0f766e;
+      }
+      .a3 {
+        background: #9d4edd;
+      }
+      .a4 {
+        background: #b45309;
+      }
+      .a5 {
+        background: #be185d;
+      }
+      .shell {
+        display: flex;
+        height: calc(100% - 60px);
+      }
+      .nav {
+        width: 232px;
+        padding: 16px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex: none;
+      }
+      .nav h6 {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        padding: 14px 12px 6px;
+        font-weight: 500;
+      }
+      .nav a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 38px;
+        padding: 0 12px;
+        border-radius: 10px;
+        font-size: 14px;
+        color: var(--ink-2);
+        text-decoration: none;
+      }
+      .nav a.on {
+        background: var(--brand-100);
+        color: var(--brand-900);
+        font-weight: 500;
+      }
+      .nav a .n {
+        margin-left: auto;
+        font-size: 12px;
+        background: #fff;
+        border-radius: 99px;
+        padding: 1px 8px;
+        color: var(--ink-2);
+      }
+      .nav a.on .n {
+        background: var(--brand);
+        color: #fff;
+      }
+      .co {
+        margin-top: auto;
+        background: #fff;
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 13px;
+        box-shadow: var(--shadow);
+      }
+      .co small {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .main {
+        flex: 1;
+        padding: 22px 26px 22px 10px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .ph {
+        display: flex;
+        align-items: flex-end;
+        gap: 16px;
+      }
+      .ph h1 {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .ph p {
+        font-size: 14px;
+        color: var(--ink-2);
+        margin-top: 4px;
+      }
+      .crumb {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 6px;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .btn {
+        height: 36px;
+        padding: 0 14px;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+        white-space: nowrap;
+        font-family: inherit;
+      }
+      .btn.pri {
+        background: var(--brand);
+        color: #fff;
+        border-color: var(--brand);
+      }
+      .btn.sm {
+        height: 32px;
+        padding: 0 11px;
+        font-size: 13px;
+      }
+      .card {
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 18px 20px;
+        min-width: 0;
+      }
+      .ch {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .ch h2 {
+        font-size: 16px;
+        font-weight: 500;
+      }
+      .ch .sub {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .ch .r {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 13px;
+        color: var(--brand);
+        font-weight: 500;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 24px;
+        padding: 0 9px;
+        border-radius: 99px;
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .p-ok {
+        background: var(--ok-fill);
+        color: #155e3e;
+      }
+      .p-w {
+        background: var(--watch-fill);
+        color: #6b4405;
+      }
+      .p-u {
+        background: var(--urgent-fill);
+        color: #8c2318;
+      }
+      .p-n {
+        background: var(--unk-fill);
+        color: #334155;
+      }
+      .p-b {
+        background: var(--brand-50);
+        color: var(--brand-700);
+      }
+      .tag {
+        font-size: 12px;
+        background: #f1f5f9;
+        color: var(--ink-2);
+        padding: 3px 8px;
+        border-radius: 6px;
+        white-space: nowrap;
+      }
+      .tg {
+        display: inline-grid;
+        place-items: center;
+        min-width: 38px;
+        height: 22px;
+        border-radius: 6px;
+        font-size: 11.5px;
+        font-weight: 700;
+        padding: 0 6px;
+        white-space: nowrap;
+      }
+      .tg1 {
+        background: var(--ok-fill);
+        color: #155e3e;
+        border: 1px solid #9fd7bb;
+      }
+      .tg2 {
+        background: var(--watch-fill);
+        color: #6b4405;
+        border: 1px solid #e7c06a;
+      }
+      .tg3 {
+        background: var(--urgent-fill);
+        color: #8c2318;
+        border: 1px solid #eb9c93;
+      }
+      .tgiu {
+        background: var(--unk-fill);
+        color: #334155;
+        border: 1px solid #c3ccd8;
+      }
+      .tg0 {
+        background: #fff;
+        color: var(--muted);
+        border: 1px dashed #b8c2cf;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 0;
+        border-top: 1px solid var(--line);
+        font-size: 14px;
+      }
+      .row:first-of-type {
+        border-top: 0;
+      }
+      .row .t {
+        font-weight: 500;
+      }
+      .row .d {
+        font-size: 13px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .bar {
+        height: 6px;
+        border-radius: 9px;
+        background: #e8edf3;
+        overflow: hidden;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        background: var(--brand);
+        border-radius: 9px;
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+      }
+      .stat {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+      }
+      .stat .ic {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        background: var(--brand-50);
+        color: var(--brand);
+      }
+      .stat b {
+        font-size: 24px;
+        font-weight: 700;
+        display: block;
+        line-height: 1.1;
+      }
+      .stat span {
+        font-size: 13px;
+        color: var(--ink-2);
+      }
+      .ell {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      /* photo */
+      .photo {
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative;
+        flex: none;
+      }
+      .photo svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .photo .lb {
+        position: absolute;
+        left: 6px;
+        bottom: 6px;
+        font-size: 11px;
+        background: rgb(15 23 42/0.7);
+        color: #fff;
+        padding: 2px 6px;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute">
+      <defs>
+        <symbol id="home" viewBox="0 0 24 24">
+          <path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />
+        </symbol>
+        <symbol id="folder" viewBox="0 0 24 24">
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        </symbol>
+        <symbol id="inbox" viewBox="0 0 24 24">
+          <path d="M3 13l3-8h12l3 8v6H3z" />
+          <path d="M3 13h5l1 3h6l1-3h5" />
+        </symbol>
+        <symbol id="check2" viewBox="0 0 24 24">
+          <path d="M9 12l2 2 4-4" />
+          <circle cx="12" cy="12" r="9" />
+        </symbol>
+        <symbol id="cal" viewBox="0 0 24 24">
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M3 10h18M8 3v4M16 3v4" />
+        </symbol>
+        <symbol id="archive" viewBox="0 0 24 24">
+          <rect x="3" y="4" width="18" height="5" rx="1" />
+          <path d="M5 9v10h14V9M10 13h4" />
+        </symbol>
+        <symbol id="book" viewBox="0 0 24 24">
+          <path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" />
+          <path d="M4 21V5" />
+        </symbol>
+        <symbol id="tmpl" viewBox="0 0 24 24">
+          <rect x="4" y="3" width="16" height="18" rx="2" />
+          <path d="M8 8h8M8 12h8M8 16h5" />
+        </symbol>
+        <symbol id="search" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M20 20l-4-4" />
+        </symbol>
+        <symbol id="bell" viewBox="0 0 24 24">
+          <path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" />
+          <path d="M10 20a2 2 0 0 0 4 0" />
+        </symbol>
+        <symbol id="cloud" viewBox="0 0 24 24">
+          <path d="M7 18a4 4 0 0 1-.5-8A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z" />
+          <path d="M9.5 13.5l2 2 3.5-3.5" />
+        </symbol>
+        <symbol id="cloudoff" viewBox="0 0 24 24">
+          <path
+            d="M7 18a4 4 0 0 1-.5-8 6 6 0 0 1 2-3M12 5a6 6 0 0 1 6 4 4.5 4.5 0 0 1 2 8M3 3l18 18"
+          />
+        </symbol>
+        <symbol id="pin" viewBox="0 0 24 24">
+          <path d="M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z" />
+          <circle cx="12" cy="9" r="2.5" />
+        </symbol>
+        <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
+        <symbol id="cam" viewBox="0 0 24 24">
+          <path
+            d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"
+          />
+          <circle cx="12" cy="13.5" r="3.5" />
+        </symbol>
+        <symbol id="mic" viewBox="0 0 24 24">
+          <rect x="9" y="3" width="6" height="11" rx="3" />
+          <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+        </symbol>
+        <symbol id="spark" viewBox="0 0 24 24">
+          <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+          <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
+        </symbol>
+        <symbol id="msg" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z" /></symbol>
+        <symbol id="img" viewBox="0 0 24 24">
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <circle cx="9" cy="10" r="2" />
+          <path d="M21 16l-5-5-9 9" />
+        </symbol>
+        <symbol id="alert" viewBox="0 0 24 24">
+          <path d="M12 3l10 18H2z" />
+          <path d="M12 10v5M12 18h.01" />
+        </symbol>
+        <symbol id="ruler" viewBox="0 0 24 24">
+          <path d="M3 17L17 3l4 4L7 21z" />
+          <path d="M7 13l2 2M10 10l2 2M13 7l2 2" />
+        </symbol>
+        <symbol id="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" /></symbol>
+        <symbol id="chevl" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" /></symbol>
+        <symbol id="chevd" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" /></symbol>
+        <symbol id="ok" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" /></symbol>
+        <symbol id="clock" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
+        </symbol>
+        <symbol id="users" viewBox="0 0 24 24">
+          <circle cx="9" cy="8" r="3.5" />
+          <path
+            d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"
+          />
+        </symbol>
+        <symbol id="file" viewBox="0 0 24 24">
+          <path d="M6 3h8l5 5v13H6z" />
+          <path d="M14 3v5h5" />
+        </symbol>
+        <symbol id="drill" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3" />
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+        </symbol>
+        <symbol id="bolt" viewBox="0 0 24 24"><path d="M13 3L5 13h6l-1 8 8-10h-6z" /></symbol>
+        <symbol id="dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></symbol>
+        <symbol id="flag" viewBox="0 0 24 24"><path d="M5 21V4h11l-2 4 2 4H5" /></symbol>
+        <!-- foto: sluk i flislagt gulv -->
+        <symbol id="ph-sluk" viewBox="0 0 160 120">
+          <rect width="160" height="120" fill="#b9c0c7" />
+          <g stroke="#9aa3ad" stroke-width="2">
+            <path d="M0 30h160M0 60h160M0 90h160M40 0v120M80 0v120M120 0v120" />
+          </g>
+          <ellipse cx="82" cy="64" rx="26" ry="20" fill="#6b7480" />
+          <ellipse cx="82" cy="64" rx="18" ry="13" fill="#3f4650" />
+          <g stroke="#8a929c" stroke-width="2"><path d="M70 64h24M74 58h16M74 70h16" /></g>
+          <rect width="160" height="120" fill="url(#lg)" opacity=".35" />
+        </symbol>
+        <symbol id="ph-dusj" viewBox="0 0 160 120">
+          <rect width="160" height="120" fill="#d4d8dc" />
+          <g stroke="#bfc5cb" stroke-width="2">
+            <path
+              d="M0 20h160M0 40h160M0 60h160M0 80h160M0 100h160M27 0v120M54 0v120M81 0v120M108 0v120M135 0v120"
+            />
+          </g>
+          <rect x="96" y="10" width="6" height="70" fill="#8d959e" />
+          <circle cx="99" cy="12" r="10" fill="#9aa2ab" />
+          <path d="M0 120L50 86h110v34z" fill="#a9b1b9" />
+        </symbol>
+        <symbol id="ph-hull" viewBox="0 0 160 120">
+          <rect width="160" height="120" fill="#e4dfd6" />
+          <circle cx="80" cy="56" r="10" fill="#4d4337" />
+          <rect x="58" y="78" width="46" height="26" rx="4" fill="#26323f" />
+          <text
+            x="81"
+            y="96"
+            font-size="14"
+            fill="#7ef0b8"
+            text-anchor="middle"
+            font-family="monospace"
+          >
+            15%
+          </text>
+          <path d="M80 66v12" stroke="#26323f" stroke-width="3" />
+        </symbol>
+        <symbol id="ph-rom" viewBox="0 0 160 120">
+          <rect width="160" height="120" fill="#cfd6dc" />
+          <path d="M0 0h50v120H0z" fill="#e0e4e8" />
+          <rect x="62" y="30" width="56" height="40" rx="4" fill="#f4f6f8" stroke="#aab2bb" />
+          <rect x="70" y="72" width="40" height="30" fill="#e9ecef" stroke="#aab2bb" />
+          <path d="M0 100h160v20H0z" fill="#9aa3ad" />
+        </symbol>
+        <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#fff" />
+          <stop offset="1" stop-color="#000" />
+        </linearGradient>
+      </defs>
+    </svg>
+
+    <div class="doc-h">
+      <h1>Retning A – «Fjord»: rolig, skandinavisk og kort-basert</h1>
+      <p>
+        Samme designspråk som Optiplan (Byggcon-blå, Roboto, blågrå flate med hvite kort,
+        statuspiller med tekst). Hver skjerm svarer på ett spørsmål, og har én hovedhandling.
+        Befaringen på iPad bruker de samme kortene, men med store trykkflater og en fast
+        handlingslinje nederst der tomlene er.
+      </p>
+    </div>
+
+    <!-- ================= A1 DASHBORD ================= -->
+    <div class="cap">A1 · Dashbord for takstmann · PC 1440 × 900</div>
+    <section class="frame pc" id="dashbord">
+      <div class="aurora"></div>
+      <div class="top">
+        <div class="logo"><b>Ez</b>EzProp</div>
+        <div class="switch"><span class="on">EzProp</span><span>Optiplan</span></div>
+        <div class="search">
+          <svg class="i"><use href="#search" /></svg>Søk etter adresse, oppdragsnr. eller person<kbd
+            >⌘ K</kbd
+          >
+        </div>
+        <div class="sp"></div>
+        <div class="sync">
+          <svg class="i"><use href="#cloud" /></svg>Alt er lagret
+        </div>
+        <div class="iconbtn">
+          <svg class="i"><use href="#bell" /></svg><span class="dot"></span>
+        </div>
+        <div class="av a1">IS</div>
+      </div>
+      <div class="shell">
+        <nav class="nav">
+          <a class="on"
+            ><svg class="i"><use href="#home" /></svg>Oversikt</a
+          >
+          <a
+            ><svg class="i"><use href="#folder" /></svg>Mine oppdrag<span class="n">9</span></a
+          >
+          <a
+            ><svg class="i"><use href="#inbox" /></svg>Felles kø<span class="n">5</span></a
+          >
+          <a
+            ><svg class="i"><use href="#check2" /></svg>Sidemannskontroll<span class="n">1</span></a
+          >
+          <a
+            ><svg class="i"><use href="#cal" /></svg>Kalender</a
+          >
+          <a
+            ><svg class="i"><use href="#archive" /></svg>Arkiv</a
+          >
+          <h6>Bibliotek</h6>
+          <a
+            ><svg class="i"><use href="#book" /></svg>Frasebank</a
+          >
+          <a
+            ><svg class="i"><use href="#tmpl" /></svg>Maler og sjekklister</a
+          >
+          <div class="co"><small>Du jobber for</small><b>Byggcon Nord AS</b> · Bodø</div>
+        </nav>
+        <main class="main">
+          <div class="ph">
+            <div>
+              <h1>God morgen, Ingrid</h1>
+              <p>
+                Fredag 23. oktober · Du har to befaringer i dag, og én rapport venter på din
+                sidemannskontroll.
+              </p>
+            </div>
+            <div class="sp"></div>
+            <button class="btn">
+              <svg class="i"><use href="#cal" /></svg>Kalender
+            </button>
+            <button class="btn pri">
+              <svg class="i"><use href="#plus" /></svg>Nytt oppdrag
+            </button>
+          </div>
+          <div class="stats">
+            <div class="card stat">
+              <div class="ic">
+                <svg class="i"><use href="#pin" /></svg>
+              </div>
+              <div><b>2</b><span>befaringer i dag</span></div>
+            </div>
+            <div class="card stat">
+              <div class="ic" style="background: #fdf1d8; color: #a86a12">
+                <svg class="i"><use href="#check2" /></svg>
+              </div>
+              <div><b>1</b><span>venter på deg som sidemann</span></div>
+            </div>
+            <div class="card stat">
+              <div class="ic" style="background: #fbe1de; color: #c0392b">
+                <svg class="i"><use href="#clock" /></svg>
+              </div>
+              <div><b>3</b><span>leveringsfrister denne uka</span></div>
+            </div>
+            <div class="card stat">
+              <div class="ic">
+                <svg class="i"><use href="#inbox" /></svg>
+              </div>
+              <div><b>5</b><span>ledige i felles kø, Salten</span></div>
+            </div>
+          </div>
+          <div
+            style="
+              display: grid;
+              grid-template-columns: 1.55fr 1fr;
+              gap: 16px;
+              flex: 1;
+              min-height: 0;
+            "
+          >
+            <div style="display: flex; flex-direction: column; gap: 16px; min-height: 0">
+              <div class="card">
+                <div class="ch">
+                  <h2>Dagens befaringer</h2>
+                  <span class="sub">Lastet ned – virker uten nett</span
+                  ><span class="r"
+                    >Se kalender
+                    <svg class="i" style="width: 14px; height: 14px"><use href="#chev" /></svg
+                  ></span>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+                  <div
+                    style="
+                      border: 1px solid var(--line);
+                      border-radius: 12px;
+                      padding: 14px;
+                      display: flex;
+                      gap: 14px;
+                    "
+                  >
+                    <div style="text-align: center; flex: none">
+                      <div style="font-size: 22px; font-weight: 700; color: var(--brand)">
+                        09:00
+                      </div>
+                      <div style="font-size: 12px; color: var(--muted)">ca. 3 t</div>
+                    </div>
+                    <div class="grow">
+                      <div style="font-weight: 500">Fjellveien 12, 8015 Bodø</div>
+                      <div style="font-size: 13px; color: var(--muted); margin: 3px 0 8px">
+                        Enebolig 1978 · 164 m² · selger møter
+                      </div>
+                      <div style="display: flex; gap: 6px; flex-wrap: wrap">
+                        <span class="pill p-ok"
+                          ><svg class="i" style="width: 13px; height: 13px"><use href="#ok" /></svg
+                          >Klar uten nett</span
+                        ><span class="pill p-b">Egenerklæring mottatt</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    style="
+                      border: 1px solid var(--line);
+                      border-radius: 12px;
+                      padding: 14px;
+                      display: flex;
+                      gap: 14px;
+                    "
+                  >
+                    <div style="text-align: center; flex: none">
+                      <div style="font-size: 22px; font-weight: 700; color: var(--brand)">
+                        13:30
+                      </div>
+                      <div style="font-size: 12px; color: var(--muted)">ca. 1,5 t</div>
+                    </div>
+                    <div class="grow">
+                      <div style="font-weight: 500">Sjøgata 7 B, 8006 Bodø</div>
+                      <div style="font-size: 13px; color: var(--muted); margin: 3px 0 8px">
+                        Leilighet, seksjon 14 · 72 m²
+                      </div>
+                      <div style="display: flex; gap: 6px; flex-wrap: wrap">
+                        <span class="pill p-ok"
+                          ><svg class="i" style="width: 13px; height: 13px"><use href="#ok" /></svg
+                          >Klar uten nett</span
+                        ><span class="pill p-w"
+                          ><svg class="i" style="width: 13px; height: 13px">
+                            <use href="#alert" /></svg
+                          >Egenerklæring mangler</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="card" style="flex: 1; min-height: 0">
+                <div class="ch">
+                  <h2>Mine oppdrag</h2>
+                  <span class="sub">Sortert etter frist</span
+                  ><span class="r"
+                    >Alle 9
+                    <svg class="i" style="width: 14px; height: 14px"><use href="#chev" /></svg
+                  ></span>
+                </div>
+                <div class="row">
+                  <div class="grow">
+                    <div class="t">Fjellveien 12, Bodø</div>
+                    <div class="d">26-1042 · Tilstandsrapport · selger Per Arne Kristiansen</div>
+                  </div>
+                  <span class="pill p-b">Befaring i dag</span>
+                  <div style="width: 120px">
+                    <div class="bar"><i style="width: 46%"></i></div>
+                    <div class="d">18 av 39 punkter</div>
+                  </div>
+                  <div style="width: 92px; text-align: right" class="d">
+                    <b style="color: var(--ink)">28. okt.</b><br />frist
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="grow">
+                    <div class="t">Mørkvedlia 41, Bodø</div>
+                    <div class="d">26-1031 · Tilstandsrapport · Nordlys Eiendomsmegling</div>
+                  </div>
+                  <span class="pill p-w">Utkast til selger</span>
+                  <div style="width: 120px">
+                    <div class="bar"><i style="width: 100%; background: var(--ok)"></i></div>
+                    <div class="d">39 av 39 punkter</div>
+                  </div>
+                  <div style="width: 92px; text-align: right" class="d">
+                    <b style="color: var(--urgent)">26. okt.</b><br />frist
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="grow">
+                    <div class="t">Løpsmarka 6, Bodø</div>
+                    <div class="d">26-1027 · Tilstandsrapport · Fremtind-avtale</div>
+                  </div>
+                  <span class="pill p-n">Til sidemann (Mats)</span>
+                  <div style="width: 120px">
+                    <div class="bar"><i style="width: 100%; background: var(--ok)"></i></div>
+                    <div class="d">Venter på Mats</div>
+                  </div>
+                  <div style="width: 92px; text-align: right" class="d">
+                    <b style="color: var(--ink)">27. okt.</b><br />frist
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="grow">
+                    <div class="t">Sjøgata 7 B, Bodø</div>
+                    <div class="d">26-1045 · Tilstandsrapport · seksjonert leilighet</div>
+                  </div>
+                  <span class="pill p-b">Befaring i dag</span>
+                  <div style="width: 120px">
+                    <div class="bar"><i style="width: 0"></i></div>
+                    <div class="d">Ikke startet</div>
+                  </div>
+                  <div style="width: 92px; text-align: right" class="d">
+                    <b style="color: var(--ink)">30. okt.</b><br />frist
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 16px; min-height: 0">
+              <div class="card">
+                <div class="ch"><h2>Venter på deg</h2></div>
+                <div class="row">
+                  <div class="av a2">JE</div>
+                  <div class="grow">
+                    <div class="t">Sidemannskontroll: Kirkegata 5, Tromsø</div>
+                    <div class="d">Fra Jonas Eliassen, Byggcon Troms · sendt i går</div>
+                  </div>
+                  <button class="btn sm pri">Start</button>
+                </div>
+                <div class="row">
+                  <div class="av a5">LM</div>
+                  <div class="grow">
+                    <div class="t">Megler spør om leveringsdato</div>
+                    <div class="d">Line Mørch om Mørkvedlia 41 · 08:12</div>
+                  </div>
+                  <button class="btn sm">Svar</button>
+                </div>
+                <div class="row">
+                  <div class="av a3">MH</div>
+                  <div class="grow">
+                    <div class="t">Mats nevnte deg i en kommentar</div>
+                    <div class="d">«Taktekking: TG2 eller TG3?» · Løpsmarka 6</div>
+                  </div>
+                  <button class="btn sm">Åpne</button>
+                </div>
+              </div>
+              <div class="card">
+                <div class="ch">
+                  <h2>Felles kø · Salten</h2>
+                  <span class="sub">5 ledige</span><span class="r">Se alle</span>
+                </div>
+                <div class="row">
+                  <div class="grow">
+                    <div class="t">Hålogalandsgata 3, Bodø</div>
+                    <div class="d">Enebolig 1962 · ønsket uke 44 · Generell</div>
+                  </div>
+                  <button class="btn sm">Ta oppdraget</button>
+                </div>
+                <div class="row">
+                  <div class="grow">
+                    <div class="t">Rønvikjordene 18, Bodø</div>
+                    <div class="d">Rekkehus 1994 · ønsket uke 45 · Fremtind</div>
+                  </div>
+                  <button class="btn sm">Ta oppdraget</button>
+                </div>
+              </div>
+              <div class="card" style="flex: 1">
+                <div class="ch">
+                  <h2>Teamet i dag</h2>
+                  <span class="sub">Bodø-kontoret</span>
+                </div>
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 10px 14px;
+                    font-size: 13px;
+                  "
+                >
+                  <div style="display: flex; gap: 9px; align-items: center">
+                    <div class="av a3">MH</div>
+                    <div>
+                      <b style="font-weight: 500">Mats Hågensen</b>
+                      <div style="color: var(--muted)">Kontoret</div>
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 9px; align-items: center">
+                    <div class="av a4">KN</div>
+                    <div>
+                      <b style="font-weight: 500">Kari Nygård</b>
+                      <div style="color: var(--muted)">Kontoret</div>
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 9px; align-items: center">
+                    <div class="av a2">EA</div>
+                    <div>
+                      <b style="font-weight: 500">Erik Aune</b>
+                      <div style="color: var(--muted)">På befaring, Saltstraumen</div>
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 9px; align-items: center">
+                    <div class="av a5" style="opacity: 0.55">SB</div>
+                    <div>
+                      <b style="font-weight: 500">Silje Berg</b>
+                      <div style="color: var(--muted)">Ferie til 28. okt.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <!-- ================= A2 OPPDRAG ================= -->
+    <div class="cap">A2 · Oppdragets hovedside · PC 1440 × 900</div>
+    <section class="frame pc" id="oppdrag">
+      <div class="aurora"></div>
+      <div class="top">
+        <div class="logo"><b>Ez</b>EzProp</div>
+        <div class="switch"><span class="on">EzProp</span><span>Optiplan</span></div>
+        <div class="search">
+          <svg class="i"><use href="#search" /></svg>Søk etter adresse, oppdragsnr. eller person<kbd
+            >⌘ K</kbd
+          >
+        </div>
+        <div class="sp"></div>
+        <div class="sync">
+          <svg class="i"><use href="#cloud" /></svg>Alt er lagret
+        </div>
+        <div class="iconbtn">
+          <svg class="i"><use href="#bell" /></svg>
+        </div>
+        <div class="av a1">IS</div>
+      </div>
+      <div class="shell">
+        <nav class="nav">
+          <a
+            ><svg class="i"><use href="#home" /></svg>Oversikt</a
+          >
+          <a class="on"
+            ><svg class="i"><use href="#folder" /></svg>Mine oppdrag<span class="n">9</span></a
+          >
+          <a
+            ><svg class="i"><use href="#inbox" /></svg>Felles kø<span class="n">5</span></a
+          >
+          <a
+            ><svg class="i"><use href="#check2" /></svg>Sidemannskontroll<span class="n">1</span></a
+          >
+          <a
+            ><svg class="i"><use href="#cal" /></svg>Kalender</a
+          >
+          <a
+            ><svg class="i"><use href="#archive" /></svg>Arkiv</a
+          >
+          <h6>Bibliotek</h6>
+          <a
+            ><svg class="i"><use href="#book" /></svg>Frasebank</a
+          >
+          <a
+            ><svg class="i"><use href="#tmpl" /></svg>Maler og sjekklister</a
+          >
+          <div class="co"><small>Utstedende selskap</small><b>Byggcon Nord AS</b> · Bodø</div>
+        </nav>
+        <main class="main" style="gap: 14px">
+          <div>
+            <div class="crumb">
+              Mine oppdrag
+              <svg class="i" style="width: 12px; height: 12px"><use href="#chev" /></svg> 26-1042
+            </div>
+            <div class="ph">
+              <div>
+                <h1>Fjellveien 12, 8015 Bodø</h1>
+                <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap">
+                  <span class="tag">Tilstandsrapport</span
+                  ><span class="tag">Enebolig · byggeår 1978</span
+                  ><span class="tag">164 m² BRA</span
+                  ><span class="tag">Gnr. 138 / Bnr. 245 · Bodø (1804)</span
+                  ><span class="tag">Oppdragsgiver: Generell</span>
+                </div>
+              </div>
+              <div class="sp"></div>
+              <button class="btn">
+                Mer <svg class="i" style="width: 14px; height: 14px"><use href="#chevd" /></svg>
+              </button>
+              <button class="btn pri">
+                <svg class="i"><use href="#pin" /></svg>Fortsett befaring
+              </button>
+            </div>
+          </div>
+          <!-- steg -->
+          <div class="card" style="padding: 14px 20px; display: flex; align-items: center; gap: 0">
+            <style>
+              .st {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 13px;
+                color: var(--muted);
+                flex: none;
+              }
+              .st i {
+                width: 24px;
+                height: 24px;
+                border-radius: 99px;
+                display: grid;
+                place-items: center;
+                font-style: normal;
+                font-size: 12px;
+                font-weight: 700;
+                background: #e8edf3;
+                color: var(--muted);
+              }
+              .st.d {
+                color: var(--ink-2);
+              }
+              .st.d i {
+                background: var(--ok);
+                color: #fff;
+              }
+              .st.c {
+                color: var(--brand-900);
+                font-weight: 500;
+              }
+              .st.c i {
+                background: var(--brand);
+                color: #fff;
+                box-shadow: 0 0 0 4px var(--brand-100);
+              }
+              .ln {
+                flex: 1;
+                height: 2px;
+                background: #e2e8f0;
+                margin: 0 10px;
+              }
+              .ln.d {
+                background: var(--ok);
+              }
+            </style>
+            <div class="st d"><i>✓</i>Bestilt 20.10.</div>
+            <div class="ln d"></div>
+            <div class="st d"><i>✓</i>Tildelt 21.10.</div>
+            <div class="ln d"></div>
+            <div class="st c"><i>3</i>Befaring i dag</div>
+            <div class="ln"></div>
+            <div class="st"><i>4</i>Utkast til selger</div>
+            <div class="ln"></div>
+            <div class="st"><i>5</i>Sidemannskontroll</div>
+            <div class="ln"></div>
+            <div class="st"><i>6</i>Levert</div>
+            <div class="ln"></div>
+            <div class="st"><i>7</i>Fakturert</div>
+          </div>
+          <div style="display: flex; gap: 4px; border-bottom: 1px solid #d5dde7; font-size: 14px">
+            <style>
+              .tb {
+                padding: 8px 14px;
+                color: var(--ink-2);
+                border-bottom: 2px solid transparent;
+                margin-bottom: -1px;
+              }
+              .tb.on {
+                color: var(--brand-900);
+                font-weight: 500;
+                border-color: var(--brand);
+              }
+              .tb small {
+                color: var(--muted);
+              }
+            </style>
+            <span class="tb on">Oversikt</span><span class="tb">Rapport</span
+            ><span class="tb">Dokumenter <small>4</small></span
+            ><span class="tb">Bilder <small>38</small></span
+            ><span class="tb">Oppgaver <small>3</small></span
+            ><span class="tb">Faktura</span><span class="tb">Logg</span>
+          </div>
+          <div
+            style="
+              display: grid;
+              grid-template-columns: 1fr 1.15fr 1fr;
+              gap: 16px;
+              flex: 1;
+              min-height: 0;
+            "
+          >
+            <div style="display: flex; flex-direction: column; gap: 16px; min-height: 0">
+              <div class="card" style="padding: 0; overflow: hidden">
+                <svg viewBox="0 0 380 170" style="display: block; width: 100%; height: 170px">
+                  <rect width="380" height="170" fill="#e8eef2" />
+                  <path
+                    d="M0 120 C80 100 120 140 200 128 S320 96 380 110 V170 H0z"
+                    fill="#bcd9ea"
+                  />
+                  <path
+                    d="M30 0 L60 170 M0 60 L380 40 M150 0 L170 170 M260 0 L240 170 M0 95 L380 82"
+                    stroke="#fff"
+                    stroke-width="7"
+                  />
+                  <path d="M0 60 L380 40" stroke="#f6d38b" stroke-width="5" />
+                  <g fill="#d6dde3">
+                    <rect x="72" y="70" width="22" height="16" />
+                    <rect x="100" y="66" width="18" height="18" />
+                    <rect x="186" y="56" width="20" height="16" />
+                    <rect x="200" y="94" width="26" height="14" />
+                    <rect x="276" y="58" width="22" height="18" />
+                    <rect x="118" y="100" width="20" height="14" />
+                  </g>
+                  <g transform="translate(196 62)">
+                    <path
+                      d="M0 0 c-10 -12 -14 -18 -14 -24 a14 14 0 0 1 28 0 c0 6 -4 12 -14 24z"
+                      fill="#c0392b"
+                    />
+                    <circle cx="0" cy="-24" r="5" fill="#fff" />
+                  </g>
+                  <text x="12" y="160" font-size="11" fill="#475569" font-family="Roboto">
+                    Kartgrunnlag: Kartverket (åpne data)
+                  </text>
+                </svg>
+                <div style="padding: 14px 18px">
+                  <div
+                    style="
+                      display: grid;
+                      grid-template-columns: auto 1fr;
+                      gap: 6px 14px;
+                      font-size: 13px;
+                    "
+                  >
+                    <span style="color: var(--muted)">Matrikkel</span><span>1804-138/245/0/0</span>
+                    <span style="color: var(--muted)">Bruksenhet</span
+                    ><span
+                      >H0101
+                      <span class="pill p-ok" style="height: 20px; margin-left: 4px"
+                        >✓ Stemmer med matrikkel</span
+                      ></span
+                    >
+                    <span style="color: var(--muted)">Tomt</span><span>812 m² · eiet</span>
+                    <span style="color: var(--muted)">Bygninger</span><span>Enebolig, garasje</span>
+                    <span style="color: var(--muted)">Risiko</span
+                    ><span>Ikke i flom- eller skredsone (NVE)</span>
+                  </div>
+                </div>
+              </div>
+              <div class="card" style="flex: 1">
+                <div class="ch">
+                  <h2>Oppgaver</h2>
+                  <span class="r">+ Ny</span>
+                </div>
+                <div class="row">
+                  <svg class="i" style="color: var(--ok)"><use href="#check2" /></svg>
+                  <div class="grow">
+                    <div class="t" style="text-decoration: line-through; color: var(--muted)">
+                      Hent byggetegninger fra kommunen
+                    </div>
+                    <div class="d">Kari · ferdig 22.10.</div>
+                  </div>
+                </div>
+                <div class="row">
+                  <span
+                    style="
+                      width: 18px;
+                      height: 18px;
+                      border: 2px solid var(--field);
+                      border-radius: 5px;
+                      flex: none;
+                    "
+                  ></span>
+                  <div class="grow">
+                    <div class="t">Be om FDV for varmepumpe</div>
+                    <div class="d">Ingrid · frist 26.10.</div>
+                  </div>
+                </div>
+                <div class="row">
+                  <span
+                    style="
+                      width: 18px;
+                      height: 18px;
+                      border: 2px solid var(--field);
+                      border-radius: 5px;
+                      flex: none;
+                    "
+                  ></span>
+                  <div class="grow">
+                    <div class="t">Avklar tilgang til krypkjeller</div>
+                    <div class="d">Ingrid · på befaringen</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 16px; min-height: 0">
+              <div class="card">
+                <div class="ch">
+                  <h2>Rapporter</h2>
+                  <span class="r">+ Ny rapport</span>
+                </div>
+                <div style="border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px">
+                  <div style="display: flex; align-items: center; gap: 10px">
+                    <svg class="i" style="color: var(--brand)"><use href="#file" /></svg
+                    ><b style="font-weight: 500">Tilstandsrapport · NS 3600:2025</b
+                    ><span class="pill p-b" style="margin-left: auto">Under arbeid</span>
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      font-size: 13px;
+                      color: var(--ink-2);
+                      margin: 12px 0 6px;
+                    "
+                  >
+                    <span>18 av 39 punkter vurdert</span><span>46 %</span>
+                  </div>
+                  <div class="bar"><i style="width: 46%"></i></div>
+                  <div style="font-size: 13px; color: var(--ink-2); margin: 14px 0 6px">
+                    Tilstand så langt
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      height: 12px;
+                      border-radius: 6px;
+                      overflow: hidden;
+                      gap: 2px;
+                    "
+                  >
+                    <span style="flex: 13; background: #3fae7d"></span
+                    ><span style="flex: 3; background: #e3a93b"></span
+                    ><span style="flex: 1; background: #d4564a"></span
+                    ><span style="flex: 1; background: #94a3b8"></span>
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      gap: 12px;
+                      font-size: 12px;
+                      margin-top: 8px;
+                      color: var(--ink-2);
+                      flex-wrap: wrap;
+                    "
+                  >
+                    <span><span class="tg tg1">TG0–1</span> 13</span
+                    ><span><span class="tg tg2">TG2</span> 3</span
+                    ><span><span class="tg tg3">TG3</span> 1</span
+                    ><span><span class="tg tgiu">TGIU</span> 1</span>
+                  </div>
+                  <div style="display: flex; gap: 8px; margin-top: 14px">
+                    <button class="btn sm">Forhåndsvis PDF</button
+                    ><button class="btn sm">
+                      <svg class="i" style="width: 15px; height: 15px; color: var(--watch)">
+                        <use href="#alert" /></svg
+                      >Kontroller (6 mangler)
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="card" style="flex: 1; min-height: 0">
+                <div class="ch">
+                  <h2>Dokumenter</h2>
+                  <span class="sub">fra selger og kommunen</span><span class="r">Last opp</span>
+                </div>
+                <div class="row">
+                  <svg class="i" style="color: var(--muted)"><use href="#file" /></svg>
+                  <div class="grow">
+                    <div class="t">Egenerklæring fra selger</div>
+                    <div class="d">Mottatt via portalen 22.10. · 6 sider</div>
+                  </div>
+                  <span class="pill p-ok">I rapporten</span>
+                </div>
+                <div class="row">
+                  <svg class="i" style="color: var(--muted)"><use href="#file" /></svg>
+                  <div class="grow">
+                    <div class="t">Godkjente byggetegninger 1977</div>
+                    <div class="d">Bodø kommune · 4 sider</div>
+                  </div>
+                  <span class="pill p-ok">I rapporten</span>
+                </div>
+                <div class="row">
+                  <svg class="i" style="color: var(--muted)"><use href="#file" /></svg>
+                  <div class="grow">
+                    <div class="t">Samsvarserklæring el, 2015</div>
+                    <div class="d">Fra selger · 1 side</div>
+                  </div>
+                  <span class="pill p-n">Internt</span>
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 16px; min-height: 0">
+              <div class="card">
+                <div class="ch">
+                  <h2>Oppdragsteam</h2>
+                  <span class="r">Endre</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px">
+                  <div style="display: flex; gap: 10px; align-items: center">
+                    <div class="av a1">IS</div>
+                    <div class="grow">
+                      <b style="font-weight: 500">Ingrid Solberg</b>
+                      <div style="color: var(--muted)">Ansvarlig takstmann · signerer</div>
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 10px; align-items: center">
+                    <div class="av a3">MH</div>
+                    <div class="grow">
+                      <b style="font-weight: 500">Mats Hågensen</b>
+                      <div style="color: var(--muted)">Sidemann</div>
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 10px; align-items: center">
+                    <div class="av a4">KN</div>
+                    <div class="grow">
+                      <b style="font-weight: 500">Kari Nygård</b>
+                      <div style="color: var(--muted)">Kontor og faktura</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="ch"><h2>Kunde og megler</h2></div>
+                <div style="font-size: 13px; display: flex; flex-direction: column; gap: 10px">
+                  <div>
+                    <b style="font-weight: 500">Per Arne Kristiansen</b>
+                    <span class="tag">Selger · bestiller</span>
+                    <div style="color: var(--muted); margin-top: 2px">
+                      911 22 334 · per.arne@eksempel.no
+                    </div>
+                  </div>
+                  <div>
+                    <b style="font-weight: 500">Line Mørch</b> <span class="tag">Megler</span>
+                    <div style="color: var(--muted); margin-top: 2px">
+                      Nordlys Eiendomsmegling · får rapporten ved levering
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="card" style="flex: 1; min-height: 0">
+                <div class="ch">
+                  <h2>Hva har skjedd</h2>
+                  <span class="r">Hele loggen</span>
+                </div>
+                <style>
+                  .lg {
+                    display: flex;
+                    gap: 10px;
+                    font-size: 13px;
+                    padding: 6px 0;
+                  }
+                  .lg em {
+                    font-style: normal;
+                    color: var(--muted);
+                    width: 76px;
+                    flex: none;
+                  }
+                  .lg .auto {
+                    font-size: 11px;
+                    color: var(--brand-700);
+                    background: var(--brand-50);
+                    border-radius: 4px;
+                    padding: 1px 5px;
+                    margin-left: 4px;
+                  }
+                </style>
+                <div class="lg">
+                  <em>i dag 07:40</em><span>Lastet ned til iPad for befaring</span>
+                </div>
+                <div class="lg">
+                  <em>22.10. 14:12</em
+                  ><span
+                    >Påminnelse om befaring sendt til selger<span class="auto"
+                      >automatisk</span
+                    ></span
+                  >
+                </div>
+                <div class="lg">
+                  <em>22.10. 09:40</em><span>Egenerklæring mottatt fra selger</span>
+                </div>
+                <div class="lg">
+                  <em>21.10. 10:05</em
+                  ><span>Ordrebekreftelse sendt<span class="auto">automatisk</span></span>
+                </div>
+                <div class="lg">
+                  <em>21.10. 10:02</em><span>Kari tildelte oppdraget til Ingrid</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <!-- ================= A3 KONSTRUKSJONER PC ================= -->
+    <div class="cap">A3 · Konstruksjoner på PC (kontoret) · 1440 × 900</div>
+    <section class="frame pc" id="konstr-pc">
+      <style>
+        .kh {
+          height: 60px;
+          background: #fff;
+          border-bottom: 1px solid var(--line);
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 0 20px;
+        }
+        .kh .back {
+          color: var(--muted);
+          display: flex;
+          align-items: center;
+        }
+        .seg {
+          display: flex;
+          gap: 2px;
+          background: var(--canvas);
+          padding: 3px;
+          border-radius: 10px;
+          font-size: 13px;
+        }
+        .seg span {
+          padding: 6px 12px;
+          border-radius: 8px;
+          color: var(--ink-2);
+        }
+        .seg span.on {
+          background: #fff;
+          color: var(--ink);
+          font-weight: 500;
+          box-shadow: var(--shadow);
+        }
+        .k3 {
+          display: grid;
+          grid-template-columns: 286px 1fr 352px;
+          height: calc(100% - 64px);
+        }
+        .tree {
+          background: #f6f8fb;
+          border-right: 1px solid var(--line);
+          padding: 14px 10px;
+          overflow: hidden;
+          font-size: 13.5px;
+        }
+        .tree .g {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 10px;
+          color: var(--ink-2);
+          font-weight: 500;
+          border-radius: 8px;
+        }
+        .tree .g small {
+          margin-left: auto;
+          color: var(--muted);
+          font-weight: 400;
+          font-size: 12px;
+        }
+        .tree .r2 {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 7px 10px 7px 30px;
+          border-radius: 8px;
+          color: var(--ink);
+        }
+        .tree .r2.on {
+          background: #fff;
+          box-shadow: var(--shadow);
+          font-weight: 500;
+          outline: 2px solid var(--brand);
+          outline-offset: -2px;
+        }
+        .tree .r2 .tg {
+          margin-left: auto;
+        }
+        .tree .room {
+          padding: 6px 10px 4px 22px;
+          font-size: 12px;
+          color: var(--muted);
+          display: flex;
+          gap: 6px;
+          align-items: center;
+        }
+        .ed {
+          padding: 20px 26px;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+        .side {
+          background: #fff;
+          border-left: 1px solid var(--line);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+        .q {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 0;
+          border-top: 1px solid var(--line);
+          font-size: 14px;
+        }
+        .yn {
+          display: flex;
+          border: 1px solid var(--field);
+          border-radius: 9px;
+          overflow: hidden;
+          flex: none;
+        }
+        .yn span {
+          padding: 6px 14px;
+          font-size: 13px;
+          font-weight: 500;
+        }
+        .yn span + span {
+          border-left: 1px solid var(--field);
+        }
+        .yn .y {
+          background: var(--watch-fill);
+          color: #6b4405;
+        }
+        .yn .n {
+          background: var(--ink-2);
+          color: #fff;
+        }
+        .fld {
+          border: 1px solid var(--field);
+          border-radius: 10px;
+          padding: 9px 12px;
+          font-size: 14px;
+          line-height: 1.45;
+          background: #fff;
+        }
+        .lab {
+          font-size: 12.5px;
+          color: var(--ink-2);
+          font-weight: 500;
+          margin-bottom: 4px;
+          display: flex;
+          gap: 6px;
+          align-items: center;
+        }
+        .lab .r {
+          margin-left: auto;
+          color: var(--brand);
+          font-weight: 500;
+          display: flex;
+          gap: 4px;
+          align-items: center;
+        }
+      </style>
+      <div class="aurora"></div>
+      <div class="kh">
+        <span class="back"
+          ><svg class="i"><use href="#chevl" /></svg
+        ></span>
+        <div>
+          <div style="font-weight: 500; font-size: 15px">Fjellveien 12, Bodø</div>
+          <div style="font-size: 12px; color: var(--muted)">26-1042 · Tilstandsrapport</div>
+        </div>
+        <div class="seg" style="margin-left: 18px">
+          <span>Eiendom</span><span>Bygninger</span><span class="on">Konstruksjoner</span
+          ><span>Sammendrag</span><span>Arealer</span><span>Forutsetninger</span>
+        </div>
+        <div class="sp"></div>
+        <div style="display: flex; align-items: center; gap: -6px">
+          <div class="av a3" style="width: 28px; height: 28px; border: 2px solid #fff">MH</div>
+        </div>
+        <span style="font-size: 12px; color: var(--muted)">Mats ser på rapporten</span>
+        <div class="sync">
+          <svg class="i"><use href="#cloud" /></svg>Lagret 10:42
+        </div>
+        <button class="btn">
+          <svg class="i" style="color: var(--watch)"><use href="#alert" /></svg>Kontroller · 6
+        </button>
+        <button class="btn pri">Send til sidemann</button>
+      </div>
+      <div class="k3">
+        <aside class="tree">
+          <div class="search" style="height: 34px; margin: 0 4px 10px; background: #fff">
+            Søk i punkter
+          </div>
+          <div class="g">
+            <svg class="i" style="width: 14px; height: 14px"><use href="#chev" /></svg
+            >Utvendig<small>9 av 9</small>
+          </div>
+          <div class="g">
+            <svg class="i" style="width: 14px; height: 14px"><use href="#chev" /></svg
+            >Innvendig<small>6 av 11</small>
+          </div>
+          <div class="g">
+            <svg class="i" style="width: 14px; height: 14px"><use href="#chevd" /></svg>Våtrom<small
+              >5 av 16</small
+            >
+          </div>
+          <div class="room">
+            <svg class="i" style="width: 12px; height: 12px"><use href="#pin" /></svg>Bad · 1.
+            etasje
+          </div>
+          <div class="r2">Overflater på vegg og himling<span class="tg tg1">TG1</span></div>
+          <div class="r2">Overflater på gulv<span class="tg tg1">TG1</span></div>
+          <div class="r2 on">Vanntett sjikt, membran og sluk<span class="tg tg2">TG2?</span></div>
+          <div class="r2">Sanitærutstyr og innredning<span class="tg tg0">–</span></div>
+          <div class="r2">Ventilasjon<span class="tg tg0">–</span></div>
+          <div class="r2">Tilliggende konstruksjon<span class="tg tg0">–</span></div>
+          <div class="room">
+            <svg class="i" style="width: 12px; height: 12px"><use href="#pin" /></svg>Vaskerom ·
+            kjeller
+          </div>
+          <div class="r2" style="color: var(--muted)">
+            8 punkter<span class="tg tg0">0 / 8</span>
+          </div>
+          <div class="g">
+            <svg class="i" style="width: 14px; height: 14px"><use href="#chev" /></svg>Kjøkken<small
+              >2 av 2</small
+            >
+          </div>
+          <div class="g">
+            <svg class="i" style="width: 14px; height: 14px"><use href="#chev" /></svg>Tekniske
+            installasjoner<small>0 av 10</small>
+          </div>
+          <div class="g">
+            <svg class="i" style="width: 14px; height: 14px"><use href="#chev" /></svg
+            >Tomteforhold<small>0 av 8</small>
+          </div>
+        </aside>
+        <section class="ed">
+          <div>
+            <div class="crumb">
+              Våtrom
+              <svg class="i" style="width: 12px; height: 12px"><use href="#chev" /></svg> Bad, 1.
+              etasje<span style="margin-left: auto"
+                >Ses sammen med: <u>Tilliggende konstruksjon</u></span
+              >
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px">
+              <h1 style="font-size: 22px; font-weight: 700; white-space: nowrap">
+                Vanntett sjikt, membran og sluk
+              </h1>
+              <span class="pill p-b">Obligatorisk etter forskriften</span>
+              <div class="sp"></div>
+              <span style="font-size: 13px; color: var(--muted)"
+                >Sist endret av deg, på iPad 10:38</span
+              >
+            </div>
+          </div>
+          <div
+            style="
+              display: flex;
+              gap: 14px;
+              align-items: center;
+              background: #fff8e8;
+              border: 1px solid #f0d394;
+              border-radius: 14px;
+              padding: 12px 16px;
+            "
+          >
+            <span class="tg tg2" style="height: 30px; min-width: 52px; font-size: 14px">TG2</span>
+            <div class="grow" style="font-size: 14px">
+              <b style="font-weight: 500">Forslag: TG2.</b> Fallet i dusjsonen er målt til 8 mm per
+              meter (malen krever minst 10), og dokumentasjon på våtromsarbeidet mangler.
+              <div style="font-size: 12px; color: var(--muted); margin-top: 2px">
+                Regel fra Byggcons mal · NS 3600:2025. Du bestemmer alltid selv.
+              </div>
+            </div>
+            <button class="btn sm">Velg annen TG</button
+            ><button class="btn sm pri">Bruk TG2</button>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px">
+            <div class="card" style="padding: 14px 16px">
+              <div class="ch" style="margin-bottom: 8px">
+                <h2 style="font-size: 14px">Registrering</h2>
+              </div>
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: auto 1fr;
+                  gap: 9px 14px;
+                  font-size: 13.5px;
+                  align-items: center;
+                "
+              >
+                <span style="color: var(--muted)">Membran</span
+                ><span
+                  ><span class="pill p-b">Smøremembran</span>
+                  <span class="pill p-n" style="background: #fff; border: 1px solid var(--line)"
+                    >Folie</span
+                  >
+                  <span class="pill p-n" style="background: #fff; border: 1px solid var(--line)"
+                    >Ukjent</span
+                  ></span
+                >
+                <span style="color: var(--muted)">Sluk</span><span>Plastsluk med klemring</span>
+                <span style="color: var(--muted)">Bygget</span
+                ><span
+                  >2009 · 17 år
+                  <span class="pill p-ok" style="height: 20px">innenfor levetid</span></span
+                >
+                <span style="color: var(--muted)">Fall i dusjsone</span
+                ><span
+                  ><b style="font-family: &quot;Roboto Mono&quot;">8 mm/m</b>
+                  <span class="pill p-w" style="height: 20px">under 10 mm/m</span></span
+                >
+                <span style="color: var(--muted)">Sluk til terskel</span
+                ><span
+                  ><b style="font-family: &quot;Roboto Mono&quot;">28 mm</b>
+                  <span class="pill p-ok" style="height: 20px">ok</span></span
+                >
+              </div>
+            </div>
+            <div class="card" style="padding: 14px 16px">
+              <div class="ch" style="margin-bottom: 8px">
+                <h2 style="font-size: 14px">Hulltaking</h2>
+                <span class="pill p-ok" style="margin-left: auto">Utført</span>
+              </div>
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: auto 1fr;
+                  gap: 9px 14px;
+                  font-size: 13.5px;
+                "
+              >
+                <span style="color: var(--muted)">Sted</span
+                ><span>Vegg mot gang, bak dusjhjørnet</span>
+                <span style="color: var(--muted)">Måling</span
+                ><span
+                  ><b style="font-family: &quot;Roboto Mono&quot;">15 %</b> fuktinnhold i treverk ·
+                  ikke forhøyet</span
+                >
+                <span style="color: var(--muted)">Samtykke</span
+                ><span>Muntlig fra eier, registrert 10:31</span>
+                <span style="color: var(--muted)">Bilde</span><span>1 bilde av hull og måler</span>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="padding: 12px 16px">
+            <div class="ch" style="margin-bottom: 2px">
+              <h2 style="font-size: 14px">Avviksspørsmål</h2>
+              <span class="sub">4 av 7 besvart</span>
+            </div>
+            <div class="q" style="border-top: 0">
+              <span class="grow"
+                >Er det tegn på fukt, lekkasje eller sopp rundt sluk eller i tilliggende rom?</span
+              >
+              <div class="yn"><span>Ja</span><span class="n">Nei</span></div>
+            </div>
+            <div class="q">
+              <span class="grow"
+                >Er fallet til sluk for lite, eller er det motfall?
+                <span style="color: var(--muted); font-size: 12.5px"
+                  >– besvart av målingen</span
+                ></span
+              >
+              <div class="yn"><span class="y">Ja · TG2</span><span>Nei</span></div>
+            </div>
+            <div class="q">
+              <span class="grow">Mangler dokumentasjon på at våtrommet er bygget av fagfolk?</span>
+              <div class="yn"><span class="y">Ja · TG2</span><span>Nei</span></div>
+            </div>
+            <div class="q">
+              <span class="grow">Er overgangen mellom membran og sluk synlig mangelfull?</span>
+              <div class="yn"><span>Ja</span><span class="n">Nei</span></div>
+            </div>
+          </div>
+          <div
+            style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1; min-height: 0"
+          >
+            <div>
+              <div class="lab">
+                Årsak (avvik)<span class="r"
+                  ><svg class="i" style="width: 14px; height: 14px"><use href="#book" /></svg
+                  >Fraser</span
+                >
+              </div>
+              <div class="fld" style="height: 86px">
+                Fallet mot sluk i dusjsonen er målt til ca. 8 mm per meter. Det er ikke lagt fram
+                dokumentasjon på våtromsarbeidet fra 2009.
+              </div>
+            </div>
+            <div>
+              <div class="lab">
+                Konsekvens og tiltak<span class="r"
+                  ><svg class="i" style="width: 14px; height: 14px"><use href="#spark" /></svg
+                  >Foreslå tekst</span
+                >
+              </div>
+              <div class="fld" style="height: 86px; color: var(--muted)">
+                Skriv, velg en frase eller be om forslag …
+              </div>
+            </div>
+          </div>
+        </section>
+        <aside class="side">
+          <div style="padding: 14px 16px 12px; border-bottom: 1px solid var(--line)">
+            <div class="ch" style="margin-bottom: 10px">
+              <h2 style="font-size: 14px">
+                Bilder <span style="color: var(--muted); font-weight: 400">4</span>
+              </h2>
+              <span class="r"
+                ><svg class="i" style="width: 15px; height: 15px"><use href="#plus" /></svg>Legg
+                til</span
+              >
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px">
+              <div
+                class="photo"
+                style="height: 62px; outline: 3px solid #e3a93b; outline-offset: -3px"
+              >
+                <svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice">
+                  <use href="#ph-sluk" />
+                </svg>
+              </div>
+              <div class="photo" style="height: 62px">
+                <svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice">
+                  <use href="#ph-dusj" />
+                </svg>
+              </div>
+              <div class="photo" style="height: 62px">
+                <svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice">
+                  <use href="#ph-hull" />
+                </svg>
+              </div>
+              <div class="photo" style="height: 62px">
+                <svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice">
+                  <use href="#ph-rom" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div
+            style="
+              display: flex;
+              gap: 4px;
+              padding: 10px 12px 0;
+              font-size: 13px;
+              border-bottom: 1px solid var(--line);
+            "
+          >
+            <span class="tb on" style="padding: 8px 10px">Fraser</span
+            ><span class="tb" style="padding: 8px 10px">Kommentarer <small>2</small></span
+            ><span class="tb" style="padding: 8px 10px">Historikk</span>
+          </div>
+          <div
+            style="
+              padding: 12px 16px;
+              display: flex;
+              flex-direction: column;
+              gap: 10px;
+              flex: 1;
+              overflow: hidden;
+            "
+          >
+            <div style="display: flex; gap: 6px; font-size: 12px">
+              <span class="pill p-b">Mest brukt</span><span class="pill p-n">Byggcon felles</span
+              ><span class="pill p-n">Mine</span><span class="pill p-n">Favoritter</span>
+            </div>
+            <style>
+              .fr {
+                border: 1px solid var(--line);
+                border-radius: 12px;
+                padding: 10px 12px;
+                font-size: 13px;
+                line-height: 1.45;
+              }
+              .fr .m {
+                display: flex;
+                gap: 6px;
+                align-items: center;
+                margin-top: 7px;
+                font-size: 11.5px;
+                color: var(--muted);
+              }
+              .fr .m b {
+                margin-left: auto;
+                color: var(--brand);
+                font-weight: 500;
+                font-size: 12.5px;
+              }
+            </style>
+            <div class="fr">
+              Fallet mot sluk er mindre enn anbefalt. Vann kan bli stående på gulvet og gi større
+              belastning på membran og sluk over tid.
+              <div class="m">
+                <span class="tag">Byggcon felles</span>brukt 214 ganger<b>Sett inn</b>
+              </div>
+            </div>
+            <div class="fr">
+              Det bør innhentes dokumentasjon fra utførende. Uten dette bør det tas høyde for at
+              deler av rommet må fornyes tidligere enn forventet.
+              <div class="m">
+                <span class="tag">Byggcon felles</span>brukt 168 ganger<b>Sett inn</b>
+              </div>
+            </div>
+            <div
+              style="
+                border-radius: 12px;
+                padding: 10px 12px;
+                font-size: 13px;
+                background: linear-gradient(135deg, #eef4fa, #f3ecf8);
+                border: 1px solid #d9d2ea;
+              "
+            >
+              <div
+                style="
+                  display: flex;
+                  gap: 6px;
+                  align-items: center;
+                  font-weight: 500;
+                  color: #5b2a7a;
+                  font-size: 12.5px;
+                "
+              >
+                <svg class="i" style="width: 15px; height: 15px"><use href="#spark" /></svg>Forslag
+                fra KI · bygget på frasebanken
+              </div>
+              <div style="margin-top: 6px; line-height: 1.45">
+                Konsekvens: Økt risiko for fuktskader i gulv og tilliggende vegger. Tiltak: Innhent
+                dokumentasjon. Følg med på sluk og fuger.
+              </div>
+              <div style="display: flex; gap: 6px; margin-top: 8px">
+                <button class="btn sm">Endre</button
+                ><button class="btn sm pri" style="background: #6b3a8c; border-color: #6b3a8c">
+                  Bruk teksten
+                </button>
+              </div>
+            </div>
+            <div
+              style="
+                border-top: 1px solid var(--line);
+                padding-top: 10px;
+                display: flex;
+                gap: 9px;
+                font-size: 13px;
+              "
+            >
+              <div class="av a3" style="width: 26px; height: 26px; font-size: 10px">MH</div>
+              <div>
+                <b style="font-weight: 500">Mats</b>
+                <span style="color: var(--muted); font-size: 12px">10:20</span>
+                <div style="margin-top: 2px">
+                  @Ingrid ta gjerne et bilde ovenfra av slukmansjetten, så har vi det til
+                  sidemannskontrollen.
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ================= A4 iPad LIGGENDE ================= -->
+    <div class="cap">A4 · Befaring på iPad, liggende · 1180 × 820 · uten nett</div>
+    <section class="frame ipl" id="ipad-liggende">
+      <style>
+        .it {
+          height: 72px;
+          background: #fff;
+          border-bottom: 1px solid var(--line);
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 0 20px;
+        }
+        .bigb {
+          height: 56px;
+          min-width: 56px;
+          border-radius: 14px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          font-size: 17px;
+          font-weight: 500;
+          border: 2px solid #cbd5e1;
+          background: #fff;
+          color: var(--ink);
+          padding: 0 18px;
+          white-space: nowrap;
+        }
+        .bigb .i {
+          width: 24px;
+          height: 24px;
+        }
+        .ynb {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          flex: none;
+          width: 236px;
+        }
+        .ynb span {
+          height: 56px;
+          border-radius: 14px;
+          border: 2px solid #cbd5e1;
+          display: grid;
+          place-items: center;
+          font-size: 17px;
+          font-weight: 500;
+          background: #fff;
+        }
+        .ynb .sel-n {
+          background: #1e293b;
+          border-color: #1e293b;
+          color: #fff;
+        }
+        .ynb .sel-y {
+          background: #f6c453;
+          border-color: #b7791f;
+          color: #3d2603;
+        }
+        .iq {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 12px 0;
+          border-top: 1px solid var(--line);
+          font-size: 17px;
+          line-height: 1.35;
+        }
+        .meas {
+          display: flex;
+          align-items: center;
+          gap: 0;
+          border: 2px solid #cbd5e1;
+          border-radius: 14px;
+          overflow: hidden;
+          background: #fff;
+        }
+        .meas span {
+          width: 56px;
+          height: 56px;
+          display: grid;
+          place-items: center;
+          font-size: 26px;
+          color: var(--ink-2);
+          background: #f1f5f9;
+        }
+        .meas b {
+          width: 110px;
+          text-align: center;
+          font-family: "Roboto Mono";
+          font-size: 24px;
+        }
+      </style>
+      <div class="it">
+        <div class="bigb" style="border: 0; padding: 0 8px 0 0">
+          <svg class="i"><use href="#chevl" /></svg>Bad
+        </div>
+        <div style="flex: 1; min-width: 0">
+          <div style="font-size: 13px; color: var(--muted)">
+            Fjellveien 12 · Våtrom › Bad, 1. etasje · punkt 3 av 8
+          </div>
+          <div style="font-size: 20px; font-weight: 700" class="ell">
+            Vanntett sjikt, membran og sluk
+          </div>
+        </div>
+        <div class="sync off" style="font-size: 15px; padding: 10px 14px">
+          <svg class="i"><use href="#cloudoff" /></svg>Uten nett · alt er lagret på iPaden
+        </div>
+      </div>
+      <div
+        style="
+          display: grid;
+          grid-template-columns: 200px 1fr 330px;
+          height: calc(100% - 76px - 100px);
+        "
+      >
+        <aside
+          style="
+            background: #f6f8fb;
+            border-right: 1px solid var(--line);
+            padding: 14px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+          "
+        >
+          <div style="font-size: 13px; color: var(--muted); padding: 0 6px 4px">
+            Bad · 2 av 8 ferdig
+          </div>
+          <style>
+            .rp {
+              height: 52px;
+              border-radius: 12px;
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              padding: 0 12px;
+              font-size: 15px;
+              background: #fff;
+              border: 1px solid var(--line);
+            }
+            .rp .c {
+              width: 22px;
+              height: 22px;
+              border-radius: 99px;
+              display: grid;
+              place-items: center;
+              flex: none;
+              font-size: 12px;
+            }
+            .rp.on {
+              border: 2px solid var(--brand);
+              font-weight: 500;
+            }
+          </style>
+          <div class="rp">
+            <span class="c" style="background: var(--ok); color: #fff">✓</span
+            ><span class="ell">Vegg og himling</span>
+          </div>
+          <div class="rp">
+            <span class="c" style="background: var(--ok); color: #fff">✓</span
+            ><span class="ell">Gulv</span>
+          </div>
+          <div class="rp on">
+            <span class="c" style="background: var(--brand); color: #fff">3</span
+            ><span class="ell">Membran og sluk</span>
+          </div>
+          <div class="rp">
+            <span class="c" style="border: 2px solid #cbd5e1">4</span
+            ><span class="ell">Sanitærutstyr</span>
+          </div>
+          <div class="rp">
+            <span class="c" style="border: 2px solid #cbd5e1">5</span
+            ><span class="ell">Ventilasjon</span>
+          </div>
+          <div class="rp">
+            <span class="c" style="border: 2px solid #cbd5e1">6</span
+            ><span class="ell">Tilliggende</span>
+          </div>
+          <div class="rp">
+            <span class="c" style="border: 2px solid #cbd5e1">7</span
+            ><span class="ell">Hulltaking</span>
+          </div>
+          <div class="rp">
+            <span class="c" style="border: 2px solid #cbd5e1">8</span
+            ><span class="ell">Andre forhold</span>
+          </div>
+        </aside>
+        <section
+          style="
+            padding: 16px 22px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+          "
+        >
+          <div
+            style="
+              display: flex;
+              gap: 14px;
+              align-items: center;
+              background: #fff8e8;
+              border: 2px solid #e9c46a;
+              border-radius: 16px;
+              padding: 12px 16px;
+            "
+          >
+            <span class="tg tg2" style="height: 40px; min-width: 64px; font-size: 18px">TG2</span>
+            <div class="grow" style="font-size: 16px; line-height: 1.35">
+              <b style="font-weight: 500">Forslag: TG2</b> – for lite fall og ingen dokumentasjon.
+            </div>
+            <div
+              class="bigb"
+              style="background: var(--brand); border-color: var(--brand); color: #fff"
+            >
+              Bruk TG2
+            </div>
+          </div>
+          <div class="card" style="padding: 14px 18px; border-radius: 18px">
+            <div
+              style="
+                font-size: 15px;
+                color: var(--ink-2);
+                font-weight: 500;
+                margin-bottom: 10px;
+                display: flex;
+                gap: 8px;
+                align-items: center;
+              "
+            >
+              <svg class="i"><use href="#ruler" /></svg>Målinger
+            </div>
+            <div style="display: flex; gap: 20px; flex-wrap: wrap">
+              <div>
+                <div style="font-size: 14px; color: var(--muted); margin-bottom: 6px">
+                  Fall i dusjsone (mm/m)
+                </div>
+                <div class="meas"><span>−</span><b>8</b><span>+</span></div>
+                <div style="font-size: 13px; color: #7a4b06; margin-top: 5px">
+                  Under 10 – gir avvik
+                </div>
+              </div>
+              <div>
+                <div style="font-size: 14px; color: var(--muted); margin-bottom: 6px">
+                  Sluk til terskel (mm)
+                </div>
+                <div class="meas"><span>−</span><b>28</b><span>+</span></div>
+                <div style="font-size: 13px; color: var(--ok); margin-top: 5px">Innenfor</div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="padding: 4px 18px; border-radius: 18px">
+            <div class="iq" style="border-top: 0">
+              <span class="grow">Tegn på fukt, lekkasje eller sopp rundt sluk?</span>
+              <div class="ynb"><span>Ja</span><span class="sel-n">Nei</span></div>
+            </div>
+            <div class="iq">
+              <span class="grow">Mangler dokumentasjon på våtromsarbeidet?</span>
+              <div class="ynb"><span class="sel-y">Ja · TG2</span><span>Nei</span></div>
+            </div>
+            <div class="iq">
+              <span class="grow">Synlig mangelfull overgang membran–sluk?</span>
+              <div class="ynb"><span>Ja</span><span>Nei</span></div>
+            </div>
+          </div>
+          <div
+            class="card"
+            style="
+              padding: 12px 18px;
+              border-radius: 18px;
+              display: flex;
+              align-items: center;
+              gap: 14px;
+            "
+          >
+            <svg class="i" style="width: 26px; height: 26px; color: var(--ok)">
+              <use href="#drill" />
+            </svg>
+            <div class="grow" style="font-size: 16px">
+              <b style="font-weight: 500">Hulltaking utført</b>
+              <div style="font-size: 14px; color: var(--muted)">
+                Vegg mot gang · 15 % · samtykke fra eier
+              </div>
+            </div>
+            <div class="bigb">Endre</div>
+          </div>
+        </section>
+        <aside
+          style="
+            border-left: 1px solid var(--line);
+            background: #fff;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+          "
+        >
+          <div style="font-size: 15px; font-weight: 500">
+            Bilder <span style="color: var(--muted); font-weight: 400">· 4, venter på nett</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px">
+            <div
+              class="photo"
+              style="height: 104px; outline: 4px solid #e3a93b; outline-offset: -4px"
+            >
+              <svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice">
+                <use href="#ph-sluk" /></svg
+              ><span class="lb">TG2 · sluk</span>
+            </div>
+            <div class="photo" style="height: 104px">
+              <svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice">
+                <use href="#ph-dusj" />
+              </svg>
+            </div>
+            <div class="photo" style="height: 104px">
+              <svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice">
+                <use href="#ph-hull" /></svg
+              ><span class="lb">Hulltaking</span>
+            </div>
+            <div class="photo" style="height: 104px">
+              <svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice">
+                <use href="#ph-rom" />
+              </svg>
+            </div>
+          </div>
+          <div
+            style="
+              border: 2px dashed #cbd5e1;
+              border-radius: 14px;
+              padding: 12px;
+              font-size: 15px;
+              color: var(--ink-2);
+              display: flex;
+              gap: 10px;
+              align-items: center;
+            "
+          >
+            <svg class="i" style="width: 24px; height: 24px; color: var(--brand)">
+              <use href="#mic" /></svg
+            >Hold for å snakke inn notat
+          </div>
+          <div
+            style="
+              background: var(--canvas);
+              border-radius: 14px;
+              padding: 12px;
+              font-size: 14px;
+              line-height: 1.4;
+            "
+          >
+            <b style="font-weight: 500">Mats:</b> Ta et bilde ovenfra av slukmansjetten.
+          </div>
+        </aside>
+      </div>
+      <!-- handlingslinje i tommelsonen -->
+      <div
+        style="
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 100px;
+          background: #fff;
+          border-top: 1px solid var(--line);
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 0 20px;
+        "
+      >
+        <div class="bigb" style="height: 64px">
+          <svg class="i"><use href="#chevl" /></svg>Forrige
+        </div>
+        <div class="bigb" style="height: 64px">
+          <svg class="i"><use href="#flag" /></svg>Til kontoret
+        </div>
+        <div class="sp" style="text-align: center; font-size: 14px; color: var(--muted)">
+          Bad 2 av 8 · hele huset 18 av 39
+        </div>
+        <div
+          class="bigb"
+          style="
+            height: 64px;
+            min-width: 170px;
+            background: var(--brand-900);
+            border-color: var(--brand-900);
+            color: #fff;
+          "
+        >
+          <svg class="i"><use href="#cam" /></svg>Ta bilde
+        </div>
+        <div
+          class="bigb"
+          style="
+            height: 64px;
+            min-width: 170px;
+            background: var(--brand);
+            border-color: var(--brand);
+            color: #fff;
+          "
+        >
+          Neste punkt<svg class="i"><use href="#chev" /></svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= A5 iPad STÅENDE ================= -->
+    <div class="cap">A5 · Befaring på iPad, stående · 820 × 1180 · nytt punkt uten avvik</div>
+    <section class="frame ipp" id="ipad-staende">
+      <div class="it" style="height: 80px">
+        <div class="bigb" style="border: 0; padding: 0">
+          <svg class="i"><use href="#chevl" /></svg>
+        </div>
+        <div style="flex: 1; min-width: 0">
+          <div style="font-size: 13px; color: var(--muted)">
+            Våtrom › Bad, 1. etasje · punkt 4 av 8
+          </div>
+          <div style="font-size: 21px; font-weight: 700" class="ell">
+            Sanitærutstyr og innredning
+          </div>
+        </div>
+        <div class="sync off" style="font-size: 14px; padding: 9px 12px">
+          <svg class="i"><use href="#cloudoff" /></svg>Uten nett
+        </div>
+      </div>
+      <div style="padding: 14px 20px 0; display: flex; gap: 8px; overflow: hidden">
+        <span class="pill p-ok" style="height: 40px; font-size: 15px; padding: 0 14px"
+          >✓ Bad 3/8</span
+        >
+        <span
+          class="pill p-n"
+          style="
+            height: 40px;
+            font-size: 15px;
+            padding: 0 14px;
+            background: #fff;
+            border: 1px solid var(--line);
+          "
+          >Vaskerom 0/8</span
+        >
+        <span
+          class="pill p-n"
+          style="
+            height: 40px;
+            font-size: 15px;
+            padding: 0 14px;
+            background: #fff;
+            border: 1px solid var(--line);
+          "
+          >Kjøkken ✓</span
+        >
+        <span
+          class="pill p-n"
+          style="
+            height: 40px;
+            font-size: 15px;
+            padding: 0 14px;
+            background: #fff;
+            border: 1px solid var(--line);
+          "
+          >Teknisk 0/10</span
+        >
+      </div>
+      <div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px">
+        <div class="card" style="border-radius: 20px; padding: 20px">
+          <div style="font-size: 16px; color: var(--ink-2); margin-bottom: 14px">
+            Gikk alt greit? Trykk <b>Ingen avvik</b>, så settes TG1 og standardtekst, og du går
+            videre.
+          </div>
+          <div
+            class="bigb"
+            style="
+              width: 100%;
+              height: 76px;
+              font-size: 20px;
+              background: var(--ok);
+              border-color: var(--ok);
+              color: #fff;
+            "
+          >
+            <svg class="i" style="width: 28px; height: 28px"><use href="#ok" /></svg>Ingen avvik –
+            TG1
+          </div>
+        </div>
+        <div class="card" style="border-radius: 20px; padding: 18px 20px">
+          <div style="font-size: 16px; font-weight: 500; margin-bottom: 12px">Registrering</div>
+          <div style="font-size: 14px; color: var(--muted); margin-bottom: 8px">Innredning</div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px">
+            <span
+              class="bigb"
+              style="
+                border-color: var(--brand);
+                background: var(--brand-50);
+                color: var(--brand-900);
+              "
+              >✓ Servant med skap</span
+            ><span class="bigb">Speilskap</span
+            ><span
+              class="bigb"
+              style="
+                border-color: var(--brand);
+                background: var(--brand-50);
+                color: var(--brand-900);
+              "
+              >✓ Dusjvegger</span
+            ><span class="bigb">Badekar</span><span class="bigb">Vegghengt toalett</span>
+          </div>
+          <div style="font-size: 14px; color: var(--muted); margin-bottom: 8px">
+            Alder på utstyret
+          </div>
+          <div style="display: flex; gap: 12px; align-items: center">
+            <div class="meas"><span>−</span><b>2009</b><span>+</span></div>
+            <span style="font-size: 15px; color: var(--ink-2)">17 år · som badet</span>
+          </div>
+        </div>
+        <div class="card" style="padding: 4px 20px; border-radius: 20px">
+          <div class="iq" style="border-top: 0">
+            <span class="grow">Lekkasje fra servant, toalett eller blandebatteri?</span>
+            <div class="ynb"><span>Ja</span><span>Nei</span></div>
+          </div>
+          <div class="iq">
+            <span class="grow">Skader på innredning ut over normal slitasje?</span>
+            <div class="ynb"><span>Ja</span><span>Nei</span></div>
+          </div>
+          <div class="iq">
+            <span class="grow">Mangler sklisikring eller fastmontering?</span>
+            <div class="ynb"><span>Ja</span><span>Nei</span></div>
+          </div>
+        </div>
+        <div
+          class="card"
+          style="
+            border-radius: 20px;
+            padding: 16px 20px;
+            display: flex;
+            gap: 14px;
+            align-items: center;
+          "
+        >
+          <div class="photo" style="width: 120px; height: 88px">
+            <svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice">
+              <use href="#ph-rom" />
+            </svg>
+          </div>
+          <div class="grow" style="font-size: 15px; color: var(--ink-2)">
+            1 bilde · lagret på iPaden og lastes opp når du får nett.
+          </div>
+        </div>
+      </div>
+      <div
+        style="
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 116px;
+          background: #fff;
+          border-top: 1px solid var(--line);
+          display: grid;
+          grid-template-columns: 1fr 1.4fr 1.4fr;
+          gap: 12px;
+          padding: 20px;
+        "
+      >
+        <div class="bigb" style="height: 72px">
+          <svg class="i"><use href="#chevl" /></svg>Forrige
+        </div>
+        <div
+          class="bigb"
+          style="
+            height: 72px;
+            background: var(--brand-900);
+            border-color: var(--brand-900);
+            color: #fff;
+          "
+        >
+          <svg class="i"><use href="#cam" /></svg>Ta bilde
+        </div>
+        <div
+          class="bigb"
+          style="height: 72px; background: var(--brand); border-color: var(--brand); color: #fff"
+        >
+          Neste punkt<svg class="i"><use href="#chev" /></svg>
+        </div>
+      </div>
+    </section>
+    <div style="height: 40px"></div>
+  </body>
+</html>

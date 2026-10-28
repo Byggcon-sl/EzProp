@@ -1,0 +1,51 @@
+Gruppe,Kontrollpunkt,TG0/TG1,TG2,TG3,TGIU,Tiltak
+Felles,Felles for alle kontrollpunkter,24,210,89,10,970
+"Forhold som åpenbart kan medføre fare for helse, miljø og sikkerhet","Helse, miljø og sikkerhet",1,0,0,0,2
+Innvendig,Andre innvendige forhold,0,2,0,0,5
+Innvendig,Etasjeskille/gulv mot grunn,0,5,4,0,56
+Innvendig,Innvendige dører,0,2,0,0,5
+Innvendig,Innvendige trapper,0,8,1,0,20
+Innvendig,Krypkjeller,0,12,4,0,58
+Innvendig,Overflater,0,6,0,0,21
+Innvendig,Pipe og ildsted,0,11,7,0,129
+Innvendig,Radon,0,7,0,0,14
+Innvendig,Rom Under Terreng,0,11,3,0,69
+Kjøkken,Avtrekk,0,8,4,0,44
+Kjøkken,Overflater og innredning,0,14,5,0,83
+Spesialrom,Overflater og konstruksjon,0,14,5,0,72
+Spesialrom,Teknisk anlegg,0,4,0,0,12
+Tekniske installasjoner,Andre VVS-installasjoner,0,7,3,0,35
+Tekniske installasjoner,Andre installasjoner,0,2,0,0,5
+Tekniske installasjoner,Avløpsrør,0,9,5,0,43
+Tekniske installasjoner,Elektrisk anlegg,0,3,11,0,30
+Tekniske installasjoner,Utstyr for varsling og slukking av brann,0,0,13,0,30
+Tekniske installasjoner,Vannbåren varme,0,6,2,0,18
+Tekniske installasjoner,Vannledninger,0,13,7,0,48
+Tekniske installasjoner,Varmesentral,0,4,1,0,12
+Tekniske installasjoner,Varmtvannstank,0,2,0,0,5
+Tekniske installasjoner,Ventilasjon,0,5,4,0,36
+Tomteforhold,Andre tomteforhold,0,2,0,0,5
+Tomteforhold,Byggegrunn,0,2,0,0,5
+Tomteforhold,Forstøtningsmurer,0,6,3,0,31
+Tomteforhold,Fuktsikring og drenering,0,6,2,0,21
+Tomteforhold,Grunnmur og fundamenter,0,8,2,0,34
+Tomteforhold,Oljetank,0,4,2,0,15
+Tomteforhold,Septiktank,0,3,2,0,14
+Tomteforhold,Terrengforhold,0,3,0,0,7
+Tomteforhold,Utvendige vann- og avløpsledninger,0,6,5,0,28
+Utvendig,Andre utvendige forhold,0,2,0,0,5
+Utvendig,"Balkonger, terrasser og rom under balkonger",0,11,3,0,60
+Utvendig,Dører,0,5,2,0,21
+Utvendig,Nedløp og beslag,0,7,3,0,37
+Utvendig,Takkonstruksjon/Loft,0,11,4,0,59
+Utvendig,Taktekking,0,11,3,1,47
+Utvendig,Utvendige trapper,0,6,2,0,31
+Utvendig,Veggkonstruksjon,0,12,6,0,73
+Utvendig,Vinduer,0,6,2,0,28
+Våtrom,Generell,0,1,1,0,6
+Våtrom,Overflater Gulv,0,12,8,0,146
+Våtrom,Overflater vegger og himling,0,12,5,0,119
+Våtrom,Sanitærutstyr og innredning,0,9,5,0,51
+Våtrom,"Sluk, membran og tettesjikt",0,12,5,0,123
+Våtrom,Tilliggende konstruksjoner våtrom,0,8,4,1,61
+Våtrom,Ventilasjon,0,11,7,0,77
