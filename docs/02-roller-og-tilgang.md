@@ -23,4 +23,4 @@ Rettighetene utvides fase for fase (`src/core/access/permissions.ts`). Sidemann 
 
 ## Innlogging
 
-Engangskode på e-post (Better Auth), samme løsning som Optiplan. Nye brukere opprettes ikke ved innlogging; en person må være lagt inn som ansatt først. Hvordan innloggingen deles teknisk med Optiplan avgjøres i fase 0b (ADR).
+Engangskode på e-post (Better Auth), samme løsning som Optiplan. Nye brukere opprettes ikke ved innlogging; en person må være lagt inn som ansatt først. **Felles innlogging og felles profil med Optiplan for admin og ansatte** (Ståle 28.10.2026): samme bruker i begge løsningene, med samme navn, telefon, stilling og kontor. Kundene (Optiplans styrer, EzProps kunder og meglere) holdes adskilt og deler aldri bruker. Hvordan delingen gjøres teknisk avgjøres i fase 0b (ADR).

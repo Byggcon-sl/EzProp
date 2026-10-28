@@ -29,7 +29,7 @@ Sist oppdatert: 28.10.2026
 
 - Ingen betaling i EzProp. Byggcon fakturerer etter levering via adapter til Visma eAccounting.
 - Verdidel og markedsverdi er ikke krav for produksjon.
-- Ingen samspill med Optiplan ut over felles innlogging.
+- Samme Azure-miljø som Optiplan. Felles innlogging og felles profil for admin og ansatte, og bytte mellom løsningene med ett trykk (Ståle 28.10.2026). Kundene holdes adskilt. Annet samspill kommer etter hvert, ikke nå.
 - Alt skjer i nettleseren. Ingen egen app.
 
 Hele bakgrunnen står i `docs/kartlegging/LES-MEG-kartlegging.md` (beslutningene) og `docs/07-utviklingsplan.md` (fasene).
