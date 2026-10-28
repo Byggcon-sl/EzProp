@@ -197,6 +197,7 @@ Før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerkl�
 - [ ] **Tilgang bare for ansatte** (ingen innlogging for kunder eller meglere ennå)
 - [ ] **Intern personvernerklæring:** kort om hva som lagres, hvorfor, hvor og hvor lenge
 - [ ] **Regel for sletting av data fra betaen** som ikke skal beholdes (for eksempel prøverapporter som bare var for testing)
+  - Merknad 28.10.2026 (oppgave 4): `trial_*`-tabellene fra fase 1 slettes eller gjøres om her bare fordi dataene er oppdiktede. Det er ikke presedens for sletting av ekte data (regel 3: ingenting slettes permanent).
 - [ ] **Sperring av iPader** (innspill P6 og D10): kode eller Face ID påkrevd, og en mistet iPad kan sperres. Må være på plass før første ekte befaring på iPad i fase 2b.
 
 **Ferdig når:** Ståle har sett listen krysset av og godkjent at ekte data kan legges inn.

@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 28.10.2026 (oppgave 4: oppgavekort for første kandidat, PowerSync, på branchen `fase1-kandidat-powersync`)
+Sist oppdatert: 28.10.2026 (oppgave 4: oppgavekort for PowerSync oppdatert etter runde 1, branchen `fase1-kandidat-powersync`)
 
 ## Gjeldende fase
 
@@ -12,7 +12,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (oppgave 3, PR #6)
 
 ## Gjeldende oppgave
 
-**Oppgave 4 – Første kandidat: PowerSync koblet til testskjemaet** (fase 1, punktet «Kandidater satt opp mot samme testskjema»). Branch `fase1-kandidat-powersync` fra `main` (etter PR #6). Oppgavekort `docs/funksjoner/fase1-kandidat-powersync.md`, protokoll og resultatmal for prøve A og B `docs/funksjoner/fase1-prove-ab-powersync.md`. Steg: oppgavekort skrevet 28.10.2026; neste er forenkler, arkitekt, sikkerhet-personvern og test-leder (testplan), så utvikler og testskriver i parallell (fire biter, kontrakten står i kortet under «Data»). Versjon 0.1.2 → 0.1.3. Nytt spørsmål nr. 10 til Ståle (PowerSync: selvdrevet eller sky, pris, lisens, databehandleravtale), ikke blokkerende.
+**Oppgave 4 – Første kandidat: PowerSync koblet til testskjemaet** (fase 1, punktet «Kandidater satt opp mot samme testskjema»). Branch `fase1-kandidat-powersync` fra `main` (etter PR #6). Oppgavekort `docs/funksjoner/fase1-kandidat-powersync.md`, protokoll og resultatmal for prøve A og B `docs/funksjoner/fase1-prove-ab-powersync.md`. Steg: oppgavekort skrevet 28.10.2026; runde 1 (forenkler, arkitekt, sikkerhet-personvern, test-leder) ferdig og kortet oppdatert samme dag (DELETE kuttet, HS256 og Container Apps som eneste valg, `TrialSyncStore`-grensesnitt, tenant-voktere på id og skjema, bilderute som lager raden selv, testkrok `window.__offlineTrial`; avgjørelsene står nederst i kortet). Neste: test-leder skriver testplanen, så utvikler og testskriver i parallell (fire biter, kontrakten står i kortet under «Data»). Versjon 0.1.2 → 0.1.3. Nytt spørsmål nr. 10 til Ståle (PowerSync: selvdrevet eller sky, pris, lisens, databehandleravtale), ikke blokkerende.
 
 **Rekkefølge videre i fase 1:** kandidat 2 (ElectricSQL) og kandidat 3 (egenbygd) på samme skjema og samme protokoll → Ståle kjører prøve A og B per kandidat på ekte iPad når PR #7 og PowerSync i Azure er oppe → prøve C–F → sammenligning og ADR. Punktet «Kandidater satt opp …» krysses av først når alle tre er satt opp.
 
