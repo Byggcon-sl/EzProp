@@ -7,6 +7,14 @@
 | EzProp hovedløkke | `trig_01PjEi1FmH6JzevEdpMoX7hp` | annenhver time, minutt 42 (`42 */2 * * *`, UTC) | 28.10.2026 kl. 13:42 norsk tid |
 | EzProp nattløkke | `trig_01HAksdUvEXW6rRLmPVraJMN` | hver natt kl. 02:17 norsk tid | 29.10.2026 |
 
+**Første kjøring 28.10.2026 kl. 13:44 stoppet etter 20 sekunder:** sesjonen rutinen startet hadde ikke GitHub-tilgang (403 på `gh api`, ingen push) og ikke sesjonsverktøyene (`list_sessions`, `set_session_tags`). Rutinene kan ikke gi seg selv dette; det settes på miljøet og rutinen i Claude.
+
+**Må gjøres av Ståle før rutinene virker:**
+1. **Repoet inn i miljøet:** Claude → skymiljøet «Byggcon» (menyen i tittellinjen på en sesjon) → Edit → Repositories → legg til `Byggcon-sl/EzProp`. Da får sesjonene rutinene starter GitHub-tilgang med push.
+2. **Sesjonsverktøyene inn i rutinene:** Claude → Routines → «EzProp hovedløkke» og «EzProp nattløkke» → legg til koblingen «Claude Code Remote» (den gir `list_sessions` og `set_session_tags`). Uten den hopper rutinen over sjekken «kjører en annen sesjon allerede?», men virker ellers.
+
+Promptene er rettet samme dag: finnes ikke GitHub-tilgang, sender rutinen ett varsel og avslutter uten å gjøre noe. Mangler sesjonsverktøyene, hopper den over det steget. Begge rutinene kjører prosjektlederen på ledermodellen (som i `.claude/agents/prosjektleder.md`).
+
 Rutinene kan pauses, endres eller slettes i Claude under «Routines», eller av en sesjon med `update_trigger`. Sesjonene rutinene starter, har ikke SharePoint-koblingen; det de trenger ligger i repoet.
 
 ## Slik ble de foreslått
