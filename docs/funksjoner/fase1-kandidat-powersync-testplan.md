@@ -7,6 +7,8 @@
 - **Laget av:** test-leder, før koding. Testnavnene er bindende for testskriver. Utvikler leser avsnitt 8 («Krav til koden som testene bygger på»).
 - **Støtter hovedmål:** Tid (befaring uten nett på iPad er den største tidsbesparelsen mot IVIT; testene viser at svar overlever lukking og uten nett) og reklamasjoner (ingenting går tapt mellom befaring og rapport; testene viser at bilder og svar bare slippes når serveren har bekreftet). KI først: ikke KI her, men synklaget testene vokter, er der KI-forslag senere skal vises på iPaden.
 
+> **Avgjørelse etter runde 2 (prosjektleder, 28.10.2026):** tekstfletting (Yjs), varselet «Endret av en annen» og bildekøen **inkludert serverdelen** (`storeTrialPhoto`, ruten `PUT /api/prove/bilder/[id]`, `TRIAL_UPLOAD_DIR`) er kuttet til egne oppgaver. Kolonnen «Kommer i stedet» i avsnitt 11.2 gjelder, med ett unntak: **3.4 går også ut** (serverkode uten kaller bygges i bildekø-oppgaven, samme regel som for `DELETE` i runde 1). Dermed går 2.1, 2.2, 2.4 og 3.4 ut, «ugyldig text_state»-testen ut, «synk av trial_photos-raden etter opplasting …» til bildekø-oppgaven, og `test.fixme`-unntakene trengs ikke. Nytt i 3.2: «kropp over 4 MB gir 413 uten skriving» (e2e `request`, `TRIAL_SYNC_LIMITS.maxBodyBytes`). Nytt i 6.2: «innlogging med annen organisasjon tømmer lokal database og hurtiglager» sjekker også `caches.keys()`. Nytt i 2.9: synkreglene har eksplisitt kolonneliste uten `storage_path`, `text_state`, `created_by`, `updated_by`, `deleted_by`, og ingen `request.parameters()`. Test-leder justerer planen; dette avsnittet gjelder til det er gjort. Begrunnelsen står i kortet under «Avgjørelser etter runde 2».
+
 Selve prøvene A og B på ekte iPad er **ikke** del av denne planen. De kjøres av Ståle etter protokollen i `docs/funksjoner/fase1-prove-ab-powersync.md`. Planen her dekker alt KI kan vise i Vitest og Playwright (Chromium) uten PowerSync-tjenesten.
 
 ## 1. Hva som finnes fra før (og brukes)
@@ -126,7 +128,7 @@ Importerer bare klientskjemaet (ren datadefinisjon). Hvis `@powersync/web` ikke 
 | «sync-rules.yaml filtrerer alle tre tabellene på organization_id og deleted_at» | Én bøtte, parameter med `request.jwt() ->> 'organization_id'`, tre `SELECT` som hver inneholder `organization_id = bucket.organization_id` og `deleted_at IS NULL`. Ingen fjerde tabell. |
 | «docker-compose binder PowerSync bare til 127.0.0.1 og bruker fast versjonstag» | `powersync.ports[0]` begynner med `127.0.0.1:`; `image` slutter ikke på `:latest` og har en tag; `depends_on.db.condition === "service_healthy"`; konfigurasjonsfilene er montert `:ro`; `db.command` inneholder `wal_level=logical`. |
 
-Hvis YAML-parser ikke finnes i treet, leses filene som tekst med regex. Ingen ny avhengighet for dette.
+Filene leses som tekst med regex (ingen YAML-parser i treet, og `config.yaml` bruker `!env`-merker). Ingen ny avhengighet for dette.
 
 ## 3. Integrasjonstester mot testdatabasen (Vitest, `beforeEach(resetDatabase)`)
 
@@ -278,7 +280,7 @@ Alle `page.route`-tester bruker `page.unroute` i `finally`, og e2e sletter aldri
 |---|---|---|
 | `start.sh` er gyldig bash 3.2 | `bash -n start.sh` og `bash --posix -n start.sh` | ingen feil; ingen `[[ … ]]`-konstruksjoner nye for bash 4 (`mapfile`, `declare -A`, `${var,,}`) i `git diff main.. -- start.sh` |
 | `start.sh` kjører uten Docker | `EZPROP_SKIP_DOCKER=1 ./start.sh` (med database i `DATABASE_URL`) | går gjennom alle steg, `TOTALT` stemmer med antall `steg`-kall, skriver PowerSync-adressen i oppsummeringen |
-| compose er gyldig | `docker compose config -q` | ingen feil (Docker CLI finnes i skyen; daemon trengs ikke for `config`). Noteres «ikke kjørt» hvis CLI mangler |
+| compose er gyldig | `docker compose config -q` | ingen feil (Compose v5.6.1 finnes i skyen; daemon trengs ikke for `config`, så sjekken kjøres alltid) |
 | Ingen produktnavn i `public/sw.js` | `grep -n "EzProp" public/sw.js` | tomt |
 | Hodekommentar | `grep -L "Prøve fase 1" src/modules/offline-trial/sync/powersync/*.ts src/modules/offline-trial/server/photo-storage.ts` | tomt (alle har den) |
 | Ingen hemmelighet i repoet | `grep -rn "POWERSYNC_JWT_SECRET" --include=*.ts --include=*.yaml --include=*.yml . | grep -v node_modules` | bare `process.env`, `!env` og `.env.example` |
@@ -350,3 +352,38 @@ Godkjennes bare når alt dette stemmer:
 - Ingen `.test.tsx` (Vitest plukker dem ikke opp).
 - Avsnitt 7 er gått gjennom; det som ikke kunne kjøres (f.eks. Docker-daemon), står som «ikke kjørt» i testrapporten, ikke som grønt.
 - Testrapporten lister funn som «alvorlig» (tilgang, tenant, tap av data, bilde slippes før bekreftelse) eller «lite» (tekst, rekkefølge, ytelse).
+
+## 11. Tillegg etter runde 1, andre kjøring (test-leder, 28.10.2026)
+
+Forhåndsvurderingen ble kjørt på nytt med den snevrere rammen (kortets merknad nederst). Akseptkriteriene er testbare uten PowerSync-tjenesten, med disse rettelsene. Punktene merket **(kort)** må prosjektleder ta inn i kortet; resten gjelder testskriver og utvikler direkte.
+
+### 11.1 Rettelser i kortet (kort)
+
+1. **Bilde-telleren `M` kan aldri bli 0 i e2e slik pkt. 9 definerer den.** Pkt. 3 sier at `uploaded_at` aldri skrives lokalt, og pkt. 9 teller `trial_photos`-rader uten `uploaded_at`. Uten synktjenesten kommer serverens `uploaded_at` aldri ned til enheten, så akseptkriteriet «etter bekreftelse viser indikatoren 0 bilder» blir rødt i CI. **Ny definisjon:** `M` = antall filer som ligger igjen i IndexedDB `offline-trial-photos` på denne enheten (filen slettes først når serveren har bekreftet sha256, pkt. 22). Det er også det takstmannen mener med «venter»: filer som ikke er sendt fra denne iPaden. Testen 6.2 «bildet blir liggende lokalt …» mister påstanden «raden i lokal database har `uploaded_at`»; den kan ikke holde uten tjenesten.
+2. **`var/` i `.gitignore`:** kortet sier `var/uploads/trial` er i `.gitignore`, men `var/` finnes ikke der i dag. Legges til i PR-en; sjekk i avsnitt 7: `git check-ignore -q var/uploads/trial/x && echo ok`.
+3. **Service worker må ikke svare for API-kall.** Playwright fanger ikke kall som gjøres fra service workerens `fetch()`. Kaller `public/sw.js` `event.respondWith(fetch(event.request))` for `/api/*`, virker ingen av `page.route`-testene i 6.2 (bilde avbrutt, feil sha256, holdt synkkø). Krav (nytt pkt. 12 i avsnitt 8): for `/api/*`, `/logg-inn*` og `/dev/*` returnerer `fetch`-lytteren **uten** `respondWith`, så nettleseren håndterer kallet selv. Reserve hvis det ikke lar seg gjøre: `test.use({ serviceWorkers: "block" })` i en egen `describe` for `page.route`-testene, med begrunnelse i testfilen.
+4. **`start.sh` kan ikke kjøres rett fram:** den ender i `exec pnpm dev` og stopper det som lytter på port 3000. Sjekken i avsnitt 7 blir: `bash -n start.sh`, `test "$(grep -c '^steg "' start.sh)" = "$(sed -n 's/^TOTALT=//p' start.sh)"` (antall steg stemmer med `TOTALT`), `grep -n EZPROP_SKIP_DOCKER start.sh` viser at både Docker-steget og PowerSync-ventingen hoppes over, og kjøring bare når port 3000 er ledig: `EZPROP_SKIP_DOCKER=1 EZPROP_NO_BROWSER=1 timeout 90 ./start.sh`, der alle steg til og med «Starter» vises med PowerSync-adressen i oppsummeringen, og avslutningskode 124 (timeout) godtas.
+
+### 11.2 Hvis forenkler kutter i runde 2 (tester som faller bort, og hva som kommer i stedet)
+
+Tilgangs- og tenant-testene (alle merket **Obligatorisk**) er aldri betinget.
+
+| Kuttes | Faller bort | Kommer i stedet |
+|---|---|---|
+| Yjs/tekstfletting (pkt. 17–18) | Hele 2.1. I 3.2: «to enheters text_state … flettes på serveren …» og «ugyldig text_state gir InvalidTrialChangeError». I 6.2: «tekst skrevet i feltet lagres med text_state …» (ikke `fixme`, fjernes). Avsnitt 7: `yjs` skal da **ikke** stå i `git diff main.. -- package.json`. | 3.2 ny: «tekstfelt følger siste endring vinner, og innkommende text_state lagres ikke» (to PUT på `roof_description` med ulik `value` → siste `value`, `text_state` er `null` i databasen; serveren tar aldri vare på en tilstand den ikke kan flette). 2.8 ny: «text_state godtas som null eller streng» (Zod-skjemaet avviser ikke feltet, så en eldre klient ikke får 400). |
+| Bildekø (pkt. 22) | 2.4. I 6.2: «bildet blir liggende lokalt …», «bildet beholdes … feil sha256», og bildedelen av «indikatoren bøyer entall og flertall …» (bare «1 endring»/«2 endringer» testes). | 6.2 ny: «et valgt bilde gir en trial_photos-rad i lokal database uten fil» (velg bilde → `page.evaluate` leser raden med `name` og `size_bytes`; ingen IndexedDB-fil). Det er beviset for «bildepostene kommer fram» i PR-teksten. 3.4 beholdes uendret: ruten `PUT /api/prove/bilder/[id]` er server-kode uten klient og testes likevel. |
+| Varselet «Endret av en annen» (pkt. 19), hvis merknaden «siste endring vinner uten varsel» leses slik | 2.2. I 6.2: «TG og valg satt utenfra viser Endret av en annen …», «tekstfelt satt utenfra gir ikke varsel …», «første lasting … gir ingen varsler». | 6.2 «tall satt utenfra via testkroken …» beholdes, men uten påstanden om varselet: `floors = 7` fra kroken → feltet viser «7». Den viser at `NumberInput` leser fra `answers` (kjent svakhet fra oppgave 3) og er ikke betinget. |
+
+Forenklers avgjørelse skrives inn øverst i denne planen med dato, så testskriver vet hvilken kolonne som gjelder.
+
+### 11.3 Presiseringer til avsnitt 2, 3, 6 og 7
+
+- **2.9 leser filene med regex, ikke YAML-parser.** Det finnes ingen `yaml`-pakke i treet, og `config.yaml` bruker `!env`-merker som en vanlig parser ikke kjenner. «Hvis» i 2.9 strykes.
+- **`docker compose config -q` kjøres alltid.** Compose v5.6.1 finnes i skyen (bare CLI, ingen daemon trengs for `config`). Avsnitt 7 er rettet; «ikke kjørt» i avsnitt 10 gjelder bare det som trenger daemon (selve tjenesten).
+- **3.2 ny sak: «fremmed id i en annen tabell gir også 409».** Kortet sier «i noen av de tre tabellene». B har et `trial_forms` med id X; A sender `trial_answers` med id X → `TrialIdConflictError`, ingen skriving. Merkes **Obligatorisk** (det er tenant-vokteren).
+- **3.2/3.4 ny sak: «synk av trial_photos-raden etter opplasting sletter ikke sha256 og uploaded_at».** Rekkefølgen i prøven er: ruten lager raden og setter serverfeltene, deretter kommer PowerSync-bunten med samme id (uten disse feltene). PUT via `applyTrialChanges` etterpå → `sha256`, `storage_path`, `uploaded_at` står. Viser «ingenting går tapt» for den vanlige rekkefølgen. Alvorlig hvis rød.
+- **6.2 «indikatoren bøyer entall og flertall riktig»:** ingen `pendingOverride`-krok. SDK-en laster ikke opp endringer uten å være koblet til tjenesten, så uten tjeneste er køen deterministisk: én endring gir «Venter: 1 endring, …», to gir «2 endringer». Mindre testkode i produktet.
+- **Premiss for 6.2:** Playwright gir ny nettleserkontekst per test, så den lokale databasen er tom ved hver test, og uten tjenesten kommer ingenting ned fra serveren. Listen starter alltid tom («Testskjema 1» er deterministisk), og svar fra én test finnes ikke i den neste. Testskriver skal ikke forvente det motsatte.
+- **Testkroken er bygg-tid:** `NEXT_PUBLIC_*` bakes inn ved `next build`. `webServer.env` i `playwright.config.ts` treffer `pnpm build`, så det holder; men med `reuseExistingServer` lokalt må serveren på port 3100 være bygget med kroken, ellers feiler krok-testene med en uforståelig feil. Testskriver legger en tydelig `expect(window.__offlineTrial).toBeDefined()`-sjekk med melding «Bygg appen med NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS=1» først i de testene.
+- **Avsnitt 8, nytt pkt. 12:** service worker svarer aldri (`respondWith`) for `/api/*`, `/logg-inn*` og `/dev/*` (se 11.1 nr. 3). Nytt pkt. 13: `M` i indikatoren regnes fra IndexedDB-filene (se 11.1 nr. 1).
+- **Til prosjektleder:** arkitektens presiseringer i `src/modules/offline-trial/server/types.ts` (transaksjon og rekkefølge, `isUuid` i Zod, `row_version` bare ved faktisk endring) ligger **ukommittert** på branchen. Planens 3.2 («samme bunt to ganger … øker ikke row_version», «hele bunten avvises») bygger på dem; de må committes før testskriver starter.

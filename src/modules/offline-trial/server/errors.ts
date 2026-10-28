@@ -21,19 +21,3 @@ export class TrialIdConflictError extends Error {
     this.name = "TrialIdConflictError";
   }
 }
-
-/** Bilde-id med feil format, eller bilde i en annen organisasjon. Gir 404 uten at noe skrives. */
-export class TrialPhotoNotFoundError extends Error {
-  constructor(message = "Fant ikke bildet.") {
-    super(message);
-    this.name = "TrialPhotoNotFoundError";
-  }
-}
-
-/** Bildefilen er større enn `TRIAL_PHOTO_MAX_BYTES`. Gir 413. */
-export class TrialPhotoTooLargeError extends Error {
-  constructor(message = "Bildet er for stort.") {
-    super(message);
-    this.name = "TrialPhotoTooLargeError";
-  }
-}

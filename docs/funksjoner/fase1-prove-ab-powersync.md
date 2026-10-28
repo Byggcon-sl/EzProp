@@ -3,6 +3,7 @@
 - **Kandidat:** PowerSync (første kandidat). Oppgavekort: `docs/funksjoner/fase1-kandidat-powersync.md`.
 - **Plan:** `docs/07-utviklingsplan.md` fase 1, prøve A (må) og prøve B (bør). Kriteriene for alle kandidater står i `docs/funksjoner/fase1-testskjema.md` («Plan for prøvene A–F» og «Kriterier for å sammenligne kandidatene»).
 - **Status:** mal, ikke kjørt. Fylles inn av Ståle (tall og skjermopptak) og utvikler (teknisk).
+- **Viktig (runde 2, 28.10.2026):** PR-en for PowerSync-kandidaten lagrer bare bilde**postene** (navn og størrelse), ikke selve bildefilene, og har ingen tekstfletting eller varsel. Derfor: **steg A4 (200 bilder) kjøres først når oppgaven «Bildekø for prøve A og D» er merget**, og **hele prøve B kjøres først når oppgaven «Prøve B: tekstfletting og varsel» er merget.** Før det: kjør prøve A uten A4 (bildeknappen kan brukes på noen få bilder for å se at postene kommer fram i A8). Ellers kaster du bort tid.
 - **Støtter hovedmål:** Tid (befaring uten nett på iPad) og reklamasjoner (ingenting går tapt mellom befaring og rapport).
 
 Samme protokoll brukes for ElectricSQL og egenbygd, i hver sin fil, så kandidatene kan sammenlignes tall for tall.
@@ -25,7 +26,7 @@ Kjøres **tre ganger**, gjerne på begge iPadene samtidig med hvert sitt skjema.
 | A1 | Nett på. Åpne appen fra hjemskjermen, trykk «Nytt testskjema», åpne det. Se at indikatoren viser «Alt er lagret på serveren». | Klokkeslett start |
 | A2 | Slå på flymodus. Indikatoren skal vise «Uten nett». | |
 | A3 | Fyll ut alle 40 felt. Telleren skal nå «40 av 40 felt utfylt». | Tid brukt |
-| A4 | Ta **200 bilder** fordelt på de åtte bildefeltene (ca. 25 per felt), ett og ett med kameraknappen. Indikatoren teller bilder som venter. | Antall bilder indikatoren viser |
+| A4 | **Hopp over til bildekøen er merget.** Deretter: ta **200 bilder** fordelt på de åtte bildefeltene (ca. 25 per felt), ett og ett med kameraknappen. Indikatoren teller bilder som venter. | Antall bilder indikatoren viser |
 | A5 | Lukk appen helt (sveip opp fra appveksleren). Åpne igjen fra hjemskjermen. Skjemaet skal åpne uten nett med alle svar og alle bilder. | Åpnet? Antall felt og bilder etter åpning |
 | A6 | Start iPaden på nytt. Åpne appen fra hjemskjermen. Samme kontroll som A5. | Åpnet? Antall felt og bilder etter omstart |
 | A7 | Slå av flymodus. La appen ligge åpen. Ta tiden til indikatoren viser «Alt er lagret på serveren». | **Tid til synk ferdig** |
@@ -49,7 +50,7 @@ Kjøres **tre ganger**, gjerne på begge iPadene samtidig med hvert sitt skjema.
 
 ## Prøve B – to i samme skjema (bør)
 
-Begge iPader **med nett**, samme testskjema (åpne det samme navnet fra listen på begge).
+**Kjøres først når «Prøve B: tekstfletting og varsel» er merget.** Begge iPader **med nett**, samme testskjema (åpne det samme navnet fra listen på begge).
 
 | Steg | Gjør dette | Noter |
 |---|---|---|
@@ -91,10 +92,9 @@ Fylles inn i byggingen, også det som ikke virket. Det er grunnlaget for kriteri
 | Støtter oppsettet flere faner samtidig i Safari? | |
 | Virket SDK-en i Next 16 uten omveier? Hvilke tilpasninger måtte til? | |
 | Service worker: håndskrevet eller bibliotek? Hva måtte hurtiglagres for at skjemaet åpner uten nett? | |
-| Tekstfletting med Yjs gjennom PowerSync: virket / utsatt. Hvorfor? | |
 | Hvor mange linjer kode eier vi selv for synklaget (uten tester)? | |
 | Tid brukt på å få kandidaten klar (arbeidsdager) | |
-| Versjon av `@powersync/web`, `@journeyapps/wa-sqlite`, PowerSync-tjenesten (bilde) og `yjs` | |
+| Versjon av `@powersync/web`, `@journeyapps/wa-sqlite` og PowerSync-tjenesten (bilde) | |
 | Lisens på hver (sjekket dato) | |
 | Det som ikke virket i byggingen | |
 

@@ -20,7 +20,8 @@ export type TrialChangeOp = "PUT" | "PATCH";
  * Én endring fra enheten (én rad). `data` har kolonnenavn i snake_case som i PostgreSQL, med
  * verdiene slik de lå i den lokale databasen (`value` som JSON-tekst, tidsstempler som tekst).
  * Serverstyrte kolonner (`organization_id`, `created_by`, `updated_by`, `row_version`,
- * `uploaded_at`, `sha256`, `storage_path`) overses uten feil.
+ * `uploaded_at`, `sha256`, `storage_path`, `text_state`) overses uten feil. `text_state` godtas som
+ * null eller streng, men skrives aldri (tekstfletting er egen oppgave).
  */
 export interface TrialChangeOperation {
   op: TrialChangeOp;
@@ -35,11 +36,15 @@ export interface TrialChangesRequest {
   operations: TrialChangeOperation[];
 }
 
-/** Grenser for Zod-skjemaet i ruten. Utenfor grensene gir 400 og ingen skriving. */
+/**
+ * Grenser for ruten. Utenfor grensene gir 400 og ingen skriving. `maxBodyBytes` sjekkes mot
+ * `Content-Length` **før** `request.json()` leses og gir 413 (500 operasjoner à 64 kB er i teorien
+ * over 30 MB).
+ */
 export const TRIAL_SYNC_LIMITS = {
+  maxBodyBytes: 4 * 1024 * 1024,
   maxOperationsPerBatch: 500,
   maxValueBytes: 64 * 1024,
-  maxTextStateBytes: 64 * 1024,
   maxDeviceIdLength: 64,
 } as const;
 
@@ -69,25 +74,8 @@ export interface SyncTokenResult {
   endpoint: string;
 }
 
-/** Det ruten `PUT /api/prove/bilder/[id]` leser fra spørrestrengen og hodene. */
-export interface TrialPhotoMeta {
-  trialFormId: string;
-  fieldKey: string;
-  name: string;
-  sizeBytes: number;
-  /** Må begynne med `image/`, ellers 400. */
-  contentType: string;
-}
-
-export interface StoreTrialPhotoResult {
-  /** Hex-kodet SHA-256 av filen slik den ble lagret. Klienten sammenligner før den sletter lokalt. */
-  sha256: string;
-}
-
-/** Standardgrense for `TRIAL_PHOTO_MAX_BYTES` (25 MB). Over gir 413. */
-export const TRIAL_PHOTO_DEFAULT_MAX_BYTES = 25 * 1024 * 1024;
-
-// Signaturer for de fem funksjonene i `server/`. Alle kaller `requireOrganizationAccess(actor,
+// Signaturer for de fire funksjonene i `server/`. Bildeopplasting (`storeTrialPhoto`) er kuttet til
+// oppgaven «Bildekø for prøve A og D» (runde 2, 28.10.2026). Alle kaller `requireOrganizationAccess(actor,
 // organizationId, "organization.read")` først og bruker `grant.organizationId` videre.
 
 /** `server/sync-token.ts`. Kaster tydelig feil uten `POWERSYNC_JWT_SECRET`; nekter utviklingsverdien utenfor localhost. */
@@ -97,8 +85,18 @@ export type IssueSyncToken = (actor: Actor, organizationId: string) => Promise<S
  * `server/apply-changes.ts`. Idempotent upsert. `trial_forms` og `trial_photos` på `id`,
  * `trial_answers` på `(trial_form_id, field_key)` der serverens `id` beholdes. Fremmed `id` i noen
  * av de tre tabellene gir `TrialIdConflictError` før noe skrives; `trial_answers`/`trial_photos`
- * uten skjema i `grant.organizationId` gir `InvalidTrialChangeError`. Tekstfelt med `text_state`
- * flettes med lagret tilstand, og `value` settes til den flettede teksten.
+ * uten skjema i `grant.organizationId` gir `InvalidTrialChangeError`. Alle felt følger siste
+ * endring vinner; `text_state` skrives aldri (tekstfletting er egen oppgave).
+ *
+ * Presiseringer fra arkitekt (runde 1, 28.10.2026):
+ * - Hele bunten skrives i én transaksjon, tabellene i rekkefølgen `trial_forms` →
+ *   `trial_answers` → `trial_photos` uansett rekkefølge i nyttelasten (fremmednøkkelen til
+ *   skjemaet må finnes først). Feiler én operasjon, skrives ingenting.
+ * - `id` og `trial_form_id` må bestå `isUuid` i Zod-skjemaet (400), ellers ender en ugyldig id
+ *   som databasefeil (500).
+ * - Drizzle sitt `$onUpdate` kjører ikke ved `onConflictDoUpdate`: `row_version = row_version + 1`,
+ *   `updated_at = now()` og `updated_by` settes eksplisitt i `set`, og bare når noe faktisk er endret
+ *   (`WHERE` på at minst én kolonne er ulik), så samme bunt to ganger ikke øker versjonen.
  */
 export type ApplyTrialChanges = (
   actor: Actor,
@@ -114,16 +112,3 @@ export type ListTrialAnswers = (
   trialFormId: string,
 ) => Promise<TrialAnswerRecord[]>;
 
-/**
- * `server/photo-storage.ts`. `photoId` må bestå `isUuid` før stien bygges (ellers
- * `TrialPhotoNotFoundError`). Raden lages fra `meta` hvis den mangler. Filen skrives til
- * `TRIAL_UPLOAD_DIR/<organizationId>/<photoId>`, og stien kontrolleres å ligge under
- * `path.resolve(TRIAL_UPLOAD_DIR)`. Idempotent.
- */
-export type StoreTrialPhoto = (
-  actor: Actor,
-  organizationId: string,
-  photoId: string,
-  meta: TrialPhotoMeta,
-  bytes: Uint8Array,
-) => Promise<StoreTrialPhotoResult>;

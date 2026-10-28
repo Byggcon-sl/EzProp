@@ -25,15 +25,13 @@ export interface TrialAnswerRow {
   trialFormId: string;
   fieldKey: string;
   value: string | null;
-  /** Base64-kodet Yjs-tilstand, bare tekstfelt. Sannheten for tekst. */
-  textState: string | null;
   deviceId: string;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
 }
 
-/** En rad i `trial_photos` slik den ligger lokalt. `storage_path` synkes aldri til enheten. */
+/** En rad i `trial_photos` slik den ligger lokalt. `storage_path` synkes aldri til enheten. `sha256` og `uploadedAt` settes først i bildekø-oppgaven. */
 export interface TrialPhotoRow {
   id: string;
   trialFormId: string;
@@ -41,7 +39,7 @@ export interface TrialPhotoRow {
   name: string;
   sizeBytes: number;
   sha256: string | null;
-  /** Settes bare av serveren. Null = filen venter på opplasting fra denne eller en annen enhet. */
+  /** Settes bare av serveren (bildekø-oppgaven). Alltid null i denne oppgaven. */
   uploadedAt: string | null;
   deviceId: string | null;
   createdAt: string;
@@ -55,13 +53,11 @@ export interface TrialFormSnapshot {
   photos: TrialPhotoRow[];
 }
 
-/** Grunnlaget for måleindikatoren («Uten nett» / «Venter: N endringer, M bilder» / «Alt er lagret på serveren»). */
+/** Grunnlaget for måleindikatoren («Uten nett» / «Venter: N endringer» / «Alt er lagret på serveren»). */
 export interface TrialSyncStatus {
   online: boolean;
   /** Endringer i synkkøen som serveren ikke har bekreftet. */
   pendingChanges: number;
-  /** Bilder på denne enheten uten `uploadedAt`. */
-  pendingPhotos: number;
 }
 
 /**
@@ -76,7 +72,10 @@ export interface TrialSyncStore {
   getAnswers(formId: string): Promise<TrialAnswers>;
   /** Upsert av én `trial_answers`-rad på `(trial_form_id, field_key)`. Bildefelt skrives aldri her. */
   setAnswer(formId: string, fieldKey: string, value: TrialValue): Promise<void>;
-  /** Lagrer filen lokalt (IndexedDB) og skriver `trial_photos`-raden. Opplasting skjer i bakgrunnen. */
+  /**
+   * Skriver `trial_photos`-raden (navn, størrelse). `file` lagres ikke i denne oppgaven; parameteren
+   * står så bildekø-oppgaven (egen oppgave) ikke må endre kontrakten for alle kandidater.
+   */
   addPhoto(formId: string, fieldKey: string, file: Blob, photo: TrialPhoto): Promise<void>;
   /** Kalles med en ny snapshot hver gang lokale rader for skjemaet endres. Returnerer avmelding. */
   subscribe(formId: string, listener: (snapshot: TrialFormSnapshot) => void): () => void;
@@ -85,33 +84,14 @@ export interface TrialSyncStore {
 
 // Rene funksjoner som utvikler bygger (signaturer; implementasjonen ligger i filene som er nevnt).
 
-/** Base64-kodet Yjs-oppdatering. Tåler JSON-rundtur og ligger i en tekstkolonne både i SQLite og PostgreSQL. */
-export type TextState = string;
-
-/** `text-merge.ts`: ingen React, ingen database. Kjører likt på iPad og server. */
-export interface TextMerge {
-  createTextState(text: string): TextState;
-  /** Regner ut innsetting og sletting fra forrige tekst og legger dem på tilstanden. */
-  applyTextEdit(state: TextState, newText: string): TextState;
-  /** Kommutativ og idempotent: `merge(a, b)` = `merge(b, a)`, `merge(a, a)` = `a`. */
-  mergeTextStates(a: TextState, b: TextState): TextState;
-  textOf(state: TextState): string;
-}
-
-/**
- * `foreign-change.ts`: feltnøklene (bare `tg`, `choice`, `number`) der verdien ble endret av en
- * annen enhet. Tom `previousRows` gir aldri varsel; uendret verdi gir ikke varsel.
- */
-export type DetectForeignChanges = (
-  previousRows: readonly TrialAnswerRow[],
-  nextRows: readonly TrialAnswerRow[],
-  deviceId: string,
-) => Set<string>;
+// Tekstfletting (`TextMerge`), varselet «Endret av en annen» (`DetectForeignChanges`) og bildekøen
+// (`ShouldReleaseLocalPhoto`) er kuttet til egne oppgaver (runde 2, 28.10.2026). Alle felt følger
+// siste endring vinner; `text_state` i databasen er ubrukt.
 
 /** Det klienten skriver for ett svar. Serveren eier resten av kolonnene. */
 export type TrialAnswerRowInput = Pick<
   TrialAnswerRow,
-  "id" | "trialFormId" | "fieldKey" | "value" | "textState" | "deviceId"
+  "id" | "trialFormId" | "fieldKey" | "value" | "deviceId"
 >;
 
 /** `answer-rows.ts`: rene funksjoner mellom rader og `TrialAnswers`. */
@@ -128,21 +108,6 @@ export interface AnswerRows {
     photoRows: readonly TrialPhotoRow[],
   ): TrialAnswers;
 }
-
-/** Svaret fra `PUT /api/prove/bilder/[id]` slik klienten ser det. `undefined` = ikke noe svar. */
-export interface PhotoUploadResponse {
-  status: number;
-  body?: { sha256?: string };
-}
-
-/**
- * `sync/photo-upload.ts`: den lokale filen slettes bare når serveren svarte 200 og `sha256` er lik
- * fingeravtrykket regnet lokalt. Alt annet gir «behold».
- */
-export type ShouldReleaseLocalPhoto = (
-  localSha256: string,
-  response: PhotoUploadResponse | undefined,
-) => boolean;
 
 /** `sync/device.ts`: fast id per nettleser-installasjon (uuidv7 i `localStorage`, nøkkel `trial_device_id`). */
 export type GetTrialDeviceId = () => string;
