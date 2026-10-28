@@ -8,6 +8,15 @@ importers:
 
   .:
     dependencies:
+      '@journeyapps/wa-sqlite':
+        specifier: 2.0.10
+        version: 2.0.10
+      '@powersync/react':
+        specifier: 2.1.0
+        version: 2.1.0(@powersync/common@2.4.0)(react@19.3.1)
+      '@powersync/web':
+        specifier: 2.5.0
+        version: 2.5.0(@powersync/common@2.4.0)(@powersync/shared-internals@1.4.0(@powersync/common@2.4.0))
       better-auth:
         specifier: 1.7.10
         version: 1.7.10(drizzle-kit@0.31.11)(drizzle-orm@0.45.4(kysely@0.29.7)(postgres@3.4.9))(next@16.4.2(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@22.20.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vitest@5.0.5(@types/node@22.20.5)(vite@8.3.5(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)))
@@ -20,6 +29,9 @@ importers:
       drizzle-orm:
         specifier: 0.45.4
         version: 0.45.4(kysely@0.29.7)(postgres@3.4.9)
+      jose:
+        specifier: 6.2.13
+        version: 6.2.13
       next:
         specifier: 16.4.2
         version: 16.4.2(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@22.20.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -38,6 +50,9 @@ importers:
       tailwind-merge:
         specifier: 3.7.0
         version: 3.7.0
+      yjs:
+        specifier: 13.6.33
+        version: 13.6.33
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -917,6 +932,12 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@journeyapps/wa-sqlite@2.0.10':
+    resolution: {integrity: sha512-6Wo5ZijOc4/6M9u+MDsJdW8zDCdrct/p+7LcG7S7CT5YKu42j6lshMfUvgtGYMaZeuH7rpQHULZupPTQFqbS0w==}
+
+  '@journeyapps/wa-sqlite@2.0.7':
+    resolution: {integrity: sha512-mc6xUricl4QB2s8QTRGS+FofSr1cjwDtf6dPXAdMBuGWodjfEgkSJGDPWQ7zVqgc7hMfXYLT7WIfEBAxara8YA==}
+
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
 
@@ -1029,6 +1050,27 @@ packages:
     resolution: {integrity: sha512-IaYGml/nSOiZWROfPtuIL7neuu9qDOZ3TNvNljUIrhDMxiGTgPjzj/g9p9RxpS2tSepPDRY+UwAaEeiKtUvIAg==}
     engines: {node: '>=20'}
     hasBin: true
+
+  '@powersync/common@2.4.0':
+    resolution: {integrity: sha512-ngVogy+B8NQeI5l+0Es8qMxnGozUie8Q6R4+0/AHA3oBAhDG5UmeYw/LquTzZJSOPnCmvGgFSqovblV+JKzxKQ==}
+
+  '@powersync/react@2.1.0':
+    resolution: {integrity: sha512-ADIpakSLhstv0F9xrUIF+oCArFnAQPrcB9mNql6xH0Nup9EgBug38Ks+mv3yqbc33z60pBm9tuHs8uSIbkhuqg==}
+    peerDependencies:
+      '@powersync/common': ^2.4.0
+      react: '*'
+
+  '@powersync/shared-internals@1.4.0':
+    resolution: {integrity: sha512-OiqqDuW6tePW4Ed7C5IWutBKrtcqKuTMlVMQNwUZtKtqr7ZrqKlb+YP5l4niuz8mpqDYo3/HNU0dpc+3mneSBQ==}
+    peerDependencies:
+      '@powersync/common': ^2.4.0
+
+  '@powersync/web@2.5.0':
+    resolution: {integrity: sha512-/K2ZUjIdqvtFeoLfPetPcE+uioShBWzrTrOa8hpoZ7i62S8wgj47i+VPnKTXI7WQmXuxTGGZFUFnahinf6wjPg==}
+    hasBin: true
+    peerDependencies:
+      '@powersync/common': ^2.4.0
+      '@powersync/shared-internals': ^1.4.0
 
   '@rolldown/binding-android-arm-eabi@1.2.15':
     resolution: {integrity: sha512-aLcgK9gIJ3YRvrrtfSBbRa27F5WrpiTaPulnFpsHPxpUHgFlSgnU4854MHwoRGEBhfRJDWCS2WQ7lIjskE9Olw==}
@@ -1652,6 +1694,13 @@ packages:
 
   color-name@1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
+
+  comlink@4.4.2:
+    resolution: {integrity: sha512-OxGdvBmJuNKSCMO4NTl1L47VRp6xn2wG4F/2hYzB6tiCb709otOxtEYCSvK80PtjODfXXZu8ds+Nw5kVCjqd2g==}
+
+  commander@12.1.0:
+    resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
+    engines: {node: '>=18'}
 
   concat-map@0.0.1:
     resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
@@ -2313,6 +2362,9 @@ packages:
   isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
 
+  isomorphic.js@0.2.5:
+    resolution: {integrity: sha512-PIeMbHqMt4DnUP3MA/Flc0HElYjMXArsw1qwJZcm9sqR8mq3l8NYizFMty0pWwE/tzIGH3EKK5+jes5mAr85yw==}
+
   iterator.prototype@1.1.5:
     resolution: {integrity: sha512-H0dkQoCa3b2VEeKQBOxFph+JAbcrQdE7KC0UkqwpLmv2EC4P41QXP+rqo9wYodACiG5/WM5s9oDApTU8utwj9g==}
     engines: {node: '>= 0.4'}
@@ -2375,6 +2427,11 @@ packages:
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
+
+  lib0@0.2.119:
+    resolution: {integrity: sha512-vh+TiejVy8Xm+hCdnRfn9BthGNvNUZdEXltNjVZL3TzRIKP3s1lnQh8pWd/Q0wCgY0FPAGVVjFF4ZiHUV3LFgA==}
+    engines: {node: '>=16'}
+    hasBin: true
 
   lightningcss-android-arm64@1.32.0:
     resolution: {integrity: sha512-YK7/ClTt4kAK0vo6w3X+Pnm0D2cf2vPHbhOXdoNti1Ga0al1P4TBZhwjATvjNwLEBCnKvjJc2jQgHXH0NEwlAg==}
@@ -3136,6 +3193,10 @@ packages:
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
+  yjs@13.6.33:
+    resolution: {integrity: sha512-q/UYvr1gOk4XII+Cu1CW2dINjYqJJFifTzogEaIARznrvX7uOlHsdTEXcnOBMuIsrCGEEKdNxi74kyMLZlKVfw==}
+    engines: {node: '>=16.0.0', npm: '>=8.0.0'}
+
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
@@ -3735,6 +3796,10 @@ snapshots:
   '@img/sharp-win32-x64@0.35.5':
     optional: true
 
+  '@journeyapps/wa-sqlite@2.0.10': {}
+
+  '@journeyapps/wa-sqlite@2.0.7': {}
+
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
@@ -3819,6 +3884,25 @@ snapshots:
   '@playwright/test@1.64.1':
     dependencies:
       playwright: 1.64.1
+
+  '@powersync/common@2.4.0': {}
+
+  '@powersync/react@2.1.0(@powersync/common@2.4.0)(react@19.3.1)':
+    dependencies:
+      '@powersync/common': 2.4.0
+      react: 19.3.1
+
+  '@powersync/shared-internals@1.4.0(@powersync/common@2.4.0)':
+    dependencies:
+      '@powersync/common': 2.4.0
+
+  '@powersync/web@2.5.0(@powersync/common@2.4.0)(@powersync/shared-internals@1.4.0(@powersync/common@2.4.0))':
+    dependencies:
+      '@journeyapps/wa-sqlite': 2.0.7
+      '@powersync/common': 2.4.0
+      '@powersync/shared-internals': 1.4.0(@powersync/common@2.4.0)
+      comlink: 4.4.2
+      commander: 12.1.0
 
   '@rolldown/binding-android-arm-eabi@1.2.15':
     optional: true
@@ -4356,6 +4440,10 @@ snapshots:
       color-name: 1.1.4
 
   color-name@1.1.4: {}
+
+  comlink@4.4.2: {}
+
+  commander@12.1.0: {}
 
   concat-map@0.0.1: {}
 
@@ -5146,6 +5234,8 @@ snapshots:
 
   isexe@2.0.0: {}
 
+  isomorphic.js@0.2.5: {}
+
   iterator.prototype@1.1.5:
     dependencies:
       define-data-property: 1.1.4
@@ -5202,6 +5292,10 @@ snapshots:
     dependencies:
       prelude-ls: 1.2.1
       type-check: 0.4.0
+
+  lib0@0.2.119:
+    dependencies:
+      isomorphic.js: 0.2.5
 
   lightningcss-android-arm64@1.32.0:
     optional: true
@@ -6001,6 +6095,10 @@ snapshots:
   word-wrap@1.2.5: {}
 
   yallist@3.1.1: {}
+
+  yjs@13.6.33:
+    dependencies:
+      lib0: 0.2.119
 
   yocto-queue@0.1.0: {}
 
