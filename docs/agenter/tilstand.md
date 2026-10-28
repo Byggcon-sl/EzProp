@@ -2,17 +2,17 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 28.10.2026 (rutinene laget)
+Sist oppdatert: 28.10.2026 (oppgavekort for fase 1, oppgave 3)
 
 ## Gjeldende fase
 
 **Fase 0a – Repo og database: ferdig.** PR #2 (grunnmuren) og PR #1 (testhjelperen) er merget 28.10.2026.
 
-Gjeldende fase fra nå: **Fase 1 – Prøve uten nett.** Første oppgave: oppgave 3 i `docs/07-utviklingsplan.md` (testoppsett for prøven uten nett). Hovedløkken starter den ved neste kjøring.
+Gjeldende fase fra nå: **Fase 1 – Prøve uten nett.** Første oppgave (oppgave 3, testoppsett) er i arbeid.
 
 ## Gjeldende oppgave
 
-Ingen pågående oppgave.
+**Oppgave 3 – Testoppsett for prøven uten nett** (fase 1, første punkt). Branch `fase1-testskjema` fra `main`. Oppgavekort: `docs/funksjoner/fase1-testskjema.md` (ferdig 28.10.2026). Neste steg: utvikler (bit 1 skjema, bit 2 app på hjemskjermen) og testskriver i parallell, så test-leder, så PR. Hovedmål: tid og KI først (grunnlaget for befaring på iPad).
 
 ## Åpne PR-er
 
@@ -23,7 +23,7 @@ Ingen pågående oppgave.
 ## Venter på Ståle
 
 - PR #4: les `docs/agenter/rutiner.md` (avsnittet «Må gjøres av Ståle») og merge.
-- Spørsmålene i `docs/09-apne-sporsmal.md`.
+- Spørsmålene i `docs/09-apne-sporsmal.md`, nytt nr. 6: hvor prøveappen skal kjøre (trengs før oppgave 4 prøves på ekte iPad).
 
 ## Oppgaver fra nattløkken
 

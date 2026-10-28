@@ -4,6 +4,7 @@ Spørsmål som Ståle må avgjøre. Nyeste øverst. Når et spørsmål er besvar
 
 | Nr | Dato | Spørsmål | Status |
 |---|---|---|---|
+| 6 | 28.10.2026 | **Hvor skal prøveappen kjøre i fase 1?** iPadene må nå appen, og lagring uten nett i Safari krever https. Alternativ 1: Ståles Mac på samme wifi med et lokalt sertifikat (gratis, litt oppsett). Alternativ 2: en liten testserver i EU/EØS (koster litt per måned, virker også i kjelleren uten wifi). Trengs før oppgave 4 (kandidatene) prøves på ekte iPad. Se `docs/funksjoner/fase1-testskjema.md`. | åpent |
 | 5 | 28.10.2026 | **Excel-filen med standardavvik:** to faner er for store for SharePoint-leseren. `ivit-avvikssporsmaal.csv` har 343 av 603 rader og `ivit-frasebank-avvik-gammel.csv` 582 av 822. Kan Ståle dele de to fanene i to faner hver i Excel, eller lagre dem som CSV i SharePoint? Da leses resten inn. Ikke blokkerende før fase 2a. | åpent |
 | 4 | 28.10.2026 | **Felles innlogging med Optiplan:** EzProp har nå egne Better Auth-tabeller i egen database (som Optiplan). Hvordan innloggingen deles teknisk avgjøres i fase 0b med ADR, etter at synkløsningen er valgt i fase 1. Alternativer: felles brukerdatabase, eller Optiplan som innloggingstjeneste. Trenger ikke svar nå. | åpent |
 | 3 | 28.10.2026 | **Hva betyr «EzProp 2.0» i tid?** Claudes forslag: versjonen som er i full drift for alle takstmenn, ca. 12 måneder etter produksjonsstart. Ståle bekrefter også måten tid og reklamasjoner måles på (`docs/01-produktvisjon.md`). | åpent |
