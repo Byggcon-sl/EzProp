@@ -99,7 +99,7 @@ Felles hjelper i testfilen: `secretNames(text)` = alle treff på `secrets\.([A-Z
 | «databasen krever SSL og ligger i samme region» | Flexible Server har `version: '16'`, `location: location`, `geoRedundantBackup: 'Disabled'`, og `DATABASE_URL` inneholder `sslmode=require`. |
 | «appinnstillingene er riktige og DEV_MAILBOX settes aldri» | Appinnstillingene har `NODE_ENV` = `production`, `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `SEED_ADMIN_EMAIL`, `APP_VERSION`, `PORT`, `WEBSITES_PORT`. Teksten `DEV_MAILBOX` finnes ikke i noen fil under `infra/azure/`. |
 | «ressursnavn bruker environmentName» | Ingen ressursnavn har `test` hardkodet uten `${environmentName}`; regex `/'(app|plan|psql|rg)-ezprop-test'/` gir 0 treff. |
-| «ingen modellnavn eller produktnavn utenfor brand.ts» | Dekkes av lint for `src/`; for `infra/` og `.github/` sjekker test-leder for hånd (`grep -ri "claude\|gpt\|opus\|sonnet" infra .github`). |
+| «ingen modellnavn eller produktnavn utenfor brand.ts» | Dekkes av lint for `src/`; for `infra/` og `.github/` sjekker test-leder for hånd med `grep -ri` etter kjente modellnavn i `infra`, `.github` og `docs/drift` (selve navnene skrives ikke i repoet). |
 
 ### Dokumentasjon
 
