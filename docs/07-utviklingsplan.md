@@ -123,16 +123,16 @@ Byggcon bruker **Enova** (energimerking) og **Polycam** (3D-skanning og plantegn
 
 ---
 
-## Fase 0a – Repo og database  `status: ikke startet`
+## Fase 0a – Repo og database  `status: ferdig 28.10.2026 (PR #2 og #1)`
 
-- [ ] Repoet `Byggcon-sl/EzProp` satt opp som Optiplan: Next.js og TypeScript (strict), pnpm, ESLint, Prettier, Vitest, Playwright
-- [ ] GitHub Actions: lint, typesjekk, test og bygg ved hver pull request
-- [ ] `CLAUDE.md` og `docs/` med samme oppbygging som Optiplan (produkt, roller, domenemodell, arkitektur, plan, designprinsipper, åpne spørsmål), mal for funksjonsbeskrivelse og ADR. `CLAUDE.md` får regelen **«en fast kode (`key`) endres aldri, den arkiveres»** (`funksjonalitet-ki` avsnitt 8).
-- [ ] Datamodellen og planen fra SharePoint lagt inn i `docs/` som utgangspunkt
-- [ ] Lint-regel for modulgrenser (moduler importerer bare fra kjernen, felles kode og egen mappe)
-- [ ] PostgreSQL lokalt og Drizzle-oppsett, med felles kolonner på alle tabeller: ID laget på enheten, organisasjons-ID, laget/endret, myk sletting og radversjon
+- [x] Repoet `Byggcon-sl/EzProp` satt opp som Optiplan: Next.js og TypeScript (strict), pnpm, ESLint, Prettier, Vitest, Playwright
+- [x] GitHub Actions: lint, typesjekk, test og bygg ved hver pull request
+- [x] `CLAUDE.md` og `docs/` med samme oppbygging som Optiplan (produkt, roller, domenemodell, arkitektur, plan, designprinsipper, åpne spørsmål), mal for funksjonsbeskrivelse og ADR. `CLAUDE.md` får regelen **«en fast kode (`key`) endres aldri, den arkiveres»** (`funksjonalitet-ki` avsnitt 8).
+- [x] Datamodellen og planen fra SharePoint lagt inn i `docs/` som utgangspunkt
+- [x] Lint-regel for modulgrenser (moduler importerer bare fra kjernen, felles kode og egen mappe)
+- [x] PostgreSQL lokalt og Drizzle-oppsett, med felles kolonner på alle tabeller: ID laget på enheten, organisasjons-ID, laget/endret, myk sletting og radversjon
 - [x] Testhjelper som viser at en spørring aldri gir data fra en annen organisasjon (`tests/tenant-isolation.ts`, 28.10.2026)
-- [ ] Produktnavnet «EzProp» står bare ett sted i koden (arbeidsnavn)
+- [x] Produktnavnet «EzProp» står bare ett sted i koden (arbeidsnavn)
 
 **Ferdig når:** En tom side starter lokalt, alle sjekkene i GitHub Actions er grønne, migreringen kjører i CI, og testen for tenant-isolasjon er grønn.
 
@@ -140,12 +140,12 @@ Byggcon bruker **Enova** (energimerking) og **Polycam** (3D-skanning og plantegn
 
 > Fase 1 starter så snart fase 0a står. Resten av grunnmuren (fase 0b) kommer etter prøven, fordi valget av synkverktøy kan påvirke databasen og innloggingen.
 
-## Fase 1 – Prøve uten nett  `status: ikke startet`
+## Fase 1 – Prøve uten nett  `status: i arbeid fra 28.10.2026`
 
 Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettleseren på iPad holder mål (sidemannskontrollen del 1 T1 og del 2 P20–P23). Prøven bruker et lite testskjema, ikke den ekte malen.
 
 - [ ] **Testmiljø i Azure** (Ståle 28.10.2026): EzProp kjører i samme Azure-miljø som Optiplan (Sweden Central, EU), med egen app og egen database. Utrulling fra GitHub Actions ved merge til main, etter mønster fra Optiplans `infra/azure` og `deploy-azure.yml`. Bare oppdiktede data til «Minimum før ekte data» er på plass. Innlogging med kode på e-post via Microsoft 365 som i Optiplan (eller koden i serverloggen for første admin til e-post er satt opp). Ståle legger inn Azure-nøklene som secrets i GitHub og velger adressen (forslag: ezprop-test.byggcon.no). Ferdig når appen åpner på ekte iPad Pro i Safari fra hjemskjermen.
-- [ ] Testoppsett: to iPad Pro, appen lagt på hjemskjermen (PWA), et testskjema med ca. 40 felt (tekst, TG, valg, tall, tabell) og bildefelt
+- [x] Testoppsett: to iPad Pro, appen lagt på hjemskjermen (PWA), et testskjema med ca. 40 felt (tekst, TG, valg, tall, tabell) og bildefelt (PR #6, 28.10.2026)
 - [ ] Kandidater satt opp mot samme testskjema: **PowerSync**, **ElectricSQL** og eventuelt andre (Claudes forslag: én enkel egenbygd løsning med lokal database og endringskø, som sammenligningsgrunnlag). Tekstfletting med Yjs eller tilsvarende.
 - [ ] **Prøve A – én takstmann uten nett (må):** flymodus i 30 minutter, alle felt fylles ut, 200 bilder tas, appen lukkes og åpnes igjen, iPaden startes på nytt. Når nettet kommer: alt synkroniseres, ingenting går tapt.
 - [ ] **Prøve B – to i samme rapport (bør):** to iPader endrer samme kontrollpunkt samtidig. Tekst flettes. TG, valg og tall følger «siste endring vinner», og den andre får varsel.

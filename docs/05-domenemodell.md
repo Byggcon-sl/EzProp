@@ -1676,6 +1676,8 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Bestilt / under arbeid / ferdig / fakturert | `ordered` / `in_progress` / `completed` / `invoiced` | |
 | Hendelse | `events` | Lang liste |
 | Avtale med oppdragsgiver | `client_agreements` | For eksempel Fremtind |
+| Prøve uten nett (fase 1) | `offline-trial` | Modulen med testskjemaet for fase 1. Kastes eller gjøres om til feltkomponenter i fase 2b |
+| Testskjema | `trial form` (`trialForm`, `TrialAnswers`) | Skjemaet med 40 felt som kandidatene i fase 1 prøves mot. Ikke en systemmal |
 | Rapportprofil | `report_profiles` | Utseende på PDF |
 | Premissetekst / forutsetninger | `premise_text` | |
 | Eiendom | `properties` | |

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { listOrganizationsForActor } from "@/core/access";
 import { requireActor } from "@/core/auth/session";
 import { brand } from "@/shared/config/brand";
@@ -41,6 +42,14 @@ export default async function WorkQueuePage() {
           </p>
         </Card>
       )}
+      <p className="mt-6">
+        <Link
+          href="/prove/testskjema"
+          className="inline-flex min-h-11 min-w-11 items-center font-medium text-brand-700 underline"
+        >
+          Prøve uten nett: testskjema
+        </Link>
+      </p>
     </main>
   );
 }
