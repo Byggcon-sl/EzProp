@@ -2,7 +2,7 @@
 
 - **Fase:** 1 – Prøve uten nett
 - **Modul:** `src/modules/offline-trial` (ny, kastes etter fase 1 eller gjøres om til feltkomponenter i fase 2b)
-- **Status:** klart for utvikler og testskriver (oppgavekort 28.10.2026, revidert samme dag etter forenkler og test-leder)
+- **Status:** PR åpnet 28.10.2026 (venter på Ståle). Oppgavekort 28.10.2026, revidert samme dag etter forenkler og test-leder; bygget, testet og godkjent av test-leder samme dag.
 - **Branch:** `fase1-testskjema` (bygger på `main`)
 - **Dato:** 28.10.2026
 - **Plan:** `docs/07-utviklingsplan.md` fase 1, første punkt: «Testoppsett: to iPad Pro, appen lagt på hjemskjermen (PWA), et testskjema med ca. 40 felt (tekst, TG, valg, tall, tabell) og bildefelt»
@@ -126,19 +126,19 @@ iPad (liggende, 1194 × 834) og PC. Én skjerm: gruppene under hverandre med ove
 Ingen i denne oppgaven. Prøve E får to regler som data med testsaker: alder mot levetid (`water_heater_age`) og målegrense (`moisture_floor`). Skjemaet har feltene klare.
 
 ## Akseptkriterier
-- [ ] `trialForm` har nøyaktig 40 felt med unike `key` i engelsk snake_case, fordelt som i tabellen, og alle seks typene finnes (enhetstest).
-- [ ] `countAnswered` og `parseTrialNumber` oppfører seg som beskrevet under «Feltene» og omfang pkt. 2 (enhetstest).
-- [ ] `uuidv7` virker uten `node:crypto`, og `uuid.test.ts` er grønn uendret.
-- [ ] Innlogget ansatt (admin i e2e) åpner `/prove/testskjema` fra lenken «Prøve uten nett: testskjema» på arbeidskøen og ser alle seks gruppene og alle 40 etikettene, og telleren «0 av 40 felt utfylt».
-- [ ] Uinnlogget sendes til `/logg-inn`.
-- [ ] Alle 40 felt kan fylles ut i e2e, i både `pc` og `ipad`: tekst skrives, TG og valg trykkes (bare én knapp i gruppen har `aria-pressed="true"`), tall skrives med komma, to tabellrader legges til og én slettes (én står igjen), bilde velges med `setInputFiles` (`e2e/fixtures/test-image.png`, ensfarget, under 5 kB) i alle sju bildefelt og feltet viser «1 bilde». Telleren viser «40 av 40 felt utfylt» til slutt.
-- [ ] Ingen nedtrekksmenyer (`select` har 0 treff). Tallfelt har `inputMode="decimal"`. TG-knapper er minst 44 px høye (e2e måler `boundingBox` på én TG-knapp i `ipad`).
-- [ ] `/manifest.webmanifest` svarer 200 med `display: "standalone"`, `start_url: "/arbeidskoe"` og navn fra `brand` (e2e med `request`). `/apple-icon` svarer 200 med `image/png`.
-- [ ] `<link rel="manifest">` og `apple-mobile-web-app-capable` finnes i HTML-en på innloggingssiden (e2e, uinnlogget).
-- [ ] `pnpm lint` (modulgrense og produktnavn), `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne, og `ipad`-prosjektet har kjørt alle e2e-testene.
-- [ ] Bruker i annen organisasjon får ikke tilgang (test): ikke relevant, ingen data lagres og ingen spørring tar `organizationId`. Står i PR-en sammen med at siden bare bruker `requireActor`.
+- [x] `trialForm` har nøyaktig 40 felt med unike `key` i engelsk snake_case, fordelt som i tabellen, og alle seks typene finnes (enhetstest).
+- [x] `countAnswered` og `parseTrialNumber` oppfører seg som beskrevet under «Feltene» og omfang pkt. 2 (enhetstest).
+- [x] `uuidv7` virker uten `node:crypto`, og `uuid.test.ts` er grønn uendret.
+- [x] Innlogget ansatt (admin i e2e) åpner `/prove/testskjema` fra lenken «Prøve uten nett: testskjema» på arbeidskøen og ser alle seks gruppene og alle 40 etikettene, og telleren «0 av 40 felt utfylt».
+- [x] Uinnlogget sendes til `/logg-inn`.
+- [x] Alle 40 felt kan fylles ut i e2e, i både `pc` og `ipad`: tekst skrives, TG og valg trykkes (bare én knapp i gruppen har `aria-pressed="true"`), tall skrives med komma, to tabellrader legges til og én slettes (én står igjen), bilde velges med `setInputFiles` (`e2e/fixtures/test-image.png`, ensfarget, under 5 kB) i alle sju bildefelt og feltet viser «1 bilde». Telleren viser «40 av 40 felt utfylt» til slutt.
+- [x] Ingen nedtrekksmenyer (`select` har 0 treff). Tallfelt har `inputMode="decimal"`. TG-knapper er minst 44 px høye (e2e måler `boundingBox` på én TG-knapp i `ipad`).
+- [x] `/manifest.webmanifest` svarer 200 med `display: "standalone"`, `start_url: "/arbeidskoe"` og navn fra `brand` (e2e med `request`). `/apple-icon` svarer 200 med `image/png`.
+- [x] `<link rel="manifest">` og `apple-mobile-web-app-capable` finnes i HTML-en på innloggingssiden (e2e, uinnlogget).
+- [x] `pnpm lint` (modulgrense og produktnavn), `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne, og `ipad`-prosjektet har kjørt alle e2e-testene.
+- [x] Bruker i annen organisasjon får ikke tilgang (test): ikke relevant, ingen data lagres og ingen spørring tar `organizationId`. Står i PR-en sammen med at siden bare bruker `requireActor`.
 - [x] Virker på iPad-størrelse (e2e): dekket av `ipad`-prosjektet over.
-- [ ] Planen for prøvene A–F og kriteriene (under) er klare til å legges fram for Ståle i PR-en.
+- [x] Planen for prøvene A–F og kriteriene (under) er klare til å legges fram for Ståle i PR-en.
 
 ## Testplan (fra test-leder, navnene er bindende for testskriver)
 
@@ -185,7 +185,7 @@ Test-leder til slutt: kjører `pnpm lint`, `typecheck`, `test` og `test:e2e`, sj
 
 ## Plan for prøvene A–F (legges fram for Ståle)
 
-Forutsetninger for alle prøver: to iPad Pro med appen lagt på hjemskjermen fra Safari (Del → Legg til på Hjem-skjerm), samme testskjema, bare oppdiktede data (ingen ekte adresser eller navn). Hver prøve kjøres likt for hver kandidat, og resultatet føres i en tabell i ADR-en: bestått / delvis / ikke bestått, med det som gikk galt. Bildefeltet åpner kameraet direkte og gir ett bilde per åpning; det er med vilje (slik tas bilder på befaring) og ikke en feil.
+Forutsetninger for alle prøver: to iPad Pro med appen lagt på hjemskjermen fra Safari (Del → Legg til på Hjem-skjerm), samme testskjema, bare oppdiktede data (ingen ekte adresser eller navn). Hver prøve kjøres likt for hver kandidat, og resultatet føres i en tabell i ADR-en: bestått / delvis / ikke bestått, med det som gikk galt. Bildefeltet åpner kameraet direkte og gir ett bilde per åpning; det er med vilje (slik tas bilder på befaring) og ikke en feil. **Før prøvene:** slå av Stedstjenester for Safari på begge iPadene (Innstillinger → Personvern → Stedstjenester → Safari → Aldri), ellers får bildene GPS-posisjonen til stedet de tas (åpent spørsmål nr. 8). Prøveappen må kjøre over https (Azure-testmiljøet, Ståle 28.10.2026); over vanlig http på wifi virker verken bildefeltet eller «Legg til rad» i Safari.
 
 | Prøve | Nivå | Slik gjøres den | Bestått når |
 |---|---|---|---|
@@ -223,5 +223,12 @@ Hvert kriterium får 1–3 poeng med begrunnelse. Summen avgjør ikke alene: ADR
 Ikke med: arkitekt (modulnavn og svarform er avgjort her; arkitekten kommer inn i oppgave 4 og ADR-en), ux-ansvarlig og ui-designer (prøveverktøy, kravene står i «Skjermer»), ki-ansvarlig (ingen KI), fagansvarlig (ingen fagtekst, bare feltnavn), sikkerhet-personvern (ingen lagring, ingen ny tilgang, kamera er alt tillatt i `Permissions-Policy`). Forenkler og test-leder har vurdert kortet (se «Avgjørelser i revisjonen»).
 
 ## Åpne spørsmål
-- Til Ståle (lagt i `docs/09-apne-sporsmal.md` nr. 6): hvor skal prøveappen kjøre slik at iPadene når den? Lagring uten nett i Safari krever https. Alternativ 1: Ståles Mac på samme wifi med et lokalt sertifikat (gratis, litt oppsett). Alternativ 2: en liten testserver i EU/EØS (koster litt per måned, virker overalt, også i kjelleren uten wifi). Trengs før oppgave 4 testes på ekte iPad.
-- Ingen andre.
+- Hvor prøveappen skal kjøre (`docs/09-apne-sporsmal.md` nr. 7): **besvart** av Ståles beslutning 28.10.2026 om testmiljø i Azure (samme miljø som Optiplan, https). Det punktet står nå først i fase 1 og er neste oppgave.
+- GPS-posisjon i bildene fra iPaden (`docs/09-apne-sporsmal.md` nr. 8): Stedstjenester av under prøvene, og om posisjonen skal beholdes i originalbildene i drift. Ikke blokkerende for denne PR-en.
+
+## Kjente svakheter som tas i oppgave 4 (ikke feil i denne oppgaven)
+Funnet i gjennomgangen 28.10.2026. Ingen av dem bryter et akseptkriterium, og de rettes når kandidaten kobles på, der de først får betydning:
+- `NumberInput` i `trial-form-view.tsx` holder sin egen råtekst og leser aldri verdien tilbake fra `answers`. Tekst, TG, valg, bilde og tabell leser fra `answers`. I prøve B (siste endring vinner, den andre iPaden viser varsel) må tallfeltet vise verdien som kom fra synk. Rettes i oppgave 4 ved å lese fra `answers` når verdien der endres utenfra.
+- `parseTrialNumber` bruker `Number(text)` og godtar «Infinity», «1e3» og «0x10». Ingen regel leser tallene ennå. Før prøve E (målegrense, alder mot levetid) byttes den til et strengt desimaltall (regex), med testsaker.
+- `viewport`-eksporten i `layout.tsx` og `description` i manifestet står ikke i kortet og trengs ikke for noe kriterium. De er ufarlige og kan fjernes når manifestet uansett endres i oppgave 4.
+- Avsnittet «Testplan» i dette kortet dobbeltfører `fase1-testskjema-testplan.md`. Neste oppgavekort skal bare peke på testplanfilen.

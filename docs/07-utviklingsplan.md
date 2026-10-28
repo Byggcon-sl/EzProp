@@ -144,6 +144,7 @@ Byggcon bruker **Enova** (energimerking) og **Polycam** (3D-skanning og plantegn
 
 Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettleseren på iPad holder mål (sidemannskontrollen del 1 T1 og del 2 P20–P23). Prøven bruker et lite testskjema, ikke den ekte malen.
 
+- [ ] **Testmiljø i Azure** (Ståle 28.10.2026): EzProp kjører i samme Azure-miljø som Optiplan (Sweden Central, EU), med egen app og egen database. Utrulling fra GitHub Actions ved merge til main, etter mønster fra Optiplans `infra/azure` og `deploy-azure.yml`. Bare oppdiktede data til «Minimum før ekte data» er på plass. Innlogging med kode på e-post via Microsoft 365 som i Optiplan (eller koden i serverloggen for første admin til e-post er satt opp). Ståle legger inn Azure-nøklene som secrets i GitHub og velger adressen (forslag: ezprop-test.byggcon.no). Ferdig når appen åpner på ekte iPad Pro i Safari fra hjemskjermen.
 - [ ] Testoppsett: to iPad Pro, appen lagt på hjemskjermen (PWA), et testskjema med ca. 40 felt (tekst, TG, valg, tall, tabell) og bildefelt
 - [ ] Kandidater satt opp mot samme testskjema: **PowerSync**, **ElectricSQL** og eventuelt andre (Claudes forslag: én enkel egenbygd løsning med lokal database og endringskø, som sammenligningsgrunnlag). Tekstfletting med Yjs eller tilsvarende.
 - [ ] **Prøve A – én takstmann uten nett (må):** flymodus i 30 minutter, alle felt fylles ut, 200 bilder tas, appen lukkes og åpnes igjen, iPaden startes på nytt. Når nettet kommer: alt synkroniseres, ingenting går tapt.
@@ -164,7 +165,8 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 ## Fase 0b – Innlogging, organisasjon, roller og layout  `status: ikke startet`
 
 **Innlogging og sikkerhet**
-- [ ] **Innlogging som Optiplan** (engangskode på e-post), med **felles innlogging** mellom EzProp og Optiplan. Løsningen beskrives i en ADR som tar hensyn til ADR-en fra fase 1.
+- [ ] **Innlogging som Optiplan** (engangskode på e-post), med **felles innlogging og felles profil for admin og ansatte** mellom EzProp og Optiplan (Ståle 28.10.2026): samme bruker, samme navn, telefon, stilling og kontor i begge. **Kundene holdes adskilt**: Optiplans styrer og EzProps kunder og meglere er aldri samme brukere. Løsningen beskrives i en ADR som tar hensyn til ADR-en fra fase 1.
+- [ ] **Bytte mellom EzProp og Optiplan med ett trykk** (Ståle 28.10.2026: «sømløst»): en lenke i menyen i begge løsningene, uten ny innlogging. Mer samspill enn dette kommer senere.
 - [ ] **Sperre etter mange feil** ved innlogging (innspill P12). Tofaktor kommer i fase 4.
 - [ ] **Nøkkelboks for hemmeligheter** (for eksempel Azure Key Vault, samme oppsett som Optiplan). Ingen nøkler i koden eller databasen, bare navnet på hemmeligheten (`secret_ref`). (Innspill P12)
 
@@ -343,7 +345,7 @@ Flere takstmenn bruker EzProp på ekte oppdrag. IVIT brukes fortsatt for det EzP
 - [ ] **Adressebok med tall / meglerprofil** (funksjonskart H4): oppdrag per måned, leveringstid og svar på spørreundersøkelsen, per megler og meglerforetak
 - [ ] **Fullt CRM rett etter adresseboka** (flyttet fra «Senere» 27.10.2026, Ståle: «full CRM må komme relativt raskt i utviklingsløpet»): historikk, notater, logg og oppgaver per megler og meglerforetak, automatiske merker (for eksempel «aktiv selgermegler»), megleranalyse og egne eksporter. Spesifiseres før bygging.
 
-*Tatt ut 27.10.2026 (Ståle: «ikke noe interaksjon foreløpig»):* oppslag i Optiplan på sameiets organisasjonsnummer (O1) og én kundebase med Optiplan (O3). Felles innlogging gjelder fortsatt.
+*Tatt ut 27.10.2026 (Ståle: «ikke noe interaksjon foreløpig»):* oppslag i Optiplan på sameiets organisasjonsnummer (O1) og én kundebase med Optiplan (O3). Felles innlogging gjelder fortsatt. **Presisert 28.10.2026:** felles innlogging og profil for admin og ansatte, og bytte mellom løsningene med ett trykk, er med (fase 0b). Kundene holdes adskilt. Mer samspill «etter hvert».
 
 **Ferdig når:** Alle ansatte har fått opplæring og bruker EzProp for nye tilstandsrapporter, personvern og sikkerhetskopi er på plass, og frasene fra IVIT ligger i EzProp.
 
@@ -927,6 +929,8 @@ Det som fortsatt er åpent:
 ---
 
 ## Endringslogg
+
+- **28.10.2026 (Ståle i chat):** «Testmiljø i Azure» lagt inn som første punkt i fase 1 (samme miljø som Optiplan). Fase 0b: felles innlogging **og felles profil** for admin og ansatte med Optiplan, kundene adskilt, og bytte mellom løsningene med ett trykk. Samspillet mellom EzProp og Optiplan skal komme «etter hvert», ut over innloggingen.
 
 | Dato | Hva er endret | Fra innspill |
 |---|---|---|
