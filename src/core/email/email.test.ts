@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Env } from "@/shared/config/env";
+import { resetEnvCache, type Env } from "@/shared/config/env";
 import { emailTransport, readDevMailbox, sendEmail } from "./index";
 
 /** Drift uten e-post: ingen postkasse, ingen Microsoft 365. Oppdiktede verdier. */
@@ -31,7 +31,11 @@ function spyConsole() {
   };
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  resetEnvCache();
+});
 
 describe("e-post", () => {
   it("bruker utviklings-postkassen i test, og viser nyeste først", async () => {
@@ -51,6 +55,15 @@ describe("e-post", () => {
   it("velger devMailbox når DEV_MAILBOX er på", () => {
     expect(emailTransport({ ...env, DEV_MAILBOX: true })).toBe("devMailbox");
     expect(emailTransport({ ...env, ...graph, DEV_MAILBOX: true })).toBe("devMailbox");
+  });
+
+  it("postkassen vinner lokalt også når alle fire Microsoft 365-verdier er satt i miljøet", () => {
+    vi.stubEnv("MS_GRAPH_TENANT_ID", "t");
+    vi.stubEnv("MS_GRAPH_CLIENT_ID", "c");
+    vi.stubEnv("MS_GRAPH_CLIENT_SECRET", "s");
+    vi.stubEnv("MAIL_FROM", "noreply@example.com");
+    resetEnvCache();
+    expect(emailTransport()).toBe("devMailbox");
   });
 
   it("velger graph når alle fire Microsoft 365-verdier er satt", () => {
@@ -134,5 +147,6 @@ describe("e-post", () => {
     const line = String(spies.info.mock.calls[0]![0]);
     expect(line).toContain("123456");
     expect(line).not.toContain("999999");
+    expect(line).not.toContain("Emne");
   });
 });

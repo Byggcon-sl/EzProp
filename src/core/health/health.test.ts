@@ -7,6 +7,10 @@ afterEach(() => {
 });
 
 describe("helsesjekk", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("svarer ok med versjonen fra package.json når databasen svarer", async () => {
     const result = await checkHealth();
     expect(result.httpStatus).toBe(200);
