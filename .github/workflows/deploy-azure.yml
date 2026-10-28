@@ -1,0 +1,208 @@
+# Utrulling til testmiljøet i Azure ved merge til main (docs/drift/testmiljo-azure.md, ADR 0002).
+# Uten Azure-nøkler i GitHub hopper jobben over, uten feil. Ståle legger inn nøklene selv.
+name: Utrulling til Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: utrulling-azure
+  cancel-in-progress: false
+
+env:
+  ENVIRONMENT_NAME: test
+  RESOURCE_GROUP: rg-ezprop-test
+  LOCATION: swedencentral
+
+jobs:
+  sjekk:
+    name: Er Azure-nøklene lagt inn?
+    runs-on: ubuntu-latest
+    outputs:
+      klar: ${{ steps.nokler.outputs.klar }}
+    steps:
+      - id: nokler
+        env:
+          # Bare om nøkkelen finnes (true/false), aldri verdien.
+          KLAR: ${{ secrets.AZURE_CLIENT_ID != '' }}
+        run: |
+          echo "klar=$KLAR" >> "$GITHUB_OUTPUT"
+          if [ "$KLAR" != "true" ]; then
+            echo "Ingen Azure-nøkler i GitHub, hopper over utrullingen. Se docs/drift/testmiljo-azure.md."
+          fi
+
+  utrulling:
+    name: Bygg, migrer og rull ut
+    needs: sjekk
+    if: needs.sjekk.outputs.klar == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # Alle pakker (ikke bare drift): migrering og seed trenger tsx og dotenv.
+      - run: pnpm install --frozen-lockfile
+
+      - name: Kort commit-id (vises i helsesjekken)
+        run: echo "APP_VERSION=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Bygg
+        # Samme oppdiktede verdier som i ci.yml. Ekte verdier settes i Azure, ikke i bygget.
+        env:
+          DATABASE_URL: postgres://ezprop:ezprop@localhost:5432/ezprop
+          BETTER_AUTH_SECRET: ci-hemmelighet-som-bare-brukes-i-tester-0123456789
+          BETTER_AUTH_URL: http://localhost:3000
+          SEED_ADMIN_EMAIL: admin@byggcon.no
+        run: |
+          pnpm build
+          test -f .next/standalone/server.js
+
+      - name: Logg inn i Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Infrastruktur (Bicep)
+        id: infra
+        env:
+          APP_HOSTNAME: ${{ vars.APP_HOSTNAME }}
+          SEED_ADMIN_EMAIL: ${{ vars.SEED_ADMIN_EMAIL }}
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          MS_GRAPH_TENANT_ID: ${{ secrets.MS_GRAPH_TENANT_ID }}
+          MS_GRAPH_CLIENT_ID: ${{ secrets.MS_GRAPH_CLIENT_ID }}
+          MS_GRAPH_CLIENT_SECRET: ${{ secrets.MS_GRAPH_CLIENT_SECRET }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+        run: |
+          if [ -z "$SEED_ADMIN_EMAIL" ]; then
+            echo "Variabelen SEED_ADMIN_EMAIL mangler i GitHub (Settings → Variables)."
+            exit 1
+          fi
+          # De fire e-postverdiene sendes alltid (tomme når de ikke er satt); Bicep bruker dem bare når alle er gitt.
+          PARAMETERE=(
+            "location=$LOCATION"
+            "environmentName=$ENVIRONMENT_NAME"
+            "appHostname=$APP_HOSTNAME"
+            "appVersion=$APP_VERSION"
+            "seedAdminEmail=$SEED_ADMIN_EMAIL"
+            "postgresAdminPassword=$POSTGRES_ADMIN_PASSWORD"
+            "betterAuthSecret=$BETTER_AUTH_SECRET"
+            "msGraphTenantId=$MS_GRAPH_TENANT_ID"
+            "msGraphClientId=$MS_GRAPH_CLIENT_ID"
+            "msGraphClientSecret=$MS_GRAPH_CLIENT_SECRET"
+            "mailFrom=$MAIL_FROM"
+          )
+          az deployment group validate \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/azure/main.bicep \
+            --parameters "${PARAMETERE[@]}" \
+            --output none
+          UTDATA=$(az deployment group create \
+            --name "utrulling-$APP_VERSION-$GITHUB_RUN_ID" \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/azure/main.bicep \
+            --parameters "${PARAMETERE[@]}" \
+            --query properties.outputs \
+            --output json)
+          {
+            echo "postgres_server=$(echo "$UTDATA" | jq -r .postgresServerName.value)"
+            echo "postgres_host=$(echo "$UTDATA" | jq -r .postgresHost.value)"
+            echo "app_name=$(echo "$UTDATA" | jq -r .appName.value)"
+            echo "app_url=$(echo "$UTDATA" | jq -r .appUrl.value)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Databaseadresse for kjøreren (maskert)
+        env:
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          POSTGRES_HOST: ${{ steps.infra.outputs.postgres_host }}
+        run: |
+          DATABASE_URL="postgres://ezprop_admin:${POSTGRES_ADMIN_PASSWORD}@${POSTGRES_HOST}:5432/ezprop?sslmode=verify-full"
+          echo "::add-mask::$DATABASE_URL"
+          echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Åpne databasen for kjørerens IP (midlertidig)
+        id: brannmur
+        env:
+          POSTGRES_SERVER: ${{ steps.infra.outputs.postgres_server }}
+        run: |
+          KJORER_IP=$(curl -fsS https://api.ipify.org || curl -fsS https://ifconfig.me/ip)
+          az postgres flexible-server firewall-rule create --rule-name github-runner \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER" \
+            --start-ip-address "$KJORER_IP" \
+            --end-ip-address "$KJORER_IP" \
+            --output none
+
+      - name: Migrering og seed
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          SEED_ADMIN_EMAIL: ${{ vars.SEED_ADMIN_EMAIL }}
+        run: |
+          # Brannmurregelen kan bruke opptil ett minutt på å virke. Prøver derfor flere ganger.
+          for forsok in 1 2 3 4 5 6; do
+            if pnpm db:migrate; then
+              break
+            fi
+            if [ "$forsok" = 6 ]; then
+              echo "Migreringen feilet etter 6 forsøk."
+              exit 1
+            fi
+            echo "Databasen svarte ikke ennå, prøver igjen om 10 sekunder ($forsok/6)."
+            sleep 10
+          done
+          pnpm db:seed
+
+      - name: Lukk databasen for kjøreren igjen
+        env:
+          POSTGRES_SERVER: ${{ steps.infra.outputs.postgres_server }}
+        if: always() && steps.brannmur.outcome == 'success'
+        run: |
+          az postgres flexible-server firewall-rule delete --rule-name github-runner \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER" \
+            --yes \
+            --output none
+
+      - name: Pakk standalone-bygget
+        # Zip lages fra innsiden av .next/standalone, så server.js ligger øverst i pakken.
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+          cd .next/standalone
+          zip -qr "$GITHUB_WORKSPACE/app.zip" .
+
+      - name: Rull ut til App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ steps.infra.outputs.app_name }}
+          package: app.zip
+
+      - name: Helsesjekk (må svare 200 med riktig commit)
+        env:
+          APP_URL: ${{ steps.infra.outputs.app_url }}
+        run: |
+          for forsok in $(seq 1 30); do
+            SVAR=$(curl -fsS "$APP_URL/api/helse" || true)
+            VERSJON=$(echo "$SVAR" | jq -r '.versjon // empty' 2>/dev/null || true)
+            if [ -n "$VERSJON" ] && echo "$VERSJON" | grep -q "$APP_VERSION"; then
+              echo "Helsesjekk ok: $SVAR"
+              exit 0
+            fi
+            echo "Venter på appen ($forsok/30): ${SVAR:-ikke noe svar}"
+            sleep 10
+          done
+          echo "Helsesjekken svarte ikke med commit $APP_VERSION. Se App Service → Log stream."
+          exit 1
