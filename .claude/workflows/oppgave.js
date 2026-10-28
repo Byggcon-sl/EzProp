@@ -1,7 +1,7 @@
 export const meta = {
   name: 'oppgave',
   description: 'Oppgaveløkken for EzProp (løkke B, C og D): spesifiser, vurder, design, bygg, test, rett, gjennomgå og lag PR',
-  whenToUse: 'Én oppgave fra docs/07-utviklingsplan.md, fra oppgavekort til pull request. args: { task, phase, branch }',
+  whenToUse: 'Én oppgave fra docs/07-utviklingsplan.md, fra oppgavekort til pull request. args: { task, phase, branch, base?, date? }',
   phases: [
     { title: 'Spesifiser', detail: 'Prosjektlederen lager oppgavekortet' },
     { title: 'Forhåndsvurdering', detail: 'Bare rollene oppgaven trenger, i parallell' },
@@ -20,6 +20,8 @@ const task = args && args.task
 if (!task) throw new Error('args.task mangler: punktet fra docs/07-utviklingsplan.md')
 const phaseName = (args && args.phase) || 'ukjent fase'
 const branch = (args && args.branch) || 'oppgave'
+// Bygger oppgaven på en PR som ikke er merget ennå, er base den branchen (ellers main)
+const base = (args && args.base) || 'main'
 const today = (args && args.date) || 'i dag'
 
 const VERDICT = {
@@ -125,7 +127,7 @@ const PR = {
   required: ['prUrl', 'summary'],
 }
 
-const ctx = `Oppgave: ${task}\nFase: ${phaseName}\nBranch: ${branch}\nDato: ${today}\n`
+const ctx = `Oppgave: ${task}\nFase: ${phaseName}\nBranch: ${branch} (bygger på ${base})\nDato: ${today}\n`
 
 // ---------------------------------------------------------------------------
 // 1. Spesifiser
@@ -134,7 +136,7 @@ phase('Spesifiser')
 log(`Spesifiserer: ${task}`)
 const spec = await agent(
   `${ctx}
-Lag oppgavekortet etter docs/maler/funksjon.md. Les docs/agenter/tilstand.md og gjeldende fase i docs/07-utviklingsplan.md. Hold omfanget lite, skriv «ikke med» eksplisitt, og svar på «KI først». For større funksjoner: lagre i docs/funksjoner/<fase>-<kort-navn>.md; for små oppgaver kan kortet stå i docs/agenter/oppgaver/<branch>.md. Sørg for at branchen «${branch}» finnes (git checkout -b ${branch} fra main hvis den ikke finnes) og commit kortet. Si hvilke roller oppgaven trenger (ikke flere enn nødvendig).`,
+Lag oppgavekortet etter docs/maler/funksjon.md. Les docs/agenter/tilstand.md og gjeldende fase i docs/07-utviklingsplan.md. Hold omfanget lite, skriv «ikke med» eksplisitt, og svar på «KI først». For større funksjoner: lagre i docs/funksjoner/<fase>-<kort-navn>.md; for små oppgaver kan kortet stå i docs/agenter/oppgaver/<branch>.md. Sørg for at branchen «${branch}» finnes (git checkout -b ${branch} fra ${base} hvis den ikke finnes) og commit kortet. Si hvilke roller oppgaven trenger (ikke flere enn nødvendig).`,
   { label: 'prosjektleder: spesifiser', phase: 'Spesifiser', agentType: 'prosjektleder', schema: SPEC },
 )
 if (!spec) throw new Error('Spesifikasjonen ble ikke laget')
@@ -291,7 +293,7 @@ const reviewRoles = [
 async function review(round) {
   const results = await parallel(
     reviewRoles.map((r) => () =>
-      agent(`${ctx}\nOppgavekort: ${spec.specPath}\nGjennomgang (runde ${round}) av diffen mot main på branchen «${branch}» (git diff main...${branch}).\n${r.ask}\nMerk hvert funn alvorlig eller lite.`, {
+      agent(`${ctx}\nOppgavekort: ${spec.specPath}\nGjennomgang (runde ${round}) av diffen på branchen «${branch}» (git diff ${base}...${branch}).\n${r.ask}\nMerk hvert funn alvorlig eller lite.`, {
         label: `${r.role}: gjennomgang`,
         phase: 'Gjennomgang',
         agentType: r.role,
@@ -336,7 +338,7 @@ Sjekkene er ${allGreen ? 'grønne' : 'IKKE grønne (si det tydelig i PR-en)'}.
 Alvorlige funn som står igjen: ${serious.length === 0 ? 'ingen' : serious.map((f) => `${f.file}: ${f.description}`).join('; ')}
 Små funn (nevnes i PR-en): ${minor.length === 0 ? 'ingen' : minor.map((f) => `${f.file}: ${f.description}`).join('; ')}
 
-Gjør ferdig: øk versjonsnummeret i package.json (patch), kryss av punktet i docs/07-utviklingsplan.md, oppdater ordlisten hvis nye begreper, oppdater docs/agenter/tilstand.md (åpne PR-er, venter på Ståle). Commit og push branchen «${branch}» (git push -u origin ${branch}). Åpne PR mot main med gh pr create, norsk tittel, og teksten etter docs/maler/pr.md i klarspråk til Ståle. Hvis PR-en bygger på en annen PR som ikke er merget, skriv det under «Bygger på». Aldri modellnavn. Rapporter PR-lenken.`,
+Gjør ferdig: øk versjonsnummeret i package.json (patch), kryss av punktet i docs/07-utviklingsplan.md, oppdater ordlisten hvis nye begreper, oppdater docs/agenter/tilstand.md (åpne PR-er, venter på Ståle). Commit og push branchen «${branch}» (git push -u origin ${branch}). Åpne PR med gh pr create --base ${base}, norsk tittel, og teksten etter docs/maler/pr.md i klarspråk til Ståle. ${base === 'main' ? '' : `PR-en bygger på branchen ${base} som ikke er merget: skriv det under «Bygger på».`} Aldri modellnavn. Rapporter PR-lenken.`,
   { label: 'prosjektleder: PR', phase: 'PR', agentType: 'prosjektleder', schema: PR },
 )
 return { status: 'pr', task, prUrl: pr && pr.prUrl, summary: pr && pr.summary, seriousFindingsLeft: serious.length, minorFindings: minor.length }
