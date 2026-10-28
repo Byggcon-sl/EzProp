@@ -2,7 +2,7 @@
 
 Sist oppdatert: 23.10.2026
 Status: Utkast – observasjon i IVIT, ikke godkjent.
-Kilde: Testoppdrag 14553-3037 (Ståles egen bolig, type Generell) i IVIT. Gjennomgått natt til 23.10.2026. Rapportutkast lastet ned som PDF for å se oppbyggingen. Ingenting er sendt, levert eller fakturert.
+Kilde: Testoppdrag [oppdragsnr fjernet] (Ståles egen bolig, type Generell) i IVIT. Gjennomgått natt til 23.10.2026. Rapportutkast lastet ned som PDF for å se oppbyggingen. Ingenting er sendt, levert eller fakturert.
 
 Hører sammen med `kravdokument.md`, `kartlegging-kontrollpunkter.md` og `kartlegging-bad.md`.
 

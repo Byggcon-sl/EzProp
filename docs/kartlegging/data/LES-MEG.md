@@ -46,7 +46,7 @@ For å fullføre: del de to fanene i to faner hver i Excel (eller lagre dem som 
 
 ## Rensing
 
-Søkt etter oppdragsnummer (f.eks. 14553-3037), telefonnummer, private e-postadresser, gateadresser til private boliger og personnavn på kunder. Funn:
+Søkt etter oppdragsnummer (f.eks. [oppdragsnr fjernet]), telefonnummer, private e-postadresser, gateadresser til private boliger og personnavn på kunder. Funn:
 
 - Ingen oppdragsnummer, telefonnummer, e-postadresser eller private gateadresser ble funnet. Kildefilene inneholdt allerede «[adresse fjernet]» og «[firma fjernet]» i én frase (trykktest).
 - Tre personnavn på håndverkere/utførende i to Byggcon Helgeland-fraser («Kontroll KS» og «Kontroll produkter tettesjikt») er erstattet med `[fjernet]`. Firmanavn (f.eks. forsikringsselskap, boligbyggelag, regnskapskontor, byggefirma) er beholdt.

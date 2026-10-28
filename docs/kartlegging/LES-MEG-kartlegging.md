@@ -247,7 +247,7 @@ EzProp snakker aldri direkte med en leverandør. Kjernen bruker faste «porter»
 
 ## Testdata
 
-- **IVIT:** Oppdrag 14553-3037 (Ståles bolig) beholdes for videre testing.
+- **IVIT:** Oppdrag [oppdragsnr fjernet] (Ståles bolig) beholdes for videre testing.
 - **Spectora (prøvekonto, fiktive data):** Alt beholdes (Ståle 24.10.2026):
   - Testmalene «EzProp TEST - Vatrom (Claude)» og «Imported from XLS – 10/24/2026».
   - Automatiseringene TEST A, B og C.
@@ -255,5 +255,5 @@ EzProp snakker aldri direkte med en leverandør. Kjernen bruker faste «porter»
   - Dashbordet «TEST megleroversikt».
   - Kontoransatt «Siri Kontor (TEST)» og oppgave nr. 77565.
   - Én testinspeksjon.
-- **SmartTakst (Ståles brukerkonto):** Oppdraget Bulrats vei 9 (Ståles eget hus) er status «Under arbeid» og har et utkast med fiktive avvik i rundt 20 bygningsdeler. **Byggeåret 1978 er fiktivt.** Ingenting er ferdigstilt eller betalt.
+- **SmartTakst (Ståles brukerkonto):** Oppdraget [Ståles testadresse] (Ståles eget hus) er status «Under arbeid» og har et utkast med fiktive avvik i rundt 20 bygningsdeler. **Byggeåret 1978 er fiktivt.** Ingenting er ferdigstilt eller betalt.
 - Passordene til IVIT, Spectora og SmartTakst byttes når testingen er ferdig.
