@@ -147,7 +147,9 @@ class ChangeWriter {
     const [form] = await this.tx
       .select({ id: trialForms.id })
       .from(trialForms)
-      .where(and(eq(trialForms.id, trialFormId), eq(trialForms.organizationId, this.organizationId)))
+      .where(
+        and(eq(trialForms.id, trialFormId), eq(trialForms.organizationId, this.organizationId)),
+      )
       .limit(1);
     if (!form) throw new InvalidTrialChangeError("Testskjemaet finnes ikke.");
     this.knownForms.add(trialFormId);

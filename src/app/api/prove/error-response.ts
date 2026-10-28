@@ -22,7 +22,10 @@ export function trialErrorResponse(error: unknown, route: string, userId: string
     return errorJson(400, "Endringen kunne ikke lagres. Noe i den er ugyldig.");
   }
   if (error instanceof TrialIdConflictError) {
-    return errorJson(409, "Endringen kunne ikke lagres, fordi id-en allerede finnes et annet sted.");
+    return errorJson(
+      409,
+      "Endringen kunne ikke lagres, fordi id-en allerede finnes et annet sted.",
+    );
   }
   if (error instanceof TrialPhotoNotFoundError) {
     return errorJson(404, "Fant ikke bildet.");

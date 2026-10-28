@@ -94,8 +94,8 @@ Fylles inn i byggingen, også det som ikke virket. Det er grunnlaget for kriteri
 | Tekstfletting med Yjs gjennom PowerSync: virket / utsatt. Hvorfor? | |
 | Hvor mange linjer kode eier vi selv for synklaget (uten tester)? | |
 | Tid brukt på å få kandidaten klar (arbeidsdager) | |
-| Versjon av `@powersync/web`, `@journeyapps/wa-sqlite`, PowerSync-tjenesten (bilde) og `yjs` | |
-| Lisens på hver (sjekket dato) | |
+| Versjon av `@powersync/web`, `@journeyapps/wa-sqlite`, PowerSync-tjenesten (bilde) og `yjs` | PowerSync-tjenesten: `journeyapps/powersync-service:1.27.2` (fast tag, finnes for amd64 og arm64). `yjs` 13.6.33. |
+| Lisens på hver (sjekket dato) | PowerSync-tjenesten: FSL-1.1-ALv2 (sjekket 28.10.2026 mot npm, pakkene `@powersync/service-*`). `jose` og `yjs`: MIT (sjekket 28.10.2026). |
 | Det som ikke virket i byggingen | |
 
 ## Oppsummering for ADR-en (fylles inn til slutt)
