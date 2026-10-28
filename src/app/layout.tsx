@@ -18,10 +18,18 @@ const roboto = localFont({
 export const metadata: Metadata = {
   title: { default: brand.productName, template: `%s – ${brand.productName}` },
   description: `${brand.productName} fra ${brand.companyName}: tilstandsrapporter for takstingeniører.`,
+  // Appen lagt på hjemskjermen i Safari åpnes uten adresselinje
+  appleWebApp: { capable: true, title: brand.productName, statusBarStyle: "default" },
+  // Next.js skriver bare den nye «mobile-web-app-capable»; Safari på iPad leser fortsatt den gamle
+  other: { "apple-mobile-web-app-capable": "yes" },
 };
 
 // iPad: ingen zoom-sprang i skjemafelt, og appen fyller skjermen når den ligger på hjemskjermen
-export const viewport: Viewport = { width: "device-width", initialScale: 1 };
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: brand.color,
+};
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
