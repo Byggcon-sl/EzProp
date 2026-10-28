@@ -1,48 +1,66 @@
-import { expect, test, type Page } from "@playwright/test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { trialForm } from "../src/modules/offline-trial/trial-form";
 import { brand } from "../src/shared/config/brand";
-import { listTrialFields, trialForm } from "../src/modules/offline-trial/trial-form";
-import { logIn } from "./helpers";
+import { ADMIN_EMAIL, logIn } from "./helpers";
 
-/*
- * Fase 1, oppgave 3: testskjemaet for prøven uten nett og appen på hjemskjermen.
- * Testplan: docs/funksjoner/fase1-testskjema-testplan.md avsnitt 6. Kjører i både pc og ipad.
- * Ingen test uten nett her (oppgave 4 og 5).
- */
+// Testskjemaet for prøven uten nett (fase 1, oppgave 3).
+// Testplan: docs/funksjoner/fase1-testskjema-testplan.md avsnitt 6. Kjører i både pc og ipad.
+// Ingen test uten nett her (bevisst, oppgave 4 og 5).
 
-const FORM_URL = "/prove/testskjema";
-const TEST_IMAGE = "e2e/fixtures/test-image.png";
-const fields = listTrialFields(trialForm);
+const TEST_IMAGE = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "fixtures",
+  "test-image.png",
+);
+const fields = trialForm.groups.flatMap((group) => group.fields);
+const numberFields = fields.filter((field) => field.type === "number");
 
-async function openTrialForm(page: Page) {
-  await logIn(page);
-  await page.goto(FORM_URL);
-  await expect(counter(page)).toHaveText("0 av 40 felt utfylt");
-}
-
-function counter(page: Page) {
+function counter(page: Page): Locator {
   return page.getByText(/^\d+ av 40 felt utfylt$/);
 }
 
-function group(page: Page, name: string) {
-  return page.getByRole("group", { name, exact: true });
+async function expectCount(page: Page, n: number) {
+  await expect(counter(page)).toHaveText(`${n} av 40 felt utfylt`);
+}
+
+function fieldContainer(page: Page, key: string): Locator {
+  return page.locator(`[data-field="${key}"]`);
+}
+
+function group(page: Page, label: string): Locator {
+  return page.getByRole("group", { name: label, exact: true });
+}
+
+async function openTrialForm(page: Page) {
+  await logIn(page, ADMIN_EMAIL);
+  await page.goto("/prove/testskjema");
+  await expect(page).toHaveURL(/\/prove\/testskjema$/);
+  await expectCount(page, 0);
 }
 
 test("uinnlogget sendes til innlogging fra /prove/testskjema", async ({ page }) => {
-  await page.goto(FORM_URL);
+  await page.goto("/prove/testskjema");
   await expect(page).toHaveURL(/\/logg-inn$/);
+  await expect(page.getByRole("heading", { name: "Logg inn" })).toBeVisible();
 });
 
 test("admin finner lenken Prøve uten nett: testskjema på arbeidskøen og ser 0 av 40 felt utfylt", async ({
   page,
 }) => {
-  await logIn(page);
-  await page.getByRole("link", { name: "Prøve uten nett: testskjema" }).click();
+  await logIn(page, ADMIN_EMAIL);
+  const link = page.getByRole("link", { name: "Prøve uten nett: testskjema" });
+  await expect(link).toBeVisible();
+  await link.click();
   await expect(page).toHaveURL(/\/prove\/testskjema$/);
-  await expect(page.getByText("0 av 40 felt utfylt", { exact: true })).toBeVisible();
+  await expectCount(page, 0);
 });
 
 test("alle seks gruppene og alle 40 etiketter vises", async ({ page }) => {
   await openTrialForm(page);
+  expect(trialForm.groups).toHaveLength(6);
+  expect(fields).toHaveLength(40);
   for (const g of trialForm.groups) {
     await expect(page.getByRole("heading", { name: g.title, exact: true })).toBeVisible();
   }
@@ -51,15 +69,17 @@ test("alle seks gruppene og alle 40 etiketter vises", async ({ page }) => {
       case "text":
       case "number":
       case "photo":
-        await expect(page.getByLabel(field.label, { exact: true })).toBeVisible();
+        await expect(page.getByLabel(field.label, { exact: true }), field.key).toBeVisible();
         break;
       case "tg":
       case "choice":
-        await expect(group(page, field.label)).toBeVisible();
+        await expect(group(page, field.label), field.key).toBeVisible();
         break;
       case "table":
-        await expect(page.getByText(field.label, { exact: true })).toBeVisible();
-        await expect(page.getByRole("button", { name: "Legg til rad" })).toBeVisible();
+        await expect(fieldContainer(page, field.key).getByText(field.label)).toBeVisible();
+        await expect(
+          fieldContainer(page, field.key).getByRole("button", { name: "Legg til rad" }),
+        ).toBeVisible();
         break;
     }
   }
@@ -71,7 +91,7 @@ test("ingen nedtrekksmenyer", async ({ page }) => {
 });
 
 test("TG-knapp er minst 44 px høy", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "ipad", "Måles bare i iPad-størrelse");
+  test.skip(testInfo.project.name !== "ipad", "Trykkflaten måles i iPad-størrelse");
   await openTrialForm(page);
   const button = group(page, "Tak – tilstandsgrad").getByRole("button", {
     name: "TG0",
@@ -85,110 +105,141 @@ test("TG-knapp er minst 44 px høy", async ({ page }, testInfo) => {
 
 test("tallfelt har inputMode decimal", async ({ page }) => {
   await openTrialForm(page);
-  const numberFields = fields.filter((f) => f.type === "number");
   expect(numberFields).toHaveLength(9);
   for (const field of numberFields) {
     const input = page.getByLabel(field.label, { exact: true });
-    await expect(input).toHaveAttribute("inputmode", "decimal");
-    await expect(input).toHaveAttribute("type", "text");
-    expect(await input.evaluate((el) => el.tagName)).toBe("INPUT");
+    await expect(input, field.key).toHaveAttribute("inputmode", "decimal");
+    await expect(input, field.key).toHaveAttribute("type", "text");
+    expect(await input.evaluate((el) => el.tagName), field.key).toBe("INPUT");
   }
 });
 
 test("valg er ett trykk og bare ett valg er trykket", async ({ page }) => {
   await openTrialForm(page);
-  const leakStopper = group(page, "Lekkasjestopper");
-  const yes = leakStopper.getByRole("button", { name: "Ja", exact: true });
-  const no = leakStopper.getByRole("button", { name: "Nei", exact: true });
+  const choice = group(page, "Lekkasjestopper");
+  const yes = choice.getByRole("button", { name: "Ja", exact: true });
+  const no = choice.getByRole("button", { name: "Nei", exact: true });
+  await expect(yes).toHaveAttribute("aria-pressed", "false");
+  await expect(no).toHaveAttribute("aria-pressed", "false");
 
   await yes.click();
   await expect(yes).toHaveAttribute("aria-pressed", "true");
   await expect(no).toHaveAttribute("aria-pressed", "false");
-  await expect(counter(page)).toHaveText("1 av 40 felt utfylt");
+  await expect(choice.locator('button[aria-pressed="true"]')).toHaveCount(1);
+  await expectCount(page, 1);
 
   await no.click();
   await expect(no).toHaveAttribute("aria-pressed", "true");
   await expect(yes).toHaveAttribute("aria-pressed", "false");
-  await expect(counter(page)).toHaveText("1 av 40 felt utfylt");
+  await expect(choice.locator('button[aria-pressed="true"]')).toHaveCount(1);
+  await expectCount(page, 1);
 });
 
 test("TG er ett trykk og bare én TG er trykket", async ({ page }) => {
   await openTrialForm(page);
-  const roof = group(page, "Tak – tilstandsgrad");
-  const pressed = roof.locator('button[aria-pressed="true"]');
+  const tg = group(page, "Tak – tilstandsgrad");
+  await expect(tg.getByRole("button")).toHaveCount(5);
+  for (const name of ["TG0", "TG1", "TG2", "TG3", "TGIU"]) {
+    await expect(tg.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+  const tg2 = tg.getByRole("button", { name: "TG2", exact: true });
+  const tg3 = tg.getByRole("button", { name: "TG3", exact: true });
 
-  await roof.getByRole("button", { name: "TG2", exact: true }).click();
-  await expect(pressed).toHaveCount(1);
-  await expect(pressed).toHaveText("TG2");
-  await expect(counter(page)).toHaveText("1 av 40 felt utfylt");
+  await tg2.click();
+  await expect(tg2).toHaveAttribute("aria-pressed", "true");
+  await expect(tg.locator('button[aria-pressed="true"]')).toHaveCount(1);
+  await expectCount(page, 1);
 
-  await roof.getByRole("button", { name: "TG3", exact: true }).click();
-  await expect(pressed).toHaveCount(1);
-  await expect(pressed).toHaveText("TG3");
-  await expect(counter(page)).toHaveText("1 av 40 felt utfylt");
+  await tg3.click();
+  await expect(tg3).toHaveAttribute("aria-pressed", "true");
+  await expect(tg2).toHaveAttribute("aria-pressed", "false");
+  await expect(tg.locator('button[aria-pressed="true"]')).toHaveCount(1);
+  await expectCount(page, 1);
 });
 
 test("alle 40 felt fylles ut og telleren viser 40 av 40", async ({ page }) => {
   await openTrialForm(page);
-  let filled = 0;
+  let answered = 0;
 
   for (const field of fields) {
-    const container = page.locator(`[data-field="${field.key}"]`);
     switch (field.type) {
       case "text":
         await page.getByLabel(field.label, { exact: true }).fill("Oppdiktet tekst");
         break;
-      case "tg":
-        await group(page, field.label).getByRole("button", { name: "TG1", exact: true }).click();
+      case "tg": {
+        const button = group(page, field.label).getByRole("button", { name: "TG1", exact: true });
+        await button.click();
+        await expect(button).toHaveAttribute("aria-pressed", "true");
+        await expect(group(page, field.label).locator('button[aria-pressed="true"]')).toHaveCount(
+          1,
+        );
         break;
+      }
       case "choice": {
         const first = field.options?.[0];
-        if (!first) throw new Error(`Valgfeltet ${field.key} har ingen valg`);
-        await group(page, field.label)
-          .getByRole("button", { name: first.label, exact: true })
-          .click();
+        expect(first, field.key).toBeDefined();
+        const button = group(page, field.label).getByRole("button", {
+          name: first!.label,
+          exact: true,
+        });
+        await button.click();
+        await expect(button).toHaveAttribute("aria-pressed", "true");
+        await expect(group(page, field.label).locator('button[aria-pressed="true"]')).toHaveCount(
+          1,
+        );
         break;
       }
       case "number":
         await page.getByLabel(field.label, { exact: true }).fill("12,5");
         break;
       case "table": {
-        const addRow = container.getByRole("button", { name: "Legg til rad" });
+        const table = fieldContainer(page, field.key);
+        const addRow = table.getByRole("button", { name: "Legg til rad" });
         await addRow.click();
         await addRow.click();
-        await container.getByLabel("Sted, rad 1", { exact: true }).fill("Ved sluk");
-        await container.getByLabel("Verdi, rad 1", { exact: true }).fill("12,5");
-        await container.getByLabel("Kommentar, rad 1", { exact: true }).fill("Oppdiktet");
-        await container.getByLabel("Sted, rad 2", { exact: true }).fill("Ved dør");
-        await container.getByRole("button", { name: "Slett rad 2" }).click();
-        await expect(container.getByLabel("Sted, rad 2", { exact: true })).toHaveCount(0);
-        await expect(container.getByLabel("Sted, rad 1", { exact: true })).toHaveValue("Ved sluk");
-        await expect(container.getByRole("button", { name: /^Slett rad \d+$/ })).toHaveCount(1);
+        await table.getByLabel("Sted, rad 1", { exact: true }).fill("Oppdiktet sted");
+        await table.getByLabel("Verdi, rad 1", { exact: true }).fill("12,5");
+        await table.getByLabel("Kommentar, rad 1", { exact: true }).fill("Oppdiktet kommentar");
+        await table.getByLabel("Sted, rad 2", { exact: true }).fill("Annet sted");
+        await table.getByRole("button", { name: "Slett rad 2", exact: true }).click();
+        // Én rad igjen, og den beholder det som ble skrevet
+        await expect(table.getByLabel("Sted, rad 2", { exact: true })).toHaveCount(0);
+        await expect(table.getByRole("button", { name: "Slett rad 2", exact: true })).toHaveCount(
+          0,
+        );
+        await expect(table.getByLabel("Sted, rad 1", { exact: true })).toHaveValue(
+          "Oppdiktet sted",
+        );
+        await expect(table.getByLabel("Verdi, rad 1", { exact: true })).toHaveValue("12,5");
+        await expect(table.getByRole("button", { name: "Slett rad 1", exact: true })).toBeVisible();
         break;
       }
-      case "photo":
+      case "photo": {
         await page.getByLabel(field.label, { exact: true }).setInputFiles(TEST_IMAGE);
+        const container = fieldContainer(page, field.key);
         await expect(container.getByText("1 bilde", { exact: true })).toBeVisible();
-        await expect(container.getByText("test-image.png", { exact: true })).toBeVisible();
+        await expect(container.getByText("test-image.png")).toBeVisible();
         break;
+      }
     }
-    filled += 1;
-    // Mellomsjekk etter hvert felt (også tabellen: to rader lagt til, én slettet, feltet teller)
-    await expect(counter(page)).toHaveText(`${filled} av 40 felt utfylt`);
+    answered += 1;
+    // Telleren går opp med nøyaktig ett for hvert felt (også tabellen etter to lagt til og én slettet)
+    await expectCount(page, answered);
   }
 
-  await expect(page.getByText("40 av 40 felt utfylt", { exact: true })).toBeVisible();
+  expect(answered).toBe(40);
+  await expect(counter(page)).toHaveText("40 av 40 felt utfylt");
 });
 
 test("tall med bokstaver teller ikke", async ({ page }) => {
   await openTrialForm(page);
-  const buildingYear = page.getByLabel("Byggeår", { exact: true });
-
-  await buildingYear.fill("abc");
-  await expect(counter(page)).toHaveText("0 av 40 felt utfylt");
-
-  await buildingYear.fill("1985");
-  await expect(counter(page)).toHaveText("1 av 40 felt utfylt");
+  const year = page.getByLabel("Byggeår", { exact: true });
+  await year.fill("abc");
+  await expectCount(page, 0);
+  await year.fill("1985");
+  await expectCount(page, 1);
+  await year.fill("");
+  await expectCount(page, 0);
 });
 
 test("manifest.webmanifest svarer 200 med standalone, start_url /arbeidskoe og navn fra brand", async ({
@@ -196,12 +247,18 @@ test("manifest.webmanifest svarer 200 med standalone, start_url /arbeidskoe og n
 }) => {
   const response = await request.get("/manifest.webmanifest");
   expect(response.status()).toBe(200);
-  const manifest = await response.json();
+  const manifest = (await response.json()) as {
+    display?: string;
+    start_url?: string;
+    name?: string;
+    lang?: string;
+    icons?: { src: string }[];
+  };
   expect(manifest.display).toBe("standalone");
   expect(manifest.start_url).toBe("/arbeidskoe");
   expect(manifest.name).toBe(brand.productName);
   expect(manifest.lang).toBe("nb");
-  expect(manifest.icons[0].src).toContain("/apple-icon");
+  expect(manifest.icons?.[0]?.src).toContain("/apple-icon");
 });
 
 test("/apple-icon svarer 200 med image/png", async ({ request }) => {

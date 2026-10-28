@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { listTrialFields, trialForm, type TrialFieldType } from "./trial-form";
+import { listTrialFields, trialForm } from "./trial-form";
 
+// Testskjemaet for prøven uten nett (docs/funksjoner/fase1-testskjema.md).
+// Nøklene er faste koder (regel 6): kandidatene i oppgave 4 sammenlignes på samme nøkler.
+
+const fields = listTrialFields(trialForm);
 const SNAKE_CASE = /^[a-z][a-z0-9_]*$/;
 
-/** De 40 faste nøklene fra tabellen «Feltene (40)» i docs/funksjoner/fase1-testskjema.md. */
-const KEYS_FROM_TASK_CARD = [
+/** Nøklene fra tabellen i oppgavekortet, i samme rekkefølge. */
+const EXPECTED_KEYS = [
   "building_year",
   "building_type",
   "floors",
@@ -47,30 +51,31 @@ const KEYS_FROM_TASK_CARD = [
   "recommendation_tg",
 ];
 
-const fields = listTrialFields(trialForm);
-
 describe("trialForm", () => {
   it("har nøyaktig 40 felt med unike nøkler", () => {
-    const keys = fields.map((f) => f.key);
-    expect(keys).toHaveLength(40);
-    expect(new Set(keys).size).toBe(40);
+    expect(fields).toHaveLength(40);
+    expect(new Set(fields.map((field) => field.key)).size).toBe(40);
   });
 
   it("har fordelingen tekst 7, TG 7, valg 8, tall 9, tabell 1, bilde 8", () => {
-    const counts: Record<string, number> = {};
-    for (const field of fields) counts[field.type] = (counts[field.type] ?? 0) + 1;
-    expect(counts).toEqual({ text: 7, tg: 7, choice: 8, number: 9, table: 1, photo: 8 });
+    const count = (type: string) => fields.filter((field) => field.type === type).length;
+    expect({
+      text: count("text"),
+      tg: count("tg"),
+      choice: count("choice"),
+      number: count("number"),
+      table: count("table"),
+      photo: count("photo"),
+    }).toEqual({ text: 7, tg: 7, choice: 8, number: 9, table: 1, photo: 8 });
   });
 
   it("alle seks felttypene finnes", () => {
-    const types = new Set(fields.map((f) => f.type));
-    const expected: TrialFieldType[] = ["text", "tg", "choice", "number", "table", "photo"];
-    for (const type of expected) expect(types.has(type)).toBe(true);
-    expect(types.size).toBe(6);
+    const types = new Set<string>(fields.map((field) => field.type));
+    expect([...types].sort()).toEqual(["choice", "number", "photo", "table", "text", "tg"]);
   });
 
   it("har seks grupper med norsk overskrift", () => {
-    expect(trialForm.groups.map((g) => g.title)).toEqual([
+    expect(trialForm.groups.map((group) => group.title)).toEqual([
       "Om boligen",
       "Utvendig",
       "Bad",
@@ -81,11 +86,12 @@ describe("trialForm", () => {
   });
 
   it("alle valgfelt har minst to valg med kode og norsk etikett", () => {
-    const choiceFields = fields.filter((f) => f.type === "choice");
-    expect(choiceFields).toHaveLength(8);
+    const choiceFields = fields.filter((field) => field.type === "choice");
+    expect(choiceFields.length).toBeGreaterThan(0);
     for (const field of choiceFields) {
       const options = field.options ?? [];
       expect(options.length, field.key).toBeGreaterThanOrEqual(2);
+      expect(new Set(options.map((o) => o.key)).size, field.key).toBe(options.length);
       for (const option of options) {
         expect(option.key, field.key).toMatch(SNAKE_CASE);
         expect(option.label.trim(), field.key).not.toBe("");
@@ -94,7 +100,7 @@ describe("trialForm", () => {
   });
 
   it("tabellen drill_measurements har kolonnene location, value, note", () => {
-    const table = fields.find((f) => f.key === "drill_measurements");
+    const table = fields.find((field) => field.key === "drill_measurements");
     expect(table?.type).toBe("table");
     const columns = table?.columns ?? [];
     expect(columns.map((c) => c.key)).toEqual(["location", "value", "note"]);
@@ -103,15 +109,21 @@ describe("trialForm", () => {
   });
 
   it("nøklene er engelske snake_case", () => {
-    for (const group of trialForm.groups) expect(group.key).toMatch(SNAKE_CASE);
-    for (const field of fields) {
-      expect(field.key).toMatch(SNAKE_CASE);
-      for (const option of field.options ?? []) expect(option.key).toMatch(SNAKE_CASE);
-      for (const column of field.columns ?? []) expect(column.key).toMatch(SNAKE_CASE);
-    }
+    const keys = [
+      ...fields.map((field) => field.key),
+      ...fields.flatMap((field) => (field.options ?? []).map((o) => o.key)),
+      ...fields.flatMap((field) => (field.columns ?? []).map((c) => c.key)),
+    ];
+    for (const key of keys) expect(key).toMatch(SNAKE_CASE);
   });
 
   it("nøklene stemmer med oppgavekortet", () => {
-    expect(fields.map((f) => f.key)).toEqual(KEYS_FROM_TASK_CARD);
+    expect(fields.map((field) => field.key)).toEqual(EXPECTED_KEYS);
+  });
+
+  it("alle felt har norsk etikett, og etikettene er unike", () => {
+    // e2e finner feltene på etiketten, så to like etiketter ville gitt feil felt.
+    for (const field of fields) expect(field.label.trim(), field.key).not.toBe("");
+    expect(new Set(fields.map((field) => field.label)).size).toBe(40);
   });
 });

@@ -117,7 +117,7 @@ Ingen nye eller endrede tabeller. Faste koder i testskjemaet (`key`) er prefiks-
 | | `rooms_inspected` | Antall rom befart | number | |
 | | `recommendation_tg` | Samlet inntrykk – tilstandsgrad | tg | |
 
-Fordeling: tekst 7, TG 7, valg 9, tall 9, tabell 1, bilde 7. Et felt regnes som utfylt når det har en verdi: tekst som ikke er tom eller bare mellomrom, TG eller valg satt, tall som er et tall (`0` teller, `null` teller ikke), tabell med minst én rad, bilde med minst ett bilde.
+Fordeling: tekst 7, TG 7, valg 8, tall 9, tabell 1, bilde 8. Et felt regnes som utfylt når det har en verdi: tekst som ikke er tom eller bare mellomrom, TG eller valg satt, tall som er et tall (`0` teller, `null` teller ikke), tabell med minst én rad, bilde med minst ett bilde.
 
 ## Skjermer
 iPad (liggende, 1194 × 834) og PC. Én skjerm: gruppene under hverandre med overskrift, teller «N av 40 felt utfylt» fast øverst. Hovedhandling: fylle ut feltene. Ingen lagre-knapp (svarene lagres ikke i denne oppgaven). Antall trykk: TG og valg er ett trykk, bilde to (knapp + kamera). Ingen skisse fra ui-designer: skjemaet er et prøveverktøy, og kravene over (trykkflater, knapper i stedet for nedtrekk, TG med tekst) dekker designprinsippene 6, 8 og 11.
@@ -145,7 +145,7 @@ Ingen i denne oppgaven. Prøve E får to regler som data med testsaker: alder mo
 Enhetstester (Vitest, rene, ingen database):
 - `src/modules/offline-trial/trial-form.test.ts`
   - «har nøyaktig 40 felt med unike nøkler»
-  - «har fordelingen tekst 7, TG 7, valg 9, tall 9, tabell 1, bilde 7»
+  - «har fordelingen tekst 7, TG 7, valg 8, tall 9, tabell 1, bilde 8»
   - «alle seks felttypene finnes»
   - «alle valgfelt har minst to valg med kode og norsk etikett»
   - «tabellen drill_measurements har kolonnene location, value, note»

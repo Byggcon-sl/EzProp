@@ -23,7 +23,7 @@
 | Testnavn | Viser |
 |---|---|
 | «har nøyaktig 40 felt med unike nøkler» | `trialForm` flatet ut gir 40 felt, og `new Set(keys).size === 40`. Vokter akseptkriterium 1. |
-| «har fordelingen tekst 7, TG 7, valg 9, tall 9, tabell 1, bilde 7» | Teller per `type`. Fanger at utvikler bytter type på et felt. |
+| «har fordelingen tekst 7, TG 7, valg 8, tall 9, tabell 1, bilde 8» | Teller per `type`. Fanger at utvikler bytter type på et felt. |
 | «alle seks felttypene finnes» | `text`, `tg`, `choice`, `number`, `table`, `photo` er alle i bruk. |
 | «har seks grupper med norsk overskrift» | Gruppene «Om boligen», «Utvendig», «Bad», «Kjøkken», «Teknisk», «Oppsummering», i den rekkefølgen. |
 | «alle valgfelt har minst to valg med kode og norsk etikett» | Hvert `choice`-felt har `options.length >= 2`, koder i snake_case, etiketter ikke tomme. |
