@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { trialForm } from "../src/modules/offline-trial/trial-form";
 import { brand } from "../src/shared/config/brand";
-import { ADMIN_EMAIL, createTrialForm, logIn } from "./helpers";
+import { ADMIN_EMAIL, createTrialForm, hookValue, logIn, useCandidate } from "./helpers";
 
 // Testskjemaet for prøven uten nett (fase 1, oppgave 3).
 // Testplan: docs/funksjoner/fase1-testskjema-testplan.md avsnitt 6. Kjører i både pc og ipad.
@@ -163,8 +163,8 @@ test("TG er ett trykk og bare én TG er trykket", async ({ page }) => {
   await expectCount(page, 1);
 });
 
-test("alle 40 felt fylles ut og telleren viser 40 av 40", async ({ page }) => {
-  await openTrialForm(page);
+/** Fyller ut alle 40 felt ett for ett og sjekker at telleren går opp med nøyaktig ett for hvert. */
+async function fillAllFields(page: Page) {
   let answered = 0;
 
   for (const field of fields) {
@@ -234,6 +234,24 @@ test("alle 40 felt fylles ut og telleren viser 40 av 40", async ({ page }) => {
   }
 
   expect(answered).toBe(40);
+}
+
+test("alle 40 felt fylles ut og telleren viser 40 av 40", async ({ page }) => {
+  await openTrialForm(page);
+  await fillAllFields(page);
+  await expect(counter(page)).toHaveText("40 av 40 felt utfylt");
+});
+
+// Kandidat 2 (docs/funksjoner/fase1-kandidat-electricsql-testplan.md avsnitt 6.1): samme skjema og
+// samme utfylling med ElectricSQL valgt. Resten av filen kjører med standardkandidaten (PowerSync).
+test("alle 40 felt fylles ut og telleren viser 40 av 40 med ElectricSQL valgt", async ({
+  page,
+  context,
+}) => {
+  await useCandidate(context, "electricsql");
+  await openTrialForm(page);
+  expect(await hookValue(page, "candidate")).toBe("electricsql");
+  await fillAllFields(page);
   await expect(counter(page)).toHaveText("40 av 40 felt utfylt");
 });
 
