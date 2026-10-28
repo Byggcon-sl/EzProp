@@ -17,7 +17,7 @@ ROD=$'\033[31m'
 FET=$'\033[1m'
 NORMAL=$'\033[0m'
 STEG=0
-TOTALT=9
+TOTALT=10
 
 steg() {
   STEG=$((STEG + 1))
@@ -169,7 +169,9 @@ LAGT_TIL=""
 for par in \
   "POWERSYNC_URL=http://localhost:8080" \
   "POWERSYNC_JWT_SECRET=utvikling-ikke-hemmelig-synknokkel-bare-for-mac-0123456789" \
-  "TRIAL_UPLOAD_DIR=var/uploads/trial"; do
+  "TRIAL_UPLOAD_DIR=var/uploads/trial" \
+  "ELECTRIC_URL=http://localhost:3010" \
+  "ELECTRIC_SECRET=utvikling-ikke-hemmelig-electricnokkel-bare-for-mac-0123456789"; do
   navn=${par%%=*}
   if ! grep -q "^${navn}=" .env; then
     if [ -z "$LAGT_TIL" ]; then
@@ -227,6 +229,37 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+steg "Starter synktjenesten (ElectricSQL)"
+if [ "${EZPROP_SKIP_DOCKER:-0}" = "1" ]; then
+  advarsel "Hopper over ElectricSQL (EZPROP_SKIP_DOCKER=1)."
+else
+  # Electric bruker samme nøkkel som appen (ELECTRIC_SECRET i .env)
+  ELECTRIC_SECRET=$(grep '^ELECTRIC_SECRET=' .env | head -1 | cut -d= -f2-)
+  export ELECTRIC_SECRET
+  if ! docker compose up -d --force-recreate electric >/tmp/ezprop-electric.log 2>&1; then
+    if grep -qi "port is already allocated\|address already in use" /tmp/ezprop-electric.log; then
+      stopp "Port 3010 er opptatt av et annet program på Macen." \
+        "Lukk programmet som bruker port 3010, eller spør Claude om hjelp."
+    fi
+    stopp "Klarte ikke å starte ElectricSQL." "$(tail -5 /tmp/ezprop-electric.log)"
+  fi
+  EL_KLAR=0
+  for _ in $(seq 1 60); do
+    if curl -s -f -o /dev/null http://127.0.0.1:3010/v1/health; then
+      EL_KLAR=1
+      break
+    fi
+    sleep 1
+  done
+  if [ "$EL_KLAR" = "1" ]; then
+    ok "ElectricSQL svarer på http://localhost:3010"
+  else
+    advarsel "ElectricSQL svarer ikke ennå. Appen virker, men kandidat 2 får ikke hentet data."
+    advarsel "Se hva som skjer med: docker compose logs electric"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 steg "Starter EzProp"
 # Kjører EzProp fra før (f.eks. et Terminal-vindu som ikke ble lukket), stoppes den gamle,
 # så den nye versjonen og databaseendringene over blir tatt i bruk.
@@ -259,6 +292,7 @@ cat <<EOF
       Logg inn som:   ${FET}admin@byggcon.no${NORMAL}   (admin)
       Koden finner du: ${FET}http://localhost:3000/dev/epost${NORMAL}
       PowerSync:       ${FET}http://localhost:8080${NORMAL}   (synktjenesten, prøve uten nett)
+      ElectricSQL:     ${FET}http://localhost:3010${NORMAL}   (synktjenesten, kandidat 2)
 
       Stopp med ${FET}Ctrl + C${NORMAL}.
 

@@ -43,5 +43,9 @@ export function notLoggedIn(): Response {
 }
 
 function errorJson(status: number, message: string): Response {
-  return Response.json({ feil: message }, { status, headers: { "Cache-Control": "no-store" } });
+  // `private, no-store` på alle feilsvar, også fra shape-proxyen (aldri mellomlagret).
+  return Response.json(
+    { feil: message },
+    { status, headers: { "Cache-Control": "private, no-store" } },
+  );
 }

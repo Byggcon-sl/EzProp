@@ -1,4 +1,4 @@
-# PostgreSQL og synktjenesten (PowerSync) for lokal utvikling på Mac (Docker Desktop).
+# PostgreSQL og synktjenestene (PowerSync og ElectricSQL) for lokal utvikling på Mac (Docker Desktop).
 # Start med ./start.sh. Verdiene her er bare for utvikling på egen maskin.
 services:
   db:
@@ -41,5 +41,31 @@ services:
       # POWERSYNC_JWT_SECRET kodet som base64url. start.sh lager den fra .env.
       PS_JWT_SECRET_BASE64: ${PS_JWT_SECRET_BASE64:-}
 
+  # Prøve fase 1, kandidat 2: synktjenesten ElectricSQL, selvdrevet. Fast versjon, aldri «latest».
+  # Bare tilgjengelig fra Macen selv (127.0.0.1), på port 3010 fordi appen bruker 3000.
+  # Kjører side om side med PowerSync på samme database: hver har sin egen publikasjon
+  # (electric_publication_default fra migrering 0002, powersync fra 0001) og sin egen
+  # replikeringsplass. iPaden når aldri Electric direkte, bare via /api/prove/synk/shape.
+  # Se docs/drift/electricsql.md.
+  electric:
+    image: electricsql/electric:1.8.1
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3010:3000"
+    volumes:
+      - electricdata:/app/persistent
+    environment:
+      DATABASE_URL: ${ELECTRIC_DATABASE_URL:-postgresql://ezprop:ezprop@db:5432/ezprop?sslmode=disable}
+      # Fra .env (start.sh eksporterer den). Uten verdi starter ikke Electric.
+      ELECTRIC_SECRET: ${ELECTRIC_SECRET:-}
+      ELECTRIC_USAGE_REPORTING: "false"
+      ELECTRIC_STORAGE_DIR: /app/persistent
+      # Publikasjonen og REPLICA IDENTITY FULL lages av migrering 0002; Electric endrer dem ikke selv.
+      ELECTRIC_MANUAL_TABLE_PUBLISHING: "true"
+
 volumes:
   pgdata:
+  electricdata:
