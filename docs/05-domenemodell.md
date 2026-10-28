@@ -1683,6 +1683,7 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Utsnitt (ElectricSQL) | `shape` | Et utsnitt av én tabell (med filter på organisasjon) som ElectricSQL sender til iPaden. Bare lesing; hentes alltid gjennom appen (`/api/prove/synk/shape`), aldri rett fra Electric |
 | Valg av synkløsning i prøven | `trial_sync_candidate` (`powersync` / `electricsql`) | Innstilling i nettleseren på listen «Testskjema», bare for fase 1. Ikke en kode i datamodellen |
 | Endringskø | `crud queue` / `upload queue` / `outbox` | Endringer og bilder som venter på å bli sendt fra iPaden. PowerSync har sin egen; for ElectricSQL og egenbygd eier vi køen selv |
+| Synkposisjon (ElectricSQL) | `shape_state` | Hvor langt iPaden har lest hver shape (`handle` og `offset`), lagret lokalt så synken fortsetter der den slapp. Slettes ved «må hentes på nytt» (409) fra Electric; endringskøen røres aldri |
 | Tekstfletting | `text merge` (`text-merge.ts`, Yjs) | To som skriver i samme tekstfelt får begge bidrag med |
 | Siste endring vinner | `last write wins` | For TG, valg, tall og tabell: den endringen som når serveren sist, gjelder. Den andre får varselet «Endret av en annen» |
 | Enhets-id i prøven | `trial_device_id` | Fast id per nettleser-installasjon, bare for varselet i prøve B. Ikke tabellen `devices` (fase 2b) |

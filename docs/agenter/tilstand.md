@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 28.10.2026 kl. 23:15 (oppgavekort og resultatmal for kandidat 2, ElectricSQL, laget på branchen `fase1-kandidat-electricsql`; spørsmål nr. 11; ordliste)
+Sist oppdatert: 28.10.2026 kl. 23:45 (runde 1 for kandidat 2, ElectricSQL, avgjort og skrevet inn i oppgavekortet; neste: testplan)
 
 ## Gjeldende fase
 
@@ -12,7 +12,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (oppgave 3, PR #6)
 
 ## Gjeldende oppgave
 
-**Oppgave 5 – Kandidat 2: ElectricSQL** på samme testskjema, samme `TrialSyncStore`-kontrakt og samme protokoll for prøve A og B. **Oppgavekort:** `docs/funksjoner/fase1-kandidat-electricsql.md` (utkast, klart for runde 1: forenkler, arkitekt, sikkerhet-personvern, test-leder). **Resultatmal:** `docs/funksjoner/fase1-prove-ab-electricsql.md` (samme struktur som PowerSync-filen, teknisk tabell tilpasset Electric). Branch `fase1-kandidat-electricsql` **oppå `fase1-kandidat-powersync`**; PR åpnes mot `fase1-kandidat-powersync` til PR #8 er merget. Roller: arkitekt (forarbeid: kontrakt uten `getAnswers`, statuslytter, kandidatuavhengige sider og bildekø, oppsett av shapes/proxy/lokal lagring/kø), sikkerhet-personvern (proxy-ruten), test-leder, utvikler (bit 1 klient, bit 2 server/Docker/drift i parallell), testskriver. Ikke ux, ui, ki, fag. Neste steg: runde 1, så testplan, så bygging.
+**Oppgave 5 – Kandidat 2: ElectricSQL** på samme testskjema, samme `TrialSyncStore`-kontrakt og samme protokoll for prøve A og B. **Oppgavekort:** `docs/funksjoner/fase1-kandidat-electricsql.md` (runde 1 ferdig 28.10.2026; avgjørelsene A–G under «Avgjørelser etter runde 1» er bindende: kontrakt med `flush`/`close`/`subscribeForms`/`onStatusChange`/`listPendingPhotos`/`markPhotoUploaded` og `TrialSyncTestable`, proxy med lukket tillatelsesliste og alltid `private, no-store`, migrering 0002 for `REPLICA IDENTITY FULL` og publikasjon, IndexedDB-lager med `shape_state` og `outbox`, bytte = nøkkel + omlasting, Vitest-test for kandidatgrenser). **Resultatmal:** `docs/funksjoner/fase1-prove-ab-electricsql.md` (samme struktur som PowerSync-filen, teknisk tabell tilpasset Electric). Branch `fase1-kandidat-electricsql` **oppå `fase1-kandidat-powersync`**; PR åpnes mot `fase1-kandidat-powersync` til PR #8 er merget. Roller: arkitekt (forarbeid: kontrakt uten `getAnswers`, statuslytter, kandidatuavhengige sider og bildekø, oppsett av shapes/proxy/lokal lagring/kø), sikkerhet-personvern (proxy-ruten), test-leder, utvikler (bit 1 klient, bit 2 server/Docker/drift i parallell), testskriver. Ikke ux, ui, ki, fag. Neste steg: test-leder skriver `docs/funksjoner/fase1-kandidat-electricsql-testplan.md`, så bygging (bit 1 og 2 i parallell med testskriver).
 
 **Forrige oppgave:** Oppgave 4 – Første kandidat: PowerSync koblet til testskjemaet, **PR #8** (branch `fase1-kandidat-powersync`). Oppgavekort `docs/funksjoner/fase1-kandidat-powersync.md`, protokoll og resultatmal `docs/funksjoner/fase1-prove-ab-powersync.md` (med «det som ikke virket» (1)–(14)), drift `docs/drift/powersync.md`. 28.10.2026 kl. 22:45: `main` (med PR #7) er flettet inn i branchen, versjonen satt til 0.2.1 (0.1.3 i PR-en mot 0.2.0 på `main`). **Prøve A og B** kjøres av Ståle på ekte iPad når PowerSync kjører i Azure-testmiljøet (liten egen PR med Bicep for containeren, se under). Spørsmål nr. 10 til Ståle (PowerSync: selvdrevet eller sky, pris, lisens, databehandleravtale), ikke blokkerende.
 
@@ -28,7 +28,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 |---|---|---|---|
 | #8 | Første kandidat: PowerSync koblet til testskjemaet (fase 1). Versjon 0.2.1. https://github.com/Byggcon-sl/EzProp/pull/8 | Venter på Ståle («Squash and merge»; prøve A og B etterpå). `main` flettet inn 28.10.2026 kl. 22:45 | main |
 | (kommer) | Læringsløkke for PR #7 og tilstand (bare dokumentasjon) | Åpnes i denne kjøringen | main |
-| (kommer) | Kandidat 2: ElectricSQL (fase 1), versjon 0.2.2 | Oppgavekort og resultatmal laget 28.10.2026; runde 1 neste | #8 (`fase1-kandidat-powersync`) |
+| (kommer) | Kandidat 2: ElectricSQL (fase 1), versjon 0.2.2 | Runde 1 ferdig 28.10.2026; testplan neste | #8 (`fase1-kandidat-powersync`) |
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -47,6 +47,8 @@ Ingen ennå.
 Ingen.
 
 ## Siste kjøring
+
+28.10.2026 kl. 23:30–23:45: prosjektleder avgjorde runde 1 for oppgave 5 (forenkler, arkitekt, sikkerhet-personvern, test-leder) og skrev avgjørelsene A–G inn i oppgavekortet; ordlisten fikk `shape_state`. Sesjon: https://claude.ai/code/session_01JqwntyQSN4Un9KLnoTE43Q
 
 28.10.2026 kl. 23:00–23:15: prosjektleder laget oppgavekortet for oppgave 5 (kandidat 2, ElectricSQL), resultatmalen for prøve A og B, spørsmål nr. 11 og ordlisterader, på branchen `fase1-kandidat-electricsql`. Sesjon: https://claude.ai/code/session_01JqwntyQSN4Un9KLnoTE43Q
 
