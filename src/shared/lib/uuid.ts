@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Sjekker at en id fra URL-en eller enheten har riktig format før den brukes i en spørring. */
@@ -13,7 +11,7 @@ export function isUuid(value: string): boolean {
  * Samme algoritme skal brukes i nettleseren (fase 1); her er serverens utgave.
  */
 export function uuidv7(now: number = Date.now()): string {
-  const random = randomUUID().replace(/-/g, "");
+  const random = globalThis.crypto.randomUUID().replace(/-/g, "");
   const time = now.toString(16).padStart(12, "0");
   // 48 bit tid, versjon 7, 12 bit tilfeldig, variant 10xx, 62 bit tilfeldig
   const hex =
