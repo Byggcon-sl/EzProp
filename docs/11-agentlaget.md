@@ -20,7 +20,7 @@ BACKLOG → SPESIFISERT → DESIGNET → BYGGET → TESTET → GJENNOMGÅTT → 
 
 | Løkke | Hva | Hvor |
 |---|---|---|
-| **A. Hovedløkken** | Rutine annenhver time i ny sesjon. Sjekker at ingen annen kjøring er i gang (tag `ezprop-utvikling`), leser tilstanden og åpne PR-er, kjører F ved merge, lager oppgave av Ståles kommentarer, og starter B for neste punkt i planen. Venter 3 PR-er eller flere på Ståle: ingen nye funksjoner. | Rutine (`create_trigger`), prompt i `docs/agenter/rutiner.md` |
+| **A. Hovedløkken** | Rutine annenhver time i ny sesjon. Sjekker at ingen annen kjøring er i gang (tag `ezprop-utvikling`), leser tilstanden og åpne PR-er, kjører F ved merge, lager oppgave av Ståles kommentarer, og starter B for neste punkt i planen. Ingen grense for antall PR-er som venter på Ståle (28.10.2026); oppgaver som bygger på en PR som ikke er merget, lages som egen branch oppå den. | Rutine (`create_trigger`), prompt i `docs/agenter/rutiner.md` |
 | **B. Oppgaveløkken** | Spesifiser → forhåndsvurdering i parallell (bare rollene oppgaven trenger) → design og testplan → bygg i parallell (utvikler og testskriver) → kjør alle sjekker → gjennomgang (D) → PR. | `.claude/workflows/oppgave.js` |
 | **C. Retteløkken** | Feilrettingsleder finner årsaken, retter fikser, tester kjøres på nytt. Etter 3 forsøk merkes oppgaven «trenger Ståle». | inne i `oppgave.js` |
 | **D. Gjennomgangsløkken** | Test-leder, sikkerhet, forenkler og fagansvarlig (bare ved fagstoff) hver for seg. Alvorlige funn går tilbake til design eller bygg. Små funn nevnes i PR-en. | inne i `oppgave.js` |
