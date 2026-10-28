@@ -1,0 +1,18 @@
+import { describe, expect, it } from "vitest";
+import packageJson from "../../../package.json";
+import { appVersion, checkHealth } from "./index";
+
+describe("helsesjekk", () => {
+  it("svarer ok med versjonen fra package.json når databasen svarer", async () => {
+    const result = await checkHealth();
+    expect(result.httpStatus).toBe(200);
+    expect(result.body).toEqual({ status: "ok", versjon: packageJson.version, database: "ok" });
+    expect(appVersion()).toBe(packageJson.version);
+  });
+
+  it("svarer 503 når databasen feiler", async () => {
+    const result = await checkHealth(() => Promise.reject(new Error("nede")));
+    expect(result.httpStatus).toBe(503);
+    expect(result.body.database).toBe("feil");
+  });
+});

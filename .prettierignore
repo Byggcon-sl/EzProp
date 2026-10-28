@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+src/db/migrations/
+.next/
+coverage/
+playwright-report/
+test-results/
+*.md
+dist/

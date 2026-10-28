@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/*
+ * Design A «Fjord» (docs/08-designprinsipper.md): luftig, kort-basert, Byggcon-blå (#326CA1),
+ * Roboto, nordlysfarger som aksent. Mørk visning er et valg (kommer i fase 0b).
+ * Store trykkflater på iPad: minst 44 pt, hovedknapper 56 pt.
+ */
+@theme {
+  --color-brand-50: #eef4fa;
+  --color-brand-100: #d6e4f2;
+  --color-brand-200: #b3cce5;
+  --color-brand-400: #6f9cc8;
+  --color-brand-600: #326ca1;
+  --color-brand-700: #285786;
+  --color-brand-900: #16314d;
+  --color-aurora-green: #3ccf91;
+  --color-aurora-teal: #4fc3d9;
+  --color-aurora-violet: #833ca3;
+
+  /* Bakgrunnen bak kortene */
+  --color-canvas: #eef2f7;
+  /* Kant på skjemafelt: minst 3:1 mot hvitt (WCAG 1.4.11) */
+  --color-field: #8391a5;
+
+  --radius-card: 1rem;
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 2px 8px rgb(15 23 42 / 0.05);
+
+  --font-sans: var(--font-roboto), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+body {
+  @apply bg-canvas text-slate-900 antialiased;
+}
+
+@layer base {
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-600;
+  }
+}
+
+/* Tynn nordlysstripe øverst på siden */
+.aurora-bar {
+  height: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--color-brand-600),
+    var(--color-aurora-teal),
+    var(--color-aurora-green),
+    var(--color-aurora-violet)
+  );
+}

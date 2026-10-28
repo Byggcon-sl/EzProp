@@ -1,0 +1,18 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+.env
+.env*.local
+.DS_Store
+*.log
+.claude/settings.local.json
+next-env.d.ts
+*.tsbuildinfo
+.data/
+
+# Midlertidige arbeidskopier for agenter
+.claude/worktrees/
