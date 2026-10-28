@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 28.10.2026 (oppgave 4: arkitekt og testplan ferdig, avhengigheter lagt inn, bygging delt i fire biter til utvikler og testskriver)
+Sist oppdatert: 28.10.2026 (oppgave 4: andre kjøring av hovedløkken fant kortet, arkitektarbeidet og testplanen alt på branchen; merknad lagt nederst i kortet)
 
 ## Gjeldende fase
 
@@ -41,6 +41,8 @@ Ingen ennå.
 Ingen.
 
 ## Siste kjøring
+
+28.10.2026 (andre kjøring, oppgave 4): hovedløkken startet oppgave 4 på nytt med snevrere ramme (fra `fase1-testmiljo-azure`, uten Yjs og bildekø). Branchen `fase1-kandidat-powersync` fantes alt med vurdert kort, arkitektarbeid, testplan og avhengigheter. Avgjørelse: det eksisterende kortet gjelder, branchen blir på `main`, forenkler avgjør i runde 2 om Yjs og bildekø kuttes (merknad nederst i kortet). Et nytt, snevrere kort ble skrevet og forkastet. Hvis to kjøringer bygger på samme branch samtidig: den som pusher sist, fletter inn den andres commits (ingen force-push). Sesjon: https://claude.ai/code/session_01Jqwnu1uLzFzcU2aSGh5vhH
 
 28.10.2026: hovedløkken kjører oppgave 4 (første kandidat, PowerSync): branch, oppgavekort, protokoll for prøve A og B, spørsmål nr. 10, ordliste, runde 1, arkitekt, testplan, avhengigheter og fordeling i fire biter. Sesjon: https://claude.ai/code/session_01JqwntzCcVvuiXSedMUVdYg
 
