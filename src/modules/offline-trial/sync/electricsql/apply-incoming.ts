@@ -11,13 +11,25 @@
  *   `delete` eller `deleted_at` satt fjerner raden lokalt (serveren beholder den, regel 3).
  * - Svar kjennes igjen på `(trial_form_id, field_key)`; serverens `id` vinner. Mangler meldingen
  *   de kolonnene (update eller delete med bare endrede kolonner), finnes raden på `id`.
- * - Tekstfelt: `value` er alltid teksten i `text_state` når den finnes. `text_state` lages aldri
+ * - Tekstfelt (bare de): `value` er alltid teksten i `text_state` når den finnes. `text_state` lages aldri
  *   fra en gammel `value`. Ugyldig `text_state` gir urørt lokal rad, aldri en feil.
  */
 import { mergeTextStates, textOf } from "../../text-merge";
+import { listTrialFields, trialForm } from "../../trial-form";
 import type { TrialTableName } from "../local-columns";
 import type { ApplyIncoming, IncomingChange, LocalRow } from "../types";
 import { localRowKey } from "./outbox";
+
+const TEXT_FIELDS = new Set(
+  listTrialFields(trialForm)
+    .filter((field) => field.type === "text")
+    .map((field) => field.key),
+);
+
+/** Bare tekstfelt har `value` som følger `text_state`. */
+function isTextField(row: LocalRow): boolean {
+  return typeof row.field_key === "string" && TEXT_FIELDS.has(row.field_key);
+}
 
 function hasKeyColumns(table: TrialTableName, row: LocalRow): boolean {
   if (table === "trial_answers") {
@@ -57,7 +69,7 @@ function patchRow(local: LocalRow, incoming: LocalRow): LocalRow | null {
     next.text_state = merged;
   }
   // Sannheten for tekst er tilstanden: `value` følger den, aldri omvendt.
-  if (typeof next.text_state === "string" && next.text_state !== "") {
+  if (isTextField(next) && typeof next.text_state === "string" && next.text_state !== "") {
     next.value = valueOf(next.text_state);
   }
   return next;
@@ -70,7 +82,7 @@ function newRow(incoming: LocalRow): LocalRow {
   if (typeof state === "string" && state !== "") {
     const valid = tryMerge(null, state);
     if (valid === null) row.text_state = null;
-    else row.value = valueOf(valid);
+    else if (isTextField(row)) row.value = valueOf(valid);
   }
   return row;
 }
@@ -102,7 +114,13 @@ export const applyIncoming: ApplyIncoming = (table, localRows, changes, pendingK
       const incomingState = change.row.text_state;
       if (local && change.kind !== "delete" && typeof incomingState === "string" && incomingState) {
         const merged = tryMerge(local.text_state, incomingState);
-        if (merged !== null) rows[index] = { ...local, text_state: merged, value: valueOf(merged) };
+        if (merged !== null) {
+          rows[index] = {
+            ...local,
+            text_state: merged,
+            ...(isTextField(local) && { value: valueOf(merged) }),
+          };
+        }
       }
       continue;
     }
