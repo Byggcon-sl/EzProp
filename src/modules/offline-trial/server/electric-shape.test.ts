@@ -285,7 +285,13 @@ describe("buildTrialShapeRequest", () => {
   it("ulovlig format på offset, handle, cursor eller live gir InvalidTrialChangeError", async () => {
     const { actor, organizationId } = await setupOrganization();
     const { fetchImpl, mock } = okFetch();
-    for (const query of ["offset=../x", "handle=a b", "cursor=<script>", "live=yes", "live=false"]) {
+    for (const query of [
+      "offset=../x",
+      "handle=a b",
+      "cursor=<script>",
+      "live=yes",
+      "live=false",
+    ]) {
       await expect(
         buildTrialShapeRequest(actor, organizationId, "trial_forms", params(query)),
         query,
@@ -561,9 +567,7 @@ describe("forwardTrialShape", () => {
       );
     }
 
-    const lines = spies.flatMap((spy) =>
-      spy.mock.calls.map((call) => JSON.stringify(call)),
-    );
+    const lines = spies.flatMap((spy) => spy.mock.calls.map((call) => JSON.stringify(call)));
     expect(lines.length, "proxyen logger avviste og feilede kall").toBeGreaterThan(0);
     for (const line of lines) {
       expect(line).not.toContain(SECRET);

@@ -190,8 +190,12 @@ describe("ElectricSQL-konfigurasjon", () => {
     const steps = lines.filter((line) => /^steg "/.test(line));
     expect(Number(total)).toBe(steps.length);
 
-    const powersync = lines.findIndex((line) => line.startsWith('steg "Starter synktjenesten (PowerSync)"'));
-    const electric = lines.findIndex((line) => line.startsWith('steg "Starter synktjenesten (ElectricSQL)"'));
+    const powersync = lines.findIndex((line) =>
+      line.startsWith('steg "Starter synktjenesten (PowerSync)"'),
+    );
+    const electric = lines.findIndex((line) =>
+      line.startsWith('steg "Starter synktjenesten (ElectricSQL)"'),
+    );
     expect(powersync).toBeGreaterThanOrEqual(0);
     expect(electric, "ElectricSQL-steget står etter PowerSync-steget").toBeGreaterThan(powersync);
 
