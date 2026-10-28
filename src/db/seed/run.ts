@@ -28,10 +28,11 @@ export async function runSeed(env: Record<string, string | undefined> = process.
   }
   if (!organization) throw new Error("kunne ikke opprette organisasjonen");
 
-  await db
+  const inserted = await db
     .insert(users)
     .values({ id: randomUUID(), email: adminEmail, name: adminName })
-    .onConflictDoNothing({ target: users.email });
+    .onConflictDoNothing({ target: users.email })
+    .returning({ id: users.id });
   const [user] = await db.select().from(users).where(eq(users.email, adminEmail));
   if (!user) throw new Error("kunne ikke opprette admin");
 
@@ -50,5 +51,6 @@ export async function runSeed(env: Record<string, string | undefined> = process.
     .insert(employeeRoleAssignments)
     .values({ organizationId: organization.id, employeeId: employee.id, role: "admin" })
     .onConflictDoNothing();
-  console.log(`Admin: ${adminEmail}`);
+  // Adressen skrives aldri ut (serverloggen i drift skal ikke ha personopplysninger)
+  console.log(inserted.length > 0 ? "Admin: opprettet" : "Admin: finnes fra før");
 }

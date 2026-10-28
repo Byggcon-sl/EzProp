@@ -2,13 +2,13 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 28.10.2026 (oppgave 4: bygget, testet, sikkerhetsgjennomgang og godkjenning fra test-leder ferdig, PR åpnet mot `main`)
+Sist oppdatert: 28.10.2026 (PR #7 merget; PR #8 flettet med main, versjon 0.2.1)
 
 ## Gjeldende fase
 
-**Fase 0a – Repo og database: ferdig.** PR #1–#6 er merget 28.10.2026.
+**Fase 0a – Repo og database: ferdig.** PR #1–#7 er merget 28.10.2026.
 
-Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (oppgave 3, PR #6) er merget. Testmiljøet i Azure ligger som PR #7 og venter på Ståle.
+Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (oppgave 3, PR #6) og testmiljøet i Azure (PR #7) er merget.
 
 ## Gjeldende oppgave
 
@@ -24,16 +24,14 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #7 | Testmiljø i Azure (fase 1, første punkt). Versjon 0.2.0 | Venter på Ståle (nøkler, adresse, «Squash and merge») | Ingen |
-| #8 | Første kandidat: PowerSync koblet til testskjemaet (fase 1). Versjon 0.1.3 | Venter på Ståle («Squash and merge»; prøve A og B etterpå) | Ikke i kode. Prøvene trenger testmiljøet fra #7 |
+| #8 | Første kandidat: PowerSync koblet til testskjemaet (fase 1). Versjon 0.2.1 (main flettet inn 28.10.2026) | Venter på Ståle («Squash and merge»; prøve A og B etterpå) | main (PR #7 er merget) |
 
-To PR-er venter. Grensen er 3: én oppgave til (kandidat 2) kan åpnes før vi stopper nye funksjoner. Versjonskonflikten (0.1.3 i #8 mot 0.2.0 i #7) løses av prosjektlederen når Ståle har merget den første av dem (den andre settes til 0.2.1).
+Ingen grense for antall PR-er som venter (Ståle 28.10.2026).
 
 ## Venter på Ståle
 
 - **PR #8:** les PR-teksten og merge med **«Squash and merge»** (behold bare tittelen i meldingen). Når #7 og PowerSync i Azure er oppe: kjør prøve A og B etter `docs/funksjoner/fase1-prove-ab-powersync.md` og fyll inn tallene.
-- **PR #7:** følg `docs/drift/testmiljo-azure.md`: lag ressursgruppen og GitHub-innloggingen i Azure, legg inn secrets og variabler, svar på spørsmål nr. 6 og nr. 9, og merge med **«Squash and merge»**.
-- **Gi rutinene tilgang** (se `docs/agenter/rutiner.md`): åpne hver rutine på claude.ai/code/routines → Edit → Advanced settings → Repository `Byggcon-sl/EzProp`, miljø «Byggcon», koblingen «Claude Code Remote». Før det gjør hovedløkken ingenting.
+- **Testmiljøet (PR #7 er merget):** følg `docs/drift/testmiljo-azure.md`: lag ressursgruppen og GitHub-innloggingen i Azure, legg inn secrets og variabler, og svar på spørsmål nr. 6 og nr. 9. Deretter PowerSync-containeren (egen liten PR).
 - Spørsmålene i `docs/09-apne-sporsmal.md`: nr. 6 (adresse og e-post for testmiljøet), nr. 8 (GPS-posisjon i bildene, før prøve D), nr. 9 (tilgang til ressursgruppen, i PR #7) og nr. 10 (PowerSync som leverandør, før ADR-en).
 
 ## Oppgaver fra nattløkken

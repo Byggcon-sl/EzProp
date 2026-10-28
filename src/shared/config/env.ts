@@ -19,8 +19,10 @@ const envSchema = z.object({
   /** Utviklings-postkassen (/dev/epost). Bare lokalt. */
   DEV_MAILBOX: flag,
   /*
-   * E-post via Microsoft Graph (Office 365), som i Optiplan. Kobles til i fase 0b. De tre
-   * Graph-verdiene og MAIL_FROM må settes sammen. Tomme verdier regnes som ikke satt.
+   * E-post: lokalt brukes DEV_MAILBOX. I drift skrives engangskoden til første admin i
+   * serverloggen til alle fire (de tre Graph-verdiene og MAIL_FROM) er satt. E-post via
+   * Microsoft 365 (Graph), som i Optiplan, kobles til i fase 0b. De fire må settes sammen.
+   * Tomme verdier regnes som ikke satt.
    */
   MS_GRAPH_TENANT_ID: optionalSecret,
   MS_GRAPH_CLIENT_ID: optionalSecret,

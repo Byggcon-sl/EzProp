@@ -7,11 +7,10 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as schema from "@/db/schema";
 import { sendEmail } from "@/core/email";
-import { brand } from "@/shared/config/brand";
 import { getEnv } from "@/shared/config/env";
+import { OTP_MINUTES, otpEmail } from "./otp-email";
 
 const THIRTY_DAYS_IN_SECONDS = 60 * 60 * 24 * 30;
-const OTP_MINUTES = 10;
 
 /**
  * Innlogging med e-post og engangskode, som i Optiplan. Ingen passord.
@@ -61,18 +60,7 @@ export const auth = betterAuth({
         if (type !== "sign-in") {
           throw new APIError("BAD_REQUEST", { message: "Bare innlogging er støttet." });
         }
-        await sendEmail({
-          to: email,
-          subject: `Din innloggingskode til ${brand.productName}: ${otp}`,
-          text: [
-            `Koden din er: ${otp}`,
-            "",
-            `Skriv inn koden på innloggingssiden. Koden gjelder i ${OTP_MINUTES} minutter.`,
-            "Har du ikke bedt om å logge inn, kan du se bort fra denne e-posten.",
-            "",
-            `Hilsen ${brand.companyName}`,
-          ].join("\n"),
-        });
+        await sendEmail(otpEmail(email, otp));
       },
     }),
     nextCookies(),

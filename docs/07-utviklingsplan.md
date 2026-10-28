@@ -144,7 +144,7 @@ Byggcon bruker **Enova** (energimerking) og **Polycam** (3D-skanning og plantegn
 
 Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettleseren på iPad holder mål (sidemannskontrollen del 1 T1 og del 2 P20–P23). Prøven bruker et lite testskjema, ikke den ekte malen.
 
-- [ ] **Testmiljø i Azure** (Ståle 28.10.2026): EzProp kjører i samme Azure-miljø som Optiplan (Sweden Central, EU), med egen app og egen database. Utrulling fra GitHub Actions ved merge til main, etter mønster fra Optiplans `infra/azure` og `deploy-azure.yml`. Bare oppdiktede data til «Minimum før ekte data» er på plass. Innlogging med kode på e-post via Microsoft 365 som i Optiplan (eller koden i serverloggen for første admin til e-post er satt opp). Ståle legger inn Azure-nøklene som secrets i GitHub og velger adressen (forslag: ezprop-test.byggcon.no). Ferdig når appen åpner på ekte iPad Pro i Safari fra hjemskjermen.
+- [x] **Testmiljø i Azure** (Ståle 28.10.2026): EzProp kjører i samme Azure-miljø som Optiplan (Sweden Central, EU), med egen app og egen database. Utrulling fra GitHub Actions ved merge til main, etter mønster fra Optiplans `infra/azure` og `deploy-azure.yml`. Bare oppdiktede data til «Minimum før ekte data» er på plass. Innlogging med kode på e-post via Microsoft 365 som i Optiplan (eller koden i serverloggen for første admin til e-post er satt opp). Ståle legger inn Azure-nøklene som secrets i GitHub og velger adressen (forslag: ezprop-test.byggcon.no). Ferdig når appen åpner på ekte iPad Pro i Safari fra hjemskjermen. (PR åpnes 28.10.2026; «ferdig når»-kriteriet på ekte iPad bekreftes av Ståle etter første utrulling)
 - [x] Testoppsett: to iPad Pro, appen lagt på hjemskjermen (PWA), et testskjema med ca. 40 felt (tekst, TG, valg, tall, tabell) og bildefelt (PR #6, 28.10.2026)
 - [ ] Kandidater satt opp mot samme testskjema: **PowerSync**, **ElectricSQL** og eventuelt andre (Claudes forslag: én enkel egenbygd løsning med lokal database og endringskø, som sammenligningsgrunnlag). Tekstfletting med Yjs eller tilsvarende.
   - [x] Kandidat 1, PowerSync, med tekstfletting (Yjs), protokoll og resultatmal for prøve A og B (PR #8, 28.10.2026, `docs/funksjoner/fase1-kandidat-powersync.md`)
@@ -202,6 +202,8 @@ Før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerkl�
 - [ ] **Regel for sletting av data fra betaen** som ikke skal beholdes (for eksempel prøverapporter som bare var for testing)
   - Merknad 28.10.2026 (oppgave 4): `trial_*`-tabellene fra fase 1 slettes eller gjøres om her bare fordi dataene er oppdiktede. Det er ikke presedens for sletting av ekte data (regel 3: ingenting slettes permanent).
 - [ ] **Sperring av iPader** (innspill P6 og D10): kode eller Face ID påkrevd, og en mistet iPad kan sperres. Må være på plass før første ekte befaring på iPad i fase 2b.
+- [ ] **Microsoft 365 koblet til**, og koden i serverloggen for første admin er ikke lenger i bruk
+- [ ] **Privat nettverk eller VNet-integrasjon mellom app og database** (ikke brannmurregelen for alle Azure-tjenester), og egen databasebruker for appen uten eierrettigheter
 
 **Ferdig når:** Ståle har sett listen krysset av og godkjent at ekte data kan legges inn.
 
