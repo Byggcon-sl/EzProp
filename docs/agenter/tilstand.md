@@ -30,6 +30,7 @@ Ingen PR-er venter. Grensen er 3.
 
 ## Venter på Ståle
 
+- **PR-en for testmiljøet må merges med «Squash and merge»** (første commit på branchen fikk et modellnavn i attribusjonslinjen, og det kan ikke rettes fra skyen).
 - **Før testmiljøet kan tas i bruk:** lage innlogging for GitHub i Azure (OIDC) og legge inn secrets og variabler med nøyaktige navn. Stegene kommer i `docs/drift/testmiljo-azure.md` i PR-en.
 - **Gi rutinene tilgang** (se `docs/agenter/rutiner.md`): åpne hver rutine på claude.ai/code/routines → Edit → Advanced settings → Repository `Byggcon-sl/EzProp`, miljø «Byggcon», koblingen «Claude Code Remote». Før det gjør hovedløkken ingenting.
 - Spørsmålene i `docs/09-apne-sporsmal.md`: nr. 6 (adresse og e-post for testmiljøet i Azure; oppgaven forutsetter kode i serverloggen og tom adresse til han svarer) og nr. 8 (GPS-posisjon i bildene fra iPaden, trengs før prøve D).
