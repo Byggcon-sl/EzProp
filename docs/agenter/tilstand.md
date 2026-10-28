@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 28.10.2026 (oppgavekort for fase 1, oppgave 3)
+Sist oppdatert: 28.10.2026 (oppgavekort for oppgave 3 revidert etter forenkler og test-leder)
 
 ## Gjeldende fase
 
@@ -12,7 +12,7 @@ Gjeldende fase fra nå: **Fase 1 – Prøve uten nett.** Første oppgave (oppgav
 
 ## Gjeldende oppgave
 
-**Oppgave 3 – Testoppsett for prøven uten nett** (fase 1, første punkt). Branch `fase1-testskjema` fra `main`. Oppgavekort: `docs/funksjoner/fase1-testskjema.md` (ferdig 28.10.2026). Neste steg: utvikler (bit 1 skjema, bit 2 app på hjemskjermen) og testskriver i parallell, så test-leder, så PR. Hovedmål: tid og KI først (grunnlaget for befaring på iPad).
+**Oppgave 3 – Testoppsett for prøven uten nett** (fase 1, første punkt). Branch `fase1-testskjema` fra `main`. Oppgavekort: `docs/funksjoner/fase1-testskjema.md` (ferdig 28.10.2026, revidert samme dag etter forenkler og test-leder: fem kutt, fem presiseringer, `icon.tsx` droppet). Neste steg: utvikler (bit 1 skjema, bit 2 app på hjemskjermen) og testskriver i parallell, så test-leder, så PR. Hovedmål: tid og KI først (grunnlaget for befaring på iPad).
 
 ## Åpne PR-er
 
