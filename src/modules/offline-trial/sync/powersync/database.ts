@@ -11,15 +11,14 @@
  *   av som standard). Flere faner virker, men bare én synker om gangen.
  * - Worker-filene kopieres fra SDK-en til `public/@powersync/` av next.config.ts ved oppstart og
  *   bygg, og lastes fra `/@powersync/worker.js`.
+ * - Organisasjonsbytte og testkroken ligger i `sync/select-store.ts` og `sync/test-hooks.ts`.
  */
 import { PowerSyncDatabase } from "@powersync/web";
 import { getTrialDeviceId } from "../device";
-import { clearLocalPhotos } from "../photo-store";
 import { TrialSyncConnector } from "./connector";
 import { trialSchema } from "./schema";
 
 export const TRIAL_DB_FILENAME = "offline-trial.sqlite";
-export const TRIAL_LAST_ORGANIZATION_KEY = "trial_last_organization_id";
 const WORKER_URL = "/@powersync/worker.js";
 
 export interface TrialDatabase {
@@ -28,37 +27,20 @@ export interface TrialDatabase {
   organizationId: string;
 }
 
-interface TrialTestHooks {
-  db: PowerSyncDatabase;
-  deviceId: string;
-  organizationId: string;
-  /** Later som om en annen organisasjon brukte enheten sist; neste lasting tømmer databasen. */
-  simulateOrganizationChange(organizationId: string): void;
-}
-
-declare global {
-  interface Window {
-    __offlineTrial?: TrialTestHooks;
-  }
-}
-
 let opened: { organizationId: string; promise: Promise<TrialDatabase> } | null = null;
 
-async function open(organizationId: string): Promise<TrialDatabase> {
-  const db = new PowerSyncDatabase({
+function createDatabase(): PowerSyncDatabase {
+  return new PowerSyncDatabase({
     schema: trialSchema,
     database: { dbFilename: TRIAL_DB_FILENAME, worker: WORKER_URL, enableMultiTabs: false },
     sync: { worker: WORKER_URL },
   });
-  await db.init();
+}
 
-  // Neste person på samme iPad skal ikke se en annen organisasjons data.
-  const last = localStorage.getItem(TRIAL_LAST_ORGANIZATION_KEY);
-  if (last && last !== organizationId) {
-    await db.disconnectAndClear();
-    await clearLocalPhotos();
-  }
-  localStorage.setItem(TRIAL_LAST_ORGANIZATION_KEY, organizationId);
+async function open(organizationId: string): Promise<TrialDatabase> {
+  // Organisasjonsbytte på samme enhet håndteres av select-store.ts før databasen åpnes.
+  const db = createDatabase();
+  await db.init();
 
   const deviceId = getTrialDeviceId();
   // Kobler til i bakgrunnen. Uten nett eller uten tjeneste prøver SDK-en igjen selv.
@@ -66,18 +48,24 @@ async function open(organizationId: string): Promise<TrialDatabase> {
     console.warn("Synk: kunne ikke koble til nå. Prøver igjen senere.");
   });
 
-  if (process.env.NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS === "1") {
-    window.__offlineTrial = {
-      db,
-      deviceId,
-      organizationId,
-      simulateOrganizationChange(otherOrganizationId: string) {
-        localStorage.setItem(TRIAL_LAST_ORGANIZATION_KEY, otherOrganizationId);
-      },
-    };
-  }
-
   return { db, deviceId, organizationId };
+}
+
+/**
+ * Tømmer den lokale databasen (synkede rader, synkposisjon og køen) ved organisasjonsbytte.
+ * Åpner, `disconnectAndClear()`, lukker. Kalles av select-store.ts før noe lager åpnes.
+ */
+export async function clearPowerSyncStorage(): Promise<void> {
+  const previous = opened?.promise;
+  opened = null;
+  if (previous) {
+    const old = await previous.catch(() => null);
+    await old?.db.close();
+  }
+  const db = createDatabase();
+  await db.init();
+  await db.disconnectAndClear();
+  await db.close();
 }
 
 /** Den lokale databasen for organisasjonen. Samme instans for hele siden. */

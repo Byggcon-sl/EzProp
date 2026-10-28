@@ -10,9 +10,10 @@
 import type { AbstractPowerSyncDatabase, Transaction } from "@powersync/web";
 import { uuidv7 } from "@/shared/lib/uuid";
 import type { TrialPhoto, TrialValue } from "../../answers";
-import { applyTextEdit, createTextState, mergeTextStates, textOf } from "../../text-merge";
+import { textOf } from "../../text-merge";
 import { listTrialFields, trialForm, type TrialFieldType } from "../../trial-form";
 import { putLocalPhoto } from "../photo-store";
+import { nextTextState, safeTextOf, TEXT_WRITE_DELAY_MS } from "../text-state";
 import type {
   TrialAnswerRow,
   TrialFormSnapshot,
@@ -22,7 +23,8 @@ import type {
   TrialSyncStore,
 } from "../types";
 
-export const TEXT_WRITE_DELAY_MS = 300;
+// Delt med ElectricSQL-lageret; eksporteres herfra også så testen store-text.test.ts står.
+export { nextTextState, TEXT_WRITE_DELAY_MS } from "../text-state";
 
 const FIELD_TYPES = new Map<string, TrialFieldType>(
   listTrialFields(trialForm).map((field) => [field.key, field.type]),
@@ -52,14 +54,6 @@ interface PhotoRecord {
   created_at: string | null;
   updated_at: string | null;
   deleted_at: string | null;
-}
-
-function safeTextOf(state: string): string | null {
-  try {
-    return textOf(state);
-  } catch {
-    return null;
-  }
 }
 
 function toAnswerRow(record: AnswerRecord): TrialAnswerRow {
@@ -96,43 +90,6 @@ function toPhotoRow(record: PhotoRecord): TrialPhotoRow {
     updatedAt: record.updated_at ?? "",
     deletedAt: record.deleted_at,
   };
-}
-
-/** Hvor mange tegn to tekster har felles i starten og slutten (grovt mål på hvor like de er). */
-function sharedEdges(a: string, b: string): number {
-  const max = Math.min(a.length, b.length);
-  let start = 0;
-  while (start < max && a[start] === b[start]) start++;
-  let end = 0;
-  while (end < max - start && a[a.length - 1 - end] === b[b.length - 1 - end]) end++;
-  return start + end;
-}
-
-/**
- * Ny tekst-tilstand for et felt. Endringen regnes fra den tilstanden brukeren skrev ut fra:
- * enten det denne enheten skrev sist (brukeren skriver videre), eller det som ligger lagret (en
- * annen enhet har skrevet, og brukeren har sett det). Resultatet flettes med det lagrede.
- */
-export function nextTextState(
-  stored: string | null,
-  ownLast: string | null,
-  newText: string,
-): string {
-  let base = stored ?? createTextState("");
-  if (stored && ownLast) {
-    const storedText = safeTextOf(stored);
-    const ownText = safeTextOf(ownLast);
-    if (
-      storedText !== null &&
-      ownText !== null &&
-      storedText !== ownText &&
-      sharedEdges(ownText, newText) > sharedEdges(storedText, newText)
-    ) {
-      base = ownLast;
-    }
-  }
-  const edited = applyTextEdit(base, newText);
-  return stored ? mergeTextStates(stored, edited) : edited;
 }
 
 interface PendingText {
@@ -384,7 +341,11 @@ export function createPowerSyncTrialStore(
             if (active) listener(snapshot);
           },
         },
-        { tables: ["trial_answers", "trial_photos"], throttleMs: 30, triggerImmediate: true },
+        {
+          tables: ["trial_forms", "trial_answers", "trial_photos"],
+          throttleMs: 30,
+          triggerImmediate: true,
+        },
       );
       return () => {
         active = false;
@@ -411,14 +372,15 @@ export function createPowerSyncTrialStore(
     },
 
     async markPhotoUploaded(id: string, sha256: string): Promise<void> {
-      // Kjent svakhet (funn 6 i resultatfilen for PowerSync): oppdateringen går via visningen og
-      // havner derfor også i ps_crud. Serveren overser `uploaded_at`/`sha256` fra klienten.
-      // Utvikler retter dette i bit 1 (lokal skriving utenom køen).
-      await db.execute("UPDATE trial_photos SET uploaded_at = ?, sha256 = ? WHERE id = ?", [
-        new Date().toISOString(),
-        sha256,
-        id,
-      ]);
+      // Bare lokalt, aldri i ps_crud (avgjørelse 6): skriver rett i SDK-ens datatabell under
+      // visningen `trial_photos`. Serveren eier `uploaded_at` og `sha256` og setter dem selv.
+      await db.writeTransaction(async (tx) => {
+        await tx.execute(
+          `UPDATE ps_data__trial_photos
+           SET data = json_set(data, '$.uploaded_at', ?, '$.sha256', ?) WHERE id = ?`,
+          [new Date().toISOString(), sha256, id],
+        );
+      });
     },
 
     async status(): Promise<TrialSyncStatus> {
