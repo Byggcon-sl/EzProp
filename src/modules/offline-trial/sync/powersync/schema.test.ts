@@ -1,3 +1,6 @@
+/**
+ * Prøve fase 1, kastes eller gjøres om etter ADR.
+ */
 import { getTableColumns, type Table } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { trialAnswers, trialForms, trialPhotos } from "@/db/schema";

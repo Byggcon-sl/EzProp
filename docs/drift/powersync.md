@@ -42,7 +42,7 @@ Appen virker også uten PowerSync: svarene lagres da bare på enheten og venter 
 
 - **Bare starte PowerSync på nytt:** `docker compose restart powersync`.
 - **Slette alle lokale testdata, også PowerSyncs tilstand:** `./start.sh --nullstill`. Da slettes hele databasen i Docker, og alt lages på nytt.
-- I nettleseren: den lokale databasen i nettleseren tømmes ved utlogging.
+- I nettleseren: den lokale databasen tømmes **ikke** ved utlogging ennå (kjent svakhet, se resultatfilen). Den tømmes neste gang en annen organisasjon logger inn på samme enhet. For å tømme for hånd: Safari → Innstillinger → Safari → Avansert → Nettsteddata → slett for testmiljøet, eller fjern appen fra hjemskjermen og legg den til igjen.
 
 ## B. I Azure-testmiljøet (fra PR #7)
 
