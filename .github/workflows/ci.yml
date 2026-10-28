@@ -12,6 +12,11 @@ env:
   BETTER_AUTH_URL: http://localhost:3000
   SEED_ADMIN_EMAIL: admin@byggcon.no
   DEV_MAILBOX: "1"
+  # Prøve uten nett (fase 1). Ingen synktjeneste kjører i CI; verdiene trengs for token-ruten.
+  POWERSYNC_URL: http://localhost:8080
+  POWERSYNC_JWT_SECRET: ci-synknokkel-bare-for-automatiske-tester-0123456789
+  TRIAL_UPLOAD_DIR: var/uploads/trial
+  NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS: "1"
 
 jobs:
   check:
