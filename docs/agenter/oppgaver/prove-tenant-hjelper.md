@@ -2,7 +2,7 @@
 
 - **Fase:** 0a – Repo og database
 - **Modul:** kjerne (testhjelpere i `tests/`)
-- **Status:** spesifisert (forhåndsvurdering fra test-leder tatt inn 28.10.2026)
+- **Status:** gjennomgått, PR åpnet 28.10.2026 (venter på Ståle)
 - **Branch:** `prove-tenant-hjelper` (bygger på `fase-0a-grunnmur`, som ikke er merget ennå)
 - **Dato:** 28.10.2026
 - **Støtter hovedmål:** Tid: ingen direkte. / Reklamasjoner: indirekte, ved at feil der én organisasjon ser en annens data aldri når produksjon. / KI først: nei (se under). Planen krever punktet: fase 0a, «Testhjelper som viser at en spørring aldri gir data fra en annen organisasjon».
@@ -70,17 +70,17 @@ Ingen.
 Ingen regler som data. Hjelperen er selv testsaken.
 
 ## Akseptkriterier
-- [ ] `vitest.config.ts` har `tests/**/*.test.ts` i `include`, og `pnpm test` viser at `tests/tenant-isolation.test.ts` faktisk kjører (test-leder godkjenner ikke før dette er sett i kjøringen).
-- [ ] `tests/tenant-isolation.ts` eksporterer `expectTenantIsolation` med signaturen over (`seed` returnerer id-er per organisasjon, hjelperen tar `idOf`).
-- [ ] Hjelperen feiler med egen `TenantIsolationError` og tydelig norsk melding som nevner organisasjonen og raden, når spørringen returnerer en rad fra den andre organisasjonen (selvtest: en lokal spørring uten `where` skal få hjelperen til å feile).
-- [ ] Hjelperen feiler når spørringen ikke kaster `AccessDeniedError` for den andre organisasjonens id (selvtest: en lokal spørring som returnerer `[]` i stedet for å kaste). Sjekkes i begge retninger (A mot B sin id, B mot A sin id).
-- [ ] Hjelperen feiler når spørringen ikke returnerer organisasjonens egne rader (selvtest: en lokal spørring som alltid gir `[]`).
-- [ ] `src/core/audit/audit.test.ts` bruker hjelperen for `listAuditEvents`, og testen er grønn. Første test i filen er uendret. `src/core/audit/index.ts` er uendret.
-- [ ] `src/core/access/guards.test.ts` er uendret.
-- [ ] Bruker i annen organisasjon får ikke tilgang (test): dekket av hjelperen.
-- [ ] Admin brukes i begge organisasjoner, `resetDatabase` i `beforeEach`.
-- [ ] `pnpm lint`, `pnpm typecheck` og `pnpm test` er grønne.
-- [ ] Virker på iPad-størrelse (e2e): ikke relevant, ingen skjerm.
+- [x] `vitest.config.ts` har `tests/**/*.test.ts` i `include`, og `pnpm test` viser at `tests/tenant-isolation.test.ts` faktisk kjører (test-leder godkjenner ikke før dette er sett i kjøringen).
+- [x] `tests/tenant-isolation.ts` eksporterer `expectTenantIsolation` med signaturen over (`seed` returnerer id-er per organisasjon, hjelperen tar `idOf`).
+- [x] Hjelperen feiler med egen `TenantIsolationError` og tydelig norsk melding som nevner organisasjonen og raden, når spørringen returnerer en rad fra den andre organisasjonen (selvtest: en lokal spørring uten `where` skal få hjelperen til å feile).
+- [x] Hjelperen feiler når spørringen ikke kaster `AccessDeniedError` for den andre organisasjonens id (selvtest: en lokal spørring som returnerer `[]` i stedet for å kaste). Sjekkes i begge retninger (A mot B sin id, B mot A sin id).
+- [x] Hjelperen feiler når spørringen ikke returnerer organisasjonens egne rader (selvtest: en lokal spørring som alltid gir `[]`).
+- [x] `src/core/audit/audit.test.ts` bruker hjelperen for `listAuditEvents`, og testen er grønn. Første test i filen er uendret. `src/core/audit/index.ts` er uendret.
+- [x] `src/core/access/guards.test.ts` er uendret.
+- [x] Bruker i annen organisasjon får ikke tilgang (test): dekket av hjelperen.
+- [x] Admin brukes i begge organisasjoner, `resetDatabase` i `beforeEach`.
+- [x] `pnpm lint`, `pnpm typecheck` og `pnpm test` er grønne.
+- [x] Virker på iPad-størrelse (e2e): ikke relevant, ingen skjerm.
 
 ## Testplan (fra test-leder, godkjent av prosjektleder)
 - `tests/tenant-isolation.test.ts`:
@@ -111,3 +111,6 @@ Ikke med: arkitekt (ingen skjema eller grensesnitt), ux/ui (ingen skjerm), ki-an
 
 ## Åpne spørsmål
 - Ingen for Ståle.
+
+## Gjennomgang (28.10.2026)
+Test-leder: godkjent i runde 1. `pnpm lint`, `pnpm typecheck`, `pnpm test` (11 filer, 48 tester) og `pnpm test:e2e` (10/10, pc og iPad) grønne. Sikkerhet-personvern, forenkler og testskriver fant ingen alvorlige funn. Små funn står i PR-en.

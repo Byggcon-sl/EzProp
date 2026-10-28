@@ -6,7 +6,7 @@ Sist oppdatert: 28.10.2026
 
 ## Gjeldende fase
 
-**Fase 0a – Repo og database.** Alle punkter er bygget i PR-en «Fase 0a: grunnmur, dokumentasjon og agentlag». Fasen er ferdig når Ståle har merget PR-en.
+**Fase 0a – Repo og database.** Grunnmuren ligger på branchen `fase-0a-grunnmur` (PR mot `main` åpnes av prosjektlederen). Testhjelperen for tenant-isolasjon ligger på branchen `prove-tenant-hjelper` oppå den (PR mot `fase-0a-grunnmur`). Fasen er ferdig når Ståle har merget begge.
 
 Neste fase: **Fase 1 – Prøve uten nett** (starter når PR-en for fase 0a er merget). Første oppgave: oppgave 3 i `docs/07-utviklingsplan.md` (testoppsett for prøven uten nett).
 
@@ -18,17 +18,22 @@ Ingen pågående oppgave.
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| (fylles inn av prosjektlederen når PR-en er åpnet) | Fase 0a | venter på Ståle | – |
+| `fase-0a-grunnmur` (PR mot `main` ikke åpnet ennå) | Fase 0a: grunnmur, dokumentasjon og agentlag | venter på Ståle | – |
+| PR_TENANT | Testhjelper for tenant-isolasjon (`docs/agenter/oppgaver/prove-tenant-hjelper.md`) | venter på Ståle | `fase-0a-grunnmur` (ikke merget) |
 
 ## Venter på Ståle
 
-- Merge PR-en for fase 0a.
+- Merge PR-en for fase 0a, deretter PR-en for testhjelperen (tenant-isolasjon).
 - Godkjenne rutinene (`docs/agenter/rutiner.md`).
 - Spørsmålene i `docs/09-apne-sporsmal.md`.
 
 ## Oppgaver fra nattløkken
 
 Ingen ennå.
+
+## Kjente ustabile tester
+
+- `src/db/seed/run.test.ts` («kan kjøres to ganger uten duplikater») feilet én gang av ti fulle kjøringer 28.10.2026 (fant 2 organisasjoner). Ikke endret i noen åpen PR. Følges opp i nattløkken eller som egen liten oppgave.
 
 ## Trenger Ståle (stoppet etter 3 retteforsøk)
 
@@ -37,3 +42,4 @@ Ingen.
 ## Siste kjøring
 
 28.10.2026: første kjøring (fase 0a). Sesjon: https://claude.ai/code/session_01Jqwnu2ZDo3evvV7iSgdvQZ
+28.10.2026: oppgave «testhjelper for tenant-isolasjon» gjennom løkke B og D, PR åpnet mot `fase-0a-grunnmur`.
