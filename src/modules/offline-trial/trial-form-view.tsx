@@ -11,31 +11,92 @@ import {
   type TrialTableRow,
   type TrialValue,
 } from "./answers";
-import { TRIAL_TG_VALUES, type TrialField, type TrialForm, type TrialOption } from "./trial-form";
+import {
+  TRIAL_TG_VALUES,
+  type TrialColumn,
+  type TrialField,
+  type TrialForm,
+  type TrialOption,
+} from "./trial-form";
 
 type OnChange = (fieldKey: string, value: TrialValue) => void;
+type OnTouched = () => void;
+type OnAddPhotos = (
+  fieldKey: string,
+  items: ReadonlyArray<{ file: File; photo: TrialPhoto }>,
+) => void;
 
 interface TrialFormViewProps {
   form: TrialForm;
   answers: TrialAnswers;
   onChange: OnChange;
+  /** Felt der en annen enhet sist endret verdien. Viser «Endret av en annen». */
+  foreignChanges?: ReadonlySet<string>;
+  /** Kalles når takstmannen rører et felt (fokus, trykk eller endring). */
+  onFieldTouched?: (fieldKey: string) => void;
+  /** Når satt, får denne de nye bildefilene i stedet for `onChange`. */
+  onAddPhotos?: OnAddPhotos;
 }
 
 /** Viser testskjemaet. Vet ikke hvor svarene lagres; alt går gjennom `onChange`. */
-export function TrialFormView({ form, answers, onChange }: TrialFormViewProps) {
+export function TrialFormView({
+  form,
+  answers,
+  onChange,
+  foreignChanges,
+  onFieldTouched,
+  onAddPhotos,
+}: TrialFormViewProps) {
   return (
     <div className="space-y-8">
       {form.groups.map((group) => (
         <section key={group.key} className="space-y-5">
           <h2 className="text-xl font-semibold text-slate-900">{group.title}</h2>
-          {group.fields.map((field) => (
-            <div key={field.key} data-field={field.key}>
-              <FieldInput field={field} value={answers[field.key]} onChange={onChange} />
-            </div>
-          ))}
+          {group.fields.map((field) => {
+            const touched = () => onFieldTouched?.(field.key);
+            const change: OnChange = (key, value) => {
+              touched();
+              onChange(key, value);
+            };
+            const showForeign =
+              (field.type === "tg" || field.type === "choice" || field.type === "number") &&
+              (foreignChanges?.has(field.key) ?? false);
+            return (
+              <div key={field.key} data-field={field.key}>
+                <FieldInput
+                  field={field}
+                  value={answers[field.key]}
+                  onChange={change}
+                  onTouched={touched}
+                  onAddPhotos={onAddPhotos}
+                />
+                {showForeign ? <ForeignChangeNotice /> : null}
+              </div>
+            );
+          })}
         </section>
       ))}
     </div>
+  );
+}
+
+/** Minste mulige varsel: tekst med ikon, ingen dialog og ikke farge alene. */
+function ForeignChangeNotice() {
+  return (
+    <p role="status" className="mt-1.5 flex items-center gap-1.5 text-sm text-slate-700">
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 16 16"
+        className="h-4 w-4 shrink-0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <circle cx="8" cy="8" r="6.5" />
+        <path d="M8 4.5v4M8 11v.5" strokeLinecap="round" />
+      </svg>
+      Endret av en annen
+    </p>
   );
 }
 
@@ -47,30 +108,52 @@ function fieldId(key: string): string {
   return `trial-${key}`;
 }
 
+/** Viser et tall fra svarene: komma som desimaltegn, tomt ved null. */
+function formatTrialNumber(value: unknown): string {
+  return typeof value === "number" && !Number.isNaN(value) ? String(value).replace(".", ",") : "";
+}
+
+/**
+ * Lokal kladd mens feltet har fokus. Uten fokus vises verdien fra svarene, slik at
+ * en verdi fra synk eller fra en annen iPad vises riktig. Med fokus beholdes det
+ * takstmannen skriver («12,» forsvinner ikke).
+ */
+function useFocusDraft(external: string) {
+  const [focused, setFocused] = useState(false);
+  const [draft, setDraft] = useState(external);
+  return {
+    value: focused ? draft : external,
+    setDraft,
+    onFocus: () => {
+      setDraft(external);
+      setFocused(true);
+    },
+    onBlur: () => setFocused(false),
+  };
+}
+
 function FieldInput({
   field,
   value,
   onChange,
+  onTouched,
+  onAddPhotos,
 }: {
   field: TrialField;
   value: TrialValue | undefined;
   onChange: OnChange;
+  onTouched: OnTouched;
+  onAddPhotos?: OnAddPhotos;
 }) {
   switch (field.type) {
     case "text":
       return (
-        <>
-          <label htmlFor={fieldId(field.key)} className={labelClass}>
-            {field.label}
-          </label>
-          <textarea
-            id={fieldId(field.key)}
-            rows={3}
-            className={inputClass}
-            value={typeof value === "string" ? value : ""}
-            onChange={(e) => onChange(field.key, e.target.value)}
-          />
-        </>
+        <TextInput
+          field={field}
+          value={typeof value === "string" ? value : ""}
+          onChange={onChange}
+          onTouched={onTouched}
+        />
       );
     case "tg":
       return (
@@ -79,6 +162,7 @@ function FieldInput({
           options={TRIAL_TG_VALUES.map((tg) => ({ key: tg, label: tg }))}
           selected={typeof value === "string" ? value : null}
           onSelect={(key) => onChange(field.key, key)}
+          onTouched={onTouched}
         />
       );
     case "choice":
@@ -88,16 +172,18 @@ function FieldInput({
           options={field.options ?? []}
           selected={typeof value === "string" ? value : null}
           onSelect={(key) => onChange(field.key, key)}
+          onTouched={onTouched}
         />
       );
     case "number":
-      return <NumberInput field={field} onChange={onChange} />;
+      return <NumberInput field={field} value={value} onChange={onChange} onTouched={onTouched} />;
     case "table":
       return (
         <TableInput
           field={field}
           rows={Array.isArray(value) ? (value as TrialTableRow[]) : []}
           onChange={onChange}
+          onTouched={onTouched}
         />
       );
     case "photo":
@@ -106,9 +192,48 @@ function FieldInput({
           field={field}
           photos={Array.isArray(value) ? (value as TrialPhoto[]) : []}
           onChange={onChange}
+          onTouched={onTouched}
+          onAddPhotos={onAddPhotos}
         />
       );
   }
+}
+
+function TextInput({
+  field,
+  value,
+  onChange,
+  onTouched,
+}: {
+  field: TrialField;
+  value: string;
+  onChange: OnChange;
+  onTouched: OnTouched;
+}) {
+  const draft = useFocusDraft(value);
+  return (
+    <>
+      <label htmlFor={fieldId(field.key)} className={labelClass}>
+        {field.label}
+      </label>
+      <textarea
+        id={fieldId(field.key)}
+        rows={3}
+        className={inputClass}
+        value={draft.value}
+        onFocus={() => {
+          draft.onFocus();
+          onTouched();
+        }}
+        onBlur={draft.onBlur}
+        onPointerDown={onTouched}
+        onChange={(e) => {
+          draft.setDraft(e.target.value);
+          onChange(field.key, e.target.value);
+        }}
+      />
+    </>
+  );
 }
 
 /** Knapper på rad for TG og valg. Valgt knapp har farge, tykk ramme og fet skrift. */
@@ -117,11 +242,13 @@ function ChoiceButtons({
   options,
   selected,
   onSelect,
+  onTouched,
 }: {
   legend: string;
   options: TrialOption[];
   selected: string | null;
   onSelect: (key: string) => void;
+  onTouched: OnTouched;
 }) {
   return (
     <fieldset>
@@ -134,6 +261,8 @@ function ChoiceButtons({
               key={option.key}
               type="button"
               aria-pressed={pressed ? "true" : "false"}
+              onFocus={onTouched}
+              onPointerDown={onTouched}
               onClick={() => onSelect(option.key)}
               className={cn(
                 "min-h-11 min-w-11 rounded-xl border-2 px-4 text-base",
@@ -151,9 +280,19 @@ function ChoiceButtons({
   );
 }
 
-/** Tallfelt: rå tekst holdes her, skjemaet får bare tallet (eller null). */
-function NumberInput({ field, onChange }: { field: TrialField; onChange: OnChange }) {
-  const [text, setText] = useState("");
+/** Tallfelt: råteksten holdes bare mens feltet har fokus; skjemaet får tallet (eller null). */
+function NumberInput({
+  field,
+  value,
+  onChange,
+  onTouched,
+}: {
+  field: TrialField;
+  value: TrialValue | undefined;
+  onChange: OnChange;
+  onTouched: OnTouched;
+}) {
+  const draft = useFocusDraft(formatTrialNumber(value));
   return (
     <>
       <label htmlFor={fieldId(field.key)} className={labelClass}>
@@ -165,9 +304,15 @@ function NumberInput({ field, onChange }: { field: TrialField; onChange: OnChang
           type="text"
           inputMode="decimal"
           className={cn(inputClass, "min-w-11 max-w-40")}
-          value={text}
+          value={draft.value}
+          onFocus={() => {
+            draft.onFocus();
+            onTouched();
+          }}
+          onBlur={draft.onBlur}
+          onPointerDown={onTouched}
           onChange={(e) => {
-            setText(e.target.value);
+            draft.setDraft(e.target.value);
             onChange(field.key, parseTrialNumber(e.target.value));
           }}
         />
@@ -177,18 +322,62 @@ function NumberInput({ field, onChange }: { field: TrialField; onChange: OnChang
   );
 }
 
+/** Én celle i et tabellfelt. Samme kladd-mønster som de andre feltene. */
+function TableCellInput({
+  column,
+  cell,
+  ariaLabel,
+  onCellChange,
+  onTouched,
+}: {
+  column: TrialColumn;
+  cell: string | number | null | undefined;
+  ariaLabel: string;
+  onCellChange: (value: string | number | null) => void;
+  onTouched: OnTouched;
+}) {
+  const isNumber = column.type === "number";
+  const draft = useFocusDraft(
+    isNumber ? formatTrialNumber(cell) : typeof cell === "string" ? cell : "",
+  );
+  return (
+    <div className="flex items-center gap-1">
+      <input
+        type="text"
+        inputMode={isNumber ? "decimal" : undefined}
+        aria-label={ariaLabel}
+        placeholder={column.label}
+        className={cn(inputClass, "min-w-11", isNumber ? "w-24" : "w-40")}
+        value={draft.value}
+        onFocus={() => {
+          draft.onFocus();
+          onTouched();
+        }}
+        onBlur={draft.onBlur}
+        onPointerDown={onTouched}
+        onChange={(e) => {
+          const input = e.target.value;
+          draft.setDraft(input);
+          onCellChange(isNumber ? parseTrialNumber(input) : input);
+        }}
+      />
+      {column.unit ? <span className="text-slate-600">{column.unit}</span> : null}
+    </div>
+  );
+}
+
 function TableInput({
   field,
   rows,
   onChange,
+  onTouched,
 }: {
   field: TrialField;
   rows: TrialTableRow[];
   onChange: OnChange;
+  onTouched: OnTouched;
 }) {
   const columns = field.columns ?? [];
-  // Rå tekst for tallceller, slik at «12,» ikke forsvinner mens man skriver.
-  const [rawText, setRawText] = useState<Record<string, string>>({});
 
   function addRow() {
     const cells = Object.fromEntries(columns.map((c) => [c.key, null]));
@@ -219,42 +408,16 @@ function TableInput({
           const rowNumber = index + 1;
           return (
             <div key={row.id} className="flex flex-wrap items-end gap-2 rounded-xl bg-slate-50 p-3">
-              {columns.map((column) => {
-                const cellKey = `${row.id}:${column.key}`;
-                const cell = row.cells[column.key];
-                const shown =
-                  column.type === "number"
-                    ? (rawText[cellKey] ?? (typeof cell === "number" ? String(cell) : ""))
-                    : typeof cell === "string"
-                      ? cell
-                      : "";
-                return (
-                  <div key={column.key} className="flex items-center gap-1">
-                    <input
-                      type="text"
-                      inputMode={column.type === "number" ? "decimal" : undefined}
-                      aria-label={`${column.label}, rad ${rowNumber}`}
-                      placeholder={column.label}
-                      className={cn(
-                        inputClass,
-                        "min-w-11",
-                        column.type === "number" ? "w-24" : "w-40",
-                      )}
-                      value={shown}
-                      onChange={(e) => {
-                        const input = e.target.value;
-                        if (column.type === "number") {
-                          setRawText((prev) => ({ ...prev, [cellKey]: input }));
-                          setCell(row.id, column.key, parseTrialNumber(input));
-                        } else {
-                          setCell(row.id, column.key, input);
-                        }
-                      }}
-                    />
-                    {column.unit ? <span className="text-slate-600">{column.unit}</span> : null}
-                  </div>
-                );
-              })}
+              {columns.map((column) => (
+                <TableCellInput
+                  key={column.key}
+                  column={column}
+                  cell={row.cells[column.key]}
+                  ariaLabel={`${column.label}, rad ${rowNumber}`}
+                  onCellChange={(cellValue) => setCell(row.id, column.key, cellValue)}
+                  onTouched={onTouched}
+                />
+              ))}
               <Button variant="secondary" className="min-w-11" onClick={() => deleteRow(row.id)}>
                 Slett rad {rowNumber}
               </Button>
@@ -269,15 +432,19 @@ function TableInput({
   );
 }
 
-/** Bildefelt: bare navn og størrelse lagres. Ingen forhåndsvisning og ingen opplasting. */
+/** Bildefelt: bare navn og størrelse står i svarene. Filene går til `onAddPhotos` når den er satt. */
 function PhotoInput({
   field,
   photos,
   onChange,
+  onTouched,
+  onAddPhotos,
 }: {
   field: TrialField;
   photos: TrialPhoto[];
   onChange: OnChange;
+  onTouched: OnTouched;
+  onAddPhotos?: OnAddPhotos;
 }) {
   return (
     <>
@@ -291,15 +458,21 @@ function PhotoInput({
         capture="environment"
         multiple
         className="block min-h-11 min-w-11 text-base text-slate-900 file:mr-3 file:min-h-11 file:rounded-xl file:border-0 file:bg-brand-600 file:px-4 file:text-white"
+        onFocus={onTouched}
+        onPointerDown={onTouched}
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           if (files.length > 0) {
             const added = files.map((file) => ({
-              id: uuidv7(),
-              name: file.name,
-              sizeBytes: file.size,
+              file,
+              photo: { id: uuidv7(), name: file.name, sizeBytes: file.size },
             }));
-            onChange(field.key, [...photos, ...added]);
+            if (onAddPhotos) {
+              onTouched();
+              onAddPhotos(field.key, added);
+            } else {
+              onChange(field.key, [...photos, ...added.map((item) => item.photo)]);
+            }
           }
           e.target.value = "";
         }}
