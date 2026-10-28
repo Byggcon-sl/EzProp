@@ -15,6 +15,13 @@
       "when": 1793211983057,
       "tag": "0001_prove-uten-nett",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793229587347,
+      "tag": "0002_electric-utsnitt",
+      "breakpoints": true
     }
   ]
 }

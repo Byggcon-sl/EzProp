@@ -7,6 +7,8 @@ import { createOrganization, resetDatabase } from "../../tests/factories";
 
 // Migreringen 0001_prove-uten-nett og publikasjonen for synktjenesten
 // (docs/funksjoner/fase1-kandidat-powersync.md pkt. 10). Testplan avsnitt 3.5.
+// Migreringen 0002_electric-utsnitt (docs/funksjoner/fase1-kandidat-electricsql.md pkt. 11,
+// avgjørelse C): replikaidentitet og Electrics publikasjon.
 
 beforeEach(resetDatabase);
 
@@ -78,5 +80,34 @@ describe("migreringen for prøven uten nett", () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]!.puballtables).toBe(false);
+  });
+
+  it("migreringen 0002 gir REPLICA IDENTITY FULL på de tre trial-tabellene", async () => {
+    const rows = await db.execute<{ relname: string; relreplident: string }>(
+      sql`select relname, relreplident from pg_class
+          where relname in ('trial_forms', 'trial_answers', 'trial_photos') and relkind = 'r'`,
+    );
+    const identities = Object.fromEntries(
+      Array.from(rows).map((row) => [row.relname, row.relreplident]),
+    );
+    expect(identities).toEqual({ trial_forms: "f", trial_answers: "f", trial_photos: "f" });
+  });
+
+  it("publikasjonen electric_publication_default har nøyaktig de tre trial-tabellene, ikke FOR ALL TABLES", async () => {
+    const tables = Array.from(
+      await db.execute<{ tablename: string }>(
+        sql`select tablename from pg_publication_tables where pubname = 'electric_publication_default'`,
+      ),
+    )
+      .map((row) => row.tablename)
+      .sort();
+    expect(tables).toEqual(["trial_answers", "trial_forms", "trial_photos"]);
+    const publication = Array.from(
+      await db.execute<{ puballtables: boolean }>(
+        sql`select puballtables from pg_publication where pubname = 'electric_publication_default'`,
+      ),
+    );
+    expect(publication).toHaveLength(1);
+    expect(publication[0]!.puballtables).toBe(false);
   });
 });

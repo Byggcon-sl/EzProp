@@ -9,10 +9,9 @@
  */
 import type { AbstractPowerSyncDatabase, Transaction } from "@powersync/web";
 import { uuidv7 } from "@/shared/lib/uuid";
-import type { TrialAnswers, TrialPhoto, TrialValue } from "../../answers";
+import type { TrialPhoto, TrialValue } from "../../answers";
 import { applyTextEdit, createTextState, mergeTextStates, textOf } from "../../text-merge";
 import { listTrialFields, trialForm, type TrialFieldType } from "../../trial-form";
-import { rowsToAnswers } from "../answer-rows";
 import { putLocalPhoto } from "../photo-store";
 import type {
   TrialAnswerRow,
@@ -144,10 +143,23 @@ interface PendingText {
   waiters: { resolve: () => void; reject: (error: unknown) => void }[];
 }
 
-export interface PowerSyncTrialStore extends TrialSyncStore {
-  /** Skriver tekst som venter (ved blur, når siden skjules og ved avmelding). */
-  flush(): Promise<void>;
+/** PowerSync-utgaven. Alt står i `TrialSyncStore` (avgjørelse A); navnet beholdes for provideren. */
+export type PowerSyncTrialStore = TrialSyncStore;
+
+interface FormRecord {
+  id: string;
+  name: string;
+  created_at: string | null;
 }
+
+function toFormSummary(record: FormRecord): TrialFormSummary {
+  return { id: record.id, name: record.name, createdAt: record.created_at ?? "" };
+}
+
+const PENDING_PHOTOS_SQL = `SELECT id, trial_form_id, field_key, name, size_bytes, sha256, uploaded_at, device_id,
+          created_at, updated_at, deleted_at
+   FROM trial_photos WHERE uploaded_at IS NULL AND device_id = ? AND deleted_at IS NULL
+   ORDER BY created_at, id`;
 
 export function createPowerSyncTrialStore(
   db: AbstractPowerSyncDatabase,
@@ -260,8 +272,20 @@ export function createPowerSyncTrialStore(
     });
   }
 
+  async function readForms(): Promise<TrialFormSummary[]> {
+    const rows = await db.getAll<FormRecord>(
+      `SELECT id, name, created_at FROM trial_forms
+       WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC`,
+    );
+    return rows.map(toFormSummary);
+  }
+
   async function readSnapshot(formId: string): Promise<TrialFormSnapshot> {
-    const [answers, photos] = await Promise.all([
+    const [form, answers, photos] = await Promise.all([
+      db.getOptional<FormRecord>(
+        "SELECT id, name, created_at FROM trial_forms WHERE id = ? AND deleted_at IS NULL",
+        [formId],
+      ),
       db.getAll<AnswerRecord>(
         `SELECT id, trial_form_id, field_key, value, text_state, device_id,
                 created_at, updated_at, deleted_at
@@ -275,18 +299,38 @@ export function createPowerSyncTrialStore(
         [formId],
       ),
     ]);
-    return { answers: answers.map(toAnswerRow), photos: photos.map(toPhotoRow) };
+    return {
+      form: form ? toFormSummary(form) : null,
+      answers: answers.map(toAnswerRow),
+      photos: photos.map(toPhotoRow),
+    };
   }
 
   return {
     flush,
 
-    async listForms(): Promise<TrialFormSummary[]> {
-      const rows = await db.getAll<{ id: string; name: string; created_at: string | null }>(
-        `SELECT id, name, created_at FROM trial_forms
-         WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC`,
+    async close(): Promise<void> {
+      await flush();
+      await db.close();
+    },
+
+    listForms: readForms,
+
+    subscribeForms(listener: (forms: TrialFormSummary[]) => void): () => void {
+      let active = true;
+      const dispose = db.onChange(
+        {
+          onChange: async () => {
+            const forms = await readForms();
+            if (active) listener(forms);
+          },
+        },
+        { tables: ["trial_forms"], throttleMs: 30, triggerImmediate: true },
       );
-      return rows.map((row) => ({ id: row.id, name: row.name, createdAt: row.created_at ?? "" }));
+      return () => {
+        active = false;
+        dispose();
+      };
     },
 
     async createForm(name: string): Promise<string> {
@@ -306,11 +350,6 @@ export function createPowerSyncTrialStore(
         );
       });
       return id;
-    },
-
-    async getAnswers(formId: string): Promise<TrialAnswers> {
-      const snapshot = await readSnapshot(formId);
-      return rowsToAnswers(snapshot.answers, snapshot.photos);
     },
 
     async setAnswer(formId: string, fieldKey: string, value: TrialValue): Promise<void> {
@@ -352,6 +391,34 @@ export function createPowerSyncTrialStore(
         dispose();
         void flush();
       };
+    },
+
+    onStatusChange(listener: () => void): () => void {
+      const disposeTables = db.onChange(
+        { onChange: () => listener() },
+        { tables: ["ps_crud", "trial_answers", "trial_photos"], throttleMs: 100 },
+      );
+      const disposeStatus = db.registerListener({ statusChanged: () => listener() });
+      return () => {
+        disposeTables();
+        disposeStatus();
+      };
+    },
+
+    async listPendingPhotos(): Promise<TrialPhotoRow[]> {
+      const rows = await db.getAll<PhotoRecord>(PENDING_PHOTOS_SQL, [deviceId]);
+      return rows.map(toPhotoRow);
+    },
+
+    async markPhotoUploaded(id: string, sha256: string): Promise<void> {
+      // Kjent svakhet (funn 6 i resultatfilen for PowerSync): oppdateringen går via visningen og
+      // havner derfor også i ps_crud. Serveren overser `uploaded_at`/`sha256` fra klienten.
+      // Utvikler retter dette i bit 1 (lokal skriving utenom køen).
+      await db.execute("UPDATE trial_photos SET uploaded_at = ?, sha256 = ? WHERE id = ?", [
+        new Date().toISOString(),
+        sha256,
+        id,
+      ]);
     },
 
     async status(): Promise<TrialSyncStatus> {
