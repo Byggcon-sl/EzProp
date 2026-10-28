@@ -18,10 +18,11 @@ Ingen pågående oppgave.
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
+| #4 | Rutinene trenger tilgang (bare dokumentasjon) | Venter på Ståle | Ingen |
 
 ## Venter på Ståle
 
-- Ingenting akkurat nå. Rutinene er laget (`docs/agenter/rutiner.md`).
+- PR #4: les `docs/agenter/rutiner.md` (avsnittet «Må gjøres av Ståle») og merge.
 - Spørsmålene i `docs/09-apne-sporsmal.md`.
 
 ## Oppgaver fra nattløkken
