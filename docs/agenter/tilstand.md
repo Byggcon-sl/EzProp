@@ -19,7 +19,7 @@ Ingen pågående oppgave.
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
 | `fase-0a-grunnmur` (PR mot `main` ikke åpnet ennå) | Fase 0a: grunnmur, dokumentasjon og agentlag | venter på Ståle | – |
-| PR_TENANT | Testhjelper for tenant-isolasjon (`docs/agenter/oppgaver/prove-tenant-hjelper.md`) | venter på Ståle | `fase-0a-grunnmur` (ikke merget) |
+| [#1](https://github.com/Byggcon-sl/EzProp/pull/1) | Testhjelper for tenant-isolasjon (`docs/agenter/oppgaver/prove-tenant-hjelper.md`) | venter på Ståle | `fase-0a-grunnmur` (ikke merget) |
 
 ## Venter på Ståle
 

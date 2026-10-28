@@ -2,7 +2,7 @@
 
 - **Fase:** 0a – Repo og database
 - **Modul:** kjerne (testhjelpere i `tests/`)
-- **Status:** gjennomgått, PR åpnet 28.10.2026 (venter på Ståle)
+- **Status:** gjennomgått, PR #1 åpnet 28.10.2026 (venter på Ståle)
 - **Branch:** `prove-tenant-hjelper` (bygger på `fase-0a-grunnmur`, som ikke er merget ennå)
 - **Dato:** 28.10.2026
 - **Støtter hovedmål:** Tid: ingen direkte. / Reklamasjoner: indirekte, ved at feil der én organisasjon ser en annens data aldri når produksjon. / KI først: nei (se under). Planen krever punktet: fase 0a, «Testhjelper som viser at en spørring aldri gir data fra en annen organisasjon».
