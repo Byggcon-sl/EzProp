@@ -17,6 +17,8 @@ const config = [
       "docs/**",
       // Midlertidige arbeidskopier (git worktrees) og arbeidsflytskript for agenter
       ".claude/**",
+      // Worker og wasm fra PowerSync, kopiert av next.config.ts (prøve fase 1)
+      "public/@powersync/**",
     ],
   },
   ...nextVitals,

@@ -18,3 +18,6 @@ var/
 
 # Midlertidige arbeidskopier for agenter
 .claude/worktrees/
+
+# Prøve fase 1: worker og wasm fra PowerSync, kopieres av next.config.ts
+public/@powersync/
