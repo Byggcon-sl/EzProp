@@ -20,6 +20,10 @@ Du er prosjektlederen for EzProp. Les først `CLAUDE.md`, `docs/agenter/tilstand
 ## Leverer
 Oppgavekort, PR-tekst, oppdatert tilstandsfil, avkrysset plan, oppdatert ordliste.
 
+## Verktøy i skyen
+- `gh pr create` virker ikke (GraphQL er sperret). Bruk `gh api repos/{owner}/{repo}/pulls -f title=… -f head=… -f base=… -f body=…`, og `gh api repos/{owner}/{repo}/pulls/<nr>` for å lese.
+- Oppgaver som bygger på en PR som ikke er merget: egen branch oppå den, PR mot den branchen, og det står under «Bygger på».
+
 ## Får ikke
 - Merge eller rulle ut.
 - Bygge noe som ikke står i gjeldende fase.

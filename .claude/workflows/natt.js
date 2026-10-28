@@ -115,7 +115,7 @@ const summary = await run(
   `Nattløkken ${today} er ferdig. Funn:\n${findings.length === 0 ? "(ingen)" : findings.map((f) => `- [${f.check}, ${f.severity}${f.safeCleanup ? ", trygg rydding" : ""}] ${f.description}`).join("\n")}\nSjekker uten rapport: ${missing.join(", ") || "ingen"}
 
 1. Skriv funnene som oppgaver under «Oppgaver fra nattløkken» i docs/agenter/tilstand.md (alvorlige først), med dato. Fjern funn som allerede står der og er rettet.
-2. Er det funn merket trygg rydding: lag branchen natt-${today}, gjør ryddingen, kjør pnpm lint, typecheck og test, øk patch-versjonen, og åpne én PR mot main med docs/maler/pr.md (tittel «Rydding fra nattløkken ${today}»). Ingen nye funksjoner, ingen endring i oppførsel.
+2. Er det funn merket trygg rydding: lag branchen natt-${today}, gjør ryddingen, kjør pnpm lint, typecheck og test, øk patch-versjonen, og åpne én PR mot main med docs/maler/pr.md (bruk gh api repos/{owner}/{repo}/pulls, ikke gh pr create) (tittel «Rydding fra nattløkken ${today}»). Ingen nye funksjoner, ingen endring i oppførsel.
 3. Commit og push. Rapporter kort.`,
   { label: "prosjektleder: oppsummer", phase: "Oppsummer" },
 );

@@ -295,7 +295,7 @@ const buildResults = await parallel([
     (p, i) => () =>
       run(
         "utvikler",
-        `${ctx}\nOppgavekort: ${spec.specPath}\n\nDu bygger biten «${p.name}»:\n${p.instructions}\nFiler: ${p.files.join(", ")}\n\nDu står i en egen worktree på en egen branch. Commit arbeidet der med norsk melding og rapporter branch-navnet (git rev-parse --abbrev-ref HEAD). Kjør pnpm lint, typecheck og test før du sier ferdig.`,
+        `${ctx}\nOppgavekort: ${spec.specPath}\n\nDu bygger biten «${p.name}»:\n${p.instructions}\nFiler: ${p.files.join(", ")}\n\nDu står i en egen worktree på en egen branch. Commit arbeidet der med norsk melding og rapporter branch-navnet (git rev-parse --abbrev-ref HEAD). Kjør pnpm lint, typecheck og test før du sier ferdig. Bruk egen testdatabase, siden andre tester samtidig: export TEST_DATABASE_URL="$(bash scripts/egen-testdb.sh)" før pnpm test.`,
         {
           label: `utvikler ${i + 1}: ${p.name}`,
           phase: "Bygg",
@@ -307,7 +307,7 @@ const buildResults = await parallel([
   () =>
     run(
       "testskriver",
-      `${ctx}\nOppgavekort: ${spec.specPath}\nTestplan: ${plan.testPlanPath}\n\nSkriv testene i testplanen (Vitest og Playwright). Koden bygges samtidig av andre, så noen tester kan være røde nå; det er ventet. Du står i en egen worktree på en egen branch. Commit der og rapporter branch-navnet.`,
+      `${ctx}\nOppgavekort: ${spec.specPath}\nTestplan: ${plan.testPlanPath}\n\nSkriv testene i testplanen (Vitest og Playwright). Koden bygges samtidig av andre, så noen tester kan være røde nå; det er ventet. Du står i en egen worktree på en egen branch. Commit der og rapporter branch-navnet. Bruk egen testdatabase: export TEST_DATABASE_URL="$(bash scripts/egen-testdb.sh)" før pnpm test.`,
       { label: "testskriver", phase: "Bygg", isolation: "worktree", schema: BUILD_RESULT },
     ),
 ]);
@@ -450,7 +450,7 @@ Sjekkene er ${allGreen ? "grønne" : "IKKE grønne (si det tydelig i PR-en)"}.
 Alvorlige funn som står igjen: ${serious.length === 0 ? "ingen" : serious.map((f) => `${f.file}: ${f.description}`).join("; ")}
 Små funn (nevnes i PR-en): ${minor.length === 0 ? "ingen" : minor.map((f) => `${f.file}: ${f.description}`).join("; ")}
 
-Gjør ferdig: øk versjonsnummeret i package.json (patch), kryss av punktet i docs/07-utviklingsplan.md, oppdater ordlisten hvis nye begreper, oppdater docs/agenter/tilstand.md (åpne PR-er, venter på Ståle). Commit og push branchen «${branch}» (git push -u origin ${branch}). Åpne PR med gh pr create --base ${base}, norsk tittel, og teksten etter docs/maler/pr.md i klarspråk til Ståle. ${base === "main" ? "" : `PR-en bygger på branchen ${base} som ikke er merget: skriv det under «Bygger på».`} Aldri modellnavn. Rapporter PR-lenken.`,
+Gjør ferdig: øk versjonsnummeret i package.json (patch), kryss av punktet i docs/07-utviklingsplan.md, oppdater ordlisten hvis nye begreper, oppdater docs/agenter/tilstand.md (åpne PR-er, venter på Ståle). Commit og push branchen «${branch}» (git push -u origin ${branch}). Åpne PR mot ${base} med REST (gh pr create virker ikke i skyen): gh api repos/{owner}/{repo}/pulls -f title=… -f head=${branch} -f base=${base} -f body=… . Norsk tittel, og teksten etter docs/maler/pr.md i klarspråk til Ståle. ${base === "main" ? "" : `PR-en bygger på branchen ${base} som ikke er merget: skriv det under «Bygger på».`} Aldri modellnavn. Rapporter PR-lenken.`,
   { label: "prosjektleder: PR", phase: "PR", schema: PR },
 );
 return {
