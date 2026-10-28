@@ -22,8 +22,13 @@ Logg inn som `admin@byggcon.no`. Koden står på http://localhost:3000/dev/epost
 
 - Lokalt og i skyen vises e-post på `/dev/epost` (`DEV_MAILBOX=1`). Ingen e-post sendes på ekte.
 - E-post via Microsoft 365 (samme oppsett som Optiplan) kobles til i fase 0b. Da trengs `MS_GRAPH_TENANT_ID`, `MS_GRAPH_CLIENT_ID`, `MS_GRAPH_CLIENT_SECRET` og `MAIL_FROM` i serverens miljøinnstillinger. Aldri i chat, kode eller git.
-- Ingen hemmeligheter trengs i fase 0a.
+- I drift (testmiljøet i Azure) finnes ikke `/dev/epost`. Før Microsoft 365 er koblet til, skrives engangskoden for første admin i serverloggen. Når alle fire variablene over er satt, brukes Microsoft 365 i stedet.
+- Ingen hemmeligheter trengs lokalt i fase 0a. I testmiljøet ligger de i GitHub som secrets.
+
+## Testmiljø i Azure
+
+Testmiljøet kjører på Azure App Service og PostgreSQL Flexible Server i Sweden Central (EU). Arbeidsflyten «Utrulling til Azure» ruller ut ved merge til `main`, men hopper over til secrets er lagt inn. Bare oppdiktede data. Hva Ståle må gjøre selv, steg for steg, med kostnad: `docs/drift/testmiljo-azure.md`.
 
 ## Helsesjekk
 
-`GET /api/helse` svarer `{"status":"ok","versjon":"…","database":"ok"}`. Versjonen kommer fra `package.json` (økes i hver PR), pluss commit når `APP_VERSION` er satt.
+`GET /api/helse` svarer `{"status":"ok","versjon":"…","database":"ok"}`. Versjonen kommer fra `package.json` (økes i hver PR), pluss commit når `APP_VERSION` er satt. I testmiljøet setter utrullingen `APP_VERSION` til kort commit-id.
