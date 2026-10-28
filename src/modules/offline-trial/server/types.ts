@@ -7,7 +7,7 @@
  * (CLAUDE.md regel 2). Detaljene står i docs/funksjoner/fase1-kandidat-powersync.md pkt. 11.
  */
 import type { Actor } from "@/core/access";
-import type { TrialAnswerRecord, TrialFormRecord } from "@/db/schema";
+import type { TrialAnswerRecord, TrialFormRecord, TrialPhotoRecord } from "@/db/schema";
 
 /** Tabellene synken får skrive til. Alt annet gir `InvalidTrialChangeError`. */
 export const TRIAL_CHANGE_TABLES = ["trial_forms", "trial_answers", "trial_photos"] as const;
@@ -98,7 +98,7 @@ export interface SyncTokenResult {
   endpoint: string;
 }
 
-// Signaturer for de fire funksjonene i `server/`. Bildeopplasting (`storeTrialPhoto`) er kuttet til
+// Signaturer for de fem funksjonene i `server/`. Bildeopplasting (`storeTrialPhoto`) er kuttet til
 // oppgaven «Bildekø for prøve A og D» (runde 2, 28.10.2026). Alle kaller `requireOrganizationAccess(actor,
 // organizationId, "organization.read")` først og bruker `grant.organizationId` videre.
 
@@ -128,10 +128,19 @@ export type ApplyTrialChanges = (
   operations: readonly TrialChangeOperation[],
 ) => Promise<TrialChangesResult>;
 
-/** `server/queries.ts`. Bare for testene (tenant-isolasjonsbeviset). Ingen side bruker dem. */
+/**
+ * `server/queries.ts`. Bare for testene (tenant-isolasjonsbeviset for alle tre `trial_*`-tabellene,
+ * CLAUDE.md regel 2). Ingen side bruker dem. Alle filtrerer på `grant.organizationId` og
+ * `deleted_at IS NULL`; de to siste også på `trialFormId` (fremmed skjema-id gir tom liste).
+ */
 export type ListTrialForms = (actor: Actor, organizationId: string) => Promise<TrialFormRecord[]>;
 export type ListTrialAnswers = (
   actor: Actor,
   organizationId: string,
   trialFormId: string,
 ) => Promise<TrialAnswerRecord[]>;
+export type ListTrialPhotos = (
+  actor: Actor,
+  organizationId: string,
+  trialFormId: string,
+) => Promise<TrialPhotoRecord[]>;

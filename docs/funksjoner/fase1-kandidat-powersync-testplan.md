@@ -242,7 +242,7 @@ E2e sletter aldri noe i serverdatabasen.
 | Hodekommentar | `grep -L "Prøve fase 1" src/modules/offline-trial/sync/powersync/*.ts src/modules/offline-trial/server/*.ts` | tomt |
 | Ingen hemmelighet i repoet | `grep -rn "POWERSYNC_JWT_SECRET" --include=*.ts --include=*.yaml --include=*.yml --include=*.sh . \| grep -v node_modules` | bare `process.env`, `!env`/`PS_`-mapping, `start.sh`-nøkkelløkken og `.env.example` |
 | Testkrok aldri i deploy | `grep -rn NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS .env.example .github/workflows/` | bare i `ci.yml`, aldri i deploy-arbeidsflyten eller `.env.example` |
-| Ingen modellnavn | `git log origin/main..HEAD --format=%B \| grep -i "claude\|gpt\|sonnet\|opus"` | tomt |
+| Ingen modellnavn (utenom attribusjonslinjene `Co-Authored-By:`/`Claude-Session:`, som skyverktøyet legger på og som faller bort ved «Squash and merge»; prosjektleder 28.10.2026) | `git log origin/main..HEAD --format=%B \| grep -v '^Co-Authored-By:\|^Claude-Session:' \| grep -i "claude\|gpt\|sonnet\|opus"` | tomt |
 | Avhengigheter | `git diff main.. -- package.json` | bare `@powersync/web`, `@powersync/react`, `@journeyapps/wa-sqlite`, `jose` og versjonen; **ikke** `yjs` |
 | Dokumenter | `docs/drift/powersync.md` finnes med Mac- og Azure-del; «Teknisk som utvikleren fyller inn» i resultatfilen er fylt, også «det som ikke virket» | lest |
 
