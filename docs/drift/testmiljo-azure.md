@@ -34,7 +34,7 @@ Gå til repoet i GitHub → Settings → Secrets and variables → Actions.
 | `POSTGRES_ADMIN_PASSWORD` | Lag med `openssl rand -hex 24` i Terminal. Bare bokstaver og tall, fordi passordet står i en adresse. |
 | `BETTER_AUTH_SECRET` | Lag med `openssl rand -base64 32` i Terminal |
 
-Valgfrie secrets. Legg inn **alle fire sammen**, og først når du har sagt ja til e-post via Microsoft 365 (spørsmål nr. 6). Selve sendingen bygges i fase 0b.
+Valgfrie secrets. **Ikke legg dem inn ennå.** Sendingen via Microsoft 365 bygges først i fase 0b (etter at du har svart på spørsmål nr. 6). Legger du inn de fire før det, prøver appen å sende e-post via Microsoft 365, får feil, og ingen kan logge inn, heller ikke du. Når den tid kommer: legg inn **alle fire sammen**.
 
 - `MS_GRAPH_TENANT_ID`
 - `MS_GRAPH_CLIENT_ID`

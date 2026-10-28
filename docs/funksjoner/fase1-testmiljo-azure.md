@@ -2,7 +2,7 @@
 
 - **Fase:** 1 – Prøve uten nett
 - **Modul:** kjerne (`src/core/email`, `src/core/auth`), drift (`infra/azure`, `.github/workflows`), dokumentasjon (`docs/drift`)
-- **Status:** under bygging 28.10.2026. Bit B (Bicep, arbeidsflyt, ADR 0002) er ferdig; bit A, C og T gjenstår. Kortet er rettet etter testplanens avsnitt 0 (ny env-test, `otpEmail` som ren funksjon) og arkitektens tre svar (bygg uten database, gjenforsøk, `HOSTNAME`).
+- **Status:** PR åpnet 28.10.2026, venter på Ståle (squash-merge). Alle biter (A, B, C, T) er slått sammen, test-leder har godkjent mot testplanen, alle sjekker grønne. Småfunn fra test-leder står i PR-en; ett er rettet i kortets PR (driftsdokumentet sier nå tydelig at de fire e-post-secretene ikke skal legges inn før fase 0b).
 - **Branch:** `fase1-testmiljo-azure` (bygger på `main`)
 - **Dato:** 28.10.2026
 - **Plan:** `docs/07-utviklingsplan.md` fase 1, første punkt: «Testmiljø i Azure» (Ståle 28.10.2026)
