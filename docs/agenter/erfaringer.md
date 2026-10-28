@@ -4,7 +4,7 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 ## 28.10.2026 – Fase 0a
 
-- En rutine som starter ny sesjon får ikke repoet og koblingene fra sesjonen som laget den. Repoet må ligge i miljøets innstillinger (Repositories), og koblingen «Claude Code Remote» må legges til rutinen i Routines-menyen. Rutineprompten skal alltid sjekke tilgangen først og varsle i stedet for å prøve videre.
+- En rutine som starter ny sesjon får ikke repoet og koblingene fra sesjonen som laget den. Repoet og koblingene settes på selve rutinen (claude.ai/code/routines → Edit → Advanced settings → Repository og Connectors), ikke på miljøet. Rutineprompten skal alltid sjekke tilgangen først og varsle i stedet for å prøve videre.
 
 - Første kjøring av arbeidsflyten «oppgave» (PR #1) virket fra oppgavekort til PR, men tre ting måtte rettes etterpå:
   - Worktrees for utvikler og testskriver feilet fordi de ble laget fra `origin/main` i stedet for gjeldende branch. Rettet med `worktree.baseRef: "head"` i `.claude/settings.json`.

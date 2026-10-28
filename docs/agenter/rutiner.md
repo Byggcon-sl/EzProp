@@ -9,9 +9,14 @@
 
 **Første kjøring 28.10.2026 kl. 13:44 stoppet etter 20 sekunder:** sesjonen rutinen startet hadde ikke GitHub-tilgang (403 på `gh api`, ingen push) og ikke sesjonsverktøyene (`list_sessions`, `set_session_tags`). Rutinene kan ikke gi seg selv dette; det settes på miljøet og rutinen i Claude.
 
-**Må gjøres av Ståle før rutinene virker:**
-1. **Repoet inn i miljøet:** Claude → skymiljøet «Byggcon» (menyen i tittellinjen på en sesjon) → Edit → Repositories → legg til `Byggcon-sl/EzProp`. Da får sesjonene rutinene starter GitHub-tilgang med push.
-2. **Sesjonsverktøyene inn i rutinene:** Claude → Routines → «EzProp hovedløkke» og «EzProp nattløkke» → legg til koblingen «Claude Code Remote» (den gir `list_sessions` og `set_session_tags`). Uten den hopper rutinen over sjekken «kjører en annen sesjon allerede?», men virker ellers.
+**Må gjøres av Ståle før rutinene virker** (begge innstillingene ligger på selve rutinen, ikke på miljøet):
+1. Gå til https://claude.ai/code/routines og klikk på «EzProp hovedløkke».
+2. Klikk menyen ved siden av navnet og velg **Edit** (Rediger). Dialogen «Edit scheduled task» åpner seg.
+3. Åpne **Advanced settings** (Avanserte innstillinger). På fanen **General**: under **Repository**, velg `Byggcon-sl/EzProp`. Under **Cloud environment** som dukker opp, velg «Byggcon».
+4. Gå til fanen **Connectors** og sørg for at «Claude Code Remote» er med (den gir sesjonsverktøyene). Microsoft 365 og de andre kan tas bort.
+5. Klikk **Save changes** nederst.
+6. Gjør det samme for «EzProp nattløkke».
+7. Prøv: klikk **Run now** på hovedløkkens side. Kjøringen dukker opp under **History**; klikk på den for å se hva den gjorde.
 
 Promptene er rettet samme dag: finnes ikke GitHub-tilgang, sender rutinen ett varsel og avslutter uten å gjøre noe. Mangler sesjonsverktøyene, hopper den over det steget. Begge rutinene kjører prosjektlederen på ledermodellen (som i `.claude/agents/prosjektleder.md`).
 

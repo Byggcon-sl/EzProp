@@ -21,7 +21,7 @@ Ingen pågående oppgave.
 
 ## Venter på Ståle
 
-- **Gi rutinene tilgang** (to innstillinger i Claude, se `docs/agenter/rutiner.md`): repoet inn i miljøet «Byggcon», og koblingen «Claude Code Remote» inn i begge rutinene. Før det gjør hovedløkken ingenting.
+- **Gi rutinene tilgang** (se `docs/agenter/rutiner.md`): åpne hver rutine på claude.ai/code/routines → Edit → Advanced settings → Repository `Byggcon-sl/EzProp`, miljø «Byggcon», koblingen «Claude Code Remote». Før det gjør hovedløkken ingenting.
 - Spørsmålene i `docs/09-apne-sporsmal.md`.
 
 ## Oppgaver fra nattløkken
