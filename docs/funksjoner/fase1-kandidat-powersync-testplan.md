@@ -17,12 +17,12 @@ Selve prøvene A og B på ekte iPad er **ikke** del av denne planen. De kjøres 
 - `tests/tenant-isolation.ts`: `expectTenantIsolation({ seed, query, idOf })`. Brukes for `listTrialForms`, `listTrialAnswers` og `listTrialPhotos` (avsnitt 3.1). `query` tar `(actor, organizationId)`; de to siste tar også `trialFormId`, så testen pakker dem inn med skjema-id-en fra `seed`.
 - `tests/setup-env.ts`: setter miljø for Vitest. **Endres:** `POWERSYNC_JWT_SECRET ??= <43 base64url-tegn, testverdi>` og `POWERSYNC_URL ??= "http://localhost:8080"`, så `pnpm test` går uten `.env`-endring. Testene i 3.3 overstyrer med `vi.stubEnv`.
 - `e2e/helpers.ts`: `logIn(page, ADMIN_EMAIL)`. Bare admin finnes i seed, så e2e tester admin; rollene testes i Vitest.
-- `playwright.config.ts`: prosjektene `pc` og `ipad` (1194 × 834, `hasTouch`), `workers: 1`. **Endres:** `webServer.env` får `POWERSYNC_URL`, `POWERSYNC_JWT_SECRET` og `NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS=1` (pkt. 4 og 15). `ci.yml` får de samme tre i e2e-jobben, og de to første i `check`-jobben.
+- `playwright.config.ts`: prosjektene `pc` og `ipad` (1194 × 834, `hasTouch`), `workers: 1`. **Endres:** `webServer.env` får `POWERSYNC_URL`, `POWERSYNC_JWT_SECRET` og `NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS=1` (pkt. 4 og 15). `ci.yml` har ett `env` på toppnivå (der `BETTER_AUTH_SECRET` ligger) og to jobber (`check` og `e2e`): `POWERSYNC_URL` og `POWERSYNC_JWT_SECRET` legges på toppnivå (begge jobbene bygger og `check` kjører `pnpm test`), `NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS=1` bare i `e2e`-jobben (bygget i `check` skal være uten krok).
 - `vitest.config.ts`: tar bare `src/**/*.test.ts`, `tests/**/*.test.ts` og `eslint-rules/**/*.test.ts`. **Ikke** `.test.tsx`, og ingen DOM. Derfor ingen komponenttest; skjermene dekkes av e2e. Rene funksjoner i modulen må kunne importeres uten React, `server-only`, `window` eller `@powersync/web` (avsnitt 8).
 - `src/core/access/guards.test.ts`: mønster for roller, deaktivert ansatt og slettet organisasjon. Testene her gjentar ikke `requireOrganizationAccess` sin logikk, bare at hver ny funksjon kaller den.
 - `src/shared/lib/uuid.ts`: `uuidv7()` og `isUuid()`. Brukes i testene for id-er.
 - `e2e/fase-0a.spec.ts`: mønster for `request`-tester mot API-ruter.
-- `e2e/fase-1-testskjema.spec.ts`: dagens 14 tester. **Endres** (avsnitt 6.1), ikke erstattes.
+- `e2e/fase-1-testskjema.spec.ts`: dagens 13 tester. **Endres** (avsnitt 6.1), ikke erstattes.
 
 ## 2. Enhetstester (Vitest, rene, ingen database)
 
@@ -203,7 +203,7 @@ Uten PowerSync-tjeneste: SDK-en får token fra egen server, men når ikke `POWER
 ### 6.1 `e2e/fase-1-testskjema.spec.ts` (tilpasses listen)
 
 - `openTrialForm` blir: `logIn` → `createTrialForm` → `expectCount(page, 0)`. Testen «uinnlogget sendes til innlogging fra /prove/testskjema» er uendret. Testen «admin finner lenken …» ender nå på listen: forventer overskriften «Testskjema» og knappen «Nytt testskjema», og først etter trykk «0 av 40 felt utfylt».
-- Alle de andre 12 testene beholdes med samme navn og skal være grønne i både `pc` og `ipad`, særlig «alle 40 felt fylles ut og telleren viser 40 av 40» (akseptkriterium 1).
+- Alle de andre 11 testene beholdes med samme navn og skal være grønne i både `pc` og `ipad`, særlig «alle 40 felt fylles ut og telleren viser 40 av 40» (akseptkriterium 1).
 - Ny: «tall med komma på slutten beholdes mens man skriver» (pkt. 10): `fill("12,")` i «Antall etasjer» → `toHaveValue("12,")`, telleren uendret (streng parsing gir null); `fill("12,5")` → teller +1; `blur` → feltet viser «12,5».
 - Ny: «Nytt testskjema er minst 44 px høy» (`test.skip` utenfor `ipad`).
 
@@ -334,3 +334,4 @@ Det som er nytt siden runde 1, og hva prosjektleder må ta inn i kortet (**kort*
 11. Ny ren funksjon `buildTrialChangeOperations` i `upload-batch.ts` (2.10) gjør arkitektens «PUT med hele raden» testbar i Vitest; `connector.ts` selv kan ikke importeres uten DOM.
 12. 413-testen sender en kropp som ikke er JSON, så 413 (ikke 400) beviser at kroppen ikke ble lest (6.2).
 13. Avsnitt 11 lister to svakheter (låst kø ved 400/409, utlogging kaster køen) som ikke testes, men skal stå i resultatfilen under «det som ikke virket / kjente svakheter».
+14. **Kontroll mot repoet før koding (test-leder, 28.10.2026, `877c9ff`):** planen er lest opp mot `server/types.ts`, `server/errors.ts`, `sync/types.ts`, `src/db/schema/offline-trial.ts`, migreringen `0001_prove-uten-nett`, `tests/factories.ts`, `tests/tenant-isolation.ts`, `tests/setup-env.ts`, `vitest.config.ts`, `playwright.config.ts`, `ci.yml`, `start.sh` og `docs/02-roller-og-tilgang.md`. Alt planen viser til finnes, med tre rettelser: dagens e2e-fil har 13 tester (ikke 14), hvorav 11 beholdes uendret; og miljøvariablene i `ci.yml` legges på toppnivå, testkroken bare i `e2e`-jobben (avsnitt 1). **Står igjen for utvikler (ikke i kontraktfilene):** `ListTrialPhotos` mangler i `server/types.ts` og kortet nevner bare to lesefunksjoner; planens avsnitt 8.6 og 3.1 gjelder likevel (regel 2: alle tre `trial_*`-tabellene skal ha `expectTenantIsolation`). Uten den testen godkjennes ikke PR-en.
