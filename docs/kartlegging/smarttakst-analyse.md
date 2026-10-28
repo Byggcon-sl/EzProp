@@ -2,7 +2,7 @@
 
 Sist oppdatert: 24.10.2026
 Status: Utkast – observasjoner, ikke godkjent fagstoff.
-Kilde: En Claude-hjelpeagent gikk gjennom SmartTakst 24.10.2026 med Ståles brukerkonto, i testoppdraget Bulrats vei 9 (Ståles bolig). SmartTakst sine tekster er ikke kopiert. Bare korte eksempler er tatt med.
+Kilde: En Claude-hjelpeagent gikk gjennom SmartTakst 24.10.2026 med Ståles brukerkonto, i testoppdraget [Ståles testadresse] (Ståles bolig). SmartTakst sine tekster er ikke kopiert. Bare korte eksempler er tatt med.
 
 ---
 
@@ -371,7 +371,7 @@ Ved siden av rapportdelen har de en «samhandlingsportal» der takstmann, megler
 
 ---
 
-## 8. Endret i SmartTakst-kontoen (testoppdraget Bulrats vei 9)
+## 8. Endret i SmartTakst-kontoen (testoppdraget [Ståles testadresse])
 
 - **Status:** «Under arbeid».
 - **Utkast med fiktive data:**

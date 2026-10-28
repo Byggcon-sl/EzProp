@@ -2,7 +2,7 @@
 
 Sist oppdatert: 24.10.2026
 Status: Observasjon, ikke godkjent.
-Kilde: En Claude-hjelpeagent gikk gjennom IVIT (versjon 10.2.8) med Ståles konto natt til 24.10.2026. Den bare leste, og endret ingenting utenfor testoppdraget 14553-3037. Kundedata er ikke tatt med.
+Kilde: En Claude-hjelpeagent gikk gjennom IVIT (versjon 10.2.8) med Ståles konto natt til 24.10.2026. Den bare leste, og endret ingenting utenfor testoppdraget [oppdragsnr fjernet]. Kundedata er ikke tatt med.
 
 ## Viktigste funn
 

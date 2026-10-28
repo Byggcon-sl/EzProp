@@ -18,11 +18,12 @@ Ingen pågående oppgave.
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| (fylles inn av prosjektlederen når PR-en er åpnet) | Fase 0a | venter på Ståle | – |
+| [#2](https://github.com/Byggcon-sl/EzProp/pull/2) `fase-0a-grunnmur` | Fase 0a: grunnmur, dokumentasjon og agentlag | venter på Ståle | – |
+| [#1](https://github.com/Byggcon-sl/EzProp/pull/1) `prove-tenant-hjelper` | Fase 0a: testhjelper for tenant-isolasjon (prøve av arbeidsflyten) | venter på Ståle | #2 (merges etter #2) |
 
 ## Venter på Ståle
 
-- Merge PR-en for fase 0a.
+- Merge PR #2 (fase 0a), deretter PR #1.
 - Godkjenne rutinene (`docs/agenter/rutiner.md`).
 - Spørsmålene i `docs/09-apne-sporsmal.md`.
 
