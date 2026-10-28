@@ -8,7 +8,7 @@ export function isUuid(value: string): boolean {
 /**
  * UUID versjon 7: tilfeldig, men sorterer etter tid (docs/05-domenemodell.md avsnitt 3).
  * ID-er lages på enheten (iPad eller PC), slik at rader kan opprettes uten nett.
- * Samme algoritme skal brukes i nettleseren (fase 1); her er serverens utgave.
+ * Én utgave som kjører både på serveren (Node) og i Safari på iPaden. Krever sikker kontekst (https eller localhost).
  */
 export function uuidv7(now: number = Date.now()): string {
   const random = globalThis.crypto.randomUUID().replace(/-/g, "");

@@ -131,7 +131,7 @@ Ingen i denne oppgaven. Prøve E får to regler som data med testsaker: alder mo
 - [x] `uuidv7` virker uten `node:crypto`, og `uuid.test.ts` er grønn uendret.
 - [x] Innlogget ansatt (admin i e2e) åpner `/prove/testskjema` fra lenken «Prøve uten nett: testskjema» på arbeidskøen og ser alle seks gruppene og alle 40 etikettene, og telleren «0 av 40 felt utfylt».
 - [x] Uinnlogget sendes til `/logg-inn`.
-- [x] Alle 40 felt kan fylles ut i e2e, i både `pc` og `ipad`: tekst skrives, TG og valg trykkes (bare én knapp i gruppen har `aria-pressed="true"`), tall skrives med komma, to tabellrader legges til og én slettes (én står igjen), bilde velges med `setInputFiles` (`e2e/fixtures/test-image.png`, ensfarget, under 5 kB) i alle sju bildefelt og feltet viser «1 bilde». Telleren viser «40 av 40 felt utfylt» til slutt.
+- [x] Alle 40 felt kan fylles ut i e2e, i både `pc` og `ipad`: tekst skrives, TG og valg trykkes (bare én knapp i gruppen har `aria-pressed="true"`), tall skrives med komma, to tabellrader legges til og én slettes (én står igjen), bilde velges med `setInputFiles` (`e2e/fixtures/test-image.png`, ensfarget, under 5 kB) i alle åtte bildefelt og feltet viser «1 bilde». Telleren viser «40 av 40 felt utfylt» til slutt.
 - [x] Ingen nedtrekksmenyer (`select` har 0 treff). Tallfelt har `inputMode="decimal"`. TG-knapper er minst 44 px høye (e2e måler `boundingBox` på én TG-knapp i `ipad`).
 - [x] `/manifest.webmanifest` svarer 200 med `display: "standalone"`, `start_url: "/arbeidskoe"` og navn fra `brand` (e2e med `request`). `/apple-icon` svarer 200 med `image/png`.
 - [x] `<link rel="manifest">` og `apple-mobile-web-app-capable` finnes i HTML-en på innloggingssiden (e2e, uinnlogget).
@@ -172,7 +172,7 @@ E2e (Playwright, kjører i både `pc` og `ipad`): `e2e/fase-1-testskjema.spec.ts
 - «TG-knapp er minst 44 px høy» (`boundingBox` i `ipad`; `test.skip` i `pc`)
 - «tallfelt har inputMode decimal»
 - «valg er ett trykk og bare ett valg er trykket» (`aria-pressed` bytter mellom Ja og Nei)
-- «alle 40 felt fylles ut og telleren viser 40 av 40» (tekst, TG, valg, tall med komma, to tabellrader lagt til og én slettet, bilde via `setInputFiles` med `e2e/fixtures/test-image.png` i alle sju bildefelt; bildefelt viser «1 bilde»)
+- «alle 40 felt fylles ut og telleren viser 40 av 40» (tekst, TG, valg, tall med komma, to tabellrader lagt til og én slettet, bilde via `setInputFiles` med `e2e/fixtures/test-image.png` i alle åtte bildefelt; bildefelt viser «1 bilde»)
 - «manifest.webmanifest svarer 200 med standalone, start_url /arbeidskoe og navn fra brand» (`request`)
 - «/apple-icon svarer 200 med image/png» (`request`)
 - «innloggingssiden har link rel=manifest og apple-mobile-web-app-capable» (uinnlogget)
