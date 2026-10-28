@@ -73,7 +73,7 @@ Oppsett første gang: `cp .env.example .env`, start PostgreSQL, `pnpm install`, 
 
 I utvikling sendes ikke e-post: innloggingskoder vises på http://localhost:3000/dev/epost (`DEV_MAILBOX=1`). For Playwright i skyen: `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
 
-Tilgang: `requireOrganizationAccess(actor, organizationId, permission)` fra `@/core/access` gir en `EmployeeGrant` med `organizationId` og roller. Testhjelpere ligger i `tests/factories.ts`.
+Tilgang: `requireOrganizationAccess(actor, organizationId, permission)` fra `@/core/access` gir en `EmployeeGrant` med `organizationId` og roller. Testhjelpere ligger i `tests/factories.ts`. Hver ny spørring som tar `organizationId` skal ha ett kall til `expectTenantIsolation` (`tests/tenant-isolation.ts`) i sin testfil; den viser at en annen organisasjon verken får rader eller tilgang.
 
 ## Brukeren
 

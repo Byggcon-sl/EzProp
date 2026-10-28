@@ -131,7 +131,7 @@ Byggcon bruker **Enova** (energimerking) og **Polycam** (3D-skanning og plantegn
 - [ ] Datamodellen og planen fra SharePoint lagt inn i `docs/` som utgangspunkt
 - [ ] Lint-regel for modulgrenser (moduler importerer bare fra kjernen, felles kode og egen mappe)
 - [ ] PostgreSQL lokalt og Drizzle-oppsett, med felles kolonner på alle tabeller: ID laget på enheten, organisasjons-ID, laget/endret, myk sletting og radversjon
-- [ ] Testhjelper som viser at en spørring aldri gir data fra en annen organisasjon
+- [x] Testhjelper som viser at en spørring aldri gir data fra en annen organisasjon (`tests/tenant-isolation.ts`, 28.10.2026)
 - [ ] Produktnavnet «EzProp» står bare ett sted i koden (arbeidsnavn)
 
 **Ferdig når:** En tom side starter lokalt, alle sjekkene i GitHub Actions er grønne, migreringen kjører i CI, og testen for tenant-isolasjon er grønn.

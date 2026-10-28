@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { AccessDeniedError, requireOrganizationAccess } from "@/core/access";
 import { db } from "@/db/client";
+import { auditLog } from "@/db/schema";
 import {
   createEmployee,
   createOrganization,
   createUser,
   resetDatabase,
 } from "../../../tests/factories";
+import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { listAuditEvents, recordAuditEvent } from "./index";
 
 beforeEach(resetDatabase);
@@ -34,16 +36,20 @@ describe("revisjonslogg", () => {
   });
 
   it("viser aldri hendelser fra en annen organisasjon", async () => {
-    const orgA = await createOrganization("A");
-    const orgB = await createOrganization("B");
-    const adminA = await createUser();
-    const adminB = await createUser();
-    await createEmployee(adminA, orgA.id, ["admin"]);
-    await createEmployee(adminB, orgB.id, ["admin"]);
-    const grantA = await requireOrganizationAccess(adminA, orgA.id);
-    await recordAuditEvent(db, grantA, { entityType: "x", entityId: "1", action: "create" });
-
-    expect(await listAuditEvents(adminB, orgB.id)).toEqual([]);
-    await expect(listAuditEvents(adminB, orgA.id)).rejects.toThrow(AccessDeniedError);
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        await recordAuditEvent(db, grantA, { entityType: "x", entityId: "1", action: "create" });
+        await recordAuditEvent(db, grantB, { entityType: "x", entityId: "2", action: "create" });
+        const rows = await db
+          .select({ id: auditLog.id, organizationId: auditLog.organizationId })
+          .from(auditLog);
+        return {
+          a: rows.filter((r) => r.organizationId === grantA.organizationId).map((r) => r.id),
+          b: rows.filter((r) => r.organizationId === grantB.organizationId).map((r) => r.id),
+        };
+      },
+      query: listAuditEvents,
+      idOf: (row) => row.id,
+    });
   });
 });
