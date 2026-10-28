@@ -2,16 +2,17 @@
 
 - **Fase:** 1 – Prøve uten nett
 - **Modul:** kjerne (`src/core/email`, `src/core/auth`), drift (`infra/azure`, `.github/workflows`), dokumentasjon (`docs/drift`)
-- **Status:** utkast 28.10.2026 (oppgavekort fra prosjektleder, venter på forenkler, arkitekt, test-leder og sikkerhet-personvern)
+- **Status:** godkjent for bygging 28.10.2026 (oppgavekort rettet av prosjektleder etter forhåndsvurdering fra forenkler, arkitekt, test-leder og sikkerhet-personvern; avgjørelsene står nederst)
 - **Branch:** `fase1-testmiljo-azure` (bygger på `main`)
 - **Dato:** 28.10.2026
 - **Plan:** `docs/07-utviklingsplan.md` fase 1, første punkt: «Testmiljø i Azure» (Ståle 28.10.2026)
+- **Testplan:** `docs/funksjoner/fase1-testmiljo-azure-testplan.md` (test-leder; avsnitt 0 der viser hva som er endret etter dette kortet)
 - **Støtter hovedmål:** Tid: prøvene A–F i fase 1 må kjøres på ekte iPad Pro over https; uten testmiljø kan ikke synkløsningen (den største tidsbesparelsen mot IVIT) velges. / Reklamasjoner: indirekte, prøvene skal vise at ingenting går tapt mellom befaring og rapport. / KI først: nei i denne oppgaven (drift og innlogging), se under.
 
 ## Problem
 Testskjemaet fra oppgave 3 (PR #6) virker lokalt, men prøvene A–F skal kjøres på to ekte iPad Pro, og Safari gir bare sikker tilfeldighet (bilde-id, tabellrader) og «app på hjemskjermen» over **https** (spørsmål nr. 7). Ståle har bestemt 28.10.2026 at EzProp skal kjøre i **samme Azure-miljø som Optiplan** (Sweden Central, EU), med egen app og egen database, og at utrulling skjer fra GitHub ved merge til `main`. I dag finnes verken infrastruktur, utrullingsjobb eller en måte å logge inn på uten utviklings-postkassen (som er sperret utenfor localhost). Lar vi være, stopper fase 1: oppgave 4 (første kandidat) kan ikke prøves på iPad.
 
-Oppgaven er **forberedelsen**: alt skal ligge klart i repoet slik at Ståle bare (1) lager en innlogging for GitHub i Azure, (2) legger inn secrets med nøyaktige navn, (3) velger adresse, og (4) merger. Ingenting rulles ut fra skyen, og ingen Azure-kall kjøres av agentene (det koster penger og krever nøkler vi ikke har).
+Oppgaven er **forberedelsen**: alt skal ligge klart i repoet slik at Ståle bare (1) lager ressursgruppen og en innlogging for GitHub i Azure, (2) legger inn secrets med nøyaktige navn, (3) velger adresse, og (4) merger. Ingenting rulles ut fra skyen, og ingen Azure-kall kjøres av agentene (det koster penger og krever nøkler vi ikke har).
 
 **Viktig antakelse:** Optiplans repo (`infra/azure`, `deploy-azure.yml`) er ikke tilgjengelig fra denne sesjonen. Mønsteret følges ut fra det vi vet (Azure, Sweden Central, Microsoft 365, Better Auth, GitHub Actions), og det som er valgt står under «Avgjørelser» slik at Ståle kan sammenligne med Optiplan. Avvik fra Optiplan rettes i en senere PR.
 
@@ -27,50 +28,68 @@ Nei. Dette er drift og innlogging, ingen oppgave takstmannen gjør. KI kommer ik
 ## Omfang
 **Med:**
 
-1. **Infrastruktur som kode i `infra/azure/`** (Bicep, uten Azure-kall fra skyen):
-   - `main.bicep` med parametere: `location` (standard `swedencentral`), `environmentName` (standard `test`), `appHostname` (valgfri, standard tom = bare `*.azurewebsites.net`), `postgresAdminPassword` (`@secure()`), `betterAuthSecret` (`@secure()`), `seedAdminEmail`, og de fire valgfrie e-postverdiene (`msGraphTenantId`, `msGraphClientId`, `msGraphClientSecret` `@secure()`, `mailFrom`). Verdier står **aldri** i Bicep-filene eller i `main.bicepparam`; parameterfilen refererer bare til navnene på GitHub-secrets (kommentar) og settes fra arbeidsflyten.
-   - Ressurser i ressursgruppen `rg-ezprop-test`: App Service-plan Linux **B1** (`plan-ezprop-test`), **App Service** for Node 22 (`app-ezprop-test`, bare https, TLS 1.2, `alwaysOn`, helsesjekk på `/api/helse`), **PostgreSQL Flexible Server** 16 (`psql-ezprop-test`, Burstable B1ms, 32 GB, Sweden Central, database `ezprop`, bare SSL, geo-redundans av), og brannmurregel «Azure-tjenester» slik at App Service når databasen. Alt navngis slik at `environmentName` kan byttes til `prod` senere uten kollisjon.
-   - Appinnstillinger settes fra Bicep: `NODE_ENV=production`, `DATABASE_URL` (bygges fra servernavn, bruker og passord-parameteren, med `sslmode=require`), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (`https://<appHostname>` når satt, ellers `https://app-ezprop-test.azurewebsites.net`), `SEED_ADMIN_EMAIL`, `APP_VERSION` (fra parameter `appVersion`, settes av arbeidsflyten til kort commit-id), `PORT=3000`, `WEBSITES_PORT=3000`, og de fire e-postverdiene bare når de er gitt. `DEV_MAILBOX` settes **aldri**.
-   - Egendefinert adresse: når `appHostname` er satt, lages hostname-binding med **gratis App Service Managed Certificate**. Det forutsetter at Ståle først har lagt inn DNS (CNAME og TXT `asuid`), se dokumentasjonen. Første utrulling skjer **uten** egen adresse; den legges til i en ny kjøring når DNS er på plass.
-   - `infra/azure/README.md` (kort): hva filene gjør, hvordan Ståle kjører dem første gang fra Mac (`az deployment group create …`) hvis han vil, og at arbeidsflyten ellers gjør det.
+1. **Infrastruktur som kode i `infra/azure/main.bicep`** (Bicep, uten Azure-kall fra skyen). Én fil. Øverst står en kommentar som peker til `docs/drift/testmiljo-azure.md` (ingen README, ingen `main.bicepparam`; parameterne gis direkte fra arbeidsflyten).
+   - Parametere: `location` (standard `swedencentral`), `environmentName` (standard `test`), `appHostname` (valgfri, standard tom), `appVersion`, `seedAdminEmail`, `postgresAdminPassword` (`@secure()`), `betterAuthSecret` (`@secure()`), og de fire valgfrie e-postverdiene (`msGraphTenantId`, `msGraphClientId`, `msGraphClientSecret` `@secure()`, `mailFrom`). `@secure()` står på egen linje rett over parameteren, og hemmelige parametere har ingen standardverdi. Verdier står **aldri** i filen.
+   - Bicep er på ressursgruppenivå og **lager ikke ressursgruppen**. Ståle lager `rg-ezprop-test` én gang selv (steg (a) i dokumentasjonen), og GitHub-innloggingen får bare «Contributor» på den gruppen, ikke på abonnementet der Optiplan ligger.
+   - Ressurser: App Service-plan Linux **B1** (`plan-ezprop-${environmentName}`), **App Service** (`app-ezprop-${environmentName}`): `linuxFxVersion: 'NODE|22-lts'`, `appCommandLine: 'node server.js'` (standalone-bygget starter ikke av seg selv), `httpsOnly: true`, `minTlsVersion: '1.2'`, `alwaysOn: true`, `healthCheckPath: '/api/helse'`, applikasjonslogg til filsystem slått på med kort oppbevaring (3 dager, liten kvote) slik at Ståle ser innloggingskoden i Log stream uten at den blir liggende. **PostgreSQL Flexible Server** 16 (`psql-ezprop-${environmentName}`, Burstable B1ms, 32 GB, `location: location`, database `ezprop`, bare SSL, `geoRedundantBackup: 'Disabled'`), og brannmurregelen «Azure-tjenester» (0.0.0.0) slik at App Service når databasen (kjent avveining, se ADR 0002). Alle navn bygges av `environmentName` slik at `prod` kan legges til senere uten kollisjon; ingen ressursnavn har `test` hardkodet.
+   - Appinnstillinger fra Bicep: `NODE_ENV=production`, `SCM_DO_BUILD_DURING_DEPLOYMENT=false`, `DATABASE_URL` (bygges av servernavn, bruker og passord med `uriComponent()`, og `sslmode=verify-full`, ikke `require`: `postgres`-pakken slår av sertifikatsjekken ved `require`), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (`https://<appHostname>` når satt, ellers `https://app-ezprop-<environmentName>.azurewebsites.net`), `SEED_ADMIN_EMAIL`, `APP_VERSION` (fra `appVersion`), og de fire e-postverdiene bare når de er gitt. **Ikke** `PORT`/`WEBSITES_PORT` (App Service setter `PORT`, og Next sin `server.js` lytter på den). `DEV_MAILBOX` settes **aldri**.
+   - `output`: bare servernavn og appens adresse. Aldri `DATABASE_URL`, passord eller nøkler (alt i `output` havner i GitHub-loggen).
+   - **Ingen hostname-binding eller sertifikat i Bicep.** `appHostname` styrer bare `BETTER_AUTH_URL`. Selve bindingen og det gratis App Service Managed Certificate legger Ståle inn i Azure-portalen (steg (f)); binding og sertifikat i Bicep krever to kjøringer og gir unødig risiko for rød utrulling.
 
-2. **Utrulling: `.github/workflows/deploy-azure.yml`.** Kjører ved push til `main` (og manuelt med `workflow_dispatch`).
-   - Innlogging til Azure med **OIDC** (`azure/login` med `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`), ingen lagret Azure-passord.
-   - **Hopper over uten feil når secrets mangler:** en første jobb `sjekk` leser om `AZURE_CLIENT_ID` er satt og gir `klar=true/false` som output; jobben `utrulling` har `if: needs.sjekk.outputs.klar == 'true'`. Når Ståle ikke har lagt inn noe, blir kjøringen grønn med meldingen «Ingen Azure-nøkler i GitHub, hopper over utrullingen» i loggen. (Job-nivå `if` kan ikke lese secrets direkte; derfor egen jobb.)
-   - Steg i `utrulling`: checkout → pnpm install → `pnpm build` (standalone) → Azure-innlogging → `az deployment group create` med `main.bicep` (lager ressursgruppen om den mangler, idempotent) → åpne midlertidig brannmurregel for kjørerens IP på PostgreSQL → `pnpm db:migrate` og `pnpm db:seed` mot Azure-databasen (seed er idempotent; lager bare organisasjonen Byggcon og første admin fra `SEED_ADMIN_EMAIL`) → fjern brannmurregelen (også ved feil, `if: always()`) → pakke `.next/standalone` + `.next/static` + `public` til zip → `azure/webapps-deploy` → vent og sjekk `GET /api/helse` svarer 200 og at `versjon` inneholder commit-id-en (ellers rød jobb).
+2. **Utrulling: `.github/workflows/deploy-azure.yml`.** Kjører ved push til `main` og manuelt med `workflow_dispatch`. `concurrency` så to utrullinger ikke kjører samtidig. `permissions: {}` øverst; bare jobben `utrulling` har `permissions: id-token: write, contents: read`.
+   - **Hopper over uten feil når secrets mangler:** jobben `sjekk` setter `klar` fra `${{ secrets.AZURE_CLIENT_ID != '' }}` i `env` og gir det som output; verdien skrives aldri ut. Jobben `utrulling` har `needs: sjekk` og `if: needs.sjekk.outputs.klar == 'true'`. Uten nøkler blir kjøringen grønn med meldingen «Ingen Azure-nøkler i GitHub, hopper over utrullingen».
+   - Innlogging til Azure med **OIDC** (`azure/login` med `client-id`, `tenant-id`, `subscription-id`), ingen lagret Azure-passord, ingen `creds:`.
+   - Steg i `utrulling`: checkout → `pnpm install` (uten `--prod`; migrering trenger `tsx` og `dotenv`) → `pnpm build` med **de samme oppdiktede verdiene som i `ci.yml`** (ekte secrets brukes bare i Bicep, migrering og seed) → Azure-innlogging → `az deployment group validate` → `az deployment group create` med `main.bicep` og `--parameters` direkte, `--output none` (eller snever `--query` på servernavn og adresse) → bygg `DATABASE_URL` for kjøreren og masker den med `echo "::add-mask::…"` før bruk → midlertidig brannmurregel `github-runner` for **bare kjørerens egen IP** → `pnpm db:migrate` og `pnpm db:seed` med `DATABASE_URL`, `BETTER_AUTH_SECRET` og `SEED_ADMIN_EMAIL` i `env` (`getEnv()` krever alle tre; seed er idempotent) → slett `github-runner` med `if: always()` → kopier `.next/static` til `.next/standalone/.next/static` og `public` til `.next/standalone/public`, lag zip **fra innsiden av** `.next/standalone` → `azure/webapps-deploy` → vent og sjekk at `GET /api/helse` svarer 200 og at `versjon` inneholder kort commit-id (ellers rød jobb).
+   - `APP_VERSION` = kort commit-id (`${GITHUB_SHA::7}` eller tilsvarende).
    - Secrets og variabler, **nøyaktige navn** (dokumenteres i `docs/drift/testmiljo-azure.md`):
      - Secrets (må): `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `POSTGRES_ADMIN_PASSWORD`, `BETTER_AUTH_SECRET`.
-     - Secrets (valgfrie, alle fire sammen): `MS_GRAPH_TENANT_ID`, `MS_GRAPH_CLIENT_ID`, `MS_GRAPH_CLIENT_SECRET`, `MAIL_FROM`.
+     - Secrets (valgfrie, alle fire sammen): `MS_GRAPH_TENANT_ID`, `MS_GRAPH_CLIENT_ID`, `MS_GRAPH_CLIENT_SECRET`, `MAIL_FROM`. Arbeidsflyten sender dem til Bicep når de finnes; selve sendingen via Graph kommer i fase 0b (se punkt 3).
      - Variabler (Settings → Variables): `SEED_ADMIN_EMAIL` (Ståles jobbadresse), `APP_HOSTNAME` (tom til DNS er klar; forslag `ezprop-test.byggcon.no`).
-   - `ci.yml` endres ikke. `deploy-azure.yml` krever ikke at CI er grønn (CI kjører allerede på hver PR), men bruker `concurrency` så to utrullinger ikke kjører samtidig.
+   - `ci.yml` endres ikke.
 
 3. **Innlogging uten utviklings-postkasse i drift** (`src/core/email`, `src/core/auth`):
-   - Ny e-posttjeneste **`serverLog`** i `emailTransport`: velges automatisk når `DEV_MAILBOX` er av **og** de fire Microsoft 365-verdiene mangler. Når alle fire er satt, velges `graph` automatisk (ingen ny innstilling å huske). `none` finnes ikke lenger; `EMAIL_NOT_CONFIGURED` fjernes.
-   - `serverLog` skriver **bare** innloggingskoden for **første admin** (mottaker lik `SEED_ADMIN_EMAIL`, sammenlignet uten store bokstaver) til standard ut, med én tydelig linje: `[innlogging] Engangskode til første admin: 123456 (gyldig i 10 minutter). E-post er ikke satt opp ennå; se docs/drift/testmiljo-azure.md.` Bruk `console.info` direkte, **ikke** `logger` (loggeren fjerner med vilje felt som `otp`/`code` og e-postadresser, og den skal fortsette å gjøre det). Adressen skrives ikke i linjen. For alle andre mottakere kastes feil med norsk melding: «E-post er ikke satt opp ennå. Bare første admin kan logge inn til Microsoft 365 er koblet til.» Innloggingssiden viser meldingen slik den gjør for andre feil i dag.
-   - `rateLimit` i Better Auth er fortsatt på i drift (den slås bare av sammen med `DEV_MAILBOX`). Ingen endring der.
-   - **Microsoft 365 (Graph) som enkel adapter, valgt å ta med nå:** `src/core/email/graph.ts` med to `fetch`-kall og ingen ny avhengighet: hent token med klientlegitimasjon fra `https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token` (scope `https://graph.microsoft.com/.default`), deretter `POST https://graph.microsoft.com/v1.0/users/<MAIL_FROM>/sendMail` med ren tekst, `saveToSentItems: false`. Feil fra Graph gir én norsk feilmelding uten innhold fra svaret i loggen (kan inneholde adresser). Ingen gjenforsøk, ingen vedlegg, ingen HTML, ingen hurtiglagring av token. Begrunnelse for å ta den med: uten adapteren ville «sett de fire verdiene» gi feil i stedet for e-post, og Ståle må kunne skru på Microsoft 365 uten ny PR. Hvis forenkler eller arkitekt mener den likevel er for stor, utsettes den til fase 0b, og `graph` gir en tydelig feil som i dag; prosjektleder avgjør etter forhåndsvurderingen.
-   - `.env.example` og `docs/10-utviklingsmiljo.md` oppdateres: `DEV_MAILBOX` lokalt, serverlogg i drift før e-post, Microsoft 365 når de fire er satt.
+   - `emailTransport` gir **`serverLog`** når `DEV_MAILBOX` er av og de fire Microsoft 365-verdiene mangler, og `graph` når alle fire er satt (som i dag). `none` finnes ikke lenger; `EMAIL_NOT_CONFIGURED` fjernes.
+   - `Email` får valgfritt felt `logLine?: string`: «én linje som er trygg i serverloggen, uten personopplysninger, satt av avsenderen». `auth.ts` setter `logLine: "Engangskode til første admin: <kode> (gyldig i 10 minutter)"`. Ingen regex-parsing av e-postteksten.
+   - Ny fil `src/core/email/server-log.ts`: `createServerLogSender(firstAdminEmail: string | undefined, write: (line: string) => void = console.info): EmailSender` med `export type EmailSender = (email: Email) => Promise<void>` i `index.ts`. Adapteren skriver **én** linje, `[innlogging] ${logLine}. E-post er ikke satt opp ennå; se docs/drift/testmiljo-azure.md`, **bare** når `email.to` (små bokstaver) er lik `firstAdminEmail` (allerede små bokstaver fra `env.ts`) **og** `logLine` er satt. Adressen skrives aldri. Ellers (annen mottaker, `firstAdminEmail` udefinert eller `logLine` mangler) kastes `Error("E-post er ikke satt opp ennå. Bare første admin kan logge inn til Microsoft 365 er koblet til.")` og ingenting skrives. Meldingen avslører ikke hvem første admin er. `console.info` direkte, **aldri** `logger` (den vasker `otp`/`code`/e-post med vilje og endres ikke).
+   - `sendEmail(email, env = getEnv())` får valgfri `env` som andre parameter (samme mønster som `emailTransport(env)` og `runSeed(env)`), slik at testene ikke rører `process.env` eller `tests/setup-env.ts`.
+   - `graph` kaster fortsatt samme tydelige feil som i dag («E-post via Microsoft 365 er ikke koblet til ennå (fase 0b).»). **Graph-adapteren bygges ikke nå**, se «Avgjørelser».
+   - Innloggingssiden (`login-form.tsx`) endres ikke: den viser dagens generelle feilmelding ved alle serverfeil.
+   - `rateLimit` i Better Auth er fortsatt på i drift. Ingen endring der.
+   - `src/db/seed/run.ts` skriver ikke lenger adressen (`Admin: opprettet` / `Admin: finnes fra før`), fordi seed kjører i GitHub Actions og loggen der skal ikke inneholde Ståles adresse. Test som viser at utskriften ikke inneholder `@`.
+   - `.env.example`, kommentarene i `env.ts` og raden «E-post» i `docs/06-arkitektur.md` oppdateres: `DEV_MAILBOX` lokalt, serverlogg for første admin i drift før e-post, Microsoft 365 (Graph) kobles til i fase 0b.
 
-4. **Helsesjekken viser commit.** `appVersion()` gjør dette allerede når `APP_VERSION` er satt; oppgaven er bare at Bicep/arbeidsflyten setter `APP_VERSION` til kort commit-id, og at utrullingsjobben sjekker svaret. Ingen kodeendring i `src/core/health` utover eventuelt en test som viser formatet `0.2.0 (abc1234)`.
+4. **Helsesjekken viser commit.** `appVersion()` gjør dette allerede når `APP_VERSION` er satt; oppgaven er at arbeidsflyten setter `APP_VERSION` til kort commit-id og sjekker svaret. Ingen kodeendring i `src/core/health` utover tester som bruker `packageJson.version` (ikke hardkodet `0.2.0`).
 
-5. **Dokumentasjon for Ståle:** `docs/drift/testmiljo-azure.md` (ny, kort, klarspråk) med steg for steg: (a) lage app-registrering/service principal med **federated credential** for GitHub (OIDC) og gi den rollen «Contributor» på abonnementet eller ressursgruppen, (b) legge inn de fem secrets og to variabler med nøyaktige navn (med `openssl rand -base64 32` for `BETTER_AUTH_SECRET` og et langt tilfeldig databasepassord), (c) merge → se at arbeidsflyten «Utrulling til Azure» er grønn, (d) første innlogging: åpne `https://app-ezprop-test.azurewebsites.net/logg-inn`, skriv inn `SEED_ADMIN_EMAIL`, hent koden fra loggen (App Service → Log stream, eller `az webapp log tail`), (e) legge appen på hjemskjermen på iPad Pro (Del → Legg til på Hjem-skjerm), (f) egen adresse: DNS hos den som har byggcon.no (CNAME `ezprop-test` → `app-ezprop-test.azurewebsites.net`, TXT `asuid.ezprop-test` → verifikasjons-id fra Azure), sett `APP_HOSTNAME`, kjør arbeidsflyten på nytt, (g) Microsoft 365 senere: samme app-registrering som Optiplan bruker for e-post, rettigheten `Mail.Send`, de fire secrets, kjør på nytt. Pluss **anslått månedskostnad** (App Service B1 ca. 130–150 kr, PostgreSQL B1ms ca. 180–220 kr, til sammen ca. 350–450 kr per måned ved dagens kurs; Ståle sammenligner med Optiplans faktura) og hvordan miljøet stoppes/slettes uten å miste koden (`az group delete`). Lenke fra `docs/10-utviklingsmiljo.md` (nytt avsnitt «Testmiljø i Azure»).
+5. **Dokumentasjon for Ståle:** `docs/drift/testmiljo-azure.md` (ny, kort, klarspråk), steg for steg:
+   - (a) Lage ressursgruppen `rg-ezprop-test` i Sweden Central selv (én gang). Lage app-registrering for GitHub med **federated credential** (OIDC), subject nøyaktig `repo:Byggcon-sl/EzProp:ref:refs/heads/main`, og gi den rollen «Contributor» **bare på ressursgruppen**.
+   - (b) Legge inn de fem secrets og to variablene med nøyaktige navn. `BETTER_AUTH_SECRET` med `openssl rand -base64 32`; `POSTGRES_ADMIN_PASSWORD` med `openssl rand -hex 24` (bare bokstaver og tall, fordi det brukes i en URL).
+   - (c) Merge → se at arbeidsflyten «Utrulling til Azure» er grønn; den kan kjøres på nytt fra Actions uten ny merge.
+   - (d) Første innlogging: åpne `https://app-ezprop-test.azurewebsites.net/logg-inn`, skriv inn adressen i `SEED_ADMIN_EMAIL`, hent koden i App Service → Log stream (eller `az webapp log tail`). Merk: alle med lesetilgang til ressursgruppen i Azure-portalen kan lese koden og logge inn som første admin i testmiljøet; greit med oppdiktede data (spørsmål nr. 9). Andre brukere kan ikke logge inn før Microsoft 365 er koblet til.
+   - (e) Legge appen på hjemskjermen på iPad Pro (Del → Legg til på Hjem-skjerm).
+   - (f) Egen adresse (når Ståle har svart på spørsmål nr. 6): DNS hos den som har byggcon.no (CNAME `ezprop-test` → `app-ezprop-test.azurewebsites.net`, TXT `asuid.ezprop-test` → verifikasjons-id fra Azure), i Azure-portalen: Custom domains → Add → managed certificate, deretter sett `APP_HOSTNAME` og kjør arbeidsflyten på nytt. **Merk:** når `APP_HOSTNAME` er satt, virker innlogging bare på den adressen, ikke lenger på `app-ezprop-test.azurewebsites.net` (Better Auth avviser annet opphav).
+   - Pluss: at miljøet aldri skal få ekte oppdrag før «Minimum før ekte data» er krysset av; **anslått månedskostnad** (App Service B1 ca. 130–150 kr, PostgreSQL B1ms ca. 180–220 kr, til sammen ca. 350–450 kr per måned ved dagens kurs; Ståle sammenligner med Optiplans faktura); og hvordan miljøet slettes uten å miste koden (`az group delete`). Ikke noe om å stoppe databasen (står bare under «Åpne spørsmål» her).
+   - Lenke fra `docs/10-utviklingsmiljo.md` (nytt avsnitt «Testmiljø i Azure»).
+   - Microsoft 365-oppsettet (steg (g) i utkastet) er flyttet til fase 0b sammen med adapteren.
 
-6. **ADR 0002 – Testmiljø i Azure** (`docs/adr/0002-testmiljo-azure.md`, skrives av arkitekt): App Service i stedet for Container Apps (ingen registry, ingen Dockerfile, zip av standalone-bygget, gratis sertifikat), PostgreSQL Flexible Server, OIDC fra GitHub, migrering fra arbeidsflyten med midlertidig brannmurregel, og at valgene er antakelser om Optiplans mønster som Ståle bekrefter. `docs/06-arkitektur.md` raden «Hosting» oppdateres til «Azure App Service + PostgreSQL Flexible Server, Sweden Central (ADR 0002). Testmiljø fra fase 1.»
+6. **ADR 0002 – Testmiljø i Azure** (`docs/adr/0002-testmiljo-azure.md`, skrives av arkitekt): App Service i stedet for Container Apps (ingen registry, ingen Dockerfile, zip av standalone-bygget), PostgreSQL Flexible Server, OIDC fra GitHub med rettigheter bare på ressursgruppen, migrering fra arbeidsflyten med midlertidig brannmurregel, og at valgene er antakelser om Optiplans mønster som Ståle bekrefter. **Kjente avveininger som skal stå der:** brannmurregelen «Azure-tjenester» åpner for alle Azure-kunders IP-adresser (greit i test med TLS og langt passord; VNet-integrasjon er senere alternativ), og appen bruker administratorbrukeren på databasen (egen bruker uten eierrettigheter før ekte data; bygges ikke nå). `docs/06-arkitektur.md` raden «Hosting» oppdateres til «Azure App Service + PostgreSQL Flexible Server, Sweden Central (ADR 0002). Testmiljø fra fase 1.»
 
-7. Kryss av punktet i `docs/07-utviklingsplan.md`. Øk versjonen i `package.json` til **0.2.0** (første leveranse som kan kjøre utenfor utviklingsmaskinen). Ordlisten i `docs/05-domenemodell.md` avsnitt 8 får «Testmiljø» → `test environment`, «Utrulling» → `deploy`, «Serverlogg» → `server log`. `start.sh` og `scripts/session-start.sh` trenger ingen endring (ingen nye påkrevde miljøvariabler lokalt).
+7. **Plan, versjon og ordliste.** Kryss av punktet i `docs/07-utviklingsplan.md`. Legg til to punkter under «Minimum før ekte data» (sikkerhet-personvern 28.10.2026): «Microsoft 365 koblet til, og koden i serverloggen er ikke lenger i bruk» og «Privat nettverk eller VNet-integrasjon mellom app og database (ikke brannmurregelen for alle Azure-tjenester)». Øk versjonen i `package.json` til **0.2.0** (første leveranse som kan kjøre utenfor utviklingsmaskinen). Ordlisten i `docs/05-domenemodell.md` avsnitt 8 får «Testmiljø» → `test environment`, «Utrulling» → `deploy`, «Serverlogg» → `server log`. `start.sh` og `scripts/session-start.sh` trenger ingen endring.
 
 **Ikke med (bevisst utelatt):**
-- Ingen utrulling, ingen `az`-kommandoer og ingen Azure-kall fra skyen. Agentene har ikke nøkler og skal ikke ha det. Bicep valideres bare med `az bicep build` **hvis** `az` finnes i miljøet; ellers leses den gjennom av arkitekt og test-leder.
+- **Graph-adapteren** (`src/core/email/graph.ts`, falsk-`fetch`-tester, steg (g)). Flyttes til fase 0b («Tilkoblingslag … første tilkobling: e-post via Microsoft 365 som i Optiplan»). Når den bygges: bruk Optiplans app-registrering, `Mail.Send` begrenset til `MAIL_FROM`-postboksen med «Application Access Policy» i Exchange, token og svar fra Graph logges aldri.
+- Ingen utrulling, ingen `az`-kommandoer og ingen Azure-kall fra skyen. Bicep kompileres ikke her (ingen `az`/`bicep`); arbeidsflyten kjører `az deployment group validate` som erstatning, og arkitekt og test-leder leser filen for hånd.
+- Ingen hostname-binding eller sertifikat i Bicep (Ståle gjør det i portalen, steg (f)).
+- Ingen `infra/azure/README.md`, ingen `main.bicepparam`.
 - Ingen produksjonsmiljø, ingen egen «staging». Bare `test`. Navnene tåler `prod` senere.
-- Ingen Azure Key Vault (fase 0b, «Nøkkelboks for hemmeligheter»). Secrets ligger i GitHub og i App Service sine appinnstillinger.
+- Ingen Azure Key Vault (fase 0b). Secrets ligger i GitHub og i App Service sine appinnstillinger.
 - Ingen Container Apps, Docker, registry eller Dockerfile.
 - Ingen felles innlogging med Optiplan, ingen felles brukerdatabase (fase 0b, ADR). Testmiljøet har egen database.
+- Ingen VNet-integrasjon, ingen egen databasebruker for appen (før ekte data).
 - Ingen fillagring (blob) for bilder; bildene i prøvene lagres der kandidaten i oppgave 4 bestemmer.
 - Ingen overvåking, varsling eller Application Insights. Loggene leses i App Service.
 - Ingen sikkerhetskopi utover det Flexible Server gir som standard (7 dager). Bare oppdiktede data til «Minimum før ekte data» er på plass.
 - Ingen innloggingskode i loggen for andre enn første admin, og aldri i den vaskede loggeren.
-- Ingen e-postmaler, HTML, vedlegg eller gjenforsøk i Graph-adapteren. Ingen e-post sendes fra tester eller fra skyen (tester bruker falsk `fetch`).
-- Ingen endring i CI (`ci.yml`), ingen Playwright-kjøring mot Azure.
+- Ingen endring i CI (`ci.yml`), `login-form.tsx`, `logger.ts` eller `tests/setup-env.ts`. Ingen Playwright-kjøring mot Azure.
 - Ingen endringer i testskjemaet eller `offline-trial`.
 - Adressen og e-postvalget (spørsmål nr. 6) avgjøres av Ståle; oppgaven forutsetter «kode i serverloggen» og adressen som tom innstilling med `ezprop-test.byggcon.no` som forslag.
 
@@ -82,48 +101,67 @@ Nei. Dette er drift og innlogging, ingen oppgave takstmannen gjør. KI kommer ik
 | leder | ingen endring | ingen endring |
 | admin | ingen endring. Første admin (`SEED_ADMIN_EMAIL`) er den eneste som kan logge inn før e-post er satt opp | ingen endring |
 
-Ingen nye tilgangsregler, ingen nye spørringer. `expectTenantIsolation` trengs derfor ikke i denne oppgaven; det begrunnes i PR-en.
+Ingen nye tilgangsregler, ingen nye spørringer. `expectTenantIsolation` trengs derfor ikke i denne oppgaven; det begrunnes i PR-en. Legger utvikler til en spørring, kreves `expectTenantIsolation` i samme PR.
 
 ## Data
-Ingen nye tabeller, ingen migreringer. Ingen nye faste koder. Nye miljøinnstillinger: ingen nye navn (`APP_VERSION` og de fire e-postverdiene finnes alt i `env.ts`). `emailTransport` får verdien `serverLog` i stedet for `none`.
+Ingen nye tabeller, ingen migreringer. Ingen nye faste koder. Ingen nye miljøinnstillinger (`APP_VERSION` og de fire e-postverdiene finnes alt i `env.ts`). `emailTransport` får verdien `serverLog` i stedet for `none`. `Email` får valgfritt felt `logLine`.
 
 ## Skjermer
-Ingen nye skjermer. Innloggingssiden viser feilmeldingen «E-post er ikke satt opp ennå …» for andre enn første admin (samme feilvisning som i dag). Antall trykk uendret.
+Ingen nye skjermer. Innloggingssiden er uendret og viser dagens generelle feilmelding når `sendEmail` kaster. Antall trykk uendret.
 
 ## Regler
 Ingen regler eller TG-logikk.
 
-## Avgjørelser (prosjektleder 28.10.2026, kan endres av forhåndsvurderingen)
+## Avgjørelser (prosjektleder 28.10.2026, etter forhåndsvurderingen)
+- **Graph-adapteren utsettes til fase 0b** (forenkler vant over arkitekt og sikkerhet-personvern, som ville ta den med). Begrunnelse: spørsmål nr. 6 (om e-post skal gå via Microsoft 365 fra start) er åpent, og vi gjetter ikke på Ståles beslutninger; Optiplans `graph.ts` er ikke tilgjengelig, så adapteren ville måtte skrives om i fase 0b uansett; den krever i tillegg oppsett i Exchange (Application Access Policy) som er mer for Ståle å gjøre nå. Planens fase 1-punkt oppfylles med «koden i serverloggen for første admin». PR-en blir mindre og lettere å lese. Når Ståle svarer ja på nr. 6, er adapteren en liten egen PR.
+- **Ressursgruppen lages av Ståle, ikke av arbeidsflyten** (sikkerhet-personvern vant over arkitekt). «Contributor» bare på `rg-ezprop-test`, så en kompromittert arbeidsflyt ikke når Optiplan.
+- **Hostname-binding og sertifikat ut av Bicep** (forenkler, arkitekt hadde ingen innvending). To-kjørings-problemet gir rød utrulling uten gevinst; «ferdig når» nås på `*.azurewebsites.net`.
+- **Ingen README og ingen `main.bicepparam`** (forenkler). Ett sted å lese (`docs/drift`), én vei å rulle ut (arbeidsflyten).
+- **`logLine` på `Email`** (arkitekt) i stedet for prefiks + e-posttekst (test-leders enkleste forslag). Én trygg linje satt av avsenderen; serverloggen får aldri hele e-postteksten.
+- **`sslmode=verify-full`**, **`node server.js`**, ingen `PORT`-innstillinger, zip fra innsiden av standalone (arkitekt).
+- **Bygget kjører med oppdiktede verdier**, ekte secrets bare i Bicep, migrering og seed; `DATABASE_URL` maskeres; ingen hemmelige `output` (sikkerhet-personvern).
 - **App Service, ikke Container Apps.** Enklest: ett zip av `.next/standalone`, ingen registry, gratis sertifikat for egen adresse, logg i nettleseren. Antakelse om at det ligner Optiplan; Ståle bekrefter.
-- **Migrering fra arbeidsflyten**, ikke ved oppstart av appen. Standalone-bygget tar ikke med `tsx` og migreringsfilene, og en feilslått migrering skal stoppe utrullingen før ny kode kjører. Prisen er en midlertidig brannmurregel for kjørerens IP (fjernes alltid).
-- **Serverlogg bare for første admin**, automatisk når e-post mangler. Ingen ny innstilling, fordi Ståle da har én ting mindre å sette. Bytter seg selv til Microsoft 365 når de fire verdiene er satt.
-- **Graph-adapteren tas med** (liten, ingen avhengighet). Se punkt 3 for når den utsettes.
+- **Migrering fra arbeidsflyten**, ikke ved oppstart av appen. Standalone-bygget tar ikke med `tsx` og migreringsfilene, og en feilslått migrering skal stoppe utrullingen før ny kode kjører.
+- **Serverlogg bare for første admin**, automatisk når e-post mangler. Ingen ny innstilling.
 - **Versjon 0.2.0**, ikke 0.1.3: første leveranse som kan kjøre utenfor utviklingsmaskinen.
 
 ## Akseptkriterier
-- [ ] `infra/azure/main.bicep` og `main.bicepparam` finnes, inneholder ingen verdier for hemmeligheter (grep etter `password`, `secret` gir bare parameternavn), og lager app, plan og database i `swedencentral`.
-- [ ] `.github/workflows/deploy-azure.yml` er gyldig YAML, kjører på push til `main`, og jobben `utrulling` hoppes over uten feil når `AZURE_CLIENT_ID` mangler (jobben `sjekk` gir `klar=false`). Test: `node -e` eller en vitest som leser filen og sjekker `on.push.branches`, `needs.sjekk`, `if`-uttrykket og at ingen secrets står som verdier.
-- [ ] Arbeidsflyten setter `APP_VERSION` til kort commit-id og feiler hvis `/api/helse` ikke svarer 200 med commit-id i `versjon`.
+- [ ] `infra/azure/main.bicep` finnes, inneholder ingen verdier for hemmeligheter (hver `param` med `password`/`secret` i navnet har `@secure()` på linjen over og ingen standardverdi), lager app, plan og database i `swedencentral`, og har ingen `output` med passord, nøkler eller `DATABASE_URL`.
+- [ ] Bicep: `httpsOnly: true`, `minTlsVersion: '1.2'`, `healthCheckPath: '/api/helse'`, `alwaysOn: true`, `linuxFxVersion` med `NODE|22`, `appCommandLine` med `node server.js`, `SCM_DO_BUILD_DURING_DEPLOYMENT` = `false`; database `version: '16'`, `location: location`, `geoRedundantBackup: 'Disabled'`; `DATABASE_URL` med `sslmode=verify-full`. Appinnstillingene har `NODE_ENV`, `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `SEED_ADMIN_EMAIL`, `APP_VERSION`; ikke `PORT`, `WEBSITES_PORT` eller `DEV_MAILBOX`. Ingen ressursnavn med `-test` hardkodet.
+- [ ] `.github/workflows/deploy-azure.yml` kjører på push til `main` og `workflow_dispatch`, har `concurrency`, `permissions: {}` øverst og `id-token: write` bare på `utrulling`; jobben `sjekk` gir `klar`, `utrulling` har `needs: sjekk` og `if: needs.sjekk.outputs.klar == 'true'`; meldingen «hopper over utrullingen» finnes. Bruker bare de dokumenterte navnene på secrets og variabler; ingen `creds:`/`AZURE_CREDENTIALS`; ingen `az group create`.
+- [ ] Arbeidsflyten: `az deployment group validate` før `create`; `--output none` eller snever `--query`; `::add-mask::` på `DATABASE_URL`; migrering/seed-steget har `DATABASE_URL`, `BETTER_AUTH_SECRET` og `SEED_ADMIN_EMAIL` i `env`; `pnpm install` uten `--prod`; brannmurregelen `github-runner` slettes med `if: always()` etter migreringen; `APP_VERSION` = kort commit-id; helsesjekk-steget feiler hvis `versjon` mangler commit-id.
 - [ ] `emailTransport`: `DEV_MAILBOX=1` → `devMailbox`; fire Graph-verdier satt → `graph`; ellers `serverLog`. Delvis satt kaster fortsatt feil i `env.ts` (eksisterende test).
-- [ ] `sendEmail` med `serverLog`: mottaker lik `SEED_ADMIN_EMAIL` (uavhengig av store bokstaver) gir én `console.info`-linje som inneholder koden og **ikke** e-postadressen; annen mottaker kaster feil med meldingen «E-post er ikke satt opp ennå …» og skriver ingenting.
-- [ ] `sendEmail` med `graph` (falsk `fetch`): henter token med riktig tenant og scope, kaller `sendMail` for `MAIL_FROM` med riktig mottaker, emne og tekst, og kaster norsk feil uten svarinnhold ved 4xx/5xx. Ingen ekte nettverkskall i tester.
-- [ ] Loggeren (`src/shared/lib/logger.ts`) er uendret og vasker fortsatt `otp`/`code`/e-post (eksisterende tester grønne).
-- [ ] `/api/helse` viser `0.2.0 (abc1234)` når `APP_VERSION=abc1234` (enhetstest av `appVersion`).
-- [ ] `docs/drift/testmiljo-azure.md` har stegene (a)–(g), nøyaktige navn på secrets og variabler, anslått månedskostnad og hvordan miljøet slettes. `docs/10-utviklingsmiljo.md` lenker dit.
-- [ ] ADR 0002 finnes og `docs/06-arkitektur.md` raden «Hosting» er oppdatert.
-- [ ] Ingen «EzProp» i `src/` utenfor `brand.ts`, ingen modellnavn, ingen nye avhengigheter. `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne.
+- [ ] `sendEmail(email, env)` med `serverLog`: mottaker lik `SEED_ADMIN_EMAIL` (uavhengig av store bokstaver) og `logLine` satt gir **nøyaktig én** `console.info`-linje som inneholder koden og `docs/drift/testmiljo-azure.md`, og **ikke** `@`; `console.log`/`console.error` kalles ikke og linjen er ikke JSON. Annen mottaker, `SEED_ADMIN_EMAIL` udefinert eller `logLine` mangler → kaster `Error` med meldingen «E-post er ikke satt opp ennå. Bare første admin kan logge inn til Microsoft 365 er koblet til.» og skriver ingenting.
+- [ ] `auth.ts` setter `logLine` med koden og uten adresse. `graph` kaster fortsatt feilen om fase 0b.
+- [ ] Seed skriver ikke e-postadressen (test: utskriften fra `runSeed` inneholder ikke `@`).
+- [ ] Loggeren (`src/shared/lib/logger.ts`), `tests/setup-env.ts` og `login-form.tsx` er uendret (`git diff main..` tom), og loggertestene er grønne.
+- [ ] `appVersion()` gir `${packageJson.version} (abc1234)` når `APP_VERSION=abc1234`, og bare versjonen ved tom `APP_VERSION`.
+- [ ] `docs/drift/testmiljo-azure.md` har stegene (a)–(f), alle secret- og variabelnavn arbeidsflyten bruker, federated subject, `openssl rand -hex 24`, merknaden om Log stream og om `APP_HOSTNAME`/innlogging, anslått månedskostnad i kr og `az group delete`. `docs/10-utviklingsmiljo.md` lenker dit.
+- [ ] ADR 0002 finnes med begge avveiningene; `docs/06-arkitektur.md` radene «Hosting» og «E-post» er oppdatert; «Minimum før ekte data» har de to nye punktene.
+- [ ] Ingen «EzProp» i `src/` utenfor `brand.ts`, ingen modellnavn i `infra/`, `.github/` eller `docs/drift/`, ingen nye avhengigheter (ingen `yaml`-pakke i testene). `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne.
 - [ ] Bruker i annen organisasjon får ikke tilgang (test): **ikke relevant**, ingen nye spørringer (begrunnes i PR).
 - [ ] Virker på iPad-størrelse (e2e): **ikke relevant** for infrastruktur; eksisterende e2e grønne. Ekte iPad testes av Ståle etter utrulling («ferdig når appen åpner på ekte iPad Pro i Safari fra hjemskjermen»).
 
-## Testplan (kort, test-leder utdyper)
-- Enhetstester i `src/core/email/email.test.ts` (transportvalg, serverlogg, Graph med falsk `fetch`), `src/core/health/health.test.ts` eller eksisterende (`appVersion`).
-- `tests/deploy-workflow.test.ts`: leser `.github/workflows/deploy-azure.yml` og `infra/azure/*.bicep` som tekst og sjekker kriteriene over (ingen YAML-avhengighet nødvendig hvis sjekken gjøres med enkle tekstsøk; hvis `yaml`-pakken ønskes, må den begrunnes).
+## Biter som bygges i parallell
+| Bit | Rolle | Filer | Avhenger av |
+|---|---|---|---|
+| A: e-post og innlogging | utvikler | `src/core/email/index.ts`, `src/core/email/server-log.ts`, `src/core/auth/auth.ts`, `src/db/seed/run.ts`, `src/shared/config/env.ts` (kommentar), `.env.example`, `package.json` (0.2.0) | ingen |
+| B: infrastruktur og utrulling | arkitekt | `infra/azure/main.bicep`, `.github/workflows/deploy-azure.yml`, `docs/adr/0002-testmiljo-azure.md`, `docs/06-arkitektur.md` | ingen |
+| C: dokumentasjon og plan | utvikler (etter A) | `docs/drift/testmiljo-azure.md`, `docs/10-utviklingsmiljo.md`, `docs/07-utviklingsplan.md`, `docs/05-domenemodell.md` (ordliste) | B for nøyaktige navn (står alt i dette kortet) |
+| T: tester | testskriver | `src/core/email/email.test.ts`, `src/core/health/health.test.ts`, `src/db/seed/run.test.ts`, `tests/deploy-workflow.test.ts` | ingen (skrives mot kontraktene i dette kortet og testplanen) |
+
+## Testplan (kort, se `fase1-testmiljo-azure-testplan.md`)
+- Enhetstester i `src/core/email/email.test.ts` (transportvalg, serverlogg via `sendEmail(email, env)` med `vi.spyOn(console, "info")`), `src/core/health/health.test.ts` (`appVersion`), `src/db/seed/run.test.ts` (ingen adresse i loggen).
+- `tests/deploy-workflow.test.ts`: leser `.github/workflows/deploy-azure.yml`, `infra/azure/main.bicep` og `docs/drift/testmiljo-azure.md` som tekst og sjekker kriteriene over med enkle tekstsøk. Ingen YAML-pakke.
+- Ingen `graph.test.ts` (adapteren er utsatt).
 - Ingen e2e-endring.
+- **Kjent restrisiko (står i PR-en):** Bicep kompileres ikke og ingenting rulles ut fra skyen. Første grønne kjøring hos Ståle er den egentlige testen; `workflow_dispatch` gjør at han kan kjøre på nytt uten ny merge.
 
 ## Må bestemmes av Ståle (står i PR-en)
-- Spørsmål nr. 6: adressen (`ezprop-test.byggcon.no`?) og om e-post skal gå via Microsoft 365 fra start. Oppgaven forutsetter kode i serverloggen til han svarer, og adressen er en innstilling han setter selv.
+- Spørsmål nr. 6: adressen (`ezprop-test.byggcon.no`?) og om e-post skal gå via Microsoft 365 fra start. Oppgaven forutsetter kode i serverloggen til han svarer, og adressen er en innstilling han setter selv. Sier han ja til Microsoft 365, bygges Graph-adapteren i en liten egen PR.
+- Spørsmål nr. 9: hvem skal ha tilgang til ressursgruppen `rg-ezprop-test` i Azure-portalen (og dermed til serverloggen med innloggingskoden og appinnstillingene). Anbefaling: bare Ståle til nøkkelboksen i fase 0b er på plass.
 - Bekrefte at App Service + PostgreSQL Flexible Server + OIDC ligner Optiplans oppsett. Hvis Optiplan bruker Container Apps, byttes det i egen PR.
-- Legge inn secrets og variabler i GitHub (ingen andre kan).
+- Lage ressursgruppen og GitHub-innloggingen i Azure, og legge inn secrets og variabler i GitHub (ingen andre kan).
 
 ## Åpne spørsmål
-- Skal databasen stoppes når den ikke brukes (sparer ca. halve kostnaden, men første åpning tar et minutt)? Ikke i denne oppgaven; nevnes i dokumentasjonen.
+- Skal databasen stoppes når den ikke brukes (sparer ca. halve kostnaden, men første åpning tar et minutt)? Ikke i denne oppgaven, og ikke i dokumentasjonen til Ståle ennå.
