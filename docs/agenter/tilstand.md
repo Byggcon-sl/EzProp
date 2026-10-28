@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 28.10.2026 (oppgave 4: oppgavekort for PowerSync oppdatert etter runde 1, branchen `fase1-kandidat-powersync`)
+Sist oppdatert: 28.10.2026 (oppgave 4: arkitekt og testplan ferdig, avhengigheter lagt inn, bygging delt i fire biter til utvikler og testskriver)
 
 ## Gjeldende fase
 
@@ -12,7 +12,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (oppgave 3, PR #6)
 
 ## Gjeldende oppgave
 
-**Oppgave 4 – Første kandidat: PowerSync koblet til testskjemaet** (fase 1, punktet «Kandidater satt opp mot samme testskjema»). Branch `fase1-kandidat-powersync` fra `main` (etter PR #6). Oppgavekort `docs/funksjoner/fase1-kandidat-powersync.md`, protokoll og resultatmal for prøve A og B `docs/funksjoner/fase1-prove-ab-powersync.md`. Steg: oppgavekort skrevet 28.10.2026; runde 1 (forenkler, arkitekt, sikkerhet-personvern, test-leder) ferdig og kortet oppdatert samme dag (DELETE kuttet, HS256 og Container Apps som eneste valg, `TrialSyncStore`-grensesnitt, tenant-voktere på id og skjema, bilderute som lager raden selv, testkrok `window.__offlineTrial`; avgjørelsene står nederst i kortet). Neste: test-leder skriver testplanen, så utvikler og testskriver i parallell (fire biter, kontrakten står i kortet under «Data»). Versjon 0.1.2 → 0.1.3. Nytt spørsmål nr. 10 til Ståle (PowerSync: selvdrevet eller sky, pris, lisens, databehandleravtale), ikke blokkerende.
+**Oppgave 4 – Første kandidat: PowerSync koblet til testskjemaet** (fase 1, punktet «Kandidater satt opp mot samme testskjema»). Branch `fase1-kandidat-powersync` fra `main` (etter PR #6). Oppgavekort `docs/funksjoner/fase1-kandidat-powersync.md`, protokoll og resultatmal for prøve A og B `docs/funksjoner/fase1-prove-ab-powersync.md`. Steg: oppgavekort skrevet 28.10.2026; runde 1 (forenkler, arkitekt, sikkerhet-personvern, test-leder) ferdig og kortet oppdatert samme dag (DELETE kuttet, HS256 og Container Apps som eneste valg, `TrialSyncStore`-grensesnitt, tenant-voktere på id og skjema, bilderute som lager raden selv, testkrok `window.__offlineTrial`; avgjørelsene står nederst i kortet). Arkitekt har lagt tabeller, migrering `0001_prove-uten-nett` (med publikasjonen `powersync`) og kontrakten i `sync/types.ts`, `server/types.ts` og `server/errors.ts` (`e31db54`). Test-leder har skrevet testplanen `docs/funksjoner/fase1-kandidat-powersync-testplan.md` (`06121fa`). Prosjektleder har lagt inn de nye avhengighetene (`@powersync/web` 2.5.0, `@powersync/react` 2.1.0, `@journeyapps/wa-sqlite` 2.0.10, `yjs` 13.6.33, `jose` 6.2.13; `113c01f`) så ingen bit rører `package.json`. **Nå:** utvikler og testskriver i parallell på fire biter: (1) server, ruter, PowerSync-tjeneste i Docker og drift, med `text-merge.ts`; (2) klient: lokal database, `TrialSyncStore`, liste og skjema, indikator, bildekø; (3) de kjente svakhetene i `answers.ts` og `trial-form-view.tsx` med ny propkontrakt (`foreignChanges`, `onFieldTouched`, `onAddPhotos`); (4) service worker. Deretter sikkerhet-personvern (`/security-review`), test-leder godkjenner, PR mot `main`. Versjon 0.1.2 → 0.1.3 (gjort). Nytt spørsmål nr. 10 til Ståle (PowerSync: selvdrevet eller sky, pris, lisens, databehandleravtale), ikke blokkerende.
 
 **Rekkefølge videre i fase 1:** kandidat 2 (ElectricSQL) og kandidat 3 (egenbygd) på samme skjema og samme protokoll → Ståle kjører prøve A og B per kandidat på ekte iPad når PR #7 og PowerSync i Azure er oppe → prøve C–F → sammenligning og ADR. Punktet «Kandidater satt opp …» krysses av først når alle tre er satt opp.
 
@@ -42,7 +42,7 @@ Ingen.
 
 ## Siste kjøring
 
-28.10.2026: hovedløkken startet oppgave 4 (første kandidat, PowerSync): branch, oppgavekort, protokoll for prøve A og B, spørsmål nr. 10, ordliste og denne filen. Sesjon: https://claude.ai/code/session_01JqwntzCcVvuiXSedMUVdYg
+28.10.2026: hovedløkken kjører oppgave 4 (første kandidat, PowerSync): branch, oppgavekort, protokoll for prøve A og B, spørsmål nr. 10, ordliste, runde 1, arkitekt, testplan, avhengigheter og fordeling i fire biter. Sesjon: https://claude.ai/code/session_01JqwntzCcVvuiXSedMUVdYg
 
 28.10.2026 kl. 17:34–18:49: PR #6 merget av Ståle (kl. 17:34), deretter oppgaven «Testmiljø i Azure» fra oppgavekort til PR #7 (åpnet kl. 18:49).
 
