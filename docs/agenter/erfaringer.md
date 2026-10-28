@@ -2,6 +2,13 @@
 
 Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte tid. Nyeste øverst. Får Ståle stadig de samme kommentarene, legges de inn som regel i den aktuelle agentbeskrivelsen.
 
+## 28.10.2026 – Fase 1, testmiljø i Azure (PR #7)
+
+- Merget av Ståle samme kveld (kl. 20:19), uten kommentarer eller endringer. Det Ståle må gjøre selv (ressursgruppe, GitHub-innlogging i Azure, secrets) står i `docs/drift/testmiljo-azure.md` og i tilstandsfilen under «Venter på Ståle» til han bekrefter at appen åpner på iPaden.
+- To PR-er som begge øker versjonsnummeret i `package.json`, gir alltid konflikt når den første merges. Regel: den som merges sist, settes til neste patch over `main` (her 0.1.3 → 0.2.1). Prosjektlederen fletter `main` inn i de åpne branchene i første kjøring etter en merge, før nye oppgaver.
+- `docs/agenter/tilstand.md`, `docs/09-apne-sporsmal.md` og ordlisten i `docs/05-domenemodell.md` endres i nesten hver PR og gir konflikter når to PR-er er åpne samtidig. Løsning som brukes: ta med begge sider (nye rader fra begge), og skriv tilstandsfilen helt på nytt ut fra det som faktisk gjelder. Når samme oppdatering gjøres likt på to brancher, går neste fletting rent.
+- Ståle 28.10.2026: det er ingen grense for hvor mange PR-er som kan vente på ham. Hovedløkken fortsetter alltid med neste oppgave, og oppgaver som bygger på en åpen PR legges oppå den (PR mot den branchen, «Bygger på» i teksten). Rollefilen `prosjektleder.md` er rettet.
+
 ## 28.10.2026 – Fase 1, oppgave 3 (PR #6)
 
 - Arbeidsflyten «oppgave» gikk hele veien fra oppgavekort til PR uten retteforsøk (18 agenter, ca. 41 minutter). Ingen alvorlige funn i gjennomgangen, 12 små som er notert i oppgavekortet og tas i oppgave 4.
