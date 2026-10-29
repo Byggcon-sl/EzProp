@@ -2,7 +2,7 @@
 
 - **Fase:** 1 – Prøve uten nett
 - **Modul:** `src/modules/offline-trial` (fra oppgave 3–5). Ingen nye tabeller, ingen migrering.
-- **Status:** oppdatert etter runde 1 (arkitekt, test-leder) 29.10.2026. Neste: forarbeidet (flytting til `sync/local/`), testplan, så bygging.
+- **Status:** forarbeidet er levert (arkitekt 29.10.2026, se «Forarbeid levert»). Neste: testplan, så bygging.
 - **Branch:** `fase1-kandidat-egenbygd`, **bygger på `fase1-kandidat-electricsql` (PR #10)**. PR åpnes mot `fase1-kandidat-electricsql` til PR #10 er merget, deretter mot `main`.
 - **Dato:** 29.10.2026
 - **Plan:** `docs/07-utviklingsplan.md` fase 1, punktet «Kandidater satt opp mot samme testskjema …», delpunktet **«Kandidat 3, egenbygd (lokal database og endringskø), på samme skjema og samme protokoll»**. Når dette er levert, krysses hovedpunktet av (alle tre kandidater satt opp).
@@ -166,6 +166,19 @@ Ikke med: ux-ansvarlig og ui-designer (prøveverktøy; én knapp, teksten står 
 - **Ventetiden** skal ligge i en ren funksjon med egen test, så e2e ikke blir avhengig av tilfeldig timing.
 - **Hentemarkøren tømmes ved organisasjonsbytte** sammen med resten av `offline-trial-custom`.
 - Ingen ADR nå. Ingen spørsmål til Ståle: ingenting her gjelder fag, pris, personvern eller nye funksjoner.
+
+## Forarbeid levert (arkitekt, 29.10.2026)
+Pkt. 1 og 2 er gjort; pkt. 3 er delvis gjort. Vitest (336) og e2e for testskjema og ElectricSQL (pc og ipad) er grønne uten endring i testnavn eller forventninger.
+- **Flyttet til `sync/local/`:** `outbox.ts`, `apply-incoming.ts` og testene deres (`git mv`, bare importstier endret). Ny `local/idb.ts` (`createLocalDb`), `local/trial-store.ts` (`createLocalTrialStore`, kjernen fra `electricsql/store.ts` uten logikkendring) og `local/types.ts` (kontrakten mellom kjerne og leser, og `OutboxBatchBody`, flyttet fra `electricsql/types.ts`).
+- **Felles normaliserer:** `local/normalize-row.ts` (`normalizeLocalRow`), flyttet uendret fra `electricsql/shape-messages.ts`. `normalizeShapeRow` er nå et alias for den, så Electric er uendret.
+- **`electricsql/store.ts`** inneholder bare skjemaleseren (`createShapeReader`) og `createElectricTrialStore` = kjernen + leseren. `electricsql/storage.ts` er en tynn innpakning (`electricDb`, `clearElectricStorage`) med samme navn, versjon og `shape_state` som før.
+- **Ett tillegg i `LocalReadContext`:** `storedState` (radene i tilstandslageret ved åpning, uten `outbox_next_seq`). Electric leste dem før løkkene startet; slik er det fortsatt. Den egenbygde leseren finner markøren der.
+- **Kontrakt for bit 1:** `sync/custom/types.ts` (databaseoppsett, `sync_state`, markørraden, `PullResponseBody`, takten `NextPullDelay` med utfallene `ok`, `more`, `failed`, `invalid-cursor`, `acked`, og signaturene for `createPullReader`, `createCustomTrialStore` og `clearCustomStorage`).
+- **Kontrakt for bit 2:** `server/types.ts` (`TRIAL_PULL_LIMIT` 500, `TRIAL_PULL_OVERLAP_MS` 60 000, `TRIAL_PULL_CURSOR_MAX_LENGTH` 1 024, tabellrekkefølgen, `NIL_UUID`, `TrialPullCursor`, `TrialChangesSinceResult`, `ListTrialChangesSince`, koding og tolking av markøren) og `InvalidTrialCursorError` i `server/errors.ts`.
+- **Kandidatgrensene:** mønsteret dekker `sync/(powersync|electricsql|custom|local)`. Nye tester: de rene filene i `sync/local/`, at `sync/local/` og `sync/custom/` aldri importerer fra `electricsql/` eller `powersync/`, og hodekommentaren i begge mappene.
+- **Overlatt til bit 1 (pkt. 3):** `"custom"` i `TRIAL_SYNC_CANDIDATES`, knappen «Egenbygd», `openCustom` og tømmingen av `offline-trial-custom` i `select-store.ts`, og `custom/` i testen for dynamisk import. De henger sammen med lageret og skjermen, og må komme i samme endring, ellers peker knappen på et lager som ikke finnes.
+- **Overlatt til testskriver:** testen for `createLocalDb` med to databaser som ikke ser hverandre. Vitest har ingen IndexedDB og vi tar ikke inn en ny avhengighet, så den går i e2e (`page.evaluate`).
+- Ingen migrering, ingen ny avhengighet, ingen ADR.
 
 ## Åpne spørsmål
 - Ingen nye til Ståle. Kandidat 3 har ingen leverandør, ingen lisens utover det vi har og ingen ekstra drift. Nr. 10 (PowerSync) og nr. 11 (ElectricSQL) står fortsatt åpne før ADR-en.

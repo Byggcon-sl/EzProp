@@ -4,7 +4,8 @@
  * Kontrakten mellom skjermene i testskjemaet og synkløsningen (bare typer, ingen kode). Lik for
  * alle kandidater (docs/funksjoner/fase1-kandidat-electricsql.md, avgjørelse A). Skjermene og
  * bildekøen bruker bare `TrialSyncStore` og `select-store.ts`; PowerSync-utgaven ligger i
- * `sync/powersync/`, ElectricSQL-utgaven i `sync/electricsql/`, og egenbygd kommer i egen mappe.
+ * `sync/powersync/`, ElectricSQL-utgaven i `sync/electricsql/` og egenbygd i `sync/custom/`. De to
+ * siste bygger på den lokale kjernen i `sync/local/` (lagring, kø, innfletting).
  * Ellers blir kriteriet «Arbeid» skjevt mellom kandidatene.
  *
  * Radene speiler kolonnene i PostgreSQL (src/db/schema/offline-trial.ts) slik de ligger lokalt
@@ -19,12 +20,16 @@ export { TRIAL_TABLE_NAMES, trialColumns, localColumnsOf } from "./local-columns
 
 // Valg av kandidat (innstilling i nettleseren, ikke en kode i datamodellen).
 
+/**
+ * Bit 1 i docs/funksjoner/fase1-kandidat-egenbygd.md legger til `"custom"` (knappen «Egenbygd»,
+ * `openCustom` i `select-store.ts`) i samme endring som lageret. Standardvalget forblir `powersync`.
+ */
 export const TRIAL_SYNC_CANDIDATES = ["powersync", "electricsql"] as const;
 export type TrialSyncCandidate = (typeof TRIAL_SYNC_CANDIDATES)[number];
 /** Nøkkel i `localStorage`. Bytte = skriv nøkkelen og `location.reload()`; lageret byttes aldri mens siden lever. */
 export const TRIAL_SYNC_CANDIDATE_KEY = "trial_sync_candidate";
 export const DEFAULT_TRIAL_SYNC_CANDIDATE: TrialSyncCandidate = "powersync";
-/** Nøkkel i `localStorage` for organisasjonen som brukte enheten sist. Ulik organisasjon tømmer all lokal lagring for begge kandidater. */
+/** Nøkkel i `localStorage` for organisasjonen som brukte enheten sist. Ulik organisasjon tømmer all lokal lagring for alle kandidater (også hentemarkøren). */
 export const TRIAL_LAST_ORGANIZATION_KEY = "trial_last_organization_id";
 
 // Rader slik de ligger lokalt.
@@ -240,8 +245,8 @@ export type GetTrialDeviceId = () => string;
  */
 export type StartPhotoUploader = (store: TrialSyncStore, organizationId: string) => () => void;
 
-// Endringskø og innfletting vi eier selv (ElectricSQL og egenbygd). Rene filer: ingen `window`,
-// React eller SDK. Filnavnene settes i testplanen; signaturene her er bindende.
+// Endringskø og innfletting vi eier selv (ElectricSQL og egenbygd), i `sync/local/`. Rene filer:
+// ingen `window`, React eller SDK. Signaturene her er bindende.
 
 /** En lokal rad i snake_case, slik den ligger i den lokale lagringen (`localColumnsOf(table)` pluss `id`). */
 export type LocalRow = Record<string, unknown>;
@@ -263,7 +268,7 @@ export interface OutboxEntry {
   data: LocalRow;
 }
 
-/** Køens tilstand som ren verdi. Lagres i objektlageret `outbox` (`seq` → operasjon) og `nextSeq` i `shape_state`-lageret eller tilsvarende. */
+/** Køens tilstand som ren verdi. Lagres i objektlageret `outbox` (`seq` → operasjon) og `nextSeq` i kandidatens tilstandslager (`shape_state` eller `sync_state`, raden `outbox_next_seq`). */
 export interface OutboxState {
   entries: readonly OutboxEntry[];
   nextSeq: number;

@@ -206,3 +206,77 @@ export type ForwardTrialShape = (
   searchParams: URLSearchParams,
   fetchImpl?: typeof fetch,
 ) => Promise<Response>;
+
+// Kandidat 3 (egenbygd): hente-ruten `GET /api/prove/synk/hent`
+// (docs/funksjoner/fase1-kandidat-egenbygd.md, forarbeid pkt. 2 og bit 2).
+
+/** Største antall rader i ett svar, for alle tre tabellene til sammen. */
+export const TRIAL_PULL_LIMIT = 500;
+/** Når en tabell er ferdig lest, flyttes markøren så mye tilbake (se `TrialPullCursor`). */
+export const TRIAL_PULL_OVERLAP_MS = 60_000;
+/** Lengste markør ruten tar imot. Lengre gir `InvalidTrialCursorError` (400). */
+export const TRIAL_PULL_CURSOR_MAX_LENGTH = 1_024;
+/** Rekkefølgen tabellene leses i. En tabell som ikke ble nådd, beholder markøren sin. */
+export const TRIAL_PULL_TABLE_ORDER = ["trial_forms", "trial_answers", "trial_photos"] as const;
+/** Brukes som `id` i markøren etter overlapp, så alle rader med samme `u` leses på nytt. */
+export const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+export const TRIAL_PULL_CACHE_CONTROL = "private, no-store";
+
+/**
+ * Posisjonen i én tabell: `(updated_at, id)` for siste rad som er lest. `u` er `updated_at` som
+ * tekst med mikrosekunder slik PostgreSQL skriver den (`updated_at::text` eller `to_char` med `US`),
+ * **aldri** gjennom JS `Date` (da mistes mikrosekundene og sidene kan gå i ring).
+ */
+export interface TrialPullPosition {
+  u: string;
+  id: string;
+}
+
+/**
+ * Markøren, base64url-JSON `{ v: 1, t: { <tabell>: { u, id } } }`. Mangler en tabell, leses den
+ * fra start. Ingen organisasjons-ID og ingen signatur: spørringen filtrerer alltid på
+ * `grant.organizationId`, så en markør kan ikke gi en annen organisasjons rader.
+ *
+ * Mens sidene leses (`ferdig: false`), er markøren ren keyset (`(updated_at, id) > (u, id)`).
+ * Når en tabell er ferdig lest, settes den til `(største u minus TRIAL_PULL_OVERLAP_MS, NIL_UUID)`:
+ * hver henting leser da de siste 60 s på nytt. Det dekker at `updated_at` settes av databasens
+ * `now()` (start av transaksjonen) ved innsetting og av appserverens klokke ved oppdatering, så en
+ * skriving kan få en tid før en rad som allerede er hentet. Dobbel levering er ufarlig
+ * (`applyIncoming` tåler samme rad flere ganger).
+ */
+export interface TrialPullCursor {
+  v: 1;
+  t: Partial<Record<TrialChangeTable, TrialPullPosition>>;
+}
+
+/** `server/changes-since.ts`. Tekst til markør; ugyldig (Zod, base64, JSON, lengde) gir `InvalidTrialCursorError`. */
+export type DecodeTrialPullCursor = (text: string) => TrialPullCursor;
+export type EncodeTrialPullCursor = (cursor: TrialPullCursor) => string;
+
+/**
+ * Svaret fra hente-ruten. Radene i snake_case med nøyaktig kolonnene i `localColumnsOf(table)`
+ * (aldri `storage_path`, `created_by`, `updated_by`, `deleted_by`, `organization_id`), i samme form
+ * som `normalizeLocalRow` venter: tid som ISO-tekst, `value` som JSON-tekst, `size_bytes` som tall.
+ * Myk slettede rader er med (`deleted_at` satt), så enheten fjerner dem.
+ */
+export interface TrialChangesSinceResult {
+  endringer: Record<TrialChangeTable, Record<string, unknown>[]>;
+  /** Ny markør. Klienten lagrer og sender den tilbake uendret. */
+  markor: string;
+  /** `true` bare når alle tre tabellene ga færre rader enn plassen som var igjen. */
+  ferdig: boolean;
+}
+
+/**
+ * `server/changes-since.ts`. Rekkefølge: `requireOrganizationAccess(actor, organizationId,
+ * "organization.read")` → markøren (`null` = fra start; ugyldig gir `InvalidTrialCursorError`) →
+ * per tabell i `TRIAL_PULL_TABLE_ORDER`: `organization_id = grant.organizationId AND
+ * (updated_at, id) > (u, id)`, sortert på `updated_at, id`, høyst plassen som er igjen av
+ * `TRIAL_PULL_LIMIT`. Aldri en organisasjons-ID fra adressen eller markøren i spørringen.
+ * Ingen indeks på `(organization_id, updated_at, id)` i prøven (funn til ADR-en).
+ */
+export type ListTrialChangesSince = (
+  actor: Actor,
+  organizationId: string,
+  cursor: string | null,
+) => Promise<TrialChangesSinceResult>;
