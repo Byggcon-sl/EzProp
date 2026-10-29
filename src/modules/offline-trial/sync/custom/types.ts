@@ -56,20 +56,37 @@ export const PULL_BACKOFF_MAX_MS = 60_000;
  */
 export type PullOutcome = "ok" | "more" | "failed" | "invalid-cursor" | "acked";
 
+/**
+ * Hendelser i tillegg til utfallene av en henting (docs/funksjoner/fase1-synkstatus.md, krav K4):
+ * - `sync-now`: takstmannen trykket «Synk nå». Henting med en gang, også rett etter forrige
+ *   henting og under feilventetid. Feiltelleren står (nullstilles bare av `ok` og `acked`).
+ *   Uten nett (etter `offline`): ingen henting (`delayMs` `null`).
+ * - `wake`: nettet er tilbake eller appen kommer fram. Henting med en gang og feiltelleren
+ *   nullstilles, som leseren gjør i dag (docs/funksjoner/fase1-kandidat-egenbygd.md, avgjort 29.10.2026).
+ * - `offline`: nettet er borte. Ingen henting planlegges (`delayMs` `null`) før `wake`.
+ */
+export type PullEvent = PullOutcome | "sync-now" | "wake" | "offline";
+
 export interface PullScheduleState {
   /** Antall feil på rad. 0 etter en vellykket henting. */
   failures: number;
+  /** Satt av `offline`, fjernet av `wake`, `ok` og `acked`. Mangler = med nett. */
+  offline?: boolean;
 }
 
 /**
  * Ren funksjon: ny tilstand og ventetid i ms før neste henting. Ingen tidtakere, ingen `Date`.
  * `ok` og `acked` gir `PULL_INTERVAL_MS` og `failures = 0`; `more` og `invalid-cursor` gir 0;
- * `failed` gir `min(5 000 · 2^failures, 60 000)` og `failures + 1`.
+ * `failed` gir `min(5 000 · 2^failures, 60 000)` og `failures + 1`. Utfallene gir alltid et tall;
+ * hendelsene i `PullEvent` kan gi `null` (ingen henting planlegges).
  */
-export type NextPullDelay = (
-  state: PullScheduleState,
-  outcome: PullOutcome,
-) => { state: PullScheduleState; delayMs: number };
+export interface NextPullDelay {
+  (state: PullScheduleState, outcome: PullOutcome): { state: PullScheduleState; delayMs: number };
+  (
+    state: PullScheduleState,
+    event: PullEvent,
+  ): { state: PullScheduleState; delayMs: number | null };
+}
 
 // --- Leseren og lageret ---
 
