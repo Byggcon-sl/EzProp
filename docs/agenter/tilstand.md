@@ -54,6 +54,8 @@ Ingen.
 
 ## Siste kjøring
 
+29.10.2026 ca. kl. 15–16: prosjektleder fullførte synktjenestene i Azure: flettet `main` inn, versjon 0.2.7, planen krysset av, PR #17 åpnet mot `main`. CI grønn, men den automatiske flettingen fra `main` (bot) ga en CI-kjøring som venter på godkjenning, så GitHub meldte «unstable»; ny commit fra agenten for å starte CI på nytt. Sesjon: https://claude.ai/code/session_01Jqwnu11Jdv4FLbyF9rNKnW
+
 29.10.2026 kl. 15:55–: hovedløkken fant PR #14 merget og merget PR #15 (CI grønn). Læringsløkke for #14 og #15, beslutningen «ingen grense for PR-er som venter» ført inn i `LES-MEG-kartlegging.md` og planen (lå bare på en gammel branch). Startet oppgaven «Synkstatus som alltid vises». Sesjon: https://claude.ai/code/session_01JqwntywRSPWcBmrv2nPUoo
 
 29.10.2026 kl. 10:45–13:50 (parallelt med kjøringen under): løste konflikten i PR #10, fullførte oppgave 6 (PR #11), fant og rettet en feil der bildekøen kunne stå fast, rettet småfunnene fra PowerSync-prøven og gjorde bildetestene stabile (PR #14, først mot `fase1-kandidat-egenbygd`, så flyttet til `main`). To sesjoner jobbet samtidig uten å vite om hverandre. Sesjon: https://claude.ai/code/session_01Jqwntz9WUQ9tyG2mcL52jZ
