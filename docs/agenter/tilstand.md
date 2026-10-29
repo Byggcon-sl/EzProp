@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 29.10.2026 kl. 10:40 (oppgavekort for oppgave 6 oppdatert etter runde 1, på `fase1-kandidat-egenbygd`)
+Sist oppdatert: 29.10.2026 (oppgave 6: forarbeid og testplan levert, bit 1 og bit 2 startet)
 
 ## Gjeldende fase
 
@@ -12,7 +12,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**I arbeid: oppgave 6 – Kandidat 3, egenbygd** (lokal database og endringskø) på samme testskjema, samme `TrialSyncStore`-kontrakt og samme protokoll for prøve A og B. Branch `fase1-kandidat-egenbygd` **oppå `fase1-kandidat-electricsql`** (PR #10). PR mot `fase1-kandidat-electricsql` til PR #10 er merget. Oppgavekort `docs/funksjoner/fase1-kandidat-egenbygd.md`, resultatmal `docs/funksjoner/fase1-prove-ab-egenbygd.md`. Versjon 0.2.3. Ingen nye avhengigheter, ingen migrering, ingen ny tjeneste. Runde 1 (arkitekt, test-leder) er tatt inn i kortet: felles kjerne i `sync/local/`, markør `(updated_at, id)` per tabell med 60 s overlapp, ren funksjon for ventetid. Neste steg: forarbeidet (flytting til `sync/local/`, Electric-tester grønne uendret), testplanen `docs/funksjoner/fase1-kandidat-egenbygd-testplan.md`, så utvikler bit 1 (klient) og bit 2 (server) og testskriver i parallell.
+**I arbeid: oppgave 6 – Kandidat 3, egenbygd** (lokal database og endringskø) på samme testskjema, samme `TrialSyncStore`-kontrakt og samme protokoll for prøve A og B. Branch `fase1-kandidat-egenbygd` **oppå `fase1-kandidat-electricsql`** (PR #10). PR mot `fase1-kandidat-electricsql` til PR #10 er merget. Oppgavekort `docs/funksjoner/fase1-kandidat-egenbygd.md`, resultatmal `docs/funksjoner/fase1-prove-ab-egenbygd.md`. Versjon 0.2.3. Ingen nye avhengigheter, ingen migrering, ingen ny tjeneste. Runde 1 (arkitekt, test-leder) er tatt inn i kortet: felles kjerne i `sync/local/`, markør `(updated_at, id)` per tabell med 60 s overlapp, ren funksjon for ventetid. Forarbeidet (commit `247dc95`, Vitest 336 grønne) og testplanen `docs/funksjoner/fase1-kandidat-egenbygd-testplan.md` (`19912e5`) er levert. Nå: utvikler bit 1 (klient: lager, leser, takt, velger) og bit 2 (server: `listTrialChangesSince` og hente-ruten) og testskriver i parallell. Avgjort: kontrakten i `sync/custom/types.ts` gjelder (`createPullReader` som tynn innpakning rundt `createCustomReader(deps)` fra testplanen; takten er `(state, outcome)` uten klokke). Ingen modellnavn i nye commit-meldinger; eldre commits på branchen ryddes før PR.
 
 **Forrige oppgave:** Oppgave 5 – Kandidat 2: ElectricSQL, **PR #10** (branch `fase1-kandidat-electricsql`, versjon 0.2.2). Oppgavekort `docs/funksjoner/fase1-kandidat-electricsql.md`, testplan `docs/funksjoner/fase1-kandidat-electricsql-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-electricsql.md`, drift `docs/drift/electricsql.md`. Sikkerhet-personvern: godkjent, tre små funn; (2) og (3) rettet, (1) (Electrics 400-kropp videresendes uendret) tas i ADR-en. Test-leder: godkjent (lint, typesjekk, format, 333 Vitest, e2e 105 bestått). Spørsmål nr. 11 (ElectricSQL som leverandør), ikke blokkerende.
 
