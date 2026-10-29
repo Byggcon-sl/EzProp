@@ -26,6 +26,7 @@ import {
   type LocalRow,
   type TrialSyncCandidate,
 } from "./helpers";
+import { PULL_BACKOFF_MAX_MS } from "../src/modules/offline-trial/sync/custom/types";
 
 // Tredje kandidat for drift uten nett: egenbygd (lokal database og endringskø) koblet til
 // testskjemaet (fase 1, oppgave 6). Testplan: docs/funksjoner/fase1-kandidat-egenbygd-testplan.md
@@ -107,12 +108,17 @@ async function answerFor(page: Page, formId: string, fieldKey: string) {
   );
 }
 
-async function waitAllSaved(page: Page) {
-  await expect
-    .poll(() => pendingChanges(page), { timeout: 20_000, message: "køen tømmes" })
-    .toBe(0);
-  await expect(indicator(page)).toHaveText(ALL_SAVED, { timeout: 20_000 });
+/** Venter til køen er tom og «Alt er lagret» vises. `timeout` gjelder hvert av de to stegene. */
+async function waitAllSaved(page: Page, timeout = 20_000) {
+  await expect.poll(() => pendingChanges(page), { timeout, message: "køen tømmes" }).toBe(0);
+  await expect(indicator(page)).toHaveText(ALL_SAVED, { timeout });
 }
+
+/**
+ * Frist når køen og leseren kan ha en hel ventetid foran seg etter mange 500-feil (begge har tak
+ * på 60 s), eller en første henting i mange sider når databasen er stor (sent i en full kjøring).
+ */
+const FULL_READER_WAIT_MS = PULL_BACKOFF_MAX_MS + 10_000;
 
 /** Åpner skjemaet fra listen på en enhet som får det via hente-ruten. */
 async function openFromList(page: Page, formId: string) {
@@ -471,6 +477,9 @@ test.describe("egenbygd uten service worker", () => {
 
   // Obligatorisk (tap av data)
   test("køen overlever at fanen lukkes og åpnes igjen (Egenbygd)", async ({ page, context }) => {
+    // «Alt er lagret» krever en bekreftet henting etter at køen er tom; den kan ha en hel ventetid
+    // i leseren foran seg (FULL_READER_WAIT_MS), så testen får tid til den.
+    test.setTimeout(60_000 + 2 * FULL_READER_WAIT_MS);
     await useCandidate(context, "custom");
     await logIn(page, ADMIN_EMAIL);
     await context.route(CHANGES_ROUTE, (route) =>
@@ -494,7 +503,7 @@ test.describe("egenbygd uten service worker", () => {
     } finally {
       await context.unroute(CHANGES_ROUTE);
     }
-    await waitAllSaved(reopened!);
+    await waitAllSaved(reopened!, FULL_READER_WAIT_MS);
   });
 
   test("det som skrives mens en bunt er underveis går ikke tapt (Egenbygd)", async ({

@@ -6,7 +6,6 @@ import {
   CHANGES_PATH,
   countRequests,
   createTrialForm,
-  failChangesOnce,
   hookValue,
   indicator,
   isPullUrl,
@@ -277,30 +276,39 @@ test.describe("Synk nå", () => {
       context,
     }, testInfo) => {
       await start(page, context, candidate);
-      // To feil: neste automatiske forsøk er da minst 10 s unna, godt over grensen på 3 s
-      const failing = await failChangesOnce(page, 2);
+      // Sendingen feiler helt til testen selv slipper den. Da kan ingen POST gå igjennom før
+      // trykket, uansett hvem som sender (PowerSync-SDK-en kaller også uploadData selv).
+      let fail = true;
+      let failures = 0;
+      await page.route(CHANGES_ROUTE, (route) => {
+        if (route.request().method() !== "POST" || !fail) return route.fallback();
+        failures += 1;
+        return route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
+      });
       const posts = countRequests(page, CHANGES_ROUTE);
       await openList(page, candidate);
       await openNewForm(page, candidate);
       await fillFloors(page);
 
       if (candidate === "powersync") {
-        // Uten PowerSync-tjenesten sender SDK-en ingenting av seg selv; de to feilene kommer fra
-        // to trykk på «Synk nå» (krav K3: syncNow kaller opplastingen selv).
+        // Uten PowerSync-tjenesten er det ikke sikkert SDK-en sender av seg selv; trykk til det
+        // har kommet minst to feil (krav K3: syncNow kaller opplastingen selv).
         testInfo.annotations.push({
           type: "vei",
-          description: "to feil fra trykk (ingen tjeneste)",
+          description: "feil fra trykk (ingen tjeneste)",
         });
-        for (let i = 0; i < 2; i++) {
+        for (let i = 0; i < 2 && failures < 2; i++) {
           await syncNowButton(page).click();
           await expect(syncNowButton(page)).toHaveText("Synk nå", { timeout: 20_000 });
-          await expect.poll(() => failing.failed(), { timeout: 20_000 }).toBe(i + 1);
+          await expect.poll(() => failures, { timeout: 20_000 }).toBeGreaterThanOrEqual(i + 1);
         }
       }
-      await expect.poll(() => failing.failed(), { timeout: 20_000 }).toBe(2);
+      // Minst to feil: neste automatiske forsøk er da minst 10 s unna, godt over grensen på 3 s
+      await expect.poll(() => failures, { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
       expect(await pendingChanges(page)).toBeGreaterThan(0);
 
       const before = posts.count();
+      fail = false;
       const pressedAt = Date.now();
       await syncNowButton(page).click();
       await expect
