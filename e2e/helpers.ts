@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import postgres from "postgres";
+import { assertLocalOrTestDatabase } from "./database-guard";
 import {
   expect,
   type Browser,
@@ -457,22 +458,6 @@ export async function setSavedAt(
 /** Skriveruten for endringskøen. */
 export const CHANGES_PATH = "/api/prove/synk/endringer";
 
-/**
- * Svarer 500 på de `n` første POST-ene til skriveruten, så slipper resten gjennom. Ser ikke kall
- * som går via service worker (bruk `serviceWorkers: "block"`). `failed()` gir antall 500 som er sendt.
- */
-export async function failChangesOnce(page: Page, n = 1) {
-  let failed = 0;
-  await page.route(`**${CHANGES_PATH}`, (route) => {
-    if (route.request().method() === "POST" && failed < n) {
-      failed += 1;
-      return route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
-    }
-    return route.fallback();
-  });
-  return { failed: () => failed };
-}
-
 /** Oppdiktet takstmann for e2e. Ingen ekte navn eller adresser. */
 export const INSPECTOR_EMAIL = "takstmann.e2e@eksempel.no";
 
@@ -491,15 +476,23 @@ function e2eDatabaseUrl(): string {
 
 /**
  * Sørger for at den oppdiktede takstmannen finnes som ansatt med rollen `inspector` i samme
- * organisasjon som admin fra seed (Byggcon). Idempotent; sletter aldri noe.
+ * organisasjon som admin fra seed (Byggcon). Idempotent.
+ *
+ * - Skriver bare til lokal database eller testdatabasen (`assertLocalOrTestDatabase`), og
+ *   sjekker det før den kobler til.
+ * - Bruker aldri slettede eller deaktiverte rader (admin, ansatt eller rolle). Finnes takstmannen
+ *   eller rollen bare som slettet/deaktivert, kastes en feil som sier hva som må gjøres.
+ * - Gjenoppretter, sletter eller endrer ingenting.
  */
 export async function ensureInspector(): Promise<void> {
-  const sql = postgres(e2eDatabaseUrl(), { max: 1, onnotice: () => {} });
+  const databaseUrl = e2eDatabaseUrl();
+  assertLocalOrTestDatabase(databaseUrl, process.env.TEST_DATABASE_URL);
+  const sql = postgres(databaseUrl, { max: 1, onnotice: () => {} });
   try {
     const [admin] = await sql<{ organization_id: string }[]>`
       select e.organization_id from employees e
       join users u on u.id = e.user_id
-      where u.email = ${ADMIN_EMAIL} and e.deleted_at is null
+      where u.email = ${ADMIN_EMAIL} and e.deleted_at is null and e.deactivated_at is null
       limit 1`;
     if (!admin) throw new Error("Fant ikke admin fra seed (kjør pnpm db:seed)");
     const organizationId = admin.organization_id;
@@ -511,9 +504,18 @@ export async function ensureInspector(): Promise<void> {
       { id: string }[]
     >`select id from users where email = ${INSPECTOR_EMAIL}`;
     if (!user) throw new Error("Kunne ikke lage takstmannen for e2e");
-    let [employee] = await sql<{ id: string }[]>`
-      select id from employees
+    const found = await sql<{ id: string; deleted_at: Date | null; deactivated_at: Date | null }[]>`
+      select id, deleted_at, deactivated_at from employees
       where user_id = ${user.id} and organization_id = ${organizationId}`;
+    let employee: { id: string } | undefined = found.find(
+      (row) => row.deleted_at === null && row.deactivated_at === null,
+    );
+    if (!employee && found.length > 0) {
+      throw new Error(
+        "Takstmannen for e2e (INSPECTOR_EMAIL) er slettet eller deaktivert i testdatabasen. " +
+          "Tøm databasen eller kjør pnpm db:seed på nytt.",
+      );
+    }
     if (!employee) {
       [employee] = await sql<{ id: string }[]>`
         insert into employees (organization_id, user_id, name)
@@ -521,6 +523,16 @@ export async function ensureInspector(): Promise<void> {
         returning id`;
     }
     if (!employee) throw new Error("Kunne ikke lage den ansatte for e2e");
+    const roles = await sql<{ deleted_at: Date | null }[]>`
+      select deleted_at from employee_roles
+      where employee_id = ${employee.id} and role = 'inspector'`;
+    if (roles.some((row) => row.deleted_at === null)) return;
+    if (roles.length > 0) {
+      throw new Error(
+        "Rollen takstmann for e2e-takstmannen (INSPECTOR_EMAIL) er slettet i testdatabasen. " +
+          "Tøm databasen eller kjør pnpm db:seed på nytt.",
+      );
+    }
     await sql`
       insert into employee_roles (organization_id, employee_id, role)
       values (${organizationId}, ${employee.id}, 'inspector')
