@@ -1,3 +1,7 @@
+<!-- Første linje er én av disse to:
+✅ **Klar.** Agentene merger når testene er grønne. Ståle trenger ikke gjøre noe.
+⛔ **Venter på Ståle:** <hva han må gjøre>. (Tittelen starter da med «Venter på Ståle: », og PR-en får merket venter-pa-stale.) -->
+
 ## Hva er gjort
 (2–5 setninger uten faguttrykk fra programmering)
 

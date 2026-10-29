@@ -77,7 +77,7 @@ Tilgang: `requireOrganizationAccess(actor, organizationId, permission)` fra `@/c
 
 ## Brukeren
 
-Ståle Limstrand er daglig leder i Byggcon og produkteier. Han er ikke utvikler, og han tar alle beslutninger om fag, pris, personvern og nye funksjoner. Skriv til ham på norsk bokmål i enkelt og konkret språk. Si tydelig fra når han må gjøre noe selv. **Bare prosjektlederen skriver til Ståle.** Ståle godkjenner og merger PR-er selv. Vi merger aldri og ruller aldri ut.
+Ståle Limstrand er daglig leder i Byggcon og produkteier. Han er ikke utvikler, og han tar alle beslutninger om fag, pris, personvern og nye funksjoner. Skriv til ham på norsk bokmål i enkelt og konkret språk. Si tydelig fra når han må gjøre noe selv. **Bare prosjektlederen skriver til Ståle.** **Agentene merger selv** når en PR er klar: CI er grønn, ingen konflikt, ingen alvorlige funn i gjennomgangen, og ingenting står under «Må bestemmes av Ståle» (Ståle 29.10.2026). Bruk `scripts/merge-klare-pr.sh`. PR-er som trenger Ståle, får tittelen «Venter på Ståle: …» og merket `venter-pa-stale`, og merges aldri av agentene. Merge til main rulles ut til **testmiljøet**. Utrulling til produksjon gjør Ståle selv.
 
 ## Arbeidsflyt
 

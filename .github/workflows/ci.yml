@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Startes av «Oppdater åpne PR-er» etter at den har oppdatert en PR-branch
+  workflow_dispatch:
 
 env:
   DATABASE_URL: postgres://ezprop:ezprop@localhost:5432/ezprop

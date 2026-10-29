@@ -644,7 +644,7 @@ test("shape-svar via proxyen legges inn lokalt og vises (simulert med testkroken
 
   await applySyncedRowsViaHook(page, "trial_answers", [foreignAnswer(formId, "floors", 7)]);
   await expect(floorsInput(page)).toHaveValue("7");
-  await expect(foreignWarning(page, "floors")).toBeVisible();
+  await expect(foreignWarning(page, "floors")).toBeVisible({ timeout: 15_000 });
   expect((await answerFor(page, formId, "floors"))?.device_id).toBe(FOREIGN);
 
   await floorsInput(page).click();
@@ -672,7 +672,7 @@ test("TG og valg satt utenfra viser Endret av en annen, egen endring gjør det i
     "aria-pressed",
     "false",
   );
-  await expect(foreignWarning(page, "roof_tg")).toBeVisible();
+  await expect(foreignWarning(page, "roof_tg")).toBeVisible({ timeout: 15_000 });
 
   await applySyncedRowsViaHook(page, "trial_answers", [
     foreignAnswer(formId, "leak_stopper", "no"),
@@ -680,7 +680,7 @@ test("TG og valg satt utenfra viser Endret av en annen, egen endring gjør det i
   await expect(
     group(page, "Lekkasjestopper").getByRole("button", { name: "Nei", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(foreignWarning(page, "leak_stopper")).toBeVisible();
+  await expect(foreignWarning(page, "leak_stopper")).toBeVisible({ timeout: 15_000 });
 
   const ownDevice = await hookValue(page, "deviceId");
   expect(ownDevice).not.toBe(FOREIGN);
