@@ -198,15 +198,13 @@ jobs:
           DATABASE_URL="postgres://ezprop_admin:${POSTGRES_ADMIN_PASSWORD}@${POSTGRES_HOST}:5432/ezprop?sslmode=verify-full"
           echo "::add-mask::$DATABASE_URL"
           echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
-          # Passordene for synkrollene og adressene som lages av dem (som i containerne), maskert før rolleskriptet.
+          # Passordene for synkrollene maskeres før rolleskriptet. GitHub maskerer da også
+          # passordet inne i en adresse, så adressene trenger ingen egen maske.
           if [ -n "$POWERSYNC_DB_PASSWORD" ]; then
             echo "::add-mask::$POWERSYNC_DB_PASSWORD"
-            echo "::add-mask::postgres://powersync_repl:${POWERSYNC_DB_PASSWORD}@${POSTGRES_HOST}:5432/ezprop?sslmode=verify-full"
-            echo "::add-mask::postgres://powersync_repl:${POWERSYNC_DB_PASSWORD}@${POSTGRES_HOST}:5432/powersync_storage?sslmode=verify-full"
           fi
           if [ -n "$ELECTRIC_DB_PASSWORD" ]; then
             echo "::add-mask::$ELECTRIC_DB_PASSWORD"
-            echo "::add-mask::postgresql://electric_repl:${ELECTRIC_DB_PASSWORD}@${POSTGRES_HOST}:5432/ezprop?sslmode=verify-full"
           fi
 
       - name: Åpne databasen for kjørerens IP (midlertidig)
