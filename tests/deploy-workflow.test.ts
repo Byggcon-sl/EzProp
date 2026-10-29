@@ -616,11 +616,19 @@ describe("synktjenestene i utrullingen (deploy-azure.yml)", () => {
     expect(leaking).toEqual([]);
   });
 
-  it("passord og tilkoblingsstrenger for synk maskeres før bruk", () => {
+  it("passordene for synk maskeres før bruk, uten avledede adresser", () => {
+    // Småfunn etter PR #17: de avledede adresse-maskene stemte ikke med Bicep og trengs ikke,
+    // fordi GitHub maskerer passordet også inne i en adresse.
+    const masks = lines.filter((line) => !isComment(line) && line.includes("::add-mask::"));
+    expect(masks.length).toBeGreaterThan(0);
+    const derived = masks.filter(
+      (line) => line.includes("powersync_repl:") || line.includes("electric_repl:"),
+    );
+    expect(derived).toEqual([]);
     const roles = codeLine(lines, "sync-trial-roles.ts");
     expect(roles).toBeGreaterThan(-1);
     for (const name of ["POWERSYNC_DB_PASSWORD", "ELECTRIC_DB_PASSWORD"]) {
-      const mask = codeLine(lines, new RegExp(`::add-mask::[^\\n]*${name}`));
+      const mask = codeLine(lines, new RegExp(`::add-mask::\\$\\{?${name}\\}?"?\\s*$`));
       expect(mask, name).toBeGreaterThan(-1);
       expect(mask, name).toBeLessThan(roles);
     }
