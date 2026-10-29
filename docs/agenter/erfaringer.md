@@ -8,6 +8,11 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - To hovedløkker kjørte samtidig (taggen `ezprop-utvikling` kunne ikke sjekkes i skyen) og skrev begge i tilstandsfilen, som fikk doble linjer etter flettingen. Ryddet i en egen liten PR. Regel: les tilstandsfilen på nytt fra `main` rett før den oppdateres.
 - En automatisk fletting fra `main` ga en CI-kjøring som ventet på godkjenning, så GitHub meldte «unstable». En ny vanlig commit startet CI på nytt.
 
+## 29.10.2026 – PR #21 (synkstatus) merget
+
+- Arbeidsflyten «oppgave» gikk fra oppgavekort til merget PR uten alvorlige funn, men brukte ca. 3 t 45 min og 29 agenter for én skjermkomponent. Mens den kjørte, merget en annen sesjon fire PR-er, så versjonen måtte løftes fra 0.2.7 til 0.2.11 ved fletting. Regel: flett `main` inn rett før PR-en åpnes, og sett versjonen én patch over `main` da.
+- To sesjoner jobbet samtidig (synktjenestene i Azure og synkstatus) uten å vite om hverandre, men på hver sin del av koden, så det gikk bra. Hovedløkken lar en branch med ferske commits og uten PR være, og tar en annen oppgave.
+
 ## 29.10.2026 – PR #14 og PR #15 merget, og en branch som aldri ble PR
 
 - PR #14 (småfunn fra PowerSync-prøven, tidsavbrudd på bildeopplasting, stabile bildetester) ble merget kl. 13:58, og PR #15 (stabil e2e-test for bytte av organisasjon) av hovedløkken kl. 15:55 med `scripts/merge-klare-pr.sh`. Begge gikk rett gjennom: CI grønn, ingen konflikt.
