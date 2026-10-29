@@ -18,6 +18,7 @@ import {
   type TrialForm,
   type TrialOption,
 } from "./trial-form";
+import { TrialRuleResult } from "./trial-rule-result";
 
 type OnChange = (fieldKey: string, value: TrialValue) => void;
 type OnTouched = () => void;
@@ -70,6 +71,7 @@ export function TrialFormView({
                   onTouched={touched}
                   onAddPhotos={onAddPhotos}
                 />
+                <TrialRuleResult fieldKey={field.key} answers={answers} />
                 {showForeign ? <ForeignChangeNotice /> : null}
               </div>
             );
