@@ -8,7 +8,10 @@
 set -uo pipefail
 
 : "${REPO:?REPO mangler}"
-ATTR="$(pwd)/scripts/git/union-filer"
+# Kopier hjelpefilene ut før vi bytter branch: eldre PR-brancher har dem ikke.
+VERKTOY="$(mktemp -d)"
+cp scripts/git/union-filer scripts/git/versjon-etter-flett.mjs "$VERKTOY/"
+ATTR="$VERKTOY/union-filer"
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 git fetch -q origin
@@ -30,7 +33,7 @@ while read -r nr head base; do
   melding="Flett inn $base automatisk (oppdatering av åpne PR-er)"
   if ! git -c core.attributesFile="$ATTR" merge --no-edit -m "$melding" "origin/$base" >/dev/null 2>&1; then
     konflikter=$(git diff --name-only --diff-filter=U | tr '\n' ' ')
-    if [ "$(echo $konflikter)" = "package.json" ] && node scripts/git/versjon-etter-flett.mjs; then
+    if [ "$(echo $konflikter)" = "package.json" ] && node "$VERKTOY/versjon-etter-flett.mjs"; then
       git add package.json
       git commit -q --no-edit -m "$melding"
     else
