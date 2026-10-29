@@ -1690,6 +1690,9 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Lokal kjerne | `sync/local/` (`createLocalTrialStore`, `createLocalDb`) | Lokal lagring, endringskø, sending og innfletting som ElectricSQL og egenbygd deler i prøven. Hver kandidat har bare sin egen leser |
 | Leser (synk) | `LocalTrialReader` (`sync/local/types.ts`) | Den delen av en kandidat som henter rader fra serveren og gir dem til den lokale kjernen: skjemaleseren for ElectricSQL, hentelesingen mot `/api/prove/synk/hent` for egenbygd. Skriver aldri selv i lagringen |
 | Egenbygd kandidat | `custom` | Tredje kandidat i fase 1: egen lokal lagring (IndexedDB), egen endringskø og egen hente-rute, uten ekstra tjeneste. Verdien `custom` i innstillingen `trial_sync_candidate` |
+| Synkstatus | `SyncStatus` (komponent, `offline-trial/sync-status.tsx`) | Linjen øverst i testskjemaet som alltid viser hva som venter, «Lagret kl.» og knappen «Synk nå». Erstatter måleindikatoren fra prøven |
+| Lagret kl. | `lastSavedAt` | Siste gang enheten hadde nett og ingenting ventet. Lagres lokalt per kandidat og tømmes ved bytte av organisasjon |
+| Synk nå | `syncNow` (`TrialSyncStore`) | Sender endringskøen, starter bildeopplastingen og henter fra serveren med en gang, uten å vente på neste forsøk |
 | Tekstfletting | `text merge` (`text-merge.ts`, Yjs) | To som skriver i samme tekstfelt får begge bidrag med |
 | Siste endring vinner | `last write wins` | For TG, valg, tall og tabell: den endringen som når serveren sist, gjelder. Den andre får varselet «Endret av en annen» |
 | Enhets-id i prøven | `trial_device_id` | Fast id per nettleser-installasjon, bare for varselet i prøve B. Ikke tabellen `devices` (fase 2b) |
