@@ -1,0 +1,6 @@
+# Filer der to PR-er ofte legger til linjer på samme sted. Ved konflikt tas begge sidene med.
+# Brukes av scripts/oppdater-apne-pr.sh (via core.attributesFile) og av .gitattributes.
+docs/agenter/tilstand.md merge=union
+docs/agenter/erfaringer.md merge=union
+docs/09-apne-sporsmal.md merge=union
+docs/05-domenemodell.md merge=union

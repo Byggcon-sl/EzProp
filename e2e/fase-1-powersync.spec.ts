@@ -365,7 +365,7 @@ test("tall satt utenfra via testkroken vises i feltet med Endret av en annen", a
 
   await setAnswerViaHook(page, formId, "floors", 7, FOREIGN);
   await expect(floors).toHaveValue("7");
-  await expect(foreignWarning(page, "floors")).toBeVisible();
+  await expect(foreignWarning(page, "floors")).toBeVisible({ timeout: 15_000 });
 
   await floors.click();
   await expect(foreignWarning(page, "floors")).toHaveCount(0);
@@ -389,13 +389,13 @@ test("TG og valg satt utenfra viser Endret av en annen, egen endring gjør det i
     "aria-pressed",
     "false",
   );
-  await expect(foreignWarning(page, "roof_tg")).toBeVisible();
+  await expect(foreignWarning(page, "roof_tg")).toBeVisible({ timeout: 15_000 });
 
   await setAnswerViaHook(page, formId, "leak_stopper", "no", FOREIGN);
   await expect(
     group(page, "Lekkasjestopper").getByRole("button", { name: "Nei", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(foreignWarning(page, "leak_stopper")).toBeVisible();
+  await expect(foreignWarning(page, "leak_stopper")).toBeVisible({ timeout: 15_000 });
 
   const ownDevice = await hookValue(page, "deviceId");
   expect(ownDevice).not.toBe(FOREIGN);

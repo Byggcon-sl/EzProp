@@ -2,6 +2,12 @@
 
 Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte tid. Nyeste øverst. Får Ståle stadig de samme kommentarene, legges de inn som regel i den aktuelle agentbeskrivelsen.
 
+
+## 29.10.2026 – Hvorfor PR-er stoppet hos Ståle
+
+- Tre av ti PR-er stoppet: to med konflikt i felles filer (versjon, tilstand, erfaringer, åpne spørsmål), én med en ende-til-ende-test som feilet på tid i CI og gikk grønt ved neste kjøring. Ingen ekte kodefeil.
+- Tiltak (Ståle 29.10.2026): agentene merger selv når alt er grønt (`scripts/merge-klare-pr.sh`), «Oppdater åpne PR-er» fletter main inn i åpne PR-er etter hver merge, felles dokumenter flettes med begge sider, og varselet «Endret av en annen» får 15 s ventetid i e2e.
+- Commit-meldinger fra skyen kan få modellnavn i attribusjonslinjen. Squash-merge med bare tittelen holder main fri for dem.
 ## 29.10.2026 – Modellbytte når kvoten er brukt opp (PR #9)
 
 - Lederrollene hadde fast modell i `.claude/agents/`. Da kvoten for ledermodellen var brukt opp, ville arbeidsflytene stoppe selv om rutinen ble flyttet til en annen modell. Lederne arver nå modellen fra rutinen (`model: inherit`). Bytte modell gjøres bare på rutinen. Utøverne har fortsatt fast modell.
