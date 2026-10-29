@@ -128,6 +128,51 @@ describe("check-sync-secrets.sh", () => {
     });
   });
 
+  // Småfunn etter PR #17: JWT- og Electric-hemmeligheten må ha minst 32 tegn.
+  describe.each(["POWERSYNC_JWT_SECRET", "ELECTRIC_SECRET"] as const)("%s", (name) => {
+    it(`${name} under 32 tegn stopper`, () => {
+      const short = `oppdiktet-${"k".repeat(21)}`; // 31 tegn
+      expect(short).toHaveLength(31);
+      const env: Record<string, string> = { ENABLE_SYNC_TRIAL: "true", ...VALID, [name]: short };
+      const result = run(env);
+      expect(result.status, result.output).toBe(1);
+      expect(result.output).toContain(name);
+      expectNoValues(result, env);
+    });
+  });
+
+  it("JWT- og Electric-hemmelighet med nøyaktig 32 tegn gir exit 0", () => {
+    const jwt = `oppdiktet-jwt-${"j".repeat(18)}`;
+    const electric = `oppdiktet-el-${"e".repeat(19)}`;
+    expect(jwt).toHaveLength(32);
+    expect(electric).toHaveLength(32);
+    const env: Record<string, string> = {
+      ENABLE_SYNC_TRIAL: "true",
+      ...VALID,
+      POWERSYNC_JWT_SECRET: jwt,
+      ELECTRIC_SECRET: electric,
+    };
+    const result = run(env);
+    expect(result.status, result.output).toBe(0);
+    expectNoValues(result, env);
+  });
+
+  it("32 tegn med spesialtegn gir exit 0", () => {
+    const jwt = "oppdiktet/jwt-nokkel/med-tegn-01";
+    const electric = "oppdiktet-el/nokkel-med/tegn-012";
+    expect(jwt).toHaveLength(32);
+    expect(electric).toHaveLength(32);
+    const env: Record<string, string> = {
+      ENABLE_SYNC_TRIAL: "true",
+      ...VALID,
+      POWERSYNC_JWT_SECRET: jwt,
+      ELECTRIC_SECRET: electric,
+    };
+    const result = run(env);
+    expect(result.status, result.output).toBe(0);
+    expectNoValues(result, env);
+  });
+
   it("alle satt gir exit 0", () => {
     const env: Record<string, string> = { ENABLE_SYNC_TRIAL: "true", ...VALID };
     const result = run(env);

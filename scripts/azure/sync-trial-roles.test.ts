@@ -16,7 +16,8 @@ import {
 
 /*
  * Rolleskriptet for synktjenestene i testmiljøet (ADR 0003). Kjøres mot testdatabasen, serielt
- * (én fil). Testplan: docs/funksjoner/fase1-synk-i-azure-testplan.md, avsnitt 4.
+ * (én fil). Testplan: docs/funksjoner/fase1-synk-i-azure-testplan.md, avsnitt 4, og
+ * docs/agenter/oppgaver/fase1-smafunn-synk-azure-testplan.md (A1–A4: replikeringsplasser).
  *
  * Rollene er tenant-grensen på databasenivå: synkreglene og shape-proxyen filtrerer per
  * organisasjon, men rollene skal heller ikke kunne lese brukere, sesjoner eller revisjonslogg.
@@ -165,6 +166,51 @@ async function dropSlot(name: string) {
     from pg_replication_slots where slot_name = ${name}`;
 }
 
+/** Fysiske testplasser (A1). Fysiske plasser hører ikke til noen database. */
+const PHYSICAL_SLOTS = ["powersync_testplan_1", "electric_slot_testplan_1", "annen_testplan_1"];
+/** Midlertidig database for A3. Aldri ezprop eller powersync_storage. */
+const OTHER_DB = "ezprop_slottest_other";
+const OTHER_SLOT = "powersync_testplan_3";
+const ACTIVE_SLOT = "powersync_testplan_4";
+/** Logiske testplasser i testdatabasen (A2 og A4). */
+const LOGICAL_SLOTS = [
+  "powersync_testplan_2",
+  "electric_slot_testplan_2",
+  "annen_testplan_2",
+  ACTIVE_SLOT,
+];
+
+const [{ wal_level: walLevel }] = (await sql`show wal_level`) as unknown as [{ wal_level: string }];
+/** Logiske plasser krever wal_level=logical. CI og vanlig lokal PostgreSQL har «replica». */
+const logicalWal = walLevel === "logical";
+const SKIP_REASON = logicalWal
+  ? ""
+  : ` (hoppes over: wal_level er «${walLevel}», logiske plasser krever «logical»)`;
+const adminUser = decodeURIComponent(new URL(url).username);
+const adminPassword = decodeURIComponent(new URL(url).password);
+
+/**
+ * Sletter logiske plasser i den andre databasen (må gjøres derfra) og så databasen.
+ * Tåler at den ikke finnes.
+ */
+async function dropOtherDatabase() {
+  const exists = await sql`select 1 from pg_database where datname = ${OTHER_DB}`;
+  if (exists.length === 0) return;
+  const other = postgres(urlAs(adminUser, adminPassword, OTHER_DB), {
+    max: 1,
+    onnotice: () => {},
+    connect_timeout: 5,
+  });
+  try {
+    await other`
+      select pg_drop_replication_slot(slot_name) from pg_replication_slots
+      where database = ${OTHER_DB} and not active`;
+  } finally {
+    await other.end({ timeout: 1 });
+  }
+  await sql.unsafe(`drop database if exists ${OTHER_DB} with (force)`);
+}
+
 async function slotNames(): Promise<string[]> {
   const rows = await sql<{ slot_name: string }[]>`select slot_name from pg_replication_slots`;
   return rows.map((row) => row.slot_name);
@@ -203,9 +249,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const name of ["powersync_testplan_1", "electric_slot_testplan_1", "annen_testplan_1"]) {
-    await tolerate(() => dropSlot(name));
-  }
+  // Logiske plasser først (de holder på WAL), så fysiske, så den andre databasen.
+  for (const name of LOGICAL_SLOTS) await tolerate(() => dropSlot(name));
+  await dropOtherDatabase();
+  for (const name of PHYSICAL_SLOTS) await tolerate(() => dropSlot(name));
   await tolerate(() => sql`revoke select on users from electric_repl`);
   await cleanup();
   await sql.end({ timeout: 1 });
@@ -466,9 +513,10 @@ describe("rolleskriptet mot testdatabasen", () => {
     }
   });
 
-  it("bryteren av rydder ubrukte replikeringsplasser og ingenting annet", async () => {
-    const names = ["powersync_testplan_1", "electric_slot_testplan_1", "annen_testplan_1"];
-    for (const name of names) {
+  it("bryteren av rører ikke fysiske plasser, selv med synknavn", async () => {
+    // Regresjonstest for småfunn 1 etter PR #17: fysiske plasser hører ikke til noen database
+    // og skal aldri slettes av skriptet. Kjører alltid (trenger ikke wal_level=logical).
+    for (const name of PHYSICAL_SLOTS) {
       await tolerate(() => dropSlot(name));
       await sql`select pg_create_physical_replication_slot(${name})`;
     }
@@ -477,21 +525,80 @@ describe("rolleskriptet mot testdatabasen", () => {
       expect(result.enabled).toBe(false);
       expect(result.rolesEnsured).toEqual([]);
       expect(result.storageDatabaseCreated).toBe(false);
-      expect([...result.droppedSlots].sort()).toEqual(
-        ["electric_slot_testplan_1", "powersync_testplan_1"].sort(),
-      );
+      expect(result.droppedSlots).toEqual([]);
       const left = await slotNames();
-      expect(left).not.toContain("powersync_testplan_1");
-      expect(left).not.toContain("electric_slot_testplan_1");
-      expect(left).toContain("annen_testplan_1");
+      for (const name of PHYSICAL_SLOTS) expect(left, name).toContain(name);
       // Rollene og lagringen blir stående (Bicep og Ståle sletter containerne, ikke data).
       for (const role of ROLES) expect(await roleExists(role), role).toBe(true);
       expect(await storageExists()).toBe(true);
-
-      const again = await apply({ enabled: false, adminDatabaseUrl: url });
-      expect(again.droppedSlots).toEqual([]);
     } finally {
-      await tolerate(() => dropSlot("annen_testplan_1"));
+      for (const name of PHYSICAL_SLOTS) await tolerate(() => dropSlot(name));
+    }
+  });
+
+  it.skipIf(!logicalWal)(
+    `bryteren av sletter ubrukte logiske plasser i egen database${SKIP_REASON}`,
+    async () => {
+      const names = ["powersync_testplan_2", "electric_slot_testplan_2", "annen_testplan_2"];
+      for (const name of names) {
+        await tolerate(() => dropSlot(name));
+        await sql`select pg_create_logical_replication_slot(${name}, 'pgoutput')`;
+      }
+      try {
+        const result = await apply({ enabled: false, adminDatabaseUrl: url });
+        expect([...result.droppedSlots].sort()).toEqual(
+          ["electric_slot_testplan_2", "powersync_testplan_2"].sort(),
+        );
+        const left = await slotNames();
+        expect(left).not.toContain("powersync_testplan_2");
+        expect(left).not.toContain("electric_slot_testplan_2");
+        expect(left).toContain("annen_testplan_2");
+
+        const again = await apply({ enabled: false, adminDatabaseUrl: url });
+        expect(again.droppedSlots).toEqual([]);
+      } finally {
+        for (const name of names) await tolerate(() => dropSlot(name));
+      }
+    },
+  );
+
+  it.skipIf(!logicalWal)(
+    `bryteren av rører ikke plasser i en annen database${SKIP_REASON}`,
+    async () => {
+      await dropOtherDatabase();
+      await sql.unsafe(`create database ${OTHER_DB}`);
+      const other = postgres(urlAs(adminUser, adminPassword, OTHER_DB), {
+        max: 1,
+        onnotice: () => {},
+      });
+      try {
+        await other`select pg_create_logical_replication_slot(${OTHER_SLOT}, 'pgoutput')`;
+        const result = await apply({ enabled: false, adminDatabaseUrl: url });
+        expect(result.droppedSlots).not.toContain(OTHER_SLOT);
+        const [row] = await sql<{ database: string }[]>`
+          select database from pg_replication_slots where slot_name = ${OTHER_SLOT}`;
+        expect(row?.database, "plassen i den andre databasen er borte").toBe(OTHER_DB);
+      } finally {
+        await other.end({ timeout: 1 });
+        await dropOtherDatabase();
+      }
+    },
+  );
+
+  it.skipIf(!logicalWal)(`bryteren av rører ikke aktive plasser${SKIP_REASON}`, async () => {
+    // En midlertidig plass er aktiv så lenge økten som lagde den, lever, og forsvinner
+    // av seg selv når økten lukkes. Den kan derfor ikke bli liggende.
+    const holder = postgres(url, { max: 1, onnotice: () => {} });
+    try {
+      await holder`select pg_create_logical_replication_slot(${ACTIVE_SLOT}, 'pgoutput', true)`;
+      const [before] = await sql<{ active: boolean }[]>`
+        select active from pg_replication_slots where slot_name = ${ACTIVE_SLOT}`;
+      expect(before?.active, "plassen er ikke aktiv").toBe(true);
+      const result = await apply({ enabled: false, adminDatabaseUrl: url });
+      expect(result.droppedSlots).not.toContain(ACTIVE_SLOT);
+      expect(await slotNames()).toContain(ACTIVE_SLOT);
+    } finally {
+      await holder.end({ timeout: 1 });
     }
   });
 

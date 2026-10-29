@@ -102,6 +102,9 @@ Ingen.
 - [ ] Admin stenges ikke ute: rollematrisen er uendret.
 - [ ] Virker på iPad-størrelse: uendret (ingen nye skjermer).
 
+## Funn til ADR-en
+- REPLICATION gir synkrollene (`powersync_repl` og `electric_repl`) mulighet til å lese hele databasen via replikeringsprotokollen, uavhengig av lesetilgangen (SELECT). Det er akseptert for testmiljøet, der det bare finnes oppdiktede data. I produksjon må dette vurderes, for eksempel med en egen database for synkdata, eller med en tjeneste som ikke trenger REPLICATION. Kilde: gjennomgangen av PR #17, 29.10.2026.
+
 ## Åpne spørsmål
 - Nr. 12 (nytt): vil Ståle slå på synktjenestene i testmiljøet, og hvor lenge? Ikke blokkerende.
 - Nr. 10 og 11 (leverandørvalg) gjelder fortsatt før ADR-en. Ikke blokkerende.

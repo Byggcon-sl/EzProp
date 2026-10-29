@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 29.10.2026 kl. 17:00 (PR #14–#17 merget; synkstatus i arbeid på `fase1-synkstatus`)
+Sist oppdatert: 29.10.2026 (liten oppgave (c), småfunn fra PR #17, levert som PR fra `fase1-smafunn-synk-azure`; synkstatus i arbeid på `fase1-synkstatus`)
 
 ## Gjeldende fase
 
@@ -20,7 +20,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 **Enda før:** Oppgave 5 – Kandidat 2: ElectricSQL, **PR #10** (branch `fase1-kandidat-electricsql`, versjon 0.2.2). Oppgavekort `docs/funksjoner/fase1-kandidat-electricsql.md`, testplan `docs/funksjoner/fase1-kandidat-electricsql-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-electricsql.md`, drift `docs/drift/electricsql.md`. Sikkerhet-personvern: godkjent, tre små funn; (2) og (3) rettet, (1) (Electrics 400-kropp videresendes uendret) tas i ADR-en. Test-leder: godkjent (lint, typesjekk, format, 333 Vitest, e2e 105 bestått). Spørsmål nr. 11 (ElectricSQL som leverandør), ikke blokkerende.
 
-**Små oppgaver som venter:** (c) Småfunn fra synktjenestene i Azure: rydding av replikeringsplasser bare i egen database (rammer i dag også `ezprop` lokalt når `pnpm test` kjøres med containerne stoppet), lengdekrav på `POWERSYNC_JWT_SECRET` og `ELECTRIC_SECRET` i `check-sync-secrets.sh`, riktig «postgresql://» eller fjerne de avledede maskene i `deploy-azure.yml`, mindre bastant setning om hva tjenestene kan lese i `electricsql.md` (REPLICATION gir lesing av hele databasen), og to overflødige sjekker i `sync-trial-roles.ts`. (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14** (merget 29.10.2026), sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
+**Små oppgaver som venter:** ingen. (c) Småfunn fra synktjenestene i Azure er levert som PR fra branchen `fase1-smafunn-synk-azure` (versjon 0.2.9, oppgavekort `docs/agenter/oppgaver/fase1-smafunn-synk-azure.md`). (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14** (merget 29.10.2026), sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
 
 **Rekkefølge videre i fase 1:** alle tre kandidatene er satt opp → synktjenestene i Azure (a, merget) → Ståle slår dem på (spørsmål nr. 12) og kjører prøve A og B per kandidat på ekte iPad → prøve C–F → sammenligning og ADR.
 
@@ -28,7 +28,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 ## Åpne PR-er
 
-Ingen åpne PR-er. PR #14, #15, #16 og #17 er merget 29.10.2026. Synkstatus (`fase1-synkstatus`) er i arbeid uten PR ennå.
+PR for liten oppgave (c), småfunn fra synktjenestene i Azure (`fase1-smafunn-synk-azure` mot `main`, versjon 0.2.9): klar, merges av agentene med skriptet når CI er grønn. PR #14, #15, #16 og #17 er merget 29.10.2026. Synkstatus (`fase1-synkstatus`) er i arbeid uten PR ennå.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -47,6 +47,8 @@ Ingen ennå.
 Ingen.
 
 ## Siste kjøring
+
+29.10.2026: prosjektleder fullførte liten oppgave (c), småfunnene fra PR #17 (forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver; alle sjekker grønne), krysset av i planen og åpnet PR mot `main`. Sesjon: https://claude.ai/code/session_01Jqwnu11Jdv4FLbyF9rNKnW
 
 29.10.2026 kl. 13:57–17:00: hovedløkken merget PR #14 (CI grønn), sjekket at ingen gamle brancher har innhold som mangler på `main` (forskjellene er bare eldre versjoner som `main` har erstattet), og kjørte oppgave (a) med arbeidsflyten «oppgave» til PR #17, som ble merget med skriptet. Ryddet tilstandsfilen etter to kjøringer samtidig. Sesjon: https://claude.ai/code/session_01Jqwnu11Jdv4FLbyF9rNKnW
 
