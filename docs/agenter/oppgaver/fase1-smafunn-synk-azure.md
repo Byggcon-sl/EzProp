@@ -2,7 +2,7 @@
 
 - **Fase:** 1 – Prøve uten nett
 - **Modul:** kjerne (drift: `scripts/azure`, `.github/workflows`, `docs/drift`)
-- **Status:** godkjent (prosjektleder 29.10.2026)
+- **Status:** godkjent (prosjektleder 29.10.2026), rettet etter test-leder runde 1
 - **Branch:** `fase1-smafunn-synk-azure`, bygger på `main`
 - **Støtter hovedmål:** Reklamasjoner: prøven uten nett må være til å stole på, og ingen lokale data eller replikeringsplasser skal forsvinne eller bli liggende uten at vi vet det. Tid: færre feil når Ståle slår på synktjenestene (spørsmål nr. 12), så prøve A og B kan kjøres uten stopp. KI først: indirekte, prøven er grunnlaget for befaring på iPad der KI-forslag senere vises og godkjennes.
 
@@ -28,7 +28,7 @@ Nei. Dette er drift og rydding i skript. Det finnes ingenting takstmannen skal k
 2. **Lengdekrav i `check-sync-secrets.sh`:** `POWERSYNC_JWT_SECRET` og `ELECTRIC_SECRET` må ha minst 32 tegn. Ingen krav til tegnsett (de går ikke inn i databaseadresser). Meldingen nevner bare navnet, aldri verdien. Kommentaren øverst og `docs/drift/testmiljo-azure.md` (der hemmelighetene lages) oppdateres med kravet. Bash 3.2.
 3. **Maskene i `deploy-azure.yml`:** fjern de tre avledede adresse-maskene for synkrollene (linjene med `powersync_repl:` og `electric_repl:` i steget «Databaseadresse for kjøreren (maskert)»). Selve passordene er allerede maskert, og GitHub maskerer da også passordet inne i en adresse. Masken for `DATABASE_URL` til admin beholdes. Kommentaren rettes.
 4. **`docs/drift/electricsql.md`** og samme setning i `docs/drift/powersync.md` (linjen om `powersync_repl`): skriv at rollen har SELECT bare på de tre trial-tabellene, men at REPLICATION-egenskapen gir mulighet til å lese hele databasen via replikeringsprotokollen; at skriptets sjekk dekker SELECT-rettighetene, ikke dette; og at det er akseptert for testmiljøet med oppdiktede data. Legg en linje **«Funn til ADR-en»** i `docs/funksjoner/fase1-synk-i-azure.md`: i produksjon må dette vurderes (egen database for synkdata, eller en tjeneste som ikke trenger REPLICATION).
-5. **To overflødige sjekker i `applySyncTrialRoles`:** (a) passordene valideres på nytt med `assertValidPassword`, selv om typen og `readSyncTrialRolesInput` allerede sikrer dem; (b) `|| !passwords` i grenen for bryteren av kan aldri slå til. Fjern dem uten å endre oppførselen. Hvis typen `SyncTrialRolesInput` gjør at valideringen faktisk trengs (input som ikke kommer fra `readSyncTrialRolesInput`), beholdes (a), og det står i PR-en hvorfor.
+5. **Én overflødig sjekk i `applySyncTrialRoles`:** `|| !passwords` i grenen for bryteren av kan aldri slå til. Den fjernes uten å endre oppførselen. Beregningen av `passwords` flyttes til etter grenen for bryteren av (da er `input.enabled` sann, og `passwords` er aldri null), slik at typecheck er grønn uten sjekken. Valideringen med `assertValidPassword` inne i `applySyncTrialRoles` **beholdes** (avgjort av prosjektleder 29.10.2026, etter test-leder): testen «bryteren på uten passord stopper med navnet» kaller funksjonen direkte med tomme og ugyldige passord, og dokumentasjonen på `SyncTrialRolesInput` lover at feil passord kastes. Typen `string` sikrer ikke det. Begrunnelsen står i PR-en.
 6. Versjon i `package.json`: 0.2.8 → 0.2.9.
 
 **Ikke med (bevisst utelatt):**
@@ -37,6 +37,8 @@ Nei. Dette er drift og rydding i skript. Det finnes ingenting takstmannen skal k
 - Ingen endring i rollenes rettigheter (REPLICATION beholdes; det er en sak for ADR-en).
 - Ingen endring i synkstatus (`fase1-synkstatus`) eller i kandidatene.
 - Ingen nye spørsmål til Ståle.
+- `_` som jokertegn i LIKE-mønsteret `electric_slot%` rettes ikke (ingen praktisk betydning). Notert her og kan vente.
+- Lengden i `check-sync-secrets.sh` telles i byte (`LC_ALL=C`), så æøå teller dobbelt. Det er greit for et minstekrav og endres ikke.
 
 ## Tilgang
 Ingen endring. Ingen ny spørring som tar `organizationId`, så ingen ny tenant-isolasjonstest.
@@ -58,16 +60,40 @@ Ingen.
 Ingen fagregler.
 
 ## Akseptkriterier
-- [ ] `dropUnusedSlots` sletter bare ubrukte plasser i `current_database()`. Test i `scripts/azure/sync-trial-roles.test.ts`: en plass med riktig navn i en annen database (eller en fysisk plass) blir liggende. Logiske plasser krever `wal_level=logical`; CI-databasen har ikke det, så testene som trenger logiske plasser hoppes over med tydelig grunn når `wal_level` ikke er `logical`, mens testen med fysisk plass kjører alltid. Den eksisterende testen som i dag sletter fysiske plasser, skrives om tilsvarende.
-- [ ] `check-sync-secrets.sh` gir exit 1 med navnet (aldri verdien) når `POWERSYNC_JWT_SECRET` eller `ELECTRIC_SECRET` er under 32 tegn, og exit 0 med 32 tegn. Skripttesten utvides.
-- [ ] `deploy-azure.yml` har ingen masker med `powersync_repl:` eller `electric_repl:`. Passordmaskene og admin-masken står. `tests/deploy-workflow.test.ts` sjekker dette.
-- [ ] `docs/drift/electricsql.md` og `docs/drift/powersync.md` sier ikke lenger at rollen «bare kan lese» de tre tabellene, og forklarer REPLICATION. «Funn til ADR-en» står i `docs/funksjoner/fase1-synk-i-azure.md`.
-- [ ] De to sjekkene er fjernet (eller begrunnet beholdt), og alle eksisterende tester for rolleskriptet er grønne.
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne. Versjon 0.2.9.
+- [ ] `dropUnusedSlots` sletter bare ubrukte logiske plasser i `current_database()`. Fysiske plasser og plasser i andre databaser røres ikke.
+- [ ] `check-sync-secrets.sh` gir exit 1 med navnet (aldri verdien) når `POWERSYNC_JWT_SECRET` eller `ELECTRIC_SECRET` er under 32 tegn, og exit 0 med 32 tegn, også med spesialtegn. Bash 3.2.
+- [ ] `deploy-azure.yml` har ingen masker med `powersync_repl:` eller `electric_repl:`. Passordmaskene og admin-masken står.
+- [ ] `docs/drift/electricsql.md` og `docs/drift/powersync.md` sier ikke lenger at rollen «bare kan lese» de tre tabellene, forklarer REPLICATION og sier at det er akseptert for testmiljøet. «Funn til ADR-en» står i `docs/funksjoner/fase1-synk-i-azure.md`. Kravet om 32 tegn står i `docs/drift/testmiljo-azure.md`.
+- [ ] `|| !passwords` er fjernet uten å endre oppførselen, og typecheck er grønn. `assertValidPassword` i `applySyncTrialRoles` er beholdt, med begrunnelse i PR-en. Alle eksisterende tester for rolleskriptet er grønne, også «bryteren på uten passord stopper med navnet».
+- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne. Versjon 0.2.9. Testrapporten sier hvilke tester som ble hoppet over i CI på grunn av `wal_level`.
+
+## Testplan (fra test-leder, runde 1)
+Ingen ny spørring tar `organizationId`: ingen test for tenant-isolasjon eller roller i appen, og ingen ny e2e. Admin berøres ikke.
+
+**A. `scripts/azure/sync-trial-roles.test.ts`**
+- A1. «bryteren av rører ikke fysiske plasser, selv med synknavn»: fysiske plasser `powersync_testplan_1`, `electric_slot_testplan_1` og `annen_testplan_1` står igjen, og `droppedSlots` er tom. Erstatter dagens test «bryteren av rydder ubrukte replikeringsplasser og ingenting annet». Kjører alltid, også i CI, og feiler med dagens kode (regresjonstest for funnet).
+- A2. «bryteren av sletter ubrukte logiske plasser i egen database» (`pgoutput`). Hoppes over med tydelig grunn når `wal_level` ikke er `logical`.
+- A3. «bryteren av rører ikke plasser i en annen database»: midlertidig database (f.eks. `ezprop_slottest_other`) med en logisk plass med synknavn; den står igjen. Bruk aldri `ezprop` eller `powersync_storage`. Hoppes over som A2.
+- A4. (valgfri) «bryteren av rører ikke aktive plasser». Droppes hvis den blir ustabil.
+- `afterAll` sletter alle logiske testplasser før den midlertidige databasen slettes. En logisk plass som blir liggende, holder på WAL og fyller disken; det regnes som alvorlig funn.
+
+**B. Skripttesten for `check-sync-secrets.sh` (`scripts/azure/check-sync-secrets.test.ts`)**
+- B1. `POWERSYNC_JWT_SECRET` med 31 tegn gir exit 1, navnet men ikke verdien i utskriften.
+- B2. Det samme for `ELECTRIC_SECRET`.
+- B3. Begge med nøyaktig 32 tegn gir exit 0.
+- B4. 32 tegn med `-` og `/` gir exit 0 (ikke krav til tegnsett).
+- Testene for bash 3.2 og «aldri verdiene i utskriften» er fortsatt grønne.
+
+**C. `tests/deploy-workflow.test.ts`** (testen «passord og tilkoblingsstrenger for synk maskeres før bruk» skrives om)
+- C1. Ingen `::add-mask::`-linje inneholder `powersync_repl:` eller `electric_repl:`.
+- C2. Maskene for `POWERSYNC_DB_PASSWORD` og `ELECTRIC_DB_PASSWORD` står før `sync-trial-roles.ts`.
+- C3. Masken for `$DATABASE_URL` står før `pnpm db:migrate` (finnes allerede).
+
+**D. Dokumentene** sjekkes ved gjennomgang (se akseptkriteriene).
 
 ## Roller
-- **utvikler:** punkt 1–6.
-- **testskriver (i parallell):** testene i akseptkriteriene (`sync-trial-roles.test.ts`, skripttesten for `check-sync-secrets.sh`, `tests/deploy-workflow.test.ts`). Kontrakten er navnene i dette kortet; ingen nye eksporter.
+- **utvikler:** punkt 1–6 (punkt 5: bare `|| !passwords` fjernes, `assertValidPassword` beholdes).
+- **testskriver (i parallell):** testplanen A–C. Kontrakten er navnene i dette kortet; ingen nye eksporter. `applySyncTrialRoles` kaster fortsatt ved ugyldige passord.
 - Ingen arkitekt, UX, UI, KI, fag eller sikkerhet-personvern: ingen nye valg, og punkt 4 er bare en mer presis beskrivelse av det sikkerhet-personvern allerede har godkjent for testmiljøet. Selve vurderingen tas i synk-ADR-en.
 
 ## Åpne spørsmål
