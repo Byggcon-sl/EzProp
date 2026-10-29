@@ -37,9 +37,13 @@ const DIR = path.dirname(fileURLToPath(import.meta.url));
 const TEST_IMAGE = path.join(DIR, "fixtures", "test-image.png");
 const PHOTO_ROUTE = "**/api/prove/bilder/**";
 const CHANGES_ROUTE = "**/api/prove/synk/endringer";
-const ANY_STATUS = /^(Venter: \d+ endring(er)?, \d+ bilde(r)?|Alt er lagret på serveren)$/;
-const NO_PHOTOS_WAITING = /^Venter: \d+ endring(er)?, 0 bilder$|^Alt er lagret på serveren$/;
-const ALL_SAVED = "Alt er lagret på serveren";
+const ANY_STATUS =
+  /^(Venter: \d+ endring(er)?, \d+ bilde(r)?|Alt er lagret|Venter på kontakt med serveren)$/;
+const NO_PHOTOS_WAITING =
+  /^Venter: \d+ endring(er)?, 0 bilder$|^Alt er lagret$|^Venter på kontakt med serveren$/;
+const ALL_SAVED = "Alt er lagret";
+/** PowerSync og ElectricSQL: køen er tom, men uten henting fra serveren i e2e er ingenting bekreftet. */
+const AWAITING_SERVER = "Venter på kontakt med serveren";
 const WAIT_TEXT = "Vent til alt er lagret på serveren før du bytter";
 /** Takt 5 s pluss sending og slingringsmonn (testplan 6.2, «To enheter»). */
 const OTHER_DEVICE_TIMEOUT = 20_000;
@@ -1216,7 +1220,7 @@ test("velgeren har tre knapper, og Egenbygd overlever omlasting", async ({ page 
       expect(box!.height).toBeGreaterThanOrEqual(44);
     }
   }
-  await expect(indicator(page)).toHaveText(ALL_SAVED);
+  await expect(indicator(page)).toHaveText(AWAITING_SERVER);
 
   await Promise.all([page.waitForEvent("load"), custom.click()]);
   await page.waitForLoadState();
