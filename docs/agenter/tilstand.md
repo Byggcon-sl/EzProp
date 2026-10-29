@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 29.10.2026 kl. 19:50 (PR #21 synkstatus merget kl. 19:44, ingen åpne PR-er)
+Sist oppdatert: 29.10.2026 (liten oppgave (d) startet på `fase1-smafunn-synkstatus`)
 
 ## Gjeldende fase
 
@@ -13,6 +13,8 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 ## Gjeldende oppgave
 
 **Levert: Synkstatus som alltid vises**, **PR #21** (merget 29.10.2026 kl. 19:44; branch `fase1-synkstatus`, bygger på `main`, versjon 0.2.11). Oppgavekort `docs/funksjoner/fase1-synkstatus.md`, skisse `docs/funksjoner/fase1-synkstatus-skisse.md`, testplan `docs/funksjoner/fase1-synkstatus-testplan.md`. Måleindikatoren er erstattet av `sync-status.tsx` for alle tre kandidatene. Roller: forenkler, ux-ansvarlig, test-leder, ui-designer, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
+
+**Pågår:** liten oppgave (d), småfunnene fra PR #21. Branch `fase1-smafunn-synkstatus` (bygger på `main`, versjon 0.2.13), oppgavekort `docs/agenter/oppgaver/fase1-smafunn-synkstatus.md`. Roller: utvikler og testskriver i parallell.
 
 **Neste:** liten oppgave (d) med småfunnene fra synkstatus-PR-en (se under). Deretter prøve A og B per kandidat (Ståle, når synktjenestene er slått på, spørsmål nr. 12). Til da: prøve C–F i fase 1 som kan forberedes uten Ståle. Små oppgaver fra synkstatus-PR-en (kan tas som én liten oppgave): enhetstest for «Synk nå» i lageret, `ensureInspector` i e2e skal ikke bruke slettede ansatte og ikke skrive mot andre databaser enn lokal/test, loggen i `trial-store.ts` skal bare vise feilmeldingen, og fjerne `failChangesOnce` og en unødvendig cast.
 
