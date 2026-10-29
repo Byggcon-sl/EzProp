@@ -2,6 +2,13 @@
 
 Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte tid. Nyeste øverst. Får Ståle stadig de samme kommentarene, legges de inn som regel i den aktuelle agentbeskrivelsen.
 
+## 29.10.2026 – PR #14 og PR #15 merget, og en branch som aldri ble PR
+
+- PR #14 (småfunn fra PowerSync-prøven, tidsavbrudd på bildeopplasting, stabile bildetester) ble merget kl. 13:58, og PR #15 (stabil e2e-test for bytte av organisasjon) av hovedløkken kl. 15:55 med `scripts/merge-klare-pr.sh`. Begge gikk rett gjennom: CI grønn, ingen konflikt.
+- PR #15 var laget for PR #14, men kom etter at #14 var merget. Det gikk bra fordi den ble åpnet mot `main`. Regel: en rettelse til en PR som kan bli merget når som helst, lages mot `main` når den ikke trenger noe fra PR-en.
+- En beslutning (ingen grense for PR-er som venter på Ståle) lå bare på branchen `beslutning-azure-felles-innlogging` etter at PR #5 var merget, fordi siste commit kom etter mergen. Rollefilen var rettet senere, men `LES-MEG-kartlegging.md` og endringsloggen i planen manglet den. Ført inn i `main` nå. Regel: push ikke til en branch etter at PR-en er merget; lag ny branch fra `main`.
+- Branchen `fase1-synk-i-azure` (oppgave a) har oppgavekort, ADR og testplan, men ingen PR. Hovedløkken lar den være så lenge den kan være i arbeid i en annen sesjon, og tar en annen oppgave i mellomtiden.
+
 ## 29.10.2026 – «Oppdater åpne PR-er» fikk konflikt i felles dokument
 
 - Første kjøring etter PR #12 ga konflikt i `erfaringer.md`, selv om filen skal flettes med begge sider. Årsak: skriptet byttet til PR-ens branch før flettingen, og den eldre branchen hadde ikke `scripts/git/union-filer`. Rettet ved å kopiere hjelpefilene ut før byttet. Regel: et skript som bytter branch, kan ikke lese sine egne hjelpefiler etterpå.
