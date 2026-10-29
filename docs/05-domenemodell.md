@@ -1686,6 +1686,8 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Synklager (kontrakten i prøven) | `TrialSyncStore` (`sync/types.ts`) | Det skjermene og bildekøen i testskjemaet bygger mot, likt for alle kandidater. Testkroken i e2e er `TrialSyncTestable` (`applySyncedRows`, `readRows`) |
 | Innfletting | `applyIncoming` | Nedlastede rader flettes inn i den lokale lagringen uten å legge seg over usendte endringer; `text_state` flettes alltid med Yjs |
 | Synkposisjon (ElectricSQL) | `shape_state` | Hvor langt iPaden har lest hver shape (`handle` og `offset`), lagret lokalt så synken fortsetter der den slapp. Slettes ved «må hentes på nytt» (409) fra Electric; endringskøen røres aldri |
+| Hentemarkør (egenbygd) | `pull cursor` | Hvor langt iPaden har hentet «endringer siden sist» fra `/api/prove/synk/hent` med den egenbygde kandidaten. En tekst fra serveren som iPaden bare lagrer og sender tilbake; ugyldig markør gir henting fra start, og endringskøen røres aldri |
+| Egenbygd kandidat | `custom` | Tredje kandidat i fase 1: egen lokal lagring (IndexedDB), egen endringskø og egen hente-rute, uten ekstra tjeneste. Verdien `custom` i innstillingen `trial_sync_candidate` |
 | Tekstfletting | `text merge` (`text-merge.ts`, Yjs) | To som skriver i samme tekstfelt får begge bidrag med |
 | Siste endring vinner | `last write wins` | For TG, valg, tall og tabell: den endringen som når serveren sist, gjelder. Den andre får varselet «Endret av en annen» |
 | Enhets-id i prøven | `trial_device_id` | Fast id per nettleser-installasjon, bare for varselet i prøve B. Ikke tabellen `devices` (fase 2b) |
