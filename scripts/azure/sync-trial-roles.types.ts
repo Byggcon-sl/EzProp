@@ -41,8 +41,12 @@ export type SyncTrialRolesInput =
       /** Må passe `SYNC_TRIAL_PASSWORD_PATTERN`, ellers kastes en feil med navnet, aldri verdien. */
       powerSyncDbPassword: string;
       electricDbPassword: string;
-      /** Standard `ezprop`. Databasen rollene får CONNECT på. */
-      appDatabaseName?: string;
+      /**
+       * Navnet på PowerSyncs lagringsdatabase. Standard `POWERSYNC_STORAGE_DATABASE`.
+       * Testen bruker `powersync_storage_test`, fordi Docker allerede har `powersync_storage`.
+       * Databasen rollene får CONNECT på, tas fra tilkoblingen (`current_database()`).
+       */
+      storageDatabase?: string;
     };
 
 export interface SyncTrialRolesResult {

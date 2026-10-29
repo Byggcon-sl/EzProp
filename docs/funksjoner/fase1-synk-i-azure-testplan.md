@@ -156,17 +156,13 @@ Ingen ny skjerm og ingen endring i appens synklogikk. Hele den eksisterende pakk
 
 ## 9. Krav til koden som testene bygger på (for utvikler)
 
-1. `scripts/azure/sync-trial-roles.ts` eksporterer
+1. `scripts/azure/sync-trial-roles.ts` følger kontrakten i `scripts/azure/sync-trial-roles.types.ts` (rettet av prosjektleder 29.10.2026, gjelder foran tidligere utkast her) og eksporterer
    ```ts
-   export async function runSyncTrialRoles(options: {
-     databaseUrl: string;
-     enabled: boolean;
-     powerSyncPassword?: string;
-     electricPassword?: string;
-     storageDatabase?: string; // standard "powersync_storage"
-   }): Promise<void>;
+   export const applySyncTrialRoles: ApplySyncTrialRoles; // (input: SyncTrialRolesInput) => Promise<SyncTrialRolesResult>
+   export const readSyncTrialRolesInput: ReadSyncTrialRolesInput; // (env) => SyncTrialRolesInput
+   export const toPowerSyncJwtKey: ToPowerSyncJwtKey; // (secret) => base64url av UTF-8
    ```
-   og har en tynn kjøredel (bare når filen kjøres direkte) som leser `DATABASE_URL`, `ENABLE_SYNC_TRIAL` (på bare ved nøyaktig `true`), `POWERSYNC_DB_PASSWORD` og `ELECTRIC_DB_PASSWORD`. Import fra testen skal ikke starte kjøredelen.
+   Input når bryteren er på: `{ enabled: true, adminDatabaseUrl, powerSyncDbPassword, electricDbPassword, storageDatabase? }` (standard `powersync_storage`). Når av: `{ enabled: false, adminDatabaseUrl }`. Testene i avsnitt 4 bruker disse navnene («`powerSyncPassword` tom» betyr `powerSyncDbPassword: ""`). Skriptet har en tynn kjøredel (bare når filen kjøres direkte) som bruker `readSyncTrialRolesInput(process.env)`. Import fra testen skal ikke starte kjøredelen.
 2. Databasenavnet for `GRANT CONNECT` tas fra tilkoblingen (`current_database()`), ikke hardkodet `ezprop`, så testen kan bruke `ezprop_test`.
 3. Feilmeldinger er på norsk og nevner navn (rolle, tabell, miljøvariabel), aldri verdier.
 4. Med bryteren av: bare rydding av ubrukte plasser (`powersync%`, `electric_slot%`, `active = false`); ingen passord kreves.

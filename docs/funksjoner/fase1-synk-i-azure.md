@@ -28,7 +28,7 @@ Nei. Dette er drift av testmiljøet. KI er ikke med. Det som støttes, er grunnl
    - Arbeidsflyten: ingen `set -x`, ingen `echo` av verdier, `::add-mask::` på passord og alle avledede verdier (tilkoblingsstrenger) før bruk.
 4. **Databasen (bare når bryteren er på):**
    - **wal_level:** `configurations 'wal_level'` = `logical` i Bicep med betingelse, kjedet etter `allowAzureServices` med `dependsOn` (parallelle endringer gir ServerIsBusy). Arbeidsflyten sjekker `az postgres flexible-server parameter show --name wal_level`; er `isConfigPendingRestart` `true`, kjører den `az postgres flexible-server restart` og venter til serveren er klar, før brannmur og migrering. Tåler å kjøres flere ganger. `wal_level` settes ikke tilbake når bryteren slås av (ufarlig, dokumenteres).
-   - **Roller:** nytt skript `scripts/azure/sync-trial-roles.ts` (tsx og driveren `postgres` som finnes fra før, ingen ny avhengighet). Kjøres etter migrering og seed, mens brannmuren er åpen, bare når bryteren er på.
+   - **Roller:** nytt skript `scripts/azure/sync-trial-roles.ts` (tsx og driveren `postgres` som finnes fra før, ingen ny avhengighet). Kjøres **alltid** etter migrering og seed, mens brannmuren er åpen (ingen `if:` på bryteren i arbeidsflyten). Skriptet velger selv: bryteren på gir roller og rettigheter, bryteren av gir bare rydding av replikeringsplasser (rettet av prosjektleder 29.10.2026 etter testplanens funn 1).
      - Lager `powersync_repl` og `electric_repl` hvis de mangler, og kjører deretter alltid `ALTER ROLE … LOGIN REPLICATION PASSWORD …` (passordbytte virker). Passordet settes inn med `format('… PASSWORD %L', $1)` på serveren og `sql.unsafe` på resultatet; det logges aldri og står aldri i SQL-tekst i filen.
      - Aldri SUPERUSER, CREATEDB, CREATEROLE eller `azure_pg_admin`. CONNECT til `ezprop`, USAGE på `public`, bare SELECT på `trial_forms`, `trial_answers` og `trial_photos`.
      - `powersync_storage` lages med `CREATE DATABASE … OWNER powersync_repl` bare når den mangler i `pg_database`, utenfor transaksjon (ikke i Bicep, da eier admin den). `REVOKE ALL ON DATABASE powersync_storage FROM PUBLIC`; `electric_repl` kan ikke koble til den.
@@ -116,6 +116,13 @@ Ingen.
 - Ingen UX, UI, KI eller fag.
 
 ## Avgjort ved uenighet (prosjektleder, 29.10.2026)
+- **Rettelser etter testplanen (funn 1–5):**
+  1. Rolleskriptet kjøres alltid (se punkt 4). Ellers blir replikeringsplassene liggende når bryteren slås av.
+  2. Den eksisterende testen «alle passord og hemmeligheter er @secure() og uten standardverdi» endres: nøyaktig `= ''` er lov bare for de fire nye synkparameterne.
+  3. Navnet på lagringsdatabasen er valgfritt i skriptet (`storageDatabase`, standard `powersync_storage`), fordi Docker allerede har en `powersync_storage`. Testen bruker `powersync_storage_test`.
+  4. `scripts/cloud-setup.sh` gir `ezprop` `CREATEROLE REPLICATION` hver gang (bash 3.2), så testene i skyen kjører med samme rettigheter som admin i Azure.
+  5. PostgreSQL 16: før `CREATE DATABASE … OWNER powersync_repl` gir skriptet seg selv retten til å bruke rollen (`GRANT powersync_repl TO CURRENT_USER WITH INHERIT FALSE, SET TRUE`) når det ikke kjører som superbruker. Testen «virker uten superbruker, slik som i Azure» viser at det virker.
+- **Kontrakten for rolleskriptet** er `scripts/azure/sync-trial-roles.types.ts`. Testplanens avsnitt 9 er rettet til samme navn: `applySyncTrialRoles(input: SyncTrialRolesInput): Promise<SyncTrialRolesResult>`, `readSyncTrialRolesInput(env)` og `toPowerSyncJwtKey(secret)`, alle eksportert fra `scripts/azure/sync-trial-roles.ts`. `appDatabaseName` er fjernet; databasen for `GRANT CONNECT` tas fra `current_database()`.
 - **Omstart for wal_level: arbeidsflyten gjør det** (arkitekt), ikke Ståle i portalen (forenkler). Ståle er ikke utvikler, og hvert manuelt steg er et sted prøven kan stoppe. Omstarten skjer bare når Azure melder at den trengs, og står i loggen og i dokumentet, så den skjer ikke ubemerket.
 - **PowerSync-konfig: secret-volum med `loadTextContent`** (arkitekt), ikke miljøvariabler (forenkler). Volumet er kjent å virke; miljøvariant måtte først prøves i 1.27.2 uten Azure. Begge laster fra repoet.
 - **Logg: ingen Log Analytics** (forenkler og arkitekt). Sikkerhet-personvern ba om det eksisterende området «logs», men testmiljøet har ikke noe Log Analytics-område i dag (App Service logger til filsystemet, 3 dager). Uten lagrede logger er det heller ingen hemmeligheter i logg, som er strengere enn ønsket.
