@@ -563,31 +563,35 @@ test.describe("egenbygd uten service worker", () => {
       }
     });
 
-    await page.route(PHOTO_ROUTE, (route) => route.abort());
+    // Ruten blir stående til slutt; bryteren slipper opplastingene gjennom. page.unroute midt i en
+    // opplasting kan la forespørselen henge uten svar (fanget, men aldri behandlet).
+    let blockPhotos = true;
+    await page.route(PHOTO_ROUTE, (route) => (blockPhotos ? route.abort() : route.fallback()));
     try {
       await page.getByLabel("Forsidebilde", { exact: true }).setInputFiles(TEST_IMAGE);
       await expect(indicator(page)).toHaveText(/, 1 bilde$/);
       await expect.poll(() => localPhotoFileCount(page)).toBe(1);
       await expect.poll(() => pendingChanges(page), { timeout: 20_000 }).toBe(0);
+      const postsBeforeUpload = photoPosts.length;
+      expect(postsBeforeUpload).toBeGreaterThan(0);
+
+      blockPhotos = false;
+      await expect(indicator(page)).toHaveText(NO_PHOTOS_WAITING, { timeout: 15_000 });
+      await expect.poll(() => localPhotoFileCount(page), { timeout: 15_000 }).toBe(0);
+      await expect
+        .poll(async () => {
+          const rows = await readRowsViaHook(page, "trial_photos", formId);
+          return rows.length === 1 && Boolean(rows[0]!.uploaded_at);
+        })
+        .toBe(true);
+      await expect(indicator(page)).toHaveText(ALL_SAVED, { timeout: 15_000 });
+      // markPhotoUploaded skriver bare lokalt: ingen ny endring i køen og ingen ny sending
+      expect(await pendingChanges(page)).toBe(0);
+      await page.waitForTimeout(1_000);
+      expect(photoPosts.length).toBe(postsBeforeUpload);
     } finally {
       await page.unroute(PHOTO_ROUTE);
     }
-    const postsBeforeUpload = photoPosts.length;
-    expect(postsBeforeUpload).toBeGreaterThan(0);
-
-    await expect(indicator(page)).toHaveText(NO_PHOTOS_WAITING, { timeout: 15_000 });
-    await expect.poll(() => localPhotoFileCount(page), { timeout: 15_000 }).toBe(0);
-    await expect
-      .poll(async () => {
-        const rows = await readRowsViaHook(page, "trial_photos", formId);
-        return rows.length === 1 && Boolean(rows[0]!.uploaded_at);
-      })
-      .toBe(true);
-    await expect(indicator(page)).toHaveText(ALL_SAVED, { timeout: 15_000 });
-    // markPhotoUploaded skriver bare lokalt: ingen ny endring i køen og ingen ny sending
-    expect(await pendingChanges(page)).toBe(0);
-    await page.waitForTimeout(1_000);
-    expect(photoPosts.length).toBe(postsBeforeUpload);
   });
 
   test("Electric og Egenbygd har hver sin lokale database", async ({ page }, testInfo) => {
