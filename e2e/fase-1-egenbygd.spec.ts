@@ -524,15 +524,19 @@ test.describe("egenbygd uten service worker", () => {
       await floorsInput(page).fill("8");
       await expectCount(page, 1);
 
-      const outbox = await readRowsViaHook(page, "outbox");
-      expect(
-        outbox.some(
-          (entry) =>
-            entry.table === "trial_answers" &&
-            (entry.data as Record<string, unknown> | undefined)?.value === "8",
-        ),
-        JSON.stringify(outbox),
-      ).toBe(true);
+      // Feltet viser 8 med en gang, men skrivingen til køen er asynkron: vent på den, så
+      // sjekk at bunten med 7 fortsatt er underveis (svaret kommer først etter 3 s).
+      await expect
+        .poll(
+          async () =>
+            (await readRowsViaHook(page, "outbox")).some(
+              (entry) =>
+                entry.table === "trial_answers" &&
+                (entry.data as Record<string, unknown> | undefined)?.value === "8",
+            ),
+          { timeout: 2_500, message: "8 ligger i køen mens bunten med 7 er underveis" },
+        )
+        .toBe(true);
       expect(responded).toBe(0);
 
       await expect.poll(() => pendingChanges(page), { timeout: 30_000 }).toBe(0);
@@ -563,14 +567,17 @@ test.describe("egenbygd uten service worker", () => {
       }
     });
 
-    await page.route(PHOTO_ROUTE, (route) => route.abort());
+    // Ruten blir stående og slippes gjennom med et flagg. `page.unroute` mens en opplasting er
+    // fanget, kan la den forespørselen henge, og da står bildekøen fast (feil i testen, ikke i appen).
+    let blockPhotos = true;
+    await page.route(PHOTO_ROUTE, (route) => (blockPhotos ? route.abort() : route.continue()));
     try {
       await page.getByLabel("Forsidebilde", { exact: true }).setInputFiles(TEST_IMAGE);
       await expect(indicator(page)).toHaveText(/, 1 bilde$/);
       await expect.poll(() => localPhotoFileCount(page)).toBe(1);
       await expect.poll(() => pendingChanges(page), { timeout: 20_000 }).toBe(0);
     } finally {
-      await page.unroute(PHOTO_ROUTE);
+      blockPhotos = false;
     }
     const postsBeforeUpload = photoPosts.length;
     expect(postsBeforeUpload).toBeGreaterThan(0);
@@ -726,6 +733,9 @@ test.describe("egenbygd uten service worker", () => {
     await useCandidate(context, "custom");
     const formId = await openNewForm(page);
     await waitAllSaved(page);
+    // Den gamle siden kan sende en henting rett etter svaret på «nytt skjema» (pkt. 6), mens
+    // den nye lastes. Forlat den først, så opptakeren bare teller hentingene fra den nye siden.
+    await page.goto("about:blank");
 
     await page.route(isPullUrl, (route) =>
       route.fulfill({ status: 500, contentType: "application/json", body: "{}" }),
