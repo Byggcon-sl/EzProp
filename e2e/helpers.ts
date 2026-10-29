@@ -1,4 +1,11 @@
-import { expect, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import {
+  expect,
+  type Browser,
+  type BrowserContext,
+  type BrowserContextOptions,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 
 /** Første admin fra seed (SEED_ADMIN_EMAIL i CI og .env.example). */
 export const ADMIN_EMAIL = "admin@byggcon.no";
@@ -180,7 +187,10 @@ export async function localPhotoFileCount(page: Page): Promise<number> {
 
 export type TrialSyncCandidate = "powersync" | "electricsql" | "custom";
 export type TrialTable = "trial_forms" | "trial_answers" | "trial_photos";
-/** ElectricSQL og egenbygd har i tillegg synkposisjonen og endringskøen som egne lagre. */
+/**
+ * ElectricSQL-lageret har i tillegg synkposisjonen (`shape_state`) og endringskøen som egne lagre;
+ * egenbygd har `sync_state` (hentemarkøren) i stedet for `shape_state`.
+ */
 export type HookTable = TrialTable | "shape_state" | "sync_state" | "outbox";
 export type LocalRow = Record<string, unknown>;
 
@@ -306,4 +316,88 @@ export function countRequests(page: Page, urlGlob: string) {
       return counts;
     },
   };
+}
+
+// --- Kandidat 3, egenbygd (docs/funksjoner/fase1-kandidat-egenbygd-testplan.md avsnitt 6) ---
+
+/** Hente-ruten for egenbygd. */
+export const PULL_PATH = "/api/prove/synk/hent";
+
+/** Treffer bare hente-ruten (brukes i `page.route` og `context.route`). */
+export function isPullUrl(url: URL): boolean {
+  return url.pathname === PULL_PATH;
+}
+
+export interface RecordedPull {
+  /** `Date.now()` da kallet gikk ut. */
+  at: number;
+  /** `siden` i spørrestrengen, eller null. */
+  siden: string | null;
+  status: number | null;
+  /** `ferdig` fra svaret, når svaret var 200 med JSON. */
+  ferdig: boolean | null;
+}
+
+/**
+ * Husker kall fra siden mot hente-ruten med tidspunkt, `siden` og `ferdig` fra svaret.
+ * Registreres før `goto`. Ser ikke kall som går via service worker (bruk `serviceWorkers: "block"`).
+ */
+export function recordPulls(page: Page) {
+  const pulls: RecordedPull[] = [];
+  const byRequest = new Map<unknown, RecordedPull>();
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (!isPullUrl(url)) return;
+    const entry: RecordedPull = {
+      at: Date.now(),
+      siden: url.searchParams.get("siden"),
+      status: null,
+      ferdig: null,
+    };
+    pulls.push(entry);
+    byRequest.set(request, entry);
+  });
+  page.on("response", (response) => {
+    const entry = byRequest.get(response.request());
+    if (!entry) return;
+    entry.status = response.status();
+    if (response.status() !== 200) return;
+    response
+      .json()
+      .then((body: unknown) => {
+        const ferdig = (body as { ferdig?: unknown } | null)?.ferdig;
+        if (typeof ferdig === "boolean") entry.ferdig = ferdig;
+      })
+      .catch(() => {});
+  });
+  page.on("requestfailed", (request) => {
+    const entry = byRequest.get(request);
+    if (entry) entry.status = 0;
+  });
+  return {
+    pulls,
+    count: () => pulls.length,
+    /** Kall som gikk ut etter tidspunktet. */
+    since: (at: number) => pulls.filter((entry) => entry.at > at),
+  };
+}
+
+/**
+ * En enhet til: ny nettleserkontekst (egen `localStorage`, egen IndexedDB og dermed egen
+ * `deviceId`) med valgt kandidat og innlogget som admin. Kontekstvalgene (baseURL, skjermstørrelse)
+ * sendes inn fra testen, fordi `browser.newContext` ikke arver prosjektets `use`.
+ */
+export async function openSecondDevice(
+  browser: Browser,
+  candidate: TrialSyncCandidate,
+  options: BrowserContextOptions = {},
+): Promise<{ context: BrowserContext; page: Page }> {
+  const context = await browser.newContext({ locale: "nb-NO", ...options });
+  // Samme som useCandidate (navnet med «use» tolkes som React-hook av lint utenfor testene)
+  await context.addInitScript((value) => {
+    window.localStorage.setItem("trial_sync_candidate", value);
+  }, candidate);
+  const page = await context.newPage();
+  await logIn(page, ADMIN_EMAIL);
+  return { context, page };
 }

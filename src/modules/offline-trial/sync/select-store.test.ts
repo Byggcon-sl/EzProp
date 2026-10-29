@@ -55,8 +55,13 @@ describe("readSyncCandidate og writeSyncCandidate (select-store.ts)", () => {
     expect(Array.from(storage.map.keys())).toEqual(["trial_sync_candidate"]);
   });
 
+  // Kandidat 3, egenbygd (docs/funksjoner/fase1-kandidat-egenbygd-testplan.md avsnitt 2.4)
+  it("lagret custom leses tilbake", () => {
+    expect(readSyncCandidate(memoryStorage({ trial_sync_candidate: "custom" }))).toBe("custom");
+  });
+
   it("custom med store bokstaver eller norsk navn gir powersync", () => {
-    for (const value of ["CUSTOM", "egenbygd"]) {
+    for (const value of ["CUSTOM", "Custom", " custom", "egenbygd", "Egenbygd"]) {
       expect(readSyncCandidate(memoryStorage({ trial_sync_candidate: value })), value).toBe(
         "powersync",
       );

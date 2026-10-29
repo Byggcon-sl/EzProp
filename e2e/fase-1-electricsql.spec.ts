@@ -9,10 +9,12 @@ import {
   createTrialForm,
   hookValue,
   indicator,
+  isPullUrl,
   localPhotoFileCount,
   logIn,
   pendingChanges,
   readRowsViaHook,
+  recordPulls,
   useCandidate,
   type ElectricTrialHook,
   type LocalRow,
@@ -31,7 +33,6 @@ const TEST_IMAGE = path.join(DIR, "fixtures", "test-image.png");
 const PHOTO_ROUTE = "**/api/prove/bilder/**";
 const CHANGES_ROUTE = "**/api/prove/synk/endringer";
 const SHAPE_ROUTE = "/api/prove/synk/shape";
-const PULL_ROUTE = "**/api/prove/synk/hent*";
 const ANY_STATUS = /^(Venter: \d+ endring(er)?, \d+ bilde(r)?|Alt er lagret på serveren)$/;
 const NO_PHOTOS_WAITING = /^Venter: \d+ endring(er)?, 0 bilder$|^Alt er lagret på serveren$/;
 const ALL_SAVED = "Alt er lagret på serveren";
@@ -585,6 +586,7 @@ test.describe("endringskøen", () => {
   });
 
   test.describe("innlogging med annen organisasjon tømmer lokal lagring for begge kandidater", () => {
+    // "custom" lagt til for kandidat 3 (docs/funksjoner/fase1-kandidat-egenbygd-testplan.md 1.1)
     for (const candidate of ["powersync", "electricsql", "custom"] as TrialSyncCandidate[]) {
       // Obligatorisk (tenant)
       test(`innlogging med annen organisasjon tømmer lokal lagring for begge kandidater (${candidate})`, async ({
@@ -603,21 +605,29 @@ test.describe("endringskøen", () => {
           await expect
             .poll(async () => (await readRowsViaHook(page, "trial_forms")).length)
             .toBeGreaterThan(0);
+          if (candidate === "custom") {
+            // Hentemarkøren må finnes før byttet, ellers viser testen ingenting
+            await expect
+              .poll(
+                async () =>
+                  (await readRowsViaHook(page, "sync_state")).some((row) => row.key === "cursor"),
+                { timeout: 20_000, message: "hentemarkøren er lagret" },
+              )
+              .toBe(true);
+            // Etter byttet holdes hente-ruten nede, så tomme lagre ikke fylles igjen fra serveren
+            // (samme organisasjon på serveren; byttet er bare simulert på enheten)
+            await page.route(isPullUrl, (route) =>
+              route.fulfill({ status: 500, contentType: "application/json", body: "{}" }),
+            );
+          }
+          const pulls = recordPulls(page);
 
           await page.evaluate(async (organizationId) => {
             const hook = (window as unknown as { __offlineTrial: ElectricTrialHook })
               .__offlineTrial;
             await hook.simulateOrganizationChange(organizationId);
           }, randomUuid());
-          // Egenbygd: hentingen etter byttet stoppes og registreres, så skjemaet fra serveren
-          // ikke kommer tilbake før lagringen er sjekket, og første kall kan leses.
-          const pulls: string[] = [];
-          if (candidate === "custom") {
-            await page.route(PULL_ROUTE, (route) => {
-              pulls.push(route.request().url());
-              return route.abort();
-            });
-          }
+          const reloadedAt = Date.now();
           await page.reload();
 
           await expect
@@ -635,12 +645,13 @@ test.describe("endringskøen", () => {
           if (candidate === "custom") {
             expect(await readRowsViaHook(page, "sync_state")).toEqual([]);
             expect(await readRowsViaHook(page, "outbox")).toEqual([]);
-            await expect.poll(() => pulls.length, { timeout: 15_000 }).toBeGreaterThan(0);
-            expect(new URL(pulls[0]!).searchParams.has("siden")).toBe(false);
+            await expect.poll(() => pulls.since(reloadedAt).length).toBeGreaterThan(0);
+            // En markør fra forrige organisasjon brukes aldri
+            expect(pulls.since(reloadedAt)[0]!.siden).toBeNull();
           }
         } finally {
           await page.unroute(PHOTO_ROUTE);
-          await page.unroute(PULL_ROUTE);
+          if (candidate === "custom") await page.unroute(isPullUrl);
         }
       });
     }

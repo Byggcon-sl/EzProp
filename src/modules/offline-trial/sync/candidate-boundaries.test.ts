@@ -112,22 +112,43 @@ describe("kandidatgrensene", () => {
     expectPure(`${MODULE}/sync/electricsql/shape-messages.ts`);
   });
 
-  it("de rene filene i sync/local importerer ikke window, React eller en SDK", () => {
+  it("de rene filene i sync/local og sync/custom importerer ikke window, React eller @electric-sql", () => {
     for (const name of ["outbox.ts", "apply-incoming.ts", "normalize-row.ts"]) {
       expectPure(`${MODULE}/sync/local/${name}`);
     }
+    // Hente-leseren og takten (testplan 2.5): nett bare via ctx.isOnline(), aldri navigator
+    for (const name of ["pull-schedule.ts", "reader.ts"]) {
+      expectPure(`${MODULE}/sync/custom/${name}`);
+    }
   });
 
-  it("sync/local og sync/custom importerer aldri fra sync/electricsql eller sync/powersync", () => {
-    const files = [
-      ...filesUnder(`${MODULE}/sync/local`, /\.ts$/),
-      ...filesUnder(`${MODULE}/sync/custom`, /\.ts$/),
-    ].filter((file) => !file.endsWith(".test.ts"));
+  // Obligatorisk (kandidat 3 knyttes ikke til en kandidat som kanskje kastes)
+  it("sync/custom importerer aldri fra sync/electricsql eller sync/powersync", () => {
+    const files = filesUnder(`${MODULE}/sync/custom`, /\.ts$/).filter(
+      (file) => !file.endsWith(".test.ts"),
+    );
+    expect(files.length).toBeGreaterThanOrEqual(4);
     const found = files.flatMap((file) =>
       specifiersOf(read(file))
         .map((entry) => entry.specifier)
         .filter((spec) =>
           /(^|\/)(electricsql|powersync)(\/|$)|@electric-sql\/|@powersync\//.test(spec),
+        )
+        .map((spec) => `${file}: ${spec}`),
+    );
+    expect(found).toEqual([]);
+  });
+
+  it("sync/local importerer aldri fra noen kandidat", () => {
+    const files = filesUnder(`${MODULE}/sync/local`, /\.ts$/).filter(
+      (file) => !file.endsWith(".test.ts"),
+    );
+    expect(files.length).toBeGreaterThanOrEqual(5);
+    const found = files.flatMap((file) =>
+      specifiersOf(read(file))
+        .map((entry) => entry.specifier)
+        .filter((spec) =>
+          /(^|\/)(electricsql|powersync|custom)(\/|$)|@electric-sql\/|@powersync\//.test(spec),
         )
         .map((spec) => `${file}: ${spec}`),
     );
@@ -151,10 +172,15 @@ describe("kandidatgrensene", () => {
       dynamic.some((s) => /(^|\/)electricsql\//.test(s)),
       "import() for electricsql",
     ).toBe(true);
+    // Kandidat 3 (testplan egenbygd 2.5): egen dynamisk import, ingen statisk import fra custom/ eller local/
     expect(
       dynamic.some((s) => /(^|\/)custom\//.test(s)),
       "import() for custom",
     ).toBe(true);
+    const staticCustomOrLocal = specifiers.filter(
+      (entry) => entry.kind === "static" && /(^|\/)(custom|local)\//.test(entry.specifier),
+    );
+    expect(staticCustomOrLocal.map((entry) => entry.specifier)).toEqual([]);
   });
 
   it("types.ts har ikke getAnswers", () => {
@@ -195,6 +221,8 @@ describe("kandidatgrensene", () => {
       ...filesUnder(`${MODULE}/sync/custom`, /\.ts$/),
     ].filter((file) => !file.endsWith(".test.ts"));
     expect(files.length).toBeGreaterThanOrEqual(6);
+    // Hente-ruten og spørringen bak den er også prøvekode (testplan egenbygd 2.5)
+    files.push(`${MODULE}/server/changes-since.ts`, "src/app/api/prove/synk/hent/route.ts");
     const missing = files.filter((file) => !startsWithHeader(file));
     expect(missing).toEqual([]);
   });
