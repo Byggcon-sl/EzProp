@@ -17,7 +17,8 @@ import type { TrialPhoto, TrialValue } from "../../answers";
 import { textOf } from "../../text-merge";
 import { listTrialFields, trialForm, type TrialFieldType } from "../../trial-form";
 import { isTrialTableName, type TrialTableName } from "../local-columns";
-import { putLocalPhoto } from "../photo-store";
+import { confirmLocalPhoto, listConfirmedPhotoIds, putLocalPhoto } from "../photo-store";
+import { isPhotoWaiting } from "../photo-upload";
 import { nextTextState, safeTextOf, TEXT_WRITE_DELAY_MS } from "../text-state";
 import type {
   IncomingChange,
@@ -184,6 +185,15 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
     const run = chain.then(task, task);
     chain = run.catch(() => undefined);
     return run;
+  }
+
+  /** Bilder fra denne enheten som venter på opplasting (uten `uploaded_at`, ikke bekreftet). */
+  async function waitingPhotos(): Promise<LocalRow[]> {
+    const [photos, confirmedPhotos] = await Promise.all([
+      db.readAll<LocalRow>(LOCAL_SYNCED_STORES.trial_photos),
+      listConfirmedPhotoIds(),
+    ]);
+    return photos.filter((row) => isPhotoWaiting(row, deviceId, confirmedPhotos));
   }
 
   // --- Lyttere. Varslene samles og sendes etter at skrivingen er ferdig. ---
@@ -739,13 +749,11 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
     },
 
     async status(): Promise<TrialSyncStatus> {
-      const photos = await db.readAll<LocalRow>(LOCAL_SYNCED_STORES.trial_photos);
+      const photos = await waitingPhotos();
       return {
         online: isOnline(),
         pendingChanges: outbox.entries.length,
-        pendingPhotos: photos.filter(
-          (row) => row.uploaded_at == null && row.device_id === deviceId && row.deleted_at == null,
-        ).length,
+        pendingPhotos: photos.length,
       };
     },
 
@@ -757,27 +765,16 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
     },
 
     async listPendingPhotos(): Promise<TrialPhotoRow[]> {
-      const photos = await db.readAll<LocalRow>(LOCAL_SYNCED_STORES.trial_photos);
-      return photos
-        .filter(
-          (row) => row.uploaded_at == null && row.device_id === deviceId && row.deleted_at == null,
-        )
-        .sort(byCreated)
-        .map(toPhotoRow);
+      const photos = await waitingPhotos();
+      return photos.sort(byCreated).map(toPhotoRow);
     },
 
     markPhotoUploaded(id: string, sha256: string): Promise<void> {
-      // Bare lokalt, aldri i køen: serveren eier `uploaded_at` og `sha256`.
+      // Bare i bildelageret, aldri i køen eller de synkede radene (småfunn 6): serveren eier
+      // `uploaded_at` og `sha256` og setter dem selv.
       return serial(async () => {
-        await db.inTransaction([LOCAL_SYNCED_STORES.trial_photos], "readwrite", async (tx) => {
-          const objectStore = tx.objectStore(LOCAL_SYNCED_STORES.trial_photos);
-          const row = (await requestResult(objectStore.get(id))) as LocalRow | undefined;
-          if (!row) return;
-          await requestResult(
-            objectStore.put({ ...row, uploaded_at: new Date().toISOString(), sha256 }),
-          );
-        });
-        notify({ rows: true, status: true });
+        await confirmLocalPhoto(id, sha256);
+        notify({ status: true });
       });
     },
 

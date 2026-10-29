@@ -7,11 +7,12 @@
  * Alt annet: filen blir liggende og prøves igjen på neste runde.
  *
  * Kandidatuavhengig: bruker bare `listPendingPhotos`, `markPhotoUploaded` og `onStatusChange`
- * fra `TrialSyncStore`. `markPhotoUploaded` skriver bare lokalt, aldri i endringskøen.
+ * fra `TrialSyncStore`. `markPhotoUploaded` skriver bare lokalt, aldri i endringskøen, og aldri
+ * `uploaded_at` (den setter bare serveren).
  */
 import { isUuid } from "@/shared/lib/uuid";
 import { shouldReleaseLocalPhoto } from "./photo-upload";
-import { deleteLocalPhoto, getLocalPhoto } from "./photo-store";
+import { getLocalPhoto } from "./photo-store";
 import type { PhotoUploadResponse, TrialPhotoRow, TrialSyncStore } from "./types";
 
 export const PHOTO_UPLOAD_INTERVAL_MS = 10_000;
@@ -67,8 +68,8 @@ export async function uploadPendingPhotos(
     const localSha = await sha256Hex(blob);
     const response = await send(organizationId, photo, blob);
     if (!shouldReleaseLocalPhoto(localSha, response)) continue;
+    // Sletter filen og merker bildet bekreftet lokalt (`confirmLocalPhoto`); aldri `uploaded_at`.
     await store.markPhotoUploaded(photo.id, localSha);
-    await deleteLocalPhoto(photo.id);
     released++;
   }
   return released;

@@ -24,7 +24,7 @@ import {
   TrialPhotoNotFoundError,
   TrialPhotoTooLargeError,
 } from "./errors";
-import { storeTrialPhoto } from "./photo-storage";
+import { readTrialPhotoBody, storeTrialPhoto } from "./photo-storage";
 import { TRIAL_PHOTO_DEFAULT_MAX_BYTES, type TrialPhotoMeta } from "./types";
 
 // Opplasting av bildefiler i prøven (docs/funksjoner/fase1-kandidat-powersync.md pkt. 11).
@@ -276,6 +276,34 @@ describe("storeTrialPhoto", () => {
     ).resolves.toHaveProperty("sha256");
   });
 
+  it("navn over 200 tegn gir InvalidTrialChangeError uten rad og fil (småfunn 9)", async () => {
+    const { actor, organizationId } = await setupOrganization();
+    const formId = await putTrialForm(actor, organizationId);
+    const photoId = uuidv7();
+
+    await expect(
+      storeTrialPhoto(
+        actor,
+        organizationId,
+        photoId,
+        meta(formId, { name: "n".repeat(201) }),
+        BYTES,
+      ),
+    ).rejects.toThrow("Navnet er for langt. Det kan ha høyst 200 tegn.");
+    expect(await photoRow(photoId)).toBeUndefined();
+    expect(await listAll(uploadDir)).toEqual([]);
+
+    await expect(
+      storeTrialPhoto(
+        actor,
+        organizationId,
+        photoId,
+        meta(formId, { name: "n".repeat(200) }),
+        BYTES,
+      ),
+    ).resolves.toEqual({ sha256: SHA });
+  });
+
   it("den ferdige stien ligger alltid under TRIAL_UPLOAD_DIR", async () => {
     const relative = path.join("var", `tmp-test-${uuidv7()}`);
     extraDirs.push(path.resolve(relative));
@@ -325,5 +353,66 @@ describe("storeTrialPhoto", () => {
       ).rejects.toThrow(AccessDeniedError);
       expect(await listAll(uploadDir)).toEqual([]);
     });
+  });
+});
+
+// Småfunn 8: bilderuten skal ikke lese en for stor fil inn i minnet før grensen sjekkes.
+describe("readTrialPhotoBody", () => {
+  /** En strøm som teller hvor mange biter som er lest, og om den ble avbrutt. */
+  function countingStream(chunkCount: number, chunkSize: number) {
+    const state = { pulled: 0, cancelled: false };
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (state.pulled >= chunkCount) {
+          controller.close();
+          return;
+        }
+        state.pulled += 1;
+        controller.enqueue(new Uint8Array(chunkSize));
+      },
+      cancel() {
+        state.cancelled = true;
+      },
+    });
+    return { stream, state };
+  }
+
+  function putRequest(body: BodyInit | null, headers: Record<string, string> = {}) {
+    return new Request("http://localhost/api/prove/bilder/x", {
+      method: "PUT",
+      body,
+      headers,
+      duplex: "half",
+    } as RequestInit);
+  }
+
+  it("leser hele filen når den er innenfor grensen", async () => {
+    const bytes = await readTrialPhotoBody(putRequest(BYTES), BYTES.byteLength);
+    expect(Buffer.compare(Buffer.from(bytes), TEST_IMAGE)).toBe(0);
+  });
+
+  it("for stor Content-Length avvises før noe av kroppen leses", async () => {
+    const { stream, state } = countingStream(100, 10);
+    const request = putRequest(stream, { "content-length": "1000" });
+    await expect(readTrialPhotoBody(request, 999)).rejects.toThrow(TrialPhotoTooLargeError);
+    expect(state.pulled).toBeLessThanOrEqual(1);
+  });
+
+  it("uten Content-Length stoppes lesingen straks grensen passeres", async () => {
+    const { stream, state } = countingStream(100, 10);
+    await expect(readTrialPhotoBody(putRequest(stream), 25)).rejects.toThrow(
+      TrialPhotoTooLargeError,
+    );
+    // 25 byte passeres på tredje bit; resten av de 100 bitene leses aldri
+    expect(state.pulled).toBeLessThanOrEqual(4);
+    expect(state.cancelled).toBe(true);
+  });
+
+  it("bruker TRIAL_PHOTO_MAX_BYTES som standard, med samme feil som før", async () => {
+    vi.stubEnv("TRIAL_PHOTO_MAX_BYTES", "10");
+    await expect(readTrialPhotoBody(putRequest(new Uint8Array(11)))).rejects.toThrow(
+      "Bildet er for stort.",
+    );
+    await expect(readTrialPhotoBody(putRequest(new Uint8Array(10)))).resolves.toHaveLength(10);
   });
 });

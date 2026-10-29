@@ -270,9 +270,12 @@ test.describe("bildekøen", () => {
           "SELECT uploaded_at FROM trial_photos WHERE trial_form_id = ?",
           [formId],
         );
-        return rows.length === 1 && Boolean(rows[0]!.uploaded_at);
+        // Småfunn 6: bare serveren setter uploaded_at. Uten synktjeneste i e2e forblir den tom
+        // lokalt, men bildet regnes ikke som ventende fordi serveren har bekreftet filen.
+        return rows.length === 1 && rows[0]!.uploaded_at === null;
       })
       .toBe(true);
+    await expect(indicator(page)).toHaveText(NO_PHOTOS_WAITING);
   });
 
   test("bildet beholdes lokalt når serveren svarer med feil sha256", async ({ page }, testInfo) => {

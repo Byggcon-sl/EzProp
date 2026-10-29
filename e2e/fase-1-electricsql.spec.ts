@@ -549,7 +549,9 @@ test.describe("endringskøen", () => {
     await expect
       .poll(async () => {
         const rows = await readRowsViaHook(page, "trial_photos", formId);
-        return rows.length === 1 && Boolean(rows[0]!.uploaded_at);
+        // Småfunn 6: bare serveren setter uploaded_at. Uten Electric i e2e kommer den aldri ned,
+        // men bildet regnes ikke som ventende fordi serveren har bekreftet filen.
+        return rows.length === 1 && rows[0]!.uploaded_at == null;
       })
       .toBe(true);
     await expect(indicator(page)).toHaveText(ALL_SAVED, { timeout: 15_000 });

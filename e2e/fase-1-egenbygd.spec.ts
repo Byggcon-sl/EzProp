@@ -578,10 +578,14 @@ test.describe("egenbygd uten service worker", () => {
     await expect(indicator(page)).toHaveText(NO_PHOTOS_WAITING, { timeout: 15_000 });
     await expect.poll(() => localPhotoFileCount(page), { timeout: 15_000 }).toBe(0);
     await expect
-      .poll(async () => {
-        const rows = await readRowsViaHook(page, "trial_photos", formId);
-        return rows.length === 1 && Boolean(rows[0]!.uploaded_at);
-      })
+      .poll(
+        async () => {
+          const rows = await readRowsViaHook(page, "trial_photos", formId);
+          // Småfunn 6: uploaded_at kommer bare fra serveren, med neste henting (hvert 5. sekund)
+          return rows.length === 1 && Boolean(rows[0]!.uploaded_at);
+        },
+        { timeout: 15_000 },
+      )
       .toBe(true);
     await expect(indicator(page)).toHaveText(ALL_SAVED, { timeout: 15_000 });
     // markPhotoUploaded skriver bare lokalt: ingen ny endring i køen og ingen ny sending

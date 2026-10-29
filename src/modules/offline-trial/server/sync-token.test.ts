@@ -10,7 +10,7 @@ import {
   createDeactivatedEmployee,
   setupOrganization,
 } from "../../../../tests/offline-trial";
-import { issueSyncToken } from "./sync-token";
+import { issueSyncToken, PUBLIC_SYNC_SECRETS } from "./sync-token";
 
 // Token til synktjenesten (docs/funksjoner/fase1-kandidat-powersync.md pkt. 11). Testplan avsnitt 3.3.
 // organization_id i tokenet er det PowerSync filtrerer bøtta på, så den må alltid være grant-ens.
@@ -131,6 +131,42 @@ describe("issueSyncToken", () => {
     await expect(issueSyncToken(actor, organizationId)).rejects.toThrow(Error);
 
     vi.stubEnv("BETTER_AUTH_URL", "http://localhost:3000");
+    await expect(issueSyncToken(actor, organizationId)).resolves.toHaveProperty("token");
+  });
+
+  it("nøklene fra CI, e2e og utvikling i repoet nektes når BETTER_AUTH_URL ikke er localhost (småfunn 10)", async () => {
+    const { actor, organizationId } = await setupOrganization();
+    // Alle steder i repoet der en synknøkkel står åpent
+    const files = [".env.example", "start.sh", ".github/workflows/ci.yml", "playwright.config.ts"];
+    const found = new Set<string>();
+    for (const file of files) {
+      const text = readFileSync(path.resolve(process.cwd(), file), "utf8");
+      for (const match of text.matchAll(
+        /POWERSYNC_JWT_SECRET["']?\s*[:=]\s*["']?([A-Za-z0-9_-]{32,})/g,
+      )) {
+        found.add(match[1]!);
+      }
+    }
+    expect(found.size, "fant ingen synknøkler i filene").toBeGreaterThanOrEqual(3);
+    for (const secret of found) {
+      expect(PUBLIC_SYNC_SECRETS, secret).toContain(secret);
+      vi.stubEnv("POWERSYNC_JWT_SECRET", secret);
+      vi.stubEnv("BETTER_AUTH_URL", "https://test.example.com");
+      await expect(issueSyncToken(actor, organizationId), secret).rejects.toThrow(
+        /står åpent i repoet/,
+      );
+      vi.stubEnv("BETTER_AUTH_URL", "http://localhost:3000");
+      await expect(issueSyncToken(actor, organizationId), secret).resolves.toHaveProperty("token");
+    }
+  });
+
+  it("POWERSYNC_JWT_SECRET lik BETTER_AUTH_SECRET gir feil (småfunn 14)", async () => {
+    const { actor, organizationId } = await setupOrganization();
+    vi.stubEnv("BETTER_AUTH_SECRET", SECRET);
+    await expect(issueSyncToken(actor, organizationId)).rejects.toThrow(
+      /kan ikke være lik BETTER_AUTH_SECRET/,
+    );
+    vi.stubEnv("BETTER_AUTH_SECRET", `${SECRET}-annen`);
     await expect(issueSyncToken(actor, organizationId)).resolves.toHaveProperty("token");
   });
 

@@ -41,6 +41,22 @@ describe("miljøvariabler", () => {
     expect(env.DEV_MAILBOX).toBe(true);
   });
 
+  it("POWERSYNC_JWT_SECRET lik BETTER_AUTH_SECRET stopper oppstarten (småfunn 14)", () => {
+    const shared = "oppdiktet-felles-nokkel-som-er-lang-nok-0123456789";
+    vi.stubEnv("BETTER_AUTH_SECRET", shared);
+    vi.stubEnv("POWERSYNC_JWT_SECRET", shared);
+    resetEnvCache();
+    expect(() => getEnv()).toThrow(/POWERSYNC_JWT_SECRET kan ikke være lik BETTER_AUTH_SECRET/);
+
+    vi.stubEnv("POWERSYNC_JWT_SECRET", `${shared}-synk`);
+    resetEnvCache();
+    expect(() => getEnv()).not.toThrow();
+
+    vi.stubEnv("POWERSYNC_JWT_SECRET", "");
+    resetEnvCache();
+    expect(() => getEnv()).not.toThrow();
+  });
+
   it("SEED_ADMIN_EMAIL leveres med små bokstaver", () => {
     vi.stubEnv("SEED_ADMIN_EMAIL", " Admin@Example.com ");
     resetEnvCache();

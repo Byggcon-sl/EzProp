@@ -159,7 +159,8 @@ export async function localPhotoFileCount(page: Page): Promise<number> {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const database = request.result;
-        const stores = Array.from(database.objectStoreNames);
+        // Bare filene; lageret `confirmed` har merknader om bekreftede bilder, ikke filer.
+        const stores = Array.from(database.objectStoreNames).filter((name) => name === "photos");
         if (stores.length === 0) {
           database.close();
           resolve(0);

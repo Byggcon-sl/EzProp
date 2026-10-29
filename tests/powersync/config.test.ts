@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { localColumnsOf } from "@/modules/offline-trial/sync/local-columns";
 import { block, contentLines, envExampleValue, indentOf, read } from "../compose-text";
 
 // Konfigurasjonen for den selvdrevne PowerSync-tjenesten (docs/funksjoner/fase1-kandidat-powersync.md
@@ -69,6 +70,26 @@ describe("PowerSync-konfigurasjon", () => {
     const columns = /^SELECT\b([\s\S]*?)\bFROM\b/i.exec(photoSelect!)![1]!;
     expect(columns, "SELECT * tar med storage_path").not.toMatch(/(^|[\s,])\*([\s,]|$)/);
     expect(columns).not.toMatch(/storage_path/);
+  });
+
+  // Småfunn 13: eksplisitt kolonneliste, samme kolonner som de andre kandidatene sender.
+  it("sync-rules.yaml sender bare localColumnsOf for trial_forms og trial_answers", () => {
+    const rules = read("powersync/sync-rules.yaml");
+    for (const table of ["trial_forms", "trial_answers"] as const) {
+      const statement = selectStatements(rules).find((s) =>
+        new RegExp(`\\bFROM\\s+"?${table}\\b`, "i").test(s),
+      );
+      expect(statement, table).toBeDefined();
+      const columns = /^SELECT\b([\s\S]*?)\bFROM\b/i
+        .exec(statement!)![1]!
+        .split(",")
+        .map((column) => column.trim());
+      expect(columns, table).not.toContain("*");
+      expect(columns, table).toEqual([...localColumnsOf(table)]);
+      for (const audit of ["created_by", "updated_by", "deleted_by"]) {
+        expect(columns, `${table}.${audit}`).not.toContain(audit);
+      }
+    }
   });
 
   it("docker-compose binder PowerSync bare til 127.0.0.1 og bruker fast versjonstag", () => {

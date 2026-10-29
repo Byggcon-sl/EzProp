@@ -34,6 +34,8 @@ const envSchema = z.object({
   /** Første admin (lages av seed). */
   SEED_ADMIN_EMAIL: z.preprocess(emptyToUndefined, z.string().trim().toLowerCase().optional()),
   SEED_ADMIN_NAME: z.preprocess(emptyToUndefined, z.string().trim().optional()),
+  /** Nøkkelen for synktjenesten i prøven uten nett. Selve sjekken av den ligger i `sync-token.ts`. */
+  POWERSYNC_JWT_SECRET: optionalSecret,
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -60,6 +62,15 @@ export function getEnv(): Env {
     if (graph.some(Boolean) && (!graph.every(Boolean) || !parsed.data.MAIL_FROM)) {
       throw new Error(
         "E-post via Microsoft 365 er bare delvis satt opp. MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET og MAIL_FROM må alle være satt.",
+      );
+    }
+    // Synktjenesten får nøkkelen sin; den skal aldri kunne lage innloggingsøkter (småfunn 14).
+    if (
+      parsed.data.POWERSYNC_JWT_SECRET !== undefined &&
+      parsed.data.POWERSYNC_JWT_SECRET === parsed.data.BETTER_AUTH_SECRET.trim()
+    ) {
+      throw new Error(
+        "POWERSYNC_JWT_SECRET kan ikke være lik BETTER_AUTH_SECRET. Bruk en egen nøkkel for synktjenesten.",
       );
     }
     cached = parsed.data;

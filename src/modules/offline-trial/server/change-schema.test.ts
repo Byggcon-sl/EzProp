@@ -116,6 +116,22 @@ describe("skjemaet for endringsbunter", () => {
     expect(ok(body([answerOp({ device_id: "d".repeat(65) })]))).toBe(false);
   });
 
+  it("avviser navn på skjema og bilde over 200 tegn, med norsk melding (småfunn 9)", () => {
+    expect(TRIAL_SYNC_LIMITS.maxNameLength).toBe(200);
+    const atLimit = "n".repeat(200);
+    const over = "n".repeat(201);
+    expect(ok(body([{ ...formOp, data: { name: atLimit } }]))).toBe(true);
+    expect(ok(body([{ ...formOp, data: { name: over } }]))).toBe(false);
+    expect(ok(body([{ ...photoOp, data: { ...photoOp.data, name: atLimit } }]))).toBe(true);
+    expect(ok(body([{ ...photoOp, data: { ...photoOp.data, name: over } }]))).toBe(false);
+
+    const result = changeSchemaModule.trialNameSchema.safeParse(over);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe(
+      "Navnet er for langt. Det kan ha høyst 200 tegn.",
+    );
+  });
+
   it("avviser id som ikke er uuid", () => {
     expect(ok(body([{ ...formOp, id: "../x" }]))).toBe(false);
     expect(ok(body([{ ...formOp, id: "" }]))).toBe(false);
