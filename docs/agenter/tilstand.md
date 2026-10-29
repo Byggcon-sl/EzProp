@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 29.10.2026 kl. 14:05 (PR #14 merget; PR #15 med stabil e2e-test for organisasjonsbytte)
+Sist oppdatert: 29.10.2026 (synkstatus: oppgavekort, skisse, testplan og kontrakt på `fase1-synkstatus`; bygging startet i tre biter)
 
 ## Gjeldende fase
 
@@ -11,6 +11,9 @@ Sist oppdatert: 29.10.2026 kl. 14:05 (PR #14 merget; PR #15 med stabil e2e-test 
 Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd er merget til `main` i PR #13 (PR #12: agentene merger selv).
 
 ## Gjeldende oppgave
+
+**Pågår: Synkstatus som alltid vises** (branch `fase1-synkstatus`, bygger på `main`). Oppgavekort `docs/funksjoner/fase1-synkstatus.md`, skisse `docs/funksjoner/fase1-synkstatus-skisse.md`, testplan `docs/funksjoner/fase1-synkstatus-testplan.md` (bindende for fil- og testnavn; skissen er rettet til testplanens `data-testid`). Kontrakten (`serverConfirmed`, `syncNow`, `TrialSyncRoundResult`) og `sync/sync-now.ts` er lagt inn av prosjektleder. Bygging i tre biter i parallell: (1) lokal kjerne, ElectricSQL og egenbygd, (2) PowerSync, (3) skjermen, `select-store.ts`, versjon og ordliste. Testskriver eier alle testfiler og e2e. Støtter reklamasjoner og tid.
+
 
 **Neste: liten oppgave (a) – PowerSync- og Electric-containerne i Azure-testmiljøet** (Bicep i `infra/azure`). Gir faste månedskostnader, så den bør vente på Ståles svar på spørsmål nr. 10 og 11. Til da: neste punkt i fase 1 som ikke trenger Ståle.
 
