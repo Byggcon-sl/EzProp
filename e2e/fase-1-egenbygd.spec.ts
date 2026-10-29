@@ -673,8 +673,9 @@ test.describe("egenbygd uten service worker", () => {
     });
     try {
       const other = second.page;
-      expect(await hookValue(other, "deviceId")).not.toBe(await hookValue(page, "deviceId"));
+      // Lageret og testkroken finnes bare under /prove/testskjema: les enhets-id etter åpning
       await openFromList(other, formId);
+      expect(await hookValue(other, "deviceId")).not.toBe(await hookValue(page, "deviceId"));
       await expect(floorsInput(other)).toHaveValue("7");
       await expect(roofTg(other, "TG2")).toHaveAttribute("aria-pressed", "true");
       await expectCount(other, 2);
@@ -775,8 +776,10 @@ test.describe("egenbygd uten service worker", () => {
       route.fulfill({ status: 500, contentType: "application/json", body: "{}" }),
     );
     try {
+      // To svar gir minst to endringer i køen, også når «nytt skjema» alt er sendt
       await floorsInput(page).fill("7");
-      await expectCount(page, 1);
+      await roofTg(page, "TG2").click();
+      await expectCount(page, 2);
       await expect.poll(() => pendingChanges(page)).toBeGreaterThanOrEqual(2);
       const pendingBefore = await pendingChanges(page);
       const outboxBefore = (await readRowsViaHook(page, "outbox")).length;
