@@ -17,7 +17,7 @@ import {
   shouldAckBatch,
   takeBatch,
 } from "./outbox";
-import { parseShapeMessages } from "./shape-messages";
+import { parseShapeMessages } from "../electricsql/shape-messages";
 
 // Endringskøen vi eier selv for ElectricSQL (docs/funksjoner/fase1-kandidat-electricsql.md
 // avgjørelse D og «Avgjørelser før bygging» 1). Testplan avsnitt 2.1. Rene funksjoner over

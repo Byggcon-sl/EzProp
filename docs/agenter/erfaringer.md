@@ -2,6 +2,24 @@
 
 Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte tid. Nyeste øverst. Får Ståle stadig de samme kommentarene, legges de inn som regel i den aktuelle agentbeskrivelsen.
 
+## 29.10.2026 – «Oppdater åpne PR-er» fikk konflikt i felles dokument
+
+- Første kjøring etter PR #12 ga konflikt i `erfaringer.md`, selv om filen skal flettes med begge sider. Årsak: skriptet byttet til PR-ens branch før flettingen, og den eldre branchen hadde ikke `scripts/git/union-filer`. Rettet ved å kopiere hjelpefilene ut før byttet. Regel: et skript som bytter branch, kan ikke lese sine egne hjelpefiler etterpå.
+
+## 29.10.2026 – PR #10 og PR #11 merget, kandidat 3 havnet utenfor `main`
+
+- Ståle merget PR #10 (kandidat 2) til `main` kl. 12:25 og PR #11 (kandidat 3) kl. 12:43. PR #11 pekte på branchen til PR #10, og GitHub flytter ikke en PR til `main` når branchen den bygger på er merget, så kandidat 3 havnet i den gamle branchen og ikke i `main`. Rettet med en ny PR fra `fase1-kandidat-egenbygd-til-main` til `main`.
+- Regel: når en PR merges og en annen PR bygger på den, endrer prosjektlederen med en gang målet for den andre PR-en til `main` (`gh api -X PATCH repos/{owner}/{repo}/pulls/<nr> -f base=main`) og fletter `main` inn. Skriv også i PR-teksten under «Bygger på»: «merg PR #X først; denne flyttes da til main».
+- To kjøringer av hovedløkken jobbet samtidig på kandidat 3 (den ene via arbeidsflyten, den andre for hånd på samme branch). Arbeidsflyten oppdaget det og pushet ikke. Sjekken av andre sesjoner (taggen `ezprop-utvikling`) virker bare når verktøyene for sesjoner finnes; ellers må tilstandsfilen på `main` og nyeste commit-tid på branchene sjekkes før en oppgave startes.
+
+## 29.10.2026 – Fase 1, kandidat 3 egenbygd (PR #11)
+
+- Kjøringen som startet oppgaven, stoppet etter at bitene var satt sammen, uten at Vitest og e2e var kjørt på det sammensatte. Neste kjøring fant 3 røde Vitest-tester og 3 røde e2e-tester. Regel: kjør `pnpm test` med en gang etter sammensetting, og skriv resultatet i tilstandsfilen før neste steg.
+- Utvikler og testskriver skrev hvert sitt sett med tester for samme kode (`.impl.test.ts` ved siden av `.test.ts`), over 1 000 linjer dobbelt. Regel: utvikleren skriver ikke egne testfiler når testskriveren har oppgaven; utvikleren gir heller testskriveren en liste over grensetilfeller.
+- Falske tidtakere i Vitest gjør en tidtaker på 0 ms om til 1 ms når den settes under en tick. Henting «med en gang» går derfor via et løfte, ikke en tidtaker.
+- Begge e2e-feilene lå i testene: testkroken finnes bare på skjemasiden, og en test hang på tidsforløpet. Sjekk først om testen venter på riktig side og riktig tilstand før koden endres.
+- Modellnavn i commit-meldinger (`Co-Authored-By`) har kommet inn på `main` og på flere brancher. Nye commits skrives uten. Gamle skrives ikke om.
+
 
 ## 29.10.2026 – Hvorfor PR-er stoppet hos Ståle
 

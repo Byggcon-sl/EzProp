@@ -37,3 +37,11 @@ export class TrialPhotoTooLargeError extends Error {
     this.name = "TrialPhotoTooLargeError";
   }
 }
+
+/** Markøren i `GET /api/prove/synk/hent` kan ikke leses (form, base64, JSON, tid, uuid, lengde). Gir 400. */
+export class InvalidTrialCursorError extends Error {
+  constructor(message = "Ugyldig markør.") {
+    super(message);
+    this.name = "InvalidTrialCursorError";
+  }
+}

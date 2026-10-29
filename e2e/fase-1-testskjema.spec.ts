@@ -255,6 +255,18 @@ test("alle 40 felt fylles ut og telleren viser 40 av 40 med ElectricSQL valgt", 
   await expect(counter(page)).toHaveText("40 av 40 felt utfylt");
 });
 
+// Kandidat 3 (docs/funksjoner/fase1-kandidat-egenbygd-testplan.md avsnitt 6.1). Obligatorisk.
+test("alle 40 felt fylles ut og telleren viser 40 av 40 med Egenbygd valgt", async ({
+  page,
+  context,
+}) => {
+  await useCandidate(context, "custom");
+  await openTrialForm(page);
+  expect(await hookValue(page, "candidate")).toBe("custom");
+  await fillAllFields(page);
+  await expect(counter(page)).toHaveText("40 av 40 felt utfylt");
+});
+
 test("tall med bokstaver teller ikke", async ({ page }) => {
   await openTrialForm(page);
   const year = page.getByLabel("Byggeår", { exact: true });

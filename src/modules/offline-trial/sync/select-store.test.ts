@@ -32,6 +32,10 @@ describe("readSyncCandidate og writeSyncCandidate (select-store.ts)", () => {
     );
   });
 
+  it("lagret custom leses tilbake", () => {
+    expect(readSyncCandidate(memoryStorage({ trial_sync_candidate: "custom" }))).toBe("custom");
+  });
+
   it("ukjent verdi gir powersync, ikke krasj", () => {
     for (const value of ["pglite", "", "ELECTRICSQL", " electricsql", "null"]) {
       expect(readSyncCandidate(memoryStorage({ trial_sync_candidate: value })), value).toBe(
@@ -51,8 +55,17 @@ describe("readSyncCandidate og writeSyncCandidate (select-store.ts)", () => {
     expect(Array.from(storage.map.keys())).toEqual(["trial_sync_candidate"]);
   });
 
-  it("nøkkelen er trial_sync_candidate og verdiene bare powersync og electricsql", () => {
+  // Kandidat 3, egenbygd (docs/funksjoner/fase1-kandidat-egenbygd-testplan.md avsnitt 2.4)
+  it("custom med store bokstaver eller norsk navn gir powersync", () => {
+    for (const value of ["CUSTOM", "Custom", " custom", "egenbygd", "Egenbygd"]) {
+      expect(readSyncCandidate(memoryStorage({ trial_sync_candidate: value })), value).toBe(
+        "powersync",
+      );
+    }
+  });
+
+  it("nøkkelen er trial_sync_candidate og verdiene powersync, electricsql og custom", () => {
     expect(TRIAL_SYNC_CANDIDATE_KEY).toBe("trial_sync_candidate");
-    expect([...TRIAL_SYNC_CANDIDATES]).toEqual(["powersync", "electricsql"]);
+    expect([...TRIAL_SYNC_CANDIDATES]).toEqual(["powersync", "electricsql", "custom"]);
   });
 });

@@ -2,8 +2,11 @@
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
  * Testkroken `window.__offlineTrial` for e2e, bare med `NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS=1`
- * (aldri i Azure). Lik for begge kandidater (`TrialTestHooks` i `sync/types.ts`); PowerSync har i
- * tillegg `db` og `pendingOverride`, så dagens e2e står uendret. Importerer ingen kandidat.
+ * (aldri i Azure). Lik for alle kandidater (`TrialTestHooks` i `sync/types.ts`); PowerSync har i
+ * tillegg `db` og `pendingOverride`, så dagens e2e står uendret. ElectricSQL og egenbygd bruker
+ * den lokale kjernen som `TrialSyncTestable`: `readRows` tar da også tilstandslageret
+ * (`shape_state` eller `sync_state`, uten `outbox_next_seq`) og `"outbox"`, og `applySyncedRows`
+ * går samme vei som synken (`mergeIncoming`). Importerer ingen kandidat.
  */
 import { createTextState } from "../text-merge";
 import {

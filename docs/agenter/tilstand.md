@@ -2,23 +2,25 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 29.10.2026 kl. 10:00 (PR #8 merget; `main` flettet inn i kandidat 2; sikkerhet-personvern og test-leder godkjent; e2e grønn; PR #10 åpnet mot `main`)
+Sist oppdatert: 29.10.2026 kl. 13:00 (PR #10 og #11 merget; kandidat 3 ført til `main` i PR #12)
 
 ## Gjeldende fase
 
 **Fase 0a – Repo og database: ferdig.** PR #1–#6 er merget 28.10.2026.
 
-Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmiljøet i Azure (PR #7) og kandidat 1 PowerSync (PR #8, merget 29.10.2026 kl. 08:30) er merget. Kandidat 2 ElectricSQL ligger som PR #10.
+Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd (PR #11) ble merget inn i branchen til PR #10 etter at den var merget, og føres til `main` i PR #12.
 
 ## Gjeldende oppgave
 
-**Neste: oppgave 6 – Kandidat 3, egenbygd** (lokal database og endringskø) på samme testskjema, samme `TrialSyncStore`-kontrakt og samme protokoll for prøve A og B. Branch `fase1-kandidat-egenbygd` **oppå `fase1-kandidat-electricsql`** (bruker kontrakten, `select-store`, de kandidatuavhengige sidene og grensetesten fra oppgave 5; endringskøen og innflettingen fra ElectricSQL kan trolig gjenbrukes, det avgjør arkitekten). PR mot `fase1-kandidat-electricsql` til PR #10 er merget.
+**Neste: liten oppgave (a) – PowerSync- og Electric-containerne i Azure-testmiljøet** (Bicep i `infra/azure`, egen liten PR oppå PR #12), så Ståle kan kjøre prøve A og B på ekte iPad. Deretter (b) småfunnene i PowerSync-resultatfilen.
 
-**Forrige oppgave:** Oppgave 5 – Kandidat 2: ElectricSQL, **PR #10** (branch `fase1-kandidat-electricsql`, versjon 0.2.2). Oppgavekort `docs/funksjoner/fase1-kandidat-electricsql.md`, testplan `docs/funksjoner/fase1-kandidat-electricsql-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-electricsql.md`, drift `docs/drift/electricsql.md`. Sikkerhet-personvern: godkjent, tre små funn; (2) og (3) rettet, (1) (Electrics 400-kropp videresendes uendret) tas i ADR-en. Test-leder: godkjent (lint, typesjekk, format, 333 Vitest, e2e 105 bestått). Spørsmål nr. 11 (ElectricSQL som leverandør), ikke blokkerende.
+**Forrige oppgave:** Oppgave 6 – Kandidat 3, egenbygd (lokal database og endringskø), **PR #11** (branch `fase1-kandidat-egenbygd`, versjon 0.2.3, oppå PR #10). Oppgavekort `docs/funksjoner/fase1-kandidat-egenbygd.md` (med «Avgjørelser etter gjennomgangen»), testplan `docs/funksjoner/fase1-kandidat-egenbygd-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-egenbygd.md`. Ingen ny avhengighet, ingen migrering, ingen ny tjeneste. Sikkerhet-personvern: godkjent (ett lite funn rettet). Forenkler: doble testfiler slått sammen. Test-leder: avviste først for små funn (alle rettet), e2e-feil i to tester rettet av feilrettingslederen (feil i testene, ikke i koden). Punktet «Kandidater satt opp …» er krysset av.
 
-**Små oppgaver som venter:** (a) PowerSync- og Electric-containerne i Azure-testmiljøet (Bicep i `infra/azure`, egen liten PR). (b) Småfunnene (6), (8), (9), (10), (13) og (14) i PowerSync-resultatfilen i én liten rettelse. Tas etter kandidat 3, eller før hvis Ståle vil kjøre prøve A og B først.
+**Før det:** Oppgave 5 – Kandidat 2: ElectricSQL, **PR #10** (branch `fase1-kandidat-electricsql`, versjon 0.2.2). Oppgavekort `docs/funksjoner/fase1-kandidat-electricsql.md`, testplan `docs/funksjoner/fase1-kandidat-electricsql-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-electricsql.md`, drift `docs/drift/electricsql.md`. Sikkerhet-personvern: godkjent, tre små funn; (2) og (3) rettet, (1) (Electrics 400-kropp videresendes uendret) tas i ADR-en. Test-leder: godkjent (lint, typesjekk, format, 333 Vitest, e2e 105 bestått). Spørsmål nr. 11 (ElectricSQL som leverandør), ikke blokkerende.
 
-**Rekkefølge videre i fase 1:** kandidat 3 → Ståle kjører prøve A og B per kandidat på ekte iPad når synktjenestene er oppe i Azure → prøve C–F → sammenligning og ADR. Punktet «Kandidater satt opp …» krysses av når alle tre er satt opp.
+**Små oppgaver som venter:** (a) se «Neste». (b) Småfunnene (6), (8), (9), (10), (13) og (14) i PowerSync-resultatfilen i én liten rettelse.
+
+**Rekkefølge videre i fase 1:** alle tre kandidatene er satt opp → synktjenestene i Azure (a) → Ståle kjører prøve A og B per kandidat på ekte iPad → prøve C–F → sammenligning og ADR.
 
 Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI-forslag senere vises og godkjennes), og reklamasjoner (ingenting går tapt mellom befaring og rapport).
 
@@ -26,13 +28,13 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #10 | Kandidat 2: ElectricSQL (fase 1), versjon 0.2.2, med læringsløkke for PR #8 | Venter på Ståle | main |
+| #12 | Kandidat 3 (egenbygd) inn på `main`, versjon 0.2.3. Innholdet er det Ståle godkjente i PR #11 | Venter på Ståle | main |
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
 ## Venter på Ståle
 
-- **PR #10:** les PR-teksten og merge. Når PowerSync og ElectricSQL kjører i Azure (egen liten PR kommer): kjør prøve A og B etter `docs/funksjoner/fase1-prove-ab-powersync.md` og `docs/funksjoner/fase1-prove-ab-electricsql.md`.
+- **PR #12:** merge. Den inneholder kandidat 3 (PR #11), som du allerede har godkjent, men som havnet i den gamle branchen til PR #10 og ikke på `main`. Når synktjenestene kjører i Azure (egen liten PR kommer): kjør prøve A og B etter `docs/funksjoner/fase1-prove-ab-powersync.md`, `…-electricsql.md` og `…-egenbygd.md`.
 - **Testmiljøet (PR #7 er merget):** følg `docs/drift/testmiljo-azure.md`: lag ressursgruppen `rg-ezprop-test` og GitHub-innloggingen i Azure, legg inn secrets og variabler, svar på spørsmål nr. 6 og nr. 9. Bekreft «ferdig når»: appen åpner på ekte iPad Pro fra hjemskjermen. Ikke legg inn de fire e-post-secretene før Graph-adapteren er bygget (fase 0b).
 - Spørsmålene i `docs/09-apne-sporsmal.md`: nr. 6, nr. 8 (GPS i bildene, før prøve D), nr. 9, nr. 10 (PowerSync som leverandør) og nr. 11 (ElectricSQL som leverandør), de to siste før ADR-en.
 
@@ -46,7 +48,13 @@ Ingen.
 
 ## Siste kjøring
 
-29.10.2026 kl. 10:45: hovedløkken fant PR #9 merget (kl. 11:27 norsk tid). Flettet `main` inn i `fase1-kandidat-electricsql` (én konflikt i `erfaringer.md`, begge avsnitt beholdt) og kjørte læringsløkken for PR #9. Sesjon: https://claude.ai/code/session_01Jqwntz9WUQ9tyG2mcL52jZ
+29.10.2026 kl. 12:45–13:00: hovedløkken fant PR #10 og #11 merget, og at kandidat 3 manglet på `main`. Laget `fase1-kandidat-egenbygd-til-main` fra den gamle branchen med `main` flettet inn, læringsløkke for #10 og #11, og PR #12. Sesjon: https://claude.ai/code/session_01Jqwnu1u7LijJH79yxkGBBS
+
+29.10.2026 kl. 10:45: hovedløkken fant PR #9 merget (kl. 11:27 norsk tid). Flettet `main` inn i `fase1-kandidat-electricsql` (én konflikt i `erfaringer.md`, begge avsnitt beholdt), kjørte læringsløkken for PR #9, fullførte oppgave 6: rettet tre feilende Vitest-tester (hodekommentar, henting «med en gang» uten tidtaker), gjennomgang hos sikkerhet-personvern, forenkler og test-leder, slo sammen doble testfiler, rettet to e2e-tester, kjørte alle sjekker (grønne) og åpnet PR #11 mot `fase1-kandidat-electricsql`. Sesjon: https://claude.ai/code/session_01Jqwntz9WUQ9tyG2mcL52jZ
+
+29.10.2026 kl. 10:00–10:15: prosjektleder laget branchen `fase1-kandidat-egenbygd` oppå `fase1-kandidat-electricsql`, oppgavekortet for oppgave 6 (kandidat 3, egenbygd), resultatmalen for prøve A og B og to ordlisterader. Roller: arkitekt, sikkerhet-personvern, test-leder, utvikler, testskriver. Sesjon: https://claude.ai/code/session_01Jqwnu1u7LijJH79yxkGBBS
+
+29.10.2026 kl. 10:40: prosjektleder oppdaterte oppgavekortet etter runde 1 (arkitekt og test-leder ba om endring). Avgjort: arkitektens forarbeid tas inn som det står; myk sletting dekkes av `applyIncoming` pluss én ny test for hente-leseren; markøren tømmes ved organisasjonsbytte. Ordlisten: ny rad «lokal kjerne». Ingen nye spørsmål til Ståle.
 
 29.10.2026 kl. 09:30–10:00: hovedløkken fant PR #8 merget (kl. 08:30). Flettet `main` inn i `fase1-kandidat-electricsql` (ingen konflikter), kjørte læringsløkken for PR #8, sikkerhet-personvern og test-leder (begge godkjent, to små funn rettet), lint, typesjekk, format, Vitest og e2e (grønne), og åpnet PR #10 mot `main`. Lederrollene måtte startes med modellen satt i kallet fordi kvoten for den faste modellen var brukt opp (PR #9). Sesjon: https://claude.ai/code/session_01Jqwnu1u7LijJH79yxkGBBS
 
