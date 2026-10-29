@@ -91,3 +91,8 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - Arbeidsflyten «oppgave» gikk fra oppgavekort til merget PR på ca. 2,5 timer (27 agenter), uten alvorlige funn. `main` hadde fått PR #21 og #22 underveis; eneste konflikt var versjonsnummeret. Ta alltid versjonen som én patch over `main` ved fletting, ikke over branchens egen.
 - Hovedløkken kan starte neste oppgave fra `main` mens en klar PR venter på CI, så lenge oppgavene ikke rører de samme filene. Det sparte ventetid her.
+
+## 29.10.2026 – Småfunn fra synkstatus (PR #26)
+
+- Når boten fletter `main` inn i en PR, kan CI-kjøringen bli stående og vente på godkjenning. `merge-klare-pr.sh --vent` gir da opp etter 30 minutter. Løsning: en ny commit fra agenten på branchen, så starter CI som vanlig.
+- Testskriver og utvikler laget doble testfiler for samme kode. Test-leder bør sjekke etter doble testfiler før gjennomgangen er ferdig.

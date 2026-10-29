@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 29.10.2026 (liten oppgave (d) levert som PR #26)
+Sist oppdatert: 29.10.2026 (PR #26 merget, ingen åpne PR-er)
 
 ## Gjeldende fase
 
@@ -20,7 +20,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 **Levert: Synkstatus som alltid vises**, **PR #21** (merget 29.10.2026 kl. 19:44; branch `fase1-synkstatus`, bygger på `main`, versjon 0.2.11). Oppgavekort `docs/funksjoner/fase1-synkstatus.md`, skisse `docs/funksjoner/fase1-synkstatus-skisse.md`, testplan `docs/funksjoner/fase1-synkstatus-testplan.md`. Måleindikatoren er erstattet av `sync-status.tsx` for alle tre kandidatene. Roller: forenkler, ux-ansvarlig, test-leder, ui-designer, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
-**Levert: liten oppgave (d)**, småfunnene fra PR #21, **PR #26** (branch `fase1-smafunn-synkstatus` fra `main`, versjon 0.2.16). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-synkstatus.md`. Test for «Synk nå», vakt mot andre databaser enn lokal/test i e2e, `ensureInspector` bruker ikke slettede ansatte, loggen viser bare feilmeldingen. Roller: forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
+**Levert: liten oppgave (d)**, småfunnene fra PR #21, **PR #26** (merget 29.10.2026; branch `fase1-smafunn-synkstatus` fra `main`, versjon 0.2.16). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-synkstatus.md`. Test for «Synk nå», vakt mot andre databaser enn lokal/test i e2e, `ensureInspector` bruker ikke slettede ansatte, loggen viser bare feilmeldingen. Roller: forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
 **Neste:** småfunn fra prøve E: egen enhetstest for `localWriteGeneration` i `trial-store.ts`, testsakene ut av appens pakke (`rules/index.ts`), grensetallene bare ett sted i meldingene, og rydding i overlappende tester. Kan tas sammen med småfunnene som står igjen fra PR #26: `sync/custom/reader.ts:275` og `sync/electricsql/store.ts:197` logger hele feilobjektet. Deretter prøve A og B per kandidat (Ståle, når synktjenestene er slått på, spørsmål nr. 12). Til da: prøve C, D og F som kan forberedes uten Ståle.
 
@@ -40,9 +40,8 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #26 | Liten oppgave (d): småfunn fra synkstatus | Klar, merges med skriptet når CI er grønn | `main` |
 
-PR #16–#25 er merget 29.10.2026 (#23: prøve E, #25: autonom modus).
+PR #16–#26 er merget 29.10.2026 (#23: prøve E, #25: autonom modus, #26: småfunn fra synkstatus). Ingen åpne PR-er.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -64,6 +63,8 @@ Ingen ennå.
 Ingen.
 
 ## Siste kjøring
+
+29.10.2026: hovedløkken fant ingen åpne PR-er, kjørte liten oppgave (d) med arbeidsflyten «oppgave» (24 agenter, ca. 2 t 25 min) til PR #26, merget med skriptet (CI grønn, ingen alvorlige funn, to små funn står under «Neste»). Første merge-forsøk stoppet fordi den automatiske flettingen fra `main` ga en CI-kjøring som ventet på godkjenning; en ny commit startet CI. Sesjon: https://claude.ai/code/session_01JqwntzupjW6jbbFTYtkeBA
 
 29.10.2026: prosjektleder fullførte liten oppgave (d), småfunnene fra PR #21: flettet `main` inn (versjon 0.2.16), fjernet to doble testfiler, strammet testene for `ensureInspector`, krysset av i planen og åpnet PR #26 mot `main`. Sesjon: https://claude.ai/code/session_01JqwntzupjW6jbbFTYtkeBA
 
