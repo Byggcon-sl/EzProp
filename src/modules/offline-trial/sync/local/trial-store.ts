@@ -236,7 +236,7 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
       const forms = await readForms();
       if (formListeners.has(listener)) listener(forms);
     } catch (error) {
-      console.warn("Lagring: kunne ikke lese listen.", error);
+      console.warn("Lagring: kunne ikke lese listen.", errorText(error));
     }
   }
 
@@ -245,7 +245,7 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
       const snapshot = await readSnapshot(formId);
       if (snapshotListeners.get(listener) === formId) listener(snapshot);
     } catch (error) {
-      console.warn("Lagring: kunne ikke lese skjemaet.", error);
+      console.warn("Lagring: kunne ikke lese skjemaet.", errorText(error));
     }
   }
 
@@ -465,7 +465,7 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
     if (closed) return Promise.resolve(false);
     const run = sendQueue()
       .catch((error: unknown) => {
-        console.warn("Synk: sendingen stoppet.", error);
+        console.warn("Synk: sendingen stoppet.", errorText(error));
         return false;
       })
       .finally(() => {
@@ -859,3 +859,8 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
     readRows,
   };
 };
+
+/** Bare feilmeldingen til loggen, aldri hele feilobjektet (kan bære tekst fra skjemaet). */
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : "ukjent feil";
+}

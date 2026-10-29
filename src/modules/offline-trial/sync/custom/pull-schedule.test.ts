@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PULL_BACKOFF_MAX_MS,
   PULL_INTERVAL_MS,
+  type PullEvent,
   type PullOutcome,
   type PullScheduleState,
 } from "./types";
@@ -15,12 +16,12 @@ import { nextPullDelay } from "./pull-schedule";
 
 const START: PullScheduleState = { failures: 0 };
 /** «Synk nå» (krav K4 i docs/funksjoner/fase1-synkstatus-testplan.md). */
-const SYNC_NOW = "sync-now" as PullOutcome;
+const SYNC_NOW: PullEvent = "sync-now";
 
 /** Kjører en rekke utfall fra start og gir ventetiden etter hvert. */
-function run(outcomes: readonly PullOutcome[], from: PullScheduleState = START) {
+function run(outcomes: readonly PullEvent[], from: PullScheduleState = START) {
   let state = from;
-  const delays: number[] = [];
+  const delays: (number | null)[] = [];
   for (const outcome of outcomes) {
     const next = nextPullDelay(state, outcome);
     delays.push(next.delayMs);
@@ -124,7 +125,7 @@ describe("nextPullDelay (custom/pull-schedule.ts)", () => {
   // Hendelsen `sync-now` gir henting med en gang og hopper over ventetiden etter feil, men nullstiller
   // ikke feiltelleren (bare en vellykket henting gjør det). Uten nett når «Synk nå» aldri leseren:
   // `runSyncNow` gir `"offline"` før runden kalles (sync/sync-now.test.ts) og e2e viser at ingenting
-  // sendes. Typen utvides av utvikler; `as PullOutcome` lar testen kjøre før det.
+  // sendes.
 
   it("sync-now gir henting med en gang, også rett etter forrige henting", () => {
     const afterOk = nextPullDelay(START, "ok");
