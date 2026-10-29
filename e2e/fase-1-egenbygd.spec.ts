@@ -26,6 +26,7 @@ import {
   type LocalRow,
   type TrialSyncCandidate,
 } from "./helpers";
+import { PULL_BACKOFF_MAX_MS } from "../src/modules/offline-trial/sync/custom/types";
 
 // Tredje kandidat for drift uten nett: egenbygd (lokal database og endringskø) koblet til
 // testskjemaet (fase 1, oppgave 6). Testplan: docs/funksjoner/fase1-kandidat-egenbygd-testplan.md
@@ -37,9 +38,13 @@ const DIR = path.dirname(fileURLToPath(import.meta.url));
 const TEST_IMAGE = path.join(DIR, "fixtures", "test-image.png");
 const PHOTO_ROUTE = "**/api/prove/bilder/**";
 const CHANGES_ROUTE = "**/api/prove/synk/endringer";
-const ANY_STATUS = /^(Venter: \d+ endring(er)?, \d+ bilde(r)?|Alt er lagret på serveren)$/;
-const NO_PHOTOS_WAITING = /^Venter: \d+ endring(er)?, 0 bilder$|^Alt er lagret på serveren$/;
-const ALL_SAVED = "Alt er lagret på serveren";
+const ANY_STATUS =
+  /^(Venter: \d+ endring(er)?, \d+ bilde(r)?|Alt er lagret|Venter på kontakt med serveren)$/;
+const NO_PHOTOS_WAITING =
+  /^Venter: \d+ endring(er)?, 0 bilder$|^Alt er lagret$|^Venter på kontakt med serveren$/;
+const ALL_SAVED = "Alt er lagret";
+/** PowerSync og ElectricSQL: køen er tom, men uten henting fra serveren i e2e er ingenting bekreftet. */
+const AWAITING_SERVER = "Venter på kontakt med serveren";
 const WAIT_TEXT = "Vent til alt er lagret på serveren før du bytter";
 /** Takt 5 s pluss sending og slingringsmonn (testplan 6.2, «To enheter»). */
 const OTHER_DEVICE_TIMEOUT = 20_000;
@@ -103,12 +108,17 @@ async function answerFor(page: Page, formId: string, fieldKey: string) {
   );
 }
 
-async function waitAllSaved(page: Page) {
-  await expect
-    .poll(() => pendingChanges(page), { timeout: 20_000, message: "køen tømmes" })
-    .toBe(0);
-  await expect(indicator(page)).toHaveText(ALL_SAVED, { timeout: 20_000 });
+/** Venter til køen er tom og «Alt er lagret» vises. `timeout` gjelder hvert av de to stegene. */
+async function waitAllSaved(page: Page, timeout = 20_000) {
+  await expect.poll(() => pendingChanges(page), { timeout, message: "køen tømmes" }).toBe(0);
+  await expect(indicator(page)).toHaveText(ALL_SAVED, { timeout });
 }
+
+/**
+ * Frist når køen og leseren kan ha en hel ventetid foran seg etter mange 500-feil (begge har tak
+ * på 60 s), eller en første henting i mange sider når databasen er stor (sent i en full kjøring).
+ */
+const FULL_READER_WAIT_MS = PULL_BACKOFF_MAX_MS + 10_000;
 
 /** Åpner skjemaet fra listen på en enhet som får det via hente-ruten. */
 async function openFromList(page: Page, formId: string) {
@@ -467,6 +477,9 @@ test.describe("egenbygd uten service worker", () => {
 
   // Obligatorisk (tap av data)
   test("køen overlever at fanen lukkes og åpnes igjen (Egenbygd)", async ({ page, context }) => {
+    // «Alt er lagret» krever en bekreftet henting etter at køen er tom; den kan ha en hel ventetid
+    // i leseren foran seg (FULL_READER_WAIT_MS), så testen får tid til den.
+    test.setTimeout(60_000 + 2 * FULL_READER_WAIT_MS);
     await useCandidate(context, "custom");
     await logIn(page, ADMIN_EMAIL);
     await context.route(CHANGES_ROUTE, (route) =>
@@ -490,7 +503,7 @@ test.describe("egenbygd uten service worker", () => {
     } finally {
       await context.unroute(CHANGES_ROUTE);
     }
-    await waitAllSaved(reopened!);
+    await waitAllSaved(reopened!, FULL_READER_WAIT_MS);
   });
 
   test("det som skrives mens en bunt er underveis går ikke tapt (Egenbygd)", async ({
@@ -764,7 +777,11 @@ test.describe("egenbygd uten service worker", () => {
       // Henting blokkerer aldri skriving: skrivingen kommer fram mens hentingen feiler
       await floorsInput(page).fill("7");
       await expectCount(page, 1);
-      await waitAllSaved(page);
+      // Hentingen svarer 500, så serveren bekrefter aldri: «Alt er lagret» kan ikke vises her
+      await expect
+        .poll(() => pendingChanges(page), { timeout: 15_000, message: "køen tømmes" })
+        .toBe(0);
+      await expect(indicator(page)).toHaveText(AWAITING_SERVER);
     } finally {
       await page.unroute(isPullUrl);
     }
@@ -1216,7 +1233,7 @@ test("velgeren har tre knapper, og Egenbygd overlever omlasting", async ({ page 
       expect(box!.height).toBeGreaterThanOrEqual(44);
     }
   }
-  await expect(indicator(page)).toHaveText(ALL_SAVED);
+  await expect(indicator(page)).toHaveText(AWAITING_SERVER);
 
   await Promise.all([page.waitForEvent("load"), custom.click()]);
   await page.waitForLoadState();

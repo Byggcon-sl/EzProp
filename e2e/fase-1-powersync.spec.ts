@@ -24,8 +24,10 @@ const TEST_IMAGE = path.join(
   "test-image.png",
 );
 const PHOTO_ROUTE = "**/api/prove/bilder/**";
-const ANY_STATUS = /^(Venter: \d+ endring(er)?, \d+ bilde(r)?|Alt er lagret på serveren)$/;
-const NO_PHOTOS_WAITING = /^Venter: \d+ endring(er)?, 0 bilder$|^Alt er lagret på serveren$/;
+const ANY_STATUS =
+  /^(Venter: \d+ endring(er)?, \d+ bilde(r)?|Alt er lagret|Venter på kontakt med serveren)$/;
+const NO_PHOTOS_WAITING =
+  /^Venter: \d+ endring(er)?, 0 bilder$|^Alt er lagret$|^Venter på kontakt med serveren$/;
 const FOREIGN = "annen-enhet";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 

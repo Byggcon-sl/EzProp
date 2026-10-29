@@ -14,6 +14,8 @@ import { nextPullDelay } from "./pull-schedule";
 // Takten er data: tabellene under er testsakene.
 
 const START: PullScheduleState = { failures: 0 };
+/** «Synk nå» (krav K4 i docs/funksjoner/fase1-synkstatus-testplan.md). */
+const SYNC_NOW = "sync-now" as PullOutcome;
 
 /** Kjører en rekke utfall fra start og gir ventetiden etter hvert. */
 function run(outcomes: readonly PullOutcome[], from: PullScheduleState = START) {
@@ -116,6 +118,51 @@ describe("nextPullDelay (custom/pull-schedule.ts)", () => {
       expect(state.failures).toBe(2);
       expect(next.state).not.toBe(state);
     }
+  });
+
+  // --- «Synk nå» (docs/funksjoner/fase1-synkstatus.md pkt. 3, testplan synkstatus 2.4, krav K4) ---
+  // Hendelsen `sync-now` gir henting med en gang og hopper over ventetiden etter feil, men nullstiller
+  // ikke feiltelleren (bare en vellykket henting gjør det). Uten nett når «Synk nå» aldri leseren:
+  // `runSyncNow` gir `"offline"` før runden kalles (sync/sync-now.test.ts) og e2e viser at ingenting
+  // sendes. Typen utvides av utvikler; `as PullOutcome` lar testen kjøre før det.
+
+  it("sync-now gir henting med en gang, også rett etter forrige henting", () => {
+    const afterOk = nextPullDelay(START, "ok");
+    expect(afterOk.delayMs).toBe(PULL_INTERVAL_MS);
+    const next = nextPullDelay(afterOk.state, SYNC_NOW);
+    expect(next.delayMs).toBe(0);
+    expect(next.state.failures).toBe(0);
+  });
+
+  it("sync-now under feilventetid gir henting med en gang og nullstiller ikke feiltelleren", () => {
+    const { state, delays } = run(["failed", "failed", "failed"]);
+    expect(delays.at(-1)).toBe(20_000);
+    const now = nextPullDelay(state, SYNC_NOW);
+    expect(now.delayMs).toBe(0);
+    expect(now.state.failures).toBe(3);
+    // Ny feil etter «Synk nå» fortsetter der den var
+    expect(nextPullDelay(now.state, "failed").delayMs).toBe(40_000);
+  });
+
+  it("wake er uendret: aldri tettere enn 5 s", () => {
+    // `wake` ligger i leseren (reader.test.ts, uendret). I takten er `sync-now` det eneste nye
+    // unntaket: ok, acked og failed gir fortsatt minst 5 s fra alle feiltall.
+    for (let failures = 0; failures <= 10; failures++) {
+      expect(nextPullDelay({ failures }, SYNC_NOW).delayMs, `sync-now, ${failures}`).toBe(0);
+      for (const outcome of ["ok", "acked", "failed"] as const) {
+        expect(
+          nextPullDelay({ failures }, outcome).delayMs,
+          `${outcome}, ${failures}`,
+        ).toBeGreaterThanOrEqual(PULL_INTERVAL_MS);
+      }
+    }
+  });
+
+  it("sync-now endrer ikke tilstanden den får inn", () => {
+    const state = Object.freeze({ failures: 2 });
+    const next = nextPullDelay(state, SYNC_NOW);
+    expect(state.failures).toBe(2);
+    expect(next.state).not.toBe(state);
   });
 
   it("ventetiden er aldri under 5 s mellom to hentinger med ferdig: true", () => {

@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 29.10.2026 kl. 18:00 (PR #18 og #19 merget; synkstatus i arbeid på `fase1-synkstatus`)
+Sist oppdatert: 29.10.2026 (synkstatus ferdig og levert som PR #21, versjon 0.2.11)
 
 ## Gjeldende fase
 
@@ -12,7 +12,9 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Nå: Synkstatus som alltid vises** (punkt i fase 1: antall endringer og bilder som venter, «lagret kl.» og «Synk nå»). Bygger videre på måleindikatoren `src/modules/offline-trial/sync-indicator.tsx`, for alle tre kandidatene. Startet av hovedløkken 29.10.2026 kl. 16:00 med arbeidsflyten «oppgave» (branch `fase1-synkstatus`).
+**Levert: Synkstatus som alltid vises**, **PR #21** (branch `fase1-synkstatus`, bygger på `main`, versjon 0.2.11). Oppgavekort `docs/funksjoner/fase1-synkstatus.md`, skisse `docs/funksjoner/fase1-synkstatus-skisse.md`, testplan `docs/funksjoner/fase1-synkstatus-testplan.md`. Måleindikatoren er erstattet av `sync-status.tsx` for alle tre kandidatene. Roller: forenkler, ux-ansvarlig, test-leder, ui-designer, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
+
+**Neste:** prøve A og B per kandidat (Ståle, når synktjenestene er slått på, spørsmål nr. 12). Til da: prøve C–F i fase 1 som kan forberedes uten Ståle. Små oppgaver fra synkstatus-PR-en (kan tas som én liten oppgave): enhetstest for «Synk nå» i lageret, `ensureInspector` i e2e skal ikke bruke slettede ansatte og ikke skrive mot andre databaser enn lokal/test, loggen i `trial-store.ts` skal bare vise feilmeldingen, og fjerne `failChangesOnce` og en unødvendig cast.
 
 **Forrige oppgave:** liten oppgave (a) – synktjenestene i Azure-testmiljøet, **PR #17** (merget 29.10.2026 kl. 16:58, versjon 0.2.7). PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så mergen lager ingen nye ressurser. ADR 0003, oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. Kostnad når de er på: ca. 700–850 kr per måned. Spørsmål nr. 12.
 
@@ -28,7 +30,9 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 ## Åpne PR-er
 
-Ingen åpne PR-er. PR #14–#19 er merget 29.10.2026 (#19: liten oppgave (c), versjon 0.2.9). Synkstatus (`fase1-synkstatus`) er i arbeid uten PR (siste commit 29.10.2026 kl. 16:29 norsk tid). Står branchen uten nye commits ved neste kjøring, tar hovedløkken den opp igjen.
+| PR | Oppgave | Status | Bygger på |
+|---|---|---|---|
+| #21 | Synkstatus som alltid vises (versjon 0.2.11) | Klar, merges med skriptet når CI er grønn | main |
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -47,6 +51,8 @@ Ingen ennå.
 Ingen.
 
 ## Siste kjøring
+
+29.10.2026: prosjektleder fullførte synkstatus: flettet `main` inn (versjonskonflikt løst, 0.2.11), krysset av i planen, oppdaterte tilstanden og åpnet PR #21 mot `main`. Sesjon: https://claude.ai/code/session_01JqwntywRSPWcBmrv2nPUoo
 
 29.10.2026 kl. 17:10–18:00: hovedløkken merget PR #18 (tilstand) og kjørte liten oppgave (c) med arbeidsflyten «oppgave» til PR #19, merget med skriptet (CI grønn, to små funn står i PR-en). Neste: synkstatus (annen sesjon), deretter prøve A og B når Ståle har slått på synktjenestene. Sesjon: https://claude.ai/code/session_01Jqwnu11Jdv4FLbyF9rNKnW
 

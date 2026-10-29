@@ -33,9 +33,12 @@ const TEST_IMAGE = path.join(DIR, "fixtures", "test-image.png");
 const PHOTO_ROUTE = "**/api/prove/bilder/**";
 const CHANGES_ROUTE = "**/api/prove/synk/endringer";
 const SHAPE_ROUTE = "/api/prove/synk/shape";
-const ANY_STATUS = /^(Venter: \d+ endring(er)?, \d+ bilde(r)?|Alt er lagret på serveren)$/;
-const NO_PHOTOS_WAITING = /^Venter: \d+ endring(er)?, 0 bilder$|^Alt er lagret på serveren$/;
-const ALL_SAVED = "Alt er lagret på serveren";
+const ANY_STATUS =
+  /^(Venter: \d+ endring(er)?, \d+ bilde(r)?|Alt er lagret|Venter på kontakt med serveren)$/;
+const NO_PHOTOS_WAITING =
+  /^Venter: \d+ endring(er)?, 0 bilder$|^Alt er lagret$|^Venter på kontakt med serveren$/;
+/** PowerSync og ElectricSQL: køen er tom, men uten henting fra serveren i e2e er ingenting bekreftet. */
+const AWAITING_SERVER = "Venter på kontakt med serveren";
 const FOREIGN = "annen-enhet";
 const WAIT_TEXT = "Vent til alt er lagret på serveren før du bytter";
 
@@ -288,7 +291,7 @@ test("indikatoren viser Uten nett uten nett, og venter-tekst eller alt lagret me
   }
   await expect(indicator(page)).toHaveText(NO_PHOTOS_WAITING);
   // Skriveruten finnes i e2e, så køen tømmes (ulikt PowerSync uten tjeneste)
-  await expect(indicator(page)).toHaveText(ALL_SAVED, { timeout: 20_000 });
+  await expect(indicator(page)).toHaveText(AWAITING_SERVER, { timeout: 20_000 });
 });
 
 test("skjemaet åpner fra hurtiglageret uten nett etter ett besøk (ElectricSQL)", async ({
@@ -375,7 +378,7 @@ test.describe("endringskøen", () => {
       await page.unroute(CHANGES_ROUTE);
     }
     await expect.poll(() => pendingChanges(page), { timeout: 20_000 }).toBe(0);
-    await expect(indicator(page)).toHaveText(ALL_SAVED, { timeout: 20_000 });
+    await expect(indicator(page)).toHaveText(AWAITING_SERVER, { timeout: 20_000 });
   });
 
   test("avbrutt sending beholder bunten", async ({ page, context }, testInfo) => {
@@ -399,7 +402,7 @@ test.describe("endringskøen", () => {
       await page.unroute(CHANGES_ROUTE);
     }
     await expect.poll(() => pendingChanges(page), { timeout: 20_000 }).toBe(0);
-    await expect(indicator(page)).toHaveText(ALL_SAVED, { timeout: 20_000 });
+    await expect(indicator(page)).toHaveText(AWAITING_SERVER, { timeout: 20_000 });
   });
 
   test("det som skrives mens en bunt er underveis går ikke tapt", async ({
@@ -555,7 +558,7 @@ test.describe("endringskøen", () => {
           return rows.length === 1 && rows[0]!.uploaded_at == null;
         })
         .toBe(true);
-      await expect(indicator(page)).toHaveText(ALL_SAVED, { timeout: 15_000 });
+      await expect(indicator(page)).toHaveText(AWAITING_SERVER, { timeout: 15_000 });
       // markPhotoUploaded skriver bare lokalt: ingen ny endring i køen og ingen ny sending
       expect(await pendingChanges(page)).toBe(0);
       await page.waitForTimeout(1_000);
@@ -803,7 +806,7 @@ test("velgeren Synkløsning: valget overlever omlasting og er tillatt når alt e
       expect(box!.height).toBeGreaterThanOrEqual(44);
     }
   }
-  await expect(indicator(page)).toHaveText(ALL_SAVED);
+  await expect(indicator(page)).toHaveText(AWAITING_SERVER);
   await expect(page.getByText(WAIT_TEXT)).toHaveCount(0);
 
   await Promise.all([page.waitForEvent("load"), electric.click()]);

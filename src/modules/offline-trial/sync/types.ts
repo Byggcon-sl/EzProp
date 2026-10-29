@@ -81,14 +81,26 @@ export interface TrialFormSnapshot {
   photos: TrialPhotoRow[];
 }
 
-/** Grunnlaget for måleindikatoren («Uten nett» / «Venter: N endringer, M bilder» / «Alt er lagret på serveren»). */
+/**
+ * Grunnlaget for synkstatusen (`sync-status.tsx`, docs/funksjoner/fase1-synkstatus.md): «Uten nett»,
+ * «Venter: N endringer, M bilder», «Venter på kontakt med serveren» eller «Alt er lagret».
+ */
 export interface TrialSyncStatus {
   online: boolean;
+  /**
+   * Siste runde mot serveren (sending og henting) lyktes, og ingenting har feilet etter den. Settes
+   * til `false` ved feil, tidsavbrudd og når nettet forsvinner. Hver kandidat setter feltet ut fra
+   * sine egne svar fra serveren, aldri ut fra `navigator.onLine`.
+   */
+  serverConfirmed: boolean;
   /** Endringer i endringskøen som serveren ikke har bekreftet. */
   pendingChanges: number;
   /** Bilder på denne enheten uten `uploadedAt`. */
   pendingPhotos: number;
 }
+
+/** Utfallet av én runde fra «Synk nå». */
+export type TrialSyncRoundResult = "ok" | "offline" | "failed";
 
 /**
  * Synklageret skjermene og bildekøen bygger mot. Én implementasjon per kandidat. Alle metoder
@@ -126,6 +138,13 @@ export interface TrialSyncStore {
    * og setter dem selv (`storeTrialPhoto`).
    */
   markPhotoUploaded(id: string, sha256: string): Promise<void>;
+  /**
+   * «Synk nå»: sender køen og henter med en gang, og hopper over ventetiden etter en feil. Varsler
+   * `onStatusChange` (bildekøen starter av det varselet). Kaster aldri. Uten nett: `"offline"` straks,
+   * uten fetch. Feil eller tidsavbrudd (`SYNC_NOW_TIMEOUT_MS` i `sync/sync-now.ts`): `"failed"`.
+   * Bygges med `runSyncNow` fra `sync/sync-now.ts`, så reglene er like for alle kandidater.
+   */
+  syncNow(): Promise<TrialSyncRoundResult>;
   /** Skriver tekst som venter (ved blur, når siden skjules, ved avmelding og før siden lukkes). */
   flush(): Promise<void>;
   /** Stopper synk og lytting og lukker lokal lagring. Sletter ingenting. */

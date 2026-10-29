@@ -10,6 +10,12 @@
  *   `applyIncoming` og skriver synkposisjonen i samme transaksjon, aldri før radene.
  * - Henting blokkerer aldri skriving; skrivingene går i kø etter hverandre (`serial`).
  *
+ * - «Synk nå» (`syncNow`, docs/funksjoner/fase1-synkstatus.md): skriver tekst som venter, sender
+ *   hele køen med en gang (forbi ventetiden etter feil, feiltelleren står til neste 200) og ber
+ *   leseren hente. Bygget på `runSyncNow`, så nett-sjekk, tidsavbrudd og «kaster aldri» er felles.
+ * - `serverConfirmed`: siste sending lyktes (eller køen var tom) og leseren har fått 200 med alt
+ *   hentet. Usann etter sendefeil, tidsavbrudd og `offline`-hendelsen til neste bekreftede henting.
+ *
  * Én fane sender køen (ingen `navigator.locks`, kjent svakhet).
  */
 import { uuidv7 } from "@/shared/lib/uuid";
@@ -19,6 +25,7 @@ import { listTrialFields, trialForm, type TrialFieldType } from "../../trial-for
 import { isTrialTableName, type TrialTableName } from "../local-columns";
 import { confirmLocalPhoto, listConfirmedPhotoIds, putLocalPhoto } from "../photo-store";
 import { isPhotoWaiting } from "../photo-upload";
+import { runSyncNow, singleFlight } from "../sync-now";
 import { nextTextState, safeTextOf, TEXT_WRITE_DELAY_MS } from "../text-state";
 import type {
   IncomingChange,
@@ -29,6 +36,7 @@ import type {
   TrialFormSnapshot,
   TrialFormSummary,
   TrialPhotoRow,
+  TrialSyncRoundResult,
   TrialSyncStatus,
 } from "../types";
 import { applyIncoming } from "./apply-incoming";
@@ -429,10 +437,15 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
   }
 
   // --- Sending av køen. ---
-  let sending = false;
+  /** Sendingen som pågår. Gir `true` når køen ble tom, `false` ved feil, uten nett eller lukket. */
+  let currentSend: Promise<boolean> | null = null;
   let sendAttempt = 0;
   let sendTimer: ReturnType<typeof setTimeout> | null = null;
   let retryWaiting = false;
+  /** Siste bunt fikk ikke 200. Usann igjen først når en bunt får 200. */
+  let sendFailed = false;
+  /** Feil, tidsavbrudd eller `offline` etter siste bekreftede henting. */
+  let contactLost = false;
 
   function scheduleSend(delay: number, force = false) {
     if (closed) return;
@@ -446,70 +459,99 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
     }, delay);
   }
 
-  async function sendBatches() {
-    if (sending || closed) return;
-    sending = true;
-    try {
-      while (!closed && isOnline()) {
-        // Uttak og tilbakelegging går i samme rekke som skrivingene, så en endring som kommer
-        // mens bunten er underveis, aldri flettes inn i den (den får ny seq).
-        const taken = await serial(async () => {
-          const result = takeBatch(outbox, MAX_OPERATIONS_PER_BATCH);
-          if (result) outbox = result.state;
-          return result;
+  /** Starter sending av køen, eller gir sendingen som allerede pågår. Kaster aldri. */
+  function sendBatches(): Promise<boolean> {
+    if (currentSend) return currentSend;
+    if (closed) return Promise.resolve(false);
+    const run = sendQueue()
+      .catch((error: unknown) => {
+        console.warn("Synk: sendingen stoppet.", error);
+        return false;
+      })
+      .finally(() => {
+        currentSend = null;
+      });
+    currentSend = run;
+    return run;
+  }
+
+  /**
+   * «Synk nå»: sender hele køen med en gang, forbi ventetiden etter en feil. Feiltelleren
+   * (`sendAttempt`) står til en bunt får 200. Kaster hvis en bunt ikke fikk 200.
+   */
+  async function sendNow(): Promise<void> {
+    // En sending som pågår, kan ha tatt ut bunten før den siste teksten kom i køen.
+    if (currentSend) await currentSend;
+    if (sendTimer) clearTimeout(sendTimer);
+    sendTimer = null;
+    retryWaiting = false;
+    const drained = await sendBatches();
+    if (!drained) throw new Error("Køen ble ikke sendt.");
+  }
+
+  async function sendQueue(): Promise<boolean> {
+    while (!closed && isOnline()) {
+      // Uttak og tilbakelegging går i samme rekke som skrivingene, så en endring som kommer
+      // mens bunten er underveis, aldri flettes inn i den (den får ny seq).
+      const taken = await serial(async () => {
+        const result = takeBatch(outbox, MAX_OPERATIONS_PER_BATCH);
+        if (result) outbox = result.state;
+        return result;
+      });
+      if (!taken) return true;
+      let status: number | undefined;
+      try {
+        const response = await fetch(CHANGES_ROUTE, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(outboxBatchBody(organizationId, taken.batch)),
         });
-        if (!taken) return;
-        let status: number | undefined;
-        try {
-          const response = await fetch(CHANGES_ROUTE, {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(outboxBatchBody(organizationId, taken.batch)),
-          });
-          status = response.status;
-        } catch {
-          status = undefined;
-        }
-        if (shouldAckBatch(status)) {
-          await serial(async () => {
-            const sent = outbox.inFlight ?? [];
-            await db.inTransaction([LOCAL_OUTBOX_STORE], "readwrite", async (tx) => {
-              const objectStore = tx.objectStore(LOCAL_OUTBOX_STORE);
-              for (const seq of sent) await requestResult(objectStore.delete(seq));
-            });
-            const now = Date.now();
-            for (const entry of taken.batch) {
-              confirmed.set(localRowKey(entry.table, { ...entry.data, id: entry.id }), now);
-            }
-            outbox = ackBatch(outbox);
-          });
-          sendAttempt = 0;
-          notify({ status: true });
-          for (const listener of ackListeners) listener();
-          continue;
-        }
-        await serial(async () => {
-          outbox = keepBatch(outbox);
-        });
-        // Bare status og antall i loggen, aldri innholdet (fritekst fra skjemaet).
-        console.warn(
-          `Synk: serveren svarte ${status ?? "ikke"} på ${taken.batch.length} endringer. Prøver igjen senere.`,
-        );
-        const delay = retryDelayMs(sendAttempt);
-        sendAttempt++;
-        retryWaiting = true;
-        if (sendTimer) clearTimeout(sendTimer);
-        sendTimer = setTimeout(() => {
-          sendTimer = null;
-          retryWaiting = false;
-          void sendBatches();
-        }, delay);
-        return;
+        status = response.status;
+      } catch {
+        status = undefined;
       }
-    } finally {
-      sending = false;
+      if (shouldAckBatch(status)) {
+        await serial(async () => {
+          const sent = outbox.inFlight ?? [];
+          await db.inTransaction([LOCAL_OUTBOX_STORE], "readwrite", async (tx) => {
+            const objectStore = tx.objectStore(LOCAL_OUTBOX_STORE);
+            for (const seq of sent) await requestResult(objectStore.delete(seq));
+          });
+          const now = Date.now();
+          for (const entry of taken.batch) {
+            confirmed.set(localRowKey(entry.table, { ...entry.data, id: entry.id }), now);
+          }
+          outbox = ackBatch(outbox);
+        });
+        sendAttempt = 0;
+        sendFailed = false;
+        notify({ status: true });
+        for (const listener of ackListeners) listener();
+        continue;
+      }
+      await serial(async () => {
+        outbox = keepBatch(outbox);
+      });
+      // Bare status og antall i loggen, aldri innholdet (fritekst fra skjemaet).
+      console.warn(
+        `Synk: serveren svarte ${status ?? "ikke"} på ${taken.batch.length} endringer. Prøver igjen senere.`,
+      );
+      // Varsler bare når «bekreftet» skifter, så bildekøen ikke startes ved hvert nye forsøk.
+      if (!sendFailed) notify({ status: true });
+      sendFailed = true;
+      const delay = retryDelayMs(sendAttempt);
+      sendAttempt++;
+      retryWaiting = true;
+      if (sendTimer) clearTimeout(sendTimer);
+      sendTimer = setTimeout(() => {
+        sendTimer = null;
+        retryWaiting = false;
+        void sendBatches();
+      }, delay);
+      return false;
     }
+    return false;
   }
 
   // --- Innfletting av rader fra serveren. ---
@@ -625,7 +667,10 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
     reader.wake();
     notify({ status: true });
   };
-  const onOffline = () => notify({ status: true });
+  const onOffline = () => {
+    contactLost = true;
+    notify({ status: true });
+  };
   if (typeof window !== "undefined") {
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
@@ -639,12 +684,32 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
     mergeIncoming: (table, changes, stateRow) => mergeIncoming(table, changes, stateRow),
     resetTable,
     deleteState,
-    notifyStatus: () => notify({ status: true }),
+    notifyStatus: () => {
+      // Leseren har fått 200 med alt hentet: kontakten med serveren er bekreftet igjen.
+      if (reader.serverConfirmed()) contactLost = false;
+      notify({ status: true });
+    },
     afterAck: (listener) => {
       ackListeners.add(listener);
     },
   });
   scheduleSend(0);
+
+  /** Én runde for «Synk nå»: tekst som venter, hele køen, så henting. Avvises ved feil. */
+  async function syncRound(): Promise<void> {
+    await flush();
+    await sendNow();
+    await reader.syncNow();
+  }
+
+  const syncNow = singleFlight(async (): Promise<TrialSyncRoundResult> => {
+    if (closed) return "failed";
+    const result = await runSyncNow({ isOnline: () => !closed && isOnline(), round: syncRound });
+    if (result === "failed") contactLost = true;
+    // Også ved feil: synkstatusen oppdateres, og bildekøen starter av varselet.
+    notify({ status: true });
+    return result;
+  });
 
   async function readRows(table: string, formId?: string): Promise<LocalRow[]> {
     if (table === "outbox") return db.readAll<LocalRow>(LOCAL_OUTBOX_STORE);
@@ -662,6 +727,8 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
 
   return {
     flush,
+
+    syncNow,
 
     async close() {
       await flush();
@@ -752,6 +819,7 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
       const photos = await waitingPhotos();
       return {
         online: isOnline(),
+        serverConfirmed: !sendFailed && !contactLost && reader.serverConfirmed(),
         pendingChanges: outbox.entries.length,
         pendingPhotos: photos.length,
       };

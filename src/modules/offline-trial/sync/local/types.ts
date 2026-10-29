@@ -113,7 +113,10 @@ export interface LocalReadContext {
   resetTable(table: TrialTableName, stateKey: string): Promise<void>;
   /** Sletter én rad i tilstandslageret (f.eks. en ugyldig markør). Synkede rader og køen røres ikke. */
   deleteState(key: string): Promise<void>;
-  /** Varsler `onStatusChange`-lytterne (etter hver henting). */
+  /**
+   * Varsler `onStatusChange`-lytterne (etter hver vellykkede henting). Kjernen leser
+   * `reader.serverConfirmed()` her, så leseren oppdaterer den før kallet.
+   */
   notifyStatus(): void;
   /** Kalles etter hver bunt serveren har svart 200 på. */
   afterAck(listener: () => void): void;
@@ -124,6 +127,18 @@ export interface LocalTrialReader {
   start(ctx: LocalReadContext): void;
   /** Nettet kom tilbake: hent med en gang (ventetiden nullstilles). */
   wake(): void;
+  /**
+   * «Synk nå» (docs/funksjoner/fase1-synkstatus.md): hent én runde med en gang og hopp over
+   * ventetiden. Løses når en henting som startet etter kallet, har fått 200 og er ferdig hentet.
+   * Avvises ved feil, uten nett og når leseren stoppes. Kjernen setter tidsavbruddet
+   * (`runSyncNow`).
+   */
+  syncNow(): Promise<void>;
+  /**
+   * Siste henting fikk 200 og var ferdig, og ingenting har feilet etter den. `false` før første
+   * henting, ved feil og når leseren ser at nettet er borte. Bygger bare på svar fra serveren.
+   */
+  serverConfirmed(): boolean;
   /** Lageret lukkes: avbryt kall som pågår og ikke start nye. */
   stop(): void;
 }

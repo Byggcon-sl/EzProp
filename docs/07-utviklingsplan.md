@@ -158,7 +158,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 - [ ] **Prøve D – bilder:** komprimering og riktig rotering på iPaden, HEIC til JPEG, opplasting mens appen er åpen, fortsettelse etter brudd, kontroll med fingeravtrykk
 - [ ] **Prøve E – regler uten nett:** én regel for alder mot levetid og én målegrense kjører på iPaden og gir samme svar som på serveren
 - [ ] **Prøve F – innlogging som har gått ut:** takstmannen kan fortsatt åpne og fullføre rapporten uten nett
-- [ ] Synkstatus som alltid vises: antall endringer og bilder som venter, «lagret kl.», og «Synk nå»
+- [x] Synkstatus som alltid vises: antall endringer og bilder som venter, «lagret kl.», og «Synk nå» (PR #21, 29.10.2026, `docs/funksjoner/fase1-synkstatus.md`)
 - [ ] Sammenligning av kandidatene: virker prøvene, hvor mye arbeid, drift i EU/EØS, pris og hvor modent verktøyet er
 - [ ] **ADR: valg av løsning for drift uten nett**, med begrunnelse og det som ikke virket
 - [ ] Demo for Ståle på ekte iPad i en kjeller uten dekning
