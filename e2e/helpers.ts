@@ -10,6 +10,7 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
+import { listTrialFields, trialForm } from "../src/modules/offline-trial/trial-form";
 
 /** Første admin fra seed (SEED_ADMIN_EMAIL i CI og .env.example). */
 export const ADMIN_EMAIL = "admin@byggcon.no";
@@ -533,4 +534,18 @@ export async function ensureInspector(): Promise<void> {
 export async function logInAsInspector(page: Page) {
   await ensureInspector();
   await logIn(page, INSPECTOR_EMAIL);
+}
+
+// --- Prøve E, regler uten nett (docs/funksjoner/fase1-prove-e-regler-testplan.md avsnitt 5.1) ---
+
+/** Linjen med regelsvaret under feltet (`data-rule-key`, `data-rule-state`). */
+export function ruleResult(page: Page, ruleKey: string): Locator {
+  return page.locator(`[data-rule-key="${ruleKey}"]`);
+}
+
+/** Tallfeltet for en feltkode i testskjemaet, funnet på etiketten (som testskjema-testene). */
+export function numberInput(page: Page, fieldKey: string): Locator {
+  const field = listTrialFields(trialForm).find((entry) => entry.key === fieldKey);
+  if (!field || field.type !== "number") throw new Error(`${fieldKey} er ikke et tallfelt`);
+  return page.getByLabel(field.label, { exact: true });
 }
