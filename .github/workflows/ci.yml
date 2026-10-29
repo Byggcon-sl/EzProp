@@ -62,6 +62,43 @@ jobs:
           restore-keys: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - run: pnpm build
 
+  bicep:
+    name: Bicep for testmiljøet (uten innlogging)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bygg og lint main.bicep
+        run: |
+          az bicep install
+          az bicep build --file infra/azure/main.bicep --outfile "$RUNNER_TEMP/main.json"
+          az bicep lint --file infra/azure/main.bicep
+      # Synktjenestene (ADR 0003) skal være av som standard: alle Microsoft.App-ressurser og
+      # wal_level må ha betingelsen enableSyncTrial, ellers lager en merge til main nye ressurser.
+      - name: Sjekk at synkressursene har betingelsen enableSyncTrial
+        run: |
+          missing=$(jq -r '
+            (.resources | if type == "object" then [.[]] else . end)[]
+            | select((.type | startswith("Microsoft.App/")) or (.name | contains("wal_level")))
+            | select(((.condition // "") | contains("parameters('"'"'enableSyncTrial'"'"')")) | not)
+            | "\(.type) \(.name)"
+          ' "$RUNNER_TEMP/main.json")
+          count=$(jq '[(.resources | if type == "object" then [.[]] else . end)[] | select(.type | startswith("Microsoft.App/"))] | length' "$RUNNER_TEMP/main.json")
+          wal=$(jq '[(.resources | if type == "object" then [.[]] else . end)[] | select(.name | contains("wal_level"))] | length' "$RUNNER_TEMP/main.json")
+          if [ -n "$missing" ]; then
+            echo "Disse ressursene mangler betingelsen enableSyncTrial:"
+            echo "$missing"
+            exit 1
+          fi
+          if [ "$count" -lt 3 ]; then
+            echo "Fant $count Microsoft.App-ressurser, ventet minst 3 (miljø og to containere)."
+            exit 1
+          fi
+          if [ "$wal" -ne 1 ]; then
+            echo "Fant $wal ressurser for wal_level, ventet 1."
+            exit 1
+          fi
+          echo "Alle $count Microsoft.App-ressurser og wal_level har betingelsen enableSyncTrial."
+
   e2e:
     name: Ende-til-ende (Playwright, PC og iPad)
     runs-on: ubuntu-latest

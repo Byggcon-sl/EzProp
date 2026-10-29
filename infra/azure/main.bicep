@@ -56,12 +56,38 @@ param msGraphClientSecret string
 @description('Avsenderadresse for e-post. Tom til e-post kobles til.')
 param mailFrom string = ''
 
+// Prøve fase 1: synktjenestene PowerSync og ElectricSQL (ADR 0003). AV som standard, så en merge til
+// main lager ingen nye ressurser. Ståle slår på med GitHub-variabelen ENABLE_SYNC_TRIAL (docs/drift).
+@description('Slår på synktjenestene for prøve A og B (koster penger). Standard av.')
+param enableSyncTrial bool = false
+
+// De fire hemmelighetene under trengs bare når bryteren er på; tom standardverdi så utrullingen virker uten dem.
+// scripts/azure/check-sync-secrets.sh stopper utrullingen hvis bryteren er på og noen mangler.
+@description('Nøkkelen appen signerer synk-tokens med (POWERSYNC_JWT_SECRET). Bare når bryteren er på.')
+@secure()
+param powerSyncJwtSecret string = ''
+
+@description('Passord for databaserollen powersync_repl. Bare bokstaver og tall. Bare når bryteren er på.')
+@secure()
+param powerSyncDbPassword string = ''
+
+@description('Nøkkelen appen bruker mot Electric (ELECTRIC_SECRET). Bare når bryteren er på.')
+@secure()
+param electricSecret string = ''
+
+@description('Passord for databaserollen electric_repl. Bare bokstaver og tall. Bare når bryteren er på.')
+@secure()
+param electricDbPassword string = ''
+
 // ---------- Navn og avledede verdier ----------
 
 var planName = 'plan-ezprop-${environmentName}'
 var appName = 'app-ezprop-${environmentName}'
 var postgresServerName = 'psql-ezprop-${environmentName}'
 var databaseName = 'ezprop'
+var containerEnvName = 'cae-ezprop-${environmentName}'
+var powerSyncAppName = 'ca-ezprop-powersync-${environmentName}'
+var electricAppName = 'ca-ezprop-electric-${environmentName}'
 
 var defaultAppUrl = 'https://${appName}.azurewebsites.net'
 var betterAuthUrl = empty(appHostname) ? defaultAppUrl : 'https://${appHostname}'
@@ -82,6 +108,8 @@ var baseAppSettings = [
   { name: 'BETTER_AUTH_URL', value: betterAuthUrl }
   { name: 'SEED_ADMIN_EMAIL', value: seedAdminEmail }
   { name: 'APP_VERSION', value: appVersion }
+  // Bilder fra prøven (fase 1). Under /home, som App Service beholder ved omstart.
+  { name: 'TRIAL_UPLOAD_DIR', value: '/home/data/uploads/trial' }
 ]
 
 var emailAppSettings = emailConfigured
@@ -90,6 +118,18 @@ var emailAppSettings = emailConfigured
       { name: 'MS_GRAPH_CLIENT_ID', value: msGraphClientId }
       { name: 'MS_GRAPH_CLIENT_SECRET', value: msGraphClientSecret }
       { name: 'MAIL_FROM', value: mailFrom }
+    ]
+  : []
+
+// Synktjenestene (bare når bryteren er på). Adressene bygges av miljøets domene, så appen avhenger
+// bare av Container Apps-miljøet og ikke av containerne (Electric avhenger av appen, se under).
+// ELECTRIC_URL brukes bare på serveren (shape-ruten), aldri i nettleseren.
+var syncTrialAppSettings = enableSyncTrial
+  ? [
+      { name: 'POWERSYNC_URL', value: 'https://${powerSyncAppName}.${containerEnv!.properties.defaultDomain}' }
+      { name: 'POWERSYNC_JWT_SECRET', value: powerSyncJwtSecret }
+      { name: 'ELECTRIC_URL', value: 'https://${electricAppName}.${containerEnv!.properties.defaultDomain}' }
+      { name: 'ELECTRIC_SECRET', value: electricSecret }
     ]
   : []
 
@@ -156,6 +196,19 @@ resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallR
   dependsOn: [requireTls]
 }
 
+// Logisk replikering for synktjenestene (bare når bryteren er på). Etter brannmurregelen, fordi
+// samtidige endringer på serveren gir ServerIsBusy. Krever omstart av databasen; arbeidsflyten gjør
+// den når Azure melder at den trengs. Settes ikke tilbake når bryteren slås av (ufarlig).
+resource walLevel 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024-08-01' = if (enableSyncTrial) {
+  parent: postgres
+  name: 'wal_level'
+  properties: {
+    value: 'logical'
+    source: 'user-override'
+  }
+  dependsOn: [allowAzureServices]
+}
+
 // ---------- App ----------
 
 resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
@@ -188,7 +241,7 @@ resource app 'Microsoft.Web/sites@2024-04-01' = {
       ftpsState: 'Disabled'
       http20Enabled: true
       healthCheckPath: '/api/helse'
-      appSettings: concat(baseAppSettings, emailAppSettings)
+      appSettings: concat(baseAppSettings, emailAppSettings, syncTrialAppSettings)
     }
   }
 }
@@ -216,6 +269,177 @@ resource appLogs 'Microsoft.Web/sites/config@2024-04-01' = {
     }
     failedRequestsTracing: {
       enabled: false
+    }
+  }
+}
+
+// ---------- Synktjenestene for prøve A og B (bare når bryteren er på, ADR 0003) ----------
+// Samme faste versjoner som docker-compose.yml. Begge når databasen gjennom regelen for Azure-tjenester
+// over TLS med sertifikatsjekk. Rollene powersync_repl og electric_repl og databasen powersync_storage
+// lages av scripts/azure/sync-trial-roles.ts fra arbeidsflyten; til de finnes kan containerne starte
+// på nytt et par ganger.
+
+// Navn på Container Apps-secrets (bare små bokstaver, tall og bindestrek).
+var psDataSourceUriRef = 'ps-data-source-uri'
+var psStorageUriRef = 'ps-storage-uri'
+var psJwtKeyRef = 'ps-jwt-secret-base64'
+var psConfigRef = 'powersync-config-yaml'
+var psSyncRulesRef = 'powersync-sync-rules-yaml'
+var electricDatabaseUrlRef = 'electric-database-url'
+var electricSecretRef = 'electric-secret'
+
+var postgresHost = postgres.properties.fullyQualifiedDomainName
+var powerSyncDataSourceUri = 'postgresql://powersync_repl:${uriComponent(powerSyncDbPassword)}@${postgresHost}:5432/${databaseName}'
+var powerSyncStorageUri = 'postgresql://powersync_repl:${uriComponent(powerSyncDbPassword)}@${postgresHost}:5432/powersync_storage'
+// PowerSync vil ha nøkkelen som base64url av de samme bytene appen signerer med (som start.sh lokalt).
+var powerSyncJwtKey = replace(replace(replace(base64(powerSyncJwtSecret), '+', '-'), '/', '_'), '=', '')
+var electricDatabaseUrl = 'postgresql://electric_repl:${uriComponent(electricDbPassword)}@${postgresHost}:5432/${databaseName}?sslmode=verify-full'
+
+// Electric slipper bare inn appens utgående adresser (IPv4). Et ekstra lag; ELECTRIC_SECRET er den
+// egentlige beskyttelsen, fordi adressene deles med andre Azure-kunder.
+var appOutboundIpv4 = filter(split(app.properties.possibleOutboundIpAddresses, ','), ip => !contains(ip, ':'))
+
+// Forbruksplan, uten lagrede logger (loggstrømmen i portalen brukes under prøven).
+resource containerEnv 'Microsoft.App/managedEnvironments@2024-03-01' = if (enableSyncTrial) {
+  name: containerEnvName
+  location: location
+  properties: {
+    appLogsConfiguration: {}
+    zoneRedundant: false
+  }
+}
+
+resource powerSync 'Microsoft.App/containerApps@2024-03-01' = if (enableSyncTrial) {
+  name: powerSyncAppName
+  location: location
+  properties: {
+    managedEnvironmentId: containerEnv.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: true
+        targetPort: 8080
+        transport: 'auto'
+        allowInsecure: false
+      }
+      secrets: [
+        { name: psDataSourceUriRef, value: powerSyncDataSourceUri }
+        { name: psStorageUriRef, value: powerSyncStorageUri }
+        // Lages av den sikre parameteren powerSyncJwtSecret; linteren ser ikke gjennom base64 og replace.
+        #disable-next-line use-secure-value-for-secure-inputs
+        { name: psJwtKeyRef, value: powerSyncJwtKey }
+        // Konfigfilene fra repoet er ikke hemmelige (de leser hemmelighetene fra miljøet), men
+        // Container Apps monterer bare secrets som filer.
+        #disable-next-line use-secure-value-for-secure-inputs
+        { name: psConfigRef, value: loadTextContent('../../powersync/config.yaml') }
+        #disable-next-line use-secure-value-for-secure-inputs
+        { name: psSyncRulesRef, value: loadTextContent('../../powersync/sync-rules.yaml') }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'powersync'
+          image: 'journeyapps/powersync-service:1.27.2'
+          // I Container Apps erstatter args bildets CMD, slik command gjør i docker-compose.yml.
+          args: ['start', '-r', 'unified']
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+          env: [
+            { name: 'POWERSYNC_CONFIG_PATH', value: '/config/config.yaml' }
+            {
+              name: 'PS_DATA_SOURCE_URI'
+              secretRef: psDataSourceUriRef
+            }
+            {
+              name: 'PS_STORAGE_URI'
+              secretRef: psStorageUriRef
+            }
+            {
+              name: 'PS_JWT_SECRET_BASE64'
+              secretRef: psJwtKeyRef
+            }
+            { name: 'PS_PG_SSLMODE', value: 'verify-full' }
+          ]
+          volumeMounts: [
+            { volumeName: 'powersync-config', mountPath: '/config' }
+          ]
+        }
+      ]
+      volumes: [
+        {
+          name: 'powersync-config'
+          storageType: 'Secret'
+          secrets: [
+            { secretRef: psConfigRef, path: 'config.yaml' }
+            { secretRef: psSyncRulesRef, path: 'sync-rules.yaml' }
+          ]
+        }
+      ]
+      // Én replikeringsstrøm: aldri null og aldri to kopier.
+      scale: {
+        minReplicas: 1
+        maxReplicas: 1
+      }
+    }
+  }
+}
+
+resource electric 'Microsoft.App/containerApps@2024-03-01' = if (enableSyncTrial) {
+  name: electricAppName
+  location: location
+  properties: {
+    managedEnvironmentId: containerEnv.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: true
+        targetPort: 3000
+        transport: 'auto'
+        allowInsecure: false
+        // map, ikke for: adressene er først kjent når appen finnes.
+        ipSecurityRestrictions: map(appOutboundIpv4, (ip, i) => {
+          name: 'app-utgaende-${i}'
+          description: 'Appens utgående adresse'
+          ipAddressRange: '${ip}/32'
+          action: 'Allow'
+        })
+      }
+      secrets: [
+        { name: electricDatabaseUrlRef, value: electricDatabaseUrl }
+        { name: electricSecretRef, value: electricSecret }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'electric'
+          image: 'electricsql/electric:1.8.1'
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+          env: [
+            {
+              name: 'DATABASE_URL'
+              secretRef: electricDatabaseUrlRef
+            }
+            {
+              name: 'ELECTRIC_SECRET'
+              secretRef: electricSecretRef
+            }
+            { name: 'ELECTRIC_USAGE_REPORTING', value: 'false' }
+            // Publikasjonen lages av migrering 0002; Electric endrer den ikke selv.
+            { name: 'ELECTRIC_MANUAL_TABLE_PUBLISHING', value: 'true' }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 1
+      }
     }
   }
 }
