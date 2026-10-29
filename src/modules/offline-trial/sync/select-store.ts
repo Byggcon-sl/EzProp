@@ -49,10 +49,24 @@ export function writeSyncCandidate(candidate: TrialSyncCandidate, storage?: Writ
   (storage ?? globalThis.localStorage).setItem(TRIAL_SYNC_CANDIDATE_KEY, candidate);
 }
 
+/** Prefiks for «Lagret kl.» i `localStorage`, én nøkkel per kandidat (docs/funksjoner/fase1-synkstatus.md pkt. 7). */
+const SAVED_AT_KEY_PREFIX = "trial_saved_at_";
+
+/** Nøkkelen i `localStorage` for «Lagret kl.» for kandidaten, f.eks. `trial_saved_at_powersync`. */
+export function savedAtKey(candidate: TrialSyncCandidate): string {
+  return `${SAVED_AT_KEY_PREFIX}${candidate}`;
+}
+
+/** Fjerner «Lagret kl.» for alle kandidatene, uansett hvilken som er valgt. */
+export function clearSavedAt(storage: Pick<Storage, "removeItem">): void {
+  for (const candidate of TRIAL_SYNC_CANDIDATES) storage.removeItem(savedAtKey(candidate));
+}
+
 /** Neste person på samme iPad skal ikke se en annen organisasjons data, uansett kandidat. */
 async function clearIfOtherOrganization(organizationId: string): Promise<void> {
   const last = localStorage.getItem(TRIAL_LAST_ORGANIZATION_KEY);
   if (last && last !== organizationId) {
+    clearSavedAt(localStorage);
     const [electric, powersync, custom] = await Promise.all([
       import("./electricsql/storage"),
       import("./powersync/database"),
