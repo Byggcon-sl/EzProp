@@ -128,7 +128,7 @@ Det er ingen kostnad for privat nett, fillagring eller logglagring, fordi ingen 
    | `ELECTRIC_SECRET` | Nøkkelen appen og Electric deler |
    | `ELECTRIC_DB_PASSWORD` | Passordet til Electrics databasebruker |
 
-   De to databasepassordene må bare ha bokstaver og tall, og minst 24 tegn. `openssl rand -hex 32` gir 64 tegn med bare bokstaver og tall, så det holder. Mangler en secret, eller er et passord feil, stopper utrullingen med en melding som sier hvilket navn det gjelder.
+   De to databasepassordene må bare ha bokstaver og tall, og minst 24 tegn. `openssl rand -hex 32` gir 64 tegn med bare bokstaver og tall, så det holder. De to nøklene `POWERSYNC_JWT_SECRET` og `ELECTRIC_SECRET` må ha minst 32 tegn. `openssl rand -hex 32` gir 64 tegn, så det holder også. Mangler en secret, eller er et passord feil, stopper utrullingen med en melding som sier hvilket navn det gjelder.
 
 2. **Sett variabelen** `ENABLE_SYNC_TRIAL` til `true` (fanen Variables). Nøyaktig `true`, med små bokstaver. Alt annet, også tom, betyr av.
 3. **Kjør utrullingen:** Actions → «Utrulling til Azure» → «Run workflow».
