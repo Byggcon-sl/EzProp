@@ -1,2 +1,8 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Felles dokumenter som mange PR-er legger til i (se scripts/git/union-filer)
+docs/agenter/tilstand.md merge=union
+docs/agenter/erfaringer.md merge=union
+docs/09-apne-sporsmal.md merge=union
+docs/05-domenemodell.md merge=union
