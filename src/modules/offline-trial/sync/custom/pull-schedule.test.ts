@@ -53,6 +53,10 @@ describe("nextPullDelay (custom/pull-schedule.ts)", () => {
     expect(state.failures).toBe(6);
   });
 
+  it("taket på 60 s holder også etter svært mange feil", () => {
+    expect(nextPullDelay({ failures: 1_000 }, "failed").delayMs).toBe(60_000);
+  });
+
   it("vellykket henting etter feil gir 5 s igjen", () => {
     const { delays } = run(["failed", "failed", "failed", "ok", "failed"]);
     // Etter suksess er telleren nullstilt: neste feil starter på 5 s igjen
@@ -72,11 +76,23 @@ describe("nextPullDelay (custom/pull-schedule.ts)", () => {
     expect(nextPullDelay(START, "acked").delayMs).toBe(PULL_INTERVAL_MS);
   });
 
-  it("200 på en bunt under feilventetid gir henting ved neste takt, ikke etter feilventetiden", () => {
+  it("200 på en bunt under feilventetid gir 5 s og nullstiller feiltelleren", () => {
+    // Avgjort 29.10.2026: serveren svarte, så nettet virker. `acked` gir alltid 5 s.
     const { state, delays } = run(["failed", "failed", "failed", "acked"]);
     expect(delays.at(-1)).toBe(PULL_INTERVAL_MS);
-    expect(delays.at(-1)).toBeLessThan(40_000);
-    expect(state.failures).toBeGreaterThanOrEqual(0);
+    expect(state.failures).toBe(0);
+    // Telleren er nullstilt: neste feil starter på 5 s
+    expect(nextPullDelay(state, "failed").delayMs).toBe(5_000);
+  });
+
+  it.each<[PullOutcome, number, number]>([
+    ["ok", 3, 0],
+    ["acked", 3, 0],
+    ["more", 3, 3],
+    ["invalid-cursor", 3, 3],
+    ["failed", 3, 4],
+  ])("%s med %i feil på rad gir %i feil etterpå", (outcome, before, after) => {
+    expect(nextPullDelay({ failures: before }, outcome).state.failures).toBe(after);
   });
 
   it.each<[PullOutcome[], number]>([
