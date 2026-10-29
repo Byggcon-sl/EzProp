@@ -3,6 +3,7 @@
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
 Sist oppdatert: 29.10.2026 (PR #15 merget; PR #17 for synktjenestene i Azure åpnet fra `fase1-synk-i-azure`)
+Sist oppdatert: 29.10.2026 kl. 16:00 (PR #14 og #15 merget; neste oppgave: synkstatus som alltid vises)
 
 ## Gjeldende fase
 
@@ -13,6 +14,9 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 ## Gjeldende oppgave
 
 **Nå: liten oppgave (a) – synktjenestene i Azure-testmiljøet, PR #17** (branch `fase1-synk-i-azure`, oppå `main`, versjon 0.2.7). Oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så en merge lager ingen nye ressurser. Spørsmål nr. 12 (slå på, kostnad) lagt inn, ikke blokkerende. Roller: arkitekt, sikkerhet-personvern, utvikler, testskriver, test-leder. Steg: ADR 0003 og kontrakt (`scripts/azure/sync-trial-roles.types.ts`) ferdig, testplan ferdig, funn 1–5 rettet i kortet. Bygget i fire biter med testskriver i parallell; lint, typesjekk, 510 Vitest og e2e grønne; ingen alvorlige funn. Små funn står i PR-en og under «Små oppgaver som venter» (c). Neste: merge når CI er grønn, så venter prøve A og B på at Ståle slår på synktjenestene (spørsmål nr. 12).
+**Nå: Synkstatus som alltid vises** (punkt i fase 1: antall endringer og bilder som venter, «lagret kl.» og «Synk nå»). Bygger videre på måleindikatoren `src/modules/offline-trial/sync-indicator.tsx`, for alle tre kandidatene. Startet av hovedløkken 29.10.2026 kl. 16:00 med arbeidsflyten «oppgave» (branch `fase1-synkstatus`).
+
+**Oppgave (a) – synktjenestene i Azure-testmiljøet** ligger på branchen `fase1-synk-i-azure` (oppgavekort, ADR 0003, testplan og kontrakt, siste commit 29.10.2026 kl. 14:12), uten PR. Den kan være i arbeid i en annen sesjon. Neste kjøring tar den opp igjen hvis branchen ikke har fått nye commits.
 
 **Forrige oppgave:** Oppgave 6 – Kandidat 3, egenbygd (lokal database og endringskø), **PR #11** (branch `fase1-kandidat-egenbygd`, versjon 0.2.3, oppå PR #10). Oppgavekort `docs/funksjoner/fase1-kandidat-egenbygd.md` (med «Avgjørelser etter gjennomgangen»), testplan `docs/funksjoner/fase1-kandidat-egenbygd-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-egenbygd.md`. Ingen ny avhengighet, ingen migrering, ingen ny tjeneste. Sikkerhet-personvern: godkjent (ett lite funn rettet). Forenkler: doble testfiler slått sammen. Test-leder: avviste først for små funn (alle rettet), e2e-feil i to tester rettet av feilrettingslederen (feil i testene, ikke i koden). Punktet «Kandidater satt opp …» er krysset av.
 
@@ -30,6 +34,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 |---|---|---|---|
 
 | #17 | Synktjenestene i Azure-testmiljøet (av som standard) | Klar (CI), merges av agentene | main |
+PR #14 og #15 er merget 29.10.2026.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -48,6 +53,8 @@ Ingen ennå.
 Ingen.
 
 ## Siste kjøring
+
+29.10.2026 kl. 15:55–: hovedløkken fant PR #14 merget og merget PR #15 (CI grønn). Læringsløkke for #14 og #15, beslutningen «ingen grense for PR-er som venter» ført inn i `LES-MEG-kartlegging.md` og planen (lå bare på en gammel branch). Startet oppgaven «Synkstatus som alltid vises». Sesjon: https://claude.ai/code/session_01JqwntywRSPWcBmrv2nPUoo
 
 29.10.2026 kl. 10:45–13:50 (parallelt med kjøringen under): løste konflikten i PR #10, fullførte oppgave 6 (PR #11), fant og rettet en feil der bildekøen kunne stå fast, rettet småfunnene fra PowerSync-prøven og gjorde bildetestene stabile (PR #14, først mot `fase1-kandidat-egenbygd`, så flyttet til `main`). To sesjoner jobbet samtidig uten å vite om hverandre. Sesjon: https://claude.ai/code/session_01Jqwntz9WUQ9tyG2mcL52jZ
 
