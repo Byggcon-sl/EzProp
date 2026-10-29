@@ -12,6 +12,8 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
+**Også nå: Prøve E – regler uten nett** (branch `fase1-prove-e-regler` fra `main`). Oppgavekort `docs/funksjoner/fase1-prove-e-regler.md` laget 29.10.2026. Roller: utvikler, testskriver, sikkerhet-personvern, fagansvarlig, test-leder. Spørsmål nr. 13 (ekte levetider og grenser), ikke blokkerende.
+
 **Levert: Synkstatus som alltid vises**, **PR #21** (branch `fase1-synkstatus`, bygger på `main`, versjon 0.2.11). Oppgavekort `docs/funksjoner/fase1-synkstatus.md`, skisse `docs/funksjoner/fase1-synkstatus-skisse.md`, testplan `docs/funksjoner/fase1-synkstatus-testplan.md`. Måleindikatoren er erstattet av `sync-status.tsx` for alle tre kandidatene. Roller: forenkler, ux-ansvarlig, test-leder, ui-designer, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
 **Neste:** prøve A og B per kandidat (Ståle, når synktjenestene er slått på, spørsmål nr. 12). Til da: prøve C–F i fase 1 som kan forberedes uten Ståle. Små oppgaver fra synkstatus-PR-en (kan tas som én liten oppgave): enhetstest for «Synk nå» i lageret, `ensureInspector` i e2e skal ikke bruke slettede ansatte og ikke skrive mot andre databaser enn lokal/test, loggen i `trial-store.ts` skal bare vise feilmeldingen, og fjerne `failChangesOnce` og en unødvendig cast.
@@ -51,6 +53,8 @@ Ingen ennå.
 Ingen.
 
 ## Siste kjøring
+
+29.10.2026: prosjektleder laget branchen `fase1-prove-e-regler`, oppgavekortet for prøve E og spørsmål nr. 13. `parseTrialNumber` var allerede streng (oppgave 4); kortet ber bare om flere testsaker. Sesjon: https://claude.ai/code/session_01Jqwnu3Rs4hsNXmsS1zrwe5
 
 29.10.2026: prosjektleder fullførte synkstatus: flettet `main` inn (versjonskonflikt løst, 0.2.11), krysset av i planen, oppdaterte tilstanden og åpnet PR #21 mot `main`. Sesjon: https://claude.ai/code/session_01JqwntywRSPWcBmrv2nPUoo
 
