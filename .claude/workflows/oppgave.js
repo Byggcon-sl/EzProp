@@ -241,7 +241,7 @@ if (stops.length > 0) {
   const reason = stops.map((s) => `${s.role}: ${s.notes}`).join("\n");
   await run(
     "prosjektleder",
-    `${ctx}\nOppgaven stoppes i forhåndsvurderingen:\n${reason}\n\nSkriv det i docs/agenter/tilstand.md under «Trenger Ståle» (klarspråk) og i docs/09-apne-sporsmal.md hvis det er Ståles beslutning. Commit og push branchen.`,
+    `${ctx}\nOppgaven stoppes i forhåndsvurderingen:\n${reason}\n\nSkriv det i docs/agenter/tilstand.md under «Trenger Ståle» (klarspråk) og i docs/09-apne-sporsmal.md hvis det er Ståles beslutning. Er autonom modus på (tilstand.md), bruk «Trenger Ståle når han er tilbake» og send ingen varsel. Commit og push branchen.`,
     { label: "prosjektleder: stopp", phase: "Forhåndsvurdering" },
   );
   return { status: "stoppet", task, reason };
@@ -339,7 +339,7 @@ while (check && !check.passed && attempts < 3) {
   log(`Rødt. Retteforsøk ${attempts} av 3`);
   const fix = await run(
     "feilrettingsleder",
-    `${ctx}\nSjekkene feilet (forsøk ${attempts}):\n${check.output}\n\nFinn årsaken og skriv en presis retteoppgave. Sett needsStaale bare hvis feilen krever en beslutning fra Ståle.`,
+    `${ctx}\nSjekkene feilet (forsøk ${attempts}):\n${check.output}\n\nFinn årsaken og skriv en presis retteoppgave. Sett needsStaale bare hvis feilen krever en beslutning fra Ståle. Er autonom modus på (docs/agenter/tilstand.md), sett needsStaale bare når det trengs noe bare Ståle kan gjøre (hemmeligheter, kontoer, penger); faglige valg tar du selv ut fra docs/kartlegging/.`,
     { label: `feilrettingsleder: forsøk ${attempts}`, phase: "Kjør og rett", schema: FIX_TASK },
   );
   if (!fix || fix.needsStaale) break;
@@ -450,7 +450,7 @@ Sjekkene er ${allGreen ? "grønne" : "IKKE grønne (si det tydelig i PR-en)"}.
 Alvorlige funn som står igjen: ${serious.length === 0 ? "ingen" : serious.map((f) => `${f.file}: ${f.description}`).join("; ")}
 Små funn (nevnes i PR-en): ${minor.length === 0 ? "ingen" : minor.map((f) => `${f.file}: ${f.description}`).join("; ")}
 
-Gjør ferdig: øk versjonsnummeret i package.json (patch), kryss av punktet i docs/07-utviklingsplan.md, oppdater ordlisten hvis nye begreper, oppdater docs/agenter/tilstand.md (åpne PR-er, venter på Ståle). Commit og push branchen «${branch}» (git push -u origin ${branch}). Åpne PR mot ${base} med REST (gh pr create virker ikke i skyen): gh api repos/{owner}/{repo}/pulls -f title=… -f head=${branch} -f base=${base} -f body=… . Norsk tittel, og teksten etter docs/maler/pr.md i klarspråk til Ståle, med statuslinjen øverst. Trenger PR-en en beslutning eller handling fra Ståle før merge, starter tittelen med «Venter på Ståle: », du legger på merket venter-pa-stale (gh api repos/{owner}/{repo}/issues/<nr>/labels -f 'labels[]=venter-pa-stale') og sender ETT varsel med PushNotification. Ellers: kjør bash scripts/merge-klare-pr.sh <nr> --vent, som venter på CI og merger når alt er grønt (Ståle 29.10.2026). Blir CI rød, si det i rapporten; hovedløkken retter. ${base === "main" ? "" : `PR-en bygger på branchen ${base} som ikke er merget: skriv det under «Bygger på».`} Aldri modellnavn. Rapporter PR-lenken, og om den ble merget.`,
+Gjør ferdig: øk versjonsnummeret i package.json (patch), kryss av punktet i docs/07-utviklingsplan.md, oppdater ordlisten hvis nye begreper, oppdater docs/agenter/tilstand.md (åpne PR-er, venter på Ståle). Commit og push branchen «${branch}» (git push -u origin ${branch}). Åpne PR mot ${base} med REST (gh pr create virker ikke i skyen): gh api repos/{owner}/{repo}/pulls -f title=… -f head=${branch} -f base=${base} -f body=… . Norsk tittel, og teksten etter docs/maler/pr.md i klarspråk til Ståle, med statuslinjen øverst. Er autonom modus på (docs/agenter/tilstand.md): ingen «Venter på Ståle» og ingen PushNotification; beslutninger du har tatt selv føres i docs/09-apne-sporsmal.md under «Avgjort av agentene mens Ståle var borte», og PR-en merges med skriptet. Ellers: trenger PR-en en beslutning eller handling fra Ståle før merge, starter tittelen med «Venter på Ståle: », du legger på merket venter-pa-stale (gh api repos/{owner}/{repo}/issues/<nr>/labels -f 'labels[]=venter-pa-stale') og sender ETT varsel med PushNotification. Ellers: kjør bash scripts/merge-klare-pr.sh <nr> --vent, som venter på CI og merger når alt er grønt (Ståle 29.10.2026). Blir CI rød, si det i rapporten; hovedløkken retter. ${base === "main" ? "" : `PR-en bygger på branchen ${base} som ikke er merget: skriv det under «Bygger på».`} Aldri modellnavn. Rapporter PR-lenken, og om den ble merget.`,
   { label: "prosjektleder: PR", phase: "PR", schema: PR },
 );
 return {

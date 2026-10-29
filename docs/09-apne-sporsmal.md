@@ -2,6 +2,15 @@
 
 Spørsmål som Ståle må avgjøre. Nyeste øverst. Når et spørsmål er besvart, flyttes svaret til `docs/kartlegging/LES-MEG-kartlegging.md` (beslutningstabellen) eller riktig dokument, og raden her merkes besvart. De samme spørsmålene står under «Eget rapportsystem» i `01 Kunnskapsbase/99-apne-sporsmal.md` i SharePoint.
 
+## Avgjort av agentene mens Ståle var borte (til gjennomgang)
+
+Ståle 29.10.2026: «Er du i tvil, gå tilbake til undersøkelsene og tolk hva du mener blir beste løsning.» Agentene fører hver beslutning her. Ståle går gjennom listen når han er tilbake, og kan endre hva som helst.
+
+| Nr | Dato | Beslutning | Hvorfor og kilde | PR |
+|---|---|---|---|---|
+
+## Spørsmål til Ståle
+
 | Nr | Dato | Spørsmål | Status |
 |---|---|---|---|
 | 13 | 29.10.2026 | **Ekte levetider og målegrenser for reglene.** Prøve E (regler uten nett) bruker to oppdiktede prøveverdier: levetid for varmtvannsbereder og en grense for fuktmåling i gulv. Før de ekte reglene lages (fase 2a): (a) Hvilke levetider og grenser skal brukes, og fra hvilken kilde (tallverdier som fakta, kilden står i bakgrunnen)? (b) Hvem i fagrådet bekrefter dem før de tas i bruk? (c) Skal en verdi lik grensen (for eksempel alder lik levetid) regnes som over grensen eller ikke? Prøven bruker «strengt større enn» og tallene 7 år og 42 %, som er valgt slik at de ikke likner ekte tall. Ikke blokkerende for prøven. | åpent |

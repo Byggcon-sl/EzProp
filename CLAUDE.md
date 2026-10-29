@@ -79,6 +79,17 @@ Tilgang: `requireOrganizationAccess(actor, organizationId, permission)` fra `@/c
 
 Ståle Limstrand er daglig leder i Byggcon og produkteier. Han er ikke utvikler, og han tar alle beslutninger om fag, pris, personvern og nye funksjoner. Skriv til ham på norsk bokmål i enkelt og konkret språk. Si tydelig fra når han må gjøre noe selv. **Bare prosjektlederen skriver til Ståle.** **Agentene merger selv** når en PR er klar: CI er grønn, ingen konflikt, ingen alvorlige funn i gjennomgangen, og ingenting står under «Må bestemmes av Ståle» (Ståle 29.10.2026). Bruk `scripts/merge-klare-pr.sh`. PR-er som trenger Ståle, får tittelen «Venter på Ståle: …» og merket `venter-pa-stale`, og merges aldri av agentene. Merge til main rulles ut til **testmiljøet**. Utrulling til produksjon gjør Ståle selv.
 
+## Autonom modus (Ståle 29.10.2026, gjelder til Ståle sier fra)
+
+Ståle er borte noen dager og vil ikke ha meldinger, spørsmål eller noe å teste. Hans ord: «Kjør utvikling og testing autonomt. Er du i tvil, gå tilbake til undersøkelsene og tolk hva du mener blir beste løsning. Løsningen er foreløpig kun i test.» Derfor, så lenge `docs/agenter/tilstand.md` sier «Autonom modus: på»:
+
+- **Agentene avgjør selv** spørsmål om fag, innhold og funksjoner innenfor planen. Grunnlaget er researchen i `docs/kartlegging/` (Ståles svar er fasit, nyeste dato gjelder), hovedmålene og forskriften. Velg det som best støtter målene (mindre tid, færre reklamasjoner, KI først), og det enkleste som virker.
+- **Hver slik beslutning føres** i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte» (hva, hvorfor, kilde i researchen, hvordan det kan endres), og nevnes i PR-en. PR-en merges som vanlig.
+- **Ingen PushNotification, ingen «Venter på Ståle»-PR-er.** Det som virkelig bare Ståle kan gjøre (hemmeligheter, kontoer, noe som koster penger, e-post/SMS til ekte mottakere), legges under «Trenger Ståle når han er tilbake» i tilstandsfilen, og løkken går videre med en annen oppgave.
+- **Ikke lov uansett:** noe som koster penger (for eksempel å slå på tjenester i Azure), sende e-post eller SMS til ekte mottakere, logge inn i IVIT, Spectora eller SmartTakst, rulle ut til produksjon, ekte kundedata, hemmeligheter i repoet, tekst fra NS 3600, IVIT eller SmartTakst.
+- **Fagtekster** (avvikstekster, regler, terskler) kan lages som utkast etter beslutningene og prøveeksemplene i researchen. De merkes «utkast, ikke godkjent av fagrådet» i data, slik at Ståle godkjenner dem før ekte bruk.
+- Gjeldende fase fullføres først. Når alle punktene i en fase er levert, går løkken videre til neste fase i planen.
+
 ## Arbeidsflyt
 
 Arbeidet gjøres av agentlaget i `.claude/agents/` med arbeidsflytene i `.claude/workflows/` (`docs/11-agentlaget.md`). Kort:
@@ -98,4 +109,4 @@ Arbeidet gjøres av agentlaget i `.claude/agents/` med arbeidsflytene i `.claude
 - Ikke kopier tekst fra NS 3600, IVIT eller SmartTakst inn i koden.
 - Ikke logg inn i IVIT, Spectora eller SmartTakst. Kartleggingen er ferdig.
 - Ikke gjør noe som koster penger eller sender e-post eller SMS til ekte mottakere uten at Ståle har sagt ja.
-- Ikke lag mange avvikstekster før Ståle har avklart lengde, tone og varianter.
+- Ikke lag mange avvikstekster før Ståle har avklart lengde, tone og varianter (i autonom modus: utkast er lov, se over).
