@@ -180,5 +180,15 @@ Pkt. 1 og 2 er gjort; pkt. 3 er delvis gjort. Vitest (336) og e2e for testskjema
 - **Overlatt til testskriver:** testen for `createLocalDb` med to databaser som ikke ser hverandre. Vitest har ingen IndexedDB og vi tar ikke inn en ny avhengighet, så den går i e2e (`page.evaluate`).
 - Ingen migrering, ingen ny avhengighet, ingen ADR.
 
+## Avgjørelser etter gjennomgangen (prosjektleder, 29.10.2026)
+Test-leder fant at takten i koden avviker fra testplanen 2.1 på fire punkter. Koden gjelder, og testplanen leses slik:
+- **Svar 200 på en sendt bunt (`acked`) nullstiller feiltelleren.** Serveren svarte, så nettet virker. Én test sjekker det eksakte tallet.
+- **`wake` (nettet er tilbake, appen kommer fram) henter med en gang,** også under 5 s etter forrige henting. Det skjer sjelden og gir raskere oppdatering når takstmannen trenger den.
+- **`acked` gir alltid 5 s,** ikke «5 s minus tiden siden forrige henting». En henting som alt er planlagt tidligere, flyttes aldri bakover.
+- **To ugyldige markører på rad** gir ingen løkke: 400 uten `siden` regnes som feil og får vanlig feilventetid.
+- **«Med en gang» (ventetid 0) går uten tidtaker,** via et løfte. En tidtaker på 0 ms kan bli forsinket (i falske tidtakere i Vitest blir den 1 ms). En teller sørger for at en avlyst henting ikke går.
+- **Testene skrevet to ganger** (utvikler og testskriver) slås sammen i filene med navnene fra testplanen; `.impl`-filene slettes.
+- **Modellnavn i commit-meldinger:** eldre commits på branchen skrives ikke om (de ligger også på `main` og i PR #10). Nye commits har det ikke.
+
 ## Åpne spørsmål
 - Ingen nye til Ståle. Kandidat 3 har ingen leverandør, ingen lisens utover det vi har og ingen ekstra drift. Nr. 10 (PowerSync) og nr. 11 (ElectricSQL) står fortsatt åpne før ADR-en.
