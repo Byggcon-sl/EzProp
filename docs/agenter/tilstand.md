@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 29.10.2026 (liten oppgave (c), småfunn fra PR #17, levert som PR fra `fase1-smafunn-synk-azure`; synkstatus i arbeid på `fase1-synkstatus`)
+Sist oppdatert: 29.10.2026 kl. 18:00 (PR #18 og #19 merget; synkstatus i arbeid på `fase1-synkstatus`)
 
 ## Gjeldende fase
 
@@ -28,7 +28,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 ## Åpne PR-er
 
-PR for liten oppgave (c), småfunn fra synktjenestene i Azure (`fase1-smafunn-synk-azure` mot `main`, versjon 0.2.9): klar, merges av agentene med skriptet når CI er grønn. PR #14, #15, #16 og #17 er merget 29.10.2026. Synkstatus (`fase1-synkstatus`) er i arbeid uten PR ennå.
+Ingen åpne PR-er. PR #14–#19 er merget 29.10.2026 (#19: liten oppgave (c), versjon 0.2.9). Synkstatus (`fase1-synkstatus`) er i arbeid uten PR (siste commit 29.10.2026 kl. 16:29 norsk tid). Står branchen uten nye commits ved neste kjøring, tar hovedløkken den opp igjen.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -47,6 +47,8 @@ Ingen ennå.
 Ingen.
 
 ## Siste kjøring
+
+29.10.2026 kl. 17:10–18:00: hovedløkken merget PR #18 (tilstand) og kjørte liten oppgave (c) med arbeidsflyten «oppgave» til PR #19, merget med skriptet (CI grønn, to små funn står i PR-en). Neste: synkstatus (annen sesjon), deretter prøve A og B når Ståle har slått på synktjenestene. Sesjon: https://claude.ai/code/session_01Jqwnu11Jdv4FLbyF9rNKnW
 
 29.10.2026: prosjektleder fullførte liten oppgave (c), småfunnene fra PR #17 (forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver; alle sjekker grønne), krysset av i planen og åpnet PR mot `main`. Sesjon: https://claude.ai/code/session_01Jqwnu11Jdv4FLbyF9rNKnW
 
