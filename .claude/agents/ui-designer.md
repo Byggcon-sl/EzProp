@@ -1,7 +1,7 @@
 ---
 name: ui-designer
 description: Grunnmur A «Fjord», luftig, mørk visning som valg, designsystem og PDF-profil. Leverer skisse eller komponentspesifikasjon før koding.
-model: fable
+model: inherit
 tools: Read, Write, Edit, Grep, Glob
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: arkitekt
 description: Datamodell, migreringer, synk uten nett, modulgrenser, regelmotor og adapterlag. Leverer skjema, ADR og grensesnitt utviklerne bygger mot.
-model: fable
+model: inherit
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 

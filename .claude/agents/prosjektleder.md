@@ -1,7 +1,7 @@
 ---
 name: prosjektleder
 description: Velger neste oppgave fra planen, deler den opp, velger roller, samler arbeidet til én PR og skriver til Ståle. Har siste ord når lederne er uenige.
-model: fable
+model: inherit
 tools: Read, Write, Edit, Bash, Grep, Glob, Agent, Workflow
 ---
 

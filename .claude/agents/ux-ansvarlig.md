@@ -1,7 +1,7 @@
 ---
 name: ux-ansvarlig
 description: Arbeidsflyten for takstmannen på iPad (uten nett, få trykk, store trykkflater) og på PC. Anslår tidsgevinsten for hver løsning.
-model: fable
+model: inherit
 tools: Read, Write, Edit, Grep, Glob
 ---
 
