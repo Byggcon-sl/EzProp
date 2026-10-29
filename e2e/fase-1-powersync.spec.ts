@@ -377,6 +377,9 @@ test("TG og valg satt utenfra viser Endret av en annen, egen endring gjør det i
   const formId = await openNewForm(page);
   const tg = group(page, "Tak – tilstandsgrad");
   await tg.getByRole("button", { name: "TG2", exact: true }).click();
+  // Siden må ha vist egen rad (telleren leser lagrede svar) før «en annen» skriver; ellers kan
+  // begge skrivingene komme i samme varsel fra databasen og se ut som første lasting.
+  await expectCount(page, 1);
   await waitForOwnRow(page, formId, "roof_tg");
   await expect(foreignWarning(page, "roof_tg")).toHaveCount(0);
 
