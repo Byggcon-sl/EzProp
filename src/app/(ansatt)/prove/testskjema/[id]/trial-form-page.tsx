@@ -9,12 +9,12 @@ import {
   type TrialValue,
 } from "@/modules/offline-trial/answers";
 import { detectForeignChanges } from "@/modules/offline-trial/foreign-change";
-import { SyncIndicator } from "@/modules/offline-trial/sync-indicator";
+import { SyncStatus } from "@/modules/offline-trial/sync-status";
 import { rowsToAnswers } from "@/modules/offline-trial/sync/answer-rows";
 import type { TrialAnswerRow, TrialFormSnapshot } from "@/modules/offline-trial/sync/types";
 import { listTrialFields, trialForm } from "@/modules/offline-trial/trial-form";
 import { TrialFormView } from "@/modules/offline-trial/trial-form-view";
-import { useIndicatorSource, useTrialSync } from "../trial-sync-provider";
+import { useSyncStatusSource, useTrialSync } from "../trial-sync-provider";
 
 const FIELD_COUNT = listTrialFields(trialForm).length;
 
@@ -50,7 +50,7 @@ const EMPTY_SET: ReadonlySet<string> = new Set();
  */
 export function TrialFormPage({ formId }: { formId: string }) {
   const { store, deviceId } = useTrialSync();
-  const indicator = useIndicatorSource();
+  const syncSource = useSyncStatusSource();
   const [snapshot, setSnapshot] = useState<TrialFormSnapshot | null>(null);
   const [foreignChanges, setForeignChanges] = useState<ReadonlySet<string>>(EMPTY_SET);
   const [pending, setPending] = useState<Record<string, PendingValue>>({});
@@ -147,8 +147,8 @@ export function TrialFormPage({ formId }: { formId: string }) {
   return (
     <main className="mx-auto max-w-3xl px-4 pb-16">
       <div className="sticky top-0 z-10 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-3">
-        <SyncIndicator getStatus={indicator.getStatus} subscribe={indicator.subscribe} />
-        <p className="text-base font-medium text-slate-900">
+        <SyncStatus {...syncSource} />
+        <p className="mt-2 text-base font-medium text-slate-900">
           {`${countAnswered(trialForm, savedAnswers)} av ${FIELD_COUNT} felt utfylt`}
         </p>
       </div>

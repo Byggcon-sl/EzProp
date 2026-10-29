@@ -21,15 +21,17 @@ export function useTrialSync(): TrialSync {
   return value;
 }
 
-/** Det måleindikatoren trenger: status fra lageret og varsel når den kan ha endret seg. */
-export function useIndicatorSource() {
-  const { store } = useTrialSync();
+/** Det synkstatusen trenger: status, varsel når den kan ha endret seg, «Synk nå» og kandidaten. */
+export function useSyncStatusSource() {
+  const { store, candidate } = useTrialSync();
   return useMemo(
     () => ({
       getStatus: () => store.status(),
       subscribe: (onChange: () => void) => store.onStatusChange(onChange),
+      syncNow: () => store.syncNow(),
+      candidate,
     }),
-    [store],
+    [store, candidate],
   );
 }
 

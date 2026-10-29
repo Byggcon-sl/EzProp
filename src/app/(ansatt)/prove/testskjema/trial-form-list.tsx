@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { SyncIndicator } from "@/modules/offline-trial/sync-indicator";
+import { SyncStatus } from "@/modules/offline-trial/sync-status";
 import { writeSyncCandidate } from "@/modules/offline-trial/sync/select-store";
 import type {
   TrialFormSummary,
@@ -13,7 +13,7 @@ import type {
 } from "@/modules/offline-trial/sync/types";
 import { cn } from "@/shared/lib/cn";
 import { Button } from "@/shared/ui/button";
-import { useIndicatorSource, useTrialSync } from "./trial-sync-provider";
+import { useSyncStatusSource, useTrialSync } from "./trial-sync-provider";
 
 const STATUS_POLL_MS = 2000;
 
@@ -111,7 +111,7 @@ export function TrialFormList() {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [forms, setForms] = useState<TrialFormSummary[] | null>(null);
-  const indicator = useIndicatorSource();
+  const syncSource = useSyncStatusSource();
 
   useEffect(() => store.subscribeForms(setForms), [store]);
 
@@ -126,10 +126,13 @@ export function TrialFormList() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8">
+    <main className="mx-auto max-w-3xl px-4 pb-8">
+      <div className="sticky top-0 z-10 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-3">
+        <SyncStatus {...syncSource} />
+      </div>
       <Link
         href="/arbeidskoe"
-        className="inline-flex min-h-11 min-w-11 items-center text-brand-700 underline"
+        className="mt-4 inline-flex min-h-11 min-w-11 items-center text-brand-700 underline"
       >
         Tilbake til arbeidskøen
       </Link>
@@ -137,9 +140,6 @@ export function TrialFormList() {
       <p className="mt-1 text-slate-600">
         Skjemaene brukes til å prøve appen på iPad uten nett. Bare oppdiktede data.
       </p>
-      <div className="mt-3">
-        <SyncIndicator getStatus={indicator.getStatus} subscribe={indicator.subscribe} />
-      </div>
       <CandidatePicker />
       <Button className="mt-4 min-h-11" onClick={createForm} disabled={creating}>
         Nytt testskjema
