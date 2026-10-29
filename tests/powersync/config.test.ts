@@ -73,9 +73,9 @@ describe("PowerSync-konfigurasjon", () => {
   });
 
   // Småfunn 13: eksplisitt kolonneliste, samme kolonner som de andre kandidatene sender.
-  it("sync-rules.yaml sender bare localColumnsOf for trial_forms og trial_answers", () => {
+  it("sync-rules.yaml sender bare localColumnsOf for alle tre tabellene", () => {
     const rules = read("powersync/sync-rules.yaml");
-    for (const table of ["trial_forms", "trial_answers"] as const) {
+    for (const table of ["trial_forms", "trial_answers", "trial_photos"] as const) {
       const statement = selectStatements(rules).find((s) =>
         new RegExp(`\\bFROM\\s+"?${table}\\b`, "i").test(s),
       );

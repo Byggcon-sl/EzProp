@@ -32,6 +32,11 @@ function openPhotoDb(): Promise<IDBDatabase> {
       };
       resolve(db);
     };
+    // En åpen fane med den gamle versjonen sperrer oppgraderingen; gi beskjed i stedet for å henge.
+    request.onblocked = () => {
+      opening = null;
+      reject(new Error("Lukk andre faner med appen, og prøv igjen."));
+    };
     request.onerror = () => {
       opening = null;
       reject(request.error ?? new Error("Kunne ikke åpne lageret for bilder."));
