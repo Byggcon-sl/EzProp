@@ -150,6 +150,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
   - [x] Kandidat 1, PowerSync, med tekstfletting (Yjs), protokoll og resultatmal for prøve A og B (PR #8, 28.10.2026, `docs/funksjoner/fase1-kandidat-powersync.md`)
   - [x] Kandidat 2, ElectricSQL, på samme skjema og samme protokoll (PR #10, 29.10.2026, `docs/funksjoner/fase1-kandidat-electricsql.md`)
   - [x] Kandidat 3, egenbygd (lokal database og endringskø), på samme skjema og samme protokoll (PR #11, 29.10.2026, `docs/funksjoner/fase1-kandidat-egenbygd.md`)
+  - [x] Synktjenestene for kandidat 1 og 2 i Azure-testmiljøet, av som standard til Ståle slår dem på (PR #17, 29.10.2026, `docs/funksjoner/fase1-synk-i-azure.md`, `docs/drift/testmiljo-azure.md`)
 - [ ] **Prøve A – én takstmann uten nett (må):** flymodus i 30 minutter, alle felt fylles ut, 200 bilder tas, appen lukkes og åpnes igjen, iPaden startes på nytt. Når nettet kommer: alt synkroniseres, ingenting går tapt.
 - [ ] **Prøve B – to i samme rapport (bør):** to iPader endrer samme kontrollpunkt samtidig. Tekst flettes. TG, valg og tall følger «siste endring vinner», og den andre får varsel.
 - [ ] **Prøve C – lagring i Safari:** hvor mye plass appen får, at data overlever omstart og flere dager uten bruk, og hva som skjer når plassen er brukt opp
