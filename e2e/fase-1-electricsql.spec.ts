@@ -633,8 +633,12 @@ test.describe("endringskøen", () => {
               .__offlineTrial;
             await hook.simulateOrganizationChange(organizationId);
           }, randomUuid());
+          // Den gamle siden kan sende en henting med sin markør mens den nye lastes. Forlat den
+          // først, så bare hentingene fra den nye siden telles (samme retting som i egenbygd-testen).
+          const formUrl = page.url();
+          await page.goto("about:blank");
           const reloadedAt = Date.now();
-          await page.reload();
+          await page.goto(formUrl);
 
           await expect
             .poll(async () => (await readRowsViaHook(page, "trial_forms")).length, {
