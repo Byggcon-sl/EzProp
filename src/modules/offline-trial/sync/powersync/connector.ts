@@ -7,6 +7,10 @@
  * så SDK-en prøver igjen senere. Serveren tåler at samme bunt kommer to ganger.
  *
  * Organisasjons-id-en sendes bare til tilgangssjekken; serveren stoler bare på `grant`.
+ *
+ * «Synk nå» (docs/funksjoner/fase1-synkstatus.md, krav K3) sender køen selv med `uploadAll`, også
+ * uten PowerSync-tjenesten. SDK-ens egne kall og våre går gjennom samme lås per database, så to
+ * opplastinger aldri kjører samtidig og samme transaksjon ikke sendes to ganger parallelt.
  */
 import type {
   AbstractPowerSyncDatabase,
@@ -54,8 +58,53 @@ async function withIdentity(
   return data;
 }
 
+/** Høyst så mange transaksjoner per `uploadAll`, så nye skrivinger under runden ikke gir en evig løkke. */
+export const MAX_TRANSACTIONS_PER_ROUND = 200;
+
+interface UploadState {
+  /** Siste opplasting som er i gang eller ferdig; neste venter på den (låsen). */
+  tail: Promise<unknown>;
+  /** Siste opplasting feilet, og ingen har lyktes etter den. */
+  failed: boolean;
+}
+
+/** Per database, ikke per connector: SDK-en og «Synk nå» kan ha hver sin instans. */
+const uploadStates = new WeakMap<AbstractPowerSyncDatabase, UploadState>();
+
+function uploadStateOf(db: AbstractPowerSyncDatabase): UploadState {
+  let state = uploadStates.get(db);
+  if (!state) {
+    state = { tail: Promise.resolve(), failed: false };
+    uploadStates.set(db, state);
+  }
+  return state;
+}
+
+/** Siste opplasting (fra SDK-en eller «Synk nå») feilet, og ingen har lyktes etter den. */
+export function lastUploadFailed(db: AbstractPowerSyncDatabase): boolean {
+  return uploadStates.get(db)?.failed ?? false;
+}
+
 export class TrialSyncConnector implements PowerSyncBackendConnector {
   constructor(private readonly organizationId: string) {}
+
+  /** Kjører `task` når opplastingen før er ferdig (også ved feil), og fører siste utfall. */
+  private locked<T>(db: AbstractPowerSyncDatabase, task: () => Promise<T>): Promise<T> {
+    const state = uploadStateOf(db);
+    const run = state.tail.then(
+      () => task(),
+      () => task(),
+    );
+    state.tail = run.then(
+      () => {
+        state.failed = false;
+      },
+      () => {
+        state.failed = true;
+      },
+    );
+    return run;
+  }
 
   async fetchCredentials(): Promise<PowerSyncCredentials | null> {
     const params = new URLSearchParams({ organisasjon: this.organizationId });
@@ -71,9 +120,26 @@ export class TrialSyncConnector implements PowerSyncBackendConnector {
     return { endpoint: body.endpoint, token: body.token };
   }
 
+  /** Kalles av SDK-en. Én transaksjon om gangen, bak låsen. */
   async uploadData(db: AbstractPowerSyncDatabase): Promise<void> {
+    await this.locked(db, () => this.uploadNext(db));
+  }
+
+  /**
+   * «Synk nå»: sender transaksjon for transaksjon til køen er tom. Kaster ved første feil
+   * (transaksjonen blir liggende i køen). Trenger ikke PowerSync-tjenesten.
+   */
+  async uploadAll(db: AbstractPowerSyncDatabase): Promise<void> {
+    for (let i = 0; i < MAX_TRANSACTIONS_PER_ROUND; i++) {
+      const sent = await this.locked(db, () => this.uploadNext(db));
+      if (!sent) return;
+    }
+  }
+
+  /** Sender neste transaksjon. `false` når køen var tom. Kaster når serveren ikke svarte 200. */
+  private async uploadNext(db: AbstractPowerSyncDatabase): Promise<boolean> {
     const transaction = await db.getNextCrudTransaction();
-    if (!transaction) return;
+    if (!transaction) return false;
 
     const operations: UploadOperation[] = [];
     for (const entry of transaction.crud) {
@@ -96,7 +162,7 @@ export class TrialSyncConnector implements PowerSyncBackendConnector {
 
     if (operations.length === 0) {
       await transaction.complete();
-      return;
+      return true;
     }
 
     const response = await fetch("/api/prove/synk/endringer", {
@@ -107,7 +173,7 @@ export class TrialSyncConnector implements PowerSyncBackendConnector {
     });
     if (response.status === 200) {
       await transaction.complete();
-      return;
+      return true;
     }
     // Bare status og antall i loggen, aldri innholdet (fritekst fra skjemaet).
     console.warn(
