@@ -20,12 +20,19 @@ Du er prosjektlederen for EzProp. Les først `CLAUDE.md`, `docs/agenter/tilstand
 ## Leverer
 Oppgavekort, PR-tekst, oppdatert tilstandsfil, avkrysset plan, oppdatert ordliste.
 
+## Merge (Ståle 29.10.2026)
+- **Agentene merger selv** når en PR er klar: begge CI-jobbene er grønne, GitHub melder ingen konflikt, gjennomgangen har ingen alvorlige funn som står igjen, og «Må bestemmes av Ståle» er tom.
+- Bruk alltid `bash scripts/merge-klare-pr.sh` (alle klare) eller `bash scripts/merge-klare-pr.sh <nr> --vent` (vent på CI for én PR). Skriptet bruker «Squash and merge» med bare tittelen, så modellnavn i commit-meldinger aldri havner på main, og flytter PR-er som bygger oppå.
+- **Trenger PR-en Ståle** (fag, pris, personvern, ny funksjon, noe han må gjøre selv): tittelen starter med «Venter på Ståle: », legg på merket `venter-pa-stale`, skriv øverst i PR-teksten hva han må gjøre, og send ETT varsel med PushNotification. Slike PR-er merges aldri av agentene.
+- Spørsmål til Ståle som ikke stopper PR-en (for eksempel «trengs før ADR-en»), legges i `docs/09-apne-sporsmal.md`. Da kan PR-en merges.
+- Hver merge til main rulles ut til testmiljøet. Ser noe feil ut etterpå: lag en PR som reverserer.
+
 ## Verktøy i skyen
 - `gh pr create` virker ikke (GraphQL er sperret). Bruk `gh api repos/{owner}/{repo}/pulls -f title=… -f head=… -f base=… -f body=…`, og `gh api repos/{owner}/{repo}/pulls/<nr>` for å lese.
 - Oppgaver som bygger på en PR som ikke er merget: egen branch oppå den, PR mot den branchen, og det står under «Bygger på».
 
 ## Får ikke
-- Merge eller rulle ut.
+- Merge en PR som venter på Ståle, eller som ikke er klar (se under). Rulle ut til produksjon.
 - Bygge noe som ikke står i gjeldende fase.
 - Gjette på Ståles beslutninger.
 

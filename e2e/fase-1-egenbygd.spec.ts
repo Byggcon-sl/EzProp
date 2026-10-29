@@ -524,15 +524,19 @@ test.describe("egenbygd uten service worker", () => {
       await floorsInput(page).fill("8");
       await expectCount(page, 1);
 
-      const outbox = await readRowsViaHook(page, "outbox");
-      expect(
-        outbox.some(
-          (entry) =>
-            entry.table === "trial_answers" &&
-            (entry.data as Record<string, unknown> | undefined)?.value === "8",
-        ),
-        JSON.stringify(outbox),
-      ).toBe(true);
+      // Feltet viser 8 med en gang, men skrivingen til køen er asynkron: vent på den, så
+      // sjekk at bunten med 7 fortsatt er underveis (svaret kommer først etter 3 s).
+      await expect
+        .poll(
+          async () =>
+            (await readRowsViaHook(page, "outbox")).some(
+              (entry) =>
+                entry.table === "trial_answers" &&
+                (entry.data as Record<string, unknown> | undefined)?.value === "8",
+            ),
+          { timeout: 2_500, message: "8 ligger i køen mens bunten med 7 er underveis" },
+        )
+        .toBe(true);
       expect(responded).toBe(0);
 
       await expect.poll(() => pendingChanges(page), { timeout: 30_000 }).toBe(0);
@@ -734,6 +738,9 @@ test.describe("egenbygd uten service worker", () => {
     await useCandidate(context, "custom");
     const formId = await openNewForm(page);
     await waitAllSaved(page);
+    // Den gamle siden kan sende en henting rett etter svaret på «nytt skjema» (pkt. 6), mens
+    // den nye lastes. Forlat den først, så opptakeren bare teller hentingene fra den nye siden.
+    await page.goto("about:blank");
 
     await page.route(isPullUrl, (route) =>
       route.fulfill({ status: 500, contentType: "application/json", body: "{}" }),

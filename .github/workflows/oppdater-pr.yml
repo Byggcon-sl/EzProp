@@ -1,0 +1,35 @@
+# Holder åpne PR-er oppdatert mot main, så de ikke får konflikt når en annen PR merges
+# (Ståle 29.10.2026). Se scripts/oppdater-apne-pr.sh.
+name: Oppdater åpne PR-er
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: oppdater-pr
+  cancel-in-progress: false
+
+jobs:
+  oppdater:
+    name: Flett main inn i åpne PR-er
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Oppdater
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: bash scripts/oppdater-apne-pr.sh
