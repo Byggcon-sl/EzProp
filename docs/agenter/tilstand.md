@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 29.10.2026 kl. 13:50 (PR #10–#13 merget; PR #14 med småfunn og tidsavbrudd på bildeopplasting åpnet mot `main`)
+Sist oppdatert: 29.10.2026 (PR #14 merget; oppgavekort for synktjenestene i Azure laget på `fase1-synk-i-azure`)
 
 ## Gjeldende fase
 
@@ -12,7 +12,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Neste: liten oppgave (a) – PowerSync- og Electric-containerne i Azure-testmiljøet** (Bicep i `infra/azure`). Gir faste månedskostnader, så den bør vente på Ståles svar på spørsmål nr. 10 og 11. Til da: neste punkt i fase 1 som ikke trenger Ståle.
+**Nå: liten oppgave (a) – synktjenestene i Azure-testmiljøet** (branch `fase1-synk-i-azure`, oppå `main`, versjon 0.2.6). Oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så en merge lager ingen nye ressurser. Spørsmål nr. 12 (slå på, kostnad) lagt inn, ikke blokkerende. Roller: arkitekt, sikkerhet-personvern, utvikler, test-leder.
 
 **Forrige oppgave:** Oppgave 6 – Kandidat 3, egenbygd (lokal database og endringskø), **PR #11** (branch `fase1-kandidat-egenbygd`, versjon 0.2.3, oppå PR #10). Oppgavekort `docs/funksjoner/fase1-kandidat-egenbygd.md` (med «Avgjørelser etter gjennomgangen»), testplan `docs/funksjoner/fase1-kandidat-egenbygd-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-egenbygd.md`. Ingen ny avhengighet, ingen migrering, ingen ny tjeneste. Sikkerhet-personvern: godkjent (ett lite funn rettet). Forenkler: doble testfiler slått sammen. Test-leder: avviste først for små funn (alle rettet), e2e-feil i to tester rettet av feilrettingslederen (feil i testene, ikke i koden). Punktet «Kandidater satt opp …» er krysset av.
 
@@ -28,7 +28,8 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #14 | Småfunn fra PowerSync-prøven, tidsavbrudd på bildeopplasting og stabile bildetester (fase 1) | Klar (CI) | main |
+
+Ingen åpne PR-er nå.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -36,7 +37,7 @@ Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). 
 
 - Når synktjenestene kjører i Azure (egen liten PR kommer): kjør prøve A og B etter `docs/funksjoner/fase1-prove-ab-powersync.md`, `…-electricsql.md` og `…-egenbygd.md`.
 - **Testmiljøet (PR #7 er merget):** følg `docs/drift/testmiljo-azure.md`: lag ressursgruppen `rg-ezprop-test` og GitHub-innloggingen i Azure, legg inn secrets og variabler, svar på spørsmål nr. 6 og nr. 9. Bekreft «ferdig når»: appen åpner på ekte iPad Pro fra hjemskjermen. Ikke legg inn de fire e-post-secretene før Graph-adapteren er bygget (fase 0b).
-- Spørsmålene i `docs/09-apne-sporsmal.md`: nr. 6, nr. 8 (GPS i bildene, før prøve D), nr. 9, nr. 10 (PowerSync som leverandør) og nr. 11 (ElectricSQL som leverandør), de to siste før ADR-en.
+- Spørsmålene i `docs/09-apne-sporsmal.md`: nr. 6, nr. 8 (GPS i bildene, før prøve D), nr. 9, nr. 10 (PowerSync som leverandør) og nr. 11 (ElectricSQL som leverandør), de to siste før ADR-en, og nr. 12 (slå på synktjenestene i testmiljøet, kostnad).
 
 ## Oppgaver fra nattløkken
 
