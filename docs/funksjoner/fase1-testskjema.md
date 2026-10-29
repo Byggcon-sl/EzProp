@@ -229,6 +229,8 @@ Ikke med: arkitekt (modulnavn og svarform er avgjort her; arkitekten kommer inn 
 ## Kjente svakheter som tas i oppgave 4 (ikke feil i denne oppgaven)
 Funnet i gjennomgangen 28.10.2026. Ingen av dem bryter et akseptkriterium, og de rettes når kandidaten kobles på, der de først får betydning:
 - `NumberInput` i `trial-form-view.tsx` holder sin egen råtekst og leser aldri verdien tilbake fra `answers`. Tekst, TG, valg, bilde og tabell leser fra `answers`. I prøve B (siste endring vinner, den andre iPaden viser varsel) må tallfeltet vise verdien som kom fra synk. Rettes i oppgave 4 ved å lese fra `answers` når verdien der endres utenfra.
+  - **Rettet i oppgave 4 (28.10.2026):** alle felt (tekst, tall, tabellceller) har kladd bare mens feltet har fokus; ellers vises verdien fra `answers`.
 - `parseTrialNumber` bruker `Number(text)` og godtar «Infinity», «1e3» og «0x10». Ingen regel leser tallene ennå. Før prøve E (målegrense, alder mot levetid) byttes den til et strengt desimaltall (regex), med testsaker.
+  - **Rettet i oppgave 4 (28.10.2026):** `parseTrialNumber` godtar bare `^-?\d+([.,]\d+)?$`; alt annet gir null.
 - `viewport`-eksporten i `layout.tsx` og `description` i manifestet står ikke i kortet og trengs ikke for noe kriterium. De er ufarlige og kan fjernes når manifestet uansett endres i oppgave 4.
 - Avsnittet «Testplan» i dette kortet dobbeltfører `fase1-testskjema-testplan.md`. Neste oppgavekort skal bare peke på testplanfilen.

@@ -36,10 +36,15 @@ export function countAnswered(form: TrialForm, answers: TrialAnswers): number {
   return listTrialFields(form).filter((field) => isAnswered(field, answers[field.key])).length;
 }
 
-/** Leser et tall skrevet på iPaden. Godtar komma og punktum. Tom eller ugyldig tekst gir null. */
+const STRICT_DECIMAL = /^-?\d+([.,]\d+)?$/;
+
+/**
+ * Leser et tall skrevet på iPaden. Godtar bare et strengt desimaltall: valgfritt minus,
+ * sifre, og eventuelt komma eller punktum fulgt av sifre («12,5», «-3», « 7 »).
+ * Alt annet gir null: tom tekst, «12,», «,5», «+3», «1e3», «Infinity», «0x10», «1 000».
+ */
 export function parseTrialNumber(input: string): number | null {
-  const text = input.trim().replace(",", ".");
-  if (text === "") return null;
-  const value = Number(text);
-  return Number.isNaN(value) ? null : value;
+  const text = input.trim();
+  if (!STRICT_DECIMAL.test(text)) return null;
+  return Number(text.replace(",", "."));
 }

@@ -95,13 +95,35 @@ describe("countAnswered", () => {
 });
 
 describe("parseTrialNumber", () => {
-  it("parseTrialNumber godtar komma og punktum, avviser tekst", () => {
+  // Strengt desimaltall (docs/funksjoner/fase1-kandidat-powersync.md pkt. 20, testplan 2.5)
+  it("parseTrialNumber godtar strengt desimaltall med komma eller punktum", () => {
     expect(parseTrialNumber("12,5")).toBe(12.5);
     expect(parseTrialNumber("12.5")).toBe(12.5);
     expect(parseTrialNumber("0")).toBe(0);
+    expect(parseTrialNumber("-3")).toBe(-3);
     expect(parseTrialNumber(" 7 ")).toBe(7);
-    expect(parseTrialNumber("abc")).toBeNull();
-    expect(parseTrialNumber("")).toBeNull();
-    expect(parseTrialNumber("   ")).toBeNull();
+    expect(parseTrialNumber("007")).toBe(7);
+    expect(parseTrialNumber("-0,5")).toBe(-0.5);
+  });
+
+  it("parseTrialNumber avviser alt som ikke er et rent desimaltall", () => {
+    for (const input of [
+      "1e3",
+      "Infinity",
+      "-Infinity",
+      "NaN",
+      "0x10",
+      "1 000",
+      "12,",
+      ",5",
+      "12,5,1",
+      "1_000",
+      "abc",
+      "",
+      "   ",
+      "+3",
+    ]) {
+      expect(parseTrialNumber(input), JSON.stringify(input)).toBeNull();
+    }
   });
 });

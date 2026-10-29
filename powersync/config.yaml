@@ -1,0 +1,41 @@
+# Prøve fase 1, kastes eller gjøres om etter ADR.
+#
+# Oppsett for synktjenesten (PowerSync, selvdrevet utgave i Docker). Brukes likt på Macen
+# (docker-compose.yml) og i Azure Container Apps (docs/drift/powersync.md).
+#
+# Ingen hemmeligheter eller tilkoblingsstrenger i denne filen. Alt slikt leses fra miljøet med !env:
+#   PS_DATA_SOURCE_URI     databasen med trial-tabellene (lesing via publikasjonen «powersync»)
+#   PS_STORAGE_URI         egen database «powersync_storage» der tjenesten lagrer sin tilstand
+#   PS_PG_SSLMODE          «disable» på Macen, «verify-full» i Azure
+#   PS_JWT_SECRET_BASE64   POWERSYNC_JWT_SECRET kodet som base64url (start.sh lager den)
+
+replication:
+  connections:
+    - type: postgresql
+      uri: !env PS_DATA_SOURCE_URI
+      sslmode: !env PS_PG_SSLMODE
+
+storage:
+  type: postgresql
+  uri: !env PS_STORAGE_URI
+  sslmode: !env PS_PG_SSLMODE
+
+# Porten inne i containeren (tjenestens standard). Macen når den på 127.0.0.1:8080.
+port: 8080
+
+sync_rules:
+  path: /config/sync-rules.yaml
+
+# Bare JWT-er fra appen (/api/prove/synk/token): HS256, kid «trial», aud «powersync».
+client_auth:
+  audience: [powersync]
+  jwks:
+    keys:
+      - kty: oct
+        alg: HS256
+        kid: trial
+        k: !env PS_JWT_SECRET_BASE64
+
+# Ingen bruksdata til leverandøren (utenfor EU/EØS, uten databehandleravtale).
+telemetry:
+  disable_telemetry_sharing: true

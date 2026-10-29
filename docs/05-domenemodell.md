@@ -1678,6 +1678,12 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Avtale med oppdragsgiver | `client_agreements` | For eksempel Fremtind |
 | Prøve uten nett (fase 1) | `offline-trial` | Modulen med testskjemaet for fase 1. Kastes eller gjøres om til feltkomponenter i fase 2b |
 | Testskjema | `trial form` (`trialForm`, `TrialAnswers`) | Skjemaet med 40 felt som kandidatene i fase 1 prøves mot. Ikke en systemmal |
+| Testskjema (lagret), svar per felt, bilde i prøven | `trial_forms`, `trial_answers`, `trial_photos` | Tabeller **bare for prøven i fase 1** (oppgave 4, PowerSync). Har `baseColumns`. Slettes eller gjøres om i fase 2b; ikke en del av datamodellen ellers |
+| Synk / synkronisering | `sync` | Lokal database på iPaden som sendes til og hentes fra serveren. Verktøy velges i fase 1 (kandidat 1: PowerSync) |
+| Endringskø | `crud queue` / `upload queue` | Endringer og bilder som venter på å bli sendt fra iPaden |
+| Tekstfletting | `text merge` (`text-merge.ts`, Yjs) | To som skriver i samme tekstfelt får begge bidrag med |
+| Siste endring vinner | `last write wins` | For TG, valg, tall og tabell: den endringen som når serveren sist, gjelder. Den andre får varselet «Endret av en annen» |
+| Enhets-id i prøven | `trial_device_id` | Fast id per nettleser-installasjon, bare for varselet i prøve B. Ikke tabellen `devices` (fase 2b) |
 | Testmiljø | `test environment` (`environmentName: test`) | Appen og databasen i Azure (Sweden Central) som prøvene i fase 1 kjøres mot. Bare oppdiktede data |
 | Utrulling | `deploy` (`deploy-azure.yml`) | Automatisk oppdatering av testmiljøet ved merge til `main` |
 | Serverlogg | `server log` (`serverLog`) | Loggen i App Service. Innloggingskoden til første admin skrives der til e-post er satt opp |

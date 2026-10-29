@@ -13,7 +13,7 @@ import {
 /** Tømmer alle tabeller i testdatabasen. Ny tabell? Legg den til her. */
 export async function resetDatabase() {
   await db.execute(
-    sql`truncate table audit_log, employee_roles, employees, organizations, sessions, accounts, verifications, users restart identity cascade`,
+    sql`truncate table trial_photos, trial_answers, trial_forms, audit_log, employee_roles, employees, organizations, sessions, accounts, verifications, users restart identity cascade`,
   );
 }
 

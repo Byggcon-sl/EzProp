@@ -13,6 +13,11 @@ test-results/
 next-env.d.ts
 *.tsbuildinfo
 .data/
+# Bildefiler fra prøven uten nett (TRIAL_UPLOAD_DIR) og annen lokal kjøredata
+var/
 
 # Midlertidige arbeidskopier for agenter
 .claude/worktrees/
+
+# Prøve fase 1: worker og wasm fra PowerSync, kopieres av next.config.ts
+public/@powersync/

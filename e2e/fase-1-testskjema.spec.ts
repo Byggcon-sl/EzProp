@@ -3,11 +3,12 @@ import { fileURLToPath } from "node:url";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { trialForm } from "../src/modules/offline-trial/trial-form";
 import { brand } from "../src/shared/config/brand";
-import { ADMIN_EMAIL, logIn } from "./helpers";
+import { ADMIN_EMAIL, createTrialForm, logIn } from "./helpers";
 
 // Testskjemaet for prøven uten nett (fase 1, oppgave 3).
 // Testplan: docs/funksjoner/fase1-testskjema-testplan.md avsnitt 6. Kjører i både pc og ipad.
-// Ingen test uten nett her (bevisst, oppgave 4 og 5).
+// Oppgave 4 (PowerSync): /prove/testskjema er nå en liste, og skjemaet åpnes fra «Nytt testskjema»
+// (docs/funksjoner/fase1-kandidat-powersync-testplan.md avsnitt 6.1). Uten nett: fase-1-powersync.spec.ts.
 
 const TEST_IMAGE = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -35,8 +36,7 @@ function group(page: Page, label: string): Locator {
 
 async function openTrialForm(page: Page) {
   await logIn(page, ADMIN_EMAIL);
-  await page.goto("/prove/testskjema");
-  await expect(page).toHaveURL(/\/prove\/testskjema$/);
+  await createTrialForm(page);
   await expectCount(page, 0);
 }
 
@@ -54,6 +54,12 @@ test("admin finner lenken Prøve uten nett: testskjema på arbeidskøen og ser 0
   await expect(link).toBeVisible();
   await link.click();
   await expect(page).toHaveURL(/\/prove\/testskjema$/);
+  // Listen først (oppgave 4), skjemaet etter trykk på «Nytt testskjema»
+  await expect(page.getByRole("heading", { name: "Testskjema", level: 1 })).toBeVisible();
+  const create = page.getByRole("button", { name: "Nytt testskjema", exact: true });
+  await expect(create).toBeVisible();
+  await create.click();
+  await expect(page).toHaveURL(/\/prove\/testskjema\/[0-9a-f-]{36}$/);
   await expectCount(page, 0);
 });
 
@@ -240,6 +246,33 @@ test("tall med bokstaver teller ikke", async ({ page }) => {
   await expectCount(page, 1);
   await year.fill("");
   await expectCount(page, 0);
+});
+
+test("tall med komma på slutten beholdes mens man skriver", async ({ page }) => {
+  // Kjent svakhet fra oppgave 3, rettet i oppgave 4 (pkt. 20): «12,» skal ikke forsvinne
+  await openTrialForm(page);
+  const floors = page.getByLabel("Antall etasjer", { exact: true });
+  await floors.fill("12,");
+  await expect(floors).toHaveValue("12,");
+  await expectCount(page, 0);
+  await floors.fill("12,5");
+  await expect(floors).toHaveValue("12,5");
+  await expectCount(page, 1);
+  await floors.blur();
+  await expect(floors).toHaveValue("12,5");
+  await expectCount(page, 1);
+});
+
+test("Nytt testskjema er minst 44 px høy", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "ipad", "Trykkflaten måles i iPad-størrelse");
+  await logIn(page, ADMIN_EMAIL);
+  await page.goto("/prove/testskjema");
+  const button = page.getByRole("button", { name: "Nytt testskjema", exact: true });
+  await expect(button).toBeVisible();
+  const box = await button.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.height).toBeGreaterThanOrEqual(44);
+  expect(box!.width).toBeGreaterThanOrEqual(44);
 });
 
 test("manifest.webmanifest svarer 200 med standalone, start_url /arbeidskoe og navn fra brand", async ({
