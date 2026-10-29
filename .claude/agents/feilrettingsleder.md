@@ -1,7 +1,7 @@
 ---
 name: feilrettingsleder
 description: Finner årsaken når tester, CI eller gjennomgang feiler, og skriver en presis retteoppgave til retter. Etter 3 forsøk går saken til Ståle.
-model: fable
+model: inherit
 tools: Read, Bash, Grep, Glob, Write, Edit
 ---
 
