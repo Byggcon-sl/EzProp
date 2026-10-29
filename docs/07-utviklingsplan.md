@@ -936,6 +936,7 @@ Det som fortsatt er åpent:
 
 ## Endringslogg
 
+- **28.10.2026 (Ståle i chat, senere):** ingen grense for antall PR-er som venter på Ståle. Løkken stopper ikke lenger ved tre.
 - **28.10.2026 (Ståle i chat):** «Testmiljø i Azure» lagt inn som første punkt i fase 1 (samme miljø som Optiplan). Fase 0b: felles innlogging **og felles profil** for admin og ansatte med Optiplan, kundene adskilt, og bytte mellom løsningene med ett trykk. Samspillet mellom EzProp og Optiplan skal komme «etter hvert», ut over innloggingen.
 
 | Dato | Hva er endret | Fra innspill |
