@@ -44,74 +44,38 @@ Appen virker også uten PowerSync: svarene lagres da bare på enheten og venter 
 - **Slette alle lokale testdata, også PowerSyncs tilstand:** `./start.sh --nullstill`. Da slettes hele databasen i Docker, og alt lages på nytt.
 - I nettleseren: den lokale databasen tømmes **ikke** ved utlogging ennå (kjent svakhet, se resultatfilen). Den tømmes neste gang en annen organisasjon logger inn på samme enhet. For å tømme for hånd: Safari → Innstillinger → Safari → Avansert → Nettsteddata → slett for testmiljøet, eller fjern appen fra hjemskjermen og legg den til igjen.
 
-## B. I Azure-testmiljøet (fra PR #7)
+## B. I Azure-testmiljøet
 
-**Ingenting rulles ut fra skyen i denne oppgaven.** Her står hva som skal settes opp. Selve oppsettet (Bicep) kommer i en egen liten PR når PR #7 er merget. Ståle eller prosjektlederen kjører den. Ingen konto hos PowerSync Cloud.
+PowerSync er bygget inn i oppsettet for testmiljøet (`infra/azure/main.bicep`), men står **av** til Ståle slår den på. **Hvordan du slår på, sjekker og slår av, og hva det koster, står ett sted: `docs/drift/testmiljo-azure.md`**, avsnittet «Synktjenestene for prøve A og B». Ingen konto hos PowerSync Cloud.
 
-### 1. Databasen (Azure Database for PostgreSQL Flexible Server)
+Her står bare hva som lages når bryteren `ENABLE_SYNC_TRIAL` er `true`.
 
-1. **Logisk replikering:** sett serverparameteren `wal_level` til `LOGICAL` (Azure-portalen → databasen → Serverparametere). **Krever omstart av databaseserveren.** Gjør det utenom prøvetid.
-2. **Egen database for PowerSync:** `powersync_storage`.
-3. **Egen rolle for PowerSync** med bare det den trenger: lese de tre trial-tabellene og følge endringene. Passordet lages tilfeldig og legges bare som hemmelighet i Azure, aldri i chat, kode eller repoet.
+### 1. Databasen
 
-```sql
--- Kjøres som administrator, i databasen til appen.
-CREATE ROLE powersync_repl WITH LOGIN REPLICATION PASSWORD '<tilfeldig passord, settes inn av den som kjører>';
-GRANT CONNECT ON DATABASE ezprop TO powersync_repl;
-GRANT USAGE ON SCHEMA public TO powersync_repl;
-GRANT SELECT ON trial_forms, trial_answers, trial_photos TO powersync_repl;
+- **Logisk replikering:** `wal_level` settes til `logical` av oppsettet. Utrullingen starter databasen på nytt én gang hvis Azure sier at det trengs. Innstillingen settes ikke tilbake når bryteren slås av; det er ufarlig.
+- **Egen databasebruker** `powersync_repl`, laget av skriptet `scripts/azure/sync-trial-roles.ts` ved hver utrulling. Den har lesetilgang (SELECT) bare til de tre trial-tabellene. REPLICATION-egenskapen, som tjenesten trenger for å følge endringene, gir likevel mulighet til å lese hele databasen via replikeringsprotokollen, uavhengig av lesetilgangen. Skriptets sjekk til slutt dekker lesetilgangen, ikke dette. Det er akseptert for testmiljøet, der det bare finnes oppdiktede data. For produksjon avgjøres det i synk-ADR-en. Aldri superbruker. Passordet er secreten `POWERSYNC_DB_PASSWORD` og står aldri i repoet.
+- **Egen database** `powersync_storage` der PowerSync lagrer sin egen tilstand. Den eies av `powersync_repl`, og Electrics bruker kan ikke koble til den.
+- **Publikasjonen** `powersync` lages av migreringen `0001_prove-uten-nett`, som før.
+- **Replikeringsplass:** PowerSync lager en replikeringsplass i databasen. Når bryteren slås av og utrullingen kjøres, rydder skriptet bort plasser som ikke er i bruk. Se «Slå av» i `docs/drift/testmiljo-azure.md` for hvorfor det er viktig.
 
--- Databasen der PowerSync lagrer sin egen tilstand (eies av rollen, så den kan lage tabeller der).
-GRANT powersync_repl TO CURRENT_USER;
-CREATE DATABASE powersync_storage OWNER powersync_repl;
-```
-
-4. **Publikasjonen** `powersync` finnes allerede; den lages av migreringen `0001_prove-uten-nett`. Den har bare de tre trial-tabellene.
-5. **Merk:** PowerSync lager en replikeringsplass (replication slot) i databasen. Står PowerSync stoppet lenge, holder databasen på endringsloggen og bruker mer disk. Skal PowerSync fjernes for godt, må plassen slettes (`SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE slot_name LIKE 'powersync%';`). Det gjøres i samme PR som fjerner tjenesten.
-
-### 2. PowerSync som egen container (Azure Container Apps)
+### 2. Containeren (Azure Container Apps)
 
 - **Bilde:** `journeyapps/powersync-service:1.27.2` (samme som på Macen), kommando `start -r unified`.
-- **Samme to konfigurasjonsfiler** som på Macen, `powersync/config.yaml` og `powersync/sync-rules.yaml`, lagt inn som hemmeligheter og montert som volum på `/config`. Miljøvariabelen `POWERSYNC_CONFIG_PATH=/config/config.yaml`.
-- **Innkommende trafikk:** ekstern, bare https, målport `8080`. Containerens adresse blir `https://<navn>.<region>.azurecontainerapps.io`.
-- **Antall kopier:** minst 1 og høyst 1 (iPadene holder en åpen kobling; tjenesten skal ikke skaleres ned til 0 under prøvene).
-- **Størrelse:** 0,5 vCPU og 1 GiB minne holder for to iPader.
-- **Region:** samme som appen (Sweden Central). Data blir i EU/EØS.
-- **Miljøvariabler for containeren** (alle unntatt `PS_PG_SSLMODE` som hemmeligheter):
+- **Konfigurasjon:** de samme to filene som på Macen, `powersync/config.yaml` og `powersync/sync-rules.yaml`, lastes fra repoet og monteres på `/config`.
+- **Innkommende trafikk:** fra internett, bare https, mot port `8080`. iPadene kobler seg til denne adressen med adgangsbeviset fra appen.
+- **Én kopi**, 0,5 vCPU og 1 GiB minne, i Sweden Central (EU).
+- **Hemmeligheter** (tilkoblingene til databasen og nøkkelen) ligger som hemmeligheter i Container Apps, ikke som vanlige verdier. Nøkkelen kodes om til formatet PowerSync vil ha (base64url) av oppsettet.
+- Tilkoblingene til databasen bruker `sslmode=verify-full`. Containeren når databasen gjennom den samme brannmurregelen for Azure-tjenester som appen (ADR 0002).
+- Ingen logger lagres. Bruksdata til leverandøren er slått av i `config.yaml` (`disable_telemetry_sharing: true`).
 
-| Variabel | Verdi |
-|---|---|
-| `PS_DATA_SOURCE_URI` | tilkoblingen til appens database med rollen `powersync_repl` |
-| `PS_STORAGE_URI` | tilkoblingen til `powersync_storage` med rollen `powersync_repl` |
-| `PS_PG_SSLMODE` | `verify-full` |
-| `PS_JWT_SECRET_BASE64` | samme nøkkel som appens `POWERSYNC_JWT_SECRET`, kodet som base64url: `node -e 'console.log(Buffer.from(process.argv[1]).toString("base64url"))' '<nøkkelen>'` |
+### 3. Appen
 
-- PowerSync må nå databasen. Er databasen bare åpen for Azure-tjenester, må containeren få lov på samme måte som appen (avgjøres i Bicep-PR-en).
-- Bruksdata til leverandøren er slått av i `config.yaml` (`disable_telemetry_sharing: true`).
+Når bryteren er på, får appen `POWERSYNC_URL` (adressen til containeren) og `POWERSYNC_JWT_SECRET` (fra secreten med samme navn). `TRIAL_UPLOAD_DIR` er alltid `/home/data/uploads/trial`. Når bryteren slås av, fjernes de to første ved neste utrulling.
 
-### 3. Miljøvariabler i appen (App Service fra PR #7)
+### 4. Personvern og sikkerhet
 
-| Variabel | Verdi |
-|---|---|
-| `POWERSYNC_URL` | containerens adresse, f.eks. `https://<navn>.<region>.azurecontainerapps.io` |
-| `POWERSYNC_JWT_SECRET` | en ny, tilfeldig nøkkel på minst 32 tegn (`openssl rand -base64 48`), lagt inn som hemmelighet. **Aldri** utviklingsverdien fra `.env.example`; den nektes når adressen ikke er `localhost`. |
-| `TRIAL_UPLOAD_DIR` | `/home/data/uploads/trial` (`/home` er varig lagring i App Service) |
-
-### 4. Anslått kostnad per måned
-
-Med forbehold: priser fra Azures prisliste for Container Apps (forbruksplan) slik vi kjenner dem i oktober 2026, uten rabatter, og avhengig av hvor lenge tjenesten står på.
-
-| Del | Anslag |
-|---|---|
-| PowerSync-containeren (0,5 vCPU, 1 GiB, på hele døgnet, fratrukket gratiskvoten) | ca. 300–450 kr |
-| Ekstra lagring og endringslogg i PostgreSQL | under 20 kr |
-| **Sum** | **ca. 300–470 kr per måned** |
-
-Stoppes containeren mellom prøvene (0 kopier), koster den nesten ingenting i den tiden. Husk da merknaden om replikeringsplassen over.
-
-### 5. Personvern og sikkerhet
-
-- Den lokale databasen på iPaden (SQLite i nettleseren) er **bare beskyttet av iPadens egen kryptering** (kode på iPaden). Det er godt nok for prøven, der alle data er oppdiktede. Sperring av en mistet enhet kommer i fase 2b.
+- Bare oppdiktede data i testmiljøet (se `docs/drift/testmiljo-azure.md`).
+- Den lokale databasen på iPaden (SQLite i nettleseren) er **bare beskyttet av iPadens egen kryptering** (kode på iPaden). Det er godt nok for prøven. Sperring av en mistet enhet kommer i fase 2b.
 - Adgangsbeviset har bare bruker-id og organisasjon, og varer én time.
 - Synkreglene gir hver iPad bare egen organisasjons rader. Filstien til bildene (`storage_path`) sendes aldri til iPaden.
 - Ingen hemmeligheter står i `powersync/config.yaml`; alt leses fra miljøet (`!env`).

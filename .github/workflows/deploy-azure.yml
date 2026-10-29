@@ -74,6 +74,17 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Sjekk secrets for synktjenestene
+        # Synkbryteren (docs/drift/testmiljo-azure.md): på bare når variabelen er nøyaktig true.
+        # Skriptet skriver bare navn, aldri verdier.
+        env:
+          ENABLE_SYNC_TRIAL: ${{ vars.ENABLE_SYNC_TRIAL == 'true' }}
+          POWERSYNC_JWT_SECRET: ${{ secrets.POWERSYNC_JWT_SECRET }}
+          POWERSYNC_DB_PASSWORD: ${{ secrets.POWERSYNC_DB_PASSWORD }}
+          ELECTRIC_SECRET: ${{ secrets.ELECTRIC_SECRET }}
+          ELECTRIC_DB_PASSWORD: ${{ secrets.ELECTRIC_DB_PASSWORD }}
+        run: bash scripts/azure/check-sync-secrets.sh
+
       - name: Infrastruktur (Bicep)
         id: infra
         env:
@@ -85,12 +96,24 @@ jobs:
           MS_GRAPH_CLIENT_ID: ${{ secrets.MS_GRAPH_CLIENT_ID }}
           MS_GRAPH_CLIENT_SECRET: ${{ secrets.MS_GRAPH_CLIENT_SECRET }}
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          ENABLE_SYNC_TRIAL: ${{ vars.ENABLE_SYNC_TRIAL == 'true' }}
+          POWERSYNC_JWT_SECRET: ${{ secrets.POWERSYNC_JWT_SECRET }}
+          POWERSYNC_DB_PASSWORD: ${{ secrets.POWERSYNC_DB_PASSWORD }}
+          ELECTRIC_SECRET: ${{ secrets.ELECTRIC_SECRET }}
+          ELECTRIC_DB_PASSWORD: ${{ secrets.ELECTRIC_DB_PASSWORD }}
         run: |
           if [ -z "$SEED_ADMIN_EMAIL" ]; then
             echo "Variabelen SEED_ADMIN_EMAIL mangler i GitHub (Settings → Variables)."
             exit 1
           fi
+          # Synkbryteren: alt annet enn nøyaktig true betyr av.
+          if [ "$ENABLE_SYNC_TRIAL" = "true" ]; then
+            SYNK=true
+          else
+            SYNK=false
+          fi
           # De fire e-postverdiene sendes alltid (tomme når de ikke er satt); Bicep bruker dem bare når alle er gitt.
+          # Det samme gjelder de fire synkverdiene; Bicep bruker dem bare når enableSyncTrial er true.
           PARAMETERE=(
             "location=$LOCATION"
             "environmentName=$ENVIRONMENT_NAME"
@@ -103,6 +126,11 @@ jobs:
             "msGraphClientId=$MS_GRAPH_CLIENT_ID"
             "msGraphClientSecret=$MS_GRAPH_CLIENT_SECRET"
             "mailFrom=$MAIL_FROM"
+            "enableSyncTrial=$SYNK"
+            "powerSyncJwtSecret=$POWERSYNC_JWT_SECRET"
+            "powerSyncDbPassword=$POWERSYNC_DB_PASSWORD"
+            "electricSecret=$ELECTRIC_SECRET"
+            "electricDbPassword=$ELECTRIC_DB_PASSWORD"
           )
           az deployment group validate \
             --resource-group "$RESOURCE_GROUP" \
@@ -123,14 +151,61 @@ jobs:
             echo "app_url=$(echo "$UTDATA" | jq -r .appUrl.value)"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Start databasen på nytt hvis wal_level venter på omstart
+        # Med synkbryteren på setter Bicep wal_level=logical, som først virker etter omstart.
+        # Omstarten skjer bare når Azure melder at den trengs, så steget tåler flere kjøringer.
+        env:
+          POSTGRES_SERVER: ${{ steps.infra.outputs.postgres_server }}
+        run: |
+          VENTER=$(az postgres flexible-server parameter show \
+            --resource-group "$RESOURCE_GROUP" \
+            --server-name "$POSTGRES_SERVER" \
+            --name wal_level \
+            --query isConfigPendingRestart \
+            --output json | tr -d '"[:space:]' | tr '[:upper:]' '[:lower:]')
+          if [ "$VENTER" != "true" ]; then
+            echo "wal_level venter ikke på omstart. Ingen omstart av databasen."
+            exit 0
+          fi
+          echo "wal_level er endret og venter på omstart. Starter databasen på nytt (tar noen minutter)."
+          az postgres flexible-server restart \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER" \
+            --output none
+          for forsok in $(seq 1 60); do
+            TILSTAND=$(az postgres flexible-server show \
+              --resource-group "$RESOURCE_GROUP" \
+              --name "$POSTGRES_SERVER" \
+              --query state \
+              --output tsv || true)
+            if [ "$TILSTAND" = "Ready" ]; then
+              echo "Databasen er klar igjen."
+              exit 0
+            fi
+            echo "Venter på databasen ($forsok/60): ${TILSTAND:-ikke noe svar}"
+            sleep 10
+          done
+          echo "Databasen ble ikke klar etter omstarten. Se databasen i Azure-portalen."
+          exit 1
+
       - name: Databaseadresse for kjøreren (maskert)
         env:
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
           POSTGRES_HOST: ${{ steps.infra.outputs.postgres_host }}
+          POWERSYNC_DB_PASSWORD: ${{ secrets.POWERSYNC_DB_PASSWORD }}
+          ELECTRIC_DB_PASSWORD: ${{ secrets.ELECTRIC_DB_PASSWORD }}
         run: |
           DATABASE_URL="postgres://ezprop_admin:${POSTGRES_ADMIN_PASSWORD}@${POSTGRES_HOST}:5432/ezprop?sslmode=verify-full"
           echo "::add-mask::$DATABASE_URL"
           echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
+          # Passordene for synkrollene maskeres før rolleskriptet. GitHub maskerer da også
+          # passordet inne i en adresse, så adressene trenger ingen egen maske.
+          if [ -n "$POWERSYNC_DB_PASSWORD" ]; then
+            echo "::add-mask::$POWERSYNC_DB_PASSWORD"
+          fi
+          if [ -n "$ELECTRIC_DB_PASSWORD" ]; then
+            echo "::add-mask::$ELECTRIC_DB_PASSWORD"
+          fi
 
       - name: Åpne databasen for kjørerens IP (midlertidig)
         id: brannmur
@@ -164,6 +239,16 @@ jobs:
             sleep 10
           done
           pnpm db:seed
+
+      - name: Roller for synktjenestene
+        # Kjører alltid. Skriptet velger selv: bryteren på gir roller og rettigheter,
+        # bryteren av rydder bare ubrukte replikeringsplasser (ellers fylles databasedisken).
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          ENABLE_SYNC_TRIAL: ${{ vars.ENABLE_SYNC_TRIAL == 'true' }}
+          POWERSYNC_DB_PASSWORD: ${{ secrets.POWERSYNC_DB_PASSWORD }}
+          ELECTRIC_DB_PASSWORD: ${{ secrets.ELECTRIC_DB_PASSWORD }}
+        run: pnpm tsx scripts/azure/sync-trial-roles.ts
 
       - name: Lukk databasen for kjøreren igjen
         env:

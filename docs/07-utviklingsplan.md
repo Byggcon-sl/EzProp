@@ -150,13 +150,15 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
   - [x] Kandidat 1, PowerSync, med tekstfletting (Yjs), protokoll og resultatmal for prøve A og B (PR #8, 28.10.2026, `docs/funksjoner/fase1-kandidat-powersync.md`)
   - [x] Kandidat 2, ElectricSQL, på samme skjema og samme protokoll (PR #10, 29.10.2026, `docs/funksjoner/fase1-kandidat-electricsql.md`)
   - [x] Kandidat 3, egenbygd (lokal database og endringskø), på samme skjema og samme protokoll (PR #11, 29.10.2026, `docs/funksjoner/fase1-kandidat-egenbygd.md`)
+  - [x] Synktjenestene for kandidat 1 og 2 i Azure-testmiljøet, av som standard til Ståle slår dem på (PR #17, 29.10.2026, `docs/funksjoner/fase1-synk-i-azure.md`, `docs/drift/testmiljo-azure.md`)
+    - [x] Småfunn fra gjennomgangen av PR #17: rydding av replikeringsplasser bare i egen database, lengdekrav på synkhemmelighetene, maskene i utrullingen og dokumentasjonen om hva tjenestene kan lese (29.10.2026, `docs/agenter/oppgaver/fase1-smafunn-synk-azure.md`)
 - [ ] **Prøve A – én takstmann uten nett (må):** flymodus i 30 minutter, alle felt fylles ut, 200 bilder tas, appen lukkes og åpnes igjen, iPaden startes på nytt. Når nettet kommer: alt synkroniseres, ingenting går tapt.
 - [ ] **Prøve B – to i samme rapport (bør):** to iPader endrer samme kontrollpunkt samtidig. Tekst flettes. TG, valg og tall følger «siste endring vinner», og den andre får varsel.
 - [ ] **Prøve C – lagring i Safari:** hvor mye plass appen får, at data overlever omstart og flere dager uten bruk, og hva som skjer når plassen er brukt opp
 - [ ] **Prøve D – bilder:** komprimering og riktig rotering på iPaden, HEIC til JPEG, opplasting mens appen er åpen, fortsettelse etter brudd, kontroll med fingeravtrykk
 - [ ] **Prøve E – regler uten nett:** én regel for alder mot levetid og én målegrense kjører på iPaden og gir samme svar som på serveren
 - [ ] **Prøve F – innlogging som har gått ut:** takstmannen kan fortsatt åpne og fullføre rapporten uten nett
-- [ ] Synkstatus som alltid vises: antall endringer og bilder som venter, «lagret kl.», og «Synk nå»
+- [x] Synkstatus som alltid vises: antall endringer og bilder som venter, «lagret kl.», og «Synk nå» (PR #21, 29.10.2026, `docs/funksjoner/fase1-synkstatus.md`)
 - [ ] Sammenligning av kandidatene: virker prøvene, hvor mye arbeid, drift i EU/EØS, pris og hvor modent verktøyet er
 - [ ] **ADR: valg av løsning for drift uten nett**, med begrunnelse og det som ikke virket
 - [ ] Demo for Ståle på ekte iPad i en kjeller uten dekning
@@ -936,6 +938,7 @@ Det som fortsatt er åpent:
 
 ## Endringslogg
 
+- **28.10.2026 (Ståle i chat, senere):** ingen grense for antall PR-er som venter på Ståle. Løkken stopper ikke lenger ved tre.
 - **28.10.2026 (Ståle i chat):** «Testmiljø i Azure» lagt inn som første punkt i fase 1 (samme miljø som Optiplan). Fase 0b: felles innlogging **og felles profil** for admin og ansatte med Optiplan, kundene adskilt, og bytte mellom løsningene med ett trykk. Samspillet mellom EzProp og Optiplan skal komme «etter hvert», ut over innloggingen.
 
 | Dato | Hva er endret | Fra innspill |
