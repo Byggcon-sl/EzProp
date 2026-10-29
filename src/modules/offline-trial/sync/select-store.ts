@@ -4,8 +4,8 @@
  * Det eneste stedet sidene velger synkløsning (docs/funksjoner/fase1-kandidat-electricsql.md
  * pkt. 7, avgjørelse E og «Avgjørelser før bygging» 5). Valget ligger i `localStorage`; bytte =
  * skriv nøkkelen og last siden på nytt. Kandidaten lastes med dynamisk `import()`, så bare den
- * valgte SDK-en kommer med. Organisasjonsbytte på samme enhet tømmer lokal lagring for begge
- * kandidater og bildene før noe lager åpnes.
+ * valgte SDK-en kommer med. Organisasjonsbytte på samme enhet tømmer lokal lagring for alle
+ * kandidater (også hentemarkøren til egenbygd) og bildene før noe lager åpnes.
  */
 import { getTrialDeviceId } from "./device";
 import { clearLocalPhotos } from "./photo-store";
@@ -53,12 +53,14 @@ export function writeSyncCandidate(candidate: TrialSyncCandidate, storage?: Writ
 async function clearIfOtherOrganization(organizationId: string): Promise<void> {
   const last = localStorage.getItem(TRIAL_LAST_ORGANIZATION_KEY);
   if (last && last !== organizationId) {
-    const [electric, powersync] = await Promise.all([
+    const [electric, powersync, custom] = await Promise.all([
       import("./electricsql/storage"),
       import("./powersync/database"),
+      import("./custom/store"),
     ]);
     await electric.clearElectricStorage();
     await powersync.clearPowerSyncStorage();
+    await custom.clearCustomStorage();
     await clearLocalPhotos();
   }
   localStorage.setItem(TRIAL_LAST_ORGANIZATION_KEY, organizationId);
@@ -81,6 +83,15 @@ async function openElectric(organizationId: string): Promise<OpenedTrialStore> {
   const deviceId = getTrialDeviceId();
   const store = await createElectricTrialStore(deviceId, organizationId);
   const opened: OpenedTrialStore = { store, deviceId, organizationId, candidate: "electricsql" };
+  installTrialTestHooks(opened, store);
+  return opened;
+}
+
+async function openCustom(organizationId: string): Promise<OpenedTrialStore> {
+  const { createCustomTrialStore } = await import("./custom/store");
+  const deviceId = getTrialDeviceId();
+  const store = await createCustomTrialStore(deviceId, organizationId);
+  const opened: OpenedTrialStore = { store, deviceId, organizationId, candidate: "custom" };
   installTrialTestHooks(opened, store);
   return opened;
 }
@@ -109,9 +120,14 @@ export function openTrialStore(
       await old?.store.close();
     }
     await clearIfOtherOrganization(organizationId);
-    return candidate === "electricsql"
-      ? openElectric(organizationId)
-      : openPowerSync(organizationId);
+    switch (candidate) {
+      case "electricsql":
+        return openElectric(organizationId);
+      case "custom":
+        return openCustom(organizationId);
+      default:
+        return openPowerSync(organizationId);
+    }
   })();
   current = { candidate, organizationId, promise };
   promise.catch(() => {

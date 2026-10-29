@@ -151,6 +151,10 @@ describe("kandidatgrensene", () => {
       dynamic.some((s) => /(^|\/)electricsql\//.test(s)),
       "import() for electricsql",
     ).toBe(true);
+    expect(
+      dynamic.some((s) => /(^|\/)custom\//.test(s)),
+      "import() for custom",
+    ).toBe(true);
   });
 
   it("types.ts har ikke getAnswers", () => {

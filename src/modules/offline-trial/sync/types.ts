@@ -21,10 +21,10 @@ export { TRIAL_TABLE_NAMES, trialColumns, localColumnsOf } from "./local-columns
 // Valg av kandidat (innstilling i nettleseren, ikke en kode i datamodellen).
 
 /**
- * Bit 1 i docs/funksjoner/fase1-kandidat-egenbygd.md legger til `"custom"` (knappen «Egenbygd»,
- * `openCustom` i `select-store.ts`) i samme endring som lageret. Standardvalget forblir `powersync`.
+ * `"custom"` er den egenbygde kandidaten (knappen «Egenbygd», `openCustom` i `select-store.ts`,
+ * docs/funksjoner/fase1-kandidat-egenbygd.md). Standardvalget forblir `powersync`.
  */
-export const TRIAL_SYNC_CANDIDATES = ["powersync", "electricsql"] as const;
+export const TRIAL_SYNC_CANDIDATES = ["powersync", "electricsql", "custom"] as const;
 export type TrialSyncCandidate = (typeof TRIAL_SYNC_CANDIDATES)[number];
 /** Nøkkel i `localStorage`. Bytte = skriv nøkkelen og `location.reload()`; lageret byttes aldri mens siden lever. */
 export const TRIAL_SYNC_CANDIDATE_KEY = "trial_sync_candidate";
@@ -167,7 +167,7 @@ export type WriteSyncCandidate = (candidate: TrialSyncCandidate) => void;
 /**
  * Åpner lageret for kandidaten med dynamisk `import()` per kandidat, så bare den valgte SDK-en
  * lastes. Samme instans for hele siden. Organisasjonsbytte (`TRIAL_LAST_ORGANIZATION_KEY`) tømmer
- * lager, synkposisjon, kø og bilder for **begge** kandidater før det nye åpnes. Aldri under SSR.
+ * lager, synkposisjon, kø og bilder for **alle** kandidater før det nye åpnes. Aldri under SSR.
  */
 export type OpenTrialStore = (
   candidate: TrialSyncCandidate,

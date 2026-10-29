@@ -178,10 +178,10 @@ export async function localPhotoFileCount(page: Page): Promise<number> {
 
 // --- Kandidat 2, ElectricSQL (docs/funksjoner/fase1-kandidat-electricsql-testplan.md avsnitt 6) ---
 
-export type TrialSyncCandidate = "powersync" | "electricsql";
+export type TrialSyncCandidate = "powersync" | "electricsql" | "custom";
 export type TrialTable = "trial_forms" | "trial_answers" | "trial_photos";
-/** ElectricSQL-lageret har i tillegg synkposisjonen og endringskøen som egne lagre. */
-export type HookTable = TrialTable | "shape_state" | "outbox";
+/** ElectricSQL og egenbygd har i tillegg synkposisjonen og endringskøen som egne lagre. */
+export type HookTable = TrialTable | "shape_state" | "sync_state" | "outbox";
 export type LocalRow = Record<string, unknown>;
 
 /**

@@ -31,6 +31,7 @@ const TEST_IMAGE = path.join(DIR, "fixtures", "test-image.png");
 const PHOTO_ROUTE = "**/api/prove/bilder/**";
 const CHANGES_ROUTE = "**/api/prove/synk/endringer";
 const SHAPE_ROUTE = "/api/prove/synk/shape";
+const PULL_ROUTE = "**/api/prove/synk/hent*";
 const ANY_STATUS = /^(Venter: \d+ endring(er)?, \d+ bilde(r)?|Alt er lagret på serveren)$/;
 const NO_PHOTOS_WAITING = /^Venter: \d+ endring(er)?, 0 bilder$|^Alt er lagret på serveren$/;
 const ALL_SAVED = "Alt er lagret på serveren";
@@ -584,7 +585,7 @@ test.describe("endringskøen", () => {
   });
 
   test.describe("innlogging med annen organisasjon tømmer lokal lagring for begge kandidater", () => {
-    for (const candidate of ["powersync", "electricsql"] as TrialSyncCandidate[]) {
+    for (const candidate of ["powersync", "electricsql", "custom"] as TrialSyncCandidate[]) {
       // Obligatorisk (tenant)
       test(`innlogging med annen organisasjon tømmer lokal lagring for begge kandidater (${candidate})`, async ({
         page,
@@ -608,6 +609,15 @@ test.describe("endringskøen", () => {
               .__offlineTrial;
             await hook.simulateOrganizationChange(organizationId);
           }, randomUuid());
+          // Egenbygd: hentingen etter byttet stoppes og registreres, så skjemaet fra serveren
+          // ikke kommer tilbake før lagringen er sjekket, og første kall kan leses.
+          const pulls: string[] = [];
+          if (candidate === "custom") {
+            await page.route(PULL_ROUTE, (route) => {
+              pulls.push(route.request().url());
+              return route.abort();
+            });
+          }
           await page.reload();
 
           await expect
@@ -622,8 +632,15 @@ test.describe("endringskøen", () => {
             expect(await readRowsViaHook(page, "shape_state")).toEqual([]);
             expect(await readRowsViaHook(page, "outbox")).toEqual([]);
           }
+          if (candidate === "custom") {
+            expect(await readRowsViaHook(page, "sync_state")).toEqual([]);
+            expect(await readRowsViaHook(page, "outbox")).toEqual([]);
+            await expect.poll(() => pulls.length, { timeout: 15_000 }).toBeGreaterThan(0);
+            expect(new URL(pulls[0]!).searchParams.has("siden")).toBe(false);
+          }
         } finally {
           await page.unroute(PHOTO_ROUTE);
+          await page.unroute(PULL_ROUTE);
         }
       });
     }
