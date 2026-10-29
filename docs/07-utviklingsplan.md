@@ -159,6 +159,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 - [x] **Prøve E – regler uten nett:** én regel for alder mot levetid og én målegrense kjører på iPaden og gir samme svar som på serveren (PR-en fra branchen `fase1-prove-e-regler`, 29.10.2026, `docs/funksjoner/fase1-prove-e-regler.md`; prøven på ekte iPad gjenstår, resultatmal `docs/funksjoner/fase1-prove-e-regler-resultat.md`)
 - [ ] **Prøve F – innlogging som har gått ut:** takstmannen kan fortsatt åpne og fullføre rapporten uten nett
 - [x] Synkstatus som alltid vises: antall endringer og bilder som venter, «lagret kl.», og «Synk nå» (PR #21, 29.10.2026, `docs/funksjoner/fase1-synkstatus.md`)
+  - [x] Småfunn fra gjennomgangen av PR #21: egen test for «Synk nå», trygg oppretting av testtakstmannen i e2e (bare lokal database og testdatabase), loggen viser bare feilmeldingen, og opprydding i testkoden (29.10.2026, `docs/agenter/oppgaver/fase1-smafunn-synkstatus.md`)
 - [ ] Sammenligning av kandidatene: virker prøvene, hvor mye arbeid, drift i EU/EØS, pris og hvor modent verktøyet er
 - [ ] **ADR: valg av løsning for drift uten nett**, med begrunnelse og det som ikke virket
 - [ ] Demo for Ståle på ekte iPad i en kjeller uten dekning

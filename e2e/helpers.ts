@@ -507,7 +507,9 @@ export async function ensureInspector(): Promise<void> {
     const found = await sql<{ id: string; deleted_at: Date | null; deactivated_at: Date | null }[]>`
       select id, deleted_at, deactivated_at from employees
       where user_id = ${user.id} and organization_id = ${organizationId}`;
-    let employee = found.find((row) => row.deleted_at === null && row.deactivated_at === null);
+    let employee: { id: string } | undefined = found.find(
+      (row) => row.deleted_at === null && row.deactivated_at === null,
+    );
     if (!employee && found.length > 0) {
       throw new Error(
         "Takstmannen for e2e (INSPECTOR_EMAIL) er slettet eller deaktivert i testdatabasen. " +
@@ -515,12 +517,10 @@ export async function ensureInspector(): Promise<void> {
       );
     }
     if (!employee) {
-      [employee] = await sql<
-        { id: string; deleted_at: Date | null; deactivated_at: Date | null }[]
-      >`
+      [employee] = await sql<{ id: string }[]>`
         insert into employees (organization_id, user_id, name)
         values (${organizationId}, ${user.id}, 'Oppdiktet takstmann')
-        returning id, deleted_at, deactivated_at`;
+        returning id`;
     }
     if (!employee) throw new Error("Kunne ikke lage den ansatte for e2e");
     const roles = await sql<{ deleted_at: Date | null }[]>`

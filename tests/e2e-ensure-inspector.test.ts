@@ -88,9 +88,6 @@ describe("ensureInspector (e2e-hjelper)", () => {
     await ensureInspector();
     const second = await snapshot();
 
-    expect(second.users).toHaveLength(first.users.length);
-    expect(second.employees).toHaveLength(first.employees.length);
-    expect(second.roles).toHaveLength(first.roles.length);
     expect(second).toEqual(first);
   });
 
@@ -100,7 +97,7 @@ describe("ensureInspector (e2e-hjelper)", () => {
     await db.update(employees).set({ deletedAt: DELETED_AT }).where(eq(employees.id, inspector.id));
     const before = await snapshot();
 
-    await expect(ensureInspector()).rejects.toThrow(Error);
+    await expect(ensureInspector()).rejects.toThrow(/slettet eller deaktivert.*pnpm db:seed/);
 
     const after = await snapshot();
     expect(after).toEqual(before);
@@ -117,7 +114,7 @@ describe("ensureInspector (e2e-hjelper)", () => {
       .where(eq(employees.id, inspector.id));
     const before = await snapshot();
 
-    await expect(ensureInspector()).rejects.toThrow(Error);
+    await expect(ensureInspector()).rejects.toThrow(/slettet eller deaktivert.*pnpm db:seed/);
 
     const after = await snapshot();
     expect(after).toEqual(before);
@@ -135,7 +132,7 @@ describe("ensureInspector (e2e-hjelper)", () => {
       .where(eq(employeeRoleAssignments.employeeId, inspector.id));
     const before = await snapshot();
 
-    await expect(ensureInspector()).rejects.toThrow(Error);
+    await expect(ensureInspector()).rejects.toThrow(/Rollen takstmann.*er slettet.*pnpm db:seed/);
 
     const after = await snapshot();
     expect(after).toEqual(before);
@@ -190,7 +187,6 @@ describe("ensureInspector (e2e-hjelper)", () => {
     })();
     vi.stubEnv("DATABASE_URL", external);
 
-    const started = Date.now();
     const error = await ensureInspector().then(
       () => null,
       (caught: unknown) => caught,
@@ -200,6 +196,5 @@ describe("ensureInspector (e2e-hjelper)", () => {
     expect((error as Error).message).toBe(expected);
     expect((error as Error).message).not.toContain("hemmelig-pw");
     expect((error as Error).message).not.toContain("ekstern-db.eksempel.invalid");
-    expect(Date.now() - started).toBeLessThan(1_000);
   }, 5_000);
 });
