@@ -12,7 +12,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Også nå: Prøve E – regler uten nett** (branch `fase1-prove-e-regler` fra `main`). Oppgavekort `docs/funksjoner/fase1-prove-e-regler.md` laget 29.10.2026. Roller: utvikler, testskriver, sikkerhet-personvern, fagansvarlig, test-leder. Spørsmål nr. 13 (ekte levetider og grenser), ikke blokkerende.
+**Også nå: Prøve E – regler uten nett** (branch `fase1-prove-e-regler` fra `main`). Oppgavekort `docs/funksjoner/fase1-prove-e-regler.md` laget 29.10.2026. Roller: utvikler, testskriver, sikkerhet-personvern, fagansvarlig, test-leder. Kortet rettet etter gjennomgang (prøvetall 7 år og 42 %, negativt tall gir «ikke vurdert», testsaker som tekst, knappen «Sjekk mot server» tatt ut); klar for utvikler og testskriver. Spørsmål nr. 13 (ekte tall, grensebehandling), ikke blokkerende.
 
 **Levert: Synkstatus som alltid vises**, **PR #21** (branch `fase1-synkstatus`, bygger på `main`, versjon 0.2.11). Oppgavekort `docs/funksjoner/fase1-synkstatus.md`, skisse `docs/funksjoner/fase1-synkstatus-skisse.md`, testplan `docs/funksjoner/fase1-synkstatus-testplan.md`. Måleindikatoren er erstattet av `sync-status.tsx` for alle tre kandidatene. Roller: forenkler, ux-ansvarlig, test-leder, ui-designer, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
@@ -55,6 +55,7 @@ Ingen.
 ## Siste kjøring
 
 29.10.2026: prosjektleder laget branchen `fase1-prove-e-regler`, oppgavekortet for prøve E og spørsmål nr. 13. `parseTrialNumber` var allerede streng (oppgave 4); kortet ber bare om flere testsaker. Sesjon: https://claude.ai/code/session_01Jqwnu3Rs4hsNXmsS1zrwe5
+29.10.2026: prosjektleder rettet oppgavekortet for prøve E etter forenkler, fagansvarlig og test-leder, og la til nr. 13 c (verdi lik grensen).
 
 29.10.2026: prosjektleder fullførte synkstatus: flettet `main` inn (versjonskonflikt løst, 0.2.11), krysset av i planen, oppdaterte tilstanden og åpnet PR #21 mot `main`. Sesjon: https://claude.ai/code/session_01JqwntywRSPWcBmrv2nPUoo
 
