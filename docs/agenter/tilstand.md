@@ -2,6 +2,10 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
+**Autonom modus: på** (Ståle 29.10.2026). Ståle er hjemme tirsdag kveld 03.11.2026 og tilgjengelig fra onsdag morgen 04.11.2026. Da slås modusen av, og han får en samlet oversikt. Ståle er borte noen dager: ingen varsler, ingen spørsmål, ingen «Venter på Ståle». Agentene avgjør selv ut fra researchen og fører beslutningene i `docs/09-apne-sporsmal.md` («Avgjort av agentene mens Ståle var borte»). Se «Autonom modus» i `CLAUDE.md`.
+
+**Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
+
 Sist oppdatert: 29.10.2026 kl. 22:30 (PR #21, #22 og #23 merget; ingen åpne PR-er)
 
 ## Gjeldende fase
@@ -36,7 +40,10 @@ Ingen åpne PR-er. PR #16–#23 er merget 29.10.2026 (#23: prøve E, versjon 0.2
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
-## Venter på Ståle
+## Trenger Ståle når han er tilbake
+
+I autonom modus samles alt her. Ingen varsler.
+
 
 - Spørsmål nr. 12: slå på synktjenestene i testmiljøet (`docs/drift/testmiljo-azure.md`, «Slå på»). Når de kjører: kjør prøve A og B etter `docs/funksjoner/fase1-prove-ab-powersync.md`, `…-electricsql.md` og `…-egenbygd.md`.
 - **Testmiljøet (PR #7 er merget):** følg `docs/drift/testmiljo-azure.md`: lag ressursgruppen `rg-ezprop-test` og GitHub-innloggingen i Azure, legg inn secrets og variabler, svar på spørsmål nr. 6 og nr. 9. Bekreft «ferdig når»: appen åpner på ekte iPad Pro fra hjemskjermen. Ikke legg inn de fire e-post-secretene før Graph-adapteren er bygget (fase 0b).
