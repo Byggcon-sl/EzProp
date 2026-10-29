@@ -280,4 +280,30 @@ describe("applyIncoming (apply-incoming.ts)", () => {
     }).not.toThrow();
     expect(result!.rows).toEqual([before]);
   });
+
+  // Tillegg til testplanen (reklamasjoner): med standard replica har en update bare id og de
+  // endrede kolonnene. Raden må likevel finnes, og en usendt lokal endring må fortsatt vinne.
+  it("update med bare id og endrede kolonner treffer riktig rad og respekterer usendte endringer (tillegg)", () => {
+    const local = answerRow("floors", 7);
+    const update: IncomingChange = {
+      table: "trial_answers",
+      kind: "update",
+      key: LOCAL_ID,
+      row: { id: LOCAL_ID, value: JSON.stringify(3), device_id: "annen-enhet" },
+    };
+
+    const pending = applyIncoming("trial_answers", [local], [update], new Set([keyOf(local)]));
+    expect(pending.rows).toEqual([local]);
+    expect(pending.skippedKeys).toEqual([keyOf(local)]);
+
+    const free = applyIncoming("trial_answers", [local], [update], new Set());
+    expect(free.rows).toHaveLength(1);
+    expect(free.rows[0]).toMatchObject({
+      id: LOCAL_ID,
+      trial_form_id: FORM,
+      field_key: "floors",
+      value: JSON.stringify(3),
+      device_id: "annen-enhet",
+    });
+  });
 });

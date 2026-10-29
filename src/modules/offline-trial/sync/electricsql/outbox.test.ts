@@ -14,6 +14,7 @@ import {
   localRowKey,
   pendingKeys,
   retryDelayMs,
+  shouldAckBatch,
   takeBatch,
 } from "./outbox";
 import { parseShapeMessages } from "./shape-messages";
@@ -206,20 +207,22 @@ describe("endringskøen (outbox.ts)", () => {
     expect(take(kept).batch).toEqual(batch);
   });
 
-  // Hvilken status som gir ackBatch, avgjøres i lageret (store.ts), ikke i den rene køen; navnet
-  // shouldAckBatch står ikke blant de bindende navnene (avgjørelse 1). Testen viser det køen lover:
-  // alt annet enn 200 går til keepBatch og mister ingenting. Selve 200-regelen vises ende til ende
-  // i e2e («endringskøen overlever omlasting og tømmes bare etter 200», «avbrutt sending …»).
+  // Samme regel som PowerSync-koblingen (pkt. 5). Lageret velger ackBatch eller keepBatch med
+  // shouldAckBatch; e2e viser det ende til ende («endringskøen overlever omlasting …»).
   it("ackBatch kalles bare ved 200: hjelperen shouldAckBatch", () => {
+    expect(shouldAckBatch(200)).toBe(true);
+    const outcomes = [201, 204, 400, 401, 403, 409, 429, 500, 502, undefined];
+    for (const status of outcomes) expect(shouldAckBatch(status), String(status)).toBe(false);
+
+    // Det køen lover for alt annet enn 200: keepBatch mister ingenting
     const state = enqueueAll(createOutboxState(), [
       formEntry(),
       answerEntry(ANSWER_X, "floors", 7),
     ]);
-    const outcomes = [201, 204, 400, 401, 403, 409, 429, 500, 502, undefined];
     let current = state;
     for (const status of outcomes) {
       const { state: sending } = take(current);
-      current = keepBatch(sending);
+      current = shouldAckBatch(status) ? ackBatch(sending) : keepBatch(sending);
       expect(current.entries, String(status)).toEqual(state.entries);
     }
     const { state: sending } = take(current);
