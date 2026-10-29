@@ -669,7 +669,7 @@ export async function createElectricTrialStore(
       }
 
       if (response.status === 409) {
-        await response.body?.cancel().catch(() => undefined);
+        await response.text().catch(() => undefined);
         await resetTable(table);
         state = null;
         cursor = undefined;
@@ -677,7 +677,7 @@ export async function createElectricTrialStore(
         continue;
       }
       if (response.status !== 200 && response.status !== 204) {
-        await response.body?.cancel().catch(() => undefined);
+        await response.text().catch(() => undefined);
         await failed();
         continue;
       }
