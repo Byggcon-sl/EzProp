@@ -1,50 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { block, contentLines, envExampleValue, indentOf, read } from "../compose-text";
 
 // Konfigurasjonen for den selvdrevne PowerSync-tjenesten (docs/funksjoner/fase1-kandidat-powersync.md
-// pkt. 13). Testplan avsnitt 2.9. Ingen YAML-pakke i treet som direkte avhengighet, så filene leses
-// som tekst: små hjelpere under henter ut en blokk etter innrykk.
-
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-
-function read(relative: string): string {
-  const file = path.join(ROOT, relative);
-  expect(existsSync(file), `${relative} mangler`).toBe(true);
-  return readFileSync(file, "utf8");
-}
-
-/** Linjer uten kommentarer og tomme linjer. */
-function contentLines(text: string): string[] {
-  return text
-    .split("\n")
-    .map((line) => line.replace(/\s+#.*$/, "").replace(/^\s*#.*$/, ""))
-    .filter((line) => line.trim() !== "");
-}
-
-function indentOf(line: string): number {
-  return line.length - line.trimStart().length;
-}
-
-/**
- * Teksten under nøkkelen `key` (første treff med gitt innrykk eller dypere enn `parentIndent`),
- * fram til neste linje med samme eller mindre innrykk.
- */
-function block(text: string, key: string, minIndent = 0): string {
-  const lines = contentLines(text);
-  const start = lines.findIndex(
-    (line) => indentOf(line) >= minIndent && new RegExp(`^\\s*${key}:`).test(line),
-  );
-  expect(start, `fant ikke «${key}:»`).toBeGreaterThanOrEqual(0);
-  const indent = indentOf(lines[start]!);
-  const out = [lines[start]!];
-  for (const line of lines.slice(start + 1)) {
-    if (indentOf(line) <= indent) break;
-    out.push(line);
-  }
-  return out.join("\n");
-}
+// pkt. 13). Testplan avsnitt 2.9. Tekst-hjelperne ligger i tests/compose-text.ts (delt med
+// tests/electricsql/config.test.ts).
 
 /** Hver SQL-setning fra én SELECT fram til neste (synkreglene har én setning per linje eller blokk). */
 function selectStatements(text: string): string[] {
@@ -53,13 +12,6 @@ function selectStatements(text: string): string[] {
     .split(/(?=\bSELECT\b)/i)
     .filter((part) => /^SELECT\b/i.test(part))
     .map((part) => part.trim());
-}
-
-function envExampleValue(key: string): string | undefined {
-  const line = read(".env.example")
-    .split("\n")
-    .find((l) => l.startsWith(`${key}=`));
-  return line?.slice(key.length + 1).trim();
 }
 
 describe("PowerSync-konfigurasjon", () => {

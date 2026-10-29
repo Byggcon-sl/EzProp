@@ -1,12 +1,18 @@
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
+import { MIGRATIONS_FOLDER, runMigrations } from "@/db/run-migrations";
 import { trialAnswers, trialForms } from "@/db/schema";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { createOrganization, resetDatabase } from "../../tests/factories";
 
 // Migreringen 0001_prove-uten-nett og publikasjonen for synktjenesten
 // (docs/funksjoner/fase1-kandidat-powersync.md pkt. 10). Testplan avsnitt 3.5.
+// Migreringen 0002_electric-utsnitt (docs/funksjoner/fase1-kandidat-electricsql.md pkt. 11,
+// avgjørelse C): replikaidentitet og Electrics publikasjon.
 
 beforeEach(resetDatabase);
 
@@ -78,5 +84,100 @@ describe("migreringen for prøven uten nett", () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]!.puballtables).toBe(false);
+  });
+
+  it("migreringen 0002 gir REPLICA IDENTITY FULL på de tre trial-tabellene", async () => {
+    const rows = await db.execute<{ relname: string; relreplident: string }>(
+      sql`select relname, relreplident from pg_class
+          where relname in ('trial_forms', 'trial_answers', 'trial_photos') and relkind = 'r'`,
+    );
+    const identities = Object.fromEntries(
+      Array.from(rows).map((row) => [row.relname, row.relreplident]),
+    );
+    expect(identities).toEqual({ trial_forms: "f", trial_answers: "f", trial_photos: "f" });
+  });
+
+  it("publikasjonen electric_publication_default har nøyaktig de tre trial-tabellene, ikke FOR ALL TABLES", async () => {
+    const tables = Array.from(
+      await db.execute<{ tablename: string }>(
+        sql`select tablename from pg_publication_tables where pubname = 'electric_publication_default'`,
+      ),
+    )
+      .map((row) => row.tablename)
+      .sort();
+    expect(tables).toEqual(["trial_answers", "trial_forms", "trial_photos"]);
+    const publication = Array.from(
+      await db.execute<{ puballtables: boolean }>(
+        sql`select puballtables from pg_publication where pubname = 'electric_publication_default'`,
+      ),
+    );
+    expect(publication).toHaveLength(1);
+    expect(publication[0]!.puballtables).toBe(false);
+  });
+
+  // Testplan 3.3, Obligatorisk (sikkerhet). Arkitektens test over sjekker det samme for de tre
+  // tabellene; denne har navnet fra planen og lister i tillegg tabellene som aldri skal med.
+  it("publikasjonen electric_publication_default har nøyaktig trial_forms, trial_answers og trial_photos", async () => {
+    const tables = Array.from(
+      await db.execute<{ tablename: string }>(
+        sql`select tablename from pg_publication_tables where pubname = 'electric_publication_default'`,
+      ),
+    )
+      .map((row) => row.tablename)
+      .sort();
+    expect(tables).toEqual(["trial_answers", "trial_forms", "trial_photos"]);
+    for (const secret of [
+      "users",
+      "sessions",
+      "verifications",
+      "accounts",
+      "employees",
+      "organizations",
+    ]) {
+      expect(tables).not.toContain(secret);
+    }
+  });
+
+  it("ingen andre tabeller har fått REPLICA IDENTITY FULL", async () => {
+    const rows = Array.from(
+      await db.execute<{ relname: string; relreplident: string }>(
+        sql`select c.relname, c.relreplident from pg_class c
+            join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'public' and c.relkind = 'r'
+              and c.relname not in ('trial_forms', 'trial_answers', 'trial_photos')`,
+      ),
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    const changed = rows.filter((row) => row.relreplident !== "d").map((row) => row.relname);
+    expect(changed).toEqual([]);
+  });
+
+  // Migreringen er ikke idempotent (CREATE PUBLICATION uten IF NOT EXISTS). Testen viser derfor at
+  // Drizzle-journalen hindrer dobbeltkjøring: en ny kjøring gir ingen feil, og 0002 står én gang.
+  it("migreringen kjører to ganger uten feil", async () => {
+    const url = process.env.TEST_DATABASE_URL;
+    expect(url, "TEST_DATABASE_URL").toBeTruthy();
+    await expect(runMigrations(url!)).resolves.toBeUndefined();
+
+    const file = readdirSync(MIGRATIONS_FOLDER).find((name) => /^0002_.*\.sql$/.test(name));
+    expect(file, "0002_*.sql").toBeDefined();
+    const hash = createHash("sha256")
+      .update(readFileSync(path.join(MIGRATIONS_FOLDER, file!), "utf8"))
+      .digest("hex");
+    const rows = Array.from(
+      await db.execute<{ hash: string }>(sql`select hash from drizzle.__drizzle_migrations`),
+    );
+    expect(rows.filter((row) => row.hash === hash)).toHaveLength(1);
+    const sqlFiles = readdirSync(MIGRATIONS_FOLDER).filter((name) => name.endsWith(".sql"));
+    expect(rows).toHaveLength(sqlFiles.length);
+
+    // Publikasjonen og replikaidentiteten er uendret etter andre kjøring
+    const identities = Array.from(
+      await db.execute<{ relreplident: string }>(
+        sql`select relreplident from pg_class
+            where relname in ('trial_forms', 'trial_answers', 'trial_photos') and relkind = 'r'`,
+      ),
+    ).map((row) => row.relreplident);
+    expect(identities).toEqual(["f", "f", "f"]);
   });
 });

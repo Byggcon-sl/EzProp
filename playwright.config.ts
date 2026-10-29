@@ -45,6 +45,9 @@ export default defineConfig({
       // Prøve uten nett (fase 1). Ingen synktjeneste i e2e; den lokale databasen virker uten.
       POWERSYNC_URL: "http://localhost:8080",
       POWERSYNC_JWT_SECRET: "e2e-synknokkel-bare-for-automatiske-tester-0123456789",
+      // Kandidat 2 (ElectricSQL). Ingen Electric i e2e; shape-ruten svarer 502.
+      ELECTRIC_URL: "http://localhost:3010",
+      ELECTRIC_SECRET: "e2e-electricnokkel-bare-for-automatiske-tester-0123456789",
       TRIAL_UPLOAD_DIR: "var/uploads/trial",
       // Testkroken window.__offlineTrial. Aldri i .env.example.
       NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS: "1",

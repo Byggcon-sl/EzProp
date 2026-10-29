@@ -2,10 +2,18 @@
 
 Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte tid. Nyeste øverst. Får Ståle stadig de samme kommentarene, legges de inn som regel i den aktuelle agentbeskrivelsen.
 
-
-## 29.10.2026 – Modellbytte når kvoten er brukt opp
+## 29.10.2026 – Modellbytte når kvoten er brukt opp (PR #9)
 
 - Lederrollene hadde fast modell i `.claude/agents/`. Da kvoten for ledermodellen var brukt opp, ville arbeidsflytene stoppe selv om rutinen ble flyttet til en annen modell. Lederne arver nå modellen fra rutinen (`model: inherit`). Bytte modell gjøres bare på rutinen. Utøverne har fortsatt fast modell.
+- Merget av Ståle 29.10.2026 kl. 11:27, uten kommentarer. Mergen ga en liten konflikt i denne filen på PR #10 (to nye avsnitt øverst samtidig). Løst ved å beholde begge.
+
+## 29.10.2026 – Fase 1, kandidat 1 PowerSync (PR #8)
+
+- Merget av Ståle 29.10.2026 kl. 08:30, uten kommentarer eller endringer. Merget som vanlig fletting (ikke «Squash and merge»), så kandidat 2-branchen som lå oppå, kunne flette inn `main` uten konflikter.
+- Oppgaven ble delt i én kjøring som stoppet midt i (kvoten for ledermodellen ble brukt opp natt til 29.10.) og en ny kjøring som fortsatte. Tilstandsfilen på selve oppgavebranchen sa nøyaktig hvor arbeidet sto («neste: sikkerhet-personvern, test-leder, PR»), så ingenting måtte gjøres på nytt. Regel: skriv neste steg i tilstandsfilen på branchen og push før hvert lengre steg.
+- Lederrollene har fast modell i `.claude/agents/`. Når kvoten for den modellen er brukt opp, feiler agentene med en gang. PR #9 (merget 29.10.2026) lar dem følge modellen rutinen kjører på.
+- Testskriveren leverte to runder som overlappet. Prosjektlederen beholdt versjonen som var avstemt mot koden. Én runde per testskriver er nok; gi heller retteoppgave enn ny runde.
+
 ## 28.10.2026 – Fase 1, testmiljø i Azure (PR #7)
 
 - Merget av Ståle samme kveld (kl. 20:19), uten kommentarer eller endringer. Det Ståle må gjøre selv (ressursgruppe, GitHub-innlogging i Azure, secrets) står i `docs/drift/testmiljo-azure.md` og i tilstandsfilen under «Venter på Ståle» til han bekrefter at appen åpner på iPaden.

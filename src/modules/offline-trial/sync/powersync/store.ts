@@ -9,11 +9,11 @@
  */
 import type { AbstractPowerSyncDatabase, Transaction } from "@powersync/web";
 import { uuidv7 } from "@/shared/lib/uuid";
-import type { TrialAnswers, TrialPhoto, TrialValue } from "../../answers";
-import { applyTextEdit, createTextState, mergeTextStates, textOf } from "../../text-merge";
+import type { TrialPhoto, TrialValue } from "../../answers";
+import { textOf } from "../../text-merge";
 import { listTrialFields, trialForm, type TrialFieldType } from "../../trial-form";
-import { rowsToAnswers } from "../answer-rows";
 import { putLocalPhoto } from "../photo-store";
+import { nextTextState, safeTextOf, TEXT_WRITE_DELAY_MS } from "../text-state";
 import type {
   TrialAnswerRow,
   TrialFormSnapshot,
@@ -23,7 +23,8 @@ import type {
   TrialSyncStore,
 } from "../types";
 
-export const TEXT_WRITE_DELAY_MS = 300;
+// Delt med ElectricSQL-lageret; eksporteres herfra også så testen store-text.test.ts står.
+export { nextTextState, TEXT_WRITE_DELAY_MS } from "../text-state";
 
 const FIELD_TYPES = new Map<string, TrialFieldType>(
   listTrialFields(trialForm).map((field) => [field.key, field.type]),
@@ -53,14 +54,6 @@ interface PhotoRecord {
   created_at: string | null;
   updated_at: string | null;
   deleted_at: string | null;
-}
-
-function safeTextOf(state: string): string | null {
-  try {
-    return textOf(state);
-  } catch {
-    return null;
-  }
 }
 
 function toAnswerRow(record: AnswerRecord): TrialAnswerRow {
@@ -99,43 +92,6 @@ function toPhotoRow(record: PhotoRecord): TrialPhotoRow {
   };
 }
 
-/** Hvor mange tegn to tekster har felles i starten og slutten (grovt mål på hvor like de er). */
-function sharedEdges(a: string, b: string): number {
-  const max = Math.min(a.length, b.length);
-  let start = 0;
-  while (start < max && a[start] === b[start]) start++;
-  let end = 0;
-  while (end < max - start && a[a.length - 1 - end] === b[b.length - 1 - end]) end++;
-  return start + end;
-}
-
-/**
- * Ny tekst-tilstand for et felt. Endringen regnes fra den tilstanden brukeren skrev ut fra:
- * enten det denne enheten skrev sist (brukeren skriver videre), eller det som ligger lagret (en
- * annen enhet har skrevet, og brukeren har sett det). Resultatet flettes med det lagrede.
- */
-export function nextTextState(
-  stored: string | null,
-  ownLast: string | null,
-  newText: string,
-): string {
-  let base = stored ?? createTextState("");
-  if (stored && ownLast) {
-    const storedText = safeTextOf(stored);
-    const ownText = safeTextOf(ownLast);
-    if (
-      storedText !== null &&
-      ownText !== null &&
-      storedText !== ownText &&
-      sharedEdges(ownText, newText) > sharedEdges(storedText, newText)
-    ) {
-      base = ownLast;
-    }
-  }
-  const edited = applyTextEdit(base, newText);
-  return stored ? mergeTextStates(stored, edited) : edited;
-}
-
 interface PendingText {
   formId: string;
   fieldKey: string;
@@ -144,10 +100,23 @@ interface PendingText {
   waiters: { resolve: () => void; reject: (error: unknown) => void }[];
 }
 
-export interface PowerSyncTrialStore extends TrialSyncStore {
-  /** Skriver tekst som venter (ved blur, når siden skjules og ved avmelding). */
-  flush(): Promise<void>;
+/** PowerSync-utgaven. Alt står i `TrialSyncStore` (avgjørelse A); navnet beholdes for provideren. */
+export type PowerSyncTrialStore = TrialSyncStore;
+
+interface FormRecord {
+  id: string;
+  name: string;
+  created_at: string | null;
 }
+
+function toFormSummary(record: FormRecord): TrialFormSummary {
+  return { id: record.id, name: record.name, createdAt: record.created_at ?? "" };
+}
+
+const PENDING_PHOTOS_SQL = `SELECT id, trial_form_id, field_key, name, size_bytes, sha256, uploaded_at, device_id,
+          created_at, updated_at, deleted_at
+   FROM trial_photos WHERE uploaded_at IS NULL AND device_id = ? AND deleted_at IS NULL
+   ORDER BY created_at, id`;
 
 export function createPowerSyncTrialStore(
   db: AbstractPowerSyncDatabase,
@@ -260,8 +229,20 @@ export function createPowerSyncTrialStore(
     });
   }
 
+  async function readForms(): Promise<TrialFormSummary[]> {
+    const rows = await db.getAll<FormRecord>(
+      `SELECT id, name, created_at FROM trial_forms
+       WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC`,
+    );
+    return rows.map(toFormSummary);
+  }
+
   async function readSnapshot(formId: string): Promise<TrialFormSnapshot> {
-    const [answers, photos] = await Promise.all([
+    const [form, answers, photos] = await Promise.all([
+      db.getOptional<FormRecord>(
+        "SELECT id, name, created_at FROM trial_forms WHERE id = ? AND deleted_at IS NULL",
+        [formId],
+      ),
       db.getAll<AnswerRecord>(
         `SELECT id, trial_form_id, field_key, value, text_state, device_id,
                 created_at, updated_at, deleted_at
@@ -275,18 +256,38 @@ export function createPowerSyncTrialStore(
         [formId],
       ),
     ]);
-    return { answers: answers.map(toAnswerRow), photos: photos.map(toPhotoRow) };
+    return {
+      form: form ? toFormSummary(form) : null,
+      answers: answers.map(toAnswerRow),
+      photos: photos.map(toPhotoRow),
+    };
   }
 
   return {
     flush,
 
-    async listForms(): Promise<TrialFormSummary[]> {
-      const rows = await db.getAll<{ id: string; name: string; created_at: string | null }>(
-        `SELECT id, name, created_at FROM trial_forms
-         WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC`,
+    async close(): Promise<void> {
+      await flush();
+      await db.close();
+    },
+
+    listForms: readForms,
+
+    subscribeForms(listener: (forms: TrialFormSummary[]) => void): () => void {
+      let active = true;
+      const dispose = db.onChange(
+        {
+          onChange: async () => {
+            const forms = await readForms();
+            if (active) listener(forms);
+          },
+        },
+        { tables: ["trial_forms"], throttleMs: 30, triggerImmediate: true },
       );
-      return rows.map((row) => ({ id: row.id, name: row.name, createdAt: row.created_at ?? "" }));
+      return () => {
+        active = false;
+        dispose();
+      };
     },
 
     async createForm(name: string): Promise<string> {
@@ -306,11 +307,6 @@ export function createPowerSyncTrialStore(
         );
       });
       return id;
-    },
-
-    async getAnswers(formId: string): Promise<TrialAnswers> {
-      const snapshot = await readSnapshot(formId);
-      return rowsToAnswers(snapshot.answers, snapshot.photos);
     },
 
     async setAnswer(formId: string, fieldKey: string, value: TrialValue): Promise<void> {
@@ -345,13 +341,46 @@ export function createPowerSyncTrialStore(
             if (active) listener(snapshot);
           },
         },
-        { tables: ["trial_answers", "trial_photos"], throttleMs: 30, triggerImmediate: true },
+        {
+          tables: ["trial_forms", "trial_answers", "trial_photos"],
+          throttleMs: 30,
+          triggerImmediate: true,
+        },
       );
       return () => {
         active = false;
         dispose();
         void flush();
       };
+    },
+
+    onStatusChange(listener: () => void): () => void {
+      const disposeTables = db.onChange(
+        { onChange: () => listener() },
+        { tables: ["ps_crud", "trial_answers", "trial_photos"], throttleMs: 100 },
+      );
+      const disposeStatus = db.registerListener({ statusChanged: () => listener() });
+      return () => {
+        disposeTables();
+        disposeStatus();
+      };
+    },
+
+    async listPendingPhotos(): Promise<TrialPhotoRow[]> {
+      const rows = await db.getAll<PhotoRecord>(PENDING_PHOTOS_SQL, [deviceId]);
+      return rows.map(toPhotoRow);
+    },
+
+    async markPhotoUploaded(id: string, sha256: string): Promise<void> {
+      // Bare lokalt, aldri i ps_crud (avgjørelse 6): skriver rett i SDK-ens datatabell under
+      // visningen `trial_photos`. Serveren eier `uploaded_at` og `sha256` og setter dem selv.
+      await db.writeTransaction(async (tx) => {
+        await tx.execute(
+          `UPDATE ps_data__trial_photos
+           SET data = json_set(data, '$.uploaded_at', ?, '$.sha256', ?) WHERE id = ?`,
+          [new Date().toISOString(), sha256, id],
+        );
+      });
     },
 
     async status(): Promise<TrialSyncStatus> {

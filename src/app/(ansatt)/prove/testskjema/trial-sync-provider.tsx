@@ -1,21 +1,16 @@
 "use client";
 
-import { PowerSyncContext } from "@powersync/react";
-import type { PowerSyncDatabase } from "@powersync/web";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { openTrialDatabase } from "@/modules/offline-trial/sync/powersync/database";
-import {
-  createPowerSyncTrialStore,
-  type PowerSyncTrialStore,
-} from "@/modules/offline-trial/sync/powersync/store";
 import { startPhotoUploader } from "@/modules/offline-trial/sync/photo-uploader";
+import { openTrialStore, readSyncCandidate } from "@/modules/offline-trial/sync/select-store";
+import type { TrialSyncCandidate, TrialSyncStore } from "@/modules/offline-trial/sync/types";
 
-/** Prøve fase 1: den lokale databasen og synklageret for testskjemaet. */
+/** Prøve fase 1: synklageret for testskjemaet, uavhengig av hvilken kandidat som er valgt. */
 export interface TrialSync {
-  db: PowerSyncDatabase;
-  store: PowerSyncTrialStore;
+  store: TrialSyncStore;
   deviceId: string;
   organizationId: string;
+  candidate: TrialSyncCandidate;
 }
 
 const TrialSyncContext = createContext<TrialSync | null>(null);
@@ -26,36 +21,23 @@ export function useTrialSync(): TrialSync {
   return value;
 }
 
-/**
- * Det måleindikatoren trenger: status fra lageret, og et varsel når synkkøen, bilderadene eller
- * SDK-ens status endres.
- */
+/** Det måleindikatoren trenger: status fra lageret og varsel når den kan ha endret seg. */
 export function useIndicatorSource() {
-  const { db, store } = useTrialSync();
+  const { store } = useTrialSync();
   return useMemo(
     () => ({
       getStatus: () => store.status(),
-      subscribe: (onChange: () => void) => {
-        const disposeTables = db.onChange(
-          { onChange },
-          { tables: ["ps_crud", "trial_answers", "trial_photos"], throttleMs: 100 },
-        );
-        const disposeStatus = db.registerListener({ statusChanged: () => onChange() });
-        return () => {
-          disposeTables();
-          disposeStatus();
-        };
-      },
+      subscribe: (onChange: () => void) => store.onStatusChange(onChange),
     }),
-    [db, store],
+    [store],
   );
 }
 
 type State = { kind: "opening" } | { kind: "ready"; sync: TrialSync } | { kind: "failed" };
 
 /**
- * Åpner den lokale databasen i nettleseren og starter bildekøen. Organisasjons-id-en kommer fra
- * serverkomponenten (tilgangssjekken); serveren stoler uansett bare på `grant`.
+ * Åpner lageret for den valgte kandidaten i nettleseren og starter bildekøen. Organisasjons-id-en
+ * kommer fra serverkomponenten (tilgangssjekken); serveren stoler uansett bare på `grant`.
  */
 export function TrialSyncProvider({
   organizationId,
@@ -69,23 +51,31 @@ export function TrialSyncProvider({
   useEffect(() => {
     let active = true;
     let stopUploader: (() => void) | undefined;
-    let store: PowerSyncTrialStore | undefined;
+    let store: TrialSyncStore | undefined;
     const flush = () => void store?.flush();
     const onVisibility = () => {
       if (document.visibilityState === "hidden") flush();
     };
 
-    openTrialDatabase(organizationId).then(
-      ({ db, deviceId }) => {
+    openTrialStore(readSyncCandidate(), organizationId).then(
+      (opened) => {
         if (!active) return;
-        store = createPowerSyncTrialStore(db, deviceId, organizationId);
-        stopUploader = startPhotoUploader(db, deviceId, organizationId);
+        store = opened.store;
+        stopUploader = startPhotoUploader(opened.store, organizationId);
         document.addEventListener("visibilitychange", onVisibility);
         window.addEventListener("pagehide", flush);
-        setState({ kind: "ready", sync: { db, store, deviceId, organizationId } });
+        setState({
+          kind: "ready",
+          sync: {
+            store: opened.store,
+            deviceId: opened.deviceId,
+            organizationId: opened.organizationId,
+            candidate: opened.candidate,
+          },
+        });
       },
       (error: unknown) => {
-        console.error("Kunne ikke åpne den lokale databasen.", error);
+        console.error("Kunne ikke åpne lagringen på enheten.", error);
         if (active) setState({ kind: "failed" });
       },
     );
@@ -116,9 +106,5 @@ export function TrialSyncProvider({
       </main>
     );
   }
-  return (
-    <PowerSyncContext.Provider value={state.sync.db}>
-      <TrialSyncContext.Provider value={state.sync}>{children}</TrialSyncContext.Provider>
-    </PowerSyncContext.Provider>
-  );
+  return <TrialSyncContext.Provider value={state.sync}>{children}</TrialSyncContext.Provider>;
 }

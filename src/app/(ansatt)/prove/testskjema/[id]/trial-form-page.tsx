@@ -1,6 +1,5 @@
 "use client";
 
-import { useQuery } from "@powersync/react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -52,12 +51,6 @@ const EMPTY_SET: ReadonlySet<string> = new Set();
 export function TrialFormPage({ formId }: { formId: string }) {
   const { store, deviceId } = useTrialSync();
   const indicator = useIndicatorSource();
-  const { data: formRows, isLoading } = useQuery<{ id: string; name: string }>(
-    "SELECT id, name FROM trial_forms WHERE id = ? AND deleted_at IS NULL",
-    [formId],
-  );
-  const form = formRows[0];
-
   const [snapshot, setSnapshot] = useState<TrialFormSnapshot | null>(null);
   const [foreignChanges, setForeignChanges] = useState<ReadonlySet<string>>(EMPTY_SET);
   const [pending, setPending] = useState<Record<string, PendingValue>>({});
@@ -131,7 +124,9 @@ export function TrialFormPage({ formId }: { formId: string }) {
     [store, formId],
   );
 
-  if (!isLoading && !form) {
+  const form = snapshot?.form ?? null;
+
+  if (snapshot && !form) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
         <Link

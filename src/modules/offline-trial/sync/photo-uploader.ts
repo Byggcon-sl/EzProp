@@ -5,22 +5,16 @@
  * og nettet finnes, sendes bilder uten `uploaded_at` fra denne enheten ett om gangen. Den lokale
  * filen slettes bare når serveren svarte 200 og fingeravtrykket er likt (`shouldReleaseLocalPhoto`).
  * Alt annet: filen blir liggende og prøves igjen på neste runde.
+ *
+ * Kandidatuavhengig: bruker bare `listPendingPhotos`, `markPhotoUploaded` og `onStatusChange`
+ * fra `TrialSyncStore`. `markPhotoUploaded` skriver bare lokalt, aldri i endringskøen.
  */
-import type { AbstractPowerSyncDatabase } from "@powersync/web";
 import { isUuid } from "@/shared/lib/uuid";
 import { shouldReleaseLocalPhoto } from "./photo-upload";
 import { deleteLocalPhoto, getLocalPhoto } from "./photo-store";
-import type { PhotoUploadResponse } from "./types";
+import type { PhotoUploadResponse, TrialPhotoRow, TrialSyncStore } from "./types";
 
 export const PHOTO_UPLOAD_INTERVAL_MS = 10_000;
-
-interface PendingPhoto {
-  id: string;
-  trial_form_id: string;
-  field_key: string;
-  name: string;
-  size_bytes: number;
-}
 
 async function sha256Hex(blob: Blob): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
@@ -29,13 +23,13 @@ async function sha256Hex(blob: Blob): Promise<string> {
 
 async function send(
   organizationId: string,
-  photo: PendingPhoto,
+  photo: TrialPhotoRow,
   blob: Blob,
 ): Promise<PhotoUploadResponse | undefined> {
   const params = new URLSearchParams({
     organisasjon: organizationId,
-    skjema: photo.trial_form_id,
-    felt: photo.field_key,
+    skjema: photo.trialFormId,
+    felt: photo.fieldKey,
     navn: photo.name,
     bytes: String(blob.size),
   });
@@ -60,16 +54,10 @@ async function send(
 
 /** Én runde gjennom køen. Gir antall bilder som ble bekreftet av serveren. */
 export async function uploadPendingPhotos(
-  db: AbstractPowerSyncDatabase,
-  deviceId: string,
+  store: TrialSyncStore,
   organizationId: string,
 ): Promise<number> {
-  const pending = await db.getAll<PendingPhoto>(
-    `SELECT id, trial_form_id, field_key, name, size_bytes FROM trial_photos
-     WHERE uploaded_at IS NULL AND device_id = ? AND deleted_at IS NULL
-     ORDER BY created_at, id`,
-    [deviceId],
-  );
+  const pending = await store.listPendingPhotos();
   let released = 0;
   for (const photo of pending) {
     if (typeof navigator !== "undefined" && !navigator.onLine) break;
@@ -79,10 +67,7 @@ export async function uploadPendingPhotos(
     const localSha = await sha256Hex(blob);
     const response = await send(organizationId, photo, blob);
     if (!shouldReleaseLocalPhoto(localSha, response)) continue;
-    await db.execute("UPDATE trial_photos SET uploaded_at = ? WHERE id = ?", [
-      new Date().toISOString(),
-      photo.id,
-    ]);
+    await store.markPhotoUploaded(photo.id, localSha);
     await deleteLocalPhoto(photo.id);
     released++;
   }
@@ -90,14 +75,10 @@ export async function uploadPendingPhotos(
 }
 
 /**
- * Starter opplasteren: ved `online`, ved nye bilderader og hvert 10. sekund. Bare én runde om
- * gangen. Returnerer stopp.
+ * Starter opplasteren: ved `online`, ved statusvarsel fra lageret og hvert 10. sekund. Bare én
+ * runde om gangen. Returnerer stopp.
  */
-export function startPhotoUploader(
-  db: AbstractPowerSyncDatabase,
-  deviceId: string,
-  organizationId: string,
-): () => void {
+export function startPhotoUploader(store: TrialSyncStore, organizationId: string): () => void {
   let running = false;
   let again = false;
   let stopped = false;
@@ -112,7 +93,7 @@ export function startPhotoUploader(
     try {
       do {
         again = false;
-        await uploadPendingPhotos(db, deviceId, organizationId);
+        await uploadPendingPhotos(store, organizationId);
       } while (again && !stopped);
     } catch {
       console.warn("Bildekø: runden feilet. Prøver igjen senere.");
@@ -124,15 +105,13 @@ export function startPhotoUploader(
   const onOnline = () => void tick();
   window.addEventListener("online", onOnline);
   const interval = setInterval(() => void tick(), PHOTO_UPLOAD_INTERVAL_MS);
-  const disposeChange = db.onChange(
-    { onChange: () => void tick() },
-    { tables: ["trial_photos"], throttleMs: 200, triggerImmediate: true },
-  );
+  const disposeStatus = store.onStatusChange(() => void tick());
+  void tick();
 
   return () => {
     stopped = true;
     window.removeEventListener("online", onOnline);
     clearInterval(interval);
-    disposeChange();
+    disposeStatus();
   };
 }

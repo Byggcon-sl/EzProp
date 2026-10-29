@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page } from "@playwright/test";
+import { expect, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
 /** Første admin fra seed (SEED_ADMIN_EMAIL i CI og .env.example). */
 export const ADMIN_EMAIL = "admin@byggcon.no";
@@ -55,10 +55,16 @@ export interface OfflineTrialHook {
   simulateOrganizationChange?: (organizationId: string) => Promise<void> | void;
 }
 
-/** Venter til testkroken og den lokale databasen er klare på siden. */
+/**
+ * Venter til testkroken og lageret er klare på siden. Venter på `store` (finnes for alle kandidater;
+ * PowerSync-kroken har i tillegg `db`, så dagens tester går som før).
+ */
 export async function waitForTrialHook(page: Page) {
   await page.waitForFunction(
-    () => Boolean((window as unknown as { __offlineTrial?: OfflineTrialHook }).__offlineTrial?.db),
+    () =>
+      Boolean(
+        (window as unknown as { __offlineTrial?: { store?: unknown } }).__offlineTrial?.store,
+      ),
     undefined,
     { timeout: 15_000 },
   );
@@ -81,11 +87,15 @@ export async function queryLocal<T = Record<string, unknown>>(
   );
 }
 
-/** Leser en verdi fra testkroken (`deviceId`, `organizationId`). */
-export async function hookValue(page: Page, key: "deviceId" | "organizationId"): Promise<string> {
+/** Leser en verdi fra testkroken (`deviceId`, `organizationId`, `candidate`). */
+export async function hookValue(
+  page: Page,
+  key: "deviceId" | "organizationId" | "candidate",
+): Promise<string> {
   await waitForTrialHook(page);
   const value = await page.evaluate(
-    (name) => (window as unknown as { __offlineTrial: OfflineTrialHook }).__offlineTrial[name],
+    (name) =>
+      (window as unknown as { __offlineTrial: Record<string, unknown> }).__offlineTrial[name],
     key,
   );
   if (typeof value !== "string" || value === "") throw new Error(`Testkroken mangler ${key}`);
@@ -164,4 +174,136 @@ export async function localPhotoFileCount(page: Page): Promise<number> {
       };
     });
   });
+}
+
+// --- Kandidat 2, ElectricSQL (docs/funksjoner/fase1-kandidat-electricsql-testplan.md avsnitt 6) ---
+
+export type TrialSyncCandidate = "powersync" | "electricsql";
+export type TrialTable = "trial_forms" | "trial_answers" | "trial_photos";
+/** ElectricSQL-lageret har i tillegg synkposisjonen og endringskøen som egne lagre. */
+export type HookTable = TrialTable | "shape_state" | "outbox";
+export type LocalRow = Record<string, unknown>;
+
+/**
+ * Den delte testkroken `window.__offlineTrial` (`sync/test-hooks.ts`), lik for begge kandidater.
+ * PowerSync har i tillegg `db` og `pendingOverride` (se `OfflineTrialHook`).
+ */
+export interface ElectricTrialHook {
+  candidate: TrialSyncCandidate;
+  store: {
+    status(): Promise<{ online: boolean; pendingChanges: number; pendingPhotos: number }>;
+  };
+  deviceId: string;
+  organizationId: string;
+  applySyncedRows(table: TrialTable, rows: LocalRow[]): Promise<void>;
+  readRows(table: HookTable, formId?: string): Promise<LocalRow[]>;
+  simulateOrganizationChange(organizationId: string): Promise<void> | void;
+  createTextState(text: string): string;
+  db?: unknown;
+}
+
+/** Velger kandidat før hver side lastes (`localStorage.trial_sync_candidate`). Kalles før `logIn`. */
+export async function useCandidate(context: BrowserContext, candidate: TrialSyncCandidate) {
+  await context.addInitScript((value) => {
+    window.localStorage.setItem("trial_sync_candidate", value);
+  }, candidate);
+}
+
+/** Leser radene i et lokalt lager via testkroken (`hook.readRows`). */
+export async function readRowsViaHook(
+  page: Page,
+  table: HookTable,
+  formId?: string,
+): Promise<LocalRow[]> {
+  await waitForTrialHook(page);
+  return page.evaluate(
+    async ([name, id]) => {
+      const hook = (window as unknown as { __offlineTrial: ElectricTrialHook }).__offlineTrial;
+      return hook.readRows(name, id ?? undefined);
+    },
+    [table, formId ?? null] as const,
+  );
+}
+
+/**
+ * Legger rader inn som om synk leverte dem fra serveren (`hook.applySyncedRows`, samme vei som en
+ * shape-melding). Rader i snake_case; `trial_answers` upsertes på `(trial_form_id, field_key)`.
+ */
+export async function applySyncedRowsViaHook(page: Page, table: TrialTable, rows: LocalRow[]) {
+  await waitForTrialHook(page);
+  await page.evaluate(
+    async ([name, list]) => {
+      const hook = (window as unknown as { __offlineTrial: ElectricTrialHook }).__offlineTrial;
+      await hook.applySyncedRows(name, list);
+    },
+    [table, rows] as const,
+  );
+}
+
+/** Antall endringer som venter på serverens bekreftelse (`store.status().pendingChanges`). */
+export async function pendingChanges(page: Page): Promise<number> {
+  await waitForTrialHook(page);
+  return page.evaluate(async () => {
+    const hook = (window as unknown as { __offlineTrial: ElectricTrialHook }).__offlineTrial;
+    return (await hook.store.status()).pendingChanges;
+  });
+}
+
+export interface RecordedRequest {
+  url: URL;
+  status: number | null;
+}
+
+/** Enkel glob: `**` er hva som helst, `*` hva som helst unntatt «/». */
+function globToRegExp(glob: string): RegExp {
+  let pattern = "";
+  for (let i = 0; i < glob.length; i++) {
+    const char = glob[i]!;
+    if (char === "*" && glob[i + 1] === "*") {
+      pattern += ".*";
+      i++;
+    } else if (char === "*") {
+      pattern += "[^/]*";
+    } else {
+      pattern += char.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+  return new RegExp(`^${pattern}$`);
+}
+
+/**
+ * Teller forespørsler fra siden mot adresser som passer `urlGlob` (f.eks. kall mot
+ * `/api/prove/synk/shape`), med status når svaret er kommet. Registreres før `goto`.
+ */
+export function countRequests(page: Page, urlGlob: string) {
+  const matcher = globToRegExp(urlGlob);
+  const requests: RecordedRequest[] = [];
+  const byRequest = new Map<unknown, RecordedRequest>();
+  page.on("request", (request) => {
+    if (!matcher.test(request.url())) return;
+    const entry: RecordedRequest = { url: new URL(request.url()), status: null };
+    requests.push(entry);
+    byRequest.set(request, entry);
+  });
+  page.on("response", (response) => {
+    const entry = byRequest.get(response.request());
+    if (entry) entry.status = response.status();
+  });
+  page.on("requestfailed", (request) => {
+    const entry = byRequest.get(request);
+    if (entry) entry.status = 0;
+  });
+  return {
+    requests,
+    count: () => requests.length,
+    /** Antall kall per verdi av `param` i spørrestrengen (f.eks. `tabell`). */
+    countBy: (param: string) => {
+      const counts: Record<string, number> = {};
+      for (const entry of requests) {
+        const key = entry.url.searchParams.get(param) ?? "";
+        counts[key] = (counts[key] ?? 0) + 1;
+      }
+      return counts;
+    },
+  };
 }

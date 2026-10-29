@@ -148,7 +148,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 - [x] Testoppsett: to iPad Pro, appen lagt på hjemskjermen (PWA), et testskjema med ca. 40 felt (tekst, TG, valg, tall, tabell) og bildefelt (PR #6, 28.10.2026)
 - [ ] Kandidater satt opp mot samme testskjema: **PowerSync**, **ElectricSQL** og eventuelt andre (Claudes forslag: én enkel egenbygd løsning med lokal database og endringskø, som sammenligningsgrunnlag). Tekstfletting med Yjs eller tilsvarende.
   - [x] Kandidat 1, PowerSync, med tekstfletting (Yjs), protokoll og resultatmal for prøve A og B (PR #8, 28.10.2026, `docs/funksjoner/fase1-kandidat-powersync.md`)
-  - [ ] Kandidat 2, ElectricSQL, på samme skjema og samme protokoll
+  - [x] Kandidat 2, ElectricSQL, på samme skjema og samme protokoll (PR #10, 29.10.2026, `docs/funksjoner/fase1-kandidat-electricsql.md`)
   - [ ] Kandidat 3, egenbygd (lokal database og endringskø), på samme skjema og samme protokoll
 - [ ] **Prøve A – én takstmann uten nett (må):** flymodus i 30 minutter, alle felt fylles ut, 200 bilder tas, appen lukkes og åpnes igjen, iPaden startes på nytt. Når nettet kommer: alt synkroniseres, ingenting går tapt.
 - [ ] **Prøve B – to i samme rapport (bør):** to iPader endrer samme kontrollpunkt samtidig. Tekst flettes. TG, valg og tall følger «siste endring vinner», og den andre får varsel.

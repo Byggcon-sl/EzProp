@@ -8,10 +8,19 @@
  */
 import type { Actor } from "@/core/access";
 import type { TrialAnswerRecord, TrialFormRecord } from "@/db/schema";
+import type { TrialTableName } from "../sync/local-columns";
 
-/** Tabellene synken får skrive til. Alt annet gir `InvalidTrialChangeError`. */
+/** Tabellene synken får skrive til og lese fra. Alt annet gir `InvalidTrialChangeError`. */
 export const TRIAL_CHANGE_TABLES = ["trial_forms", "trial_answers", "trial_photos"] as const;
 export type TrialChangeTable = (typeof TRIAL_CHANGE_TABLES)[number];
+/** Samme liste som klienten bruker lokalt (`sync/local-columns.ts`); typene skal være like. */
+type _TablesMatch = TrialChangeTable extends TrialTableName
+  ? TrialTableName extends TrialChangeTable
+    ? true
+    : never
+  : never;
+const _tablesMatch: _TablesMatch = true;
+void _tablesMatch;
 
 /** `DELETE` er bevisst ikke med: ingen skjerm sletter noe i prøven. Den gir 400. */
 export type TrialChangeOp = "PUT" | "PATCH";
@@ -127,3 +136,73 @@ export type StoreTrialPhoto = (
   meta: TrialPhotoMeta,
   bytes: Uint8Array,
 ) => Promise<StoreTrialPhotoResult>;
+
+// Kandidat 2 (ElectricSQL): proxy-ruten `GET /api/prove/synk/shape`
+// (docs/funksjoner/fase1-kandidat-electricsql.md pkt. 9 og avgjørelse B).
+
+/**
+ * Det eneste klienten får sende videre til Electric, etter formatsjekk. Alt annet i spørrestrengen
+ * (`table`, `where`, `columns`, `params[1]`, `replica`, `secret`, `api_secret`, …) overses.
+ */
+export const SHAPE_CLIENT_PARAMS = ["offset", "handle", "live", "cursor"] as const;
+export type ShapeClientParam = (typeof SHAPE_CLIENT_PARAMS)[number];
+/** `offset`, `handle` og `cursor` må passe mønsteret; `live` må være nøyaktig `true`. Ellers 400. */
+export const SHAPE_PARAM_PATTERN = /^[A-Za-z0-9_.-]+$/;
+
+/** Filteret i hver shape. `$1` er alltid `grant.organizationId`, sendt som `params[1]`, aldri limt inn. */
+export const SHAPE_WHERE = "organization_id = $1 AND deleted_at IS NULL";
+
+/**
+ * Hodene fra Electric som når klienten. `ETag`, `Age`, `Expires` og Electrics `Cache-Control`
+ * gjør det aldri; proxyen setter alltid `Cache-Control: private, no-store`.
+ */
+export const SHAPE_FORWARDED_HEADERS = [
+  "content-type",
+  "electric-handle",
+  "electric-offset",
+  "electric-schema",
+  "electric-cursor",
+  "electric-up-to-date",
+] as const;
+export const SHAPE_CACHE_CONTROL = "private, no-store";
+
+/** Statusene fra Electric som videresendes uendret. Nettverksfeil og tidsavbrudd gir 502 `{ feil }`. */
+export const SHAPE_FORWARDED_STATUSES = [200, 204, 400, 409, 429] as const;
+
+/** Lang-polling (`live=true`) varer opptil ca. 20 s hos Electric; proxyen gir opp litt senere. */
+export const SHAPE_UPSTREAM_TIMEOUT_MS = 30_000;
+
+/** `ELECTRIC_SECRET`: minst 32 byte; utviklingsverdien fra `.env.example` nektes utenfor localhost. Aldri med `NEXT_PUBLIC_`. */
+export const ELECTRIC_SECRET_MIN_BYTES = 32;
+
+/**
+ * `server/electric-shape.ts`. Rekkefølge: `requireOrganizationAccess(actor, organizationId,
+ * "organization.read")` → tabellsjekk (bare `TRIAL_CHANGE_TABLES`, ellers `InvalidTrialChangeError`
+ * uten kall) → `new URL(ELECTRIC_URL + "/v1/shape")` med `searchParams.set` for `table`, `where`
+ * (`SHAPE_WHERE`), `params[1]` = `grant.organizationId`, `columns` = `localColumnsOf(table)` (aldri
+ * `storage_path`, `created_by`, `updated_by`, `deleted_by`), `secret` = `ELECTRIC_SECRET`, og til
+ * slutt de av `SHAPE_CLIENT_PARAMS` som finnes i `clientParams` og passer `SHAPE_PARAM_PATTERN`.
+ * Ulovlig format gir `InvalidTrialChangeError`. `organizationId` fra adressen brukes bare til
+ * tilgangssjekken.
+ */
+export type BuildTrialShapeRequest = (
+  actor: Actor,
+  organizationId: string,
+  table: string,
+  clientParams: URLSearchParams,
+) => Promise<{ url: URL }>;
+
+/**
+ * `server/electric-shape.ts`. Kaller `buildTrialShapeRequest` og henter fra Electric med
+ * `fetchImpl` (byttes i testene). Svaret har bare `SHAPE_FORWARDED_HEADERS` og
+ * `Cache-Control: SHAPE_CACHE_CONTROL`; statusene i `SHAPE_FORWARDED_STATUSES` og kroppen
+ * strømmes uendret. Nettverksfeil eller tidsavbrudd gir 502 med `{ feil }` uten Electrics tekst og
+ * uten ny prøving. `ELECTRIC_URL` og `ELECTRIC_SECRET` står aldri i noe svar. Logger bare rute,
+ * bruker-id, tabellnavn og status, aldri spørrestrengen.
+ */
+export type ForwardTrialShape = (
+  actor: Actor,
+  organizationId: string,
+  searchParams: URLSearchParams,
+  fetchImpl?: typeof fetch,
+) => Promise<Response>;
