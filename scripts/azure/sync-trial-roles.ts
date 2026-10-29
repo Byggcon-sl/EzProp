@@ -5,7 +5,8 @@
  * Kjøres alltid av `deploy-azure.yml` etter migrering og seed:
  * - Bryteren på: lager `powersync_repl` og `electric_repl` (bare SELECT på de tre
  *   `trial_*`-tabellene), PowerSyncs lagringsdatabase, og sjekker at rollene ikke ser mer.
- * - Bryteren av: sletter bare ubrukte replikeringsplasser fra synktjenestene.
+ * - Bryteren av: sletter bare ubrukte logiske replikeringsplasser fra synktjenestene i
+ *   denne databasen. Fysiske plasser og plasser i andre databaser røres ikke.
  *
  * Passord logges aldri og står aldri i SQL-tekst her. De settes inn på serveren med
  * `format(… %L, $1)`. Feilmeldinger nevner navn, aldri verdier.
@@ -61,12 +62,17 @@ export const readSyncTrialRolesInput: ReadSyncTrialRolesInput = (env) => {
   };
 };
 
-/** Sletter ubrukte replikeringsplasser fra PowerSync og Electric. Rører ingen andre. */
+/**
+ * Sletter bare ubrukte logiske replikeringsplasser fra synktjenestene i denne databasen.
+ * Fysiske plasser (database er null) og plasser i andre databaser røres ikke.
+ */
 async function dropUnusedSlots(sql: Sql): Promise<string[]> {
   const [powerSyncPattern, electricPattern] = SYNC_TRIAL_SLOT_PATTERNS;
   const slots = await sql<{ slot_name: string }[]>`
     select slot_name from pg_replication_slots
-    where not active and (slot_name like ${powerSyncPattern} or slot_name like ${electricPattern})
+    where not active
+      and database = current_database()
+      and (slot_name like ${powerSyncPattern} or slot_name like ${electricPattern})
     order by slot_name`;
   const dropped: string[] = [];
   for (const { slot_name } of slots) {
@@ -203,25 +209,24 @@ async function assertOnlyTrialTablesReadable(sql: Sql): Promise<void> {
 }
 
 export const applySyncTrialRoles: ApplySyncTrialRoles = async (input) => {
-  const passwords: Record<SyncTrialRoleName, string> | null = input.enabled
-    ? {
-        powersync_repl: assertValidPassword(
-          PASSWORD_ENV_NAMES.powersync_repl,
-          input.powerSyncDbPassword,
-        ),
-        electric_repl: assertValidPassword(
-          PASSWORD_ENV_NAMES.electric_repl,
-          input.electricDbPassword,
-        ),
-      }
-    : null;
-
+  // postgres() kobler først ved første spørring, så valideringen under skjer før tilkobling.
   const sql = postgres(input.adminDatabaseUrl, { max: 1, onnotice: () => {} });
   try {
-    if (!input.enabled || !passwords) {
+    if (!input.enabled) {
       const droppedSlots = await dropUnusedSlots(sql);
       return { enabled: false, rolesEnsured: [], storageDatabaseCreated: false, droppedSlots };
     }
+
+    const passwords: Record<SyncTrialRoleName, string> = {
+      powersync_repl: assertValidPassword(
+        PASSWORD_ENV_NAMES.powersync_repl,
+        input.powerSyncDbPassword,
+      ),
+      electric_repl: assertValidPassword(
+        PASSWORD_ENV_NAMES.electric_repl,
+        input.electricDbPassword,
+      ),
+    };
 
     const [session] = await sql<{ database: string; superuser: boolean }[]>`
       select current_database() as database,
