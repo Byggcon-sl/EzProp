@@ -20,6 +20,7 @@ const STATUS_POLL_MS = 2000;
 const CANDIDATE_LABELS: Record<TrialSyncCandidate, string> = {
   powersync: "PowerSync",
   electricsql: "ElectricSQL",
+  custom: "Egenbygd",
 };
 
 /** Status fra lageret, oppdatert ved varsel og hvert 2. sekund. Null til første svar. */

@@ -2,6 +2,14 @@
 
 Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte tid. Nyeste øverst. Får Ståle stadig de samme kommentarene, legges de inn som regel i den aktuelle agentbeskrivelsen.
 
+## 29.10.2026 – Fase 1, kandidat 3 egenbygd (PR #11, før merge)
+
+- Kjøringen som startet oppgaven, stoppet etter at bitene var satt sammen, uten at Vitest og e2e var kjørt på det sammensatte. Neste kjøring fant 3 røde Vitest-tester og 3 røde e2e-tester. Regel: kjør `pnpm test` med en gang etter sammensetting, og skriv resultatet i tilstandsfilen før neste steg.
+- Utvikler og testskriver skrev hvert sitt sett med tester for samme kode (`.impl.test.ts` ved siden av `.test.ts`), over 1 000 linjer dobbelt. Regel: utvikleren skriver ikke egne testfiler når testskriveren har oppgaven; utvikleren gir heller testskriveren en liste over grensetilfeller.
+- Falske tidtakere i Vitest gjør en tidtaker på 0 ms om til 1 ms når den settes under en tick. Henting «med en gang» går derfor via et løfte, ikke en tidtaker.
+- Begge e2e-feilene lå i testene: testkroken finnes bare på skjemasiden, og en test hang på tidsforløpet. Sjekk først om testen venter på riktig side og riktig tilstand før koden endres.
+- Modellnavn i commit-meldinger (`Co-Authored-By`) har kommet inn på `main` og på flere brancher. Nye commits skrives uten. Gamle skrives ikke om.
+
 ## 29.10.2026 – Modellbytte når kvoten er brukt opp (PR #9)
 
 - Lederrollene hadde fast modell i `.claude/agents/`. Da kvoten for ledermodellen var brukt opp, ville arbeidsflytene stoppe selv om rutinen ble flyttet til en annen modell. Lederne arver nå modellen fra rutinen (`model: inherit`). Bytte modell gjøres bare på rutinen. Utøverne har fortsatt fast modell.

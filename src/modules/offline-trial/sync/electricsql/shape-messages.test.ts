@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { localRowKey } from "./outbox";
+import { localRowKey } from "../local/outbox";
 import { nextShapeParams, parseShapeMessages, readShapeHeaders } from "./shape-messages";
 
 // Tolking av meldingene fra Electric slik proxyen videresender dem (docs/funksjoner/

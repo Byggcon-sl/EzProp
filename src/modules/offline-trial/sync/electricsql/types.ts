@@ -8,10 +8,12 @@
  * med en endringskø vi eier selv (`OutboxMachine` i `sync/types.ts`).
  *
  * Lokal lagring: IndexedDB-databasen `offline-trial-electric` (rått API, ingen PGlite, ingen
- * wasm). Bildefilene ligger som før i `offline-trial-photos`.
+ * wasm), åpnet med `createLocalDb` fra den lokale kjernen (`sync/local/`). Skriving, kø og
+ * innfletting ligger i kjernen (`createLocalTrialStore`); her ligger bare skjemaleseren.
+ * Bildefilene ligger som før i `offline-trial-photos`.
  */
 import type { TrialTableName } from "../local-columns";
-import type { IncomingChange, OutboxEntry, TrialSyncStore, TrialSyncTestable } from "../types";
+import type { IncomingChange, TrialSyncStore, TrialSyncTestable } from "../types";
 
 export const ELECTRIC_DB_NAME = "offline-trial-electric";
 
@@ -99,12 +101,6 @@ export interface ParsedShapeBody {
 }
 
 export type ParseShapeBody = (table: TrialTableName, body: unknown) => ParsedShapeBody;
-
-/** Bunten slik den sendes til `POST /api/prove/synk/endringer` (uten `seq`). */
-export type OutboxBatchBody = (
-  organizationId: string,
-  batch: readonly OutboxEntry[],
-) => { organizationId: string; operations: Omit<OutboxEntry, "seq">[] };
 
 /**
  * `sync/electricsql/store.ts`: `createElectricTrialStore(deviceId, organizationId)`.
