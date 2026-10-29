@@ -768,7 +768,11 @@ test.describe("egenbygd uten service worker", () => {
       // Henting blokkerer aldri skriving: skrivingen kommer fram mens hentingen feiler
       await floorsInput(page).fill("7");
       await expectCount(page, 1);
-      await waitAllSaved(page);
+      // Hentingen svarer 500, så serveren bekrefter aldri: «Alt er lagret» kan ikke vises her
+      await expect
+        .poll(() => pendingChanges(page), { timeout: 15_000, message: "køen tømmes" })
+        .toBe(0);
+      await expect(indicator(page)).toHaveText(AWAITING_SERVER);
     } finally {
       await page.unroute(isPullUrl);
     }
