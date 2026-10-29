@@ -9,10 +9,10 @@ import {
   failChangesOnce,
   hookValue,
   indicator,
+  isPullUrl,
   logIn,
   logInAsInspector,
   pendingChanges,
-  PULL_PATH,
   recordPulls,
   savedAt,
   setSavedAt,
@@ -42,7 +42,7 @@ const DIR = path.dirname(fileURLToPath(import.meta.url));
 const TEST_IMAGE = path.join(DIR, "fixtures", "test-image.png");
 const CANDIDATES = ["powersync", "electricsql", "custom"] as const;
 const CHANGES_ROUTE = `**${CHANGES_PATH}`;
-const PULL_ROUTE = `**${PULL_PATH}`;
+const PULL_ROUTE = isPullUrl;
 const PHOTO_ROUTE = "**/api/prove/bilder/**";
 
 const ALL_SAVED = "Alt er lagret";
