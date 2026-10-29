@@ -126,4 +126,19 @@ describe("parseTrialNumber", () => {
       expect(parseTrialNumber(input), JSON.stringify(input)).toBeNull();
     }
   });
+
+  // Prøve E: verdiene prøvereglene bruker (docs/funksjoner/fase1-prove-e-regler.md pkt. 8,
+  // testplan 2.4). Funksjonen skal ikke endres; feiler en sak, er det et funn.
+  it("parseTrialNumber leser verdiene prøvereglene bruker", () => {
+    expect(parseTrialNumber("42")).toBe(42);
+    expect(parseTrialNumber("42,0")).toBe(42);
+    expect(parseTrialNumber("42.01")).toBe(42.01);
+    expect(parseTrialNumber("7,5")).toBe(7.5);
+    expect(parseTrialNumber("-1")).toBe(-1);
+  });
+
+  it("parseTrialNumber avviser ugyldig tekst fra prøvereglene", () => {
+    expect(parseTrialNumber("12,")).toBeNull();
+    expect(parseTrialNumber("1e3")).toBeNull();
+  });
 });
