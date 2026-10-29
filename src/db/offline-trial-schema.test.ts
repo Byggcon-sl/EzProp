@@ -1,6 +1,10 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
+import { runMigrations } from "@/db/run-migrations";
 import { trialAnswers, trialForms } from "@/db/schema";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { createOrganization, resetDatabase } from "../../tests/factories";
@@ -82,26 +86,24 @@ describe("migreringen for prøven uten nett", () => {
     expect(rows[0]!.puballtables).toBe(false);
   });
 
-  it("migreringen 0002 gir REPLICA IDENTITY FULL på de tre trial-tabellene", async () => {
-    const rows = await db.execute<{ relname: string; relreplident: string }>(
-      sql`select relname, relreplident from pg_class
-          where relname in ('trial_forms', 'trial_answers', 'trial_photos') and relkind = 'r'`,
-    );
-    const identities = Object.fromEntries(
-      Array.from(rows).map((row) => [row.relname, row.relreplident]),
-    );
-    expect(identities).toEqual({ trial_forms: "f", trial_answers: "f", trial_photos: "f" });
+  // Migreringen 0002 (testplan for kandidat 2, avsnitt 3.3). Navnene er fra testplanen.
+
+  it("publikasjonen electric_publication_default har nøyaktig trial_forms, trial_answers og trial_photos", async () => {
+    const tables = await electricPublicationTables();
+    expect(tables).toEqual(["trial_answers", "trial_forms", "trial_photos"]);
+    for (const secret of [
+      "users",
+      "sessions",
+      "verifications",
+      "accounts",
+      "employees",
+      "organizations",
+    ]) {
+      expect(tables).not.toContain(secret);
+    }
   });
 
-  it("publikasjonen electric_publication_default har nøyaktig de tre trial-tabellene, ikke FOR ALL TABLES", async () => {
-    const tables = Array.from(
-      await db.execute<{ tablename: string }>(
-        sql`select tablename from pg_publication_tables where pubname = 'electric_publication_default'`,
-      ),
-    )
-      .map((row) => row.tablename)
-      .sort();
-    expect(tables).toEqual(["trial_answers", "trial_forms", "trial_photos"]);
+  it("publikasjonen electric_publication_default er ikke FOR ALL TABLES", async () => {
     const publication = Array.from(
       await db.execute<{ puballtables: boolean }>(
         sql`select puballtables from pg_publication where pubname = 'electric_publication_default'`,
@@ -110,4 +112,67 @@ describe("migreringen for prøven uten nett", () => {
     expect(publication).toHaveLength(1);
     expect(publication[0]!.puballtables).toBe(false);
   });
+
+  it("de tre trial-tabellene har REPLICA IDENTITY FULL", async () => {
+    const rows = await db.execute<{ relname: string; relreplident: string }>(
+      sql`select c.relname, c.relreplident from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'public' and c.relkind = 'r'
+            and c.relname in ('trial_forms', 'trial_answers', 'trial_photos')`,
+    );
+    const identities = Object.fromEntries(
+      Array.from(rows).map((row) => [row.relname, row.relreplident]),
+    );
+    expect(identities).toEqual({ trial_forms: "f", trial_answers: "f", trial_photos: "f" });
+  });
+
+  it("ingen andre tabeller har fått REPLICA IDENTITY FULL", async () => {
+    const rows = Array.from(
+      await db.execute<{ relname: string; relreplident: string }>(
+        sql`select c.relname, c.relreplident from pg_class c
+            join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'public' and c.relkind in ('r', 'p')
+              and c.relname not in ('trial_forms', 'trial_answers', 'trial_photos')`,
+      ),
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    const changed = rows.filter((row) => row.relreplident !== "d").map((row) => row.relname);
+    expect(changed).toEqual([]);
+  });
+
+  it("migreringen kjører to ganger uten feil", async () => {
+    // Valgt vei: Drizzle-journalen hindrer dobbeltkjøring (CREATE PUBLICATION er ikke idempotent).
+    // global-setup har migrert testdatabasen; her kjøres migreringene én gang til.
+    // setup-env.ts har satt DATABASE_URL til testdatabasen (testDatabaseUrl() nekter da).
+    const url = process.env.DATABASE_URL!;
+    expect(url).toBe(process.env.TEST_DATABASE_URL);
+    await expect(runMigrations(url)).resolves.toBeUndefined();
+
+    const text = readFileSync(
+      path.resolve(process.cwd(), "src/db/migrations/0002_electric-utsnitt.sql"),
+      "utf8",
+    );
+    const hash = createHash("sha256").update(text).digest("hex");
+    const rows = Array.from(
+      await db.execute<{ hash: string }>(
+        sql`select hash from drizzle.__drizzle_migrations where hash = ${hash}`,
+      ),
+    );
+    expect(rows).toHaveLength(1);
+    expect(await electricPublicationTables()).toEqual([
+      "trial_answers",
+      "trial_forms",
+      "trial_photos",
+    ]);
+  });
 });
+
+async function electricPublicationTables(): Promise<string[]> {
+  return Array.from(
+    await db.execute<{ tablename: string }>(
+      sql`select tablename from pg_publication_tables where pubname = 'electric_publication_default'`,
+    ),
+  )
+    .map((row) => row.tablename)
+    .sort();
+}
