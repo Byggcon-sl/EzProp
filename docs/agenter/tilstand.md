@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 29.10.2026 (prøve E levert som PR, versjon 0.2.13)
+Sist oppdatert: 29.10.2026 kl. 22:30 (PR #21, #22 og #23 merget; ingen åpne PR-er)
 
 ## Gjeldende fase
 
@@ -12,7 +12,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Levert: Prøve E – regler uten nett**, **PR #23** (branch `fase1-prove-e-regler` fra `main`, versjon 0.2.13). Oppgavekort `docs/funksjoner/fase1-prove-e-regler.md`, testplan `docs/funksjoner/fase1-prove-e-regler-testplan.md`, resultatmal for ekte iPad `docs/funksjoner/fase1-prove-e-regler-resultat.md`. To prøveregler som data (oppdiktede tall 7 år og 42 %), én regelmotor for nettleser og server, regelsvar under feltene, ruten `/api/prove/regler`, 14 testsaker. Roller: forenkler, fagansvarlig, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en. Punktet er krysset av i planen. Spørsmål nr. 13 (ekte tall), ikke blokkerende. Støtter tid og reklamasjoner.
+**Levert: Prøve E – regler uten nett**, **PR #23** (merget 29.10.2026; branch `fase1-prove-e-regler` fra `main`, versjon 0.2.13). Oppgavekort `docs/funksjoner/fase1-prove-e-regler.md`, testplan `docs/funksjoner/fase1-prove-e-regler-testplan.md`, resultatmal for ekte iPad `docs/funksjoner/fase1-prove-e-regler-resultat.md`. To prøveregler som data (oppdiktede tall 7 år og 42 %), én regelmotor for nettleser og server, regelsvar under feltene, ruten `/api/prove/regler`, 14 testsaker. Roller: forenkler, fagansvarlig, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en. Punktet er krysset av i planen. Spørsmål nr. 13 (ekte tall), ikke blokkerende. Støtter tid og reklamasjoner.
 
 **Levert: Synkstatus som alltid vises**, **PR #21** (merget 29.10.2026 kl. 19:44; branch `fase1-synkstatus`, bygger på `main`, versjon 0.2.11). Oppgavekort `docs/funksjoner/fase1-synkstatus.md`, skisse `docs/funksjoner/fase1-synkstatus-skisse.md`, testplan `docs/funksjoner/fase1-synkstatus-testplan.md`. Måleindikatoren er erstattet av `sync-status.tsx` for alle tre kandidatene. Roller: forenkler, ux-ansvarlig, test-leder, ui-designer, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
@@ -32,11 +32,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 ## Åpne PR-er
 
-| PR | Oppgave | Status | Bygger på |
-|---|---|---|---|
-| #23 | Prøve E – regler uten nett (versjon 0.2.13) | Klar, merges med skriptet når CI er grønn | main |
-
-PR #16–#21 er merget 29.10.2026.
+Ingen åpne PR-er. PR #16–#23 er merget 29.10.2026 (#23: prøve E, versjon 0.2.13).
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -55,6 +51,8 @@ Ingen ennå.
 Ingen.
 
 ## Siste kjøring
+
+29.10.2026 kl. 18:40–22:30: hovedløkken ventet på CI og merget PR #21 (synkstatus) med skriptet, og kjørte prøve E med arbeidsflyten «oppgave» til PR #23 (merget med skriptet, CI grønn, ingen alvorlige funn, 11 små funn i PR-en). Neste: liten oppgave med småfunnene fra PR #21 og #23 (se «Neste»), deretter prøve C, D (etter svar på nr. 8) og F. Sesjon: https://claude.ai/code/session_01Jqwnu3Rs4hsNXmsS1zrwe5
 
 29.10.2026: prosjektleder laget branchen `fase1-prove-e-regler`, oppgavekortet for prøve E og spørsmål nr. 13. `parseTrialNumber` var allerede streng (oppgave 4); kortet ber bare om flere testsaker. Sesjon: https://claude.ai/code/session_01Jqwnu3Rs4hsNXmsS1zrwe5
 29.10.2026: prosjektleder rettet oppgavekortet for prøve E etter forenkler, fagansvarlig og test-leder, og la til nr. 13 c (verdi lik grensen).
