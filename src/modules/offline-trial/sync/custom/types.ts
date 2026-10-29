@@ -32,12 +32,6 @@ export interface CustomCursorRow {
 /** Hente-ruten i appen. */
 export const TRIAL_PULL_ROUTE = "/api/prove/synk/hent";
 
-/** Spørrestrengen klienten sender. `siden` utelates ved første henting og etter 400. */
-export interface PullRequestParams {
-  organisasjon: string;
-  siden?: string;
-}
-
 /** Svaret fra hente-ruten slik klienten leser det (`TrialChangesSinceResult` på serveren). */
 export interface PullResponseBody {
   endringer: Partial<Record<TrialTableName, Record<string, unknown>[]>>;

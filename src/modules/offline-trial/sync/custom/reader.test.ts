@@ -199,7 +199,10 @@ function startReader(fetchImpl: typeof fetch, ctx: LocalReadContext): LocalTrial
   return reader;
 }
 
-/** Lar løfter og tidtakere på 0 ms gå, uten at klokken flyttes. */
+/**
+ * Lar ventende løfter gå ferdig, uten at klokken flyttes. Henting «med en gang» (ventetid 0)
+ * går via et løfte, ikke via en tidtaker, så dette er nok til å kjøre den.
+ */
 async function settle() {
   for (let i = 0; i < 30; i++) await vi.advanceTimersByTimeAsync(0);
 }
@@ -453,11 +456,34 @@ describe("createCustomReader (custom/reader.ts)", () => {
     expect(calls[1]!.url.searchParams.has("siden")).toBe(false);
   });
 
+  it("400 uten siden regnes som feil, så hentingen ikke går i ring", async () => {
+    const fake = fakeContext();
+    const { fetchImpl, calls } = fakeFetch([
+      () => respond(400, { feil: "Ugyldig." }),
+      () => respond(400, { feil: "Ugyldig." }),
+    ]);
+    start(fetchImpl, fake.ctx);
+    await settle();
+    expect(calls).toHaveLength(1);
+    expect(fake.deleteState).not.toHaveBeenCalled();
+    // Vanlig feilventetid: første feil gir 5 s
+    await advance(4_999);
+    expect(calls).toHaveLength(1);
+    await advance(1);
+    expect(calls).toHaveLength(2);
+    // Andre feil på rad: 10 s
+    await advance(9_999);
+    expect(calls).toHaveLength(2);
+    await advance(1);
+    expect(calls).toHaveLength(3);
+  });
+
   it.each<[string, Handler]>([
     ["401", () => respond(401, { feil: "Ikke innlogget." })],
     ["403", () => respond(403, { feil: "Ingen tilgang." })],
     ["500", () => respond(500, { feil: "Feil." })],
     ["502", () => respond(502, { feil: "Feil." })],
+    ["ugyldig kropp", () => respond(200, { endringer: [], markor: 1 })],
     [
       "nettverksfeil",
       () => {
@@ -465,7 +491,7 @@ describe("createCustomReader (custom/reader.ts)", () => {
       },
     ],
   ])(
-    "401, 403, 500 og nettverksfeil fletter ingenting og rører ikke markøren (%s)",
+    "401, 403, 500, nettverksfeil og ugyldig kropp fletter ingenting og rører ikke markøren (%s)",
     async (_name, handler) => {
       const fake = fakeContext({
         stored: [{ key: CUSTOM_CURSOR_KEY, value: "m1" }],
@@ -536,6 +562,9 @@ describe("createCustomReader (custom/reader.ts)", () => {
     expect(calls).toHaveLength(1);
 
     reader.stop();
+    expect(vi.getTimerCount()).toBe(0);
+    reader.wake();
+    for (const listener of fake.ackListeners) listener();
     await advance(120_000);
     expect(calls).toHaveLength(1);
   });
@@ -567,10 +596,28 @@ describe("createCustomReader (custom/reader.ts)", () => {
     // Tre feil: uten bunt ville neste forsøk vært om 20 s
     expect(calls).toHaveLength(3);
     await advance(1_000);
+    // Nå ventes det 20 s. En bunt får 200: neste henting om nøyaktig 5 s.
     for (const listener of fake.ackListeners) listener();
-    await settle();
-    await advance(5_100);
+    await advance(4_999);
+    expect(calls).toHaveLength(3);
+    await advance(1);
     expect(calls).toHaveLength(4);
+  });
+
+  it("mange bunter på rad skyver ikke hentingen foran seg", async () => {
+    const fake = fakeContext();
+    const { fetchImpl, calls } = fakeFetch();
+    start(fetchImpl, fake.ctx);
+    await settle();
+    expect(calls).toHaveLength(1);
+    // En bunt hvert sekund: hentingen som alt er planlagt om 5 s, flyttes ikke bakover
+    for (let i = 0; i < 4; i++) {
+      await advance(1_000);
+      for (const listener of fake.ackListeners) listener();
+    }
+    expect(calls).toHaveLength(1);
+    await advance(1_000);
+    expect(calls).toHaveLength(2);
   });
 
   it("notifyStatus kalles etter en vellykket henting (tillegg)", async () => {

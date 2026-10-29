@@ -18,9 +18,9 @@ import { expectTenantIsolation } from "../../../../tests/tenant-isolation";
 import { localColumnsOf, type TrialTableName } from "../sync/local-columns";
 import { normalizeLocalRow } from "../sync/local/normalize-row";
 import { applyTrialChanges } from "./apply-changes";
-import { listTrialChangesSince } from "./changes-since";
+import { listTrialChangesSince, START_POSITION, subtractOverlap } from "./changes-since";
 import { InvalidTrialCursorError } from "./errors";
-import { TRIAL_PULL_LIMIT, type TrialChangesSinceResult } from "./types";
+import { NIL_UUID, TRIAL_PULL_LIMIT, type TrialChangesSinceResult } from "./types";
 
 // «Endringer siden sist» for kandidat 3, egenbygd (docs/funksjoner/fase1-kandidat-egenbygd.md
 // pkt. 10 og 12, forarbeid pkt. 2). Testplan avsnitt 3.1. Rader lages med applyTrialChanges der
@@ -375,6 +375,19 @@ describe("listTrialChangesSince: ingen rad hoppes over", () => {
     expect(second.ferdig).toBe(true);
     expect(second.endringer).toEqual({ trial_forms: [], trial_answers: [], trial_photos: [] });
   });
+
+  it("en full side etterfulgt av en tom side får overlappet likevel", async () => {
+    // Uten dette ville markøren bli stående som ren keyset, og en eldre transaksjon som committer
+    // senere med tid før siste rad, ville bli hoppet over.
+    const { actor, organizationId } = await setupOrganization();
+    await insertManyForms(organizationId, TRIAL_PULL_LIMIT);
+    const first = await listTrialChangesSince(actor, organizationId, null);
+    expect(first.ferdig).toBe(false);
+    const next = await listTrialChangesSince(actor, organizationId, first.markor);
+    expect(next.ferdig).toBe(true);
+    const decoded = decode(next.markor) as DecodedCursor;
+    expect(decoded.t.trial_forms?.id).toBe(NIL_UUID);
+  });
 });
 
 describe("listTrialChangesSince: form på radene", () => {
@@ -488,6 +501,16 @@ describe("listTrialChangesSince: forfalsket markør (aldri 500)", () => {
         },
       }),
     ],
+    [
+      "30. februar",
+      encode({ v: 1, t: { trial_forms: { u: "2026-02-30T10:00:00.000000Z", id: nil } } }),
+    ],
+    [
+      "ukjent tabell",
+      encode({ v: 1, t: { users: { u: "2026-10-29T10:00:00.000000Z", id: nil } } }),
+    ],
+    ["ekstra felt", encode({ v: 1, t: {}, organizationId: nil })],
+    ["tom tekst", ""],
     ["10 000 tegn", "a".repeat(10_000)],
   ])("ugyldig markør gir InvalidTrialCursorError (%s)", async (_name, cursor) => {
     const { actor, organizationId } = await setupOrganization();
@@ -534,5 +557,18 @@ describe("listTrialChangesSince: forfalsket markør (aldri 500)", () => {
     const ids = allIds(foreign.rows);
     for (const id of Object.values(seededB)) expect(ids.has(id), `B-rad ${id}`).toBe(false);
     for (const id of Object.values(seededA)) expect(ids.has(id), `A-rad ${id}`).toBe(true);
+  });
+});
+
+describe("subtractOverlap", () => {
+  it("trekker fra 60 s og beholder mikrosekundene", () => {
+    expect(subtractOverlap("2026-10-29T10:00:30.123456Z")).toBe("2026-10-29T09:59:30.123456Z");
+    expect(subtractOverlap("2026-01-01T00:00:00.000001Z")).toBe("2025-12-31T23:59:00.000001Z");
+  });
+
+  it("går aldri under startposisjonen, så en markør nær år 0001 ikke gir år 0000", () => {
+    expect(subtractOverlap("1970-01-01T00:00:30.000005Z")).toBe(START_POSITION.u);
+    expect(subtractOverlap("0001-01-01T00:00:30.000001Z")).toBe("0001-01-01T00:00:30.000001Z");
+    expect(subtractOverlap("0001-01-01T00:00:30.000001Z")).not.toMatch(/^0000/);
   });
 });

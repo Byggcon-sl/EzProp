@@ -97,12 +97,18 @@ export const decodeTrialPullCursor: DecodeTrialPullCursor = (text: string) => {
   return result.data;
 };
 
+/** Startposisjonens tid i millisekunder: nedre grense for `subtractOverlap`. */
+const START_MILLIS = Date.parse(`${START_POSITION.u.slice(0, 23)}Z`);
+
 /**
  * Trekker overlappet fra en markørtid uten å miste mikrosekundene: millisekund-delen regnes med
- * `Date`, de tre siste sifrene følger med uendret.
+ * `Date`, de tre siste sifrene følger med uendret. Resultatet går aldri under startposisjonen
+ * (ellers kunne en markør nær år 0001 gi år 0000, som PostgreSQL ikke tar). En markør som alt er
+ * før startposisjonen, står uendret, så den aldri flyttes fremover.
  */
 export function subtractOverlap(u: string, overlapMs: number = TRIAL_PULL_OVERLAP_MS): string {
   const millis = Date.parse(`${u.slice(0, 23)}Z`) - overlapMs;
+  if (millis < START_MILLIS) return u < START_POSITION.u ? u : START_POSITION.u;
   return `${new Date(millis).toISOString().slice(0, 23)}${u.slice(23, 26)}Z`;
 }
 
