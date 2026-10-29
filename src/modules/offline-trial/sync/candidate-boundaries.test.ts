@@ -103,8 +103,51 @@ describe("kandidatgrensene", () => {
     expect(candidateImports(`${MODULE}/sync/photo-uploader.ts`)).toEqual([]);
   });
 
-  it("sync-indicator.tsx importerer ikke fra noen kandidat", () => {
-    expect(candidateImports(`${MODULE}/sync-indicator.tsx`)).toEqual([]);
+  it("sync-status.tsx importerer ikke fra noen kandidat", () => {
+    expect(candidateImports(`${MODULE}/sync-status.tsx`)).toEqual([]);
+  });
+
+  // Synkstatus (docs/funksjoner/fase1-synkstatus-testplan.md avsnitt 2.6)
+  it("synkstatusen kjenner ingen kandidat", () => {
+    const files = [
+      `${MODULE}/sync-status.tsx`,
+      `${MODULE}/sync-status-text.ts`,
+      `${MODULE}/sync/sync-now.ts`,
+    ];
+    const found = files.flatMap((file) => candidateImports(file).map((spec) => `${file}: ${spec}`));
+    expect(found).toEqual([]);
+    // De rene filene har heller ingen nettleser-API, React eller SDK
+    expectPure(`${MODULE}/sync-status-text.ts`);
+    expectPure(`${MODULE}/sync/sync-now.ts`);
+    // Hodekommentaren i de rene filene («use client» står først i sync-status.tsx)
+    for (const file of files.slice(1)) expect(startsWithHeader(file), file).toBe(true);
+    expect(read(`${MODULE}/sync-status.tsx`)).toContain(HEADER);
+  });
+
+  it("sync-indicator.tsx er fjernet", () => {
+    expect(existsSync(path.join(ROOT, `${MODULE}/sync-indicator.tsx`))).toBe(false);
+    const importers = filesUnder("src", /\.tsx?$/).filter((file) =>
+      specifiersOf(read(file)).some((entry) => /(^|\/)sync-indicator$/.test(entry.specifier)),
+    );
+    expect(importers).toEqual([]);
+  });
+
+  it("Lagret kl. regnes ut ett sted", () => {
+    const sources = filesUnder("src", /\.tsx?$/).filter((file) => !/\.test\.tsx?$/.test(file));
+    const definesNextSavedAt = sources.filter((file) =>
+      /\b(function|const)\s+nextSavedAt\b/.test(read(file)),
+    );
+    expect(definesNextSavedAt).toEqual([`${MODULE}/sync-status-text.ts`]);
+    // Ingen kandidatfil skriver nøklene for «Lagret kl.»; bare skjermen og select-store.ts
+    const candidateFiles = ["powersync", "electricsql", "custom", "local"].flatMap((dir) =>
+      filesUnder(`${MODULE}/sync/${dir}`, /\.tsx?$/).filter((file) => !/\.test\.tsx?$/.test(file)),
+    );
+    const writers = candidateFiles.filter((file) => /trial_saved_at_|savedAtKey/.test(read(file)));
+    expect(writers).toEqual([]);
+    const mentions = sources.filter((file) => /trial_saved_at_/.test(read(file)));
+    for (const file of mentions) {
+      expect([`${MODULE}/sync-status.tsx`, `${MODULE}/sync/select-store.ts`], file).toContain(file);
+    }
   });
 
   it("de rene filene i sync/electricsql importerer ikke window, React eller @electric-sql", () => {

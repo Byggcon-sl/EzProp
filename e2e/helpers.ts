@@ -1,3 +1,7 @@
+import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import postgres from "postgres";
 import {
   expect,
   type Browser,
@@ -45,9 +49,12 @@ export async function createTrialForm(page: Page): Promise<string> {
   return id;
 }
 
-/** Måleindikatoren over telleren. */
+/**
+ * Tilstanden i synkstatusen øverst («Uten nett», «Venter: …», «Venter på kontakt med serveren»
+ * eller «Alt er lagret»). Erstatter måleindikatoren (docs/funksjoner/fase1-synkstatus.md pkt. 1).
+ */
 export function indicator(page: Page): Locator {
-  return page.getByTestId("sync-indicator");
+  return page.getByTestId("sync-status-state");
 }
 
 /**
@@ -401,4 +408,129 @@ export async function openSecondDevice(
   const page = await context.newPage();
   await logIn(page, ADMIN_EMAIL);
   return { context, page };
+}
+
+// --- Synkstatus (docs/funksjoner/fase1-synkstatus-testplan.md avsnitt 5.1) ---
+
+/** Hele synkstatuslinjen øverst på listen og testskjemaet. */
+export function syncStatus(page: Page): Locator {
+  return page.getByTestId("sync-status");
+}
+
+/** «Lagret kl. 14:32», «Lagret 28.10. kl. 14:32» eller «Ikke lagret på serveren ennå». */
+export function savedAt(page: Page): Locator {
+  return page.getByTestId("sync-status-saved-at");
+}
+
+/** Knappen «Synk nå» (viser «Synker …» mens runden pågår). */
+export function syncNowButton(page: Page): Locator {
+  return page.getByRole("button", { name: /^(Synk nå|Synker …)$/ });
+}
+
+/** Beskjedfeltet under linjen (`aria-live`). */
+export function syncMessage(page: Page): Locator {
+  return page.getByTestId("sync-status-message");
+}
+
+/**
+ * Legger «Lagret kl.» for kandidaten i `localStorage` før første lasting, som om enheten hadde
+ * lagret alt da. Skrives bare én gang per fane (merket i `sessionStorage`), så en omlasting ikke
+ * legger tidspunktet tilbake etter at appen har endret eller tømt det.
+ */
+export async function setSavedAt(
+  context: BrowserContext,
+  candidate: TrialSyncCandidate,
+  iso: string,
+) {
+  await context.addInitScript(
+    ({ key, value }) => {
+      const marker = `e2e_set_${key}`;
+      if (window.sessionStorage.getItem(marker)) return;
+      window.sessionStorage.setItem(marker, "1");
+      window.localStorage.setItem(key, value);
+    },
+    { key: `trial_saved_at_${candidate}`, value: iso },
+  );
+}
+
+/** Skriveruten for endringskøen. */
+export const CHANGES_PATH = "/api/prove/synk/endringer";
+
+/**
+ * Svarer 500 på de `n` første POST-ene til skriveruten, så slipper resten gjennom. Ser ikke kall
+ * som går via service worker (bruk `serviceWorkers: "block"`). `failed()` gir antall 500 som er sendt.
+ */
+export async function failChangesOnce(page: Page, n = 1) {
+  let failed = 0;
+  await page.route(`**${CHANGES_PATH}`, (route) => {
+    if (route.request().method() === "POST" && failed < n) {
+      failed += 1;
+      return route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
+    }
+    return route.fallback();
+  });
+  return { failed: () => failed };
+}
+
+/** Oppdiktet takstmann for e2e. Ingen ekte navn eller adresser. */
+export const INSPECTOR_EMAIL = "takstmann.e2e@eksempel.no";
+
+/** Databasen appen i e2e bruker: `DATABASE_URL`, ellers `.env`, ellers standarden fra `.env.example`. */
+function e2eDatabaseUrl(): string {
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+  const envFile = path.join(process.cwd(), ".env");
+  if (existsSync(envFile)) {
+    const line = readFileSync(envFile, "utf8")
+      .split("\n")
+      .find((entry) => entry.startsWith("DATABASE_URL="));
+    if (line) return line.slice("DATABASE_URL=".length).trim();
+  }
+  return "postgres://ezprop:ezprop@localhost:5432/ezprop";
+}
+
+/**
+ * Sørger for at den oppdiktede takstmannen finnes som ansatt med rollen `inspector` i samme
+ * organisasjon som admin fra seed (Byggcon). Idempotent; sletter aldri noe.
+ */
+export async function ensureInspector(): Promise<void> {
+  const sql = postgres(e2eDatabaseUrl(), { max: 1, onnotice: () => {} });
+  try {
+    const [admin] = await sql<{ organization_id: string }[]>`
+      select e.organization_id from employees e
+      join users u on u.id = e.user_id
+      where u.email = ${ADMIN_EMAIL} and e.deleted_at is null
+      limit 1`;
+    if (!admin) throw new Error("Fant ikke admin fra seed (kjør pnpm db:seed)");
+    const organizationId = admin.organization_id;
+    await sql`
+      insert into users (id, name, email, email_verified)
+      values (${randomUUID()}, 'Oppdiktet takstmann', ${INSPECTOR_EMAIL}, true)
+      on conflict (email) do nothing`;
+    const [user] = await sql<
+      { id: string }[]
+    >`select id from users where email = ${INSPECTOR_EMAIL}`;
+    if (!user) throw new Error("Kunne ikke lage takstmannen for e2e");
+    let [employee] = await sql<{ id: string }[]>`
+      select id from employees
+      where user_id = ${user.id} and organization_id = ${organizationId}`;
+    if (!employee) {
+      [employee] = await sql<{ id: string }[]>`
+        insert into employees (organization_id, user_id, name)
+        values (${organizationId}, ${user.id}, 'Oppdiktet takstmann')
+        returning id`;
+    }
+    if (!employee) throw new Error("Kunne ikke lage den ansatte for e2e");
+    await sql`
+      insert into employee_roles (organization_id, employee_id, role)
+      values (${organizationId}, ${employee.id}, 'inspector')
+      on conflict do nothing`;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Logger inn som den oppdiktede takstmannen (rolle `inspector`, ikke admin). */
+export async function logInAsInspector(page: Page) {
+  await ensureInspector();
+  await logIn(page, INSPECTOR_EMAIL);
 }
