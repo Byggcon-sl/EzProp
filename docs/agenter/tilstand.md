@@ -2,8 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 29.10.2026 (PR #15 merget; PR #17 for synktjenestene i Azure åpnet fra `fase1-synk-i-azure`)
-Sist oppdatert: 29.10.2026 kl. 16:00 (PR #14 og #15 merget; neste oppgave: synkstatus som alltid vises)
+Sist oppdatert: 29.10.2026 kl. 17:00 (PR #14–#17 merget; synkstatus i arbeid på `fase1-synkstatus`)
 
 ## Gjeldende fase
 
@@ -13,28 +12,23 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Nå: liten oppgave (a) – synktjenestene i Azure-testmiljøet, PR #17** (branch `fase1-synk-i-azure`, oppå `main`, versjon 0.2.7). Oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så en merge lager ingen nye ressurser. Spørsmål nr. 12 (slå på, kostnad) lagt inn, ikke blokkerende. Roller: arkitekt, sikkerhet-personvern, utvikler, testskriver, test-leder. Steg: ADR 0003 og kontrakt (`scripts/azure/sync-trial-roles.types.ts`) ferdig, testplan ferdig, funn 1–5 rettet i kortet. Bygget i fire biter med testskriver i parallell; lint, typesjekk, 510 Vitest og e2e grønne; ingen alvorlige funn. Små funn står i PR-en og under «Små oppgaver som venter» (c). Neste: merge når CI er grønn, så venter prøve A og B på at Ståle slår på synktjenestene (spørsmål nr. 12).
 **Nå: Synkstatus som alltid vises** (punkt i fase 1: antall endringer og bilder som venter, «lagret kl.» og «Synk nå»). Bygger videre på måleindikatoren `src/modules/offline-trial/sync-indicator.tsx`, for alle tre kandidatene. Startet av hovedløkken 29.10.2026 kl. 16:00 med arbeidsflyten «oppgave» (branch `fase1-synkstatus`).
 
-**Oppgave (a) – synktjenestene i Azure-testmiljøet** ligger på branchen `fase1-synk-i-azure` (oppgavekort, ADR 0003, testplan og kontrakt, siste commit 29.10.2026 kl. 14:12), uten PR. Den kan være i arbeid i en annen sesjon. Neste kjøring tar den opp igjen hvis branchen ikke har fått nye commits.
+**Forrige oppgave:** liten oppgave (a) – synktjenestene i Azure-testmiljøet, **PR #17** (merget 29.10.2026 kl. 16:58, versjon 0.2.7). PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så mergen lager ingen nye ressurser. ADR 0003, oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. Kostnad når de er på: ca. 700–850 kr per måned. Spørsmål nr. 12.
 
-**Forrige oppgave:** Oppgave 6 – Kandidat 3, egenbygd (lokal database og endringskø), **PR #11** (branch `fase1-kandidat-egenbygd`, versjon 0.2.3, oppå PR #10). Oppgavekort `docs/funksjoner/fase1-kandidat-egenbygd.md` (med «Avgjørelser etter gjennomgangen»), testplan `docs/funksjoner/fase1-kandidat-egenbygd-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-egenbygd.md`. Ingen ny avhengighet, ingen migrering, ingen ny tjeneste. Sikkerhet-personvern: godkjent (ett lite funn rettet). Forenkler: doble testfiler slått sammen. Test-leder: avviste først for små funn (alle rettet), e2e-feil i to tester rettet av feilrettingslederen (feil i testene, ikke i koden). Punktet «Kandidater satt opp …» er krysset av.
+**Før det:** Oppgave 6 – Kandidat 3, egenbygd (lokal database og endringskø), **PR #11** (branch `fase1-kandidat-egenbygd`, versjon 0.2.3, oppå PR #10). Oppgavekort `docs/funksjoner/fase1-kandidat-egenbygd.md` (med «Avgjørelser etter gjennomgangen»), testplan `docs/funksjoner/fase1-kandidat-egenbygd-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-egenbygd.md`. Ingen ny avhengighet, ingen migrering, ingen ny tjeneste. Sikkerhet-personvern: godkjent (ett lite funn rettet). Forenkler: doble testfiler slått sammen. Test-leder: avviste først for små funn (alle rettet), e2e-feil i to tester rettet av feilrettingslederen (feil i testene, ikke i koden). Punktet «Kandidater satt opp …» er krysset av.
 
-**Før det:** Oppgave 5 – Kandidat 2: ElectricSQL, **PR #10** (branch `fase1-kandidat-electricsql`, versjon 0.2.2). Oppgavekort `docs/funksjoner/fase1-kandidat-electricsql.md`, testplan `docs/funksjoner/fase1-kandidat-electricsql-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-electricsql.md`, drift `docs/drift/electricsql.md`. Sikkerhet-personvern: godkjent, tre små funn; (2) og (3) rettet, (1) (Electrics 400-kropp videresendes uendret) tas i ADR-en. Test-leder: godkjent (lint, typesjekk, format, 333 Vitest, e2e 105 bestått). Spørsmål nr. 11 (ElectricSQL som leverandør), ikke blokkerende.
+**Enda før:** Oppgave 5 – Kandidat 2: ElectricSQL, **PR #10** (branch `fase1-kandidat-electricsql`, versjon 0.2.2). Oppgavekort `docs/funksjoner/fase1-kandidat-electricsql.md`, testplan `docs/funksjoner/fase1-kandidat-electricsql-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-electricsql.md`, drift `docs/drift/electricsql.md`. Sikkerhet-personvern: godkjent, tre små funn; (2) og (3) rettet, (1) (Electrics 400-kropp videresendes uendret) tas i ADR-en. Test-leder: godkjent (lint, typesjekk, format, 333 Vitest, e2e 105 bestått). Spørsmål nr. 11 (ElectricSQL som leverandør), ikke blokkerende.
 
-**Små oppgaver som venter:** (a) se «Nå». (c) Småfunn fra synktjenestene i Azure: rydding av replikeringsplasser bare i egen database (rammer i dag også `ezprop` lokalt når `pnpm test` kjøres med containerne stoppet), lengdekrav på `POWERSYNC_JWT_SECRET` og `ELECTRIC_SECRET` i `check-sync-secrets.sh`, riktig «postgresql://» eller fjerne de avledede maskene i `deploy-azure.yml`, mindre bastant setning om hva tjenestene kan lese i `electricsql.md` (REPLICATION gir lesing av hele databasen), og to overflødige sjekker i `sync-trial-roles.ts`. (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14** (merget 29.10.2026), sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
+**Små oppgaver som venter:** (c) Småfunn fra synktjenestene i Azure: rydding av replikeringsplasser bare i egen database (rammer i dag også `ezprop` lokalt når `pnpm test` kjøres med containerne stoppet), lengdekrav på `POWERSYNC_JWT_SECRET` og `ELECTRIC_SECRET` i `check-sync-secrets.sh`, riktig «postgresql://» eller fjerne de avledede maskene i `deploy-azure.yml`, mindre bastant setning om hva tjenestene kan lese i `electricsql.md` (REPLICATION gir lesing av hele databasen), og to overflødige sjekker i `sync-trial-roles.ts`. (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14** (merget 29.10.2026), sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
 
-**Rekkefølge videre i fase 1:** alle tre kandidatene er satt opp → synktjenestene i Azure (a) → Ståle kjører prøve A og B per kandidat på ekte iPad → prøve C–F → sammenligning og ADR.
+**Rekkefølge videre i fase 1:** alle tre kandidatene er satt opp → synktjenestene i Azure (a, merget) → Ståle slår dem på (spørsmål nr. 12) og kjører prøve A og B per kandidat på ekte iPad → prøve C–F → sammenligning og ADR.
 
 Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI-forslag senere vises og godkjennes), og reklamasjoner (ingenting går tapt mellom befaring og rapport).
 
 ## Åpne PR-er
 
-| PR | Oppgave | Status | Bygger på |
-|---|---|---|---|
-
-| #17 | Synktjenestene i Azure-testmiljøet (av som standard) | Klar (CI), merges av agentene | main |
-PR #14 og #15 er merget 29.10.2026.
+Ingen åpne PR-er. PR #14, #15, #16 og #17 er merget 29.10.2026. Synkstatus (`fase1-synkstatus`) er i arbeid uten PR ennå.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -53,6 +47,8 @@ Ingen ennå.
 Ingen.
 
 ## Siste kjøring
+
+29.10.2026 kl. 13:57–17:00: hovedløkken merget PR #14 (CI grønn), sjekket at ingen gamle brancher har innhold som mangler på `main` (forskjellene er bare eldre versjoner som `main` har erstattet), og kjørte oppgave (a) med arbeidsflyten «oppgave» til PR #17, som ble merget med skriptet. Ryddet tilstandsfilen etter to kjøringer samtidig. Sesjon: https://claude.ai/code/session_01Jqwnu11Jdv4FLbyF9rNKnW
 
 29.10.2026 ca. kl. 15–16: prosjektleder fullførte synktjenestene i Azure: flettet `main` inn, versjon 0.2.7, planen krysset av, PR #17 åpnet mot `main`. CI grønn, men den automatiske flettingen fra `main` (bot) ga en CI-kjøring som venter på godkjenning, så GitHub meldte «unstable»; ny commit fra agenten for å starte CI på nytt. Sesjon: https://claude.ai/code/session_01Jqwnu11Jdv4FLbyF9rNKnW
 
