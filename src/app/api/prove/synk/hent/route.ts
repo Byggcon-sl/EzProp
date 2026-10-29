@@ -1,10 +1,3 @@
-import { getCurrentActor } from "@/core/auth/session";
-import { listTrialChangesSince } from "@/modules/offline-trial/server/changes-since";
-import { InvalidTrialCursorError } from "@/modules/offline-trial/server/errors";
-import { TRIAL_PULL_CACHE_CONTROL } from "@/modules/offline-trial/server/types";
-import { logger } from "@/shared/lib/logger";
-import { notLoggedIn, trialErrorResponse } from "../../error-response";
-
 /**
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
@@ -14,6 +7,13 @@ import { notLoggedIn, trialErrorResponse } from "../../error-response";
  * `Cache-Control: private, no-store`. Loggen får bare rute, bruker-id, antall rader og status,
  * aldri radene eller markøren.
  */
+import { getCurrentActor } from "@/core/auth/session";
+import { listTrialChangesSince } from "@/modules/offline-trial/server/changes-since";
+import { InvalidTrialCursorError } from "@/modules/offline-trial/server/errors";
+import { TRIAL_PULL_CACHE_CONTROL } from "@/modules/offline-trial/server/types";
+import { logger } from "@/shared/lib/logger";
+import { notLoggedIn, trialErrorResponse } from "../../error-response";
+
 export const dynamic = "force-dynamic";
 
 const ROUTE = "/api/prove/synk/hent";

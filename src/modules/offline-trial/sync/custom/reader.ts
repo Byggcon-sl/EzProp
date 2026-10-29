@@ -88,6 +88,8 @@ export function createCustomReader({
   let schedule: PullScheduleState = INITIAL_PULL_SCHEDULE;
   let cursor: string | null = null;
   let timer: TimerHandle | null = null;
+  /** Øker når en planlagt henting avlyses, så en henting «med en gang» som er avlyst, ikke går. */
+  let generation = 0;
   /** Når den planlagte hentingen går (fra `now()`), eller `null`. */
   let dueAt: number | null = null;
   let running = false;
@@ -102,12 +104,23 @@ export function createCustomReader({
     if (timer !== null) clearTimer(timer);
     timer = null;
     dueAt = null;
+    generation += 1;
   }
 
   function plan(delayMs: number) {
     if (!active()) return;
     cancelTimer();
     dueAt = now() + delayMs;
+    if (delayMs === 0) {
+      // «Med en gang» går uten tidtaker: en tidtaker på 0 ms kan bli forsinket.
+      const planned = generation;
+      void Promise.resolve().then(() => {
+        if (planned !== generation) return;
+        dueAt = null;
+        void run();
+      });
+      return;
+    }
     timer = setTimer(() => {
       timer = null;
       dueAt = null;
