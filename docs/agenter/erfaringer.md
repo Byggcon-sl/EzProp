@@ -85,3 +85,9 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - SharePoint-leseren kutter store Excel-faner ved ca. 190 000 tegn uten sidedeling. Store faner må deles eller lagres som CSV før de leses.
 - Rader som skal kunne lages uten nett, bør ikke ha fremmednøkkel på `created_by` (bare bruker-id som tekst), ellers feiler innsetting når innloggingen er utløpt.
 - Optiplans oppsett kunne kopieres nesten direkte; forskjellene er dokumentert i ADR 0001.
+- Lokal lagring: øyeblikksbilder lest før en skriving må forkastes. Ellers vises den gamle verdien et øyeblikk. Funnet av e2e for prøve E.
+
+## 29.10.2026 – Prøve E (PR #23)
+
+- Arbeidsflyten «oppgave» gikk fra oppgavekort til merget PR på ca. 2,5 timer (27 agenter), uten alvorlige funn. `main` hadde fått PR #21 og #22 underveis; eneste konflikt var versjonsnummeret. Ta alltid versjonen som én patch over `main` ved fletting, ikke over branchens egen.
+- Hovedløkken kan starte neste oppgave fra `main` mens en klar PR venter på CI, så lenge oppgavene ikke rører de samme filene. Det sparte ventetid her.

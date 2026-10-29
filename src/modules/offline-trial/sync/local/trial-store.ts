@@ -209,6 +209,8 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
   const snapshotListeners = new Map<(snapshot: TrialFormSnapshot) => void, string>();
   const statusListeners = new Set<() => void>();
   let pendingNotify: { forms: boolean; rows: boolean; status: boolean } | null = null;
+  // Øker for hver lokal endring av rader, så et øyeblikksbilde som ble lest før endringen, aldri vises.
+  let localWriteGeneration = 0;
 
   function notify(what: { forms?: boolean; rows?: boolean; status?: boolean }) {
     if (!pendingNotify) {
@@ -242,7 +244,10 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
 
   async function sendSnapshot(formId: string, listener: (snapshot: TrialFormSnapshot) => void) {
     try {
+      const generation = localWriteGeneration;
       const snapshot = await readSnapshot(formId);
+      // Lest før en nyere skriving: forkastes. Skrivingen varsler selv, så et nytt bilde kommer.
+      if (generation !== localWriteGeneration) return;
       if (snapshotListeners.get(listener) === formId) listener(snapshot);
     } catch (error) {
       console.warn("Lagring: kunne ikke lese skjemaet.", errorText(error));
@@ -337,6 +342,7 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
         },
       );
       outbox = next;
+      localWriteGeneration++;
       notify({ forms: table === "trial_forms", rows: true, status: true });
       scheduleSend(0);
       return row;
@@ -611,6 +617,7 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
         for (const key of resolvedKeys) confirmed.delete(key);
       }
       if (changes.length > 0) {
+        localWriteGeneration++;
         notify({ forms: table === "trial_forms", rows: true, status: table === "trial_photos" });
       }
     });
@@ -647,6 +654,7 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
           }
         }
       });
+      localWriteGeneration++;
       notify({ forms: table === "trial_forms", rows: true, status: table === "trial_photos" });
     });
   }

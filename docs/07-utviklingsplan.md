@@ -156,7 +156,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 - [ ] **Prøve B – to i samme rapport (bør):** to iPader endrer samme kontrollpunkt samtidig. Tekst flettes. TG, valg og tall følger «siste endring vinner», og den andre får varsel.
 - [ ] **Prøve C – lagring i Safari:** hvor mye plass appen får, at data overlever omstart og flere dager uten bruk, og hva som skjer når plassen er brukt opp
 - [ ] **Prøve D – bilder:** komprimering og riktig rotering på iPaden, HEIC til JPEG, opplasting mens appen er åpen, fortsettelse etter brudd, kontroll med fingeravtrykk
-- [ ] **Prøve E – regler uten nett:** én regel for alder mot levetid og én målegrense kjører på iPaden og gir samme svar som på serveren
+- [x] **Prøve E – regler uten nett:** én regel for alder mot levetid og én målegrense kjører på iPaden og gir samme svar som på serveren (PR-en fra branchen `fase1-prove-e-regler`, 29.10.2026, `docs/funksjoner/fase1-prove-e-regler.md`; prøven på ekte iPad gjenstår, resultatmal `docs/funksjoner/fase1-prove-e-regler-resultat.md`)
 - [ ] **Prøve F – innlogging som har gått ut:** takstmannen kan fortsatt åpne og fullføre rapporten uten nett
 - [x] Synkstatus som alltid vises: antall endringer og bilder som venter, «lagret kl.», og «Synk nå» (PR #21, 29.10.2026, `docs/funksjoner/fase1-synkstatus.md`)
 - [ ] Sammenligning av kandidatene: virker prøvene, hvor mye arbeid, drift i EU/EØS, pris og hvor modent verktøyet er

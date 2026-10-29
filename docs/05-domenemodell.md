@@ -1701,6 +1701,9 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Tekstfletting | `text merge` (`text-merge.ts`, Yjs) | To som skriver i samme tekstfelt får begge bidrag med |
 | Siste endring vinner | `last write wins` | For TG, valg, tall og tabell: den endringen som når serveren sist, gjelder. Den andre får varselet «Endret av en annen» |
 | Enhets-id i prøven | `trial_device_id` | Fast id per nettleser-installasjon, bare for varselet i prøve B. Ikke tabellen `devices` (fase 2b) |
+| Prøveregel | `trial rule` (`TrialRule`, `trialRules`, `offline-trial/rules/`) | En av de to reglene i prøve E (`trial_water_heater_age`, `trial_moisture_floor_limit`). Data i kode med oppdiktede prøveverdier (`TRIAL_ONLY_LIMITS`), ikke fag og ingen TG. Ikke tabellen `rules` |
+| Regelmotoren i prøven | `evaluateTrialRules` | Én ren funksjon som gir svaret fra hver prøveregel ut fra svarene i testskjemaet. Samme kode kjører i nettleseren uten nett og i serverruten `/api/prove/regler` |
+| Regelsvar (slår til / slår ikke til / ikke vurdert) | `rule state` (`TrialRuleState`: `triggered` / `not_triggered` / `not_evaluated`) | Svaret fra en prøveregel. «Ikke vurdert» ved tomt felt, ugyldig tekst eller negativt tall |
 | Testmiljø | `test environment` (`environmentName: test`) | Appen og databasen i Azure (Sweden Central) som prøvene i fase 1 kjøres mot. Bare oppdiktede data |
 | Utrulling | `deploy` (`deploy-azure.yml`) | Automatisk oppdatering av testmiljøet ved merge til `main` |
 | Serverlogg | `server log` (`serverLog`) | Loggen i App Service. Innloggingskoden til første admin skrives der til e-post er satt opp |

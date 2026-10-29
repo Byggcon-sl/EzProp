@@ -3,6 +3,7 @@
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
 Sist oppdatert: 29.10.2026 (liten oppgave (d) startet på `fase1-smafunn-synkstatus`)
+Sist oppdatert: 29.10.2026 kl. 22:30 (PR #21, #22 og #23 merget; ingen åpne PR-er)
 
 ## Gjeldende fase
 
@@ -12,11 +13,14 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
+**Levert: Prøve E – regler uten nett**, **PR #23** (merget 29.10.2026; branch `fase1-prove-e-regler` fra `main`, versjon 0.2.13). Oppgavekort `docs/funksjoner/fase1-prove-e-regler.md`, testplan `docs/funksjoner/fase1-prove-e-regler-testplan.md`, resultatmal for ekte iPad `docs/funksjoner/fase1-prove-e-regler-resultat.md`. To prøveregler som data (oppdiktede tall 7 år og 42 %), én regelmotor for nettleser og server, regelsvar under feltene, ruten `/api/prove/regler`, 14 testsaker. Roller: forenkler, fagansvarlig, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en. Punktet er krysset av i planen. Spørsmål nr. 13 (ekte tall), ikke blokkerende. Støtter tid og reklamasjoner.
+
 **Levert: Synkstatus som alltid vises**, **PR #21** (merget 29.10.2026 kl. 19:44; branch `fase1-synkstatus`, bygger på `main`, versjon 0.2.11). Oppgavekort `docs/funksjoner/fase1-synkstatus.md`, skisse `docs/funksjoner/fase1-synkstatus-skisse.md`, testplan `docs/funksjoner/fase1-synkstatus-testplan.md`. Måleindikatoren er erstattet av `sync-status.tsx` for alle tre kandidatene. Roller: forenkler, ux-ansvarlig, test-leder, ui-designer, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
 **Pågår:** liten oppgave (d), småfunnene fra PR #21. Branch `fase1-smafunn-synkstatus` (bygger på `main`, versjon 0.2.13), oppgavekort `docs/agenter/oppgaver/fase1-smafunn-synkstatus.md`. Roller: utvikler og testskriver i parallell.
 
 **Neste:** liten oppgave (d) med småfunnene fra synkstatus-PR-en (se under). Deretter prøve A og B per kandidat (Ståle, når synktjenestene er slått på, spørsmål nr. 12). Til da: prøve C–F i fase 1 som kan forberedes uten Ståle. Små oppgaver fra synkstatus-PR-en (kan tas som én liten oppgave): enhetstest for «Synk nå» i lageret, `ensureInspector` i e2e skal ikke bruke slettede ansatte og ikke skrive mot andre databaser enn lokal/test, loggen i `trial-store.ts` skal bare vise feilmeldingen, og fjerne `failChangesOnce` og en unødvendig cast.
+**Neste:** småfunn fra prøve E kan tas sammen med (d): egen enhetstest for `localWriteGeneration` i `trial-store.ts`, testsakene ut av appens pakke (`rules/index.ts`), grensetallene bare ett sted i meldingene, og rydding i overlappende tester. Deretter liten oppgave (d) med småfunnene fra synkstatus-PR-en (se under). Deretter prøve A og B per kandidat (Ståle, når synktjenestene er slått på, spørsmål nr. 12). Til da: prøve C–F i fase 1 som kan forberedes uten Ståle. Små oppgaver fra synkstatus-PR-en (kan tas som én liten oppgave): enhetstest for «Synk nå» i lageret, `ensureInspector` i e2e skal ikke bruke slettede ansatte og ikke skrive mot andre databaser enn lokal/test, loggen i `trial-store.ts` skal bare vise feilmeldingen, og fjerne `failChangesOnce` og en unødvendig cast.
 
 **Forrige oppgave:** liten oppgave (a) – synktjenestene i Azure-testmiljøet, **PR #17** (merget 29.10.2026 kl. 16:58, versjon 0.2.7). PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så mergen lager ingen nye ressurser. ADR 0003, oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. Kostnad når de er på: ca. 700–850 kr per måned. Spørsmål nr. 12.
 
@@ -32,10 +36,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 ## Åpne PR-er
 
-| PR | Oppgave | Status | Bygger på |
-|---|---|---|---|
-
-Ingen åpne PR-er nå (PR #16–#21 er merget 29.10.2026).
+Ingen åpne PR-er. PR #16–#23 er merget 29.10.2026 (#23: prøve E, versjon 0.2.13).
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -55,6 +56,10 @@ Ingen.
 
 ## Siste kjøring
 
+29.10.2026 kl. 18:40–22:30: hovedløkken ventet på CI og merget PR #21 (synkstatus) med skriptet, og kjørte prøve E med arbeidsflyten «oppgave» til PR #23 (merget med skriptet, CI grønn, ingen alvorlige funn, 11 små funn i PR-en). Neste: liten oppgave med småfunnene fra PR #21 og #23 (se «Neste»), deretter prøve C, D (etter svar på nr. 8) og F. Sesjon: https://claude.ai/code/session_01Jqwnu3Rs4hsNXmsS1zrwe5
+
+29.10.2026: prosjektleder laget branchen `fase1-prove-e-regler`, oppgavekortet for prøve E og spørsmål nr. 13. `parseTrialNumber` var allerede streng (oppgave 4); kortet ber bare om flere testsaker. Sesjon: https://claude.ai/code/session_01Jqwnu3Rs4hsNXmsS1zrwe5
+29.10.2026: prosjektleder rettet oppgavekortet for prøve E etter forenkler, fagansvarlig og test-leder, og la til nr. 13 c (verdi lik grensen).
 29.10.2026 kl. 15:55–19:50: hovedløkken merget PR #15 og #16 (læringsløkke for #14 og #15, beslutningen om PR-er som venter ført inn i `main`) og kjørte «Synkstatus som alltid vises» med arbeidsflyten «oppgave» (29 agenter, ca. 3 t 45 min) til PR #21, merget med skriptet (CI grønn, 11 små funn). En annen sesjon leverte synktjenestene i Azure (PR #17–#20) samtidig. Sesjon: https://claude.ai/code/session_01JqwntywRSPWcBmrv2nPUoo
 
 29.10.2026: prosjektleder fullførte synkstatus: flettet `main` inn (versjonskonflikt løst, 0.2.11), krysset av i planen, oppdaterte tilstanden og åpnet PR #21 mot `main`. Sesjon: https://claude.ai/code/session_01JqwntywRSPWcBmrv2nPUoo
