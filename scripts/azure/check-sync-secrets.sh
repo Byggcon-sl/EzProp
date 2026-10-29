@@ -4,8 +4,9 @@
 #
 # Bryteren ENABLE_SYNC_TRIAL er på bare når verdien er nøyaktig «true».
 # Av: ingen secrets trengs, exit 0.
-# På: alle fire secrets må finnes, og DB-passordene må være bare bokstaver og tall
-# og minst 24 tegn (de brukes i databaseadresser). Ellers exit 1.
+# På: alle fire secrets må finnes, POWERSYNC_JWT_SECRET og ELECTRIC_SECRET må ha
+# minst 32 tegn, og DB-passordene må være bare bokstaver og tall og minst 24 tegn
+# (de brukes i databaseadresser). Ellers exit 1.
 #
 # Skriptet skriver bare navn, aldri verdier. Virker med bash 3.2.
 
@@ -27,6 +28,18 @@ for NAVN in POWERSYNC_JWT_SECRET POWERSYNC_DB_PASSWORD ELECTRIC_SECRET ELECTRIC_
   eval "VERDI=\${$NAVN:-}"
   if [ -z "$VERDI" ]; then
     echo "Secreten $NAVN mangler i GitHub (Settings → Secrets). Den trengs når ENABLE_SYNC_TRIAL er true." >&2
+    FEIL=1
+  fi
+done
+
+# De delte nøklene må ha minst 32 tegn. Alle tegn er lov. Tomme er meldt over.
+for NAVN in POWERSYNC_JWT_SECRET ELECTRIC_SECRET; do
+  eval "VERDI=\${$NAVN:-}"
+  if [ -z "$VERDI" ]; then
+    continue
+  fi
+  if [ "${#VERDI}" -lt 32 ]; then
+    echo "Secreten $NAVN er for kort. Den må ha minst 32 tegn." >&2
     FEIL=1
   fi
 done
