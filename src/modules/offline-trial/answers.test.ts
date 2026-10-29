@@ -127,7 +127,8 @@ describe("parseTrialNumber", () => {
     }
   });
 
-  // Prøve E (docs/funksjoner/fase1-prove-e-regler.md pkt. 8, testplan 2.4). Funksjonen endres ikke.
+  // Prøve E: verdiene prøvereglene bruker (docs/funksjoner/fase1-prove-e-regler.md pkt. 8,
+  // testplan 2.4). Funksjonen skal ikke endres; feiler en sak, er det et funn.
   it("parseTrialNumber leser verdiene prøvereglene bruker", () => {
     expect(parseTrialNumber("42")).toBe(42);
     expect(parseTrialNumber("42,0")).toBe(42);

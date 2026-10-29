@@ -538,7 +538,7 @@ export async function logInAsInspector(page: Page) {
 
 // --- Prøve E, regler uten nett (docs/funksjoner/fase1-prove-e-regler-testplan.md avsnitt 5.1) ---
 
-/** Linjen med regelsvaret under feltet (`data-rule-key`, `data-rule-state`). */
+/** Linjen med regelsvaret for en regelkode (`data-rule-key`, `data-rule-state`). */
 export function ruleResult(page: Page, ruleKey: string): Locator {
   return page.locator(`[data-rule-key="${ruleKey}"]`);
 }
@@ -546,6 +546,6 @@ export function ruleResult(page: Page, ruleKey: string): Locator {
 /** Tallfeltet for en feltkode i testskjemaet, funnet på etiketten (som testskjema-testene). */
 export function numberInput(page: Page, fieldKey: string): Locator {
   const field = listTrialFields(trialForm).find((entry) => entry.key === fieldKey);
-  if (!field || field.type !== "number") throw new Error(`${fieldKey} er ikke et tallfelt`);
+  if (!field || field.type !== "number") throw new Error(`Fant ikke tallfeltet ${fieldKey}`);
   return page.getByLabel(field.label, { exact: true });
 }

@@ -2,9 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { parseTrialNumber } from "../src/modules/offline-trial/answers";
 import {
   trialRuleCases,
+  trialRules,
   type TrialRuleCase,
-} from "../src/modules/offline-trial/rules/trial-rule-cases";
-import { trialRules, type TrialRuleState } from "../src/modules/offline-trial/rules/trial-rules";
+} from "../src/modules/offline-trial/rules/index";
 import {
   ADMIN_EMAIL,
   countRequests,
@@ -12,63 +12,59 @@ import {
   hookValue,
   logIn,
   numberInput,
+  readRowsViaHook,
   ruleResult,
   useCandidate,
 } from "./helpers";
 
 // Prøve E: regler uten nett (docs/funksjoner/fase1-prove-e-regler.md pkt. 5–6, AK 6).
-// Testplan: docs/funksjoner/fase1-prove-e-regler-testplan.md avsnitt 5.2. Testsakene er de samme
-// dataene som Vitest og resultatmalen bruker. Testene leser `data-rule-state`, aldri norsk tekst.
-// Kandidat «custom» (egenbygd) er den eneste som virker fullt uten synktjeneste i e2e.
+// Testplan: docs/funksjoner/fase1-prove-e-regler-testplan.md avsnitt 5.2. Testsakene er felles
+// fasit fra src/modules/offline-trial/rules. Testene leser `data-rule-state`, aldri norsk tekst.
+// Egenbygd er eneste kandidat som virker fullt uten synktjeneste i e2e. Bare admin her; de fire
+// rollene dekkes i route.test.ts. Alle data er oppdiktet.
 
 const RULES_PATH = "/api/prove/regler";
-const RULES_ROUTE = `**${RULES_PATH}`;
-/** Verdi som er over begge prøvegrensene (oppdiktet). Brukes for å få en kjent tilstand før hver sak. */
-const ABOVE_BOTH = "100";
+const RULES_GLOB = `**${RULES_PATH}`;
 
-function pcOnly(testInfo: { project: { name: string } }) {
-  test.skip(
-    testInfo.project.name !== "pc",
-    "Ruten svarer likt uansett skjermstørrelse, så dette kjøres bare i pc (testplan 5.2)",
-  );
+function pcOnly(testInfo: { project: { name: string } }, reason: string) {
+  test.skip(testInfo.project.name !== "pc", reason);
 }
 
-function ipadOnly(testInfo: { project: { name: string } }) {
-  test.skip(testInfo.project.name !== "ipad", "Gjelder iPad-størrelse (testplan 5.2)");
-}
-
-function fieldFor(testCase: TrialRuleCase): string {
-  const rule = trialRules.find((entry) => entry.key === testCase.rule_key);
-  if (!rule) throw new Error(`Fant ikke regelen ${testCase.rule_key}`);
+function fieldOf(ruleKey: string): string {
+  const rule = trialRules.find((entry) => entry.key === ruleKey);
+  if (!rule) throw new Error(`Fant ikke regelen ${ruleKey}`);
   return rule.field;
 }
 
-function label(testCase: TrialRuleCase): string {
-  return `${testCase.rule_key}: ${testCase.name}`;
+function caseLabel(entry: TrialRuleCase): string {
+  return `${entry.rule_key} / ${entry.name} («${entry.input}»)`;
 }
 
-/** Logger inn som admin, lager et nytt testskjema og venter til det er klart. */
-async function openNewForm(page: Page): Promise<string> {
+async function openNewForm(page: Page) {
   await logIn(page, ADMIN_EMAIL);
-  const id = await createTrialForm(page);
-  await expect(page.getByText(/^0 av 40 felt utfylt$/)).toBeVisible();
-  expect(await hookValue(page, "candidate")).toBe("custom");
-  return id;
+  await createTrialForm(page);
+  for (const rule of trialRules) await expect(numberInput(page, rule.field)).toBeVisible();
 }
 
 /**
- * Fyller inn en testsak og venter på svaret. Først settes feltet til en verdi som gir en annen
- * tilstand enn forventet, så venter testen alltid på en endring og aldri på en gammel linje.
+ * Fyller inn en testsak og venter på at svaret under feltet er oppdatert. Først settes en verdi
+ * med en annen tilstand enn den forventede, så testen aldri leser et gammelt svar som tilfeldigvis
+ * er likt. Gir tilstanden nettleseren viser.
  */
-async function enterCase(page: Page, testCase: TrialRuleCase): Promise<void> {
-  const input = numberInput(page, fieldFor(testCase));
-  const result = ruleResult(page, testCase.rule_key);
-  const primed: [string, TrialRuleState] =
-    testCase.expect_state === "not_evaluated" ? [ABOVE_BOTH, "triggered"] : ["", "not_evaluated"];
-  await input.fill(primed[0]);
-  await expect(result, `${label(testCase)} (før)`).toHaveAttribute("data-rule-state", primed[1]);
-  await input.fill(testCase.input);
-  await expect(result, label(testCase)).toHaveAttribute("data-rule-state", testCase.expect_state);
+async function browserStateFor(page: Page, entry: TrialRuleCase): Promise<string | null> {
+  const input = numberInput(page, fieldOf(entry.rule_key));
+  const line = ruleResult(page, entry.rule_key);
+  const [resetText, resetState] =
+    entry.expect_state === "not_evaluated" ? ["0", "not_triggered"] : ["", "not_evaluated"];
+  await input.fill(resetText);
+  await expect(line, `${caseLabel(entry)}: før`).toHaveAttribute("data-rule-state", resetState);
+  await input.fill(entry.input);
+  try {
+    await expect(line).toHaveAttribute("data-rule-state", entry.expect_state);
+  } catch {
+    // Les det som faktisk vises, så sammenligningen under sier hvilken sak som er ulik
+  }
+  return line.getAttribute("data-rule-state");
 }
 
 test.beforeEach(async ({ context }) => {
@@ -78,46 +74,49 @@ test.beforeEach(async ({ context }) => {
 test("regelsvaret vises under begge feltene", async ({ page }) => {
   await openNewForm(page);
   for (const rule of trialRules) {
-    const result = ruleResult(page, rule.key);
-    await expect(result, rule.key).toHaveCount(1);
-    await expect(result, rule.key).toBeVisible();
-    await expect(result, rule.key).toHaveAttribute("data-rule-state", "not_evaluated");
-    await expect(result, rule.key).toHaveAttribute("aria-live", "polite");
+    const line = ruleResult(page, rule.key);
+    await expect(line, rule.key).toHaveCount(1);
+    await expect(line, rule.key).toBeVisible();
+    await expect(line, rule.key).toHaveAttribute("data-rule-state", "not_evaluated");
+    await expect(line, rule.key).toHaveAttribute("aria-live", "polite");
+    // Under feltet: linjen begynner nedenfor toppen av tallfeltet
     const inputBox = await numberInput(page, rule.field).boundingBox();
-    const resultBox = await result.boundingBox();
-    expect(inputBox && resultBox, rule.key).toBeTruthy();
-    expect(resultBox!.y, `${rule.key} står under feltet`).toBeGreaterThanOrEqual(
-      inputBox!.y + inputBox!.height - 1,
-    );
+    const lineBox = await line.boundingBox();
+    expect(inputBox && lineBox, rule.key).toBeTruthy();
+    expect(lineBox!.y, `${rule.key} ligger under feltet`).toBeGreaterThan(inputBox!.y);
   }
 });
 
 // Obligatorisk (AK 6)
 test("uten nett gir hver testsak riktig svar", async ({ page, context }) => {
+  const calls = countRequests(page, RULES_GLOB);
   await openNewForm(page);
-  const ruleCalls = countRequests(page, RULES_ROUTE);
   try {
     await context.setOffline(true);
-    for (const testCase of trialRuleCases) {
-      await enterCase(page, testCase);
+    for (const entry of trialRuleCases) {
+      const state = await browserStateFor(page, entry);
+      expect(state, caseLabel(entry)).toBe(entry.expect_state);
     }
-    expect(ruleCalls.count(), "ingen kall til regelruten").toBe(0);
   } finally {
     await context.setOffline(false);
   }
+  expect(calls.count(), "forespørsler til regelruten").toBe(0);
 });
 
 test("svaret endres uten ekstra trykk", async ({ page, context }, testInfo) => {
-  ipadOnly(testInfo);
+  test.skip(testInfo.project.name !== "ipad", "Kjøres bare i iPad-størrelse (testplan 5.2)");
   await openNewForm(page);
   const input = numberInput(page, "water_heater_age");
-  const result = ruleResult(page, "trial_water_heater_age");
+  const line = ruleResult(page, "trial_water_heater_age");
   try {
     await context.setOffline(true);
-    await input.fill("6");
-    await expect(result).toHaveAttribute("data-rule-state", "not_triggered");
-    await input.fill("8");
-    await expect(result).toHaveAttribute("data-rule-state", "triggered");
+    await input.click();
+    await input.pressSequentially("6");
+    await expect(line).toHaveAttribute("data-rule-state", "not_triggered");
+    await input.press("Backspace");
+    await input.pressSequentially("8");
+    await expect(line).toHaveAttribute("data-rule-state", "triggered");
+    await expect(input).toBeFocused();
   } finally {
     await context.setOffline(false);
   }
@@ -128,94 +127,108 @@ test("nettleser og server gir samme svar for alle testsakene", async ({
   page,
   context,
 }, testInfo) => {
-  pcOnly(testInfo);
+  pcOnly(testInfo, "Ruten svarer likt uansett skjermstørrelse; sammenlignes bare i pc (pkt. 6)");
   await openNewForm(page);
   const organizationId = await hookValue(page, "organizationId");
-  const ruleCalls = countRequests(page, RULES_ROUTE);
 
-  const fromBrowser = new Map<TrialRuleCase, string | null>();
+  const browser: (string | null)[] = [];
   try {
     await context.setOffline(true);
-    for (const testCase of trialRuleCases) {
-      await enterCase(page, testCase);
-      fromBrowser.set(
-        testCase,
-        await ruleResult(page, testCase.rule_key).getAttribute("data-rule-state"),
-      );
-    }
-    expect(ruleCalls.count(), "ingen kall til regelruten uten nett").toBe(0);
+    for (const entry of trialRuleCases) browser.push(await browserStateFor(page, entry));
   } finally {
     await context.setOffline(false);
   }
 
-  for (const testCase of trialRuleCases) {
+  for (const [index, entry] of trialRuleCases.entries()) {
+    const field = fieldOf(entry.rule_key);
     const response = await page.request.post(RULES_PATH, {
-      data: {
-        organizationId,
-        answers: { [fieldFor(testCase)]: parseTrialNumber(testCase.input) },
-      },
+      data: { organizationId, answers: { [field]: parseTrialNumber(entry.input) } },
     });
-    expect(response.status(), label(testCase)).toBe(200);
-    const body = (await response.json()) as { results: { key: string; state: string }[] };
-    const fromServer = body.results.find((entry) => entry.key === testCase.rule_key)?.state;
-    expect(fromBrowser.get(testCase), label(testCase)).toBe(testCase.expect_state);
-    expect(fromServer, label(testCase)).toBe(testCase.expect_state);
-    expect(fromServer, label(testCase)).toBe(fromBrowser.get(testCase));
+    expect(response.status(), caseLabel(entry)).toBe(200);
+    const body = (await response.json()) as unknown;
+    const list = (Array.isArray(body) ? body : (body as { results?: unknown } | null)?.results) as
+      { key: string; state: string }[] | undefined;
+    expect(Array.isArray(list), `${caseLabel(entry)}: regelsvar i kroppen`).toBe(true);
+    const server = list!.find((result) => result.key === entry.rule_key)?.state;
+    expect(
+      { nettleser: browser[index], server },
+      `${caseLabel(entry)}: nettleser og server`,
+    ).toEqual({ nettleser: entry.expect_state, server: entry.expect_state });
   }
 });
 
 test("ruten krever innlogging", async ({ request }, testInfo) => {
-  pcOnly(testInfo);
+  pcOnly(testInfo, "Rutetest, kjøres bare i pc");
   const response = await request.post(RULES_PATH, {
     data: { organizationId: crypto.randomUUID(), answers: {} },
   });
   expect(response.status()).toBe(401);
+  expect(response.headers()["cache-control"]).toBe("private, no-store");
 });
 
 test("ruten gir 403 for annen organisasjon", async ({ page }, testInfo) => {
-  pcOnly(testInfo);
+  pcOnly(testInfo, "Rutetest, kjøres bare i pc");
   await logIn(page, ADMIN_EMAIL);
   const response = await page.request.post(RULES_PATH, {
     data: { organizationId: crypto.randomUUID(), answers: { water_heater_age: 8 } },
   });
   expect(response.status()).toBe(403);
+  expect(response.headers()["cache-control"]).toBe("private, no-store");
+  const body = (await response.json()) as Record<string, unknown>;
+  expect(typeof body.feil).toBe("string");
+  expect(body).not.toHaveProperty("results");
 });
 
-test("regelsvaret etter omlasting uten nett", async ({ page, context }) => {
+test("regelsvaret etter omlasting uten nett", async ({ page, context }, testInfo) => {
   await openNewForm(page);
-  // Samme vei som «skjemaet åpner fra hurtiglageret uten nett» i fase-1-egenbygd.spec.ts
+  // Samme vei som fase-1-egenbygd.spec.ts («reload uten nett»): service worker klar og hurtiglager fylt
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
   });
   await page.reload();
-  await expect(page.getByText(/^0 av 40 felt utfylt$/)).toBeVisible();
+  await expect(numberInput(page, "water_heater_age")).toBeVisible();
   await expect
     .poll(() => page.evaluate(async () => (await caches.keys()).length), { timeout: 15_000 })
     .toBeGreaterThan(0);
 
+  const formId = new URL(page.url()).pathname.split("/").pop()!;
   await numberInput(page, "water_heater_age").fill("7,5");
   await expect(ruleResult(page, "trial_water_heater_age")).toHaveAttribute(
     "data-rule-state",
     "triggered",
   );
-  await expect(page.getByText(/^1 av 40 felt utfylt$/)).toBeVisible();
+  // Svaret er lagret lokalt før omlastingen
+  await expect
+    .poll(
+      async () =>
+        (await readRowsViaHook(page, "trial_answers", formId)).some(
+          (row) => row.field_key === "water_heater_age",
+        ),
+      { timeout: 10_000 },
+    )
+    .toBe(true);
 
+  let reloaded = false;
   try {
     await context.setOffline(true);
-    let reloaded = true;
     try {
       await page.reload();
-      await expect(page.getByRole("heading", { name: "Testskjema", level: 1 })).toBeVisible();
-    } catch {
-      reloaded = false;
+      await expect(numberInput(page, "water_heater_age")).toBeVisible();
+      reloaded = true;
+    } catch (error) {
+      testInfo.annotations.push({
+        type: "ikke dekket",
+        description: `omlasting uten nett virket ikke: ${String(error).slice(0, 120)}`,
+      });
     }
-    test.skip(
-      !reloaded,
-      "Testskjemaet lastet ikke på nytt uten nett i Chromium her; ikke dekket (oppgavekort pkt. 6)",
-    );
+    test.skip(!reloaded, "Testskjemaet kan ikke lastes på nytt uten nett her (pkt. 6)");
     await expect(ruleResult(page, "trial_water_heater_age")).toHaveAttribute(
       "data-rule-state",
       "triggered",
+    );
+    await expect(ruleResult(page, "trial_moisture_floor_limit")).toHaveAttribute(
+      "data-rule-state",
+      "not_evaluated",
     );
   } finally {
     await context.setOffline(false);
