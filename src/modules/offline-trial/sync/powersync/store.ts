@@ -6,8 +6,12 @@
  * `(trial_form_id, field_key)`). Tekstfelt skriver både `value` og `text_state` (Yjs), ventet
  * ca. 300 ms etter siste tastetrykk, og fletter med det som ligger lagret, så tekst fra en annen
  * enhet ikke forsvinner. Bildefilen legges i IndexedDB og raden i `trial_photos`.
+ *
+ * Synkstatus (docs/funksjoner/fase1-synkstatus.md, K3 og K5): «Synk nå» sender køen selv
+ * (`connector.uploadAll`) og venter så på en henting fra PowerSync-tjenesten. `serverConfirmed`
+ * bygger bare på svar fra serveren og tjenesten, aldri på `navigator.onLine` alene.
  */
-import type { AbstractPowerSyncDatabase, Transaction } from "@powersync/web";
+import type { AbstractPowerSyncDatabase, SyncStatus, Transaction } from "@powersync/web";
 import { uuidv7 } from "@/shared/lib/uuid";
 import type { TrialPhoto, TrialValue } from "../../answers";
 import { textOf } from "../../text-merge";
@@ -15,11 +19,14 @@ import { listTrialFields, trialForm, type TrialFieldType } from "../../trial-for
 import { confirmLocalPhoto, listConfirmedPhotoIds, putLocalPhoto } from "../photo-store";
 import { isPhotoWaiting } from "../photo-upload";
 import { nextTextState, safeTextOf, TEXT_WRITE_DELAY_MS } from "../text-state";
+import { runSyncNow, singleFlight, SYNC_NOW_TIMEOUT_MS } from "../sync-now";
+import { lastUploadFailed, TrialSyncConnector } from "./connector";
 import type {
   TrialAnswerRow,
   TrialFormSnapshot,
   TrialFormSummary,
   TrialPhotoRow,
+  TrialSyncRoundResult,
   TrialSyncStatus,
   TrialSyncStore,
 } from "../types";
@@ -119,16 +126,130 @@ const PENDING_PHOTOS_SQL = `SELECT id, trial_form_id, field_key, name, size_byte
    FROM trial_photos WHERE uploaded_at IS NULL AND device_id = ? AND deleted_at IS NULL
    ORDER BY created_at, id`;
 
+function isOnline(): boolean {
+  // Node har `navigator` uten `onLine` (tester); bare et uttrykkelig `false` betyr uten nett.
+  return typeof navigator === "undefined" || navigator.onLine !== false;
+}
+
+/** Noe er galt mot tjenesten nå: ikke koblet til, eller feil ved henting eller opplasting. */
+function hasSyncProblem(status: SyncStatus): boolean {
+  return !status.connected || Boolean(status.downloadError) || Boolean(status.uploadError);
+}
+
+/** En henting fra tjenesten er ferdig etter `since` (ms). */
+function downloadedSince(status: SyncStatus, since: number): boolean {
+  const syncedAt = status.lastSyncedAt?.getTime();
+  return (
+    status.connected &&
+    syncedAt !== undefined &&
+    syncedAt > since &&
+    !status.downloading &&
+    !status.downloadError
+  );
+}
+
+/**
+ * `connector` kan sendes inn (tester); ellers lages en ny. Låsen rundt opplastingen er per
+ * database (connector.ts), så den deles med connectoren SDK-en bruker (database.ts).
+ */
 export function createPowerSyncTrialStore(
   db: AbstractPowerSyncDatabase,
   deviceId: string,
   organizationId: string,
+  connector: TrialSyncConnector = new TrialSyncConnector(organizationId),
 ): PowerSyncTrialStore {
   // Organisasjonen bestemmer hvilken lokal database som er åpnet (database.ts); radene har ikke
   // organization_id lokalt, serveren setter den fra grant.
-  void organizationId;
   const pendingText = new Map<string, PendingText>();
-  const confirmedListeners = new Set<() => void>();
+  /** Varsler som ikke kommer fra en tabell eller SDK-status: bekreftede bilder og «Synk nå». */
+  const statusListeners = new Set<() => void>();
+
+  function notifyStatus() {
+    for (const listener of statusListeners) listener();
+  }
+
+  // K5: tidspunktet (ms) for siste feil, frakobling eller tap av nett. Bekreftet krever en henting
+  // fra tjenesten etter dette. Starter ved åpning, så `lastSyncedAt` fra en tidligere økt ikke teller.
+  let lastProblemAt = Date.now();
+  function markProblem() {
+    lastProblemAt = Date.now();
+  }
+  const disposeProblemWatch = db.registerListener({
+    statusChanged: (status) => {
+      if (hasSyncProblem(status)) markProblem();
+    },
+  });
+  const onOffline = () => {
+    markProblem();
+    notifyStatus();
+  };
+  if (typeof window !== "undefined") window.addEventListener("offline", onOffline);
+
+  function isServerConfirmed(): boolean {
+    if (!isOnline() || lastUploadFailed(db)) return false;
+    const status = db.currentStatus;
+    if (hasSyncProblem(status)) return false;
+    return downloadedSince(status, lastProblemAt);
+  }
+
+  /**
+   * Venter på en henting fra tjenesten som er ferdig etter `since`. Ikke koblet til: kaster straks
+   * (runden er sending og henting, som for ElectricSQL). Tidsavbruddet ligger i `runSyncNow`.
+   */
+  function waitForDownload(since: number, uploaded: boolean): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const check = (status: SyncStatus): boolean => {
+        if (!status.connected) {
+          reject(new Error("Ikke koblet til synktjenesten."));
+          return true;
+        }
+        // Ingenting ble sendt i runden og tjenesten er koblet til uten feil, med en henting etter
+        // siste problem: strømmen er oppdatert, så vi venter ikke på et sjekkpunkt som ikke kommer.
+        if (
+          downloadedSince(status, since) ||
+          (!uploaded && !hasSyncProblem(status) && downloadedSince(status, lastProblemAt))
+        ) {
+          resolve();
+          return true;
+        }
+        return false;
+      };
+      if (check(db.currentStatus)) return;
+      // Lytteren fjernes også etter tidsavbruddet, så den ikke blir hengende etter runden.
+      const timer = setTimeout(() => {
+        dispose();
+        reject(new Error("Tidsavbrudd ved henting."));
+      }, SYNC_NOW_TIMEOUT_MS);
+      const dispose = db.registerListener({
+        statusChanged: (status) => {
+          if (!check(status)) return;
+          clearTimeout(timer);
+          dispose();
+        },
+      });
+    });
+  }
+
+  async function round(): Promise<void> {
+    const startedAt = Date.now();
+    await flush();
+    const before = await db.get<{ n: number }>("SELECT count(*) AS n FROM ps_crud");
+    try {
+      await connector.uploadAll(db);
+    } catch (error) {
+      markProblem();
+      throw error;
+    }
+    await waitForDownload(startedAt, before.n > 0);
+  }
+
+  const syncNowOnce = singleFlight(async (): Promise<TrialSyncRoundResult> => {
+    try {
+      return await runSyncNow({ isOnline, round });
+    } finally {
+      notifyStatus();
+    }
+  });
 
   /** Bilder fra denne enheten som venter på opplasting (uten `uploaded_at`, ikke bekreftet). */
   async function waitingPhotos(): Promise<PhotoRecord[]> {
@@ -277,8 +398,12 @@ export function createPowerSyncTrialStore(
   return {
     flush,
 
+    syncNow: syncNowOnce,
+
     async close(): Promise<void> {
       await flush();
+      disposeProblemWatch();
+      if (typeof window !== "undefined") window.removeEventListener("offline", onOffline);
       await db.close();
     },
 
@@ -367,14 +492,14 @@ export function createPowerSyncTrialStore(
 
     onStatusChange(listener: () => void): () => void {
       // Bekreftede bilder (`confirmLocalPhoto`) endrer ingen tabell, så de varsles her.
-      confirmedListeners.add(listener);
+      statusListeners.add(listener);
       const disposeTables = db.onChange(
         { onChange: () => listener() },
         { tables: ["ps_crud", "trial_answers", "trial_photos"], throttleMs: 100 },
       );
       const disposeStatus = db.registerListener({ statusChanged: () => listener() });
       return () => {
-        confirmedListeners.delete(listener);
+        statusListeners.delete(listener);
         disposeTables();
         disposeStatus();
       };
@@ -388,7 +513,7 @@ export function createPowerSyncTrialStore(
       // Bare i bildelageret, aldri i ps_crud eller trial_photos (avgjørelse 6, småfunn 6):
       // serveren eier `uploaded_at` og `sha256` og setter dem selv.
       await confirmLocalPhoto(id, sha256);
-      for (const listener of confirmedListeners) listener();
+      notifyStatus();
     },
 
     async status(): Promise<TrialSyncStatus> {
@@ -397,7 +522,8 @@ export function createPowerSyncTrialStore(
         waitingPhotos(),
       ]);
       return {
-        online: typeof navigator === "undefined" ? true : navigator.onLine,
+        online: isOnline(),
+        serverConfirmed: isServerConfirmed(),
         pendingChanges: crud.n,
         pendingPhotos: photos.length,
       };
