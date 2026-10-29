@@ -101,4 +101,16 @@ describe("TrialSyncConnector.uploadData (powersync/connector.ts)", () => {
     expect(calls).toHaveLength(0);
     expect(complete).not.toHaveBeenCalled();
   });
+
+  it("PowerSync: SDK-en kaller uploadData uten nett, og ingenting sendes", async () => {
+    vi.stubGlobal("navigator", { onLine: false });
+    const calls = stubFetch(200);
+    const { db, complete } = fakeDb();
+    const connector = new TrialSyncConnector(ORG);
+
+    await expect(connector.uploadData(db)).rejects.toThrow("Uten nett.");
+
+    expect(calls).toHaveLength(0);
+    expect(complete).not.toHaveBeenCalled();
+  });
 });

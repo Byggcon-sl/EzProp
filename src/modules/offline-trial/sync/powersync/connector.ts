@@ -11,6 +11,7 @@
  * «Synk nå» (docs/funksjoner/fase1-synkstatus.md, krav K3) sender køen selv med `uploadAll`, også
  * uten PowerSync-tjenesten. SDK-ens egne kall og våre går gjennom samme lås per database, så to
  * opplastinger aldri kjører samtidig og samme transaksjon ikke sendes to ganger parallelt.
+ * Uten nett sendes ingenting: opplastingen kaster før `fetch`, og transaksjonen blir i køen.
  */
 import type {
   AbstractPowerSyncDatabase,
@@ -163,6 +164,11 @@ export class TrialSyncConnector implements PowerSyncBackendConnector {
     if (operations.length === 0) {
       await transaction.complete();
       return true;
+    }
+
+    // SDK-en kaller `uploadData` ved hver lokale skriving, også uten nett. Da skal ingenting sendes.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      throw new Error("Uten nett.");
     }
 
     const response = await fetch("/api/prove/synk/endringer", {
