@@ -16,6 +16,7 @@ import { db } from "@/db/client";
 import { trialForms, trialPhotos } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { requireTrialField } from "./apply-changes";
+import { trialNameSchema } from "./change-schema";
 import {
   InvalidTrialChangeError,
   TrialPhotoNotFoundError,
@@ -42,6 +43,43 @@ export function trialPhotoMaxBytes(): number {
   return Number.isSafeInteger(configured) && configured > 0
     ? configured
     : TRIAL_PHOTO_DEFAULT_MAX_BYTES;
+}
+
+/**
+ * Leser kroppen i bilderuten, men aldri mer enn `maxBytes` inn i minnet (småfunn 8). Et for stort
+ * `Content-Length` avvises før noe leses; ellers stoppes lesingen straks grensen passeres.
+ * Kaster `TrialPhotoTooLargeError` (413).
+ */
+export async function readTrialPhotoBody(
+  request: Request,
+  maxBytes: number = trialPhotoMaxBytes(),
+): Promise<Uint8Array> {
+  const declared = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    await request.body?.cancel().catch(() => undefined);
+    throw new TrialPhotoTooLargeError();
+  }
+  if (!request.body) return new Uint8Array(0);
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new TrialPhotoTooLargeError();
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 export const storeTrialPhoto: StoreTrialPhoto = async (
@@ -74,7 +112,8 @@ export const storeTrialPhoto: StoreTrialPhoto = async (
   if (!existing) {
     if (!isUuid(meta.trialFormId)) throw new InvalidTrialChangeError("Testskjemaet finnes ikke.");
     requireTrialField(meta.fieldKey);
-    if (typeof meta.name !== "string") throw new InvalidTrialChangeError();
+    const name = trialNameSchema.safeParse(meta.name);
+    if (!name.success) throw new InvalidTrialChangeError(name.error.issues[0]!.message);
     const [form] = await db
       .select({ id: trialForms.id })
       .from(trialForms)

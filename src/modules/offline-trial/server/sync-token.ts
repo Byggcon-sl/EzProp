@@ -24,6 +24,17 @@ export const SYNC_TOKEN_KEY_ID = "trial";
  */
 export const DEVELOPMENT_SYNC_SECRET = "utvikling-ikke-hemmelig-synknokkel-bare-for-mac-0123456789";
 
+/**
+ * Alle nøkler som står åpent i repoet (småfunn 10): utvikling (`.env.example`, `start.sh`), CI
+ * (`.github/workflows/ci.yml`) og e2e (`playwright.config.ts`). Ingen av dem er hemmelige, så alle
+ * nektes utenfor localhost. Testen `sync-token.test.ts` sjekker at listen følger filene.
+ */
+export const PUBLIC_SYNC_SECRETS: readonly string[] = [
+  DEVELOPMENT_SYNC_SECRET,
+  "ci-synknokkel-bare-for-automatiske-tester-0123456789",
+  "e2e-synknokkel-bare-for-automatiske-tester-0123456789",
+];
+
 function isLocalhost(url: string): boolean {
   try {
     const host = new URL(url).hostname;
@@ -43,9 +54,14 @@ function readSecret(): Uint8Array {
     );
   }
   const appUrl = process.env.BETTER_AUTH_URL || "http://localhost:3000";
-  if (secret === DEVELOPMENT_SYNC_SECRET && !isLocalhost(appUrl)) {
+  if (PUBLIC_SYNC_SECRETS.includes(secret.trim()) && !isLocalhost(appUrl)) {
     throw new Error(
-      "POWERSYNC_JWT_SECRET har utviklingsverdien fra .env.example. Den kan bare brukes når BETTER_AUTH_URL er localhost.",
+      "POWERSYNC_JWT_SECRET har en verdi som står åpent i repoet (utvikling, CI eller e2e). Den kan bare brukes når BETTER_AUTH_URL er localhost.",
+    );
+  }
+  if (secret.trim() === (process.env.BETTER_AUTH_SECRET ?? "").trim()) {
+    throw new Error(
+      "POWERSYNC_JWT_SECRET kan ikke være lik BETTER_AUTH_SECRET. Bruk en egen nøkkel for synktjenesten.",
     );
   }
   return bytes;

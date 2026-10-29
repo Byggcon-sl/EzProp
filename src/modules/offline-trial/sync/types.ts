@@ -120,8 +120,10 @@ export interface TrialSyncStore {
   /** Bilder fra denne enheten uten `uploadedAt`, i stabil rekkefølge (`createdAt`, så `id`). */
   listPendingPhotos(): Promise<TrialPhotoRow[]>;
   /**
-   * Skriver `uploaded_at` og `sha256` **bare lokalt** etter at serveren har bekreftet filen. Legges
-   * aldri i endringskøen: serveren eier begge kolonnene og setter dem selv (`storeTrialPhoto`).
+   * Serveren har bekreftet filen: sletter den lokale filen og merker bildet bekreftet i
+   * `photo-store.ts` (`confirmLocalPhoto`), så det ikke lenger regnes som ventende. Skriver aldri
+   * `uploaded_at` eller `sha256` og legger ingenting i endringskøen: serveren eier begge kolonnene
+   * og setter dem selv (`storeTrialPhoto`).
    */
   markPhotoUploaded(id: string, sha256: string): Promise<void>;
   /** Skriver tekst som venter (ved blur, når siden skjules, ved avmelding og før siden lukkes). */

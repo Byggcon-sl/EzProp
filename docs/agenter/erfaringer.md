@@ -18,6 +18,7 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Utvikler og testskriver skrev hvert sitt sett med tester for samme kode (`.impl.test.ts` ved siden av `.test.ts`), over 1 000 linjer dobbelt. Regel: utvikleren skriver ikke egne testfiler når testskriveren har oppgaven; utvikleren gir heller testskriveren en liste over grensetilfeller.
 - Falske tidtakere i Vitest gjør en tidtaker på 0 ms om til 1 ms når den settes under en tick. Henting «med en gang» går derfor via et løfte, ikke en tidtaker.
 - Begge e2e-feilene lå i testene: testkroken finnes bare på skjemasiden, og en test hang på tidsforløpet. Sjekk først om testen venter på riktig side og riktig tilstand før koden endres.
+- En ustabil bildetest på iPad avslørte en ekte feil: en opplasting uten svar stoppet bildekøen for godt. Tidsavbruddet på opplastingen (PR #14) kom ikke med i PR #13, fordi den ble laget mens PR #13 ble satt sammen. Regel for e2e: kall aldri `page.unroute` mens appen kan sende til ruten; la ruten stå og bruk en bryter.
 - Modellnavn i commit-meldinger (`Co-Authored-By`) har kommet inn på `main` og på flere brancher. Nye commits skrives uten. Gamle skrives ikke om.
 
 

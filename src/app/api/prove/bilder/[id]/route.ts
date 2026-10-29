@@ -1,5 +1,5 @@
 import { getCurrentActor } from "@/core/auth/session";
-import { storeTrialPhoto } from "@/modules/offline-trial/server/photo-storage";
+import { readTrialPhotoBody, storeTrialPhoto } from "@/modules/offline-trial/server/photo-storage";
 import { notLoggedIn, trialErrorResponse } from "../../error-response";
 
 /**
@@ -15,7 +15,8 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   try {
     const { id } = await context.params;
     const query = new URL(request.url).searchParams;
-    const bytes = new Uint8Array(await request.arrayBuffer());
+    // Stopper før hele filen er lest inn når den er for stor (413)
+    const bytes = await readTrialPhotoBody(request);
     const result = await storeTrialPhoto(
       actor,
       query.get("organisasjon") ?? "",

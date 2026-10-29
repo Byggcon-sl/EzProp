@@ -7,21 +7,37 @@
  * Alt annet: filen blir liggende og prøves igjen på neste runde.
  *
  * Kandidatuavhengig: bruker bare `listPendingPhotos`, `markPhotoUploaded` og `onStatusChange`
- * fra `TrialSyncStore`. `markPhotoUploaded` skriver bare lokalt, aldri i endringskøen.
+ * fra `TrialSyncStore`. `markPhotoUploaded` skriver bare lokalt, aldri i endringskøen, og aldri
+ * `uploaded_at` (den setter bare serveren).
  */
 import { isUuid } from "@/shared/lib/uuid";
 import { shouldReleaseLocalPhoto } from "./photo-upload";
-import { deleteLocalPhoto, getLocalPhoto } from "./photo-store";
+import { getLocalPhoto } from "./photo-store";
 import type { PhotoUploadResponse, TrialPhotoRow, TrialSyncStore } from "./types";
 
 export const PHOTO_UPLOAD_INTERVAL_MS = 10_000;
+
+/**
+ * Tidsavbrudd per opplasting: 30 sekunder pluss tid for filen på et svakt nett (ca. 25 kB/s).
+ * Uten dette står køen fast for godt hvis én forespørsel aldri svarer (svakt nett på befaring).
+ */
+const PHOTO_UPLOAD_BASE_TIMEOUT_MS = 30_000;
+const PHOTO_UPLOAD_SLOW_BYTES_PER_SECOND = 25_000;
+
+export function photoUploadTimeoutMs(bytes: number): number {
+  const size = Number.isFinite(bytes) && bytes > 0 ? bytes : 0;
+  return (
+    PHOTO_UPLOAD_BASE_TIMEOUT_MS + Math.ceil((size / PHOTO_UPLOAD_SLOW_BYTES_PER_SECOND) * 1000)
+  );
+}
 
 async function sha256Hex(blob: Blob): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function send(
+/** Sender ett bilde. Gir `undefined` ved nettfeil eller tidsavbrudd (filen blir liggende). */
+export async function sendPhoto(
   organizationId: string,
   photo: TrialPhotoRow,
   blob: Blob,
@@ -33,12 +49,15 @@ async function send(
     navn: photo.name,
     bytes: String(blob.size),
   });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), photoUploadTimeoutMs(blob.size));
   try {
     const response = await fetch(`/api/prove/bilder/${photo.id}?${params}`, {
       method: "PUT",
       credentials: "same-origin",
       headers: { "Content-Type": blob.type.startsWith("image/") ? blob.type : "image/jpeg" },
       body: blob,
+      signal: controller.signal,
     });
     let body: PhotoUploadResponse["body"];
     try {
@@ -49,6 +68,8 @@ async function send(
     return { status: response.status, body };
   } catch {
     return undefined;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -65,10 +86,10 @@ export async function uploadPendingPhotos(
     const blob = await getLocalPhoto(photo.id);
     if (!blob) continue;
     const localSha = await sha256Hex(blob);
-    const response = await send(organizationId, photo, blob);
+    const response = await sendPhoto(organizationId, photo, blob);
     if (!shouldReleaseLocalPhoto(localSha, response)) continue;
+    // Sletter filen og merker bildet bekreftet lokalt (`confirmLocalPhoto`); aldri `uploaded_at`.
     await store.markPhotoUploaded(photo.id, localSha);
-    await deleteLocalPhoto(photo.id);
     released++;
   }
   return released;

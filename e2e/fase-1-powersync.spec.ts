@@ -252,27 +252,34 @@ test.describe("bildekøen", () => {
     page,
   }) => {
     const formId = await openNewForm(page);
-    await page.route(PHOTO_ROUTE, (route) => route.abort());
+    // Ruten blir stående til slutt; bryteren slipper opplastingene gjennom. page.unroute midt i en
+    // opplasting kan la forespørselen henge uten svar (fanget, men aldri behandlet).
+    let blockPhotos = true;
+    await page.route(PHOTO_ROUTE, (route) => (blockPhotos ? route.abort() : route.fallback()));
     try {
       await page.getByLabel("Forsidebilde", { exact: true }).setInputFiles(TEST_IMAGE);
       await expect(indicator(page)).toHaveText(/, 1 bilde$/);
       await expect.poll(() => localPhotoFileCount(page)).toBe(1);
+
+      blockPhotos = false;
+      await expect(indicator(page)).toHaveText(NO_PHOTOS_WAITING, { timeout: 15_000 });
+      await expect.poll(() => localPhotoFileCount(page), { timeout: 15_000 }).toBe(0);
+      await expect
+        .poll(async () => {
+          const rows = await queryLocal<{ uploaded_at: string | null }>(
+            page,
+            "SELECT uploaded_at FROM trial_photos WHERE trial_form_id = ?",
+            [formId],
+          );
+          // Småfunn 6: bare serveren setter uploaded_at. Uten synktjeneste i e2e forblir den tom
+          // lokalt, men bildet regnes ikke som ventende fordi serveren har bekreftet filen.
+          return rows.length === 1 && rows[0]!.uploaded_at === null;
+        })
+        .toBe(true);
+      await expect(indicator(page)).toHaveText(NO_PHOTOS_WAITING);
     } finally {
       await page.unroute(PHOTO_ROUTE);
     }
-
-    await expect(indicator(page)).toHaveText(NO_PHOTOS_WAITING, { timeout: 15_000 });
-    await expect.poll(() => localPhotoFileCount(page), { timeout: 15_000 }).toBe(0);
-    await expect
-      .poll(async () => {
-        const rows = await queryLocal<{ uploaded_at: string | null }>(
-          page,
-          "SELECT uploaded_at FROM trial_photos WHERE trial_form_id = ?",
-          [formId],
-        );
-        return rows.length === 1 && Boolean(rows[0]!.uploaded_at);
-      })
-      .toBe(true);
   });
 
   test("bildet beholdes lokalt når serveren svarer med feil sha256", async ({ page }, testInfo) => {

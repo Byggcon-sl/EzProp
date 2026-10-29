@@ -17,7 +17,21 @@ function byteSize(value: unknown): number {
   return encoder.encode(text).length;
 }
 
+/** Navn på skjema og bilde: tekst, høyst `maxNameLength` tegn. Brukes også av bilderuten. */
+export const trialNameSchema = z
+  .string("Navnet må være tekst.")
+  .max(
+    TRIAL_SYNC_LIMITS.maxNameLength,
+    `Navnet er for langt. Det kan ha høyst ${TRIAL_SYNC_LIMITS.maxNameLength} tegn.`,
+  );
+
 const changeDataSchema = z.record(z.string(), z.unknown()).superRefine((data, ctx) => {
+  if (typeof data.name === "string") {
+    const name = trialNameSchema.safeParse(data.name);
+    if (!name.success) {
+      ctx.addIssue({ code: "custom", path: ["name"], message: name.error.issues[0]!.message });
+    }
+  }
   if (data.value !== undefined && byteSize(data.value) > TRIAL_SYNC_LIMITS.maxValueBytes) {
     ctx.addIssue({ code: "custom", path: ["value"], message: "value er for stor" });
   }

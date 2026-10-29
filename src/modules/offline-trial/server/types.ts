@@ -50,6 +50,8 @@ export const TRIAL_SYNC_LIMITS = {
   maxValueBytes: 64 * 1024,
   maxTextStateBytes: 64 * 1024,
   maxDeviceIdLength: 64,
+  /** Navn på skjema (`trial_forms.name`) og bilde (`trial_photos.name`), i tegn (småfunn 9). */
+  maxNameLength: 200,
 } as const;
 
 export interface TrialChangesResult {

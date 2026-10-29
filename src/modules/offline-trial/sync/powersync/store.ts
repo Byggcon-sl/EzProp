@@ -12,7 +12,8 @@ import { uuidv7 } from "@/shared/lib/uuid";
 import type { TrialPhoto, TrialValue } from "../../answers";
 import { textOf } from "../../text-merge";
 import { listTrialFields, trialForm, type TrialFieldType } from "../../trial-form";
-import { putLocalPhoto } from "../photo-store";
+import { confirmLocalPhoto, listConfirmedPhotoIds, putLocalPhoto } from "../photo-store";
+import { isPhotoWaiting } from "../photo-upload";
 import { nextTextState, safeTextOf, TEXT_WRITE_DELAY_MS } from "../text-state";
 import type {
   TrialAnswerRow,
@@ -127,6 +128,16 @@ export function createPowerSyncTrialStore(
   // organization_id lokalt, serveren setter den fra grant.
   void organizationId;
   const pendingText = new Map<string, PendingText>();
+  const confirmedListeners = new Set<() => void>();
+
+  /** Bilder fra denne enheten som venter på opplasting (uten `uploaded_at`, ikke bekreftet). */
+  async function waitingPhotos(): Promise<PhotoRecord[]> {
+    const [rows, confirmed] = await Promise.all([
+      db.getAll<PhotoRecord>(PENDING_PHOTOS_SQL, [deviceId]),
+      listConfirmedPhotoIds(),
+    ]);
+    return rows.filter((row) => isPhotoWaiting(row, deviceId, confirmed));
+  }
   /** Siste tekst-tilstand denne enheten skrev, per skjema og felt. */
   const ownTextStates = new Map<string, string>();
 
@@ -355,47 +366,40 @@ export function createPowerSyncTrialStore(
     },
 
     onStatusChange(listener: () => void): () => void {
+      // Bekreftede bilder (`confirmLocalPhoto`) endrer ingen tabell, så de varsles her.
+      confirmedListeners.add(listener);
       const disposeTables = db.onChange(
         { onChange: () => listener() },
         { tables: ["ps_crud", "trial_answers", "trial_photos"], throttleMs: 100 },
       );
       const disposeStatus = db.registerListener({ statusChanged: () => listener() });
       return () => {
+        confirmedListeners.delete(listener);
         disposeTables();
         disposeStatus();
       };
     },
 
     async listPendingPhotos(): Promise<TrialPhotoRow[]> {
-      const rows = await db.getAll<PhotoRecord>(PENDING_PHOTOS_SQL, [deviceId]);
-      return rows.map(toPhotoRow);
+      return (await waitingPhotos()).map(toPhotoRow);
     },
 
     async markPhotoUploaded(id: string, sha256: string): Promise<void> {
-      // Bare lokalt, aldri i ps_crud (avgjørelse 6): skriver rett i SDK-ens datatabell under
-      // visningen `trial_photos`. Serveren eier `uploaded_at` og `sha256` og setter dem selv.
-      await db.writeTransaction(async (tx) => {
-        await tx.execute(
-          `UPDATE ps_data__trial_photos
-           SET data = json_set(data, '$.uploaded_at', ?, '$.sha256', ?) WHERE id = ?`,
-          [new Date().toISOString(), sha256, id],
-        );
-      });
+      // Bare i bildelageret, aldri i ps_crud eller trial_photos (avgjørelse 6, småfunn 6):
+      // serveren eier `uploaded_at` og `sha256` og setter dem selv.
+      await confirmLocalPhoto(id, sha256);
+      for (const listener of confirmedListeners) listener();
     },
 
     async status(): Promise<TrialSyncStatus> {
       const [crud, photos] = await Promise.all([
         db.get<{ n: number }>("SELECT count(*) AS n FROM ps_crud"),
-        db.get<{ n: number }>(
-          `SELECT count(*) AS n FROM trial_photos
-           WHERE uploaded_at IS NULL AND device_id = ? AND deleted_at IS NULL`,
-          [deviceId],
-        ),
+        waitingPhotos(),
       ]);
       return {
         online: typeof navigator === "undefined" ? true : navigator.onLine,
         pendingChanges: crud.n,
-        pendingPhotos: photos.n,
+        pendingPhotos: photos.length,
       };
     },
   };
