@@ -101,6 +101,61 @@ Anslag per måned ved dagens kurs:
 
 Dette er et anslag. Sammenlign med Optiplans faktura.
 
+## Synktjenestene for prøve A og B
+
+**Kostnad:** ca. 700–850 kr per måned når synktjenestene er på, i tillegg til dagens testmiljø. Når de er av, koster de 0 kr.
+
+Anslaget bygger på Azures prisliste for Container Apps (forbruksplan, oktober 2026, uten rabatter). Hver container har 0,5 vCPU og 1 GiB minne og står på hele døgnet. Gratiskvoten gjelder per abonnement, så den trekkes fra bare én gang:
+
+- PowerSync-containeren: ca. 350 kr per måned (gratiskvoten trukket fra)
+- Electric-containeren: ca. 400 kr per måned
+- Ekstra endringslogg i databasen: noen få kroner
+
+Det er ingen kostnad for privat nett, fillagring eller logglagring, fordi ingen av delene brukes. Står tjenestene på bare noen dager, blir det tilsvarende mindre. Se også spørsmål nr. 12 i `docs/09-apne-sporsmal.md`.
+
+**Hva dette er:** prøve A og B skal kjøres på ekte iPad for alle tre kandidatene. Kandidat 3 (egenbygd) går bare gjennom appen og virker uten noe mer. PowerSync og ElectricSQL trenger hver sin lille tjeneste (container) i Azure ved siden av appen, i Sweden Central (EU). Disse står **av** til du slår dem på. En merge til `main` lager ingenting nytt så lenge de er av.
+
+**Bare oppdiktede adresser, navn og bilder i prøve A og B, aldri ekte kunder.** Testmiljøet oppfyller ikke «Minimum før ekte data» i `docs/07-utviklingsplan.md`.
+
+### Slå på
+
+1. **Lag fire nye secrets** i GitHub → Settings → Secrets and variables → Actions → fanen Secrets. Lag hver verdi i Terminal med `openssl rand -hex 32`. Det gir en ny, tilfeldig verdi hver gang. Bruk en ny verdi for hver av de fire:
+
+   | Navn | Hva det er |
+   |---|---|
+   | `POWERSYNC_JWT_SECRET` | Nøkkelen appen og PowerSync deler |
+   | `POWERSYNC_DB_PASSWORD` | Passordet til PowerSyncs databasebruker |
+   | `ELECTRIC_SECRET` | Nøkkelen appen og Electric deler |
+   | `ELECTRIC_DB_PASSWORD` | Passordet til Electrics databasebruker |
+
+   De to databasepassordene må bare ha bokstaver og tall, og minst 24 tegn. `openssl rand -hex 32` gir 64 tegn med bare bokstaver og tall, så det holder. Mangler en secret, eller er et passord feil, stopper utrullingen med en melding som sier hvilket navn det gjelder.
+
+2. **Sett variabelen** `ENABLE_SYNC_TRIAL` til `true` (fanen Variables). Nøyaktig `true`, med små bokstaver. Alt annet, også tom, betyr av.
+3. **Kjør utrullingen:** Actions → «Utrulling til Azure» → «Run workflow».
+4. **Vent noen minutter** etter at utrullingen er grønn. Første gang:
+   - Databasen må få innstillingen `wal_level` satt til logisk replikering. Utrullingen gjør det selv, og starter databasen på nytt **én gang** hvis Azure sier at det trengs. Appen er borte i et par minutter mens det skjer. Det står i loggen til utrullingen.
+   - Containerne kan starte på nytt et par ganger før databasebrukerne deres finnes. Det er normalt.
+
+### Sjekke
+
+1. **PowerSync svarer:** i portalen, gå til ressursgruppen `rg-ezprop-test` og åpne Container App-en for PowerSync. Kopier adressen («Application Url») og legg til `/probes/liveness`. Åpne den i nettleseren. Du skal få et kort svar, ikke en feilside.
+2. **Electric er stengt for andre enn appen:** åpne Electric-adressen («Application Url» på Container App-en for Electric) med `/v1/health` på mobilen, på **mobilnett** (ikke wifi). Du skal få **403** eller ingen svar. Det viser at sperren virker: bare appen slipper inn.
+3. **Kjør prøve A og B i appen** på iPaden, etter beskrivelsene i `docs/funksjoner/`. Velg kandidat på listen over testskjemaer.
+
+Ser noe galt ut: åpne Container App-en i portalen → Log stream, og kopier de siste linjene til Claude. Loggene lagres ikke, de vises bare mens du ser på.
+
+### Slå av
+
+Gjør alle tre stegene, i denne rekkefølgen:
+
+1. **Slett i portalen:** i ressursgruppen `rg-ezprop-test`, slett de to Container App-ene (PowerSync og Electric) og deretter Container Apps-miljøet (Container Apps Environment). Utrullingen sletter dem ikke selv.
+2. **Sett variabelen** `ENABLE_SYNC_TRIAL` til noe annet enn `true`, for eksempel `false`.
+3. **Kjør utrullingen** på nytt. Den fjerner synkinnstillingene i appen og rydder bort replikeringsplassene i databasen.
+
+**Hvorfor steg 3 er viktig:** hver synktjeneste har en replikeringsplass i databasen. Når tjenesten er borte, men replikeringsplassen står igjen, tar databasen vare på alle endringer i påvente av at tjenesten kommer tilbake. Da fylles databasedisken, og hele testmiljøet stopper. Utrullingen med bryteren av sletter replikeringsplassene som ikke er i bruk.
+
+Innstillingen `wal_level` settes ikke tilbake. Det er ufarlig og koster ingenting. De fire secrets kan stå, eller du kan slette dem.
+
 ## Slette miljøet
 
 `az group delete --name rg-ezprop-test`
