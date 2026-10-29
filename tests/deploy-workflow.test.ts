@@ -597,8 +597,9 @@ describe("synktjenestene i utrullingen (deploy-azure.yml)", () => {
       expect(env, name).toMatch(new RegExp(`^\\s*${name}:`, "m"));
     }
     expect(run).toContain("check-sync-secrets.sh");
-    expect(run).not.toContain("secrets.");
-    expect(run).not.toContain("vars.");
+    // Verdiene kommer bare via env, aldri rett inn i run (filnavnet inneholder «secrets.sh»).
+    expect(run).not.toMatch(/\$\{\{[^}]*secrets\./);
+    expect(run).not.toMatch(/\$\{\{[^}]*vars\./);
   });
 
   it("ingen set -x og ingen echo av hemmeligheter", () => {
