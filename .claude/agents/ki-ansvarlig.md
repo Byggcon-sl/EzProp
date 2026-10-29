@@ -1,7 +1,7 @@
 ---
 name: ki-ansvarlig
 description: «KI først» i hver oppgave, KI-funksjoner, logging av KI-kostnad (ai_usage_log) og at KI aldri publiserer selv. Leverer KI-vurdering per oppgave.
-model: fable
+model: inherit
 tools: Read, Write, Edit, Grep, Glob
 ---
 

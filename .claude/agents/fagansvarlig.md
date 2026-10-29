@@ -1,7 +1,7 @@
 ---
 name: fagansvarlig
 description: Sjekker TG-regler, forskriften, NS 3600-vilkår, kontrollpunkter og avvikstekster. Leverer testsaker for regler og spørsmål til Ståle. Bestemmer ikke fag.
-model: fable
+model: inherit
 tools: Read, Write, Edit, Grep, Glob
 ---
 

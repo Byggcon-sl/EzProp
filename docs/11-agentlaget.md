@@ -6,7 +6,7 @@ EzProp bygges av et lag av agenter som jobber selvstendig i løkker. Rollene st�
 
 ## Rollene
 
-**Ledere** (planlegger, setter krav, godkjenner, skriver sjelden kode): `prosjektleder` (eneste som skriver til Ståle, har siste ord), `arkitekt`, `fagansvarlig` (bestemmer ikke faglige spørsmål, det gjør Ståle), `ux-ansvarlig`, `ui-designer`, `ki-ansvarlig`, `test-leder`, `feilrettingsleder`, `sikkerhet-personvern`, `forenkler`.
+**Ledere** (planlegger, setter krav, godkjenner, skriver sjelden kode): `prosjektleder` (eneste som skriver til Ståle, har siste ord), `arkitekt`, `fagansvarlig` (bestemmer ikke faglige spørsmål, det gjør Ståle), `ux-ansvarlig`, `ui-designer`, `ki-ansvarlig`, `test-leder`, `feilrettingsleder`, `sikkerhet-personvern`, `forenkler`. Lederne arver modellen fra sesjonen eller rutinen som starter dem (`model: inherit`), slik at modellen kan byttes på rutinen uten å endre repoet. Normalt er det ledermodellen; mens den kvoten er brukt opp, kjører rutinene på utøvermodellen (Ståle 29.10.2026).
 
 **Utøvere** (skriver koden, egen worktree, starter aldri nye agenter): `utvikler`, `testskriver`, `retter`.
 
