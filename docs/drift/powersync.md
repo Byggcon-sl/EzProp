@@ -53,7 +53,7 @@ Her står bare hva som lages når bryteren `ENABLE_SYNC_TRIAL` er `true`.
 ### 1. Databasen
 
 - **Logisk replikering:** `wal_level` settes til `logical` av oppsettet. Utrullingen starter databasen på nytt én gang hvis Azure sier at det trengs. Innstillingen settes ikke tilbake når bryteren slås av; det er ufarlig.
-- **Egen databasebruker** `powersync_repl`, laget av skriptet `scripts/azure/sync-trial-roles.ts` ved hver utrulling. Den kan bare lese de tre trial-tabellene og følge endringene. Aldri superbruker. Passordet er secreten `POWERSYNC_DB_PASSWORD` og står aldri i repoet.
+- **Egen databasebruker** `powersync_repl`, laget av skriptet `scripts/azure/sync-trial-roles.ts` ved hver utrulling. Den har lesetilgang (SELECT) bare til de tre trial-tabellene. REPLICATION-egenskapen, som tjenesten trenger for å følge endringene, gir likevel mulighet til å lese hele databasen via replikeringsprotokollen, uavhengig av lesetilgangen. Skriptets sjekk til slutt dekker lesetilgangen, ikke dette. Det er akseptert for testmiljøet, der det bare finnes oppdiktede data. For produksjon avgjøres det i synk-ADR-en. Aldri superbruker. Passordet er secreten `POWERSYNC_DB_PASSWORD` og står aldri i repoet.
 - **Egen database** `powersync_storage` der PowerSync lagrer sin egen tilstand. Den eies av `powersync_repl`, og Electrics bruker kan ikke koble til den.
 - **Publikasjonen** `powersync` lages av migreringen `0001_prove-uten-nett`, som før.
 - **Replikeringsplass:** PowerSync lager en replikeringsplass i databasen. Når bryteren slås av og utrullingen kjøres, rydder skriptet bort plasser som ikke er i bruk. Se «Slå av» i `docs/drift/testmiljo-azure.md` for hvorfor det er viktig.
