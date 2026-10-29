@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 29.10.2026 (PR #15 merget; PR for synktjenestene i Azure åpnet fra `fase1-synk-i-azure`)
+Sist oppdatert: 29.10.2026 (PR #15 merget; PR #17 for synktjenestene i Azure åpnet fra `fase1-synk-i-azure`)
 
 ## Gjeldende fase
 
@@ -12,7 +12,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Nå: liten oppgave (a) – synktjenestene i Azure-testmiljøet, PR åpnet** (branch `fase1-synk-i-azure`, oppå `main`, versjon 0.2.7). Oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så en merge lager ingen nye ressurser. Spørsmål nr. 12 (slå på, kostnad) lagt inn, ikke blokkerende. Roller: arkitekt, sikkerhet-personvern, utvikler, testskriver, test-leder. Steg: ADR 0003 og kontrakt (`scripts/azure/sync-trial-roles.types.ts`) ferdig, testplan ferdig, funn 1–5 rettet i kortet. Bygget i fire biter med testskriver i parallell; lint, typesjekk, 510 Vitest og e2e grønne; ingen alvorlige funn. Små funn står i PR-en og under «Små oppgaver som venter» (c). Neste: merge når CI er grønn, så venter prøve A og B på at Ståle slår på synktjenestene (spørsmål nr. 12).
+**Nå: liten oppgave (a) – synktjenestene i Azure-testmiljøet, PR #17** (branch `fase1-synk-i-azure`, oppå `main`, versjon 0.2.7). Oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så en merge lager ingen nye ressurser. Spørsmål nr. 12 (slå på, kostnad) lagt inn, ikke blokkerende. Roller: arkitekt, sikkerhet-personvern, utvikler, testskriver, test-leder. Steg: ADR 0003 og kontrakt (`scripts/azure/sync-trial-roles.types.ts`) ferdig, testplan ferdig, funn 1–5 rettet i kortet. Bygget i fire biter med testskriver i parallell; lint, typesjekk, 510 Vitest og e2e grønne; ingen alvorlige funn. Små funn står i PR-en og under «Små oppgaver som venter» (c). Neste: merge når CI er grønn, så venter prøve A og B på at Ståle slår på synktjenestene (spørsmål nr. 12).
 
 **Forrige oppgave:** Oppgave 6 – Kandidat 3, egenbygd (lokal database og endringskø), **PR #11** (branch `fase1-kandidat-egenbygd`, versjon 0.2.3, oppå PR #10). Oppgavekort `docs/funksjoner/fase1-kandidat-egenbygd.md` (med «Avgjørelser etter gjennomgangen»), testplan `docs/funksjoner/fase1-kandidat-egenbygd-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-egenbygd.md`. Ingen ny avhengighet, ingen migrering, ingen ny tjeneste. Sikkerhet-personvern: godkjent (ett lite funn rettet). Forenkler: doble testfiler slått sammen. Test-leder: avviste først for små funn (alle rettet), e2e-feil i to tester rettet av feilrettingslederen (feil i testene, ikke i koden). Punktet «Kandidater satt opp …» er krysset av.
 
@@ -29,7 +29,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
 
-| (ny) | Synktjenestene i Azure-testmiljøet (av som standard) | Klar (CI), merges av agentene | main |
+| #17 | Synktjenestene i Azure-testmiljøet (av som standard) | Klar (CI), merges av agentene | main |
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
