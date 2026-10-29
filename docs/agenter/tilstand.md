@@ -2,8 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-Sist oppdatert: 29.10.2026 (PR #14 merget; oppgavekort for synktjenestene i Azure laget på `fase1-synk-i-azure`)
-Sist oppdatert: 29.10.2026 kl. 14:05 (PR #14 merget; PR #15 med stabil e2e-test for organisasjonsbytte)
+Sist oppdatert: 29.10.2026 (PR #15 merget; PR for synktjenestene i Azure åpnet fra `fase1-synk-i-azure`)
 
 ## Gjeldende fase
 
@@ -13,13 +12,13 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Nå: liten oppgave (a) – synktjenestene i Azure-testmiljøet** (branch `fase1-synk-i-azure`, oppå `main`, versjon 0.2.6). Oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så en merge lager ingen nye ressurser. Spørsmål nr. 12 (slå på, kostnad) lagt inn, ikke blokkerende. Roller: arkitekt, sikkerhet-personvern, utvikler, testskriver, test-leder. Steg: ADR 0003 og kontrakt (`scripts/azure/sync-trial-roles.types.ts`) ferdig, testplan ferdig, funn 1–5 rettet i kortet. Neste: bygging i fire uavhengige biter (Bicep og CI, arbeidsflyt og secrets-sjekk, rolleskript og cloud-setup, driftsdokumenter og versjon) med testskriver i parallell.
+**Nå: liten oppgave (a) – synktjenestene i Azure-testmiljøet, PR åpnet** (branch `fase1-synk-i-azure`, oppå `main`, versjon 0.2.7). Oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så en merge lager ingen nye ressurser. Spørsmål nr. 12 (slå på, kostnad) lagt inn, ikke blokkerende. Roller: arkitekt, sikkerhet-personvern, utvikler, testskriver, test-leder. Steg: ADR 0003 og kontrakt (`scripts/azure/sync-trial-roles.types.ts`) ferdig, testplan ferdig, funn 1–5 rettet i kortet. Bygget i fire biter med testskriver i parallell; lint, typesjekk, 510 Vitest og e2e grønne; ingen alvorlige funn. Små funn står i PR-en og under «Små oppgaver som venter» (c). Neste: merge når CI er grønn, så venter prøve A og B på at Ståle slår på synktjenestene (spørsmål nr. 12).
 
 **Forrige oppgave:** Oppgave 6 – Kandidat 3, egenbygd (lokal database og endringskø), **PR #11** (branch `fase1-kandidat-egenbygd`, versjon 0.2.3, oppå PR #10). Oppgavekort `docs/funksjoner/fase1-kandidat-egenbygd.md` (med «Avgjørelser etter gjennomgangen»), testplan `docs/funksjoner/fase1-kandidat-egenbygd-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-egenbygd.md`. Ingen ny avhengighet, ingen migrering, ingen ny tjeneste. Sikkerhet-personvern: godkjent (ett lite funn rettet). Forenkler: doble testfiler slått sammen. Test-leder: avviste først for små funn (alle rettet), e2e-feil i to tester rettet av feilrettingslederen (feil i testene, ikke i koden). Punktet «Kandidater satt opp …» er krysset av.
 
 **Før det:** Oppgave 5 – Kandidat 2: ElectricSQL, **PR #10** (branch `fase1-kandidat-electricsql`, versjon 0.2.2). Oppgavekort `docs/funksjoner/fase1-kandidat-electricsql.md`, testplan `docs/funksjoner/fase1-kandidat-electricsql-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-electricsql.md`, drift `docs/drift/electricsql.md`. Sikkerhet-personvern: godkjent, tre små funn; (2) og (3) rettet, (1) (Electrics 400-kropp videresendes uendret) tas i ADR-en. Test-leder: godkjent (lint, typesjekk, format, 333 Vitest, e2e 105 bestått). Spørsmål nr. 11 (ElectricSQL som leverandør), ikke blokkerende.
 
-**Små oppgaver som venter:** (a) se «Neste». (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14** (merget 29.10.2026), sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
+**Små oppgaver som venter:** (a) se «Nå». (c) Småfunn fra synktjenestene i Azure: rydding av replikeringsplasser bare i egen database (rammer i dag også `ezprop` lokalt når `pnpm test` kjøres med containerne stoppet), lengdekrav på `POWERSYNC_JWT_SECRET` og `ELECTRIC_SECRET` i `check-sync-secrets.sh`, riktig «postgresql://» eller fjerne de avledede maskene i `deploy-azure.yml`, mindre bastant setning om hva tjenestene kan lese i `electricsql.md` (REPLICATION gir lesing av hele databasen), og to overflødige sjekker i `sync-trial-roles.ts`. (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14** (merget 29.10.2026), sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
 
 **Rekkefølge videre i fase 1:** alle tre kandidatene er satt opp → synktjenestene i Azure (a) → Ståle kjører prøve A og B per kandidat på ekte iPad → prøve C–F → sammenligning og ADR.
 
@@ -30,14 +29,13 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
 
-Ingen åpne PR-er nå.
-| #15 | E2e: testen for organisasjonsbytte uten henting fra den gamle siden (bare test) | Klar (CI) | main |
+| (ny) | Synktjenestene i Azure-testmiljøet (av som standard) | Klar (CI), merges av agentene | main |
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
 ## Venter på Ståle
 
-- Når synktjenestene kjører i Azure (egen liten PR kommer): kjør prøve A og B etter `docs/funksjoner/fase1-prove-ab-powersync.md`, `…-electricsql.md` og `…-egenbygd.md`.
+- Spørsmål nr. 12: slå på synktjenestene i testmiljøet (`docs/drift/testmiljo-azure.md`, «Slå på»). Når de kjører: kjør prøve A og B etter `docs/funksjoner/fase1-prove-ab-powersync.md`, `…-electricsql.md` og `…-egenbygd.md`.
 - **Testmiljøet (PR #7 er merget):** følg `docs/drift/testmiljo-azure.md`: lag ressursgruppen `rg-ezprop-test` og GitHub-innloggingen i Azure, legg inn secrets og variabler, svar på spørsmål nr. 6 og nr. 9. Bekreft «ferdig når»: appen åpner på ekte iPad Pro fra hjemskjermen. Ikke legg inn de fire e-post-secretene før Graph-adapteren er bygget (fase 0b).
 - Spørsmålene i `docs/09-apne-sporsmal.md`: nr. 6, nr. 8 (GPS i bildene, før prøve D), nr. 9, nr. 10 (PowerSync som leverandør) og nr. 11 (ElectricSQL som leverandør), de to siste før ADR-en, og nr. 12 (slå på synktjenestene i testmiljøet, kostnad).
 

@@ -171,7 +171,7 @@ Ingen ny skjerm og ingen endring i appens synklogikk. Hele den eksisterende pakk
 
 ## 10. Når test-leder godkjenner
 
-- `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne; versjon 0.2.6.
+- `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne; versjon 0.2.7.
 - Alle testnavn over finnes (eller en likeverdig test med begrunnelse i PR-en).
 - Avvises hvis testene i avsnitt 4 for rettigheter og «virker uten superbruker» mangler, eller hvis funn 1 ikke er rettet.
 - CI-jobben for Bicep er grønn på PR-en (kan ikke kjøres lokalt).

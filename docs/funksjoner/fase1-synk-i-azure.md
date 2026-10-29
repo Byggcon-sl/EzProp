@@ -2,7 +2,7 @@
 
 - **Fase:** 1 – Prøve uten nett (forberedelse til prøve A og B)
 - **Modul:** drift (`infra/azure`, `.github/workflows`, `docs/drift`). Ingen ny produktkode.
-- **Status:** klar til bygging (vurdert av forenkler, arkitekt, sikkerhet-personvern og test-leder)
+- **Status:** bygget, PR åpnet 29.10.2026 (vurdert av forenkler, arkitekt, sikkerhet-personvern og test-leder)
 - **Branch:** `fase1-synk-i-azure` (bygger på `main`)
 - **Dato:** 29.10.2026
 - **Støtter hovedmål:** Tid: prøve A og B må kjøres på ekte iPad mot testmiljøet før vi velger synkløsning; valget avgjør om befaring uten nett (den største tidsbesparelsen mot IVIT) holder. / Reklamasjoner: prøvene viser om noe går tapt mellom iPad og server, før ekte rapporter bygges oppå. / KI først: nei (se under).
@@ -53,7 +53,7 @@ Nei. Dette er drift av testmiljøet. KI er ikke med. Det som støttes, er grunnl
 9. **Spørsmål nr. 12** ligger allerede i `docs/09-apne-sporsmal.md`. Ikke blokkerende, siden alt er av.
 10. **CI (`ci.yml`):** `az bicep build` og `az bicep lint` på `main.bicep`, uten `azure/login`. Deretter en `jq`-sjekk på den kompilerte JSON-en: alle ressurser av typen `Microsoft.App/*` og `wal_level`-konfigurasjonen har `condition` med `parameters('enableSyncTrial')`.
 11. **ADR** `docs/adr/0003-synktjenester-testmiljo.md` (arkitekten skriver den): bryteren, forbruksplan, nettverksvalg (b) med forbeholdet, omstart av databasen, logger lagres ikke, forkastet: VNet og Azure Files.
-12. Versjon i `package.json`: 0.2.5 → 0.2.6.
+12. Versjon i `package.json`: 0.2.6 → 0.2.7 (main var 0.2.6 etter PR #15).
 
 **Ikke med (bevisst utelatt):**
 - Ingen utrulling til Azure og ingen Azure-kall fra agentene. Ståle slår på selv.
@@ -97,7 +97,7 @@ Ingen.
 - [ ] Bildeversjonene er like i Bicep og `docker-compose.yml`.
 - [ ] `docs/drift/testmiljo-azure.md` sier i klarspråk hvordan Ståle slår på, sjekker og slår av, hva det koster per måned, og at bare oppdiktede data brukes. `powersync.md` og `electricsql.md` lenker dit.
 - [ ] `tests/deploy-workflow.test.ts` er utvidet (nye secrets, `ENABLE_SYNC_TRIAL`, mønstre for hemmeligheter, driftsdokumentet, spørsmål nr. 12, CI-steget).
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne, versjon 0.2.6.
+- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne, versjon 0.2.7.
 - [ ] Bruker i annen organisasjon får ikke tilgang: uendret, dekket av eksisterende tester for synkreglene og shape-proxyen. Ingen ny spørring som tar `organizationId`.
 - [ ] Admin stenges ikke ute: rollematrisen er uendret.
 - [ ] Virker på iPad-størrelse: uendret (ingen nye skjermer).
