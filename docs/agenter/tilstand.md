@@ -3,6 +3,7 @@
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
 Sist oppdatert: 29.10.2026 (PR #14 merget; oppgavekort for synktjenestene i Azure laget på `fase1-synk-i-azure`)
+Sist oppdatert: 29.10.2026 kl. 14:05 (PR #14 merget; PR #15 med stabil e2e-test for organisasjonsbytte)
 
 ## Gjeldende fase
 
@@ -18,7 +19,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 **Før det:** Oppgave 5 – Kandidat 2: ElectricSQL, **PR #10** (branch `fase1-kandidat-electricsql`, versjon 0.2.2). Oppgavekort `docs/funksjoner/fase1-kandidat-electricsql.md`, testplan `docs/funksjoner/fase1-kandidat-electricsql-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-electricsql.md`, drift `docs/drift/electricsql.md`. Sikkerhet-personvern: godkjent, tre små funn; (2) og (3) rettet, (1) (Electrics 400-kropp videresendes uendret) tas i ADR-en. Test-leder: godkjent (lint, typesjekk, format, 333 Vitest, e2e 105 bestått). Spørsmål nr. 11 (ElectricSQL som leverandør), ikke blokkerende.
 
-**Små oppgaver som venter:** (a) se «Neste». (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14**, sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
+**Små oppgaver som venter:** (a) se «Neste». (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14** (merget 29.10.2026), sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
 
 **Rekkefølge videre i fase 1:** alle tre kandidatene er satt opp → synktjenestene i Azure (a) → Ståle kjører prøve A og B per kandidat på ekte iPad → prøve C–F → sammenligning og ADR.
 
@@ -30,6 +31,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 |---|---|---|---|
 
 Ingen åpne PR-er nå.
+| #15 | E2e: testen for organisasjonsbytte uten henting fra den gamle siden (bare test) | Klar (CI) | main |
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
