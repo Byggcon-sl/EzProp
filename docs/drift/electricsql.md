@@ -102,6 +102,7 @@ SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE slot_
 | `ELECTRIC_SECRET` | en ny, tilfeldig nøkkel på minst 32 tegn (`openssl rand -base64 48`), lagt inn som hemmelighet. **Aldri** utviklingsverdien fra `.env.example`; den nektes når adressen ikke er `localhost`. |
 
 - Ingen av dem får forstavelsen `NEXT_PUBLIC_`; nøkkelen skal aldri til nettleseren.
+- Nøkkelen sendes i adressen fra appen til Electric. Trafikken mellom appen og Electric skal derfor bare gå på privat nett (VNet), og ingen proxy mellom dem skal logge hele adressen (tilgangslogg med spørrestreng slås ikke på).
 - `NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS` settes **aldri** i Azure. Den er bare for de automatiske testene.
 - **Lang-polling:** når iPaden er à jour, venter proxyen opptil ca. 20 sekunder på nye endringer fra Electric før den svarer (appen gir opp etter 30 sekunder). App Service tåler dette; tidsgrensen der er mye lengre (ca. 230 sekunder).
 

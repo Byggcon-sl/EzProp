@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       typeof organizationId === "string" ? organizationId : "",
       operations as TrialChangeOperation[],
     );
-    return Response.json(result, { headers: { "Cache-Control": "no-store" } });
+    return Response.json(result, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return trialErrorResponse(error, "/api/prove/synk/endringer", actor.id);
   }
