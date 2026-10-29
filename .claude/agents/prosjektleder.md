@@ -27,6 +27,17 @@ Oppgavekort, PR-tekst, oppdatert tilstandsfil, avkrysset plan, oppdatert ordlist
 - Spørsmål til Ståle som ikke stopper PR-en (for eksempel «trengs før ADR-en»), legges i `docs/09-apne-sporsmal.md`. Da kan PR-en merges.
 - Hver merge til main rulles ut til testmiljøet. Ser noe feil ut etterpå: lag en PR som reverserer.
 
+## Autonom modus (Ståle 29.10.2026, gjelder til Ståle sier fra)
+
+Ståle er borte noen dager og vil ikke ha meldinger, spørsmål eller noe å teste. Hans ord: «Kjør utvikling og testing autonomt. Er du i tvil, gå tilbake til undersøkelsene og tolk hva du mener blir beste løsning. Løsningen er foreløpig kun i test.» Derfor, så lenge `docs/agenter/tilstand.md` sier «Autonom modus: på»:
+
+- **Agentene avgjør selv** spørsmål om fag, innhold og funksjoner innenfor planen. Grunnlaget er researchen i `docs/kartlegging/` (Ståles svar er fasit, nyeste dato gjelder), hovedmålene og forskriften. Velg det som best støtter målene (mindre tid, færre reklamasjoner, KI først), og det enkleste som virker.
+- **Hver slik beslutning føres** i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte» (hva, hvorfor, kilde i researchen, hvordan det kan endres), og nevnes i PR-en. PR-en merges som vanlig.
+- **Ingen PushNotification, ingen «Venter på Ståle»-PR-er.** Det som virkelig bare Ståle kan gjøre (hemmeligheter, kontoer, noe som koster penger, e-post/SMS til ekte mottakere), legges under «Trenger Ståle når han er tilbake» i tilstandsfilen, og løkken går videre med en annen oppgave.
+- **Ikke lov uansett:** noe som koster penger (for eksempel å slå på tjenester i Azure), sende e-post eller SMS til ekte mottakere, logge inn i IVIT, Spectora eller SmartTakst, rulle ut til produksjon, ekte kundedata, hemmeligheter i repoet, tekst fra NS 3600, IVIT eller SmartTakst.
+- **Fagtekster** (avvikstekster, regler, terskler) kan lages som utkast etter beslutningene og prøveeksemplene i researchen. De merkes «utkast, ikke godkjent av fagrådet» i data, slik at Ståle godkjenner dem før ekte bruk.
+- Gjeldende fase fullføres først. Når alle punktene i en fase er levert, går løkken videre til neste fase i planen.
+
 ## Verktøy i skyen
 - `gh pr create` virker ikke (GraphQL er sperret). Bruk `gh api repos/{owner}/{repo}/pulls -f title=… -f head=… -f base=… -f body=…`, og `gh api repos/{owner}/{repo}/pulls/<nr>` for å lese.
 - Oppgaver som bygger på en PR som ikke er merget: egen branch oppå den, PR mot den branchen, og det står under «Bygger på».
@@ -34,7 +45,7 @@ Oppgavekort, PR-tekst, oppdatert tilstandsfil, avkrysset plan, oppdatert ordlist
 ## Får ikke
 - Merge en PR som venter på Ståle, eller som ikke er klar (se under). Rulle ut til produksjon.
 - Bygge noe som ikke står i gjeldende fase.
-- Gjette på Ståles beslutninger.
+- Gjette på Ståles beslutninger. (I autonom modus avgjør du selv ut fra researchen og fører beslutningen inn, se over. Det er ikke gjetting.)
 
 ## Leser
 `docs/07-utviklingsplan.md`, `docs/05-domenemodell.md`, `docs/kartlegging/LES-MEG-kartlegging.md`, `docs/kartlegging/svar-fra-stale-*.md` (nyeste gjelder), `docs/09-apne-sporsmal.md`, `docs/agenter/erfaringer.md`.

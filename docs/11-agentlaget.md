@@ -33,6 +33,17 @@ BACKLOG → SPESIFISERT → DESIGNET → BYGGET → TESTET → GJENNOMGÅTT → 
 - GitHub-arbeidsflyten «Oppdater åpne PR-er» (`.github/workflows/oppdater-pr.yml`) fletter main inn i alle åpne PR-er hver gang main endres. Felles dokumenter (tilstand, erfaringer, åpne spørsmål, domenemodell) får begge sider med, og versjonsnummeret settes én over main. Bare ekte kodekonflikter blir igjen; da får PR-en en kommentar, og hovedløkken retter.
 - Merge til main rulles ut til testmiljøet. Produksjon styrer Ståle.
 
+**Autonom modus (Ståle 29.10.2026, gjelder til Ståle sier fra)**
+
+Ståle er borte noen dager og vil ikke ha meldinger, spørsmål eller noe å teste. Hans ord: «Kjør utvikling og testing autonomt. Er du i tvil, gå tilbake til undersøkelsene og tolk hva du mener blir beste løsning. Løsningen er foreløpig kun i test.» Derfor, så lenge `docs/agenter/tilstand.md` sier «Autonom modus: på»:
+
+- **Agentene avgjør selv** spørsmål om fag, innhold og funksjoner innenfor planen. Grunnlaget er researchen i `docs/kartlegging/` (Ståles svar er fasit, nyeste dato gjelder), hovedmålene og forskriften. Velg det som best støtter målene (mindre tid, færre reklamasjoner, KI først), og det enkleste som virker.
+- **Hver slik beslutning føres** i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte» (hva, hvorfor, kilde i researchen, hvordan det kan endres), og nevnes i PR-en. PR-en merges som vanlig.
+- **Ingen PushNotification, ingen «Venter på Ståle»-PR-er.** Det som virkelig bare Ståle kan gjøre (hemmeligheter, kontoer, noe som koster penger, e-post/SMS til ekte mottakere), legges under «Trenger Ståle når han er tilbake» i tilstandsfilen, og løkken går videre med en annen oppgave.
+- **Ikke lov uansett:** noe som koster penger (for eksempel å slå på tjenester i Azure), sende e-post eller SMS til ekte mottakere, logge inn i IVIT, Spectora eller SmartTakst, rulle ut til produksjon, ekte kundedata, hemmeligheter i repoet, tekst fra NS 3600, IVIT eller SmartTakst.
+- **Fagtekster** (avvikstekster, regler, terskler) kan lages som utkast etter beslutningene og prøveeksemplene i researchen. De merkes «utkast, ikke godkjent av fagrådet» i data, slik at Ståle godkjenner dem før ekte bruk.
+- Gjeldende fase fullføres først. Når alle punktene i en fase er levert, går løkken videre til neste fase i planen.
+
 **Uenighet:** prosjektlederen avgjør og begrunner i PR-en. Fag, pris, personvern og nye funksjoner avgjøres av Ståle; spørsmålet legges i `docs/09-apne-sporsmal.md`, og løkken fortsetter med andre oppgaver.
 
 **Kvote:** ingen kostnadstak (Ståle 28.10.2026). Når kvoten er brukt opp, stopper kjøringen der den er; neste kjøring fortsetter fra `tilstand.md`. Derfor commit og push etter hvert ferdige steg. Flere enn ca. 10 agenter samtidig krever at Ståle øker «Dynamic workflow size» i `/config`.
