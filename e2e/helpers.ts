@@ -561,3 +561,55 @@ export function numberInput(page: Page, fieldKey: string): Locator {
   if (!field || field.type !== "number") throw new Error(`Fant ikke tallfeltet ${fieldKey}`);
   return page.getByLabel(field.label, { exact: true });
 }
+
+// --- Prøve C, lagring i Safari (docs/funksjoner/fase1-prove-c-lagring-testplan.md avsnitt 5.1) ---
+
+/** 1 MB i byte (som `navigator.storage.estimate()` gir). */
+export const MB = 1024 * 1024;
+
+/**
+ * Testkroken for lagring (`window.__offlineTrialStorage`, bare med
+ * NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS=1). `estimate` erstatter `navigator.storage.estimate()`;
+ * `fail` lar lagring av svar, bilder eller begge feile med `QuotaExceededError` til den slås av.
+ */
+export interface StorageOverride {
+  estimate?: { usage: number; quota: number };
+  fail?: "answer" | "photo" | "both" | null;
+}
+
+/** Setter kroken før siden lastes (`addInitScript`), så den gjelder fra første måling. */
+export async function setStorageOverride(target: Page | BrowserContext, value: StorageOverride) {
+  await target.addInitScript((override) => {
+    (window as unknown as { __offlineTrialStorage?: unknown }).__offlineTrialStorage = override;
+  }, value);
+}
+
+/** Endrer kroken på åpen side; neste måling eller lagring bruker den nye verdien. */
+export async function updateStorageOverride(page: Page, patch: StorageOverride) {
+  await page.evaluate((change) => {
+    const target = window as unknown as { __offlineTrialStorage?: Record<string, unknown> };
+    target.__offlineTrialStorage = { ...(target.__offlineTrialStorage ?? {}), ...change };
+  }, patch);
+}
+
+/** Boksen «Lagring på denne iPaden» på listen (`data-storage-level`, `data-storage-persisted`). */
+export function storageBox(page: Page): Locator {
+  return page.getByTestId("storage-health");
+}
+
+/** Varselet om lite plass i den faste linjen øverst i skjemaet (`role="status"`). */
+export function storageWarning(page: Page): Locator {
+  return page.getByTestId("storage-low-warning");
+}
+
+/** Meldingen når lagring feiler, i den faste linjen øverst i skjemaet (`role="alert"`). */
+export function storageError(page: Page): Locator {
+  return page.getByTestId("storage-error");
+}
+
+/** Feltbeholderen for etiketten (har `data-field-saved="yes|no"`). */
+export function fieldSaved(page: Page, label: string): Locator {
+  const field = listTrialFields(trialForm).find((entry) => entry.label === label);
+  if (!field) throw new Error(`Fant ikke feltet «${label}»`);
+  return page.locator(`[data-field="${field.key}"]`);
+}
