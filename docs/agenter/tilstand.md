@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 (prøve C – lagring i Safari, PR åpnet)
+Sist oppdatert: 30.10.2026 (prøve C – lagring i Safari, PR #32 åpnet)
 
 ## Gjeldende fase
 
@@ -16,7 +16,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Levert: Prøve C – lagring i Safari** (30.10.2026; branch `fase1-prove-c-lagring` fra `main`, versjon 0.2.21). Oppgavekort `docs/funksjoner/fase1-prove-c-lagring.md`, resultatmal `docs/funksjoner/fase1-prove-c-lagring-resultat.md` for ekte iPad. Boksen «Lagring på denne iPaden» på listen, automatisk varig lagring, varsel ved lite plass (under 500 MB ledig), én samlet melding med automatisk ny lagring og «Prøv igjen» når lagring feiler, e2e i Chromium (pc og iPad-størrelse). Roller: forenkler, ux-ansvarlig, test-leder, sikkerhet-personvern, utvikler, testskriver. Beslutninger A1–A4 i `docs/09-apne-sporsmal.md`. Ingen alvorlige funn; små funn står i PR-en (blant annet: loggen skriver hele feilmeldingen fra lagringen, doble e2e-tester, reservevei i testen for åpning uten nett). Punktet er krysset av i planen. Støtter reklamasjoner og tid.
+**Levert: Prøve C – lagring i Safari** (30.10.2026; branch `fase1-prove-c-lagring` fra `main`, versjon 0.2.21, **PR #32**). Oppgavekort `docs/funksjoner/fase1-prove-c-lagring.md`, resultatmal `docs/funksjoner/fase1-prove-c-lagring-resultat.md` for ekte iPad. Boksen «Lagring på denne iPaden» på listen, automatisk varig lagring, varsel ved lite plass (under 500 MB ledig), én samlet melding med automatisk ny lagring og «Prøv igjen» når lagring feiler, e2e i Chromium (pc og iPad-størrelse). Roller: forenkler, ux-ansvarlig, test-leder, sikkerhet-personvern, utvikler, testskriver. Beslutninger A1–A4 i `docs/09-apne-sporsmal.md`. Ingen alvorlige funn; små funn står i PR-en (blant annet: loggen skriver hele feilmeldingen fra lagringen, doble e2e-tester, reservevei i testen for åpning uten nett). Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
 **Levert: Prøve E – regler uten nett**, **PR #23** (merget 29.10.2026; branch `fase1-prove-e-regler` fra `main`, versjon 0.2.13). Oppgavekort `docs/funksjoner/fase1-prove-e-regler.md`, testplan `docs/funksjoner/fase1-prove-e-regler-testplan.md`, resultatmal for ekte iPad `docs/funksjoner/fase1-prove-e-regler-resultat.md`. To prøveregler som data (oppdiktede tall 7 år og 42 %), én regelmotor for nettleser og server, regelsvar under feltene, ruten `/api/prove/regler`, 14 testsaker. Roller: forenkler, fagansvarlig, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en. Punktet er krysset av i planen. Spørsmål nr. 13 (ekte tall), ikke blokkerende. Støtter tid og reklamasjoner.
 
@@ -44,7 +44,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| (ny) | Prøve C – lagring i Safari | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
+| #32 | Prøve C – lagring i Safari | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
 
 PR #16–#28, #30 og #31 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken). Ingen PR venter på Ståle.
 
