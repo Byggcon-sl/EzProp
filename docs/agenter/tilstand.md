@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 (liten oppgave (g) og (h) levert som PR)
+Sist oppdatert: 30.10.2026 (oppgavekort for selskap og kontor, fase 0b)
 
 ## Gjeldende fase
 
@@ -15,6 +15,8 @@ Sist oppdatert: 30.10.2026 (liten oppgave (g) og (h) levert som PR)
 Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd er merget til `main` i PR #13 (PR #12: agentene merger selv).
 
 ## Gjeldende oppgave
+
+**I arbeid: Organisasjon → selskap → kontor → ansatt** (fase 0b, 30.10.2026; branch `fase0b-organisasjon-selskap-kontor` fra `main`). Oppgavekort `docs/funksjoner/fase0b-organisasjon-selskap-kontor.md`. Tabellene `companies` og `offices`, `company_id`/`office_id`/`phone` på `employees`, sjekk for sluttet uten innlogging (D18), lesespørringer med tilgang og tenant-isolasjon, seed med navnene. Ikke admin-skjermer. Beslutninger A13 og A14. Roller: utvikler, testskriver, sikkerhet-personvern, test-leder. Støtter reklamasjoner og tid.
 
 **Levert: liten oppgave (g) og (h)**, småfunnene fra PR #34 (prøve F) og PR #35 (prøve D) (30.10.2026; branch `fase1-smafunn-prove-d-f` fra `main`, versjon 0.2.27, **PR #38**). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-d-f.md`. En visningskopi som får 400 eller 404 regnes som endelig feilet, sendes ikke igjen og vises som «Bare originalen er lagret» (A11). Serveren slipper bare de feltene kopien trenger (A12). Én tegnevei, adressen til visningsruten ett sted, ingen falsk rad i `sendPhoto`, færre doble tester. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en (blant annet: 400-saken i e2e tar rundt 30 s per prosjekt, progressiv JPEG kan ha felt etter første skanning). Underpunktene er krysset av under prøve D og F i planen. Støtter reklamasjoner og tid.
 

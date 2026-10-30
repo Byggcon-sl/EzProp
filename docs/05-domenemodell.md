@@ -1647,6 +1647,8 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Bruker / innlogging | `users` | Felles med Optiplan |
 | Sertifisering | `certifications` | Personlig sertifisering |
 | Ansvarsforsikring | `companies.liability_*` | Hører til selskapet |
+| Firmatekst | `companies.company_text` | Teksten om selskapet på rapportens side 2 |
+| Sluttet | `employees.deactivated_at` | Kan ikke logge inn, står fortsatt på gamle rapporter |
 | Rolle | `employee_roles.role` | `inspector`, `office`, `manager`, `admin` |
 | Rettighet | `employee_permissions.permission` | Enkeltrettighet, for eksempel `template.edit_structure` |
 | Takstmann | `inspector` | Rolle |
