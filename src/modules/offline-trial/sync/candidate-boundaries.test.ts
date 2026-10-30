@@ -90,6 +90,25 @@ function startsWithHeader(relative: string): boolean {
   return comment !== undefined && comment.includes(HEADER);
 }
 
+/** Hvert `console.error(…)` og `console.warn(…)` i teksten, med argumentene (parentesene telles). */
+function logCalls(text: string): string[] {
+  const out: string[] = [];
+  for (const match of text.matchAll(/console\.(error|warn)\(/g)) {
+    let depth = 0;
+    let end = match.index;
+    for (let i = match.index + match[0].length - 1; i < text.length; i++) {
+      if (text[i] === "(") depth++;
+      else if (text[i] === ")") depth--;
+      if (depth === 0) {
+        end = i + 1;
+        break;
+      }
+    }
+    out.push(text.slice(match.index, end).replace(/\s+/g, " "));
+  }
+  return out;
+}
+
 describe("kandidatgrensene", () => {
   // Obligatorisk (rettferdig «Arbeid»)
   it("sidene under prove/testskjema importerer ikke fra noen kandidat", () => {
@@ -268,5 +287,55 @@ describe("kandidatgrensene", () => {
     files.push(`${MODULE}/server/changes-since.ts`, "src/app/api/prove/synk/hent/route.ts");
     const missing = files.filter((file) => !startsWithHeader(file));
     expect(missing).toEqual([]);
+  });
+
+  // Prøve C – lagring (docs/funksjoner/fase1-prove-c-lagring-testplan.md avsnitt 2.2)
+  it("storage-health.ts importerer ikke fra noen kandidat og ikke React", () => {
+    const file = `${MODULE}/storage-health.ts`;
+    expect(candidateImports(file)).toEqual([]);
+    const react = specifiersOf(read(file))
+      .map((entry) => entry.specifier)
+      .filter((s) => s === "react" || s.startsWith("react/") || s.startsWith("react-dom"));
+    expect(react).toEqual([]);
+  });
+
+  it("storage-health.ts har hodekommentaren", () => {
+    expect(read(`${MODULE}/storage-health.ts`)).toContain(HEADER);
+  });
+
+  // Obligatorisk (loggregelen: aldri svaret eller bildet i loggen)
+  it("loggen ved lagringsfeil bruker storageErrorLog", () => {
+    const files = [`${PAGES}/[id]/trial-form-page.tsx`, `${PAGES}/trial-sync-provider.tsx`];
+    for (const file of files) {
+      const text = read(file);
+      const calls = logCalls(text);
+      const storageCalls = calls.filter((call) => /lagr/i.test(call));
+      expect(storageCalls.length, `${file}: logg om lagring`).toBeGreaterThan(0);
+      for (const call of storageCalls) {
+        expect(call, `${file}: ${call}`).toContain("storageErrorLog(");
+      }
+      // Ingen logg med det rå feilobjektet som siste argument
+      for (const call of calls) {
+        expect(/,\s*(error|err|e|reason)\s*,?\s*\)$/.test(call), `${file}: ${call}`).toBe(false);
+      }
+    }
+  });
+
+  it("testkroken for lagring leses bare med miljøvariabelen", () => {
+    const hookFile = `${MODULE}/storage-test-hook.ts`;
+    const text = read(hookFile);
+    expect(text).toContain("__offlineTrialStorage");
+    // Samme vakt som sync/test-hooks.ts: direkte eller via trialTestHooksEnabled()
+    const guard = /NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS\s*===\s*["']1["']/;
+    const usesSharedGuard =
+      /\btrialTestHooksEnabled\s*\(/.test(text) &&
+      specifiersOf(text).some((entry) => /(^|\/)test-hooks$/.test(entry.specifier));
+    expect(guard.test(text) || usesSharedGuard, hookFile).toBe(true);
+    expect(read(`${MODULE}/sync/test-hooks.ts`)).toMatch(guard);
+    // Ingen annen kildefil leser kroken direkte
+    const readers = filesUnder("src", /\.tsx?$/)
+      .filter((file) => !/\.test\.tsx?$/.test(file) && file !== hookFile)
+      .filter((file) => read(file).includes("__offlineTrialStorage"));
+    expect(readers).toEqual([]);
   });
 });

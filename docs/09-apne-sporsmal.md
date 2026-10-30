@@ -8,6 +8,10 @@ Ståle 29.10.2026: «Er du i tvil, gå tilbake til undersøkelsene og tolk hva d
 
 | Nr | Dato | Beslutning | Hvorfor og kilde | PR |
 |---|---|---|---|---|
+| A1 | 30.10.2026 | **Prøve C: varsel om «lite plass» når under 500 MB er ledig** på iPaden. Bare varsel, ingen sperre. | 100–300 bilder per befaring (sidemannskontrollen del 1 T1); med ca. 1,5–2 MB per bilde trengs ca. 500 MB for én befaring. Advarsel, aldri sperre, som for sidemannskontrollen (Ståle 27.10.2026). Endres i konstanten `LOW_STORAGE_FREE_BYTES`. `docs/funksjoner/fase1-prove-c-lagring.md` | branch `fase1-prove-c-lagring` |
+| A2 | 30.10.2026 | **Prøve C: appen ber selv om varig lagring** (`navigator.storage.persist()`) når en prøveside åpnes, uten knapp. | Færre trykk (mål: tid), og Safari kan slette data som ikke er varig (sidemannskontrollen del 1, linje 152). Kan gjøres om til en knapp senere. | branch `fase1-prove-c-lagring` |
+| A3 | 30.10.2026 | **Prøve C på ekte iPad prøver 7 dager uten bruk med appen på hjemskjermen.** Prøven i vanlig Safari er valgfri (rettet 30.10.2026). | Planen sier allerede at appen må ligge på hjemskjermen (risikotabellen i `docs/07-utviklingsplan.md`); sidemannskontrollen del 1 (Safari kan slette data for nettsider som ikke er på hjemskjermen); planen for prøvene i `fase1-testskjema.md` (7 dager). Kan endres ved å gjøre prøven i vanlig Safari obligatorisk i resultatmalen. | branch `fase1-prove-c-lagring` |
+| A4 | 30.10.2026 | **Prøve C: svar som ikke ble lagret på iPaden, prøves lagret på nytt automatisk** neste gang et svar lagres uten feil. «Prøv igjen» finnes som reserve. Én samlet feilmelding om gangen. | Ingenting skal gå tapt i stillhet (mål: reklamasjoner), og null trykk når det løser seg selv (mål: tid). Én melding så linjen øverst ikke dekker feltet når iPaden holdes i én hånd. `docs/funksjoner/fase1-prove-c-lagring.md`. Kan endres i skjermen for testskjemaet. | branch `fase1-prove-c-lagring` |
 
 ## Spørsmål til Ståle
 

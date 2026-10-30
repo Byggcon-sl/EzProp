@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  requestPersistentStorage,
+  storageHealthText,
+  type StorageHealth,
+} from "@/modules/offline-trial/storage-health";
+import { readStorageHealthForScreen } from "@/modules/offline-trial/storage-test-hook";
 import { SyncStatus } from "@/modules/offline-trial/sync-status";
 import { writeSyncCandidate } from "@/modules/offline-trial/sync/select-store";
 import type {
@@ -98,6 +104,45 @@ function CandidatePicker() {
   );
 }
 
+/**
+ * Prøve C: hvor mye plass appen bruker og får på denne iPaden, og om lagringen er varig. Måles når
+ * siden åpnes, og igjen etter at appen har bedt om varig lagring. Ingen knapp; ny innlasting måler
+ * på nytt.
+ */
+function StorageHealthBox() {
+  const [health, setHealth] = useState<StorageHealth | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let latest = 0;
+    const measure = () => {
+      const call = ++latest;
+      void readStorageHealthForScreen().then((next) => {
+        if (active && call === latest) setHealth(next);
+      });
+    };
+    measure();
+    void requestPersistentStorage().then(measure);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (!health) return null;
+  return (
+    <section
+      aria-label="Lagring på denne iPaden"
+      data-testid="storage-health"
+      data-storage-level={health.level}
+      data-storage-persisted={health.persisted}
+      className="mt-4 rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200 ring-inset"
+    >
+      <h2 className="text-sm font-medium text-slate-900">Lagring på denne iPaden</h2>
+      <p className="mt-1 text-sm text-slate-700 tabular-nums">{storageHealthText(health)}</p>
+    </section>
+  );
+}
+
 function formatCreatedAt(value: string): string {
   if (!value) return "";
   const date = new Date(value.includes("T") ? value : value.replace(" ", "T"));
@@ -141,6 +186,7 @@ export function TrialFormList() {
         Skjemaene brukes til å prøve appen på iPad uten nett. Bare oppdiktede data.
       </p>
       <CandidatePicker />
+      <StorageHealthBox />
       <Button className="mt-4 min-h-11" onClick={createForm} disabled={creating}>
         Nytt testskjema
       </Button>
