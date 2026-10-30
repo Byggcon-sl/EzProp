@@ -56,7 +56,7 @@ I autonom modus samles alt her. Ingen varsler.
 
 ## Oppgaver fra nattløkken
 
-Fra nattløkken 30.10.2026 (main ved 08a7675, versjon 0.2.17). Rettet i PR «Rydding fra nattløkken 2026-10-30»: sammensatt indeks for synk-uttrekket og trygge pakkeoppdateringer (better-auth, jose, next, eslint-config-next, dotenv, typescript-eslint).
+Fra nattløkken 30.10.2026 (main ved 08a7675, versjon 0.2.17). Rettet i PR #31 «Rydding fra nattløkken 2026-10-30»: sammensatt indeks for synk-uttrekket og trygge pakkeoppdateringer (better-auth, jose, next, eslint-config-next, dotenv, typescript-eslint).
 
 **Alvorlige**
 
@@ -84,7 +84,7 @@ Ingen.
 
 ## Siste kjøring
 
-30.10.2026: prosjektleder skrev funnene fra nattløkken inn under «Oppgaver fra nattløkken» og laget branchen `natt-2026-10-30` med trygg rydding (synkindeks, pakkeoppdateringer, versjon 0.2.18). Sesjon: https://claude.ai/code/session_01Jqwntym4bVyM8CVw74aqdP
+30.10.2026: prosjektleder skrev funnene fra nattløkken inn under «Oppgaver fra nattløkken» og laget branchen `natt-2026-10-30` med trygg rydding (synkindeks, pakkeoppdateringer, versjon 0.2.18), alle sjekker grønne (også e2e), PR #31 åpnet mot `main`. Sesjon: https://claude.ai/code/session_01Jqwntym4bVyM8CVw74aqdP
 
 29.10.2026: hovedløkken fant ingen åpne PR-er, kjørte liten oppgave (d) med arbeidsflyten «oppgave» (24 agenter, ca. 2 t 25 min) til PR #26, merget med skriptet (CI grønn, ingen alvorlige funn, to små funn står under «Neste»). Første merge-forsøk stoppet fordi den automatiske flettingen fra `main` ga en CI-kjøring som ventet på godkjenning; en ny commit startet CI. Sesjon: https://claude.ai/code/session_01JqwntzupjW6jbbFTYtkeBA
 
