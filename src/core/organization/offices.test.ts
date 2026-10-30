@@ -30,6 +30,19 @@ describe("listOffices", () => {
     });
   });
 
+  it("gir nøyaktig de lovede feltene, uten sporingsfelt", async () => {
+    const org = await createOrganization();
+    await createOffice(org.id, { name: "Testkontor Nord" });
+    const person = await createUser();
+    await createEmployee(person, org.id, ["admin"]);
+
+    const rows = await listOffices(person, org.id);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(Object.keys(row).sort()).toEqual(["address", "id", "name", "sortOrder"]);
+    }
+  });
+
   it.each(roles)("rollen %s kan lese kontorene", async (role) => {
     const org = await createOrganization();
     const office = await createOffice(org.id);

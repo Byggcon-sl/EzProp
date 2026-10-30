@@ -30,6 +30,31 @@ describe("listCompanies", () => {
     });
   });
 
+  it("gir nøyaktig de lovede feltene, uten sporingsfelt", async () => {
+    const org = await createOrganization();
+    await createCompany(org.id, { legalName: "Testselskap A AS" });
+    const person = await createUser();
+    await createEmployee(person, org.id, ["admin"]);
+
+    const rows = await listCompanies(person, org.id);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(Object.keys(row).sort()).toEqual([
+        "address",
+        "city",
+        "companyText",
+        "id",
+        "legalName",
+        "liabilityInsurer",
+        "liabilityPolicyNumber",
+        "liabilityValidTo",
+        "orgNumber",
+        "postalCode",
+        "vatRegistered",
+      ]);
+    }
+  });
+
   it.each(roles)("rollen %s kan lese selskapene", async (role) => {
     const org = await createOrganization();
     const company = await createCompany(org.id);
