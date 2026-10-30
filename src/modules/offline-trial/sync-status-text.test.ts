@@ -2,9 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   nextSavedAt,
   savedAtText,
+  showSyncNow,
+  signInHref,
+  SIGN_IN_LABEL,
   SYNC_NOW_FAILED_MESSAGE,
   SYNC_NOW_OFFLINE_MESSAGE,
+  SYNC_STATE_SIGN_IN_REQUIRED,
+  syncStatusKind,
   syncStatusText,
+  type SyncStatusKind,
 } from "./sync-status-text";
 import type { TrialSyncStatus } from "./sync/types";
 
@@ -208,4 +214,126 @@ describe("beskjedene ved «Synk nå» (sync-status-text.ts)", () => {
       expect(text, text).not.toMatch(/antas|trolig|sannsynligvis/i);
     }
   });
+});
+
+// --- Prøve F: «Logg inn på nytt» (docs/funksjoner/fase1-prove-f-innlogging.md, punkt 2) ---
+// Testplan: docs/funksjoner/fase1-prove-f-innlogging-testplan.md avsnitt 1. Støtter reklamasjoner
+// (takstmannen får vite at noe ikke er sendt ennå) og tid (ett trykk tilbake til innlogging).
+
+const SIGN_IN_TEXT = "Logg inn på nytt for å sende. Alt er lagret på iPaden.";
+const KINDS: readonly SyncStatusKind[] = [
+  "offline",
+  "allSaved",
+  "pending",
+  "awaitingServer",
+  "signInRequired",
+];
+const FORM_ID = "0192f0c4-5d6e-7a8b-9c0d-1e2f3a4b5c6d";
+
+/** Alle 16 kombinasjoner av status, ganger innlogging gjelder / har gått ut. */
+function allCombinations(): { input: TrialSyncStatus; signInRequired: boolean }[] {
+  const rows: { input: TrialSyncStatus; signInRequired: boolean }[] = [];
+  for (const online of [false, true]) {
+    for (const confirmed of [false, true]) {
+      for (const changes of [0, 4]) {
+        for (const photos of [0, 1]) {
+          for (const signInRequired of [false, true]) {
+            rows.push({ input: status(online, confirmed, changes, photos), signInRequired });
+          }
+        }
+      }
+    }
+  }
+  return rows;
+}
+
+describe("signInRequired i synkstatusen (sync-status-text.ts)", () => {
+  it("teksten, ordrett", () => {
+    expect(SYNC_STATE_SIGN_IN_REQUIRED).toBe(SIGN_IN_TEXT);
+    expect(syncStatusText(status(true, false, 3, 2), true)).toBe(SIGN_IN_TEXT);
+  });
+
+  it("knappen heter Logg inn", () => {
+    expect(SIGN_IN_LABEL).toBe("Logg inn");
+  });
+
+  // [beskrivelse, status, forventet tilstand med signInRequired]
+  it.each<[string, TrialSyncStatus, SyncStatusKind]>([
+    ["foran Venter (endringer)", status(true, true, 3, 0), "signInRequired"],
+    ["foran Venter (bilder)", status(true, true, 0, 2), "signInRequired"],
+    ["foran Venter (ikke bekreftet)", status(true, false, 3, 2), "signInRequired"],
+    ["foran Venter på kontakt med serveren", status(true, false, 0, 0), "signInRequired"],
+    ["ikke foran Uten nett (noe venter)", status(false, false, 3, 2), "offline"],
+    ["ikke foran Uten nett (ingenting venter)", status(false, true, 0, 0), "offline"],
+  ])("forrang: %s", (_label, input, kind) => {
+    expect(syncStatusKind(input, true)).toBe(kind);
+  });
+
+  it("uten nett vises aldri meldingen om innlogging", () => {
+    for (const { input } of allCombinations().filter((row) => !row.input.online)) {
+      expect(syncStatusText(input, true), JSON.stringify(input)).toBe("Uten nett");
+    }
+  });
+
+  it("uten signInRequired er alt som før (fire tilstander)", () => {
+    for (const { input } of allCombinations()) {
+      expect(syncStatusKind(input, false), JSON.stringify(input)).toBe(syncStatusKind(input));
+      expect(syncStatusText(input, false), JSON.stringify(input)).toBe(syncStatusText(input));
+      expect(syncStatusKind(input)).not.toBe("signInRequired");
+    }
+  });
+
+  it("markøren er alltid en av de fem verdiene", () => {
+    const rows = allCombinations();
+    expect(rows).toHaveLength(32);
+    for (const { input, signInRequired } of rows) {
+      expect(KINDS, JSON.stringify({ input, signInRequired })).toContain(
+        syncStatusKind(input, signInRequired),
+      );
+    }
+  });
+
+  // Obligatorisk (reklamasjoner): «Alt er lagret» vises aldri når innloggingen har gått ut
+  it("Alt er lagret vises aldri når innloggingen har gått ut", () => {
+    for (const { input } of allCombinations()) {
+      expect(syncStatusText(input, true), JSON.stringify(input)).not.toBe(ALL_SAVED);
+    }
+  });
+
+  it("ingen gjetteord i teksten", () => {
+    expect(SIGN_IN_TEXT).not.toMatch(/antas|trolig|sannsynligvis/i);
+  });
+});
+
+describe("knappen «Synk nå» eller «Logg inn» (showSyncNow)", () => {
+  it.each<[SyncStatusKind | null, boolean]>([
+    ["offline", true],
+    ["allSaved", true],
+    ["pending", true],
+    ["awaitingServer", true],
+    ["signInRequired", false],
+    [null, true],
+  ])("%s: Synk nå vises = %s", (kind, shown) => {
+    expect(showSyncNow(kind)).toBe(shown);
+  });
+});
+
+describe("lenken «Logg inn» (signInHref)", () => {
+  it.each<[string, string]>([
+    [`/prove/testskjema/${FORM_ID}`, `/prove/testskjema/${FORM_ID}`],
+    [`/prove/testskjema/${FORM_ID}?x=1#a`, `/prove/testskjema/${FORM_ID}`],
+    [`/prove/testskjema/${FORM_ID}#a`, `/prove/testskjema/${FORM_ID}`],
+    ["/prove/testskjema", "/prove/testskjema"],
+    ["/prove/testskjema?x=1", "/prove/testskjema"],
+  ])("%s gir neste=%s, uten spørrestreng og #", (pathname, next) => {
+    const href = signInHref(pathname);
+    const url = new URL(href, "https://ezprop.invalid");
+    expect(url.host).toBe("ezprop.invalid");
+    expect(url.pathname).toBe("/logg-inn");
+    expect(url.hash).toBe("");
+    expect([...url.searchParams.keys()]).toEqual(["neste"]);
+    expect(url.searchParams.get("neste")).toBe(next);
+  });
+  // At lenken og safeNextPath passer sammen, testes i src/app/logg-inn/safe-next-path.test.ts
+  // (moduler importerer ikke fra app).
 });
