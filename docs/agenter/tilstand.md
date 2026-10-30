@@ -6,13 +6,15 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 (sammenligning og foreløpig ADR 0004 på `fase1-sammenligning-adr`, etter PR #38)
+Sist oppdatert: 30.10.2026 kl. 18:00 UTC (PR #38 og #39 merget; løkken går videre til fase 0b)
 
 ## Gjeldende fase
 
 **Fase 0a – Repo og database: ferdig.** PR #1–#6 er merget 28.10.2026.
 
-Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd er merget til `main` i PR #13 (PR #12: agentene merger selv).
+Gjeldende fase: **Fase 0b – Innlogging, organisasjon, roller og layout** (fra 30.10.2026). Fase 1 er levert så langt det går uten Ståle; prøve A og B på ekte iPad, demoen og godkjenning av ADR 0004 venter på ham.
+
+Fase 1 – Prøve uten nett: Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd er merget til `main` i PR #13 (PR #12: agentene merger selv).
 
 ## Gjeldende oppgave
 
@@ -52,9 +54,9 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #39 | Sammenligning og ADR 0004 (foreløpig), branch `fase1-sammenligning-adr` | venter på CI, merges med skriptet | `main` |
+| – | Ingen åpne PR-er | – | – |
 
-PR #16–#28 og #30–#38 er merget (#38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
+PR #16–#28 og #30–#39 er merget (#39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -102,6 +104,8 @@ Fra nattløkken 30.10.2026 (main ved 08a7675, versjon 0.2.17). Rettet i PR #31 �
 Ingen.
 
 ## Siste kjøring
+
+30.10.2026 kl. 14:36–18:05 UTC: hovedløkken fant ingen åpne PR-er og småfunn D og F i arbeid hos en annen kjøring (PR #38, merget i mellomtiden). Kjørte sammenligningen av kandidatene og ADR 0004 med arbeidsflyten «oppgave» (22 agenter, ca. 3 t 15 min) til PR #39, merget med skriptet (CI grønn, ingen alvorlige funn, 14 små). Foreløpig valg: egenbygd synk (A13–A15). Neste: fase 0b, første punkt som ikke trenger Optiplan-tilgang (organisasjon → selskap → kontor → ansatt). Sesjon: https://claude.ai/code/session_01JqwntwoupH4oRYcBqomqQ
 
 30.10.2026 kl. 03:05–11:35 UTC: hovedløkken fant ingen åpne PR-er og kjørte arbeidsflyten «oppgave» tre ganger: prøve C (PR #32), småfunn fra prøve C (PR #33) og prøve F (PR #34), alle merget med skriptet (CI grønn, ingen alvorlige funn). En annen kjøring leverte prøve D (PR #35) samtidig; denne kjøringen ventet på CI og merget den med skriptet før tilstanden ble oppdatert. Sesjon: https://claude.ai/code/session_01Jqwnu2V8ERMPTnXezmxYu6
 30.10.2026 kl. 09:05–11:35: hovedløkken fant PR #33 merget og prøve F i arbeid hos en annen kjøring, og kjørte prøve D (bilder) med arbeidsflyten «oppgave» (20 agenter, ca. 2 t 25 min) til PR #35, merget (CI grønn, ingen alvorlige funn, småfunn lagt inn som liten oppgave (h)). Spørsmål nr. 8 avgjort som A7. Neste i fase 1: små oppgaver (g) og (h), deretter sammenligning av kandidatene og ADR (foreløpig, bekreftes etter prøve A og B). Sesjon: https://claude.ai/code/session_01Jqwnu2VWYuQTPKrLPiFmXt
