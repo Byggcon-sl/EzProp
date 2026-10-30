@@ -67,6 +67,8 @@ Ingen.
 
 ## Siste kjøring
 
+30.10.2026 kl. 01:05–02:00: hovedløkken trodde kjøringen med liten oppgave (e) hadde stoppet (45 min uten push) og fullførte den selv (PR #29). Den andre kjøringen var i live og merget PR #28 kl. 01:25 med samme innhold. PR #29 er lukket uten tap. Lærdom og ny regel (3 timer) i `erfaringer.md`. Startet ingen ny oppgave, fordi den andre kjøringen kan holde på med neste. Sesjon: https://claude.ai/code/session_01Jqwnu1z3G1tg8SDiRvvu7V
+
 29.10.2026: hovedløkken fant ingen åpne PR-er, kjørte liten oppgave (d) med arbeidsflyten «oppgave» (24 agenter, ca. 2 t 25 min) til PR #26, merget med skriptet (CI grønn, ingen alvorlige funn, to små funn står under «Neste»). Første merge-forsøk stoppet fordi den automatiske flettingen fra `main` ga en CI-kjøring som ventet på godkjenning; en ny commit startet CI. Sesjon: https://claude.ai/code/session_01JqwntzupjW6jbbFTYtkeBA
 
 29.10.2026: prosjektleder fullførte liten oppgave (d), småfunnene fra PR #21: flettet `main` inn (versjon 0.2.16), fjernet to doble testfiler, strammet testene for `ensureInspector`, krysset av i planen og åpnet PR #26 mot `main`. Sesjon: https://claude.ai/code/session_01JqwntzupjW6jbbFTYtkeBA
