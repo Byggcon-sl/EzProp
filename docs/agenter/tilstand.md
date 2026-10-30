@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 (prøve C – lagring i Safari, PR #32 åpnet)
+Sist oppdatert: 30.10.2026 (liten oppgave (f), småfunn fra prøve C, PR åpnet)
 
 ## Gjeldende fase
 
@@ -16,7 +16,9 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Levert: Prøve C – lagring i Safari** (30.10.2026; branch `fase1-prove-c-lagring` fra `main`, versjon 0.2.21, **PR #32**). Oppgavekort `docs/funksjoner/fase1-prove-c-lagring.md`, resultatmal `docs/funksjoner/fase1-prove-c-lagring-resultat.md` for ekte iPad. Boksen «Lagring på denne iPaden» på listen, automatisk varig lagring, varsel ved lite plass (under 500 MB ledig), én samlet melding med automatisk ny lagring og «Prøv igjen» når lagring feiler, e2e i Chromium (pc og iPad-størrelse). Roller: forenkler, ux-ansvarlig, test-leder, sikkerhet-personvern, utvikler, testskriver. Beslutninger A1–A4 i `docs/09-apne-sporsmal.md`. Ingen alvorlige funn; små funn står i PR-en (blant annet: loggen skriver hele feilmeldingen fra lagringen, doble e2e-tester, reservevei i testen for åpning uten nett). Punktet er krysset av i planen. Støtter reklamasjoner og tid.
+**Levert: liten oppgave (f)**, småfunnene fra PR #32 (prøve C) (30.10.2026; branch `fase1-smafunn-prove-c` fra `main`, versjon 0.2.22). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-c.md`. Loggen viser bare feilnavnet, testen for åpning uten nett har ingen reservevei, e2e-filen gikk fra 27 til 22 tester, tekstblokken som leste kildefilen er borte, én felles hook for plassmålingen, ingen `DOMException`-sjekk. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; to doble sjekker i e2e rettet av prosjektlederen før PR. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
+
+**Levert: Prøve C – lagring i Safari** (merget 30.10.2026; branch `fase1-prove-c-lagring` fra `main`, versjon 0.2.21, **PR #32**). Oppgavekort `docs/funksjoner/fase1-prove-c-lagring.md`, resultatmal `docs/funksjoner/fase1-prove-c-lagring-resultat.md` for ekte iPad. Boksen «Lagring på denne iPaden» på listen, automatisk varig lagring, varsel ved lite plass (under 500 MB ledig), én samlet melding med automatisk ny lagring og «Prøv igjen» når lagring feiler, e2e i Chromium (pc og iPad-størrelse). Roller: forenkler, ux-ansvarlig, test-leder, sikkerhet-personvern, utvikler, testskriver. Beslutninger A1–A4 i `docs/09-apne-sporsmal.md`. Ingen alvorlige funn; små funn står i PR-en (blant annet: loggen skriver hele feilmeldingen fra lagringen, doble e2e-tester, reservevei i testen for åpning uten nett). Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
 **Levert: Prøve E – regler uten nett**, **PR #23** (merget 29.10.2026; branch `fase1-prove-e-regler` fra `main`, versjon 0.2.13). Oppgavekort `docs/funksjoner/fase1-prove-e-regler.md`, testplan `docs/funksjoner/fase1-prove-e-regler-testplan.md`, resultatmal for ekte iPad `docs/funksjoner/fase1-prove-e-regler-resultat.md`. To prøveregler som data (oppdiktede tall 7 år og 42 %), én regelmotor for nettleser og server, regelsvar under feltene, ruten `/api/prove/regler`, 14 testsaker. Roller: forenkler, fagansvarlig, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en. Punktet er krysset av i planen. Spørsmål nr. 13 (ekte tall), ikke blokkerende. Støtter tid og reklamasjoner.
 
@@ -26,7 +28,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 **Levert: liten oppgave (e)**, småfunnene fra PR #23 (prøve E) og det som sto igjen fra PR #26 (30.10.2026; branch `fase1-smafunn-prove-e` fra `main`, versjon 0.2.18). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-e.md`, testplan `docs/agenter/oppgaver/fase1-smafunn-prove-e-testplan.md`. Test for `localWriteGeneration`, testsakene ut av `rules/index.ts`, grensetallet ett sted, færre doble tester, loggen i `custom/reader.ts` og `electricsql/store.ts` viser bare feilmeldingen («ukjent feil» når feilen ikke er en Error). Roller: forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn; små funn rettet av prosjektlederen før PR. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
-**Neste:** prøve A og B per kandidat (Ståle, når synktjenestene er slått på, spørsmål nr. 12). Til da: prøve D og F som kan forberedes uten Ståle, og en liten oppgave for småfunnene fra prøve C.
+**Neste:** prøve A og B per kandidat (Ståle, når synktjenestene er slått på, spørsmål nr. 12). Til da: prøve D og F som kan forberedes uten Ståle.
 
 **Forrige oppgave:** liten oppgave (a) – synktjenestene i Azure-testmiljøet, **PR #17** (merget 29.10.2026 kl. 16:58, versjon 0.2.7). PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så mergen lager ingen nye ressurser. ADR 0003, oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. Kostnad når de er på: ca. 700–850 kr per måned. Spørsmål nr. 12.
 
@@ -34,7 +36,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 **Enda før:** Oppgave 5 – Kandidat 2: ElectricSQL, **PR #10** (branch `fase1-kandidat-electricsql`, versjon 0.2.2). Oppgavekort `docs/funksjoner/fase1-kandidat-electricsql.md`, testplan `docs/funksjoner/fase1-kandidat-electricsql-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-electricsql.md`, drift `docs/drift/electricsql.md`. Sikkerhet-personvern: godkjent, tre små funn; (2) og (3) rettet, (1) (Electrics 400-kropp videresendes uendret) tas i ADR-en. Test-leder: godkjent (lint, typesjekk, format, 333 Vitest, e2e 105 bestått). Spørsmål nr. 11 (ElectricSQL som leverandør), ikke blokkerende.
 
-**Små oppgaver som venter:** (f) småfunnene fra prøve C: loggen i `storage-health.ts` skal bare vise feilnavnet, ikke hele feilmeldingen fra lagringen; fjern doble e2e-tester og tekstblokken i `storage-health.test.ts`; reserveveien i testen for åpning uten nett skal bort eller feile; ett mønster for målingen i skjemaet og listen; overflødig `DOMException`-sjekk. (e) Småfunn fra prøve E er levert (se over). (d) Småfunnene fra PR #21 er levert i **PR #26**. (c) Småfunn fra synktjenestene i Azure er merget i **PR #19** (branch `fase1-smafunn-synk-azure` (versjon 0.2.9, oppgavekort `docs/agenter/oppgaver/fase1-smafunn-synk-azure.md`). (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14** (merget 29.10.2026), sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
+**Små oppgaver som venter:** ingen. (f) Småfunnene fra prøve C er levert (se over). (e) Småfunn fra prøve E er levert (se over). (d) Småfunnene fra PR #21 er levert i **PR #26**. (c) Småfunn fra synktjenestene i Azure er merget i **PR #19** (branch `fase1-smafunn-synk-azure` (versjon 0.2.9, oppgavekort `docs/agenter/oppgaver/fase1-smafunn-synk-azure.md`). (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14** (merget 29.10.2026), sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
 
 **Rekkefølge videre i fase 1:** alle tre kandidatene er satt opp → synktjenestene i Azure (a, merget) → Ståle slår dem på (spørsmål nr. 12) og kjører prøve A og B per kandidat på ekte iPad → prøve C–F → sammenligning og ADR.
 
@@ -44,9 +46,9 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #32 | Prøve C – lagring i Safari | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
+| (ny) | Liten oppgave (f): småfunn fra prøve C | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
 
-PR #16–#28, #30 og #31 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken). Ingen PR venter på Ståle.
+PR #16–#28 og #30–#32 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken). Ingen PR venter på Ståle.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 

@@ -165,7 +165,6 @@ test.describe("boksen på listen og varig lagring (5.2)", () => {
     await expect(box).toHaveAttribute("data-storage-level", "ok");
     await expect(box).toContainText("100");
     await expect(box).toContainText("2148");
-    await expect(box.getByRole("button")).toHaveCount(0);
     await expect(box.locator("button")).toHaveCount(0);
   });
 
@@ -361,9 +360,6 @@ test.describe("lite plass og lagring som feiler (5.4)", () => {
   test("Prøv igjen lagrer de feilede svarene og fjerner meldingen", async ({ page, context }) => {
     await openForm(page, context);
     await failTwoAnswers(page);
-    // Flere svar som feiler samles i én melding
-    await expect(storageError(page)).toHaveCount(1);
-    await expect(storageError(page)).toContainText("2 svar");
     await expect(storageError(page)).toContainText(TEXT_B);
     await expectSaved(page, TEXT_A, "no");
     await expectSaved(page, TEXT_B, "no");
