@@ -521,7 +521,7 @@ describe("hasMetadataSegment", () => {
     expect(hasMetadataSegment(bytes)).toBe(false);
   });
 
-  // Obligatorisk (A5, A8)
+  // Obligatorisk (A7, A10)
   it.each([
     ["APP1 Exif etter APP0", jpeg(APP0, APP1_EXIF)],
     ["APP1 med XMP-hode", jpeg(APP0, APP1_XMP)],

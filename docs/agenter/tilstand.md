@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 (prøve D – bilder, resultatmal og dokumentasjon laget)
+Sist oppdatert: 30.10.2026 (prøve D – bilder, PR åpnet)
 
 ## Gjeldende fase
 
@@ -16,7 +16,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Pågår: Prøve D – bilder** (30.10.2026; branch `fase1-prove-d-bilder` fra `main`, versjon 0.2.23). Oppgavekort `docs/funksjoner/fase1-prove-d-bilder.md`. Det som virker fra før: opplasting mens appen er åpen, nytt forsøk per bilde etter brudd, kontroll med fingeravtrykk. Det som bygges: visningskopi på iPaden (rettet, høyst 2000 punkter, JPEG, uten EXIF/GPS), egen rute for visningskopien med «Vis fra serveren», e2e for rotering, brudd og HEIC, resultatmal for ekte iPad. Beslutninger A7–A10 i `docs/09-apne-sporsmal.md`. Kortet er gjennomgått av forenkler, sikkerhet-personvern og test-leder og oppdatert 30.10.2026; bygging pågår (utvikler og testskriver i parallell). Resultatmalen for ekte iPad (`docs/funksjoner/fase1-prove-d-bilder-resultat.md`), A7–A10, ordlisten, avkryssingen i planen og versjon 0.2.23 er ført; neste steg er at koden og testene blir ferdige, så PR og gjennomgang. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Prøve F jobbes med på `fase1-prove-f-innlogging` og røres ikke. Støtter reklamasjoner og tid.
+**Levert: Prøve D – bilder** (30.10.2026; branch `fase1-prove-d-bilder` fra `main`, versjon 0.2.23, PR åpnet). Oppgavekort `docs/funksjoner/fase1-prove-d-bilder.md`, resultatmal `docs/funksjoner/fase1-prove-d-bilder-resultat.md` for ekte iPad. Fra før: opplasting mens appen er åpen, nytt forsøk per bilde etter brudd, kontroll med fingeravtrykk. Nytt: visningskopi på iPaden (rettet, høyst 2000 punkter, JPEG 0,8, uten EXIF/GPS), egen rute for visningskopien med «Vis fra serveren», e2e for rotering, brudd og HEIC (pc og ipad). Beslutninger A7–A10 i `docs/09-apne-sporsmal.md`. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en (feil beslutningsnumre i kommentarer er rettet av prosjektlederen før PR). Punktet er krysset av i planen. Prøve F røres ikke. Støtter reklamasjoner og tid.
 
 **Levert: liten oppgave (f)**, småfunnene fra PR #32 (prøve C) (30.10.2026; branch `fase1-smafunn-prove-c` fra `main`, versjon 0.2.22, **PR #33**). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-c.md`. Loggen viser bare feilnavnet, testen for åpning uten nett har ingen reservevei, e2e-filen gikk fra 27 til 22 tester, tekstblokken som leste kildefilen er borte, én felles hook for plassmålingen, ingen `DOMException`-sjekk. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; to doble sjekker i e2e rettet av prosjektlederen før PR. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
@@ -48,7 +48,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| – | Prøve D – bilder | under arbeid på `fase1-prove-d-bilder`, PR ikke åpnet ennå | `main` |
+| (se PR-lenken) | Prøve D – bilder | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
 
 PR #16–#28 og #30–#33 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken). Ingen PR venter på Ståle.
 

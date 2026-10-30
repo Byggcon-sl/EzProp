@@ -1,9 +1,9 @@
 /**
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
- * Visningskopien på iPaden (prøve D, beslutning A6 i docs/09-apne-sporsmal.md): lengste side høyst
+ * Visningskopien på iPaden (prøve D, beslutning A8 i docs/09-apne-sporsmal.md): lengste side høyst
  * 2000 punkter, JPEG med kvalitet 0,8, rettet etter retningen kameraet har lagret. Tegnes på et
- * canvas, så kopien får aldri EXIF eller GPS (A5). Bare det nettleseren har (`createImageBitmap`
+ * canvas, så kopien får aldri EXIF eller GPS (A7). Bare det nettleseren har (`createImageBitmap`
  * og canvas), ingen avhengighet. Originalen røres aldri.
  */
 

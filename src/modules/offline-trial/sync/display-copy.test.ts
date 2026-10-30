@@ -7,7 +7,7 @@ import {
 } from "./display-copy";
 
 // Prøve D – bilder: visningskopien på iPaden (docs/funksjoner/fase1-prove-d-bilder.md pkt. 1,
-// A6). Testplan avsnitt 2.1. Skaleringen er en teknisk regel, testet som data (tabell). Selve
+// A8). Testplan avsnitt 2.1. Skaleringen er en teknisk regel, testet som data (tabell). Selve
 // tegningen (canvas, JPEG, rotering) testes i e2e, der det finnes en ekte nettleser.
 
 afterEach(() => {
@@ -30,7 +30,7 @@ const SIZE_CASES: ReadonlyArray<[number, number, number, number]> = [
 
 describe("displaySize", () => {
   it("konstantene er 2000 punkter og kvalitet 0,8", () => {
-    // Endres de, må testen endres bevisst (A6)
+    // Endres de, må testen endres bevisst (A8)
     expect(DISPLAY_MAX_EDGE_PX).toBe(2000);
     expect(DISPLAY_JPEG_QUALITY).toBe(0.8);
   });
