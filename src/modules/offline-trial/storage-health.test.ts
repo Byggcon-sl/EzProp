@@ -378,7 +378,9 @@ describe("tekstene (storage-health.ts)", () => {
   it("ingen gjetteord i tekstene", () => {
     const texts = [LOW_STORAGE_WARNING_TEXT];
     for (const persisted of ["yes", "no"] as const) {
-      texts.push(storageHealthText({ usage: 1948 * MB, quota: 2048 * MB, level: "low", persisted }));
+      texts.push(
+        storageHealthText({ usage: 1948 * MB, quota: 2048 * MB, level: "low", persisted }),
+      );
     }
     texts.push(storageHealthText({ level: "unknown", persisted: "unsupported" }));
     for (const error of [new Error("x"), quotaError()]) {
