@@ -27,7 +27,7 @@ Tellingen er kjørt på branchen `fase1-sammenligning-adr` (lik `main` ved `1510
 | Kommando | Resultat 30.10.2026 |
 |---|---|
 | `pnpm test` (Vitest, mot `TEST_DATABASE_URL`) | **67 testfiler, 988 bestått, 0 feilet, 3 hoppet over** (de tre i `scripts/azure/sync-trial-roles.test.ts` som krever `wal_level=logical`, punkt 2 i nattløkken) |
-| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium pnpm test:e2e` (Chromium, prosjektene `pc` og `ipad`) | **E2E_RESULTAT** |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium pnpm test:e2e` (Chromium, prosjektene `pc` og `ipad`) | **356 tester: 300 bestått, 55 hoppet over, 1 feilet** på 21,9 min. De som hoppes over, er bevisst bare kjørt i `pc` (testplanene, punkt 4 i nattløkken). Den ene feilen var helsesjekken i `ipad` (`e2e/fase-0a.spec.ts`), fordi versjonen i `package.json` ble økt mens kjøringen pågikk; kjørt på nytt etterpå: `fase-0a.spec.ts` 10 av 10 bestått. Ingen feil i synk- eller prøvetestene |
 
 **Viktig skille:** «virker i automatiske tester» betyr Chromium på Linux uten synktjenestene (skyen har ikke Docker: `fase1-kandidat-powersync.md` pkt. 16, `fase1-kandidat-electricsql.md` pkt. 14). Ingenting er prøvd i Safari på ekte iPad. PowerSync- og Electric-tjenesten er ikke startet i noen automatisk test.
 
