@@ -1062,7 +1062,13 @@ test.describe("egenbygd uten service worker", () => {
       selector.getByRole("button", { name: "PowerSync", exact: true }),
       selector.getByRole("button", { name: "ElectricSQL", exact: true }),
     ];
+    // UU-funn 9 (docs/agenter/oppgaver/fase1-uu-nattlokken-testplan.md E3): regionen finnes før
+    // teksten kommer, så skjermleseren leser meldingen opp
+    const waitStatus = selector.getByRole("status");
     try {
+      await page.goto("/prove/testskjema");
+      await expect(selector).toBeVisible();
+      await expect(waitStatus).toHaveCount(1);
       await createTrialForm(page);
       await floorsInput(page).fill("7");
       await expectCount(page, 1);
@@ -1070,11 +1076,15 @@ test.describe("egenbygd uten service worker", () => {
       await expect(selector).toBeVisible();
       for (const button of others) await expect(button).toBeDisabled();
       await expect(page.getByText(WAIT_TEXT)).toBeVisible();
+      await expect(waitStatus).toHaveCount(1);
+      await expect(waitStatus).toHaveText(WAIT_TEXT);
     } finally {
       await page.unroute(CHANGES_ROUTE);
     }
     for (const button of others) await expect(button).toBeEnabled({ timeout: 20_000 });
     await expect(page.getByText(WAIT_TEXT)).toHaveCount(0);
+    await expect(waitStatus).toHaveCount(1);
+    await expect(waitStatus).toHaveText("");
   });
 
   // Obligatorisk (tap av data)
