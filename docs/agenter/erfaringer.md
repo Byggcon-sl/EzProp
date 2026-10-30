@@ -102,3 +102,8 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Hovedløkken så at siste push på `fase1-smafunn-prove-e` var 45 minutter gammel og trodde kjøringen hadde stoppet. Den var i live: arbeidsflyten «oppgave» kan gå 50 minutter uten push mens utvikler og testskriver jobber i egne worktrees. Begge kjøringene leverte samme oppgave; PR #28 ble merget, PR #29 lukket.
 - Regel videre: en oppgave som har oppgavekort på en branch uten PR, regnes som tatt i **3 timer** fra siste push (ikke 30 minutter). Har den ingen PR etter 3 timer, kan neste kjøring ta over. Hovedløkken velger da heller en annen oppgave som ikke rører de samme filene.
 - Er siste merge til `main` mindre enn 1 time gammel og ingen PR er åpen, kan den andre kjøringen holde på med neste oppgave. Start ikke en ny oppgave i den situasjonen; vent til neste kjøring.
+
+## 30.10.2026 – Prøve D (PR #35) og prøve F (PR #34) samtidig
+
+- To kjøringer jobbet samtidig med prøve D og prøve F, som rører ulike filer. Regelen om 3 timer for en branch med oppgavekort virket: hovedløkken lot prøve F være og valgte prøve D. Begge ble merget samme formiddag; eneste konflikt var versjonen og nummereringen av beslutningene i `docs/09-apne-sporsmal.md` (A5/A6 ble brukt av begge).
+- Regel videre: når to kjøringer kan skrive beslutninger eller små oppgaver samtidig, sjekk siste nummer på `main` rett før PR-en åpnes, og bruk neste ledige. Kommentarer i koden som viser til et beslutningsnummer, rettes samtidig.
