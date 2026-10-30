@@ -30,7 +30,14 @@ export const trialForms = pgTable(
     ...baseColumns,
     name: text("name").notNull(),
   },
-  (table) => [index("trial_forms_organization_id_idx").on(table.organizationId)],
+  // Dekker synk-uttrekket: organisasjon, deretter (updated_at, id) som markør og sortering.
+  (table) => [
+    index("trial_forms_organization_id_updated_at_id_idx").on(
+      table.organizationId,
+      table.updatedAt,
+      table.id,
+    ),
+  ],
 );
 export type TrialFormRecord = typeof trialForms.$inferSelect;
 
@@ -58,7 +65,11 @@ export const trialAnswers = pgTable(
     deviceId: text("device_id").notNull(),
   },
   (table) => [
-    index("trial_answers_organization_id_idx").on(table.organizationId),
+    index("trial_answers_organization_id_updated_at_id_idx").on(
+      table.organizationId,
+      table.updatedAt,
+      table.id,
+    ),
     uniqueIndex("trial_answers_trial_form_id_field_key_idx").on(table.trialFormId, table.fieldKey),
   ],
 );
@@ -85,7 +96,11 @@ export const trialPhotos = pgTable(
     deviceId: text("device_id"),
   },
   (table) => [
-    index("trial_photos_organization_id_idx").on(table.organizationId),
+    index("trial_photos_organization_id_updated_at_id_idx").on(
+      table.organizationId,
+      table.updatedAt,
+      table.id,
+    ),
     index("trial_photos_trial_form_id_field_key_idx").on(table.trialFormId, table.fieldKey),
   ],
 );

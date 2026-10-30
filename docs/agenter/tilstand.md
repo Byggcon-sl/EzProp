@@ -59,7 +59,27 @@ I autonom modus samles alt her. Ingen varsler.
 
 ## Oppgaver fra nattløkken
 
-Ingen ennå.
+Fra nattløkken 30.10.2026 (main ved 08a7675, versjon 0.2.17). Rettet i PR #31 «Rydding fra nattløkken 2026-10-30»: sammensatt indeks for synk-uttrekket og trygge pakkeoppdateringer (better-auth, jose, next, eslint-config-next, dotenv, typescript-eslint).
+
+**Alvorlige**
+
+1. **Sårbar pakke (moderat, GHSA-67mh-4wv8-2f99):** esbuild <=0.24.2 via drizzle-kit 0.31.11 > @esbuild-kit/esm-loader > @esbuild-kit/core-utils. Bare utviklingsavhengighet, vi bruker ikke esbuilds serve-modus, så lav risiko i praksis. drizzle-kit er nyeste. Oppgave: følg med på ny drizzle-kit, eller lag egen PR med pnpm-overstyring esbuild >=0.25.0 under @esbuild-kit/core-utils, testet med `pnpm db:generate` og `db:migrate`. Mål: reklamasjoner (trygg plattform).
+
+**Små**
+
+2. **Tre tester hoppes alltid over lokalt:** `scripts/azure/sync-trial-roles.test.ts` (bryteren som sletter logiske plasser) krever `wal_level=logical`; testdatabasen har `replica`. Sjekk om CI-databasen har `logical`; hvis ikke er oppførselen ikke testet noe sted. Mål: reklamasjoner.
+3. **Nattløkken kjørte `pnpm build` og e2e samtidig i samme arbeidskopi**, og ca. 120 e2e-tester ble røde (`.next` bygget på nytt under kjøringen). Ikke en produktfeil. Oppgave: nattsjekkene må ikke bygge i samme mappe samtidig, eller hver e2e-kjøring får egen kopi og egen `E2E_PORT`.
+4. **Synktestene for de tre kandidatene og 401/403 i prøve E kjøres bare på pc**, ikke i iPad-størrelse (bevisst, testplan 6.2). Vurder på nytt når synkløsningen er valgt.
+5. **UU, ikke kjørt automatisk:** `@axe-core/playwright` mangler. Egen PR med ny utviklingsavhengighet (begrunnelse, regel 9) og e2e-test som kjører axe på /logg-inn, /arbeidskoe, /prove/testskjema og ett testskjema.
+6. **UU, tabellceller i testskjemaet** (`trial-form-view.tsx`, `TableCellInput`): kolonnenavnet vises bare som blek hjelpetekst (ca. 3:1) som forsvinner. Forslag: synlig liten etikett, i det minste i første rad.
+7. **UU, fast statuslinje kan dekke felt med fokus** (WCAG 2.4.11). Forslag: `scroll-padding-top` på `html` lik høyden på statuslinjen.
+8. **UU, «Til forsiden» i `src/app/not-found.tsx`** har trykkflate under 44 px. Forslag: `inline-flex min-h-11 min-w-11 items-center`.
+9. **UU, `CandidatePicker`** i `trial-form-list.tsx`: «Vent til alt er lagret på serveren før du bytter» leses ikke opp (mangler `role="status"`/`aria-live`).
+10. **Store pakkeoppdateringer** (kan gi brudd): eslint 10, postgres 4, typescript 7. Én PR per pakke senere med full testkjøring. `@types/node` står på 22 (følger Node-versjonen).
+11. **Størrelse:** ingen side over 200 kB JS ved første last (gzip). Testskjema/[id] 188,9 kB er nærmest grensen; følg med i neste fase (bilder, synk, skjema). Next.js 16 viser ikke størrelser i byggutskriften; et lite skript (`scripts/check-bundle-size.mjs`) kan gjøre sjekken gjentakbar.
+12. **Synk-ADR-en (fase 2b):** hent eksisterende rader for hele bunten på én gang per tabell eller bruk `INSERT ... ON CONFLICT` (N+1 i `applyTrialChanges`, 1 500–2 000 rundturer per bunt på 500), og bruk indeksmønsteret `(organization_id, updated_at, id)` på de ekte tabellene. Mål: tid.
+13. **Ekte tabeller for oppdrag og rapporter:** indeks på `(organization_id, <sorteringsfelt>)`, eventuelt delvis med `WHERE deleted_at IS NULL` (som `listTrialForms` mangler i dag; brukes bare i tester).
+14. **`findGrant`** bruker to spørringer per tilgangssjekk; kan slås sammen. Liten gevinst, ingen N+1. Lav prioritet.
 
 ## Trenger Ståle (stoppet etter 3 retteforsøk)
 
@@ -67,6 +87,7 @@ Ingen.
 
 ## Siste kjøring
 
+30.10.2026: prosjektleder skrev funnene fra nattløkken inn under «Oppgaver fra nattløkken» og laget branchen `natt-2026-10-30` med trygg rydding (synkindeks, pakkeoppdateringer, versjon 0.2.20 etter fletting med main), alle sjekker grønne (også e2e), PR #31 åpnet mot `main`. Sesjon: https://claude.ai/code/session_01Jqwntym4bVyM8CVw74aqdP
 30.10.2026 kl. 01:05–02:00: hovedløkken trodde kjøringen med liten oppgave (e) hadde stoppet (45 min uten push) og fullførte den selv (PR #29). Den andre kjøringen var i live og merget PR #28 kl. 01:25 med samme innhold. PR #29 er lukket uten tap. Lærdom og ny regel (3 timer) i `erfaringer.md`. Startet ingen ny oppgave, fordi den andre kjøringen kan holde på med neste. Sesjon: https://claude.ai/code/session_01Jqwnu1z3G1tg8SDiRvvu7V
 
 29.10.2026: hovedløkken fant ingen åpne PR-er, kjørte liten oppgave (d) med arbeidsflyten «oppgave» (24 agenter, ca. 2 t 25 min) til PR #26, merget med skriptet (CI grønn, ingen alvorlige funn, to små funn står under «Neste»). Første merge-forsøk stoppet fordi den automatiske flettingen fra `main` ga en CI-kjøring som ventet på godkjenning; en ny commit startet CI. Sesjon: https://claude.ai/code/session_01JqwntzupjW6jbbFTYtkeBA
