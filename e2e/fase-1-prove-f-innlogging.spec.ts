@@ -8,10 +8,10 @@ import {
   createTrialForm,
   expireOwnSession,
   fieldSaved,
+  hookValue,
   indicator,
   logIn,
   logInAsInspector,
-  organizationIdOf,
   pendingQueue,
   serverTrialData,
   signInWithCode,
@@ -220,8 +220,6 @@ test("2.1 takstmann med utløpt innlogging fyller ut uten nett, logger inn og al
       await expect(signInLink(target)).toBeVisible();
       await expect(syncNowButton(target)).toBeHidden();
     }
-    await expect(form.getByText(SIGN_IN_MESSAGE, { exact: true })).toHaveCount(1);
-    await expect(form.getByText(SIGN_IN_MESSAGE, { exact: true })).toBeVisible();
     await expect(indicator(form)).toHaveText(SIGN_IN_MESSAGE);
     await expect(indicator(form)).toHaveAttribute("role", "status");
     await expect(signInLink(form)).toHaveAttribute("href", `/logg-inn?neste=${nextParam(formId)}`);
@@ -260,8 +258,9 @@ test("2.1 takstmann med utløpt innlogging fyller ut uten nett, logger inn og al
     await expectFormContent(form);
     await syncAfterSignIn(form, testInfo);
 
-    // 12. Serveren har alle svar og nøyaktig ett bilde, i takstmannens organisasjon
-    const organizationId = await organizationIdOf(INSPECTOR_EMAIL);
+    // 12. Serveren har alle svar og nøyaktig ett bilde, i takstmannens organisasjon. Forventet
+    // organisasjon er den enheten åpnet synken for (fra innloggingen), ikke radene på serveren.
+    const organizationId = await hookValue(form, "organizationId");
     await expect
       .poll(
         async () => {

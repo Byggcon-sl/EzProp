@@ -182,7 +182,7 @@ Prosjektene `pc` og `ipad` (Chromium). Kandidaten egenbygd (`useCandidate(contex
 | Testnavn | Viser |
 |---|---|
 | «visningskopien står riktig vei og har ingen metadata (EXIF-retning 6)» | **Obligatorisk** (AK 1). Velg `test-photo-rotated.jpg` (lagret 64x32, retning 6, rødt felt 16x16 oppe til venstre i de lagrede pikslene, GPS 0,0). Vent til `<id>.display.jpg` finnes. Originalen på disk: samme sha som fixturen (uendret, også GPS-feltet er der: `jpegMarkers` har `APP1`). Kopien: starter med `FF D8`, `jpegMarkers` har verken `APP1` (`FF E1`) eller `APP13` (`FF ED`), bytene har ikke teksten «Exif». `decodeInPage(GET-ruten)`: bredde 32, høyde 64 (byttet). Pikselen ved (28, 4) er rød (r > 200, g < 60, b < 60), pikselen ved (4, 4) er ikke rød. |
-| «PNG blir JPEG i kopien» | `test-image.png` → kopien starter med `FF D8`, `Content-Type` `image/jpeg` fra GET. |
+| ~~«PNG blir JPEG i kopien»~~ | Fjernet 30.10.2026 (småfunn D og F): dekket av enhetstesten «toBlob kalles med image/jpeg og 0,8» i `display-copy.test.ts`. |
 
 ### 5.4 Størrelse
 

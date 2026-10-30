@@ -29,6 +29,7 @@ import {
   DQT,
   jpeg,
   jpegWithScan,
+  segment,
   SOF0,
   SOS,
 } from "../../../../tests/jpeg-bytes";
@@ -511,25 +512,43 @@ async function idsThatSucceed(ids: string[], call: (id: string) => Promise<unkno
 }
 
 describe("hasMetadataSegment", () => {
-  // Obligatorisk
-  it.each([
-    ["bare APP0 (JFIF)", jpeg(APP0)],
-    ["APP0 + APP2 (fargeprofil)", jpeg(APP0, APP2)],
-    ["APP0 + DQT + SOF0 + DHT", jpeg(APP0, DQT, SOF0, DHT)],
-    ["ingen APPn", jpeg(DQT, SOF0, DHT)],
-  ])("hasMetadataSegment godtar JPEG uten metadatafelt: %s", (_name, bytes) => {
-    expect(hasMetadataSegment(bytes)).toBe(false);
-  });
+  // Bare merkene på listen er lov før FF DA (A12). Innholdet er oppdiktet.
+  const filler = [0x01, 0x02, 0x03];
+  /** Merke uten lengdefelt (TEM, RST0–RST7). */
+  const bare = (marker: number): number[] => [0xff, marker];
 
-  // Obligatorisk (A7, A10)
+  // U12 (A7, A10, A12)
   it.each([
+    ["COM (FE)", jpeg(APP0, segment(0xfe, filler))],
     ["APP1 Exif etter APP0", jpeg(APP0, APP1_EXIF)],
     ["APP1 med XMP-hode", jpeg(APP0, APP1_XMP)],
-    ["APP13 (Photoshop 3.0)", jpeg(APP0, APP13)],
     ["APP1 som første felt", jpeg(APP1_EXIF, APP0)],
     ["APP1 etter APP2", jpeg(APP0, APP2, APP1_EXIF)],
-  ])("hasMetadataSegment avviser APP1 og APP13: %s", (_name, bytes) => {
+    ["APP3 (E3)", jpeg(APP0, segment(0xe3, filler))],
+    ["APP13 (Photoshop 3.0)", jpeg(APP0, APP13)],
+    ["APP15 (EF)", jpeg(APP0, segment(0xef, filler))],
+    ["JPGn (F0)", jpeg(APP0, segment(0xf0, filler))],
+    ["DE", jpeg(APP0, segment(0xde, filler))],
+  ])("hasMetadataSegment avviser %s", (_name, bytes) => {
     expect(hasMetadataSegment(bytes)).toBe(true);
+  });
+
+  // U13 (A12)
+  it.each([
+    ["APP0 (JFIF)", jpeg(APP0)],
+    ["APP2 (fargeprofil)", jpeg(APP0, APP2)],
+    ["APP14 (EE)", jpeg(APP0, segment(0xee, filler))],
+    ["C0 (SOF0)", jpeg(SOF0)],
+    ["C4 (DHT)", jpeg(DHT)],
+    ["CF", jpeg(segment(0xcf, filler))],
+    ["DB (DQT)", jpeg(DQT)],
+    ["DD (DRI)", jpeg(segment(0xdd, [0x00, 0x10]))],
+    ["TEM (01)", jpeg(APP0, bare(0x01))],
+    ["RST0 (D0)", jpeg(APP0, bare(0xd0))],
+    ["RST7 (D7)", jpeg(APP0, bare(0xd7))],
+    ["ingen APPn", jpeg(DQT, SOF0, DHT)],
+  ])("hasMetadataSegment godtar %s", (_name, bytes) => {
+    expect(hasMetadataSegment(bytes)).toBe(false);
   });
 
   it("hasMetadataSegment ser ikke etter bildedataene", () => {

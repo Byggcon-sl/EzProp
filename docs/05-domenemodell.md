@@ -1791,6 +1791,7 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Bilde | `photos` | |
 | Original / komprimert | `original_file_id` / `display_file_id` | |
 | Visningskopi | `display copy` (`display_file_id`; i prøven nøkkelen `<photoId>:display` på iPaden og `<photoId>.display.jpg` på serveren) | Den komprimerte, rettvendte JPEG-en uten EXIF og GPS som lages på iPaden. Originalen lastes opp uendret ved siden av |
+| Visningskopi feilet endelig | `display failed` (i prøven nøkkelen `display-failed:<photoId>` på iPaden, med koden `"400"` eller `"404"`) | Kopien ble avvist eller bildet er slettet. Kopien lages og sendes ikke igjen, og ved bildet står «Bare originalen er lagret» (A11) |
 | Markering | `annotations` | Eget lag |
 | Bildetekst | `caption` | |
 | Forsidebilde | `is_cover` | |
