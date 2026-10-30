@@ -91,11 +91,10 @@ function CandidatePicker() {
           );
         })}
       </div>
-      {waiting ? (
-        <p className="mt-2 text-sm text-slate-700">
-          Vent til alt er lagret på serveren før du bytter
-        </p>
-      ) : null}
+      {/* Står alltid i DOM, så skjermleseren leser opp meldingen når den dukker opp. Tom og uten marg tar den ingen plass. */}
+      <p role="status" className={cn("text-sm text-slate-700", waiting && "mt-2")}>
+        {waiting ? "Vent til alt er lagret på serveren før du bytter" : null}
+      </p>
     </fieldset>
   );
 }
