@@ -16,7 +16,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Levert: liten oppgave (f)**, småfunnene fra PR #32 (prøve C) (30.10.2026; branch `fase1-smafunn-prove-c` fra `main`, versjon 0.2.22). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-c.md`. Loggen viser bare feilnavnet, testen for åpning uten nett har ingen reservevei, e2e-filen gikk fra 27 til 22 tester, tekstblokken som leste kildefilen er borte, én felles hook for plassmålingen, ingen `DOMException`-sjekk. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; to doble sjekker i e2e rettet av prosjektlederen før PR. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
+**Levert: liten oppgave (f)**, småfunnene fra PR #32 (prøve C) (30.10.2026; branch `fase1-smafunn-prove-c` fra `main`, versjon 0.2.22, **PR #33**). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-c.md`. Loggen viser bare feilnavnet, testen for åpning uten nett har ingen reservevei, e2e-filen gikk fra 27 til 22 tester, tekstblokken som leste kildefilen er borte, én felles hook for plassmålingen, ingen `DOMException`-sjekk. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; to doble sjekker i e2e rettet av prosjektlederen før PR. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
 **Levert: Prøve C – lagring i Safari** (merget 30.10.2026; branch `fase1-prove-c-lagring` fra `main`, versjon 0.2.21, **PR #32**). Oppgavekort `docs/funksjoner/fase1-prove-c-lagring.md`, resultatmal `docs/funksjoner/fase1-prove-c-lagring-resultat.md` for ekte iPad. Boksen «Lagring på denne iPaden» på listen, automatisk varig lagring, varsel ved lite plass (under 500 MB ledig), én samlet melding med automatisk ny lagring og «Prøv igjen» når lagring feiler, e2e i Chromium (pc og iPad-størrelse). Roller: forenkler, ux-ansvarlig, test-leder, sikkerhet-personvern, utvikler, testskriver. Beslutninger A1–A4 i `docs/09-apne-sporsmal.md`. Ingen alvorlige funn; små funn står i PR-en (blant annet: loggen skriver hele feilmeldingen fra lagringen, doble e2e-tester, reservevei i testen for åpning uten nett). Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
@@ -46,7 +46,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| (ny) | Liten oppgave (f): småfunn fra prøve C | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
+| #33 | Liten oppgave (f): småfunn fra prøve C | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
 
 PR #16–#28 og #30–#32 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken). Ingen PR venter på Ståle.
 
