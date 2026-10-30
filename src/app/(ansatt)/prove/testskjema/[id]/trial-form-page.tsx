@@ -24,6 +24,7 @@ import {
 import type { TrialAnswerRow, TrialFormSnapshot } from "@/modules/offline-trial/sync/types";
 import { listTrialFields, trialForm } from "@/modules/offline-trial/trial-form";
 import { TrialFormView } from "@/modules/offline-trial/trial-form-view";
+import { useStickyScrollPadding } from "@/shared/lib/use-sticky-scroll-padding";
 import { Button } from "@/shared/ui/button";
 import { useSyncStatusSource, useTrialSync } from "../trial-sync-provider";
 import { useStorageHealth } from "../use-storage-health";
@@ -257,6 +258,8 @@ export function TrialFormPage({ formId }: { formId: string }) {
   const errorHasAnswers = failures.some((item) => item.kind === "answer");
 
   const form = snapshot?.form ?? null;
+  const stickyBarRef = useRef<HTMLDivElement>(null);
+  useStickyScrollPadding(stickyBarRef);
 
   if (snapshot && !form) {
     return (
@@ -279,6 +282,8 @@ export function TrialFormPage({ formId }: { formId: string }) {
   return (
     <main className="mx-auto max-w-3xl px-4 pb-16">
       <div
+        ref={stickyBarRef}
+        data-testid="sticky-status-bar"
         className="sticky top-0 z-10 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-3"
         data-storage-level={health?.level}
         data-storage-persisted={health?.persisted}

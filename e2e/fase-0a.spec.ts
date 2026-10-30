@@ -53,3 +53,21 @@ test("ukjent e-post får ingen kode og ingen bekreftelse på at adressen finnes"
     mailbox.getByTestId("dev-email-to").filter({ hasText: "ukjent@example.com" }),
   ).toHaveCount(0);
 });
+
+// UU-funn 8 fra nattløkken 30.10.2026 (docs/agenter/oppgaver/fase1-uu-nattlokken-testplan.md
+// avsnitt 2). Kjører i pc og ipad.
+test("Til forsiden på Fant ikke siden er minst 44 × 44 px", async ({ page }) => {
+  await logIn(page, ADMIN_EMAIL);
+  await page.goto("/finnes-ikke-e2e");
+  await expect(page.getByRole("heading", { name: "Fant ikke siden" })).toBeVisible();
+  const link = page.getByRole("link", { name: "Til forsiden", exact: true });
+  await expect(link).toBeVisible();
+  const box = await link.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.width).toBeGreaterThanOrEqual(44);
+  expect(box!.height).toBeGreaterThanOrEqual(44);
+  // Admin kommer tilbake fra siden og stenges ikke ute
+  await link.click();
+  await expect(page).toHaveURL(/\/(arbeidskoe)?$/);
+  await expect(page.getByRole("heading", { name: "Fant ikke siden" })).toHaveCount(0);
+});

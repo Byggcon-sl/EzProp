@@ -113,6 +113,9 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - To kjøringer jobbet samtidig med prøve D og prøve F, som rører ulike filer. Regelen om 3 timer for en branch med oppgavekort virket: hovedløkken lot prøve F være og valgte prøve D. Begge ble merget samme formiddag; eneste konflikt var versjonen og nummereringen av beslutningene i `docs/09-apne-sporsmal.md` (A5/A6 ble brukt av begge).
 - Regel videre: når to kjøringer kan skrive beslutninger eller små oppgaver samtidig, sjekk siste nummer på `main` rett før PR-en åpnes, og bruk neste ledige. Kommentarer i koden som viser til et beslutningsnummer, rettes samtidig.
 
+## 30.10.2026 – UU-funnene fra nattløkken
+
+- e2e henger når en gammel next-server holder port 3100 (reuseExistingServer). Kjør med CI=1 og en ledig E2E_PORT. Kilde: nattløkken 30.10.2026.
 ## 30.10.2026 – PR #38 og #39 merget (småfunn D og F, sammenligning og ADR 0004)
 
 - Regelen om 3 timer virket igjen: hovedløkken lot `fase1-smafunn-prove-d-f` (84 min siden push) være og valgte sammenligningen og ADR-en, som bare rører dokumenter. Beslutningsnumrene A11/A12 ble holdt av til den andre kjøringen, så ADR-en brukte A13–A15 uten konflikt.
