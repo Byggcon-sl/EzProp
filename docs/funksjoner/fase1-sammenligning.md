@@ -16,7 +16,9 @@
 | Egen kode vi eier (uten tester) | Minst (ca. 1 000 linjer) | Mest (ca. 2 300 linjer + tjeneste) | Nesten like mye som Electric (ca. 2 300 linjer), ingen tjeneste |
 | Drift i EU/EØS | Selvdrevet i Sweden Central, ekstra container | Selvdrevet i Sweden Central, ekstra container | Bare appen og databasen, som i dag |
 | Pris i testmiljøet | Del av ca. 700–850 kr/mnd for begge tjenestene | Del av ca. 700–850 kr/mnd | 0 kr ekstra |
-| Poeng (vektet, 1–3) | **2,20** | **1,65** | **2,65** |
+| Poeng (vektet, 1–3, **foreløpige**) | **2,20** | **1,65** | **2,65** |
+
+Poengene er foreløpige: **ingen kandidat har bestått prøve A og C på ekte iPad**, og de to prøvene er port i planen for prøvene.
 
 **Foreløpig valg: egenbygd.** Reserve: PowerSync hvis lagringen på iPaden svikter, ElectricSQL hvis bare hentingen svikter. Se ADR 0004.
 
@@ -65,9 +67,11 @@ echo "sync/ rett: kode $(ls *.ts | grep -v '\.test\.' | xargs cat | wc -l) teste
 | **Egen kode** `electricsql/` | 534 | 285 | ElectricSQL |
 | **Egen kode** `powersync/` | 851 | 218 | PowerSync |
 | **Felles** `local/` (lokal kjerne: lagring, kø, innfletting) | 1 523 | 1 156 | egenbygd og ElectricSQL |
-| **Felles** filene rett i `sync/` (kontrakt, bildekø, visningskopi, tekstfletting, valg av kandidat, testkrok) | 1 433 | 1 686 | alle tre |
+| **Felles** filene rett i `sync/` (kontrakt, bildekø, visningskopi, tekstfletting, valg av kandidat, testkrok) | 1 505 | 2 056 | alle tre |
 
 Arkitektens tall med testene regnet med (bare til sammenligning): custom 1 439, electricsql 819, powersync 1 069, local 2 679. De stemmer med summene over.
+
+Tellingen er kjørt på nytt 30.10.2026 etter rebase på `main` ved `fa094a4` (PR #38, småfunn D og F). Bare filene rett i `sync/` endret seg (PR #38 rørte bildekøen, visningskopien og testene deres); de andre tallene er like.
 
 **Serverdelen** (samme kommando, `src/modules/offline-trial/server/` og `src/app/api/prove/synk/`):
 
@@ -87,7 +91,9 @@ Arkitektens tall med testene regnet med (bare til sammenligning): custom 1 439, 
 | ElectricSQL | 534 + 1 523 | 211 | **ca. 2 270** | Tjenesten (container), migrering `0002` (`REPLICA IDENTITY FULL` og publikasjon), `ELECTRIC_SECRET`, replikeringsplass |
 | Egenbygd | 560 + 1 523 | 238 | **ca. 2 320** | Ingenting utover appen og databasen |
 
-**Nye avhengigheter:** PowerSync: `@powersync/web`, `@powersync/react`, `@journeyapps/wa-sqlite` (`package.json`). ElectricSQL: ingen (`@electric-sql/client` ble prøvd og tatt ut igjen, `fase1-prove-ab-electricsql.md`). Egenbygd: ingen. `yjs` brukes av alle tre.
+**Nye avhengigheter:** PowerSync: `@powersync/web`, `@powersync/react`, `@journeyapps/wa-sqlite` (`package.json`), pluss egen tjeneste. ElectricSQL: ingen klientpakke i repoet (`@electric-sql/client` ble prøvd og tatt ut igjen, `fase1-prove-ab-electricsql.md`); klienten er egen kode i `sync/electricsql/`, pluss egen tjeneste. Egenbygd: ingen ny pakke og ingen ny tjeneste. `yjs` brukes av alle tre.
+
+`@electric-sql/pglite` står i `pnpm-lock.yaml`, men bare som valgfri peer-avhengighet til `drizzle-orm`. Den er ikke installert, ikke i bruk og er **ikke** en avhengighet for ElectricSQL.
 
 **Tid brukt:** alle tre under to arbeidsdager (resultatfilene, «Tid brukt»). Egenbygd gikk raskt fordi den lokale kjernen kom fra ElectricSQL.
 
@@ -102,6 +108,8 @@ Arkitektens tall med testene regnet med (bare til sammenligning): custom 1 439, 
 ## 3. Drift i EU/EØS
 
 Kilder: ADR 0003, `docs/drift/powersync.md`, `docs/drift/electricsql.md`, `docs/drift/testmiljo-azure.md`.
+
+**Kort sagt:** vi drifter selv i det miljøet vi allerede har (appen og databasen i Azure Sweden Central). Ingen skytjeneste velges for noen av kandidatene (A13, A14 i `docs/09-apne-sporsmal.md`). Med egenbygd går data ingen andre steder enn i dag.
 
 | | PowerSync | ElectricSQL | Egenbygd |
 |---|---|---|---|
@@ -122,6 +130,8 @@ Kilder: ADR 0003, `docs/drift/powersync.md`, `docs/drift/electricsql.md`, `docs/
 | Skytjeneste | Ikke valgt (A13) | Ikke valgt (A14) | Finnes ikke |
 | Å bytte senere | Synkregler og klientskjema må skrives om. Lisensen på tjenesten (se under) | Lagret posisjon og proxy må skrives om; kjernen kan beholdes | Kjernen kan beholdes for ElectricSQL; for PowerSync bak samme kontrakt (`TrialSyncStore`) |
 
+**Kort sagt:** egenbygd koster **0 kr ekstra**, fordi den kjører i appen og databasen vi allerede har. Ingen skytjeneste velges (A13, A14), og ingenting er slått på i Azure.
+
 **Poeng (vekt 10 %):** egenbygd **3**, PowerSync **2**, ElectricSQL **2**.
 
 ## 5. Hvor modent verktøyet er
@@ -131,8 +141,8 @@ Versjon og lisens er bare hentet fra filer i repoet. «Ikke sjekket» betyr at d
 | | PowerSync | ElectricSQL | Egenbygd |
 |---|---|---|---|
 | Tjeneste, versjon | `journeyapps/powersync-service:1.27.2` (`docker-compose.yml`) | `electricsql/electric:1.8.1` (`docker-compose.yml`) | Ingen tjeneste |
-| Tjeneste, lisens | FSL-1.1-ALv2 ifølge resultatfilen (sjekket mot npm 28.10.2026, `fase1-prove-ab-powersync.md`). Ikke sjekket mot en fil i repoet | Ikke sjekket mot en fil i repoet (`docs/drift/electricsql.md` sier Apache-2.0, uten kilde) | – |
-| Klient, versjon og lisens | `@powersync/web` 2.5.0 Apache-2.0, `@powersync/common` 2.4.0 Apache-2.0, `@powersync/react` 2.1.0 Apache-2.0 (`node_modules/*/package.json`). `@journeyapps/wa-sqlite` 2.0.10: MIT (`LICENSE` i pakken). `yjs` 13.6.33 MIT | Ingen klientpakke i bruk. `@electric-sql/client` 1.5.28 ble prøvd og tatt ut | Ingen pakke. Bruker IndexedDB, som er innebygd i nettleseren |
+| Tjeneste, lisens | **Ikke sjekket** (ingen lisensfil for `powersync-service` i repoet; resultatfilen `fase1-prove-ab-powersync.md` nevner FSL-1.1-ALv2 fra npm 28.10.2026, men det er ikke sjekket mot tjenesten) | **Ikke sjekket** (ingen lisensfil for `electric` i repoet; `docs/drift/electricsql.md` nevner Apache-2.0 uten kilde) | – |
+| Klient, versjon og lisens | `@powersync/web` 2.5.0 Apache-2.0, `@powersync/common` 2.4.0 Apache-2.0, `@powersync/react` 2.1.0 Apache-2.0 (`node_modules/*/package.json`). `@journeyapps/wa-sqlite` 2.0.10: MIT (`LICENSE` i pakken). `yjs` 13.6.33 MIT | Ingen klientpakke i repoet. Klienten er egen kode i `sync/electricsql/` (henting mot shape-ruten). Versjonen finnes bare for tjenesten, i `docker-compose.yml`. `@electric-sql/client` 1.5.28 ble prøvd og tatt ut. `@electric-sql/pglite` i `pnpm-lock.yaml` hører ikke til ElectricSQL (se avsnitt 2) | Ingen pakke. Bruker IndexedDB, som er innebygd i nettleseren |
 | Hvor lenge stabilt | Ikke sjekket | Ikke sjekket | Vår egen kode, laget 29.10.2026 |
 | Kjente begrensninger fra prøvene | Flere faner synker ikke samtidig (av i Safari i SDK-en). Service workeren må hurtiglagre worker og wasm, ellers åpner ikke databasen uten nett | SDK-klienten holdt ikke regelen om høyst ett kall per 5 s, og ble byttet med egen løkke. Update og delete sender bare endrede kolonner uten `REPLICA IDENTITY FULL` | Hentemarkøren har en kjent grense (rad som blir synlig mer enn 60 s «bakover i tid», test i `changes-since.test.ts`). Ikke trygt med flere faner (ingen `navigator.locks`) |
 | Postgres og Drizzle | Postgres med logisk replikering. Drizzle ikke direkte (eget klientskjema) | Postgres med logisk replikering. Drizzle ikke direkte | Drizzle og Postgres direkte, uten logisk replikering |
@@ -140,7 +150,13 @@ Versjon og lisens er bare hentet fra filer i repoet. «Ikke sjekket» betyr at d
 
 **Poeng (vekt 15 %):** PowerSync **2** (mest ferdig bygget, men aldri prøvd mot tjenesten), egenbygd **2** (ingen avhengighet å stole på, men ny kode), ElectricSQL **1** (klientpakken holdt ikke våre regler og ble tatt ut).
 
-## 6. Det som ikke virket
+## 6. Det som ikke virket / ikke prøvd
+
+**Ikke prøvd for noen av de tre**
+- Prøve A og B på ekte iPad, Safari på iPad i det hele tatt, 200 bilder, omstart av iPaden og 7 dager uten bruk (prøve C).
+- **PowerSync- og ElectricSQL-tjenesten er aldri startet i en automatisk test.** Skyen har ikke Docker (`fase1-kandidat-powersync.md` pkt. 16, `fase1-kandidat-electricsql.md` pkt. 14). Alt som står om dem, bygger på klientkoden og simulerte svar.
+- `sync_conflicts` og `field_clock` finnes ikke i prøven (se under «Felles»).
+- Ytelse er ikke målt.
 
 **PowerSync**
 - Henting fra tjenesten er aldri prøvd (ingen Docker i skyen). Uten tjenesten når synkstatusen aldri «Alt er lagret på serveren», og køen sendes bare med «Synk nå» (`e2e/fase-1-prove-f-innlogging.spec.ts`).
@@ -155,14 +171,14 @@ Versjon og lisens er bare hentet fra filer i repoet. «Ikke sjekket» betyr at d
 - Avviste bunter blir liggende som i PowerSync. Ikke prøvd mot ekte Electric-tjeneste.
 
 **Egenbygd**
-- Hentemarkøren bruker `updated_at` med 60 s overlapp. En rad som blir synlig mer enn 60 s «bakover i tid» (lang transaksjon eller appklokke mer enn 60 s bak databasen), hoppes over. Dokumentert med test (`fase1-prove-ab-egenbygd.md`, `server/changes-since.test.ts`).
+- Hentemarkøren bruker `updated_at` med 60 s overlapp. En endring som blir synlig mer enn 60 s for sent (lang transaksjon eller appklokke mer enn 60 s bak databasen), hoppes over. Dokumentert med test («oppdatering mer enn 60 s bakover kommer ikke med (kjent grense)» i `server/changes-since.test.ts`, og `fase1-prove-ab-egenbygd.md`). **Krav til fase 2b** (ADR 0004).
 - `updated_at` settes av databasen ved innsetting og av appklokken ved oppdatering (`src/db/schema/common.ts`). Bør ryddes før ekte data.
 - Rader endret de siste 60 s sendes på nytt i hver henting (ca. 12 ganger per endring med takt 5 s). Ufarlig, men unødvendig nettbruk. Ikke målt på ekte iPad.
 - Avviste bunter blir liggende som for de andre (felles kjerne med ElectricSQL).
 
 **Felles for alle tre (skiller dem ikke)**
 - **Bildekøen kunne stå fast:** én opplasting uten svar stoppet alle bildene etter den til siden ble lastet på nytt. Rettet med tidsavbrudd per opplasting i PR #14 (`photo-uploader.ts`, `photoUploadTimeoutMs`).
-- **Småfunnene fra prøve D** (liten oppgave h, PR #35): en visningskopi som avvises (400) eller får 404 etter myk sletting, sendes på nytt hver runde; metadatasjekken i `photo-storage.ts` slipper COM og andre APP-felt; to tegneveier i `display-copy.ts`; falskt `{ id } as TrialPhotoRow` i `sendPhoto`; adressen til visningsruten bygges to steder; e2e-saker som dobler Vitest. Rettes på branchen `fase1-smafunn-prove-d-f`.
+- **Småfunnene fra prøve D og F** (funnet etter PR #35): en visningskopi som avvises (400) eller får 404 etter myk sletting, ble sendt på nytt hver runde; metadatasjekken i `photo-storage.ts` slapp COM og andre APP-felt; to tegneveier i `display-copy.ts`; falskt `{ id } as TrialPhotoRow` i `sendPhoto`; adressen til visningsruten ble bygget to steder; e2e-saker som doblet Vitest. **Nå rettet og merget på `main`** (PR #38, `fa094a4`; beslutningene står som A11 og A12 i `docs/09-apne-sporsmal.md`). Gjaldt alle tre og skiller dem ikke.
 - Skriveruten gjør én spørring per rad (N+1 i `applyTrialChanges`, punkt 12 i nattløkken). Krav til fase 2b.
 - `sync_conflicts` finnes ikke i prøven. TG, valg og tall følger «siste endring kommer fram, vinner» på serveren, og varselet vises bare på iPaden (`foreign-change.ts`). Den tapte verdien lagres ikke. **Ikke prøvd.**
 
@@ -170,11 +186,11 @@ Versjon og lisens er bare hentet fra filer i repoet. «Ikke sjekket» betyr at d
 
 | Kriterium | Vekt | PowerSync | ElectricSQL | Egenbygd |
 |---|---|---|---|---|
-| Virker prøvene (A og C er port; ikke kjørt for noen) | 40 % | 2 | 2 | 3 |
+| Virker prøvene (A og C er port; ingen har bestått dem på ekte iPad) | 40 % | 2 | 2 | 3 |
 | Arbeid | 20 % | 3 | 1 | 2 |
 | Drift i EU/EØS | 15 % | 2 | 2 | 3 |
 | Pris | 10 % | 2 | 2 | 3 |
 | Modenhet | 15 % | 2 | 1 | 2 |
-| **Vektet sum** | | **2,20** | **1,65** | **2,65** |
+| **Vektet sum (foreløpig)** | | **2,20** | **1,65** | **2,65** |
 
-Summen avgjør ikke alene (planen for prøvene). Begrunnelsen, det som ikke virket, og hva prøve A og B må vise, står i ADR 0004.
+Poengene er **foreløpige**. Ingen kandidat har bestått prøve A og C på ekte iPad, og summen avgjør ikke alene (planen for prøvene). Begrunnelsen, det som ikke virket, og hva prøve A og B må vise, står i ADR 0004.
