@@ -1698,18 +1698,15 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Bekreftet av serveren | `serverConfirmed` (`TrialSyncStatus`) | Siste runde mot serveren (sending og henting) lyktes, og ingenting har feilet etter den. Uten dette vises aldri «Alt er lagret», selv om nettleseren mener den har nett |
 | Synk nå | `syncNow` (`TrialSyncStore`) | Sender endringskøen, starter bildeopplastingen og henter fra serveren med en gang, uten å vente på neste forsøk |
 | Utfall av runden («Synk nå») | `TrialSyncRoundResult` (`ok` / `offline` / `failed`) | Det «Synk nå» gir tilbake: lyktes, uten nett (ingenting sendt) eller feilet (også etter 15 sekunder). Styrer beskjeden under synkstatusen |
-| Lagringsstatus | `storage health` (`StorageHealth`, `offline-trial/storage-health.ts`) | Plass appen bruker på iPaden, plassen nettleseren gir appen, og om lagringen er varig. Vises i boksen «Lagring på denne iPaden» på listen over testskjemaer (prøve C) |
+| Lagringsstatus | `storage health` (`StorageHealth`, `readStorageHealth`, `offline-trial/storage-health.ts`) | Plass appen bruker på iPaden og plassen nettleseren gir appen (`navigator.storage.estimate()`), og om lagringen er varig. Bare på egen enhet, lagres ikke. Vises i boksen «Lagring på denne iPaden» på listen over testskjemaer (prøve C) |
 | Varig lagring | `persistent storage` (`navigator.storage.persist()`) | Nettleseren lover å ikke slette appens data av seg selv. Appen ber om det automatisk når en prøveside åpnes, én gang per innlasting |
-| Lite plass | `low storage` (`LOW_STORAGE_FREE_BYTES`) | Ledig plass for appen er under grensen (500 MB). Gir et varsel øverst i skjemaet, aldri en sperre |
+| Lite plass | `low storage` (`storageLevel`: `ok` / `low` / `unknown`, `LOW_STORAGE_FREE_BYTES`) | Ledig plass for appen er under grensen (500 MB i prøven). Gir et varsel øverst i skjemaet, aldri en sperre |
 | Tekstfletting | `text merge` (`text-merge.ts`, Yjs) | To som skriver i samme tekstfelt får begge bidrag med |
 | Siste endring vinner | `last write wins` | For TG, valg, tall og tabell: den endringen som når serveren sist, gjelder. Den andre får varselet «Endret av en annen» |
 | Enhets-id i prøven | `trial_device_id` | Fast id per nettleser-installasjon, bare for varselet i prøve B. Ikke tabellen `devices` (fase 2b) |
 | Prøveregel | `trial rule` (`TrialRule`, `trialRules`, `offline-trial/rules/`) | En av de to reglene i prøve E (`trial_water_heater_age`, `trial_moisture_floor_limit`). Data i kode med oppdiktede prøveverdier (`TRIAL_ONLY_LIMITS`), ikke fag og ingen TG. Ikke tabellen `rules` |
 | Regelmotoren i prøven | `evaluateTrialRules` | Én ren funksjon som gir svaret fra hver prøveregel ut fra svarene i testskjemaet. Samme kode kjører i nettleseren uten nett og i serverruten `/api/prove/regler` |
 | Regelsvar (slår til / slår ikke til / ikke vurdert) | `rule state` (`TrialRuleState`: `triggered` / `not_triggered` / `not_evaluated`) | Svaret fra en prøveregel. «Ikke vurdert» ved tomt felt, ugyldig tekst eller negativt tall |
-| Lagringsstatus | `storage health` (`readStorageHealth`, `offline-trial/storage-health.ts`) | Prøve C: plass brukt og plass appen får (`navigator.storage.estimate()`), og om lagringen er varig. Bare på egen enhet, lagres ikke |
-| Varig lagring | `persistent storage` (`navigator.storage.persist()`) | Nettleseren lover å ikke slette appens data av seg selv. Appen ber om det automatisk |
-| Lite plass | `low storage` (`storageLevel`: `ok` / `low` / `unknown`, `LOW_STORAGE_FREE_BYTES`) | Ledig plass under grensen (500 MB i prøven). Gir varsel, aldri sperre |
 | Testmiljø | `test environment` (`environmentName: test`) | Appen og databasen i Azure (Sweden Central) som prøvene i fase 1 kjøres mot. Bare oppdiktede data |
 | Utrulling | `deploy` (`deploy-azure.yml`) | Automatisk oppdatering av testmiljøet ved merge til `main` |
 | Serverlogg | `server log` (`serverLog`) | Loggen i App Service. Innloggingskoden til første admin skrives der til e-post er satt opp |
