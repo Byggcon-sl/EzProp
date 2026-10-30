@@ -16,7 +16,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Levert: Prøve D – bilder** (30.10.2026; branch `fase1-prove-d-bilder` fra `main`, versjon 0.2.23, PR åpnet). Oppgavekort `docs/funksjoner/fase1-prove-d-bilder.md`, resultatmal `docs/funksjoner/fase1-prove-d-bilder-resultat.md` for ekte iPad. Fra før: opplasting mens appen er åpen, nytt forsøk per bilde etter brudd, kontroll med fingeravtrykk. Nytt: visningskopi på iPaden (rettet, høyst 2000 punkter, JPEG 0,8, uten EXIF/GPS), egen rute for visningskopien med «Vis fra serveren», e2e for rotering, brudd og HEIC (pc og ipad). Beslutninger A7–A10 i `docs/09-apne-sporsmal.md`. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en (feil beslutningsnumre i kommentarer er rettet av prosjektlederen før PR). Punktet er krysset av i planen. Prøve F røres ikke. Støtter reklamasjoner og tid.
+**Levert: Prøve D – bilder** (30.10.2026; branch `fase1-prove-d-bilder` fra `main`, versjon 0.2.23, **PR #35**). Oppgavekort `docs/funksjoner/fase1-prove-d-bilder.md`, resultatmal `docs/funksjoner/fase1-prove-d-bilder-resultat.md` for ekte iPad. Fra før: opplasting mens appen er åpen, nytt forsøk per bilde etter brudd, kontroll med fingeravtrykk. Nytt: visningskopi på iPaden (rettet, høyst 2000 punkter, JPEG 0,8, uten EXIF/GPS), egen rute for visningskopien med «Vis fra serveren», e2e for rotering, brudd og HEIC (pc og ipad). Beslutninger A7–A10 i `docs/09-apne-sporsmal.md`. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en (feil beslutningsnumre i kommentarer er rettet av prosjektlederen før PR). Punktet er krysset av i planen. Prøve F røres ikke. Støtter reklamasjoner og tid.
 
 **Levert: liten oppgave (f)**, småfunnene fra PR #32 (prøve C) (30.10.2026; branch `fase1-smafunn-prove-c` fra `main`, versjon 0.2.22, **PR #33**). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-c.md`. Loggen viser bare feilnavnet, testen for åpning uten nett har ingen reservevei, e2e-filen gikk fra 27 til 22 tester, tekstblokken som leste kildefilen er borte, én felles hook for plassmålingen, ingen `DOMException`-sjekk. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; to doble sjekker i e2e rettet av prosjektlederen før PR. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
@@ -48,7 +48,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| (se PR-lenken) | Prøve D – bilder | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
+| #35 | Prøve D – bilder | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
 
 PR #16–#28 og #30–#33 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken). Ingen PR venter på Ståle.
 
