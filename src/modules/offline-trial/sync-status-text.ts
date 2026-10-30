@@ -14,13 +14,16 @@ export const SYNC_NOW_FAILED_MESSAGE = "Fikk ikke sendt. Prøver igjen automatis
 export const SYNC_STATE_OFFLINE = "Uten nett";
 export const SYNC_STATE_ALL_SAVED = "Alt er lagret";
 export const SYNC_STATE_AWAITING_SERVER = "Venter på kontakt med serveren";
+export const SYNC_STATE_SIGN_IN_REQUIRED = "Logg inn på nytt for å sende. Alt er lagret på iPaden.";
 export const SAVED_AT_NEVER = "Ikke lagret på serveren ennå";
 
 export const SYNC_NOW_LABEL = "Synk nå";
 export const SYNC_NOW_RUNNING_LABEL = "Synker …";
+export const SIGN_IN_LABEL = "Logg inn";
 
-/** Hvilken av de fire tilstandene statusen er i (styrer farge og ikon; teksten bærer betydningen). */
-export type SyncStatusKind = "offline" | "allSaved" | "pending" | "awaitingServer";
+/** Hvilken av de fem tilstandene statusen er i (styrer farge og ikon; teksten bærer betydningen). */
+export type SyncStatusKind =
+  "offline" | "allSaved" | "pending" | "awaitingServer" | "signInRequired";
 
 function isAllSaved(status: TrialSyncStatus): boolean {
   return (
@@ -31,8 +34,13 @@ function isAllSaved(status: TrialSyncStatus): boolean {
   );
 }
 
-export function syncStatusKind(status: TrialSyncStatus): SyncStatusKind {
+/**
+ * «Uten nett» har forrang; deretter «Logg inn på nytt» (når serveren har sagt at økten er borte)
+ * foran alt annet (docs/funksjoner/fase1-prove-f-innlogging.md, punkt 2).
+ */
+export function syncStatusKind(status: TrialSyncStatus, signInRequired = false): SyncStatusKind {
   if (!status.online) return "offline";
+  if (signInRequired) return "signInRequired";
   if (status.pendingChanges > 0 || status.pendingPhotos > 0) return "pending";
   return status.serverConfirmed ? "allSaved" : "awaitingServer";
 }
@@ -41,10 +49,12 @@ export function syncStatusKind(status: TrialSyncStatus): SyncStatusKind {
  * «Uten nett», «Venter: N endringer, M bilder», «Alt er lagret» eller «Venter på kontakt med
  * serveren». «Alt er lagret» bare når serveren har bekreftet og ingenting venter.
  */
-export function syncStatusText(status: TrialSyncStatus): string {
-  switch (syncStatusKind(status)) {
+export function syncStatusText(status: TrialSyncStatus, signInRequired = false): string {
+  switch (syncStatusKind(status, signInRequired)) {
     case "offline":
       return SYNC_STATE_OFFLINE;
+    case "signInRequired":
+      return SYNC_STATE_SIGN_IN_REQUIRED;
     case "allSaved":
       return SYNC_STATE_ALL_SAVED;
     case "awaitingServer":
@@ -55,6 +65,20 @@ export function syncStatusText(status: TrialSyncStatus): string {
       return `Venter: ${changes}, ${photos}`;
     }
   }
+}
+
+/** «Synk nå» skjules mens «Logg inn» vises. */
+export function showSyncNow(kind: SyncStatusKind | null): boolean {
+  return kind !== "signInRequired";
+}
+
+/**
+ * Lenken «Logg inn»: `/logg-inn?neste=<sti>`. Bare stien sendes med; spørrestreng og `#` fjernes.
+ * Innloggingssiden godtar bare trygge stier (`safeNextPath`).
+ */
+export function signInHref(pathname: string): string {
+  const path = pathname.split(/[?#]/, 1)[0] ?? "";
+  return `/logg-inn?neste=${encodeURIComponent(path)}`;
 }
 
 interface DateParts {
