@@ -17,6 +17,10 @@ import {
 import { throwIfStorageFailHook } from "@/modules/offline-trial/storage-test-hook";
 import { SyncStatus } from "@/modules/offline-trial/sync-status";
 import { rowsToAnswers } from "@/modules/offline-trial/sync/answer-rows";
+import {
+  listDisplayFailedPhotoIds,
+  onDisplayFailedChange,
+} from "@/modules/offline-trial/sync/photo-store";
 import type { TrialAnswerRow, TrialFormSnapshot } from "@/modules/offline-trial/sync/types";
 import { listTrialFields, trialForm } from "@/modules/offline-trial/trial-form";
 import { TrialFormView } from "@/modules/offline-trial/trial-form-view";
@@ -69,6 +73,10 @@ function withoutSaved(
 
 const EMPTY_SET: ReadonlySet<string> = new Set();
 
+function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  return a.size === b.size && [...a].every((item) => b.has(item));
+}
+
 /**
  * Prøve fase 1: ett testskjema. Alt lagres i den lokale databasen idet det skrives og sendes til
  * serveren i bakgrunnen. Telleren viser det som er lagret på enheten.
@@ -87,6 +95,8 @@ export function TrialFormPage({ formId }: { formId: string }) {
   /** Siste skriving per felt (samme objekt som i `pending`), så en eldre feil ikke overstyrer en nyere. */
   const latestWrite = useRef<Record<string, PendingValue>>({});
   const failuresRef = useRef<FailedSave[]>(failures);
+  /** Prøve D: bilder der visningskopien er endelig feilet («Bare originalen er lagret»). */
+  const [displayFailed, setDisplayFailed] = useState<ReadonlySet<string>>(EMPTY_SET);
 
   useEffect(() => {
     failuresRef.current = failures;
@@ -121,6 +131,27 @@ export function TrialFormPage({ formId }: { formId: string }) {
       setSnapshot(next);
     });
   }, [store, formId, deviceId]);
+
+  // Leses ved åpning, når bildene endres og når bildekøen setter en merknad.
+  const photoRows = snapshot?.photos;
+  useEffect(() => {
+    if (!organizationId) return;
+    let active = true;
+    const read = () => {
+      listDisplayFailedPhotoIds().then(
+        (ids) => {
+          if (active) setDisplayFailed((current) => (sameSet(current, ids) ? current : ids));
+        },
+        () => undefined,
+      );
+    };
+    read();
+    const dispose = onDisplayFailedChange(read);
+    return () => {
+      active = false;
+      dispose();
+    };
+  }, [organizationId, photoRows]);
 
   const savedAnswers = useMemo<TrialAnswers>(
     () => (snapshot ? rowsToAnswers(snapshot.answers, snapshot.photos) : {}),
@@ -318,6 +349,7 @@ export function TrialFormPage({ formId }: { formId: string }) {
           onAddPhotos={handleAddPhotos}
           unsavedFields={unsavedFields}
           organizationId={organizationId}
+          displayFailedPhotoIds={organizationId ? displayFailed : EMPTY_SET}
         />
       ) : null}
     </main>

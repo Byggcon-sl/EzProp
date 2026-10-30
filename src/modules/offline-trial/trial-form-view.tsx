@@ -18,6 +18,7 @@ import {
   type TrialForm,
   type TrialOption,
 } from "./trial-form";
+import { displayCopyUrl } from "./photo-urls";
 import { TrialRuleResult } from "./trial-rule-result";
 
 type OnChange = (fieldKey: string, value: TrialValue) => void;
@@ -41,6 +42,8 @@ interface TrialFormViewProps {
   unsavedFields?: ReadonlySet<string>;
   /** Organisasjonen fra synklageret. Når satt, står «Vis fra serveren» ved hvert bilde. */
   organizationId?: string;
+  /** Bilder der visningskopien er endelig feilet. Viser «Bare originalen er lagret» i stedet for lenken. */
+  displayFailedPhotoIds?: ReadonlySet<string>;
 }
 
 /** Viser testskjemaet. Vet ikke hvor svarene lagres; alt går gjennom `onChange`. */
@@ -53,6 +56,7 @@ export function TrialFormView({
   onAddPhotos,
   unsavedFields,
   organizationId,
+  displayFailedPhotoIds,
 }: TrialFormViewProps) {
   return (
     <div className="space-y-8">
@@ -78,6 +82,7 @@ export function TrialFormView({
                   onTouched={touched}
                   onAddPhotos={onAddPhotos}
                   organizationId={organizationId}
+                  displayFailedPhotoIds={displayFailedPhotoIds}
                 />
                 <TrialRuleResult fieldKey={field.key} answers={answers} />
                 {showForeign ? <ForeignChangeNotice /> : null}
@@ -170,6 +175,7 @@ function FieldInput({
   onTouched,
   onAddPhotos,
   organizationId,
+  displayFailedPhotoIds,
 }: {
   field: TrialField;
   value: TrialValue | undefined;
@@ -177,6 +183,7 @@ function FieldInput({
   onTouched: OnTouched;
   onAddPhotos?: OnAddPhotos;
   organizationId?: string;
+  displayFailedPhotoIds?: ReadonlySet<string>;
 }) {
   switch (field.type) {
     case "text":
@@ -228,6 +235,7 @@ function FieldInput({
           onTouched={onTouched}
           onAddPhotos={onAddPhotos}
           organizationId={organizationId}
+          displayFailedPhotoIds={displayFailedPhotoIds}
         />
       );
   }
@@ -474,6 +482,7 @@ function PhotoInput({
   onTouched,
   onAddPhotos,
   organizationId,
+  displayFailedPhotoIds,
 }: {
   field: TrialField;
   photos: TrialPhoto[];
@@ -481,6 +490,7 @@ function PhotoInput({
   onTouched: OnTouched;
   onAddPhotos?: OnAddPhotos;
   organizationId?: string;
+  displayFailedPhotoIds?: ReadonlySet<string>;
 }) {
   return (
     <>
@@ -522,11 +532,16 @@ function PhotoInput({
             {photos.map((photo) => (
               <li key={photo.id}>
                 {photo.name}
-                {organizationId ? (
+                {organizationId && displayFailedPhotoIds?.has(photo.id) ? (
+                  <>
+                    {" "}
+                    <span>Bare originalen er lagret</span>
+                  </>
+                ) : organizationId ? (
                   <>
                     {" "}
                     <a
-                      href={`/api/prove/bilder/${photo.id}/visning?${new URLSearchParams({ organisasjon: organizationId })}`}
+                      href={displayCopyUrl(organizationId, photo.id)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex min-h-11 min-w-11 items-center text-brand-700 underline"

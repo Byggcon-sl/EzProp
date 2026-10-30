@@ -6,9 +6,15 @@ import {
   deleteLocalPhoto,
   listConfirmedPhotoIds,
   listLocalDisplayCopyIds,
+  markDisplayCopyFailed,
   putLocalPhoto,
 } from "./photo-store";
-import { photoUploadTimeoutMs, sendPhoto, uploadPendingPhotos } from "./photo-uploader";
+import {
+  originalUrl,
+  photoUploadTimeoutMs,
+  sendPhoto,
+  uploadPendingPhotos,
+} from "./photo-uploader";
 import type { TrialPhotoRow, TrialSyncStore } from "./types";
 
 // Lageret for bildefiler i minnet (Vitest har ingen IndexedDB, og vi legger ikke til en
@@ -17,6 +23,8 @@ import type { TrialPhotoRow, TrialSyncStore } from "./types";
 const photoState = vi.hoisted(() => ({
   photos: new Map<string, Blob>(),
   confirmed: new Set<string>(),
+  /** Merknadene om endelig feilet kopi: bilde-id til fast kode. */
+  failed: new Map<string, string>(),
   calls: [] as string[],
   lastCopySource: undefined as Blob | undefined,
 }));
@@ -44,9 +52,18 @@ vi.mock("./photo-store", () => ({
     photoState.confirmed.add(id);
   }),
   listConfirmedPhotoIds: vi.fn(async () => new Set(photoState.confirmed)),
+  markDisplayCopyFailed: vi.fn(async (id: string, reason: string) => {
+    photoState.calls.push(`failed:${id}`);
+    photoState.photos.delete(`${id}:display`);
+    photoState.failed.set(id, reason);
+  }),
+  hasDisplayCopyFailed: vi.fn(async (id: string) => photoState.failed.has(id)),
+  listDisplayFailedPhotoIds: vi.fn(async () => new Set(photoState.failed.keys())),
+  onDisplayFailedChange: vi.fn(() => () => {}),
   clearLocalPhotos: vi.fn(async () => {
     photoState.photos.clear();
     photoState.confirmed.clear();
+    photoState.failed.clear();
   }),
 }));
 
@@ -107,7 +124,7 @@ describe("sendPhoto", () => {
     );
     const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" });
 
-    const result = sendPhoto(ORGANIZATION_ID, PHOTO, blob);
+    const result = sendPhoto(originalUrl(ORGANIZATION_ID, PHOTO, blob), blob, "image/png");
     await vi.advanceTimersByTimeAsync(photoUploadTimeoutMs(blob.size) - 1);
     expect(signal?.aborted).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
@@ -124,10 +141,29 @@ describe("sendPhoto", () => {
     );
     const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" });
 
-    await expect(sendPhoto(ORGANIZATION_ID, PHOTO, blob)).resolves.toEqual({
+    await expect(
+      sendPhoto(originalUrl(ORGANIZATION_ID, PHOTO, blob), blob, "image/png"),
+    ).resolves.toEqual({
       status: 200,
       body: { sha256 },
     });
+  });
+
+  // U7
+  it("sendPhoto sender til adressen den får", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ sha256: "b".repeat(64) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const url = "/api/prove/bilder/oppdiktet-id/oppdiktet?a=1";
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" });
+
+    await sendPhoto(url, blob, "image/webp");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [calledUrl, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(calledUrl).toBe(url);
+    expect(init.method).toBe("PUT");
+    expect(new Headers(init.headers).get("content-type")).toBe("image/webp");
+    expect(init.body).toBe(blob);
   });
 });
 
@@ -159,7 +195,7 @@ function row(id: string, minute = 0): TrialPhotoRow {
   return { ...PHOTO, id, createdAt: at, updatedAt: at };
 }
 
-type Reply = 200 | "other-sha" | 400 | 404 | 500 | "reject" | "hang";
+type Reply = 200 | "other-sha" | 400 | 401 | 403 | 404 | 500 | "reject" | "hang";
 type Kind = "original" | "display";
 
 interface SentRequest {
@@ -210,7 +246,7 @@ function stubFetch() {
       if (reply === "other-sha") {
         return Response.json({ sha256: sha === "f".repeat(64) ? "e".repeat(64) : "f".repeat(64) });
       }
-      return Response.json({ feil: "Oppdiktet feil." }, { status: reply });
+      return Response.json({ feil: "Oppdiktet feil, hemmelig-svar." }, { status: reply });
     }),
   );
 }
@@ -255,6 +291,7 @@ describe("bildekøen med visningskopi", () => {
   beforeEach(() => {
     photoState.photos.clear();
     photoState.confirmed.clear();
+    photoState.failed.clear();
     photoState.calls.length = 0;
     photoState.lastCopySource = undefined;
     queue.rows = [];
@@ -270,6 +307,7 @@ describe("bildekøen med visningskopi", () => {
     vi.mocked(deleteLocalPhoto).mockClear();
     vi.mocked(putLocalPhoto).mockClear();
     vi.mocked(confirmLocalPhoto).mockClear();
+    vi.mocked(markDisplayCopyFailed).mockClear();
     vi.stubGlobal("navigator", { onLine: true });
     stubFetch();
   });
@@ -319,8 +357,9 @@ describe("bildekøen med visningskopi", () => {
   });
 
   // Obligatorisk
-  it.each([["other-sha"], [404], [500], ["reject"], ["hang"]] as const)(
-    "ulikt fingeravtrykk, 404, 500, nettfeil og tidsavbrudd gir nytt forsøk neste runde (%s)",
+  // U4
+  it.each([["other-sha"], [500], ["reject"], ["hang"], [401], [403]] as const)(
+    "ulikt fingeravtrykk, 500, nettfeil, tidsavbrudd, 401 og 403 gir nytt forsøk neste runde og ingen merknad (%s)",
     async (reply) => {
       const id = uuidv7();
       photoState.photos.set(id, originalBlob(3));
@@ -346,6 +385,8 @@ describe("bildekøen med visningskopi", () => {
       expect(deleteLocalPhoto).not.toHaveBeenCalledWith(displayKey(id));
       expect(sentFor("original", id)).toHaveLength(1);
       expect(sentFor("display", id)).toHaveLength(1);
+      expect(photoState.failed.size).toBe(0);
+      expect(markDisplayCopyFailed).not.toHaveBeenCalled();
 
       // Runde 2: originalen er bekreftet og sendes ikke; bare kopien sendes igjen
       await uploadPendingPhotos(store, ORGANIZATION_ID);
@@ -355,26 +396,144 @@ describe("bildekøen med visningskopi", () => {
     },
   );
 
-  // Obligatorisk (AK 7)
-  it("400 på kopien sletter den lokalt uten nytt forsøk", async () => {
+  // Obligatorisk (AK 7), U1
+  it("kopi som får 400 lages og sendes én gang over tre runder, og får merknad", async () => {
     const id = uuidv7();
     photoState.photos.set(id, originalBlob(4));
     queue.rows = [row(id)];
     queue.replies.display = [400];
     const store = asStore(fakeStore());
+    vi.spyOn(console, "warn").mockImplementation(() => {});
 
     await uploadPendingPhotos(store, ORGANIZATION_ID);
-    expect(deleteLocalPhoto).toHaveBeenCalledWith(displayKey(id));
+    await uploadPendingPhotos(store, ORGANIZATION_ID);
+    await uploadPendingPhotos(store, ORGANIZATION_ID);
+
+    expect(makeDisplayCopy).toHaveBeenCalledTimes(1);
+    expect(sentFor("display", id)).toHaveLength(1);
+    expect(markDisplayCopyFailed).toHaveBeenCalledWith(id, "400");
+    expect(photoState.failed.get(id)).toBe("400");
     expect(photoState.photos.has(displayKey(id))).toBe(false);
-    expect(sentFor("display", id)).toHaveLength(1);
-
-    await uploadPendingPhotos(store, ORGANIZATION_ID);
-    await uploadPendingPhotos(store, ORGANIZATION_ID);
-    expect(sentFor("display", id)).toHaveLength(1);
     // Originalen er bekreftet og påvirkes ikke
     expect(photoState.confirmed.has(id)).toBe(true);
     expect(sentFor("original", id)).toHaveLength(1);
+  });
+
+  // U3
+  it("kopi som får 404 får merknad og sendes ikke i runde 2 og 3", async () => {
+    const id = uuidv7();
+    photoState.photos.set(id, originalBlob(11));
+    queue.rows = [row(id)];
+    queue.replies.display = [404];
+    const store = asStore(fakeStore());
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await uploadPendingPhotos(store, ORGANIZATION_ID);
+    expect(markDisplayCopyFailed).toHaveBeenCalledWith(id, "404");
+    expect(photoState.failed.get(id)).toBe("404");
+    expect(photoState.photos.has(displayKey(id))).toBe(false);
+
+    await uploadPendingPhotos(store, ORGANIZATION_ID);
+    await uploadPendingPhotos(store, ORGANIZATION_ID);
+    expect(sentFor("display", id)).toHaveLength(1);
     expect(makeDisplayCopy).toHaveBeenCalledTimes(1);
+    expect(photoState.confirmed.has(id)).toBe(true);
+  });
+
+  // U2
+  it("kopien sendes ikke før originalen er bekreftet", async () => {
+    const id = uuidv7();
+    photoState.photos.set(id, originalBlob(12));
+    queue.rows = [row(id)];
+    queue.replies.original = ["reject"];
+    const store = asStore(fakeStore());
+
+    // Runde 1: originalen får nettfeil
+    await uploadPendingPhotos(store, ORGANIZATION_ID);
+    expect(photoState.confirmed.has(id)).toBe(false);
+    expect(sentFor("display", id)).toHaveLength(0);
+    expect(photoState.failed.size).toBe(0);
+    expect(markDisplayCopyFailed).not.toHaveBeenCalled();
+    expect(photoState.photos.has(displayKey(id))).toBe(true);
+
+    // Runde 2: originalen får 200 med likt fingeravtrykk; kopien sendes etter den
+    const fetchMock = vi.mocked(fetch);
+    const before = fetchMock.mock.calls.length;
+    await uploadPendingPhotos(store, ORGANIZATION_ID);
+    expect(photoState.confirmed.has(id)).toBe(true);
+    expect(sentFor("display", id)).toHaveLength(1);
+    const urls = fetchMock.mock.calls.slice(before).map((call) => String(call[0]));
+    const order = fetchMock.mock.invocationCallOrder.slice(before);
+    const originalAt = urls.findIndex((url) => !url.includes("/visning"));
+    const displayAt = urls.findIndex((url) => url.includes("/visning"));
+    expect(originalAt).toBeGreaterThanOrEqual(0);
+    expect(displayAt).toBeGreaterThanOrEqual(0);
+    expect(order[originalAt]!).toBeLessThan(order[displayAt]!);
+    expect(photoState.photos.has(displayKey(id))).toBe(false);
+  });
+
+  // U5
+  it("merknaden påvirker aldri originalen", async () => {
+    const a = uuidv7();
+    const b = uuidv7();
+    photoState.confirmed.add(a);
+    photoState.failed.set(a, "400");
+    photoState.photos.set(b, originalBlob(13));
+    queue.rows = [row(a, 0), row(b, 1)];
+
+    const released = await uploadPendingPhotos(asStore(fakeStore()), ORGANIZATION_ID);
+
+    expect(released).toBe(1);
+    expect(photoState.confirmed.has(a)).toBe(true);
+    expect(photoState.confirmed.has(b)).toBe(true);
+    expect(sentFor("original", a)).toHaveLength(0);
+    expect(sentFor("display", a)).toHaveLength(0);
+    expect(sentFor("original", b)).toHaveLength(1);
+    expect(sentFor("display", b)).toHaveLength(1);
+    expect(photoState.failed.get(a)).toBe("400");
+    expect(photoState.failed.has(b)).toBe(false);
+  });
+
+  // U6
+  it.each([[400], [404]] as const)("loggen ved %s har bare fast tekst", async (reply) => {
+    const id = uuidv7();
+    const photo = { ...row(id), name: "kjokken-oppdiktet.jpg" };
+    photoState.photos.set(id, originalBlob(14));
+    queue.rows = [photo];
+    queue.replies.display = [reply];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await uploadPendingPhotos(asStore(fakeStore()), ORGANIZATION_ID);
+
+    expect(photoState.failed.get(id)).toBe(String(reply));
+    expect(warn).toHaveBeenCalled();
+    for (const args of warn.mock.calls) {
+      for (const arg of args) {
+        expect(typeof arg).toBe("string");
+        const text = String(arg);
+        expect(text).not.toContain(id);
+        expect(text).not.toContain(photo.name);
+        expect(text).not.toContain(ORGANIZATION_ID);
+        expect(text).not.toContain("hemmelig-svar");
+      }
+    }
+  });
+
+  // U11
+  it("ensureDisplayCopy lager ikke kopien når merknaden finnes", async () => {
+    const id = uuidv7();
+    photoState.photos.set(id, originalBlob(15));
+    photoState.failed.set(id, "404");
+    queue.rows = [row(id)];
+
+    await uploadPendingPhotos(asStore(fakeStore()), ORGANIZATION_ID);
+
+    expect(makeDisplayCopy).not.toHaveBeenCalled();
+    expect(photoState.photos.has(displayKey(id))).toBe(false);
+    expect(sentFor("display", id)).toHaveLength(0);
+    // Originalen sendes og bekreftes som før
+    expect(sentFor("original", id)).toHaveLength(1);
+    expect(photoState.confirmed.has(id)).toBe(true);
   });
 
   // Obligatorisk
@@ -460,8 +619,10 @@ describe("bildekøen med visningskopi", () => {
     expect(released).toBe(0);
     expect(await store.listPendingPhotos()).toEqual([]);
     expect(store.markPhotoUploaded).not.toHaveBeenCalled();
-    expect(sentFor("display", id)).toHaveLength(1);
+    // Originalen er ikke bekreftet på enheten, så kopien blir liggende
+    expect(sentFor("display", id)).toHaveLength(0);
     expect(sentFor("original", id)).toHaveLength(0);
+    expect(photoState.photos.has(displayKey(id))).toBe(true);
   });
 
   it("visningskopien havner aldri i confirmed", async () => {
