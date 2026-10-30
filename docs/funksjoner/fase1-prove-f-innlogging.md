@@ -95,7 +95,7 @@ Uten nett vises ingen melding om innlogging: appen kan ikke vite om innloggingen
 - Sjekk av innloggingen når siden åpnes (se punkt 1).
 - At innloggingssiden husker e-posten eller at koden er sendt hvis iPadOS laster appen på nytt (prøves i F4).
 - Fylle inn e-posten selv på innloggingssiden (sparer ca. 10 s). Kan foreslås senere.
-- At en annen ansatt logger inn på samme iPad og overtar køen. Samme organisasjon i dag; hører til fase 0b og 2b.
+- At en annen ansatt logger inn på samme iPad og overtar køen. Samme organisasjon i dag; hører til fase 0b og 2b (spørsmål nr. 14 i `docs/09-apne-sporsmal.md`).
 - Logg ut som tømmer iPaden. Logg ut endres ikke.
 - Nye ruter, nye tabeller, migreringer, nye avhengigheter.
 - Safari/WebKit i Playwright (som prøve C).
