@@ -51,11 +51,9 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-
-PR #16–#28 og #30–#35 er merget (#32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D). Ingen åpne PR-er. Ingen PR venter på Ståle.
 | – | Ingen åpne PR-er | – | – |
 
-PR #16–#28 og #30–#35 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken). Ingen PR venter på Ståle.
+PR #16–#28 og #30–#37 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
