@@ -62,20 +62,23 @@ describe("listEmployees", () => {
           const company = await createCompany(grant.organizationId);
           const office = await createOffice(grant.organizationId);
           const person = await createUser({ name: `Test Takstmann ${side.toUpperCase()}` });
-          const employee = await createEmployee(person, grant.organizationId, ["inspector"], {
+          const active = await createEmployee(person, grant.organizationId, ["inspector"], {
             companyId: company.id,
             officeId: office.id,
           });
+          // Sluttet, uten innlogging (D18): bare med i listen med includeDeactivated.
           const [quit] = await db
             .insert(employees)
             .values({
               organizationId: grant.organizationId,
               userId: null,
               name: `Tidligere Takstmann ${side.toUpperCase()}`,
+              companyId: company.id,
+              officeId: office.id,
               deactivatedAt: new Date(),
             })
             .returning();
-          ids[side].push(employee.id, quit!.id);
+          ids[side].push(active.id, quit!.id);
         }
         return ids;
       },
