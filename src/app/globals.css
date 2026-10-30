@@ -28,6 +28,16 @@
   --font-sans: var(--font-roboto), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/*
+ * Den faste statuslinjen (sticky top-0) på testskjemaet og listen må ikke dekke felt som får fokus
+ * (WCAG 2.4.11). Linjen vokser med varselet om lagring og feilmeldingen, så høyden måles i
+ * useStickyScrollPadding (src/shared/lib/use-sticky-scroll-padding.ts) og settes i
+ * --sticky-bar-height. 9rem er reserve før målingen er klar.
+ */
+html {
+  scroll-padding-top: calc(var(--sticky-bar-height, 9rem) + 0.5rem);
+}
+
 body {
   @apply bg-canvas text-slate-900 antialiased;
 }
