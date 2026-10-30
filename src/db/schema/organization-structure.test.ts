@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { companies, employees, offices } from "@/db/schema";
+import { uuidv7 } from "@/shared/lib/uuid";
 import {
   createCompany,
   createEmployee,
@@ -266,5 +267,49 @@ describe("standardverdier", () => {
       // Dato uten klokkeslett, lagret som tekst «ÅÅÅÅ-MM-DD»
       liabilityValidTo: "2027-12-31",
     });
+  });
+});
+
+// ADR 0004 (egenbygd synk): id lages på enheten, og row_version økes ved hver endring.
+// Økningen gjøres av Drizzle ($onUpdate i src/db/schema/common.ts), ikke av en trigger i databasen.
+describe("id fra enheten og row_version (ADR 0004)", () => {
+  it("selskap beholder id fra enheten, og row_version går fra 1 til 2 ved én endring", async () => {
+    const org = await createOrganization();
+    const id = uuidv7();
+    const [inserted] = await db
+      .insert(companies)
+      .values({ id, organizationId: org.id, legalName: "Testselskap A AS" })
+      .returning();
+    expect(inserted).toMatchObject({ id, rowVersion: 1 });
+
+    const [updated] = await db
+      .update(companies)
+      .set({ legalName: "Testselskap B AS" })
+      .where(eq(companies.id, id))
+      .returning();
+    expect(updated).toMatchObject({ id, legalName: "Testselskap B AS", rowVersion: 2 });
+
+    const [read] = await db.select().from(companies).where(eq(companies.id, id));
+    expect(read).toMatchObject({ id, legalName: "Testselskap B AS", rowVersion: 2 });
+  });
+
+  it("kontor beholder id fra enheten, og row_version går fra 1 til 2 ved én endring", async () => {
+    const org = await createOrganization();
+    const id = uuidv7();
+    const [inserted] = await db
+      .insert(offices)
+      .values({ id, organizationId: org.id, name: "Testkontor Nord" })
+      .returning();
+    expect(inserted).toMatchObject({ id, rowVersion: 1 });
+
+    const [updated] = await db
+      .update(offices)
+      .set({ name: "Testkontor Sør" })
+      .where(eq(offices.id, id))
+      .returning();
+    expect(updated).toMatchObject({ id, name: "Testkontor Sør", rowVersion: 2 });
+
+    const [read] = await db.select().from(offices).where(eq(offices.id, id));
+    expect(read).toMatchObject({ id, name: "Testkontor Sør", rowVersion: 2 });
   });
 });
