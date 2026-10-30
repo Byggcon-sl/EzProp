@@ -577,7 +577,7 @@ export const CHANGES_PATH = "/api/prove/synk/endringer";
 export const INSPECTOR_EMAIL = "takstmann.e2e@eksempel.no";
 
 /** Databasen appen i e2e bruker: `DATABASE_URL`, ellers `.env`, ellers standarden fra `.env.example`. */
-function e2eDatabaseUrl(): string {
+export function e2eDatabaseUrl(): string {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
   const envFile = path.join(process.cwd(), ".env");
   if (existsSync(envFile)) {
@@ -727,4 +727,148 @@ export function fieldSaved(page: Page, label: string): Locator {
   const field = listTrialFields(trialForm).find((entry) => entry.label === label);
   if (!field) throw new Error(`Fant ikke feltet «${label}»`);
   return page.locator(`[data-field="${field.key}"]`);
+}
+
+// --- Prøve F, innlogging som har gått ut (docs/funksjoner/fase1-prove-f-innlogging-testplan.md avsnitt 2) ---
+
+/**
+ * Skriver inn e-post og kode på innloggingssiden som allerede er åpen (f.eks. med `?neste=`).
+ * Sjekker ikke hvor siden sender etterpå; det gjør testen selv med `toHaveURL`.
+ */
+export async function signInWithCode(page: Page, email: string) {
+  await page.getByLabel("E-postadresse").fill(email);
+  await page.getByRole("button", { name: "Send meg en kode" }).click();
+  await expect(page.getByLabel("Kode fra e-posten")).toBeVisible();
+
+  const mailbox = await page.context().newPage();
+  await mailbox.goto("/dev/epost");
+  const subject = await mailbox.getByTestId("dev-email-subject").first().textContent();
+  await mailbox.close();
+  const code = /: (\d{6})$/.exec(subject ?? "")?.[1];
+  if (!code) throw new Error(`Fant ingen innloggingskode i «${subject}»`);
+
+  await page.getByLabel("Kode fra e-posten").fill(code);
+  await page.getByRole("button", { name: "Logg inn", exact: true }).click();
+}
+
+/** Better Auth kaller kapselen `better-auth.session_token` (med `__Secure-` foran over https). */
+function isSessionCookie(name: string): boolean {
+  return name.endsWith("session_token");
+}
+
+/** Kobler til databasen appen i e2e bruker, etter vakten (bare lokal database eller testdatabasen). */
+function e2eSql() {
+  const databaseUrl = e2eDatabaseUrl();
+  assertLocalOrTestDatabase(databaseUrl, process.env.TEST_DATABASE_URL);
+  return postgres(databaseUrl, { max: 1, onnotice: () => {} });
+}
+
+/**
+ * Lar innloggingen i denne nettleserkonteksten gå ut, slik den gjør etter 30 dager: setter
+ * `expires_at` til passert tid på nøyaktig den økten kapselen peker på. Kapselen blir liggende i
+ * nettleseren, men serveren har ingen gyldig økt.
+ *
+ * - Tokenet er delen før første punktum i kapselen («token.signatur», URL-kodet).
+ * - Bare lokal database eller testdatabasen (`assertLocalOrTestDatabase`).
+ * - Aldri en admin-økt (andre tester kjører som admin): finnes ingen slik økt som ikke tilhører
+ *   admin, kastes en feil og ingenting endres.
+ */
+export async function expireOwnSession(context: BrowserContext): Promise<void> {
+  const cookie = (await context.cookies()).find((entry) => isSessionCookie(entry.name));
+  if (!cookie) throw new Error("Fant ingen innloggingskapsel i nettleseren");
+  const token = decodeURIComponent(cookie.value).split(".")[0];
+  if (!token) throw new Error("Innloggingskapselen har ikke formen token.signatur");
+  const sql = e2eSql();
+  try {
+    const updated = await sql<{ id: string }[]>`
+      update sessions s set expires_at = now() - interval '1 minute'
+      from users u
+      where s.token = ${token}
+        and u.id = s.user_id
+        and u.email <> ${ADMIN_EMAIL}
+        and not exists (
+          select 1 from employees e
+          join employee_roles r on r.employee_id = e.id
+          where e.user_id = s.user_id and r.role = 'admin' and r.deleted_at is null
+        )
+      returning s.id`;
+    if (updated.length !== 1) {
+      throw new Error("Fant ikke egen økt, eller økten tilhører admin. Ingenting er endret.");
+    }
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Organisasjonen til en oppdiktet testbruker, fra den aktive ansatt-raden. */
+export async function organizationIdOf(email: string): Promise<string> {
+  const sql = e2eSql();
+  try {
+    const [row] = await sql<{ organization_id: string }[]>`
+      select e.organization_id from employees e
+      join users u on u.id = e.user_id
+      where u.email = ${email} and e.deleted_at is null and e.deactivated_at is null
+      limit 1`;
+    if (!row) throw new Error("Fant ikke den ansatte for testbrukeren");
+    return row.organization_id;
+  } finally {
+    await sql.end();
+  }
+}
+
+export interface ServerTrialAnswer {
+  fieldKey: string;
+  value: unknown;
+  organizationId: string;
+}
+
+export interface ServerTrialPhoto {
+  id: string;
+  fieldKey: string;
+  organizationId: string;
+  uploaded: boolean;
+}
+
+/** Det serveren har for ett testskjema (rader som ikke er slettet): svar og bilder. */
+export async function serverTrialData(
+  formId: string,
+): Promise<{ answers: ServerTrialAnswer[]; photos: ServerTrialPhoto[] }> {
+  const sql = e2eSql();
+  try {
+    const answers = await sql<{ field_key: string; value: unknown; organization_id: string }[]>`
+      select field_key, value, organization_id from trial_answers
+      where trial_form_id = ${formId} and deleted_at is null
+      order by field_key`;
+    const photos = await sql<
+      { id: string; field_key: string; organization_id: string; uploaded_at: Date | null }[]
+    >`
+      select id, field_key, organization_id, uploaded_at from trial_photos
+      where trial_form_id = ${formId} and deleted_at is null
+      order by id`;
+    return {
+      answers: answers.map((row) => ({
+        fieldKey: row.field_key,
+        value: row.value,
+        organizationId: row.organization_id,
+      })),
+      photos: photos.map((row) => ({
+        id: row.id,
+        fieldKey: row.field_key,
+        organizationId: row.organization_id,
+        uploaded: row.uploaded_at !== null,
+      })),
+    };
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Køen på enheten: endringer og bilder som venter (`store.status()` fra testkroken). */
+export async function pendingQueue(page: Page): Promise<{ changes: number; photos: number }> {
+  await waitForTrialHook(page);
+  return page.evaluate(async () => {
+    const hook = (window as unknown as { __offlineTrial: ElectricTrialHook }).__offlineTrial;
+    const status = await hook.store.status();
+    return { changes: status.pendingChanges, photos: status.pendingPhotos };
+  });
 }
