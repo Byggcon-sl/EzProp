@@ -1,9 +1,8 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   isQuotaError,
   LOW_STORAGE_FREE_BYTES,
+  LOW_STORAGE_WARNING_TEXT,
   readStorageHealth,
   requestPersistentStorage,
   resetPersistRequestForTests,
@@ -374,18 +373,14 @@ describe("storageErrorLog (storage-health.ts)", () => {
 });
 
 describe("tekstene (storage-health.ts)", () => {
-  /** Alle tekstene modulen kan gi takstmannen, og tekstlitteralene i filen (også varselet). */
-  async function allTexts(): Promise<string[]> {
-    const texts: string[] = [];
-    for (const persisted of [true, false]) {
-      stubStorage({
-        estimate: async () => ({ usage: 1948 * MB, quota: 2048 * MB }),
-        persisted: async () => persisted,
-      });
-      texts.push(storageHealthText(await readStorageHealth()));
+  it("ingen gjetteord i tekstene", () => {
+    const texts = [LOW_STORAGE_WARNING_TEXT];
+    for (const persisted of ["yes", "no"] as const) {
+      texts.push(
+        storageHealthText({ usage: 1948 * MB, quota: 2048 * MB, level: "low", persisted }),
+      );
     }
-    stubStorage(undefined);
-    texts.push(storageHealthText(await readStorageHealth()));
+    texts.push(storageHealthText({ level: "unknown", persisted: "unsupported" }));
     for (const error of [new Error("x"), quotaError()]) {
       texts.push(
         storageErrorMessage([answerFailure("Generell beskrivelse", error)]),
@@ -394,32 +389,11 @@ describe("tekstene (storage-health.ts)", () => {
         storageErrorMessage([answerFailure("A", error), photoFailure("Forsidebilde", error)]),
       );
     }
-    const source = readFileSync(
-      path.join(process.cwd(), "src/modules/offline-trial/storage-health.ts"),
-      "utf8",
-    );
-    for (const match of source.matchAll(
-      /(["'`])((?:(?!\1)[^\\\n]|\\.)*iPaden(?:(?!\1)[^\\\n]|\\.)*)\1/g,
-    )) {
-      texts.push(match[2]!);
-    }
-    return texts;
-  }
-
-  it("ingen gjetteord i tekstene", async () => {
-    const texts = await allTexts();
-    expect(texts.length).toBeGreaterThan(0);
+    expect(texts).toHaveLength(12);
     for (const text of texts) {
-      for (const word of ["antas", "trolig", "sannsynligvis"]) {
+      for (const word of ["antas", "trolig", "sannsynligvis", "frigjør", "rydd"]) {
         expect(text.toLowerCase(), text).not.toContain(word);
       }
-    }
-  });
-
-  it("ingen tekst sier at synk frigjør plass", async () => {
-    for (const text of await allTexts()) {
-      expect(text.toLowerCase(), text).not.toContain("frigjør");
-      expect(text.toLowerCase(), text).not.toContain("rydd");
     }
   });
 });
