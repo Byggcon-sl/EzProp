@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 (liten oppgave (f), småfunn fra prøve C, PR åpnet)
+Sist oppdatert: 30.10.2026 (prøve F: oppgavekort laget)
 
 ## Gjeldende fase
 
@@ -15,6 +15,8 @@ Sist oppdatert: 30.10.2026 (liten oppgave (f), småfunn fra prøve C, PR åpnet)
 Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd er merget til `main` i PR #13 (PR #12: agentene merger selv).
 
 ## Gjeldende oppgave
+
+**I arbeid: Prøve F – innlogging som har gått ut** (30.10.2026; branch `fase1-prove-f-innlogging` fra `main`). Oppgavekort `docs/funksjoner/fase1-prove-f-innlogging.md`, resultatmal `docs/funksjoner/fase1-prove-f-innlogging-resultat.md` (lages). Skjemaet virker uten nett når innloggingen har gått ut, meldingen «Logg inn på nytt for å sende» når nettet kommer, tilbake til skjemaet etter innlogging (`neste`, bare trygge stier), synk uten tap. Ingen endringer i kandidatene, ingen ny rute. Roller: forenkler, ux-ansvarlig, sikkerhet-personvern, test-leder, utvikler, testskriver. Beslutninger A5 og A6. Steg: kort laget. Støtter reklamasjoner og tid.
 
 **Levert: liten oppgave (f)**, småfunnene fra PR #32 (prøve C) (30.10.2026; branch `fase1-smafunn-prove-c` fra `main`, versjon 0.2.22, **PR #33**). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-c.md`. Loggen viser bare feilnavnet, testen for åpning uten nett har ingen reservevei, e2e-filen gikk fra 27 til 22 tester, tekstblokken som leste kildefilen er borte, én felles hook for plassmålingen, ingen `DOMException`-sjekk. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; to doble sjekker i e2e rettet av prosjektlederen før PR. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
