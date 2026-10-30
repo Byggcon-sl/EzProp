@@ -800,22 +800,6 @@ export async function expireOwnSession(context: BrowserContext): Promise<void> {
   }
 }
 
-/** Organisasjonen til en oppdiktet testbruker, fra den aktive ansatt-raden. */
-export async function organizationIdOf(email: string): Promise<string> {
-  const sql = e2eSql();
-  try {
-    const [row] = await sql<{ organization_id: string }[]>`
-      select e.organization_id from employees e
-      join users u on u.id = e.user_id
-      where u.email = ${email} and e.deleted_at is null and e.deactivated_at is null
-      limit 1`;
-    if (!row) throw new Error("Fant ikke den ansatte for testbrukeren");
-    return row.organization_id;
-  } finally {
-    await sql.end();
-  }
-}
-
 export interface ServerTrialAnswer {
   fieldKey: string;
   value: unknown;
@@ -823,7 +807,6 @@ export interface ServerTrialAnswer {
 }
 
 export interface ServerTrialPhoto {
-  id: string;
   fieldKey: string;
   organizationId: string;
   uploaded: boolean;
@@ -840,9 +823,9 @@ export async function serverTrialData(
       where trial_form_id = ${formId} and deleted_at is null
       order by field_key`;
     const photos = await sql<
-      { id: string; field_key: string; organization_id: string; uploaded_at: Date | null }[]
+      { field_key: string; organization_id: string; uploaded_at: Date | null }[]
     >`
-      select id, field_key, organization_id, uploaded_at from trial_photos
+      select field_key, organization_id, uploaded_at from trial_photos
       where trial_form_id = ${formId} and deleted_at is null
       order by id`;
     return {
@@ -852,7 +835,6 @@ export async function serverTrialData(
         organizationId: row.organization_id,
       })),
       photos: photos.map((row) => ({
-        id: row.id,
         fieldKey: row.field_key,
         organizationId: row.organization_id,
         uploaded: row.uploaded_at !== null,

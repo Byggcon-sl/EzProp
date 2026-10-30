@@ -18,6 +18,7 @@ import {
   logIn,
   logInAsInspector,
   readRowsViaHook,
+  syncNowButton,
   sha256Bytes,
   sha256File,
   trialUploadPath,
@@ -151,6 +152,38 @@ function recordPhotoPuts(page: Page) {
 async function expectAllUploaded(page: Page) {
   await expect.poll(() => localPhotoFileCount(page), { timeout: UPLOAD_TIMEOUT }).toBe(0);
   await expect.poll(() => localDisplayCopyCount(page), { timeout: UPLOAD_TIMEOUT }).toBe(0);
+}
+
+/** Teksten ved et bilde der visningskopien har feilet endelig (400 eller 404). */
+const ONLY_ORIGINAL = "Bare originalen er lagret";
+/** Prefikset til merknaden i lageret `confirmed` (`display-failed:<uuid>`). */
+const DISPLAY_FAILED_PREFIX = "display-failed:";
+
+function photoItem(page: Page, fileName: string) {
+  return page.getByRole("listitem").filter({ hasText: fileName });
+}
+
+/** Svarer 400 på PUT til visningsruten og teller dem; alt annet går videre. */
+async function rejectDisplayCopies(page: Page) {
+  const counter = { puts: 0 };
+  await page.route("**/visning**", (route) => {
+    if (route.request().method() !== "PUT") return route.fallback();
+    counter.puts += 1;
+    return route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({ feil: "Visningskopien ble avvist." }),
+    });
+  });
+  return counter;
+}
+
+/** Venter til minst `rounds` runder av opplasteren har gått. */
+async function waitRounds(rounds: number) {
+  const start = Date.now();
+  await expect
+    .poll(() => Date.now() - start, { timeout: PHOTO_UPLOAD_INTERVAL_MS * rounds + 10_000 })
+    .toBeGreaterThan(PHOTO_UPLOAD_INTERVAL_MS * rounds);
 }
 
 async function waitForFile(file: string) {
@@ -464,30 +497,63 @@ test.describe("Prøve D – bilder", () => {
     await popup.close();
   });
 
-  test("uinnlogget gir 401 på visningsruten", async ({ request }, testInfo) => {
-    test.skip(testInfo.project.name !== "pc", "Bare pc (testplan 5.6)");
-    const url = displayUrl(randomUUID(), randomUUID());
-    const put = await request.put(url, {
-      headers: { "content-type": "image/jpeg" },
-      data: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
-    });
-    expect(put.status()).toBe(401);
-    const get = await request.get(url);
-    expect(get.status()).toBe(401);
+  // Beslutning A11: kopi med 400 eller 404 er endelig feilet (docs/agenter/oppgaver/
+  // fase1-smafunn-prove-d-f.md punkt 1 og 2). Støtter reklamasjoner: synlig status, ingen
+  // sending i det stille hvert 10. sekund.
+  test("kopi som får 400 viser Bare originalen er lagret og sendes ikke igjen", async ({
+    page,
+    context,
+  }) => {
+    test.setTimeout(120_000);
+    const { formId, organizationId } = await openNewForm(page, context);
+    const rejected = await rejectDisplayCopies(page);
+
+    await photoInput(page).setInputFiles(PNG);
+    const id = await photoIdFor(page, formId, "test-image.png");
+    await waitForFile(trialUploadPath(organizationId, id));
+    const item = photoItem(page, "test-image.png");
+    const status = item.getByText(ONLY_ORIGINAL, { exact: true });
+    await expect(status).toBeVisible({ timeout: UPLOAD_TIMEOUT });
+    await expect(viewFromServerLink(page, "test-image.png")).toHaveCount(0);
+    expect(rejected.puts).toBe(1);
+
+    // Teksten er vanlig tekst uten bilde-id eller feilkode
+    await expect(item.getByRole("link", { name: ONLY_ORIGINAL })).toHaveCount(0);
+    expect(await status.evaluate((element) => element.closest("a, button"))).toBeNull();
+    const text = (await status.textContent()) ?? "";
+    expect(text).not.toContain(id);
+    expect(text).not.toContain("400");
+
+    // Synlig uten å rulle sidelengs (pc og ipad)
+    const box = await status.boundingBox();
+    const viewport = page.viewportSize();
+    expect(box).not.toBeNull();
+    expect(viewport).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width);
+
+    // Minst to runder til, med «Synk nå»: ingen ny PUT
+    for (let round = 0; round < 2; round++) {
+      await syncNowButton(page).click();
+      await waitRounds(1);
+    }
+    expect(rejected.puts).toBe(1);
+    // Originalen er urørt: lagret på serveren og bekreftet lokalt
+    expect(sha256File(trialUploadPath(organizationId, id))).toBe(sha256Bytes(PNG_BYTES));
+    expect(await localConfirmedKeys(page)).toContain(id);
+
+    // Etter omlasting: teksten står, og ingen ny PUT etter én runde til
+    await page.reload();
+    await waitForTrialHook(page);
+    await expect(
+      photoItem(page, "test-image.png").getByText(ONLY_ORIGINAL, { exact: true }),
+    ).toBeVisible();
+    await expect(viewFromServerLink(page, "test-image.png")).toHaveCount(0);
+    await waitRounds(1);
+    expect(rejected.puts).toBe(1);
   });
 
-  test("annen organisasjon i adressen gir 403 på visningsruten", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "pc", "Bare pc (testplan 5.6)");
-    await logIn(page, ADMIN_EMAIL);
-    const url = displayUrl(randomUUID(), randomUUID());
-    const put = await page.request.put(url, {
-      headers: { "content-type": "image/jpeg" },
-      data: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
-    });
-    expect(put.status()).toBe(403);
-    const get = await page.request.get(url);
-    expect(get.status()).toBe(403);
-  });
+  // 401 og 403 på visningsruten: src/app/api/prove/bilder/[id]/visning/route.test.ts.
 
   // --- 5.7 Lokal lagring og logg ---
 
@@ -513,7 +579,10 @@ test.describe("Prøve D – bilder", () => {
 
     blockCopies = false;
     await expect.poll(() => localDisplayCopyCount(page), { timeout: UPLOAD_TIMEOUT }).toBe(0);
-    expect((await localConfirmedKeys(page)).filter((key) => key.includes(":display"))).toEqual([]);
+    const confirmed = await localConfirmedKeys(page);
+    expect(confirmed.filter((key) => key.includes(":display"))).toEqual([]);
+    // Avbrutt sending er ikke endelig feilet: ingen merknad
+    expect(confirmed.filter((key) => key.startsWith(DISPLAY_FAILED_PREFIX))).toEqual([]);
   });
 
   test("innlogging i annen organisasjon tømmer også visningskopiene", async ({ page, context }) => {
@@ -536,13 +605,14 @@ test.describe("Prøve D – bilder", () => {
         request.onerror = () => reject(request.error);
       });
       await new Promise<void>((resolve, reject) => {
-        const tx = database.transaction(["photos"], "readwrite");
+        const tx = database.transaction(["photos", "confirmed"], "readwrite");
         const store = tx.objectStore("photos");
         store.put(new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }), id);
         store.put(
           new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: "image/jpeg" }),
           `${id}:display`,
         );
+        tx.objectStore("confirmed").put("400", `display-failed:${id}`);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
@@ -550,6 +620,7 @@ test.describe("Prøve D – bilder", () => {
     }, photoId);
     expect(await localPhotoFileCount(page)).toBe(1);
     expect(await localDisplayCopyCount(page)).toBe(1);
+    expect(await localConfirmedKeys(page)).toContain(`${DISPLAY_FAILED_PREFIX}${photoId}`);
 
     await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [
       TRIAL_LAST_ORGANIZATION_KEY,
@@ -560,6 +631,11 @@ test.describe("Prøve D – bilder", () => {
 
     await expect.poll(() => localPhotoFileCount(page)).toBe(0);
     await expect.poll(() => localDisplayCopyCount(page)).toBe(0);
+    await expect
+      .poll(async () =>
+        (await localConfirmedKeys(page)).filter((key) => key.startsWith(DISPLAY_FAILED_PREFIX)),
+      )
+      .toEqual([]);
   });
 
   test("loggen har aldri filnavnet", async ({ page, context }) => {
@@ -567,16 +643,23 @@ test.describe("Prøve D – bilder", () => {
     page.on("console", (message) => messages.push(message.text()));
     page.on("pageerror", (error) => messages.push(`${error.name}: ${error.message}`));
     const { formId, organizationId } = await openNewForm(page, context);
+    // Også grenen der kopien avvises (400) og feiler endelig
+    const rejected = await rejectDisplayCopies(page);
 
-    await photoInput(page).setInputFiles({
-      name: "oppdiktet-bilde-7391.heic",
-      mimeType: "image/heic",
-      buffer: HEIC_BYTES,
-    });
-    const id = await photoIdFor(page, formId, "oppdiktet-bilde-7391.heic");
+    await photoInput(page).setInputFiles([
+      { name: "oppdiktet-bilde-7391.heic", mimeType: "image/heic", buffer: HEIC_BYTES },
+      { name: "oppdiktet-bilde-7392.png", mimeType: "image/png", buffer: PNG_BYTES },
+    ]);
+    const heicId = await photoIdFor(page, formId, "oppdiktet-bilde-7391.heic");
+    const pngId = await photoIdFor(page, formId, "oppdiktet-bilde-7392.png");
     await expect.poll(() => localPhotoFileCount(page), { timeout: UPLOAD_TIMEOUT }).toBe(0);
-    await waitForFile(trialUploadPath(organizationId, id));
+    await waitForFile(trialUploadPath(organizationId, heicId));
+    await waitForFile(trialUploadPath(organizationId, pngId));
+    await expect(photoItem(page, "oppdiktet-bilde-7392.png")).toContainText(ONLY_ORIGINAL, {
+      timeout: UPLOAD_TIMEOUT,
+    });
+    expect(rejected.puts).toBe(1);
 
-    expect(messages.filter((text) => text.includes("oppdiktet-bilde-7391"))).toEqual([]);
+    expect(messages.filter((text) => /oppdiktet-bilde-739[12]/.test(text))).toEqual([]);
   });
 });
