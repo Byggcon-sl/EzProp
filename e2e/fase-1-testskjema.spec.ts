@@ -464,19 +464,33 @@ test("kolonnenavnet over tabellcellene har kontrast minst 4,5:1", async ({ page 
   const label = table.getByText(tableColumns[0]!.label, { exact: true }).first();
   await expect(label).toBeVisible();
   const colors = await label.evaluate((el) => {
-    const foreground = getComputedStyle(el).color;
+    // Tailwind v4 gir farger i lab()/oklab(). Et 1x1-canvas gjør dem om til sRGB.
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) throw new Error("Fikk ikke 2d-canvas");
+    const toRgba = (css: string): [number, number, number, number] => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = css;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+      return [r!, g!, b!, a!];
+    };
+    const rgb = ([r, g, b]: number[]) => `rgb(${r}, ${g}, ${b})`;
+    const foreground = toRgba(getComputedStyle(el).color);
+    let background = [255, 255, 255];
     let node: Element | null = el;
-    let background = "rgb(255, 255, 255)";
     while (node) {
-      const bg = getComputedStyle(node).backgroundColor;
-      const alpha = /rgba\([^)]*,\s*([\d.]+)\)/.exec(bg)?.[1];
-      if (bg !== "transparent" && (alpha === undefined || Number(alpha) > 0)) {
-        background = bg;
+      const [r, g, b, a] = toRgba(getComputedStyle(node).backgroundColor);
+      if (a > 0) {
+        // Halvgjennomsiktig bakgrunn (f.eks. bg-white/95) legges over hvit.
+        background = [r, g, b].map((c) => Math.round((c * a) / 255 + 255 * (1 - a / 255)));
         break;
       }
       node = node.parentElement;
     }
-    return { foreground, background };
+    return { foreground: rgb(foreground), background: rgb(background) };
   });
   const ratio = contrastRatio(colors.foreground, colors.background);
   expect(ratio, `${colors.foreground} mot ${colors.background}`).toBeGreaterThanOrEqual(4.5);

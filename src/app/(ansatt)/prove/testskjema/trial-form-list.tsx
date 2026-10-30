@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { storageHealthText } from "@/modules/offline-trial/storage-health";
 import { SyncStatus } from "@/modules/offline-trial/sync-status";
 import { writeSyncCandidate } from "@/modules/offline-trial/sync/select-store";
@@ -13,6 +13,7 @@ import type {
   TrialSyncStore,
 } from "@/modules/offline-trial/sync/types";
 import { cn } from "@/shared/lib/cn";
+import { useStickyScrollPadding } from "@/shared/lib/use-sticky-scroll-padding";
 import { Button } from "@/shared/ui/button";
 import { useSyncStatusSource, useTrialSync } from "./trial-sync-provider";
 import { useStorageHealth } from "./use-storage-health";
@@ -136,6 +137,8 @@ export function TrialFormList() {
   const [creating, setCreating] = useState(false);
   const [forms, setForms] = useState<TrialFormSummary[] | null>(null);
   const syncSource = useSyncStatusSource();
+  const stickyBarRef = useRef<HTMLDivElement>(null);
+  useStickyScrollPadding(stickyBarRef);
 
   useEffect(() => store.subscribeForms(setForms), [store]);
 
@@ -151,7 +154,11 @@ export function TrialFormList() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-8">
-      <div className="sticky top-0 z-10 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-3">
+      <div
+        ref={stickyBarRef}
+        data-testid="sticky-status-bar"
+        className="sticky top-0 z-10 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-3"
+      >
         <SyncStatus {...syncSource} />
       </div>
       <Link
