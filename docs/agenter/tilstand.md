@@ -42,7 +42,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| (ny) | Liten oppgave (e): småfunn fra prøve E | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
+| #28 | Liten oppgave (e): småfunn fra prøve E | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
 
 PR #16–#26 er merget 29.10.2026 (#23: prøve E, #25: autonom modus, #26: småfunn fra synkstatus). Ingen åpne PR-er.
 
