@@ -4,11 +4,18 @@ import { getCurrentActor } from "@/core/auth/session";
 import { brand } from "@/shared/config/brand";
 import { Card } from "@/shared/ui/card";
 import { LoginForm } from "./login-form";
+import { safeNextPath } from "./safe-next-path";
 
 export const metadata: Metadata = { title: "Logg inn" };
 
-export default async function LoginPage() {
-  if (await getCurrentActor()) redirect("/arbeidskoe");
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ neste?: string | string[] }>;
+}) {
+  const { neste } = await searchParams;
+  const next = safeNextPath(neste);
+  if (await getCurrentActor()) redirect(next);
   return (
     <main className="flex min-h-[calc(100dvh-4px)] items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
@@ -21,7 +28,7 @@ export default async function LoginPage() {
             Skriv inn e-postadressen din. Vi sender deg en kode. Du trenger ikke passord.
           </p>
           <div className="mt-6">
-            <LoginForm />
+            <LoginForm next={next} />
           </div>
         </Card>
         <p className="mt-6 text-center text-sm text-slate-600">

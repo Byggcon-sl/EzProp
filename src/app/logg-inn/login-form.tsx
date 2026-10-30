@@ -5,11 +5,15 @@ import { useState, type FormEvent } from "react";
 import { authClient } from "@/core/auth/auth-client";
 import { Button } from "@/shared/ui/button";
 import { Field, FormMessage, Input } from "@/shared/ui/form";
+import { DEFAULT_NEXT_PATH, safeNextPath } from "./safe-next-path";
 
 const TOO_MANY_ATTEMPTS = "For mange forsøk på kort tid. Vent ett minutt og prøv igjen.";
 
-/** Innlogging i to steg: e-postadresse, så koden fra e-posten. */
-export function LoginForm() {
+/**
+ * Innlogging i to steg: e-postadresse, så koden fra e-posten.
+ * `next` er siden brukeren sendes til etter riktig kode (sjekkes på nytt her).
+ */
+export function LoginForm({ next = DEFAULT_NEXT_PATH }: { next?: string }) {
   const router = useRouter();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
@@ -53,7 +57,7 @@ export function LoginForm() {
       );
       return;
     }
-    router.replace("/arbeidskoe");
+    router.replace(safeNextPath(next));
     router.refresh();
   }
 
