@@ -383,27 +383,32 @@ function TableCellInput({
     isNumber ? formatTrialNumber(cell) : typeof cell === "string" ? cell : "",
   );
   return (
-    <div className="flex items-center gap-1">
-      <input
-        type="text"
-        inputMode={isNumber ? "decimal" : undefined}
-        aria-label={ariaLabel}
-        placeholder={column.label}
-        className={cn(inputClass, "min-w-11", isNumber ? "w-24" : "w-40")}
-        value={draft.value}
-        onFocus={() => {
-          draft.onFocus();
-          onTouched();
-        }}
-        onBlur={draft.onBlur}
-        onPointerDown={onTouched}
-        onChange={(e) => {
-          const input = e.target.value;
-          draft.setDraft(input);
-          onCellChange(isNumber ? parseTrialNumber(input) : input);
-        }}
-      />
-      {column.unit ? <span className="text-slate-600">{column.unit}</span> : null}
+    <div className="flex flex-col gap-0.5">
+      {/* Synlig kolonnenavn i hver rad. Navnet for skjermleser kommer fra aria-label. */}
+      <span aria-hidden="true" className="text-xs font-medium text-slate-700">
+        {column.label}
+      </span>
+      <div className="flex items-center gap-1">
+        <input
+          type="text"
+          inputMode={isNumber ? "decimal" : undefined}
+          aria-label={ariaLabel}
+          className={cn(inputClass, "min-w-11", isNumber ? "w-24" : "w-40")}
+          value={draft.value}
+          onFocus={() => {
+            draft.onFocus();
+            onTouched();
+          }}
+          onBlur={draft.onBlur}
+          onPointerDown={onTouched}
+          onChange={(e) => {
+            const input = e.target.value;
+            draft.setDraft(input);
+            onCellChange(isNumber ? parseTrialNumber(input) : input);
+          }}
+        />
+        {column.unit ? <span className="text-slate-600">{column.unit}</span> : null}
+      </div>
     </div>
   );
 }
