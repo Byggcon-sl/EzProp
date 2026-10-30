@@ -66,6 +66,9 @@ describe("listEmployees", () => {
     await createEmployee(person, org.id, []);
 
     await expect(listEmployees(person, org.id)).rejects.toThrow(AccessDeniedError);
+    await expect(listEmployees(person, org.id, { includeDeactivated: true })).rejects.toThrow(
+      AccessDeniedError,
+    );
   });
 
   it("gir nøyaktig de lovede feltene, uten e-post eller innloggings-id", async () => {
@@ -161,6 +164,8 @@ describe("listEmployees", () => {
 
     const active = await listEmployees(admin, org.id);
     expect(active.map((row) => row.id)).toEqual([adminEmployee.id]);
+    const explicitlyActive = await listEmployees(admin, org.id, { includeDeactivated: false });
+    expect(explicitlyActive.map((row) => row.id)).toEqual([adminEmployee.id]);
 
     const all = await listEmployees(admin, org.id, { includeDeactivated: true });
     expect(all.map((row) => row.id).sort()).toEqual(

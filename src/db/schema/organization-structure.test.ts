@@ -58,6 +58,15 @@ describe("ansatt uten innlogging (D18)", () => {
       .returning();
     expect(row?.userId).toBeNull();
   });
+
+  it("avviser å fjerne innloggingen fra en aktiv ansatt", async () => {
+    const org = await createOrganization();
+    const employee = await createEmployee(await createUser(), org.id, ["inspector"]);
+    await expectViolation(
+      db.update(employees).set({ userId: null }).where(eq(employees.id, employee.id)),
+      "employees_user_or_deactivated_check",
+    );
+  });
 });
 
 describe("selskap og kontor må høre til samme organisasjon som den ansatte", () => {
@@ -96,6 +105,18 @@ describe("selskap og kontor må høre til samme organisasjon som den ansatte", (
     await expectViolation(
       db.update(employees).set({ officeId: foreign.id }).where(eq(employees.id, employee.id)),
       "employees_office_fk",
+    );
+  });
+
+  it("avviser at den ansatte flyttes til en annen organisasjon med selskapet sitt", async () => {
+    const { orgA, orgB } = await twoOrganizations();
+    const own = await createCompany(orgA.id);
+    const employee = await createEmployee(await createUser(), orgA.id, ["inspector"], {
+      companyId: own.id,
+    });
+    await expectViolation(
+      db.update(employees).set({ organizationId: orgB.id }).where(eq(employees.id, employee.id)),
+      "employees_company_fk",
     );
   });
 
@@ -142,6 +163,13 @@ describe("org.nr. er unikt per organisasjon blant aktive selskaper", () => {
     await createCompany(orgA.id, { orgNumber: "000000001" });
     const b = await createCompany(orgB.id, { orgNumber: "000000001" });
     expect(b.orgNumber).toBe("000000001");
+  });
+
+  it("er lov med flere selskaper uten org.nr. i samme organisasjon", async () => {
+    const org = await createOrganization();
+    await createCompany(org.id, { legalName: "Testselskap A AS", orgNumber: null });
+    const b = await createCompany(org.id, { legalName: "Testselskap B AS", orgNumber: null });
+    expect(b.orgNumber).toBeNull();
   });
 });
 
@@ -203,5 +231,40 @@ describe("standardverdier", () => {
       .returning();
     expect(company?.vatRegistered).toBe(true);
     expect(office?.sortOrder).toBe(0);
+  });
+
+  it("selskapet kan lagres med bare navn; resten fylles ut av admin senere", async () => {
+    const org = await createOrganization();
+    const [company] = await db
+      .insert(companies)
+      .values({ organizationId: org.id, legalName: "Testselskap A AS" })
+      .returning();
+    expect(company).toMatchObject({
+      orgNumber: null,
+      companyText: null,
+      liabilityInsurer: null,
+      liabilityPolicyNumber: null,
+      liabilityValidTo: null,
+      deletedAt: null,
+    });
+  });
+
+  it("lagrer ansvarsforsikring og firmatekst per selskap", async () => {
+    const org = await createOrganization();
+    const company = await createCompany(org.id, {
+      orgNumber: "000000003",
+      companyText: "Oppdiktet firmatekst for test.",
+      liabilityInsurer: "Testforsikring",
+      liabilityPolicyNumber: "TEST-0001",
+      liabilityValidTo: "2027-12-31",
+    });
+    const [row] = await db.select().from(companies).where(eq(companies.id, company.id));
+    expect(row).toMatchObject({
+      companyText: "Oppdiktet firmatekst for test.",
+      liabilityInsurer: "Testforsikring",
+      liabilityPolicyNumber: "TEST-0001",
+      // Dato uten klokkeslett, lagret som tekst «ÅÅÅÅ-MM-DD»
+      liabilityValidTo: "2027-12-31",
+    });
   });
 });
