@@ -18,7 +18,7 @@ Fase 1 – Prøve uten nett: Testskjemaet (PR #6), testmiljøet i Azure (PR #7),
 
 ## Gjeldende oppgave
 
-**Levert: UU-funn 6–9 fra nattløkken** (30.10.2026; branch `fase1-uu-nattlokken` fra `main`, versjon 0.2.33, PR mot `main`). Oppgavekort `docs/agenter/oppgaver/fase1-uu-nattlokken.md`, testplan `docs/agenter/oppgaver/fase1-uu-nattlokken-testplan.md`. Kolonnenavn synlig over hver tabellcelle, `scroll-padding-top` på `html` lik målt høyde på statuslinjen (`useStickyScrollPadding`), «Til forsiden» med trykkflate på 44 px, og meldingen i `CandidatePicker` leses opp. Roller: forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn. Små funn i PR-en: reserven 9rem gir ekstra rulling på sider uten statuslinje, måleren og fabrikken er mer enn kortet ba om, reservevelgeren `div.sticky` i e2e kan fjernes. Støtter tid og reklamasjoner.
+**Levert: UU-funn 6–9 fra nattløkken** (30.10.2026; branch `fase1-uu-nattlokken` fra `main`, versjon 0.2.33, **PR #45**). Oppgavekort `docs/agenter/oppgaver/fase1-uu-nattlokken.md`, testplan `docs/agenter/oppgaver/fase1-uu-nattlokken-testplan.md`. Kolonnenavn synlig over hver tabellcelle, `scroll-padding-top` på `html` lik målt høyde på statuslinjen (`useStickyScrollPadding`), «Til forsiden» med trykkflate på 44 px, og meldingen i `CandidatePicker` leses opp. Roller: forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn. Små funn i PR-en: reserven 9rem gir ekstra rulling på sider uten statuslinje, måleren og fabrikken er mer enn kortet ba om, reservevelgeren `div.sticky` i e2e kan fjernes. Støtter tid og reklamasjoner.
 
 **Levert: Organisasjon → selskap → kontor → ansatt** (fase 0b, 30.10.2026; branch `fase0b-organisasjon-selskap-kontor` fra `main`, versjon 0.2.30, **PR #41**, merget 30.10.2026 kl. 19:10 UTC). Beslutningene er omnummerert til A16 og A17 (A13–A15 var brukt av ADR 0004). Små funn i PR-en: doble seed-tester, tenant-test uten `includeDeactivated`, `select()` uten feltliste i `listCompanies`/`listOffices` (sporingsfelt ut til alle med lesetilgang), unødvendig organisasjonsfilter i join. Punktet er krysset av i planen. Oppgavekort `docs/funksjoner/fase0b-organisasjon-selskap-kontor.md`. Tabellene `companies` og `offices`, `company_id`/`office_id` på `employees` (`phone` er tatt ut av kortet, hører til innloggings-ADR-en), sjekk for sluttet uten innlogging (D18), lesespørringer med tilgang og tenant-isolasjon, seed med navnene. Ikke admin-skjermer. Beslutninger A16 og A17. Roller: utvikler, testskriver, sikkerhet-personvern, test-leder. Støtter reklamasjoner og tid. Testplan `docs/funksjoner/fase0b-organisasjon-selskap-kontor-testplan.md` (commit d001487). Bygges i to biter i parallell: utvikler (skjema, migrering, spørringer, seed, CI, dokumenter) og testskriver (fabrikker og tester).
 
@@ -58,7 +58,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| (ny) | UU-funn 6–9 fra nattløkken, branch `fase1-uu-nattlokken` | venter på CI, merges med skriptet | `main` |
+| #45 | UU-funn 6–9 fra nattløkken, branch `fase1-uu-nattlokken` | venter på CI, merges med skriptet | `main` |
 
 
 PR #16–#28 og #30–#41 er merget (#41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
