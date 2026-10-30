@@ -28,6 +28,15 @@
   --font-sans: var(--font-roboto), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/*
+ * Den faste statuslinjen (sticky top-0) på testskjemaet og listen må ikke dekke felt som får fokus
+ * (WCAG 2.4.11). Linjen er ca. 86 px vanligvis og ca. 115 px med melding under synkstatusen.
+ * 9rem (144 px) dekker det med margin.
+ */
+html {
+  scroll-padding-top: 9rem;
+}
+
 body {
   @apply bg-canvas text-slate-900 antialiased;
 }
