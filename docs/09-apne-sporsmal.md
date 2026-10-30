@@ -4,7 +4,7 @@ Spørsmål som Ståle må avgjøre. Nyeste øverst. Når et spørsmål er besvar
 
 ## Avgjort av agentene mens Ståle var borte (til gjennomgang)
 
-Ståle 29.10.2026: «Er du i tvil, gå tilbake til undersøkelsene og tolk hva du mener blir beste løsning.» Agentene fører hver beslutning her. Ståle går gjennom listen når han er tilbake, og kan endre hva som helst. A5 og A6 er brukt av prøve F (PR #34); prøve D bruker derfor A7–A10. Småfunnene fra prøve D og F bruker A11 og A12; sammenligningen og ADR 0004 bruker A13–A15.
+Ståle 29.10.2026: «Er du i tvil, gå tilbake til undersøkelsene og tolk hva du mener blir beste løsning.» Agentene fører hver beslutning her. Ståle går gjennom listen når han er tilbake, og kan endre hva som helst. A5 og A6 er brukt av prøve F (PR #34); prøve D bruker derfor A7–A10. Småfunnene fra prøve D og F bruker A11 og A12; sammenligningen og ADR 0004 bruker A13–A15; selskap og kontor (fase 0b) bruker A16 og A17.
 
 | Nr | Dato | Beslutning | Hvorfor og kilde | PR |
 |---|---|---|---|---|
