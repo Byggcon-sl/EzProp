@@ -6,8 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 (prøve D – bilder, PR åpnet)
-Sist oppdatert: 30.10.2026 (prøve F levert som PR, merges med skriptet)
+Sist oppdatert: 30.10.2026 kl. 11:30 UTC (prøve C, D og F merget i PR #32–#35)
 
 ## Gjeldende fase
 
@@ -32,7 +31,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 **Levert: liten oppgave (e)**, småfunnene fra PR #23 (prøve E) og det som sto igjen fra PR #26 (30.10.2026; branch `fase1-smafunn-prove-e` fra `main`, versjon 0.2.18). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-e.md`, testplan `docs/agenter/oppgaver/fase1-smafunn-prove-e-testplan.md`. Test for `localWriteGeneration`, testsakene ut av `rules/index.ts`, grensetallet ett sted, færre doble tester, loggen i `custom/reader.ts` og `electricsql/store.ts` viser bare feilmeldingen («ukjent feil» når feilen ikke er en Error). Roller: forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn; små funn rettet av prosjektlederen før PR. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
-**Neste:** prøve D (bilder) så langt det går i nettleser, og en liten oppgave for småfunnene fra prøve F. Prøve A og B per kandidat venter på Ståle (spørsmål nr. 12).
+**Neste:** liten oppgave (g) for småfunnene fra prøve F, og småfunnene fra prøve D (står i PR #35). Deretter sammenligning av kandidatene og foreløpig ADR (se «Slik går fase 1 videre uten Ståle»). Prøve A og B per kandidat venter på Ståle (spørsmål nr. 12).
 
 **Forrige oppgave:** liten oppgave (a) – synktjenestene i Azure-testmiljøet, **PR #17** (merget 29.10.2026 kl. 16:58, versjon 0.2.7). PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så mergen lager ingen nye ressurser. ADR 0003, oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. Kostnad når de er på: ca. 700–850 kr per måned. Spørsmål nr. 12.
 
@@ -50,9 +49,8 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #35 | Prøve D – bilder | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
 
-PR #16–#28 og #30–#34 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken). Ingen PR venter på Ståle.
+PR #16–#28 og #30–#35 er merget (#32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D). Ingen åpne PR-er. Ingen PR venter på Ståle.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -98,6 +96,8 @@ Fra nattløkken 30.10.2026 (main ved 08a7675, versjon 0.2.17). Rettet i PR #31 �
 Ingen.
 
 ## Siste kjøring
+
+30.10.2026 kl. 03:05–11:35 UTC: hovedløkken fant ingen åpne PR-er og kjørte arbeidsflyten «oppgave» tre ganger: prøve C (PR #32), småfunn fra prøve C (PR #33) og prøve F (PR #34), alle merget med skriptet (CI grønn, ingen alvorlige funn). En annen kjøring leverte prøve D (PR #35) samtidig; denne kjøringen ventet på CI og merget den med skriptet før tilstanden ble oppdatert. Sesjon: https://claude.ai/code/session_01Jqwnu2V8ERMPTnXezmxYu6
 
 30.10.2026: prosjektleder skrev funnene fra nattløkken inn under «Oppgaver fra nattløkken» og laget branchen `natt-2026-10-30` med trygg rydding (synkindeks, pakkeoppdateringer, versjon 0.2.20 etter fletting med main), alle sjekker grønne (også e2e), PR #31 åpnet mot `main`. Sesjon: https://claude.ai/code/session_01Jqwntym4bVyM8CVw74aqdP
 30.10.2026 kl. 01:05–02:00: hovedløkken trodde kjøringen med liten oppgave (e) hadde stoppet (45 min uten push) og fullførte den selv (PR #29). Den andre kjøringen var i live og merget PR #28 kl. 01:25 med samme innhold. PR #29 er lukket uten tap. Lærdom og ny regel (3 timer) i `erfaringer.md`. Startet ingen ny oppgave, fordi den andre kjøringen kan holde på med neste. Sesjon: https://claude.ai/code/session_01Jqwnu1z3G1tg8SDiRvvu7V
