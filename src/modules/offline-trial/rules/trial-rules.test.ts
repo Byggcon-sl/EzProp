@@ -37,6 +37,32 @@ function keysIn(value: unknown): string[] {
   return Object.entries(value).flatMap(([key, inner]) => [key, ...keysIn(inner)]);
 }
 
+const SRC_DIR = path.resolve(RULES_DIR, "../../..");
+
+/** Kildefilen uten kommentarer (blokk- og linjekommentarer utenfor tekst). */
+function withoutComments(source: string): string {
+  return source.replace(
+    /("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`)|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
+    (match, literal: string | undefined) => literal ?? "",
+  );
+}
+
+/** Alle tekstverdier i kilden. I malstrenger tas `${…}` ut, så bare den faste teksten står. */
+function stringLiterals(source: string): string[] {
+  const found = source.match(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g) ?? [];
+  return found.map((literal) => literal.slice(1, -1).replace(/\$\{[^}]*\}/g, ""));
+}
+
+/** Alle `.ts`/`.tsx` under `src/` utenom tester. */
+function appSourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return appSourceFiles(full);
+    if (!/\.tsx?$/.test(entry.name) || /\.test\.tsx?$/.test(entry.name)) return [];
+    return [full];
+  });
+}
+
 const STATES = ["triggered", "not_triggered", "not_evaluated"] as const;
 
 function allMessages(): string[] {
@@ -132,6 +158,35 @@ describe("prøvereglene som data", () => {
       expect(message, message).not.toMatch(/bør/i);
       expect(message, message).not.toMatch(/(^|[^\p{L}\p{N}])tg($|[^\p{L}\p{N}])/iu);
     }
+  });
+
+  // Testplan docs/agenter/oppgaver/fase1-smafunn-prove-e-testplan.md avsnitt 3 (R3).
+  it("grensetallene står bare i regeldataene", () => {
+    const source = withoutComments(readFileSync(path.join(RULES_DIR, "trial-rules.ts"), "utf8"));
+    expect(source.match(/(?<![\w.])7(?![\w.])/g) ?? [], "tallet 7").toHaveLength(1);
+    expect(source.match(/(?<![\w.])42(?![\w.])/g) ?? [], "tallet 42").toHaveLength(1);
+    // Begge står i TRIAL_ONLY_LIMITS.
+    expect(source).toMatch(/TRIAL_ONLY_LIMITS\s*=\s*\{[^}]*\b7\b[^}]*\b42\b[^}]*\}/);
+
+    // Ingen tekst til takstmannen har et siffer skrevet rett inn (malverdier `${…}` er tatt ut).
+    const texts = stringLiterals(source).filter((text) => /Prøveregel|prøvegrensen/.test(text));
+    expect(texts.length).toBeGreaterThan(0);
+    for (const text of texts) expect(text, text).not.toMatch(/\d/);
+  });
+
+  // R5
+  it("index eksporterer ikke testsakene", () => {
+    expect("trialRuleCases" in rulesModule).toBe(false);
+  });
+
+  // R6
+  it("ingen appfil importerer trial-rule-cases", () => {
+    const offenders = appSourceFiles(SRC_DIR).filter((file) =>
+      /(from\s*|import\s*\(\s*|require\s*\(\s*)["'][^"']*trial-rule-cases(\.tsx?)?["']/.test(
+        readFileSync(file, "utf8"),
+      ),
+    );
+    expect(offenders.map((file) => path.relative(SRC_DIR, file))).toEqual([]);
   });
 
   it("ingen TG eller utfall i reglene", () => {
