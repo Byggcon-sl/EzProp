@@ -10,6 +10,10 @@ beforeEach(resetDatabase);
 afterEach(() => vi.restoreAllMocks());
 
 describe("seed", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+
   it("lager Byggcon og admin, og kan kjøres to ganger uten duplikater", async () => {
     const env = { SEED_ADMIN_EMAIL: "Admin@Example.com", SEED_ADMIN_NAME: "Test Admin" };
     await runSeed(env);
@@ -28,7 +32,7 @@ describe("seed", () => {
   });
 
   it("skriver aldri e-postadressen i loggen", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const log = vi.mocked(console.log);
     const env = { SEED_ADMIN_EMAIL: "Admin@Example.com", SEED_ADMIN_NAME: "Test Admin" };
     await runSeed(env);
     const firstRun = log.mock.calls.map((args) => args.map(String).join(" "));
