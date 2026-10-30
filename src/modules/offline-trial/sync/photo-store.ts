@@ -6,10 +6,15 @@
  * serveren har bekreftet fingeravtrykket (oppgavekortet pkt. 22). Da legges samtidig en merknad i
  * lageret `confirmed`, så enheten vet at bildet er på serveren uten å skrive `uploaded_at` selv
  * (bare serveren setter den; resultatfilen, småfunn 6).
+ *
+ * Visningskopien (prøve D) ligger i det samme lageret `photos` under `displayCopyKey(photoId)`.
+ * Den er aldri en rad og skrives aldri i `confirmed`; originalene finnes alltid fra radene i
+ * synklageret, aldri ved å liste nøklene her.
  */
 
 export const TRIAL_PHOTO_DB_NAME = "offline-trial-photos";
 const PHOTO_STORE = "photos";
+const DISPLAY_COPY_SUFFIX = ":display";
 const CONFIRMED_STORE = "confirmed";
 type PhotoStoreName = typeof PHOTO_STORE | typeof CONFIRMED_STORE;
 
@@ -60,6 +65,11 @@ async function run<T>(
   });
 }
 
+/** Nøkkelen til visningskopien av et bilde i lageret `photos`. */
+export function displayCopyKey(photoId: string): string {
+  return `${photoId}${DISPLAY_COPY_SUFFIX}`;
+}
+
 export async function putLocalPhoto(id: string, file: Blob): Promise<void> {
   await run([PHOTO_STORE], "readwrite", (tx) => tx.objectStore(PHOTO_STORE).put(file, id));
 }
@@ -69,6 +79,21 @@ export async function getLocalPhoto(id: string): Promise<Blob | undefined> {
     tx.objectStore(PHOTO_STORE).get(id),
   );
   return value instanceof Blob ? value : undefined;
+}
+
+/** Sletter én fil i lageret `photos` (brukes for visningskopien). Rører aldri `confirmed`. */
+export async function deleteLocalPhoto(key: string): Promise<void> {
+  await run([PHOTO_STORE], "readwrite", (tx) => tx.objectStore(PHOTO_STORE).delete(key));
+}
+
+/** Photo-id-ene til visningskopiene som ligger på enheten. */
+export async function listLocalDisplayCopyIds(): Promise<string[]> {
+  const keys = await run([PHOTO_STORE], "readonly", (tx) =>
+    tx.objectStore(PHOTO_STORE).getAllKeys(),
+  );
+  return keys
+    .filter((key): key is string => typeof key === "string" && key.endsWith(DISPLAY_COPY_SUFFIX))
+    .map((key) => key.slice(0, -DISPLAY_COPY_SUFFIX.length));
 }
 
 /**
@@ -92,7 +117,7 @@ export async function listConfirmedPhotoIds(): Promise<Set<string>> {
   return new Set(keys.filter((key): key is string => typeof key === "string"));
 }
 
-/** Tømmer lageret (ved bytte av organisasjon på samme enhet). */
+/** Tømmer lageret, også visningskopiene (ved bytte av organisasjon på samme enhet). */
 export async function clearLocalPhotos(): Promise<void> {
   await run([PHOTO_STORE, CONFIRMED_STORE], "readwrite", (tx) => {
     tx.objectStore(CONFIRMED_STORE).clear();

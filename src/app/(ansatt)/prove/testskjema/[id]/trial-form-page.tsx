@@ -74,7 +74,7 @@ const EMPTY_SET: ReadonlySet<string> = new Set();
  * serveren i bakgrunnen. Telleren viser det som er lagret på enheten.
  */
 export function TrialFormPage({ formId }: { formId: string }) {
-  const { store, deviceId } = useTrialSync();
+  const { store, deviceId, organizationId } = useTrialSync();
   const syncSource = useSyncStatusSource();
   const [snapshot, setSnapshot] = useState<TrialFormSnapshot | null>(null);
   const [foreignChanges, setForeignChanges] = useState<ReadonlySet<string>>(EMPTY_SET);
@@ -317,6 +317,7 @@ export function TrialFormPage({ formId }: { formId: string }) {
           onFieldTouched={handleFieldTouched}
           onAddPhotos={handleAddPhotos}
           unsavedFields={unsavedFields}
+          organizationId={organizationId}
         />
       ) : null}
     </main>

@@ -39,6 +39,8 @@ interface TrialFormViewProps {
   onAddPhotos?: OnAddPhotos;
   /** Felt der svaret eller et bilde ikke ble lagret på enheten. Viser «ikke lagret». */
   unsavedFields?: ReadonlySet<string>;
+  /** Organisasjonen fra synklageret. Når satt, står «Vis fra serveren» ved hvert bilde. */
+  organizationId?: string;
 }
 
 /** Viser testskjemaet. Vet ikke hvor svarene lagres; alt går gjennom `onChange`. */
@@ -50,6 +52,7 @@ export function TrialFormView({
   onFieldTouched,
   onAddPhotos,
   unsavedFields,
+  organizationId,
 }: TrialFormViewProps) {
   return (
     <div className="space-y-8">
@@ -74,6 +77,7 @@ export function TrialFormView({
                   onChange={change}
                   onTouched={touched}
                   onAddPhotos={onAddPhotos}
+                  organizationId={organizationId}
                 />
                 <TrialRuleResult fieldKey={field.key} answers={answers} />
                 {showForeign ? <ForeignChangeNotice /> : null}
@@ -165,12 +169,14 @@ function FieldInput({
   onChange,
   onTouched,
   onAddPhotos,
+  organizationId,
 }: {
   field: TrialField;
   value: TrialValue | undefined;
   onChange: OnChange;
   onTouched: OnTouched;
   onAddPhotos?: OnAddPhotos;
+  organizationId?: string;
 }) {
   switch (field.type) {
     case "text":
@@ -221,6 +227,7 @@ function FieldInput({
           onChange={onChange}
           onTouched={onTouched}
           onAddPhotos={onAddPhotos}
+          organizationId={organizationId}
         />
       );
   }
@@ -466,12 +473,14 @@ function PhotoInput({
   onChange,
   onTouched,
   onAddPhotos,
+  organizationId,
 }: {
   field: TrialField;
   photos: TrialPhoto[];
   onChange: OnChange;
   onTouched: OnTouched;
   onAddPhotos?: OnAddPhotos;
+  organizationId?: string;
 }) {
   return (
     <>
@@ -511,7 +520,22 @@ function PhotoInput({
           </p>
           <ul className="mt-1 list-disc pl-5">
             {photos.map((photo) => (
-              <li key={photo.id}>{photo.name}</li>
+              <li key={photo.id}>
+                {photo.name}
+                {organizationId ? (
+                  <>
+                    {" "}
+                    <a
+                      href={`/api/prove/bilder/${photo.id}/visning?${new URLSearchParams({ organisasjon: organizationId })}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-11 min-w-11 items-center text-brand-700 underline"
+                    >
+                      Vis fra serveren
+                    </a>
+                  </>
+                ) : null}
+              </li>
             ))}
           </ul>
         </div>
