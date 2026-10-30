@@ -6,6 +6,8 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
+Sist oppdatert: 30.10.2026 (liten oppgave (i) levert som PR, småfunn fra PR #41)
+Sist oppdatert: 30.10.2026 (UU-funn 6–9 fra nattløkken levert som PR)
 Sist oppdatert: 30.10.2026 kl. 21:30 UTC (PR #45 merget)
 
 ## Gjeldende fase
@@ -48,7 +50,7 @@ Fase 1 – Prøve uten nett: Testskjemaet (PR #6), testmiljøet i Azure (PR #7),
 
 **Enda før:** Oppgave 5 – Kandidat 2: ElectricSQL, **PR #10** (branch `fase1-kandidat-electricsql`, versjon 0.2.2). Oppgavekort `docs/funksjoner/fase1-kandidat-electricsql.md`, testplan `docs/funksjoner/fase1-kandidat-electricsql-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-electricsql.md`, drift `docs/drift/electricsql.md`. Sikkerhet-personvern: godkjent, tre små funn; (2) og (3) rettet, (1) (Electrics 400-kropp videresendes uendret) tas i ADR-en. Test-leder: godkjent (lint, typesjekk, format, 333 Vitest, e2e 105 bestått). Spørsmål nr. 11 (ElectricSQL som leverandør), ikke blokkerende.
 
-**Små oppgaver:** (i) **Ikke startet:** småfunnene fra PR #41: doble seed-tester, tenant-test for `listEmployees` med `includeDeactivated`, feltliste i `listCompanies`/`listOffices` (ikke sporingsfelt med innloggings-id-er ut til alle med lesetilgang), unødvendig organisasjonsfilter i join, `ListEmployeesOptions` eksporteres uten bruk. Fra den andre gjennomgangen av samme PR: test som viser at seed lager et slettet kontor på nytt, test for sortering på navn i `listEmployees`, migrering 0004 rydder ikke rader som bryter `employees_user_or_deactivated_check` (ingen slike finnes i dag), typene `Company` og `Office` brukes ikke. (g) og (h) er levert (se over). (f) Småfunnene fra prøve C er levert (se over). (e) Småfunn fra prøve E er levert (se over). (d) Småfunnene fra PR #21 er levert i **PR #26**. (c) Småfunn fra synktjenestene i Azure er merget i **PR #19** (branch `fase1-smafunn-synk-azure` (versjon 0.2.9, oppgavekort `docs/agenter/oppgaver/fase1-smafunn-synk-azure.md`). (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14** (merget 29.10.2026), sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
+**Små oppgaver:** (j) **Ikke startet:** fra den andre gjennomgangen av PR #41: test som viser at seed lager et slettet kontor på nytt, test for sortering på navn i `listEmployees`, migrering 0004 rydder ikke rader som bryter `employees_user_or_deactivated_check` (ingen slike finnes i dag), typene `Company` og `Office` brukes ikke. Fra PR-en for (i): console.log-spyen står i to `beforeEach` i `src/db/seed/run.test.ts` (kan stå én gang øverst), og retur-uttrykket i `listEmployees` har ekstra parenteser på grunn av kommentarplasseringen. (i) **Levert (30.10.2026):** småfunnene fra PR #41, branch `fase0b-smafunn-organisasjon`, versjon 0.2.35, oppgavekort `docs/agenter/oppgaver/fase0b-smafunn-organisasjon.md`. Faste feltlister i `listCompanies`/`listOffices`, tenant-test for `listEmployees` med `includeDeactivated`, organisasjonsfilteret i join-ene fjernet, `ListEmployeesOptions` eksporteres ikke, seed-testene fanger console.log (de doble seed-testene var alt borte på main). (g) og (h) er levert (se over). (f) Småfunnene fra prøve C er levert (se over). (e) Småfunn fra prøve E er levert (se over). (d) Småfunnene fra PR #21 er levert i **PR #26**. (c) Småfunn fra synktjenestene i Azure er merget i **PR #19** (branch `fase1-smafunn-synk-azure` (versjon 0.2.9, oppgavekort `docs/agenter/oppgaver/fase1-smafunn-synk-azure.md`). (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14** (merget 29.10.2026), sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
 
 **Rekkefølge videre i fase 1:** alle tre kandidatene er satt opp → synktjenestene i Azure (a, merget) → Ståle slår dem på (spørsmål nr. 12) og kjører prøve A og B per kandidat på ekte iPad → prøve C–F → sammenligning og ADR (levert, foreløpig) → prøve A og B med egenbygd og demo når Ståle er tilbake.
 
@@ -58,13 +60,13 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #44 | Opprydding i selskap, kontor og ansatte (småfunn fra PR #41) | i arbeid hos en annen kjøring | `main` |
+| #44 | Liten oppgave (i), småfunn fra PR #41, branch `fase0b-smafunn-organisasjon`, versjon 0.2.35 | venter på CI, merges med skriptet | `main` |
 | #46 | Seed lager ikke et slettet kontor på nytt (småfunn fra PR #41) | i arbeid hos en annen kjøring | `main` |
 
 PR #45 (UU-funn 6–9 fra nattløkken) er merget 30.10.2026.
 
 
-PR #16–#28 og #30–#41 er merget (#41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
+PR #16–#28, #30–#43 og #45 er merget (#45: UU-funn 6–9 fra nattløkken, #43 og #42: tilstand, #41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 

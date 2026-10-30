@@ -3,7 +3,7 @@ import { requireOrganizationAccess, type Actor } from "@/core/access";
 import { db } from "@/db/client";
 import { companies, employees, offices } from "@/db/schema";
 
-export type ListEmployeesOptions = {
+type ListEmployeesOptions = {
   /** Ta med ansatte som har sluttet (også de uten innlogging). Standard: nei. */
   includeDeactivated?: boolean;
 };
@@ -18,38 +18,28 @@ export async function listEmployees(
   options: ListEmployeesOptions = {},
 ) {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
-  return db
-    .select({
-      id: employees.id,
-      name: employees.name,
-      jobTitle: employees.jobTitle,
-      companyName: companies.legalName,
-      officeName: offices.name,
-      deactivatedAt: employees.deactivatedAt,
-    })
-    .from(employees)
-    .leftJoin(
-      companies,
-      and(
-        eq(companies.id, employees.companyId),
-        eq(companies.organizationId, grant.organizationId),
-        isNull(companies.deletedAt),
-      ),
-    )
-    .leftJoin(
-      offices,
-      and(
-        eq(offices.id, employees.officeId),
-        eq(offices.organizationId, grant.organizationId),
-        isNull(offices.deletedAt),
-      ),
-    )
-    .where(
-      and(
-        eq(employees.organizationId, grant.organizationId),
-        isNull(employees.deletedAt),
-        options.includeDeactivated ? undefined : isNull(employees.deactivatedAt),
-      ),
-    )
-    .orderBy(asc(employees.name));
+  return (
+    db
+      .select({
+        id: employees.id,
+        name: employees.name,
+        jobTitle: employees.jobTitle,
+        companyName: companies.legalName,
+        officeName: offices.name,
+        deactivatedAt: employees.deactivatedAt,
+      })
+      .from(employees)
+      // De sammensatte fremmednøklene (organization_id, company_id/office_id) sikrer at
+      // selskap og kontor hører til samme organisasjon som den ansatte.
+      .leftJoin(companies, and(eq(companies.id, employees.companyId), isNull(companies.deletedAt)))
+      .leftJoin(offices, and(eq(offices.id, employees.officeId), isNull(offices.deletedAt)))
+      .where(
+        and(
+          eq(employees.organizationId, grant.organizationId),
+          isNull(employees.deletedAt),
+          options.includeDeactivated ? undefined : isNull(employees.deactivatedAt),
+        ),
+      )
+      .orderBy(asc(employees.name))
+  );
 }
