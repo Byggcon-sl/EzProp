@@ -331,6 +331,8 @@ test.describe("data overlever lukking (5.3)", () => {
     await expect(storageWarning(page)).toBeVisible();
     await textInput(page, TEXT_A).fill("Oppdiktet tekst med lite plass");
     await expectSaved(page, TEXT_A, "yes");
+    // `data-field-saved="yes"` står også mens skrivingen pågår; telleren leser det som er lagret
+    await expect(counter(page)).toHaveText("1 av 40 felt utfylt");
     await page.reload();
     await expect(textInput(page, TEXT_A)).toHaveValue("Oppdiktet tekst med lite plass");
     await expect(storageWarning(page)).toBeVisible();
