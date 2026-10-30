@@ -51,6 +51,40 @@ describe("listEmployees", () => {
     });
   });
 
+  it("viser aldri ansatte fra en annen organisasjon, heller ikke med includeDeactivated", async () => {
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        const ids: { a: string[]; b: string[] } = { a: [], b: [] };
+        for (const [side, grant] of [
+          ["a", grantA],
+          ["b", grantB],
+        ] as const) {
+          const company = await createCompany(grant.organizationId);
+          const office = await createOffice(grant.organizationId);
+          const person = await createUser({ name: `Test Takstmann ${side.toUpperCase()}` });
+          const employee = await createEmployee(person, grant.organizationId, ["inspector"], {
+            companyId: company.id,
+            officeId: office.id,
+          });
+          const [quit] = await db
+            .insert(employees)
+            .values({
+              organizationId: grant.organizationId,
+              userId: null,
+              name: `Tidligere Takstmann ${side.toUpperCase()}`,
+              deactivatedAt: new Date(),
+            })
+            .returning();
+          ids[side].push(employee.id, quit!.id);
+        }
+        return ids;
+      },
+      query: (actor, organizationId) =>
+        listEmployees(actor, organizationId, { includeDeactivated: true }),
+      idOf: (row) => row.id,
+    });
+  });
+
   it.each(roles)("rollen %s kan lese de ansatte", async (role) => {
     const { org, adminEmployee } = await setup();
     const person = await createUser();
