@@ -16,6 +16,20 @@ import {
 
 beforeEach(resetDatabase);
 
+/**
+ * Venter at databasen avviser med akkurat denne sjekken, indeksen eller fremmednøkkelen,
+ * så testen ikke blir grønn av en annen feil.
+ */
+async function expectViolation(write: PromiseLike<unknown>, constraint: string) {
+  const error: unknown = await Promise.resolve(write).then(
+    () => null,
+    (caught: unknown) => caught,
+  );
+  expect(error, `forventet at ${constraint} avviste skrivingen`).toBeInstanceOf(Error);
+  const cause = (error as { cause?: { constraint_name?: string } }).cause;
+  expect(cause?.constraint_name).toBe(constraint);
+}
+
 async function twoOrganizations() {
   const orgA = await createOrganization("Organisasjon A");
   const orgB = await createOrganization("Organisasjon B");
@@ -25,9 +39,10 @@ async function twoOrganizations() {
 describe("ansatt uten innlogging (D18)", () => {
   it("avviser tom user_id uten deactivated_at", async () => {
     const org = await createOrganization();
-    await expect(
+    await expectViolation(
       db.insert(employees).values({ organizationId: org.id, userId: null, name: "Ny Takstmann" }),
-    ).rejects.toThrow();
+      "employees_user_or_deactivated_check",
+    );
   });
 
   it("godtar tom user_id når deactivated_at er satt", async () => {
@@ -49,35 +64,39 @@ describe("selskap og kontor må høre til samme organisasjon som den ansatte", (
   it("avviser innsetting med selskap fra en annen organisasjon", async () => {
     const { orgA, orgB } = await twoOrganizations();
     const foreign = await createCompany(orgB.id);
-    await expect(
+    await expectViolation(
       createEmployee(await createUser(), orgA.id, ["inspector"], { companyId: foreign.id }),
-    ).rejects.toThrow();
+      "employees_company_fk",
+    );
   });
 
   it("avviser oppdatering til selskap fra en annen organisasjon", async () => {
     const { orgA, orgB } = await twoOrganizations();
     const foreign = await createCompany(orgB.id);
     const employee = await createEmployee(await createUser(), orgA.id, ["inspector"]);
-    await expect(
+    await expectViolation(
       db.update(employees).set({ companyId: foreign.id }).where(eq(employees.id, employee.id)),
-    ).rejects.toThrow();
+      "employees_company_fk",
+    );
   });
 
   it("avviser innsetting med kontor fra en annen organisasjon", async () => {
     const { orgA, orgB } = await twoOrganizations();
     const foreign = await createOffice(orgB.id);
-    await expect(
+    await expectViolation(
       createEmployee(await createUser(), orgA.id, ["inspector"], { officeId: foreign.id }),
-    ).rejects.toThrow();
+      "employees_office_fk",
+    );
   });
 
   it("avviser oppdatering til kontor fra en annen organisasjon", async () => {
     const { orgA, orgB } = await twoOrganizations();
     const foreign = await createOffice(orgB.id);
     const employee = await createEmployee(await createUser(), orgA.id, ["inspector"]);
-    await expect(
+    await expectViolation(
       db.update(employees).set({ officeId: foreign.id }).where(eq(employees.id, employee.id)),
-    ).rejects.toThrow();
+      "employees_office_fk",
+    );
   });
 
   it("godtar selskap og kontor fra egen organisasjon", async () => {
@@ -104,9 +123,10 @@ describe("org.nr. er unikt per organisasjon blant aktive selskaper", () => {
   it("avviser to aktive selskaper med samme org.nr.", async () => {
     const org = await createOrganization();
     await createCompany(org.id, { orgNumber: "000000001" });
-    await expect(
+    await expectViolation(
       createCompany(org.id, { legalName: "Testselskap B AS", orgNumber: "000000001" }),
-    ).rejects.toThrow();
+      "companies_organization_id_org_number_idx",
+    );
   });
 
   it("er lov når det første selskapet er slettet", async () => {
@@ -129,7 +149,10 @@ describe("kontornavn er unikt per organisasjon blant aktive kontorer", () => {
   it("avviser to aktive kontorer med samme navn", async () => {
     const org = await createOrganization();
     await createOffice(org.id, { name: "Testkontor Nord" });
-    await expect(createOffice(org.id, { name: "Testkontor Nord" })).rejects.toThrow();
+    await expectViolation(
+      createOffice(org.id, { name: "Testkontor Nord" }),
+      "offices_organization_id_name_idx",
+    );
   });
 
   it("er lov når det første kontoret er slettet", async () => {
@@ -153,7 +176,10 @@ describe("format på org.nr. (9 siffer når det er fylt ut)", () => {
     "avviser %j",
     async (orgNumber) => {
       const org = await createOrganization();
-      await expect(createCompany(org.id, { orgNumber })).rejects.toThrow();
+      await expectViolation(
+        createCompany(org.id, { orgNumber }),
+        "companies_org_number_format_check",
+      );
     },
   );
 
