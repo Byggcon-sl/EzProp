@@ -19,15 +19,6 @@ export const TRIAL_ONLY_LIMITS = { water_heater_age_years: 7, moisture_floor_per
 
 const NOT_EVALUATED = "Prøveregel: ikke vurdert";
 
-/** Meldingene bygges fra grensen, så tallet bare står ett sted. */
-function limitMessages(limit: string): TrialRule["messages"] {
-  return {
-    triggered: `Prøveregel: over prøvegrensen (${limit})`,
-    not_triggered: `Prøveregel: ikke over prøvegrensen (${limit})`,
-    not_evaluated: NOT_EVALUATED,
-  };
-}
-
 export const trialRules: readonly TrialRule[] = [
   {
     key: "trial_water_heater_age",
