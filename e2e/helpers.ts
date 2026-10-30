@@ -462,7 +462,7 @@ export const CHANGES_PATH = "/api/prove/synk/endringer";
 export const INSPECTOR_EMAIL = "takstmann.e2e@eksempel.no";
 
 /** Databasen appen i e2e bruker: `DATABASE_URL`, ellers `.env`, ellers standarden fra `.env.example`. */
-function e2eDatabaseUrl(): string {
+export function e2eDatabaseUrl(): string {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
   const envFile = path.join(process.cwd(), ".env");
   if (existsSync(envFile)) {
