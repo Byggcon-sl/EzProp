@@ -9,14 +9,43 @@ import {
   type TrialValue,
 } from "@/modules/offline-trial/answers";
 import { detectForeignChanges } from "@/modules/offline-trial/foreign-change";
+import {
+  LOW_STORAGE_WARNING_TEXT,
+  requestPersistentStorage,
+  storageErrorLog,
+  storageErrorMessage,
+  type StorageHealth,
+} from "@/modules/offline-trial/storage-health";
+import {
+  readStorageHealthForScreen,
+  throwIfStorageFailHook,
+} from "@/modules/offline-trial/storage-test-hook";
 import { SyncStatus } from "@/modules/offline-trial/sync-status";
 import { rowsToAnswers } from "@/modules/offline-trial/sync/answer-rows";
 import type { TrialAnswerRow, TrialFormSnapshot } from "@/modules/offline-trial/sync/types";
 import { listTrialFields, trialForm } from "@/modules/offline-trial/trial-form";
 import { TrialFormView } from "@/modules/offline-trial/trial-form-view";
+import { Button } from "@/shared/ui/button";
 import { useSyncStatusSource, useTrialSync } from "../trial-sync-provider";
 
 const FIELD_COUNT = listTrialFields(trialForm).length;
+const FIELD_LABELS = new Map(listTrialFields(trialForm).map((field) => [field.key, field.label]));
+
+/** Et svar eller bilde som ikke ble lagret på enheten (prøve C). Svarverdien står i `pending`. */
+interface FailedSave {
+  kind: "answer" | "photo";
+  fieldKey: string;
+  error: unknown;
+}
+
+function withoutFailure(
+  current: FailedSave[],
+  kind: FailedSave["kind"],
+  fieldKey: string,
+): FailedSave[] {
+  const next = current.filter((item) => !(item.kind === kind && item.fieldKey === fieldKey));
+  return next.length === current.length ? current : next;
+}
 
 /** Det brukeren nettopp gjorde, vist til den lokale databasen har det (unngår hakk og tap ved raske trykk). */
 interface PendingValue {
@@ -55,6 +84,48 @@ export function TrialFormPage({ formId }: { formId: string }) {
   const [foreignChanges, setForeignChanges] = useState<ReadonlySet<string>>(EMPTY_SET);
   const [pending, setPending] = useState<Record<string, PendingValue>>({});
   const previousAnswers = useRef<TrialAnswerRow[] | null>(null);
+  const [health, setHealth] = useState<StorageHealth | null>(null);
+  const [failures, setFailures] = useState<FailedSave[]>([]);
+  const [errorHidden, setErrorHidden] = useState(false);
+  /** Siste skriving per felt (samme objekt som i `pending`), så en eldre feil ikke overstyrer en nyere. */
+  const latestWrite = useRef<Record<string, PendingValue>>({});
+  const failuresRef = useRef<FailedSave[]>(failures);
+  const measureCall = useRef(0);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    failuresRef.current = failures;
+  }, [failures]);
+
+  /** Prøve C: måler plassen. Når skjemaet åpnes, før hvert bilde og etter hver lagringsfeil. */
+  const measureStorage = useCallback(() => {
+    const call = ++measureCall.current;
+    void readStorageHealthForScreen().then((next) => {
+      if (mounted.current && call === measureCall.current) setHealth(next);
+    });
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    measureStorage();
+    void requestPersistentStorage().then(measureStorage);
+    return () => {
+      mounted.current = false;
+    };
+  }, [measureStorage]);
+
+  const recordFailure = useCallback(
+    (kind: FailedSave["kind"], fieldKey: string, error: unknown) => {
+      // Samme svarfelt står én gang, sist i listen; hvert bilde står for seg.
+      setFailures((current) => [
+        ...(kind === "answer" ? withoutFailure(current, kind, fieldKey) : current),
+        { kind, fieldKey, error },
+      ]);
+      setErrorHidden(false);
+      measureStorage();
+    },
+    [measureStorage],
+  );
 
   useEffect(() => {
     previousAnswers.current = null;
@@ -84,21 +155,62 @@ export function TrialFormPage({ formId }: { formId: string }) {
     return merged;
   }, [savedAnswers, pending]);
 
-  const handleChange = useCallback(
-    (fieldKey: string, value: TrialValue) => {
+  const writeAnswerRef = useRef<(fieldKey: string, value: TrialValue, retry: boolean) => void>(
+    () => undefined,
+  );
+
+  /**
+   * Skriver svaret på enheten. Feiler det, vises meldingen og feltet merkes; verdien blir stående
+   * i `pending`. Lykkes et nytt svar, prøves svarene som feilet, på nytt (bare én runde).
+   */
+  const writeAnswer = useCallback(
+    (fieldKey: string, value: TrialValue, retry: boolean) => {
       const entry: PendingValue = { value, written: false };
+      latestWrite.current[fieldKey] = entry;
       setPending((current) => ({ ...current, [fieldKey]: entry }));
-      store.setAnswer(formId, fieldKey, value).then(
+      const write = async () => {
+        throwIfStorageFailHook("answer");
+        await store.setAnswer(formId, fieldKey, value);
+      };
+      write().then(
         () => {
           entry.written = true;
+          if (latestWrite.current[fieldKey] === entry) {
+            setFailures((current) => withoutFailure(current, "answer", fieldKey));
+          }
+          if (retry) return;
+          for (const failed of failuresRef.current) {
+            if (failed.kind !== "answer" || failed.fieldKey === fieldKey) continue;
+            const latest = latestWrite.current[failed.fieldKey];
+            if (latest) writeAnswerRef.current(failed.fieldKey, latest.value, true);
+          }
         },
         (error: unknown) => {
-          console.error("Kunne ikke lagre svaret på enheten.", error);
+          console.error("Kunne ikke lagre svaret på enheten.", storageErrorLog(error));
+          // En nyere skriving i samme felt avgjør om feltet er lagret.
+          if (latestWrite.current[fieldKey] === entry) recordFailure("answer", fieldKey, error);
         },
       );
     },
-    [store, formId],
+    [store, formId, recordFailure],
   );
+  useEffect(() => {
+    writeAnswerRef.current = writeAnswer;
+  }, [writeAnswer]);
+
+  const handleChange = useCallback(
+    (fieldKey: string, value: TrialValue) => writeAnswer(fieldKey, value, false),
+    [writeAnswer],
+  );
+
+  /** «Prøv igjen»: skriver svarene som feilet, på nytt med verdien som står i feltet. */
+  const retryFailedAnswers = useCallback(() => {
+    for (const failed of failuresRef.current) {
+      if (failed.kind !== "answer") continue;
+      const latest = latestWrite.current[failed.fieldKey];
+      if (latest) writeAnswer(failed.fieldKey, latest.value, true);
+    }
+  }, [writeAnswer]);
 
   const handleFieldTouched = useCallback((fieldKey: string) => {
     setForeignChanges((current) => {
@@ -113,16 +225,27 @@ export function TrialFormPage({ formId }: { formId: string }) {
     (fieldKey: string, items: ReadonlyArray<{ file: File; photo: TrialPhoto }>) => {
       void (async () => {
         for (const { file, photo } of items) {
+          measureStorage();
           try {
+            throwIfStorageFailHook("photo");
             await store.addPhoto(formId, fieldKey, file, photo);
+            setFailures((current) => withoutFailure(current, "photo", fieldKey));
           } catch (error) {
-            console.error("Kunne ikke lagre bildet på enheten.", error);
+            console.error("Kunne ikke lagre bildet på enheten.", storageErrorLog(error));
+            recordFailure("photo", fieldKey, error);
           }
         }
       })();
     },
-    [store, formId],
+    [store, formId, measureStorage, recordFailure],
   );
+
+  const unsavedFields = useMemo<ReadonlySet<string>>(
+    () => (failures.length === 0 ? EMPTY_SET : new Set(failures.map((item) => item.fieldKey))),
+    [failures],
+  );
+  const showError = failures.length > 0 && !errorHidden;
+  const errorHasAnswers = failures.some((item) => item.kind === "answer");
 
   const form = snapshot?.form ?? null;
 
@@ -146,8 +269,49 @@ export function TrialFormPage({ formId }: { formId: string }) {
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-16">
-      <div className="sticky top-0 z-10 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-3">
+      <div
+        className="sticky top-0 z-10 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-3"
+        data-storage-level={health?.level}
+        data-storage-persisted={health?.persisted}
+      >
         <SyncStatus {...syncSource} />
+        {health?.level === "low" ? (
+          <p
+            role="status"
+            data-testid="storage-low-warning"
+            className="mt-2 rounded-xl bg-[#fbe7b5] px-3 py-2 text-sm font-medium text-[#6b4405]"
+          >
+            {LOW_STORAGE_WARNING_TEXT}
+          </p>
+        ) : null}
+        {showError ? (
+          <div
+            role="alert"
+            data-testid="storage-error"
+            className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-red-800"
+          >
+            {/* Fast høyde: linjen vokser ikke når det kommer flere feil. */}
+            <p className="h-15 overflow-y-auto text-sm leading-5">
+              {storageErrorMessage(
+                failures.map((item) => ({
+                  kind: item.kind,
+                  fieldLabel: FIELD_LABELS.get(item.fieldKey) ?? item.fieldKey,
+                  error: item.error,
+                })),
+              )}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {errorHasAnswers ? (
+                <Button className="min-h-11" onClick={retryFailedAnswers}>
+                  Prøv igjen
+                </Button>
+              ) : null}
+              <Button variant="secondary" className="min-h-11" onClick={() => setErrorHidden(true)}>
+                Lukk
+              </Button>
+            </div>
+          </div>
+        ) : null}
         <p className="mt-2 text-base font-medium text-slate-900">
           {`${countAnswered(trialForm, savedAnswers)} av ${FIELD_COUNT} felt utfylt`}
         </p>
@@ -174,6 +338,7 @@ export function TrialFormPage({ formId }: { formId: string }) {
           foreignChanges={foreignChanges}
           onFieldTouched={handleFieldTouched}
           onAddPhotos={handleAddPhotos}
+          unsavedFields={unsavedFields}
         />
       ) : null}
     </main>

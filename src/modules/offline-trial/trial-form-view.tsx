@@ -37,6 +37,8 @@ interface TrialFormViewProps {
   onFieldTouched?: (fieldKey: string) => void;
   /** Når satt, får denne de nye bildefilene i stedet for `onChange`. */
   onAddPhotos?: OnAddPhotos;
+  /** Felt der svaret eller et bilde ikke ble lagret på enheten. Viser «ikke lagret». */
+  unsavedFields?: ReadonlySet<string>;
 }
 
 /** Viser testskjemaet. Vet ikke hvor svarene lagres; alt går gjennom `onChange`. */
@@ -47,6 +49,7 @@ export function TrialFormView({
   foreignChanges,
   onFieldTouched,
   onAddPhotos,
+  unsavedFields,
 }: TrialFormViewProps) {
   return (
     <div className="space-y-8">
@@ -62,8 +65,13 @@ export function TrialFormView({
             const showForeign =
               (field.type === "tg" || field.type === "choice" || field.type === "number") &&
               (foreignChanges?.has(field.key) ?? false);
+            const unsaved = unsavedFields?.has(field.key) ?? false;
             return (
-              <div key={field.key} data-field={field.key}>
+              <div
+                key={field.key}
+                data-field={field.key}
+                data-field-saved={unsaved ? "no" : "yes"}
+              >
                 <FieldInput
                   field={field}
                   value={answers[field.key]}
@@ -73,6 +81,7 @@ export function TrialFormView({
                 />
                 <TrialRuleResult fieldKey={field.key} answers={answers} />
                 {showForeign ? <ForeignChangeNotice /> : null}
+                {unsaved ? <NotSavedMark /> : null}
               </div>
             );
           })}
@@ -98,6 +107,26 @@ function ForeignChangeNotice() {
         <path d="M8 4.5v4M8 11v.5" strokeLinecap="round" />
       </svg>
       Endret av en annen
+    </p>
+  );
+}
+
+/** Merket på et felt som ikke er lagret på enheten. Ingen role: meldingen øverst er varselet. */
+function NotSavedMark() {
+  return (
+    <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-2 py-1 text-sm font-medium text-red-800">
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 16 16"
+        className="h-4 w-4 shrink-0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <circle cx="8" cy="8" r="6.5" />
+        <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" strokeLinecap="round" />
+      </svg>
+      ikke lagret
     </p>
   );
 }

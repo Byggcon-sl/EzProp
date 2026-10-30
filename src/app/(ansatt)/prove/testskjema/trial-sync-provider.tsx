@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { storageErrorLog } from "@/modules/offline-trial/storage-health";
 import { startPhotoUploader } from "@/modules/offline-trial/sync/photo-uploader";
 import { openTrialStore, readSyncCandidate } from "@/modules/offline-trial/sync/select-store";
 import type { TrialSyncCandidate, TrialSyncStore } from "@/modules/offline-trial/sync/types";
@@ -77,7 +78,7 @@ export function TrialSyncProvider({
         });
       },
       (error: unknown) => {
-        console.error("Kunne ikke åpne lagringen på enheten.", error);
+        console.error("Kunne ikke åpne lagringen på enheten.", storageErrorLog(error));
         if (active) setState({ kind: "failed" });
       },
     );
