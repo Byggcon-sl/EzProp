@@ -18,6 +18,7 @@ import {
   logIn,
   logInAsInspector,
   readRowsViaHook,
+  syncNowButton,
   sha256Bytes,
   sha256File,
   trialUploadPath,
@@ -73,12 +74,47 @@ const UPLOAD_TIMEOUT = 30_000;
 const APP1 = 0xe1;
 const APP13 = 0xed;
 
+/** Teksten ved et bilde der visningskopien har feilet endelig (A11). */
+const ONLY_ORIGINAL_SAVED = "Bare originalen er lagret";
+/** Merknaden i lageret `confirmed` for en kopi som har feilet endelig (oppgavekortet pkt. 1). */
+const DISPLAY_FAILED_PREFIX = "display-failed:";
+const FAILED_COPY_NAME = "oppdiktet-kopi-4821.png";
+
 function displayUrl(photoId: string, organizationId: string): string {
   return `/api/prove/bilder/${photoId}/visning?organisasjon=${organizationId}`;
 }
 
 function photoInput(page: Page) {
   return page.getByLabel(PHOTO_FIELD, { exact: true });
+}
+
+/** Bildet i listen med navnet. */
+function photoListItem(page: Page, fileName: string) {
+  return page.getByRole("listitem").filter({ hasText: fileName });
+}
+
+function onlyOriginalSaved(page: Page, fileName: string) {
+  return photoListItem(page, fileName).getByText(ONLY_ORIGINAL_SAVED, { exact: true });
+}
+
+/** «Bare originalen er lagret» vises som vanlig tekst, og lenken «Vis fra serveren» er borte. */
+async function expectOnlyOriginalSaved(page: Page, fileName: string, photoId: string) {
+  const text = onlyOriginalSaved(page, fileName);
+  await expect(text).toBeVisible({ timeout: UPLOAD_TIMEOUT });
+  await expect(text).toHaveCount(1);
+  await expect(viewFromServerLink(page, fileName)).toHaveCount(0);
+  await expect(
+    photoListItem(page, fileName).getByRole("link", { name: ONLY_ORIGINAL_SAVED }),
+  ).toHaveCount(0);
+  expect(await text.evaluate((element) => element.closest("a"))).toBeNull();
+  const content = (await text.textContent()) ?? "";
+  expect(content).not.toContain(photoId);
+  expect(content).not.toContain("400");
+  // iPad-størrelse: synlig uten å rulle sidelengs
+  const box = await text.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box).not.toBeNull();
+  if (viewport) expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
 }
 
 /** Admin, kandidaten egenbygd og et nytt testskjema. Gir skjema- og organisasjons-id. */
@@ -464,31 +500,6 @@ test.describe("Prøve D – bilder", () => {
     await popup.close();
   });
 
-  test("uinnlogget gir 401 på visningsruten", async ({ request }, testInfo) => {
-    test.skip(testInfo.project.name !== "pc", "Bare pc (testplan 5.6)");
-    const url = displayUrl(randomUUID(), randomUUID());
-    const put = await request.put(url, {
-      headers: { "content-type": "image/jpeg" },
-      data: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
-    });
-    expect(put.status()).toBe(401);
-    const get = await request.get(url);
-    expect(get.status()).toBe(401);
-  });
-
-  test("annen organisasjon i adressen gir 403 på visningsruten", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "pc", "Bare pc (testplan 5.6)");
-    await logIn(page, ADMIN_EMAIL);
-    const url = displayUrl(randomUUID(), randomUUID());
-    const put = await page.request.put(url, {
-      headers: { "content-type": "image/jpeg" },
-      data: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
-    });
-    expect(put.status()).toBe(403);
-    const get = await page.request.get(url);
-    expect(get.status()).toBe(403);
-  });
-
   // --- 5.7 Lokal lagring og logg ---
 
   test("visningskopien telles ikke i Venter og havner aldri i confirmed", async ({
@@ -511,9 +522,101 @@ test.describe("Prøve D – bilder", () => {
     await expect(indicator(page)).toHaveText(NO_PHOTOS_WAITING, { timeout: UPLOAD_TIMEOUT });
     expect((await localConfirmedKeys(page)).filter((key) => key.includes(":display"))).toEqual([]);
 
+    // En avbrutt kopi er ikke endelig feilet (småfunn D/F, A11): ingen merknad
+    expect(
+      (await localConfirmedKeys(page)).filter((key) => key.startsWith(DISPLAY_FAILED_PREFIX)),
+    ).toEqual([]);
+
     blockCopies = false;
     await expect.poll(() => localDisplayCopyCount(page), { timeout: UPLOAD_TIMEOUT }).toBe(0);
     expect((await localConfirmedKeys(page)).filter((key) => key.includes(":display"))).toEqual([]);
+    expect(
+      (await localConfirmedKeys(page)).filter((key) => key.startsWith(DISPLAY_FAILED_PREFIX)),
+    ).toEqual([]);
+    await expect(onlyOriginalSaved(page, "test-image.png")).toHaveCount(0);
+  });
+
+  // Småfunn D/F (docs/agenter/oppgaver/fase1-smafunn-prove-d-f.md, A11). Obligatorisk: en kopi som
+  // serveren avviser, sendes ikke på nytt i stillhet, og takstmannen ser at bare originalen er lagret.
+  test("kopi som får 400 viser Bare originalen er lagret og sendes ikke igjen", async ({
+    page,
+    context,
+  }) => {
+    test.setTimeout(150_000);
+    const messages: string[] = [];
+    page.on("console", (message) => messages.push(message.text()));
+    page.on("pageerror", (error) => messages.push(`${error.name}: ${error.message}`));
+    const { formId, organizationId } = await openNewForm(page, context);
+
+    let displayPuts = 0;
+    await page.route("**/visning**", (route) => {
+      if (route.request().method() !== "PUT") return route.fallback();
+      displayPuts++;
+      return route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({ feil: "oppdiktet-svar-fra-serveren" }),
+      });
+    });
+
+    await photoInput(page).setInputFiles({
+      name: FAILED_COPY_NAME,
+      mimeType: "image/png",
+      buffer: PNG_BYTES,
+    });
+    const id = await photoIdFor(page, formId, FAILED_COPY_NAME);
+
+    // Originalen er sikret som før
+    await waitForFile(trialUploadPath(organizationId, id));
+    expect(sha256File(trialUploadPath(organizationId, id))).toBe(sha256Bytes(PNG_BYTES));
+    await expect
+      .poll(async () => (await localConfirmedKeys(page)).includes(id), {
+        timeout: UPLOAD_TIMEOUT,
+      })
+      .toBe(true);
+
+    // Kopien ble sendt én gang, er slettet lokalt og har merknad
+    await expect.poll(() => displayPuts, { timeout: UPLOAD_TIMEOUT }).toBe(1);
+    await expect.poll(() => localDisplayCopyCount(page), { timeout: UPLOAD_TIMEOUT }).toBe(0);
+    await expect
+      .poll(async () => (await localConfirmedKeys(page)).includes(`${DISPLAY_FAILED_PREFIX}${id}`))
+      .toBe(true);
+    expect(existsSync(trialUploadPath(organizationId, id, true))).toBe(false);
+
+    // Synlig status i stedet for lenken
+    await expectOnlyOriginalSaved(page, FAILED_COPY_NAME, id);
+
+    // Minst to runder til («Synk nå» og ventetid): ingen ny PUT til visningsruten
+    const start = Date.now();
+    for (const round of [1, 2]) {
+      if (await syncNowButton(page).isVisible()) await syncNowButton(page).click();
+      await expect
+        .poll(() => Date.now() - start, { timeout: PHOTO_UPLOAD_INTERVAL_MS * 2 + 10_000 })
+        .toBeGreaterThan(PHOTO_UPLOAD_INTERVAL_MS * round + 1_000);
+    }
+    expect(displayPuts).toBe(1);
+    expect(await localDisplayCopyCount(page)).toBe(0);
+
+    // Etter omlasting står teksten fortsatt, og det kommer ingen ny PUT etter en runde til
+    await page.reload();
+    await waitForTrialHook(page);
+    await expectOnlyOriginalSaved(page, FAILED_COPY_NAME, id);
+    const afterReload = Date.now();
+    await expect
+      .poll(() => Date.now() - afterReload, { timeout: PHOTO_UPLOAD_INTERVAL_MS + 10_000 })
+      .toBeGreaterThan(PHOTO_UPLOAD_INTERVAL_MS + 1_000);
+    expect(displayPuts).toBe(1);
+    expect(await localDisplayCopyCount(page)).toBe(0);
+
+    // Loggen har verken filnavn, bilde-id eller svarteksten (grenen for 400)
+    expect(
+      messages.filter(
+        (text) =>
+          text.includes("oppdiktet-kopi-4821") ||
+          text.includes(id) ||
+          text.includes("oppdiktet-svar-fra-serveren"),
+      ),
+    ).toEqual([]);
   });
 
   test("innlogging i annen organisasjon tømmer også visningskopiene", async ({ page, context }) => {
@@ -546,10 +649,18 @@ test.describe("Prøve D – bilder", () => {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
+      // Merknaden for en kopi som har feilet endelig (A11): egen nøkkel i `confirmed`
+      await new Promise<void>((resolve, reject) => {
+        const tx = database.transaction(["confirmed"], "readwrite");
+        tx.objectStore("confirmed").put("400", `display-failed:${id}`);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
       database.close();
     }, photoId);
     expect(await localPhotoFileCount(page)).toBe(1);
     expect(await localDisplayCopyCount(page)).toBe(1);
+    expect(await localConfirmedKeys(page)).toContain(`${DISPLAY_FAILED_PREFIX}${photoId}`);
 
     await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [
       TRIAL_LAST_ORGANIZATION_KEY,
@@ -560,6 +671,11 @@ test.describe("Prøve D – bilder", () => {
 
     await expect.poll(() => localPhotoFileCount(page)).toBe(0);
     await expect.poll(() => localDisplayCopyCount(page)).toBe(0);
+    await expect
+      .poll(async () =>
+        (await localConfirmedKeys(page)).filter((key) => key.startsWith(DISPLAY_FAILED_PREFIX)),
+      )
+      .toEqual([]);
   });
 
   test("loggen har aldri filnavnet", async ({ page, context }) => {

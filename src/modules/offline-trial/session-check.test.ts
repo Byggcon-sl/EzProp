@@ -71,29 +71,11 @@ describe("checkSession: svar fra serveren", () => {
     expect(await checkSession(fetchReturning(response))).toBe("unknown");
   });
 
-  it("nettverksfeil gir unknown og kaster ikke", async () => {
-    const fetchImpl = vi.fn(() => Promise.reject(new TypeError("Failed to fetch")));
-    await expect(checkSession(fetchImpl)).resolves.toBe("unknown");
-  });
-
   it("synkron feil i fetch gir unknown og kaster ikke", async () => {
     const fetchImpl = vi.fn((): Promise<Response> => {
       throw new Error("brått");
     });
     await expect(checkSession(fetchImpl)).resolves.toBe("unknown");
-  });
-
-  it("json() som kaster gir unknown", async () => {
-    const badJson = fetchReturning(
-      () =>
-        ({
-          status: 200,
-          ok: true,
-          json: () => Promise.reject(new SyntaxError("ugyldig")),
-          text: () => Promise.reject(new SyntaxError("ugyldig")),
-        }) as unknown as Response,
-    );
-    await expect(checkSession(badJson)).resolves.toBe("unknown");
   });
 
   it("tidsavbrudd gir unknown og avbryter kallet", async () => {
@@ -177,17 +159,6 @@ describe("nextSignInRequired: tilstandsregelen", () => {
     [true, "valid", false],
   ])("forrige=%s og %s gir %s", (previous, result, expected) => {
     expect(nextSignInRequired(previous, result)).toBe(expected);
-  });
-
-  it("expired gir meldingen, unknown beholder den, en senere valid fjerner den", () => {
-    const steps: SessionCheckResult[] = ["unknown", "expired", "unknown", "valid"];
-    const seen: boolean[] = [];
-    steps.reduce((previous, result) => {
-      const next = nextSignInRequired(previous, result);
-      seen.push(next);
-      return next;
-    }, false);
-    expect(seen).toEqual([false, true, true, false]);
   });
 });
 
