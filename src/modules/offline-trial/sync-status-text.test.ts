@@ -221,6 +221,8 @@ describe("beskjedene ved «Synk nå» (sync-status-text.ts)", () => {
 // --- Prøve F: «Logg inn på nytt» (docs/funksjoner/fase1-prove-f-innlogging.md, punkt 2) ---
 // Testplan: docs/funksjoner/fase1-prove-f-innlogging-testplan.md avsnitt 1. Støtter reklamasjoner
 // (takstmannen får vite at noe ikke er sendt ennå) og tid (ett trykk tilbake til innlogging).
+// Én blokk for signInRequired (småfunn fra PR #34, docs/agenter/oppgaver/fase1-smafunn-prove-d-f.md
+// punkt 8). Knappen og lenken har egne blokker under.
 
 const SIGN_IN_TEXT = "Logg inn på nytt for å sende. Alt er lagret på iPaden.";
 const ALL_KINDS: readonly SyncStatusKind[] = [
@@ -261,11 +263,11 @@ describe("signInRequired i synkstatusen (sync-status-text.ts)", () => {
 
   // [beskrivelse, status, forventet tilstand med signInRequired]
   it.each<[string, TrialSyncStatus, SyncStatusKind]>([
-    ["foran Alt er lagret", status(true, true, 0, 0), "signInRequired"],
     ["foran Venter (endringer)", status(true, true, 3, 0), "signInRequired"],
     ["foran Venter (bilder)", status(true, true, 0, 2), "signInRequired"],
     ["foran Venter (ikke bekreftet)", status(true, false, 3, 2), "signInRequired"],
     ["foran Venter på kontakt med serveren", status(true, false, 0, 0), "signInRequired"],
+    ["foran Alt er lagret", status(true, true, 0, 0), "signInRequired"],
     ["ikke foran Uten nett (noe venter)", status(false, false, 3, 2), "offline"],
     ["ikke foran Uten nett (ingenting venter)", status(false, true, 0, 0), "offline"],
   ])("forrang: %s", (_label, input, kind) => {
@@ -284,6 +286,8 @@ describe("signInRequired i synkstatusen (sync-status-text.ts)", () => {
       expect(syncStatusText(input, false), JSON.stringify(input)).toBe(syncStatusText(input));
       expect(syncStatusKind(input)).not.toBe("signInRequired");
     }
+    expect(syncStatusKind(status(true, false, 0, 0))).toBe("awaitingServer");
+    expect(syncStatusText(status(true, true, 3, 2), false)).toBe("Venter: 3 endringer, 2 bilder");
   });
 
   it("markøren er alltid en av de fem verdiene, og alle fem forekommer", () => {
@@ -306,10 +310,10 @@ describe("signInRequired i synkstatusen (sync-status-text.ts)", () => {
     }
   });
 
-  it("lenken Logg inn tar ikke med neste fra spørrestrengen", () => {
-    expect(signInHref("/prove/testskjema?neste=//evil.example")).toBe(
-      "/logg-inn?neste=%2Fprove%2Ftestskjema",
-    );
+  it("lenken Logg inn tar ikke med neste fra adressen (?neste=//evil.example)", () => {
+    const href = signInHref("/prove/testskjema?neste=//evil.example");
+    expect(href).toBe("/logg-inn?neste=%2Fprove%2Ftestskjema");
+    expect(href).not.toContain("evil");
   });
 
   it("ingen gjetteord i teksten", () => {
@@ -337,6 +341,7 @@ describe("lenken «Logg inn» (signInHref)", () => {
     [`/prove/testskjema/${FORM_ID}#a`, `/prove/testskjema/${FORM_ID}`],
     ["/prove/testskjema", "/prove/testskjema"],
     ["/prove/testskjema?x=1", "/prove/testskjema"],
+    ["/arbeidskoe", "/arbeidskoe"],
   ])("%s gir neste=%s, uten spørrestreng og #", (pathname, next) => {
     const href = signInHref(pathname);
     const url = new URL(href, "https://ezprop.invalid");

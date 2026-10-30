@@ -258,8 +258,8 @@ test("2.1 takstmann med utløpt innlogging fyller ut uten nett, logger inn og al
     await expectFormContent(form);
     await syncAfterSignIn(form, testInfo);
 
-    // 12. Serveren har alle svar og nøyaktig ett bilde, i organisasjonen enheten åpnet synken
-    // for (fra innloggingen). Det er en annen kilde enn radene, så sjekken kan bli rød.
+    // 12. Serveren har alle svar og nøyaktig ett bilde, i takstmannens organisasjon. Forventet
+    // organisasjon er den enheten åpnet synken for (fra innloggingen), ikke radene på serveren.
     const organizationId = await hookValue(form, "organizationId");
     await expect
       .poll(
