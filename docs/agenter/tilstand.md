@@ -61,7 +61,6 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
 | #44 | Liten oppgave (i), småfunn fra PR #41, branch `fase0b-smafunn-organisasjon`, versjon 0.2.35 | venter på CI, merges med skriptet | `main` |
-| #44 | Opprydding i selskap, kontor og ansatte (småfunn fra PR #41) | i arbeid hos en annen kjøring | `main` |
 | #46 | Seed lager ikke et slettet kontor på nytt (småfunn fra PR #41) | i arbeid hos en annen kjøring | `main` |
 
 PR #45 (UU-funn 6–9 fra nattløkken) er merget 30.10.2026.
