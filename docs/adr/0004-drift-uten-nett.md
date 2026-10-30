@@ -23,17 +23,18 @@ Dato: 30.10.2026. Tatt av agentene i autonom modus («Slik går fase 1 videre ut
 
 - **Det eneste som virket hele veien.** Egenbygd er den eneste kandidaten der både sending og henting er prøvd mot ekte ruter og testdatabase i e2e, også to nettleserkontekster i samme skjema: tekst flettes, og TG følger «siste endring vinner» med varselet «Endret av en annen» (`e2e/fase-1-egenbygd.spec.ts`). PowerSync- og Electric-tjenesten er aldri startet i en automatisk test (skyen har ikke Docker).
 - **Det enkleste som virker.** Ingen ekstra container, ingen replikeringsrolle, ingen logisk replikering, ingen JWT-nøkkel å bytte, ingen wasm å hurtiglagre. Alt går gjennom appen med samme innlogging og samme tilgangssjekk (`requireOrganizationAccess`) som resten.
-- **Prøve A og B kan kjøres uten kostnad.** Egenbygd trenger ikke synktjenestene (ADR 0003), så Ståle kan bekrefte valget på ekte iPad uten å svare ja på nr. 12 først.
-- **Drift og personvern.** Data går bare mellom iPaden og appen i Sweden Central. Ingen ny leverandør, ingen databehandleravtale, og ingen tjeneste med `REPLICATION` som i praksis kan lese hele databasen (`docs/drift/powersync.md`).
+- **Prøve A og B kan kjøres for 0 kr.** Egenbygd trenger ikke at synktjenestene slås på (ADR 0003), så valget kan bekreftes på ekte iPad uten å svare ja på nr. 12 først.
+- **Drift og personvern.** Vi drifter selv i miljøet vi allerede har, uten skytjeneste og for 0 kr ekstra (A13, A14). Data går bare mellom iPaden og appen i Sweden Central. Ingen ny leverandør, ingen databehandleravtale, og ingen tjeneste med `REPLICATION` som i praksis kan lese hele databasen (`docs/drift/powersync.md`).
 - **Passer domenemodellen.** Synk per felt, `sync_conflicts` og forslag i egne felt må vi uansett bygge på serveren selv (skriveruten er vår for alle tre kandidatene). Med egenbygd er hente- og skriveveien samme kode, i Drizzle, med `organization_id` fra grant.
+- **Poengene** i sammenligningen (egenbygd 2,65, PowerSync 2,20, ElectricSQL 1,65) er foreløpige. Ingen kandidat har bestått prøve A og C på ekte iPad, så poengene er bare et grunnlag, ikke et bevis.
 - **Prisen vi betaler:** vi eier mest kode selv (ca. 2 300 linjer uten tester mot ca. 1 000 for PowerSync), og hentemarkøren har en kjent grense (se under). Det veier mindre enn en tjeneste vi ikke har sett virke.
 
-## Det som ikke virket eller ikke ble prøvd
+## Det som ikke virket / ikke prøvd
 
-**Ikke prøvd for noen:** prøve A og B på ekte iPad, Safari på iPad i det hele tatt, 200 bilder, omstart av iPaden, 7 dager uten bruk (prøve C), `sync_conflicts`, `field_clock`, ytelse (ikke målt).
+**Ikke prøvd for noen:** prøve A og B på ekte iPad, Safari på iPad i det hele tatt, 200 bilder, omstart av iPaden, 7 dager uten bruk (prøve C), `sync_conflicts` (finnes ikke i prøven), `field_clock`, ytelse (ikke målt). **PowerSync- og ElectricSQL-tjenesten er aldri startet i en automatisk test**, fordi skyen ikke har Docker (`fase1-kandidat-powersync.md` pkt. 16, `fase1-kandidat-electricsql.md` pkt. 14).
 
 **Egenbygd (valgt)**
-- Hentemarkøren bruker `updated_at` med 60 s overlapp. En rad som blir synlig mer enn 60 s «bakover i tid» (lang transaksjon, eller appklokken mer enn 60 s bak databasen), hoppes over. Dokumentert med test i `server/changes-since.test.ts`.
+- Hentemarkøren bruker `updated_at` med 60 s overlapp. En endring som blir synlig mer enn 60 s for sent (lang transaksjon, eller appklokken mer enn 60 s bak databasen), hoppes over. Dokumentert med test i `server/changes-since.test.ts` («oppdatering mer enn 60 s bakover kommer ikke med (kjent grense)»). Må fjernes i fase 2b (se «Krav til fase 2b»).
 - `updated_at` settes av databasen ved innsetting og av appklokken ved oppdatering (`src/db/schema/common.ts`).
 - Rader endret siste 60 s sendes i hver henting (ca. 12 ganger per endring). Ikke målt på ekte nett.
 - Ikke trygt med flere faner samtidig (ingen `navigator.locks`). Appen på hjemskjermen har én fane.
@@ -42,21 +43,22 @@ Dato: 30.10.2026. Tatt av agentene i autonom modus («Slik går fase 1 videre ut
 **PowerSync (reserve for lagring)**
 - Henting fra tjenesten er aldri prøvd. Uten tjenesten når synkstatusen aldri «Alt er lagret», og køen sendes bare med «Synk nå».
 - Avviste bunter stopper køen for enheten. Utlogging tømmer ikke den lokale databasen.
-- Tjenestens lisens er FSL-1.1-ALv2 (resultatfilen), ikke Apache-2.0 som klientpakkene.
+- Lisensen for tjenesten (`powersync-service`) er ikke sjekket; det finnes ingen lisensfil for den i repoet. Klientpakkene `@powersync/web`, `@powersync/react` og `@powersync/common` er Apache-2.0 (`node_modules/*/package.json`).
 
 **ElectricSQL (reserve for henting)**
 - **Electrics 400-kropp sendes videre til iPaden uendret** (PR #10, funn 1 fra sikkerhet-personvern; `SHAPE_FORWARDED_STATUSES` i `server/types.ts`). Må rettes før ekte data hvis ElectricSQL tas i bruk: 400 fra Electric skal gi `{ feil }` med vår egen tekst.
 - Klientpakken `@electric-sql/client` holdt ikke regelen om høyst ett kall per 5 s og ble tatt ut; egen løkke brukes.
 - Krever `REPLICA IDENTITY FULL` (migrering `0002`) på hver tabell. Henting bare prøvd med simulerte svar.
+- Ingen klientpakke i repoet; klienten er egen kode i `sync/electricsql/`, og versjonen finnes bare for tjenesten (`docker-compose.yml`, 1.8.1). Lisensen for tjenesten (`electric`) er ikke sjekket.
 
 **Felles (skiller ikke kandidatene)**
 - Bildekøen kunne stå fast når én opplasting aldri fikk svar. Rettet med tidsavbrudd per opplasting i PR #14.
-- Småfunnene fra prøve D (liten oppgave h): kopi som avvises (400) eller får 404 etter myk sletting sendes på nytt hver runde, metadatasjekken slipper COM og andre APP-felt, m.m. Rettes på `fase1-smafunn-prove-d-f`.
+- Småfunnene fra prøve D og F: kopi som ble avvist (400) eller fikk 404 etter myk sletting, ble sendt på nytt hver runde, metadatasjekken slapp COM og andre APP-felt, m.m. **Rettet og merget på `main`** (PR #38; A11 og A12 i `docs/09-apne-sporsmal.md`).
 - N+1 i `applyTrialChanges` (én spørring per rad i bunten).
 
 ## Hva prøve A og B må vise for at valget står
 
-Kjøres med egenbygd først, etter `docs/funksjoner/fase1-prove-ab-egenbygd.md`, mot testmiljøet i Azure. Trenger ikke synktjenestene.
+Kjøres med egenbygd først, etter `docs/funksjoner/fase1-prove-ab-egenbygd.md`, mot testmiljøet i Azure. Krever ikke at synktjenestene slås på (0 kr ekstra).
 
 | Krav | Valget står når |
 |---|---|
@@ -82,9 +84,9 @@ Kjøres med egenbygd først, etter `docs/funksjoner/fase1-prove-ab-egenbygd.md`,
 ### Felles kolonner i ekte tabeller (domenemodellen avsnitt 3)
 
 - `id` lages på iPaden (UUID v7, `src/shared/lib/uuid.ts`).
-- `organization_id` settes **alltid fra grant** (`grant.organizationId`), aldri fra nyttelasten, slik `applyTrialChanges` gjør i dag.
+- `organization_id` settes **alltid fra grant** (`grant.organizationId`), aldri fra klienten eller nyttelasten, slik `applyTrialChanges` gjør i dag (`server/apply-changes.test.ts`: «bruker aldri organization_id fra nyttelasten» og «fremmed organisasjon gir AccessDeniedError og ingen skriving»; `expectTenantIsolation` i `changes-since.test.ts`, `trial-queries.test.ts`, `electric-shape.test.ts` og `photo-storage.test.ts`). Hver ny spørring i fase 0b og 2b får `expectTenantIsolation`.
 - `row_version` eies av serveren og øker bare når noe faktisk endres (`server/apply-changes.test.ts`).
-- Myk sletting er en endring av `deleted_at`. En DELETE-operasjon gir feil (`InvalidTrialChangeError`; endringsskjemaet godtar bare `PUT` og `PATCH`), slik det skal være i ekte tabeller også.
+- Myk sletting er en endring av `deleted_at`. En DELETE-operasjon avvises med `InvalidTrialChangeError` (endringsskjemaet godtar bare `PUT` og `PATCH`; `server/apply-changes.test.ts` «DELETE, ukjent tabell og ukjent felt gir InvalidTrialChangeError og ingen skriving», `server/change-schema.test.ts` «avviser DELETE»), slik det skal være i ekte tabeller også.
 
 ### Synk per felt mot konflikttabellen (domenemodellen 4.11)
 
@@ -107,7 +109,7 @@ Regelmotoren fra prøve E er uavhengig av synkvalget. Samme kode og samme testsa
 
 ### Hvor synkmotoren skal ligge
 
-Når synken blir ekte, flyttes den til `src/core/sync` (kjernen), og hver modul melder inn sine egne tabeller. Ingen modul importerer fra en annen. I dag ligger alt i `src/modules/offline-trial` og er bare for prøven. Flyttingen skjer i en egen PR etter Ståles godkjenning, sammen med at PowerSync og ElectricSQL fjernes. Utkast til grensesnitt (bygges ikke nå):
+Når synken blir ekte, flyttes den til `src/core/sync` (kjernen), og hver modul melder inn sine egne tabeller. Ingen modul importerer fra en annen. I dag ligger alt i `src/modules/offline-trial` og er bare for prøven. Flyttingen skjer i en egen PR etter Ståles godkjenning, sammen med at PowerSync og ElectricSQL fjernes. Utkast til grensesnitt, bare som tekst her (ingen TypeScript-fil lages nå):
 
 ```ts
 // src/core/sync/types.ts (utkast)

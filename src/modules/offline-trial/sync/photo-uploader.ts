@@ -11,18 +11,24 @@
  * `uploaded_at` (den setter bare serveren).
  *
  * Prøve D: før originalen sendes, lages visningskopien (`display-copy.ts`) og lagres lokalt under
- * `displayCopyKey(id)`. Etter originalene i samme runde sendes kopiene til visningsruten. Likt
- * fingeravtrykk eller 400 sletter kopien lokalt; alt annet gir nytt forsøk neste runde. Kopien
- * stopper aldri originalen.
+ * `displayCopyKey(id)`. Etter originalene i samme runde sendes kopiene til visningsruten, men bare
+ * for bilder der originalen er bekreftet lokalt (da betyr 404 alltid at bildet er slettet). Likt
+ * fingeravtrykk sletter kopien lokalt. 400 eller 404 gjør kopien endelig feilet (beslutning A11):
+ * den slettes, får en merknad og lages eller sendes aldri igjen. Alt annet gir nytt forsøk neste
+ * runde. Kopien stopper aldri originalen.
  */
 import { isUuid } from "@/shared/lib/uuid";
+import { displayCopyUrl } from "../photo-urls";
 import { shouldReleaseLocalPhoto } from "./photo-upload";
 import { makeDisplayCopy } from "./display-copy";
 import {
   deleteLocalPhoto,
   displayCopyKey,
   getLocalPhoto,
+  hasDisplayCopyFailed,
+  listConfirmedPhotoIds,
   listLocalDisplayCopyIds,
+  markDisplayCopyFailed,
   putLocalPhoto,
 } from "./photo-store";
 import type { PhotoUploadResponse, TrialPhotoRow, TrialSyncStore } from "./types";
@@ -48,12 +54,8 @@ async function sha256Hex(blob: Blob): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-/** Adressen for visningskopien. Bare organisasjonen står i spørrestrengen. */
-export function displayCopyUrl(organizationId: string, photoId: string): string {
-  return `/api/prove/bilder/${photoId}/visning?${new URLSearchParams({ organisasjon: organizationId })}`;
-}
-
-function originalUrl(organizationId: string, photo: TrialPhotoRow, blob: Blob): string {
+/** Adressen for originalen. */
+export function originalUrl(organizationId: string, photo: TrialPhotoRow, blob: Blob): string {
   const params = new URLSearchParams({
     organisasjon: organizationId,
     skjema: photo.trialFormId,
@@ -65,22 +67,18 @@ function originalUrl(organizationId: string, photo: TrialPhotoRow, blob: Blob): 
 }
 
 /**
- * Sender ett bilde. Uten `url` går det til originalruten; med `url` (visningskopien) brukes den.
- * Gir `undefined` ved nettfeil eller tidsavbrudd (filen blir liggende).
+ * Sender ett bilde til adressen den får (`originalUrl` eller `displayCopyUrl`). Gir `undefined`
+ * ved nettfeil eller tidsavbrudd (filen blir liggende).
  */
 export async function sendPhoto(
-  organizationId: string,
-  photo: TrialPhotoRow,
+  url: string,
   blob: Blob,
-  url?: string,
+  contentType: string,
 ): Promise<PhotoUploadResponse | undefined> {
-  const target = url ?? originalUrl(organizationId, photo, blob);
-  const contentType =
-    url !== undefined ? "image/jpeg" : blob.type.startsWith("image/") ? blob.type : "image/jpeg";
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), photoUploadTimeoutMs(blob.size));
   try {
-    const response = await fetch(target, {
+    const response = await fetch(url, {
       method: "PUT",
       credentials: "same-origin",
       headers: { "Content-Type": contentType },
@@ -105,9 +103,13 @@ function isOffline(): boolean {
   return typeof navigator !== "undefined" && !navigator.onLine;
 }
 
-/** Lager og lagrer visningskopien hvis den ikke finnes. Feil hopper bare over kopien. */
+/**
+ * Lager og lagrer visningskopien hvis den ikke finnes og ikke er endelig feilet. Feil hopper bare
+ * over kopien.
+ */
 async function ensureDisplayCopy(photoId: string, original: Blob): Promise<void> {
   try {
+    if (await hasDisplayCopyFailed(photoId)) return;
     if (await getLocalPhoto(displayCopyKey(photoId))) return;
     const copy = await makeDisplayCopy(original);
     if (!copy) return;
@@ -117,26 +119,28 @@ async function ensureDisplayCopy(photoId: string, original: Blob): Promise<void>
   }
 }
 
-/** Sender visningskopiene som ligger på enheten. Teller ikke med i svaret fra runden. */
+/**
+ * Sender visningskopiene som ligger på enheten, bare når originalen er bekreftet lokalt. Teller
+ * ikke med i svaret fra runden.
+ */
 async function uploadDisplayCopies(organizationId: string): Promise<void> {
   const ids = await listLocalDisplayCopyIds();
+  if (ids.length === 0) return;
+  const confirmed = await listConfirmedPhotoIds();
   for (const id of ids) {
     if (isOffline()) break;
-    if (!isUuid(id)) continue;
+    if (!isUuid(id) || !confirmed.has(id)) continue;
     const key = displayCopyKey(id);
     const copy = await getLocalPhoto(key);
     if (!copy) continue;
     const localSha = await sha256Hex(copy);
-    // Kopien trenger bare id-en fra raden; resten av adressen er visningsruten.
-    const response = await sendPhoto(
-      organizationId,
-      { id } as TrialPhotoRow,
-      copy,
-      displayCopyUrl(organizationId, id),
-    );
-    if (shouldReleaseLocalPhoto(localSha, response) || response?.status === 400) {
-      // 400: serveren avviser kopien; originalen er sannheten, så den prøves ikke igjen.
+    const response = await sendPhoto(displayCopyUrl(organizationId, id), copy, "image/jpeg");
+    if (shouldReleaseLocalPhoto(localSha, response)) {
       await deleteLocalPhoto(key);
+    } else if (response?.status === 400 || response?.status === 404) {
+      // Serveren avviser kopien (400) eller bildet er slettet (404). Originalen er sannheten.
+      await markDisplayCopyFailed(id, response.status === 400 ? "400" : "404");
+      console.warn("Bildekø: serveren tok ikke imot visningskopien. Bare originalen er lagret.");
     }
   }
 }
@@ -158,7 +162,8 @@ export async function uploadPendingPhotos(
     if (!blob) continue;
     await ensureDisplayCopy(photo.id, blob);
     const localSha = await sha256Hex(blob);
-    const response = await sendPhoto(organizationId, photo, blob);
+    const contentType = blob.type.startsWith("image/") ? blob.type : "image/jpeg";
+    const response = await sendPhoto(originalUrl(organizationId, photo, blob), blob, contentType);
     if (!shouldReleaseLocalPhoto(localSha, response)) continue;
     // Sletter filen og merker bildet bekreftet lokalt (`confirmLocalPhoto`); aldri `uploaded_at`.
     await store.markPhotoUploaded(photo.id, localSha);

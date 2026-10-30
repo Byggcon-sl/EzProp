@@ -10,12 +10,18 @@
  * Visningskopien (prøve D) ligger i det samme lageret `photos` under `displayCopyKey(photoId)`.
  * Den er aldri en rad og skrives aldri i `confirmed`; originalene finnes alltid fra radene i
  * synklageret, aldri ved å liste nøklene her.
+ *
+ * Endelig feilet visningskopi (beslutning A11): får kopien 400 eller 404, slettes den, og det
+ * legges en merknad i `confirmed` under `display-failed:<uuid>` med verdien `"400"` eller `"404"`.
+ * Merknaden er aldri et bekreftet bilde (`isConfirmedPhotoKey`), og den tømmes av
+ * `clearLocalPhotos` sammen med resten. Ingen ny databaseversjon.
  */
 
 export const TRIAL_PHOTO_DB_NAME = "offline-trial-photos";
 const PHOTO_STORE = "photos";
 const DISPLAY_COPY_SUFFIX = ":display";
 const CONFIRMED_STORE = "confirmed";
+const DISPLAY_FAILED_PREFIX = "display-failed:";
 type PhotoStoreName = typeof PHOTO_STORE | typeof CONFIRMED_STORE;
 
 let opening: Promise<IDBDatabase> | null = null;
@@ -70,6 +76,33 @@ export function displayCopyKey(photoId: string): string {
   return `${photoId}${DISPLAY_COPY_SUFFIX}`;
 }
 
+/** Grunnen til at visningskopien er endelig feilet. Bare en fast kode, aldri svartekst. */
+export type DisplayCopyFailure = "400" | "404";
+
+/** Nøkkelen til merknaden om endelig feilet visningskopi i lageret `confirmed`. */
+export function displayFailedKey(photoId: string): string {
+  return `${DISPLAY_FAILED_PREFIX}${photoId}`;
+}
+
+/** Er nøkkelen i `confirmed` et bekreftet bilde? Merknader om feilet kopi er det aldri. */
+export function isConfirmedPhotoKey(key: IDBValidKey): key is string {
+  return typeof key === "string" && !key.startsWith(DISPLAY_FAILED_PREFIX);
+}
+
+const displayFailedListeners = new Set<() => void>();
+
+/** Varsel når merknadene om feilet kopi endres (siden viser «Bare originalen er lagret»). */
+export function onDisplayFailedChange(listener: () => void): () => void {
+  displayFailedListeners.add(listener);
+  return () => {
+    displayFailedListeners.delete(listener);
+  };
+}
+
+function notifyDisplayFailed(): void {
+  for (const listener of displayFailedListeners) listener();
+}
+
 export async function putLocalPhoto(id: string, file: Blob): Promise<void> {
   await run([PHOTO_STORE], "readwrite", (tx) => tx.objectStore(PHOTO_STORE).put(file, id));
 }
@@ -114,13 +147,54 @@ export async function listConfirmedPhotoIds(): Promise<Set<string>> {
   const keys = await run([CONFIRMED_STORE], "readonly", (tx) =>
     tx.objectStore(CONFIRMED_STORE).getAllKeys(),
   );
-  return new Set(keys.filter((key): key is string => typeof key === "string"));
+  return new Set(keys.filter(isConfirmedPhotoKey));
 }
 
-/** Tømmer lageret, også visningskopiene (ved bytte av organisasjon på samme enhet). */
+/**
+ * Visningskopien er endelig feilet: sletter kopien og legger merknaden i samme transaksjon.
+ * Merknaden har bare bilde-id (i nøkkelen) og en fast kode. Rører aldri originalen.
+ */
+export async function markDisplayCopyFailed(
+  photoId: string,
+  reason: DisplayCopyFailure,
+): Promise<void> {
+  await run([PHOTO_STORE, CONFIRMED_STORE], "readwrite", (tx) => {
+    tx.objectStore(PHOTO_STORE).delete(displayCopyKey(photoId));
+    return tx.objectStore(CONFIRMED_STORE).put(reason, displayFailedKey(photoId));
+  });
+  notifyDisplayFailed();
+}
+
+/** Har bildet en merknad om endelig feilet visningskopi? */
+export async function hasDisplayCopyFailed(photoId: string): Promise<boolean> {
+  const value = await run<unknown>([CONFIRMED_STORE], "readonly", (tx) =>
+    tx.objectStore(CONFIRMED_STORE).get(displayFailedKey(photoId)),
+  );
+  return value !== undefined;
+}
+
+/** Id-ene til bildene der visningskopien er endelig feilet. */
+export async function listDisplayFailedPhotoIds(): Promise<Set<string>> {
+  const keys = await run([CONFIRMED_STORE], "readonly", (tx) =>
+    tx.objectStore(CONFIRMED_STORE).getAllKeys(),
+  );
+  return new Set(
+    keys
+      .filter(
+        (key): key is string => typeof key === "string" && key.startsWith(DISPLAY_FAILED_PREFIX),
+      )
+      .map((key) => key.slice(DISPLAY_FAILED_PREFIX.length)),
+  );
+}
+
+/**
+ * Tømmer lageret, også visningskopiene og merknadene om feilet kopi (ved bytte av organisasjon
+ * på samme enhet).
+ */
 export async function clearLocalPhotos(): Promise<void> {
   await run([PHOTO_STORE, CONFIRMED_STORE], "readwrite", (tx) => {
     tx.objectStore(CONFIRMED_STORE).clear();
     return tx.objectStore(PHOTO_STORE).clear();
   });
+  notifyDisplayFailed();
 }

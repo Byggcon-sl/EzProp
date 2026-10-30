@@ -7,8 +7,8 @@ import {
 } from "./display-copy";
 
 // Prøve D – bilder: visningskopien på iPaden (docs/funksjoner/fase1-prove-d-bilder.md pkt. 1,
-// A8). Testplan avsnitt 2.1. Skaleringen er en teknisk regel, testet som data (tabell). Selve
-// tegningen (canvas, JPEG, rotering) testes i e2e, der det finnes en ekte nettleser.
+// A8). Testplan avsnitt 2.1. Skaleringen er en teknisk regel, testet som data (tabell). Tegningen
+// skjer bare på vanlig canvas; kallet til toBlob testes med et falskt canvas. Rotering testes i e2e.
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -98,11 +98,45 @@ describe("makeDisplayCopy", () => {
   });
 
   it("makeDisplayCopy gir null når nettleseren mangler createImageBitmap eller canvas", async () => {
-    vi.stubGlobal("createImageBitmap", undefined);
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
     const blob = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: "image/jpeg" });
+
+    // Uten createImageBitmap
+    vi.stubGlobal("createImageBitmap", undefined);
     await expect(makeDisplayCopy(blob)).resolves.toBeNull();
+
+    // Med createImageBitmap, men uten canvas (ingen document)
+    const close = vi.fn();
+    vi.stubGlobal("createImageBitmap", () => Promise.resolve({ width: 40, height: 30, close }));
+    vi.stubGlobal("document", undefined);
+    await expect(makeDisplayCopy(blob)).resolves.toBeNull();
+    expect(close).toHaveBeenCalled();
+  });
+
+  it("toBlob kalles med image/jpeg og 0,8", async () => {
+    const jpeg = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: "image/jpeg" });
+    const drawImage = vi.fn();
+    const toBlob = vi.fn((callback: (blob: Blob | null) => void, _type?: string, _q?: number) =>
+      callback(jpeg),
+    );
+    const canvas = { width: 0, height: 0, getContext: () => ({ drawImage }), toBlob };
+    const createElement = vi.fn(() => canvas);
+    vi.stubGlobal("document", { createElement });
+    vi.stubGlobal("createImageBitmap", () =>
+      Promise.resolve({ width: 4032, height: 3024, close: () => {} }),
+    );
+    const original = new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: "image/png" });
+
+    await expect(makeDisplayCopy(original)).resolves.toBe(jpeg);
+
+    expect(createElement).toHaveBeenCalledWith("canvas");
+    expect(canvas.width).toBe(2000);
+    expect(canvas.height).toBe(1500);
+    expect(drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 2000, 1500);
+    expect(toBlob).toHaveBeenCalledTimes(1);
+    expect(toBlob.mock.calls[0]![1]).toBe("image/jpeg");
+    expect(toBlob.mock.calls[0]![2]).toBe(0.8);
   });
 
   it("makeDisplayCopy ber om retning fra bildet", async () => {
