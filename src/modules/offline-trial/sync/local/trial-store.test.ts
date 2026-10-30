@@ -59,10 +59,25 @@ function createFakeDb(outbox: readonly OutboxEntry[]) {
   };
   for (const entry of outbox) storeOf(LOCAL_OUTBOX_STORE).set(entry.seq, structuredClone(entry));
 
-  const control: { failTransaction: FailWhen; failReadAll: (name: string) => boolean } = {
+  const control: {
+    failTransaction: FailWhen;
+    failReadAll: (name: string) => boolean;
+    /**
+     * Holder igjen neste `readonly`-transaksjon etter at den har lest (som et øyeblikksbilde som
+     * er lest, men ikke levert ennå). Brukes én gang, så settes den tilbake til `null`.
+     */
+    holdNextRead: Promise<void> | null;
+  } = {
     failTransaction: () => false,
     failReadAll: () => false,
+    holdNextRead: null,
   };
+
+  /** Legger en rad rett i et lager (som om den lå der fra før). */
+  const seed = (name: string, row: Record<string, unknown>) =>
+    storeOf(name).set(row[keyPathOf(name)], structuredClone(row));
+
+  const keyPathOf = (name: string) => (name === LOCAL_OUTBOX_STORE ? "seq" : "id");
 
   /** Forespørsel som får `onsuccess` etter at kalleren har satt den (som i IndexedDB). */
   function request<T>(result: T) {
@@ -75,8 +90,6 @@ function createFakeDb(outbox: readonly OutboxEntry[]) {
     return req;
   }
 
-  const keyPathOf = (name: string) => (name === LOCAL_OUTBOX_STORE ? "seq" : "id");
-
   const db: LocalDb = {
     options: { name: "test-local", version: 1, stateStore: { name: STATE_STORE, keyPath: "key" } },
     open: () => Promise.reject(new Error("Ikke i bruk i testen.")),
@@ -84,16 +97,37 @@ function createFakeDb(outbox: readonly OutboxEntry[]) {
     clear: () => Promise.resolve(),
     async inTransaction(names, mode, body) {
       if (control.failTransaction(names, mode)) throw new Error("hemmelig-innhold");
+      const rowsOf = (name: string) =>
+        [...storeOf(name).values()].map((v) => structuredClone(v) as Record<string, unknown>);
       const tx = {
         objectStore: (name: string) => ({
-          get: (key: unknown) => request(storeOf(name).get(key)),
-          getAll: () => request([...storeOf(name).values()]),
+          get: (key: unknown) => request(structuredClone(storeOf(name).get(key))),
+          getAll: () => request(rowsOf(name)),
           put: (value: Record<string, unknown>) =>
             request(storeOf(name).set(value[keyPathOf(name)], structuredClone(value))),
           delete: (key: unknown) => request(storeOf(name).delete(key)),
+          // Bare det kjernen bruker: svar på [skjema, felt] og bilder på skjema.
+          index: () => ({
+            get: ([formId, fieldKey]: [string, string]) =>
+              request(
+                rowsOf(name).find(
+                  (row) => row.trial_form_id === formId && row.field_key === fieldKey,
+                ),
+              ),
+            getAll: (query: string | { formId: string }) => {
+              const formId = typeof query === "string" ? query : query.formId;
+              return request(rowsOf(name).filter((row) => row.trial_form_id === formId));
+            },
+          }),
         }),
       };
-      return body(tx as unknown as IDBTransaction);
+      const result = await body(tx as unknown as IDBTransaction);
+      const hold = mode === "readonly" ? control.holdNextRead : null;
+      if (hold) {
+        control.holdNextRead = null;
+        await hold;
+      }
+      return result;
     },
     readAll<T>(name: LocalStoreName): Promise<T[]> {
       if (control.failReadAll(name)) return Promise.reject(new Error("hemmelig-innhold"));
@@ -101,7 +135,7 @@ function createFakeDb(outbox: readonly OutboxEntry[]) {
     },
     syncedStoreOf: (table) => LOCAL_SYNCED_STORES[table],
   };
-  return { db, control };
+  return { db, control, seed };
 }
 
 function createReader() {
@@ -257,5 +291,136 @@ describe("loggen i den lokale kjernen", () => {
 
     expectOnlyText(warnCalls(warn, "Lagring: kunne ikke lese listen."));
     expectOnlyText(warnCalls(warn, "Lagring: kunne ikke lese skjemaet."));
+  });
+});
+
+describe("øyeblikksbilder og nyere lokale skrivinger (localWriteGeneration)", () => {
+  // Testplan docs/agenter/oppgaver/fase1-smafunn-prove-e-testplan.md avsnitt 1 (W1–W3).
+  // Lesingen av skjemaet holdes igjen etter at den har lest, mens en nyere skriving skjer.
+  // Et bilde som ble lest før skrivingen, skal aldri nå lytteren.
+
+  const FIELD = "floors";
+  const ANSWER_KEY = `${FORM}:${FIELD}`;
+
+  /** Utsatt løfte som testen slipper selv. */
+  function deferred() {
+    let release!: () => void;
+    const promise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return { promise, release };
+  }
+
+  /** Åpner uten nett og uten kø, med ett skjema og ett svar (`floors` = 2) i lagringen. */
+  async function openWithAnswer() {
+    // Bare det `readSnapshot` trenger: grensene for svarene på skjemaet.
+    vi.stubGlobal("IDBKeyRange", {
+      bound: (lower: [string, string]) => ({ formId: lower[0] }),
+    });
+    const fake = await open(false, []);
+    fake.seed(LOCAL_SYNCED_STORES.trial_forms, {
+      id: FORM,
+      name: "Testskjema 1",
+      created_at: NOW,
+      updated_at: NOW,
+      deleted_at: null,
+    });
+    fake.seed(LOCAL_SYNCED_STORES.trial_answers, {
+      id: ANSWER,
+      trial_form_id: FORM,
+      field_key: FIELD,
+      value: "2",
+      text_state: null,
+      device_id: "enhet-1",
+      created_at: NOW,
+      updated_at: NOW,
+      deleted_at: null,
+    });
+    return fake;
+  }
+
+  /** Verdien til `floors` i hvert bilde lytteren fikk, i rekkefølge. */
+  function valuesSeen(listener: Mock): (string | null | undefined)[] {
+    return listener.mock.calls.map(
+      ([snapshot]) =>
+        (snapshot as { answers: { fieldKey: string; value: string | null }[] }).answers.find(
+          (answer) => answer.fieldKey === FIELD,
+        )?.value,
+    );
+  }
+
+  it("øyeblikksbilde lest før en nyere lokal skriving forkastes", async () => {
+    const { control } = await openWithAnswer();
+    const gate = deferred();
+    control.holdNextRead = gate.promise;
+    const listener = vi.fn();
+
+    // Første lesing leser «2» og holdes igjen før den leveres.
+    store!.subscribe(FORM, listener);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listener).not.toHaveBeenCalled();
+
+    // Nyere lokal skriving mens den gamle lesingen venter. Varselet gir et nytt bilde.
+    await store!.setAnswer(FORM, FIELD, 3);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(valuesSeen(listener).at(-1)).toBe("3");
+
+    // Den gamle lesingen slippes: bildet med «2» skal aldri vises etter skrivingen.
+    gate.release();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(valuesSeen(listener)).not.toContain("2");
+    expect(valuesSeen(listener).at(-1)).toBe("3");
+  });
+
+  it("øyeblikksbilde uten nyere skriving brukes", async () => {
+    const { control } = await openWithAnswer();
+    const gate = deferred();
+    control.holdNextRead = gate.promise;
+    const listener = vi.fn();
+
+    store!.subscribe(FORM, listener);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listener).not.toHaveBeenCalled();
+
+    gate.release();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(valuesSeen(listener)).toEqual(["2"]);
+  });
+
+  it("innkommende rader fra serveren teller som nyere skriving", async () => {
+    const { control } = await openWithAnswer();
+    const context = reader.start.mock.calls[0]![0];
+    const gate = deferred();
+    control.holdNextRead = gate.promise;
+    const listener = vi.fn();
+
+    store!.subscribe(FORM, listener);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listener).not.toHaveBeenCalled();
+
+    // Serveren sender en ny verdi mens den gamle lesingen venter.
+    await context.mergeIncoming(
+      "trial_answers",
+      [
+        {
+          table: "trial_answers",
+          kind: "update",
+          key: ANSWER_KEY,
+          row: { id: ANSWER, value: "4", updated_at: "2026-10-28T10:05:00.000Z" },
+        },
+      ],
+      null,
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(valuesSeen(listener).at(-1)).toBe("4");
+
+    gate.release();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(valuesSeen(listener)).not.toContain("2");
+    expect(valuesSeen(listener).at(-1)).toBe("4");
   });
 });

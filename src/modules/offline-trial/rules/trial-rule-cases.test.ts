@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseTrialNumber } from "../answers";
 import { listTrialFields, trialForm } from "../trial-form";
-import { evaluateTrialRules, trialRuleCases, trialRules } from "./index";
+import { evaluateTrialRules, trialRules } from "./index";
+import { trialRuleCases } from "./trial-rule-cases";
 
 // Prøve E: testsakene som data er felles fasit for Vitest, Playwright og resultatmalen
 // (docs/funksjoner/fase1-prove-e-regler.md pkt. 2, AK 4 og AK 10). Testplan avsnitt 2.2 og 6.
