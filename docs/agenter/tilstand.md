@@ -6,7 +6,6 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 (sammenligning og foreløpig ADR 0004 på `fase1-sammenligning-adr`)
 Sist oppdatert: 30.10.2026 (sammenligning og foreløpig ADR 0004 på `fase1-sammenligning-adr`, etter PR #38)
 
 ## Gjeldende fase
@@ -53,9 +52,9 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #38 | Liten oppgave (g) og (h), branch `fase1-smafunn-prove-d-f` | venter på CI, merges med skriptet | `main` |
+| (ny) | Sammenligning og ADR 0004 (foreløpig), branch `fase1-sammenligning-adr` | venter på CI, merges med skriptet | `main` |
 
-PR #16–#28 og #30–#37 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
+PR #16–#28 og #30–#38 er merget (#38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -96,6 +95,7 @@ Fra nattløkken 30.10.2026 (main ved 08a7675, versjon 0.2.17). Rettet i PR #31 �
 12. **Synk-ADR-en (fase 2b):** hent eksisterende rader for hele bunten på én gang per tabell eller bruk `INSERT ... ON CONFLICT` (N+1 i `applyTrialChanges`, 1 500–2 000 rundturer per bunt på 500), og bruk indeksmønsteret `(organization_id, updated_at, id)` på de ekte tabellene. Mål: tid.
 13. **Ekte tabeller for oppdrag og rapporter:** indeks på `(organization_id, <sorteringsfelt>)`, eventuelt delvis med `WHERE deleted_at IS NULL` (som `listTrialForms` mangler i dag; brukes bare i tester).
 14. **`findGrant`** bruker to spørringer per tilgangssjekk; kan slås sammen. Liten gevinst, ingen N+1. Lav prioritet.
+15. **Ustabil e2e-test i prøve D** (`e2e/fase-1-prove-d-bilder.spec.ts`, [ipad] «kopi som får 400 viser Bare originalen er lagret …»): feilet én gang med fingeravtrykket til en tom fil. `waitForFile` venter bare til filen finnes, og serveren skriver originalen rett til endelig sti (`photo-storage.ts`), så en halvskrevet fil kan ses. Forslag: skriv til midlertidig fil og gi nytt navn, eller vent til størrelsen er riktig i testen. Funnet i gjennomgangen av sammenligningen 30.10.2026. Mål: reklamasjoner.
 
 ## Trenger Ståle (stoppet etter 3 retteforsøk)
 

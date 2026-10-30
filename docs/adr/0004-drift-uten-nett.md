@@ -65,6 +65,7 @@ Kjøres med egenbygd først, etter `docs/funksjoner/fase1-prove-ab-egenbygd.md`,
 | A: 30 min i flymodus, alle 40 felt, 200 bilder, appen lukket og åpnet, iPaden startet på nytt | **Null** tapte eller doble svar og **null** tapte bilder på serveren, tre ganger på rad, på begge iPadene. Alle bildene har samme fingeravtrykk på iPad og server |
 | A: synk når nettet kommer | Synkstatusen går til «Alt er lagret» uten «Synk nå», innen rimelig tid (føres i resultatfilen; ikke målt ennå) |
 | A: lagring | Data ligger på iPaden etter omstart. Ingen melding om at noe ikke ble lagret |
+| C med egenbygd | Den automatiske prøve C er bare kjørt med PowerSync. Prøve C (C1–C4, også 7 dager uten bruk med appen på hjemskjermen) kjøres derfor med egenbygd på ekte iPad sammen med A og B. Data ligger der etter 7 dager |
 | B: tekst | Begge bidrag i `roof_description` på begge iPadene |
 | B: TG, valg og tall | Samme verdi på begge (siste endring vinner), og varselet «Endret av en annen» hos den som tapte |
 | B: tid | Den andre iPaden ser endringen innen ca. 10 s med nett (takt 5 s pluss sending) |
@@ -97,11 +98,11 @@ Kjøres med egenbygd først, etter `docs/funksjoner/fase1-prove-ab-egenbygd.md`,
 
 ### Bilder
 
-Hvert bilde har egen id og legges bare til (ingen konflikt). Serveren bekrefter med fingeravtrykk (SHA-256) før iPaden gir slipp på bildet, og et avbrutt bilde sendes på nytt i sin helhet (A9, A10). Bildekøen (`photo-uploader.ts`) er felles for alle kandidatene og skiller dem ikke.
+Hvert bilde har egen id og legges bare til (ingen konflikt). Serveren bekrefter med fingeravtrykk (SHA-256) før iPaden gir slipp på bildet, og et avbrutt bilde sendes på nytt i sin helhet (A9). En visningskopi som serveren avviser, sendes ikke igjen (A10–A12). Bildekøen (`photo-uploader.ts`) er felles for alle kandidatene og skiller dem ikke.
 
 ### KI-forslag
 
-Et forslag er **ikke** en vanlig endring av verdien. Forslaget ligger i egne felt eller rader (`suggested_by_rule_id`, `suggestion_status`, `suggestion_override_reason`, og tilsvarende for KI). Takstmannens godkjenning er hans egen endring av verdien, med sin egen `field_clock`. Et forslag som kommer sent via synk, endrer bare forslagsfeltene og kan derfor aldri overskrive takstmannens verdi gjennom «siste endring vinner». KI publiserer aldri selv. Ingen KI bygges nå.
+Et forslag er **ikke** en vanlig endring av verdien. Forslaget ligger i egne felt eller rader (`suggested_by_rule_id`, `suggestion_status`, `suggestion_override_reason`, og tilsvarende for KI). Takstmannens godkjenning er hans egen endring av verdien, med sin egen `field_clock`. Et forslag som kommer sent via synk, endrer bare forslagsfeltene og kan derfor aldri overskrive takstmannens verdi gjennom «siste endring vinner». KI publiserer aldri selv. Synkede rapportdata sendes ikke til KI slik de er: hva KI får se, og at personopplysninger holdes utenfor, avgjøres når KI bygges (krav om leverandør i EU/EØS og databehandleravtale). Ingen KI bygges nå.
 
 ### Regelmotoren
 
@@ -109,18 +110,7 @@ Regelmotoren fra prøve E er uavhengig av synkvalget. Samme kode og samme testsa
 
 ### Hvor synkmotoren skal ligge
 
-Når synken blir ekte, flyttes den til `src/core/sync` (kjernen), og hver modul melder inn sine egne tabeller. Ingen modul importerer fra en annen. I dag ligger alt i `src/modules/offline-trial` og er bare for prøven. Flyttingen skjer i en egen PR etter Ståles godkjenning, sammen med at PowerSync og ElectricSQL fjernes. Utkast til grensesnitt, bare som tekst her (ingen TypeScript-fil lages nå):
-
-```ts
-// src/core/sync/types.ts (utkast)
-export interface SyncedTableSpec {
-  table: string; // tabellnavn i databasen
-  localColumns: readonly string[]; // det som går til iPaden (aldri storage_path eller *_by)
-  textColumns: readonly string[]; // flettes med text_state
-  lastWriteWinsColumns: readonly string[]; // TG, valg, tall: varsel og sync_conflicts
-}
-export type RegisterSyncedTable = (spec: SyncedTableSpec) => void;
-```
+Når synken blir ekte, flyttes den til `src/core/sync` (kjernen), og hver modul melder inn sine egne tabeller. Ingen modul importerer fra en annen. I dag ligger alt i `src/modules/offline-trial` og er bare for prøven. Flyttingen skjer i en egen PR etter Ståles godkjenning, sammen med at PowerSync og ElectricSQL fjernes. Hvordan en modul melder inn tabellene sine (navn og felt), bestemmes når fase 2b spesifiseres, ikke nå.
 
 ### Kontrakten `TrialSyncStore`
 
@@ -133,6 +123,7 @@ export type RegisterSyncedTable = (spec: SyncedTableSpec) => void;
 - Fjern den kjente grensen i hentemarkøren: `updated_at` settes av databasen både ved innsetting og oppdatering, eller markøren bygger på en løpende teller fra databasen. Avgjøres når fase 2b spesifiseres.
 - Avviste bunter (400/409) skal ikke stoppe køen for alltid: de tas ut, vises for takstmannen og lagres slik at ingenting går tapt i stillhet.
 - Utlogging og sperret iPad tømmer lokal lagring og hurtiglagrede sider («Sperring av iPader» under «Minimum før ekte data» i planen).
+- Delt iPad (spørsmål nr. 14): endringer som ligger i køen, sendes med den som er logget inn. Logger en annen ansatt inn før køen er tom, må endringene ikke føres på ham. Løses før ekte data, sammen med utlogging.
 
 ## Forkastet
 
