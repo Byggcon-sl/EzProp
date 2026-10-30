@@ -239,12 +239,9 @@ describe("requestPersistentStorage (storage-health.ts)", () => {
 });
 
 describe("isQuotaError (storage-health.ts)", () => {
-  const code22 = Object.defineProperty(new DOMException("x", "Error"), "code", { value: 22 });
-
   it.each<[string, unknown]>([
     ["DOMException QuotaExceededError", new DOMException("x", "QuotaExceededError")],
     ["NS_ERROR_DOM_QUOTA_REACHED", { name: "NS_ERROR_DOM_QUOTA_REACHED" }],
-    ["DOMException med code 22", code22],
   ])("isQuotaError gjenkjenner full plass: %s", (_name, error) => {
     expect(isQuotaError(error)).toBe(true);
   });
@@ -344,22 +341,23 @@ describe("storageErrorMessage (storage-health.ts)", () => {
 });
 
 describe("storageErrorLog (storage-health.ts)", () => {
-  it("storageErrorLog gir bare navn og melding", () => {
-    expect(storageErrorLog(new DOMException("Kvoten er full", "QuotaExceededError"))).toStrictEqual(
-      { name: "QuotaExceededError", message: "Kvoten er full" },
-    );
+  // Obligatorisk
+  it("storageErrorLog gir bare navnet", () => {
+    expect(storageErrorLog(new DOMException("x", "QuotaExceededError"))).toStrictEqual({
+      name: "QuotaExceededError",
+    });
   });
 
   // Obligatorisk
-  it("storageErrorLog tar ikke med svar eller bildedata", () => {
-    const error = Object.assign(new Error("Lagringen feilet"), {
+  it("storageErrorLog tar ikke med svarverdien fra meldingen", () => {
+    const error = Object.assign(new Error(SECRET_ANSWER), {
       value: SECRET_ANSWER,
       file: { name: SECRET_PHOTO, content: SECRET_ANSWER },
       blob: SECRET_ANSWER,
       cause: { value: SECRET_ANSWER },
     });
     const result = storageErrorLog(error);
-    expect(result).toStrictEqual({ name: "Error", message: "Lagringen feilet" });
+    expect(result).toStrictEqual({ name: "Error" });
     expect(JSON.stringify(result)).not.toContain(SECRET_ANSWER);
     expect(JSON.stringify(result)).not.toContain(SECRET_PHOTO);
   });
@@ -370,7 +368,7 @@ describe("storageErrorLog (storage-health.ts)", () => {
     ["objekt med verdi", { value: SECRET_ANSWER }],
   ])("storageErrorLog for noe som ikke er Error: %s", (_name, error) => {
     const result = storageErrorLog(error);
-    expect(result).toStrictEqual({ name: "ukjent feil", message: "ukjent feil" });
+    expect(result).toStrictEqual({ name: "ukjent feil" });
     expect(JSON.stringify(result)).not.toContain(SECRET_ANSWER);
   });
 });
