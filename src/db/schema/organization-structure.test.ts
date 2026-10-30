@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { companies, employees, offices } from "@/db/schema";
+import { uuidv7 } from "@/shared/lib/uuid";
 import {
   createCompany,
   createEmployee,
@@ -266,5 +267,39 @@ describe("standardverdier", () => {
       // Dato uten klokkeslett, lagret som tekst «ÅÅÅÅ-MM-DD»
       liabilityValidTo: "2027-12-31",
     });
+  });
+});
+
+// ADR 0004 (foreløpig, egenbygd synk): tabeller som kan synkes senere, tar imot id laget på
+// enheten og har row_version som øker ved hver endring.
+describe("ADR 0004: id fra enheten og row_version", () => {
+  it("selskap og kontor beholder id fra enheten, og row_version går fra 1 til 2", async () => {
+    const org = await createOrganization();
+    const companyId = uuidv7();
+    const officeId = uuidv7();
+    await db
+      .insert(companies)
+      .values({ id: companyId, organizationId: org.id, legalName: "Testselskap A AS" });
+    await db
+      .insert(offices)
+      .values({ id: officeId, organizationId: org.id, name: "Testkontor Nord" });
+
+    const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+    const [office] = await db.select().from(offices).where(eq(offices.id, officeId));
+    expect(company).toMatchObject({ id: companyId, rowVersion: 1 });
+    expect(office).toMatchObject({ id: officeId, rowVersion: 1 });
+
+    const [updatedCompany] = await db
+      .update(companies)
+      .set({ city: "Testby" })
+      .where(eq(companies.id, companyId))
+      .returning();
+    const [updatedOffice] = await db
+      .update(offices)
+      .set({ sortOrder: 3 })
+      .where(eq(offices.id, officeId))
+      .returning();
+    expect(updatedCompany).toMatchObject({ id: companyId, rowVersion: 2 });
+    expect(updatedOffice).toMatchObject({ id: officeId, rowVersion: 2 });
   });
 });
