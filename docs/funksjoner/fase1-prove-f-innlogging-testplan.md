@@ -12,11 +12,14 @@
 - 200 med `null` gir `expired`.
 - `unknown` for: 200 med `{}`, 200 uten `session`, 401, 403, 5xx, nettverksfeil, ugyldig JSON, tidsavbrudd.
 - Funksjonen kaster aldri.
+- Funksjonen skriver aldri til konsollen e-post, navn eller svaret fra serveren (spion på `console.*`, oppdiktet e-post i svaret).
+- `fetch` kalles bare mot `/api/auth/get-session` på samme opprinnelse, med `credentials` som sender informasjonskapselen.
 - Resultatet er alltid nøyaktig en av `valid`, `expired`, `unknown`. Det gir aldri tilbake e-post, navn eller andre felt fra svaret (svaret i testen har oppdiktet e-post og navn, og testen sjekker at de ikke finnes i resultatet).
 - Reglene for når sjekken kjøres (ren funksjon):
   - `online`, overgang fra «Uten nett» til nett, `visibilitychange` til synlig og feilet synkrunde gir sjekk;
   - ingen sjekk når appen er uten nett, uansett hva som utløser;
   - ingen sjekk ved vanlig statuslesing uten overgang.
+- `unknown` endrer ikke statusen; `expired` gir `signInRequired`; en senere `valid` fjerner meldingen igjen.
 - Høyst én sjekk om gangen: to utløsere samtidig (`online` og feilet synkrunde) gir ett kall til `fetch`; en ny sjekk etter at den første er ferdig, gir et nytt kall.
 
 ### `src/modules/offline-trial/sync-status-text.test.ts`
@@ -25,8 +28,11 @@
 - Teksten er «Logg inn på nytt for å sende. Alt er lagret på iPaden.».
 - Markøren (`SyncStatusKind`) er alltid en av de fem verdiene for alle kombinasjoner av status og innlogging.
 - «Synk nå» er skjult ved `signInRequired` (funksjonen som avgjør knappen, eller komponenttesten).
+- Lenken «Logg inn» bygges av bare stien: `/prove/testskjema/<id>?x=1#a` gir `/logg-inn?neste=%2Fprove%2Ftestskjema%2F<id>` eller tilsvarende uten spørrestreng og `#`, og den bygde `neste` godtas av `safeNextPath` (de to funksjonene passer sammen).
 
-### `src/app/logg-inn/safe-next-path.test.ts`
+### `src/app/logg-inn/safe-next-path.test.ts` (regeltest, testsaker som data)
+
+Testsakene ligger som en tabell (`it.each`) med `input` og forventet svar. Ingen fagregler i denne oppgaven, så ingen nye regeltester i regelmotoren; eksisterende regeltester (`trial-rule-cases.test.ts`) skal fortsatt være grønne.
 
 Godtas uendret: `/arbeidskoe`, `/prove/testskjema`, `/prove/testskjema/<uuid>`.
 
@@ -54,14 +60,14 @@ Chromium, standardkandidaten PowerSync. `pnpm build` og e2e kjøres etter hveran
 2. Start telling av kall til `/api/auth/get-session` (`countRequests`).
 3. Sett `expires_at` til passert tid **bare på egen økt**: token fra informasjonskapselen i `context.cookies()` (delen før punktum), `assertLocalOrTestDatabase` først.
 4. `context.setOffline(true)`, last siden på nytt. Skjemaet åpnes fra kopien. `data-sync-state="offline"`, ingen melding om innlogging.
-5. Fyll ut svar og ett bilde. Åpne ny side i samme kontekst uten nett: alt står der. Åpne listen i en tredje side uten nett (fra kopien), slik at den er åpen når nettet kommer.
+5. Fyll ut svar og ett bilde. Lukk siden (`page.close()`), åpne ny side i samme kontekst uten nett: alt står der (lukking og ny åpning). Åpne listen i en tredje side uten nett (fra kopien), slik at den er åpen når nettet kommer.
 6. Sjekk: ingen kall til `get-session` mens nettet var av.
 7. `context.setOffline(false)`. `data-sync-state="signInRequired"`, meldingen og «Logg inn» vises, «Synk nå» er skjult. Svarene står i feltene.
 8. Testdatabasen: svarene og bildet finnes ikke på serveren; `pendingChanges` er over 0.
 9. Bare ipad: «Logg inn» er minst 44 px høy i skjemaet og på listen (siden fra trinn 5 viser også `signInRequired`).
 10. Trykk «Logg inn». `expect(page).toHaveURL` viser `/logg-inn?neste=/prove/testskjema/<id>`. Kode fra utviklingspostkassen.
 11. `expect(page).toHaveURL` viser `/prove/testskjema/<id>`. Vent på `data-sync-state="allSaved"`.
-12. Testdatabasen: alle svar og bildet finnes. Køen er 0.
+12. Testdatabasen: alle svar og bildet finnes, med verdiene som ble skrevet, nøyaktig ett bilde og ingen doble svar. Køen er 0. Svarene ligger i takstmannens organisasjon (`organization_id` = organisasjonen til `INSPECTOR_EMAIL`).
 
 ### 2.2 Admin, «Synk nå» og ingen sjekk uten grunn (pc)
 
@@ -96,7 +102,19 @@ Les adressen med `expect(page).toHaveURL`.
   `git diff main --stat -- src/db src/app/api src/modules/offline-trial/server src/modules/offline-trial/sync/powersync src/modules/offline-trial/sync/electricsql src/modules/offline-trial/sync/custom src/modules/offline-trial/sync/local`
   Er noe endret, gjelder kravet om `expectTenantIsolation` som vanlig.
 
-## 4. Ikke testet her
+- Integrasjonstester mot testdatabasen: ingen nye, fordi ingen spørring eller rute endres. De eksisterende `it.each(ALL_ROLES)`-testene i `src/modules/offline-trial/server/*.test.ts` og `expectTenantIsolation` der skal være grønne.
+- Admin stenges ikke ute: 2.2. Ingen tilgangsregel endres.
+- Myk sletting: gjelder ikke (ingen nye data, ingenting slettes). Den lokale lagringen tømmes ikke ved ny innlogging; det vises i 2.1 trinn 11 og 12.
+
+## 4. Krav før test-leder godkjenner
+
+- `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` grønne (begge prosjektene, pc og ipad).
+- Alle testene over finnes og venter på markøren, ikke på faste pauser (unntatt de 15 sekundene i 2.2, som er selve målingen).
+- `git diff`-sjekken i punkt 3 er tom, ellers kreves `expectTenantIsolation` for det som er endret.
+- Ingen nye avhengigheter i `package.json`, versjonen er økt.
+- Ingen ekte e-post, navn eller nøkler i testene; bare oppdiktede testbrukere.
+
+## 5. Ikke testet her
 
 - Safari/WebKit i Playwright (som prøve C). Dekkes av resultatmalen på ekte iPad.
 - Egenbygd og ElectricSQL i e2e. Sjekken er lik for alle kandidatene; resultatmalen dekker alle.
