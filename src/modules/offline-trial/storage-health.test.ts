@@ -28,12 +28,12 @@ type Failure = Parameters<typeof storageErrorMessage>[0][number];
 
 /** Ett svar som ikke ble lagret (feltnavnet er etiketten takstmannen ser). */
 function answerFailure(label: string, error: unknown = new Error("x")): Failure {
-  return { kind: "answer", label, error } as Failure;
+  return { kind: "answer", fieldLabel: label, error } as Failure;
 }
 
 /** Ett bilde som ikke ble lagret. */
 function photoFailure(label: string, error: unknown = new Error("x")): Failure {
-  return { kind: "photo", label, error } as Failure;
+  return { kind: "photo", fieldLabel: label, error } as Failure;
 }
 
 function quotaError(message = "Kvoten er full"): DOMException {
