@@ -3,11 +3,20 @@ import { requireOrganizationAccess, type Actor } from "@/core/access";
 import { db } from "@/db/client";
 import { offices } from "@/db/schema";
 
-/** Kontorene i organisasjonen som ikke er slettet, sortert på rekkefølge og så navn. */
+/**
+ * Kontorene i organisasjonen som ikke er slettet, sortert på rekkefølge og så navn.
+ * Gir aldri sporingsfelt (createdBy/updatedBy/deletedBy), organizationId, rowVersion
+ * eller tidsstempler.
+ */
 export async function listOffices(actor: Actor, organizationId: string) {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
   return db
-    .select()
+    .select({
+      id: offices.id,
+      name: offices.name,
+      address: offices.address,
+      sortOrder: offices.sortOrder,
+    })
     .from(offices)
     .where(and(eq(offices.organizationId, grant.organizationId), isNull(offices.deletedAt)))
     .orderBy(asc(offices.sortOrder), asc(offices.name));
