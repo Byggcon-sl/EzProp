@@ -39,9 +39,9 @@ Ikke i denne oppgaven, og KI får ikke tilgang til bildene her. Visningskopien e
 
 ## Beslutninger i autonom modus (føres i `docs/09-apne-sporsmal.md`)
 
-- **A5 – GPS i bildene (spørsmål nr. 8):** originalen lastes opp uendret, med det kameraet la i filen (nødvendig for kontrollen med fingeravtrykk). Visningskopien som lages på iPaden, lagres uten EXIF og uten GPS, og serveren avviser en visningskopi med metadatafelt (APP1 og APP13). Om GPS i originalen skal beholdes i 10 år, avgjøres i fase 2b. Kilde: innspill D14 (`docs/kartlegging/innspill-datamodell-og-plan-2026-10-25.md`), P24 i sidemannskontrollen del 2, domenemodellen 4.8 (`display_file_id`). At Ståle slår av Stedstjenester for Safari på iPadene under prøven, står under «Trenger Ståle når han er tilbake».
-- **A6 – Visningskopien:** lengste side 2000 punkter (mindre bilder forstørres ikke), JPEG med kvalitet 0,8, rettet etter retningen kameraet har lagret. Lages i nettleseren med det som finnes der (`createImageBitmap` og `canvas`), ingen ny avhengighet. Kilde: domenemodellen 4.8 (2000 punkter, ca. 0,3–0,6 MB) og P24 («komprimering til fast størrelse lokalt, original beholdes til server»; «EXIF-rotering normaliseres ved lagring»). Endres i konstantene `DISPLAY_MAX_EDGE_PX` og `DISPLAY_JPEG_QUALITY`.
-- **A7 – «Fortsetter der den slapp» betyr per bilde:** bekreftede bilder sendes aldri igjen; bildet som ble avbrutt, sendes på nytt i sin helhet. Ingen opplasting i biter. Hvorfor: en visningskopi er under 1 MB og en original 3–4 MB, så et nytt forsøk koster sekunder, og det enkleste som virker holder for prøven. Kan endres i fase 2a hvis prøven på ekte iPad viser at det tar for lang tid på svakt nett.
+- **A7 – GPS i bildene (spørsmål nr. 8):** originalen lastes opp uendret, med det kameraet la i filen (nødvendig for kontrollen med fingeravtrykk). Visningskopien som lages på iPaden, lagres uten EXIF og uten GPS, og serveren avviser en visningskopi med metadatafelt (APP1 og APP13). Om GPS i originalen skal beholdes i 10 år, avgjøres i fase 2b. Kilde: innspill D14 (`docs/kartlegging/innspill-datamodell-og-plan-2026-10-25.md`), P24 i sidemannskontrollen del 2, domenemodellen 4.8 (`display_file_id`). At Ståle slår av Stedstjenester for Safari på iPadene under prøven, står under «Trenger Ståle når han er tilbake».
+- **A8 – Visningskopien:** lengste side 2000 punkter (mindre bilder forstørres ikke), JPEG med kvalitet 0,8, rettet etter retningen kameraet har lagret. Lages i nettleseren med det som finnes der (`createImageBitmap` og `canvas`), ingen ny avhengighet. Kilde: domenemodellen 4.8 (2000 punkter, ca. 0,3–0,6 MB) og P24 («komprimering til fast størrelse lokalt, original beholdes til server»; «EXIF-rotering normaliseres ved lagring»). Endres i konstantene `DISPLAY_MAX_EDGE_PX` og `DISPLAY_JPEG_QUALITY`.
+- **A9 – «Fortsetter der den slapp» betyr per bilde:** bekreftede bilder sendes aldri igjen; bildet som ble avbrutt, sendes på nytt i sin helhet. Ingen opplasting i biter. Hvorfor: en visningskopi er under 1 MB og en original 3–4 MB, så et nytt forsøk koster sekunder, og det enkleste som virker holder for prøven. Kan endres i fase 2a hvis prøven på ekte iPad viser at det tar for lang tid på svakt nett.
 
 ## Omfang
 
@@ -85,7 +85,7 @@ Ikke i denne oppgaven, og KI får ikke tilgang til bildene her. Visningskopien e
      - **Uten nett:** bildene velges med `context.setOffline(true)` og lastes opp når nettet kommer tilbake.
      - **Rotering og metadata:** fixture `e2e/fixtures/test-photo-rotated.jpg` med EXIF-retning 6, oppdiktet GPS 0,0 og et rødt felt oppe til venstre i de lagrede pikslene. Originalen på serveren har samme fingeravtrykk som regnet i testen fra fixture-bytene. Visningskopien er JPEG, har bredde og høyde byttet om, har det røde feltet i hjørnet der retning 6 skal legge det (oppe til høyre), og `hasMetadataSegment` gir nei for bytene.
      - **Størrelse:** et bilde på 3000x1000 lages i testen selv (canvas til buffer, `setInputFiles` med buffer, ingen fil). Kopien blir 2000x667. Et lite bilde blir ikke forstørret.
-     - **Brudd:** minst to bilder. Det første er bekreftet før bruddet; opplastingen av det andre avbrytes med `page.route(…).abort()`, så slippes nettet fram. Testen teller PUT per bilde-id: etter bekreftelse sendes det ingen nye for det bildet. På serveren er det én rad og én fil per bilde, med likt fingeravtrykk. `abort()` bryter før kroppen er sendt; det godtas for prøven (A7), og det ekte bruddet midt i en fil prøves på ekte iPad (D3).
+     - **Brudd:** minst to bilder. Det første er bekreftet før bruddet; opplastingen av det andre avbrytes med `page.route(…).abort()`, så slippes nettet fram. Testen teller PUT per bilde-id: etter bekreftelse sendes det ingen nye for det bildet. På serveren er det én rad og én fil per bilde, med likt fingeravtrykk. `abort()` bryter før kroppen er sendt; det godtas for prøven (A9), og det ekte bruddet midt i en fil prøves på ekte iPad (D3).
      - **HEIC i Chromium:** to filer, `e2e/fixtures/test-photo.heic` (`image/heic`, kan ikke dekodes av Chromium) og et JPEG. Originalen lastes opp uendret med `image/heic`, uten visningskopi, og det andre bildet går gjennom.
      - **«Vis fra serveren»:** åpner en ny fane med 200, `image/jpeg` og `X-Content-Type-Options: nosniff`. Lenken er minst 44 pt høy på `ipad`.
    - **Fixturene** er faste, små filer (noen få kB) som sjekkes inn. Testplanen sier hvordan de ble laget og at de er oppdiktet (GPS 0,0, ingen ekte bilder). HEIC-fixturen trenger bare å være en liten fil med HEIC-hode som Chromium ikke kan dekode. Ingen skript i repoet og ingen ny avhengighet.
@@ -98,11 +98,11 @@ Ikke i denne oppgaven, og KI får ikke tilgang til bildene her. Visningskopien e
    - **D4 Fingeravtrykk:** synkstatusen viser 0 bilder som venter (iPaden sletter bare ved likt fingeravtrykk). Per kandidat noteres antall bilder der «Vis fra serveren» svarer «Bildet er ikke lastet opp ennå.» etter at alt er lastet opp (bilder uten visningskopi, også de serveren har avvist). Bør være 0; over 0 er et funn for ADR-en.
    - **D5 Tid:** omtrent hvor lang tid fra flymodus av til 0 bilder for 20 bilder.
    - Etter: testbildene ryddes på testserveren (står under «Trenger Ståle når han er tilbake»).
-7. **Dokumentasjon:** A5–A8 i `docs/09-apne-sporsmal.md`, spørsmål nr. 8 merkes «avgjort av agentene (A5), del (b) tas i fase 2b»; ordlisten (`docs/05-domenemodell.md` avsnitt 8) får «visningskopi» → `display copy`; planen krysses av; versjon 0.2.22 → 0.2.23.
+7. **Dokumentasjon:** A7–A10 i `docs/09-apne-sporsmal.md`, spørsmål nr. 8 merkes «avgjort av agentene (A7), del (b) tas i fase 2b»; ordlisten (`docs/05-domenemodell.md` avsnitt 8) får «visningskopi» → `display copy`; planen krysses av; versjon 0.2.22 → 0.2.23.
 
 **Ikke med (bevisst utelatt):**
 
-- Ingen opplasting i biter eller fortsettelse midt i en fil (A7).
+- Ingen opplasting i biter eller fortsettelse midt i en fil (A9).
 - Ingen opplasting i bakgrunnen når appen er lukket (service worker eller Background Sync). Prøven sier «mens appen er åpen».
 - Ingen konvertering eller rotering på serveren, og ingen ny avhengighet for bildebehandling (for eksempel `sharp` eller et HEIC-bibliotek). Klarer Safari ikke å lage kopien, er det et funn i prøven, ikke noe vi bygger rundt nå.
 - Ingen fjerning av GPS fra originalen (del (b) av spørsmål nr. 8, fase 2b).
@@ -150,7 +150,7 @@ Ingen regler som data. Skalering (`displaySize`) og metadatasjekken (`hasMetadat
 - [ ] Bruker i annen organisasjon får ikke tilgang til PUT eller GET for visningskopien (`expectTenantIsolation` og egen test med bilde-id fra B)
 - [ ] De fire rollene får PUT og GET; deaktivert og ikke innlogget nektes (Vitest)
 - [ ] Ingen endring i `src/core/auth`, mellomvare, økt eller service worker (sjekkes med `git diff` ved godkjenningen)
-- [ ] Resultatmalen for ekte iPad finnes, A5–A8 er ført, ordlisten og planen er oppdatert, versjonen er økt
+- [ ] Resultatmalen for ekte iPad finnes, A7–A10 er ført, ordlisten og planen er oppdatert, versjonen er økt
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne
 
 ## Roller
@@ -167,8 +167,8 @@ Forenkler, sikkerhet-personvern (GPS, ny rute med filer), test-leder, utvikler, 
 
 ## Avgjort ved gjennomgangen (prosjektlederen, 30.10.2026)
 
-- **Metadatasjekken avviser alle `APP1` og `APP13`**, ikke bare «APP1 med Exif» som forenkleren foreslo. Sikkerhet-personvern og test-leder viste at GPS også kan ligge i XMP (`APP1`) og IPTC (`APP13`). Det er like enkelt: funksjonen ser bare på merket, ikke innholdet, og en kopi fra `canvas` har aldri slike felt. Navnet blir derfor `hasMetadataSegment`. Ført som A8.
-- **Avvist kopi (400) slettes lokalt uten nytt forsøk** (sikkerhet-personvern). Ellers kan en Safari som legger et lite Exif-felt i kopien, gi evige nye forsøk. Ingen egen teller i appen: bildet mangler da visningskopi på serveren, og det telles i D4 med «Vis fra serveren». To årsaker (ingen kopi laget, kopi avvist) er samme funn for ADR-en. Ført som A8.
+- **Metadatasjekken avviser alle `APP1` og `APP13`**, ikke bare «APP1 med Exif» som forenkleren foreslo. Sikkerhet-personvern og test-leder viste at GPS også kan ligge i XMP (`APP1`) og IPTC (`APP13`). Det er like enkelt: funksjonen ser bare på merket, ikke innholdet, og en kopi fra `canvas` har aldri slike felt. Navnet blir derfor `hasMetadataSegment`. Ført som A10.
+- **Avvist kopi (400) slettes lokalt uten nytt forsøk** (sikkerhet-personvern). Ellers kan en Safari som legger et lite Exif-felt i kopien, gi evige nye forsøk. Ingen egen teller i appen: bildet mangler da visningskopi på serveren, og det telles i D4 med «Vis fra serveren». To årsaker (ingen kopi laget, kopi avvist) er samme funn for ADR-en. Ført som A10.
 - **Ingen `confirmLocalDisplayCopy` og ingen merknad i `confirmed` for kopier** (forenkler). Det løser også test-leders krav om at kopiene ikke kommer i `listConfirmedPhotoIds`.
 - **Krav før kopien godtas:** raden må ha `sha256` og `uploaded_at` og ikke være slettet (test-leder og sikkerhet-personvern). Rettingen av `storeTrialPhoto` for slettede rader tas med, fordi den er én linje og samme mangel.
 - **Overskriving får ingen egen testsak** (forenkler mot test-leder). Det er ikke et akseptkriterium, og det er vanlig filskriving. At det er greit i prøven og endres i fase 2a, står i omfang pkt. 3.

@@ -36,7 +36,7 @@ Skaleringen er en teknisk regel, ikke fag, men testes som data (`it.each`-tabell
 
 | Testnavn | Viser |
 |---|---|
-| «konstantene er 2000 punkter og kvalitet 0,8» | `DISPLAY_MAX_EDGE_PX === 2000`, `DISPLAY_JPEG_QUALITY === 0.8`. Endres de, må testen endres bevisst (A6). |
+| «konstantene er 2000 punkter og kvalitet 0,8» | `DISPLAY_MAX_EDGE_PX === 2000`, `DISPLAY_JPEG_QUALITY === 0.8`. Endres de, må testen endres bevisst (A8). |
 | «displaySize følger lengste side på 2000» | **Obligatorisk.** Én tabell: 4032x3024 → 2000x1500 · 3024x4032 → 1500x2000 · 3000x1000 → 2000x667 · 1000x3000 → 667x2000 · 4000x4000 → 2000x2000 · 2000x1500 → 2000x1500 (nøyaktig grensen) · 2001x1 → 2000x1 (aldri 0) · 64x64 → 64x64 (ikke forstørret) · 1x1 → 1x1. |
 | «displaySize gir null for ugyldige mål» | tabell: (0, 100), (100, 0), (-1, 100), (`NaN`, 100), (100, `Infinity`), maxEdge 0 → `null`. |
 | «displaySize gir alltid hele tall» | for alle radene over: `Number.isInteger` på bredde og høyde. |
@@ -195,7 +195,7 @@ Prosjektene `pc` og `ipad` (Chromium). Kandidaten egenbygd (`useCandidate(contex
 
 | Testnavn | Viser |
 |---|---|
-| «brudd i opplastingen: hvert bilde kommer fram én gang og bekreftede sendes ikke igjen» | **Obligatorisk** (AK 4). Tell PUT med `page.on("request")`, skilt på adresse: original (`/api/prove/bilder/<id>?`) og kopi (`/api/prove/bilder/<id>/visning?`), per bilde-id. `page.route("**/api/prove/bilder/**", …)`: første bilde slippes gjennom; velg bilde 1, vent til det er bekreftet (`localConfirmedKeys` har id-en og originalen finnes på disk). Så `abort()` for alle PUT til bilde 2 (original og kopi); velg bilde 2, vent til minst én PUT for bilde 2 er avbrutt og `localPhotoFileCount` = 1. Slipp nettet fram (`unroute`). Poll til `localPhotoFileCount` = 0 og `localDisplayCopyCount` = 0. Da: PUT-tallet for originalen til bilde 1 er **nøyaktig 1** (aldri sendt igjen); bilde 2 har ≥ 2 forsøk på originalen; etter at bilde 2 er bekreftet, kommer det ingen nye PUT for noen av dem i to nye runder (poll på at tellerne er like etter `PHOTO_UPLOAD_INTERVAL_MS * 2`, med `expect.poll` på en tidsstempel, ikke `waitForTimeout`). På serveren: kroken gir én rad per bilde-id (2 rader), disk har én original og én kopi per bilde, originalene har sha lik fixturene. `abort()` bryter før kroppen er sendt; det godtas (A7), og det ekte bruddet midt i en fil prøves i D3. |
+| «brudd i opplastingen: hvert bilde kommer fram én gang og bekreftede sendes ikke igjen» | **Obligatorisk** (AK 4). Tell PUT med `page.on("request")`, skilt på adresse: original (`/api/prove/bilder/<id>?`) og kopi (`/api/prove/bilder/<id>/visning?`), per bilde-id. `page.route("**/api/prove/bilder/**", …)`: første bilde slippes gjennom; velg bilde 1, vent til det er bekreftet (`localConfirmedKeys` har id-en og originalen finnes på disk). Så `abort()` for alle PUT til bilde 2 (original og kopi); velg bilde 2, vent til minst én PUT for bilde 2 er avbrutt og `localPhotoFileCount` = 1. Slipp nettet fram (`unroute`). Poll til `localPhotoFileCount` = 0 og `localDisplayCopyCount` = 0. Da: PUT-tallet for originalen til bilde 1 er **nøyaktig 1** (aldri sendt igjen); bilde 2 har ≥ 2 forsøk på originalen; etter at bilde 2 er bekreftet, kommer det ingen nye PUT for noen av dem i to nye runder (poll på at tellerne er like etter `PHOTO_UPLOAD_INTERVAL_MS * 2`, med `expect.poll` på en tidsstempel, ikke `waitForTimeout`). På serveren: kroken gir én rad per bilde-id (2 rader), disk har én original og én kopi per bilde, originalene har sha lik fixturene. `abort()` bryter før kroppen er sendt; det godtas (A9), og det ekte bruddet midt i en fil prøves i D3. |
 
 ### 5.6 HEIC og «Vis fra serveren»
 
@@ -255,7 +255,7 @@ Alle er oppdiktet: ingen ekte bilder, ingen personer, GPS 0,0. Laget én gang av
 | 10 Annen organisasjon får ikke PUT eller GET | 3.3 (to `expectTenantIsolation` + bilde-id fra B), 5.6 «annen organisasjon …» |
 | 11 Fire roller får PUT og GET; deaktivert og ikke innlogget nektes | 3.4 |
 | 12 Ingen endring i auth, mellomvare, økt, service worker | avsnitt 9 |
-| 13 Resultatmal, A5–A8, ordliste, plan, versjon | avsnitt 9 |
+| 13 Resultatmal, A7–A10, ordliste, plan, versjon | avsnitt 9 |
 | 14 Lint, typecheck, test, test:e2e grønne | avsnitt 9 |
 
 ## 9. Sjekk ved godkjenning (test-leder)
@@ -266,7 +266,7 @@ Alle er oppdiktet: ingen ekte bilder, ingen personer, GPS 0,0. Laget én gang av
 - Ingen `rm`, `unlink`, `rmdir` eller `.delete(` mot serverfiler eller `trial_photos` i nye linjer.
 - Ingen tilgangslogikk i `route.ts` eller `trial-form-view.tsx` (bare kall til serverfunksjonene).
 - Fixturene har bare feltene i 7 (testskriver viser utskriften i PR-en).
-- `docs/funksjoner/fase1-prove-d-bilder-resultat.md` finnes med D1–D5 og punktene «Før» fra kortet; A5–A8 står i `docs/09-apne-sporsmal.md`; «visningskopi» → `display copy` i ordlisten; «Stedstjenester av» og «rydd testbildene» står under «Trenger Ståle når han er tilbake».
+- `docs/funksjoner/fase1-prove-d-bilder-resultat.md` finnes med D1–D5 og punktene «Før» fra kortet; A7–A10 står i `docs/09-apne-sporsmal.md`; «visningskopi» → `display copy` i ordlisten; «Stedstjenester av» og «rydd testbildene» står under «Trenger Ståle når han er tilbake».
 - Mangler en test merket **Obligatorisk** for tilgang eller tenant-isolasjon (3.3, 3.4), avvises leveransen.
 
 ## 10. Ikke testet automatisk (står i resultatmalen)
