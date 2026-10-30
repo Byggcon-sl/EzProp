@@ -2,7 +2,7 @@
 
 - **Fase:** 1 – Prøve uten nett
 - **Modul:** `offline-trial` (prøvemodulen), og innloggingssiden (`src/app/logg-inn`)
-- **Status:** utkast til gjennomgang (30.10.2026)
+- **Status:** godkjent etter gjennomgang (30.10.2026). Se «Avgjørelser etter gjennomgangen».
 - **Branch:** `fase1-prove-f-innlogging` (bygger på `main`)
 - **Støtter hovedmål:**
   - **Reklamasjoner (hovedsak):** ingenting fra befaringen skal gå tapt fordi innloggingen gikk ut mens takstmannen var uten nett. Svarene og bildene ligger på iPaden til han har logget inn igjen, og synkes da uten tap.
@@ -47,29 +47,41 @@ Uten nett vises ingen melding om innlogging: appen kan ikke vite om innloggingen
 
 1. **Oppdage at innloggingen har gått ut** (i skjermlaget, likt for alle tre kandidatene):
    - En ren funksjon i prøvemodulen, `src/modules/offline-trial/session-check.ts`, spør serveren om innloggingen gjelder (`GET /api/auth/get-session` fra Better Auth, som finnes; svaret `null` betyr «ikke innlogget»). Svar: `valid`, `expired` eller `unknown` (nettverksfeil, 5xx, ugyldig svar). Funksjonen kaster aldri, og leser bare om det finnes en økt, aldri e-post eller navn.
-   - Sjekken kjøres når skjemaet eller listen åpnes **med nett**, når nettleseren melder `online`, og etter en synkrunde som feiler (også «Synk nå»). Ikke på tidsur. Høyst én sjekk om gangen.
-   - `unknown` endrer ingenting (statusen blir som i dag). Bare `expired` gir meldingen.
+   - Svar fra serveren: 200 med en økt gir `valid`. 200 med `null` gir `expired`. Alt annet gir `unknown`: 200 med `{}` eller uten `session`, 401, 403, 5xx, nettverksfeil, ugyldig JSON og tidsavbrudd. 401 og 403 gir bevisst `unknown`, fordi `get-session` svarer 200 med `null` når ingen er innlogget; et annet svar er en feil vi ikke skal vise som «logg inn».
+   - **Når sjekken kjøres** (bare med nett, aldri når `navigator.onLine` er usann):
+     1. nettleseren melder `online`;
+     2. synkstatusen (som allerede leser status hvert 2. sekund) ser at appen går fra «Uten nett» til nett. Safari på iPad sender ikke alltid `online`;
+     3. appen kommer fram på skjermen igjen (`visibilitychange` til synlig);
+     4. en synkrunde feiler (også etter «Synk nå»).
+   - Ingen sjekk når siden åpnes. Sidene kaller allerede `requireActor()` på serveren, så med nett og utløpt økt sendes takstmannen til innlogging før sjekken rekker å kjøre.
+   - Ikke noe nytt tidsur. Høyst én sjekk om gangen (en sjekk som pågår, gjenbrukes). Reglene for når sjekken kjøres, skilles ut som en ren funksjon med Vitest.
+   - `unknown` endrer ingenting (statusen blir som i dag). Bare `expired` gir meldingen. Gir en senere sjekk `valid`, forsvinner meldingen.
    - **Ingen endringer i de tre kandidatene** (`sync/powersync`, `sync/electricsql`, `sync/custom`, `sync/local`). De fortsetter å prøve og feile som i dag; køen og bildene blir liggende urørt til innloggingen er tilbake.
 2. **Melding om å logge inn på nytt:**
    - Ny femte tilstand i synkstatusen: `signInRequired`, med tekst i `sync-status-text.ts`: «Logg inn på nytt for å sende. Alt er lagret på iPaden.» Den har forrang foran «Venter …» og «Venter på kontakt med serveren», men **ikke** foran «Uten nett».
-   - Knappen «Logg inn» (minst 44 pt høy) i den faste linjen øverst går til `/logg-inn?neste=<sti til siden takstmannen står på>`. «Synk nå» skjules mens meldingen vises.
+   - Knappen «Logg inn» står **på samme plass som «Synk nå»**, med samme størrelse (`size="lg"`, minst 44 pt, hele bredden på smal skjerm), så linjen ikke hopper. Den går til `/logg-inn?neste=<location.pathname>` (bare stien, uten spørrestreng og `#`). «Synk nå» skjules mens meldingen vises.
+   - Meldingen leses opp (`role="status"`). Farge og utseende bestemmer ui-designer (advarsel, ikke feil).
    - Vises på listen `/prove/testskjema` og i skjemaet. Ingen melding om innlogging uten nett.
    - Markør for testene: ny `data-sync-state="offline|allSaved|pending|awaitingServer|signInRequired"` på `data-testid="sync-status"` (verdien er `SyncStatusKind`). Testene leser markøren, ikke norsk tekst.
 3. **Tilbake til skjemaet etter innlogging:**
-   - Innloggingssiden tar imot `neste`. Etter riktig kode går den dit i stedet for `/arbeidskoe`. Er takstmannen allerede innlogget når siden åpnes, går den også dit.
-   - **Bare trygge stier:** én ren funksjon `safeNextPath(value)` i `src/app/logg-inn/` (eller `src/core/auth`): godtar bare stier som begynner med `/prove/testskjema` eller er `/arbeidskoe`, ikke `//`, ikke `\`, ingen protokoll, ingen kontrolltegn. Alt annet gir `/arbeidskoe`. Testsaker i Vitest.
+   - Innloggingssiden tar imot `neste`. Begge veiene bruker **samme funksjon** `safeNextPath`: `page.tsx` (allerede innlogget, sender videre på serveren; i dag alltid til `/arbeidskoe`) og `login-form.tsx` (`router.replace` etter riktig kode).
+   - **Bare trygge stier:** én ren funksjon `safeNextPath(value: string | string[] | undefined)` i `src/app/logg-inn/safe-next-path.ts`. Den godtar bare en **hel** sti fra en fast liste, uten å dekode noe: nøyaktig `/arbeidskoe`, nøyaktig `/prove/testskjema`, eller `/prove/testskjema/<uuid>` (små bokstaver, tall og bindestrek, 36 tegn). Spørrestreng og `#` er ikke lov. Alt annet gir `/arbeidskoe`: liste, tom, mangler, `//`, `\`, protokoll, kontrolltegn, mellomrom, kodede tegn (`%2F`, `%5C`), `..`, og stier som bare begynner likt (`/prove/testskjemaX`). En fast liste i stedet for «begynner med» gjør at alle skjeve tilfeller faller bort av seg selv. Testsaker i Vitest.
    - `requireActor()` endres ikke. Åpner takstmannen en side **med nett** og utløpt innlogging, sendes han til innlogging som i dag (uten `neste`); det er greit fordi han da har nett og kan logge inn.
 4. **Synk etter innlogging:** når siden lastes på nytt etter innlogging, starter synken som før, og køen sendes. Ingen ny kode i kandidatene. Den lokale lagringen tømmes ikke (samme organisasjon, `TRIAL_LAST_ORGANIZATION_KEY`).
-5. **Testkrok for e2e:** ingen ny krok i produksjonskoden. E2e simulerer utløpt innlogging ved å sette `expires_at` på økten i testdatabasen til et tidspunkt som er passert (vakten i `e2e/database-guard.ts` brukes). Går ikke det, slettes informasjonskapselen med `context.clearCookies()`. Nettet slås av og på med `context.setOffline()`.
+5. **Testkrok for e2e:** ingen ny krok i produksjonskoden. To måter, som dekker de to tilfellene serveren kan se:
+   - **Hovedflyten (takstmann):** setter `expires_at` til et passert tidspunkt **bare på sin egen økt**. Økten finnes ved å slå opp `sessions.token` fra informasjonskapselen i `context.cookies()` (formen «token.signatur»). Vakten `assertLocalOrTestDatabase` brukes. Aldri admin-økter, fordi andre tester kjører samtidig som admin. Dette er ekte utløp: nettleseren sender kapselen, men serveren har ingen gyldig økt.
+   - **Admin-flyten:** `context.clearCookies()`, med en forklaring i testen. Det er det samme som «Logg ut» på ekte iPad (A6): nettleseren sender ingen kapsel.
+   - Nettet slås av og på med `context.setOffline()`.
 6. **Tester:** se «Testplan».
 7. **Resultatmal for prøven på ekte iPad:** `docs/funksjoner/fase1-prove-f-innlogging-resultat.md`. Trinn for Ståle, med avkryssing:
    - iPad-modell, iPadOS- og Safari-versjon, appen lagt på hjemskjermen, kandidat.
    - **Slik settes innloggingen som utløpt på ekte iPad:** åpne skjemaet med nett (så kopien ligger i appen), gå til arbeidskøen og trykk «Logg ut» (med nett), slå på flymodus, åpne appen fra hjemskjermen og deretter skjemaet. Serveren ser det samme som når innloggingen har gått ut: ingen gyldig økt. Ingen egen kort levetid i testmiljøet (se A6).
    - **F1 Åpne uten nett:** skjemaet åpnes, alt som var der står der.
    - **F2 Fylle ut uten nett:** alle felt og 10 bilder; lukk appen helt og åpne igjen; alt står der.
-   - **F3 Nettet kommer:** flymodus av; meldingen «Logg inn på nytt for å sende» kommer innen ca. 10 sekunder (eller etter «Synk nå»).
-   - **F4 Logg inn og synk:** «Logg inn», kode på e-post, tilbake i skjemaet, «Alt er lagret». Sjekk på PC at alle svar og alle 10 bilder er der.
-   - Hver del per kandidat, med bestått / delvis / ikke bestått. Det står i malen at ekte utløp etter 30 dager ikke kan testes direkte.
+   - **Under A6 står hva Ståle må passe på:** han må ha åpnet både skjemaet og listen med nett før han logger ut.
+   - **F3 Nettet kommer:** flymodus av; meldingen «Logg inn på nytt for å sende» kommer innen ca. 10 sekunder (eller etter «Synk nå»). **Tid fra flymodus av til meldingen, i sekunder.**
+   - **F4 Logg inn og synk:** «Logg inn», kode på e-post, tilbake i skjemaet, «Alt er lagret». Sjekk på PC at alle svar og alle 10 bilder er der. **Tid fra «Logg inn» til «Alt er lagret», i sekunder.** Eget punkt: «Gikk til Mail og tilbake: sto siden fortsatt på kodefeltet? ja/nei». Svarer prøven nei, føres det i `docs/09-apne-sporsmal.md` (forslag: husk steget i `sessionStorage`). Vi bygger ikke noe for det nå.
+   - Hver del per kandidat, med bestått / delvis / ikke bestått. Det står i malen at ekte utløp etter 30 dager ikke kan testes direkte, og at PowerSync-tokenet kan gjelde i opptil én time etter at økten er borte (bare henting av data, ikke sending).
 8. Versjon i `package.json` økes (patch). Ordlisten oppdateres (se «Data»). Beslutningene A5 og A6 står i `docs/09-apne-sporsmal.md`.
 
 **Ikke med (bevisst utelatt):**
@@ -80,6 +92,9 @@ Uten nett vises ingen melding om innlogging: appen kan ikke vite om innloggingen
 - Varsel før innloggingen går ut («utløper om 3 dager»). Kan foreslås senere.
 - Melding om innlogging mens appen er uten nett.
 - Tilbake til skjemaet når siden åpnes med nett og innloggingen har gått ut (`requireActor` med `neste`). Kan tas i fase 0b sammen med felles innlogging.
+- Sjekk av innloggingen når siden åpnes (se punkt 1).
+- At innloggingssiden husker e-posten eller at koden er sendt hvis iPadOS laster appen på nytt (prøves i F4).
+- Fylle inn e-posten selv på innloggingssiden (sparer ca. 10 s). Kan foreslås senere.
 - At en annen ansatt logger inn på samme iPad og overtar køen. Samme organisasjon i dag; hører til fase 0b og 2b.
 - Logg ut som tømmer iPaden. Logg ut endres ikke.
 - Nye ruter, nye tabeller, migreringer, nye avhengigheter.
@@ -94,7 +109,9 @@ Uten nett vises ingen melding om innlogging: appen kan ikke vite om innloggingen
 | leder | ja | – |
 | admin | ja | – |
 
-Ingen ny rute og ingen ny spørring som tar `organizationId`, så `expectTenantIsolation` trengs ikke. Det godtas bare hvis `git diff` viser at ingenting i `src/db`, `src/app/api` eller `src/modules/offline-trial/server` er endret. All synk går fortsatt gjennom rutene som sjekker tilgang i `src/core/access`; de endres ikke. Ingen tilgangsregel endres, så admin stenges ikke ute. Myk sletting gjelder ikke (ingen nye data).
+Ingen ny rute og ingen ny spørring som tar `organizationId`, så `expectTenantIsolation` trengs ikke. Det godtas bare hvis testrapporten viser at `git diff main --stat -- src/db src/app/api src/modules/offline-trial/server src/modules/offline-trial/sync/powersync src/modules/offline-trial/sync/electricsql src/modules/offline-trial/sync/custom src/modules/offline-trial/sync/local` er tom. Er noe der endret, gjelder kravet om `expectTenantIsolation` som vanlig.
+
+Hovedflyten i e2e kjøres som **takstmann** (`logInAsInspector`). En egen e2e viser at **admin** med «Logg inn» og `neste` havner i skjemaet (admin stenges ikke ute). Kontor og leder dekkes av de eksisterende rolletestene for `/prove`; det står i testrapporten. All synk går fortsatt gjennom rutene som sjekker tilgang i `src/core/access`; de endres ikke. Ingen tilgangsregel endres, så admin stenges ikke ute. Myk sletting gjelder ikke (ingen nye data).
 
 **Sikkerhet:** `neste` er den eneste nye inngangen fra adressefeltet. Den må aldri kunne sende til en annen nettside (åpen videresending). Sjekken av økten skal aldri logge eller vise e-post, navn eller svar.
 
@@ -120,21 +137,15 @@ Ingen fagregler. `safeNextPath` er en teknisk regel med testsaker i Vitest.
 
 ## Testplan
 
-**Vitest:**
+Hele testplanen står i `docs/funksjoner/fase1-prove-f-innlogging-testplan.md`. Kort:
 
-- `session-check.test.ts`: økt gir `valid`, `null` gir `expired`, 5xx, nettverksfeil og ugyldig JSON gir `unknown`, aldri kast.
-- `sync-status-text.test.ts`: `signInRequired` har forrang foran «Venter …» og «Venter på kontakt med serveren», men ikke foran «Uten nett».
-- `safeNextPath`: `/prove/testskjema`, `/prove/testskjema/<uuid>` og `/arbeidskoe` godtas; `//evil.example`, `/\evil.example`, `https://…`, `javascript:…`, tom, `/api/…`, `/logg-inn`, kontrolltegn og lange strenger gir `/arbeidskoe`.
-
-**Playwright, `e2e/fase-1-prove-f-innlogging.spec.ts`** (pc og ipad, Chromium, standardkandidaten PowerSync; én test med egenbygd hvis det ikke dobler tiden):
-
-- **Åpne og fylle ut uten nett med utløpt innlogging:** logg inn, åpne skjemaet (kopien lages), sett økten som utløpt, slå av nettet, last siden på nytt. Skjemaet åpnes, svar og ett bilde lagres, ingen melding om innlogging, statusen er «Uten nett».
-- **Data overlever lukking:** ny side i samme kontekst uten nett, alt står der.
-- **Nettet kommer:** slå på nettet. `data-sync-state="signInRequired"`, meldingen og «Logg inn» vises; svarene står fortsatt i feltene; serveren har ikke fått dem (sjekk i testdatabasen).
-- **Logg inn og synk:** «Logg inn», koden fra utviklingspostkassen, tilbake på samme skjema (`neste`), statusen blir «Alt er lagret», og svarene og bildet finnes i testdatabasen. Ingenting mangler.
-- **Gyldig innlogging gir ingen melding:** med nett og gyldig økt vises aldri `signInRequired`.
-- **`neste` til en annen nettside** (`/logg-inn?neste=//evil.example`): etter innlogging havner man på `/arbeidskoe`.
-- «Logg inn» er minst 44 px høy på ipad.
+- **Vitest:** `session-check.test.ts` (alle svar fra serveren, aldri kast, aldri e-post eller navn ut, når sjekken kjøres, høyst én om gangen), `sync-status-text.test.ts` (`signInRequired`, forrang, markøren er alltid en av fem verdier), `safe-next-path.test.ts` (alle tilfellene fra punkt 3), og at «Synk nå» er skjult ved `signInRequired`.
+- **Playwright** `e2e/fase-1-prove-f-innlogging.spec.ts`, Chromium, standardkandidaten PowerSync:
+  1. **Hovedflyt som takstmann (pc og ipad):** én test med hele løpet, fra utløpt økt og uten nett til «Alt er lagret» og sjekk i testdatabasen.
+  2. **Admin, «Synk nå» og ingen sjekk uten grunn (pc):** utløst av «Synk nå», ikke `online`.
+  3. **Kopien av skjemaet ødelegges ikke (pc):** omdirigering til innlogging lagres ikke som kopi.
+  4. **`neste` på begge veier (pc):** allerede innlogget og etter kode, med trygg sti og med `//evil.example`.
+- `pnpm build` og e2e kjøres etter hverandre, ikke samtidig.
 
 ## Akseptkriterier
 
@@ -142,10 +153,15 @@ Ingen fagregler. `safeNextPath` er en teknisk regel med testsaker i Vitest.
 - [ ] Endringene ligger lokalt etter lukking og ny åpning (e2e).
 - [ ] Når nettet kommer, vises «Logg inn på nytt for å sende. Alt er lagret på iPaden.» med knappen «Logg inn» (e2e).
 - [ ] Etter innlogging kommer takstmannen tilbake til samme skjema, og alt synkes uten tap (e2e, sjekket i testdatabasen).
-- [ ] `neste` sender aldri til en annen nettside (Vitest og e2e).
-- [ ] Ingen endringer i de tre kandidatene, i `src/db` eller i `src/app/api` (`git diff`).
+- [ ] Meldingen kommer også etter «Synk nå», ikke bare etter `online`, og «Synk nå» er skjult mens «Logg inn» vises (e2e).
+- [ ] Ingen sjekk av innloggingen uten nett, og ingen sjekk uten noe som utløser den (e2e og Vitest). Høyst én om gangen (Vitest).
+- [ ] Serveren får ingenting før innlogging; etter innlogging finnes alle svar og bildet, og køen er 0 (e2e, testdatabasen).
+- [ ] Den lagrede kopien av skjemaet blir ikke erstattet av innloggingssiden (e2e).
+- [ ] `neste` sender aldri til en annen nettside, på begge veier (Vitest og e2e på pc).
+- [ ] Admin med `neste` havner i skjemaet (e2e).
+- [ ] Ingen endringer i de tre kandidatene, i `src/db`, `src/app/api` eller `src/modules/offline-trial/server` (`git diff` i testrapporten).
 - [ ] Bruker i annen organisasjon får ikke tilgang: ingen ny spørring; eksisterende tester for rutene gjelder.
-- [ ] Virker på iPad-størrelse (e2e).
+- [ ] Virker på iPad-størrelse, og «Logg inn» er minst 44 px høy på listen og i skjemaet (e2e, ipad).
 - [ ] Resultatmalen `docs/funksjoner/fase1-prove-f-innlogging-resultat.md` finnes.
 - [ ] Ingen nye avhengigheter. Versjon økt. Ordlisten oppdatert.
 
@@ -153,6 +169,22 @@ Ingen fagregler. `safeNextPath` er en teknisk regel med testsaker i Vitest.
 
 - **A5:** Meldingen om å logge inn vises bare når appen har nett og serveren sier at økten er borte. Uten nett: ingen melding. Kilde: Spectora (`spectora-detaljer.md` linje 74) og målet om få avbrudd.
 - **A6:** På ekte iPad simuleres utløpt innlogging med «Logg ut» før flymodus, ikke med kort levetid i testmiljøet. Serveren ser det samme (ingen gyldig økt), det krever ingen endring i testmiljøet og ingen ekstra kode. Kan endres ved å legge inn kort levetid i testmiljøet senere.
+
+## Avgjørelser etter gjennomgangen (prosjektlederen, 30.10.2026)
+
+Rollene var uenige på noen punkter. Slik er det avgjort:
+
+1. **Sjekk når siden åpnes: kuttet** (forenkler). `requireActor()` sender allerede til innlogging når takstmannen har nett. **I stedet** kommer to utløsere fra ux-ansvarlig: overgangen fra «Uten nett» til nett som synkstatusen allerede ser, og `visibilitychange`. Grunn: Safari på iPad sender ikke alltid `online`, og uten dem kan F3 feile. Det er ikke noe nytt tidsur.
+2. **Hvordan økten går ut i e2e: begge måter, i hver sin test** (test-leder foran forenkler). Hovedflyten setter `expires_at` på sin egen økt; det er det som skjer ved ekte utløp (kapselen sendes, men gjelder ikke). Admin-testen bruker `clearCookies()`, som er det samme som «Logg ut» i A6. Vakten finnes allerede, så det blir lite ny kode, og vi dekker begge tilfellene uten flere tester. Bare egen økt, aldri admin-økter, fordi testene kjører samtidig.
+3. **Én hovedflyt per prosjekt** (forenkler), men med alle sjekkene test-leder og ux-ansvarlig ba om inne i flyten: lukking og ny side, ingenting på serveren før innlogging, 44 px på listen og i skjemaet (bare ipad), «Alt er lagret» uten fast pause. Ingen egen test for «gyldig innlogging gir ingen melding»; det sjekkes i starten av flyten og i Vitest.
+4. **`neste` i e2e: beholdt, men bare på pc** (test-leder foran forenkler). Test-leder godkjenner ikke koden uten at begge veiene er dekket. Fire korte saker uten nettbrudd, så det koster lite tid.
+5. **Innloggingssiden bruker `neste` også når man allerede er innlogget: beholdt** (test-leder foran forenkler). Siden sender allerede videre i dag (til `/arbeidskoe`); det er én linje å bruke `safeNextPath` der også, og da oppfører de to veiene seg likt. Det hjelper også når takstmannen har logget inn i en annen fane og så trykker «Logg inn».
+6. **Egenbygd kandidat i e2e: kuttet** (forenkler). Sjekken ligger i skjermlaget og er lik for alle; kandidatene endres ikke. Resultatmalen for ekte iPad dekker alle kandidatene.
+7. **«Høyst én sjekk om gangen» testes i Vitest, ikke e2e.** E2e kan ikke måle sikkert om to kall overlapper. E2e teller at det ikke kommer kall uten nett og ikke på 15 sekunder uten noe som utløser.
+8. **`safeNextPath` bruker en fast liste over hele stier**, ikke «begynner med». Spørrestreng og `#` er ikke lov. Da er alle skjeve tilfeller fra test-leder avvist uten egne regler.
+9. **401 og 403 fra `get-session` gir `unknown`**, ikke `expired`. Heller ingen melding enn feil melding.
+
+Ingen av disse er fag, pris, personvern eller nye funksjoner, så ingen nye punkter i `docs/09-apne-sporsmal.md`.
 
 ## Åpne spørsmål
 
