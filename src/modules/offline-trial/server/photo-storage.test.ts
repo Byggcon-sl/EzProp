@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import os from "node:os";
@@ -11,7 +11,6 @@ import { db } from "@/db/client";
 import { employees, trialPhotos, users } from "@/db/schema";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { resetDatabase } from "../../../../tests/factories";
-import { expectTenantIsolation } from "../../../../tests/tenant-isolation";
 import {
   ALL_ROLES,
   createDeactivatedEmployee,
@@ -19,6 +18,21 @@ import {
   putTrialForm,
   setupOrganization,
 } from "../../../../tests/offline-trial";
+import {
+  APP0,
+  APP1_EXIF,
+  APP1_XMP,
+  APP13,
+  APP2,
+  cleanDisplayCopy,
+  DHT,
+  DQT,
+  jpeg,
+  jpegWithScan,
+  SOF0,
+  SOS,
+} from "../../../../tests/jpeg-bytes";
+import { expectTenantIsolation } from "../../../../tests/tenant-isolation";
 import { applyTrialChanges } from "./apply-changes";
 import {
   InvalidTrialChangeError,
@@ -424,407 +438,463 @@ describe("readTrialPhotoBody", () => {
   });
 });
 
-// Prøve D: visningskopien (docs/funksjoner/fase1-prove-d-bilder.md pkt. 3). Testplan 2.2, 3.1–3.3.
+// --- Prøve D – bilder: visningskopien på serveren (docs/funksjoner/fase1-prove-d-bilder.md
+// pkt. 3, AK 6, 8 og 10). Testplan avsnitt 2.2, 3.1, 3.2 og 3.3. JPEG-bytene bygges i testen
+// (`tests/jpeg-bytes.ts`), ingen ekte bilder. Alle data er oppdiktet.
 
-/** Ett felt i en JPEG: merke og innhold, med lengdefeltet regnet ut. */
-function segment(marker: number, payload: number[] | string = [0, 0]): number[] {
-  const data = typeof payload === "string" ? [...Buffer.from(payload, "latin1")] : payload;
-  const length = data.length + 2;
-  return [0xff, marker, length >> 8, length & 0xff, ...data];
-}
-
-/** En liten JPEG: FF D8, feltene, FF DA, noen bytes bildedata og FF D9. */
-function jpeg(...segments: number[][]): Uint8Array {
-  return new Uint8Array([
-    0xff,
-    0xd8,
-    ...segments.flat(),
-    ...segment(0xda, [1, 1, 0, 0, 0x3f, 0]),
-    0x12,
-    0x34,
-    0x56,
-    0xff,
-    0xd9,
-  ]);
-}
-
-const APP0 = segment(0xe0, "JFIF\0\x01\x01\0\0\x01\0\x01\0\0");
-const APP2 = segment(0xe2, "ICC_PROFILE\0\x01\x01");
-const APP1_EXIF = segment(0xe1, "Exif\0\0GPSLatitude 0/0/0 N");
-const APP1_XMP = segment(0xe1, "http://ns.adobe.com/xap/1.0/\0<x/>");
-const APP13 = segment(0xed, "Photoshop 3.0\0");
-const COPY = jpeg(APP0);
+const COPY = cleanDisplayCopy();
 const COPY_SHA = createHash("sha256").update(COPY).digest("hex");
-const PNG_HEAD = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const UNUSED_UUID = "00000000-0000-4000-8000-000000000000";
 
-describe("hasMetadataSegment", () => {
-  it("hasMetadataSegment godtar JPEG uten metadatafelt", () => {
-    const cases = [
-      jpeg(APP0),
-      jpeg(APP0, APP2),
-      jpeg(APP0, segment(0xdb), segment(0xc0), segment(0xc4)),
-      jpeg(segment(0xdb)),
-      jpeg(),
-    ];
-    for (const bytes of cases) expect(hasMetadataSegment(bytes)).toBe(false);
-  });
-
-  it("hasMetadataSegment avviser APP1 og APP13", () => {
-    const cases = [
-      jpeg(APP0, APP1_EXIF),
-      jpeg(APP0, APP1_XMP),
-      jpeg(APP0, APP13),
-      jpeg(APP1_EXIF),
-      jpeg(APP2, APP1_EXIF),
-    ];
-    for (const bytes of cases) expect(hasMetadataSegment(bytes)).toBe(true);
-  });
-
-  it("hasMetadataSegment ser ikke etter bildedataene", () => {
-    const bytes = new Uint8Array([
-      0xff,
-      0xd8,
-      ...APP0,
-      ...segment(0xda, [1, 1, 0, 0, 0x3f, 0]),
-      0xff,
-      0xe1,
-      0x00,
-      0x10,
-      0xff,
-      0xd9,
-    ]);
-    expect(hasMetadataSegment(bytes)).toBe(false);
-  });
-
-  it("hasMetadataSegment avviser ødelagte filer", () => {
-    const cases: Uint8Array[] = [
-      new Uint8Array(0),
-      new Uint8Array([0xff, 0xd8]),
-      PNG_HEAD,
-      new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00]),
-      new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x40, 0x01, 0x02]),
-      new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x00, 0xff, 0xda]),
-      new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x01, 0xff, 0xda]),
-      new Uint8Array([0xff, 0xd8, ...APP0]),
-      new Uint8Array([0xff, 0xd8, 0xff, 0xff, 0xff, 0xff]),
-    ];
-    for (const bytes of cases) expect(hasMetadataSegment(bytes)).toBe(true);
-  });
-
-  it("hasMetadataSegment henger aldri", { timeout: 2000 }, () => {
-    const random = new Uint8Array(1024 * 1024);
-    for (let i = 0; i < random.length; i += 1) random[i] = Math.floor(Math.random() * 256);
-    random[0] = 0xff;
-    random[1] = 0xd8;
-    expect(typeof hasMetadataSegment(random)).toBe("boolean");
-    const allFf = new Uint8Array(1024 * 1024).fill(0xff);
-    expect(hasMetadataSegment(allFf)).toBe(true);
-  });
-});
-
-/** Legger inn originalen med storeTrialPhoto, slik ruten gjør. */
-async function uploadOriginal(actor: Actor, organizationId: string, photoId = uuidv7()) {
-  const formId = await putTrialForm(actor, organizationId);
-  await storeTrialPhoto(actor, organizationId, photoId, meta(formId), BYTES);
-  return photoId;
+function displayPath(organizationId: string, photoId: string): string {
+  return path.join(uploadDir, organizationId, `${photoId}.display.jpg`);
 }
 
-function displayPath(organizationId: string, photoId: string) {
-  return path.join(uploadDir, organizationId, `${photoId}.display.jpg`);
+function sha(bytes: Uint8Array | Buffer): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+/** Testskjema og ett bilde med original mottatt (`storeTrialPhoto`). */
+async function photoWithOriginal(actor: Actor, organizationId: string, formId?: string) {
+  const form = formId ?? (await putTrialForm(actor, organizationId));
+  const photoId = uuidv7();
+  await storeTrialPhoto(actor, organizationId, photoId, meta(form), BYTES);
+  return { formId: form, photoId };
 }
 
 async function softDelete(photoId: string) {
   await db.update(trialPhotos).set({ deletedAt: new Date() }).where(eq(trialPhotos.id, photoId));
 }
 
-/** Admin-innloggingen i grant-ens organisasjon. */
+/** Meldingen til feilen, eller kaster om kallet lyktes. */
+async function errorOf(promise: Promise<unknown>): Promise<Error> {
+  try {
+    await promise;
+  } catch (error) {
+    return error as Error;
+  }
+  throw new Error("Kallet skulle feilet");
+}
+
+/** Filene som slutter på `.display.jpg` under en mappe. */
+async function displayFiles(dir: string): Promise<string[]> {
+  return (await listAll(dir)).filter((name) => name.endsWith(".display.jpg"));
+}
+
+/** Admin-innloggingen i grant-ens organisasjon (expectTenantIsolation bruker admin i begge). */
 async function actorFor(grant: EmployeeGrant): Promise<Actor> {
-  const [row] = await db
+  const [found] = await db
     .select({ id: users.id, name: users.name, email: users.email })
     .from(employees)
     .innerJoin(users, eq(users.id, employees.userId))
     .where(eq(employees.id, grant.employeeId));
-  if (!row) throw new Error("fant ikke den ansatte");
-  return row;
+  if (!found) throw new Error("fant ikke den ansatte");
+  return found;
 }
 
-/** Id-ene som lyktes; bare 404-feilen fanges, så AccessDeniedError går videre. */
-async function succeeded(ids: string[], run: (id: string) => Promise<unknown>) {
+/**
+ * Prøver funksjonen for hver id og gir de id-ene som lyktes. Fanger bare
+ * `TrialPhotoNotFoundError`; `AccessDeniedError` og alt annet går videre (testplan 3.3).
+ */
+async function idsThatSucceed(ids: string[], call: (id: string) => Promise<unknown>) {
   const ok: { id: string }[] = [];
   for (const id of ids) {
     try {
-      await run(id);
+      await call(id);
       ok.push({ id });
     } catch (error) {
-      if (!(error instanceof TrialPhotoNotFoundError)) throw error;
+      if (error instanceof TrialPhotoNotFoundError) continue;
+      throw error;
     }
   }
   return ok;
 }
 
+describe("hasMetadataSegment", () => {
+  // Obligatorisk
+  it.each([
+    ["bare APP0 (JFIF)", jpeg(APP0)],
+    ["APP0 + APP2 (fargeprofil)", jpeg(APP0, APP2)],
+    ["APP0 + DQT + SOF0 + DHT", jpeg(APP0, DQT, SOF0, DHT)],
+    ["ingen APPn", jpeg(DQT, SOF0, DHT)],
+  ])("hasMetadataSegment godtar JPEG uten metadatafelt: %s", (_name, bytes) => {
+    expect(hasMetadataSegment(bytes)).toBe(false);
+  });
+
+  // Obligatorisk (A5, A8)
+  it.each([
+    ["APP1 Exif etter APP0", jpeg(APP0, APP1_EXIF)],
+    ["APP1 med XMP-hode", jpeg(APP0, APP1_XMP)],
+    ["APP13 (Photoshop 3.0)", jpeg(APP0, APP13)],
+    ["APP1 som første felt", jpeg(APP1_EXIF, APP0)],
+    ["APP1 etter APP2", jpeg(APP0, APP2, APP1_EXIF)],
+  ])("hasMetadataSegment avviser APP1 og APP13: %s", (_name, bytes) => {
+    expect(hasMetadataSegment(bytes)).toBe(true);
+  });
+
+  it("hasMetadataSegment ser ikke etter bildedataene", () => {
+    // `FF E1` inne i bildedataene etter `FF DA` er ikke et felt
+    const bytes = jpegWithScan([APP0], [0x12, 0xff, 0xe1, 0x00, 0x10, 0x34]);
+    expect(hasMetadataSegment(bytes)).toBe(false);
+  });
+
+  // Obligatorisk (ødelagt fil regnes som avvist)
+  it.each([
+    ["tom fil", new Uint8Array(0)],
+    ["bare FF D8", Uint8Array.from([0xff, 0xd8])],
+    [
+      "uten FF D8 først (PNG-hode)",
+      Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    ],
+    ["avkuttet midt i et lengdefelt", Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00])],
+    [
+      "lengde som peker forbi slutten",
+      Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0xff, 0x4a, 0x46]),
+    ],
+    ["lengde 0", Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x00, ...SOS, 0xff, 0xd9])],
+    ["lengde 1", Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x01, ...SOS, 0xff, 0xd9])],
+    ["ingen FF DA før slutten", Uint8Array.from([0xff, 0xd8, ...APP0])],
+    [
+      "fyllbytes FF FF uten merke til slutten",
+      Uint8Array.from([0xff, 0xd8, 0xff, 0xff, 0xff, 0xff]),
+    ],
+  ])("hasMetadataSegment avviser ødelagte filer: %s", (_name, bytes) => {
+    expect(hasMetadataSegment(bytes)).toBe(true);
+  });
+
+  it("hasMetadataSegment henger aldri", { timeout: 2000 }, () => {
+    const random = new Uint8Array(randomBytes(1024 * 1024));
+    random[0] = 0xff;
+    random[1] = 0xd8;
+    const allFf = new Uint8Array(1024 * 1024).fill(0xff);
+    for (const bytes of [random, allFf]) {
+      let result: unknown;
+      expect(() => {
+        result = hasMetadataSegment(bytes);
+      }).not.toThrow();
+      expect(typeof result).toBe("boolean");
+    }
+  });
+});
+
 describe("storeTrialDisplayCopy", () => {
+  // Obligatorisk
   it("lagrer kopien som <id>.display.jpg under TRIAL_UPLOAD_DIR/<organizationId> og svarer sha256", async () => {
     const { actor, organizationId } = await setupOrganization("inspector");
-    const photoId = await uploadOriginal(actor, organizationId);
+    const { photoId } = await photoWithOriginal(actor, organizationId);
+    const originalPath = path.join(uploadDir, organizationId, photoId);
+    const originalShaBefore = sha(readFileSync(originalPath));
 
     const result = await storeTrialDisplayCopy(actor, organizationId, photoId, "image/jpeg", COPY);
 
+    const file = displayPath(organizationId, photoId);
+    expect(existsSync(file)).toBe(true);
+    expect(Buffer.compare(readFileSync(file), Buffer.from(COPY))).toBe(0);
     expect(result).toEqual({ sha256: COPY_SHA });
-    expect(Buffer.compare(readFileSync(displayPath(organizationId, photoId)), COPY)).toBe(0);
-    const original = readFileSync(path.join(uploadDir, organizationId, photoId));
-    expect(createHash("sha256").update(original).digest("hex")).toBe(SHA);
+    // Originalen er uendret
+    expect(sha(readFileSync(originalPath))).toBe(originalShaBefore);
+    expect(originalShaBefore).toBe(SHA);
   });
 
-  it("annen type enn image/jpeg gir InvalidTrialChangeError uten fil", async () => {
-    const { actor, organizationId } = await setupOrganization();
-    const photoId = await uploadOriginal(actor, organizationId);
-    for (const type of ["image/png", "image/heic", "image/jpeg; charset=x", "", "text/plain"]) {
+  // Valget er låst her: bare nøyaktig `image/jpeg` godtas, også parametre avvises.
+  it.each(["image/png", "image/heic", "image/jpeg; charset=x", "", "text/plain"])(
+    "annen type enn image/jpeg gir InvalidTrialChangeError uten fil (%s)",
+    async (contentType) => {
+      const { actor, organizationId } = await setupOrganization();
+      const { photoId } = await photoWithOriginal(actor, organizationId);
+
       await expect(
-        storeTrialDisplayCopy(actor, organizationId, photoId, type, COPY),
-        type || "(tom)",
+        storeTrialDisplayCopy(actor, organizationId, photoId, contentType, COPY),
       ).rejects.toThrow(InvalidTrialChangeError);
-    }
-    expect(existsSync(displayPath(organizationId, photoId))).toBe(false);
-  });
+      expect(await displayFiles(uploadDir)).toEqual([]);
+    },
+  );
 
   it("fil uten FF D8 først gir InvalidTrialChangeError uten fil", async () => {
     const { actor, organizationId } = await setupOrganization();
-    const photoId = await uploadOriginal(actor, organizationId);
+    const { photoId } = await photoWithOriginal(actor, organizationId);
+
     await expect(
-      storeTrialDisplayCopy(actor, organizationId, photoId, "image/jpeg", PNG_HEAD),
+      storeTrialDisplayCopy(actor, organizationId, photoId, "image/jpeg", BYTES),
     ).rejects.toThrow(InvalidTrialChangeError);
-    expect(existsSync(displayPath(organizationId, photoId))).toBe(false);
+    expect(await displayFiles(uploadDir)).toEqual([]);
   });
 
-  it("kopi med APP1 eller APP13 gir InvalidTrialChangeError uten fil", async () => {
+  // Obligatorisk (AK 6)
+  it.each([
+    ["APP1 Exif med oppdiktet GPS", jpeg(APP0, APP1_EXIF)],
+    ["APP1 XMP", jpeg(APP0, APP1_XMP)],
+    ["APP13", jpeg(APP0, APP13)],
+  ])("kopi med APP1 eller APP13 gir InvalidTrialChangeError uten fil (%s)", async (_n, bytes) => {
     const { actor, organizationId } = await setupOrganization();
-    const photoId = await uploadOriginal(actor, organizationId);
-    for (const bytes of [jpeg(APP0, APP1_EXIF), jpeg(APP0, APP1_XMP), jpeg(APP0, APP13)]) {
-      await expect(
-        storeTrialDisplayCopy(actor, organizationId, photoId, "image/jpeg", bytes),
-      ).rejects.toThrow(InvalidTrialChangeError);
-    }
-    expect(existsSync(displayPath(organizationId, photoId))).toBe(false);
+    const { photoId } = await photoWithOriginal(actor, organizationId);
+
+    await expect(
+      storeTrialDisplayCopy(actor, organizationId, photoId, "image/jpeg", bytes),
+    ).rejects.toThrow(InvalidTrialChangeError);
+    expect(await displayFiles(uploadDir)).toEqual([]);
   });
 
-  it("ødelagt eller avkuttet kopi gir InvalidTrialChangeError, aldri annen feil", async () => {
-    const { actor, organizationId } = await setupOrganization();
-    const photoId = await uploadOriginal(actor, organizationId);
-    const cases = [
-      new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00]),
-      new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x40, 0x01]),
-    ];
-    for (const bytes of cases) {
-      await expect(
+  // Obligatorisk
+  it.each([
+    ["avkuttet", Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00])],
+    ["lengde forbi slutten", Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0xff, 0x4a, 0x46])],
+  ])(
+    "ødelagt eller avkuttet kopi gir InvalidTrialChangeError, aldri annen feil (%s)",
+    async (_n, bytes) => {
+      const { actor, organizationId } = await setupOrganization();
+      const { photoId } = await photoWithOriginal(actor, organizationId);
+
+      const error = await errorOf(
         storeTrialDisplayCopy(actor, organizationId, photoId, "image/jpeg", bytes),
-      ).rejects.toThrow(InvalidTrialChangeError);
-    }
-    expect(existsSync(displayPath(organizationId, photoId))).toBe(false);
-  });
+      );
+      expect(error).toBeInstanceOf(InvalidTrialChangeError);
+      expect(await displayFiles(uploadDir)).toEqual([]);
+    },
+  );
 
   it("for stor kopi gir TrialPhotoTooLargeError uten fil", async () => {
     const { actor, organizationId } = await setupOrganization();
-    const photoId = await uploadOriginal(actor, organizationId);
+    const { photoId } = await photoWithOriginal(actor, organizationId);
     vi.stubEnv("TRIAL_PHOTO_MAX_BYTES", String(COPY.byteLength - 1));
+
     await expect(
       storeTrialDisplayCopy(actor, organizationId, photoId, "image/jpeg", COPY),
     ).rejects.toThrow(TrialPhotoTooLargeError);
-    expect(existsSync(displayPath(organizationId, photoId))).toBe(false);
+    expect(await displayFiles(uploadDir)).toEqual([]);
   });
 
   it("ugyldig id gir TrialPhotoNotFoundError uten fil", async () => {
     const { actor, organizationId } = await setupOrganization();
+    await photoWithOriginal(actor, organizationId);
+    const before = await listAll(uploadDir);
+
     for (const badId of ["../x", "ikke-en-uuid"]) {
       await expect(
         storeTrialDisplayCopy(actor, organizationId, badId, "image/jpeg", COPY),
+        badId,
       ).rejects.toThrow(TrialPhotoNotFoundError);
     }
-    expect(await listAll(uploadDir)).toEqual([]);
+    expect(await listAll(uploadDir)).toEqual(before);
+    expect(existsSync(path.join(path.dirname(uploadDir), "x"))).toBe(false);
+    expect(existsSync(path.join(path.dirname(uploadDir), "x.display.jpg"))).toBe(false);
   });
 
+  // Obligatorisk (AK 6, 8)
   it("404 når raden ikke finnes, er slettet, mangler sha256 eller uploaded_at", async () => {
     const { actor, organizationId } = await setupOrganization();
-    const deleted = await uploadOriginal(actor, organizationId);
-    await softDelete(deleted);
-    const formId = await putTrialForm(actor, organizationId, "Testskjema 2");
-    const notReceived = uuidv7();
-    await applyTrialChanges(actor, organizationId, [
-      photoOp(formId, "cover_photo", {}, notReceived),
-    ]);
+    const formId = await putTrialForm(actor, organizationId);
 
-    const messages: string[] = [];
-    for (const id of [uuidv7(), deleted, notReceived]) {
-      const error = await storeTrialDisplayCopy(actor, organizationId, id, "image/jpeg", COPY).then(
-        () => null,
-        (e: unknown) => e,
-      );
-      expect(error, id).toBeInstanceOf(TrialPhotoNotFoundError);
-      messages.push((error as Error).message);
-      expect(existsSync(displayPath(organizationId, id))).toBe(false);
+    const unknown = await errorOf(
+      storeTrialDisplayCopy(actor, organizationId, uuidv7(), "image/jpeg", COPY),
+    );
+    expect(unknown).toBeInstanceOf(TrialPhotoNotFoundError);
+
+    const deleted = (await photoWithOriginal(actor, organizationId, formId)).photoId;
+    await softDelete(deleted);
+    const deletedError = await errorOf(
+      storeTrialDisplayCopy(actor, organizationId, deleted, "image/jpeg", COPY),
+    );
+
+    // Raden er laget av synken, uten fil: sha256 og uploaded_at er tomme
+    const synced = uuidv7();
+    await applyTrialChanges(actor, organizationId, [photoOp(formId, "cover_photo", {}, synced)]);
+    const syncedRow = await photoRow(synced);
+    expect(syncedRow!.sha256).toBeNull();
+    expect(syncedRow!.uploadedAt).toBeNull();
+    const syncedError = await errorOf(
+      storeTrialDisplayCopy(actor, organizationId, synced, "image/jpeg", COPY),
+    );
+
+    for (const error of [deletedError, syncedError]) {
+      expect(error).toBeInstanceOf(TrialPhotoNotFoundError);
+      expect(error.message).toBe(unknown.message);
     }
-    expect(new Set(messages).size).toBe(1);
+    expect(await displayFiles(uploadDir)).toEqual([]);
   });
 
+  // Obligatorisk (AK 8, retting i pkt. 3)
   it("storeTrialPhoto gir 404 for slettet rad", async () => {
     const { actor, organizationId } = await setupOrganization();
-    const formId = await putTrialForm(actor, organizationId);
-    const photoId = uuidv7();
-    await storeTrialPhoto(actor, organizationId, photoId, meta(formId), BYTES);
+    const { formId, photoId } = await photoWithOriginal(actor, organizationId);
     await softDelete(photoId);
     const before = await photoRow(photoId);
+    const file = path.join(uploadDir, organizationId, photoId);
+    const fileShaBefore = sha(readFileSync(file));
 
     await expect(
-      storeTrialPhoto(actor, organizationId, photoId, meta(formId), new Uint8Array([1, 2, 3])),
+      storeTrialPhoto(actor, organizationId, photoId, meta(formId), COPY),
     ).rejects.toThrow(TrialPhotoNotFoundError);
 
-    expect(await photoRow(photoId)).toEqual(before);
-    const onDisk = readFileSync(path.join(uploadDir, organizationId, photoId));
-    expect(Buffer.compare(onDisk, TEST_IMAGE)).toBe(0);
+    expect(sha(readFileSync(file))).toBe(fileShaBefore);
+    const after = await photoRow(photoId);
+    expect(after!.sha256).toBe(before!.sha256);
+    expect(after!.uploadedAt).toEqual(before!.uploadedAt);
+    expect(after!.deletedAt).toEqual(before!.deletedAt);
   });
 
   it("den ferdige stien til kopien ligger alltid under TRIAL_UPLOAD_DIR/<organizationId>", async () => {
-    const { actor, organizationId } = await setupOrganization();
-    const photoId = await uploadOriginal(actor, organizationId);
+    const { actor, organizationId, grant } = await setupOrganization();
+    const { photoId } = await photoWithOriginal(actor, organizationId);
+
     await storeTrialDisplayCopy(actor, organizationId, photoId, "image/jpeg", COPY);
-    const files = (await listAll(uploadDir)).filter((f) => f.endsWith(".display.jpg"));
-    expect(files).toEqual([path.join(organizationId, `${photoId}.display.jpg`)]);
+
+    const files = await displayFiles(uploadDir);
+    expect(files).toHaveLength(1);
     const relative = path.relative(uploadDir, path.join(uploadDir, files[0]!));
-    expect(relative.startsWith(organizationId + path.sep)).toBe(true);
-    expect(relative.includes("..")).toBe(false);
+    expect(relative.startsWith(`${grant.organizationId}${path.sep}`)).toBe(true);
+    expect(relative.split(path.sep)).not.toContain("..");
+    expect(relative).toBe(path.join(grant.organizationId, `${photoId}.display.jpg`));
   });
 
   it("kopien endrer ikke raden", async () => {
     const { actor, organizationId } = await setupOrganization();
-    const photoId = await uploadOriginal(actor, organizationId);
+    const { photoId } = await photoWithOriginal(actor, organizationId);
     const before = await photoRow(photoId);
+
     await storeTrialDisplayCopy(actor, organizationId, photoId, "image/jpeg", COPY);
-    expect(await photoRow(photoId)).toEqual(before);
-  });
 
-  it("storeTrialDisplayCopy: tenant-isolasjon", async () => {
-    const ids = { a: [] as string[], b: [] as string[], orgA: "", orgB: "" };
-    await expectTenantIsolation({
-      seed: async (grantA, grantB) => {
-        const actorA = await actorFor(grantA);
-        const actorB = await actorFor(grantB);
-        ids.orgA = grantA.organizationId;
-        ids.orgB = grantB.organizationId;
-        ids.a = [
-          await uploadOriginal(actorA, grantA.organizationId),
-          await uploadOriginal(actorA, grantA.organizationId),
-        ];
-        ids.b = [
-          await uploadOriginal(actorB, grantB.organizationId),
-          await uploadOriginal(actorB, grantB.organizationId),
-        ];
-        return { a: ids.a, b: ids.b };
-      },
-      query: (actor, organizationId) =>
-        succeeded([...ids.a, ...ids.b], (id) =>
-          storeTrialDisplayCopy(actor, organizationId, id, "image/jpeg", COPY),
-        ),
-      idOf: (row) => row.id,
-    });
-    for (const id of ids.b) expect(existsSync(displayPath(ids.orgA, id))).toBe(false);
-    for (const id of ids.a) expect(existsSync(displayPath(ids.orgB, id))).toBe(false);
-  });
-
-  it("egen organisasjons-id med bilde-id fra B gir samme 404 som finnes ikke", async () => {
-    const a = await setupOrganization("admin", "Organisasjon A");
-    const b = await setupOrganization("admin", "Organisasjon B");
-    const photoB = await uploadOriginal(b.actor, b.organizationId);
-    const copyB = jpeg(APP0, APP2);
-    await storeTrialDisplayCopy(b.actor, b.organizationId, photoB, "image/jpeg", copyB);
-
-    const notFound = (e: unknown) => e as Error;
-    const unknown = await storeTrialDisplayCopy(
-      a.actor,
-      a.organizationId,
-      uuidv7(),
-      "image/jpeg",
-      COPY,
-    ).catch(notFound);
-    const foreign = await storeTrialDisplayCopy(
-      a.actor,
-      a.organizationId,
-      photoB,
-      "image/jpeg",
-      COPY,
-    ).catch(notFound);
-    expect(foreign).toBeInstanceOf(TrialPhotoNotFoundError);
-    expect((foreign as Error).message).toBe((unknown as Error).message);
-    expect(Buffer.compare(readFileSync(displayPath(b.organizationId, photoB)), copyB)).toBe(0);
-    expect(await listAll(path.join(uploadDir, a.organizationId))).toEqual([]);
-
-    const unknownRead = await readTrialDisplayCopy(a.actor, a.organizationId, uuidv7()).catch(
-      notFound,
-    );
-    const foreignRead = await readTrialDisplayCopy(a.actor, a.organizationId, photoB).catch(
-      notFound,
-    );
-    expect(foreignRead).toBeInstanceOf(TrialPhotoNotFoundError);
-    expect((foreignRead as Error).message).toBe((unknownRead as Error).message);
+    const after = await photoRow(photoId);
+    expect(after).toEqual(before);
+    expect(after!.sha256).toBe(SHA);
   });
 });
 
 describe("readTrialDisplayCopy", () => {
   it("gir bytene til kopien", async () => {
-    const { actor, organizationId } = await setupOrganization("office");
-    const photoId = await uploadOriginal(actor, organizationId);
+    const { actor, organizationId } = await setupOrganization();
+    const { photoId } = await photoWithOriginal(actor, organizationId);
     await storeTrialDisplayCopy(actor, organizationId, photoId, "image/jpeg", COPY);
+
     const bytes = await readTrialDisplayCopy(actor, organizationId, photoId);
-    expect(Buffer.compare(Buffer.from(bytes), COPY)).toBe(0);
+    expect(Buffer.compare(Buffer.from(bytes), Buffer.from(COPY))).toBe(0);
   });
 
   it("uten kopi gir 404 med Bildet er ikke lastet opp ennå.", async () => {
-    // Ruten gjør TrialPhotoNotFoundError om til 404 med den teksten (K4, løsning b)
+    // Teksten selv sjekkes gjennom ruten (route.test.ts, K4); her vises at det er en 404-feil
     const { actor, organizationId } = await setupOrganization();
-    const photoId = await uploadOriginal(actor, organizationId);
+    const { photoId } = await photoWithOriginal(actor, organizationId);
+
     await expect(readTrialDisplayCopy(actor, organizationId, photoId)).rejects.toThrow(
       TrialPhotoNotFoundError,
     );
   });
 
+  // Obligatorisk (AK 8)
   it("slettet rad gir 404 selv om filen finnes", async () => {
     const { actor, organizationId } = await setupOrganization();
-    const photoId = await uploadOriginal(actor, organizationId);
+    const { photoId } = await photoWithOriginal(actor, organizationId);
     await storeTrialDisplayCopy(actor, organizationId, photoId, "image/jpeg", COPY);
     await softDelete(photoId);
+
     await expect(readTrialDisplayCopy(actor, organizationId, photoId)).rejects.toThrow(
       TrialPhotoNotFoundError,
     );
+    // Ingenting slettes permanent
     expect(existsSync(displayPath(organizationId, photoId))).toBe(true);
+    expect(existsSync(path.join(uploadDir, organizationId, photoId))).toBe(true);
   });
 
   it("ukjent og ugyldig id gir 404", async () => {
     const { actor, organizationId } = await setupOrganization();
-    for (const id of [uuidv7(), "../x"]) {
+    const { photoId } = await photoWithOriginal(actor, organizationId);
+    await storeTrialDisplayCopy(actor, organizationId, photoId, "image/jpeg", COPY);
+
+    for (const id of [uuidv7(), "../x", `../${organizationId}/${photoId}`, UNUSED_UUID]) {
       await expect(readTrialDisplayCopy(actor, organizationId, id), id).rejects.toThrow(
         TrialPhotoNotFoundError,
       );
     }
   });
+});
 
-  it("readTrialDisplayCopy: tenant-isolasjon", async () => {
-    const ids = { a: [] as string[], b: [] as string[] };
+describe("visningskopien: tenant-isolasjon", () => {
+  /** Ett skjema og to bilder med original i organisasjonen; `withCopy` lagrer også kopiene. */
+  async function seedSide(grant: EmployeeGrant, withCopy: boolean): Promise<string[]> {
+    const actor = await actorFor(grant);
+    const formId = await putTrialForm(actor, grant.organizationId);
+    const ids: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const { photoId } = await photoWithOriginal(actor, grant.organizationId, formId);
+      if (withCopy) {
+        await storeTrialDisplayCopy(actor, grant.organizationId, photoId, "image/jpeg", COPY);
+      }
+      ids.push(photoId);
+    }
+    return ids;
+  }
+
+  // Obligatorisk (AK 10)
+  it("storeTrialDisplayCopy: tenant-isolasjon", async () => {
+    const all: string[] = [];
+    const orgOf = new Map<string, string>();
     await expectTenantIsolation({
       seed: async (grantA, grantB) => {
-        for (const [grant, side] of [
-          [grantA, "a"],
-          [grantB, "b"],
-        ] as const) {
-          const actor = await actorFor(grant);
-          for (let i = 0; i < 2; i += 1) {
-            const id = await uploadOriginal(actor, grant.organizationId);
-            await storeTrialDisplayCopy(actor, grant.organizationId, id, "image/jpeg", COPY);
-            ids[side].push(id);
-          }
-        }
-        return { a: ids.a, b: ids.b };
+        const a = await seedSide(grantA, false);
+        const b = await seedSide(grantB, false);
+        for (const id of a) orgOf.set(id, grantA.organizationId);
+        for (const id of b) orgOf.set(id, grantB.organizationId);
+        all.push(...a, ...b);
+        return { a, b };
       },
       query: (actor, organizationId) =>
-        succeeded([...ids.a, ...ids.b], (id) => readTrialDisplayCopy(actor, organizationId, id)),
-      idOf: (row) => row.id,
+        idsThatSucceed(all, (id) =>
+          storeTrialDisplayCopy(actor, organizationId, id, "image/jpeg", COPY),
+        ),
+      idOf: (entry) => entry.id,
     });
+
+    // Ingen kopi for et bilde havnet i en annen organisasjons mappe
+    for (const id of all) {
+      for (const organizationId of new Set(orgOf.values())) {
+        const file = displayPath(organizationId, id);
+        expect(existsSync(file), file).toBe(organizationId === orgOf.get(id));
+      }
+    }
+  });
+
+  // Obligatorisk (AK 10)
+  it("readTrialDisplayCopy: tenant-isolasjon", async () => {
+    const all: string[] = [];
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        const a = await seedSide(grantA, true);
+        const b = await seedSide(grantB, true);
+        all.push(...a, ...b);
+        return { a, b };
+      },
+      query: (actor, organizationId) =>
+        idsThatSucceed(all, (id) => readTrialDisplayCopy(actor, organizationId, id)),
+      idOf: (entry) => entry.id,
+    });
+  });
+
+  // Obligatorisk
+  it("egen organisasjons-id med bilde-id fra B gir samme 404 som finnes ikke", async () => {
+    const a = await setupOrganization("admin", "Organisasjon A");
+    const b = await setupOrganization("admin", "Organisasjon B");
+    const { photoId: photoB } = await photoWithOriginal(b.actor, b.organizationId);
+    await storeTrialDisplayCopy(b.actor, b.organizationId, photoB, "image/jpeg", COPY);
+    const fileB = displayPath(b.organizationId, photoB);
+    const bytesBefore = readFileSync(fileB);
+    const other = cleanDisplayCopy([0x77, 0x78]);
+
+    const unknownPut = await errorOf(
+      storeTrialDisplayCopy(a.actor, a.organizationId, uuidv7(), "image/jpeg", other),
+    );
+    const foreignPut = await errorOf(
+      storeTrialDisplayCopy(a.actor, a.organizationId, photoB, "image/jpeg", other),
+    );
+    expect(unknownPut).toBeInstanceOf(TrialPhotoNotFoundError);
+    expect(foreignPut).toBeInstanceOf(TrialPhotoNotFoundError);
+    expect(foreignPut.message).toBe(unknownPut.message);
+    expect(Buffer.compare(readFileSync(fileB), bytesBefore)).toBe(0);
+    expect(await listAll(path.join(uploadDir, a.organizationId))).toEqual([]);
+
+    const unknownGet = await errorOf(readTrialDisplayCopy(a.actor, a.organizationId, uuidv7()));
+    const foreignGet = await errorOf(readTrialDisplayCopy(a.actor, a.organizationId, photoB));
+    expect(unknownGet).toBeInstanceOf(TrialPhotoNotFoundError);
+    expect(foreignGet).toBeInstanceOf(TrialPhotoNotFoundError);
+    expect(foreignGet.message).toBe(unknownGet.message);
   });
 });

@@ -321,6 +321,21 @@ describe("kandidatgrensene", () => {
     }
   });
 
+  // Prøve D – bilder (docs/funksjoner/fase1-prove-d-bilder-testplan.md avsnitt 2.4).
+  // «photo-uploader.ts importerer fortsatt ingen kandidat» dekkes av testen over, uendret.
+  it("display-copy.ts importerer ikke fra noen kandidat og ikke React", () => {
+    const file = `${MODULE}/sync/display-copy.ts`;
+    expect(candidateImports(file)).toEqual([]);
+    const react = specifiersOf(read(file))
+      .map((entry) => entry.specifier)
+      .filter((s) => s === "react" || s.startsWith("react/") || s.startsWith("react-dom"));
+    expect(react).toEqual([]);
+  });
+
+  it("display-copy.ts har hodekommentaren", () => {
+    expect(read(`${MODULE}/sync/display-copy.ts`)).toContain(HEADER);
+  });
+
   it("testkroken for lagring leses bare med miljøvariabelen", () => {
     const hookFile = `${MODULE}/storage-test-hook.ts`;
     const text = read(hookFile);

@@ -15,6 +15,15 @@ import { logger } from "@/shared/lib/logger";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { resetDatabase } from "../../../../../../../tests/factories";
 import {
+  APP0,
+  APP1_EXIF,
+  APP1_XMP,
+  APP13,
+  cleanDisplayCopy,
+  jpeg,
+  textBytes,
+} from "../../../../../../../tests/jpeg-bytes";
+import {
   ALL_ROLES,
   createDeactivatedEmployee,
   photoOp,
@@ -23,38 +32,19 @@ import {
 } from "../../../../../../../tests/offline-trial";
 import { GET, PUT } from "./route";
 
-// Prøve D: ruten for visningskopien (docs/funksjoner/fase1-prove-d-bilder.md pkt. 3, K4 løsning b).
-// Testplan avsnitt 3.4. Bare innloggingen er mocket; tilgangssjekken kjøres ekte mot testdatabasen.
-// Alle data er oppdiktet.
+// Prøve D – bilder: visningsruten PUT og GET /api/prove/bilder/[id]/visning
+// (docs/funksjoner/fase1-prove-d-bilder.md pkt. 3, AK 6, 8, 10 og 11). Testplan avsnitt 3.4.
+// Bare innloggingen er mocket; tilgangssjekken i src/core/access kjøres ekte mot testdatabasen.
+// JPEG-bytene bygges i testen (`tests/jpeg-bytes.ts`). Alle data er oppdiktet.
 
 vi.mock("@/core/auth/session", () => ({ getCurrentActor: vi.fn() }));
 
-const ROOT = process.cwd();
-const ORIGINAL = new Uint8Array(readFileSync(path.join(ROOT, "e2e", "fixtures", "test-image.png")));
-const NOT_UPLOADED = "Bildet er ikke lastet opp ennå.";
-
-function segment(marker: number, payload: string): number[] {
-  const data = [...Buffer.from(payload, "latin1")];
-  const length = data.length + 2;
-  return [0xff, marker, length >> 8, length & 0xff, ...data];
-}
-
-function jpeg(...segments: number[][]): Uint8Array<ArrayBuffer> {
-  return new Uint8Array([
-    0xff,
-    0xd8,
-    ...segments.flat(),
-    ...segment(0xda, "\x01\x01\0\0\x3f\0"),
-    0x12,
-    0x34,
-    0xff,
-    0xd9,
-  ]);
-}
-
-const APP0 = segment(0xe0, "JFIF\0\x01\x01\0\0\x01\0\x01\0\0");
-const COPY = jpeg(APP0);
+const ORIGINAL = new Uint8Array(
+  readFileSync(path.join(process.cwd(), "e2e", "fixtures", "test-image.png")),
+);
+const COPY = cleanDisplayCopy();
 const COPY_SHA = createHash("sha256").update(COPY).digest("hex");
+const NOT_UPLOADED = "Bildet er ikke lastet opp ennå.";
 
 let uploadDir: string;
 
@@ -65,8 +55,8 @@ beforeEach(async () => {
   vi.stubEnv("TRIAL_UPLOAD_DIR", uploadDir);
 });
 afterEach(async () => {
-  vi.restoreAllMocks();
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   await rm(uploadDir, { recursive: true, force: true });
 });
 
@@ -74,32 +64,43 @@ function loggedInAs(actor: Actor | null) {
   vi.mocked(getCurrentActor).mockResolvedValue(actor);
 }
 
-function url(id: string, organizationId: string) {
+function address(id: string, organizationId: string): string {
   return `http://localhost/api/prove/bilder/${encodeURIComponent(id)}/visning?organisasjon=${organizationId}`;
 }
 
-function put(
+function params(id: string) {
+  return { params: Promise.resolve({ id }) };
+}
+
+function putRequest(
   id: string,
   organizationId: string,
-  body: Uint8Array | ReadableStream<Uint8Array>,
-  headers: Record<string, string> = { "content-type": "image/jpeg" },
+  body: Uint8Array,
+  contentType = "image/jpeg",
+  headers: Record<string, string> = {},
+): Request {
+  return new Request(address(id, organizationId), {
+    method: "PUT",
+    headers: { "content-type": contentType, ...headers },
+    body: body as BodyInit,
+  });
+}
+
+async function put(
+  id: string,
+  organizationId: string,
+  body: Uint8Array = COPY,
+  contentType = "image/jpeg",
 ) {
-  return PUT(
-    new Request(url(id, organizationId), {
-      method: "PUT",
-      body,
-      headers,
-      duplex: "half",
-    } as RequestInit),
-    { params: Promise.resolve({ id }) },
-  );
+  return PUT(putRequest(id, organizationId, body, contentType), params(id));
 }
 
-function get(id: string, organizationId: string) {
-  return GET(new Request(url(id, organizationId)), { params: Promise.resolve({ id }) });
+async function get(id: string, organizationId: string) {
+  return GET(new Request(address(id, organizationId), { method: "GET" }), params(id));
 }
 
-async function uploadOriginal(actor: Actor, organizationId: string) {
+/** Testskjema og ett bilde med original mottatt. */
+async function photoWithOriginal(actor: Actor, organizationId: string) {
   const formId = await putTrialForm(actor, organizationId);
   const photoId = uuidv7();
   await storeTrialPhoto(
@@ -115,132 +116,155 @@ async function uploadOriginal(actor: Actor, organizationId: string) {
     },
     ORIGINAL,
   );
-  return photoId;
+  return { formId, photoId };
 }
 
 async function displayFiles(): Promise<string[]> {
   if (!existsSync(uploadDir)) return [];
   const entries = await readdir(uploadDir, { recursive: true });
-  return entries.map(String).filter((entry) => entry.endsWith(".display.jpg"));
+  return entries.map(String).filter((name) => name.endsWith(".display.jpg"));
+}
+
+async function expectError(response: Response, status: number): Promise<string> {
+  expect(response.status).toBe(status);
+  const cacheControl = response.headers.get("cache-control") ?? "";
+  expect(cacheControl).toContain("private");
+  expect(cacheControl).toContain("no-store");
+  const body = (await response.json()) as Record<string, unknown>;
+  expect(Object.keys(body)).toEqual(["feil"]);
+  expect(typeof body.feil).toBe("string");
+  return body.feil as string;
 }
 
 describe("PUT og GET /api/prove/bilder/[id]/visning", () => {
+  // Obligatorisk
   it("ikke innlogget gir 401 på PUT og GET uten fil", async () => {
+    const { actor, organizationId } = await setupOrganization();
+    const { photoId } = await photoWithOriginal(actor, organizationId);
     loggedInAs(null);
-    const id = uuidv7();
-    const request = new Request(url(id, uuidv7()), {
-      method: "PUT",
-      body: COPY,
-      headers: { "content-type": "image/jpeg" },
-    });
-    const putResponse = await PUT(request, { params: Promise.resolve({ id }) });
+
+    const request = putRequest(photoId, organizationId, COPY);
+    const putResponse = await PUT(request, params(photoId));
     expect(putResponse.status).toBe(401);
     expect(await putResponse.json()).toEqual({ feil: "Du må logge inn." });
     expect(request.bodyUsed).toBe(false);
-    const getResponse = await get(id, uuidv7());
+
+    const getResponse = await get(photoId, organizationId);
     expect(getResponse.status).toBe(401);
     expect(await getResponse.json()).toEqual({ feil: "Du må logge inn." });
     expect(await displayFiles()).toEqual([]);
   });
 
+  // Obligatorisk (AK 11, admin stenges aldri ute)
   it.each(ALL_ROLES)("de fire rollene får PUT og GET (%s)", async (role) => {
     const { actor, organizationId } = await setupOrganization(role);
-    const photoId = await uploadOriginal(actor, organizationId);
+    const { photoId } = await photoWithOriginal(actor, organizationId);
     loggedInAs(actor);
 
-    const putResponse = await put(photoId, organizationId, COPY);
+    const putResponse = await put(photoId, organizationId);
     expect(putResponse.status).toBe(200);
     expect(await putResponse.json()).toEqual({ sha256: COPY_SHA });
-    expect(putResponse.headers.get("cache-control")).toBe("no-store");
 
     const getResponse = await get(photoId, organizationId);
     expect(getResponse.status).toBe(200);
-    expect(Buffer.compare(Buffer.from(await getResponse.arrayBuffer()), COPY)).toBe(0);
+    const bytes = Buffer.from(await getResponse.arrayBuffer());
+    expect(Buffer.compare(bytes, Buffer.from(COPY))).toBe(0);
   });
 
+  // Obligatorisk
   it("deaktivert ansatt nektes PUT og GET", async () => {
     const owner = await setupOrganization("admin");
-    const photoId = await uploadOriginal(owner.actor, owner.organizationId);
+    const { photoId } = await photoWithOriginal(owner.actor, owner.organizationId);
     const gone = await createDeactivatedEmployee(owner.organizationId);
     loggedInAs(gone);
-    expect((await put(photoId, owner.organizationId, COPY)).status).toBe(403);
-    expect((await get(photoId, owner.organizationId)).status).toBe(403);
+
+    await expectError(await put(photoId, owner.organizationId), 403);
     expect(await displayFiles()).toEqual([]);
+    await expectError(await get(photoId, owner.organizationId), 403);
   });
 
   it("fremmed organisasjon i adressen gir 403", async () => {
-    const a = await setupOrganization("admin", "Organisasjon A");
-    const b = await setupOrganization("admin", "Organisasjon B");
-    const photoB = await uploadOriginal(b.actor, b.organizationId);
+    const a = await setupOrganization("admin", "Oppdiktet takst A");
+    const b = await setupOrganization("admin", "Oppdiktet takst B");
+    const { photoId } = await photoWithOriginal(b.actor, b.organizationId);
+    loggedInAs(b.actor);
+    expect((await put(photoId, b.organizationId)).status).toBe(200);
+
     loggedInAs(a.actor);
-    const putResponse = await put(photoB, b.organizationId, COPY);
-    expect(putResponse.status).toBe(403);
-    expect(putResponse.headers.get("cache-control")).toBe("private, no-store");
-    expect((await get(photoB, b.organizationId)).status).toBe(403);
-    expect(await displayFiles()).toEqual([]);
+    await expectError(await put(photoId, b.organizationId, cleanDisplayCopy([0x55])), 403);
+    await expectError(await get(photoId, b.organizationId), 403);
+    // Kopien til B er uendret
+    const file = path.join(uploadDir, b.organizationId, `${photoId}.display.jpg`);
+    expect(Buffer.compare(readFileSync(file), Buffer.from(COPY))).toBe(0);
   });
 
-  it("PUT svarer 400 for feil type, uten FF D8, med metadata og ødelagt fil", async () => {
-    const { actor, organizationId } = await setupOrganization();
-    const photoId = await uploadOriginal(actor, organizationId);
-    loggedInAs(actor);
-    const exif = jpeg(APP0, segment(0xe1, "Exif\0\0Oppdiktet-GPS"));
-    const cases: [Uint8Array, string][] = [
-      [COPY, "image/png"],
-      [COPY, "image/jpeg; charset=x"],
-      [ORIGINAL, "image/jpeg"],
-      [exif, "image/jpeg"],
-      [new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00]), "image/jpeg"],
-      [new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x40, 0x01]), "image/jpeg"],
-    ];
-    for (const [bytes, type] of cases) {
-      const response = await put(photoId, organizationId, bytes, { "content-type": type });
-      expect(response.status, type).toBe(400);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect(typeof body.feil).toBe("string");
-      expect(JSON.stringify(body)).not.toContain("Oppdiktet-GPS");
-    }
-    expect(await displayFiles()).toEqual([]);
-  });
+  it.each([
+    ["feil type (image/png)", COPY, "image/png"],
+    ["feil type (image/heic)", COPY, "image/heic"],
+    ["uten FF D8", ORIGINAL, "image/jpeg"],
+    ["APP1 Exif med oppdiktet GPS", jpeg(APP0, APP1_EXIF), "image/jpeg"],
+    ["APP1 XMP", jpeg(APP0, APP1_XMP), "image/jpeg"],
+    ["APP13", jpeg(APP0, APP13), "image/jpeg"],
+    ["avkuttet", Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00]), "image/jpeg"],
+    [
+      "lengde forbi slutten",
+      Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0xff, 0x4a]),
+      "image/jpeg",
+    ],
+  ] as const)(
+    "PUT svarer 400 for feil type, uten FF D8, med metadata og ødelagt fil (%s)",
+    async (_name, body, contentType) => {
+      const { actor, organizationId } = await setupOrganization();
+      const { photoId } = await photoWithOriginal(actor, organizationId);
+      loggedInAs(actor);
+
+      const message = await expectError(await put(photoId, organizationId, body, contentType), 400);
+      // Ingenting fra filen i svaret
+      expect(message).not.toMatch(/Exif|JFIF|Photoshop|xmpmeta|GPS/);
+      expect(await displayFiles()).toEqual([]);
+    },
+  );
 
   it("PUT svarer 413 for stor fil", async () => {
     const { actor, organizationId } = await setupOrganization();
-    const photoId = await uploadOriginal(actor, organizationId);
+    const { photoId } = await photoWithOriginal(actor, organizationId);
     loggedInAs(actor);
     vi.stubEnv("TRIAL_PHOTO_MAX_BYTES", "10");
-    const response = await put(photoId, organizationId, COPY, {
-      "content-type": "image/jpeg",
-      "content-length": String(COPY.byteLength),
-    });
-    expect(response.status).toBe(413);
+
+    const response = await PUT(
+      putRequest(photoId, organizationId, COPY, "image/jpeg", {
+        "content-length": String(COPY.byteLength),
+      }),
+      params(photoId),
+    );
+    await expectError(response, 413);
     expect(await displayFiles()).toEqual([]);
   });
 
   it("PUT og GET svarer 404 for ugyldig id, slettet rad og original som ikke er mottatt", async () => {
     const { actor, organizationId } = await setupOrganization();
-    const deleted = await uploadOriginal(actor, organizationId);
-    await db.update(trialPhotos).set({ deletedAt: new Date() }).where(eq(trialPhotos.id, deleted));
-    const formId = await putTrialForm(actor, organizationId, "Testskjema 2");
-    const notReceived = uuidv7();
-    await applyTrialChanges(actor, organizationId, [
-      photoOp(formId, "cover_photo", {}, notReceived),
-    ]);
+    const { formId, photoId: deleted } = await photoWithOriginal(actor, organizationId);
     loggedInAs(actor);
+    expect((await put(deleted, organizationId)).status).toBe(200);
+    await db.update(trialPhotos).set({ deletedAt: new Date() }).where(eq(trialPhotos.id, deleted));
+    const synced = uuidv7();
+    await applyTrialChanges(actor, organizationId, [photoOp(formId, "cover_photo", {}, synced)]);
+    const filesBefore = await displayFiles();
 
-    for (const id of ["ikke-en-uuid", "..", uuidv7(), deleted, notReceived]) {
-      expect((await put(id, organizationId, COPY)).status, id).toBe(404);
-      const getResponse = await get(id, organizationId);
-      expect(getResponse.status, id).toBe(404);
-      expect(await getResponse.json()).toEqual({ feil: NOT_UPLOADED });
+    const unknown = await expectError(await put(uuidv7(), organizationId), 404);
+    for (const id of ["../x", "ikke-en-uuid", deleted, synced]) {
+      expect(await expectError(await put(id, organizationId), 404), `PUT ${id}`).toBe(unknown);
+      await expectError(await get(id, organizationId), 404);
     }
-    expect(await displayFiles()).toEqual([]);
+    expect(await displayFiles()).toEqual(filesBefore);
   });
 
+  // Obligatorisk
   it("GET gir bildet med riktige hoder", async () => {
-    const { actor, organizationId } = await setupOrganization("inspector");
-    const photoId = await uploadOriginal(actor, organizationId);
+    const { actor, organizationId } = await setupOrganization();
+    const { photoId } = await photoWithOriginal(actor, organizationId);
     loggedInAs(actor);
-    expect((await put(photoId, organizationId, COPY)).status).toBe(200);
+    expect((await put(photoId, organizationId)).status).toBe(200);
 
     const response = await get(photoId, organizationId);
     expect(response.status).toBe(200);
@@ -248,53 +272,61 @@ describe("PUT og GET /api/prove/bilder/[id]/visning", () => {
     const cacheControl = response.headers.get("cache-control") ?? "";
     expect(cacheControl).toContain("private");
     expect(cacheControl).toContain("no-store");
-    expect(response.headers.get("content-disposition")?.startsWith("inline")).toBe(true);
+    expect(response.headers.get("content-disposition") ?? "").toMatch(/^inline/);
   });
 
   it("GET uten kopi gir 404 med Bildet er ikke lastet opp ennå.", async () => {
-    const a = await setupOrganization("admin", "Organisasjon A");
-    const b = await setupOrganization("admin", "Organisasjon B");
-    const photoA = await uploadOriginal(a.actor, a.organizationId);
-    const photoB = await uploadOriginal(b.actor, b.organizationId);
-    loggedInAs(b.actor);
-    expect((await put(photoB, b.organizationId, COPY)).status).toBe(200);
-    loggedInAs(a.actor);
+    const { actor, organizationId } = await setupOrganization();
+    const { photoId } = await photoWithOriginal(actor, organizationId);
+    loggedInAs(actor);
 
-    // Uten kopi, og bilde-id fra B med kopi, gir samme svar
-    for (const id of [photoA, photoB]) {
-      const response = await get(id, a.organizationId);
-      expect(response.status).toBe(404);
-      expect(response.headers.get("cache-control")).toBe("private, no-store");
-      expect(await response.json()).toEqual({ feil: NOT_UPLOADED });
-    }
+    const response = await get(photoId, organizationId);
+    expect(await expectError(response, 404)).toBe(NOT_UPLOADED);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("GET for bilde-id fra en annen organisasjon gir samme svar som ukjent id", async () => {
+    const a = await setupOrganization("admin", "Oppdiktet takst A");
+    const b = await setupOrganization("admin", "Oppdiktet takst B");
+    const { photoId } = await photoWithOriginal(b.actor, b.organizationId);
+    loggedInAs(b.actor);
+    expect((await put(photoId, b.organizationId)).status).toBe(200);
+
+    loggedInAs(a.actor);
+    const unknown = await expectError(await get(uuidv7(), a.organizationId), 404);
+    expect(await expectError(await get(photoId, a.organizationId), 404)).toBe(unknown);
+    expect(await expectError(await put(photoId, a.organizationId), 404)).toBe(
+      await expectError(await put(uuidv7(), a.organizationId), 404),
+    );
   });
 
   it("loggen har aldri filinnholdet", async () => {
-    const marker = "Oppdiktet-innhold-7391";
-    const lines: string[] = [];
-    const capture = (...args: unknown[]) => {
-      lines.push(args.map((arg) => (typeof arg === "string" ? arg : String(arg))).join(" "));
-    };
-    for (const method of ["log", "info", "warn", "error", "debug"] as const) {
-      vi.spyOn(console, method).mockImplementation(capture);
-    }
-    const loggerError = vi.spyOn(logger, "error").mockImplementation((...args: unknown[]) => {
-      lines.push(JSON.stringify(args, (_key, value: unknown) => String(value)));
-    });
-
     const { actor, organizationId } = await setupOrganization();
-    const photoId = await uploadOriginal(actor, organizationId);
+    const { photoId } = await photoWithOriginal(actor, organizationId);
     loggedInAs(actor);
-    // Mappen byttes med en fil, så skrivingen feiler (500)
-    const blocker = path.join(uploadDir, "fil-i-stedet-for-mappe");
-    await writeFile(blocker, "x");
-    vi.stubEnv("TRIAL_UPLOAD_DIR", blocker);
+    // TRIAL_UPLOAD_DIR peker på en fil, så skrivingen feiler og gir 500
+    const notADir = path.join(uploadDir, "ikke-en-mappe");
+    await writeFile(notADir, "x");
+    vi.stubEnv("TRIAL_UPLOAD_DIR", notADir);
+    const secret = "Oppdiktet-innhold-7391";
+    const body = cleanDisplayCopy(textBytes(secret));
+    const logged: unknown[][] = [];
+    vi.spyOn(logger, "error").mockImplementation((...args: unknown[]) => {
+      logged.push(args);
+    });
+    for (const method of ["error", "warn", "log", "info", "debug"] as const) {
+      vi.spyOn(console, method).mockImplementation((...args: unknown[]) => {
+        logged.push(args);
+      });
+    }
 
-    const bytes = jpeg(APP0, segment(0xe2, marker));
-    const response = await put(photoId, organizationId, bytes);
+    const response = await put(photoId, organizationId, body);
+
     expect(response.status).toBe(500);
-    expect(JSON.stringify(await response.json())).not.toContain(marker);
-    expect(loggerError).toHaveBeenCalled();
-    for (const line of lines) expect(line).not.toContain(marker);
+    const text = JSON.stringify(logged, (_key, value: unknown) =>
+      value instanceof Error ? { name: value.name, message: value.message } : value,
+    );
+    expect(text).not.toContain(secret);
+    expect(JSON.stringify(await response.json())).not.toContain(secret);
   });
 });
