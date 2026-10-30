@@ -24,12 +24,14 @@ Poengene er foreløpige: **ingen kandidat har bestått prøve A og C på ekte iP
 
 ## 1. Virker prøvene
 
-Tellingen er kjørt 30.10.2026 på branchen `fase1-sammenligning-adr` ved commit `1f1fb5e` (koden lik `main` ved `1510923`, versjon 0.2.26; bare dokumentasjon lagt til):
+Testene er kjørt på nytt 30.10.2026 etter rebase på `main` ved `fa094a4` (PR #38, småfunn D og F), på branchen `fase1-sammenligning-adr` ved commit `5c0aab8`, versjon 0.2.28. Koden er lik `main`; branchen har bare dokumentasjon og versjonsnummeret. Hver kjøring med egen testdatabase.
 
-| Kommando | Resultat 30.10.2026 |
+| Kommando | Resultat 30.10.2026, commit `5c0aab8` |
 |---|---|
-| `pnpm test` (Vitest, mot `TEST_DATABASE_URL`) | **67 testfiler, 988 bestått, 0 feilet, 3 hoppet over** (de tre i `scripts/azure/sync-trial-roles.test.ts` som krever `wal_level=logical`, punkt 2 i nattløkken) |
-| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium pnpm test:e2e` (Chromium, prosjektene `pc` og `ipad`) | **356 tester: 300 bestått, 55 hoppet over, 1 feilet** på 21,9 min. De som hoppes over, er bevisst bare kjørt i `pc` (testplanene, punkt 4 i nattløkken). Den ene feilen var helsesjekken i `ipad` (`e2e/fase-0a.spec.ts`), fordi versjonen i `package.json` ble økt mens kjøringen pågikk; kjørt på nytt etterpå: `fase-0a.spec.ts` 10 av 10 bestått. Ingen feil i synk- eller prøvetestene |
+| `pnpm test` (Vitest, mot `TEST_DATABASE_URL`) | **68 testfiler, 999 bestått, 0 feilet, 3 hoppet over** (de tre i `scripts/azure/sync-trial-roles.test.ts` som krever `wal_level=logical`, punkt 2 i nattløkken) |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium pnpm test:e2e` (Chromium, prosjektene `pc` og `ipad`) | **352 tester: 299 bestått, 53 hoppet over, 0 feilet** på 27,2 min. De som hoppes over, er bevisst bare kjørt i `pc` (testplanene, punkt 4 i nattløkken). Ingen feil i synk- eller prøvetestene |
+
+Første kjøring, før rebase (commit `1f1fb5e`, koden lik `main` ved `1510923`, versjon 0.2.26), bare til sammenligning: `pnpm test` 67 filer, 988 bestått, 0 feilet, 3 hoppet over; `pnpm test:e2e` 356 tester, 300 bestått, 55 hoppet over, 1 feilet. Den ene feilen var helsesjekken i `ipad` (`e2e/fase-0a.spec.ts`), fordi versjonen i `package.json` ble økt mens kjøringen pågikk; kjørt på nytt etterpå: `fase-0a.spec.ts` 10 av 10 bestått. Forskjellen i antall kommer fra PR #38, som la til Vitest-saker og fjernet e2e-saker som doblet Vitest.
 
 **Viktig skille:** «virker i automatiske tester» betyr Chromium på Linux uten synktjenestene (skyen har ikke Docker: `fase1-kandidat-powersync.md` pkt. 16, `fase1-kandidat-electricsql.md` pkt. 14). Ingenting er prøvd i Safari på ekte iPad. PowerSync- og Electric-tjenesten er ikke startet i noen automatisk test.
 
