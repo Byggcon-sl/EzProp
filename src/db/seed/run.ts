@@ -1,15 +1,32 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
-import { employeeRoleAssignments, employees, organizations, users } from "@/db/schema";
+import {
+  companies,
+  employeeRoleAssignments,
+  employees,
+  offices,
+  organizations,
+  users,
+} from "@/db/schema";
 import { brand } from "@/shared/config/brand";
 
 /**
  * Grunndata (trygt å kjøre flere ganger):
  * - organisasjonen Byggcon (én rad, docs/05-domenemodell.md 4.1)
  * - første admin (SEED_ADMIN_EMAIL) som ansatt med rollen admin
- * Ingen kundeopplysninger, ingen eksempeloppdrag. Selskaper og kontorer kommer i fase 0b.
+ * - Byggcons selskaper og kontorer, bare navn og rekkefølge (beslutning A16). Org.nr., adresse,
+ *   forsikring og firmatekst fylles ut av admin. Admin får ikke selskap eller kontor her.
+ * Ingen kundeopplysninger, ingen eksempeloppdrag.
  */
+const seedCompanies = [
+  "Byggcon AS",
+  "Byggcon Nord AS",
+  "Byggcon Helgeland AS",
+  "Byggcon Troms AS",
+] as const;
+const seedOffices = ["Bodø", "Mo i Rana", "Mosjøen", "Narvik", "Tromsø"] as const;
+
 export async function runSeed(env: Record<string, string | undefined> = process.env) {
   const adminEmail = env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
   if (!adminEmail) throw new Error("SEED_ADMIN_EMAIL mangler");
@@ -53,4 +70,35 @@ export async function runSeed(env: Record<string, string | undefined> = process.
     .onConflictDoNothing();
   // Adressen skrives aldri ut (serverloggen i drift skal ikke ha personopplysninger)
   console.log(inserted.length > 0 ? "Admin: opprettet" : "Admin: finnes fra før");
+
+  // Selskaper: sjekkes mot alle rader, også slettede, så et slettet selskap aldri lages på nytt
+  const existingCompanies = await db
+    .select({ legalName: companies.legalName })
+    .from(companies)
+    .where(eq(companies.organizationId, organization.id));
+  const existingNames = new Set(existingCompanies.map((company) => company.legalName));
+  const newCompanies = seedCompanies.filter((legalName) => !existingNames.has(legalName));
+  if (newCompanies.length > 0) {
+    await db
+      .insert(companies)
+      .values(newCompanies.map((legalName) => ({ organizationId: organization.id, legalName })));
+  }
+  console.log(`Selskaper: ${newCompanies.length} nye`);
+
+  // Kontorer: den delvise unike indeksen på navn (bare aktive rader) hindrer duplikater
+  const insertedOffices = await db
+    .insert(offices)
+    .values(
+      seedOffices.map((name, index) => ({
+        organizationId: organization.id,
+        name,
+        sortOrder: index + 1,
+      })),
+    )
+    .onConflictDoNothing({
+      target: [offices.organizationId, offices.name],
+      where: isNull(offices.deletedAt),
+    })
+    .returning({ id: offices.id });
+  console.log(`Kontorer: ${insertedOffices.length} nye`);
 }

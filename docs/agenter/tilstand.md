@@ -6,16 +6,21 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 (liten oppgave (g) og (h) levert som PR)
+Sist oppdatert: 30.10.2026 (flere småfunn fra PR #41 lagt i liten oppgave (i))
 
 ## Gjeldende fase
 
 **Fase 0a – Repo og database: ferdig.** PR #1–#6 er merget 28.10.2026.
 
-Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd er merget til `main` i PR #13 (PR #12: agentene merger selv).
+Gjeldende fase: **Fase 0b – Innlogging, organisasjon, roller og layout** (fra 30.10.2026). Fase 1 er levert så langt det går uten Ståle; prøve A og B på ekte iPad, demoen og godkjenning av ADR 0004 venter på ham.
+
+Fase 1 – Prøve uten nett: Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd er merget til `main` i PR #13 (PR #12: agentene merger selv).
 
 ## Gjeldende oppgave
 
+**Levert: Organisasjon → selskap → kontor → ansatt** (fase 0b, 30.10.2026; branch `fase0b-organisasjon-selskap-kontor` fra `main`, versjon 0.2.30, **PR #41**, merget 30.10.2026 kl. 19:10 UTC). Beslutningene er omnummerert til A16 og A17 (A13–A15 var brukt av ADR 0004). Små funn i PR-en: doble seed-tester, tenant-test uten `includeDeactivated`, `select()` uten feltliste i `listCompanies`/`listOffices` (sporingsfelt ut til alle med lesetilgang), unødvendig organisasjonsfilter i join. Punktet er krysset av i planen. Oppgavekort `docs/funksjoner/fase0b-organisasjon-selskap-kontor.md`. Tabellene `companies` og `offices`, `company_id`/`office_id` på `employees` (`phone` er tatt ut av kortet, hører til innloggings-ADR-en), sjekk for sluttet uten innlogging (D18), lesespørringer med tilgang og tenant-isolasjon, seed med navnene. Ikke admin-skjermer. Beslutninger A16 og A17. Roller: utvikler, testskriver, sikkerhet-personvern, test-leder. Støtter reklamasjoner og tid. Testplan `docs/funksjoner/fase0b-organisasjon-selskap-kontor-testplan.md` (commit d001487). Bygges i to biter i parallell: utvikler (skjema, migrering, spørringer, seed, CI, dokumenter) og testskriver (fabrikker og tester).
+
+**Levert: Sammenligning av kandidatene og ADR 0004 (foreløpig)** (30.10.2026; branch `fase1-sammenligning-adr` fra `main`, versjon 0.2.28, bare dokumentasjon, **PR #39**). Oppgavekort `docs/funksjoner/fase1-sammenligning-adr.md`, sammenligning `docs/funksjoner/fase1-sammenligning.md`, ADR `docs/adr/0004-drift-uten-nett.md`. **Foreløpig valg: egenbygd** (eneste kandidat der sending og henting virket hele veien i e2e); reserve PowerSync hvis lagringen på iPaden svikter, ElectricSQL hvis bare hentingen svikter. Nr. 10 og 11 avgjort som A13 og A14 (selvdrevet, ingen skytjeneste), valget ført som A15. Begge punktene er krysset av i planen med «foreløpig; Ståles godkjenning i demoen gjenstår». Ingen endringer i `src/`, `e2e/`, `infra/` eller `scripts/`. Støtter tid, reklamasjoner og KI først.
 **Levert: liten oppgave (g) og (h)**, småfunnene fra PR #34 (prøve F) og PR #35 (prøve D) (30.10.2026; branch `fase1-smafunn-prove-d-f` fra `main`, versjon 0.2.27, **PR #38**). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-d-f.md`. En visningskopi som får 400 eller 404 regnes som endelig feilet, sendes ikke igjen og vises som «Bare originalen er lagret» (A11). Serveren slipper bare de feltene kopien trenger (A12). Én tegnevei, adressen til visningsruten ett sted, ingen falsk rad i `sendPhoto`, færre doble tester. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en (blant annet: 400-saken i e2e tar rundt 30 s per prosjekt, progressiv JPEG kan ha felt etter første skanning). Underpunktene er krysset av under prøve D og F i planen. Støtter reklamasjoner og tid.
 
 **Levert: Prøve D – bilder** (30.10.2026; branch `fase1-prove-d-bilder` fra `main`, versjon 0.2.24, **PR #35**, merget 30.10.2026 kl. 11:29 UTC; `main` med prøve F flettet inn før merge). Oppgavekort `docs/funksjoner/fase1-prove-d-bilder.md`, resultatmal `docs/funksjoner/fase1-prove-d-bilder-resultat.md` for ekte iPad. Fra før: opplasting mens appen er åpen, nytt forsøk per bilde etter brudd, kontroll med fingeravtrykk. Nytt: visningskopi på iPaden (rettet, høyst 2000 punkter, JPEG 0,8, uten EXIF/GPS), egen rute for visningskopien med «Vis fra serveren», e2e for rotering, brudd og HEIC (pc og ipad). Beslutninger A7–A10 i `docs/09-apne-sporsmal.md`. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en (feil beslutningsnumre i kommentarer er rettet av prosjektlederen før PR). Punktet er krysset av i planen. Prøve F røres ikke. Støtter reklamasjoner og tid.
@@ -33,7 +38,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 **Levert: liten oppgave (e)**, småfunnene fra PR #23 (prøve E) og det som sto igjen fra PR #26 (30.10.2026; branch `fase1-smafunn-prove-e` fra `main`, versjon 0.2.18). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-e.md`, testplan `docs/agenter/oppgaver/fase1-smafunn-prove-e-testplan.md`. Test for `localWriteGeneration`, testsakene ut av `rules/index.ts`, grensetallet ett sted, færre doble tester, loggen i `custom/reader.ts` og `electricsql/store.ts` viser bare feilmeldingen («ukjent feil» når feilen ikke er en Error). Roller: forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn; små funn rettet av prosjektlederen før PR. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
-**Neste:** sammenligning av kandidatene og foreløpig ADR (se «Slik går fase 1 videre uten Ståle»). Prøve A og B per kandidat venter på Ståle (spørsmål nr. 12).
+**Neste:** sammenligningen og ADR 0004 er levert (foreløpig). Det som står igjen i fase 1 (prøve A og B på ekte iPad med egenbygd, demoen og Ståles godkjenning av ADR 0004) venter på Ståle. Løkken går derfor videre til fase 0b i planen. Fjerning av PowerSync og ElectricSQL og flytting av synken til `src/core/sync` gjøres først etter Ståles godkjenning.
 
 **Forrige oppgave:** liten oppgave (a) – synktjenestene i Azure-testmiljøet, **PR #17** (merget 29.10.2026 kl. 16:58, versjon 0.2.7). PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så mergen lager ingen nye ressurser. ADR 0003, oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. Kostnad når de er på: ca. 700–850 kr per måned. Spørsmål nr. 12.
 
@@ -41,19 +46,18 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 **Enda før:** Oppgave 5 – Kandidat 2: ElectricSQL, **PR #10** (branch `fase1-kandidat-electricsql`, versjon 0.2.2). Oppgavekort `docs/funksjoner/fase1-kandidat-electricsql.md`, testplan `docs/funksjoner/fase1-kandidat-electricsql-testplan.md`, resultatmal `docs/funksjoner/fase1-prove-ab-electricsql.md`, drift `docs/drift/electricsql.md`. Sikkerhet-personvern: godkjent, tre små funn; (2) og (3) rettet, (1) (Electrics 400-kropp videresendes uendret) tas i ADR-en. Test-leder: godkjent (lint, typesjekk, format, 333 Vitest, e2e 105 bestått). Spørsmål nr. 11 (ElectricSQL som leverandør), ikke blokkerende.
 
-**Små oppgaver:** (g) og (h) er levert (se over). (f) Småfunnene fra prøve C er levert (se over). (e) Småfunn fra prøve E er levert (se over). (d) Småfunnene fra PR #21 er levert i **PR #26**. (c) Småfunn fra synktjenestene i Azure er merget i **PR #19** (branch `fase1-smafunn-synk-azure` (versjon 0.2.9, oppgavekort `docs/agenter/oppgaver/fase1-smafunn-synk-azure.md`). (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14** (merget 29.10.2026), sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
+**Små oppgaver:** (i) **Ikke startet:** småfunnene fra PR #41: doble seed-tester, tenant-test for `listEmployees` med `includeDeactivated`, feltliste i `listCompanies`/`listOffices` (ikke sporingsfelt med innloggings-id-er ut til alle med lesetilgang), unødvendig organisasjonsfilter i join, `ListEmployeesOptions` eksporteres uten bruk. Fra den andre gjennomgangen av samme PR: test som viser at seed lager et slettet kontor på nytt, test for sortering på navn i `listEmployees`, migrering 0004 rydder ikke rader som bryter `employees_user_or_deactivated_check` (ingen slike finnes i dag), typene `Company` og `Office` brukes ikke. (g) og (h) er levert (se over). (f) Småfunnene fra prøve C er levert (se over). (e) Småfunn fra prøve E er levert (se over). (d) Småfunnene fra PR #21 er levert i **PR #26**. (c) Småfunn fra synktjenestene i Azure er merget i **PR #19** (branch `fase1-smafunn-synk-azure` (versjon 0.2.9, oppgavekort `docs/agenter/oppgaver/fase1-smafunn-synk-azure.md`). (b) Småfunnene i PowerSync-resultatfilen er rettet i **PR #14** (merget 29.10.2026), sammen med tidsavbrudd på bildeopplasting (bildekøen kunne stå fast; rettingen kom ikke med i PR #13).
 
-**Rekkefølge videre i fase 1:** alle tre kandidatene er satt opp → synktjenestene i Azure (a, merget) → Ståle slår dem på (spørsmål nr. 12) og kjører prøve A og B per kandidat på ekte iPad → prøve C–F → sammenligning og ADR.
+**Rekkefølge videre i fase 1:** alle tre kandidatene er satt opp → synktjenestene i Azure (a, merget) → Ståle slår dem på (spørsmål nr. 12) og kjører prøve A og B per kandidat på ekte iPad → prøve C–F → sammenligning og ADR (levert, foreløpig) → prøve A og B med egenbygd og demo når Ståle er tilbake.
 
 Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI-forslag senere vises og godkjennes), og reklamasjoner (ingenting går tapt mellom befaring og rapport).
 
 ## Åpne PR-er
 
-| PR | Oppgave | Status | Bygger på |
-|---|---|---|---|
-| #38 | Liten oppgave (g) og (h), branch `fase1-smafunn-prove-d-f` | venter på CI, merges med skriptet | `main` |
+Ingen åpne PR-er.
 
-PR #16–#28 og #30–#37 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
+
+PR #16–#28 og #30–#41 er merget (#41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -64,11 +68,12 @@ I autonom modus samles alt her. Ingen varsler.
 
 - Prøve F på ekte iPad: følg `docs/funksjoner/fase1-prove-f-innlogging-resultat.md` (logg ut før flymodus, beslutning A6).
 - Prøve C på ekte iPad: følg `docs/funksjoner/fase1-prove-c-lagring-resultat.md` (C1–C4 per kandidat, 7 dager uten bruk med appen på hjemskjermen).
-- Spørsmål nr. 12: slå på synktjenestene i testmiljøet (`docs/drift/testmiljo-azure.md`, «Slå på»). Når de kjører: kjør prøve A og B etter `docs/funksjoner/fase1-prove-ab-powersync.md`, `…-electricsql.md` og `…-egenbygd.md`.
+- **Les og godkjenn ADR 0004 i demoen** (`docs/adr/0004-drift-uten-nett.md`, kort versjon øverst i `docs/funksjoner/fase1-sammenligning.md`). Foreløpig valg: egenbygd. Kjør prøve A og B med egenbygd først (`docs/funksjoner/fase1-prove-ab-egenbygd.md`); det trenger ikke synktjenestene. Når valget er godkjent, fjerner agentene PowerSync og ElectricSQL i en egen PR.
+- Spørsmål nr. 12 (bare hvis egenbygd ikke holder i prøve A og B, se ADR 0004): slå på synktjenestene i testmiljøet (`docs/drift/testmiljo-azure.md`, «Slå på»). Når de kjører: kjør prøve A og B etter `docs/funksjoner/fase1-prove-ab-powersync.md`, `…-electricsql.md` og `…-egenbygd.md`.
 - **Testmiljøet (PR #7 er merget):** følg `docs/drift/testmiljo-azure.md`: lag ressursgruppen `rg-ezprop-test` og GitHub-innloggingen i Azure, legg inn secrets og variabler, svar på spørsmål nr. 6 og nr. 9. Bekreft «ferdig når»: appen åpner på ekte iPad Pro fra hjemskjermen. Ikke legg inn de fire e-post-secretene før Graph-adapteren er bygget (fase 0b).
 - **Slå av Stedstjenester for Safari på de to iPadene før prøve D** (Innstillinger → Personvern og sikkerhet → Stedstjenester → Safari-nettsteder → Aldri). Så følg `docs/funksjoner/fase1-prove-d-bilder-resultat.md` (D1–D5). Se A7 i `docs/09-apne-sporsmal.md`.
 - **Rydd testbildene fra prøve D på testserveren etterpå** (myk sletting eller tømming av `TRIAL_UPLOAD_DIR` i testmiljøet). Det står også nederst i resultatmalen.
-- Spørsmålene i `docs/09-apne-sporsmal.md`: nr. 6, nr. 8 del (b) (GPS i originalbildene i 10 år, fase 2b; del (a) er avgjort som A7), nr. 9, nr. 10 (PowerSync som leverandør) og nr. 11 (ElectricSQL som leverandør), de to siste før ADR-en, og nr. 12 (slå på synktjenestene i testmiljøet, kostnad).
+- Spørsmålene i `docs/09-apne-sporsmal.md`: nr. 6, nr. 8 del (b) (GPS i originalbildene i 10 år, fase 2b; del (a) er avgjort som A7), nr. 9, nr. 10 og nr. 11 (avgjort av agentene som A13 og A14: selvdrevet, ingen skytjeneste; til gjennomgang), og nr. 12 (slå på synktjenestene i testmiljøet, kostnad).
 
 ## Oppgaver fra nattløkken
 
@@ -93,12 +98,17 @@ Fra nattløkken 30.10.2026 (main ved 08a7675, versjon 0.2.17). Rettet i PR #31 �
 12. **Synk-ADR-en (fase 2b):** hent eksisterende rader for hele bunten på én gang per tabell eller bruk `INSERT ... ON CONFLICT` (N+1 i `applyTrialChanges`, 1 500–2 000 rundturer per bunt på 500), og bruk indeksmønsteret `(organization_id, updated_at, id)` på de ekte tabellene. Mål: tid.
 13. **Ekte tabeller for oppdrag og rapporter:** indeks på `(organization_id, <sorteringsfelt>)`, eventuelt delvis med `WHERE deleted_at IS NULL` (som `listTrialForms` mangler i dag; brukes bare i tester).
 14. **`findGrant`** bruker to spørringer per tilgangssjekk; kan slås sammen. Liten gevinst, ingen N+1. Lav prioritet.
+15. **Ustabil e2e-test i prøve D** (`e2e/fase-1-prove-d-bilder.spec.ts`, [ipad] «kopi som får 400 viser Bare originalen er lagret …»): feilet én gang med fingeravtrykket til en tom fil. `waitForFile` venter bare til filen finnes, og serveren skriver originalen rett til endelig sti (`photo-storage.ts`), så en halvskrevet fil kan ses. Forslag: skriv til midlertidig fil og gi nytt navn, eller vent til størrelsen er riktig i testen. Funnet i gjennomgangen av sammenligningen 30.10.2026. Mål: reklamasjoner.
 
 ## Trenger Ståle (stoppet etter 3 retteforsøk)
 
 Ingen.
 
 ## Siste kjøring
+
+30.10.2026 kl. 16:25–19:20 UTC: hovedløkken fant ingen åpne PR-er; sammenligningen (ADR 0004) og UU-funnene var i arbeid hos andre kjøringer. Kjørte fase 0b «Organisasjon → selskap → kontor → ansatt» med arbeidsflyten «oppgave» (24 agenter, ca. 2 t 45 min) til PR #41, merget med skriptet (CI grønn, ingen alvorlige funn, 6 små, lagt inn som liten oppgave (i)). En annen kjøring pushet samme oppgave til branchen samtidig; flettet uten tap. Branchen `fase1-uu-nattlokken` har bare oppgavekort og ingen push siden kl. 15:08, så neste kjøring kan ta den over (3-timersregelen). Sesjon: https://claude.ai/code/session_01Jqwnu2N3LWzoBoqfcro6m9
+
+30.10.2026 kl. 14:36–18:05 UTC: hovedløkken fant ingen åpne PR-er og småfunn D og F i arbeid hos en annen kjøring (PR #38, merget i mellomtiden). Kjørte sammenligningen av kandidatene og ADR 0004 med arbeidsflyten «oppgave» (22 agenter, ca. 3 t 15 min) til PR #39, merget med skriptet (CI grønn, ingen alvorlige funn, 14 små). Foreløpig valg: egenbygd synk (A13–A15). Neste: fase 0b, første punkt som ikke trenger Optiplan-tilgang (organisasjon → selskap → kontor → ansatt). Sesjon: https://claude.ai/code/session_01JqwntwoupH4oRYcBqomqQ
 
 30.10.2026 kl. 03:05–11:35 UTC: hovedløkken fant ingen åpne PR-er og kjørte arbeidsflyten «oppgave» tre ganger: prøve C (PR #32), småfunn fra prøve C (PR #33) og prøve F (PR #34), alle merget med skriptet (CI grønn, ingen alvorlige funn). En annen kjøring leverte prøve D (PR #35) samtidig; denne kjøringen ventet på CI og merget den med skriptet før tilstanden ble oppdatert. Sesjon: https://claude.ai/code/session_01Jqwnu2V8ERMPTnXezmxYu6
 30.10.2026 kl. 09:05–11:35: hovedløkken fant PR #33 merget og prøve F i arbeid hos en annen kjøring, og kjørte prøve D (bilder) med arbeidsflyten «oppgave» (20 agenter, ca. 2 t 25 min) til PR #35, merget (CI grønn, ingen alvorlige funn, småfunn lagt inn som liten oppgave (h)). Spørsmål nr. 8 avgjort som A7. Neste i fase 1: små oppgaver (g) og (h), deretter sammenligning av kandidatene og ADR (foreløpig, bekreftes etter prøve A og B). Sesjon: https://claude.ai/code/session_01Jqwnu2VWYuQTPKrLPiFmXt

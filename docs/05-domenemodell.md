@@ -189,6 +189,8 @@ Disse feltene finnes i **alle** tabeller (med få unntak, som er nevnt). De stå
 | `photo_file_id` | Profilbilde (valgfritt i rapporten) |
 | `deactivated_at` | Sluttet. Personen kan ikke logge inn, men står fortsatt på gamle rapporter. |
 
+**Bygget i fase 0b (30.10.2026):** `logo_file_id`, `signature_file_id`, `photo_file_id`, `accounting_connection_id` og `default_report_profile_id` legges til når tabellene de peker på finnes (beslutning A17). `company_id` og `office_id` kan være tomme til admin har fylt dem ut. Databasen sikrer at selskap og kontor hører til samme organisasjon som den ansatte, og at `user_id` bare er tom når `deactivated_at` er satt.
+
 **`certifications`** – sertifisering, som hører til personen.
 
 | Felt | Forklaring |
@@ -1647,6 +1649,8 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Bruker / innlogging | `users` | Felles med Optiplan |
 | Sertifisering | `certifications` | Personlig sertifisering |
 | Ansvarsforsikring | `companies.liability_*` | Hører til selskapet |
+| Firmatekst | `companies.company_text` | Teksten om selskapet på rapportens side 2 |
+| Sluttet | `employees.deactivated_at` | Kan ikke logge inn, står fortsatt på gamle rapporter |
 | Rolle | `employee_roles.role` | `inspector`, `office`, `manager`, `admin` |
 | Rettighet | `employee_permissions.permission` | Enkeltrettighet, for eksempel `template.edit_structure` |
 | Takstmann | `inspector` | Rolle |
@@ -1679,7 +1683,8 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Prøve uten nett (fase 1) | `offline-trial` | Modulen med testskjemaet for fase 1. Kastes eller gjøres om til feltkomponenter i fase 2b |
 | Testskjema | `trial form` (`trialForm`, `TrialAnswers`) | Skjemaet med 40 felt som kandidatene i fase 1 prøves mot. Ikke en systemmal |
 | Testskjema (lagret), svar per felt, bilde i prøven | `trial_forms`, `trial_answers`, `trial_photos` | Tabeller **bare for prøven i fase 1** (oppgave 4, PowerSync). Har `baseColumns`. Slettes eller gjøres om i fase 2b; ikke en del av datamodellen ellers |
-| Synk / synkronisering | `sync` | Lokal database på iPaden som sendes til og hentes fra serveren. Verktøy velges i fase 1 (kandidat 1: PowerSync, kandidat 2: ElectricSQL, kandidat 3: egenbygd) |
+| Synk / synkronisering | `sync` | Lokal database på iPaden som sendes til og hentes fra serveren. Foreløpig valg: egenbygd (ADR 0004, bekreftes etter prøve A og B); PowerSync og ElectricSQL er reserve |
+| Synkmotor | `src/core/sync` (mappe, finnes ikke ennå) | Den felles delen av synken når den blir ekte: lokal lagring, endringskø, henting og skriving. Hver modul melder inn sine egne tabeller. Flyttes dit fra `offline-trial` etter Ståles godkjenning (ADR 0004) |
 | Utsnitt (ElectricSQL) | `shape` | Et utsnitt av én tabell (med filter på organisasjon) som ElectricSQL sender til iPaden. Bare lesing; hentes alltid gjennom appen (`/api/prove/synk/shape`), aldri rett fra Electric |
 | Valg av synkløsning i prøven | `trial_sync_candidate` (`powersync` / `electricsql` / `custom`) | Innstilling i nettleseren på listen «Testskjema», bare for fase 1. Ikke en kode i datamodellen |
 | Endringskø | `crud queue` / `upload queue` / `outbox` | Endringer og bilder som venter på å bli sendt fra iPaden. PowerSync har sin egen; for ElectricSQL og egenbygd eier vi køen selv |

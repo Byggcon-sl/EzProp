@@ -164,8 +164,8 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
   - [x] Småfunn fra gjennomgangen av PR #34: færre doble tester for meldingen om innlogging og i sjekken av innloggingen, og opprydding i testhjelperne (30.10.2026, `docs/agenter/oppgaver/fase1-smafunn-prove-d-f.md`)
 - [x] Synkstatus som alltid vises: antall endringer og bilder som venter, «lagret kl.», og «Synk nå» (PR #21, 29.10.2026, `docs/funksjoner/fase1-synkstatus.md`)
   - [x] Småfunn fra gjennomgangen av PR #21: egen test for «Synk nå», trygg oppretting av testtakstmannen i e2e (bare lokal database og testdatabase), loggen viser bare feilmeldingen, og opprydding i testkoden (29.10.2026, `docs/agenter/oppgaver/fase1-smafunn-synkstatus.md`)
-- [ ] Sammenligning av kandidatene: virker prøvene, hvor mye arbeid, drift i EU/EØS, pris og hvor modent verktøyet er
-- [ ] **ADR: valg av løsning for drift uten nett**, med begrunnelse og det som ikke virket
+- [x] Sammenligning av kandidatene: virker prøvene, hvor mye arbeid, drift i EU/EØS, pris og hvor modent verktøyet er (30.10.2026, `docs/funksjoner/fase1-sammenligning.md`; bygger på de automatiske prøvene. **Foreløpig; bekreftes etter prøve A og B på ekte iPad, og Ståles godkjenning i demoen gjenstår**)
+- [x] **ADR: valg av løsning for drift uten nett**, med begrunnelse og det som ikke virket (30.10.2026, `docs/adr/0004-drift-uten-nett.md`: egenbygd, reserve PowerSync eller ElectricSQL. **Foreløpig; bekreftes etter prøve A og B på ekte iPad, og Ståles godkjenning i demoen gjenstår**)
 - [ ] Demo for Ståle på ekte iPad i en kjeller uten dekning
 
 **Ferdig når:** Prøve A virker uten tap på to iPader flere ganger, prøve B virker med nett, og Ståle har sett demoen og godkjent ADR-en med valgt løsning.
@@ -181,7 +181,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 - [ ] **Nøkkelboks for hemmeligheter** (for eksempel Azure Key Vault, samme oppsett som Optiplan). Ingen nøkler i koden eller databasen, bare navnet på hemmeligheten (`secret_ref`). (Innspill P12)
 
 **Organisasjon og tilgang**
-- [ ] Organisasjon → selskap → kontor → ansatt, med ansvarsforsikring og firmatekst per selskap. Ansatte som har sluttet, kan stå uten innlogging (innspill D18).
+- [x] Organisasjon → selskap → kontor → ansatt, med ansvarsforsikring og firmatekst per selskap. Ansatte som har sluttet, kan stå uten innlogging (innspill D18). (30.10.2026, branch `fase0b-organisasjon-selskap-kontor`)
 - [ ] **Sertifisering med utløpsdato** (funksjonskart H5): den som har utgått sertifisering, kan ikke publisere som ansvarlig, og admin ser hvem som snart går ut. Varsel i arbeidslisten kommer i fase 3.
 - [ ] Roller og rettigheter i én felles tilgangsmodul, etter rettighetsmatrisen i `datamodell.md` avsnitt 5. Admin kan gi enkeltrettigheter (for eksempel maltilgang). Admin stenges aldri ute. **Fra 27.10.2026:** alle takstmenn ser alle oppdrag og data og kan foreløpig endre alt, styrt av en innstilling som er lett å stramme inn. Alle kan sende fakturagrunnlag.
 - [ ] Admin: opprette selskaper, kontorer og ansatte, og gi roller

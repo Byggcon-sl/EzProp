@@ -116,3 +116,13 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 ## 30.10.2026 – UU-funnene fra nattløkken
 
 - e2e henger når en gammel next-server holder port 3100 (reuseExistingServer). Kjør med CI=1 og en ledig E2E_PORT. Kilde: nattløkken 30.10.2026.
+## 30.10.2026 – PR #38 og #39 merget (småfunn D og F, sammenligning og ADR 0004)
+
+- Regelen om 3 timer virket igjen: hovedløkken lot `fase1-smafunn-prove-d-f` (84 min siden push) være og valgte sammenligningen og ADR-en, som bare rører dokumenter. Beslutningsnumrene A11/A12 ble holdt av til den andre kjøringen, så ADR-en brukte A13–A15 uten konflikt.
+- En oppgave med bare dokumentasjon tok like lang tid som en prøve (ca. 3 t 15 min, 22 agenter), fordi alle rollene leser mye. Regel videre: rene dokumentoppgaver kan få færre roller i forhåndsvurderingen.
+
+## 30.10.2026 – PR #41 merget (organisasjon → selskap → kontor → ansatt)
+
+- Første punkt i fase 0b gikk fra oppgavekort til merget PR i én kjøring (24 agenter, ca. 2 t 45 min). Ingen alvorlige funn, 6 små, lagt inn som liten oppgave (i).
+- To kjøringer tok samme oppgave: den andre startet «organisasjon → selskap → kontor» i en egen worktree-branch mens denne kjøringen allerede hadde pushet oppgavekortet til `fase0b-organisasjon-selskap-kontor`, og pushet også til samme branch. Det ble flettet uten tap, men arbeidet ble gjort to ganger. Regel videre: før en oppgave startes, sjekk alle brancher på origin med push de siste 3 timene (også `worktree-wf_*`) og om oppgavekortet for punktet allerede finnes der. Finnes det, velg et annet punkt.
+- Beslutningsnumrene kolliderte igjen (A13–A15 brukt av ADR 0004). Regelen fra prøve D gjelder: sjekk siste nummer på `main` rett før PR-en åpnes.
