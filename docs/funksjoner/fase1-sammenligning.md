@@ -22,7 +22,7 @@
 
 ## 1. Virker prøvene
 
-Tellingen er kjørt på branchen `fase1-sammenligning-adr` (lik `main` ved `1510923`, versjon 0.2.26, bare dokumentasjon lagt til) 30.10.2026:
+Tellingen er kjørt 30.10.2026 på branchen `fase1-sammenligning-adr` ved commit `1f1fb5e` (koden lik `main` ved `1510923`, versjon 0.2.26; bare dokumentasjon lagt til):
 
 | Kommando | Resultat 30.10.2026 |
 |---|---|
