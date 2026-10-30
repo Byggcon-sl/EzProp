@@ -3,7 +3,7 @@
 - **Fase:** 0b – Innlogging, organisasjon, roller og layout
 - **Modul:** kjerne (`src/core/organization`, skjema i `src/db/schema`)
 - **Branch:** `fase0b-organisasjon-selskap-kontor` (bygger på `main`)
-- **Status:** klar til bygging (endret etter forenkler og test-leder 30.10.2026)
+- **Status:** bygget, tester skrevet; `main` med ADR 0004 flettet inn 30.10.2026. Gjenstår: grønn kjøring, gjennomgang og PR.
 - **Støtter hovedmål:**
   - **Reklamasjoner:** riktig utstedende selskap, ansvarsforsikring og firmatekst skal kunne hentes fra data, ikke skrives for hånd i hver rapport. Feil selskap eller utgått forsikring i rapporten er en kjent kilde til klager. Ansatte som har sluttet, står fortsatt riktig på gamle rapporter (innspill D18).
   - **Tid:** når selskap og forsikring ligger ett sted, fylles bunntekst og side 2 i rapporten ut automatisk senere (fase 2a). Takstmannen skriver det aldri.
@@ -34,7 +34,7 @@ KI har ingen rolle i selve tabellene. Men strukturen er det KI senere bruker for
    - `listOffices(actor, organizationId)`: kontorer som ikke er slettet, sortert på `sort_order`, så navn.
    - `listEmployees(actor, organizationId, { includeDeactivated })`: ansatte som ikke er slettet, med selskapsnavn og kontornavn. Som standard bare aktive; med `includeDeactivated: true` også de som har sluttet (også uten innlogging). Én spørring med left join til `companies` og `offices`, der `deleted_at IS NULL` for selskap og kontor står i join-betingelsen (slettet selskap eller kontor gir tomt navn). `select` velger bare feltene som er lovet: `id`, `name`, `jobTitle`, `companyName`, `officeName`, `deactivatedAt` (står fast i testen). Ingen egen mapper eller DTO. Ingen e-post eller innloggings-id.
    - Alle kaller `requireOrganizationAccess(actor, organizationId, "organization.read")` og filtrerer på `grant.organizationId` fra tilgangssjekken, aldri direkte på `organizationId`-argumentet (sjekkes i gjennomgangen).
-9. **Seed av Byggcon:** de fire selskapene og fem kontorene fra domenemodellen 4.1 (Byggcon AS, Byggcon Nord AS, Byggcon Helgeland AS, Byggcon Troms AS; Bodø, Mo i Rana, Mosjøen, Narvik, Tromsø), med bare navn og rekkefølge. Org.nr., adresse, forsikring og firmatekst står tomme og fylles ut av admin (beslutning A13). Seed tåler å kjøres flere ganger: kontorer settes inn med `ON CONFLICT DO NOTHING` mot den delvise unike indeksen på navn; for selskaper sjekkes `legal_name` før innsetting. Sjekken for selskaper ser på alle rader, også slettede, slik at seed aldri lager på nytt et selskap admin har slettet. (Et slettet kontor lages derimot på nytt, fordi den delvise indeksen bare gjelder aktive rader; se «Avgjort» under.) Ingen ny hjelpefunksjon for dette. Admin får ikke selskap eller kontor av seed.
+9. **Seed av Byggcon:** de fire selskapene og fem kontorene fra domenemodellen 4.1 (Byggcon AS, Byggcon Nord AS, Byggcon Helgeland AS, Byggcon Troms AS; Bodø, Mo i Rana, Mosjøen, Narvik, Tromsø), med bare navn og rekkefølge. Org.nr., adresse, forsikring og firmatekst står tomme og fylles ut av admin (beslutning A16). Seed tåler å kjøres flere ganger: kontorer settes inn med `ON CONFLICT DO NOTHING` mot den delvise unike indeksen på navn; for selskaper sjekkes `legal_name` før innsetting. Sjekken for selskaper ser på alle rader, også slettede, slik at seed aldri lager på nytt et selskap admin har slettet. (Et slettet kontor lages derimot på nytt, fordi den delvise indeksen bare gjelder aktive rader; se «Avgjort» under.) Ingen ny hjelpefunksjon for dette. Admin får ikke selskap eller kontor av seed.
 10. **Testfabrikker** i `tests/factories.ts`: `createCompany`, `createOffice`, og `createEmployee` som kan ta selskap og kontor (valgfritt, så alle dagens kall, også i `tests/tenant-isolation.ts`, virker uendret). `resetDatabase` tømmer også `companies` og `offices`. Oppdiktede verdier (for eksempel org.nr. `000000001`, forsikringsselskapet «Testforsikring»).
 11. **Ordlisten** (`docs/05-domenemodell.md` avsnitt 8): «Firmatekst» → `companies.company_text` og «Sluttet» → `employees.deactivated_at` (lagt inn av prosjektlederen i denne commiten).
 12. Versjon i `package.json` økes (patch).
@@ -42,14 +42,21 @@ KI har ingen rolle i selve tabellene. Men strukturen er det KI senere bruker for
 
 **Ikke med (bevisst utelatt):**
 - Admin-skjermbilder for å opprette eller endre selskaper, kontorer og ansatte (eget punkt i fase 0b). Derfor heller ingen skrivefunksjoner (opprett, endre, myk sletting) i `src/core/organization` ennå; de lages sammen med skjermene, med revisjonslogg.
-- `logo_file_id`, `signature_file_id`, `photo_file_id` (venter på felles filtjeneste), `accounting_connection_id` (venter på tilkoblingslaget), `default_report_profile_id` (rapportprofiler kommer i fase 2a). Kolonnene legges til når tabellene de peker på finnes (beslutning A14).
+- `logo_file_id`, `signature_file_id`, `photo_file_id` (venter på felles filtjeneste), `accounting_connection_id` (venter på tilkoblingslaget), `default_report_profile_id` (rapportprofiler kommer i fase 2a). Kolonnene legges til når tabellene de peker på finnes (beslutning A17).
 - Sertifisering (`certifications`), enkeltrettigheter (`employee_permissions`), nye rettigheter eller roller. Eget punkt i fase 0b.
 - Endringer i tilgangssjekken (`findGrant`). Den nekter allerede ansatte med `deactivated_at` og bruker uten ansatt-rad.
 - Synk av selskaper og kontorer til iPaden (kommer med valgt synkløsning, fase 2b).
-- Synkkandidatene, ADR 0004 og UU-funnene fra nattløkken (andre kjøringer jobber med dem).
+- Synk av selskaper og kontorer (melding inn i synkmotoren, indeksen `(organization_id, updated_at, id)`). Kommer når fase 2b spesifiseres (se «ADR 0004» under). UU-funnene fra nattløkken.
 - Validering av org.nr. med kontrollsiffer (MOD11). Kommer med admin-skjemaet.
 - `phone` på `employees`. Telefon er en del av den felles profilen med Optiplan (punktet om innlogging i fase 0b, spørsmål nr. 4), og hvor den lagres avgjøres i innloggings-ADR-en. Legges til der eller med admin-skjermene. Ingen endring i domenemodellen.
 - Ekstra indekser for ytelse (`(organization_id, legal_name)`, `(organization_id, sort_order)`, `employees.company_id`, `employees.office_id`). Få rader per organisasjon, og myk sletting gjør at det aldri blir `DELETE` som må slå opp i `employees`. De unike indeksene i punkt 4 og 6 beholdes, fordi de er dataregler.
+
+## ADR 0004 (foreløpig, egenbygd synk) og tabellene
+Sjekket 30.10.2026 etter at ADR 0004 kom på `main` (PR #39):
+- **Felles kolonner:** `companies` og `offices` bruker `baseColumns` (`src/db/schema/common.ts`): `id` kan lages på enheten (UUID v7), `organization_id`, myk sletting og `row_version`. Det er det ADR-en krever. Ingen ny kode.
+- **`organization_id` fra tilgangssjekken:** spørringene filtrerer på `grant.organizationId` (punkt 8). Det samme kravet stiller ADR-en til synken.
+- **Ingen DELETE:** ingen skrivefunksjoner nå; myk sletting med `deleted_at` når admin-skjermene lages.
+- **Ikke nå:** indeksen `(organization_id, updated_at, id)` og innmelding i synkmotoren. ADR-en sier at den gjelder tabeller som synkes, og hvordan en modul melder inn tabellene bestemmes når fase 2b spesifiseres. Selskaper og kontorer leses på iPaden først når rapporten trenger firmatekst (fase 2a/2b). Avgjort av prosjektlederen: det enkleste som virker, ingen indeks uten bruk.
 
 ## Tilgang
 | Rolle | Se | Endre |
@@ -64,7 +71,7 @@ Ingen ny rettighet. Admin stenges ikke ute.
 ## Data
 - Nye tabeller: `companies`, `offices`.
 - Endret: `employees` (`company_id`, `office_id`, sjekk på `user_id`/`deactivated_at`).
-- `docs/05-domenemodell.md` 4.1: legg til en linje om at kolonnene i A14 kommer senere, og at `company_id`/`office_id` kan være tomme til admin har fylt dem ut.
+- `docs/05-domenemodell.md` 4.1: legg til en linje om at kolonnene i A17 kommer senere, og at `company_id`/`office_id` kan være tomme til admin har fylt dem ut.
 - Ingen faste koder (`key`) tas i bruk.
 
 ## Skjermer
@@ -114,9 +121,9 @@ Ingen fagregler. Databaseregler (sjekk og fremmednøkler) prøves med tester.
 - **CI kjører migreringen to ganger:** én linje i CI, og gir sikkerhet for at migreringene tåler ny kjøring hver gang.
 
 ## Beslutninger tatt av agentene (autonom modus)
-Føres i `docs/09-apne-sporsmal.md`. Numrene kan bli flyttet hvis en annen kjøring bruker samme nummer først.
-- **A13:** Seed lager bare navnene på Byggcons fire selskaper og fem kontorer (fra domenemodellen 4.1). Org.nr., adresse, forsikring og firmatekst fylles ut av admin. Grunn: oppdiktede tall i seed ville havnet i drift; ekte tall skal admin legge inn selv (planens «ferdig når»).
-- **A14:** Felt som peker på tabeller som ikke finnes ennå (logo, signatur, profilbilde, regnskapstilkobling, rapportprofil), legges til når tabellene lages. Grunn: det enkleste som virker, og ingen kolonner uten fremmednøkkel.
+Føres i `docs/09-apne-sporsmal.md`. Numrene ble flyttet fra A13/A14 til A16/A17 30.10.2026, fordi `main` hadde tatt A13–A15. Sjekk igjen rett før PR.
+- **A16:** Seed lager bare navnene på Byggcons fire selskaper og fem kontorer (fra domenemodellen 4.1). Org.nr., adresse, forsikring og firmatekst fylles ut av admin. Grunn: oppdiktede tall i seed ville havnet i drift; ekte tall skal admin legge inn selv (planens «ferdig når»).
+- **A17:** Felt som peker på tabeller som ikke finnes ennå (logo, signatur, profilbilde, regnskapstilkobling, rapportprofil), legges til når tabellene lages. Grunn: det enkleste som virker, og ingen kolonner uten fremmednøkkel.
 
 ## Roller
 - **utvikler:** skjema, migrering, spørringer, seed, fabrikker (én bit).
@@ -124,7 +131,7 @@ Føres i `docs/09-apne-sporsmal.md`. Numrene kan bli flyttet hvis en annen kjør
 - **sikkerhet-personvern:** tenant-isolasjon, sammensatte fremmednøkler, at `listEmployees` ikke lekker e-post.
 - **test-leder:** godkjenner testdekning mot akseptkriteriene.
 
-Ikke nødvendig: arkitekt (følger domenemodellen og eksisterende mønster), ux, ui (ingen skjermer), ki-ansvarlig, fagansvarlig (ingen fagtekst).
+Ikke nødvendig: arkitekt (følger domenemodellen, eksisterende mønster og ADR 0004), ux, ui (ingen skjermer), ki-ansvarlig, fagansvarlig (ingen fagtekst).
 
 ## Åpne spørsmål
-- Ingen til Ståle. A13 og A14 er ført som beslutninger.
+- Ingen til Ståle. A16 og A17 er ført som beslutninger.
