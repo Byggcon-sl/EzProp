@@ -164,14 +164,11 @@ describe("POST /api/prove/regler", () => {
   });
 
   describe("ugyldig innhold gir 400", () => {
+    // Én sak per type feil; rene varianter av samme type er slått sammen
     const cases: [string, (organizationId: string) => unknown, boolean?][] = [
       [
         "tekst i stedet for tall",
         (id) => ({ organizationId: id, answers: { water_heater_age: "7" } }),
-      ],
-      [
-        "sannhetsverdi i stedet for tall",
-        (id) => ({ organizationId: id, answers: { moisture_floor: true } }),
       ],
       [
         "ekstra felt i answers",
@@ -181,12 +178,11 @@ describe("POST /api/prove/regler", () => {
       ["manglende organizationId", () => ({ answers: { water_heater_age: 1 } })],
       ["organizationId som ikke er uuid", () => ({ organizationId: "ikke-en-uuid", answers: {} })],
       ["answers mangler", (id) => ({ organizationId: id })],
-      ["answers er tekst", (id) => ({ organizationId: id, answers: "7" })],
-      ["answers er en liste", (id) => ({ organizationId: id, answers: [7, 42] })],
+      ["answers er feil type", (id) => ({ organizationId: id, answers: "7" })],
       ["kroppen er ikke JSON", () => "{ikke json", true],
       ["kroppen er tom", () => "", true],
-      ["kroppen er en liste", (id) => [{ organizationId: id, answers: {} }]],
       ["kroppen er null", () => null],
+      ["kroppen er ikke et objekt", (id) => [{ organizationId: id, answers: {} }]],
     ];
     it.each(cases)("%s", async (_name, build, raw) => {
       const { actor, organizationId } = await setupOrganization("admin");

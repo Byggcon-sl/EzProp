@@ -272,9 +272,10 @@ export function createCustomReader({
         );
       }
     } catch (error) {
+      // Bare feilmeldingen, aldri feilobjektet (kan bære rader fra serveren).
       console.warn(
         "Synk: kunne ikke legge inn rader fra serveren.",
-        error instanceof Error ? error.message : String(error),
+        error instanceof Error ? error.message : "ukjent feil",
       );
       return active() ? "failed" : null;
     }
