@@ -34,13 +34,6 @@ export function displaySize(
 }
 
 async function drawToJpeg(bitmap: ImageBitmap, width: number, height: number): Promise<Blob> {
-  if (typeof OffscreenCanvas !== "undefined") {
-    const canvas = new OffscreenCanvas(width, height);
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Mangler canvas.");
-    context.drawImage(bitmap, 0, 0, width, height);
-    return canvas.convertToBlob({ type: "image/jpeg", quality: DISPLAY_JPEG_QUALITY });
-  }
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -57,7 +50,7 @@ async function drawToJpeg(bitmap: ImageBitmap, width: number, height: number): P
 }
 
 function hasCanvas(): boolean {
-  return typeof OffscreenCanvas !== "undefined" || typeof document !== "undefined";
+  return typeof document !== "undefined" && typeof document.createElement === "function";
 }
 
 /**
