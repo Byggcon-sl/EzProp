@@ -60,7 +60,7 @@ Feil fra databasen fanges med `rejects.toThrow()`; testen sjekker gjerne navnet 
 ## 3. Seed, `src/db/seed/run.test.ts` (utvidet)
 
 - **fire selskaper og fem kontorer etter første kjøring, ingen nye etter andre kjøring** (tell rader; navnene som i domenemodellen 4.1).
-- **seed fyller ikke ut org.nr., adresse, forsikring eller firmatekst** (alle `null`, beslutning A13).
+- **seed fyller ikke ut org.nr., adresse, forsikring eller firmatekst** (alle `null`, beslutning A16).
 - **slettet selskap lages ikke på nytt:** seed, myk-slett «Byggcon Troms AS», seed igjen: fortsatt fire rader totalt og ingen aktiv «Byggcon Troms AS».
 - **admin får ikke selskap eller kontor:** `companyId` og `officeId` er `null` på adminens ansatt-rad.
 - Eksisterende tester («to ganger uten duplikater», «skriver aldri e-postadressen i loggen») skal være grønne uendret.

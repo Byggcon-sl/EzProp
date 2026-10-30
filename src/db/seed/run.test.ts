@@ -99,7 +99,7 @@ describe("seed", () => {
 
 // Selskaper og kontorer (fase 0b). Testplan
 // docs/funksjoner/fase0b-organisasjon-selskap-kontor-testplan.md avsnitt 3. Navnene fra
-// docs/05-domenemodell.md 4.1. Org.nr., adresse, forsikring og firmatekst fylles ut av admin (A13).
+// docs/05-domenemodell.md 4.1. Org.nr., adresse, forsikring og firmatekst fylles ut av admin (A16).
 describe("seed av selskaper og kontorer", () => {
   const env = { SEED_ADMIN_EMAIL: "admin@example.com", SEED_ADMIN_NAME: "Test Admin" };
   const COMPANY_NAMES = [
@@ -137,7 +137,7 @@ describe("seed av selskaper og kontorer", () => {
     );
   });
 
-  it("fyller ikke ut org.nr., adresse, forsikring eller firmatekst (A13)", async () => {
+  it("fyller ikke ut org.nr., adresse, forsikring eller firmatekst (A16)", async () => {
     await runSeed(env);
     for (const row of await db.select().from(companies)) {
       expect(row).toMatchObject({

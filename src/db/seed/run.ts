@@ -15,7 +15,7 @@ import { brand } from "@/shared/config/brand";
  * Grunndata (trygt å kjøre flere ganger):
  * - organisasjonen Byggcon (én rad, docs/05-domenemodell.md 4.1)
  * - første admin (SEED_ADMIN_EMAIL) som ansatt med rollen admin
- * - Byggcons selskaper og kontorer, bare navn og rekkefølge (beslutning A13). Org.nr., adresse,
+ * - Byggcons selskaper og kontorer, bare navn og rekkefølge (beslutning A16). Org.nr., adresse,
  *   forsikring og firmatekst fylles ut av admin. Admin får ikke selskap eller kontor her.
  * Ingen kundeopplysninger, ingen eksempeloppdrag.
  */
