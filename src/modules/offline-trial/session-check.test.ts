@@ -47,7 +47,7 @@ describe("checkSession: svar fra serveren", () => {
     expect(await checkSession(fetchReturning(() => jsonResponse(200, null)))).toBe("expired");
   });
 
-  it.each<[string, () => Response]>([
+  it.each<[string, () => Response | Promise<Response>]>([
     ["200 med {}", () => jsonResponse(200, {})],
     ["200 uten session", () => jsonResponse(200, { user: { email: FAKE_EMAIL } })],
     ["200 med session null", () => jsonResponse(200, { session: null, user: null })],
@@ -56,7 +56,17 @@ describe("checkSession: svar fra serveren", () => {
     ["403", () => jsonResponse(403, null)],
     ["500", () => jsonResponse(500, VALID_BODY)],
     ["503", () => new Response("feil", { status: 503 })],
+    ["200 med tekst", () => jsonResponse(200, "ok")],
     ["ugyldig JSON", () => new Response("{ikke json", { status: 200 })],
+    ["tom kropp", () => new Response("", { status: 200 })],
+    [
+      "tidsavbrudd fra nettleseren",
+      () => Promise.reject(new DOMException("Tidsavbrudd", "TimeoutError")) as Promise<Response>,
+    ],
+    [
+      "avbrutt",
+      () => Promise.reject(new DOMException("Avbrutt", "AbortError")) as Promise<Response>,
+    ],
   ])("%s gir unknown", async (_name, response) => {
     expect(await checkSession(fetchReturning(response))).toBe("unknown");
   });
@@ -71,6 +81,19 @@ describe("checkSession: svar fra serveren", () => {
       throw new Error("brått");
     });
     await expect(checkSession(fetchImpl)).resolves.toBe("unknown");
+  });
+
+  it("json() som kaster gir unknown", async () => {
+    const badJson = fetchReturning(
+      () =>
+        ({
+          status: 200,
+          ok: true,
+          json: () => Promise.reject(new SyntaxError("ugyldig")),
+          text: () => Promise.reject(new SyntaxError("ugyldig")),
+        }) as unknown as Response,
+    );
+    await expect(checkSession(badJson)).resolves.toBe("unknown");
   });
 
   it("tidsavbrudd gir unknown og avbryter kallet", async () => {
@@ -191,5 +214,18 @@ describe("createSessionChecker: høyst én sjekk om gangen", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     release(jsonResponse(200, VALID_BODY));
     expect(await third).toBe("valid");
+  });
+
+  it("en sjekk som feilet, slipper låsen", async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async (_input: string, _init?: RequestInit) => {
+      calls += 1;
+      if (calls === 1) throw new TypeError("Failed to fetch");
+      return jsonResponse(200, null);
+    });
+    const check = createSessionChecker(() => checkSession(fetchImpl));
+    await expect(check()).resolves.toBe("unknown");
+    await expect(check()).resolves.toBe("expired");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 });

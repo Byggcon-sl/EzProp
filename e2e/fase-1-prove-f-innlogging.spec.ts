@@ -8,6 +8,7 @@ import {
   createTrialForm,
   expireOwnSession,
   fieldSaved,
+  indicator,
   logIn,
   logInAsInspector,
   organizationIdOf,
@@ -221,6 +222,8 @@ test("2.1 takstmann med utløpt innlogging fyller ut uten nett, logger inn og al
     }
     await expect(form.getByText(SIGN_IN_MESSAGE, { exact: true })).toHaveCount(1);
     await expect(form.getByText(SIGN_IN_MESSAGE, { exact: true })).toBeVisible();
+    await expect(indicator(form)).toHaveText(SIGN_IN_MESSAGE);
+    await expect(indicator(form)).toHaveAttribute("role", "status");
     await expect(signInLink(form)).toHaveAttribute("href", `/logg-inn?neste=${nextParam(formId)}`);
     await expectFormContent(form);
     // Telleren ser sjekken (ellers ville trinn 6 ikke bety noe)
@@ -383,6 +386,17 @@ test("2.3 omdirigering til innlogging erstatter ikke kopien av skjemaet", async 
     await expect(page.getByLabel("Kode fra e-posten")).toHaveCount(0);
     await expect(page.getByLabel("E-postadresse")).toHaveCount(0);
     await expectState(page, "offline");
+
+    // 4. Kopien i hurtiglageret er skjemaet, ikke en omdirigering til innloggingssiden
+    const cached = await page.evaluate(async (target) => {
+      const hit = await caches.match(target);
+      if (!hit) return null;
+      return { redirected: hit.redirected, url: hit.url, body: await hit.text() };
+    }, formPath(formId));
+    expect(cached, "kopien finnes").not.toBeNull();
+    expect(cached!.redirected).toBe(false);
+    expect(new URL(cached!.url).pathname).toBe(formPath(formId));
+    expect(cached!.body).not.toContain("Send meg en kode");
   } finally {
     await context.setOffline(false);
   }
