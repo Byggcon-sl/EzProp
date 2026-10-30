@@ -16,7 +16,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Levert: Prøve F – innlogging som har gått ut** (30.10.2026; branch `fase1-prove-f-innlogging` fra `main`, versjon 0.2.23, PR åpnet og merges med skriptet når CI er grønn). Oppgavekort `docs/funksjoner/fase1-prove-f-innlogging.md`, testplan `docs/funksjoner/fase1-prove-f-innlogging-testplan.md`, resultatmal for ekte iPad `docs/funksjoner/fase1-prove-f-innlogging-resultat.md`. Skjemaet virker uten nett når innloggingen har gått ut, meldingen «Logg inn på nytt for å sende» når nettet kommer, tilbake til skjemaet etter innlogging (`neste`, bare trygge stier), synk uten tap. e2e i pc og iPad-størrelse. Ingen endringer i kandidatene, ingen ny rute, ingen ny avhengighet. Roller: forenkler, ux-ansvarlig, sikkerhet-personvern, test-leder, utvikler, testskriver. Beslutninger A5 og A6, spørsmål nr. 14 (delt iPad, ikke blokkerende). Ingen alvorlige funn; små funn (doble tester, tilstandsfilen) står i PR-en. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
+**Levert: Prøve F – innlogging som har gått ut** (30.10.2026; branch `fase1-prove-f-innlogging` fra `main`, versjon 0.2.23, **PR #34**, merges med skriptet når CI er grønn). Oppgavekort `docs/funksjoner/fase1-prove-f-innlogging.md`, testplan `docs/funksjoner/fase1-prove-f-innlogging-testplan.md`, resultatmal for ekte iPad `docs/funksjoner/fase1-prove-f-innlogging-resultat.md`. Skjemaet virker uten nett når innloggingen har gått ut, meldingen «Logg inn på nytt for å sende» når nettet kommer, tilbake til skjemaet etter innlogging (`neste`, bare trygge stier), synk uten tap. e2e i pc og iPad-størrelse. Ingen endringer i kandidatene, ingen ny rute, ingen ny avhengighet. Roller: forenkler, ux-ansvarlig, sikkerhet-personvern, test-leder, utvikler, testskriver. Beslutninger A5 og A6, spørsmål nr. 14 (delt iPad, ikke blokkerende). Ingen alvorlige funn; små funn (doble tester, tilstandsfilen) står i PR-en. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
 **Levert: liten oppgave (f)**, småfunnene fra PR #32 (prøve C) (30.10.2026; branch `fase1-smafunn-prove-c` fra `main`, versjon 0.2.22, **PR #33**). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-c.md`. Loggen viser bare feilnavnet, testen for åpning uten nett har ingen reservevei, e2e-filen gikk fra 27 til 22 tester, tekstblokken som leste kildefilen er borte, én felles hook for plassmålingen, ingen `DOMException`-sjekk. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; to doble sjekker i e2e rettet av prosjektlederen før PR. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
@@ -48,7 +48,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| (ny) | Prøve F – innlogging som har gått ut | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
+| #34 | Prøve F – innlogging som har gått ut | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
 
 PR #16–#28 og #30–#33 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken). Ingen PR venter på Ståle.
 
