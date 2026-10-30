@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 (UU-funn 6–9 fra nattløkken levert som PR)
+Sist oppdatert: 30.10.2026 kl. 21:30 UTC (PR #45 merget)
 
 ## Gjeldende fase
 
@@ -58,7 +58,10 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #45 | UU-funn 6–9 fra nattløkken, branch `fase1-uu-nattlokken` | venter på CI, merges med skriptet | `main` |
+| #44 | Opprydding i selskap, kontor og ansatte (småfunn fra PR #41) | i arbeid hos en annen kjøring | `main` |
+| #46 | Seed lager ikke et slettet kontor på nytt (småfunn fra PR #41) | i arbeid hos en annen kjøring | `main` |
+
+PR #45 (UU-funn 6–9 fra nattløkken) er merget 30.10.2026.
 
 
 PR #16–#28 og #30–#41 er merget (#41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
@@ -110,6 +113,7 @@ Ingen.
 
 ## Siste kjøring
 
+30.10.2026 kl. 12:19–21:30 UTC: hovedløkken ryddet og merget PR #36 (tilstand), kjørte arbeidsflyten «oppgave» for småfunnene fra prøve D og F, (g) og (h), til PR #38 (merget kl. 15:06, beslutning A11 og A12), og lot sammenligningen og ADR-en være, fordi en annen kjøring hadde branchen. Kjørte deretter UU-funnene 6–9 fra nattløkken til PR #45 (merget, versjon 0.2.33, 7 små funn i PR-en). Sesjon: https://claude.ai/code/session_01Jqwnu26c9ExRcqGMEG67mm
 30.10.2026 kl. 16:25–19:20 UTC: hovedløkken fant ingen åpne PR-er; sammenligningen (ADR 0004) og UU-funnene var i arbeid hos andre kjøringer. Kjørte fase 0b «Organisasjon → selskap → kontor → ansatt» med arbeidsflyten «oppgave» (24 agenter, ca. 2 t 45 min) til PR #41, merget med skriptet (CI grønn, ingen alvorlige funn, 6 små, lagt inn som liten oppgave (i)). En annen kjøring pushet samme oppgave til branchen samtidig; flettet uten tap. Branchen `fase1-uu-nattlokken` har bare oppgavekort og ingen push siden kl. 15:08, så neste kjøring kan ta den over (3-timersregelen). Sesjon: https://claude.ai/code/session_01Jqwnu2N3LWzoBoqfcro6m9
 
 30.10.2026 kl. 14:36–18:05 UTC: hovedløkken fant ingen åpne PR-er og småfunn D og F i arbeid hos en annen kjøring (PR #38, merget i mellomtiden). Kjørte sammenligningen av kandidatene og ADR 0004 med arbeidsflyten «oppgave» (22 agenter, ca. 3 t 15 min) til PR #39, merget med skriptet (CI grønn, ingen alvorlige funn, 14 små). Foreløpig valg: egenbygd synk (A13–A15). Neste: fase 0b, første punkt som ikke trenger Optiplan-tilgang (organisasjon → selskap → kontor → ansatt). Sesjon: https://claude.ai/code/session_01JqwntwoupH4oRYcBqomqQ
