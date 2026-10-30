@@ -1,10 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { parseTrialNumber } from "../src/modules/offline-trial/answers";
+import { trialRules } from "../src/modules/offline-trial/rules/index";
 import {
   trialRuleCases,
-  trialRules,
   type TrialRuleCase,
-} from "../src/modules/offline-trial/rules/index";
+} from "../src/modules/offline-trial/rules/trial-rule-cases";
 import {
   ADMIN_EMAIL,
   countRequests,
@@ -155,28 +155,6 @@ test("nettleser og server gir samme svar for alle testsakene", async ({
       `${caseLabel(entry)}: nettleser og server`,
     ).toEqual({ nettleser: entry.expect_state, server: entry.expect_state });
   }
-});
-
-test("ruten krever innlogging", async ({ request }, testInfo) => {
-  pcOnly(testInfo, "Rutetest, kjøres bare i pc");
-  const response = await request.post(RULES_PATH, {
-    data: { organizationId: crypto.randomUUID(), answers: {} },
-  });
-  expect(response.status()).toBe(401);
-  expect(response.headers()["cache-control"]).toBe("private, no-store");
-});
-
-test("ruten gir 403 for annen organisasjon", async ({ page }, testInfo) => {
-  pcOnly(testInfo, "Rutetest, kjøres bare i pc");
-  await logIn(page, ADMIN_EMAIL);
-  const response = await page.request.post(RULES_PATH, {
-    data: { organizationId: crypto.randomUUID(), answers: { water_heater_age: 8 } },
-  });
-  expect(response.status()).toBe(403);
-  expect(response.headers()["cache-control"]).toBe("private, no-store");
-  const body = (await response.json()) as Record<string, unknown>;
-  expect(typeof body.feil).toBe("string");
-  expect(body).not.toHaveProperty("results");
 });
 
 test("regelsvaret etter omlasting uten nett", async ({ page, context }, testInfo) => {

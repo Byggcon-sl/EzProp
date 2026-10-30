@@ -194,7 +194,10 @@ function createShapeReader(): LocalTrialReader {
           nextState === state ? null : (nextState as unknown as Record<string, unknown> | null),
         );
       } catch (error) {
-        console.warn("Synk: kunne ikke legge inn rader fra serveren.", error);
+        console.warn(
+          "Synk: kunne ikke legge inn rader fra serveren.",
+          error instanceof Error ? error.message : String(error),
+        );
         await failed();
         continue;
       }

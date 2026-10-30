@@ -13,7 +13,8 @@ import {
   trialPhotos,
 } from "@/db/schema";
 import { parseTrialNumber } from "@/modules/offline-trial/answers";
-import { evaluateTrialRules, trialRuleCases, trialRules } from "@/modules/offline-trial/rules";
+import { evaluateTrialRules, trialRules } from "@/modules/offline-trial/rules";
+import { trialRuleCases } from "@/modules/offline-trial/rules/trial-rule-cases";
 import { logger } from "@/shared/lib/logger";
 import { resetDatabase } from "../../../../../tests/factories";
 import {
@@ -169,10 +170,6 @@ describe("POST /api/prove/regler", () => {
         (id) => ({ organizationId: id, answers: { water_heater_age: "7" } }),
       ],
       [
-        "tekst i stedet for tall (fukt)",
-        (id) => ({ organizationId: id, answers: { moisture_floor: "42" } }),
-      ],
-      [
         "sannhetsverdi i stedet for tall",
         (id) => ({ organizationId: id, answers: { moisture_floor: true } }),
       ],
@@ -183,11 +180,9 @@ describe("POST /api/prove/regler", () => {
       ["ekstra felt i kroppen", (id) => ({ organizationId: id, answers: {}, ekstra: 1 })],
       ["manglende organizationId", () => ({ answers: { water_heater_age: 1 } })],
       ["organizationId som ikke er uuid", () => ({ organizationId: "ikke-en-uuid", answers: {} })],
-      ["organizationId som tall", () => ({ organizationId: 12, answers: {} })],
       ["answers mangler", (id) => ({ organizationId: id })],
       ["answers er tekst", (id) => ({ organizationId: id, answers: "7" })],
       ["answers er en liste", (id) => ({ organizationId: id, answers: [7, 42] })],
-      ["answers er null", (id) => ({ organizationId: id, answers: null })],
       ["kroppen er ikke JSON", () => "{ikke json", true],
       ["kroppen er tom", () => "", true],
       ["kroppen er en liste", (id) => [{ organizationId: id, answers: {} }]],

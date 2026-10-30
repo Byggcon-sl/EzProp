@@ -60,14 +60,14 @@ Ingen endring. Regelsvaret under feltene ser likt ut.
 De to prøvereglene er uendret. Alle 14 testsaker skal fortsatt passere.
 
 ## Akseptkriterier
-- [ ] Egen Vitest-test for `localWriteGeneration` som feiler hvis rettingen fjernes.
-- [ ] `rules/index.ts` eksporterer ikke testsakene, og ingen fil under `src/` utenom tester importerer `trial-rule-cases`.
-- [ ] Tallene 7 og 42 står bare i regeldataene i `trial-rules.ts`, ikke i meldingsteksten; meldingene som vises er like som før.
-- [ ] Overlappende tester for prøve E er fjernet eller slått sammen; dekningen av 401, 403 og annen organisasjon finnes fortsatt i `route.test.ts`.
-- [ ] `reader.ts` og `electricsql/store.ts` logger bare feilmeldingen (test).
-- [ ] Bruker i annen organisasjon får ikke tilgang (eksisterende `expectTenantIsolation` i `route.test.ts` står igjen og passerer).
-- [ ] Virker på iPad-størrelse (eksisterende e2e for prøve E passerer på PC og iPad).
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne. Versjon 0.2.18.
+- [x] Egen Vitest-test for `localWriteGeneration` som feiler hvis rettingen fjernes.
+- [x] `rules/index.ts` eksporterer ikke testsakene, og ingen fil under `src/` utenom tester importerer `trial-rule-cases`.
+- [x] Tallene 7 og 42 står bare i regeldataene i `trial-rules.ts`, ikke i meldingsteksten; meldingene som vises er like som før.
+- [x] Overlappende tester for prøve E er fjernet eller slått sammen; dekningen av 401, 403 og annen organisasjon finnes fortsatt i `route.test.ts`.
+- [x] `reader.ts` og `electricsql/store.ts` logger bare feilmeldingen (test).
+- [x] Bruker i annen organisasjon får ikke tilgang (eksisterende `expectTenantIsolation` i `route.test.ts` står igjen og passerer).
+- [x] Virker på iPad-størrelse (eksisterende e2e for prøve E passerer på PC og iPad).
+- [x] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne. Versjon 0.2.18.
 
 ## Roller
 - **utvikler** og **testskriver** i parallell. Bitene henger ikke sammen: (a) testskriver: enhetstest for `localWriteGeneration` og logg-testene; (b) utvikler: testsakene ut av `index.ts`, tallet ett sted, loggendringen, ryddingen i overlappende tester.
@@ -76,3 +76,12 @@ De to prøvereglene er uendret. Alle 14 testsaker skal fortsatt passere.
 
 ## Åpne spørsmål
 - Ingen nye. Nr. 13 (ekte grensetall) står fortsatt åpent og påvirkes ikke.
+
+## Levert (30.10.2026)
+- Meldingene i `trial-rules.ts` bygges av `limitMessages()` fra `TRIAL_ONLY_LIMITS`; teksten er ordrett som før (testen med fast tekst er uendret).
+- `rules/index.ts` eksporterer bare regler og motor. Testene og e2e henter testsakene fra `trial-rule-cases.ts`.
+- E2e «ruten krever innlogging» og «ruten gir 403 for annen organisasjon» er fjernet (dekket i `route.test.ts`). Tre doble 400-saker er fjernet (fukt-variant av tekst, `organizationId` som tall, `answers` er null).
+- Importsjekken i motortesten (D4) er **beholdt**: lint for modulgrenser stopper bare import mellom moduler, ikke fra en annen mappe i samme modul.
+- `custom/reader.ts` og `electricsql/store.ts` logger bare feilmeldingen.
+- Kontroll: uten vakten i `sendSnapshot` blir W1 og W3 røde; med hele feilobjektet i loggen blir L1–L3 røde.
+- Versjon 0.2.18. Vitest: 702 bestått (3 hoppet over, som før).
