@@ -628,3 +628,47 @@ describe("createCustomReader (custom/reader.ts)", () => {
     expect(fake.notifyStatus).toHaveBeenCalled();
   });
 });
+
+// Testplan docs/agenter/oppgaver/fase1-smafunn-prove-e-testplan.md avsnitt 2 (L1).
+describe("loggen i hente-leseren", () => {
+  const MESSAGE = "Synk: kunne ikke legge inn rader fra serveren.";
+
+  it("loggen viser bare feilmeldingen når rader fra serveren ikke kan legges inn", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const fake = fakeContext({ stored: [{ key: CUSTOM_CURSOR_KEY, value: "m1" }] });
+      // Feilen bærer en rad (oppdiktet) som aldri skal havne i loggen.
+      fake.ctx.mergeIncoming = async () => {
+        throw Object.assign(new Error("hemmelig-rad"), { row: formRow({ name: "Hemmelig navn" }) });
+      };
+      const { fetchImpl } = fakeFetch([
+        () => respond(200, body("m2", { trial_forms: [formRow()] })),
+        () => respond(200, body("m2", { trial_forms: [formRow()] })),
+      ]);
+      const reader = start(fetchImpl, fake.ctx);
+      await settle();
+
+      const calls = warn.mock.calls.filter((args) => args[0] === MESSAGE);
+      expect(calls.length).toBeGreaterThan(0);
+      for (const args of calls) {
+        for (const arg of args) {
+          expect(arg).not.toBeInstanceOf(Error);
+          expect(typeof arg).toBe("string");
+        }
+        expect(args).toContain("hemmelig-rad");
+        expect(JSON.stringify(args)).not.toContain("Hemmelig navn");
+      }
+
+      // Hentingen regnes fortsatt som feilet, og markøren flyttes ikke.
+      expect(reader.serverConfirmed()).toBe(false);
+      expect(fake.state.get(CUSTOM_CURSOR_KEY)).toEqual({ key: CUSTOM_CURSOR_KEY, value: "m1" });
+      const again = reader.syncNow();
+      const outcome = expect(again).rejects.toThrow();
+      await settle();
+      await outcome;
+      expect(fake.state.get(CUSTOM_CURSOR_KEY)).toEqual({ key: CUSTOM_CURSOR_KEY, value: "m1" });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

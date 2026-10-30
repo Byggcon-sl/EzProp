@@ -272,7 +272,11 @@ export function createCustomReader({
         );
       }
     } catch (error) {
-      console.warn("Synk: kunne ikke legge inn rader fra serveren.", error);
+      // Bare feilmeldingen, aldri feilobjektet (kan bære rader fra serveren).
+      console.warn(
+        "Synk: kunne ikke legge inn rader fra serveren.",
+        error instanceof Error ? error.message : String(error),
+      );
       return active() ? "failed" : null;
     }
     cursor = parsed.markor;

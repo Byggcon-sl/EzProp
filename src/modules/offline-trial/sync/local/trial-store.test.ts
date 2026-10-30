@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
-import type { OutboxEntry } from "../types";
-import { retryDelayMs } from "./outbox";
+import type { LocalRow, OutboxEntry, TrialFormSnapshot } from "../types";
+import { ANSWER_FORM_FIELD_INDEX } from "./idb";
+import { localRowKey, retryDelayMs } from "./outbox";
 import { createLocalTrialStore } from "./trial-store";
 import {
   LOCAL_OUTBOX_STORE,
@@ -49,7 +50,11 @@ const QUEUE: OutboxEntry[] = [
 
 type FailWhen = (stores: readonly LocalStoreName[], mode: IDBTransactionMode) => boolean;
 
-/** Liten falsk `LocalDb`: lagrene er `Map`-er, transaksjonen kan bare `get`, `put` og `delete`. */
+/**
+ * Liten falsk `LocalDb`: lagrene er `Map`-er, transaksjonen kan `get`, `getAll`, `put`, `delete` og
+ * de to indeksene (skjema + felt for svar, skjema for bilder). `holdReadonly` holder igjen svaret
+ * fra neste `readonly`-transaksjon etter at den har lest (én gang), til testen slipper løftet.
+ */
 function createFakeDb(outbox: readonly OutboxEntry[]) {
   const stores = new Map<string, Map<unknown, unknown>>();
   const storeOf = (name: string) => {
@@ -59,9 +64,14 @@ function createFakeDb(outbox: readonly OutboxEntry[]) {
   };
   for (const entry of outbox) storeOf(LOCAL_OUTBOX_STORE).set(entry.seq, structuredClone(entry));
 
-  const control: { failTransaction: FailWhen; failReadAll: (name: string) => boolean } = {
+  const control: {
+    failTransaction: FailWhen;
+    failReadAll: (name: string) => boolean;
+    holdReadonly: Promise<void> | null;
+  } = {
     failTransaction: () => false,
     failReadAll: () => false,
+    holdReadonly: null,
   };
 
   /** Forespørsel som får `onsuccess` etter at kalleren har satt den (som i IndexedDB). */
@@ -77,6 +87,16 @@ function createFakeDb(outbox: readonly OutboxEntry[]) {
 
   const keyPathOf = (name: string) => (name === LOCAL_OUTBOX_STORE ? "seq" : "id");
 
+  /** Indeksene: [skjema, felt] for svar, skjema for bilder. Et område (`IDBKeyRange`) gir skjemaet. */
+  function indexMatches(indexName: string, row: Record<string, unknown>, query: unknown) {
+    if (indexName === ANSWER_FORM_FIELD_INDEX) {
+      if (Array.isArray(query)) return row.trial_form_id === query[0] && row.field_key === query[1];
+      return row.trial_form_id === (query as { lower: unknown[] }).lower[0];
+    }
+    return row.trial_form_id === query;
+  }
+  const rowsOf = (name: string) => [...storeOf(name).values()] as Record<string, unknown>[];
+
   const db: LocalDb = {
     options: { name: "test-local", version: 1, stateStore: { name: STATE_STORE, keyPath: "key" } },
     open: () => Promise.reject(new Error("Ikke i bruk i testen.")),
@@ -86,14 +106,27 @@ function createFakeDb(outbox: readonly OutboxEntry[]) {
       if (control.failTransaction(names, mode)) throw new Error("hemmelig-innhold");
       const tx = {
         objectStore: (name: string) => ({
-          get: (key: unknown) => request(storeOf(name).get(key)),
-          getAll: () => request([...storeOf(name).values()]),
+          get: (key: unknown) => request(structuredClone(storeOf(name).get(key))),
+          getAll: () => request(structuredClone(rowsOf(name))),
           put: (value: Record<string, unknown>) =>
             request(storeOf(name).set(value[keyPathOf(name)], structuredClone(value))),
           delete: (key: unknown) => request(storeOf(name).delete(key)),
+          index: (indexName: string) => ({
+            get: (query: unknown) =>
+              request(structuredClone(rowsOf(name).find((r) => indexMatches(indexName, r, query)))),
+            getAll: (query: unknown) =>
+              request(
+                structuredClone(rowsOf(name).filter((r) => indexMatches(indexName, r, query))),
+              ),
+          }),
         }),
       };
-      return body(tx as unknown as IDBTransaction);
+      const hold = mode === "readonly" ? control.holdReadonly : null;
+      if (hold) control.holdReadonly = null;
+      const result = await body(tx as unknown as IDBTransaction);
+      // Lest nå, men svaret kommer først når testen slipper løftet (en treg lesing).
+      if (hold) await hold;
+      return result;
     },
     readAll<T>(name: LocalStoreName): Promise<T[]> {
       if (control.failReadAll(name)) return Promise.reject(new Error("hemmelig-innhold"));
@@ -101,7 +134,9 @@ function createFakeDb(outbox: readonly OutboxEntry[]) {
     },
     syncedStoreOf: (table) => LOCAL_SYNCED_STORES[table],
   };
-  return { db, control };
+  /** Legger en rad rett i et lager, uten kø (som om den alt var synket). */
+  const seed = (name: string, row: LocalRow) => storeOf(name).set(row.id, structuredClone(row));
+  return { db, control, seed };
 }
 
 function createReader() {
@@ -257,5 +292,113 @@ describe("loggen i den lokale kjernen", () => {
 
     expectOnlyText(warnCalls(warn, "Lagring: kunne ikke lese listen."));
     expectOnlyText(warnCalls(warn, "Lagring: kunne ikke lese skjemaet."));
+  });
+});
+
+// Testplan docs/agenter/oppgaver/fase1-smafunn-prove-e-testplan.md avsnitt 1 (W1-W3).
+describe("øyeblikksbilder og nyere lokale skrivinger (localWriteGeneration)", () => {
+  const FIELD = "building_year";
+  const FORM_ROW: LocalRow = {
+    id: FORM,
+    name: "Testskjema 1",
+    created_at: NOW,
+    updated_at: NOW,
+    deleted_at: null,
+  };
+  const answerRow = (value: number): LocalRow => ({
+    id: ANSWER,
+    trial_form_id: FORM,
+    field_key: FIELD,
+    value: JSON.stringify(value),
+    text_state: null,
+    device_id: "enhet-2",
+    created_at: NOW,
+    updated_at: NOW,
+    deleted_at: null,
+  });
+
+  /** Verdien til feltet i et bilde (JSON-tekst), eller `null` når svaret mangler. */
+  const valueIn = (snapshot: TrialFormSnapshot) =>
+    snapshot.answers.find((answer) => answer.fieldKey === FIELD)?.value ?? null;
+
+  /** Et løfte testen slipper selv. */
+  function gate() {
+    let release: () => void = () => undefined;
+    const promise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return { promise, release };
+  }
+
+  /** Åpner uten nett og med tom kø, med skjemaet og ett svar (1990) lagret fra før. */
+  async function openWithAnswer() {
+    vi.stubGlobal("IDBKeyRange", {
+      bound: (lower: unknown, upper: unknown) => ({ lower, upper }),
+    });
+    const fake = await open(false, []);
+    fake.seed(LOCAL_SYNCED_STORES.trial_forms, FORM_ROW);
+    fake.seed(LOCAL_SYNCED_STORES.trial_answers, answerRow(1990));
+    return fake;
+  }
+
+  /** Lytter på skjemaet mens svaret fra lesingen holdes igjen etter at den har lest. */
+  async function subscribeWithHeldRead(control: { holdReadonly: Promise<void> | null }) {
+    const held = gate();
+    control.holdReadonly = held.promise;
+    const listener = vi.fn<(snapshot: TrialFormSnapshot) => void>();
+    store!.subscribe(FORM, listener);
+    // Lesingen er gjort (gammel verdi), men svaret venter på løftet.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listener).not.toHaveBeenCalled();
+    return { listener, release: held.release };
+  }
+
+  it("øyeblikksbilde lest før en nyere lokal skriving forkastes", async () => {
+    const { control } = await openWithAnswer();
+    const { listener, release } = await subscribeWithHeldRead(control);
+
+    await store!.setAnswer(FORM, FIELD, 2001);
+    await vi.advanceTimersByTimeAsync(0);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const values = listener.mock.calls.map(([snapshot]) => valueIn(snapshot));
+    expect(values.length).toBeGreaterThan(0);
+    expect(values).not.toContain("1990");
+    expect(values.at(-1)).toBe("2001");
+  });
+
+  it("øyeblikksbilde uten nyere skriving brukes", async () => {
+    const { control } = await openWithAnswer();
+    const { listener, release } = await subscribeWithHeldRead(control);
+
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    const [snapshot] = listener.mock.calls[0]!;
+    expect(snapshot.form?.id).toBe(FORM);
+    expect(valueIn(snapshot)).toBe("1990");
+  });
+
+  it("innkommende rader fra serveren teller som nyere skriving", async () => {
+    const { control } = await openWithAnswer();
+    const { listener, release } = await subscribeWithHeldRead(control);
+
+    const context = reader.start.mock.calls[0]![0];
+    const row = { ...answerRow(2010), updated_at: "2026-10-28T11:00:00.000Z" };
+    await context.mergeIncoming(
+      "trial_answers",
+      [{ table: "trial_answers", kind: "update", key: localRowKey("trial_answers", row), row }],
+      null,
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const values = listener.mock.calls.map(([snapshot]) => valueIn(snapshot));
+    expect(values.length).toBeGreaterThan(0);
+    expect(values).not.toContain("1990");
+    expect(values.at(-1)).toBe("2010");
   });
 });
