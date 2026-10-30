@@ -96,3 +96,9 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - Når boten fletter `main` inn i en PR, kan CI-kjøringen bli stående og vente på godkjenning. `merge-klare-pr.sh --vent` gir da opp etter 30 minutter. Løsning: en ny commit fra agenten på branchen, så starter CI som vanlig.
 - Testskriver og utvikler laget doble testfiler for samme kode. Test-leder bør sjekke etter doble testfiler før gjennomgangen er ferdig.
+
+## 30.10.2026 – To kjøringer gjorde samme oppgave (PR #28 og #29)
+
+- Hovedløkken så at siste push på `fase1-smafunn-prove-e` var 45 minutter gammel og trodde kjøringen hadde stoppet. Den var i live: arbeidsflyten «oppgave» kan gå 50 minutter uten push mens utvikler og testskriver jobber i egne worktrees. Begge kjøringene leverte samme oppgave; PR #28 ble merget, PR #29 lukket.
+- Regel videre: en oppgave som har oppgavekort på en branch uten PR, regnes som tatt i **3 timer** fra siste push (ikke 30 minutter). Har den ingen PR etter 3 timer, kan neste kjøring ta over. Hovedløkken velger da heller en annen oppgave som ikke rører de samme filene.
+- Er siste merge til `main` mindre enn 1 time gammel og ingen PR er åpen, kan den andre kjøringen holde på med neste oppgave. Start ikke en ny oppgave i den situasjonen; vent til neste kjøring.
