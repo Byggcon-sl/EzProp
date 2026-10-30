@@ -189,6 +189,8 @@ Disse feltene finnes i **alle** tabeller (med få unntak, som er nevnt). De stå
 | `photo_file_id` | Profilbilde (valgfritt i rapporten) |
 | `deactivated_at` | Sluttet. Personen kan ikke logge inn, men står fortsatt på gamle rapporter. |
 
+**Bygget i fase 0b (30.10.2026):** `logo_file_id`, `signature_file_id`, `photo_file_id`, `accounting_connection_id` og `default_report_profile_id` legges til når tabellene de peker på finnes (beslutning A14). `company_id` og `office_id` kan være tomme til admin har fylt dem ut. Databasen sikrer at selskap og kontor hører til samme organisasjon som den ansatte, og at `user_id` bare er tom når `deactivated_at` er satt.
+
 **`certifications`** – sertifisering, som hører til personen.
 
 | Felt | Forklaring |

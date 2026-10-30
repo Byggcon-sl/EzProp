@@ -51,7 +51,7 @@ jobs:
       - name: Lag testdatabase
         run: PGPASSWORD=ezprop psql -h localhost -U ezprop -c "create database ezprop_test"
       - name: Migreringer
-        run: pnpm db:migrate
+        run: pnpm db:migrate && pnpm db:migrate
       - name: Sjekk at migreringer er i takt med skjemaet
         run: pnpm db:generate && test -z "$(git status --porcelain src/db/migrations)"
       - run: pnpm test
