@@ -14,7 +14,8 @@
  */
 export const LOW_STORAGE_FREE_BYTES = 500 * 1024 * 1024;
 
-export const LOW_STORAGE_WARNING_TEXT = "Lite plass igjen på iPaden. Synk med nett så snart du kan.";
+export const LOW_STORAGE_WARNING_TEXT =
+  "Lite plass igjen på iPaden. Synk med nett så snart du kan.";
 
 export type StorageLevel = "ok" | "low" | "unknown";
 export type PersistedState = "yes" | "no" | "unsupported";

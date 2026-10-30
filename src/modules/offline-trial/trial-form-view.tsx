@@ -67,11 +67,7 @@ export function TrialFormView({
               (foreignChanges?.has(field.key) ?? false);
             const unsaved = unsavedFields?.has(field.key) ?? false;
             return (
-              <div
-                key={field.key}
-                data-field={field.key}
-                data-field-saved={unsaved ? "no" : "yes"}
-              >
+              <div key={field.key} data-field={field.key} data-field-saved={unsaved ? "no" : "yes"}>
                 <FieldInput
                   field={field}
                   value={answers[field.key]}
