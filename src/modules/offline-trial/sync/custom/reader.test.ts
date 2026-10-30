@@ -628,3 +628,57 @@ describe("createCustomReader (custom/reader.ts)", () => {
     expect(fake.notifyStatus).toHaveBeenCalled();
   });
 });
+
+describe("loggen i egenbygd leser", () => {
+  // Testplan docs/agenter/oppgaver/fase1-smafunn-prove-e-testplan.md avsnitt 2 (L1). Samme mønster
+  // som `expectOnlyText` i local/trial-store.test.ts: bare tekst, aldri feilobjektet.
+  const MESSAGE = "Synk: kunne ikke legge inn rader fra serveren.";
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("loggen viser bare feilmeldingen når rader fra serveren ikke kan legges inn", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fake = fakeContext({ stored: [{ key: CUSTOM_CURSOR_KEY, value: "lagret-markor" }] });
+    // Feilen bærer et radinnhold (oppdiktet) som aldri skal havne i loggen.
+    fake.ctx.mergeIncoming = vi.fn(async () => {
+      throw Object.assign(new Error("hemmelig-rad"), {
+        row: { name: "Oppdiktet skjemanavn Fjellvegen", value: '"privat-notat"' },
+      });
+    });
+    const { fetchImpl, calls } = fakeFetch([
+      () => respond(200, body("ny-markor", { trial_forms: [formRow()] })),
+      () => respond(200, body("ny-markor", { trial_forms: [formRow()] })),
+    ]);
+    const reader = start(fetchImpl, fake.ctx);
+    await settle();
+
+    // Hentingen feiler som før: ikke bekreftet, og markøren er ikke flyttet.
+    expect(reader.serverConfirmed()).toBe(false);
+    expect(fake.state.get(CUSTOM_CURSOR_KEY)).toEqual({
+      key: CUSTOM_CURSOR_KEY,
+      value: "lagret-markor",
+    });
+    const round = reader.syncNow();
+    const rejected = expect(round).rejects.toThrow();
+    await settle();
+    await rejected;
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls[1]!.url.searchParams.get("siden")).toBe("lagret-markor");
+
+    // Loggen: bare tekst, meldingen fra feilen er med, radinnholdet er ikke.
+    const logged = warn.mock.calls.filter((args) => args[0] === MESSAGE);
+    expect(logged.length).toBeGreaterThan(0);
+    for (const args of logged) {
+      for (const arg of args) {
+        expect(arg).not.toBeInstanceOf(Error);
+        expect(typeof arg).toBe("string");
+      }
+      expect(args.some((arg) => String(arg).includes("hemmelig-rad"))).toBe(true);
+      const text = args.map(String).join(" ");
+      expect(text).not.toContain("Fjellvegen");
+      expect(text).not.toContain("privat-notat");
+    }
+  });
+});

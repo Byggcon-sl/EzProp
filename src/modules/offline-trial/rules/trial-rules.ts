@@ -27,8 +27,8 @@ export const trialRules: readonly TrialRule[] = [
     limit: TRIAL_ONLY_LIMITS.water_heater_age_years,
     source_ref: "oppdiktet prøveverdi",
     messages: {
-      triggered: "Prøveregel: over prøvegrensen (7 år)",
-      not_triggered: "Prøveregel: ikke over prøvegrensen (7 år)",
+      triggered: `Prøveregel: over prøvegrensen (${TRIAL_ONLY_LIMITS.water_heater_age_years} år)`,
+      not_triggered: `Prøveregel: ikke over prøvegrensen (${TRIAL_ONLY_LIMITS.water_heater_age_years} år)`,
       not_evaluated: NOT_EVALUATED,
     },
   },
@@ -39,8 +39,8 @@ export const trialRules: readonly TrialRule[] = [
     limit: TRIAL_ONLY_LIMITS.moisture_floor_percent,
     source_ref: "oppdiktet prøveverdi",
     messages: {
-      triggered: "Prøveregel: over prøvegrensen (42 %)",
-      not_triggered: "Prøveregel: ikke over prøvegrensen (42 %)",
+      triggered: `Prøveregel: over prøvegrensen (${TRIAL_ONLY_LIMITS.moisture_floor_percent} %)`,
+      not_triggered: `Prøveregel: ikke over prøvegrensen (${TRIAL_ONLY_LIMITS.moisture_floor_percent} %)`,
       not_evaluated: NOT_EVALUATED,
     },
   },

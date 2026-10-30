@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -10,6 +10,21 @@ import * as rulesModule from "./index";
 
 const { trialRules } = rulesModule;
 const RULES_DIR = path.dirname(fileURLToPath(import.meta.url));
+const SRC_DIR = path.resolve(RULES_DIR, "../../..");
+
+/** Kildeteksten uten kommentarer (enkel fjerning, nok for denne filen). */
+function withoutComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
+/** Alle .ts/.tsx-filer under en mappe, rekursivt. */
+function sourceFilesUnder(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const full = path.join(dir, name);
+    if (statSync(full).isDirectory()) return sourceFilesUnder(full);
+    return /\.tsx?$/.test(name) ? [full] : [];
+  });
+}
 
 /** Kildefilene i `rules/` (uten testfiler). */
 function ruleSourceFiles(): { file: string; text: string }[] {
@@ -88,6 +103,29 @@ describe("prøvereglene som data", () => {
     }
     // Ingen andre tall i konstanten enn de to prøvetallene
     expect([...values].sort((a, b) => a - b)).toEqual([7, 42]);
+  });
+
+  it("grensetallene står bare i regeldataene", () => {
+    // Tallene i TRIAL_ONLY_LIMITS er dekket over; her sjekkes at meldingene ikke har egne tall.
+    const text = withoutComments(readFileSync(path.join(RULES_DIR, "trial-rules.ts"), "utf8"));
+    // Ingen meldingsstreng (tekst eller mal) har et siffer skrevet rett inn
+    const literals = text.match(/"[^"]*"|`[^`]*`/g) ?? [];
+    for (const literal of literals.filter((entry) => entry.includes("Prøveregel"))) {
+      const fixedText = literal.replace(/\$\{[^}]*\}/g, "");
+      expect(fixedText, literal).not.toMatch(/\d/);
+    }
+  });
+
+  it("index eksporterer ikke testsakene", () => {
+    expect("trialRuleCases" in rulesModule).toBe(false);
+  });
+
+  it("ingen appfil importerer trial-rule-cases", () => {
+    const appFiles = sourceFilesUnder(SRC_DIR).filter((file) => !/\.test\.tsx?$/.test(file));
+    const importing = appFiles.filter((file) =>
+      /from\s+["'][^"']*trial-rule-cases["']/.test(readFileSync(file, "utf8")),
+    );
+    expect(importing.map((file) => path.relative(SRC_DIR, file))).toEqual([]);
   });
 
   it("hver regel er merket som oppdiktet prøveverdi", () => {
