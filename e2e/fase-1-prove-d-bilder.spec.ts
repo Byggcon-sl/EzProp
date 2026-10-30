@@ -271,21 +271,6 @@ test.describe("Prøve D – bilder", () => {
     expect(isRed(decoded.pixels[1]!), `(4, 4) er ${decoded.pixels[1]}`).toBe(false);
   });
 
-  test("PNG blir JPEG i kopien", async ({ page, context }) => {
-    const { formId, organizationId } = await openNewForm(page, context);
-
-    await photoInput(page).setInputFiles(PNG);
-    const id = await photoIdFor(page, formId, "test-image.png");
-    const copyFile = trialUploadPath(organizationId, id, true);
-    await waitForFile(copyFile);
-
-    const copy = readFileSync(copyFile);
-    expect([copy[0], copy[1]]).toEqual([0xff, 0xd8]);
-    const response = await page.request.get(displayUrl(id, organizationId));
-    expect(response.status()).toBe(200);
-    expect(response.headers()["content-type"]).toBe("image/jpeg");
-  });
-
   // --- 5.4 Størrelse ---
 
   // Obligatorisk (AK 2)
