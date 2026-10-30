@@ -135,8 +135,8 @@ test.beforeEach(async ({ context }) => {
 });
 
 test.describe("boksen på listen og varig lagring (5.2)", () => {
-  test("boksen viser plass og varig lagring med ekte tall", async ({ page }) => {
-    await logIn(page, ADMIN_EMAIL);
+  test("takstmann ser boksen med plass og varig lagring (ekte tall)", async ({ page }) => {
+    await logInAsInspector(page);
     await page.goto("/prove/testskjema");
     const box = storageBox(page);
     await expect(box).toBeVisible();
@@ -165,6 +165,8 @@ test.describe("boksen på listen og varig lagring (5.2)", () => {
     await expect(box).toHaveAttribute("data-storage-level", "ok");
     await expect(box).toContainText("100");
     await expect(box).toContainText("2148");
+    await expect(box.getByRole("button")).toHaveCount(0);
+    await expect(box.locator("button")).toHaveCount(0);
   });
 
   test("boksen viser lite plass med 100 MB ledig", async ({ page, context }) => {
@@ -242,25 +244,6 @@ test.describe("boksen på listen og varig lagring (5.2)", () => {
     expect(await persistCalls(page)).toBe(0);
   });
 
-  test("takstmann ser boksen", async ({ page, context }) => {
-    await setStorageOverride(context, PLENTY);
-    await logInAsInspector(page);
-    await page.goto("/prove/testskjema");
-    const box = storageBox(page);
-    await expect(box).toBeVisible();
-    await expect(box).toHaveAttribute("data-storage-level", "ok");
-    await expect(box).toHaveAttribute("data-storage-persisted", /^(yes|no|unsupported)$/);
-  });
-
-  test("boksen har ingen knapp", async ({ page, context }) => {
-    await setStorageOverride(context, PLENTY);
-    await logIn(page, ADMIN_EMAIL);
-    await page.goto("/prove/testskjema");
-    await expect(storageBox(page)).toHaveAttribute("data-storage-level", "ok");
-    await expect(storageBox(page).getByRole("button")).toHaveCount(0);
-    await expect(storageBox(page).locator("button")).toHaveCount(0);
-  });
-
   test("skjemaet viser ingen tall om plass", async ({ page, context }) => {
     await openFormMeasured(page, context, { estimate: TWO_GB_FREE });
     await expect(storageBox(page)).toHaveCount(0);
@@ -273,7 +256,7 @@ test.describe("data overlever lukking (5.3)", () => {
   test("svar og bilde lagret uten nett står der etter at siden er lukket og åpnet uten nett", async ({
     page,
     context,
-  }, testInfo) => {
+  }) => {
     const formId = await openForm(page, context);
     // Service worker og hurtiglager klare (samme vei som fase-1-powersync.spec.ts)
     await page.evaluate(async () => {
@@ -299,43 +282,13 @@ test.describe("data overlever lukking (5.3)", () => {
       await expect(counter(page)).toHaveText("3 av 40 felt utfylt");
       await page.close();
 
+      // Åpnes uten nett, ingen reservevei: mangler innholdet, er testen rød
       const reopened = await context.newPage();
-      let offlineWorked = false;
-      try {
-        await reopened.goto(`/prove/testskjema/${formId}`);
-        await expectFormContent(reopened, text);
-        offlineWorked = true;
-      } catch (error) {
-        testInfo.annotations.push({
-          type: "vei",
-          description: `reserve: api stoppet (åpning uten nett feilet: ${String(error).slice(0, 120)})`,
-        });
-      }
-      if (offlineWorked) {
-        testInfo.annotations.push({ type: "vei", description: "uten nett" });
-        return;
-      }
-
-      // Reserve (testplan 5.3): nett på, men ingen svar fra serveren for prøvedataene
-      await context.route("**/api/prove/**", (route) => route.abort());
-      await context.setOffline(false);
       await reopened.goto(`/prove/testskjema/${formId}`);
       await expectFormContent(reopened, text);
     } finally {
       await context.setOffline(false);
     }
-  });
-
-  test("svar står der etter ny innlasting med lite plass-varsel", async ({ page, context }) => {
-    await openForm(page, context, { estimate: LOW_FREE });
-    await expect(storageWarning(page)).toBeVisible();
-    await textInput(page, TEXT_A).fill("Oppdiktet tekst med lite plass");
-    await expectSaved(page, TEXT_A, "yes");
-    // `data-field-saved="yes"` står også mens skrivingen pågår; telleren leser det som er lagret
-    await expect(counter(page)).toHaveText("1 av 40 felt utfylt");
-    await page.reload();
-    await expect(textInput(page, TEXT_A)).toHaveValue("Oppdiktet tekst med lite plass");
-    await expect(storageWarning(page)).toBeVisible();
   });
 });
 
@@ -354,13 +307,14 @@ test.describe("lite plass og lagring som feiler (5.4)", () => {
     await addPhoto(page);
     await expectSaved(page, TEXT_A, "yes");
     await expectSaved(page, PHOTO, "yes");
+    // `data-field-saved="yes"` står også mens skrivingen pågår; telleren leser det som er lagret
     await expect(counter(page)).toHaveText("2 av 40 felt utfylt");
     await expect(storageError(page)).toHaveCount(0);
-  });
 
-  test("nok plass gir ikke varsel", async ({ page, context }) => {
-    await openFormMeasured(page, context, { estimate: TWO_GB_FREE });
-    await expect(storageWarning(page)).toHaveCount(0);
+    // Svaret står der etter ny innlasting, og varselet vises igjen
+    await page.reload();
+    await expect(textInput(page, TEXT_A)).toHaveValue("Oppdiktet tekst med lite plass");
+    await expect(storageWarning(page)).toBeVisible();
   });
 
   test("lite plass oppdaget ved bilde uten ny innlasting", async ({ page, context }) => {
@@ -403,20 +357,17 @@ test.describe("lite plass og lagring som feiler (5.4)", () => {
     await expect(closeButton(page)).toBeVisible();
   });
 
-  test("flere svar som feiler samles i én melding", async ({ page, context }) => {
+  // Obligatorisk
+  test("Prøv igjen lagrer de feilede svarene og fjerner meldingen", async ({ page, context }) => {
     await openForm(page, context);
     await failTwoAnswers(page);
+    // Flere svar som feiler samles i én melding
     await expect(storageError(page)).toHaveCount(1);
     await expect(storageError(page)).toContainText("2 svar");
     await expect(storageError(page)).toContainText(TEXT_B);
     await expectSaved(page, TEXT_A, "no");
     await expectSaved(page, TEXT_B, "no");
-  });
 
-  // Obligatorisk
-  test("Prøv igjen lagrer de feilede svarene og fjerner meldingen", async ({ page, context }) => {
-    await openForm(page, context);
-    await failTwoAnswers(page);
     await updateStorageOverride(page, { fail: null });
     await retryButton(page).click();
     await expect(storageError(page)).toHaveCount(0);
