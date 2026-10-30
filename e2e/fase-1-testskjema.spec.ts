@@ -3,7 +3,17 @@ import { fileURLToPath } from "node:url";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { trialForm } from "../src/modules/offline-trial/trial-form";
 import { brand } from "../src/shared/config/brand";
-import { ADMIN_EMAIL, createTrialForm, hookValue, logIn, useCandidate } from "./helpers";
+import {
+  ADMIN_EMAIL,
+  MB,
+  createTrialForm,
+  hookValue,
+  indicator,
+  logIn,
+  setStorageOverride,
+  storageWarning,
+  useCandidate,
+} from "./helpers";
 
 // Testskjemaet for prøven uten nett (fase 1, oppgave 3).
 // Testplan: docs/funksjoner/fase1-testskjema-testplan.md avsnitt 6. Kjører i både pc og ipad.
@@ -336,4 +346,209 @@ test("innloggingssiden har link rel=manifest og apple-mobile-web-app-capable", a
   await expect(
     page.locator('meta[name="apple-mobile-web-app-capable"][content="yes"]'),
   ).toHaveCount(1);
+});
+
+// --- UU-funn 6–9 fra nattløkken 30.10.2026 (docs/agenter/oppgaver/fase1-uu-nattlokken-testplan.md
+// avsnitt 1). Kjører i pc og ipad. Alle data er oppdiktet.
+
+const tableField = fields.find((field) => field.type === "table");
+if (!tableField?.columns?.length) throw new Error("Testskjemaet mangler tabellfelt med kolonner");
+const tableColumns = tableField.columns;
+
+/** Kontrastforholdet mellom to farger etter WCAG 2.x (relativ luminans). */
+function contrastRatio(foreground: string, background: string): number {
+  const luminance = (color: string) => {
+    const match = /rgba?\(([^)]+)\)/.exec(color);
+    if (!match) throw new Error(`Ukjent farge «${color}»`);
+    const [r, g, b] = match[1]!
+      .split(/[,\s/]+/)
+      .filter(Boolean)
+      .slice(0, 3)
+      .map((part) => {
+        const c = Number(part) / 255;
+        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+  };
+  const [light, dark] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (light! + 0.05) / (dark! + 0.05);
+}
+
+/** Den faste linjen øverst i skjemaet (sticky-beholderen med synkstatusen). */
+function stickyLine(page: Page): Locator {
+  return page
+    .locator('[data-testid="sticky-status-bar"], div.sticky')
+    .filter({ has: indicator(page) })
+    .first();
+}
+
+/**
+ * Ruller helt ned og gir fokus til første tekst- eller tallfelt i andre gruppe, som da ligger over
+ * synsfeltet. Feltet må komme ovenfra: et felt under synsfeltet rulles til nederkanten og kan aldri
+ * treffe statuslinjen.
+ *
+ * To måter å rulle på: (1) vanlig `focus()`, slik Chromium gjør det (legger feltet midt i bildet,
+ * så den alene biter ikke), og (2) fokus der feltet rulles til nærmeste kant, slik Safari på iPaden
+ * gjør. Det er (2) som viser at `scroll-padding-top` virker.
+ */
+async function expectFocusedFieldBelowStatusBar(page: Page) {
+  const target = trialForm.groups[1]!.fields.find(
+    (field) => field.type === "text" || field.type === "number",
+  );
+  expect(target, "andre gruppe har et tekst- eller tallfelt").toBeDefined();
+  const input = page.getByLabel(target!.label, { exact: true });
+  const bar = stickyLine(page);
+  await expect(bar).toBeVisible();
+  await expect(input).toBeVisible();
+
+  for (const mode of ["focus", "nearest-edge"] as const) {
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await expect
+      .poll(async () => (await input.boundingBox())?.y ?? 0, {
+        message: `${mode}: feltet ligger over synsfeltet før det får fokus`,
+      })
+      .toBeLessThan(0);
+
+    if (mode === "focus") {
+      await input.focus();
+    } else {
+      await input.evaluate((el) => {
+        (el as HTMLElement).focus({ preventScroll: true });
+        el.scrollIntoView({ block: "nearest" });
+      });
+    }
+    await expect(input).toBeFocused();
+    // Vent til rullingen har stoppet
+    let last = Number.NaN;
+    await expect
+      .poll(async () => {
+        const y = (await input.boundingBox())?.y ?? Number.NaN;
+        const stable = y === last;
+        last = y;
+        return stable;
+      })
+      .toBe(true);
+
+    const fieldBox = await input.boundingBox();
+    const barBox = await bar.boundingBox();
+    expect(fieldBox).not.toBeNull();
+    expect(barBox).not.toBeNull();
+    expect(
+      fieldBox!.y,
+      `${mode}: feltet (${fieldBox!.y}) starter under statuslinjen (${barBox!.y + barBox!.height})`,
+    ).toBeGreaterThanOrEqual(barBox!.y + barBox!.height - 1);
+  }
+}
+
+test("tabellfeltet viser kolonnenavnet synlig over cellene i første rad, også etter utfylling", async ({
+  page,
+}) => {
+  await openTrialForm(page);
+  const table = fieldContainer(page, tableField.key);
+  await table.getByRole("button", { name: "Legg til rad" }).click();
+  for (const column of tableColumns) {
+    await expect(table.getByText(column.label, { exact: true }).first(), column.key).toBeVisible();
+  }
+  await table.getByLabel("Sted, rad 1", { exact: true }).fill("Oppdiktet sted");
+  await table.getByLabel("Verdi, rad 1", { exact: true }).fill("12,5");
+  // Navnet er ikke bare plassholder: det står der også når cellen har verdi
+  for (const column of tableColumns) {
+    await expect(table.getByText(column.label, { exact: true }).first(), column.key).toBeVisible();
+  }
+});
+
+test("kolonnenavnet over tabellcellene har kontrast minst 4,5:1", async ({ page }) => {
+  await openTrialForm(page);
+  const table = fieldContainer(page, tableField.key);
+  await table.getByRole("button", { name: "Legg til rad" }).click();
+  const label = table.getByText(tableColumns[0]!.label, { exact: true }).first();
+  await expect(label).toBeVisible();
+  const colors = await label.evaluate((el) => {
+    // Tailwind v4 gir farger i lab()/oklab(). Et 1x1-canvas gjør dem om til sRGB.
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) throw new Error("Fikk ikke 2d-canvas");
+    const toRgba = (css: string): [number, number, number, number] => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = css;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+      return [r!, g!, b!, a!];
+    };
+    const rgb = ([r, g, b]: number[]) => `rgb(${r}, ${g}, ${b})`;
+    const foreground = toRgba(getComputedStyle(el).color);
+    let background = [255, 255, 255];
+    let node: Element | null = el;
+    while (node) {
+      const [r, g, b, a] = toRgba(getComputedStyle(node).backgroundColor);
+      if (a > 0) {
+        // Halvgjennomsiktig bakgrunn (f.eks. bg-white/95) legges over hvit.
+        background = [r, g, b].map((c) => Math.round((c * a) / 255 + 255 * (1 - a / 255)));
+        break;
+      }
+      node = node.parentElement;
+    }
+    return { foreground: rgb(foreground), background: rgb(background) };
+  });
+  const ratio = contrastRatio(colors.foreground, colors.background);
+  expect(ratio, `${colors.foreground} mot ${colors.background}`).toBeGreaterThanOrEqual(4.5);
+});
+
+test("hver tabellcelle har fortsatt et tilgjengelig navn med kolonne og rad", async ({ page }) => {
+  await openTrialForm(page);
+  const table = fieldContainer(page, tableField.key);
+  const addRow = table.getByRole("button", { name: "Legg til rad" });
+  await addRow.click();
+  await addRow.click();
+  for (const row of [1, 2]) {
+    for (const column of tableColumns) {
+      await expect(
+        table.getByLabel(`${column.label}, rad ${row}`, { exact: true }),
+        `${column.key} rad ${row}`,
+      ).toHaveCount(1);
+    }
+  }
+});
+
+test("felt med fokus dekkes ikke av statuslinjen", async ({ page }) => {
+  await openTrialForm(page);
+  await expectFocusedFieldBelowStatusBar(page);
+});
+
+test("felt med fokus dekkes ikke av statuslinjen når varselet om lagring vises", async ({
+  page,
+  context,
+}) => {
+  // Lite plass gjør linjen høyere (samme oppsett som prøve C)
+  await setStorageOverride(context, { estimate: { usage: 1948 * MB, quota: 2048 * MB } });
+  await openTrialForm(page);
+  await expect(stickyLine(page).getByTestId("storage-low-warning")).toHaveCount(1);
+  await expect(storageWarning(page)).toBeVisible();
+  await expectFocusedFieldBelowStatusBar(page);
+});
+
+test("Synkløsning har en tom statusregion når ingenting venter", async ({ page }) => {
+  await logIn(page, ADMIN_EMAIL);
+  await page.goto("/prove/testskjema");
+  const picker = group(page, "Synkløsning");
+  await expect(picker).toBeVisible();
+  // Synkstatusen er klar når de andre kandidatene kan velges
+  for (const name of ["ElectricSQL", "Egenbygd"]) {
+    await expect(picker.getByRole("button", { name, exact: true })).toBeEnabled({
+      timeout: 20_000,
+    });
+  }
+  const region = picker.getByRole("status");
+  await expect(region).toHaveCount(1);
+  await expect(region).toHaveText("");
+  const box = await region.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.height).toBe(0);
+  const margin = await region.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return parseFloat(style.marginTop) + parseFloat(style.marginBottom);
+  });
+  expect(margin, "tom region tar ingen marg").toBe(0);
 });
