@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   companies,
@@ -85,20 +85,17 @@ export async function runSeed(env: Record<string, string | undefined> = process.
   }
   console.log(`Selskaper: ${newCompanies.length} nye`);
 
-  // Kontorer: den delvise unike indeksen på navn (bare aktive rader) hindrer duplikater
-  const insertedOffices = await db
-    .insert(offices)
-    .values(
-      seedOffices.map((name, index) => ({
-        organizationId: organization.id,
-        name,
-        sortOrder: index + 1,
-      })),
-    )
-    .onConflictDoNothing({
-      target: [offices.organizationId, offices.name],
-      where: isNull(offices.deletedAt),
-    })
-    .returning({ id: offices.id });
-  console.log(`Kontorer: ${insertedOffices.length} nye`);
+  // Kontorer: sjekkes mot alle rader, også slettede, så et slettet kontor aldri lages på nytt
+  const existingOffices = await db
+    .select({ name: offices.name })
+    .from(offices)
+    .where(eq(offices.organizationId, organization.id));
+  const existingOfficeNames = new Set(existingOffices.map((office) => office.name));
+  const newOffices = seedOffices
+    .map((name, index) => ({ organizationId: organization.id, name, sortOrder: index + 1 }))
+    .filter((office) => !existingOfficeNames.has(office.name));
+  if (newOffices.length > 0) {
+    await db.insert(offices).values(newOffices);
+  }
+  console.log(`Kontorer: ${newOffices.length} nye`);
 }
