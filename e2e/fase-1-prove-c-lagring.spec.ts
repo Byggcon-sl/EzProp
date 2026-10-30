@@ -282,6 +282,7 @@ test.describe("data overlever lukking (5.3)", () => {
       await expect(counter(page)).toHaveText("3 av 40 felt utfylt");
       await page.close();
 
+      // Åpnes uten nett, ingen reservevei: mangler innholdet, er testen rød
       const reopened = await context.newPage();
       await reopened.goto(`/prove/testskjema/${formId}`);
       await expectFormContent(reopened, text);
@@ -310,6 +311,7 @@ test.describe("lite plass og lagring som feiler (5.4)", () => {
     await expect(counter(page)).toHaveText("2 av 40 felt utfylt");
     await expect(storageError(page)).toHaveCount(0);
 
+    // Svaret står der etter ny innlasting, og varselet vises igjen
     await page.reload();
     await expect(textInput(page, TEXT_A)).toHaveValue("Oppdiktet tekst med lite plass");
     await expect(storageWarning(page)).toBeVisible();
@@ -359,6 +361,7 @@ test.describe("lite plass og lagring som feiler (5.4)", () => {
   test("Prøv igjen lagrer de feilede svarene og fjerner meldingen", async ({ page, context }) => {
     await openForm(page, context);
     await failTwoAnswers(page);
+    // Flere svar som feiler samles i én melding
     await expect(storageError(page)).toHaveCount(1);
     await expect(storageError(page)).toContainText("2 svar");
     await expect(storageError(page)).toContainText(TEXT_B);
