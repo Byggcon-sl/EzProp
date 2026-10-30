@@ -6,14 +6,28 @@
  * Synkstatusen som alltid vises øverst på listen og testskjemaet (docs/funksjoner/fase1-synkstatus.md
  * og -skisse.md): tilstand, «Lagret kl.» og knappen «Synk nå». Kjenner ingen kandidat; bruker bare
  * `status()`, `onStatusChange` og `syncNow` fra lageret via props.
+ *
+ * Prøve F (docs/funksjoner/fase1-prove-f-innlogging.md): når nettet kommer, appen blir synlig igjen
+ * eller en synkrunde feiler, spør den serveren om innloggingen gjelder. Har den gått ut, vises
+ * «Logg inn på nytt …» og lenken «Logg inn» i stedet for «Synk nå». Aldri uten nett, aldri ved
+ * første lasting, ikke noe eget tidsur.
  */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { cn } from "@/shared/lib/cn";
-import { Button } from "@/shared/ui/button";
+import { Button, buttonVariants } from "@/shared/ui/button";
 import {
+  createSessionChecker,
+  nextSignInRequired,
+  shouldCheckSession,
+  type SessionCheckTrigger,
+} from "./session-check";
+import {
+  SIGN_IN_LABEL,
   SYNC_BUTTON_IDLE,
   nextSavedAt,
   savedAtText,
+  showSyncNow,
+  signInHref,
   syncButtonReducer,
   syncButtonState,
   syncStatusKind,
@@ -40,7 +54,13 @@ const PILL_CLASSES: Record<SyncStatusKind, string> = {
   pending: "bg-brand-50 text-brand-700",
   offline: "bg-[#fbe7b5] text-[#6b4405]",
   awaitingServer: "bg-[#e2e8f0] text-[#334155]",
+  // Advarsel, samme som «Venter …»: ingenting er tapt.
+  signInRequired: "bg-brand-50 text-brand-700",
 };
+
+function isOnline(): boolean {
+  return typeof navigator === "undefined" ? false : navigator.onLine;
+}
 
 function readStored(key: string): string | null {
   try {
@@ -67,8 +87,25 @@ function deviceTimeZone(): string {
   }
 }
 
-/** Sky; tillegget under viser tilstanden. Bare pynt, teksten bærer betydningen. */
+/** Sky; tillegget under viser tilstanden (lås ved «Logg inn på nytt»). Bare pynt. */
 function StateIcon({ kind }: { kind: SyncStatusKind }) {
+  if (kind === "signInRequired") {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className="size-5 shrink-0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="5" y="11" width="14" height="10" rx="2" />
+        <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+      </svg>
+    );
+  }
   return (
     <svg
       aria-hidden="true"
@@ -115,6 +152,21 @@ export function SyncStatus({ getStatus, subscribe, syncNow, candidate }: SyncSta
   const [button, dispatch] = useReducer(syncButtonReducer, SYNC_BUTTON_IDLE);
   const latest = useRef(0);
   const active = useRef(true);
+  const [signInRequired, setSignInRequired] = useState(false);
+  /** Forrige statuslesing: om appen var på nett og om serveren hadde bekreftet. Null før første. */
+  const previous = useRef<{ online: boolean; serverConfirmed: boolean } | null>(null);
+  // Høyst én sjekk om gangen.
+  const checkOnce = useMemo(() => createSessionChecker(), []);
+
+  const runSessionCheck = useCallback(
+    async (trigger: SessionCheckTrigger) => {
+      if (!shouldCheckSession(trigger, isOnline())) return;
+      const result = await checkOnce();
+      if (!active.current) return;
+      setSignInRequired((prev) => nextSignInRequired(prev, result));
+    },
+    [checkOnce],
+  );
 
   const refresh = useCallback(async () => {
     const call = ++latest.current;
@@ -127,30 +179,49 @@ export function SyncStatus({ getStatus, subscribe, syncNow, candidate }: SyncSta
         writeStored(key, nextAt);
         setSavedAt(nextAt);
       }
+      const before = previous.current;
+      previous.current = { online: next.online, serverConfirmed: next.serverConfirmed };
       setStatus(next);
       if (syncStatusKind(next) === "allSaved") dispatch({ type: "allSaved" });
+      // Safari på iPad sender ikke alltid `online`: overgangen fra «Uten nett» utløser sjekken.
+      // En bakgrunnsrunde som feiler (bekreftet før, ikke nå) gjør det samme.
+      let trigger: SessionCheckTrigger = "poll";
+      if (before && !before.online && next.online) trigger = "cameOnline";
+      else if (before?.serverConfirmed && next.online && !next.serverConfirmed) {
+        trigger = "syncFailed";
+      }
+      void runSessionCheck(trigger);
     } catch {
       // Lageret er ikke klart ennå; neste runde prøver igjen.
     }
-  }, [getStatus, key]);
+  }, [getStatus, key, runSessionCheck]);
 
   useEffect(() => {
     active.current = true;
     savedAtRef.current = readStored(key);
     const onNetwork = () => void refresh();
-    window.addEventListener("online", onNetwork);
+    const onOnline = () => {
+      void refresh();
+      void runSessionCheck("online");
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void runSessionCheck("visible");
+    };
+    window.addEventListener("online", onOnline);
     window.addEventListener("offline", onNetwork);
+    document.addEventListener("visibilitychange", onVisibility);
     const unsubscribe = subscribe?.(() => void refresh());
     const interval = setInterval(() => void refresh(), POLL_MS);
     void refresh();
     return () => {
       active.current = false;
-      window.removeEventListener("online", onNetwork);
+      window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onNetwork);
+      document.removeEventListener("visibilitychange", onVisibility);
       unsubscribe?.();
       clearInterval(interval);
     };
-  }, [key, refresh, subscribe]);
+  }, [key, refresh, runSessionCheck, subscribe]);
 
   // To raske trykk gir én runde.
   const runOnce = useMemo(() => singleFlight(syncNow), [syncNow]);
@@ -165,17 +236,21 @@ export function SyncStatus({ getStatus, subscribe, syncNow, candidate }: SyncSta
     }
     if (!active.current) return;
     dispatch({ type: "done", result });
+    if (result === "failed") void runSessionCheck("syncFailed");
     await refresh();
   }
 
   const view = syncButtonState(button);
-  const kind = status ? syncStatusKind(status) : null;
+  const kind = status ? syncStatusKind(status, signInRequired) : null;
+  // «Prøver igjen automatisk» stemmer ikke når innloggingen må fornyes; linjen over sier det.
+  const message = kind === "signInRequired" ? null : view.message;
 
   return (
     <section
       aria-label="Synkstatus"
       aria-busy={button.running || undefined}
       data-testid="sync-status"
+      data-sync-state={kind ?? undefined}
     >
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
@@ -188,7 +263,7 @@ export function SyncStatus({ getStatus, subscribe, syncNow, candidate }: SyncSta
             )}
           >
             {kind ? <StateIcon kind={kind} /> : null}
-            {status ? syncStatusText(status) : null}
+            {status ? syncStatusText(status, signInRequired) : null}
           </p>
           <p
             data-testid="sync-status-saved-at"
@@ -197,23 +272,37 @@ export function SyncStatus({ getStatus, subscribe, syncNow, candidate }: SyncSta
             {savedAtText(savedAt, new Date(), deviceTimeZone())}
           </p>
         </div>
-        <Button
-          variant="secondary"
-          size="lg"
-          className="min-w-36 shrink-0 max-sm:w-full"
-          disabled={view.disabled}
-          onClick={() => void handleSyncNow()}
-        >
-          <SyncIcon spinning={button.running} />
-          {view.label}
-        </Button>
+        {showSyncNow(kind) ? (
+          <Button
+            variant="secondary"
+            size="lg"
+            className="min-w-36 shrink-0 max-sm:w-full"
+            disabled={view.disabled}
+            onClick={() => void handleSyncNow()}
+          >
+            <SyncIcon spinning={button.running} />
+            {view.label}
+          </Button>
+        ) : (
+          // Vanlig lenke (full sidelasting): innloggingssiden lastes fra serveren.
+          <a
+            href={signInHref(window.location.pathname)}
+            data-testid="sync-status-sign-in"
+            className={cn(
+              buttonVariants({ variant: "secondary", size: "lg" }),
+              "min-w-36 shrink-0 max-sm:w-full",
+            )}
+          >
+            {SIGN_IN_LABEL}
+          </a>
+        )}
       </div>
       <p
         data-testid="sync-status-message"
         aria-live="polite"
-        className={cn("text-sm text-slate-800", view.message && "mt-2")}
+        className={cn("text-sm text-slate-800", message && "mt-2")}
       >
-        {view.message ?? ""}
+        {message ?? ""}
       </p>
     </section>
   );
