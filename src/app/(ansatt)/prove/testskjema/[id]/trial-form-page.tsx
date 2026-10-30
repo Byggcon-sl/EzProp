@@ -11,15 +11,10 @@ import {
 import { detectForeignChanges } from "@/modules/offline-trial/foreign-change";
 import {
   LOW_STORAGE_WARNING_TEXT,
-  requestPersistentStorage,
   storageErrorLog,
   storageErrorMessage,
-  type StorageHealth,
 } from "@/modules/offline-trial/storage-health";
-import {
-  readStorageHealthForScreen,
-  throwIfStorageFailHook,
-} from "@/modules/offline-trial/storage-test-hook";
+import { throwIfStorageFailHook } from "@/modules/offline-trial/storage-test-hook";
 import { SyncStatus } from "@/modules/offline-trial/sync-status";
 import { rowsToAnswers } from "@/modules/offline-trial/sync/answer-rows";
 import type { TrialAnswerRow, TrialFormSnapshot } from "@/modules/offline-trial/sync/types";
@@ -27,6 +22,7 @@ import { listTrialFields, trialForm } from "@/modules/offline-trial/trial-form";
 import { TrialFormView } from "@/modules/offline-trial/trial-form-view";
 import { Button } from "@/shared/ui/button";
 import { useSyncStatusSource, useTrialSync } from "../trial-sync-provider";
+import { useStorageHealth } from "../use-storage-health";
 
 const FIELD_COUNT = listTrialFields(trialForm).length;
 const FIELD_LABELS = new Map(listTrialFields(trialForm).map((field) => [field.key, field.label]));
@@ -84,35 +80,17 @@ export function TrialFormPage({ formId }: { formId: string }) {
   const [foreignChanges, setForeignChanges] = useState<ReadonlySet<string>>(EMPTY_SET);
   const [pending, setPending] = useState<Record<string, PendingValue>>({});
   const previousAnswers = useRef<TrialAnswerRow[] | null>(null);
-  const [health, setHealth] = useState<StorageHealth | null>(null);
+  /** Prøve C: plassen måles når skjemaet åpnes, før hvert bilde og etter hver lagringsfeil. */
+  const { health, measure: measureStorage } = useStorageHealth();
   const [failures, setFailures] = useState<FailedSave[]>([]);
   const [errorHidden, setErrorHidden] = useState(false);
   /** Siste skriving per felt (samme objekt som i `pending`), så en eldre feil ikke overstyrer en nyere. */
   const latestWrite = useRef<Record<string, PendingValue>>({});
   const failuresRef = useRef<FailedSave[]>(failures);
-  const measureCall = useRef(0);
-  const mounted = useRef(true);
 
   useEffect(() => {
     failuresRef.current = failures;
   }, [failures]);
-
-  /** Prøve C: måler plassen. Når skjemaet åpnes, før hvert bilde og etter hver lagringsfeil. */
-  const measureStorage = useCallback(() => {
-    const call = ++measureCall.current;
-    void readStorageHealthForScreen().then((next) => {
-      if (mounted.current && call === measureCall.current) setHealth(next);
-    });
-  }, []);
-
-  useEffect(() => {
-    mounted.current = true;
-    measureStorage();
-    void requestPersistentStorage().then(measureStorage);
-    return () => {
-      mounted.current = false;
-    };
-  }, [measureStorage]);
 
   const recordFailure = useCallback(
     (kind: FailedSave["kind"], fieldKey: string, error: unknown) => {

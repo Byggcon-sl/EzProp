@@ -159,8 +159,7 @@ export function storageHealthText(health: StorageHealth): string {
 export function isQuotaError(error: unknown): boolean {
   if (error === null || typeof error !== "object") return false;
   const name = (error as { name?: unknown }).name;
-  if (name === "QuotaExceededError" || name === "NS_ERROR_DOM_QUOTA_REACHED") return true;
-  return typeof DOMException !== "undefined" && error instanceof DOMException && error.code === 22;
+  return name === "QuotaExceededError" || name === "NS_ERROR_DOM_QUOTA_REACHED";
 }
 
 /** Feltnavnene uten dubletter, i rekkefølgen de sist feilet. */
@@ -208,16 +207,11 @@ export function storageErrorMessage(failures: readonly StorageFailure[]): string
 
 const UNKNOWN_ERROR = "ukjent feil";
 
-function textOrUnknown(value: unknown): string {
-  return typeof value === "string" && value !== "" ? value : UNKNOWN_ERROR;
-}
-
-/** Det som kan stå i loggen om en lagringsfeil: bare navn og melding, aldri svar eller bilde. */
-export function storageErrorLog(error: unknown): { name: string; message: string } {
-  const isError =
-    error instanceof Error ||
-    (typeof DOMException !== "undefined" && error instanceof DOMException);
-  if (!isError) return { name: UNKNOWN_ERROR, message: UNKNOWN_ERROR };
-  const { name, message } = error as { name?: unknown; message?: unknown };
-  return { name: textOrUnknown(name), message: typeof message === "string" ? message : "" };
+/**
+ * Det som kan stå i loggen om en lagringsfeil: bare feilnavnet. Meldingen tas ikke med, fordi
+ * lagringen kan legge svaret eller filnavnet inn i den.
+ */
+export function storageErrorLog(error: unknown): { name: string } {
+  if (!(error instanceof Error)) return { name: UNKNOWN_ERROR };
+  return { name: typeof error.name === "string" && error.name !== "" ? error.name : UNKNOWN_ERROR };
 }

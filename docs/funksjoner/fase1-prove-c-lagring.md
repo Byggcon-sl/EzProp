@@ -166,7 +166,7 @@ Ingen fagregler. Grensen for «lite plass» er en teknisk innstilling (konstant 
 - [ ] Bilde som feiler gir egen melding uten «Prøv igjen», og bildefeltet er merket «ikke lagret» (Playwright).
 - [ ] Ved full plass sier meldingen at plassen er brukt opp (Vitest og Playwright).
 - [ ] «Prøv igjen» og «Lukk» er minst 44 pt med minst 8 pt mellom.
-- [ ] Loggen ved feil (to steder i `trial-form-page.tsx` og ett i `trial-sync-provider.tsx`) viser bare feilnavn og melding (Vitest for `storageErrorLog`).
+- [ ] Loggen ved feil (to steder i `trial-form-page.tsx` og ett i `trial-sync-provider.tsx`) viser bare feilnavnet, aldri meldingen fra lagringen (Vitest for `storageErrorLog`).
 - [ ] Ingen nye avhengigheter, ingen ny rute, ingen migrering; ingenting endret i `src/db`, `src/app/api` eller `server/`.
 - [ ] Resultatmalen finnes med C1–C4 per kandidat, bestått / delvis / ikke bestått, og sier at ekte omstart og 7 dager ikke kan testes automatisk.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne. Versjonen er økt.

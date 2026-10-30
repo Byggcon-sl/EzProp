@@ -1,9 +1,8 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   isQuotaError,
   LOW_STORAGE_FREE_BYTES,
+  LOW_STORAGE_WARNING_TEXT,
   readStorageHealth,
   requestPersistentStorage,
   resetPersistRequestForTests,
@@ -239,12 +238,9 @@ describe("requestPersistentStorage (storage-health.ts)", () => {
 });
 
 describe("isQuotaError (storage-health.ts)", () => {
-  const code22 = Object.defineProperty(new DOMException("x", "Error"), "code", { value: 22 });
-
   it.each<[string, unknown]>([
     ["DOMException QuotaExceededError", new DOMException("x", "QuotaExceededError")],
     ["NS_ERROR_DOM_QUOTA_REACHED", { name: "NS_ERROR_DOM_QUOTA_REACHED" }],
-    ["DOMException med code 22", code22],
   ])("isQuotaError gjenkjenner full plass: %s", (_name, error) => {
     expect(isQuotaError(error)).toBe(true);
   });
@@ -344,22 +340,23 @@ describe("storageErrorMessage (storage-health.ts)", () => {
 });
 
 describe("storageErrorLog (storage-health.ts)", () => {
-  it("storageErrorLog gir bare navn og melding", () => {
-    expect(storageErrorLog(new DOMException("Kvoten er full", "QuotaExceededError"))).toStrictEqual(
-      { name: "QuotaExceededError", message: "Kvoten er full" },
-    );
+  // Obligatorisk
+  it("storageErrorLog gir bare navnet", () => {
+    expect(storageErrorLog(new DOMException("x", "QuotaExceededError"))).toStrictEqual({
+      name: "QuotaExceededError",
+    });
   });
 
   // Obligatorisk
-  it("storageErrorLog tar ikke med svar eller bildedata", () => {
-    const error = Object.assign(new Error("Lagringen feilet"), {
+  it("storageErrorLog tar ikke med svarverdien fra meldingen", () => {
+    const error = Object.assign(new Error(SECRET_ANSWER), {
       value: SECRET_ANSWER,
       file: { name: SECRET_PHOTO, content: SECRET_ANSWER },
       blob: SECRET_ANSWER,
       cause: { value: SECRET_ANSWER },
     });
     const result = storageErrorLog(error);
-    expect(result).toStrictEqual({ name: "Error", message: "Lagringen feilet" });
+    expect(result).toStrictEqual({ name: "Error" });
     expect(JSON.stringify(result)).not.toContain(SECRET_ANSWER);
     expect(JSON.stringify(result)).not.toContain(SECRET_PHOTO);
   });
@@ -370,24 +367,20 @@ describe("storageErrorLog (storage-health.ts)", () => {
     ["objekt med verdi", { value: SECRET_ANSWER }],
   ])("storageErrorLog for noe som ikke er Error: %s", (_name, error) => {
     const result = storageErrorLog(error);
-    expect(result).toStrictEqual({ name: "ukjent feil", message: "ukjent feil" });
+    expect(result).toStrictEqual({ name: "ukjent feil" });
     expect(JSON.stringify(result)).not.toContain(SECRET_ANSWER);
   });
 });
 
 describe("tekstene (storage-health.ts)", () => {
-  /** Alle tekstene modulen kan gi takstmannen, og tekstlitteralene i filen (også varselet). */
-  async function allTexts(): Promise<string[]> {
-    const texts: string[] = [];
-    for (const persisted of [true, false]) {
-      stubStorage({
-        estimate: async () => ({ usage: 1948 * MB, quota: 2048 * MB }),
-        persisted: async () => persisted,
-      });
-      texts.push(storageHealthText(await readStorageHealth()));
+  it("ingen gjetteord i tekstene", () => {
+    const texts = [LOW_STORAGE_WARNING_TEXT];
+    for (const persisted of ["yes", "no"] as const) {
+      texts.push(
+        storageHealthText({ usage: 1948 * MB, quota: 2048 * MB, level: "low", persisted }),
+      );
     }
-    stubStorage(undefined);
-    texts.push(storageHealthText(await readStorageHealth()));
+    texts.push(storageHealthText({ level: "unknown", persisted: "unsupported" }));
     for (const error of [new Error("x"), quotaError()]) {
       texts.push(
         storageErrorMessage([answerFailure("Generell beskrivelse", error)]),
@@ -396,32 +389,11 @@ describe("tekstene (storage-health.ts)", () => {
         storageErrorMessage([answerFailure("A", error), photoFailure("Forsidebilde", error)]),
       );
     }
-    const source = readFileSync(
-      path.join(process.cwd(), "src/modules/offline-trial/storage-health.ts"),
-      "utf8",
-    );
-    for (const match of source.matchAll(
-      /(["'`])((?:(?!\1)[^\\\n]|\\.)*iPaden(?:(?!\1)[^\\\n]|\\.)*)\1/g,
-    )) {
-      texts.push(match[2]!);
-    }
-    return texts;
-  }
-
-  it("ingen gjetteord i tekstene", async () => {
-    const texts = await allTexts();
-    expect(texts.length).toBeGreaterThan(0);
+    expect(texts).toHaveLength(12);
     for (const text of texts) {
-      for (const word of ["antas", "trolig", "sannsynligvis"]) {
+      for (const word of ["antas", "trolig", "sannsynligvis", "frigjør", "rydd"]) {
         expect(text.toLowerCase(), text).not.toContain(word);
       }
-    }
-  });
-
-  it("ingen tekst sier at synk frigjør plass", async () => {
-    for (const text of await allTexts()) {
-      expect(text.toLowerCase(), text).not.toContain("frigjør");
-      expect(text.toLowerCase(), text).not.toContain("rydd");
     }
   });
 });

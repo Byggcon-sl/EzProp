@@ -3,12 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  requestPersistentStorage,
-  storageHealthText,
-  type StorageHealth,
-} from "@/modules/offline-trial/storage-health";
-import { readStorageHealthForScreen } from "@/modules/offline-trial/storage-test-hook";
+import { storageHealthText } from "@/modules/offline-trial/storage-health";
 import { SyncStatus } from "@/modules/offline-trial/sync-status";
 import { writeSyncCandidate } from "@/modules/offline-trial/sync/select-store";
 import type {
@@ -20,6 +15,7 @@ import type {
 import { cn } from "@/shared/lib/cn";
 import { Button } from "@/shared/ui/button";
 import { useSyncStatusSource, useTrialSync } from "./trial-sync-provider";
+import { useStorageHealth } from "./use-storage-health";
 
 const STATUS_POLL_MS = 2000;
 
@@ -110,23 +106,7 @@ function CandidatePicker() {
  * på nytt.
  */
 function StorageHealthBox() {
-  const [health, setHealth] = useState<StorageHealth | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    let latest = 0;
-    const measure = () => {
-      const call = ++latest;
-      void readStorageHealthForScreen().then((next) => {
-        if (active && call === latest) setHealth(next);
-      });
-    };
-    measure();
-    void requestPersistentStorage().then(measure);
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { health } = useStorageHealth();
 
   if (!health) return null;
   return (
