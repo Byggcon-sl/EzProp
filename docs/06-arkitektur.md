@@ -14,7 +14,7 @@ Sist oppdatert: 28.10.2026. Begrunnelse for teknologivalg: [ADR 0001](adr/0001-t
 | Innlogging | Better Auth med e-post-engangskode (OTP), som Optiplan |
 | Validering | Zod |
 | E-post | Utviklings-postkasse lokalt (`DEV_MAILBOX=1`). I drift før e-post er koblet til: engangskoden for første admin skrives i serverloggen (bare den, ingen andre kan logge inn). Microsoft 365 (Graph) som Optiplan kobles til i fase 0b; valget skjer automatisk når de fire `MS_GRAPH`/`MAIL_FROM`-verdiene er satt |
-| Uten nett | PWA på iPad Pro, lokal lagring og synk per felt. Verktøy velges i fase 1 (ADR) |
+| Uten nett | PWA på iPad Pro, lokal lagring og synk per felt. Foreløpig valg: egenbygd lokal lagring og endringskø, uten synktjeneste (ADR 0004, bekreftes etter prøve A og B) |
 | Test | Vitest (enhet og integrasjon), Playwright (PC og iPad-størrelse) |
 | CI | GitHub Actions: format, lint, typesjekk, migrering i takt med skjema, test, bygg, e2e |
 | Hosting | Azure App Service + PostgreSQL Flexible Server, Sweden Central (ADR 0002). Testmiljø fra fase 1, rulles ut fra GitHub Actions ved merge til `main` (`infra/azure/main.bicep`, `.github/workflows/deploy-azure.yml`). Bare oppdiktede data til «Minimum før ekte data» er på plass |
