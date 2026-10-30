@@ -245,7 +245,8 @@ function displayCopyPath(organizationId: string, photoId: string): string {
 }
 
 /**
- * Lagrer visningskopien (JPEG med bare de lovlige feltene i `hasMetadataSegment`, laget på iPaden) ved siden av originalen, som
+ * Lagrer visningskopien (JPEG laget på iPaden, med bare de lovlige feltene i `hasMetadataSegment`)
+ * ved siden av originalen, som
  * `TRIAL_UPLOAD_DIR/<organizationId>/<photoId>.display.jpg`. Originalen må være mottatt først.
  * En ny kopi overskriver den gamle. Raden i `trial_photos` endres ikke. Svaret er SHA-256 av kopien.
  */
