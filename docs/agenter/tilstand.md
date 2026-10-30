@@ -54,7 +54,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 ## Åpne PR-er
 
-- Liten oppgave (i), småfunn fra PR #41 (branch `fase0b-smafunn-organisasjon`, versjon 0.2.33). Merges med skriptet når CI er grønn. Venter ikke på Ståle.
+- **PR #44**: liten oppgave (i), småfunn fra PR #41 (branch `fase0b-smafunn-organisasjon`, versjon 0.2.33). Merges med skriptet når CI er grønn. Venter ikke på Ståle.
 
 
 PR #16–#28 og #30–#41 er merget (#41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
