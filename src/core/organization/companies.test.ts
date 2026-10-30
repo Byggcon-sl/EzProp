@@ -89,4 +89,29 @@ describe("listCompanies", () => {
       "Testselskap C AS",
     ]);
   });
+
+  it("gir nøyaktig de lovede feltene, uten sporingsfelt", async () => {
+    const org = await createOrganization();
+    await createCompany(org.id);
+    const admin = await createUser();
+    await createEmployee(admin, org.id, ["admin"]);
+
+    const rows = await listCompanies(admin, org.id);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(Object.keys(row).sort()).toEqual([
+        "address",
+        "city",
+        "companyText",
+        "id",
+        "legalName",
+        "liabilityInsurer",
+        "liabilityPolicyNumber",
+        "liabilityValidTo",
+        "orgNumber",
+        "postalCode",
+        "vatRegistered",
+      ]);
+    }
+  });
 });

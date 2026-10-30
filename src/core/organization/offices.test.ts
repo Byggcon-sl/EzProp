@@ -72,4 +72,17 @@ describe("listOffices", () => {
     const rows = await listOffices(person, org.id);
     expect(rows.map((row) => row.name)).toEqual(["Akontor", "Bkontor", "Ckontor"]);
   });
+
+  it("gir nøyaktig de lovede feltene, uten sporingsfelt", async () => {
+    const org = await createOrganization();
+    await createOffice(org.id);
+    const admin = await createUser();
+    await createEmployee(admin, org.id, ["admin"]);
+
+    const rows = await listOffices(admin, org.id);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(Object.keys(row).sort()).toEqual(["address", "id", "name", "sortOrder"]);
+    }
+  });
 });
