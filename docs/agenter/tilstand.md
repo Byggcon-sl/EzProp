@@ -6,8 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 (prøve D – bilder, PR åpnet)
-Sist oppdatert: 30.10.2026 (prøve F levert som PR, merges med skriptet)
+Sist oppdatert: 30.10.2026 kl. 11:30 UTC (prøve C, D og F merget i PR #32–#35)
 
 ## Gjeldende fase
 
@@ -32,7 +31,7 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 **Levert: liten oppgave (e)**, småfunnene fra PR #23 (prøve E) og det som sto igjen fra PR #26 (30.10.2026; branch `fase1-smafunn-prove-e` fra `main`, versjon 0.2.18). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-e.md`, testplan `docs/agenter/oppgaver/fase1-smafunn-prove-e-testplan.md`. Test for `localWriteGeneration`, testsakene ut av `rules/index.ts`, grensetallet ett sted, færre doble tester, loggen i `custom/reader.ts` og `electricsql/store.ts` viser bare feilmeldingen («ukjent feil» når feilen ikke er en Error). Roller: forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn; små funn rettet av prosjektlederen før PR. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
-**Neste:** prøve D (bilder) så langt det går i nettleser, og en liten oppgave for småfunnene fra prøve F. Prøve A og B per kandidat venter på Ståle (spørsmål nr. 12).
+**Neste:** liten oppgave (g) for småfunnene fra prøve F, og småfunnene fra prøve D (står i PR #35). Deretter sammenligning av kandidatene og foreløpig ADR (se «Slik går fase 1 videre uten Ståle»). Prøve A og B per kandidat venter på Ståle (spørsmål nr. 12).
 
 **Forrige oppgave:** liten oppgave (a) – synktjenestene i Azure-testmiljøet, **PR #17** (merget 29.10.2026 kl. 16:58, versjon 0.2.7). PowerSync- og Electric-containerne i Bicep, **av som standard** (`enableSyncTrial = false`, GitHub-variabelen `ENABLE_SYNC_TRIAL`), så mergen lager ingen nye ressurser. ADR 0003, oppgavekort `docs/funksjoner/fase1-synk-i-azure.md`. Kostnad når de er på: ca. 700–850 kr per måned. Spørsmål nr. 12.
 
@@ -54,7 +53,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 |---|---|---|---|
 | – | Ingen åpne PR-er | – | – |
 
-PR #16–#28 og #30–#35 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken). Ingen PR venter på Ståle.
+PR #16–#28 og #30–#37 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -101,6 +100,7 @@ Ingen.
 
 ## Siste kjøring
 
+30.10.2026 kl. 03:05–11:35 UTC: hovedløkken fant ingen åpne PR-er og kjørte arbeidsflyten «oppgave» tre ganger: prøve C (PR #32), småfunn fra prøve C (PR #33) og prøve F (PR #34), alle merget med skriptet (CI grønn, ingen alvorlige funn). En annen kjøring leverte prøve D (PR #35) samtidig; denne kjøringen ventet på CI og merget den med skriptet før tilstanden ble oppdatert. Sesjon: https://claude.ai/code/session_01Jqwnu2V8ERMPTnXezmxYu6
 30.10.2026 kl. 09:05–11:35: hovedløkken fant PR #33 merget og prøve F i arbeid hos en annen kjøring, og kjørte prøve D (bilder) med arbeidsflyten «oppgave» (20 agenter, ca. 2 t 25 min) til PR #35, merget (CI grønn, ingen alvorlige funn, småfunn lagt inn som liten oppgave (h)). Spørsmål nr. 8 avgjort som A7. Neste i fase 1: små oppgaver (g) og (h), deretter sammenligning av kandidatene og ADR (foreløpig, bekreftes etter prøve A og B). Sesjon: https://claude.ai/code/session_01Jqwnu2VWYuQTPKrLPiFmXt
 
 30.10.2026: prosjektleder skrev funnene fra nattløkken inn under «Oppgaver fra nattløkken» og laget branchen `natt-2026-10-30` med trygg rydding (synkindeks, pakkeoppdateringer, versjon 0.2.20 etter fletting med main), alle sjekker grønne (også e2e), PR #31 åpnet mot `main`. Sesjon: https://claude.ai/code/session_01Jqwntym4bVyM8CVw74aqdP

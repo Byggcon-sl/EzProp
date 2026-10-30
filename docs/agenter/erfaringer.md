@@ -103,6 +103,11 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Regel videre: en oppgave som har oppgavekort på en branch uten PR, regnes som tatt i **3 timer** fra siste push (ikke 30 minutter). Har den ingen PR etter 3 timer, kan neste kjøring ta over. Hovedløkken velger da heller en annen oppgave som ikke rører de samme filene.
 - Er siste merge til `main` mindre enn 1 time gammel og ingen PR er åpen, kan den andre kjøringen holde på med neste oppgave. Start ikke en ny oppgave i den situasjonen; vent til neste kjøring.
 
+## 30.10.2026 – PR #32–#35 merget (prøve C, D og F)
+
+- Arbeidsflyten «oppgave» leverte tre PR-er på rad i én kjøring (ca. 3 t, 1 t 40 min og 3 t). Små oppgaver med småfunn går omtrent dobbelt så fort som en prøve.
+- To kjøringer jobbet samtidig (prøve F og prøve D) på hver sin branch uten konflikt i koden, men begge skrev i tilstandsfilen, og det ble to linjer «Sist oppdatert». Regel som før: vent til den andre PR-en er merget, les tilstandsfilen på nytt fra `main`, og oppdater den i en egen liten PR.
+
 ## 30.10.2026 – Prøve D (PR #35) og prøve F (PR #34) samtidig
 
 - To kjøringer jobbet samtidig med prøve D og prøve F, som rører ulike filer. Regelen om 3 timer for en branch med oppgavekort virket: hovedløkken lot prøve F være og valgte prøve D. Begge ble merget samme formiddag; eneste konflikt var versjonen og nummereringen av beslutningene i `docs/09-apne-sporsmal.md` (A5/A6 ble brukt av begge).
