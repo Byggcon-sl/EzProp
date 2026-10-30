@@ -1790,6 +1790,7 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Sidemannskontroll | `peer_reviews`, `peer_review_comments` | |
 | Bilde | `photos` | |
 | Original / komprimert | `original_file_id` / `display_file_id` | |
+| Visningskopi | `display copy` (`display_file_id`; i prøven nøkkelen `<photoId>:display` på iPaden og `<photoId>.display.jpg` på serveren) | Den komprimerte, rettvendte JPEG-en uten EXIF og GPS som lages på iPaden. Originalen lastes opp uendret ved siden av |
 | Markering | `annotations` | Eget lag |
 | Bildetekst | `caption` | |
 | Forsidebilde | `is_cover` | |

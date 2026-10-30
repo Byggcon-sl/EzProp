@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import postgres from "postgres";
@@ -157,40 +157,155 @@ export async function setAnswerViaHook(
   );
 }
 
-/** Antall bildefiler som ligger i køen i IndexedDB (`offline-trial-photos`). 0 hvis den ikke finnes. */
+/**
+ * Antall **originaler** som ligger i køen i IndexedDB (`offline-trial-photos`, lageret `photos`).
+ * Visningskopiene (nøkler som slutter på `:display`, prøve D) telles ikke; de telles med
+ * `localDisplayCopyCount`. 0 hvis databasen ikke finnes.
+ */
 export async function localPhotoFileCount(page: Page): Promise<number> {
-  return page.evaluate(async () => {
+  const keys = await localPhotoKeys(page, "photos");
+  return keys.filter((key) => !key.endsWith(DISPLAY_COPY_SUFFIX)).length;
+}
+
+/**
+ * Slutten på nøkkelen til en visningskopi i lageret `photos` (`displayCopyKey` i
+ * `sync/photo-store.ts`). Skrevet her, ikke importert, fordi e2e ikke laster modulen.
+ */
+export const DISPLAY_COPY_SUFFIX = ":display";
+
+/** Alle nøkler i et lager i `offline-trial-photos`. Åpner ikke en database som ikke finnes. */
+async function localPhotoKeys(page: Page, storeName: "photos" | "confirmed"): Promise<string[]> {
+  return page.evaluate(async (name) => {
     // Åpner ikke en database som ikke finnes (det ville laget den tom og forstyrret appen)
     const databases = await indexedDB.databases();
-    if (!databases.some((info) => info.name === "offline-trial-photos")) return 0;
-    return new Promise<number>((resolve, reject) => {
+    if (!databases.some((info) => info.name === "offline-trial-photos")) return [];
+    return new Promise<string[]>((resolve, reject) => {
       const request = indexedDB.open("offline-trial-photos");
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const database = request.result;
-        // Bare filene; lageret `confirmed` har merknader om bekreftede bilder, ikke filer.
-        const stores = Array.from(database.objectStoreNames).filter((name) => name === "photos");
-        if (stores.length === 0) {
+        if (!database.objectStoreNames.contains(name)) {
           database.close();
-          resolve(0);
+          resolve([]);
           return;
         }
-        let total = 0;
-        const tx = database.transaction(stores, "readonly");
-        for (const store of stores) {
-          const counting = tx.objectStore(store).count();
-          counting.onsuccess = () => {
-            total += counting.result;
-          };
-        }
+        const tx = database.transaction([name], "readonly");
+        const reading = tx.objectStore(name).getAllKeys();
         tx.oncomplete = () => {
           database.close();
-          resolve(total);
+          resolve(reading.result.map(String));
         };
         tx.onerror = () => reject(tx.error);
       };
     });
-  });
+  }, storeName);
+}
+
+// --- Prøve D, bilder (docs/funksjoner/fase1-prove-d-bilder-testplan.md avsnitt 5.1) ---
+
+/** Antall visningskopier (nøkler i `photos` som slutter på `:display`). 0 hvis databasen ikke finnes. */
+export async function localDisplayCopyCount(page: Page): Promise<number> {
+  const keys = await localPhotoKeys(page, "photos");
+  return keys.filter((key) => key.endsWith(DISPLAY_COPY_SUFFIX)).length;
+}
+
+/** Alle nøkler i lageret `confirmed` (bilder serveren har bekreftet fra denne enheten). */
+export async function localConfirmedKeys(page: Page): Promise<string[]> {
+  return localPhotoKeys(page, "confirmed");
+}
+
+/** Mappen e2e-appen lagrer bilder i (`TRIAL_UPLOAD_DIR` i `playwright.config.ts`). */
+export const E2E_TRIAL_UPLOAD_DIR = "var/uploads/trial";
+
+/** Sti på disk til originalen eller visningskopien (`<id>.display.jpg`). */
+export function trialUploadPath(organizationId: string, photoId: string, display = false): string {
+  return path.resolve(
+    E2E_TRIAL_UPLOAD_DIR,
+    organizationId,
+    display ? `${photoId}.display.jpg` : photoId,
+  );
+}
+
+/** SHA-256 som heks av bytene. */
+export function sha256Bytes(bytes: Uint8Array | Buffer): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+/** SHA-256 som heks av filen på disk. */
+export function sha256File(file: string): string {
+  return sha256Bytes(readFileSync(file));
+}
+
+/**
+ * JPEG-merkene fram til bildedataene (`FF DA`, tatt med), for eksempel `[0xd8, 0xe0, 0xdb, …,
+ * 0xda]`. Egen, liten gjennomgang, uavhengig av `hasMetadataSegment` i produktkoden, så testen
+ * ikke sjekker koden med seg selv. Kaster ved ødelagt fil.
+ */
+export function jpegMarkers(bytes: Uint8Array | Buffer): number[] {
+  if (bytes.length < 2 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
+    throw new Error("Ikke en JPEG (mangler FF D8)");
+  }
+  const markers = [0xd8];
+  let i = 2;
+  while (i < bytes.length) {
+    if (bytes[i] !== 0xff) throw new Error(`Ventet FF ved byte ${i}`);
+    while (i < bytes.length && bytes[i] === 0xff) i++;
+    if (i >= bytes.length) throw new Error("Fil slutter i fyllbytes");
+    const marker = bytes[i]!;
+    i++;
+    markers.push(marker);
+    if (marker === 0xda) return markers;
+    if (marker === 0xd9) throw new Error("FF D9 før bildedataene");
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+    if (i + 2 > bytes.length) throw new Error("Avkuttet lengdefelt");
+    const length = (bytes[i]! << 8) | bytes[i + 1]!;
+    if (length < 2 || i + length > bytes.length) throw new Error("Ugyldig lengde");
+    i += length;
+  }
+  throw new Error("Fant ikke FF DA");
+}
+
+export interface DecodedImage {
+  width: number;
+  height: number;
+  /** `[r, g, b, a]` for hvert punkt testen ba om, i samme rekkefølge. */
+  pixels: [number, number, number, number][];
+}
+
+/**
+ * Henter bildet i siden (`fetch` med innloggingen), dekoder det med `createImageBitmap` og tegner
+ * det på `OffscreenCanvas`. Gir mål og fargen i punktene testen ber om.
+ */
+export async function decodeInPage(
+  page: Page,
+  url: string,
+  points: ReadonlyArray<readonly [number, number]> = [],
+): Promise<DecodedImage> {
+  return page.evaluate(
+    async ({ address, wanted }) => {
+      const response = await fetch(address, { credentials: "same-origin" });
+      if (!response.ok) throw new Error(`Svar ${response.status} fra ${address}`);
+      const bitmap = await createImageBitmap(await response.blob());
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Ingen 2d-kontekst");
+      context.drawImage(bitmap, 0, 0);
+      const pixels = wanted.map(([x, y]) => {
+        const data = context.getImageData(x, y, 1, 1).data;
+        return [data[0]!, data[1]!, data[2]!, data[3]!] as [number, number, number, number];
+      });
+      return { width: bitmap.width, height: bitmap.height, pixels };
+    },
+    { address: url, wanted: points.map(([x, y]) => [x, y] as [number, number]) },
+  );
+}
+
+/** Lenken «Vis fra serveren» i raden for filnavnet i bildefeltet. */
+export function viewFromServerLink(page: Page, fileName: string): Locator {
+  return page
+    .getByRole("listitem")
+    .filter({ hasText: fileName })
+    .getByRole("link", { name: "Vis fra serveren" });
 }
 
 // --- Kandidat 2, ElectricSQL (docs/funksjoner/fase1-kandidat-electricsql-testplan.md avsnitt 6) ---

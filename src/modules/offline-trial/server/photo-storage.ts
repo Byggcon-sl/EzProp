@@ -8,9 +8,9 @@
  * om synktjenesten er nede.
  */
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { requireOrganizationAccess, type Actor } from "@/core/access";
 import { db } from "@/db/client";
 import { trialForms, trialPhotos } from "@/db/schema";
@@ -105,10 +105,12 @@ export const storeTrialPhoto: StoreTrialPhoto = async (
   if (foreign) throw new TrialPhotoNotFoundError();
 
   const [existing] = await db
-    .select({ id: trialPhotos.id })
+    .select({ id: trialPhotos.id, deletedAt: trialPhotos.deletedAt })
     .from(trialPhotos)
     .where(and(eq(trialPhotos.id, photoId), eq(trialPhotos.organizationId, grant.organizationId)))
     .limit(1);
+  // Et slettet bilde tar ikke imot ny fil; filen og raden røres ikke (myk sletting)
+  if (existing?.deletedAt) throw new TrialPhotoNotFoundError();
   if (!existing) {
     if (!isUuid(meta.trialFormId)) throw new InvalidTrialChangeError("Testskjemaet finnes ikke.");
     requireTrialField(meta.fieldKey);
@@ -155,6 +157,127 @@ export const storeTrialPhoto: StoreTrialPhoto = async (
   await db
     .update(trialPhotos)
     .set({ sha256, storagePath: filePath, uploadedAt: new Date(), updatedBy: actor.id })
-    .where(and(eq(trialPhotos.id, photoId), eq(trialPhotos.organizationId, grant.organizationId)));
+    .where(
+      and(
+        eq(trialPhotos.id, photoId),
+        eq(trialPhotos.organizationId, grant.organizationId),
+        isNull(trialPhotos.deletedAt),
+      ),
+    );
   return { sha256 };
 };
+
+/** Den eneste typen visningskopien kan ha. Parametre (`image/jpeg; charset=x`) godtas ikke. */
+const DISPLAY_COPY_CONTENT_TYPE = "image/jpeg";
+
+/**
+ * Sjekker om en JPEG har felt som kan bære metadata (posisjon, dato, kamera). `true` betyr avvis.
+ * Går gjennom merkene fra `FF D8` fram til `FF DA` (starten på bildedataene) og ser ikke lenger.
+ * Avviser APP1 (EXIF, XMP) og APP13 (IPTC); APP0 (JFIF) og APP2 (fargeprofil) er lov.
+ * En ødelagt fil gir også `true`. Indeksen øker i hver runde, så funksjonen henger aldri.
+ */
+export function hasMetadataSegment(bytes: Uint8Array): boolean {
+  if (bytes.length < 2 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return true;
+  let index = 2;
+  while (index < bytes.length) {
+    if (bytes[index] !== 0xff) return true;
+    // Fyllbytes FF foran merket hoppes over
+    while (index < bytes.length && bytes[index] === 0xff) index += 1;
+    if (index >= bytes.length) return true;
+    const marker = bytes[index]!;
+    index += 1;
+    if (marker === 0xda) return false;
+    if (marker === 0xe1 || marker === 0xed) return true;
+    // Nytt start- eller sluttmerke før bildedataene, eller 00: ødelagt
+    if (marker === 0xd8 || marker === 0xd9 || marker === 0x00) return true;
+    // Merker uten lengdefelt (TEM og RST0–RST7)
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+    if (index + 1 >= bytes.length) return true;
+    const length = (bytes[index]! << 8) | bytes[index + 1]!;
+    if (length < 2 || index + length > bytes.length) return true;
+    index += length;
+  }
+  return true;
+}
+
+/**
+ * Krever at bildet finnes i organisasjonen og ikke er slettet. Med `requireOriginal` må også
+ * originalen være mottatt (`sha256` og `uploaded_at`). Alle tilfellene gir samme feil.
+ */
+async function requireTrialPhotoRow(
+  organizationId: string,
+  photoId: string,
+  requireOriginal: boolean,
+): Promise<void> {
+  const [row] = await db
+    .select({
+      sha256: trialPhotos.sha256,
+      uploadedAt: trialPhotos.uploadedAt,
+      deletedAt: trialPhotos.deletedAt,
+    })
+    .from(trialPhotos)
+    .where(and(eq(trialPhotos.id, photoId), eq(trialPhotos.organizationId, organizationId)))
+    .limit(1);
+  if (!row || row.deletedAt) throw new TrialPhotoNotFoundError();
+  if (requireOriginal && (!row.sha256 || !row.uploadedAt)) throw new TrialPhotoNotFoundError();
+}
+
+/** Stien til visningskopien, bygget fra organisasjonen i tilgangssjekken. */
+function displayCopyPath(organizationId: string, photoId: string): string {
+  const root = trialUploadDir();
+  const filePath = path.resolve(root, organizationId, `${photoId}.display.jpg`);
+  if (!filePath.startsWith(root + path.sep)) throw new TrialPhotoNotFoundError();
+  return filePath;
+}
+
+/**
+ * Lagrer visningskopien (JPEG uten metadata, laget på iPaden) ved siden av originalen, som
+ * `TRIAL_UPLOAD_DIR/<organizationId>/<photoId>.display.jpg`. Originalen må være mottatt først.
+ * En ny kopi overskriver den gamle. Raden i `trial_photos` endres ikke. Svaret er SHA-256 av kopien.
+ */
+export async function storeTrialDisplayCopy(
+  actor: Actor,
+  organizationId: string,
+  photoId: string,
+  contentType: string,
+  bytes: Uint8Array,
+): Promise<{ sha256: string }> {
+  const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
+  // Id-en sjekkes før noen sti bygges (ingen «../»)
+  if (!isUuid(photoId)) throw new TrialPhotoNotFoundError();
+  if (contentType !== DISPLAY_COPY_CONTENT_TYPE) {
+    throw new InvalidTrialChangeError("Visningskopien må være JPEG.");
+  }
+  if (bytes.byteLength > trialPhotoMaxBytes()) throw new TrialPhotoTooLargeError();
+  if (hasMetadataSegment(bytes)) {
+    throw new InvalidTrialChangeError("Visningskopien er ikke en gyldig JPEG uten metadata.");
+  }
+  await requireTrialPhotoRow(grant.organizationId, photoId, true);
+
+  const filePath = displayCopyPath(grant.organizationId, photoId);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, bytes);
+  return { sha256: createHash("sha256").update(bytes).digest("hex") };
+}
+
+/**
+ * Leser visningskopien. Ukjent, fremmed eller slettet bilde, eller ingen kopi, gir
+ * `TrialPhotoNotFoundError`.
+ */
+export async function readTrialDisplayCopy(
+  actor: Actor,
+  organizationId: string,
+  photoId: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
+  if (!isUuid(photoId)) throw new TrialPhotoNotFoundError();
+  await requireTrialPhotoRow(grant.organizationId, photoId, false);
+
+  const filePath = displayCopyPath(grant.organizationId, photoId);
+  try {
+    return new Uint8Array(await readFile(filePath));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new TrialPhotoNotFoundError();
+    throw error;
+  }
+}

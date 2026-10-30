@@ -6,6 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
+Sist oppdatert: 30.10.2026 (prøve D – bilder, PR åpnet)
 Sist oppdatert: 30.10.2026 (prøve F levert som PR, merges med skriptet)
 
 ## Gjeldende fase
@@ -16,7 +17,8 @@ Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmilj�
 
 ## Gjeldende oppgave
 
-**Levert: Prøve F – innlogging som har gått ut** (30.10.2026; branch `fase1-prove-f-innlogging` fra `main`, versjon 0.2.23, **PR #34**, merges med skriptet når CI er grønn). Oppgavekort `docs/funksjoner/fase1-prove-f-innlogging.md`, testplan `docs/funksjoner/fase1-prove-f-innlogging-testplan.md`, resultatmal for ekte iPad `docs/funksjoner/fase1-prove-f-innlogging-resultat.md`. Skjemaet virker uten nett når innloggingen har gått ut, meldingen «Logg inn på nytt for å sende» når nettet kommer, tilbake til skjemaet etter innlogging (`neste`, bare trygge stier), synk uten tap. e2e i pc og iPad-størrelse. Ingen endringer i kandidatene, ingen ny rute, ingen ny avhengighet. Roller: forenkler, ux-ansvarlig, sikkerhet-personvern, test-leder, utvikler, testskriver. Beslutninger A5 og A6, spørsmål nr. 14 (delt iPad, ikke blokkerende). Ingen alvorlige funn; små funn (doble tester, tilstandsfilen) står i PR-en. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
+**Levert: Prøve D – bilder** (30.10.2026; branch `fase1-prove-d-bilder` fra `main`, versjon 0.2.24, **PR #35**; `main` med prøve F flettet inn før merge). Oppgavekort `docs/funksjoner/fase1-prove-d-bilder.md`, resultatmal `docs/funksjoner/fase1-prove-d-bilder-resultat.md` for ekte iPad. Fra før: opplasting mens appen er åpen, nytt forsøk per bilde etter brudd, kontroll med fingeravtrykk. Nytt: visningskopi på iPaden (rettet, høyst 2000 punkter, JPEG 0,8, uten EXIF/GPS), egen rute for visningskopien med «Vis fra serveren», e2e for rotering, brudd og HEIC (pc og ipad). Beslutninger A7–A10 i `docs/09-apne-sporsmal.md`. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en (feil beslutningsnumre i kommentarer er rettet av prosjektlederen før PR). Punktet er krysset av i planen. Prøve F røres ikke. Støtter reklamasjoner og tid.
+**Levert: Prøve F – innlogging som har gått ut** (30.10.2026; branch `fase1-prove-f-innlogging` fra `main`, versjon 0.2.23, **PR #34**, merget 30.10.2026). Oppgavekort `docs/funksjoner/fase1-prove-f-innlogging.md`, testplan `docs/funksjoner/fase1-prove-f-innlogging-testplan.md`, resultatmal for ekte iPad `docs/funksjoner/fase1-prove-f-innlogging-resultat.md`. Skjemaet virker uten nett når innloggingen har gått ut, meldingen «Logg inn på nytt for å sende» når nettet kommer, tilbake til skjemaet etter innlogging (`neste`, bare trygge stier), synk uten tap. e2e i pc og iPad-størrelse. Ingen endringer i kandidatene, ingen ny rute, ingen ny avhengighet. Roller: forenkler, ux-ansvarlig, sikkerhet-personvern, test-leder, utvikler, testskriver. Beslutninger A5 og A6, spørsmål nr. 14 (delt iPad, ikke blokkerende). Ingen alvorlige funn; små funn (doble tester, tilstandsfilen) står i PR-en. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
 **Levert: liten oppgave (f)**, småfunnene fra PR #32 (prøve C) (30.10.2026; branch `fase1-smafunn-prove-c` fra `main`, versjon 0.2.22, **PR #33**). Oppgavekort `docs/agenter/oppgaver/fase1-smafunn-prove-c.md`. Loggen viser bare feilnavnet, testen for åpning uten nett har ingen reservevei, e2e-filen gikk fra 27 til 22 tester, tekstblokken som leste kildefilen er borte, én felles hook for plassmålingen, ingen `DOMException`-sjekk. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; to doble sjekker i e2e rettet av prosjektlederen før PR. Punktet er krysset av i planen. Støtter reklamasjoner og tid.
 
@@ -48,9 +50,9 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #34 | Prøve F – innlogging som har gått ut | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
+| #35 | Prøve D – bilder | åpnet 30.10.2026, merges med skriptet når CI er grønn | `main` |
 
-PR #16–#28 og #30–#33 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken). Ingen PR venter på Ståle.
+PR #16–#28 og #30–#34 er merget (#28: småfunn fra prøve E, #31: rydding fra nattløkken). Ingen PR venter på Ståle.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -63,7 +65,9 @@ I autonom modus samles alt her. Ingen varsler.
 - Prøve C på ekte iPad: følg `docs/funksjoner/fase1-prove-c-lagring-resultat.md` (C1–C4 per kandidat, 7 dager uten bruk med appen på hjemskjermen).
 - Spørsmål nr. 12: slå på synktjenestene i testmiljøet (`docs/drift/testmiljo-azure.md`, «Slå på»). Når de kjører: kjør prøve A og B etter `docs/funksjoner/fase1-prove-ab-powersync.md`, `…-electricsql.md` og `…-egenbygd.md`.
 - **Testmiljøet (PR #7 er merget):** følg `docs/drift/testmiljo-azure.md`: lag ressursgruppen `rg-ezprop-test` og GitHub-innloggingen i Azure, legg inn secrets og variabler, svar på spørsmål nr. 6 og nr. 9. Bekreft «ferdig når»: appen åpner på ekte iPad Pro fra hjemskjermen. Ikke legg inn de fire e-post-secretene før Graph-adapteren er bygget (fase 0b).
-- Spørsmålene i `docs/09-apne-sporsmal.md`: nr. 6, nr. 8 (GPS i bildene, før prøve D), nr. 9, nr. 10 (PowerSync som leverandør) og nr. 11 (ElectricSQL som leverandør), de to siste før ADR-en, og nr. 12 (slå på synktjenestene i testmiljøet, kostnad).
+- **Slå av Stedstjenester for Safari på de to iPadene før prøve D** (Innstillinger → Personvern og sikkerhet → Stedstjenester → Safari-nettsteder → Aldri). Så følg `docs/funksjoner/fase1-prove-d-bilder-resultat.md` (D1–D5). Se A7 i `docs/09-apne-sporsmal.md`.
+- **Rydd testbildene fra prøve D på testserveren etterpå** (myk sletting eller tømming av `TRIAL_UPLOAD_DIR` i testmiljøet). Det står også nederst i resultatmalen.
+- Spørsmålene i `docs/09-apne-sporsmal.md`: nr. 6, nr. 8 del (b) (GPS i originalbildene i 10 år, fase 2b; del (a) er avgjort som A7), nr. 9, nr. 10 (PowerSync som leverandør) og nr. 11 (ElectricSQL som leverandør), de to siste før ADR-en, og nr. 12 (slå på synktjenestene i testmiljøet, kostnad).
 
 ## Oppgaver fra nattløkken
 
