@@ -163,7 +163,7 @@ describe("POST /api/prove/regler", () => {
     );
   });
 
-  it("ugyldig innhold gir 400", async () => {
+  describe("ugyldig innhold gir 400", () => {
     // Én sak per type feil; rene varianter av samme type er slått sammen
     const cases: [string, (organizationId: string) => unknown, boolean?][] = [
       [
@@ -180,15 +180,15 @@ describe("POST /api/prove/regler", () => {
       ["answers mangler", (id) => ({ organizationId: id })],
       ["answers er feil type", (id) => ({ organizationId: id, answers: "7" })],
       ["kroppen er ikke JSON", () => "{ikke json", true],
+      ["kroppen er tom", () => "", true],
+      ["kroppen er null", () => null],
       ["kroppen er ikke et objekt", (id) => [{ organizationId: id, answers: {} }]],
     ];
-    const { actor, organizationId } = await setupOrganization("admin");
-    loggedInAs(actor);
-    for (const [name, build, raw] of cases) {
-      const response = await post(build(organizationId), raw ?? false);
-      expect(response.status, name).toBe(400);
-      await expectError(response, 400);
-    }
+    it.each(cases)("%s", async (_name, build, raw) => {
+      const { actor, organizationId } = await setupOrganization("admin");
+      loggedInAs(actor);
+      await expectError(await post(build(organizationId), raw ?? false), 400);
+    });
   });
 
   it("tilgang sjekkes før svar gis", async () => {

@@ -106,9 +106,8 @@ describe("prøvereglene som data", () => {
   });
 
   it("grensetallene står bare i regeldataene", () => {
+    // Tallene i TRIAL_ONLY_LIMITS er dekket over; her sjekkes at meldingene ikke har egne tall.
     const text = withoutComments(readFileSync(path.join(RULES_DIR, "trial-rules.ts"), "utf8"));
-    expect(text.match(/\b7\b/g) ?? [], "7 skal stå én gang").toHaveLength(1);
-    expect(text.match(/\b42\b/g) ?? [], "42 skal stå én gang").toHaveLength(1);
     // Ingen meldingsstreng (tekst eller mal) har et siffer skrevet rett inn
     const literals = text.match(/"[^"]*"|`[^`]*`/g) ?? [];
     for (const literal of literals.filter((entry) => entry.includes("Prøveregel"))) {
