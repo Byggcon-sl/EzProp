@@ -1704,6 +1704,9 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Prøveregel | `trial rule` (`TrialRule`, `trialRules`, `offline-trial/rules/`) | En av de to reglene i prøve E (`trial_water_heater_age`, `trial_moisture_floor_limit`). Data i kode med oppdiktede prøveverdier (`TRIAL_ONLY_LIMITS`), ikke fag og ingen TG. Ikke tabellen `rules` |
 | Regelmotoren i prøven | `evaluateTrialRules` | Én ren funksjon som gir svaret fra hver prøveregel ut fra svarene i testskjemaet. Samme kode kjører i nettleseren uten nett og i serverruten `/api/prove/regler` |
 | Regelsvar (slår til / slår ikke til / ikke vurdert) | `rule state` (`TrialRuleState`: `triggered` / `not_triggered` / `not_evaluated`) | Svaret fra en prøveregel. «Ikke vurdert» ved tomt felt, ugyldig tekst eller negativt tall |
+| Lagringsstatus | `storage health` (`readStorageHealth`, `offline-trial/storage-health.ts`) | Prøve C: plass brukt og plass appen får (`navigator.storage.estimate()`), og om lagringen er varig. Bare på egen enhet, lagres ikke |
+| Varig lagring | `persistent storage` (`navigator.storage.persist()`) | Nettleseren lover å ikke slette appens data av seg selv. Appen ber om det automatisk |
+| Lite plass | `low storage` (`storageLevel`: `ok` / `low` / `unknown`, `LOW_STORAGE_FREE_BYTES`) | Ledig plass under grensen (500 MB i prøven). Gir varsel, aldri sperre |
 | Testmiljø | `test environment` (`environmentName: test`) | Appen og databasen i Azure (Sweden Central) som prøvene i fase 1 kjøres mot. Bare oppdiktede data |
 | Utrulling | `deploy` (`deploy-azure.yml`) | Automatisk oppdatering av testmiljøet ved merge til `main` |
 | Serverlogg | `server log` (`serverLog`) | Loggen i App Service. Innloggingskoden til første admin skrives der til e-post er satt opp |

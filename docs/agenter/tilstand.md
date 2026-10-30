@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 (liten oppgave (e), småfunn fra prøve E, PR åpnet)
+Sist oppdatert: 30.10.2026 (prøve C – lagring i Safari, oppgavekort laget)
 
 ## Gjeldende fase
 
@@ -15,6 +15,8 @@ Sist oppdatert: 30.10.2026 (liten oppgave (e), småfunn fra prøve E, PR åpnet)
 Gjeldende fase: **Fase 1 – Prøve uten nett.** Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd er merget til `main` i PR #13 (PR #12: agentene merger selv).
 
 ## Gjeldende oppgave
+
+**Pågår: Prøve C – lagring i Safari** (30.10.2026; branch `fase1-prove-c-lagring` fra `main`). Oppgavekort `docs/funksjoner/fase1-prove-c-lagring.md`. Måling av plass og varig lagring i prøvesidene, varsel ved lite plass (under 500 MB ledig), melding med «Prøv igjen» når lagring på iPaden feiler (i dag bare i konsollen), e2e i Chromium, resultatmal `docs/funksjoner/fase1-prove-c-lagring-resultat.md` for ekte iPad. Roller: ux-ansvarlig, test-leder, utvikler, testskriver. Tre beslutninger ført som A1–A3 i `docs/09-apne-sporsmal.md`. Neste: runde 1 (ux-ansvarlig, test-leder), så utvikler og testskriver i parallell. Støtter reklamasjoner og tid.
 
 **Levert: Prøve E – regler uten nett**, **PR #23** (merget 29.10.2026; branch `fase1-prove-e-regler` fra `main`, versjon 0.2.13). Oppgavekort `docs/funksjoner/fase1-prove-e-regler.md`, testplan `docs/funksjoner/fase1-prove-e-regler-testplan.md`, resultatmal for ekte iPad `docs/funksjoner/fase1-prove-e-regler-resultat.md`. To prøveregler som data (oppdiktede tall 7 år og 42 %), én regelmotor for nettleser og server, regelsvar under feltene, ruten `/api/prove/regler`, 14 testsaker. Roller: forenkler, fagansvarlig, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; små funn står i PR-en. Punktet er krysset av i planen. Spørsmål nr. 13 (ekte tall), ikke blokkerende. Støtter tid og reklamasjoner.
 

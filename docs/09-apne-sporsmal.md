@@ -8,6 +8,9 @@ Ståle 29.10.2026: «Er du i tvil, gå tilbake til undersøkelsene og tolk hva d
 
 | Nr | Dato | Beslutning | Hvorfor og kilde | PR |
 |---|---|---|---|---|
+| A1 | 30.10.2026 | **Prøve C: varsel om «lite plass» når under 500 MB er ledig** på iPaden. Bare varsel, ingen sperre. | 100–300 bilder per befaring (sidemannskontrollen del 1 T1); med ca. 1,5–2 MB per bilde trengs ca. 500 MB for én befaring. Advarsel, aldri sperre, som for sidemannskontrollen (Ståle 27.10.2026). Endres i konstanten `LOW_STORAGE_FREE_BYTES`. `docs/funksjoner/fase1-prove-c-lagring.md` | branch `fase1-prove-c-lagring` |
+| A2 | 30.10.2026 | **Prøve C: appen ber selv om varig lagring** (`navigator.storage.persist()`) når en prøveside åpnes, uten knapp. | Færre trykk (mål: tid), og Safari kan slette data som ikke er varig (sidemannskontrollen del 1, linje 152). Kan gjøres om til en knapp senere. | branch `fase1-prove-c-lagring` |
+| A3 | 30.10.2026 | **Prøve C på ekte iPad prøver både hjemskjerm og vanlig Safari** etter 7 dager uten bruk. Om EzProp skal kreve hjemskjerm, avgjøres i ADR-en. | Sidemannskontrollen del 1 (Safari kan slette data for nettsider som ikke er på hjemskjermen), planen for prøvene i `fase1-testskjema.md` (7 dager). | branch `fase1-prove-c-lagring` |
 
 ## Spørsmål til Ståle
 
