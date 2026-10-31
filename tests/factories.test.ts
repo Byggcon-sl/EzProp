@@ -1,10 +1,19 @@
 import { count } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { requireOrganizationAccess } from "@/core/access";
+import { isCertificationValid } from "@/core/organization/certification-rules";
 import { db } from "@/db/client";
-import { employeePermissions, trialAnswers, trialForms, trialPhotos } from "@/db/schema";
+import {
+  certifications,
+  employeePermissions,
+  trialAnswers,
+  trialForms,
+  trialPhotos,
+} from "@/db/schema";
+import { todayInOslo } from "@/shared/lib/dates";
 import { uuidv7 } from "@/shared/lib/uuid";
 import {
+  createCertification,
   createEmployee,
   createOrganization,
   createUser,
@@ -74,6 +83,73 @@ describe("grantPermission (fase 0b, roller og rettigheter)", () => {
     await resetDatabase();
 
     const [row] = await db.select({ n: count() }).from(employeePermissions);
+    expect(row!.n).toBe(0);
+  });
+});
+
+describe("createCertification (fase 0b, sertifisering)", () => {
+  /** Samme dato ett år frem, regnet for hånd fra «ÅÅÅÅ-MM-DD». */
+  function nextYear(isoDate: string): string {
+    return `${Number(isoDate.slice(0, 4)) + 1}${isoDate.slice(4)}`;
+  }
+
+  it("1. uten overstyring: gyldig i dag, gyldig til ett år frem, samme organisasjon", async () => {
+    await resetDatabase();
+    const org = await createOrganization("Oppdiktet takst AS");
+    const employee = await createEmployee(await createUser(), org.id, ["inspector"]);
+
+    const today = todayInOslo();
+    const row = await createCertification(employee);
+
+    expect(row.organizationId).toBe(org.id);
+    expect(row.employeeId).toBe(employee.id);
+    expect(row.area).toBe("condition_report");
+    expect(row.validFrom).toBe(today);
+    expect(row.validTo).toBe(nextYear(today));
+    expect(row.deletedAt).toBeNull();
+    expect(isCertificationValid(row, today)).toBe(true);
+  });
+
+  it("2. overstyring av validTo, validFrom, organizationId og employeeId brukes", async () => {
+    await resetDatabase();
+    const orgA = await createOrganization("Oppdiktet takst A");
+    const orgB = await createOrganization("Oppdiktet takst B");
+    const inA = await createEmployee(await createUser(), orgA.id, ["inspector"]);
+    const colleague = await createEmployee(await createUser(), orgA.id, ["inspector"]);
+    const inB = await createEmployee(await createUser(), orgB.id, ["inspector"]);
+
+    const dated = await createCertification(inA, { validFrom: null, validTo: "2026-10-30" });
+    expect(dated.validFrom).toBeNull();
+    expect(dated.validTo).toBe("2026-10-30");
+
+    const fromSet = await createCertification(inA, {
+      validFrom: "2026-11-01",
+      validTo: "2027-11-01",
+    });
+    expect(fromSet.validFrom).toBe("2026-11-01");
+    expect(fromSet.validTo).toBe("2027-11-01");
+
+    const other = await createCertification(inA, { employeeId: colleague.id });
+    expect(other.employeeId).toBe(colleague.id);
+    expect(other.organizationId).toBe(orgA.id);
+
+    const moved = await createCertification(inA, {
+      organizationId: orgB.id,
+      employeeId: inB.id,
+    });
+    expect(moved.organizationId).toBe(orgB.id);
+    expect(moved.employeeId).toBe(inB.id);
+  });
+
+  it("3. resetDatabase tømmer certifications", async () => {
+    await resetDatabase();
+    const org = await createOrganization("Oppdiktet takst AS");
+    const employee = await createEmployee(await createUser(), org.id, ["inspector"]);
+    await createCertification(employee);
+
+    await resetDatabase();
+
+    const [row] = await db.select({ n: count() }).from(certifications);
     expect(row!.n).toBe(0);
   });
 });

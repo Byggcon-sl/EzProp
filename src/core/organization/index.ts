@@ -13,12 +13,20 @@ export {
 } from "./employees-admin";
 export { grantEmployeePermission, revokeEmployeePermission } from "./employee-permissions";
 export {
+  addCertification,
+  listCertificationsForEmployee,
+  listExpiringCertifications,
+  removeCertification,
+} from "./certifications";
+export {
   DuplicateEmployeeEmailError,
   DuplicateOfficeNameError,
   DuplicateOrgNumberError,
   LastAdminError,
 } from "./errors";
 export {
+  addCertificationSchema,
+  type AddCertificationInput,
   companyInputSchema,
   employeeCreateSchema,
   employeeRolesSchema,
@@ -29,3 +37,15 @@ export {
   type EmployeeUpdateInput,
   type OfficeInput,
 } from "./schemas";
+
+// Sertifisering: datoregelen (fase0b-sertifisering, bit 1)
+export {
+  CERTIFICATION_AREA_KEYS,
+  CERTIFICATION_AREAS,
+  EXPIRING_SOON_DAYS,
+  certificationStatus,
+  expiresWithin,
+  isCertificationValid,
+  type CertificationArea,
+  type CertificationStatus,
+} from "./certification-rules";
