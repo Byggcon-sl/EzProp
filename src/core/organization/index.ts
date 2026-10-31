@@ -29,3 +29,15 @@ export {
   type EmployeeUpdateInput,
   type OfficeInput,
 } from "./schemas";
+
+// Sertifisering: datoregelen (fase0b-sertifisering, bit 1)
+export {
+  CERTIFICATION_AREA_KEYS,
+  CERTIFICATION_AREAS,
+  EXPIRING_SOON_DAYS,
+  certificationStatus,
+  expiresWithin,
+  isCertificationValid,
+  type CertificationArea,
+  type CertificationStatus,
+} from "./certification-rules";
