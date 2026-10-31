@@ -631,7 +631,8 @@ describe("rolleskriptet mot testdatabasen", () => {
         expect(row!.ok, `${role} på ${table}`).toBe(false);
       }
     }
-  });
+    // Mange databasekall etter hverandre; kan bli treg når hele testpakken kjører samtidig.
+  }, 20_000);
 
   it("virker uten superbruker, slik som i Azure", async () => {
     await cleanup();
