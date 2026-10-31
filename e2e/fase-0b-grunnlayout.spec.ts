@@ -336,13 +336,21 @@ test.describe("iPad stående (834x1194)", () => {
       .filter({ has: indicator(page) })
       .first();
     await expect(bar).toBeVisible();
+    // Skjemaet må være ferdig tegnet før vi ruller, ellers er siden for kort
+    await expect(input).toBeVisible();
 
-    // Ruller helt ned, så feltet kommer ovenfra når det får fokus
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    // Ruller helt ned, så feltet kommer ovenfra når det får fokus. Rull på nytt i hver runde,
+    // siden skjemaet kan vokse etter første tegning.
     await expect
-      .poll(async () => (await input.boundingBox())?.y ?? 0, {
-        message: "feltet ligger over synsfeltet før det får fokus",
-      })
+      .poll(
+        async () => {
+          await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+          return (await input.boundingBox())?.y ?? 0;
+        },
+        {
+          message: "feltet ligger over synsfeltet før det får fokus",
+        },
+      )
       .toBeLessThan(0);
     // Fokus som Safari på iPaden: feltet rulles til nærmeste kant
     await input.evaluate((el) => {
