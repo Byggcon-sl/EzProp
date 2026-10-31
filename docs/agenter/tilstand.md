@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 31.10.2026 (PR #54 merget; doble testfiler for admin slått sammen i egen PR)
+Sist oppdatert: 31.10.2026 kl. 09:00 UTC (PR #54 og #55 merget; `fase0b-sertifisering` i arbeid hos en annen kjøring)
 
 ## Gjeldende fase
 
@@ -63,9 +63,9 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #55 | Slå sammen doble testfiler for admin (`fase0b-admin-testfiler`) | Venter på CI, merges av skriptet | `main` |
+| – | Sertifisering med utløpsdato (`fase0b-sertifisering`) | i arbeid hos en annen kjøring, ingen PR ennå | `main` |
 
-PR #16–#28 og #30–#54 er merget (#54: admin-skjermene, #53: tilstand, #52: tilstand, #51: grunnlayout Fjord, #50: roller og rettigheter, #49: rydding fra nattløkken, #48 og #47: tilstand, #46: seed og slettet kontor, #44: liten oppgave (i), #45: UU-funn 6–9 fra nattløkken, #43 og #42: tilstand, #41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
+PR #16–#28 og #30–#55 er merget (#55: doble testfiler for admin slått sammen, merget 31.10.2026 kl. 08:56 UTC, #54: admin-skjermene, #53: tilstand, #52: tilstand, #51: grunnlayout Fjord, #50: roller og rettigheter, #49: rydding fra nattløkken, #48 og #47: tilstand, #46: seed og slettet kontor, #44: liten oppgave (i), #45: UU-funn 6–9 fra nattløkken, #43 og #42: tilstand, #41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
