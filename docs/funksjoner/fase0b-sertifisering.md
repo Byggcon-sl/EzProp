@@ -106,5 +106,7 @@ Ingen fagregler (ikke TG-logikk). Datoregelen (Omfang 3) testes med grensesaker:
 ## Endringer etter gjennomgang (31.10.2026)
 Test-leder ba om fire rettelser, og alle er tatt inn: «i dag» regnes i TypeScript med Europe/Oslo og sendes inn som parameter (ellers kan tidssonegrensen ikke testes); sjekken er en egen ren funksjon slik at rollematrisen står urørt; «nyeste per område» og «har sluttet» er definert. Merknaden «Krever gyldig sertifisering.» ved «Publisere rapport» er tatt med fordi admin ellers kan tro at avkrysningen er nok. Ingen uenighet.
 
+Rettelser fra testplanen (prosjektleder 31.10.2026): oppslaget i `findGrant` ligger i en egen funksjon `employeeHasValidCertification(employee, today)` i `src/core/access/guards.ts`, slik at SQL-regelen kan testes med fast dato. Revisjonsloggen følger mønsteret i `src/core/audit`: `entityType: "certification"` med `action: "create"` og `action: "delete"` (det er dette «certification.created» og «certification.deleted» betyr). En ansatt som har sluttet, kan få registrert sertifisering (historikk); slettet ansatt kan ikke.
+
 ## Åpne spørsmål
 - Ingen som stopper oppgaven. Om sertifiseringskravet fra Norsk takst stiller andre krav (sidemannskontroll del 1), tas opp når Ståle er tilbake.
