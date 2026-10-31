@@ -59,11 +59,17 @@ export async function saveCompanyAction(
     if (companyId === null) await createCompany(context.actor, context.organizationId, input);
     else await updateCompany(context.actor, context.organizationId, companyId, input);
   } catch (error) {
-    return errorResult(error, previous, values, {
-      route: "/admin/selskaper",
-      userId: context.actor.id,
-      ...(companyId && { companyId }),
-    });
+    return errorResult(
+      error,
+      previous,
+      values,
+      { route: "/admin/selskaper", userId: context.actor.id, ...(companyId && { companyId }) },
+      {
+        legalName: "Skriv inn det juridiske navnet.",
+        orgNumber: "Org.nr. må være 9 siffer.",
+        liabilityValidTo: "Skriv inn en gyldig dato.",
+      },
+    );
   }
   redirect("/admin/selskaper?lagret=selskap");
 }

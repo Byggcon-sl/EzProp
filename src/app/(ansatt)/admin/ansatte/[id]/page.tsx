@@ -55,7 +55,8 @@ export default async function EmployeePage({
   const notice = noticeText((await searchParams).lagret);
   const locked = employee.deactivatedAt !== null;
   const roles = roleBadgeOrder.filter((role) => employee.roles.includes(role));
-  const canReactivate = !("hasLogin" in employee) || employee.hasLogin !== false;
+  // Uten innlogging finnes ingen e-post, og «Angre sluttet» er ikke mulig (kortet, Omfang 6).
+  const canReactivate = employee.email !== null;
 
   return (
     <main className="max-w-2xl">

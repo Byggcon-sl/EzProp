@@ -40,11 +40,13 @@ export async function saveOfficeAction(
     if (officeId === null) await createOffice(context.actor, context.organizationId, input);
     else await updateOffice(context.actor, context.organizationId, officeId, input);
   } catch (error) {
-    return errorResult(error, previous, values, {
-      route: "/admin/kontorer",
-      userId: context.actor.id,
-      ...(officeId && { officeId }),
-    });
+    return errorResult(
+      error,
+      previous,
+      values,
+      { route: "/admin/kontorer", userId: context.actor.id, ...(officeId && { officeId }) },
+      { name: "Skriv inn navnet på kontoret.", sortOrder: "Skriv inn et helt tall." },
+    );
   }
   redirect("/admin/kontorer?lagret=kontor");
 }

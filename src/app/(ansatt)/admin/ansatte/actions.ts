@@ -22,6 +22,12 @@ import {
 
 const ROUTE = "/admin/ansatte";
 
+/** Feilmeldingene ved feltet fra skissen (avsnitt 6). */
+const MESSAGES = {
+  name: "Skriv inn navnet.",
+  email: "Skriv inn en gyldig e-postadresse.",
+};
+
 /** Bare kjente verdier sendes videre; alt annet fra skjemaet ignoreres. */
 function pick<T extends string>(formData: FormData, name: string, allowed: readonly T[]): T[] {
   const chosen = new Set(formData.getAll(name).map(String));
@@ -91,7 +97,13 @@ export async function createEmployeeAction(
       roles,
     });
   } catch (error) {
-    return errorResult(error, previous, values, { route: ROUTE, userId: context.actor.id });
+    return errorResult(
+      error,
+      previous,
+      values,
+      { route: ROUTE, userId: context.actor.id },
+      MESSAGES,
+    );
   }
   redirect(`${ROUTE}?lagret=ny-ansatt`);
 }
@@ -111,11 +123,13 @@ export async function updateEmployeeAction(
     if (Object.keys(choiceErrors).length > 0) return failure(previous, values, choiceErrors);
     await updateEmployee(context.actor, context.organizationId, employeeId, detailsInput(values));
   } catch (error) {
-    return errorResult(error, previous, values, {
-      route: ROUTE,
-      userId: context.actor.id,
-      employeeId,
-    });
+    return errorResult(
+      error,
+      previous,
+      values,
+      { route: ROUTE, userId: context.actor.id, employeeId },
+      MESSAGES,
+    );
   }
   redirect(`${ROUTE}?lagret=endret`);
 }

@@ -4,7 +4,7 @@
  * Funksjonene her kaster alltid; ingen data og ingen tilgang uten kjernen.
  */
 import { z } from "zod";
-import { AccessDeniedError, type Actor, type GrantablePermission } from "@/core/access";
+import { AccessDeniedError, type Actor } from "@/core/access";
 import type { EmployeeRole } from "@/db/schema";
 
 export { listCompanies, listOffices } from "@/core/organization";
@@ -79,9 +79,8 @@ type AdminEmployee = {
   officeId: string | null;
   officeName: string | null;
   deactivatedAt: Date | null;
-  hasLogin: boolean;
   roles: EmployeeRole[];
-  permissions: GrantablePermission[];
+  permissions: string[];
 };
 
 export async function findAdminOrganizationId(_actor: Actor): Promise<string | null> {
