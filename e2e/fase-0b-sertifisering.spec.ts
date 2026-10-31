@@ -133,6 +133,25 @@ async function describedByText(page: Page, field: Locator): Promise<string> {
   return texts.join(" ");
 }
 
+/**
+ * Om nettleserens datofelt har dagen først (31.12.2026) eller måneden først (12/31/2026). Finnes
+ * med et midlertidig prøvefelt utenfor skjemaet, som fjernes igjen; skjemaet røres ikke.
+ */
+async function dateInputIsDayFirst(page: Page): Promise<boolean> {
+  await page.evaluate(() => {
+    const probe = document.createElement("input");
+    probe.type = "date";
+    probe.id = "e2e-date-probe";
+    document.body.append(probe);
+  });
+  const probe = page.locator("#e2e-date-probe");
+  await probe.focus();
+  await page.keyboard.type("01022026");
+  const value = await probe.inputValue();
+  await page.evaluate(() => document.getElementById("e2e-date-probe")?.remove());
+  return value === "2026-02-01";
+}
+
 test.describe("sertifisering i adminområdet (pc og iPad liggende)", () => {
   test("1. admin legger til en sertifisering og ser den i listen", async ({ page }) => {
     const validTo = addDays(todayInOslo(), 30);
@@ -140,8 +159,8 @@ test.describe("sertifisering i adminområdet (pc og iPad liggende)", () => {
     const employee = await createEmployeeAndOpen(page);
 
     // Merknaden ved «Publisere rapport»: avkrysningen alene er ikke nok
-    await expect(page.getByLabel("Publisere rapport", { exact: true })).toBeVisible();
-    await expect(page.getByText("Krever gyldig sertifisering.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: /^Publisere rapport\b/ })).toBeVisible();
+    await expect(page.getByText("Krever gyldig sertifisering.")).toBeVisible();
 
     await addCertification(page, validTo);
     const item = certItem(page, validTo);
@@ -328,9 +347,11 @@ test.describe("iPad (bare prosjektet ipad)", () => {
     const validTo = addDays(todayInOslo(), 45);
     await logIn(page, ADMIN_EMAIL);
     await createEmployeeAndOpen(page);
+    // Rekkefølgen på delene i datofeltet finnes før skjemaet åpnes
+    const dayFirst = await dateInputIsDayFirst(page);
 
     const open = certSection(page).getByRole("button", { name: "Legg til sertifisering" });
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 80; i++) {
       if (await open.evaluate((el) => el === document.activeElement)) break;
       await page.keyboard.press("Tab");
     }
@@ -344,15 +365,8 @@ test.describe("iPad (bare prosjektet ipad)", () => {
       await page.keyboard.press("Tab");
     }
     await expect(field).toBeFocused();
-    const order = await page.evaluate(() =>
-      new Intl.DateTimeFormat(navigator.language)
-        .formatToParts(new Date(2026, 11, 30))
-        .map((part) => part.type)
-        .filter((type) => type === "day" || type === "month" || type === "year"),
-    );
     const [year, month, day] = validTo.split("-") as [string, string, string];
-    const segments: Record<string, string> = { day, month, year };
-    await page.keyboard.type(order.map((type) => segments[type]).join(""));
+    await page.keyboard.type(dayFirst ? `${day}${month}${year}` : `${month}${day}${year}`);
     await expect(field).toHaveValue(validTo);
 
     const save = addForm(page).getByRole("button", { name: "Lagre", exact: true });
