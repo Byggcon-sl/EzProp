@@ -43,6 +43,13 @@
       "when": 1793405812141,
       "tag": "0005_enkeltrettigheter",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793422143738,
+      "tag": "0006_roller-myk-sletting",
+      "breakpoints": true
     }
   ]
 }

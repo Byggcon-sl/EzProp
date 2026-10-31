@@ -1,0 +1,2 @@
+DROP INDEX "employee_roles_employee_id_role_idx";--> statement-breakpoint
+CREATE UNIQUE INDEX "employee_roles_employee_id_role_idx" ON "employee_roles" USING btree ("employee_id","role") WHERE "employee_roles"."deleted_at" is null;
