@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   AccessDeniedError,
   CERTIFICATION_EXPIRY_WARNING_DAYS,
+  certificationAreaLabels,
   certificationAreas,
   grantablePermissions,
   todayInOslo,
@@ -13,7 +14,6 @@ import { Notice } from "@/shared/ui/notice";
 import { getAdminContext } from "../../admin-context";
 import {
   certificationAreaLabel,
-  certificationAreaLabels,
   certificationStatus,
   certificationStatusLabels,
   formatDate,

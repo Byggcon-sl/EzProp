@@ -131,6 +131,9 @@ async function addCertification(page: Page, data: { validTo: string; number?: st
   }
   await saveButton(page).click();
   await expect(page).toHaveURL(/\/admin\/ansatte\/[0-9a-f-]{36}\?lagret=sertifisering$/);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Sertifiseringen er lagret." }),
+  ).toBeVisible();
 }
 
 /** Feltet har `aria-invalid` og meldingen er koblet med `aria-describedby`. */
@@ -153,6 +156,7 @@ test.describe("sertifiseringer (pc og iPad liggende)", () => {
   }) => {
     await logIn(page, ADMIN_EMAIL);
     const employee = await createEmployee(page);
+    await expect(page.getByText("Ingen sertifiseringer registrert.")).toBeVisible();
     const validTo = isoDaysFromToday(20);
     await addCertification(page, { validTo, number: "TEST-CERT-0001" });
 
@@ -219,7 +223,11 @@ test.describe("sertifiseringer (pc og iPad liggende)", () => {
       .getByRole("button", { name: /^Ja, fjern/ })
       .click();
     await expect(page).toHaveURL(/\?lagret=sertifisering-fjernet$/);
+    await expect(
+      page.getByRole("status").filter({ hasText: "Sertifiseringen er fjernet." }),
+    ).toBeVisible();
     await expect(certificationItems(page)).toHaveCount(0);
+    await expect(page.getByText("Ingen sertifiseringer registrert.")).toBeVisible();
     await expect(page.getByText(`Gyldig til ${norwegianDate(validTo)}`)).toHaveCount(0);
   });
 

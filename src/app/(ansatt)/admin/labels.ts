@@ -1,4 +1,4 @@
-import type { CertificationArea, GrantablePermission } from "@/core/access";
+import { addDaysToIsoDate, certificationAreaLabels, type GrantablePermission } from "@/core/access";
 import type { EmployeeRole } from "@/db/schema";
 
 /** Rollene i den rekkefølgen de står i skjemaene (oftest brukt først). */
@@ -29,12 +29,7 @@ export const permissionLabels: Record<GrantablePermission, string> = {
   "report.publish": "Publisere rapport",
 };
 
-/** Etiketten til hvert sertifiseringsområde (fast kode i `src/core/access`). */
-export const certificationAreaLabels: Record<CertificationArea, string> = {
-  condition_report: "Tilstandsrapport bolig",
-};
-
-/** Etiketten til et område lest fra databasen. Ukjent (arkivert) kode vises som den er. */
+/** Etiketten (fra kjernen) til et område lest fra databasen. Ukjent (arkivert) kode vises som den er. */
 export function certificationAreaLabel(area: string): string {
   return (certificationAreaLabels as Record<string, string>)[area] ?? area;
 }
@@ -46,13 +41,6 @@ export const certificationStatusLabels: Record<Exclude<CertificationStatus, null
   expiring: "Går ut snart",
 };
 
-/** «2026-10-31» pluss `days` dager, som «ÅÅÅÅ-MM-DD». Regnes i UTC, så sommertid påvirker ikke. */
-function addDays(isoDate: string, days: number): string {
-  const date = new Date(`${isoDate}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
 /**
  * Merket på en sertifisering: «Utgått» når siste gyldige dag er passert, «Går ut snart» når den er
  * innen `warningDays` dager (utløpsdagen er siste gyldige dag). Bare visning; sjekken er i kjernen.
@@ -63,7 +51,7 @@ export function certificationStatus(
   warningDays: number,
 ): CertificationStatus {
   if (validTo < today) return "expired";
-  if (validTo <= addDays(today, warningDays)) return "expiring";
+  if (validTo <= addDaysToIsoDate(today, warningDays)) return "expiring";
   return null;
 }
 

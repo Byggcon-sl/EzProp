@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { certificationAreas, grantablePermissions } from "@/core/access";
+import { grantablePermissions } from "@/core/access";
 import { employeeRoles } from "@/db/schema";
 import {
-  certificationAreaLabels,
   certificationStatus,
   certificationStatusLabels,
   formatDate,
@@ -78,11 +77,6 @@ describe("formatering", () => {
 });
 
 describe("sertifiseringer", () => {
-  it("har etikett for hvert område, og condition_report er «Tilstandsrapport bolig»", () => {
-    for (const area of certificationAreas) expect(certificationAreaLabels[area]).toBeTruthy();
-    expect(certificationAreaLabels.condition_report).toBe("Tilstandsrapport bolig");
-  });
-
   // Fast «i dag» og faste datoer, slik at en endring av 60 dager blir en rød test.
   it.each([
     ["utløp i går", "2026-10-30", "expired"],
