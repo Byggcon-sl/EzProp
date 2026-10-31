@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { grantablePermissions } from "@/core/access";
+import { certificationAreas, grantablePermissions } from "@/core/access";
 import { employeeRoles } from "@/db/schema";
 import {
+  certificationAreaLabels,
+  certificationStatus,
+  certificationStatusLabels,
   formatDate,
   formatIsoDate,
   formatOrgNumber,
@@ -38,6 +41,8 @@ describe("noticeText", () => {
     ["ny-ansatt", "Den ansatte er lagt inn."],
     ["sluttet", "Markert som sluttet."],
     ["angret", "Sluttet er angret."],
+    ["sertifisering", "Sertifiseringen er lagret."],
+    ["sertifisering-fjernet", "Sertifiseringen er fjernet."],
   ])("«%s» gir «%s»", (key, text) => {
     expect(noticeText(key)).toBe(text);
   });
@@ -69,5 +74,33 @@ describe("formatering", () => {
     const lateNewYearsEve = new Date("2026-12-31T23:30:00Z");
     expect(todayInNorway(lateNewYearsEve)).toBe("2027-01-01");
     expect(formatDate(lateNewYearsEve)).toBe("01.01.2027");
+  });
+});
+
+describe("sertifiseringer", () => {
+  it("har etikett for hvert område, og condition_report er «Tilstandsrapport bolig»", () => {
+    for (const area of certificationAreas) expect(certificationAreaLabels[area]).toBeTruthy();
+    expect(certificationAreaLabels.condition_report).toBe("Tilstandsrapport bolig");
+  });
+
+  // Fast «i dag» og faste datoer, slik at en endring av 60 dager blir en rød test.
+  it.each([
+    ["utløp i går", "2026-10-30", "expired"],
+    ["utløper i dag", "2026-10-31", "expiring"],
+    ["60 dager frem", "2026-12-30", "expiring"],
+    ["61 dager frem", "2026-12-31", null],
+    ["over nyttår", "2027-10-31", null],
+  ] as const)("%s (%s) gir %s", (_name, validTo, expected) => {
+    expect(certificationStatus(validTo, "2026-10-31", 60)).toBe(expected);
+  });
+
+  it("teller dager riktig over overgangen til vintertid", () => {
+    // Vintertid begynner 25.10.2026; 60 dager fra 01.10.2026 er 30.11.2026
+    expect(certificationStatus("2026-11-30", "2026-10-01", 60)).toBe("expiring");
+    expect(certificationStatus("2026-12-01", "2026-10-01", 60)).toBeNull();
+  });
+
+  it("viser merkene med tekst", () => {
+    expect(certificationStatusLabels).toEqual({ expired: "Utgått", expiring: "Går ut snart" });
   });
 });

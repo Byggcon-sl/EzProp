@@ -1,13 +1,33 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AccessDeniedError, grantablePermissions } from "@/core/access";
+import {
+  AccessDeniedError,
+  CERTIFICATION_EXPIRY_WARNING_DAYS,
+  certificationAreas,
+  grantablePermissions,
+  todayInOslo,
+} from "@/core/access";
 import { isUuid } from "@/shared/lib/uuid";
 import { Badge } from "@/shared/ui/badge";
 import { Notice } from "@/shared/ui/notice";
 import { getAdminContext } from "../../admin-context";
-import { formatDate, noticeText, roleBadgeOrder, roleLabels } from "../../labels";
+import {
+  certificationAreaLabels,
+  certificationStatus,
+  certificationStatusLabels,
+  formatDate,
+  formatIsoDate,
+  noticeText,
+  roleBadgeOrder,
+  roleLabels,
+} from "../../labels";
 import { NoAccess } from "../../no-access";
-import { getEmployeeForAdmin, listCompanies, listOffices } from "@/core/organization";
+import {
+  getEmployeeForAdmin,
+  listCertificationsForEmployee,
+  listCompanies,
+  listOffices,
+} from "@/core/organization";
 import {
   deactivateEmployeeAction,
   reactivateEmployeeAction,
@@ -15,7 +35,9 @@ import {
   setRolesAction,
   updateEmployeeAction,
 } from "../actions";
+import { createCertificationAction, deleteCertificationAction } from "../certification-actions";
 import { EmployeeDetailsForm, PermissionsForm, RolesForm, StatusForm } from "../employee-forms";
+import { CertificationSection, type CertificationRow } from "./certification-section";
 
 export const metadata: Metadata = { title: "Endre ansatt" };
 
@@ -34,7 +56,10 @@ async function findEmployee(
   }
 }
 
-/** Opplysninger, roller, enkeltrettigheter og sluttet, i fire kort som lagres hver for seg. */
+/**
+ * Opplysninger, roller, enkeltrettigheter, sertifiseringer og sluttet, i kort som lagres hver for
+ * seg.
+ */
 export default async function EmployeePage({
   params,
   searchParams,
@@ -48,10 +73,29 @@ export default async function EmployeePage({
   const employee = await findEmployee(context.actor, context.organizationId, id);
   if (!employee) return <NoAccess />;
 
-  const [companies, offices] = await Promise.all([
+  const [companies, offices, certifications] = await Promise.all([
     listCompanies(context.actor, context.organizationId),
     listOffices(context.actor, context.organizationId),
+    listCertificationsForEmployee(context.actor, context.organizationId, employee.id),
   ]);
+  const today = todayInOslo(new Date());
+  const certificationRows: CertificationRow[] = certifications.map((certification) => {
+    const status = certificationStatus(
+      certification.validTo,
+      today,
+      CERTIFICATION_EXPIRY_WARNING_DAYS,
+    );
+    return {
+      id: certification.id,
+      areaLabel: certificationAreaLabels[certification.area],
+      certificateNumber: certification.certificateNumber,
+      issuer: certification.issuer,
+      validTo: formatIsoDate(certification.validTo),
+      statusLabel: status ? certificationStatusLabels[status] : null,
+      expired: status === "expired",
+      remove: deleteCertificationAction.bind(null, employee.id, certification.id),
+    };
+  });
   const notice = noticeText((await searchParams).lagret);
   const locked = employee.deactivatedAt !== null;
   const roles = roleBadgeOrder.filter((role) => employee.roles.includes(role));
@@ -111,6 +155,13 @@ export default async function EmployeePage({
           permissions={employee.permissions}
           grantable={grantablePermissions}
           action={setPermissionsAction.bind(null, employee.id)}
+          locked={locked}
+        />
+        <CertificationSection
+          rows={certificationRows}
+          area={certificationAreas[0]}
+          areaLabel={certificationAreaLabels[certificationAreas[0]]}
+          create={createCertificationAction.bind(null, employee.id)}
           locked={locked}
         />
         <StatusForm

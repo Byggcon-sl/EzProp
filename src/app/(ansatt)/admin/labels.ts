@@ -1,4 +1,4 @@
-import type { GrantablePermission } from "@/core/access";
+import type { CertificationArea, GrantablePermission } from "@/core/access";
 import type { EmployeeRole } from "@/db/schema";
 
 /** Rollene i den rekkefølgen de står i skjemaene (oftest brukt først). */
@@ -29,6 +29,39 @@ export const permissionLabels: Record<GrantablePermission, string> = {
   "report.publish": "Publisere rapport",
 };
 
+/** Etiketten til hvert sertifiseringsområde (fast kode i `src/core/access`). */
+export const certificationAreaLabels: Record<CertificationArea, string> = {
+  condition_report: "Tilstandsrapport bolig",
+};
+
+export type CertificationStatus = "expired" | "expiring" | null;
+
+export const certificationStatusLabels: Record<Exclude<CertificationStatus, null>, string> = {
+  expired: "Utgått",
+  expiring: "Går ut snart",
+};
+
+/** «2026-10-31» pluss `days` dager, som «ÅÅÅÅ-MM-DD». Regnes i UTC, så sommertid påvirker ikke. */
+function addDays(isoDate: string, days: number): string {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Merket på en sertifisering: «Utgått» når siste gyldige dag er passert, «Går ut snart» når den er
+ * innen `warningDays` dager (utløpsdagen er siste gyldige dag). Bare visning; sjekken er i kjernen.
+ */
+export function certificationStatus(
+  validTo: string,
+  today: string,
+  warningDays: number,
+): CertificationStatus {
+  if (validTo < today) return "expired";
+  if (validTo <= addDays(today, warningDays)) return "expiring";
+  return null;
+}
+
 /** Kvitteringene etter lagring. Bare faste nøkler fra adressen; ukjent nøkkel gir ingen tekst. */
 const notices = {
   selskap: "Selskapet er lagret.",
@@ -39,6 +72,8 @@ const notices = {
   rettigheter: "Rettighetene er lagret.",
   sluttet: "Markert som sluttet.",
   angret: "Sluttet er angret.",
+  sertifisering: "Sertifiseringen er lagret.",
+  "sertifisering-fjernet": "Sertifiseringen er fjernet.",
 } as const;
 
 export type NoticeKey = keyof typeof notices;
