@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 31.10.2026 (funn fra nattløkken 31.10.2026 lagt inn, PR «Rydding fra nattløkken 2026-10-31» åpnet)
+Sist oppdatert: 31.10.2026 (funn fra nattløkken 31.10.2026 lagt inn, PR #49 åpnet)
 
 ## Gjeldende fase
 
@@ -58,9 +58,9 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #46 | Seed lager ikke et slettet kontor på nytt (småfunn fra PR #41) | i arbeid hos en annen kjøring | `main` |
+| #49 | Rydding fra nattløkken 2026-10-31 | klar, venter på CI | `main` |
 
-PR #44 (liten oppgave (i)) er merget 30.10.2026 kl. 22:31 UTC. PR #45 (UU-funn 6–9 fra nattløkken) er merget 30.10.2026.
+PR #46 (seed og slettet kontor) er merget (main 410f2a1). PR #44 (liten oppgave (i)) er merget 30.10.2026 kl. 22:31 UTC. PR #45 (UU-funn 6–9 fra nattløkken) er merget 30.10.2026.
 
 
 PR #16–#28, #30–#43 og #45 er merget (#45: UU-funn 6–9 fra nattløkken, #43 og #42: tilstand, #41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
@@ -83,7 +83,7 @@ I autonom modus samles alt her. Ingen varsler.
 
 ## Oppgaver fra nattløkken
 
-Fra nattløkken 31.10.2026 (main ved 410f2a1, versjon 0.2.37), slått sammen med funnene fra 30.10.2026. Trygg rydding er gjort i PR «Rydding fra nattløkken 2026-10-31» (branch `natt-2026-10-31`, versjon 0.2.38): egen tidsgrense (20 s) på den ustabile testen «bryteren av lager ingen roller og trenger ingen passord» i `scripts/azure/sync-trial-roles.test.ts`, utdatert indekskommentar fjernet i `changes-since.ts`, mørkere plassholdertekst (`placeholder:text-slate-500`) i `src/shared/ui/form.tsx`. Fra 30.10.2026 er UU-funn 6–9 levert i PR #45 og tatt ut av listen.
+Fra nattløkken 31.10.2026 (main ved 410f2a1, versjon 0.2.37), slått sammen med funnene fra 30.10.2026. Trygg rydding er gjort i **PR #49** «Rydding fra nattløkken 2026-10-31» (branch `natt-2026-10-31`, versjon 0.2.38): egen tidsgrense (20 s) på den ustabile testen «bryteren av lager ingen roller og trenger ingen passord» i `scripts/azure/sync-trial-roles.test.ts`, utdatert indekskommentar fjernet i `changes-since.ts`, mørkere plassholdertekst (`placeholder:text-slate-500`) i `src/shared/ui/form.tsx`. Fra 30.10.2026 er UU-funn 6–9 levert i PR #45 og tatt ut av listen.
 
 **Alvorlige**
 
@@ -117,7 +117,7 @@ Ingen.
 
 ## Siste kjøring
 
-31.10.2026: prosjektleder skrev funnene fra nattløkken 31.10.2026 inn under «Oppgaver fra nattløkken» og laget branchen `natt-2026-10-31` med trygg rydding (versjon 0.2.38). Sesjon: https://claude.ai/code/session_01Jqwntzb2tNnUYJeKVL5dq3
+31.10.2026: prosjektleder skrev funnene fra nattløkken 31.10.2026 inn under «Oppgaver fra nattløkken» og laget branchen `natt-2026-10-31` med trygg rydding (versjon 0.2.38), lint, typesjekk og test grønne, PR #49 åpnet mot `main`. Sesjon: https://claude.ai/code/session_01Jqwntzb2tNnUYJeKVL5dq3
 
 30.10.2026 kl. 19:30–22:35 UTC (samme kjøring som under): kjørte liten oppgave (i) med arbeidsflyten «oppgave» (16 agenter, ca. 3 t) til PR #44, merget med skriptet (CI grønn, ingen alvorlige funn, 4 små i liten oppgave (j)). Arbeidsflyten varslet «svekket sikkerhet» for to roller. Prosjektlederen sjekket diffen: endringen er at organisasjonsfilteret i join-ene i `listEmployees` er fjernet. Det er trygt fordi de sammensatte fremmednøklene `employees_company_fk` og `employees_office_fk` (organization_id + id) gjør at selskap og kontor alltid hører til samme organisasjon, og det er lagt til en tenant-test med `includeDeactivated`. PR #46 (seed og slettet kontor) er i arbeid hos en annen kjøring. Sesjon: https://claude.ai/code/session_01Jqwnu2N3LWzoBoqfcro6m9
 
