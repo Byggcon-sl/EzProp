@@ -213,13 +213,16 @@ Bare en person med gyldig sertifisering for rapporttypen kan stå som ansvarlig 
 | `employee_id` | Hvem |
 | `role` | `inspector` (takstmann), `office` (kontor), `manager` (leder), `admin` |
 
-**`employee_permissions`** – enkeltrettigheter som tildeles i admin, i tillegg til rollen.
+**`employee_permissions`** – enkeltrettigheter som admin gir, i tillegg til rollen (fase 0b). Bare rettighetene i `grantablePermissions` kan gis: `template.edit_structure`, `assignment.edit`, `report.edit` og `report.publish` (A21). En rad med et annet navn gir ingen rettighet. Rader slettes aldri og settes aldri tilbake: å ta bort setter `deleted_at` og `deleted_by`, å gi på nytt lager en ny rad. Hver endring står i revisjonsloggen (`permission_change`).
 
 | Felt | Forklaring |
 |---|---|
-| `employee_id` | Hvem |
-| `permission` | For eksempel `template.edit_structure` (fagansvarlig/maltilgang: kan endre kontrollpunkter, spørsmål og regler i systemmalene, beslutning 25.10.2026) eller `invoice.send` (alle takstmenn har den fra 27.10.2026, se avsnitt 5) |
-| `granted_by`, `granted_at` | Hvem som ga rettigheten, og når |
+| `employee_id` | Hvem. Sammensatt fremmednøkkel `(organization_id, employee_id)` mot `employees`. |
+| `permission` | For eksempel `template.edit_structure` (fagansvarlig/maltilgang: kan endre kontrollpunkter, spørsmål og regler i systemmalene, beslutning 25.10.2026) |
+| `created_by`, `created_at` | Hvem som ga rettigheten, og når (fra de felles kolonnene, ingen egne felt) |
+| `deleted_by`, `deleted_at` | Hvem som tok den bort, og når |
+
+Bare én aktiv rad per ansatt og rettighet (delvis unik indeks `(employee_id, permission) WHERE deleted_at IS NULL`).
 
 **`peer_review_requirements`** – krav om sidemannskontroll **per ansatt** (beslutning 25.10.2026, for eksempel for nyansatte).
 
@@ -1517,7 +1520,7 @@ En **krok** er en liten tabell eller et felt som legges inn nå, selv om skjerme
 | `closed_at` | Når saken ble avsluttet |
 | `handled_by` | Ansvarlig internt |
 
-Registreres med et enkelt skjema **fra første ekte rapport** (beslutning 27.10.2026, spørsmål 4). **Bare leder og admin ser reklamasjonssaker** (beslutning 27.10.2026). Dette er et unntak fra «alle takstmenn ser alle data». Tilgangen sjekkes i tilgangsmodulen med rettigheten `claims.view`, som leder og admin har. Den gis ikke til takstmenn gjennom innstillingen `access.inspectors_edit_all`. Etter noen år viser tabellen hvilke punkter, formuleringer og TG-valg som faktisk gir saker.
+Registreres med et enkelt skjema **fra første ekte rapport** (beslutning 27.10.2026, spørsmål 4). **Bare leder og admin ser reklamasjonssaker** (beslutning 27.10.2026). Dette er et unntak fra «alle takstmenn ser alle data». Tilgangen sjekkes i tilgangsmodulen med rettigheten `claims.read`, som leder og admin har. Den gis ikke til takstmenn gjennom innstillingen `access.inspectors_edit_all`. Etter noen år viser tabellen hvilke punkter, formuleringer og TG-valg som faktisk gir saker.
 
 **`followup_responses`** – **forkastet 27.10.2026.** Ståle svarte nei til ettårs-oppfølging av kjøper og selger (spørsmål 21). Tabellen og hendelsen `followup.received` er tatt ut.
 
@@ -1605,6 +1608,26 @@ Rettighetene lagres som rettigheter (`permission`), ikke som rollenavn i koden. 
 
 Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med endringslogg. **Egne maler** i malbyggeren kan lages av alle ansatte (fase 5). Visningsrollene for kunde og megler finnes i modellen fra start, men skjermene kommer senere.
 
+### Rettighetene i koden (fase 0b, `src/core/access/permissions.ts`)
+
+Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har alltid alle, uansett innstilling og enkeltrettigheter (admin stenges aldri ute).
+
+| Rettighet | Hva | Takstmann | Kontor | Leder | Admin |
+|---|---|---|---|---|---|
+| `organization.read` | Se oppdrag og data | ja | ja | ja | ja |
+| `organization.manage` | Ansatte, roller, rettigheter, selskaper, kontorer, innstillinger | nei | nei | nei | ja |
+| `claims.read` | Se reklamasjonssaker | nei | nei | ja | ja |
+| `staff.manage` | Krav om sidemannskontroll, rutiner for alle, sperring av enheter | nei | nei | ja | ja |
+| `assignment.edit` | Endre ordre, oppdrag, parter, befaringstid, dokumenter | ja når `access.inspectors_edit_all` er på | ja | ja | ja |
+| `report.edit` | Endre rapportinnhold | ja når `access.inspectors_edit_all` er på | nei | ja | ja |
+| `report.publish` | Publisere og overstyre sperre (ansvarlig og sertifisert sjekkes i fase 2a, A19) | ja | nei | ja | ja |
+| `template.edit_structure` | Endre struktur i systemmalen (maltilgang) | kan gis | nei | kan gis | ja |
+| `invoice.send` | Sende fakturagrunnlag (alle, 27.10.2026) | ja | ja | ja | ja |
+
+**Innstillingen `access.inspectors_edit_all`** ligger i `organizations.settings` og er **på** som standard (A18). Bare verdien `false` slår den av. Når den er av, har takstmann verken `assignment.edit` eller `report.edit` før team på oppdraget finnes i fase 2a (A20). Innstillingen påvirker aldri `claims.read`, `organization.manage` eller `staff.manage`.
+
+**Enkeltrettigheter** (`employee_permissions`, 4.1) kan bare være `template.edit_structure`, `assignment.edit`, `report.edit` eller `report.publish` (`grantablePermissions`, A21). Bare admin kan gi og ta bort dem, og alt revisjonslogges.
+
 ---
 
 ## 6. De viktigste valgene, og hvorfor
@@ -1653,8 +1676,14 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Sluttet | `employees.deactivated_at` | Kan ikke logge inn, står fortsatt på gamle rapporter |
 | Rolle | `employee_roles.role` | `inspector`, `office`, `manager`, `admin` |
 | Rettighet | `employee_permissions.permission` | Enkeltrettighet, for eksempel `template.edit_structure` |
+| Enkeltrettigheter | `employee_permissions` | Rettigheter admin har gitt én ansatt, i tillegg til rollen |
+| Rettigheter som kan gis | `grantablePermissions` | Listen over rettigheter som kan gis som enkeltrettighet |
 | Takstmann | `inspector` | Rolle |
 | Fagansvarlig / maltilgang | `template.edit_structure` | Rettighet gitt i admin |
+| Endre oppdrag | `assignment.edit` | Rettighet: ordre, oppdrag, parter, befaringstid, dokumenter |
+| Endre rapport | `report.edit` | Rettighet: rapportinnhold |
+| Publisere rapport | `report.publish` | Rettighet: publisere og overstyre sperre |
+| Sende fakturagrunnlag | `invoice.send` | Rettighet: alle har den (27.10.2026) |
 | Kontor (rolle) | `office` | Saksbehandler |
 | Leder | `manager` | Rolle |
 | Krav om sidemannskontroll | `peer_review_requirements` | Per ansatt |
@@ -1815,7 +1844,7 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Port | `port` | Type tilkobling |
 | Energimerking (Enova) | `energy_label` | Port, krok |
 | 3D-skanning og plantegning (Polycam) | `scanning` | Port, krok |
-| Alle takstmenn kan endre alt | `access.inspectors_edit_all` | Innstilling |
+| Alle takstmenn kan endre alt | `access.inspectors_edit_all` | Innstilling i `organizations.settings`, standard på |
 | Revisjonslogg | `audit_log` | |
 | Logg over KI-bruk | `ai_usage_log` | |
 | Myk sletting | `deleted_at` | |
@@ -1844,7 +1873,7 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Romskisse | `rooms.geometry` | |
 | Grunn til sidemannskontroll | `peer_reviews.required_reason` | |
 | Forfatter av kommentar | `peer_review_comments.author_type` | `employee` eller `ai` |
-| Reklamasjon / krav | `claims` | Bare leder og admin (`claims.view`) |
+| Reklamasjon / krav | `claims` | Bare leder og admin (`claims.read`) |
 | Ettårs-oppfølging | ~~`followup_responses`~~ | Forkastet 27.10.2026 |
 | Kostnadsbank | `cost_observations` | |
 | Kalibreringsbibliotek | `reference_photos` | |
@@ -1930,3 +1959,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 〃 | Eierform og boligtype godkjent. Ordlisten og åpne spørsmål oppdatert. | Spørsmål 2 |
 | 〃 | Reklamasjonssaker bare for leder og admin (`claims.view`), åpent spørsmål 18 lukket. Merket «Rettet» under «Ferdig», åpent spørsmål 5 lukket. | Tilleggsbeslutninger 27.10.2026 |
 | 28.10.2026 | Modellen sjekket mot hovedmålet. Reklamasjoner per 100 rapporter dekkes allerede (`claims` og `report_releases`). Tid per fase dekkes bare delvis av hendelsene. Nye kroker: `work_sessions` (arbeidsøkter per rapport og fase) og `baseline_metrics` (nullpunkt fra IVIT og de siste 3 årene). | Hovedmål, Ståle i chat 28.10.2026 |
+| 31.10.2026 | Roller og rettigheter (fase 0b): nye rettigheter `assignment.edit`, `report.edit`, `report.publish`, `template.edit_structure` og `invoice.send`; `claims.view` heter `claims.read` som i koden; `employee_permissions` med `created_by`/`created_at` i stedet for `granted_by`/`granted_at`; innstillingen `access.inspectors_edit_all` i `organizations.settings`, standard på. | A18–A21, `docs/funksjoner/fase0b-roller-rettigheter.md` |
