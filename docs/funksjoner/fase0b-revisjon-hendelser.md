@@ -2,7 +2,7 @@
 
 - **Fase:** 0b – Innlogging, organisasjon, roller og layout (punktet «Revisjonslogg og hendelseslogg» under Grunnmur)
 - **Modul:** kjerne (`src/core/audit`, ny `src/core/events`)
-- **Status:** utkast
+- **Status:** klar til bygging (etter forenkler og test-leder 31.10.2026)
 - **Branch:** `fase0b-revisjon-hendelser` fra `main` (versjon 0.2.48; PR #58 med 0.2.47 venter)
 - **Støtter hovedmål:**
   - **Reklamasjoner:** når alle takstmenn kan endre alt (27.10.2026), må det alltid gå an å se hvem som endret hva og når. Ved en reklamasjon er loggen beviset.
@@ -34,18 +34,18 @@ KI har ingen rolle i selve loggen. Loggen er grunnlaget KI senere leser (hendels
 ## Omfang
 
 **Med:**
-1. **Tabellen `events`** (`src/db/schema/events.ts`, migrering 0008) med `baseColumns` (organisasjons-ID), `type` (tekst, påkrevd), `assignment_id` og `report_id` (uuid, kan være tomme, **ingen fremmednøkkel ennå**, tabellene kommer i fase 2a), `occurred_at`, `actor_type` (`employee`, `system`, `integration`, sjekk i databasen), `actor_id` (uuid, kan være tom for `system`), `data` (jsonb, standard `{}`). Indeks på `(organization_id, occurred_at)` og `(organization_id, assignment_id)`. Raden slettes aldri (heller ikke mykt); det står i kommentaren.
-2. **Hendelsestypene som faste koder ett sted:** `src/core/events/types.ts` med alle kodene fra 4.9 og norsk navn (`EVENT_TYPES`, typen `EventType`). Ny kode legges bare til her; en kode endres aldri (regel 6).
-3. **`recordEvent(executor, grant, input)`** i `src/core/events/index.ts`: samme mønster som `recordAuditEvent`. Organisasjonen og den ansatte (`actor_type = employee`, `actor_id = grant.employeeId`) kommer fra tilgangssjekken. `type` må være en kjent kode (TypeScript-typen og en sjekk som kaster ved ukjent kode). Kalles i samme transaksjon som endringen.
-4. **Revisjonsloggen for admin:** ny fane «Logg» i adminområdet, `/admin/logg`. Enkel liste over de siste 100 endringene i organisasjonen: tidspunkt, hvem (navnet på den ansatte, «Ukjent» hvis tom), hva (norsk navn på `entity_type` og `action`, koden hvis navnet mangler) og endrede felt som «felt: fra → til». Bruker `listAuditEvents` (utvides med navnet på den ansatte og grensen 100). Tilgang som resten av adminområdet.
-5. **Tester:** `recordEvent` lagrer på organisasjonen fra tilgangssjekken og avviser ukjent kode; `expectTenantIsolation` for `listAuditEvents` (finnes, beholdes og dekker navneoppslaget); takstmann og kontor får ikke se `/admin/logg` (e2e, pc og ipad); admin ser en endring han nettopp gjorde (e2e).
+1. **Tabellen `events`** (`src/db/schema/events.ts`, migrering 0008; PR #58 lager ingen migrering, sjekket 31.10.2026) med `baseColumns` (organisasjons-ID), `type` (tekst, påkrevd), `assignment_id` og `report_id` (uuid, kan være tomme, **ingen fremmednøkkel ennå**, tabellene kommer i fase 2a), `occurred_at`, `actor_type` (`employee`, `system`, `integration`, sjekk i databasen), `actor_id` (uuid, kan være tom for `system`), `data` (jsonb, standard `{}`). Bare indeksen `(organization_id, occurred_at)`. Indeksen på `(organization_id, assignment_id)` kommer med fremmednøkkelen i fase 2a (A33). **Myk sletting:** `baseColumns` beholdes, som i `audit_log`, slik at alle tabeller har samme kolonner. `deleted_at`/`deleted_by` forblir alltid tomme; kommentaren i skjemaet sier at raden aldri slettes eller endres, heller ikke mykt.
+2. **Hendelsestypene som faste koder ett sted:** `src/core/events/types.ts` med alle kodene fra 4.9 som en `as const`-liste (`EVENT_TYPES`) og typen `EventType`. Ingen norske navn nå; de står i 4.9 og legges inn når hendelser vises (fase 2a). Ny kode legges bare til her; en kode endres aldri (regel 6).
+3. **`recordEvent(executor, grant, input)`** i `src/core/events/index.ts`: samme mønster som `recordAuditEvent`. Organisasjonen og den ansatte (`actor_type = employee`, `actor_id = grant.employeeId`) kommer fra tilgangssjekken; input har ikke noe `organizationId`-felt. `type` har typen `EventType`, så ukjente koder stoppes av typecheck (ingen kjøresjekk). Kalles i samme transaksjon som endringen.
+4. **Revisjonsloggen for admin:** ny fane «Logg» i adminområdet, `/admin/logg`. Enkel liste over de siste 50 endringene i organisasjonen (dagens standardgrense i `listAuditEvents`): tidspunkt, hvem (navnet på den ansatte, «Ukjent» hvis tom), hva (norsk navn på `entity_type` og `action` for verdiene som finnes i dag, ellers koden) og endrede felt som «felt: fra → til». `listAuditEvents` utvides bare med navnet på den ansatte (**left join**, så rader uten ansatt ikke forsvinner). Siden bruker `getAdminContext` (krever `organization.manage`) og organisasjonen derfra, som resten av adminområdet.
+5. **Tester:** se Testplan under.
 6. Ordlisten (avsnitt 8), domenemodellen 4.9 (ingen fremmednøkkel ennå, `actor_id` kan være tom), planen krysses av, versjon 0.2.48.
 
 **Ikke med (bevisst utelatt):**
 - Lesing av hendelser (`listEvents`) og skjerm for hendelser. Kommer med oppdragssiden i fase 2a, når det finnes oppdrag å vise dem på.
 - Hendelser fra `system` og `integration` (ingen funksjon for dem nå). Kommer med første rutine eller tilkobling.
 - Skriving av noen hendelse fra eksisterende kode. Ingen av typene i 4.9 skjer før fase 2a (oppdrag) eller fase 3 (`certification.expiring`).
-- Søk, filter, sider, eksport og detaljvisning i revisjonsloggen. Bare siste 100.
+- Søk, filter, sider, eksport og detaljvisning i revisjonsloggen. Bare siste 50.
 - Revisjonslogg for leder i appen (kjernen tillater det, skjermen ligger i adminområdet).
 - `automation_rules`, `action_runs`, `notifications` og rutinene.
 - `device_id` i loggene (kommer med `devices`).
@@ -78,18 +78,53 @@ Ingen fagregler. Hendelsestypene er faste koder, ikke regler.
 
 ## Akseptkriterier
 
-- [ ] Tabellen `events` finnes med migrering 0008, med `organization_id` og tomme `assignment_id`/`report_id` tillatt.
-- [ ] Alle hendelsestypene fra 4.9 står i `src/core/events/types.ts` og ingen andre steder.
-- [ ] `recordEvent` lagrer organisasjonen og den ansatte fra tilgangssjekken, og avviser en ukjent kode (test).
-- [ ] Admin ser de siste endringene på `/admin/logg` med navn, hva og når (e2e, pc og ipad).
-- [ ] Takstmann får ikke se `/admin/logg` (e2e).
-- [ ] Bruker i annen organisasjon ser ingen rader fra loggen (`expectTenantIsolation`).
+- [ ] Tabellen `events` finnes med migrering 0008, med `organization_id` og tomme `assignment_id`/`report_id` tillatt. Databasen avviser `actor_type` utenfor de tre verdiene (test).
+- [ ] `EVENT_TYPES` har nøyaktig kodene fra 4.9, uten duplikater, alle på formen «ord.ord_med_understrek» (enhetstest). At kodene ikke står andre steder, sjekkes ved gjennomlesing (grep).
+- [ ] `recordEvent` tar bare `EventType`, og lagrer organisasjonen og den ansatte fra tilgangssjekken med `actor_type = employee` (integrasjonstest). Input har ikke `organizationId` (`@ts-expect-error`-test).
+- [ ] Ingen kode i `src/core/events` eller `src/core/audit` endrer eller sletter rader i loggene (gjennomlesing).
+- [ ] Admin ser endringen han nettopp gjorde på `/admin/logg` med navn, hva, når og «felt: fra → til» (e2e, pc og ipad). Admin stenges aldri ute.
+- [ ] Takstmann får «Ingen tilgang» eller 404 på `/admin/logg` og ser ingen rader (e2e).
+- [ ] Leder og kontor slipper ikke inn på `/admin/logg`: `findAdminOrganizationId` gir `null` for dem (integrasjonstest). I kjernen får takstmann og kontor `AccessDeniedError` fra `listAuditEvents`, leder og admin får lese.
+- [ ] Rad uten ansatt vises med «Ukjent» (left join, integrasjonstest).
+- [ ] Bruker i annen organisasjon ser ingen rader, og ingen navn på ansatte i den andre organisasjonen (`expectTenantIsolation` mot den utvidede `listAuditEvents`, med ansatte i begge organisasjonene).
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne. Versjon 0.2.48.
 
 ## Beslutninger i autonom modus (føres i `docs/09-apne-sporsmal.md`)
 
 - **A33:** `events` får ingen fremmednøkler til oppdrag og rapport før tabellene finnes i fase 2a; de legges til i samme migrering som tabellene. Hvorfor: punktet skal ligge klart før fase 2a, og det enkleste som virker. Kilde: domenemodellen 4.9, planen fase 0b. Kan endres i fase 2a.
-- **A34:** Revisjonsloggen vises bare for admin, som én liste over de siste 100 endringene, uten filter. Hvorfor: gir svar på «hvem endret hva» nå (beslutning 27.10.2026 om at alle kan endre alt), med minst mulig kode. Kilde: domenemodellen 4.12, `svar-fra-stale-2026-10-27.md`. Kan utvides med filter per oppdrag i fase 2a.
+- **A34:** Revisjonsloggen vises bare for admin, som én liste over de siste 50 endringene, uten filter. Hvorfor: gir svar på «hvem endret hva» nå (beslutning 27.10.2026 om at alle kan endre alt), med minst mulig kode. Kilde: domenemodellen 4.12, `svar-fra-stale-2026-10-27.md`. Kan utvides med filter per oppdrag i fase 2a.
+
+## Testplan (testskriver, bit 2)
+
+**`src/core/events/events.test.ts`** (mot testdatabasen):
+- `recordEvent` lagrer `organization_id` og `actor_id` fra grant, `actor_type = employee`.
+- Tomme `assignment_id` og `report_id` godtas, `data` blir `{}` som standard.
+- Databasen avviser `actor_type` utenfor `employee`, `system`, `integration`.
+- `recordEvent` i en transaksjon som rulles tilbake lagrer ingenting.
+- `@ts-expect-error`: input med `organizationId` eller ukjent `type` gir typefeil.
+- `EVENT_TYPES`: nøyaktig kodene fra 4.9, unike, riktig format.
+
+**`src/core/audit/audit.test.ts`** (utvides):
+- Navnet på den ansatte kommer med; rad med tom `actor_employee_id` kommer med, uten navn (left join).
+- Nyeste først, og standardgrensen 50 brukes.
+- Admin og leder kan lese; takstmann og kontor får `AccessDeniedError`.
+- `expectTenantIsolation` mot den utvidede spørringen; seed lager rader med ansatte i begge organisasjonene, og navnet fra organisasjon B kommer aldri med.
+
+**Visningstekster** (`labels.test.ts` ved siden av siden): norsk navn for dagens `entity_type`/`action`, koden når navnet mangler; «felt: fra → til», også med tomme verdier.
+
+**E2e** (`e2e/fase-0b-logg.spec.ts`, kjøres i pc og ipad via `pnpm test:e2e`):
+- Admin endrer stilling på en ansatt, trykker «Logg» (1 trykk) og ser navn, hva, når og endringen.
+- iPad stående: ingen vannrett rulling.
+- Takstmann får «Ingen tilgang» eller 404 og ser ingen rader (legg også `/admin/logg` i listen i test 4 i `fase-0b-admin.spec.ts`).
+
+## Avgjort av prosjektlederen ved uenighet (31.10.2026)
+
+- **Kjøresjekk for ukjent kode (forenkler kutter, test-leder vil teste):** kuttes. Alle kall er serverkode i TypeScript, så `EventType` stopper ukjente koder ved typecheck. Testen blir en `@ts-expect-error`-test i stedet. Mindre kode, samme vern.
+- **Grense 100 (kortet) mot 50 (forenkler):** 50, som finnes i dag. Testen sjekker standardgrensen, ikke 100.
+- **Norske navn på hendelsestyper:** kuttes nå (forenkler). Enhetstesten sjekker koder og format, ikke navn.
+- **E2e for kontor og leder (test-leder) mot ingen kontor-e2e (forenkler):** siden bruker samme `getAdminContext` som resten av adminområdet. E2e kjøres for admin og takstmann. Leder og kontor dekkes med integrasjonstest av `findAdminOrganizationId` og av tilgangstestene i kjernen. Det er raskere og tester samme sperre; test-leders krav om tilgang per rolle er dermed dekket.
+- **Myk sletting (test-leder punkt 4):** `baseColumns` beholdes som i `audit_log`; kolonnene forblir tomme, med kommentar.
+- **Indeks på `assignment_id`:** kuttes til fase 2a (forenkler).
 
 ## Roller
 
