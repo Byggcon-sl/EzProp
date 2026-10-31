@@ -7,6 +7,7 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Arbeidsflyten «oppgave» gikk fra oppgavekort til merget PR uten Ståle (24 agenter, ca. 3 timer). Tjenester som koster penger, ble lagt inn **av som standard** (en Bicep-parameter og en GitHub-variabel), så mergen kostet ingenting og PR-en trengte ikke vente på Ståle. Spørsmålet om å slå dem på ligger som nr. 12. Regel: noe som koster penger, bygges slått av, og Ståle slår det på.
 - To hovedløkker kjørte samtidig (taggen `ezprop-utvikling` kunne ikke sjekkes i skyen) og skrev begge i tilstandsfilen, som fikk doble linjer etter flettingen. Ryddet i en egen liten PR. Regel: les tilstandsfilen på nytt fra `main` rett før den oppdateres.
 - En automatisk fletting fra `main` ga en CI-kjøring som ventet på godkjenning, så GitHub meldte «unstable». En ny vanlig commit startet CI på nytt.
+- Automatiske flettinger fra `main` kan lage doble linjer i `docs/agenter/tilstand.md` (begge sider tatt med). Sjekk diffen på tilstandsfilen før merge, og ta main sin versjon hvis PR-en ikke skal endre den.
 
 ## 29.10.2026 – PR #21 (synkstatus) merget
 
