@@ -4,7 +4,7 @@ Spørsmål som Ståle må avgjøre. Nyeste øverst. Når et spørsmål er besvar
 
 ## Avgjort av agentene mens Ståle var borte (til gjennomgang)
 
-Ståle 29.10.2026: «Er du i tvil, gå tilbake til undersøkelsene og tolk hva du mener blir beste løsning.» Agentene fører hver beslutning her. Ståle går gjennom listen når han er tilbake, og kan endre hva som helst. A5 og A6 er brukt av prøve F (PR #34); prøve D bruker derfor A7–A10. Småfunnene fra prøve D og F bruker A11 og A12; sammenligningen og ADR 0004 bruker A13–A15; selskap og kontor (fase 0b) bruker A16 og A17.
+Ståle 29.10.2026: «Er du i tvil, gå tilbake til undersøkelsene og tolk hva du mener blir beste løsning.» Agentene fører hver beslutning her. Ståle går gjennom listen når han er tilbake, og kan endre hva som helst. A5 og A6 er brukt av prøve F (PR #34); prøve D bruker derfor A7–A10. Småfunnene fra prøve D og F bruker A11 og A12; sammenligningen og ADR 0004 bruker A13–A15; selskap og kontor (fase 0b) bruker A16 og A17; roller og rettigheter (fase 0b) bruker A18–A21.
 
 | Nr | Dato | Beslutning | Hvorfor og kilde | PR |
 |---|---|---|---|---|
@@ -28,6 +28,7 @@ Ståle 29.10.2026: «Er du i tvil, gå tilbake til undersøkelsene og tolk hva d
 | A18 | 31.10.2026 | **Innstillingen `access.inspectors_edit_all` lagres i `organizations.settings`** (finnes i dag), standard på. Egen tabell `settings` med nivåene organisasjon, selskap og person lages først når en innstilling trenger selskap eller person. | Enkleste som virker; bare organisasjonsnivå trengs nå (`docs/05-domenemodell.md` 4.12 og avsnitt 5, Ståle 27.10.2026: lett å stramme inn). Endres ved å flytte nøkkelen til tabellen `settings` når den lages. | fase0b-roller-rettigheter |
 | A19 | 31.10.2026 | **Publisere og overstyre sperre er én rettighet (`report.publish`)** til fase 2a. At personen er ansvarlig og sertifisert, sjekkes per rapport i fase 2a. | Rettighetsmatrisen (avsnitt 5) gir begge til de samme rollene; færre koder. Endres ved å lage en ny rettighet `report.override_block`. | fase0b-roller-rettigheter |
 | A20 | 31.10.2026 | **Slås `access.inspectors_edit_all` av, kan takstmann ikke endre oppdrag eller rapporter** før team på oppdraget finnes (fase 2a). Da gjelder «endre bare der du er i teamet». | Matrisen sier «bare der den er i teamet»; uten team er det tryggeste å ikke gi endringsrett. Innstillingen er på, så ingen merker det nå. Endres i fase 2a med team-sjekken. | fase0b-roller-rettigheter |
+| A21 | 31.10.2026 | **Bare `template.edit_structure`, `assignment.edit`, `report.edit` og `report.publish` kan gis som enkeltrettighet.** `organization.manage`, `staff.manage`, `claims.read`, `organization.read` og `invoice.send` kan ikke gis, og en slik rad i databasen gir ingen rettighet. Administrasjonsmakt følger bare rollen admin. | Kan `organization.manage` gis, kan en som ikke er admin gi seg selv alt. Ståle 27.10.2026: bare leder og admin ser reklamasjonssaker. Rettighetsmatrisen i `docs/05-domenemodell.md` avsnitt 5. Endres ved å legge koden til i `grantablePermissions`. | fase0b-roller-rettigheter |
 
 ## Spørsmål til Ståle
 
