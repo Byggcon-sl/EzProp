@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import type { Actor } from "@/core/access";
 import { db } from "@/db/client";
 import {
+  auditLog,
   companies,
   employeePermissions,
   employeeRoleAssignments,
@@ -120,4 +121,13 @@ export async function grantPermission(
     .returning();
   if (!row) throw new Error("kunne ikke gi enkeltrettighet");
   return row;
+}
+
+/** Radene i revisjonsloggen for organisasjonen, eldste først. */
+export async function auditRows(organizationId: string) {
+  return db
+    .select()
+    .from(auditLog)
+    .where(eq(auditLog.organizationId, organizationId))
+    .orderBy(asc(auditLog.receivedAt), asc(auditLog.createdAt));
 }
