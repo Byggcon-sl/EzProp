@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { listOrganizationsForActor } from "@/core/access";
 import { requireActor } from "@/core/auth/session";
+import { findAdminOrganizationId } from "@/core/organization";
 import { brand } from "@/shared/config/brand";
 import { LogOutButton } from "./log-out-button";
 import { NavLink } from "./nav-link";
@@ -53,6 +54,29 @@ function DocumentIcon() {
   );
 }
 
+function PeopleIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="8" r="3" />
+      <path d="M6.5 20a5.5 5.5 0 0 1 11 0" />
+      <circle cx="5" cy="10" r="2" />
+      <path d="M1.5 18a3.5 3.5 0 0 1 5-3.2" />
+      <circle cx="19" cy="10" r="2" />
+      <path d="M22.5 18a3.5 3.5 0 0 0-5-3.2" />
+    </svg>
+  );
+}
+
 /**
  * Rammen (design A «Fjord», docs/funksjoner/fase0b-grunnlayout-fjord-skisse.md) rundt alle sidene
  * for innloggede ansatte: topplinje, meny og innholdsflate. Menyen står fast til venstre fra `lg`
@@ -62,7 +86,10 @@ function DocumentIcon() {
  */
 export default async function EmployeeLayout({ children }: { children: ReactNode }) {
   const actor = await requireActor();
-  const organizations = await listOrganizationsForActor(actor);
+  const [organizations, adminOrganizationId] = await Promise.all([
+    listOrganizationsForActor(actor),
+    findAdminOrganizationId(actor),
+  ]);
   const worksFor = organizationLabel(organizations);
   const displayName = actor.name.trim() || actor.email;
 
@@ -121,6 +148,27 @@ export default async function EmployeeLayout({ children }: { children: ReactNode
               </NavLink>
             </li>
           </ul>
+          {adminOrganizationId !== null && (
+            <>
+              <p
+                id="nav-group-organization"
+                className="text-sm text-slate-600 lg:px-3 lg:pt-3.5 lg:pb-1.5 lg:text-xs lg:tracking-wider lg:uppercase"
+              >
+                Organisasjon<span className="lg:hidden">:</span>
+              </p>
+              <ul
+                aria-labelledby="nav-group-organization"
+                className="flex flex-wrap gap-2 lg:flex-col lg:gap-0.5"
+              >
+                <li>
+                  <NavLink href="/admin" matchChildren>
+                    <PeopleIcon />
+                    Admin
+                  </NavLink>
+                </li>
+              </ul>
+            </>
+          )}
           {worksFor !== null && (
             <p className="basis-full text-sm text-slate-600 lg:mt-auto lg:basis-auto lg:rounded-xl lg:bg-white lg:px-3 lg:py-2.5 lg:shadow-card">
               <span className="lg:block lg:text-xs">Du jobber for</span>{" "}

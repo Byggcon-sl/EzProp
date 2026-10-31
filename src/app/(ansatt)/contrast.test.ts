@@ -32,10 +32,27 @@ const fixed: Record<string, string> = {
   "slate-900": "#0f172a",
   "slate-700": "#334155",
   "slate-600": "#475569",
+  // Adminområdet (docs/funksjoner/fase0b-admin-organisasjon-skisse.md avsnitt 8). Regnet om fra
+  // oklch-verdiene i tailwindcss/theme.css (v4) til sRGB, klippet til sRGB der fargen ligger utenfor.
+  "slate-100": "#f1f5f9",
+  "amber-50": "#fffbeb",
+  "amber-900": "#7b3306",
+  "red-700": "#c10007",
+  "red-800": "#9f0712",
+  "emerald-50": "#ecfdf5",
+  "emerald-900": "#004f3b",
 };
 
 /** Variablene i globals.css som parene under bruker. Mangler én, skal testen feile. */
-const themeNames = ["canvas", "brand-100", "brand-600", "brand-700", "brand-900"] as const;
+const themeNames = [
+  "canvas",
+  "field",
+  "brand-50",
+  "brand-100",
+  "brand-600",
+  "brand-700",
+  "brand-900",
+] as const;
 
 function luminance(hex: string): number {
   const value = /^#([0-9a-f]{6})$/i.exec(hex)?.[1];
@@ -72,12 +89,21 @@ const textPairs: [text: string, background: string, usage: string][] = [
   ["white", "brand-600", "logo og initialer"],
   ["brand-700", "canvas", "Byggcon-blå som tekst (lenker) på canvas"],
   ["brand-700", "white", "Byggcon-blå som tekst (lenker) på hvitt"],
+  ["slate-700", "slate-100", "merket «neutral» (roller, «Sluttet»)"],
+  ["brand-700", "brand-50", "merket «brand» (Admin) og «Endre» i rad med hover"],
+  ["amber-900", "amber-50", "merket «warning» («Forsikring utløpt», «Mangler opplysninger»)"],
+  ["red-800", "white", "feil ved feltet"],
+  ["emerald-900", "emerald-50", "kvittering etter lagring"],
+  ["slate-600", "brand-50", "linje 2 i rad med hover"],
+  ["slate-900", "brand-50", "tittel i rad med hover"],
 ];
 
 /** Fokusring og annet som ikke er tekst: minst 3:1 (WCAG 1.4.11). */
 const nonTextPairs: [ring: string, background: string, usage: string][] = [
   ["brand-600", "canvas", "fokusring på canvas"],
   ["brand-600", "white", "fokusring på hvitt"],
+  ["red-700", "white", "kant på felt med feil"],
+  ["field", "white", "kant på felt og avkryssingsboks"],
 ];
 
 describe("kontrasthjelperen", () => {
