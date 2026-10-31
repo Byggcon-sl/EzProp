@@ -1,98 +1,127 @@
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// Kontrast i rammen (grunnlayout design A «Fjord», lys visning).
-// Testplan: docs/funksjoner/fase0b-grunnlayout-fjord-testplan.md avsnitt 1.
-// Fargeparene: docs/funksjoner/fase0b-grunnlayout-fjord-skisse.md avsnitt 4.
-// Støtter reklamasjoner: målt kontrast gir færre feillesinger på PC og iPad.
+/*
+ * Kontrast i rammen (grunnlayout Fjord, lys visning).
+ * Testplan: docs/funksjoner/fase0b-grunnlayout-fjord-testplan.md avsnitt 1.
+ * Fargeparene er fra ui-designerens skisse (docs/funksjoner/fase0b-grunnlayout-fjord-skisse.md
+ * avsnitt 4). `canvas` og `brand-*` leses fra globals.css; slate og hvit er Tailwinds egne tall.
+ * Støtter hovedmål: reklamasjoner (høy kontrast gir færre feillesinger på iPad i dagslys).
+ */
 
-const globalsCss = readFileSync(fileURLToPath(new URL("../globals.css", import.meta.url)), "utf8");
+const GLOBALS_CSS = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "globals.css");
 
-/** `--color-<navn>: #rrggbb;` fra `globals.css`, eller kast hvis variabelen mangler. */
-function themeColor(name: string): string {
-  const match = new RegExp(`--color-${name}:\\s*(#[0-9a-fA-F]{6})\\s*;`).exec(globalsCss);
-  if (!match?.[1]) throw new Error(`Fant ikke --color-${name} i src/app/globals.css`);
-  return match[1].toLowerCase();
+/** Fargevariablene i `@theme { ... }` i globals.css, uten `--color-`. */
+function readThemeColors(): Record<string, string> {
+  const css = readFileSync(GLOBALS_CSS, "utf8");
+  const theme = /@theme\s*\{([\s\S]*?)\n\}/.exec(css)?.[1];
+  if (!theme) throw new Error("Fant ikke @theme i globals.css");
+  const colors: Record<string, string> = {};
+  for (const match of theme.matchAll(/--color-([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;/g)) {
+    colors[match[1]!] = match[2]!.toLowerCase();
+  }
+  return colors;
 }
 
-/** Tailwinds egne farger (ikke i globals.css), som tall. */
-const tailwindColors: Record<string, string> = {
+/** Tailwinds egne farger som rammen bruker (sRGB-verdiene fra skissen). */
+const fixed: Record<string, string> = {
+  white: "#ffffff",
+  black: "#000000",
   "slate-900": "#0f172a",
   "slate-700": "#334155",
   "slate-600": "#475569",
-  white: "#ffffff",
 };
 
-/** Fargene fra globals.css som rammen bruker. */
+/** Variablene i globals.css som parene under bruker. Mangler én, skal testen feile. */
 const themeNames = ["canvas", "brand-100", "brand-600", "brand-700", "brand-900"] as const;
 
-function color(name: string): string {
-  return tailwindColors[name] ?? themeColor(name);
-}
-
-function relativeLuminance(hex: string): number {
-  const channels = [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16) / 255);
-  const [r, g, b] = channels.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+function luminance(hex: string): number {
+  const value = /^#([0-9a-f]{6})$/i.exec(hex)?.[1];
+  if (!value) throw new Error(`Ugyldig farge: ${hex}`);
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const channel = parseInt(value.slice(i, i + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
   return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
 }
 
-/** WCAG 2.x kontrastforhold mellom to farger på formen #rrggbb. */
-function contrastRatio(foreground: string, background: string): number {
-  const [lighter, darker] = [relativeLuminance(foreground), relativeLuminance(background)].sort(
-    (a, b) => b - a,
-  );
-  return (lighter! + 0.05) / (darker! + 0.05);
+/** WCAG 2.x kontrastforhold mellom to farger (1 til 21). */
+function contrastRatio(a: string, b: string): number {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (light! + 0.05) / (dark! + 0.05);
 }
 
-const TEXT = 4.5;
-const NON_TEXT = 3;
+function color(name: string, theme: Record<string, string>): string {
+  const value = fixed[name] ?? theme[name];
+  if (!value) throw new Error(`Fargen ${name} finnes ikke i globals.css`);
+  return value;
+}
 
-/** Parene i skissen avsnitt 4: [forgrunn, bakgrunn, bruk, krav]. */
-const pairs: [string, string, string, number][] = [
-  ["slate-900", "canvas", "h1, navn i org-linjen (smal)", TEXT],
-  ["slate-900", "white", "korttekst, org-navn i kortet", TEXT],
-  ["slate-700", "canvas", "menypunkt", TEXT],
-  ["slate-700", "white", "menypunkt i raden (smal)", TEXT],
-  ["slate-600", "canvas", "hilsen, «Prøver», «Du jobber for»", TEXT],
-  ["slate-600", "white", "brødtekst i kortet, «Du jobber for» i kortet", TEXT],
-  ["brand-900", "brand-100", "aktivt menypunkt", TEXT],
-  ["brand-900", "white", "produktnavn", TEXT],
-  ["white", "brand-600", "logo og initialer", TEXT],
-  ["brand-700", "canvas", "Byggcon-blå som tekst", TEXT],
-  ["brand-700", "white", "Byggcon-blå som tekst", TEXT],
-  ["brand-600", "canvas", "fokusring", NON_TEXT],
-  ["brand-600", "white", "fokusring", NON_TEXT],
+/** Tekst mot bakgrunn: minst 4,5:1 (WCAG 1.4.3). */
+const textPairs: [text: string, background: string, usage: string][] = [
+  ["slate-900", "canvas", "h1 og organisasjonsnavn på smal skjerm"],
+  ["slate-900", "white", "korttekst og organisasjonsnavn i kortet"],
+  ["slate-700", "canvas", "menypunkt"],
+  ["slate-700", "white", "menypunkt i raden på iPad stående"],
+  ["slate-600", "canvas", "hilsen, «Prøver» og «Du jobber for»"],
+  ["slate-600", "white", "brødtekst i kortet og «Du jobber for» i kortet"],
+  ["brand-900", "brand-100", "aktivt menypunkt"],
+  ["brand-900", "white", "produktnavn i topplinjen"],
+  ["white", "brand-600", "logo og initialer"],
+  ["brand-700", "canvas", "Byggcon-blå som tekst (lenker) på canvas"],
+  ["brand-700", "white", "Byggcon-blå som tekst (lenker) på hvitt"],
+];
+
+/** Fokusring og annet som ikke er tekst: minst 3:1 (WCAG 1.4.11). */
+const nonTextPairs: [ring: string, background: string, usage: string][] = [
+  ["brand-600", "canvas", "fokusring på canvas"],
+  ["brand-600", "white", "fokusring på hvitt"],
 ];
 
 describe("kontrasthjelperen", () => {
   it("svart mot hvitt gir 21:1", () => {
     expect(contrastRatio("#000000", "#ffffff")).toBeCloseTo(21, 5);
-    expect(contrastRatio("#ffffff", "#000000")).toBeCloseTo(21, 5);
   });
 
   it("hvitt mot hvitt gir 1:1", () => {
     expect(contrastRatio("#ffffff", "#ffffff")).toBeCloseTo(1, 5);
   });
 
-  it("feiler hvis en variabel ikke finnes i globals.css", () => {
-    expect(() => themeColor("finnes-ikke")).toThrow(/--color-finnes-ikke/);
+  it("er lik begge veier", () => {
+    expect(contrastRatio("#326ca1", "#eef2f7")).toBeCloseTo(contrastRatio("#eef2f7", "#326ca1"));
+  });
+
+  it("feiler hvis en farge ikke finnes", () => {
+    expect(() => color("finnes-ikke", readThemeColors())).toThrow(/finnes ikke/);
   });
 });
 
 describe("fargevariablene i globals.css", () => {
-  it.each(themeNames)("--color-%s finnes som #rrggbb", (name) => {
-    expect(themeColor(name)).toMatch(/^#[0-9a-f]{6}$/);
+  it.each(themeNames)("--color-%s finnes i @theme", (name) => {
+    expect(readThemeColors()[name], `--color-${name} mangler i globals.css`).toMatch(
+      /^#[0-9a-f]{6}$/,
+    );
+  });
+
+  it("alle farger parene bruker, finnes", () => {
+    const theme = readThemeColors();
+    for (const [a, b] of [...textPairs, ...nonTextPairs]) {
+      expect(() => color(a, theme)).not.toThrow();
+      expect(() => color(b, theme)).not.toThrow();
+    }
   });
 });
 
 describe("kontrast i rammen (lys visning)", () => {
-  it("listen har de 13 parene fra skissen", () => {
-    expect(pairs).toHaveLength(13);
+  it.each(textPairs)("tekst %s mot %s er minst 4,5:1 (%s)", (text, background) => {
+    const theme = readThemeColors();
+    expect(contrastRatio(color(text, theme), color(background, theme))).toBeGreaterThanOrEqual(4.5);
   });
 
-  it.each(pairs)("%s på %s (%s) er minst %d:1", (foreground, background, _use, minimum) => {
-    const ratio = contrastRatio(color(foreground), color(background));
-    expect(ratio).toBeGreaterThanOrEqual(minimum);
+  it.each(nonTextPairs)("%s mot %s er minst 3:1 (%s)", (ring, background) => {
+    const theme = readThemeColors();
+    expect(contrastRatio(color(ring, theme), color(background, theme))).toBeGreaterThanOrEqual(3);
   });
 });

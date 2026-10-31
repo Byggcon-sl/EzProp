@@ -11,13 +11,15 @@ import {
 } from "../../../tests/factories";
 import { organizationLabel } from "./organization-label";
 
-// «Du jobber for …» i rammen (grunnlayout design A «Fjord»).
-// Testplan: docs/funksjoner/fase0b-grunnlayout-fjord-testplan.md avsnitt 1 og 2.
-// Ingen ny spørring: layouten kaller listOrganizationsForActor, som har tenant-testen sin i
-// src/core/access/guards.test.ts. Derfor ingen ny expectTenantIsolation her.
-// Støtter tid og reklamasjoner: takstmannen ser alltid hvilken organisasjon hen jobber for.
+/*
+ * «Du jobber for …» i rammen (grunnlayout Fjord).
+ * Testplan: docs/funksjoner/fase0b-grunnlayout-fjord-testplan.md avsnitt 1 og 2.
+ * Ingen ny spørring: layouten kaller organizationLabel(await listOrganizationsForActor(actor)).
+ * Tenant-isolasjonen for listOrganizationsForActor står i src/core/access/guards.test.ts.
+ * Støtter hovedmål: reklamasjoner (takstmannen ser alltid hvilken organisasjon han jobber for).
+ */
 
-describe("organizationLabel (ren)", () => {
+describe("organizationLabel (ren funksjon)", () => {
   it("tom liste gir null", () => {
     expect(organizationLabel([])).toBeNull();
   });
@@ -26,9 +28,12 @@ describe("organizationLabel (ren)", () => {
     expect(organizationLabel([{ name: "Testfirma takst" }])).toBe("Testfirma takst");
   });
 
-  it("to organisasjoner gir navnene med komma og mellomrom i rekkefølgen de kommer", () => {
+  it("to organisasjoner gir navnene med komma og mellomrom, i rekkefølgen de kommer inn", () => {
     expect(organizationLabel([{ name: "Testfirma takst" }, { name: "Annen org AS" }])).toBe(
       "Testfirma takst, Annen org AS",
+    );
+    expect(organizationLabel([{ name: "Annen org AS" }, { name: "Testfirma takst" }])).toBe(
+      "Annen org AS, Testfirma takst",
     );
   });
 });
@@ -36,21 +41,30 @@ describe("organizationLabel (ren)", () => {
 describe("organizationLabel med listOrganizationsForActor (testdatabasen)", () => {
   beforeEach(resetDatabase);
 
-  async function labelFor(user: Awaited<ReturnType<typeof createUser>>) {
-    return organizationLabel(await listOrganizationsForActor(user));
+  async function labelFor(actor: Awaited<ReturnType<typeof createUser>>) {
+    return organizationLabel(await listOrganizationsForActor(actor));
   }
 
-  it("viser egen organisasjon og ikke den andre", async () => {
+  it("egen organisasjon vises, ikke den andre", async () => {
     const own = await createOrganization("Testfirma takst");
-    const other = await createOrganization("Annen org AS");
+    await createOrganization("Annen org AS");
     const user = await createUser();
     await createEmployee(user, own.id, ["inspector"]);
-    const stranger = await createUser();
-    await createEmployee(stranger, other.id, ["admin"]);
 
     const label = await labelFor(user);
     expect(label).toBe("Testfirma takst");
     expect(label).not.toContain("Annen org AS");
+  });
+
+  it("den andre organisasjonen ser bare sitt eget navn", async () => {
+    await createOrganization("Testfirma takst");
+    const other = await createOrganization("Annen org AS");
+    const user = await createUser();
+    await createEmployee(user, other.id, ["admin"]);
+
+    const label = await labelFor(user);
+    expect(label).toBe("Annen org AS");
+    expect(label).not.toContain("Testfirma takst");
   });
 
   it("bruker uten ansattrad gir null", async () => {
@@ -67,35 +81,49 @@ describe("organizationLabel med listOrganizationsForActor (testdatabasen)", () =
       .update(employees)
       .set({ deactivatedAt: new Date() })
       .where(eq(employees.id, employee.id));
+
     expect(await labelFor(user)).toBeNull();
   });
 
   it("myk-slettet ansatt (deleted_at) gir null", async () => {
     const org = await createOrganization("Testfirma takst");
     const user = await createUser();
-    const employee = await createEmployee(user, org.id, ["inspector"]);
+    const employee = await createEmployee(user, org.id, ["admin"]);
     await db.update(employees).set({ deletedAt: new Date() }).where(eq(employees.id, employee.id));
+
     expect(await labelFor(user)).toBeNull();
   });
 
-  it("ansatt i to organisasjoner gir begge navnene med komma", async () => {
-    const first = await createOrganization("Annen org AS");
-    const second = await createOrganization("Testfirma takst");
+  it("sluttet i én organisasjon, aktiv i en annen: bare den aktive vises", async () => {
+    const left = await createOrganization("Annen org AS");
+    const active = await createOrganization("Testfirma takst");
     const user = await createUser();
-    await createEmployee(user, first.id, ["inspector"]);
-    await createEmployee(user, second.id, ["office"]);
+    const old = await createEmployee(user, left.id, ["inspector"]);
+    await createEmployee(user, active.id, ["inspector"]);
+    await db.update(employees).set({ deactivatedAt: new Date() }).where(eq(employees.id, old.id));
+
+    expect(await labelFor(user)).toBe("Testfirma takst");
+  });
+
+  it("ansatt i to organisasjoner gir begge navnene med komma", async () => {
+    const a = await createOrganization("Testfirma takst");
+    const b = await createOrganization("Annen org AS");
+    const user = await createUser();
+    await createEmployee(user, a.id, ["inspector"]);
+    await createEmployee(user, b.id, ["office"]);
+
     // listOrganizationsForActor sorterer på navn
     expect(await labelFor(user)).toBe("Annen org AS, Testfirma takst");
   });
 
-  // Rammen er lik for alle roller; admin stenges ikke ute. Bare rollene som finnes på main.
   it.each<EmployeeRole>(["inspector", "office", "manager", "admin"])(
-    "rollen %s ser eget organisasjonsnavn",
+    "rollen %s får eget navn (rammen er lik for alle, admin stenges ikke ute)",
     async (role) => {
-      const own = await createOrganization("Testfirma takst");
+      const org = await createOrganization("Testfirma takst");
       await createOrganization("Annen org AS");
       const user = await createUser();
-      await createEmployee(user, own.id, [role]);
+      await createEmployee(user, org.id, [role]);
+
       expect(await labelFor(user)).toBe("Testfirma takst");
     },
   );
