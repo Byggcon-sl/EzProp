@@ -193,7 +193,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 - [ ] Felles filtjeneste for bilder og dokumenter (lokal mappe i utvikling, fillagring i EU/EØS i drift), **bak et eget lag**, slik at bilder senere kan flyttes til et lokalt arkiv hos Byggcon (27.10.2026). Oppbevaringstidene er innstillinger.
 - [ ] Tilkoblingslag med faste porter (regnskap, e-post, meglersystem, eiendomsdata, KI). Første tilkobling: e-post via Microsoft 365 som i Optiplan, og en «utviklingspostkasse» lokalt.
 - [ ] Test av tenant-isolasjon for alle nye tabeller: en bruker i én organisasjon får aldri data fra en annen
-- [ ] Grunnlayout i design A «Fjord» (luftig), for PC og iPad, med tom arbeidskø som startside
+- [x] Grunnlayout i design A «Fjord» (luftig), for PC og iPad, med tom arbeidskø som startside
 
 **Ferdig når:** Admin har lagt inn Byggcon med selskapene, kontorene og noen ansatte. En takstmann logger inn med engangskode (samme innlogging som i Optiplan) og ser en tom arbeidskø. En automatisk test viser at en annen organisasjon ikke ser noe av Byggcons data.
 

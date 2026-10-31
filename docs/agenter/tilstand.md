@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 31.10.2026 (funn fra nattløkken 31.10.2026 lagt inn, PR #49 åpnet)
+Sist oppdatert: 31.10.2026 (grunnlayout Fjord levert som PR)
 
 ## Gjeldende fase
 
@@ -18,7 +18,7 @@ Fase 1 – Prøve uten nett: Testskjemaet (PR #6), testmiljøet i Azure (PR #7),
 
 ## Gjeldende oppgave
 
-**I arbeid: Grunnlayout i design A «Fjord» med tom arbeidskø som startside** (fase 0b, 31.10.2026; branch `fase0b-grunnlayout-fjord` fra `main`). Oppgavekort `docs/funksjoner/fase0b-grunnlayout-fjord.md`, skisse `-skisse.md`, testplan `-testplan.md`. Bygging startet i to parallelle biter (utvikler: ramme og arbeidskø; testskriver: tester). Felles ramme (topplinje, meny; mørk visning tatt ut, kommer i fase 3), ingen migrering, ingen endring i tilgangsmodulen. Beslutning A23 føres i `docs/09-apne-sporsmal.md` ved PR. Roller: ui-designer, utvikler, testskriver, test-leder. Støtter tid, reklamasjoner og KI først.
+**Levert: Grunnlayout i design A «Fjord» med tom arbeidskø som startside** (fase 0b, 31.10.2026; branch `fase0b-grunnlayout-fjord` fra `main`, versjon 0.2.39, **PR #PRNR**). Oppgavekort `docs/funksjoner/fase0b-grunnlayout-fjord.md`, skisse `-skisse.md`, testplan `-testplan.md`. Felles ramme (topplinje med «Du jobber for», fast meny til venstre på PC og iPad liggende, rad på iPad stående), `/` går til `/arbeidskoe`, «Logg ut» i rammen. Mørk visning tatt ut, kommer i fase 3. Ingen migrering, ingen endring i tilgangsmodulen. Beslutning A23 ført. Roller: forenkler, test-leder, ui-designer, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn. Små funn i PR-en: `listOrganizationsForActor` kalles to ganger per side (layout og side), fokustesten godtar `boxShadow` fra ring-klassene, «iPad stående»-blokken kjører i begge prosjektene, ekstra tester (mørk visning, initialer mot databasen, fokus i testskjemaet, kontrasthjelperen, roller i `it.each`), faste slate-tall i kontrasttesten, menypunktet «Testskjema uten nett» vises også for bruker uten ansattrad, `matchChildren` i `NavLink` trengs ikke. Punktet er krysset av i planen. Støtter tid, reklamasjoner og KI først.
 
 **Levert: UU-funn 6–9 fra nattløkken** (30.10.2026; branch `fase1-uu-nattlokken` fra `main`, versjon 0.2.33, **PR #45**). Oppgavekort `docs/agenter/oppgaver/fase1-uu-nattlokken.md`, testplan `docs/agenter/oppgaver/fase1-uu-nattlokken-testplan.md`. Kolonnenavn synlig over hver tabellcelle, `scroll-padding-top` på `html` lik målt høyde på statuslinjen (`useStickyScrollPadding`), «Til forsiden» med trykkflate på 44 px, og meldingen i `CandidatePicker` leses opp. Roller: forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn. Små funn i PR-en: reserven 9rem gir ekstra rulling på sider uten statuslinje, måleren og fabrikken er mer enn kortet ba om, reservevelgeren `div.sticky` i e2e kan fjernes. Støtter tid og reklamasjoner.
 
@@ -60,9 +60,9 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #49 | Rydding fra nattløkken 2026-10-31 | klar, venter på CI | `main` |
+| #PRNR | Grunnlayout i design A «Fjord» med tom arbeidskø | klar, venter på CI | `main` |
 
-PR #46 (seed og slettet kontor) er merget (main 410f2a1). PR #44 (liten oppgave (i)) er merget 30.10.2026 kl. 22:31 UTC. PR #45 (UU-funn 6–9 fra nattløkken) er merget 30.10.2026.
+PR #49 (rydding fra nattløkken) er merget (main f480df2). PR #46 (seed og slettet kontor) er merget (main 410f2a1). PR #44 (liten oppgave (i)) er merget 30.10.2026 kl. 22:31 UTC. PR #45 (UU-funn 6–9 fra nattløkken) er merget 30.10.2026.
 
 
 PR #16–#28, #30–#43 og #45 er merget (#45: UU-funn 6–9 fra nattløkken, #43 og #42: tilstand, #41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
