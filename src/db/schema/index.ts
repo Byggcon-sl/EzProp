@@ -5,4 +5,5 @@ export * from "./employees";
 export * from "./certifications";
 export * from "./audit";
 export * from "./events";
+export * from "./login-attempts";
 export * from "./offline-trial";

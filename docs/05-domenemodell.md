@@ -1912,6 +1912,9 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Arbeidsøkt | `work_sessions` | Tid per rapport og fase (hovedmålet) |
 | Forberedelse / befaring / kontorarbeid / levering | `preparation` / `inspection` / `office` / `delivery` | `work_sessions.phase` |
 | Nullpunkt | `baseline_metrics` | Tall fra IVIT og de siste 3 årene |
+| Innloggingsforsøk (sperre ved innlogging) | `login_attempts` | Systemtabell uten organisasjons-ID; radene endres og slettes ikke (A36) |
+| Hash av e-postadressen | `login_attempts.email_hash` | HMAC-SHA256, aldri adressen i klartekst |
+| Kode bestilt / feil kode / innlogget | `code_requested` / `code_failed` / `login_succeeded` | `login_attempts.kind`. `login_succeeded` nullstiller tellingen |
 
 ---
 
@@ -1991,3 +1994,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 28.10.2026 | Modellen sjekket mot hovedmålet. Reklamasjoner per 100 rapporter dekkes allerede (`claims` og `report_releases`). Tid per fase dekkes bare delvis av hendelsene. Nye kroker: `work_sessions` (arbeidsøkter per rapport og fase) og `baseline_metrics` (nullpunkt fra IVIT og de siste 3 årene). | Hovedmål, Ståle i chat 28.10.2026 |
 | 31.10.2026 | Roller og rettigheter (fase 0b): nye rettigheter `assignment.edit`, `report.edit`, `report.publish`, `template.edit_structure` og `invoice.send`; `claims.view` heter `claims.read` som i koden; `employee_permissions` med `created_by`/`created_at` i stedet for `granted_by`/`granted_at`; innstillingen `access.inspectors_edit_all` i `organizations.settings`, standard på. | A18–A21, `docs/funksjoner/fase0b-roller-rettigheter.md` |
 | 31.10.2026 | Admin (fase 0b): `employee_roles` har delvis unik indeks `(employee_id, role) WHERE deleted_at IS NULL`, så en rolle kan tas bort og gis på nytt som ny rad. Minst én aktiv admin per organisasjon. Nye funksjonsnavn og feilklasser i ordlisten. | A24–A28, `docs/funksjoner/fase0b-admin-organisasjon.md` |
+| 31.10.2026 | Sperre ved innlogging (fase 0b): ny systemtabell `login_attempts` (`email_hash`, `kind`, `created_at`) uten organisasjons-ID. Nye ord i ordlisten. | A35–A38, `docs/funksjoner/fase0b-sperre-innlogging.md` |

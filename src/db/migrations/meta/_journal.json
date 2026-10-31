@@ -64,6 +64,13 @@
       "when": 1793452756175,
       "tag": "0008_hendelser",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793462974533,
+      "tag": "0009_innloggingssperre",
+      "breakpoints": true
     }
   ]
 }
