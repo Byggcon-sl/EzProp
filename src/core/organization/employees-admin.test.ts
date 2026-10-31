@@ -213,10 +213,8 @@ const byIdCalls: ReadonlyArray<
   readonly [
     string,
     (actor: Actor, organizationId: string, employeeId: string) => Promise<unknown>,
-    (
-      /** Målpersonen i B: aktiv, eller har sluttet (så «angre sluttet» ville gjort noe). */
-      "active" | "deactivated"
-    ),
+    /** Målpersonen i B: aktiv, eller har sluttet (så «angre sluttet» ville gjort noe). */
+    "active" | "deactivated",
   ]
 > = [
   ["getEmployeeForAdmin", (a, o, id) => getEmployeeForAdmin(a, o, id), "active"],
@@ -1273,12 +1271,7 @@ describe("admin stenges aldri ute", () => {
 
 describe("revisjonslogg uten persontekst", () => {
   type Action =
-    | "create"
-    | "update"
-    | "role_change"
-    | "permission_change"
-    | "deactivate"
-    | "reactivate";
+    "create" | "update" | "role_change" | "permission_change" | "deactivate" | "reactivate";
 
   /** Kjører handlingen og gir id-en loggraden skal peke på. */
   const actions: ReadonlyArray<
