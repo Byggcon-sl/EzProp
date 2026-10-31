@@ -206,6 +206,13 @@ Bare en person med gyldig sertifisering for rapporttypen kan stå som ansvarlig 
 
 **Utløp og varsel (funksjonskart H5, tatt inn):** Når `valid_to` nærmer seg (bekreftet 27.10.2026: 60 og 14 dager før, som innstilling), lages hendelsen `certification.expiring`, og den ansatte og leder får et varsel. Admin ser en liste over sertifiseringer som snart går ut. Hvilken sertifisering som gjaldt da rapporten ble utgitt, lagres i utgivelsen (4.7).
 
+**Bygget i fase 0b (31.10.2026):** Tabellen `certifications` med `id`, `organization_id`, `employee_id`, `area`, `issuer` (valgfri), `certificate_number` (valgfri), `valid_from` (valgfri, dato), `valid_to` (påkrevd, dato), sporingsfelt og `deleted_at` (myk sletting). Databasen sikrer med sammensatt fremmednøkkel `(employee_id, organization_id)` at den ansatte hører til samme organisasjon, og med en CHECK at `valid_from <= valid_to` når begge er fylt ut. Område er en fast kode; nå finnes bare `condition_report` («Tilstandsrapport bolig», A30). En sertifisering er **gyldig** når den ikke er slettet, `valid_from` er tom eller i dag eller tidligere, og `valid_to` er i dag eller senere. Utløpsdagen er siste gyldige dag, og «i dag» regnes i norsk tid (Europe/Oslo) i koden og sendes som parameter til spørringene. Tilgangsmodulen tar bort `report.publish` for alle roller, også enkeltrettigheten, når personen ikke har minst én gyldig sertifisering i organisasjonen (A29). Andre rettigheter røres ikke, så admin stenges aldri ute. Admin registrerer og fjerner sertifiseringer på den ansatte, og fornyelse er en ny rad (A32). Listen «Sertifiseringer» i adminområdet viser den nyeste per område som har gått ut eller går ut innen 60 dager (A31).
+
+Dette venter, og hvorfor:
+- `document_file_id` (kopi av beviset) kommer når filtjenesten finnes (samme mønster som A17).
+- `expiry_warned_at` og hendelsen `certification.expiring` kommer med varslene i arbeidslisten i fase 3. Da blir 60 og 14 dager en innstilling.
+- `certification_id` i utgivelsen og sjekken per rapporttype og «ansvarlig på rapporten» kommer i fase 2a (A19). Til da holder det med én gyldig sertifisering uansett område.
+
 **`employee_roles`** – hvilke roller personen har (se rettighetsmatrisen i avsnitt 5).
 
 | Felt | Forklaring |
@@ -1674,6 +1681,12 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Bruker / innlogging | `users` | Felles med Optiplan |
 | Ramme | `app shell` (`src/app/(ansatt)/layout.tsx`) | Topplinjen og menyen rundt alle sidene for innloggede ansatte. Lik på PC og iPad; menyen står til venstre fra bredde `lg` og som rad under topplinjen på smalere skjermer |
 | Sertifisering | `certifications` | Personlig sertifisering |
+| Område (sertifisering) | `certifications.area` | Fast kode for hva sertifiseringen gjelder. Nå bare `condition_report` («Tilstandsrapport bolig») |
+| Gyldig fra / gyldig til | `valid_from` / `valid_to` | Gyldighet for sertifiseringen. Utløpsdagen er siste gyldige dag, i norsk tid |
+| Sertifikatnummer | `certificate_number` | Nummeret på sertifiseringen (valgfritt) |
+| Utsteder | `issuer` | Hvem som har sertifisert (valgfritt) |
+| Går ut snart | `expiring` | Sertifiseringen går ut innen 60 dager (listen i admin) |
+| Utgått | `expired` | `valid_to` er før i dag (norsk tid) |
 | Ansvarsforsikring | `companies.liability_*` | Hører til selskapet |
 | Firmatekst | `companies.company_text` | Teksten om selskapet på rapportens side 2 |
 | Sluttet | `employees.deactivated_at` | Kan ikke logge inn, står fortsatt på gamle rapporter |
