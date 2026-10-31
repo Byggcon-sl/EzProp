@@ -68,3 +68,98 @@ export function formatDate(value: Date): string {
     year: "numeric",
   }).format(value);
 }
+
+/** Norske navn på `entity_type` i revisjonsloggen. Dekker alt som skrives i `src/core/organization`. */
+const auditEntityLabels: Record<string, string> = {
+  employee: "Ansatt",
+  employee_permission: "Enkeltrettighet",
+  company: "Selskap",
+  office: "Kontor",
+  certification: "Sertifisering",
+};
+
+/** Norske navn på `action` i revisjonsloggen. */
+const auditActionLabels: Record<string, string> = {
+  create: "Opprettet",
+  update: "Endret",
+  delete: "Slettet",
+  role_change: "Roller endret",
+  permission_change: "Rettigheter endret",
+  deactivate: "Deaktivert",
+  reactivate: "Aktivert igjen",
+};
+
+/** Norske navn på feltene som står i `changes`. Ukjent felt vises med koden. */
+const auditFieldLabels: Record<string, string> = {
+  name: "Navn",
+  email: "E-post",
+  jobTitle: "Stilling",
+  companyId: "Selskap",
+  officeId: "Kontor",
+  street: "Gate",
+  address: "Adresse",
+  postalCode: "Postnummer",
+  city: "Sted",
+  sortOrder: "Rekkefølge",
+  legalName: "Navn",
+  orgNumber: "Org.nr.",
+  vatRegistered: "MVA-registrert",
+  companyText: "Tekst om selskapet",
+  liabilityInsurer: "Forsikringsselskap",
+  liabilityPolicyNumber: "Polisenummer",
+  liabilityValidTo: "Forsikring gyldig til",
+};
+
+function labelFrom(labels: Record<string, string>, code: string): string {
+  return (Object.hasOwn(labels, code) ? labels[code] : undefined) ?? code;
+}
+
+export function auditEntityLabel(entityType: string): string {
+  return labelFrom(auditEntityLabels, entityType);
+}
+
+export function auditActionLabel(action: string): string {
+  return labelFrom(auditActionLabels, action);
+}
+
+/** Én verdi som tekst. Tomme verdier blir «(tom)»; objekter og lister gir `null` (vises ikke). */
+function auditValueText(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return "(tom)";
+  if (typeof value === "boolean") return value ? "Ja" : "Nei";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  return null;
+}
+
+function isFromTo(value: unknown): value is { from: unknown; to: unknown } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "from") &&
+    Object.hasOwn(value, "to")
+  );
+}
+
+/**
+ * Endringene i en rad i revisjonsloggen som korte linjer: «Gate: Storgata 1 → Storgata 2» for
+ * fra/til, «Endret: Navn, Stilling» for en liste med feltkoder. Alt annet (id-er, lister over
+ * roller, objekter) hoppes over, så det aldri står «null», «undefined» eller «[object Object]».
+ */
+export function formatAuditChanges(changes: Record<string, unknown>): string[] {
+  const lines: string[] = [];
+  for (const [field, value] of Object.entries(changes)) {
+    if (field === "fields" && Array.isArray(value)) {
+      const names = value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => labelFrom(auditFieldLabels, item));
+      if (names.length > 0) lines.push(`Endret: ${names.join(", ")}`);
+      continue;
+    }
+    if (!isFromTo(value)) continue;
+    const from = auditValueText(value.from);
+    const to = auditValueText(value.to);
+    if (from === null || to === null) continue;
+    lines.push(`${labelFrom(auditFieldLabels, field)}: ${from} → ${to}`);
+  }
+  return lines;
+}
