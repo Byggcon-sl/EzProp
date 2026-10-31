@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { employeeRoles } from "@/db/schema";
+import { CERTIFICATION_AREA_KEYS } from "./certification-rules";
 
 /*
  * Validering av skjemaene i adminområdet. Samme skjema brukes av kjernen og skjermene, slik at
@@ -81,3 +82,52 @@ export const employeeUpdateSchema = z.object({
   officeId: optionalId,
 });
 export type EmployeeUpdateInput = z.input<typeof employeeUpdateSchema>;
+
+const CERTIFICATION_VALID_TO = "Velg dato for gyldig til.";
+const CERTIFICATION_VALID_FROM = "Gyldig fra må være en dato.";
+const CERTIFICATION_RANGE = "Gyldig fra kan ikke være etter gyldig til.";
+const CERTIFICATION_AREA = "Velg område.";
+const CERTIFICATION_TEXT_MAX = 200;
+const CERTIFICATION_TEXT_TOO_LONG = `Teksten kan være høyst ${CERTIFICATION_TEXT_MAX} tegn.`;
+
+/** Valgfri kort tekst på sertifiseringen (utsteder, nummer): trimmes, tom blir `null`. */
+const certificationText = z
+  .string()
+  .trim()
+  .max(CERTIFICATION_TEXT_MAX, { error: CERTIFICATION_TEXT_TOO_LONG })
+  .nullish()
+  .transform(emptyToNull);
+
+/**
+ * Ny sertifisering på en ansatt (docs/funksjoner/fase0b-sertifisering.md). Datoene er
+ * `ÅÅÅÅ-MM-DD`; utløpsdagen er siste gyldige dag.
+ */
+export const addCertificationSchema = z
+  .object({
+    /** Formatet sjekkes i kjernen (ugyldig id gir `AccessDeniedError`). */
+    employeeId: z.string(),
+    area: z.enum(CERTIFICATION_AREA_KEYS, { error: CERTIFICATION_AREA }),
+    validTo: z
+      .string({ error: CERTIFICATION_VALID_TO })
+      .trim()
+      .refine(isRealIsoDate, { error: CERTIFICATION_VALID_TO }),
+    validFrom: optionalText.refine((value) => value === null || isRealIsoDate(value), {
+      error: CERTIFICATION_VALID_FROM,
+    }),
+    issuer: certificationText,
+    certificateNumber: certificationText,
+  })
+  .refine(
+    // Bare når begge datoene er gyldige; ellers har feltet selv allerede en feilmelding.
+    (value) =>
+      typeof value.validFrom !== "string" ||
+      typeof value.validTo !== "string" ||
+      !isRealIsoDate(value.validFrom) ||
+      !isRealIsoDate(value.validTo) ||
+      value.validFrom <= value.validTo,
+    {
+      error: CERTIFICATION_RANGE,
+      path: ["validFrom"],
+    },
+  );
+export type AddCertificationInput = z.input<typeof addCertificationSchema>;

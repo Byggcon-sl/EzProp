@@ -13,12 +13,20 @@ export {
 } from "./employees-admin";
 export { grantEmployeePermission, revokeEmployeePermission } from "./employee-permissions";
 export {
+  addCertification,
+  listCertificationsForEmployee,
+  listExpiringCertifications,
+  removeCertification,
+} from "./certifications";
+export {
   DuplicateEmployeeEmailError,
   DuplicateOfficeNameError,
   DuplicateOrgNumberError,
   LastAdminError,
 } from "./errors";
 export {
+  addCertificationSchema,
+  type AddCertificationInput,
   companyInputSchema,
   employeeCreateSchema,
   employeeRolesSchema,
