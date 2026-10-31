@@ -1,23 +1,35 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
-import { employeeRoleAssignments, employees, organizations } from "@/db/schema";
+import {
+  employeePermissions,
+  employeeRoleAssignments,
+  employees,
+  organizations,
+} from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { AccessDeniedError } from "./errors";
 import {
-  rolesHavePermission,
+  effectivePermissions,
+  grantHasPermission,
+  readInspectorsEditAll,
   type Actor,
   type EmployeeGrant,
   type Permission,
 } from "./permissions";
 
 /**
- * Finner den ansatte bak innloggingen i organisasjonen, med roller. Kaster `AccessDeniedError`
+ * Finner den ansatte bak innloggingen i organisasjonen, med roller, enkeltrettigheter og
+ * innstillingen `access.inspectors_edit_all`, og regner ut rettighetene. Kaster `AccessDeniedError`
  * når personen ikke er ansatt der, er deaktivert, eller organisasjonen er slettet.
  */
 async function findGrant(actor: Actor, organizationId: string): Promise<EmployeeGrant> {
   if (!isUuid(organizationId)) throw new AccessDeniedError();
   const [employee] = await db
-    .select({ id: employees.id, organizationId: employees.organizationId })
+    .select({
+      id: employees.id,
+      organizationId: employees.organizationId,
+      settings: organizations.settings,
+    })
     .from(employees)
     .innerJoin(organizations, eq(organizations.id, employees.organizationId))
     .where(
@@ -30,20 +42,40 @@ async function findGrant(actor: Actor, organizationId: string): Promise<Employee
       ),
     );
   if (!employee) throw new AccessDeniedError();
-  const roles = await db
-    .select({ role: employeeRoleAssignments.role })
-    .from(employeeRoleAssignments)
-    .where(
-      and(
-        eq(employeeRoleAssignments.employeeId, employee.id),
-        eq(employeeRoleAssignments.organizationId, organizationId),
-        isNull(employeeRoleAssignments.deletedAt),
+  // Filtrerer på organisasjonen fra den ansatt-raden, ikke på id-en fra kalleren
+  const [roleRows, grantedRows] = await Promise.all([
+    db
+      .select({ role: employeeRoleAssignments.role })
+      .from(employeeRoleAssignments)
+      .where(
+        and(
+          eq(employeeRoleAssignments.employeeId, employee.id),
+          eq(employeeRoleAssignments.organizationId, employee.organizationId),
+          isNull(employeeRoleAssignments.deletedAt),
+        ),
       ),
-    );
+    db
+      .select({ permission: employeePermissions.permission })
+      .from(employeePermissions)
+      .where(
+        and(
+          eq(employeePermissions.employeeId, employee.id),
+          eq(employeePermissions.organizationId, employee.organizationId),
+          isNull(employeePermissions.deletedAt),
+        ),
+      ),
+  ]);
+  const roles = roleRows.map((r) => r.role);
+  const inspectorsEditAll = readInspectorsEditAll(employee.organizationId, employee.settings);
   return {
     employeeId: employee.id,
     organizationId: employee.organizationId,
-    roles: roles.map((r) => r.role),
+    roles,
+    permissions: effectivePermissions(
+      roles,
+      grantedRows.map((r) => r.permission),
+      { inspectorsEditAll },
+    ),
   };
 }
 
@@ -58,7 +90,7 @@ export async function requireOrganizationAccess(
   permission: Permission = "organization.read",
 ): Promise<EmployeeGrant> {
   const grant = await findGrant(actor, organizationId);
-  if (!rolesHavePermission(grant.roles, permission)) throw new AccessDeniedError();
+  if (!grantHasPermission(grant, permission)) throw new AccessDeniedError();
   return grant;
 }
 
