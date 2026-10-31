@@ -1,4 +1,6 @@
 import { createElement } from "react";
+
+// Komponentene uten tilstand kalles direkte, slik at barna kan sendes med typene i behold.
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Badge } from "./badge";
@@ -7,7 +9,7 @@ import { Notice } from "./notice";
 
 function field(props: { hint?: string; error?: string }) {
   return renderToStaticMarkup(
-    createElement(Field, {
+    Field({
       label: "Navn",
       htmlFor: "name",
       ...props,
@@ -72,7 +74,7 @@ describe("Checkbox, Radio og ChoiceGroup", () => {
 
   it("gruppen er fieldset med legend, og feilen er knyttet til gruppen", () => {
     const html = renderToStaticMarkup(
-      createElement(ChoiceGroup, {
+      ChoiceGroup({
         id: "roles",
         legend: "Roller",
         error: "Velg en rolle.",
@@ -88,9 +90,7 @@ describe("Checkbox, Radio og ChoiceGroup", () => {
 
 describe("Badge og Notice", () => {
   it("merket bærer teksten, ikke bare fargen", () => {
-    const html = renderToStaticMarkup(
-      createElement(Badge, { tone: "warning", children: "Forsikring utløpt" }),
-    );
+    const html = renderToStaticMarkup(Badge({ tone: "warning", children: "Forsikring utløpt" }));
     expect(html).toContain("Forsikring utløpt");
     expect(html).toContain("bg-amber-50 text-amber-900");
   });
