@@ -366,7 +366,21 @@ test.describe("iPad (bare prosjektet ipad)", () => {
     }
     await expect(field).toBeFocused();
     const [year, month, day] = validTo.split("-") as [string, string, string];
-    await page.keyboard.type(dayFirst ? `${day}${month}${year}` : `${month}${day}${year}`);
+    const orders = dayFirst
+      ? [`${day}${month}${year}`, `${month}${day}${year}`]
+      : [`${month}${day}${year}`, `${day}${month}${year}`];
+    // Prøven over kan bomme på en annen maskin (CI). Da skrives datoen på nytt i den andre
+    // rekkefølgen: Skift+Tab ut av datofeltet og Tab inn igjen gir første del av feltet.
+    for (const digits of orders) {
+      await page.keyboard.type(digits);
+      if ((await field.inputValue()) === validTo) break;
+      for (let i = 0; i < 5; i++) {
+        if (!(await field.evaluate((el) => el === document.activeElement))) break;
+        await page.keyboard.press("Shift+Tab");
+      }
+      await page.keyboard.press("Tab");
+      await expect(field).toBeFocused();
+    }
     await expect(field).toHaveValue(validTo);
 
     const save = addForm(page).getByRole("button", { name: "Lagre", exact: true });
