@@ -1,42 +1,49 @@
 import { expect, test } from "@playwright/test";
 import { uniqueSuffix } from "./helpers";
 
-// Sperre etter mange feil ved innlogging (docs/funksjoner/fase0b-sperre-innlogging-testplan.md
-// avsnitt 4). Kjører i pc og ipad. Støtter færre reklamasjoner (ingen kan gjette seg inn og
-// endre rapporter i en takstmanns navn) og tid (takstmannen ser nøyaktig når han kan prøve igjen).
-//
-// Oppdiktet, ukjent adresse som er unik per prosjekt og kjøring (aldri ADMIN_EMAIL), så sperren
-// ikke rører de andre testene. Bare utviklings-postkassen brukes (DEV_MAILBOX=1 i webServer).
+/*
+ * Sperre etter mange feil ved innlogging (docs/funksjoner/fase0b-sperre-innlogging-testplan.md
+ * avsnitt 4). Kjører i pc og ipad. Oppdiktet, ukjent adresse som er unik per prosjekt og kjøring,
+ * aldri ADMIN_EMAIL. Bare utviklings-postkassen brukes (DEV_MAILBOX=1, rateLimit er av).
+ * Støtter hovedmål reklamasjoner: ingen kan gjette seg til koden og endre rapporter i en
+ * takstmanns navn. Hele pakken grønn etterpå viser at riktig kode nullstiller (logIn virker).
+ */
 
-test("sperre etter 5 feil koder viser når man kan prøve igjen", async ({ page }) => {
-  const email = `sperre.${uniqueSuffix()}@eksempel.no`;
+const SIGN_IN_PATH = "/api/auth/sign-in/email-otp";
+
+test("sperre etter 5 feil koder viser når man kan prøve igjen", async ({ page }, testInfo) => {
+  const email = `sperre.${testInfo.project.name}.${uniqueSuffix()}@eksempel.no`;
 
   await page.goto("/logg-inn");
   await page.getByLabel("E-postadresse").fill(email);
   await page.getByRole("button", { name: "Send meg en kode" }).click();
   await expect(page.getByLabel("Kode fra e-posten")).toBeVisible();
 
-  // Skjemaets melding (Next har også en tom role="alert" for sidebytter)
+  const codeField = page.getByLabel("Kode fra e-posten");
+  const submit = page.getByRole("button", { name: "Logg inn", exact: true });
+  // Meldingen i skjemaet (Next har også en tom «alert» for sidebytter)
   const alert = page.locator("form").getByRole("alert");
-  const logInButton = page.getByRole("button", { name: "Logg inn" });
 
-  /** Skriver feil kode, trykker «Logg inn» og venter på svaret fra serveren. */
-  async function submitWrongCode() {
-    await page.getByLabel("Kode fra e-posten").fill("000000");
-    const response = page.waitForResponse((r) => r.url().includes("/api/auth/sign-in/email-otp"));
-    await logInButton.click();
-    return (await response).status();
+  // Presisering 3: de 5 første feilene får Better Auths vanlige svar, ikke 429
+  for (let i = 0; i < 5; i += 1) {
+    await codeField.fill("000000");
+    const [response] = await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith(SIGN_IN_PATH)),
+      submit.click(),
+    ]);
+    expect(response.status()).not.toBe(429);
+    await expect(alert).toBeVisible();
+    await expect(alert).not.toContainText("For mange");
+    await expect(submit).toBeEnabled();
   }
 
-  // 5 feil koder: hver gang Better Auths vanlige svar, også den 5. (presisering 3)
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    expect(await submitWrongCode()).not.toBe(429);
-    await expect(alert).toHaveText(/^Koden (stemmer ikke|er ikke lenger gyldig)/);
-    await expect(logInButton).toBeEnabled();
-  }
-
-  // 6. forsøk: sperren slår inn, med klokkeslett
-  expect(await submitWrongCode()).toBe(429);
+  // 6. forsøk: sperret, med klokkeslett
+  await codeField.fill("000000");
+  const [blocked] = await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith(SIGN_IN_PATH)),
+    submit.click(),
+  ]);
+  expect(blocked.status()).toBe(429);
   await expect(alert).toHaveText(/^For mange feil koder\. Du kan prøve igjen kl\. \d{2}:\d{2}\.$/);
   await expect(alert).toBeInViewport();
   await expect(page.getByText("Vent ett minutt")).toHaveCount(0);
