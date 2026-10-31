@@ -21,6 +21,8 @@ test("sperre etter 5 feil koder viser når man kan prøve igjen", async ({ page 
 
   const codeField = page.getByLabel("Kode fra e-posten");
   const submit = page.getByRole("button", { name: "Logg inn", exact: true });
+  // Meldingen i skjemaet (Next har også en tom «alert» for sidebytter)
+  const alert = page.locator("form").getByRole("alert");
 
   // Presisering 3: de 5 første feilene får Better Auths vanlige svar, ikke 429
   for (let i = 0; i < 5; i += 1) {
@@ -30,8 +32,8 @@ test("sperre etter 5 feil koder viser når man kan prøve igjen", async ({ page 
       submit.click(),
     ]);
     expect(response.status()).not.toBe(429);
-    await expect(page.getByRole("alert")).toBeVisible();
-    await expect(page.getByRole("alert")).not.toContainText("For mange");
+    await expect(alert).toBeVisible();
+    await expect(alert).not.toContainText("For mange");
     await expect(submit).toBeEnabled();
   }
 
@@ -42,7 +44,6 @@ test("sperre etter 5 feil koder viser når man kan prøve igjen", async ({ page 
     submit.click(),
   ]);
   expect(blocked.status()).toBe(429);
-  const alert = page.getByRole("alert");
   await expect(alert).toHaveText(/^For mange feil koder\. Du kan prøve igjen kl\. \d{2}:\d{2}\.$/);
   await expect(alert).toBeInViewport();
   await expect(page.getByText("Vent ett minutt")).toHaveCount(0);
