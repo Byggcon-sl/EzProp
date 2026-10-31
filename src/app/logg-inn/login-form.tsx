@@ -7,7 +7,15 @@ import { Button } from "@/shared/ui/button";
 import { Field, FormMessage, Input } from "@/shared/ui/form";
 import { DEFAULT_NEXT_PATH, safeNextPath } from "./safe-next-path";
 
-const TOO_MANY_ATTEMPTS = "For mange forsøk på kort tid. Vent ett minutt og prøv igjen.";
+/**
+ * Sperren (429) sender en norsk melding med klokkeslett fra serveren («For mange …»).
+ * Better Auths egen fartsgrense per IP svarer på engelsk; da vises en norsk tekst i stedet.
+ */
+const THROTTLE_FALLBACK = "For mange forsøk på kort tid. Prøv igjen om litt.";
+
+function throttleText(error: { message?: string }): string {
+  return error.message?.startsWith("For mange ") ? error.message : THROTTLE_FALLBACK;
+}
 
 /**
  * Innlogging i to steg: e-postadresse, så koden fra e-posten.
@@ -33,7 +41,7 @@ export function LoginForm({ next = DEFAULT_NEXT_PATH }: { next?: string }) {
     if (error) {
       setError(
         error.status === 429
-          ? TOO_MANY_ATTEMPTS
+          ? throttleText(error)
           : "Vi klarte ikke å sende koden. Sjekk e-postadressen og prøv igjen.",
       );
       return;
@@ -50,7 +58,7 @@ export function LoginForm({ next = DEFAULT_NEXT_PATH }: { next?: string }) {
       setPending(false);
       setError(
         error.status === 429
-          ? TOO_MANY_ATTEMPTS
+          ? throttleText(error)
           : error.code === "TOO_MANY_ATTEMPTS" || error.code === "OTP_EXPIRED"
             ? "Koden er ikke lenger gyldig. Be om en ny kode."
             : "Koden stemmer ikke. Sjekk e-posten og prøv igjen.",

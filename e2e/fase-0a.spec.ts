@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import packageJson from "../package.json" with { type: "json" };
-import { ADMIN_EMAIL, logIn } from "./helpers";
+import { ADMIN_EMAIL, logIn, uniqueSuffix } from "./helpers";
 
 test("helsesjekken svarer med versjonen fra package.json uten innlogging", async ({ request }) => {
   const response = await request.get("/api/helse");
@@ -42,16 +42,16 @@ test("feil kode avvises", async ({ page }) => {
 test("ukjent e-post får ingen kode og ingen bekreftelse på at adressen finnes", async ({
   page,
 }) => {
+  // Unik per kjøring: sperren teller bestillinger per adresse, og e2e-databasen tømmes ikke
+  const email = `ukjent.${uniqueSuffix()}@eksempel.no`;
   await page.goto("/logg-inn");
-  await page.getByLabel("E-postadresse").fill("ukjent@example.com");
+  await page.getByLabel("E-postadresse").fill(email);
   await page.getByRole("button", { name: "Send meg en kode" }).click();
   // Samme skjerm som for kjente adresser (lekker ikke hvem som har tilgang)
   await expect(page.getByLabel("Kode fra e-posten")).toBeVisible();
   const mailbox = await page.context().newPage();
   await mailbox.goto("/dev/epost");
-  await expect(
-    mailbox.getByTestId("dev-email-to").filter({ hasText: "ukjent@example.com" }),
-  ).toHaveCount(0);
+  await expect(mailbox.getByTestId("dev-email-to").filter({ hasText: email })).toHaveCount(0);
 });
 
 // UU-funn 8 fra nattløkken 30.10.2026 (docs/agenter/oppgaver/fase1-uu-nattlokken-testplan.md
