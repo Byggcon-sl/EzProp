@@ -12,6 +12,7 @@ import { Badge } from "@/shared/ui/badge";
 import { Notice } from "@/shared/ui/notice";
 import { getAdminContext } from "../../admin-context";
 import {
+  certificationAreaLabel,
   certificationAreaLabels,
   certificationStatus,
   certificationStatusLabels,
@@ -87,7 +88,7 @@ export default async function EmployeePage({
     );
     return {
       id: certification.id,
-      areaLabel: certificationAreaLabels[certification.area],
+      areaLabel: certificationAreaLabel(certification.area),
       certificateNumber: certification.certificateNumber,
       issuer: certification.issuer,
       validTo: formatIsoDate(certification.validTo),

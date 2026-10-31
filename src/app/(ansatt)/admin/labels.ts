@@ -34,6 +34,11 @@ export const certificationAreaLabels: Record<CertificationArea, string> = {
   condition_report: "Tilstandsrapport bolig",
 };
 
+/** Etiketten til et område lest fra databasen. Ukjent (arkivert) kode vises som den er. */
+export function certificationAreaLabel(area: string): string {
+  return (certificationAreaLabels as Record<string, string>)[area] ?? area;
+}
+
 export type CertificationStatus = "expired" | "expiring" | null;
 
 export const certificationStatusLabels: Record<Exclude<CertificationStatus, null>, string> = {

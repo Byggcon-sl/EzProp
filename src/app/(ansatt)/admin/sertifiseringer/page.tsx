@@ -5,7 +5,7 @@ import { Badge } from "@/shared/ui/badge";
 import { getAdminContext } from "../admin-context";
 import { EmptyList, Row, RowList } from "../admin-list";
 import {
-  certificationAreaLabels,
+  certificationAreaLabel,
   certificationStatus,
   certificationStatusLabels,
   formatIsoDate,
@@ -48,7 +48,7 @@ export default async function CertificationsPage() {
                 title={row.employeeName}
               >
                 <span className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                  <span>{certificationAreaLabels[row.area]}</span>
+                  <span>{certificationAreaLabel(row.area)}</span>
                   <span>Gyldig til {formatIsoDate(row.validTo)}</span>
                   <Badge tone={status === "expired" ? "warning" : "brand"}>
                     {certificationStatusLabels[status]}
