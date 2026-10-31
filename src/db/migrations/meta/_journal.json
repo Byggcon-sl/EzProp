@@ -50,6 +50,13 @@
       "when": 1793422143738,
       "tag": "0006_roller-myk-sletting",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793435764619,
+      "tag": "0007_sertifiseringer",
+      "breakpoints": true
     }
   ]
 }

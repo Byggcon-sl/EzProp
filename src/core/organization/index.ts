@@ -11,6 +11,14 @@ export {
   updateEmployee,
   type AdminEmployee,
 } from "./employees-admin";
+export {
+  createCertification,
+  deleteCertification,
+  listCertificationsForEmployee,
+  listExpiringCertifications,
+  type AdminCertification,
+  type ExpiringCertification,
+} from "./certifications";
 export { grantEmployeePermission, revokeEmployeePermission } from "./employee-permissions";
 export {
   DuplicateEmployeeEmailError,
@@ -19,11 +27,13 @@ export {
   LastAdminError,
 } from "./errors";
 export {
+  certificationCreateSchema,
   companyInputSchema,
   employeeCreateSchema,
   employeeRolesSchema,
   employeeUpdateSchema,
   officeInputSchema,
+  type CertificationCreateInput,
   type CompanyInput,
   type EmployeeCreateInput,
   type EmployeeUpdateInput,

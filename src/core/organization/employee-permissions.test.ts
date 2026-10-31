@@ -11,6 +11,7 @@ import {
 import { db } from "@/db/client";
 import { auditLog, employeePermissions, employees, users, type EmployeeRole } from "@/db/schema";
 import {
+  createCertification,
   createEmployee,
   createOrganization,
   createUser,
@@ -264,7 +265,9 @@ describe("tilgang per rolle", () => {
     await revokeEmployeePermission(admin, org.id, adminEmployee.id, PERMISSION);
     expect(await activeRows(adminEmployee.id)).toHaveLength(0);
 
-    // Admin stenges aldri ute, skal aldri fjernes
+    // Admin stenges aldri ute, skal aldri fjernes. Gyldig sertifisering, fordi report.publish
+    // krever den (A29); uten den har admin alt unntatt report.publish (certification-guard.test).
+    await createCertification(adminEmployee);
     const grant = await requireOrganizationAccess(admin, org.id, "organization.manage");
     expect([...grant.permissions].sort()).toEqual([...permissions].sort());
     for (const p of permissions) {

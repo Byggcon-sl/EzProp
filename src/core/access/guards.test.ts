@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { employeePermissions, employees, organizations, type EmployeeRole } from "@/db/schema";
 import { logger } from "@/shared/lib/logger";
 import {
+  createCertification,
   createEmployee,
   createOrganization,
   createUser,
@@ -30,6 +31,8 @@ describe("requireOrganizationAccess", () => {
     const org = await createOrganization();
     const user = await createUser();
     const employee = await createEmployee(user, org.id, ["inspector"]);
+    // report.publish krever gyldig sertifisering (A29)
+    await createCertification(employee);
 
     const grant = await requireOrganizationAccess(user, org.id);
     expect(grant).toEqual({
@@ -189,7 +192,9 @@ describe("tilgang per rolle", () => {
       const org = await createOrganization();
       await setSettings(org.id, { [SETTING]: true });
       const user = await createUser();
-      await createEmployee(user, org.id, [role]);
+      const employee = await createEmployee(user, org.id, [role]);
+      // Gyldig sertifisering, slik at matrisen viser rollene (report.publish krever den, A29)
+      await createCertification(employee);
       await expectAllowed(user, org.id, permission, allowed);
     },
   );
@@ -200,7 +205,9 @@ describe("tilgang per rolle", () => {
       const org = await createOrganization();
       await setSettings(org.id, { [SETTING]: false });
       const user = await createUser();
-      await createEmployee(user, org.id, [role]);
+      const employee = await createEmployee(user, org.id, [role]);
+      // Gyldig sertifisering, slik at matrisen viser rollene (report.publish krever den, A29)
+      await createCertification(employee);
       await expectAllowed(user, org.id, permission, allowed);
     },
   );
@@ -218,6 +225,7 @@ describe("tilgang per rolle", () => {
     await setSettings(org.id, { [SETTING]: false });
     const user = await createUser();
     const employee = await createEmployee(user, org.id, ["inspector"]);
+    await createCertification(employee);
     await grantPermission(employee, "report.edit");
 
     const grant = await requireOrganizationAccess(user, org.id);
@@ -246,6 +254,7 @@ describe("Admin stenges aldri ute, skal aldri fjernes", () => {
     await setSettings(org.id, { [SETTING]: false });
     const user = await createUser();
     const admin = await createEmployee(user, org.id, ["admin"]);
+    await createCertification(admin);
     for (const p of ["template.edit_structure", "report.edit", "organization.manage"]) {
       await grantPermission(admin, p);
     }
@@ -261,7 +270,8 @@ describe("Admin stenges aldri ute, skal aldri fjernes", () => {
     const org = await createOrganization();
     await setSettings(org.id, { [SETTING]: false });
     const user = await createUser();
-    await createEmployee(user, org.id, ["admin"]);
+    const admin = await createEmployee(user, org.id, ["admin"]);
+    await createCertification(admin);
 
     await expectAdminHasEverything(user, org.id);
   });
