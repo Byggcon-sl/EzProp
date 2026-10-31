@@ -65,7 +65,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #57 | Sertifisering med utløpsdato (`fase0b-sertifisering`) | åpnet 31.10.2026, merges med skriptet når CI er grønn | `main` |
+| #57 | Sertifisering med utløpsdato (`fase0b-sertifisering`) | åpnet 31.10.2026. CI rød: e2e 7b (iPad, dato skrevet med tastatur i `e2e/fase-0b-sertifisering.spec.ts:370` ble tom). Rettes av hovedløkken, så merges med skriptet | `main` |
 
 PR #16–#28 og #30–#55 er merget (#55: doble testfiler for admin slått sammen, merget 31.10.2026 kl. 08:56 UTC, #54: admin-skjermene, #53: tilstand, #52: tilstand, #51: grunnlayout Fjord, #50: roller og rettigheter, #49: rydding fra nattløkken, #48 og #47: tilstand, #46: seed og slettet kontor, #44: liten oppgave (i), #45: UU-funn 6–9 fra nattløkken, #43 og #42: tilstand, #41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
 
