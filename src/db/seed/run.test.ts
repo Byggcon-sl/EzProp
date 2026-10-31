@@ -119,6 +119,18 @@ describe("seed av selskaper og kontorer", () => {
     expect(troms[0]!.deletedAt).not.toBeNull();
   });
 
+  it("lager ikke et slettet kontor på nytt", async () => {
+    await runSeed(env);
+    await db.update(offices).set({ deletedAt: new Date() }).where(eq(offices.name, "Narvik"));
+
+    await runSeed(env);
+    const rows = await db.select().from(offices);
+    expect(rows).toHaveLength(5);
+    const narvik = rows.filter((row) => row.name === "Narvik");
+    expect(narvik).toHaveLength(1);
+    expect(narvik[0]!.deletedAt).not.toBeNull();
+  });
+
   it("gir ikke admin selskap eller kontor", async () => {
     await runSeed(env);
     await runSeed(env);
