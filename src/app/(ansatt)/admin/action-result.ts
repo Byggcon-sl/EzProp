@@ -8,7 +8,7 @@ import {
   DuplicateOfficeNameError,
   DuplicateOrgNumberError,
   LastAdminError,
-} from "./organization";
+} from "@/core/organization";
 
 /** Et mislykket forsøk med feil ved feltene og/eller en melding øverst. */
 export function failure(

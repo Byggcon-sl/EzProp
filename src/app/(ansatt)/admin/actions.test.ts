@@ -38,8 +38,8 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/shared/lib/logger", () => ({ logger: { error: mocks.logError } }));
 vi.mock("./admin-context", () => ({ getAdminContext: mocks.getAdminContext }));
-vi.mock("./organization", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./organization")>()),
+vi.mock("@/core/organization", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/core/organization")>()),
   ...mocks.core,
 }));
 
@@ -52,7 +52,7 @@ const {
   setRolesAction,
   updateEmployeeAction,
 } = await import("./ansatte/actions");
-const { DuplicateOrgNumberError, LastAdminError } = await import("./organization");
+const { DuplicateOrgNumberError, LastAdminError } = await import("@/core/organization");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
 const OTHER_ORG = "0190a000-0000-7000-8000-000000000002";

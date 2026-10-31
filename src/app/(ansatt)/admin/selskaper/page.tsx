@@ -4,7 +4,7 @@ import { getAdminContext } from "../admin-context";
 import { EmptyList, ListHeader, Row, RowList } from "../admin-list";
 import { formatIsoDate, formatOrgNumber, noticeText, todayInNorway } from "../labels";
 import { NoAccess } from "../no-access";
-import { listCompanies } from "../organization";
+import { listCompanies } from "@/core/organization";
 
 export const metadata: Metadata = { title: "Selskaper" };
 

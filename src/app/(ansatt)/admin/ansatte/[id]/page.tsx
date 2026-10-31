@@ -7,7 +7,7 @@ import { Notice } from "@/shared/ui/notice";
 import { getAdminContext } from "../../admin-context";
 import { formatDate, noticeText, roleBadgeOrder, roleLabels } from "../../labels";
 import { NoAccess } from "../../no-access";
-import { getEmployeeForAdmin, listCompanies, listOffices } from "../../organization";
+import { getEmployeeForAdmin, listCompanies, listOffices } from "@/core/organization";
 import {
   deactivateEmployeeAction,
   reactivateEmployeeAction,

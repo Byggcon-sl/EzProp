@@ -5,7 +5,7 @@ import { isUuid } from "@/shared/lib/uuid";
 import { errorResult, failure } from "../action-result";
 import { getAdminContext } from "../admin-context";
 import { NO_ACCESS, type FormState } from "../form-state";
-import { createCompany, updateCompany } from "../organization";
+import { createCompany, updateCompany } from "@/core/organization";
 
 const TEXT_FIELDS = [
   "legalName",

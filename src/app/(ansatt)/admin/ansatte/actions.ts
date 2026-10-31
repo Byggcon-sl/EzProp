@@ -18,7 +18,7 @@ import {
   revokeEmployeePermission,
   setEmployeeRoles,
   updateEmployee,
-} from "../organization";
+} from "@/core/organization";
 
 const ROUTE = "/admin/ansatte";
 

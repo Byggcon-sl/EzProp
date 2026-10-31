@@ -5,7 +5,7 @@ import { isUuid } from "@/shared/lib/uuid";
 import { errorResult, failure } from "../action-result";
 import { getAdminContext } from "../admin-context";
 import { NO_ACCESS, type FormState } from "../form-state";
-import { createOffice, updateOffice } from "../organization";
+import { createOffice, updateOffice } from "@/core/organization";
 
 /**
  * Lagrer et kontor. `officeId` er `null` for nytt kontor. Organisasjonen hentes alltid på

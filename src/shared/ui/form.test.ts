@@ -7,11 +7,12 @@ import { Notice } from "./notice";
 
 function field(props: { hint?: string; error?: string }) {
   return renderToStaticMarkup(
-    createElement(
-      Field,
-      { label: "Navn", htmlFor: "name", ...props },
-      createElement(Input, { id: "name", name: "name" }),
-    ),
+    createElement(Field, {
+      label: "Navn",
+      htmlFor: "name",
+      ...props,
+      children: createElement(Input, { id: "name", name: "name" }),
+    }),
   );
 }
 
@@ -71,11 +72,12 @@ describe("Checkbox, Radio og ChoiceGroup", () => {
 
   it("gruppen er fieldset med legend, og feilen er knyttet til gruppen", () => {
     const html = renderToStaticMarkup(
-      createElement(
-        ChoiceGroup,
-        { id: "roles", legend: "Roller", error: "Velg en rolle." },
-        createElement(Checkbox, { name: "roles", label: "Admin" }),
-      ),
+      createElement(ChoiceGroup, {
+        id: "roles",
+        legend: "Roller",
+        error: "Velg en rolle.",
+        children: createElement(Checkbox, { name: "roles", label: "Admin" }),
+      }),
     );
     expect(html).toMatch(/^<fieldset aria-describedby="roles-error" aria-invalid="true"/);
     expect(html).toContain("<legend");
@@ -87,7 +89,7 @@ describe("Checkbox, Radio og ChoiceGroup", () => {
 describe("Badge og Notice", () => {
   it("merket bærer teksten, ikke bare fargen", () => {
     const html = renderToStaticMarkup(
-      createElement(Badge, { tone: "warning" }, "Forsikring utløpt"),
+      createElement(Badge, { tone: "warning", children: "Forsikring utløpt" }),
     );
     expect(html).toContain("Forsikring utløpt");
     expect(html).toContain("bg-amber-50 text-amber-900");

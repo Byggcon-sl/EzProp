@@ -1,7 +1,7 @@
 import "server-only";
 import type { Actor } from "@/core/access";
 import { requireActor } from "@/core/auth/session";
-import { findAdminOrganizationId } from "./organization";
+import { findAdminOrganizationId } from "@/core/organization";
 
 export type AdminContext = { actor: Actor; organizationId: string };
 

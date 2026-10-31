@@ -3,7 +3,7 @@ import { isUuid } from "@/shared/lib/uuid";
 import { getAdminContext } from "../../admin-context";
 import { FormHeader } from "../../admin-list";
 import { NoAccess } from "../../no-access";
-import { listOffices } from "../../organization";
+import { listOffices } from "@/core/organization";
 import { saveOfficeAction } from "../actions";
 import { OfficeForm } from "../office-form";
 

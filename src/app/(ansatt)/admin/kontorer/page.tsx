@@ -3,7 +3,7 @@ import { getAdminContext } from "../admin-context";
 import { EmptyList, ListHeader, Row, RowList } from "../admin-list";
 import { noticeText } from "../labels";
 import { NoAccess } from "../no-access";
-import { listOffices } from "../organization";
+import { listOffices } from "@/core/organization";
 
 export const metadata: Metadata = { title: "Kontorer" };
 

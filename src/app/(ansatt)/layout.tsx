@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { listOrganizationsForActor } from "@/core/access";
 import { requireActor } from "@/core/auth/session";
-import { findAdminOrganizationId } from "./admin/organization";
+import { findAdminOrganizationId } from "@/core/organization";
 import { brand } from "@/shared/config/brand";
 import { LogOutButton } from "./log-out-button";
 import { NavLink } from "./nav-link";
