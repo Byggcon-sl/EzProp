@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { emailOTP } from "better-auth/plugins/email-otp";
@@ -8,9 +8,26 @@ import { db } from "@/db/client";
 import * as schema from "@/db/schema";
 import { sendEmail } from "@/core/email";
 import { getEnv } from "@/shared/config/env";
+import { checkAndRecordAttempt, recordLoginSucceeded, throttleMessage } from "./login-throttle";
 import { OTP_MINUTES, otpEmail } from "./otp-email";
 
 const THIRTY_DAYS_IN_SECONDS = 60 * 60 * 24 * 30;
+
+const REQUEST_CODE_PATH = "/email-otp/send-verification-otp";
+const SIGN_IN_PATH = "/sign-in/email-otp";
+
+/** Andre kode-endepunkter i Better Auth er stengt, så koden bare kan prøves der sperren gjelder. */
+function isClosedPath(path: string): boolean {
+  return (
+    (path.startsWith("/email-otp/") || path.startsWith("/forget-password/")) &&
+    path !== REQUEST_CODE_PATH
+  );
+}
+
+function emailFromBody(body: unknown): string | null {
+  const email = (body as { email?: unknown } | undefined)?.email;
+  return typeof email === "string" && email.trim() !== "" ? email : null;
+}
 
 /**
  * Innlogging med e-post og engangskode, som i Optiplan. Ingen passord.
@@ -41,6 +58,34 @@ export const auth = betterAuth({
         },
       },
     },
+  },
+  hooks: {
+    // Innloggingssperre (login-throttle.ts). Telles før Better Auth slår opp brukeren, så
+    // svaret er likt for kjent og ukjent adresse.
+    before: createAuthMiddleware(async (ctx) => {
+      if (isClosedPath(ctx.path)) throw new APIError("NOT_FOUND");
+      const action =
+        ctx.path === REQUEST_CODE_PATH
+          ? "request_code"
+          : ctx.path === SIGN_IN_PATH
+            ? "sign_in"
+            : null;
+      if (!action) return;
+      const email = emailFromBody(ctx.body);
+      if (!email) return;
+      const decision = await checkAndRecordAttempt(email, action);
+      if (decision.blocked) {
+        throw new APIError("TOO_MANY_REQUESTS", {
+          message: throttleMessage(decision.reason, decision.retryAt),
+        });
+      }
+    }),
+    // Riktig kode nullstiller sperren for adressen
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== SIGN_IN_PATH || !ctx.context.newSession) return;
+      const email = emailFromBody(ctx.body);
+      if (email) await recordLoginSucceeded(email);
+    }),
   },
   session: {
     expiresIn: THIRTY_DAYS_IN_SECONDS,

@@ -1679,6 +1679,12 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Kontor | `offices` | Bodø, Mo i Rana osv. |
 | Ansatt | `employees` | Person som jobber i Byggcon |
 | Bruker / innlogging | `users` | Felles med Optiplan |
+| Innloggingssperre | `login throttle` (`src/core/auth/login-throttle.ts`) | Midlertidig sperre per e-postadresse etter 5 feil koder eller 5 kodebestillinger på 15 minutter. Går ut av seg selv etter 15 minutter, gjelder alle (også admin) |
+| Innloggingsforsøk | `login_attempts` | Ett forsøk per rad (bestilling, feil kode eller riktig kode). Ingen organisasjons-ID, ingen adresse i klartekst. Radene endres aldri |
+| Adresse-HMAC | `email_hash` | HMAC-SHA256 av e-postadressen (trim og små bokstaver), med nøkkel avledet fra innloggingshemmeligheten. Adressen lagres aldri i klartekst |
+| Kode bestilt | `code_requested` | Noen ba om en engangskode til adressen |
+| Feil kode | `code_failed` | Et forsøk på innlogging med kode som ikke ga innlogging (feil, utløpt, ukjent adresse) |
+| Riktig kode | `login_succeeded` | Innloggingen lyktes. Bare forsøk etter denne raden telles i sperren |
 | Ramme | `app shell` (`src/app/(ansatt)/layout.tsx`) | Topplinjen og menyen rundt alle sidene for innloggede ansatte. Lik på PC og iPad; menyen står til venstre fra bredde `lg` og som rad under topplinjen på smalere skjermer |
 | Sertifisering | `certifications` | Personlig sertifisering |
 | Område (sertifisering) | `certifications.area` | Fast kode for hva sertifiseringen gjelder. Nå bare `condition_report` («Tilstandsrapport bolig») |

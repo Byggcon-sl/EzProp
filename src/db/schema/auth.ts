@@ -1,4 +1,5 @@
-import { boolean, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, check, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 /*
  * Tabellene Better Auth bruker (bruker, sesjon, konto, verifisering). Feltnavnene følger Better
@@ -81,4 +82,31 @@ export const verifications = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [index("verifications_identifier_idx").on(table.identifier)],
+);
+
+/**
+ * Innloggingssperre (`src/core/auth/login-throttle.ts`): ett forsøk per rad, per e-postadresse.
+ * Adressen lagres bare som HMAC (`email_hash`), aldri i klartekst. Ingen `organization_id`: før
+ * innlogging vet vi ikke hvilken organisasjon personen hører til (samme unntak som Better Auths
+ * egne tabeller). Radene endres aldri. Riktig kode nullstiller med en `login_succeeded`-rad.
+ */
+export const loginAttempts = pgTable(
+  "login_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    emailHash: text("email_hash").notNull(),
+    kind: text("kind", { enum: ["code_requested", "code_failed", "login_succeeded"] }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("login_attempts_email_hash_kind_created_at_idx").on(
+      table.emailHash,
+      table.kind,
+      table.createdAt,
+    ),
+    check(
+      "login_attempts_kind_check",
+      sql`${table.kind} in ('code_requested', 'code_failed', 'login_succeeded')`,
+    ),
+  ],
 );
