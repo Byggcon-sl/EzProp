@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { certificationAreas } from "@/core/access";
 import { employeeRoles } from "@/db/schema";
 
 /*
@@ -11,6 +12,10 @@ const ORG_NUMBER = "Org.nr. må være 9 siffer";
 const VALID_TO = "Gyldig til må være en dato";
 const SORT_ORDER = "Rekkefølge må være et heltall";
 const EMAIL = "Skriv en gyldig e-post";
+const CERTIFICATION_VALID_TO = "Velg dato for gyldig til.";
+const CERTIFICATION_VALID_FROM = "Gyldig fra må være en dato.";
+const CERTIFICATION_FROM_AFTER_TO = "Gyldig fra kan ikke være etter gyldig til.";
+const CERTIFICATION_AREA = "Velg område.";
 
 function emptyToNull(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -81,3 +86,27 @@ export const employeeUpdateSchema = z.object({
   officeId: optionalId,
 });
 export type EmployeeUpdateInput = z.input<typeof employeeUpdateSchema>;
+
+/**
+ * Ny sertifisering (A29–A32). Område er forhåndsvalgt (bare ett nå). Datoene er `YYYY-MM-DD`.
+ * Ansatt-id-en sjekkes i kjernen (fremmed eller ugyldig id gir `AccessDeniedError`).
+ */
+export const certificationCreateSchema = z
+  .object({
+    employeeId: z.string(),
+    area: z.enum(certificationAreas, { error: CERTIFICATION_AREA }).default("condition_report"),
+    issuer: optionalText,
+    certificateNumber: optionalText,
+    validFrom: optionalText.refine((value) => value === null || isRealIsoDate(value), {
+      error: CERTIFICATION_VALID_FROM,
+    }),
+    validTo: z
+      .string({ error: CERTIFICATION_VALID_TO })
+      .trim()
+      .refine(isRealIsoDate, { error: CERTIFICATION_VALID_TO }),
+  })
+  .refine((value) => value.validFrom === null || value.validFrom <= value.validTo, {
+    error: CERTIFICATION_FROM_AFTER_TO,
+    path: ["validFrom"],
+  });
+export type CertificationCreateInput = z.input<typeof certificationCreateSchema>;

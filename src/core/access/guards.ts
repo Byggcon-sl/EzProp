@@ -1,12 +1,14 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
+  certifications,
   employeePermissions,
   employeeRoleAssignments,
   employees,
   organizations,
 } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
+import { todayInOslo } from "./certification";
 import { AccessDeniedError } from "./errors";
 import {
   effectivePermissions,
@@ -19,7 +21,8 @@ import {
 
 /**
  * Finner den ansatte bak innloggingen i organisasjonen, med roller, enkeltrettigheter og
- * innstillingen `access.inspectors_edit_all`, og regner ut rettighetene. Kaster `AccessDeniedError`
+ * innstillingen `access.inspectors_edit_all`, og regner ut rettighetene. `report.publish` krever i
+ * tillegg en gyldig sertifisering. Kaster `AccessDeniedError`
  * når personen ikke er ansatt der, er deaktivert, eller organisasjonen er slettet.
  */
 async function findGrant(actor: Actor, organizationId: string): Promise<EmployeeGrant> {
@@ -43,7 +46,8 @@ async function findGrant(actor: Actor, organizationId: string): Promise<Employee
     );
   if (!employee) throw new AccessDeniedError();
   // Filtrerer på organisasjonen fra den ansatt-raden, ikke på id-en fra kalleren
-  const [roleRows, grantedRows] = await Promise.all([
+  const today = todayInOslo(new Date());
+  const [roleRows, grantedRows, validCertifications] = await Promise.all([
     db
       .select({ role: employeeRoleAssignments.role })
       .from(employeeRoleAssignments)
@@ -64,18 +68,39 @@ async function findGrant(actor: Actor, organizationId: string): Promise<Employee
           isNull(employeePermissions.deletedAt),
         ),
       ),
+    // Gyldig sertifisering i dag (norsk tid), samme regel som `isCertificationValid`
+    db
+      .select({ id: certifications.id })
+      .from(certifications)
+      .where(
+        and(
+          eq(certifications.employeeId, employee.id),
+          eq(certifications.organizationId, employee.organizationId),
+          isNull(certifications.deletedAt),
+          or(isNull(certifications.validFrom), lte(certifications.validFrom, today)),
+          gte(certifications.validTo, today),
+        ),
+      )
+      .limit(1),
   ]);
   const roles = roleRows.map((r) => r.role);
   const inspectorsEditAll = readInspectorsEditAll(employee.organizationId, employee.settings);
+  const permissions = effectivePermissions(
+    roles,
+    grantedRows.map((r) => r.permission),
+    { inspectorsEditAll },
+  );
+  // Uten gyldig sertifisering tas bare `report.publish` bort, for alle roller og også når den er
+  // gitt som enkeltrettighet (A29). Ingen andre rettigheter røres, så admin stenges aldri ute fra
+  // admin (regel 11). Sjekk per rapporttype og «ansvarlig» kommer i fase 2a (A19).
   return {
     employeeId: employee.id,
     organizationId: employee.organizationId,
     roles,
-    permissions: effectivePermissions(
-      roles,
-      grantedRows.map((r) => r.permission),
-      { inspectorsEditAll },
-    ),
+    permissions:
+      validCertifications.length > 0
+        ? permissions
+        : permissions.filter((permission) => permission !== "report.publish"),
   };
 }
 

@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
-import type { Actor } from "@/core/access";
+import { addDaysToIsoDate, todayInOslo, type Actor } from "@/core/access";
 import { db } from "@/db/client";
 import {
   auditLog,
+  certifications,
   companies,
   employeePermissions,
   employeeRoleAssignments,
@@ -17,7 +18,7 @@ import {
 /** Tømmer alle tabeller i testdatabasen. Ny tabell? Legg den til her. */
 export async function resetDatabase() {
   await db.execute(
-    sql`truncate table trial_photos, trial_answers, trial_forms, audit_log, employee_permissions, employee_roles, employees, companies, offices, organizations, sessions, accounts, verifications, users restart identity cascade`,
+    sql`truncate table certifications, trial_photos, trial_answers, trial_forms, audit_log, employee_permissions, employee_roles, employees, companies, offices, organizations, sessions, accounts, verifications, users restart identity cascade`,
   );
 }
 
@@ -120,6 +121,33 @@ export async function grantPermission(
     })
     .returning();
   if (!row) throw new Error("kunne ikke gi enkeltrettighet");
+  return row;
+}
+
+type CertificationOverrides = Partial<
+  Omit<typeof certifications.$inferInsert, "organizationId" | "employeeId">
+>;
+
+/**
+ * Gir den ansatte en sertifisering direkte i databasen (uten tilgangssjekk). Standard er område
+ * `condition_report`, gyldig til ett år frem fra i dag i norsk tid. Heter `createCertification`
+ * her; kjernefunksjonen med samme navn importeres fra `@/core/organization`.
+ */
+export async function createCertification(
+  employee: { id: string; organizationId: string },
+  overrides: CertificationOverrides = {},
+) {
+  const [row] = await db
+    .insert(certifications)
+    .values({
+      area: "condition_report",
+      validTo: addDaysToIsoDate(todayInOslo(), 365),
+      ...overrides,
+      organizationId: employee.organizationId,
+      employeeId: employee.id,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette sertifisering");
   return row;
 }
 
