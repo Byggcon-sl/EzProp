@@ -117,15 +117,12 @@ function ConfirmButton({ buttonRef }: { buttonRef: Ref<HTMLButtonElement> }) {
 /** «Fjern» → «Bekreft» eller «Avbryt». Fokus flyttes slik at det går med tastatur alene. */
 function RemoveCertification({ action }: { action: Action }) {
   const [state, formAction] = useActionState(action, initialFormState);
-  const [confirming, setConfirming] = useState(false);
+  // Bekreftelsen gjelder forsøket den ble åpnet i; et mislykket forsøk lukker den.
+  const [confirmingAttempt, setConfirmingAttempt] = useState<number | null>(null);
+  const confirming = confirmingAttempt === state.attempt;
   const removeRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const wasConfirming = useRef(false);
-
-  // Mislykket forsøk: tilbake til «Fjern» med meldingen.
-  useEffect(() => {
-    if (state.attempt > 0) setConfirming(false);
-  }, [state.attempt]);
 
   useEffect(() => {
     if (confirming) confirmRef.current?.focus();
@@ -137,7 +134,11 @@ function RemoveCertification({ action }: { action: Action }) {
     return (
       <div className="w-full space-y-2 sm:w-auto">
         <FormErrors state={state} />
-        <Button ref={removeRef} variant="secondary" onClick={() => setConfirming(true)}>
+        <Button
+          ref={removeRef}
+          variant="secondary"
+          onClick={() => setConfirmingAttempt(state.attempt)}
+        >
           Fjern
         </Button>
       </div>
@@ -148,7 +149,7 @@ function RemoveCertification({ action }: { action: Action }) {
       <p className="text-sm text-slate-700">Fjerne sertifiseringen?</p>
       <div className="flex flex-wrap gap-2">
         <ConfirmButton buttonRef={confirmRef} />
-        <Button variant="ghost" onClick={() => setConfirming(false)}>
+        <Button variant="ghost" onClick={() => setConfirmingAttempt(null)}>
           Avbryt
         </Button>
       </div>
