@@ -4,6 +4,7 @@ import type { Actor } from "@/core/access";
 import { db } from "@/db/client";
 import {
   companies,
+  employeePermissions,
   employeeRoleAssignments,
   employees,
   offices,
@@ -15,7 +16,7 @@ import {
 /** Tømmer alle tabeller i testdatabasen. Ny tabell? Legg den til her. */
 export async function resetDatabase() {
   await db.execute(
-    sql`truncate table trial_photos, trial_answers, trial_forms, audit_log, employee_roles, employees, companies, offices, organizations, sessions, accounts, verifications, users restart identity cascade`,
+    sql`truncate table trial_photos, trial_answers, trial_forms, audit_log, employee_permissions, employee_roles, employees, companies, offices, organizations, sessions, accounts, verifications, users restart identity cascade`,
   );
 }
 
@@ -96,4 +97,27 @@ export async function createEmployee(
       .values(roles.map((role) => ({ organizationId, employeeId: employee.id, role })));
   }
   return employee;
+}
+
+/**
+ * Gir den ansatte én enkeltrettighet (som admin gjør). Tar fri tekst, slik at tester kan sette
+ * inn ukjente navn og vise at de ikke gir tilgang. `createdBy` er bruker-id-en til den som ga
+ * rettigheten (admin), som i `createEmployee`.
+ */
+export async function grantPermission(
+  employee: { id: string; organizationId: string },
+  permission: string,
+  createdBy: string | null = null,
+) {
+  const [row] = await db
+    .insert(employeePermissions)
+    .values({
+      organizationId: employee.organizationId,
+      employeeId: employee.id,
+      permission,
+      createdBy,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke gi enkeltrettighet");
+  return row;
 }
