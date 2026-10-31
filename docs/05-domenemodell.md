@@ -206,6 +206,14 @@ Bare en person med gyldig sertifisering for rapporttypen kan stå som ansvarlig 
 
 **Utløp og varsel (funksjonskart H5, tatt inn):** Når `valid_to` nærmer seg (bekreftet 27.10.2026: 60 og 14 dager før, som innstilling), lages hendelsen `certification.expiring`, og den ansatte og leder får et varsel. Admin ser en liste over sertifiseringer som snart går ut. Hvilken sertifisering som gjaldt da rapporten ble utgitt, lagres i utgivelsen (4.7).
 
+**Bygget i fase 0b (31.10.2026):** tabellen `certifications` med `id`, `organization_id`, `employee_id`, `area`, `issuer` (valgfri), `certificate_number` (valgfri), `valid_from` (valgfri dato), `valid_to` (påkrevd dato), sporingsfeltene og `deleted_at`/`deleted_by` (myk sletting). Sammensatt fremmednøkkel `(organization_id, employee_id)` mot `employees`, så den ansatte alltid hører til samme organisasjon. En check sikrer at `valid_from <= valid_to` når begge er fylt ut. `area` er en fast kode; nå finnes bare `condition_report` («Tilstandsrapport bolig», A30). En sertifisering er **gyldig** når den ikke er slettet, `valid_from` er tom eller i dag eller tidligere, og `valid_to` er i dag eller senere, regnet i norsk tid (utløpsdagen er siste gyldige dag, A31). Uten minst én gyldig sertifisering tas `report.publish` bort i tilgangsmodulen, for alle roller (A29). Fornyelse er en ny rad, og feil rettes med «Fjern» og ny registrering (A32). Admin ser listen «går ut snart» (utgått eller utløp innen 60 dager).
+
+Venter, og hvorfor:
+- `expiry_warned_at` og hendelsen `certification.expiring`: kommer med varslene i fase 3. Feltet har ingen bruk før det finnes noe som varsler.
+- `document_file_id` (kopi av beviset): venter på filtjenesten, som de andre fil-feltene (A17).
+- Sjekk per rapporttype og ansvarlig på rapporten, og `certification_id` i utgivelsen (4.7): fase 2a, sammen med «ansvarlig» (A19). Til da holder det med én gyldig sertifisering uansett område (A30).
+- Innstillingen for 60 og 14 dager (Ståle 27.10.2026): kommer med varslene i fase 3. Nå er 60 dager en konstant ett sted i koden (A31).
+
 **`employee_roles`** – hvilke roller personen har (se rettighetsmatrisen i avsnitt 5).
 
 | Felt | Forklaring |
@@ -1612,7 +1620,7 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 
 ### Rettighetene i koden (fase 0b, `src/core/access/permissions.ts`)
 
-Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har alltid alle, uansett innstilling og enkeltrettigheter (admin stenges aldri ute).
+Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har alltid alle, uansett innstilling og enkeltrettigheter (admin stenges aldri ute). Eneste unntak er `report.publish`, som krever gyldig sertifisering for alle roller (A29); de andre rettighetene til admin røres ikke.
 
 | Rettighet | Hva | Takstmann | Kontor | Leder | Admin |
 |---|---|---|---|---|---|
@@ -1622,7 +1630,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | `staff.manage` | Krav om sidemannskontroll, rutiner for alle, sperring av enheter | nei | nei | ja | ja |
 | `assignment.edit` | Endre ordre, oppdrag, parter, befaringstid, dokumenter | ja når `access.inspectors_edit_all` er på | ja | ja | ja |
 | `report.edit` | Endre rapportinnhold | ja når `access.inspectors_edit_all` er på | nei | ja | ja |
-| `report.publish` | Publisere og overstyre sperre (ansvarlig og sertifisert sjekkes i fase 2a, A19) | ja | nei | ja | ja |
+| `report.publish` | Publisere og overstyre sperre. Krever gyldig sertifisering (fase 0b, A29); ansvarlig og rapporttype sjekkes i fase 2a (A19) | ja | nei | ja | ja |
 | `template.edit_structure` | Endre struktur i systemmalen (maltilgang) | kan gis | nei | kan gis | ja |
 | `invoice.send` | Sende fakturagrunnlag (alle, 27.10.2026) | ja | ja | ja | ja |
 
@@ -1673,7 +1681,10 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Ansatt | `employees` | Person som jobber i Byggcon |
 | Bruker / innlogging | `users` | Felles med Optiplan |
 | Ramme | `app shell` (`src/app/(ansatt)/layout.tsx`) | Topplinjen og menyen rundt alle sidene for innloggede ansatte. Lik på PC og iPad; menyen står til venstre fra bredde `lg` og som rad under topplinjen på smalere skjermer |
-| Sertifisering | `certifications` | Personlig sertifisering |
+| Sertifisering | `certification` (`certifications`) | Personlig sertifisering med utløpsdato. Uten gyldig sertifisering får ingen `report.publish` |
+| Område (sertifisering) | `area` | Fast kode for hva sertifiseringen gjelder. Nå bare `condition_report`, «Tilstandsrapport bolig» |
+| Gyldig fra / gyldig til | `valid_from` / `valid_to` | Datoene sertifiseringen gjelder. Utløpsdagen er siste gyldige dag, i norsk tid |
+| Går ut snart | `expiring` | Sertifisering som har gått ut eller går ut innen 60 dager (listen for admin) |
 | Ansvarsforsikring | `companies.liability_*` | Hører til selskapet |
 | Firmatekst | `companies.company_text` | Teksten om selskapet på rapportens side 2 |
 | Sluttet | `employees.deactivated_at` | Kan ikke logge inn, står fortsatt på gamle rapporter |
@@ -1975,3 +1986,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 28.10.2026 | Modellen sjekket mot hovedmålet. Reklamasjoner per 100 rapporter dekkes allerede (`claims` og `report_releases`). Tid per fase dekkes bare delvis av hendelsene. Nye kroker: `work_sessions` (arbeidsøkter per rapport og fase) og `baseline_metrics` (nullpunkt fra IVIT og de siste 3 årene). | Hovedmål, Ståle i chat 28.10.2026 |
 | 31.10.2026 | Roller og rettigheter (fase 0b): nye rettigheter `assignment.edit`, `report.edit`, `report.publish`, `template.edit_structure` og `invoice.send`; `claims.view` heter `claims.read` som i koden; `employee_permissions` med `created_by`/`created_at` i stedet for `granted_by`/`granted_at`; innstillingen `access.inspectors_edit_all` i `organizations.settings`, standard på. | A18–A21, `docs/funksjoner/fase0b-roller-rettigheter.md` |
 | 31.10.2026 | Admin (fase 0b): `employee_roles` har delvis unik indeks `(employee_id, role) WHERE deleted_at IS NULL`, så en rolle kan tas bort og gis på nytt som ny rad. Minst én aktiv admin per organisasjon. Nye funksjonsnavn og feilklasser i ordlisten. | A24–A28, `docs/funksjoner/fase0b-admin-organisasjon.md` |
+| 31.10.2026 | Sertifisering (fase 0b): `certifications` bygget med sammensatt fremmednøkkel og check på datoene, område `condition_report`, `report.publish` krever gyldig sertifisering (A29–A32). `expiry_warned_at`, `document_file_id` og `certification_id` i utgivelsen venter. | funksjonskart H5 |

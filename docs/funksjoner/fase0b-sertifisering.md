@@ -3,7 +3,7 @@
 - **Fase:** 0b – Innlogging, organisasjon, roller og layout
 - **Modul:** kjerne (`src/core/organization`, `src/core/access`, adminområdet)
 - **Branch:** `fase0b-sertifisering` (bygger på `main`)
-- **Status:** utkast (31.10.2026)
+- **Status:** under arbeid (31.10.2026)
 - **Støtter hovedmål:** Reklamasjoner: ingen rapport kan publiseres av en ansvarlig uten gyldig sertifisering, og admin ser i god tid hvem som må fornye. Tid: admin slipper å holde oversikt i regneark; fornyelse er én ny rad. KI først: se under.
 
 ## Problem
