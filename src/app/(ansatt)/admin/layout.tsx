@@ -33,6 +33,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 Sertifiseringer
               </NavLink>
             </li>
+            <li>
+              <NavLink href="/admin/logg" variant="tab">
+                Logg
+              </NavLink>
+            </li>
           </ul>
         </nav>
       )}

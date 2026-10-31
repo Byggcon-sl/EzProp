@@ -57,6 +57,13 @@
       "when": 1793441670123,
       "tag": "0007_sertifiseringer",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793452756175,
+      "tag": "0008_hendelser",
+      "breakpoints": true
     }
   ]
 }
