@@ -33,6 +33,8 @@ export const employees = pgTable(
   },
   (table) => [
     index("employees_organization_id_idx").on(table.organizationId),
+    // Mål for sammensatte fremmednøkler fra andre tabeller (samme organisasjon)
+    uniqueIndex("employees_organization_id_id_idx").on(table.organizationId, table.id),
     // Én ansatt per innlogging per organisasjon
     uniqueIndex("employees_user_id_organization_id_idx").on(table.userId, table.organizationId),
     // Selskap og kontor må høre til samme organisasjon som den ansatte
@@ -70,3 +72,30 @@ export const employeeRoleAssignments = pgTable(
     uniqueIndex("employee_roles_employee_id_role_idx").on(table.employeeId, table.role),
   ],
 );
+
+/**
+ * Enkeltrettigheter som admin har gitt en ansatt i tillegg til rollene (for eksempel maltilgang).
+ * Navnet på rettigheten er fri tekst her; ukjente navn gir ingen tilgang (håndteres i
+ * `src/core/access`). Fjernes med myk sletting, og kan gis på nytt etterpå.
+ */
+export const employeePermissions = pgTable(
+  "employee_permissions",
+  {
+    ...baseColumns,
+    employeeId: uuid("employee_id").notNull(),
+    permission: text("permission").notNull(),
+  },
+  (table) => [
+    // Den ansatte må høre til samme organisasjon som raden
+    foreignKey({
+      name: "employee_permissions_employee_fk",
+      columns: [table.organizationId, table.employeeId],
+      foreignColumns: [employees.organizationId, employees.id],
+    }),
+    // Samme rettighet bare én gang per ansatt blant aktive rader
+    uniqueIndex("employee_permissions_employee_id_permission_idx")
+      .on(table.employeeId, table.permission)
+      .where(sql`${table.deletedAt} is null`),
+  ],
+);
+export type EmployeePermission = typeof employeePermissions.$inferSelect;
