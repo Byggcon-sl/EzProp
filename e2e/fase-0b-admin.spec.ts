@@ -338,6 +338,7 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
       "/admin/selskaper/ny",
       "/admin/kontorer",
       "/admin/kontorer/ny",
+      // Revisjonsloggen (fase0b-revisjon-hendelser-testplan.md 6.5)
       "/admin/logg",
     ]) {
       const response = await page.goto(url);
