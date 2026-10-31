@@ -907,3 +907,12 @@ export async function companyOrgNumbers(): Promise<string[]> {
     await sql.end();
   }
 }
+
+/** Trykkflaten er minst 44 × 44 punkter (iPad, docs/08-designprinsipper.md). */
+export async function expectAtLeast44(target: Locator, name: string) {
+  await expect(target).toBeVisible();
+  const box = await target.boundingBox();
+  expect(box, `${name} er synlig`).not.toBeNull();
+  expect(box!.height, `${name} er minst 44 px høy`).toBeGreaterThanOrEqual(44);
+  expect(box!.width, `${name} er minst 44 px bred`).toBeGreaterThanOrEqual(44);
+}
