@@ -127,3 +127,8 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Første punkt i fase 0b gikk fra oppgavekort til merget PR i én kjøring (24 agenter, ca. 2 t 45 min). Ingen alvorlige funn, 6 små, lagt inn som liten oppgave (i).
 - To kjøringer tok samme oppgave: den andre startet «organisasjon → selskap → kontor» i en egen worktree-branch mens denne kjøringen allerede hadde pushet oppgavekortet til `fase0b-organisasjon-selskap-kontor`, og pushet også til samme branch. Det ble flettet uten tap, men arbeidet ble gjort to ganger. Regel videre: før en oppgave startes, sjekk alle brancher på origin med push de siste 3 timene (også `worktree-wf_*`) og om oppgavekortet for punktet allerede finnes der. Finnes det, velg et annet punkt.
 - Beslutningsnumrene kolliderte igjen (A13–A15 brukt av ADR 0004). Regelen fra prøve D gjelder: sjekk siste nummer på `main` rett før PR-en åpnes.
+
+## 31.10.2026 – PR #51 merget (grunnlayout Fjord)
+
+- Containeren startet på nytt to ganger mens arbeidsflyten kjørte. Arbeidsflyten ble gjenopptatt med `resumeFromRunId`, og arbeidet som var pushet, gikk ikke tapt. Regel som før: push etter hvert steg.
+- Etter at «Oppdater åpne PR-er» flettet inn `main`, fikk PR-en samme versjon som `main` og ble stående «unstable» (CI-kjøringen for `pull_request` ventet på godkjenning, bare `workflow_dispatch`-kjøringen var grønn). En ny push fra agenten med versjonen én patch over `main` startet vanlig CI, og skriptet merget. Regel videre: står en PR «unstable» med alle jobbene grønne, sjekk versjonen og push en liten endring.
