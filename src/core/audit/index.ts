@@ -1,7 +1,7 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { requireOrganizationAccess, type Actor, type EmployeeGrant } from "@/core/access";
 import { db, type DbExecutor } from "@/db/client";
-import { auditLog } from "@/db/schema";
+import { auditLog, employees } from "@/db/schema";
 
 export type AuditEventInput = {
   entityType: string;
@@ -37,9 +37,16 @@ export async function recordAuditEvent(
   });
 }
 
-/** Siste hendelser i organisasjonen. Bare admin og leder (`staff.manage`). */
+/**
+ * Siste hendelser i organisasjonen, nyeste først. Bare admin og leder (`staff.manage`).
+ * Bare lesing: ingen kode endrer eller sletter rader i revisjonsloggen.
+ */
 export async function listAuditEvents(actor: Actor, organizationId: string, limit = 50) {
   const grant = await requireOrganizationAccess(actor, organizationId, "staff.manage");
+  // Left join: rader uten ansatt forsvinner ikke, de får `actorName = null` («Ukjent»).
+  // Join krever samme organisasjon, så et navn fra en annen organisasjon vises aldri.
+  // Ansatte som har sluttet eller er mykt slettet, er bevisst med: historikken skal ikke miste
+  // navnet på den som gjorde endringen.
   return db
     .select({
       id: auditLog.id,
@@ -48,9 +55,17 @@ export async function listAuditEvents(actor: Actor, organizationId: string, limi
       entityId: auditLog.entityId,
       changes: auditLog.changes,
       actorEmployeeId: auditLog.actorEmployeeId,
+      actorName: employees.name,
       occurredAt: auditLog.occurredAt,
     })
     .from(auditLog)
+    .leftJoin(
+      employees,
+      and(
+        eq(employees.id, auditLog.actorEmployeeId),
+        eq(employees.organizationId, grant.organizationId),
+      ),
+    )
     .where(eq(auditLog.organizationId, grant.organizationId))
     .orderBy(desc(auditLog.occurredAt))
     .limit(limit);
