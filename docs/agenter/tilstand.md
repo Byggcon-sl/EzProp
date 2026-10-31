@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 31.10.2026 (PR #54 og #55 merget; oppgavekort for sertifisering med utløpsdato klart)
+Sist oppdatert: 31.10.2026 kl. 13:10 UTC (PR #57 sertifisering merget)
 
 ## Gjeldende fase
 
@@ -67,9 +67,9 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #57 | Sertifisering med utløpsdato (`fase0b-sertifisering`) | åpnet 31.10.2026. CI rød: e2e 7b (iPad, dato skrevet med tastatur i `e2e/fase-0b-sertifisering.spec.ts:370` ble tom). Rettes av hovedløkken, så merges med skriptet | `main` |
+| – | Ingen åpne PR-er | – | – |
 
-PR #16–#28 og #30–#55 er merget (#55: doble testfiler for admin slått sammen, merget 31.10.2026 kl. 08:56 UTC, #54: admin-skjermene, #53: tilstand, #52: tilstand, #51: grunnlayout Fjord, #50: roller og rettigheter, #49: rydding fra nattløkken, #48 og #47: tilstand, #46: seed og slettet kontor, #44: liten oppgave (i), #45: UU-funn 6–9 fra nattløkken, #43 og #42: tilstand, #41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
+PR #16–#28 og #30–#57 er merget (#57: sertifisering med utløpsdato, merget 31.10.2026 kl. 13:05 UTC, #56: tilstand, #55: doble testfiler for admin slått sammen, merget 31.10.2026 kl. 08:56 UTC, #54: admin-skjermene, #53: tilstand, #52: tilstand, #51: grunnlayout Fjord, #50: roller og rettigheter, #49: rydding fra nattløkken, #48 og #47: tilstand, #46: seed og slettet kontor, #44: liten oppgave (i), #45: UU-funn 6–9 fra nattløkken, #43 og #42: tilstand, #41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
 
 Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). Bygger en oppgave på en PR som ikke er merget, står det under «Bygger på».
 
@@ -122,6 +122,8 @@ I orden 31.10.2026 (ingen oppgave): lint og typesjekk uten advarsler; e2e-ipad g
 Ingen.
 
 ## Siste kjøring
+
+31.10.2026 kl. 10:05–13:10 UTC: hovedløkken fant ingen åpne PR-er. Branchen `fase0b-sertifisering` hadde bare oppgavekortet og ingen push siden kl. 08:31, så denne kjøringen tok den over. Kjørte arbeidsflyten «oppgave» (21 agenter, ca. 2 t 10 min) til PR #57. CI ble rød på e2e-test 7b (datoen skrevet med tastatur ble tom i CI, men ikke lokalt). Prosjektlederen rettet testen: datoen settes direkte, og Tab-rekkefølge, fokus og Enter testes fortsatt med tastaturet. CI grønn, PR #57 merget med skriptet (ingen alvorlige funn, 11 små i liten oppgave (n), beslutninger A29–A32). Neste i fase 0b: «Revisjonslogg og hendelseslogg». Sesjon: https://claude.ai/code/session_01Jqwnu1fnAecZEgZZBeVqQL
 
 31.10.2026 kl. 00:05–03:15 UTC: hovedløkken fant PR #46 grønn, men «unstable» (CI-kjøringen fra en automatisk fletting ventet på godkjenning). Tok tilstandsfilen fra main (flettingen hadde laget doble linjer), økte versjonen til 0.2.37 og pushet; CI startet på nytt, og PR #46 ble merget med skriptet. Kjørte fase 0b «Roller og rettigheter» med arbeidsflyten «oppgave» (23 agenter, ca. 3 t) til PR #50, merget med skriptet (CI grønn, ingen alvorlige funn, 9 små i liten oppgave (k), beslutning A18–A21). PR #51 (grunnlayout) er i arbeid hos en annen kjøring, så denne kjøringen startet ingen ny oppgave. Sesjon: https://claude.ai/code/session_01JqwntzfiA6KpanbBfiuad9
 

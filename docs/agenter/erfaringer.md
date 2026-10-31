@@ -2,6 +2,11 @@
 
 Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte tid. Nyeste øverst. Får Ståle stadig de samme kommentarene, legges de inn som regel i den aktuelle agentbeskrivelsen.
 
+## 31.10.2026 – PR #57 merget (sertifisering med utløpsdato)
+
+- Å skrive en dato med tastaturet i et `<input type="date">` i Playwright virker ulikt i Chromium lokalt og i CI (feltet ble tomt i CI, også når begge rekkefølger dag/måned ble prøvd). Delene inne i datofeltet styres av nettleseren. I e2e: sett datoen med `fill`, og test Tab-rekkefølge, fokus og Enter med tastaturet.
+- En e2e-test som er grønn lokalt, men rød i CI, skal reproduseres med samme forutsetning før den rettes; ett retteforsøk som bare gjetter årsaken, koster en hel CI-runde (ca. 25 min).
+
 ## 29.10.2026 – PR #17 merget (synktjenestene i Azure)
 
 - Arbeidsflyten «oppgave» gikk fra oppgavekort til merget PR uten Ståle (24 agenter, ca. 3 timer). Tjenester som koster penger, ble lagt inn **av som standard** (en Bicep-parameter og en GitHub-variabel), så mergen kostet ingenting og PR-en trengte ikke vente på Ståle. Spørsmålet om å slå dem på ligger som nr. 12. Regel: noe som koster penger, bygges slått av, og Ståle slår det på.
