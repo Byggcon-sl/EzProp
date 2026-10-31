@@ -146,6 +146,15 @@ describe("listEmployees", () => {
     });
   });
 
+  it("sorterer på navn", async () => {
+    const { org, admin } = await setup();
+    await createEmployee(await createUser({ name: "Test Cecilie" }), org.id, ["inspector"]);
+    await createEmployee(await createUser({ name: "Test Bjørn" }), org.id, ["inspector"]);
+
+    const rows = await listEmployees(admin, org.id);
+    expect(rows.map((row) => row.name)).toEqual(["Test Admin", "Test Bjørn", "Test Cecilie"]);
+  });
+
   it("viser ikke slettede ansatte, heller ikke med includeDeactivated", async () => {
     const { org, admin, adminEmployee } = await setup();
     const person = await createUser();
