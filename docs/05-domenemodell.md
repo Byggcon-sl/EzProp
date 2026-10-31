@@ -1177,10 +1177,10 @@ Dette betyr: Databasen tåler en million rader i `photos` uten problemer. Filene
 | Felt | Forklaring |
 |---|---|
 | `type` | Hendelsestypen (listen under) |
-| `assignment_id`, `report_id` | Oppdraget og eventuelt rapporten |
+| `assignment_id`, `report_id` | Oppdraget og eventuelt rapporten. Kan være tomme. Ingen fremmednøkkel før tabellene finnes i fase 2a; den legges til i samme migrering som tabellene, sammen med indeksen på `(organization_id, assignment_id)` (A33, 31.10.2026) |
 | `occurred_at` | Når |
-| `actor_type` | `employee`, `system` eller `integration` |
-| `actor_id` | Hvem |
+| `actor_type` | `employee`, `system` eller `integration` (sjekk i databasen) |
+| `actor_id` | Hvem. Tom når systemet selv er aktøren |
 | `data` | Detaljer, for eksempel gammel og ny status eller ny befaringstid |
 
 **Hendelsestypene (lang liste).** Claudes forslag, bygd på P1 og Spectora-forslagene:
@@ -1741,6 +1741,9 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Merket «Rettet» | – | Regnes ut fra `report_releases` (versjon 2 eller høyere er sendt) |
 | Bestilt / under arbeid / ferdig / fakturert | `ordered` / `in_progress` / `completed` / `invoiced` | |
 | Hendelse | `events` | Lang liste |
+| Hendelsestype | `EventType`, `EVENT_TYPES` (`src/core/events/types.ts`) | Faste koder for hendelsene i 4.9. Står bare der; en kode endres aldri |
+| Hvem gjorde det (hendelse) | `events.actor_type` | `employee` (ansatt), `system` (systemet selv) eller `integration` (tilkobling) |
+| Skrive hendelse | `recordEvent` (`src/core/events`) | Lagrer en hendelse fra en ansatt, i samme transaksjon som endringen. Organisasjonen og den ansatte kommer fra tilgangssjekken |
 | Avtale med oppdragsgiver | `client_agreements` | For eksempel Fremtind |
 | Prøve uten nett (fase 1) | `offline-trial` | Modulen med testskjemaet for fase 1. Kastes eller gjøres om til feltkomponenter i fase 2b |
 | Testskjema | `trial form` (`trialForm`, `TrialAnswers`) | Skjemaet med 40 felt som kandidatene i fase 1 prøves mot. Ikke en systemmal |

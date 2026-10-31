@@ -19,7 +19,7 @@ import { todayInOslo } from "@/shared/lib/dates";
 /** Tømmer alle tabeller i testdatabasen. Ny tabell? Legg den til her. */
 export async function resetDatabase() {
   await db.execute(
-    sql`truncate table certifications, trial_photos, trial_answers, trial_forms, audit_log, employee_permissions, employee_roles, employees, companies, offices, organizations, sessions, accounts, verifications, login_attempts, users restart identity cascade`,
+    sql`truncate table certifications, trial_photos, trial_answers, trial_forms, audit_log, events, employee_permissions, employee_roles, employees, companies, offices, organizations, sessions, accounts, verifications, login_attempts, users restart identity cascade`,
   );
 }
 
