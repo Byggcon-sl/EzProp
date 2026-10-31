@@ -11,6 +11,7 @@ import {
 import { db } from "@/db/client";
 import { auditLog, employeePermissions, employees, users, type EmployeeRole } from "@/db/schema";
 import {
+  createCertification,
   createEmployee,
   createOrganization,
   createUser,
@@ -251,6 +252,8 @@ describe("tilgang per rolle", () => {
 
   it("6. admin gir og tar bort, også til en annen admin og til seg selv, og stenges aldri ute", async () => {
     const { org, admin, adminEmployee } = await setup();
+    // Gyldig sertifisering, så admin også har report.publish (A29)
+    await createCertification(adminEmployee);
     const other = await createUser({ name: "Test Admin To" });
     const otherEmployee = await createEmployee(other, org.id, ["admin"]);
 

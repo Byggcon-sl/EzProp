@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { grantablePermissions } from "@/core/access";
 import { employeeRoles } from "@/db/schema";
+import { todayInOslo } from "@/shared/lib/dates";
 import {
   formatDate,
   formatIsoDate,
@@ -10,7 +11,6 @@ import {
   roleBadgeOrder,
   roleFormOrder,
   roleLabels,
-  todayInNorway,
 } from "./labels";
 
 describe("tekstene i adminområdet", () => {
@@ -67,7 +67,7 @@ describe("formatering", () => {
   it("bruker norsk tid for dagens dato og for tidspunkt", () => {
     // 23:30 UTC 31. desember er 1. januar i Norge
     const lateNewYearsEve = new Date("2026-12-31T23:30:00Z");
-    expect(todayInNorway(lateNewYearsEve)).toBe("2027-01-01");
+    expect(todayInOslo(lateNewYearsEve)).toBe("2027-01-01");
     expect(formatDate(lateNewYearsEve)).toBe("01.01.2027");
   });
 });

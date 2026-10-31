@@ -4,6 +4,7 @@ import type { Actor } from "@/core/access";
 import { db } from "@/db/client";
 import {
   auditLog,
+  certifications,
   companies,
   employeePermissions,
   employeeRoleAssignments,
@@ -13,11 +14,12 @@ import {
   users,
   type EmployeeRole,
 } from "@/db/schema";
+import { todayInOslo } from "@/shared/lib/dates";
 
 /** Tømmer alle tabeller i testdatabasen. Ny tabell? Legg den til her. */
 export async function resetDatabase() {
   await db.execute(
-    sql`truncate table trial_photos, trial_answers, trial_forms, audit_log, employee_permissions, employee_roles, employees, companies, offices, organizations, sessions, accounts, verifications, users restart identity cascade`,
+    sql`truncate table certifications, trial_photos, trial_answers, trial_forms, audit_log, employee_permissions, employee_roles, employees, companies, offices, organizations, sessions, accounts, verifications, users restart identity cascade`,
   );
 }
 
@@ -120,6 +122,49 @@ export async function grantPermission(
     })
     .returning();
   if (!row) throw new Error("kunne ikke gi enkeltrettighet");
+  return row;
+}
+
+/** Samme dato ett år frem («ÅÅÅÅ-MM-DD»). 29. februar blir 1. mars. */
+function oneYearAfter(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(year + 1, month - 1, day)).toISOString().slice(0, 10);
+}
+
+/**
+ * En sertifisering for den ansatte, satt inn direkte. Standard er gyldig i ett år fra i dag
+ * (norsk tid), området `condition_report`. Overstyringene brukes til grensesaker og til å vise at
+ * databasen avviser fremmede ansatte. Nummer og utsteder er oppdiktet.
+ */
+export async function createCertification(
+  employee: { id: string; organizationId: string },
+  overrides: {
+    organizationId?: string;
+    employeeId?: string;
+    validFrom?: string | null;
+    validTo?: string;
+    area?: string;
+    deletedAt?: Date | null;
+    issuer?: string | null;
+    certificateNumber?: string | null;
+  } = {},
+) {
+  const today = todayInOslo();
+  const [row] = await db
+    .insert(certifications)
+    .values({
+      organizationId: overrides.organizationId ?? employee.organizationId,
+      employeeId: overrides.employeeId ?? employee.id,
+      area: overrides.area ?? "condition_report",
+      issuer: overrides.issuer === undefined ? null : overrides.issuer,
+      certificateNumber:
+        overrides.certificateNumber === undefined ? null : overrides.certificateNumber,
+      validFrom: overrides.validFrom === undefined ? today : overrides.validFrom,
+      validTo: overrides.validTo ?? oneYearAfter(today),
+      deletedAt: overrides.deletedAt ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette sertifisering");
   return row;
 }
 
