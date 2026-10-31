@@ -6,6 +6,7 @@ import { db } from "@/db/client";
 import {
   certifications,
   employeePermissions,
+  loginAttempts,
   trialAnswers,
   trialForms,
   trialPhotos,
@@ -52,6 +53,24 @@ describe("resetDatabase", () => {
       const [row] = await db.select({ n: count() }).from(table);
       expect(row!.n).toBe(0);
     }
+  });
+});
+
+describe("resetDatabase og innloggingssperren (fase 0b)", () => {
+  it("o) resetDatabase tømmer login_attempts", async () => {
+    await resetDatabase();
+    await db.insert(loginAttempts).values([
+      { emailHash: "a".repeat(64), kind: "code_requested" },
+      { emailHash: "a".repeat(64), kind: "code_failed" },
+      { emailHash: "a".repeat(64), kind: "login_succeeded" },
+    ]);
+    const [before] = await db.select({ n: count() }).from(loginAttempts);
+    expect(before!.n).toBe(3);
+
+    await resetDatabase();
+
+    const [after] = await db.select({ n: count() }).from(loginAttempts);
+    expect(after!.n).toBe(0);
   });
 });
 
