@@ -1,4 +1,5 @@
-import { addDaysToIsoDate, certificationAreaLabels, type GrantablePermission } from "@/core/access";
+import { addDaysToIsoDate, certificationAreaLabels } from "@/core/access/certification";
+import type { GrantablePermission } from "@/core/access";
 import type { EmployeeRole } from "@/db/schema";
 
 /** Rollene i den rekkefølgen de står i skjemaene (oftest brukt først). */
