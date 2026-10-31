@@ -168,7 +168,7 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
   }) => {
     await logIn(page, ADMIN_EMAIL);
     await adminMenuLink(page).click();
-    await expect(page).toHaveURL(/\/admin(\/ansatte)?$/);
+    await expect(page).toHaveURL(/\/admin(\/ansatte)?(\?[^/]*)?$/);
     await adminSubnav(page).getByRole("link", { name: "Selskaper", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Selskaper", level: 1 })).toBeVisible();
 
@@ -186,7 +186,7 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
     await page.getByLabel(/^Gyldig til/).fill("2027-06-30");
     await page.getByRole("button", { name: "Lagre" }).click();
 
-    await expect(page).toHaveURL(/\/admin\/selskaper$/);
+    await expect(page).toHaveURL(/\/admin\/selskaper(\?[^/]*)?$/);
     await expect(page.getByRole("status")).toContainText("Selskapet er lagret.");
     const row = mainArea(page).getByRole("listitem").filter({ hasText: data.companyName });
     await expect(row).toBeVisible();
@@ -194,12 +194,12 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
     await expect(row).toContainText("30.06.2027");
 
     await row.getByRole("link").click();
-    await expect(page).toHaveURL(/\/admin\/selskaper\/[0-9a-f-]{36}$/);
+    await expect(page).toHaveURL(/\/admin\/selskaper\/[0-9a-f-]{36}(\?[^/]*)?$/);
     await expect(page.getByRole("heading", { name: "Endre selskap", level: 1 })).toBeVisible();
     await expect(page.getByLabel(/^Firmatekst/)).toHaveValue("Firmatekst for testselskapet.");
     await page.getByLabel(/^Polisenummer/).fill("TEST-0002");
     await page.getByRole("button", { name: "Lagre" }).click();
-    await expect(page).toHaveURL(/\/admin\/selskaper$/);
+    await expect(page).toHaveURL(/\/admin\/selskaper(\?[^/]*)?$/);
 
     await mainArea(page)
       .getByRole("listitem")
@@ -223,7 +223,7 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
     await page.getByLabel(/^Rekkefølge/).fill("90");
     await page.getByRole("button", { name: "Lagre" }).click();
 
-    await expect(page).toHaveURL(/\/admin\/kontorer$/);
+    await expect(page).toHaveURL(/\/admin\/kontorer(\?[^/]*)?$/);
     await expect(page.getByRole("status")).toContainText("Kontoret er lagret.");
     const row = mainArea(page).getByRole("listitem").filter({ hasText: data.officeName });
     await expect(row).toContainText("Testgata 2");
@@ -233,7 +233,7 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
     await expect(page.getByLabel(/^Rekkefølge/)).toHaveValue("90");
     await page.getByLabel(/^Adresse/).fill("Testgata 3");
     await page.getByRole("button", { name: "Lagre" }).click();
-    await expect(page).toHaveURL(/\/admin\/kontorer$/);
+    await expect(page).toHaveURL(/\/admin\/kontorer(\?[^/]*)?$/);
     await expect(
       mainArea(page).getByRole("listitem").filter({ hasText: data.officeName }),
     ).toContainText("Testgata 3");
@@ -259,7 +259,7 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
     await page.getByRole("checkbox", { name: /^Takstmann/ }).check();
     await page.getByRole("button", { name: "Lagre" }).click();
 
-    await expect(page).toHaveURL(/\/admin\/ansatte$/);
+    await expect(page).toHaveURL(/\/admin\/ansatte(\?[^/]*)?$/);
     await expect(page.getByRole("status")).toContainText("Den ansatte er lagt inn.");
     const activeRow = mainArea(page).getByRole("listitem").filter({ hasText: data.employeeName });
     await expect(activeRow).toContainText(data.employeeEmail);
@@ -282,10 +282,12 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
 
       // Admin markerer personen som sluttet
       await activeRow.getByRole("link").click();
-      await expect(page).toHaveURL(/\/admin\/ansatte\/[0-9a-f-]{36}$/);
+      await expect(page).toHaveURL(/\/admin\/ansatte\/[0-9a-f-]{36}(\?[^/]*)?$/);
+      const employeeUrl = page.url().replace(/\?.*$/, "");
       await page.getByRole("button", { name: "Har sluttet" }).click();
+      await expect(page.getByRole("status")).toContainText("Markert som sluttet.");
+      await page.goto(employeeUrl);
       await expect(page.getByRole("button", { name: "Angre sluttet" })).toBeVisible();
-      const employeeUrl = page.url();
 
       await page.goto("/admin/ansatte");
       await expect(page.getByRole("heading", { name: "Har sluttet", level: 2 })).toBeVisible();
@@ -305,6 +307,8 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
       // Admin angrer
       await page.goto(employeeUrl);
       await page.getByRole("button", { name: "Angre sluttet" }).click();
+      await expect(page.getByRole("status")).toContainText("Sluttet er angret.");
+      await page.goto(employeeUrl);
       await expect(page.getByRole("button", { name: "Har sluttet" })).toBeVisible();
 
       await employeePage.goto("/arbeidskoe");
@@ -421,7 +425,7 @@ test.describe("adminområdet på iPad (prosjektet ipad)", () => {
     await page.keyboard.type("91");
     await page.keyboard.press("Enter");
 
-    await expect(page).toHaveURL(/\/admin\/kontorer$/);
+    await expect(page).toHaveURL(/\/admin\/kontorer(\?[^/]*)?$/);
     await expect(
       mainArea(page).getByRole("listitem").filter({ hasText: officeName }),
     ).toBeVisible();
