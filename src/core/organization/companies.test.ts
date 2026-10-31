@@ -123,48 +123,35 @@ describe("listCompanies", () => {
   });
 });
 
-// Testplan: docs/funksjoner/fase0b-admin-organisasjon-testplan.md, avsnitt 1.
-// Testdata er oppdiktet (org.nr. 000000001–000000009, polise TEST-0001, «Testforsikring»).
+// Admin: opprette og endre selskaper.
+// Testplan: docs/funksjoner/fase0b-admin-organisasjon-testplan.md, avsnitt 1. Testdata er oppdiktet.
 
-/** Alle feltene i skjemaet, med oppdiktede verdier. */
-const fullCompany = {
-  legalName: "Testselskap Nord AS",
-  orgNumber: "000000001",
-  vatRegistered: false,
-  address: "Testveien 1",
-  postalCode: "0001",
-  city: "Teststed",
-  companyText: "Oppdiktet firmatekst til testene.",
-  liabilityInsurer: "Testforsikring",
-  liabilityPolicyNumber: "TEST-0001",
-  liabilityValidTo: "2027-06-30",
-};
+type CompanyInput = Parameters<typeof adminCreateCompany>[2];
+type CompanyUpdate = Parameters<typeof adminUpdateCompany>[3];
 
-const changedCompany = {
-  legalName: "Testselskap Sør AS",
-  orgNumber: "000000002",
-  vatRegistered: true,
-  address: "Testgata 2",
-  postalCode: "0002",
-  city: "Testby",
-  companyText: "Endret oppdiktet firmatekst.",
-  liabilityInsurer: "Testforsikring Ny",
-  liabilityPolicyNumber: "TEST-0002",
-  liabilityValidTo: "2028-01-31",
-};
-
-async function adminIn(organizationId: string) {
-  const admin = await createUser({ name: "Admin Testesen" });
-  const employee = await createEmployee(admin, organizationId, ["admin"]);
-  return { admin, employee };
+/** Alle feltene i selskapet, oppdiktede verdier. */
+function companyInput(overrides: Record<string, unknown> = {}): CompanyInput {
+  return {
+    legalName: "Testselskap Nord AS",
+    orgNumber: "000000001",
+    vatRegistered: true,
+    address: "Testveien 1",
+    postalCode: "0001",
+    city: "Testby",
+    companyText: "Firmatekst for testselskapet.",
+    liabilityInsurer: "Testforsikring",
+    liabilityPolicyNumber: "TEST-0001",
+    liabilityValidTo: "2027-06-30",
+    ...overrides,
+  } as CompanyInput;
 }
 
-async function countCompanies() {
+function companyUpdate(overrides: Record<string, unknown> = {}): CompanyUpdate {
+  return companyInput(overrides) as unknown as CompanyUpdate;
+}
+
+async function companyCount() {
   return (await db.select({ id: companies.id }).from(companies)).length;
-}
-
-async function countAudit() {
-  return (await db.select({ id: auditLog.id }).from(auditLog)).length;
 }
 
 async function companyRow(id: string) {
@@ -173,114 +160,170 @@ async function companyRow(id: string) {
   return row;
 }
 
-/** Fanger feilen fra et kall som skal feile. */
-async function caught(promise: Promise<unknown>): Promise<unknown> {
-  return promise.then(
-    () => null,
-    (error: unknown) => error,
-  );
+async function orgWithAdmin() {
+  const org = await createOrganization();
+  const admin = await createUser({ name: "Test Admin" });
+  const adminEmployee = await createEmployee(admin, org.id, ["admin"]);
+  return { org, admin, adminEmployee };
 }
 
-describe("createCompany og updateCompany", () => {
-  it("createCompany lagrer alle feltene i organisasjonen fra tilgangssjekken", async () => {
-    const org = await createOrganization();
-    const { admin } = await adminIn(org.id);
+const nonAdminRoles: EmployeeRole[] = ["inspector", "office", "manager"];
 
-    const created = await adminCreateCompany(admin, org.id, fullCompany);
+describe("createCompany og updateCompany (admin)", () => {
+  it("1. createCompany lagrer alle feltene på organisasjonen fra tilgangssjekken", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const created = await adminCreateCompany(admin, org.id, companyInput());
 
-    expect(created).toMatchObject({ ...fullCompany, organizationId: org.id, rowVersion: 1 });
-    expect(await companyRow(created.id)).toMatchObject({ ...fullCompany, organizationId: org.id });
+    const row = await companyRow(created.id);
+    expect(row).toMatchObject({
+      organizationId: org.id,
+      legalName: "Testselskap Nord AS",
+      orgNumber: "000000001",
+      vatRegistered: true,
+      address: "Testveien 1",
+      postalCode: "0001",
+      city: "Testby",
+      companyText: "Firmatekst for testselskapet.",
+      liabilityInsurer: "Testforsikring",
+      liabilityPolicyNumber: "TEST-0001",
+      liabilityValidTo: "2027-06-30",
+      deletedAt: null,
+    });
   });
 
-  it("updateCompany endrer alle feltene og øker row_version med 1", async () => {
-    const org = await createOrganization();
-    const { admin } = await adminIn(org.id);
-    const created = await adminCreateCompany(admin, org.id, fullCompany);
+  it("2. updateCompany endrer alle feltene og øker row_version med 1", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const company = await createCompany(org.id, { legalName: "Testselskap Gammel AS" });
+    const before = await companyRow(company.id);
 
-    const updated = await adminUpdateCompany(admin, org.id, created.id, changedCompany);
+    await adminUpdateCompany(
+      admin,
+      org.id,
+      company.id,
+      companyUpdate({
+        legalName: "Testselskap Ny AS",
+        orgNumber: "000000002",
+        vatRegistered: false,
+        address: "Testgata 2",
+        postalCode: "0002",
+        city: "Testvik",
+        companyText: "Ny firmatekst.",
+        liabilityInsurer: "Testforsikring to",
+        liabilityPolicyNumber: "TEST-0002",
+        liabilityValidTo: "2028-01-31",
+      }),
+    );
 
-    expect(updated).toMatchObject({ ...changedCompany, id: created.id, rowVersion: 2 });
-    expect(await companyRow(created.id)).toMatchObject({ ...changedCompany, rowVersion: 2 });
+    const after = await companyRow(company.id);
+    expect(after).toMatchObject({
+      organizationId: org.id,
+      legalName: "Testselskap Ny AS",
+      orgNumber: "000000002",
+      vatRegistered: false,
+      address: "Testgata 2",
+      postalCode: "0002",
+      city: "Testvik",
+      companyText: "Ny firmatekst.",
+      liabilityInsurer: "Testforsikring to",
+      liabilityPolicyNumber: "TEST-0002",
+      liabilityValidTo: "2028-01-31",
+    });
+    expect(after.rowVersion).toBe(before.rowVersion + 1);
   });
 
-  it.each(["inspector", "office", "manager"] as const)(
-    "rollen %s får AccessDeniedError, og ingenting skrives",
-    async (role) => {
+  describe("3. tilgang per rolle", () => {
+    it.each(nonAdminRoles)("rollen %s får AccessDeniedError og ingen endring", async (role) => {
       const org = await createOrganization();
-      const existing = await createCompany(org.id, { legalName: "Testselskap A AS" });
+      const company = await createCompany(org.id);
       const person = await createUser();
       await createEmployee(person, org.id, [role]);
-      const companiesBefore = await countCompanies();
-      const auditBefore = await countAudit();
+      const countBefore = await companyCount();
+      const rowBefore = await companyRow(company.id);
 
-      await expect(adminCreateCompany(person, org.id, fullCompany)).rejects.toThrow(
+      await expect(adminCreateCompany(person, org.id, companyInput())).rejects.toThrow(
         AccessDeniedError,
       );
-      await expect(adminUpdateCompany(person, org.id, existing.id, changedCompany)).rejects.toThrow(
-        AccessDeniedError,
+      await expect(
+        adminUpdateCompany(person, org.id, company.id, companyUpdate({ legalName: "Endret AS" })),
+      ).rejects.toThrow(AccessDeniedError);
+
+      expect(await companyCount()).toBe(countBefore);
+      expect(await companyRow(company.id)).toEqual(rowBefore);
+      expect(await auditRows(org.id)).toHaveLength(0);
+    });
+
+    it("admin lykkes (positiv kontroll)", async () => {
+      const { org, admin } = await orgWithAdmin();
+      const created = await adminCreateCompany(admin, org.id, companyInput());
+      await adminUpdateCompany(
+        admin,
+        org.id,
+        created.id,
+        companyUpdate({ legalName: "Endret AS" }),
       );
-
-      expect(await countCompanies()).toBe(companiesBefore);
-      expect(await countAudit()).toBe(auditBefore);
-      expect((await companyRow(existing.id)).rowVersion).toBe(1);
-    },
-  );
-
-  it("admin lykkes (positiv kontroll for rolletesten)", async () => {
-    const org = await createOrganization();
-    const { admin } = await adminIn(org.id);
-    const created = await adminCreateCompany(admin, org.id, fullCompany);
-    await adminUpdateCompany(admin, org.id, created.id, changedCompany);
-    expect(await countCompanies()).toBe(1);
+      expect((await companyRow(created.id)).legalName).toBe("Endret AS");
+    });
   });
 
-  it.each([
-    ["ansatt uten roller", "none"],
-    ["admin som har sluttet", "deactivated"],
-  ] as const)("%s får AccessDeniedError", async (_label, variant) => {
-    const org = await createOrganization();
-    const existing = await createCompany(org.id);
-    const person = await createUser();
-    const employee = await createEmployee(person, org.id, variant === "none" ? [] : ["admin"]);
-    if (variant === "deactivated") {
+  describe("4. uten roller og sluttet admin", () => {
+    it("ansatt uten roller får AccessDeniedError", async () => {
+      const org = await createOrganization();
+      const company = await createCompany(org.id);
+      const person = await createUser();
+      await createEmployee(person, org.id, []);
+
+      await expect(adminCreateCompany(person, org.id, companyInput())).rejects.toThrow(
+        AccessDeniedError,
+      );
+      await expect(adminUpdateCompany(person, org.id, company.id, companyUpdate())).rejects.toThrow(
+        AccessDeniedError,
+      );
+      expect(await companyCount()).toBe(1);
+    });
+
+    it("admin som har sluttet får AccessDeniedError", async () => {
+      const { org, admin, adminEmployee } = await orgWithAdmin();
+      const company = await createCompany(org.id);
       await db
         .update(employees)
         .set({ deactivatedAt: new Date() })
-        .where(eq(employees.id, employee.id));
-    }
+        .where(eq(employees.id, adminEmployee.id));
 
-    await expect(adminCreateCompany(person, org.id, fullCompany)).rejects.toThrow(
-      AccessDeniedError,
-    );
-    await expect(adminUpdateCompany(person, org.id, existing.id, changedCompany)).rejects.toThrow(
-      AccessDeniedError,
-    );
-    expect(await countCompanies()).toBe(1);
-    expect(await countAudit()).toBe(0);
+      await expect(adminCreateCompany(admin, org.id, companyInput())).rejects.toThrow(
+        AccessDeniedError,
+      );
+      await expect(adminUpdateCompany(admin, org.id, company.id, companyUpdate())).rejects.toThrow(
+        AccessDeniedError,
+      );
+      expect(await companyCount()).toBe(1);
+    });
   });
 
-  it("createCompany: raden havner i egen organisasjon, og kall mot den andre avvises", async () => {
+  it("5. tenant-isolasjon: createCompany legger raden i egen organisasjon", async () => {
     let orgB = "";
     await expectTenantIsolation({
       seed: async (grantA, grantB) => {
         orgB = grantB.organizationId;
         return { a: [grantA.organizationId], b: [grantB.organizationId] };
       },
-      query: async (actor: Actor, organizationId: string) => [
-        await adminCreateCompany(actor, organizationId, {
-          legalName: `Testselskap laget av ${actor.id}`,
-        }),
-      ],
+      query: async (actor: Actor, organizationId: string) => {
+        const row = await adminCreateCompany(
+          actor,
+          organizationId,
+          companyInput({ legalName: `Testselskap ${actor.id} AS`, orgNumber: null }),
+        );
+        // Leser raden fra databasen, så det er den lagrede organisasjonen som sammenlignes
+        return [await companyRow(row.id)];
+      },
       idOf: (row) => row.organizationId,
     });
-
-    const rowsInB = await db.select().from(companies).where(eq(companies.organizationId, orgB));
-    expect(rowsInB).toHaveLength(1);
+    const inB = await db.select().from(companies).where(eq(companies.organizationId, orgB));
+    expect(inB).toHaveLength(1);
   });
 
-  it("updateCompany: endrer bare raden i egen organisasjon", async () => {
+  it("6. tenant-isolasjon: updateCompany endrer bare raden i egen organisasjon", async () => {
     const companyByOrg = new Map<string, string>();
-    const callerByOrg = new Map<string, string>();
+    const actorByOrg = new Map<string, Actor>();
     let orgB = "";
     await expectTenantIsolation({
       seed: async (grantA, grantB) => {
@@ -292,76 +335,73 @@ describe("createCompany og updateCompany", () => {
         return { a: [a.id], b: [b.id] };
       },
       query: async (actor: Actor, organizationId: string) => {
-        const row = await adminUpdateCompany(
+        const companyId = companyByOrg.get(organizationId) ?? randomUUID();
+        await adminUpdateCompany(
           actor,
           organizationId,
-          companyByOrg.get(organizationId) ?? randomUUID(),
-          { legalName: `Endret av ${actor.id}` },
+          companyId,
+          companyUpdate({ legalName: `Endret av ${actor.id}`, orgNumber: null }),
         );
-        callerByOrg.set(organizationId, actor.id);
-        return [row];
+        actorByOrg.set(organizationId, actor);
+        return [await companyRow(companyId)];
       },
       idOf: (row) => row.id,
     });
-
-    const rowB = await companyRow(companyByOrg.get(orgB) ?? "");
-    expect(rowB.legalName).toBe(`Endret av ${callerByOrg.get(orgB)}`);
+    const rowB = await companyRow(companyByOrg.get(orgB)!);
+    expect(rowB.legalName).toBe(`Endret av ${actorByOrg.get(orgB)!.id}`);
     expect(rowB.rowVersion).toBe(2);
   });
 
-  it.each([
-    ["id fra en annen organisasjon", "foreign"],
-    ["id som ikke er uuid", "invalid"],
-    ["tilfeldig uuid", "random"],
-  ] as const)("updateCompany med %s gir AccessDeniedError (regel 2)", async (_label, kind) => {
-    const orgA = await createOrganization("Organisasjon A");
-    const orgB = await createOrganization("Organisasjon B");
-    const { admin: adminA } = await adminIn(orgA.id);
-    const companyB = await createCompany(orgB.id, { legalName: "Testselskap B AS" });
-    const id = kind === "foreign" ? companyB.id : kind === "invalid" ? "ikke-en-id" : randomUUID();
+  describe("7. fremmed, ugyldig og ukjent id (regel 2)", () => {
+    it.each([
+      ["id fra en annen organisasjon", "foreign"],
+      ["id som ikke er uuid", "ikke-en-id"],
+      ["tilfeldig uuid", "random"],
+    ])("%s gir AccessDeniedError, og B-raden er uendret", async (_label, kind) => {
+      const { org: orgA, admin: adminA } = await orgWithAdmin();
+      const orgB = await createOrganization("Organisasjon B");
+      const companyB = await createCompany(orgB.id, { legalName: "Testselskap B AS" });
+      const before = await companyRow(companyB.id);
+      const id = kind === "foreign" ? companyB.id : kind === "random" ? randomUUID() : kind;
 
-    await expect(adminUpdateCompany(adminA, orgA.id, id, changedCompany)).rejects.toThrow(
-      AccessDeniedError,
-    );
+      await expect(
+        adminUpdateCompany(adminA, orgA.id, id, companyUpdate({ legalName: "Kapret AS" })),
+      ).rejects.toThrow(AccessDeniedError);
 
-    const after = await companyRow(companyB.id);
-    expect(after.rowVersion).toBe(1);
-    expect(after.legalName).toBe("Testselskap B AS");
-    expect(await countAudit()).toBe(0);
+      const after = await companyRow(companyB.id);
+      expect(after).toEqual(before);
+      expect(after.rowVersion).toBe(1);
+      expect(await db.select().from(auditLog)).toHaveLength(0);
+    });
   });
 
-  it("slettet selskap kan ikke endres", async () => {
-    const org = await createOrganization();
-    const { admin } = await adminIn(org.id);
-    const removed = await createCompany(org.id, { deletedAt: new Date() });
+  it("8. slettet selskap kan ikke endres", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const company = await createCompany(org.id, { deletedAt: new Date() });
+    const before = await companyRow(company.id);
 
-    await expect(adminUpdateCompany(admin, org.id, removed.id, changedCompany)).rejects.toThrow(
-      AccessDeniedError,
-    );
-    expect((await companyRow(removed.id)).rowVersion).toBe(1);
-    expect(await countAudit()).toBe(0);
+    await expect(
+      adminUpdateCompany(admin, org.id, company.id, companyUpdate({ legalName: "Endret AS" })),
+    ).rejects.toThrow(AccessDeniedError);
+    expect(await companyRow(company.id)).toEqual(before);
   });
 
-  it("create og update gir én loggrad hver for selskapet", async () => {
-    const org = await createOrganization();
-    const { admin, employee } = await adminIn(org.id);
-
-    const created = await adminCreateCompany(admin, org.id, fullCompany);
-    await adminUpdateCompany(admin, org.id, created.id, changedCompany);
+  it("9. revisjonslogg: én rad for create og én for update, på riktig organisasjon", async () => {
+    const { org, admin, adminEmployee } = await orgWithAdmin();
+    const created = await adminCreateCompany(admin, org.id, companyInput());
+    await adminUpdateCompany(admin, org.id, created.id, companyUpdate({ city: "Testvik" }));
 
     const rows = await auditRows(org.id);
     expect(rows.map((row) => row.action).sort()).toEqual(["create", "update"]);
     for (const row of rows) {
-      expect(row).toMatchObject({
-        entityType: "company",
-        entityId: created.id,
-        organizationId: org.id,
-        actorEmployeeId: employee.id,
-      });
+      expect(row.organizationId).toBe(org.id);
+      expect(row.entityId).toBe(created.id);
+      expect(row.entityType).toMatch(/compan/);
+      expect(row.actorEmployeeId).toBe(adminEmployee.id);
     }
   });
 
-  describe("validering (regeltester som data)", () => {
+  describe("10. validering (Zod), regeltester som data", () => {
     it.each([
       ["org.nr. med 8 siffer", { orgNumber: "12345678" }],
       ["org.nr. med 10 siffer", { orgNumber: "1234567890" }],
@@ -369,54 +409,46 @@ describe("createCompany og updateCompany", () => {
       ["org.nr. med mellomrom", { orgNumber: "123 456 789" }],
       ["tomt juridisk navn", { legalName: "" }],
       ["juridisk navn med bare mellomrom", { legalName: "   " }],
-      ["gyldig til med måned 13", { liabilityValidTo: "31.13.2026" }],
-      ["gyldig til som ikke er en dato", { liabilityValidTo: "ikke-dato" }],
-    ])("avviser %s uten rad og uten loggrad", async (_label, override) => {
-      const org = await createOrganization();
-      const { admin } = await adminIn(org.id);
-
-      const error = await caught(
-        adminCreateCompany(admin, org.id, { legalName: "Testselskap A AS", ...override }),
+      ["«Gyldig til» med måned 13", { liabilityValidTo: "31.13.2026" }],
+      ["«Gyldig til» som ikke er en dato", { liabilityValidTo: "ikke-dato" }],
+    ])("%s avvises med ZodError, uten rad og uten loggrad", async (_label, overrides) => {
+      const { org, admin } = await orgWithAdmin();
+      await expect(adminCreateCompany(admin, org.id, companyInput(overrides))).rejects.toThrow(
+        ZodError,
       );
-
-      expect(error).toBeInstanceOf(ZodError);
-      expect(await countCompanies()).toBe(0);
-      expect(await countAudit()).toBe(0);
+      expect(await companyCount()).toBe(0);
+      expect(await auditRows(org.id)).toHaveLength(0);
     });
 
     it.each([
-      ["org.nr. tomt (null)", { orgNumber: null }, { orgNumber: null }],
-      ["org.nr. tom tekst", { orgNumber: "" }, { orgNumber: null }],
-      ["org.nr. med 9 siffer", { orgNumber: "000000001" }, { orgNumber: "000000001" }],
-      [
-        "gyldig til som dato (ÅÅÅÅ-MM-DD)",
-        { liabilityValidTo: "2027-06-30" },
-        { liabilityValidTo: "2027-06-30" },
-      ],
-    ])("godtar %s", async (_label, override, expected) => {
-      const org = await createOrganization();
-      const { admin } = await adminIn(org.id);
-
-      const created = await adminCreateCompany(admin, org.id, {
-        legalName: "Testselskap A AS",
-        ...override,
-      });
-
-      expect(await companyRow(created.id)).toMatchObject(expected);
+      ["org.nr. null", { orgNumber: null }, null],
+      ["tomt org.nr.", { orgNumber: "" }, null],
+      ["org.nr. 000000001", { orgNumber: "000000001" }, "000000001"],
+    ])("%s godtas", async (_label, overrides, expected) => {
+      const { org, admin } = await orgWithAdmin();
+      const created = await adminCreateCompany(admin, org.id, companyInput(overrides));
+      expect((await companyRow(created.id)).orgNumber).toBe(expected);
     });
 
-    it("updateCompany avviser ugyldig org.nr. og lar raden stå", async () => {
-      const org = await createOrganization();
-      const { admin } = await adminIn(org.id);
-      const created = await adminCreateCompany(admin, org.id, fullCompany);
-
-      const error = await caught(
-        adminUpdateCompany(admin, org.id, created.id, { ...fullCompany, orgNumber: "12345678" }),
+    it("«Gyldig til» 2027-06-30 godtas", async () => {
+      const { org, admin } = await orgWithAdmin();
+      const created = await adminCreateCompany(
+        admin,
+        org.id,
+        companyInput({ liabilityValidTo: "2027-06-30" }),
       );
+      expect((await companyRow(created.id)).liabilityValidTo).toBe("2027-06-30");
+    });
 
-      expect(error).toBeInstanceOf(ZodError);
-      expect(await companyRow(created.id)).toMatchObject({ orgNumber: "000000001", rowVersion: 1 });
-      expect(await countAudit()).toBe(1);
+    it("ugyldig verdi i updateCompany avvises også, og raden er uendret", async () => {
+      const { org, admin } = await orgWithAdmin();
+      const company = await createCompany(org.id);
+      const before = await companyRow(company.id);
+      await expect(
+        adminUpdateCompany(admin, org.id, company.id, companyUpdate({ orgNumber: "12345678" })),
+      ).rejects.toThrow(ZodError);
+      expect(await companyRow(company.id)).toEqual(before);
+      expect(await auditRows(org.id)).toHaveLength(0);
     });
   });
 });

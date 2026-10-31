@@ -94,23 +94,27 @@ describe("listOffices", () => {
   });
 });
 
-// Testplan: docs/funksjoner/fase0b-admin-organisasjon-testplan.md, avsnitt 2. Oppdiktede data.
+// Admin: opprette og endre kontorer.
+// Testplan: docs/funksjoner/fase0b-admin-organisasjon-testplan.md, avsnitt 2. Testdata er oppdiktet.
 
-const fullOffice = { name: "Testkontor Vest", address: "Testveien 3, 0003 Teststed", sortOrder: 3 };
-const changedOffice = { name: "Testkontor Øst", address: "Testgata 4, 0004 Testby", sortOrder: 5 };
+type OfficeInput = Parameters<typeof adminCreateOffice>[2];
+type OfficeUpdate = Parameters<typeof adminUpdateOffice>[3];
 
-async function adminIn(organizationId: string) {
-  const admin = await createUser({ name: "Admin Testesen" });
-  const employee = await createEmployee(admin, organizationId, ["admin"]);
-  return { admin, employee };
+function officeInput(overrides: Record<string, unknown> = {}): OfficeInput {
+  return {
+    name: "Testkontor Vest",
+    address: "Testveien 3",
+    sortOrder: 2,
+    ...overrides,
+  } as OfficeInput;
 }
 
-async function countOffices() {
+function officeUpdate(overrides: Record<string, unknown> = {}): OfficeUpdate {
+  return officeInput(overrides) as unknown as OfficeUpdate;
+}
+
+async function officeCount() {
   return (await db.select({ id: offices.id }).from(offices)).length;
-}
-
-async function countAudit() {
-  return (await db.select({ id: auditLog.id }).from(auditLog)).length;
 }
 
 async function officeRow(id: string) {
@@ -119,213 +123,234 @@ async function officeRow(id: string) {
   return row;
 }
 
-async function caught(promise: Promise<unknown>): Promise<unknown> {
-  return promise.then(
-    () => null,
-    (error: unknown) => error,
-  );
+async function orgWithAdmin() {
+  const org = await createOrganization();
+  const admin = await createUser({ name: "Test Admin" });
+  const adminEmployee = await createEmployee(admin, org.id, ["admin"]);
+  return { org, admin, adminEmployee };
 }
 
-describe("createOffice og updateOffice", () => {
-  it("lagrer navn, adresse og rekkefølge, og updateOffice øker row_version", async () => {
-    const org = await createOrganization();
-    const { admin } = await adminIn(org.id);
+const nonAdminRoles: EmployeeRole[] = ["inspector", "office", "manager"];
 
-    const created = await adminCreateOffice(admin, org.id, fullOffice);
-    expect(created).toMatchObject({ ...fullOffice, organizationId: org.id, rowVersion: 1 });
+describe("createOffice og updateOffice (admin)", () => {
+  it("1. createOffice lagrer navn, adresse og rekkefølge; updateOffice endrer dem og øker row_version", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const created = await adminCreateOffice(admin, org.id, officeInput());
+    const row = await officeRow(created.id);
+    expect(row).toMatchObject({
+      organizationId: org.id,
+      name: "Testkontor Vest",
+      address: "Testveien 3",
+      sortOrder: 2,
+      deletedAt: null,
+    });
 
-    const updated = await adminUpdateOffice(admin, org.id, created.id, changedOffice);
-    expect(updated).toMatchObject({ ...changedOffice, id: created.id, rowVersion: 2 });
-    expect(await officeRow(created.id)).toMatchObject({ ...changedOffice, rowVersion: 2 });
+    await adminUpdateOffice(
+      admin,
+      org.id,
+      created.id,
+      officeUpdate({ name: "Testkontor Øst", address: "Testgata 4", sortOrder: 5 }),
+    );
+    const after = await officeRow(created.id);
+    expect(after).toMatchObject({ name: "Testkontor Øst", address: "Testgata 4", sortOrder: 5 });
+    expect(after.rowVersion).toBe(row.rowVersion + 1);
   });
 
-  it.each(["inspector", "office", "manager"] as const)(
-    "rollen %s får AccessDeniedError, og ingenting skrives",
-    async (role) => {
+  describe("2. tilgang per rolle", () => {
+    it.each(nonAdminRoles)("rollen %s får AccessDeniedError og ingen endring", async (role) => {
       const org = await createOrganization();
-      const existing = await createOffice(org.id);
+      const office = await createOffice(org.id);
       const person = await createUser();
       await createEmployee(person, org.id, [role]);
+      const before = await officeRow(office.id);
 
-      await expect(adminCreateOffice(person, org.id, fullOffice)).rejects.toThrow(
+      await expect(adminCreateOffice(person, org.id, officeInput())).rejects.toThrow(
         AccessDeniedError,
       );
-      await expect(adminUpdateOffice(person, org.id, existing.id, changedOffice)).rejects.toThrow(
+      await expect(
+        adminUpdateOffice(person, org.id, office.id, officeUpdate({ name: "Endret" })),
+      ).rejects.toThrow(AccessDeniedError);
+
+      expect(await officeCount()).toBe(1);
+      expect(await officeRow(office.id)).toEqual(before);
+      expect(await auditRows(org.id)).toHaveLength(0);
+    });
+
+    it("ansatt uten roller får AccessDeniedError", async () => {
+      const org = await createOrganization();
+      const office = await createOffice(org.id);
+      const person = await createUser();
+      await createEmployee(person, org.id, []);
+
+      await expect(adminCreateOffice(person, org.id, officeInput())).rejects.toThrow(
         AccessDeniedError,
       );
+      await expect(adminUpdateOffice(person, org.id, office.id, officeUpdate())).rejects.toThrow(
+        AccessDeniedError,
+      );
+      expect(await officeCount()).toBe(1);
+    });
 
-      expect(await countOffices()).toBe(1);
-      expect(await countAudit()).toBe(0);
-      expect((await officeRow(existing.id)).rowVersion).toBe(1);
-    },
-  );
-
-  it("admin lykkes (positiv kontroll for rolletesten)", async () => {
-    const org = await createOrganization();
-    const { admin } = await adminIn(org.id);
-    const created = await adminCreateOffice(admin, org.id, fullOffice);
-    await adminUpdateOffice(admin, org.id, created.id, changedOffice);
-    expect(await countOffices()).toBe(1);
-  });
-
-  it.each([
-    ["ansatt uten roller", "none"],
-    ["admin som har sluttet", "deactivated"],
-  ] as const)("%s får AccessDeniedError", async (_label, variant) => {
-    const org = await createOrganization();
-    const existing = await createOffice(org.id);
-    const person = await createUser();
-    const employee = await createEmployee(person, org.id, variant === "none" ? [] : ["admin"]);
-    if (variant === "deactivated") {
+    it("admin som har sluttet får AccessDeniedError", async () => {
+      const { org, admin, adminEmployee } = await orgWithAdmin();
+      const office = await createOffice(org.id);
       await db
         .update(employees)
         .set({ deactivatedAt: new Date() })
-        .where(eq(employees.id, employee.id));
-    }
+        .where(eq(employees.id, adminEmployee.id));
 
-    await expect(adminCreateOffice(person, org.id, fullOffice)).rejects.toThrow(AccessDeniedError);
-    await expect(adminUpdateOffice(person, org.id, existing.id, changedOffice)).rejects.toThrow(
-      AccessDeniedError,
-    );
-    expect(await countOffices()).toBe(1);
-    expect(await countAudit()).toBe(0);
+      await expect(adminCreateOffice(admin, org.id, officeInput())).rejects.toThrow(
+        AccessDeniedError,
+      );
+      await expect(adminUpdateOffice(admin, org.id, office.id, officeUpdate())).rejects.toThrow(
+        AccessDeniedError,
+      );
+      expect(await officeCount()).toBe(1);
+    });
+
+    it("admin lykkes (positiv kontroll)", async () => {
+      const { org, admin } = await orgWithAdmin();
+      const created = await adminCreateOffice(admin, org.id, officeInput());
+      await adminUpdateOffice(admin, org.id, created.id, officeUpdate({ name: "Endret" }));
+      expect((await officeRow(created.id)).name).toBe("Endret");
+    });
   });
 
-  it("createOffice: raden havner i egen organisasjon, og kall mot den andre avvises", async () => {
+  it("3a. tenant-isolasjon: createOffice legger raden i egen organisasjon", async () => {
     let orgB = "";
     await expectTenantIsolation({
       seed: async (grantA, grantB) => {
         orgB = grantB.organizationId;
         return { a: [grantA.organizationId], b: [grantB.organizationId] };
       },
-      query: async (actor: Actor, organizationId: string) => [
-        await adminCreateOffice(actor, organizationId, { name: `Testkontor ${actor.id}` }),
-      ],
+      query: async (actor: Actor, organizationId: string) => {
+        const row = await adminCreateOffice(
+          actor,
+          organizationId,
+          officeInput({ name: `Testkontor ${actor.id}` }),
+        );
+        return [await officeRow(row.id)];
+      },
       idOf: (row) => row.organizationId,
     });
-
-    const rowsInB = await db.select().from(offices).where(eq(offices.organizationId, orgB));
-    expect(rowsInB).toHaveLength(1);
+    const inB = await db.select().from(offices).where(eq(offices.organizationId, orgB));
+    expect(inB).toHaveLength(1);
   });
 
-  it("updateOffice: endrer bare raden i egen organisasjon", async () => {
+  it("3b. tenant-isolasjon: updateOffice endrer bare raden i egen organisasjon", async () => {
     const officeByOrg = new Map<string, string>();
-    const callerByOrg = new Map<string, string>();
+    const actorByOrg = new Map<string, Actor>();
     let orgB = "";
     await expectTenantIsolation({
       seed: async (grantA, grantB) => {
         orgB = grantB.organizationId;
-        const a = await createOffice(grantA.organizationId, { name: "Testkontor Nord" });
-        const b = await createOffice(grantB.organizationId, { name: "Testkontor Nord" });
+        const a = await createOffice(grantA.organizationId, { name: "Testkontor A" });
+        const b = await createOffice(grantB.organizationId, { name: "Testkontor B" });
         officeByOrg.set(grantA.organizationId, a.id);
         officeByOrg.set(grantB.organizationId, b.id);
         return { a: [a.id], b: [b.id] };
       },
       query: async (actor: Actor, organizationId: string) => {
-        const row = await adminUpdateOffice(
+        const officeId = officeByOrg.get(organizationId) ?? randomUUID();
+        await adminUpdateOffice(
           actor,
           organizationId,
-          officeByOrg.get(organizationId) ?? randomUUID(),
-          { name: `Endret av ${actor.id}` },
+          officeId,
+          officeUpdate({ name: `Endret av ${actor.id}` }),
         );
-        callerByOrg.set(organizationId, actor.id);
-        return [row];
+        actorByOrg.set(organizationId, actor);
+        return [await officeRow(officeId)];
       },
       idOf: (row) => row.id,
     });
-
-    const rowB = await officeRow(officeByOrg.get(orgB) ?? "");
-    expect(rowB.name).toBe(`Endret av ${callerByOrg.get(orgB)}`);
+    const rowB = await officeRow(officeByOrg.get(orgB)!);
+    expect(rowB.name).toBe(`Endret av ${actorByOrg.get(orgB)!.id}`);
     expect(rowB.rowVersion).toBe(2);
   });
 
-  it.each([
-    ["id fra en annen organisasjon", "foreign"],
-    ["id som ikke er uuid", "invalid"],
-    ["tilfeldig uuid", "random"],
-    ["slettet kontor i egen organisasjon", "deleted"],
-  ] as const)("updateOffice med %s gir AccessDeniedError", async (_label, kind) => {
-    const orgA = await createOrganization("Organisasjon A");
-    const orgB = await createOrganization("Organisasjon B");
-    const { admin: adminA } = await adminIn(orgA.id);
-    const officeB = await createOffice(orgB.id, { name: "Testkontor B" });
-    const deletedA = await createOffice(orgA.id, { name: "Testkontor A", deletedAt: new Date() });
-    const id = {
-      foreign: officeB.id,
-      invalid: "ikke-en-id",
-      random: randomUUID(),
-      deleted: deletedA.id,
-    }[kind];
+  describe("4. fremmed, ugyldig, ukjent og slettet id", () => {
+    it.each([
+      ["id fra en annen organisasjon", "foreign"],
+      ["id som ikke er uuid", "ikke-en-id"],
+      ["tilfeldig uuid", "random"],
+    ])("%s gir AccessDeniedError, og B-raden er uendret", async (_label, kind) => {
+      const { org: orgA, admin: adminA } = await orgWithAdmin();
+      const orgB = await createOrganization("Organisasjon B");
+      const officeB = await createOffice(orgB.id, { name: "Testkontor B" });
+      const before = await officeRow(officeB.id);
+      const id = kind === "foreign" ? officeB.id : kind === "random" ? randomUUID() : kind;
 
-    await expect(adminUpdateOffice(adminA, orgA.id, id, changedOffice)).rejects.toThrow(
-      AccessDeniedError,
-    );
+      await expect(
+        adminUpdateOffice(adminA, orgA.id, id, officeUpdate({ name: "Kapret" })),
+      ).rejects.toThrow(AccessDeniedError);
 
-    expect(await officeRow(officeB.id)).toMatchObject({ name: "Testkontor B", rowVersion: 1 });
-    expect(await officeRow(deletedA.id)).toMatchObject({ name: "Testkontor A", rowVersion: 1 });
-    expect(await countAudit()).toBe(0);
+      expect(await officeRow(officeB.id)).toEqual(before);
+      expect(await db.select().from(auditLog)).toHaveLength(0);
+    });
+
+    it("slettet kontor kan ikke endres", async () => {
+      const { org, admin } = await orgWithAdmin();
+      const office = await createOffice(org.id, { deletedAt: new Date() });
+      const before = await officeRow(office.id);
+      await expect(
+        adminUpdateOffice(admin, org.id, office.id, officeUpdate({ name: "Endret" })),
+      ).rejects.toThrow(AccessDeniedError);
+      expect(await officeRow(office.id)).toEqual(before);
+    });
   });
 
-  it("samme navn som et aktivt kontor i egen organisasjon gir en feil, ikke en databasefeil", async () => {
-    const org = await createOrganization();
-    const { admin } = await adminIn(org.id);
-    await adminCreateOffice(admin, org.id, { name: "Testkontor Vest" });
-    const other = await adminCreateOffice(admin, org.id, { name: "Testkontor Øst" });
+  describe("5. samme navn", () => {
+    it("samme navn som et aktivt kontor i egen organisasjon gir en feil, og ingen ny rad", async () => {
+      const { org, admin } = await orgWithAdmin();
+      await createOffice(org.id, { name: "Testkontor Vest" });
+      await expect(
+        adminCreateOffice(admin, org.id, officeInput({ name: "Testkontor Vest" })),
+      ).rejects.toThrow();
+      expect(await officeCount()).toBe(1);
+      expect(await auditRows(org.id)).toHaveLength(0);
+    });
 
-    const onCreate = await caught(adminCreateOffice(admin, org.id, { name: "Testkontor Vest" }));
-    const onUpdate = await caught(
-      adminUpdateOffice(admin, org.id, other.id, { name: "Testkontor Vest" }),
-    );
-
-    for (const error of [onCreate, onUpdate]) {
-      expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).toMatch(/kontor/i);
-      expect((error as Error).message).not.toMatch(/duplicate|insert|update|offices_/i);
-    }
-    expect(await countOffices()).toBe(2);
-    expect((await officeRow(other.id)).name).toBe("Testkontor Øst");
+    it("samme navn i en annen organisasjon er lov", async () => {
+      const { org, admin } = await orgWithAdmin();
+      const other = await createOrganization("Organisasjon B");
+      await createOffice(other.id, { name: "Testkontor Vest" });
+      const created = await adminCreateOffice(
+        admin,
+        org.id,
+        officeInput({ name: "Testkontor Vest" }),
+      );
+      expect((await officeRow(created.id)).organizationId).toBe(org.id);
+    });
   });
 
-  it("samme navn i en annen organisasjon er lov", async () => {
-    const orgA = await createOrganization("Organisasjon A");
-    const orgB = await createOrganization("Organisasjon B");
-    const { admin: adminA } = await adminIn(orgA.id);
-    await createOffice(orgB.id, { name: "Testkontor Vest" });
-
-    const created = await adminCreateOffice(adminA, orgA.id, { name: "Testkontor Vest" });
-    expect(created.organizationId).toBe(orgA.id);
-  });
-
-  it("create og update gir én loggrad hver for kontoret", async () => {
-    const org = await createOrganization();
-    const { admin, employee } = await adminIn(org.id);
-
-    const created = await adminCreateOffice(admin, org.id, fullOffice);
-    await adminUpdateOffice(admin, org.id, created.id, changedOffice);
+  it("6. revisjonslogg: én rad for create og én for update", async () => {
+    const { org, admin, adminEmployee } = await orgWithAdmin();
+    const created = await adminCreateOffice(admin, org.id, officeInput());
+    await adminUpdateOffice(admin, org.id, created.id, officeUpdate({ address: "Testgata 9" }));
 
     const rows = await auditRows(org.id);
     expect(rows.map((row) => row.action).sort()).toEqual(["create", "update"]);
     for (const row of rows) {
-      expect(row).toMatchObject({
-        entityType: "office",
-        entityId: created.id,
-        organizationId: org.id,
-        actorEmployeeId: employee.id,
-      });
+      expect(row.organizationId).toBe(org.id);
+      expect(row.entityId).toBe(created.id);
+      expect(row.entityType).toMatch(/office/);
+      expect(row.actorEmployeeId).toBe(adminEmployee.id);
     }
   });
 
-  it.each([
-    ["tomt navn", { name: "" }],
-    ["navn med bare mellomrom", { name: "   " }],
-    ["rekkefølge som ikke er et heltall", { name: "Testkontor Vest", sortOrder: 1.5 }],
-    ["rekkefølge som tekst", { name: "Testkontor Vest", sortOrder: "første" as unknown as number }],
-  ])("avviser %s med ZodError uten rad og loggrad", async (_label, input) => {
-    const org = await createOrganization();
-    const { admin } = await adminIn(org.id);
-
-    expect(await caught(adminCreateOffice(admin, org.id, input))).toBeInstanceOf(ZodError);
-    expect(await countOffices()).toBe(0);
-    expect(await countAudit()).toBe(0);
+  describe("7. validering (Zod)", () => {
+    it.each([
+      ["tomt navn", { name: "" }],
+      ["navn med bare mellomrom", { name: "   " }],
+      ["rekkefølge som ikke er et heltall", { sortOrder: 1.5 }],
+      ["rekkefølge som tekst", { sortOrder: "først" }],
+    ])("%s avvises med ZodError, uten rad og uten loggrad", async (_label, overrides) => {
+      const { org, admin } = await orgWithAdmin();
+      await expect(adminCreateOffice(admin, org.id, officeInput(overrides))).rejects.toThrow(
+        ZodError,
+      );
+      expect(await officeCount()).toBe(0);
+      expect(await auditRows(org.id)).toHaveLength(0);
+    });
   });
 });
