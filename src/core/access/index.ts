@@ -1,10 +1,15 @@
 export { AccessDeniedError } from "./errors";
 export { listOrganizationsForActor, requireOrganizationAccess } from "./guards";
 export {
+  effectivePermissions,
+  grantablePermissions,
+  grantHasPermission,
   isAdmin,
   permissions,
-  rolesHavePermission,
+  readInspectorsEditAll,
+  type AccessSettings,
   type Actor,
   type EmployeeGrant,
+  type GrantablePermission,
   type Permission,
 } from "./permissions";
