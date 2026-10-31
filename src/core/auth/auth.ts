@@ -8,7 +8,6 @@ import { db } from "@/db/client";
 import * as schema from "@/db/schema";
 import { sendEmail } from "@/core/email";
 import { getEnv } from "@/shared/config/env";
-import { logger } from "@/shared/lib/logger";
 import { checkAndRecordAttempt, recordLoginSucceeded, throttleMessage } from "./login-throttle";
 import { OTP_MINUTES, otpEmail } from "./otp-email";
 
@@ -80,8 +79,6 @@ export const auth = betterAuth({
       if (!email) return;
       const decision = await checkAndRecordAttempt(email, action);
       if (decision.blocked) {
-        // Aldri e-post eller hash i loggen. Tidspunktet legger loggeren selv på.
-        logger.warn("Innlogging sperret etter for mange forsøk", { route: ctx.path });
         throw new APIError("TOO_MANY_REQUESTS", {
           message: throttleMessage(decision.reason, decision.retryAt),
         });
