@@ -1,4 +1,4 @@
-import { count } from "drizzle-orm";
+import { count, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { requireOrganizationAccess } from "@/core/access";
 import { isCertificationValid } from "@/core/organization/certification-rules";
@@ -151,5 +151,25 @@ describe("createCertification (fase 0b, sertifisering)", () => {
 
     const [row] = await db.select({ n: count() }).from(certifications);
     expect(row!.n).toBe(0);
+  });
+});
+
+describe("login_attempts (fase 0b, sperre ved innlogging)", () => {
+  it("o) resetDatabase tømmer login_attempts", async () => {
+    // Lastes her, så resten av filen kjører selv om sperremodulen mangler
+    const { checkAndRecordAttempt } = await import("@/core/auth/login-throttle");
+    await resetDatabase();
+    await checkAndRecordAttempt("ola@eksempel.no", "request_code");
+    const before = await db.execute<{ n: number }>(
+      sql`select count(*)::int as n from login_attempts`,
+    );
+    expect(Array.from(before)[0]?.n).toBe(1);
+
+    await resetDatabase();
+
+    const after = await db.execute<{ n: number }>(
+      sql`select count(*)::int as n from login_attempts`,
+    );
+    expect(Array.from(after)[0]?.n).toBe(0);
   });
 });
