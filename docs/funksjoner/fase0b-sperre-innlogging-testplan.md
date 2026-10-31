@@ -2,6 +2,8 @@
 
 - **Oppgavekort:** `docs/funksjoner/fase0b-sperre-innlogging.md`
 - **Dato:** 31.10.2026
+- **Bygger på:** `main` med PR #59 (revisjonsloggen, tabellen `events`) merget. Main har 0.2.48, denne PR-en blir 0.2.49.
+- **Hendelse i `events` ved sperre er ikke med** (egen liten oppgave, se kortet). Testene under krever derfor ingen hendelse, men viser at sperren ikke skriver i `events` (test p).
 - **Støtter hovedmål:** reklamasjoner (indirekte: ingen kan gjette seg inn og endre eller publisere rapporter i en takstmanns navn). Tid: testene viser at den som skriver riktig kode, ikke merker noe, og at riktig kode nullstiller. KI først: ingen KI i oppgaven. Sperren er en fast regel uten skjønn.
 
 Alle Vitest-tester som bruker databasen, går mot testdatabasen (`TEST_DATABASE_URL`) med `resetDatabase` i `beforeEach`. Testdata er oppdiktet: adresser på `eksempel.no` (for eksempel `ola@eksempel.no`, `kari@eksempel.no`, `ukjent.<suffix>@eksempel.no`). Aldri ekte adresser. Bare utviklings-postkassen brukes (`DEV_MAILBOX=1` i `tests/setup-env.ts` og i Playwright).
@@ -77,7 +79,11 @@ Gjennom `auth.handler(new Request(...))` mot `/api/auth/...`, så det er vist at
 
 Tillegg i `tests/factories.test.ts`:
 
-- **o) `resetDatabase` tømmer `login_attempts`.**
+- **o) `resetDatabase` tømmer `login_attempts`** (i tillegg til `events` og de andre tabellene den allerede tømmer).
+
+Tillegg i `login-throttle.integration.test.ts`:
+
+- **p) sperren skriver ikke i `events` eller `audit_log`:** etter test a-forløpet (5 feil og 429) er antall rader i `events` og `audit_log` uendret. Når hendelse ved sperre kommer som egen oppgave, byttes denne testen ut.
 
 ## 3. Tilgang og tenant-isolasjon
 
@@ -122,3 +128,4 @@ Hele e2e-pakken skal være grønn etterpå. Det viser at riktig kode nullstiller
 | Ingen ny avhengighet, versjon 0.2.49 | gjennomgang (avsnitt 5) |
 | Isolasjon begrunnet, test l erstatter | 2g, 2l |
 | Virker på iPad-størrelse | 4.1 i `ipad` |
+| Hendelse i `events` holdes utenfor denne PR-en | 2p |
