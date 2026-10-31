@@ -28,6 +28,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 Kontorer
               </NavLink>
             </li>
+            <li>
+              <NavLink href="/admin/sertifiseringer" matchChildren variant="tab">
+                Sertifiseringer
+              </NavLink>
+            </li>
           </ul>
         </nav>
       )}
