@@ -9,8 +9,6 @@
  * Markørens tid (`u`) er alltid tekst med mikrosekunder i UTC, lest fra PostgreSQL med `to_char`.
  * Den går aldri gjennom JS `Date` som helhet: overlappet trekkes fra på millisekund-delen, og de tre
  * siste sifrene (mikrosekundene) beholdes uendret.
- *
- * Ingen indeks på `(organization_id, updated_at, id)` i prøven (funn til ADR-en).
  */
 import { sql } from "drizzle-orm";
 import { z } from "zod";

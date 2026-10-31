@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 kl. 22:35 UTC (PR #44 og #45 merget, PR #46 i arbeid hos en annen kjøring)
+Sist oppdatert: 31.10.2026 (funn fra nattløkken 31.10.2026 lagt inn, PR #49 åpnet)
 
 ## Gjeldende fase
 
@@ -60,9 +60,9 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| #46 | Seed lager ikke et slettet kontor på nytt (småfunn fra PR #41) | i arbeid hos en annen kjøring | `main` |
+| #49 | Rydding fra nattløkken 2026-10-31 | klar, venter på CI | `main` |
 
-PR #44 (liten oppgave (i)) er merget 30.10.2026 kl. 22:31 UTC. PR #45 (UU-funn 6–9 fra nattløkken) er merget 30.10.2026.
+PR #46 (seed og slettet kontor) er merget (main 410f2a1). PR #44 (liten oppgave (i)) er merget 30.10.2026 kl. 22:31 UTC. PR #45 (UU-funn 6–9 fra nattløkken) er merget 30.10.2026.
 
 
 PR #16–#28, #30–#43 og #45 er merget (#45: UU-funn 6–9 fra nattløkken, #43 og #42: tilstand, #41: organisasjon → selskap → kontor → ansatt, #40: tilstand, #39: sammenligning og ADR 0004, foreløpig, #38: småfunn fra prøve D og F, #28: småfunn fra prøve E, #31: rydding fra nattløkken, #32: prøve C, #33: småfunn fra prøve C, #34: prøve F, #35: prøve D, #36 og #37: tilstand). Ingen PR venter på Ståle.
@@ -85,34 +85,41 @@ I autonom modus samles alt her. Ingen varsler.
 
 ## Oppgaver fra nattløkken
 
-Fra nattløkken 30.10.2026 (main ved 08a7675, versjon 0.2.17). Rettet i PR #31 «Rydding fra nattløkken 2026-10-30»: sammensatt indeks for synk-uttrekket og trygge pakkeoppdateringer (better-auth, jose, next, eslint-config-next, dotenv, typescript-eslint).
+Fra nattløkken 31.10.2026 (main ved 410f2a1, versjon 0.2.37), slått sammen med funnene fra 30.10.2026. Trygg rydding er gjort i **PR #49** «Rydding fra nattløkken 2026-10-31» (branch `natt-2026-10-31`, versjon 0.2.38): egen tidsgrense (20 s) på den ustabile testen «bryteren av lager ingen roller og trenger ingen passord» i `scripts/azure/sync-trial-roles.test.ts`, utdatert indekskommentar fjernet i `changes-since.ts`, mørkere plassholdertekst (`placeholder:text-slate-500`) i `src/shared/ui/form.tsx`. Fra 30.10.2026 er UU-funn 6–9 levert i PR #45 og tatt ut av listen.
 
 **Alvorlige**
 
-1. **Sårbar pakke (moderat, GHSA-67mh-4wv8-2f99):** esbuild <=0.24.2 via drizzle-kit 0.31.11 > @esbuild-kit/esm-loader > @esbuild-kit/core-utils. Bare utviklingsavhengighet, vi bruker ikke esbuilds serve-modus, så lav risiko i praksis. drizzle-kit er nyeste. Oppgave: følg med på ny drizzle-kit, eller lag egen PR med pnpm-overstyring esbuild >=0.25.0 under @esbuild-kit/core-utils, testet med `pnpm db:generate` og `db:migrate`. Mål: reklamasjoner (trygg plattform).
+1. **Sårbar pakke esbuild (moderat, GHSA-67mh-4wv8-2f99)** (30. og 31.10.2026): esbuild 0.18.20 via drizzle-kit 0.31.11 > @esbuild-kit/esm-loader > @esbuild-kit/core-utils. Bare utviklingsverktøy, ikke i appen, vi bruker ikke esbuilds serve-modus. Ingen nyere drizzle-kit. Oppgave: egen PR med `pnpm.overrides` `{"@esbuild-kit/core-utils>esbuild": ">=0.25.0"}`, testet med `pnpm db:generate` og `db:migrate` (hopp over flere hovedversjoner, kan gi brudd), eller vent på drizzle-kit uten @esbuild-kit. Mål: reklamasjoner (trygg drift).
+2. **Sårbar pakke minimatch (moderat, GHSA-g3hv-75wg-m249)** (31.10.2026): 3.1.5 og 10.2.6 via eslint 9.39.5 og eslint-config-next > eslint-plugin-import > @typescript-eslint/typescript-estree. Bare lint, mønstrene kommer fra vår egen konfigurasjon, svært lav risiko. Oppgave: rettes med eslint 10 (punkt 12) når eslint-config-next støtter det; ikke override til minimatch 11 (hovedversjon). Mål: reklamasjoner.
 
 **Små**
 
-2. **Tre tester hoppes alltid over lokalt:** `scripts/azure/sync-trial-roles.test.ts` (bryteren som sletter logiske plasser) krever `wal_level=logical`; testdatabasen har `replica`. Sjekk om CI-databasen har `logical`; hvis ikke er oppførselen ikke testet noe sted. Mål: reklamasjoner.
-3. **Nattløkken kjørte `pnpm build` og e2e samtidig i samme arbeidskopi**, og ca. 120 e2e-tester ble røde (`.next` bygget på nytt under kjøringen). Ikke en produktfeil. Oppgave: nattsjekkene må ikke bygge i samme mappe samtidig, eller hver e2e-kjøring får egen kopi og egen `E2E_PORT`.
-4. **Synktestene for de tre kandidatene og 401/403 i prøve E kjøres bare på pc**, ikke i iPad-størrelse (bevisst, testplan 6.2). Vurder på nytt når synkløsningen er valgt.
-5. **UU, ikke kjørt automatisk:** `@axe-core/playwright` mangler. Egen PR med ny utviklingsavhengighet (begrunnelse, regel 9) og e2e-test som kjører axe på /logg-inn, /arbeidskoe, /prove/testskjema og ett testskjema.
-6. **(Levert, PR fra `fase1-uu-nattlokken`)** **UU, tabellceller i testskjemaet** (`trial-form-view.tsx`, `TableCellInput`): kolonnenavnet vises bare som blek hjelpetekst (ca. 3:1) som forsvinner. Forslag: synlig liten etikett, i det minste i første rad.
-7. **(Levert, PR fra `fase1-uu-nattlokken`)** **UU, fast statuslinje kan dekke felt med fokus** (WCAG 2.4.11). Forslag: `scroll-padding-top` på `html` lik høyden på statuslinjen.
-8. **(Levert, PR fra `fase1-uu-nattlokken`)** **UU, «Til forsiden» i `src/app/not-found.tsx`** har trykkflate under 44 px. Forslag: `inline-flex min-h-11 min-w-11 items-center`.
-9. **(Levert, PR fra `fase1-uu-nattlokken`)** **UU, `CandidatePicker`** i `trial-form-list.tsx`: «Vent til alt er lagret på serveren før du bytter» leses ikke opp (mangler `role="status"`/`aria-live`).
-10. **Store pakkeoppdateringer** (kan gi brudd): eslint 10, postgres 4, typescript 7. Én PR per pakke senere med full testkjøring. `@types/node` står på 22 (følger Node-versjonen).
-11. **Størrelse:** ingen side over 200 kB JS ved første last (gzip). Testskjema/[id] 188,9 kB er nærmest grensen; følg med i neste fase (bilder, synk, skjema). Next.js 16 viser ikke størrelser i byggutskriften; et lite skript (`scripts/check-bundle-size.mjs`) kan gjøre sjekken gjentakbar.
-12. **Synk-ADR-en (fase 2b):** hent eksisterende rader for hele bunten på én gang per tabell eller bruk `INSERT ... ON CONFLICT` (N+1 i `applyTrialChanges`, 1 500–2 000 rundturer per bunt på 500), og bruk indeksmønsteret `(organization_id, updated_at, id)` på de ekte tabellene. Mål: tid.
-13. **Ekte tabeller for oppdrag og rapporter:** indeks på `(organization_id, <sorteringsfelt>)`, eventuelt delvis med `WHERE deleted_at IS NULL` (som `listTrialForms` mangler i dag; brukes bare i tester).
-14. **`findGrant`** bruker to spørringer per tilgangssjekk; kan slås sammen. Liten gevinst, ingen N+1. Lav prioritet.
-15. **Ustabil e2e-test i prøve D** (`e2e/fase-1-prove-d-bilder.spec.ts`, [ipad] «kopi som får 400 viser Bare originalen er lagret …»): feilet én gang med fingeravtrykket til en tom fil. `waitForFile` venter bare til filen finnes, og serveren skriver originalen rett til endelig sti (`photo-storage.ts`), så en halvskrevet fil kan ses. Forslag: skriv til midlertidig fil og gi nytt navn, eller vent til størrelsen er riktig i testen. Funnet i gjennomgangen av sammenligningen 30.10.2026. Mål: reklamasjoner.
+3. **Tre tester kjøres ikke noe sted** (30. og 31.10.2026): `scripts/azure/sync-trial-roles.test.ts` linje 539, 565 og 588 (`it.skipIf(!logicalWal)`, replikasjonsplasser) krever `wal_level=logical`. Testdatabasen lokalt har `replica`, og CI (`.github/workflows/ci.yml`, tjenesten `postgres:16`) setter heller ikke `wal_level`. Oppgave: egen PR som starter CI-databasen med `wal_level=logical` (f.eks. `ALTER SYSTEM` og omstart av containeren i et steg). Mål: reklamasjoner.
+4. **Nattløkken bygger og kjører e2e samtidig i samme arbeidskopi** (30. og 31.10.2026, skjedde igjen: 118 røde e2e-tester, ChunkLoadError etter ny `.next`). Ikke en produktfeil. Oppgave: nattsjekkene kjører ikke `pnpm build` og e2e samtidig i samme mappe, eller hver jobb får egen kopi eller egen `distDir` (`E2E_PORT` skiller bare porten).
+5. **e2e starter `next start` med `output: standalone`** (31.10.2026): Next.js varsler at det ikke virker. `webServer.command` i `playwright.config.ts` bør bruke `node .next/standalone/server.js` (samme som i drift; statiske filer må kopieres inn). Mål: reklamasjoner.
+6. **UU, ikke kjørt automatisk** (30. og 31.10.2026): `@axe-core/playwright` mangler. Egen PR med ny utviklingsavhengighet (begrunnelse, regel 9) og e2e-test som kjører axe på /logg-inn, /arbeidskoe, /prove/testskjema og /prove/testskjema/[id]. Mål: reklamasjoner.
+7. **UU, feilboksen kan ikke rulles med tastatur** (31.10.2026): `src/app/(ansatt)/prove/testskjema/[id]/trial-form-page.tsx` linje 308 (`h-15 overflow-y-auto` uten `tabIndex`), blir kuttet ved forstørret tekst. Forslag: `tabIndex={0}` og `aria-label`, eller la boksen vokse utenfor den faste statuslinjen.
+8. **UU, svak ramme på knapper** (31.10.2026): uvalgte TG- og valgknapper (`border-slate-300`, `trial-form-view.tsx` linje 313) og sekundærknappen (`ring-slate-300`, `src/shared/ui/button.tsx` linje 13) har ca. 1,5:1 mot hvitt. Ikke brudd (teksten bærer), men svakt i dagslys på iPad. Forslag: `--color-field` (#8391a5, 3:1). Endrer utseendet, derfor ikke tatt som rydding.
+9. **UU, tabellfeltet mangler gruppering** (31.10.2026): `TableInput` i `trial-form-view.tsx` linje 452 har overskriften som `<p>`, så feltnavnet leses ikke opp. Forslag: `role="group"` med `aria-labelledby`, som `ChoiceButtons`.
+10. **UU, mange områder leser opp samtidig** (31.10.2026): hvert regelresultat (`trial-rule-result.tsx` linje 32, `aria-live="polite"`), synkstatusen, lagret-linjen og lagringsvarselet. Testes med VoiceOver på iPad før fase 2a.
+11. **Synktestene for de tre kandidatene og 401/403 i prøve E kjøres bare på pc** (30.10.2026), ikke i iPad-størrelse (bevisst, testplan 6.2). Vurder på nytt når synkløsningen er valgt.
+12. **Store pakkeoppdateringer** (30. og 31.10.2026, kan gi brudd): eslint 9.39.5 → 10.14.0 (retter også punkt 2; sjekk modulgrenser, produktnavn og eslint-config-next), postgres 3.4.9 → 4.0.0 (drift; sjekk at drizzle-orm støtter 4.x, full `pnpm test`), typescript 6.0.3 → 7.0.2 (sjekk Next.js og typescript-eslint). Én PR per pakke. `@types/node` står på 22 (følger Node-versjonen); oppdatering innen 22.x er trygg.
+13. **Størrelse** (30.10.2026): ingen side over 200 kB JS ved første last (gzip). Testskjema/[id] 188,9 kB er nærmest grensen. Et lite skript (`scripts/check-bundle-size.mjs`) kan gjøre sjekken gjentakbar.
+14. **Synk-ADR-en (fase 2b)** (30. og 31.10.2026): N+1 i `applyTrialChanges` (1–3 SELECT per operasjon, opptil ca. 1 500–2 000 rundturer per bunt på 500). Hent eksisterende rader for hele bunten på én gang (`WHERE id = ANY(...) AND organization_id = grant.organizationId`) eller bruk `INSERT ... ON CONFLICT`, og indeksmønsteret `(organization_id, updated_at, id)` på de ekte tabellene. Mål: tid.
+15. **Ekte tabeller for oppdrag og rapporter** (30.10.2026): indeks på `(organization_id, <sorteringsfelt>)`, eventuelt delvis med `WHERE deleted_at IS NULL`.
+16. **Historikk per objekt** (31.10.2026): `audit_log_entity_idx` er `(entity_type, entity_id)` uten `organization_id`. Brukes ikke i dag. Når historikk per objekt bygges: ny migrering med `(organization_id, entity_type, entity_id, occurred_at)`. Mål: reklamasjoner (sporbarhet).
+17. **`findGrant`** (30. og 31.10.2026) bruker to spørringer per tilgangssjekk (begge på indeks); kan slås sammen med join eller `array_agg`. Lav prioritet. Mål: tid.
+18. **Ustabil e2e-test i prøve D** (30.10.2026, `e2e/fase-1-prove-d-bilder.spec.ts`, [ipad] «kopi som får 400 viser Bare originalen er lagret …»): `waitForFile` kan se en halvskrevet fil. Forslag: skriv til midlertidig fil og gi nytt navn i `photo-storage.ts`, eller vent på riktig størrelse i testen. Mål: reklamasjoner.
+
+I orden 31.10.2026 (ingen oppgave): lint og typesjekk uten advarsler; e2e-ipad grønn i andre kjøring (313 bestått, 53 bevisst hoppet over, 0 feilet), også drift uten nett og tilgangstestene; fokusmarkering, trykkflater, TG uten farge alene og statusfarger; alle tabeller med `organization_id` har indeks som starter med den. Vitest-tipset `isolate: false` (ca. 10 s) er ikke tatt.
 
 ## Trenger Ståle (stoppet etter 3 retteforsøk)
 
 Ingen.
 
 ## Siste kjøring
+
+31.10.2026: prosjektleder skrev funnene fra nattløkken 31.10.2026 inn under «Oppgaver fra nattløkken» og laget branchen `natt-2026-10-31` med trygg rydding (versjon 0.2.38), lint, typesjekk og test grønne, PR #49 åpnet mot `main`. Sesjon: https://claude.ai/code/session_01Jqwntzb2tNnUYJeKVL5dq3
 
 30.10.2026 kl. 19:30–22:35 UTC (samme kjøring som under): kjørte liten oppgave (i) med arbeidsflyten «oppgave» (16 agenter, ca. 3 t) til PR #44, merget med skriptet (CI grønn, ingen alvorlige funn, 4 små i liten oppgave (j)). Arbeidsflyten varslet «svekket sikkerhet» for to roller. Prosjektlederen sjekket diffen: endringen er at organisasjonsfilteret i join-ene i `listEmployees` er fjernet. Det er trygt fordi de sammensatte fremmednøklene `employees_company_fk` og `employees_office_fk` (organization_id + id) gjør at selskap og kontor alltid hører til samme organisasjon, og det er lagt til en tenant-test med `includeDeactivated`. PR #46 (seed og slettet kontor) er i arbeid hos en annen kjøring. Sesjon: https://claude.ai/code/session_01Jqwnu2N3LWzoBoqfcro6m9
 
