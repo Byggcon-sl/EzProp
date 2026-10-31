@@ -69,7 +69,11 @@ export const employeeRoleAssignments = pgTable(
   },
   (table) => [
     index("employee_roles_organization_id_idx").on(table.organizationId),
-    uniqueIndex("employee_roles_employee_id_role_idx").on(table.employeeId, table.role),
+    // Samme rolle bare én gang per ansatt blant aktive rader. En rolle som er tatt bort
+    // (myk sletting), kan gis på nytt som en ny rad (A27).
+    uniqueIndex("employee_roles_employee_id_role_idx")
+      .on(table.employeeId, table.role)
+      .where(sql`${table.deletedAt} is null`),
   ],
 );
 

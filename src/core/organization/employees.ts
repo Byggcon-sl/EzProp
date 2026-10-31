@@ -1,5 +1,10 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { requireOrganizationAccess, type Actor } from "@/core/access";
+import {
+  AccessDeniedError,
+  listOrganizationsForActor,
+  requireOrganizationAccess,
+  type Actor,
+} from "@/core/access";
 import { db } from "@/db/client";
 import { companies, employees, offices } from "@/db/schema";
 
@@ -42,4 +47,22 @@ export async function listEmployees(
       )
       .orderBy(asc(employees.name))
   );
+}
+
+/**
+ * Den første organisasjonen der personen er admin (`organization.manage`), eller `null`.
+ * Brukes av adminsidene og menypunktet «Admin». Tilgangen avgjøres av `requireOrganizationAccess`,
+ * og hver funksjon i adminområdet sjekker den på nytt.
+ */
+export async function findAdminOrganizationId(actor: Actor): Promise<string | null> {
+  const organizationsForActor = await listOrganizationsForActor(actor);
+  for (const organization of organizationsForActor) {
+    try {
+      const grant = await requireOrganizationAccess(actor, organization.id, "organization.manage");
+      return grant.organizationId;
+    } catch (error) {
+      if (!(error instanceof AccessDeniedError)) throw error;
+    }
+  }
+  return null;
 }

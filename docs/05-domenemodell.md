@@ -213,6 +213,8 @@ Bare en person med gyldig sertifisering for rapporttypen kan stå som ansvarlig 
 | `employee_id` | Hvem |
 | `role` | `inspector` (takstmann), `office` (kontor), `manager` (leder), `admin` |
 
+Bare én aktiv rad per ansatt og rolle (delvis unik indeks `(employee_id, role) WHERE deleted_at IS NULL`). En rolle som tas bort, får `deleted_at` og `deleted_by`; gis den på nytt, lages en ny rad (A27, fase 0b). Organisasjonen har alltid minst én aktiv admin: rollen `admin` uten `deleted_at`, på en ansatt som ikke er slettet, ikke har sluttet og har innlogging (A25). Endringer i roller står i revisjonsloggen (`role_change`).
+
 **`employee_permissions`** – enkeltrettigheter som admin gir, i tillegg til rollen (fase 0b). Bare rettighetene i `grantablePermissions` kan gis: `template.edit_structure`, `assignment.edit`, `report.edit` og `report.publish` (A21). En rad med et annet navn gir ingen rettighet. Rader slettes aldri og settes aldri tilbake: å ta bort setter `deleted_at` og `deleted_by`, å gi på nytt lager en ny rad. Hver endring står i revisjonsloggen (`permission_change`).
 
 | Felt | Forklaring |
@@ -1679,6 +1681,17 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Rettighet | `employee_permissions.permission` | Enkeltrettighet, for eksempel `template.edit_structure` |
 | Enkeltrettigheter | `employee_permissions` | Rettigheter admin har gitt én ansatt, i tillegg til rollen |
 | Rettigheter som kan gis | `grantablePermissions` | Listen over rettigheter som kan gis som enkeltrettighet |
+| Opprette / endre selskap | `createCompany`, `updateCompany` | Admin legger inn og endrer selskap med firmatekst og ansvarsforsikring |
+| Opprette / endre kontor | `createOffice`, `updateOffice` | Admin legger inn og endrer kontor |
+| Ansatte (admin) | `listEmployeesForAdmin`, `getEmployeeForAdmin` | Ansatte med e-post, roller og enkeltrettigheter, også de som har sluttet. Bare admin |
+| Ny ansatt / endre ansatt | `createEmployee`, `updateEmployee` | Ny ansatt kobles til eksisterende innlogging med samme e-post (A26) |
+| Sette roller | `setEmployeeRoles` | Gir nye roller og tar bort de som ikke er med (myk sletting) |
+| Har sluttet / angre sluttet | `deactivateEmployee`, `reactivateEmployee` | Setter og nullstiller `employees.deactivated_at` |
+| Adminorganisasjon | `findAdminOrganizationId` | Organisasjonen der personen er admin; brukes av adminsidene |
+| Minst én admin | `LastAdminError` | Feil når en endring ville gitt en organisasjon uten aktiv admin (A25) |
+| Duplikat e-post | `DuplicateEmployeeEmailError` | Det finnes alt en ansatt med den e-posten i organisasjonen |
+| Duplikat kontornavn | `DuplicateOfficeNameError` | Det finnes alt et aktivt kontor med samme navn |
+| Duplikat org.nr. | `DuplicateOrgNumberError` | Det finnes alt et aktivt selskap med samme org.nr. |
 | Takstmann | `inspector` | Rolle |
 | Fagansvarlig / maltilgang | `template.edit_structure` | Rettighet gitt i admin |
 | Endre oppdrag | `assignment.edit` | Rettighet: ordre, oppdrag, parter, befaringstid, dokumenter |
@@ -1961,3 +1974,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 〃 | Reklamasjonssaker bare for leder og admin (`claims.view`), åpent spørsmål 18 lukket. Merket «Rettet» under «Ferdig», åpent spørsmål 5 lukket. | Tilleggsbeslutninger 27.10.2026 |
 | 28.10.2026 | Modellen sjekket mot hovedmålet. Reklamasjoner per 100 rapporter dekkes allerede (`claims` og `report_releases`). Tid per fase dekkes bare delvis av hendelsene. Nye kroker: `work_sessions` (arbeidsøkter per rapport og fase) og `baseline_metrics` (nullpunkt fra IVIT og de siste 3 årene). | Hovedmål, Ståle i chat 28.10.2026 |
 | 31.10.2026 | Roller og rettigheter (fase 0b): nye rettigheter `assignment.edit`, `report.edit`, `report.publish`, `template.edit_structure` og `invoice.send`; `claims.view` heter `claims.read` som i koden; `employee_permissions` med `created_by`/`created_at` i stedet for `granted_by`/`granted_at`; innstillingen `access.inspectors_edit_all` i `organizations.settings`, standard på. | A18–A21, `docs/funksjoner/fase0b-roller-rettigheter.md` |
+| 31.10.2026 | Admin (fase 0b): `employee_roles` har delvis unik indeks `(employee_id, role) WHERE deleted_at IS NULL`, så en rolle kan tas bort og gis på nytt som ny rad. Minst én aktiv admin per organisasjon. Nye funksjonsnavn og feilklasser i ordlisten. | A24–A28, `docs/funksjoner/fase0b-admin-organisasjon.md` |
