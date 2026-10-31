@@ -420,9 +420,7 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
   });
 });
 
-test.describe("iPad stående (834x1194)", () => {
-  test.use(PORTRAIT);
-
+test.describe("iPad liggende (prosjektet ipad)", () => {
   // Bare i prosjektet ipad (lite funn fra PR #51: blokken skal ikke kjøre to ganger)
   test.beforeEach(() => {
     test.skip(test.info().project.name !== "ipad", "Bare i prosjektet ipad");
@@ -487,6 +485,14 @@ test.describe("iPad stående (834x1194)", () => {
     await expect(page).toHaveURL(/\/admin\/kontorer\?lagret=kontor$/);
     await expect(row(page, name)).toHaveCount(1);
     await expect(row(page, name)).toContainText("Tastaturveien 1");
+  });
+});
+
+test.describe("iPad stående (834x1194)", () => {
+  test.use(PORTRAIT);
+
+  test.beforeEach(() => {
+    test.skip(test.info().project.name !== "ipad", "Bare i prosjektet ipad");
   });
 
   test("7c. ansattlisten og ansattskjemaet har ingen vannrett rulling", async ({ page }) => {
