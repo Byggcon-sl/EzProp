@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { companies, employees, offices } from "@/db/schema";
+import { companies, employeeRoleAssignments, employees, offices } from "@/db/schema";
 import { uuidv7 } from "@/shared/lib/uuid";
 import {
   createCompany,
@@ -311,5 +311,60 @@ describe("id fra enheten og row_version (ADR 0004)", () => {
 
     const [read] = await db.select().from(offices).where(eq(offices.id, id));
     expect(read).toMatchObject({ id, name: "Testkontor Sør", rowVersion: 2 });
+  });
+});
+
+// Roller med myk sletting (docs/funksjoner/fase0b-admin-organisasjon.md, Omfang 5;
+// testplanen avsnitt 4): den unike indeksen på (employee_id, role) gjelder bare aktive rader.
+describe("rolle kan tas bort og gis på nytt (delvis unik indeks)", () => {
+  async function inspectorWithRole() {
+    const org = await createOrganization();
+    const person = await createUser();
+    const employee = await createEmployee(person, org.id, ["inspector"]);
+    return { org, employee };
+  }
+
+  it("1. ny rad med samme rolle godtas når den gamle har deleted_at", async () => {
+    const { org, employee } = await inspectorWithRole();
+    await db
+      .update(employeeRoleAssignments)
+      .set({ deletedAt: new Date() })
+      .where(eq(employeeRoleAssignments.employeeId, employee.id));
+
+    await db
+      .insert(employeeRoleAssignments)
+      .values({ organizationId: org.id, employeeId: employee.id, role: "inspector" });
+
+    const rows = await db
+      .select()
+      .from(employeeRoleAssignments)
+      .where(
+        and(
+          eq(employeeRoleAssignments.employeeId, employee.id),
+          eq(employeeRoleAssignments.role, "inspector"),
+        ),
+      );
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((row) => row.deletedAt === null)).toHaveLength(1);
+  });
+
+  it("2. to aktive rader med samme rolle stoppes av indeksen", async () => {
+    const { org, employee } = await inspectorWithRole();
+    await expectViolation(
+      db
+        .insert(employeeRoleAssignments)
+        .values({ organizationId: org.id, employeeId: employee.id, role: "inspector" }),
+      "employee_roles_employee_id_role_idx",
+    );
+  });
+
+  it("3. indeksen er delvis: WHERE (deleted_at IS NULL)", async () => {
+    const result = await db.execute<{ indexdef: string }>(
+      sql`select indexdef from pg_indexes where indexname = 'employee_roles_employee_id_role_idx'`,
+    );
+    const rows = Array.from(result as unknown as { indexdef: string }[]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.indexdef).toMatch(/UNIQUE/);
+    expect(rows[0]!.indexdef).toMatch(/WHERE \(deleted_at IS NULL\)/);
   });
 });

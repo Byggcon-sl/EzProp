@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Actor } from "@/core/access";
 import { db } from "@/db/client";
 import {
@@ -121,6 +121,30 @@ export async function grantPermission(
     .returning();
   if (!row) throw new Error("kunne ikke gi enkeltrettighet");
   return row;
+}
+
+/**
+ * Antall aktive admin i organisasjonen, etter definisjonen i
+ * docs/funksjoner/fase0b-admin-organisasjon.md (Omfang 4): rollen `admin` uten `deleted_at`, og
+ * ansatt-raden har `deleted_at`, `deactivated_at` tomme og `user_id` satt.
+ */
+export async function activeAdminCount(organizationId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(employeeRoleAssignments)
+    .innerJoin(employees, eq(employees.id, employeeRoleAssignments.employeeId))
+    .where(
+      and(
+        eq(employeeRoleAssignments.organizationId, organizationId),
+        eq(employees.organizationId, organizationId),
+        eq(employeeRoleAssignments.role, "admin"),
+        isNull(employeeRoleAssignments.deletedAt),
+        isNull(employees.deletedAt),
+        isNull(employees.deactivatedAt),
+        isNotNull(employees.userId),
+      ),
+    );
+  return row?.count ?? 0;
 }
 
 /** Radene i revisjonsloggen for organisasjonen, eldste først. */
