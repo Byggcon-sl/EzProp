@@ -517,16 +517,23 @@ describe("3.2 sertifisering: report.publish per rolle (ekte klokke)", () => {
     await expectAllowed(user, org.id, "report.publish", true);
   });
 
-  it("4. kontor får aldri report.publish, heller ikke med sertifisering eller enkeltrettighet", async () => {
+  it("4. kontor får ikke report.publish fra rollen, heller ikke med sertifisering", async () => {
     const org = await createOrganization();
     const { user, employee } = await newPerson(org.id, ["office"]);
     await expectAllowed(user, org.id, "report.publish", false);
 
     await createCertification(employee);
     await expectAllowed(user, org.id, "report.publish", false);
+  });
 
+  it("4b. kontor med enkeltrettigheten publiserer bare med gyldig sertifisering (A21, A29)", async () => {
+    const org = await createOrganization();
+    const { user, employee } = await newPerson(org.id, ["office"]);
     await grantPermission(employee, "report.publish");
     await expectAllowed(user, org.id, "report.publish", false);
+
+    await createCertification(employee);
+    await expectAllowed(user, org.id, "report.publish", true);
   });
 
   it("5. fjernet sertifisering virker i neste kall", async () => {

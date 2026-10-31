@@ -67,7 +67,7 @@ Rollematrisen fra fase 0b står med samme fasit. Oppsettet får `createCertifica
 1. **`it.each` over `inspector`, `manager`, `admin`:** uten sertifisering → `requireOrganizationAccess(…, "report.publish")` gir `AccessDeniedError`; utgått (`validTo` = i går) → `AccessDeniedError`; gyldig (`validTo` = i dag) → lykkes, og `grant.permissions` inneholder `report.publish`.
 2. **innstillingen `access.inspectors_edit_all` av:** takstmann med gyldig sertifisering har fortsatt `report.publish`; uten har han det ikke.
 3. **enkeltrettighet:** en takstmann uten sertifisering med `grantPermission(…, "report.publish")` får ikke `report.publish`; med gyldig sertifisering får han den.
-4. **kontor får aldri `report.publish`**, heller ikke med gyldig sertifisering, og heller ikke med enkeltrettigheten i tillegg.
+4. **kontor får aldri `report.publish` fra rollen**, heller ikke med gyldig sertifisering. Gir admin kontor enkeltrettigheten (A21), gjelder sertifiseringskravet som for alle andre: uten gyldig sertifisering nei, med gyldig ja.
 5. **fjernet sertifisering virker i neste kall:** gyldig → `removeCertification` → neste `requireOrganizationAccess(…, "report.publish")` gir `AccessDeniedError`.
 6. **fornyelse virker i neste kall:** utgått → `addCertification` med ny `validTo` → `report.publish` tillatt.
 7. **ingen annen rettighet påvirkes:** for hver rolle er `grant.permissions` uten sertifisering lik fasiten minus `report.publish`.
