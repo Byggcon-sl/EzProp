@@ -3,8 +3,8 @@
 - **Fase:** 0b (innspill P12)
 - **Modul:** kjerne (`src/core/auth`)
 - **Status:** klar for bygging (autonom modus, avgjort av agentene, gjennomgått av forenkler, sikkerhet-personvern og test-leder 31.10.2026)
-- **Branch:** `fase0b-sperre-innlogging` fra `main`. Versjon **0.2.49** (PR #59 med revisjonsloggen har 0.2.48 og venter på merge).
-- **Bygger på:** `main` (ikke på PR #59).
+- **Branch:** `fase0b-sperre-innlogging` fra `main`. Versjon **0.2.49** (main har 0.2.48 etter at PR #59 med revisjonsloggen ble merget 31.10.2026).
+- **Bygger på:** `main` (PR #59 er merget, tabellen `events` finnes på main).
 - **Støtter hovedmål:** Reklamasjoner: indirekte. En konto som blir tatt over, kan endre eller publisere rapporter i en takstmanns navn. Sperren gjør det mye vanskeligere å gjette seg til en kode, og beskytter rapportene og signaturen. Tid: ingen ekstra trykk for den som skriver riktig kode. KI først: se under.
 
 ## Problem
@@ -48,7 +48,7 @@ Nei. Dette er en fast sikkerhetsregel uten skjønn. KI skal ikke avgjøre hvem s
 - Sperre per IP-adresse (Better Auths `rateLimit` står som i dag i drift).
 - Knapp for admin til å oppheve en sperre, og liste over sperrer i adminområdet.
 - E-post eller varsel til brukeren eller admin om sperre.
-- Hendelse i hendelsesloggen (`events`): tabellen kommer med PR #59, som ikke er merget. Legges til senere som liten oppgave.
+- Hendelse i hendelsesloggen (`events`): tabellen finnes nå på main (PR #59), men hendelse ved sperre holdes utenfor for å holde PR-en liten. Legges til som egen liten oppgave.
 - Opprydding av gamle rader. Forslaget er sletting etter 24 timer (A38), men det bygges senere.
 - Endringer i Optiplan eller felles innlogging (egen oppgave i fase 0b).
 - CAPTCHA eller lignende.
