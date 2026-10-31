@@ -1647,6 +1647,7 @@ Felles for alle ansatte: **fraser** kan lages, endres og arkiveres av alle, med 
 | Kontor | `offices` | Bodø, Mo i Rana osv. |
 | Ansatt | `employees` | Person som jobber i Byggcon |
 | Bruker / innlogging | `users` | Felles med Optiplan |
+| Ramme | `app shell` (`src/app/(ansatt)/layout.tsx`) | Topplinjen og menyen rundt alle sidene for innloggede ansatte. Lik på PC og iPad; menyen står til venstre fra bredde `lg` og som rad under topplinjen på smalere skjermer |
 | Sertifisering | `certifications` | Personlig sertifisering |
 | Ansvarsforsikring | `companies.liability_*` | Hører til selskapet |
 | Firmatekst | `companies.company_text` | Teksten om selskapet på rapportens side 2 |

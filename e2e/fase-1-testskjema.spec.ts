@@ -60,7 +60,7 @@ test("admin finner lenken Prøve uten nett: testskjema på arbeidskøen og ser 0
   page,
 }) => {
   await logIn(page, ADMIN_EMAIL);
-  const link = page.getByRole("link", { name: "Prøve uten nett: testskjema" });
+  const link = page.getByRole("link", { name: "Testskjema uten nett" });
   await expect(link).toBeVisible();
   await link.click();
   await expect(page).toHaveURL(/\/prove\/testskjema$/);
