@@ -3,7 +3,7 @@
 - **Fase:** 0b – Innlogging, organisasjon, roller og layout
 - **Modul:** kjerne (`src/core/organization`, `src/core/access`, adminområdet)
 - **Branch:** `fase0b-sertifisering` (bygger på `main`)
-- **Status:** utkast (31.10.2026)
+- **Status:** klar for bygging (31.10.2026)
 - **Støtter hovedmål:** Reklamasjoner: ingen rapport kan publiseres av en ansvarlig uten gyldig sertifisering, og admin ser i god tid hvem som må fornye. Tid: admin slipper å holde oversikt i regneark; fornyelse er én ny rad. KI først: se under.
 
 ## Problem
@@ -27,7 +27,7 @@ Ikke nå. Registreringen er noen få felt én gang hvert par år, og sjekken er 
 6. **Adminskjermen for ansatte** (`/admin/ansatte/[id]`): en seksjon «Sertifiseringer» med listen (område, nummer, utsteder, gyldig til, merket «Utgått» eller «Går ut snart»), et lite skjema «Legg til sertifisering» og knappen «Fjern» per rad (med bekreftelse). Retting av en feil gjøres med «Fjern» og ny registrering. Fornyelse er en ny rad; den gamle blir stående som historikk.
 7. **Listen «Sertifiseringer»** (`/admin/sertifiseringer`, ny fane i adminområdet): aktive ansatte der den nyeste sertifiseringen per område har gått ut eller går ut innen 60 dager, sortert på dato (tidligst først). Ansatte som har fornyet, vises ikke. Tom liste viser «Ingen sertifiseringer går ut de neste 60 dagene.»
 8. **Testfabrikk** `createCertification` i `tests/factories.ts`, og de eksisterende testene for `report.publish` får en gyldig sertifisering der de trenger rettigheten.
-9. Ordlisten (avsnitt 8) og domenemodellen 4.1 oppdateres med det som er bygget. Versjon 0.2.43 → 0.2.44.
+9. Ordlisten (avsnitt 8) og domenemodellen 4.1 oppdateres med det som er bygget. Versjon 0.2.45 → 0.2.46.
 
 **Ikke med (bevisst utelatt):**
 - Varsel i arbeidslisten og hendelsen `certification.expiring` (fase 3). Derfor heller ikke feltet `expiry_warned_at`.
@@ -78,7 +78,7 @@ Ingen fagregler (ikke TG-logikk). Datoregelen (Omfang 3) testes med grensesaker:
 - [ ] Virker på iPad-størrelse (e2e: admin legger til en sertifisering og ser den i listen, i `pc` og `ipad`).
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne.
 
-## Beslutninger (autonom modus, føres i `docs/09-apne-sporsmal.md`)
+## Beslutninger (autonom modus, føres i `docs/09-apne-sporsmal.md`; neste ledige nummer er A29, og innledningen der får «sertifisering bruker A29–A32»)
 - **A29:** `report.publish` tas bort i tilgangsmodulen når personen mangler gyldig sertifisering (alle roller, også enkeltrettighet). Begrunnelse: «Bare sertifiserte personer kan stå som ansvarlig og signere» (svar 23.10.2026, nr. 2) og rettighetsmatrisen «Ja (når sertifisert)». Endres i fase 2a når sjekken flyttes til per rapport og rapporttype.
 - **A30:** Ett område nå (`condition_report`, «Tilstandsrapport bolig»); sjekken krever en gyldig sertifisering uansett område til flere rapporttyper finnes. Endres ved å legge til koder og sjekke type i fase 2a.
 - **A31:** Listen «går ut snart» bruker 60 dager som konstant; innstillingen (60 og 14 dager, Ståle 27.10.2026) og varslene kommer i fase 3. Utløpsdagen er siste gyldige dag, i norsk tid.
