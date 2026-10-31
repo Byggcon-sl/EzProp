@@ -338,6 +338,7 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
       "/admin/selskaper/ny",
       "/admin/kontorer",
       "/admin/kontorer/ny",
+      "/admin/logg",
     ]) {
       const response = await page.goto(url);
       expectNoServerError(response, url);
