@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 31.10.2026 (admin-skjermene levert som PR)
+Sist oppdatert: 31.10.2026 (oppgavekort for sertifisering med utløpsdato)
 
 ## Gjeldende fase
 
@@ -17,6 +17,8 @@ Gjeldende fase: **Fase 0b – Innlogging, organisasjon, roller og layout** (fra 
 Fase 1 – Prøve uten nett: Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd er merget til `main` i PR #13 (PR #12: agentene merger selv).
 
 ## Gjeldende oppgave
+
+**I arbeid: Sertifisering med utløpsdato** (fase 0b, 31.10.2026; branch `fase0b-sertifisering` fra `main`). Oppgavekort `docs/funksjoner/fase0b-sertifisering.md`. Tabellen `certifications`, registrering på `/admin/ansatte/[id]`, `report.publish` tas bort uten gyldig sertifisering (admin stenges ikke ute), listen `/admin/sertifiseringer` (60 dager). Beslutninger A29–A32 (føres i `docs/09-apne-sporsmal.md`). Roller: utvikler, testskriver, sikkerhet-personvern, test-leder. Støtter reklamasjoner og tid.
 
 **Levert: Admin – selskaper, kontorer, ansatte og roller** (fase 0b, 31.10.2026; branch `fase0b-admin-organisasjon` fra `main`, versjon 0.2.43, **PR #54**). Oppgavekort `docs/funksjoner/fase0b-admin-organisasjon.md`. Adminområdet `/admin` i rammen Fjord, bare for `organization.manage`: selskaper (med firmatekst og ansvarsforsikring), kontorer, ansatte med roller og enkeltrettigheter, «Har sluttet» / «Angre sluttet». Minst én admin alltid, under lås per organisasjon (A25), roller med myk sletting (migrering 0006, A27), ingen e-post sendes (A26). Beslutninger A24–A28. Roller: forenkler, sikkerhet-personvern, test-leder, ui-designer, utvikler, testskriver. Ingen alvorlige funn. Små funn i PR-en, lagt inn som liten oppgave (m). Punktet er krysset av i planen. Neste i fase 0b: «Sertifisering med utløpsdato». Støtter reklamasjoner og tid.
 
