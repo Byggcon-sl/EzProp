@@ -8,6 +8,7 @@ import {
   isAdmin,
   permissions,
   readInspectorsEditAll,
+  withPublishRequiringCertification,
   type EmployeeGrant,
   type Permission,
 } from "./permissions";
@@ -334,5 +335,64 @@ describe("grantHasPermission og isAdmin", () => {
     expect(
       isAdmin({ employeeId: "e", organizationId: "o", roles: ["admin"], permissions: [] }),
     ).toBe(true);
+  });
+});
+
+// --- Sertifisering (testplan docs/funksjoner/fase0b-sertifisering-testplan.md, del 2). Bare nye
+// tester; rollematrisen og fasitene over er urørt. ---
+
+describe("withPublishRequiringCertification", () => {
+  const withoutPublish = allNine.filter((p) => p !== "report.publish");
+
+  it("1. alle ni uten gyldig sertifisering gir de åtte andre, uten report.publish", () => {
+    expect(withPublishRequiringCertification(allNine, false)).toEqual(withoutPublish);
+  });
+
+  it("2. med gyldig sertifisering er listen uendret (innhold og rekkefølge)", () => {
+    expect(withPublishRequiringCertification(allNine, true)).toEqual([...allNine]);
+  });
+
+  it("3. uten report.publish i listen og uten sertifisering er listen uendret", () => {
+    const list: Permission[] = ["organization.read", "assignment.edit", "invoice.send"];
+    expect(withPublishRequiringCertification(list, false)).toEqual(list);
+    expect(withPublishRequiringCertification([], false)).toEqual([]);
+  });
+
+  const fasitCases = roles.flatMap((role) =>
+    [true, false].map((editAll) => ({
+      role,
+      editAll,
+      fasit: allNine.filter((p) => expected[p][column(role, editAll)]),
+    })),
+  );
+
+  it.each(fasitCases)(
+    "4. rører ingen andre rettigheter: $role med innstillingen $editAll",
+    ({ fasit }) => {
+      expect(withPublishRequiringCertification(fasit, false)).toEqual(
+        fasit.filter((p) => p !== "report.publish"),
+      );
+      expect(withPublishRequiringCertification(fasit, true)).toEqual(fasit);
+    },
+  );
+
+  // Admin stenges aldri ute (regel 11). Testen skal aldri fjernes.
+  it("5. admin uten sertifisering beholder organization.manage og staff.manage", () => {
+    const admin = withPublishRequiringCertification(
+      effectivePermissions(["admin"], [], OFF),
+      false,
+    );
+    expect(admin).toContain("organization.manage");
+    expect(admin).toContain("staff.manage");
+    expect(admin).toContain("organization.read");
+    expect(admin).not.toContain("report.publish");
+    expect(admin).toHaveLength(8);
+  });
+
+  it("6. muterer ikke listen som sendes inn", () => {
+    const input = Object.freeze([...allNine]) as readonly Permission[];
+    expect(() => withPublishRequiringCertification(input, false)).not.toThrow();
+    expect(() => withPublishRequiringCertification(input, true)).not.toThrow();
+    expect(input).toEqual([...allNine]);
   });
 });
