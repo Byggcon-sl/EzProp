@@ -263,6 +263,9 @@ export function PermissionsForm({
                 name="permissions"
                 value={permission}
                 label={permissionLabels[permission]}
+                description={
+                  permission === "report.publish" ? "Krever gyldig sertifisering." : undefined
+                }
                 defaultChecked={selected.includes(permission)}
               />
             ))}
