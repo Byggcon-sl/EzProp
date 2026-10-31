@@ -184,7 +184,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 **Organisasjon og tilgang**
 - [x] Organisasjon → selskap → kontor → ansatt, med ansvarsforsikring og firmatekst per selskap. Ansatte som har sluttet, kan stå uten innlogging (innspill D18). (30.10.2026, branch `fase0b-organisasjon-selskap-kontor`)
   - [x] Småfunn fra gjennomgangen av PR #41: faste feltlister for selskaper og kontorer (ingen sporingsfelt), tenant-test også for ansatte som har sluttet, enklere join, seed-testene skriver ikke til konsollen (30.10.2026, `docs/agenter/oppgaver/fase0b-smafunn-organisasjon.md`)
-- [ ] **Sertifisering med utløpsdato** (funksjonskart H5): den som har utgått sertifisering, kan ikke publisere som ansvarlig, og admin ser hvem som snart går ut. Varsel i arbeidslisten kommer i fase 3.
+- [x] **Sertifisering med utløpsdato** (funksjonskart H5): den som har utgått sertifisering, kan ikke publisere som ansvarlig, og admin ser hvem som snart går ut. Varsel i arbeidslisten kommer i fase 3.
 - [x] Roller og rettigheter i én felles tilgangsmodul, etter rettighetsmatrisen i `datamodell.md` avsnitt 5. Admin kan gi enkeltrettigheter (for eksempel maltilgang). Admin stenges aldri ute. **Fra 27.10.2026:** alle takstmenn ser alle oppdrag og data og kan foreløpig endre alt, styrt av en innstilling som er lett å stramme inn. Alle kan sende fakturagrunnlag. (31.10.2026, `docs/funksjoner/fase0b-roller-rettigheter.md`, beslutninger A18–A21; admin-skjermene er eget punkt)
 - [x] Admin: opprette selskaper, kontorer og ansatte, og gi roller (31.10.2026, `docs/funksjoner/fase0b-admin-organisasjon.md`, beslutninger A24–A28; minst én admin alltid)
 

@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { Badge } from "@/shared/ui/badge";
 import { getAdminContext } from "../admin-context";
 import { EmptyList, ListHeader, Row, RowList } from "../admin-list";
-import { formatIsoDate, formatOrgNumber, noticeText, todayInNorway } from "../labels";
+import { formatIsoDate, formatOrgNumber, noticeText } from "../labels";
 import { NoAccess } from "../no-access";
 import { listCompanies } from "@/core/organization";
+import { todayInOslo } from "@/shared/lib/dates";
 
 export const metadata: Metadata = { title: "Selskaper" };
 
@@ -18,7 +19,7 @@ export default async function CompaniesPage({
   if (!context) return <NoAccess />;
   const companies = await listCompanies(context.actor, context.organizationId);
   const notice = noticeText((await searchParams).lagret);
-  const today = todayInNorway();
+  const today = todayInOslo();
 
   return (
     <main className="max-w-4xl">

@@ -59,11 +59,6 @@ export function formatIsoDate(isoDate: string): string {
   return match ? `${match[3]}.${match[2]}.${match[1]}` : isoDate;
 }
 
-/** Dagens dato i Norge som «ÅÅÅÅ-MM-DD». */
-export function todayInNorway(now: Date = new Date()): string {
-  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Oslo" }).format(now);
-}
-
 /** Et tidspunkt som norsk dato, «31.10.2026». */
 export function formatDate(value: Date): string {
   return new Intl.DateTimeFormat("nb-NO", {

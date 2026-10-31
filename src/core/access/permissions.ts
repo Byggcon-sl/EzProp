@@ -94,6 +94,19 @@ export function effectivePermissions(
 }
 
 /**
+ * Publisering krever gyldig sertifisering (A29). Tar bort bare `report.publish` når personen
+ * ikke har en gyldig sertifisering, uansett rolle og enkeltrettighet. Alle andre rettigheter står,
+ * så admin stenges aldri ute fra admin (regel 11). Endrer ikke listen som sendes inn.
+ */
+export function withPublishRequiringCertification(
+  permissions: readonly Permission[],
+  hasValidCertification: boolean,
+): Permission[] {
+  if (hasValidCertification) return [...permissions];
+  return permissions.filter((permission) => permission !== "report.publish");
+}
+
+/**
  * Leser `access.inspectors_edit_all` fra `organizations.settings`. Standard på: bare boolean
  * `false` slår den av. Er verdien noe annet enn boolean, logges en advarsel (bare organisasjon og
  * nøkkel), slik at en skrivefeil ved innstramming blir oppdaget.

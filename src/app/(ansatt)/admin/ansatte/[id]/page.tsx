@@ -5,9 +5,15 @@ import { isUuid } from "@/shared/lib/uuid";
 import { Badge } from "@/shared/ui/badge";
 import { Notice } from "@/shared/ui/notice";
 import { getAdminContext } from "../../admin-context";
-import { formatDate, noticeText, roleBadgeOrder, roleLabels } from "../../labels";
+import { formatDate, formatIsoDate, noticeText, roleBadgeOrder, roleLabels } from "../../labels";
 import { NoAccess } from "../../no-access";
-import { getEmployeeForAdmin, listCompanies, listOffices } from "@/core/organization";
+import {
+  CERTIFICATION_AREAS,
+  getEmployeeForAdmin,
+  listCertificationsForEmployee,
+  listCompanies,
+  listOffices,
+} from "@/core/organization";
 import {
   deactivateEmployeeAction,
   reactivateEmployeeAction,
@@ -16,8 +22,27 @@ import {
   updateEmployeeAction,
 } from "../actions";
 import { EmployeeDetailsForm, PermissionsForm, RolesForm, StatusForm } from "../employee-forms";
+import { addCertificationAction, removeCertificationAction } from "./certification-actions";
+import { CertificationSection, type CertificationRow } from "./certification-section";
 
 export const metadata: Metadata = { title: "Endre ansatt" };
+
+/** Kvitteringene for sertifiseringer. Bare faste nøkler; resten tolkes av `noticeText`. */
+const certificationNotices: Readonly<Record<string, string>> = {
+  sertifisering: "Sertifiseringen er lagret.",
+  "sertifisering-fjernet": "Sertifiseringen er fjernet.",
+};
+
+function pageNotice(value: string | string[] | undefined): string | null {
+  if (typeof value === "string" && Object.hasOwn(certificationNotices, value)) {
+    return certificationNotices[value] ?? null;
+  }
+  return noticeText(value);
+}
+
+function areaLabel(key: string): string {
+  return CERTIFICATION_AREAS.find((area) => area.key === key)?.label ?? key;
+}
 
 /** Henter den ansatte. Ugyldig, ukjent og fremmed id gir `null` (samme svar som ingen tilgang). */
 async function findEmployee(
@@ -34,7 +59,10 @@ async function findEmployee(
   }
 }
 
-/** Opplysninger, roller, enkeltrettigheter og sluttet, i fire kort som lagres hver for seg. */
+/**
+ * Opplysninger, roller, enkeltrettigheter, sertifiseringer og sluttet, i kort som lagres hver
+ * for seg.
+ */
 export default async function EmployeePage({
   params,
   searchParams,
@@ -48,11 +76,21 @@ export default async function EmployeePage({
   const employee = await findEmployee(context.actor, context.organizationId, id);
   if (!employee) return <NoAccess />;
 
-  const [companies, offices] = await Promise.all([
+  const [companies, offices, certifications] = await Promise.all([
     listCompanies(context.actor, context.organizationId),
     listOffices(context.actor, context.organizationId),
+    listCertificationsForEmployee(context.actor, context.organizationId, employee.id),
   ]);
-  const notice = noticeText((await searchParams).lagret);
+  const notice = pageNotice((await searchParams).lagret);
+  const certificationRows: CertificationRow[] = certifications.map((row) => ({
+    id: row.id,
+    areaLabel: areaLabel(row.area),
+    certificateNumber: row.certificateNumber,
+    issuer: row.issuer,
+    validTo: formatIsoDate(row.validTo),
+    validFrom: row.validFrom ? formatIsoDate(row.validFrom) : null,
+    status: row.status,
+  }));
   const locked = employee.deactivatedAt !== null;
   const roles = roleBadgeOrder.filter((role) => employee.roles.includes(role));
   // Uten innlogging finnes ingen e-post, og «Angre sluttet» er ikke mulig (kortet, Omfang 6).
@@ -112,6 +150,17 @@ export default async function EmployeePage({
           grantable={grantablePermissions}
           action={setPermissionsAction.bind(null, employee.id)}
           locked={locked}
+        />
+        <CertificationSection
+          certifications={certificationRows}
+          areas={CERTIFICATION_AREAS.map((area) => ({ key: area.key, label: area.label }))}
+          addAction={addCertificationAction.bind(null, employee.id)}
+          removeActions={Object.fromEntries(
+            certifications.map((row) => [
+              row.id,
+              removeCertificationAction.bind(null, employee.id, row.id),
+            ]),
+          )}
         />
         <StatusForm
           deactivatedOn={employee.deactivatedAt ? formatDate(employee.deactivatedAt) : null}
