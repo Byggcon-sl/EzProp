@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 30.10.2026 kl. 22:35 UTC (PR #44 og #45 merget, PR #46 i arbeid hos en annen kjøring)
+Sist oppdatert: 31.10.2026 (oppgavekort for roller og rettigheter laget, branch `fase0b-roller-rettigheter`)
 
 ## Gjeldende fase
 
@@ -17,6 +17,8 @@ Gjeldende fase: **Fase 0b – Innlogging, organisasjon, roller og layout** (fra 
 Fase 1 – Prøve uten nett: Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd er merget til `main` i PR #13 (PR #12: agentene merger selv).
 
 ## Gjeldende oppgave
+
+**I arbeid: Roller og rettigheter i én felles tilgangsmodul** (fase 0b, 31.10.2026; branch `fase0b-roller-rettigheter` fra `main`). Oppgavekort `docs/funksjoner/fase0b-roller-rettigheter.md`. Nye rettigheter `assignment.edit`, `report.edit`, `report.publish`, `template.edit_structure`, `invoice.send`; tabellen `employee_permissions` (enkeltrettigheter, myk sletting, revisjonslogg); innstillingen `access.inspectors_edit_all` i `organizations.settings`, standard på; `requireOrganizationAccess` regner med begge. Admin stenges aldri ute (test). Ingen skjermer. Beslutninger A18–A20. Roller: utvikler og testskriver i parallell, sikkerhet-personvern, test-leder. Støtter reklamasjoner og tid. Neste steg: testplan og bygging.
 
 **Levert: UU-funn 6–9 fra nattløkken** (30.10.2026; branch `fase1-uu-nattlokken` fra `main`, versjon 0.2.33, **PR #45**). Oppgavekort `docs/agenter/oppgaver/fase1-uu-nattlokken.md`, testplan `docs/agenter/oppgaver/fase1-uu-nattlokken-testplan.md`. Kolonnenavn synlig over hver tabellcelle, `scroll-padding-top` på `html` lik målt høyde på statuslinjen (`useStickyScrollPadding`), «Til forsiden» med trykkflate på 44 px, og meldingen i `CandidatePicker` leses opp. Roller: forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver. Ingen alvorlige funn. Små funn i PR-en: reserven 9rem gir ekstra rulling på sider uten statuslinje, måleren og fabrikken er mer enn kortet ba om, reservevelgeren `div.sticky` i e2e kan fjernes. Støtter tid og reklamasjoner.
 
