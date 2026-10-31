@@ -1484,4 +1484,12 @@ describe("findAdminOrganizationId", () => {
 
     expect(await findAdminOrganizationId(person)).toBe(orgB.id);
   });
+
+  // Sperren for /admin/logg (fase0b-revisjon-hendelser-testplan.md 4.1): siden bruker
+  // getAdminContext, så leder og kontor skal ikke slippe inn selv om kjernen lar leder lese loggen.
+  it.each<EmployeeRole>(["manager", "office"])("gir null for %s", async (role) => {
+    const { org } = await orgWithAdmin();
+    const { actor } = await seedPerson(org.id, [role], { name: "Kari Testdatter" });
+    expect(await findAdminOrganizationId(actor)).toBeNull();
+  });
 });
