@@ -24,7 +24,7 @@ export function Input({ className, ...props }: ComponentProps<"input">) {
   return (
     <input
       className={cn(
-        "block min-h-11 w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-brand-600",
+        "block min-h-11 w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 placeholder:text-slate-500 focus:border-brand-600",
         className,
       )}
       {...props}
