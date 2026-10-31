@@ -854,3 +854,56 @@ export async function pendingQueue(page: Page): Promise<{ changes: number; photo
     return { changes: status.pendingChanges, photos: status.pendingPhotos };
   });
 }
+
+// --- Admin: selskaper, kontorer og ansatte (docs/funksjoner/fase0b-admin-organisasjon-testplan.md avsnitt 8) ---
+
+/**
+ * Unik ending per kjøring (e2e-databasen tømmes ikke, og navn, org.nr. og e-post er unike blant
+ * aktive rader): tid i base 36 og et tilfeldig tall.
+ */
+export function uniqueSuffix(): string {
+  return `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+/** Oppdiktet org.nr. som ikke finnes: 9 siffer som starter med 000. */
+export function fakeOrgNumber(): string {
+  return `000${String(Math.floor(Math.random() * 1e6)).padStart(6, "0")}`;
+}
+
+/**
+ * Id og navn til en ansatt (ikke slettet) med e-posten, i samme organisasjon som admin fra seed.
+ * Bare lesing, bare lokal database eller testdatabasen.
+ */
+export async function employeeByEmail(email: string): Promise<{ id: string; name: string }> {
+  const sql = e2eSql();
+  try {
+    const [row] = await sql<{ id: string; name: string }[]>`
+      select e.id, e.name from employees e
+      join users u on u.id = e.user_id
+      where u.email = ${email} and e.deleted_at is null
+        and e.organization_id = (
+          select a.organization_id from employees a join users au on au.id = a.user_id
+          where au.email = ${ADMIN_EMAIL} and a.deleted_at is null limit 1)
+      limit 1`;
+    if (!row) throw new Error("Fant ikke den ansatte (kjør pnpm db:seed)");
+    return row;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Org.nr. til alle selskapene i organisasjonen til admin fra seed. Bare lesing. */
+export async function companyOrgNumbers(): Promise<string[]> {
+  const sql = e2eSql();
+  try {
+    const rows = await sql<{ org_number: string }[]>`
+      select c.org_number from companies c
+      where c.org_number is not null
+        and c.organization_id = (
+          select a.organization_id from employees a join users au on au.id = a.user_id
+          where au.email = ${ADMIN_EMAIL} and a.deleted_at is null limit 1)`;
+    return rows.map((row) => row.org_number);
+  } finally {
+    await sql.end();
+  }
+}
