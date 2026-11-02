@@ -7,7 +7,16 @@ import { Button } from "@/shared/ui/button";
 import { Field, FormMessage, Input } from "@/shared/ui/form";
 import { DEFAULT_NEXT_PATH, safeNextPath } from "./safe-next-path";
 
-const TOO_MANY_ATTEMPTS = "For mange forsøk på kort tid. Vent ett minutt og prøv igjen.";
+/** Brukes bare hvis serveren svarer 429 uten egen melding. */
+const TOO_MANY_REQUESTS_FALLBACK = "For mange forsøk. Prøv igjen senere.";
+
+/**
+ * Serveren sier selv når man kan prøve igjen (sperre per e-postadresse).
+ * Andre 429-svar (Better Auths grense per IP-adresse) er på engelsk og byttes med den norske teksten.
+ */
+function tooManyRequestsMessage(message: string | undefined): string {
+  return message?.trim().startsWith("For mange") ? message.trim() : TOO_MANY_REQUESTS_FALLBACK;
+}
 
 /**
  * Innlogging i to steg: e-postadresse, så koden fra e-posten.
@@ -33,7 +42,7 @@ export function LoginForm({ next = DEFAULT_NEXT_PATH }: { next?: string }) {
     if (error) {
       setError(
         error.status === 429
-          ? TOO_MANY_ATTEMPTS
+          ? tooManyRequestsMessage(error.message)
           : "Vi klarte ikke å sende koden. Sjekk e-postadressen og prøv igjen.",
       );
       return;
@@ -50,7 +59,7 @@ export function LoginForm({ next = DEFAULT_NEXT_PATH }: { next?: string }) {
       setPending(false);
       setError(
         error.status === 429
-          ? TOO_MANY_ATTEMPTS
+          ? tooManyRequestsMessage(error.message)
           : error.code === "TOO_MANY_ATTEMPTS" || error.code === "OTP_EXPIRED"
             ? "Koden er ikke lenger gyldig. Be om en ny kode."
             : "Koden stemmer ikke. Sjekk e-posten og prøv igjen.",
