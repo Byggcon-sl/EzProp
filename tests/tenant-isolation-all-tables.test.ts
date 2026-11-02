@@ -168,7 +168,13 @@ describe("vakten checkTenantRegistry", () => {
     expect(run("ingen lesespørring i produktkoden ennå")).toEqual([]);
   });
 
-  it.each(["tests/tenant-isolation.test.ts", "src/core/x/x.ts", "src/core/x/x.dev.test.ts"])(
+  it.each([
+    "tests/tenant-isolation.test.ts",
+    "src/core/x/x.ts",
+    "src/core/x/x.dev.test.ts",
+    "src/../tests/tenant-isolation-all-tables.test.ts",
+    "src/core/./x.test.ts",
+  ])(
     "U10 vakten er rød når testFile peker utenfor src/ eller har feil endelse (%s)",
     (testFile) => {
       const errors = checkTenantRegistry({

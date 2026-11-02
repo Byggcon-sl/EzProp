@@ -1,3 +1,4 @@
+import { posix } from "node:path";
 import { eq } from "drizzle-orm";
 import { EVENT_TYPES } from "@/core/events";
 import { db } from "@/db/client";
@@ -249,7 +250,12 @@ export function checkTenantRegistry(input: {
       continue;
     }
 
-    if (!testFile.startsWith("src/") || !testFile.endsWith(".test.ts")) {
+    if (
+      !testFile.startsWith("src/") ||
+      !testFile.endsWith(".test.ts") ||
+      testFile.split("/").includes("..") ||
+      posix.normalize(testFile) !== testFile
+    ) {
       errors.push(
         `Tabellen ${table}: testfilen ${testFile} må ligge under src/ og slutte på .test.ts. Rett stien i tests/tenant-tables.ts.`,
       );
