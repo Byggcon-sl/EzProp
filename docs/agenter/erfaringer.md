@@ -137,3 +137,9 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - Containeren startet på nytt to ganger mens arbeidsflyten kjørte. Arbeidsflyten ble gjenopptatt med `resumeFromRunId`, og arbeidet som var pushet, gikk ikke tapt. Regel som før: push etter hvert steg.
 - Etter at «Oppdater åpne PR-er» flettet inn `main`, fikk PR-en samme versjon som `main` og ble stående «unstable» (CI-kjøringen for `pull_request` ventet på godkjenning, bare `workflow_dispatch`-kjøringen var grønn). En ny push fra agenten med versjonen én patch over `main` startet vanlig CI, og skriptet merget. Regel videre: står en PR «unstable» med alle jobbene grønne, sjekk versjonen og push en liten endring.
+
+## 31.10.–02.11.2026 – PR #59 og #60 merget (revisjonslogg, sperre ved innlogging)
+
+- Revisjonsloggen (PR #59) ble påbegynt i én kjøring og fullført i neste. Det gikk bra fordi oppgavekortet og testplanen lå på branchen, så den neste kjøringen kunne ta over uten å begynne på nytt. Regel som før: push oppgavekortet først.
+- Sperren ved innlogging (PR #60) er den første tabellen uten organisasjons-ID siden Better Auths tabeller. `expectTenantIsolation` passer ikke da; isolasjonen ble i stedet vist med en vanlig integrasjonstest (sperre på én adresse påvirker ikke en annen). Regel videre: en tabell uten organisasjons-ID må begrunnes i oppgavekortet og få en egen test som viser at den ikke lekker mellom organisasjoner.
+- Arbeidsflyten merget PR #60 selv, men kjøringen rakk ikke å oppdatere tilstandsfilen og erfaringene etterpå. Hovedløkken tok det igjen i neste kjøring. Regel som før: læringsløkken (tilstand, erfaringer, plan, ordliste) kjøres i en egen liten PR straks en PR er merget, også når det er arbeidsflyten som merget.
