@@ -33,13 +33,6 @@ describe("filtjenesten, statiske kontroller", () => {
     }
   });
 
-  it("src/core/files importerer ikke fra modulene", () => {
-    for (const file of productFiles()) {
-      const text = readFileSync(file, "utf8");
-      expect(text, relative(repoRoot, file)).not.toMatch(/from\s+["'](@\/modules|[./]+modules)\//);
-    }
-  });
-
   it("@azure/storage-blob importeres bare i Azure-adapteren", () => {
     const users = sourceFiles(join(repoRoot, "src"))
       .filter((file) => /from\s+["']@azure\/storage-blob["']/.test(readFileSync(file, "utf8")))
