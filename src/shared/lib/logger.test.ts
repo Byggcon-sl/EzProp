@@ -122,3 +122,53 @@ describe("logger vasker Azure-hemmeligheter", () => {
     expect(scrubText("signatur")).toBe("signatur");
   });
 });
+
+// Tilkoblingslaget (docs/funksjoner/fase0b-tilkoblingslag-testplan.md avsnitt 9). Oppdiktede verdier.
+describe("logger vasker Microsoft 365-hemmeligheter", () => {
+  const SECRET = "hemmelig-test-verdi";
+
+  it("1. client_secret= i tekst fjernes, resten av skjemaet står", () => {
+    const text = scrubText(
+      `grant_type=client_credentials&client_id=c&client_secret=${SECRET}&scope=x`,
+    );
+    expect(text).toContain(`client_secret=${REDACTED}`);
+    expect(text).toContain("client_id=c");
+    expect(text).toContain("scope=x");
+    expect(text).not.toContain(SECRET);
+  });
+
+  it("2. client_secret= i en feilmelding fjernes fra logglinjen", () => {
+    const lines: string[] = [];
+    const log = createLogger((_level, line) => lines.push(line));
+    log.error("x", { error: new Error(`token feilet: client_secret=${SECRET} avvist`) });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).not.toContain(SECRET);
+  });
+
+  it("3. nøklene clientSecret, client_secret og CLIENT_SECRET fjernes; secretRef og clientId står", () => {
+    const line = formatLogLine("info", "Test", {
+      clientSecret: SECRET,
+      client_secret: SECRET,
+      CLIENT_SECRET: SECRET,
+      secretRef: "MS_GRAPH_CLIENT_SECRET",
+      clientId: "c-oppdiktet",
+    });
+    expect(line.clientSecret).toBe(REDACTED);
+    expect(line.client_secret).toBe(REDACTED);
+    expect(line.CLIENT_SECRET).toBe(REDACTED);
+    expect(line.secretRef).toBe("MS_GRAPH_CLIENT_SECRET");
+    expect(line.clientId).toBe("c-oppdiktet");
+    expect(JSON.stringify(line)).not.toContain(SECRET);
+  });
+
+  it("4. ingen overvasking: client_secret_name=… står urørt", () => {
+    expect(scrubText("client_secret_name=MS_GRAPH_CLIENT_SECRET")).toBe(
+      "client_secret_name=MS_GRAPH_CLIENT_SECRET",
+    );
+  });
+
+  it("5. scrubText stopper ved mellomrom og ved &", () => {
+    expect(scrubText("client_secret=abc def")).toBe(`client_secret=${REDACTED} def`);
+    expect(scrubText("client_secret=abc&x=1")).toBe(`client_secret=${REDACTED}&x=1`);
+  });
+});
