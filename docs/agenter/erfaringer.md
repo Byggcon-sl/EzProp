@@ -152,3 +152,8 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - To kjøringer tok «Tilkoblingslag med faste porter» samtidig. Begge brukte samme branch og samme testskriver-commit, men hver sin utvikler-variant. Den ene (denne) satte sammen fire arbeidstrær lokalt og fikk test-lederens godkjenning uten å pushe; den andre pushet sin variant rett på branchen en time senere. Prosjektlederen beholdt den godkjente varianten og flettet inn origin med `-s ours` (ingen force-push), slik at ingen av kjøringene mister historikk. Den andre variantens forbedringer står i liten oppgave (p).
 - Regel videre (presisering av 3-timersregelen): sjekk `origin` for push på branchen, også rett før hvert av de siste stegene (sammensetting, test-leder, PR), ikke bare ved start. Og push den sammensatte branchen straks den er satt sammen, før test-lederen kjører, så den andre kjøringen ser at arbeidet finnes.
+
+## 02.11.2026 – PR #64 sett fra den andre kjøringen (hovedløkken kl. 21:05)
+
+- Hovedløkken fant branchene for tilkoblingslaget uten push på 54 minutter og tok over fra byggesteget. Den forrige kjøringen levde fortsatt: den satte sammen og testet lokalt i over en time uten å pushe. Resultat: to varianter, flettet uten tap, men arbeidet ble gjort to ganger. Regel videre: hovedløkken bruker 3-timersregelen også når oppgavekortet alt er pushet («30 minutter uten push» holder ikke), og en kjøring som tar over, pusher en markør i `docs/agenter/tilstand.md` på branchen først.
+- Containeren startet på nytt tre ganger i løpet av to timer. Alt som var pushet, ble tatt videre; det som lå i arbeidskopier uten push (en PR-tekst, en tilstandsendring) måtte gjøres på nytt. Regel som før: push etter hvert steg, også små.
