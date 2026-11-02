@@ -541,7 +541,9 @@ describe("dokumentasjon for testmiljøet", () => {
       expect(doc, text).toContain(text);
     }
     expect(doc).toMatch(/Log stream|log tail/);
-    expect(doc).not.toContain("Mail.Send");
+    // Fase 0b: Graph-adapteren er bygget, så dokumentet skal forklare rettigheten og policyen.
+    expect(doc).toContain("Mail.Send");
+    expect(doc).toContain("New-ApplicationAccessPolicy");
   });
 
   it("utviklingsmiljø-dokumentet lenker til driftsdokumentet", () => {
