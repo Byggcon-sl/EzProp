@@ -10,9 +10,12 @@ import { DEFAULT_NEXT_PATH, safeNextPath } from "./safe-next-path";
 /** Brukes bare hvis serveren svarer 429 uten egen melding. */
 const TOO_MANY_REQUESTS_FALLBACK = "For mange forsøk. Prøv igjen senere.";
 
-/** Serveren sier selv når man kan prøve igjen (sperre per e-postadresse). */
+/**
+ * Serveren sier selv når man kan prøve igjen (sperre per e-postadresse).
+ * Andre 429-svar (Better Auths grense per IP-adresse) er på engelsk og byttes med den norske teksten.
+ */
 function tooManyRequestsMessage(message: string | undefined): string {
-  return message?.trim() ? message : TOO_MANY_REQUESTS_FALLBACK;
+  return message?.trim().startsWith("For mange") ? message.trim() : TOO_MANY_REQUESTS_FALLBACK;
 }
 
 /**
