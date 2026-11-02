@@ -241,6 +241,10 @@ describe("tenant-isolasjon mot testdatabasen", () => {
   it.each(tableCases)(
     "I15/I16 radbyggeren legger raden (og foreldre-raden) i oppgitt organisasjon: $name",
     async ({ name, table }) => {
+      // En annen organisasjon får rad først, så en radbygger som gjenbruker en eksisterende
+      // rad eller foreldre-rad fra feil organisasjon blir avslørt.
+      const other = await createOrganization("Oppdiktet nabo AS");
+      await insertMinimalRow(name, other.id);
       const org = await createOrganization("Oppdiktet takst AS");
       const id = await insertMinimalRow(name, org.id);
       const [row] = await db
