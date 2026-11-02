@@ -11,6 +11,7 @@ import {
   employeeRoleAssignments,
   employees,
   files,
+  integrationConnections,
   offices,
   organizations,
   users,
@@ -35,6 +36,7 @@ export const RESET_TABLES = [
   "companies",
   "offices",
   "files",
+  "integration_connections",
   "organizations",
   "sessions",
   "accounts",
@@ -192,6 +194,49 @@ export async function createFile(
     })
     .returning();
   if (!row) throw new Error("kunne ikke opprette fil");
+  return row;
+}
+
+type ConnectionInsert = typeof integrationConnections.$inferInsert;
+
+type IntegrationConnectionOverrides = {
+  port?: string;
+  provider?: string;
+  status?: string;
+  secretRef?: string | null;
+  settings?: Record<string, unknown>;
+  lastOkAt?: Date | null;
+  lastError?: string | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/**
+ * En tilkobling (`integration_connections`), satt inn rått uten tilgangssjekk og uten
+ * validering, slik at testene kan lage rader tjenesten ville avvist (ukjent leverandør, ugyldige
+ * `settings`, dubletter). Standard er e-post via serverloggen, aktiv, tomme `settings`.
+ */
+export async function createIntegrationConnection(
+  organizationId: string,
+  overrides: IntegrationConnectionOverrides = {},
+) {
+  const [row] = await db
+    .insert(integrationConnections)
+    .values({
+      organizationId,
+      // Rå tekst: fabrikken skal kunne lage ukjente koder (typene i skjemaet kan være smalere)
+      port: (overrides.port ?? "email") as ConnectionInsert["port"],
+      provider: (overrides.provider ?? "server_log") as ConnectionInsert["provider"],
+      status: (overrides.status ?? "active") as ConnectionInsert["status"],
+      secretRef: overrides.secretRef ?? null,
+      settings: overrides.settings ?? {},
+      lastOkAt: overrides.lastOkAt ?? null,
+      lastError: overrides.lastError ?? null,
+      deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette tilkobling");
   return row;
 }
 

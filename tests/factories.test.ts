@@ -12,6 +12,7 @@ import {
   certifications,
   employeePermissions,
   files,
+  integrationConnections,
   loginAttempts,
   trialAnswers,
   trialForms,
@@ -23,6 +24,7 @@ import {
   createCertification,
   createEmployee,
   createFile,
+  createIntegrationConnection,
   createOrganization,
   createUser,
   grantPermission,
@@ -273,5 +275,72 @@ describe("login_attempts (fase 0b, sperre ved innlogging)", () => {
       sql`select count(*)::int as n from login_attempts`,
     );
     expect(Array.from(after)[0]?.n).toBe(0);
+  });
+});
+
+// Testplan docs/funksjoner/fase0b-tilkoblingslag-testplan.md avsnitt 10. Verdiene er oppdiktet.
+describe("createIntegrationConnection (fase 0b, tilkoblingslag)", () => {
+  it("10.1 uten overstyring: email/server_log, active, tomme settings, ingen secret_ref", async () => {
+    await resetDatabase();
+    const org = await createOrganization("Oppdiktet takst A");
+
+    const row = await createIntegrationConnection(org.id);
+
+    expect(row.organizationId).toBe(org.id);
+    expect(row.port).toBe("email");
+    expect(row.provider).toBe("server_log");
+    expect(row.status).toBe("active");
+    expect(row.settings).toEqual({});
+    expect(row.secretRef).toBeNull();
+    expect(row.lastOkAt).toBeNull();
+    expect(row.lastError).toBeNull();
+    expect(row.deletedAt).toBeNull();
+  });
+
+  it("10.2 overstyringene står på raden, og fabrikken validerer ikke", async () => {
+    await resetDatabase();
+    const org = await createOrganization("Oppdiktet takst A");
+    const lastOkAt = new Date("2026-11-01T10:00:00.000Z");
+    const deletedAt = new Date("2026-11-02T08:00:00.000Z");
+
+    const row = await createIntegrationConnection(org.id, {
+      port: "accounting",
+      provider: "x",
+      status: "error",
+      secretRef: "ORG_HEMMELIGHET",
+      settings: { from: "ikke-en-adresse" },
+      lastOkAt,
+      lastError: "gammel feil",
+      deletedAt,
+      deletedBy: "oppdiktet-ansatt",
+    });
+
+    expect(row).toMatchObject({
+      organizationId: org.id,
+      port: "accounting",
+      provider: "x",
+      status: "error",
+      secretRef: "ORG_HEMMELIGHET",
+      settings: { from: "ikke-en-adresse" },
+      lastError: "gammel feil",
+      deletedBy: "oppdiktet-ansatt",
+    });
+    expect(row.lastOkAt?.toISOString()).toBe(lastOkAt.toISOString());
+    expect(row.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+  });
+
+  it("10.3 integration_connections står i truncate-listen før organizations, og tømmes", async () => {
+    const listed: readonly string[] = RESET_TABLES;
+    expect(listed).toContain("integration_connections");
+    expect(listed.indexOf("integration_connections")).toBeLessThan(listed.indexOf("organizations"));
+
+    await resetDatabase();
+    const org = await createOrganization("Oppdiktet takst A");
+    await createIntegrationConnection(org.id);
+
+    await resetDatabase();
+
+    const [row] = await db.select({ n: count() }).from(integrationConnections);
+    expect(row!.n).toBe(0);
   });
 });
