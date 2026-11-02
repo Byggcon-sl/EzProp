@@ -1162,6 +1162,16 @@ Dette betyr: Databasen tåler en million rader i `photos` uten problemer. Filene
 
 **Alle tidene er innstillinger** (`settings`, for eksempel `photo.retention.deviation_original_years`, `photo.retention.other_original_years`, `photo.retention.display_years`) som er enkle å justere. Feltet `retain_until` regnes ut fra innstillingene når rapporten utgis.
 
+Fra fase 0b ligger de tre i `organizations.settings` og leses med `readFileRetention` (`src/core/files`):
+
+| Nøkkel | Standard | Betyr |
+|---|---|---|
+| `photo.retention.deviation_original_years` | 10 | Original av bilde brukt i et avvik |
+| `photo.retention.other_original_years` | 2 | Andre originaler |
+| `photo.retention.display_years` | 10 | Komprimert visningskopi |
+
+Gyldig verdi er et heltall fra 1 til og med 100 (år). Mangler nøkkelen, brukes standard. Er verdien ugyldig, brukes standard og det logges en advarsel med bare organisasjon og nøkkel (A42).
+
 **Lagring bak eget lag (adapter):** Filene lagres via porten `file_storage` (4.10), aldri direkte hos én leverandør. Da kan bilder og data senere flyttes til et **lokalt arkiv eller en server hos Byggcon** uten ombygging.
 
 **Bildegrense (innspill D14):** myk grense per rapport. Bekreftet 27.10.2026 (innstilling): advarsel ved 80 bilder i rapporten, slik at PDF-en holder seg under 8 MB (se P8 i `utviklingsplan.md`). Bilder som ikke er med i rapporten, teller ikke.
@@ -1465,10 +1475,12 @@ KI setter aldri TG og sender aldri noe selv (beslutning 24.10). En tekst fra KI 
 
 | Felt | Forklaring |
 |---|---|
-| `storage_key` | Hvor filen ligger i fillagringen |
-| `mime_type`, `size_bytes`, `sha256` | Type, størrelse og fingeravtrykk |
-| `kind` | `photo`, `report_pdf`, `document`, `logo`, `signature`, `attachment` |
-| `retain_until` | Oppbevares til |
+| `storage_key` | Hvor filen ligger i fillagringen: `<organization_id>/<kind>/<id>`, aldri et filnavn fra brukeren. Unik per organisasjon (`organization_id`, `storage_key`) |
+| `mime_type`, `size_bytes`, `sha256` | Type, størrelse og fingeravtrykk (SHA-256, kontrolleres ved hver henting) |
+| `kind` | Fast kode. Nå `photo`, `report_pdf`, `document`. `logo`, `signature` og `attachment` legges til når en funksjon trenger dem (fase 2) |
+| `retain_until` | Oppbevares til. Kan være tom. Så lenge den er i fremtiden, kan raden ikke merkes som slettet, heller ikke av admin. Regnes ut ved utgivelse (fase 2) |
+
+Bygget i fase 0b (`src/db/schema/files.ts`, tjenesten i `src/core/files`). Filinnholdet ligger bak porten `FileStorage` (lokal mappe i utvikling og test, Azure Blob Storage i drift), som bare kan lagre og hente, aldri slette. «Slette» er `deleted_at`/`deleted_by` på raden; innholdet blir liggende (A39). Gyldige filtyper per `kind`: `photo` = JPEG, PNG, HEIC, WebP; `report_pdf` = PDF; `document` = PDF, JPEG, PNG. Største fil 25 MB. Alle ansatte kan lagre og hente; bare admin kan merke som slettet (A43).
 
 **`settings`** – innstillinger på tre nivåer: organisasjon, selskap og person (`scope`, `scope_id`, `key`, `value`). Eksempler: nummerformat for oppdrag, standard e-postavsender, KI av/på, varselvalg, oppbevaringstider for bilder (4.8), dager på iPaden etter levering, bildegrense, varsel før utløp av sertifisering, og `access.inspectors_edit_all` (alle takstmenn kan endre alle oppdrag, se avsnitt 5). Endringer i innstillinger logges i revisjonsloggen.
 
@@ -1878,7 +1890,12 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Revisjonslogg | `audit_log` | |
 | Logg over KI-bruk | `ai_usage_log` | |
 | Myk sletting | `deleted_at` | |
-| Oppbevares til | `retain_until` | |
+| Oppbevares til | `retain_until` | Raden kan ikke merkes som slettet før tidspunktet er passert, heller ikke av admin |
+| Fil | `files` | Metadata for en fil (type, størrelse, fingeravtrykk). Innholdet ligger i fillagringen |
+| Fillagring | `file storage` (`FileStorage`) | Porten for filinnhold i `src/core/files`: bare lagre (`put`) og hente (`get`), aldri slette eller skrive over. Lokal mappe i utvikling, Azure Blob Storage i drift |
+| Lagringsnøkkel | `storage key` (`storage_key`) | Hvor filen ligger i fillagringen: `<organisasjon>/<kind>/<fil-id>`, aldri et filnavn fra brukeren |
+| Filtype (fil) | `files.kind` | Fast kode: `photo`, `report_pdf`, `document` |
+| Oppbevaringstid for bilder | `photo.retention.*_years` | Tre innstillinger i `organizations.settings`, se 4.8 |
 | Versjon per felt | `field_clock` | |
 | Konflikt | `sync_conflicts` | |
 | Hovedbefaring / tilleggsbefaring / etterkontroll | `main` / `supplementary` / `reinspection` | `inspections.kind` |
@@ -1991,3 +2008,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 28.10.2026 | Modellen sjekket mot hovedmålet. Reklamasjoner per 100 rapporter dekkes allerede (`claims` og `report_releases`). Tid per fase dekkes bare delvis av hendelsene. Nye kroker: `work_sessions` (arbeidsøkter per rapport og fase) og `baseline_metrics` (nullpunkt fra IVIT og de siste 3 årene). | Hovedmål, Ståle i chat 28.10.2026 |
 | 31.10.2026 | Roller og rettigheter (fase 0b): nye rettigheter `assignment.edit`, `report.edit`, `report.publish`, `template.edit_structure` og `invoice.send`; `claims.view` heter `claims.read` som i koden; `employee_permissions` med `created_by`/`created_at` i stedet for `granted_by`/`granted_at`; innstillingen `access.inspectors_edit_all` i `organizations.settings`, standard på. | A18–A21, `docs/funksjoner/fase0b-roller-rettigheter.md` |
 | 31.10.2026 | Admin (fase 0b): `employee_roles` har delvis unik indeks `(employee_id, role) WHERE deleted_at IS NULL`, så en rolle kan tas bort og gis på nytt som ny rad. Minst én aktiv admin per organisasjon. Nye funksjonsnavn og feilklasser i ordlisten. | A24–A28, `docs/funksjoner/fase0b-admin-organisasjon.md` |
+| 02.11.2026 | Filtjeneste (fase 0b): tabellen `files` bygget med `kind` bare `photo`, `report_pdf`, `document`, unik på `(organization_id, storage_key)`. Oppbevaringstidene for bilder i `organizations.settings`. | A39–A43, `docs/funksjoner/fase0b-filtjeneste.md` |
