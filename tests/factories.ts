@@ -1,6 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Actor } from "@/core/access";
+import type { FileStorage } from "@/core/files";
 import { db } from "@/db/client";
 import {
   auditLog,
@@ -9,17 +10,19 @@ import {
   employeePermissions,
   employeeRoleAssignments,
   employees,
+  files,
   offices,
   organizations,
   users,
   type EmployeeRole,
 } from "@/db/schema";
 import { todayInOslo } from "@/shared/lib/dates";
+import { uuidv7 } from "@/shared/lib/uuid";
 
 /** Tømmer alle tabeller i testdatabasen. Ny tabell? Legg den til her. */
 export async function resetDatabase() {
   await db.execute(
-    sql`truncate table certifications, trial_photos, trial_answers, trial_forms, audit_log, events, employee_permissions, employee_roles, employees, companies, offices, organizations, sessions, accounts, verifications, users restart identity cascade`,
+    sql`truncate table files, certifications, trial_photos, trial_answers, trial_forms, audit_log, events, employee_permissions, employee_roles, employees, companies, offices, organizations, sessions, accounts, verifications, users restart identity cascade`,
   );
 }
 
@@ -199,4 +202,47 @@ export async function auditRows(organizationId: string) {
     .from(auditLog)
     .where(eq(auditLog.organizationId, organizationId))
     .orderBy(asc(auditLog.receivedAt), asc(auditLog.createdAt));
+}
+
+type FileKind = (typeof files.$inferInsert)["kind"];
+
+/**
+ * En fil-rad i `files`, satt inn direkte (uten tilgangssjekk). `storage_key` er
+ * `<organizationId>/<kind>/<id>` med mindre testen overstyrer den. Får fabrikken `storage`, skrives
+ * også innholdet via porten. `sha256` og `size_bytes` regnes av innholdet. Innholdet er oppdiktet.
+ */
+export async function createFile(
+  organizationId: string,
+  overrides: {
+    kind?: FileKind;
+    mimeType?: string;
+    retainUntil?: Date | null;
+    deletedAt?: Date | null;
+    storageKey?: string;
+    sha256?: string;
+  } = {},
+  options: { storage?: FileStorage; bytes?: Uint8Array } = {},
+) {
+  const id = uuidv7();
+  const kind: FileKind = overrides.kind ?? "photo";
+  const mimeType = overrides.mimeType ?? (kind === "report_pdf" ? "application/pdf" : "image/jpeg");
+  const bytes = options.bytes ?? new TextEncoder().encode(`oppdiktet testfil ${id}`);
+  const storageKey = overrides.storageKey ?? `${organizationId}/${kind}/${id}`;
+  if (options.storage) await options.storage.put(storageKey, bytes, mimeType);
+  const [row] = await db
+    .insert(files)
+    .values({
+      id,
+      organizationId,
+      storageKey,
+      kind,
+      mimeType,
+      sizeBytes: bytes.byteLength,
+      sha256: overrides.sha256 ?? createHash("sha256").update(bytes).digest("hex"),
+      retainUntil: overrides.retainUntil ?? null,
+      deletedAt: overrides.deletedAt ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette fil");
+  return row;
 }
