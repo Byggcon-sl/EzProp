@@ -23,6 +23,7 @@
     "db:seed": "tsx src/db/seed/index.ts"
   },
   "dependencies": {
+    "@azure/storage-blob": "12.34.0",
     "@journeyapps/wa-sqlite": "2.0.10",
     "@powersync/react": "2.1.0",
     "@powersync/web": "2.5.0",
