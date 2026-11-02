@@ -190,7 +190,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 
 **Grunnmur**
 - [x] Revisjonslogg og hendelseslogg (grunnmuren som rapporter, maler og rutiner skriver til) (31.10.2026, `docs/funksjoner/fase0b-revisjon-hendelser.md`, beslutninger A33 og A34)
-- [ ] Felles filtjeneste for bilder og dokumenter (lokal mappe i utvikling, fillagring i EU/EØS i drift), **bak et eget lag**, slik at bilder senere kan flyttes til et lokalt arkiv hos Byggcon (27.10.2026). Oppbevaringstidene er innstillinger.
+- [x] Felles filtjeneste for bilder og dokumenter (lokal mappe i utvikling, fillagring i EU/EØS i drift), **bak et eget lag**, slik at bilder senere kan flyttes til et lokalt arkiv hos Byggcon (27.10.2026). Oppbevaringstidene er innstillinger. (02.11.2026, `docs/funksjoner/fase0b-filtjeneste.md`, beslutninger A39–A43; Azure-adapteren er bare kode og slås på av Ståle)
 - [ ] Tilkoblingslag med faste porter (regnskap, e-post, meglersystem, eiendomsdata, KI). Første tilkobling: e-post via Microsoft 365 som i Optiplan, og en «utviklingspostkasse» lokalt.
 - [ ] Test av tenant-isolasjon for alle nye tabeller: en bruker i én organisasjon får aldri data fra en annen
 - [x] Grunnlayout i design A «Fjord» (luftig), for PC og iPad, med tom arbeidskø som startside

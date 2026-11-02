@@ -1,6 +1,6 @@
 # 06 – Arkitektur
 
-Sist oppdatert: 28.10.2026. Begrunnelse for teknologivalg: [ADR 0001](adr/0001-teknologivalg.md). Testmiljø i Azure: [ADR 0002](adr/0002-testmiljo-azure.md).
+Sist oppdatert: 02.11.2026. Begrunnelse for teknologivalg: [ADR 0001](adr/0001-teknologivalg.md). Testmiljø i Azure: [ADR 0002](adr/0002-testmiljo-azure.md).
 
 ## Teknologi
 
@@ -33,6 +33,7 @@ src/
     auth/                 # Better Auth, sesjon
     audit/                # Revisjonslogg
     email/
+    files/                # Filtjenesten: porten FileStorage, adaptere, tabellen files
     health/
   modules/                # Fagmoduler (kommer: rapport, maler, regler, oppdrag …)
   shared/
@@ -57,6 +58,19 @@ src/
 8. **Tilkoblinger bak faste porter** (regnskap, e-post, meglersystem, eiendomsdata, KI, bildelagring). Kjernen snakker aldri direkte med en leverandør.
 9. **Navn og profil ett sted:** `src/shared/config/brand.ts`.
 10. **Server først.** Klientkomponenter bare der det trengs. Befaringen på iPad er unntaket (fase 1 og 2b).
+
+## Filtjenesten (fase 0b)
+
+Alle filer (bilder, PDF-er, dokumenter, senere logo og signatur) lagres og hentes gjennom `src/core/files`. Modulene kaller bare tjenesten, aldri en lagringsleverandør direkte (arkitekturregel 8). Oppgavekort: `docs/funksjoner/fase0b-filtjeneste.md`.
+
+- **Tjenesten:** `saveFile`, `readFile` og `markFileDeleted`. Tilgang via `requireOrganizationAccess` (lagre og hente: `organization.read`; merke som slettet: `organization.manage`). Metadata ligger i tabellen `files` med `organization_id`, type, størrelse og SHA-256. Fingeravtrykket kontrolleres ved hver henting. Rekkefølgen er filen først, så raden; feiler raden, blir filen liggende uten rad og kan ikke nås.
+- **Porten `FileStorage`:** bare `put` og `get`. Ingen slette-operasjon, og `put` skriver aldri over en fil som finnes (A39). Nøkkelen er `<organisasjon>/<kind>/<fil-id>`, aldri et filnavn fra brukeren.
+- **Adaptere:** velges med `FILE_STORAGE_DRIVER` (A40) til tilkoblingslaget (`integration_connections`) kommer.
+  - `local` (standard): mappen `FILE_STORAGE_DIR` (standard `var/files`). Nøkkelen kan ikke gå ut av mappen. Brukes i utvikling og test.
+  - `azure`: Azure Blob Storage med `FILE_STORAGE_AZURE_CONNECTION_STRING` og `FILE_STORAGE_AZURE_CONTAINER`. Bare kode foreløpig; ingen ressurser er opprettet. Lagringskontoen skal ligge i **Sweden Central** (EU/EØS), containeren skal være **privat** (ingen offentlig tilgang), og Microsofts databehandleravtale gjelder. `@azure/storage-blob` importeres bare i adapteren. Feil fra Azure pakkes inn uten den opprinnelige meldingen.
+  - Senere kan en adapter for et lokalt arkiv hos Byggcon legges til uten endring i tjenesten.
+- **Oppbevaring:** tidene for bilder er innstillinger i `organizations.settings` (`readFileRetention`, A42). Så lenge `retain_until` er i fremtiden, kan en fil ikke merkes som slettet, heller ikke av admin.
+- **Visning (senere):** en rute som sender filer til nettleseren skal sette `Content-Disposition` (med et trygt filnavn laget av oss) og `X-Content-Type-Options: nosniff`, og bare bruke `mime_type` fra `files`. Ingen slik rute finnes ennå.
 
 ## Personvern og sikkerhet
 

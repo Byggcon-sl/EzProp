@@ -1,11 +1,17 @@
-import { count, sql } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { count, eq, sql } from "drizzle-orm";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { requireOrganizationAccess } from "@/core/access";
+import { createLocalFileStorage } from "@/core/files";
 import { isCertificationValid } from "@/core/organization/certification-rules";
 import { db } from "@/db/client";
 import {
   certifications,
   employeePermissions,
+  files,
   loginAttempts,
   trialAnswers,
   trialForms,
@@ -16,15 +22,41 @@ import { uuidv7 } from "@/shared/lib/uuid";
 import {
   createCertification,
   createEmployee,
+  createFile,
   createOrganization,
   createUser,
   grantPermission,
+  RESET_TABLES,
   resetDatabase,
 } from "./factories";
 
 // Fanger at en ny tabell glemmes i truncate-listen (testplan for oppgave 4, avsnitt 3.6).
 
 describe("resetDatabase", () => {
+  it("truncate-listen har alle tabellene i databasen (også files)", async () => {
+    const result = await db.execute<{ table_name: string }>(
+      sql`select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'`,
+    );
+    const tables = result.map((row) => row.table_name).sort();
+    expect(tables).toContain("files");
+    const listed: readonly string[] = RESET_TABLES;
+    expect(tables.filter((table) => !listed.includes(table))).toEqual([]);
+    expect(listed).toContain("files");
+    // `files` tømmes før `organizations`, som den peker på
+    expect(listed.indexOf("files")).toBeLessThan(listed.indexOf("organizations"));
+  });
+
+  it("resetDatabase tømmer files", async () => {
+    await resetDatabase();
+    const org = await createOrganization("Oppdiktet takst AS");
+    await createFile(org.id);
+
+    await resetDatabase();
+
+    const [row] = await db.select({ n: count() }).from(files);
+    expect(row!.n).toBe(0);
+  });
+
   it("resetDatabase tømmer trial_-tabellene", async () => {
     await resetDatabase();
     const org = await createOrganization("Oppdiktet takst AS");
@@ -170,6 +202,57 @@ describe("createCertification (fase 0b, sertifisering)", () => {
 
     const [row] = await db.select({ n: count() }).from(certifications);
     expect(row!.n).toBe(0);
+  });
+});
+
+// Filtjenesten (docs/funksjoner/fase0b-filtjeneste-testplan.md avsnitt 7). Innholdet skrives bare
+// til en midlertidig mappe, aldri til var/files. Bytene er oppdiktet.
+describe("createFile (fase 0b, filtjeneste)", () => {
+  let tmp: string | undefined;
+
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  afterEach(async () => {
+    if (tmp) await rm(tmp, { recursive: true, force: true });
+    tmp = undefined;
+  });
+
+  it("1. gir en rad i organisasjonen med storage_key <organisasjon>/photo/<id>", async () => {
+    const orgA = await createOrganization("Oppdiktet takst A");
+    await createOrganization("Oppdiktet takst B");
+
+    const row = await createFile(orgA.id);
+
+    expect(row.organizationId).toBe(orgA.id);
+    expect(row.storageKey).toBe(`${orgA.id}/photo/${row.id}`);
+    const [stored] = await db.select().from(files).where(eq(files.id, row.id));
+    expect(stored?.organizationId).toBe(orgA.id);
+  });
+
+  it("2. med storage: innholdet finnes i porten, og sha256 og size_bytes stemmer", async () => {
+    tmp = await mkdtemp(path.join(tmpdir(), "factories-files-"));
+    const storage = createLocalFileStorage(tmp);
+    const orgA = await createOrganization("Oppdiktet takst A");
+    const bytes = new TextEncoder().encode("oppdiktet innhold for fabrikken");
+
+    const row = await createFile(orgA.id, {}, { storage, bytes });
+
+    expect(Buffer.from(await storage.get(row.storageKey)).equals(Buffer.from(bytes))).toBe(true);
+    expect(row.sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
+    expect(Number(row.sizeBytes)).toBe(bytes.byteLength);
+  });
+
+  it("3. deletedAt og deletedBy fra overstyringene står på raden", async () => {
+    const orgA = await createOrganization("Oppdiktet takst A");
+    const employee = await createEmployee(await createUser(), orgA.id, ["inspector"]);
+    const deletedAt = new Date("2026-11-01T08:00:00Z");
+
+    const row = await createFile(orgA.id, { deletedAt, deletedBy: employee.id });
+
+    expect(row.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+    expect(row.deletedBy).toBe(employee.id);
   });
 });
 

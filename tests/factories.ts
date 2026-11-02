@@ -1,6 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Actor } from "@/core/access";
+import type { FileStorage } from "@/core/files";
 import { db } from "@/db/client";
 import {
   auditLog,
@@ -9,6 +10,7 @@ import {
   employeePermissions,
   employeeRoleAssignments,
   employees,
+  files,
   offices,
   organizations,
   users,
@@ -16,11 +18,34 @@ import {
 } from "@/db/schema";
 import { todayInOslo } from "@/shared/lib/dates";
 
-/** Tømmer alle tabeller i testdatabasen. Ny tabell? Legg den til her. */
+/**
+ * Tabellene `resetDatabase` tømmer. Ny tabell? Legg den til her. `tests/factories.test.ts`
+ * sjekker at alle tabellene i databasen står i listen.
+ */
+export const RESET_TABLES = [
+  "certifications",
+  "trial_photos",
+  "trial_answers",
+  "trial_forms",
+  "audit_log",
+  "events",
+  "employee_permissions",
+  "employee_roles",
+  "employees",
+  "companies",
+  "offices",
+  "files",
+  "organizations",
+  "sessions",
+  "accounts",
+  "verifications",
+  "login_attempts",
+  "users",
+] as const;
+
+/** Tømmer alle tabeller i testdatabasen. */
 export async function resetDatabase() {
-  await db.execute(
-    sql`truncate table certifications, trial_photos, trial_answers, trial_forms, audit_log, events, employee_permissions, employee_roles, employees, companies, offices, organizations, sessions, accounts, verifications, login_attempts, users restart identity cascade`,
-  );
+  await db.execute(sql.raw(`truncate table ${RESET_TABLES.join(", ")} restart identity cascade`));
 }
 
 /** En innlogging (Better Auth-bruker). Oppdiktet e-post. */
@@ -122,6 +147,51 @@ export async function grantPermission(
     })
     .returning();
   if (!row) throw new Error("kunne ikke gi enkeltrettighet");
+  return row;
+}
+
+type FileOverrides = {
+  kind?: string;
+  mimeType?: string;
+  retainUntil?: Date | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+  storageKey?: string;
+  sha256?: string;
+};
+
+/**
+ * En fil-rad i den felles filtjenesten, satt inn direkte uten tilgangssjekk. Nøkkelen er
+ * `<organizationId>/<kind>/<id>` som i tjenesten. Med `storage` skrives også innholdet via
+ * porten, og `sha256`/`size_bytes` regnes av innholdet. Standardinnholdet er oppdiktede byte.
+ */
+export async function createFile(
+  organizationId: string,
+  overrides: FileOverrides = {},
+  options: { storage?: FileStorage; bytes?: Uint8Array } = {},
+) {
+  const id = randomUUID();
+  const kind = overrides.kind ?? "photo";
+  const mimeType = overrides.mimeType ?? (kind === "report_pdf" ? "application/pdf" : "image/jpeg");
+  const bytes = options.bytes ?? new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x10, 0x20, 0x30]);
+  const storageKey = overrides.storageKey ?? `${organizationId}/${kind}/${id}`;
+  if (options.storage) await options.storage.put(storageKey, bytes, mimeType);
+  const [row] = await db
+    .insert(files)
+    .values({
+      id,
+      organizationId,
+      storageKey,
+      kind,
+      mimeType,
+      sizeBytes: bytes.byteLength,
+      sha256: overrides.sha256 ?? createHash("sha256").update(bytes).digest("hex"),
+      retainUntil: overrides.retainUntil ?? null,
+      deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette fil");
   return row;
 }
 
