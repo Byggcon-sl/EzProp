@@ -6,6 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
+Sist oppdatert: 02.11.2026 kl. 19:40 UTC (tilkoblingslaget startet)
 Sist oppdatert: 02.11.2026 kl. 19:10 UTC (PR #62 filtjeneste merget)
 Sist oppdatert: 02.11.2026 kl. 17:00 UTC (PR #59 og #60 merget, filtjenesten startet)
 
@@ -18,6 +19,8 @@ Gjeldende fase: **Fase 0b – Innlogging, organisasjon, roller og layout** (fra 
 Fase 1 – Prøve uten nett: Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd er merget til `main` i PR #13 (PR #12: agentene merger selv).
 
 ## Gjeldende oppgave
+
+**I arbeid: Tilkoblingslag med faste porter, første tilkobling e-post** (fase 0b, startet 02.11.2026 kl. 19:40 UTC; branch `fase0b-tilkoblingslag` fra `main`, versjon 0.2.53). Oppgavekort `docs/funksjoner/fase0b-tilkoblingslag.md`. Tabellene `integration_connections` og `external_references`, portene som faste koder i `src/core/integrations`, `readSecret` som eneste vei til hemmeligheter (miljøvariabler til nøkkelboksen kommer), e-postporten med utviklingspostkassen, serverloggen og Microsoft Graph (bare kode, falsk klient i test), `sendEmail` gjennom laget. Ingen skjermer, ingen ekte sending, filtjenesten røres ikke. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Støtter tid, reklamasjoner og KI først.
 
 **Levert: Felles filtjeneste for bilder og dokumenter** (fase 0b, 02.11.2026; branch `fase0b-filtjeneste` fra `main`, versjon 0.2.51, **PR #62**, merget 02.11.2026 kl. 19:04 UTC). Oppgavekort `docs/funksjoner/fase0b-filtjeneste.md`, testplan `docs/funksjoner/fase0b-filtjeneste-testplan.md`. Port `FileStorage` i `src/core/files` (bare `put` og `get`, aldri sletting eller overskriving), adapter for lokal mappe og for Azure Blob Storage (bare kode, av som standard, testet mot falsk klient), tabellen `files` (migrering 0010) med tenant-isolasjon, myk sletting, `retain_until` som sperrer også admin, oppbevaringstider i `organizations.settings` (`readFileRetention`, 10/2/10 år), loggeren vasker Azure-hemmeligheter. Ingen skjermer, prøve D røres ikke. Beslutninger A39–A43. Ny avhengighet `@azure/storage-blob` (A41). Roller: forenkler (runde 1 og 2), sikkerhet-personvern, test-leder, utvikler, testskriver. Lint, typesjekk, 2109 Vitest og e2e pc og iPad (384 bestått) grønne. Ingen alvorlige funn; små funn i PR-en, lagt inn som liten oppgave (o). Punktet er krysset av i planen. Støtter reklamasjoner, tid og KI først. Neste i fase 0b: «Tilkoblingslag med faste porter» (første tilkobling e-post via Microsoft 365 og utviklingspostkasse) eller «Test av tenant-isolasjon for alle nye tabeller».
 
