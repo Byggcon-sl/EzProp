@@ -154,5 +154,5 @@ Ingen nye. `pnpm test:e2e` (PC og iPad-størrelse) skal være grønn uendret, s�
 - Ingen `delete(files)` eller `unlink`/`rm` i `src/core/files`.
 - Ingen ekte nøkler i `.env.example` (tomme verdier, heller ikke Azurite-nøkkelen) eller i testene.
 - Ingen test skriver i `var/files`.
-- Versjon 0.2.50 i `package.json` (eller neste ledige patch).
+- Versjon 0.2.51 i `package.json` (eller neste ledige patch).
 - **Avvises** hvis 6.4, 6.5, 6.6 eller alle tre kallene i 6.7 mangler.

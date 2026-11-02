@@ -3,7 +3,7 @@
 - **Fase:** 0b (Grunnmur)
 - **Modul:** kjerne (`src/core/files`)
 - **Status:** klar til bygging (runde 1 med forenkler, sikkerhet-personvern og test-leder er innarbeidet, se «Endringer etter gjennomgang»)
-- **Branch:** `fase0b-filtjeneste` fra `main`. Versjon **0.2.50** (PR #60 med sperre ved innlogging har 0.2.49 og merges før; står `main` på en annen versjon når PR-en åpnes, brukes neste ledige patch).
+- **Branch:** `fase0b-filtjeneste` fra `main`. Versjon **0.2.51** (én patch over `main`: PR #60 ga 0.2.49, PR #61 med tilstandsfilen gir 0.2.50; står `main` på en annen versjon når PR-en åpnes, brukes neste ledige patch). Bekreftet av prosjektlederen 02.11.2026 kl. 16:50 UTC mot oppgaveteksten: omfang, «ikke med» og KI først stemmer; bare versjonen er rettet.
 - **Støtter hovedmål:**
   - **Reklamasjoner:** bilder og dokumenter ligger trygt i 10 år med fingeravtrykk og myk sletting. Ved en reklamasjon kan vi vise nøyaktig hvilket bilde som var med, og at det ikke er endret.
   - **Tid:** én felles tjeneste som alle senere funksjoner (bilder, PDF, logo, signatur, vedlegg) bruker, i stedet for egen lagring per funksjon. Takstmannen merker ingenting, men alt senere går fortere å bygge.
@@ -133,7 +133,7 @@ Ingen fagregler. Tekniske regler med tester: nøkkelen kan ikke gå ut av mappen
 
 **E2e:** ingen nye. Hele pakken (PC og iPad-størrelse) skal være grønn.
 
-**Kontroller i gjennomgangen:** `git diff main -- src/modules/offline-trial` er tom; `src/core/files` importerer ikke fra `src/modules`; `@azure/storage-blob` importeres bare i adapteren; ingen ekte nøkler i `.env.example` eller testene; versjon 0.2.50. Test-leder godkjenner ikke uten kriteriet om fremmed fil-ID og tenant-isolasjon for alle tre operasjonene.
+**Kontroller i gjennomgangen:** `git diff main -- src/modules/offline-trial` er tom; `src/core/files` importerer ikke fra `src/modules`; `@azure/storage-blob` importeres bare i adapteren; ingen ekte nøkler i `.env.example` eller testene; versjon 0.2.51. Test-leder godkjenner ikke uten kriteriet om fremmed fil-ID og tenant-isolasjon for alle tre operasjonene.
 
 ## Endringer etter gjennomgang (runde 1, avgjort av prosjektlederen)
 
