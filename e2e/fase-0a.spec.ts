@@ -51,9 +51,9 @@ test("ukjent e-post får ingen kode og ingen bekreftelse på at adressen finnes"
   await expect(page.getByLabel("Kode fra e-posten")).toBeVisible();
   const mailbox = await page.context().newPage();
   await mailbox.goto("/dev/epost");
-  await expect(
-    mailbox.getByTestId("dev-email-to").filter({ hasText: unknownEmail }),
-  ).toHaveCount(0);
+  await expect(mailbox.getByTestId("dev-email-to").filter({ hasText: unknownEmail })).toHaveCount(
+    0,
+  );
 });
 
 // UU-funn 8 fra nattløkken 30.10.2026 (docs/agenter/oppgaver/fase1-uu-nattlokken-testplan.md
