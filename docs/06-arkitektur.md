@@ -55,7 +55,7 @@ src/
 5. **Migreringer er versjonert** og må være i takt med skjemaet (CI sjekker `pnpm db:generate`).
 6. **Regler er data med testsaker** og kjører likt på iPad og server (fase 1 og 2a).
 7. **Faste koder endres aldri, de arkiveres.**
-8. **Tilkoblinger bak faste porter** (regnskap, e-post, meglersystem, eiendomsdata, KI, bildelagring). Kjernen snakker aldri direkte med en leverandør.
+8. **Tilkoblinger bak faste porter** (regnskap, e-post, meglersystem, eiendomsdata, KI, bildelagring). Kjernen snakker aldri direkte med en leverandør. Laget ligger i `src/core/integrations`: portene og leverandørene som faste koder, tabellen `integration_connections` og tjenesten for tilkoblinger (bare admin). `readSecret` i `src/core/integrations/secrets.ts` er eneste vei til hemmeligheter: nå fra miljøvariabler, senere fra nøkkelboksen, samme funksjon. Adapterne ligger i kjernen (`src/core/email`, `src/core/files`); modulene kaller aldri en leverandør direkte. Leverandør for e-post velges i `resolveEmailSender`: utviklingspostkassen først, så en tilkobling i tabellen for organisasjonen, ellers systemvalget fra miljøet (Microsoft 365 eller serverloggen). Filtjenesten beholder `FILE_STORAGE_DRIVER` (A40) til en egen liten oppgave flytter valget til laget.
 9. **Navn og profil ett sted:** `src/shared/config/brand.ts`.
 10. **Server først.** Klientkomponenter bare der det trengs. Befaringen på iPad er unntaket (fase 1 og 2b).
 

@@ -1381,7 +1381,28 @@ Status fra eAccounting hentes via tilkoblingen og blir hendelsene **«faktura se
 | `settings` | Innstillinger (for eksempel sandbox eller ekte) |
 | `last_ok_at`, `last_error` | Sist det virket, og siste feil |
 
-**`external_references`** – kobling mellom en rad i EzProp og ID-en hos leverandøren (`entity_type`, `entity_id`, `connection_id`, `external_id`). Hindrer dubletter, for eksempel samme megler opprettet to ganger i eAccounting.
+**Bygget i fase 0b** (PR for tilkoblingslaget, 02.11.2026). Laget ligger i `src/core/integrations`. Tabellen ble slik:
+
+| Felt | Slik ble det |
+|---|---|
+| Felles kolonner | `organization_id`, sporingsfelt, `deleted_at`/`deleted_by`, `row_version` |
+| `port` | Fast kode, en av de ti portene over |
+| `provider` | Fast kode, kjent liste per port. Nå `dev_mailbox`, `server_log` og `microsoft365` for `email`. De andre portene har tom liste, så en tilkobling for dem avvises til leverandøren er lagt inn i koden. |
+| `status` | `active`, `disabled`, `error`. Admin setter bare `active` eller `disabled`. `error` settes av laget når en sending feiler, og går tilbake til `active` ved neste vellykkede sending. |
+| `secret_ref` | Bare navnet på hemmeligheten, aldri verdien. Leses gjennom `readSecret` (`src/core/integrations/secrets.ts`). Appens egne hemmeligheter (innlogging, database, synk, fillagring) står på en nektliste og kan aldri leses gjennom laget. Påkrevd for `microsoft365`. |
+| `settings` | jsonb, sjekkes per leverandør. `microsoft365`: `from`, `tenantId`, `clientId` (alle påkrevd). `dev_mailbox` og `server_log`: tomme. |
+| `last_ok_at` | Sist en sending gikk gjennom tilkoblingen |
+| `last_error` | Siste feil, vasket, høyst 500 tegn, aldri adresse, kode eller hemmelig verdi. Beholdes når admin setter `active` igjen, nullstilles ved neste vellykkede sending. |
+
+Regel: **én tilkobling per organisasjon og port** blant rader som ikke er slettet, uansett status (delvis unik indeks på `organization_id` og `port` der `deleted_at` er tom). En `disabled` rad sperrer også; den gamle merkes som slettet før en ny lages. Admin leser og endrer tilkoblinger (`organization.manage`), og endringer får rad i revisjonsloggen. Laget sine egne oppdateringer av `last_ok_at`, `last_error` og `status = error` får ingen loggrad.
+
+`company_id`: **fase 3**, bygges sammen med regnskapet etter eAccounting-prøven. Alternativet er `companies.accounting_connection_id`; valget tas etter prøven.
+
+**`external_references`** – kobling mellom en rad i EzProp og ID-en hos leverandøren (`entity_type`, `entity_id`, `connection_id`, `external_id`, unik per tilkobling). Hindrer dubletter, for eksempel samme megler opprettet to ganger i eAccounting. **Fase 3** (planpunktet «Fakturagrunnlag til eAccounting»). Krav når den bygges:
+
+- Modulen som lagrer en referanse, viser at `entity_id` hører til `grant.organizationId` før den lagrer.
+- Spørringene filtrerer på `organization_id` på referanseraden selv, ikke bare via tilkoblingen.
+- `external_id` logges aldri.
 
 ---
 
@@ -1888,8 +1909,13 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Merke | `tags` | |
 | Fakturagrunnlag | `invoice_drafts` | |
 | Fakturalinje | `invoice_lines` | |
-| Tilkobling (adapter) | `integration_connections` | |
+| Tilkobling (adapter) | `integration_connections` | `src/core/integrations` |
 | Port | `port` | Type tilkobling |
+| Leverandør | `provider` | Fast kode per port |
+| Hemmelighetsnavn | `secret_ref` | Navnet, aldri verdien; leses med `readSecret` |
+| Utviklingspostkasse | `dev_mailbox` | Leverandør for e-post lokalt |
+| Serverlogg (e-post) | `server_log` | Leverandør, bare første admin |
+| Microsoft 365 (e-post) | `microsoft365` | Leverandør, Microsoft Graph |
 | Energimerking (Enova) | `energy_label` | Port, krok |
 | 3D-skanning og plantegning (Polycam) | `scanning` | Port, krok |
 | Alle takstmenn kan endre alt | `access.inspectors_edit_all` | Innstilling i `organizations.settings`, standard på |
