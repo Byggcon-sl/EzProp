@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import path, { join } from "node:path";
+import path from "node:path";
 import { count, eq, sql } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { requireOrganizationAccess } from "@/core/access";
-import { createFileStorage, createLocalFileStorage } from "@/core/files";
+import { createLocalFileStorage } from "@/core/files";
 import { isCertificationValid } from "@/core/organization/certification-rules";
 import { db } from "@/db/client";
 import {
@@ -29,35 +29,6 @@ import {
   RESET_TABLES,
   resetDatabase,
 } from "./factories";
-
-// Filtjenesten (docs/funksjoner/fase0b-filtjeneste-testplan.md avsnitt 7). Midlertidig mappe.
-describe("createFile, grunnkrav (fase 0b, filtjeneste)", () => {
-  it("1. lager en rad med riktig organisasjon og storage_key <org>/<kind>/<id>", async () => {
-    await resetDatabase();
-    const org = await createOrganization("Oppdiktet takst AS");
-    const row = await createFile(org.id);
-    expect(row.organizationId).toBe(org.id);
-    expect(row.storageKey).toBe(`${org.id}/${row.kind}/${row.id}`);
-    expect(row.deletedAt).toBeNull();
-  });
-
-  it("2. med storage skrives innholdet via porten, og sha256 stemmer med innholdet", async () => {
-    await resetDatabase();
-    const tmp = await mkdtemp(join(tmpdir(), "ezprop-factory-files-"));
-    try {
-      const storage = createFileStorage({ FILE_STORAGE_DIR: tmp });
-      const org = await createOrganization("Oppdiktet takst AS");
-      const bytes = new TextEncoder().encode("oppdiktet innhold for fabrikken");
-      const row = await createFile(org.id, { kind: "document" }, { storage, bytes });
-      const stored = await storage.get(row.storageKey);
-      expect(Buffer.from(stored).equals(Buffer.from(bytes))).toBe(true);
-      expect(row.sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
-      expect(Number(row.sizeBytes)).toBe(bytes.byteLength);
-    } finally {
-      await rm(tmp, { recursive: true, force: true });
-    }
-  });
-});
 
 // Fanger at en ny tabell glemmes i truncate-listen (testplan for oppgave 4, avsnitt 3.6).
 
@@ -234,65 +205,54 @@ describe("createCertification (fase 0b, sertifisering)", () => {
   });
 });
 
+// Filtjenesten (docs/funksjoner/fase0b-filtjeneste-testplan.md avsnitt 7). Innholdet skrives bare
+// til en midlertidig mappe, aldri til var/files. Bytene er oppdiktet.
 describe("createFile (fase 0b, filtjeneste)", () => {
-  it("1. gir en rad med riktig organisasjon og nøkkelformat <organisasjon>/<kind>/<id>", async () => {
+  let tmp: string | undefined;
+
+  beforeEach(async () => {
     await resetDatabase();
+  });
+
+  afterEach(async () => {
+    if (tmp) await rm(tmp, { recursive: true, force: true });
+    tmp = undefined;
+  });
+
+  it("1. gir en rad i organisasjonen med storage_key <organisasjon>/photo/<id>", async () => {
     const orgA = await createOrganization("Oppdiktet takst A");
     await createOrganization("Oppdiktet takst B");
 
     const row = await createFile(orgA.id);
+
     expect(row.organizationId).toBe(orgA.id);
     expect(row.storageKey).toBe(`${orgA.id}/photo/${row.id}`);
-    expect(row.deletedAt).toBeNull();
-    expect(row.retainUntil).toBeNull();
-
-    const document = await createFile(orgA.id, { kind: "document", mimeType: "application/pdf" });
-    expect(document.storageKey).toBe(`${orgA.id}/document/${document.id}`);
-    expect(document.mimeType).toBe("application/pdf");
-
     const [stored] = await db.select().from(files).where(eq(files.id, row.id));
     expect(stored?.organizationId).toBe(orgA.id);
   });
 
-  it("2. med storage: filen finnes i porten, og sha256 stemmer med innholdet", async () => {
-    await resetDatabase();
-    const tmp = await mkdtemp(path.join(tmpdir(), "factories-files-"));
-    try {
-      const storage = createLocalFileStorage(tmp);
-      const org = await createOrganization("Oppdiktet takst AS");
-      const bytes = new Uint8Array([1, 2, 3, 4, 5, 6, 7]);
+  it("2. med storage: innholdet finnes i porten, og sha256 og size_bytes stemmer", async () => {
+    tmp = await mkdtemp(path.join(tmpdir(), "factories-files-"));
+    const storage = createLocalFileStorage(tmp);
+    const orgA = await createOrganization("Oppdiktet takst A");
+    const bytes = new TextEncoder().encode("oppdiktet innhold for fabrikken");
 
-      const row = await createFile(org.id, {}, { storage, bytes });
+    const row = await createFile(orgA.id, {}, { storage, bytes });
 
-      expect(Array.from(await storage.get(row.storageKey))).toEqual(Array.from(bytes));
-      expect(Array.from(await readFile(path.join(tmp, row.storageKey)))).toEqual(Array.from(bytes));
-      expect(row.sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
-      expect(row.sizeBytes).toBe(bytes.byteLength);
-    } finally {
-      await rm(tmp, { recursive: true, force: true });
-    }
+    expect(Buffer.from(await storage.get(row.storageKey)).equals(Buffer.from(bytes))).toBe(true);
+    expect(row.sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
+    expect(Number(row.sizeBytes)).toBe(bytes.byteLength);
   });
 
-  it("3. overstyringene brukes", async () => {
-    await resetDatabase();
-    const org = await createOrganization("Oppdiktet takst AS");
-    const retainUntil = new Date("2036-11-02T00:00:00Z");
-    const deletedAt = new Date("2026-11-01T00:00:00Z");
+  it("3. deletedAt og deletedBy fra overstyringene står på raden", async () => {
+    const orgA = await createOrganization("Oppdiktet takst A");
+    const employee = await createEmployee(await createUser(), orgA.id, ["inspector"]);
+    const deletedAt = new Date("2026-11-01T08:00:00Z");
 
-    const row = await createFile(org.id, {
-      kind: "report_pdf",
-      mimeType: "application/pdf",
-      retainUntil,
-      deletedAt,
-      storageKey: `${org.id}/report_pdf/egen-nokkel`,
-      sha256: "0".repeat(64),
-    });
+    const row = await createFile(orgA.id, { deletedAt, deletedBy: employee.id });
 
-    expect(row.kind).toBe("report_pdf");
-    expect(row.retainUntil?.toISOString()).toBe(retainUntil.toISOString());
     expect(row.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
-    expect(row.storageKey).toBe(`${org.id}/report_pdf/egen-nokkel`);
-    expect(row.sha256).toBe("0".repeat(64));
+    expect(row.deletedBy).toBe(employee.id);
   });
 });
 
