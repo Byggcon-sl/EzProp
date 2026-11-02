@@ -65,12 +65,19 @@ describe("tilkoblingslaget, statiske kontroller", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("5. findActiveConnection og resolveEmailSender holdes inne i laget", () => {
+  it("5. findActiveConnection og resolveEmailSender holdes inne i laget", async () => {
+    // index.ts kan bruke dem selv (sendEmail kaller resolveEmailSender), men aldri eksportere dem
+    const exported =
+      /export\s*(?:type\s*)?\{[^}]*\b(findActiveConnection|resolveEmailSender)\b[^}]*\}|export\s+(?:async\s+)?(?:function|const|let)\s+(findActiveConnection|resolveEmailSender)\b|export\s*\*\s*from\s*["']\.\/(connections|resolve)["']/;
     for (const index of [join(integrationsDir, "index.ts"), join(emailDir, "index.ts")]) {
       expect(existsSync(index), rel(index)).toBe(true);
-      const text = read(index);
-      expect(text, rel(index)).not.toContain("findActiveConnection");
-      expect(text, rel(index)).not.toContain("resolveEmailSender");
+      expect(read(index), rel(index)).not.toMatch(exported);
+    }
+    const integrations: Record<string, unknown> = await import("./index");
+    const email: Record<string, unknown> = await import("../email/index");
+    for (const name of ["findActiveConnection", "resolveEmailSender"]) {
+      expect(Object.keys(integrations)).not.toContain(name);
+      expect(Object.keys(email)).not.toContain(name);
     }
 
     const callers = [...sourceFiles(join(srcDir, "app")), ...sourceFiles(join(srcDir, "modules"))];
