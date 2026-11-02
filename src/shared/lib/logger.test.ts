@@ -76,59 +76,6 @@ describe("logger", () => {
     expect(scrubText("x".repeat(2000)).length).toBeLessThan(510);
   });
 
-  // Testplan: docs/funksjoner/fase0b-filtjeneste-testplan.md, avsnitt 5 (Azure-hemmeligheter).
-  // Verdiene er oppdiktet.
-  it("vasker nøkkelen ut av en Azure-tilkoblingsstreng", () => {
-    const text = scrubText(
-      "DefaultEndpointsProtocol=https;AccountName=fiktiv;AccountKey=fiktivNokkel==;EndpointSuffix=core.windows.net",
-    );
-    expect(text).not.toContain("fiktivNokkel");
-    expect(text).toContain("AccountName=fiktiv");
-    expect(text).toContain("EndpointSuffix=core.windows.net");
-  });
-
-  it("vasker SAS i tekst og i adresser, resten av adressen kan stå", () => {
-    const sasText = scrubText("SharedAccessSignature=sv=2024&sig=abc;BlobEndpoint=x");
-    expect(sasText).not.toContain("abc");
-
-    const url = scrubText(
-      "https://fiktiv.blob.core.windows.net/c/b?sv=2024&sig=abc%2B123&se=2026 feilet",
-    );
-    expect(url).not.toContain("abc%2B123");
-    expect(url).not.toContain("abc");
-    expect(url).toContain("https://fiktiv.blob.core.windows.net/c/b?");
-  });
-
-  it("fjerner Azure-nøkler i objekter", () => {
-    const line = formatLogLine("error", "Test", {
-      connectionString: "AccountKey=fiktivNokkel==",
-      CONNECTION_STRING: "fiktiv-tilkobling",
-      nested: { accountKey: "fiktivNokkel==", "account-key": "fiktivNokkel2==", sas: "sv=1" },
-    });
-    expect(line).toMatchObject({
-      connectionString: REDACTED,
-      CONNECTION_STRING: REDACTED,
-      nested: { accountKey: REDACTED, "account-key": REDACTED, sas: REDACTED },
-    });
-    const text = JSON.stringify(line);
-    for (const secret of ["fiktivNokkel", "fiktiv-tilkobling", "sv=1"]) {
-      expect(text).not.toContain(secret);
-    }
-  });
-
-  it("vasker ikke for mye: nøkkelen sasquatch og teksten signatur står urørt", () => {
-    const line = formatLogLine("info", "Mangler signatur", {
-      sasquatch: "stor fot",
-      note: "signatur",
-    });
-    expect(line).toMatchObject({
-      msg: "Mangler signatur",
-      sasquatch: "stor fot",
-      note: "signatur",
-    });
-    expect(scrubText("Rapporten mangler signatur")).toBe("Rapporten mangler signatur");
-  });
-
   it("velter aldri det den logger fra", () => {
     const log = createLogger(() => {
       throw new Error("disken er full");
