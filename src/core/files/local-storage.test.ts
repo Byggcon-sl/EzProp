@@ -7,7 +7,6 @@ import {
   createLocalFileStorage,
   FileAlreadyExistsError,
   FileNotFoundError,
-  FileStorageError,
   FileValidationError,
   isInsideRoot,
 } from "@/core/files";
@@ -50,6 +49,9 @@ describe("lokal adapter", () => {
     await storage.put("org/photo/a", bytes(0xff, 0xd8, 0xff, 0x00, 0x01, 0xfe), "image/jpeg");
     const read = await storage.get("org/photo/a");
     expect(Array.from(read)).toEqual([0xff, 0xd8, 0xff, 0x00, 0x01, 0xfe]);
+    // Vanlig Uint8Array, ikke Buffer, slik at alle adaptere gir samme type
+    expect(read).toBeInstanceOf(Uint8Array);
+    expect(Buffer.isBuffer(read)).toBe(false);
   });
 
   it("2. lager mappen selv ved første put", async () => {
@@ -80,16 +82,18 @@ describe("lokal adapter", () => {
       "a/",
       "",
       "a\\b",
+      "a/./b",
+      "org/photo/med mellomrom",
     ];
 
-    function expectRejectedByAdapter(error: unknown) {
-      expect(error).not.toBeNull();
-      // Avvist av adapteren selv, ikke en rå feil fra filsystemet (den har stien i meldingen)
-      expect(
-        error instanceof FileValidationError ||
-          error instanceof FileNotFoundError ||
-          error instanceof FileStorageError,
-      ).toBe(true);
+    /** Avvist av adapteren selv med FileValidationError, og nøkkelen står ikke i meldingen. */
+    function expectRejectedByAdapter(error: unknown, key: string) {
+      expect(error).toBeInstanceOf(FileValidationError);
+      if (key.length > 0) {
+        for (const text of [(error as Error).message, String(error)]) {
+          expect(text).not.toContain(key);
+        }
+      }
     }
 
     it.each(invalidKeys)("put med %j avvises og lager ingen fil utenfor roten", async (key) => {
@@ -98,7 +102,7 @@ describe("lokal adapter", () => {
       await storage.put("org/photo/ok", bytes(1), "image/jpeg");
       const parentBefore = await listAll(tmp);
 
-      expectRejectedByAdapter(await caught(storage.put(key, bytes(6, 6, 6), "image/jpeg")));
+      expectRejectedByAdapter(await caught(storage.put(key, bytes(6, 6, 6), "image/jpeg")), key);
 
       // Foreldremappen til roten (og roten) er uendret: ingen fil skrevet noe sted
       expect(await listAll(tmp)).toEqual(parentBefore);
@@ -107,7 +111,7 @@ describe("lokal adapter", () => {
     it.each(invalidKeys)("get med %j avvises", async (key) => {
       const storage = createLocalFileStorage(root);
       await storage.put("org/photo/ok", bytes(1), "image/jpeg");
-      expectRejectedByAdapter(await caught(storage.get(key)));
+      expectRejectedByAdapter(await caught(storage.get(key)), key);
     });
   });
 

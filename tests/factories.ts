@@ -155,6 +155,7 @@ type FileOverrides = {
   mimeType?: string;
   retainUntil?: Date | null;
   deletedAt?: Date | null;
+  deletedBy?: string | null;
   storageKey?: string;
   sha256?: string;
 };
@@ -187,6 +188,7 @@ export async function createFile(
       sha256: overrides.sha256 ?? createHash("sha256").update(bytes).digest("hex"),
       retainUntil: overrides.retainUntil ?? null,
       deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
     })
     .returning();
   if (!row) throw new Error("kunne ikke opprette fil");
