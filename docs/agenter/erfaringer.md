@@ -141,6 +141,7 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 ## 02.11.2026 – filtjenesten kolliderte med PR #60
 
 - Parallelle PR-er med migrering: oppdater fra main og kjør db:generate på nytt før push. To migreringer med samme nummer gir rød test.
+- Rett før PR åpnes: flett inn `main` og sjekk at versjonen er én patch over. Branchen gikk fra #60, og #61 (bare tilstandsfilen) økte versjonen på `main` etterpå, så GitHub meldte konflikt på versjonslinjen. Flettingen tok fem minutter, men CI måtte kjøre på nytt (25 min), og merge-skriptet med `--vent` ga opp etter 30 minutter fordi klokken startet før flettingen. Regel: flett inn `main` først, kjør skriptet etterpå.
 ## 31.10.–02.11.2026 – PR #59 og #60 merget (revisjonslogg, sperre ved innlogging)
 
 - Revisjonsloggen (PR #59) ble påbegynt i én kjøring og fullført i neste. Det gikk bra fordi oppgavekortet og testplanen lå på branchen, så den neste kjøringen kunne ta over uten å begynne på nytt. Regel som før: push oppgavekortet først.
