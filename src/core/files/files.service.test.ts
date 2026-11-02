@@ -265,6 +265,26 @@ describe("6.1 lagre og hente", () => {
     expect(caught instanceof FileNotFoundError || caught instanceof FileIntegrityError).toBe(true);
   });
 
+  it("6b. ekstra forsvar på prefikset: bare nøkkelen byttet gir feil, aldri B sitt innhold", async () => {
+    const a = await orgWithEmployee(["admin"], "Organisasjon A");
+    const b = await orgWithEmployee(["admin"], "Organisasjon B");
+    const savedB = await savePhoto(b.user, b.org.id, new Uint8Array([0xbb, 0xbb, 0xbb, 0x02]));
+    const savedA = await savePhoto(a.user, a.org.id);
+    const keyB = (await fileRow(savedB.id)).storageKey;
+
+    await db.update(files).set({ storageKey: keyB }).where(eq(files.id, savedA.id));
+
+    let result: Awaited<ReturnType<typeof readFile>> | undefined;
+    let caught: unknown;
+    try {
+      result = await readFile(a.user, a.org.id, savedA.id);
+    } catch (error) {
+      caught = error;
+    }
+    expect(result).toBeUndefined();
+    expect(caught instanceof FileNotFoundError || caught instanceof FileIntegrityError).toBe(true);
+  });
+
   it("7. ikke-uuid som fil-ID gir FileNotFoundError, ikke databasefeil", async () => {
     const { org, user } = await orgWithEmployee(["admin"]);
     await expect(readFile(user, org.id, "ikke-en-id")).rejects.toBeInstanceOf(FileNotFoundError);
