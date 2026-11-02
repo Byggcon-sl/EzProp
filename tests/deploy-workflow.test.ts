@@ -541,7 +541,11 @@ describe("dokumentasjon for testmiljøet", () => {
       expect(doc, text).toContain(text);
     }
     expect(doc).toMatch(/Log stream|log tail/);
-    expect(doc).not.toContain("Mail.Send");
+    // Fase 0b, tilkoblingslaget: Graph-adapteren finnes, og dokumentet skal si hva Ståle må
+    // sette opp før de fire secretene legges inn (Mail.Send og tilgangspolicy i Exchange).
+    expect(doc).toContain("Mail.Send");
+    expect(doc).toContain("Application Access Policy");
+    expect(doc).toContain("alle fire sammen");
   });
 
   it("utviklingsmiljø-dokumentet lenker til driftsdokumentet", () => {
