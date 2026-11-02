@@ -2,7 +2,7 @@
 
 - **Fase:** 0b (Grunnmur)
 - **Modul:** kjerne (`src/core/files`)
-- **Status:** klar til bygging (runde 1 med forenkler, sikkerhet-personvern og test-leder er innarbeidet, se «Endringer etter gjennomgang»)
+- **Status:** bygget, rydding før PR (runde 2 med forenkler og test-leder er avgjort 02.11.2026, se «Endringer etter gjennomgang (runde 2)»; koden og 300 grønne tester ligger på branchen, bare doble testfiler og fabrikken gjenstår)
 - **Branch:** `fase0b-filtjeneste` fra `main`. Versjon **0.2.51** (én patch over `main`: PR #60 ga 0.2.49, PR #61 med tilstandsfilen gir 0.2.50; står `main` på en annen versjon når PR-en åpnes, brukes neste ledige patch). Bekreftet av prosjektlederen 02.11.2026 kl. 16:50 UTC mot oppgaveteksten: omfang, «ikke med» og KI først stemmer; bare versjonen er rettet.
 - **Støtter hovedmål:**
   - **Reklamasjoner:** bilder og dokumenter ligger trygt i 10 år med fingeravtrykk og myk sletting. Ved en reklamasjon kan vi vise nøyaktig hvilket bilde som var med, og at det ikke er endret.
@@ -107,7 +107,7 @@ Ingen fagregler. Tekniske regler med tester: nøkkelen kan ikke gå ut av mappen
 - [ ] `readFileRetention` gir 10/2/10 uten innstillinger, leser egne verdier, og faller tilbake til standard med advarsel (bare organisasjon og nøkkel) for alle ugyldige verdier i fasiten under Omfang 6.
 - [ ] **Fremmed fil-ID i egen organisasjon:** en bruker i B som kaller `readFile(actorB, orgB, fileIdFraA)` eller `markFileDeleted(actorB, orgB, fileIdFraA)`, får «ikke funnet», og raden i A er uendret (`deleted_at` fortsatt tom).
 - [ ] `expectTenantIsolation` kalles én gang for **hver** operasjon, med egen innpakning: `readFile` (gir `[{id}]` for hver lagret id), `saveFile` (lagrer og gir raden), `markFileDeleted` (merker en fil uten `retain_until` og gir raden). Finnes en intern funksjon som henter raden, får den også sitt eget kall.
-- [ ] Unik på `(organization_id, storage_key)` er testet. Migreringen har `deleted_at`.
+- [ ] Unik på `(organization_id, storage_key)` er testet, og samme nøkkel i en annen organisasjon godtas. At migreringen har `deleted_at`/`deleted_by`, vises av testene for `markFileDeleted` (ingen egen kolonnetest; migreringer og `resetDatabase` dekkes av `tests/factories.test.ts`).
 - [ ] Lint (inkludert modulgrensene), typesjekk og alle tester grønne. Prøvekandidatene er uendret.
 - [ ] Ny avhengighet (`@azure/storage-blob`) er begrunnet i PR-en.
 - [ ] Virker på iPad-størrelse: ikke relevant (ingen skjerm); eksisterende e2e skal fortsatt være grønn.
@@ -129,11 +129,13 @@ Ingen fagregler. Tekniske regler med tester: nøkkelen kan ikke gå ut av mappen
 - readFileRetention: standard 10/2/10; egne verdier; tabelltest med fasiten (0, -1, 2.5, "10", null, NaN, 101 ugyldig; 1, 10, 100 gyldig).
 - logger: vasking av Azure-hemmeligheter.
 
-**Integrasjonstester mot testdatabasen** (`files.service.test.ts`): alle akseptkriteriene over som gjelder tjenesten, med fabrikken `createFile` og `auditRows`.
+**Integrasjonstester mot testdatabasen** (`files.service.test.ts`): alle akseptkriteriene over som gjelder tjenesten, med fabrikken `createFile` (med `deletedAt` og `deletedBy` i `FileOverrides`) og `auditRows`.
+
+**Én testfil per kildefil** (`local-storage`, `azure-storage`, `config`, `retention`, `files.service`, `static-checks`, pluss `logger.test.ts`). Ingen `*.plan.test.ts`, ingen røyktest ved siden av. Samme mønster som PR #55 for admin.
 
 **E2e:** ingen nye. Hele pakken (PC og iPad-størrelse) skal være grønn.
 
-**Kontroller i gjennomgangen:** `git diff main -- src/modules/offline-trial` er tom; `src/core/files` importerer ikke fra `src/modules`; `@azure/storage-blob` importeres bare i adapteren; ingen ekte nøkler i `.env.example` eller testene; versjon 0.2.51. Test-leder godkjenner ikke uten kriteriet om fremmed fil-ID og tenant-isolasjon for alle tre operasjonene.
+**Kontroller i gjennomgangen:** `git diff main -- src/modules/offline-trial` er tom; `src/core/files` importerer ikke fra `src/modules` (lint-regelen for modulgrenser, ingen egen test); `@azure/storage-blob` importeres bare i adapteren (`static-checks.test.ts`); ingen ekte nøkler i `.env.example` eller testene; versjon 0.2.51. Test-leder godkjenner ikke uten kriteriet om fremmed fil-ID og tenant-isolasjon for alle tre operasjonene.
 
 ## Endringer etter gjennomgang (runde 1, avgjort av prosjektlederen)
 
@@ -142,8 +144,24 @@ Ingen fagregler. Tekniske regler med tester: nøkkelen kan ikke gå ut av mappen
 - **Test-leder, alle fem punkt tatt:** fremmed fil-ID, tenant-isolasjon per operasjon, fasit for oppbevaringstid (0 er ugyldig, øvre grense 100 år, samme som sikkerhet-personvern foreslo), grensen på 25 MB og tom fil, og rekkefølgen fil først, så rad.
 - Ingen uenighet mellom rollene som måtte avgjøres. Grensen 1–100 år og filtypelisten er tekniske vern, ikke fagvalg; standardverdiene er fortsatt Ståles.
 
+## Endringer etter gjennomgang (runde 2, avgjort av prosjektlederen 02.11.2026)
+
+Forenkler og test-leder ba om det samme: doble tester. Ingen uenighet om koden. Alt under gjøres av utvikler og testskriver på branchen før PR; test-leder godkjenner ikke hvis tenant-kallene eller rollematrisen faller bort.
+
+1. **Doble testfiler slås sammen, én fil per kildefil.** `*.test.ts` (testskriverens) er grunnlaget, fordi de er mest komplette (fire `expectTenantIsolation`-kall, «ukjent driver», 6a/6b/7 for deaktivert, uten roller og ikke ansatt). Fra `*.plan.test.ts` tas bare det som mangler: `files.service.plan` 6.1.6 andre variant («nøkkel, fingeravtrykk og størrelse kopiert: bare prefikssjekken stopper») inn som 6.1.6b ved siden av dagens 6.1.6, og 6.8.1 utvides til å vise at samme nøkkel i en annen organisasjon godtas. Deretter slettes `retention.plan.test.ts`, `local-storage.plan.test.ts`, `azure-storage.plan.test.ts`, `config.plan.test.ts` og `files.service.plan.test.ts`.
+2. **`src/core/files/service.test.ts` (røyktesten) fjernes helt.** Alt den tester, står i `files.service.test.ts` og `retention.test.ts`.
+3. **`files.service.test.ts` 6.8.2–6.8.4 fjernes** (kolonnene finnes, `organization_id` påkrevd, `resetDatabase` tømmer `files`). Det tester migreringen og `RESET_TABLES`, som `tests/factories.test.ts` alt dekker. Bare 6.8.1 (unik indeks) står. Akseptkriteriet er justert tilsvarende.
+4. **`static-checks.test.ts`:** testen «importerer ikke fra modulene» fjernes (lint-regelen for modulgrenser, regel 4, gjør jobben). «Ingen sletting» og «Azure-import bare i adapteren» står.
+5. **`src/shared/lib/logger.test.ts`:** Azure-vaskingen står to ganger. Behold `describe("logger vasker Azure-hemmeligheter")` (nummerert 1–4, samsvarer med testplanens punkt 5) og fjern de fire Azure-testene inne i `describe("logger")`.
+6. **Fabrikken:** `FileOverrides` i `tests/factories.ts` får `deletedBy?: string | null`, så 6.3.5 («allerede merket») kan vise at `deleted_by` står urørt uten omvei.
+7. **Azure-adapteren står (A41 gjelder).** Forenkler pekte på at oppgaveteksten sier «bare grensesnittet og innstillingen forberedes», mens kortet bygger hele adapteren med `@azure/storage-blob`. Avgjort: adapteren beholdes, fordi (a) den er alt bygget og testet mot en falsk klient, isolert til én fil, og kan fjernes uten at noe annet endres; (b) den viser at porten faktisk holder for en annen lagring enn mappe (ingen overskriving med `ifNoneMatch: "*"`), slik at laget ikke bare er en påstand; (c) å ta den ut nå er mer arbeid enn å la den stå. Prisen er én ny avhengighet, som begrunnes i PR-en (regel 9), og at adapteren **ikke er prøvd mot ekte Azure**. Det føres under «Trenger Ståle når han er tilbake»: adapteren prøves mot lagringskontoen før `FILE_STORAGE_DRIVER=azure` slås på i testmiljøet. Ingen beslutning i `docs/09-apne-sporsmal.md` endres.
+8. **Ikke gjort nå, små funn i PR-en:** `src/core/files/index.ts` eksporterer `isInsideRoot`, `createAzureFileStorage`, `createLocalFileStorage` og `findActiveFile`, som bare testene bruker (`findActiveFile` er godtatt for tenant-testen). Tas i den lille oppgaven etter PR-en, samme mønster som (k) for `@/core/access`.
+
+Etter ryddingen kjøres lint, typesjekk, Vitest og hele e2e på nytt før PR.
+
 ## Roller
 
+- **forenkler** (runde 1 og 2)
 - **utvikler** (bit 1: port, adaptere, skjema, migrering, tjeneste, innstillinger, dokumenter)
 - **testskriver** (bit 2, i parallell: tester etter akseptkriteriene, fabrikk for `files`, tenant-isolasjon)
 - **sikkerhet-personvern** (sti utenfor mappen, hemmeligheter i miljøvariabler og feilmeldinger, tilgang, ingen sletting)
@@ -153,4 +171,4 @@ Ikke med: ux, ui (ingen skjerm), fagansvarlig (ingen fagtekst), arkitekt (porten
 
 ## Åpne spørsmål
 
-- Ingen som stopper PR-en. Når Ståle er tilbake (føres under «Trenger Ståle når han er tilbake»): lagringskonto i Azure i Sweden Central (koster penger), privat container, at Microsofts databehandleravtale for Azure dekker lagringen, og hvor nøkkelen skal ligge (Key Vault, eget punkt).
+- Ingen som stopper PR-en. Når Ståle er tilbake (føres under «Trenger Ståle når han er tilbake»): lagringskonto i Azure i Sweden Central (koster penger), privat container, at Microsofts databehandleravtale for Azure dekker lagringen, hvor nøkkelen skal ligge (Key Vault, eget punkt), og at Azure-adapteren prøves mot den ekte kontoen før den slås på (den er bare testet mot en falsk klient).
