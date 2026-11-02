@@ -12,6 +12,7 @@ import {
   certifications,
   employeePermissions,
   files,
+  loginAttempts,
   trialAnswers,
   trialForms,
   trialPhotos,
@@ -113,6 +114,24 @@ describe("resetDatabase", () => {
       const [row] = await db.select({ n: count() }).from(table);
       expect(row!.n).toBe(0);
     }
+  });
+});
+
+describe("resetDatabase og innloggingssperren (fase 0b)", () => {
+  it("o) resetDatabase tømmer login_attempts", async () => {
+    await resetDatabase();
+    await db.insert(loginAttempts).values([
+      { emailHash: "a".repeat(64), kind: "code_requested" },
+      { emailHash: "a".repeat(64), kind: "code_failed" },
+      { emailHash: "a".repeat(64), kind: "login_succeeded" },
+    ]);
+    const [before] = await db.select({ n: count() }).from(loginAttempts);
+    expect(before!.n).toBe(3);
+
+    await resetDatabase();
+
+    const [after] = await db.select({ n: count() }).from(loginAttempts);
+    expect(after!.n).toBe(0);
   });
 });
 
@@ -274,5 +293,25 @@ describe("createFile (fase 0b, filtjeneste)", () => {
     expect(row.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
     expect(row.storageKey).toBe(`${org.id}/report_pdf/egen-nokkel`);
     expect(row.sha256).toBe("0".repeat(64));
+  });
+});
+
+describe("login_attempts (fase 0b, sperre ved innlogging)", () => {
+  it("o) resetDatabase tømmer login_attempts", async () => {
+    // Lastes her, så resten av filen kjører selv om sperremodulen mangler
+    const { checkAndRecordAttempt } = await import("@/core/auth/login-throttle");
+    await resetDatabase();
+    await checkAndRecordAttempt("ola@eksempel.no", "request_code");
+    const before = await db.execute<{ n: number }>(
+      sql`select count(*)::int as n from login_attempts`,
+    );
+    expect(Array.from(before)[0]?.n).toBe(1);
+
+    await resetDatabase();
+
+    const after = await db.execute<{ n: number }>(
+      sql`select count(*)::int as n from login_attempts`,
+    );
+    expect(Array.from(after)[0]?.n).toBe(0);
   });
 });

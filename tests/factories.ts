@@ -39,6 +39,7 @@ export const RESET_TABLES = [
   "sessions",
   "accounts",
   "verifications",
+  "login_attempts",
   "users",
 ] as const;
 
