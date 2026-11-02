@@ -5,7 +5,7 @@
  *
  * Aldri personopplysninger eller hemmeligheter i loggen: felt med følsomme navn (e-post, navn,
  * telefon, passord, token, cookie …) fjernes, og e-postadresser, telefonnumre, «Bearer»-tokener,
- * parameterne i databasefeil og Azure-nøkler og -signaturer vaskes bort fra tekst. Bruk bruker-id,
+ * parameterne i databasefeil, Azure-nøkler og -signaturer og klienthemmeligheter vaskes bort fra tekst. Bruk bruker-id,
  * aldri e-post.
  */
 
@@ -41,6 +41,8 @@ const PHONE = /(?:\+|00)47(?:[\s-]?\d){8}|\b\d{3} \d{2} \d{3}\b|\b\d{2} \d{2} \d
 const AZURE_ACCOUNT_KEY = /AccountKey=[^;]+/gi;
 const AZURE_SAS = /SharedAccessSignature=[^;]+/gi;
 const AZURE_SIG = /sig=[^&\s]+/gi;
+// Klienthemmeligheten i token-kall (skjemadata til Microsoft 365). Ikke `client_secret_name=…`.
+const CLIENT_SECRET = /client_secret=[^&\s]+/g;
 const MAX_TEXT = 500;
 
 /** Fjerner personopplysninger og hemmeligheter fra en tekst, og korter den ned. */
@@ -51,6 +53,7 @@ export function scrubText(text: string): string {
     .replace(AZURE_ACCOUNT_KEY, "AccountKey=" + REDACTED)
     .replace(AZURE_SAS, "SharedAccessSignature=" + REDACTED)
     .replace(AZURE_SIG, "sig=" + REDACTED)
+    .replace(CLIENT_SECRET, "client_secret=" + REDACTED)
     .replace(EMAIL, "[e-post]")
     .replace(BEARER, "$1 " + REDACTED)
     .replace(PHONE, "[telefon]");

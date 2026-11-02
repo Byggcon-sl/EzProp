@@ -125,7 +125,7 @@ Felles hjelpere i testfilen: `secretNames(text)` = alle treff på `secrets\.([A-
 | Testnavn | Viser |
 |---|---|
 | «driftsdokumentet nevner alle secrets og variabler arbeidsflyten bruker» | Hvert navn fra `secretNames(workflow)` og `varNames(workflow)` finnes som tekst i `docs/drift/testmiljo-azure.md`. Gjør «nøyaktige navn» etterprøvbart. |
-| «driftsdokumentet har stegene, kostnad og sletting» | Inneholder `rg-ezprop-test`, «federated», `repo:Byggcon-sl/EzProp:ref:refs/heads/main`, «Contributor», `rand -hex 24`, `rand -base64 32`, «Log stream» (eller `log tail`), «Legg til på Hjem-skjerm», «asuid», `APP_HOSTNAME`, «kr», `az group delete`, «Minimum før ekte data». Inneholder **ikke** «Mail.Send» (hører til fase 0b). |
+| «driftsdokumentet har stegene, kostnad og sletting» | Inneholder `rg-ezprop-test`, «federated», `repo:Byggcon-sl/EzProp:ref:refs/heads/main`, «Contributor», `rand -hex 24`, `rand -base64 32`, «Log stream» (eller `log tail`), «Legg til på Hjem-skjerm», «asuid», `APP_HOSTNAME`, «kr», `az group delete`, «Minimum før ekte data». Inneholder «Mail.Send» og «New-ApplicationAccessPolicy» (snudd i fase 0b da Graph-adapteren ble bygget; før det skulle dokumentet **ikke** nevne «Mail.Send»). |
 | «utviklingsmiljø-dokumentet lenker til driftsdokumentet» | `docs/10-utviklingsmiljo.md` inneholder `docs/drift/testmiljo-azure.md`. |
 | «ADR 0002 finnes med begge avveiningene» | `docs/adr/0002-testmiljo-azure.md` finnes og inneholder «Azure-tjenester» (brannmur) og «administrator» (databasebruker). `docs/06-arkitektur.md` inneholder «ADR 0002». |
 

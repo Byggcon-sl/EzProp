@@ -9,14 +9,17 @@ export function createServerLogSender(
   firstAdminEmail: string | undefined,
   write: (line: string) => void = console.info,
 ): EmailSender {
-  return async (email: Email) => {
-    if (!firstAdminEmail || email.to.trim().toLowerCase() !== firstAdminEmail || !email.logLine) {
-      throw new Error(
-        "E-post er ikke satt opp ennå. Bare første admin kan logge inn til Microsoft 365 er koblet til.",
+  return {
+    provider: "server_log",
+    async send(email: Email) {
+      if (!firstAdminEmail || email.to.trim().toLowerCase() !== firstAdminEmail || !email.logLine) {
+        throw new Error(
+          "E-post er ikke satt opp ennå. Bare første admin kan logge inn til Microsoft 365 er koblet til.",
+        );
+      }
+      write(
+        `[innlogging] ${email.logLine}. E-post er ikke satt opp ennå; se docs/drift/testmiljo-azure.md`,
       );
-    }
-    write(
-      `[innlogging] ${email.logLine}. E-post er ikke satt opp ennå; se docs/drift/testmiljo-azure.md`,
-    );
+    },
   };
 }

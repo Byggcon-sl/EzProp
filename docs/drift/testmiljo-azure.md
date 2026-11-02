@@ -34,12 +34,29 @@ Gå til repoet i GitHub → Settings → Secrets and variables → Actions.
 | `POSTGRES_ADMIN_PASSWORD` | Lag med `openssl rand -hex 24` i Terminal. Bare bokstaver og tall, fordi passordet står i en adresse. |
 | `BETTER_AUTH_SECRET` | Lag med `openssl rand -base64 32` i Terminal |
 
-Valgfrie secrets. **Ikke legg dem inn ennå.** Sendingen via Microsoft 365 bygges først i fase 0b (etter at du har svart på spørsmål nr. 6). Legger du inn de fire før det, prøver appen å sende e-post via Microsoft 365, får feil, og ingen kan logge inn, heller ikke du. Når den tid kommer: legg inn **alle fire sammen**.
+Valgfrie secrets for e-post via Microsoft 365. Sendingen er bygget (fase 0b), men den er bare prøvd mot en falsk Microsoft-tjeneste, ikke mot Byggcons ekte konto. Du kan legge dem inn nå. Legg inn **alle fire sammen**. Legger du inn bare noen av dem, starter ikke appen.
 
-- `MS_GRAPH_TENANT_ID`
-- `MS_GRAPH_CLIENT_ID`
-- `MS_GRAPH_CLIENT_SECRET`
-- `MAIL_FROM`
+| Navn | Hva du legger inn |
+|---|---|
+| `MS_GRAPH_TENANT_ID` | Directory (tenant) ID for Byggcons Microsoft 365 |
+| `MS_GRAPH_CLIENT_ID` | Application (client) ID fra app-registreringen for e-post |
+| `MS_GRAPH_CLIENT_SECRET` | Klienthemmeligheten (client secret) fra samme app-registrering |
+| `MAIL_FROM` | Postboksen e-posten sendes fra, for eksempel `noreply@byggcon.no` |
+
+Før du legger dem inn, sjekk dette i Microsoft 365 (samme app-registrering som Optiplan, hvis du bekrefter at den skal brukes):
+
+1. App-registreringen har rettigheten **`Mail.Send`** som **applikasjonsrettighet** (Application permission), og en administrator har gitt samtykke (Grant admin consent).
+2. Det finnes en **tilgangspolicy i Exchange Online** som begrenser appen til postboksen i `MAIL_FROM`. Den lages i PowerShell med `New-ApplicationAccessPolicy`. **Uten policyen kan appen sende e-post fra alle postbokser i Byggcon.**
+3. Det koster ingenting ekstra. Postboksen og app-registreringen finnes fra før.
+
+Etter at de fire er lagt inn og utrullingen har gått: prøv én innlogging i testmiljøet med en annen adresse enn din egen. Kommer ikke koden, se feilen i serverloggen (Log stream), eller i kolonnen `last_error` i tabellen `integration_connections` hvis en tilkobling er lagt inn der.
+
+**Slik virker e-posten:**
+
+1. På Macen (`DEV_MAILBOX=1`): ingen e-post sendes. Kodene vises på `/dev/epost`.
+2. I testmiljøet uten de fire secretene: koden til første admin skrives i serverloggen. Andre får ingen kode.
+3. I testmiljøet med de fire secretene: e-posten sendes via Microsoft 365 fra postboksen i `MAIL_FROM`.
+4. Senere kan en tilkobling i tabellen `integration_connections` overstyre dette for én organisasjon.
 
 **Variabler** (fanen Variables):
 
@@ -71,7 +88,7 @@ Første kjøring tar lengre tid, fordi databasen lages. Du kan kjøre arbeidsfly
 2. Skriv adressen fra `SEED_ADMIN_EMAIL`.
 3. Hent koden i Azure-portalen: App Service `app-ezprop-test` → **Log stream** (eller `az webapp log tail` i Terminal). Linjen begynner med `[innlogging]`.
 
-Merk: alle som har lesetilgang til ressursgruppen kan lese koden og logge inn som første admin (spørsmål nr. 9). Det er greit så lenge det bare er oppdiktede data. Andre brukere kan ikke logge inn før Microsoft 365 er koblet til.
+Merk: alle som har lesetilgang til ressursgruppen kan lese koden og logge inn som første admin (spørsmål nr. 9). Det er greit så lenge det bare er oppdiktede data. Andre brukere kan ikke logge inn før de fire secretene for Microsoft 365 er lagt inn (se punkt b).
 
 Helsesjekken: `https://app-ezprop-test.azurewebsites.net/api/helse` viser versjon og commit.
 
@@ -166,7 +183,7 @@ Alt i gruppen slettes, også databasen. Koden ligger fortsatt i GitHub, så milj
 
 Alt dette skal på plass før ekte data:
 
-- E-post via Microsoft 365 (fase 0b)
+- E-post via Microsoft 365 prøvd mot ekte konto (sendingen er bygget, venter på at de fire secretene legges inn)
 - Nøkkelboks for hemmeligheter (fase 0b)
 - Privat nettverk mellom app og database
 - Egen databasebruker for appen
