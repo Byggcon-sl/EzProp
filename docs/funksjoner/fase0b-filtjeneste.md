@@ -2,7 +2,7 @@
 
 - **Fase:** 0b (Grunnmur)
 - **Modul:** kjerne (`src/core/files`)
-- **Status:** bygget, rydding før PR (runde 2 med forenkler og test-leder er avgjort 02.11.2026, se «Endringer etter gjennomgang (runde 2)»; koden og 300 grønne tester ligger på branchen, bare doble testfiler og fabrikken gjenstår)
+- **Status:** levert som PR 02.11.2026 (runde 2 innarbeidet, alle sjekker grønne: lint, typesjekk, 2109 Vitest, e2e pc og iPad 384 bestått; test-leder godkjente testrapporten). Små funn fra gjennomgangen står i PR-en og i liten oppgave (o) i `docs/agenter/tilstand.md`.
 - **Branch:** `fase0b-filtjeneste` fra `main`. Versjon **0.2.51** (én patch over `main`: PR #60 ga 0.2.49, PR #61 med tilstandsfilen gir 0.2.50; står `main` på en annen versjon når PR-en åpnes, brukes neste ledige patch). Bekreftet av prosjektlederen 02.11.2026 kl. 16:50 UTC mot oppgaveteksten: omfang, «ikke med» og KI først stemmer; bare versjonen er rettet.
 - **Støtter hovedmål:**
   - **Reklamasjoner:** bilder og dokumenter ligger trygt i 10 år med fingeravtrykk og myk sletting. Ved en reklamasjon kan vi vise nøyaktig hvilket bilde som var med, og at det ikke er endret.
@@ -90,27 +90,27 @@ Ingen fagregler. Tekniske regler med tester: nøkkelen kan ikke gå ut av mappen
 
 ## Akseptkriterier
 
-- [ ] `saveFile` + `readFile` gir samme innhold og samme SHA-256, med lokal mappe (Vitest mot testdatabasen og en midlertidig mappe).
-- [ ] Endret fil i lagringen gir feil ved henting (fingeravtrykket stemmer ikke).
-- [ ] Nøkkel med `..`, absolutt sti, tomme deler eller bakstrek avvises av den lokale adapteren, og en løst sti utenfor mappen avvises.
-- [ ] `put` to ganger på samme nøkkel gir feil, og det første innholdet står uendret (lokal og falsk Azure-klient).
-- [ ] `storage_key` er `<org>/<kind>/<fileId>` og inneholder aldri filnavn fra brukeren.
-- [ ] Fil over 25 MB avvises før noe skrives (ingen fil i mappen, ingen rad). Nøyaktig 25 MB godtas. Tom fil avvises.
-- [ ] Ugyldig `kind` og ugyldig filtype (for eksempel `image/svg+xml`, `text/html`) avvises før noe skrives.
-- [ ] Feiler skrivingen av raden etter at filen er lagret, finnes ingen rad, og feilen inneholder ikke sti eller hemmeligheter.
-- [ ] `markFileDeleted` setter `deleted_at`/`deleted_by`, filen ligger fortsatt i mappen, og `readFile` gir «ikke funnet» etterpå. Revisjonsloggen har én rad med bare `fileId`, `kind` og `organizationId`.
-- [ ] `markFileDeleted` avvises når `retain_until` er i fremtiden, også for admin. Tillatt når `retain_until` er tom eller passert.
-- [ ] Rollematrise: takstmann, kontor og leder kan lagre og lese, men ikke merke som slettet. Admin kan alt. En ansatt med både takstmann og admin kan merke. En deaktivert ansatt nektes alt.
-- [ ] Admin stenges ikke ute: admin kan lagre, lese og merke også når `access.inspectors_edit_all` er false.
-- [ ] Azure-adapteren lagrer og henter mot en falsk klient (ingen nett). `FILE_STORAGE_DRIVER=azure` uten tilkoblingsstreng eller uten container gir feil som nevner variabelnavnet; med `CONNECTION_STRING=hemmelig-test-verdi` og manglende container inneholder meldingen ikke verdien. Standard er lokal adapter.
-- [ ] Loggeren vasker `AccountKey=`, `SharedAccessSignature=` og `sig=` i tekst, og nøklene `connectionString`, `accountKey` og `sas` i objekter.
-- [ ] `readFileRetention` gir 10/2/10 uten innstillinger, leser egne verdier, og faller tilbake til standard med advarsel (bare organisasjon og nøkkel) for alle ugyldige verdier i fasiten under Omfang 6.
-- [ ] **Fremmed fil-ID i egen organisasjon:** en bruker i B som kaller `readFile(actorB, orgB, fileIdFraA)` eller `markFileDeleted(actorB, orgB, fileIdFraA)`, får «ikke funnet», og raden i A er uendret (`deleted_at` fortsatt tom).
-- [ ] `expectTenantIsolation` kalles én gang for **hver** operasjon, med egen innpakning: `readFile` (gir `[{id}]` for hver lagret id), `saveFile` (lagrer og gir raden), `markFileDeleted` (merker en fil uten `retain_until` og gir raden). Finnes en intern funksjon som henter raden, får den også sitt eget kall.
-- [ ] Unik på `(organization_id, storage_key)` er testet, og samme nøkkel i en annen organisasjon godtas. At migreringen har `deleted_at`/`deleted_by`, vises av testene for `markFileDeleted` (ingen egen kolonnetest; migreringer og `resetDatabase` dekkes av `tests/factories.test.ts`).
-- [ ] Lint (inkludert modulgrensene), typesjekk og alle tester grønne. Prøvekandidatene er uendret.
-- [ ] Ny avhengighet (`@azure/storage-blob`) er begrunnet i PR-en.
-- [ ] Virker på iPad-størrelse: ikke relevant (ingen skjerm); eksisterende e2e skal fortsatt være grønn.
+- [x] `saveFile` + `readFile` gir samme innhold og samme SHA-256, med lokal mappe (Vitest mot testdatabasen og en midlertidig mappe).
+- [x] Endret fil i lagringen gir feil ved henting (fingeravtrykket stemmer ikke).
+- [x] Nøkkel med `..`, absolutt sti, tomme deler eller bakstrek avvises av den lokale adapteren, og en løst sti utenfor mappen avvises.
+- [x] `put` to ganger på samme nøkkel gir feil, og det første innholdet står uendret (lokal og falsk Azure-klient).
+- [x] `storage_key` er `<org>/<kind>/<fileId>` og inneholder aldri filnavn fra brukeren.
+- [x] Fil over 25 MB avvises før noe skrives (ingen fil i mappen, ingen rad). Nøyaktig 25 MB godtas. Tom fil avvises.
+- [x] Ugyldig `kind` og ugyldig filtype (for eksempel `image/svg+xml`, `text/html`) avvises før noe skrives.
+- [x] Feiler skrivingen av raden etter at filen er lagret, finnes ingen rad, og feilen inneholder ikke sti eller hemmeligheter.
+- [x] `markFileDeleted` setter `deleted_at`/`deleted_by`, filen ligger fortsatt i mappen, og `readFile` gir «ikke funnet» etterpå. Revisjonsloggen har én rad med bare `fileId`, `kind` og `organizationId`.
+- [x] `markFileDeleted` avvises når `retain_until` er i fremtiden, også for admin. Tillatt når `retain_until` er tom eller passert.
+- [x] Rollematrise: takstmann, kontor og leder kan lagre og lese, men ikke merke som slettet. Admin kan alt. En ansatt med både takstmann og admin kan merke. En deaktivert ansatt nektes alt.
+- [x] Admin stenges ikke ute: admin kan lagre, lese og merke også når `access.inspectors_edit_all` er false.
+- [x] Azure-adapteren lagrer og henter mot en falsk klient (ingen nett). `FILE_STORAGE_DRIVER=azure` uten tilkoblingsstreng eller uten container gir feil som nevner variabelnavnet; med `CONNECTION_STRING=hemmelig-test-verdi` og manglende container inneholder meldingen ikke verdien. Standard er lokal adapter.
+- [x] Loggeren vasker `AccountKey=`, `SharedAccessSignature=` og `sig=` i tekst, og nøklene `connectionString`, `accountKey` og `sas` i objekter.
+- [x] `readFileRetention` gir 10/2/10 uten innstillinger, leser egne verdier, og faller tilbake til standard med advarsel (bare organisasjon og nøkkel) for alle ugyldige verdier i fasiten under Omfang 6.
+- [x] **Fremmed fil-ID i egen organisasjon:** en bruker i B som kaller `readFile(actorB, orgB, fileIdFraA)` eller `markFileDeleted(actorB, orgB, fileIdFraA)`, får «ikke funnet», og raden i A er uendret (`deleted_at` fortsatt tom).
+- [x] `expectTenantIsolation` kalles én gang for **hver** operasjon, med egen innpakning: `readFile` (gir `[{id}]` for hver lagret id), `saveFile` (lagrer og gir raden), `markFileDeleted` (merker en fil uten `retain_until` og gir raden). Finnes en intern funksjon som henter raden, får den også sitt eget kall.
+- [x] Unik på `(organization_id, storage_key)` er testet, og samme nøkkel i en annen organisasjon godtas. At migreringen har `deleted_at`/`deleted_by`, vises av testene for `markFileDeleted` (ingen egen kolonnetest; migreringer og `resetDatabase` dekkes av `tests/factories.test.ts`).
+- [x] Lint (inkludert modulgrensene), typesjekk og alle tester grønne. Prøvekandidatene er uendret.
+- [x] Ny avhengighet (`@azure/storage-blob`) er begrunnet i PR-en.
+- [x] Virker på iPad-størrelse: ikke relevant (ingen skjerm); eksisterende e2e skal fortsatt være grønn.
 
 ## Beslutninger (autonom modus, føres i `docs/09-apne-sporsmal.md`)
 
