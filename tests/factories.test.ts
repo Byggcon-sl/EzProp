@@ -1,11 +1,17 @@
-import { count } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { count, eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { requireOrganizationAccess } from "@/core/access";
+import { createLocalFileStorage } from "@/core/files";
 import { isCertificationValid } from "@/core/organization/certification-rules";
 import { db } from "@/db/client";
 import {
   certifications,
   employeePermissions,
+  files,
   trialAnswers,
   trialForms,
   trialPhotos,
@@ -15,15 +21,41 @@ import { uuidv7 } from "@/shared/lib/uuid";
 import {
   createCertification,
   createEmployee,
+  createFile,
   createOrganization,
   createUser,
   grantPermission,
+  RESET_TABLES,
   resetDatabase,
 } from "./factories";
 
 // Fanger at en ny tabell glemmes i truncate-listen (testplan for oppgave 4, avsnitt 3.6).
 
 describe("resetDatabase", () => {
+  it("truncate-listen har alle tabellene i databasen (også files)", async () => {
+    const result = await db.execute<{ table_name: string }>(
+      sql`select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'`,
+    );
+    const tables = result.map((row) => row.table_name).sort();
+    expect(tables).toContain("files");
+    const listed: readonly string[] = RESET_TABLES;
+    expect(tables.filter((table) => !listed.includes(table))).toEqual([]);
+    expect(listed).toContain("files");
+    // `files` tømmes før `organizations`, som den peker på
+    expect(listed.indexOf("files")).toBeLessThan(listed.indexOf("organizations"));
+  });
+
+  it("resetDatabase tømmer files", async () => {
+    await resetDatabase();
+    const org = await createOrganization("Oppdiktet takst AS");
+    await createFile(org.id);
+
+    await resetDatabase();
+
+    const [row] = await db.select({ n: count() }).from(files);
+    expect(row!.n).toBe(0);
+  });
+
   it("resetDatabase tømmer trial_-tabellene", async () => {
     await resetDatabase();
     const org = await createOrganization("Oppdiktet takst AS");
@@ -151,5 +183,67 @@ describe("createCertification (fase 0b, sertifisering)", () => {
 
     const [row] = await db.select({ n: count() }).from(certifications);
     expect(row!.n).toBe(0);
+  });
+});
+
+describe("createFile (fase 0b, filtjeneste)", () => {
+  it("1. gir en rad med riktig organisasjon og nøkkelformat <organisasjon>/<kind>/<id>", async () => {
+    await resetDatabase();
+    const orgA = await createOrganization("Oppdiktet takst A");
+    await createOrganization("Oppdiktet takst B");
+
+    const row = await createFile(orgA.id);
+    expect(row.organizationId).toBe(orgA.id);
+    expect(row.storageKey).toBe(`${orgA.id}/photo/${row.id}`);
+    expect(row.deletedAt).toBeNull();
+    expect(row.retainUntil).toBeNull();
+
+    const document = await createFile(orgA.id, { kind: "document", mimeType: "application/pdf" });
+    expect(document.storageKey).toBe(`${orgA.id}/document/${document.id}`);
+    expect(document.mimeType).toBe("application/pdf");
+
+    const [stored] = await db.select().from(files).where(eq(files.id, row.id));
+    expect(stored?.organizationId).toBe(orgA.id);
+  });
+
+  it("2. med storage: filen finnes i porten, og sha256 stemmer med innholdet", async () => {
+    await resetDatabase();
+    const tmp = await mkdtemp(path.join(tmpdir(), "factories-files-"));
+    try {
+      const storage = createLocalFileStorage(tmp);
+      const org = await createOrganization("Oppdiktet takst AS");
+      const bytes = new Uint8Array([1, 2, 3, 4, 5, 6, 7]);
+
+      const row = await createFile(org.id, {}, { storage, bytes });
+
+      expect(Array.from(await storage.get(row.storageKey))).toEqual(Array.from(bytes));
+      expect(Array.from(await readFile(path.join(tmp, row.storageKey)))).toEqual(Array.from(bytes));
+      expect(row.sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
+      expect(row.sizeBytes).toBe(bytes.byteLength);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("3. overstyringene brukes", async () => {
+    await resetDatabase();
+    const org = await createOrganization("Oppdiktet takst AS");
+    const retainUntil = new Date("2036-11-02T00:00:00Z");
+    const deletedAt = new Date("2026-11-01T00:00:00Z");
+
+    const row = await createFile(org.id, {
+      kind: "report_pdf",
+      mimeType: "application/pdf",
+      retainUntil,
+      deletedAt,
+      storageKey: `${org.id}/report_pdf/egen-nokkel`,
+      sha256: "0".repeat(64),
+    });
+
+    expect(row.kind).toBe("report_pdf");
+    expect(row.retainUntil?.toISOString()).toBe(retainUntil.toISOString());
+    expect(row.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+    expect(row.storageKey).toBe(`${org.id}/report_pdf/egen-nokkel`);
+    expect(row.sha256).toBe("0".repeat(64));
   });
 });
