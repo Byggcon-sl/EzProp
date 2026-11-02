@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { sql } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { emailTransport, readDevMailbox } from "@/core/email";
+import { readDevMailbox } from "@/core/email";
+import { resolveEmailSender } from "@/core/email/resolve";
 import { db } from "@/db/client";
 import { getEnv } from "@/shared/config/env";
 import { logger } from "@/shared/lib/logger";
@@ -159,8 +160,8 @@ function clearDevMailbox() {
 }
 
 // n) Vakt: e-post går aldri til ekte mottakere i disse testene.
-beforeAll(() => {
-  expect(emailTransport()).toBe("devMailbox");
+beforeAll(async () => {
+  expect((await resolveEmailSender({})).sender.provider).toBe("dev_mailbox");
 });
 
 beforeEach(async () => {
@@ -173,8 +174,8 @@ afterEach(() => {
 });
 
 describe("sperre ved innlogging gjennom Better Auth", () => {
-  it("n) e-post sendes bare til utviklings-postkassen", () => {
-    expect(emailTransport()).toBe("devMailbox");
+  it("n) e-post sendes bare til utviklings-postkassen", async () => {
+    expect((await resolveEmailSender({})).sender.provider).toBe("dev_mailbox");
   });
 
   it("a) 5 feil koder gir 429 med norsk melding på innlogging og bestilling", async () => {

@@ -7,3 +7,4 @@ export * from "./audit";
 export * from "./events";
 export * from "./offline-trial";
 export * from "./files";
+export * from "./integrations";

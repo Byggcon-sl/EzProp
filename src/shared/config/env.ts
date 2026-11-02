@@ -20,9 +20,10 @@ const envSchema = z.object({
   DEV_MAILBOX: flag,
   /*
    * E-post: lokalt brukes DEV_MAILBOX. I drift skrives engangskoden til første admin i
-   * serverloggen til alle fire (de tre Graph-verdiene og MAIL_FROM) er satt. E-post via
-   * Microsoft 365 (Graph), som i Optiplan, kobles til i fase 0b. De fire må settes sammen.
-   * Tomme verdier regnes som ikke satt.
+   * serverloggen til alle fire (de tre Graph-verdiene og MAIL_FROM) er satt; da sendes e-post via
+   * Microsoft 365 (Graph), som i Optiplan (`src/core/email`). De fire må settes sammen. Her
+   * sjekkes bare at klienthemmeligheten finnes; verdien leses bare gjennom `readSecret` i
+   * `src/core/integrations`. Tomme verdier regnes som ikke satt.
    */
   MS_GRAPH_TENANT_ID: optionalSecret,
   MS_GRAPH_CLIENT_ID: optionalSecret,

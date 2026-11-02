@@ -36,8 +36,8 @@ describe("miljøvariabler", () => {
     expect(env.MS_GRAPH_CLIENT_ID).toBe("c");
     expect(env.MS_GRAPH_CLIENT_SECRET).toBe("s");
     expect(env.MAIL_FROM).toBe("noreply@example.com");
-    // Postkassen vinner lokalt. emailTransport kan ikke importeres herfra (shared importerer
-    // aldri fra core); at devMailbox velges selv med Graph satt, vises i src/core/email/email.test.ts.
+    // Postkassen vinner lokalt. Valget av leverandør kan ikke importeres herfra (shared importerer
+    // aldri fra core); at dev_mailbox velges selv med Graph satt, vises i src/core/email/email.test.ts.
     expect(env.DEV_MAILBOX).toBe(true);
   });
 
