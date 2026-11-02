@@ -170,7 +170,7 @@ export async function createFile(
 ) {
   const id = randomUUID();
   const kind = overrides.kind ?? "photo";
-  const mimeType = overrides.mimeType ?? "image/jpeg";
+  const mimeType = overrides.mimeType ?? (kind === "report_pdf" ? "application/pdf" : "image/jpeg");
   const bytes = options.bytes ?? new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x10, 0x20, 0x30]);
   const storageKey = overrides.storageKey ?? `${organizationId}/${kind}/${id}`;
   if (options.storage) await options.storage.put(storageKey, bytes, mimeType);

@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import path from "node:path";
+import path, { join } from "node:path";
 import { count, eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { requireOrganizationAccess } from "@/core/access";
-import { createLocalFileStorage } from "@/core/files";
+import { createFileStorage, createLocalFileStorage } from "@/core/files";
 import { isCertificationValid } from "@/core/organization/certification-rules";
 import { db } from "@/db/client";
 import {
@@ -28,6 +28,35 @@ import {
   RESET_TABLES,
   resetDatabase,
 } from "./factories";
+
+// Filtjenesten (docs/funksjoner/fase0b-filtjeneste-testplan.md avsnitt 7). Midlertidig mappe.
+describe("createFile, grunnkrav (fase 0b, filtjeneste)", () => {
+  it("1. lager en rad med riktig organisasjon og storage_key <org>/<kind>/<id>", async () => {
+    await resetDatabase();
+    const org = await createOrganization("Oppdiktet takst AS");
+    const row = await createFile(org.id);
+    expect(row.organizationId).toBe(org.id);
+    expect(row.storageKey).toBe(`${org.id}/${row.kind}/${row.id}`);
+    expect(row.deletedAt).toBeNull();
+  });
+
+  it("2. med storage skrives innholdet via porten, og sha256 stemmer med innholdet", async () => {
+    await resetDatabase();
+    const tmp = await mkdtemp(join(tmpdir(), "ezprop-factory-files-"));
+    try {
+      const storage = createFileStorage({ FILE_STORAGE_DIR: tmp });
+      const org = await createOrganization("Oppdiktet takst AS");
+      const bytes = new TextEncoder().encode("oppdiktet innhold for fabrikken");
+      const row = await createFile(org.id, { kind: "document" }, { storage, bytes });
+      const stored = await storage.get(row.storageKey);
+      expect(Buffer.from(stored).equals(Buffer.from(bytes))).toBe(true);
+      expect(row.sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
+      expect(Number(row.sizeBytes)).toBe(bytes.byteLength);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+});
 
 // Fanger at en ny tabell glemmes i truncate-listen (testplan for oppgave 4, avsnitt 3.6).
 

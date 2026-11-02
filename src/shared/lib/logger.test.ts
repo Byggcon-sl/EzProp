@@ -136,3 +136,42 @@ describe("logger", () => {
     expect(() => log.error("Feil")).not.toThrow();
   });
 });
+
+// Filtjenesten (docs/funksjoner/fase0b-filtjeneste-testplan.md avsnitt 5). Verdiene er oppdiktet.
+describe("logger vasker Azure-hemmeligheter", () => {
+  it("1. tilkoblingsstreng: AccountKey fjernes", () => {
+    const text = scrubText(
+      "DefaultEndpointsProtocol=https;AccountName=fiktiv;AccountKey=fiktivNokkel==;EndpointSuffix=core.windows.net",
+    );
+    expect(text).not.toContain("fiktivNokkel");
+  });
+
+  it("2. SAS: SharedAccessSignature og sig= i adresser fjernes", () => {
+    const sas = scrubText("SharedAccessSignature=sv=2024&sig=abc;");
+    expect(sas).not.toContain("abc");
+    const url = scrubText("https://fiktiv.blob.core.windows.net/c/b?sv=2024&sig=abc%2B123&se=2026");
+    expect(url).not.toContain("abc%2B123");
+    expect(url).not.toContain("abc");
+  });
+
+  it("3. nøkler i objekter: connectionString, CONNECTION_STRING, accountKey, account-key og sas", () => {
+    const line = formatLogLine("info", "Test", {
+      connectionString: "a",
+      CONNECTION_STRING: "b",
+      accountKey: "c",
+      "account-key": "d",
+      sas: "e",
+    });
+    expect(line.connectionString).toBe(REDACTED);
+    expect(line.CONNECTION_STRING).toBe(REDACTED);
+    expect(line.accountKey).toBe(REDACTED);
+    expect(line["account-key"]).toBe(REDACTED);
+    expect(line.sas).toBe(REDACTED);
+  });
+
+  it("4. ingen overvasking: sasquatch og signatur står urørt", () => {
+    const line = formatLogLine("info", "Test", { sasquatch: "stor fot" });
+    expect(line.sasquatch).toBe("stor fot");
+    expect(scrubText("signatur")).toBe("signatur");
+  });
+});
