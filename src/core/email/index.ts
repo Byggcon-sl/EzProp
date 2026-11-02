@@ -1,61 +1,69 @@
+import { and, eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { integrationConnections } from "@/db/schema";
 import { getEnv, type Env } from "@/shared/config/env";
-import { createServerLogSender } from "./server-log";
+import { scrubText } from "@/shared/lib/logger";
+import { readStoredEmails } from "./dev-mailbox";
+import { resolveEmailSender } from "./resolve";
+
+/*
+ * E-postporten i tilkoblingslaget (docs/funksjoner/fase0b-tilkoblingslag.md). Tre leverandører
+ * bak samme grensesnitt:
+ * - `dev_mailbox`: utviklings-postkassen på /dev/epost (`DEV_MAILBOX=1`, bare lokalt)
+ * - `server_log`: engangskoden til første admin skrives i serverloggen; andre mottakere gir feil
+ * - `microsoft365`: Microsoft Graph fra én postboks, som i Optiplan
+ * Valget gjøres i `resolve.ts`.
+ */
 
 /** logLine: én linje som er trygg i serverloggen, uten personopplysninger, satt av avsenderen. */
 export type Email = { to: string; subject: string; text: string; logLine?: string };
-export type EmailSender = (email: Email) => Promise<void>;
+export type EmailProvider = "dev_mailbox" | "server_log" | "microsoft365";
+export type EmailSender = { readonly provider: EmailProvider; send(email: Email): Promise<void> };
 export type StoredEmail = Email & { id: number; sentAt: Date };
 
-const globalForMailbox = globalThis as unknown as { ezpropDevMailbox?: StoredEmail[] };
-const MAX_STORED = 50;
+export { createGraphEmailSender, EmailSendError } from "./graph";
 
-function devMailbox(): StoredEmail[] {
-  globalForMailbox.ezpropDevMailbox ??= [];
-  return globalForMailbox.ezpropDevMailbox;
-}
+const MAX_LAST_ERROR = 500;
 
 /**
- * Hvordan e-post sendes:
- * - `devMailbox`: utviklings-postkassen på /dev/epost (`DEV_MAILBOX=1`, bare lokalt)
- * - `graph`: Microsoft Graph fra Byggcons postboks, som i Optiplan. Kobles til i fase 0b.
- * - `serverLog`: e-post er ikke satt opp ennå. Engangskoden til første admin (SEED_ADMIN_EMAIL)
- *   skrives i serverloggen til e-post er satt opp. Alle andre mottakere gir feil.
+ * Sender e-post med leverandøren `resolveEmailSender` velger. Gikk sendingen gjennom en
+ * tilkobling i tabellen, oppdateres `last_ok_at`/`last_error`/`status` på raden (systemets egne
+ * skrivinger, ingen rad i revisjonsloggen), og en feil kastes videre etterpå.
+ * `organizationId` er alltid `grant.organizationId`, aldri en id fra adressen eller skjemaet.
  */
-export type EmailTransport = "devMailbox" | "graph" | "serverLog";
-
-export function emailTransport(env: Env = getEnv()): EmailTransport {
-  if (env.DEV_MAILBOX) return "devMailbox";
-  if (
-    env.MS_GRAPH_TENANT_ID &&
-    env.MS_GRAPH_CLIENT_ID &&
-    env.MS_GRAPH_CLIENT_SECRET &&
-    env.MAIL_FROM
-  ) {
-    return "graph";
+export async function sendEmail(
+  email: Email,
+  options: { organizationId?: string; fetchFn?: typeof fetch } = {},
+  env: Env = getEnv(),
+): Promise<void> {
+  const { sender, connectionId } = await resolveEmailSender(options, env);
+  if (!connectionId || !options.organizationId) {
+    await sender.send(email);
+    return;
   }
-  return "serverLog";
-}
 
-/** Sender e-post med tjenesten som er satt opp (se `emailTransport`). */
-export async function sendEmail(email: Email, env: Env = getEnv()): Promise<void> {
-  switch (emailTransport(env)) {
-    case "devMailbox": {
-      const mailbox = devMailbox();
-      mailbox.unshift({ ...email, id: Date.now() + mailbox.length, sentAt: new Date() });
-      mailbox.length = Math.min(mailbox.length, MAX_STORED);
-      console.info(`[e-post] Til: ${email.to} | ${email.subject}\n${email.text}`);
-      return;
-    }
-    case "graph":
-      // Fase 0b: samme Graph-sender som Optiplan (src/core/email/graph.ts der)
-      throw new Error("E-post via Microsoft 365 er ikke koblet til ennå (fase 0b).");
-    case "serverLog":
-      return createServerLogSender(env.SEED_ADMIN_EMAIL)(email);
+  const where = and(
+    eq(integrationConnections.id, connectionId),
+    eq(integrationConnections.organizationId, options.organizationId),
+  );
+  try {
+    await sender.send(email);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await db
+      .update(integrationConnections)
+      .set({ lastError: scrubText(message).slice(0, MAX_LAST_ERROR), status: "error" })
+      .where(where);
+    throw error;
   }
+  await db
+    .update(integrationConnections)
+    .set({ lastOkAt: new Date(), lastError: null, status: "active" })
+    .where(where);
 }
 
 /** Siste e-poster i utviklings-postkassen. Tom liste når den er slått av. */
 export function readDevMailbox(): StoredEmail[] {
   if (!getEnv().DEV_MAILBOX) return [];
-  return [...devMailbox()];
+  return readStoredEmails();
 }

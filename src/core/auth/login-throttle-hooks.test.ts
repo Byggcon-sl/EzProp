@@ -1,6 +1,6 @@
 import { count, eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { emailTransport, readDevMailbox } from "@/core/email";
+import { readDevMailbox } from "@/core/email";
 import { db } from "@/db/client";
 import { loginAttempts, sessions } from "@/db/schema";
 import { getEnv } from "@/shared/config/env";
@@ -26,8 +26,7 @@ import {
  * login-throttle.test.ts og login-throttle.integration.test.ts.
  */
 
-if (emailTransport() !== "devMailbox")
-  throw new Error("Testene skal bare bruke utviklings-postkassen.");
+if (!getEnv().DEV_MAILBOX) throw new Error("Testene skal bare bruke utviklings-postkassen.");
 
 const BASE = getEnv().BETTER_AUTH_URL;
 
