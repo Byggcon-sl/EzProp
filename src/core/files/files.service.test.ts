@@ -154,7 +154,7 @@ describe("6.1 lagre og hente", () => {
   });
 
   it("2. raden har riktige verdier", async () => {
-    const { org, user } = await orgWithEmployee(["inspector"]);
+    const { org, user, employee } = await orgWithEmployee(["inspector"]);
     const saved = await savePhoto(user, org.id);
 
     const row = await fileRow(saved.id);
@@ -164,7 +164,7 @@ describe("6.1 lagre og hente", () => {
     expect(row.sizeBytes).toBe(JPEG.byteLength);
     expect(row.sha256).toBe(sha256(JPEG));
     expect(row.retainUntil).toBeNull();
-    expect(row.createdBy).toBeTruthy();
+    expect(row.createdBy).toBe(employee.id);
     expect(row.deletedAt).toBeNull();
     expect(row.deletedBy).toBeNull();
   });
@@ -240,54 +240,46 @@ describe("6.1 lagre og hente", () => {
     await expect(readFile(user, org.id, saved.id)).rejects.toBeInstanceOf(FileIntegrityError);
   });
 
-  async function foreignKeySetup() {
-    const a = await orgWithEmployee(["admin"], "Organisasjon A");
-    const b = await orgWithEmployee(["admin"], "Organisasjon B");
-    const contentB = new Uint8Array([0xbb, 0xbb, 0xbb, 0x01]);
-    const savedB = await savePhoto(b.user, b.org.id, contentB);
-    const savedA = await savePhoto(a.user, a.org.id);
-    const rowB = await fileRow(savedB.id);
-    return { a, savedA, rowB, contentB };
-  }
-
-  async function expectNeverForeignContent(
-    actor: Actor,
-    organizationId: string,
-    fileId: string,
-    contentB: Uint8Array,
-  ) {
-    let result: Awaited<ReturnType<typeof readFile>> | undefined;
-    let caught: unknown;
-    try {
-      result = await readFile(actor, organizationId, fileId);
-    } catch (error) {
-      caught = error;
+  describe("6. ekstra forsvar på prefikset: en rad i A som peker på B sin fil", () => {
+    async function rowInAPointingAtB() {
+      const a = await orgWithEmployee(["admin"], "Organisasjon A");
+      const b = await orgWithEmployee(["admin"], "Organisasjon B");
+      const contentB = new Uint8Array([0xbb, 0xbb, 0xbb, 0x01]);
+      const savedB = await savePhoto(b.user, b.org.id, contentB);
+      const savedA = await savePhoto(a.user, a.org.id);
+      const keyB = (await fileRow(savedB.id)).storageKey;
+      return { a, contentB, keyB, savedA };
     }
-    expect(result).toBeUndefined();
-    expect(caught instanceof FileNotFoundError || caught instanceof FileIntegrityError).toBe(true);
-    if (result) expect(Buffer.from(result.bytes).equals(Buffer.from(contentB))).toBe(false);
-  }
 
-  it("6a. bare nøkkelen byttet: feil, aldri B sitt innhold", async () => {
-    const { a, savedA, rowB, contentB } = await foreignKeySetup();
+    async function expectNeverBContent(actor: Actor, organizationId: string, fileId: string) {
+      let result: Awaited<ReturnType<typeof readFile>> | undefined;
+      let caught: unknown;
+      try {
+        result = await readFile(actor, organizationId, fileId);
+      } catch (error) {
+        caught = error;
+      }
+      expect(result).toBeUndefined();
+      expect(caught instanceof FileNotFoundError || caught instanceof FileIntegrityError).toBe(
+        true,
+      );
+    }
 
-    // Rå oppdatering: raden i A peker på B sin fil, men har fortsatt A sitt fingeravtrykk
-    await db.update(files).set({ storageKey: rowB.storageKey }).where(eq(files.id, savedA.id));
+    it("6a. bare nøkkelen byttet: feil, aldri B sitt innhold", async () => {
+      const { a, keyB, savedA } = await rowInAPointingAtB();
+      await db.update(files).set({ storageKey: keyB }).where(eq(files.id, savedA.id));
+      await expectNeverBContent(a.user, a.org.id, savedA.id);
+    });
 
-    await expectNeverForeignContent(a.user, a.org.id, savedA.id, contentB);
-  });
-
-  it("6b. nøkkel, fingeravtrykk og størrelse kopiert: bare prefikssjekken stopper, aldri B sitt innhold", async () => {
-    const { a, savedA, rowB, contentB } = await foreignKeySetup();
-    expect(rowB.sha256).toBe(sha256(contentB));
-
-    // Rå oppdatering: raden i A er en kopi av B sin rad (nøkkel, fingeravtrykk og størrelse)
-    await db
-      .update(files)
-      .set({ storageKey: rowB.storageKey, sha256: rowB.sha256, sizeBytes: rowB.sizeBytes })
-      .where(eq(files.id, savedA.id));
-
-    await expectNeverForeignContent(a.user, a.org.id, savedA.id, contentB);
+    it("6b. nøkkel, fingeravtrykk og størrelse kopiert: bare prefikssjekken stopper, aldri B sitt innhold", async () => {
+      const { a, contentB, keyB, savedA } = await rowInAPointingAtB();
+      // Fingeravtrykket stemmer med B sin fil, så integritetssjekken alene ville sluppet den gjennom
+      await db
+        .update(files)
+        .set({ storageKey: keyB, sha256: sha256(contentB), sizeBytes: contentB.byteLength })
+        .where(eq(files.id, savedA.id));
+      await expectNeverBContent(a.user, a.org.id, savedA.id);
+    });
   });
 
   it("7. ikke-uuid som fil-ID gir FileNotFoundError, ikke databasefeil", async () => {
@@ -394,7 +386,7 @@ describe("6.2 validering før skriving", () => {
 
 describe("6.3 myk sletting", () => {
   it("1. merker raden, rører ikke filen, og readFile gir ikke funnet etterpå", async () => {
-    const { org, user } = await orgWithEmployee(["admin"]);
+    const { org, user, employee } = await orgWithEmployee(["admin"]);
     const saved = await savePhoto(user, org.id);
     const { storageKey } = await fileRow(saved.id);
 
@@ -404,7 +396,7 @@ describe("6.3 myk sletting", () => {
 
     const stored = await fileRow(saved.id);
     expect(stored.deletedAt).not.toBeNull();
-    expect(stored.deletedBy).toBeTruthy();
+    expect(stored.deletedBy).toBe(employee.id);
     expect(Array.from(await readFromDisk(path.join(tmp, storageKey)))).toEqual(Array.from(JPEG));
     await expect(readFile(user, org.id, saved.id)).rejects.toBeInstanceOf(FileNotFoundError);
   });
@@ -470,18 +462,19 @@ describe("6.3 myk sletting", () => {
     expect((await fileRow(row.id)).deletedAt).not.toBeNull();
   });
 
-  it("5. allerede merket: gir ikke funnet, og deleted_at/deleted_by er det fabrikken satte", async () => {
+  it("5. allerede merket: FileNotFoundError, og deleted_at/deleted_by er det fabrikken satte", async () => {
     const { org, user } = await orgWithEmployee(["admin"]);
     const earlier = await addEmployee(org.id, ["admin"]);
-    const deletedAt = new Date("2026-10-01T08:00:00.000Z");
+    const deletedAt = new Date(Date.now() - DAY);
     const row = await createFile(org.id, { deletedAt, deletedBy: earlier.employee.id });
+    const auditBefore = await auditCount();
 
     await expect(markFileDeleted(user, org.id, row.id)).rejects.toBeInstanceOf(FileNotFoundError);
 
-    const after = await fileRow(row.id);
-    expect(after.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
-    expect(after.deletedBy).toBe(earlier.employee.id);
-    expect(await auditCount()).toBe(0);
+    const stored = await fileRow(row.id);
+    expect(stored.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+    expect(stored.deletedBy).toBe(earlier.employee.id);
+    expect(await auditCount()).toBe(auditBefore);
   });
 
   it("6. porten har ingen sletting, og raden finnes fortsatt etter merking", async () => {
@@ -794,7 +787,7 @@ describe("6.8 databasen", () => {
     };
   }
 
-  it("1. (organization_id, storage_key) er unik sammensatt", async () => {
+  it("1. (organization_id, storage_key) er unik sammensatt; samme nøkkel i en annen organisasjon godtas", async () => {
     const orgA = await createOrganization("Organisasjon A");
     const orgB = await createOrganization("Organisasjon B");
     const key = "felles/photo/nokkel";

@@ -23,6 +23,7 @@ describe("readFileRetention", () => {
   it.each([
     { name: "{}", settings: {} },
     { name: "null", settings: null },
+    { name: "undefined", settings: undefined },
     { name: "[]", settings: [] },
     { name: '"tekst"', settings: "tekst" },
   ])("1. settings $name gir standard 10/2/10 uten advarsel", ({ settings }) => {
