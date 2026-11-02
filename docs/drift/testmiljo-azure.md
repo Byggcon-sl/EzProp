@@ -34,7 +34,13 @@ Gå til repoet i GitHub → Settings → Secrets and variables → Actions.
 | `POSTGRES_ADMIN_PASSWORD` | Lag med `openssl rand -hex 24` i Terminal. Bare bokstaver og tall, fordi passordet står i en adresse. |
 | `BETTER_AUTH_SECRET` | Lag med `openssl rand -base64 32` i Terminal |
 
-Valgfrie secrets. **Ikke legg dem inn ennå.** Sendingen via Microsoft 365 bygges først i fase 0b (etter at du har svart på spørsmål nr. 6). Legger du inn de fire før det, prøver appen å sende e-post via Microsoft 365, får feil, og ingen kan logge inn, heller ikke du. Når den tid kommer: legg inn **alle fire sammen**.
+Valgfrie secrets: **e-post via Microsoft 365**, som i Optiplan. Koden er klar (fase 0b, `src/core/email/graph.ts`), men ingen e-post sendes før du legger dem inn. Legg inn **alle fire sammen**; mangler én, starter ikke appen. Før du legger dem inn:
+
+1. App-registreringen (samme som Optiplan, hvis du bekrefter det) må ha **`Mail.Send` som applikasjonsrettighet** (Application permission, med admin-samtykke).
+2. Sett en **tilgangspolicy i Exchange** (Application Access Policy) slik at app-registreringen bare kan sende fra adressen i `MAIL_FROM`. Uten policyen kan appen sende fra alle postbokser i Byggcon.
+3. Bekreft at Microsofts databehandleravtale for Microsoft 365 dekker app-registreringen (som for Azure-lagringen).
+
+Det koster ingenting ekstra. Etterpå: prøv én innlogging med en ansatt som ikke er første admin. Feiler sendingen, står det i Log stream uten adresse og kode, og ingen kan logge inn før det er rettet (fjern de fire for å gå tilbake til koden i serverloggen).
 
 - `MS_GRAPH_TENANT_ID`
 - `MS_GRAPH_CLIENT_ID`
@@ -71,7 +77,7 @@ Første kjøring tar lengre tid, fordi databasen lages. Du kan kjøre arbeidsfly
 2. Skriv adressen fra `SEED_ADMIN_EMAIL`.
 3. Hent koden i Azure-portalen: App Service `app-ezprop-test` → **Log stream** (eller `az webapp log tail` i Terminal). Linjen begynner med `[innlogging]`.
 
-Merk: alle som har lesetilgang til ressursgruppen kan lese koden og logge inn som første admin (spørsmål nr. 9). Det er greit så lenge det bare er oppdiktede data. Andre brukere kan ikke logge inn før Microsoft 365 er koblet til.
+Merk: alle som har lesetilgang til ressursgruppen kan lese koden og logge inn som første admin (spørsmål nr. 9). Det er greit så lenge det bare er oppdiktede data. Andre brukere kan ikke logge inn før de fire secretene for Microsoft 365 er lagt inn (punkt b).
 
 Helsesjekken: `https://app-ezprop-test.azurewebsites.net/api/helse` viser versjon og commit.
 
@@ -166,7 +172,7 @@ Alt i gruppen slettes, også databasen. Koden ligger fortsatt i GitHub, så milj
 
 Alt dette skal på plass før ekte data:
 
-- E-post via Microsoft 365 (fase 0b)
+- E-post via Microsoft 365: koden er klar, secretene og tilgangspolicyen mangler (punkt b)
 - Nøkkelboks for hemmeligheter (fase 0b)
 - Privat nettverk mellom app og database
 - Egen databasebruker for appen

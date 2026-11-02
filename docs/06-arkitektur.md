@@ -55,7 +55,7 @@ src/
 5. **Migreringer er versjonert** og må være i takt med skjemaet (CI sjekker `pnpm db:generate`).
 6. **Regler er data med testsaker** og kjører likt på iPad og server (fase 1 og 2a).
 7. **Faste koder endres aldri, de arkiveres.**
-8. **Tilkoblinger bak faste porter** (regnskap, e-post, meglersystem, eiendomsdata, KI, bildelagring). Kjernen snakker aldri direkte med en leverandør.
+8. **Tilkoblinger bak faste porter** (regnskap, e-post, meglersystem, eiendomsdata, KI, bildelagring). Kjernen snakker aldri direkte med en leverandør. Laget ligger i `src/core/integrations` (se «Tilkoblingslaget» under). Hemmeligheter leses bare med `readSecret`.
 9. **Navn og profil ett sted:** `src/shared/config/brand.ts`.
 10. **Server først.** Klientkomponenter bare der det trengs. Befaringen på iPad er unntaket (fase 1 og 2b).
 
@@ -65,12 +65,23 @@ Alle filer (bilder, PDF-er, dokumenter, senere logo og signatur) lagres og hente
 
 - **Tjenesten:** `saveFile`, `readFile` og `markFileDeleted`. Tilgang via `requireOrganizationAccess` (lagre og hente: `organization.read`; merke som slettet: `organization.manage`). Metadata ligger i tabellen `files` med `organization_id`, type, størrelse og SHA-256. Fingeravtrykket kontrolleres ved hver henting. Rekkefølgen er filen først, så raden; feiler raden, blir filen liggende uten rad og kan ikke nås.
 - **Porten `FileStorage`:** bare `put` og `get`. Ingen slette-operasjon, og `put` skriver aldri over en fil som finnes (A39). Nøkkelen er `<organisasjon>/<kind>/<fil-id>`, aldri et filnavn fra brukeren.
-- **Adaptere:** velges med `FILE_STORAGE_DRIVER` (A40) til tilkoblingslaget (`integration_connections`) kommer.
+- **Adaptere:** velges med `FILE_STORAGE_DRIVER` (A40) til valget flyttes inn i tilkoblingslaget (`integration_connections`, egen liten oppgave).
   - `local` (standard): mappen `FILE_STORAGE_DIR` (standard `var/files`). Nøkkelen kan ikke gå ut av mappen. Brukes i utvikling og test.
   - `azure`: Azure Blob Storage med `FILE_STORAGE_AZURE_CONNECTION_STRING` og `FILE_STORAGE_AZURE_CONTAINER`. Bare kode foreløpig; ingen ressurser er opprettet. Lagringskontoen skal ligge i **Sweden Central** (EU/EØS), containeren skal være **privat** (ingen offentlig tilgang), og Microsofts databehandleravtale gjelder. `@azure/storage-blob` importeres bare i adapteren. Feil fra Azure pakkes inn uten den opprinnelige meldingen.
   - Senere kan en adapter for et lokalt arkiv hos Byggcon legges til uten endring i tjenesten.
 - **Oppbevaring:** tidene for bilder er innstillinger i `organizations.settings` (`readFileRetention`, A42). Så lenge `retain_until` er i fremtiden, kan en fil ikke merkes som slettet, heller ikke av admin.
 - **Visning (senere):** en rute som sender filer til nettleseren skal sette `Content-Disposition` (med et trygt filnavn laget av oss) og `X-Content-Type-Options: nosniff`, og bare bruke `mime_type` fra `files`. Ingen slik rute finnes ennå.
+
+## Tilkoblingslaget (fase 0b)
+
+Alt EzProp snakker med utenfor seg selv, går gjennom en fast port i `src/core/integrations` (arkitekturregel 8). Oppgavekort: `docs/funksjoner/fase0b-tilkoblingslag.md`.
+
+- **Porter og leverandører** er faste koder i `ports.ts` (`INTEGRATION_PORTS`, `PROVIDERS_BY_PORT`, `CONNECTION_STATUSES`). En ny tilkobling er en ny adapter og en ny leverandørkode på sin port, ikke en ombygging. Nå er bare e-post fylt ut.
+- **Tabellen `integration_connections`:** én tilkobling per organisasjon og port blant rader som ikke er slettet. Tjenesten `listConnections`, `createConnection`, `updateConnection` og `markConnectionDeleted` er bare for admin (`organization.manage`) og skriver revisjonslogg. `findActiveConnection` er intern (uten tilgangssjekk) og eksporteres ikke fra `index.ts`; en statisk test stopper at `src/app` eller `src/modules` bruker den.
+- **Hemmeligheter:** `readSecret(secretRef)` i `secrets.ts` er eneste vei. Tabellen har bare navnet. Navnet må passe `^[A-Z][A-Z0-9_]{1,127}$`, og appens egne hemmeligheter (`BETTER_AUTH_SECRET`, `DATABASE_URL`, `TEST_DATABASE_URL`, `POWERSYNC_JWT_SECRET`, `FILE_STORAGE_AZURE_CONNECTION_STRING`) står på en nektliste. Nå leses miljøvariabler; når nøkkelboksen (Azure Key Vault) kommer, byttes bare denne filen.
+- **E-post** (`src/core/email`): `sendEmail(email, { organizationId? })`. Leverandøren velges i `resolve.ts` for hver sending: `DEV_MAILBOX` → utviklings-postkassen; med organisasjon → organisasjonens aktive e-posttilkobling; ellers systemvalget fra miljøet (Microsoft 365 når `MS_GRAPH_TENANT_ID`, `MS_GRAPH_CLIENT_ID` og `MAIL_FROM` er satt, hemmeligheten via `readSecret("MS_GRAPH_CLIENT_SECRET")`; ellers serverloggen). Innloggingskoder sendes uten organisasjon. Gikk sendingen gjennom en tilkobling, oppdateres `last_ok_at`, `last_error` og `status` uten rad i revisjonsloggen.
+- **Microsoft 365** (`graph.ts`): klientlegitimasjon mot én postboks, som i Optiplan. Ett token-kall per sending, tidsavbrudd 15 sekunder, innebygd `fetch`. Feilmeldingene har aldri svaret fra Microsoft, mottaker, emne, tekst eller hemmeligheten. Graph-adressene står bare i denne filen.
+- **Filtjenesten** velger fortsatt adapter med `FILE_STORAGE_DRIVER` (A40); flytting inn i tabellen er en egen liten oppgave.
 
 ## Personvern og sikkerhet
 

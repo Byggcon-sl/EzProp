@@ -1369,19 +1369,21 @@ Svarene er personopplysninger og sendes aldri til KI uten at navn og kontaktoppl
 
 Status fra eAccounting hentes via tilkoblingen og blir hendelsene **«faktura sendt»** og **«faktura betalt»** (og «faktura forfalt»).
 
-**`integration_connections`** – **tilkoblinger (adaptere)**. EzProp snakker aldri direkte med en leverandør.
+**`integration_connections`** – **tilkoblinger (adaptere)**. EzProp snakker aldri direkte med en leverandør. **Bygget i fase 0b** (02.11.2026, `src/core/integrations`, migrering `0011_tilkoblinger.sql`), med felles kolonner (avsnitt 3).
 
 | Felt | Forklaring |
 |---|---|
-| `company_id` | Selskapet tilkoblingen gjelder (for regnskap) |
-| `port` | Hva den gjør: `accounting` (regnskap), `email` (e-post), `broker` (meglersystem), `property_data` (eiendomsdata), `sms`, `speech_to_text` (tale til tekst), `ai` (KI), `file_storage` (fillagring, kan senere være et lokalt arkiv hos Byggcon), `energy_label` (energimerking, Enova), `scanning` (3D-skanning og plantegning, Polycam). De to siste er **kroker** fra 27.10.2026: API-ene undersøkes først, og tilkoblingen bygges senere. DIAKRIT og Boligpass tas ikke med. |
-| `provider` | Leverandør, for eksempel `eaccounting`, `microsoft365`, senere `enova`, `polycam`, `local_archive` |
-| `status` | `active`, `disabled`, `error` |
-| `secret_ref` | **Navnet på hemmeligheten** i en sikker nøkkelboks. Selve nøkkelen lagres aldri i databasen. |
-| `settings` | Innstillinger (for eksempel sandbox eller ekte) |
-| `last_ok_at`, `last_error` | Sist det virket, og siste feil |
+| `company_id` | **Fase 3**, ikke bygget. Selskapet tilkoblingen gjelder (for regnskap). Om koblingen ligger her eller i `companies.accounting_connection_id`, avgjøres når regnskapet bygges, etter eAccounting-prøven. |
+| `port` | Fast kode (`INTEGRATION_PORTS`): `accounting` (regnskap), `email` (e-post), `broker` (meglersystem), `property_data` (eiendomsdata), `sms`, `speech_to_text` (tale til tekst), `ai` (KI), `file_storage` (fillagring, kan senere være et lokalt arkiv hos Byggcon), `energy_label` (energimerking, Enova), `scanning` (3D-skanning og plantegning, Polycam). De to siste er **kroker** fra 27.10.2026: API-ene undersøkes først, og tilkoblingen bygges senere. DIAKRIT og Boligpass tas ikke med. |
+| `provider` | Leverandør, fast kode per port (`PROVIDERS_BY_PORT`). Nå bare e-post: `dev_mailbox` (utviklings-postkassen, bare lokalt), `server_log` (koden til første admin i serverloggen), `microsoft365` (Microsoft Graph). Senere for eksempel `eaccounting`, `enova`, `polycam`, `local_archive`. Ukjent leverandør avvises. |
+| `status` | `active`, `disabled`, `error`. Admin setter `active` eller `disabled`; `error` settes bare av laget selv når en sending feiler, og `active` igjen ved neste vellykkede sending. |
+| `secret_ref` | **Navnet på hemmeligheten** (for eksempel `MS_GRAPH_CLIENT_SECRET`), aldri verdien. Leses bare med `readSecret` (miljøvariabel nå, nøkkelboksen senere). Appens egne hemmeligheter står på en nektliste og kan aldri brukes. Påkrevd for `microsoft365`. |
+| `settings` | Innstillinger per leverandør, sjekket mot leverandøren. `microsoft365`: `from` (postboksen), `tenantId`, `clientId`. `dev_mailbox` og `server_log`: tom. Ukjente nøkler avvises. |
+| `last_ok_at`, `last_error` | Sist det virket, og siste feil (vasket, høyst 500 tegn). Settes av laget selv, uten rad i revisjonsloggen. `last_error` beholdes når admin setter `error` → `active`. |
 
-**`external_references`** – kobling mellom en rad i EzProp og ID-en hos leverandøren (`entity_type`, `entity_id`, `connection_id`, `external_id`). Hindrer dubletter, for eksempel samme megler opprettet to ganger i eAccounting.
+**Én tilkobling per organisasjon og port** blant rader som ikke er slettet, uansett status (delvis unik indeks `(organization_id, port) WHERE deleted_at IS NULL`). En `disabled` rad sperrer også; admin merker den gamle som slettet først. Bare admin (`organization.manage`) ser og endrer tilkoblinger, og hver endring admin gjør står i revisjonsloggen (`integration_connection`). E-post uten organisasjon (innloggingskoder) bruker systemvalget fra miljøet; en tilkobling i tabellen gjelder bare når avsenderen oppgir organisasjon.
+
+**`external_references`** – **fase 3**, ikke bygget. Kobling mellom en rad i EzProp og ID-en hos leverandøren (`entity_type`, `entity_id`, `connection_id`, `external_id`). Hindrer dubletter, for eksempel samme megler opprettet to ganger i eAccounting. Bygges sammen med «Fakturagrunnlag til eAccounting», etter eAccounting-prøven.
 
 ---
 
@@ -1889,7 +1891,11 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Fakturagrunnlag | `invoice_drafts` | |
 | Fakturalinje | `invoice_lines` | |
 | Tilkobling (adapter) | `integration_connections` | |
-| Port | `port` | Type tilkobling |
+| Port | `port` | Type tilkobling, fast kode (`INTEGRATION_PORTS`) |
+| Leverandør (bak en port) | `provider` | Fast kode per port (`PROVIDERS_BY_PORT`), for eksempel `microsoft365` |
+| Hemmelighetsnavn | `secret_ref` / `secretRef` | Navnet på hemmeligheten, aldri verdien. Leses med `readSecret`. |
+| Utviklings-postkassen | `dev_mailbox` | E-post vises på /dev/epost, bare lokalt |
+| Serverloggen (e-post) | `server_log` | Koden til første admin skrives i serverloggen før e-post er satt opp |
 | Energimerking (Enova) | `energy_label` | Port, krok |
 | 3D-skanning og plantegning (Polycam) | `scanning` | Port, krok |
 | Alle takstmenn kan endre alt | `access.inspectors_edit_all` | Innstilling i `organizations.settings`, standard på |
@@ -2015,3 +2021,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 31.10.2026 | Roller og rettigheter (fase 0b): nye rettigheter `assignment.edit`, `report.edit`, `report.publish`, `template.edit_structure` og `invoice.send`; `claims.view` heter `claims.read` som i koden; `employee_permissions` med `created_by`/`created_at` i stedet for `granted_by`/`granted_at`; innstillingen `access.inspectors_edit_all` i `organizations.settings`, standard på. | A18–A21, `docs/funksjoner/fase0b-roller-rettigheter.md` |
 | 31.10.2026 | Admin (fase 0b): `employee_roles` har delvis unik indeks `(employee_id, role) WHERE deleted_at IS NULL`, så en rolle kan tas bort og gis på nytt som ny rad. Minst én aktiv admin per organisasjon. Nye funksjonsnavn og feilklasser i ordlisten. | A24–A28, `docs/funksjoner/fase0b-admin-organisasjon.md` |
 | 02.11.2026 | Filtjeneste (fase 0b): tabellen `files` bygget med `kind` bare `photo`, `report_pdf`, `document`, unik på `(organization_id, storage_key)`. Oppbevaringstidene for bilder i `organizations.settings`. | A39–A43, `docs/funksjoner/fase0b-filtjeneste.md` |
+| 02.11.2026 | Tilkoblingslag (fase 0b): `integration_connections` bygget uten `company_id`, med delvis unik indeks `(organization_id, port) WHERE deleted_at IS NULL`. Portene og leverandørene (`dev_mailbox`, `server_log`, `microsoft365`) er faste koder i koden; `error` settes bare av laget selv. `company_id` og `external_references` flyttet til fase 3. Ord for leverandør, hemmelighetsnavn og e-postleverandørene i ordlisten. | A44 og videre, `docs/funksjoner/fase0b-tilkoblingslag.md` |
