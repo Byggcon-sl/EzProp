@@ -4,6 +4,7 @@
 - **Fase:** 0b – Innlogging, organisasjon, roller og layout
 - **Branch:** `fase0b-smafunn-r-s` (bygger på `main`), versjon `0.2.60`
 - **Laget av:** test-leder, 03.11.2026 (før koding, runde 1). Justert av prosjektlederen samme dag etter avgjørelsene i kortet («Avgjørelser etter forhåndsvurderingen»): T4 er tatt ut, T1, T2 og T5 er påstander i tester som finnes, ikke nye tester. 2b, 8c og E1–E3 står.
+- **Runde 2 (test-leder, 03.11.2026):** fire presiseringer etter sjekk mot kildekoden, merket «runde 2» under: 8c må kreve `ConnectionValidationError`, seedtesten får én påstand om små bokstaver, 2b setter `id` og `name` selv, og e2e-gjentakelsen kjøres med `--retries 0`. Telleregelen for `it(` per fil står nå som kommando, med tall sjekket mot `main` (0b0f122).
 - **Støtter hovedmål:** Reklamasjoner: en halvskrevet bildefil kan aldri leses av e2e-testen eller visningsruten; typesjekken sier fra hvis Microsoft 365-innstillingene får et nytt felt; loggvasken blir kortere og dermed lettere å holde riktig. Tid: oppslaget på innlogging ved ny ansatt bruker indeksen; færre doble tester gir raskere CI. KI først: ikke direkte (grunnmur).
 
 ## Hva som skal vises
@@ -41,9 +42,9 @@ Fast oppsett som i dag: `resetDatabase` i `beforeEach` for sakene mot databasen;
 | Test | Viser |
 |---|---|
 | 2 (beholdes). `createUser({ email: "ola@eksempel.no" })` + `createEmployee` med `"  Ola@Eksempel.NO "` → ingen ny rad i `users`, `userId` er den eksisterende, navn og e-post på innloggingen uendret | Skjemaet normaliserer, og eksakt sammenligning treffer raden som seedet/`employeeCreateSchema` har skrevet. |
-| 2b (ny). Rad i `users` lagt inn **direkte** med `db.insert(users)` og `email: "Kari@Eksempel.NO"` (utenom skriverne) + `createEmployee` med `"kari@eksempel.no"` → **ny** rad i `users` med `kari@eksempel.no`, den ansatte peker på den nye, og raden med store bokstaver er uendret | Sammenligningen er eksakt (`eq`), ikke `lower(`. Dette er den eneste oppførselen som skiller før og etter. Kommentaren i testen sier at slike rader ikke skal finnes (alle skrivere gjør adressen til små bokstaver), og at testen går rød hvis noen setter `lower(` tilbake. |
+| 2b (ny). Rad i `users` lagt inn **direkte** med `db.insert(users)` og `email: "Kari@Eksempel.NO"` (utenom skriverne; runde 2: `users.id` er tekst uten standardverdi og `name` er påkrevd, så testen setter `id: randomUUID()` og `name` selv) + `createEmployee` med `"kari@eksempel.no"` → **ny** rad i `users` med `kari@eksempel.no`, den ansatte peker på den nye, og raden med store bokstaver er uendret | Sammenligningen er eksakt (`eq`), ikke `lower(`. Dette er den eneste oppførselen som skiller før og etter. Kommentaren i testen sier at slike rader ikke skal finnes (alle skrivere gjør adressen til små bokstaver), og at testen går rød hvis noen setter `lower(` tilbake. |
 | 1 (beholdes). Ny e-post lager innlogging med små bokstaver | Skjemaet er en av skriverne som holder invarianten. |
-| `src/db/seed/run.test.ts` (finnes): seedet skriver `SEED_ADMIN_EMAIL` med små bokstaver | Seedet er den andre skriveren. Ingen ny test; test-leder bekrefter at den finnes, ellers én liten sak der. |
+| `src/db/seed/run.test.ts` «lager Byggcon og admin, og kan kjøres to ganger uten duplikater» (finnes, seeder `Admin@Example.com`): **én ekstra påstand** `expect(admin.email).toBe("admin@example.com")` (runde 2: testen sjekker i dag aldri e-posten) | Seedet er den andre skriveren. Uten påstanden kan seedet slutte å gjøre adressen til små bokstaver uten at noen test blir rød, og da treffer ikke 2b-premisset lenger. |
 
 Ikke med: `EXPLAIN` mot testdatabasen (ville bare måle en håndskrevet spørring, ikke koden) og statisk lesing av kildefilen (tatt ut av prosjektet i liten oppgave (f)). Kriteriet `grep -c 'lower(' src/core/organization/employees-admin.ts` = 0 kjøres av test-leder i testrapporten.
 
@@ -53,7 +54,7 @@ Ikke med: `EXPLAIN` mot testdatabasen (ville bare måle en håndskrevet spørrin
 |---|---|
 | 1 (finnes). Aktiv microsoft365-tilkobling brukes med sine settings og sin hemmelighet | `from`, `tenantId` og `clientId` kommer fra `parsed.data` med Zod-typen. |
 | 8b (finnes). Ugyldige settings på microsoft365-raden: `send` avvises, `fetchFn` ukalt, hemmeligheten ikke i feilen | Valideringen i microsoft365-grenen. |
-| 8c (ny). `server_log`-rad med `settings: { x: 1 }` (ikke tomt): `connectionId` satt, `send` avvises, ingen logglinje skrives | De to andre grenene validerer fortsatt mot det tomme skjemaet etter omleggingen. Uten denne testen kan valideringen stille forsvinne for `server_log`/`dev_mailbox`. |
+| 8c (ny). `server_log`-rad med `settings: { x: 1 }` lagt inn med fabrikken (`createIntegrationConnection`, som skriver `settings` rått, ikke tomt): `connectionId` satt, `send` avvises **med `ConnectionValidationError`** (`toBeInstanceOf`), ingen logglinje (`vi.spyOn(console, "info")` ukalt) | De to andre grenene validerer fortsatt mot det tomme skjemaet (`.strict()`) etter omleggingen. **Runde 2:** feiltypen er den eneste påstanden som skiller: den ekte `server_log`-senderen avviser også `EMAIL` (`a@example.com` er ikke `SEED_ADMIN_EMAIL`, og `logLine` mangler), og `rejectingSender` gir samme `provider`. «Send avvises» og «ingen logglinje» alene er grønne uten validering. |
 | 10 (finnes). `server_log`-tilkobling med tomme settings gir server_log | Motstykket til 8c. |
 | `email.test.ts` 2 (finnes). microsoft365 sender gjennom `fetchFn`: ett token-kall og ett sendekall | Hele veien med typen fra skjemaet. |
 
@@ -65,7 +66,7 @@ Ikke med: `EXPLAIN` mot testdatabasen (ville bare måle en håndskrevet spørrin
 | `connections.test.ts` 3.12 test 9 «ingen rad i revisjonsloggen etter suksess og feil» | `email.test.ts` 8.2 test 1, 2 og 5 (`recordConnectionResult` gjennom `sendEmail`, `auditRows` tom). 3.12 test 1–8 står, inkludert `expectTenantIsolation` (3.9.4). |
 | `config.test.ts` 6: spionene på `put` og `get` | Ingenting å dekke; sjekken beviste ingenting. `fetchSpy`-sjekken står. |
 
-Ingen andre tester fjernes. Test-leder sammenligner antall `it(` per fil mot `main` i rapporten.
+Ingen andre tester fjernes. Test-leder sammenligner antall `it(` per fil mot `main` i rapporten. Utgangspunkt på `main` (runde 2, telt med `grep -cE '^\s*(it|test)(\.each)?\(' <fil>`): `email.test.ts` 28 → 27, `connections.test.ts` 61 → 60, `config.test.ts` 7 → 7, `logger.test.ts` 22 → 25 (E1–E3), `employees-admin.test.ts` 57 → 58 (2b), `resolve.test.ts` 14 → 15 (8c), `photo-storage.test.ts` 41 → 42 (T3), `src/db/seed/run.test.ts` 7 → 7 (bare én ekstra påstand).
 
 ### `src/modules/offline-trial/server/photo-storage.test.ts` (T1, T2 og T5 som én ekstra påstand hver i tester som finnes; T3 som ny test)
 
@@ -91,7 +92,7 @@ Ingen regler endres.
 | Test | Viser |
 |---|---|
 | Hele `pnpm test:e2e` i begge prosjektene | Ingen regresjon; `e2e/` er ikke endret. |
-| `pnpm test:e2e -- --repeat-each 3 -g "kopi som får 400"` (begge prosjektene) | Den ustabile testen er grønn tre ganger på rad i begge størrelsene. `waitForFile` ser bare den ferdige filen fordi stien først finnes etter `rename`. Tar ca. 30 s per kjøring per prosjekt. |
+| `pnpm test:e2e --repeat-each 3 --retries 0 -g "kopi som får 400"` (begge prosjektene; runde 2: `--retries 0` fordi `playwright.config.ts` gir ett nytt forsøk i CI, som ville skjult en ustabil kjøring) | Den ustabile testen er grønn tre ganger på rad i begge størrelsene uten nye forsøk. `waitForFile` ser bare den ferdige filen fordi stien først finnes etter `rename`. Tar ca. 30 s per kjøring per prosjekt. |
 | Prøve D for øvrig (rotering, brudd, HEIC) | `sha256File` rett etter `waitForFile` gir riktig fingeravtrykk hver gang, også for visningskopien. |
 
 Uten nett: ingen ny sak; drift uten nett er ikke berørt (bare serverens skriving).
