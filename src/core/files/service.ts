@@ -102,9 +102,12 @@ export async function saveFile(
       createdBy: grant.employeeId,
       updatedBy: grant.employeeId,
     });
-  } catch {
-    // Den rå databasefeilen kan ha nøkkel og verdier; den kastes ikke videre.
-    logger.error("Kunne ikke lagre raden for en fil", { organizationId: grant.organizationId });
+  } catch (error) {
+    // Den rå databasefeilen kastes ikke videre. Loggeren vasker parametere og hemmeligheter.
+    logger.error("Kunne ikke lagre raden for en fil", {
+      organizationId: grant.organizationId,
+      error,
+    });
     throw new Error("Kunne ikke lagre filen.");
   }
 
@@ -134,6 +137,10 @@ export async function readFile(
   const storage = createFileStorage(process.env);
   const bytes = await storage.get(row.storageKey);
   if (bytes.byteLength !== row.sizeBytes || sha256Hex(bytes) !== row.sha256) {
+    logger.error("Fil lest fra lagringen stemmer ikke med raden", {
+      organizationId: grant.organizationId,
+      fileId,
+    });
     throw new FileIntegrityError();
   }
 

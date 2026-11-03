@@ -5,7 +5,7 @@ import {
   FileStorageConfigError,
   FileStorageError,
 } from "./errors";
-import { assertValidStorageKey, toPlainBytes, type FileStorage } from "./storage";
+import { assertValidStorageKey, type FileStorage } from "./storage";
 
 /*
  * Adapter for Azure Blob Storage. Bare kode: ingen ressurser i Azure er opprettet. Slås på med
@@ -65,9 +65,8 @@ export function createAzureFileStorage(containerClient: AzureContainerClientLike
     async get(storageKey) {
       assertValidStorageKey(storageKey);
       try {
-        return toPlainBytes(
-          await containerClient.getBlockBlobClient(storageKey).downloadToBuffer(),
-        );
+        const buffer = await containerClient.getBlockBlobClient(storageKey).downloadToBuffer();
+        return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
       } catch (error) {
         if (isNotFound(error)) throw new FileNotFoundError();
         throw new FileStorageError();
