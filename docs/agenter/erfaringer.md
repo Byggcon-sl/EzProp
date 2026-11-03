@@ -157,3 +157,10 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - Hovedløkken fant branchene for tilkoblingslaget uten push på 54 minutter og tok over fra byggesteget. Den forrige kjøringen levde fortsatt: den satte sammen og testet lokalt i over en time uten å pushe. Resultat: to varianter, flettet uten tap, men arbeidet ble gjort to ganger. Regel videre: hovedløkken bruker 3-timersregelen også når oppgavekortet alt er pushet («30 minutter uten push» holder ikke), og en kjøring som tar over, pusher en markør i `docs/agenter/tilstand.md` på branchen først.
 - Containeren startet på nytt tre ganger i løpet av to timer. Alt som var pushet, ble tatt videre; det som lå i arbeidskopier uten push (en PR-tekst, en tilstandsendring) måtte gjøres på nytt. Regel som før: push etter hvert steg, også små.
+
+## 03.11.2026 – PR #69 (liten oppgave (o), (p) og (q))
+
+- Nattløkken (PR #68) og oppgaveløkken (PR #69) tok samme versjonsnummer (0.2.57) fra hver sin branch. Prosjektlederen fletter `main` inn rett før PR-en åpnes og setter versjonen til neste ledige tall da, ikke når kortet skrives. Sjekk: `git show origin/main:package.json | grep version`.
+- Når `main` har fått en ny migrering siden branchen ble laget, kjøres `pnpm db:migrate "$TEST_DATABASE_URL"` før de berørte testene kjøres på nytt; ellers er røde tester en falsk alarm.
+- To av tre fulle `pnpm test`-kjøringer ble falskt røde fordi en annen agent tømte den delte testdatabasen samtidig (kjent fra liten oppgave (k)). Test-leder og prosjektleder kjører de berørte filene alene før de sier «rød», og CI er fasiten. Hver kjøring sin egen testdatabase (f.eks. `ezprop_test_<worktree>`) er en liten oppgave verd å ta.
+- Et funn fra en gjennomgang kan være feil: «overflødig `FOR UPDATE` i `markFileDeleted`» (o) ble avvist av sikkerhet-personvern i runde 1 med begrunnelse, og låsen står. Kortet skal si det når et funn ikke tas, så det ikke dukker opp igjen i neste liste.
