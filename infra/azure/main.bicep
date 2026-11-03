@@ -5,7 +5,8 @@
 //
 // Filen er på ressursgruppenivå og lager ikke ressursgruppen. Ingen verdier for hemmeligheter står her;
 // alt kommer som parametere fra arbeidsflyten (GitHub-secrets). Ingen hostname-binding eller sertifikat
-// her; egen adresse legges inn i Azure-portalen etterpå.
+// her; egen adresse legges inn i Azure-portalen etterpå. Når nøkkelboksen er på (enableKeyVault, ADR 0005),
+// legges hemmelighetene i Key Vault og appen leser dem derfra med Key Vault-referanser.
 
 targetScope = 'resourceGroup'
 
@@ -79,6 +80,9 @@ param electricSecret string = ''
 @secure()
 param electricDbPassword string = ''
 
+@description('Nøkkelboks (Key Vault) for hemmeligheter, ADR 0005. Av som standard; Ståle slår på med GitHub-variabelen ENABLE_KEY_VAULT.')
+param enableKeyVault bool = false
+
 // ---------- Navn og avledede verdier ----------
 
 var planName = 'plan-ezprop-${environmentName}'
@@ -88,6 +92,7 @@ var databaseName = 'ezprop'
 var containerEnvName = 'cae-ezprop-${environmentName}'
 var powerSyncAppName = 'ca-ezprop-powersync-${environmentName}'
 var electricAppName = 'ca-ezprop-electric-${environmentName}'
+var kvName = 'kv-ezprop-${environmentName}'
 
 var defaultAppUrl = 'https://${appName}.azurewebsites.net'
 var betterAuthUrl = empty(appHostname) ? defaultAppUrl : 'https://${appHostname}'
@@ -103,8 +108,9 @@ var baseAppSettings = [
   { name: 'HOSTNAME', value: '0.0.0.0' }
   // Pakken som rulles ut er ferdig bygd (.next/standalone). Serveren skal ikke bygge noe selv.
   { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'false' }
-  { name: 'DATABASE_URL', value: databaseUrl }
-  { name: 'BETTER_AUTH_SECRET', value: betterAuthSecret }
+  // Med nøkkelboksen på leser appen hemmelighetene fra Key Vault (siste versjon, uten versjonsnummer).
+  { name: 'DATABASE_URL', value: enableKeyVault ? '@Microsoft.KeyVault(SecretUri=${kvDatabaseUrl!.properties.secretUri})' : databaseUrl }
+  { name: 'BETTER_AUTH_SECRET', value: enableKeyVault ? '@Microsoft.KeyVault(SecretUri=${kvBetterAuthSecret!.properties.secretUri})' : betterAuthSecret }
   { name: 'BETTER_AUTH_URL', value: betterAuthUrl }
   { name: 'SEED_ADMIN_EMAIL', value: seedAdminEmail }
   { name: 'APP_VERSION', value: appVersion }
@@ -116,7 +122,7 @@ var emailAppSettings = emailConfigured
   ? [
       { name: 'MS_GRAPH_TENANT_ID', value: msGraphTenantId }
       { name: 'MS_GRAPH_CLIENT_ID', value: msGraphClientId }
-      { name: 'MS_GRAPH_CLIENT_SECRET', value: msGraphClientSecret }
+      { name: 'MS_GRAPH_CLIENT_SECRET', value: enableKeyVault ? '@Microsoft.KeyVault(SecretUri=${kvMsGraphClientSecret!.properties.secretUri})' : msGraphClientSecret }
       { name: 'MAIL_FROM', value: mailFrom }
     ]
   : []
@@ -228,6 +234,10 @@ resource app 'Microsoft.Web/sites@2024-04-01' = {
   name: appName
   location: location
   kind: 'app,linux'
+  // Systemtildelt identitet: koster ingenting og lager ingen ny ressurs. Brukes bare av nøkkelboksen (ADR 0005).
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     serverFarmId: plan.id
     httpsOnly: true
@@ -270,6 +280,68 @@ resource appLogs 'Microsoft.Web/sites/config@2024-04-01' = {
     failedRequestsTracing: {
       enabled: false
     }
+  }
+}
+
+// ---------- Nøkkelboks for hemmeligheter (bare når bryteren er på, ADR 0005) ----------
+// Standard prisnivå, betaling per oppslag. Myk sletting og slettesperre er på, så en hemmelighet kan ikke
+// fjernes for godt ved et uhell. Ingen nettverksregler her (privat nettverk står i «Minimum før ekte data»).
+// Verdiene kommer fra de samme parameterne som før; de står aldri som fast tekst.
+
+resource vault 'Microsoft.KeyVault/vaults@2023-07-01' = if (enableKeyVault) {
+  name: kvName
+  location: location
+  properties: {
+    tenantId: subscription().tenantId
+    sku: {
+      family: 'A'
+      name: 'standard'
+    }
+    enableSoftDelete: true
+    enablePurgeProtection: true
+    enableRbacAuthorization: false
+    accessPolicies: []
+  }
+}
+
+resource kvDatabaseUrl 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (enableKeyVault) {
+  parent: vault
+  name: 'database-url'
+  properties: {
+    value: databaseUrl
+  }
+}
+
+resource kvBetterAuthSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (enableKeyVault) {
+  parent: vault
+  name: 'better-auth-secret'
+  properties: {
+    value: betterAuthSecret
+  }
+}
+
+resource kvMsGraphClientSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (enableKeyVault && emailConfigured) {
+  parent: vault
+  name: 'ms-graph-client-secret'
+  properties: {
+    value: msGraphClientSecret
+  }
+}
+
+// Appen får bare lese én og én hemmelighet (get). Ikke liste, skrive eller slette.
+resource vaultAccess 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = if (enableKeyVault) {
+  parent: vault
+  name: 'add'
+  properties: {
+    accessPolicies: [
+      {
+        tenantId: subscription().tenantId
+        objectId: app.identity.principalId
+        permissions: {
+          secrets: ['get']
+        }
+      }
+    ]
   }
 }
 

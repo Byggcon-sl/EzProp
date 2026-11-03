@@ -98,6 +98,27 @@ jobs:
             exit 1
           fi
           echo "Alle $count Microsoft.App-ressurser og wal_level har betingelsen enableSyncTrial."
+      # Nøkkelboksen (ADR 0005) skal være av som standard: alle Microsoft.KeyVault-ressurser må ha
+      # betingelsen enableKeyVault, ellers lager en merge til main en nøkkelboks.
+      - name: Sjekk at nøkkelboksen har betingelsen enableKeyVault
+        run: |
+          missing=$(jq -r '
+            (.resources | if type == "object" then [.[]] else . end)[]
+            | select(.type | startswith("Microsoft.KeyVault/"))
+            | select(((.condition // "") | contains("parameters('"'"'enableKeyVault'"'"')")) | not)
+            | "\(.type) \(.name)"
+          ' "$RUNNER_TEMP/main.json")
+          count=$(jq '[(.resources | if type == "object" then [.[]] else . end)[] | select(.type | startswith("Microsoft.KeyVault/"))] | length' "$RUNNER_TEMP/main.json")
+          if [ -n "$missing" ]; then
+            echo "Disse ressursene mangler betingelsen enableKeyVault:"
+            echo "$missing"
+            exit 1
+          fi
+          if [ "$count" -lt 5 ]; then
+            echo "Fant $count Microsoft.KeyVault-ressurser, ventet minst 5 (boksen, policyen og tre hemmeligheter)."
+            exit 1
+          fi
+          echo "Alle $count Microsoft.KeyVault-ressurser har betingelsen enableKeyVault."
 
   e2e:
     name: Ende-til-ende (Playwright, PC og iPad)
