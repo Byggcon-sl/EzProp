@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
-import { SecretNotFoundError, updateConnection } from "@/core/integrations";
+import {
+  ConnectionValidationError,
+  SecretNotFoundError,
+  updateConnection,
+} from "@/core/integrations";
 import { resetEnvCache, type Env } from "@/shared/config/env";
 import {
   createEmployee,
@@ -285,6 +289,24 @@ describe("7.2 med organisasjon", () => {
     expect(error).toBeInstanceOf(Error);
     expect(String(error)).not.toContain(ORG_SECRET);
     expect(calls).toHaveLength(0);
+  });
+
+  it("8c. server_log-rad med ugyldige settings: connectionId satt, send avvises med ConnectionValidationError, ingen logglinje", async () => {
+    // Låser at server_log (og dev_mailbox) fortsatt valideres mot det tomme skjemaet etter at
+    // senderForConnection velger leverandør først. Feiltypen er påstanden som skiller: den ekte
+    // server_log-senderen avviser også denne e-posten, men med en annen feil.
+    const { orgA } = await twoOrganizations();
+    const row = await createIntegrationConnection(orgA.id, {
+      provider: "server_log",
+      settings: { x: 1 },
+    });
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    const resolved = await resolveEmailSender({ organizationId: orgA.id }, env);
+    expect(resolved.connectionId).toBe(row.id);
+    const error = await rejection(resolved.sender.send(EMAIL));
+    expect(error).toBeInstanceOf(ConnectionValidationError);
+    expect(info).not.toHaveBeenCalled();
   });
 
   it("9. ny sender per kall: disabled virker straks", async () => {

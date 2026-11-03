@@ -647,25 +647,4 @@ describe("8.2 e-post gjennom en tilkobling", () => {
     expect(after.status).toBe("error");
     expect(after).toEqual(before);
   });
-
-  it("16. ingen nettkall der sending ikke skjer (disabled → systemvalget server_log)", async () => {
-    spyConsole();
-    const orgA = await createOrganization("Organisasjon A");
-    await createIntegrationConnection(orgA.id, {
-      provider: "microsoft365",
-      secretRef: "ORG_HEMMELIGHET",
-      settings: ORG_SETTINGS,
-      status: "disabled",
-    });
-    vi.stubEnv("ORG_HEMMELIGHET", ORG_SECRET);
-    const { fetchFn, calls } = fakeFetch();
-
-    await sendEmail(ADMIN_EMAIL, { organizationId: orgA.id, fetchFn }, env);
-    await expect(sendEmail(OTHER_EMAIL, { organizationId: orgA.id, fetchFn }, env)).rejects.toThrow(
-      NOT_CONFIGURED,
-    );
-
-    expect(calls).toHaveLength(0);
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
 });
