@@ -101,6 +101,7 @@ jobs:
           POWERSYNC_DB_PASSWORD: ${{ secrets.POWERSYNC_DB_PASSWORD }}
           ELECTRIC_SECRET: ${{ secrets.ELECTRIC_SECRET }}
           ELECTRIC_DB_PASSWORD: ${{ secrets.ELECTRIC_DB_PASSWORD }}
+          ENABLE_KEY_VAULT: ${{ vars.ENABLE_KEY_VAULT == 'true' }}
         run: |
           if [ -z "$SEED_ADMIN_EMAIL" ]; then
             echo "Variabelen SEED_ADMIN_EMAIL mangler i GitHub (Settings → Variables)."
@@ -111,6 +112,12 @@ jobs:
             SYNK=true
           else
             SYNK=false
+          fi
+          # Nøkkelboksen (ADR 0005): alt annet enn nøyaktig true betyr av.
+          if [ "$ENABLE_KEY_VAULT" = "true" ]; then
+            NOKKELBOKS=true
+          else
+            NOKKELBOKS=false
           fi
           # De fire e-postverdiene sendes alltid (tomme når de ikke er satt); Bicep bruker dem bare når alle er gitt.
           # Det samme gjelder de fire synkverdiene; Bicep bruker dem bare når enableSyncTrial er true.
@@ -127,6 +134,7 @@ jobs:
             "msGraphClientSecret=$MS_GRAPH_CLIENT_SECRET"
             "mailFrom=$MAIL_FROM"
             "enableSyncTrial=$SYNK"
+            "enableKeyVault=$NOKKELBOKS"
             "powerSyncJwtSecret=$POWERSYNC_JWT_SECRET"
             "powerSyncDbPassword=$POWERSYNC_DB_PASSWORD"
             "electricSecret=$ELECTRIC_SECRET"

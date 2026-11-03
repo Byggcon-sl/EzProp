@@ -1389,7 +1389,7 @@ Status fra eAccounting hentes via tilkoblingen og blir hendelsene **«faktura se
 | `port` | Fast kode, en av de ti portene over |
 | `provider` | Fast kode, kjent liste per port. Nå `dev_mailbox`, `server_log` og `microsoft365` for `email`. De andre portene har tom liste, så en tilkobling for dem avvises til leverandøren er lagt inn i koden. |
 | `status` | `active`, `disabled`, `error`. Admin setter bare `active` eller `disabled`. `error` settes av laget når en sending feiler, og går tilbake til `active` ved neste vellykkede sending. |
-| `secret_ref` | Bare navnet på hemmeligheten, aldri verdien. Leses gjennom `readSecret` (`src/core/integrations/secrets.ts`). Appens egne hemmeligheter (innlogging, database, synk, fillagring) står på en nektliste og kan aldri leses gjennom laget. Påkrevd for `microsoft365`. |
+| `secret_ref` | Bare navnet på hemmeligheten, aldri verdien. Leses gjennom `readSecret` (`src/core/integrations/secrets.ts`). Appens egne hemmeligheter (innlogging, database, synk, fillagring) står på en nektliste og kan aldri leses gjennom laget. Påkrevd for `microsoft365`. Navnet er navnet på miljøvariabelen; i Azure fylles miljøvariabelen fra nøkkelboksen ved oppstart (ADR 0005), i utvikling fra `.env`. Navnet i boksen finnes bare i Bicep. |
 | `settings` | jsonb, sjekkes per leverandør. `microsoft365`: `from`, `tenantId`, `clientId` (alle påkrevd). `dev_mailbox` og `server_log`: tomme. |
 | `last_ok_at` | Sist en sending gikk gjennom tilkoblingen |
 | `last_error` | Siste feil, vasket, høyst 500 tegn, aldri adresse, kode eller hemmelig verdi. Beholdes når admin setter `active` igjen, nullstilles ved neste vellykkede sending. |
@@ -1913,6 +1913,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Port | `port` | Type tilkobling |
 | Leverandør | `provider` | Fast kode per port |
 | Hemmelighetsnavn | `secret_ref` | Navnet, aldri verdien; leses med `readSecret` |
+| Nøkkelboks | Azure Key Vault | Fyller miljøvariablene i Azure ved oppstart (ADR 0005); navnet i boksen finnes bare i Bicep |
 | Utviklingspostkasse | `dev_mailbox` | Leverandør for e-post lokalt |
 | Serverlogg (e-post) | `server_log` | Leverandør, bare første admin |
 | Microsoft 365 (e-post) | `microsoft365` | Leverandør, Microsoft Graph |

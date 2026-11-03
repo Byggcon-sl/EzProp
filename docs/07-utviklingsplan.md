@@ -179,7 +179,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 - [ ] **Innlogging som Optiplan** (engangskode på e-post), med **felles innlogging og felles profil for admin og ansatte** mellom EzProp og Optiplan (Ståle 28.10.2026): samme bruker, samme navn, telefon, stilling og kontor i begge. **Kundene holdes adskilt**: Optiplans styrer og EzProps kunder og meglere er aldri samme brukere. Løsningen beskrives i en ADR som tar hensyn til ADR-en fra fase 1.
 - [ ] **Bytte mellom EzProp og Optiplan med ett trykk** (Ståle 28.10.2026: «sømløst»): en lenke i menyen i begge løsningene, uten ny innlogging. Mer samspill enn dette kommer senere.
 - [x] **Sperre etter mange feil** ved innlogging (innspill P12). Tofaktor kommer i fase 4. (02.11.2026, `docs/funksjoner/fase0b-sperre-innlogging.md`, beslutninger A35–A38)
-- [ ] **Nøkkelboks for hemmeligheter** (for eksempel Azure Key Vault, samme oppsett som Optiplan). Ingen nøkler i koden eller databasen, bare navnet på hemmeligheten (`secret_ref`). (Innspill P12)
+- [x] **Nøkkelboks for hemmeligheter** (for eksempel Azure Key Vault, samme oppsett som Optiplan). Ingen nøkler i koden eller databasen, bare navnet på hemmeligheten (`secret_ref`). (Innspill P12) Levert 03.11.2026 som bare kode, av som standard, Ståle slår på (`ENABLE_KEY_VAULT`); ADR 0005.
 
 **Organisasjon og tilgang**
 - [x] Organisasjon → selskap → kontor → ansatt, med ansvarsforsikring og firmatekst per selskap. Ansatte som har sluttet, kan stå uten innlogging (innspill D18). (30.10.2026, branch `fase0b-organisasjon-selskap-kontor`)
