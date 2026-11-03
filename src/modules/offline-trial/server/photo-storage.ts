@@ -57,7 +57,8 @@ async function writeFileAtomically(filePath: string, bytes: Uint8Array): Promise
     await writeFile(tmpPath, bytes);
     await rename(tmpPath, filePath);
   } catch (error) {
-    await rm(tmpPath, { force: true });
+    // Oppryddingen må aldri skjule den opprinnelige feilen (rettighetsfeil på mappen o.l.).
+    await rm(tmpPath, { force: true }).catch(() => undefined);
     throw error;
   }
 }

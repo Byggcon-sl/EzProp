@@ -55,6 +55,10 @@ Forenkler og test-leder var uenige på tre punkter. Avgjort slik, og begrunnet h
 
 Tatt inn uten uenighet: premisset om Better Auth rettet (se punkt 20 over); presiseringen for `server_log`/`dev_mailbox` i (r) 1 med test 8c; (r) 5 får én ny tabelltest (E1–E3) for de elleve ordene, siden seks av dem ikke har noen eksakt-sak i dag, og kriteriet sier nå «ingen test fjernet eller endret; nye er lov».
 
+## Avgjørelser etter gjennomgangen (prosjektlederen, 03.11.2026)
+
+Test-leder godkjente (runde 1). Tre små funn fra gjennomgangen er rettet av prosjektlederen før PR: (1) `rm` i catch-grenen i `writeFileAtomically` kunne selv kaste og skjule den opprinnelige feilen fra `writeFile`/`rename`; nå svelges feil fra oppryddingen, og den opprinnelige feilen kastes alltid. (2) Kommentaren over `findOrCreateUser` sa «Better Auth skriver aldri `users`»; riktig er at Better Auth aldri skriver `users.email` (hooks oppdaterer `last_login_at` og `email_verified`). Det som bærer den eksakte sammenligningen, er at bare seedet og `employeeCreateSchema` skriver `users.email`. (3) Ingen handling: test 8c prøver bare `server_log` (kortet ba om det), `tmpEntries`-påstandene i `photo-storage.test.ts` er overflødige ved siden av `listAll`, og E1 har to påstander for samme sak; alle tre føres som små funn i PR-en, ikke rettet (ingen falsk trygghet, bare litt mer test enn nødvendig).
+
 ## Omfang
 
 **Med:**
@@ -107,17 +111,17 @@ Ingen.
 
 ## Akseptkriterier
 
-- [ ] `grep -c 'lower(' src/core/organization/employees-admin.ts` gir 0; test 2 og 2b i `employees-admin.test.ts` er grønne.
-- [ ] `grep -c ' as {' src/core/email/resolve.ts` gir 0; `senderForConnection` validerer `settings` én gang per sending, også for `server_log` og `dev_mailbox` (test 8c); alle tester i `resolve.test.ts` og `email.test.ts` grønne.
-- [ ] `SENSITIVE_KEY` inneholder ikke lenger ordene `password`, `passord`, `secret`, `clientsecret`, `token`, `accesstoken`, `refreshtoken`, `sessiontoken`, `apikey`, `connectionstring`, `accountkey` som eksakte alternativ; `logger.test.ts` er grønn uten at noen eksisterende test er fjernet eller endret; nye tester (E1–E3) er lov.
-- [ ] `photo-storage.ts` skriver via midlertidig fil og `rename` på begge skrivestedene (`writeFile` bare i hjelperen); påstandene i de eksisterende testene og T3 viser ingen `.tmp-`-fil igjen etter suksess og etter feil; «kopi som får 400 …» grønn tre ganger på rad i begge e2e-prosjektene.
-- [ ] `docs/05-domenemodell.md` sier ved `employee_permissions` hvorfor det ikke er indeks på `organization_id`, og når det skal vurderes på nytt.
-- [ ] Test 16 (`email.test.ts`), test 9 i 3.12 (`connections.test.ts`) og `put`/`get`-spionene i `config.test.ts` test 6 er borte. Ingen andre tester fjernes.
-- [ ] Ingen fil under «Ikke med» er endret (`git diff --name-only main` viser ingen av dem).
-- [ ] Versjon `0.2.60` i `package.json`.
-- [ ] Bruker i annen organisasjon får ikke tilgang: ingen ny spørring med `organizationId`, så ingen nytt `expectTenantIsolation`-kall; de eksisterende står urørt (test).
-- [ ] Virker på iPad-størrelse: e2e pc og iPad grønne, «kopi som får 400 …» grønn i begge prosjektene (e2e).
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne.
+- [x] `grep -c 'lower(' src/core/organization/employees-admin.ts` gir 0; test 2 og 2b i `employees-admin.test.ts` er grønne.
+- [x] `grep -c ' as {' src/core/email/resolve.ts` gir 0; `senderForConnection` validerer `settings` én gang per sending, også for `server_log` og `dev_mailbox` (test 8c); alle tester i `resolve.test.ts` og `email.test.ts` grønne.
+- [x] `SENSITIVE_KEY` inneholder ikke lenger ordene `password`, `passord`, `secret`, `clientsecret`, `token`, `accesstoken`, `refreshtoken`, `sessiontoken`, `apikey`, `connectionstring`, `accountkey` som eksakte alternativ; `logger.test.ts` er grønn uten at noen eksisterende test er fjernet eller endret; nye tester (E1–E3) er lov.
+- [x] `photo-storage.ts` skriver via midlertidig fil og `rename` på begge skrivestedene (`writeFile` bare i hjelperen); påstandene i de eksisterende testene og T3 viser ingen `.tmp-`-fil igjen etter suksess og etter feil; «kopi som får 400 …» grønn tre ganger på rad i begge e2e-prosjektene.
+- [x] `docs/05-domenemodell.md` sier ved `employee_permissions` hvorfor det ikke er indeks på `organization_id`, og når det skal vurderes på nytt.
+- [x] Test 16 (`email.test.ts`), test 9 i 3.12 (`connections.test.ts`) og `put`/`get`-spionene i `config.test.ts` test 6 er borte. Ingen andre tester fjernes.
+- [x] Ingen fil under «Ikke med» er endret (`git diff --name-only main` viser ingen av dem).
+- [x] Versjon `0.2.60` i `package.json`.
+- [x] Bruker i annen organisasjon får ikke tilgang: ingen ny spørring med `organizationId`, så ingen nytt `expectTenantIsolation`-kall; de eksisterende står urørt (test).
+- [x] Virker på iPad-størrelse: e2e pc og iPad grønne, «kopi som får 400 …» grønn i begge prosjektene (e2e).
+- [x] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne.
 
 ## Roller
 
