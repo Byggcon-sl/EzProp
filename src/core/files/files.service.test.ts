@@ -3,10 +3,11 @@ import { mkdtemp, readFile as readFromDisk, readdir, rm, writeFile } from "node:
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { and, count, eq, isNotNull, sql } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
 import { db } from "@/db/client";
 import { auditLog, employees, files, organizations, type EmployeeRole } from "@/db/schema";
+import { formatLogLine, logger } from "@/shared/lib/logger";
 import { APP0, DQT, jpeg, SOF0, SOS } from "../../../tests/jpeg-bytes";
 import {
   auditRows,
@@ -67,6 +68,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const key of ENV_KEYS) {
     const value = savedEnv[key];
     if (value === undefined) delete process.env[key];
@@ -193,6 +195,7 @@ describe("6.1 lagre og hente", () => {
         "create trigger files_test_fail before insert on files for each row execute function files_test_fail()",
       ),
     );
+    const logError = vi.spyOn(logger, "error");
     let caught: unknown;
     try {
       await savePhoto(user, org.id);
@@ -218,6 +221,22 @@ describe("6.1 lagre og hente", () => {
       expect(text).not.toContain(SECRET);
       expect(text).not.toContain("testfeil fra trigger");
     }
+
+    // Databasefeilen logges, vasket: én rad med fast tekst, organisasjonen og feilen
+    expect(logError).toHaveBeenCalledTimes(1);
+    const [msg, fields] = logError.mock.calls[0]!;
+    expect(msg).toBe("Kunne ikke lagre raden for en fil");
+    expect(fields).toBeDefined();
+    expect(Object.keys(fields!).sort()).toEqual(["error", "organizationId"]);
+    expect(fields!.organizationId).toBe(org.id);
+    expect(fields!.error).toBeDefined();
+    const line = JSON.stringify(formatLogLine("error", msg, fields));
+    expect(line).toContain("params: [fjernet]");
+    expect(line).not.toContain(SECRET);
+    expect(line).not.toContain(tmp);
+    expect(line).not.toContain(storageKey);
+    const afterParams = line.slice(line.indexOf("params:"));
+    expect(afterParams).not.toContain("testfeil fra trigger");
   });
 
   it("5. endret innhold på disken gir FileIntegrityError uten sti", async () => {
@@ -229,6 +248,7 @@ describe("6.1 lagre og hente", () => {
     const tampered = new Uint8Array(JPEG);
     tampered[tampered.length - 1] = (tampered[tampered.length - 1]! + 1) % 256;
     await writeFile(path.join(tmp, row.storageKey), tampered);
+    const logError = vi.spyOn(logger, "error");
 
     const error = await readFile(user, org.id, saved.id).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(FileIntegrityError);
@@ -238,6 +258,16 @@ describe("6.1 lagre og hente", () => {
     // Annen lengde gir også integritetsfeil
     await writeFile(path.join(tmp, row.storageKey), new Uint8Array([1, 2, 3]));
     await expect(readFile(user, org.id, saved.id)).rejects.toBeInstanceOf(FileIntegrityError);
+
+    // Hvert tilfelle gir én loggrad med bare organisasjon og fil-ID, aldri lagringsnøkkelen
+    expect(logError).toHaveBeenCalledTimes(2);
+    for (const [msg, fields] of logError.mock.calls) {
+      expect(msg).toBe("Fil lest fra lagringen stemmer ikke med raden");
+      expect(fields).toEqual({ organizationId: org.id, fileId: saved.id });
+      const line = JSON.stringify(formatLogLine("error", msg, fields));
+      expect(line).not.toContain(row.storageKey);
+      expect(line).not.toContain(tmp);
+    }
   });
 
   describe("6. ekstra forsvar på prefikset: en rad i A som peker på B sin fil", () => {
@@ -477,22 +507,28 @@ describe("6.3 myk sletting", () => {
     expect(await auditCount()).toBe(auditBefore);
   });
 
-  it("6. porten har ingen sletting, og raden finnes fortsatt etter merking", async () => {
-    const port = storage();
-    // @ts-expect-error FileStorage har ingen slette-operasjon (regel 3). Fanges av typecheck.
-    const remove: unknown = port.delete;
-    expect(remove).toBeUndefined();
-    expect("delete" in port).toBe(false);
-
+  it("7. to samtidige merkinger: én lykkes, én gir FileNotFoundError, og én loggrad", async () => {
     const { org, user } = await orgWithEmployee(["admin"]);
-    const row = await createFile(org.id, {}, { storage: port });
-    await markFileDeleted(user, org.id, row.id);
+    const row = await createFile(org.id);
+    const auditBefore = await auditRows(org.id);
 
-    // Uten filter på deleted_at: raden står der fortsatt
-    const rows = await db.select().from(files).where(eq(files.id, row.id));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.deletedAt).not.toBeNull();
-    expect(await filesOnDisk()).toEqual([row.storageKey]);
+    const results = await Promise.allSettled([
+      markFileDeleted(user, org.id, row.id),
+      markFileDeleted(user, org.id, row.id),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toBeInstanceOf(FileNotFoundError);
+
+    const auditAfter = await auditRows(org.id);
+    expect(auditAfter).toHaveLength(auditBefore.length + 1);
+    const stored = await fileRow(row.id);
+    expect(stored.deletedAt).not.toBeNull();
+    const winner = (fulfilled[0] as PromiseFulfilledResult<{ deletedAt: Date | null }>).value;
+    expect(stored.deletedAt?.toISOString()).toBe(winner.deletedAt?.toISOString());
   });
 });
 
@@ -508,7 +544,7 @@ describe("6.4 tilgang per rolle", () => {
   );
 
   it.each<EmployeeRole>(["inspector", "office", "manager"])(
-    "2. %s kan ikke merke som slettet, og raden er uendret",
+    "2. %s kan ikke merke som slettet, raden er uendret og ingen loggrad skrives",
     async (role) => {
       const { org, user } = await orgWithEmployee([role]);
       const row = await createFile(org.id);
@@ -517,6 +553,7 @@ describe("6.4 tilgang per rolle", () => {
       await expect(markFileDeleted(user, org.id, row.id)).rejects.toBeInstanceOf(AccessDeniedError);
 
       expect(await fileRow(row.id)).toEqual(before);
+      expect(await auditRows(org.id)).toEqual([]);
     },
   );
 

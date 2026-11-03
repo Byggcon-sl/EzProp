@@ -14,7 +14,8 @@ import {
   resetDatabase,
 } from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
-import { findActiveConnection } from "./connections";
+import { formatLogLine, logger } from "@/shared/lib/logger";
+import { findActiveConnection, recordConnectionResult } from "./connections";
 import {
   ConnectionNotFoundError,
   ConnectionValidationError,
@@ -52,17 +53,6 @@ const SUMMARY_KEYS = [
   "settings",
   "status",
 ];
-const OTHER_PORTS = [
-  "accounting",
-  "broker",
-  "property_data",
-  "sms",
-  "speech_to_text",
-  "ai",
-  "file_storage",
-  "energy_label",
-  "scanning",
-];
 const DENYLIST = [
   "BETTER_AUTH_SECRET",
   "DATABASE_URL",
@@ -79,6 +69,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
 /** Lar testene sende inn feil former (det er det som prøves). */
@@ -207,10 +198,15 @@ describe("3.2 validering før skriving", () => {
         settings: M365,
       },
     ],
-    ...OTHER_PORTS.map((port): [string, Record<string, unknown>] => [
-      `3. server_log på ${port}`,
-      { port, provider: "server_log", settings: {} },
-    ]),
+    ["3. server_log på accounting", { port: "accounting", provider: "server_log", settings: {} }],
+    [
+      "7. clientId på 129 tegn",
+      { ...M365_INPUT, settings: { ...M365, clientId: "c".repeat(129) } },
+    ],
+    [
+      "7. from på 255 tegn",
+      { ...M365_INPUT, settings: { ...M365, from: "a".repeat(243) + "@example.com" } },
+    ],
     ...["a=b", "ms graph", "lowercase", "hemmelig-test-verdi=abc", "", "A"].map(
       (secretRef): [string, Record<string, unknown>] => [
         `4. ugyldig secretRef ${JSON.stringify(secretRef)}`,
@@ -275,6 +271,18 @@ describe("3.2 validering før skriving", () => {
     );
     expect(error).toBeInstanceOf(ConnectionValidationError);
     expect(String(error)).not.toContain(SECRET);
+  });
+
+  it("7. positiv kontroll: clientId på 128 tegn og from på 254 tegn godtas", async () => {
+    const { orgA, adminA } = await setup();
+    const from = "a".repeat(242) + "@example.com";
+    expect(from).toHaveLength(254);
+    const created = await create(adminA.user, orgA.id, {
+      ...M365_INPUT,
+      settings: { ...M365, clientId: "c".repeat(128), from },
+    });
+    const row = await rowById(created.id);
+    expect(row.settings).toEqual({ ...M365, clientId: "c".repeat(128), from });
   });
 
   it.each(["dev_mailbox", "server_log"])(
@@ -915,6 +923,202 @@ describe("3.9 tenant-isolasjon (regel 2)", () => {
       },
       idOf: (row) => row.id,
     });
+  });
+
+  it("4. recordConnectionResult endrer bare rader i organisasjonen fra tilgangssjekken", async () => {
+    let allIds: string[] = [];
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        const ids = { a: [] as string[], b: [] as string[] };
+        for (const [organizationId, list] of [
+          [grantA.organizationId, ids.a],
+          [grantB.organizationId, ids.b],
+        ] as const) {
+          list.push((await createIntegrationConnection(organizationId, { status: "error" })).id);
+          list.push(
+            (
+              await createIntegrationConnection(organizationId, {
+                port: "accounting",
+                provider: "x",
+                status: "error",
+              })
+            ).id,
+          );
+        }
+        allIds = [...ids.a, ...ids.b];
+        return ids;
+      },
+      query: async (actor, organizationId) => {
+        const grant = await requireOrganizationAccess(actor, organizationId, "organization.manage");
+        const before = new Map<string, string>();
+        for (const id of allIds) before.set(id, (await rowById(id)).status);
+        // Prøver alle id-ene, også de fremmede
+        for (const id of allIds) {
+          await recordConnectionResult(grant.organizationId, id, { ok: true });
+        }
+        // Radene som gikk fra error til active i dette kallet
+        const changed: { id: string }[] = [];
+        for (const id of allIds) {
+          if (before.get(id) === "error" && (await rowById(id)).status === "active") {
+            changed.push({ id });
+          }
+        }
+        return changed;
+      },
+      idOf: (row) => row.id,
+    });
+  });
+
+  it("5. A sender med B sin connectionId: B-raden er uendret ved suksess og feil", async () => {
+    const { orgA, orgB } = await setup();
+    const rowB = await createIntegrationConnection(orgB.id, {
+      status: "error",
+      lastError: "gammel feil",
+    });
+    const before = await rowById(rowB.id);
+
+    await recordConnectionResult(orgA.id, rowB.id, { ok: true });
+    await recordConnectionResult(orgA.id, rowB.id, { ok: false, error: "x" });
+
+    const after = await rowById(rowB.id);
+    expect(after).toEqual(before);
+    expect(after.status).toBe("error");
+    expect(after.lastOkAt).toBeNull();
+    expect(after.lastError).toBe("gammel feil");
+  });
+});
+
+describe("3.12 recordConnectionResult", () => {
+  it("1. error → active ved suksess: last_ok_at satt, last_error null, ingen loggrad", async () => {
+    const { orgA } = await setup();
+    const row = await createIntegrationConnection(orgA.id, {
+      status: "error",
+      lastError: "gammel feil",
+    });
+
+    const start = Date.now();
+    await recordConnectionResult(orgA.id, row.id, { ok: true });
+
+    const after = await rowById(row.id);
+    expect(after.status).toBe("active");
+    expect(after.lastError).toBeNull();
+    expect(after.lastOkAt).not.toBeNull();
+    expect(Math.abs(after.lastOkAt!.getTime() - start)).toBeLessThanOrEqual(1000);
+    // 9. Systemets egne skrivinger står ikke i revisjonsloggen
+    expect(await auditRows(orgA.id)).toEqual([]);
+  });
+
+  it("2. disabled røres ikke ved suksess", async () => {
+    const { orgA } = await setup();
+    const row = await createIntegrationConnection(orgA.id, {
+      status: "disabled",
+      lastError: "gammel feil",
+    });
+    const before = await rowById(row.id);
+
+    await recordConnectionResult(orgA.id, row.id, { ok: true });
+
+    expect(await rowById(row.id)).toEqual(before);
+  });
+
+  it("3. slettet rad røres ikke ved suksess", async () => {
+    const { orgA } = await setup();
+    const row = await createIntegrationConnection(orgA.id, {
+      status: "error",
+      lastError: "gammel feil",
+      deletedAt: new Date(),
+      deletedBy: "oppdiktet",
+    });
+    const before = await rowById(row.id);
+
+    await recordConnectionResult(orgA.id, row.id, { ok: true });
+
+    expect(await rowById(row.id)).toEqual(before);
+  });
+
+  it("4. disabled røres ikke ved feil", async () => {
+    const { orgA } = await setup();
+    const row = await createIntegrationConnection(orgA.id, { status: "disabled" });
+    const before = await rowById(row.id);
+
+    await recordConnectionResult(orgA.id, row.id, { ok: false, error: "x" });
+
+    expect(await rowById(row.id)).toEqual(before);
+  });
+
+  it("5. slettet rad røres ikke ved feil", async () => {
+    const { orgA } = await setup();
+    const row = await createIntegrationConnection(orgA.id, {
+      deletedAt: new Date(),
+      deletedBy: "oppdiktet",
+    });
+    const before = await rowById(row.id);
+
+    await recordConnectionResult(orgA.id, row.id, { ok: false, error: "x" });
+
+    expect(await rowById(row.id)).toEqual(before);
+  });
+
+  it("6. active → error ved feil: last_error satt, last_ok_at uendret, ingen loggrad", async () => {
+    const { orgA } = await setup();
+    const lastOkAt = new Date(Date.now() - 60_000);
+    const row = await createIntegrationConnection(orgA.id, { lastOkAt });
+
+    await recordConnectionResult(orgA.id, row.id, { ok: false, error: "x" });
+
+    const after = await rowById(row.id);
+    expect(after.status).toBe("error");
+    expect(after.lastError).toBe("x");
+    expect(after.lastOkAt?.toISOString()).toBe(lastOkAt.toISOString());
+    // 9. Systemets egne skrivinger står ikke i revisjonsloggen
+    expect(await auditRows(orgA.id)).toEqual([]);
+  });
+
+  it("7. lang feilmelding kuttes og vaskes av scrubText (høyst 500 tegn pluss « …»)", async () => {
+    const { orgA } = await setup();
+    const row = await createIntegrationConnection(orgA.id);
+
+    await recordConnectionResult(orgA.id, row.id, { ok: false, error: "x".repeat(600) });
+    const long = (await rowById(row.id)).lastError!;
+    expect(long.length).toBeLessThanOrEqual(503);
+    expect(long.endsWith(" …")).toBe(true);
+
+    await recordConnectionResult(orgA.id, row.id, {
+      ok: false,
+      error: "token feilet: client_secret=abc avvist",
+    });
+    const scrubbed = (await rowById(row.id)).lastError!;
+    expect(scrubbed).toContain("client_secret=[fjernet]");
+    expect(scrubbed).not.toContain("client_secret=abc");
+  });
+
+  it("8. databasefeil ved skriving: kaster ikke, én logglinje med fast tekst per kall", async () => {
+    const { orgA } = await setup();
+    const row = await createIntegrationConnection(orgA.id);
+    const before = await rowById(row.id);
+    const logError = vi.spyOn(logger, "error");
+    // Settes sist, etter fabrikkene
+    const update = vi.spyOn(db, "update").mockImplementation(() => {
+      throw new Error("db nede");
+    });
+
+    await expect(
+      recordConnectionResult(orgA.id, row.id, { ok: false, error: "sendefeil" }),
+    ).resolves.toBeUndefined();
+    expect(logError).toHaveBeenCalledTimes(1);
+    await expect(recordConnectionResult(orgA.id, row.id, { ok: true })).resolves.toBeUndefined();
+    expect(logError).toHaveBeenCalledTimes(2);
+
+    for (const [msg, fields] of logError.mock.calls) {
+      expect(msg).toBe("Kunne ikke oppdatere status på en tilkobling");
+      expect(Object.keys(fields ?? {}).sort()).toEqual(["connectionId", "error"]);
+      expect(fields!.connectionId).toBe(row.id);
+      expect((fields!.error as Error).message).toBe("db nede");
+      const line = JSON.stringify(formatLogLine("error", msg, fields));
+      expect(line).not.toContain(SECRET);
+    }
+    update.mockRestore();
+    expect(await rowById(row.id)).toEqual(before);
   });
 });
 

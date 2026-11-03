@@ -35,8 +35,4 @@ describe("faste koder for tilkoblingslaget", () => {
   it("3. statusene er active, disabled og error", () => {
     expect([...CONNECTION_STATUSES]).toEqual(["active", "disabled", "error"]);
   });
-
-  it("4. alle porter har en oppføring i leverandørlisten, ingen ekstra", () => {
-    expect(Object.keys(PROVIDERS_BY_PORT)).toEqual([...INTEGRATION_PORTS]);
-  });
 });

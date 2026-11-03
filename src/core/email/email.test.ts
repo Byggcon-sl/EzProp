@@ -4,6 +4,7 @@ import { SecretNotFoundError, updateConnection } from "@/core/integrations";
 import { db } from "@/db/client";
 import { integrationConnections } from "@/db/schema";
 import { resetEnvCache, type Env } from "@/shared/config/env";
+import { logger } from "@/shared/lib/logger";
 import {
   auditRows,
   createEmployee,
@@ -86,22 +87,6 @@ describe("8.1 e-post uten organisasjon (som før)", () => {
     expect(latest).toMatchObject({ to: "b@example.com", subject: "Andre" });
   });
 
-  it("1b. velger tjeneste ut fra innstillingene", async () => {
-    expect((await resolveEmailSender({}, env)).sender.provider).toBe("server_log");
-    expect((await resolveEmailSender({}, { ...env, ...graph })).sender.provider).toBe(
-      "microsoft365",
-    );
-  });
-
-  it("1c. velger dev_mailbox når DEV_MAILBOX er på", async () => {
-    expect((await resolveEmailSender({}, { ...env, DEV_MAILBOX: true })).sender.provider).toBe(
-      "dev_mailbox",
-    );
-    expect(
-      (await resolveEmailSender({}, { ...env, ...graph, DEV_MAILBOX: true })).sender.provider,
-    ).toBe("dev_mailbox");
-  });
-
   it("1d. postkassen vinner lokalt også når alle fire Microsoft 365-verdier er satt i miljøet", async () => {
     vi.stubEnv("MS_GRAPH_TENANT_ID", "t-oppdiktet");
     vi.stubEnv("MS_GRAPH_CLIENT_ID", "c-oppdiktet");
@@ -109,16 +94,6 @@ describe("8.1 e-post uten organisasjon (som før)", () => {
     vi.stubEnv("MAIL_FROM", "noreply@example.com");
     resetEnvCache();
     expect((await resolveEmailSender({})).sender.provider).toBe("dev_mailbox");
-  });
-
-  it("1e. velger microsoft365 når de tre verdiene er satt (hemmeligheten via readSecret)", async () => {
-    expect((await resolveEmailSender({}, { ...env, ...graph })).sender.provider).toBe(
-      "microsoft365",
-    );
-  });
-
-  it("1f. velger server_log når e-post ikke er satt opp", async () => {
-    expect((await resolveEmailSender({}, env)).sender.provider).toBe("server_log");
   });
 
   it("2. microsoft365 sender gjennom fetchFn: ett token-kall og ett sendekall", async () => {
@@ -370,21 +345,6 @@ describe("8.2 e-post gjennom en tilkobling", () => {
     expect(await db.select().from(integrationConnections)).toEqual([]);
   });
 
-  it("6b. disabled tilkobling røres ikke (systemvalget brukes)", async () => {
-    spyConsole();
-    const orgA = await createOrganization("Organisasjon A");
-    const row = await createIntegrationConnection(orgA.id, {
-      status: "disabled",
-      lastError: "gammel feil",
-    });
-    const before = await connectionRow(row.id);
-
-    await sendEmail(ADMIN_EMAIL, { organizationId: orgA.id }, env);
-    await expect(sendEmail(OTHER_EMAIL, { organizationId: orgA.id }, env)).rejects.toThrow();
-
-    expect(await connectionRow(row.id)).toEqual(before);
-  });
-
   it("7. DEV_MAILBOX skriver ingenting til tabellen, e-posten ligger i postkassen", async () => {
     spyConsole();
     const orgA = await createOrganization("Organisasjon A");
@@ -515,5 +475,148 @@ describe("8.2 e-post gjennom en tilkobling", () => {
     const audit = await auditRows(orgA.id);
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({ entityType: "integration_connection", action: "update" });
+  });
+
+  // Liten oppgave (o), (p), (q): docs/agenter/oppgaver/fase0b-smafunn-filtjeneste-tilkobling-testplan.md
+
+  it("13. disabled tilkobling: systemvalget brukes, suksess og feil endrer ingenting (16: ingen nett)", async () => {
+    spyConsole();
+    const orgA = await createOrganization("Organisasjon A");
+    const row = await createIntegrationConnection(orgA.id, {
+      status: "disabled",
+      lastError: "gammel feil",
+    });
+    const before = await connectionRow(row.id);
+    const { fetchFn, calls } = fakeFetch();
+
+    expect((await resolveEmailSender({ organizationId: orgA.id }, env)).sender.provider).toBe(
+      "server_log",
+    );
+    await sendEmail(ADMIN_EMAIL, { organizationId: orgA.id, fetchFn }, env);
+    expect(await connectionRow(row.id)).toEqual(before);
+
+    await expect(sendEmail(OTHER_EMAIL, { organizationId: orgA.id, fetchFn }, env)).rejects.toThrow(
+      NOT_CONFIGURED,
+    );
+    expect(await connectionRow(row.id)).toEqual(before);
+
+    expect(calls).toHaveLength(0);
+  });
+
+  /** Tilkobling i error som admin endrer (via `change`) mens sendekallet pågår. */
+  async function changedDuringSend(change: { status: "disabled" } | { deletedAt: Date }) {
+    const orgA = await createOrganization("Organisasjon A");
+    const row = await createIntegrationConnection(orgA.id, {
+      provider: "microsoft365",
+      secretRef: "ORG_HEMMELIGHET",
+      settings: ORG_SETTINGS,
+      status: "error",
+      lastError: "gammel feil",
+    });
+    vi.stubEnv("ORG_HEMMELIGHET", ORG_SECRET);
+    let duringSend: Awaited<ReturnType<typeof connectionRow>> | undefined;
+    const { fetchFn, calls } = fakeFetch({
+      send: async () => {
+        // En «samtidig admin» endrer raden etter at resolveEmailSender har valgt den
+        await db
+          .update(integrationConnections)
+          .set(change)
+          .where(eq(integrationConnections.id, row.id));
+        duringSend = await connectionRow(row.id);
+        return new Response(null, { status: 202 });
+      },
+    });
+
+    await sendEmail(
+      { to: "a@example.com", subject: "Emne", text: "Hei" },
+      { organizationId: orgA.id, fetchFn },
+      env,
+    );
+
+    expect(calls.map((call) => call.kind)).toEqual(["token", "send"]);
+    expect(duringSend).toBeDefined();
+    return { row, duringSend: duringSend!, after: await connectionRow(row.id) };
+  }
+
+  it("13b. satt til disabled mens sendingen pågår: raden blir stående disabled", async () => {
+    const { duringSend, after } = await changedDuringSend({ status: "disabled" });
+    expect(duringSend.status).toBe("disabled");
+    expect(after.status).toBe("disabled");
+    expect(after.lastOkAt).toBeNull();
+    expect(after.lastError).toBe("gammel feil");
+    expect(after).toEqual(duringSend);
+  });
+
+  it("13c. slettet mens sendingen pågår: raden er uendret bortsett fra deleted_at", async () => {
+    const { duringSend, after } = await changedDuringSend({ deletedAt: new Date() });
+    expect(duringSend.deletedAt).not.toBeNull();
+    expect(after.status).toBe("error");
+    expect(after.lastOkAt).toBeNull();
+    expect(after.lastError).toBe("gammel feil");
+    expect(after).toEqual(duringSend);
+  });
+
+  async function microsoft365Connection() {
+    const orgA = await createOrganization("Organisasjon A");
+    const row = await createIntegrationConnection(orgA.id, {
+      provider: "microsoft365",
+      secretRef: "ORG_HEMMELIGHET",
+      settings: ORG_SETTINGS,
+      status: "error",
+      lastError: "gammel feil",
+    });
+    vi.stubEnv("ORG_HEMMELIGHET", ORG_SECRET);
+    return { orgA, row, before: await connectionRow(row.id) };
+  }
+
+  it("14. databasefeil ved skriving av last_error: sendefeilen kastes, én fast loggrad", async () => {
+    const { orgA, row, before } = await microsoft365Connection();
+    const { fetchFn } = fakeFetch({ send: { status: 500, body: "{}" } });
+    const logError = vi.spyOn(logger, "error");
+    // Settes sist, etter fabrikkene
+    const update = vi.spyOn(db, "update").mockImplementation(() => {
+      throw new Error("db nede");
+    });
+
+    const error = await rejection(
+      sendEmail(
+        { to: "a@example.com", subject: "Emne", text: "Hei" },
+        { organizationId: orgA.id, fetchFn },
+        env,
+      ),
+    );
+    update.mockRestore();
+
+    expect(error).toBeInstanceOf(EmailSendError);
+    expect((error as Error).message).not.toContain("db nede");
+    expect(logError).toHaveBeenCalledTimes(1);
+    expect(logError.mock.calls[0]![0]).toBe("Kunne ikke oppdatere status på en tilkobling");
+    expect(await connectionRow(row.id)).toEqual(before);
+  });
+
+  it("15. databasefeil ved skriving av last_ok_at etter vellykket sending: sendEmail lykkes, én fast loggrad", async () => {
+    const { orgA, row, before } = await microsoft365Connection();
+    const { fetchFn, calls } = fakeFetch();
+    const logError = vi.spyOn(logger, "error");
+    // Settes sist, etter fabrikkene
+    const update = vi.spyOn(db, "update").mockImplementation(() => {
+      throw new Error("db nede");
+    });
+
+    await expect(
+      sendEmail(
+        { to: "a@example.com", subject: "Emne", text: "Hei" },
+        { organizationId: orgA.id, fetchFn },
+        env,
+      ),
+    ).resolves.toBeUndefined();
+    update.mockRestore();
+
+    expect(calls.map((call) => call.kind)).toEqual(["token", "send"]);
+    expect(logError).toHaveBeenCalledTimes(1);
+    expect(logError.mock.calls[0]![0]).toBe("Kunne ikke oppdatere status på en tilkobling");
+    const after = await connectionRow(row.id);
+    expect(after.status).toBe("error");
+    expect(after).toEqual(before);
   });
 });

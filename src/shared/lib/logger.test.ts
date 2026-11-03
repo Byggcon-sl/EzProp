@@ -161,6 +161,14 @@ describe("logger vasker Microsoft 365-hemmeligheter", () => {
     expect(JSON.stringify(line)).not.toContain(SECRET);
   });
 
+  it("1b. Client_Secret= i tekst vaskes uten hensyn til store bokstaver, skrivemåten beholdes", () => {
+    expect(scrubText("Client_Secret=abc")).toBe(`Client_Secret=${REDACTED}`);
+  });
+
+  it("1c. CLIENT_SECRET= i tekst vaskes, resten av strengen står", () => {
+    expect(scrubText("CLIENT_SECRET=abc&x=1")).toBe(`CLIENT_SECRET=${REDACTED}&x=1`);
+  });
+
   it("4. ingen overvasking: client_secret_name=… står urørt", () => {
     expect(scrubText("client_secret_name=MS_GRAPH_CLIENT_SECRET")).toBe(
       "client_secret_name=MS_GRAPH_CLIENT_SECRET",
@@ -170,5 +178,65 @@ describe("logger vasker Microsoft 365-hemmeligheter", () => {
   it("5. scrubText stopper ved mellomrom og ved &", () => {
     expect(scrubText("client_secret=abc def")).toBe(`client_secret=${REDACTED} def`);
     expect(scrubText("client_secret=abc&x=1")).toBe(`client_secret=${REDACTED}&x=1`);
+  });
+});
+
+// Liten oppgave (o), (p): feltnavn med prefiks (docs/agenter/oppgaver/fase0b-smafunn-filtjeneste-tilkobling-testplan.md)
+describe("logger vasker feltnavn med prefiks", () => {
+  const VALUE = "oppdiktet-hemmelig-verdi";
+
+  it("P1. FILE_STORAGE_AZURE_CONNECTION_STRING fjernes", () => {
+    const line = formatLogLine("info", "Test", { FILE_STORAGE_AZURE_CONNECTION_STRING: VALUE });
+    expect(line.FILE_STORAGE_AZURE_CONNECTION_STRING).toBe(REDACTED);
+    expect(JSON.stringify(line)).not.toContain(VALUE);
+  });
+
+  it("P2. fileStorageAzureConnectionString (camelCase) fjernes", () => {
+    const line = formatLogLine("info", "Test", { fileStorageAzureConnectionString: VALUE });
+    expect(line.fileStorageAzureConnectionString).toBe(REDACTED);
+  });
+
+  it("P3. MS_GRAPH_CLIENT_SECRET fjernes", () => {
+    const line = formatLogLine("info", "Test", { MS_GRAPH_CLIENT_SECRET: VALUE });
+    expect(line.MS_GRAPH_CLIENT_SECRET).toBe(REDACTED);
+  });
+
+  it("P4. MS_GRAPH_ACCESS_TOKEN fjernes", () => {
+    const line = formatLogLine("info", "Test", { MS_GRAPH_ACCESS_TOKEN: VALUE });
+    expect(line.MS_GRAPH_ACCESS_TOKEN).toBe(REDACTED);
+  });
+
+  it.each(["secretRef", "secret_ref", "clientId", "client_id"])(
+    "P5. %s står urørt (mønsteret er «slutter på», ikke «inneholder»)",
+    (key) => {
+      const line = formatLogLine("info", "Test", { [key]: "MS_GRAPH_CLIENT_SECRET" });
+      expect(line[key]).toBe("MS_GRAPH_CLIENT_SECRET");
+    },
+  );
+
+  it("P6. nøkkel dypt i objekt fjernes", () => {
+    const line = formatLogLine("info", "Test", {
+      config: { storage: { FILE_STORAGE_AZURE_CONNECTION_STRING: VALUE } },
+    });
+    expect(line.config).toEqual({ storage: { FILE_STORAGE_AZURE_CONNECTION_STRING: REDACTED } });
+    expect(JSON.stringify(line)).not.toContain(VALUE);
+  });
+
+  it("P7. de gamle nøklene fjernes fortsatt (regresjon)", () => {
+    const line = formatLogLine("info", "Test", {
+      connectionString: "a",
+      CONNECTION_STRING: "b",
+      accountKey: "c",
+      sas: "d",
+      clientSecret: "e",
+      client_secret: "f",
+      password: "g",
+      token: "h",
+      apiKey: "i",
+      passord: "j",
+    });
+    for (const key of Object.keys(line).filter((k) => !["level", "time", "msg"].includes(k))) {
+      expect(line[key]).toBe(REDACTED);
+    }
   });
 });

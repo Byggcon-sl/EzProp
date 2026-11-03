@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFileStorage, FileStorageConfigError } from "@/core/files";
 
 // Testplan: docs/funksjoner/fase0b-filtjeneste-testplan.md, avsnitt 3.
@@ -15,6 +15,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await rm(tmp, { recursive: true, force: true });
 });
 
@@ -74,11 +75,27 @@ describe("createFileStorage", () => {
     expect(String(error)).not.toContain("hemmelig-test-verdi");
   });
 
-  it("5. ukjent driver (s3) gir FileStorageConfigError, ingen stille fallback", () => {
-    const error = thrownBy(() =>
-      createFileStorage({ FILE_STORAGE_DRIVER: "s3", FILE_STORAGE_DIR: tmp }),
-    );
-    expect(error).toBeInstanceOf(FileStorageConfigError);
-    expect((error as Error).message).toContain("FILE_STORAGE_DRIVER");
+  it.each(["s3", "tull"])(
+    "5. ukjent driver (%s) gir FileStorageConfigError, ingen stille fallback",
+    (driver) => {
+      const error = thrownBy(() =>
+        createFileStorage({ FILE_STORAGE_DRIVER: driver, FILE_STORAGE_DIR: tmp }),
+      );
+      expect(error).toBeInstanceOf(FileStorageConfigError);
+      expect((error as Error).message).toContain("FILE_STORAGE_DRIVER");
+    },
+  );
+
+  it("6. azure med begge innstillingene satt gir Azure-adapteren uten nett", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    // Oppdiktet og ugyldig konto; ingen put eller get kalles, så ingenting kobler til
+    const storage = createFileStorage({
+      FILE_STORAGE_DRIVER: "azure",
+      FILE_STORAGE_AZURE_CONNECTION_STRING:
+        "DefaultEndpointsProtocol=https;AccountName=oppdiktet;AccountKey=b3BwZGlrdGV0;EndpointSuffix=core.windows.net",
+      FILE_STORAGE_AZURE_CONTAINER: "filer",
+    });
+    expect(storage.driver).toBe("azure");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

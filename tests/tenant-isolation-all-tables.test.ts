@@ -67,6 +67,22 @@ async function readRows(table: PgTable, actor: Actor, organizationId: string) {
   return db.select({ id }).from(table).where(eq(orgColumn, grant.organizationId));
 }
 
+/**
+ * Sammenligner tabellnavnene fra skjemaet med `RESET_TABLES`. Gir navnene som mangler på hver
+ * side, sortert, slik at en glemt tabell navngis i meldingen i stedet for et tall.
+ */
+function compareTableLists(
+  schemaNames: readonly string[],
+  resetNames: readonly string[],
+): { missingInResetTables: string[]; missingInSchema: string[] } {
+  const inSchema = new Set(schemaNames);
+  const inReset = new Set(resetNames);
+  return {
+    missingInResetTables: [...inSchema].filter((name) => !inReset.has(name)).sort(),
+    missingInSchema: [...inReset].filter((name) => !inSchema.has(name)).sort(),
+  };
+}
+
 /** Oppdiktet register-oppføring til selvtestene av vakten. */
 function entry(table: string, testFile: string | null, reason?: string): TenantTableEntry {
   return { table, testFile, reason, insertRow: async () => "x" };
@@ -81,9 +97,30 @@ describe("tabellene fra skjemaet", () => {
     for (const table of tenantTableList) {
       expect(organizationColumn(table)?.notNull, getTableName(table)).toBe(true);
     }
-    expect(tenantTableNames).toHaveLength(RESET_TABLES.length - 6);
+    expect(compareTableLists([...tenantTableNames, ...globalTableNames], RESET_TABLES)).toEqual({
+      missingInResetTables: [],
+      missingInSchema: [],
+    });
     expect(tenantTableNames).toContain("employee_roles");
     expect(tenantTableNames).toContain("files");
+  });
+
+  it("U1b hjelperen navngir en tabell i skjemaet som mangler i RESET_TABLES", () => {
+    expect(
+      compareTableLists(
+        [...tenantTableNames, ...globalTableNames, "oppdiktet_tabell"],
+        RESET_TABLES,
+      ),
+    ).toEqual({ missingInResetTables: ["oppdiktet_tabell"], missingInSchema: [] });
+  });
+
+  it("U1c hjelperen navngir en tabell i RESET_TABLES som mangler i skjemaet", () => {
+    expect(
+      compareTableLists(
+        [...tenantTableNames, ...globalTableNames],
+        [...RESET_TABLES, "oppdiktet_tabell"],
+      ),
+    ).toEqual({ missingInResetTables: [], missingInSchema: ["oppdiktet_tabell"] });
   });
 
   it("U2 tabellene uten organization_id er nøyaktig de seks kjente", () => {
