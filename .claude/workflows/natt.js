@@ -77,7 +77,7 @@ const CHECKS = [
   {
     key: "storrelse",
     role: "arkitekt",
-    ask: "Kjør pnpm build og les størrelsen på sidene og første last (Next.js-utskriften). Rapporter sider over 200 kB JS som funn.",
+    ask: "Kjør pnpm build og deretter pnpm size (scripts/check-bundle-size.mjs leser egen JS per side og den delte grunnpakken fra .next; Next.js skriver ikke lenger størrelsene i byggutskriften). Rapporter sider over grensen (100 kB egen JS gzip) som funn, og si hva som drar opp. Ikke kjør bygget samtidig med e2e i samme mappe.",
   },
   {
     key: "sporringer",

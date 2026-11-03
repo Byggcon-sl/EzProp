@@ -447,9 +447,13 @@ function TableInput({
     );
   }
 
+  const labelId = `${fieldId(field.key)}-label`;
+
   return (
-    <div>
-      <p className={labelClass}>{field.label}</p>
+    <div role="group" aria-labelledby={labelId}>
+      <p id={labelId} className={labelClass}>
+        {field.label}
+      </p>
       <div className="space-y-3">
         {rows.map((row, index) => {
           const rowNumber = index + 1;
@@ -551,7 +555,7 @@ function PhotoInput({
                       rel="noopener noreferrer"
                       className="inline-flex min-h-11 min-w-11 items-center text-brand-700 underline"
                     >
-                      Vis fra serveren
+                      Vis fra serveren<span className="sr-only"> (åpnes i ny fane)</span>
                     </a>
                   </>
                 ) : null}

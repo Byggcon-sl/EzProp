@@ -85,6 +85,13 @@
       "when": 1793649444928,
       "tag": "0011_tilkoblinger",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793672666221,
+      "tag": "0012_indekser-rydding",
+      "breakpoints": true
     }
   ]
 }
