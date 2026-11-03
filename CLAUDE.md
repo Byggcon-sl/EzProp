@@ -59,6 +59,7 @@ TypeScript (strict), Next.js App Router, PostgreSQL, Drizzle ORM, Better Auth (e
 pnpm dev          # start utviklingsserver (http://localhost:3000)
 pnpm test         # enhets- og integrasjonstester (mot TEST_DATABASE_URL)
 pnpm test:e2e     # Playwright, PC og iPad-størrelse (bygger og starter appen selv)
+pnpm size         # egen JS per side fra siste bygg (kjør pnpm build først)
 pnpm lint         # ESLint + modulgrenser + produktnavn
 pnpm typecheck
 pnpm format       # Prettier (ikke markdown)

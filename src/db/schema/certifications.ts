@@ -22,7 +22,6 @@ export const certifications = pgTable(
     validTo: date("valid_to", { mode: "string" }).notNull(),
   },
   (table) => [
-    index("certifications_organization_id_idx").on(table.organizationId),
     index("certifications_organization_id_employee_id_idx").on(
       table.organizationId,
       table.employeeId,
