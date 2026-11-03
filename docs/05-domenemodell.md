@@ -1913,6 +1913,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Port | `port` | Type tilkobling |
 | Leverandør | `provider` | Fast kode per port |
 | Hemmelighetsnavn | `secret_ref` | Navnet, aldri verdien; leses med `readSecret` |
+| Nøkkelboks | Azure Key Vault | Fyller miljøvariablene i Azure ved oppstart (ADR 0005); navnet i boksen finnes bare i Bicep |
 | Utviklingspostkasse | `dev_mailbox` | Leverandør for e-post lokalt |
 | Serverlogg (e-post) | `server_log` | Leverandør, bare første admin |
 | Microsoft 365 (e-post) | `microsoft365` | Leverandør, Microsoft Graph |
