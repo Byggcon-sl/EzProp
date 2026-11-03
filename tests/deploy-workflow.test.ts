@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 /*
  * Drift-filene leses som tekst og sjekkes med enkle mønstre (ingen YAML-pakke, ingen Azure-kall).
  * Testplan: docs/funksjoner/fase1-testmiljo-azure-testplan.md, avsnitt 3, og
- * docs/funksjoner/fase1-synk-i-azure-testplan.md, avsnitt 3 (synktjenestene, av som standard).
+ * docs/funksjoner/fase1-synk-i-azure-testplan.md, avsnitt 3 (synktjenestene, av som standard), og
+ * docs/funksjoner/fase0b-nokkelboks-testplan.md, avsnitt 1–3 og 7 (nøkkelboksen, av som standard).
  */
 
 function read(path: string): string {
@@ -194,7 +195,7 @@ const ALLOWED_SECRETS = [
   "ELECTRIC_DB_PASSWORD",
 ];
 const REQUIRED_SECRETS = ALLOWED_SECRETS.slice(0, 5);
-const ALLOWED_VARS = ["SEED_ADMIN_EMAIL", "APP_HOSTNAME", "ENABLE_SYNC_TRIAL"];
+const ALLOWED_VARS = ["SEED_ADMIN_EMAIL", "APP_HOSTNAME", "ENABLE_SYNC_TRIAL", "ENABLE_KEY_VAULT"];
 
 /** De fire nye secrets for synktjenestene. Bare påkrevd når bryteren er på. */
 const SYNC_SECRETS = [
@@ -492,7 +493,8 @@ describe("infrastruktur (main.bicep)", () => {
 
   it("ressursnavn bruker environmentName", () => {
     expect(bicep).not.toContain("ezprop-test");
-    for (const name of ["planName", "appName", "postgresServerName"]) {
+    // kvName: nøkkelboksen (docs/funksjoner/fase0b-nokkelboks-testplan.md, punkt 5 og test 1.7).
+    for (const name of ["planName", "appName", "postgresServerName", "kvName"]) {
       expect(bicep).toMatch(new RegExp(`var\\s+${name}\\s*=\\s*'[^']*\\$\\{environmentName\\}`));
     }
     // Container Apps-miljøet og de to containerne (synktjenestene).
@@ -947,6 +949,25 @@ describe("Bicep i CI (ci.yml)", () => {
     expect(ci).toContain("Microsoft.App");
     expect(ci).toContain("enableSyncTrial");
   });
+
+  it("CI krever enableKeyVault på alle Key Vault-ressurser i den bygde malen", () => {
+    // Testplan nøkkelboks 3.1 (A9). Samme jobb-avgrensning som testen over.
+    const ciLines = ci.split("\n");
+    const buildLine = ciLines.findIndex((line) => line.includes("az bicep build"));
+    expect(buildLine).toBeGreaterThan(-1);
+    let jobStart = buildLine;
+    while (jobStart > 0 && !/^ {2}[\w-]+:\s*$/.test(ciLines[jobStart]!)) jobStart -= 1;
+    let jobEnd = buildLine + 1;
+    while (jobEnd < ciLines.length && !/^ {2}[\w-]+:\s*$/.test(ciLines[jobEnd]!)) jobEnd += 1;
+    const job = ciLines.slice(jobStart, jobEnd).join("\n");
+    expect(job).toMatch(/\bjq\b/);
+    expect(job).toContain("Microsoft.KeyVault/");
+    // I jq-uttrykket i YAML skrives anførselstegnene ofte som '"'"'; begge former godtas.
+    expect(job).toMatch(/parameters\((?:'|'"'"')enableKeyVault(?:'|'"'"')\)/);
+    // Tellesjekk: minst fem Key Vault-ressurser, så en tom select ikke blir grønn.
+    expect(job).toMatch(/-lt\s+5\b|-ge\s+5\b|<\s*5\b|>=\s*5\b/);
+    expect(job).not.toContain("secrets.");
+  });
 });
 
 describe("dokumentasjon for synktjenestene", () => {
@@ -1012,5 +1033,480 @@ describe("dokumentasjon for synktjenestene", () => {
     for (const text of ["enableSyncTrial", "VNet", "Azure Files", "wal_level"]) {
       expect(adr, text).toContain(text);
     }
+  });
+});
+
+/*
+ * Nøkkelboksen (ADR 0005). Testplan: docs/funksjoner/fase0b-nokkelboks-testplan.md, avsnitt 1, 2 og 7.
+ * Støtter hovedmål: reklamasjoner (ingen hemmelighet i klartekst i portalen) og tid (én bryter).
+ */
+
+/** Antall `{` minus antall `}` i teksten. */
+function braceBalance(text: string): number {
+  return (text.match(/\{/g)?.length ?? 0) - (text.match(/\}/g)?.length ?? 0);
+}
+
+/** Linjene i alle Container Apps-ressursene (synktjenestene har egne miljøvariabler). */
+function containerLineIndexes(bicep: string): Set<number> {
+  return new Set(
+    resourceBlocks(bicep)
+      .filter((r) => r.type.startsWith("Microsoft.App/"))
+      .flatMap((r) => r.lines.map((_, i) => r.start + i)),
+  );
+}
+
+/** `var`-definisjonen `name`: fra `var name =` til neste tomme linje, `var`, `resource`, `param` eller `output`. */
+function varDefinition(bicep: string, name: string): string | undefined {
+  const lines = bicep.split("\n");
+  const start = lines.findIndex((l) => new RegExp(`^var\\s+${name}\\s*=`).test(l));
+  if (start === -1) return undefined;
+  const out = [lines[start]!.replace(new RegExp(`^var\\s+${name}\\s*=\\s*`), "")];
+  for (const line of lines.slice(start + 1)) {
+    if (line.trim() === "" || /^(var|resource|param|output|@)\b/.test(line)) break;
+    if (isComment(line)) continue;
+    out.push(line);
+  }
+  return out.join("\n").trim();
+}
+
+/**
+ * Verdien til appinnstillingen `name` som tekst: uttrykket etter `value:` (over flere linjer til
+ * klammene går opp), eller `var`-definisjonen det peker på (ett nivå).
+ */
+function appSettingExpression(bicep: string, name: string): string | undefined {
+  const lines = bicep.split("\n");
+  const inContainers = containerLineIndexes(bicep);
+  const index = lines.findIndex(
+    (line, i) => !inContainers.has(i) && !isComment(line) && line.includes(`name: '${name}'`),
+  );
+  if (index === -1) return undefined;
+  // Objektet starter på samme linje (`{ name: …`) eller på linjen før (`{` alene, flere linjer).
+  let begin = index;
+  if (!/\{\s*name:/.test(lines[index]!)) {
+    begin -= 1;
+    while (begin > 0 && isComment(lines[begin]!)) begin -= 1;
+  }
+  const entry = lines.slice(begin, index + 1).filter((line) => !isComment(line));
+  let end = index;
+  while (braceBalance(entry.join("\n")) > 0 && end + 1 < lines.length) {
+    end += 1;
+    if (!isComment(lines[end]!)) entry.push(lines[end]!);
+  }
+  const text = entry.join("\n");
+  const match = /value:\s*([\s\S]*?)\s*\}\s*$/.exec(text);
+  const value = (match?.[1] ?? text.slice(text.indexOf("value:") + 6)).trim();
+  if (/^[A-Za-z_]\w*$/.test(value)) {
+    const definition = varDefinition(bicep, value);
+    if (definition !== undefined) return definition;
+  }
+  return value;
+}
+
+/** For en `output`-linje: uttrykket etter `=` og `var`-definisjonen identifikatoren peker på. */
+function outputValue(bicep: string, line: string): string {
+  const expression = line.slice(line.indexOf("=") + 1).trim();
+  const identifier = /^([A-Za-z_]\w*)/.exec(expression)?.[1];
+  const definition = identifier ? varDefinition(bicep, identifier) : undefined;
+  return [expression, definition ?? ""].join("\n");
+}
+
+/** Navnene på alle `@secure()`-parametere i filen. */
+function secureParamNames(lines: string[]): string[] {
+  return lines.flatMap((line, index) => {
+    if (lines[index - 1]?.trim() !== "@secure()") return [];
+    const match = /^\s*param\s+(\w+)\s/.exec(line);
+    return match ? [match[1]!] : [];
+  });
+}
+
+/** Alle filer under `dir` (rekursivt) som slutter på en av `extensions`. */
+function filesUnder(dir: string, extensions: string[]): string[] {
+  return readdirSync(join(process.cwd(), dir), { withFileTypes: true }).flatMap((entry) => {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) return filesUnder(path, extensions);
+    return extensions.some((ext) => entry.name.endsWith(ext)) ? [path] : [];
+  });
+}
+
+const KEY_VAULT_SETTINGS: Record<string, string> = {
+  DATABASE_URL: "databaseUrl",
+  BETTER_AUTH_SECRET: "betterAuthSecret",
+  MS_GRAPH_CLIENT_SECRET: "msGraphClientSecret",
+};
+
+const KEY_VAULT_SECRETS: Record<string, string> = {
+  "database-url": "databaseUrl",
+  "better-auth-secret": "betterAuthSecret",
+  "ms-graph-client-secret": "msGraphClientSecret",
+};
+
+const NOT_THROUGH_KEY_VAULT = [
+  "MS_GRAPH_TENANT_ID",
+  "MS_GRAPH_CLIENT_ID",
+  "MAIL_FROM",
+  "BETTER_AUTH_URL",
+  "SEED_ADMIN_EMAIL",
+  "APP_VERSION",
+  "POWERSYNC_JWT_SECRET",
+  "ELECTRIC_SECRET",
+  "POWERSYNC_URL",
+  "ELECTRIC_URL",
+];
+
+describe("nøkkelboksen i infrastrukturen (main.bicep)", () => {
+  const bicep = read(BICEP_PATH);
+  const lines = bicep.split("\n");
+  const resources = resourceBlocks(bicep);
+  const kv = resources.filter((r) => r.type.startsWith("Microsoft.KeyVault/"));
+  const vault = kv.find((r) => r.type === "Microsoft.KeyVault/vaults");
+  const policy = kv.find((r) => r.type === "Microsoft.KeyVault/vaults/accessPolicies");
+  const secrets = kv.filter((r) => r.type === "Microsoft.KeyVault/vaults/secrets");
+
+  function secretBlock(name: string) {
+    return secrets.find((r) => r.lines.some((line) => line.trim() === `name: '${name}'`));
+  }
+
+  it("1. bryteren finnes og er av som standard", () => {
+    expect(bicep).toContain("param enableKeyVault bool = false");
+    expect(bicep.match(/^\s*param\s+enableKeyVault\b/gm) ?? []).toHaveLength(1);
+  });
+
+  it("2. alle Key Vault-ressurser har betingelsen enableKeyVault", () => {
+    expect(kv).toHaveLength(5);
+    expect(kv.filter((r) => r.type === "Microsoft.KeyVault/vaults")).toHaveLength(1);
+    expect(kv.filter((r) => r.type === "Microsoft.KeyVault/vaults/accessPolicies")).toHaveLength(1);
+    expect(secrets).toHaveLength(3);
+    for (const resource of kv) {
+      expect(resource.lines[0], resource.symbol).toMatch(/=\s*if\s*\(\s*enableKeyVault\b/);
+    }
+    for (const resource of [policy, ...secrets]) {
+      expect(resource?.text, resource?.symbol).toMatch(/^\s*parent:\s*\w+/m);
+    }
+  });
+
+  it("3. appen har systemtildelt identitet, ubetinget", () => {
+    const app = resources.find((r) => r.type === "Microsoft.Web/sites");
+    expect(app).toBeDefined();
+    expect(app!.lines[0]).not.toMatch(/=\s*if\s*\(/);
+    expect(app!.text).toMatch(/identity:\s*\{[^}]*type:\s*'SystemAssigned'/);
+  });
+
+  it("4. policyen gir bare get", () => {
+    expect(policy, "Microsoft.KeyVault/vaults/accessPolicies").toBeDefined();
+    const text = policy!.text;
+    expect(text).toMatch(/^\s*name:\s*'add'\s*$/m);
+    expect(text).toMatch(/objectId:\s*app\.identity\.principalId\b/);
+    expect(text).toMatch(/tenantId:\s*subscription\(\)\.tenantId/);
+    expect(text).toMatch(/permissions:/);
+    expect(text).toMatch(/secrets:\s*\[\s*'get'\s*\]/);
+    for (const forbidden of [
+      "keys:",
+      "certificates:",
+      "storage:",
+      "'list'",
+      "'set'",
+      "'delete'",
+      "'purge'",
+      "'all'",
+      "'recover'",
+      "'backup'",
+      "'restore'",
+    ]) {
+      expect(text, forbidden).not.toContain(forbidden);
+    }
+    expect(bicep).not.toContain("Microsoft.Authorization/roleAssignments");
+    expect(bicep).not.toContain("roleDefinitionId");
+    const principalLines = lineIndexes(lines, /principalId/);
+    expect(principalLines.length).toBeGreaterThan(0);
+    const policyEnd = policy!.start + policy!.lines.length - 1;
+    for (const index of principalLines) {
+      expect(
+        index >= policy!.start && index <= policyEnd,
+        `principalId utenfor policyen på linje ${index + 1}`,
+      ).toBe(true);
+    }
+  });
+
+  it("5. de tre hemmelighetene går gjennom boksen når bryteren er på", () => {
+    for (const name of Object.keys(KEY_VAULT_SETTINGS)) {
+      const expression = appSettingExpression(bicep, name);
+      expect(expression, name).toBeDefined();
+      expect(expression, name).toContain("enableKeyVault");
+      expect(expression, name).toContain("@Microsoft.KeyVault(SecretUri=");
+      expect(expression, name).toContain(".properties.secretUri");
+    }
+    expect(bicep).not.toContain("secretUriWithVersion");
+    for (const name of NOT_THROUGH_KEY_VAULT) {
+      const expression = appSettingExpression(bicep, name);
+      expect(expression, name).toBeDefined();
+      expect(expression, name).not.toContain("enableKeyVault");
+      expect(expression, name).not.toContain("@Microsoft.KeyVault(");
+    }
+  });
+
+  it("6. bryteren av gir samme verdi som før", () => {
+    for (const [name, previous] of Object.entries(KEY_VAULT_SETTINGS)) {
+      const expression = appSettingExpression(bicep, name);
+      expect(expression, name).toBeDefined();
+      expect(expression, name).toMatch(
+        new RegExp(`enableKeyVault\\s*\\?[\\s\\S]*:\\s*${previous}\\s*\\}?\\s*$`),
+      );
+    }
+    // Dagens tilkoblingsstreng er uendret (sertifikatsjekk, se testen for databasen over).
+    expect(bicep).toMatch(/^var databaseUrl = 'postgres:\/\/[^\n]*sslmode=verify-full'$/m);
+  });
+
+  it("7. boksen er låst riktig og uten nettverk", () => {
+    expect(vault, "Microsoft.KeyVault/vaults").toBeDefined();
+    const text = vault!.text;
+    for (const expected of [
+      "enableSoftDelete: true",
+      "enablePurgeProtection: true",
+      "enableRbacAuthorization: false",
+      "name: 'standard'",
+      "family: 'A'",
+      "tenantId: subscription().tenantId",
+      "accessPolicies: []",
+      "location: location",
+    ]) {
+      expect(text, expected).toContain(expected);
+    }
+    const nameLine = vault!.lines.find((line) => /^\s{2}name:/.test(line));
+    expect(nameLine, "navnet på boksen").toBeDefined();
+    expect(resolvesTo(bicep, nameLine!, "${environmentName}")).toBe(true);
+    expect(resolvesTo(bicep, nameLine!, "'kv-ezprop-")).toBe(true);
+    expect(bicep).toMatch(/^var kvName = 'kv-ezprop-\$\{environmentName\}'/m);
+    for (const forbidden of [
+      "privateEndpoint",
+      "privateLink",
+      "'Deny'",
+      "enabledForDeployment: true",
+    ]) {
+      expect(bicep, forbidden).not.toContain(forbidden);
+    }
+  });
+
+  it("8. ingen ny utdata og ingen hemmelig utdata", () => {
+    const outputs = lines.filter((line) => /^\s*output\b/.test(line));
+    expect(outputs.map((line) => /^\s*output\s+(\w+)/.exec(line)?.[1])).toEqual([
+      "postgresServerName",
+      "postgresHost",
+      "appName",
+      "appUrl",
+    ]);
+    const secureNames = secureParamNames(lines);
+    expect(secureNames).toContain("betterAuthSecret");
+    for (const line of outputs) {
+      const value = outputValue(bicep, line);
+      for (const forbidden of [
+        "vault.azure.net",
+        "secretUri",
+        "identity",
+        "principalId",
+        ...secureNames,
+      ]) {
+        expect(value, `${line}: ${forbidden}`).not.toContain(forbidden);
+      }
+    }
+  });
+
+  it("9. navnene i boksen er små bokstaver, tall og bindestrek", () => {
+    const names = secrets.map((r) => {
+      const nameLine = r.lines.find((line) => /^\s{2}name:/.test(line));
+      expect(nameLine, r.symbol).toMatch(/^\s*name:\s*'[a-z0-9-]+'$/);
+      return /'([^']*)'/.exec(nameLine ?? "")?.[1];
+    });
+    expect(names.sort()).toEqual(Object.keys(KEY_VAULT_SECRETS).sort());
+    for (const [name, value] of Object.entries(KEY_VAULT_SECRETS)) {
+      const block = secretBlock(name);
+      expect(block, name).toBeDefined();
+      expect(block!.text, name).toMatch(/properties:/);
+      expect(block!.text, name).toMatch(new RegExp(`^\\s*value:\\s*${value}\\s*$`, "m"));
+    }
+  });
+
+  it("10. ingen hemmelighet i boksen uten bryteren og e-post", () => {
+    const graph = secretBlock("ms-graph-client-secret");
+    expect(graph).toBeDefined();
+    expect(graph!.lines[0]).toMatch(/=\s*if\s*\(\s*enableKeyVault\s*&&\s*emailConfigured\s*\)/);
+    for (const name of ["database-url", "better-auth-secret"]) {
+      const block = secretBlock(name);
+      expect(block, name).toBeDefined();
+      expect(block!.lines[0], name).toMatch(/=\s*if\s*\(\s*enableKeyVault\s*\)/);
+      expect(block!.lines[0], name).not.toContain("emailConfigured");
+    }
+  });
+
+  it("11. ingen egen kodevei og ingen ny avhengighet", () => {
+    const pkg = read("package.json");
+    expect(pkg).not.toContain("@azure/keyvault-secrets");
+    expect(pkg).not.toContain("@azure/identity");
+    for (const file of filesUnder("src", [".ts", ".tsx"])) {
+      const text = read(file);
+      expect(text, file).not.toContain("SECRETS_DRIVER");
+      expect(text, file).not.toMatch(/^\s*import[^;]*keyvault/im);
+      expect(text, file).not.toMatch(/(from|import|require)\s*\(?\s*["'][^"']*keyvault/i);
+      if (!/\.test\.tsx?$/.test(file)) expect(text, file).not.toContain("vault.azure.net");
+    }
+  });
+});
+
+describe("nøkkelboksen i utrullingen (deploy-azure.yml)", () => {
+  const workflow = read(WORKFLOW_PATH);
+  const lines = workflow.split("\n");
+
+  it("1. bryteren er på bare når ENABLE_KEY_VAULT er nøyaktig true", () => {
+    const code = lines.filter((line) => !isComment(line));
+    const mentions = code.filter((line) => line.includes("ENABLE_KEY_VAULT"));
+    expect(mentions.length).toBeGreaterThan(0);
+    const exact = code.filter(
+      (line) =>
+        /vars\.ENABLE_KEY_VAULT\s*==\s*'true'/.test(line) ||
+        /ENABLE_KEY_VAULT[^\n]*?\s(==?)\s*["']true["']/.test(line),
+    );
+    expect(exact.length).toBeGreaterThan(0);
+    for (const line of mentions) {
+      expect(line).not.toMatch(/ENABLE_KEY_VAULT[^\n]*!=/);
+      expect(line).not.toMatch(/!=[^\n]*ENABLE_KEY_VAULT/);
+      expect(line).not.toMatch(/contains\([^)]*ENABLE_KEY_VAULT/i);
+      expect(line).not.toMatch(/-n\s+"?\$\{?ENABLE_KEY_VAULT/);
+    }
+    for (const marker of ["az deployment group validate", "az deployment group create"]) {
+      const command = commandBlock(workflow, marker);
+      expect(command, marker).not.toBe("");
+      expect(parameterSources(workflow, command), marker).toMatch(/enableKeyVault=/);
+    }
+    // Bryteren kommer inn via env i steget «Infrastruktur (Bicep)», ikke rett i run.
+    const stepLine = codeLine(lines, /^\s*-\s+name:\s*Infrastruktur \(Bicep\)/);
+    expect(stepLine, "steget Infrastruktur (Bicep)").toBeGreaterThan(-1);
+    const step = stepOf(lines, stepLine);
+    expect(subBlock(step, "env")).toMatch(/^\s*ENABLE_KEY_VAULT:/m);
+    expect(subBlock(step, "run")).not.toMatch(/\$\{\{[^}]*ENABLE_KEY_VAULT/);
+  });
+
+  it("2. ingen nye hemmeligheter og ingen nye utskrifter", () => {
+    expect(secretNames(workflow).sort()).toEqual([...ALLOWED_SECRETS].sort());
+    const echoes = lines.filter((line) => !isComment(line) && /\becho\b/.test(line));
+    for (const line of echoes) {
+      expect(line).not.toContain("vault.azure.net");
+      expect(line).not.toContain("KeyVault");
+      // Bare navnet på bryteren kan nevnes (på/av), ikke andre KEY_VAULT-verdier.
+      expect(line.replace(/ENABLE_KEY_VAULT/g, "")).not.toContain("KEY_VAULT");
+    }
+  });
+
+  it("3. ENABLE_KEY_VAULT er en tillatt variabel som brukes og er dokumentert", () => {
+    expect(ALLOWED_VARS).toContain("ENABLE_KEY_VAULT");
+    expect(varNames(workflow)).toContain("ENABLE_KEY_VAULT");
+    expect(read(DRIFT_DOC_PATH)).toContain("ENABLE_KEY_VAULT");
+  });
+
+  it("4. ingen steg som leser fra boksen", () => {
+    for (const forbidden of ["az keyvault", "secret show", "secret list", "--query value"]) {
+      expect(workflow, forbidden).not.toContain(forbidden);
+    }
+  });
+});
+
+describe("dokumentasjon for nøkkelboksen", () => {
+  const RESTART = /start(et|es)? (appen )?på nytt|omstart/i;
+
+  it("1. ADR 0005 finnes og dekker valgene", () => {
+    const path = "docs/adr/0005-nokkelboks-key-vault.md";
+    expect(existsSync(join(process.cwd(), path)), path).toBe(true);
+    const adr = read(path);
+    for (const text of [
+      "App Service",
+      "@Microsoft.KeyVault(",
+      "av som standard",
+      "GitHub",
+      "RBAC",
+      "purge",
+      "90 dager",
+      "Optiplan",
+      "antakelse",
+      "synk",
+      "ENABLE_KEY_VAULT",
+    ]) {
+      expect(adr, text).toContain(text);
+    }
+    expect(adr).toMatch(RESTART);
+    expect(adr.trimEnd().split("\n").length).toBeLessThanOrEqual(60);
+  });
+
+  it("2. driftsdokumentet forklarer slå på, sjekk og slå av", () => {
+    const doc = read(DRIFT_DOC_PATH);
+    for (const text of [
+      "Nøkkelboks for hemmeligheter",
+      "ENABLE_KEY_VAULT",
+      "true",
+      "hakemerke",
+      "Recover",
+      "90 dager",
+      "kv-ezprop-",
+    ]) {
+      expect(doc, text).toContain(text);
+    }
+    expect(doc).toMatch(/^#+\s.*Nøkkelboks for hemmeligheter/m);
+    expect(doc).toMatch(RESTART);
+    const docLines = doc.split("\n");
+    const start = docLines.findIndex((line) => /^#+\s.*Hva som ikke er med ennå/.test(line));
+    expect(start, "overskriften «Hva som ikke er med ennå»").toBeGreaterThan(-1);
+    const level = /^(#+)/.exec(docLines[start]!)![1]!.length;
+    let end = start + 1;
+    while (end < docLines.length) {
+      const heading = /^(#+)\s/.exec(docLines[end]!);
+      if (heading && heading[1]!.length <= level) break;
+      end += 1;
+    }
+    const section = docLines.slice(start + 1, end);
+    expect(
+      section.some((line) => line.includes("Nøkkelboks") && line.includes("ENABLE_KEY_VAULT")),
+      "linje om nøkkelboksen under «Hva som ikke er med ennå»",
+    ).toBe(true);
+    expect(
+      section.filter((line) => line.includes("Nøkkelboks for hemmeligheter (fase 0b)")),
+    ).toEqual([]);
+  });
+
+  it("3. henvisningene i ADR 0002, domenemodellen, arkitekturen og åpne spørsmål", () => {
+    expect(read("docs/adr/0002-testmiljo-azure.md")).toContain("ADR 0005");
+
+    const domain = read("docs/05-domenemodell.md").split("\n");
+    expect(
+      domain.some(
+        (line) =>
+          line.includes("secret_ref") &&
+          line.includes("miljøvariabel") &&
+          /n[øo]kkelboks/i.test(line) &&
+          line.includes("Bicep"),
+      ),
+      "linje i domenemodellen om secret_ref og nøkkelboksen",
+    ).toBe(true);
+
+    const rule8 = read("docs/06-arkitektur.md")
+      .split("\n")
+      .find((line) => line.startsWith("8. **Tilkoblinger"));
+    expect(rule8, "regel 8 i arkitekturen").toBeDefined();
+    expect(rule8).toContain("nøkkelboksen");
+    expect(rule8).toContain("oppstart");
+
+    const questions = read("docs/09-apne-sporsmal.md").split("\n");
+    const question9 = questions.find((line) => /^\|\s*9\s*\|/.test(line));
+    expect(question9, "spørsmål nr. 9").toBeDefined();
+    expect(question9).toContain("nøkkelboksen er bygget");
+    const decided = questions.findIndex((line) =>
+      /Avgjort av agentene mens Ståle var borte/.test(line),
+    );
+    expect(decided, "«Avgjort av agentene mens Ståle var borte»").toBeGreaterThan(-1);
+    const decisions = questions.slice(decided).filter((line) => /^\|\s*A\d+\s*\|/.test(line));
+    expect(
+      decisions.some(
+        (line) =>
+          line.includes("Key Vault") &&
+          (line.includes("enableKeyVault") || line.includes("ENABLE_KEY_VAULT")),
+      ),
+      "A-rad om Key Vault",
+    ).toBe(true);
   });
 });

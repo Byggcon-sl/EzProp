@@ -113,4 +113,55 @@ describe("readSecret", () => {
     expect((error as Error).message).not.toContain(SECRET);
     expect(String(error)).not.toContain(SECRET);
   });
+
+  /*
+   * Nøkkelboksen: testplan docs/funksjoner/fase0b-nokkelboks-testplan.md avsnitt 5. Får ikke App
+   * Service hentet verdien, står referanseteksten igjen i miljøvariabelen. Den regnes som mangler.
+   */
+  const REFERENCE_URI =
+    "@Microsoft.KeyVault(SecretUri=https://kv-oppdiktet.vault.azure.net/secrets/oppdiktet/)";
+  const REFERENCE_NAME = "@Microsoft.KeyVault(VaultName=kv-oppdiktet;SecretName=oppdiktet)";
+  const REFERENCE_PARTS = [
+    "@Microsoft.KeyVault",
+    "vault.azure.net",
+    "https://",
+    "kv-oppdiktet",
+    "SecretUri",
+  ];
+
+  it.each([[REFERENCE_URI], [REFERENCE_NAME], [`  ${REFERENCE_URI}`]])(
+    "9. uløst referanse %j regnes som mangler, uten referansen i meldingen",
+    async (reference) => {
+      vi.stubEnv(NAME, reference);
+      let value: unknown;
+      const error = await caught(async () => {
+        value = await readSecret(NAME);
+      });
+      expect(error).toBeInstanceOf(SecretNotFoundError);
+      expect(value).toBeUndefined();
+      expect((error as Error).message).toContain(NAME);
+      for (const part of REFERENCE_PARTS) {
+        expect((error as Error).message, part).not.toContain(part);
+        expect(String(error), part).not.toContain(part);
+      }
+    },
+  );
+
+  it("10. ugyldig navn sjekkes før referansen", async () => {
+    vi.stubEnv("lowercase", REFERENCE_URI);
+    const error = await caught(() => readSecret("lowercase"));
+    expect(error).toBeInstanceOf(InvalidSecretRefError);
+    expect(error).not.toBeInstanceOf(SecretNotFoundError);
+    for (const part of REFERENCE_PARTS) {
+      expect((error as Error).message, part).not.toContain(part);
+    }
+  });
+
+  it.each([["abc-KeyVault-xyz"], ["@oppdiktet"]])(
+    "11. vanlig verdi %j leses som før",
+    async (value) => {
+      vi.stubEnv(NAME, value);
+      expect(await readSecret(NAME)).toBe(value);
+    },
+  );
 });
