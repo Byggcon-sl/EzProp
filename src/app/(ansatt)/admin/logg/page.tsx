@@ -56,6 +56,7 @@ export default async function AuditLogPage() {
                   {auditEntityLabel(row.entityType)} – {auditActionLabel(row.action)}
                 </span>
                 <span className="block min-w-0 text-sm text-slate-600">
+                  {lines.length > 0 ? <span className="sr-only">Endringer: </span> : null}
                   {lines.map((line, index) => (
                     <span key={index} className="block">
                       {line}

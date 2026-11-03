@@ -32,7 +32,6 @@ export const employees = pgTable(
     deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
   },
   (table) => [
-    index("employees_organization_id_idx").on(table.organizationId),
     // Mål for sammensatte fremmednøkler fra andre tabeller (samme organisasjon)
     uniqueIndex("employees_organization_id_id_idx").on(table.organizationId, table.id),
     // Én ansatt per innlogging per organisasjon
