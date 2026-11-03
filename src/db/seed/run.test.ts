@@ -23,6 +23,8 @@ describe("seed", () => {
     expect(orgs).toHaveLength(1);
     expect(people).toHaveLength(1);
     const admin = people[0]!;
+    // Seedet er en av skriverne av users.email: adressen lagres med små bokstaver.
+    expect(admin.email).toBe("admin@example.com");
     const grant = await requireOrganizationAccess(
       { id: admin.id, email: admin.email, name: admin.name },
       orgs[0]!.id,

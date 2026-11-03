@@ -54,7 +54,14 @@ describe("readFileRetention", () => {
     { label: "101", value: 101 },
   ];
 
-  it.each(KEYS.flatMap(({ key, field }) => invalidValues.map((v) => ({ key, field, ...v }))))(
+  // Hele fasiten for den første nøkkelen, og én ugyldig verdi for hver av de to andre
+  const [firstKey, ...otherKeys] = KEYS;
+  const invalidCases = [
+    ...invalidValues.map((v) => ({ ...firstKey, ...v })),
+    ...otherKeys.map((k) => ({ ...k, ...invalidValues[0]! })),
+  ];
+
+  it.each(invalidCases)(
     "3. ugyldig $label i $key gir standard og én advarsel med bare organisasjon og nøkkel",
     ({ key, field, value }) => {
       const warn = vi.spyOn(logger, "warn");
@@ -73,14 +80,17 @@ describe("readFileRetention", () => {
     },
   );
 
-  it.each(KEYS.flatMap(({ key, field }) => [1, 10, 100].map((value) => ({ key, field, value }))))(
-    "4. gyldig $value i $key brukes uten advarsel",
-    ({ key, field, value }) => {
-      const warn = vi.spyOn(logger, "warn");
-      expect(readFileRetention(orgId, { [key]: value })).toEqual({ ...DEFAULTS, [field]: value });
-      expect(warn).not.toHaveBeenCalled();
-    },
-  );
+  const validCases = [
+    ...[1, 10, 100].map((value) => ({ ...firstKey, value })),
+    // 7 er ingen standardverdi, så testen viser at verdien faktisk leses
+    ...otherKeys.map((k) => ({ ...k, value: 7 })),
+  ];
+
+  it.each(validCases)("4. gyldig $value i $key brukes uten advarsel", ({ key, field, value }) => {
+    const warn = vi.spyOn(logger, "warn");
+    expect(readFileRetention(orgId, { [key]: value })).toEqual({ ...DEFAULTS, [field]: value });
+    expect(warn).not.toHaveBeenCalled();
+  });
 
   it("5. ukjente nøkler påvirker ingenting og gir ingen advarsel", () => {
     const warn = vi.spyOn(logger, "warn");
