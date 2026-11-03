@@ -74,6 +74,22 @@ function entry(table: string, testFile: string | null, reason?: string): TenantT
 
 const GOOD_TEXT = "await expectTenantIsolation({ seed, query, idOf });";
 
+/**
+ * Sammenligner tabellnavnene i skjemaet med `RESET_TABLES`, begge veier. En glemt tabell gir
+ * navnet i resultatet, ikke bare et tall som ikke stemmer.
+ */
+function compareTableLists(
+  schemaNames: readonly string[],
+  resetNames: readonly string[],
+): { missingInResetTables: string[]; missingInSchema: string[] } {
+  const inSchema = new Set(schemaNames);
+  const inReset = new Set(resetNames);
+  return {
+    missingInResetTables: [...inSchema].filter((name) => !inReset.has(name)).sort(),
+    missingInSchema: [...inReset].filter((name) => !inSchema.has(name)).sort(),
+  };
+}
+
 describe("tabellene fra skjemaet", () => {
   it("U1 finner alle tabeller med organization_id fra skjemaet", () => {
     expect(tenantTableNames.length).toBeGreaterThan(0);
@@ -81,9 +97,30 @@ describe("tabellene fra skjemaet", () => {
     for (const table of tenantTableList) {
       expect(organizationColumn(table)?.notNull, getTableName(table)).toBe(true);
     }
-    expect(tenantTableNames).toHaveLength(RESET_TABLES.length - 6);
+    expect(compareTableLists([...tenantTableNames, ...globalTableNames], RESET_TABLES)).toEqual({
+      missingInResetTables: [],
+      missingInSchema: [],
+    });
     expect(tenantTableNames).toContain("employee_roles");
     expect(tenantTableNames).toContain("files");
+  });
+
+  it("U1b hjelperen navngir en tabell som finnes i skjemaet, men mangler i RESET_TABLES", () => {
+    expect(
+      compareTableLists(
+        [...tenantTableNames, ...globalTableNames, "oppdiktet_tabell"],
+        RESET_TABLES,
+      ),
+    ).toEqual({ missingInResetTables: ["oppdiktet_tabell"], missingInSchema: [] });
+  });
+
+  it("U1c hjelperen navngir en tabell i RESET_TABLES som ikke finnes i skjemaet", () => {
+    expect(
+      compareTableLists(
+        [...tenantTableNames, ...globalTableNames],
+        [...RESET_TABLES, "oppdiktet_tabell"],
+      ),
+    ).toEqual({ missingInResetTables: [], missingInSchema: ["oppdiktet_tabell"] });
   });
 
   it("U2 tabellene uten organization_id er nøyaktig de seks kjente", () => {
