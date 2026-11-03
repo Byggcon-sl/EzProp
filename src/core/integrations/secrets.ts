@@ -1,7 +1,10 @@
+import { isUnresolvedSecretReference } from "@/shared/config/secret-reference";
+
 /*
- * Den eneste veien til hemmelighetene for tilkoblingene. Nå leses de fra miljøvariabler.
- * Byttes ut med nøkkelboksen (Azure Key Vault, eget punkt i fase 0b); resten av laget merker
- * ikke byttet. Verdien står aldri i en feilmelding eller i loggen, bare navnet.
+ * Den eneste veien til hemmelighetene for tilkoblingene. De leses fra miljøvariabler. Lokalt
+ * settes de i `.env`; i Azure fylles de fra nøkkelboksen ved oppstart (ADR 0005). En referanse
+ * til nøkkelboksen som ikke ble hentet, regnes som at hemmeligheten mangler. Verdien står aldri
+ * i en feilmelding eller i loggen, bare navnet.
  *
  * Dette er den eneste filen i `src/core/integrations` og `src/core/email` som leser miljøet
  * direkte.
@@ -45,6 +48,8 @@ export function readSecret(secretRef: string): string {
     throw new InvalidSecretRefError();
   }
   const value = process.env[secretRef];
-  if (value === undefined || value === "") throw new SecretNotFoundError(secretRef);
+  if (value === undefined || value === "" || isUnresolvedSecretReference(value)) {
+    throw new SecretNotFoundError(secretRef);
+  }
   return value;
 }
