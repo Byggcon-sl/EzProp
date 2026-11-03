@@ -64,6 +64,7 @@ Etter at de fire er lagt inn og utrullingen har gått: prøv én innlogging i te
 |---|---|
 | `SEED_ADMIN_EMAIL` | Din jobbadresse. Blir første admin. |
 | `APP_HOSTNAME` | La stå tom til DNS er klar (se punkt f). Forslag: `ezprop-test.byggcon.no`. |
+| `ENABLE_KEY_VAULT` | Nøkkelboksen for hemmeligheter (ADR 0005). La stå tom eller `false` til du vil slå den på, se avsnittet «Nøkkelboks for hemmeligheter». |
 
 Databasebrukeren heter `ezprop_admin`. Den settes av oppsettet, og du trenger ikke legge den inn.
 
@@ -173,6 +174,36 @@ Gjør alle tre stegene, i denne rekkefølgen:
 
 Innstillingen `wal_level` settes ikke tilbake. Det er ufarlig og koster ingenting. De fire secrets kan stå, eller du kan slette dem.
 
+## Nøkkelboks for hemmeligheter
+
+**Hva dette er:** en nøkkelboks (Azure Key Vault) i ressursgruppen. I testmiljøet heter den `kv-ezprop-test` (navnet er alltid `kv-ezprop-<miljø>`). Når den er på, ligger databasepassordet (`DATABASE_URL`), innloggingsnøkkelen (`BETTER_AUTH_SECRET`) og klienthemmeligheten for e-post (`MS_GRAPH_CLIENT_SECRET`) i boksen, ikke i klartekst i appinnstillingene. Appinnstillingene viser da bare en henvisning til boksen. Appen får en egen identitet som bare kan lese fra boksen. Se ADR 0005.
+
+Du legger fortsatt verdiene inn i GitHub-secrets, som før. Utrullingen legger dem i boksen. Du trenger ikke legge dem inn noe annet sted.
+
+**Kostnad:** tilnærmet null. Azure tar betalt per 10 000 oppslag, og appen leser bare når den starter. Med bryteren av: ingenting.
+
+Boksen står **av** til du slår den på. En merge til `main` lager ingenting nytt så lenge den er av.
+
+### Slå på
+
+1. **Sett variabelen** `ENABLE_KEY_VAULT` til `true` (GitHub → Settings → Secrets and variables → Actions → fanen Variables). Nøyaktig `true`, med små bokstaver. Alt annet, også tom, betyr av.
+2. **Kjør utrullingen:** Actions → «Utrulling til Azure» → «Run workflow». Eller vent til neste merge til `main`.
+
+### Sjekke
+
+1. **Se etter grønt hakemerke:** i Azure-portalen, åpne App Service (`app-ezprop-test`) → Configuration (Environment variables). `DATABASE_URL`, `BETTER_AUTH_SECRET` og `MS_GRAPH_CLIENT_SECRET` skal ha et grønt hakemerke og teksten «Key vault reference».
+2. **Er de røde rett etter første utrulling:** start appen på nytt (knappen «Restart» på App Service). Tilgangen til boksen lages etter appen, og App Service henter verdiene når appen starter. Etter omstart skal hakemerket være grønt.
+3. **Logg inn** i testmiljøet og se at det virker.
+
+### Slå av
+
+1. **Sett variabelen** `ENABLE_KEY_VAULT` til noe annet enn `true`, for eksempel `false`.
+2. **Kjør utrullingen** på nytt. Verdiene står da som før i klartekst i appinnstillingene.
+
+Utrullingen sletter ikke boksen. Sletter du den selv i portalen, ligger den i myk sletting i 90 dager og sperrer navnet så lenge. Vil du ha den tilbake, bruk «Recover» på den slettede boksen i stedet for å lage en ny. Purge-beskyttelsen kan ikke slås av.
+
+**Merk:** utrullingen eier tilgangslisten på boksen. Tilganger du legger til selv i portalen, forsvinner ved neste utrulling. Du trenger ikke lese verdiene i boksen; de ligger i GitHub.
+
 ## Slette miljøet
 
 `az group delete --name rg-ezprop-test`
@@ -184,6 +215,6 @@ Alt i gruppen slettes, også databasen. Koden ligger fortsatt i GitHub, så milj
 Alt dette skal på plass før ekte data:
 
 - E-post via Microsoft 365 prøvd mot ekte konto (sendingen er bygget, venter på at de fire secretene legges inn)
-- Nøkkelboks for hemmeligheter (fase 0b)
+- Nøkkelboksen er bygget, av til Ståle slår den på (`ENABLE_KEY_VAULT`, se avsnittet «Nøkkelboks for hemmeligheter»)
 - Privat nettverk mellom app og database
 - Egen databasebruker for appen

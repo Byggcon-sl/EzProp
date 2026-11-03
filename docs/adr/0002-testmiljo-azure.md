@@ -24,7 +24,7 @@ Optiplans repo (`infra/azure`, `deploy-azure.yml`) var ikke tilgjengelig da dett
 
 - **Brannmurregelen «Azure-tjenester» (0.0.0.0) åpner databasen for alle Azure-kunders IP-adresser,** ikke bare vår app. Akseptert i test fordi databasen krever TLS og et langt tilfeldig passord, og bare inneholder oppdiktede data. Før ekte data: privat nettverk eller VNet-integrasjon mellom app og database, og regelen fjernes.
 - **Appen bruker administratorbrukeren på databasen.** Enklest nå (én bruker, ett passord). Før ekte data lages en egen bruker uten eierrettigheter til appen; administrator brukes bare til migrering.
-- **Hemmelighetene ligger i GitHub-secrets og i App Service sine appinnstillinger,** ikke i Key Vault. Alle med lesetilgang til ressursgruppen i Azure-portalen kan lese dem og innloggingskoden i loggen (spørsmål nr. 9). Key Vault kommer i fase 0b.
+- **Hemmelighetene ligger i GitHub-secrets og i App Service sine appinnstillinger,** ikke i Key Vault. Alle med lesetilgang til ressursgruppen i Azure-portalen kan lese dem og innloggingskoden i loggen (spørsmål nr. 9). Key Vault kommer i fase 0b. Nøkkelboksen er bygget i ADR 0005 (av som standard, Ståle slår på med `ENABLE_KEY_VAULT`).
 - **Bicep kompileres ikke i skymiljøet** (ingen `az`/`bicep`), og ingenting rulles ut herfra. Første grønne kjøring hos Ståle er den egentlige testen. Mottiltak: `az deployment group validate` før `create`, tekst-tester i `tests/deploy-workflow.test.ts`, og `workflow_dispatch` så Ståle kan kjøre på nytt uten ny merge.
 - **`HOSTNAME=0.0.0.0` settes som appinnstilling.** Next sin `server.js` lytter på `HOSTNAME` hvis den er satt, og containeren i App Service setter den til sitt eget navn. `0.0.0.0` gjør at helsesjekken alltid når fram.
 
