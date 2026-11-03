@@ -26,7 +26,7 @@ Tilnærmet null (betaling per 10 000 oppslag; appen leser ved oppstart). Med bry
 
 ## Forkastet
 
-- **Egen kodevei mot Key Vault** (REST med `fetch` eller `@azure/keyvault-secrets`). Mer kode og en avhengighet for noe plattformen gjør gratis, og to veier til samme hemmelighet. Blir hemmeligheter per organisasjon lagt inn fra admin-skjermen (fase 3), er det en egen oppgave; `readSecret` er stedet.
+- **Egen kodevei mot Key Vault** (REST med `fetch` eller `@azure/keyvault-secrets`). Mer kode og en avhengighet for noe plattformen gjør gratis, og to veier til samme hemmelighet. Blir hemmeligheter per organisasjon lagt inn fra admin-skjermen (fase 3), er det en egen oppgave; `readSecret` er stedet. Vurdert på nytt 03.11.2026 som «steg 2» og utsatt til den første tilkoblingen som trenger en hemmelighet som ikke er kjent ved utrulling (A50, `docs/funksjoner/fase0b-nokkelboks-kodevei.md`).
 - **RBAC i test.** Krever rettigheter Ståle må gi. Steg mot produksjon sammen med privat nettverk (ADR 0002, «Minimum før ekte data»).
 - **Container Apps-secrets.** Appen kjører på App Service, ikke i Container Apps.
 - **Hemmeligheter lagt direkte i boksen nå.** Ståle er borte, og utrullingen skal virke uten manuelle steg i portalen. Steg to.

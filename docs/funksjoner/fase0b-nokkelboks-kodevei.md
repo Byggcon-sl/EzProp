@@ -2,13 +2,35 @@
 
 - **Fase:** 0b (Innlogging og sikkerhet)
 - **Modul:** kjerne (`src/core/integrations`), litt infrastruktur (`infra/azure/main.bicep`, `.github/workflows/deploy-azure.yml`) og dokumenter
-- **Status:** klart til bygging (oppgavekort laget av prosjektlederen 03.11.2026, oppdatert samme dag etter at steg 1 ble PR #73; autonom modus)
+- **Status:** **utsatt** (prosjektlederen 03.11.2026 etter forhåndsvurderingen, se «Avgjørelse etter forhåndsvurderingen» under). Bygges ikke i fase 0b. Kortet og testplanen er grunnlaget når steg 2 bygges sammen med den første tilkoblingen som trenger en hemmelighet som ikke er kjent ved utrulling. Oppgavekortet ble laget 03.11.2026 og oppdatert samme dag etter at steg 1 ble PR #73 (autonom modus).
 - **Branch:** `fase0b-nokkelboks-kodevei` fra `origin/fase0b-nokkelboks`. **Bygger på** steg 1 (branch `fase0b-nokkelboks`, ADR 0005, beslutning A49, **PR #73** mot `main`, versjon 0.2.62; merges av merge-skriptet når CI er grønn). Branchen er flettet med `fase0b-nokkelboks` til og med `main` ved PR #72. PR-en for steg 2 åpnes mot `fase0b-nokkelboks` så lenge #73 er åpen, ellers mot `main` (merge-skriptet flytter PR-en). Versjon: **0.2.63**.
 - **Planpunkt:** «Nøkkelboks for hemmeligheter (for eksempel Azure Key Vault, samme oppsett som Optiplan). Ingen nøkler i koden eller databasen, bare navnet på hemmeligheten (`secret_ref`). (Innspill P12)» – steg 2 av samme punkt.
 - **Støtter hovedmål:**
   - **Reklamasjoner (trygg drift):** hemmelighetene for tilkoblingene ligger ett sted (boksen) og leses ved navn. Ingen nøkkel i kode, database, Bicep-utdata, logg eller feilmelding. En nøkkel på avveie er en reklamasjon og et personvernbrudd på én gang.
   - **Tid (for Ståle og admin):** en ny tilkobling (regnskap i fase 3, KI i fase 2) trenger ingen kodeendring og ingen ny utrulling: Ståle legger hemmeligheten i boksen, admin skriver navnet i tilkoblingen. Ett oppsett, som Optiplan.
   - **KI først:** ikke selve oppgaven, men KI-tilkoblingen i fase 2 får nøkkelen sin denne veien (`readSecret`).
+
+## Avgjørelse etter forhåndsvurderingen (prosjektlederen 03.11.2026)
+
+Forenkleren anbefalte å ikke bygge steg 2 nå (forslag A). Arkitekten, sikkerhet-personvern og test-lederen vurderte kortet som om det skulle bygges, og la inn gode presiseringer. Prosjektlederen avgjør: **steg 2 utsettes.** Beslutningen er ført som A50 i `docs/09-apne-sporsmal.md`. Grunnene, i rekkefølge:
+
+1. **Planpunktet er alt levert.** Linjen i `docs/07-utviklingsplan.md` er krysset av med steg 1 (PR #73). Steg 2 står ikke i gjeldende fase, og regel 1 sier at vi bare bygger det som står der.
+2. **ADR 0005 forkaster uttrykkelig en egen kodevei** («mer kode, en avhengighet og to veier til samme hemmelighet»). Å snu det én dag etter, før Ståle har slått på steg 1 og sett at boksen virker, er ikke en beslutning fra researchen, bare fra oss.
+3. **Ingen bruker i fase 0b.** Den eneste tilkoblingen er e-post, og `MS_GRAPH_CLIENT_SECRET` ligger alt i Bicep i steg 1. Den første hemmeligheten som ikke er kjent ved utrulling, kommer med KI-tilkoblingen (fase 2) eller eAccounting (fase 3). Begge får uansett egen PR; der er steg 2 én bit til, med en ekte bruker som kan vise at det virker.
+4. **To avhengigheter for kode som er av.** `@azure/identity` drar med seg `msal-node` med mer for én klasse. En port med bare én adapter (miljøvariabler) er en abstraksjon uten bruk og skal heller ikke bygges nå.
+5. **Ståle er tilbake 04.11.2026** og kan svare på det som avgjør formen: om Optiplan leser hemmeligheter i kode fra boksen eller bare via referanser (planpunktet sier «samme oppsett som Optiplan»). Å vente én dag koster ingenting; å bygge feil vei koster en PR til.
+
+**Hovedmål:** reklamasjoner er dekket av steg 1 (ingen nøkkel i kode, database eller logg). Tid gjelder bare Ståle og admin ved nye tilkoblinger i fase 2 og 3, ikke takstmannen i fase 0b. Utsettelsen støtter derfor hovedmålene like godt, med mindre kode.
+
+**Tas med når steg 2 bygges** (presiseringene fra forhåndsvurderingen, så de ikke går tapt):
+
+- Fra forenkleren (forslag B): mellomlageret ut (volumet er lite, boksen tåler det, og rotasjon virker straks); ingen egen ADR 0006, men ett nytt punkt i ADR 0005; ingen egen GitHub-variabel `SECRET_STORE_DRIVER` i Bicep (kodeveien bindes til `enableKeyVault`; miljøvariabelen i koden beholdes for lokal bruk); kravet om snubar omforming ut (alfabetet [A-Z0-9_] gjør den entydig; tre eksempler og mønstertest holder); grep-kontrollene på `.setSecret`/`.beginDeleteSecret`/`listPropertiesOfSecrets` ut (porten har bare `get`); feilsakene i A4 som én `it.each`.
+- Fra arkitekten: `index.ts` eksporterer bare `readSecret`, feilklassene og `type SecretStore` (fabrikkene importeres fra filene i testene, som i filtjenesten); valget av kilde som ren funksjon `createSecretStore(env)` i `secret-store.ts` med `SECRET_STORE_DRIVERS` som fast konstant; rekkefølgen navn → kilde → `undefined`/tom → `SecretNotFoundError`; 404 gjenkjennes på `statusCode === 404` eller `code === "SecretNotFound"`, 403 (deaktivert hemmelighet) gir `SecretStoreError`; `@allowed` på Bicep-parameteren hvis den finnes; linje 1916 i `docs/05-domenemodell.md` endres; to samtidige `get` på samme navn før første svar gir to kall (bevisst).
+- Fra sikkerhet-personvern: test 11 i `tests/deploy-workflow.test.ts` skrives om bevisst (unntak bare for adapterfilen); `SECRET_STORE_AZURE_KEY_VAULT_URL` må begynne med `https://` og vertsnavnet slutte på `.vault.azure.net`, ellers `SecretStoreConfigError` uten nettkall; `AZURE_LOG_LEVEL` finnes ikke i `main.bicep`, `.env.example` eller `src/`; `last_error` ved `SecretStoreError` inneholder verken `vault.azure.net`, `https://` eller `Bearer`; `secret_ref` er globalt per miljø (spørsmål nr. 16 til Ståle før flere organisasjoner).
+- Fra test-lederen: `resetSecretStore(store?)` som testsøm, miljøadapteren leser selve `process.env`, ingen test kaller `get` på en kilde laget med ekte klient; testplanen i `docs/funksjoner/fase0b-nokkelboks-kodevei-testplan.md` (avsnitt 2, 3.13–3.17 og 7 strykes hvis avhengighetene kuttes).
+- Beholdes uendret: asynkron `readSecret` med navnesjekk før kilden, nektlisten også for boksen, bare arbeidsidentitet, ingen stille fallback, 404 → `undefined`, feiltekst med bare navnet, `await` i `resolve.ts`.
+
+Resten av kortet står som det ble skrevet før avgjørelsen, som grunnlag.
 
 ## Problem
 
@@ -103,7 +125,7 @@ Ingen.
 - [ ] A5: Den ekte `SecretClient` oppfyller `KeyVaultClientLike` (typekontroll i adapterfilen, `pnpm typecheck`).
 - [ ] A6: Valg av kilde: `SECRET_STORE_DRIVER=azure_key_vault` uten `SECRET_STORE_AZURE_KEY_VAULT_URL` gir `SecretStoreConfigError` som nevner variabelnavnet; `tull` gir `SecretStoreConfigError`; `azure_key_vault` med oppdiktet adresse lager kilden med `driver === "azure_key_vault"` uten nettkall (kallet skjer først ved `get`). Ingen stille fallback til miljøet når boksen er valgt: en hemmelighet som bare finnes i miljøet, finnes ikke.
 - [ ] A7: Mellomlageret: to kall på samme navn innen 5 minutter gir ett kall på klienten; etter 5 minutter (`vi.useFakeTimers`) nytt kall; `undefined` og feil lagres ikke (neste kall spør igjen); `resetSecretStore()` tømmer; to ulike navn deler ikke verdi. Miljøvariabler mellomlagres ikke (ny verdi med `vi.stubEnv` leses straks).
-- [ ] A8: Statisk: `@azure/keyvault-secrets` og `@azure/identity` importeres bare i `src/core/integrations/azure-key-vault.ts`; `process.env` leses i laget bare i `secrets.ts` (kontroll 4, uendret); `ManagedIdentityCredential` brukes, `DefaultAzureCredential` forekommer ikke i `src/`; ingen `.setSecret(`, `.beginDeleteSecret(` eller `listPropertiesOfSecrets(` i `src/`.
+- [ ] A8: Statisk: `@azure/keyvault-secrets` og `@azure/identity` importeres bare i `src/core/integrations/azure-key-vault.ts`; `process.env` leses i laget bare i `secrets.ts` (kontroll 4, uendret); `ManagedIdentityCredential` brukes, `DefaultAzureCredential` forekommer ikke i `src/` (heller ikke i kommentarer); ingen `.setSecret(`, `.beginDeleteSecret(` eller `listPropertiesOfSecrets(` i `src/`; `vault.azure.net` står ikke i produktfiler under `src/` (adressen kommer bare fra miljøet). Steg 1-testen 11 «ingen egen kodevei og ingen ny avhengighet» i `tests/deploy-workflow.test.ts` blir rød av dette og skrives om til sin motsats (testplanen avsnitt 7); PR-en sier det.
 - [ ] A9: `src/core/email/resolve.ts`: `sendEmail` gjennom tilkoblingslaget virker med asynkron `readSecret` (eksisterende tester i `email.test.ts` og `resolve.test.ts` grønne); manglende hemmelighet gir fortsatt avvist sending med `last_error` som bare har navnet.
 - [ ] Bruker i annen organisasjon får ikke tilgang (test): ikke relevant, ingen ny spørring og ingen ny tabell. `tests/tenant-isolation-all-tables.test.ts` er uendret og grønn.
 - [ ] Virker på iPad-størrelse (e2e): ingen skjerm. e2e kjøres som vanlig og er grønn.
@@ -139,7 +161,7 @@ Ikke med: ux-ansvarlig og ui-designer (ingen skjerm), fagansvarlig (ingen fagsto
 - **Utvikler, bit 1 (kode):** omfang 1–6, 8, 10, 12, `index.ts` og `resolve.ts`.
 - **Utvikler, bit 2 (infrastruktur og dokumenter):** omfang 7 og 9 (utenom ADR 0006). Rører ikke filene i bit 1.
 - **Arkitekt:** ADR 0006 og linjen i ADR 0005.
-- **Testskriver:** omfang 11 etter testplanen, mot grensesnittet i kortet: `SecretStore` med `driver` og `get`, `createEnvSecretStore(env)`, `createAzureKeyVaultSecretStore(client)`, `toKeyVaultSecretName(secretRef)`, `withSecretCache(store, ttlMs)`, `SECRET_CACHE_TTL_MS`, `readSecret(secretRef): Promise<string>`, `resetSecretStore()`, `SecretStoreError`, `SecretStoreConfigError`; alle eksportert fra `src/core/integrations/index.ts`.
+- **Testskriver:** omfang 11 etter testplanen, mot grensesnittet i kortet: `SecretStore` med `driver` og `get`, `createEnvSecretStore(env)`, `createAzureKeyVaultSecretStore(client)`, `createAzureKeyVaultSecretStoreFromUrl(vaultUrl)`, `toKeyVaultSecretName(secretRef)`, `withSecretCache(store, ttlMs)`, `SECRET_CACHE_TTL_MS`, `createSecretStore(env)` (ren funksjon som velger kilde fra et env-objekt, som `createFileStorage(env)`), `readSecret(secretRef): Promise<string>`, `resetSecretStore(store?)` (uten argument: les miljøet på nytt ved neste kall; med argument: bruk kilden som sendes inn, mellomlager legges på ut fra `store.driver`), `SecretStoreError`, `SecretStoreConfigError`; alle eksportert fra `src/core/integrations/index.ts`. Testsømmen trengs fordi `readSecret` med driveren `azure_key_vault` ellers bare kan prøves mot den ekte klienten, som går mot IMDS og henger. Formkravene står i testplanen («Punkter utvikleren låser»).
 
 ## Samkjøring med steg 1 (prosjektlederen)
 
