@@ -95,12 +95,7 @@ describe("createFileStorage", () => {
         "DefaultEndpointsProtocol=https;AccountName=oppdiktet;AccountKey=b3BwZGlrdGV0;EndpointSuffix=core.windows.net",
       FILE_STORAGE_AZURE_CONTAINER: "filer",
     });
-    const put = vi.spyOn(storage, "put");
-    const get = vi.spyOn(storage, "get");
-
     expect(storage).toHaveProperty("driver", "azure");
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(put).not.toHaveBeenCalled();
-    expect(get).not.toHaveBeenCalled();
   });
 });

@@ -229,3 +229,49 @@ describe("logger vasker feltnavn med prefiks", () => {
     expect(JSON.stringify(line)).not.toContain(VALUE);
   });
 });
+
+// Småfunn (r) 5 (docs/agenter/oppgaver/fase0b-smafunn-r-s-testplan.md avsnitt 1). De elleve
+// ordene som tas ut som eksakte alternativer i SENSITIVE_KEY, skal fortsatt vaskes av
+// «slutter på»-alternativet, både eksakt og med prefiks. Oppdiktede verdier.
+describe("de elleve ordene vaskes fortsatt etter at de eksakte alternativene er tatt ut", () => {
+  it.each([
+    "password",
+    "passord",
+    "secret",
+    "clientSecret",
+    "token",
+    "accessToken",
+    "refreshToken",
+    "sessionToken",
+    "apiKey",
+    "connectionString",
+    "accountKey",
+  ])("E1. %s fjernes", (key) => {
+    expect(formatLogLine("info", "Test", { [key]: "x" })[key]).toBe(REDACTED);
+  });
+
+  it.each([
+    ["userPassword", "USER_PASSWORD"],
+    ["userPassord", "USER_PASSORD"],
+    ["appSecret", "APP_SECRET"],
+    ["msClientSecret", "MS_CLIENT_SECRET"],
+    ["myToken", "MY_TOKEN"],
+    ["graphAccessToken", "GRAPH_ACCESS_TOKEN"],
+    ["graphRefreshToken", "GRAPH_REFRESH_TOKEN"],
+    ["userSessionToken", "USER_SESSION_TOKEN"],
+    ["xApiKey", "X_API_KEY"],
+    ["dbConnectionString", "DB_CONNECTION_STRING"],
+    ["storageAccountKey", "STORAGE_ACCOUNT_KEY"],
+  ])("E2. %s og %s fjernes", (camel, snake) => {
+    const line = formatLogLine("info", "Test", { [camel]: "x", [snake]: "x" });
+    expect(line[camel]).toBe(REDACTED);
+    expect(line[snake]).toBe(REDACTED);
+  });
+
+  it.each(["tokens", "secretRef", "secret_ref", "passordHint", "apiKeys"])(
+    "E3. %s står urørt (ingen overvasking)",
+    (key) => {
+      expect(formatLogLine("info", "Test", { [key]: "x" })[key]).toBe("x");
+    },
+  );
+});

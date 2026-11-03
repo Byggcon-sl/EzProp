@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { eq } from "drizzle-orm";
@@ -112,6 +112,29 @@ describe("storeTrialPhoto", () => {
     expect(row!.storagePath).toBeTruthy();
     expect(path.resolve(row!.storagePath!)).toBe(path.resolve(expectedPath));
     expect(row!.uploadedAt).toBeInstanceOf(Date);
+    // T1: bare den endelige filen ligger igjen, ingen midlertidig fil
+    const entries = (await listAll(path.join(uploadDir, organizationId))).sort();
+    expect(entries).toEqual([photoId]);
+    expect(entries.some((name) => name.includes(".tmp-"))).toBe(false);
+  });
+
+  it("feil etter at den midlertidige filen er laget: mappe på den endelige stien gir avvisning, raden uten uploaded_at, ingen .tmp-fil igjen", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+    const photoId = uuidv7();
+    const finalPath = path.join(uploadDir, organizationId, photoId);
+    // En mappe på den endelige stien: den midlertidige filen kan skrives, men ikke gis nytt navn
+    await mkdir(finalPath, { recursive: true });
+
+    const error = await errorOf(
+      storeTrialPhoto(actor, organizationId, photoId, meta(formId), BYTES),
+    );
+
+    expect((error as NodeJS.ErrnoException).code).toBe("EISDIR");
+    expect((await stat(finalPath)).isDirectory()).toBe(true);
+    const entries = await listAll(path.join(uploadDir, organizationId));
+    expect(entries.some((name) => name.includes(".tmp-"))).toBe(false);
+    expect((await photoRow(photoId))?.uploadedAt ?? null).toBeNull();
   });
 
   it("lager raden fra meta når den mangler", async () => {
@@ -613,6 +636,10 @@ describe("storeTrialDisplayCopy", () => {
     // Originalen er uendret
     expect(sha(readFileSync(originalPath))).toBe(originalShaBefore);
     expect(originalShaBefore).toBe(SHA);
+    // T2: bare originalen og kopien ligger i mappen, ingen midlertidig fil
+    const entries = (await listAll(path.join(uploadDir, organizationId))).sort();
+    expect(entries).toEqual([photoId, `${photoId}.display.jpg`].sort());
+    expect(entries.some((name) => name.includes(".tmp-"))).toBe(false);
   });
 
   // Valget er låst her: bare nøyaktig `image/jpeg` godtas, også parametre avvises.

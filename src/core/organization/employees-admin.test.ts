@@ -664,6 +664,27 @@ describe("3.5 ny ansatt og innlogging", () => {
     expect(login?.email).toBe("ola@eksempel.no");
   });
 
+  it("2b. «Kari@Eksempel.NO» lagt inn utenom skriverne treffes ikke; ny innlogging med små bokstaver lages", async () => {
+    // Slike rader skal ikke finnes: alle som skriver users.email (seedet og skjemaet for ny
+    // ansatt) gjør adressen til små bokstaver. Oppslaget sammenligner derfor eksakt, slik at
+    // indeksen på e-post brukes. Testen går rød hvis noen setter `lower(` tilbake i oppslaget.
+    const { org, admin } = await orgWithAdmin();
+    const upperId = randomUUID();
+    await db.insert(users).values({ id: upperId, email: "Kari@Eksempel.NO", name: "Kari Test" });
+    const usersBefore = (await tableCounts()).users;
+
+    const created = await createEmployee(admin, org.id, newEmployee({ email: "kari@eksempel.no" }));
+
+    expect((await tableCounts()).users).toBe(usersBefore + 1);
+    const lower = await db.select().from(users).where(eq(users.email, "kari@eksempel.no"));
+    const upper = await db.select().from(users).where(eq(users.email, "Kari@Eksempel.NO"));
+    expect(lower).toHaveLength(1);
+    expect(upper).toHaveLength(1);
+    expect(lower[0]!.id).not.toBe(upperId);
+    expect((await employeeRow(created.id)).userId).toBe(lower[0]!.id);
+    expect(upper[0]).toMatchObject({ id: upperId, email: "Kari@Eksempel.NO", name: "Kari Test" });
+  });
+
   it("3. duplikat i samme organisasjon gir feilmeldingen, og ingenting skrives", async () => {
     const { org, admin } = await orgWithAdmin();
     await createEmployee(admin, org.id, newEmployee({ email: "dobbel@eksempel.no" }));
