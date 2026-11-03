@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { FileAlreadyExistsError, FileNotFoundError, FileStorageError } from "./errors";
-import { assertValidStorageKey, toPlainBytes, type FileStorage } from "./storage";
+import { assertValidStorageKey, type FileStorage } from "./storage";
 
 /**
  * Sann bare hvis `resolvedPath` ligger under `root` (ikke roten selv, og ikke en søskenmappe
@@ -50,7 +50,8 @@ export function createLocalFileStorage(rootDir: string): FileStorage {
     async get(storageKey) {
       const target = resolveKey(storageKey);
       try {
-        return toPlainBytes(await readFile(target));
+        const buffer = await readFile(target);
+        return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
       } catch (error) {
         const code = errorCode(error);
         if (code === "ENOENT" || code === "ENOTDIR" || code === "EISDIR") {

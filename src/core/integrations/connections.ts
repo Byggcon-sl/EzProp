@@ -2,8 +2,10 @@ import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 import { requireOrganizationAccess, type Actor } from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
-import { db, type DbExecutor } from "@/db/client";
+import { isUniqueViolation } from "@/core/organization/errors";
+import { db } from "@/db/client";
 import { integrationConnections } from "@/db/schema";
+import { logger, scrubText } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
 import { ConnectionNotFoundError, ConnectionValidationError } from "./errors";
 import { INTEGRATION_PORTS, PROVIDERS_BY_PORT, type ConnectionStatus } from "./ports";
@@ -48,12 +50,12 @@ export type UpdateConnectionInput = {
 /** Leverandører som krever navnet på en hemmelighet. */
 const PROVIDERS_REQUIRING_SECRET = ["microsoft365"];
 
-/** `settings` for `microsoft365`. Brukes også av e-postporten når senderen lages fra raden. */
-export const microsoft365SettingsSchema = z
+/** `settings` for `microsoft365`. E-postporten får skjemaet via `settingsSchemaFor`. */
+const microsoft365SettingsSchema = z
   .object({
-    from: z.email(),
+    from: z.email().max(254),
     tenantId: z.string().regex(/^[A-Za-z0-9.-]{1,64}$/),
-    clientId: z.string().min(1),
+    clientId: z.string().min(1).max(128),
   })
   .strict();
 const emptySettingsSchema = z.object({}).strict();
@@ -62,7 +64,7 @@ const emptySettingsSchema = z.object({}).strict();
  * Zod-skjemaet for `settings` til leverandøren, eller `null` for en ukjent leverandør.
  * Brukes også når e-postporten lager en sender fra raden.
  */
-export function settingsSchemaFor(provider: string) {
+export function settingsSchemaFor(provider: string): z.ZodType<Record<string, unknown>> | null {
   switch (provider) {
     case "microsoft365":
       return microsoft365SettingsSchema;
@@ -135,16 +137,6 @@ function toSummary(row: SummaryRow): ConnectionSummary {
     lastOkAt: row.lastOkAt,
     lastError: row.lastError,
   };
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  let current: unknown = error;
-  for (let depth = 0; current && depth < 5; depth += 1) {
-    const candidate = current as { code?: unknown; constraint_name?: unknown; cause?: unknown };
-    if (candidate.code === "23505" && candidate.constraint_name === UNIQUE_INDEX) return true;
-    current = candidate.cause;
-  }
-  return false;
 }
 
 /** Nøklene som er lagt til, fjernet eller har fått ny verdi. Sortert, uten verdier. */
@@ -236,7 +228,7 @@ export async function createConnection(
       return toSummary(row);
     });
   } catch (error) {
-    if (isUniqueViolation(error)) throw duplicateError();
+    if (isUniqueViolation(error, UNIQUE_INDEX)) throw duplicateError();
     throw error;
   }
 }
@@ -362,10 +354,9 @@ export async function markConnectionDeleted(
 export async function findActiveConnection(
   organizationId: string,
   port: (typeof INTEGRATION_PORTS)[number],
-  executor: DbExecutor = db,
 ) {
   if (!isUuid(organizationId)) return null;
-  const [row] = await executor
+  const [row] = await db
     .select()
     .from(integrationConnections)
     .where(
@@ -377,4 +368,38 @@ export async function findActiveConnection(
       ),
     );
   return row ?? null;
+}
+
+/**
+ * Skriver resultatet av en sending på tilkoblingen: `ok` gir `last_ok_at` og `status` `active`,
+ * en feil gir vasket `last_error` og `status` `error`. Samme vilkår som `findActiveConnection`:
+ * slettede rader og `disabled` røres ikke, så status går bare mellom `active` og `error`.
+ * Systemets egen skriving, ingen rad i revisjonsloggen. Kaster aldri; en databasefeil logges.
+ * Intern som `findActiveConnection`, eksporteres ikke fra `index.ts`. `organizationId` er alltid
+ * `grant.organizationId` eller organisasjonen laget selv kjenner.
+ */
+export async function recordConnectionResult(
+  organizationId: string,
+  connectionId: string,
+  result: { ok: true } | { ok: false; error: string },
+): Promise<void> {
+  if (!isUuid(organizationId) || !isUuid(connectionId)) return;
+  const values = result.ok
+    ? { lastOkAt: new Date(), lastError: null, status: "active" as const }
+    : { lastError: scrubText(result.error), status: "error" as const };
+  try {
+    await db
+      .update(integrationConnections)
+      .set(values)
+      .where(
+        and(
+          eq(integrationConnections.id, connectionId),
+          eq(integrationConnections.organizationId, organizationId),
+          isNull(integrationConnections.deletedAt),
+          ne(integrationConnections.status, "disabled"),
+        ),
+      );
+  } catch (error) {
+    logger.error("Kunne ikke oppdatere status på en tilkobling", { connectionId, error });
+  }
 }

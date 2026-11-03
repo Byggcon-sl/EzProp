@@ -25,9 +25,12 @@ export type LogFields = {
 
 export const REDACTED = "[fjernet]";
 
-/** Feltnavn som aldri skal i loggen (sammenlignes uten store bokstaver, «-» og «_»). */
+/**
+ * Feltnavn som aldri skal i loggen (sammenlignes uten store bokstaver, «-» og «_»): de eksakte
+ * ordene, og nøkler som slutter på et hemmelighetsord (f.eks. `FILE_STORAGE_AZURE_CONNECTION_STRING`).
+ */
 const SENSITIVE_KEY =
-  /^(e?mail|epost|emailaddress|to|from|cc|bcc|name|navn|fullname|firstname|lastname|phone|telefon|mobil|mobile|address|adresse|ip|ipaddress|useragent|password|passord|secret|clientsecret|token|accesstoken|refreshtoken|apikey|authorization|cookie|cookies|setcookie|otp|code|kode|session|sessiontoken|headers|body|formdata|details|connectionstring|accountkey|sas)$/;
+  /^(e?mail|epost|emailaddress|to|from|cc|bcc|name|navn|fullname|firstname|lastname|phone|telefon|mobil|mobile|address|adresse|ip|ipaddress|useragent|password|passord|secret|clientsecret|token|accesstoken|refreshtoken|apikey|authorization|cookie|cookies|setcookie|otp|code|kode|session|sessiontoken|headers|body|formdata|details|connectionstring|accountkey|sas|.*(?:connectionstring|accountkey|clientsecret|secret|token|password|passord|apikey))$/;
 
 function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEY.test(key.toLowerCase().replace(/[-_]/g, ""));
@@ -41,8 +44,9 @@ const PHONE = /(?:\+|00)47(?:[\s-]?\d){8}|\b\d{3} \d{2} \d{3}\b|\b\d{2} \d{2} \d
 const AZURE_ACCOUNT_KEY = /AccountKey=[^;]+/gi;
 const AZURE_SAS = /SharedAccessSignature=[^;]+/gi;
 const AZURE_SIG = /sig=[^&\s]+/gi;
-// Klienthemmeligheten i token-kall (skjemadata til Microsoft 365). Ikke `client_secret_name=…`.
-const CLIENT_SECRET = /client_secret=[^&\s]+/g;
+// Klienthemmeligheten i token-kall (skjemadata til Microsoft 365), uansett store og små bokstaver.
+// Ikke `client_secret_name=…` (der kommer ikke `=` rett etter).
+const CLIENT_SECRET = /(client_secret)=[^&\s]+/gi;
 const MAX_TEXT = 500;
 
 /** Fjerner personopplysninger og hemmeligheter fra en tekst, og korter den ned. */
@@ -53,7 +57,7 @@ export function scrubText(text: string): string {
     .replace(AZURE_ACCOUNT_KEY, "AccountKey=" + REDACTED)
     .replace(AZURE_SAS, "SharedAccessSignature=" + REDACTED)
     .replace(AZURE_SIG, "sig=" + REDACTED)
-    .replace(CLIENT_SECRET, "client_secret=" + REDACTED)
+    .replace(CLIENT_SECRET, "$1=" + REDACTED)
     .replace(EMAIL, "[e-post]")
     .replace(BEARER, "$1 " + REDACTED)
     .replace(PHONE, "[telefon]");

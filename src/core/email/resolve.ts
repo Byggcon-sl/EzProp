@@ -1,8 +1,4 @@
-import {
-  findActiveConnection,
-  microsoft365SettingsSchema,
-  settingsSchemaFor,
-} from "@/core/integrations/connections";
+import { findActiveConnection, settingsSchemaFor } from "@/core/integrations/connections";
 import { ConnectionValidationError } from "@/core/integrations/errors";
 import { readSecret } from "@/core/integrations/secrets";
 import { getEnv, type Env } from "@/shared/config/env";
@@ -78,13 +74,13 @@ function senderForConnection(
   env: Env,
 ): EmailSender {
   try {
-    if (!settingsSchemaFor(row.provider)?.safeParse(row.settings).success) {
-      throw new ConnectionValidationError();
-    }
+    const parsed = settingsSchemaFor(row.provider)?.safeParse(row.settings);
+    if (!parsed?.success) throw new ConnectionValidationError();
 
     switch (row.provider) {
       case "microsoft365": {
-        const settings = microsoft365SettingsSchema.parse(row.settings);
+        // Skjemaet for `microsoft365` har gitt disse tre feltene.
+        const settings = parsed.data as { from: string; tenantId: string; clientId: string };
         if (!row.secretRef) throw new ConnectionValidationError();
         const clientSecret = readSecret(row.secretRef);
         return createGraphEmailSender(

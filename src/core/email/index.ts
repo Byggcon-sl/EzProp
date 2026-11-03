@@ -1,8 +1,5 @@
-import { and, eq } from "drizzle-orm";
-import { db } from "@/db/client";
-import { integrationConnections } from "@/db/schema";
+import { recordConnectionResult } from "@/core/integrations/connections";
 import { getEnv, type Env } from "@/shared/config/env";
-import { scrubText } from "@/shared/lib/logger";
 import { readStoredEmails } from "./dev-mailbox";
 import { resolveEmailSender } from "./resolve";
 
@@ -23,12 +20,11 @@ export type StoredEmail = Email & { id: number; sentAt: Date };
 
 export { createGraphEmailSender, EmailSendError } from "./graph";
 
-const MAX_LAST_ERROR = 500;
-
 /**
  * Sender e-post med leverandøren `resolveEmailSender` velger. Gikk sendingen gjennom en
- * tilkobling i tabellen, oppdateres `last_ok_at`/`last_error`/`status` på raden (systemets egne
- * skrivinger, ingen rad i revisjonsloggen), og en feil kastes videre etterpå.
+ * tilkobling i tabellen, skriver `recordConnectionResult` resultatet på raden (systemets egne
+ * skrivinger, ingen rad i revisjonsloggen). Den kaster aldri, så en statusskriving som svikter
+ * stopper ikke sendingen (e-posten er alt sendt) og skjuler aldri sendefeilen, som kastes videre.
  * `organizationId` er alltid `grant.organizationId`, aldri en id fra adressen eller skjemaet.
  */
 export async function sendEmail(
@@ -37,29 +33,21 @@ export async function sendEmail(
   env: Env = getEnv(),
 ): Promise<void> {
   const { sender, connectionId } = await resolveEmailSender(options, env);
-  if (!connectionId || !options.organizationId) {
+  // `resolveEmailSender` gir `connectionId` bare når `organizationId` er satt; sjekken er typevakt.
+  const organizationId = options.organizationId;
+  if (!connectionId || !organizationId) {
     await sender.send(email);
     return;
   }
 
-  const where = and(
-    eq(integrationConnections.id, connectionId),
-    eq(integrationConnections.organizationId, options.organizationId),
-  );
   try {
     await sender.send(email);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await db
-      .update(integrationConnections)
-      .set({ lastError: scrubText(message).slice(0, MAX_LAST_ERROR), status: "error" })
-      .where(where);
+    await recordConnectionResult(organizationId, connectionId, { ok: false, error: message });
     throw error;
   }
-  await db
-    .update(integrationConnections)
-    .set({ lastOkAt: new Date(), lastError: null, status: "active" })
-    .where(where);
+  await recordConnectionResult(organizationId, connectionId, { ok: true });
 }
 
 /** Siste e-poster i utviklings-postkassen. Tom liste når den er slått av. */
