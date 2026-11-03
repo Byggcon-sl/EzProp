@@ -342,13 +342,20 @@ export async function createEmployee(
   }
 }
 
-/** Finner innloggingen med e-posten (små bokstaver), eller lager en ny. Gir bare id-en. */
+/**
+ * Finner innloggingen med e-posten, eller lager en ny. Gir bare id-en.
+ * Bare to steder skriver `users.email`: seedet (`src/db/seed/run.ts`, `trim().toLowerCase()`) og
+ * `employeeCreateSchema` (`src/core/organization/schemas.ts`); begge gjør adressen til små
+ * bokstaver. Better Auth skriver aldri `users` (`disableSignUp: true` i `src/core/auth/auth.ts`).
+ * Sammenligningen er derfor eksakt, så den unike indeksen på `users.email` brukes. Delt innlogging
+ * med Optiplan (ADR i fase 0b) må holde samme regel.
+ */
 async function findOrCreateUser(executor: DbExecutor, email: string, name: string) {
   const findExisting = async () => {
     const [user] = await executor
       .select({ id: users.id })
       .from(users)
-      .where(sql`lower(${users.email}) = ${email}`)
+      .where(eq(users.email, email))
       .orderBy(asc(users.createdAt))
       .limit(1);
     return user?.id;

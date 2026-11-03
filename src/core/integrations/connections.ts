@@ -62,8 +62,14 @@ const emptySettingsSchema = z.object({}).strict();
 
 /**
  * Zod-skjemaet for `settings` til leverandøren, eller `null` for en ukjent leverandør.
- * Brukes også når e-postporten lager en sender fra raden.
+ * Brukes også når e-postporten lager en sender fra raden; med et kjent leverandørnavn gir
+ * overlastene det konkrete skjemaet, så `parsed.data` får typen fra skjemaet uten cast.
  */
+export function settingsSchemaFor(provider: "microsoft365"): typeof microsoft365SettingsSchema;
+export function settingsSchemaFor(
+  provider: "server_log" | "dev_mailbox",
+): typeof emptySettingsSchema;
+export function settingsSchemaFor(provider: string): z.ZodType<Record<string, unknown>> | null;
 export function settingsSchemaFor(provider: string): z.ZodType<Record<string, unknown>> | null {
   switch (provider) {
     case "microsoft365":

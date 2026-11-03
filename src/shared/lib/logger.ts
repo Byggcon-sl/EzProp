@@ -26,11 +26,12 @@ export type LogFields = {
 export const REDACTED = "[fjernet]";
 
 /**
- * Feltnavn som aldri skal i loggen (sammenlignes uten store bokstaver, «-» og «_»): de eksakte
- * ordene, og nøkler som slutter på et hemmelighetsord (f.eks. `FILE_STORAGE_AZURE_CONNECTION_STRING`).
+ * Feltnavn som aldri skal i loggen (sammenlignes uten store bokstaver, «-» og «_»): eksakte ord
+ * for personopplysninger og rammeverksfelt, pluss nøkler som slutter på et hemmelighetsord
+ * (f.eks. `password`, `graphRefreshToken`, `FILE_STORAGE_AZURE_CONNECTION_STRING`).
  */
 const SENSITIVE_KEY =
-  /^(e?mail|epost|emailaddress|to|from|cc|bcc|name|navn|fullname|firstname|lastname|phone|telefon|mobil|mobile|address|adresse|ip|ipaddress|useragent|password|passord|secret|clientsecret|token|accesstoken|refreshtoken|apikey|authorization|cookie|cookies|setcookie|otp|code|kode|session|sessiontoken|headers|body|formdata|details|connectionstring|accountkey|sas|.*(?:connectionstring|accountkey|clientsecret|secret|token|password|passord|apikey))$/;
+  /^(e?mail|epost|emailaddress|to|from|cc|bcc|name|navn|fullname|firstname|lastname|phone|telefon|mobil|mobile|address|adresse|ip|ipaddress|useragent|authorization|cookie|cookies|setcookie|otp|code|kode|session|headers|body|formdata|details|sas|.*(?:connectionstring|accountkey|clientsecret|secret|token|password|passord|apikey))$/;
 
 function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEY.test(key.toLowerCase().replace(/[-_]/g, ""));

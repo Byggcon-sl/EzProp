@@ -7,8 +7,8 @@
  * Raden i `trial_photos` lages her hvis synken ikke har levert den ennå, så bildet kommer fram selv
  * om synktjenesten er nede.
  */
-import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { and, eq, isNull, ne } from "drizzle-orm";
 import { requireOrganizationAccess, type Actor } from "@/core/access";
@@ -43,6 +43,23 @@ export function trialPhotoMaxBytes(): number {
   return Number.isSafeInteger(configured) && configured > 0
     ? configured
     : TRIAL_PHOTO_DEFAULT_MAX_BYTES;
+}
+
+/**
+ * Skriver filen til en midlertidig fil i samme mappe og gir den nytt navn til slutt, så ingen
+ * leser ser en halvskrevet fil (nattløkken punkt 18). Feiler skrivingen, fjernes den midlertidige
+ * filen og den opprinnelige feilen kastes videre.
+ */
+async function writeFileAtomically(filePath: string, bytes: Uint8Array): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  const tmpPath = `${filePath}.tmp-${randomUUID()}`;
+  try {
+    await writeFile(tmpPath, bytes);
+    await rename(tmpPath, filePath);
+  } catch (error) {
+    await rm(tmpPath, { force: true });
+    throw error;
+  }
 }
 
 /**
@@ -150,8 +167,7 @@ export const storeTrialPhoto: StoreTrialPhoto = async (
   const root = trialUploadDir();
   const filePath = path.resolve(root, grant.organizationId, photoId);
   if (!filePath.startsWith(root + path.sep)) throw new TrialPhotoNotFoundError();
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, bytes);
+  await writeFileAtomically(filePath, bytes);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
 
   await db
@@ -270,8 +286,7 @@ export async function storeTrialDisplayCopy(
   await requireTrialPhotoRow(grant.organizationId, photoId, true);
 
   const filePath = displayCopyPath(grant.organizationId, photoId);
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, bytes);
+  await writeFileAtomically(filePath, bytes);
   return { sha256: createHash("sha256").update(bytes).digest("hex") };
 }
 
