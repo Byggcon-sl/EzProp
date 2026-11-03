@@ -14,14 +14,8 @@ const srcDir = join(repoRoot, "src");
 const integrationsDir = join(srcDir, "core", "integrations");
 const emailDir = join(srcDir, "core", "email");
 
-/** Fast liste skrevet inn i testen (testplan 2.8), aldri importert fra koden. */
-const DENYLIST = [
-  "BETTER_AUTH_SECRET",
-  "DATABASE_URL",
-  "TEST_DATABASE_URL",
-  "POWERSYNC_JWT_SECRET",
-  "FILE_STORAGE_AZURE_CONNECTION_STRING",
-];
+/** Interne funksjoner uten tilgangssjekk. Bare laget selv kaller dem. */
+const INTERNAL = ["findActiveConnection", "recordConnectionResult", "resolveEmailSender"];
 
 function sourceFiles(dir: string): string[] {
   if (!existsSync(dir)) return [];
@@ -65,17 +59,17 @@ describe("tilkoblingslaget, statiske kontroller", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("5. findActiveConnection og resolveEmailSender holdes inne i laget", async () => {
-    // index.ts kan bruke dem selv (sendEmail kaller resolveEmailSender), men aldri eksportere dem
+  it("5. findActiveConnection, recordConnectionResult og resolveEmailSender holdes inne i laget", async () => {
+    // index.ts kan bruke dem selv (sendEmail kaller dem), men aldri eksportere dem
     const exported =
-      /export\s*(?:type\s*)?\{[^}]*\b(findActiveConnection|resolveEmailSender)\b[^}]*\}|export\s+(?:async\s+)?(?:function|const|let)\s+(findActiveConnection|resolveEmailSender)\b|export\s*\*\s*from\s*["']\.\/(connections|resolve)["']/;
+      /export\s*(?:type\s*)?\{[^}]*\b(findActiveConnection|recordConnectionResult|resolveEmailSender)\b[^}]*\}|export\s+(?:async\s+)?(?:function|const|let)\s+(findActiveConnection|recordConnectionResult|resolveEmailSender)\b|export\s*\*\s*from\s*["']\.\/(connections|resolve)["']/;
     for (const index of [join(integrationsDir, "index.ts"), join(emailDir, "index.ts")]) {
       expect(existsSync(index), rel(index)).toBe(true);
       expect(read(index), rel(index)).not.toMatch(exported);
     }
     const integrations: Record<string, unknown> = await import("./index");
     const email: Record<string, unknown> = await import("../email/index");
-    for (const name of ["findActiveConnection", "resolveEmailSender"]) {
+    for (const name of INTERNAL) {
       expect(Object.keys(integrations)).not.toContain(name);
       expect(Object.keys(email)).not.toContain(name);
     }
@@ -88,8 +82,7 @@ describe("tilkoblingslaget, statiske kontroller", () => {
         return (
           /["'][^"']*core\/integrations\/connections["']/.test(text) ||
           /["'][^"']*core\/email\/resolve["']/.test(text) ||
-          text.includes("findActiveConnection") ||
-          text.includes("resolveEmailSender")
+          INTERNAL.some((name) => text.includes(name))
         );
       })
       .map(rel);
@@ -111,12 +104,5 @@ describe("tilkoblingslaget, statiske kontroller", () => {
       })
       .map(rel);
     expect(users).toEqual(["src/core/email/graph.ts"]);
-  });
-
-  it("7. nektlisten i secrets.ts har alle de fem navnene", () => {
-    const text = read(join(integrationsDir, "secrets.ts"));
-    for (const name of DENYLIST) {
-      expect(text, name).toMatch(new RegExp(`["'\`]${name}["'\`]`));
-    }
   });
 });

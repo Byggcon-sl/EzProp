@@ -5,7 +5,7 @@ import path from "node:path";
 import { count, eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { requireOrganizationAccess } from "@/core/access";
-import { createLocalFileStorage } from "@/core/files";
+import { createLocalFileStorage } from "@/core/files/local-storage";
 import { isCertificationValid } from "@/core/organization/certification-rules";
 import { db } from "@/db/client";
 import {

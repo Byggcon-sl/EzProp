@@ -1,8 +1,4 @@
-import {
-  findActiveConnection,
-  microsoft365SettingsSchema,
-  settingsSchemaFor,
-} from "@/core/integrations/connections";
+import { findActiveConnection, settingsSchemaFor } from "@/core/integrations/connections";
 import { ConnectionValidationError } from "@/core/integrations/errors";
 import { readSecret } from "@/core/integrations/secrets";
 import { getEnv, type Env } from "@/shared/config/env";
@@ -78,13 +74,12 @@ function senderForConnection(
   env: Env,
 ): EmailSender {
   try {
-    if (!settingsSchemaFor(row.provider)?.safeParse(row.settings).success) {
-      throw new ConnectionValidationError();
-    }
-
+    // Hver gren validerer `settings` med det konkrete skjemaet, så typene kommer fra skjemaet.
     switch (row.provider) {
       case "microsoft365": {
-        const settings = microsoft365SettingsSchema.parse(row.settings);
+        const parsed = settingsSchemaFor("microsoft365").safeParse(row.settings);
+        if (!parsed.success) throw new ConnectionValidationError();
+        const settings = parsed.data;
         if (!row.secretRef) throw new ConnectionValidationError();
         const clientSecret = readSecret(row.secretRef);
         return createGraphEmailSender(
@@ -97,10 +92,18 @@ function senderForConnection(
           fetchFn,
         );
       }
-      case "server_log":
+      case "server_log": {
+        if (!settingsSchemaFor("server_log").safeParse(row.settings).success) {
+          throw new ConnectionValidationError();
+        }
         return createServerLogSender(env.SEED_ADMIN_EMAIL);
-      case "dev_mailbox":
+      }
+      case "dev_mailbox": {
+        if (!settingsSchemaFor("dev_mailbox").safeParse(row.settings).success) {
+          throw new ConnectionValidationError();
+        }
         return createDevMailboxSender();
+      }
       default:
         throw new ConnectionValidationError();
     }

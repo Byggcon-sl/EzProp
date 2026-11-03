@@ -191,8 +191,12 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 **Grunnmur**
 - [x] Revisjonslogg og hendelseslogg (grunnmuren som rapporter, maler og rutiner skriver til) (31.10.2026, `docs/funksjoner/fase0b-revisjon-hendelser.md`, beslutninger A33 og A34)
 - [x] Felles filtjeneste for bilder og dokumenter (lokal mappe i utvikling, fillagring i EU/EØS i drift), **bak et eget lag**, slik at bilder senere kan flyttes til et lokalt arkiv hos Byggcon (27.10.2026). Oppbevaringstidene er innstillinger. (02.11.2026, `docs/funksjoner/fase0b-filtjeneste.md`, beslutninger A39–A43; Azure-adapteren er bare kode og slås på av Ståle)
+  - [x] Småfunn fra gjennomgangen rettet (liten oppgave (o)/(p)/(q), 03.11.2026, docs/agenter/oppgaver/fase0b-smafunn-filtjeneste-tilkobling.md)
 - [x] Tilkoblingslag med faste porter (regnskap, e-post, meglersystem, eiendomsdata, KI). Første tilkobling: e-post via Microsoft 365 som i Optiplan, og en «utviklingspostkasse» lokalt. (02.11.2026, `docs/funksjoner/fase0b-tilkoblingslag.md`, beslutninger A44–A48; Microsoft 365-adapteren er bare kode og slås på av Ståle med de fire secretene; `external_references` og selskap på tilkoblingen er flyttet til fase 3)
+  - [x] Småfunn fra gjennomgangen rettet (liten oppgave (o)/(p)/(q), 03.11.2026, docs/agenter/oppgaver/fase0b-smafunn-filtjeneste-tilkobling.md)
 - [x] Test av tenant-isolasjon for alle nye tabeller: en bruker i én organisasjon får aldri data fra en annen (02.11.2026, `tests/tenant-tables.ts`, `tests/tenant-isolation-all-tables.test.ts`)
+  - [x] Småfunn fra gjennomgangen rettet (liten oppgave (o)/(p)/(q), 03.11.2026, docs/agenter/oppgaver/fase0b-smafunn-filtjeneste-tilkobling.md)
+  - [x] Småfunn fra gjennomgangen av PR #69 og nattløkken 03.11.2026 rettet: typen fra skjemaet i e-postoppsettet, enklere loggvask, eksakt e-postoppslag ved ny ansatt, bildefiler skrives ferdig før de får navn, unntaket for `employee_permissions` dokumentert, færre doble tester (liten oppgave (r)/(s), 03.11.2026, `docs/agenter/oppgaver/fase0b-smafunn-r-s.md`)
 - [x] Grunnlayout i design A «Fjord» (luftig), for PC og iPad, med tom arbeidskø som startside
 
 **Ferdig når:** Admin har lagt inn Byggcon med selskapene, kontorene og noen ansatte. En takstmann logger inn med engangskode (samme innlogging som i Optiplan) og ser en tom arbeidskø. En automatisk test viser at en annen organisasjon ikke ser noe av Byggcons data.

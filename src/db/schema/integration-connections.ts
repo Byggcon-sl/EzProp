@@ -33,4 +33,3 @@ export const integrationConnections = pgTable(
       .where(sql`${table.deletedAt} is null`),
   ],
 );
-export type IntegrationConnectionRecord = typeof integrationConnections.$inferSelect;

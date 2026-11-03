@@ -31,8 +31,3 @@ export function assertValidStorageKey(storageKey: string): void {
     storageKey.split("/").some((part) => part === "." || part === ".." || !KEY_SEGMENT.test(part));
   if (invalid) throw new FileValidationError("Ugyldig lagringsnøkkel.");
 }
-
-/** Kopi som vanlig `Uint8Array` (ikke `Buffer`), slik at alle adaptere gir samme type. */
-export function toPlainBytes(bytes: Uint8Array): Uint8Array {
-  return new Uint8Array(bytes);
-}
