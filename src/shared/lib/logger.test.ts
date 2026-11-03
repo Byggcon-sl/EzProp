@@ -229,3 +229,53 @@ describe("logger vasker feltnavn med prefiks", () => {
     expect(JSON.stringify(line)).not.toContain(VALUE);
   });
 });
+
+// Liten oppgave (r) 5: de elleve ordene er tatt ut som eksakte alternativ i SENSITIVE_KEY.
+// «Slutter på»-alternativet skal fortsatt vaske dem, både eksakt og med prefiks.
+describe("de elleve ordene vaskes fortsatt etter at de eksakte alternativene er tatt ut", () => {
+  const VALUE = "oppdiktet-verdi";
+
+  it.each([
+    "password",
+    "passord",
+    "secret",
+    "clientSecret",
+    "token",
+    "accessToken",
+    "refreshToken",
+    "sessionToken",
+    "apiKey",
+    "connectionString",
+    "accountKey",
+  ])("E1. %s vaskes eksakt", (key) => {
+    const line = formatLogLine("info", "Test", { [key]: VALUE });
+    expect(line[key]).toBe(REDACTED);
+    expect(JSON.stringify(line)).not.toContain(VALUE);
+  });
+
+  it.each([
+    ["userPassword", "USER_PASSWORD"],
+    ["userPassord", "USER_PASSORD"],
+    ["graphSecret", "GRAPH_SECRET"],
+    ["graphClientSecret", "GRAPH_CLIENT_SECRET"],
+    ["graphToken", "GRAPH_TOKEN"],
+    ["graphAccessToken", "GRAPH_ACCESS_TOKEN"],
+    ["graphRefreshToken", "GRAPH_REFRESH_TOKEN"],
+    ["userSessionToken", "USER_SESSION_TOKEN"],
+    ["mapsApiKey", "MAPS_API_KEY"],
+    ["dbConnectionString", "DB_CONNECTION_STRING"],
+    ["storageAccountKey", "STORAGE_ACCOUNT_KEY"],
+  ])("E2. %s og %s vaskes (prefiks, begge skrivemåter)", (camel, snake) => {
+    expect(sanitizeFields({ [camel]: VALUE, [snake]: VALUE })).toEqual({
+      [camel]: REDACTED,
+      [snake]: REDACTED,
+    });
+  });
+
+  it.each(["tokens", "secretRef", "secret_ref", "passordHint", "apiKeys"])(
+    "E3. %s står urørt (ingen overvasking)",
+    (key) => {
+      expect(sanitizeFields({ [key]: VALUE })).toEqual({ [key]: VALUE });
+    },
+  );
+});

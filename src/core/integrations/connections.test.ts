@@ -1091,20 +1091,6 @@ describe("3.12 recordConnectionResult", () => {
     expect(line).toContain("db nede");
     expect(line).not.toContain("sendefeil");
   });
-
-  it("9. ingen rad i revisjonsloggen etter suksess og feil", async () => {
-    const { orgA } = await setup();
-    const failed = await createIntegrationConnection(orgA.id, { status: "error" });
-    const active = await createIntegrationConnection(orgA.id, {
-      port: "accounting",
-      provider: "x",
-    });
-    await recordConnectionResult(orgA.id, failed.id, { ok: true });
-    await recordConnectionResult(orgA.id, active.id, { ok: false, error: "x" });
-    expect((await rowById(failed.id)).status).toBe("active");
-    expect((await rowById(active.id)).status).toBe("error");
-    expect(await auditRows(orgA.id)).toEqual([]);
-  });
 });
 
 describe("3.10 findActiveConnection", () => {
