@@ -33,4 +33,3 @@ export const files = pgTable(
     ),
   ],
 );
-export type FileRecord = typeof files.$inferSelect;

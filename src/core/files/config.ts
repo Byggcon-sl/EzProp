@@ -3,7 +3,7 @@ import { FileStorageConfigError } from "./errors";
 import { createLocalFileStorage } from "./local-storage";
 import type { FileStorage } from "./storage";
 
-export const DEFAULT_FILE_STORAGE_DIR = "var/files";
+const DEFAULT_FILE_STORAGE_DIR = "var/files";
 
 /**
  * Velger adapter ut fra miljøvariablene (A40, til tilkoblingslaget kommer):
