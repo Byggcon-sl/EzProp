@@ -664,6 +664,33 @@ describe("3.5 ny ansatt og innlogging", () => {
     expect(login?.email).toBe("ola@eksempel.no");
   });
 
+  it("2b. innlogging med store bokstaver lagt inn utenom skriverne treffes ikke; ny innlogging lages", async () => {
+    // Slike rader skal ikke finnes: seedet og employeeCreateSchema gjør adressen til små
+    // bokstaver, og Better Auth skriver aldri users. Raden legges derfor inn direkte.
+    // findOrCreateUser sammenligner eksakt på users.email (bruker den unike indeksen).
+    // Testen går rød hvis noen setter lower( tilbake i oppslaget.
+    const { org, admin } = await orgWithAdmin();
+    const outsideId = randomUUID();
+    await db
+      .insert(users)
+      .values({ id: outsideId, name: "Kari Utenom", email: "Kari@Eksempel.NO" });
+    const [outsideBefore] = await db.select().from(users).where(eq(users.id, outsideId));
+    const usersBefore = (await tableCounts()).users;
+
+    const created = await createEmployee(
+      admin,
+      org.id,
+      newEmployee({ name: "Kari Skjemanavn", email: "kari@eksempel.no" }),
+    );
+
+    expect((await tableCounts()).users).toBe(usersBefore + 1);
+    const login = await actorByEmail("kari@eksempel.no");
+    expect(login.id).not.toBe(outsideId);
+    expect((await employeeRow(created.id)).userId).toBe(login.id);
+    const [outsideAfter] = await db.select().from(users).where(eq(users.id, outsideId));
+    expect(outsideAfter).toEqual(outsideBefore);
+  });
+
   it("3. duplikat i samme organisasjon gir feilmeldingen, og ingenting skrives", async () => {
     const { org, admin } = await orgWithAdmin();
     await createEmployee(admin, org.id, newEmployee({ email: "dobbel@eksempel.no" }));

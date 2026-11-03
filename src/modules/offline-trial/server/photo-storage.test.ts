@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { eq } from "drizzle-orm";
@@ -94,6 +94,11 @@ async function listAll(dir: string): Promise<string[]> {
   return entries.map(String);
 }
 
+/** Midlertidige filer fra skrivingen (`<fil>.tmp-<tilfeldig>`) skal aldri ligge igjen (punkt 18). */
+async function tmpEntries(dir: string): Promise<string[]> {
+  return (await listAll(dir)).filter((entry) => entry.includes(".tmp-"));
+}
+
 describe("storeTrialPhoto", () => {
   it("lagrer filen under TRIAL_UPLOAD_DIR/<organizationId>/<id> og svarer riktig sha256", async () => {
     const { actor, organizationId } = await setupOrganization("inspector");
@@ -112,6 +117,9 @@ describe("storeTrialPhoto", () => {
     expect(row!.storagePath).toBeTruthy();
     expect(path.resolve(row!.storagePath!)).toBe(path.resolve(expectedPath));
     expect(row!.uploadedAt).toBeInstanceOf(Date);
+    // T1: bare den endelige filen ligger i mappen, ingen midlertidig fil igjen
+    expect(await listAll(path.join(uploadDir, organizationId))).toEqual([photoId]);
+    expect(await tmpEntries(uploadDir)).toEqual([]);
   });
 
   it("lager raden fra meta når den mangler", async () => {
@@ -191,6 +199,29 @@ describe("storeTrialPhoto", () => {
     const rows = await db.select().from(trialPhotos);
     expect(rows).toHaveLength(1);
     expect(await listAll(path.join(uploadDir, organizationId))).toEqual([photoId]);
+    // T5: rename over en eksisterende fil etterlater ingen midlertidig fil
+    expect(await tmpEntries(uploadDir)).toEqual([]);
+  });
+
+  it("T3. skrivingen feiler etter at den midlertidige filen er laget: feilen kastes, ingen .tmp- igjen, ingen uploaded_at", async () => {
+    const { actor, organizationId } = await setupOrganization();
+    const formId = await putTrialForm(actor, organizationId);
+    const photoId = uuidv7();
+    // En mappe på den endelige stien: mkdir lykkes, den midlertidige filen kan skrives,
+    // men rename over en mappe feiler (EISDIR på Linux).
+    const finalPath = path.join(uploadDir, organizationId, photoId);
+    await mkdir(finalPath, { recursive: true });
+
+    await expect(
+      storeTrialPhoto(actor, organizationId, photoId, meta(formId), BYTES),
+    ).rejects.toThrow();
+
+    expect((await stat(finalPath)).isDirectory()).toBe(true);
+    expect(await tmpEntries(uploadDir)).toEqual([]);
+    expect(await listAll(path.join(uploadDir, organizationId))).toEqual([photoId]);
+    const row = await photoRow(photoId);
+    expect(row?.uploadedAt ?? null).toBeNull();
+    expect(row?.sha256 ?? null).toBeNull();
   });
 
   it("ugyldig id gir 404-feil uten filskriving", async () => {
@@ -613,6 +644,11 @@ describe("storeTrialDisplayCopy", () => {
     // Originalen er uendret
     expect(sha(readFileSync(originalPath))).toBe(originalShaBefore);
     expect(originalShaBefore).toBe(SHA);
+    // T2: bare originalen og kopien ligger i mappen, ingen midlertidig fil igjen
+    expect((await listAll(path.join(uploadDir, organizationId))).sort()).toEqual(
+      [photoId, `${photoId}.display.jpg`].sort(),
+    );
+    expect(await tmpEntries(uploadDir)).toEqual([]);
   });
 
   // Valget er låst her: bare nøyaktig `image/jpeg` godtas, også parametre avvises.
