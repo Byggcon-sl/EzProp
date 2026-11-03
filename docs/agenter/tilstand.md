@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 02.11.2026 kl. 23:30 UTC (PR #66 tenant-testen merget)
+Sist oppdatert: 03.11.2026 (oppgavekort for liten oppgave (o), (p) og (q))
 
 ## Gjeldende fase
 
@@ -17,6 +17,8 @@ Gjeldende fase: **Fase 0b – Innlogging, organisasjon, roller og layout** (fra 
 Fase 1 – Prøve uten nett: Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd er merget til `main` i PR #13 (PR #12: agentene merger selv).
 
 ## Gjeldende oppgave
+
+**Pågående: Liten oppgave (o), (p) og (q)** (fase 0b, 03.11.2026; branch `fase0b-smafunn-filtjeneste-tilkobling` fra `main`, versjon 0.2.56 → 0.2.57). Småfunnene fra PR #62 (filtjenesten), PR #64 (tilkoblingslaget) og PR #66 (tenant-testen). Oppgavekort `docs/agenter/oppgaver/fase0b-smafunn-filtjeneste-tilkobling.md`. Reelle feil først (`sendEmail` går bare fra `error` til `active` og rører ikke `disabled`/slettet, sendefeilen overskygges ikke av en databasefeil, `i`-flagget på `CLIENT_SECRET`, øvre lengde på `clientId`/`from`, `SENSITIVE_KEY` treffer `FILE_STORAGE_AZURE_CONNECTION_STRING`, `saveFile`/`readFile` logger feilen), så manglende tester, så rydding (én `isUniqueViolation`, `recordConnectionResult` fra den parallelle varianten, ubrukte eksporter, doble tester, `.env.example`, `FOR UPDATE`, `toPlainBytes`). Ingen ny funksjon, tabell eller migrering. Roller: utvikler, testskriver, test-leder, sikkerhet-personvern. Støtter reklamasjoner og tid.
 
 **Levert: Test av tenant-isolasjon for alle nye tabeller** (fase 0b, 02.11.2026; branch `fase0b-tenant-test-alle-tabeller` fra `main`, versjon 0.2.55, **PR #66**, merget 02.11.2026 kl. 23:25 UTC). Oppgavekort `docs/agenter/oppgaver/fase0b-tenant-test-alle-tabeller.md`, testplan `docs/agenter/oppgaver/fase0b-tenant-test-alle-tabeller-testplan.md`. Registeret `tests/tenant-tables.ts` (radbygger og testfil per tabell med `organization_id`, `insertMinimalRow`, vakten `checkTenantRegistry` som ren funksjon) og den samlede testen `tests/tenant-isolation-all-tables.test.ts` (tabellene fra Drizzle-skjemaet, 13 i dag, `expectTenantIsolation` per tabell, de seks globale tabellene låst, selvtester av vakten, radbyggertester). Én setning i `CLAUDE.md`. Ingen produktkode. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Lint, typesjekk og 2356 Vitest grønne; e2e i CI. Punktet er krysset av i planen. Støtter reklamasjoner. Neste i fase 0b som ikke trenger Ståle: liten oppgave (p) (funn fra PR #64), eller nøkkelboksen som bare kode (`readSecret` mot Azure Key Vault, av som standard). Innlogging og bytte med Optiplan venter på Ståle og Optiplan-tilgang.
 
