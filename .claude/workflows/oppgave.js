@@ -18,9 +18,13 @@ export const meta = {
 // ---------------------------------------------------------------------------
 // Roller: bruker agentbeskrivelsen i .claude/agents/<rolle>.md når den er lastet i sesjonen.
 // Er den ikke det (f.eks. første kjøring etter at filene ble laget), får en vanlig agent
-// beskjed om å lese og følge filen selv. Utøverne kjører da på opus, lederne på sesjonens modell.
+// beskjed om å lese og følge filen selv.
+// Kvote (Ståle 04.11.2026): bare arkitekt, fagansvarlig og sikkerhet-personvern bruker fable;
+// alle andre roller bruker opus. Er fable-kvoten brukt opp, kjøres rollen på nytt på opus.
 // ---------------------------------------------------------------------------
-const DOERS = ["utvikler", "testskriver", "retter"];
+const FABLE_ROLES = ["arkitekt", "fagansvarlig", "sikkerhet-personvern"];
+const modelFor = (role) => (FABLE_ROLES.includes(role) ? "fable" : "opus");
+const isQuotaError = (e) => /limit|quota|rate|usage|overloaded/i.test(String(e && e.message));
 async function run(role, prompt, opts) {
   const text = `Du er rollen «${role}» i EzProp. Les .claude/agents/${role}.md først og følg den.
 
@@ -28,8 +32,12 @@ ${prompt}`;
   try {
     return await agent(prompt, { ...opts, agentType: role });
   } catch (e) {
+    if (isQuotaError(e) && modelFor(role) === "fable") {
+      log(`${role}: fable-kvoten er brukt opp, kjører på opus`);
+      return agent(text, { ...opts, model: "opus" });
+    }
     if (!/not found/i.test(String(e && e.message))) throw e;
-    return agent(text, { ...opts, ...(DOERS.includes(role) ? { model: "opus" } : {}) });
+    return agent(text, { ...opts, model: modelFor(role) });
   }
 }
 
