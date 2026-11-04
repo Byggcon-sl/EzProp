@@ -3,7 +3,7 @@ import { Badge } from "@/shared/ui/badge";
 import { getAdminContext } from "../admin-context";
 import { EmptyList, ListHeader, Row, RowList } from "../admin-list";
 import { noticeText, roleBadgeOrder, roleLabels } from "../labels";
-import { NoAccess } from "../no-access";
+import { NoAccess } from "../../no-access";
 import { listEmployeesForAdmin } from "@/core/organization";
 
 export const metadata: Metadata = { title: "Ansatte" };

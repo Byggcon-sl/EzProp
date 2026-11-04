@@ -1,4 +1,4 @@
-/** Svaret fra en server action i /admin når noe ikke ble lagret. Ved suksess sendes man videre. */
+/** Svaret fra en server action (/admin, /ordre) når noe ikke ble lagret. Ved suksess sendes man videre. */
 export type FormState = {
   /** Feil per felt (første melding per felt). */
   fieldErrors: Record<string, string>;

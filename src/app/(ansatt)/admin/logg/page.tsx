@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getAdminContext } from "../admin-context";
 import { EmptyList, RowList } from "../admin-list";
 import { auditActionLabel, auditEntityLabel, formatAuditChanges, formatDate } from "../labels";
-import { NoAccess } from "../no-access";
+import { NoAccess } from "../../no-access";
 import { listAuditEvents } from "@/core/audit";
 
 export const metadata: Metadata = { title: "Logg" };

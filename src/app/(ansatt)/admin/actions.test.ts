@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { AccessDeniedError } from "@/core/access";
-import { initialFormState, NO_ACCESS, UNKNOWN_ERROR } from "./form-state";
+import { initialFormState, NO_ACCESS, UNKNOWN_ERROR } from "../form-state";
 
 /*
  * Server actions i /admin (skjermene, bit 2). Kjernen og tilgangssjekken er byttet ut her; de
