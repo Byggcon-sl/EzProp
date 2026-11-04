@@ -10,7 +10,8 @@ services:
       POSTGRES_PASSWORD: ezprop
       POSTGRES_DB: ezprop
     ports:
-      - "5432:5432"
+      # På Macen bruker start.sh port 5433, så EzProp kan kjøre side om side med Optiplan (5432).
+      - "${EZPROP_DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./scripts/docker-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
