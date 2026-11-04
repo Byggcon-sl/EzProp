@@ -2,9 +2,10 @@
 
 import { redirect } from "next/navigation";
 import { isUuid } from "@/shared/lib/uuid";
-import { errorResult, failure } from "../action-result";
+import { ADMIN_ERRORS } from "../admin-errors";
+import { errorResult, failure } from "../../action-result";
 import { getAdminContext } from "../admin-context";
-import { NO_ACCESS, type FormState } from "../form-state";
+import { NO_ACCESS, type FormState } from "../../form-state";
 import { createOffice, updateOffice } from "@/core/organization";
 
 /**
@@ -45,7 +46,10 @@ export async function saveOfficeAction(
       previous,
       values,
       { route: "/admin/kontorer", userId: context.actor.id, ...(officeId && { officeId }) },
-      { name: "Skriv inn navnet på kontoret.", sortOrder: "Skriv inn et helt tall." },
+      {
+        known: ADMIN_ERRORS,
+        messages: { name: "Skriv inn navnet på kontoret.", sortOrder: "Skriv inn et helt tall." },
+      },
     );
   }
   redirect("/admin/kontorer?lagret=kontor");

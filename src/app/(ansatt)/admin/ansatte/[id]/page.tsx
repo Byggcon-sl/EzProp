@@ -6,7 +6,7 @@ import { Badge } from "@/shared/ui/badge";
 import { Notice } from "@/shared/ui/notice";
 import { getAdminContext } from "../../admin-context";
 import { formatDate, formatIsoDate, noticeText, roleBadgeOrder, roleLabels } from "../../labels";
-import { NoAccess } from "../../no-access";
+import { NoAccess } from "../../../no-access";
 import {
   CERTIFICATION_AREAS,
   getEmployeeForAdmin,

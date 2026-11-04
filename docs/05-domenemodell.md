@@ -381,6 +381,18 @@ En person kan ha flere roller på samme oppdrag (for eksempel selger og fakturam
 
 Neste nummer hentes med lås i databasen, slik at to kontorer aldri får samme nummer. Det lages en ny serie hvert år. Numre lages **bare på serveren**. Alt som må kunne lages uten nett (rapport, avvik, bilder), bruker ID-er laget på enheten (avsnitt 3).
 
+**Bygget i fase 2a (04.11.2026, manuell ordre og oppdragsnummer):** Tabellene `orders`, `assignments` og `number_sequences` (`src/db/schema/orders.ts`, `assignments.ts`, `number-sequences.ts`), kjernen i `src/core/orders` og `src/core/assignments`. Oppgavekort: `docs/funksjoner/fase2a-manuell-ordre.md`; beslutningene A51–A55.
+
+- **`orders`** har `baseColumns` (myk sletting), `received_at` (påkrevd), `source` (`manual` eller `email`; bare `manual` brukes nå), `external_ref`, `ordered_by_text`, `address_text` (påkrevd), `requested_report_type` (bare `condition_report`, settes av kjernen), `gnr`, `bnr`, `snr` (seksjonsnummer; bare sifre), `housing_association_name` (borettslag eller sameie), `seller_declaration_received` (ja/nei, standard nei), `status`, `rejected_reason` og `assignment_id`. Databasen sikrer at `rejected` har grunn, at `converted` har `assignment_id`, og at `assignment_id` er tom ellers. `assignment_id` har sammensatt fremmednøkkel `(organization_id, assignment_id)` til `assignments`. Unik indeks `(organization_id, id)`.
+- **`assignments`** er minimal (A54): `number` (unik per organisasjon, også blant slettede), `office_id` (påkrevd, sammensatt fremmednøkkel til `offices`), `order_id` (valgfri, sammensatt fremmednøkkel til `orders`), `assignment_type` (bare `condition_report`) og `status` (de fire kodene; bare `ordered` settes nå). Unik indeks `(organization_id, id)`.
+- **`number_sequences`** har `organization_id`, `scope` (bare `assignment`), `prefix`, `next_value` (minst 1) og `padding` (standard 5), unik på `(organization_id, scope, prefix)`. Ingen myk sletting; raden er en teller.
+- **`events.assignment_id`** har fått sammensatt fremmednøkkel til `assignments` og indeksen `(organization_id, assignment_id)` (A33).
+- **Nummeret** lages bare på serveren (D9), av `nextAssignmentNumber` i `src/core/assignments/number-sequence.ts`, som er det eneste stedet som skriver `number_sequences`. Én setning (`INSERT … ON CONFLICT … DO UPDATE … RETURNING`) låser raden, så to samtidige konverteringer aldri får samme nummer. Første oppdrag i et år lager serien (A52). Året regnes i norsk tid. `padding` er et minimum: nummer 100 000 blir `2026-100000`.
+- **Gjør om til oppdrag** låser ordreraden (`FOR UPDATE`) før status og kontor sjekkes og før nummeret hentes. Da får to samtidige forsøk på samme ordre ett oppdrag, og den som taper, bruker ikke opp et nummer.
+- **Hendelser og revisjonslogg:** `order.received` (`{ orderId, source }`), `order.rejected` (`{ orderId }`), `assignment.created` (`{ number, orderId }`); revisjonslogg `order` med `create`, `reject` og `convert`, og `assignment` med `create`. Ingen adresse, bestiller, matrikkel eller borettslag i hendelser eller logg; raden er kilden.
+
+**Venter (egne planpunkter):** `ordered_by_contact_id`/`ordered_by_firm_id` (kontakter og firma; til da `ordered_by_text`), eiendom og matrikkel som egne tabeller (A51; adresse og matrikkel er tekst på ordren til da), `raw_payload` (e-post-til-ordre og API), og på oppdraget `external_ref`, `company_id`, `property_id`, `client_agreement_id`, `report_profile_id`, `status_changed_at`, `inspection_at`, `due_date`, `cancelled_reason` og `internal_note`. De legges til når planpunktene som bruker dem, bygges (samme mønster som A17), fordi ingen skjerm bruker dem nå. Statusflyten videre fra `ordered` kommer med oppdragslisten. En ordre kan ikke endres etter at den er lagret (A55).
+
 **`assignment_team_members`** – oppdragsteamet. Historikken beholdes, så overlevering kan spores.
 
 | Felt | Forklaring |
@@ -1763,8 +1775,23 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Selgers representant | `seller_representative` | Rolle |
 | Fakturamottaker | `invoice_recipient` | Rolle |
 | Ordre | `orders` | Bestilling som kommer inn |
+| Kilde (ordre) | `orders.source` | Hvor ordren kom fra: `manual` (lagt inn for hånd) eller `email` (forslag fra e-post, senere med KI) |
+| Mottatt / gjort om til oppdrag / avvist | `received` / `converted` / `rejected` | Ordrestatus (`orders.status`, `ORDER_STATUSES`, `orderStatusLabel`) |
+| Mottatt (tid) | `orders.received_at` | Når bestillingen kom. Kan ikke være frem i tid |
+| Hvem bestilte | `orders.ordered_by_text` | Navn og firma slik det sto i e-posten, til kontakter kommer |
+| Ordreadresse | `orders.address_text` | Adressen slik bestillingen sa det |
+| Ønsket rapport | `orders.requested_report_type` | Nå bare `condition_report` |
+| Gårdsnummer / bruksnummer / seksjonsnummer | `gnr` / `bnr` / `snr` | Matrikkel som tekst på ordren, bare sifre (A51) |
+| Borettslag eller sameie | `orders.housing_association_name` | |
+| Egenerklæring mottatt | `orders.seller_declaration_received` | Ja/nei, standard nei |
+| Grunn for avvisning | `orders.rejected_reason` | Påkrevd når ordren avvises |
+| Gjøre om til oppdrag | `convertOrderToAssignment` (`src/core/orders`) | Lager oppdraget med nytt nummer og setter ordren til `converted` |
+| Avvise ordre | `rejectOrder` (`src/core/orders`) | Setter ordren til `rejected` med grunn. Ordren blir stående |
+| Ordren er allerede behandlet | `OrderAlreadyHandledError` | Ordren er alt avvist eller gjort om |
+| Kontoret finnes ikke | `OfficeNotFoundError` | Kontoret er ikke i organisasjonen eller er slettet |
 | Oppdrag | `assignments` | Jobben |
-| Oppdragsnummer | `assignments.number` | |
+| Oppdragstype | `assignments.assignment_type` | Nå bare `condition_report` (`ASSIGNMENT_TYPES`) |
+| Oppdragsnummer | `assignments.number` | `ÅÅÅÅ-NNNNN`, laget på serveren av `nextAssignmentNumber` |
 | Oppdragsteam | `assignment_team_members` | |
 | Ansvarlig takstmann | `responsible` | Rolle i teamet, signerer |
 | Medansvarlig | `co_responsible` | |
@@ -1772,7 +1799,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Overlevering | `handed_over_reason`, `assignment.handed_over` | |
 | Status | `assignments.status` | Kort liste: fire statuser fra 27.10.2026 |
 | Merket «Rettet» | – | Regnes ut fra `report_releases` (versjon 2 eller høyere er sendt) |
-| Bestilt / under arbeid / ferdig / fakturert | `ordered` / `in_progress` / `completed` / `invoiced` | |
+| Bestilt / under arbeid / ferdig / fakturert | `ordered` / `in_progress` / `completed` / `invoiced` | `ASSIGNMENT_STATUSES`, `assignmentStatusLabel` |
 | Hendelse | `events` | Lang liste |
 | Hendelsestype | `EventType`, `EVENT_TYPES` (`src/core/events/types.ts`) | Faste koder for hendelsene i 4.9. Står bare der; en kode endres aldri |
 | Hvem gjorde det (hendelse) | `events.actor_type` | `employee` (ansatt), `system` (systemet selv) eller `integration` (tilkobling) |
@@ -1939,6 +1966,10 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Oppsummering per bygningsdel | `report_section_summaries` | Generert og redigert tekst |
 | Signert av / medsignert av | `signed_by_employee_id` / `co_signed_by_employee_id` | I utgivelsen |
 | Nummerserie | `number_sequences` | Oppdragsnummer som 2026-00123 |
+| Formål (nummerserie) | `number_sequences.scope` | Hva serien teller. Nå bare `assignment` (`NUMBER_SEQUENCE_SCOPES`) |
+| Prefiks / neste verdi / antall sifre | `prefix` / `next_value` / `padding` | `2026-`, neste nummer som deles ut, og minste antall sifre |
+| Neste oppdragsnummer | `nextAssignmentNumber` (`src/core/assignments`) | Det eneste stedet som skriver `number_sequences` |
+| Ansattkontekst | `findEmployeeGrant` (`src/core/organization`) | Første organisasjon der personen kan se, med grant og den ansattes kontor |
 | Eksternt saksnummer | `assignments.external_ref` | |
 | Enhet (iPad, PC) | `devices` | |
 | Sperret enhet | `devices.blocked_at` | |
@@ -2043,3 +2074,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 31.10.2026 | Admin (fase 0b): `employee_roles` har delvis unik indeks `(employee_id, role) WHERE deleted_at IS NULL`, så en rolle kan tas bort og gis på nytt som ny rad. Minst én aktiv admin per organisasjon. Nye funksjonsnavn og feilklasser i ordlisten. | A24–A28, `docs/funksjoner/fase0b-admin-organisasjon.md` |
 | 02.11.2026 | Filtjeneste (fase 0b): tabellen `files` bygget med `kind` bare `photo`, `report_pdf`, `document`, unik på `(organization_id, storage_key)`. Oppbevaringstidene for bilder i `organizations.settings`. | A39–A43, `docs/funksjoner/fase0b-filtjeneste.md` |
 | 03.11.2026 | `employee_permissions`: ingen indeks som begynner med `organization_id`, bare den delvise unike `(employee_id, permission) WHERE deleted_at IS NULL`, fordi alle spørringer (`findGrant`, `selectAdminEmployees`) går via `employee_id`. Må vurderes på nytt hvis en spørring filtrerer på organisasjon uten ansatt (nattløkken punkt 19). | `docs/agenter/oppgaver/fase0b-smafunn-r-s.md` |
+| 04.11.2026 | Manuell ordre og oppdragsnummer (fase 2a): `orders`, `assignments` (minimal) og `number_sequences` bygget; `orders` med `gnr`, `bnr`, `snr`, `housing_association_name`, `seller_declaration_received` og `ordered_by_text` til eiendom og kontakter kommer; `orders.source` bare `manual` og `email`; fremmednøkkel fra `events.assignment_id` (A33). Se «Bygget i fase 2a» i 4.3. | A51–A55, `docs/funksjoner/fase2a-manuell-ordre.md` |

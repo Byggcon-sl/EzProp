@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 import { AccessDeniedError } from "@/core/access";
-import { initialFormState, NO_ACCESS } from "../../form-state";
+import { initialFormState, NO_ACCESS } from "../../../form-state";
 
 /*
  * Server actions for sertifiseringer på /admin/ansatte/[id] (docs/funksjoner/fase0b-sertifisering.md,

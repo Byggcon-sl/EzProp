@@ -5,6 +5,7 @@ import { requireOrganizationAccess, type Actor } from "@/core/access";
 import { db } from "@/db/client";
 import { events, type EmployeeRole } from "@/db/schema";
 import {
+  createAssignment,
   createEmployee,
   createOrganization,
   createUser,
@@ -68,10 +69,12 @@ describe("recordEvent: lagring", () => {
     expect(row?.deletedBy).toBeNull();
   });
 
-  it("3. koblinger og data lagres uendret (ingen fremmednøkkel ennå, A33)", async () => {
+  it("3. koblinger og data lagres uendret (oppdraget finnes i organisasjonen, A33)", async () => {
     const org = await createOrganization();
     const { grant } = await personIn(org.id, ["office"]);
-    const assignmentId = randomUUID();
+    // `assignment_id` har fremmednøkkel til `assignments` fra fase 2a (A33); `report_id` ikke ennå.
+    // At et fremmed eller ukjent oppdrag avvises, står i src/db/orders-schema.test.ts (6.9).
+    const assignmentId = (await createAssignment(org.id)).id;
     const reportId = randomUUID();
 
     await recordEvent(db, grant, {

@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 /**
- * Samme svar for alle som ikke er admin, og for ugyldig, ukjent eller fremmed id.
+ * Samme svar for alle uten tilgang til siden (ikke admin i /admin, ingen ansattrad i /ordre), og
+ * for ugyldig, ukjent eller fremmed id.
  * Ingen data og ingen navn.
  */
 export function NoAccess() {

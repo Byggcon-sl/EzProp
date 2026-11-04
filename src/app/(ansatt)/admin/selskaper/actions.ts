@@ -2,9 +2,10 @@
 
 import { redirect } from "next/navigation";
 import { isUuid } from "@/shared/lib/uuid";
-import { errorResult, failure } from "../action-result";
+import { ADMIN_ERRORS } from "../admin-errors";
+import { errorResult, failure } from "../../action-result";
 import { getAdminContext } from "../admin-context";
-import { NO_ACCESS, type FormState } from "../form-state";
+import { NO_ACCESS, type FormState } from "../../form-state";
 import { createCompany, updateCompany } from "@/core/organization";
 
 const TEXT_FIELDS = [
@@ -65,9 +66,12 @@ export async function saveCompanyAction(
       values,
       { route: "/admin/selskaper", userId: context.actor.id, ...(companyId && { companyId }) },
       {
-        legalName: "Skriv inn det juridiske navnet.",
-        orgNumber: "Org.nr. må være 9 siffer.",
-        liabilityValidTo: "Skriv inn en gyldig dato.",
+        known: ADMIN_ERRORS,
+        messages: {
+          legalName: "Skriv inn det juridiske navnet.",
+          orgNumber: "Org.nr. må være 9 siffer.",
+          liabilityValidTo: "Skriv inn en gyldig dato.",
+        },
       },
     );
   }

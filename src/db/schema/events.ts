@@ -1,5 +1,15 @@
 import { sql } from "drizzle-orm";
-import { check, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  foreignKey,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
+import { assignments } from "./assignments";
 import { baseColumns } from "./common";
 
 /**
@@ -7,8 +17,10 @@ import { baseColumns } from "./common";
  * bygges på disse. Raden slettes eller endres aldri, heller ikke mykt: `deleted_at` og
  * `deleted_by` fra `baseColumns` forblir alltid tomme.
  *
- * `assignment_id` og `report_id` har ingen fremmednøkkel ennå; den legges til når tabellene
- * kommer i fase 2a (A33). `actor_id` er tom når systemet selv er aktøren.
+ * `assignment_id` har sammensatt fremmednøkkel `(organization_id, assignment_id)` til
+ * `assignments`, så en hendelse aldri kan peke på et oppdrag i en annen organisasjon (A33, fase
+ * 2a). `report_id` får sin når rapporttabellen kommer. `actor_id` er tom når systemet selv er
+ * aktøren.
  */
 export const events = pgTable(
   "events",
@@ -27,6 +39,13 @@ export const events = pgTable(
   },
   (table) => [
     index("events_organization_id_idx").on(table.organizationId, table.occurredAt),
+    index("events_organization_id_assignment_id_idx").on(table.organizationId, table.assignmentId),
+    // Oppdraget må høre til samme organisasjon som hendelsen (A33)
+    foreignKey({
+      name: "events_assignment_fk",
+      columns: [table.organizationId, table.assignmentId],
+      foreignColumns: [assignments.organizationId, assignments.id],
+    }),
     check(
       "events_actor_type_check",
       sql`${table.actorType} in ('employee', 'system', 'integration')`,

@@ -3,8 +3,8 @@
 import { useActionState } from "react";
 import { Card } from "@/shared/ui/card";
 import { Checkbox, Field, Input, Textarea } from "@/shared/ui/form";
-import { FormActions, FormErrors } from "../form-parts";
-import { initialFormState, textValue, type FormState } from "../form-state";
+import { FormActions, FormErrors } from "../../form-parts";
+import { initialFormState, textValue, type FormState } from "../../form-state";
 
 export type CompanyValues = {
   legalName: string;
