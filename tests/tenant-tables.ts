@@ -11,12 +11,15 @@ import {
   trialPhotos,
 } from "@/db/schema";
 import {
+  createAssignment,
   createCertification,
   createCompany,
   createEmployee,
   createFile,
   createIntegrationConnection,
+  createNumberSequence,
   createOffice,
+  createOrder,
   createUser,
   grantPermission,
 } from "./factories";
@@ -61,6 +64,12 @@ async function insertTrialForm(organizationId: string) {
  * `tests/tenant-isolation-all-tables.test.ts` rød. Alle verdier er oppdiktede.
  */
 export const tenantTables: TenantTableEntry[] = [
+  {
+    table: "assignments",
+    // Konverteringen lager oppdragene; getAssignment kommer med oppdragslisten (runde 1).
+    testFile: "src/core/orders/orders.test.ts",
+    insertRow: async (organizationId) => (await createAssignment(organizationId)).id,
+  },
   {
     table: "audit_log",
     testFile: "src/core/audit/audit.test.ts",
@@ -144,9 +153,19 @@ export const tenantTables: TenantTableEntry[] = [
     insertRow: async (organizationId) => (await createIntegrationConnection(organizationId)).id,
   },
   {
+    table: "number_sequences",
+    testFile: "src/core/assignments/number-sequence.test.ts",
+    insertRow: async (organizationId) => (await createNumberSequence(organizationId)).id,
+  },
+  {
     table: "offices",
     testFile: "src/core/organization/offices.test.ts",
     insertRow: async (organizationId) => (await createOffice(organizationId)).id,
+  },
+  {
+    table: "orders",
+    testFile: "src/core/orders/orders.test.ts",
+    insertRow: async (organizationId) => (await createOrder(organizationId)).id,
   },
   {
     table: "trial_answers",

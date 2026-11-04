@@ -4,6 +4,7 @@ import type { Actor } from "@/core/access";
 import type { FileStorage } from "@/core/files";
 import { db } from "@/db/client";
 import {
+  assignments,
   auditLog,
   certifications,
   companies,
@@ -12,7 +13,9 @@ import {
   employees,
   files,
   integrationConnections,
+  numberSequences,
   offices,
+  orders,
   organizations,
   users,
   type EmployeeRole,
@@ -30,6 +33,9 @@ export const RESET_TABLES = [
   "trial_forms",
   "audit_log",
   "events",
+  "orders",
+  "assignments",
+  "number_sequences",
   "employee_permissions",
   "employee_roles",
   "employees",
@@ -314,4 +320,88 @@ export async function auditRows(organizationId: string) {
     .from(auditLog)
     .where(eq(auditLog.organizationId, organizationId))
     .orderBy(asc(auditLog.receivedAt), asc(auditLog.createdAt));
+}
+
+/** Fast tid i ordretestene: 03.11.2026 i Oslo, serien `2026-`. */
+export const ORDER_TEST_NOW = new Date("2026-11-03T10:00:00Z");
+
+type OrderInsert = typeof orders.$inferInsert;
+type OrderOverrides = Partial<Omit<OrderInsert, "organizationId">>;
+
+/**
+ * En ordre satt inn direkte, uten tilgangssjekk og uten hendelse. Standard er `received`,
+ * `manual`, oppdiktet adresse og `receivedAt` = fast testtid. For `converted` må testen sende med
+ * `assignmentId` til et oppdrag i samme organisasjon (CHECK og fremmednøkkel i databasen).
+ */
+export async function createOrder(organizationId: string, overrides: OrderOverrides = {}) {
+  const [row] = await db
+    .insert(orders)
+    .values({
+      addressText: "Testveien 12, 8000 Bodø",
+      receivedAt: ORDER_TEST_NOW,
+      source: "manual",
+      status: "received",
+      ...overrides,
+      organizationId,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette ordre");
+  return row;
+}
+
+let assignmentCounter = 0;
+
+type AssignmentInsert = typeof assignments.$inferInsert;
+type AssignmentOverrides = Partial<Omit<AssignmentInsert, "organizationId">>;
+
+/**
+ * Et oppdrag satt inn direkte. Lager et kontor i organisasjonen når `officeId` mangler. Nummeret
+ * kommer fra en egen teller (`TEST-00001`, `TEST-00002` …), aldri fra nummerserien, så fabrikken
+ * aldri rører `number_sequences`.
+ */
+export async function createAssignment(
+  organizationId: string,
+  overrides: AssignmentOverrides = {},
+) {
+  assignmentCounter += 1;
+  const officeId = overrides.officeId ?? (await createOffice(organizationId)).id;
+  const [row] = await db
+    .insert(assignments)
+    .values({
+      number: `TEST-${String(assignmentCounter).padStart(5, "0")}`,
+      assignmentType: "condition_report",
+      status: "ordered",
+      ...overrides,
+      officeId,
+      organizationId,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette oppdrag");
+  return row;
+}
+
+type NumberSequenceOverrides = Partial<Omit<typeof numberSequences.$inferInsert, "organizationId">>;
+
+/**
+ * En nummerserie satt inn direkte (bare i tester; i produktkoden skrives tabellen bare fra
+ * `nextAssignmentNumber`). Standard: `scope = assignment`, `prefix = 2026-`, `next_value = 1`,
+ * `padding = 5`.
+ */
+export async function createNumberSequence(
+  organizationId: string,
+  overrides: NumberSequenceOverrides = {},
+) {
+  const [row] = await db
+    .insert(numberSequences)
+    .values({
+      scope: "assignment",
+      prefix: "2026-",
+      nextValue: 1,
+      padding: 5,
+      ...overrides,
+      organizationId,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette nummerserie");
+  return row;
 }

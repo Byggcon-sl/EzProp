@@ -9,11 +9,15 @@ import { createLocalFileStorage } from "@/core/files/local-storage";
 import { isCertificationValid } from "@/core/organization/certification-rules";
 import { db } from "@/db/client";
 import {
+  assignments,
   certifications,
   employeePermissions,
   files,
   integrationConnections,
   loginAttempts,
+  numberSequences,
+  offices,
+  orders,
   trialAnswers,
   trialForms,
   trialPhotos,
@@ -21,13 +25,18 @@ import {
 import { todayInOslo } from "@/shared/lib/dates";
 import { uuidv7 } from "@/shared/lib/uuid";
 import {
+  createAssignment,
   createCertification,
   createEmployee,
   createFile,
   createIntegrationConnection,
+  createNumberSequence,
+  createOffice,
+  createOrder,
   createOrganization,
   createUser,
   grantPermission,
+  ORDER_TEST_NOW,
   RESET_TABLES,
   resetDatabase,
 } from "./factories";
@@ -342,5 +351,124 @@ describe("createIntegrationConnection (fase 0b, tilkoblingslag)", () => {
 
     const [row] = await db.select({ n: count() }).from(integrationConnections);
     expect(row!.n).toBe(0);
+  });
+});
+
+// Manuell ordre (docs/funksjoner/fase2a-manuell-ordre-testplan.md avsnitt 5). Oppdiktede verdier.
+describe("createOrder, createAssignment og createNumberSequence (fase 2a, manuell ordre)", () => {
+  beforeEach(resetDatabase);
+
+  it("5.1 createOrder uten overstyring: received, manual, receivedAt = fast testtid", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+
+    const row = await createOrder(org.id);
+
+    expect(row).toMatchObject({
+      organizationId: org.id,
+      status: "received",
+      source: "manual",
+      requestedReportType: "condition_report",
+      addressText: "Testveien 12, 8000 Bodø",
+      assignmentId: null,
+      rejectedReason: null,
+      deletedAt: null,
+    });
+    expect(row.receivedAt.toISOString()).toBe(ORDER_TEST_NOW.toISOString());
+    expect(ORDER_TEST_NOW.toISOString()).toBe("2026-11-03T10:00:00.000Z");
+  });
+
+  it("5.1 createOrder bruker overstyringene (status, grunn, oppdrag, sletting)", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const deletedAt = new Date("2026-11-02T08:00:00Z");
+
+    const rejected = await createOrder(org.id, {
+      status: "rejected",
+      rejectedReason: "Feil registrering",
+      deletedAt,
+    });
+    expect(rejected).toMatchObject({ status: "rejected", rejectedReason: "Feil registrering" });
+    expect(rejected.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+
+    // For converted må testen sende med et oppdrag
+    const assignment = await createAssignment(org.id);
+    const converted = await createOrder(org.id, {
+      status: "converted",
+      assignmentId: assignment.id,
+    });
+    expect(converted).toMatchObject({ status: "converted", assignmentId: assignment.id });
+  });
+
+  it("5.2 createAssignment lager kontor i samme organisasjon, og to kall gir ulike nummer", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    await createOrganization("Oppdiktet takst B");
+
+    const first = await createAssignment(org.id);
+    const second = await createAssignment(org.id);
+
+    const [office] = await db.select().from(offices).where(eq(offices.id, first.officeId));
+    expect(office?.organizationId).toBe(org.id);
+    expect(first.organizationId).toBe(org.id);
+    expect(first.number).not.toBe(second.number);
+    expect(first.number).toMatch(/^TEST-\d{5}$/);
+    expect(first).toMatchObject({ status: "ordered", assignmentType: "condition_report" });
+    // Fabrikken bruker aldri nummerserien
+    const [series] = await db.select({ n: count() }).from(numberSequences);
+    expect(series!.n).toBe(0);
+  });
+
+  it("5.2 createAssignment bruker overstyringene (kontor, ordre, nummer, sletting)", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const office = await createOffice(org.id);
+    const order = await createOrder(org.id);
+    const deletedAt = new Date("2026-11-02T08:00:00Z");
+
+    const row = await createAssignment(org.id, {
+      officeId: office.id,
+      orderId: order.id,
+      number: "TEST-99999",
+      deletedAt,
+    });
+
+    expect(row).toMatchObject({ officeId: office.id, orderId: order.id, number: "TEST-99999" });
+    expect(row.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+    const [officeCount] = await db.select({ n: count() }).from(offices);
+    expect(officeCount!.n).toBe(1);
+  });
+
+  it("5.3 createNumberSequence: assignment, 2026-, next_value 1, padding 5", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+
+    const row = await createNumberSequence(org.id);
+
+    expect(row).toMatchObject({
+      organizationId: org.id,
+      scope: "assignment",
+      prefix: "2026-",
+      nextValue: 1,
+      padding: 5,
+    });
+    const other = await createNumberSequence(org.id, { prefix: "2027-", nextValue: 7 });
+    expect(other).toMatchObject({ prefix: "2027-", nextValue: 7 });
+  });
+
+  it("5.4 orders, assignments og number_sequences står i truncate-listen og tømmes", async () => {
+    const listed: readonly string[] = RESET_TABLES;
+    for (const table of ["orders", "assignments", "number_sequences"]) {
+      expect(listed).toContain(table);
+      expect(listed.indexOf(table)).toBeLessThan(listed.indexOf("organizations"));
+    }
+    expect(listed.indexOf("assignments")).toBeLessThan(listed.indexOf("offices"));
+
+    const org = await createOrganization("Oppdiktet takst A");
+    const order = await createOrder(org.id);
+    await createAssignment(org.id, { orderId: order.id });
+    await createNumberSequence(org.id);
+
+    await resetDatabase();
+
+    for (const table of [orders, assignments, numberSequences]) {
+      const [row] = await db.select({ n: count() }).from(table);
+      expect(row!.n).toBe(0);
+    }
   });
 });
