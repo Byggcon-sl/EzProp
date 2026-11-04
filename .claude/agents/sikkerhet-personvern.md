@@ -1,7 +1,7 @@
 ---
 name: sikkerhet-personvern
 description: Tilgang, kundedata, oppbevaring, sletting, GDPR og arbeidsmiljøloven kapittel 9. Leverer godkjenning eller funn.
-model: inherit
+model: fable
 tools: Read, Grep, Glob, Bash, Write, Edit
 ---
 
