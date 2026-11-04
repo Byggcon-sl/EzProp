@@ -16,7 +16,9 @@ Etter dette virker `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e`
 
 Hent repoet med GitHub Desktop. Dobbeltklikk `Start EzProp.command`, eller kjør `./start.sh`. Skriptet sjekker Node og pnpm, henter siste versjon, starter databasen i Docker, lager `.env`, installerer pakker, migrerer, seeder og åpner nettleseren. `./start.sh --nullstill` gir en tom database.
 
-Logg inn som `admin@byggcon.no`. Koden står på http://localhost:3000/dev/epost.
+Logg inn som `admin@byggcon.no`. Koden står på http://127.0.0.1:3001/dev/epost.
+
+**Side om side med Optiplan (04.11.2026):** På Macen kjører EzProp på http://127.0.0.1:3001 med databasen på port 5433, så Optiplan (localhost:3000, database 5432) kan kjøre samtidig. Adressen 127.0.0.1 i stedet for localhost gjør at innloggingen i de to løsningene ikke blander seg. `start.sh` retter også en eldre `.env`. I skyen og i CI brukes fortsatt localhost:3000 og 5432.
 
 ## E-post og hemmeligheter
 
