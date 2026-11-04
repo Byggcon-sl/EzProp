@@ -3,7 +3,7 @@
 # Brukes av hovedløkken og av arbeidsflyten «oppgave».
 #
 #   bash scripts/merge-klare-pr.sh            # alle åpne PR-er som er klare nå
-#   bash scripts/merge-klare-pr.sh 12 --vent  # vent på CI for PR 12 (høyst 30 min), merge hvis klar
+#   bash scripts/merge-klare-pr.sh 12 --vent  # vent på CI for PR 12 (høyst 60 min), merge hvis klar
 #
 # En PR er klar når: den ikke er merket «venter-pa-stale» og tittelen ikke starter med «Venter på Ståle»,
 # GitHub melder ingen konflikt (mergeable_state = clean), og begge CI-jobbene på siste commit er grønne.
@@ -30,6 +30,16 @@ klar() {
   total=$(echo "$runs" | jq 'length')
   ok=$(echo "$runs" | jq '[.[] | select(.conclusion == "success")] | length')
   pending=$(echo "$runs" | jq '[.[] | select(.status != "completed")] | length')
+  if [ "$total" -eq 0 ]; then
+    # Ingen CI på siste commit (push fra Actions starter ikke CI, og GitHub svarer av og til 502
+    # når den startes for hånd). Start den, men bare når commiten er eldre enn 3 minutter.
+    local age head
+    head=$(echo "$info" | jq -r .head.ref)
+    age=$(( $(date +%s) - $(date -d "$(gh api "repos/$REPO/commits/$sha" --jq .commit.committer.date)" +%s 2>/dev/null || date +%s) ))
+    if [ "$age" -gt 180 ] && [ "${CI_STARTET:-}" != "$sha" ]; then
+      gh workflow run ci.yml --ref "$head" -R "$REPO" >/dev/null 2>&1 && CI_STARTET="$sha" && echo "#$nr: startet CI"
+    fi
+  fi
   if [ "$pending" -gt 0 ] || [ "$total" -lt 2 ]; then echo "#$nr: CI ikke ferdig"; return 3; fi
   if [ "$ok" -ne "$total" ]; then echo "#$nr: CI er rød"; return 4; fi
   if [ "$state" != "clean" ]; then echo "#$nr: ikke klar ($state)"; return 5; fi
@@ -51,7 +61,7 @@ merge() {
 }
 
 if [ -n "$ONLY" ]; then
-  for _ in $(seq 1 60); do
+  for _ in $(seq 1 120); do
     klar "$ONLY"; rc=$?
     case $rc in
       0) merge "$ONLY"; exit $? ;;
@@ -59,7 +69,7 @@ if [ -n "$ONLY" ]; then
       *) exit $rc ;;
     esac
   done
-  echo "#$ONLY: ga opp etter 30 minutter"; exit 3
+  echo "#$ONLY: ga opp etter 60 minutter"; exit 3
 fi
 
 for nr in $(gh api "repos/$REPO/pulls?state=open&sort=created&direction=asc&per_page=100" --jq '.[].number'); do
