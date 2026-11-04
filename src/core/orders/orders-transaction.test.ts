@@ -1,180 +1,170 @@
 import { count, eq } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { requireOrganizationAccess } from "@/core/access";
-import { nextAssignmentNumber } from "@/core/assignments";
+import { recordAuditEvent } from "@/core/audit";
+import { recordEvent } from "@/core/events";
 import { db } from "@/db/client";
 import { assignments, auditLog, events, numberSequences, orders } from "@/db/schema";
 import {
   createEmployee,
+  createNumberSequence,
   createOffice,
   createOrder as insertOrder,
   createOrganization,
   createUser,
   resetDatabase,
 } from "../../../tests/factories";
+import { convertOrderToAssignment, createOrder, rejectOrder } from "./index";
 
 /*
- * Hendelser og revisjonslogg skrives i samme transaksjon som endringen (testplan
- * docs/funksjoner/fase2a-manuell-ordre-testplan.md 4.6.5, runde 2 punkt 3). `recordEvent` og
- * `recordAuditEvent` er pakket inn: de kaller den ekte funksjonen, og kaster bare der testen ber
- * om det. Feiler skrivingen, finnes verken ordre, oppdrag eller hendelse, og serien er uendret.
- * Ingen ny spørring her, så ingen tenant-test (den står i orders.test.ts).
- * Støtter hovedmål: reklamasjoner (ingen halve endringer uten spor i loggen).
+ * Hendelser og revisjonslogg skrives i samme transaksjon som endringen
+ * (docs/funksjoner/fase2a-manuell-ordre-testplan.md 4.6.5, egen fil etter runde 2).
+ *
+ * `recordEvent` og `recordAuditEvent` er pakket inn: de kaller den ekte funksjonen, og kaster
+ * bare der testen ber om det. Kaster en av dem, skal verken ordre, oppdrag, hendelse eller
+ * loggrad finnes, og nummerserien skal stå som før.
+ *
+ * Ingen ny spørring her, så filen trenger ikke expectTenantIsolation. Testdata er oppdiktet.
+ * Støtter hovedmål: reklamasjoner (aldri en endring uten spor, aldri et brukt nummer uten oppdrag).
  */
 
-const mocks = vi.hoisted(() => ({
-  recordEvent: vi.fn(),
-  recordAuditEvent: vi.fn(),
-}));
-
-vi.mock("@/core/events", async () => {
-  const actual = await vi.importActual<typeof import("@/core/events")>("@/core/events");
-  mocks.recordEvent.mockImplementation(actual.recordEvent);
-  return { ...actual, recordEvent: mocks.recordEvent };
+vi.mock("@/core/events", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/core/events")>();
+  return { ...actual, recordEvent: vi.fn(actual.recordEvent) };
 });
 
-vi.mock("@/core/audit", async () => {
-  const actual = await vi.importActual<typeof import("@/core/audit")>("@/core/audit");
-  mocks.recordAuditEvent.mockImplementation(actual.recordAuditEvent);
-  return { ...actual, recordAuditEvent: mocks.recordAuditEvent };
+vi.mock("@/core/audit", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/core/audit")>();
+  return { ...actual, recordAuditEvent: vi.fn(actual.recordAuditEvent) };
 });
-
-const { convertOrderToAssignment, createOrder, rejectOrder } = await import("./index");
 
 const NOW = new Date("2026-11-03T10:00:00Z");
-const FAILURE = new Error("skrivingen feilet (test)");
-
-function failOnce(mock: typeof mocks.recordEvent) {
-  mock.mockImplementationOnce(async () => {
-    throw FAILURE;
-  });
-}
-
-async function rowCount(table: PgTable) {
-  const [row] = await db.select({ n: count() }).from(table);
-  return row!.n;
-}
-
-async function setup() {
-  const org = await createOrganization();
-  const office = await createOffice(org.id);
-  const admin = await createUser({ name: "Test Admin" });
-  await createEmployee(admin, org.id, ["admin"]);
-  return { org, office, admin };
-}
-
-async function orderStatus(id: string) {
-  const [row] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, id));
-  return row?.status;
-}
 
 beforeEach(async () => {
   await resetDatabase();
-  mocks.recordEvent.mockClear();
-  mocks.recordAuditEvent.mockClear();
+  vi.mocked(recordEvent).mockClear();
+  vi.mocked(recordAuditEvent).mockClear();
 });
 
+function failEventOnce() {
+  vi.mocked(recordEvent).mockImplementationOnce(async () => {
+    throw new Error("hendelsen feilet (test)");
+  });
+}
+
+function failAuditOnce() {
+  vi.mocked(recordAuditEvent).mockImplementationOnce(async () => {
+    throw new Error("revisjonsloggen feilet (test)");
+  });
+}
+
+async function rowCount(
+  table: typeof orders | typeof assignments | typeof events | typeof auditLog,
+) {
+  const [row] = await db.select({ n: count() }).from(table);
+  return row?.n ?? 0;
+}
+
+async function orgWithAdmin() {
+  const org = await createOrganization();
+  const admin = await createUser({ name: "Test Admin" });
+  await createEmployee(admin, org.id, ["admin"]);
+  const office = await createOffice(org.id);
+  return { org, admin, office };
+}
+
+async function orderStatus(id: string) {
+  const [row] = await db.select().from(orders).where(eq(orders.id, id));
+  return row?.status;
+}
+
 describe("4.6.5 feiler hendelsen eller loggen, finnes ingenting", () => {
-  it("de ekte modulene brukes når testen ikke ber om feil", async () => {
-    const { org, admin } = await setup();
+  it("modulene er pakket inn (ellers tester filen ingenting)", async () => {
+    const { org, admin } = await orgWithAdmin();
     await createOrder(admin, org.id, { addressText: "Testveien 12, 8000 Bodø" }, NOW);
-    expect(mocks.recordEvent).toHaveBeenCalledTimes(1);
-    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
-    expect(await rowCount(events)).toBe(1);
-    expect(await rowCount(auditLog)).toBe(1);
+    expect(vi.mocked(recordEvent)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(recordAuditEvent)).toHaveBeenCalledTimes(1);
   });
 
-  it("createOrder: recordEvent kaster → ingen ordre, ingen loggrad", async () => {
-    const { org, admin } = await setup();
-    failOnce(mocks.recordEvent);
+  it.each([
+    ["recordEvent", failEventOnce],
+    ["recordAuditEvent", failAuditOnce],
+  ])("createOrder: %s kaster, og orders, events og audit_log er tomme", async (_name, fail) => {
+    const { org, admin } = await orgWithAdmin();
+    fail();
 
     await expect(
       createOrder(admin, org.id, { addressText: "Testveien 12, 8000 Bodø" }, NOW),
-    ).rejects.toThrow(FAILURE);
+    ).rejects.toThrow();
 
     expect(await rowCount(orders)).toBe(0);
     expect(await rowCount(events)).toBe(0);
     expect(await rowCount(auditLog)).toBe(0);
   });
 
-  it("createOrder: recordAuditEvent kaster → ingen ordre, ingen hendelse", async () => {
-    const { org, admin } = await setup();
-    failOnce(mocks.recordAuditEvent);
-
-    await expect(
-      createOrder(admin, org.id, { addressText: "Testveien 12, 8000 Bodø" }, NOW),
-    ).rejects.toThrow(FAILURE);
-
-    expect(await rowCount(orders)).toBe(0);
-    expect(await rowCount(events)).toBe(0);
-  });
-
-  it("convertOrderToAssignment: recordEvent kaster → ordren er mottatt, ingen oppdrag, ingen serie", async () => {
-    const { org, office, admin } = await setup();
+  it.each([
+    ["recordEvent", failEventOnce],
+    ["recordAuditEvent", failAuditOnce],
+  ])("rejectOrder: %s kaster, og ordren står som mottatt uten spor", async (_name, fail) => {
+    const { org, admin } = await orgWithAdmin();
     const order = await insertOrder(org.id);
-    failOnce(mocks.recordEvent);
+    fail();
 
-    await expect(
-      convertOrderToAssignment(admin, org.id, order.id, { officeId: office.id, now: NOW }),
-    ).rejects.toThrow(FAILURE);
+    await expect(rejectOrder(admin, org.id, order.id, "Feil registrering")).rejects.toThrow();
 
     expect(await orderStatus(order.id)).toBe("received");
-    expect(await rowCount(assignments)).toBe(0);
-    expect(await rowCount(numberSequences)).toBe(0);
-    expect(await rowCount(events)).toBe(0);
-    expect(await rowCount(auditLog)).toBe(0);
-  });
-
-  it("convertOrderToAssignment: siste loggrad kaster → serien står på samme next_value", async () => {
-    const { org, office, admin } = await setup();
-    // Serien finnes fra før (laget av en konvertering som lyktes)
-    const grant = await requireOrganizationAccess(admin, org.id, "assignment.edit");
-    await db.transaction((tx) => nextAssignmentNumber(tx, grant, "2026-11-03"));
-    const [before] = await db.select().from(numberSequences);
-    const order = await insertOrder(org.id);
-    // Første loggrad (order/convert) skrives, andre (assignment/create) kaster
-    const actual = await vi.importActual<typeof import("@/core/audit")>("@/core/audit");
-    mocks.recordAuditEvent.mockImplementationOnce(actual.recordAuditEvent);
-    failOnce(mocks.recordAuditEvent);
-
-    await expect(
-      convertOrderToAssignment(admin, org.id, order.id, { officeId: office.id, now: NOW }),
-    ).rejects.toThrow(FAILURE);
-
-    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(2);
-    expect(await orderStatus(order.id)).toBe("received");
-    expect(await rowCount(assignments)).toBe(0);
-    expect(await rowCount(events)).toBe(0);
-    expect(await rowCount(auditLog)).toBe(0);
-    const [after] = await db.select().from(numberSequences);
-    expect(after?.nextValue).toBe(before?.nextValue);
-  });
-
-  it("rejectOrder: recordAuditEvent kaster → ordren er mottatt, ingen hendelse", async () => {
-    const { org, admin } = await setup();
-    const order = await insertOrder(org.id);
-    failOnce(mocks.recordAuditEvent);
-
-    await expect(rejectOrder(admin, org.id, order.id, "Feil registrering")).rejects.toThrow(
-      FAILURE,
-    );
-
     const [row] = await db.select().from(orders).where(eq(orders.id, order.id));
-    expect(row).toMatchObject({ status: "received", rejectedReason: null });
+    expect(row?.rejectedReason).toBeNull();
     expect(await rowCount(events)).toBe(0);
     expect(await rowCount(auditLog)).toBe(0);
   });
 
-  it("rejectOrder: recordEvent kaster → ordren er mottatt", async () => {
-    const { org, admin } = await setup();
-    const order = await insertOrder(org.id);
-    failOnce(mocks.recordEvent);
+  it.each([
+    ["recordEvent", failEventOnce],
+    ["recordAuditEvent", failAuditOnce],
+  ])(
+    "convertOrderToAssignment: %s kaster, ingen serie lages, ingen oppdrag, ordren er mottatt",
+    async (_name, fail) => {
+      const { org, admin, office } = await orgWithAdmin();
+      const order = await insertOrder(org.id);
+      fail();
 
-    await expect(rejectOrder(admin, org.id, order.id, "Feil registrering")).rejects.toThrow(
-      FAILURE,
-    );
-    expect(await orderStatus(order.id)).toBe("received");
-    expect(await rowCount(auditLog)).toBe(0);
-  });
+      await expect(
+        convertOrderToAssignment(admin, org.id, order.id, { officeId: office.id, now: NOW }),
+      ).rejects.toThrow();
+
+      expect(await orderStatus(order.id)).toBe("received");
+      expect(await rowCount(assignments)).toBe(0);
+      expect(await rowCount(events)).toBe(0);
+      expect(await rowCount(auditLog)).toBe(0);
+      expect(await db.select().from(numberSequences)).toEqual([]);
+    },
+  );
+
+  it.each([
+    ["recordEvent", failEventOnce],
+    ["recordAuditEvent", failAuditOnce],
+  ])(
+    "convertOrderToAssignment: %s kaster, og en serie som fantes, har samme next_value",
+    async (_name, fail) => {
+      const { org, admin, office } = await orgWithAdmin();
+      const order = await insertOrder(org.id);
+      await createNumberSequence(org.id, { nextValue: 4 });
+      fail();
+
+      await expect(
+        convertOrderToAssignment(admin, org.id, order.id, { officeId: office.id, now: NOW }),
+      ).rejects.toThrow();
+
+      const [sequence] = await db.select().from(numberSequences);
+      expect(sequence?.nextValue).toBe(4);
+      expect(await rowCount(assignments)).toBe(0);
+
+      // Neste forsøk lykkes og får nummeret som ikke ble brukt
+      const result = await convertOrderToAssignment(admin, org.id, order.id, {
+        officeId: office.id,
+        now: NOW,
+      });
+      expect(result.assignment.number).toBe("2026-00004");
+    },
+  );
 });

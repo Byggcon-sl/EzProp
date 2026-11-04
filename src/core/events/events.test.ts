@@ -72,7 +72,8 @@ describe("recordEvent: lagring", () => {
   it("3. koblinger og data lagres uendret (oppdraget finnes i organisasjonen, A33)", async () => {
     const org = await createOrganization();
     const { grant } = await personIn(org.id, ["office"]);
-    // `assignment_id` har fremmednøkkel til `assignments` fra fase 2a; `report_id` har ingen ennå
+    // `assignment_id` har fremmednøkkel til `assignments` fra fase 2a (A33); `report_id` ikke ennå.
+    // At et fremmed eller ukjent oppdrag avvises, står i src/db/orders-schema.test.ts (6.9).
     const assignmentId = (await createAssignment(org.id)).id;
     const reportId = randomUUID();
 

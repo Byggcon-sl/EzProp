@@ -66,7 +66,6 @@ async function insertTrialForm(organizationId: string) {
 export const tenantTables: TenantTableEntry[] = [
   {
     table: "assignments",
-    // Konverteringen lager oppdragene; getAssignment kommer med oppdragslisten (runde 1).
     testFile: "src/core/orders/orders.test.ts",
     insertRow: async (organizationId) => (await createAssignment(organizationId)).id,
   },

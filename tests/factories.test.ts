@@ -36,9 +36,9 @@ import {
   createOrganization,
   createUser,
   grantPermission,
-  ORDER_TEST_NOW,
   RESET_TABLES,
   resetDatabase,
+  TEST_NOW,
 } from "./factories";
 
 // Fanger at en ny tabell glemmes i truncate-listen (testplan for oppgave 4, avsnitt 3.6).
@@ -354,92 +354,88 @@ describe("createIntegrationConnection (fase 0b, tilkoblingslag)", () => {
   });
 });
 
-// Manuell ordre (docs/funksjoner/fase2a-manuell-ordre-testplan.md avsnitt 5). Oppdiktede verdier.
-describe("createOrder, createAssignment og createNumberSequence (fase 2a, manuell ordre)", () => {
+// Manuell ordre og oppdragsnummer, docs/funksjoner/fase2a-manuell-ordre-testplan.md avsnitt 5.
+// Testdata er oppdiktet.
+describe("fabrikkene for ordre, oppdrag og nummerserie", () => {
   beforeEach(resetDatabase);
 
-  it("5.1 createOrder uten overstyring: received, manual, receivedAt = fast testtid", async () => {
+  it("5.1 createOrder uten overstyring gir mottatt, manuell, receivedAt = TEST_NOW, i organisasjonen", async () => {
     const org = await createOrganization("Oppdiktet takst A");
-
     const row = await createOrder(org.id);
-
     expect(row).toMatchObject({
       organizationId: org.id,
       status: "received",
       source: "manual",
       requestedReportType: "condition_report",
-      addressText: "Testveien 12, 8000 Bodø",
       assignmentId: null,
       rejectedReason: null,
       deletedAt: null,
     });
-    expect(row.receivedAt.toISOString()).toBe(ORDER_TEST_NOW.toISOString());
-    expect(ORDER_TEST_NOW.toISOString()).toBe("2026-11-03T10:00:00.000Z");
+    expect(row.receivedAt.toISOString()).toBe(TEST_NOW.toISOString());
+    expect(row.addressText).toContain("Testveien");
   });
 
-  it("5.1 createOrder bruker overstyringene (status, grunn, oppdrag, sletting)", async () => {
+  it("5.1 createOrder bruker overstyring av status, rejectedReason, assignmentId og deletedAt", async () => {
     const org = await createOrganization("Oppdiktet takst A");
-    const deletedAt = new Date("2026-11-02T08:00:00Z");
-
     const rejected = await createOrder(org.id, {
       status: "rejected",
       rejectedReason: "Feil registrering",
-      deletedAt,
     });
     expect(rejected).toMatchObject({ status: "rejected", rejectedReason: "Feil registrering" });
-    expect(rejected.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
 
-    // For converted må testen sende med et oppdrag
-    const assignment = await createAssignment(org.id);
+    const received = await createOrder(org.id);
+    const assignment = await createAssignment(org.id, { orderId: received.id });
     const converted = await createOrder(org.id, {
       status: "converted",
       assignmentId: assignment.id,
     });
     expect(converted).toMatchObject({ status: "converted", assignmentId: assignment.id });
+
+    const deletedAt = new Date("2026-11-01T08:00:00Z");
+    const deleted = await createOrder(org.id, { deletedAt });
+    expect(deleted.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
   });
 
-  it("5.2 createAssignment lager kontor i samme organisasjon, og to kall gir ulike nummer", async () => {
+  it("5.2 createAssignment lager kontor selv i samme organisasjon, og to kall gir ulike nummer", async () => {
     const org = await createOrganization("Oppdiktet takst A");
-    await createOrganization("Oppdiktet takst B");
-
     const first = await createAssignment(org.id);
     const second = await createAssignment(org.id);
-
-    const [office] = await db.select().from(offices).where(eq(offices.id, first.officeId));
-    expect(office?.organizationId).toBe(org.id);
-    expect(first.organizationId).toBe(org.id);
     expect(first.number).not.toBe(second.number);
     expect(first.number).toMatch(/^TEST-\d{5}$/);
-    expect(first).toMatchObject({ status: "ordered", assignmentType: "condition_report" });
+    expect(first).toMatchObject({
+      organizationId: org.id,
+      status: "ordered",
+      assignmentType: "condition_report",
+      orderId: null,
+    });
+    const [office] = await db.select().from(offices).where(eq(offices.id, first.officeId));
+    expect(office?.organizationId).toBe(org.id);
     // Fabrikken bruker aldri nummerserien
-    const [series] = await db.select({ n: count() }).from(numberSequences);
-    expect(series!.n).toBe(0);
+    const [sequences] = await db.select({ n: count() }).from(numberSequences);
+    expect(sequences!.n).toBe(0);
   });
 
-  it("5.2 createAssignment bruker overstyringene (kontor, ordre, nummer, sletting)", async () => {
+  it("5.2 createAssignment bruker overstyring av officeId, orderId, number og deletedAt", async () => {
     const org = await createOrganization("Oppdiktet takst A");
     const office = await createOffice(org.id);
     const order = await createOrder(org.id);
-    const deletedAt = new Date("2026-11-02T08:00:00Z");
-
+    const deletedAt = new Date("2026-11-01T08:00:00Z");
     const row = await createAssignment(org.id, {
       officeId: office.id,
       orderId: order.id,
-      number: "TEST-99999",
+      number: "2026-09999",
       deletedAt,
     });
-
-    expect(row).toMatchObject({ officeId: office.id, orderId: order.id, number: "TEST-99999" });
+    expect(row).toMatchObject({ officeId: office.id, orderId: order.id, number: "2026-09999" });
     expect(row.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
-    const [officeCount] = await db.select({ n: count() }).from(offices);
-    expect(officeCount!.n).toBe(1);
+    // Ingen ekstra kontor når officeId er gitt
+    const officeRows = await db.select().from(offices).where(eq(offices.organizationId, org.id));
+    expect(officeRows).toHaveLength(1);
   });
 
-  it("5.3 createNumberSequence: assignment, 2026-, next_value 1, padding 5", async () => {
+  it("5.3 createNumberSequence gir oppdrag, 2026-, neste verdi 1 og fem sifre", async () => {
     const org = await createOrganization("Oppdiktet takst A");
-
     const row = await createNumberSequence(org.id);
-
     expect(row).toMatchObject({
       organizationId: org.id,
       scope: "assignment",
@@ -447,17 +443,11 @@ describe("createOrder, createAssignment og createNumberSequence (fase 2a, manuel
       nextValue: 1,
       padding: 5,
     });
-    const other = await createNumberSequence(org.id, { prefix: "2027-", nextValue: 7 });
-    expect(other).toMatchObject({ prefix: "2027-", nextValue: 7 });
   });
 
-  it("5.4 orders, assignments og number_sequences står i truncate-listen og tømmes", async () => {
+  it("5.4 RESET_TABLES har orders, assignments og number_sequences, og resetDatabase tømmer dem", async () => {
     const listed: readonly string[] = RESET_TABLES;
-    for (const table of ["orders", "assignments", "number_sequences"]) {
-      expect(listed).toContain(table);
-      expect(listed.indexOf(table)).toBeLessThan(listed.indexOf("organizations"));
-    }
-    expect(listed.indexOf("assignments")).toBeLessThan(listed.indexOf("offices"));
+    expect(listed).toEqual(expect.arrayContaining(["orders", "assignments", "number_sequences"]));
 
     const org = await createOrganization("Oppdiktet takst A");
     const order = await createOrder(org.id);

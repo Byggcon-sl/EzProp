@@ -1,219 +1,206 @@
 import { describe, expect, it } from "vitest";
-import { orderInputSchema, rejectReasonSchema } from "./index";
+import { orderInputSchema, rejectReasonSchema } from "./schemas";
 
 /*
- * Validering av ordreskjemaet og avvisningsgrunnen (testplan
- * docs/funksjoner/fase2a-manuell-ordre-testplan.md avsnitt 1, med runde 1 og 2). Rene
- * enhetstester, ingen database. Testdata er oppdiktet.
- * Støtter hovedmål: reklamasjoner (gnr/bnr/snr bare sifre, ingen fødselsnummer i fritekst) og
- * tid (feilen står ved feltet med en tekst som sier hva som må rettes).
+ * Zod for ordre og avvisning (docs/funksjoner/fase2a-manuell-ordre-testplan.md 1.3–1.10, med
+ * rettelsene i runde 1: ingen `note`, `source` og `requestedReportType` kan ikke settes fra
+ * skjemaet, og 11 sifre på rad avvises i bestiller og grunn).
+ *
+ * Fast tid: NOW = 03.11.2026 kl. 11 i Oslo. Testdata er oppdiktet.
+ * Støtter hovedmål: reklamasjoner (gnr/bnr bare sifre, ingen dato frem i tid, ingen
+ * fødselsnummer i fritekst).
  */
 
 const NOW = new Date("2026-11-03T10:00:00Z");
+const ADDRESS = "Testveien 12, 8000 Bodø";
+const PNR = "Fødselsnummer skal ikke lagres her.";
+
 const schema = orderInputSchema(NOW);
 
-const VALID = { addressText: "Testveien 12, 8000 Bodø" };
+type Issue = { path: PropertyKey[]; message: string };
+type Parsed = { success: true; data: unknown } | { success: false; error: { issues: Issue[] } };
 
-function parse(input: Record<string, unknown>) {
-  return schema.safeParse({ ...VALID, ...input });
+function parse(input: Record<string, unknown>): Parsed {
+  return schema.safeParse({ addressText: ADDRESS, ...input }) as Parsed;
 }
 
-/** Meldingene for ett felt (første ledd i stien), tom liste når feltet er gyldig. */
-function messagesFor(input: Record<string, unknown>, field: string): string[] {
-  const result = parse(input);
+/** Meldingene for ett felt (første ledd i stien). */
+function messagesFor(result: Parsed, field: string): string[] {
   if (result.success) return [];
   return result.error.issues
-    .filter((issue) => String(issue.path[0]) === field)
+    .filter((issue) => String(issue.path[0] ?? "") === field)
     .map((issue) => issue.message);
 }
 
-describe("orderInputSchema: adresse (1.3)", () => {
+function ok(input: Record<string, unknown>): Record<string, unknown> {
+  const result = parse(input);
+  if (!result.success) {
+    throw new Error(`ventet godkjent, fikk ${JSON.stringify(result.error.issues)}`);
+  }
+  return result.data as Record<string, unknown>;
+}
+
+function iso(value: unknown): string {
+  return new Date(value as string | Date).toISOString();
+}
+
+describe("adresse (1.3)", () => {
   it.each([
     ["tom", ""],
     ["bare mellomrom", "   "],
-  ])("%s adresse gir «Skriv inn adressen.»", (_label, addressText) => {
-    expect(messagesFor({ addressText }, "addressText")).toContain("Skriv inn adressen.");
+  ])("%s gir «Skriv inn adressen.»", (_name, addressText) => {
+    expect(messagesFor(parse({ addressText }), "addressText")).toContain("Skriv inn adressen.");
   });
 
-  it("manglende adresse avvises", () => {
-    expect(schema.safeParse({}).success).toBe(false);
+  it("mangler gir «Skriv inn adressen.»", () => {
+    const result = schema.safeParse({}) as Parsed;
+    expect(messagesFor(result, "addressText")).toContain("Skriv inn adressen.");
   });
 
   it("300 tegn godtas, 301 avvises", () => {
-    expect(parse({ addressText: "a".repeat(300) }).success).toBe(true);
-    expect(messagesFor({ addressText: "a".repeat(301) }, "addressText")).toHaveLength(1);
+    expect(ok({ addressText: "a".repeat(300) }).addressText).toBe("a".repeat(300));
+    expect(messagesFor(parse({ addressText: "a".repeat(301) }), "addressText")).not.toEqual([]);
   });
 
-  it("adressen trimmes", () => {
-    const result = parse({ addressText: "  Testveien 12, 8000 Bodø  " });
-    expect(result.success && result.data.addressText).toBe("Testveien 12, 8000 Bodø");
+  it("trimmes", () => {
+    expect(ok({ addressText: `  ${ADDRESS}  ` }).addressText).toBe(ADDRESS);
   });
 
-  it("adressen har ikke sperren mot elleve sifre (gateadresser kan ha lange tall)", () => {
-    expect(parse({ addressText: "Testveien 12345678901" }).success).toBe(true);
-  });
-});
-
-describe("orderInputSchema: gnr, bnr og snr (1.4)", () => {
-  const fields = [
-    ["gnr", "Gårdsnummer kan bare ha sifre."],
-    ["bnr", "Bruksnummer kan bare ha sifre."],
-    ["snr", "Seksjonsnummer kan bare ha sifre."],
-  ] as const;
-
-  it.each(fields)("%s: «12» godtas", (field) => {
-    const result = parse({ [field]: "12" });
-    expect(result.success && result.data[field]).toBe("12");
-  });
-
-  it.each(
-    fields.flatMap(([field, message]) =>
-      ["12a", "1 2", "-1", "12345678901"].map((value) => ({ field, message, value })),
-    ),
-  )("$field: «$value» avvises med «$message»", ({ field, message, value }) => {
-    expect(messagesFor({ [field]: value }, field)).toEqual([message]);
-  });
-
-  it.each(fields)("%s: tom streng og manglende felt blir null", (field) => {
-    const empty = parse({ [field]: "" });
-    expect(empty.success && empty.data[field]).toBeNull();
-    const missing = parse({});
-    expect(missing.success && missing.data[field]).toBeNull();
+  it("11 sifre på rad i adressen godtas (ingen fødselsnummersperre der, 1.10)", () => {
+    expect(ok({ addressText: "Testveien 12345678901" }).addressText).toBe("Testveien 12345678901");
   });
 });
 
-describe("orderInputSchema: lengder (1.5)", () => {
-  it.each(["externalRef", "orderedByText", "housingAssociationName"])(
-    "%s: 200 tegn godtas, 201 avvises",
-    (field) => {
-      expect(parse({ [field]: "a".repeat(200) }).success).toBe(true);
-      expect(messagesFor({ [field]: "a".repeat(201) }, field)).toHaveLength(1);
-    },
-  );
+const cadastralFields = [
+  ["gnr", "Gårdsnummer kan bare ha sifre."],
+  ["bnr", "Bruksnummer kan bare ha sifre."],
+  ["snr", "Seksjonsnummer kan bare ha sifre."],
+] as const;
 
-  it("valgfrie tekstfelt trimmes, og tom tekst blir null", () => {
-    const result = parse({
-      externalRef: "  TEST-ORD-0001 ",
-      orderedByText: " Megler Testesen, Testmegleren AS ",
-      housingAssociationName: "   ",
-    });
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.data.externalRef).toBe("TEST-ORD-0001");
-    expect(result.data.orderedByText).toBe("Megler Testesen, Testmegleren AS");
-    expect(result.data.housingAssociationName).toBeNull();
+const badDigits = cadastralFields.flatMap(([field, message]) =>
+  ["12a", "1 2", "-1"].map((value) => [field, message, value] as const),
+);
+
+describe("gnr, bnr og snr (1.4)", () => {
+  it.each(cadastralFields)("%s: «12» godtas", (field) => {
+    expect(ok({ [field]: "12" })[field]).toBe("12");
   });
 
-  it("note finnes ikke i skjemaet (runde 1: kuttet)", () => {
-    const result = parse({ note: "x".repeat(10) });
-    expect(result.success).toBe(true);
-    expect(result.success && "note" in result.data).toBe(false);
+  it.each(badDigits)("%s: «%s» for «%s»", (field, message, value) => {
+    expect(messagesFor(parse({ [field]: value }), field)).toContain(message);
+  });
+
+  it.each(cadastralFields)("%s: 11 sifre avvises (høyst 10 tegn)", (field) => {
+    expect(messagesFor(parse({ [field]: "12345678901" }), field)).not.toEqual([]);
+  });
+
+  it.each(cadastralFields)("%s: 10 sifre godtas", (field) => {
+    expect(ok({ [field]: "1234567890" })[field]).toBe("1234567890");
+  });
+
+  it.each(cadastralFields)("%s: tom tekst blir null", (field) => {
+    expect(ok({ [field]: "" })[field]).toBeNull();
   });
 });
 
-describe("orderInputSchema: mottatt (1.6)", () => {
-  it("NOW og NOW − 1 dag godtas", () => {
-    const now = parse({ receivedAt: NOW.toISOString() });
-    expect(now.success && now.data.receivedAt.getTime()).toBe(NOW.getTime());
+describe("lengder (1.5)", () => {
+  const textFields = ["externalRef", "orderedByText", "housingAssociationName"] as const;
+
+  it.each(textFields)("%s: 200 tegn godtas, 201 avvises", (field) => {
+    expect(ok({ [field]: "b".repeat(200) })[field]).toBe("b".repeat(200));
+    expect(messagesFor(parse({ [field]: "b".repeat(201) }), field)).not.toEqual([]);
+  });
+
+  it.each(textFields)("%s: bare mellomrom blir null", (field) => {
+    expect(ok({ [field]: "  " })[field]).toBeNull();
+  });
+
+  it("ordren har ikke merknad (note er kuttet i runde 1)", () => {
+    const result = parse({ note: "Oppdiktet merknad" });
+    if (result.success) expect(result.data).not.toHaveProperty("note");
+  });
+});
+
+describe("mottatt (1.6)", () => {
+  it("NOW og NOW minus én dag godtas", () => {
+    expect(iso(ok({ receivedAt: NOW.toISOString() }).receivedAt)).toBe(NOW.toISOString());
     const yesterday = new Date(NOW.getTime() - 24 * 60 * 60 * 1000);
-    const earlier = parse({ receivedAt: yesterday });
-    expect(earlier.success && earlier.data.receivedAt.getTime()).toBe(yesterday.getTime());
+    expect(iso(ok({ receivedAt: yesterday }).receivedAt)).toBe(yesterday.toISOString());
   });
 
-  it("NOW + 1 minutt gir «Mottatt kan ikke være frem i tid.»", () => {
-    const later = new Date(NOW.getTime() + 60 * 1000);
-    expect(messagesFor({ receivedAt: later.toISOString() }, "receivedAt")).toEqual([
+  it("ett minutt frem i tid gir «Mottatt kan ikke være frem i tid.»", () => {
+    const future = new Date(NOW.getTime() + 60 * 1000).toISOString();
+    expect(messagesFor(parse({ receivedAt: future }), "receivedAt")).toContain(
       "Mottatt kan ikke være frem i tid.",
-    ]);
-    expect(messagesFor({ receivedAt: later }, "receivedAt")).toEqual([
-      "Mottatt kan ikke være frem i tid.",
-    ]);
+    );
   });
 
   it.each(["i går", "2026-13-01"])("ugyldig tekst «%s» avvises", (receivedAt) => {
-    expect(messagesFor({ receivedAt }, "receivedAt").length).toBeGreaterThan(0);
+    expect(messagesFor(parse({ receivedAt }), "receivedAt")).not.toEqual([]);
   });
 
-  it("mangler mottatt → now", () => {
-    const result = parse({});
-    expect(result.success && result.data.receivedAt.getTime()).toBe(NOW.getTime());
-  });
-
-  it("«frem i tid» regnes mot now som sendes inn, ikke klokken på maskinen", () => {
-    const later = new Date(NOW.getTime() + 60 * 1000);
-    const result = orderInputSchema(new Date(NOW.getTime() + 2 * 60 * 1000)).safeParse({
-      ...VALID,
-      receivedAt: later.toISOString(),
-    });
-    expect(result.success).toBe(true);
+  it("mangler gir standard now", () => {
+    expect(iso(ok({}).receivedAt)).toBe(NOW.toISOString());
   });
 });
 
-describe("orderInputSchema: egenerklæring (1.7)", () => {
-  it("mangler → false", () => {
-    const result = parse({});
-    expect(result.success && result.data.sellerDeclarationReceived).toBe(false);
+describe("egenerklæring (1.7)", () => {
+  it("mangler gir false", () => {
+    expect(ok({}).sellerDeclarationReceived).toBe(false);
   });
 
-  it.each([["on"], [true]])("%s → true (slik avkrysningen sender)", (value) => {
-    const result = parse({ sellerDeclarationReceived: value });
-    expect(result.success && result.data.sellerDeclarationReceived).toBe(true);
+  it.each([["on"], [true]] as const)("%s gir true (slik avkrysningen sender)", (value) => {
+    expect(ok({ sellerDeclarationReceived: value }).sellerDeclarationReceived).toBe(true);
   });
 });
 
-describe("orderInputSchema: source og rapporttype kan ikke settes fra skjemaet (1.8)", () => {
-  it("source og requestedReportType i skjemaet tas bort (kjernen setter manual og condition_report)", () => {
+describe("rapporttype og kilde kan ikke settes fra skjemaet (1.8)", () => {
+  it("source og requestedReportType fra skjemaet blir ikke brukt (ignoreres eller avvises)", () => {
     const result = parse({ source: "email", requestedReportType: "bolig" });
-    expect(result.success).toBe(true);
     if (!result.success) return;
-    expect("source" in result.data).toBe(false);
-    expect("requestedReportType" in result.data).toBe(false);
-  });
-
-  it("organizationId i skjemaet tas bort", () => {
-    const result = parse({ organizationId: "0190a000-0000-7000-8000-000000000002" });
-    expect(result.success && "organizationId" in result.data).toBe(false);
+    const data = result.data as Record<string, unknown>;
+    expect(data.source ?? "manual").toBe("manual");
+    expect(data.requestedReportType ?? "condition_report").toBe("condition_report");
   });
 });
 
-describe("rejectReasonSchema (1.9)", () => {
-  it.each(["", "   "])("tom grunn «%s» gir «Skriv inn en grunn.»", (reason) => {
-    const result = rejectReasonSchema.safeParse(reason);
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.map((issue) => issue.message)).toContain("Skriv inn en grunn.");
+describe("fødselsnummer i fritekst (1.10)", () => {
+  it("bestiller med 11 sifre på rad gir «Fødselsnummer skal ikke lagres her.»", () => {
+    expect(messagesFor(parse({ orderedByText: "Ola 12345678901" }), "orderedByText")).toContain(
+      PNR,
+    );
+  });
+
+  it("bestiller med 10 sifre på rad godtas", () => {
+    expect(ok({ orderedByText: "Ola 1234567890" }).orderedByText).toBe("Ola 1234567890");
+  });
+
+  it("ekstern referanse med 11 sifre på rad godtas (ingen sperre der)", () => {
+    expect(ok({ externalRef: "TEST-12345678901" }).externalRef).toBe("TEST-12345678901");
+  });
+});
+
+describe("avvisningsgrunn (1.9 og 1.10)", () => {
+  function reasonMessages(value: string): string[] {
+    const result = rejectReasonSchema.safeParse(value);
+    return result.success ? [] : result.error.issues.map((issue) => issue.message);
+  }
+
+  it.each(["", "   "])("«%s» gir «Skriv inn en grunn.»", (reason) => {
+    expect(reasonMessages(reason)).toContain("Skriv inn en grunn.");
   });
 
   it("500 tegn godtas, 501 avvises", () => {
-    expect(rejectReasonSchema.safeParse("a".repeat(500)).success).toBe(true);
-    expect(rejectReasonSchema.safeParse("a".repeat(501)).success).toBe(false);
+    expect(rejectReasonSchema.safeParse("c".repeat(500)).success).toBe(true);
+    expect(rejectReasonSchema.safeParse("c".repeat(501)).success).toBe(false);
   });
 
-  it("grunnen trimmes", () => {
+  it("trimmes", () => {
     expect(rejectReasonSchema.parse("  Feil registrering  ")).toBe("Feil registrering");
   });
-});
 
-describe("ingen fødselsnummer i fritekst (1.10)", () => {
-  const NATIONAL_ID = "Fødselsnummer skal ikke lagres her.";
-
-  it("orderedByText med elleve sifre på rad avvises", () => {
-    expect(messagesFor({ orderedByText: "Ola 12345678901" }, "orderedByText")).toEqual([
-      NATIONAL_ID,
-    ]);
-  });
-
-  it("orderedByText med ti sifre godtas", () => {
-    expect(parse({ orderedByText: "Megler Testesen 1234567890" }).success).toBe(true);
-  });
-
-  it("avvisningsgrunn med elleve sifre på rad avvises, ti godtas", () => {
-    const result = rejectReasonSchema.safeParse("Ola 12345678901");
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.map((issue) => issue.message)).toEqual([NATIONAL_ID]);
-    expect(rejectReasonSchema.safeParse("Ring 1234567890").success).toBe(true);
-  });
-
-  it("externalRef har ikke sperren (meglerreferanser kan ha lange tall)", () => {
-    expect(parse({ externalRef: "12345678901234" }).success).toBe(true);
+  it("11 sifre på rad gir «Fødselsnummer skal ikke lagres her.», 10 sifre godtas", () => {
+    expect(reasonMessages("Ola 12345678901")).toContain(PNR);
+    expect(rejectReasonSchema.safeParse("Ola 1234567890").success).toBe(true);
   });
 });

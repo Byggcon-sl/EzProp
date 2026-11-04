@@ -27,15 +27,15 @@ import { todayInOslo } from "@/shared/lib/dates";
  * sjekker at alle tabellene i databasen står i listen.
  */
 export const RESET_TABLES = [
+  "number_sequences",
+  "orders",
+  "assignments",
   "certifications",
   "trial_photos",
   "trial_answers",
   "trial_forms",
   "audit_log",
   "events",
-  "orders",
-  "assignments",
-  "number_sequences",
   "employee_permissions",
   "employee_roles",
   "employees",
@@ -322,42 +322,46 @@ export async function auditRows(organizationId: string) {
     .orderBy(asc(auditLog.receivedAt), asc(auditLog.createdAt));
 }
 
-/** Fast tid i ordretestene: 03.11.2026 i Oslo, serien `2026-`. */
-export const ORDER_TEST_NOW = new Date("2026-11-03T10:00:00Z");
+/**
+ * Fast tid i ordretestene (docs/funksjoner/fase2a-manuell-ordre-testplan.md): 03.11.2026 kl. 11
+ * i Oslo. `createOrder` bruker den som standard for `receivedAt`.
+ */
+export const TEST_NOW = new Date("2026-11-03T10:00:00Z");
 
 type OrderInsert = typeof orders.$inferInsert;
 type OrderOverrides = Partial<Omit<OrderInsert, "organizationId">>;
 
 /**
- * En ordre satt inn direkte, uten tilgangssjekk og uten hendelse. Standard er `received`,
- * `manual`, oppdiktet adresse og `receivedAt` = fast testtid. For `converted` må testen sende med
- * `assignmentId` til et oppdrag i samme organisasjon (CHECK og fremmednøkkel i databasen).
+ * En ordre satt inn direkte uten tilgangssjekk og uten Zod, slik at testene kan lage rader
+ * tjenesten ville avvist. Standard: mottatt, lagt inn for hånd, oppdiktet adresse,
+ * `receivedAt = TEST_NOW`. For `converted` må testen sende med `assignmentId` (CHECK i databasen).
  */
 export async function createOrder(organizationId: string, overrides: OrderOverrides = {}) {
   const [row] = await db
     .insert(orders)
     .values({
       addressText: "Testveien 12, 8000 Bodø",
-      receivedAt: ORDER_TEST_NOW,
+      receivedAt: TEST_NOW,
       source: "manual",
       status: "received",
+      requestedReportType: "condition_report",
       ...overrides,
       organizationId,
-    })
+    } as OrderInsert)
     .returning();
   if (!row) throw new Error("kunne ikke opprette ordre");
   return row;
 }
 
-let assignmentCounter = 0;
-
 type AssignmentInsert = typeof assignments.$inferInsert;
 type AssignmentOverrides = Partial<Omit<AssignmentInsert, "organizationId">>;
 
+let assignmentCounter = 0;
+
 /**
- * Et oppdrag satt inn direkte. Lager et kontor i organisasjonen når `officeId` mangler. Nummeret
- * kommer fra en egen teller (`TEST-00001`, `TEST-00002` …), aldri fra nummerserien, så fabrikken
- * aldri rører `number_sequences`.
+ * Et oppdrag satt inn direkte. Lager et kontor i samme organisasjon når `officeId` mangler.
+ * Nummeret kommer fra en egen teller (`TEST-00001`, `TEST-00002` …), aldri fra nummerserien, så
+ * fabrikken ikke rører `number_sequences`.
  */
 export async function createAssignment(
   organizationId: string,
@@ -374,19 +378,16 @@ export async function createAssignment(
       ...overrides,
       officeId,
       organizationId,
-    })
+    } as AssignmentInsert)
     .returning();
   if (!row) throw new Error("kunne ikke opprette oppdrag");
   return row;
 }
 
-type NumberSequenceOverrides = Partial<Omit<typeof numberSequences.$inferInsert, "organizationId">>;
+type NumberSequenceInsert = typeof numberSequences.$inferInsert;
+type NumberSequenceOverrides = Partial<Omit<NumberSequenceInsert, "organizationId">>;
 
-/**
- * En nummerserie satt inn direkte (bare i tester; i produktkoden skrives tabellen bare fra
- * `nextAssignmentNumber`). Standard: `scope = assignment`, `prefix = 2026-`, `next_value = 1`,
- * `padding = 5`.
- */
+/** En nummerserie satt inn direkte. Standard: oppdrag, `2026-`, neste verdi 1, fem sifre. */
 export async function createNumberSequence(
   organizationId: string,
   overrides: NumberSequenceOverrides = {},
@@ -400,7 +401,7 @@ export async function createNumberSequence(
       padding: 5,
       ...overrides,
       organizationId,
-    })
+    } as NumberSequenceInsert)
     .returning();
   if (!row) throw new Error("kunne ikke opprette nummerserie");
   return row;
