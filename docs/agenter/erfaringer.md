@@ -172,3 +172,8 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Premisset for en ytelsesretting skal være presist i kommentaren («Better Auth skriver aldri `users.email`», ikke «skriver aldri `users`»), ellers setter neste utvikler det gamle tilbake av forsiktighet.
 - `merge-klare-pr.sh … --vent` må kjøres i bakgrunnen med lang tidsgrense (CI med e2e tar 20–25 min); 10 minutter i forgrunnen er for lite, og skriptet skriver først når det er ferdig.
 
+
+## 04.11.2026 – PR #84 (personvernerklæring og sletteregel for betadata)
+
+- Rollen sikkerhet-personvern feilet på kvoten både i forhåndsvurderingen og i gjennomgangen, og reserven til opus slo ikke inn. PR-en ble likevel merget uten rollens vurdering. Gjennomgangen i ettertid fant 3 alvorlige feil (hvem ser hva, arbeidsmiljøloven kapittel 9, ekte bilder i prøvetabellene). Regel videre: feiler en rolle i arbeidsflyten, står det i sluttrapporten, og hovedløkken kjører rollen for hånd før neste oppgave. Gjenkjenningen av kvotefeil i `oppgave.js` leser nå hele feilen, ikke bare `message`.
+- En hengt `next start` på port 3100 fra en tidligere kjøring stoppet e2e. Sjekk `ps` for gamle `next-server` før e2e når testene får tidsavbrudd på `/api/helse`.

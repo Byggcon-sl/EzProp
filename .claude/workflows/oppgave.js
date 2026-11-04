@@ -24,7 +24,17 @@ export const meta = {
 // ---------------------------------------------------------------------------
 const FABLE_ROLES = ["arkitekt", "fagansvarlig", "sikkerhet-personvern"];
 const modelFor = (role) => (FABLE_ROLES.includes(role) ? "fable" : "opus");
-const isQuotaError = (e) => /limit|quota|rate|usage|overloaded/i.test(String(e && e.message));
+// Feilen kan komme som Error, som tekst eller som objekt; les alt (04.11.2026: «Fable limit» ble ikke fanget).
+const errorText = (e) => {
+  if (!e) return "";
+  if (typeof e === "string") return e;
+  try {
+    return [e.message, e.error, e.reason, JSON.stringify(e)].filter(Boolean).join(" ");
+  } catch {
+    return String(e);
+  }
+};
+const isQuotaError = (e) => /limit|quota|rate|usage|overloaded|429/i.test(errorText(e));
 async function run(role, prompt, opts) {
   const text = `Du er rollen «${role}» i EzProp. Les .claude/agents/${role}.md først og følg den.
 
@@ -36,7 +46,7 @@ ${prompt}`;
       log(`${role}: fable-kvoten er brukt opp, kjører på opus`);
       return agent(text, { ...opts, model: "opus" });
     }
-    if (!/not found/i.test(String(e && e.message))) throw e;
+    if (!/not found/i.test(errorText(e))) throw e;
     return agent(text, { ...opts, model: modelFor(role) });
   }
 }

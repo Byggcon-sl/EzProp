@@ -31,8 +31,8 @@ Brukere (`users`) har ingen organisasjons-ID. En oppdiktet bruker regnes som pr�
 ## 4. Hvordan det ryddes
 
 - **Myk sletting:** `deleted_at` og `deleted_by` settes. Raden finnes fortsatt. Ingenting slettes permanent (CLAUDE.md regel 3, 10 års oppbevaring).
-- **Filer** i prøveorganisasjonen myk-slettes som andre rader. Filinnholdet blir liggende i lagringen (`src/db/schema/files.ts`). Oppbevaringstidene i `src/core/files/retention.ts` gjelder: en fil kan ikke merkes som slettet før `retain_until` er passert.
-- **Eneste unntak er `trial_forms`, `trial_answers` og `trial_photos`.** De kan slettes helt, fordi dataene er oppdiktede og tabellene bare var for prøven i fase 1 (merknaden 28.10.2026 og `docs/05-domenemodell.md`: «slettes eller gjøres om i fase 2b»). Unntaket er **ikke** presedens for andre tabeller.
+- **Filer** i prøveorganisasjonen myk-slettes som andre rader. Filinnholdet blir liggende i lagringen (`src/db/schema/files.ts`). Oppbevaringstidene står i `src/core/files/retention.ts`, men `retain_until` settes ikke ennå. Filtjenesten (`src/core/files/service.ts`) stopper merkingen bare når feltet har en verdi i fremtiden. I dag kan admin derfor merke filer som slettet. Filinnholdet blir uansett liggende.
+- **Eneste unntak er `trial_forms`, `trial_answers` og `trial_photos`.** De kan slettes helt, fordi tabellene skulle inneholde oppdiktede data og bare var for prøven i fase 1 (merknaden 28.10.2026 og `docs/05-domenemodell.md`: «slettes eller gjøres om i fase 2b»). Merk: `trial_photos` er ekte kamerabilder som kan ha posisjon (GPS), og `trial_answers` er fritekst. Bildefilene (`storage_path` i fillagringen) slettes sammen med radene, så ingen bilder blir liggende igjen. Unntaket er **ikke** presedens for andre tabeller.
 
 ## 5. Det som aldri ryddes (A58)
 
@@ -41,7 +41,8 @@ Brukere (`users`) har ingen organisasjons-ID. En oppdiktet bruker regnes som pr�
 ## 6. Hvem som kan rydde (A59)
 
 - Bare **admin** kan rydde prøveorganisasjonen. Takstmann og leder kan ikke.
-- Oppryddingen myk-sletter **aldri** admin-brukeren eller admins ansatt-rad i den ekte organisasjonen. Admin stenges aldri ute (CLAUDE.md regel 11).
+- Oppryddingen rører bare prøveorganisasjonen. Brukerraden (`users`) har ikke `deleted_at` og myk-slettes ikke.
+- Oppryddingen myk-sletter **aldri** ansatt-raden som gir admin tilgang til den ekte organisasjonen, og aldri siste admin i prøveorganisasjonen. Admin stenges aldri ute (CLAUDE.md regel 11).
 - Tilgangen sjekkes i `src/core/access`, som for alt annet.
 
 ## 7. Når det bygges

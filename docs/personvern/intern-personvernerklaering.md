@@ -27,19 +27,19 @@ Dokumentet er ikke juridisk rådgivning. Det dekker ikke rettslig grunnlag, beha
 | `organizations` | Ingen personopplysninger (navn på organisasjonen, innstillinger) | Skille data mellom organisasjoner | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte i organisasjonen; admin endrer |
 | `companies` | Ingen personopplysninger (selskapsnavn, organisasjonsnummer, adresse, forsikring) | Utsteder rapporten | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte ser; admin endrer |
 | `offices` | Ingen personopplysninger (kontornavn og adresse) | Plassere ansatte | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte ser; admin endrer |
-| `employees` | Navn, stillingstittel, selskap, kontor, kobling til bruker, når den ansatte sluttet | Vite hvem som jobber og står på rapporten | Database | Nå i koden: myk sletting; «Har sluttet» stopper innlogging, men raden blir stående. Foreslått, bygges senere: minst 10 år etter siste rapport | Bare admin ser listen og endrer (`organization.manage`) |
+| `employees` | Navn, stillingstittel, selskap, kontor, kobling til bruker, når den ansatte sluttet | Vite hvem som jobber og står på rapporten | Database | Nå i koden: myk sletting. «Har sluttet» (`deactivatedAt`) gjør at tilgangssjekken sier nei (`src/core/access/guards.ts`), og raden blir stående. Innloggingen og økten virker fortsatt, men uten tilgang til noe; se «iPaden». Foreslått, bygges senere: minst 10 år etter siste rapport | Alle ansatte i organisasjonen ser navn, stillingstittel, selskap og kontor (`listEmployees`, `organization.read`). Bare admin ser e-postadressen og endrer (`organization.manage`) |
 | `employee_roles` | Hvilke roller den ansatte har | Styre tilgang | Database | Nå i koden: myk sletting, ingen rydding | Admin |
 | `employee_permissions` | Enkeltrettigheter gitt til den ansatte | Styre tilgang | Database | Nå i koden: myk sletting, ingen rydding | Admin |
 | `certifications` | Sertifiseringsområde, utsteder, sertifikatnummer, gyldig fra og til | Bare sertifiserte kan publisere rapport | Database | Nå i koden: myk sletting; fornyelse er ny rad, den gamle blir stående som historikk | Admin |
 | `files` | Metadata om filen (type, størrelse, sjekksum, hvem som lastet opp). Selve filen ligger i fillagringen og kan være bilder med personer eller adresser | Lagre bilder og dokumenter trygt | Database og fillagring | Nå i koden: myk sletting, filinnholdet blir liggende. `retain_until` er ikke regnet ut ennå (fase 2). Foreslått, bygges senere: se «Hvor lenge» | Alle ansatte i organisasjonen; admin merker som slettet |
 | `events` | Hendelser på oppdrag, hvem som gjorde det, tidspunkt, detaljer uten mer personopplysninger enn nødvendig | Rutiner og varsler | Database | Nå i koden: endres og slettes aldri, heller ikke mykt | Ingen skjerm ennå |
-| `audit_log` | Hvem som endret hva og når, gammel og ny verdi (aldri passord eller nøkler), enhet | Spore endringer, viktig ved reklamasjon | Database | Nå i koden: ryddes aldri | Leder og admin |
+| `audit_log` | Hvem som endret hva og når, og enhet. Loggen lagrer feltnavn, id-er og statusendringer, ikke e-postadresse, sertifikatnummer, passord eller nøkler. Unntak: grunnen ved avvist ordre (`rejectedReason`) lagres som den ble skrevet. Den er fritekst og kan inneholde personopplysninger | Spore endringer, viktig ved reklamasjon | Database | Nå i koden: ryddes aldri | Leder og admin |
 | `integration_connections` | Ingen personopplysninger (tilkoblinger til andre systemer; bare navnet på hemmeligheten, aldri verdien) | Koble til e-post og andre tjenester | Database | Nå i koden: myk sletting, ingen rydding | Admin |
-| `trial_forms` | Navn på testskjemaet (oppdiktet), hvem som laget det | Prøven uten nett i fase 1 | Database og iPaden | Nå i koden: myk sletting. Eneste unntak fra regelen om myk sletting fordi dataene er oppdiktede (merknaden 28.10.2026, ikke presedens), se sletteregelen | Alle ansatte i organisasjonen |
-| `trial_answers` | Oppdiktede svar, fast id per nettleser-installasjon | Prøven uten nett i fase 1 | Database og iPaden | Som `trial_forms` | Alle ansatte i organisasjonen |
-| `trial_photos` | Bilder fra prøven (filnavn, størrelse, sjekksum), fast id per nettleser. Bildefilen lastes opp uendret og kan ha posisjon fra iPaden | Prøven uten nett i fase 1 | Database, fillagring og iPaden | Som `trial_forms` | Alle ansatte i organisasjonen |
-| `orders` | Bestillingen slik den kom inn: adresse, gnr/bnr/snr, borettslag, bestiller som tekst, ekstern referanse, status og grunn ved avvisning. Kan inneholde navn og adresse til kunder | Ta imot og fordele oppdrag | Database | Nå i koden: myk sletting; en avvist ordre blir stående (A55). Foreslått, bygges senere: minst 10 år | Ansatte med `assignment.edit` i organisasjonen |
-| `assignments` | Oppdraget: oppdragsnummer, type, status, kontor, kobling til ordren | Lage og levere rapporten | Database | Nå i koden: myk sletting. Foreslått, bygges senere: minst 10 år | Ansatte med `assignment.edit` i organisasjonen |
+| `trial_forms` | Navn på testskjemaet (skulle være oppdiktet), hvem som laget det | Prøven uten nett i fase 1 | Database og iPaden | Nå i koden: bare myk sletting. Foreslått, bygges senere: slettes helt sammen med bildefilene, som eneste unntak fra regel 3, fordi tabellene skulle inneholde oppdiktede data (merknaden 28.10.2026). Unntaket er ikke presedens for andre tabeller. Se sletteregelen | Alle ansatte i organisasjonen |
+| `trial_answers` | Svar i fritekst (skulle være oppdiktede, men kan inneholde det den ansatte skrev), fast id per nettleser-installasjon (`device_id`) | Prøven uten nett i fase 1 | Database og iPaden | Som `trial_forms` | Alle ansatte i organisasjonen |
+| `trial_photos` | Bilder fra prøven (filnavn, størrelse, sjekksum, plassering i fillagringen `storage_path`), fast id per nettleser (`device_id`). Dette er ekte kamerabilder. Bildefilen lastes opp uendret og kan ha posisjon (GPS) fra iPaden | Prøven uten nett i fase 1 | Database, fillagring og iPaden | Som `trial_forms` | Alle ansatte i organisasjonen |
+| `orders` | Bestillingen slik den kom inn: adresse, gnr/bnr/snr, borettslag, bestiller som tekst, ekstern referanse, status og grunn ved avvisning. Kan inneholde navn og adresse til kunder | Ta imot og fordele oppdrag | Database | Nå i koden: myk sletting; en avvist ordre blir stående (A55). Foreslått, bygges senere: minst 10 år | Alle ansatte i organisasjonen ser ordrene (`listOrders` og `getOrder`, `organization.read`). Bare ansatte med `assignment.edit` legger inn, avviser og gjør om til oppdrag |
+| `assignments` | Oppdraget: oppdragsnummer, type, status, kontor, kobling til ordren | Lage og levere rapporten | Database | Nå i koden: myk sletting. Foreslått, bygges senere: minst 10 år | Alle ansatte i organisasjonen ser oppdragsnummeret i ordrelisten (`organization.read`). Bare ansatte med `assignment.edit` lager oppdrag (fra en ordre). Egen oppdragsliste finnes ikke ennå |
 | `number_sequences` | Nummerserien for oppdragsnummer (prefiks, siste nummer). Ingen personopplysninger | Unike oppdragsnummer | Database | Nå i koden: telleren blir stående, ingen sletting (heller ikke myk) | Ingen skjerm |
 | *Kommer senere i fase 2a: parter, eiendom, bilder, egenerklæring* | Opplysninger om kunder, eiere, kjøpere og eiendommen, og bilder fra befaringen | Lage og levere rapporten | Database og fillagring, utkast på iPaden | Foreslått, bygges senere: minst 10 år (Ståle 25.10 og 27.10.2026), med myk sletting | Alle ansatte (`access.inspectors_edit_all`); reklamasjonssaker bare leder og admin |
 
@@ -47,6 +47,7 @@ Dokumentet er ikke juridisk rådgivning. Det dekker ikke rettslig grunnlag, beha
 
 - **Database og fillagring:** Azure, region Sweden Central (EU/EØS). Fillagring i Azure Blob Storage er bygd i koden, men ikke slått på ennå; til da ligger filene i en lokal mappe på serveren.
 - **E-post:** innloggingskoder sendes via Microsoft 365. Til det er koblet til, vises koden i utviklingspostkassen lokalt eller i serverloggen for første admin.
+- **Serverloggen:** Azure App Service samler loggen fra serveren (`src/shared/lib/logger.ts`). Den har bruker-id, rute og referansekode, ikke e-postadresse eller telefonnummer (loggeren vasker dem bort). Unntak: til Microsoft 365 er koblet til, står engangskoden til første admin i klartekst i loggen (`src/core/email/server-log.ts`). Koden gjelder i 10 minutter. Hvor lenge loggen lagres, er ikke satt ennå.
 - **iPaden:** i nettleserens database (IndexedDB, `src/modules/offline-trial/sync`). Utkast og bilder ligger der til de er synket. Originalbildet slettes fra iPaden når serveren har bekreftet det; svarene og visningskopiene blir liggende.
 
 ## iPaden
@@ -55,11 +56,17 @@ Lokal lagring tømmes **ikke** ved utlogging i dag. Utloggingsknappen avslutter 
 
 Ved tapt iPad finnes ingen fjernsletting og ingen knapp for å stoppe økten. Det som virker i dag:
 
-- Admin markerer den ansatte som «Har sluttet». Da sier tilgangssjekken nei, men dataene på iPaden blir liggende.
+- Admin markerer den ansatte som «Har sluttet» (`deactivatedAt`). Da sier tilgangssjekken nei (`src/core/access/guards.ts`). Innloggingen og økten virker fortsatt, men uten tilgang. En synknøkkel som allerede er utstedt, virker i opptil 1 time (`SYNC_TOKEN_TTL_SECONDS`). Dataene på iPaden blir liggende.
 - Noen med databasetilgang sletter øktraden i `sessions`.
 - Ellers går økten ut etter 30 dager uten bruk.
 
-Hva som skal gjelde, er åpent spørsmål nr. 17.
+Sperring av en mistet iPad er allerede et punkt i planen under «Minimum før ekte data» (`docs/07-utviklingsplan.md`), og skal være på plass før første ekte befaring på iPad i fase 2b. Det som er åpent, er bare om iPaden skal tømmes ved utlogging (spørsmål nr. 17).
+
+## Ikke kontroll av ansatte
+
+EzProp lagrer noen opplysninger om hva den enkelte ansatte gjør: IP-adresse og enhet (`sessions`), siste innlogging (`users`), revisjonsloggen (`audit_log`), hendelser (`events`) og fast id per nettleser (`device_id` i `trial_*`). Disse brukes bare til innlogging, sikkerhet og oppfølging av reklamasjoner. De brukes ikke til å måle tid eller følge med på den enkelte ansatte.
+
+Tidsmåling kommer senere (planpunktet «Tidsmåling per rapport» i fase 2a). Til de ansatte har sagt ja etter drøfting (arbeidsmiljøloven kapittel 9), brukes tiden bare samlet per rapporttype og fase, ikke per person. Det samme står i `docs/06-arkitektur.md`, avsnittet «Personvern og sikkerhet».
 
 ## Hvor lenge
 
@@ -83,4 +90,4 @@ Hva som skal gjelde, er åpent spørsmål nr. 17.
 
 ## Prøvedata
 
-Hvordan prøvedata fra betaen merkes og ryddes, står i [sletting-av-betadata.md](sletting-av-betadata.md). Kort: prøvedata ligger i en egen prøveorganisasjon (A57), bare admin rydder, og admin-brukeren og admins ansatt-rad myk-slettes aldri (A59).
+Hvordan prøvedata fra betaen merkes og ryddes, står i [sletting-av-betadata.md](sletting-av-betadata.md). Kort: prøvedata ligger i en egen prøveorganisasjon (A57), bare admin rydder, og oppryddingen myk-sletter aldri ansatt-raden som gir admin tilgang til den ekte organisasjonen eller siste admin i prøveorganisasjonen (A59).
