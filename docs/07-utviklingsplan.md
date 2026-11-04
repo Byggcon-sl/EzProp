@@ -173,7 +173,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 
 **Ståle avgjør innen demoen:** godkjenne ADR-en for drift uten nett.
 
-## Fase 0b – Innlogging, organisasjon, roller og layout  `status: ikke startet`
+## Fase 0b – Innlogging, organisasjon, roller og layout  `status: i arbeid fra 30.10.2026; levert så langt det går uten Ståle (03.11.2026). Igjen: de to Optiplan-punktene (innlogging som Optiplan og bytte med ett trykk), som venter på Ståle og Optiplan-tilgang. Løkken gikk videre til fase 2a 03.11.2026`
 
 **Innlogging og sikkerhet**
 - [ ] **Innlogging som Optiplan** (engangskode på e-post), med **felles innlogging og felles profil for admin og ansatte** mellom EzProp og Optiplan (Ståle 28.10.2026): samme bruker, samme navn, telefon, stilling og kontor i begge. **Kundene holdes adskilt**: Optiplans styrer og EzProps kunder og meglere er aldri samme brukere. Løsningen beskrives i en ADR som tar hensyn til ADR-en fra fase 1.
@@ -220,13 +220,13 @@ Før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerkl�
 
 **Ferdig når:** Ståle har sett listen krysset av og godkjent at ekte data kan legges inn.
 
-## Fase 2a – Rapporten på PC  `status: ikke startet`
+## Fase 2a – Rapporten på PC  `status: i arbeid fra 03.11.2026`
 
 Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **på PC**, med full selskapsstruktur. Ingen iPad og ingen drift uten nett ennå. Kjøres **ved siden av IVIT** (IVIT er fortsatt fasit). Betaen holdes smal på funksjoner (beslutning 25.10.2026). Målet er at fagrådet og Ståle kan se og godkjenne malen, tekstene, reglene og PDF-en i et ekte skjermbilde så tidlig som mulig (innspill P2).
 
 **Oppdrag og eiendom**
-- [ ] Manuell ordre (bestilling lagt inn for hånd fra e-post), med egne felt som gnr/bnr, seksjon, borettslag og om egenerklæring er mottatt, og «gjør om til oppdrag» eller «avvis»
-- [ ] **Oppdragsnummer** som `2026-00123`, laget på serveren fra en nummerserie (innspill D9)
+- [x] Manuell ordre (bestilling lagt inn for hånd fra e-post), med egne felt som gnr/bnr, seksjon, borettslag og om egenerklæring er mottatt, og «gjør om til oppdrag» eller «avvis» (04.11.2026, `docs/funksjoner/fase2a-manuell-ordre.md`, sidene `/ordre`, `/ordre/ny` og `/ordre/[id]`, beslutningene A51–A55; sammen med oppdragsnummeret)
+- [x] **Oppdragsnummer** som `2026-00123`, laget på serveren fra en nummerserie (innspill D9) (04.11.2026, samme kort; tabellen `number_sequences`, én serie per organisasjon og år, A52)
 - [ ] Oppdrag med team (ansvarlig, medansvarlig, befaringstakstmann, sidemann, kontor), parter med roller (megler, selger, kjøper, representant, fakturamottaker) og hva hver part mottar
 - [ ] Utstedende selskap settes automatisk fra ansvarlig takstmann
 - [ ] Statusflyten med **fire statuser** (bestilt, under arbeid, ferdig, fakturert, 27.10.2026) og hendelser som lagres for alt som skjer. Kansellering med myk sletting. En rapport som er rettet og sendt på nytt, får merket **«Rettet»** under «Ferdig» (27.10.2026).

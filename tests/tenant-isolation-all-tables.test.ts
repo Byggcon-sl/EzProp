@@ -268,8 +268,12 @@ describe("tenant-isolasjon mot testdatabasen", () => {
     await expect(attempt).rejects.toThrow(/tests\/tenant-tables\.ts/);
   });
 
+  /** Tabeller uten `deleted_at` (tellere, ikke dokumenter). Ny tabell her må begrunnes. */
+  const NO_SOFT_DELETE = ["number_sequences"];
+
   /** Tabeller der radbyggeren må lage en foreldre-rad (I16). */
   const PARENTS: Record<string, { column: string; parent: PgTable }> = {
+    assignments: { column: "office_id", parent: schema.offices },
     certifications: { column: "employee_id", parent: schema.employees },
     employee_roles: { column: "employee_id", parent: schema.employees },
     employee_permissions: { column: "employee_id", parent: schema.employees },
@@ -290,16 +294,22 @@ describe("tenant-isolasjon mot testdatabasen", () => {
       await insertMinimalRow(name, other.id);
       const org = await createOrganization("Oppdiktet takst AS");
       const id = await insertMinimalRow(name, org.id);
+      // `number_sequences` er en teller uten myk sletting (oppgavekortet for manuell ordre,
+      // Omfang 3); de andre tabellene skal ha `deleted_at` tom.
+      const hasDeletedAt = Object.values(getTableColumns(table)).some(
+        (c) => c.name === "deleted_at",
+      );
       const [row] = await db
         .select({
           organizationId: column(table, "organization_id"),
-          deletedAt: column(table, "deleted_at"),
+          ...(hasDeletedAt ? { deletedAt: column(table, "deleted_at") } : {}),
         })
         .from(table)
         .where(eq(column(table, "id"), id));
       expect(row).toBeDefined();
       expect(row?.organizationId).toBe(org.id);
-      expect(row?.deletedAt).toBeNull();
+      if (hasDeletedAt) expect(row?.deletedAt).toBeNull();
+      else expect(NO_SOFT_DELETE).toContain(name);
 
       // I16: foreldre-raden ligger i samme organisasjon.
       const link = PARENTS[name];

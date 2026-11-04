@@ -1,6 +1,11 @@
 export { createCompany, listCompanies, updateCompany } from "./companies";
 export { createOffice, listOffices, updateOffice } from "./offices";
-export { findAdminOrganizationId, listEmployees } from "./employees";
+export {
+  findAdminOrganizationId,
+  findEmployeeGrant,
+  listEmployees,
+  type EmployeeGrantWithOffice,
+} from "./employees";
 export {
   createEmployee,
   deactivateEmployee,

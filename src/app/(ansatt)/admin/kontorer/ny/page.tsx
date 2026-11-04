@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getAdminContext } from "../../admin-context";
 import { FormHeader } from "../../admin-list";
-import { NoAccess } from "../../no-access";
+import { NoAccess } from "../../../no-access";
 import { saveOfficeAction } from "../actions";
 import { OfficeForm } from "../office-form";
 

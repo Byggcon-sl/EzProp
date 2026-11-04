@@ -4,6 +4,7 @@ import type { Actor } from "@/core/access";
 import type { FileStorage } from "@/core/files";
 import { db } from "@/db/client";
 import {
+  assignments,
   auditLog,
   certifications,
   companies,
@@ -12,7 +13,9 @@ import {
   employees,
   files,
   integrationConnections,
+  numberSequences,
   offices,
+  orders,
   organizations,
   users,
   type EmployeeRole,
@@ -24,6 +27,9 @@ import { todayInOslo } from "@/shared/lib/dates";
  * sjekker at alle tabellene i databasen står i listen.
  */
 export const RESET_TABLES = [
+  "number_sequences",
+  "orders",
+  "assignments",
   "certifications",
   "trial_photos",
   "trial_answers",
@@ -314,4 +320,89 @@ export async function auditRows(organizationId: string) {
     .from(auditLog)
     .where(eq(auditLog.organizationId, organizationId))
     .orderBy(asc(auditLog.receivedAt), asc(auditLog.createdAt));
+}
+
+/**
+ * Fast tid i ordretestene (docs/funksjoner/fase2a-manuell-ordre-testplan.md): 03.11.2026 kl. 11
+ * i Oslo. `createOrder` bruker den som standard for `receivedAt`.
+ */
+export const TEST_NOW = new Date("2026-11-03T10:00:00Z");
+
+type OrderInsert = typeof orders.$inferInsert;
+type OrderOverrides = Partial<Omit<OrderInsert, "organizationId">>;
+
+/**
+ * En ordre satt inn direkte uten tilgangssjekk og uten Zod, slik at testene kan lage rader
+ * tjenesten ville avvist. Standard: mottatt, lagt inn for hånd, oppdiktet adresse,
+ * `receivedAt = TEST_NOW`. For `converted` må testen sende med `assignmentId` (CHECK i databasen).
+ */
+export async function createOrder(organizationId: string, overrides: OrderOverrides = {}) {
+  const [row] = await db
+    .insert(orders)
+    .values({
+      addressText: "Testveien 12, 8000 Bodø",
+      receivedAt: TEST_NOW,
+      source: "manual",
+      status: "received",
+      requestedReportType: "condition_report",
+      ...overrides,
+      organizationId,
+    } as OrderInsert)
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette ordre");
+  return row;
+}
+
+type AssignmentInsert = typeof assignments.$inferInsert;
+type AssignmentOverrides = Partial<Omit<AssignmentInsert, "organizationId">>;
+
+let assignmentCounter = 0;
+
+/**
+ * Et oppdrag satt inn direkte. Lager et kontor i samme organisasjon når `officeId` mangler.
+ * Nummeret kommer fra en egen teller (`TEST-00001`, `TEST-00002` …), aldri fra nummerserien, så
+ * fabrikken ikke rører `number_sequences`.
+ */
+export async function createAssignment(
+  organizationId: string,
+  overrides: AssignmentOverrides = {},
+) {
+  assignmentCounter += 1;
+  const officeId = overrides.officeId ?? (await createOffice(organizationId)).id;
+  const [row] = await db
+    .insert(assignments)
+    .values({
+      number: `TEST-${String(assignmentCounter).padStart(5, "0")}`,
+      assignmentType: "condition_report",
+      status: "ordered",
+      ...overrides,
+      officeId,
+      organizationId,
+    } as AssignmentInsert)
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette oppdrag");
+  return row;
+}
+
+type NumberSequenceInsert = typeof numberSequences.$inferInsert;
+type NumberSequenceOverrides = Partial<Omit<NumberSequenceInsert, "organizationId">>;
+
+/** En nummerserie satt inn direkte. Standard: oppdrag, `2026-`, neste verdi 1, fem sifre. */
+export async function createNumberSequence(
+  organizationId: string,
+  overrides: NumberSequenceOverrides = {},
+) {
+  const [row] = await db
+    .insert(numberSequences)
+    .values({
+      scope: "assignment",
+      prefix: "2026-",
+      nextValue: 1,
+      padding: 5,
+      ...overrides,
+      organizationId,
+    } as NumberSequenceInsert)
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette nummerserie");
+  return row;
 }
