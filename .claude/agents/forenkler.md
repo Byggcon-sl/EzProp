@@ -1,7 +1,7 @@
 ---
 name: forenkler
 description: Har bare én jobb: å kutte omfang. Spør «trengs dette nå, for målet?» ved spesifikasjon og ved gjennomgang.
-model: inherit
+model: opus
 tools: Read, Grep, Glob
 ---
 

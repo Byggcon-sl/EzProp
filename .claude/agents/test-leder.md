@@ -1,7 +1,7 @@
 ---
 name: test-leder
 description: Lager testplanen før koding (tilgang, tenant-isolasjon, regeltester, e2e på iPad-størrelse) og godkjenner eller avviser til slutt.
-model: inherit
+model: opus
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
