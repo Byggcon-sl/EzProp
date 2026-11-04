@@ -97,7 +97,7 @@ Alle kall skjer i `db.transaction` med et `grant` fra `requireOrganizationAccess
 
 ### 4.5 Avvise og gjøre om (statusreglene som data)
 
-1. **`rejectOrder` fra `received`:** `status = rejected`, `rejected_reason` lagret (trimmet), `assignmentId` tom. Raden slettes ikke (`deletedAt` er `null`), og den står fortsatt i `listOrders` (A54).
+1. **`rejectOrder` fra `received`:** `status = rejected`, `rejected_reason` lagret (trimmet), `assignmentId` tom. Raden slettes ikke (`deletedAt` er `null`), og den står fortsatt i `listOrders` (A55).
 2. **`convertOrderToAssignment` fra `received`:** oppdraget har `number = 2026-00001`, `status = ordered`, `statusChangedAt` = `now`, `assignmentType = condition_report`, `officeId` = valgt kontor, `orderId` = ordren, `externalRef` kopiert; ordren har `status = converted` og `assignmentId` = oppdraget; svaret inneholder nummeret.
 3. **overgangstabell** (`it.each` over `{ fra: converted | rejected, handling: reject | convert }`, fire saker): `OrderAlreadyHandledError`, ingen endring i `orders` (`updatedAt`, `rowVersion` like), ingen ny rad i `assignments`, `events`, `audit_log`; `next_value` uendret.
 4. **to samtidige konverteringer av samme ordre** (`Promise.all` med to kall): nøyaktig ett lykkes, det andre gir `OrderAlreadyHandledError`; ett oppdrag, `next_value = 2` (taperen bruker ikke opp et nummer, ingen hull).
@@ -168,7 +168,7 @@ Admin fra seed (Byggcon har fem kontorer fra seed, så «Gjør om til oppdrag» 
 6. `FOR UPDATE` på ordreraden i `convertOrderToAssignment` kommer før nummeret hentes (4.5.4 er rød ellers).
 7. Ingen ekte adresser, navn eller matrikkelnumre i testdata eller e2e; `ordered_by_text` har ingen ledetekst som ber om mer enn navn og firma.
 8. `RESET_TABLES`, `tests/tenant-tables.ts` og `tests/tenant-isolation-all-tables.test.ts` dekker de tre tabellene.
-9. Versjon 0.2.65; A50–A54 i `docs/09-apne-sporsmal.md`; domenemodellen 4.3 og ordlisten oppdatert; planen satt til «i arbeid fra 03.11.2026».
+9. Versjon 0.2.69; A51–A55 i `docs/09-apne-sporsmal.md`; domenemodellen 4.3 og ordlisten oppdatert; planen satt til «i arbeid fra 03.11.2026».
 10. `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne.
 
 ## Dekning av akseptkriteriene
@@ -185,7 +185,7 @@ Admin fra seed (Byggcon har fem kontorer fra seed, så «Gjør om til oppdrag» 
 | Databasen avviser (CHECK, sammensatte fremmednøkler, unikt nummer, ukjente koder) | 6.1–6.10 |
 | Tenant-isolasjon per spørring og de tre tabellene i registeret | 2.7, 3.2, 4.2, 4.3, 6.11 |
 | iPad-størrelse | 8.2, 8.3, 8.7 |
-| Alt grønt, versjon 0.2.65 | 9.9, 9.10 |
+| Alt grønt, versjon 0.2.69 | 9.9, 9.10 |
 
 ## Endringer etter prosjektlederens avgjørelser (03.11.2026, runde 1)
 
