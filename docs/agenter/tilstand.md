@@ -91,6 +91,8 @@ Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). 
 
 ## Trenger Ståle når han er tilbake
 
+- **Ståles prøve på Mac 04.11.2026:** synk uten nett virket (wifi av, data synkronisert med en gang da nettet kom tilbake). Ført inn i `docs/funksjoner/fase1-sammenligning.md`. Prøve A og B på ekte iPad gjenstår.
+
 I autonom modus samles alt her. Ingen varsler.
 
 - **Nøkkelboksen for hemmeligheter (branch `fase0b-nokkelboks`, ADR 0005):** sett GitHub-variabelen `ENABLE_KEY_VAULT` til `true`, kjør utrullingen, se grønt hakemerke på `DATABASE_URL`, `BETTER_AUTH_SECRET` og `MS_GRAPH_CLIENT_SECRET` under Configuration i App Service; er de røde, start appen på nytt; logg inn og se at det virker (`docs/drift/testmiljo-azure.md`, «Nøkkelboks for hemmeligheter»). Valgfritt: slå på diagnostikk for boksen (koster litt). Bekreft om Optiplan bruker Key Vault på samme måte (ADR 0002 og 0005 er antakelser). Si om GitHub-secrets skal fjernes som kilde etterpå (steg to i ADR 0005). **Steg 2 av nøkkelboksen (appen leser rett fra boksen i kode) er utsatt (A50, bekreftet 03.11.2026 i runde 2 av forhåndsvurderingen):** agentene bygde det ikke, fordi planpunktet alt er levert med steg 1, ingen tilkobling i fase 0b trenger det, og ADR 0005 sier nei til en egen kodevei. To ting bare du kan svare på: (1) leser Optiplan hemmeligheter i kode fra boksen, eller bare via referanser i appinnstillingene? (2) Skal steg 2 bygges sammen med KI-tilkoblingen i fase 2 eller med eAccounting i fase 3? Det koster ingenting å vente; kortet og testplanen ligger klare (`docs/funksjoner/fase0b-nokkelboks-kodevei.md`). Se også spørsmål nr. 16 (hemmeligheter når flere organisasjoner deler boksen).

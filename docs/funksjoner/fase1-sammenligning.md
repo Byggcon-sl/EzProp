@@ -45,6 +45,8 @@ Testene er kjørt på nytt 30.10.2026 etter rebase på `main` ved `fa094a4` (PR 
 | Synkstatus | e2e (`e2e/fase-1-synkstatus.spec.ts`). Uten tjenesten når den aldri «Alt er lagret på serveren» | e2e. Når «Alt er lagret» fordi skriveruten finnes | e2e. Når «Alt er lagret» med ekte henting |
 | Kandidatgrensen | `src/modules/offline-trial/sync/candidate-boundaries.test.ts`: sidene og bildekøen importerer aldri SDK-en, bare `TrialSyncStore` | Samme test | Samme test |
 
+**Ståles prøve på Mac 04.11.2026** (kilde: Ståle i chat 04.11.2026): testskjemaet på Macen (`./start.sh`), wifi slått av, ingen mobilnett. Skjemaet virket uten nett, og da wifi ble slått på igjen, synkroniserte dataene med en gang. Kandidat er ikke oppgitt. Dette er første prøve med en ekte person, men ikke prøve A eller B: den var på Mac, ikke iPad, uten bilder og uten omstart. ADR 0004 er fortsatt foreløpig til prøve A og B er kjørt på ekte iPad (krever testmiljøet i Azure).
+
 **Poeng (vekt 40 %, port: A og C må bestås):** egenbygd **3** (eneste med hele rundturen i automatiske tester, og brukt i prøve D og E), PowerSync **2** (lokal database og sending virker, også i C og F; henting aldri prøvd), ElectricSQL **2** (samme lokale kjerne som egenbygd; henting bare med falske svar). Porten (A og C på ekte iPad) er ikke prøvd for noen.
 
 ## 2. Hvor mye arbeid
