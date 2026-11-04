@@ -112,7 +112,7 @@ Alle kall skjer i `db.transaction` med et `grant` fra `requireOrganizationAccess
 2. **`rejectOrder`:** `order.rejected` med `data.reason`; `audit_log` `action = reject` med `changes.status` fra `received` til `rejected` og grunnen.
 3. **`convertOrderToAssignment`:** `assignment.created` med `assignmentId` = oppdraget og `data = { number, orderId }`; `audit_log` har `order`/`convert` og `assignment`/`create` (to rader).
 4. **ingen hendelse** ved avvist tilgang, valideringsfeil eller `OrderAlreadyHandledError`.
-5. **feiler hendelsen, finnes ingenting:** `vi.mock("@/core/events")` med `recordEvent` som kaster én gang: `createOrder` kaster, og `orders` er tom; `convertOrderToAssignment` kaster, ordren står som `received`, ingen oppdrag, `number_sequences` er uendret (ingen rad, eller samme `next_value`). Samme for `recordAuditEvent` i `rejectOrder`.
+5. **feiler hendelsen, finnes ingenting** (i egen fil `src/core/orders/orders-transaction.test.ts`, se runde 2): `vi.mock("@/core/events")` og `vi.mock("@/core/audit")` med `recordEvent`/`recordAuditEvent` som kaster én gang: `createOrder` kaster, og `orders` er tom; `convertOrderToAssignment` kaster, ordren står som `received`, ingen oppdrag, `number_sequences` er uendret (ingen rad, eller samme `next_value`). Samme for `recordAuditEvent` i `rejectOrder`.
 6. **`events.assignment_id` peker på et ekte oppdrag:** `assignment.created`-raden kan slås opp mot `assignments` med samme `organization_id` (fremmednøkkelen fra A33 er på plass; 6.9 viser at den avviser).
 
 ## 5. Fabrikker, `tests/factories.test.ts` (utvides)
@@ -134,7 +134,7 @@ Alle kall skjer i `db.transaction` med et `grant` fra `requireOrganizationAccess
 8. **ukjente koder:** `source = "fax"`, `status = "lost"`, `assignment_type = "valuation"`, `assignments.status = "cancelled"`, `scope = "invoice"` avvises.
 9. **hendelse med `assignment_id` fra annen organisasjon** avvises (fremmednøkkelen på `events`, A33); hendelse med `assignment_id = null` godtas (som i dag).
 10. **to serier med samme `(organization_id, scope, prefix)`** avvises; `next_value = 0` avvises hvis utvikler legger CHECK (ellers tas testen ut og noteres).
-11. **`number_sequences` i `tests/tenant-tables.ts`** med radbygger `createNumberSequence` og testfil `src/core/assignments/number-sequence.test.ts`; `orders` → `src/core/orders/orders.test.ts`; `assignments` → `src/core/assignments/assignments.test.ts`. `tests/tenant-isolation-all-tables.test.ts` er grønn (16 tabeller).
+11. **`number_sequences` i `tests/tenant-tables.ts`** med radbygger `createNumberSequence` og testfil `src/core/assignments/number-sequence.test.ts`; `orders` → `src/core/orders/orders.test.ts`; `assignments` → `src/core/assignments/assignments.test.ts`. `tests/tenant-isolation-all-tables.test.ts` er grønn (18 tabeller: 15 fra før pluss de tre nye).
 12. **migreringen er ren:** `pnpm db:generate` lager ingen ny fil (sjekkes i gjennomgangen).
 
 ## 7. Server actions, `src/app/(ansatt)/ordre/actions.test.ts` (ny, kjernen byttet ut som i `admin/actions.test.ts`)
@@ -150,12 +150,12 @@ Alle kall skjer i `db.transaction` med et `grant` fra `requireOrganizationAccess
 Admin fra seed (Byggcon har fem kontorer fra seed, så «Gjør om til oppdrag» virker). Hver test lager sin egen ordre med `uniqueSuffix()` i adressen, fordi e2e-databasen ikke tømmes mellom kjøringer. Tom liste («Ingen ordre er lagt inn ennå.») testes ikke i e2e (andre kjøringer har lagt inn rader); den dekkes av en enhetstest av listekomponenten hvis utvikler lager en, ellers av 4.4.4 med tom organisasjon.
 
 1. **menypunktet «Ordre»** finnes i hovedmenyen og er aktivt på `/ordre`.
-2. **ny ordre → gjør om → nummeret vises:** «Ny ordre» → fyll adresse, gnr, bnr, snr, borettslag, bestiller, kryss av egenerklæring → «Lagre» → `/ordre/<uuid>` viser alle feltene og merket «Mottatt» → «Gjør om til oppdrag» → velg kontor «Bodø» → bekreft → siden viser «Gjort om til oppdrag» og et nummer som matcher `/\d{4}-\d{5}/`; knappene er borte; listen viser nummeret på raden. Nummeret sammenlignes ikke med `00001` (databasen er delt).
+2. **ny ordre → gjør om → nummeret vises:** «Ny ordre» → fyll adresse, gnr, bnr, snr, borettslag, bestiller, kryss av egenerklæring → «Lagre» → `/ordre/<uuid>` viser alle feltene og merket «Mottatt» → «Gjør om til oppdrag» → velg kontor «Bodø» → «Gjør om til oppdrag» → siden viser «Gjort om til oppdrag» og et nummer som matcher `/\d{4}-\d{5}/`; knappene er borte; listen viser nummeret på raden. Nummeret sammenlignes ikke med `00001` (databasen er delt).
 3. **ny ordre → avvis med grunn:** «Avvis» → «Bekreft» uten grunn gir «Skriv inn en grunn.» og ingen endring; med grunn «Feil registrering» → merket «Avvist» og grunnen vises; knappene er borte. «Avbryt» i bekreftelsen endrer ingenting.
 4. **feilmeldinger ved feltet:** tom adresse → «Skriv inn adressen.»; gnr `12a` → «Gårdsnummer kan bare ha sifre.»; mottatt frem i tid → «Mottatt kan ikke være frem i tid.»; feltet har `aria-describedby` til meldingen; ingenting lagres (listen har ikke adressen).
 5. **takstmann ser ordren og kan legge inn** (`logInAsInspector`, innstillingen er på i seed): `/ordre` viser listen; ny ordre kan lagres. Takstmann uten `assignment.edit` testes bare i kjernen (4.1.2), fordi innstillingen deles av hele e2e-databasen.
 6. **bruker uten ansattrad:** ny innlogging med `signInWithCode` for en oppdiktet adresse uten ansattrad → `/ordre` gir «Ingen tilgang» eller 404, aldri 500, og HTML-en inneholder ingen adresse fra listen.
-7. **iPad (bare prosjektet `ipad`):** «Ny ordre», «Lagre», «Gjør om til oppdrag», «Avvis» og «Bekreft» er minst 44 px; skjemaet fylles og sendes med tastaturet alene; i stående (834x1194) har `/ordre`, `/ordre/ny` og `/ordre/<id>` ingen vannrett rulling; skjemaet står i én kolonne.
+7. **iPad (bare prosjektet `ipad`):** «Ny ordre», «Lagre», «Gjør om til oppdrag» og «Avvis» er minst 44 px; skjemaet fylles og sendes med tastaturet alene; i stående (834x1194) har `/ordre`, `/ordre/ny` og `/ordre/<id>` ingen vannrett rulling; skjemaet står i én kolonne.
 8. **ukjent ordre-id** (`/ordre/<tilfeldig uuid>`) gir «Fant ikke siden» eller «Ingen tilgang», aldri 500.
 
 ## 9. Sjekker i gjennomgangen (test-leder)
@@ -208,3 +208,24 @@ Prosjektlederen tok alle forslagene fra forenkler, sikkerhet-personvern og test-
 - **8.3:** ingen bekreftelsesdialog og ingen «Avbryt». «Avvis» med tom grunn gir «Skriv inn en grunn.» og ingen endring; med grunn «Feil registrering» → merket «Avvist» og grunnen vises.
 - **9.1:** seks `expectTenantIsolation`-kall (2.7, 4.2.1–4.2.5).
 - **Dekningstabellen:** rad «Takstmann …» uten 3.1; rad «Tenant-isolasjon …» uten 3.2; ny rad «Taperen bruker ikke opp et nummer» → 4.5.4; ny rad «Hendelser og logg uten personopplysninger» → 4.6.1–4.6.3; ny rad «Ukjent feil logges uten skjemaverdier» → 7.3; ny rad «`next_value = 0` avvises» → 6.10.
+
+## Endringer etter test-leders gjennomgang av testplanen (04.11.2026, runde 2)
+
+Prosjektlederen tok alle sju rettelsene. Der dette avsnittet sier noe annet enn teksten over (også runde 1), gjelder dette avsnittet.
+
+1. **6.11:** 18 tabeller i `tests/tenant-tables.ts` (15 fra før pluss `orders`, `assignments` og `number_sequences`). Rettet i teksten.
+2. **4.2.1 `listOrders` og 4.2.2 `getOrder`:** `seed` lager i både A og B en ordre som er gjort om til oppdrag, med et ekte oppdrag (`createAssignment` med `orderId`, og ordren `converted` med `assignmentId`). A og B får ulike nummer (fabrikken teller `TEST-0000N`). Etterpå: A sine rader har bare A sitt `assignmentNumber`, aldri B sitt; B sitt nummer finnes ikke noe sted i A sitt svar. Slik er koblingen (left join mot `assignments`) testet for tenant-isolasjon. Testskriveren sjekker at joinen også filtrerer `assignments.organization_id` (en ordre i A kan ikke peke på et oppdrag i B på grunn av den sammensatte fremmednøkkelen i avsnitt 6, så testen viser at svaret bare bygger på A sine rader).
+3. **4.6.5 i egen fil:** `src/core/orders/orders-transaction.test.ts` med `vi.mock("@/core/events")` og `vi.mock("@/core/audit")`. Mocken kaller den ekte funksjonen (`vi.importActual`) og kaster bare der testen ber om det (`mockImplementationOnce`). `orders.test.ts` bruker de ekte modulene uten mock. Utvikleren importerer `recordEvent` fra `@/core/events` og `recordAuditEvent` fra `@/core/audit`, aldri med relativ sti (test-leder sjekker dette i gjennomgangen, nytt 9.11). Filen trenger ikke `expectTenantIsolation` (den tester ingen ny spørring).
+4. **8.2 og 8.7:** ingen «Bekreft». Man velger kontor og trykker «Gjør om til oppdrag». 8.7 gjelder «Ny ordre», «Lagre», «Gjør om til oppdrag» og «Avvis». Rettet i teksten.
+5. **Forhåndsvalgt kontor (nytt 7.7):** ren hjelpefunksjon `officeChoice(offices, employeeOfficeId)` i `src/app/(ansatt)/ordre/office-choice.ts`, testet i `src/app/(ansatt)/ordre/office-choice.test.ts` (ingen database, ingen komponenttest; repoet har ikke testbibliotek for React, og vi legger ikke til et). Svar: `{ offices, defaultOfficeId: string | null, emptyMessage: string | null }`. Saker:
+   1. den ansattes kontor står i listen → `defaultOfficeId` er det kontoret;
+   2. den ansatte har ikke kontor (`null`) → `defaultOfficeId = null`;
+   3. den ansattes kontor står ikke i listen (slettet, så `listOffices` har ikke med det) → `defaultOfficeId = null`;
+   4. tom liste → `emptyMessage = "Legg inn et kontor i admin først."` og `defaultOfficeId = null`;
+   5. liste med kontorer → `emptyMessage = null`.
+   Kontorlisten hentes med `listOffices` (har tenant-test fra før). Den ansattes kontor kommer fra `getEmployeeContext()`, som nå også gir `officeId` (se kortet). **7.6 utvides:** ansatt med kontor gir `officeId` = kontoret; ansatt uten kontor gir `officeId = null`. Det kommer ingen ny spørring som tar `organizationId`, så antallet `expectTenantIsolation` er fortsatt seks. Lager utvikleren likevel en ny spørring, trenger den sitt eget kall.
+6. **Samtidighet (2.6, 4.5.5):** databaseklienten har `max: 10`, så 20 transaksjoner kjører høyst ti om gangen. Testene står, men får lengre tidsgrense (`{ timeout: 30_000 }`). **4.5.4:** de to kallene startes samtidig i én `Promise.all([convert(...), convert(...)])`, uten `await` imellom (bruk `Promise.allSettled` for å lese begge utfallene).
+7. **9.5:** `grep` etter `numberSequences` og `number_sequences` gjøres bare i `src/` og utenom `*.test.ts` (2.3 setter `next_value` direkte i testen, og fabrikken `createNumberSequence` skriver til tabellen).
+8. **Nytt 9.11:** `grep` i `src/core/orders`: `recordEvent` og `recordAuditEvent` importeres fra `@/core/events` og `@/core/audit`, ikke med relativ sti.
+9. **Dekningstabellen:** ny rad «Kontoret er forhåndsvalgt; uten kontorer vises beskjeden» → 7.6, 7.7, 8.2. Raden «Tenant-isolasjon …» får med «4.2.1–4.2.2 med konvertert ordre i begge organisasjoner».
+
