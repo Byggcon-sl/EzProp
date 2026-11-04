@@ -48,7 +48,7 @@ Uten nett-delen av e2e er ikke relevant: ingen skjerm endres.
 | M13 | Beslutninger fra A56 | `grep -nE '\| A5[0-9]' docs/09-apne-sporsmal.md` | Nye rader starter på A56, ingen A51–A55 i denne branchen. Kontaktperson (rollen daglig leder) er en A-rad. Rydding av innloggingsforsøk/økter og iPad ved utlogging/tapt iPad står som åpne spørsmål. |
 | M14 | Ingen kundeopplysninger, navn eller hemmeligheter | `git diff main -- docs/personvern` og les | Bare roller («daglig leder», «admin»). Ingen e-postadresser, navn, nøkler. |
 | M15 | Ingen modellnavn, ingen fremmed fagtekst | `git diff main \| grep -iE 'claude\|opus\|sonnet\|gpt\|NS 3600\|IVIT\|SmartTakst'` | Ingen treff utover henvisning til at tekst derfra ikke brukes. |
-| M16 | Ikke rørt fase2a-filer | `git diff --stat main` og `ls drizzle \| grep 0013` | Bare `docs/` og `package.json` endret. Ingen migrering 0013. Versjon 0.2.70. |
+| M16 | Ikke rørt fase2a-filer | `git diff --stat main` og `ls src/db/migrations \| grep 0013` | Bare `docs/` og `package.json` endret. Ingen migrering 0013. Versjon 0.2.70. |
 | M17 | Plan og tilstand | `git diff main -- docs/07-utviklingsplan.md docs/agenter/tilstand.md` | De to punktene i «Minimum før ekte data» er krysset av med lenke til filene. Tilstandsfilen er oppdatert. |
 
 ## 3. Senere (når oppryddingen bygges, ikke i denne PR-en)
