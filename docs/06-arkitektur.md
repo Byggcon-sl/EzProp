@@ -19,6 +19,10 @@ Sist oppdatert: 02.11.2026. Begrunnelse for teknologivalg: [ADR 0001](adr/0001-t
 | CI | GitHub Actions: format, lint, typesjekk, migrering i takt med skjema, test, bygg, e2e |
 | Hosting | Azure App Service + PostgreSQL Flexible Server, Sweden Central (ADR 0002). Testmiljø fra fase 1, rulles ut fra GitHub Actions ved merge til `main` (`infra/azure/main.bicep`, `.github/workflows/deploy-azure.yml`). Bare oppdiktede data til «Minimum før ekte data» er på plass |
 
+## Nettleser (Ståle 04.11.2026)
+
+Vi støtter **Chrome**: på PC og Mac, og på iPad Pro. e2e-testene kjører i Chromium (prosjektene `pc` og `ipad`). På iPad bruker Chrome Apples motor (WebKit), som alle nettlesere der må. Lagringsgrenser, sletting av data og hjemskjerm-appen følger derfor WebKit, ikke Chromium. Regler og prøver for Safari på iPad (fase 1, prøve A–D) gjelder fortsatt. Bruk ikke funksjoner som bare finnes i Chromium på datamaskin, i det som skal virke på iPaden.
+
 ## Mappestruktur
 
 ```
