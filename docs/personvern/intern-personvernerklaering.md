@@ -15,7 +15,7 @@ Dokumentet er ikke juridisk rådgivning. Det dekker ikke rettslig grunnlag, beha
 
 ## Tabellene
 
-Én rad per tabell i `src/db/schema` (19 tabeller). Alle tabeller med `organization_id` filtreres på organisasjonen fra tilgangssjekken, så ansatte ser bare egen organisasjon. «Admin» betyr rettigheten `organization.manage`, «leder og admin» betyr `staff.manage`.
+Én rad per tabell i `src/db/schema` (22 tabeller etter PR #82). Alle tabeller med `organization_id` filtreres på organisasjonen fra tilgangssjekken, så ansatte ser bare egen organisasjon. «Admin» betyr rettigheten `organization.manage`, «leder og admin» betyr `staff.manage`.
 
 | Tabell | Hva | Formål | Hvor | Hvor lenge | Hvem ser det |
 |---|---|---|---|---|---|
@@ -38,7 +38,10 @@ Dokumentet er ikke juridisk rådgivning. Det dekker ikke rettslig grunnlag, beha
 | `trial_forms` | Navn på testskjemaet (oppdiktet), hvem som laget det | Prøven uten nett i fase 1 | Database og iPaden | Nå i koden: myk sletting. Eneste unntak fra regelen om myk sletting fordi dataene er oppdiktede (merknaden 28.10.2026, ikke presedens), se sletteregelen | Alle ansatte i organisasjonen |
 | `trial_answers` | Oppdiktede svar, fast id per nettleser-installasjon | Prøven uten nett i fase 1 | Database og iPaden | Som `trial_forms` | Alle ansatte i organisasjonen |
 | `trial_photos` | Bilder fra prøven (filnavn, størrelse, sjekksum), fast id per nettleser. Bildefilen lastes opp uendret og kan ha posisjon fra iPaden | Prøven uten nett i fase 1 | Database, fillagring og iPaden | Som `trial_forms` | Alle ansatte i organisasjonen |
-| *Kommer i fase 2a: oppdrag, parter, eiendom, bilder, egenerklæring* | Opplysninger om kunder, eiere, kjøpere og eiendommen, og bilder fra befaringen | Lage og levere rapporten | Database og fillagring, utkast på iPaden | Foreslått, bygges senere: minst 10 år (Ståle 25.10 og 27.10.2026), med myk sletting | Alle ansatte (`access.inspectors_edit_all`); reklamasjonssaker bare leder og admin |
+| `orders` | Bestillingen slik den kom inn: adresse, gnr/bnr/snr, borettslag, bestiller som tekst, ekstern referanse, status og grunn ved avvisning. Kan inneholde navn og adresse til kunder | Ta imot og fordele oppdrag | Database | Nå i koden: myk sletting; en avvist ordre blir stående (A55). Foreslått, bygges senere: minst 10 år | Ansatte med `assignment.edit` i organisasjonen |
+| `assignments` | Oppdraget: oppdragsnummer, type, status, kontor, kobling til ordren | Lage og levere rapporten | Database | Nå i koden: myk sletting. Foreslått, bygges senere: minst 10 år | Ansatte med `assignment.edit` i organisasjonen |
+| `number_sequences` | Nummerserien for oppdragsnummer (prefiks, siste nummer). Ingen personopplysninger | Unike oppdragsnummer | Database | Nå i koden: telleren blir stående, ingen sletting (heller ikke myk) | Ingen skjerm |
+| *Kommer senere i fase 2a: parter, eiendom, bilder, egenerklæring* | Opplysninger om kunder, eiere, kjøpere og eiendommen, og bilder fra befaringen | Lage og levere rapporten | Database og fillagring, utkast på iPaden | Foreslått, bygges senere: minst 10 år (Ståle 25.10 og 27.10.2026), med myk sletting | Alle ansatte (`access.inspectors_edit_all`); reklamasjonssaker bare leder og admin |
 
 ## Hvor
 
