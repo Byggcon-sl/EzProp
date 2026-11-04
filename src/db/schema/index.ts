@@ -7,6 +7,8 @@ export * from "./audit";
 export * from "./events";
 export * from "./orders";
 export * from "./assignments";
+export * from "./assignment-team-members";
+export * from "./assignment-parties";
 export * from "./number-sequences";
 export * from "./offline-trial";
 export * from "./files";

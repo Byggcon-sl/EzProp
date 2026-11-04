@@ -227,7 +227,7 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 **Oppdrag og eiendom**
 - [x] Manuell ordre (bestilling lagt inn for hånd fra e-post), med egne felt som gnr/bnr, seksjon, borettslag og om egenerklæring er mottatt, og «gjør om til oppdrag» eller «avvis» (04.11.2026, `docs/funksjoner/fase2a-manuell-ordre.md`, sidene `/ordre`, `/ordre/ny` og `/ordre/[id]`, beslutningene A51–A55; sammen med oppdragsnummeret)
 - [x] **Oppdragsnummer** som `2026-00123`, laget på serveren fra en nummerserie (innspill D9) (04.11.2026, samme kort; tabellen `number_sequences`, én serie per organisasjon og år, A52)
-- [ ] Oppdrag med team (ansvarlig, medansvarlig, befaringstakstmann, sidemann, kontor), parter med roller (megler, selger, kjøper, representant, fakturamottaker) og hva hver part mottar
+- [x] Oppdrag med team (ansvarlig, medansvarlig, befaringstakstmann, sidemann, kontor), parter med roller (megler, selger, kjøper, representant, fakturamottaker) og hva hver part mottar (04.11.2026, `docs/funksjoner/fase2a-oppdrag-team-parter.md`, tabellene `assignment_team_members` og `assignment_parties`, siden `/oppdrag/[id]`, beslutningene A60–A63)
 - [ ] Utstedende selskap settes automatisk fra ansvarlig takstmann
 - [ ] Statusflyten med **fire statuser** (bestilt, under arbeid, ferdig, fakturert, 27.10.2026) og hendelser som lagres for alt som skjer. Kansellering med myk sletting. En rapport som er rettet og sendt på nytt, får merket **«Rettet»** under «Ferdig» (27.10.2026).
 - [ ] Oppdragslisten som arbeidskø: faner etter status med antall, hurtigfilter, kort notat per oppdrag, merker med status, dato og takstmann
