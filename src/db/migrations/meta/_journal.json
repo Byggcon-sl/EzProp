@@ -92,6 +92,13 @@
       "when": 1793672666221,
       "tag": "0012_indekser-rydding",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793803951144,
+      "tag": "0013_manuell-ordre",
+      "breakpoints": true
     }
   ]
 }

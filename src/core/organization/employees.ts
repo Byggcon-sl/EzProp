@@ -4,6 +4,7 @@ import {
   listOrganizationsForActor,
   requireOrganizationAccess,
   type Actor,
+  type EmployeeGrant,
 } from "@/core/access";
 import { db } from "@/db/client";
 import { companies, employees, offices } from "@/db/schema";
@@ -63,6 +64,38 @@ export async function findAdminOrganizationId(actor: Actor): Promise<string | nu
     } catch (error) {
       if (!(error instanceof AccessDeniedError)) throw error;
     }
+  }
+  return null;
+}
+
+export type EmployeeGrantWithOffice = {
+  grant: EmployeeGrant;
+  /** Kontoret på den ansattes egen rad, eller `null`. Bare til forhåndsvalg på skjermen. */
+  officeId: string | null;
+};
+
+/**
+ * Den første organisasjonen der personen er ansatt og kan se (`organization.read`), med grant og
+ * den ansattes kontor, eller `null`. Brukes av ansattsidene (som `/ordre`) for å finne
+ * organisasjonen uten en id i adressen. Hver funksjon i kjernen sjekker tilgangen på nytt.
+ */
+export async function findEmployeeGrant(actor: Actor): Promise<EmployeeGrantWithOffice | null> {
+  const organizationsForActor = await listOrganizationsForActor(actor);
+  for (const organization of organizationsForActor) {
+    let grant: EmployeeGrant;
+    try {
+      grant = await requireOrganizationAccess(actor, organization.id, "organization.read");
+    } catch (error) {
+      if (!(error instanceof AccessDeniedError)) throw error;
+      continue;
+    }
+    const [employee] = await db
+      .select({ officeId: employees.officeId })
+      .from(employees)
+      .where(
+        and(eq(employees.id, grant.employeeId), eq(employees.organizationId, grant.organizationId)),
+      );
+    return { grant, officeId: employee?.officeId ?? null };
   }
   return null;
 }
