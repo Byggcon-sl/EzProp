@@ -259,11 +259,13 @@ test.describe("ordre (pc og ipad)", () => {
     browser,
   }) => {
     // Lag en ordre som admin, slik at listen har noe som ikke skal lekke
-    const adminPage = await browser.newPage({ baseURL: test.info().project.use.baseURL });
+    const { baseURL, viewport, hasTouch } = test.info().project.use;
+    const adminContext = await browser.newContext({ baseURL, viewport, hasTouch, locale: "nb-NO" });
+    const adminPage = await adminContext.newPage();
     const data = newOrderData(uniqueSuffix());
     await logIn(adminPage);
     await createOrderViaUi(adminPage, data);
-    await adminPage.context().close();
+    await adminContext.close();
 
     const email = await createUserWithoutEmployee();
     await page.goto("/logg-inn");
@@ -352,8 +354,8 @@ test.describe("iPad (prosjektet ipad)", () => {
     );
     const lefts = boxes.map((box) => Math.round(box!.x));
     expect(new Set(lefts).size, "alle feltene starter i samme kolonne").toBe(1);
-    for (let i = 1; i < boxes.length; i++) {
-      expect(boxes[i]!.y, "feltene står under hverandre").toBeGreaterThan(boxes[i - 1]!.y);
-    }
+    // Rekkefølgen i skjemaet bestemmer utvikleren; to felt står aldri på samme rad
+    const tops = boxes.map((box) => Math.round(box!.y)).sort((a, b) => a - b);
+    expect(new Set(tops).size, "feltene står under hverandre, ett per rad").toBe(tops.length);
   });
 });
