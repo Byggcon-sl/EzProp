@@ -6,5 +6,5 @@ export {
   type OrderStatus,
 } from "./codes";
 export { OfficeNotFoundError, OrderAlreadyHandledError } from "./errors";
-export { orderInputSchema, rejectReasonSchema, type OrderInput, type OrderValues } from "./schemas";
+export { orderInputSchema, rejectReasonSchema, type OrderInput } from "./schemas";
 export { convertOrderToAssignment, createOrder, getOrder, listOrders, rejectOrder } from "./orders";
