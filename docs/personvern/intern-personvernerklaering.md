@@ -20,9 +20,9 @@ Dokumentet er ikke juridisk rådgivning. Det dekker ikke rettslig grunnlag, beha
 | Tabell | Hva | Formål | Hvor | Hvor lenge | Hvem ser det |
 |---|---|---|---|---|---|
 | `users` | Navn, e-postadresse, om e-posten er bekreftet, bilde (tomt i dag), siste innlogging | Innlogging | Database | Nå i koden: slettes aldri, ingen rydding. Foreslått, bygges senere: beholdes så lenge den ansatte står på rapporter (minst 10 år) | Brukeren selv; admin via ansattlisten |
-| `sessions` | IP-adresse, nettleser og enhet (user agent), bruker, utløpstid | Holde den ansatte innlogget | Database | Nå i koden: økten gjelder 30 dager og forlenges når den brukes (høyst én gang per døgn). Utløpte økter ligger til de ryddes, rydding er ikke bygd. Foreslått, bygges senere: se spørsmål nr. 18 | Ingen skjerm; bare drift med databasetilgang |
+| `sessions` | IP-adresse, nettleser og enhet (user agent), bruker, utløpstid | Holde den ansatte innlogget | Database | Nå i koden: økten gjelder 30 dager og forlenges når den brukes (høyst én gang per døgn). Tabellen har ikke myk sletting. Better Auth sletter raden helt ved utlogging, ved «logg ut andre økter» og når en utløpt økt slås opp. Utløpte økter som aldri slås opp igjen, blir liggende; ingen rydding er bygd. Se spørsmål nr. 18 | Ingen skjerm; bare drift med databasetilgang |
 | `accounts` | Kobling mellom bruker og innloggingsmåte. Feltene for passord og nøkler fra andre tjenester er tomme, siden vi bare bruker engangskode på e-post | Innlogging | Database | Nå i koden: slettes aldri, ingen rydding. Foreslått, bygges senere: som `users` | Ingen skjerm |
-| `verifications` | E-postadresse og innloggingskoden (lagret som hash, ikke i klartekst), utløpstid | Sende og sjekke innloggingskoden | Database | Nå i koden: koden gjelder i 10 minutter. Brukte og utløpte koder ligger til de ryddes, rydding er ikke bygd. Foreslått, bygges senere: se spørsmål nr. 18 | Ingen skjerm |
+| `verifications` | E-postadresse og innloggingskoden (lagret som hash, ikke i klartekst), utløpstid | Sende og sjekke innloggingskoden | Database | Nå i koden: koden gjelder i 10 minutter. Tabellen har ikke myk sletting. Better Auth sletter koden helt når den er brukt, når den har gått ut og blir prøvd, etter 3 feil forsøk og når en ny kode bestilles. Koder som aldri prøves, blir liggende; ingen rydding er bygd. Se spørsmål nr. 18 | Ingen skjerm |
 | `login_attempts` | E-postadressen som HMAC (ikke i klartekst), type forsøk, tidspunkt. Gjelder også fremmede som prøver å logge inn | Sperre innlogging etter mange feil koder | Database | Nå i koden: sperrevinduet er 15 minutter. Radene ligger til de ryddes, rydding er ikke bygd. Foreslått, bygges senere: slettes etter 24 timer (spørsmål nr. 15) | Ingen skjerm |
 | `organizations` | Ingen personopplysninger (navn på organisasjonen, innstillinger) | Skille data mellom organisasjoner | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte i organisasjonen; admin endrer |
 | `companies` | Ingen personopplysninger (selskapsnavn, organisasjonsnummer, adresse, forsikring) | Utsteder rapporten | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte ser; admin endrer |
@@ -65,9 +65,11 @@ Hva som skal gjelde, er åpent spørsmål nr. 17.
 - Økt: 30 dager (`src/core/auth/auth.ts`).
 - Innloggingskode: 10 minutter (`src/core/auth/otp-email.ts`).
 - Sperrevindu for innlogging: 15 minutter (`src/core/auth/login-throttle.ts`).
-- `login_attempts`, utløpte økter og `verifications`: ligger til de ryddes, rydding er ikke bygd. Se spørsmål nr. 15 (innloggingsforsøk) og nr. 18 (utløpte økter og koder).
+- `login_attempts`: radene blir liggende, rydding er ikke bygd (spørsmål nr. 15).
+- `sessions` og `verifications`: Better Auth sletter rader helt (se tabellen). Det som blir liggende, er utløpte økter som aldri slås opp igjen og koder som aldri prøves (spørsmål nr. 18).
 - `audit_log` og `events` ryddes aldri (A58).
-- Myk sletting (`deleted_at`) gjelder alt. Ingenting slettes permanent av appen i dag.
+- Myk sletting (`deleted_at`) gjelder alle tabeller med `baseColumns` (`src/db/schema/common.ts`). Innloggingstabellene `users`, `sessions`, `accounts`, `verifications` og `login_attempts` har ikke `deleted_at`.
+- **Kjent unntak fra regel 3 (ingenting slettes permanent):** Better Auth (1.7.15) sletter rader helt i `sessions` og `verifications`. Det er innloggingsdata, ikke rapportdata. Om unntaket skal godtas, er en del av spørsmål nr. 18. Appens egen kode sletter ikke rader permanent.
 - Oppbevaringstidene for filer står som innstillinger (`src/core/files/retention.ts`): avviksbilder i original 10 år, andre originaler 2 år, komprimerte kopier 10 år. Fristen (`retain_until`) regnes ikke ut ennå, så i dag ryddes ingen filer.
 
 **Foreslått, bygges senere:**
