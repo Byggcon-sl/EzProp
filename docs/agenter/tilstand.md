@@ -9,6 +9,8 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 Sist oppdatert: 04.11.2026 (intern personvernerklæring og sletteregel for betadata, «Minimum før ekte data», PR mot `main`; før det 03.11.2026: PR #73 merget kl. 09:01 UTC; nøkkelboks steg 2 utsatt, A50, bekreftet i runde 2 av forhåndsvurderingen; PR #74 flyttet til `main` og flettet)
 Sist oppdatert: 04.11.2026 (PR #82 manuell ordre og oppdragsnummer merget kl. 17:14 UTC, fase 2a)
 
+**Pågår (04.11.2026):** fase 2a, team og parter på oppdraget. Branch `fase2a-oppdrag-team-parter` fra `main`. Oppgavekort `docs/funksjoner/fase2a-oppdrag-team-parter.md` (utkast, beslutninger A60–A63). Roller: utvikler og testskriver i parallell, sikkerhet-personvern før PR.
+
 ## Gjeldende fase
 
 **Fase 0a – Repo og database: ferdig.** PR #1–#6 er merget 28.10.2026.
