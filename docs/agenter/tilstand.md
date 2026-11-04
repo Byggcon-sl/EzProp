@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
-**Autonom modus: på** (Ståle 29.10.2026). Ståle er hjemme tirsdag kveld 03.11.2026 og tilgjengelig fra onsdag morgen 04.11.2026. Da slås modusen av, og han får en samlet oversikt. Ståle er borte noen dager: ingen varsler, ingen spørsmål, ingen «Venter på Ståle». Agentene avgjør selv ut fra researchen og fører beslutningene i `docs/09-apne-sporsmal.md` («Avgjort av agentene mens Ståle var borte»). Se «Autonom modus» i `CLAUDE.md`.
+**Autonom modus: av (Ståle tilbake 04.11.2026).** Vanlige regler gjelder igjen: PR-er som trenger Ståle får tittelen «Venter på Ståle: …», merket `venter-pa-stale` og ett varsel. Beslutningene A1–A50 fra perioden står i `docs/09-apne-sporsmal.md` til Ståle har gått gjennom dem.
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
