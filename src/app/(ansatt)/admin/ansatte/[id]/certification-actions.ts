@@ -2,9 +2,10 @@
 
 import { redirect } from "next/navigation";
 import { isUuid } from "@/shared/lib/uuid";
-import { errorResult, failure } from "../../action-result";
+import { ADMIN_ERRORS } from "../../admin-errors";
+import { errorResult, failure } from "../../../action-result";
 import { getAdminContext } from "../../admin-context";
-import { NO_ACCESS, type FormState } from "../../form-state";
+import { NO_ACCESS, type FormState } from "../../../form-state";
 import { addCertification, removeCertification, type CertificationArea } from "@/core/organization";
 
 const ROUTE = "/admin/ansatte";
@@ -53,7 +54,7 @@ export async function addCertificationAction(
       previous,
       values,
       { route: ROUTE, userId: context.actor.id, employeeId },
-      MESSAGES,
+      { known: ADMIN_ERRORS, messages: MESSAGES },
     );
   }
   redirect(`${ROUTE}/${employeeId}?lagret=sertifisering`);
@@ -77,6 +78,7 @@ export async function removeCertificationAction(
       previous,
       {},
       { route: ROUTE, userId: context.actor.id, employeeId, certificationId },
+      { known: ADMIN_ERRORS },
     );
   }
   redirect(`${ROUTE}/${employeeId}?lagret=sertifisering-fjernet`);

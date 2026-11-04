@@ -154,3 +154,16 @@ Ingen nye spørsmål om fag, pris, personvern eller funksjoner; ingenting nytt i
 
 ## Åpne spørsmål
 - Ingen som stopper oppgaven. Til Ståle når han er tilbake (ikke blokkerende): om feste- og bruksenhetsnummer skal med på ordren alt nå, eller først med matrikkelen; og om oppdragsnummeret skal ha et annet format enn `2026-00123` (D9 er tatt inn, men formatet er Claudes forslag). Når e-post-til-ordre bygges: databehandleravtale med KI-leverandør i EU/EØS før `source = email` tas i bruk.
+
+## Avgjørelser etter gjennomgangen
+
+**Utvikler, sider og handlinger (04.11.2026).** Valg der kortet var åpent, og avvik fra grensesnittet:
+- `errorResult(error, previous, values, log, { known, messages, zodField })`: femte parameter er nå et objekt. `known` er listen over kjente feil (`KnownError`: `error`, valgfri `field`, `message`), `messages` er feltmeldingene som før, og `zodField` er feltet der en Zod-feil uten sti vises (brukes av «Avvis», der kjernen validerer selve grunnen). Admin sender `ADMIN_ERRORS` fra `admin/admin-errors.ts`. Loggteksten er nå «Lagring feilet» (felles for områdene); loggfeltene er uendret.
+- `no-access.tsx` er også flyttet til `src/app/(ansatt)/`, så `/ordre` gjenbruker «Ingen tilgang» uten å importere fra `admin`. Importstien i `admin/ansatte/[id]/certification-actions.test.ts` er rettet (bare stien), ellers ville den blitt rød.
+- Nye hjelpefiler i `ordre/`: `received-at.ts` (mottatt-tidspunktet), `order-status-badge.tsx`, `ny/order-form.tsx` (klientskjemaet) og `[id]/order-actions.tsx` (skjemaene for «Gjør om til oppdrag» og «Avvis»).
+- **Mottatt** er et `datetime-local`-felt som alltid leses i norsk tid og sendes til kjernen som ISO-tekst. Tomt felt sendes ikke (kjernen bruker nå). Annet format gir «Skriv inn dato og klokkeslett.» ved feltet uten kall til kjernen.
+- Tomme valgfrie felt sendes som `undefined`. Feltnavnene i skjemaet er de samme som i kjernen (`addressText`, `receivedAt`, `externalRef`, `orderedByText`, `gnr`, `bnr`, `snr`, `housingAssociationName`, `sellerDeclarationReceived`), slik at Zod-feil havner ved riktig felt.
+- **Kontorvalget** er en nedtrekksliste med etiketten «Kontor». Uten forhåndsvalg står «Velg kontor» øverst. Tomt valg gir «Velg et kontor.», og en id som ikke er uuid gir «Kontoret finnes ikke.», begge uten kall til kjernen.
+- `/ordre/ny` viser «Ingen tilgang» når `canEditOrders` er usann (knappen vises heller ikke i listen). Kjernen sjekker likevel.
+- Menypunktet «Ordre» vises når `listOrganizationsForActor` gir minst én organisasjon (rammen henter den alt), uten ekstra spørring.
+- Sidene forventer fra kjernen: `findEmployeeGrant(actor)` → `{ grant, officeId } | null`; `listOrders` og `getOrder` med feltene i testplanens signaturavtale (`receivedAt` som `Date` eller ISO-tekst); `orderStatusLabel(status)` der parameteren er ordrestatusen. Rettes ved sammenslåingen hvis kjernen heter noe annet.

@@ -5,8 +5,8 @@ import { useFormStatus } from "react-dom";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { ChoiceGroup, Field, Input, Radio } from "@/shared/ui/form";
-import { FormErrors, SubmitButton } from "../../form-parts";
-import { initialFormState, textValue, type FormState } from "../../form-state";
+import { FormErrors, SubmitButton } from "../../../form-parts";
+import { initialFormState, textValue, type FormState } from "../../../form-state";
 import { EmployeeCard } from "../employee-forms";
 
 type Action = (state: FormState, formData: FormData) => Promise<FormState>;

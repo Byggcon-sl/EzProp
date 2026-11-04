@@ -54,6 +54,25 @@ function DocumentIcon() {
   );
 }
 
+function InboxIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 13h5l1.5 3h5L16 13h5" />
+      <path d="M5.5 5h13L21 13v6H3v-6z" />
+    </svg>
+  );
+}
+
 function PeopleIcon() {
   return (
     <svg
@@ -130,6 +149,14 @@ export default async function EmployeeLayout({ children }: { children: ReactNode
                 Arbeidskø
               </NavLink>
             </li>
+            {organizations.length > 0 && (
+              <li>
+                <NavLink href="/ordre" matchChildren>
+                  <InboxIcon />
+                  Ordre
+                </NavLink>
+              </li>
+            )}
           </ul>
           <p
             id="nav-group-trials"

@@ -4,7 +4,7 @@ import { getAdminContext } from "../admin-context";
 import { EmptyList, RowList } from "../admin-list";
 import { CertificationStatusBadge } from "../ansatte/[id]/certification-section";
 import { formatIsoDate } from "../labels";
-import { NoAccess } from "../no-access";
+import { NoAccess } from "../../no-access";
 import { CERTIFICATION_AREAS, listExpiringCertifications } from "@/core/organization";
 
 export const metadata: Metadata = { title: "Sertifiseringer" };

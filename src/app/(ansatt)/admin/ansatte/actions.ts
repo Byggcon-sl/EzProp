@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 import { grantablePermissions } from "@/core/access";
 import { employeeRoles } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
-import { errorResult, failure } from "../action-result";
+import { ADMIN_ERRORS } from "../admin-errors";
+import { errorResult, failure } from "../../action-result";
 import { getAdminContext, type AdminContext } from "../admin-context";
-import { NO_ACCESS, type FormState } from "../form-state";
+import { NO_ACCESS, type FormState } from "../../form-state";
 import {
   createEmployee,
   deactivateEmployee,
@@ -102,7 +103,7 @@ export async function createEmployeeAction(
       previous,
       values,
       { route: ROUTE, userId: context.actor.id },
-      MESSAGES,
+      { known: ADMIN_ERRORS, messages: MESSAGES },
     );
   }
   redirect(`${ROUTE}?lagret=ny-ansatt`);
@@ -128,7 +129,7 @@ export async function updateEmployeeAction(
       previous,
       values,
       { route: ROUTE, userId: context.actor.id, employeeId },
-      MESSAGES,
+      { known: ADMIN_ERRORS, messages: MESSAGES },
     );
   }
   redirect(`${ROUTE}?lagret=endret`);
@@ -148,11 +149,17 @@ export async function setRolesAction(
   try {
     await setEmployeeRoles(context.actor, context.organizationId, employeeId, roles);
   } catch (error) {
-    return errorResult(error, previous, values, {
-      route: ROUTE,
-      userId: context.actor.id,
-      employeeId,
-    });
+    return errorResult(
+      error,
+      previous,
+      values,
+      {
+        route: ROUTE,
+        userId: context.actor.id,
+        employeeId,
+      },
+      { known: ADMIN_ERRORS },
+    );
   }
   redirect(`${ROUTE}/${employeeId}?lagret=roller`);
 }
@@ -181,11 +188,17 @@ export async function setPermissionsAction(
       }
     }
   } catch (error) {
-    return errorResult(error, previous, values, {
-      route: ROUTE,
-      userId: context.actor.id,
-      employeeId,
-    });
+    return errorResult(
+      error,
+      previous,
+      values,
+      {
+        route: ROUTE,
+        userId: context.actor.id,
+        employeeId,
+      },
+      { known: ADMIN_ERRORS },
+    );
   }
   redirect(`${ROUTE}/${employeeId}?lagret=rettigheter`);
 }
@@ -200,7 +213,13 @@ export async function deactivateEmployeeAction(
   try {
     await deactivateEmployee(context.actor, context.organizationId, employeeId);
   } catch (error) {
-    return errorResult(error, previous, {}, { route: ROUTE, userId: context.actor.id, employeeId });
+    return errorResult(
+      error,
+      previous,
+      {},
+      { route: ROUTE, userId: context.actor.id, employeeId },
+      { known: ADMIN_ERRORS },
+    );
   }
   redirect(`${ROUTE}?lagret=sluttet`);
 }
@@ -215,7 +234,13 @@ export async function reactivateEmployeeAction(
   try {
     await reactivateEmployee(context.actor, context.organizationId, employeeId);
   } catch (error) {
-    return errorResult(error, previous, {}, { route: ROUTE, userId: context.actor.id, employeeId });
+    return errorResult(
+      error,
+      previous,
+      {},
+      { route: ROUTE, userId: context.actor.id, employeeId },
+      { known: ADMIN_ERRORS },
+    );
   }
   redirect(`${ROUTE}?lagret=angret`);
 }

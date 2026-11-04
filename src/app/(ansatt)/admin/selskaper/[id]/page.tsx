@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { isUuid } from "@/shared/lib/uuid";
 import { getAdminContext } from "../../admin-context";
 import { FormHeader } from "../../admin-list";
-import { NoAccess } from "../../no-access";
+import { NoAccess } from "../../../no-access";
 import { listCompanies } from "@/core/organization";
 import { saveCompanyAction } from "../actions";
 import { CompanyForm } from "../company-form";

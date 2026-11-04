@@ -5,8 +5,8 @@ import type { GrantablePermission } from "@/core/access";
 import type { EmployeeRole } from "@/db/schema";
 import { Card } from "@/shared/ui/card";
 import { Checkbox, ChoiceGroup, Field, Input, Radio } from "@/shared/ui/form";
-import { FormActions, FormErrors, SubmitButton } from "../form-parts";
-import { initialFormState, listValue, textValue, type FormState } from "../form-state";
+import { FormActions, FormErrors, SubmitButton } from "../../form-parts";
+import { initialFormState, listValue, textValue, type FormState } from "../../form-state";
 import { permissionLabels, roleDescriptions, roleFormOrder, roleLabels } from "../labels";
 
 type Action = (state: FormState, formData: FormData) => Promise<FormState>;

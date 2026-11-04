@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LOGIN_PATH } from "@/core/auth/session";
 import { getAdminContext } from "../../admin-context";
 import { FormHeader } from "../../admin-list";
-import { NoAccess } from "../../no-access";
+import { NoAccess } from "../../../no-access";
 import { listCompanies, listOffices } from "@/core/organization";
 import { createEmployeeAction } from "../actions";
 import { EmployeeDetailsForm } from "../employee-forms";
