@@ -270,6 +270,7 @@ describe("tenant-isolasjon mot testdatabasen", () => {
 
   /** Tabeller der radbyggeren må lage en foreldre-rad (I16). */
   const PARENTS: Record<string, { column: string; parent: PgTable }> = {
+    assignments: { column: "office_id", parent: schema.offices },
     certifications: { column: "employee_id", parent: schema.employees },
     employee_roles: { column: "employee_id", parent: schema.employees },
     employee_permissions: { column: "employee_id", parent: schema.employees },
