@@ -67,9 +67,19 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
 
       {order.status === "converted" && order.assignmentNumber && (
         <Card className="mb-6">
-          <p className="text-lg font-medium text-slate-900">
-            Gjort om til oppdrag <span className="tabular-nums">{order.assignmentNumber}</span>
-          </p>
+          {order.assignmentId ? (
+            <Link
+              href={`/oppdrag/${order.assignmentId}`}
+              className="inline-flex min-h-11 items-center text-lg font-medium text-brand-700 underline"
+            >
+              Gjort om til oppdrag&nbsp;
+              <span className="tabular-nums">{order.assignmentNumber}</span>
+            </Link>
+          ) : (
+            <p className="text-lg font-medium text-slate-900">
+              Gjort om til oppdrag <span className="tabular-nums">{order.assignmentNumber}</span>
+            </p>
+          )}
         </Card>
       )}
       {order.status === "rejected" && (
