@@ -27,7 +27,7 @@ Dokumentet er ikke juridisk rådgivning. Det dekker ikke rettslig grunnlag, beha
 | `organizations` | Ingen personopplysninger (navn på organisasjonen, innstillinger) | Skille data mellom organisasjoner | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte i organisasjonen; admin endrer |
 | `companies` | Ingen personopplysninger (selskapsnavn, organisasjonsnummer, adresse, forsikring) | Utsteder rapporten | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte ser; admin endrer |
 | `offices` | Ingen personopplysninger (kontornavn og adresse) | Plassere ansatte | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte ser; admin endrer |
-| `employees` | Navn, stillingstittel, selskap, kontor, kobling til bruker, når den ansatte sluttet | Vite hvem som jobber og står på rapporten | Database | Nå i koden: myk sletting; «Har sluttet» stopper innlogging, men raden blir stående. Foreslått, bygges senere: minst 10 år etter siste rapport | Alle ansatte ser listen; admin endrer |
+| `employees` | Navn, stillingstittel, selskap, kontor, kobling til bruker, når den ansatte sluttet | Vite hvem som jobber og står på rapporten | Database | Nå i koden: myk sletting; «Har sluttet» stopper innlogging, men raden blir stående. Foreslått, bygges senere: minst 10 år etter siste rapport | Bare admin ser listen og endrer (`organization.manage`) |
 | `employee_roles` | Hvilke roller den ansatte har | Styre tilgang | Database | Nå i koden: myk sletting, ingen rydding | Admin |
 | `employee_permissions` | Enkeltrettigheter gitt til den ansatte | Styre tilgang | Database | Nå i koden: myk sletting, ingen rydding | Admin |
 | `certifications` | Sertifiseringsområde, utsteder, sertifikatnummer, gyldig fra og til | Bare sertifiserte kan publisere rapport | Database | Nå i koden: myk sletting; fornyelse er ny rad, den gamle blir stående som historikk | Admin |
@@ -48,7 +48,7 @@ Dokumentet er ikke juridisk rådgivning. Det dekker ikke rettslig grunnlag, beha
 
 ## iPaden
 
-Lokal lagring tømmes **ikke** ved utlogging i dag. Utloggingsknappen avslutter bare økten. Funksjonene som tømmer iPaden (`clearLocalPhotos`, `clearElectricStorage`) kalles bare når en person fra en annen organisasjon logger inn på samme iPad (`select-store.ts`).
+Lokal lagring tømmes **ikke** ved utlogging i dag. Utloggingsknappen avslutter bare økten. Funksjonene som tømmer iPaden (bilder, synklagringen og «Lagret kl.», se `clearIfOtherOrganization`) kalles bare når en person fra en annen organisasjon logger inn på samme iPad (`select-store.ts`).
 
 Ved tapt iPad finnes ingen fjernsletting og ingen knapp for å stoppe økten. Det som virker i dag:
 
@@ -69,7 +69,7 @@ Hva som skal gjelde, er åpent spørsmål nr. 17.
 - `sessions` og `verifications`: Better Auth sletter rader helt (se tabellen). Det som blir liggende, er utløpte økter som aldri slås opp igjen og koder som aldri prøves (spørsmål nr. 18).
 - `audit_log` og `events` ryddes aldri (A58).
 - Myk sletting (`deleted_at`) gjelder alle tabeller med `baseColumns` (`src/db/schema/common.ts`). Innloggingstabellene `users`, `sessions`, `accounts`, `verifications` og `login_attempts` har ikke `deleted_at`.
-- **Kjent unntak fra regel 3 (ingenting slettes permanent):** Better Auth (1.7.15) sletter rader helt i `sessions` og `verifications`. Det er innloggingsdata, ikke rapportdata. Om unntaket skal godtas, er en del av spørsmål nr. 18. Appens egen kode sletter ikke rader permanent.
+- **Kjent unntak fra regel 3 (ingenting slettes permanent):** Better Auth sletter rader helt i `sessions` og `verifications`. Det er innloggingsdata, ikke rapportdata. Om unntaket skal godtas, er en del av spørsmål nr. 18. Appens egen kode sletter ikke rader permanent.
 - Oppbevaringstidene for filer står som innstillinger (`src/core/files/retention.ts`): avviksbilder i original 10 år, andre originaler 2 år, komprimerte kopier 10 år. Fristen (`retain_until`) regnes ikke ut ennå, så i dag ryddes ingen filer.
 
 **Foreslått, bygges senere:**
@@ -77,7 +77,6 @@ Hva som skal gjelde, er åpent spørsmål nr. 17.
 - Rapporter, bilder og måledata: minst 10 år (Ståle 25.10 og 27.10.2026), med filtidene over.
 - Innloggingsforsøk: 24 timer (spørsmål nr. 15).
 - Utløpte økter og koder: avgjøres i spørsmål nr. 18.
-- `trial_*` er eneste unntak fra myk sletting, fordi dataene er oppdiktede (merknaden 28.10.2026, ikke presedens).
 
 ## Prøvedata
 

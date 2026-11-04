@@ -20,7 +20,7 @@ Det finnes én måte: **en egen prøveorganisasjon.** Alle data har allerede org
 
 Valgt bort: et merke «prøve» på hvert oppdrag. Det krever et nytt felt, og det er lett å glemme å sette det.
 
-Brukere (`users`) har ingen organisasjons-ID. En oppdiktet bruker regnes som prøvedata bare når alle ansatt-radene til brukeren ligger i prøveorganisasjonen.
+Brukere (`users`) har ingen organisasjons-ID. En oppdiktet bruker regnes som prøvedata bare når alle ansatt-radene til brukeren ligger i prøveorganisasjonen. `users` har ikke `deleted_at`, så brukerraden blir stående; det er ansatt-radene som myk-slettes, og da kommer brukeren ikke inn.
 
 ## 3. Regelen
 
@@ -31,12 +31,12 @@ Brukere (`users`) har ingen organisasjons-ID. En oppdiktet bruker regnes som pr�
 ## 4. Hvordan det ryddes
 
 - **Myk sletting:** `deleted_at` og `deleted_by` settes. Raden finnes fortsatt. Ingenting slettes permanent (CLAUDE.md regel 3, 10 års oppbevaring).
+- **Filer** i prøveorganisasjonen myk-slettes som andre rader. Filinnholdet blir liggende i lagringen (`src/db/schema/files.ts`). Oppbevaringstidene i `src/core/files/retention.ts` gjelder: en fil kan ikke merkes som slettet før `retain_until` er passert.
 - **Eneste unntak er `trial_forms`, `trial_answers` og `trial_photos`.** De kan slettes helt, fordi dataene er oppdiktede og tabellene bare var for prøven i fase 1 (merknaden 28.10.2026 og `docs/05-domenemodell.md`: «slettes eller gjøres om i fase 2b»). Unntaket er **ikke** presedens for andre tabeller.
 
 ## 5. Det som aldri ryddes (A58)
 
 - `audit_log` (revisjonsloggen) og `events` ryddes aldri, heller ikke mykt og heller ikke for prøveorganisasjonen. Radene endres aldri (se kommentaren i `src/db/schema/events.ts`).
-- Filer i prøveorganisasjonen myk-slettes som andre rader. Filinnholdet blir liggende i lagringen (`src/db/schema/files.ts`). Oppbevaringstidene i `src/core/files/retention.ts` gjelder: en fil kan ikke merkes som slettet før `retain_until` er passert.
 
 ## 6. Hvem som kan rydde (A59)
 
@@ -46,7 +46,7 @@ Brukere (`users`) har ingen organisasjons-ID. En oppdiktet bruker regnes som pr�
 
 ## 7. Når det bygges
 
-Selve oppryddingen bygges senere, med eget oppgavekort. Hver rydding føres i revisjonsloggen (hvem, når, hvilken organisasjon, antall rader). Disse testene kreves før den godkjennes (fra testplanen `docs/agenter/oppgaver/minimum-personvern-betadata-testplan.md`, avsnittet «Senere»):
+Selve oppryddingen bygges senere, med eget oppgavekort. Disse testene kreves før den godkjennes (fra testplanen `docs/agenter/oppgaver/minimum-personvern-betadata-testplan.md`, avsnittet «Senere»):
 
 | Test | Hva den viser |
 |---|---|
@@ -56,12 +56,4 @@ Selve oppryddingen bygges senere, med eget oppgavekort. Hver rydding føres i re
 | Logg urørt | Antall rader i `audit_log` og `events` er likt før og etter rydding (utenom den nye loggraden for selve ryddingen). |
 | Admin ikke stengt ute | Admin logger inn og har tilgang i den ekte organisasjonen etterpå. |
 
-## Beslutninger
-
-| Nr. | Hva | Kan endres ved |
-|---|---|---|
-| A57 | Prøvedata merkes med egen prøveorganisasjon, ingen nye felt. | Å legge til et merke på oppdraget i en ny migrering. |
-| A58 | `audit_log` og `events` ryddes aldri, heller ikke for prøveorganisasjonen. | Ny beslutning fra Ståle. |
-| A59 | Bare admin kan rydde; admin-brukeren og admins ansatt-rad myk-slettes aldri. | Ny beslutning fra Ståle; admin skal aldri stenges ute. |
-
-Beslutningene føres i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte».
+Beslutningene A57–A59 står i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte».
