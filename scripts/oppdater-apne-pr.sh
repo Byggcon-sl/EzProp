@@ -48,5 +48,9 @@ while read -r nr head base; do
     fi
   fi
   git push -q origin "$head" && echo "   Oppdatert og pushet."
-  gh workflow run ci.yml --ref "$head" -R "$REPO" && echo "   CI startet."
+  # GitHub svarer av og til 502 her. Prøv noen ganger; merge-klare-pr.sh starter CI selv hvis det mangler.
+  for vent in 5 15 45; do
+    gh workflow run ci.yml --ref "$head" -R "$REPO" && { echo "   CI startet."; break; }
+    sleep "$vent"
+  done
 done <<<"$prs"
