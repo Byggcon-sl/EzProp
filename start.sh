@@ -47,6 +47,13 @@ done
 
 printf '%sEzProp – lokal oppstart%s\n' "$FET" "$NORMAL"
 
+# Egne porter på Macen, så EzProp kan kjøre samtidig med Optiplan (som bruker 3000 og 5432).
+# Adressen er 127.0.0.1, ikke localhost, så innloggingen i de to løsningene ikke blander seg.
+DB_PORT=5433
+APP_PORT=3001
+APP_URL="http://127.0.0.1:${APP_PORT}"
+export EZPROP_DB_PORT=$DB_PORT
+
 # ---------------------------------------------------------------------------
 steg "Sjekker Node.js"
 if ! command -v node >/dev/null 2>&1; then
@@ -120,7 +127,7 @@ else
   fi
   if ! docker compose up -d db >/tmp/ezprop-docker.log 2>&1; then
     if grep -qi "port is already allocated\|address already in use" /tmp/ezprop-docker.log; then
-      stopp "Port 5432 er opptatt av en annen database på Macen." \
+      stopp "Port ${DB_PORT} er opptatt av en annen database på Macen." \
         "Stopp den andre databasen (f.eks. Postgres.app), eller spør Claude om hjelp."
     fi
     stopp "Klarte ikke å starte databasen." "$(tail -5 /tmp/ezprop-docker.log)"
@@ -148,6 +155,12 @@ if [ ! -f .env ]; then
 else
   ok ".env finnes"
 fi
+# Flytt databasen til egen port og appen til egen adresse (også i en eldre .env).
+sed -i '' \
+  -e "s#@localhost:5432/ezprop#@localhost:${DB_PORT}/ezprop#g" \
+  -e "s#^BETTER_AUTH_URL=http://localhost:3000\$#BETTER_AUTH_URL=${APP_URL}#" \
+  .env
+ok "Database på port ${DB_PORT}, EzProp på ${APP_URL} (Optiplan kan kjøre samtidig)"
 # Nye innstillinger legges til tomme i en eldre .env, så det er lett å se hva som finnes.
 # Tomme verdier betyr «ikke i bruk»: lokalt vises e-post på /dev/epost.
 LAGT_TIL=""
@@ -263,34 +276,34 @@ fi
 steg "Starter EzProp"
 # Kjører EzProp fra før (f.eks. et Terminal-vindu som ikke ble lukket), stoppes den gamle,
 # så den nye versjonen og databaseendringene over blir tatt i bruk.
-GAMMEL=$(lsof -ti tcp:3000 -sTCP:LISTEN 2>/dev/null | head -1)
+GAMMEL=$(lsof -ti tcp:${APP_PORT} -sTCP:LISTEN 2>/dev/null | head -1)
 if [ -n "$GAMMEL" ]; then
   if ps -p "$GAMMEL" -o command= 2>/dev/null | grep -qi "next\|node"; then
     advarsel "EzProp kjørte allerede (prosess $GAMMEL) – stopper den og starter på nytt."
     kill "$GAMMEL" 2>/dev/null || true
     for _ in $(seq 1 10); do
-      lsof -ti tcp:3000 -sTCP:LISTEN >/dev/null 2>&1 || break
+      lsof -ti tcp:${APP_PORT} -sTCP:LISTEN >/dev/null 2>&1 || break
       sleep 1
     done
-    if lsof -ti tcp:3000 -sTCP:LISTEN >/dev/null 2>&1; then
+    if lsof -ti tcp:${APP_PORT} -sTCP:LISTEN >/dev/null 2>&1; then
       kill -9 "$GAMMEL" 2>/dev/null || true
       sleep 1
     fi
     # Next.js lar en låsfil ligge igjen når den stoppes brått
     rm -f .next/dev/lock 2>/dev/null || true
   else
-    stopp "Port 3000 er opptatt av et annet program." \
-      "Lukk programmet som bruker port 3000, eller spør Claude om hjelp." \
+    stopp "Port ${APP_PORT} er opptatt av et annet program." \
+      "Lukk programmet som bruker port ${APP_PORT}, eller spør Claude om hjelp." \
       "(Det er prosess $GAMMEL: $(ps -p "$GAMMEL" -o command= 2>/dev/null))"
   fi
 fi
 
 cat <<EOF
 
-      Åpner ${FET}http://localhost:3000${NORMAL} i nettleseren når den er klar.
+      Åpner ${FET}${APP_URL}${NORMAL} i nettleseren når den er klar.
 
       Logg inn som:   ${FET}admin@byggcon.no${NORMAL}   (admin)
-      Koden finner du: ${FET}http://localhost:3000/dev/epost${NORMAL}
+      Koden finner du: ${FET}${APP_URL}/dev/epost${NORMAL}
       PowerSync:       ${FET}http://localhost:8080${NORMAL}   (synktjenesten, prøve uten nett)
       ElectricSQL:     ${FET}http://localhost:3010${NORMAL}   (synktjenesten, kandidat 2)
 
@@ -301,9 +314,9 @@ EOF
 if [ "${EZPROP_NO_BROWSER:-0}" != "1" ]; then
   (
     for _ in $(seq 1 90); do
-      if curl -s -o /dev/null http://localhost:3000/logg-inn; then
-        open "http://localhost:3000/dev/epost" >/dev/null 2>&1 || true
-        open "http://localhost:3000/logg-inn" >/dev/null 2>&1 || true
+      if curl -s -o /dev/null ${APP_URL}/logg-inn; then
+        open "${APP_URL}/dev/epost" >/dev/null 2>&1 || true
+        open "${APP_URL}/logg-inn" >/dev/null 2>&1 || true
         exit 0
       fi
       sleep 1
@@ -311,4 +324,4 @@ if [ "${EZPROP_NO_BROWSER:-0}" != "1" ]; then
   ) &
 fi
 
-exec "${PNPM[@]}" dev
+exec "${PNPM[@]}" dev --port "$APP_PORT" --hostname 127.0.0.1

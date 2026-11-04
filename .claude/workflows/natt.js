@@ -12,7 +12,7 @@ export const meta = {
 // ---------------------------------------------------------------------------
 // Roller: bruker agentbeskrivelsen i .claude/agents/<rolle>.md når den er lastet i sesjonen.
 // Er den ikke det (f.eks. første kjøring etter at filene ble laget), får en vanlig agent
-// beskjed om å lese og følge filen selv. Utøverne kjører da på opus, lederne på sesjonens modell.
+// beskjed om å lese og følge filen selv. Nattløkken bruker bare opus (Ståle 04.11.2026: spar fable-kvoten).
 // ---------------------------------------------------------------------------
 const DOERS = ["utvikler", "testskriver", "retter"];
 async function run(role, prompt, opts) {
@@ -23,7 +23,7 @@ ${prompt}`;
     return await agent(prompt, { ...opts, agentType: role });
   } catch (e) {
     if (!/not found/i.test(String(e && e.message))) throw e;
-    return agent(text, { ...opts, ...(DOERS.includes(role) ? { model: "opus" } : {}) });
+    return agent(text, { ...opts, model: "opus" });
   }
 }
 

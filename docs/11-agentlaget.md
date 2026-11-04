@@ -46,6 +46,13 @@ Ståle er borte noen dager og vil ikke ha meldinger, spørsmål eller noe å tes
 
 **Uenighet:** prosjektlederen avgjør og begrunner i PR-en. Fag, pris, personvern og nye funksjoner avgjøres av Ståle; spørsmålet legges i `docs/09-apne-sporsmal.md`, og løkken fortsetter med andre oppgaver.
 
+**Spar fable-kvoten (Ståle 04.11.2026):** fable-kvoten fylles på bare én gang i uken, så den skal vare hele uken.
+- Bare **arkitekt**, **fagansvarlig** og **sikkerhet-personvern** bruker fable. Alle andre roller, hovedløkken og nattløkken bruker opus. Er fable-kvoten brukt opp, kjøres de tre rollene på opus (`oppgave.js`).
+- Hovedløkken kjører annenhver time, også i autonom modus.
+- Små funn fra gjennomgangen samles og tas sammen med neste oppgave i samme område. De blir ikke egne småoppgaver for hver PR.
+- Tilstandsfilen oppdateres i samme PR som oppgaven. En egen PR bare for tilstanden lages bare når kjøringen ikke leverte noen oppgave.
+- Forhåndsvurderingen og gjennomgangen tar bare med rollene oppgaven faktisk berører.
+
 **Kvote:** ingen kostnadstak (Ståle 28.10.2026). Når kvoten er brukt opp, stopper kjøringen der den er; neste kjøring fortsetter fra `tilstand.md`. Derfor commit og push etter hvert ferdige steg. Flere enn ca. 10 agenter samtidig krever at Ståle øker «Dynamic workflow size» i `/config`.
 
 ## Kommandoer

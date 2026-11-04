@@ -80,9 +80,9 @@ Tilgang: `requireOrganizationAccess(actor, organizationId, permission)` fra `@/c
 
 Ståle Limstrand er daglig leder i Byggcon og produkteier. Han er ikke utvikler, og han tar alle beslutninger om fag, pris, personvern og nye funksjoner. Skriv til ham på norsk bokmål i enkelt og konkret språk. Si tydelig fra når han må gjøre noe selv. **Bare prosjektlederen skriver til Ståle.** **Agentene merger selv** når en PR er klar: CI er grønn, ingen konflikt, ingen alvorlige funn i gjennomgangen, og ingenting står under «Må bestemmes av Ståle» (Ståle 29.10.2026). Bruk `scripts/merge-klare-pr.sh`. PR-er som trenger Ståle, får tittelen «Venter på Ståle: …» og merket `venter-pa-stale`, og merges aldri av agentene. Merge til main rulles ut til **testmiljøet**. Utrulling til produksjon gjør Ståle selv.
 
-## Autonom modus (Ståle 29.10.2026, gjelder til Ståle sier fra)
+## Autonom modus (Ståle 29.10.2026, slått på igjen 04.11.2026, gjelder til Ståle sier fra)
 
-Ståle er borte noen dager og vil ikke ha meldinger, spørsmål eller noe å teste. Hans ord: «Kjør utvikling og testing autonomt. Er du i tvil, gå tilbake til undersøkelsene og tolk hva du mener blir beste løsning. Løsningen er foreløpig kun i test.» Derfor, så lenge `docs/agenter/tilstand.md` sier «Autonom modus: på»:
+Ståle vil ikke ha meldinger, spørsmål eller noe å teste mens modusen er på. Fra 04.11.2026: «Jeg synes det fungerte så bra at du kan kjøre videre på autonom utvikling igjen.» Hans ord 29.10.2026: «Kjør utvikling og testing autonomt. Er du i tvil, gå tilbake til undersøkelsene og tolk hva du mener blir beste løsning. Løsningen er foreløpig kun i test.» Derfor, så lenge `docs/agenter/tilstand.md` sier «Autonom modus: på»:
 
 - **Agentene avgjør selv** spørsmål om fag, innhold og funksjoner innenfor planen. Grunnlaget er researchen i `docs/kartlegging/` (Ståles svar er fasit, nyeste dato gjelder), hovedmålene og forskriften. Velg det som best støtter målene (mindre tid, færre reklamasjoner, KI først), og det enkleste som virker.
 - **Hver slik beslutning føres** i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte» (hva, hvorfor, kilde i researchen, hvordan det kan endres), og nevnes i PR-en. PR-en merges som vanlig.
