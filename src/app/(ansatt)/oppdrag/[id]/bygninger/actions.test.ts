@@ -215,6 +215,7 @@ beforeEach(() => {
     actor,
     organizationId: ORG,
     canEditOrders: true,
+    canManageContacts: false,
     officeId: null,
   });
   for (const fn of Object.values(mocks.core)) fn.mockResolvedValue(undefined);
@@ -329,6 +330,7 @@ describe("6.4 takstmann uten skriverett (access.inspectors_edit_all av)", () => 
       actor: { id: "user-takst", email: "takst@eksempel.no", name: "Takst Testsen" },
       organizationId: ORG,
       canEditOrders: false,
+      canManageContacts: false,
       officeId: null,
     });
   });

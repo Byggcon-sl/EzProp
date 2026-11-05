@@ -56,6 +56,7 @@ describe("getEmployeeContext", () => {
     expect(context).toMatchObject({
       organizationId: org.id,
       canEditOrders: true,
+      canManageContacts: false,
       officeId: office.id,
     });
     expect(context?.actor.id).toBe(actor.id);

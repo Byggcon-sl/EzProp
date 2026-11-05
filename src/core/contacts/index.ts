@@ -10,6 +10,14 @@ export { createContact, getContact, listContacts, updateContact } from "./contac
 export { ContactNotFoundError, FirmDuplicateError, FirmNotFoundError } from "./errors";
 export { createFirm, getFirm, listFirms, updateFirm } from "./firms";
 export { findContactForLink } from "./link";
+export {
+  getContactUsage,
+  getFirmUsage,
+  getRemovedContactName,
+  getRemovedFirmName,
+  type ContactUsage,
+  type FirmUsage,
+} from "./merge-view";
 export { isValidOrgNumber, normalizeOrgNumber } from "./org-number";
 export {
   contactInputSchema,

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { firmTypeLabel, listFirms } from "@/core/contacts";
+import { firmTypeLabel, getRemovedFirmName, listFirms } from "@/core/contacts";
 import { buttonVariants } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
+import { Notice } from "@/shared/ui/notice";
 import { getEmployeeContext } from "../employee-context";
 import { NoAccess } from "../no-access";
 import { SearchBox, searchQuery } from "../search-box";
@@ -12,15 +13,22 @@ export const metadata: Metadata = { title: "Firma" };
 /**
  * Meglerforetakene og de andre firmaene i organisasjonen, sortert på navn. Alle ansatte ser
  * listen og kan søke; «Nytt firma» vises bare for dem som kan endre (sjekken skjer i kjernen).
+ * `?fjernet=<id>` gir kvitteringen «<navn> er fjernet.» etter «Fjern» på firmasiden.
  */
 export default async function FirmsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[] }>;
+  searchParams: Promise<{ q?: string | string[]; fjernet?: string | string[] }>;
 }) {
   const context = await getEmployeeContext();
   if (!context) return <NoAccess />;
-  const query = searchQuery((await searchParams).q);
+  const params = await searchParams;
+  const query = searchQuery(params.q);
+  // Kvitteringen etter «Fjern» (`?fjernet=<id>`). Navnet slås opp her, så det står aldri i adressen.
+  const removed =
+    context.canManageContacts && typeof params.fjernet === "string"
+      ? await getRemovedFirmName(context.actor, context.organizationId, params.fjernet)
+      : null;
   const firms = await listFirms(context.actor, context.organizationId, {
     query: query || undefined,
   });
@@ -35,6 +43,11 @@ export default async function FirmsPage({
           </Link>
         )}
       </div>
+      {removed && (
+        <div className="mt-4">
+          <Notice message={`${removed} er fjernet.`} />
+        </div>
+      )}
       <SearchBox label="Søk på navn eller organisasjonsnummer" query={query} />
       {firms.length === 0 ? (
         <Card className="mt-6">

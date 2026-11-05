@@ -90,6 +90,7 @@ beforeEach(() => {
     actor,
     organizationId: ORG,
     canEditOrders: true,
+    canManageContacts: false,
     officeId: null,
   });
   mocks.updateAssignmentNote.mockResolvedValue({
@@ -150,6 +151,7 @@ describe("3.1.4 feilkart", () => {
       actor,
       organizationId: ORG,
       canEditOrders: false,
+      canManageContacts: false,
       officeId: null,
     });
     mocks.updateAssignmentNote.mockRejectedValue(new AccessDeniedError());

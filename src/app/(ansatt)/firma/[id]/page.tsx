@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { AccessDeniedError } from "@/core/access";
 import { firmTypeLabel, getFirm } from "@/core/contacts";
 import { isUuid } from "@/shared/lib/uuid";
 import { Card } from "@/shared/ui/card";
+import { Notice } from "@/shared/ui/notice";
 import { BackLink, Detail, EMPTY } from "../../detail";
 import { getEmployeeContext } from "../../employee-context";
 import { NoAccess } from "../../no-access";
 import { contactName } from "../../kontakter/contact-name";
-import { updateFirmAction } from "../actions";
+import { RemoveMergeActions } from "../../remove-merge-actions";
+import { removeFirmAction, updateFirmAction } from "../actions";
 import { FirmForm } from "../firm-form";
 import { firmTypeOptions } from "../firm-types";
 
@@ -16,20 +19,39 @@ export const metadata: Metadata = { title: "Firma" };
 
 /**
  * Firmaet med skjema for dem som kan endre, ellers bare opplysningene. Under står kontaktene i
- * firmaet. Ugyldig, ukjent, slettet og fremmed id gir samme svar som manglende tilgang.
+ * firmaet. Ugyldig, ukjent, fjernet og fremmed id gir «Fant ikke siden». «Fjern» og «Slå sammen
+ * med …» vises bare med `canManageContacts`; selve sjekken skjer i kjernen.
+ * `?sammenslatt=1` gir kvitteringen etter sammenslåing.
  */
-export default async function FirmPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function FirmPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ sammenslatt?: string | string[] }>;
+}) {
   const { id } = await params;
   const context = await getEmployeeContext();
-  if (!context || !isUuid(id)) return <NoAccess />;
+  if (!context) return <NoAccess />;
+  if (!isUuid(id)) notFound();
 
   let firm: Awaited<ReturnType<typeof getFirm>>;
   try {
     firm = await getFirm(context.actor, context.organizationId, id);
   } catch (error) {
-    if (error instanceof AccessDeniedError) return <NoAccess />;
+    if (error instanceof AccessDeniedError) notFound();
     throw error;
   }
+  const merged = (await searchParams).sammenslatt === "1";
+  // Bekreftelsen: kontaktene i firmaet (aktive) beholdes, men står uten firma.
+  const contactCount = firm.contacts.length;
+  const confirmLines = [
+    `Fjerne ${firm.name}?`,
+    "Firmaet vises ikke lenger i listen og søket. Oppdrag og ordrer beholder navnet som står på dem.",
+    ...(contactCount > 0
+      ? [`${contactCount} kontakter er koblet til firmaet. De beholdes, men står uten firma.`]
+      : []),
+  ];
 
   return (
     <main className="max-w-2xl">
@@ -37,6 +59,11 @@ export default async function FirmPage({ params }: { params: Promise<{ id: strin
       <h1 className="mt-2 mb-6 min-w-0 text-2xl font-semibold break-words text-slate-900">
         {firm.name}
       </h1>
+      {merged && (
+        <div className="mb-4">
+          <Notice message="Firmaene er slått sammen." />
+        </div>
+      )}
 
       {context.canEditOrders ? (
         <FirmForm
@@ -90,6 +117,16 @@ export default async function FirmPage({ params }: { params: Promise<{ id: strin
             ))}
           </ul>
         </Card>
+      )}
+
+      {context.canManageContacts && (
+        <RemoveMergeActions
+          idField="firmId"
+          id={firm.id}
+          mergeHref={`/firma/${firm.id}/sla-sammen`}
+          confirmLines={confirmLines}
+          action={removeFirmAction}
+        />
       )}
     </main>
   );
