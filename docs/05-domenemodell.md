@@ -398,6 +398,15 @@ Neste nummer hentes med lås i databasen, slik at to kontorer aldri får samme n
 - **Gjør om til oppdrag** låser ordreraden (`FOR UPDATE`) før status og kontor sjekkes og før nummeret hentes. Da får to samtidige forsøk på samme ordre ett oppdrag, og den som taper, bruker ikke opp et nummer.
 - **Hendelser og revisjonslogg:** `order.received` (`{ orderId, source }`), `order.rejected` (`{ orderId }`), `assignment.created` (`{ number, orderId }`); revisjonslogg `order` med `create`, `reject` og `convert`, og `assignment` med `create`. Ingen adresse, bestiller, matrikkel eller borettslag i hendelser eller logg; raden er kilden.
 
+**Bygget i fase 2a (05.11.2026, utstedende selskap):** Kolonnen `assignments.company_id` og regelen i `setTeamMember` (`src/core/assignments/team.ts`). Oppgavekort: `docs/agenter/oppgaver/fase2a-utstedende-selskap.md`; beslutningene A65–A68.
+
+- **`company_id`** (kan være tom) med sammensatt fremmednøkkel `(organization_id, company_id)` til `companies` (`assignments_company_fk`), så selskapet alltid hører til samme organisasjon.
+- **Settes automatisk** når ansvarlig takstmann settes eller byttes, i samme transaksjon som byttet: oppdraget får den ansattes `employees.company_id` (A65, ingen bekreftelse og ingen manuell overstyring nå). Ansvarlig fjernet, eller ny ansvarlig uten selskap, gir tomt selskap (A66). Et mykt slettet selskap på den ansatte settes likevel (A68). Andre roller i teamet rører aldri selskapet.
+- **Ikke bakover:** endres den ansattes selskap senere, beholder åpne oppdrag sitt selskap til ansvarlig settes på nytt. Eksisterende oppdrag ble ikke fylt ut i migreringen (A67).
+- **Hendelse og revisjonslogg** bare ved faktisk endring: `assignment.company_changed` med `{ fromCompanyId, toCompanyId }` og revisjonslogg `assignment` med `update` og `changes.companyId { from, to }`. Bare id-er.
+- **Visning:** `getAssignment` gir `companyName` (`companies.legal_name`, også et slettet selskap). Oppdragssiden viser «Utstedende selskap: …», eller «Ikke satt» med forklaring.
+- **Venter:** kopi til rapporten (`reports.company_id`) ved publisering, advarsel før publisering når selskap mangler, visning av selskapshistorikk.
+
 **Venter (egne planpunkter):** `ordered_by_contact_id`/`ordered_by_firm_id` (kontakter og firma; til da `ordered_by_text`), eiendom og matrikkel som egne tabeller (A51; adresse og matrikkel er tekst på ordren til da), `raw_payload` (e-post-til-ordre og API), og på oppdraget `external_ref`, `company_id`, `property_id`, `client_agreement_id`, `report_profile_id`, `status_changed_at`, `inspection_at`, `due_date`, `cancelled_reason` og `internal_note`. De legges til når planpunktene som bruker dem, bygges (samme mønster som A17), fordi ingen skjerm bruker dem nå. Statusflyten videre fra `ordered` kommer med oppdragslisten. En ordre kan ikke endres etter at den er lagret (A55).
 
 **`assignment_team_members`** – oppdragsteamet. Historikken beholdes, så overlevering kan spores.
@@ -417,7 +426,7 @@ Det kan bare være én aktiv ansvarlig om gangen.
 - **Én aktiv person per rolle per oppdrag** (A61), også for befaringstakstmann og sidemann: unik delvis indeks `(organization_id, assignment_id, team_role) WHERE to_at IS NULL AND deleted_at IS NULL`. Samme ansatt kan ha flere roller.
 - **Bytte** avslutter den aktive raden (`to_at`, valgfri grunn) og lager en ny; ingenting skrives over eller slettes. Oppdragsraden låses (`FOR UPDATE`) først, så samtidige bytter går etter hverandre. Bare ansatte som ikke er slettet og ikke har sluttet, kan velges.
 - **Hendelse** `assignment.team_changed` med `{ teamRole, fromEmployeeId, toEmployeeId }`; revisjonslogg `assignment_team_member` med `end` og `create`. Grunnen står bare på raden.
-- **Venter:** visning av tidligere teammedlemmer på skjermen, team-sjekk for endring når `access.inspectors_edit_all` er av (A63), utstedende selskap fra ansvarlig (neste planpunkt).
+- **Venter:** visning av tidligere teammedlemmer på skjermen, team-sjekk for endring når `access.inspectors_edit_all` er av (A63), utstedende selskap fra ansvarlig (bygget 05.11.2026, se `assignments` over).
 
 **`client_agreements`** – avtale med oppdragsgiver (for eksempel Fremtind).
 
@@ -1234,6 +1243,7 @@ Gyldig verdi er et heltall fra 1 til og med 100 (år). Mangler nøkkelen, brukes
 | `assignment.cancelled` | Kansellert (oppdraget mykt slettet, 27.10.2026) |
 | `assignment.closed` / `assignment.reopened` | Lukket / gjenåpnet |
 | `assignment.team_changed` | Person satt, byttet eller fjernet i en rolle i teamet (fase 2a) |
+| `assignment.company_changed` | Utstedende selskap endret fordi ansvarlig takstmann ble satt, byttet eller fjernet (fase 2a), med `fromCompanyId` og `toCompanyId` |
 | `assignment.party_added` / `assignment.party_updated` / `assignment.party_removed` | Part lagt til / endret / fjernet (fase 2a) |
 | `inspection.scheduled` | Befaring avtalt (booket) |
 | `inspection.rescheduled` | Befaring flyttet |
@@ -1737,7 +1747,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 |---|---|---|
 | Organisasjon | `organizations` | Den ytterste grensen for data (Byggcon-gruppen) |
 | Selskap | `companies` | Juridisk selskap (Byggcon Nord AS osv.) |
-| Utstedende selskap | `assignments.company_id` | Selskapet der ansvarlig takstmann er ansatt |
+| Utstedende selskap | `assignments.company_id` (issuing company) | Selskapet der ansvarlig takstmann er ansatt. Settes automatisk når ansvarlig settes eller byttes (A65–A68) |
 | Kontor | `offices` | Bodø, Mo i Rana osv. |
 | Ansatt | `employees` | Person som jobber i Byggcon |
 | Bruker / innlogging | `users` | Felles med Optiplan |
@@ -1826,6 +1836,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Oppdragsside | `getAssignment` (`src/core/assignments`), `AssignmentDetail` | Oppdraget med aktivt team, parter og kandidater til teamet |
 | Overlevering | `handed_over_reason`, `assignment.handed_over` | Grunnen ved bytte står på raden som avsluttes (høyst 300 tegn) |
 | Bytte i teamet | `assignment.team_changed` | Hendelse med `teamRole`, `fromEmployeeId`, `toEmployeeId` |
+| Bytte av utstedende selskap | `assignment.company_changed` | Hendelse med `fromCompanyId`, `toCompanyId` |
 | Status | `assignments.status` | Kort liste: fire statuser fra 27.10.2026 |
 | Merket «Rettet» | – | Regnes ut fra `report_releases` (versjon 2 eller høyere er sendt) |
 | Bestilt / under arbeid / ferdig / fakturert | `ordered` / `in_progress` / `completed` / `invoiced` | `ASSIGNMENT_STATUSES`, `assignmentStatusLabel` |
@@ -2105,3 +2116,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 03.11.2026 | `employee_permissions`: ingen indeks som begynner med `organization_id`, bare den delvise unike `(employee_id, permission) WHERE deleted_at IS NULL`, fordi alle spørringer (`findGrant`, `selectAdminEmployees`) går via `employee_id`. Må vurderes på nytt hvis en spørring filtrerer på organisasjon uten ansatt (nattløkken punkt 19). | `docs/agenter/oppgaver/fase0b-smafunn-r-s.md` |
 | 04.11.2026 | Manuell ordre og oppdragsnummer (fase 2a): `orders`, `assignments` (minimal) og `number_sequences` bygget; `orders` med `gnr`, `bnr`, `snr`, `housing_association_name`, `seller_declaration_received` og `ordered_by_text` til eiendom og kontakter kommer; `orders.source` bare `manual` og `email`; fremmednøkkel fra `events.assignment_id` (A33). Se «Bygget i fase 2a» i 4.3. | A51–A55, `docs/funksjoner/fase2a-manuell-ordre.md` |
 | 04.11.2026 | Team og parter på oppdraget (fase 2a): `assignment_team_members` og `assignment_parties` (enkel utgave med fritekst, fem roller, tre mottar-valg) bygget; nye hendelser `assignment.team_changed` og `assignment.party_added`/`_updated`/`_removed`. `contact_id`, `firm_id`, `receives_survey`, `is_primary`, `client` og `other` venter. Se «Bygget i fase 2a» i 4.2 og 4.3. | A60–A63, `docs/funksjoner/fase2a-oppdrag-team-parter.md` |
+| 05.11.2026 | Utstedende selskap (fase 2a): `assignments.company_id` med sammensatt fremmednøkkel til `companies`, satt automatisk fra ansvarlig takstmann i `setTeamMember`; ny hendelse `assignment.company_changed`. Ingen utfylling bakover. Se «Bygget i fase 2a» i 4.3. | A65–A68, `docs/agenter/oppgaver/fase2a-utstedende-selskap.md` |
