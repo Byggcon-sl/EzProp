@@ -347,7 +347,10 @@ describe("6.6 loggkontrakt", () => {
       const logged = JSON.stringify(mocks.logError.mock.calls);
       expect(logged).toContain("OppdiktetFeil");
       expect(logged).toContain(actor.id);
-      for (const value of PERSONAL_VALUES) expect(logged, value).not.toContain(value);
+      // Id-ene i loggen (faste uuid-er med mange nuller) byttes ut, så telefonen 00000000 ikke
+      // gir falsk treff i en id
+      const text = withoutIds(logged);
+      for (const value of PERSONAL_VALUES) expect(text, value).not.toContain(value);
       expect(logged).not.toContain("Testmegling");
     },
   );
@@ -357,8 +360,8 @@ describe("6.6 loggkontrakt", () => {
     mocks.core.addParty.mockRejectedValue(new AccessDeniedError());
     await run(setTeamMemberAction(initialFormState, teamForm()));
     await run(addPartyAction(initialFormState, addForm()));
-    const logged = JSON.stringify(mocks.logError.mock.calls);
-    for (const value of PERSONAL_VALUES) expect(logged, value).not.toContain(value);
+    const text = withoutIds(JSON.stringify(mocks.logError.mock.calls));
+    for (const value of PERSONAL_VALUES) expect(text, value).not.toContain(value);
   });
 });
 

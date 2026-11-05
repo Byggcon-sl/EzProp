@@ -695,6 +695,10 @@ describe("4.4 myk sletting", () => {
       housingAssociationName: ASSOCIATION,
     });
     const assignment = await createAssignment(org.id, { orderId: order.id });
+    await db
+      .update(orders)
+      .set({ status: "converted", assignmentId: assignment.id })
+      .where(eq(orders.id, order.id));
     const { property } = await createProperty(org.id, {
       assignmentId: assignment.id,
       address: "Testveien 5",
@@ -955,6 +959,10 @@ describe("4.5 getAssignmentProperty", () => {
       deletedAt: TEST_NOW,
     });
     const assignment = await createAssignment(org.id, { orderId: order.id });
+    await db
+      .update(orders)
+      .set({ status: "converted", assignmentId: assignment.id })
+      .where(eq(orders.id, order.id));
 
     const result = await getAssignmentProperty(admin, org.id, assignment.id);
     for (const value of Object.values(result.prefill)) expect([null, ""]).toContain(value);
@@ -967,7 +975,7 @@ describe("4.5 getAssignmentProperty", () => {
 
 describe("4.6 lagring", () => {
   it("4.6.1 første lagring lager én eiendom og én matrikkelrad, setter property_id og gir én hendelse", async () => {
-    const { org, admin, assignment } = await orgWithAdmin();
+    const { org, admin, adminEmployee, assignment } = await orgWithAdmin();
 
     await saveAssignmentProperty(admin, org.id, assignment.id, propertyInput());
 
@@ -984,7 +992,7 @@ describe("4.6 lagring", () => {
       housingType: "apartment",
       ownershipForm: "cooperative",
       dataSource: "manual",
-      createdBy: admin.id,
+      createdBy: adminEmployee.id,
       deletedAt: null,
     });
     const units = await cadastralRowsFor(property.id);
@@ -1149,7 +1157,7 @@ describe("4.6 lagring", () => {
     ["detached", "share"],
     ["apartment", "share"],
   ])("4.6.7 saveCommonAreas på %s med %s lykkes", async (housingType, ownershipForm) => {
-    const { org, admin, assignment } = await orgWithAdmin();
+    const { org, admin, adminEmployee, assignment } = await orgWithAdmin();
     await createProperty(org.id, { assignmentId: assignment.id, housingType, ownershipForm });
 
     await saveCommonAreas(admin, org.id, assignment.id, commonAreasInput());
@@ -1162,7 +1170,7 @@ describe("4.6 lagring", () => {
       conditionReportStatus: "yes",
       maintenancePlanStatus: "unknown",
       notes: NOTES,
-      createdBy: admin.id,
+      createdBy: adminEmployee.id,
     });
   });
 
