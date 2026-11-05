@@ -67,7 +67,13 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
 
       {order.status === "converted" && order.assignmentNumber && (
         <Card className="mb-6">
-          {order.assignmentId ? (
+          {order.assignmentCancelled ? (
+            // Kansellert oppdrag har ingen side lenger, så ingen lenke.
+            <p className="text-lg font-medium text-slate-900">
+              Gjort om til oppdrag <span className="tabular-nums">{order.assignmentNumber}</span>{" "}
+              (kansellert)
+            </p>
+          ) : order.assignmentId ? (
             <Link
               href={`/oppdrag/${order.assignmentId}`}
               className="inline-flex min-h-11 items-center text-lg font-medium text-brand-700 underline"

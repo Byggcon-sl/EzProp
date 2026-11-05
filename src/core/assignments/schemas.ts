@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PARTY_ROLES } from "./codes";
+import { ASSIGNMENT_STATUSES, PARTY_ROLES } from "./codes";
 
 /*
  * Validering av partene og grunnen ved bytte i teamet. Samme skjema brukes av kjernen og
@@ -78,3 +78,51 @@ export type PartyValues = z.output<typeof partyInputSchema>;
 export const teamChangeReasonSchema = optionalText(300, REASON_TOO_LONG).refine(hasNoNationalId, {
   error: NATIONAL_ID,
 });
+
+/*
+ * Statusflyten (A74, A76). Grunnen er påkrevd ved ett steg tilbake og ved kansellering, og
+ * valgfri ellers. Den lagres bare i hendelsen, aldri i revisjonsloggen.
+ */
+
+const REASON_REQUIRED = "Skriv en grunn.";
+const STATUS_REASON_TOO_LONG = "Grunnen kan være høyst 500 tegn.";
+const STATUS = "Velg en gyldig status.";
+
+/** Grunnen ved tilbake-steg og kansellering: trimmet, 1–500 tegn. */
+export const statusChangeReasonSchema = z
+  .string({ error: REASON_REQUIRED })
+  .trim()
+  .min(1, { error: REASON_REQUIRED })
+  .max(500, { error: STATUS_REASON_TOO_LONG });
+
+/** En av de fire oppdragsstatusene. */
+export const assignmentStatusSchema = z.enum(ASSIGNMENT_STATUSES, { error: STATUS });
+
+/** Valgfri grunn: tom eller bare mellomrom blir `undefined`, ellers som `statusChangeReasonSchema`. */
+const optionalStatusChangeReason = z
+  .string()
+  .nullish()
+  .transform((value) => {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : undefined;
+  })
+  .pipe(statusChangeReasonSchema.optional());
+
+/** Input til `changeAssignmentStatus`. Ukjente felt (også `organizationId`) tas bort. */
+export const changeAssignmentStatusInputSchema = z
+  .object({
+    expectedStatus: assignmentStatusSchema,
+    toStatus: assignmentStatusSchema,
+    reason: optionalStatusChangeReason,
+  })
+  .strip();
+export type ChangeAssignmentStatusInput = z.input<typeof changeAssignmentStatusInputSchema>;
+
+/** Input til `cancelAssignment`. Grunnen er påkrevd. Ukjente felt tas bort. */
+export const cancelAssignmentInputSchema = z
+  .object({
+    expectedStatus: assignmentStatusSchema,
+    reason: statusChangeReasonSchema,
+  })
+  .strip();
+export type CancelAssignmentInput = z.input<typeof cancelAssignmentInputSchema>;
