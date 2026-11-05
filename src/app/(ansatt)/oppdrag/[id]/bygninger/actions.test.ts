@@ -402,6 +402,18 @@ describe("6.4 feil fra kjernen", () => {
     expect(state.values[field]).toBe((bad as Record<string, string>)[field]);
   });
 
+  it.each([
+    ["PropertyMissingError", () => new PropertyMissingError()],
+    ["BuildingNotEmptyError", () => new BuildingNotEmptyError()],
+    ["FloorNotEmptyError", () => new FloorNotEmptyError()],
+  ] as const)("%s → aldri UNKNOWN_ERROR i noen handling", async (_name, make) => {
+    for (const name of ACTION_NAMES) {
+      CORE_FOR_ACTION[name].mockRejectedValue(make());
+      const state = await failed(call(name));
+      expect(state.message, name).not.toBe(UNKNOWN_ERROR);
+    }
+  });
+
   it.each(ACTION_NAMES)("%s: ukjent feil → UNKNOWN_ERROR", async (name) => {
     CORE_FOR_ACTION[name].mockRejectedValue(new Error("oppdiktet feil"));
     const state = await failed(call(name));
