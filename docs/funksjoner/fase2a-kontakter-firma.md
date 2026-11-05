@@ -21,7 +21,7 @@ Ikke nå. Kontaktene er personopplysninger og sendes **aldri** til KI (domenemod
 ## Omfang
 **Med:**
 1. **Tabellen `firms`** (ny migrering, neste ledige nummer), etter domenemodellen 4.2: `baseColumns` (organisasjon, sporingsfelt, `deleted_at`), `name` (påkrevd, høyst 200 tegn), `org_number` (valgfri, nøyaktig 9 sifre, lagret uten mellomrom), `firm_type` (påkrevd, CHECK: `broker_firm`, `insurer`, `housing_association`, `other`; standard `broker_firm`), `notes` (valgfri, høyst 1000 tegn).
-   - **Ingen dubletter:** unik delvis indeks på `(organization_id, org_number)` der `org_number is not null and deleted_at is null`. Tjenesten sjekker først og gir `FirmDuplicateError` med id og navn på firmaet som finnes; databasen er vakten ved samtidige lagringer (unik-feil gjøres om til samme feil).
+   - **Ingen dubletter, én vei:** unik delvis indeks `firms_organization_id_org_number_idx` på `(organization_id, org_number)` der `org_number is not null and deleted_at is null` er eneste vakt. Ingen forhåndssjekk i tjenesten. `createFirm` og `updateFirm` fanger unik-feilen med den eksisterende `isUniqueViolation` fra `@/core/organization/errors` (samme mønster som `companies.ts`), slår opp firmaet som finnes **etter** at transaksjonen er avbrutt (filtrert på `grant.organizationId`), og kaster `FirmDuplicateError` med id og navn.
    - Organisasjonsnummeret kontrolleres med kontrollsifferet (modulus 11) som ren funksjon `isValidOrgNumber` i `src/core/contacts/org-number.ts`, med testsaker. Mellomrom fjernes før kontroll og lagring.
    - Indeks `(organization_id, name)`.
 2. **Tabellen `contacts`** (samme migrering): `baseColumns`, `first_name` (påkrevd, høyst 100 tegn), `last_name` (valgfri, høyst 100 tegn), `email` (valgfri, gyldig, høyst 254 tegn), `phone` (valgfri, sifre, mellomrom og `+`, høyst 20 tegn), `firm_id` (valgfri; sammensatt fremmednøkkel `(organization_id, firm_id)` → `firms`), `notes` (valgfri, høyst 1000 tegn), `source` (påkrevd, CHECK: `manual`, `order`; standard `manual`).
@@ -32,7 +32,7 @@ Ikke nå. Kontaktene er personopplysninger og sendes **aldri** til KI (domenemod
    - `listFirms(actor, organizationId, { query? })` og `listContacts(actor, organizationId, { query? })`: `organization.read`. Sortert på navn. Søket (valgfritt, trimmet, høyst 100 tegn) treffer navn og organisasjonsnummer for firma, og navn, e-post og firmanavn for kontakter (`ILIKE` med parameter, tegnene `%` og `_` escapes). Høyst 200 rader.
    - `getFirm` (med kontaktene i firmaet) og `getContact` (med firmanavnet): `organization.read`.
    - `createFirm`, `updateFirm`, `createContact`, `updateContact`: `assignment.edit` (samme rettighet som parter på oppdraget). `firmId` på kontakten må finnes i organisasjonen og ikke være slettet (ellers `FirmNotFoundError`, «Firmaet finnes ikke.»).
-   - Zod-skjemaene `firmInputSchema` og `contactInputSchema` i `schemas.ts`. Navn og notat avviser 11 sifre på rad («Fødselsnummer skal ikke lagres her.»). Verdiene trimmes; tomme valgfrie felt blir `null`.
+   - Zod-skjemaene `firmInputSchema` og `contactInputSchema` i `schemas.ts`. Navn og notat avviser 11 sifre på rad («Fødselsnummer skal ikke lagres her.»), med samme lokale konstanter (`NATIONAL_ID`, `ELEVEN_DIGITS`) som i `src/core/orders/schemas.ts` og `src/core/assignments/schemas.ts`. Ingen ny felles hjelper i denne PR-en. Verdiene trimmes; tomme valgfrie felt blir `null`.
    - **Revisjonslogg** i samme transaksjon (`recordAuditEvent`): `firm` og `contact` med `create`/`update`, `changes` med id-er, kodene (`firm_type`, `source`) og **navnene** på feltene som ble endret, aldri navn, organisasjonsnummer, e-post, telefon eller notat. Ingen hendelser i `events` (de gjelder oppdrag og rapport).
 5. **Sidene** (PC først, må virke i iPad-størrelse; rammen Fjord; skjemadelene i `src/app/(ansatt)/`, samme mønster som ordre):
    - Nye menypunkter «Kontakter» og «Firma» under «Ordre».
@@ -46,10 +46,10 @@ Ikke nå. Kontaktene er personopplysninger og sendes **aldri** til KI (domenemod
 6. **Tester** (testskriver). Testdata er oppdiktet («Megler Test», «Testmegling AS», `megler@example.com`, telefon `00000000`, organisasjonsnumre som er gyldige etter modulus 11 men oppdiktede).
    - Fabrikker `createFirm` og `createContact` i `tests/factories.ts` (med tester), `RESET_TABLES`, og begge tabellene i `tests/tenant-tables.ts`.
    - `isValidOrgNumber`: gyldig, feil kontrollsiffer, 8 og 10 sifre, bokstaver, mellomrom, og nummer der kontrollsifferet blir 10 (ugyldig).
-   - Skjemaene: grensene for hvert felt (n og n+1 tegn), 11 sifre i navn og notat, trimming, tom streng blir `null`.
+   - Skjemaene: n og n+1 tegn for hver grense som finnes (200, 100, 254, 20, 1000), felt med lik grense deler test (`it.each`); 11 sifre i navn og notat, trimming, tom streng blir `null`.
    - Database: to aktive firma med samme organisasjonsnummer i samme organisasjon avvises; samme nummer i to organisasjoner er lov; et myk-slettet firma sperrer ikke; flere firma uten nummer er lov; kontakt med firma fra en annen organisasjon avvises; ukjent `firm_type` og `source` avvises.
    - **Tenant-isolasjon (regel 2):** `expectTenantIsolation` for alle åtte tjenestene. **IDOR:** A med egen org-id og Bs firma- eller kontakt-id gir `AccessDeniedError` i `get*` og `update*`, og Bs rad er uendret; `createContact` med Bs `firmId` gir `FirmNotFoundError` og ingen rad.
-   - **Dubletter:** `createFirm` og `updateFirm` med nummer som finnes gir `FirmDuplicateError` med riktig id; to samtidige `createFirm` med samme nummer gir én rad og én `FirmDuplicateError`.
+   - **Dubletter:** `createFirm` og `updateFirm` med nummer som finnes gir `FirmDuplicateError` med riktig id og navn, og ingen ny eller endret rad. `updateFirm` som lagrer firmaet med sitt eget nummer, går gjennom. Ingen test med samtidige lagringer (indeksen er eneste vei, så de vanlige testene dekker den).
    - **Søk:** treffer på navn, nummer, e-post og firmanavn; `%` og `_` søker etter tegnet; slettede rader vises ikke.
    - **Rettigheter:** lesing og skriving, med `access.inspectors_edit_all` på og av (admin stenges aldri ute).
    - **Logg:** hele JSON-en i revisjonsloggen gjøres om til tekst, og navn, nummer, e-post, telefon og notat står ikke der.
@@ -91,6 +91,12 @@ Ingen TG-regler. Kontrollen av organisasjonsnummer (modulus 11) er en ren funksj
 3. **Ingen sperre mot like kontakter**, bare mot like organisasjonsnumre. To meglere kan hete det samme. Kilde: planpunktet og D17.
 4. **Samme rettigheter som parter på oppdraget:** alle ansatte ser, `assignment.edit` endrer. Kilde: Ståle 27.10.2026 (alle ser alt), A53.
 5. **Fjerning og samtykke til markedsføring venter.** Holder punktet lite; ingenting bruker dem ennå.
+
+## Endringer etter forenkleren (05.11.2026, prosjektleder)
+Alle tre forslagene er tatt inn. Resten av omfanget står, slik forenkleren også anbefalte.
+1. **Dublettsjekken går én vei:** den unike indeksen er eneste vakt, og unik-feilen gjøres om til `FirmDuplicateError`. Valgt fremfor forhåndssjekk uten omgjøring fordi en samtidig dublett da gir riktig melding med lenke, ikke `UNKNOWN_ERROR`, og fordi mønsteret finnes allerede (`isUniqueViolation`, `companies.ts`, `offices.ts`). Testen med samtidige lagringer er kuttet: den er treg, kan feile tilfeldig, og de vanlige dubletttestene går gjennom samme kodevei.
+2. **Grensetestene** gjelder hver grense, ikke hvert felt.
+3. **Fødselsnummer-sjekken** følger mønsteret i ordre og oppdrag. En felles hjelper kan foreslås som eget punkt senere; den lages ikke her.
 
 ## Akseptkriterier
 - [ ] Et firma med et organisasjonsnummer som finnes, kan ikke lagres; meldingen lenker til firmaet (test og e2e)
