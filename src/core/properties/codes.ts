@@ -7,11 +7,13 @@
 /** Boligtype. Godkjent av Ståle 27.10.2026 (spørsmål 2, innspill D15). */
 export const HOUSING_TYPES = [
   "detached",
+  /** Tomannsbolig, både vertikaldelt og horisontaldelt. */
   "semi_detached",
   "terraced",
   "apartment",
   "apartment_in_house",
   "holiday_home",
+  /** Bare våningshuset på et gårdsbruk, ikke driftsbygningene. */
   "farm",
   "other",
 ] as const;

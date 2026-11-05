@@ -28,7 +28,7 @@ const SNR_DIGITS = "Seksjonsnummer kan bare ha sifre.";
 const POSTAL = "Postnummeret må ha fire sifre.";
 const MUNICIPALITY = "Kommunenummeret må ha fire sifre.";
 const ORG_NUMBER = "Organisasjonsnummeret må ha ni sifre.";
-const SHARE = "Andelsnummeret kan bare ha sifre og bindestrek.";
+const SHARE = "Nummeret kan bare ha sifre og bindestrek.";
 const NATIONAL_ID = "Fødselsnummer skal ikke lagres her.";
 const NOT_APPLICABLE =
   "Fellesdeler gjelder bare leilighet, eierseksjon, borettslag og aksjeleilighet.";
@@ -309,7 +309,7 @@ describe("2.9 andelsnummer", () => {
   });
 
   it.each(["A12", "1 2", "1/2", "0 0", "0/0"])(
-    "«%s» → «Andelsnummeret kan bare ha sifre og bindestrek.»",
+    "«%s» → «Nummeret kan bare ha sifre og bindestrek.»",
     (value) => {
       expectFieldMessage(parseProperty({ shareNumber: value }), "shareNumber", SHARE);
     },

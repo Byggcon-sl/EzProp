@@ -381,6 +381,7 @@ export async function saveAssignmentProperty(
         })
         .returning({ id: cadastralUnits.id });
       if (!unit) throw new Error("Fant ikke matrikkelen etter at den ble lagret. Prøv igjen.");
+      // Koblingen til oppdraget spores i revisjonsloggen for eiendommen (`assignmentId` under).
       await tx
         .update(assignments)
         .set({ propertyId: property.id, updatedBy: grant.employeeId })

@@ -47,8 +47,12 @@ const CADASTRAL_FIELDS: { name: TextField; label: string; maxLength: number; num
     { name: "gnr", label: "Gårdsnummer (gnr)", maxLength: 5, numeric: true },
     { name: "bnr", label: "Bruksnummer (bnr)", maxLength: 5, numeric: true },
     { name: "fnr", label: "Festenummer (fnr)", maxLength: 5, numeric: true },
-    { name: "snr", label: "Seksjonsnummer", maxLength: 5, numeric: true },
-    { name: "associationName", label: "Borettslag eller sameie", maxLength: 200 },
+    { name: "snr", label: "Seksjonsnummer (snr)", maxLength: 5, numeric: true },
+    {
+      name: "associationName",
+      label: "Borettslag, sameie eller boligaksjeselskap",
+      maxLength: 200,
+    },
     { name: "associationOrgNumber", label: "Organisasjonsnummer", maxLength: 9, numeric: true },
     { name: "shareNumber", label: "Andelsnummer eller aksjenummer", maxLength: 20 },
   ];
