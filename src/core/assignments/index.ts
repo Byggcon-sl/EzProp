@@ -23,6 +23,9 @@ export {
   EmployeeNotFoundError,
 } from "./errors";
 export {
+  NOTE_MAX_LENGTH,
+  assignmentNoteSchema,
+  assignmentScheduleSchema,
   assignmentStatusSchema,
   cancelAssignmentInputSchema,
   changeAssignmentStatusInputSchema,
@@ -30,6 +33,8 @@ export {
   partyInputSchema,
   statusChangeReasonSchema,
   teamChangeReasonSchema,
+  type AssignmentScheduleInput,
+  type AssignmentScheduleValues,
   type CancelAssignmentInput,
   type ChangeAssignmentStatusInput,
   type PartyInput,
@@ -51,3 +56,22 @@ export {
 } from "./assignments";
 export { setTeamMember, type SetTeamMemberInput } from "./team";
 export { addParty, removeParty, updateParty } from "./parties";
+export { isOverdue } from "./overdue";
+export {
+  DEFAULT_WORK_QUEUE_STATUS,
+  WORK_QUEUE_LIMIT,
+  WORK_QUEUE_QUERY_MAX_LENGTH,
+  parseWorkQueueParams,
+  type WorkQueueParams,
+} from "./work-queue-params";
+export {
+  countWorkQueueByStatus,
+  listWorkQueue,
+  setAssignmentSchedule,
+  updateAssignmentNote,
+  type AssignmentNoteResult,
+  type AssignmentScheduleResult,
+  type WorkQueueCounts,
+  type WorkQueueFilter,
+  type WorkQueueItem,
+} from "./work-queue";

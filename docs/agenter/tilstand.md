@@ -8,6 +8,8 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 Sist oppdatert: 04.11.2026 (intern personvernerklæring og sletteregel for betadata, «Minimum før ekte data», PR mot `main`; før det 03.11.2026: PR #73 merget kl. 09:01 UTC; nøkkelboks steg 2 utsatt, A50, bekreftet i runde 2 av forhåndsvurderingen; PR #74 flyttet til `main` og flettet)
 Sist oppdatert: 04.11.2026 (PR #82 manuell ordre og oppdragsnummer merget kl. 17:14 UTC, fase 2a)
+Sist oppdatert: 05.11.2026 (oppgavekort for arbeidskøen: `docs/funksjoner/fase2a-arbeidsko.md`, branch `fase2a-arbeidsko` fra `main`, beslutningene A99–A104; PR #97 er merget, PR #98 bygninger venter på CI og bruker migrering 0019)
+
 
 Sist oppdatert: 05.11.2026 (eiendom og matrikkel på oppdraget levert som PR mot `main`, versjon 0.2.77)
 Sist oppdatert: 05.11.2026 (oppgavekort for bygninger, etasjer, areal og rom laget, branch `fase2a-bygninger-areal-rom` fra `main`)

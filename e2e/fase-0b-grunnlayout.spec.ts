@@ -74,7 +74,7 @@ async function expectFrameWithEmptyQueue(page: Page) {
   await expect(banner(page)).toContainText(brand.productName);
   await expect(mainNav(page)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Arbeidskø", level: 1 })).toBeVisible();
-  await expect(page.getByText("Ingenting venter på deg")).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Status" })).toBeVisible();
 }
 
 /** Alle lenker og knapper i topplinjen og navigasjonen er minst 44x44 px. */
@@ -239,7 +239,7 @@ test.describe("ingen halvferdig mørk visning (kommer i fase 3)", () => {
     page,
   }) => {
     await logIn(page, ADMIN_EMAIL);
-    await expect(page.getByText("Ingenting venter på deg")).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Status" })).toBeVisible();
 
     const read = () =>
       page.evaluate(() => {

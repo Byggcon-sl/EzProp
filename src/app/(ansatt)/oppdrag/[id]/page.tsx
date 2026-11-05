@@ -9,6 +9,7 @@ import {
   canCancel,
   defaultReceives,
   getAssignment,
+  listWorkQueue,
   PARTY_ROLES,
   partyRoleLabel,
   TEAM_ROLES,
@@ -36,6 +37,7 @@ import {
   removePartyAction,
   saveCommonAreasAction,
   savePropertyAction,
+  setScheduleAction,
   setTeamMemberAction,
   updatePartyAction,
 } from "./actions";
@@ -47,6 +49,8 @@ import {
 import { PartyCard } from "./party-card";
 import { AddPartySection, type PartyRoleOption } from "./party-form";
 import { PropertyDetails, PropertyForm, type PropertyFormValues } from "./property-form";
+import { formatDueDate, formatInspectionAt, toDateTimeLocal } from "../../oslo-format";
+import { ScheduleCard } from "./schedule-card";
 import { StatusCard, type StatusOption } from "./status-card";
 import { TeamMemberForm } from "./team-form";
 
@@ -82,6 +86,26 @@ function commonAreasFormValues(data: AssignmentProperty): CommonAreasFormValues 
     maintenancePlanStatus: areas?.maintenancePlanStatus ?? "unknown",
     notes: areas?.notes ?? "",
   };
+}
+
+/**
+ * Avtalt befaring og frist for oppdraget. `getAssignment` gir dem ikke, så de hentes fra
+ * arbeidskøen i kjernen (samme tilgangssjekk og organisasjonsfilter): søk på oppdragsnummeret i
+ * oppdragets fane, «Alle», og velg raden med samme id.
+ */
+async function loadSchedule(
+  context: NonNullable<Awaited<ReturnType<typeof getEmployeeContext>>>,
+  assignment: { id: string; number: string; status: string },
+) {
+  const status = ASSIGNMENT_STATUSES.find((code) => code === assignment.status);
+  if (!status) return { inspectionAt: null, dueDate: null };
+  const { items } = await listWorkQueue(context.actor, context.organizationId, {
+    status,
+    mineOnly: false,
+    query: assignment.number,
+  });
+  const item = items.find((row) => row.id === assignment.id);
+  return { inspectionAt: item?.inspectionAt ?? null, dueDate: item?.dueDate ?? null };
 }
 
 /**
@@ -194,6 +218,8 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
   }
 
   const canEdit = context.canEditOrders;
+  const schedule = await loadSchedule(context, assignment);
+  const now = new Date();
   // Statusen er alltid en av de fire kodene (CHECK i databasen); ukjent kode gir ingen knapper.
   const status = ASSIGNMENT_STATUSES.find((code) => code === assignment.status) ?? null;
   const { next, previous } = status ? allowedTransitions(status) : { next: null, previous: null };
@@ -233,6 +259,19 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         cancellable={status !== null && canCancel(status)}
         changeAction={changeStatusAction}
         cancelAction={cancelAssignmentAction}
+      />
+      <ScheduleCard
+        assignmentId={assignment.id}
+        inspectionAt={schedule.inspectionAt ? toDateTimeLocal(schedule.inspectionAt) : ""}
+        dueDate={schedule.dueDate ?? ""}
+        inspectionText={
+          schedule.inspectionAt
+            ? formatInspectionAt(schedule.inspectionAt, now)
+            : "Befaring ikke avtalt"
+        }
+        dueDateText={schedule.dueDate ? formatDueDate(schedule.dueDate, now) : "Ingen frist"}
+        canEdit={canEdit}
+        action={setScheduleAction}
       />
       <p className="text-slate-600">Kontor: {assignment.officeName}</p>
       <div className="mb-6">

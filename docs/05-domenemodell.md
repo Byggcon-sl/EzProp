@@ -373,10 +373,10 @@ En person kan ha flere roller på samme oppdrag (for eksempel selger og fakturam
 | `report_profile_id` | Rapportprofil (arves fra avtalen eller selskapet, kan endres) |
 | `status` | Status fra den korte listen under |
 | `status_changed_at` | Når status sist ble endret |
-| `inspection_at` | Avtalt tidspunkt for befaring (kopi fra befaringen, for lister og regler) |
-| `due_date` | Frist for levering |
+| `inspection_at` | Avtalt tidspunkt for befaring (kopi fra befaringen, for lister og regler). Settes for hånd til befaringene finnes (A100) |
+| `due_date` | Frist for levering (dato) |
 | `cancelled_reason` | Grunn ved kansellering (oppdraget mykt slettet). «På vent» er foreløpig bare en hendelse. |
-| `internal_note` | Kort intern merknad |
+| `internal_note` | Kort intern merknad, høyst 200 tegn. Bare internt, aldri i rapport eller PDF (A101) |
 
 **Status (kort liste – vises i lister og på dashbordet).** **Beslutning 27.10.2026 (spørsmål 13):** fire statuser til å begynne med. Flere kan legges til senere uten ombygging.
 
@@ -418,7 +418,7 @@ Neste nummer hentes med lås i databasen, slik at to kontorer aldri får samme n
 
 **Bygget i fase 2a (05.11.2026, bestilleren koblet til kontakter):** `orders.ordered_by_contact_id` og `ordered_by_firm_id` (valgfrie) med sammensatte fremmednøkler `(organization_id, ordered_by_contact_id)` til `contacts` (`orders_ordered_by_contact_fk`) og `(organization_id, ordered_by_firm_id)` til `firms` (`orders_ordered_by_firm_fk`). Indeks `(organization_id, ordered_by_contact_id)`. `createOrder` tar `contactId` (feltet `orderedByContactId` i skjemaet), og firmaet følger kontakten som for partene (4.2). `ordered_by_text` beholdes og er det som vises; valgt kontakt fyller det med «Navn, Firma». Ordren kobles bare når den legges inn (A55). `getOrder` gir id-ene, og ordresiden lenker til kontakten. Revisjonsloggen har `orderedByContactId` og `orderedByFirmId` (bare id-er). Oppgavekort: `docs/funksjoner/fase2a-koble-kontakter.md`; beslutningene A84–A92.
 
-**Venter (egne planpunkter):** `raw_payload` (e-post-til-ordre og API), og på oppdraget `external_ref`, `company_id`, `client_agreement_id`, `report_profile_id`, `status_changed_at`, `inspection_at`, `due_date`, `cancelled_reason` og `internal_note`. De legges til når planpunktene som bruker dem, bygges (samme mønster som A17), fordi ingen skjerm bruker dem nå. Statusflyten videre fra `ordered` kommer med oppdragslisten. En ordre kan ikke endres etter at den er lagret (A55). Eiendom og matrikkel som egne tabeller, med `assignments.property_id`, kom 05.11.2026 (se «Bygget i fase 2a» i 4.4); adresse og matrikkel på ordren står fortsatt som tekst og brukes til forhåndsutfylling.
+**Venter (egne planpunkter):** `raw_payload` (e-post-til-ordre og API), og på oppdraget `external_ref`, `company_id`, `client_agreement_id`, `report_profile_id`, `status_changed_at` og `cancelled_reason`. De legges til når planpunktene som bruker dem, bygges (samme mønster som A17), fordi ingen skjerm bruker dem nå. `inspection_at`, `due_date` og `internal_note` kom med arbeidskøen 05.11.2026 (se under). En ordre kan ikke endres etter at den er lagret (A55). Eiendom og matrikkel som egne tabeller, med `assignments.property_id`, kom 05.11.2026 (se «Bygget i fase 2a» i 4.4); adresse og matrikkel på ordren står fortsatt som tekst og brukes til forhåndsutfylling.
 **Bygget i fase 2a (05.11.2026, utstedende selskap):** Kolonnen `assignments.company_id` og regelen i `setTeamMember` (`src/core/assignments/team.ts`). Oppgavekort: `docs/agenter/oppgaver/fase2a-utstedende-selskap.md`; beslutningene A65–A68.
 
 - **`company_id`** (kan være tom) med sammensatt fremmednøkkel `(organization_id, company_id)` til `companies` (`assignments_company_fk`), så selskapet alltid hører til samme organisasjon.
@@ -446,7 +446,17 @@ Neste nummer hentes med lås i databasen, slik at to kontorer aldri får samme n
 - **Ingen nye kolonner:** `status_changed_at` og `cancelled_reason` lages ikke nå; tidspunktet og grunnen står i hendelsene (A77). De kan legges til når arbeidskøen eller papirkurven trenger raske oppslag.
 - **Venter:** automatisk status fra hendelser (befaring startet, `report.sent`, faktura sendt), angre kansellering (papirkurv), «På vent», visning av hendelsene på oppdragssiden.
 
-**Venter (egne planpunkter):** eiendom og matrikkel som egne tabeller (A51; adresse og matrikkel er tekst på ordren til da), `raw_payload` (e-post-til-ordre og API), og på oppdraget `external_ref`, `company_id`, `property_id`, `client_agreement_id`, `report_profile_id`, `status_changed_at`, `inspection_at`, `due_date`, `cancelled_reason` og `internal_note`. De legges til når planpunktene som bruker dem, bygges (samme mønster som A17), fordi ingen skjerm bruker dem nå. Statusflyten er bygget 05.11.2026 (se over); `status_changed_at` og `cancelled_reason` venter (A77). En ordre kan ikke endres etter at den er lagret (A55).
+**Bygget i fase 2a (05.11.2026, arbeidskøen):** Kolonnene `assignments.inspection_at`, `due_date` og `internal_note` er tatt i bruk, spørringene i `src/core/assignments` og startsiden `/arbeidskoe`. Oppgavekort: `docs/funksjoner/fase2a-arbeidsko.md`; beslutningene A99–A107. Revisjonsloggen for notatet har bare feltnavnet (`{ fields: ["internalNote"] }`), aldri teksten; befaring og frist logges med fra og til.
+
+- **`inspection_at`** (`timestamptz`, kan være tom): avtalt befaring. Settes for hånd på `/oppdrag/[id]` i skjemaet «Befaring og frist» til befaringene (`inspections`) finnes; da fylles den derfra (A100).
+- **`due_date`** (`date`, kan være tom): frist for levering. Settes i samme skjema. Begge kan tømmes.
+- **`internal_note`** (`text`, kan være tom): kort internt notat, høyst 200 tegn (sjekkes med Zod), redigeres rett i køen. Tomt notat lagres som tomt (null). Stoppes hvis det ser ut som et fødselsnummer. Notatet er bare internt og kommer aldri i rapporten eller PDF-en (A101).
+- **Spørringene** følger mønsteret i `status.ts` (`actor`, `organizationId`, …) med tilgangssjekken inne i funksjonen: `listWorkQueue` og `countWorkQueueByStatus` (lesing, `organization.read`), `updateAssignmentNote` og `setAssignmentSchedule` (endring, `assignment.edit`). Alle filtrerer på `grant.organizationId` og hopper over kansellerte oppdrag. «Mine» (`mineOnly`) bruker `grant.employeeId`: den ansatte er i det aktive teamet, uansett rolle.
+- **Køen:** fire faner etter status med antall (én spørring gruppert på status), standard «Under arbeid» (A99) og «Mine» (A102), søk på oppdragsnummer og adresse, sortering etter nærmeste befaring eller frist (A103), høyst 50 kort (A104). «Forfalt» (`isOverdue`) er frist før dagens dato i norsk tid mens status er Bestilt eller Under arbeid. Mangler fristen, står «Ingen frist» (A105).
+- **Revisjonslogg** `assignment` med `update` når notat, befaring eller frist endres. Et avvist notat havner aldri i loggen eller i adressen (A106).
+- **Venter:** befaringene (`inspections`) som kilde for `inspection_at`, flere hurtigfiltre, lagrede filtre og KI-forslag i køen.
+
+**Venter (egne planpunkter):** eiendom og matrikkel som egne tabeller (A51; adresse og matrikkel er tekst på ordren til da), `raw_payload` (e-post-til-ordre og API), og på oppdraget `external_ref`, `company_id`, `property_id`, `client_agreement_id`, `report_profile_id`, `status_changed_at` og `cancelled_reason`. De legges til når planpunktene som bruker dem, bygges (samme mønster som A17), fordi ingen skjerm bruker dem nå. Statusflyten er bygget 05.11.2026 (se over); `status_changed_at` og `cancelled_reason` venter (A77). En ordre kan ikke endres etter at den er lagret (A55).
 
 **`assignment_team_members`** – oppdragsteamet. Historikken beholdes, så overlevering kan spores.
 
@@ -1925,6 +1935,13 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Merket «Rettet» | – | Regnes ut fra `report_releases` (versjon 2 eller høyere er sendt) |
 | Bestilt / under arbeid / ferdig / fakturert | `ordered` / `in_progress` / `completed` / `invoiced` | `ASSIGNMENT_STATUSES`, `assignmentStatusLabel` |
 | Rettet | `corrected` (`isCorrected`, `src/core/assignments/status-flow.ts`) | Merket under «Ferdig» for en rapport som er rettet og sendt på nytt. Ingen egen status; regnes ut fra utgivelsene og lagres ikke (A77) |
+| Arbeidskø | `work queue` (`listWorkQueue`, `countWorkQueueByStatus`, `src/core/assignments`) | Startsiden `/arbeidskoe`: oppdragene som kort i fire faner etter status, med antall per fane |
+| Mine / Alle | `mineOnly` | Hurtigfilter i køen. «Mine» viser oppdrag der den innloggede ansatte er i teamet (`grant.employeeId`). Standard er «Mine» (A102) |
+| Avtalt befaring | `inspection at` (`assignments.inspection_at`) | Tidspunkt for befaringen. Settes for hånd til befaringene finnes (A100) |
+| Frist | `due date` (`assignments.due_date`) | Dato for levering |
+| Forfalt | `overdue` (`isOverdue`) | Fristen er passert (norsk tid) og status er Bestilt eller Under arbeid |
+| Internt notat | `internal note` (`assignments.internal_note`, `updateAssignmentNote`) | Kort notat på oppdraget, høyst 200 tegn. Bare internt, aldri i rapport eller PDF (A101) |
+| Sette befaring og frist | `setAssignmentSchedule` (`src/core/assignments`) | Lagrer eller tømmer `inspection_at` og `due_date` |
 | Hendelse | `events` | Lang liste |
 | Hendelsestype | `EventType`, `EVENT_TYPES` (`src/core/events/types.ts`) | Faste koder for hendelsene i 4.9. Står bare der; en kode endres aldri |
 | Hvem gjorde det (hendelse) | `events.actor_type` | `employee` (ansatt), `system` (systemet selv) eller `integration` (tilkobling) |
@@ -2222,3 +2239,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 05.11.2026 | Bygninger, etasjer, areal og rom (fase 2a): `report_buildings` (per oppdrag til rapporten finnes), `floors`, `floor_areas` (én aktiv rad per etasje, `numeric(7,1)`) og `rooms` bygget; romtypene som fast kode i `src/core/buildings/codes.ts` (33, utkast); sju nye hendelser. Byggeår, bygningstype, hovedbygg, TBA, «vanskelig å måle», `room_types` som tabell og `geometry` venter. Se «Bygget i fase 2a» i 4.4. | A94–A98, `docs/funksjoner/fase2a-bygninger-areal-rom.md` |
 | 05.11.2026 | Statusflyten (fase 2a): lovlige overganger (ett steg fram, ett steg tilbake med grunn, ingen hopp), kansellering fra Bestilt og Under arbeid som myk sletting med grunn i hendelsen `assignment.cancelled`, grunnen ved tilbake i `assignment.status_changed`. «Rettet» regnes ut (`isCorrected`) og lagres ikke. Ingen migrering; `status_changed_at` og `cancelled_reason` venter. Se «Bygget i fase 2a» i 4.3. | A74–A77, `docs/funksjoner/fase2a-statusflyt.md` |
 | 05.11.2026 | Koble parter og bestiller til kontakter (fase 2a): `assignment_parties.contact_id`/`firm_id` og `orders.ordered_by_contact_id`/`ordered_by_firm_id`, valgfrie, med sammensatte fremmednøkler med `organization_id`. Firmaet følger kontakten; friteksten beholdes som øyeblikksbilde. Bare id-er i revisjonsloggen, ingen kontaktdata til KI. Se «Bygget i fase 2a» i 4.2 og 4.3. | A84–A92, `docs/funksjoner/fase2a-koble-kontakter.md` |
+| 05.11.2026 | Arbeidskøen (fase 2a): `assignments.inspection_at`, `due_date` og `internal_note` tatt i bruk (notat høyst 200 tegn, internt, aldri i rapport eller PDF). Spørringene `listWorkQueue`, `countWorkQueueByStatus`, `updateAssignmentNote` og `setAssignmentSchedule`. Se «Bygget i fase 2a» i 4.3. | A99–A107, `docs/funksjoner/fase2a-arbeidsko.md` |
