@@ -551,26 +551,26 @@ describe("3.7 tenant-tabellene", () => {
 describe("3.8 migreringen", () => {
   const dir = path.join(process.cwd(), "src/db/migrations");
 
-  it("0017 finnes og er den eneste med nummeret", () => {
-    const files = readdirSync(dir).filter((name) => name.startsWith("0017_"));
+  it("0018 finnes og er den eneste med nummeret", () => {
+    const files = readdirSync(dir).filter((name) => name.startsWith("0018_"));
     expect(files).toHaveLength(1);
     expect(files[0]).toMatch(/\.sql$/);
   });
 
-  it("0017 lager de fire tabellene", () => {
-    const [file] = readdirSync(dir).filter((name) => name.startsWith("0017_"));
+  it("0018 lager de fire tabellene", () => {
+    const [file] = readdirSync(dir).filter((name) => name.startsWith("0018_"));
     const text = readFileSync(path.join(dir, file!), "utf8");
     for (const name of ["report_buildings", "floors", "floor_areas", "rooms"]) {
       expect(text, name).toMatch(new RegExp(`CREATE TABLE[^;]*"${name}"`, "i"));
     }
   });
 
-  it("journalen har 0017 som siste oppføring", () => {
+  it("journalen har 0018 som siste oppføring", () => {
     const journal = JSON.parse(readFileSync(path.join(dir, "meta/_journal.json"), "utf8")) as {
       entries: { idx: number; tag: string }[];
     };
     const last = journal.entries.at(-1)!;
-    expect(last.idx).toBe(17);
-    expect(last.tag.startsWith("0017_")).toBe(true);
+    expect(last.idx).toBe(18);
+    expect(last.tag.startsWith("0018_")).toBe(true);
   });
 });
