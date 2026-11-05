@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { getTableColumns, getTableName, is, sql } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -5,6 +6,7 @@ import { db } from "@/db/client";
 import * as schema from "@/db/schema";
 import {
   createAssignment,
+  createCompany,
   createEmployee,
   createOrganization,
   createUser,
@@ -337,5 +339,125 @@ describe("3.11 tenant-tabellene", () => {
     const org = await createOrganization("Oppdiktet takst A");
     const id = await entry!.insertRow(org.id);
     expect(id).toMatch(/^[0-9a-f-]{36}$/);
+  });
+});
+
+/*
+ * Utstedende selskap på oppdraget (docs/agenter/oppgaver/fase2a-utstedende-selskap-testplan.md
+ * avsnitt 1). `assignments.company_id` kan være tom, og den sammensatte fremmednøkkelen
+ * `assignments_company_fk` på (organization_id, company_id) stopper et selskap fra en annen
+ * organisasjon. Navnet på fremmednøkkelen sjekkes, så det ikke er en annen nøkkel som slår til.
+ */
+
+/** Navnet på skranken som stoppet raden, også når Drizzle har pakket feilen inn. */
+function pgConstraint(error: unknown): string | undefined {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current; depth += 1) {
+    const name = (current as { constraint_name?: unknown }).constraint_name;
+    if (typeof name === "string") return name;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
+async function expectCompanyFk(run: Promise<unknown>) {
+  const error = await run.then(
+    () => null,
+    (caught: unknown) => caught,
+  );
+  expect(error, "databasen skulle avvist selskapet").not.toBeNull();
+  expect(pgCode(error), `feilkode (fikk ${String(error)})`).toBe(FOREIGN_KEY);
+  expect(pgConstraint(error)).toBe("assignments_company_fk");
+}
+
+function insertAssignmentSql(values: {
+  organizationId: string;
+  officeId: string;
+  companyId: string | null;
+}) {
+  return db.execute(sql`
+    insert into assignments (organization_id, number, office_id, company_id)
+    values (${values.organizationId}, ${`SQL-${randomUUID().slice(0, 8)}`}, ${values.officeId},
+      ${values.companyId})
+    returning id, company_id`);
+}
+
+function updateCompanySql(assignmentId: string, companyId: string | null) {
+  return db.execute(
+    sql`update assignments set company_id = ${companyId} where id = ${assignmentId}`,
+  );
+}
+
+async function companyIdOf(assignmentId: string) {
+  const rows = (await db.execute(
+    sql`select company_id from assignments where id = ${assignmentId}`,
+  )) as unknown as { company_id: string | null }[];
+  return rows[0]?.company_id;
+}
+
+describe("3.x utstedende selskap (assignments.company_id)", () => {
+  it("1.1 company_id kan være tom", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const assignment = await createAssignment(org.id);
+    expect(await companyIdOf(assignment.id)).toBeNull();
+    const result = await insertAssignmentSql({
+      organizationId: org.id,
+      officeId: assignment.officeId,
+      companyId: null,
+    });
+    const [row] = result as unknown as { company_id: string | null }[];
+    expect(row?.company_id).toBeNull();
+  });
+
+  it("1.2 company_id fra egen organisasjon godtas (insert og update)", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const own = await createCompany(org.id, { legalName: "Selskap A1 AS" });
+    const other = await createCompany(org.id, { legalName: "Selskap A2 AS" });
+    const assignment = await createAssignment(org.id);
+
+    const result = await insertAssignmentSql({
+      organizationId: org.id,
+      officeId: assignment.officeId,
+      companyId: own.id,
+    });
+    const [row] = result as unknown as { company_id: string | null }[];
+    expect(row?.company_id).toBe(own.id);
+
+    await updateCompanySql(assignment.id, other.id);
+    expect(await companyIdOf(assignment.id)).toBe(other.id);
+    await updateCompanySql(assignment.id, null);
+    expect(await companyIdOf(assignment.id)).toBeNull();
+  });
+
+  it("1.3 company_id fra en annen organisasjon avvises av assignments_company_fk", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const orgB = await createOrganization("Oppdiktet takst B");
+    const foreign = await createCompany(orgB.id, { legalName: "Selskap B AS" });
+    const assignment = await createAssignment(org.id);
+
+    await expectCompanyFk(
+      insertAssignmentSql({
+        organizationId: org.id,
+        officeId: assignment.officeId,
+        companyId: foreign.id,
+      }),
+    );
+    await expectCompanyFk(updateCompanySql(assignment.id, foreign.id));
+    expect(await companyIdOf(assignment.id)).toBeNull();
+  });
+
+  it("1.4 ukjent company_id avvises av samme fremmednøkkel", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const assignment = await createAssignment(org.id);
+
+    await expectCompanyFk(
+      insertAssignmentSql({
+        organizationId: org.id,
+        officeId: assignment.officeId,
+        companyId: randomUUID(),
+      }),
+    );
+    await expectCompanyFk(updateCompanySql(assignment.id, randomUUID()));
+    expect(await companyIdOf(assignment.id)).toBeNull();
   });
 });
