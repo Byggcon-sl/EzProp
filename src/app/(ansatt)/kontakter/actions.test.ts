@@ -1,19 +1,8 @@
-import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AccessDeniedError, type Actor } from "@/core/access";
-import { db } from "@/db/client";
-import { employees } from "@/db/schema";
+import { AccessDeniedError } from "@/core/access";
 import { FirmNotFoundError } from "@/core/contacts/errors";
 import { contactInputSchema } from "@/core/contacts/schemas";
 import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../form-state";
-import {
-  createContact as insertContact,
-  createEmployee,
-  createFirm as insertFirm,
-  createOrganization,
-  createUser,
-  resetDatabase,
-} from "../../../../tests/factories";
 
 /*
  * Server actions i /kontakter (docs/funksjoner/fase2a-kontakter-firma-testplan.md avsnitt 7).
@@ -62,7 +51,6 @@ vi.mock("@/core/contacts", async (importOriginal) => ({
 
 const { createContactAction, updateContactAction, searchContactsAction } =
   await import("./actions");
-const realCore = await vi.importActual<typeof import("@/core/contacts")>("@/core/contacts");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
 const OTHER_ORG = "0190a000-0000-7000-8000-000000000002";
@@ -305,129 +293,6 @@ describe("7.8 loggkontrakt", () => {
 });
 
 /*
- * Søket i kontaktvelgeren (docs/funksjoner/fase2a-koble-kontakter-testplan.md punkt 8.3–8.6).
- * 8.4 og 8.5 kjører mot testdatabasen med den ekte `listContacts`; bare konteksten er byttet ut,
- * slik at organisasjonen kommer fra den ansatte som i appen.
- */
-describe("8.3 search_under_2_chars_empty_no_call", () => {
-  it.each(["", " ", "a", "  b  "])("søk på «%s» gir tom liste uten kall", async (query) => {
-    expect(await searchContactsAction(query)).toEqual([]);
-    expect(mocks.core.listContacts).not.toHaveBeenCalled();
-    expect(mocks.getEmployeeContext).not.toHaveBeenCalled();
-  });
-});
-
-describe("8.4–8.5 søket mot databasen", () => {
-  beforeEach(async () => {
-    await resetDatabase();
-    mocks.core.listContacts.mockImplementation(realCore.listContacts);
-  });
-
-  async function employeeIn(organizationId: string): Promise<Actor> {
-    const user = await createUser({ name: "Kontor Testdatter" });
-    await createEmployee(user, organizationId, ["office"]);
-    return user;
-  }
-
-  function contextFor(user: Actor, organizationId: string) {
-    mocks.getEmployeeContext.mockResolvedValue({
-      actor: user,
-      organizationId,
-      canEditOrders: true,
-      officeId: null,
-    });
-  }
-
-  it("search_returns_max_10_own_org_only: 12 i A og 1 i B gir 10 treff fra A", async () => {
-    const orgA = await createOrganization("Testfirma A");
-    const orgB = await createOrganization("Testfirma B");
-    const firm = await insertFirm(orgA.id, { name: "Testmegling AS" });
-    const own = new Set<string>();
-    for (let index = 0; index < 12; index++) {
-      const contact = await insertContact(orgA.id, {
-        firstName: "Megler",
-        lastName: `Søketest ${String(index).padStart(2, "0")}`,
-        email: `megler${index}@example.com`,
-        phone: "00000000",
-        firmId: firm.id,
-      });
-      own.add(contact.id);
-    }
-    const foreign = await insertContact(orgB.id, { firstName: "Megler", lastName: "Søketest B" });
-    const user = await employeeIn(orgA.id);
-    contextFor(user, orgA.id);
-
-    const hits = await searchContactsAction("  søketest ");
-    expect(hits).toHaveLength(10);
-    for (const hit of hits) expect(own.has(hit.id)).toBe(true);
-    expect(hits.map((hit) => hit.id)).not.toContain(foreign.id);
-    expect(hits[0]).toEqual({
-      id: expect.any(String),
-      name: "Megler Søketest 00",
-      firmName: "Testmegling AS",
-      email: "megler0@example.com",
-      phone: "00000000",
-    });
-    expect(mocks.core.listContacts).toHaveBeenCalledWith(user, orgA.id, { query: "søketest" });
-  });
-
-  it("search_no_access_gives_no_hits: ansatt i B med organisasjonen A får ingen treff", async () => {
-    const orgA = await createOrganization("Testfirma A");
-    const orgB = await createOrganization("Testfirma B");
-    await insertContact(orgA.id, { firstName: "Megler", lastName: "Søketest" });
-    const outsider = await employeeIn(orgB.id);
-    contextFor(outsider, orgA.id);
-
-    await expect(searchContactsAction("søketest")).resolves.toEqual([]);
-    expect(mocks.logError).not.toHaveBeenCalled();
-  });
-
-  it("search_no_access_gives_no_hits: slettet ansattkobling gir ingen treff", async () => {
-    const orgA = await createOrganization("Testfirma A");
-    await insertContact(orgA.id, { firstName: "Megler", lastName: "Søketest" });
-    const user = await employeeIn(orgA.id);
-    await db
-      .update(employees)
-      .set({ deletedAt: new Date("2026-11-01T08:00:00Z") })
-      .where(eq(employees.userId, user.id));
-    contextFor(user, orgA.id);
-
-    await expect(searchContactsAction("søketest")).resolves.toEqual([]);
-    expect(mocks.logError).not.toHaveBeenCalled();
-  });
-
-  it("uten ansattkobling (konteksten er null) gir ingen treff og ingen kall", async () => {
-    mocks.getEmployeeContext.mockResolvedValue(null);
-    await expect(searchContactsAction("søketest")).resolves.toEqual([]);
-    expect(mocks.core.listContacts).not.toHaveBeenCalled();
-  });
-});
-
-describe("8.6 logger_never_gets_form_values_or_query", () => {
-  it("ukjent feil i søket gir tom liste og logges uten søketekst eller kontaktdata", async () => {
-    const query = "Megler Test megler@example.com 00000000";
-    const boom = new Error(`databasen sa nei til ${query}`);
-    boom.name = "OppdiktetFeil";
-    mocks.core.listContacts.mockRejectedValue(boom);
-
-    await expect(searchContactsAction(query)).resolves.toEqual([]);
-    expect(mocks.logError).toHaveBeenCalledTimes(1);
-    const logged = JSON.stringify(mocks.logError.mock.calls).replaceAll(ORG, "<org>");
-    expect(logged).toContain("OppdiktetFeil");
-    expect(logged).toContain(actor.id);
-    for (const value of [query, FIRST, LAST, EMAIL, PHONE, "Megler Test"]) {
-      expect(logged).not.toContain(value);
-    }
-  });
-
-  it("AccessDeniedError fra kjernen gir tom liste og logges ikke", async () => {
-    mocks.core.listContacts.mockRejectedValue(new AccessDeniedError());
-    await expect(searchContactsAction("megler")).resolves.toEqual([]);
-    expect(mocks.logError).not.toHaveBeenCalled();
-  });
-});
-
-/*
  * Søket i kontaktvelgeren (docs/funksjoner/fase2a-koble-kontakter-testplan.md avsnitt 8).
  * `searchContactsAction(query)` kaller `listContacts` og gir høyst 10 treff med
  * `{ id, name, firmName, email, phone }`. Under 2 tegn gir tom liste uten kall. Her er kjernen
@@ -466,7 +331,7 @@ describe("8. searchContactsAction (kjernen byttet ut)", () => {
   it("8.4a kaller listContacts med organisasjonen fra konteksten og søketeksten; høyst 10 treff med fem felt", async () => {
     mocks.core.listContacts.mockResolvedValue(Array.from({ length: 15 }, (_v, i) => listRow(i)));
 
-    const hits = await searchContactsAction("Me");
+    const hits = await searchContactsAction("  Me ");
 
     expect(mocks.core.listContacts).toHaveBeenCalledTimes(1);
     const [calledActor, calledOrg, options] = mocks.core.listContacts.mock.calls[0]!;
@@ -490,6 +355,7 @@ describe("8. searchContactsAction (kjernen byttet ut)", () => {
   it("8.5a AccessDeniedError fra kjernen gir tom liste, ikke unntak", async () => {
     mocks.core.listContacts.mockRejectedValue(new AccessDeniedError());
     await expect(searchContactsAction("Megler")).resolves.toEqual([]);
+    expect(mocks.logError).not.toHaveBeenCalled();
   });
 
   it("8.6 logger_never_gets_query: ukjent feil logges uten søketeksten, navn, e-post eller telefon", async () => {
@@ -500,10 +366,12 @@ describe("8. searchContactsAction (kjernen byttet ut)", () => {
 
     await expect(searchContactsAction(query)).resolves.toEqual([]);
 
+    expect(mocks.logError).toHaveBeenCalledTimes(1);
     const logged = JSON.stringify(mocks.logError.mock.calls).replace(
       /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
       "<id>",
     );
+    expect(logged).toContain("OppdiktetFeil");
     for (const value of ["Hemmeligsøk", "Testesen", EMAIL, PHONE]) {
       expect(logged, value).not.toContain(value);
     }

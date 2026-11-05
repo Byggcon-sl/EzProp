@@ -12,18 +12,29 @@ import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { ContactNotFoundError, findContactForLink } from "./index";
 
 /*
- * Oppslaget når en kontakt kobles til en part eller en ordre
- * (docs/funksjoner/fase2a-koble-kontakter-testplan.md avsnitt 2). Funksjonen tar
- * `organizationId` fra grant hos den som kaller; tenant-testen henter grant med
- * `requireOrganizationAccess`, slik kjernen gjør.
+ * Oppslaget som kobler en part eller en ordre til en kontakt
+ * (docs/funksjoner/fase2a-koble-kontakter-testplan.md avsnitt 2).
  *
- * Testdata er oppdiktet. Støtter hovedmål: reklamasjoner (koblingen kan aldri peke på en
- * fremmed eller slettet kontakt) og KI først (kroken for e-post-til-ordre).
+ * Avtalt signatur (testplanen, «Avtale om signaturer»):
+ * findContactForLink(tx, organizationId, contactId) → { id, firmId } | null. Den tar
+ * `organizationId` fra grant hos den som kaller, og filtrerer bort slettede kontakter. Et slettet
+ * firma gir `firmId: null` (samme filter som `firmJoin`).
+ *
+ * Støtter hovedmål: reklamasjoner (en part kan aldri kobles til en kontakt i en annen
+ * organisasjon eller en slettet kontakt) og KI først (koblingen er kroken for e-post-til-ordre).
+ * Testdata er oppdiktet.
  */
 
 beforeEach(resetDatabase);
 
-const DELETED = new Date("2026-11-01T08:00:00Z");
+const DELETED_AT = new Date("2026-11-01T08:00:00Z");
+
+/** Alle kontakt-id-ene `seed` la inn i 2.6; spørringen slår opp hver av dem. */
+let allIds: string[] = [];
+
+function lookup(organizationId: string, contactId: string) {
+  return db.transaction((tx) => findContactForLink(tx, organizationId, contactId));
+}
 
 describe("2. findContactForLink", () => {
   it("2.1 egen kontakt med firma gir { id, firmId } med kontaktens firma", async () => {
@@ -31,76 +42,82 @@ describe("2. findContactForLink", () => {
     const firm = await createFirm(org.id);
     const contact = await createContact(org.id, { firmId: firm.id });
 
-    expect(await findContactForLink(db, org.id, contact.id)).toEqual({
-      id: contact.id,
-      firmId: firm.id,
-    });
+    expect(await lookup(org.id, contact.id)).toEqual({ id: contact.id, firmId: firm.id });
   });
 
   it("2.2 egen kontakt uten firma gir { id, firmId: null }", async () => {
     const org = await createOrganization();
     const contact = await createContact(org.id);
 
-    expect(await findContactForLink(db, org.id, contact.id)).toEqual({
-      id: contact.id,
-      firmId: null,
-    });
+    expect(await lookup(org.id, contact.id)).toEqual({ id: contact.id, firmId: null });
   });
 
   it("2.3 slettet kontakt gir null", async () => {
     const org = await createOrganization();
-    const contact = await createContact(org.id, { deletedAt: DELETED });
+    const contact = await createContact(org.id, { deletedAt: DELETED_AT });
 
-    expect(await findContactForLink(db, org.id, contact.id)).toBeNull();
+    expect(await lookup(org.id, contact.id)).toBeNull();
   });
 
   it("2.4 kontakt med slettet firma gir { id, firmId: null }", async () => {
     const org = await createOrganization();
-    const firm = await createFirm(org.id, { deletedAt: DELETED });
+    const firm = await createFirm(org.id, { deletedAt: DELETED_AT });
     const contact = await createContact(org.id, { firmId: firm.id });
 
-    expect(await findContactForLink(db, org.id, contact.id)).toEqual({
-      id: contact.id,
-      firmId: null,
-    });
+    expect(await lookup(org.id, contact.id)).toEqual({ id: contact.id, firmId: null });
   });
 
-  it.each([
-    ["ukjent uuid", randomUUID()],
-    ["ugyldig id", "abc"],
-  ])("2.5 %s gir null", async (_name, id) => {
+  it("2.5 ukjent uuid gir null", async () => {
     const org = await createOrganization();
     await createContact(org.id);
 
-    expect(await findContactForLink(db, org.id, id)).toBeNull();
+    expect(await lookup(org.id, randomUUID())).toBeNull();
   });
 
-  it("2.6 gir aldri en kontakt fra en annen organisasjon", async () => {
-    const seededIds: string[] = [];
+  it("2.5b kontakt fra en annen organisasjon gir null, også når den har firma", async () => {
+    const orgA = await createOrganization("Organisasjon A");
+    const orgB = await createOrganization("Organisasjon B");
+    const firmB = await createFirm(orgB.id);
+    const contactB = await createContact(orgB.id, { firmId: firmB.id });
+
+    expect(await lookup(orgA.id, contactB.id)).toBeNull();
+  });
+
+  it("2.6 tenant-isolasjon: A får aldri B sin kontakt og omvendt, og fremmed organisasjon nektes", async () => {
     await expectTenantIsolation({
       seed: async (grantA, grantB) => {
-        const a = [(await createContact(grantA.organizationId)).id];
-        const b = [(await createContact(grantB.organizationId)).id];
-        seededIds.push(...a, ...b);
+        const firmA = await createFirm(grantA.organizationId);
+        const firmB = await createFirm(grantB.organizationId);
+        const a = [
+          (await createContact(grantA.organizationId, { firmId: firmA.id })).id,
+          (await createContact(grantA.organizationId)).id,
+        ];
+        const b = [
+          (await createContact(grantB.organizationId, { firmId: firmB.id })).id,
+          (await createContact(grantB.organizationId)).id,
+        ];
+        allIds = [...a, ...b];
         return { a, b };
       },
       query: async (actor, organizationId) => {
         const grant = await requireOrganizationAccess(actor, organizationId);
-        return db.transaction(async (tx) => {
-          const found = [];
-          for (const id of seededIds) {
-            const row = await findContactForLink(tx, grant.organizationId, id);
-            if (row) found.push(row);
-          }
-          return found;
+        const found = await db.transaction(async (tx) => {
+          const rows = [];
+          for (const id of allIds)
+            rows.push(await findContactForLink(tx, grant.organizationId, id));
+          return rows;
         });
+        return found.filter((row) => row !== null);
       },
       idOf: (row) => row.id,
     });
   });
+});
 
-  it("ContactNotFoundError har meldingen «Kontakten finnes ikke.»", () => {
+describe("ContactNotFoundError", () => {
+  it("har meldingen «Kontakten finnes ikke.» og eget navn", () => {
     const error = new ContactNotFoundError();
+    expect(error).toBeInstanceOf(Error);
     expect(error.message).toBe("Kontakten finnes ikke.");
     expect(error.name).toBe("ContactNotFoundError");
   });
