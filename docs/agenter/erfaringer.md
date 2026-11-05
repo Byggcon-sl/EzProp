@@ -202,3 +202,7 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - Merge-skriptet merger alle klare PR-er, også de en annen kjøring jobber med. PR #97 ble merget mens arbeidsflyten fortsatt rettet funn fra gjennomgangen, så siste commit kom ikke med. Regel videre: arbeidsflyten åpner PR-en først når gjennomgangen og rettingene er ferdige (slik den gjør), og etter en omstart sjekkes `origin/main` for en merget PR fra branchen før noe annet.
 - Å gjenoppta arbeidsflyten med `resumeFromRunId` etter en omstart feilet: planleggingssteget kjørte på nytt og ga ingen biter. Når bare sjekker og PR gjenstår, er det raskere å fullføre for hånd.
+
+## 05.11.2026: samme planpunkt bygget to ganger
+
+- To kjøringer bygde «Bygninger, etasjer, areal per etasje og rom» samtidig. Den ene startet fra `main` med et annet branchnavn enn den som alt var i arbeid, og leverte PR #98; den andre (startet 08:45 UTC, branch `fase2a-bygninger-areal-rom`) brukte ca. 7 timer og endte med bare en opprydding (PR #100). Regel videre: før en kjøring starter et planpunkt, søker den etter branches på `origin` med push de siste 3 timene som gjelder samme punkt (`git for-each-ref --sort=-committerdate refs/remotes/origin`, se på navn og oppgavekort), ikke bare etter samme branchnavn. Den som starter, pusher oppgavekortet straks, så andre ser det.
