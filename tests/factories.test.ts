@@ -5,6 +5,7 @@ import path from "node:path";
 import { count, eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { requireOrganizationAccess } from "@/core/access";
+import { isValidOrgNumber } from "@/core/contacts";
 import { createLocalFileStorage } from "@/core/files/local-storage";
 import { isCertificationValid } from "@/core/organization/certification-rules";
 import { db } from "@/db/client";
@@ -15,9 +16,11 @@ import {
   cadastralUnits,
   certifications,
   commonAreas,
+  contacts,
   employeePermissions,
   employees,
   files,
+  firms,
   integrationConnections,
   loginAttempts,
   numberSequences,
@@ -35,8 +38,10 @@ import {
   createAssignmentParty,
   createCertification,
   createCommonAreas,
+  createContact,
   createEmployee,
   createFile,
+  createFirm,
   createIntegrationConnection,
   createNumberSequence,
   createOffice,
@@ -756,6 +761,110 @@ describe("fabrikkene for eiendom og fellesdeler (fase 2a)", () => {
     await resetDatabase();
 
     for (const table of [properties, cadastralUnits, commonAreas]) {
+      const [row] = await db.select({ n: count() }).from(table);
+      expect(row!.n).toBe(0);
+    }
+  });
+});
+
+describe("fabrikkene for firma og kontakter (fase 2a)", () => {
+  beforeEach(resetDatabase);
+
+  it("6.1 createFirm uten overstyring: «Testmegling AS», broker_firm, gyldig nummer; to kall gir ikke unik-feil", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const first = await createFirm(org.id);
+    const second = await createFirm(org.id);
+
+    expect(first).toMatchObject({
+      organizationId: org.id,
+      name: "Testmegling AS",
+      firmType: "broker_firm",
+      notes: null,
+      deletedAt: null,
+    });
+    for (const firm of [first, second]) {
+      expect(firm.orgNumber).toMatch(/^000\d{6}$/);
+      expect(isValidOrgNumber(firm.orgNumber!)).toBe(true);
+    }
+    expect(first.orgNumber).not.toBe(second.orgNumber);
+  });
+
+  it("6.1 createFirm bruker overstyringene, også orgNumber null og deletedAt", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const deletedAt = new Date("2026-11-01T08:00:00Z");
+    const firm = await createFirm(org.id, {
+      name: "Testforsikring ASA",
+      orgNumber: null,
+      firmType: "insurer",
+      notes: "Vil ha rapport før kl. 12",
+      deletedAt,
+    });
+    expect(firm).toMatchObject({
+      name: "Testforsikring ASA",
+      orgNumber: null,
+      firmType: "insurer",
+      notes: "Vil ha rapport før kl. 12",
+    });
+    expect(firm.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+    const withNumber = await createFirm(org.id, { orgNumber: "000000027" });
+    expect(withNumber.orgNumber).toBe("000000027");
+  });
+
+  it("6.2 createContact uten overstyring: «Megler Test», manual, uten firma", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const contact = await createContact(org.id);
+    expect(contact).toMatchObject({
+      organizationId: org.id,
+      firstName: "Megler",
+      lastName: "Test",
+      source: "manual",
+      firmId: null,
+      email: null,
+      phone: null,
+      notes: null,
+      deletedAt: null,
+    });
+  });
+
+  it("6.2 createContact bruker overstyringene, også firmId og deletedAt", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const firm = await createFirm(org.id);
+    const deletedAt = new Date("2026-11-01T08:00:00Z");
+    const contact = await createContact(org.id, {
+      firstName: "Kari",
+      lastName: "Testvik",
+      email: "megler@example.com",
+      phone: "00000000",
+      firmId: firm.id,
+      notes: "Vil ha rapport før kl. 12",
+      source: "order",
+      deletedAt,
+    });
+    expect(contact).toMatchObject({
+      firstName: "Kari",
+      lastName: "Testvik",
+      email: "megler@example.com",
+      phone: "00000000",
+      firmId: firm.id,
+      notes: "Vil ha rapport før kl. 12",
+      source: "order",
+    });
+    expect(contact.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+  });
+
+  it("6.3 RESET_TABLES har contacts før firms (fremmednøkkelen), og resetDatabase tømmer dem", async () => {
+    const listed: readonly string[] = RESET_TABLES;
+    expect(listed).toEqual(expect.arrayContaining(["contacts", "firms"]));
+    expect(listed.indexOf("contacts")).toBeLessThan(listed.indexOf("firms"));
+    expect(listed.indexOf("firms")).toBeLessThan(listed.indexOf("organizations"));
+
+    const org = await createOrganization("Oppdiktet takst A");
+    const firm = await createFirm(org.id);
+    await createContact(org.id, { firmId: firm.id });
+
+    await resetDatabase();
+
+    for (const table of [contacts, firms]) {
       const [row] = await db.select({ n: count() }).from(table);
       expect(row!.n).toBe(0);
     }

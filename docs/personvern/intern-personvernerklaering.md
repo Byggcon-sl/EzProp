@@ -1,6 +1,6 @@
 # Intern personvernerklæring for EzProp
 
-**Utkast, ikke godkjent av Ståle.** Dato: 04.11.2026.
+**Utkast, ikke godkjent av Ståle.** Dato: 04.11.2026, sist endret 05.11.2026 (kontakter og firma).
 
 - **Fase:** Minimum før ekte data
 - **Støtter hovedmål:** Reklamasjoner (rapporter, bilder og logg finnes i 10 år når en sak kommer) og KI først (agentene har laget utkastet ut fra koden, daglig leder leser og godkjenner).
@@ -15,7 +15,7 @@ Dokumentet er ikke juridisk rådgivning. Det dekker ikke rettslig grunnlag, beha
 
 ## Tabellene
 
-Én rad per tabell i `src/db/schema` (22 tabeller etter PR #82). Alle tabeller med `organization_id` filtreres på organisasjonen fra tilgangssjekken, så ansatte ser bare egen organisasjon. «Admin» betyr rettigheten `organization.manage`, «leder og admin» betyr `staff.manage`.
+Én rad per tabell i `src/db/schema` (29 tabeller etter kontakter og firma i fase 2a. Radene for `properties`, `cadastral_units` og `common_areas` fra PR #91 mangler ennå og legges inn som egen liten oppgave). Alle tabeller med `organization_id` filtreres på organisasjonen fra tilgangssjekken, så ansatte ser bare egen organisasjon. «Admin» betyr rettigheten `organization.manage`, «leder og admin» betyr `staff.manage`.
 
 | Tabell | Hva | Formål | Hvor | Hvor lenge | Hvem ser det |
 |---|---|---|---|---|---|
@@ -43,6 +43,8 @@ Dokumentet er ikke juridisk rådgivning. Det dekker ikke rettslig grunnlag, beha
 | `number_sequences` | Nummerserien for oppdragsnummer (prefiks, siste nummer). Ingen personopplysninger | Unike oppdragsnummer | Database | Nå i koden: telleren blir stående, ingen sletting (heller ikke myk) | Ingen skjerm |
 | `assignment_parties` | Partene på oppdraget: rolle (megler, selger, kjøper, representant, fakturamottaker), navn, firma, e-post, telefon og hva parten mottar. Personopplysninger om kunder og andre utenfor Byggcon. Fødselsnummer stoppes i skjemaet | Levere rapport og faktura til riktig mottaker | Database | Nå i koden: myk sletting (`deleted_at`/`deleted_by`). Foreslått, bygges senere: minst 10 år | Alle ansatte i organisasjonen ser (`organization.read`). Bare ansatte med `assignment.edit` legger til, endrer og fjerner |
 | `assignment_team_members` | Hvilken ansatt som hadde hvilken rolle på oppdraget, fra og til, og grunnen ved bytte (fritekst, høyst 300 tegn). Skjermen ber om at det ikke skrives helseopplysninger i grunnen (A64) | Vite hvem som hadde ansvaret, viktig ved reklamasjon | Database | Nå i koden: slettes aldri; et bytte avslutter raden med `to_at` og lager en ny | Alle ansatte i organisasjonen ser (`organization.read`). Bare ansatte med `assignment.edit` endrer |
+| `firms` | Firmaregisteret: navn, organisasjonsnummer, type (meglerforetak, forsikringsselskap, sameie eller borettslag, annet) og et kort notat. Ikke personopplysninger i seg selv, men notatet kan nevne personer. Skjermen ber om at det ikke skrives helseopplysninger eller fødselsnummer, og 11 sifre på rad stoppes | Kontakt med meglerforetak og andre bestillere om oppdrag; ett firma per organisasjonsnummer | Database | Nå i koden: myk sletting (`deleted_at`), ingen fjerning fra skjermen ennå. Foreslått, bygges senere: minst 10 år som resten | Alle ansatte i organisasjonen ser (`listFirms` og `getFirm`, `organization.read`). Bare ansatte med `assignment.edit` legger inn og endrer. Sendes aldri til KI |
+| `contacts` | Personer utenfor Byggcon, for eksempel meglere: fornavn, etternavn, e-post, telefon, firma, kort notat og **kilde** (`source`: lagt inn for hånd eller fra en ordre), slik at vi kan svare den det gjelder om hvor opplysningene kom fra (D17). Fødselsnummer stoppes i skjemaet, og skjemaet ber om at notatet ikke har helseopplysninger | Kontakt med meglere og bestillere om oppdrag. Brukes ikke til markedsføring; samtykke til markedsføring lagres ikke ennå | Database | Nå i koden: myk sletting (`deleted_at`), ingen fjerning eller sammenslåing fra skjermen ennå. Foreslått, bygges senere: minst 10 år som resten | Alle ansatte i organisasjonen ser (`listContacts` og `getContact`, `organization.read`). Bare ansatte med `assignment.edit` legger inn og endrer. Sendes aldri til KI |
 | *Kommer senere i fase 2a: eiendom, bilder, egenerklæring* | Opplysninger om kunder, eiere, kjøpere og eiendommen, og bilder fra befaringen | Lage og levere rapporten | Database og fillagring, utkast på iPaden | Foreslått, bygges senere: minst 10 år (Ståle 25.10 og 27.10.2026), med myk sletting | Alle ansatte (`access.inspectors_edit_all`); reklamasjonssaker bare leder og admin |
 
 ## Fritekst i hendelsene

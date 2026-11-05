@@ -881,6 +881,26 @@ export function fakeOrgNumber(): string {
   return `000${String(Math.floor(Math.random() * 1e6)).padStart(6, "0")}`;
 }
 
+/** Vektene for kontrollsifferet i organisasjonsnummeret (modulus 11). */
+const ORG_NUMBER_WEIGHTS = [3, 2, 7, 6, 5, 4, 3, 2] as const;
+
+/**
+ * Oppdiktet org.nr. som er gyldig etter modulus 11 og ikke finnes: «000», fem tilfeldige sifre og
+ * kontrollsifferet. Blir kontrollsifferet 10, trekkes nye sifre.
+ */
+export function fakeValidOrgNumber(): string {
+  for (;;) {
+    const base = `000${String(Math.floor(Math.random() * 1e5)).padStart(5, "0")}`;
+    const sum = ORG_NUMBER_WEIGHTS.reduce(
+      (total, weight, index) => total + weight * Number(base[index]),
+      0,
+    );
+    const rest = sum % 11;
+    const check = rest === 0 ? 0 : 11 - rest;
+    if (check !== 10) return `${base}${check}`;
+  }
+}
+
 /**
  * Id og navn til en ansatt (ikke slettet) med e-posten, i samme organisasjon som admin fra seed.
  * Bare lesing, bare lokal database eller testdatabasen.

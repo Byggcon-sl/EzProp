@@ -298,6 +298,14 @@ Målinger kan merkes med instrumentet (`instrument_id`, se 4.7). I første versj
 
 Kontakter er personopplysninger. De vises bare for ansatte, og sendes aldri til KI.
 
+**Bygget i fase 2a (05.11.2026, kontakter og firma):** Tabellene `firms` og `contacts` (én migrering), kjernen i `src/core/contacts`, sidene `/firma` og `/kontakter`. Oppgavekort: `docs/funksjoner/fase2a-kontakter-firma.md`; innspill D17; beslutningene A79–A83.
+
+- **`firms`, med nå:** `baseColumns` (organisasjon, sporingsfelt, myk sletting), `name` (påkrevd, høyst 200 tegn), `org_number` (valgfri, nøyaktig 9 sifre lagret uten mellomrom, kontrollert med kontrollsifferet etter modulus 11 i `isValidOrgNumber`), `firm_type` (påkrevd, CHECK: `broker_firm`, `insurer`, `housing_association`, `other`; standard `broker_firm`; `FIRM_TYPES`), `notes` (valgfri, høyst 1000 tegn). Indeks `(organization_id, name)`.
+- **Ingen dubletter på organisasjonsnummer:** unik delvis indeks `firms_organization_id_org_number_idx` på `(organization_id, org_number)` der `org_number is not null and deleted_at is null`. Indeksen er eneste vakt; tjenesten gjør unik-feilen om til `FirmDuplicateError` med id og navn på firmaet som finnes. Samme nummer i to organisasjoner er lov, og et myk-slettet firma sperrer ikke.
+- **`contacts`, med nå:** `baseColumns`, `first_name` (påkrevd, høyst 100 tegn), `last_name` (valgfri, høyst 100 tegn), `email` (valgfri, høyst 254 tegn), `phone` (valgfri, sifre, mellomrom og `+`, høyst 20 tegn), `firm_id` (valgfri, sammensatt fremmednøkkel `(organization_id, firm_id)` til `firms`), `notes` (valgfri, høyst 1000 tegn), `source` (påkrevd, CHECK: `manual`, `order`; standard `manual`; `CONTACT_SOURCES`). Indeks `(organization_id, last_name, first_name)`. Ingen sperre mot like kontakter.
+- **Tilgang:** alle ansatte i organisasjonen ser (`organization.read`), `assignment.edit` legger inn og endrer. Revisjonsloggen (`firm`, `contact`, `create`/`update`) har id-er, kodene og navnene på endrede felt, aldri navn, organisasjonsnummer, e-post, telefon eller notat.
+- **Venter:** `assignment_parties.contact_id`/`firm_id` og `orders.ordered_by_contact_id`/`ordered_by_firm_id` (eget planpunkt; til da er parter og bestiller fritekst, A51 og A60), fjerning fra skjermen og sammenslåing av like kontakter (eget planpunkt; `deleted_at` finnes), `marketing_consent` (D17: ikke i bruk nå), `invoice_email` og `address` på firma (kommer med fakturagrunnlaget), og kildekoden `broker_system` (legges til når API mot meglersystem kommer; kodene endres aldri, nye legges til).
+
 **`assignment_parties`** – **part på oppdrag**: hvem som er med på oppdraget, i hvilken rolle, og hva de skal motta.
 
 | Felt | Forklaring |
@@ -1825,8 +1833,14 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Kontor (rolle) | `office` | Saksbehandler |
 | Leder | `manager` | Rolle |
 | Krav om sidemannskontroll | `peer_review_requirements` | Per ansatt |
-| Firma | `firms` | Meglerforetak, forsikringsselskap, sameie osv. |
-| Kontakt | `contacts` | Person utenfor Byggcon |
+| Firma | `firms` | Meglerforetak, forsikringsselskap, sameie osv. Registeret i `src/core/contacts` (fase 2a) |
+| Organisasjonsnummer (firma) | `firms.org_number` | Valgfritt, 9 sifre, unikt i organisasjonen når det er fylt ut. Kontrolleres med `isValidOrgNumber` (modulus 11) |
+| Firmatype | `firms.firm_type`, `FIRM_TYPES` (`src/core/contacts/codes.ts`) | `broker_firm` (meglerforetak), `insurer` (forsikringsselskap), `housing_association` (sameie eller borettslag), `other` (annet) |
+| Firmaet finnes allerede | `FirmDuplicateError` | Feil når organisasjonsnummeret er brukt av et annet aktivt firma; har id og navn på firmaet som finnes |
+| Firmaet finnes ikke | `FirmNotFoundError` | Feil når en kontakt peker på et firma som ikke finnes i organisasjonen eller er slettet |
+| Kontakt | `contacts` | Person utenfor Byggcon, for eksempel en megler. Personopplysninger, sendes aldri til KI |
+| Kilde (kontakt) | `contacts.source`, `CONTACT_SOURCES` (`src/core/contacts/codes.ts`) | Hvor opplysningene kom fra: `manual` (lagt inn for hånd) eller `order` (fra en ordre). Senere `broker_system` (D17) |
+| Firma / kontakt: liste, vise, legge inn, endre | `listFirms`, `getFirm`, `createFirm`, `updateFirm`, `listContacts`, `getContact`, `createContact`, `updateContact` (`src/core/contacts`) | |
 | Part på oppdrag | `assignment_parties` | Kontakt eller firma med rolle på oppdraget. I fase 2a fritekst (navn, firma, e-post, telefon) på oppdraget (A60) |
 | Partsroller | `PARTY_ROLES`, `partyRoleLabel` (`src/core/assignments/codes.ts`) | De fem rollekodene en part kan ha, i fast rekkefølge |
 | Firma (part, fritekst) | `assignment_parties.firm_name` | For eksempel meglerforetaket, til firma-registeret kommer |
@@ -2059,7 +2073,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Varsel | `notifications` | Arbeidsliste med lest og ulest |
 | Varselvalg | `notification_preferences` | |
 | Prisliste / prislinje | `price_lists` / `price_list_items` | Per avtale |
-| Kilde for kontakt | `contacts.source` | |
+| Kilde for kontakt | `contacts.source` | Se «Kilde (kontakt)» |
 | Samtykke til markedsføring | `contacts.marketing_consent` | Nei som standard |
 | Måleinstrument | `instruments` | Med kalibrering |
 | Øvingsrapport (skyggemodus) | `reports.training` | |
@@ -2159,6 +2173,7 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 03.11.2026 | `employee_permissions`: ingen indeks som begynner med `organization_id`, bare den delvise unike `(employee_id, permission) WHERE deleted_at IS NULL`, fordi alle spørringer (`findGrant`, `selectAdminEmployees`) går via `employee_id`. Må vurderes på nytt hvis en spørring filtrerer på organisasjon uten ansatt (nattløkken punkt 19). | `docs/agenter/oppgaver/fase0b-smafunn-r-s.md` |
 | 04.11.2026 | Manuell ordre og oppdragsnummer (fase 2a): `orders`, `assignments` (minimal) og `number_sequences` bygget; `orders` med `gnr`, `bnr`, `snr`, `housing_association_name`, `seller_declaration_received` og `ordered_by_text` til eiendom og kontakter kommer; `orders.source` bare `manual` og `email`; fremmednøkkel fra `events.assignment_id` (A33). Se «Bygget i fase 2a» i 4.3. | A51–A55, `docs/funksjoner/fase2a-manuell-ordre.md` |
 | 04.11.2026 | Team og parter på oppdraget (fase 2a): `assignment_team_members` og `assignment_parties` (enkel utgave med fritekst, fem roller, tre mottar-valg) bygget; nye hendelser `assignment.team_changed` og `assignment.party_added`/`_updated`/`_removed`. `contact_id`, `firm_id`, `receives_survey`, `is_primary`, `client` og `other` venter. Se «Bygget i fase 2a» i 4.2 og 4.3. | A60–A63, `docs/funksjoner/fase2a-oppdrag-team-parter.md` |
+| 05.11.2026 | Kontakter og firma (fase 2a): `firms` og `contacts` bygget; organisasjonsnummer valgfritt, kontrollert med modulus 11 og unikt per organisasjon blant aktive firma (delvis unik indeks `firms_organization_id_org_number_idx`); `contacts.source` med `manual` og `order`. `assignment_parties.contact_id`/`firm_id`, `orders.ordered_by_contact_id`/`ordered_by_firm_id`, `marketing_consent`, `invoice_email`, `address` og `broker_system` venter. Se «Bygget i fase 2a» i 4.2. | D17, A79–A83, `docs/funksjoner/fase2a-kontakter-firma.md` |
 | 05.11.2026 | Eiendom og matrikkel på oppdraget (fase 2a): `properties`, `cadastral_units` og `common_areas` (per oppdrag til rapporten finnes) bygget, og `assignments.property_id`; eierform uten obligasjonsleilighet; `hasCommonAreas` styrer fellesdelene; nye hendelser `assignment.property_saved` og `assignment.common_areas_saved`. Oppslag, gjenbruk av eiendom, `unit_number`, `plot_area` og `association_firm_id` venter. Se «Bygget i fase 2a» i 4.4. | A69–A73, `docs/funksjoner/fase2a-eiendom-matrikkel.md` |
 | 05.11.2026 | Utstedende selskap (fase 2a): `assignments.company_id` med sammensatt fremmednøkkel til `companies`, satt automatisk fra ansvarlig takstmann i `setTeamMember`; ny hendelse `assignment.company_changed`. Ingen utfylling bakover. Se «Bygget i fase 2a» i 4.3. | A65–A68, `docs/agenter/oppgaver/fase2a-utstedende-selskap.md` |
 | 05.11.2026 | Statusflyten (fase 2a): lovlige overganger (ett steg fram, ett steg tilbake med grunn, ingen hopp), kansellering fra Bestilt og Under arbeid som myk sletting med grunn i hendelsen `assignment.cancelled`, grunnen ved tilbake i `assignment.status_changed`. «Rettet» regnes ut (`isCorrected`) og lagres ikke. Ingen migrering; `status_changed_at` og `cancelled_reason` venter. Se «Bygget i fase 2a» i 4.3. | A74–A77, `docs/funksjoner/fase2a-statusflyt.md` |

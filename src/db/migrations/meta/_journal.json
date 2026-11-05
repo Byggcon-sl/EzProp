@@ -120,6 +120,13 @@
       "when": 1793865654929,
       "tag": "0016_eiendom-matrikkel",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793874244509,
+      "tag": "0017_kontakter-og-firma",
+      "breakpoints": true
     }
   ]
 }
