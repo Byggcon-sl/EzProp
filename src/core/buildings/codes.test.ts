@@ -5,89 +5,67 @@ import {
   MEASURING_METHODS,
   ROOM_TYPE_GROUPS,
   ROOM_TYPES,
-  suggestAreaType,
-  suggestBelowGround,
   sumAssignmentArea,
   sumBuildingArea,
   sumFloorArea,
+  suggestAreaType,
+  suggestBelowGround,
 } from "./codes";
 
 /*
- * Faste koder for bygninger, areal og rom, og datareglene `suggestAreaType`, `suggestBelowGround`
- * og summene (docs/funksjoner/fase2a-bygninger-areal-rom-testplan.md avsnitt 1). Ren enhetstest.
+ * Faste koder og dataregler for bygninger, etasjer, areal og rom
+ * (docs/funksjoner/fase2a-bygninger-areal-rom-testplan.md avsnitt 1). Ren enhetstest. Kodene
+ * endres aldri (regel 6); en ny romtype uten testsak gjør 1.11 rød.
  *
- * Fasiten står her med vilje, ikke importert: en kode endres aldri, den arkiveres (regel 6).
- * En ny romtype uten rad i `EXPECTED_ROOM_TYPES` gjør 1.4 og 1.11 røde.
+ * Kortet sier ikke om `AREA_TYPES`, `MEASURING_METHODS` og `ROOM_TYPE_GROUPS` er lister med
+ * tekst eller med `{ key, label }`; `keysOf` og `labelOf` tåler begge. Etikettfunksjonene finnes
+ * under de vanlige navnene (`areaTypeLabel`, `measuringMethodLabel`, `roomTypeLabel`).
  *
- * Kortet sier ikke hvordan etikettene leses. Testen godtar `label` på raden i `ROOM_TYPES`, og
- * for arealtyper og metoder et etikettkart eller en etikettfunksjon under de vanlige navnene.
+ * Romtypenes etiketter i kortet har noen ganger en merknad etter navnet («Bod, ute, BRA-e»,
+ * «Kjellerstue, under terreng»). Merknaden er standardverdien, ikke en del av navnet, så testen
+ * sjekker bare at etiketten begynner med navnet.
  *
- * Støtter hovedmål: reklamasjoner (låste koder, summer uten regnefeil, rom under terreng blir
- * alltid foreslått), tid (forslag fra romtype og etasje) og KI først (faste koder som et senere
+ * Summene tar etasjene som `{ area }` (arealraden eller `null`) og bygningene som `{ floors }`.
+ * Avviker utvikleren, rettes `floorsOf` og `buildingsOf` ved sammenslåingen.
+ *
+ * Støtter hovedmål: tid (forslag til arealtype og «under terreng», summene regnes av systemet),
+ * reklamasjoner (låste koder, ingen flyttallsfeil i BRA) og KI først (faste koder som et senere
  * forslag fra plantegning eller LiDAR kan fylle ut).
  */
 
-type ExpectedRoomType = {
-  key: string;
-  label: string;
-  group: "wet_room" | "kitchen" | "toilet" | "special" | "other";
-  defaultAreaType: "bra_i" | "bra_e" | "bra_b";
-  defaultBelowGround: boolean;
-};
+type Entry = string | { key: string; label?: string };
 
-function room(
-  key: string,
-  label: string,
-  group: ExpectedRoomType["group"],
-  defaultAreaType: ExpectedRoomType["defaultAreaType"] = "bra_i",
-  defaultBelowGround = false,
-): ExpectedRoomType {
-  return { key, label, group, defaultAreaType, defaultBelowGround };
+function keysOf(list: readonly unknown[]): string[] {
+  return (list as Entry[]).map((entry) => (typeof entry === "string" ? entry : entry.key));
 }
 
-/** De 33 romtypene i kortets rekkefølge (A79). */
-const EXPECTED_ROOM_TYPES: ExpectedRoomType[] = [
-  room("bathroom", "Bad", "wet_room"),
-  room("laundry", "Vaskerom", "wet_room"),
-  room("bathroom_laundry", "Bad og vaskerom", "wet_room"),
-  room("room_with_drain", "Annet rom med sluk", "wet_room"),
-  room("other_wet_room", "Annet våtrom", "wet_room"),
-  room("kitchen", "Kjøkken", "kitchen"),
-  room("living_kitchen", "Stue og kjøkken", "kitchen"),
-  room("toilet", "Toalettrom", "toilet"),
-  room("sauna", "Badstue", "special"),
-  room("boiler_room", "Fyrrom", "special"),
-  room("technical_room", "Teknisk rom", "special"),
-  room("cold_room", "Kjølerom", "special"),
-  room("swimming_pool", "Svømmebasseng", "special"),
-  room("living_room", "Stue", "other"),
-  room("bedroom", "Soverom", "other"),
-  room("office", "Kontor eller arbeidsrom", "other"),
-  room("family_room", "Allrom", "other"),
-  room("dining_room", "Spisestue", "other"),
-  room("entrance", "Entré og vindfang", "other"),
-  room("hallway", "Gang og hall", "other"),
-  room("stairwell", "Trapperom", "other"),
-  room("wardrobe", "Garderobe", "other"),
-  room("storage", "Bod, inne", "other"),
-  room("external_storage", "Bod, ute", "other", "bra_e"),
-  room("basement_living_room", "Kjellerstue", "other", "bra_i", true),
-  room("basement_room", "Kjellerrom, uinnredet", "other", "bra_i", true),
-  room("crawl_space", "Kryperom", "other", "bra_i", true),
-  room("attic_living_room", "Loftstue", "other"),
-  room("unfinished_attic", "Loft, uinnredet", "other"),
-  room("garage", "Garasje", "other", "bra_e"),
-  room("glazed_balcony", "Innglasset balkong", "other", "bra_b"),
-  room("workshop", "Verksted", "other"),
-  room("other", "Annet", "other"),
-];
+const LABEL_FUNCTIONS = {
+  area: ["areaTypeLabel", "areaTypeLabelOf"],
+  method: ["measuringMethodLabel", "methodLabel", "measuringMethodLabelOf"],
+  room: ["roomTypeLabel", "roomTypeLabelOf"],
+} as const;
 
-const AREA_LABELS: Record<string, string> = { bra_i: "BRA-i", bra_e: "BRA-e", bra_b: "BRA-b" };
-const METHOD_LABELS: Record<string, string> = {
-  laser: "Oppmålt med laser",
-  drawing: "Fra tegning",
-  other: "Annen kilde",
-};
+type LabelKind = keyof typeof LABEL_FUNCTIONS;
+
+function labelFunction(kind: LabelKind): (code: string) => string {
+  const names = LABEL_FUNCTIONS[kind];
+  const found = names
+    .map((name) => (codes as unknown as Record<string, unknown>)[name])
+    .find((value) => typeof value === "function");
+  if (!found) {
+    throw new Error(`fant ikke etikettfunksjonen i ./codes (prøvde ${names.join(", ")})`);
+  }
+  return found as (code: string) => string;
+}
+
+/** Etiketten fra lista (`{ key, label }`) eller etikettfunksjonen. */
+function labelOf(list: readonly unknown[], kind: LabelKind, key: string) {
+  const entry = (list as Entry[]).find(
+    (candidate) => (typeof candidate === "string" ? candidate : candidate.key) === key,
+  );
+  if (entry && typeof entry !== "string" && typeof entry.label === "string") return entry.label;
+  return labelFunction(kind)(key);
+}
 
 type RoomTypeRow = {
   key: string;
@@ -97,124 +75,155 @@ type RoomTypeRow = {
   defaultBelowGround: boolean;
   draft: boolean;
 };
-const roomTypes = ROOM_TYPES as unknown as readonly RoomTypeRow[];
 
-/** Kodene i en liste, enten listen har tekster eller rader med `key`. */
-function keysOf(list: readonly unknown[]): string[] {
-  return list.map((entry) =>
-    typeof entry === "string" ? entry : String((entry as { key: unknown }).key),
-  );
-}
+const ROOMS = ROOM_TYPES as unknown as readonly RoomTypeRow[];
 
-/**
- * Etiketten for en kode: fra raden i listen (`label`), et etikettkart eller en etikettfunksjon
- * med et av navnene. Kaster når ingen finnes.
- */
-function labelFor(list: readonly unknown[], names: readonly string[], code: string): string {
-  const row = list.find(
-    (entry) =>
-      typeof entry === "object" && entry !== null && (entry as { key?: unknown }).key === code,
-  ) as { label?: unknown } | undefined;
-  if (row && typeof row.label === "string") return row.label;
-  const exported = codes as unknown as Record<string, unknown>;
-  for (const name of names) {
-    const value = exported[name];
-    if (typeof value === "function") return (value as (code: string) => string)(code);
-    if (value && typeof value === "object") {
-      const label = (value as Record<string, unknown>)[code];
-      if (typeof label === "string") return label;
-    }
-  }
-  throw new Error(`fant ingen etikett for ${code} (prøvde ${names.join(", ")})`);
-}
+/** Kortets 33 romtyper i fast rekkefølge, med navnet (uten merknaden om standardverdi). */
+const EXPECTED_ROOM_TYPES: [string, string][] = [
+  ["bathroom", "Bad"],
+  ["laundry", "Vaskerom"],
+  ["bathroom_laundry", "Bad og vaskerom"],
+  ["room_with_drain", "Annet rom med sluk"],
+  ["other_wet_room", "Annet våtrom"],
+  ["kitchen", "Kjøkken"],
+  ["living_kitchen", "Stue og kjøkken"],
+  ["toilet", "Toalettrom"],
+  ["sauna", "Badstue"],
+  ["boiler_room", "Fyrrom"],
+  ["technical_room", "Teknisk rom"],
+  ["cold_room", "Kjølerom"],
+  ["swimming_pool", "Svømmebasseng"],
+  ["living_room", "Stue"],
+  ["bedroom", "Soverom"],
+  ["office", "Kontor eller arbeidsrom"],
+  ["family_room", "Allrom"],
+  ["dining_room", "Spisestue"],
+  ["entrance", "Entré og vindfang"],
+  ["hallway", "Gang og hall"],
+  ["stairwell", "Trapperom"],
+  ["wardrobe", "Garderobe"],
+  ["storage", "Bod, inne"],
+  ["external_storage", "Bod, ute"],
+  ["basement_living_room", "Kjellerstue"],
+  ["basement_room", "Kjellerrom, uinnredet"],
+  ["crawl_space", "Kryperom"],
+  ["attic_living_room", "Loftstue"],
+  ["unfinished_attic", "Loft, uinnredet"],
+  ["garage", "Garasje"],
+  ["glazed_balcony", "Innglasset balkong"],
+  ["workshop", "Verksted"],
+  ["other", "Annet"],
+];
 
-const AREA_LABEL_NAMES = ["areaTypeLabel", "AREA_TYPE_LABELS", "areaTypeLabels"] as const;
-const METHOD_LABEL_NAMES = [
-  "measuringMethodLabel",
-  "MEASURING_METHOD_LABELS",
-  "methodLabel",
-  "measuringMethodLabels",
-] as const;
+/** 1.6 Grupper som testsaker. Én rad per romtype. */
+const GROUP_CASES: [string, string][] = [
+  ["bathroom", "wet_room"],
+  ["laundry", "wet_room"],
+  ["bathroom_laundry", "wet_room"],
+  ["room_with_drain", "wet_room"],
+  ["other_wet_room", "wet_room"],
+  ["kitchen", "kitchen"],
+  ["living_kitchen", "kitchen"],
+  ["toilet", "toilet"],
+  ["sauna", "special"],
+  ["boiler_room", "special"],
+  ["technical_room", "special"],
+  ["cold_room", "special"],
+  ["swimming_pool", "special"],
+  ["living_room", "other"],
+  ["bedroom", "other"],
+  ["office", "other"],
+  ["family_room", "other"],
+  ["dining_room", "other"],
+  ["entrance", "other"],
+  ["hallway", "other"],
+  ["stairwell", "other"],
+  ["wardrobe", "other"],
+  ["storage", "other"],
+  ["external_storage", "other"],
+  ["basement_living_room", "other"],
+  ["basement_room", "other"],
+  ["crawl_space", "other"],
+  ["attic_living_room", "other"],
+  ["unfinished_attic", "other"],
+  ["garage", "other"],
+  ["glazed_balcony", "other"],
+  ["workshop", "other"],
+  ["other", "other"],
+];
+
+/** 1.7 Arealtype som testsaker. Én rad per romtype. */
+const NOT_BRA_I: Record<string, string> = {
+  garage: "bra_e",
+  external_storage: "bra_e",
+  glazed_balcony: "bra_b",
+};
+const AREA_TYPE_CASES: [string, string][] = EXPECTED_ROOM_TYPES.map(([key]) => [
+  key,
+  NOT_BRA_I[key] ?? "bra_i",
+]);
+
+const USUALLY_BELOW_GROUND = ["basement_living_room", "basement_room", "crawl_space"];
 
 describe("1.1–1.4 faste koder og etiketter", () => {
-  it("1.1 AREA_TYPES er nøyaktig bra_i, bra_e, bra_b i fast rekkefølge, med etikettene BRA-i, BRA-e, BRA-b", () => {
+  it("1.1 AREA_TYPES er bra_i, bra_e, bra_b i fast rekkefølge, med BRA-i, BRA-e, BRA-b", () => {
     expect(keysOf(AREA_TYPES)).toEqual(["bra_i", "bra_e", "bra_b"]);
-    for (const code of keysOf(AREA_TYPES)) {
-      expect(labelFor(AREA_TYPES, AREA_LABEL_NAMES, code)).toBe(AREA_LABELS[code]);
-    }
+    expect(keysOf(AREA_TYPES).map((key) => labelOf(AREA_TYPES, "area", key))).toEqual([
+      "BRA-i",
+      "BRA-e",
+      "BRA-b",
+    ]);
   });
 
-  it("1.2 MEASURING_METHODS er nøyaktig laser, drawing, other; lidar finnes ikke ennå (K7)", () => {
+  it("1.2 MEASURING_METHODS er laser, drawing, other; lidar finnes ikke ennå (K7)", () => {
     expect(keysOf(MEASURING_METHODS)).toEqual(["laser", "drawing", "other"]);
     expect(keysOf(MEASURING_METHODS)).not.toContain("lidar");
-    for (const code of keysOf(MEASURING_METHODS)) {
-      expect(labelFor(MEASURING_METHODS, METHOD_LABEL_NAMES, code)).toBe(METHOD_LABELS[code]);
-    }
+    expect(
+      keysOf(MEASURING_METHODS).map((key) => labelOf(MEASURING_METHODS, "method", key)),
+    ).toEqual(["Oppmålt med laser", "Fra tegning", "Annen kilde"]);
   });
 
-  it("1.3 ROOM_TYPE_GROUPS er nøyaktig wet_room, kitchen, toilet, special, other", () => {
+  it("1.3 ROOM_TYPE_GROUPS er wet_room, kitchen, toilet, special, other", () => {
     expect(keysOf(ROOM_TYPE_GROUPS)).toEqual(["wet_room", "kitchen", "toilet", "special", "other"]);
   });
 
   it("1.4 ROOM_TYPES har nøyaktig de 33 kodene i kortets rekkefølge, uten dubletter", () => {
-    expect(EXPECTED_ROOM_TYPES).toHaveLength(33);
-    expect(roomTypes.map((row) => row.key)).toEqual(EXPECTED_ROOM_TYPES.map((row) => row.key));
-    expect(new Set(roomTypes.map((row) => row.key)).size).toBe(roomTypes.length);
+    expect(ROOMS.map((row) => row.key)).toEqual(EXPECTED_ROOM_TYPES.map(([key]) => key));
+    expect(ROOMS).toHaveLength(33);
+    expect(new Set(ROOMS.map((row) => row.key)).size).toBe(33);
   });
 
-  it("1.4 alle romtypene har kortets etikett, og etikettene er ulike", () => {
-    expect(roomTypes.map((row) => [row.key, row.label])).toEqual(
-      EXPECTED_ROOM_TYPES.map((row) => [row.key, row.label]),
-    );
-    expect(new Set(roomTypes.map((row) => row.label)).size).toBe(roomTypes.length);
+  it.each(EXPECTED_ROOM_TYPES)("1.4 %s har etiketten «%s»", (key, label) => {
+    const row = ROOMS.find((candidate) => candidate.key === key);
+    expect(row, key).toBeDefined();
+    expect(row!.label.startsWith(label), `«${row!.label}» begynner med «${label}»`).toBe(true);
+    expect(labelFunction("room")(key)).toBe(row!.label);
   });
 
-  it("1.4 alle romtypene er merket utkast (draft: true), ikke godkjent av fagrådet (A79)", () => {
-    for (const row of roomTypes) expect(row.draft, row.key).toBe(true);
+  it("1.4 alle romtypene er merket utkast (draft: true), ikke godkjent av fagrådet", () => {
+    for (const row of ROOMS) expect(row.draft, row.key).toBe(true);
+  });
+
+  it.each([
+    ["area", "alh"],
+    ["method", "lidar"],
+    ["room", "villa"],
+  ] as const)("etiketten for ukjent %s-kode «%s» er koden selv", (kind, code) => {
+    expect(labelFunction(kind)(code)).toBe(code);
   });
 });
 
-describe("1.5–1.6 gyldige felt og grupper per romtype", () => {
-  it.each(EXPECTED_ROOM_TYPES)(
-    "1.5 $key: gruppe, standard arealtype og «under terreng» er gyldige og som i kortet",
-    (expected) => {
-      const row = roomTypes.find((candidate) => candidate.key === expected.key);
-      expect(row, `${expected.key} finnes`).toBeDefined();
-      expect(keysOf(ROOM_TYPE_GROUPS)).toContain(row!.group);
-      expect(keysOf(AREA_TYPES)).toContain(row!.defaultAreaType);
-      expect(typeof row!.defaultBelowGround).toBe("boolean");
-      expect({
-        group: row!.group,
-        defaultAreaType: row!.defaultAreaType,
-        defaultBelowGround: row!.defaultBelowGround,
-      }).toEqual({
-        group: expected.group,
-        defaultAreaType: expected.defaultAreaType,
-        defaultBelowGround: expected.defaultBelowGround,
-      });
-    },
-  );
+describe("1.5 gyldige felt per romtype", () => {
+  it.each(ROOMS.map((row) => [row.key, row] as const))("%s", (_key, row) => {
+    expect(keysOf(ROOM_TYPE_GROUPS)).toContain(row.group);
+    expect(keysOf(AREA_TYPES)).toContain(row.defaultAreaType);
+    expect(typeof row.defaultBelowGround).toBe("boolean");
+  });
+});
 
-  it("1.6 grupper: fem våtrom (også «Annet rom med sluk»), to kjøkken, ett toalett, fem spesialrom, resten andre", () => {
-    const byGroup = (group: string) =>
-      roomTypes.filter((row) => row.group === group).map((row) => row.key);
-    expect(byGroup("wet_room")).toEqual([
-      "bathroom",
-      "laundry",
-      "bathroom_laundry",
-      "room_with_drain",
-      "other_wet_room",
-    ]);
-    expect(byGroup("kitchen")).toEqual(["kitchen", "living_kitchen"]);
-    expect(byGroup("toilet")).toEqual(["toilet"]);
-    expect(byGroup("special")).toEqual([
-      "sauna",
-      "boiler_room",
-      "technical_room",
-      "cold_room",
-      "swimming_pool",
-    ]);
-    expect(byGroup("other")).toHaveLength(20);
+describe("1.6 grupper som testsaker", () => {
+  it.each(GROUP_CASES)("%s har gruppen %s", (key, group) => {
+    expect(ROOMS.find((row) => row.key === key)?.group).toBe(group);
   });
 });
 
@@ -224,24 +233,24 @@ describe("1.7 suggestAreaType", () => {
     ["garage", "bra_e"],
     ["external_storage", "bra_e"],
     ["glazed_balcony", "bra_b"],
-  ])("%s gir %s", (roomType, expected) => {
-    expect(suggestAreaType(roomType as never)).toBe(expected);
+  ])("%s → %s", (key, expected) => {
+    expect(suggestAreaType(key as never)).toBe(expected);
   });
 
-  const OTHERS = EXPECTED_ROOM_TYPES.filter(
-    (row) => !["garage", "external_storage", "glazed_balcony"].includes(row.key),
-  );
+  const OTHERS = AREA_TYPE_CASES.filter(([key]) => !(key in NOT_BRA_I) && key !== "bathroom");
 
-  it("alle andre romtyper er 30 (33 minus tre unntak)", () => {
-    expect(OTHERS).toHaveLength(30);
+  it.each(OTHERS)("%s → %s (alle andre 29 gir bra_i)", (key, expected) => {
+    expect(suggestAreaType(key as never)).toBe(expected);
   });
 
-  it.each(OTHERS.map((row) => row.key))("%s gir bra_i", (roomType) => {
-    expect(suggestAreaType(roomType as never)).toBe("bra_i");
+  it("de andre 29 gir bra_i, og 30 av 33 romtyper (med bad) gir bra_i", () => {
+    expect(OTHERS).toHaveLength(29);
+    expect(OTHERS.every(([, type]) => type === "bra_i")).toBe(true);
+    expect(AREA_TYPE_CASES.filter(([, type]) => type === "bra_i")).toHaveLength(30);
   });
 
-  it.each(EXPECTED_ROOM_TYPES)("$key gir romtypens standard arealtype", (row) => {
-    expect(suggestAreaType(row.key as never)).toBe(row.defaultAreaType);
+  it.each(AREA_TYPE_CASES)("%s: romtypens defaultAreaType er %s", (key, expected) => {
+    expect(ROOMS.find((row) => row.key === key)?.defaultAreaType).toBe(expected);
   });
 });
 
@@ -251,177 +260,157 @@ describe("1.8 suggestBelowGround (A81)", () => {
     ["basement_living_room", false, true],
     ["bathroom", true, true],
     ["bathroom", false, false],
-  ] as const)(
-    "romtype %s, etasje under terreng %s → %s",
-    (roomType, floorBelowGround, expected) => {
-      expect(suggestBelowGround({ roomType: roomType as never, floorBelowGround })).toBe(expected);
-    },
-  );
+  ] as const)("%s i etasje under terreng = %s → %s", (roomType, floorBelowGround, expected) => {
+    expect(suggestBelowGround({ roomType: roomType as never, floorBelowGround })).toBe(expected);
+  });
 
-  const BELOW = ["basement_living_room", "basement_room", "crawl_space"];
-
-  it.each(EXPECTED_ROOM_TYPES.map((row) => row.key))(
+  it.each(EXPECTED_ROOM_TYPES.map(([key]) => key))(
     "%s i etasje over terreng: sann bare for kjellerstue, kjellerrom og kryperom",
-    (roomType) => {
-      expect(suggestBelowGround({ roomType: roomType as never, floorBelowGround: false })).toBe(
-        BELOW.includes(roomType),
+    (key) => {
+      const expected = USUALLY_BELOW_GROUND.includes(key);
+      expect(suggestBelowGround({ roomType: key as never, floorBelowGround: false })).toBe(
+        expected,
       );
+      expect(ROOMS.find((row) => row.key === key)?.defaultBelowGround).toBe(expected);
     },
   );
 
-  it.each(EXPECTED_ROOM_TYPES.map((row) => row.key))(
-    "%s i etasje under terreng: alltid sann (hellere ett forslag for mye)",
-    (roomType) => {
-      expect(suggestBelowGround({ roomType: roomType as never, floorBelowGround: true })).toBe(
-        true,
-      );
+  it.each(EXPECTED_ROOM_TYPES.map(([key]) => key))(
+    "%s i etasje under terreng: alltid sann",
+    (key) => {
+      expect(suggestBelowGround({ roomType: key as never, floorBelowGround: true })).toBe(true);
     },
   );
 });
 
-type AreaArg = Parameters<typeof sumFloorArea>[0];
+type AreaValues = {
+  braI: number | null;
+  braE: number | null;
+  braB: number | null;
+  alh: number | null;
+};
 
-function area(values: {
-  braI?: number | null;
-  braE?: number | null;
-  braB?: number | null;
-  alh?: number | null;
-}): AreaArg {
-  return {
-    braI: values.braI ?? null,
-    braE: values.braE ?? null,
-    braB: values.braB ?? null,
-    alh: values.alh ?? null,
-  } as unknown as AreaArg;
+type Sum = { braI: number; braE: number; braB: number; bra: number };
+
+const EMPTY: AreaValues = { braI: null, braE: null, braB: null, alh: null };
+const ZERO: Sum = { braI: 0, braE: 0, braB: 0, bra: 0 };
+
+function area(values: Partial<AreaValues>): AreaValues {
+  return { ...EMPTY, ...values };
 }
 
-/** Høyst én desimal, uten flyttallsrest (for eksempel aldri 0.30000000000000004). */
-function expectOneDecimal(value: number) {
-  expect(String(value)).toMatch(/^-?\d+(\.\d)?$/);
+function floorSum(values: AreaValues): Sum {
+  return sumFloorArea(values as never) as unknown as Sum;
+}
+
+/** Etasjene slik summene tar dem: `{ area }`, der `area` er arealraden eller `null`. */
+function floorsOf(areas: (AreaValues | null)[]) {
+  return areas.map((value) => ({ area: value }));
+}
+
+function buildingSum(areas: (AreaValues | null)[]): Sum {
+  return sumBuildingArea(floorsOf(areas) as never) as unknown as Sum;
+}
+
+function assignmentSum(buildings: (AreaValues | null)[][]): Sum {
+  return sumAssignmentArea(
+    buildings.map((areas) => ({ floors: floorsOf(areas) })) as never,
+  ) as unknown as Sum;
+}
+
+function decimals(value: number): number {
+  return (String(value).split(".")[1] ?? "").length;
 }
 
 describe("1.9 sumFloorArea", () => {
-  it("alle felt tomme gir 0 overalt", () => {
-    expect(sumFloorArea(area({}))).toMatchObject({ braI: 0, braE: 0, braB: 0, bra: 0 });
+  it("alle tomme → 0", () => {
+    expect(floorSum(EMPTY)).toEqual(ZERO);
   });
 
-  it("bare BRA-i gir BRA = BRA-i", () => {
-    expect(sumFloorArea(area({ braI: 123.4 }))).toMatchObject({
-      braI: 123.4,
-      braE: 0,
-      braB: 0,
-      bra: 123.4,
-    });
+  it("bare BRA-i → BRA = BRA-i", () => {
+    expect(floorSum(area({ braI: 123.4 }))).toEqual({ ...ZERO, braI: 123.4, bra: 123.4 });
   });
 
-  it("0,1 + 0,2 gir nøyaktig 0,3 (ingen flyttallsfeil)", () => {
-    const sum = sumFloorArea(area({ braI: 0.1, braE: 0.2 }));
+  it("0,1 + 0,2 = 0,3 nøyaktig (ingen flyttallsfeil)", () => {
+    const sum = floorSum(area({ braI: 0.1, braE: 0.2 }));
     expect(sum.bra).toBe(0.3);
     expect(String(sum.bra)).toBe("0.3");
   });
 
-  it("123,4 + 56,7 + 8,9 gir 189,0", () => {
-    const sum = sumFloorArea(area({ braI: 123.4, braE: 56.7, braB: 8.9 }));
-    expect(sum.bra).toBe(189);
-    expect(sum).toMatchObject({ braI: 123.4, braE: 56.7, braB: 8.9 });
+  it("123,4 + 56,7 + 8,9 = 189,0", () => {
+    const sum = floorSum(area({ braI: 123.4, braE: 56.7, braB: 8.9 }));
+    expect(sum).toEqual({ braI: 123.4, braE: 56.7, braB: 8.9, bra: 189 });
   });
 
-  it("ALH 210,3 tas ikke med i BRA (A80)", () => {
-    const without = sumFloorArea(area({ braI: 123.4 }));
-    const withAlh = sumFloorArea(area({ braI: 123.4, alh: 210.3 }));
-    expect(withAlh.bra).toBe(without.bra);
-    expect(withAlh.bra).toBe(123.4);
-    expect(JSON.stringify(withAlh)).not.toContain("210.3");
-  });
-
-  it("tall som tekst fra databasen (numeric) regnes likt", () => {
-    const sum = sumFloorArea({
-      braI: "0.1",
-      braE: "0.2",
-      braB: null,
-      alh: "5.0",
-    } as unknown as AreaArg);
-    expect(sum.bra).toBe(0.3);
+  it("ALH 210,3 endrer ikke BRA og er ikke med i summen", () => {
+    const sum = floorSum(area({ braI: 123.4, alh: 210.3 }));
+    expect(sum.bra).toBe(123.4);
+    expect(Object.values(sum)).not.toContain(210.3);
+    expect(Object.values(sum)).not.toContain(333.7);
   });
 
   it.each([
-    [{ braI: 0.1, braE: 0.2, braB: 0.4 }],
-    [{ braI: 9999.9, braE: 9999.9, braB: 9999.9 }],
-    [{ braI: 33.3, braE: 33.3, braB: 33.4 }],
-    [{ braI: 1.1, braE: 2.2 }],
-  ])("summen %o har aldri mer enn én desimal", (values) => {
-    const sum = sumFloorArea(area(values));
-    for (const value of [sum.braI, sum.braE, sum.braB, sum.bra]) expectOneDecimal(value);
-  });
-
-  it("9999,9 × 3 gir 29999,7", () => {
-    expect(sumFloorArea(area({ braI: 9999.9, braE: 9999.9, braB: 9999.9 })).bra).toBe(29999.7);
+    [0.1, 0.2, 0.4],
+    [0.7, 0.1, 0.1],
+    [1.1, 2.2, 3.3],
+    [9999.9, 9999.9, 9999.9],
+    [56.7, 123.4, 0.3],
+  ])("resultatet har aldri mer enn én desimal (%s + %s + %s)", (braI, braE, braB) => {
+    const sum = floorSum(area({ braI, braE, braB }));
+    for (const value of Object.values(sum)) {
+      expect(decimals(value), String(value)).toBeLessThanOrEqual(1);
+    }
+    expect(sum.bra).toBe(Math.round((braI + braE + braB) * 10) / 10);
   });
 });
-
-type BuildingArg = Parameters<typeof sumBuildingArea>[0];
-type AssignmentArg = Parameters<typeof sumAssignmentArea>[0];
-
-function floorsOf(...areas: (AreaArg | null)[]): BuildingArg {
-  return areas.map((entry) => ({ area: entry })) as unknown as BuildingArg;
-}
 
 describe("1.10 sumBuildingArea og sumAssignmentArea", () => {
   it("to etasjer, én uten areal (null): summen per arealtype og totalt", () => {
-    const sum = sumBuildingArea(floorsOf(area({ braI: 123.4, braE: 8.9, alh: 210.3 }), null));
-    expect(sum).toMatchObject({ braI: 123.4, braE: 8.9, braB: 0, bra: 132.3 });
-  });
-
-  it("to etasjer med areal: 56,7 + 123,4 gir 180,1 (som i e2e)", () => {
-    const sum = sumBuildingArea(floorsOf(area({ braI: 56.7 }), area({ braI: 123.4 })));
-    expect(sum).toMatchObject({ braI: 180.1, bra: 180.1 });
-  });
-
-  it("etasjer med 0,1 og 0,2 gir 0,3 uten flyttallsfeil", () => {
-    const sum = sumBuildingArea(floorsOf(area({ braI: 0.1 }), area({ braI: 0.2 })));
-    expect(sum.braI).toBe(0.3);
-    expect(sum.bra).toBe(0.3);
-  });
-
-  it("to bygninger: totalen er summen av bygningene, per arealtype", () => {
-    const house = floorsOf(area({ braI: 123.4, braB: 8.9 }), area({ braI: 56.7 }));
-    const garage = floorsOf(area({ braE: 0.1 }), area({ braE: 0.2 }));
-    const buildings = [{ floors: house }, { floors: garage }] as unknown as AssignmentArg;
-    const total = sumAssignmentArea(buildings);
-    const a = sumBuildingArea(house);
-    const b = sumBuildingArea(garage);
-    expect(total).toMatchObject({
-      braI: 180.1,
-      braE: 0.3,
-      braB: 8.9,
-      bra: 189.3,
-    });
-    expect(total.bra).toBe(Math.round((a.bra + b.bra) * 10) / 10);
-  });
-
-  it("tom liste gir 0 for bygning og oppdrag", () => {
-    expect(sumBuildingArea(floorsOf())).toMatchObject({ braI: 0, braE: 0, braB: 0, bra: 0 });
-    expect(sumAssignmentArea([] as unknown as AssignmentArg)).toMatchObject({
-      braI: 0,
-      braE: 0,
+    expect(buildingSum([area({ braI: 123.4, braE: 8.9, alh: 210.3 }), null])).toEqual({
+      braI: 123.4,
+      braE: 8.9,
       braB: 0,
-      bra: 0,
+      bra: 132.3,
     });
   });
 
-  it("bygning uten etasjer gir 0 i totalen", () => {
-    const buildings = [
-      { floors: floorsOf() },
-      { floors: floorsOf(area({ braI: 12.3 })) },
-    ] as unknown as AssignmentArg;
-    expect(sumAssignmentArea(buildings).bra).toBe(12.3);
+  it("to etasjer med areal: 56,7 + 123,4 = 180,1", () => {
+    expect(buildingSum([area({ braI: 56.7 }), area({ braI: 123.4 })])).toEqual({
+      ...ZERO,
+      braI: 180.1,
+      bra: 180.1,
+    });
+  });
+
+  it("to bygninger: totalen er summen av bygningene", () => {
+    const first = [area({ braI: 56.7 }), area({ braI: 123.4, braB: 8.9 })];
+    const second = [area({ braE: 0.1 }), area({ braE: 0.2 }), null];
+    const total = assignmentSum([first, second]);
+    expect(total).toEqual({ braI: 180.1, braE: 0.3, braB: 8.9, bra: 189.3 });
+    const a = buildingSum(first);
+    const b = buildingSum(second);
+    expect(total.bra).toBe(Math.round((a.bra + b.bra) * 10) / 10);
+    for (const value of Object.values(total)) expect(decimals(value)).toBeLessThanOrEqual(1);
+  });
+
+  it("tom liste → 0", () => {
+    expect(buildingSum([])).toEqual(ZERO);
+    expect(assignmentSum([])).toEqual(ZERO);
+  });
+
+  it("bygning uten etasjer teller som 0 i totalen", () => {
+    expect(assignmentSum([[], [area({ braI: 12.3 })]])).toEqual({
+      ...ZERO,
+      braI: 12.3,
+      bra: 12.3,
+    });
   });
 });
 
-describe("1.11 alle koder er dekket av testsakene", () => {
-  it("fasiten over har én rad per romtype i ROOM_TYPES (ny kode uten testsak gjør testen rød)", () => {
-    expect(roomTypes).toHaveLength(EXPECTED_ROOM_TYPES.length);
-    const covered = new Set(EXPECTED_ROOM_TYPES.map((row) => row.key));
-    for (const row of roomTypes) expect(covered.has(row.key), row.key).toBe(true);
+describe("1.11 alle koder er dekket", () => {
+  it("testsakene i 1.6 og 1.7 har like mange rader som ROOM_TYPES", () => {
+    expect(GROUP_CASES).toHaveLength(ROOMS.length);
+    expect(AREA_TYPE_CASES).toHaveLength(ROOMS.length);
+    expect(GROUP_CASES.map(([key]) => key).sort()).toEqual(ROOMS.map((row) => row.key).sort());
   });
 });

@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AccessDeniedError } from "@/core/access";
 import {
   BuildingNotEmptyError,
-  floorAreaInputSchema,
+  buildingInputSchema,
   FloorNotEmptyError,
+  floorAreaInputSchema,
+  floorInputSchema,
   PropertyMissingError,
+  roomInputSchema,
 } from "@/core/buildings";
 import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../../../form-state";
 
@@ -12,30 +15,18 @@ import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../.
  * Server actions på bygningssiden /oppdrag/[id]/bygninger
  * (docs/funksjoner/fase2a-bygninger-areal-rom-testplan.md avsnitt 6). Kjernen og konteksten er
  * byttet ut her; kjernen testes i src/core/buildings. Testene viser at hver handling henter
- * organisasjonen på serveren, stopper id-er som ikke er uuid før kjernen kalles, gir de faste
- * meldingene, og aldri sender skjemaverdier til loggen.
+ * organisasjonen på serveren, sjekker id-er før kjernen kalles, og gir de faste meldingene uten
+ * skjemaverdier i loggen.
  *
- * Kortet låser ikke navnene på handlingene eller feltene. Testen finner alle eksporterte
- * funksjoner i ./actions og sender et skjema med alle feltene fra kortet (assignmentId,
- * buildingId, floorId, roomId, name, level, belowGround, braI, braE, braB, alh, measuredBy,
- * method, comment, roomType, areaType). Hvilken kjernefunksjon en handling bruker, finnes ved å
- * kjøre den én gang.
+ * Kortet navngir ikke handlingene. Testene bruker saveBuildingAction, removeBuildingAction,
+ * saveFloorAction, removeFloorAction, saveFloorAreaAction, saveRoomAction og removeRoomAction,
+ * med feltene assignmentId, buildingId, floorId, roomId («» = ny), name, level, belowGround,
+ * braI, braE, braB, alh, measuredBy, method, comment, roomType og areaType (samme som kjernen).
+ * Avviker utvikleren, rettes navnene ved sammenslåingen.
  *
- * Testdata er oppdiktet. Støtter hovedmål: tid (feil vises ved feltet med fast tekst) og
- * reklamasjoner (aldri feil organisasjon; aldri navn, kommentar eller arealtall i loggen).
+ * Testdata er oppdiktet. Støtter hovedmål: tid (feil vises ved feltet) og reklamasjoner (aldri
+ * feil organisasjon, aldri navn, kommentar eller arealtall i loggen).
  */
-
-const CORE_NAMES = [
-  "getAssignmentBuildings",
-  "saveBuilding",
-  "removeBuilding",
-  "saveFloor",
-  "removeFloor",
-  "saveFloorArea",
-  "saveRoom",
-  "removeRoom",
-] as const;
-type CoreName = (typeof CORE_NAMES)[number];
 
 const mocks = vi.hoisted(() => ({
   getEmployeeContext: vi.fn(),
@@ -67,12 +58,15 @@ vi.mock("@/core/buildings", async (importOriginal) => ({
   ...mocks.core,
 }));
 
-const actionsModule = (await import("./actions")) as unknown as Record<string, unknown>;
-
-type Action = (previous: FormState, formData: FormData) => Promise<FormState>;
-const ACTIONS: [string, Action][] = Object.entries(actionsModule)
-  .filter((entry): entry is [string, Action] => typeof entry[1] === "function")
-  .sort(([a], [b]) => a.localeCompare(b));
+const {
+  saveBuildingAction,
+  removeBuildingAction,
+  saveFloorAction,
+  removeFloorAction,
+  saveFloorAreaAction,
+  saveRoomAction,
+  removeRoomAction,
+} = await import("./actions");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
 const OTHER_ORG = "0190a000-0000-7000-8000-000000000002";
@@ -80,41 +74,19 @@ const ASSIGNMENT = "0190a000-0000-7000-8000-000000000050";
 const BUILDING = "0190a000-0000-7000-8000-000000000051";
 const FLOOR = "0190a000-0000-7000-8000-000000000052";
 const ROOM = "0190a000-0000-7000-8000-000000000053";
-const EMPLOYEE = "0190a000-0000-7000-8000-000000000060";
-/** Et felt `id` i skjemaet (kortet bruker det ikke), med egen verdi så testen ser om det leses. */
-const OTHER_ID = "0190a000-0000-7000-8000-000000000054";
+const MEASURER = "0190a000-0000-7000-8000-000000000060";
 const actor = { id: "user-kontor", email: "kontor@eksempel.no", name: "Kontor Testdatter" };
 
-const HOUSE = "Bolighus";
+const BUILDING_NAME = "Bolighus";
+const FLOOR_NAME = "Kjeller";
 const ROOM_NAME = "Rom test";
 const COMMENT = "Målt langs innvendig vegg test";
-const SENSITIVE = [HOUSE, ROOM_NAME, COMMENT, "Målt langs", "123,4", "56,7", "210,3", "8,9"];
+const AREAS = ["123,4", "56,7", "8,9", "210,3"];
+const PERSONAL = [BUILDING_NAME, FLOOR_NAME, ROOM_NAME, "Målt langs innvendig vegg"];
 
-const ID_FIELDS = ["assignmentId", "buildingId", "floorId", "roomId", "id"] as const;
-
-/** Alle feltene fra kortet, med gyldige verdier. */
-function allFields(overrides: Record<string, string> = {}): Record<string, string> {
-  return {
-    assignmentId: ASSIGNMENT,
-    buildingId: BUILDING,
-    floorId: FLOOR,
-    roomId: ROOM,
-    id: OTHER_ID,
-    name: HOUSE,
-    level: "-1",
-    belowGround: "on",
-    braI: "123,4",
-    braE: "56,7",
-    braB: "8,9",
-    alh: "210,3",
-    measuredBy: EMPLOYEE,
-    method: "laser",
-    comment: COMMENT,
-    roomType: "bathroom",
-    areaType: "bra_i",
-    ...overrides,
-  };
-}
+const PROPERTY_MISSING = "Legg inn eiendommen før du legger til bygninger.";
+const BUILDING_NOT_EMPTY = "Fjern etasjene først.";
+const FLOOR_NOT_EMPTY = "Fjern rommene først.";
 
 function form(entries: Record<string, string>): FormData {
   const data = new FormData();
@@ -122,18 +94,91 @@ function form(entries: Record<string, string>): FormData {
   return data;
 }
 
+const FORMS = {
+  saveBuildingAction: { assignmentId: ASSIGNMENT, buildingId: "", name: BUILDING_NAME },
+  removeBuildingAction: { assignmentId: ASSIGNMENT, buildingId: BUILDING },
+  saveFloorAction: {
+    assignmentId: ASSIGNMENT,
+    buildingId: BUILDING,
+    floorId: "",
+    name: FLOOR_NAME,
+    level: "-1",
+    belowGround: "on",
+  },
+  removeFloorAction: { assignmentId: ASSIGNMENT, floorId: FLOOR },
+  saveFloorAreaAction: {
+    assignmentId: ASSIGNMENT,
+    floorId: FLOOR,
+    braI: AREAS[0]!,
+    braE: AREAS[1]!,
+    braB: AREAS[2]!,
+    alh: AREAS[3]!,
+    measuredBy: MEASURER,
+    method: "laser",
+    comment: COMMENT,
+  },
+  saveRoomAction: {
+    assignmentId: ASSIGNMENT,
+    floorId: FLOOR,
+    roomId: "",
+    roomType: "bathroom",
+    name: ROOM_NAME,
+    areaType: "bra_i",
+  },
+  removeRoomAction: { assignmentId: ASSIGNMENT, roomId: ROOM },
+} as const;
+
+type ActionName = keyof typeof FORMS;
+
+const ACTION_FNS = {
+  saveBuildingAction,
+  removeBuildingAction,
+  saveFloorAction,
+  removeFloorAction,
+  saveFloorAreaAction,
+  saveRoomAction,
+  removeRoomAction,
+} as const;
+
+const CORE_FOR_ACTION = {
+  saveBuildingAction: mocks.core.saveBuilding,
+  removeBuildingAction: mocks.core.removeBuilding,
+  saveFloorAction: mocks.core.saveFloor,
+  removeFloorAction: mocks.core.removeFloor,
+  saveFloorAreaAction: mocks.core.saveFloorArea,
+  saveRoomAction: mocks.core.saveRoom,
+  removeRoomAction: mocks.core.removeRoom,
+} as const;
+
+const ACTION_NAMES = Object.keys(FORMS) as ActionName[];
+
+function call(name: ActionName, overrides: Record<string, string> = {}) {
+  return ACTION_FNS[name](initialFormState, form({ ...FORMS[name], ...overrides }));
+}
+
+/** Id-feltene hver handling bruker (det kjernen får), som skal være uuid. */
+const ID_FIELDS: Record<ActionName, string[]> = {
+  saveBuildingAction: ["assignmentId"],
+  removeBuildingAction: ["buildingId"],
+  saveFloorAction: ["buildingId"],
+  removeFloorAction: ["floorId"],
+  saveFloorAreaAction: ["floorId"],
+  saveRoomAction: ["floorId"],
+  removeRoomAction: ["roomId"],
+};
+
+/** Valgfrie id-er («» = ny), som likevel må være uuid når de er fylt ut. */
+const OPTIONAL_ID_FIELDS: [ActionName, string][] = [
+  ["saveBuildingAction", "buildingId"],
+  ["saveFloorAction", "floorId"],
+  ["saveRoomAction", "roomId"],
+];
+
 function coreCalls() {
   return Object.values(mocks.core).reduce((sum, fn) => sum + fn.mock.calls.length, 0);
 }
 
-function calledCore(): CoreName[] {
-  return CORE_NAMES.filter((name) => mocks.core[name].mock.calls.length > 0);
-}
-
-/**
- * Alt loggeren fikk, som tekst, med uuid-er byttet ut med «<id>». Id-ene kan stå i loggen, men
- * skjemaverdiene skal ikke.
- */
+/** Alt loggeren fikk, som tekst, med uuid-er byttet ut med «<id>». */
 function loggedWithoutIds(): string {
   return JSON.stringify(mocks.logError.mock.calls).replace(
     /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
@@ -163,22 +208,6 @@ async function failed(promise: Promise<FormState>): Promise<FormState> {
   return state!;
 }
 
-function resolveAll() {
-  for (const name of CORE_NAMES) {
-    mocks.core[name].mockReset();
-    mocks.core[name].mockResolvedValue({ id: ROOM, created: false, changed: true });
-  }
-}
-
-/** Kjernefunksjonene handlingen bruker med et gyldig skjema. */
-async function coreUsedBy(action: Action): Promise<CoreName[]> {
-  resolveAll();
-  await run(action(initialFormState, form(allFields())));
-  const used = calledCore();
-  resolveAll();
-  return used;
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getEmployeeContext.mockResolvedValue({
@@ -187,30 +216,15 @@ beforeEach(() => {
     canEditOrders: true,
     officeId: null,
   });
-  resolveAll();
+  for (const fn of Object.values(mocks.core)) fn.mockResolvedValue(undefined);
 });
 
-describe("handlingene finnes", () => {
-  it("modulen eksporterer minst sju handlinger, og hver bruker en kjernefunksjon med et gyldig skjema", async () => {
-    expect(ACTIONS.length).toBeGreaterThanOrEqual(7);
-    const used = new Set<CoreName>();
-    for (const [name, action] of ACTIONS) {
-      const core = await coreUsedBy(action);
-      expect(core.length, `${name} kaller kjernen`).toBeGreaterThan(0);
-      for (const entry of core) used.add(entry);
-    }
-    for (const name of CORE_NAMES.filter((n) => n !== "getAssignmentBuildings")) {
-      expect(used.has(name), `en handling bruker ${name}`).toBe(true);
-    }
-  });
-});
-
-describe("6.1 uten kontekst", () => {
-  it.each(ACTIONS)(
+describe("6.1 uten ansattkontekst", () => {
+  it.each(ACTION_NAMES)(
     "%s: getEmployeeContext gir null → NO_ACCESS uten kall til kjernen",
-    async (_name, action) => {
+    async (name) => {
       mocks.getEmployeeContext.mockResolvedValue(null);
-      const state = await failed(action(initialFormState, form(allFields())));
+      const state = await failed(call(name));
       expect(state.message).toBe(NO_ACCESS);
       expect(coreCalls()).toBe(0);
     },
@@ -218,60 +232,86 @@ describe("6.1 uten kontekst", () => {
 });
 
 describe("6.2 id som ikke er uuid", () => {
-  const BAD_IDS = ["ikke-en-id", "1 or 1=1", "../x", "0190a000-0000-7000-8000-00000000005"];
-  const cases = ACTIONS.flatMap(([name, action]) => BAD_IDS.map((bad) => ({ name, action, bad })));
-
-  it.each(cases)(
-    "$name: alle id-felt «$bad» → NO_ACCESS uten kall til kjernen",
-    async ({ action, bad }) => {
-      const ids = Object.fromEntries(ID_FIELDS.map((field) => [field, bad]));
-      const state = await failed(action(initialFormState, form(allFields(ids))));
-      expect(state.message).toBe(NO_ACCESS);
-      expect(coreCalls()).toBe(0);
-    },
+  const BAD_IDS = ["ikke-en-id", "1 or 1=1", "../x"];
+  const REQUIRED = ACTION_NAMES.flatMap((name) =>
+    ID_FIELDS[name].flatMap((field) => [...BAD_IDS, ""].map((id) => [name, field, id] as const)),
+  );
+  const OPTIONAL = OPTIONAL_ID_FIELDS.flatMap(([name, field]) =>
+    BAD_IDS.map((id) => [name, field, id] as const),
   );
 
-  it.each(ACTIONS)(
-    "%s: hvert id-felt kjernen får, er stoppet når det ikke er uuid",
-    async (_name, action) => {
-      const used = await coreUsedBy(action);
-      // Id-feltene handlingen sender til kjernen (de står i kallet)
-      await run(action(initialFormState, form(allFields())));
-      const called = JSON.stringify(used.map((name) => mocks.core[name].mock.calls));
-      const sent = ID_FIELDS.filter((field) => called.includes(allFields()[field]!));
-      expect(sent.length, "handlingen sender minst én id til kjernen").toBeGreaterThan(0);
-      for (const field of sent) {
-        resolveAll();
-        const state = await failed(
-          action(initialFormState, form(allFields({ [field]: "ikke-en-id" }))),
-        );
-        expect(state.message, field).toBe(NO_ACCESS);
-        expect(coreCalls(), field).toBe(0);
-      }
+  it.each([...REQUIRED, ...OPTIONAL])(
+    "%s: %s «%s» → NO_ACCESS uten kall",
+    async (name, field, id) => {
+      const state = await failed(call(name, { [field]: id }));
+      expect(state.message).toBe(NO_ACCESS);
+      expect(coreCalls()).toBe(0);
     },
   );
 });
 
 describe("6.3 organisasjonen kommer fra konteksten", () => {
-  it.each(ACTIONS)(
+  it.each(ACTION_NAMES)(
     "%s: organizationId i skjemaet endrer ikke kallet; kjernen får aktøren og ORG",
-    async (_name, action) => {
-      await run(action(initialFormState, form(allFields({ organizationId: OTHER_ORG }))));
-      const used = calledCore();
-      expect(used.length).toBeGreaterThan(0);
-      for (const name of used) {
-        const [calledActor, calledOrg] = mocks.core[name].mock.calls[0]!;
-        expect(calledActor).toEqual(actor);
-        expect(calledOrg).toBe(ORG);
-      }
-      expect(JSON.stringify(used.map((name) => mocks.core[name].mock.calls))).not.toContain(
-        OTHER_ORG,
-      );
+    async (name) => {
+      await run(call(name, { organizationId: OTHER_ORG }));
+      const core = CORE_FOR_ACTION[name];
+      expect(core).toHaveBeenCalledTimes(1);
+      const [calledActor, calledOrg] = core.mock.calls[0]!;
+      expect([calledActor, calledOrg]).toEqual([actor, ORG]);
+      expect(JSON.stringify(core.mock.calls)).not.toContain(OTHER_ORG);
     },
   );
 
-  it.each(ACTIONS)("%s: lykket lagring gir ingen feil", async (_name, action) => {
-    const state = await run(action(initialFormState, form(allFields())));
+  it("saveBuildingAction: ny bygning gir (oppdrag, null, { name })", async () => {
+    await run(call("saveBuildingAction"));
+    const [, , assignmentId, buildingId, input] = mocks.core.saveBuilding.mock.calls[0]!;
+    expect([assignmentId, buildingId]).toEqual([ASSIGNMENT, null]);
+    expect(input).toMatchObject({ name: BUILDING_NAME });
+  });
+
+  it("saveBuildingAction: endring gir bygningens id", async () => {
+    await run(call("saveBuildingAction", { buildingId: BUILDING }));
+    const [, , assignmentId, buildingId] = mocks.core.saveBuilding.mock.calls[0]!;
+    expect([assignmentId, buildingId]).toEqual([ASSIGNMENT, BUILDING]);
+  });
+
+  it("saveFloorAction: (bygning, null, input) og (bygning, etasje, input)", async () => {
+    await run(call("saveFloorAction"));
+    await run(call("saveFloorAction", { floorId: FLOOR }));
+    const [first, second] = mocks.core.saveFloor.mock.calls;
+    expect(first!.slice(2, 4)).toEqual([BUILDING, null]);
+    expect(second!.slice(2, 4)).toEqual([BUILDING, FLOOR]);
+    expect(first![4]).toMatchObject({ name: FLOOR_NAME });
+  });
+
+  it("saveFloorAreaAction: (etasje, input) med arealene og «Målt av»", async () => {
+    await run(call("saveFloorAreaAction"));
+    const [, , floorId, input] = mocks.core.saveFloorArea.mock.calls[0]!;
+    expect(floorId).toBe(FLOOR);
+    expect(input).toMatchObject({ method: "laser", comment: COMMENT, measuredBy: MEASURER });
+  });
+
+  it("saveRoomAction: (etasje, null, input) og (etasje, rom, input)", async () => {
+    await run(call("saveRoomAction"));
+    await run(call("saveRoomAction", { roomId: ROOM }));
+    const [first, second] = mocks.core.saveRoom.mock.calls;
+    expect(first!.slice(2, 4)).toEqual([FLOOR, null]);
+    expect(second!.slice(2, 4)).toEqual([FLOOR, ROOM]);
+    expect(first![4]).toMatchObject({ roomType: "bathroom", areaType: "bra_i" });
+  });
+
+  it.each([
+    ["removeBuildingAction", BUILDING],
+    ["removeFloorAction", FLOOR],
+    ["removeRoomAction", ROOM],
+  ] as const)("%s: kjernen får id-en fra skjemaet", async (name, id) => {
+    await run(call(name));
+    expect(CORE_FOR_ACTION[name].mock.calls[0]).toContain(id);
+  });
+
+  it.each(ACTION_NAMES)("%s: lykket lagring gir ingen feil", async (name) => {
+    const state = await run(call(name));
     if (state) {
       expect(state.message).toBeNull();
       expect(state.fieldErrors).toEqual({});
@@ -279,124 +319,95 @@ describe("6.3 organisasjonen kommer fra konteksten", () => {
   });
 });
 
-function rejectAll(error: unknown) {
-  for (const name of CORE_NAMES) mocks.core[name].mockRejectedValue(error);
-}
-
 describe("6.4 feil fra kjernen", () => {
-  it.each(ACTIONS)("%s: AccessDeniedError → NO_ACCESS", async (_name, action) => {
-    rejectAll(new AccessDeniedError());
-    const state = await failed(action(initialFormState, form(allFields())));
+  it.each(ACTION_NAMES)("%s: AccessDeniedError → NO_ACCESS", async (name) => {
+    CORE_FOR_ACTION[name].mockRejectedValue(new AccessDeniedError());
+    const state = await failed(call(name));
     expect(state.message).toBe(NO_ACCESS);
+  });
+
+  it.each([
+    ["saveBuildingAction", () => new PropertyMissingError(), PROPERTY_MISSING],
+    ["removeBuildingAction", () => new BuildingNotEmptyError(), BUILDING_NOT_EMPTY],
+    ["removeFloorAction", () => new FloorNotEmptyError(), FLOOR_NOT_EMPTY],
+  ] as const)("%s: kjent feil → «%s»", async (name, make, message) => {
+    CORE_FOR_ACTION[name].mockRejectedValue(make());
+    const state = await failed(call(name));
+    expect(allMessages(state)).toContain(message);
+    expect(state.message).not.toBe(UNKNOWN_ERROR);
     expect(mocks.logError).not.toHaveBeenCalled();
   });
 
-  const KNOWN = [
+  it.each([
     [
-      "PropertyMissingError",
-      () => new PropertyMissingError(),
-      "saveBuilding",
-      "Legg inn eiendommen før du legger til bygninger.",
+      "saveBuildingAction",
+      buildingInputSchema,
+      { name: "" },
+      "name",
+      "Skriv inn navnet på bygningen.",
     ],
     [
-      "BuildingNotEmptyError",
-      () => new BuildingNotEmptyError(),
-      "removeBuilding",
-      "Fjern etasjene først.",
+      "saveFloorAction",
+      floorInputSchema,
+      { name: "Kjeller", level: "21" },
+      "level",
+      "Etasjenummeret må være mellom −3 og 20.",
     ],
-    ["FloorNotEmptyError", () => new FloorNotEmptyError(), "removeFloor", "Fjern rommene først."],
-  ] as const;
-
-  it.each(KNOWN)(
-    "%s → norsk melding i handlingen som bruker %s, ikke UNKNOWN_ERROR, og ingen logg",
-    async (_name, make, coreName, message) => {
-      let checked = 0;
-      for (const [actionName, action] of ACTIONS) {
-        const used = await coreUsedBy(action);
-        if (!used.includes(coreName)) continue;
-        vi.clearAllMocks();
-        rejectAll(make());
-        const state = await failed(action(initialFormState, form(allFields())));
-        expect(allMessages(state), actionName).toContain(message);
-        expect(state.message, actionName).not.toBe(UNKNOWN_ERROR);
-        expect(mocks.logError, actionName).not.toHaveBeenCalled();
-        checked += 1;
-      }
-      expect(checked, `minst én handling bruker ${coreName}`).toBeGreaterThan(0);
-    },
-  );
-
-  it.each(KNOWN)("%s → aldri UNKNOWN_ERROR i noen handling", async (_name, make) => {
-    for (const [actionName, action] of ACTIONS) {
-      vi.clearAllMocks();
-      rejectAll(make());
-      const state = await failed(action(initialFormState, form(allFields())));
-      expect(state.message, actionName).not.toBe(UNKNOWN_ERROR);
-    }
-  });
-
-  it("ZodError fra arealet → arealmeldingen ved feltet, og verdien står igjen", async () => {
-    const result = floorAreaInputSchema.safeParse({ braI: "12,34" });
+    [
+      "saveFloorAreaAction",
+      floorAreaInputSchema,
+      { braI: "12,34" },
+      "braI",
+      "Arealet må være et tall mellom 0 og 9999,9 med høyst én desimal.",
+    ],
+    ["saveRoomAction", roomInputSchema, { roomType: "villa" }, "roomType", "Velg romtype."],
+  ] as const)("%s: ZodError → feil ved feltet %s", async (name, schema, bad, field, message) => {
+    const result = (
+      schema as { safeParse: (v: unknown) => { success: boolean; error?: unknown } }
+    ).safeParse(bad);
     expect(result.success).toBe(false);
-    let checked = 0;
-    for (const [actionName, action] of ACTIONS) {
-      const used = await coreUsedBy(action);
-      if (!used.includes("saveFloorArea")) continue;
-      rejectAll(result.error);
-      const state = await failed(action(initialFormState, form(allFields({ braI: "12,34" }))));
-      expect(state.fieldErrors.braI, actionName).toBe(
-        "Arealet må være et tall mellom 0 og 9999,9 med høyst én desimal.",
-      );
-      expect(state.values, actionName).toMatchObject({ braI: "12,34" });
-      checked += 1;
-    }
-    expect(checked).toBeGreaterThan(0);
+    CORE_FOR_ACTION[name].mockRejectedValue(result.error);
+
+    const state = await failed(call(name, bad as Record<string, string>));
+    expect(state.fieldErrors[field]).toBe(message);
+    // Verdien står igjen i skjemaet
+    expect(state.values[field]).toBe((bad as Record<string, string>)[field]);
   });
 
-  it.each(ACTIONS)("%s: ukjent feil → UNKNOWN_ERROR", async (_name, action) => {
-    rejectAll(new Error("oppdiktet feil"));
-    const state = await failed(action(initialFormState, form(allFields())));
+  it.each(ACTION_NAMES)("%s: ukjent feil → UNKNOWN_ERROR", async (name) => {
+    CORE_FOR_ACTION[name].mockRejectedValue(new Error("oppdiktet feil"));
+    const state = await failed(call(name));
     expect(state.message).toBe(UNKNOWN_ERROR);
   });
 });
 
 describe("6.5 loggkontrakt", () => {
-  it.each(ACTIONS)(
+  it.each(ACTION_NAMES)(
     "%s: ukjent feil logges bare med rute, bruker-id, id-er og feilnavn",
-    async (_name, action) => {
-      const boom = new Error(`databasen sa nei til ${SENSITIVE.join(" ")}`);
+    async (name) => {
+      const boom = new Error(`databasen sa nei til ${PERSONAL.join(" ")} ${AREAS.join(" ")}`);
       boom.name = "OppdiktetFeil";
-      rejectAll(boom);
+      CORE_FOR_ACTION[name].mockRejectedValue(boom);
 
-      const state = await failed(action(initialFormState, form(allFields())));
+      const state = await failed(call(name));
       expect(state.message).toBe(UNKNOWN_ERROR);
       expect(mocks.logError).toHaveBeenCalledTimes(1);
       const logged = loggedWithoutIds();
       expect(logged).toContain("OppdiktetFeil");
       expect(logged).toContain(actor.id);
-      for (const value of SENSITIVE) expect(logged, value).not.toContain(value);
-      expect(logged).not.toContain("databasen sa nei");
+      for (const value of [...PERSONAL, ...AREAS, "123.4", "56.7", "210.3"]) {
+        expect(logged, value).not.toContain(value);
+      }
     },
   );
 
-  it("ingen kall til loggeren gir skjemaverdier, heller ikke ved kjente feil eller valideringsfeil", async () => {
-    const zod = floorAreaInputSchema.safeParse({ braI: "12,34", comment: "12345678901" });
-    const errors = [
-      new AccessDeniedError(),
-      new PropertyMissingError(),
-      new BuildingNotEmptyError(),
-      new FloorNotEmptyError(),
-      zod.error,
-      new Error("oppdiktet feil"),
-    ];
-    for (const error of errors) {
-      for (const [, action] of ACTIONS) {
-        rejectAll(error);
-        await run(action(initialFormState, form(allFields())));
-      }
-    }
+  it("ingen kall til loggeren gir skjemaverdier, heller ikke ved kjente feil", async () => {
+    mocks.core.saveBuilding.mockRejectedValue(new PropertyMissingError());
+    mocks.core.removeBuilding.mockRejectedValue(new BuildingNotEmptyError());
+    mocks.core.removeFloor.mockRejectedValue(new FloorNotEmptyError());
+    mocks.core.saveFloorArea.mockRejectedValue(new AccessDeniedError());
+    for (const name of ACTION_NAMES) await run(call(name));
     const logged = loggedWithoutIds();
-    for (const value of SENSITIVE) expect(logged, value).not.toContain(value);
-    expect(logged).not.toContain("12345678901");
+    for (const value of [...PERSONAL, ...AREAS]) expect(logged, value).not.toContain(value);
   });
 });

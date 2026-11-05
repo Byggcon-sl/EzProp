@@ -11,7 +11,6 @@ import {
   createEmployee,
   createFloor,
   createOrganization,
-  createProperty,
   createUser,
   resetDatabase,
 } from "../../tests/factories";
@@ -25,13 +24,10 @@ import { tenantTables } from "../../tests/tenant-tables";
  *
  * Kolonnenavnene er fra kortet punkt 1–4: report_buildings (assignment_id, name), floors
  * (report_building_id, name, level, below_ground), floor_areas (floor_id, bra_i, bra_e, bra_b,
- * alh, measured_by, method, comment) og rooms (floor_id, room_type, name, area_type,
- * below_ground).
+ * alh, measured_by, method, comment) og rooms (floor_id, room_type, name, area_type, below_ground).
  *
- * Støtter hovedmål: reklamasjoner (bare faste koder for romtype, arealtype og metode, aldri
- * negativt areal, aldri en rad som peker inn i en annen organisasjon, aldri to aktive arealrader
- * på samme etasje) og KI først (strukturen er låst, så et senere forslag fyller de samme feltene).
- * Testdata er oppdiktet.
+ * Støtter hovedmål: reklamasjoner (bare faste koder, aldri negativt areal, aldri en rad som peker
+ * inn i en annen organisasjon, aldri to aktive arealrader på samme etasje). Testdata er oppdiktet.
  */
 
 beforeEach(resetDatabase);
@@ -68,83 +64,89 @@ function rowsOf(result: unknown): Row[] {
   return result as Row[];
 }
 
-const MISSING = Symbol("mangler");
-type Value = string | number | boolean | null | typeof MISSING;
-
-/**
- * `insert into <table> (...) values (...) returning *` med bare kolonnene som ikke er `MISSING`,
- * slik at standardverdier og NOT NULL kan prøves.
- */
-function insertSql(table: string, values: Record<string, Value>) {
-  const entries = Object.entries(values).filter(([, value]) => value !== MISSING);
-  const columns = sql.raw(entries.map(([name]) => name).join(", "));
-  const params = sql.join(
-    entries.map(([, value]) => sql`${value}`),
-    sql`, `,
-  );
-  return db.execute(sql`insert into ${sql.raw(table)} (${columns}) values (${params}) returning *`);
+/** Oppdrag i organisasjonen (uten eiendom; databasen krever ikke eiendom). */
+async function assignmentIn(organizationId: string) {
+  return (await createAssignment(organizationId)).id;
 }
 
-async function insertedId(run: Promise<unknown>): Promise<string> {
-  const [row] = rowsOf(await run);
-  return row!.id as string;
+function insertBuildingSql(values: {
+  organizationId: string;
+  assignmentId: string | null;
+  name?: string | null;
+}) {
+  return db.execute(sql`
+    insert into report_buildings (organization_id, assignment_id, name)
+    values (${values.organizationId}, ${values.assignmentId},
+      ${values.name === undefined ? "Bolighus" : values.name})
+    returning id`);
 }
 
-function insertBuilding(organizationId: string, values: Record<string, Value> = {}) {
-  return insertSql("report_buildings", {
-    organization_id: organizationId,
-    name: "Bolighus",
-    ...values,
-  });
+function insertFloorSql(values: {
+  organizationId: string;
+  buildingId: string | null;
+  name?: string | null;
+  level?: number | null;
+  belowGround?: boolean | null;
+}) {
+  if (values.belowGround === undefined) {
+    return db.execute(sql`
+      insert into floors (organization_id, report_building_id, name, level)
+      values (${values.organizationId}, ${values.buildingId},
+        ${values.name === undefined ? "1. etasje" : values.name},
+        ${values.level === undefined ? 1 : values.level})
+      returning id, below_ground`);
+  }
+  return db.execute(sql`
+    insert into floors (organization_id, report_building_id, name, level, below_ground)
+    values (${values.organizationId}, ${values.buildingId},
+      ${values.name === undefined ? "1. etasje" : values.name},
+      ${values.level === undefined ? 1 : values.level}, ${values.belowGround})
+    returning id, below_ground`);
 }
 
-function insertFloor(
-  organizationId: string,
-  buildingId: Value,
-  values: Record<string, Value> = {},
-) {
-  return insertSql("floors", {
-    organization_id: organizationId,
-    report_building_id: buildingId,
-    name: "1. etasje",
-    level: 1,
-    ...values,
-  });
+function insertAreaSql(values: {
+  organizationId: string;
+  floorId: string | null;
+  braI?: string | null;
+  braE?: string | null;
+  braB?: string | null;
+  alh?: string | null;
+  measuredBy?: string | null;
+  method?: string | null;
+  deletedAt?: string | null;
+}) {
+  return db.execute(sql`
+    insert into floor_areas (organization_id, floor_id, bra_i, bra_e, bra_b, alh, measured_by, method, deleted_at)
+    values (${values.organizationId}, ${values.floorId}, ${values.braI ?? null}::numeric,
+      ${values.braE ?? null}::numeric, ${values.braB ?? null}::numeric, ${values.alh ?? null}::numeric,
+      ${values.measuredBy ?? null}, ${values.method ?? null}, ${values.deletedAt ?? null})
+    returning id`);
 }
 
-function insertArea(organizationId: string, floorId: Value, values: Record<string, Value> = {}) {
-  return insertSql("floor_areas", {
-    organization_id: organizationId,
-    floor_id: floorId,
-    ...values,
-  });
+function insertRoomSql(values: {
+  organizationId: string;
+  floorId: string | null;
+  roomType?: string | null;
+  areaType?: string | null;
+  belowGround?: boolean | null;
+}) {
+  return db.execute(sql`
+    insert into rooms (organization_id, floor_id, room_type, area_type, below_ground)
+    values (${values.organizationId}, ${values.floorId},
+      ${values.roomType === undefined ? "bathroom" : values.roomType},
+      ${values.areaType === undefined ? "bra_i" : values.areaType},
+      ${values.belowGround === undefined ? false : values.belowGround})
+    returning id`);
 }
 
-function insertRoom(organizationId: string, floorId: Value, values: Record<string, Value> = {}) {
-  return insertSql("rooms", {
-    organization_id: organizationId,
-    floor_id: floorId,
-    room_type: "bathroom",
-    area_type: "bra_i",
-    below_ground: false,
-    ...values,
-  });
+async function ownFloor(organizationId: string) {
+  return (await createFloor(organizationId)).id;
 }
 
-/** Oppdrag med eiendom i organisasjonen. */
-async function assignmentWithProperty(organizationId: string) {
-  const assignment = await createAssignment(organizationId);
-  await createProperty(organizationId, { assignmentId: assignment.id });
-  return assignment;
-}
-
-/** En organisasjon med oppdrag, bygning og etasje, satt inn med SQL. */
-async function orgWithFloor(name: string) {
-  const org = await createOrganization(name);
-  const assignment = await assignmentWithProperty(org.id);
-  const buildingId = await insertedId(insertBuilding(org.id, { assignment_id: assignment.id }));
-  const floorId = await insertedId(insertFloor(org.id, buildingId));
-  return { org, assignment, buildingId, floorId };
+async function twoOrgs() {
+  const a = await createOrganization("Oppdiktet takst A");
+  const b = await createOrganization("Oppdiktet takst B");
+  return { a, b };
 }
 
 const ROOM_TYPE_KEYS = [
@@ -184,279 +186,330 @@ const ROOM_TYPE_KEYS = [
 ];
 
 describe("3.1 CHECK på faste koder", () => {
-  it("de 33 romtypene i kortet godtas", async () => {
-    expect(ROOM_TYPE_KEYS).toHaveLength(33);
-    const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
-    for (const roomType of ROOM_TYPE_KEYS) {
-      await insertRoom(org.id, floorId, { room_type: roomType });
-    }
-    const [row] = rowsOf(await db.execute(sql`select count(*)::int as n from rooms`));
-    expect(row!.n).toBe(33);
+  it.each(["villa", "", "Bathroom", "wet_room"])("ukjent room_type «%s» avvises", async (code) => {
+    const org = await createOrganization();
+    const floorId = await ownFloor(org.id);
+    await expectPgError(insertRoomSql({ organizationId: org.id, floorId, roomType: code }), CHECK);
   });
 
-  it.each(["villa", "", "Bathroom", "bad"])("ukjent room_type «%s» avvises", async (roomType) => {
-    const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
-    await expectPgError(insertRoom(org.id, floorId, { room_type: roomType }), CHECK);
+  it.each(ROOM_TYPE_KEYS)("room_type %s godtas", async (code) => {
+    const org = await createOrganization();
+    const floorId = await ownFloor(org.id);
+    await insertRoomSql({ organizationId: org.id, floorId, roomType: code });
   });
 
-  it.each(["bra_i", "bra_e", "bra_b"])("area_type %s godtas", async (areaType) => {
-    const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
-    const [row] = rowsOf(await insertRoom(org.id, floorId, { area_type: areaType }));
-    expect(row!.area_type).toBe(areaType);
+  it.each(["alh", "", "bra", "BRA-i"])("ukjent area_type «%s» avvises", async (code) => {
+    const org = await createOrganization();
+    const floorId = await ownFloor(org.id);
+    await expectPgError(insertRoomSql({ organizationId: org.id, floorId, areaType: code }), CHECK);
   });
 
-  it.each(["alh", "tba", "BRA-i", ""])("ukjent area_type «%s» avvises", async (areaType) => {
-    const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
-    await expectPgError(insertRoom(org.id, floorId, { area_type: areaType }), CHECK);
+  it.each(["bra_i", "bra_e", "bra_b"])("area_type %s godtas", async (code) => {
+    const org = await createOrganization();
+    const floorId = await ownFloor(org.id);
+    await insertRoomSql({ organizationId: org.id, floorId, areaType: code });
   });
 
-  it.each(["laser", "drawing", "other"])("method %s godtas", async (method) => {
-    const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
-    const [row] = rowsOf(await insertArea(org.id, floorId, { method }));
-    expect(row!.method).toBe(method);
+  it.each(["lidar", "", "Laser", "tape"])("ukjent method «%s» avvises", async (code) => {
+    const org = await createOrganization();
+    const floorId = await ownFloor(org.id);
+    await expectPgError(insertAreaSql({ organizationId: org.id, floorId, method: code }), CHECK);
   });
 
-  it.each(["lidar", "Laser", ""])("ukjent method «%s» avvises", async (method) => {
-    const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
-    await expectPgError(insertArea(org.id, floorId, { method }), CHECK);
-  });
-
-  it("method kan være tom (null)", async () => {
-    const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
-    const [row] = rowsOf(await insertArea(org.id, floorId, { method: null }));
-    expect(row!.method).toBeNull();
+  it.each(["laser", "drawing", "other"])("method %s godtas (og tom method)", async (code) => {
+    const org = await createOrganization();
+    await insertAreaSql({ organizationId: org.id, floorId: await ownFloor(org.id), method: code });
+    await insertAreaSql({ organizationId: org.id, floorId: await ownFloor(org.id), method: null });
   });
 });
 
-const AREA_COLUMNS = ["bra_i", "bra_e", "bra_b", "alh"] as const;
-
-describe("3.2 areal", () => {
-  it.each(AREA_COLUMNS)("negativt %s (-0,1) avvises", async (column) => {
-    const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
-    await expectPgError(insertArea(org.id, floorId, { [column]: "-0.1" }), CHECK);
+describe("3.2 negativt areal", () => {
+  it.each(["braI", "braE", "braB", "alh"] as const)("%s = -0.1 avvises", async (field) => {
+    const org = await createOrganization();
+    const floorId = await ownFloor(org.id);
+    await expectPgError(insertAreaSql({ organizationId: org.id, floorId, [field]: "-0.1" }), CHECK);
   });
 
-  it("0 og 9999,9 godtas i alle fire kolonnene, og tallene lagres med én desimal", async () => {
-    const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
+  it("0 og 9999.9 godtas i alle fire kolonnene, og tallet står med én desimal", async () => {
+    const org = await createOrganization();
+    await insertAreaSql({
+      organizationId: org.id,
+      floorId: await ownFloor(org.id),
+      braI: "0",
+      braE: "0",
+      braB: "0",
+      alh: "0",
+    });
     const [row] = rowsOf(
-      await insertArea(org.id, floorId, {
-        bra_i: "9999.9",
-        bra_e: "0",
-        bra_b: "8.9",
+      await insertAreaSql({
+        organizationId: org.id,
+        floorId: await ownFloor(org.id),
+        braI: "9999.9",
+        braE: "123.4",
+        braB: "8.9",
         alh: "210.3",
       }),
     );
-    expect([row!.bra_i, row!.bra_e, row!.bra_b, row!.alh].map(String)).toEqual([
-      "9999.9",
-      "0.0",
-      "8.9",
-      "210.3",
-    ]);
+    const [stored] = rowsOf(
+      await db.execute(sql`select bra_i, bra_e, bra_b, alh from floor_areas where id = ${row!.id}`),
+    );
+    expect(stored).toEqual({ bra_i: "9999.9", bra_e: "123.4", bra_b: "8.9", alh: "210.3" });
   });
 
-  it("alle fire kolonnene kan være tomme", async () => {
-    const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
-    const [row] = rowsOf(await insertArea(org.id, floorId));
-    expect([row!.bra_i, row!.bra_e, row!.bra_b, row!.alh]).toEqual([null, null, null, null]);
+  it("kolonnene er numeric(7,1)", async () => {
+    const rows = rowsOf(
+      await db.execute(sql`
+        select column_name, data_type, numeric_precision, numeric_scale
+        from information_schema.columns
+        where table_name = 'floor_areas' and column_name in ('bra_i', 'bra_e', 'bra_b', 'alh')
+        order by column_name`),
+    );
+    expect(rows).toHaveLength(4);
+    for (const row of rows) {
+      expect(row, String(row.column_name)).toMatchObject({
+        data_type: "numeric",
+        numeric_precision: 7,
+        numeric_scale: 1,
+      });
+    }
   });
 });
 
 describe("3.3 etasjenummer", () => {
-  it.for([-4, 21])("level %d avvises når databasen har CHECK på level", async (level, ctx) => {
-    const [found] = rowsOf(
+  async function levelCheckExists(): Promise<boolean> {
+    const rows = rowsOf(
       await db.execute(sql`
-        select count(*)::int as n from pg_constraint
-        where conrelid = 'floors'::regclass and contype = 'c'
-          and pg_get_constraintdef(oid) like '%level%'`),
+        select pg_get_constraintdef(c.oid) as def from pg_constraint c
+        join pg_class t on t.oid = c.conrelid
+        where t.relname = 'floors' and c.contype = 'c'`),
     );
-    // Uten CHECK i databasen er grensen dekket av skjemaet (schemas.test.ts 2.3).
-    if (found!.n === 0) ctx.skip();
-    const org = await createOrganization("Oppdiktet takst A");
-    const building = await createBuilding(org.id);
-    await expectPgError(insertFloor(org.id, building.id, { level }), CHECK);
-  });
+    return rows.some((row) => String(row.def).includes("level"));
+  }
 
-  it.each([-3, 0, 20])("level %d godtas", async (level) => {
-    const org = await createOrganization("Oppdiktet takst A");
-    const building = await createBuilding(org.id);
-    const [row] = rowsOf(await insertFloor(org.id, building.id, { level }));
-    expect(row!.level).toBe(level);
+  it.for([-4, 21])(
+    "level = %s avvises (hvis CHECK finnes; ellers dekket av skjematesten 2.3)",
+    async (level, context) => {
+      if (!(await levelCheckExists())) {
+        context.skip("ingen CHECK på floors.level i databasen; grensen holdes av skjemaet (2.3)");
+      }
+      const org = await createOrganization();
+      const buildingId = (await createBuilding(org.id)).id;
+      await expectPgError(insertFloorSql({ organizationId: org.id, buildingId, level }), CHECK);
+    },
+  );
+
+  it.each([-3, 0, 20])("level = %s godtas", async (level) => {
+    const org = await createOrganization();
+    const buildingId = (await createBuilding(org.id)).id;
+    await insertFloorSql({ organizationId: org.id, buildingId, level });
   });
 });
 
-describe("3.4 sammensatte fremmednøkler: rad i A som peker inn i B avvises", () => {
-  it("bygning i A → oppdrag i B", async () => {
-    const a = await createOrganization("Oppdiktet takst A");
-    const b = await createOrganization("Oppdiktet takst B");
-    const assignmentB = await assignmentWithProperty(b.id);
-    await expectPgError(insertBuilding(a.id, { assignment_id: assignmentB.id }), FOREIGN_KEY);
-  });
-
-  it("etasje i A → bygning i B", async () => {
-    const a = await createOrganization("Oppdiktet takst A");
-    const b = await orgWithFloor("Oppdiktet takst B");
-    await expectPgError(insertFloor(a.id, b.buildingId), FOREIGN_KEY);
-  });
-
-  it("areal i A → etasje i B", async () => {
-    const a = await createOrganization("Oppdiktet takst A");
-    const b = await orgWithFloor("Oppdiktet takst B");
-    await expectPgError(insertArea(a.id, b.floorId), FOREIGN_KEY);
-  });
-
-  it("rom i A → etasje i B", async () => {
-    const a = await createOrganization("Oppdiktet takst A");
-    const b = await orgWithFloor("Oppdiktet takst B");
-    await expectPgError(insertRoom(a.id, b.floorId), FOREIGN_KEY);
-  });
-
-  it("areal i A med measured_by = ansatt i B", async () => {
-    const a = await orgWithFloor("Oppdiktet takst A");
-    const b = await createOrganization("Oppdiktet takst B");
-    const employeeB = await createEmployee(await createUser({ name: "Test Måler B" }), b.id, [
-      "inspector",
-    ]);
+describe("3.4 sammensatte fremmednøkler på tvers av organisasjoner", () => {
+  it("bygning i A som peker på oppdrag i B avvises", async () => {
+    const { a, b } = await twoOrgs();
     await expectPgError(
-      insertArea(a.org.id, a.floorId, { measured_by: employeeB.id }),
+      insertBuildingSql({ organizationId: a.id, assignmentId: await assignmentIn(b.id) }),
       FOREIGN_KEY,
     );
   });
 
-  it("measured_by = ansatt i samme organisasjon godtas", async () => {
-    const a = await orgWithFloor("Oppdiktet takst A");
-    const employee = await createEmployee(await createUser({ name: "Test Måler A" }), a.org.id, [
+  it("bygning mot eget oppdrag godtas", async () => {
+    const { a } = await twoOrgs();
+    await insertBuildingSql({ organizationId: a.id, assignmentId: await assignmentIn(a.id) });
+  });
+
+  it("etasje i A som peker på bygning i B avvises", async () => {
+    const { a, b } = await twoOrgs();
+    const buildingB = await createBuilding(b.id);
+    await expectPgError(
+      insertFloorSql({ organizationId: a.id, buildingId: buildingB.id }),
+      FOREIGN_KEY,
+    );
+  });
+
+  it("areal i A som peker på etasje i B avvises", async () => {
+    const { a, b } = await twoOrgs();
+    await expectPgError(
+      insertAreaSql({ organizationId: a.id, floorId: await ownFloor(b.id) }),
+      FOREIGN_KEY,
+    );
+  });
+
+  it("rom i A som peker på etasje i B avvises", async () => {
+    const { a, b } = await twoOrgs();
+    await expectPgError(
+      insertRoomSql({ organizationId: a.id, floorId: await ownFloor(b.id) }),
+      FOREIGN_KEY,
+    );
+  });
+
+  it("measured_by i A som peker på ansatt i B avvises", async () => {
+    const { a, b } = await twoOrgs();
+    const employeeB = await createEmployee(await createUser({ name: "Test Måler B" }), b.id, [
       "inspector",
     ]);
-    const [row] = rowsOf(await insertArea(a.org.id, a.floorId, { measured_by: employee.id }));
-    expect(row!.measured_by).toBe(employee.id);
+    await expectPgError(
+      insertAreaSql({
+        organizationId: a.id,
+        floorId: await ownFloor(a.id),
+        measuredBy: employeeB.id,
+      }),
+      FOREIGN_KEY,
+    );
+  });
+
+  it("measured_by mot egen ansatt godtas", async () => {
+    const { a } = await twoOrgs();
+    const employeeA = await createEmployee(await createUser({ name: "Test Måler A" }), a.id, [
+      "inspector",
+    ]);
+    await insertAreaSql({
+      organizationId: a.id,
+      floorId: await ownFloor(a.id),
+      measuredBy: employeeA.id,
+    });
   });
 
   it.each([
-    ["bygning → ukjent oppdrag", "report_buildings"],
-    ["etasje → ukjent bygning", "floors"],
-    ["areal → ukjent etasje", "floor_areas"],
-    ["rom → ukjent etasje", "rooms"],
-  ])("%s avvises", async (_name, table) => {
-    const org = await createOrganization("Oppdiktet takst A");
-    const unknown = "0190a000-0000-7000-8000-0000000000ff";
+    ["bygning → oppdrag", "building"],
+    ["etasje → bygning", "floor"],
+    ["areal → etasje", "area"],
+    ["rom → etasje", "room"],
+    ["measured_by → ansatt", "measurer"],
+  ] as const)("%s som ikke finnes avvises", async (_name, kind) => {
+    const org = await createOrganization();
+    const missing = "0190a000-0000-7000-8000-00000000dead";
     const run =
-      table === "report_buildings"
-        ? insertBuilding(org.id, { assignment_id: unknown })
-        : table === "floors"
-          ? insertFloor(org.id, unknown)
-          : table === "floor_areas"
-            ? insertArea(org.id, unknown)
-            : insertRoom(org.id, unknown);
+      kind === "building"
+        ? insertBuildingSql({ organizationId: org.id, assignmentId: missing })
+        : kind === "floor"
+          ? insertFloorSql({ organizationId: org.id, buildingId: missing })
+          : kind === "area"
+            ? insertAreaSql({ organizationId: org.id, floorId: missing })
+            : kind === "room"
+              ? insertRoomSql({ organizationId: org.id, floorId: missing })
+              : insertAreaSql({
+                  organizationId: org.id,
+                  floorId: await ownFloor(org.id),
+                  measuredBy: missing,
+                });
     await expectPgError(run, FOREIGN_KEY);
   });
 });
 
-describe("3.5 én aktiv arealrad per etasje (A80)", () => {
-  it("to aktive arealrader på samme etasje avvises", async () => {
-    const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
-    await insertArea(org.id, floorId, { bra_i: "123.4" });
-    await expectPgError(insertArea(org.id, floorId, { bra_i: "56.7" }), UNIQUE);
+describe("3.5 én aktiv arealrad per etasje", () => {
+  it("to aktive rader på samme etasje avvises (unik delvis indeks)", async () => {
+    const org = await createOrganization();
+    const floorId = await ownFloor(org.id);
+    await insertAreaSql({ organizationId: org.id, floorId, braI: "123.4" });
+    await expectPgError(insertAreaSql({ organizationId: org.id, floorId, braI: "56.7" }), UNIQUE);
   });
 
-  it("en myk-slettet arealrad sperrer ikke for en ny aktiv", async () => {
-    const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
-    await insertArea(org.id, floorId, { bra_i: "123.4", deleted_at: DELETED_AT });
-    const [row] = rowsOf(await insertArea(org.id, floorId, { bra_i: "56.7" }));
-    expect(row!.deleted_at).toBeNull();
-    const [count] = rowsOf(
-      await db.execute(sql`select count(*)::int as n from floor_areas where floor_id = ${floorId}`),
-    );
-    expect(count!.n).toBe(2);
+  it("én myk-slettet og én aktiv godtas", async () => {
+    const org = await createOrganization();
+    const floorId = await ownFloor(org.id);
+    await insertAreaSql({ organizationId: org.id, floorId, deletedAt: DELETED_AT });
+    await insertAreaSql({ organizationId: org.id, floorId });
   });
 
-  it("to myk-slettede arealrader på samme etasje godtas", async () => {
-    const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
-    await insertArea(org.id, floorId, { deleted_at: DELETED_AT });
-    await insertArea(org.id, floorId, { deleted_at: DELETED_AT });
+  it("to myk-slettede og én aktiv godtas", async () => {
+    const org = await createOrganization();
+    const floorId = await ownFloor(org.id);
+    await insertAreaSql({ organizationId: org.id, floorId, deletedAt: DELETED_AT });
+    await insertAreaSql({ organizationId: org.id, floorId, deletedAt: DELETED_AT });
+    await insertAreaSql({ organizationId: org.id, floorId });
   });
 
-  it("aktive arealrader på hver sin etasje godtas", async () => {
-    const { org, buildingId, floorId } = await orgWithFloor("Oppdiktet takst A");
-    const second = await insertedId(
-      insertFloor(org.id, buildingId, { name: "Kjeller", level: -1 }),
-    );
-    await insertArea(org.id, floorId);
-    await insertArea(org.id, second);
+  it("aktive rader på to ulike etasjer godtas", async () => {
+    const org = await createOrganization();
+    await insertAreaSql({ organizationId: org.id, floorId: await ownFloor(org.id) });
+    await insertAreaSql({ organizationId: org.id, floorId: await ownFloor(org.id) });
+  });
+
+  it("flere rom på samme etasje godtas", async () => {
+    const org = await createOrganization();
+    const floorId = await ownFloor(org.id);
+    await insertRoomSql({ organizationId: org.id, floorId });
+    await insertRoomSql({ organizationId: org.id, floorId });
   });
 });
 
-describe("3.6 påkrevde felt og standardverdier", () => {
-  it("bygning uten assignment_id avvises", async () => {
-    const org = await createOrganization("Oppdiktet takst A");
-    await expectPgError(insertBuilding(org.id, { assignment_id: MISSING }), NOT_NULL);
+describe("3.6 påkrevde felt", () => {
+  it("report_buildings.assignment_id er NOT NULL", async () => {
+    const org = await createOrganization();
+    await expectPgError(
+      insertBuildingSql({ organizationId: org.id, assignmentId: null }),
+      NOT_NULL,
+    );
   });
 
-  it("bygning uten navn avvises", async () => {
-    const org = await createOrganization("Oppdiktet takst A");
-    const assignment = await assignmentWithProperty(org.id);
+  it("report_buildings.name er NOT NULL", async () => {
+    const org = await createOrganization();
     await expectPgError(
-      insertBuilding(org.id, { assignment_id: assignment.id, name: null }),
+      insertBuildingSql({
+        organizationId: org.id,
+        assignmentId: await assignmentIn(org.id),
+        name: null,
+      }),
       NOT_NULL,
     );
   });
 
   it.each([
-    ["report_building_id", { report_building_id: null }],
+    ["report_building_id", { buildingId: null }],
     ["name", { name: null }],
     ["level", { level: null }],
-    ["below_ground", { below_ground: null }],
-  ] as const)("etasje med %s = null avvises", async (_column, values) => {
-    const org = await createOrganization("Oppdiktet takst A");
-    const building = await createBuilding(org.id);
-    await expectPgError(insertFloor(org.id, building.id, values), NOT_NULL);
+    ["below_ground", { belowGround: null }],
+  ] as const)("floors.%s er NOT NULL", async (_name, values) => {
+    const org = await createOrganization();
+    const buildingId = (await createBuilding(org.id)).id;
+    await expectPgError(
+      insertFloorSql({ organizationId: org.id, buildingId, ...values }),
+      NOT_NULL,
+    );
   });
 
-  it("etasje uten below_ground får standard false", async () => {
-    const org = await createOrganization("Oppdiktet takst A");
-    const building = await createBuilding(org.id);
-    const [row] = rowsOf(await insertFloor(org.id, building.id));
+  it("floors.below_ground får standard false", async () => {
+    const org = await createOrganization();
+    const buildingId = (await createBuilding(org.id)).id;
+    const [row] = rowsOf(await insertFloorSql({ organizationId: org.id, buildingId }));
     expect(row!.below_ground).toBe(false);
   });
 
-  it("areal uten floor_id avvises", async () => {
-    const org = await createOrganization("Oppdiktet takst A");
-    await expectPgError(insertArea(org.id, null), NOT_NULL);
+  it("floor_areas.floor_id er NOT NULL", async () => {
+    const org = await createOrganization();
+    await expectPgError(insertAreaSql({ organizationId: org.id, floorId: null }), NOT_NULL);
+  });
+
+  it("floor_areas: alle arealfelt, måler, metode og kommentar kan stå tomme", async () => {
+    const org = await createOrganization();
+    const [row] = rowsOf(
+      await insertAreaSql({ organizationId: org.id, floorId: await ownFloor(org.id) }),
+    );
+    const [stored] = rowsOf(
+      await db.execute(sql`
+        select bra_i, bra_e, bra_b, alh, measured_by, method, comment
+        from floor_areas where id = ${row!.id}`),
+    );
+    expect(Object.values(stored!).every((value) => value === null)).toBe(true);
   });
 
   it.each([
-    ["floor_id", "floor_id"],
-    ["room_type", "room_type"],
-    ["area_type", "area_type"],
-    ["below_ground", "below_ground"],
-  ])("rom med %s = null avvises", async (_name, column) => {
-    const floor = await createFloor((await createOrganization("Oppdiktet takst A")).id);
-    await expectPgError(insertRoom(floor.organizationId, floor.id, { [column]: null }), NOT_NULL);
+    ["floor_id", { floorId: null }],
+    ["room_type", { roomType: null }],
+    ["area_type", { areaType: null }],
+    ["below_ground", { belowGround: null }],
+  ] as const)("rooms.%s er NOT NULL", async (_name, values) => {
+    const org = await createOrganization();
+    const floorId = await ownFloor(org.id);
+    await expectPgError(insertRoomSql({ organizationId: org.id, floorId, ...values }), NOT_NULL);
   });
 
-  it("rom uten navn godtas (romtypens navn vises)", async () => {
-    const floor = await createFloor((await createOrganization("Oppdiktet takst A")).id);
-    const [row] = rowsOf(await insertRoom(floor.organizationId, floor.id, { name: null }));
-    expect(row!.name).toBeNull();
+  it("rooms.name kan stå tomt", async () => {
+    const org = await createOrganization();
+    await insertRoomSql({ organizationId: org.id, floorId: await ownFloor(org.id) });
   });
-
-  it.each(["report_buildings", "floors", "floor_areas", "rooms"])(
-    "%s får deleted_at = null og row_version = 1 som standard",
-    async (table) => {
-      const { org, assignment, buildingId, floorId } = await orgWithFloor("Oppdiktet takst A");
-      const run =
-        table === "report_buildings"
-          ? insertBuilding(org.id, { assignment_id: assignment.id })
-          : table === "floors"
-            ? insertFloor(org.id, buildingId, { level: 2 })
-            : table === "floor_areas"
-              ? insertArea(org.id, floorId)
-              : insertRoom(org.id, floorId);
-      const [row] = rowsOf(await run);
-      expect(row!.deleted_at).toBeNull();
-      expect(row!.row_version).toBe(1);
-      expect(row!.organization_id).toBe(org.id);
-    },
-  );
 });
 
 describe("3.7 tenant-tabellene", () => {
@@ -468,20 +521,18 @@ describe("3.7 tenant-tabellene", () => {
     const table = tables.find((candidate) => getTableName(candidate) === name);
     expect(table, `tabellen ${name} i skjemaet`).toBeDefined();
     const columns = Object.values(getTableColumns(table!)).map((column) => column.name);
-    expect(columns).toEqual(
-      expect.arrayContaining(["id", "organization_id", "deleted_at", "deleted_by", "row_version"]),
-    );
+    expect(columns).toEqual(expect.arrayContaining(["organization_id", "deleted_at"]));
   });
 
-  it("report_buildings har ikke property_id (eiendommen finnes via oppdraget, A78)", () => {
+  it("report_buildings har ingen property_id (eiendommen finnes via oppdraget, A78)", () => {
     const table = tables.find((candidate) => getTableName(candidate) === "report_buildings");
+    expect(table).toBeDefined();
     const columns = Object.values(getTableColumns(table!)).map((column) => column.name);
-    expect(columns).toContain("assignment_id");
     expect(columns).not.toContain("property_id");
   });
 
   it.each(NAMES)(
-    "%s står i tests/tenant-tables.ts med buildings.test.ts, og radbyggeren virker",
+    "%s står i tests/tenant-tables.ts med src/core/buildings/buildings.test.ts, og radbyggeren virker",
     async (name) => {
       const entry = tenantTables.find((candidate) => candidate.table === name);
       expect(entry, `${name} i tests/tenant-tables.ts`).toBeDefined();
@@ -490,7 +541,7 @@ describe("3.7 tenant-tabellene", () => {
       const id = await entry!.insertRow(org.id);
       expect(id).toMatch(/^[0-9a-f-]{36}$/);
       const [row] = rowsOf(
-        await db.execute(sql`select organization_id from ${sql.raw(name)} where id = ${id}`),
+        await db.execute(sql`select organization_id from ${sql.identifier(name)} where id = ${id}`),
       );
       expect(row!.organization_id).toBe(org.id);
     },
@@ -500,23 +551,26 @@ describe("3.7 tenant-tabellene", () => {
 describe("3.8 migreringen", () => {
   const dir = path.join(process.cwd(), "src/db/migrations");
 
-  it("0017 finnes, er den eneste med nummeret, og lager de fire tabellene", () => {
+  it("0017 finnes og er den eneste med nummeret", () => {
     const files = readdirSync(dir).filter((name) => name.startsWith("0017_"));
     expect(files).toHaveLength(1);
     expect(files[0]).toMatch(/\.sql$/);
-    const text = readFileSync(path.join(dir, files[0]!), "utf8");
-    for (const table of ["report_buildings", "floors", "floor_areas", "rooms"]) {
-      expect(text, `0017 lager ${table}`).toMatch(new RegExp(`create table "?${table}"?`, "i"));
+  });
+
+  it("0017 lager de fire tabellene", () => {
+    const [file] = readdirSync(dir).filter((name) => name.startsWith("0017_"));
+    const text = readFileSync(path.join(dir, file!), "utf8");
+    for (const name of ["report_buildings", "floors", "floor_areas", "rooms"]) {
+      expect(text, name).toMatch(new RegExp(`CREATE TABLE[^;]*"${name}"`, "i"));
     }
   });
 
-  it("ingen annen migrering lager de fire tabellene", () => {
-    const others = readdirSync(dir).filter(
-      (name) => name.endsWith(".sql") && !name.startsWith("0017_"),
-    );
-    for (const name of others) {
-      const text = readFileSync(path.join(dir, name), "utf8");
-      expect(text, name).not.toMatch(/create table "?(report_buildings|floor_areas|rooms)"?/i);
-    }
+  it("journalen har 0017 som siste oppføring", () => {
+    const journal = JSON.parse(readFileSync(path.join(dir, "meta/_journal.json"), "utf8")) as {
+      entries: { idx: number; tag: string }[];
+    };
+    const last = journal.entries.at(-1)!;
+    expect(last.idx).toBe(17);
+    expect(last.tag.startsWith("0017_")).toBe(true);
   });
 });

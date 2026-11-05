@@ -395,7 +395,7 @@ function FloorAreaForm({
     <form action={formAction} noValidate className="space-y-4">
       <FormErrors state={state} />
       <input type="hidden" name="floorId" value={floorId} />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
         {AREA_FIELDS.map((field) => (
           <Field
             key={field.name}
@@ -416,7 +416,7 @@ function FloorAreaForm({
       <p className="text-sm text-slate-600">
         Areal i m² med høyst én desimal. BRA er summen av BRA-i, BRA-e og BRA-b; ALH tas ikke med.
       </p>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Field
           label="Målt av"
           htmlFor={`${idPrefix}-measuredBy`}

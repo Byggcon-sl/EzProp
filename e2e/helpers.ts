@@ -918,3 +918,48 @@ export async function companyOrgNumbers(): Promise<string[]> {
     await sql.end();
   }
 }
+
+/**
+ * Setter innstillingen `access.inspectors_edit_all` i organisasjonen til admin fra seed, og gir
+ * tilbake verdien som sto der før (`undefined` når den ikke var satt). Sett den tilbake med
+ * `restoreInspectorsEditAll` i `finally`. Playwright kjører med én arbeider, så ingen annen test
+ * ser endringen. Bare lokal database eller testdatabasen.
+ */
+export async function setInspectorsEditAll(value: boolean): Promise<boolean | undefined> {
+  const sql = e2eSql();
+  try {
+    const [row] = await sql<{ id: string; previous: boolean | null }[]>`
+      select o.id, (o.settings ->> 'access.inspectors_edit_all')::boolean as previous
+      from organizations o
+      where o.id = (
+        select a.organization_id from employees a join users au on au.id = a.user_id
+        where au.email = ${ADMIN_EMAIL} and a.deleted_at is null limit 1)`;
+    if (!row) throw new Error("Fant ikke organisasjonen til admin fra seed (kjør pnpm db:seed)");
+    await sql`
+      update organizations
+      set settings = settings || jsonb_build_object('access.inspectors_edit_all', ${value}::boolean)
+      where id = ${row.id}`;
+    return row.previous ?? undefined;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Setter innstillingen tilbake til verdien fra `setInspectorsEditAll` (fjerner den når den manglet). */
+export async function restoreInspectorsEditAll(previous: boolean | undefined): Promise<void> {
+  if (previous !== undefined) {
+    await setInspectorsEditAll(previous);
+    return;
+  }
+  const sql = e2eSql();
+  try {
+    await sql`
+      update organizations
+      set settings = settings - 'access.inspectors_edit_all'
+      where id = (
+        select a.organization_id from employees a join users au on au.id = a.user_id
+        where au.email = ${ADMIN_EMAIL} and a.deleted_at is null limit 1)`;
+  } finally {
+    await sql.end();
+  }
+}
