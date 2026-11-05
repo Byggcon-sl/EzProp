@@ -101,7 +101,17 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         <dl>
           <Detail label="Adresse">{order.addressText}</Detail>
           <Detail label="Mottatt">{formatOsloDateTime(order.receivedAt)}</Detail>
-          <Detail label="Hvem bestilte">{order.orderedByText || EMPTY}</Detail>
+          <Detail label="Hvem bestilte">
+            {order.orderedByText || EMPTY}
+            {order.orderedByContactId && (
+              <Link
+                href={`/kontakter/${order.orderedByContactId}`}
+                className="mt-1 flex min-h-11 w-fit items-center font-medium text-brand-700 underline"
+              >
+                Kontakt i registeret
+              </Link>
+            )}
+          </Detail>
           <Detail label="Ekstern referanse">{order.externalRef || EMPTY}</Detail>
           <Detail label="Gårdsnummer">{order.gnr || EMPTY}</Detail>
           <Detail label="Bruksnummer">{order.bnr || EMPTY}</Detail>

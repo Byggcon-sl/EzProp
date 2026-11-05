@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AccessDeniedError } from "@/core/access";
+import { ContactNotFoundError } from "@/core/contacts";
 import { OfficeNotFoundError, OrderAlreadyHandledError } from "@/core/orders/errors";
 import { orderInputSchema } from "@/core/orders/schemas";
 import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../form-state";
@@ -345,6 +346,87 @@ describe("7.5 convertOrderAction", () => {
     expect(state.message).toBe(UNKNOWN_ERROR);
     const logged = JSON.stringify(mocks.logError.mock.calls);
     expect(logged).toContain("TypeError");
+    expect(logged).not.toContain(ADDRESS);
+  });
+});
+
+/*
+ * Bestilleren fra kontaktregisteret (docs/funksjoner/fase2a-koble-kontakter-testplan.md punkt
+ * 8.1, 8.2 og 8.6). Kontaktvelgeren sender det skjulte feltet `orderedByContactId`.
+ */
+describe("8 bestilleren fra kontaktregisteret", () => {
+  const CONTACT_ID = "0190a000-0000-7000-8000-000000000090";
+  const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
+
+  function orderForm(overrides: Record<string, string> = {}) {
+    return form({ addressText: ADDRESS, orderedByText: ORDERED_BY, ...overrides });
+  }
+
+  it.each(["abc", "1 or 1=1", "../x"])(
+    "invalid_contactId_field_error_no_core_call: «%s» → feil ved feltet uten kall",
+    async (orderedByContactId) => {
+      const state = await createOrderAction(initialFormState, orderForm({ orderedByContactId }));
+      expect(state.fieldErrors.orderedByContactId).toBe(CONTACT_NOT_FOUND);
+      expect(coreCalls()).toBe(0);
+    },
+  );
+
+  it("ContactNotFoundError_becomes_field_error: feil ved feltet, ikke 500, og ingen logg", async () => {
+    mocks.core.createOrder.mockRejectedValue(new ContactNotFoundError());
+    const state = await createOrderAction(
+      initialFormState,
+      orderForm({ orderedByContactId: CONTACT_ID }),
+    );
+    expect(state.fieldErrors.orderedByContactId).toBe(CONTACT_NOT_FOUND);
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it("ZodError for orderedByContactId fra kjernen står ved feltet", async () => {
+    const result = orderInputSchema(new Date()).safeParse({
+      addressText: ADDRESS,
+      orderedByContactId: "ikke-en-id",
+    });
+    expect(result.success).toBe(false);
+    mocks.core.createOrder.mockRejectedValue(result.error);
+    const state = await createOrderAction(initialFormState, orderForm());
+    expect(state.fieldErrors.orderedByContactId).toBe(CONTACT_NOT_FOUND);
+  });
+
+  it("valgt kontakt sendes med id-en og friteksten, og man går til ordresiden", async () => {
+    mocks.core.createOrder.mockResolvedValue({ id: ORDER, organizationId: ORG });
+    const url = await redirectOf(
+      createOrderAction(initialFormState, orderForm({ orderedByContactId: CONTACT_ID })),
+    );
+    expect(url).toBe(`/ordre/${ORDER}`);
+    expect(mocks.core.createOrder.mock.calls[0]?.[2]).toMatchObject({
+      orderedByContactId: CONTACT_ID,
+      orderedByText: ORDERED_BY,
+    });
+  });
+
+  it.each([
+    ["tomt felt", { orderedByContactId: "" }],
+    ["uten feltet", {}],
+  ])("%s gir orderedByContactId = null", async (_label, overrides) => {
+    mocks.core.createOrder.mockResolvedValue({ id: ORDER, organizationId: ORG });
+    await redirectOf(createOrderAction(initialFormState, orderForm(overrides)));
+    const input = mocks.core.createOrder.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(input.orderedByContactId).toBeNull();
+  });
+
+  it("logger_never_gets_form_values_or_query: ukjent feil logges uten bestilleren", async () => {
+    const boom = new Error(`databasen sa nei til ${ORDERED_BY}`);
+    boom.name = "OppdiktetFeil";
+    mocks.core.createOrder.mockRejectedValue(boom);
+    const state = await createOrderAction(
+      initialFormState,
+      orderForm({ orderedByContactId: CONTACT_ID }),
+    );
+    expect(state.message).toBe(UNKNOWN_ERROR);
+    const logged = JSON.stringify(mocks.logError.mock.calls);
+    expect(logged).toContain("OppdiktetFeil");
+    expect(logged).not.toContain(ORDERED_BY);
+    expect(logged).not.toContain("Testmegleren");
     expect(logged).not.toContain(ADDRESS);
   });
 });

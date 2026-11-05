@@ -313,6 +313,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                     firmName: party.firmName ?? "",
                     email: party.email ?? "",
                     phone: party.phone ?? "",
+                    contactId: party.contactId ?? null,
                     receivesReport: party.receivesReport,
                     receivesInvoice: party.receivesInvoice,
                     receivesMessages: party.receivesMessages,
