@@ -7,7 +7,7 @@ import { isUuid } from "@/shared/lib/uuid";
 import type { ContactSource } from "./codes";
 import { FirmNotFoundError } from "./errors";
 import { contactInputSchema, type ContactInput } from "./schemas";
-import { LIST_LIMIT, matchesAny, searchPattern, type ListOptions } from "./search";
+import { listLimit, matchesAny, searchPattern, type ListOptions } from "./search";
 
 /*
  * Kontakter (docs/05-domenemodell.md 4.2): personer utenfor organisasjonen, for eksempel
@@ -82,7 +82,7 @@ export async function listContacts(
       ),
     )
     .orderBy(asc(contacts.lastName), asc(contacts.firstName), asc(contacts.id))
-    .limit(LIST_LIMIT);
+    .limit(listLimit(options));
 }
 
 /** Én kontakt med alle feltene, kilden og firmanavnet. */

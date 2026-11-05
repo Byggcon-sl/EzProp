@@ -34,6 +34,10 @@ import { todayInOslo } from "@/shared/lib/dates";
  * sjekker at alle tabellene i databasen står i listen.
  */
 export const RESET_TABLES = [
+  "rooms",
+  "floor_areas",
+  "floors",
+  "report_buildings",
   "contacts",
   "firms",
   "number_sequences",
@@ -646,6 +650,231 @@ export async function createCommonAreas(
     .returning();
   if (!row) throw new Error("kunne ikke opprette fellesdeler");
   return row;
+}
+
+// --- Bygninger, etasjer, areal og rom (docs/funksjoner/fase2a-bygninger-areal-rom.md) ---------
+
+/*
+ * Fabrikkene under setter inn med SQL mot kolonnenavnene i kortet (punkt 1–4), uten
+ * tilgangssjekk og uten Zod, slik at testene kan lage rader tjenesten ville avvist (ukjente
+ * koder, rader i en annen organisasjon). Mangler forelderen, lages den i samme organisasjon.
+ * Raden gis tilbake med feltnavn i camelCase; arealtallene som tall (eller `null`).
+ */
+
+type DbRow = Record<string, unknown>;
+
+function firstRowOf(result: unknown, table: string): DbRow {
+  const [row] = result as DbRow[];
+  if (!row) throw new Error(`kunne ikke opprette rad i ${table}`);
+  return row;
+}
+
+type BaseRow = {
+  id: string;
+  organizationId: string;
+  createdAt: Date;
+  createdBy: string | null;
+  updatedAt: Date;
+  updatedBy: string | null;
+  deletedAt: Date | null;
+  deletedBy: string | null;
+  rowVersion: number;
+};
+
+function baseOf(row: DbRow): BaseRow {
+  return {
+    id: row.id as string,
+    organizationId: row.organization_id as string,
+    createdAt: new Date(row.created_at as string | Date),
+    createdBy: (row.created_by as string | null) ?? null,
+    updatedAt: new Date(row.updated_at as string | Date),
+    updatedBy: (row.updated_by as string | null) ?? null,
+    deletedAt: row.deleted_at ? new Date(row.deleted_at as string | Date) : null,
+    deletedBy: (row.deleted_by as string | null) ?? null,
+    rowVersion: Number(row.row_version),
+  };
+}
+
+/** Tidspunkt som tekst til SQL (postgres-js tar ikke `Date` i rå spørringer). */
+function isoOrNull(value: Date | null | undefined): string | null {
+  return value ? value.toISOString() : null;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return value === null || value === undefined ? null : Number(value);
+}
+
+export type TestBuilding = BaseRow & { assignmentId: string; name: string };
+
+type BuildingOverrides = {
+  /** Oppdraget. Mangler det, lages et oppdrag med eiendom i organisasjonen. */
+  assignmentId?: string;
+  name?: string;
+  createdAt?: Date;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/** En bygning (`report_buildings`). Standard: «Bolighus» på et nytt oppdrag med eiendom. */
+export async function createBuilding(
+  organizationId: string,
+  overrides: BuildingOverrides = {},
+): Promise<TestBuilding> {
+  let assignmentId = overrides.assignmentId;
+  if (!assignmentId) {
+    assignmentId = (await createAssignment(organizationId)).id;
+    await createProperty(organizationId, { assignmentId });
+  }
+  const row = firstRowOf(
+    await db.execute(sql`
+      insert into report_buildings (organization_id, assignment_id, name, created_at, deleted_at, deleted_by)
+      values (${organizationId}, ${assignmentId}, ${overrides.name ?? "Bolighus"},
+        ${(overrides.createdAt ?? new Date()).toISOString()}::timestamptz, ${isoOrNull(overrides.deletedAt)}::timestamptz, ${overrides.deletedBy ?? null})
+      returning *`),
+    "report_buildings",
+  );
+  return { ...baseOf(row), assignmentId: row.assignment_id as string, name: row.name as string };
+}
+
+export type TestFloor = BaseRow & {
+  reportBuildingId: string;
+  name: string;
+  level: number;
+  belowGround: boolean;
+};
+
+type FloorOverrides = {
+  buildingId?: string;
+  name?: string;
+  level?: number;
+  belowGround?: boolean;
+  createdAt?: Date;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/** En etasje (`floors`). Standard: «1. etasje», nivå 1, over terreng, i en ny bygning. */
+export async function createFloor(
+  organizationId: string,
+  overrides: FloorOverrides = {},
+): Promise<TestFloor> {
+  const buildingId = overrides.buildingId ?? (await createBuilding(organizationId)).id;
+  const row = firstRowOf(
+    await db.execute(sql`
+      insert into floors (organization_id, report_building_id, name, level, below_ground, created_at, deleted_at, deleted_by)
+      values (${organizationId}, ${buildingId}, ${overrides.name ?? "1. etasje"},
+        ${overrides.level ?? 1}, ${overrides.belowGround ?? false}, ${(overrides.createdAt ?? new Date()).toISOString()}::timestamptz,
+        ${isoOrNull(overrides.deletedAt)}::timestamptz, ${overrides.deletedBy ?? null})
+      returning *`),
+    "floors",
+  );
+  return {
+    ...baseOf(row),
+    reportBuildingId: row.report_building_id as string,
+    name: row.name as string,
+    level: Number(row.level),
+    belowGround: row.below_ground as boolean,
+  };
+}
+
+export type TestFloorArea = BaseRow & {
+  floorId: string;
+  braI: number | null;
+  braE: number | null;
+  braB: number | null;
+  alh: number | null;
+  measuredBy: string | null;
+  method: string | null;
+  comment: string | null;
+};
+
+type FloorAreaOverrides = {
+  floorId?: string;
+  braI?: number | string | null;
+  braE?: number | string | null;
+  braB?: number | string | null;
+  alh?: number | string | null;
+  /** Ansatt-id (ikke bruker-id). */
+  measuredBy?: string | null;
+  method?: string | null;
+  comment?: string | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/** Arealet på en etasje (`floor_areas`). Standard: alle felt tomme, i en ny etasje. */
+export async function createFloorArea(
+  organizationId: string,
+  overrides: FloorAreaOverrides = {},
+): Promise<TestFloorArea> {
+  const floorId = overrides.floorId ?? (await createFloor(organizationId)).id;
+  const text = (value: number | string | null | undefined) =>
+    value === null || value === undefined ? null : String(value);
+  const row = firstRowOf(
+    await db.execute(sql`
+      insert into floor_areas (organization_id, floor_id, bra_i, bra_e, bra_b, alh, measured_by, method, comment, deleted_at, deleted_by)
+      values (${organizationId}, ${floorId}, ${text(overrides.braI)}::numeric, ${text(overrides.braE)}::numeric,
+        ${text(overrides.braB)}::numeric, ${text(overrides.alh)}::numeric, ${overrides.measuredBy ?? null},
+        ${overrides.method ?? null}, ${overrides.comment ?? null}, ${isoOrNull(overrides.deletedAt)}::timestamptz,
+        ${overrides.deletedBy ?? null})
+      returning *`),
+    "floor_areas",
+  );
+  return {
+    ...baseOf(row),
+    floorId: row.floor_id as string,
+    braI: numberOrNull(row.bra_i),
+    braE: numberOrNull(row.bra_e),
+    braB: numberOrNull(row.bra_b),
+    alh: numberOrNull(row.alh),
+    measuredBy: (row.measured_by as string | null) ?? null,
+    method: (row.method as string | null) ?? null,
+    comment: (row.comment as string | null) ?? null,
+  };
+}
+
+export type TestRoom = BaseRow & {
+  floorId: string;
+  roomType: string;
+  name: string | null;
+  areaType: string;
+  belowGround: boolean;
+};
+
+type RoomOverrides = {
+  floorId?: string;
+  roomType?: string;
+  name?: string | null;
+  areaType?: string;
+  belowGround?: boolean;
+  createdAt?: Date;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/** Et rom (`rooms`). Standard: bad uten navn, BRA-i, over terreng, i en ny etasje. */
+export async function createRoom(
+  organizationId: string,
+  overrides: RoomOverrides = {},
+): Promise<TestRoom> {
+  const floorId = overrides.floorId ?? (await createFloor(organizationId)).id;
+  const row = firstRowOf(
+    await db.execute(sql`
+      insert into rooms (organization_id, floor_id, room_type, name, area_type, below_ground, created_at, deleted_at, deleted_by)
+      values (${organizationId}, ${floorId}, ${overrides.roomType ?? "bathroom"},
+        ${overrides.name ?? null}, ${overrides.areaType ?? "bra_i"}, ${overrides.belowGround ?? false},
+        ${(overrides.createdAt ?? new Date()).toISOString()}::timestamptz, ${isoOrNull(overrides.deletedAt)}::timestamptz, ${overrides.deletedBy ?? null})
+      returning *`),
+    "rooms",
+  );
+  return {
+    ...baseOf(row),
+    floorId: row.floor_id as string,
+    roomType: row.room_type as string,
+    name: (row.name as string | null) ?? null,
+    areaType: row.area_type as string,
+    belowGround: row.below_ground as boolean,
+  };
 }
 
 const ORG_NUMBER_WEIGHTS = [3, 2, 7, 6, 5, 4, 3, 2] as const;
