@@ -267,7 +267,7 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
       await signInWithCode(employee, email);
       await expect(employee).toHaveURL(/\/arbeidskoe$/);
       await expect(employee.getByRole("heading", { name: "Arbeidskø", level: 1 })).toBeVisible();
-      await expect(employee.getByText("Ingenting venter på deg")).toBeVisible();
+      await expect(employee.getByRole("navigation", { name: "Status" })).toBeVisible();
       await expect(mainNav(employee)).toBeVisible();
       await expect(mainNav(employee).getByRole("link", { name: "Admin" })).toHaveCount(0);
 
@@ -295,7 +295,7 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
           name: /^(Ingen tilgang|Du er ikke registrert som ansatt)$/,
         }),
       ).toBeVisible();
-      await expect(employee.getByText("Ingenting venter på deg")).toHaveCount(0);
+      await expect(employee.getByRole("navigation", { name: "Status" })).toHaveCount(0);
       await expect(employee.getByText("Du jobber for")).toHaveCount(0);
       // Adminområdet er stengt for personen
       const response = await employee.goto(employeeUrl);
@@ -315,7 +315,7 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
       ).toHaveCount(0);
 
       await employee.goto("/arbeidskoe");
-      await expect(employee.getByText("Ingenting venter på deg")).toBeVisible();
+      await expect(employee.getByRole("navigation", { name: "Status" })).toBeVisible();
       await expect(mainNav(employee).getByRole("link", { name: "Admin" })).toHaveCount(0);
     } finally {
       await employee.context().close();

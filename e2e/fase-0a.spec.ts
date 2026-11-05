@@ -18,12 +18,13 @@ test("uinnlogget sendes til innlogging", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Logg inn" })).toBeVisible();
 });
 
-test("admin logger inn med kode på e-post og ser en tom arbeidskø, og kan logge ut", async ({
+test("admin logger inn med kode på e-post og ser arbeidskøen, og kan logge ut", async ({
   page,
 }) => {
   await logIn(page, ADMIN_EMAIL);
   await expect(page.getByRole("heading", { name: "Arbeidskø" })).toBeVisible();
-  await expect(page.getByText("Ingenting venter på deg")).toBeVisible();
+  // Arbeidskøen med fanene etter status (fase 2a)
+  await expect(page.getByRole("navigation", { name: "Status" })).toBeVisible();
   await page.getByRole("button", { name: "Logg ut" }).click();
   await expect(page).toHaveURL(/\/logg-inn$/);
 });

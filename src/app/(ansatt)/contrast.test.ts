@@ -39,6 +39,8 @@ const fixed: Record<string, string> = {
   "amber-900": "#7b3306",
   "red-700": "#c10007",
   "red-800": "#9f0712",
+  // Merket «danger» («Forfalt» i arbeidskøen), docs/funksjoner/fase2a-arbeidsko-skisse.md.
+  "red-50": "#fef2f2",
   "emerald-50": "#ecfdf5",
   "emerald-900": "#004f3b",
 };
@@ -93,6 +95,7 @@ const textPairs: [text: string, background: string, usage: string][] = [
   ["brand-700", "brand-50", "merket «brand» (Admin) og «Endre» i rad med hover"],
   ["amber-900", "amber-50", "merket «warning» («Forsikring utløpt», «Mangler opplysninger»)"],
   ["red-800", "white", "feil ved feltet"],
+  ["red-800", "red-50", "merket «danger» («Forfalt») og feilmeldingen øverst"],
   ["emerald-900", "emerald-50", "kvittering etter lagring"],
   ["slate-600", "brand-50", "linje 2 i rad med hover"],
   ["slate-900", "brand-50", "tittel i rad med hover"],
