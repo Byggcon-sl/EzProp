@@ -873,6 +873,7 @@ const ASSIGNMENT_KEYS = [
   "orderId",
   // 6.1: utstedende selskap (docs/agenter/oppgaver/fase2a-utstedende-selskap-testplan.md)
   "companyName",
+  "corrected",
   "team",
   "parties",
   "teamCandidates",

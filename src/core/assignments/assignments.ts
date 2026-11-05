@@ -12,6 +12,7 @@ import {
 } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { PARTY_ROLES, TEAM_ROLES } from "./codes";
+import { isCorrected } from "./status-flow";
 
 /*
  * Oppdragssiden (docs/05-domenemodell.md 4.3): oppdraget med aktivt team, parter og hvem som kan
@@ -50,6 +51,8 @@ export type AssignmentDetail = {
    * selskap vises, fordi det var det som gjaldt. Tomt når oppdraget ikke har selskap.
    */
   companyName: string | null;
+  /** Merket «Rettet» (A72): Ferdig og sendt på nytt med versjon 2 eller høyere. Regnes ut. */
+  corrected: boolean;
   /** Aktive rader, i rekkefølgen i `TEAM_ROLES`. */
   team: AssignmentTeamEntry[];
   /** Parter som ikke er fjernet, i rekkefølgen i `PARTY_ROLES` og så eldste først. */
@@ -175,5 +178,9 @@ export async function getAssignment(
     (a, b) => orderIndex(PARTY_ROLES, a.role) - orderIndex(PARTY_ROLES, b.role),
   );
 
-  return { ...assignment, team, parties, teamCandidates };
+  // Utgivelsene finnes ikke ennå, så versjonen er alltid tom og «Rettet» alltid usant. Kobles
+  // til `report_releases` i planpunktet «Utgivelser med versjon» (A72).
+  const corrected = isCorrected({ status: assignment.status, highestSentReleaseVersion: null });
+
+  return { ...assignment, corrected, team, parties, teamCandidates };
 }
