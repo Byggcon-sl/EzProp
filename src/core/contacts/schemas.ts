@@ -26,8 +26,11 @@ const NOTES_TOO_LONG = "Notatet kan ha høyst 1000 tegn.";
 const FIRM_NOT_FOUND = "Firmaet finnes ikke.";
 const NATIONAL_ID = "Fødselsnummer skal ikke lagres her.";
 
-/** Elleve sifre på rad ligner et fødselsnummer. Ti godtas (for eksempel telefonnummer med 0). */
-const ELEVEN_DIGITS = /\d{11}/;
+/**
+ * Elleve sifre ligner et fødselsnummer, også med mellomrom etter fødselsdatoen («010190 12345»).
+ * Ti godtas (for eksempel telefonnummer med 0).
+ */
+const ELEVEN_DIGITS = /\d{6}\s?\d{5}/;
 
 function emptyToNull(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -108,10 +111,9 @@ export const contactInputSchema = z.object({
     (value) => value === null || emailFormat.safeParse(value).success,
     { error: EMAIL },
   ),
-  phone: optionalText(20, PHONE_TOO_LONG).refine(
-    (value) => value === null || /^[0-9 +]*$/.test(value),
-    { error: PHONE },
-  ),
+  phone: optionalText(20, PHONE_TOO_LONG)
+    .refine((value) => value === null || /^[0-9 +]*$/.test(value), { error: PHONE })
+    .refine(hasNoNationalId, { error: NATIONAL_ID }),
   firmId: z
     .string()
     .nullish()

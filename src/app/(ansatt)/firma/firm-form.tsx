@@ -99,7 +99,7 @@ export function FirmForm({
         <Field
           label="Notat (valgfritt)"
           htmlFor="notes"
-          hint="Kort og saklig."
+          hint="Kort og saklig. Ikke skriv helseopplysninger eller fødselsnummer."
           error={error("notes")}
         >
           <Textarea
