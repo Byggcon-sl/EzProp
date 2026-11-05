@@ -85,7 +85,7 @@ const yesNoUnknown = z.preprocess(
   z.enum(YES_NO_UNKNOWN, { error: YES_NO }),
 );
 
-/** Eiendommen med én matrikkelrad (A65). */
+/** Eiendommen med én matrikkelrad (A70). */
 export const propertyInputSchema = z.object({
   address: z
     .string({ error: ADDRESS })
@@ -122,7 +122,7 @@ export type PropertyInput = Omit<
 > & { housingType?: string | null; ownershipForm?: string | null };
 export type PropertyValues = z.output<typeof propertyInputSchema>;
 
-/** Fellesdelene for leilighet (A66). */
+/** Fellesdelene for leilighet (A71). */
 export const commonAreasInputSchema = z.object({
   managingAgent: optionalText(200, MANAGING_AGENT_TOO_LONG),
   conditionReportStatus: yesNoUnknown,

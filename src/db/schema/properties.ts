@@ -5,7 +5,7 @@ import { baseColumns } from "./common";
 /**
  * Eiendommen (docs/05-domenemodell.md 4.4), enkel utgave i fase 2a: adresse, kommune, boligtype og
  * eierform, lagt inn for hånd (`data_source = manual`). Hvert oppdrag har sin egen eiendom til søk
- * og gjenbruk kommer (A65). Matrikkelen står i `cadastral_units`.
+ * og gjenbruk kommer (A70). Matrikkelen står i `cadastral_units`.
  *
  * Faste koder står i `@/core/properties/codes`. CHECK-reglene under må ha de samme kodene.
  */

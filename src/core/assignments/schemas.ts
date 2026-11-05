@@ -16,12 +16,16 @@ const PHONE = "Telefonnummeret kan bare ha sifre, mellomrom og +.";
 const REASON_TOO_LONG = "Grunnen kan ha høyst 300 tegn.";
 const NATIONAL_ID = "Fødselsnummer skal ikke lagres her.";
 
-/** Elleve sifre på rad ligner et fødselsnummer. Ti godtas (for eksempel telefonnummer med 0). */
+/**
+ * Elleve sifre på rad ligner et fødselsnummer. Ti godtas (for eksempel telefonnummer med 0).
+ * Mellomrom, punktum og bindestrek mellom sifrene teller ikke («010190 12345» stoppes også).
+ */
 const ELEVEN_DIGITS = /\d{11}/;
+const DIGIT_SEPARATORS = /(?<=\d)[\s.-]+(?=\d)/g;
 
 /** Sann når teksten ikke ligner et fødselsnummer. Tom tekst er greit. */
 export function hasNoNationalId(value: string | null): boolean {
-  return value === null || !ELEVEN_DIGITS.test(value);
+  return value === null || !ELEVEN_DIGITS.test(value.replace(DIGIT_SEPARATORS, ""));
 }
 
 function emptyToNull(value: string | null | undefined): string | null {
@@ -54,7 +58,7 @@ export const partyInputSchema = z.object({
     .trim()
     .min(1, { error: NAME })
     .max(200, { error: NAME_TOO_LONG })
-    .refine((value) => !ELEVEN_DIGITS.test(value), { error: NATIONAL_ID }),
+    .refine(hasNoNationalId, { error: NATIONAL_ID }),
   firmName: optionalText(200, FIRM_TOO_LONG).refine(hasNoNationalId, { error: NATIONAL_ID }),
   email: optionalText(254, EMAIL).refine(
     (value) => value === null || emailFormat.safeParse(value).success,

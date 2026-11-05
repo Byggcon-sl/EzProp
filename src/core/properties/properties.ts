@@ -55,7 +55,7 @@ export type PropertyDetail = {
   housingType: string;
   ownershipForm: string;
   dataSource: string;
-  /** Den eldste matrikkelraden som ikke er slettet (A65). */
+  /** Den eldste matrikkelraden som ikke er slettet (A70). */
   cadastralUnit: CadastralUnitDetail | null;
 };
 
@@ -78,9 +78,9 @@ export type PropertyPrefill = {
 
 export type AssignmentProperty = {
   property: PropertyDetail | null;
-  /** `null` når raden mangler, eller når eiendommen ikke har fellesdeler (A67). */
+  /** `null` når raden mangler, eller når eiendommen ikke har fellesdeler (A72). */
   commonAreas: CommonAreasDetail | null;
-  /** Fra ordren når eiendom mangler, ellers tomme verdier. Adressen deles ikke opp (A68). */
+  /** Fra ordren når eiendom mangler, ellers tomme verdier. Adressen deles ikke opp (A73). */
   prefill: PropertyPrefill;
 };
 
@@ -232,7 +232,7 @@ async function findProperty(tx: DbExecutor, organizationId: string, propertyId: 
   return row ?? null;
 }
 
-/** Den eldste matrikkelraden som ikke er slettet (A65). */
+/** Den eldste matrikkelraden som ikke er slettet (A70). */
 async function findCadastralUnit(tx: DbExecutor, organizationId: string, propertyId: string) {
   const [row] = await tx
     .select(cadastralColumns)

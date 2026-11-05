@@ -21,9 +21,9 @@ Fra kortet, punkt 1–8. Testskriveren skriver mot dette; avvik føres i kortet 
 ## 1. Faste koder, `src/core/properties/codes.test.ts` (ny, ren enhetstest)
 
 1. **`HOUSING_TYPES` er låst:** nøyaktig de åtte kodene i fast rekkefølge. Kommentar: koder endres aldri (regel 6).
-2. **`OWNERSHIP_FORMS` er låst:** nøyaktig `freehold`, `section`, `cooperative`, `share`; `bond` finnes ikke (A64).
+2. **`OWNERSHIP_FORMS` er låst:** nøyaktig `freehold`, `section`, `cooperative`, `share`; `bond` finnes ikke (A69).
 3. **etiketter:** `housingTypeLabel` gir de åtte norske etikettene i kortet punkt 5; `ownershipFormLabel` gir `Selveier`, `Eierseksjon i sameie`, `Andel i borettslag`, `Aksjeleilighet`; ja/nei gir `Ja`, `Nei`, `Vet ikke`. Ukjent kode gir koden tilbake, aldri `undefined`.
-4. **`hasCommonAreas` som testsaker** (`it.each`, A67):
+4. **`hasCommonAreas` som testsaker** (`it.each`, A72):
    | boligtype | eierform | fellesdeler |
    |---|---|---|
    | hver av de åtte med `freehold` | `freehold` | bare `apartment` = ja, de sju andre = nei (inkludert `apartment_in_house`) |
@@ -59,7 +59,7 @@ Fra kortet, punkt 1–8. Testskriveren skriver mot dette; avvik føres i kortet 
 7. **påkrevde felt:** `address`, `housing_type`, `ownership_form`, `gnr`, `bnr`, `property_id`, `assignment_id` er `NOT NULL`.
 8. **oppdrag uten eiendom** (`property_id = null`) godtas (eldre oppdrag).
 9. **tenant-tabeller:** `properties`, `cadastral_units` og `common_areas` står i `tests/tenant-tables.ts` med radbyggere og testfilen `src/core/properties/properties.test.ts`; `tests/tenant-isolation-all-tables.test.ts` er grønn (tre flere tabeller enn før).
-10. **migreringen er ren:** `0015` finnes, og `pnpm db:generate` lager ingen ny fil (sjekkes i gjennomgangen).
+10. **migreringen er ren:** `0016` finnes, og `pnpm db:generate` lager ingen ny fil (sjekkes i gjennomgangen).
 
 ## 4. Kjernen, `src/core/properties/properties.test.ts` (ny, mot databasen)
 
@@ -97,10 +97,10 @@ Admin i A, med `orgA.id` som organisasjon:
 ### 4.5 `getAssignmentProperty`
 
 1. **faste felt:** `Object.keys` på `property` og `commonAreas` er faste lister; ingen `deletedAt`, `deletedBy`, `rowVersion`, `organizationId`, `createdBy`.
-2. **uten eiendom, med ordre:** ordre med `addressText = "Testveien 1"`, `gnr = "999"`, `bnr = "999"`, `snr = "9"`, `housingAssociationName = "Borettslaget Test"` → `prefill` har nøyaktig de fem verdiene; `property = null`; adressen er ikke delt opp (A68).
+2. **uten eiendom, med ordre:** ordre med `addressText = "Testveien 1"`, `gnr = "999"`, `bnr = "999"`, `snr = "9"`, `housingAssociationName = "Borettslaget Test"` → `prefill` har nøyaktig de fem verdiene; `property = null`; adressen er ikke delt opp (A73).
 3. **uten eiendom, uten ordre:** `prefill` har tomme verdier.
 4. **med eiendom:** `prefill` er tom eller mangler; `property` har feltene og én matrikkelrad.
-5. **flere matrikkelrader** (satt inn direkte): svaret har én, og hvilken er fast (eldste) (A65).
+5. **flere matrikkelrader** (satt inn direkte): svaret har én, og hvilken er fast (eldste) (A70).
 6. **ordre i en annen organisasjon** som oppdraget (umulig via fremmednøkkel) testes ikke; i stedet: ordre som er myk-slettet gir tom `prefill`.
 
 ### 4.6 Lagring
@@ -160,7 +160,7 @@ Admin fra seed. Hver test lager egen ordre og eget oppdrag med `uniqueSuffix()` 
 - Alle tre tabellene i `tests/tenant-tables.ts`, og database-testene for sammensatte fremmednøkler (3.3–3.5).
 - `hasCommonAreas`-testsakene dekker alle koder (1.4–1.5).
 - Ingen tilgangslogikk i siden eller handlingene utover `NO_ACCESS`-mappingen; ingen id fra skjemaet brukes til filtrering.
-- `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne; versjonen er 0.2.73 (eller neste ledige); migrering `0015`.
+- `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne; versjonen er 0.2.77 (neste ledige); migrering `0016`.
 
 ## Dekning av akseptkriteriene
 

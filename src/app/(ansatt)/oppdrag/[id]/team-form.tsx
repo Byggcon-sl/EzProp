@@ -60,7 +60,7 @@ export function TeamMemberForm({
       <Field
         label="Grunn ved bytte"
         htmlFor={`${id}-reason`}
-        hint="For eksempel ferie, sykdom eller kapasitet."
+        hint="For eksempel ferie, fravær eller kapasitet. Ikke skriv helseopplysninger."
         error={state.fieldErrors.reason}
       >
         <Input

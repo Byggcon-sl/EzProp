@@ -555,7 +555,8 @@ function PhotoInput({
                       rel="noopener noreferrer"
                       className="inline-flex min-h-11 min-w-11 items-center text-brand-700 underline"
                     >
-                      Vis fra serveren<span className="sr-only"> (åpnes i ny fane)</span>
+                      Vis fra serveren
+                      <span className="sr-only"> {photo.name} (åpnes i ny fane)</span>
                     </a>
                   </>
                 ) : null}

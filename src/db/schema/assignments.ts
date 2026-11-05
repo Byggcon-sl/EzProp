@@ -11,13 +11,13 @@ import {
 } from "drizzle-orm/pg-core";
 import { baseColumns } from "./common";
 import { orders } from "./orders";
-import { offices } from "./organization-structure";
+import { companies, offices } from "./organization-structure";
 import { properties } from "./properties";
 
 /**
  * Oppdraget (docs/05-domenemodell.md 4.3), minimalt i fase 2a (A54): nummer, kontor, type,
- * status, koblingen til ordren og eiendommen. Selskap, team, ekstern referanse, statusflyt og
- * frister legges til av planpunktene som bruker dem.
+ * status, koblingen til ordren, utstedende selskap og eiendommen. Ekstern referanse, statusflyt
+ * og frister legges til av planpunktene som bruker dem.
  *
  * `number` lages bare på serveren fra nummerserien (`nextAssignmentNumber`, D9) og er unikt per
  * organisasjon, også blant slettede rader. Faste koder står i `@/core/assignments/codes`.
@@ -30,10 +30,15 @@ export const assignments = pgTable(
     officeId: uuid("office_id").notNull(),
     /** Ordren oppdraget ble laget fra. Tom når oppdraget lages direkte (senere). */
     orderId: uuid("order_id"),
-    /** Eiendommen. Høyst én per oppdrag, og hvert oppdrag har sin egen nå (A65). Tom til den er lagt inn. */
+    /** Eiendommen. Høyst én per oppdrag, og hvert oppdrag har sin egen nå (A70). Tom til den er lagt inn. */
     propertyId: uuid("property_id"),
     assignmentType: text("assignment_type").notNull().default("condition_report"),
     status: text("status").notNull().default("ordered"),
+    /**
+     * Utstedende selskap: selskapet til ansvarlig takstmann, satt automatisk når ansvarlig settes
+     * eller byttes (`setTeamMember`, A65–A68). Tomt når ingen ansvarlig har selskap.
+     */
+    companyId: uuid("company_id"),
   },
   // Returtypen står fordi tabellene peker på hverandre (ellers klarer ikke TypeScript typene).
   (table): PgTableExtraConfigValue[] => [
@@ -46,6 +51,12 @@ export const assignments = pgTable(
       name: "assignments_office_fk",
       columns: [table.organizationId, table.officeId],
       foreignColumns: [offices.organizationId, offices.id],
+    }),
+    // Utstedende selskap må høre til samme organisasjon som oppdraget
+    foreignKey({
+      name: "assignments_company_fk",
+      columns: [table.organizationId, table.companyId],
+      foreignColumns: [companies.organizationId, companies.id],
     }),
     // `AnyPgColumn` fordi tabellene peker på hverandre (ordre → oppdrag og oppdrag → ordre).
     foreignKey({

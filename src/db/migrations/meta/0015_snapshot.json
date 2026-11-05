@@ -1,5 +1,5 @@
 {
-  "id": "1987317f-dcd5-473a-9a37-b566705afae1",
+  "id": "1909d579-68ce-4582-9c20-c2b335750ea9",
   "prevId": "725c5741-5dbc-4928-b835-77d557e789b6",
   "version": "7",
   "dialect": "postgresql",
@@ -2131,345 +2131,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.properties": {
-      "name": "properties",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "address": {
-          "name": "address",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "postal_code": {
-          "name": "postal_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "city": {
-          "name": "city",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "municipality_number": {
-          "name": "municipality_number",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "municipality_name": {
-          "name": "municipality_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "housing_type": {
-          "name": "housing_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ownership_form": {
-          "name": "ownership_form",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "data_source": {
-          "name": "data_source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'manual'"
-        }
-      },
-      "indexes": {
-        "properties_organization_id_id_idx": {
-          "name": "properties_organization_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "properties_organization_id_organizations_id_fk": {
-          "name": "properties_organization_id_organizations_id_fk",
-          "tableFrom": "properties",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "properties_housing_type_check": {
-          "name": "properties_housing_type_check",
-          "value": "\"properties\".\"housing_type\" in ('detached', 'semi_detached', 'terraced', 'apartment', 'apartment_in_house', 'holiday_home', 'farm', 'other')"
-        },
-        "properties_ownership_form_check": {
-          "name": "properties_ownership_form_check",
-          "value": "\"properties\".\"ownership_form\" in ('freehold', 'section', 'cooperative', 'share')"
-        },
-        "properties_data_source_check": {
-          "name": "properties_data_source_check",
-          "value": "\"properties\".\"data_source\" in ('manual')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.cadastral_units": {
-      "name": "cadastral_units",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "property_id": {
-          "name": "property_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "gnr": {
-          "name": "gnr",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "bnr": {
-          "name": "bnr",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "fnr": {
-          "name": "fnr",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "snr": {
-          "name": "snr",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "association_name": {
-          "name": "association_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "association_org_number": {
-          "name": "association_org_number",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "share_number": {
-          "name": "share_number",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "cadastral_units_organization_id_property_id_idx": {
-          "name": "cadastral_units_organization_id_property_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "property_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "cadastral_units_organization_id_organizations_id_fk": {
-          "name": "cadastral_units_organization_id_organizations_id_fk",
-          "tableFrom": "cadastral_units",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "cadastral_units_property_fk": {
-          "name": "cadastral_units_property_fk",
-          "tableFrom": "cadastral_units",
-          "tableTo": "properties",
-          "columnsFrom": [
-            "organization_id",
-            "property_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.assignments": {
       "name": "assignments",
       "schema": "",
@@ -2550,12 +2211,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "property_id": {
-          "name": "property_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "assignment_type": {
           "name": "assignment_type",
           "type": "text",
@@ -2569,6 +2224,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'ordered'"
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -2644,13 +2305,13 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "assignments_order_fk": {
-          "name": "assignments_order_fk",
+        "assignments_company_fk": {
+          "name": "assignments_company_fk",
           "tableFrom": "assignments",
-          "tableTo": "orders",
+          "tableTo": "companies",
           "columnsFrom": [
             "organization_id",
-            "order_id"
+            "company_id"
           ],
           "columnsTo": [
             "organization_id",
@@ -2659,13 +2320,13 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "assignments_property_fk": {
-          "name": "assignments_property_fk",
+        "assignments_order_fk": {
+          "name": "assignments_order_fk",
           "tableFrom": "assignments",
-          "tableTo": "properties",
+          "tableTo": "orders",
           "columnsFrom": [
             "organization_id",
-            "property_id"
+            "order_id"
           ],
           "columnsTo": [
             "organization_id",
@@ -2686,170 +2347,6 @@
         "assignments_status_check": {
           "name": "assignments_status_check",
           "value": "\"assignments\".\"status\" in ('ordered', 'in_progress', 'completed', 'invoiced')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.common_areas": {
-      "name": "common_areas",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "assignment_id": {
-          "name": "assignment_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "managing_agent": {
-          "name": "managing_agent",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "condition_report_status": {
-          "name": "condition_report_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'unknown'"
-        },
-        "maintenance_plan_status": {
-          "name": "maintenance_plan_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'unknown'"
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "common_areas_active_assignment_idx": {
-          "name": "common_areas_active_assignment_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "assignment_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"common_areas\".\"deleted_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "common_areas_organization_id_organizations_id_fk": {
-          "name": "common_areas_organization_id_organizations_id_fk",
-          "tableFrom": "common_areas",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "common_areas_assignment_fk": {
-          "name": "common_areas_assignment_fk",
-          "tableFrom": "common_areas",
-          "tableTo": "assignments",
-          "columnsFrom": [
-            "organization_id",
-            "assignment_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "common_areas_condition_report_status_check": {
-          "name": "common_areas_condition_report_status_check",
-          "value": "\"common_areas\".\"condition_report_status\" in ('yes', 'no', 'unknown')"
-        },
-        "common_areas_maintenance_plan_status_check": {
-          "name": "common_areas_maintenance_plan_status_check",
-          "value": "\"common_areas\".\"maintenance_plan_status\" in ('yes', 'no', 'unknown')"
         }
       },
       "isRLSEnabled": false

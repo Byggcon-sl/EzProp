@@ -224,7 +224,7 @@ test.describe("eiendom og matrikkel på oppdraget (pc og ipad)", () => {
     expect(propertyBox && teamBox, "Eiendom og Team er synlige").toBeTruthy();
     expect(propertyBox!.y, "Eiendom står over Team").toBeLessThan(teamBox!.y);
 
-    // Adressen er én tekst, ikke delt opp (A68)
+    // Adressen er én tekst, ikke delt opp (A73)
     await expect(field(page, "address")).toHaveValue(address);
     await expect(field(page, "gnr")).toHaveValue("999");
     await expect(field(page, "bnr")).toHaveValue("999");

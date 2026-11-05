@@ -1,6 +1,6 @@
 /**
  * Oppdraget har ingen eiendom, eller eiendommen har ikke fellesdeler (`hasCommonAreas` er usann,
- * A67). Ingenting er lagret.
+ * A72). Ingenting er lagret.
  */
 export class CommonAreasNotApplicableError extends Error {
   constructor() {

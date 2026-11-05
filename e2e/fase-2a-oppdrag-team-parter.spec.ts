@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page, type Response } from "@playwrigh
 import {
   ADMIN_EMAIL,
   employeeByEmail,
+  INSPECTOR_COMPANY,
   INSPECTOR_EMAIL,
   logIn,
   logInAsInspector,
@@ -87,6 +88,14 @@ function teamLine(page: Page, label: string): Locator {
   return section(page, "Team").getByRole("listitem", { name: label, exact: true });
 }
 
+/**
+ * Den lagrede personen på linjen (teksten under rollens navn, eller «Ikke satt»). Den kommer fra
+ * serveren, så den viser når lagringen er ferdig og skjemaet er tegnet på nytt.
+ */
+function teamCurrent(page: Page, label: string): Locator {
+  return teamLine(page, label).locator("h3 + p");
+}
+
 /** Nedtrekkslisten med ansatte på linjen. */
 function teamSelect(page: Page, label: string): Locator {
   return teamLine(page, label).getByRole("combobox");
@@ -101,6 +110,32 @@ function partyCard(page: Page, name: string): Locator {
 }
 
 const EMPTY_PARTIES = "Ingen parter er lagt inn ennå.";
+
+/** Linjen «Utstedende selskap: …» under «Kontor» på oppdragssiden. */
+function issuingCompany(page: Page): Locator {
+  return page
+    .getByRole("main")
+    .getByText(/^\s*Utstedende selskap:/)
+    .first();
+}
+
+const ISSUING_COMPANY_HELP =
+  "Settes fra ansvarlig takstmann. Har den ansvarlige ikke selskap, legger admin det inn under Ansatte.";
+
+/** Utstedende selskap viser `value` («Ikke satt» eller selskapsnavnet). */
+async function expectIssuingCompany(page: Page, value: string) {
+  await expect(issuingCompany(page)).toContainText(
+    new RegExp(`^\\s*Utstedende selskap:\\s*${value}(?![\\p{L}\\d])`, "u"),
+  );
+}
+
+/** Setter takstmannen fra e2e (med selskap) som ansvarlig og venter til det er lagret. */
+async function setInspectorResponsible(page: Page, inspector: { id: string; name: string }) {
+  const responsible = "Ansvarlig takstmann";
+  await teamSelect(page, responsible).selectOption(inspector.id);
+  await teamLine(page, responsible).getByRole("button", { name: "Lagre", exact: true }).click();
+  await expect(teamCurrent(page, responsible)).toHaveText(inspector.name);
+}
 
 /** Ny ordre med en unik adresse → «Gjør om til oppdrag» (Bodø). Returnerer ordre-id. */
 async function createConvertedOrder(page: Page): Promise<string> {
@@ -200,10 +235,25 @@ test.describe("team og parter på oppdraget (pc og ipad)", () => {
     ).toEqual(positions);
     await expect(team.getByText("Ikke satt", { exact: true })).toHaveCount(5);
 
+    // Utstedende selskap: tomt før ansvarlig er satt, med forklaring
+    await expectIssuingCompany(page, "Ikke satt");
+    await expect(page.getByRole("main").getByText(ISSUING_COMPANY_HELP)).toBeVisible();
+    const office = page
+      .getByRole("main")
+      .getByText(/^\s*Kontor:/)
+      .first();
+    const officeBox = await office.boundingBox();
+    const companyBox = await issuingCompany(page).boundingBox();
+    expect(officeBox && companyBox, "Kontor og Utstedende selskap er synlige").toBeTruthy();
+    expect(companyBox!.y, "Utstedende selskap står under Kontor").toBeGreaterThanOrEqual(
+      officeBox!.y + officeBox!.height - 1,
+    );
+
     // Sett admin som ansvarlig
     const responsible = "Ansvarlig takstmann";
     await teamSelect(page, responsible).selectOption(admin.id);
     await teamLine(page, responsible).getByRole("button", { name: "Lagre", exact: true }).click();
+    await expect(teamCurrent(page, responsible)).toHaveText(admin.name);
     await expect(team.getByText("Ikke satt", { exact: true })).toHaveCount(4);
     await expect(teamLine(page, responsible).getByText("Ikke satt", { exact: true })).toHaveCount(
       0,
@@ -216,16 +266,23 @@ test.describe("team og parter på oppdraget (pc og ipad)", () => {
       .getByLabel(/^Grunn ved bytte/)
       .fill("Ferie");
     await teamLine(page, responsible).getByRole("button", { name: "Lagre", exact: true }).click();
-    // Skjemaet lages på nytt (ny key) når byttet er lagret; da er grunnen tom igjen
+    // Vent til byttet er lagret: linjen viser takstmannen og «Grunn ved bytte» er tømt
+    await expect(teamCurrent(page, responsible)).toHaveText(inspector.name);
     await expect(teamLine(page, responsible).getByLabel(/^Grunn ved bytte/)).toHaveValue("");
     await expect(teamSelect(page, responsible)).toHaveValue(inspector.id);
     await expect(team.getByText("Ikke satt", { exact: true })).toHaveCount(4);
+    // Takstmannen har selskap: oppdraget får det som utstedende selskap
+    await expectIssuingCompany(page, INSPECTOR_COMPANY);
+    await expect(page.getByRole("main").getByText(ISSUING_COMPANY_HELP)).toHaveCount(0);
 
     // «Ingen» fjerner personen fra rollen
     await teamSelect(page, responsible).selectOption({ label: "Ingen" });
     await teamLine(page, responsible).getByRole("button", { name: "Lagre", exact: true }).click();
+    await expect(teamCurrent(page, responsible)).toHaveText("Ikke satt");
     await expect(team.getByText("Ikke satt", { exact: true })).toHaveCount(5);
     await expect(teamSelect(page, responsible)).toHaveValue("");
+    await expectIssuingCompany(page, "Ikke satt");
+    await expect(page.getByRole("main").getByText(ISSUING_COMPANY_HELP)).toBeVisible();
   });
 
   test("7.3 parter: tom liste, forhåndsutfylte mottar-valg, legg til megler", async ({ page }) => {
@@ -359,8 +416,16 @@ test.describe("iPad (prosjektet ipad)", () => {
     page,
   }) => {
     await page.setViewportSize(PORTRAIT);
+    await ensureInspector();
+    const inspector = await employeeByEmail(INSPECTOR_EMAIL);
     await logIn(page);
     const { assignmentId } = await newAssignment(page);
+    // Selskapslinjen med forklaring (tomt) og med navnet skal ikke gi vannrett rulling
+    await expectIssuingCompany(page, "Ikke satt");
+    await expect(page.getByRole("main").getByText(ISSUING_COMPANY_HELP)).toBeVisible();
+    await expectNoHorizontalScroll(page, `/oppdrag/${assignmentId} uten selskap`);
+    await setInspectorResponsible(page, inspector);
+    await expectIssuingCompany(page, INSPECTOR_COMPANY);
     const form = await openAddPartyForm(page);
     await form.getByLabel(/^Rolle/).selectOption({ label: "Megler" });
     await fillParty(form, { name: PARTY.name });
@@ -369,6 +434,7 @@ test.describe("iPad (prosjektet ipad)", () => {
 
     const url = `/oppdrag/${assignmentId}`;
     await page.goto(url);
+    await expectIssuingCompany(page, INSPECTOR_COMPANY);
     await expectNoHorizontalScroll(page, url);
 
     // Én kolonne: Team og Parter står under hverandre og starter likt

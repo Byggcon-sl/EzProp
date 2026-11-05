@@ -5,6 +5,7 @@ import {
   assignmentParties,
   assignmentTeamMembers,
   assignments,
+  companies,
   employees,
   offices,
   orders,
@@ -44,6 +45,11 @@ export type AssignmentDetail = {
   status: string;
   officeName: string | null;
   orderId: string | null;
+  /**
+   * Utstedende selskap (`companies.legal_name`), satt fra ansvarlig takstmann. Også et slettet
+   * selskap vises, fordi det var det som gjaldt. Tomt når oppdraget ikke har selskap.
+   */
+  companyName: string | null;
   /** Aktive rader, i rekkefølgen i `TEAM_ROLES`. */
   team: AssignmentTeamEntry[];
   /** Parter som ikke er fjernet, i rekkefølgen i `PARTY_ROLES` og så eldste først. */
@@ -77,9 +83,14 @@ export async function getAssignment(
       status: assignments.status,
       officeName: offices.name,
       orderId: orders.id,
+      companyName: companies.legalName,
     })
     .from(assignments)
     .leftJoin(offices, and(eq(offices.id, assignments.officeId), eq(offices.organizationId, orgId)))
+    .leftJoin(
+      companies,
+      and(eq(companies.id, assignments.companyId), eq(companies.organizationId, orgId)),
+    )
     .leftJoin(
       orders,
       and(

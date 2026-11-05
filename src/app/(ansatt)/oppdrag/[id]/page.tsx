@@ -80,7 +80,7 @@ function commonAreasFormValues(data: AssignmentProperty): CommonAreasFormValues 
 }
 
 /**
- * «Eiendom» og, når eiendommen har fellesdeler (A67), «Fellesdeler». Skjemaene vises bare med
+ * «Eiendom» og, når eiendommen har fellesdeler (A72), «Fellesdeler». Skjemaene vises bare med
  * `canEdit`; ellers står verdiene som tekst. Skjemaene får ny `key` når de lagrede verdiene
  * endres, så feltene starter med det som er lagret.
  */
@@ -211,7 +211,18 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         </h1>
         <Badge tone="brand">{assignmentStatusLabel(assignment.status)}</Badge>
       </div>
-      <p className="mb-6 text-slate-600">Kontor: {assignment.officeName}</p>
+      <p className="text-slate-600">Kontor: {assignment.officeName}</p>
+      <div className="mb-6">
+        <p className="break-words text-slate-600">
+          Utstedende selskap: {assignment.companyName ?? "Ikke satt"}
+        </p>
+        {!assignment.companyName && (
+          <p className="text-sm text-slate-500">
+            Settes fra ansvarlig takstmann. Har den ansvarlige ikke selskap, legger admin det inn
+            under Ansatte.
+          </p>
+        )}
+      </div>
 
       <PropertySection assignmentId={assignment.id} data={propertyData} canEdit={canEdit} />
 

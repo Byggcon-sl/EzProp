@@ -5,7 +5,7 @@ import { properties } from "./properties";
 /**
  * Matrikkelen til eiendommen (docs/05-domenemodell.md 4.4): gårds-, bruks-, feste- og
  * seksjonsnummer, og for borettslag, sameie og boligaksjeselskap navn, organisasjonsnummer og
- * andelsnummer. Tabellen tåler flere rader per eiendom; skjermen viser og lagrer én (A65).
+ * andelsnummer. Tabellen tåler flere rader per eiendom; skjermen viser og lagrer én (A70).
  */
 export const cadastralUnits = pgTable(
   "cadastral_units",

@@ -199,7 +199,7 @@ describe("2.4 boligtype og eierform", () => {
     ["mangler", undefined],
     ["tom", ""],
     ["ukjent", "villa"],
-    ["obligasjon (A64)", "bond"],
+    ["obligasjon (A69)", "bond"],
     ["norsk navn", "Selveier"],
   ])("eierform %s → «Velg eierform.»", (_name, ownershipForm) => {
     expectFieldMessage(parseProperty({ ownershipForm }), "ownershipForm", OWNERSHIP);

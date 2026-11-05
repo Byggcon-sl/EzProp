@@ -154,7 +154,7 @@ describe("3.1 CHECK på faste koder", () => {
   });
 
   it.each(["bond", "", "Freehold", "rental"])(
-    "ukjent ownership_form «%s» avvises (bond er ikke med, A64)",
+    "ukjent ownership_form «%s» avvises (bond er ikke med, A69)",
     async (ownershipForm) => {
       const org = await createOrganization();
       await expectPgError(insertPropertySql(org.id, { ownershipForm }), CHECK);
@@ -404,7 +404,7 @@ describe("3.8 oppdrag uten eiendom", () => {
     expect(result[0]!.property_id).toBeNull();
   });
 
-  it("en eiendom tåler flere matrikkelrader (domenemodellen; skjermen viser én, A65)", async () => {
+  it("en eiendom tåler flere matrikkelrader (domenemodellen; skjermen viser én, A70)", async () => {
     const org = await createOrganization();
     const own = await propertyId(org.id);
     await insertCadastralSql({ organizationId: org.id, propertyId: own });
@@ -444,9 +444,9 @@ describe("3.9 tenant-tabellene", () => {
 });
 
 describe("3.10 migreringen", () => {
-  it("0015 finnes og er den eneste med nummeret", () => {
+  it("0016 finnes og er den eneste med nummeret", () => {
     const dir = path.join(process.cwd(), "src/db/migrations");
-    const files = readdirSync(dir).filter((name) => name.startsWith("0015_"));
+    const files = readdirSync(dir).filter((name) => name.startsWith("0016_"));
     expect(files).toHaveLength(1);
     expect(files[0]).toMatch(/\.sql$/);
   });

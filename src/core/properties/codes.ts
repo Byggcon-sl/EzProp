@@ -35,7 +35,7 @@ export function housingTypeLabel(code: string): string {
 
 /**
  * Eierform. De fire kodene Ståle godkjente 27.10.2026 (spørsmål 2, innspill D15).
- * Obligasjonsleilighet er ikke med (A64).
+ * Obligasjonsleilighet er ikke med (A69).
  */
 export const OWNERSHIP_FORMS = ["freehold", "section", "cooperative", "share"] as const;
 export type OwnershipForm = (typeof OWNERSHIP_FORMS)[number];
@@ -67,11 +67,11 @@ export function yesNoUnknownLabel(code: string): string {
   return YES_NO_UNKNOWN_LABELS[code as YesNoUnknown] ?? code;
 }
 
-/** Eierformene som alltid har fellesdeler (A67). */
+/** Eierformene som alltid har fellesdeler (A72). */
 const SHARED_OWNERSHIP_FORMS: readonly string[] = ["section", "cooperative", "share"];
 
 /**
- * Dataregel (A67): om eiendommen har fellesdeler som skal vurderes. Sann for leilighet, og for
+ * Dataregel (A72): om eiendommen har fellesdeler som skal vurderes. Sann for leilighet, og for
  * eierseksjon, borettslag og aksjeleilighet uansett boligtype (også rekkehus i borettslag).
  * «Leilighet i tomannsbolig uten sameie» med selveier har ikke fellesdeler.
  */

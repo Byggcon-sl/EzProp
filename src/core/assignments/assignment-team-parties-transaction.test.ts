@@ -3,10 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { recordAuditEvent } from "@/core/audit";
 import { recordEvent } from "@/core/events";
 import { db } from "@/db/client";
-import { assignmentParties, assignmentTeamMembers, auditLog, events } from "@/db/schema";
+import {
+  assignmentParties,
+  assignments,
+  assignmentTeamMembers,
+  auditLog,
+  events,
+} from "@/db/schema";
 import {
   createAssignment,
   createAssignmentParty,
+  createCompany,
   createEmployee,
   createOrganization,
   createTeamMember,
@@ -61,6 +68,48 @@ const FAILURES = [
   ["recordEvent", failEventOnce],
   ["recordAuditEvent", failAuditOnce],
 ] as const;
+
+const actualEvents = await vi.importActual<typeof import("@/core/events")>("@/core/events");
+const actualAudit = await vi.importActual<typeof import("@/core/audit")>("@/core/audit");
+
+/** Setter den ekte funksjonen tilbake etter en test som kaster bare for selskapet. */
+function restoreMocks() {
+  vi.mocked(recordEvent).mockImplementation(actualEvents.recordEvent);
+  vi.mocked(recordAuditEvent).mockImplementation(actualAudit.recordAuditEvent);
+}
+
+/** Kaster bare for hendelsen `assignment.company_changed`; alt annet skrives som vanlig. */
+function failCompanyEvent() {
+  vi.mocked(recordEvent).mockImplementation(async (tx, grant, event) => {
+    if (event.type === "assignment.company_changed") {
+      throw new Error("hendelsen for selskapet feilet (test)");
+    }
+    return actualEvents.recordEvent(tx, grant, event);
+  });
+}
+
+/** Kaster bare for loggraden med `entityType = "assignment"`; alt annet skrives som vanlig. */
+function failCompanyAudit() {
+  vi.mocked(recordAuditEvent).mockImplementation(async (tx, grant, event) => {
+    if (event.entityType === "assignment") {
+      throw new Error("revisjonsloggen for selskapet feilet (test)");
+    }
+    return actualAudit.recordAuditEvent(tx, grant, event);
+  });
+}
+
+const COMPANY_FAILURES = [
+  ["recordEvent (assignment.company_changed)", failCompanyEvent],
+  ["recordAuditEvent (entityType assignment)", failCompanyAudit],
+] as const;
+
+async function companyIdOf(assignmentId: string) {
+  const [row] = await db
+    .select({ companyId: assignments.companyId })
+    .from(assignments)
+    .where(eq(assignments.id, assignmentId));
+  return row?.companyId;
+}
 
 async function rowCount(
   table: typeof assignmentTeamMembers | typeof assignmentParties | typeof events | typeof auditLog,
@@ -121,6 +170,64 @@ describe("4.8.5 feiler hendelsen eller loggen, finnes ingen endring", () => {
       expect(rows[0]).toMatchObject({ id: active.id, toAt: null, handedOverReason: null });
       expect(await rowCount(events)).toBe(0);
       expect(await rowCount(auditLog)).toBe(0);
+    },
+  );
+
+  // Utstedende selskap (docs/agenter/oppgaver/fase2a-utstedende-selskap-testplan.md 3.5):
+  // kaster hendelsen eller loggraden for selskapet, rulles hele byttet tilbake.
+  it.each(COMPANY_FAILURES)(
+    "3.5 kaster %s for selskapsbyttet, rulles hele byttet tilbake",
+    async (_name, failForCompany) => {
+      const { org, admin, assignment } = await setup();
+      const a1 = await createCompany(org.id, { legalName: "Selskap A1 AS" });
+      const a2 = await createCompany(org.id, { legalName: "Selskap A2 AS" });
+      const respA1 = await createEmployee(
+        await createUser({ name: "Rita Ansvarligsen" }),
+        org.id,
+        ["inspector"],
+        { companyId: a1.id },
+      );
+      const respA2 = await createEmployee(
+        await createUser({ name: "Randi Nordselskap" }),
+        org.id,
+        ["inspector"],
+        { companyId: a2.id },
+      );
+      await setTeamMember(admin, org.id, assignment.id, {
+        teamRole: "responsible",
+        employeeId: respA1.id,
+        now: TEST_NOW,
+      });
+      const [active] = await db
+        .select()
+        .from(assignmentTeamMembers)
+        .where(eq(assignmentTeamMembers.assignmentId, assignment.id));
+      expect(await companyIdOf(assignment.id)).toBe(a1.id);
+      const before = { events: await rowCount(events), auditLog: await rowCount(auditLog) };
+
+      failForCompany();
+      try {
+        await expect(
+          setTeamMember(admin, org.id, assignment.id, {
+            teamRole: "responsible",
+            employeeId: respA2.id,
+            reason: "Ferie",
+            now: LATER,
+          }),
+        ).rejects.toThrow();
+      } finally {
+        restoreMocks();
+      }
+
+      const rows = await db
+        .select()
+        .from(assignmentTeamMembers)
+        .where(eq(assignmentTeamMembers.assignmentId, assignment.id));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ id: active!.id, toAt: null, handedOverReason: null });
+      expect(await companyIdOf(assignment.id)).toBe(a1.id);
+      expect(await rowCount(events)).toBe(before.events);
+      expect(await rowCount(auditLog)).toBe(before.auditLog);
     },
   );
 

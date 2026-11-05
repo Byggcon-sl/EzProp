@@ -44,7 +44,8 @@ ${prompt}`;
   } catch (e) {
     if (isQuotaError(e) && modelFor(role) === "fable") {
       log(`${role}: fable-kvoten er brukt opp, kjører på opus`);
-      return agent(text, { ...opts, model: "opus" });
+      // Samme rolle, men på opus (05.11.2026: uten agentType arvet reserven fable og feilet igjen).
+      return agent(prompt, { ...opts, agentType: role, model: "opus" });
     }
     if (!/not found/i.test(errorText(e))) throw e;
     return agent(text, { ...opts, model: modelFor(role) });

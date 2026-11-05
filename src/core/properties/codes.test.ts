@@ -71,7 +71,7 @@ describe("1.1–1.3 faste koder og etiketter", () => {
     ]);
   });
 
-  it("1.2 OWNERSHIP_FORMS er de fire kodene i fast rekkefølge, uten bond (A64)", () => {
+  it("1.2 OWNERSHIP_FORMS er de fire kodene i fast rekkefølge, uten bond (A69)", () => {
     expect([...OWNERSHIP_FORMS]).toEqual(["freehold", "section", "cooperative", "share"]);
     expect(OWNERSHIP_FORMS as readonly string[]).not.toContain("bond");
   });
@@ -115,7 +115,7 @@ describe("1.1–1.3 faste koder og etiketter", () => {
 });
 
 /*
- * 1.4 Dataregelen `hasCommonAreas` som testsaker (A67): fellesdeler gjelder når boligtypen er
+ * 1.4 Dataregelen `hasCommonAreas` som testsaker (A72): fellesdeler gjelder når boligtypen er
  * leilighet, eller eierformen er eierseksjon, borettslag eller aksje.
  */
 
@@ -143,7 +143,7 @@ const SHARED_HOUSING = ["detached", "terraced", "apartment"] as const;
 type HousingType = (typeof HOUSING_TYPES)[number];
 type OwnershipForm = (typeof OWNERSHIP_FORMS)[number];
 
-describe("1.4 hasCommonAreas (A67)", () => {
+describe("1.4 hasCommonAreas (A72)", () => {
   it.each(Object.entries(FREEHOLD_CASES))(
     "%s med selveier gir fellesdeler = %s",
     (housingType, expected) => {
@@ -176,7 +176,7 @@ describe("1.4 hasCommonAreas (A67)", () => {
     },
   );
 
-  it("leilighet i tomannsbolig uten sameie med selveier får ikke fellesdeler (A67)", () => {
+  it("leilighet i tomannsbolig uten sameie med selveier får ikke fellesdeler (A72)", () => {
     expect(hasCommonAreas({ housingType: "apartment_in_house", ownershipForm: "freehold" })).toBe(
       false,
     );

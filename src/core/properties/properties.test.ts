@@ -907,7 +907,7 @@ describe("4.5 getAssignmentProperty", () => {
     expectNoForbiddenKeys(result, "svar");
   });
 
-  it("4.5.2 uten eiendom, med ordre: prefill har nøyaktig ordrens fem verdier; adressen er ikke delt opp (A68)", async () => {
+  it("4.5.2 uten eiendom, med ordre: prefill har nøyaktig ordrens fem verdier; adressen er ikke delt opp (A73)", async () => {
     const { org, admin, office } = await orgWithAdmin();
     const fullAddress = `${ADDRESS}, 0000 Testby`;
     const assignment = await assignmentFromOrder(org.id, office.id, {
@@ -969,7 +969,7 @@ describe("4.5 getAssignmentProperty", () => {
     expectBlankPrefill(result.prefill);
   });
 
-  it("4.5.5 flere matrikkelrader: svaret har den eldste (A65)", async () => {
+  it("4.5.5 flere matrikkelrader: svaret har den eldste (A70)", async () => {
     const { org, admin, assignment } = await orgWithAdmin();
     const { property } = await createProperty(org.id, { assignmentId: assignment.id, gnr: GNR });
     await db.execute(sql`
@@ -1118,7 +1118,7 @@ describe("4.6 lagring", () => {
   it.each([
     ["tom adresse", { address: " " }],
     ["ukjent boligtype", { housingType: "villa" }],
-    ["obligasjon (A64)", { ownershipForm: "bond" }],
+    ["obligasjon (A69)", { ownershipForm: "bond" }],
     ["bokstaver i gnr", { gnr: "12a" }],
     ["fødselsnummer i adressen", { address: "Testveien 12345678901" }],
   ])("4.6.5 %s gir ZodError; ingen rad og ingen hendelse", async (_name, bad) => {
@@ -1171,7 +1171,7 @@ describe("4.6 lagring", () => {
     expect(await commonRowsFor(assignment.id)).toHaveLength(0);
   });
 
-  it("4.6.6 saveCommonAreas på leilighet i tomannsbolig med selveier gir CommonAreasNotApplicableError (A67)", async () => {
+  it("4.6.6 saveCommonAreas på leilighet i tomannsbolig med selveier gir CommonAreasNotApplicableError (A72)", async () => {
     const { org, admin, assignment } = await orgWithAdmin();
     await createProperty(org.id, {
       assignmentId: assignment.id,

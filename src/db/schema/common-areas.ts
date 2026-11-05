@@ -5,7 +5,7 @@ import { baseColumns } from "./common";
 
 /**
  * Fellesdeler for leilighet (docs/05-domenemodell.md 4.4), per oppdrag til rapportene finnes
- * (A66): forretningsfører, om det finnes tilstandsrapport og vedlikeholdsplan for fellesdelene,
+ * (A71): forretningsfører, om det finnes tilstandsrapport og vedlikeholdsplan for fellesdelene,
  * og hva som er sett. Én aktiv rad per oppdrag. `association_firm_id` kommer med
  * kontaktregisteret.
  *
