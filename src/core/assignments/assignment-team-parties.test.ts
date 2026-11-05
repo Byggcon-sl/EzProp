@@ -355,7 +355,7 @@ describe("4.1 tilgang per rolle", () => {
 
     const result = await getAssignment(admin, org.id, assignment.id);
     expect(result.team.map((row) => row.employeeId)).toEqual([fixtures.employee.id]);
-    expect(result.parties.map((row) => row.name).sort()).toEqual([PARTY_NAME, "Megler Endret"]);
+    expect(result.parties.map((row) => row.name).sort()).toEqual(["Megler Endret", PARTY_NAME]);
   });
 });
 

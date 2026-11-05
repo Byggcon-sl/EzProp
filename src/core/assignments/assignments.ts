@@ -83,7 +83,7 @@ export async function getAssignment(
     .leftJoin(
       orders,
       and(
-        eq(orders.assignmentId, assignments.id),
+        eq(orders.id, assignments.orderId),
         eq(orders.organizationId, orgId),
         isNull(orders.deletedAt),
       ),

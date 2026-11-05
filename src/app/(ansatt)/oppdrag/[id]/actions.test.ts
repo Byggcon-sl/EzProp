@@ -59,7 +59,7 @@ const actor = { id: "user-kontor", email: "kontor@eksempel.no", name: "Kontor Te
 const PARTY_NAME = "Megler Test";
 const FIRM = "Testmegling AS";
 const EMAIL = "megler@example.com";
-const PHONE = "00000000";
+const PHONE = "99999999";
 const REASON = "Ferie";
 const PERSONAL_VALUES = [PARTY_NAME, FIRM, EMAIL, PHONE, REASON];
 
