@@ -188,6 +188,9 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - Reserven til opus slo fortsatt ikke inn for sikkerhet-personvern i gjennomgangen (bare én «started» i journalen). Inntil årsaken er funnet: kjør sikkerhetsgjennomgangen for hånd etter hver arbeidsflyt der rollen feilet, før neste oppgave.
 
+## 05.11.2026 – fase2a-bygninger-areal-rom (ustabil e2e i sertifisering)
+
+- I e2e skal man aldri navigere bort rett etter et klikk på «Lagre». Vent først på et synlig tegn på at lagringen er ferdig, ellers avbrytes forespørselen.
 ## 05.11.2026 – PR #95 (kontakter og firma)
 
 - Reserven feilet igjen for sikkerhet-personvern, både i forhåndsvurderingen og i gjennomgangen: også kallet med `agentType` og `model: "opus"` ga «Fable limit». Rollefilen har `model: fable`, og den ser ut til å vinne over modellen i arbeidsflyten. Gjennomgangen for hånd med en vanlig agent på opus som leser rollefilen, virket (40 sekunder). Fortsett slik til reserven er rettet; en mulig retting er å la rollefilen styre bare verktøyene og la arbeidsflyten velge modellen.

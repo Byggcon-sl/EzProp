@@ -134,6 +134,13 @@
       "when": 1793883800548,
       "tag": "0018_koble-kontakter",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793899196013,
+      "tag": "0019_bygninger-areal-rom",
+      "breakpoints": true
     }
   ]
 }
