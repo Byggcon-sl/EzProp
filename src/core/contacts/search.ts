@@ -6,7 +6,15 @@ export const MAX_QUERY_LENGTH = 100;
 /** Listene gir høyst så mange rader. */
 export const LIST_LIMIT = 200;
 
-export type ListOptions = { query?: string | null };
+/** `limit` kan bare gjøre listen kortere (høyst `LIST_LIMIT`), for eksempel 10 i kontaktvelgeren. */
+export type ListOptions = { query?: string | null; limit?: number };
+
+/** Antall rader: `limit` når den er et positivt heltall under `LIST_LIMIT`, ellers `LIST_LIMIT`. */
+export function listLimit(options: ListOptions): number {
+  const limit = options.limit;
+  if (limit === undefined || !Number.isInteger(limit) || limit <= 0) return LIST_LIMIT;
+  return Math.min(limit, LIST_LIMIT);
+}
 
 /**
  * Gjør søketeksten om til et `ILIKE`-mønster: trimmet, høyst 100 tegn, og `\`, `%` og `_`
