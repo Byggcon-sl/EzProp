@@ -383,6 +383,17 @@ describe("statusflyt 2.1 grunnen ved tilbake og kansellering", () => {
     if (result.success) expect(result.data).toBe("Feiltrykk");
   });
 
+  it.each(["12345678901", "Feil 123456 78901"])(
+    "grunnen «%s» gir «Fødselsnummer skal ikke lagres her.»",
+    (value) => {
+      const result = statusReasonSchema().safeParse(value);
+      expect(result.success).toBe(false);
+      expect(issueMessages(result)).toContain(NATIONAL_ID);
+      const cancelled = cancelSchema().safeParse({ expectedStatus: "ordered", reason: value });
+      expect(cancelled.success).toBe(false);
+    },
+  );
+
   it("kanselleringen godtar grunnen og trimmer den", () => {
     const result = cancelSchema().safeParse({
       expectedStatus: "in_progress",
