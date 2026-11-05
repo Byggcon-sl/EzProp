@@ -3,7 +3,7 @@
 - **Fase:** 2a – Rapporten på PC (punktet «Koble partene på oppdraget og bestilleren til kontakter og firma» under «Oppdrag og eiendom»)
 - **Modul:** kjerne (`src/core/assignments`, `src/core/orders`, lesing fra `src/core/contacts`; sidene `/oppdrag/[id]`, `/ordre/ny` og `/ordre/[id]`)
 - **Branch:** `fase2a-koble-kontakter` (bygger på `main`, der kontaktregisteret fra PR #95 og partene fra PR #87 er merget)
-- **Status:** klar til bygging (05.11.2026, prosjektleder; runde 1 med forenkler og test-leder innarbeidet)
+- **Status:** bygget, til gjennomgang (05.11.2026; beslutningene er ført som A84–A92 og forslaget som A93 i `docs/09-apne-sporsmal.md`)
 - **Støtter hovedmål:** Tid: megleren søkes opp med noen bokstaver, og navn, firma, e-post og telefon fylles ut av seg selv i stedet for å skrives på nytt på hvert oppdrag. Reklamasjoner: færre skrivefeil i e-post og navn, så rapporten går til riktig person. KI først: koblingen er kroken for at e-post-til-ordre (krok A1) senere kan foreslå en kjent kontakt som bestiller og part, og kontoret bare godkjenner. Ingen KI nå.
 
 ## Problem
