@@ -262,7 +262,7 @@ describe("3.2 areal", () => {
 });
 
 describe("3.3 etasjenummer", () => {
-  it.each([-4, 21])("level %d avvises når databasen har CHECK på level", async (level, ctx) => {
+  it.for([-4, 21])("level %d avvises når databasen har CHECK på level", async (level, ctx) => {
     const [found] = rowsOf(
       await db.execute(sql`
         select count(*)::int as n from pg_constraint
