@@ -168,13 +168,17 @@ test.describe("sertifisering i adminområdet (pc og iPad liggende)", () => {
     await expect(certItem(page, validTo)).toHaveCount(1);
 
     // «Avbryt» i bekreftelsen
-    await certItem(page, validTo).getByRole("button", { name: "Fjern", exact: true }).click();
+    await certItem(page, validTo)
+      .getByRole("button", { name: /^Fjern / })
+      .click();
     await certItem(page, validTo).getByRole("button", { name: "Avbryt", exact: true }).click();
     await page.reload();
     await expect(certItem(page, validTo)).toHaveCount(1);
 
     // «Fjern» → bekreft
-    await certItem(page, validTo).getByRole("button", { name: "Fjern", exact: true }).click();
+    await certItem(page, validTo)
+      .getByRole("button", { name: /^Fjern / })
+      .click();
     await certItem(page, validTo)
       .getByRole("button", { name: /^(Bekreft|Ja, fjern|Fjern sertifiseringen)$/ })
       .click();
@@ -319,7 +323,7 @@ test.describe("iPad (bare prosjektet ipad)", () => {
     await addForm(page).getByRole("button", { name: "Lagre", exact: true }).click();
     await expect(certItem(page, validTo)).toHaveCount(1);
     await expectAtLeast44(
-      certItem(page, validTo).getByRole("button", { name: "Fjern", exact: true }),
+      certItem(page, validTo).getByRole("button", { name: /^Fjern / }),
       "Fjern",
     );
   });
