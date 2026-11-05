@@ -362,8 +362,8 @@ describe("8 bestilleren fra kontaktregisteret", () => {
     return form({ addressText: ADDRESS, orderedByText: ORDERED_BY, ...overrides });
   }
 
-  it.each(["abc", "1 or 1=1", "../x"])(
-    "invalid_contactId_field_error_no_core_call: «%s» → feil ved feltet uten kall",
+  it.each(["abc", "1", "1 or 1=1", "../x"])(
+    "8.1 invalid_contactId_field_error_no_core_call: «%s» → feil ved feltet uten kall",
     async (orderedByContactId) => {
       const state = await createOrderAction(initialFormState, orderForm({ orderedByContactId }));
       expect(state.fieldErrors.orderedByContactId).toBe(CONTACT_NOT_FOUND);
@@ -371,7 +371,7 @@ describe("8 bestilleren fra kontaktregisteret", () => {
     },
   );
 
-  it("ContactNotFoundError_becomes_field_error: feil ved feltet, ikke 500, og ingen logg", async () => {
+  it("8.2 ContactNotFoundError_becomes_field_error: feil ved feltet, ikke 500, og ingen logg", async () => {
     mocks.core.createOrder.mockRejectedValue(new ContactNotFoundError());
     const state = await createOrderAction(
       initialFormState,
@@ -414,7 +414,21 @@ describe("8 bestilleren fra kontaktregisteret", () => {
     expect(input.orderedByContactId).toBeNull();
   });
 
-  it("logger_never_gets_form_values_or_query: ukjent feil logges uten bestilleren", async () => {
+  it("8.1d orderedByFirmId fra skjemaet sendes aldri til kjernen", async () => {
+    mocks.core.createOrder.mockResolvedValue({ id: ORDER, organizationId: ORG });
+    await redirectOf(
+      createOrderAction(
+        initialFormState,
+        orderForm({
+          orderedByContactId: CONTACT_ID,
+          orderedByFirmId: "0190a000-0000-7000-8000-000000000091",
+        }),
+      ),
+    );
+    expect(mocks.core.createOrder.mock.calls[0]?.[2]).not.toHaveProperty("orderedByFirmId");
+  });
+
+  it("8.6 logger_never_gets_form_values_or_query: ukjent feil logges uten bestilleren", async () => {
     const boom = new Error(`databasen sa nei til ${ORDERED_BY}`);
     boom.name = "OppdiktetFeil";
     mocks.core.createOrder.mockRejectedValue(boom);
@@ -428,99 +442,5 @@ describe("8 bestilleren fra kontaktregisteret", () => {
     expect(logged).not.toContain(ORDERED_BY);
     expect(logged).not.toContain("Testmegleren");
     expect(logged).not.toContain(ADDRESS);
-  });
-});
-
-/*
- * Bestiller fra kontaktregisteret (docs/funksjoner/fase2a-koble-kontakter-testplan.md avsnitt 8).
- * Feltnavnet i skjemaet er `orderedByContactId` (kortet punkt 4). En verdi som ikke er uuid gir
- * feltfeilen «Kontakten finnes ikke.» uten kall til kjernen; `ContactNotFoundError` fra kjernen
- * vises ved feltet. Testdata er oppdiktet.
- */
-
-describe("8. createOrderAction med bestiller fra registeret", () => {
-  const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
-  const CONTACT_ID = "0190a000-0000-7000-8000-000000000090";
-
-  function orderInputOf() {
-    return mocks.core.createOrder.mock.calls[0]?.[2] as Record<string, unknown> | undefined;
-  }
-
-  it.each(["abc", "1", "1 or 1=1", "../x"])(
-    "8.1 invalid_contactId_field_error_no_core_call: orderedByContactId «%s» gir feltfeil uten kall",
-    async (value) => {
-      const state = await createOrderAction(
-        initialFormState,
-        form({ addressText: ADDRESS, orderedByContactId: value }),
-      );
-      expect(Object.values(state.fieldErrors)).toContain(CONTACT_NOT_FOUND);
-      expect(coreCalls()).toBe(0);
-    },
-  );
-
-  it("8.1b gyldig orderedByContactId sendes til kjernen sammen med «Bestilt av»", async () => {
-    mocks.core.createOrder.mockResolvedValue({ id: ORDER, organizationId: ORG });
-    await redirectOf(
-      createOrderAction(
-        initialFormState,
-        form({ addressText: ADDRESS, orderedByText: ORDERED_BY, orderedByContactId: CONTACT_ID }),
-      ),
-    );
-    expect(orderInputOf()).toMatchObject({
-      orderedByContactId: CONTACT_ID,
-      orderedByText: ORDERED_BY,
-    });
-  });
-
-  it("8.1c tom orderedByContactId betyr ingen kobling", async () => {
-    mocks.core.createOrder.mockResolvedValue({ id: ORDER, organizationId: ORG });
-    await redirectOf(
-      createOrderAction(initialFormState, form({ addressText: ADDRESS, orderedByContactId: "" })),
-    );
-    const value = orderInputOf()?.orderedByContactId;
-    expect(value === undefined || value === null || value === "").toBe(true);
-  });
-
-  it("8.1d orderedByFirmId fra skjemaet sendes aldri til kjernen", async () => {
-    mocks.core.createOrder.mockResolvedValue({ id: ORDER, organizationId: ORG });
-    await redirectOf(
-      createOrderAction(
-        initialFormState,
-        form({
-          addressText: ADDRESS,
-          orderedByContactId: CONTACT_ID,
-          orderedByFirmId: "0190a000-0000-7000-8000-000000000091",
-        }),
-      ),
-    );
-    expect(orderInputOf()).not.toHaveProperty("orderedByFirmId");
-  });
-
-  it("8.2 ContactNotFoundError_becomes_field_error: «Kontakten finnes ikke.» ved feltet, ingen logglinje", async () => {
-    mocks.core.createOrder.mockRejectedValue(new ContactNotFoundError());
-    const state = await createOrderAction(
-      initialFormState,
-      form({ addressText: ADDRESS, orderedByContactId: CONTACT_ID }),
-    );
-    expect(Object.values(state.fieldErrors)).toContain(CONTACT_NOT_FOUND);
-    expect(state.message).not.toBe(UNKNOWN_ERROR);
-    expect(mocks.logError).not.toHaveBeenCalled();
-  });
-
-  it("8.6 logger_never_gets_form_values: ukjent feil med kontakt logger bare id-er og feilnavn", async () => {
-    const boom = new Error(`databasen sa nei til ${ORDERED_BY}`);
-    boom.name = "OppdiktetFeil";
-    mocks.core.createOrder.mockRejectedValue(boom);
-
-    const state = await createOrderAction(
-      initialFormState,
-      form({ addressText: ADDRESS, orderedByText: ORDERED_BY, orderedByContactId: CONTACT_ID }),
-    );
-    expect(state.message).toBe(UNKNOWN_ERROR);
-    const logged = JSON.stringify(mocks.logError.mock.calls);
-    expect(logged).toContain("OppdiktetFeil");
-    for (const value of [ADDRESS, ORDERED_BY, "Testmegleren"]) {
-      expect(logged).not.toContain(value);
-    }
   });
 });

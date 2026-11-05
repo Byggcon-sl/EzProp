@@ -140,7 +140,10 @@ export async function searchContactsAction(query: string): Promise<ContactHit[]>
   const context = await getEmployeeContext();
   if (!context) return [];
   try {
-    const rows = await listContacts(context.actor, context.organizationId, { query: text });
+    const rows = await listContacts(context.actor, context.organizationId, {
+      query: text,
+      limit: MAX_SEARCH_HITS,
+    });
     return rows.slice(0, MAX_SEARCH_HITS).map((row) => ({
       id: row.id,
       name: contactName(row),
