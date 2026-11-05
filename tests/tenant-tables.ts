@@ -14,6 +14,7 @@ import {
   createAssignment,
   createAssignmentParty,
   createCertification,
+  createCommonAreas,
   createCompany,
   createContact,
   createEmployee,
@@ -23,6 +24,7 @@ import {
   createNumberSequence,
   createOffice,
   createOrder,
+  createProperty,
   createTeamMember,
   createUser,
   grantPermission,
@@ -98,12 +100,22 @@ export const tenantTables: TenantTableEntry[] = [
     },
   },
   {
+    table: "cadastral_units",
+    testFile: "src/core/properties/properties.test.ts",
+    insertRow: async (organizationId) => (await createProperty(organizationId)).cadastralUnit.id,
+  },
+  {
     table: "certifications",
     testFile: "src/core/organization/certifications.test.ts",
     insertRow: async (organizationId) => {
       const employee = await insertEmployee(organizationId);
       return (await createCertification(employee)).id;
     },
+  },
+  {
+    table: "common_areas",
+    testFile: "src/core/properties/properties.test.ts",
+    insertRow: async (organizationId) => (await createCommonAreas(organizationId)).id,
   },
   {
     table: "companies",
@@ -192,6 +204,11 @@ export const tenantTables: TenantTableEntry[] = [
     table: "orders",
     testFile: "src/core/orders/orders.test.ts",
     insertRow: async (organizationId) => (await createOrder(organizationId)).id,
+  },
+  {
+    table: "properties",
+    testFile: "src/core/properties/properties.test.ts",
+    insertRow: async (organizationId) => (await createProperty(organizationId)).property.id,
   },
   {
     table: "trial_answers",

@@ -110,8 +110,22 @@
     {
       "idx": 15,
       "version": "7",
-      "when": 1793854350010,
-      "tag": "0015_kontakter-og-firma",
+      "when": 1793850785292,
+      "tag": "0015_utstedende-selskap",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793865654929,
+      "tag": "0016_eiendom-matrikkel",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793874244509,
+      "tag": "0017_kontakter-og-firma",
       "breakpoints": true
     }
   ]
