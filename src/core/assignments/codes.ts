@@ -9,7 +9,7 @@
 export const ASSIGNMENT_TYPES = ["condition_report"] as const;
 export type AssignmentType = (typeof ASSIGNMENT_TYPES)[number];
 
-/** Oppdragsstatusene fra Ståle 27.10.2026, i rekkefølge. Bare `ordered` settes i fase 2a. */
+/** Oppdragsstatusene fra Ståle 27.10.2026, i rekkefølge. Overgangene står i `status-flow.ts`. */
 export const ASSIGNMENT_STATUSES = ["ordered", "in_progress", "completed", "invoiced"] as const;
 export type AssignmentStatus = (typeof ASSIGNMENT_STATUSES)[number];
 

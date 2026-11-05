@@ -1,18 +1,26 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { isUuid } from "@/shared/lib/uuid";
 import { errorResult, failure, type KnownError } from "../../action-result";
 import { getEmployeeContext } from "../../employee-context";
 import { NO_ACCESS, type FormState } from "../../form-state";
 import {
   addParty,
+  ASSIGNMENT_STATUSES,
+  AssignmentCannotBeCancelledError,
+  AssignmentStatusConflictError,
+  AssignmentTransitionNotAllowedError,
+  cancelAssignment,
+  changeAssignmentStatus,
   EmployeeNotFoundError,
   PARTY_ROLES,
   removeParty,
   setTeamMember,
   TEAM_ROLES,
   updateParty,
+  type AssignmentStatus,
   type PartyRole,
   type TeamRole,
 } from "@/core/assignments";
@@ -23,7 +31,7 @@ import {
 } from "@/core/properties";
 
 /*
- * Server actions på oppdragssiden (team, parter, eiendom og fellesdeler). Ingen tilgangslogikk her: organisasjonen
+ * Server actions på oppdragssiden (status, team, parter, eiendom og fellesdeler). Ingen tilgangslogikk her: organisasjonen
  * kommer fra `getEmployeeContext()`, og kjernen sjekker rettigheten. Et felt `organizationId` i
  * skjemaet leses aldri. Id-er som ikke er uuid stoppes før kjernen kalles. Loggen får bare rute,
  * bruker-id, id-er og feilnavn, aldri navn, firma, e-post, telefon, grunn, adresse, matrikkel,
@@ -89,6 +97,31 @@ function refresh() {
 
 function isTeamRole(value: string): value is TeamRole {
   return (TEAM_ROLES as readonly string[]).includes(value);
+}
+
+function isAssignmentStatus(value: string): value is AssignmentStatus {
+  return (ASSIGNMENT_STATUSES as readonly string[]).includes(value);
+}
+
+/**
+ * Feilene fra statusflyten har egen norsk tekst i kjernen (konflikt, ulovlig overgang, kan ikke
+ * kanselleres). Teksten inneholder bare statusnavn, aldri grunnen. Øverst i kortet.
+ */
+const STATUS_ERRORS = [
+  AssignmentStatusConflictError,
+  AssignmentTransitionNotAllowedError,
+  AssignmentCannotBeCancelledError,
+] as const;
+
+function statusErrorMessage(error: unknown): string | null {
+  return STATUS_ERRORS.some((type) => error instanceof type) ? (error as Error).message : null;
+}
+
+/** Oppdragsnummeret i adressen til arbeidskøen, bare når det ser ut som et nummer (`2026-00001`). */
+function cancelledNotice(number: unknown): string {
+  return typeof number === "string" && /^\d[\d-]{0,19}$/.test(number)
+    ? `/arbeidskoe?kansellert=${encodeURIComponent(number)}`
+    : "/arbeidskoe";
 }
 
 function isPartyRole(value: string): value is PartyRole {
@@ -163,6 +196,87 @@ export async function setTeamMemberAction(
   }
   refresh();
   return saved(previous);
+}
+
+/**
+ * Hovedknappen «Sett til …» (ett steg fram) og «Lagre» under «Tilbake til …» (ett steg tilbake
+ * med grunn) i kortet «Status». `expectedStatus` er statusen siden viste; har noen andre endret den
+ * siden, svarer kjernen med konflikt. Kjernen avgjør om overgangen er lov og om grunn trengs.
+ */
+export async function changeStatusAction(
+  previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const assignmentId = String(formData.get("assignmentId") ?? "");
+  const expectedStatus = String(formData.get("expectedStatus") ?? "");
+  const toStatus = String(formData.get("toStatus") ?? "");
+  const values = { reason: String(formData.get("reason") ?? "") };
+  const context = await getEmployeeContext();
+  if (
+    !context ||
+    !isUuid(assignmentId) ||
+    !isAssignmentStatus(expectedStatus) ||
+    !isAssignmentStatus(toStatus)
+  ) {
+    return failure(previous, values, {}, NO_ACCESS);
+  }
+
+  try {
+    await changeAssignmentStatus(context.actor, context.organizationId, assignmentId, {
+      expectedStatus,
+      toStatus,
+      reason: optional(values.reason),
+    });
+  } catch (error) {
+    const message = statusErrorMessage(error);
+    if (message) return failure(previous, values, {}, message);
+    return errorResult(
+      error,
+      previous,
+      values,
+      { route: `${ROUTE}/[id]`, userId: context.actor.id, assignmentId },
+      { zodField: "reason" },
+    );
+  }
+  refresh();
+  return saved(previous);
+}
+
+/**
+ * «Kanseller» etter «Kanseller oppdraget»: myk sletting med grunn i kjernen. Etterpå finnes ikke
+ * oppdragssiden lenger, så brukeren sendes til arbeidskøen med kvitteringen.
+ */
+export async function cancelAssignmentAction(
+  previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const assignmentId = String(formData.get("assignmentId") ?? "");
+  const expectedStatus = String(formData.get("expectedStatus") ?? "");
+  const values = { reason: String(formData.get("reason") ?? "") };
+  const context = await getEmployeeContext();
+  if (!context || !isUuid(assignmentId) || !isAssignmentStatus(expectedStatus)) {
+    return failure(previous, values, {}, NO_ACCESS);
+  }
+
+  let cancelled: Awaited<ReturnType<typeof cancelAssignment>>;
+  try {
+    cancelled = await cancelAssignment(context.actor, context.organizationId, assignmentId, {
+      expectedStatus,
+      reason: values.reason,
+    });
+  } catch (error) {
+    const message = statusErrorMessage(error);
+    if (message) return failure(previous, values, {}, message);
+    return errorResult(
+      error,
+      previous,
+      values,
+      { route: `${ROUTE}/[id]`, userId: context.actor.id, assignmentId },
+      { zodField: "reason" },
+    );
+  }
+  revalidatePath("/ordre/[id]", "page");
+  redirect(cancelledNotice(cancelled.number));
 }
 
 /** «Lagre» i skjemaet «Legg til part». */
