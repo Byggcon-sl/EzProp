@@ -87,6 +87,14 @@ function teamLine(page: Page, label: string): Locator {
   return section(page, "Team").getByRole("listitem", { name: label, exact: true });
 }
 
+/**
+ * Den lagrede personen på linjen (teksten under rollens navn, eller «Ikke satt»). Den kommer fra
+ * serveren, så den viser når lagringen er ferdig og skjemaet er tegnet på nytt.
+ */
+function teamCurrent(page: Page, label: string): Locator {
+  return teamLine(page, label).locator("h3 + p");
+}
+
 /** Nedtrekkslisten med ansatte på linjen. */
 function teamSelect(page: Page, label: string): Locator {
   return teamLine(page, label).getByRole("combobox");
@@ -204,6 +212,7 @@ test.describe("team og parter på oppdraget (pc og ipad)", () => {
     const responsible = "Ansvarlig takstmann";
     await teamSelect(page, responsible).selectOption(admin.id);
     await teamLine(page, responsible).getByRole("button", { name: "Lagre", exact: true }).click();
+    await expect(teamCurrent(page, responsible)).toHaveText(admin.name);
     await expect(team.getByText("Ikke satt", { exact: true })).toHaveCount(4);
     await expect(teamLine(page, responsible).getByText("Ikke satt", { exact: true })).toHaveCount(
       0,
@@ -216,12 +225,16 @@ test.describe("team og parter på oppdraget (pc og ipad)", () => {
       .getByLabel(/^Grunn ved bytte/)
       .fill("Ferie");
     await teamLine(page, responsible).getByRole("button", { name: "Lagre", exact: true }).click();
+    // Vent til byttet er lagret: linjen viser takstmannen og «Grunn ved bytte» er tømt
+    await expect(teamCurrent(page, responsible)).toHaveText(inspector.name);
+    await expect(teamLine(page, responsible).getByLabel(/^Grunn ved bytte/)).toHaveValue("");
     await expect(teamSelect(page, responsible)).toHaveValue(inspector.id);
     await expect(team.getByText("Ikke satt", { exact: true })).toHaveCount(4);
 
     // «Ingen» fjerner personen fra rollen
     await teamSelect(page, responsible).selectOption({ label: "Ingen" });
     await teamLine(page, responsible).getByRole("button", { name: "Lagre", exact: true }).click();
+    await expect(teamCurrent(page, responsible)).toHaveText("Ikke satt");
     await expect(team.getByText("Ikke satt", { exact: true })).toHaveCount(5);
     await expect(teamSelect(page, responsible)).toHaveValue("");
   });
