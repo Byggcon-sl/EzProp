@@ -45,7 +45,7 @@ function room(
   return { key, label, group, defaultAreaType, defaultBelowGround };
 }
 
-/** De 33 romtypene i kortets rekkefølge (A79). */
+/** De 33 romtypene i kortets rekkefølge (A85). */
 const EXPECTED_ROOM_TYPES: ExpectedRoomType[] = [
   room("bathroom", "Bad", "wet_room"),
   room("laundry", "Vaskerom", "wet_room"),
@@ -169,7 +169,7 @@ describe("1.1–1.4 faste koder og etiketter", () => {
     expect(new Set(roomTypes.map((row) => row.label)).size).toBe(roomTypes.length);
   });
 
-  it("1.4 alle romtypene er merket utkast (draft: true), ikke godkjent av fagrådet (A79)", () => {
+  it("1.4 alle romtypene er merket utkast (draft: true), ikke godkjent av fagrådet (A85)", () => {
     for (const row of roomTypes) expect(row.draft, row.key).toBe(true);
   });
 });
@@ -245,7 +245,7 @@ describe("1.7 suggestAreaType", () => {
   });
 });
 
-describe("1.8 suggestBelowGround (A81)", () => {
+describe("1.8 suggestBelowGround (A87)", () => {
   it.each([
     ["basement_living_room", true, true],
     ["basement_living_room", false, true],
@@ -326,7 +326,7 @@ describe("1.9 sumFloorArea", () => {
     expect(sum).toMatchObject({ braI: 123.4, braE: 56.7, braB: 8.9 });
   });
 
-  it("ALH 210,3 tas ikke med i BRA (A80)", () => {
+  it("ALH 210,3 tas ikke med i BRA (A86)", () => {
     const without = sumFloorArea(area({ braI: 123.4 }));
     const withAlh = sumFloorArea(area({ braI: 123.4, alh: 210.3 }));
     expect(withAlh.bra).toBe(without.bra);

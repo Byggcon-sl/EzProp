@@ -13,8 +13,8 @@ import { baseColumns } from "./common";
 import { floors } from "./floors";
 
 /**
- * Rommet i en etasje (docs/05-domenemodell.md 4.4): romtype (fast kode, A79), navn (tomt betyr at
- * romtypens navn vises), arealtype og «under terreng» (forslag fra romtype og etasje, A81).
+ * Rommet i en etasje (docs/05-domenemodell.md 4.4): romtype (fast kode, A85), navn (tomt betyr at
+ * romtypens navn vises), arealtype og «under terreng» (forslag fra romtype og etasje, A87).
  * `geometry` kommer med plantegning (K7).
  *
  * Faste koder står i `@/core/buildings/codes`. CHECK-reglene under må ha de samme kodene.

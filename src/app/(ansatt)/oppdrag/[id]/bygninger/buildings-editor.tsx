@@ -259,7 +259,7 @@ type RoomValues = { roomType: string; name: string; areaType: string; belowGroun
 
 /**
  * Rommet: romtype (gruppert), navn, arealtype og «Under terreng». Når romtypen velges, settes
- * arealtype og «Under terreng» til forslaget (A81); begge kan endres før lagring.
+ * arealtype og «Under terreng» til forslaget (A87); begge kan endres før lagring.
  */
 function RoomForm({
   idPrefix,

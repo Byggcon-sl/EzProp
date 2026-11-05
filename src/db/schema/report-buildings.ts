@@ -4,7 +4,7 @@ import { baseColumns } from "./common";
 
 /**
  * Bygningen i rapporten (docs/05-domenemodell.md 4.4), enkel utgave i fase 2a: bare navnet.
- * Lagres per oppdrag til rapportene finnes (A78); da får tabellen `report_id`. Eiendommen finnes
+ * Lagres per oppdrag til rapportene finnes (A84); da får tabellen `report_id`. Eiendommen finnes
  * via `assignments.property_id`, så den kan ikke komme i utakt.
  */
 export const reportBuildings = pgTable(
