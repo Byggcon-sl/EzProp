@@ -204,3 +204,31 @@ describe("avvisningsgrunn (1.9 og 1.10)", () => {
     expect(rejectReasonSchema.safeParse("Ola 1234567890").success).toBe(true);
   });
 });
+
+// Koble kontakter (docs/funksjoner/fase2a-koble-kontakter-testplan.md 3.2)
+describe("koble kontakter 3.2 orderedByContactId på ordren", () => {
+  const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
+  const CONTACT_ID = "0190a3c4-7b2e-7c00-8a00-000000000001";
+
+  it("gyldig uuid godtas", () => {
+    expect(ok({ orderedByContactId: CONTACT_ID }).orderedByContactId).toBe(CONTACT_ID);
+  });
+
+  it.each([
+    ["tom streng", ""],
+    ["bare mellomrom", "   "],
+    ["null", null],
+  ])("%s blir null", (_name, orderedByContactId) => {
+    expect(ok({ orderedByContactId }).orderedByContactId).toBeNull();
+  });
+
+  it("manglende felt blir null", () => {
+    expect(ok({}).orderedByContactId).toBeNull();
+  });
+
+  it.each(["abc", "1"])("«%s» gir «Kontakten finnes ikke.»", (orderedByContactId) => {
+    const result = parse({ orderedByContactId });
+    expect(result.success).toBe(false);
+    expect(messagesFor(result, "orderedByContactId")).toEqual([CONTACT_NOT_FOUND]);
+  });
+});

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isUuid } from "@/shared/lib/uuid";
 import { ASSIGNMENT_STATUSES, PARTY_ROLES } from "./codes";
 
 /*
@@ -15,6 +16,7 @@ const EMAIL = "E-postadressen er ikke gyldig.";
 const PHONE = "Telefonnummeret kan bare ha sifre, mellomrom og +.";
 const REASON_TOO_LONG = "Grunnen kan ha høyst 300 tegn.";
 const NATIONAL_ID = "Fødselsnummer skal ikke lagres her.";
+const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
 
 /**
  * Elleve sifre på rad ligner et fødselsnummer. Ti godtas (for eksempel telefonnummer med 0).
@@ -70,6 +72,15 @@ export const partyInputSchema = z.object({
   receivesReport: checkbox,
   receivesInvoice: checkbox,
   receivesMessages: checkbox,
+  /**
+   * Kontakten i registeret (valgfri). Tom, bare mellomrom og manglende blir `null` («ingen
+   * kobling»). Kjernen slår den opp og setter firmaet fra kontakten.
+   */
+  contactId: z
+    .string({ error: CONTACT_NOT_FOUND })
+    .nullish()
+    .transform(emptyToNull)
+    .refine((value) => value === null || isUuid(value), { error: CONTACT_NOT_FOUND }),
 });
 export type PartyInput = z.input<typeof partyInputSchema>;
 export type PartyValues = z.output<typeof partyInputSchema>;

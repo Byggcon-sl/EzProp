@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { assignments } from "./assignments";
 import { baseColumns } from "./common";
+import { contacts, firms } from "./contacts";
 
 /**
  * Ordren: bestillingen slik den kom inn (docs/05-domenemodell.md 4.3). Lagt inn for hånd fra
@@ -33,6 +34,9 @@ export const orders = pgTable(
     externalRef: text("external_ref"),
     /** Hvem som bestilte (navn og firma slik det sto i e-posten). */
     orderedByText: text("ordered_by_text"),
+    /** Bestilleren i kontaktregisteret (valgfritt). Firmaet følger kontakten. */
+    orderedByContactId: uuid("ordered_by_contact_id"),
+    orderedByFirmId: uuid("ordered_by_firm_id"),
     addressText: text("address_text").notNull(),
     requestedReportType: text("requested_report_type").notNull().default("condition_report"),
     gnr: text("gnr"),
@@ -57,6 +61,21 @@ export const orders = pgTable(
       name: "orders_assignment_fk",
       columns: [table.organizationId, table.assignmentId],
       foreignColumns: [assignments.organizationId as AnyPgColumn, assignments.id as AnyPgColumn],
+    }),
+    index("orders_organization_id_ordered_by_contact_id_idx").on(
+      table.organizationId,
+      table.orderedByContactId,
+    ),
+    // Bestilleren og firmaet må høre til samme organisasjon som ordren
+    foreignKey({
+      name: "orders_ordered_by_contact_fk",
+      columns: [table.organizationId, table.orderedByContactId],
+      foreignColumns: [contacts.organizationId, contacts.id],
+    }),
+    foreignKey({
+      name: "orders_ordered_by_firm_fk",
+      columns: [table.organizationId, table.orderedByFirmId],
+      foreignColumns: [firms.organizationId, firms.id],
     }),
     check("orders_source_check", sql`${table.source} in ('manual', 'email')`),
     check(
