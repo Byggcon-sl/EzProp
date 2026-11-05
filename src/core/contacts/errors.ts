@@ -32,3 +32,17 @@ export class ContactNotFoundError extends Error {
     this.name = "ContactNotFoundError";
   }
 }
+
+/**
+ * Sammenslåing med samme kontakt (eller samme firma) på begge sider. Sjekkes før databasen, så
+ * ingenting er endret.
+ */
+export class MergeSameRecordError extends Error {
+  readonly kind: "contact" | "firm";
+
+  constructor(kind: "contact" | "firm") {
+    super(kind === "contact" ? "Velg to ulike kontakter." : "Velg to ulike firma.");
+    this.name = "MergeSameRecordError";
+    this.kind = kind;
+  }
+}
