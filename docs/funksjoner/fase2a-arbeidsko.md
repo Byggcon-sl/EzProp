@@ -2,7 +2,7 @@
 
 - **Fase:** 2a – Rapporten på PC
 - **Modul:** kjerne / `src/core/assignments` (spørringene), siden `/arbeidskoe`
-- **Status:** klar til bygging etter forhåndsvurdering runde 1 (autonom modus, beslutningene A99–A104)
+- **Status:** klar til bygging etter forhåndsvurdering runde 1 (autonom modus, beslutningene A99–A107)
 - **Branch:** `fase2a-arbeidsko` (bygger på `main`)
 - **Støtter hovedmål:** Tid: takstmannen ser med én gang hva som venter, finner et oppdrag med søk i stedet for å bla, og slipper å holde oversikten i hodet eller på lapper. Reklamasjoner: frister som er passert og oppdrag uten befaringsdato blir synlige, så ingenting blir liggende. KI først: køen er stedet der KI-forslag til godkjenning skal stå senere (se under).
 
@@ -29,7 +29,7 @@ Ikke KI i denne oppgaven. Køen er en ren oversikt over data som allerede finnes
   - Ugyldig `?status=` gir standardfanen og ugyldig `?mine=` gir «Mine». Ingen feilside.
   - Søk i ett felt på oppdragsnummer og adresse (eiendommens adresse, ellers adressen fra ordren). Delvis treff, store og små bokstaver likt. `%` og `_` i søket tolkes som vanlige tegn. Står i adressen (`?q=`).
   - Ett kort per oppdrag: oppdragsnummer og adresse (lenke til `/oppdrag/[id]`), merker for status (og «Rettet» når funksjonen fra statusflyten sier det), befaring (dato og klokkeslett, eller «Befaring ikke avtalt»), frist (dato; merket «Forfalt» når fristen er passert og status er Bestilt eller Under arbeid) og ansvarlig takstmann (navn, eller «Ingen ansvarlig»).
-  - Notatet vises på kortet og kan redigeres der: `<details>` med «Notat» åpner et lite tekstfelt med «Lagre» og «Avbryt». Vanlig skjema med server action, ingen egen klientkomponent. «Avbryt» lukker bare `<details>`. Virker uten JavaScript. Tomt notat lagres som tomt (null).
+  - Notatet vises på kortet og kan redigeres der: `<details>` med «Notat» åpner et lite tekstfelt med «Lagre» og «Avbryt». Vanlig skjema med server action, ingen egen klientkomponent. «Avbryt» er en vanlig lenke tilbake til køen (A107). Virker uten JavaScript. Tomt notat lagres som tomt (null).
   - Sortering: oppdrag med befaring eller frist først, etter nærmeste dato (befaring, ellers frist); deretter nyeste oppdragsnummer først (A103). Gjøres i én `ORDER BY COALESCE(inspection_at, due_date) NULLS LAST, number DESC`, ingen sortering i TypeScript.
   - Høyst 50 kort per fane. Er det flere, står «Viser 50 av N. Bruk søket for å finne flere.» (A104). N tas fra antallet for fanen, ikke fra en egen spørring.
   - Tomtilstand: én felles tekst med fanens navn («Ingen oppdrag med status Under arbeid.»), og lenke til «Ny ordre» i fanen Bestilt.
@@ -106,6 +106,7 @@ Ingen faglige regler. «Forfalt» er én liten ren funksjon `isOverdue` (frist f
 - **A102** Hurtigfilteret står på «Mine» som standard, fordi startsiden skal vise det som venter på takstmannen selv; «Alle» er ett trykk unna (alle ser alt, 27.10.2026).
 - **A103** Sortering etter nærmeste befaring eller frist, så det som haster står øverst.
 - **A104** Høyst 50 kort per fane, med søk for resten. Arkiv og lagrede filtre kommer senere.
+- **A105–A107** Se «Avgjort i forhåndsvurderingen» under.
 
 ## Testplan (fra test-leder, runde 1)
 **Enhetstester:** `isOverdue` (frist i går, i dag, i morgen; grensen ved midnatt i Europe/Oslo med UTC-tid nær midnatt; bare Bestilt og Under arbeid kan bli forfalt). Zod for notat (200 tegn ok, 201 avvist, fødselsnummer avvist, tom tekst gir null) og for befaring og frist (kan tømmes). Tolking av adressen (`status`, `mine`, `q`, med standard ved ugyldige verdier).
@@ -120,8 +121,11 @@ Ingen faglige regler. «Forfalt» er én liten ren funksjon `isOverdue` (frist f
 - Alle forslagene fra forenkler og test-leder er tatt inn. De trekker i samme retning og gjør kortet både enklere og tryggere.
 - Forenkler ville ha én e2e-test; test-leder listet flere steg. Avgjørelse: én gjennomgang i begge størrelsene for hovedflyten, pluss tre korte tester for det gjennomgangen ikke dekker (befaring og frist, tomtilstand, uten JavaScript). Grunn: hovedflyten holdes samlet, men det som kan gå i stykker hver for seg, får egen test.
 - Felles tomtekst i stedet for egen tekst per fane: mindre tekst å vedlikeholde, og fanenavnet forklarer nok.
-- Signaturer følger `status.ts`: `(actor, organizationId, …)` med `requireOrganizationAccess` inne i funksjonen (`organization.read` for lesing, `assignment.edit` for endring); ingen funksjon tar ansatt-id, «Mine» bruker `grant.employeeId`.
+- Signaturene følger `status.ts`: `listWorkQueue(actor, organizationId, { status, mineOnly, query })`, `countWorkQueueByStatus(actor, organizationId, { mineOnly, query })`, `updateAssignmentNote(actor, organizationId, assignmentId, note)` og `setAssignmentSchedule(actor, organizationId, assignmentId, { inspectionAt, dueDate })`. Tilgangssjekken (`requireOrganizationAccess`) skjer inne i funksjonen, slik at tilgangs- og isolasjonstestene kjøres mot kjernen og ikke bare mot siden. Spørringene filtrerer fortsatt på `grant.organizationId` og `grant.employeeId` fra sjekken. (Erstatter `grant` som første parameter under «Data».)
 - Valgt under bygging (utvikler, 05.11.2026): «Mine» teller bare aktive teamrader (ikke slettet og ikke avsluttet med `to_at`), som teamet på oppdragssiden; den som har overlevert oppdraget, ser det under «Alle». Samme notat, befaring eller frist på nytt skriver ingenting og gir ingen rad i revisjonsloggen. Befaring uten tidssone fra skjemaet leses som norsk tid; tolkingen er flyttet fra ordreskjemaet til `src/shared/lib/dates.ts` (`parseOsloDateTime`) og brukes av begge.
+- **A105** Merket «Ingen frist» vises når fristen mangler. Speiler «Befaring ikke avtalt», så ingenting blir liggende.
+- **A106** Feil fra notatskjemaet sendes som fast kode i adressen. Avvist tekst står aldri i adressen eller loggen; brukeren skriver notatet på nytt. Personvern før bekvemmelighet.
+- **A107** «Avbryt» er en vanlig lenke uten klientkomponent. Virker uten JavaScript, men siden kan hoppe til toppen.
 
 ## Åpne spørsmål
 - Ingen som stopper oppgaven. Ingenting om fag, pris, personvern eller nye funksjoner ble reist i forhåndsvurderingen.
