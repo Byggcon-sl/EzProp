@@ -605,6 +605,23 @@ describe("eiendom og fellesdeler: handlingene", () => {
       },
     );
 
+    it("savePropertyAction: fødselsnummer i adressen → «Fødselsnummer skal ikke lagres her.» ved feltet", async () => {
+      const result = propertyInputSchema.safeParse({
+        address: "12345678901",
+        housingType: "apartment",
+        ownershipForm: "cooperative",
+        gnr: "999",
+        bnr: "999",
+      });
+      expect(result.success).toBe(false);
+      mocks.properties.saveAssignmentProperty.mockRejectedValue(result.error);
+
+      const state = await failed(
+        savePropertyAction(initialFormState, propertyForm({ address: "12345678901" })),
+      );
+      expect(state.fieldErrors.address).toBe("Fødselsnummer skal ikke lagres her.");
+    });
+
     it("saveCommonAreasAction: ZodError → feil ved feltet", async () => {
       const result = commonAreasInputSchema.safeParse({ notes: "12345678901" });
       expect(result.success).toBe(false);

@@ -373,6 +373,18 @@ describe("4.1 tilgang per rolle", () => {
     });
   });
 
+  it("4.1.2 takstmann med innstillingen av kan fortsatt lese eiendommen og fellesdelene", async () => {
+    const { org, assignment } = await orgWithAdmin();
+    await setInspectorsEditAll(org.id, false);
+    const { property } = await apartmentOn(org.id, assignment.id);
+    const areas = await createCommonAreas(org.id, { assignmentId: assignment.id });
+    const { actor } = await person(org.id, ["inspector"]);
+
+    const result = await getAssignmentProperty(actor, org.id, assignment.id);
+    expect(result.property?.id).toBe(property.id);
+    expect(result.commonAreas?.id).toBe(areas.id);
+  });
+
   it("4.1.3 takstmann med innstillingen av og enkeltrettigheten assignment.edit kan begge skrivefunksjonene", async () => {
     const { org, assignment } = await orgWithAdmin();
     await setInspectorsEditAll(org.id, false);
@@ -1369,6 +1381,14 @@ describe("4.7 hendelser og revisjonslogg", () => {
     const unitText = JSON.stringify(unitUpdate!.changes);
     expect(unitText).toContain("gnr");
     expect(unitText).not.toContain("998");
+  });
+
+  it("4.7.1 bare matrikkelen endret: ingen update-rad for property", async () => {
+    const { org, admin, assignment } = await orgWithAdmin();
+    await saveAssignmentProperty(admin, org.id, assignment.id, propertyInput());
+    await saveAssignmentProperty(admin, org.id, assignment.id, propertyInput({ gnr: "998" }));
+    const updates = (await auditFor(org.id)).filter((row) => row.action === "update");
+    expect(updates.map((row) => row.entityType)).toEqual(["cadastral_unit"]);
   });
 
   it("4.7.2 saveCommonAreas: common_areas_saved med { commonAreasId, created }, og revisjonslogg common_areas", async () => {

@@ -175,6 +175,7 @@ describe("2.3 poststed og kommunenavn", () => {
     "%s er valgfritt; 100 tegn godtas, 101 avvises, trimmes",
     (field) => {
       expect(expectAccepted(parseProperty({ [field]: "" }))[field]).toBeNull();
+      expect(expectAccepted(parseProperty({ [field]: "   " }))[field]).toBeNull();
       expectAccepted(parseProperty({ [field]: "a".repeat(100) }));
       expectRejected(parseProperty({ [field]: "a".repeat(101) }), field);
       expect(expectAccepted(parseProperty({ [field]: "  Testby  " }))[field]).toBe("Testby");
@@ -188,6 +189,8 @@ describe("2.4 boligtype og eierform", () => {
     ["tom", ""],
     ["ukjent", "villa"],
     ["stor forbokstav", "Detached"],
+    ["norsk navn", "Enebolig"],
+    ["eierformkode", "bond"],
   ])("boligtype %s → «Velg boligtype.»", (_name, housingType) => {
     expectFieldMessage(parseProperty({ housingType }), "housingType", HOUSING);
   });
@@ -197,6 +200,7 @@ describe("2.4 boligtype og eierform", () => {
     ["tom", ""],
     ["ukjent", "villa"],
     ["obligasjon (A64)", "bond"],
+    ["norsk navn", "Selveier"],
   ])("eierform %s → «Velg eierform.»", (_name, ownershipForm) => {
     expectFieldMessage(parseProperty({ ownershipForm }), "ownershipForm", OWNERSHIP);
   });
@@ -239,7 +243,8 @@ describe("2.5 gnr og bnr", () => {
 });
 
 describe("2.6 fnr og snr", () => {
-  it.each(["fnr", "snr"])("%s er valgfritt: tom blir null", (field) => {
+  it.each(["fnr", "snr"])("%s er valgfritt: mangler og tom blir null", (field) => {
+    expect(expectAccepted(parseProperty({}))[field] ?? null).toBeNull();
     expect(expectAccepted(parseProperty({ [field]: "" }))[field]).toBeNull();
     expect(expectAccepted(parseProperty({ [field]: "  " }))[field]).toBeNull();
   });
@@ -303,7 +308,7 @@ describe("2.9 andelsnummer", () => {
     expectRejected(parseProperty({ shareNumber: "0".repeat(21) }), "shareNumber");
   });
 
-  it.each(["A12", "1 2", "1/2"])(
+  it.each(["A12", "1 2", "1/2", "0 0", "0/0"])(
     "«%s» → «Andelsnummeret kan bare ha sifre og bindestrek.»",
     (value) => {
       expectFieldMessage(parseProperty({ shareNumber: value }), "shareNumber", SHARE);

@@ -166,11 +166,27 @@ async function newPrefilledAssignment(page: Page) {
   return { address, assignmentId };
 }
 
-/** Velg boligtype og eierform og lagre. Venter til siden er oppdatert. */
+/**
+ * Trykk knappen og vent på svaret fra server-handlingen (POST med «next-action»). Serveren sender
+ * svaret først når handlingen har lagret, så en `page.reload()` etterpå kan ikke avbryte
+ * lagringen.
+ */
+async function clickAndWaitForSave(page: Page, button: Locator) {
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.request().headers()["next-action"] !== undefined,
+  );
+  await button.click();
+  const response = await saved;
+  expect(response.status(), "lagringen gir ikke 500").toBeLessThan(500);
+}
+
+/** Velg boligtype og eierform og lagre. Venter til lagringen er ferdig og siden er oppdatert. */
 async function savePropertyAs(page: Page, housing: string, ownership: string) {
   await field(page, "housingType").selectOption({ label: housing });
   await field(page, "ownershipForm").selectOption({ label: ownership });
-  await saveProperty(page).click();
+  await clickAndWaitForSave(page, saveProperty(page));
   await expect(section(page, "Eiendom")).not.toContainText(PREFILL_LINE);
   await expect(field(page, "housingType").locator("option:checked")).toHaveText(housing);
 }
@@ -181,7 +197,7 @@ async function fillCommonAreas(page: Page) {
   await chooseYesNo(common, CONDITION_REPORT, "Ja");
   await chooseYesNo(common, MAINTENANCE_PLAN, "Vet ikke");
   await common.getByLabel(/^Hva er sett av fellesdelene/).fill(NOTES);
-  await saveCommon(page).click();
+  await clickAndWaitForSave(page, saveCommon(page));
 }
 
 async function expectCommonAreasSaved(page: Page) {

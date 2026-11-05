@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 import {
   createAssignment,
+  createCommonAreas,
   createEmployee,
   createOrganization,
   createProperty,
@@ -169,4 +170,19 @@ describe("4.7.5 feiler hendelsen eller loggen, finnes ingen endring", () => {
     expect(await rowCount(events)).toBe(0);
     expect(await rowCount(auditLog)).toBe(0);
   });
+
+  it.each(FAILURES)(
+    "saveCommonAreas ved endring: %s kaster → raden er uendret",
+    async (_name, fail) => {
+      const { org, admin } = await setup();
+      const existing = await createCommonAreas(org.id);
+      fail();
+
+      await expect(saveCommonAreas(admin, org.id, existing.assignmentId, COMMON)).rejects.toThrow();
+
+      const [row] = await db.select().from(commonAreas).where(eq(commonAreas.id, existing.id));
+      expect(row).toMatchObject({ managingAgent: null, conditionReportStatus: "unknown" });
+      expect(row?.rowVersion).toBe(existing.rowVersion);
+    },
+  );
 });

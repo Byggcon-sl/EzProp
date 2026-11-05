@@ -1,3 +1,5 @@
+import { readdirSync } from "node:fs";
+import path from "node:path";
 import { getTableColumns, getTableName, is, sql } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -276,6 +278,17 @@ describe("3.3–3.5 sammensatte fremmednøkler på tvers av organisasjoner", () 
     await db.execute(sql`update assignments set property_id = ${own} where id = ${assignment.id}`);
   });
 
+  it("3.4 assignments.property_id mot eiendom som ikke finnes avvises", async () => {
+    const { a } = await twoOrgs();
+    const assignment = await createAssignment(a.id);
+    await expectPgError(
+      db.execute(
+        sql`update assignments set property_id = ${"0190a000-0000-7000-8000-0000000000ff"} where id = ${assignment.id}`,
+      ),
+      FOREIGN_KEY,
+    );
+  });
+
   it("3.5 fellesdeler i A på oppdrag i B avvises", async () => {
     const { a, b } = await twoOrgs();
     const foreign = await createAssignment(b.id);
@@ -428,4 +441,13 @@ describe("3.9 tenant-tabellene", () => {
       expect(id).toMatch(/^[0-9a-f-]{36}$/);
     },
   );
+});
+
+describe("3.10 migreringen", () => {
+  it("0015 finnes og er den eneste med nummeret", () => {
+    const dir = path.join(process.cwd(), "src/db/migrations");
+    const files = readdirSync(dir).filter((name) => name.startsWith("0015_"));
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatch(/\.sql$/);
+  });
 });
