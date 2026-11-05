@@ -117,7 +117,7 @@ export type FloorInput = {
 };
 export type FloorValues = z.output<typeof floorInputSchema>;
 
-/** Arealet i én etasje (A80). «Målt av» sjekkes i kjernen mot ansatte i organisasjonen. */
+/** Arealet i én etasje (A86). «Målt av» sjekkes i kjernen mot ansatte i organisasjonen. */
 export const floorAreaInputSchema = z.object({
   braI: area,
   braE: area,
@@ -147,7 +147,7 @@ export type FloorAreaValues = z.output<typeof floorAreaInputSchema>;
 
 /**
  * Rommet. Mangler arealtype eller «under terreng», brukes forslagene fra romtypen og etasjen i
- * kjernen (A81); da er verdien `undefined` her.
+ * kjernen (A87); da er verdien `undefined` her.
  */
 export const roomInputSchema = z.object({
   roomType: z.enum(ROOM_TYPE_KEYS, { error: ROOM_TYPE }),

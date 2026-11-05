@@ -191,3 +191,8 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 ## 05.11.2026 – fase2a-bygninger-areal-rom (ustabil e2e i sertifisering)
 
 - I e2e skal man aldri navigere bort rett etter et klikk på «Lagre». Vent først på et synlig tegn på at lagringen er ferdig, ellers avbrytes forespørselen.
+## 05.11.2026 – PR #95 (kontakter og firma)
+
+- Reserven feilet igjen for sikkerhet-personvern, både i forhåndsvurderingen og i gjennomgangen: også kallet med `agentType` og `model: "opus"` ga «Fable limit». Rollefilen har `model: fable`, og den ser ut til å vinne over modellen i arbeidsflyten. Gjennomgangen for hånd med en vanlig agent på opus som leser rollefilen, virket (40 sekunder). Fortsett slik til reserven er rettet; en mulig retting er å la rollefilen styre bare verktøyene og la arbeidsflyten velge modellen.
+- Når `main` får flere PR-er mens en oppgave er i arbeid, må migreringen og A-numrene renummereres ved hver fletting (her tre ganger). Sjekk høyeste migrering og høyeste A-nummer på `origin/main` rett før PR-en åpnes.
+- Lokale databaser med en migrering som senere ble renummerert, må bygges på nytt (tøm `public` og `drizzle`, og fjern publikasjonene `powersync` og `electric_publication_default`), ellers feiler `pnpm db:migrate`.

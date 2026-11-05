@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AccessDeniedError } from "@/core/access";
 import {
@@ -317,6 +318,33 @@ describe("6.3 organisasjonen kommer fra konteksten", () => {
       expect(state.fieldErrors).toEqual({});
     }
   });
+});
+
+describe("6.4 takstmann uten skriverett (access.inspectors_edit_all av)", () => {
+  // Kjernen avgjør: takstmannen får AccessDeniedError når innstillingen er av. Handlingen skal
+  // ikke sjekke rollen selv, bare gi NO_ACCESS og ikke friske opp siden. Dekker hullet hvis en
+  // knapp likevel skulle vises.
+  beforeEach(() => {
+    mocks.getEmployeeContext.mockResolvedValue({
+      actor: { id: "user-takst", email: "takst@eksempel.no", name: "Takst Testsen" },
+      organizationId: ORG,
+      canEditOrders: false,
+      officeId: null,
+    });
+  });
+
+  it.each(ACTION_NAMES)(
+    "%s: kjernen kalles én gang, kaster AccessDeniedError, og svaret er NO_ACCESS uten revalidatePath",
+    async (name) => {
+      CORE_FOR_ACTION[name].mockRejectedValue(new AccessDeniedError());
+      const state = await failed(call(name));
+      expect(state.message).toBe(NO_ACCESS);
+      expect(CORE_FOR_ACTION[name]).toHaveBeenCalledTimes(1);
+      expect(CORE_FOR_ACTION[name].mock.calls[0]![1]).toBe(ORG);
+      expect(coreCalls(), "ingen andre kjernekall").toBe(1);
+      expect(vi.mocked(revalidatePath)).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("6.4 feil fra kjernen", () => {

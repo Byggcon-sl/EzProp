@@ -3,6 +3,7 @@ import { and, count, eq, isNull } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 import { AccessDeniedError, type Actor } from "@/core/access";
+import { cancelAssignment } from "@/core/assignments";
 import { recordAuditEvent } from "@/core/audit";
 import {
   BuildingNotEmptyError,
@@ -1182,6 +1183,57 @@ describe("4.4 slettede id-er og myk sletting", () => {
     expect((await buildingRow(t.building.id)).name).toBe(HOUSE);
   });
 
+  it("4.4.1b kansellert gjennom statustjenesten (A76): bygningene kan verken leses eller endres", async () => {
+    const { org, admin, assignment } = await orgWithAdmin();
+    const t = await fixture(org.id, assignment.id);
+    const [before] = await db
+      .select({ status: assignments.status })
+      .from(assignments)
+      .where(eq(assignments.id, assignment.id));
+    await cancelAssignment(admin, org.id, assignment.id, {
+      expectedStatus: before!.status as "ordered" | "in_progress",
+      reason: "Avbestilt av kunden test",
+    });
+    const cancelled = (
+      await db.select().from(assignments).where(eq(assignments.id, assignment.id))
+    )[0]!;
+    expect(cancelled.deletedAt, "statustjenesten myk-sletter oppdraget").not.toBeNull();
+
+    const rowsBefore = await snapshot(org.id);
+    const countsBefore = await tableCounts();
+
+    const calls: [string, () => Promise<unknown>][] = [
+      ["getAssignmentBuildings", () => getAssignmentBuildings(admin, org.id, assignment.id)],
+      ["saveBuilding ny", () => saveBuilding(admin, org.id, assignment.id, null, buildingInput())],
+      [
+        "saveBuilding eksisterende",
+        () =>
+          saveBuilding(
+            admin,
+            org.id,
+            assignment.id,
+            t.building.id,
+            buildingInput({ name: "Endret" }),
+          ),
+      ],
+      [
+        "saveFloor",
+        () => saveFloor(admin, org.id, t.building.id, null, floorInput({ name: "2. etasje" })),
+      ],
+      ["saveFloorArea", () => saveFloorArea(admin, org.id, t.floor.id, areaInput())],
+      ["saveRoom", () => saveRoom(admin, org.id, t.floor.id, null, roomInput())],
+      ["removeRoom", () => removeRoom(admin, org.id, t.room.id)],
+    ];
+    for (const [name, call] of calls) {
+      expect(await caught(call()), name).toBeInstanceOf(AccessDeniedError);
+    }
+
+    expect(await snapshot(org.id), "radene i de fire tabellene er uendret").toBe(rowsBefore);
+    expect(await tableCounts()).toEqual(countsBefore);
+    expect((await roomRow(t.room.id)).deletedAt).toBeNull();
+    expect((await buildingRow(t.building.id)).deletedAt).toBeNull();
+  });
+
   type DeletedCase = [string, (ctx: Awaited<ReturnType<typeof deletedSetup>>) => Promise<unknown>];
 
   async function deletedSetup() {
@@ -1650,7 +1702,7 @@ describe("4.5 oppførsel", () => {
     });
   });
 
-  describe("4.5.6 forslag for rom (A81)", () => {
+  describe("4.5.6 forslag for rom (A87)", () => {
     async function floorWith(belowGround: boolean) {
       const { org, admin, assignment } = await orgWithAdmin();
       const building = await createBuilding(org.id, { assignmentId: assignment.id });

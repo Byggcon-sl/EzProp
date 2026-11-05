@@ -12,10 +12,12 @@ import {
   certifications,
   commonAreas,
   companies,
+  contacts,
   employeePermissions,
   employeeRoleAssignments,
   employees,
   files,
+  firms,
   integrationConnections,
   numberSequences,
   offices,
@@ -36,6 +38,8 @@ export const RESET_TABLES = [
   "floor_areas",
   "floors",
   "report_buildings",
+  "contacts",
+  "firms",
   "number_sequences",
   "orders",
   "common_areas",
@@ -865,4 +869,106 @@ export async function createRoom(
     areaType: row.area_type as string,
     belowGround: row.below_ground as boolean,
   };
+}
+
+const ORG_NUMBER_WEIGHTS = [3, 2, 7, 6, 5, 4, 3, 2] as const;
+
+/**
+ * Kontrollsifferet (modulus 11) for de åtte første sifrene, eller `null` når det blir 10 (da
+ * finnes ikke noe gyldig nummer med disse sifrene).
+ */
+function orgNumberCheckDigit(firstEight: string): number | null {
+  const sum = ORG_NUMBER_WEIGHTS.reduce(
+    (total, weight, index) => total + weight * Number(firstEight[index]),
+    0,
+  );
+  const remainder = sum % 11;
+  const check = remainder === 0 ? 0 : 11 - remainder;
+  return check === 10 ? null : check;
+}
+
+// Starter høyt, så faste numre i testene (000000019, 000000027 …) aldri lages av fabrikken.
+let firmOrgNumberCounter = 50000;
+
+/**
+ * Neste oppdiktede, gyldige organisasjonsnummer: `000` + løpenummer på fem sifre + kontrollsiffer.
+ * Løpenumre der kontrollsifferet blir 10, hoppes over. Løpenummeret starter på 50001. Starter med
+ * `000`, så det kan ikke finnes i Brønnøysundregistrene.
+ */
+export function nextFakeOrgNumber(): string {
+  for (;;) {
+    firmOrgNumberCounter += 1;
+    const firstEight = `000${String(firmOrgNumberCounter).padStart(5, "0")}`;
+    const check = orgNumberCheckDigit(firstEight);
+    if (check !== null) return `${firstEight}${check}`;
+  }
+}
+
+type FirmOverrides = {
+  name?: string;
+  orgNumber?: string | null;
+  firmType?: string;
+  notes?: string | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/**
+ * Et firma (`firms`), satt inn direkte uten tilgangssjekk og uten Zod, slik at testene kan lage
+ * rader tjenesten ville avvist (ukjent `firmType`). Standard: «Testmegling AS», meglerforetak, uten
+ * notat, og et nytt gyldig organisasjonsnummer fra `nextFakeOrgNumber()` per kall. Derfor gir to
+ * kall i samme organisasjon aldri unik-feil. `orgNumber: null` gir firma uten nummer.
+ */
+export async function createFirm(organizationId: string, overrides: FirmOverrides = {}) {
+  const [row] = await db
+    .insert(firms)
+    .values({
+      organizationId,
+      name: overrides.name ?? "Testmegling AS",
+      orgNumber: overrides.orgNumber === undefined ? nextFakeOrgNumber() : overrides.orgNumber,
+      firmType: (overrides.firmType ?? "broker_firm") as typeof firms.$inferInsert.firmType,
+      notes: overrides.notes ?? null,
+      deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette firma");
+  return row;
+}
+
+type ContactOverrides = {
+  firstName?: string;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  firmId?: string | null;
+  notes?: string | null;
+  source?: string;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/**
+ * En kontakt (`contacts`), satt inn direkte uten tilgangssjekk og uten Zod. Standard: «Megler
+ * Test», lagt inn for hånd (`manual`), uten firma, e-post, telefon og notat. `source` er fri tekst,
+ * så testene kan vise at databasen avviser ukjente koder. Oppdiktede data.
+ */
+export async function createContact(organizationId: string, overrides: ContactOverrides = {}) {
+  const [row] = await db
+    .insert(contacts)
+    .values({
+      organizationId,
+      firstName: overrides.firstName ?? "Megler",
+      lastName: overrides.lastName === undefined ? "Test" : overrides.lastName,
+      email: overrides.email ?? null,
+      phone: overrides.phone ?? null,
+      firmId: overrides.firmId ?? null,
+      notes: overrides.notes ?? null,
+      source: (overrides.source ?? "manual") as typeof contacts.$inferInsert.source,
+      deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette kontakt");
+  return row;
 }
