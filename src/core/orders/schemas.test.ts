@@ -232,3 +232,36 @@ describe("koble kontakter 3.2 orderedByContactId på ordren", () => {
     expect(messagesFor(result, "orderedByContactId")).toEqual([CONTACT_NOT_FOUND]);
   });
 });
+
+// Kobling til kontaktregisteret (docs/funksjoner/fase2a-koble-kontakter-testplan.md 3.2).
+describe("3.2 orderedByContactId på ordren (koble kontakter)", () => {
+  const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
+  const CONTACT_ID = "0190a000-0000-7000-8000-000000000070";
+
+  it("gyldig uuid godtas og beholdes", () => {
+    expect(ok({ orderedByContactId: CONTACT_ID }).orderedByContactId).toBe(CONTACT_ID);
+  });
+
+  it.each([
+    ["tom streng", { orderedByContactId: "" }],
+    ["bare mellomrom", { orderedByContactId: "   " }],
+    ["null", { orderedByContactId: null }],
+    ["manglende felt", {}],
+  ])("%s gir null", (_name, input) => {
+    expect(ok(input).orderedByContactId).toBeNull();
+  });
+
+  it.each(["abc", "1"])("«%s» gir «Kontakten finnes ikke.» ved orderedByContactId", (value) => {
+    expect(messagesFor(parse({ orderedByContactId: value }), "orderedByContactId")).toContain(
+      CONTACT_NOT_FOUND,
+    );
+  });
+
+  it("orderedByFirmId fra skjemaet tas bort (firmaet følger kontakten i kjernen)", () => {
+    const data = ok({
+      orderedByContactId: CONTACT_ID,
+      orderedByFirmId: "0190a000-0000-7000-8000-000000000060",
+    });
+    expect(data).not.toHaveProperty("orderedByFirmId");
+  });
+});

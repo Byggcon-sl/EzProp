@@ -16,6 +16,7 @@ import {
   createCompany,
   createContact,
   createEmployee,
+  createFirm,
   createOrganization,
   createTeamMember,
   createUser,
@@ -242,6 +243,54 @@ describe("4.8.5 feiler hendelsen eller loggen, finnes ingen endring", () => {
     expect(await rowCount(events)).toBe(0);
     expect(await rowCount(auditLog)).toBe(0);
   });
+
+  // Koble kontakter (docs/funksjoner/fase2a-koble-kontakter-testplan.md 7.3): samme mønster med
+  // kontakt. Kaster hendelsen eller loggen, finnes ingen part og ingen kobling.
+  it.each(FAILURES)(
+    "7.3 addParty med kontakt: %s kaster, og ingen part finnes",
+    async (_name, fail) => {
+      const { org, admin, assignment } = await setup();
+      const firm = await createFirm(org.id);
+      const contact = await createContact(org.id, { firmId: firm.id });
+      fail();
+
+      await expect(
+        addParty(admin, org.id, assignment.id, {
+          ...PARTY,
+          contactId: contact.id,
+        } as Parameters<typeof addParty>[3]),
+      ).rejects.toThrow();
+
+      expect(await rowCount(assignmentParties)).toBe(0);
+      expect(await rowCount(events)).toBe(0);
+      expect(await rowCount(auditLog)).toBe(0);
+    },
+  );
+
+  it.each(FAILURES)(
+    "7.3 updateParty med kontakt: %s kaster, og koblingen er ikke satt",
+    async (_name, fail) => {
+      const { org, admin, assignment } = await setup();
+      const contact = await createContact(org.id);
+      const party = await createAssignmentParty(org.id, { assignmentId: assignment.id });
+      fail();
+
+      await expect(
+        updateParty(admin, org.id, party.id, {
+          ...PARTY,
+          contactId: contact.id,
+        } as Parameters<typeof updateParty>[3]),
+      ).rejects.toThrow();
+
+      const [row] = await db
+        .select()
+        .from(assignmentParties)
+        .where(eq(assignmentParties.id, party.id));
+      expect(row?.contactId).toBeNull();
+      expect(row?.rowVersion).toBe(party.rowVersion);
+      expect(await rowCount(events)).toBe(0);
+    },
+  );
 
   it.each(FAILURES)("updateParty: %s kaster, og parten er uendret", async (_name, fail) => {
     const { org, admin, assignment } = await setup();
