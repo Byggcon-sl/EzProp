@@ -893,6 +893,9 @@ const PARTY_KEYS = [
   "receivesReport",
   "receivesInvoice",
   "receivesMessages",
+  // Koble kontakter (docs/funksjoner/fase2a-koble-kontakter.md punkt 4): rene kolonner
+  "contactId",
+  "firmId",
 ];
 const PARTY_OPTIONAL_KEYS = ["assignmentId"];
 const CANDIDATE_KEYS = ["id", "name"].sort();

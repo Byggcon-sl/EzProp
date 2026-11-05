@@ -479,6 +479,9 @@ type PartyOverrides = {
   receivesReport?: boolean;
   receivesInvoice?: boolean;
   receivesMessages?: boolean;
+  /** Kobling til kontaktregisteret (fase2a-koble-kontakter). Standard: ingen kobling. */
+  contactId?: string | null;
+  firmId?: string | null;
   deletedAt?: Date | null;
   deletedBy?: string | null;
 };
@@ -507,6 +510,8 @@ export async function createAssignmentParty(
       receivesReport: overrides.receivesReport ?? false,
       receivesInvoice: overrides.receivesInvoice ?? false,
       receivesMessages: overrides.receivesMessages ?? false,
+      contactId: overrides.contactId ?? null,
+      firmId: overrides.firmId ?? null,
       deletedAt: overrides.deletedAt ?? null,
       deletedBy: overrides.deletedBy ?? null,
     })

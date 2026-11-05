@@ -49,7 +49,8 @@ vi.mock("@/core/contacts", async (importOriginal) => ({
   ...mocks.core,
 }));
 
-const { createContactAction, updateContactAction } = await import("./actions");
+const { createContactAction, updateContactAction, searchContactsAction } =
+  await import("./actions");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
 const OTHER_ORG = "0190a000-0000-7000-8000-000000000002";
@@ -288,5 +289,88 @@ describe("7.8 loggkontrakt", () => {
     const state = await createContactAction(initialFormState, contactForm());
     expect(allMessages(state)).toContain("Firmaet finnes ikke.");
     expect(mocks.logError).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * Søket i kontaktvelgeren (docs/funksjoner/fase2a-koble-kontakter-testplan.md avsnitt 8).
+ * `searchContactsAction(query)` kaller `listContacts` og gir høyst 10 treff med
+ * `{ id, name, firmName, email, phone }`. Under 2 tegn gir tom liste uten kall. Her er kjernen
+ * byttet ut; organisasjonen og tilgangen mot ekte database står i search-action.test.ts.
+ * Testdata er oppdiktet.
+ */
+
+describe("8. searchContactsAction (kjernen byttet ut)", () => {
+  function listRow(index: number) {
+    return {
+      id: `0190a000-0000-7000-8000-0000000001${String(index).padStart(2, "0")}`,
+      firstName: `${FIRST}${index}`,
+      lastName: LAST,
+      email: EMAIL,
+      phone: PHONE,
+      firmId: FIRM,
+      firmName: "Testmegling AS",
+      source: "manual",
+    };
+  }
+
+  it.each(["", " ", "a", " a ", "Ø"])(
+    "8.3 search_under_2_chars_empty_no_call: «%s» gir tom liste, og listContacts kalles ikke",
+    async (query) => {
+      expect(await searchContactsAction(query)).toEqual([]);
+      expect(mocks.core.listContacts).not.toHaveBeenCalled();
+    },
+  );
+
+  it("8.3b uten kontekst gir tom liste uten kall", async () => {
+    mocks.getEmployeeContext.mockResolvedValue(null);
+    expect(await searchContactsAction("Megler")).toEqual([]);
+    expect(mocks.core.listContacts).not.toHaveBeenCalled();
+  });
+
+  it("8.4a kaller listContacts med organisasjonen fra konteksten og søketeksten; høyst 10 treff med fem felt", async () => {
+    mocks.core.listContacts.mockResolvedValue(Array.from({ length: 15 }, (_v, i) => listRow(i)));
+
+    const hits = await searchContactsAction("Me");
+
+    expect(mocks.core.listContacts).toHaveBeenCalledTimes(1);
+    const [calledActor, calledOrg, options] = mocks.core.listContacts.mock.calls[0]!;
+    expect(calledActor).toEqual(actor);
+    expect(calledOrg).toBe(ORG);
+    expect(options).toMatchObject({ query: "Me" });
+    expect(hits).toHaveLength(10);
+    for (const hit of hits) {
+      expect(Object.keys(hit).sort()).toEqual(["email", "firmName", "id", "name", "phone"]);
+    }
+    expect(hits[0]).toMatchObject({
+      id: listRow(0).id,
+      firmName: "Testmegling AS",
+      email: EMAIL,
+      phone: PHONE,
+    });
+    expect(hits[0]!.name).toContain(`${FIRST}0`);
+    expect(hits[0]!.name).toContain(LAST);
+  });
+
+  it("8.5a AccessDeniedError fra kjernen gir tom liste, ikke unntak", async () => {
+    mocks.core.listContacts.mockRejectedValue(new AccessDeniedError());
+    await expect(searchContactsAction("Megler")).resolves.toEqual([]);
+  });
+
+  it("8.6 logger_never_gets_query: ukjent feil logges uten søketeksten, navn, e-post eller telefon", async () => {
+    const query = "Hemmeligsøk Testesen";
+    const boom = new Error(`databasen sa nei til ${query} ${EMAIL} ${PHONE}`);
+    boom.name = "OppdiktetFeil";
+    mocks.core.listContacts.mockRejectedValue(boom);
+
+    await expect(searchContactsAction(query)).resolves.toEqual([]);
+
+    const logged = JSON.stringify(mocks.logError.mock.calls).replace(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+      "<id>",
+    );
+    for (const value of ["Hemmeligsøk", "Testesen", EMAIL, PHONE]) {
+      expect(logged, value).not.toContain(value);
+    }
   });
 });
