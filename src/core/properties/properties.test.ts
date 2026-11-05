@@ -303,6 +303,12 @@ const SETTINGS = [
 const MATRIX = SETTINGS.flatMap((s) => ROLE_CASES.map((r) => ({ ...r, ...s })));
 const WRITE_ALLOWED = MATRIX.filter((c) => c.editAll || c.roles[0] !== "inspector");
 
+
+/** Id-ene i loggen er tilfeldige og kan inneholde «998» eller «1111»; fjern dem før sjekken av verdier. */
+function withoutUuids(text: string): string {
+  return text.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "");
+}
+
 describe("4.1 tilgang per rolle", () => {
   it.each(MATRIX)(
     "4.1.1 $name med innstillingen $setting kan lese eiendommen",
@@ -1371,14 +1377,14 @@ describe("4.7 hendelser og revisjonslogg", () => {
       (row) => row.action === "update",
     );
     expect(propertyUpdate?.entityId).toBe(propertyId);
-    const propertyText = JSON.stringify(propertyUpdate!.changes);
+    const propertyText = withoutUuids(JSON.stringify(propertyUpdate!.changes));
     expect(propertyText).toMatch(/postal_?[cC]ode/);
     expect(propertyText).not.toContain("1111");
     const unitUpdate = (await auditFor(org.id, "cadastral_unit")).find(
       (row) => row.action === "update",
     );
     expect(unitUpdate?.entityId).toBe(unit!.id);
-    const unitText = JSON.stringify(unitUpdate!.changes);
+    const unitText = withoutUuids(JSON.stringify(unitUpdate!.changes));
     expect(unitText).toContain("gnr");
     expect(unitText).not.toContain("998");
   });
