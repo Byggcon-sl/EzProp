@@ -74,13 +74,14 @@ const CARD_KEYS = [
 ].sort();
 
 type Filter = { mineOnly: boolean; query: string };
-type Item = Awaited<ReturnType<typeof listWorkQueue>> extends infer R
-  ? R extends { items: (infer I)[] }
-    ? I
-    : R extends (infer I)[]
+type Item =
+  Awaited<ReturnType<typeof listWorkQueue>> extends infer R
+    ? R extends { items: (infer I)[] }
       ? I
-      : never
-  : never;
+      : R extends (infer I)[]
+        ? I
+        : never
+    : never;
 type ScheduleInput = Parameters<typeof setAssignmentSchedule>[3];
 
 // ---------------------------------------------------------------------------------------------
@@ -369,9 +370,9 @@ describe("2.3 «Mine»", () => {
 
     expect(await list(setup.admin, setup.org.id, { status: "in_progress", ...MINE })).toEqual([]);
     expect((await count(setup.admin, setup.org.id, MINE)).in_progress).toBe(0);
-    expect(
-      (await listAll(setup.admin, setup.org.id, "in_progress")).map((r) => r.id),
-    ).toEqual([row.id]);
+    expect((await listAll(setup.admin, setup.org.id, "in_progress")).map((r) => r.id)).toEqual([
+      row.id,
+    ]);
   });
 
   it("2.3.3 slettet teamrad → ikke med «Mine»", async () => {
@@ -479,7 +480,9 @@ describe("2.4 søk", () => {
     const hit = await newAssignment(setup, { number: "2026-00004" });
     await newAssignment(setup, { number: "2026-00017" });
     expect(await search(setup, "0004")).toEqual([hit.id]);
-    expect((await count(setup.admin, setup.org.id, { mineOnly: false, query: "0004" })).ordered).toBe(1);
+    expect(
+      (await count(setup.admin, setup.org.id, { mineOnly: false, query: "0004" })).ordered,
+    ).toBe(1);
   });
 
   it("2.4.2 del av eiendomsadressen, store og små bokstaver", async () => {
@@ -804,9 +807,9 @@ describe("2.7 endringer", () => {
     const setup = await orgWithAdmin();
     const row = await newAssignment(setup);
     await note(setup.admin, setup.org.id, row.id, NOTE);
-    await expect(
-      note(setup.admin, setup.org.id, row.id, FAKE_NATIONAL_ID),
-    ).rejects.toBeInstanceOf(ZodError);
+    await expect(note(setup.admin, setup.org.id, row.id, FAKE_NATIONAL_ID)).rejects.toBeInstanceOf(
+      ZodError,
+    );
     expect(await auditFor(row.id)).toHaveLength(1);
     expect(JSON.stringify(await auditRows(setup.org.id))).not.toContain(FAKE_NATIONAL_ID);
   });
@@ -1025,15 +1028,13 @@ describe("2.8 tilgang per rolle", () => {
     const beforeAudit = await auditCount();
 
     await expect(note(actor, setup.org.id, row.id, "Ny tekst")).rejects.toThrow(AccessDeniedError);
-    await expect(
-      schedule(actor, setup.org.id, row.id, { dueDate: "2026-11-10" }),
-    ).rejects.toThrow(AccessDeniedError);
+    await expect(schedule(actor, setup.org.id, row.id, { dueDate: "2026-11-10" })).rejects.toThrow(
+      AccessDeniedError,
+    );
     expect(await snapshot(row.id)).toEqual(before);
     expect(await auditCount()).toBe(beforeAudit);
 
-    expect((await listAll(actor, setup.org.id, "in_progress")).map((r) => r.id)).toEqual([
-      row.id,
-    ]);
+    expect((await listAll(actor, setup.org.id, "in_progress")).map((r) => r.id)).toEqual([row.id]);
     expect((await count(actor, setup.org.id, ALL)).in_progress).toBe(1);
   });
 
@@ -1098,18 +1099,21 @@ describe("2.8 tilgang per rolle", () => {
     ).map(([state, set]) => ({ fn, state, set })),
   );
 
-  it.each(BLOCKED)("2.8.5 $fn: $state ansatt (admin) får AccessDeniedError", async ({ fn, set }) => {
-    const setup = await orgWithAdmin();
-    const row = await newAssignment(setup);
-    const { actor, employee } = await person(setup.org.id, ["admin"]);
-    await db.update(employees).set(set).where(eq(employees.id, employee.id));
-    const before = await snapshot(row.id);
-    const beforeAudit = await auditCount();
+  it.each(BLOCKED)(
+    "2.8.5 $fn: $state ansatt (admin) får AccessDeniedError",
+    async ({ fn, set }) => {
+      const setup = await orgWithAdmin();
+      const row = await newAssignment(setup);
+      const { actor, employee } = await person(setup.org.id, ["admin"]);
+      await db.update(employees).set(set).where(eq(employees.id, employee.id));
+      const before = await snapshot(row.id);
+      const beforeAudit = await auditCount();
 
-    await expect(callFn(fn, actor, setup.org.id, row.id)).rejects.toThrow(AccessDeniedError);
-    expect(await snapshot(row.id)).toEqual(before);
-    expect(await auditCount()).toBe(beforeAudit);
-  });
+      await expect(callFn(fn, actor, setup.org.id, row.id)).rejects.toThrow(AccessDeniedError);
+      expect(await snapshot(row.id)).toEqual(before);
+      expect(await auditCount()).toBe(beforeAudit);
+    },
+  );
 
   it.each(FUNCTIONS)("2.8.5 %s: ansatt uten roller får AccessDeniedError", async (fn) => {
     const setup = await orgWithAdmin();
@@ -1225,8 +1229,9 @@ describe("2.9 tenant-isolasjon", () => {
     await createProperty(b.org.id, { assignmentId: rowB.id, address: "Testveien 12" });
 
     for (const query of ["Testveien", "00001"]) {
-      const idsA = (await list(a.admin, a.org.id, { status: "ordered", mineOnly: false, query }))
-        .map((r) => r.id);
+      const idsA = (
+        await list(a.admin, a.org.id, { status: "ordered", mineOnly: false, query })
+      ).map((r) => r.id);
       expect(idsA).toEqual([rowA.id]);
       expect((await count(a.admin, a.org.id, { mineOnly: false, query })).ordered).toBe(1);
     }
