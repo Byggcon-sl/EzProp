@@ -8,6 +8,8 @@ export type FormState = {
   values: Record<string, string | string[]>;
   /** Økes ved hvert mislykket forsøk, slik at fokus flyttes til meldingen hver gang. */
   attempt: number;
+  /** Lenke som hører til meldingen, for eksempel til firmaet som allerede har nummeret. */
+  link?: { href: string; text: string };
 };
 
 export const initialFormState: FormState = {

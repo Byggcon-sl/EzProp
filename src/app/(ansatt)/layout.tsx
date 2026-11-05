@@ -73,6 +73,46 @@ function InboxIcon() {
   );
 }
 
+function ContactIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20a7 7 0 0 1 14 0" />
+    </svg>
+  );
+}
+
+function BuildingIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 21V4h11v17" />
+      <path d="M15 9h5v12" />
+      <path d="M3 21h18" />
+      <path d="M8 8h3M8 12h3M8 16h3" />
+    </svg>
+  );
+}
+
 function PeopleIcon() {
   return (
     <svg
@@ -154,6 +194,22 @@ export default async function EmployeeLayout({ children }: { children: ReactNode
                 <NavLink href="/ordre" matchChildren>
                   <InboxIcon />
                   Ordre
+                </NavLink>
+              </li>
+            )}
+            {organizations.length > 0 && (
+              <li>
+                <NavLink href="/kontakter" matchChildren>
+                  <ContactIcon />
+                  Kontakter
+                </NavLink>
+              </li>
+            )}
+            {organizations.length > 0 && (
+              <li>
+                <NavLink href="/firma" matchChildren>
+                  <BuildingIcon />
+                  Firma
                 </NavLink>
               </li>
             )}
