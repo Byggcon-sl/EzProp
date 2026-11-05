@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseOsloDateTime } from "@/shared/lib/dates";
 import { isUuid } from "@/shared/lib/uuid";
 import { ASSIGNMENT_STATUSES, PARTY_ROLES } from "./codes";
 
@@ -138,3 +139,58 @@ export const cancelAssignmentInputSchema = z
   })
   .strip();
 export type CancelAssignmentInput = z.input<typeof cancelAssignmentInputSchema>;
+
+/*
+ * Arbeidskøen (A100, A101): kort internt notat per oppdrag, og befaring og frist satt for hånd.
+ * Alt kan tømmes; tom tekst blir `null`. Ingen regel om rekkefølgen på befaring og frist.
+ */
+
+/** Høyeste lengde på notatet i arbeidskøen (A101). */
+export const NOTE_MAX_LENGTH = 200;
+
+const NOTE_TOO_LONG = `Notatet kan ha høyst ${NOTE_MAX_LENGTH} tegn.`;
+const INSPECTION_AT = "Skriv en gyldig dato og et gyldig klokkeslett for befaringen.";
+const DUE_DATE = "Skriv en gyldig dato for fristen.";
+
+/** Notatet: trimmet, tom tekst blir `null`, høyst 200 tegn, uten fødselsnummer. */
+export const assignmentNoteSchema = optionalText(NOTE_MAX_LENGTH, NOTE_TOO_LONG).refine(
+  hasNoNationalId,
+  { error: NATIONAL_ID },
+);
+
+/** En dato som finnes, på formen `YYYY-MM-DD`. */
+function isIsoDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return date.toISOString().slice(0, 10) === value;
+}
+
+/** Befaring: tom blir `null`, ellers et gyldig tidspunkt (tekst uten tidssone er norsk tid). */
+const inspectionAtSchema = z
+  .union([z.date(), z.string()], { error: INSPECTION_AT })
+  .nullish()
+  .transform((value, ctx) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "string" && value.trim() === "") return null;
+    const parsed = parseOsloDateTime(value);
+    if (parsed === null) {
+      ctx.addIssue({ code: "custom", message: INSPECTION_AT });
+      return z.NEVER;
+    }
+    return parsed;
+  });
+
+/** Frist: tom blir `null`, ellers en gyldig dato `YYYY-MM-DD`. */
+const dueDateSchema = z
+  .string({ error: DUE_DATE })
+  .nullish()
+  .transform(emptyToNull)
+  .refine((value) => value === null || isIsoDate(value), { error: DUE_DATE });
+
+/** Befaring og frist på oppdraget. Ukjente felt (også `organizationId`) tas bort. */
+export const assignmentScheduleSchema = z
+  .object({ inspectionAt: inspectionAtSchema, dueDate: dueDateSchema })
+  .strip();
+export type AssignmentScheduleInput = z.input<typeof assignmentScheduleSchema>;
+export type AssignmentScheduleValues = z.output<typeof assignmentScheduleSchema>;

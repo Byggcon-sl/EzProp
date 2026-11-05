@@ -1,9 +1,11 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  date,
   foreignKey,
   pgTable,
   text,
+  timestamp,
   uniqueIndex,
   uuid,
   type AnyPgColumn,
@@ -16,8 +18,8 @@ import { properties } from "./properties";
 
 /**
  * Oppdraget (docs/05-domenemodell.md 4.3), minimalt i fase 2a (A54): nummer, kontor, type,
- * status, koblingen til ordren, utstedende selskap og eiendommen. Ekstern referanse, statusflyt
- * og frister legges til av planpunktene som bruker dem.
+ * status, koblingen til ordren, utstedende selskap og eiendommen. Arbeidskøen la til befaring,
+ * frist og internt notat. Ekstern referanse legges til av planpunktet som bruker den.
  *
  * `number` lages bare på serveren fra nummerserien (`nextAssignmentNumber`, D9) og er unikt per
  * organisasjon, også blant slettede rader. Faste koder står i `@/core/assignments/codes`.
@@ -39,6 +41,15 @@ export const assignments = pgTable(
      * eller byttes (`setTeamMember`, A65–A68). Tomt når ingen ansvarlig har selskap.
      */
     companyId: uuid("company_id"),
+    /**
+     * Avtalt befaring (dato og klokkeslett). Settes for hånd til befaringene finnes (A100). Tom
+     * gir «Befaring ikke avtalt» i arbeidskøen.
+     */
+    inspectionAt: timestamp("inspection_at", { withTimezone: true }),
+    /** Frist for levering (dato, `YYYY-MM-DD`). Tom når ingen frist er satt. */
+    dueDate: date("due_date", { mode: "string" }),
+    /** Kort intern merknad i arbeidskøen, høyst 200 tegn (A101). Aldri i rapport eller PDF. */
+    internalNote: text("internal_note"),
   },
   // Returtypen står fordi tabellene peker på hverandre (ellers klarer ikke TypeScript typene).
   (table): PgTableExtraConfigValue[] => [

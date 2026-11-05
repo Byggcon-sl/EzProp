@@ -120,6 +120,8 @@ Ingen faglige regler. «Forfalt» er én liten ren funksjon `isOverdue` (frist f
 - Alle forslagene fra forenkler og test-leder er tatt inn. De trekker i samme retning og gjør kortet både enklere og tryggere.
 - Forenkler ville ha én e2e-test; test-leder listet flere steg. Avgjørelse: én gjennomgang i begge størrelsene for hovedflyten, pluss tre korte tester for det gjennomgangen ikke dekker (befaring og frist, tomtilstand, uten JavaScript). Grunn: hovedflyten holdes samlet, men det som kan gå i stykker hver for seg, får egen test.
 - Felles tomtekst i stedet for egen tekst per fane: mindre tekst å vedlikeholde, og fanenavnet forklarer nok.
+- Signaturer følger `status.ts`: `(actor, organizationId, …)` med `requireOrganizationAccess` inne i funksjonen (`organization.read` for lesing, `assignment.edit` for endring); ingen funksjon tar ansatt-id, «Mine» bruker `grant.employeeId`.
+- Valgt under bygging (utvikler, 05.11.2026): «Mine» teller bare aktive teamrader (ikke slettet og ikke avsluttet med `to_at`), som teamet på oppdragssiden; den som har overlevert oppdraget, ser det under «Alle». Samme notat, befaring eller frist på nytt skriver ingenting og gir ingen rad i revisjonsloggen. Befaring uten tidssone fra skjemaet leses som norsk tid; tolkingen er flyttet fra ordreskjemaet til `src/shared/lib/dates.ts` (`parseOsloDateTime`) og brukes av begge.
 
 ## Åpne spørsmål
 - Ingen som stopper oppgaven. Ingenting om fag, pris, personvern eller nye funksjoner ble reist i forhåndsvurderingen.
