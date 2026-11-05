@@ -474,6 +474,34 @@ describe("statusflyt 2.3 grunnen er valgfri ved fram", () => {
   });
 });
 
+// Koble kontakter (docs/funksjoner/fase2a-koble-kontakter-testplan.md 3.1)
+describe("koble kontakter 3.1 contactId på parten", () => {
+  const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
+  const CONTACT_ID = "0190a3c4-7b2e-7c00-8a00-000000000001";
+
+  it("gyldig uuid godtas", () => {
+    expect(expectAccepted({ contactId: CONTACT_ID }).contactId).toBe(CONTACT_ID);
+  });
+
+  it.each([
+    ["tom streng", ""],
+    ["bare mellomrom", "   "],
+    ["null", null],
+  ])("%s blir null", (_name, contactId) => {
+    expect(expectAccepted({ contactId }).contactId).toBeNull();
+  });
+
+  it("manglende felt blir null", () => {
+    expect(expectAccepted({}).contactId).toBeNull();
+  });
+
+  it.each(["abc", "1"])("«%s» gir «Kontakten finnes ikke.»", (contactId) => {
+    const result = parseParty({ contactId });
+    expect(result.success).toBe(false);
+    expect(messagesFor(result, "contactId")).toEqual([CONTACT_NOT_FOUND]);
+  });
+});
+
 describe("2.9 alle norske meldinger i kortet er dekket", () => {
   it("EmployeeNotFoundError har meldingen «Den ansatte finnes ikke.»", () => {
     expect(new EmployeeNotFoundError().message).toBe(EMPLOYEE_NOT_FOUND);

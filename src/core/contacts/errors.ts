@@ -21,3 +21,14 @@ export class FirmNotFoundError extends Error {
     this.name = "FirmNotFoundError";
   }
 }
+
+/**
+ * Kontakten som skal kobles til en part eller en ordre, finnes ikke i organisasjonen, eller er
+ * slettet. Ingenting er lagret.
+ */
+export class ContactNotFoundError extends Error {
+  constructor() {
+    super("Kontakten finnes ikke.");
+    this.name = "ContactNotFoundError";
+  }
+}

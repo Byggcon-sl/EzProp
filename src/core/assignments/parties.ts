@@ -6,6 +6,7 @@ import {
   type EmployeeGrant,
 } from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
+import { ContactNotFoundError, findContactForLink } from "@/core/contacts";
 import { recordEvent } from "@/core/events";
 import { db, type DbExecutor } from "@/db/client";
 import { assignmentParties, assignments } from "@/db/schema";
@@ -18,7 +19,14 @@ import { lockAssignment } from "./shared";
  * med navn og kontakt som fritekst og hva parten mottar. Endring med `assignment.edit`. Fjerning
  * er myk sletting. Hendelse og revisjonslogg har bare id-er, rollekoden, mottar-valgene og
  * navnene på feltene som er endret, aldri navn, firma, e-post eller telefon. Raden er kilden.
+ *
+ * Koblingen til kontaktregisteret: bare `contactId` sendes inn. Kjernen slår opp kontakten i
+ * organisasjonen fra tilgangssjekken og setter firmaet fra kontakten. Friteksten lagres slik den
+ * sendes og overskrives aldri. Kontaktdata sendes aldri til KI.
  */
+
+/** Det som lagres på parten: skjemaverdiene og firmaet fra kontakten. */
+type StoredPartyValues = PartyValues & { firmId: string | null };
 
 /** Feltene som sammenlignes ved endring. Navnene (ikke verdiene) står i revisjonsloggen. */
 const PARTY_FIELDS = [
@@ -30,15 +38,35 @@ const PARTY_FIELDS = [
   "receivesReport",
   "receivesInvoice",
   "receivesMessages",
-] as const satisfies readonly (keyof PartyValues)[];
+  "contactId",
+  "firmId",
+] as const satisfies readonly (keyof StoredPartyValues)[];
 
-/** Felt der verdien kan stå i revisjonsloggen (koder og ja/nei, ingen personopplysninger). */
+/** Felt der verdien kan stå i revisjonsloggen (koder, ja/nei og id-er, ingen personopplysninger). */
 const LOGGABLE_FIELDS = new Set<string>([
   "role",
   "receivesReport",
   "receivesInvoice",
   "receivesMessages",
+  "contactId",
+  "firmId",
 ]);
+
+/**
+ * Slår opp kontakten i organisasjonen fra tilgangssjekken og gir verdiene som lagres. Uten
+ * kontakt er begge koblingene `null`. Fremmed, ukjent eller slettet kontakt gir
+ * `ContactNotFoundError` før noe er skrevet.
+ */
+async function withContactLink(
+  tx: DbExecutor,
+  grant: EmployeeGrant,
+  values: PartyValues,
+): Promise<StoredPartyValues> {
+  if (values.contactId === null) return { ...values, contactId: null, firmId: null };
+  const contact = await findContactForLink(tx, grant.organizationId, values.contactId);
+  if (!contact) throw new ContactNotFoundError();
+  return { ...values, contactId: contact.id, firmId: contact.firmId };
+}
 
 /**
  * Henter og låser en part som ikke er fjernet, på et oppdrag som ikke er slettet, i
@@ -57,6 +85,8 @@ async function lockParty(tx: DbExecutor, grant: EmployeeGrant, partyId: string) 
       receivesReport: assignmentParties.receivesReport,
       receivesInvoice: assignmentParties.receivesInvoice,
       receivesMessages: assignmentParties.receivesMessages,
+      contactId: assignmentParties.contactId,
+      firmId: assignmentParties.firmId,
     })
     .from(assignmentParties)
     .innerJoin(
@@ -92,11 +122,12 @@ export async function addParty(
 
   return db.transaction(async (tx) => {
     const assignment = await lockAssignment(tx, grant, assignmentId);
+    const stored = await withContactLink(tx, grant, values);
 
     const [row] = await tx
       .insert(assignmentParties)
       .values({
-        ...values,
+        ...stored,
         organizationId: grant.organizationId,
         assignmentId: assignment.id,
         createdBy: grant.employeeId,
@@ -119,6 +150,10 @@ export async function addParty(
         receivesReport: values.receivesReport,
         receivesInvoice: values.receivesInvoice,
         receivesMessages: values.receivesMessages,
+        // Bare id-er, og bare når parten er koblet (uten kobling er raden som før)
+        ...(stored.contactId === null
+          ? {}
+          : { contactId: stored.contactId, firmId: stored.firmId }),
       },
     });
     return { id: row.id };
@@ -126,8 +161,9 @@ export async function addParty(
 }
 
 /**
- * Endrer en part. Uten endringer skrives ingenting (ingen hendelse). Revisjonsloggen får
- * navnene på feltene som er endret, og fra/til bare for rollen og mottar-valgene.
+ * Endrer en part. Alle feltene erstattes, også koblingen: tom eller manglende `contactId` fjerner
+ * den. Uten endringer skrives ingenting (ingen hendelse). Revisjonsloggen får navnene på feltene
+ * som er endret, og fra/til bare for rollen, mottar-valgene og id-ene til kontakt og firma.
  */
 export async function updateParty(
   actor: Actor,
@@ -141,13 +177,14 @@ export async function updateParty(
 
   return db.transaction(async (tx) => {
     const before = await lockParty(tx, grant, partyId);
+    const stored = await withContactLink(tx, grant, values);
 
-    const fields = PARTY_FIELDS.filter((field) => before[field] !== values[field]);
+    const fields = PARTY_FIELDS.filter((field) => before[field] !== stored[field]);
     if (fields.length === 0) return { id: before.id, changed: false };
 
     await tx
       .update(assignmentParties)
-      .set({ ...values, updatedBy: grant.employeeId })
+      .set({ ...stored, updatedBy: grant.employeeId })
       .where(
         and(
           eq(assignmentParties.id, before.id),
@@ -157,7 +194,7 @@ export async function updateParty(
 
     const changes: Record<string, unknown> = { assignmentId: before.assignmentId, fields };
     for (const field of fields) {
-      if (LOGGABLE_FIELDS.has(field)) changes[field] = { from: before[field], to: values[field] };
+      if (LOGGABLE_FIELDS.has(field)) changes[field] = { from: before[field], to: stored[field] };
     }
 
     await recordEvent(tx, grant, {

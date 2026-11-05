@@ -2,6 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
 import { nextAssignmentNumber } from "@/core/assignments";
 import { recordAuditEvent } from "@/core/audit";
+import { ContactNotFoundError, findContactForLink } from "@/core/contacts";
 import { recordEvent } from "@/core/events";
 import { db } from "@/db/client";
 import { assignments, offices, orders } from "@/db/schema";
@@ -71,6 +72,8 @@ export async function getOrder(actor: Actor, organizationId: string, orderId: st
       source: orders.source,
       externalRef: orders.externalRef,
       orderedByText: orders.orderedByText,
+      orderedByContactId: orders.orderedByContactId,
+      orderedByFirmId: orders.orderedByFirmId,
       addressText: orders.addressText,
       requestedReportType: orders.requestedReportType,
       gnr: orders.gnr,
@@ -101,7 +104,9 @@ export async function getOrder(actor: Actor, organizationId: string, orderId: st
 
 /**
  * Legger inn en ordre fra e-posten (`source = manual`, `status = received`). `now` kan sendes
- * inn i tester; mottatt kan ikke være etter `now`.
+ * inn i tester; mottatt kan ikke være etter `now`. Bestilleren kan kobles til en kontakt i
+ * registeret (`orderedByContactId`); firmaet følger kontakten. Fremmed, ukjent eller slettet
+ * kontakt gir `ContactNotFoundError`, og ingenting lagres.
  */
 export async function createOrder(
   actor: Actor,
@@ -113,10 +118,18 @@ export async function createOrder(
   const values = orderInputSchema(now).parse(input);
 
   return db.transaction(async (tx) => {
+    let orderedByFirmId: string | null = null;
+    if (values.orderedByContactId !== null) {
+      const contact = await findContactForLink(tx, grant.organizationId, values.orderedByContactId);
+      if (!contact) throw new ContactNotFoundError();
+      orderedByFirmId = contact.firmId;
+    }
+
     const [row] = await tx
       .insert(orders)
       .values({
         ...values,
+        orderedByFirmId,
         organizationId: grant.organizationId,
         source: MANUAL_SOURCE,
         requestedReportType: REQUESTED_REPORT_TYPE,
@@ -138,6 +151,10 @@ export async function createOrder(
         status: row.status,
         source: row.source,
         requestedReportType: row.requestedReportType,
+        // Bare id-er, og bare når bestilleren er koblet (uten kobling er raden som før)
+        ...(row.orderedByContactId === null
+          ? {}
+          : { orderedByContactId: row.orderedByContactId, orderedByFirmId: row.orderedByFirmId }),
       },
     });
     return row;
