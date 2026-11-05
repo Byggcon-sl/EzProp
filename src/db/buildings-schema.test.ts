@@ -573,7 +573,9 @@ describe("3.8 migreringen", () => {
     );
     for (const name of others) {
       const text = readFileSync(path.join(dir, name), "utf8");
-      expect(text, name).not.toMatch(/create table "?(report_buildings|floors|floor_areas|rooms)"?/i);
+      expect(text, name).not.toMatch(
+        /create table "?(report_buildings|floors|floor_areas|rooms)"?/i,
+      );
     }
   });
 
