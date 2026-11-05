@@ -574,7 +574,7 @@ describe("eiendom og fellesdeler: handlingene", () => {
         postalCode: "Postnummeret må ha fire sifre.",
         municipalityNumber: "Kommunenummeret må ha fire sifre.",
         associationOrgNumber: "Organisasjonsnummeret må ha ni sifre.",
-        shareNumber: "Andelsnummeret kan bare ha sifre og bindestrek.",
+        shareNumber: "Nummeret kan bare ha sifre og bindestrek.",
         snr: "Seksjonsnummer kan bare ha sifre.",
       });
       // Verdiene står igjen i skjemaet
