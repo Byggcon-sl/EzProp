@@ -234,7 +234,9 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 - [ ] Avtale med oppdragsgiver (for eksempel Fremtind) med egen rapportprofil og premissetekst
 - [ ] Eiendom og matrikkel lagt inn for hånd, med boligtype og **eierform**, og **fellesdeler** for leilighet
 - [ ] Bygninger, etasjer, **areal per etasje** (BRA-i, BRA-e, BRA-b, ALH) med hvem som målte og metode, og rom med romtype og «under terreng»
-- [ ] Kontakter og firma (meglere og meglerforetak) med notater, uten dubletter på organisasjonsnummer, og med kilde for opplysningene (innspill D17)
+- [x] Kontakter og firma (meglere og meglerforetak) med notater, uten dubletter på organisasjonsnummer, og med kilde for opplysningene (innspill D17) (05.11.2026, `docs/funksjoner/fase2a-kontakter-firma.md`, tabellene `firms` og `contacts`, sidene `/kontakter` og `/firma`, beslutningene A69–A73)
+- [ ] Koble partene på oppdraget og bestilleren til kontakter og firma (`assignment_parties.contact_id`/`firm_id`, `orders.ordered_by_contact_id`/`ordered_by_firm_id`), med søk etter kontakt fra oppdragssiden
+- [ ] Fjerne (myk sletting fra skjermen) og slå sammen like kontakter og firma
 - [ ] **Tidsmåling per rapport fra første ekte rapport** (hovedmålet, 28.10.2026): arbeidsøkter per fase (forberedelse, befaring, kontorarbeid, levering) lagres automatisk fra hendelsene, slik at tiden kan sammenlignes med nullpunktet fra IVIT.
 - [ ] **Reklamasjoner med enkelt skjema fra første ekte rapport** (beslutning 27.10.2026, spørsmål 4). **Bare leder og admin ser reklamasjonssakene** (unntak fra «alle ser alt», 27.10.2026). Reklamasjonsmappen kommer i fase 4.
 - [ ] **Fire testoppdrag som grunndata** (innspill P11): enebolig med garasje, leilighet i sameie, borettslagsleilighet og fritidsbolig, med bilder uten personer. Brukes i «Prøv malen», i regeltester og i demoer.
