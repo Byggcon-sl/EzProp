@@ -663,6 +663,112 @@ export async function logInAsInspector(page: Page) {
   await logIn(page, INSPECTOR_EMAIL);
 }
 
+// --- Utstedende selskap (docs/agenter/oppgaver/fase2a-utstedende-selskap-testplan.md avsnitt 7) ---
+
+/** Selskapet fra seed som e2e-takstmannen får når han ikke har noe selskap. */
+export const INSPECTOR_COMPANY = "Byggcon Nord AS";
+
+/**
+ * Sørger for at e2e-takstmannen finnes og har et selskap, slik at oppdragssiden kan vise
+ * utstedende selskap når han er ansvarlig. Setter «Byggcon Nord AS» fra seed bare når
+ * `company_id` er tom; et selskap som alt står, røres ikke. Idempotent. Returnerer navnet på
+ * selskapet han har. Bare lokal database eller testdatabasen.
+ */
+export async function ensureInspectorCompany(): Promise<string> {
+  await ensureInspector();
+  const sql = e2eSql();
+  try {
+    const [inspector] = await sql<{ id: string; organization_id: string }[]>`
+      select e.id, e.organization_id from employees e
+      join users u on u.id = e.user_id
+      where u.email = ${INSPECTOR_EMAIL} and e.deleted_at is null and e.deactivated_at is null
+        and e.organization_id = (
+          select a.organization_id from employees a join users au on au.id = a.user_id
+          where au.email = ${ADMIN_EMAIL} and a.deleted_at is null limit 1)
+      limit 1`;
+    if (!inspector) throw new Error("Fant ikke takstmannen for e2e");
+    await sql`
+      update employees set company_id = (
+        select c.id from companies c
+        where c.organization_id = ${inspector.organization_id}
+          and c.legal_name = ${INSPECTOR_COMPANY} and c.deleted_at is null
+        limit 1)
+      where id = ${inspector.id} and company_id is null`;
+    const [row] = await sql<{ legal_name: string }[]>`
+      select c.legal_name from employees e
+      join companies c on c.id = e.company_id and c.organization_id = e.organization_id
+      where e.id = ${inspector.id}`;
+    if (!row)
+      throw new Error(`Fant ikke selskapet ${INSPECTOR_COMPANY} fra seed (kjør pnpm db:seed)`);
+    return row.legal_name;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Oppdiktet ansatt i et selskap med langt navn (iPad uten vannrett rulling). */
+export const LONG_COMPANY_EMAIL = "langnavn.e2e@eksempel.no";
+export const LONG_COMPANY_NAME =
+  "Oppdiktet Takst- og Bygningsrådgivning for Nordre Salten, Ofoten og Vesterålen Avdeling Vest AS";
+
+/**
+ * Sørger for at et oppdiktet selskap med langt navn og en ansatt i det finnes i organisasjonen
+ * til admin fra seed. Idempotent; lager bare det som mangler, og endrer aldri andre rader.
+ * Returnerer id og navn på den ansatte.
+ */
+export async function ensureLongCompanyEmployee(): Promise<{ id: string; name: string }> {
+  const sql = e2eSql();
+  try {
+    const [admin] = await sql<{ organization_id: string }[]>`
+      select e.organization_id from employees e join users u on u.id = e.user_id
+      where u.email = ${ADMIN_EMAIL} and e.deleted_at is null limit 1`;
+    if (!admin) throw new Error("Fant ikke admin fra seed (kjør pnpm db:seed)");
+    const organizationId = admin.organization_id;
+
+    let [company] = await sql<{ id: string }[]>`
+      select id from companies
+      where organization_id = ${organizationId} and legal_name = ${LONG_COMPANY_NAME}
+        and deleted_at is null
+      limit 1`;
+    if (!company) {
+      [company] = await sql<{ id: string }[]>`
+        insert into companies (organization_id, legal_name)
+        values (${organizationId}, ${LONG_COMPANY_NAME})
+        returning id`;
+    }
+    if (!company) throw new Error("Kunne ikke lage selskapet med langt navn");
+
+    await sql`
+      insert into users (id, name, email, email_verified)
+      values (${randomUUID()}, 'Oppdiktet langnavn-takstmann', ${LONG_COMPANY_EMAIL}, true)
+      on conflict (email) do nothing`;
+    const [user] = await sql<{ id: string }[]>`
+      select id from users where email = ${LONG_COMPANY_EMAIL}`;
+    if (!user) throw new Error("Kunne ikke lage brukeren med langt selskapsnavn");
+
+    let [employee] = await sql<{ id: string; name: string }[]>`
+      select id, name from employees
+      where user_id = ${user.id} and organization_id = ${organizationId}
+        and deleted_at is null and deactivated_at is null`;
+    if (!employee) {
+      [employee] = await sql<{ id: string; name: string }[]>`
+        insert into employees (organization_id, user_id, name, company_id)
+        values (${organizationId}, ${user.id}, 'Oppdiktet langnavn-takstmann', ${company.id})
+        returning id, name`;
+      if (employee) {
+        await sql`
+          insert into employee_roles (organization_id, employee_id, role)
+          values (${organizationId}, ${employee.id}, 'inspector')
+          on conflict do nothing`;
+      }
+    }
+    if (!employee) throw new Error("Kunne ikke lage den ansatte med langt selskapsnavn");
+    return employee;
+  } finally {
+    await sql.end();
+  }
+}
+
 // --- Prøve E, regler uten nett (docs/funksjoner/fase1-prove-e-regler-testplan.md avsnitt 5.1) ---
 
 /** Linjen med regelsvaret for en regelkode (`data-rule-key`, `data-rule-state`). */

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { count, eq } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 import { AccessDeniedError, type Actor } from "@/core/access";
@@ -9,6 +9,7 @@ import {
   assignments,
   assignmentTeamMembers,
   auditLog,
+  companies,
   employees,
   events,
   organizations,
@@ -17,6 +18,7 @@ import {
 import {
   createAssignment,
   createAssignmentParty,
+  createCompany,
   createEmployee,
   createOffice,
   createOrder,
@@ -29,7 +31,14 @@ import {
 } from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { EmployeeNotFoundError } from "./errors";
-import { addParty, getAssignment, removeParty, setTeamMember, updateParty } from "./index";
+import {
+  addParty,
+  getAssignment,
+  removeParty,
+  setTeamMember,
+  updateParty,
+  type SetTeamMemberInput,
+} from "./index";
 
 /*
  * Team og parter på oppdraget: kjernen i src/core/assignments.
@@ -43,6 +52,9 @@ import { addParty, getAssignment, removeParty, setTeamMember, updateParty } from
  * - setTeamMember(actor, organizationId, assignmentId, { teamRole, employeeId, reason?, now? })
  * - addParty(actor, organizationId, assignmentId, input) → raden (minst `id`)
  * - updateParty(actor, organizationId, partyId, input), removeParty(actor, organizationId, partyId)
+ *
+ * Utstedende selskap (getAssignment(...).companyName og regelen i setTeamMember) står nederst,
+ * etter docs/agenter/oppgaver/fase2a-utstedende-selskap-testplan.md. 4.5.1 har companyName.
  *
  * Fast tid: TEST_NOW og LATER = TEST_NOW + 1 time. Testdata er oppdiktet: «Megler Test»,
  * «Testmegling AS», megler@example.com, telefon 00000000, grunn «Ferie».
@@ -864,6 +876,7 @@ describe("4.4 myk sletting", () => {
 const ASSIGNMENT_KEYS = [
   "id",
   "number",
+  "companyName",
   "status",
   "officeName",
   "orderId",
@@ -1528,5 +1541,762 @@ describe("4.8 hendelser og revisjonslogg", () => {
 
     expect(await rowCount(events)).toBe(0);
     expect(await rowCount(auditLog)).toBe(0);
+  });
+});
+
+// =============================================================================================
+// Utstedende selskap settes automatisk fra ansvarlig takstmann
+// Testplan: docs/agenter/oppgaver/fase2a-utstedende-selskap-testplan.md avsnitt 2–6.
+// Selskapet leses rett fra `assignments.company_id` med SQL (lagringen), og fra
+// `getAssignment(...).companyName` (visningen). Oppsettet før handlingen settes direkte i
+// databasen, så hver test bare prøver selve handlingen. Navn er oppdiktet.
+// Støtter hovedmål: reklamasjoner (rapport, forsikring og faktura fra riktig selskap, hvert bytte
+// har spor) og tid (ingen velger selskap for hånd).
+// =============================================================================================
+
+const COMPANY_A1 = "Selskap A1 AS";
+const COMPANY_A2 = "Selskap A2 AS";
+const COMPANY_B = "Selskap B AS";
+const COMPANY_EVENT = "assignment.company_changed";
+
+/** `assignments.company_id` lest direkte fra databasen. */
+async function companyIdOf(assignmentId: string): Promise<string | null> {
+  const rows = (await db.execute(
+    sql`select company_id from assignments where id = ${assignmentId}`,
+  )) as unknown as { company_id: string | null }[];
+  if (rows.length !== 1) throw new Error("fant ikke oppdraget");
+  return rows[0]!.company_id;
+}
+
+/** Setter `assignments.company_id` direkte (oppsett før handlingen). */
+async function setCompanyIdDirect(assignmentId: string, companyId: string | null) {
+  await db.execute(
+    sql`update assignments set company_id = ${companyId} where id = ${assignmentId}`,
+  );
+}
+
+/** Rader i revisjonsloggen for selve oppdraget (ikke teamradene). */
+async function assignmentAudit(organizationId: string) {
+  return auditFor(organizationId, "assignment");
+}
+
+/**
+ * Organisasjon A med to selskaper og fem ansatte, og organisasjon B med ett selskap og én
+ * ansatt. Oppdraget i A har ingen ansvarlig og tomt selskap.
+ */
+async function companySetup() {
+  const base = await orgWithAdmin("Oppdiktet takst A");
+  const { org } = base;
+  const a1 = await createCompany(org.id, { legalName: COMPANY_A1 });
+  const a2 = await createCompany(org.id, { legalName: COMPANY_A2 });
+  const inCompany = async (name: string, companyId?: string) =>
+    createEmployee(
+      await createUser({ name }),
+      org.id,
+      ["inspector"],
+      companyId ? { companyId } : {},
+    );
+  const staff = {
+    respA1: await inCompany("Rita Ansvarlig", a1.id),
+    respA1b: await inCompany("Rolf Ansvarlig", a1.id),
+    respA2: await inCompany("Randi Ansvarlig", a2.id),
+    noCompany: await inCompany("Uno Utenselskap"),
+    sidemann: await inCompany("Sigve Sidemann", a2.id),
+  };
+  const orgB = await createOrganization("Oppdiktet takst B");
+  const b = await createCompany(orgB.id, { legalName: COMPANY_B });
+  const employeeB = await createEmployee(
+    await createUser({ name: "Bente Fremmed" }),
+    orgB.id,
+    ["inspector"],
+    { companyId: b.id },
+  );
+  const companyIds = { A1: a1.id, A2: a2.id } as const;
+  return { ...base, a1, a2, b, orgB, employeeB, staff, companyIds };
+}
+
+type CompanySetup = Awaited<ReturnType<typeof companySetup>>;
+type StaffKey = keyof CompanySetup["staff"];
+type CompanyKey = "A1" | "A2";
+
+/** Setter en aktiv teamrad og selskapet direkte, uten kjernen (før-tilstanden i tabellen). */
+async function arrangeBefore(
+  s: CompanySetup,
+  responsible: StaffKey | null,
+  company: CompanyKey | null,
+) {
+  if (responsible) {
+    await createTeamMember(s.org.id, {
+      assignmentId: s.assignment.id,
+      employeeId: s.staff[responsible].id,
+      fromAt: TEST_NOW,
+    });
+  }
+  await setCompanyIdDirect(s.assignment.id, company ? s.companyIds[company] : null);
+}
+
+type RuleCase = {
+  name: string;
+  before: { responsible: StaffKey | null; company: CompanyKey | null };
+  teamRole: SetTeamMemberInput["teamRole"];
+  to: StaffKey | null;
+  expected: CompanyKey | null;
+  companyChanged: boolean;
+  teamChanged: boolean;
+};
+
+/** Regelen som data (testplanen 2.1–2.9). */
+const RULE_CASES: RuleCase[] = [
+  {
+    name: "2.1 ingen / tom → sett respA1",
+    before: { responsible: null, company: null },
+    teamRole: "responsible",
+    to: "respA1",
+    expected: "A1",
+    companyChanged: true,
+    teamChanged: true,
+  },
+  {
+    name: "2.2 respA1 / A1 → bytt til respA2",
+    before: { responsible: "respA1", company: "A1" },
+    teamRole: "responsible",
+    to: "respA2",
+    expected: "A2",
+    companyChanged: true,
+    teamChanged: true,
+  },
+  {
+    name: "2.3 respA1 / A1 → bytt til respA1b (samme selskap)",
+    before: { responsible: "respA1", company: "A1" },
+    teamRole: "responsible",
+    to: "respA1b",
+    expected: "A1",
+    companyChanged: false,
+    teamChanged: true,
+  },
+  {
+    name: "2.4 respA1 / A1 → «Ingen» (A66)",
+    before: { responsible: "respA1", company: "A1" },
+    teamRole: "responsible",
+    to: null,
+    expected: null,
+    companyChanged: true,
+    teamChanged: true,
+  },
+  {
+    name: "2.5 respA1 / A1 → bytt til noCompany (A66)",
+    before: { responsible: "respA1", company: "A1" },
+    teamRole: "responsible",
+    to: "noCompany",
+    expected: null,
+    companyChanged: true,
+    teamChanged: true,
+  },
+  {
+    name: "2.6 noCompany / tom → bytt til respA2",
+    before: { responsible: "noCompany", company: null },
+    teamRole: "responsible",
+    to: "respA2",
+    expected: "A2",
+    companyChanged: true,
+    teamChanged: true,
+  },
+  {
+    name: "2.7 ingen / tom → sett noCompany",
+    before: { responsible: null, company: null },
+    teamRole: "responsible",
+    to: "noCompany",
+    expected: null,
+    companyChanged: false,
+    teamChanged: true,
+  },
+  {
+    name: "2.8 respA1 / A1 → samme ansatt igjen",
+    before: { responsible: "respA1", company: "A1" },
+    teamRole: "responsible",
+    to: "respA1",
+    expected: "A1",
+    companyChanged: false,
+    teamChanged: false,
+  },
+  ...(["peer_reviewer", "co_responsible", "inspector", "office"] as const).map(
+    (teamRole): RuleCase => ({
+      name: `2.9 respA1 / A1 → sett ${teamRole} til sidemann (A2)`,
+      before: { responsible: "respA1", company: "A1" },
+      teamRole,
+      to: "sidemann",
+      expected: "A1",
+      companyChanged: false,
+      teamChanged: true,
+    }),
+  ),
+];
+
+function companyNameOf(key: CompanyKey | null): string | null {
+  if (key === "A1") return COMPANY_A1;
+  if (key === "A2") return COMPANY_A2;
+  return null;
+}
+
+describe("4.9 utstedende selskap", () => {
+  it.each(RULE_CASES)(
+    "$name gir selskap $expected (company_changed: $companyChanged)",
+    async ({ before, teamRole, to, expected, companyChanged, teamChanged }) => {
+      const s = await companySetup();
+      await arrangeBefore(s, before.responsible, before.company);
+      const fromCompanyId = before.company ? s.companyIds[before.company] : null;
+      const toCompanyId = expected ? s.companyIds[expected] : null;
+
+      await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+        teamRole,
+        employeeId: to ? s.staff[to].id : null,
+        now: LATER,
+      });
+
+      expect(await companyIdOf(s.assignment.id)).toBe(toCompanyId);
+      const changed = await eventsFor(s.org.id, COMPANY_EVENT);
+      expect(changed).toHaveLength(companyChanged ? 1 : 0);
+      if (companyChanged) {
+        expect(changed[0]!.assignmentId).toBe(s.assignment.id);
+        expect(changed[0]!.data).toEqual({ fromCompanyId, toCompanyId });
+      }
+      // 3.3: ingen loggrad for oppdraget når selskapet ikke endres
+      expect(await assignmentAudit(s.org.id)).toHaveLength(companyChanged ? 1 : 0);
+      expect(await eventsFor(s.org.id, "assignment.team_changed")).toHaveLength(
+        teamChanged ? 1 : 0,
+      );
+      expect((await getAssignment(s.admin, s.org.id, s.assignment.id)).companyName).toBe(
+        companyNameOf(expected),
+      );
+    },
+  );
+
+  it("2.10 fjern sidemann: selskapet er urørt", async () => {
+    const s = await companySetup();
+    await arrangeBefore(s, "respA1", "A1");
+    await createTeamMember(s.org.id, {
+      assignmentId: s.assignment.id,
+      employeeId: s.staff.sidemann.id,
+      teamRole: "peer_reviewer",
+    });
+
+    await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+      teamRole: "peer_reviewer",
+      employeeId: null,
+      now: LATER,
+    });
+
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a1.id);
+    expect(await eventsFor(s.org.id, COMPANY_EVENT)).toHaveLength(0);
+    expect(await eventsFor(s.org.id, "assignment.team_changed")).toHaveLength(1);
+    expect(await assignmentAudit(s.org.id)).toHaveLength(0);
+  });
+
+  it.each([
+    ["Bs selskap", (s: CompanySetup) => s.b.id],
+    ["selskap A2", (s: CompanySetup) => s.a2.id],
+  ] as const)(
+    "2.11 selskapet leses fra den ansattes rad nå, ikke fra skjemaet (companyId = %s ignoreres)",
+    async (_name, pick) => {
+      const s = await companySetup();
+      const input = {
+        teamRole: "responsible",
+        employeeId: s.staff.respA1.id,
+        now: LATER,
+        companyId: pick(s),
+      } as SetTeamMemberInput;
+
+      await setTeamMember(s.admin, s.org.id, s.assignment.id, input);
+
+      expect(await companyIdOf(s.assignment.id)).toBe(s.a1.id);
+    },
+  );
+
+  it("2.12 admin endrer den ansattes selskap senere: oppdraget beholder det gamle (A67)", async () => {
+    const s = await companySetup();
+    await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+      teamRole: "responsible",
+      employeeId: s.staff.respA1.id,
+      now: TEST_NOW,
+    });
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a1.id);
+
+    await db
+      .update(employees)
+      .set({ companyId: s.a2.id })
+      .where(eq(employees.id, s.staff.respA1.id));
+
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a1.id);
+    expect(await eventsFor(s.org.id, COMPANY_EVENT)).toHaveLength(1);
+
+    // Bytt bort (til en i det gamle selskapet) og tilbake: nå gjelder A2
+    await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+      teamRole: "responsible",
+      employeeId: s.staff.respA1b.id,
+      now: LATER,
+    });
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a1.id);
+    await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+      teamRole: "responsible",
+      employeeId: s.staff.respA1.id,
+      now: LATEST,
+    });
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a2.id);
+    expect(await eventsFor(s.org.id, COMPANY_EVENT)).toHaveLength(2);
+  });
+
+  it("2.13 samtidige bytter av ansvarlig: selskapet følger den som er aktiv til slutt", async () => {
+    const s = await companySetup();
+
+    // Ingen `now`: kjernen bruker klokken, slik skjermen gjør
+    const results = await Promise.allSettled([
+      setTeamMember(s.admin, s.org.id, s.assignment.id, {
+        teamRole: "responsible",
+        employeeId: s.staff.respA1.id,
+      }),
+      setTeamMember(s.admin, s.org.id, s.assignment.id, {
+        teamRole: "responsible",
+        employeeId: s.staff.respA2.id,
+      }),
+    ]);
+    expect(
+      results
+        .filter((r) => r.status === "rejected")
+        .map((r) => String((r as PromiseRejectedResult).reason)),
+    ).toEqual([]);
+
+    const [active] = await activeTeamRows(s.assignment.id, "responsible");
+    expect(active).toBeDefined();
+    const expected = active!.employeeId === s.staff.respA1.id ? s.a1.id : s.a2.id;
+    expect(await companyIdOf(s.assignment.id)).toBe(expected);
+
+    // tom → første → andre: to faktiske endringer; én starter i tom, én ender i selskapet
+    const chain = (await eventsFor(s.org.id, COMPANY_EVENT)).map(
+      (row) => row.data as { fromCompanyId: string | null; toCompanyId: string | null },
+    );
+    expect(chain).toHaveLength(2);
+    expect(chain.map((d) => d.fromCompanyId)).toContain(null);
+    expect(chain.map((d) => d.toCompanyId)).toContain(expected);
+    expect(await assignmentAudit(s.org.id)).toHaveLength(2);
+  });
+
+  it("2.14 Bs ansatt-id gir EmployeeNotFoundError og selskapet er urørt", async () => {
+    const s = await companySetup();
+    await arrangeBefore(s, "respA1", "A1");
+
+    await expect(
+      setTeamMember(s.admin, s.org.id, s.assignment.id, {
+        teamRole: "responsible",
+        employeeId: s.employeeB.id,
+        now: LATER,
+      }),
+    ).rejects.toThrow(EmployeeNotFoundError);
+
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a1.id);
+    expect(await eventsFor(s.org.id, COMPANY_EVENT)).toHaveLength(0);
+    expect(await assignmentAudit(s.org.id)).toHaveLength(0);
+  });
+
+  it("2.15 avvist tilgang og valideringsfeil endrer ikke selskapet", async () => {
+    const s = await companySetup();
+    await setInspectorsEditAll(s.org.id, false);
+    await arrangeBefore(s, "respA1", "A1");
+    const { actor: inspector } = await person(s.org.id, ["inspector"]);
+
+    const denied = await caught(
+      setTeamMember(inspector, s.org.id, s.assignment.id, {
+        teamRole: "responsible",
+        employeeId: s.staff.respA2.id,
+        now: LATER,
+      }),
+    );
+    const unknownRole = await caught(
+      setTeamMember(s.admin, s.org.id, s.assignment.id, {
+        teamRole: "owner" as never,
+        employeeId: s.staff.respA2.id,
+        now: LATER,
+      }),
+    );
+    const nationalId = await caught(
+      setTeamMember(s.admin, s.org.id, s.assignment.id, {
+        teamRole: "responsible",
+        employeeId: s.staff.respA2.id,
+        reason: "Ferie 12345678901",
+        now: LATER,
+      }),
+    );
+
+    expect(denied).toBeInstanceOf(AccessDeniedError);
+    expect(unknownRole).not.toBeNull();
+    expect(nationalId).toBeInstanceOf(ZodError);
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a1.id);
+    expect(await rowCount(events)).toBe(0);
+    expect(await rowCount(auditLog)).toBe(0);
+  });
+
+  it("2.16 den ansvarliges selskap er myk-slettet: selskapet settes likevel (A68)", async () => {
+    const s = await companySetup();
+    await db
+      .update(companies)
+      .set({ deletedAt: new Date("2026-11-01T08:00:00Z") })
+      .where(eq(companies.id, s.a2.id));
+
+    await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+      teamRole: "responsible",
+      employeeId: s.staff.respA2.id,
+      now: LATER,
+    });
+
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a2.id);
+    const changed = await eventsFor(s.org.id, COMPANY_EVENT);
+    expect(changed.map((row) => row.data)).toEqual([{ fromCompanyId: null, toCompanyId: s.a2.id }]);
+    expect((await getAssignment(s.admin, s.org.id, s.assignment.id)).companyName).toBe(COMPANY_A2);
+  });
+});
+
+describe("4.8 hendelser og revisjonslogg: utstedende selskap", () => {
+  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+  it("3.1 assignment.company_changed har { fromCompanyId, toCompanyId } og bare id-er", async () => {
+    const s = await companySetup();
+    await arrangeBefore(s, "respA1", "A1");
+
+    await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+      teamRole: "responsible",
+      employeeId: s.staff.respA2.id,
+      now: LATER,
+    });
+
+    const changed = await eventsFor(s.org.id, COMPANY_EVENT);
+    expect(changed).toHaveLength(1);
+    expect(changed[0]!.assignmentId).toBe(s.assignment.id);
+    const data = changed[0]!.data as Record<string, unknown>;
+    expect(Object.keys(data).sort()).toEqual(["fromCompanyId", "toCompanyId"]);
+    expect(data).toEqual({ fromCompanyId: s.a1.id, toCompanyId: s.a2.id });
+    for (const value of Object.values(data)) {
+      expect(value === null || (typeof value === "string" && UUID_PATTERN.test(value))).toBe(true);
+    }
+  });
+
+  it("3.2 revisjonslogg: entityType assignment, action update, changes { companyId: { from, to } }", async () => {
+    const s = await companySetup();
+    await arrangeBefore(s, "respA1", "A1");
+
+    await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+      teamRole: "responsible",
+      employeeId: s.staff.respA2.id,
+      now: LATER,
+    });
+
+    const rows = await assignmentAudit(s.org.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.entityId).toBe(s.assignment.id);
+    expect(rows[0]!.action).toBe("update");
+    expect(rows[0]!.changes).toEqual({ companyId: { from: s.a1.id, to: s.a2.id } });
+    expect(JSON.stringify(rows[0]!.changes)).not.toContain("legalName");
+  });
+
+  it("3.3 ingen company_changed og ingen assignment-loggrad når selskapet ikke endres (2.7, 2.3, 2.8 og 2.9 etter hverandre)", async () => {
+    const s = await companySetup();
+    // 2.7: ingen / tom → noCompany
+    await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+      teamRole: "responsible",
+      employeeId: s.staff.noCompany.id,
+      now: TEST_NOW,
+    });
+    expect(await eventsFor(s.org.id, COMPANY_EVENT)).toHaveLength(0);
+    expect(await assignmentAudit(s.org.id)).toHaveLength(0);
+
+    // Oppsett: respA1 gir A1 (én endring, som telles med)
+    await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+      teamRole: "responsible",
+      employeeId: s.staff.respA1.id,
+      now: LATER,
+    });
+    expect(await eventsFor(s.org.id, COMPANY_EVENT)).toHaveLength(1);
+    expect(await assignmentAudit(s.org.id)).toHaveLength(1);
+
+    // 2.3 (samme selskap), 2.8 (samme ansatt) og 2.9 (andre roller)
+    for (let i = 0; i < 2; i++) {
+      await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+        teamRole: "responsible",
+        employeeId: s.staff.respA1b.id,
+        now: LATEST,
+      });
+    }
+    for (const teamRole of ["peer_reviewer", "co_responsible", "inspector", "office"] as const) {
+      await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+        teamRole,
+        employeeId: s.staff.sidemann.id,
+        now: LATEST,
+      });
+    }
+
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a1.id);
+    expect(await eventsFor(s.org.id, COMPANY_EVENT)).toHaveLength(1);
+    expect(await assignmentAudit(s.org.id)).toHaveLength(1);
+  });
+
+  it("3.4 4.8.3 utvides: ingen personopplysninger eller selskapsnavn i events.data / audit_log.changes", async () => {
+    const s = await companySetup();
+    const steps: (StaffKey | null)[] = ["respA1", "respA2", "respA1b", null, "respA1", "noCompany"];
+    let at = TEST_NOW.getTime();
+    for (const to of steps) {
+      at += 60 * 1000;
+      await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+        teamRole: "responsible",
+        employeeId: to ? s.staff[to].id : null,
+        reason: REASON,
+        now: new Date(at),
+      });
+    }
+
+    expect((await eventsFor(s.org.id, COMPANY_EVENT)).length).toBeGreaterThanOrEqual(4);
+    const text = JSON.stringify([
+      (await eventsFor(s.org.id)).map((row) => row.data),
+      (await auditFor(s.org.id)).map((row) => row.changes),
+    ]);
+    const forbidden = [
+      COMPANY_A1,
+      COMPANY_A2,
+      COMPANY_B,
+      "Selskap A",
+      "Rita Ansvarlig",
+      "Rolf Ansvarlig",
+      "Randi Ansvarlig",
+      "Uno Utenselskap",
+      "Sigve Sidemann",
+      REASON,
+    ];
+    for (const value of forbidden) expect(text, value).not.toContain(value);
+    expect(text).not.toContain("legalName");
+  });
+});
+
+describe("4.1 tilgang per rolle: utstedende selskap", () => {
+  it.each([
+    { name: "kontor", roles: ["office"] as EmployeeRole[] },
+    { name: "leder", roles: ["manager"] as EmployeeRole[] },
+    { name: "admin", roles: ["admin"] as EmployeeRole[] },
+    { name: "takstmann (innstillingen på)", roles: ["inspector"] as EmployeeRole[] },
+  ])("4.1 $name setter ansvarlig og får selskapet", async ({ roles }) => {
+    const s = await companySetup();
+    await setInspectorsEditAll(s.org.id, true);
+    const { actor } = await person(s.org.id, roles);
+
+    await setTeamMember(actor, s.org.id, s.assignment.id, {
+      teamRole: "responsible",
+      employeeId: s.staff.respA1.id,
+      now: LATER,
+    });
+
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a1.id);
+    expect(await eventsFor(s.org.id, COMPANY_EVENT)).toHaveLength(1);
+  });
+
+  it("4.2 takstmann med inspectors_edit_all av: AccessDeniedError, selskapet urørt, men companyName kan leses", async () => {
+    const s = await companySetup();
+    await setInspectorsEditAll(s.org.id, false);
+    await arrangeBefore(s, "respA1", "A1");
+    const { actor } = await person(s.org.id, ["inspector"]);
+
+    await expect(
+      setTeamMember(actor, s.org.id, s.assignment.id, {
+        teamRole: "responsible",
+        employeeId: s.staff.respA2.id,
+        now: LATER,
+      }),
+    ).rejects.toThrow(AccessDeniedError);
+
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a1.id);
+    expect(await eventsFor(s.org.id, COMPANY_EVENT)).toHaveLength(0);
+    expect((await getAssignment(actor, s.org.id, s.assignment.id)).companyName).toBe(COMPANY_A1);
+  });
+
+  // Regel 11: admin stenges aldri ute. Testen skal aldri fjernes.
+  it("4.3 admin uten andre roller og med innstillingen av setter ansvarlig og får selskapet", async () => {
+    const s = await companySetup();
+    await setInspectorsEditAll(s.org.id, false);
+
+    await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+      teamRole: "responsible",
+      employeeId: s.staff.respA1.id,
+      now: LATER,
+    });
+
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a1.id);
+    expect((await getAssignment(s.admin, s.org.id, s.assignment.id)).companyName).toBe(COMPANY_A1);
+  });
+
+  it("4.4 alle fire roller ser samme companyName", async () => {
+    const s = await companySetup();
+    await setInspectorsEditAll(s.org.id, false);
+    await arrangeBefore(s, "respA1", "A1");
+
+    for (const roles of [["inspector"], ["office"], ["manager"], ["admin"]] as EmployeeRole[][]) {
+      const { actor } = await person(s.org.id, roles);
+      const result = await getAssignment(actor, s.org.id, s.assignment.id);
+      expect(result.companyName, roles[0]).toBe(COMPANY_A1);
+    }
+  });
+
+  it("4.5 bruker uten ansattrad og ansatt uten roller får AccessDeniedError, og ingen companyName lekker", async () => {
+    const s = await companySetup();
+    await arrangeBefore(s, "respA1", "A1");
+    const stranger = await createUser();
+    const { actor: noRoles } = await person(s.org.id, []);
+
+    for (const actor of [stranger, noRoles]) {
+      const error = await caught(getAssignment(actor, s.org.id, s.assignment.id));
+      expect(error).toBeInstanceOf(AccessDeniedError);
+      expect((error as Error).message).not.toContain(COMPANY_A1);
+    }
+  });
+});
+
+describe("4.2 tenant-isolasjon: utstedende selskap", () => {
+  it("5.1 getAssignment(...).companyName viser aldri selskap fra en annen organisasjon", async () => {
+    const assignmentFor = new Map<string, string>();
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        const names: Record<string, string> = {};
+        const sides = [
+          [grantA, "Selskap A AS"],
+          [grantB, "Selskap B AS"],
+        ] as const;
+        for (const [grant, legalName] of sides) {
+          const orgId = grant.organizationId;
+          const company = await createCompany(orgId, { legalName });
+          const employee = await createEmployee(
+            await createUser({ name: `Ansvarlig ${legalName}` }),
+            orgId,
+            ["inspector"],
+            { companyId: company.id },
+          );
+          const assignment = await createAssignment(orgId);
+          assignmentFor.set(orgId, assignment.id);
+          await setTeamMember(await adminActorOf(orgId), orgId, assignment.id, {
+            teamRole: "responsible",
+            employeeId: employee.id,
+            now: TEST_NOW,
+          });
+          names[orgId] = legalName;
+        }
+        return { a: [names[grantA.organizationId]!], b: [names[grantB.organizationId]!] };
+      },
+      query: async (actor, organizationId) => [
+        await getAssignment(
+          actor,
+          organizationId,
+          assignmentFor.get(organizationId) ?? randomUUID(),
+        ),
+      ],
+      idOf: (row) => String(row.companyName),
+    });
+  });
+
+  it("5.2 setTeamMember skriver bare company_id på oppdrag i egen organisasjon", async () => {
+    const s = await companySetup();
+    const assignmentB = await createAssignment(s.orgB.id);
+    await setCompanyIdDirect(assignmentB.id, s.b.id);
+
+    // A mot Bs oppdrag, både med egen og med Bs organisasjons-id
+    for (const organizationId of [s.org.id, s.orgB.id]) {
+      const error = await caught(
+        setTeamMember(s.admin, organizationId, assignmentB.id, {
+          teamRole: "responsible",
+          employeeId: s.staff.respA1.id,
+          now: LATER,
+        }),
+      );
+      expect(error).toBeInstanceOf(AccessDeniedError);
+    }
+    // A på eget oppdrag
+    await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+      teamRole: "responsible",
+      employeeId: s.staff.respA1.id,
+      now: LATER,
+    });
+
+    expect(await companyIdOf(assignmentB.id)).toBe(s.b.id);
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a1.id);
+    expect(await eventsFor(s.orgB.id)).toHaveLength(0);
+    expect(await auditFor(s.orgB.id)).toHaveLength(0);
+  });
+});
+
+/** Antall spørringer i `getAssignment` målt på `main` før selskapet kom (05.11.2026). */
+const QUERIES_BEFORE_COMPANY = 8;
+
+describe("4.5 getAssignment: utstedende selskap", () => {
+  it("6.2 oppdrag uten selskap gir companyName = null", async () => {
+    const { org, admin, assignment } = await orgWithAdmin();
+    expect(await companyIdOf(assignment.id)).toBeNull();
+    expect((await getAssignment(admin, org.id, assignment.id)).companyName).toBeNull();
+  });
+
+  it("6.3 myk-slettet selskap vises fortsatt med navn", async () => {
+    const s = await companySetup();
+    await arrangeBefore(s, "respA1", "A1");
+    await db
+      .update(companies)
+      .set({ deletedAt: new Date("2026-11-04T08:00:00Z") })
+      .where(eq(companies.id, s.a1.id));
+
+    expect((await getAssignment(s.admin, s.org.id, s.assignment.id)).companyName).toBe(COMPANY_A1);
+  });
+
+  it("6.4 4.5.6 ingen N+1 holder med selskapet: like mange spørringer med og uten, og som før", async () => {
+    const s = await companySetup();
+    await arrangeBefore(s, "respA1", "A1");
+    const without = await createAssignment(s.org.id);
+
+    // Drizzle sender hver spørring gjennom `unsafe` på postgres-klienten
+    const client = (db as unknown as { $client: { unsafe: (...args: unknown[]) => unknown } })
+      .$client;
+    const spy = vi.spyOn(client, "unsafe");
+    try {
+      spy.mockClear();
+      const shown = await getAssignment(s.admin, s.org.id, s.assignment.id);
+      const withCount = spy.mock.calls.length;
+      spy.mockClear();
+      await getAssignment(s.admin, s.org.id, without.id);
+      const withoutCount = spy.mock.calls.length;
+
+      expect(shown.companyName).toBe(COMPANY_A1);
+      expect(withCount).toBe(withoutCount);
+      expect(withCount).toBe(QUERIES_BEFORE_COMPANY);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("6.5 4.4.4 holder med selskapsbytter: ingen teamrad slettes, oppdraget står, selskapet oppdateres", async () => {
+    const s = await companySetup();
+    const sequence: (StaffKey | null)[] = ["respA1", "respA2", null, "respA1b"];
+    let at = TEST_NOW.getTime();
+    for (const to of sequence) {
+      at += 60 * 1000;
+      await setTeamMember(s.admin, s.org.id, s.assignment.id, {
+        teamRole: "responsible",
+        employeeId: to ? s.staff[to].id : null,
+        now: new Date(at),
+      });
+    }
+
+    const rows = await teamRows(s.assignment.id, "responsible");
+    expect(rows).toHaveLength(3);
+    expect(rows.every((row) => row.deletedAt === null)).toBe(true);
+    expect(rows.filter((row) => row.toAt === null)).toHaveLength(1);
+    const [assignmentRow] = await db
+      .select()
+      .from(assignments)
+      .where(eq(assignments.id, s.assignment.id));
+    expect(assignmentRow?.deletedAt).toBeNull();
+    expect(await companyIdOf(s.assignment.id)).toBe(s.a1.id);
+    // tom → A1 → A2 → tom → A1: fire endringer, fire loggrader med action update
+    const audit = await assignmentAudit(s.org.id);
+    expect(audit).toHaveLength(4);
+    expect(audit.every((row) => row.action === "update")).toBe(true);
   });
 });

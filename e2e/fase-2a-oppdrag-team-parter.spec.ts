@@ -3,10 +3,12 @@ import { expect, test, type Locator, type Page, type Response } from "@playwrigh
 import {
   ADMIN_EMAIL,
   employeeByEmail,
+  ensureInspectorCompany,
+  ensureLongCompanyEmployee,
   INSPECTOR_EMAIL,
+  LONG_COMPANY_NAME,
   logIn,
   logInAsInspector,
-  ensureInspector,
   uniqueSuffix,
 } from "./helpers";
 
@@ -26,8 +28,13 @@ import {
  * feltene «Rolle», «Navn», «Firma», «E-post», «Telefon» og avkrysningene «Rapport», «Faktura» og
  * «Kopi av meldinger».
  *
+ * Utstedende selskap (docs/agenter/oppgaver/fase2a-utstedende-selskap-testplan.md avsnitt 7):
+ * linjen «Utstedende selskap» under «Kontor» prøves i 7.2 og 7.8. Takstmannen for e2e får
+ * «Byggcon Nord AS» fra seed (`ensureInspectorCompany`), og iPad-testen bruker et oppdiktet
+ * selskap med langt navn (`ensureLongCompanyEmployee`).
+ *
  * Støtter hovedmål: tid (få trykk, mottar forhåndsutfylt etter rollen, virker på iPad) og
- * reklamasjoner (hvem som har ansvaret står på oppdraget).
+ * reklamasjoner (hvem som har ansvaret står på oppdraget, og fra hvilket selskap).
  */
 
 const PORTRAIT = { width: 834, height: 1194 } as const;
@@ -110,6 +117,30 @@ function partyCard(page: Page, name: string): Locator {
 
 const EMPTY_PARTIES = "Ingen parter er lagt inn ennå.";
 
+const COMPANY_LABEL = "Utstedende selskap";
+const COMPANY_HELP =
+  "Settes fra ansvarlig takstmann. Har den ansvarlige ikke selskap, legger admin det inn under Ansatte.";
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Linjen «Utstedende selskap: <verdi>» (kolon og mellomrom er valgfrie i oppsettet). */
+function companyLine(value: string): RegExp {
+  return new RegExp(`${COMPANY_LABEL}:?\\s*${escapeRegExp(value)}`);
+}
+
+/** Linjen for utstedende selskap står under «Kontor» og over «Team». */
+async function expectCompanyLineUnderOffice(page: Page) {
+  const text = (await page.getByRole("main").textContent()) ?? "";
+  const office = text.indexOf("Kontor");
+  const company = text.indexOf(COMPANY_LABEL);
+  const team = text.indexOf("Team");
+  expect(office, "«Kontor» står på siden").toBeGreaterThanOrEqual(0);
+  expect(company, "«Utstedende selskap» står under «Kontor»").toBeGreaterThan(office);
+  expect(company, "«Utstedende selskap» står over teamet").toBeLessThan(team);
+}
+
 /** Ny ordre med en unik adresse → «Gjør om til oppdrag» (Bodø). Returnerer ordre-id. */
 async function createConvertedOrder(page: Page): Promise<string> {
   await page.goto("/ordre/ny");
@@ -188,11 +219,17 @@ test.describe("team og parter på oppdraget (pc og ipad)", () => {
   test("7.2 team: fem linjer i fast rekkefølge; sett, bytt med grunn og fjern ansvarlig", async ({
     page,
   }) => {
-    await ensureInspector();
+    const inspectorCompany = await ensureInspectorCompany();
     const admin = await employeeByEmail(ADMIN_EMAIL);
     const inspector = await employeeByEmail(INSPECTOR_EMAIL);
     await logIn(page);
     await newAssignment(page);
+
+    // Utstedende selskap: «Ikke satt» med forklaring før ansvarlig er satt, under «Kontor»
+    const main = page.getByRole("main");
+    await expect(main).toContainText(companyLine("Ikke satt"));
+    await expect(main).toContainText(COMPANY_HELP);
+    await expectCompanyLineUnderOffice(page);
 
     const team = section(page, "Team");
     await expect(team).toBeVisible();
@@ -230,6 +267,9 @@ test.describe("team og parter på oppdraget (pc og ipad)", () => {
     await expect(teamLine(page, responsible).getByLabel(/^Grunn ved bytte/)).toHaveValue("");
     await expect(teamSelect(page, responsible)).toHaveValue(inspector.id);
     await expect(team.getByText("Ikke satt", { exact: true })).toHaveCount(4);
+    // Takstmannen har selskap: navnet står som utstedende selskap
+    await expect(main).toContainText(companyLine(inspectorCompany));
+    await expectCompanyLineUnderOffice(page);
 
     // «Ingen» fjerner personen fra rollen
     await teamSelect(page, responsible).selectOption({ label: "Ingen" });
@@ -237,6 +277,10 @@ test.describe("team og parter på oppdraget (pc og ipad)", () => {
     await expect(teamCurrent(page, responsible)).toHaveText("Ikke satt");
     await expect(team.getByText("Ikke satt", { exact: true })).toHaveCount(5);
     await expect(teamSelect(page, responsible)).toHaveValue("");
+    // Uten ansvarlig er selskapet tomt igjen (A66)
+    await expect(main).toContainText(companyLine("Ikke satt"));
+    await expect(main).toContainText(COMPANY_HELP);
+    await expect(main).not.toContainText(companyLine(inspectorCompany));
   });
 
   test("7.3 parter: tom liste, forhåndsutfylte mottar-valg, legg til megler", async ({ page }) => {
@@ -370,8 +414,16 @@ test.describe("iPad (prosjektet ipad)", () => {
     page,
   }) => {
     await page.setViewportSize(PORTRAIT);
+    const longCompanyEmployee = await ensureLongCompanyEmployee();
     await logIn(page);
     const { assignmentId } = await newAssignment(page);
+
+    // Ansvarlig i et selskap med langt navn, så selskapslinjen er så lang som den kan bli
+    const responsible = "Ansvarlig takstmann";
+    await teamSelect(page, responsible).selectOption(longCompanyEmployee.id);
+    await teamLine(page, responsible).getByRole("button", { name: "Lagre", exact: true }).click();
+    await expect(teamCurrent(page, responsible)).toHaveText(longCompanyEmployee.name);
+
     const form = await openAddPartyForm(page);
     await form.getByLabel(/^Rolle/).selectOption({ label: "Megler" });
     await fillParty(form, { name: PARTY.name });
@@ -380,6 +432,7 @@ test.describe("iPad (prosjektet ipad)", () => {
 
     const url = `/oppdrag/${assignmentId}`;
     await page.goto(url);
+    await expect(page.getByRole("main")).toContainText(companyLine(LONG_COMPANY_NAME));
     await expectNoHorizontalScroll(page, url);
 
     // Én kolonne: Team og Parter står under hverandre og starter likt
