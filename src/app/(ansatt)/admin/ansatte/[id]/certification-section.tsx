@@ -99,7 +99,12 @@ function CertificationItem({
         <p className="text-slate-700">Gyldig til {certification.validTo}</p>
         {details.length > 0 && <p className="text-sm text-slate-600">{details.join(" · ")}</p>}
       </div>
-      {removeAction && <RemoveCertification action={removeAction} />}
+      {removeAction && (
+        <RemoveCertification
+          action={removeAction}
+          label={`${certification.areaLabel}, gyldig til ${certification.validTo}`}
+        />
+      )}
     </li>
   );
 }
@@ -114,8 +119,11 @@ function ConfirmButton({ buttonRef }: { buttonRef: Ref<HTMLButtonElement> }) {
   );
 }
 
-/** «Fjern» → «Bekreft» eller «Avbryt». Fokus flyttes slik at det går med tastatur alene. */
-function RemoveCertification({ action }: { action: Action }) {
+/**
+ * «Fjern» → «Bekreft» eller «Avbryt». Fokus flyttes slik at det går med tastatur alene.
+ * `label` er skjult tekst for skjermleser, slik at knappene i listen kan skilles.
+ */
+function RemoveCertification({ action, label }: { action: Action; label: string }) {
   const [state, formAction] = useActionState(action, initialFormState);
   // Bekreftelsen gjelder forsøket den ble åpnet i; et mislykket forsøk lukker den.
   const [confirmingAttempt, setConfirmingAttempt] = useState<number | null>(null);
@@ -139,7 +147,7 @@ function RemoveCertification({ action }: { action: Action }) {
           variant="secondary"
           onClick={() => setConfirmingAttempt(state.attempt)}
         >
-          Fjern
+          Fjern<span className="sr-only"> {label}</span>
         </Button>
       </div>
     );
