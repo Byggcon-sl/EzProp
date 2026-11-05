@@ -90,6 +90,7 @@ Ingen arkitekt (én kolonne etter kjent mønster), ingen UX/UI (én tekstlinje p
 - **Kutt 1 godtatt:** ingen `UPDATE` i migreringen og ingen migreringstest. Det finnes bare oppdiktede testdata, og repoet har ikke oppsett for å teste migreringsdata; et nytt oppsett for én engangs-SQL er ikke verdt det. Gamle oppdrag viser «Ikke satt» med forklaring og får selskap neste gang ansvarlig settes. Ført i A67.
 - **Kutt 2 godtatt:** e2e-sjekken legges i den eksisterende team-testen på `/oppdrag/[id]`. Samme dekning (PC og iPad), mindre oppsett.
 - **Manuell overstyring trengs ikke nå** (forenkleren og prosjektleder enige). A65 står.
+- **Mykt slettet selskap på den ansvarlige (spørsmål fra test-leder):** selskapet settes likevel. Regelen er fast: det som står på den ansatte. Advarselen før publisering tar det senere. Føres som A68. Testskriver legger til én test (2.16) for dette.
 
 ## Åpne spørsmål
 - Ingen som stopper. A65–A67 kan endres av Ståle når han er tilbake.
