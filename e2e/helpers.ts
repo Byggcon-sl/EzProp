@@ -871,6 +871,25 @@ export function fakeOrgNumber(): string {
 }
 
 /**
+ * Oppdiktet organisasjonsnummer som er gyldig etter modulus 11 (kontaktregisteret godtar bare
+ * slike): `000` + fem tilfeldige sifre + kontrollsiffer. Blir kontrollsifferet 10, trekkes nye
+ * sifre. Starter med `000`, så det kan ikke finnes i Brønnøysundregistrene.
+ */
+export function fakeValidOrgNumber(): string {
+  const weights = [3, 2, 7, 6, 5, 4, 3, 2];
+  for (;;) {
+    const firstEight = `000${String(Math.floor(Math.random() * 1e5)).padStart(5, "0")}`;
+    const sum = weights.reduce(
+      (total, weight, index) => total + weight * Number(firstEight[index]),
+      0,
+    );
+    const remainder = sum % 11;
+    const check = remainder === 0 ? 0 : 11 - remainder;
+    if (check !== 10) return `${firstEight}${check}`;
+  }
+}
+
+/**
  * Id og navn til en ansatt (ikke slettet) med e-posten, i samme organisasjon som admin fra seed.
  * Bare lesing, bare lokal database eller testdatabasen.
  */
