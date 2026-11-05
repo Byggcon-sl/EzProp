@@ -18,12 +18,16 @@ import {
   employeePermissions,
   employees,
   files,
+  floorAreas,
+  floors,
   integrationConnections,
   loginAttempts,
   numberSequences,
   offices,
   orders,
   properties,
+  reportBuildings,
+  rooms,
   trialAnswers,
   trialForms,
   trialPhotos,
@@ -33,16 +37,20 @@ import { uuidv7 } from "@/shared/lib/uuid";
 import {
   createAssignment,
   createAssignmentParty,
+  createBuilding,
   createCertification,
   createCommonAreas,
   createEmployee,
   createFile,
+  createFloor,
+  createFloorArea,
   createIntegrationConnection,
   createNumberSequence,
   createOffice,
   createOrder,
   createOrganization,
   createProperty,
+  createRoom,
   createTeamMember,
   createUser,
   grantPermission,
@@ -756,6 +764,201 @@ describe("fabrikkene for eiendom og fellesdeler (fase 2a)", () => {
     await resetDatabase();
 
     for (const table of [properties, cadastralUnits, commonAreas]) {
+      const [row] = await db.select({ n: count() }).from(table);
+      expect(row!.n).toBe(0);
+    }
+  });
+});
+
+/*
+ * Fabrikkene for bygninger, etasjer, areal og rom
+ * (docs/funksjoner/fase2a-bygninger-areal-rom-testplan.md avsnitt 5). Oppdiktede data.
+ * Støtter hovedmål: reklamasjoner (testene for areal, romtyper og tenant-isolasjon bygger på
+ * disse radene).
+ */
+describe("fabrikkene for bygninger, etasjer, areal og rom (fase 2a)", () => {
+  beforeEach(resetDatabase);
+
+  it("5.1 createBuilding uten overstyring: «Bolighus» på et nytt oppdrag med eiendom i samme organisasjon", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const building = await createBuilding(org.id);
+    expect(building).toMatchObject({
+      organizationId: org.id,
+      name: "Bolighus",
+      deletedAt: null,
+    });
+    const [assignment] = await db
+      .select()
+      .from(assignments)
+      .where(eq(assignments.id, building.assignmentId));
+    expect(assignment?.organizationId).toBe(org.id);
+    expect(assignment?.propertyId).toBeTruthy();
+    const [property] = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.id, assignment!.propertyId!));
+    expect(property?.organizationId).toBe(org.id);
+  });
+
+  it("5.1 createBuilding bruker overstyringene og lager ikke eget oppdrag eller eiendom når assignmentId er gitt", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const assignment = await createAssignment(org.id);
+    const createdAt = new Date("2026-11-03T08:00:00Z");
+    const deletedAt = new Date("2026-11-03T12:00:00Z");
+    const building = await createBuilding(org.id, {
+      assignmentId: assignment.id,
+      name: "Garasje test",
+      createdAt,
+      deletedAt,
+    });
+    expect(building).toMatchObject({ assignmentId: assignment.id, name: "Garasje test" });
+    expect(building.createdAt.toISOString()).toBe(createdAt.toISOString());
+    expect(building.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+    expect(
+      await db.select().from(assignments).where(eq(assignments.organizationId, org.id)),
+    ).toHaveLength(1);
+    expect(await db.select().from(properties)).toHaveLength(0);
+  });
+
+  it("5.1 createFloor uten overstyring: «1. etasje», nivå 1, over terreng, med bygning i samme organisasjon", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const floor = await createFloor(org.id);
+    expect(floor).toMatchObject({
+      organizationId: org.id,
+      name: "1. etasje",
+      level: 1,
+      belowGround: false,
+      deletedAt: null,
+    });
+    const [building] = await db
+      .select()
+      .from(reportBuildings)
+      .where(eq(reportBuildings.id, floor.reportBuildingId));
+    expect(building?.organizationId).toBe(org.id);
+  });
+
+  it("5.1 createFloor bruker overstyringene", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const building = await createBuilding(org.id);
+    const deletedAt = new Date("2026-11-03T12:00:00Z");
+    const floor = await createFloor(org.id, {
+      buildingId: building.id,
+      name: "Kjeller",
+      level: -1,
+      belowGround: true,
+      deletedAt,
+    });
+    expect(floor).toMatchObject({
+      reportBuildingId: building.id,
+      name: "Kjeller",
+      level: -1,
+      belowGround: true,
+    });
+    expect(floor.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+    expect(await db.select().from(reportBuildings)).toHaveLength(1);
+  });
+
+  it("5.1 createFloorArea uten overstyring: alle felt tomme, med etasje i samme organisasjon", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const area = await createFloorArea(org.id);
+    expect(area).toMatchObject({
+      organizationId: org.id,
+      braI: null,
+      braE: null,
+      braB: null,
+      alh: null,
+      measuredBy: null,
+      method: null,
+      comment: null,
+      deletedAt: null,
+    });
+    const [floor] = await db.select().from(floors).where(eq(floors.id, area.floorId));
+    expect(floor?.organizationId).toBe(org.id);
+  });
+
+  it("5.1 createFloorArea bruker overstyringene (tallene med én desimal)", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const floor = await createFloor(org.id);
+    const measurer = await createEmployee(await createUser({ name: "Test Måler" }), org.id, [
+      "inspector",
+    ]);
+    const area = await createFloorArea(org.id, {
+      floorId: floor.id,
+      braI: 123.4,
+      braE: 56.7,
+      braB: 8.9,
+      alh: 210.3,
+      measuredBy: measurer.id,
+      method: "laser",
+      comment: "Målt langs innvendig vegg test",
+    });
+    expect(area).toMatchObject({
+      floorId: floor.id,
+      measuredBy: measurer.id,
+      method: "laser",
+      comment: "Målt langs innvendig vegg test",
+    });
+    expect([area.braI, area.braE, area.braB, area.alh].map(Number)).toEqual([
+      123.4, 56.7, 8.9, 210.3,
+    ]);
+  });
+
+  it("5.1 createRoom uten overstyring: bad uten navn, BRA-i, over terreng, med etasje i samme organisasjon", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const room = await createRoom(org.id);
+    expect(room).toMatchObject({
+      organizationId: org.id,
+      roomType: "bathroom",
+      name: null,
+      areaType: "bra_i",
+      belowGround: false,
+      deletedAt: null,
+    });
+    const [floor] = await db.select().from(floors).where(eq(floors.id, room.floorId));
+    expect(floor?.organizationId).toBe(org.id);
+  });
+
+  it("5.1 createRoom bruker overstyringene", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const floor = await createFloor(org.id, { belowGround: true, level: -1, name: "Kjeller" });
+    const deletedAt = new Date("2026-11-03T12:00:00Z");
+    const room = await createRoom(org.id, {
+      floorId: floor.id,
+      roomType: "garage",
+      name: "Rom test",
+      areaType: "bra_e",
+      belowGround: true,
+      deletedAt,
+    });
+    expect(room).toMatchObject({
+      floorId: floor.id,
+      roomType: "garage",
+      name: "Rom test",
+      areaType: "bra_e",
+      belowGround: true,
+    });
+    expect(room.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+    expect(await db.select().from(floors)).toHaveLength(1);
+  });
+
+  it("5.2 RESET_TABLES har de fire tabellene, barna før foreldrene, og resetDatabase tømmer dem", async () => {
+    const listed: readonly string[] = RESET_TABLES;
+    expect(listed).toEqual(
+      expect.arrayContaining(["report_buildings", "floors", "floor_areas", "rooms"]),
+    );
+    expect(listed.indexOf("rooms")).toBeLessThan(listed.indexOf("floors"));
+    expect(listed.indexOf("floor_areas")).toBeLessThan(listed.indexOf("floors"));
+    expect(listed.indexOf("floor_areas")).toBeLessThan(listed.indexOf("employees"));
+    expect(listed.indexOf("floors")).toBeLessThan(listed.indexOf("report_buildings"));
+    expect(listed.indexOf("report_buildings")).toBeLessThan(listed.indexOf("assignments"));
+
+    const org = await createOrganization("Oppdiktet takst A");
+    await createRoom(org.id);
+    await createFloorArea(org.id, { braI: 12.3 });
+
+    await resetDatabase();
+
+    for (const table of [rooms, floorAreas, floors, reportBuildings]) {
       const [row] = await db.select({ n: count() }).from(table);
       expect(row!.n).toBe(0);
     }
