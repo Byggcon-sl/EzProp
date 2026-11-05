@@ -12,6 +12,7 @@ import {
 } from "@/db/schema";
 import {
   createAssignment,
+  createAssignmentParty,
   createCertification,
   createCompany,
   createEmployee,
@@ -20,6 +21,7 @@ import {
   createNumberSequence,
   createOffice,
   createOrder,
+  createTeamMember,
   createUser,
   grantPermission,
 } from "./factories";
@@ -64,6 +66,16 @@ async function insertTrialForm(organizationId: string) {
  * `tests/tenant-isolation-all-tables.test.ts` rød. Alle verdier er oppdiktede.
  */
 export const tenantTables: TenantTableEntry[] = [
+  {
+    table: "assignment_parties",
+    testFile: "src/core/assignments/assignment-team-parties.test.ts",
+    insertRow: async (organizationId) => (await createAssignmentParty(organizationId)).id,
+  },
+  {
+    table: "assignment_team_members",
+    testFile: "src/core/assignments/assignment-team-parties.test.ts",
+    insertRow: async (organizationId) => (await createTeamMember(organizationId)).id,
+  },
   {
     table: "assignments",
     testFile: "src/core/orders/orders.test.ts",

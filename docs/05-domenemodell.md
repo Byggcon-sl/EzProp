@@ -313,6 +313,13 @@ Kontakter er personopplysninger. De vises bare for ansatte, og sendes aldri til 
 
 En person kan ha flere roller på samme oppdrag (for eksempel selger og fakturamottaker). Da blir det to rader.
 
+**Bygget i fase 2a (04.11.2026, team og parter på oppdraget):** Tabellen `assignment_parties` (`src/db/schema/assignment-parties.ts`) i en enkel utgave (A60), tjenestene i `src/core/assignments`. Oppgavekort: `docs/funksjoner/fase2a-oppdrag-team-parter.md`; beslutningene A60–A63.
+
+- **Med nå:** `baseColumns` (myk sletting), `assignment_id` (påkrevd, sammensatt fremmednøkkel `(organization_id, assignment_id)` til `assignments`), `role` (CHECK: `broker`, `seller`, `buyer`, `seller_representative`, `invoice_recipient`; `PARTY_ROLES`), `name` (påkrevd, høyst 200 tegn), `firm_name`, `email`, `phone` (valgfrie fritekstfelt), `receives_report`, `receives_invoice`, `receives_messages` (ja/nei, standard nei). Indeks `(organization_id, assignment_id)`.
+- **Forhåndsvalg:** `defaultReceives(role)` fyller ut hva parten mottar etter rollen (A62): megler, selger og selgers representant får rapport og kopi av meldinger, kjøper får rapport, fakturamottaker får faktura. Kjernen lagrer det som sendes.
+- **Fjerning** er myk sletting. Hendelsene `assignment.party_added`, `assignment.party_updated` og `assignment.party_removed` har bare `{ partyId, role }`; revisjonsloggen (`assignment_party`, `create`/`update`/`delete`) har id-er, rollekoden, mottar-valgene og navnene på endrede felt, aldri navn, firma, e-post eller telefon.
+- **Venter:** `contact_id` og `firm_id` (planpunktet «Kontakter og firma»; da kobles fritekstpartene til kontakter), `receives_survey` og `is_primary` (rutiner og undersøkelser), og rollekodene `client` og `other` (oppdragsgiver er megler eller selger, 24.10.2026). Ingen sending til partene ennå (fase 3).
+
 ---
 
 ### 4.3 Ordre og oppdrag
@@ -403,6 +410,14 @@ Neste nummer hentes med lås i databasen, slik at to kontorer aldri får samme n
 | `handed_over_reason` | Grunn ved overlevering (sykdom, ferie, kapasitet) |
 
 Det kan bare være én aktiv ansvarlig om gangen.
+
+**Bygget i fase 2a (04.11.2026, team og parter på oppdraget):** Tabellen `assignment_team_members` (`src/db/schema/assignment-team-members.ts`), tjenesten `setTeamMember` og `getAssignment` i `src/core/assignments`. Beslutningene A61 og A63.
+
+- **Med nå:** `baseColumns`, `assignment_id` og `employee_id` (påkrevde, sammensatte fremmednøkler `(organization_id, …)` til `assignments` og `employees`), `team_role` (CHECK med de fem kodene; `TEAM_ROLES`), `from_at` (påkrevd), `to_at` (tom = aktiv), `handed_over_reason` (høyst 300 tegn). CHECK `to_at is null or to_at >= from_at`. Indeks `(organization_id, assignment_id)`.
+- **Én aktiv person per rolle per oppdrag** (A61), også for befaringstakstmann og sidemann: unik delvis indeks `(organization_id, assignment_id, team_role) WHERE to_at IS NULL AND deleted_at IS NULL`. Samme ansatt kan ha flere roller.
+- **Bytte** avslutter den aktive raden (`to_at`, valgfri grunn) og lager en ny; ingenting skrives over eller slettes. Oppdragsraden låses (`FOR UPDATE`) først, så samtidige bytter går etter hverandre. Bare ansatte som ikke er slettet og ikke har sluttet, kan velges.
+- **Hendelse** `assignment.team_changed` med `{ teamRole, fromEmployeeId, toEmployeeId }`; revisjonslogg `assignment_team_member` med `end` og `create`. Grunnen står bare på raden.
+- **Venter:** visning av tidligere teammedlemmer på skjermen, team-sjekk for endring når `access.inspectors_edit_all` er av (A63), utstedende selskap fra ansvarlig (neste planpunkt).
 
 **`client_agreements`** – avtale med oppdragsgiver (for eksempel Fremtind).
 
@@ -1218,6 +1233,8 @@ Gyldig verdi er et heltall fra 1 til og med 100 (år). Mangler nøkkelen, brukes
 | `assignment.on_hold` / `assignment.resumed` | Satt på vent / tatt opp igjen |
 | `assignment.cancelled` | Kansellert (oppdraget mykt slettet, 27.10.2026) |
 | `assignment.closed` / `assignment.reopened` | Lukket / gjenåpnet |
+| `assignment.team_changed` | Person satt, byttet eller fjernet i en rolle i teamet (fase 2a) |
+| `assignment.party_added` / `assignment.party_updated` / `assignment.party_removed` | Part lagt til / endret / fjernet (fase 2a) |
 | `inspection.scheduled` | Befaring avtalt (booket) |
 | `inspection.rescheduled` | Befaring flyttet |
 | `inspection.cancelled` | Befaring avlyst |
@@ -1767,8 +1784,13 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Krav om sidemannskontroll | `peer_review_requirements` | Per ansatt |
 | Firma | `firms` | Meglerforetak, forsikringsselskap, sameie osv. |
 | Kontakt | `contacts` | Person utenfor Byggcon |
-| Part på oppdrag | `assignment_parties` | Kontakt eller firma med rolle på oppdraget |
-| Oppdragsgiver | `client` | Rolle |
+| Part på oppdrag | `assignment_parties` | Kontakt eller firma med rolle på oppdraget. I fase 2a fritekst (navn, firma, e-post, telefon) på oppdraget (A60) |
+| Partsroller | `PARTY_ROLES`, `partyRoleLabel` (`src/core/assignments/codes.ts`) | De fem rollekodene en part kan ha, i fast rekkefølge |
+| Firma (part, fritekst) | `assignment_parties.firm_name` | For eksempel meglerforetaket, til firma-registeret kommer |
+| Mottar rapport / faktura / kopi av meldinger | `receives_report` / `receives_invoice` / `receives_messages` | Hva parten skal motta. Lagres bare; ingen sending ennå |
+| Forhåndsvalg for hva parten mottar | `defaultReceives` (`src/core/assignments`) | Fyller ut mottar-valgene etter rollen (A62) |
+| Legge til / endre / fjerne part | `addParty` / `updateParty` / `removeParty` (`src/core/assignments`) | Fjerne er myk sletting |
+| Oppdragsgiver | `client` | Rolle (ikke tatt i bruk, A60) |
 | Selger / eier | `seller` | Rolle |
 | Megler | `broker` | Rolle |
 | Kjøper | `buyer` | Rolle |
@@ -1792,11 +1814,18 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Oppdrag | `assignments` | Jobben |
 | Oppdragstype | `assignments.assignment_type` | Nå bare `condition_report` (`ASSIGNMENT_TYPES`) |
 | Oppdragsnummer | `assignments.number` | `ÅÅÅÅ-NNNNN`, laget på serveren av `nextAssignmentNumber` |
-| Oppdragsteam | `assignment_team_members` | |
+| Oppdragsteam | `assignment_team_members` | Én rad per person og rolle i en periode (`from_at`–`to_at`). Én aktiv per rolle (A61) |
+| Rolle i teamet | `team_role`, `TEAM_ROLES`, `teamRoleLabel` | De fem rollekodene i teamet, i fast rekkefølge |
 | Ansvarlig takstmann | `responsible` | Rolle i teamet, signerer |
 | Medansvarlig | `co_responsible` | |
+| Befaringstakstmann | `inspector` | Rolle i teamet (samme kode som ansattrollen, men egen liste) |
 | Sidemann | `peer_reviewer` | |
-| Overlevering | `handed_over_reason`, `assignment.handed_over` | |
+| Saksbehandler | `office` | Rolle i teamet (kontoret) |
+| Sette person i teamet | `setTeamMember` (`src/core/assignments`) | Setter, bytter eller fjerner personen i en rolle. Bytte avslutter den gamle raden |
+| Den ansatte finnes ikke | `EmployeeNotFoundError` | Den ansatte er ikke i organisasjonen, er slettet eller har sluttet |
+| Oppdragsside | `getAssignment` (`src/core/assignments`), `AssignmentDetail` | Oppdraget med aktivt team, parter og kandidater til teamet |
+| Overlevering | `handed_over_reason`, `assignment.handed_over` | Grunnen ved bytte står på raden som avsluttes (høyst 300 tegn) |
+| Bytte i teamet | `assignment.team_changed` | Hendelse med `teamRole`, `fromEmployeeId`, `toEmployeeId` |
 | Status | `assignments.status` | Kort liste: fire statuser fra 27.10.2026 |
 | Merket «Rettet» | – | Regnes ut fra `report_releases` (versjon 2 eller høyere er sendt) |
 | Bestilt / under arbeid / ferdig / fakturert | `ordered` / `in_progress` / `completed` / `invoiced` | `ASSIGNMENT_STATUSES`, `assignmentStatusLabel` |
@@ -2075,3 +2104,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 02.11.2026 | Filtjeneste (fase 0b): tabellen `files` bygget med `kind` bare `photo`, `report_pdf`, `document`, unik på `(organization_id, storage_key)`. Oppbevaringstidene for bilder i `organizations.settings`. | A39–A43, `docs/funksjoner/fase0b-filtjeneste.md` |
 | 03.11.2026 | `employee_permissions`: ingen indeks som begynner med `organization_id`, bare den delvise unike `(employee_id, permission) WHERE deleted_at IS NULL`, fordi alle spørringer (`findGrant`, `selectAdminEmployees`) går via `employee_id`. Må vurderes på nytt hvis en spørring filtrerer på organisasjon uten ansatt (nattløkken punkt 19). | `docs/agenter/oppgaver/fase0b-smafunn-r-s.md` |
 | 04.11.2026 | Manuell ordre og oppdragsnummer (fase 2a): `orders`, `assignments` (minimal) og `number_sequences` bygget; `orders` med `gnr`, `bnr`, `snr`, `housing_association_name`, `seller_declaration_received` og `ordered_by_text` til eiendom og kontakter kommer; `orders.source` bare `manual` og `email`; fremmednøkkel fra `events.assignment_id` (A33). Se «Bygget i fase 2a» i 4.3. | A51–A55, `docs/funksjoner/fase2a-manuell-ordre.md` |
+| 04.11.2026 | Team og parter på oppdraget (fase 2a): `assignment_team_members` og `assignment_parties` (enkel utgave med fritekst, fem roller, tre mottar-valg) bygget; nye hendelser `assignment.team_changed` og `assignment.party_added`/`_updated`/`_removed`. `contact_id`, `firm_id`, `receives_survey`, `is_primary`, `client` og `other` venter. Se «Bygget i fase 2a» i 4.2 og 4.3. | A60–A63, `docs/funksjoner/fase2a-oppdrag-team-parter.md` |

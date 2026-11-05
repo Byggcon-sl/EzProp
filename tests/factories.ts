@@ -4,7 +4,9 @@ import type { Actor } from "@/core/access";
 import type { FileStorage } from "@/core/files";
 import { db } from "@/db/client";
 import {
+  assignmentParties,
   assignments,
+  assignmentTeamMembers,
   auditLog,
   certifications,
   companies,
@@ -29,6 +31,8 @@ import { todayInOslo } from "@/shared/lib/dates";
 export const RESET_TABLES = [
   "number_sequences",
   "orders",
+  "assignment_team_members",
+  "assignment_parties",
   "assignments",
   "certifications",
   "trial_photos",
@@ -404,5 +408,99 @@ export async function createNumberSequence(
     } as NumberSequenceInsert)
     .returning();
   if (!row) throw new Error("kunne ikke opprette nummerserie");
+  return row;
+}
+
+type TeamMemberOverrides = {
+  assignmentId?: string;
+  employeeId?: string;
+  teamRole?: string;
+  fromAt?: Date;
+  toAt?: Date | null;
+  handedOverReason?: string | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/**
+ * En rad i teamet på oppdraget (`assignment_team_members`), satt inn direkte uten tilgangssjekk.
+ * Standard: aktiv `responsible` fra `TEST_NOW`. Lager oppdrag og ansatt (rolle takstmann,
+ * oppdiktet navn) i samme organisasjon når de mangler. `teamRole` er fri tekst, så testene kan
+ * vise at databasen avviser ukjente koder.
+ */
+export async function createTeamMember(
+  organizationId: string,
+  overrides: TeamMemberOverrides = {},
+) {
+  const assignmentId = overrides.assignmentId ?? (await createAssignment(organizationId)).id;
+  const employeeId =
+    overrides.employeeId ??
+    (
+      await createEmployee(await createUser({ name: "Test Teammedlem" }), organizationId, [
+        "inspector",
+      ])
+    ).id;
+  const [row] = await db
+    .insert(assignmentTeamMembers)
+    .values({
+      organizationId,
+      assignmentId,
+      employeeId,
+      teamRole: (overrides.teamRole ??
+        "responsible") as typeof assignmentTeamMembers.$inferInsert.teamRole,
+      fromAt: overrides.fromAt ?? TEST_NOW,
+      toAt: overrides.toAt ?? null,
+      handedOverReason: overrides.handedOverReason ?? null,
+      deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette teamrad");
+  return row;
+}
+
+type PartyOverrides = {
+  assignmentId?: string;
+  role?: string;
+  name?: string;
+  firmName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  receivesReport?: boolean;
+  receivesInvoice?: boolean;
+  receivesMessages?: boolean;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/**
+ * En part på oppdraget (`assignment_parties`), satt inn direkte uten tilgangssjekk og uten Zod.
+ * Standard: megler «Megler Test» uten firma, e-post og telefon, og alle tre «mottar» = `false`
+ * (fast, ikke etter `defaultReceives`, så testene ser hva de selv setter). Lager oppdraget i
+ * samme organisasjon når det mangler. Oppdiktede data.
+ */
+export async function createAssignmentParty(
+  organizationId: string,
+  overrides: PartyOverrides = {},
+) {
+  const assignmentId = overrides.assignmentId ?? (await createAssignment(organizationId)).id;
+  const [row] = await db
+    .insert(assignmentParties)
+    .values({
+      organizationId,
+      assignmentId,
+      role: (overrides.role ?? "broker") as typeof assignmentParties.$inferInsert.role,
+      name: overrides.name ?? "Megler Test",
+      firmName: overrides.firmName ?? null,
+      email: overrides.email ?? null,
+      phone: overrides.phone ?? null,
+      receivesReport: overrides.receivesReport ?? false,
+      receivesInvoice: overrides.receivesInvoice ?? false,
+      receivesMessages: overrides.receivesMessages ?? false,
+      deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette part");
   return row;
 }

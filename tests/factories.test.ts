@@ -9,9 +9,12 @@ import { createLocalFileStorage } from "@/core/files/local-storage";
 import { isCertificationValid } from "@/core/organization/certification-rules";
 import { db } from "@/db/client";
 import {
+  assignmentParties,
   assignments,
+  assignmentTeamMembers,
   certifications,
   employeePermissions,
+  employees,
   files,
   integrationConnections,
   loginAttempts,
@@ -26,6 +29,7 @@ import { todayInOslo } from "@/shared/lib/dates";
 import { uuidv7 } from "@/shared/lib/uuid";
 import {
   createAssignment,
+  createAssignmentParty,
   createCertification,
   createEmployee,
   createFile,
@@ -34,6 +38,7 @@ import {
   createOffice,
   createOrder,
   createOrganization,
+  createTeamMember,
   createUser,
   grantPermission,
   RESET_TABLES,
@@ -457,6 +462,133 @@ describe("fabrikkene for ordre, oppdrag og nummerserie", () => {
     await resetDatabase();
 
     for (const table of [orders, assignments, numberSequences]) {
+      const [row] = await db.select({ n: count() }).from(table);
+      expect(row!.n).toBe(0);
+    }
+  });
+});
+
+/*
+ * Fabrikkene for team og parter på oppdraget
+ * (docs/funksjoner/fase2a-oppdrag-team-parter-testplan.md avsnitt 5). Oppdiktede data.
+ * Støtter hovedmål: reklamasjoner (testene for teamhistorikk og parter bygger på disse radene).
+ */
+describe("fabrikkene for team og parter (fase 2a)", () => {
+  beforeEach(resetDatabase);
+
+  it("5.1 createTeamMember uten overstyring: aktiv responsible fra TEST_NOW, oppdrag og ansatt i samme organisasjon", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const row = await createTeamMember(org.id);
+    expect(row).toMatchObject({
+      organizationId: org.id,
+      teamRole: "responsible",
+      toAt: null,
+      handedOverReason: null,
+      deletedAt: null,
+    });
+    expect(row.fromAt.toISOString()).toBe(TEST_NOW.toISOString());
+    const [assignment] = await db
+      .select()
+      .from(assignments)
+      .where(eq(assignments.id, row.assignmentId));
+    expect(assignment?.organizationId).toBe(org.id);
+    const [employee] = await db
+      .select({ organizationId: employees.organizationId })
+      .from(employees)
+      .where(eq(employees.id, row.employeeId));
+    expect(employee?.organizationId).toBe(org.id);
+  });
+
+  it("5.1 createTeamMember bruker overstyring av rolle, oppdrag, ansatt, toAt, grunn og deletedAt", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const assignment = await createAssignment(org.id);
+    const employee = await createEmployee(await createUser(), org.id, ["inspector"]);
+    const toAt = new Date(TEST_NOW.getTime() + 60 * 60 * 1000);
+    const deletedAt = new Date("2026-11-03T12:00:00Z");
+    const row = await createTeamMember(org.id, {
+      assignmentId: assignment.id,
+      employeeId: employee.id,
+      teamRole: "peer_reviewer",
+      toAt,
+      handedOverReason: "Ferie",
+      deletedAt,
+    });
+    expect(row).toMatchObject({
+      assignmentId: assignment.id,
+      employeeId: employee.id,
+      teamRole: "peer_reviewer",
+      handedOverReason: "Ferie",
+    });
+    expect(row.toAt?.toISOString()).toBe(toAt.toISOString());
+    expect(row.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+    // Ikke noe ekstra oppdrag når assignmentId er gitt
+    const rows = await db.select().from(assignments).where(eq(assignments.organizationId, org.id));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("5.2 createAssignmentParty uten overstyring: megler «Megler Test», tomme felt og alle mottar = false", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const row = await createAssignmentParty(org.id);
+    expect(row).toMatchObject({
+      organizationId: org.id,
+      role: "broker",
+      name: "Megler Test",
+      firmName: null,
+      email: null,
+      phone: null,
+      receivesReport: false,
+      receivesInvoice: false,
+      receivesMessages: false,
+      deletedAt: null,
+    });
+    const [assignment] = await db
+      .select()
+      .from(assignments)
+      .where(eq(assignments.id, row.assignmentId));
+    expect(assignment?.organizationId).toBe(org.id);
+  });
+
+  it("5.2 createAssignmentParty bruker overstyringene", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const assignment = await createAssignment(org.id);
+    const deletedAt = new Date("2026-11-03T12:00:00Z");
+    const row = await createAssignmentParty(org.id, {
+      assignmentId: assignment.id,
+      role: "invoice_recipient",
+      name: "Faktura Test",
+      firmName: "Testmegling AS",
+      email: "megler@example.com",
+      phone: "00000000",
+      receivesInvoice: true,
+      deletedAt,
+    });
+    expect(row).toMatchObject({
+      assignmentId: assignment.id,
+      role: "invoice_recipient",
+      name: "Faktura Test",
+      firmName: "Testmegling AS",
+      email: "megler@example.com",
+      phone: "00000000",
+      receivesReport: false,
+      receivesInvoice: true,
+      receivesMessages: false,
+    });
+    expect(row.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+  });
+
+  it("5.3 RESET_TABLES har assignment_team_members og assignment_parties, og resetDatabase tømmer dem", async () => {
+    const listed: readonly string[] = RESET_TABLES;
+    expect(listed).toEqual(
+      expect.arrayContaining(["assignment_team_members", "assignment_parties"]),
+    );
+
+    const org = await createOrganization("Oppdiktet takst A");
+    await createTeamMember(org.id);
+    await createAssignmentParty(org.id);
+
+    await resetDatabase();
+
+    for (const table of [assignmentTeamMembers, assignmentParties]) {
       const [row] = await db.select({ n: count() }).from(table);
       expect(row!.n).toBe(0);
     }
