@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AccessDeniedError } from "@/core/access";
 import { EmployeeNotFoundError } from "@/core/assignments/errors";
 import { partyInputSchema } from "@/core/assignments/schemas";
+import {
+  CommonAreasNotApplicableError,
+  commonAreasInputSchema,
+  propertyInputSchema,
+} from "@/core/properties";
 import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../../form-state";
 
 /*
@@ -32,6 +37,11 @@ const mocks = vi.hoisted(() => ({
     updateParty: vi.fn(),
     removeParty: vi.fn(),
   },
+  properties: {
+    getAssignmentProperty: vi.fn(),
+    saveAssignmentProperty: vi.fn(),
+    saveCommonAreas: vi.fn(),
+  },
 }));
 
 vi.mock("server-only", () => ({}));
@@ -45,9 +55,19 @@ vi.mock("@/core/assignments", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/core/assignments")>()),
   ...mocks.core,
 }));
+vi.mock("@/core/properties", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/core/properties")>()),
+  ...mocks.properties,
+}));
 
-const { setTeamMemberAction, addPartyAction, updatePartyAction, removePartyAction } =
-  await import("./actions");
+const {
+  setTeamMemberAction,
+  addPartyAction,
+  updatePartyAction,
+  removePartyAction,
+  savePropertyAction,
+  saveCommonAreasAction,
+} = await import("./actions");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
 const OTHER_ORG = "0190a000-0000-7000-8000-000000000002";
@@ -106,7 +126,21 @@ function removeForm(overrides: Record<string, string> = {}) {
 }
 
 function coreCalls() {
-  return Object.values(mocks.core).reduce((sum, fn) => sum + fn.mock.calls.length, 0);
+  return [...Object.values(mocks.core), ...Object.values(mocks.properties)].reduce(
+    (sum, fn) => sum + fn.mock.calls.length,
+    0,
+  );
+}
+
+/**
+ * Alt loggeren fikk, som tekst, med uuid-er byttet ut med «<id>». Id-ene skal stå i loggen, men
+ * oppdiktede verdier som telefon 00000000 og organisasjonsnummer 000000000 finnes også inni dem.
+ */
+function loggedWithoutIds(): string {
+  return JSON.stringify(mocks.logError.mock.calls).replace(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+    "<id>",
+  );
 }
 
 /** Alle meldinger i svaret, ved feltene og øverst. */
@@ -314,7 +348,7 @@ describe("6.6 loggkontrakt", () => {
       const state = await failed(action());
       expect(state.message).toBe(UNKNOWN_ERROR);
       expect(mocks.logError).toHaveBeenCalledTimes(1);
-      const logged = JSON.stringify(mocks.logError.mock.calls);
+      const logged = loggedWithoutIds();
       expect(logged).toContain("OppdiktetFeil");
       expect(logged).toContain(actor.id);
       for (const value of PERSONAL_VALUES) expect(logged, value).not.toContain(value);
@@ -327,7 +361,297 @@ describe("6.6 loggkontrakt", () => {
     mocks.core.addParty.mockRejectedValue(new AccessDeniedError());
     await run(setTeamMemberAction(initialFormState, teamForm()));
     await run(addPartyAction(initialFormState, addForm()));
-    const logged = JSON.stringify(mocks.logError.mock.calls);
+    const logged = loggedWithoutIds();
     for (const value of PERSONAL_VALUES) expect(logged, value).not.toContain(value);
+  });
+});
+
+/*
+ * Eiendom og fellesdeler på oppdragssiden (docs/funksjoner/fase2a-eiendom-matrikkel-testplan.md
+ * avsnitt 6). Feltnavnene i skjemaene er som i kjernen: assignmentId, address, postalCode, city,
+ * municipalityNumber, municipalityName, housingType, ownershipForm, gnr, bnr, fnr, snr,
+ * associationName, associationOrgNumber, shareNumber; managingAgent, conditionReportStatus,
+ * maintenancePlanStatus, notes. Testdata er oppdiktet.
+ *
+ * Støtter hovedmål: reklamasjoner (aldri feil organisasjon, aldri adresse, matrikkel eller
+ * fritekst i loggen) og tid (feil vises ved feltet).
+ */
+
+const P_ADDRESS = "Testveien 1";
+const P_CITY = "Testby";
+const P_MUNICIPALITY = "Testkommune";
+const P_ASSOCIATION = "Borettslaget Test";
+const P_ORG_NUMBER = "000000000";
+const P_SHARE = "0-0";
+const P_AGENT = "Forvalter Test";
+const P_NOTES = "Sett trapperom og kjeller";
+const PROPERTY_PERSONAL = [
+  P_ADDRESS,
+  P_CITY,
+  P_MUNICIPALITY,
+  P_ASSOCIATION,
+  P_ORG_NUMBER,
+  P_AGENT,
+  P_NOTES,
+];
+const FOREIGN_PROPERTY = "0190a000-0000-7000-8000-000000000080";
+const NOT_APPLICABLE =
+  "Fellesdeler gjelder bare leilighet, eierseksjon, borettslag og aksjeleilighet.";
+
+function propertyForm(overrides: Record<string, string> = {}) {
+  return form({
+    assignmentId: ASSIGNMENT,
+    address: P_ADDRESS,
+    postalCode: "0000",
+    city: P_CITY,
+    municipalityNumber: "0000",
+    municipalityName: P_MUNICIPALITY,
+    housingType: "apartment",
+    ownershipForm: "cooperative",
+    gnr: "999",
+    bnr: "999",
+    fnr: "0",
+    snr: "9",
+    associationName: P_ASSOCIATION,
+    associationOrgNumber: P_ORG_NUMBER,
+    shareNumber: P_SHARE,
+    ...overrides,
+  });
+}
+
+function commonForm(overrides: Record<string, string> = {}) {
+  return form({
+    assignmentId: ASSIGNMENT,
+    managingAgent: P_AGENT,
+    conditionReportStatus: "yes",
+    maintenancePlanStatus: "unknown",
+    notes: P_NOTES,
+    ...overrides,
+  });
+}
+
+const PROPERTY_ACTIONS = [
+  ["savePropertyAction", () => savePropertyAction(initialFormState, propertyForm())],
+  ["saveCommonAreasAction", () => saveCommonAreasAction(initialFormState, commonForm())],
+] as const;
+
+const CORE_FOR_PROPERTY_ACTION = {
+  savePropertyAction: mocks.properties.saveAssignmentProperty,
+  saveCommonAreasAction: mocks.properties.saveCommonAreas,
+} as const;
+
+describe("eiendom og fellesdeler: handlingene", () => {
+  beforeEach(() => {
+    mocks.properties.saveAssignmentProperty.mockResolvedValue(undefined);
+    mocks.properties.saveCommonAreas.mockResolvedValue(undefined);
+  });
+
+  describe("6.1 uten kontekst", () => {
+    it.each(PROPERTY_ACTIONS)(
+      "%s: getEmployeeContext gir null → NO_ACCESS uten kall til kjernen",
+      async (_name, action) => {
+        mocks.getEmployeeContext.mockResolvedValue(null);
+        const state = await failed(action());
+        expect(state.message).toBe(NO_ACCESS);
+        expect(coreCalls()).toBe(0);
+      },
+    );
+  });
+
+  describe("6.2 id som ikke er uuid", () => {
+    const BAD_IDS = ["ikke-en-id", "1 or 1=1", "../x", ""];
+
+    it.each(BAD_IDS)("savePropertyAction: oppdrags-id «%s» → NO_ACCESS uten kall", async (id) => {
+      const state = await failed(
+        savePropertyAction(initialFormState, propertyForm({ assignmentId: id })),
+      );
+      expect(state.message).toBe(NO_ACCESS);
+      expect(coreCalls()).toBe(0);
+    });
+
+    it.each(BAD_IDS)(
+      "saveCommonAreasAction: oppdrags-id «%s» → NO_ACCESS uten kall",
+      async (id) => {
+        const state = await failed(
+          saveCommonAreasAction(initialFormState, commonForm({ assignmentId: id })),
+        );
+        expect(state.message).toBe(NO_ACCESS);
+        expect(coreCalls()).toBe(0);
+      },
+    );
+  });
+
+  describe("6.3 organisasjonen kommer fra konteksten", () => {
+    it("savePropertyAction: organizationId og propertyId i skjemaet endrer ikke kallet", async () => {
+      await run(
+        savePropertyAction(
+          initialFormState,
+          propertyForm({ organizationId: OTHER_ORG, propertyId: FOREIGN_PROPERTY }),
+        ),
+      );
+      expect(mocks.properties.saveAssignmentProperty).toHaveBeenCalledTimes(1);
+      const [calledActor, calledOrg, calledAssignment, input] =
+        mocks.properties.saveAssignmentProperty.mock.calls[0]!;
+      expect([calledActor, calledOrg, calledAssignment]).toEqual([actor, ORG, ASSIGNMENT]);
+      expect(input).toMatchObject({
+        address: P_ADDRESS,
+        housingType: "apartment",
+        ownershipForm: "cooperative",
+        gnr: "999",
+        bnr: "999",
+        associationName: P_ASSOCIATION,
+      });
+      const called = JSON.stringify(mocks.properties.saveAssignmentProperty.mock.calls);
+      expect(called).not.toContain(OTHER_ORG);
+      expect(called).not.toContain(FOREIGN_PROPERTY);
+    });
+
+    it("saveCommonAreasAction: kjernen kalles med ORG og oppdraget fra skjemaet", async () => {
+      await run(saveCommonAreasAction(initialFormState, commonForm({ organizationId: OTHER_ORG })));
+      expect(mocks.properties.saveCommonAreas).toHaveBeenCalledTimes(1);
+      const [calledActor, calledOrg, calledAssignment, input] =
+        mocks.properties.saveCommonAreas.mock.calls[0]!;
+      expect([calledActor, calledOrg, calledAssignment]).toEqual([actor, ORG, ASSIGNMENT]);
+      expect(input).toMatchObject({
+        managingAgent: P_AGENT,
+        conditionReportStatus: "yes",
+        maintenancePlanStatus: "unknown",
+        notes: P_NOTES,
+      });
+      expect(JSON.stringify(mocks.properties.saveCommonAreas.mock.calls)).not.toContain(OTHER_ORG);
+    });
+
+    it("lykket lagring gir ingen feil", async () => {
+      for (const [, action] of PROPERTY_ACTIONS) {
+        const state = await run(action());
+        if (state) {
+          expect(state.message).toBeNull();
+          expect(state.fieldErrors).toEqual({});
+        }
+      }
+    });
+  });
+
+  describe("6.4 feil fra kjernen", () => {
+    it.each(PROPERTY_ACTIONS)("%s: AccessDeniedError → NO_ACCESS", async (name, action) => {
+      CORE_FOR_PROPERTY_ACTION[name].mockRejectedValue(new AccessDeniedError());
+      const state = await failed(action());
+      expect(state.message).toBe(NO_ACCESS);
+    });
+
+    it("saveCommonAreasAction: CommonAreasNotApplicableError → norsk melding", async () => {
+      mocks.properties.saveCommonAreas.mockRejectedValue(new CommonAreasNotApplicableError());
+      const state = await failed(saveCommonAreasAction(initialFormState, commonForm()));
+      expect(allMessages(state)).toContain(NOT_APPLICABLE);
+      expect(state.message).not.toBe(UNKNOWN_ERROR);
+      expect(mocks.logError).not.toHaveBeenCalled();
+    });
+
+    it("savePropertyAction: ZodError → feil ved feltene med kortets tekster", async () => {
+      const bad = {
+        address: " ",
+        gnr: "12a",
+        bnr: "",
+        postalCode: "123",
+        municipalityNumber: "12345",
+        associationOrgNumber: "12345678",
+        shareNumber: "A12",
+        snr: "9b",
+      };
+      const result = propertyInputSchema.safeParse({
+        housingType: "apartment",
+        ownershipForm: "cooperative",
+        ...bad,
+      });
+      expect(result.success).toBe(false);
+      mocks.properties.saveAssignmentProperty.mockRejectedValue(result.error);
+
+      const state = await failed(savePropertyAction(initialFormState, propertyForm(bad)));
+      expect(state.fieldErrors).toMatchObject({
+        address: "Skriv inn adressen.",
+        gnr: "Gårdsnummer kan bare ha sifre.",
+        bnr: "Skriv inn bruksnummer.",
+        postalCode: "Postnummeret må ha fire sifre.",
+        municipalityNumber: "Kommunenummeret må ha fire sifre.",
+        associationOrgNumber: "Organisasjonsnummeret må ha ni sifre.",
+        shareNumber: "Andelsnummeret kan bare ha sifre og bindestrek.",
+        snr: "Seksjonsnummer kan bare ha sifre.",
+      });
+      // Verdiene står igjen i skjemaet
+      expect(state.values).toMatchObject({ gnr: "12a", postalCode: "123" });
+    });
+
+    it.each([
+      ["housingType", { housingType: "" }, "Velg boligtype."],
+      ["housingType", { housingType: "villa" }, "Velg boligtype."],
+      ["ownershipForm", { ownershipForm: "" }, "Velg eierform."],
+      ["ownershipForm", { ownershipForm: "bond" }, "Velg eierform."],
+    ] as const)(
+      "savePropertyAction: ugyldig %s (%o) → «%s» ved feltet (fra handlingen eller kjernen)",
+      async (field, bad, message) => {
+        const result = propertyInputSchema.safeParse({
+          address: P_ADDRESS,
+          housingType: "apartment",
+          ownershipForm: "cooperative",
+          gnr: "999",
+          bnr: "999",
+          ...bad,
+        });
+        expect(result.success).toBe(false);
+        mocks.properties.saveAssignmentProperty.mockRejectedValue(result.error);
+
+        const state = await failed(savePropertyAction(initialFormState, propertyForm(bad)));
+        expect(state.fieldErrors[field]).toBe(message);
+      },
+    );
+
+    it("saveCommonAreasAction: ZodError → feil ved feltet", async () => {
+      const result = commonAreasInputSchema.safeParse({ notes: "12345678901" });
+      expect(result.success).toBe(false);
+      mocks.properties.saveCommonAreas.mockRejectedValue(result.error);
+
+      const state = await failed(
+        saveCommonAreasAction(initialFormState, commonForm({ notes: "12345678901" })),
+      );
+      expect(state.fieldErrors.notes).toBe("Fødselsnummer skal ikke lagres her.");
+    });
+
+    it.each(PROPERTY_ACTIONS)("%s: ukjent feil → UNKNOWN_ERROR", async (name, action) => {
+      CORE_FOR_PROPERTY_ACTION[name].mockRejectedValue(new Error("oppdiktet feil"));
+      const state = await failed(action());
+      expect(state.message).toBe(UNKNOWN_ERROR);
+    });
+  });
+
+  describe("6.5 loggkontrakt", () => {
+    it.each(PROPERTY_ACTIONS)(
+      "%s: ukjent feil logges bare med rute, bruker-id, id-er og feilnavn",
+      async (name, action) => {
+        const boom = new Error(
+          `databasen sa nei til ${PROPERTY_PERSONAL.join(" ")} gnr 999 bnr 999 ${P_SHARE}`,
+        );
+        boom.name = "OppdiktetFeil";
+        CORE_FOR_PROPERTY_ACTION[name].mockRejectedValue(boom);
+
+        const state = await failed(action());
+        expect(state.message).toBe(UNKNOWN_ERROR);
+        expect(mocks.logError).toHaveBeenCalledTimes(1);
+        const logged = loggedWithoutIds();
+        expect(logged).toContain("OppdiktetFeil");
+        expect(logged).toContain(actor.id);
+        for (const value of PROPERTY_PERSONAL) expect(logged, value).not.toContain(value);
+        expect(logged).not.toContain("gnr 999");
+        expect(logged).not.toContain(P_SHARE);
+      },
+    );
+
+    it("ingen kall til loggeren gir skjemaverdier, heller ikke ved kjente feil", async () => {
+      mocks.properties.saveAssignmentProperty.mockRejectedValue(new AccessDeniedError());
+      mocks.properties.saveCommonAreas.mockRejectedValue(new CommonAreasNotApplicableError());
+      await run(savePropertyAction(initialFormState, propertyForm()));
+      await run(saveCommonAreasAction(initialFormState, commonForm()));
+      const logged = loggedWithoutIds();
+      for (const value of PROPERTY_PERSONAL) expect(logged, value).not.toContain(value);
+    });
   });
 });
