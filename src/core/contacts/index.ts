@@ -7,8 +7,9 @@ export {
   type FirmType,
 } from "./codes";
 export { createContact, getContact, listContacts, updateContact } from "./contacts";
-export { FirmDuplicateError, FirmNotFoundError } from "./errors";
+export { ContactNotFoundError, FirmDuplicateError, FirmNotFoundError } from "./errors";
 export { createFirm, getFirm, listFirms, updateFirm } from "./firms";
+export { findContactForLink } from "./link";
 export { isValidOrgNumber, normalizeOrgNumber } from "./org-number";
 export {
   contactInputSchema,

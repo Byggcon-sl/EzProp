@@ -127,6 +127,13 @@
       "when": 1793874244509,
       "tag": "0017_kontakter-og-firma",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793883800548,
+      "tag": "0018_koble-kontakter",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 import { AccessDeniedError, type Actor } from "@/core/access";
 import { cancelAssignment } from "@/core/assignments";
+import { ContactNotFoundError } from "@/core/contacts";
 import { db } from "@/db/client";
 import {
   assignments,
@@ -18,7 +19,9 @@ import {
 } from "@/db/schema";
 import {
   createAssignment,
+  createContact,
   createEmployee,
+  createFirm,
   createNumberSequence,
   createOffice,
   createOrder as insertOrder,
@@ -168,6 +171,9 @@ const DETAIL_KEYS = [
   "gnr",
   "housingAssociationName",
   "id",
+  // Koble kontakter (docs/funksjoner/fase2a-koble-kontakter-testplan.md avsnitt 5)
+  "orderedByContactId",
+  "orderedByFirmId",
   "orderedByText",
   "receivedAt",
   "rejectedReason",
@@ -1113,5 +1119,392 @@ describe("statusflyt 3.7.2 getOrder(...).assignmentCancelled", () => {
     const order = await insertOrder(org.id);
     const detail = await getOrder(admin, org.id, order.id);
     expect(detail).toHaveProperty("assignmentCancelled", false);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Koble kontakter (docs/funksjoner/fase2a-koble-kontakter-testplan.md avsnitt 5 og 6)
+// ---------------------------------------------------------------------------------------------
+
+describe("koble kontakter 5. bestilleren fra registeret", () => {
+  const DELETED = new Date("2026-11-01T08:00:00Z");
+
+  it("5.1 createOrder_with_contact: kontakten og firmaet lagres; revisjonsloggen har id-ene", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const firm = await createFirm(org.id);
+    const contact = await createContact(org.id, { firmId: firm.id });
+
+    const created = await createOrder(
+      admin,
+      org.id,
+      fullInput({ orderedByContactId: contact.id }),
+      NOW,
+    );
+
+    expect(await orderRow(created.id)).toMatchObject({
+      orderedByContactId: contact.id,
+      orderedByFirmId: firm.id,
+      orderedByText: ORDERED_BY,
+    });
+    const [audit] = await auditFor(org.id);
+    expect(audit?.changes).toEqual({
+      status: "received",
+      source: "manual",
+      requestedReportType: "condition_report",
+      orderedByContactId: contact.id,
+      orderedByFirmId: firm.id,
+    });
+  });
+
+  it("5.2 createOrder_contact_without_firm: firma null", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const contact = await createContact(org.id);
+
+    const created = await createOrder(
+      admin,
+      org.id,
+      orderInput({ orderedByContactId: contact.id }),
+      NOW,
+    );
+
+    expect(await orderRow(created.id)).toMatchObject({
+      orderedByContactId: contact.id,
+      orderedByFirmId: null,
+    });
+  });
+
+  it("5.3 createOrder_foreign_contact_throws_and_no_order (IDOR)", async () => {
+    const { org, admin } = await orgWithAdmin("Organisasjon A");
+    const orgB = await createOrganization("Organisasjon B");
+    const contactB = await createContact(orgB.id);
+    const before = await tableCounts();
+
+    await expect(
+      createOrder(admin, org.id, orderInput({ orderedByContactId: contactB.id }), NOW),
+    ).rejects.toThrow(ContactNotFoundError);
+
+    expect(await tableCounts()).toEqual(before);
+    expect(await eventsFor(org.id)).toHaveLength(0);
+    expect(await auditFor(org.id)).toHaveLength(0);
+  });
+
+  it("5.4 createOrder_deleted_contact_throws_and_no_order", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const deleted = await createContact(org.id, { deletedAt: DELETED });
+    const before = await tableCounts();
+
+    await expect(
+      createOrder(admin, org.id, orderInput({ orderedByContactId: deleted.id }), NOW),
+    ).rejects.toThrow(ContactNotFoundError);
+
+    expect(await tableCounts()).toEqual(before);
+  });
+
+  it("5.5 createOrder_without_contact: begge kolonnene null", async () => {
+    const { org, admin } = await orgWithAdmin();
+
+    const created = await createOrder(admin, org.id, fullInput(), NOW);
+
+    expect(await orderRow(created.id)).toMatchObject({
+      orderedByContactId: null,
+      orderedByFirmId: null,
+    });
+  });
+
+  it("5.6 getOrder_returns_link: koblet ordre gir id-ene, ukoblet gir null", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const firm = await createFirm(org.id);
+    const contact = await createContact(org.id, { firmId: firm.id });
+    const linked = await insertOrder(org.id, {
+      orderedByContactId: contact.id,
+      orderedByFirmId: firm.id,
+    });
+    const plain = await insertOrder(org.id);
+
+    expect(await getOrder(admin, org.id, linked.id)).toMatchObject({
+      orderedByContactId: contact.id,
+      orderedByFirmId: firm.id,
+    });
+    expect(await getOrder(admin, org.id, plain.id)).toMatchObject({
+      orderedByContactId: null,
+      orderedByFirmId: null,
+    });
+  });
+});
+
+describe("koble kontakter 6. tilgang per rolle på createOrder med kontakt", () => {
+  const DELETED = new Date("2026-11-01T08:00:00Z");
+
+  it("6.1 takstmann med innstillingen av får AccessDeniedError; ingen ordre", async () => {
+    const { org } = await orgWithAdmin();
+    await setInspectorsEditAll(org.id, false);
+    const { actor } = await person(org.id, ["inspector"]);
+    const contact = await createContact(org.id);
+    const before = await tableCounts();
+
+    await expect(
+      createOrder(actor, org.id, orderInput({ orderedByContactId: contact.id }), NOW),
+    ).rejects.toThrow(AccessDeniedError);
+
+    expect(await tableCounts()).toEqual(before);
+  });
+
+  it.each([
+    { name: "takstmann, innstillingen på", roles: ["inspector"] as EmployeeRole[], editAll: true },
+    { name: "kontor", roles: ["office"] as EmployeeRole[], editAll: false },
+    { name: "leder", roles: ["manager"] as EmployeeRole[], editAll: false },
+    { name: "admin, innstillingen på", roles: ["admin"] as EmployeeRole[], editAll: true },
+    // Admin stenges aldri ute (regel 11)
+    { name: "admin, innstillingen av", roles: ["admin"] as EmployeeRole[], editAll: false },
+  ])("6.2/6.3 $name kan legge inn ordre med kontakt", async ({ roles, editAll }) => {
+    const { org } = await orgWithAdmin();
+    await setInspectorsEditAll(org.id, editAll);
+    const { actor } = await person(org.id, roles);
+    const firm = await createFirm(org.id);
+    const contact = await createContact(org.id, { firmId: firm.id });
+
+    const created = await createOrder(
+      actor,
+      org.id,
+      orderInput({ orderedByContactId: contact.id }),
+      NOW,
+    );
+
+    expect(await orderRow(created.id)).toMatchObject({
+      orderedByContactId: contact.id,
+      orderedByFirmId: firm.id,
+    });
+  });
+
+  it("6.4 ansatt med slettet ansattkobling får AccessDeniedError; ingen ordre", async () => {
+    const { org } = await orgWithAdmin();
+    const { actor, employee } = await person(org.id, ["office"]);
+    await db.update(employees).set({ deletedAt: DELETED }).where(eq(employees.id, employee.id));
+    const contact = await createContact(org.id);
+    const before = await tableCounts();
+
+    await expect(
+      createOrder(actor, org.id, orderInput({ orderedByContactId: contact.id }), NOW),
+    ).rejects.toThrow(AccessDeniedError);
+
+    expect(await tableCounts()).toEqual(before);
+  });
+
+  it("6.5 ansatt i en annen organisasjon får AccessDeniedError i A, og A sin kontakt kan ikke brukes i B", async () => {
+    const { org } = await orgWithAdmin("Organisasjon A");
+    const contactA = await createContact(org.id);
+    const { admin: adminB, org: orgB } = await orgWithAdmin("Organisasjon B");
+    const before = await tableCounts();
+
+    await expect(
+      createOrder(adminB, org.id, orderInput({ orderedByContactId: contactA.id }), NOW),
+    ).rejects.toThrow(AccessDeniedError);
+    await expect(
+      createOrder(adminB, orgB.id, orderInput({ orderedByContactId: contactA.id }), NOW),
+    ).rejects.toThrow(ContactNotFoundError);
+
+    expect(await tableCounts()).toEqual(before);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 5. Bestilleren koblet til kontaktregisteret
+// (docs/funksjoner/fase2a-koble-kontakter-testplan.md avsnitt 5; tilgang per rolle for
+// `createOrder` med kontakt står i src/core/assignments/assignment-contact-link.test.ts 6).
+// `orderedByContactId` kommer i input; kjernen setter `orderedByFirmId` fra kontakten.
+// ---------------------------------------------------------------------------------------------
+
+describe("5. bestiller fra kontaktregisteret", () => {
+  const DELETED_AT = new Date("2026-11-01T08:00:00Z");
+
+  async function withContact(withFirm = true) {
+    const base = await orgWithAdmin();
+    const firm = withFirm ? await createFirm(base.org.id) : null;
+    const contact = await createContact(base.org.id, {
+      firstName: "Megler",
+      lastName: "Testesen",
+      email: "megler@example.com",
+      phone: "00000000",
+      firmId: firm?.id ?? null,
+    });
+    return { ...base, firm, contact };
+  }
+
+  it("5.1 createOrder_with_contact: kontakten og kontaktens firma lagres; revisjonsloggen har id-ene", async () => {
+    const s = await withContact();
+    const created = await createOrder(
+      s.admin,
+      s.org.id,
+      fullInput({ orderedByContactId: s.contact.id }),
+      NOW,
+    );
+
+    const row = await orderRow(created.id);
+    expect(row.orderedByContactId).toBe(s.contact.id);
+    expect(row.orderedByFirmId).toBe(s.firm!.id);
+    // Friteksten lagres som sendt (øyeblikksbilde)
+    expect(row.orderedByText).toBe(ORDERED_BY);
+
+    const audit = await auditFor(s.org.id);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.changes).toMatchObject({
+      orderedByContactId: s.contact.id,
+      orderedByFirmId: s.firm!.id,
+    });
+    const text = JSON.stringify([await eventsFor(s.org.id), audit]).replace(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+      "<id>",
+    );
+    for (const value of [ORDERED_BY, "Testesen", "megler@example.com", "00000000", "Testveien"]) {
+      expect(text, value).not.toContain(value);
+    }
+  });
+
+  it("5.1b orderedByFirmId fra input brukes aldri; firmaet følger kontakten", async () => {
+    const s = await withContact();
+    const otherFirm = await createFirm(s.org.id, { name: "Annet Firma AS" });
+    const created = await createOrder(
+      s.admin,
+      s.org.id,
+      orderInput({ orderedByContactId: s.contact.id, orderedByFirmId: otherFirm.id }),
+      NOW,
+    );
+    expect((await orderRow(created.id)).orderedByFirmId).toBe(s.firm!.id);
+  });
+
+  it("5.2 createOrder_contact_without_firm: firma null", async () => {
+    const s = await withContact(false);
+    const created = await createOrder(
+      s.admin,
+      s.org.id,
+      orderInput({ orderedByContactId: s.contact.id }),
+      NOW,
+    );
+    const row = await orderRow(created.id);
+    expect(row.orderedByContactId).toBe(s.contact.id);
+    expect(row.orderedByFirmId).toBeNull();
+  });
+
+  it("5.2b kontakt med slettet firma: firma null", async () => {
+    const s = await orgWithAdmin();
+    const firm = await createFirm(s.org.id, { deletedAt: DELETED_AT });
+    const contact = await createContact(s.org.id, { firmId: firm.id });
+    const created = await createOrder(
+      s.admin,
+      s.org.id,
+      orderInput({ orderedByContactId: contact.id }),
+      NOW,
+    );
+    const row = await orderRow(created.id);
+    expect(row.orderedByContactId).toBe(contact.id);
+    expect(row.orderedByFirmId).toBeNull();
+  });
+
+  it("5.3 createOrder_foreign_contact_throws_and_no_order (IDOR): ingen ordre, ingen hendelse, ingen revisjonsrad", async () => {
+    const s = await orgWithAdmin();
+    const orgB = await createOrganization("Organisasjon B");
+    const firmB = await createFirm(orgB.id);
+    const contactB = await createContact(orgB.id, { firmId: firmB.id });
+    const before = await tableCounts();
+
+    await expect(
+      createOrder(s.admin, s.org.id, fullInput({ orderedByContactId: contactB.id }), NOW),
+    ).rejects.toThrow(ContactNotFoundError);
+
+    expect(await tableCounts()).toEqual(before);
+    expect(await eventsFor(s.org.id)).toHaveLength(0);
+    expect(await auditFor(s.org.id)).toHaveLength(0);
+  });
+
+  it.each([
+    ["slettet kontakt i egen organisasjon", "deleted"],
+    ["ukjent uuid", "unknown"],
+  ] as const)("5.4 createOrder_deleted_contact_throws_and_no_order: %s", async (_name, kind) => {
+    const s = await orgWithAdmin();
+    const contactId =
+      kind === "deleted"
+        ? (await createContact(s.org.id, { deletedAt: DELETED_AT })).id
+        : randomUUID();
+    const before = await tableCounts();
+
+    await expect(
+      createOrder(s.admin, s.org.id, orderInput({ orderedByContactId: contactId }), NOW),
+    ).rejects.toThrow(ContactNotFoundError);
+
+    expect(await tableCounts()).toEqual(before);
+  });
+
+  it("5.5 createOrder_without_contact: som før, begge kolonnene null", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const created = await createOrder(admin, org.id, fullInput(), NOW);
+    const row = await orderRow(created.id);
+    expect(row.orderedByContactId).toBeNull();
+    expect(row.orderedByFirmId).toBeNull();
+    expect(row.orderedByText).toBe(ORDERED_BY);
+  });
+
+  it("5.6 getOrder_returns_link: koblet ordre gir id-ene, ukoblet gir null", async () => {
+    const s = await withContact();
+    const linked = await createOrder(
+      s.admin,
+      s.org.id,
+      orderInput({ orderedByContactId: s.contact.id }),
+      NOW,
+    );
+    const plain = await createOrder(s.admin, s.org.id, orderInput(), NOW);
+
+    expect(await getOrder(s.admin, s.org.id, linked.id)).toMatchObject({
+      orderedByContactId: s.contact.id,
+      orderedByFirmId: s.firm!.id,
+    });
+    expect(await getOrder(s.admin, s.org.id, plain.id)).toMatchObject({
+      orderedByContactId: null,
+      orderedByFirmId: null,
+    });
+  });
+
+  it("5.6b getOrder slår ikke opp kontakten: ingen navn, e-post eller telefon fra registeret i svaret", async () => {
+    const s = await withContact();
+    const linked = await createOrder(
+      s.admin,
+      s.org.id,
+      orderInput({ orderedByContactId: s.contact.id }),
+      NOW,
+    );
+    const text = JSON.stringify(await getOrder(s.admin, s.org.id, linked.id));
+    expect(text).not.toContain("Testesen");
+    expect(text).not.toContain("megler@example.com");
+  });
+
+  it("5.7 tenant-isolasjon: getOrder med kobling gir aldri en ordre eller kontakt fra en annen organisasjon", async () => {
+    const orderFor = new Map<string, string>();
+    const contactFor = new Map<string, string>();
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        const ids: Record<string, string[]> = {};
+        for (const grant of [grantA, grantB]) {
+          const firm = await createFirm(grant.organizationId);
+          const contact = await createContact(grant.organizationId, { firmId: firm.id });
+          const order = await insertOrder(grant.organizationId, {
+            orderedByContactId: contact.id,
+            orderedByFirmId: firm.id,
+          });
+          orderFor.set(grant.organizationId, order.id);
+          contactFor.set(grant.organizationId, contact.id);
+          ids[grant.organizationId] = [order.id];
+        }
+        return { a: ids[grantA.organizationId]!, b: ids[grantB.organizationId]! };
+      },
+      query: async (actor, organizationId) => {
+        const order = await getOrder(
+          actor,
+          organizationId,
+          orderFor.get(organizationId) ?? randomUUID(),
+        );
+        expect(order.orderedByContactId).toBe(contactFor.get(organizationId));
+        return [order];
+      },
+      idOf: (row) => row.id,
+    });
   });
 });

@@ -5,6 +5,7 @@ import { isUuid } from "@/shared/lib/uuid";
 import { errorResult, failure, type KnownError } from "../action-result";
 import { getEmployeeContext } from "../employee-context";
 import { NO_ACCESS, type FormState } from "../form-state";
+import { ContactNotFoundError } from "@/core/contacts";
 import {
   convertOrderToAssignment,
   createOrder,
@@ -23,10 +24,13 @@ import { parseOsloDateTimeLocal } from "./received-at";
 
 const ROUTE = "/ordre";
 
+const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
+
 /** Feilene fra kjernen som ordresidene viser med egen tekst. */
 const ORDER_ERRORS: readonly KnownError[] = [
   { error: OrderAlreadyHandledError, message: "Ordren er allerede behandlet." },
   { error: OfficeNotFoundError, field: "officeId", message: "Kontoret finnes ikke." },
+  { error: ContactNotFoundError, field: "orderedByContactId", message: CONTACT_NOT_FOUND },
 ];
 
 const ORDER_TEXT_FIELDS = [
@@ -34,6 +38,7 @@ const ORDER_TEXT_FIELDS = [
   "receivedAt",
   "externalRef",
   "orderedByText",
+  "orderedByContactId",
   "gnr",
   "bnr",
   "snr",
@@ -69,12 +74,18 @@ export async function createOrderAction(
   if (receivedAt === null) {
     return failure(previous, values, { receivedAt: "Skriv inn dato og klokkeslett." });
   }
+  // Bestilleren fra kontaktvelgeren. En id som ikke er uuid, kan ikke finnes; kjernen kalles ikke.
+  const orderedByContactId = optional(values.orderedByContactId) ?? null;
+  if (orderedByContactId !== null && !isUuid(orderedByContactId)) {
+    return failure(previous, values, { orderedByContactId: CONTACT_NOT_FOUND });
+  }
 
   const input = {
     addressText: (values.addressText ?? "").trim(),
     receivedAt: receivedAt?.toISOString(),
     externalRef: optional(values.externalRef),
     orderedByText: optional(values.orderedByText),
+    orderedByContactId,
     gnr: optional(values.gnr),
     bnr: optional(values.bnr),
     snr: optional(values.snr),

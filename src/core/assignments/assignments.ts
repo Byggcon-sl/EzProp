@@ -38,6 +38,10 @@ export type AssignmentPartyEntry = {
   receivesReport: boolean;
   receivesInvoice: boolean;
   receivesMessages: boolean;
+  /** Kontakten i registeret, eller `null`. Ren kolonne; navnet som vises er friteksten. */
+  contactId: string | null;
+  /** Firmaet fra kontakten da parten ble lagret, eller `null`. */
+  firmId: string | null;
 };
 
 export type AssignmentDetail = {
@@ -148,6 +152,8 @@ export async function getAssignment(
         receivesReport: assignmentParties.receivesReport,
         receivesInvoice: assignmentParties.receivesInvoice,
         receivesMessages: assignmentParties.receivesMessages,
+        contactId: assignmentParties.contactId,
+        firmId: assignmentParties.firmId,
       })
       .from(assignmentParties)
       .where(

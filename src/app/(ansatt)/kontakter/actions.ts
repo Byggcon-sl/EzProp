@@ -1,11 +1,14 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { AccessDeniedError } from "@/core/access";
+import { logger } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
 import { errorResult, failure, type KnownError } from "../action-result";
 import { getEmployeeContext } from "../employee-context";
 import { NO_ACCESS, type FormState } from "../form-state";
-import { createContact, FirmNotFoundError, updateContact } from "@/core/contacts";
+import { createContact, FirmNotFoundError, listContacts, updateContact } from "@/core/contacts";
+import { contactName } from "./contact-name";
 
 /*
  * Server actions i /kontakter. Ingen tilgangslogikk her: organisasjonen kommer fra
@@ -106,4 +109,53 @@ export async function updateContactAction(
     );
   }
   redirect(`${ROUTE}/${contactId}`);
+}
+
+/** Ett treff i kontaktvelgeren: bare det som fylles ut i skjemaet. */
+export type ContactHit = {
+  id: string;
+  name: string;
+  firmName: string | null;
+  email: string | null;
+  phone: string | null;
+};
+
+/** Søket starter først ved så mange tegn. */
+const MIN_SEARCH_LENGTH = 2;
+
+/** Kontaktvelgeren viser høyst så mange treff. */
+const MAX_SEARCH_HITS = 10;
+
+/**
+ * Søket i kontaktvelgeren (partene på oppdraget og bestilleren på ny ordre). Kaller den samme
+ * `listContacts` som /kontakter, så tilgangen (`organization.read`) og organisasjonen sjekkes i
+ * kjernen. Under 2 tegn gir ingen treff uten kall. Ingen tilgang eller en feil gir tom liste,
+ * aldri et unntak ut. Loggen får aldri søketeksten eller kontaktdata. Treffene sendes aldri til KI.
+ */
+export async function searchContactsAction(query: string): Promise<ContactHit[]> {
+  const text = typeof query === "string" ? query.trim() : "";
+  if (text.length < MIN_SEARCH_LENGTH) return [];
+
+  // Som de andre handlingene: uten innlogging sendes man til innloggingen (requireActor).
+  const context = await getEmployeeContext();
+  if (!context) return [];
+  try {
+    const rows = await listContacts(context.actor, context.organizationId, { query: text });
+    return rows.slice(0, MAX_SEARCH_HITS).map((row) => ({
+      id: row.id,
+      name: contactName(row),
+      firmName: row.firmName ?? null,
+      email: row.email ?? null,
+      phone: row.phone ?? null,
+    }));
+  } catch (error) {
+    if (!(error instanceof AccessDeniedError)) {
+      logger.error("Søk i kontakter feilet", {
+        route: ROUTE,
+        userId: context.actor.id,
+        errorName: error instanceof Error ? error.name : "ukjent feil",
+      });
+    }
+    return [];
+  }
 }

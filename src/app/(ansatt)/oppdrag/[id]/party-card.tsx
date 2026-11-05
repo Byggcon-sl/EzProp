@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useCallback, useState, type ReactNode } from "react";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
@@ -45,7 +46,8 @@ function RemovePartyForm({ partyId, action }: { partyId: string; action: Action 
 
 /**
  * Ett kort per part (samme visning i alle størrelser): rolle, navn, firma, e-post, telefon og hva
- * parten mottar. Med `canEdit` får kortet «Endre» (samme skjema som «Legg til part») og «Fjern».
+ * parten mottar. Er parten koblet til en kontakt, lenker kortet til kontakten i registeret (bare
+ * id-en brukes, navnet er friteksten på parten). Med `canEdit` får kortet «Endre» (samme skjema som «Legg til part») og «Fjern».
  */
 export function PartyCard({
   party,
@@ -92,6 +94,14 @@ export function PartyCard({
         <Detail label="Telefon">{party.phone || EMPTY}</Detail>
         <Detail label="Mottar">{receivesText(party)}</Detail>
       </dl>
+      {party.contactId && (
+        <Link
+          href={`/kontakter/${party.contactId}`}
+          className="mt-2 inline-flex min-h-11 items-center font-medium text-brand-700 underline"
+        >
+          Kontakt i registeret
+        </Link>
+      )}
       {canEdit && (
         <div className="mt-4 flex flex-wrap items-start gap-3">
           <Button variant="secondary" onClick={() => setEditing(true)}>

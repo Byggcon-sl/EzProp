@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isUuid } from "@/shared/lib/uuid";
 
 /*
  * Validering av ordreskjemaet og avvisningsgrunnen. Samme skjema brukes av kjernen og skjermene,
@@ -19,6 +20,7 @@ const RECEIVED_INVALID = "Mottatt må være en dato og et klokkeslett.";
 const NATIONAL_ID = "Fødselsnummer skal ikke lagres her.";
 const REASON = "Skriv inn en grunn.";
 const REASON_TOO_LONG = "Grunnen kan ha høyst 500 tegn.";
+const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
 
 /** Elleve sifre på rad ligner et fødselsnummer. Ti godtas (for eksempel telefonnummer med 0). */
 const ELEVEN_DIGITS = /\d{11}/;
@@ -145,6 +147,15 @@ export function orderInputSchema(now: Date) {
       .union([z.boolean(), z.string()])
       .nullish()
       .transform((value) => value === true || value === "on" || value === "true"),
+    /**
+     * Bestilleren i kontaktregisteret (valgfri). Tom, bare mellomrom og manglende blir `null`.
+     * Kjernen slår den opp og setter firmaet fra kontakten.
+     */
+    orderedByContactId: z
+      .string({ error: CONTACT_NOT_FOUND })
+      .nullish()
+      .transform(emptyToNull)
+      .refine((value) => value === null || isUuid(value), { error: CONTACT_NOT_FOUND }),
   });
 }
 export type OrderInput = z.input<ReturnType<typeof orderInputSchema>>;
