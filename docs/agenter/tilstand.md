@@ -9,7 +9,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 Sist oppdatert: 04.11.2026 (intern personvernerklæring og sletteregel for betadata, «Minimum før ekte data», PR mot `main`; før det 03.11.2026: PR #73 merget kl. 09:01 UTC; nøkkelboks steg 2 utsatt, A50, bekreftet i runde 2 av forhåndsvurderingen; PR #74 flyttet til `main` og flettet)
 Sist oppdatert: 04.11.2026 (PR #82 manuell ordre og oppdragsnummer merget kl. 17:14 UTC, fase 2a)
 
-**Pågår (05.11.2026):** fase 2a, team og parter på oppdraget er levert som PR #87 mot `main` (versjon 0.2.73, beslutninger A60–A63). Merges av merge-skriptet når CI er grønn. Neste: neste uavkryssede punkt i fase 2a.
+**Pågår (05.11.2026):** fase 2a, utstedende selskap fra ansvarlig takstmann er levert som PR mot `main` (versjon 0.2.75, beslutninger A65–A68). Merges av merge-skriptet når CI er grønn. Neste: neste uavkryssede punkt i fase 2a.
 
 ## Gjeldende fase
 
@@ -20,6 +20,8 @@ Gjeldende fase: **Fase 2a – Rapporten på PC** (fra 03.11.2026). Fase 0b er le
 Fase 1 – Prøve uten nett: Testskjemaet (PR #6), testmiljøet i Azure (PR #7), kandidat 1 PowerSync (PR #8) og kandidat 2 ElectricSQL (PR #10) er merget til `main`. Kandidat 3 egenbygd er merget til `main` i PR #13 (PR #12: agentene merger selv).
 
 ## Gjeldende oppgave
+
+**Levert: Utstedende selskap settes automatisk fra ansvarlig takstmann** (fase 2a, 05.11.2026; branch `fase2a-utstedende-selskap` fra `main`, versjon 0.2.75, PR mot `main`, merges av merge-skriptet når CI er grønn). Oppgavekort `docs/agenter/oppgaver/fase2a-utstedende-selskap.md`. Kolonnen `assignments.company_id`, regelen i `setTeamMember`, hendelsen `assignment.company_changed` med revisjonslogg, linjen på `/oppdrag/[id]`. Beslutninger A65–A68. Roller: forenkler, test-leder, sikkerhet-personvern, utvikler, testskriver. Små funn til senere: ekstra oppslag av `company_id` etter låsen i `team.ts`; e2e-hjelperen setter selskap på e2e-takstmannen med hardkodet navn fra seed; slettet selskap vises uten merke på oppdragssiden (A68).
 
 **Levert: Oppdrag med team og parter, og hva hver part mottar** (fase 2a, **PR #87**, merget 05.11.2026 med skriptet, CI grønn, versjon 0.2.73, A60–A63, oppgavekort `docs/funksjoner/fase2a-oppdrag-team-parter.md`). Sikkerhet-personvern kjørte ikke i arbeidsflyten (kvoten, reserven feilet igjen); prosjektlederen kjørte gjennomgangen i ettertid på opus: ett alvorlig funn i personvernerklæringen og tre små, rettet i `smafunn-pr87-personvern` sammen med reserven i `oppgave.js` (rollen beholdes, bare modellen byttes). Neste i fase 2a: «Utstedende selskap settes automatisk fra ansvarlig takstmann».
 
