@@ -759,6 +759,11 @@ test.describe("statusflyten på iPad (prosjektet ipad)", () => {
     );
     await expectNoHorizontalScroll(page, url);
 
+    // Kortet viser ett grunnskjema om gangen: lukk kanselleringen før «Tilbake til …»
+    await cancelForm(page).getByRole("button", { name: "Avbryt", exact: true }).click();
+    await expect(cancelForm(page)).toHaveCount(0);
+    await expect(statusButton(page, "Tilbake til Bestilt")).toBeVisible();
+
     await statusButton(page, "Tilbake til Bestilt").click();
     await expectAtLeast44(
       backForm(page).getByRole("button", { name: "Lagre", exact: true }),
