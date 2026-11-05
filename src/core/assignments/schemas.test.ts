@@ -243,6 +243,22 @@ describe("2.7 fødselsnummer", () => {
     },
   );
 
+  it.each([
+    ["name", "123456 78901"],
+    ["name", "123456-78901"],
+    ["firmName", "12.34.56 789 01"],
+  ])("%s «%s» med skilletegn gir «Fødselsnummer skal ikke lagres her.»", (field, value) => {
+    expectFieldMessage({ [field]: value }, field, NATIONAL_ID);
+  });
+
+  it("grunnen «Ferie 123456 78901» med mellomrom gir «Fødselsnummer skal ikke lagres her.»", () => {
+    expect(reasonSchema().safeParse("Ferie 123456 78901").success).toBe(false);
+  });
+
+  it("to tall med tekst mellom slås ikke sammen", () => {
+    expectAccepted({ name: "Megler 00000 og 000000", firmName: "Testmegling 2026 AS 0000000" });
+  });
+
   it("10 sifre på rad godtas i navn og firma", () => {
     expectAccepted({ name: "Megler 0000000000", firmName: "Testmegling 0000000000 AS" });
   });
