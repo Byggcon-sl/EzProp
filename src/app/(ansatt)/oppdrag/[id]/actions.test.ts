@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ZodError } from "zod";
 import { AccessDeniedError } from "@/core/access";
 import { EmployeeNotFoundError } from "@/core/assignments/errors";
 import { partyInputSchema } from "@/core/assignments/schemas";
@@ -43,6 +44,7 @@ const mocks = vi.hoisted(() => ({
     addParty: vi.fn(),
     updateParty: vi.fn(),
     removeParty: vi.fn(),
+    setAssignmentSchedule: vi.fn(),
   },
   properties: {
     getAssignmentProperty: vi.fn(),
@@ -74,6 +76,7 @@ const {
   removePartyAction,
   savePropertyAction,
   saveCommonAreasAction,
+  setScheduleAction,
 } = await import("./actions");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
@@ -860,4 +863,102 @@ describe("8. kobling til kontakt på partene", () => {
       expect(logged).not.toContain("Testmegling");
     },
   );
+});
+
+/*
+ * «Befaring og frist» (docs/funksjoner/fase2a-arbeidsko-testplan.md avsnitt 3.1). Feltene
+ * `inspectionAt` (datetime-local, norsk tid) og `dueDate` (dato) sendes som tekst til kjernen;
+ * tomt felt tømmer verdien. Støtter hovedmål: reklamasjoner (frist og befaring står på oppdraget,
+ * aldri i feil organisasjon).
+ */
+describe("befaring og frist", () => {
+  function scheduleForm(overrides: Record<string, string> = {}) {
+    return form({
+      assignmentId: ASSIGNMENT,
+      inspectionAt: "2026-11-06T09:00",
+      dueDate: "2026-11-10",
+      ...overrides,
+    });
+  }
+
+  beforeEach(() => {
+    mocks.core.setAssignmentSchedule.mockResolvedValue({
+      id: ASSIGNMENT,
+      number: "2026-00001",
+      inspectionAt: null,
+      dueDate: null,
+    });
+  });
+
+  it("getEmployeeContext gir null → NO_ACCESS uten kall til kjernen", async () => {
+    mocks.getEmployeeContext.mockResolvedValue(null);
+    const state = await failed(setScheduleAction(initialFormState, scheduleForm()));
+    expect(state.message).toBe(NO_ACCESS);
+    expect(coreCalls()).toBe(0);
+  });
+
+  it.each(["ikke-en-id", "1 or 1=1", "../x", ""])(
+    "oppdrags-id «%s» → NO_ACCESS uten kall",
+    async (id) => {
+      const state = await failed(
+        setScheduleAction(initialFormState, scheduleForm({ assignmentId: id })),
+      );
+      expect(state.message).toBe(NO_ACCESS);
+      expect(coreCalls()).toBe(0);
+    },
+  );
+
+  it("organisasjonen kommer fra konteksten, og bare de to feltene sendes", async () => {
+    const state = await run(
+      setScheduleAction(initialFormState, scheduleForm({ organizationId: OTHER_ORG })),
+    );
+    expect(state).toEqual({ fieldErrors: {}, message: null, values: {}, attempt: 1 });
+    expect(mocks.core.setAssignmentSchedule).toHaveBeenCalledWith(actor, ORG, ASSIGNMENT, {
+      inspectionAt: "2026-11-06T09:00",
+      dueDate: "2026-11-10",
+    });
+  });
+
+  it("tomme felt sendes som tom tekst (kjernen tømmer verdiene)", async () => {
+    await run(setScheduleAction(initialFormState, scheduleForm({ inspectionAt: "", dueDate: "" })));
+    expect(mocks.core.setAssignmentSchedule).toHaveBeenCalledWith(actor, ORG, ASSIGNMENT, {
+      inspectionAt: "",
+      dueDate: "",
+    });
+  });
+
+  it("AccessDeniedError → NO_ACCESS", async () => {
+    mocks.core.setAssignmentSchedule.mockRejectedValue(new AccessDeniedError());
+    const state = await failed(setScheduleAction(initialFormState, scheduleForm()));
+    expect(state.message).toBe(NO_ACCESS);
+  });
+
+  it("ZodError → melding ved feltet og verdiene beholdes", async () => {
+    const error = new ZodError([
+      {
+        code: "custom",
+        path: ["dueDate"],
+        message: "Skriv en gyldig dato for fristen.",
+        input: "",
+      },
+    ]);
+    mocks.core.setAssignmentSchedule.mockRejectedValue(error);
+    const state = await failed(
+      setScheduleAction(initialFormState, scheduleForm({ dueDate: "2026-13-40" })),
+    );
+    expect(state.fieldErrors.dueDate).toBe("Skriv en gyldig dato for fristen.");
+    expect(state.message).toBe(FIX_FIELDS);
+    expect(state.values.dueDate).toBe("2026-13-40");
+  });
+
+  it("ukjent feil → UNKNOWN_ERROR, loggen har bare id-er og feilnavn", async () => {
+    const boom = new Error("databasen sa nei til 2026-11-06T09:00");
+    boom.name = "OppdiktetFeil";
+    mocks.core.setAssignmentSchedule.mockRejectedValue(boom);
+    const state = await failed(setScheduleAction(initialFormState, scheduleForm()));
+    expect(state.message).toBe(UNKNOWN_ERROR);
+    const logged = loggedWithoutIds();
+    expect(logged).toContain("OppdiktetFeil");
+    expect(logged).not.toContain("2026-11-06T09:00");
+  });
 });

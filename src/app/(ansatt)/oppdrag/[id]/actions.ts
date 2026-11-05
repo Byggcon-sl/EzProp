@@ -17,6 +17,7 @@ import {
   EmployeeNotFoundError,
   PARTY_ROLES,
   removeParty,
+  setAssignmentSchedule,
   setTeamMember,
   TEAM_ROLES,
   updateParty,
@@ -32,7 +33,7 @@ import {
 } from "@/core/properties";
 
 /*
- * Server actions på oppdragssiden (status, team, parter, eiendom og fellesdeler). Ingen tilgangslogikk her: organisasjonen
+ * Server actions på oppdragssiden (status, befaring og frist, team, parter, eiendom og fellesdeler). Ingen tilgangslogikk her: organisasjonen
  * kommer fra `getEmployeeContext()`, og kjernen sjekker rettigheten. Et felt `organizationId` i
  * skjemaet leses aldri. Id-er som ikke er uuid stoppes før kjernen kalles. Loggen får bare rute,
  * bruker-id, id-er og feilnavn, aldri navn, firma, e-post, telefon, grunn, adresse, matrikkel,
@@ -426,5 +427,34 @@ export async function saveCommonAreasAction(
     );
   }
   refresh();
+  return saved(previous);
+}
+
+const SCHEDULE_FIELDS = ["inspectionAt", "dueDate"] as const;
+
+/**
+ * «Lagre» i kortet «Befaring og frist» (A100). Tomt felt tømmer verdien. Klokkeslettet fra
+ * `datetime-local` sendes som tekst og tolkes i norsk tid i kjernen.
+ */
+export async function setScheduleAction(
+  previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const assignmentId = String(formData.get("assignmentId") ?? "");
+  const values = readFields(formData, SCHEDULE_FIELDS);
+  const context = await getEmployeeContext();
+  if (!context || !isUuid(assignmentId)) return failure(previous, values, {}, NO_ACCESS);
+
+  try {
+    await setAssignmentSchedule(context.actor, context.organizationId, assignmentId, values);
+  } catch (error) {
+    return errorResult(error, previous, values, {
+      route: `${ROUTE}/[id]`,
+      userId: context.actor.id,
+      assignmentId,
+    });
+  }
+  refresh();
+  revalidatePath("/arbeidskoe");
   return saved(previous);
 }

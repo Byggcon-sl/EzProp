@@ -5,9 +5,10 @@ const tones = {
   neutral: "bg-slate-100 text-slate-700",
   brand: "bg-brand-50 text-brand-700",
   warning: "bg-amber-50 text-amber-900",
+  danger: "bg-red-50 text-red-800",
 } as const;
 
-/** Lite merke (rolle, «Sluttet», «Forsikring utløpt»). Teksten bærer alltid meningen, ikke fargen. */
+/** Lite merke (rolle, «Sluttet», «Forsikring utløpt», «Forfalt»). Teksten bærer alltid meningen, ikke fargen. */
 export function Badge({
   tone = "neutral",
   children,
