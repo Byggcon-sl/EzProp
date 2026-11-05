@@ -81,5 +81,6 @@ Alle filer (bilder, PDF-er, dokumenter, senere logo og signatur) lagres og hente
 - Data i EU/EØS. Byggcon er behandlingsansvarlig. Databehandleravtaler med alle leverandører, også KI (EU/EØS, ingen trening på våre data).
 - Ingen kundeopplysninger i logg, repo eller testdata. Loggeren vasker e-post, telefon og nøkler.
 - Revisjonslogg på alle endringer. Myk sletting. Oppbevaring 10 år.
+- Adresse, gårds- og bruksnummer, seksjonsnummer, andels- eller aksjenummer og forretningsfører på eiendommen peker på én bestemt bolig og er personopplysninger. De sendes ikke til KI uten at det er vurdert i personvernerklæringen og har databehandleravtale.
 - Tidsmåling bare samlet til de ansatte har sagt ja (arbeidsmiljøloven kap. 9). Ståle drøfter med de ansatte.
 - Sikkerhetshoder på alle svar (`src/shared/config/security-headers.ts`).

@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
 import { db } from "@/db/client";
 import {
@@ -51,7 +51,7 @@ export type AssignmentDetail = {
    * selskap vises, fordi det var det som gjaldt. Tomt når oppdraget ikke har selskap.
    */
   companyName: string | null;
-  /** Merket «Rettet» (A72): Ferdig og sendt på nytt med versjon 2 eller høyere. Regnes ut. */
+  /** Merket «Rettet» (A77): Ferdig og sendt på nytt med versjon 2 eller høyere. Regnes ut. */
   corrected: boolean;
   /** Aktive rader, i rekkefølgen i `TEAM_ROLES`. */
   team: AssignmentTeamEntry[];
@@ -97,7 +97,7 @@ export async function getAssignment(
     .leftJoin(
       orders,
       and(
-        eq(orders.id, assignments.orderId),
+        or(eq(orders.id, assignments.orderId), eq(orders.assignmentId, assignments.id)),
         eq(orders.organizationId, orgId),
         isNull(orders.deletedAt),
       ),
@@ -109,6 +109,7 @@ export async function getAssignment(
         isNull(assignments.deletedAt),
       ),
     )
+    .orderBy(asc(orders.createdAt), asc(orders.id))
     .limit(1);
   if (!assignment) throw new AccessDeniedError();
 
@@ -179,7 +180,7 @@ export async function getAssignment(
   );
 
   // Utgivelsene finnes ikke ennå, så versjonen er alltid tom og «Rettet» alltid usant. Kobles
-  // til `report_releases` i planpunktet «Utgivelser med versjon» (A72).
+  // til `report_releases` i planpunktet «Utgivelser med versjon» (A77).
   const corrected = isCorrected({ status: assignment.status, highestSentReleaseVersion: null });
 
   return { ...assignment, corrected, team, parties, teamCandidates };

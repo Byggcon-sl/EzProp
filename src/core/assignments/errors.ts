@@ -26,7 +26,7 @@ export class AssignmentTransitionNotAllowedError extends Error {
   }
 }
 
-/** Bare oppdrag som er Bestilt eller Under arbeid kan kanselleres (A71). Ingenting er endret. */
+/** Bare oppdrag som er Bestilt eller Under arbeid kan kanselleres (A76). Ingenting er endret. */
 export class AssignmentCannotBeCancelledError extends Error {
   constructor() {
     super("Et oppdrag som er Ferdig eller Fakturert kan ikke kanselleres.");

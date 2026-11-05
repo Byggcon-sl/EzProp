@@ -398,6 +398,7 @@ Neste nummer hentes med lås i databasen, slik at to kontorer aldri får samme n
 - **Gjør om til oppdrag** låser ordreraden (`FOR UPDATE`) før status og kontor sjekkes og før nummeret hentes. Da får to samtidige forsøk på samme ordre ett oppdrag, og den som taper, bruker ikke opp et nummer.
 - **Hendelser og revisjonslogg:** `order.received` (`{ orderId, source }`), `order.rejected` (`{ orderId }`), `assignment.created` (`{ number, orderId }`); revisjonslogg `order` med `create`, `reject` og `convert`, og `assignment` med `create`. Ingen adresse, bestiller, matrikkel eller borettslag i hendelser eller logg; raden er kilden.
 
+**Venter (egne planpunkter):** `ordered_by_contact_id`/`ordered_by_firm_id` (kontakter og firma; til da `ordered_by_text`), `raw_payload` (e-post-til-ordre og API), og på oppdraget `external_ref`, `company_id`, `client_agreement_id`, `report_profile_id`, `status_changed_at`, `inspection_at`, `due_date`, `cancelled_reason` og `internal_note`. De legges til når planpunktene som bruker dem, bygges (samme mønster som A17), fordi ingen skjerm bruker dem nå. Statusflyten videre fra `ordered` kommer med oppdragslisten. En ordre kan ikke endres etter at den er lagret (A55). Eiendom og matrikkel som egne tabeller, med `assignments.property_id`, kom 05.11.2026 (se «Bygget i fase 2a» i 4.4); adresse og matrikkel på ordren står fortsatt som tekst og brukes til forhåndsutfylling.
 **Bygget i fase 2a (05.11.2026, utstedende selskap):** Kolonnen `assignments.company_id` og regelen i `setTeamMember` (`src/core/assignments/team.ts`). Oppgavekort: `docs/agenter/oppgaver/fase2a-utstedende-selskap.md`; beslutningene A65–A68.
 
 - **`company_id`** (kan være tom) med sammensatt fremmednøkkel `(organization_id, company_id)` til `companies` (`assignments_company_fk`), så selskapet alltid hører til samme organisasjon.
@@ -407,9 +408,9 @@ Neste nummer hentes med lås i databasen, slik at to kontorer aldri får samme n
 - **Visning:** `getAssignment` gir `companyName` (`companies.legal_name`, også et slettet selskap). Oppdragssiden viser «Utstedende selskap: …», eller «Ikke satt» med forklaring.
 - **Venter:** kopi til rapporten (`reports.company_id`) ved publisering, advarsel før publisering når selskap mangler, visning av selskapshistorikk.
 
-**Bygget i fase 2a (05.11.2026, statusflyten):** Overgangene i `src/core/assignments/status-flow.ts`, tjenestene `changeAssignmentStatus` og `cancelAssignment` i `src/core/assignments/status.ts`, og kortet «Status» på `/oppdrag/[id]`. Ingen migrering. Oppgavekort: `docs/funksjoner/fase2a-statusflyt.md`; beslutningene A69–A72.
+**Bygget i fase 2a (05.11.2026, statusflyten):** Overgangene i `src/core/assignments/status-flow.ts`, tjenestene `changeAssignmentStatus` og `cancelAssignment` i `src/core/assignments/status.ts`, og kortet «Status» på `/oppdrag/[id]`. Ingen migrering. Oppgavekort: `docs/funksjoner/fase2a-statusflyt.md`; beslutningene A74–A77.
 
-- **Lovlige overganger** (A69): ett steg fram uten grunn, ett steg tilbake med grunn (1–500 tegn), ingen hopp. Tabellen er fast i kode med testsaker (ikke fagregler, så ikke malmotoren):
+- **Lovlige overganger** (A74): ett steg fram uten grunn, ett steg tilbake med grunn (1–500 tegn), ingen hopp. Tabellen er fast i kode med testsaker (ikke fagregler, så ikke malmotoren):
 
   | Fra | Fram (uten grunn) | Tilbake (med grunn) | Kanseller (med grunn) |
   |---|---|---|---|
@@ -418,14 +419,14 @@ Neste nummer hentes med lås i databasen, slik at to kontorer aldri får samme n
   | Ferdig | Fakturert | Under arbeid | nei |
   | Fakturert | – | Ferdig | nei |
 
-- **«Ferdig» settes for hånd** til «Send»-knappen finnes; da settes den av `report.sent` (A70).
+- **«Ferdig» settes for hånd** til «Send»-knappen finnes; da settes den av `report.sent` (A75).
 - **Statusendring** skjer i én transaksjon: raden låses (`FOR UPDATE`, bare ikke slettet), statusen må være den skjermen viste (ellers «Statusen er endret av noen andre»), og overgangen sjekkes. Hendelse `assignment.status_changed` med `{ from, to, reason? }`; grunnen ved tilbake står bare i hendelsen. Revisjonslogg `assignment` med `update` og `changes.status { from, to }`.
-- **Kansellering** (A71) bare fra Bestilt og Under arbeid, med grunn, som myk sletting (`deleted_at`, `deleted_by`). Statusen beholdes som den var. Grunnen står bare i hendelsen `assignment.cancelled` med `{ status, reason }`. Revisjonslogg `assignment` med `delete`. Ordren beholder `converted` og `assignment_id`; ordresiden viser «(kansellert)».
-- **«Rettet»** (A72) regnes ut og lagres ikke: `isCorrected` er sann når status er `completed` og høyeste sendte utgivelse har versjon 2 eller høyere. Til utgivelsene (`report_releases`) finnes, gir `getAssignment` alltid `corrected: false`.
-- **Ingen nye kolonner:** `status_changed_at` og `cancelled_reason` lages ikke nå; tidspunktet og grunnen står i hendelsene (A72). De kan legges til når arbeidskøen eller papirkurven trenger raske oppslag.
+- **Kansellering** (A76) bare fra Bestilt og Under arbeid, med grunn, som myk sletting (`deleted_at`, `deleted_by`). Statusen beholdes som den var. Grunnen står bare i hendelsen `assignment.cancelled` med `{ status, reason }`. Revisjonslogg `assignment` med `delete`. Ordren beholder `converted` og `assignment_id`; ordresiden viser «(kansellert)».
+- **«Rettet»** (A77) regnes ut og lagres ikke: `isCorrected` er sann når status er `completed` og høyeste sendte utgivelse har versjon 2 eller høyere. Til utgivelsene (`report_releases`) finnes, gir `getAssignment` alltid `corrected: false`.
+- **Ingen nye kolonner:** `status_changed_at` og `cancelled_reason` lages ikke nå; tidspunktet og grunnen står i hendelsene (A77). De kan legges til når arbeidskøen eller papirkurven trenger raske oppslag.
 - **Venter:** automatisk status fra hendelser (befaring startet, `report.sent`, faktura sendt), angre kansellering (papirkurv), «På vent», visning av hendelsene på oppdragssiden.
 
-**Venter (egne planpunkter):** `ordered_by_contact_id`/`ordered_by_firm_id` (kontakter og firma; til da `ordered_by_text`), eiendom og matrikkel som egne tabeller (A51; adresse og matrikkel er tekst på ordren til da), `raw_payload` (e-post-til-ordre og API), og på oppdraget `external_ref`, `company_id`, `property_id`, `client_agreement_id`, `report_profile_id`, `status_changed_at`, `inspection_at`, `due_date`, `cancelled_reason` og `internal_note`. De legges til når planpunktene som bruker dem, bygges (samme mønster som A17), fordi ingen skjerm bruker dem nå. Statusflyten er bygget 05.11.2026 (se over); `status_changed_at` og `cancelled_reason` venter (A72). En ordre kan ikke endres etter at den er lagret (A55).
+**Venter (egne planpunkter):** `ordered_by_contact_id`/`ordered_by_firm_id` (kontakter og firma; til da `ordered_by_text`), eiendom og matrikkel som egne tabeller (A51; adresse og matrikkel er tekst på ordren til da), `raw_payload` (e-post-til-ordre og API), og på oppdraget `external_ref`, `company_id`, `property_id`, `client_agreement_id`, `report_profile_id`, `status_changed_at`, `inspection_at`, `due_date`, `cancelled_reason` og `internal_note`. De legges til når planpunktene som bruker dem, bygges (samme mønster som A17), fordi ingen skjerm bruker dem nå. Statusflyten er bygget 05.11.2026 (se over); `status_changed_at` og `cancelled_reason` venter (A77). En ordre kan ikke endres etter at den er lagret (A55).
 
 **`assignment_team_members`** – oppdragsteamet. Historikken beholdes, så overlevering kan spores.
 
@@ -444,6 +445,8 @@ Det kan bare være én aktiv ansvarlig om gangen.
 - **Én aktiv person per rolle per oppdrag** (A61), også for befaringstakstmann og sidemann: unik delvis indeks `(organization_id, assignment_id, team_role) WHERE to_at IS NULL AND deleted_at IS NULL`. Samme ansatt kan ha flere roller.
 - **Bytte** avslutter den aktive raden (`to_at`, valgfri grunn) og lager en ny; ingenting skrives over eller slettes. Oppdragsraden låses (`FOR UPDATE`) først, så samtidige bytter går etter hverandre. Bare ansatte som ikke er slettet og ikke har sluttet, kan velges.
 - **Hendelse** `assignment.team_changed` med `{ teamRole, fromEmployeeId, toEmployeeId }`; revisjonslogg `assignment_team_member` med `end` og `create`. Grunnen står bare på raden.
+- **Eiendommen (05.11.2026):** `assignments.property_id` (valgfri, sammensatt fremmednøkkel `(organization_id, property_id)` til `properties`). Høyst én eiendom per oppdrag, og hvert oppdrag har sin egen nå (A70). Se «Bygget i fase 2a» i 4.4.
+- **Venter:** visning av tidligere teammedlemmer på skjermen, team-sjekk for endring når `access.inspectors_edit_all` er av (A63), utstedende selskap fra ansvarlig (neste planpunkt).
 - **Venter:** visning av tidligere teammedlemmer på skjermen, team-sjekk for endring når `access.inspectors_edit_all` er av (A63), utstedende selskap fra ansvarlig (bygget 05.11.2026, se `assignments` over).
 
 **`client_agreements`** – avtale med oppdragsgiver (for eksempel Fremtind).
@@ -534,6 +537,16 @@ Eieren er en part på oppdraget (`assignment_parties`, rolle `seller`), ikke et 
 | `notes` | Hva som er sett av fellesdelene, og hvordan |
 
 Hvilke kontrollpunkter som gjelder leilighet og fellesdeler, styres av **regler** i malen (betingelse på boligtype og eierform, se 4.5). Da trengs ingen egen mal for leilighet.
+
+**Bygget i fase 2a (05.11.2026, eiendom og matrikkel på oppdraget):** Tabellene `properties`, `cadastral_units` og `common_areas` (`src/db/schema/properties.ts`, `cadastral-units.ts`, `common-areas.ts`, migrering `0016`), kjernen i `src/core/properties` og delene «Eiendom» og «Fellesdeler» på `/oppdrag/[id]`. Oppgavekort: `docs/funksjoner/fase2a-eiendom-matrikkel.md`; beslutningene A69–A73.
+
+- **`properties`** har `baseColumns`, `address` (påkrevd), `postal_code`, `city`, `municipality_number`, `municipality_name`, `housing_type` (CHECK med de åtte kodene), `ownership_form` (CHECK med de fire kodene, uten obligasjonsleilighet, A69) og `data_source` (bare `manual`). Unik indeks `(organization_id, id)`.
+- **`cadastral_units`** har `property_id` (sammensatt fremmednøkkel `(organization_id, property_id)`), `gnr`, `bnr` (påkrevd), `fnr`, `snr`, `association_name`, `association_org_number` og `share_number`. Tabellen tåler flere rader; skjermen viser og lagrer den eldste (A70).
+- **`common_areas`** har `assignment_id` (sammensatt fremmednøkkel til `assignments`, A71), `managing_agent`, `condition_report_status` og `maintenance_plan_status` (`yes`/`no`/`unknown`, standard `unknown`) og `notes`. Én aktiv rad per oppdrag (unik delvis indeks der `deleted_at is null`).
+- **Fellesdeler** gjelder når `hasCommonAreas` er sann: boligtype leilighet, eller eierform eierseksjon, borettslag eller aksje (A72). Ellers avviser kjernen lagring (`CommonAreasNotApplicableError`) og gir `commonAreas = null`; raden slettes ikke og vises igjen hvis eiendommen igjen får fellesdeler.
+- **Forhåndsutfylling:** uten eiendom fylles skjemaet fra ordren (adresse som én tekst, gnr, bnr, seksjonsnummer, borettslag; A73). En myk-slettet eiendom regnes som at eiendom mangler; lagring lager da en ny og flytter `assignments.property_id`.
+- **Hendelser og revisjonslogg:** `assignment.property_saved` (`{ propertyId, created }`), `assignment.common_areas_saved` (`{ commonAreasId, created }`); revisjonslogg `property`, `cadastral_unit` og `common_areas` med `create`/`update`, bare id-er, kodene og navnene på endrede felt. Aldri adresse, matrikkelnummer, borettslag, andelsnummer, forretningsfører eller notater.
+- **Venter:** oppslag mot eiendomsdata (`overridden_fields`, `latitude`, `longitude`, flere `data_source`), søk og gjenbruk av eiendom på flere oppdrag (A70), flere matrikkelrader på skjermen, `unit_number`, `plot_area`, `association_firm_id` (kontaktregisteret), `common_areas.report_id` (når rapporten bygges, A71), og regler som bruker boligtype og eierform.
 
 **`report_buildings`** – bygningene på eiendommen, per rapport.
 
@@ -1263,6 +1276,8 @@ Gyldig verdi er et heltall fra 1 til og med 100 (år). Mangler nøkkelen, brukes
 | `assignment.team_changed` | Person satt, byttet eller fjernet i en rolle i teamet (fase 2a) |
 | `assignment.company_changed` | Utstedende selskap endret fordi ansvarlig takstmann ble satt, byttet eller fjernet (fase 2a), med `fromCompanyId` og `toCompanyId` |
 | `assignment.party_added` / `assignment.party_updated` / `assignment.party_removed` | Part lagt til / endret / fjernet (fase 2a) |
+| `assignment.property_saved` | Eiendommen på oppdraget lagt inn eller endret (fase 2a), `{ propertyId, created }` |
+| `assignment.common_areas_saved` | Fellesdelene på oppdraget lagt inn eller endret (fase 2a), `{ commonAreasId, created }` |
 | `inspection.scheduled` | Befaring avtalt (booket) |
 | `inspection.rescheduled` | Befaring flyttet |
 | `inspection.cancelled` | Befaring avlyst |
@@ -1858,7 +1873,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Status | `assignments.status` | Kort liste: fire statuser fra 27.10.2026 |
 | Merket «Rettet» | – | Regnes ut fra `report_releases` (versjon 2 eller høyere er sendt) |
 | Bestilt / under arbeid / ferdig / fakturert | `ordered` / `in_progress` / `completed` / `invoiced` | `ASSIGNMENT_STATUSES`, `assignmentStatusLabel` |
-| Rettet | `corrected` (`isCorrected`, `src/core/assignments/status-flow.ts`) | Merket under «Ferdig» for en rapport som er rettet og sendt på nytt. Ingen egen status; regnes ut fra utgivelsene og lagres ikke (A72) |
+| Rettet | `corrected` (`isCorrected`, `src/core/assignments/status-flow.ts`) | Merket under «Ferdig» for en rapport som er rettet og sendt på nytt. Ingen egen status; regnes ut fra utgivelsene og lagres ikke (A77) |
 | Hendelse | `events` | Lang liste |
 | Hendelsestype | `EventType`, `EVENT_TYPES` (`src/core/events/types.ts`) | Faste koder for hendelsene i 4.9. Står bare der; en kode endres aldri |
 | Hvem gjorde det (hendelse) | `events.actor_type` | `employee` (ansatt), `system` (systemet selv) eller `integration` (tilkobling) |
@@ -1904,13 +1919,22 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Serverlogg | `server log` (`serverLog`) | Loggen i App Service. Innloggingskoden til første admin skrives der til e-post er satt opp |
 | Rapportprofil | `report_profiles` | Utseende på PDF |
 | Premissetekst / forutsetninger | `premise_text` | |
-| Eiendom | `properties` | |
-| Matrikkel | `cadastral_units` | gnr, bnr, fnr, snr |
+| Eiendom | `properties`, `property` | Adresse, kommune, boligtype og eierform. Én per oppdrag nå (A70), `assignments.property_id` |
+| Matrikkel | `cadastral_units`, `cadastral_unit` | gnr, bnr, fnr, snr, borettslag, organisasjonsnummer og andelsnummer. Skjermen viser én rad (A70) |
+| Festenummer | `fnr` | Del av matrikkelen, bare sifre |
 | Bruksenhetsnummer | `unit_number` | |
-| Boligtype | `housing_type` | |
-| Eierform | `ownership_form` | |
+| Boligtype | `housing_type`, `HOUSING_TYPES`, `housingTypeLabel` | Åtte faste koder (`src/core/properties/codes.ts`) |
+| Eierform | `ownership_form`, `OWNERSHIP_FORMS`, `ownershipFormLabel` | Fire faste koder; obligasjonsleilighet ikke med (A69) |
 | Selveiet / eierseksjon / borettslagsandel / aksjeleilighet | `freehold` / `section` / `cooperative` / `share` | Godkjent 27.10.2026 (D15) |
-| Fellesdeler | `common_areas` | |
+| Borettslag, sameie eller boligaksjeselskap (navn) | `association_name` | Tekst på matrikkelraden til «Kontakter og firma» kommer |
+| Andelsnummer / aksjenummer | `share_number` | Sifre og bindestrek, høyst 20 tegn |
+| Kilde for eiendomsdata | `data_source` | Bare `manual` nå; senere et oppslag |
+| Fellesdeler | `common_areas` | Per oppdrag til rapportene finnes (A71). Vises når `hasCommonAreas` er sann (A72) |
+| Har fellesdeler | `hasCommonAreas` | Sann for leilighet, eierseksjon, borettslag og aksjeleilighet (A72) |
+| Forretningsfører | `managing_agent` | Fritekst på fellesdelene |
+| Ja / Nei / Vet ikke | `yes` / `no` / `unknown`, `YES_NO_UNKNOWN` | Svar om tilstandsrapport og vedlikeholdsplan for fellesdelene |
+| Fellesdeler gjelder ikke | `CommonAreasNotApplicableError` | Oppdraget har ingen eiendom med fellesdeler. Ingenting lagres |
+| Eiendom lagret / fellesdeler lagret | `assignment.property_saved` / `assignment.common_areas_saved` | Hendelser med bare id-er og `created` |
 | Bygning | `report_buildings` | Per rapport |
 | Hovedbygg | `is_main` | |
 | Byggeår | `build_year` | |
@@ -2135,5 +2159,6 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 03.11.2026 | `employee_permissions`: ingen indeks som begynner med `organization_id`, bare den delvise unike `(employee_id, permission) WHERE deleted_at IS NULL`, fordi alle spørringer (`findGrant`, `selectAdminEmployees`) går via `employee_id`. Må vurderes på nytt hvis en spørring filtrerer på organisasjon uten ansatt (nattløkken punkt 19). | `docs/agenter/oppgaver/fase0b-smafunn-r-s.md` |
 | 04.11.2026 | Manuell ordre og oppdragsnummer (fase 2a): `orders`, `assignments` (minimal) og `number_sequences` bygget; `orders` med `gnr`, `bnr`, `snr`, `housing_association_name`, `seller_declaration_received` og `ordered_by_text` til eiendom og kontakter kommer; `orders.source` bare `manual` og `email`; fremmednøkkel fra `events.assignment_id` (A33). Se «Bygget i fase 2a» i 4.3. | A51–A55, `docs/funksjoner/fase2a-manuell-ordre.md` |
 | 04.11.2026 | Team og parter på oppdraget (fase 2a): `assignment_team_members` og `assignment_parties` (enkel utgave med fritekst, fem roller, tre mottar-valg) bygget; nye hendelser `assignment.team_changed` og `assignment.party_added`/`_updated`/`_removed`. `contact_id`, `firm_id`, `receives_survey`, `is_primary`, `client` og `other` venter. Se «Bygget i fase 2a» i 4.2 og 4.3. | A60–A63, `docs/funksjoner/fase2a-oppdrag-team-parter.md` |
+| 05.11.2026 | Eiendom og matrikkel på oppdraget (fase 2a): `properties`, `cadastral_units` og `common_areas` (per oppdrag til rapporten finnes) bygget, og `assignments.property_id`; eierform uten obligasjonsleilighet; `hasCommonAreas` styrer fellesdelene; nye hendelser `assignment.property_saved` og `assignment.common_areas_saved`. Oppslag, gjenbruk av eiendom, `unit_number`, `plot_area` og `association_firm_id` venter. Se «Bygget i fase 2a» i 4.4. | A69–A73, `docs/funksjoner/fase2a-eiendom-matrikkel.md` |
 | 05.11.2026 | Utstedende selskap (fase 2a): `assignments.company_id` med sammensatt fremmednøkkel til `companies`, satt automatisk fra ansvarlig takstmann i `setTeamMember`; ny hendelse `assignment.company_changed`. Ingen utfylling bakover. Se «Bygget i fase 2a» i 4.3. | A65–A68, `docs/agenter/oppgaver/fase2a-utstedende-selskap.md` |
-| 05.11.2026 | Statusflyten (fase 2a): lovlige overganger (ett steg fram, ett steg tilbake med grunn, ingen hopp), kansellering fra Bestilt og Under arbeid som myk sletting med grunn i hendelsen `assignment.cancelled`, grunnen ved tilbake i `assignment.status_changed`. «Rettet» regnes ut (`isCorrected`) og lagres ikke. Ingen migrering; `status_changed_at` og `cancelled_reason` venter. Se «Bygget i fase 2a» i 4.3. | A69–A72, `docs/funksjoner/fase2a-statusflyt.md` |
+| 05.11.2026 | Statusflyten (fase 2a): lovlige overganger (ett steg fram, ett steg tilbake med grunn, ingen hopp), kansellering fra Bestilt og Under arbeid som myk sletting med grunn i hendelsen `assignment.cancelled`, grunnen ved tilbake i `assignment.status_changed`. «Rettet» regnes ut (`isCorrected`) og lagres ikke. Ingen migrering; `status_changed_at` og `cancelled_reason` venter. Se «Bygget i fase 2a» i 4.3. | A74–A77, `docs/funksjoner/fase2a-statusflyt.md` |

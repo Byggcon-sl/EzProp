@@ -12,10 +12,11 @@ import {
 import { baseColumns } from "./common";
 import { orders } from "./orders";
 import { companies, offices } from "./organization-structure";
+import { properties } from "./properties";
 
 /**
  * Oppdraget (docs/05-domenemodell.md 4.3), minimalt i fase 2a (A54): nummer, kontor, type,
- * status, koblingen til ordren og utstedende selskap. Eiendom, ekstern referanse, statusflyt
+ * status, koblingen til ordren, utstedende selskap og eiendommen. Ekstern referanse, statusflyt
  * og frister legges til av planpunktene som bruker dem.
  *
  * `number` lages bare på serveren fra nummerserien (`nextAssignmentNumber`, D9) og er unikt per
@@ -29,6 +30,8 @@ export const assignments = pgTable(
     officeId: uuid("office_id").notNull(),
     /** Ordren oppdraget ble laget fra. Tom når oppdraget lages direkte (senere). */
     orderId: uuid("order_id"),
+    /** Eiendommen. Høyst én per oppdrag, og hvert oppdrag har sin egen nå (A70). Tom til den er lagt inn. */
+    propertyId: uuid("property_id"),
     assignmentType: text("assignment_type").notNull().default("condition_report"),
     status: text("status").notNull().default("ordered"),
     /**
@@ -60,6 +63,12 @@ export const assignments = pgTable(
       name: "assignments_order_fk",
       columns: [table.organizationId, table.orderId],
       foreignColumns: [orders.organizationId as AnyPgColumn, orders.id as AnyPgColumn],
+    }),
+    // Eiendommen må høre til samme organisasjon som oppdraget
+    foreignKey({
+      name: "assignments_property_fk",
+      columns: [table.organizationId, table.propertyId],
+      foreignColumns: [properties.organizationId, properties.id],
     }),
     check(
       "assignments_assignment_type_check",

@@ -1,7 +1,7 @@
 import { ASSIGNMENT_STATUSES, type AssignmentStatus } from "./codes";
 
 /*
- * Statusflyten for oppdrag (A69, A71, A72). Rene funksjoner uten database, så de kan kjøre både
+ * Statusflyten for oppdrag (A74, A76, A77). Rene funksjoner uten database, så de kan kjøre både
  * på iPaden og på serveren. Rekkefølgen er `ASSIGNMENT_STATUSES`: ett steg fram uten grunn, ett
  * steg tilbake med grunn, ingen hopp. Tabellen er låst med testsaker i `status-flow.test.ts`.
  */
@@ -37,7 +37,7 @@ export function transitionKind(
 }
 
 /**
- * Om oppdraget kan kanselleres (A71). Bare fra Bestilt og Under arbeid. Et levert eller fakturert
+ * Om oppdraget kan kanselleres (A76). Bare fra Bestilt og Under arbeid. Et levert eller fakturert
  * oppdrag skal stå synlig i 10 år og kan få reklamasjon.
  */
 export function canCancel(status: AssignmentStatus): boolean {
@@ -45,7 +45,7 @@ export function canCancel(status: AssignmentStatus): boolean {
 }
 
 /**
- * Merket «Rettet» (A72): oppdraget er Ferdig, og den høyeste sendte utgivelsen har versjon 2
+ * Merket «Rettet» (A77): oppdraget er Ferdig, og den høyeste sendte utgivelsen har versjon 2
  * eller høyere. Regnes ut, lagres ikke.
  */
 export function isCorrected(input: {

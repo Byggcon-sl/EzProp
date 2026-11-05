@@ -94,7 +94,7 @@ export async function getOrder(actor: Actor, organizationId: string, orderId: st
       ),
     );
   if (!row) throw new AccessDeniedError();
-  // Kansellert oppdrag (myk sletting, A71): nummeret vises fortsatt, uten lenke. Uten oppdrag: false.
+  // Kansellert oppdrag (myk sletting, A76): nummeret vises fortsatt, uten lenke. Uten oppdrag: false.
   const { assignmentDeletedAt, ...order } = row;
   return { ...order, assignmentCancelled: assignmentDeletedAt !== null };
 }

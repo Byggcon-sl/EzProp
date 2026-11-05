@@ -20,6 +20,8 @@ export const EVENT_TYPES = [
   "assignment.party_added",
   "assignment.party_updated",
   "assignment.party_removed",
+  "assignment.property_saved",
+  "assignment.common_areas_saved",
   "inspection.scheduled",
   "inspection.rescheduled",
   "inspection.cancelled",

@@ -27,7 +27,7 @@ import {
 import { canCancel, transitionKind } from "./status-flow";
 
 /*
- * Statusflyten og kansellering (A69–A72). Begge krever `assignment.edit` og filtrerer på
+ * Statusflyten og kansellering (A74–A77). Begge krever `assignment.edit` og filtrerer på
  * `grant.organizationId`. Én transaksjon: oppdraget låses (`FOR UPDATE`, bare ikke slettet),
  * statusen sjekkes mot `expectedStatus` (ellers konflikt), og endring, hendelse og revisjonslogg
  * lagres sammen. Grunnen står bare i hendelsen, aldri i revisjonsloggen. Ingenting slettes
@@ -125,7 +125,7 @@ export async function changeAssignmentStatus(
 }
 
 /**
- * Kansellerer oppdraget (myk sletting, A71): bare fra Bestilt og Under arbeid, grunn påkrevd.
+ * Kansellerer oppdraget (myk sletting, A76): bare fra Bestilt og Under arbeid, grunn påkrevd.
  * Statusen beholdes. Ordren, teamet og partene røres ikke.
  */
 export async function cancelAssignment(

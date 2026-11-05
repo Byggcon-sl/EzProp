@@ -80,7 +80,7 @@ export const teamChangeReasonSchema = optionalText(300, REASON_TOO_LONG).refine(
 });
 
 /*
- * Statusflyten (A69, A71). Grunnen er påkrevd ved ett steg tilbake og ved kansellering, og
+ * Statusflyten (A74, A76). Grunnen er påkrevd ved ett steg tilbake og ved kansellering, og
  * valgfri ellers. Den lagres bare i hendelsen, aldri i revisjonsloggen.
  */
 
