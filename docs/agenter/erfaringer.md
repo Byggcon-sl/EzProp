@@ -183,3 +183,7 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Reserven når kvoten er brukt opp, virket fortsatt ikke: den kjørte uten rolletype og arvet samme modell. Rettet slik at rollen beholdes og bare modellen byttes. Ble rollen likevel ikke kjørt, kjører prosjektlederen gjennomgangen selv før neste oppgave.
 - Nye tabeller med personopplysninger skal føres i `docs/personvern/intern-personvernerklaering.md` i samme PR. Ta det med i oppgavekortet når en tabell har navn, e-post eller telefon.
 - Hjelpetekster for fritekst må ikke foreslå helseopplysninger («sykdom»).
+
+## 05.11.2026 – PR #89 (utstedende selskap)
+
+- Reserven til opus slo fortsatt ikke inn for sikkerhet-personvern i gjennomgangen (bare én «started» i journalen). Inntil årsaken er funnet: kjør sikkerhetsgjennomgangen for hånd etter hver arbeidsflyt der rollen feilet, før neste oppgave.
