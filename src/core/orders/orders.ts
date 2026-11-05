@@ -82,6 +82,7 @@ export async function getOrder(actor: Actor, organizationId: string, orderId: st
       rejectedReason: orders.rejectedReason,
       assignmentId: orders.assignmentId,
       assignmentNumber: assignments.number,
+      assignmentDeletedAt: assignments.deletedAt,
     })
     .from(orders)
     .leftJoin(assignments, assignmentJoin(grant.organizationId))
@@ -93,7 +94,9 @@ export async function getOrder(actor: Actor, organizationId: string, orderId: st
       ),
     );
   if (!row) throw new AccessDeniedError();
-  return row;
+  // Kansellert oppdrag (myk sletting, A71): nummeret vises fortsatt, uten lenke. Uten oppdrag: false.
+  const { assignmentDeletedAt, ...order } = row;
+  return { ...order, assignmentCancelled: assignmentDeletedAt !== null };
 }
 
 /**

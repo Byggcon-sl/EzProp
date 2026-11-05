@@ -158,6 +158,7 @@ const LIST_KEYS = [
 
 const DETAIL_KEYS = [
   "addressText",
+  "assignmentCancelled",
   "assignmentId",
   "assignmentNumber",
   "bnr",
