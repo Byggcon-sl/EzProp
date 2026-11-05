@@ -27,6 +27,13 @@ const EXPECTED_EVENT_TYPES = [
   "assignment.party_removed",
   "assignment.property_saved",
   "assignment.common_areas_saved",
+  "assignment.building_saved",
+  "assignment.building_removed",
+  "assignment.floor_saved",
+  "assignment.floor_removed",
+  "assignment.floor_area_saved",
+  "assignment.room_saved",
+  "assignment.room_removed",
   "inspection.scheduled",
   "inspection.rescheduled",
   "inspection.cancelled",
@@ -54,8 +61,8 @@ const EXPECTED_EVENT_TYPES = [
 ];
 
 describe("hendelseskodene", () => {
-  it("1. har nøyaktig de 42 kodene fra domenemodellen 4.9", () => {
-    expect(EXPECTED_EVENT_TYPES).toHaveLength(42);
+  it("1. har nøyaktig de 49 kodene fra domenemodellen 4.9", () => {
+    expect(EXPECTED_EVENT_TYPES).toHaveLength(49);
     expect([...EVENT_TYPES].sort()).toEqual([...EXPECTED_EVENT_TYPES].sort());
   });
 

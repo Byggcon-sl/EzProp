@@ -97,6 +97,8 @@ export type AssignmentBuildings = {
   hasProperty: boolean;
   /** Aktive ansatte i organisasjonen, til «Målt av». */
   employees: EmployeeOption[];
+  /** Den innloggede ansatte, forhåndsvalgt i «Målt av». */
+  currentEmployeeId: string;
   buildings: BuildingDetail[];
   sum: AreaSum;
 };
@@ -478,7 +480,13 @@ export async function getAssignmentBuildings(
     };
   });
 
-  return { hasProperty, employees: employeeRows, buildings, sum: sumAssignmentArea(buildings) };
+  return {
+    hasProperty,
+    employees: employeeRows,
+    currentEmployeeId: grant.employeeId,
+    buildings,
+    sum: sumAssignmentArea(buildings),
+  };
 }
 
 /**

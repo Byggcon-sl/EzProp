@@ -73,6 +73,14 @@ CREATE TABLE "rooms" (
 	CONSTRAINT "rooms_area_type_check" CHECK ("rooms"."area_type" in ('bra_i', 'bra_e', 'bra_b'))
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX "report_buildings_organization_id_id_idx" ON "report_buildings" USING btree ("organization_id","id");--> statement-breakpoint
+CREATE INDEX "report_buildings_organization_id_assignment_id_idx" ON "report_buildings" USING btree ("organization_id","assignment_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "floors_organization_id_id_idx" ON "floors" USING btree ("organization_id","id");--> statement-breakpoint
+CREATE INDEX "floors_organization_id_report_building_id_idx" ON "floors" USING btree ("organization_id","report_building_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "floor_areas_organization_id_id_idx" ON "floor_areas" USING btree ("organization_id","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "floor_areas_active_floor_idx" ON "floor_areas" USING btree ("organization_id","floor_id") WHERE "floor_areas"."deleted_at" is null;--> statement-breakpoint
+CREATE UNIQUE INDEX "rooms_organization_id_id_idx" ON "rooms" USING btree ("organization_id","id");--> statement-breakpoint
+CREATE INDEX "rooms_organization_id_floor_id_idx" ON "rooms" USING btree ("organization_id","floor_id");--> statement-breakpoint
 ALTER TABLE "report_buildings" ADD CONSTRAINT "report_buildings_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "report_buildings" ADD CONSTRAINT "report_buildings_assignment_fk" FOREIGN KEY ("organization_id","assignment_id") REFERENCES "public"."assignments"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "floors" ADD CONSTRAINT "floors_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -81,12 +89,4 @@ ALTER TABLE "floor_areas" ADD CONSTRAINT "floor_areas_organization_id_organizati
 ALTER TABLE "floor_areas" ADD CONSTRAINT "floor_areas_floor_fk" FOREIGN KEY ("organization_id","floor_id") REFERENCES "public"."floors"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "floor_areas" ADD CONSTRAINT "floor_areas_measured_by_fk" FOREIGN KEY ("organization_id","measured_by") REFERENCES "public"."employees"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "rooms" ADD CONSTRAINT "rooms_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "rooms" ADD CONSTRAINT "rooms_floor_fk" FOREIGN KEY ("organization_id","floor_id") REFERENCES "public"."floors"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "report_buildings_organization_id_id_idx" ON "report_buildings" USING btree ("organization_id","id");--> statement-breakpoint
-CREATE INDEX "report_buildings_organization_id_assignment_id_idx" ON "report_buildings" USING btree ("organization_id","assignment_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "floors_organization_id_id_idx" ON "floors" USING btree ("organization_id","id");--> statement-breakpoint
-CREATE INDEX "floors_organization_id_report_building_id_idx" ON "floors" USING btree ("organization_id","report_building_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "floor_areas_organization_id_id_idx" ON "floor_areas" USING btree ("organization_id","id");--> statement-breakpoint
-CREATE UNIQUE INDEX "floor_areas_active_floor_idx" ON "floor_areas" USING btree ("organization_id","floor_id") WHERE "floor_areas"."deleted_at" is null;--> statement-breakpoint
-CREATE UNIQUE INDEX "rooms_organization_id_id_idx" ON "rooms" USING btree ("organization_id","id");--> statement-breakpoint
-CREATE INDEX "rooms_organization_id_floor_id_idx" ON "rooms" USING btree ("organization_id","floor_id");
+ALTER TABLE "rooms" ADD CONSTRAINT "rooms_floor_fk" FOREIGN KEY ("organization_id","floor_id") REFERENCES "public"."floors"("organization_id","id") ON DELETE no action ON UPDATE no action;

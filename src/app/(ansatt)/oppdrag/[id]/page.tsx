@@ -226,6 +226,16 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
 
       <PropertySection assignmentId={assignment.id} data={propertyData} canEdit={canEdit} />
 
+      <p className="-mt-4 mb-8">
+        <Link
+          href={`/oppdrag/${assignment.id}/bygninger`}
+          className="inline-flex min-h-11 items-center font-medium text-brand-700 underline-offset-4 hover:underline"
+        >
+          Bygninger, areal og rom
+          <span aria-hidden="true">&nbsp;›</span>
+        </Link>
+      </p>
+
       <section aria-labelledby="team-heading" className="mb-8">
         <h2 id="team-heading" className="mb-3 text-xl font-semibold text-slate-900">
           Team
