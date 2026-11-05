@@ -391,8 +391,8 @@ function sentInput(name: "addPartyAction" | "updatePartyAction") {
 
 describe("8 kobling til kontakt", () => {
   describe.each(PARTY_ACTIONS)("%s", (name, action, make) => {
-    it.each(["abc", "1 or 1=1", "../x"])(
-      "invalid_contactId_field_error_no_core_call: «%s» → feil ved feltet uten kall",
+    it.each(["abc", "1", "1 or 1=1", "../x"])(
+      "8.1 invalid_contactId_field_error_no_core_call: «%s» → feil ved feltet uten kall",
       async (contactId) => {
         const state = await failed(action(initialFormState, make({ contactId })));
         expect(state.fieldErrors.contactId).toBe(CONTACT_NOT_FOUND);
@@ -400,7 +400,7 @@ describe("8 kobling til kontakt", () => {
       },
     );
 
-    it("ContactNotFoundError_becomes_field_error: feil ved feltet, ikke 500, og ingen logg", async () => {
+    it("8.2 ContactNotFoundError_becomes_field_error: feil ved feltet, ikke 500, og ingen logg", async () => {
       CORE_FOR_ACTION[name].mockRejectedValue(new ContactNotFoundError());
       const state = await failed(action(initialFormState, make({ contactId: CONTACT_ID })));
       expect(state.fieldErrors.contactId).toBe(CONTACT_NOT_FOUND);
@@ -440,7 +440,17 @@ describe("8 kobling til kontakt", () => {
       expect(sentInput(name).contactId).toBeNull();
     });
 
-    it("logger_never_gets_form_values_or_query: ukjent feil med kontakt logges uten verdier", async () => {
+    it("8.1d firmId fra skjemaet sendes aldri til kjernen (firmaet følger kontakten)", async () => {
+      await run(
+        action(
+          initialFormState,
+          make({ contactId: CONTACT_ID, firmId: "0190a000-0000-7000-8000-000000000091" }),
+        ),
+      );
+      expect(sentInput(name)).not.toHaveProperty("firmId");
+    });
+
+    it("8.6 logger_never_gets_form_values_or_query: ukjent feil med kontakt logges uten verdier", async () => {
       const boom = new Error(`databasen sa nei til ${PARTY_NAME} ${EMAIL} ${PHONE} ${FIRM}`);
       boom.name = "OppdiktetFeil";
       CORE_FOR_ACTION[name].mockRejectedValue(boom);
@@ -758,106 +768,4 @@ describe("eiendom og fellesdeler: handlingene", () => {
       for (const value of PROPERTY_PERSONAL) expect(logged, value).not.toContain(value);
     });
   });
-});
-
-/*
- * Koble partene til kontaktregisteret (docs/funksjoner/fase2a-koble-kontakter-testplan.md
- * avsnitt 8). Skjemaet sender det skjulte feltet `contactId` (tom verdi = ingen kobling). En
- * verdi som ikke er uuid gir feltfeilen «Kontakten finnes ikke.» uten kall til kjernen;
- * `ContactNotFoundError` fra kjernen vises ved feltet. Testdata er oppdiktet.
- *
- * Støtter hovedmål: tid (feilen står ved søkefeltet) og reklamasjoner (aldri en kobling til en
- * kontakt som ikke finnes, aldri navn, e-post eller telefon i loggen).
- */
-
-describe("8. kobling til kontakt på partene", () => {
-  const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
-  const CONTACT_ID = "0190a000-0000-7000-8000-000000000090";
-
-  const PARTY_ACTIONS = [
-    ["addPartyAction", addPartyAction, addForm],
-    ["updatePartyAction", updatePartyAction, updateForm],
-  ] as const;
-
-  /** Det handlingen sendte til kjernen (fjerde argument). */
-  function inputOf(name: "addPartyAction" | "updatePartyAction") {
-    return CORE_FOR_ACTION[name].mock.calls[0]?.[3] as Record<string, unknown> | undefined;
-  }
-
-  it.each(
-    PARTY_ACTIONS.flatMap(([name, action, make]) =>
-      ["abc", "1", "1 or 1=1", "../x"].map((value) => [name, value, action, make] as const),
-    ),
-  )(
-    "8.1 invalid_contactId_field_error_no_core_call: %s med contactId «%s» gir feltfeil uten kall",
-    async (_name, value, action, make) => {
-      const state = await failed(action(initialFormState, make({ contactId: value })));
-      expect(Object.values(state.fieldErrors)).toContain(CONTACT_NOT_FOUND);
-      expect(coreCalls()).toBe(0);
-    },
-  );
-
-  it.each(PARTY_ACTIONS)(
-    "8.1b %s: gyldig contactId sendes til kjernen sammen med friteksten",
-    async (name, action, make) => {
-      await run(action(initialFormState, make({ contactId: CONTACT_ID })));
-      expect(CORE_FOR_ACTION[name]).toHaveBeenCalledTimes(1);
-      expect(inputOf(name)).toMatchObject({
-        contactId: CONTACT_ID,
-        name: PARTY_NAME,
-        email: EMAIL,
-        phone: PHONE,
-      });
-    },
-  );
-
-  it.each(PARTY_ACTIONS)(
-    "8.1c %s: tom contactId betyr ingen kobling (sendes som tom/null)",
-    async (name, action, make) => {
-      await run(action(initialFormState, make({ contactId: "" })));
-      expect(CORE_FOR_ACTION[name]).toHaveBeenCalledTimes(1);
-      const contactId = inputOf(name)?.contactId;
-      expect(contactId === undefined || contactId === null || contactId === "").toBe(true);
-    },
-  );
-
-  it.each(PARTY_ACTIONS)(
-    "8.1d %s: firmId fra skjemaet sendes aldri til kjernen (firmaet følger kontakten)",
-    async (name, action, make) => {
-      await run(
-        action(
-          initialFormState,
-          make({ contactId: CONTACT_ID, firmId: "0190a000-0000-7000-8000-000000000091" }),
-        ),
-      );
-      expect(inputOf(name)).not.toHaveProperty("firmId");
-    },
-  );
-
-  it.each(PARTY_ACTIONS)(
-    "8.2 ContactNotFoundError_becomes_field_error: %s viser «Kontakten finnes ikke.» ved feltet, ingen logglinje",
-    async (name, action, make) => {
-      CORE_FOR_ACTION[name].mockRejectedValue(new ContactNotFoundError());
-      const state = await failed(action(initialFormState, make({ contactId: CONTACT_ID })));
-      expect(Object.values(state.fieldErrors)).toContain(CONTACT_NOT_FOUND);
-      expect(state.message).not.toBe(UNKNOWN_ERROR);
-      expect(mocks.logError).not.toHaveBeenCalled();
-    },
-  );
-
-  it.each(PARTY_ACTIONS)(
-    "8.6 logger_never_gets_form_values: %s med kontakt og ukjent feil logger bare id-er og feilnavn",
-    async (name, action, make) => {
-      const boom = new Error(`databasen sa nei til ${PARTY_NAME} ${EMAIL} ${PHONE} ${FIRM}`);
-      boom.name = "OppdiktetFeil";
-      CORE_FOR_ACTION[name].mockRejectedValue(boom);
-
-      const state = await failed(action(initialFormState, make({ contactId: CONTACT_ID })));
-      expect(state.message).toBe(UNKNOWN_ERROR);
-      const logged = loggedWithoutIds();
-      expect(logged).toContain("OppdiktetFeil");
-      for (const value of PERSONAL_VALUES) expect(logged, value).not.toContain(value);
-      expect(logged).not.toContain("Testmegling");
-    },
-  );
 });

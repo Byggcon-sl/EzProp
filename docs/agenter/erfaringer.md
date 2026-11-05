@@ -194,3 +194,8 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Når `main` får flere PR-er mens en oppgave er i arbeid, må migreringen og A-numrene renummereres ved hver fletting (her tre ganger). Sjekk høyeste migrering og høyeste A-nummer på `origin/main` rett før PR-en åpnes.
 - Lokale databaser med en migrering som senere ble renummerert, må bygges på nytt (tøm `public` og `drizzle`, og fjern publikasjonene `powersync` og `electric_publication_default`), ellers feiler `pnpm db:migrate`.
 - Tilfeldige id-er (uuid) skal ikke stå i fritekst som går gjennom fødselsnummersjekken (11 sifre på rad gir ustabile tester). Fjern sifrene eller bruk faste navn.
+
+## 05.11.2026 – PR #97 (koble kontakter)
+
+- Merge-skriptet merger alle klare PR-er, også de en annen kjøring jobber med. PR #97 ble merget mens arbeidsflyten fortsatt rettet funn fra gjennomgangen, så siste commit kom ikke med. Regel videre: arbeidsflyten åpner PR-en først når gjennomgangen og rettingene er ferdige (slik den gjør), og etter en omstart sjekkes `origin/main` for en merget PR fra branchen før noe annet.
+- Å gjenoppta arbeidsflyten med `resumeFromRunId` etter en omstart feilet: planleggingssteget kjørte på nytt og ga ingen biter. Når bare sjekker og PR gjenstår, er det raskere å fullføre for hånd.
