@@ -303,7 +303,6 @@ const SETTINGS = [
 const MATRIX = SETTINGS.flatMap((s) => ROLE_CASES.map((r) => ({ ...r, ...s })));
 const WRITE_ALLOWED = MATRIX.filter((c) => c.editAll || c.roles[0] !== "inspector");
 
-
 /** Id-ene i loggen er tilfeldige og kan inneholde «998» eller «1111»; fjern dem før sjekken av verdier. */
 function withoutUuids(text: string): string {
   return text.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "");
