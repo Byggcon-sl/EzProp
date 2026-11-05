@@ -3,7 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AccessDeniedError } from "@/core/access";
 import {
+  allowedTransitions,
+  ASSIGNMENT_STATUSES,
   assignmentStatusLabel,
+  canCancel,
   defaultReceives,
   getAssignment,
   PARTY_ROLES,
@@ -12,25 +15,28 @@ import {
   teamRoleLabel,
 } from "@/core/assignments";
 import { isUuid } from "@/shared/lib/uuid";
-import { Badge } from "@/shared/ui/badge";
 import { Card } from "@/shared/ui/card";
 import { getEmployeeContext } from "../../employee-context";
 import { NoAccess } from "../../no-access";
 import {
   addPartyAction,
+  cancelAssignmentAction,
+  changeStatusAction,
   removePartyAction,
   setTeamMemberAction,
   updatePartyAction,
 } from "./actions";
 import { PartyCard } from "./party-card";
 import { AddPartySection, type PartyRoleOption } from "./party-form";
+import { StatusCard, type StatusOption } from "./status-card";
 import { TeamMemberForm } from "./team-form";
 
 export const metadata: Metadata = { title: "Oppdrag" };
 
 /**
- * Oppdraget med team (fem roller) og parter. Skjemaene vises bare med `canEditOrders`; selve
- * sjekken skjer i kjernen. Ugyldig, ukjent, slettet og fremmed id gir «Fant ikke siden».
+ * Oppdraget med status, team (fem roller) og parter. Skjemaene vises bare med `canEditOrders`;
+ * selve sjekken skjer i kjernen. Ugyldig, ukjent, slettet (også kansellert) og fremmed id gir
+ * «Fant ikke siden».
  */
 export default async function AssignmentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -47,6 +53,11 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
   }
 
   const canEdit = context.canEditOrders;
+  // Statusen er alltid en av de fire kodene (CHECK i databasen); ukjent kode gir ingen knapper.
+  const status = ASSIGNMENT_STATUSES.find((code) => code === assignment.status) ?? null;
+  const { next, previous } = status ? allowedTransitions(status) : { next: null, previous: null };
+  const option = (code: typeof next): StatusOption | null =>
+    code ? { value: code, label: assignmentStatusLabel(code) } : null;
   const roles: PartyRoleOption[] = PARTY_ROLES.map((role) => ({
     value: role,
     label: partyRoleLabel(role),
@@ -68,8 +79,20 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         <h1 className="text-2xl font-semibold text-slate-900">
           Oppdrag <span className="tabular-nums">{assignment.number}</span>
         </h1>
-        <Badge tone="brand">{assignmentStatusLabel(assignment.status)}</Badge>
       </div>
+      <StatusCard
+        key={assignment.status}
+        assignmentId={assignment.id}
+        status={assignment.status}
+        statusLabel={assignmentStatusLabel(assignment.status)}
+        corrected={assignment.corrected}
+        canEdit={canEdit}
+        next={option(next)}
+        previous={option(previous)}
+        cancellable={status !== null && canCancel(status)}
+        changeAction={changeStatusAction}
+        cancelAction={cancelAssignmentAction}
+      />
       <p className="text-slate-600">Kontor: {assignment.officeName}</p>
       <div className="mb-6">
         <p className="break-words text-slate-600">
