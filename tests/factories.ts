@@ -8,7 +8,9 @@ import {
   assignments,
   assignmentTeamMembers,
   auditLog,
+  cadastralUnits,
   certifications,
+  commonAreas,
   companies,
   employeePermissions,
   employeeRoleAssignments,
@@ -19,6 +21,7 @@ import {
   offices,
   orders,
   organizations,
+  properties,
   users,
   type EmployeeRole,
 } from "@/db/schema";
@@ -31,9 +34,12 @@ import { todayInOslo } from "@/shared/lib/dates";
 export const RESET_TABLES = [
   "number_sequences",
   "orders",
+  "common_areas",
+  "cadastral_units",
   "assignment_team_members",
   "assignment_parties",
   "assignments",
+  "properties",
   "certifications",
   "trial_photos",
   "trial_answers",
@@ -502,5 +508,132 @@ export async function createAssignmentParty(
     })
     .returning();
   if (!row) throw new Error("kunne ikke opprette part");
+  return row;
+}
+
+type PropertyOverrides = {
+  /** Oppdraget som skal peke på eiendommen (`assignments.property_id`). */
+  assignmentId?: string;
+  address?: string;
+  postalCode?: string | null;
+  city?: string | null;
+  municipalityNumber?: string | null;
+  municipalityName?: string | null;
+  housingType?: string;
+  ownershipForm?: string;
+  dataSource?: string;
+  gnr?: string;
+  bnr?: string;
+  fnr?: string | null;
+  snr?: string | null;
+  associationName?: string | null;
+  associationOrgNumber?: string | null;
+  shareNumber?: string | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/**
+ * En eiendom (`properties`) med én matrikkelrad (`cadastral_units`), satt inn direkte uten
+ * tilgangssjekk og uten Zod. Standard: enebolig, selveier, «Testveien 1», lagt inn for hånd,
+ * gnr/bnr 999. Med `assignmentId` settes `assignments.property_id` på oppdraget. Kodene er fri
+ * tekst, så testene kan vise at databasen avviser ukjente koder. Oppdiktede data.
+ */
+export async function createProperty(organizationId: string, overrides: PropertyOverrides = {}) {
+  const [property] = await db
+    .insert(properties)
+    .values({
+      organizationId,
+      address: overrides.address ?? "Testveien 1",
+      postalCode: overrides.postalCode ?? null,
+      city: overrides.city ?? null,
+      municipalityNumber: overrides.municipalityNumber ?? null,
+      municipalityName: overrides.municipalityName ?? null,
+      housingType: (overrides.housingType ??
+        "detached") as typeof properties.$inferInsert.housingType,
+      ownershipForm: (overrides.ownershipForm ??
+        "freehold") as typeof properties.$inferInsert.ownershipForm,
+      dataSource: (overrides.dataSource ?? "manual") as typeof properties.$inferInsert.dataSource,
+      deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
+    })
+    .returning();
+  if (!property) throw new Error("kunne ikke opprette eiendom");
+  const [cadastralUnit] = await db
+    .insert(cadastralUnits)
+    .values({
+      organizationId,
+      propertyId: property.id,
+      gnr: overrides.gnr ?? "999",
+      bnr: overrides.bnr ?? "999",
+      fnr: overrides.fnr ?? null,
+      snr: overrides.snr ?? null,
+      associationName: overrides.associationName ?? null,
+      associationOrgNumber: overrides.associationOrgNumber ?? null,
+      shareNumber: overrides.shareNumber ?? null,
+    })
+    .returning();
+  if (!cadastralUnit) throw new Error("kunne ikke opprette matrikkelrad");
+  if (overrides.assignmentId) {
+    await db
+      .update(assignments)
+      .set({ propertyId: property.id })
+      .where(
+        and(
+          eq(assignments.id, overrides.assignmentId),
+          eq(assignments.organizationId, organizationId),
+        ),
+      );
+  }
+  return { property, cadastralUnit };
+}
+
+type CommonAreasOverrides = {
+  assignmentId?: string;
+  managingAgent?: string | null;
+  conditionReportStatus?: string;
+  maintenancePlanStatus?: string;
+  notes?: string | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/**
+ * Fellesdelene på et oppdrag (`common_areas`), satt inn direkte uten tilgangssjekk og uten Zod.
+ * Uten `assignmentId` lages et oppdrag med en leilighet i borettslag i samme organisasjon.
+ * Standard: ingen forretningsfører, ingen notater, «vet ikke» på begge spørsmålene. Kodene er
+ * fri tekst, så testene kan vise at databasen avviser ukjente koder. Oppdiktede data.
+ */
+export async function createCommonAreas(
+  organizationId: string,
+  overrides: CommonAreasOverrides = {},
+) {
+  let assignmentId = overrides.assignmentId;
+  if (!assignmentId) {
+    assignmentId = (await createAssignment(organizationId)).id;
+    await createProperty(organizationId, {
+      assignmentId,
+      housingType: "apartment",
+      ownershipForm: "cooperative",
+      associationName: "Borettslaget Test",
+    });
+  }
+  type CommonAreasInsert = typeof commonAreas.$inferInsert;
+  const [row] = await db
+    .insert(commonAreas)
+    .values({
+      organizationId,
+      assignmentId,
+      managingAgent: overrides.managingAgent ?? null,
+      conditionReportStatus: (overrides.conditionReportStatus ??
+        "unknown") as CommonAreasInsert["conditionReportStatus"],
+      maintenancePlanStatus: (overrides.maintenancePlanStatus ??
+        "unknown") as CommonAreasInsert["maintenancePlanStatus"],
+      notes: overrides.notes ?? null,
+      deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette fellesdeler");
   return row;
 }
