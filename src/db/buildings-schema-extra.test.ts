@@ -351,7 +351,7 @@ describe("3.4 sammensatte fremmednøkler: rad i A som peker inn i B avvises", ()
   });
 });
 
-describe("3.5 én aktiv arealrad per etasje (A80)", () => {
+describe("3.5 én aktiv arealrad per etasje (A86)", () => {
   it("to aktive arealrader på samme etasje avvises", async () => {
     const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
     await insertArea(org.id, floorId, { bra_i: "123.4" });
@@ -473,7 +473,7 @@ describe("3.7 tenant-tabellene", () => {
     );
   });
 
-  it("report_buildings har ikke property_id (eiendommen finnes via oppdraget, A78)", () => {
+  it("report_buildings har ikke property_id (eiendommen finnes via oppdraget, A84)", () => {
     const table = tables.find((candidate) => getTableName(candidate) === "report_buildings");
     const columns = Object.values(getTableColumns(table!)).map((column) => column.name);
     expect(columns).toContain("assignment_id");
@@ -500,19 +500,19 @@ describe("3.7 tenant-tabellene", () => {
 describe("3.8 migreringen", () => {
   const dir = path.join(process.cwd(), "src/db/migrations");
 
-  it("0017 finnes, er den eneste med nummeret, og lager de fire tabellene", () => {
-    const files = readdirSync(dir).filter((name) => name.startsWith("0017_"));
+  it("0018 finnes, er den eneste med nummeret, og lager de fire tabellene", () => {
+    const files = readdirSync(dir).filter((name) => name.startsWith("0018_"));
     expect(files).toHaveLength(1);
     expect(files[0]).toMatch(/\.sql$/);
     const text = readFileSync(path.join(dir, files[0]!), "utf8");
     for (const table of ["report_buildings", "floors", "floor_areas", "rooms"]) {
-      expect(text, `0017 lager ${table}`).toMatch(new RegExp(`create table "?${table}"?`, "i"));
+      expect(text, `0018 lager ${table}`).toMatch(new RegExp(`create table "?${table}"?`, "i"));
     }
   });
 
   it("ingen annen migrering lager de fire tabellene", () => {
     const others = readdirSync(dir).filter(
-      (name) => name.endsWith(".sql") && !name.startsWith("0017_"),
+      (name) => name.endsWith(".sql") && !name.startsWith("0018_"),
     );
     for (const name of others) {
       const text = readFileSync(path.join(dir, name), "utf8");

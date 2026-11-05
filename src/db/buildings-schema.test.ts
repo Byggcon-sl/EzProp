@@ -524,7 +524,7 @@ describe("3.7 tenant-tabellene", () => {
     expect(columns).toEqual(expect.arrayContaining(["organization_id", "deleted_at"]));
   });
 
-  it("report_buildings har ingen property_id (eiendommen finnes via oppdraget, A78)", () => {
+  it("report_buildings har ingen property_id (eiendommen finnes via oppdraget, A84)", () => {
     const table = tables.find((candidate) => getTableName(candidate) === "report_buildings");
     expect(table).toBeDefined();
     const columns = Object.values(getTableColumns(table!)).map((column) => column.name);
@@ -551,26 +551,36 @@ describe("3.7 tenant-tabellene", () => {
 describe("3.8 migreringen", () => {
   const dir = path.join(process.cwd(), "src/db/migrations");
 
-  it("0017 finnes og er den eneste med nummeret", () => {
-    const files = readdirSync(dir).filter((name) => name.startsWith("0017_"));
-    expect(files).toHaveLength(1);
-    expect(files[0]).toMatch(/\.sql$/);
+  it("0018_bygninger-areal-rom.sql finnes og er den eneste med nummeret 0018", () => {
+    const files = readdirSync(dir).filter((name) => name.startsWith("0018_"));
+    expect(files).toEqual(["0018_bygninger-areal-rom.sql"]);
   });
 
-  it("0017 lager de fire tabellene", () => {
-    const [file] = readdirSync(dir).filter((name) => name.startsWith("0017_"));
-    const text = readFileSync(path.join(dir, file!), "utf8");
+  it("0017 er kontakter og firma fra main, og ingen annen fil har nummeret", () => {
+    const files = readdirSync(dir).filter((name) => name.startsWith("0017_"));
+    expect(files).toEqual(["0017_kontakter-og-firma.sql"]);
+  });
+
+  it("0018 lager de fire tabellene", () => {
+    const text = readFileSync(path.join(dir, "0018_bygninger-areal-rom.sql"), "utf8");
     for (const name of ["report_buildings", "floors", "floor_areas", "rooms"]) {
       expect(text, name).toMatch(new RegExp(`CREATE TABLE[^;]*"${name}"`, "i"));
     }
   });
 
-  it("journalen har 0017 som siste oppføring", () => {
+  it("journalen har 19 oppføringer i rekkefølge, med 0018 sist", () => {
     const journal = JSON.parse(readFileSync(path.join(dir, "meta/_journal.json"), "utf8")) as {
       entries: { idx: number; tag: string }[];
     };
+    expect(journal.entries).toHaveLength(19);
+    journal.entries.forEach((entry, index) => {
+      expect(entry.idx).toBe(index);
+      expect(entry.tag.startsWith(String(index).padStart(4, "0") + "_")).toBe(true);
+    });
     const last = journal.entries.at(-1)!;
-    expect(last.idx).toBe(17);
-    expect(last.tag.startsWith("0017_")).toBe(true);
+    expect(last.tag).toBe("0018_bygninger-areal-rom");
+    expect(
+      readdirSync(path.join(dir, "meta")).filter((name) => name.endsWith("_snapshot.json")),
+    ).toHaveLength(19);
   });
 });
