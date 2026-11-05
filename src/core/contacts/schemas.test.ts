@@ -274,8 +274,27 @@ describe("3.7 fødselsnummer", () => {
     expect(schema.safeParse(build("1234567890")).success).toBe(true);
   });
 
-  it("telefonen er ikke berørt, og organisasjonsnummeret utløser aldri meldingen", () => {
-    expect(parseContact(contact({ phone: "00000000" })).phone).toBe("00000000");
+  it.each(PERSON_FIELDS)(
+    "$name: 11 sifre med mellomrom etter fødselsdatoen avvises",
+    ({ schema, build, field }) => {
+      expect(messagesAt(schema, build("Notat 123456 78901 her"), field)).toContain(
+        "Fødselsnummer skal ikke lagres her.",
+      );
+    },
+  );
+
+  it("telefon: 11 sifre avvises, vanlige telefonnumre godtas", () => {
+    for (const phone of [NATIONAL_ID, "123456 78901"]) {
+      expect(messagesAt(contactInputSchema, contact({ phone }), "phone")).toContain(
+        "Fødselsnummer skal ikke lagres her.",
+      );
+    }
+    for (const phone of ["00000000", "+47 00000000", "0047 00000000", "000 00 000"]) {
+      expect(parseContact(contact({ phone })).phone).toBe(phone);
+    }
+  });
+
+  it("organisasjonsnummeret utløser aldri meldingen", () => {
     expect(parseFirm(firm({ orgNumber: "000000019" })).orgNumber).toBe("000000019");
     expect(messagesAt(firmInputSchema, firm({ orgNumber: "000000019" }), "orgNumber")).toEqual([]);
   });
