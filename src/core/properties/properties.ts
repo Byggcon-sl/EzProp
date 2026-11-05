@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 import {
   AccessDeniedError,
   requireOrganizationAccess,
@@ -291,8 +291,9 @@ export async function getAssignmentProperty(
     .from(assignments)
     .leftJoin(
       orders,
+      // Ordren oppdraget ble laget fra. «Gjør om» setter begge koblingene; begge godtas.
       and(
-        eq(orders.id, assignments.orderId),
+        or(eq(orders.id, assignments.orderId), eq(orders.assignmentId, assignments.id)),
         eq(orders.organizationId, orgId),
         isNull(orders.deletedAt),
       ),
@@ -304,6 +305,7 @@ export async function getAssignmentProperty(
         isNull(assignments.deletedAt),
       ),
     )
+    .orderBy(asc(orders.createdAt), asc(orders.id))
     .limit(1);
   if (!assignment) throw new AccessDeniedError();
 
