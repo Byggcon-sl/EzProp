@@ -206,3 +206,9 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 ## 05.11.2026: samme planpunkt bygget to ganger
 
 - To kjøringer bygde «Bygninger, etasjer, areal per etasje og rom» samtidig. Den ene startet fra `main` med et annet branchnavn enn den som alt var i arbeid, og leverte PR #98; den andre (startet 08:45 UTC, branch `fase2a-bygninger-areal-rom`) brukte ca. 7 timer og endte med bare en opprydding (PR #100). Regel videre: før en kjøring starter et planpunkt, søker den etter branches på `origin` med push de siste 3 timene som gjelder samme punkt (`git for-each-ref --sort=-committerdate refs/remotes/origin`, se på navn og oppgavekort), ikke bare etter samme branchnavn. Den som starter, pusher oppgavekortet straks, så andre ser det.
+
+## 05.11.2026 – PR #102 (arbeidskøen)
+
+- En branch som er satt sammen («slå sammen del …»), men aldri gjennomgått, kan overtas etter 3 timer uten push. Det gikk raskt å fullføre for hånd: flette inn `main`, kjøre sjekkene, én gjennomgang fra test-leder, rette og åpne PR. Ingen ny arbeidsflyt trengs når bare gjennomgang og PR gjenstår.
+- Testplanen kan selv be om noe som bryter mønsteret: her ba den om `from`/`to` med notatteksten i revisjonsloggen. Fritekst (notater) skal aldri i revisjonsloggen, bare feltnavnet, uansett hva testplanen sier.
+- Ikke slett en testfil mens hele Vitest kjører; den feiler da med «Cannot find module». Kjør de berørte mappene på nytt etterpå.
