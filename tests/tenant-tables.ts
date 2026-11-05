@@ -113,7 +113,10 @@ export const tenantTables: TenantTableEntry[] = [
   {
     table: "contacts",
     testFile: "src/core/contacts/contacts.test.ts",
-    insertRow: async (organizationId) => (await createContact(organizationId)).id,
+    insertRow: async (organizationId) => {
+      const firm = await createFirm(organizationId);
+      return (await createContact(organizationId, { firmId: firm.id })).id;
+    },
   },
   {
     table: "employee_permissions",

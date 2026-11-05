@@ -31,10 +31,10 @@ import { todayInOslo } from "@/shared/lib/dates";
  * sjekker at alle tabellene i databasen står i listen.
  */
 export const RESET_TABLES = [
-  "number_sequences",
-  "orders",
   "contacts",
   "firms",
+  "number_sequences",
+  "orders",
   "assignment_team_members",
   "assignment_parties",
   "assignments",
@@ -509,12 +509,15 @@ export async function createAssignmentParty(
   return row;
 }
 
-const ORG_NUMBER_WEIGHTS = [3, 2, 7, 6, 5, 4, 3, 2];
+const ORG_NUMBER_WEIGHTS = [3, 2, 7, 6, 5, 4, 3, 2] as const;
 
-/** Kontrollsifferet etter modulus 11 for åtte sifre, eller `null` når det blir 10 (ugyldig). */
-function orgNumberCheckDigit(first8: string): number | null {
+/**
+ * Kontrollsifferet (modulus 11) for de åtte første sifrene, eller `null` når det blir 10 (da
+ * finnes ikke noe gyldig nummer med disse sifrene).
+ */
+function orgNumberCheckDigit(firstEight: string): number | null {
   const sum = ORG_NUMBER_WEIGHTS.reduce(
-    (acc, weight, index) => acc + Number(first8[index]) * weight,
+    (total, weight, index) => total + weight * Number(firstEight[index]),
     0,
   );
   const remainder = sum % 11;
@@ -522,19 +525,20 @@ function orgNumberCheckDigit(first8: string): number | null {
   return check === 10 ? null : check;
 }
 
-// Starter høyt, så numrene i testplanen (000000019, 000000027 …) aldri lages av fabrikken.
+// Starter høyt, så faste numre i testene (000000019, 000000027 …) aldri lages av fabrikken.
 let firmOrgNumberCounter = 50000;
 
 /**
- * Neste oppdiktede organisasjonsnummer for fabrikken: starter med `000` (finnes ikke i
- * Brønnøysund), gyldig etter modulus 11 og unikt i testkjøringen.
+ * Neste oppdiktede, gyldige organisasjonsnummer: `000` + løpenummer på fem sifre + kontrollsiffer.
+ * Løpenumre der kontrollsifferet blir 10, hoppes over. Løpenummeret starter på 50001. Starter med
+ * `000`, så det kan ikke finnes i Brønnøysundregistrene.
  */
-function nextFakeOrgNumber(): string {
+export function nextFakeOrgNumber(): string {
   for (;;) {
     firmOrgNumberCounter += 1;
-    const first8 = `000${String(firmOrgNumberCounter).padStart(5, "0")}`;
-    const check = orgNumberCheckDigit(first8);
-    if (check !== null) return `${first8}${check}`;
+    const firstEight = `000${String(firmOrgNumberCounter).padStart(5, "0")}`;
+    const check = orgNumberCheckDigit(firstEight);
+    if (check !== null) return `${firstEight}${check}`;
   }
 }
 
@@ -544,13 +548,14 @@ type FirmOverrides = {
   firmType?: string;
   notes?: string | null;
   deletedAt?: Date | null;
+  deletedBy?: string | null;
 };
 
 /**
- * Et firma satt inn direkte uten tilgangssjekk og uten Zod, slik at testene kan lage rader
- * tjenesten ville avvist. Standard: «Testmegling AS», meglerforetak, og et nytt oppdiktet
- * organisasjonsnummer (gyldig etter modulus 11, starter med `000`) for hvert kall, så to kall i
- * samme organisasjon aldri gir unik-feil. `orgNumber: null` gir firma uten nummer.
+ * Et firma (`firms`), satt inn direkte uten tilgangssjekk og uten Zod, slik at testene kan lage
+ * rader tjenesten ville avvist (ukjent `firmType`). Standard: «Testmegling AS», meglerforetak, uten
+ * notat, og et nytt gyldig organisasjonsnummer fra `nextFakeOrgNumber()` per kall. Derfor gir to
+ * kall i samme organisasjon aldri unik-feil. `orgNumber: null` gir firma uten nummer.
  */
 export async function createFirm(organizationId: string, overrides: FirmOverrides = {}) {
   const [row] = await db
@@ -559,9 +564,10 @@ export async function createFirm(organizationId: string, overrides: FirmOverride
       organizationId,
       name: overrides.name ?? "Testmegling AS",
       orgNumber: overrides.orgNumber === undefined ? nextFakeOrgNumber() : overrides.orgNumber,
-      firmType: overrides.firmType ?? "broker_firm",
+      firmType: (overrides.firmType ?? "broker_firm") as typeof firms.$inferInsert.firmType,
       notes: overrides.notes ?? null,
       deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
     })
     .returning();
   if (!row) throw new Error("kunne ikke opprette firma");
@@ -577,11 +583,13 @@ type ContactOverrides = {
   notes?: string | null;
   source?: string;
   deletedAt?: Date | null;
+  deletedBy?: string | null;
 };
 
 /**
- * En kontakt satt inn direkte uten tilgangssjekk og uten Zod. Standard: «Megler Test», lagt inn
- * for hånd (`source = manual`), uten firma, e-post, telefon og notat. Oppdiktede data.
+ * En kontakt (`contacts`), satt inn direkte uten tilgangssjekk og uten Zod. Standard: «Megler
+ * Test», lagt inn for hånd (`manual`), uten firma, e-post, telefon og notat. `source` er fri tekst,
+ * så testene kan vise at databasen avviser ukjente koder. Oppdiktede data.
  */
 export async function createContact(organizationId: string, overrides: ContactOverrides = {}) {
   const [row] = await db
@@ -594,8 +602,9 @@ export async function createContact(organizationId: string, overrides: ContactOv
       phone: overrides.phone ?? null,
       firmId: overrides.firmId ?? null,
       notes: overrides.notes ?? null,
-      source: overrides.source ?? "manual",
+      source: (overrides.source ?? "manual") as typeof contacts.$inferInsert.source,
       deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
     })
     .returning();
   if (!row) throw new Error("kunne ikke opprette kontakt");
