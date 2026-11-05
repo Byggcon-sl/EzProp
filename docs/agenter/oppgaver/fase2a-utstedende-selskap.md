@@ -19,7 +19,7 @@ Ikke KI, men automatikk: systemet setter selskapet selv, og takstmannen ser det 
 
 ## Omfang
 **Med:**
-1. **Migrering** (`0015_utstedende-selskap.sql` via `pnpm db:generate`): `assignments.company_id` (uuid, kan være tom) med sammensatt fremmednøkkel `(organization_id, company_id)` → `companies (organization_id, id)`, navn `assignments_company_fk`. I samme migrering én `UPDATE` som setter `company_id` på eksisterende oppdrag fra aktiv ansvarlig (bare testdata finnes; ingen sletting).
+1. **Migrering** (`0015_utstedende-selskap.sql` via `pnpm db:generate`): `assignments.company_id` (uuid, kan være tom) med sammensatt fremmednøkkel `(organization_id, company_id)` → `companies (organization_id, id)`, navn `assignments_company_fk`. Bare kolonnen og fremmednøkkelen; ingen utfylling bakover av eksisterende oppdrag (se A67).
 2. **Regelen i `setTeamMember`** (`src/core/assignments/team.ts`), i samme transaksjon og etter låsen: når `teamRole === "responsible"` og teamet faktisk endres, settes `assignments.company_id` til den nye ansvarliges `employees.company_id` (hentes i samme oppslag som sjekker den ansatte, filtrert på `grant.organizationId`). Ansvarlig fjernet, eller ny ansvarlig uten selskap: `company_id` blir tom (A66). Andre roller rører aldri selskapet.
 3. **Hendelse og revisjonslogg**, bare når selskapet faktisk endres: hendelsen `assignment.company_changed` med `data: { fromCompanyId, toCompanyId }` (ny kode i `src/core/events/types.ts`), og revisjonslogg `entityType: "assignment"`, `action: "update"`, `changes: { companyId: { from, to } }`. Bare id-er.
 4. **`getAssignment`** returnerer `companyName` (`companies.legal_name`, left join filtrert på `grant.organizationId`; også et slettet selskap vises, fordi det var det som gjaldt).
@@ -28,8 +28,7 @@ Ikke KI, men automatikk: systemet setter selskapet selv, og takstmannen ser det 
    - `setTeamMember` med ansvarlig i selskap A setter A; bytte til ansvarlig i selskap B setter B; fjerne ansvarlig gir tom; ansvarlig uten selskap gir tom; bytte av sidemann, medansvarlig osv. endrer ikke selskapet.
    - Hendelse og revisjonslogg kommer bare når selskapet endres (bytte mellom to i samme selskap gir `team_changed`, men ingen `company_changed`), og har bare id-er.
    - Tenant-isolasjon: `getAssignment` gir aldri selskapsnavnet fra en annen organisasjon (`expectTenantIsolation`), og databasen nekter `company_id` fra en annen organisasjon (fremmednøkkeltest).
-   - Migreringen: eksisterende oppdrag med aktiv ansvarlig får selskapet.
-   - e2e (PC og iPad-størrelse): sett ansvarlig på oppdragssiden, se at selskapets navn står.
+   - e2e (PC og iPad-størrelse): legges inn i den eksisterende `e2e/fase-2a-oppdrag-team-parter.spec.ts`, uten ny fil eller nytt oppsett. Sjekker bare at selskapets navn står etter at ansvarlig er satt.
 7. **Dokumenter og versjon:** `docs/05-domenemodell.md` (4.3 «Bygget i fase 2a», hendelseslisten, endringsloggen), ordlisten (`issuing company` → `company_id`), plan krysses av, `package.json` 0.2.74 → 0.2.75, A65–A67 i `docs/09-apne-sporsmal.md`.
 
 **Ikke med (bevisst utelatt):**
@@ -40,6 +39,7 @@ Ikke KI, men automatikk: systemet setter selskapet selv, og takstmannen ser det 
 - Advarsel før publisering om manglende selskap (hører til sperrer og advarsler).
 - Visning av selskapshistorikk på skjermen (hendelsene finnes; vises senere).
 - Selskap i oppdragslisten (eget planpunkt).
+- Utfylling bakover av eksisterende oppdrag i migreringen, og test av migreringsdata (A67).
 
 ## Tilgang
 | Rolle | Se | Endre |
@@ -74,7 +74,7 @@ Fast regel i koden (ikke en mal-regel): utstedende selskap = selskapet til aktiv
 ## Beslutninger (autonom modus, føres i `docs/09-apne-sporsmal.md` som A65–A67)
 - **A65:** Selskapet settes automatisk uten bekreftelse og uten manuell overstyring. Domenemodellen sier «foreslås» ved bytte; vi setter det direkte, og byttet vises med hendelse og logg. Kilde: beslutningen 23.10/25.10.2026 (utstedende selskap er der ansvarlig er ansatt), mål tid, det enkleste som virker. Endres ved å legge til et valg på oppdragssiden.
 - **A66:** Ansvarlig fjernet, eller ny ansvarlig uten selskap, gir tomt selskap (ikke det gamle). Et gammelt selskap som står igjen, ville vært feil i stillhet. Kilde: samme beslutning, mål reklamasjoner. Endres i `setTeamMember`.
-- **A67:** Selskapet settes bare når ansvarlig settes eller byttes, ikke når admin senere endrer den ansattes selskap. Oppdrag i arbeid skal ikke bytte selskap uten at noen gjør noe på oppdraget. Kilde: domenemodellen 4.3, det enkleste som virker. Endres ved å la endring av ansatt oppdatere åpne oppdrag.
+- **A67:** Selskapet settes bare når ansvarlig settes eller byttes, ikke når admin senere endrer den ansattes selskap. Oppdrag i arbeid skal ikke bytte selskap uten at noen gjør noe på oppdraget. Kilde: domenemodellen 4.3, det enkleste som virker. Endres ved å la endring av ansatt oppdatere åpne oppdrag. Eksisterende testoppdrag fylles ikke ut bakover; de får selskap når ansvarlig settes på nytt.
 
 ## Roller
 - **utvikler:** punkt 1–5 og 7.
@@ -85,6 +85,11 @@ Ingen arkitekt (én kolonne etter kjent mønster), ingen UX/UI (én tekstlinje p
 ## Byggingen deles i to biter som ikke henger sammen
 - **Bit A (utvikler):** migrering, skjema, `team.ts`, hendelseskode, `getAssignment`, siden, dokumenter, versjon.
 - **Bit B (testskriver):** testene i punkt 6, skrevet mot kortet (`setTeamMember`, `getAssignment.companyName`, hendelsen `assignment.company_changed`).
+
+## Avgjort etter forenkleren (prosjektleder, 05.11.2026)
+- **Kutt 1 godtatt:** ingen `UPDATE` i migreringen og ingen migreringstest. Det finnes bare oppdiktede testdata, og repoet har ikke oppsett for å teste migreringsdata; et nytt oppsett for én engangs-SQL er ikke verdt det. Gamle oppdrag viser «Ikke satt» med forklaring og får selskap neste gang ansvarlig settes. Ført i A67.
+- **Kutt 2 godtatt:** e2e-sjekken legges i den eksisterende team-testen på `/oppdrag/[id]`. Samme dekning (PC og iPad), mindre oppsett.
+- **Manuell overstyring trengs ikke nå** (forenkleren og prosjektleder enige). A65 står.
 
 ## Åpne spørsmål
 - Ingen som stopper. A65–A67 kan endres av Ståle når han er tilbake.
