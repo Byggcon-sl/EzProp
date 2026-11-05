@@ -1,7 +1,7 @@
 # Testplan: Bygninger, etasjer, areal per etasje og rom
 
 - **Oppgavekort:** `docs/funksjoner/fase2a-bygninger-areal-rom.md`
-- **Dato:** 05.11.2026 (test-leder, før bygging)
+- **Dato:** 05.11.2026 (test-leder, før bygging; oppdatert etter runde 2: migrering `0018`, A84–A88, versjon 0.2.83, fletting med `origin/main`)
 - **Støtter hovedmål:** tid (testene låser at arealtype og «under terreng» foreslås fra romtype og etasje, at «Målt av» settes til den innloggede, og at BRA summeres riktig, så takstmannen slipper å regne og skrive det samme flere ganger), reklamasjoner (måler, metode og kommentar per etasje er sporbare; summene har testsaker uten flyttallsfeil; kodene er låst i skjema og database) og KI først (strukturen bygning → etasje → areal og rom med faste koder er den samme som et senere forslag fra plantegning eller LiDAR kan fylle ut; testene viser at navn, kommentar og arealtall aldri havner i hendelser eller logg).
 
 Alle Vitest-tester mot databasen går mot `TEST_DATABASE_URL` med `resetDatabase` i `beforeEach`. Testdata er oppdiktet: bygninger «Bolighus» og «Garasje test», etasjer «Kjeller» og «1. etasje», rom med navn «Rom test», kommentar «Målt langs innvendig vegg test». Arealtall velges slik at de ikke kolliderer med id-er eller tidsstempler: `123.4`, `56.7`, `8.9`, `210.3`. «Fødselsnummer» er alltid `12345678901` (oppdiktet). Fast tid: `TEST_NOW`.
@@ -27,7 +27,7 @@ Fra kortet, punkt 1–8. Avvik føres i kortet under «Avgjørelser etter gjenno
 5. **gyldige felt per romtype** (`it.each` over `ROOM_TYPES`): `group` finnes i `ROOM_TYPE_GROUPS`, `defaultAreaType` i `AREA_TYPES`, `defaultBelowGround` er boolsk.
 6. **grupper som testsaker:** de fem våtrommene (inkludert `room_with_drain`) har `wet_room`; `kitchen` og `living_kitchen` har `kitchen`; `toilet` har `toilet`; `sauna`, `boiler_room`, `technical_room`, `cold_room`, `swimming_pool` har `special`; resten `other`.
 7. **`suggestAreaType`:** `bathroom` → `bra_i`, `garage` → `bra_e`, `external_storage` → `bra_e`, `glazed_balcony` → `bra_b`; og en `it.each` som viser at alle andre 29 gir `bra_i`.
-8. **`suggestBelowGround`, fire kombinasjoner (A81):**
+8. **`suggestBelowGround`, fire kombinasjoner (A87):**
    | romtype | etasje under terreng | forslag |
    |---|---|---|
    | `basement_living_room` | ja | ja |
@@ -64,8 +64,8 @@ Fra kortet, punkt 1–8. Avvik føres i kortet under «Avgjørelser etter gjenno
 4. **sammensatte fremmednøkler** (rad i A som peker på B): bygning → oppdrag i B, etasje → bygning i B, areal → etasje i B, rom → etasje i B, `measured_by` → ansatt i B. Alle avvises.
 5. **én aktiv arealrad per etasje:** to aktive → unik-feil; én myk-slettet og én aktiv godtas.
 6. **påkrevde felt:** `assignment_id`, `name` (bygning og etasje), `level`, `below_ground`, `floor_id`, `room_type`, `area_type` er `NOT NULL`; `below_ground` på etasje får standard `false`.
-7. **tenant-tabeller:** `report_buildings`, `floors`, `floor_areas`, `rooms` står i `tests/tenant-tables.ts` med radbyggere og testfilen `src/core/buildings/buildings.test.ts`; `tests/tenant-isolation-all-tables.test.ts` er grønn.
-8. **migreringen er ren:** `0017` (sjekkes på nytt mot `origin/main` og `origin/fase2a-statusflyt` før PR), og `pnpm db:generate` lager ingen ny fil.
+7. **tenant-tabeller:** `report_buildings`, `floors`, `floor_areas`, `rooms` står i `tests/tenant-tables.ts` med radbyggere og testfilen `src/core/buildings/buildings.test.ts`, **sammen med** `contacts` og `firms` fra `origin/main` (PR #95); `tests/tenant-isolation-all-tables.test.ts` er grønn etter flettingen.
+8. **migreringen er ren:** filen heter `0018_bygninger-areal-rom.sql` og kommer etter `0017_kontakter-og-firma` fra `origin/main`; journalen i `src/db/migrations/meta` er laget med `pnpm db:generate` etter flettingen (ikke rettet for hånd); `pnpm db:generate` etterpå lager ingen ny fil; `pnpm db:migrate` mot en tom testdatabase går gjennom alle 19 migreringene. Sjekkes på nytt mot `origin/main` rett før merge.
 
 ## 4. Kjernen, `src/core/buildings/buildings.test.ts` (ny, mot databasen)
 
@@ -101,7 +101,8 @@ Admin i A, med `orgA.id`:
 
 ### 4.4 Slettede id-er og myk sletting
 
-1. **slettet oppdrag** → `AccessDeniedError` i `getAssignmentBuildings` og `saveBuilding`.
+1. **slettet oppdrag** (`deleted_at` satt i fabrikken) → `AccessDeniedError` i `getAssignmentBuildings` og `saveBuilding`.
+1b. **kansellert gjennom statustjenesten** (A76): oppdrag med eiendom, bygning, etasje, areal og rom; `cancelAssignment` fra `@/core/assignments` kjøres som admin; deretter gir `getAssignmentBuildings`, `saveBuilding` (ny og eksisterende), `saveFloor`, `saveFloorArea`, `saveRoom` og `removeRoom` `AccessDeniedError`, og radene i de fire tabellene er uendret (samme `updated_at`, `deleted_at` fortsatt `null`).
 2. **myk-slettet bygning, etasje eller rom** brukt som id → `AccessDeniedError` i alle tjenestene som tar imot dem (`it.each`).
 3. **fjerning er myk:** etter `removeBuilding`, `removeFloor`, `removeRoom` finnes raden med `deleted_at` og `deleted_by` satt, og den vises ikke i `getAssignmentBuildings`.
 4. **fjerning av etasje** myk-sletter arealraden; ingen rad slettes permanent (antall rader i tabellene er uendret).
@@ -137,7 +138,8 @@ Admin i A, med `orgA.id`:
 1. **ingen ansattkontekst** → `NO_ACCESS` uten kall til kjernen.
 2. **id som ikke er uuid** (oppdrag, bygning, etasje, rom) → `NO_ACCESS` uten kall til kjernen.
 3. **organisasjonen kommer fra konteksten:** skjemafelt `organizationId = OTHER_ORG` endrer ikke kallet.
-4. **`AccessDeniedError`** → `NO_ACCESS`; `PropertyMissingError`, `BuildingNotEmptyError`, `FloorNotEmptyError` → norsk melding; `ZodError` → feil ved feltet; ukjent feil → `UNKNOWN_ERROR`.
+4. **`AccessDeniedError`** → `NO_ACCESS`. Egen test: takstmann med `access.inspectors_edit_all` av, kjernen kaster `AccessDeniedError` for hver av de sju skrivehandlingene → `NO_ACCESS`, og ingenting lagres (ingen `revalidatePath`, ingen ny rad når testen går mot ekte kjerne, eller kjernen kalt én gang og kastet). Dekker hullet hvis en knapp likevel skulle vises.
+   Videre: `PropertyMissingError`, `BuildingNotEmptyError`, `FloorNotEmptyError` → norsk melding; `ZodError` → feil ved feltet; ukjent feil → `UNKNOWN_ERROR`.
 5. **loggkontrakt:** `JSON.stringify` av alle loggkall inneholder ikke navn, kommentar eller arealtall.
 
 ## 7. E2E, `e2e/fase-2a-bygninger-areal-rom.spec.ts` (ny, prosjektene `pc` og `ipad`)
@@ -164,7 +166,9 @@ Admin fra seed. Hver test lager egen ordre, oppdrag og eiendom med `uniqueSuffix
 - Alle fire tabellene i `tests/tenant-tables.ts` og fremmednøkkeltestene 3.4.
 - Regeltestene dekker alle romtyper (1.5–1.8, 1.11), og 0,1 + 0,2 = 0,3.
 - Ingen tilgangslogikk i siden eller handlingene utover `NO_ACCESS`; ingen id fra skjemaet brukes til filtrering uten `grant.organizationId`.
-- `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne; versjonen økt; migrering og A-numre sjekket mot `origin/main` og `origin/fase2a-statusflyt`.
+- `origin/main` er flettet inn før sluttrunden; `tests/factories.ts`, `RESET_TABLES` og `tests/tenant-tables.ts` har både `contacts`/`firms` og de fire nye tabellene.
+- Kanselleringstesten 4.4.1b og handlingstesten med `AccessDeniedError` (6.4).
+- `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne; versjonen er 0.2.83 (main 0.2.82); migreringen er `0018`; beslutningene er A84–A88 overalt (kortet, `docs/09-apne-sporsmal.md`, `docs/05-domenemodell.md`, kodekommentarer) og main sine A78–A83 er uendret. Sjekkes mot `origin/main` og `origin/fase2a-statusflyt` rett før merge.
 
 ## Dekning av akseptkriteriene
 
@@ -174,10 +178,10 @@ Admin fra seed. Hver test lager egen ordre, oppdrag og eiendom med `uniqueSuffix
 | BRA-i, BRA-e, BRA-b, ALH, måler, metode, kommentar; sum per etasje, bygning, oppdrag | 1.9–1.10, 2.5–2.8, 4.5.5, 4.5.8, 7.1 |
 | Romtype fra fast liste; forslag som kan endres | 1.4–1.8, 2.9, 2.11, 3.1, 4.5.6, 7.1, 7.3 |
 | Lenken «Bygninger, areal og rom» | 7.1 |
-| Ikke-tomme kan ikke fjernes; fjerning er myk | 4.4.3–4.4.4, 4.5.3, 7.4 |
+| Ikke-tomme kan ikke fjernes; fjerning er myk | 4.4.1b, 4.4.3–4.4.4, 4.5.3, 7.4 |
 | Uten eiendom ingen bygninger, og teksten vises | 4.5.1–4.5.2, 7.5 |
 | Hendelser og logg i samme transaksjon, uten navn, kommentar, arealtall | 4.6 |
-| Innstillingen av: takstmann får ikke endre; siden viser tekst | 4.1.2, 7.7 |
+| Innstillingen av: takstmann får ikke endre; siden viser tekst | 4.1.2, 6.4, 7.7 |
 | Tenant-isolasjon, fremmed id og «Målt av» fra annen organisasjon | 3.4, 3.7, 4.2, 4.3 |
 | iPad-størrelse, knapper minst 44 px | 7.9 |
 | Kommandoene grønne, versjon økt | gjennomgangen |
