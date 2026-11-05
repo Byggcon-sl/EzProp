@@ -6,6 +6,7 @@ import { count, eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { requireOrganizationAccess } from "@/core/access";
 import { createLocalFileStorage } from "@/core/files/local-storage";
+import { isValidOrgNumber } from "@/core/contacts/org-number";
 import { isCertificationValid } from "@/core/organization/certification-rules";
 import { db } from "@/db/client";
 import {
@@ -13,9 +14,11 @@ import {
   assignments,
   assignmentTeamMembers,
   certifications,
+  contacts,
   employeePermissions,
   employees,
   files,
+  firms,
   integrationConnections,
   loginAttempts,
   numberSequences,
@@ -31,8 +34,10 @@ import {
   createAssignment,
   createAssignmentParty,
   createCertification,
+  createContact,
   createEmployee,
   createFile,
+  createFirm,
   createIntegrationConnection,
   createNumberSequence,
   createOffice,
@@ -589,6 +594,106 @@ describe("fabrikkene for team og parter (fase 2a)", () => {
     await resetDatabase();
 
     for (const table of [assignmentTeamMembers, assignmentParties]) {
+      const [row] = await db.select({ n: count() }).from(table);
+      expect(row!.n).toBe(0);
+    }
+  });
+});
+
+// Kontakter og firma, docs/funksjoner/fase2a-kontakter-firma-testplan.md avsnitt 6.
+// Testdata er oppdiktet.
+describe("fabrikkene for firma og kontakter", () => {
+  beforeEach(resetDatabase);
+
+  it("6.1 createFirm uten overstyring: Testmegling AS, broker_firm og gyldig, unikt nummer", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const first = await createFirm(org.id);
+    const second = await createFirm(org.id);
+    expect(first).toMatchObject({
+      organizationId: org.id,
+      name: "Testmegling AS",
+      firmType: "broker_firm",
+      notes: null,
+      deletedAt: null,
+    });
+    for (const row of [first, second]) {
+      expect(row.orgNumber).toMatch(/^000\d{6}$/);
+      expect(isValidOrgNumber(row.orgNumber!)).toBe(true);
+    }
+    expect(first.orgNumber).not.toBe(second.orgNumber);
+  });
+
+  it("6.1 createFirm bruker overstyringene, også orgNumber: null og deletedAt", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const deletedAt = new Date("2026-11-01T08:00:00Z");
+    const row = await createFirm(org.id, {
+      name: "Testforsikring AS",
+      orgNumber: null,
+      firmType: "insurer",
+      notes: "Oppdiktet notat",
+      deletedAt,
+    });
+    expect(row).toMatchObject({
+      name: "Testforsikring AS",
+      orgNumber: null,
+      firmType: "insurer",
+      notes: "Oppdiktet notat",
+    });
+    expect(row.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+  });
+
+  it("6.2 createContact uten overstyring: Megler Test, manual, uten firma", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const row = await createContact(org.id);
+    expect(row).toMatchObject({
+      organizationId: org.id,
+      firstName: "Megler",
+      lastName: "Test",
+      source: "manual",
+      firmId: null,
+      email: null,
+      phone: null,
+      notes: null,
+      deletedAt: null,
+    });
+  });
+
+  it("6.2 createContact bruker overstyringene, også firmId, source og deletedAt", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const firm = await createFirm(org.id);
+    const deletedAt = new Date("2026-11-01T08:00:00Z");
+    const row = await createContact(org.id, {
+      firstName: "Kari",
+      lastName: null,
+      email: "megler@example.com",
+      phone: "00000000",
+      firmId: firm.id,
+      notes: "Oppdiktet notat",
+      source: "order",
+      deletedAt,
+    });
+    expect(row).toMatchObject({
+      firstName: "Kari",
+      lastName: null,
+      email: "megler@example.com",
+      phone: "00000000",
+      firmId: firm.id,
+      notes: "Oppdiktet notat",
+      source: "order",
+    });
+    expect(row.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+  });
+
+  it("6.3 RESET_TABLES har contacts før firms, og resetDatabase tømmer begge", async () => {
+    const listed: readonly string[] = RESET_TABLES;
+    expect(listed.indexOf("contacts")).toBeGreaterThanOrEqual(0);
+    expect(listed.indexOf("contacts")).toBeLessThan(listed.indexOf("firms"));
+    expect(listed.indexOf("firms")).toBeLessThan(listed.indexOf("organizations"));
+
+    const org = await createOrganization("Oppdiktet takst A");
+    await createContact(org.id, { firmId: (await createFirm(org.id)).id });
+    await resetDatabase();
+    for (const table of [contacts, firms]) {
       const [row] = await db.select({ n: count() }).from(table);
       expect(row!.n).toBe(0);
     }

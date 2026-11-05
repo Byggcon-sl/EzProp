@@ -10,10 +10,12 @@ import {
   auditLog,
   certifications,
   companies,
+  contacts,
   employeePermissions,
   employeeRoleAssignments,
   employees,
   files,
+  firms,
   integrationConnections,
   numberSequences,
   offices,
@@ -31,6 +33,8 @@ import { todayInOslo } from "@/shared/lib/dates";
 export const RESET_TABLES = [
   "number_sequences",
   "orders",
+  "contacts",
+  "firms",
   "assignment_team_members",
   "assignment_parties",
   "assignments",
@@ -502,5 +506,98 @@ export async function createAssignmentParty(
     })
     .returning();
   if (!row) throw new Error("kunne ikke opprette part");
+  return row;
+}
+
+const ORG_NUMBER_WEIGHTS = [3, 2, 7, 6, 5, 4, 3, 2];
+
+/** Kontrollsifferet etter modulus 11 for åtte sifre, eller `null` når det blir 10 (ugyldig). */
+function orgNumberCheckDigit(first8: string): number | null {
+  const sum = ORG_NUMBER_WEIGHTS.reduce(
+    (acc, weight, index) => acc + Number(first8[index]) * weight,
+    0,
+  );
+  const remainder = sum % 11;
+  const check = remainder === 0 ? 0 : 11 - remainder;
+  return check === 10 ? null : check;
+}
+
+// Starter høyt, så numrene i testplanen (000000019, 000000027 …) aldri lages av fabrikken.
+let firmOrgNumberCounter = 50000;
+
+/**
+ * Neste oppdiktede organisasjonsnummer for fabrikken: starter med `000` (finnes ikke i
+ * Brønnøysund), gyldig etter modulus 11 og unikt i testkjøringen.
+ */
+function nextFakeOrgNumber(): string {
+  for (;;) {
+    firmOrgNumberCounter += 1;
+    const first8 = `000${String(firmOrgNumberCounter).padStart(5, "0")}`;
+    const check = orgNumberCheckDigit(first8);
+    if (check !== null) return `${first8}${check}`;
+  }
+}
+
+type FirmOverrides = {
+  name?: string;
+  orgNumber?: string | null;
+  firmType?: string;
+  notes?: string | null;
+  deletedAt?: Date | null;
+};
+
+/**
+ * Et firma satt inn direkte uten tilgangssjekk og uten Zod, slik at testene kan lage rader
+ * tjenesten ville avvist. Standard: «Testmegling AS», meglerforetak, og et nytt oppdiktet
+ * organisasjonsnummer (gyldig etter modulus 11, starter med `000`) for hvert kall, så to kall i
+ * samme organisasjon aldri gir unik-feil. `orgNumber: null` gir firma uten nummer.
+ */
+export async function createFirm(organizationId: string, overrides: FirmOverrides = {}) {
+  const [row] = await db
+    .insert(firms)
+    .values({
+      organizationId,
+      name: overrides.name ?? "Testmegling AS",
+      orgNumber: overrides.orgNumber === undefined ? nextFakeOrgNumber() : overrides.orgNumber,
+      firmType: overrides.firmType ?? "broker_firm",
+      notes: overrides.notes ?? null,
+      deletedAt: overrides.deletedAt ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette firma");
+  return row;
+}
+
+type ContactOverrides = {
+  firstName?: string;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  firmId?: string | null;
+  notes?: string | null;
+  source?: string;
+  deletedAt?: Date | null;
+};
+
+/**
+ * En kontakt satt inn direkte uten tilgangssjekk og uten Zod. Standard: «Megler Test», lagt inn
+ * for hånd (`source = manual`), uten firma, e-post, telefon og notat. Oppdiktede data.
+ */
+export async function createContact(organizationId: string, overrides: ContactOverrides = {}) {
+  const [row] = await db
+    .insert(contacts)
+    .values({
+      organizationId,
+      firstName: overrides.firstName ?? "Megler",
+      lastName: overrides.lastName === undefined ? "Test" : overrides.lastName,
+      email: overrides.email ?? null,
+      phone: overrides.phone ?? null,
+      firmId: overrides.firmId ?? null,
+      notes: overrides.notes ?? null,
+      source: overrides.source ?? "manual",
+      deletedAt: overrides.deletedAt ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette kontakt");
   return row;
 }
