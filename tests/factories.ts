@@ -16,12 +16,16 @@ import {
   employeeRoleAssignments,
   employees,
   files,
+  floorAreas,
+  floors,
   integrationConnections,
   numberSequences,
   offices,
   orders,
   organizations,
   properties,
+  reportBuildings,
+  rooms,
   users,
   type EmployeeRole,
 } from "@/db/schema";
@@ -34,6 +38,10 @@ import { todayInOslo } from "@/shared/lib/dates";
 export const RESET_TABLES = [
   "number_sequences",
   "orders",
+  "rooms",
+  "floor_areas",
+  "floors",
+  "report_buildings",
   "common_areas",
   "cadastral_units",
   "assignment_team_members",
@@ -635,5 +643,164 @@ export async function createCommonAreas(
     })
     .returning();
   if (!row) throw new Error("kunne ikke opprette fellesdeler");
+  return row;
+}
+
+type BuildingOverrides = {
+  /** Oppdraget bygningen hører til. Mangler den, lages et oppdrag med eiendom. */
+  assignmentId?: string;
+  name?: string;
+  createdAt?: Date;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/**
+ * En bygning (`report_buildings`), satt inn direkte uten tilgangssjekk og uten Zod. Uten
+ * `assignmentId` lages et oppdrag med eiendom (enebolig, selveier) i samme organisasjon.
+ * Standard: «Bolighus». Oppdiktede data.
+ */
+export async function createBuilding(organizationId: string, overrides: BuildingOverrides = {}) {
+  let assignmentId = overrides.assignmentId;
+  if (!assignmentId) {
+    assignmentId = (await createAssignment(organizationId)).id;
+    await createProperty(organizationId, { assignmentId });
+  }
+  const [row] = await db
+    .insert(reportBuildings)
+    .values({
+      organizationId,
+      assignmentId,
+      name: overrides.name ?? "Bolighus",
+      ...(overrides.createdAt ? { createdAt: overrides.createdAt } : {}),
+      deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette bygning");
+  return row;
+}
+
+type FloorOverrides = {
+  /** Bygningen etasjen hører til. Mangler den, lages en bygning i samme organisasjon. */
+  buildingId?: string;
+  name?: string;
+  level?: number;
+  belowGround?: boolean;
+  createdAt?: Date;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/**
+ * En etasje (`floors`), satt inn direkte uten tilgangssjekk og uten Zod. Uten `buildingId` lages
+ * en bygning (med oppdrag og eiendom) i samme organisasjon. Standard: «1. etasje», nivå 1, over
+ * terreng. Oppdiktede data.
+ */
+export async function createFloor(organizationId: string, overrides: FloorOverrides = {}) {
+  const buildingId = overrides.buildingId ?? (await createBuilding(organizationId)).id;
+  const [row] = await db
+    .insert(floors)
+    .values({
+      organizationId,
+      reportBuildingId: buildingId,
+      name: overrides.name ?? "1. etasje",
+      level: overrides.level ?? 1,
+      belowGround: overrides.belowGround ?? false,
+      ...(overrides.createdAt ? { createdAt: overrides.createdAt } : {}),
+      deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette etasje");
+  return row;
+}
+
+type FloorAreaOverrides = {
+  /** Etasjen arealet hører til. Mangler den, lages en etasje i samme organisasjon. */
+  floorId?: string;
+  braI?: number | null;
+  braE?: number | null;
+  braB?: number | null;
+  alh?: number | null;
+  measuredBy?: string | null;
+  method?: string | null;
+  comment?: string | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/**
+ * Tallet som tekst med én desimal, slik `numeric(7,1)` tar imot det (tom = `null`). Tekst virker
+ * både når Drizzle leser kolonnen som tekst og som tall.
+ */
+function areaValue(value: number | null | undefined) {
+  return (value === null || value === undefined ? null : value.toFixed(1)) as never;
+}
+
+/**
+ * Arealet for en etasje (`floor_areas`), satt inn direkte uten tilgangssjekk og uten Zod. Uten
+ * `floorId` lages en etasje i samme organisasjon. Standard: alle fire arealfelt tomme, ingen
+ * måler, metode eller kommentar. `method` er fri tekst, så testene kan vise at databasen avviser
+ * ukjente koder. Oppdiktede data.
+ */
+export async function createFloorArea(organizationId: string, overrides: FloorAreaOverrides = {}) {
+  const floorId = overrides.floorId ?? (await createFloor(organizationId)).id;
+  type FloorAreaInsert = typeof floorAreas.$inferInsert;
+  const [row] = await db
+    .insert(floorAreas)
+    .values({
+      organizationId,
+      floorId,
+      braI: areaValue(overrides.braI),
+      braE: areaValue(overrides.braE),
+      braB: areaValue(overrides.braB),
+      alh: areaValue(overrides.alh),
+      measuredBy: overrides.measuredBy ?? null,
+      method: (overrides.method ?? null) as FloorAreaInsert["method"],
+      comment: overrides.comment ?? null,
+      deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette areal");
+  return row;
+}
+
+type RoomOverrides = {
+  /** Etasjen rommet hører til. Mangler den, lages en etasje i samme organisasjon. */
+  floorId?: string;
+  roomType?: string;
+  name?: string | null;
+  areaType?: string;
+  belowGround?: boolean;
+  createdAt?: Date;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/**
+ * Et rom (`rooms`), satt inn direkte uten tilgangssjekk og uten Zod. Uten `floorId` lages en
+ * etasje i samme organisasjon. Standard: bad (`bathroom`) uten navn, BRA-i, over terreng. Kodene
+ * er fri tekst, så testene kan vise at databasen avviser ukjente koder. Oppdiktede data.
+ */
+export async function createRoom(organizationId: string, overrides: RoomOverrides = {}) {
+  const floorId = overrides.floorId ?? (await createFloor(organizationId)).id;
+  type RoomInsert = typeof rooms.$inferInsert;
+  const [row] = await db
+    .insert(rooms)
+    .values({
+      organizationId,
+      floorId,
+      roomType: (overrides.roomType ?? "bathroom") as RoomInsert["roomType"],
+      name: overrides.name ?? null,
+      areaType: (overrides.areaType ?? "bra_i") as RoomInsert["areaType"],
+      belowGround: overrides.belowGround ?? false,
+      ...(overrides.createdAt ? { createdAt: overrides.createdAt } : {}),
+      deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette rom");
   return row;
 }
