@@ -1,5 +1,5 @@
 {
-  "id": "33a99bcb-511f-4e2c-be68-cea7944fa682",
+  "id": "3d793fa5-28ad-4c03-95a1-8027acaffd15",
   "prevId": "f0c5fde2-9b8d-4387-b844-8475ccadd52d",
   "version": "7",
   "dialect": "postgresql",
@@ -1966,6 +1966,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "ordered_by_contact_id": {
+          "name": "ordered_by_contact_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ordered_by_firm_id": {
+          "name": "ordered_by_firm_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "address_text": {
           "name": "address_text",
           "type": "text",
@@ -2072,6 +2084,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "orders_organization_id_ordered_by_contact_id_idx": {
+          "name": "orders_organization_id_ordered_by_contact_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ordered_by_contact_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2095,6 +2128,36 @@
           "columnsFrom": [
             "organization_id",
             "assignment_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "orders_ordered_by_contact_fk": {
+          "name": "orders_ordered_by_contact_fk",
+          "tableFrom": "orders",
+          "tableTo": "contacts",
+          "columnsFrom": [
+            "organization_id",
+            "ordered_by_contact_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "orders_ordered_by_firm_fk": {
+          "name": "orders_ordered_by_firm_fk",
+          "tableFrom": "orders",
+          "tableTo": "firms",
+          "columnsFrom": [
+            "organization_id",
+            "ordered_by_firm_id"
           ],
           "columnsTo": [
             "organization_id",
@@ -2875,744 +2938,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.report_buildings": {
-      "name": "report_buildings",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "assignment_id": {
-          "name": "assignment_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "report_buildings_organization_id_id_idx": {
-          "name": "report_buildings_organization_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "report_buildings_organization_id_assignment_id_idx": {
-          "name": "report_buildings_organization_id_assignment_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "assignment_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "report_buildings_organization_id_organizations_id_fk": {
-          "name": "report_buildings_organization_id_organizations_id_fk",
-          "tableFrom": "report_buildings",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "report_buildings_assignment_fk": {
-          "name": "report_buildings_assignment_fk",
-          "tableFrom": "report_buildings",
-          "tableTo": "assignments",
-          "columnsFrom": [
-            "organization_id",
-            "assignment_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.floors": {
-      "name": "floors",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "report_building_id": {
-          "name": "report_building_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "level": {
-          "name": "level",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "below_ground": {
-          "name": "below_ground",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        }
-      },
-      "indexes": {
-        "floors_organization_id_id_idx": {
-          "name": "floors_organization_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "floors_organization_id_report_building_id_idx": {
-          "name": "floors_organization_id_report_building_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_building_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "floors_organization_id_organizations_id_fk": {
-          "name": "floors_organization_id_organizations_id_fk",
-          "tableFrom": "floors",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "floors_report_building_fk": {
-          "name": "floors_report_building_fk",
-          "tableFrom": "floors",
-          "tableTo": "report_buildings",
-          "columnsFrom": [
-            "organization_id",
-            "report_building_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "floors_level_check": {
-          "name": "floors_level_check",
-          "value": "\"floors\".\"level\" between -3 and 20"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.floor_areas": {
-      "name": "floor_areas",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "floor_id": {
-          "name": "floor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "bra_i": {
-          "name": "bra_i",
-          "type": "numeric(7, 1)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "bra_e": {
-          "name": "bra_e",
-          "type": "numeric(7, 1)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "bra_b": {
-          "name": "bra_b",
-          "type": "numeric(7, 1)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "alh": {
-          "name": "alh",
-          "type": "numeric(7, 1)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "measured_by": {
-          "name": "measured_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "method": {
-          "name": "method",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "comment": {
-          "name": "comment",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "floor_areas_organization_id_id_idx": {
-          "name": "floor_areas_organization_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "floor_areas_active_floor_idx": {
-          "name": "floor_areas_active_floor_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "floor_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"floor_areas\".\"deleted_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "floor_areas_organization_id_organizations_id_fk": {
-          "name": "floor_areas_organization_id_organizations_id_fk",
-          "tableFrom": "floor_areas",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "floor_areas_floor_fk": {
-          "name": "floor_areas_floor_fk",
-          "tableFrom": "floor_areas",
-          "tableTo": "floors",
-          "columnsFrom": [
-            "organization_id",
-            "floor_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "floor_areas_measured_by_fk": {
-          "name": "floor_areas_measured_by_fk",
-          "tableFrom": "floor_areas",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "organization_id",
-            "measured_by"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "floor_areas_bra_i_check": {
-          "name": "floor_areas_bra_i_check",
-          "value": "\"floor_areas\".\"bra_i\" >= 0"
-        },
-        "floor_areas_bra_e_check": {
-          "name": "floor_areas_bra_e_check",
-          "value": "\"floor_areas\".\"bra_e\" >= 0"
-        },
-        "floor_areas_bra_b_check": {
-          "name": "floor_areas_bra_b_check",
-          "value": "\"floor_areas\".\"bra_b\" >= 0"
-        },
-        "floor_areas_alh_check": {
-          "name": "floor_areas_alh_check",
-          "value": "\"floor_areas\".\"alh\" >= 0"
-        },
-        "floor_areas_method_check": {
-          "name": "floor_areas_method_check",
-          "value": "\"floor_areas\".\"method\" in ('laser', 'drawing', 'other')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.rooms": {
-      "name": "rooms",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "floor_id": {
-          "name": "floor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "room_type": {
-          "name": "room_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "area_type": {
-          "name": "area_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "below_ground": {
-          "name": "below_ground",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "rooms_organization_id_id_idx": {
-          "name": "rooms_organization_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "rooms_organization_id_floor_id_idx": {
-          "name": "rooms_organization_id_floor_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "floor_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "rooms_organization_id_organizations_id_fk": {
-          "name": "rooms_organization_id_organizations_id_fk",
-          "tableFrom": "rooms",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "rooms_floor_fk": {
-          "name": "rooms_floor_fk",
-          "tableFrom": "rooms",
-          "tableTo": "floors",
-          "columnsFrom": [
-            "organization_id",
-            "floor_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "rooms_room_type_check": {
-          "name": "rooms_room_type_check",
-          "value": "\"rooms\".\"room_type\" in ('bathroom', 'laundry', 'bathroom_laundry', 'room_with_drain', 'other_wet_room', 'kitchen', 'living_kitchen', 'toilet', 'sauna', 'boiler_room', 'technical_room', 'cold_room', 'swimming_pool', 'living_room', 'bedroom', 'office', 'family_room', 'dining_room', 'entrance', 'hallway', 'stairwell', 'wardrobe', 'storage', 'external_storage', 'basement_living_room', 'basement_room', 'crawl_space', 'attic_living_room', 'unfinished_attic', 'garage', 'glazed_balcony', 'workshop', 'other')"
-        },
-        "rooms_area_type_check": {
-          "name": "rooms_area_type_check",
-          "value": "\"rooms\".\"area_type\" in ('bra_i', 'bra_e', 'bra_b')"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.assignment_team_members": {
       "name": "assignment_team_members",
       "schema": "",
@@ -3945,6 +3270,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "contact_id": {
+          "name": "contact_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "firm_id": {
+          "name": "firm_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -3959,6 +3296,27 @@
             },
             {
               "expression": "assignment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "assignment_parties_organization_id_contact_id_idx": {
+          "name": "assignment_parties_organization_id_contact_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "contact_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3991,6 +3349,36 @@
           "columnsFrom": [
             "organization_id",
             "assignment_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "assignment_parties_contact_fk": {
+          "name": "assignment_parties_contact_fk",
+          "tableFrom": "assignment_parties",
+          "tableTo": "contacts",
+          "columnsFrom": [
+            "organization_id",
+            "contact_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "assignment_parties_firm_fk": {
+          "name": "assignment_parties_firm_fk",
+          "tableFrom": "assignment_parties",
+          "tableTo": "firms",
+          "columnsFrom": [
+            "organization_id",
+            "firm_id"
           ],
           "columnsTo": [
             "organization_id",

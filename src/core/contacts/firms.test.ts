@@ -338,6 +338,8 @@ describe("5.2 tenant-isolasjon (firma)", () => {
   });
 
   it("5.2.5 updateFirm endrer bare firma i egen organisasjon", async () => {
+    // Sifrene fjernes, så navnet aldri ligner et fødselsnummer (11 sifre på rad i en uuid)
+    const digitFree = (id: string) => id.replace(/\d/g, "");
     const firmFor = new Map<string, string>();
     let firmB = "";
     let employeeB = "";
@@ -355,7 +357,7 @@ describe("5.2 tenant-isolasjon (firma)", () => {
           actor,
           organizationId,
           firmFor.get(organizationId) ?? randomUUID(),
-          firmInput({ name: `Endret av ${actor.id}`, orgNumber: null }),
+          firmInput({ name: `Endret av ${digitFree(actor.id)}`, orgNumber: null }),
         ),
       ],
       idOf: (row) => row.id,
@@ -364,7 +366,7 @@ describe("5.2 tenant-isolasjon (firma)", () => {
     // Bs firma er endret nøyaktig én gang, av admin i B
     const [adminB] = await db.select().from(employees).where(eq(employees.id, employeeB));
     const rowB = await firmRow(firmB);
-    expect(rowB.name).toBe(`Endret av ${adminB!.userId}`);
+    expect(rowB.name).toBe(`Endret av ${digitFree(adminB!.userId!)}`);
     expect(rowB.rowVersion).toBe(2);
   });
 });

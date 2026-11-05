@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useCallback, useEffect, useState } from "react";
+import { useActionState, useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { Checkbox, ChoiceGroup, Field, Input } from "@/shared/ui/form";
+import { ContactPicker, type ContactHit } from "../../kontakter/contact-picker";
 import { FormErrors, SubmitButton } from "../../form-parts";
 import { initialFormState, textValue, type FormState } from "../../form-state";
 
@@ -25,6 +26,8 @@ export type PartyValues = {
   firmName: string;
   email: string;
   phone: string;
+  /** Kontakten i registeret parten er koblet til, eller `null`. */
+  contactId: string | null;
 } & Receives;
 
 export const EMPTY_PARTY: PartyValues = {
@@ -33,6 +36,7 @@ export const EMPTY_PARTY: PartyValues = {
   firmName: "",
   email: "",
   phone: "",
+  contactId: null,
   receivesReport: false,
   receivesInvoice: false,
   receivesMessages: false,
@@ -58,9 +62,10 @@ function receivesFrom(state: FormState, fallback: Receives): Receives {
 }
 
 /**
- * Skjemaet for en part: rolle først, så navn, firma, e-post og telefon, og hva parten mottar.
+ * Skjemaet for en part: søk i kontakter øverst, så rolle, navn, firma, e-post og telefon, og hva parten mottar.
  * Når rollen velges, forhåndsutfylles avkrysningene etter rollen; de kan endres etterpå.
- * Brukes både til «Legg til part» og «Endre». `onSaved` kalles når lagringen gikk bra.
+ * Valgt kontakt fyller navn, firma, e-post og telefon (de kan rettes) og kobler parten til
+ * kontakten. Brukes både til «Legg til part» og «Endre». `onSaved` kalles når lagringen gikk bra.
  */
 export function PartyForm({
   idPrefix,
@@ -93,6 +98,29 @@ export function PartyForm({
     if (savedAttempt > 0) onSaved();
   }, [savedAttempt, onSaved]);
 
+  const nameRef = useRef<HTMLInputElement>(null);
+  const firmNameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+
+  function onContactSelect(contact: ContactHit) {
+    const filled: [RefObject<HTMLInputElement | null>, string][] = [
+      [nameRef, contact.name],
+      [firmNameRef, contact.firmName ?? ""],
+      [emailRef, contact.email ?? ""],
+      [phoneRef, contact.phone ?? ""],
+    ];
+    for (const [ref, value] of filled) {
+      if (ref.current) ref.current.value = value;
+    }
+  }
+
+  // Startverdien: id-en fra parten og navnet i friteksten (ingen oppslag i registeret).
+  const initialContactId = textValue(state, "contactId", initial.contactId);
+  const initialContact = initialContactId
+    ? { id: initialContactId, name: textValue(state, "name", initial.name) }
+    : null;
+
   function onRoleChange(value: string) {
     const option = roles.find((role) => role.value === value);
     if (option) setReceives(option.receives);
@@ -102,6 +130,13 @@ export function PartyForm({
     <form action={formAction} noValidate className="space-y-5">
       <FormErrors state={state} />
       <input type="hidden" name={hidden.name} value={hidden.value} />
+      <ContactPicker
+        idPrefix={idPrefix}
+        name="contactId"
+        initial={initialContact}
+        error={state.fieldErrors.contactId}
+        onSelect={onContactSelect}
+      />
       <Field label="Rolle" htmlFor={`${idPrefix}-role`} error={state.fieldErrors.role}>
         <select
           id={`${idPrefix}-role`}
@@ -120,6 +155,7 @@ export function PartyForm({
       </Field>
       <Field label="Navn" htmlFor={`${idPrefix}-name`} error={state.fieldErrors.name}>
         <Input
+          ref={nameRef}
           id={`${idPrefix}-name`}
           name="name"
           maxLength={200}
@@ -129,6 +165,7 @@ export function PartyForm({
       </Field>
       <Field label="Firma" htmlFor={`${idPrefix}-firmName`} error={state.fieldErrors.firmName}>
         <Input
+          ref={firmNameRef}
           id={`${idPrefix}-firmName`}
           name="firmName"
           maxLength={200}
@@ -138,6 +175,7 @@ export function PartyForm({
       </Field>
       <Field label="E-post" htmlFor={`${idPrefix}-email`} error={state.fieldErrors.email}>
         <Input
+          ref={emailRef}
           id={`${idPrefix}-email`}
           name="email"
           type="email"
@@ -148,6 +186,7 @@ export function PartyForm({
       </Field>
       <Field label="Telefon" htmlFor={`${idPrefix}-phone`} error={state.fieldErrors.phone}>
         <Input
+          ref={phoneRef}
           id={`${idPrefix}-phone`}
           name="phone"
           type="tel"

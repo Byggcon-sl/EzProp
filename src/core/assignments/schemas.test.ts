@@ -474,6 +474,34 @@ describe("statusflyt 2.3 grunnen er valgfri ved fram", () => {
   });
 });
 
+// Koble kontakter (docs/funksjoner/fase2a-koble-kontakter-testplan.md 3.1)
+describe("koble kontakter 3.1 contactId på parten", () => {
+  const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
+  const CONTACT_ID = "0190a3c4-7b2e-7c00-8a00-000000000001";
+
+  it("gyldig uuid godtas", () => {
+    expect(expectAccepted({ contactId: CONTACT_ID }).contactId).toBe(CONTACT_ID);
+  });
+
+  it.each([
+    ["tom streng", ""],
+    ["bare mellomrom", "   "],
+    ["null", null],
+  ])("%s blir null", (_name, contactId) => {
+    expect(expectAccepted({ contactId }).contactId).toBeNull();
+  });
+
+  it("manglende felt blir null", () => {
+    expect(expectAccepted({}).contactId).toBeNull();
+  });
+
+  it.each(["abc", "1"])("«%s» gir «Kontakten finnes ikke.»", (contactId) => {
+    const result = parseParty({ contactId });
+    expect(result.success).toBe(false);
+    expect(messagesFor(result, "contactId")).toEqual([CONTACT_NOT_FOUND]);
+  });
+});
+
 describe("2.9 alle norske meldinger i kortet er dekket", () => {
   it("EmployeeNotFoundError har meldingen «Den ansatte finnes ikke.»", () => {
     expect(new EmployeeNotFoundError().message).toBe(EMPLOYEE_NOT_FOUND);
@@ -483,5 +511,56 @@ describe("2.9 alle norske meldinger i kortet er dekket", () => {
   // Står sist i filen: testene kjører i rekkefølge, så alle meldingene over er samlet nå.
   it("hver av de seks meldingene er brukt i minst én test over", () => {
     expect([...CARD_MESSAGES].filter((message) => !usedMessages.has(message))).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Kobling til kontaktregisteret (docs/funksjoner/fase2a-koble-kontakter-testplan.md 3.1).
+// `contactId` er valgfri uuid; tom, bare mellomrom og manglende blir `null`; ikke-uuid gir
+// «Kontakten finnes ikke.». Testdata er oppdiktet.
+// ---------------------------------------------------------------------------------------------
+
+describe("3.1 contactId på parten (koble kontakter)", () => {
+  const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
+  const CONTACT_ID = "0190a000-0000-7000-8000-000000000070";
+
+  function contactIdOf(input: Record<string, unknown>): unknown {
+    const result = partyInputSchema.safeParse({ ...VALID, ...input });
+    expect(result.success, JSON.stringify(result.success ? null : result.error.issues)).toBe(true);
+    return result.success ? (result.data as Record<string, unknown>).contactId : undefined;
+  }
+
+  it("gyldig uuid godtas og beholdes", () => {
+    expect(contactIdOf({ contactId: CONTACT_ID })).toBe(CONTACT_ID);
+  });
+
+  it.each([
+    ["tom streng", { contactId: "" }],
+    ["bare mellomrom", { contactId: "   " }],
+    ["null", { contactId: null }],
+    ["manglende felt", {}],
+  ])("%s gir null", (_name, input) => {
+    expect(contactIdOf(input)).toBeNull();
+  });
+
+  it.each(["abc", "1", "1 or 1=1"])("«%s» gir «Kontakten finnes ikke.» ved contactId", (value) => {
+    const result = partyInputSchema.safeParse({ ...VALID, contactId: value });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues
+        .filter((issue) => String(issue.path[0] ?? "") === "contactId")
+        .map((issue) => issue.message);
+      expect(messages).toContain(CONTACT_NOT_FOUND);
+    }
+  });
+
+  it("firmId fra skjemaet tas bort (firmaet følger kontakten i kjernen)", () => {
+    const result = partyInputSchema.safeParse({
+      ...VALID,
+      contactId: CONTACT_ID,
+      firmId: "0190a000-0000-7000-8000-000000000060",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).not.toHaveProperty("firmId");
   });
 });

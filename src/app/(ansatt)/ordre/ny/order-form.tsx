@@ -1,14 +1,16 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef } from "react";
 import { Card } from "@/shared/ui/card";
 import { Checkbox, Field, Input } from "@/shared/ui/form";
 import { FormActions, FormErrors } from "../../form-parts";
+import { ContactPicker, type ContactHit } from "../../kontakter/contact-picker";
 import { initialFormState, textValue, type FormState } from "../../form-state";
 
 /**
  * Skjemaet for ny ordre fra e-posten. Én kolonne (PC og iPad). Ingen felt for kilde eller
- * rapporttype; kjernen setter dem.
+ * rapporttype; kjernen setter dem. Bestilleren kan velges i kontaktregisteret; da fylles «Hvem
+ * bestilte» med «Navn, Firma», og ordren kobles til kontakten.
  */
 export function OrderForm({
   action,
@@ -22,6 +24,15 @@ export function OrderForm({
   const error = (name: string) => state.fieldErrors[name];
   const sellerDeclarationChecked =
     state.attempt > 0 ? state.values.sellerDeclarationReceived === "on" : false;
+  const orderedByRef = useRef<HTMLInputElement>(null);
+
+  function onContactSelect(contact: ContactHit) {
+    if (orderedByRef.current) {
+      orderedByRef.current.value = contact.firmName
+        ? `${contact.name}, ${contact.firmName}`
+        : contact.name;
+    }
+  }
 
   return (
     <form action={formAction} noValidate>
@@ -44,13 +55,21 @@ export function OrderForm({
             defaultValue={textValue(state, "receivedAt", receivedAtDefault)}
           />
         </Field>
+        <ContactPicker
+          idPrefix="orderedBy"
+          name="orderedByContactId"
+          initial={null}
+          error={error("orderedByContactId")}
+          onSelect={onContactSelect}
+        />
         <Field
           label="Hvem bestilte (valgfritt)"
           htmlFor="orderedByText"
-          hint="Navn og firma, slik det sto i e-posten. Telefon og e-post legges inn når kontakter kommer."
+          hint="Navn og firma, slik det sto i e-posten. Velg kontakten i søket over, så fylles feltet ut."
           error={error("orderedByText")}
         >
           <Input
+            ref={orderedByRef}
             id="orderedByText"
             name="orderedByText"
             maxLength={200}

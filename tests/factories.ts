@@ -483,6 +483,10 @@ type PartyOverrides = {
   receivesReport?: boolean;
   receivesInvoice?: boolean;
   receivesMessages?: boolean;
+  /** Kontakten i registeret. Må høre til samme organisasjon (fremmednøkkel). */
+  contactId?: string | null;
+  /** Firmaet. Må høre til samme organisasjon (fremmednøkkel). */
+  firmId?: string | null;
   deletedAt?: Date | null;
   deletedBy?: string | null;
 };
@@ -511,6 +515,8 @@ export async function createAssignmentParty(
       receivesReport: overrides.receivesReport ?? false,
       receivesInvoice: overrides.receivesInvoice ?? false,
       receivesMessages: overrides.receivesMessages ?? false,
+      contactId: overrides.contactId ?? null,
+      firmId: overrides.firmId ?? null,
       deletedAt: overrides.deletedAt ?? null,
       deletedBy: overrides.deletedBy ?? null,
     })

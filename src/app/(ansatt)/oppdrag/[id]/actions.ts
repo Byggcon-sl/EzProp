@@ -24,6 +24,7 @@ import {
   type PartyRole,
   type TeamRole,
 } from "@/core/assignments";
+import { ContactNotFoundError } from "@/core/contacts";
 import {
   CommonAreasNotApplicableError,
   saveAssignmentProperty,
@@ -43,6 +44,13 @@ const ROUTE = "/oppdrag";
 /** Feilene fra kjernen som oppdragssiden viser med egen tekst. */
 const TEAM_ERRORS: readonly KnownError[] = [
   { error: EmployeeNotFoundError, field: "employeeId", message: "Den ansatte finnes ikke." },
+];
+
+const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
+
+/** Kontakten fra søket finnes ikke (fremmed, ukjent eller slettet): feil ved søket, ikke 500. */
+const PARTY_ERRORS: readonly KnownError[] = [
+  { error: ContactNotFoundError, field: "contactId", message: CONTACT_NOT_FOUND },
 ];
 
 const COMMON_AREAS_ERRORS: readonly KnownError[] = [
@@ -83,7 +91,7 @@ function readFields<T extends string>(formData: FormData, fields: readonly T[]) 
   return values;
 }
 
-const PARTY_TEXT_FIELDS = ["role", "name", "firmName", "email", "phone"] as const;
+const PARTY_TEXT_FIELDS = ["role", "name", "firmName", "email", "phone", "contactId"] as const;
 const PARTY_RECEIVES_FIELDS = ["receivesReport", "receivesInvoice", "receivesMessages"] as const;
 
 /** Svaret når noe ble lagret: ingen feil, og `attempt` økes slik at skjemaet ser at det er lagret. */
@@ -154,7 +162,15 @@ function partyInput(values: Record<string, string>, role: PartyRole) {
     receivesReport: values.receivesReport === "on",
     receivesInvoice: values.receivesInvoice === "on",
     receivesMessages: values.receivesMessages === "on",
+    // Tomt felt betyr «ingen kobling». Kjernen setter firmaet ut fra kontakten.
+    contactId: optional(values.contactId) ?? null,
   };
+}
+
+/** En kontakt-id som ikke er uuid, kan ikke finnes. Kjernen kalles ikke. */
+function invalidContact(contactId: string | undefined) {
+  const trimmed = (contactId ?? "").trim();
+  return trimmed !== "" && !isUuid(trimmed);
 }
 
 /** «Lagre» på én linje i teamet. «Ingen» (tom verdi) fjerner personen fra rollen. */
@@ -288,15 +304,20 @@ export async function addPartyAction(previous: FormState, formData: FormData): P
 
   const role = values.role ?? "";
   if (!isPartyRole(role)) return failure(previous, values, { role: "Velg en rolle." });
+  if (invalidContact(values.contactId)) {
+    return failure(previous, values, { contactId: CONTACT_NOT_FOUND });
+  }
 
   try {
     await addParty(context.actor, context.organizationId, assignmentId, partyInput(values, role));
   } catch (error) {
-    return errorResult(error, previous, values, {
-      route: `${ROUTE}/[id]`,
-      userId: context.actor.id,
-      assignmentId,
-    });
+    return errorResult(
+      error,
+      previous,
+      values,
+      { route: `${ROUTE}/[id]`, userId: context.actor.id, assignmentId },
+      { known: PARTY_ERRORS },
+    );
   }
   refresh();
   return saved(previous);
@@ -314,15 +335,20 @@ export async function updatePartyAction(
 
   const role = values.role ?? "";
   if (!isPartyRole(role)) return failure(previous, values, { role: "Velg en rolle." });
+  if (invalidContact(values.contactId)) {
+    return failure(previous, values, { contactId: CONTACT_NOT_FOUND });
+  }
 
   try {
     await updateParty(context.actor, context.organizationId, partyId, partyInput(values, role));
   } catch (error) {
-    return errorResult(error, previous, values, {
-      route: `${ROUTE}/[id]`,
-      userId: context.actor.id,
-      partyId,
-    });
+    return errorResult(
+      error,
+      previous,
+      values,
+      { route: `${ROUTE}/[id]`, userId: context.actor.id, partyId },
+      { known: PARTY_ERRORS },
+    );
   }
   refresh();
   return saved(previous);

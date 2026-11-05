@@ -11,6 +11,8 @@ Sist oppdatert: 04.11.2026 (PR #82 manuell ordre og oppdragsnummer merget kl. 17
 
 Sist oppdatert: 05.11.2026 (eiendom og matrikkel på oppdraget levert som PR mot `main`, versjon 0.2.77)
 Sist oppdatert: 05.11.2026 (oppgavekort for bygninger, etasjer, areal og rom laget, branch `fase2a-bygninger-areal-rom` fra `main`)
+Sist oppdatert: 05.11.2026 (oppgavekort for kobling av parter og bestiller til kontakter: `docs/funksjoner/fase2a-koble-kontakter.md`, branch `fase2a-koble-kontakter`; PR #95 og #96 er merget)
+
 Sist oppdatert: 05.11.2026 (kontakter og firma levert som PR #95 mot `main`, versjon 0.2.81; PR #91–#94 er merget)
 **Levert (05.11.2026):** fase 2a, statusflyten med fire statuser, kansellering og merket «Rettet». Branch `fase2a-statusflyt` fra `main` (eiendom og matrikkel, PR #91, ble merget underveis, så `main` er flettet inn), oppgavekort `docs/funksjoner/fase2a-statusflyt.md`, versjon 0.2.79, beslutninger A74–A77 (omnummerert fra A69–A72, som ble brukt av eiendom og matrikkel). Ingen migrering. Roller: forenkler, sikkerhet-personvern, test-leder, utvikler, testskriver. Ingen alvorlige funn; småfunn står i PR-en (kandidater til en liten oppgave: test av merket «Rettet» i kortet, dobbel sjekk av oppdragsnummeret i adressen, forsvarskode og for stor offentlig flate i `src/core/assignments`). Statusdelen i `actions.test.ts` ble tatt ut ved flettingen, fordi `status-actions.test.ts` dekker det samme.
 Sist oppdatert: 05.11.2026 (statusflyten levert som PR mot `main`, versjon 0.2.79; PR #91 eiendom og matrikkel merget)
