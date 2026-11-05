@@ -251,7 +251,9 @@ test.describe("sertifisering i adminområdet (pc og iPad liggende)", () => {
       await logIn(admin, ADMIN_EMAIL);
       const employee = await createEmployeeAndOpen(admin);
       employeeName = employee.name;
-      await addCertification(admin, addDays(todayInOslo(), 15));
+      const validTo = addDays(todayInOslo(), 15);
+      await addCertification(admin, validTo);
+      await expect(certItem(admin, validTo)).toHaveCount(1);
       await admin.goto(LIST_URL);
       await expect(listRow(admin, employeeName)).toHaveCount(1);
     } finally {
