@@ -17,8 +17,10 @@ import {
   createCertification,
   createCommonAreas,
   createCompany,
+  createContact,
   createEmployee,
   createFile,
+  createFirm,
   createFloor,
   createFloorArea,
   createIntegrationConnection,
@@ -125,6 +127,14 @@ export const tenantTables: TenantTableEntry[] = [
     insertRow: async (organizationId) => (await createCompany(organizationId)).id,
   },
   {
+    table: "contacts",
+    testFile: "src/core/contacts/contacts.test.ts",
+    insertRow: async (organizationId) => {
+      const firm = await createFirm(organizationId);
+      return (await createContact(organizationId, { firmId: firm.id })).id;
+    },
+  },
+  {
     table: "employee_permissions",
     testFile: "src/core/organization/employee-permissions.test.ts",
     insertRow: async (organizationId) => {
@@ -173,6 +183,11 @@ export const tenantTables: TenantTableEntry[] = [
     table: "files",
     testFile: "src/core/files/files.service.test.ts",
     insertRow: async (organizationId) => (await createFile(organizationId)).id,
+  },
+  {
+    table: "firms",
+    testFile: "src/core/contacts/firms.test.ts",
+    insertRow: async (organizationId) => (await createFirm(organizationId)).id,
   },
   {
     table: "floor_areas",

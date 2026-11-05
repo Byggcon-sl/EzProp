@@ -16,14 +16,33 @@ export {
   type TeamRole,
 } from "./codes";
 export { nextAssignmentNumber } from "./number-sequence";
-export { EmployeeNotFoundError } from "./errors";
 export {
+  AssignmentCannotBeCancelledError,
+  AssignmentStatusConflictError,
+  AssignmentTransitionNotAllowedError,
+  EmployeeNotFoundError,
+} from "./errors";
+export {
+  assignmentStatusSchema,
+  cancelAssignmentInputSchema,
+  changeAssignmentStatusInputSchema,
   hasNoNationalId,
   partyInputSchema,
+  statusChangeReasonSchema,
   teamChangeReasonSchema,
+  type CancelAssignmentInput,
+  type ChangeAssignmentStatusInput,
   type PartyInput,
   type PartyValues,
 } from "./schemas";
+export {
+  allowedTransitions,
+  canCancel,
+  isCorrected,
+  transitionKind,
+  type AssignmentTransitionKind,
+} from "./status-flow";
+export { cancelAssignment, changeAssignmentStatus, type AssignmentStatusResult } from "./status";
 export {
   getAssignment,
   type AssignmentDetail,

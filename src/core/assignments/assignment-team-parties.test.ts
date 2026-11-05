@@ -875,6 +875,8 @@ const ASSIGNMENT_KEYS = [
   "orderId",
   // 6.1: utstedende selskap (docs/agenter/oppgaver/fase2a-utstedende-selskap-testplan.md)
   "companyName",
+  // Statusflyten 3.7.1: merket «Rettet» (docs/funksjoner/fase2a-statusflyt-testplan.md)
+  "corrected",
   "team",
   "parties",
   "teamCandidates",
