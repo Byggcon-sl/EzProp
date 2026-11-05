@@ -24,8 +24,9 @@ import {
  * - hver bygning og hver etasje er et landemerke (region) med navnet som overskrift;
  * - «Legg til bygning», «Legg til etasje» og «Legg til rom» åpner et skjema med «Lagre»; det nye
  *   skjemaet er det siste i blokken (`.last()`);
- * - feltene heter «Navn», «Etasjenummer» (eller «Nivå»), «Under terreng», «BRA-i», «BRA-e»,
+ * - feltene heter «Navn …» (etasjen: «Etasje»), «Etasjenummer» (eller «Nivå»), «Under terreng», «BRA-i», «BRA-e»,
  *   «BRA-b», «ALH», «Målt av», «Metode», «Kommentar», «Romtype» og «Arealtype»;
+ * - hvert rom er et listepunkt med navnet (romtypen når navnet er tomt);
  * - summene vises som tekst med komma («180,1»).
  *
  * Støtter hovedmål: tid (forslag til arealtype og «under terreng», «Målt av» forhåndsvalgt, sum
@@ -50,6 +51,7 @@ const FIRST_FLOOR = "1. etasje";
 
 const LABEL = {
   name: /^Navn/,
+  floorName: /^(Navn|Etasje(?!nummer))/,
   level: /^(Etasjenummer|Nivå)/,
   belowGround: /^Under terreng/,
   braI: /^BRA-i/,
@@ -162,7 +164,7 @@ async function addFloor(
 ) {
   const scope = block(page, building);
   await button(scope, "Legg til etasje").click();
-  await scope.getByLabel(LABEL.name).last().fill(values.name);
+  await scope.getByLabel(LABEL.floorName).last().fill(values.name);
   await scope.getByLabel(LABEL.level).last().fill(values.level);
   const below = scope.getByLabel(LABEL.belowGround).last();
   if (values.belowGround) await below.check();
@@ -221,6 +223,7 @@ test.describe("bygninger, areal og rom (pc og ipad)", () => {
   test("7.1–7.2 hovedflyt: bygning, etasjer, areal og rom; sum 180,1; verdiene står etter ny lasting, og kjelleren står øverst", async ({
     page,
   }) => {
+    test.slow();
     await logIn(page);
     await newAssignmentWithProperty(page);
     await openBuildings(page);
@@ -278,13 +281,11 @@ test.describe("bygninger, areal og rom (pc og ipad)", () => {
     await page.reload();
     const floor = block(block(page, BUILDING), FIRST_FLOOR);
     await expect(floor).toContainText("Garasje");
-    const areaType = floor.getByLabel(LABEL.areaType);
-    if ((await areaType.count()) > 0) {
-      await expect(areaType.first().locator("option:checked")).toHaveText("BRA-i");
-    } else {
-      await expect(floor).toContainText("BRA-i");
-      await expect(floor).not.toContainText("BRA-e");
-    }
+    // Rommet er et listepunkt med navnet (romtypen når navnet er tomt)
+    const room = floor.getByRole("listitem", { name: /^Garasje/ });
+    await expect(room).toHaveCount(1);
+    await expect(room).toContainText("BRA-i");
+    await expect(room).not.toContainText("BRA-e");
   });
 
   test("7.4 fjerning: etasje med rom gir «Fjern rommene først.»; fjern rommet, så etasjen → borte", async ({
@@ -348,6 +349,7 @@ test.describe("bygninger, areal og rom (pc og ipad)", () => {
     page,
     browser,
   }) => {
+    test.slow();
     const { baseURL, viewport, hasTouch } = test.info().project.use;
     const adminContext = await browser.newContext({ baseURL, viewport, hasTouch, locale: "nb-NO" });
     const adminPage = await adminContext.newPage();
@@ -401,21 +403,26 @@ test.describe("iPad (prosjektet ipad)", () => {
     test.skip(test.info().project.name !== "ipad", "Bare i prosjektet ipad");
   });
 
-  test("7.9 stående: ingen vannrett rulling, én kolonne, knapper og nedtrekkslister minst 44 px", async ({
-    page,
-  }) => {
+  /** Stående iPad med bolighuset fra hovedflyten. Gir kjellerblokken. */
+  async function portraitTree(page: Page): Promise<Locator> {
     await page.setViewportSize(PORTRAIT);
     await logIn(page);
     const assignmentId = await newAssignmentWithProperty(page);
     await openBuildings(page);
     await buildFullTree(page);
-
     const url = `/oppdrag/${assignmentId}/bygninger`;
     await page.goto(url);
     await expectNoHorizontalScroll(page, url);
+    return block(block(page, BUILDING), BASEMENT);
+  }
+
+  test("7.9 stående: ingen vannrett rulling, og arealfeltene står i én kolonne", async ({
+    page,
+  }) => {
+    test.slow();
+    const basement = await portraitTree(page);
 
     // Én kolonne: arealfeltene i kjelleren starter likt og står under hverandre
-    const basement = block(block(page, BUILDING), BASEMENT);
     const names = ["braI", "braE", "braB", "alh", "measuredBy", "method"] as const;
     const boxes = await Promise.all(
       names.map((name) => basement.getByLabel(LABEL[name]).boundingBox()),
@@ -427,6 +434,11 @@ test.describe("iPad (prosjektet ipad)", () => {
       );
       if (index > 0) expect(box!.y).toBeGreaterThan(boxes[index - 1]!.y);
     }
+  });
+
+  test("7.9 stående: knapper og nedtrekkslister er minst 44 px høye", async ({ page }) => {
+    test.slow();
+    const basement = await portraitTree(page);
 
     await expectAtLeast44(button(page, "Legg til bygning"), "Legg til bygning");
     await expectAtLeast44(button(block(page, BUILDING), "Legg til etasje"), "Legg til etasje");

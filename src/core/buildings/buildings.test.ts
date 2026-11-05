@@ -309,6 +309,20 @@ function expectNoSensitive(values: unknown[]) {
   for (const value of SENSITIVE) expect(text, value).not.toContain(value);
 }
 
+/** Tidspunkt fra en rå rad (tekst eller `Date`) som millisekunder. */
+function timeOf(value: unknown): number {
+  return new Date(value as string | Date).getTime();
+}
+
+/** Ansatt-id-en til admin i organisasjonen (fra `expectTenantIsolation`). */
+async function adminEmployeeIdOf(organizationId: string): Promise<string> {
+  const [row] = await db
+    .select({ id: employees.id })
+    .from(employees)
+    .where(eq(employees.organizationId, organizationId));
+  return row!.id;
+}
+
 /** Admin-aktøren i organisasjonen (fra `expectTenantIsolation`). */
 async function adminActorOf(organizationId: string): Promise<Actor> {
   const [row] = await db
@@ -509,14 +523,23 @@ describe("4.1 tilgang per rolle", () => {
     await setInspectorsEditAll(s.org.id, false);
 
     await getAssignmentBuildings(s.admin, s.org.id, s.assignment.id);
-    for (const write of WRITES) await runWrite(write, s.admin, s.org.id, s);
-
-    expect(await rowCount("events")).toBe(WRITES.length);
+    // Fjerningene først, så lagringene (saveFloor bruker den tomme bygningen fra oppsettet)
+    await runWrite("removeRoom", s.admin, s.org.id, s);
+    await runWrite("removeFloor", s.admin, s.org.id, s);
+    await runWrite("removeBuilding", s.admin, s.org.id, s);
     const result = await getAssignmentBuildings(s.admin, s.org.id, s.assignment.id);
     const ids = idsIn(result);
     expect(ids).not.toContain(s.emptyBuildingId);
     expect(ids).not.toContain(s.emptyFloorId);
     expect(ids).not.toContain(s.roomId);
+
+    // De fire lagringene, hver på et nytt oppsett med admin og innstillingen av
+    for (const write of ["saveBuilding", "saveFloor", "saveFloorArea", "saveRoom"] as const) {
+      const fresh = await writeSetup();
+      await setInspectorsEditAll(fresh.org.id, false);
+      await runWrite(write, fresh.admin, fresh.org.id, fresh);
+    }
+    expect(await rowCount("events")).toBe(WRITES.length);
   });
 });
 
@@ -722,7 +745,8 @@ describe("4.2 tenant-isolasjon", () => {
     for (const org of orgs) {
       const removed = await rowById(table, target.get(org)!);
       expect(removed.deleted_at).not.toBeNull();
-      expect(removed.deleted_by).toBe((await adminActorOf(org)).id);
+      // deleted_by er den ansattes id (samme som resten av kjernen, grant.employeeId)
+      expect(removed.deleted_by).toBe(await adminEmployeeIdOf(org));
     }
     for (const id of untouched) expect((await rowById(table, id)).deleted_at).toBeNull();
   }
@@ -1040,7 +1064,7 @@ describe("4.4 slettede id-er og myk sletting", () => {
     ] as const) {
       const row = await rowById(table, id);
       expect(row.deleted_at, table).not.toBeNull();
-      expect(row.deleted_by, table).toBe(s.admin.id);
+      expect(row.deleted_by, table).toBe(s.adminEmployee.id);
     }
     const ids = idsIn(await getAssignmentBuildings(s.admin, s.org.id, s.assignment.id));
     expect(ids).not.toContain(s.roomId);
@@ -1325,7 +1349,8 @@ describe("4.5 oppførsel", () => {
     );
 
     const rows = (await rawRows("rooms")).sort(
-      (x, y) => (x.created_at as Date).getTime() - (y.created_at as Date).getTime(),
+      // Rå tekst fra databasen har mikrosekunder og sorterer riktig som tekst
+      (x, y) => String(x.created_at).localeCompare(String(y.created_at)),
     );
     const view = rows.map((row) => [row.room_type, row.area_type, row.below_ground]);
     expect(view).toEqual([
@@ -1376,9 +1401,7 @@ describe("4.5 oppførsel", () => {
 
       const [after] = await rawRows(table);
       expect(await tableCounts()).toEqual(counts);
-      expect((after!.updated_at as Date).toISOString()).toBe(
-        (before!.updated_at as Date).toISOString(),
-      );
+      expect(timeOf(after!.updated_at)).toBe(timeOf(before!.updated_at));
       expect(after!.row_version).toBe(before!.row_version);
     });
   });

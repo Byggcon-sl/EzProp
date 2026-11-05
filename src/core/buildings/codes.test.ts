@@ -237,15 +237,16 @@ describe("1.7 suggestAreaType", () => {
     expect(suggestAreaType(key as never)).toBe(expected);
   });
 
-  it.each(AREA_TYPE_CASES.filter(([key]) => !(key in NOT_BRA_I)))(
-    "%s → %s (alle andre 29 gir bra_i)",
-    (key, expected) => {
-      expect(suggestAreaType(key as never)).toBe(expected);
-    },
-  );
+  const OTHERS = AREA_TYPE_CASES.filter(([key]) => !(key in NOT_BRA_I) && key !== "bathroom");
 
-  it("29 romtyper gir bra_i", () => {
-    expect(AREA_TYPE_CASES.filter(([, type]) => type === "bra_i")).toHaveLength(29);
+  it.each(OTHERS)("%s → %s (alle andre 29 gir bra_i)", (key, expected) => {
+    expect(suggestAreaType(key as never)).toBe(expected);
+  });
+
+  it("de andre 29 gir bra_i, og 30 av 33 romtyper (med bad) gir bra_i", () => {
+    expect(OTHERS).toHaveLength(29);
+    expect(OTHERS.every(([, type]) => type === "bra_i")).toBe(true);
+    expect(AREA_TYPE_CASES.filter(([, type]) => type === "bra_i")).toHaveLength(30);
   });
 
   it.each(AREA_TYPE_CASES)("%s: romtypens defaultAreaType er %s", (key, expected) => {
