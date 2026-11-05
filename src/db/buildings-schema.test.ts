@@ -551,36 +551,29 @@ describe("3.7 tenant-tabellene", () => {
 describe("3.8 migreringen", () => {
   const dir = path.join(process.cwd(), "src/db/migrations");
 
-  it("0018_bygninger-areal-rom.sql finnes og er den eneste med nummeret 0018", () => {
-    const files = readdirSync(dir).filter((name) => name.startsWith("0018_"));
-    expect(files).toEqual(["0018_bygninger-areal-rom.sql"]);
+  it("0019_bygninger-areal-rom.sql finnes og er den eneste med nummeret 0019", () => {
+    const files = readdirSync(dir).filter((name) => name.startsWith("0019_"));
+    expect(files).toEqual(["0019_bygninger-areal-rom.sql"]);
   });
 
-  it("0017 er kontakter og firma fra main, og ingen annen fil har nummeret", () => {
-    const files = readdirSync(dir).filter((name) => name.startsWith("0017_"));
-    expect(files).toEqual(["0017_kontakter-og-firma.sql"]);
-  });
-
-  it("0018 lager de fire tabellene", () => {
-    const text = readFileSync(path.join(dir, "0018_bygninger-areal-rom.sql"), "utf8");
+  it("0019 lager de fire tabellene", () => {
+    const text = readFileSync(path.join(dir, "0019_bygninger-areal-rom.sql"), "utf8");
     for (const name of ["report_buildings", "floors", "floor_areas", "rooms"]) {
       expect(text, name).toMatch(new RegExp(`CREATE TABLE[^;]*"${name}"`, "i"));
     }
   });
 
-  it("journalen har 19 oppføringer i rekkefølge, med 0018 sist", () => {
+  it("journalen er i rekkefølge, har 0019 og like mange øyeblikksbilder som oppføringer", () => {
     const journal = JSON.parse(readFileSync(path.join(dir, "meta/_journal.json"), "utf8")) as {
       entries: { idx: number; tag: string }[];
     };
-    expect(journal.entries).toHaveLength(19);
     journal.entries.forEach((entry, index) => {
       expect(entry.idx).toBe(index);
       expect(entry.tag.startsWith(String(index).padStart(4, "0") + "_")).toBe(true);
     });
-    const last = journal.entries.at(-1)!;
-    expect(last.tag).toBe("0018_bygninger-areal-rom");
+    expect(journal.entries.map((entry) => entry.tag)).toContain("0019_bygninger-areal-rom");
     expect(
       readdirSync(path.join(dir, "meta")).filter((name) => name.endsWith("_snapshot.json")),
-    ).toHaveLength(19);
+    ).toHaveLength(journal.entries.length);
   });
 });

@@ -618,7 +618,7 @@ Romtypens **gruppe** styrer hvilke grupper av kontrollpunkter rommet får (våtr
 | `sort_order` | Rekkefølge |
 | `geometry` | Romskisse som mangekant (valgfritt, tomt nå). Krok for plantegning, LiDAR og fuktkart senere (K7, B9). |
 
-**Bygget i fase 2a (05.11.2026, bygninger, etasjer, areal og rom):** Tabellene `report_buildings`, `floors`, `floor_areas` og `rooms` (`src/db/schema/report-buildings.ts`, `floors.ts`, `floor-areas.ts`, `rooms.ts`, migrering `0018_bygninger-areal-rom`), kjernen i `src/core/buildings` og siden `/oppdrag/[id]/bygninger` med lenken «Bygninger, areal og rom» på `/oppdrag/[id]`. Bare for hånd på PC. Oppgavekort: `docs/funksjoner/fase2a-bygninger-areal-rom.md`; beslutningene A94–A98.
+**Bygget i fase 2a (05.11.2026, bygninger, etasjer, areal og rom):** Tabellene `report_buildings`, `floors`, `floor_areas` og `rooms` (`src/db/schema/report-buildings.ts`, `floors.ts`, `floor-areas.ts`, `rooms.ts`, migrering `0019_bygninger-areal-rom`), kjernen i `src/core/buildings` og siden `/oppdrag/[id]/bygninger` med lenken «Bygninger, areal og rom» på `/oppdrag/[id]`. Bare for hånd på PC. Oppgavekort: `docs/funksjoner/fase2a-bygninger-areal-rom.md`; beslutningene A94–A98.
 
 - **Alle fire tabellene** har `baseColumns`, unik indeks `(organization_id, id)` og sammensatte fremmednøkler `(organization_id, x_id)`, så en rad aldri kan peke inn i en annen organisasjon.
 - **`report_buildings`** har `assignment_id` (påkrevd, til `assignments`) og `name`. Per oppdrag til rapportene finnes; da får tabellen `report_id` (A94). Ingen `property_id`: eiendommen finnes via `assignments.property_id`.

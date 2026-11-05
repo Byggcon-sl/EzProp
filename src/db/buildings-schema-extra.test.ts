@@ -500,19 +500,19 @@ describe("3.7 tenant-tabellene", () => {
 describe("3.8 migreringen", () => {
   const dir = path.join(process.cwd(), "src/db/migrations");
 
-  it("0018 finnes, er den eneste med nummeret, og lager de fire tabellene", () => {
-    const files = readdirSync(dir).filter((name) => name.startsWith("0018_"));
+  it("0019 finnes, er den eneste med nummeret, og lager de fire tabellene", () => {
+    const files = readdirSync(dir).filter((name) => name.startsWith("0019_"));
     expect(files).toHaveLength(1);
     expect(files[0]).toMatch(/\.sql$/);
     const text = readFileSync(path.join(dir, files[0]!), "utf8");
     for (const table of ["report_buildings", "floors", "floor_areas", "rooms"]) {
-      expect(text, `0018 lager ${table}`).toMatch(new RegExp(`create table "?${table}"?`, "i"));
+      expect(text, `0019 lager ${table}`).toMatch(new RegExp(`create table "?${table}"?`, "i"));
     }
   });
 
   it("ingen annen migrering lager de fire tabellene", () => {
     const others = readdirSync(dir).filter(
-      (name) => name.endsWith(".sql") && !name.startsWith("0018_"),
+      (name) => name.endsWith(".sql") && !name.startsWith("0019_"),
     );
     for (const name of others) {
       const text = readFileSync(path.join(dir, name), "utf8");
