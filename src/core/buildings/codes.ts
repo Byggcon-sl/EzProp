@@ -19,7 +19,7 @@ export function areaTypeLabel(code: string): string {
   return AREA_TYPE_LABELS[code as AreaType] ?? code;
 }
 
-/** Hvordan arealet er målt (A86). `lidar` kommer som ny kode med iPadens LiDAR (K7). */
+/** Hvordan arealet er målt (A96). `lidar` kommer som ny kode med iPadens LiDAR (K7). */
 export const MEASURING_METHODS = ["laser", "drawing", "other"] as const;
 export type MeasuringMethod = (typeof MEASURING_METHODS)[number];
 
@@ -57,12 +57,12 @@ type RoomTypeDefinition = {
   readonly group: RoomTypeGroup;
   readonly defaultAreaType: AreaType;
   readonly defaultBelowGround: boolean;
-  /** Utkast, ikke godkjent av fagrådet (A85). */
+  /** Utkast, ikke godkjent av fagrådet (A95). */
   readonly draft: true;
 };
 
 /**
- * Romtypene (A85): Byggcons egen liste, kortere enn IVITs. Utkast, ikke godkjent av fagrådet.
+ * Romtypene (A95): Byggcons egen liste, kortere enn IVITs. Utkast, ikke godkjent av fagrådet.
  * Rekkefølgen er den som vises i nedtrekkslisten, gruppert etter `group`.
  */
 export const ROOM_TYPES = [
@@ -350,13 +350,13 @@ export function roomTypeLabel(code: string): string {
   return findRoomType(code)?.label ?? code;
 }
 
-/** Dataregel (A87): romtypens standard arealtype. Ukjent kode gir `bra_i`. */
+/** Dataregel (A97): romtypens standard arealtype. Ukjent kode gir `bra_i`. */
 export function suggestAreaType(roomType: string): AreaType {
   return findRoomType(roomType)?.defaultAreaType ?? "bra_i";
 }
 
 /**
- * Dataregel (A87): forslag til «under terreng» for et rom. Sant når etasjen er under terreng, eller
+ * Dataregel (A97): forslag til «under terreng» for et rom. Sant når etasjen er under terreng, eller
  * romtypen vanligvis er det. Hellere ett forslag for mye enn ett for lite (styrer hulltaking).
  */
 export function suggestBelowGround({
@@ -377,7 +377,7 @@ export type AreaValues = {
   alh?: number | null;
 };
 
-/** Summen per arealtype og BRA totalt, med én desimal. ALH er ikke med i BRA (A86). */
+/** Summen per arealtype og BRA totalt, med én desimal. ALH er ikke med i BRA (A96). */
 export type AreaSum = { braI: number; braE: number; braB: number; bra: number };
 
 /** Tideler som heltall, så 0,1 + 0,2 blir 0,3 uten flyttallsfeil. */
@@ -401,7 +401,7 @@ function addSums(sums: readonly AreaSum[]): AreaSum {
   return fromTenths(braI, braE, braB);
 }
 
-/** Dataregel (A86): BRA i én etasje = BRA-i + BRA-e + BRA-b. Uten areal (`null`) gir 0. */
+/** Dataregel (A96): BRA i én etasje = BRA-i + BRA-e + BRA-b. Uten areal (`null`) gir 0. */
 export function sumFloorArea(area: AreaValues | null | undefined): AreaSum {
   return fromTenths(tenths(area?.braI), tenths(area?.braE), tenths(area?.braB));
 }

@@ -1702,7 +1702,7 @@ describe("4.5 oppførsel", () => {
     });
   });
 
-  describe("4.5.6 forslag for rom (A87)", () => {
+  describe("4.5.6 forslag for rom (A97)", () => {
     async function floorWith(belowGround: boolean) {
       const { org, admin, assignment } = await orgWithAdmin();
       const building = await createBuilding(org.id, { assignmentId: assignment.id });

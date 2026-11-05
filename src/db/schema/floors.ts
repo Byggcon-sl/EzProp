@@ -15,7 +15,7 @@ import { reportBuildings } from "./report-buildings";
 
 /**
  * Etasjen i en bygning (docs/05-domenemodell.md 4.4). `level` gir rekkefølgen (−3 til 20), og
- * `below_ground` brukes som forslag for rommene i etasjen (A87).
+ * `below_ground` brukes som forslag for rommene i etasjen (A97).
  */
 export const floors = pgTable(
   "floors",

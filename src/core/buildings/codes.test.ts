@@ -254,7 +254,7 @@ describe("1.7 suggestAreaType", () => {
   });
 });
 
-describe("1.8 suggestBelowGround (A87)", () => {
+describe("1.8 suggestBelowGround (A97)", () => {
   it.each([
     ["basement_living_room", true, true],
     ["basement_living_room", false, true],

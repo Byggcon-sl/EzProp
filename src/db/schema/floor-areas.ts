@@ -10,7 +10,7 @@ function area(name: string) {
 }
 
 /**
- * Arealet per etasje (docs/05-domenemodell.md 4.4, A86): BRA-i, BRA-e, BRA-b og ALH, hvem som
+ * Arealet per etasje (docs/05-domenemodell.md 4.4, A96): BRA-i, BRA-e, BRA-b og ALH, hvem som
  * målte, metoden og en kommentar. Én aktiv rad per etasje. BRA er summen av BRA-i, BRA-e og BRA-b
  * og lagres ikke (`sumFloorArea` i `@/core/buildings`).
  *

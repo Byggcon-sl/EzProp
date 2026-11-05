@@ -6,7 +6,7 @@ export class PropertyMissingError extends Error {
   }
 }
 
-/** Bygningen har aktive etasjer og kan ikke fjernes (A88). Ingenting er endret. */
+/** Bygningen har aktive etasjer og kan ikke fjernes (A98). Ingenting er endret. */
 export class BuildingNotEmptyError extends Error {
   constructor() {
     super("Fjern etasjene først.");
@@ -14,7 +14,7 @@ export class BuildingNotEmptyError extends Error {
   }
 }
 
-/** Etasjen har aktive rom og kan ikke fjernes (A88). Ingenting er endret. */
+/** Etasjen har aktive rom og kan ikke fjernes (A98). Ingenting er endret. */
 export class FloorNotEmptyError extends Error {
   constructor() {
     super("Fjern rommene først.");

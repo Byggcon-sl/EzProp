@@ -524,7 +524,7 @@ describe("3.7 tenant-tabellene", () => {
     expect(columns).toEqual(expect.arrayContaining(["organization_id", "deleted_at"]));
   });
 
-  it("report_buildings har ingen property_id (eiendommen finnes via oppdraget, A84)", () => {
+  it("report_buildings har ingen property_id (eiendommen finnes via oppdraget, A94)", () => {
     const table = tables.find((candidate) => getTableName(candidate) === "report_buildings");
     expect(table).toBeDefined();
     const columns = Object.values(getTableColumns(table!)).map((column) => column.name);

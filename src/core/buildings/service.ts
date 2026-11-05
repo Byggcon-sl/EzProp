@@ -40,7 +40,7 @@ import {
 
 /*
  * Bygninger, etasjer, areal per etasje og rom på oppdraget (docs/05-domenemodell.md 4.4), per
- * oppdrag til rapportene finnes (A84). Lesing med `organization.read`, endring med
+ * oppdrag til rapportene finnes (A94). Lesing med `organization.read`, endring med
  * `assignment.edit`. All filtrering bruker `grant.organizationId`, aldri en id fra skjemaet.
  * Fremmed, ukjent, slettet eller ugyldig id gir `AccessDeniedError`; en rad under en slettet
  * forelder (oppdrag, bygning eller etasje) regnes som slettet. Skrivingene låser foreldreraden med
@@ -560,7 +560,7 @@ export async function saveBuilding(
   });
 }
 
-/** Fjerner (myk sletting) en bygning uten aktive etasjer, ellers `BuildingNotEmptyError` (A88). */
+/** Fjerner (myk sletting) en bygning uten aktive etasjer, ellers `BuildingNotEmptyError` (A98). */
 export async function removeBuilding(
   actor: Actor,
   organizationId: string,
@@ -681,7 +681,7 @@ export async function saveFloor(
 }
 
 /**
- * Fjerner (myk sletting) en etasje uten aktive rom, ellers `FloorNotEmptyError` (A88).
+ * Fjerner (myk sletting) en etasje uten aktive rom, ellers `FloorNotEmptyError` (A98).
  * Arealraden myk-slettes sammen med etasjen.
  */
 export async function removeFloor(
@@ -737,7 +737,7 @@ export async function removeFloor(
 }
 
 /**
- * Lager eller oppdaterer den ene arealraden i etasjen (A86). «Målt av»:
+ * Lager eller oppdaterer den ene arealraden i etasjen (A96). «Målt av»:
  * - tom og minst ett arealfelt fylt ut: den innloggede ansatte;
  * - tom og alle arealfeltene tomme: `null`;
  * - samme id som lagret før: godtas, også om personen har sluttet siden;
@@ -828,7 +828,7 @@ export async function saveFloorArea(
 
 /**
  * Lager (`roomId = null`) eller oppdaterer et rom i etasjen. Mangler arealtype eller «under
- * terreng» i input, brukes forslagene fra romtypen og etasjen (A87).
+ * terreng» i input, brukes forslagene fra romtypen og etasjen (A97).
  */
 export async function saveRoom(
   actor: Actor,

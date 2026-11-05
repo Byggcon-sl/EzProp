@@ -351,7 +351,7 @@ describe("3.4 sammensatte fremmednøkler: rad i A som peker inn i B avvises", ()
   });
 });
 
-describe("3.5 én aktiv arealrad per etasje (A86)", () => {
+describe("3.5 én aktiv arealrad per etasje (A96)", () => {
   it("to aktive arealrader på samme etasje avvises", async () => {
     const { org, floorId } = await orgWithFloor("Oppdiktet takst A");
     await insertArea(org.id, floorId, { bra_i: "123.4" });
@@ -473,7 +473,7 @@ describe("3.7 tenant-tabellene", () => {
     );
   });
 
-  it("report_buildings har ikke property_id (eiendommen finnes via oppdraget, A84)", () => {
+  it("report_buildings har ikke property_id (eiendommen finnes via oppdraget, A94)", () => {
     const table = tables.find((candidate) => getTableName(candidate) === "report_buildings");
     const columns = Object.values(getTableColumns(table!)).map((column) => column.name);
     expect(columns).toContain("assignment_id");

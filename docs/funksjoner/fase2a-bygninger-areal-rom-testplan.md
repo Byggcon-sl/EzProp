@@ -1,7 +1,7 @@
 # Testplan: Bygninger, etasjer, areal per etasje og rom
 
 - **Oppgavekort:** `docs/funksjoner/fase2a-bygninger-areal-rom.md`
-- **Dato:** 05.11.2026 (test-leder, før bygging; oppdatert etter runde 2: migrering `0018`, A84–A88, versjon 0.2.83, fletting med `origin/main`)
+- **Dato:** 05.11.2026 (test-leder, før bygging; oppdatert etter runde 2: migrering `0018`, A94–A98, versjon 0.2.83, fletting med `origin/main`)
 - **Støtter hovedmål:** tid (testene låser at arealtype og «under terreng» foreslås fra romtype og etasje, at «Målt av» settes til den innloggede, og at BRA summeres riktig, så takstmannen slipper å regne og skrive det samme flere ganger), reklamasjoner (måler, metode og kommentar per etasje er sporbare; summene har testsaker uten flyttallsfeil; kodene er låst i skjema og database) og KI først (strukturen bygning → etasje → areal og rom med faste koder er den samme som et senere forslag fra plantegning eller LiDAR kan fylle ut; testene viser at navn, kommentar og arealtall aldri havner i hendelser eller logg).
 
 Alle Vitest-tester mot databasen går mot `TEST_DATABASE_URL` med `resetDatabase` i `beforeEach`. Testdata er oppdiktet: bygninger «Bolighus» og «Garasje test», etasjer «Kjeller» og «1. etasje», rom med navn «Rom test», kommentar «Målt langs innvendig vegg test». Arealtall velges slik at de ikke kolliderer med id-er eller tidsstempler: `123.4`, `56.7`, `8.9`, `210.3`. «Fødselsnummer» er alltid `12345678901` (oppdiktet). Fast tid: `TEST_NOW`.
@@ -27,7 +27,7 @@ Fra kortet, punkt 1–8. Avvik føres i kortet under «Avgjørelser etter gjenno
 5. **gyldige felt per romtype** (`it.each` over `ROOM_TYPES`): `group` finnes i `ROOM_TYPE_GROUPS`, `defaultAreaType` i `AREA_TYPES`, `defaultBelowGround` er boolsk.
 6. **grupper som testsaker:** de fem våtrommene (inkludert `room_with_drain`) har `wet_room`; `kitchen` og `living_kitchen` har `kitchen`; `toilet` har `toilet`; `sauna`, `boiler_room`, `technical_room`, `cold_room`, `swimming_pool` har `special`; resten `other`.
 7. **`suggestAreaType`:** `bathroom` → `bra_i`, `garage` → `bra_e`, `external_storage` → `bra_e`, `glazed_balcony` → `bra_b`; og en `it.each` som viser at alle andre 29 gir `bra_i`.
-8. **`suggestBelowGround`, fire kombinasjoner (A87):**
+8. **`suggestBelowGround`, fire kombinasjoner (A97):**
    | romtype | etasje under terreng | forslag |
    |---|---|---|
    | `basement_living_room` | ja | ja |
@@ -168,7 +168,7 @@ Admin fra seed. Hver test lager egen ordre, oppdrag og eiendom med `uniqueSuffix
 - Ingen tilgangslogikk i siden eller handlingene utover `NO_ACCESS`; ingen id fra skjemaet brukes til filtrering uten `grant.organizationId`.
 - `origin/main` er flettet inn før sluttrunden; `tests/factories.ts`, `RESET_TABLES` og `tests/tenant-tables.ts` har både `contacts`/`firms` og de fire nye tabellene.
 - Kanselleringstesten 4.4.1b og handlingstesten med `AccessDeniedError` (6.4).
-- `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne; versjonen er 0.2.83 (main 0.2.82); migreringen er `0018`; beslutningene er A84–A88 overalt (kortet, `docs/09-apne-sporsmal.md`, `docs/05-domenemodell.md`, kodekommentarer) og main sine A78–A83 er uendret. Sjekkes mot `origin/main` og `origin/fase2a-statusflyt` rett før merge.
+- `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne; versjonen er 0.2.83 (main 0.2.82); migreringen er `0018`; beslutningene er A94–A98 overalt (kortet, `docs/09-apne-sporsmal.md`, `docs/05-domenemodell.md`, kodekommentarer) og main sine A78–A83 er uendret. Sjekkes mot `origin/main` og `origin/fase2a-statusflyt` rett før merge.
 
 ## Dekning av akseptkriteriene
 
