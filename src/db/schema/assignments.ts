@@ -11,12 +11,12 @@ import {
 } from "drizzle-orm/pg-core";
 import { baseColumns } from "./common";
 import { orders } from "./orders";
-import { offices } from "./organization-structure";
+import { companies, offices } from "./organization-structure";
 
 /**
  * Oppdraget (docs/05-domenemodell.md 4.3), minimalt i fase 2a (A54): nummer, kontor, type,
- * status og koblingen til ordren. Selskap, eiendom, team, ekstern referanse, statusflyt og
- * frister legges til av planpunktene som bruker dem.
+ * status, koblingen til ordren og utstedende selskap. Eiendom, ekstern referanse, statusflyt
+ * og frister legges til av planpunktene som bruker dem.
  *
  * `number` lages bare på serveren fra nummerserien (`nextAssignmentNumber`, D9) og er unikt per
  * organisasjon, også blant slettede rader. Faste koder står i `@/core/assignments/codes`.
@@ -31,6 +31,11 @@ export const assignments = pgTable(
     orderId: uuid("order_id"),
     assignmentType: text("assignment_type").notNull().default("condition_report"),
     status: text("status").notNull().default("ordered"),
+    /**
+     * Utstedende selskap: selskapet til ansvarlig takstmann, satt automatisk når ansvarlig settes
+     * eller byttes (`setTeamMember`, A65–A68). Tomt når ingen ansvarlig har selskap.
+     */
+    companyId: uuid("company_id"),
   },
   // Returtypen står fordi tabellene peker på hverandre (ellers klarer ikke TypeScript typene).
   (table): PgTableExtraConfigValue[] => [
@@ -43,6 +48,12 @@ export const assignments = pgTable(
       name: "assignments_office_fk",
       columns: [table.organizationId, table.officeId],
       foreignColumns: [offices.organizationId, offices.id],
+    }),
+    // Utstedende selskap må høre til samme organisasjon som oppdraget
+    foreignKey({
+      name: "assignments_company_fk",
+      columns: [table.organizationId, table.companyId],
+      foreignColumns: [companies.organizationId, companies.id],
     }),
     // `AnyPgColumn` fordi tabellene peker på hverandre (ordre → oppdrag og oppdrag → ordre).
     foreignKey({

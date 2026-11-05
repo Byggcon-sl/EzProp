@@ -4,7 +4,7 @@ import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core
 import { recordAuditEvent } from "@/core/audit";
 import { recordEvent } from "@/core/events";
 import { db } from "@/db/client";
-import { assignmentTeamMembers, employees } from "@/db/schema";
+import { assignments, assignmentTeamMembers, employees } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { TEAM_ROLES, type TeamRole } from "./codes";
 import { EmployeeNotFoundError } from "./errors";
@@ -16,6 +16,10 @@ import { lockAssignment } from "./shared";
  * (`to_at`, valgfri grunn) og lager en ny; ingenting skrives over eller slettes, så det alltid
  * står hvem som hadde ansvaret (reklamasjoner). Hendelse og revisjonslogg har bare id-er og
  * rollekoden, aldri grunnen eller navn.
+ *
+ * Utstedende selskap (A65–A68): når ansvarlig settes eller byttes, får oppdraget den ansattes
+ * selskap i samme transaksjon. Ingen ansvarlig, eller ansvarlig uten selskap, gir tomt selskap.
+ * Andre roller rører aldri selskapet.
  */
 
 const teamRoleSchema = z.enum(TEAM_ROLES, { error: "Velg en rolle." });
@@ -53,10 +57,12 @@ export async function setTeamMember(
     // (1) Lås oppdraget (organisasjonen og ikke slettet)
     const assignment = await lockAssignment(tx, grant, assignmentId);
 
-    // (2) Den ansatte finnes i organisasjonen, er ikke slettet og har ikke sluttet
+    // (2) Den ansatte finnes i organisasjonen, er ikke slettet og har ikke sluttet. Selskapet
+    // hentes i samme oppslag (også et mykt slettet selskap, A68).
+    let employeeCompanyId: string | null = null;
     if (employeeId !== null) {
       const [employee] = await tx
-        .select({ id: employees.id })
+        .select({ id: employees.id, companyId: employees.companyId })
         .from(employees)
         .where(
           and(
@@ -67,6 +73,7 @@ export async function setTeamMember(
           ),
         );
       if (!employee) throw new EmployeeNotFoundError();
+      employeeCompanyId = employee.companyId;
     }
 
     // (3) Den aktive raden for rollen
@@ -142,6 +149,43 @@ export async function setTeamMember(
       assignmentId: assignment.id,
       data: { teamRole, fromEmployeeId, toEmployeeId: employeeId },
     });
+
+    // (7) Utstedende selskap følger ansvarlig takstmann (A65–A68), bare ved faktisk endring
+    if (teamRole === "responsible") {
+      const [current] = await tx
+        .select({ companyId: assignments.companyId })
+        .from(assignments)
+        .where(
+          and(
+            eq(assignments.id, assignment.id),
+            eq(assignments.organizationId, grant.organizationId),
+          ),
+        );
+      const fromCompanyId = current?.companyId ?? null;
+      const toCompanyId = employeeCompanyId;
+      if (fromCompanyId !== toCompanyId) {
+        await tx
+          .update(assignments)
+          .set({ companyId: toCompanyId, updatedBy: grant.employeeId })
+          .where(
+            and(
+              eq(assignments.id, assignment.id),
+              eq(assignments.organizationId, grant.organizationId),
+            ),
+          );
+        await recordEvent(tx, grant, {
+          type: "assignment.company_changed",
+          assignmentId: assignment.id,
+          data: { fromCompanyId, toCompanyId },
+        });
+        await recordAuditEvent(tx, grant, {
+          entityType: "assignment",
+          entityId: assignment.id,
+          action: "update",
+          changes: { companyId: { from: fromCompanyId, to: toCompanyId } },
+        });
+      }
+    }
     return { changed: true };
   });
 }

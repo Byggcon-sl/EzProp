@@ -70,7 +70,18 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         </h1>
         <Badge tone="brand">{assignmentStatusLabel(assignment.status)}</Badge>
       </div>
-      <p className="mb-6 text-slate-600">Kontor: {assignment.officeName}</p>
+      <p className="text-slate-600">Kontor: {assignment.officeName}</p>
+      <div className="mb-6">
+        <p className="break-words text-slate-600">
+          Utstedende selskap: {assignment.companyName ?? "Ikke satt"}
+        </p>
+        {!assignment.companyName && (
+          <p className="text-sm text-slate-500">
+            Settes fra ansvarlig takstmann. Har den ansvarlige ikke selskap, legger admin det inn
+            under Ansatte.
+          </p>
+        )}
+      </div>
 
       <section aria-labelledby="team-heading" className="mb-8">
         <h2 id="team-heading" className="mb-3 text-xl font-semibold text-slate-900">

@@ -576,6 +576,9 @@ export const CHANGES_PATH = "/api/prove/synk/endringer";
 /** Oppdiktet takstmann for e2e. Ingen ekte navn eller adresser. */
 export const INSPECTOR_EMAIL = "takstmann.e2e@eksempel.no";
 
+/** Selskapet fra seed som e2e-takstmannen hører til (utstedende selskap på oppdraget). */
+export const INSPECTOR_COMPANY = "Byggcon Nord AS";
+
 /** Databasen appen i e2e bruker: `DATABASE_URL`, ellers `.env`, ellers standarden fra `.env.example`. */
 export function e2eDatabaseUrl(): string {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
@@ -638,6 +641,14 @@ export async function ensureInspector(): Promise<void> {
         returning id`;
     }
     if (!employee) throw new Error("Kunne ikke lage den ansatte for e2e");
+    // Utstedende selskap: takstmannen får «Byggcon Nord AS» fra seed, bare hvis selskap mangler.
+    await sql`
+      update employees set company_id = (
+        select c.id from companies c
+        where c.organization_id = ${organizationId} and c.legal_name = ${INSPECTOR_COMPANY}
+          and c.deleted_at is null
+        order by c.created_at limit 1)
+      where id = ${employee.id} and organization_id = ${organizationId} and company_id is null`;
     const roles = await sql<{ deleted_at: Date | null }[]>`
       select deleted_at from employee_roles
       where employee_id = ${employee.id} and role = 'inspector'`;
