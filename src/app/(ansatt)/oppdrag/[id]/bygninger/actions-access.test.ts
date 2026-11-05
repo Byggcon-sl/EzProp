@@ -1,7 +1,7 @@
 import { count, eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db/client";
-import { auditLog, events, organizations } from "@/db/schema";
+import { auditLog, events, organizations, reportBuildings } from "@/db/schema";
 import {
   createAssignment,
   createBuilding,
@@ -258,5 +258,26 @@ describe("6.4 takstmann uten skriverett får NO_ACCESS fra kjernen", () => {
       mocks.log.info.mock.calls,
     ]);
     for (const value of FORM_VALUES) expect(logged).not.toContain(value);
+  });
+
+  it("kontrollen: med innstillingen på kan den samme takstmannen lagre en bygning", async () => {
+    const { org, assignment } = await setup();
+    await db
+      .update(organizations)
+      .set({ settings: { "access.inspectors_edit_all": true } })
+      .where(eq(organizations.id, org.id));
+
+    const state = await saveBuildingAction(
+      initialFormState,
+      form({ assignmentId: assignment.id, buildingId: "", name: NEW_BUILDING }),
+    );
+
+    expect(state.message).toBeNull();
+    expect(mocks.revalidatePath).toHaveBeenCalled();
+    const [row] = await db
+      .select({ n: count() })
+      .from(reportBuildings)
+      .where(eq(reportBuildings.name, NEW_BUILDING));
+    expect(row!.n).toBe(1);
   });
 });

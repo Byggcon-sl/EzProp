@@ -362,6 +362,15 @@ describe("1.9 sumFloorArea", () => {
     }
     expect(sum.bra).toBe(Math.round((braI + braE + braB) * 10) / 10);
   });
+
+  it("9999,9 × 3 = 29999,7", () => {
+    expect(floorSum(area({ braI: 9999.9, braE: 9999.9, braB: 9999.9 })).bra).toBe(29999.7);
+  });
+
+  it("tall som tekst fra databasen (numeric) regnes likt", () => {
+    const sum = sumFloorArea({ braI: "0.1", braE: "0.2", braB: null, alh: "5.0" } as never);
+    expect(sum.bra).toBe(0.3);
+  });
 });
 
 describe("1.10 sumBuildingArea og sumAssignmentArea", () => {
@@ -380,6 +389,12 @@ describe("1.10 sumBuildingArea og sumAssignmentArea", () => {
       braI: 180.1,
       bra: 180.1,
     });
+  });
+
+  it("etasjer med 0,1 og 0,2 gir 0,3 uten flyttallsfeil", () => {
+    const sum = buildingSum([area({ braI: 0.1 }), area({ braI: 0.2 })]);
+    expect(sum.braI).toBe(0.3);
+    expect(sum.bra).toBe(0.3);
   });
 
   it("to bygninger: totalen er summen av bygningene", () => {

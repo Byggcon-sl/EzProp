@@ -532,7 +532,7 @@ describe("3.7 tenant-tabellene", () => {
   });
 
   it.each(NAMES)(
-    "%s står i tests/tenant-tables.ts med src/core/buildings/buildings.test.ts, og radbyggeren virker",
+    "%s står i tests/tenant-tables.ts med src/core/buildings/buildings.test.ts, radbyggeren virker, og deleted_at = null og row_version = 1 er standard",
     async (name) => {
       const entry = tenantTables.find((candidate) => candidate.table === name);
       expect(entry, `${name} i tests/tenant-tables.ts`).toBeDefined();
@@ -541,9 +541,13 @@ describe("3.7 tenant-tabellene", () => {
       const id = await entry!.insertRow(org.id);
       expect(id).toMatch(/^[0-9a-f-]{36}$/);
       const [row] = rowsOf(
-        await db.execute(sql`select organization_id from ${sql.identifier(name)} where id = ${id}`),
+        await db.execute(
+          sql`select organization_id, deleted_at, row_version from ${sql.identifier(name)} where id = ${id}`,
+        ),
       );
       expect(row!.organization_id).toBe(org.id);
+      expect(row!.deleted_at).toBeNull();
+      expect(row!.row_version).toBe(1);
     },
   );
 });
@@ -560,6 +564,16 @@ describe("3.8 migreringen", () => {
     const text = readFileSync(path.join(dir, "0019_bygninger-areal-rom.sql"), "utf8");
     for (const name of ["report_buildings", "floors", "floor_areas", "rooms"]) {
       expect(text, name).toMatch(new RegExp(`CREATE TABLE[^;]*"${name}"`, "i"));
+    }
+  });
+
+  it("ingen annen migrering lager de fire tabellene", () => {
+    const others = readdirSync(dir).filter(
+      (name) => name.endsWith(".sql") && !name.startsWith("0019_"),
+    );
+    for (const name of others) {
+      const text = readFileSync(path.join(dir, name), "utf8");
+      expect(text, name).not.toMatch(/create table "?(report_buildings|floors|floor_areas|rooms)"?/i);
     }
   });
 
