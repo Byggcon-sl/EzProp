@@ -2,7 +2,7 @@
 
 - **Fase:** 2a – Rapporten på PC
 - **Modul:** kjerne / `src/core/assignments` (spørringene), siden `/arbeidskoe`
-- **Status:** klar til bygging etter forhåndsvurdering runde 1 (autonom modus, beslutningene A99–A107)
+- **Status:** levert 05.11.2026 (autonom modus, beslutningene A99–A107)
 - **Branch:** `fase2a-arbeidsko` (bygger på `main`)
 - **Støtter hovedmål:** Tid: takstmannen ser med én gang hva som venter, finner et oppdrag med søk i stedet for å bla, og slipper å holde oversikten i hodet eller på lapper. Reklamasjoner: frister som er passert og oppdrag uten befaringsdato blir synlige, så ingenting blir liggende. KI først: køen er stedet der KI-forslag til godkjenning skal stå senere (se under).
 
