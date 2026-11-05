@@ -287,6 +287,182 @@ describe("2.8 grunn ved bytte", () => {
   });
 });
 
+// ---------------------------------------------------------------------------------------------
+// Statusflyten (docs/funksjoner/fase2a-statusflyt-testplan.md avsnitt 2): grunnen ved tilbake og
+// kansellering, og input til changeAssignmentStatus og cancelAssignment. Navnene på skjemaene er
+// utviklerens; testen finner dem på formen (felt `toStatus` for statusendring, `expectedStatus`
+// og `reason` uten `toStatus` for kansellering). Grunnen kan også ha et eget navn.
+// ---------------------------------------------------------------------------------------------
+
+type ObjectSchema = ZodType & { shape: Record<string, ZodType> };
+
+function objectSchemas(): ObjectSchema[] {
+  return Object.values(schemas as unknown as Record<string, unknown>).filter(
+    (value): value is ObjectSchema =>
+      typeof value === "object" &&
+      value !== null &&
+      "shape" in value &&
+      typeof (value as { shape: unknown }).shape === "object",
+  );
+}
+
+function statusChangeSchema(): ObjectSchema {
+  const found = objectSchemas().find((schema) => "toStatus" in schema.shape);
+  if (!found) throw new Error("fant ikke skjemaet for statusendring (felt toStatus) i ./schemas");
+  return found;
+}
+
+function cancelSchema(): ObjectSchema {
+  const found = objectSchemas().find(
+    (schema) =>
+      "expectedStatus" in schema.shape && "reason" in schema.shape && !("toStatus" in schema.shape),
+  );
+  if (!found) {
+    throw new Error("fant ikke skjemaet for kansellering (expectedStatus og reason) i ./schemas");
+  }
+  return found;
+}
+
+const STATUS_REASON_SCHEMA_NAMES = [
+  "statusReasonSchema",
+  "assignmentStatusReasonSchema",
+  "statusChangeReasonSchema",
+  "cancelReasonSchema",
+  "cancellationReasonSchema",
+  "requiredReasonSchema",
+] as const;
+
+/** Grunnen (1–500 tegn): eget skjema hvis det finnes, ellers feltet i kanselleringen. */
+function statusReasonSchema(): ZodType {
+  const named = STATUS_REASON_SCHEMA_NAMES.map(
+    (name) => (schemas as unknown as Record<string, unknown>)[name],
+  ).find((value) => value !== undefined);
+  return (named as ZodType | undefined) ?? cancelSchema().shape.reason!;
+}
+
+/** En norsk melding, ikke Zods engelske standardtekst. */
+function expectNorwegianMessage(messages: string[]) {
+  expect(messages.length, "feilen har en melding").toBeGreaterThan(0);
+  for (const message of messages) {
+    expect(message.trim().length).toBeGreaterThan(0);
+    expect(message).not.toMatch(/^(Invalid|Too (small|big)|Expected|String must|Required)/);
+  }
+}
+
+function issueMessages(result: { success: boolean; error?: { issues: { message: string }[] } }) {
+  return result.success ? [] : (result.error?.issues ?? []).map((issue) => issue.message);
+}
+
+describe("statusflyt 2.1 grunnen ved tilbake og kansellering", () => {
+  it.each(["", "   "])("tom grunn «%s» avvises med norsk melding", (value) => {
+    const result = statusReasonSchema().safeParse(value);
+    expect(result.success).toBe(false);
+    expectNorwegianMessage(issueMessages(result));
+  });
+
+  it("grunnen mangler avvises i kanselleringen med norsk melding", () => {
+    const result = cancelSchema().safeParse({ expectedStatus: "ordered" });
+    expect(result.success).toBe(false);
+    expectNorwegianMessage(issueMessages(result));
+  });
+
+  it("1 tegn godtas", () => {
+    expect(statusReasonSchema().safeParse("G").success).toBe(true);
+  });
+
+  it("500 tegn godtas, 501 avvises med norsk melding", () => {
+    expect(statusReasonSchema().safeParse("G".repeat(500)).success).toBe(true);
+    const tooLong = statusReasonSchema().safeParse("G".repeat(501));
+    expect(tooLong.success).toBe(false);
+    expectNorwegianMessage(issueMessages(tooLong));
+  });
+
+  it("grunnen trimmes", () => {
+    const result = statusReasonSchema().safeParse("  Feiltrykk  ");
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).toBe("Feiltrykk");
+  });
+
+  it("kanselleringen godtar grunnen og trimmer den", () => {
+    const result = cancelSchema().safeParse({
+      expectedStatus: "in_progress",
+      reason: "  Kunden trakk bestillingen ",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.data as Record<string, unknown>).reason).toBe("Kunden trakk bestillingen");
+    }
+  });
+});
+
+describe("statusflyt 2.2 toStatus og expectedStatus", () => {
+  const STATUSES = ["ordered", "in_progress", "completed", "invoiced"] as const;
+
+  it.each(["cancelled", "done", "", "Bestilt"])("ukjent toStatus «%s» avvises", (code) => {
+    const result = statusChangeSchema().safeParse({ expectedStatus: "ordered", toStatus: code });
+    expect(result.success).toBe(false);
+  });
+
+  it.each(["cancelled", "done", "", "Bestilt"])("ukjent expectedStatus «%s» avvises", (code) => {
+    expect(
+      statusChangeSchema().safeParse({ expectedStatus: code, toStatus: "in_progress" }).success,
+    ).toBe(false);
+    expect(cancelSchema().safeParse({ expectedStatus: code, reason: "Feiltrykk" }).success).toBe(
+      false,
+    );
+  });
+
+  it.each(STATUSES)("koden «%s» godtas som toStatus og expectedStatus", (code) => {
+    const change = statusChangeSchema().safeParse({
+      expectedStatus: code,
+      toStatus: code,
+      reason: "Feiltrykk",
+    });
+    expect(change.success, JSON.stringify(change.success ? null : change.error.issues)).toBe(true);
+    const cancel = cancelSchema().safeParse({ expectedStatus: code, reason: "Feiltrykk" });
+    expect(cancel.success, JSON.stringify(cancel.success ? null : cancel.error.issues)).toBe(true);
+  });
+
+  it("organizationId i input tas bort", () => {
+    const result = statusChangeSchema().safeParse({
+      expectedStatus: "ordered",
+      toStatus: "in_progress",
+      organizationId: "0190a000-0000-7000-8000-000000000002",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).not.toHaveProperty("organizationId");
+  });
+});
+
+describe("statusflyt 2.3 grunnen er valgfri ved fram", () => {
+  it.each([
+    ["mangler", {}],
+    ["tom", { reason: "" }],
+    ["bare mellomrom", { reason: "   " }],
+    ["null", { reason: null }],
+  ] as const)("grunn %s godtas og gir ingen grunn", (_name, extra) => {
+    const result = statusChangeSchema().safeParse({
+      expectedStatus: "ordered",
+      toStatus: "in_progress",
+      ...extra,
+    });
+    expect(result.success, JSON.stringify(result.success ? null : result.error.issues)).toBe(true);
+    if (result.success) {
+      const reason = (result.data as Record<string, unknown>).reason;
+      expect(reason === undefined || reason === null).toBe(true);
+    }
+  });
+
+  it("501 tegn avvises også ved fram", () => {
+    const result = statusChangeSchema().safeParse({
+      expectedStatus: "ordered",
+      toStatus: "in_progress",
+      reason: "G".repeat(501),
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
 describe("2.9 alle norske meldinger i kortet er dekket", () => {
   it("EmployeeNotFoundError har meldingen «Den ansatte finnes ikke.»", () => {
     expect(new EmployeeNotFoundError().message).toBe(EMPLOYEE_NOT_FOUND);

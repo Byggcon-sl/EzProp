@@ -918,3 +918,19 @@ export async function companyOrgNumbers(): Promise<string[]> {
     await sql.end();
   }
 }
+
+/**
+ * Antall hendelser av typen på oppdraget (statusflyten, docs/funksjoner/fase2a-statusflyt-testplan.md
+ * 5.6). Bare lesing, bare lokal database eller testdatabasen.
+ */
+export async function assignmentEventCount(assignmentId: string, type: string): Promise<number> {
+  const sql = e2eSql();
+  try {
+    const [row] = await sql<{ n: number }[]>`
+      select count(*)::int as n from events
+      where assignment_id = ${assignmentId} and type = ${type}`;
+    return row?.n ?? 0;
+  } finally {
+    await sql.end();
+  }
+}
