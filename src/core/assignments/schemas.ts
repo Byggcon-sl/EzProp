@@ -93,7 +93,8 @@ export const statusChangeReasonSchema = z
   .string({ error: REASON_REQUIRED })
   .trim()
   .min(1, { error: REASON_REQUIRED })
-  .max(500, { error: STATUS_REASON_TOO_LONG });
+  .max(500, { error: STATUS_REASON_TOO_LONG })
+  .refine(hasNoNationalId, { error: NATIONAL_ID });
 
 /** En av de fire oppdragsstatusene. */
 export const assignmentStatusSchema = z.enum(ASSIGNMENT_STATUSES, { error: STATUS });
