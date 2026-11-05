@@ -115,7 +115,7 @@ I autonom modus samles alt her. Ingen varsler.
 
 ## Oppgaver fra nattløkken
 
-Fra nattløkken 05.11.2026 (main ved 90c918b, versjon 0.2.71), slått sammen med funnene fra 30.10.–03.11.2026. Trygg rydding 05.11 er gjort i PR-en «Rydding fra nattløkken 2026-11-05» (branch `natt-2026-11-05`, versjon 0.2.72): skjult tekst for skjermleser med område og «gyldig til» på hver «Fjern»-knapp i sertifiseringslisten, og bildenavnet i den skjulte teksten på hver «Vis fra serveren»-lenke. Nattløkken 05.11: lint, typesjekk og `pnpm test` grønne (116 filer, 2642 bestått, 3 hoppet over, se punkt 3); e2e grønn (401 bestått, 0 feilet, 63 bevisst hoppet over, 26,8 min), også drift uten nett. Forrige rydding: PR #68 (03.11.2026). Punkt 18–20 fra 03.11 er levert i PR #71 og fjernet fra listen.
+Fra nattløkken 05.11.2026 (main ved 90c918b, versjon 0.2.71), slått sammen med funnene fra 30.10.–03.11.2026. Trygg rydding 05.11 er gjort i **PR #86** «Rydding fra nattløkken 2026-11-05» (branch `natt-2026-11-05`, versjon 0.2.72): skjult tekst for skjermleser med område og «gyldig til» på hver «Fjern»-knapp i sertifiseringslisten, og bildenavnet i den skjulte teksten på hver «Vis fra serveren»-lenke. Nattløkken 05.11: lint, typesjekk og `pnpm test` grønne (116 filer, 2642 bestått, 3 hoppet over, se punkt 3); e2e grønn (401 bestått, 0 feilet, 63 bevisst hoppet over, 26,8 min), også drift uten nett. Forrige rydding: PR #68 (03.11.2026). Punkt 18–20 fra 03.11 er levert i PR #71 og fjernet fra listen.
 
 **Alvorlige**
 
@@ -152,7 +152,7 @@ Ingen.
 
 ## Siste kjøring
 
-05.11.2026: prosjektleder skrev funnene fra nattløkken 05.11.2026 inn under «Oppgaver fra nattløkken» (ingen nye alvorlige; punkt 3, 5 og 6 bekreftet på nytt; levert punkt 18–20 fjernet) og laget branchen `natt-2026-11-05` med trygg rydding for skjermleser (versjon 0.2.72). Lint, typesjekk, `pnpm test` og e2e for sertifisering og prøve D grønne. Sesjon: https://claude.ai/code/session_01JqwntzTcPpUu4cAwr75QZn
+05.11.2026: prosjektleder skrev funnene fra nattløkken 05.11.2026 inn under «Oppgaver fra nattløkken» (ingen nye alvorlige; punkt 3, 5 og 6 bekreftet på nytt; levert punkt 18–20 fjernet) og laget branchen `natt-2026-11-05` med trygg rydding for skjermleser (versjon 0.2.72), PR #86 åpnet mot `main`. Lint, typesjekk, `pnpm test` og e2e for sertifisering og prøve D grønne. Sesjon: https://claude.ai/code/session_01JqwntzTcPpUu4cAwr75QZn
 
 04.11.2026 kl. 16:43–21:00 UTC: hovedløkken fant ingen åpne PR-er. `fase2a-manuell-ordre` var i arbeid hos en annen kjøring (3-timersregelen), som merget PR #82 og #83. Denne kjøringen tok «Intern personvernerklæring» og «Regel for sletting av data fra betaen» (Minimum før ekte data, bare dokumenter) med arbeidsflyten «oppgave» til PR #84 (merget, A56–A59, spørsmål 17–18). Rollen sikkerhet-personvern feilet fire ganger på kvoten, og reserven til opus slo ikke inn; gjennomgangen ble kjørt i ettertid (3 alvorlige og 7 små funn, bare i dokumentene) og rettet i PR-en for `kvote-reserve-personvern`, som også retter kvote-gjenkjenningen i `oppgave.js`. En hengt `next start` på port 3100 fra en tidligere kjøring stoppet e2e og ble stoppet for hånd. Sesjon: https://claude.ai/code/session_01Jqwnu2umpJveCPGD7u5UmA
 
