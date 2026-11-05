@@ -760,3 +760,156 @@ describe("fabrikkene for eiendom og fellesdeler (fase 2a)", () => {
     }
   });
 });
+
+describe("fabrikkene for eiendom og fellesdeler (fase 2a, sett 2)", () => {
+  // docs/funksjoner/fase2a-eiendom-matrikkel-testplan.md avsnitt 5. Oppdiktede data.
+  beforeEach(resetDatabase);
+
+  it("5.1 createProperty uten overstyring: enebolig, selveier, «Testveien 1», manual, og én matrikkelrad 999/999", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const { property, cadastralUnit } = await createProperty(org.id);
+    expect(property).toMatchObject({
+      organizationId: org.id,
+      address: "Testveien 1",
+      housingType: "detached",
+      ownershipForm: "freehold",
+      dataSource: "manual",
+      deletedAt: null,
+    });
+    expect(cadastralUnit).toMatchObject({
+      organizationId: org.id,
+      propertyId: property.id,
+      gnr: "999",
+      bnr: "999",
+      fnr: null,
+      snr: null,
+      associationName: null,
+    });
+    const units = await db
+      .select()
+      .from(cadastralUnits)
+      .where(eq(cadastralUnits.propertyId, property.id));
+    expect(units).toHaveLength(1);
+  });
+
+  it("5.1 createProperty med assignmentId setter property_id på oppdraget, og overstyringene brukes", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const assignment = await createAssignment(org.id);
+    const deletedAt = new Date("2026-11-03T12:00:00Z");
+    const { property, cadastralUnit } = await createProperty(org.id, {
+      assignmentId: assignment.id,
+      address: "Testveien 2",
+      postalCode: "0000",
+      city: "Testby",
+      municipalityNumber: "0000",
+      municipalityName: "Testkommune",
+      housingType: "apartment",
+      ownershipForm: "cooperative",
+      gnr: "1",
+      bnr: "2",
+      fnr: "0",
+      snr: "9",
+      associationName: "Borettslaget Test",
+      associationOrgNumber: "000000000",
+      shareNumber: "0-0",
+      deletedAt,
+    });
+    expect(property).toMatchObject({
+      address: "Testveien 2",
+      postalCode: "0000",
+      city: "Testby",
+      municipalityNumber: "0000",
+      municipalityName: "Testkommune",
+      housingType: "apartment",
+      ownershipForm: "cooperative",
+    });
+    expect(property.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+    expect(cadastralUnit).toMatchObject({
+      gnr: "1",
+      bnr: "2",
+      fnr: "0",
+      snr: "9",
+      associationName: "Borettslaget Test",
+      associationOrgNumber: "000000000",
+      shareNumber: "0-0",
+    });
+    const [row] = await db
+      .select({ propertyId: assignments.propertyId })
+      .from(assignments)
+      .where(eq(assignments.id, assignment.id));
+    expect(row?.propertyId).toBe(property.id);
+  });
+
+  it("5.2 createCommonAreas uten overstyring: lager oppdrag med leilighet i borettslag og en rad med unknown/unknown", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const row = await createCommonAreas(org.id);
+    expect(row).toMatchObject({
+      organizationId: org.id,
+      managingAgent: null,
+      conditionReportStatus: "unknown",
+      maintenancePlanStatus: "unknown",
+      notes: null,
+      deletedAt: null,
+    });
+    const [assignment] = await db
+      .select()
+      .from(assignments)
+      .where(eq(assignments.id, row.assignmentId));
+    expect(assignment?.organizationId).toBe(org.id);
+    expect(assignment?.propertyId).not.toBeNull();
+    const [property] = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.id, assignment!.propertyId!));
+    expect(property).toMatchObject({
+      organizationId: org.id,
+      housingType: "apartment",
+      ownershipForm: "cooperative",
+    });
+  });
+
+  it("5.2 createCommonAreas bruker overstyringene, og lager ingen eiendom når assignmentId er gitt", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const assignment = await createAssignment(org.id);
+    const deletedAt = new Date("2026-11-03T12:00:00Z");
+    const row = await createCommonAreas(org.id, {
+      assignmentId: assignment.id,
+      managingAgent: "Forvalter Test",
+      conditionReportStatus: "yes",
+      maintenancePlanStatus: "no",
+      notes: "Sett trapperom og kjeller",
+      deletedAt,
+    });
+    expect(row).toMatchObject({
+      assignmentId: assignment.id,
+      managingAgent: "Forvalter Test",
+      conditionReportStatus: "yes",
+      maintenancePlanStatus: "no",
+      notes: "Sett trapperom og kjeller",
+    });
+    expect(row.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+    const [n] = await db.select({ n: count() }).from(properties);
+    expect(n!.n).toBe(0);
+  });
+
+  it("5.3 RESET_TABLES har de tre tabellene, barn før foreldre, og resetDatabase tømmer dem", async () => {
+    const listed: readonly string[] = RESET_TABLES;
+    expect(listed).toEqual(
+      expect.arrayContaining(["properties", "cadastral_units", "common_areas"]),
+    );
+    expect(listed.indexOf("cadastral_units")).toBeLessThan(listed.indexOf("properties"));
+    expect(listed.indexOf("common_areas")).toBeLessThan(listed.indexOf("assignments"));
+    expect(listed.indexOf("assignments")).toBeLessThan(listed.indexOf("properties"));
+
+    const org = await createOrganization("Oppdiktet takst A");
+    await createProperty(org.id);
+    await createCommonAreas(org.id);
+
+    await resetDatabase();
+
+    for (const table of [properties, cadastralUnits, commonAreas]) {
+      const [row] = await db.select({ n: count() }).from(table);
+      expect(row!.n).toBe(0);
+    }
+  });
+});
