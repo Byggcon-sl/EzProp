@@ -9,7 +9,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 Sist oppdatert: 04.11.2026 (intern personvernerklæring og sletteregel for betadata, «Minimum før ekte data», PR mot `main`; før det 03.11.2026: PR #73 merget kl. 09:01 UTC; nøkkelboks steg 2 utsatt, A50, bekreftet i runde 2 av forhåndsvurderingen; PR #74 flyttet til `main` og flettet)
 Sist oppdatert: 04.11.2026 (PR #82 manuell ordre og oppdragsnummer merget kl. 17:14 UTC, fase 2a)
 
-**Pågår (05.11.2026):** fase 2a, utstedende selskap fra ansvarlig takstmann er levert som PR mot `main` (versjon 0.2.75, beslutninger A65–A68). Merges av merge-skriptet når CI er grønn. Neste: neste uavkryssede punkt i fase 2a.
+**Pågår (05.11.2026):** fase 2a, statusflyten med fire statuser, kansellering og merket «Rettet». Branch `fase2a-statusflyt` fra `main`, oppgavekort `docs/funksjoner/fase2a-statusflyt.md`, versjon 0.2.77 når PR-en åpnes, beslutninger A69–A72. Roller: utvikler og testskriver i parallell, test-leder, sikkerhet-personvern (kort).
 
 ## Gjeldende fase
 
