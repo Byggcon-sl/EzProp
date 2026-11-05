@@ -233,7 +233,7 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 - [ ] Oppdragslisten som arbeidskø: faner etter status med antall, hurtigfilter, kort notat per oppdrag, merker med status, dato og takstmann
 - [ ] Avtale med oppdragsgiver (for eksempel Fremtind) med egen rapportprofil og premissetekst
 - [x] Eiendom og matrikkel lagt inn for hånd, med boligtype og **eierform**, og **fellesdeler** for leilighet (05.11.2026, `docs/funksjoner/fase2a-eiendom-matrikkel.md`, tabellene `properties`, `cadastral_units` og `common_areas`, delene «Eiendom» og «Fellesdeler» på `/oppdrag/[id]`, beslutningene A69–A73)
-- [ ] Bygninger, etasjer, **areal per etasje** (BRA-i, BRA-e, BRA-b, ALH) med hvem som målte og metode, og rom med romtype og «under terreng»
+- [x] Bygninger, etasjer, **areal per etasje** (BRA-i, BRA-e, BRA-b, ALH) med hvem som målte og metode, og rom med romtype og «under terreng» (05.11.2026, A78–A82, `docs/funksjoner/fase2a-bygninger-areal-rom.md`)
 - [ ] Kontakter og firma (meglere og meglerforetak) med notater, uten dubletter på organisasjonsnummer, og med kilde for opplysningene (innspill D17)
 - [ ] **Tidsmåling per rapport fra første ekte rapport** (hovedmålet, 28.10.2026): arbeidsøkter per fase (forberedelse, befaring, kontorarbeid, levering) lagres automatisk fra hendelsene, slik at tiden kan sammenlignes med nullpunktet fra IVIT.
 - [ ] **Reklamasjoner med enkelt skjema fra første ekte rapport** (beslutning 27.10.2026, spørsmål 4). **Bare leder og admin ser reklamasjonssakene** (unntak fra «alle ser alt», 27.10.2026). Reklamasjonsmappen kommer i fase 4.

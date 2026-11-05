@@ -592,6 +592,18 @@ Romtypens **gruppe** styrer hvilke grupper av kontrollpunkter rommet får (våtr
 | `sort_order` | Rekkefølge |
 | `geometry` | Romskisse som mangekant (valgfritt, tomt nå). Krok for plantegning, LiDAR og fuktkart senere (K7, B9). |
 
+**Bygget i fase 2a (05.11.2026, bygninger, etasjer, areal og rom):** Tabellene `report_buildings`, `floors`, `floor_areas` og `rooms` (`src/db/schema/report-buildings.ts`, `floors.ts`, `floor-areas.ts`, `rooms.ts`, migrering `0017`), kjernen i `src/core/buildings` og siden `/oppdrag/[id]/bygninger` med lenken «Bygninger, areal og rom» på `/oppdrag/[id]`. Bare for hånd på PC. Oppgavekort: `docs/funksjoner/fase2a-bygninger-areal-rom.md`; beslutningene A78–A82.
+
+- **Alle fire tabellene** har `baseColumns`, unik indeks `(organization_id, id)` og sammensatte fremmednøkler `(organization_id, x_id)`, så en rad aldri kan peke inn i en annen organisasjon.
+- **`report_buildings`** har `assignment_id` (påkrevd, til `assignments`) og `name`. Per oppdrag til rapportene finnes; da får tabellen `report_id` (A78). Ingen `property_id`: eiendommen finnes via `assignments.property_id`.
+- **`floors`** har `report_building_id`, `name`, `level` (CHECK −3 til 20) og `below_ground` (standard `false`).
+- **`floor_areas`** har `floor_id`, `bra_i`, `bra_e`, `bra_b` og `alh` (`numeric(7,1)`, valgfrie, CHECK `>= 0`), `measured_by` (sammensatt fremmednøkkel til `employees`), `method` (CHECK `laser`, `drawing`, `other`) og `comment`. Én aktiv rad per etasje (unik delvis indeks der `deleted_at is null`). BRA = BRA-i + BRA-e + BRA-b regnes i koden (`sumFloorArea`, i tideler), og ALH tas ikke med (A80). «Målt av» settes til den innloggede når areal føres uten måler; en tidligere måler som har sluttet, godtas som før.
+- **`rooms`** har `floor_id`, `room_type` (fast kode, CHECK med de 33 kodene), `name` (tom = romtypens navn), `area_type` (CHECK `bra_i`, `bra_e`, `bra_b`) og `below_ground`. Arealtype og «under terreng» foreslås fra romtype og etasje (`suggestAreaType`, `suggestBelowGround`, A81).
+- **Romtypene er kode, ikke tabell ennå:** `ROOM_TYPES` i `src/core/buildings/codes.ts` med `key`, navn, gruppe, standard arealtype og standard «under terreng», merket utkast, ikke godkjent av fagrådet (A79). `room_types` som tabell kommer med maleditoren.
+- **Fjerning** er myk sletting, og bare når bygningen ikke har aktive etasjer eller etasjen ikke har aktive rom (A82). Arealraden fjernes sammen med etasjen.
+- **Hendelser og revisjonslogg:** `assignment.building_saved`, `assignment.building_removed`, `assignment.floor_saved`, `assignment.floor_removed`, `assignment.floor_area_saved`, `assignment.room_saved` og `assignment.room_removed`, alle med `{ <id>, created }`; revisjonslogg `report_building`, `floor`, `floor_area` og `room` med `create`/`update`/`delete`, bare id-er, koder og navnene på endrede felt. Aldri navn på bygning, etasje eller rom, kommentar eller arealtall.
+- **Venter:** `report_id` (når rapporten bygges), `property_id`, `building_type`, `is_main`, `build_year` og `build_year_source` (med regelmotoren), `building_number`, `extensions`, `copied_from_id`, `tba`, `hard_to_measure` (skrives i kommentaren nå), `other_source_value`, `lidar` som metode (K7), `room_type_id`/`room_types` som tabell, `sort_order` og `geometry`, oppslag fra matrikkelen og arealtabellen i PDF-en.
+
 ---
 
 ### 4.5 Maler – felles for systemmaler og egne maler
@@ -1260,6 +1272,13 @@ Gyldig verdi er et heltall fra 1 til og med 100 (år). Mangler nøkkelen, brukes
 | `assignment.party_added` / `assignment.party_updated` / `assignment.party_removed` | Part lagt til / endret / fjernet (fase 2a) |
 | `assignment.property_saved` | Eiendommen på oppdraget lagt inn eller endret (fase 2a), `{ propertyId, created }` |
 | `assignment.common_areas_saved` | Fellesdelene på oppdraget lagt inn eller endret (fase 2a), `{ commonAreasId, created }` |
+| `assignment.building_saved` | Bygning lagt til eller endret (fase 2a), `{ buildingId, created }` |
+| `assignment.building_removed` | Bygning fjernet (myk sletting), `{ buildingId, created }` |
+| `assignment.floor_saved` | Etasje lagt til eller endret, `{ floorId, created }` |
+| `assignment.floor_removed` | Etasje fjernet, med arealet, `{ floorId, created }` |
+| `assignment.floor_area_saved` | Areal per etasje ført eller endret, `{ floorAreaId, created }` |
+| `assignment.room_saved` | Rom lagt til eller endret, `{ roomId, created }` |
+| `assignment.room_removed` | Rom fjernet, `{ roomId, created }` |
 | `inspection.scheduled` | Befaring avtalt (booket) |
 | `inspection.rescheduled` | Befaring flyttet |
 | `inspection.cancelled` | Befaring avlyst |
@@ -1916,16 +1935,22 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Ja / Nei / Vet ikke | `yes` / `no` / `unknown`, `YES_NO_UNKNOWN` | Svar om tilstandsrapport og vedlikeholdsplan for fellesdelene |
 | Fellesdeler gjelder ikke | `CommonAreasNotApplicableError` | Oppdraget har ingen eiendom med fellesdeler. Ingenting lagres |
 | Eiendom lagret / fellesdeler lagret | `assignment.property_saved` / `assignment.common_areas_saved` | Hendelser med bare id-er og `created` |
-| Bygning | `report_buildings` | Per rapport |
+| Bygning | `report_buildings`, `report_building` | Per oppdrag til rapportene finnes, så per rapport (A78) |
 | Hovedbygg | `is_main` | |
 | Byggeår | `build_year` | |
-| Etasje | `floors` | |
-| Areal per etasje | `floor_areas` | |
-| BRA-i / BRA-e / BRA-b | `bra_i` / `bra_e` / `bra_b` | Bruksareal internt, eksternt, innglasset |
-| ALH | `alh` | Areal med lav himlingshøyde |
-| Rom | `rooms` | |
-| Romtype | `room_types` | |
-| Under terreng | `below_ground` | |
+| Etasje | `floors`, `floor` | `level` (−3 til 20) gir rekkefølgen |
+| Areal per etasje | `floor_areas`, `floor_area` | Én aktiv rad per etasje (A80) |
+| Arealtype | `area_type`, `AREA_TYPES` | `bra_i`, `bra_e` eller `bra_b`, på rommet |
+| BRA-i / BRA-e / BRA-b | `bra_i` / `bra_e` / `bra_b` | Bruksareal internt, eksternt, innglasset. BRA er summen av de tre (`sumFloorArea`) |
+| ALH | `alh` | Areal med lav himlingshøyde. Vises, men tas ikke med i BRA |
+| Målt av | `measured_by` | Den ansatte som målte arealet. Forhåndsvalgt med den innloggede |
+| Målemetode | `measuring_method`, `method`, `MEASURING_METHODS` | `laser` (oppmålt med laser), `drawing` (fra tegning), `other` (annen kilde) |
+| Rom | `rooms`, `room` | |
+| Romtype | `room_type`, `ROOM_TYPES` | Fast kode, 33 typer, utkast (A79). Blir tabellen `room_types` med maleditoren |
+| Romgruppe | `room_type_group`, `ROOM_TYPE_GROUPS` | `wet_room`, `kitchen`, `toilet`, `special`, `other` |
+| Under terreng | `below_ground` | På etasje og rom. For rom foreslått fra romtype og etasje (A81) |
+| Bygning, etasje, areal og rom lagret / fjernet | `assignment.building_saved`, `assignment.building_removed`, `assignment.floor_saved`, `assignment.floor_removed`, `assignment.floor_area_saved`, `assignment.room_saved`, `assignment.room_removed` | Hendelser med bare id-er og `created` |
+| Eiendom mangler / bygning ikke tom / etasje ikke tom | `PropertyMissingError` / `BuildingNotEmptyError` / `FloorNotEmptyError` | Ny bygning uten eiendom, eller fjerning av bygning med etasjer eller etasje med rom. Ingenting lagres |
 | Malfamilie | `template_families` | |
 | Malversjon | `template_versions` | |
 | Systemmal / egen mal | `system` / `custom` | `template_families.kind` |
@@ -2142,3 +2167,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 04.11.2026 | Team og parter på oppdraget (fase 2a): `assignment_team_members` og `assignment_parties` (enkel utgave med fritekst, fem roller, tre mottar-valg) bygget; nye hendelser `assignment.team_changed` og `assignment.party_added`/`_updated`/`_removed`. `contact_id`, `firm_id`, `receives_survey`, `is_primary`, `client` og `other` venter. Se «Bygget i fase 2a» i 4.2 og 4.3. | A60–A63, `docs/funksjoner/fase2a-oppdrag-team-parter.md` |
 | 05.11.2026 | Eiendom og matrikkel på oppdraget (fase 2a): `properties`, `cadastral_units` og `common_areas` (per oppdrag til rapporten finnes) bygget, og `assignments.property_id`; eierform uten obligasjonsleilighet; `hasCommonAreas` styrer fellesdelene; nye hendelser `assignment.property_saved` og `assignment.common_areas_saved`. Oppslag, gjenbruk av eiendom, `unit_number`, `plot_area` og `association_firm_id` venter. Se «Bygget i fase 2a» i 4.4. | A69–A73, `docs/funksjoner/fase2a-eiendom-matrikkel.md` |
 | 05.11.2026 | Utstedende selskap (fase 2a): `assignments.company_id` med sammensatt fremmednøkkel til `companies`, satt automatisk fra ansvarlig takstmann i `setTeamMember`; ny hendelse `assignment.company_changed`. Ingen utfylling bakover. Se «Bygget i fase 2a» i 4.3. | A65–A68, `docs/agenter/oppgaver/fase2a-utstedende-selskap.md` |
+| 05.11.2026 | Bygninger, etasjer, areal og rom (fase 2a): `report_buildings` (per oppdrag til rapporten finnes), `floors`, `floor_areas` (én aktiv rad per etasje, `numeric(7,1)`) og `rooms` bygget; romtypene som fast kode i `src/core/buildings/codes.ts` (33, utkast); sju nye hendelser. Byggeår, bygningstype, hovedbygg, TBA, «vanskelig å måle», `room_types` som tabell og `geometry` venter. Se «Bygget i fase 2a» i 4.4. | A78–A82, `docs/funksjoner/fase2a-bygninger-areal-rom.md` |
