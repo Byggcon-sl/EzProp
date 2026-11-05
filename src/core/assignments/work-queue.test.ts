@@ -873,7 +873,7 @@ describe("2.7 endringer", () => {
     expect(await auditCount()).toBe(beforeAudit);
   });
 
-  it("2.7.4 revisjonslogg: én rad per endring av notatet, med fra og til", async () => {
+  it("2.7.4 revisjonslogg: én rad per endring av notatet, bare feltnavnet, aldri teksten", async () => {
     const setup = await orgWithAdmin();
     const row = await newAssignment(setup);
     await note(setup.admin, setup.org.id, row.id, NOTE);
@@ -885,15 +885,9 @@ describe("2.7 endringer", () => {
       expect(entry.organizationId).toBe(setup.org.id);
       expect(entry.entityType).toBe("assignment");
       expect(entry.action).toBe("update");
-      expect(Object.keys(entry.changes)).toHaveLength(1);
+      expect(entry.changes).toEqual({ fields: ["internalNote"] });
+      expect(JSON.stringify(entry.changes)).not.toContain("naboen");
     }
-    const changes = rows.map((entry) => Object.values(entry.changes)[0]);
-    expect(changes).toEqual(
-      expect.arrayContaining([
-        { from: null, to: NOTE },
-        { from: NOTE, to: "Nøkkel hos naboen" },
-      ]),
-    );
   });
 
   it("2.7.4 revisjonslogg for befaring og frist: bare feltet som endret seg", async () => {

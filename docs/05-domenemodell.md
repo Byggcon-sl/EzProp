@@ -446,7 +446,7 @@ Neste nummer hentes med lås i databasen, slik at to kontorer aldri får samme n
 - **Ingen nye kolonner:** `status_changed_at` og `cancelled_reason` lages ikke nå; tidspunktet og grunnen står i hendelsene (A77). De kan legges til når arbeidskøen eller papirkurven trenger raske oppslag.
 - **Venter:** automatisk status fra hendelser (befaring startet, `report.sent`, faktura sendt), angre kansellering (papirkurv), «På vent», visning av hendelsene på oppdragssiden.
 
-**Bygget i fase 2a (05.11.2026, arbeidskøen):** Kolonnene `assignments.inspection_at`, `due_date` og `internal_note` er tatt i bruk, spørringene i `src/core/assignments` og startsiden `/arbeidskoe`. Oppgavekort: `docs/funksjoner/fase2a-arbeidsko.md`; beslutningene A99–A107.
+**Bygget i fase 2a (05.11.2026, arbeidskøen):** Kolonnene `assignments.inspection_at`, `due_date` og `internal_note` er tatt i bruk, spørringene i `src/core/assignments` og startsiden `/arbeidskoe`. Oppgavekort: `docs/funksjoner/fase2a-arbeidsko.md`; beslutningene A99–A107. Revisjonsloggen for notatet har bare feltnavnet (`{ fields: ["internalNote"] }`), aldri teksten; befaring og frist logges med fra og til.
 
 - **`inspection_at`** (`timestamptz`, kan være tom): avtalt befaring. Settes for hånd på `/oppdrag/[id]` i skjemaet «Befaring og frist» til befaringene (`inspections`) finnes; da fylles den derfra (A100).
 - **`due_date`** (`date`, kan være tom): frist for levering. Settes i samme skjema. Begge kan tømmes.

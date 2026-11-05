@@ -264,7 +264,8 @@ export async function updateAssignmentNote(
       entityType: "assignment",
       entityId: current.id,
       action: "update",
-      changes: { internalNote: { from: current.internalNote, to: internalNote } },
+      // Bare feltnavnet, aldri teksten: notatet er fritekst, og loggen ryddes aldri.
+      changes: { fields: ["internalNote"] },
     });
     return updated;
   });

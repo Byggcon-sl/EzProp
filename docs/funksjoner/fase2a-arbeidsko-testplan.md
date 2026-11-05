@@ -99,7 +99,7 @@ Avvik føres i kortet.
 1. **notat lagres, endres, tømmes:** etterpå er `internal_note` lik teksten, ny tekst, `null`. `updated_at`/`updated_by` satt.
 2. **notat over 200 tegn og med fødselsnummer** → `ZodError`, raden uendret, **ingen rad i revisjonsloggen**, og `JSON.stringify(auditRows(org))` inneholder ikke sifrene.
 3. **befaring og frist settes og tømmes** (begge, én av dem, ingen).
-4. **revisjonslogg:** én rad per vellykket endring, `entityType: "assignment"`, `action: "update"`, `changes` med `from`/`to` for feltet som endret seg.
+4. **revisjonslogg:** én rad per vellykket endring, `entityType: "assignment"`, `action: "update"`, `changes` med `from`/`to` for befaring og frist; for notatet bare `{ fields: ["internalNote"] }`, aldri teksten (rettet etter gjennomgangen 05.11.2026).
 5. **ingen endring** (samme notat på nytt) → følg det som finnes i revisjonsloggen; testen dokumenterer valget.
 6. **kansellert oppdrag** → «ikke funnet» (`AccessDeniedError` eller egen feil), raden uendret, ingen loggrad.
 7. **tilfeldig uuid og `"ikke-en-id"`** → «ikke funnet», aldri databasefeil.
