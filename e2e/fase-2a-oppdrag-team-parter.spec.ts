@@ -216,6 +216,8 @@ test.describe("team og parter på oppdraget (pc og ipad)", () => {
       .getByLabel(/^Grunn ved bytte/)
       .fill("Ferie");
     await teamLine(page, responsible).getByRole("button", { name: "Lagre", exact: true }).click();
+    // Skjemaet lages på nytt (ny key) når byttet er lagret; da er grunnen tom igjen
+    await expect(teamLine(page, responsible).getByLabel(/^Grunn ved bytte/)).toHaveValue("");
     await expect(teamSelect(page, responsible)).toHaveValue(inspector.id);
     await expect(team.getByText("Ikke satt", { exact: true })).toHaveCount(4);
 
