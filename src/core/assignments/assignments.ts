@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
 import { db } from "@/db/client";
 import {
@@ -94,7 +94,7 @@ export async function getAssignment(
     .leftJoin(
       orders,
       and(
-        eq(orders.id, assignments.orderId),
+        or(eq(orders.id, assignments.orderId), eq(orders.assignmentId, assignments.id)),
         eq(orders.organizationId, orgId),
         isNull(orders.deletedAt),
       ),
@@ -106,6 +106,7 @@ export async function getAssignment(
         isNull(assignments.deletedAt),
       ),
     )
+    .orderBy(asc(orders.createdAt), asc(orders.id))
     .limit(1);
   if (!assignment) throw new AccessDeniedError();
 

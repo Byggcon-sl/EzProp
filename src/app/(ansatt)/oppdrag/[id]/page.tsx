@@ -11,6 +11,17 @@ import {
   TEAM_ROLES,
   teamRoleLabel,
 } from "@/core/assignments";
+import {
+  getAssignmentProperty,
+  hasCommonAreas,
+  HOUSING_TYPES,
+  housingTypeLabel,
+  OWNERSHIP_FORMS,
+  ownershipFormLabel,
+  YES_NO_UNKNOWN,
+  yesNoUnknownLabel,
+  type AssignmentProperty,
+} from "@/core/properties";
 import { isUuid } from "@/shared/lib/uuid";
 import { Badge } from "@/shared/ui/badge";
 import { Card } from "@/shared/ui/card";
@@ -19,18 +30,144 @@ import { NoAccess } from "../../no-access";
 import {
   addPartyAction,
   removePartyAction,
+  saveCommonAreasAction,
+  savePropertyAction,
   setTeamMemberAction,
   updatePartyAction,
 } from "./actions";
+import {
+  CommonAreasDetails,
+  CommonAreasForm,
+  type CommonAreasFormValues,
+} from "./common-areas-form";
 import { PartyCard } from "./party-card";
 import { AddPartySection, type PartyRoleOption } from "./party-form";
+import { PropertyDetails, PropertyForm, type PropertyFormValues } from "./property-form";
 import { TeamMemberForm } from "./team-form";
 
 export const metadata: Metadata = { title: "Oppdrag" };
 
+/** Skjemaverdiene fra den lagrede eiendommen, eller fra ordren når eiendom mangler. */
+function propertyFormValues(data: AssignmentProperty): PropertyFormValues {
+  const { property, prefill } = data;
+  const unit = property?.cadastralUnit ?? null;
+  return {
+    address: property?.address ?? prefill.address ?? "",
+    postalCode: property?.postalCode ?? "",
+    city: property?.city ?? "",
+    municipalityNumber: property?.municipalityNumber ?? "",
+    municipalityName: property?.municipalityName ?? "",
+    housingType: property?.housingType ?? "",
+    ownershipForm: property?.ownershipForm ?? "",
+    gnr: property ? (unit?.gnr ?? "") : (prefill.gnr ?? ""),
+    bnr: property ? (unit?.bnr ?? "") : (prefill.bnr ?? ""),
+    fnr: unit?.fnr ?? "",
+    snr: property ? (unit?.snr ?? "") : (prefill.snr ?? ""),
+    associationName: property ? (unit?.associationName ?? "") : (prefill.associationName ?? ""),
+    associationOrgNumber: unit?.associationOrgNumber ?? "",
+    shareNumber: unit?.shareNumber ?? "",
+  };
+}
+
+function commonAreasFormValues(data: AssignmentProperty): CommonAreasFormValues {
+  const areas = data.commonAreas;
+  return {
+    managingAgent: areas?.managingAgent ?? "",
+    conditionReportStatus: areas?.conditionReportStatus ?? "unknown",
+    maintenancePlanStatus: areas?.maintenancePlanStatus ?? "unknown",
+    notes: areas?.notes ?? "",
+  };
+}
+
 /**
- * Oppdraget med team (fem roller) og parter. Skjemaene vises bare med `canEditOrders`; selve
- * sjekken skjer i kjernen. Ugyldig, ukjent, slettet og fremmed id gir «Fant ikke siden».
+ * «Eiendom» og, når eiendommen har fellesdeler (A72), «Fellesdeler». Skjemaene vises bare med
+ * `canEdit`; ellers står verdiene som tekst. Skjemaene får ny `key` når de lagrede verdiene
+ * endres, så feltene starter med det som er lagret.
+ */
+function PropertySection({
+  assignmentId,
+  data,
+  canEdit,
+}: {
+  assignmentId: string;
+  data: AssignmentProperty;
+  canEdit: boolean;
+}) {
+  const { property } = data;
+  const values = propertyFormValues(data);
+  const showCommonAreas = property !== null && hasCommonAreas(property);
+  const areas = commonAreasFormValues(data);
+
+  return (
+    <>
+      <section aria-labelledby="property-heading" className="mb-8">
+        <h2 id="property-heading" className="mb-3 text-xl font-semibold text-slate-900">
+          Eiendom
+        </h2>
+        <Card>
+          {canEdit ? (
+            <PropertyForm
+              key={property ? JSON.stringify(values) : "prefill"}
+              assignmentId={assignmentId}
+              initial={values}
+              fromOrder={property === null}
+              housingTypes={HOUSING_TYPES.map((code) => ({
+                value: code,
+                label: housingTypeLabel(code),
+              }))}
+              ownershipForms={OWNERSHIP_FORMS.map((code) => ({
+                value: code,
+                label: ownershipFormLabel(code),
+              }))}
+              action={savePropertyAction}
+            />
+          ) : property ? (
+            <PropertyDetails
+              values={values}
+              housingTypeText={housingTypeLabel(property.housingType)}
+              ownershipFormText={ownershipFormLabel(property.ownershipForm)}
+            />
+          ) : (
+            <p className="text-slate-600">Eiendommen er ikke lagt inn ennå.</p>
+          )}
+        </Card>
+      </section>
+
+      {showCommonAreas && (
+        <section aria-labelledby="common-areas-heading" className="mb-8">
+          <h2 id="common-areas-heading" className="mb-3 text-xl font-semibold text-slate-900">
+            Fellesdeler
+          </h2>
+          <Card>
+            {canEdit ? (
+              <CommonAreasForm
+                key={JSON.stringify(areas)}
+                assignmentId={assignmentId}
+                initial={areas}
+                answers={YES_NO_UNKNOWN.map((code) => ({
+                  value: code,
+                  label: yesNoUnknownLabel(code),
+                }))}
+                action={saveCommonAreasAction}
+              />
+            ) : (
+              <CommonAreasDetails
+                values={areas}
+                conditionReportText={yesNoUnknownLabel(areas.conditionReportStatus)}
+                maintenancePlanText={yesNoUnknownLabel(areas.maintenancePlanStatus)}
+              />
+            )}
+          </Card>
+        </section>
+      )}
+    </>
+  );
+}
+
+/**
+ * Oppdraget med eiendom (og fellesdeler), team (fem roller) og parter. Skjemaene vises bare med
+ * `canEditOrders`; selve sjekken skjer i kjernen. Ugyldig, ukjent, slettet og fremmed id gir
+ * «Fant ikke siden».
  */
 export default async function AssignmentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -39,8 +176,12 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
   if (!isUuid(id)) notFound();
 
   let assignment: Awaited<ReturnType<typeof getAssignment>>;
+  let propertyData: AssignmentProperty;
   try {
-    assignment = await getAssignment(context.actor, context.organizationId, id);
+    [assignment, propertyData] = await Promise.all([
+      getAssignment(context.actor, context.organizationId, id),
+      getAssignmentProperty(context.actor, context.organizationId, id),
+    ]);
   } catch (error) {
     if (error instanceof AccessDeniedError) notFound();
     throw error;
@@ -82,6 +223,8 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
           </p>
         )}
       </div>
+
+      <PropertySection assignmentId={assignment.id} data={propertyData} canEdit={canEdit} />
 
       <section aria-labelledby="team-heading" className="mb-8">
         <h2 id="team-heading" className="mb-3 text-xl font-semibold text-slate-900">
