@@ -3,6 +3,7 @@ import { count, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 import { AccessDeniedError, type Actor } from "@/core/access";
+import { cancelAssignment } from "@/core/assignments";
 import { db } from "@/db/client";
 import {
   assignments,
@@ -158,6 +159,8 @@ const LIST_KEYS = [
 
 const DETAIL_KEYS = [
   "addressText",
+  // Statusflyten 3.7.2 (docs/funksjoner/fase2a-statusflyt-testplan.md)
+  "assignmentCancelled",
   "assignmentId",
   "assignmentNumber",
   "bnr",
@@ -1072,5 +1075,43 @@ describe("4.6 hendelser og revisjonslogg", () => {
     expect(joined[0]?.number).toBe("2026-00001");
     const [assignment] = await db.select().from(assignments);
     expect(assignment?.organizationId).toBe(org.id);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Statusflyten 3.7.2: getOrder(...).assignmentCancelled
+// (docs/funksjoner/fase2a-statusflyt-testplan.md). Tenant-isolasjonen for getOrder er dekket
+// over (4.3); joinen endres, så den skal fortsatt være grønn.
+// ---------------------------------------------------------------------------------------------
+
+describe("statusflyt 3.7.2 getOrder(...).assignmentCancelled", () => {
+  it("false for en ordre med aktivt oppdrag", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const { order } = await insertConvertedOrder(org.id);
+    const detail = await getOrder(admin, org.id, order.id);
+    expect(detail).toHaveProperty("assignmentCancelled", false);
+  });
+
+  it("true etter cancelAssignment; nummeret og koblingen står fortsatt", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const { order, assignment } = await insertConvertedOrder(org.id);
+
+    await cancelAssignment(admin, org.id, assignment.id, {
+      expectedStatus: "ordered",
+      reason: "Kunden trakk bestillingen",
+    });
+
+    const detail = await getOrder(admin, org.id, order.id);
+    expect(detail).toHaveProperty("assignmentCancelled", true);
+    expect(detail.status).toBe("converted");
+    expect(detail.assignmentId).toBe(assignment.id);
+    expect(detail.assignmentNumber).toBe(assignment.number);
+  });
+
+  it("false for en ordre uten oppdrag", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const order = await insertOrder(org.id);
+    const detail = await getOrder(admin, org.id, order.id);
+    expect(detail).toHaveProperty("assignmentCancelled", false);
   });
 });

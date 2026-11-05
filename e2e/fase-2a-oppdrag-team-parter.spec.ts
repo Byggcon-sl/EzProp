@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
 import {
   ADMIN_EMAIL,
+  assignmentEventCount,
   employeeByEmail,
   INSPECTOR_COMPANY,
   INSPECTOR_EMAIL,
@@ -489,5 +490,280 @@ test.describe("iPad (prosjektet ipad)", () => {
     await page.keyboard.press("Enter");
 
     await expect(partyCard(page, "Tastatur Test")).toHaveCount(1);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Statusflyten, kansellering og merket «Rettet»
+// (docs/funksjoner/fase2a-statusflyt-testplan.md avsnitt 5). Kjører i pc og ipad; 5.7 bare i
+// ipad. Kortet «Status» er et landemerke (region) som «Team» og «Parter». Skjemaet for
+// «Tilbake til …» har feltet «Grunn …» og «Lagre»; skjemaet for kansellering har feltet
+// «Grunn …» og «Kanseller». Grunnene er oppdiktet. «Rettet» kan ikke vises før utgivelsene
+// finnes (corrected er alltid false); det dekkes av enhetstestene 1.5 og 3.7.1.
+// ---------------------------------------------------------------------------------------------
+
+const BACK_REASON = "Feiltrykk";
+const CANCEL_REASON = "Kunden trakk bestillingen";
+const CONFLICT_MESSAGE = "Statusen er endret av noen andre. Last siden på nytt.";
+
+function statusCard(page: Page): Locator {
+  return page.getByRole("region", { name: "Status", exact: true });
+}
+
+/** Statusmerket i kortet (teksten står alene, ikke som del av en knapp). */
+function statusBadge(page: Page, label: string): Locator {
+  return statusCard(page).getByText(label, { exact: true });
+}
+
+function statusButton(page: Page, name: string): Locator {
+  return statusCard(page).getByRole("button", { name, exact: true });
+}
+
+/** Skjemaet for «Tilbake til …» (har «Lagre»). */
+function backForm(page: Page): Locator {
+  return statusCard(page)
+    .locator("form")
+    .filter({ has: page.getByRole("button", { name: "Lagre", exact: true }) });
+}
+
+/** Skjemaet for kansellering (har «Kanseller»). */
+function cancelForm(page: Page): Locator {
+  return statusCard(page)
+    .locator("form")
+    .filter({ has: page.getByRole("button", { name: "Kanseller", exact: true }) });
+}
+
+async function assignmentNumber(page: Page): Promise<string> {
+  const heading = await page.getByRole("heading", { level: 1 }).innerText();
+  const match = NUMBER.exec(heading);
+  expect(match, "oppdragsnummeret står i overskriften").not.toBeNull();
+  return match![0];
+}
+
+/** Trykker hovedknappen «Sett til <neste>» og venter til merket viser den nye statusen. */
+async function moveForward(page: Page, to: string) {
+  await statusButton(page, `Sett til ${to}`).click();
+  await expect(statusBadge(page, to)).toBeVisible();
+}
+
+async function moveBack(page: Page, to: string, reason: string) {
+  await statusButton(page, `Tilbake til ${to}`).click();
+  const form = backForm(page);
+  await form.getByLabel(/Grunn/).fill(reason);
+  await form.getByRole("button", { name: "Lagre", exact: true }).click();
+}
+
+async function cancelWithReason(page: Page, reason: string) {
+  await statusButton(page, "Kanseller oppdraget").click();
+  const form = cancelForm(page);
+  await form.getByLabel(/Grunn/).fill(reason);
+  await form.getByRole("button", { name: "Kanseller", exact: true }).click();
+}
+
+const WORK_QUEUE_URL = /\/arbeidskoe(\?.*)?$/;
+
+test.describe("statusflyten på oppdraget (pc og ipad)", () => {
+  test("5.1 hele flyten: Bestilt → Under arbeid → tilbake med grunn → kanseller → arbeidskøen", async ({
+    page,
+  }) => {
+    await logIn(page);
+    await newAssignment(page);
+    const number = await assignmentNumber(page);
+
+    await expect(statusCard(page)).toBeVisible();
+    await expect(statusBadge(page, "Bestilt")).toBeVisible();
+    await expect(statusButton(page, "Sett til Under arbeid")).toBeVisible();
+
+    await moveForward(page, "Under arbeid");
+    await expect(statusButton(page, "Sett til Ferdig")).toBeVisible();
+
+    await moveBack(page, "Bestilt", BACK_REASON);
+    await expect(statusBadge(page, "Bestilt")).toBeVisible();
+    await expect(statusButton(page, "Sett til Under arbeid")).toBeVisible();
+
+    await cancelWithReason(page, CANCEL_REASON);
+
+    await expect(page).toHaveURL(WORK_QUEUE_URL);
+    await expect(page.getByText(`Oppdrag ${number} er kansellert.`)).toBeVisible();
+    // Grunnen står ikke i adressen
+    expect(decodeURIComponent(page.url())).not.toContain("Kunden");
+  });
+
+  test("5.2 tom grunn ved «Tilbake til …» gir norsk melding i kortet; statusen er uendret", async ({
+    page,
+  }) => {
+    await logIn(page);
+    await newAssignment(page);
+    await moveForward(page, "Under arbeid");
+
+    await statusButton(page, "Tilbake til Bestilt").click();
+    const form = backForm(page);
+    await form.getByLabel(/Grunn/).fill("   ");
+    await form.getByRole("button", { name: "Lagre", exact: true }).click();
+    const alert = statusCard(page).getByRole("alert").first();
+    await expect(alert).toBeVisible();
+    await expect(alert).not.toHaveText(/^\s*$/);
+    await expect(alert).not.toHaveText(/Invalid|Too small|Expected/);
+
+    await page.reload();
+    await expect(statusBadge(page, "Under arbeid")).toBeVisible();
+  });
+
+  test("5.2 tom grunn ved kansellering: norsk melding, ingenting kansellert", async ({ page }) => {
+    await logIn(page);
+    const { assignmentId } = await newAssignment(page);
+
+    await cancelWithReason(page, "");
+    await expect(statusCard(page).getByRole("alert").first()).toBeVisible();
+
+    const url = `/oppdrag/${assignmentId}`;
+    expectNoServerError(await page.goto(url), url);
+    await expect(statusBadge(page, "Bestilt")).toBeVisible();
+  });
+
+  test("5.3 Ferdig og Fakturert: ingen kansellering, og på Fakturert bare «Tilbake til Ferdig»", async ({
+    page,
+  }) => {
+    await logIn(page);
+    await newAssignment(page);
+    await expect(statusButton(page, "Kanseller oppdraget")).toBeVisible();
+
+    await moveForward(page, "Under arbeid");
+    await expect(statusButton(page, "Kanseller oppdraget")).toBeVisible();
+
+    await moveForward(page, "Ferdig");
+    await expect(statusButton(page, "Kanseller oppdraget")).toHaveCount(0);
+    await expect(statusButton(page, "Sett til Fakturert")).toBeVisible();
+    await expect(statusButton(page, "Tilbake til Under arbeid")).toBeVisible();
+
+    await moveForward(page, "Fakturert");
+    await expect(statusButton(page, "Kanseller oppdraget")).toHaveCount(0);
+    await expect(statusCard(page).getByRole("button", { name: /^Sett til / })).toHaveCount(0);
+    await expect(statusButton(page, "Tilbake til Ferdig")).toBeVisible();
+  });
+
+  test("5.4 og 5.5 etter kansellering: ordresiden viser «(kansellert)» uten lenke, og oppdraget er borte", async ({
+    page,
+  }) => {
+    await logIn(page);
+    const { orderId, assignmentId } = await newAssignment(page);
+    const number = await assignmentNumber(page);
+
+    await cancelWithReason(page, CANCEL_REASON);
+    await expect(page).toHaveURL(WORK_QUEUE_URL);
+
+    // 5.4 ordresiden
+    const orderUrl = `/ordre/${orderId}`;
+    expectNoServerError(await page.goto(orderUrl), orderUrl);
+    await expect(page.getByRole("main")).toContainText(
+      `Gjort om til oppdrag ${number} (kansellert)`,
+    );
+    await expect(page.getByRole("main").getByRole("link", { name: NUMBER })).toHaveCount(0);
+    await expect(page.locator(`a[href$="/oppdrag/${assignmentId}"]`)).toHaveCount(0);
+
+    // 5.5 oppdraget direkte
+    const url = `/oppdrag/${assignmentId}`;
+    expectNoServerError(await page.goto(url), url);
+    await expect(deniedHeading(page)).toBeVisible();
+  });
+
+  test("5.6 konflikt: to faner, flytt fram i den ene, trykk i den andre → konfliktmelding", async ({
+    page,
+    context,
+  }) => {
+    await logIn(page);
+    const { assignmentId } = await newAssignment(page);
+    const second = await context.newPage();
+    await second.goto(`/oppdrag/${assignmentId}`);
+    await expect(statusButton(second, "Sett til Under arbeid")).toBeVisible();
+
+    await moveForward(page, "Under arbeid");
+
+    await statusButton(second, "Sett til Under arbeid").click();
+    await expect(statusCard(second)).toContainText(CONFLICT_MESSAGE);
+
+    await second.reload();
+    await expect(statusBadge(second, "Under arbeid")).toBeVisible();
+    expect(await assignmentEventCount(assignmentId, "assignment.status_changed")).toBe(1);
+    await second.close();
+  });
+
+  test("5.8 «Tilbake til …», grunnfeltet og «Lagre» nås og sendes med Tab og Enter", async ({
+    page,
+  }) => {
+    await logIn(page);
+    await newAssignment(page);
+    await moveForward(page, "Under arbeid");
+
+    async function tabTo(target: Locator, max: number) {
+      for (let i = 0; i < max; i++) {
+        if (await target.evaluate((el) => el === document.activeElement)) return;
+        await page.keyboard.press("Tab");
+      }
+      await expect(target).toBeFocused();
+    }
+
+    await page.locator("body").focus();
+    const back = statusButton(page, "Tilbake til Bestilt");
+    await tabTo(back, 120);
+    await expect(back).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    const reason = backForm(page).getByLabel(/Grunn/);
+    await expect(reason).toBeVisible();
+    await tabTo(reason, 20);
+    await expect(reason).toBeFocused();
+    await page.keyboard.type(BACK_REASON);
+
+    const save = backForm(page).getByRole("button", { name: "Lagre", exact: true });
+    await tabTo(save, 20);
+    await expect(save).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    await expect(statusBadge(page, "Bestilt")).toBeVisible();
+  });
+});
+
+test.describe("statusflyten på iPad (prosjektet ipad)", () => {
+  test.beforeEach(() => {
+    test.skip(test.info().project.name !== "ipad", "Bare i prosjektet ipad");
+  });
+
+  test("5.7 stående: kortet «Status» øverst, ingen vannrett rulling, knapper minst 44 px", async ({
+    page,
+  }) => {
+    await page.setViewportSize(PORTRAIT);
+    await logIn(page);
+    const { assignmentId } = await newAssignment(page);
+    const url = `/oppdrag/${assignmentId}`;
+
+    // Kortet står over «Team» og «Parter»
+    const statusBox = await statusCard(page).boundingBox();
+    const teamBox = await section(page, "Team").boundingBox();
+    const partiesBox = await section(page, "Parter").boundingBox();
+    expect(statusBox, "kortet «Status» er synlig").not.toBeNull();
+    expect(statusBox!.y).toBeLessThan(teamBox!.y);
+    expect(statusBox!.y).toBeLessThan(partiesBox!.y);
+    await expectNoHorizontalScroll(page, url);
+
+    await expectAtLeast44(statusButton(page, "Sett til Under arbeid"), "Sett til Under arbeid");
+    await expectAtLeast44(statusButton(page, "Kanseller oppdraget"), "Kanseller oppdraget");
+
+    await moveForward(page, "Under arbeid");
+    await expectAtLeast44(statusButton(page, "Tilbake til Bestilt"), "Tilbake til Bestilt");
+
+    await statusButton(page, "Kanseller oppdraget").click();
+    await expectAtLeast44(
+      cancelForm(page).getByRole("button", { name: "Kanseller", exact: true }),
+      "Kanseller",
+    );
+    await expectNoHorizontalScroll(page, url);
+
+    await statusButton(page, "Tilbake til Bestilt").click();
+    await expectAtLeast44(
+      backForm(page).getByRole("button", { name: "Lagre", exact: true }),
+      "Lagre (tilbake)",
+    );
+    await expectNoHorizontalScroll(page, url);
   });
 });
