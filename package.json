@@ -1,10 +1,6 @@
 {
   "name": "ezprop",
-<<<<<<< HEAD
   "version": "0.2.84",
-=======
-  "version": "0.2.83",
->>>>>>> origin/main
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",
