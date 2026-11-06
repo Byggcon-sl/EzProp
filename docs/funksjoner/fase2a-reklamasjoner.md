@@ -29,6 +29,7 @@ Ikke KI nå. Det er for få saker til at KI har noe å lære av, og en reklamasj
    - `updateClaim(actor, organizationId, claimId, input)` – `claims.manage`. Lukking er en vanlig endring der utfallet settes til noe annet enn «åpen»; da settes `closed_at` på serveren. Åpnes saken igjen, nullstilles `closed_at`.
    - `removeClaim(actor, organizationId, claimId)` – `claims.manage`, myk sletting.
    - Alle spørringer filtrerer på `grant.organizationId`. Oppdraget sjekkes mot samme organisasjon før en sak lagres på det. Zod-skjema i `schemas.ts`.
+   - **Fjernet oppdrag** (`deleted_at` satt): `createClaim` og `listClaimsForAssignment` gir begge «finnes ikke», samme svar som for et oppdrag i en annen organisasjon. Ett svar for begge er enklest å teste og avslører ingenting.
 4. **Revisjonsloggen** får bare handling og **feltnavn**, aldri innholdet i `claimant_text`, `description` eller `building_part_text` (kan inneholde navn og helseopplysninger). Hendelsen `claim.registered` får bare `claimId`, `assignmentId`, `claimType` og `receivedAt`.
 5. **Skjermer** (se under), bare for den som har `claims.read`; endringsknappene bare for `claims.manage`. Hvem som ser hva, avgjøres i `src/core/access`, ikke i sidene.
 6. **Personvernerklæringen** (`docs/personvern/intern-personvernerklaering.md`) får tabellen `claims`, og `tests/tenant-tables.ts` får tabellen.
@@ -78,24 +79,29 @@ PC og iPad-størrelse, Fjord-designet.
 - **`/oppdrag/[id]/reklamasjoner/ny`:** skjemaet. Hovedhandling «Lagre». Velg part fra oppdraget eller skriv hvem. Dato er satt til i dag. Fire trykk pluss beskrivelsen.
 - **`/oppdrag/[id]/reklamasjoner/[claimId]`:** samme skjema for endring, med utfall og beløp. Knappen «Fjern» med bekreftelse.
 - Hjelpeteksten under beskrivelsen: «Skriv kort hva som påstås. Ikke skriv fødselsnummer eller helseopplysninger.»
+- Sidene trenger ikke virke uten nett. Dette er lederarbeid på PC, ikke befaring.
 
 ## Regler
 Valideringsregler i Zod, med testsaker:
 - Enten `claimant_party_id` eller `claimant_text` må være satt.
 - `received_at` kan ikke være fram i tid.
 - `amount` bare når utfallet er `upheld` eller `settled`; heltall, 0 eller mer.
-- `closed_at` settes når utfallet går fra `open`, og nullstilles når det går tilbake til `open`.
-- Parten må høre til samme oppdrag.
+- `received_at` måles mot dagens dato i Europe/Oslo. I dag er lov, i morgen er ikke lov. Testene setter tiden med `TEST_NOW`.
+- `closed_at` settes av serveren når utfallet går fra `open`, og nullstilles når det går tilbake til `open`. En `closed_at` fra klienten ignoreres.
+- **Gjenåpning:** settes utfallet tilbake til `open` mens `amount` er fylt, **avvises** endringen (samme regel som over, `amount_only_upheld_or_settled`). Skjemaet tømmer og skjuler beløpsfeltet når «Åpen» velges, så leder merker det ikke. Begrunnelse: én regel i stedet for to, og serveren endrer aldri et beløp i stillhet.
+- Parten må høre til samme oppdrag og samme organisasjon, og kan ikke være fjernet (`deleted_at` satt). Gjelder både ved registrering og ved endring.
+- `created_by` er den som utfører handlingen, aldri en verdi fra skjemaet.
 
 ## Akseptkriterier
 - [ ] Leder og admin kan registrere, endre, lukke og fjerne en reklamasjonssak på et oppdrag (test og e2e).
 - [ ] Takstmann og kontor ser verken delen, listen eller sidene, også med `access.inspectors_edit_all` på (test og e2e).
 - [ ] `claims.manage` kan ikke gis som enkeltrettighet, og påvirkes ikke av innstillingen (test).
 - [ ] Bruker i annen organisasjon får ikke tilgang (`expectTenantIsolation` for alle tjenestene, og tabellen i `tests/tenant-tables.ts`).
-- [ ] En part fra et annet oppdrag kan ikke velges som klager (test).
+- [ ] En part fra et annet oppdrag, en annen organisasjon eller en fjernet part kan ikke velges som klager, verken ved registrering eller endring (test).
+- [ ] Et fjernet oppdrag gir «finnes ikke» ved registrering og liste (test).
 - [ ] Fjernede saker vises ikke, men raden står i databasen med `deleted_at` (test).
 - [ ] Revisjonsloggen og hendelsen inneholder ikke beskrivelsen, klageren eller bygningsdelen (test).
-- [ ] Valideringsreglene over har testsaker.
+- [ ] Valideringsreglene over har testsaker, også gjenåpning med beløp og datogrensen i Europe/Oslo.
 - [ ] Virker på iPad-størrelse (e2e).
 - [ ] Versjonen i `package.json` økes, personvernerklæringen, domenemodellen og ordlisten er oppdatert.
 
@@ -105,6 +111,15 @@ Valideringsregler i Zod, med testsaker:
 - **A121:** Status «åpen/lukket» leses av utfallet (`outcome = open` er åpen) i stedet for et eget statusfelt, slik domenemodellen allerede har det. Det er ett felt mindre å holde i takt. Kilde: domenemodellen 4.13.
 - **A122:** Bygningsdel eller kontrollpunkt er fritekst nå; kobling til `checkpoint_key` kommer når malmotoren finnes. Typen `internal` venter til fase 4. Kilde: planen fase 2a og fase 4 (H6).
 - **A123:** Beløp er med (valgfritt, bare ved medhold eller forlik), fordi hovedmålet måles både i antall og beløp. Kilde: utviklingsplanen, «Reklamasjoner: antall … og beløp».
+
+## Testplan (test-leder, runde 1, 06.11.2026)
+Testfiler: `src/core/claims/schemas.test.ts`, `src/core/claims/claims.test.ts`, `src/core/access/*.test.ts`, `e2e/claims.spec.ts`. Fellestester: `tests/tenant-tables.ts` (`claims` med radbygger), `tests/factories.ts` (`createClaim`, `claims` i `RESET_TABLES`).
+- **Regler som data:** `claimant_required`, `received_at_not_future`, `amount_only_upheld_or_settled` (negativt og desimal avvist, 0 lov), `text_limits` (beskrivelse 0 og 2001 tegn, klager og bygningsdel 201 tegn avvist), `enum_values`.
+- **Rettigheter:** rolletabellene får `claims.manage`. Takstmann har verken `claims.read` eller `claims.manage`, med innstillingen på og av. Enkeltrettighet i `employee_permissions` ignoreres. Uten gyldig sertifisering tas bare `report.publish` bort. Admin har alltid begge.
+- **Integrasjon:** full livssyklus for leder og admin; takstmann (innstilling på og av) og kontor får «finnes ikke» på alle fem tjenestene; `expectTenantIsolation` for `list`, `get`, `create`, `update`, `remove`; `closed_at`, myk sletting, revisjonsloggen uten de oppdiktede fritekstene, nøklene i `claim.registered`, `created_by`.
+- **E2e (PC og iPad):** leder registrerer, lukker med utfall og beløp, fjerner; merket går fra «Åpen» til «Lukket (utfall)». Takstmann og kontor ser ikke delen og får «finnes ikke» på direkte adresser. Hjelpeteksten vises.
+- **Ikke testet nå (bevisst):** telling per 100 rapporter og kobling til rapport eller kontrollpunkt.
+- **Krav før godkjenning:** tilgangstester per rolle med innstillingen på og av, `expectTenantIsolation` for alle fem tjenestene, og testen som viser at revisjonsloggen ikke inneholder klager, beskrivelse eller bygningsdel.
 
 ## Roller
 - **utvikler** og **testskriver** i parallell. Bitene henger ikke sammen: (1) migrering, rettighet og tjenester i `src/core/claims`; (2) sidene og delen på oppdragssiden. Testskriveren skriver tilgang, tenant-isolasjon, valideringsregler og e2e mot kortet.
