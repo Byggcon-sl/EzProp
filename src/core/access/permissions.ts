@@ -25,6 +25,8 @@ export const permissions = [
   "template.edit_structure",
   /** Sende fakturagrunnlag. Alle roller (27.10.2026). */
   "invoice.send",
+  /** Fjerne og slå sammen kontakter og firma. Leder og admin. */
+  "contacts.manage",
 ] as const;
 export type Permission = (typeof permissions)[number];
 
@@ -62,6 +64,7 @@ function permissionsForRole(role: EmployeeRole, settings: AccessSettings): reado
         "report.edit",
         "report.publish",
         "invoice.send",
+        "contacts.manage",
       ];
     case "admin":
       // Admin stenges aldri ute: alltid alle rettigheter.

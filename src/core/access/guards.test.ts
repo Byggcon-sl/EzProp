@@ -127,7 +127,7 @@ describe("requireOrganizationAccess", () => {
 
 const SETTING = "access.inspectors_edit_all";
 
-const allNine: readonly Permission[] = [
+const allPermissions: readonly Permission[] = [
   "organization.read",
   "organization.manage",
   "claims.read",
@@ -137,6 +137,7 @@ const allNine: readonly Permission[] = [
   "report.publish",
   "template.edit_structure",
   "invoice.send",
+  "contacts.manage",
 ];
 
 /** Fasit per rolle med innstillingen på. Skrevet ut for hånd, ikke regnet ut fra koden. */
@@ -157,8 +158,9 @@ const allowedWithSettingOn: Record<EmployeeRole, readonly Permission[]> = {
     "report.edit",
     "report.publish",
     "invoice.send",
+    "contacts.manage",
   ],
-  admin: allNine,
+  admin: allPermissions,
 };
 
 /** Fasit med innstillingen av: bare takstmann endres (mister assignment.edit og report.edit). */
@@ -171,7 +173,11 @@ const roles: EmployeeRole[] = ["inspector", "office", "manager", "admin"];
 
 function matrixCases(fasit: Record<EmployeeRole, readonly Permission[]>) {
   return roles.flatMap((role) =>
-    allNine.map((permission) => ({ role, permission, allowed: fasit[role].includes(permission) })),
+    allPermissions.map((permission) => ({
+      role,
+      permission,
+      allowed: fasit[role].includes(permission),
+    })),
   );
 }
 
@@ -252,7 +258,7 @@ describe("tilgang per rolle", () => {
 
 describe("Admin stenges aldri ute, skal aldri fjernes", () => {
   async function expectAdminHasEverything(actor: TestActor, organizationId: string) {
-    expect([...permissions].sort()).toEqual([...allNine].sort());
+    expect([...permissions].sort()).toEqual([...allPermissions].sort());
     for (const permission of permissions) {
       const grant = await requireOrganizationAccess(actor, organizationId, permission);
       expect(isAdmin(grant)).toBe(true);
@@ -592,7 +598,7 @@ describe("3.3 sertifisering: admin stenges aldri ute, skal aldri fjernes", () =>
       await expectAllowed(user, org.id, permission, true);
     }
     const grant = await requireOrganizationAccess(user, org.id, "organization.manage");
-    expect(grant.permissions).toEqual(allNine.filter((p) => p !== "report.publish"));
+    expect(grant.permissions).toEqual(allPermissions.filter((p) => p !== "report.publish"));
   });
 
   it("2. admin med bare utgått sertifisering har det samme", async () => {
@@ -635,7 +641,7 @@ describe("3.3 sertifisering: admin stenges aldri ute, skal aldri fjernes", () =>
       validTo: addDays(todayInOslo(), 365),
     });
     const grant = await requireOrganizationAccess(user, org.id, "report.publish");
-    expect([...grant.permissions].sort()).toEqual([...allNine].sort());
+    expect([...grant.permissions].sort()).toEqual([...allPermissions].sort());
   });
 });
 

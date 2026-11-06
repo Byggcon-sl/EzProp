@@ -95,6 +95,7 @@ beforeEach(() => {
     actor,
     organizationId: ORG,
     canEditOrders: true,
+    canManageContacts: false,
     officeId: null,
   });
   const result = { id: ASSIGNMENT, number: NUMBER, status: "ordered", deletedAt: null };

@@ -592,17 +592,31 @@ export function e2eDatabaseUrl(): string {
   return "postgres://ezprop:ezprop@localhost:5432/ezprop";
 }
 
+/** Oppdiktet leder for e2e (rollen `manager`). Ingen ekte navn eller adresser. */
+export const MANAGER_EMAIL = "leder@example.com";
+
+/** En oppdiktet ansatt for e2e: e-post, navn og rollen som skal finnes. */
+type E2eEmployee = {
+  email: string;
+  name: string;
+  role: "inspector" | "manager" | "office";
+  /** Rollen på norsk i feilmeldingene («takstmann», «leder», «kontor»). */
+  roleLabel: string;
+  /** Navnet på konstanten i feilmeldingene, slik at det er lett å finne ut hva som må gjøres. */
+  label: string;
+};
+
 /**
- * Sørger for at den oppdiktede takstmannen finnes som ansatt med rollen `inspector` i samme
- * organisasjon som admin fra seed (Byggcon). Idempotent.
+ * Sørger for at den oppdiktede ansatte finnes med rollen i samme organisasjon som admin fra seed
+ * (Byggcon). Idempotent.
  *
  * - Skriver bare til lokal database eller testdatabasen (`assertLocalOrTestDatabase`), og
  *   sjekker det før den kobler til.
- * - Bruker aldri slettede eller deaktiverte rader (admin, ansatt eller rolle). Finnes takstmannen
+ * - Bruker aldri slettede eller deaktiverte rader (admin, ansatt eller rolle). Finnes den ansatte
  *   eller rollen bare som slettet/deaktivert, kastes en feil som sier hva som må gjøres.
  * - Gjenoppretter, sletter eller endrer ingenting.
  */
-export async function ensureInspector(): Promise<void> {
+async function ensureEmployee({ email, name, role, roleLabel, label }: E2eEmployee): Promise<void> {
   const databaseUrl = e2eDatabaseUrl();
   assertLocalOrTestDatabase(databaseUrl, process.env.TEST_DATABASE_URL);
   const sql = postgres(databaseUrl, { max: 1, onnotice: () => {} });
@@ -616,12 +630,10 @@ export async function ensureInspector(): Promise<void> {
     const organizationId = admin.organization_id;
     await sql`
       insert into users (id, name, email, email_verified)
-      values (${randomUUID()}, 'Oppdiktet takstmann', ${INSPECTOR_EMAIL}, true)
+      values (${randomUUID()}, ${name}, ${email}, true)
       on conflict (email) do nothing`;
-    const [user] = await sql<
-      { id: string }[]
-    >`select id from users where email = ${INSPECTOR_EMAIL}`;
-    if (!user) throw new Error("Kunne ikke lage takstmannen for e2e");
+    const [user] = await sql<{ id: string }[]>`select id from users where email = ${email}`;
+    if (!user) throw new Error(`Kunne ikke lage brukeren for e2e (${label})`);
     const found = await sql<{ id: string; deleted_at: Date | null; deactivated_at: Date | null }[]>`
       select id, deleted_at, deactivated_at from employees
       where user_id = ${user.id} and organization_id = ${organizationId}`;
@@ -630,18 +642,18 @@ export async function ensureInspector(): Promise<void> {
     );
     if (!employee && found.length > 0) {
       throw new Error(
-        "Takstmannen for e2e (INSPECTOR_EMAIL) er slettet eller deaktivert i testdatabasen. " +
+        `Den ansatte for e2e (${label}) er slettet eller deaktivert i testdatabasen. ` +
           "Tøm databasen eller kjør pnpm db:seed på nytt.",
       );
     }
     if (!employee) {
       [employee] = await sql<{ id: string }[]>`
         insert into employees (organization_id, user_id, name)
-        values (${organizationId}, ${user.id}, 'Oppdiktet takstmann')
+        values (${organizationId}, ${user.id}, ${name})
         returning id`;
     }
-    if (!employee) throw new Error("Kunne ikke lage den ansatte for e2e");
-    // Utstedende selskap: takstmannen får «Byggcon Nord AS» fra seed, bare hvis selskap mangler.
+    if (!employee) throw new Error(`Kunne ikke lage den ansatte for e2e (${label})`);
+    // Utstedende selskap: den ansatte får «Byggcon Nord AS» fra seed, bare hvis selskap mangler.
     await sql`
       update employees set company_id = (
         select c.id from companies c
@@ -651,27 +663,74 @@ export async function ensureInspector(): Promise<void> {
       where id = ${employee.id} and organization_id = ${organizationId} and company_id is null`;
     const roles = await sql<{ deleted_at: Date | null }[]>`
       select deleted_at from employee_roles
-      where employee_id = ${employee.id} and role = 'inspector'`;
+      where employee_id = ${employee.id} and role = ${role}::employee_role`;
     if (roles.some((row) => row.deleted_at === null)) return;
     if (roles.length > 0) {
       throw new Error(
-        "Rollen takstmann for e2e-takstmannen (INSPECTOR_EMAIL) er slettet i testdatabasen. " +
+        `Rollen ${roleLabel} for den ansatte for e2e (${label}) er slettet i testdatabasen. ` +
           "Tøm databasen eller kjør pnpm db:seed på nytt.",
       );
     }
     await sql`
       insert into employee_roles (organization_id, employee_id, role)
-      values (${organizationId}, ${employee.id}, 'inspector')
+      values (${organizationId}, ${employee.id}, ${role}::employee_role)
       on conflict do nothing`;
   } finally {
     await sql.end();
   }
 }
 
+/** Sørger for at den oppdiktede takstmannen finnes med rollen `inspector` (se `ensureEmployee`). */
+export async function ensureInspector(): Promise<void> {
+  await ensureEmployee({
+    email: INSPECTOR_EMAIL,
+    name: "Oppdiktet takstmann",
+    role: "inspector",
+    roleLabel: "takstmann",
+    label: "INSPECTOR_EMAIL",
+  });
+}
+
 /** Logger inn som den oppdiktede takstmannen (rolle `inspector`, ikke admin). */
 export async function logInAsInspector(page: Page) {
   await ensureInspector();
   await logIn(page, INSPECTOR_EMAIL);
+}
+
+/**
+ * Sørger for at den oppdiktede lederen finnes med rollen `manager` og ingen andre roller fra
+ * denne hjelperen (se `ensureEmployee`). Brukes der leder skal gjøre noe admin også kan, slik at
+ * testen viser at rettigheten gjelder leder og ikke bare admin.
+ */
+export async function ensureManager(): Promise<void> {
+  await ensureEmployee({
+    email: MANAGER_EMAIL,
+    name: "Oppdiktet leder",
+    role: "manager",
+    roleLabel: "leder",
+    label: "MANAGER_EMAIL",
+  });
+}
+
+/** Logger inn som den oppdiktede lederen (rolle `manager`, ikke admin). */
+export async function logInAsManager(page: Page) {
+  await ensureManager();
+  await logIn(page, MANAGER_EMAIL);
+}
+
+/** Oppdiktet kontoransatt for e2e (rollen `office`). Ingen ekte navn eller adresser. */
+export const OFFICE_EMAIL = "kontor@example.com";
+
+/** Logger inn som den oppdiktede kontoransatte (rolle `office`, ikke admin). */
+export async function logInAsOffice(page: Page) {
+  await ensureEmployee({
+    email: OFFICE_EMAIL,
+    name: "Oppdiktet kontoransatt",
+    role: "office",
+    roleLabel: "kontor",
+    label: "OFFICE_EMAIL",
+  });
+  await logIn(page, OFFICE_EMAIL);
 }
 
 // --- Prøve E, regler uten nett (docs/funksjoner/fase1-prove-e-regler-testplan.md avsnitt 5.1) ---
