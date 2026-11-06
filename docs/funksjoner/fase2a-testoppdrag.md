@@ -2,7 +2,7 @@
 
 - **Fase:** 2a (Oppdrag og eiendom, siste punkt)
 - **Modul:** kjerne (`src/db/seed`)
-- **Status:** utkast (avgjort av agentene i autonom modus, A130–A134)
+- **Status:** klar til bygging (avgjort av agentene i autonom modus, A130–A134; kortet justert etter forenkler og test-leder 06.11.2026)
 - **Støtter hovedmål:** Tid: «Prøv malen», regeltestene og demoene får ferdige oppdrag med en gang. Ingen må skrive inn eiendom, bygninger og rom for hånd før hver prøve. / Reklamasjoner: reglene og malen prøves mot fire ulike boligtyper. Da finner vi feil før en ekte rapport går ut. / KI først: KI-forslagene i senere faser får faste oppdrag å prøve og måles mot. Det er de samme oppdragene hver gang.
 - **Branch:** `fase2a-testoppdrag-grunndata` fra `main`
 - **Kilde:** innspill P11 (`docs/kartlegging/innspill-datamodell-og-plan-2026-10-25.md`), A57 (prøveorganisasjon), `docs/personvern/sletting-av-betadata.md`
@@ -25,7 +25,7 @@ Dette er grunnlaget for å prøve KI, ikke en KI-funksjon. KI trinn 1–3 (tekst
 - Grunndata i prøveorganisasjonen:
   - ett oppdiktet selskap (`Prøveselskap AS`, uten org.nr.) og ett kontor (`Prøvekontor`)
   - admin fra `SEED_ADMIN_EMAIL` som ansatt med rollen admin, så admin kan bytte til prøveorganisasjonen
-  - to oppdiktede takstmenn med e-post på `@example.invalid`, ansatt i prøveselskapet
+  - én oppdiktet takstmann med e-post på `@example.invalid`, ansatt i prøveselskapet. Han er ansvarlig takstmann på alle fire oppdragene.
 - **Fire testoppdrag**, hvert med ordre som er gjort om til oppdrag (med oppdragsnummer fra nummerserien), team (ansvarlig takstmann) og utstedende selskap satt av den vanlige regelen. I tillegg får hvert oppdrag eiendom med matrikkel, boligtype og eierform, bygninger, etasjer, areal per etasje (BRA-i, BRA-e, BRA-b, ALH der det passer, metode og hvem som målte), rom med romtype og «under terreng», og parter (selger, megler, kjøper der det passer):
   1. **Enebolig med garasje:** `detached` / `freehold`. Bolig med to etasjer og kjeller under terreng, og frittstående garasje som egen bygning med BRA-b.
   2. **Leilighet i sameie:** `apartment` / `section`, med seksjonsnummer og fellesdeler.
@@ -34,7 +34,13 @@ Dette er grunnlaget for å prøve KI, ikke en KI-funksjon. KI trinn 1–3 (tekst
 - Status: enebolig er **bestilt**, de tre andre er **under arbeid** (A133). Da viser arbeidskøen mer enn én fane.
 - Oppdragene lages **gjennom tjenestene i `src/core`** (ordre, gjør om til oppdrag, team, parter, eiendom, bygninger) med admin som den som utfører. Da gjelder de samme kontrollene, nummerserien, hendelsene og regelen for utstedende selskap som i appen. Bare grunndataene (organisasjon, selskap, kontor, ansatte, roller) legges inn direkte, slik `runSeed` gjør i dag.
 - Alt innhold er **oppdiktet**, se «Data» (A132).
-- Steget kjøres i utrullingen til **testmiljøet** etter `pnpm db:seed` (`deploy-azure.yml`), og i CI etter `pnpm db:seed`, så vi ser at det virker mot en tom database.
+- **Oppslag og gjentatt kjøring:**
+  - Prøveorganisasjonen finnes på navn **og** merket `settings.sampleData`. Finnes organisasjonen med navnet uten merket, stopper steget uten å skrive noe. Finnes det mer enn én organisasjon med navnet, stopper steget med feilmelding.
+  - Oppslaget på `external_ref` filtrerer alltid på id-en til prøveorganisasjonen (regel 2), aldri bare på `external_ref`. Feltet er ikke unikt, og en ordre i Byggcon med samme verdi skal ikke påvirke noe.
+  - Oppslaget tar med myk-slettede (kansellerte) oppdrag og avviste ordrer. Finnes ordren i en slik tilstand, hoppes testoppdraget over. Det lages ikke på nytt, og ingenting endres.
+  - **Kjøring som stopper halvveis:** tjenestene i `src/core` har hver sin transaksjon, så hele testoppdraget kan ikke ligge i én transaksjon uten å bygge om tjenestene. Steget fortsetter derfor der det stoppet: for hvert testoppdrag sjekkes delene i fast rekkefølge (ordre, gjort om til oppdrag, team, eiendom, bygninger med etasjer, areal og rom, parter). En del som finnes, røres ikke. En del som mangler, lages. Bygninger og parter vurderes samlet: finnes ingen, lages alle; finnes noen, røres de ikke.
+  - Andre kjøring kaller ingen tjeneste som skriver. Da brukes ingen nye nummer fra `number_sequences`, og det kommer ingen nye hendelser eller loggrader.
+- Steget kjøres i utrullingen til **testmiljøet** etter `pnpm db:seed` (`deploy-azure.yml`), i CI etter `pnpm db:seed` og før `pnpm test:e2e`, og i `start.sh` etter `db:seed` (så e2e virker lokalt hos Ståle og utviklerne).
 - Planpunktet krysses av. Bildene står som en egen linje under bildepunktet i planen (A134).
 
 **Ikke med (bevisst utelatt):**
@@ -61,10 +67,11 @@ Ingen nye rettigheter. Prøveorganisasjonen er en vanlig organisasjon, og tilgan
 - Ingen nye tabeller eller kolonner. Koder som brukes: `HOUSING_TYPES` (`detached`, `apartment`, `holiday_home`), `OWNERSHIP_FORMS` (`freehold`, `section`, `cooperative`), `AREA_TYPES`, `MEASURING_METHODS`, romtypene i `src/core/buildings/codes.ts`, partsrollene og statusene som finnes.
 - Innholdet ligger i én datafil (`src/db/seed/sample-assignments.data.ts`), så regeltester og «Prøv malen» kan lese de samme verdiene.
 - Oppdiktet innhold (A132):
-  - Adresser på gater som ikke finnes, for eksempel `Prøvevegen 1`. Kommunenummer `9999` hvis valideringen tillater det. Ellers brukes en ekte kommune med gnr 9000 eller høyere, som ikke peker på en ekte eiendom.
+  - Adresser på gater som ikke finnes, for eksempel `Prøvevegen 1`. Kommunenummer **`9999`** på alle fire. Valideringen (`optionalFixedDigits(4)` i `src/core/properties/schemas.ts`) godtar det, og kommunen finnes ikke, så ingen matrikkel kan treffe en ekte eiendom.
   - Navn som tydelig er oppdiktet (for eksempel «Kari Prøve», «Ola Testesen»). E-post bare på `@example.invalid`. Ingen telefonnummer, ingen fødselsnummer, ingen ekte firma eller org.nr.
   - Byggeår og areal skal være realistiske, så reglene får noe å virke på senere (for eksempel våtrom fra før 2000 i eneboligen).
 - Ordliste (`docs/05-domenemodell.md` avsnitt 8): «Prøveorganisasjon» = organisasjon med `settings.sampleData`, og «Testoppdrag» = sample assignment, `orders.external_ref` med `sample:`.
+- Personvernerklæringen endres ikke. Prøveorganisasjonen har bare oppdiktede data og ingen personopplysninger.
 
 ## Skjermer
 Ingen nye. Testoppdragene vises i arbeidskøen, på `/oppdrag/[id]` og `/oppdrag/[id]/bygninger` etter at admin har byttet til prøveorganisasjonen. Antall trykk: 0 for å lage dem, mot 15–20 minutter med inntasting per oppdrag i dag.
@@ -74,17 +81,27 @@ Ingen nye regler. Testoppdragene er testgrunnlag for reglene som kommer.
 
 ## Akseptkriterier
 - [ ] `pnpm db:seed:testoppdrag` lager prøveorganisasjonen med fire testoppdrag, med eiendom, matrikkel, bygninger, etasjer, areal, rom og parter som beskrevet (test mot testdatabasen)
-- [ ] Andre kjøring gir nøyaktig samme antall rader i alle berørte tabeller og ingen nye hendelser (test)
-- [ ] Et testoppdrag som er myk-slettet (kansellert), lages ikke på nytt (test)
-- [ ] Steget nekter å skrive i en organisasjon med samme navn uten `settings.sampleData` (test)
+- [ ] Andre kjøring gir nøyaktig samme antall rader i alle berørte tabeller, ingen nye hendelser eller loggrader, og uendret teller i `number_sequences`. I samme test er ett testoppdrag kansellert før andre kjøring, og det lages ikke på nytt (test)
+- [ ] Kjøring som stoppet halvveis (bare ordren finnes) fullføres av neste kjøring, og resultatet har samme antall rader som en ren kjøring (test)
+- [ ] Steget nekter å skrive i en organisasjon med samme navn uten `settings.sampleData`, og stopper hvis to organisasjoner har navnet (test)
 - [ ] Byggcons ekte organisasjon får ingen nye rader, og `pnpm db:seed` er uendret (test)
-- [ ] Bruker i annen organisasjon får ikke tilgang (test med `expectTenantIsolation`: en ansatt i Byggcon ser ingen testoppdrag i arbeidskøen og får ikke åpne dem)
-- [ ] Admin fra `SEED_ADMIN_EMAIL` er admin i prøveorganisasjonen, og admin i Byggcon blir ikke borte (test)
-- [ ] Alle e-postadresser i datafilen ender på `@example.invalid`, og ingen felt har fødselsnummer eller telefonnummer (test som leser datafilen)
+- [ ] Bruker i annen organisasjon får ikke tilgang (test med `expectTenantIsolation`: en ansatt i Byggcon ser ingen testoppdrag i arbeidskøen og får nei på `getAssignment`; en ordre i Byggcon med samme `external_ref` blir ikke endret og stopper ikke prøveorganisasjonen)
+- [ ] Admin fra `SEED_ADMIN_EMAIL` er admin i prøveorganisasjonen, og admin i Byggcon blir ikke borte, også etter to kjøringer (test)
+- [ ] Steget sletter aldri noe og setter aldri `deleted_at` (test)
+- [ ] Alle e-postadresser i datafilen ender på `@example.invalid`, ingen felt har fødselsnummer, telefonnummer eller org.nr., kommunenummeret er `9999`, og romtyper og arealtyper finnes i kodelistene (test som leser datafilen)
 - [ ] Utstedende selskap og oppdragsnummer er satt av de vanlige reglene (test)
-- [ ] Virker på iPad-størrelse (e2e: admin bytter til prøveorganisasjonen, ser fire oppdrag i arbeidskøen og åpner bygningene på eneboligen)
-- [ ] CI kjører steget etter `pnpm db:seed`. `deploy-azure.yml` kjører det i testmiljøet.
-- [ ] Versjonen økt (patch). Planpunktet krysset av, med bildene som egen linje under bildepunktet. Ordlisten og `docs/personvern/intern-personvernerklaering.md` nevner prøveorganisasjonen.
+- [ ] Virker på iPad-størrelse (én liten e2e-fil, PC og iPad: admin bytter til prøveorganisasjonen, ser fire oppdrag i arbeidskøen og åpner bygningene på eneboligen og ser bolig og garasje). Mangler testoppdragene, stopper testen med meldingen «Kjør pnpm db:seed:testoppdrag først», ikke «fant ikke»
+- [ ] CI kjører steget etter `pnpm db:seed` og før `pnpm test:e2e`. `deploy-azure.yml` kjører det i testmiljøet etter `db:seed` og før brannmurregelen slettes. `tests/deploy-workflow.test.ts` sjekker de to linjene hver for seg (i dag treffer `findIndex("pnpm db:seed")` også `db:seed:testoppdrag`)
+- [ ] `start.sh` kjører steget etter `db:seed` (bash 3.2)
+- [ ] Versjonen økt (patch). Planpunktet krysset av, med bildene som egen linje under bildepunktet. Ordlisten nevner prøveorganisasjonen og testoppdrag.
+
+## Avgjort ved uenighet (prosjektleder 06.11.2026)
+- **Én takstmann, ikke to** (forenkler). Ingen akseptkriterier trenger to, og arbeidskøen viser fanene uansett. Testplanen bruker én.
+- **Kommunenummer 9999** (forenkler og test-leder er enige). Reserveløsningen er strøket.
+- **Kansellert testoppdrag:** forenkler ville kutte egen test, test-leder ville ha to (kansellert og avvist). Avgjørelse: én påstand i testen for andre kjøring (ett oppdrag kanselleres før kjøringen). Avvist ordre får ingen egen test: steget gjør alltid om ordren til oppdrag med en gang, og en ordre som er gjort om kan ikke avvises, så tilstanden kan ikke oppstå fra steget. Oppslaget tar likevel med avviste ordrer.
+- **Kjøring som stopper halvveis:** test-leder foreslo én transaksjon per testoppdrag. Det krever at tjenestene i `src/core` bygges om til å ta imot en ytre transaksjon, og det er utenfor oppgaven. Avgjørelse: steget fortsetter der det stoppet (se «Oppslag og gjentatt kjøring»), med én test.
+- **E2e:** egen liten fil `e2e/fase-2a-testoppdrag.spec.ts` (ingen eksisterende test har prøveorganisasjonen). Bare de to sjekkene over. Sjekken av at Byggcon ikke viser testoppdrag gjøres i integrasjonstesten, ikke i e2e. E2e kjører ikke seed-steget selv; CI og `start.sh` gjør det.
+- **Personvernerklæringen** endres ikke (forenkler).
 
 ## Åpne spørsmål
 Ingen som stopper oppgaven. Beslutningene A130–A134 står i `docs/09-apne-sporsmal.md` og kan endres av Ståle.
