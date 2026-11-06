@@ -30,6 +30,7 @@ const allPermissions = [
   "template.edit_structure",
   "invoice.send",
   "contacts.manage",
+  "statistics.read",
 ] as const;
 
 const notGrantable = [
@@ -39,6 +40,7 @@ const notGrantable = [
   "organization.read",
   "invoice.send",
   "contacts.manage",
+  "statistics.read",
 ] as const;
 
 type Column = "inspectorOn" | "inspectorOff" | "office" | "manager" | "admin";
@@ -117,6 +119,15 @@ const expected: Record<(typeof allPermissions)[number], Record<Column, boolean>>
     manager: true,
     admin: true,
   },
+  // Samlet statistikk (tid per fase): bare leder og admin, aldri enkeltvis (A21)
+  // (docs/funksjoner/fase2a-tidsmaling.md, Omfang 5)
+  "statistics.read": {
+    inspectorOn: false,
+    inspectorOff: false,
+    office: false,
+    manager: true,
+    admin: true,
+  },
 };
 
 function column(role: EmployeeRole, editAll: boolean): Column {
@@ -142,7 +153,7 @@ afterEach(() => {
 });
 
 describe("permissions", () => {
-  it("1. har nøyaktig de ti faste kodene", () => {
+  it("1. har nøyaktig de elleve faste kodene", () => {
     expect([...permissions].sort()).toEqual([...allPermissions].sort());
   });
 
@@ -157,8 +168,8 @@ describe("permissions", () => {
 });
 
 describe("effectivePermissions: rettighetsmatrisen", () => {
-  it("har 80 tilfeller (4 roller × på/av × 10 rettigheter)", () => {
-    expect(matrixCases).toHaveLength(80);
+  it("har 88 tilfeller (4 roller × på/av × 11 rettigheter)", () => {
+    expect(matrixCases).toHaveLength(88);
   });
 
   it.each(matrixCases)(
@@ -397,7 +408,7 @@ describe("withPublishRequiringCertification", () => {
     expect(admin).toContain("staff.manage");
     expect(admin).toContain("organization.read");
     expect(admin).not.toContain("report.publish");
-    expect(admin).toHaveLength(9);
+    expect(admin).toHaveLength(10);
   });
 
   it("6. muterer ikke listen som sendes inn", () => {
@@ -493,6 +504,7 @@ describe("contacts.manage", () => {
         "report.edit",
         "report.publish",
         "staff.manage",
+        "statistics.read",
       ],
       managerOff: [
         "assignment.edit",
@@ -503,6 +515,7 @@ describe("contacts.manage", () => {
         "report.edit",
         "report.publish",
         "staff.manage",
+        "statistics.read",
       ],
       adminOn: [...allPermissions].sort(),
       adminOff: [...allPermissions].sort(),
