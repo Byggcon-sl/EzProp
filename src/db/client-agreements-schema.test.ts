@@ -96,7 +96,10 @@ describe("3. client_agreements i databasen", () => {
     const orgA = await createOrganization("Organisasjon A");
     const orgB = await createOrganization("Organisasjon B");
     const firmB = await createFirm(orgB.id);
-    await expectPgError(insertAgreementSql({ organizationId: orgA.id, firmId: firmB.id }), FOREIGN_KEY);
+    await expectPgError(
+      insertAgreementSql({ organizationId: orgA.id, firmId: firmB.id }),
+      FOREIGN_KEY,
+    );
   });
 
   it("3.3 assignments.client_agreement_id fra en annen organisasjon avvises (assignments_client_agreement_fk)", async () => {

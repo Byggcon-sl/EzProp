@@ -363,7 +363,7 @@ test.describe("avtale med oppdragsgiver (pc og ipad)", () => {
       await expect(saveAgreementButton(inspector)).toHaveCount(0);
 
       const { headers, body, url } = captured!;
-      await inspector.request.post(url, {
+      const replay = {
         headers: {
           "next-action": headers["next-action"]!,
           "content-type": headers["content-type"]!,
@@ -374,8 +374,15 @@ test.describe("avtale med oppdragsgiver (pc og ipad)", () => {
         },
         data: body,
         failOnStatusCode: false,
-      });
+        maxRedirects: 0,
+      };
+      await inspector.request.post(url, replay);
       expect(await agreementsNamed(name)).toEqual([]);
+
+      // Kontroll: samme POST fra admin lager avtalen, så forsøket over var en ekte lagring
+      await page.unroute("**/admin/avtaler/ny");
+      await page.request.post(url, replay);
+      expect(await agreementsNamed(name)).toHaveLength(1);
     } finally {
       await inspectorContext.close();
     }

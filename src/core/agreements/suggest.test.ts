@@ -173,7 +173,10 @@ async function setupCase(setup: Setup) {
   let assignmentId: string;
   if (setup.assignment === "no_order") {
     assignmentId = (await createAssignment(org.id)).id;
-  } else if (setup.assignment === "order_without_firm" || setup.assignment === "broker_party_only") {
+  } else if (
+    setup.assignment === "order_without_firm" ||
+    setup.assignment === "broker_party_only"
+  ) {
     const order = await createOrder(org.id, { orderedByFirmId: null });
     assignmentId = (await createAssignment(org.id, { orderId: order.id })).id;
     if (setup.assignment === "broker_party_only") {
@@ -237,7 +240,10 @@ describe("6. forslaget (regeltest som data)", () => {
   it("6.1 tidssone: avtale som starter 2026-11-04, now = 2026-11-03T23:30Z (Oslo: 04.11) → forslag", async () => {
     const { ctx, assignmentId } = await setupCase({
       agreements: async (c) => {
-        await createClientAgreement(c.organizationId, { firmId: c.firmId, validFrom: "2026-11-04" });
+        await createClientAgreement(c.organizationId, {
+          firmId: c.firmId,
+          validFrom: "2026-11-04",
+        });
         return null;
       },
     });
@@ -289,10 +295,7 @@ describe("6. forslaget (regeltest som data)", () => {
 
     const former = await createUser();
     const employee = await createEmployee(former, ctx.organizationId, ["office"]);
-    await db
-      .update(employees)
-      .set({ deactivatedAt: DELETED })
-      .where(eq(employees.id, employee.id));
+    await db.update(employees).set({ deactivatedAt: DELETED }).where(eq(employees.id, employee.id));
     await expect(
       suggestAgreementForAssignment(former, ctx.organizationId, assignmentId, NOW),
     ).rejects.toBeInstanceOf(AccessDeniedError);

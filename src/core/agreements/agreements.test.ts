@@ -171,9 +171,7 @@ describe("4.1 tilgang per rolle", () => {
     const agreement = await createClientAgreement(org.id);
     const { actor } = await person(org.id, [role]);
 
-    expect((await core.listAgreements(actor, org.id)).map((row) => row.id)).toEqual([
-      agreement.id,
-    ]);
+    expect((await core.listAgreements(actor, org.id)).map((row) => row.id)).toEqual([agreement.id]);
     expect((await core.getAgreement(actor, org.id, agreement.id)).id).toBe(agreement.id);
   });
 
@@ -428,9 +426,7 @@ describe("4.3 fremmed id i egen organisasjon", () => {
 
     expectNotFoundOrDenied(await caught(core.getAgreement(admin, orgA.id, agreementB.id)));
     expectNotFoundOrDenied(
-      await caught(
-        core.updateAgreement(admin, orgA.id, agreementB.id, agreementInput(firmA.id)),
-      ),
+      await caught(core.updateAgreement(admin, orgA.id, agreementB.id, agreementInput(firmA.id))),
     );
     expectNotFoundOrDenied(await caught(core.deleteAgreement(admin, orgA.id, agreementB.id)));
 
@@ -450,9 +446,7 @@ describe("4.3 fremmed id i egen organisasjon", () => {
       await caught(core.createAgreement(admin, orgA.id, agreementInput(firmB.id))),
     );
     expectCoreRejection(
-      await caught(
-        core.updateAgreement(admin, orgA.id, agreementA.id, agreementInput(firmB.id)),
-      ),
+      await caught(core.updateAgreement(admin, orgA.id, agreementA.id, agreementInput(firmB.id))),
     );
 
     expect(await counts()).toEqual(before);

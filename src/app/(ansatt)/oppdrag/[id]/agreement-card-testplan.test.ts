@@ -118,9 +118,7 @@ describe("7. kortet «Avtale»", () => {
 
   it("7.4 ingen avtale, forslag finnes: «Forslag: <navn> (bestilleren er fra <firma>)» og «Bruk avtalen»", () => {
     const visible = text(render({ agreement: null, suggestion: SUGGESTION }));
-    expect(visible).toContain(
-      "Forslag: Testavtale gyldig (bestilleren er fra Testforsikring AS)",
-    );
+    expect(visible).toContain("Forslag: Testavtale gyldig (bestilleren er fra Testforsikring AS)");
     expect(visible).toContain("Bruk avtalen");
   });
 

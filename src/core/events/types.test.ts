@@ -34,6 +34,8 @@ const EXPECTED_EVENT_TYPES = [
   "assignment.floor_area_saved",
   "assignment.room_saved",
   "assignment.room_removed",
+  // Avtale med oppdragsgiver (docs/funksjoner/fase2a-oppdragsgiveravtale-testplan.md 5.1.5)
+  "assignment.agreement_changed",
   "inspection.scheduled",
   "inspection.rescheduled",
   "inspection.cancelled",
@@ -61,8 +63,8 @@ const EXPECTED_EVENT_TYPES = [
 ];
 
 describe("hendelseskodene", () => {
-  it("1. har nøyaktig de 49 kodene fra domenemodellen 4.9", () => {
-    expect(EXPECTED_EVENT_TYPES).toHaveLength(49);
+  it("1. har nøyaktig de 50 kodene fra domenemodellen 4.9", () => {
+    expect(EXPECTED_EVENT_TYPES).toHaveLength(50);
     expect([...EVENT_TYPES].sort()).toEqual([...EXPECTED_EVENT_TYPES].sort());
   });
 

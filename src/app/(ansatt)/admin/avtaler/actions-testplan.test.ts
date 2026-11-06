@@ -104,7 +104,10 @@ describe("8.1 uten kontekst", () => {
       "saveAgreementAction (endre)",
       () => saveAgreementAction(initialFormState, agreementForm({ id: AGREEMENT })),
     ],
-    ["deleteAgreementAction", () => deleteAgreementAction(initialFormState, form({ id: AGREEMENT }))],
+    [
+      "deleteAgreementAction",
+      () => deleteAgreementAction(initialFormState, form({ id: AGREEMENT })),
+    ],
   ])("%s: getEmployeeContext gir null → «ingen tilgang» uten kall til kjernen", async (_n, run) => {
     mocks.getEmployeeContext.mockResolvedValue(null);
     const state = (await settle(run())) as FormState;
@@ -123,7 +126,10 @@ describe("8.2 id som ikke er uuid", () => {
       "deleteAgreementAction",
       () => deleteAgreementAction(initialFormState, form({ id: "ikke-en-id" })),
     ],
-    ["deleteAgreementAction (tom)", () => deleteAgreementAction(initialFormState, form({ id: "" }))],
+    [
+      "deleteAgreementAction (tom)",
+      () => deleteAgreementAction(initialFormState, form({ id: "" })),
+    ],
   ])("%s → «ingen tilgang» uten kall til kjernen", async (_n, run) => {
     const state = (await settle(run())) as FormState;
     expect(state.message).toBe(NO_ACCESS);
@@ -133,7 +139,9 @@ describe("8.2 id som ikke er uuid", () => {
 
 describe("8.3 organisasjonen kommer fra konteksten", () => {
   it("organizationId i skjemaet endrer ikke kallet (ny, endre, fjerne)", async () => {
-    await settle(saveAgreementAction(initialFormState, agreementForm({ organizationId: OTHER_ORG })));
+    await settle(
+      saveAgreementAction(initialFormState, agreementForm({ organizationId: OTHER_ORG })),
+    );
     await settle(
       saveAgreementAction(
         initialFormState,
@@ -164,7 +172,9 @@ describe("8.3 organisasjonen kommer fra konteksten", () => {
 describe("8.4 feilene fra kjernen", () => {
   it("AccessDeniedError → «ingen tilgang»", async () => {
     mocks.core.createAgreement.mockRejectedValue(new AccessDeniedError());
-    const state = (await settle(saveAgreementAction(initialFormState, agreementForm()))) as FormState;
+    const state = (await settle(
+      saveAgreementAction(initialFormState, agreementForm()),
+    )) as FormState;
     expect(state.message).toBe(NO_ACCESS);
   });
 
