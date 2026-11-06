@@ -4,6 +4,7 @@ import { listOrganizationsForActor } from "@/core/access";
 import { requireActor } from "@/core/auth/session";
 import { findAdminOrganizationId } from "@/core/organization";
 import { brand } from "@/shared/config/brand";
+import { getEmployeeContext } from "./employee-context";
 import { LogOutButton } from "./log-out-button";
 import { NavLink } from "./nav-link";
 import { organizationLabel } from "./organization-label";
@@ -113,6 +114,26 @@ function BuildingIcon() {
   );
 }
 
+function ChartIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 20V4" />
+      <path d="M4 20h16" />
+      <path d="M8 16v-4M12 16V8M16 16v-6" />
+    </svg>
+  );
+}
+
 function PeopleIcon() {
   return (
     <svg
@@ -145,9 +166,10 @@ function PeopleIcon() {
  */
 export default async function EmployeeLayout({ children }: { children: ReactNode }) {
   const actor = await requireActor();
-  const [organizations, adminOrganizationId] = await Promise.all([
+  const [organizations, adminOrganizationId, employee] = await Promise.all([
     listOrganizationsForActor(actor),
     findAdminOrganizationId(actor),
+    getEmployeeContext(),
   ]);
   const worksFor = organizationLabel(organizations);
   const displayName = actor.name.trim() || actor.email;
@@ -210,6 +232,14 @@ export default async function EmployeeLayout({ children }: { children: ReactNode
                 <NavLink href="/firma" matchChildren>
                   <BuildingIcon />
                   Firma
+                </NavLink>
+              </li>
+            )}
+            {employee?.canReadStatistics && (
+              <li>
+                <NavLink href="/statistikk/tid" matchChildren>
+                  <ChartIcon />
+                  Statistikk
                 </NavLink>
               </li>
             )}

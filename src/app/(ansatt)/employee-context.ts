@@ -10,6 +10,10 @@ export type EmployeeContext = {
   canEditOrders: boolean;
   /** Bare til å vise «Fjern» og «Slå sammen med …». Selve sjekken skjer i kjernen. */
   canManageContacts: boolean;
+  /** Bare til å vise skjemaet for nullpunkt og bryter i /statistikk/tid. Sjekken skjer i kjernen. */
+  canManageOrganization: boolean;
+  /** Bare til å vise menylenken «Statistikk». Sjekken skjer i kjernen. */
+  canReadStatistics: boolean;
   /** Kontoret på den ansattes egen rad, eller `null`. Bare til forhåndsvalget av kontor. */
   officeId: string | null;
 };
@@ -28,6 +32,8 @@ export async function getEmployeeContext(): Promise<EmployeeContext | null> {
     organizationId: found.grant.organizationId,
     canEditOrders: grantHasPermission(found.grant, "assignment.edit"),
     canManageContacts: grantHasPermission(found.grant, "contacts.manage"),
+    canManageOrganization: grantHasPermission(found.grant, "organization.manage"),
+    canReadStatistics: grantHasPermission(found.grant, "statistics.read"),
     officeId: found.officeId,
   };
 }
