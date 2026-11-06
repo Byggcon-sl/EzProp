@@ -4,7 +4,7 @@ import { recordAuditEvent } from "@/core/audit";
 import { db, type DbExecutor } from "@/db/client";
 import { clientAgreements, firms } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
-import { NotFoundError } from "./errors";
+import { AgreementFirmNotFoundError, NotFoundError } from "./errors";
 import { agreementSchema, type AgreementInput } from "./schemas";
 
 /*
@@ -18,7 +18,6 @@ import { agreementSchema, type AgreementInput } from "./schemas";
  */
 
 const AGREEMENT_NOT_FOUND = "Fant ikke avtalen.";
-const FIRM_NOT_FOUND = "Firmaet finnes ikke.";
 
 /** Feltene som kan endres, i fast rekkefølge (navnene går til revisjonsloggen). */
 const AGREEMENT_FIELDS = [
@@ -111,7 +110,7 @@ async function requireFirm(tx: DbExecutor, grant: EmployeeGrant, firmId: string)
         isNull(firms.deletedAt),
       ),
     );
-  if (!firm) throw new NotFoundError(FIRM_NOT_FOUND);
+  if (!firm) throw new AgreementFirmNotFoundError();
 }
 
 /** Legger inn en avtale for et firma i organisasjonen. */

@@ -25,6 +25,7 @@ import {
   type PartyRole,
   type TeamRole,
 } from "@/core/assignments";
+import { AgreementNotUsableError, NotFoundError, setAssignmentAgreement } from "@/core/agreements";
 import { ContactNotFoundError } from "@/core/contacts";
 import {
   CommonAreasNotApplicableError,
@@ -456,5 +457,39 @@ export async function setScheduleAction(
   }
   refresh();
   revalidatePath("/arbeidskoe");
+  return saved(previous);
+}
+
+/**
+ * Kortet «Avtale»: «Bruk avtalen» (forslaget), velgeren og «Fjern». Tom `agreementId` er
+ * «Ingen avtale» (`null`). Kjernen avviser fjernet, utløpt og ikke påbegynt avtale, og meldingen
+ * vises øverst i kortet.
+ */
+export async function setAgreementAction(
+  previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const assignmentId = String(formData.get("assignmentId") ?? "");
+  const values = { agreementId: String(formData.get("agreementId") ?? "") };
+  const context = await getEmployeeContext();
+  const agreementId = values.agreementId.trim() === "" ? null : values.agreementId.trim();
+  if (!context || !isUuid(assignmentId) || (agreementId !== null && !isUuid(agreementId))) {
+    return failure(previous, values, {}, NO_ACCESS);
+  }
+
+  try {
+    await setAssignmentAgreement(context.actor, context.organizationId, assignmentId, agreementId);
+  } catch (error) {
+    if (error instanceof AgreementNotUsableError || error instanceof NotFoundError) {
+      return failure(previous, values, {}, error.message);
+    }
+    return errorResult(error, previous, values, {
+      route: `${ROUTE}/[id]`,
+      userId: context.actor.id,
+      assignmentId,
+      ...(agreementId && { agreementId }),
+    });
+  }
+  refresh();
   return saved(previous);
 }

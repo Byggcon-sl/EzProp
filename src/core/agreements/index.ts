@@ -11,6 +11,7 @@ export { setAssignmentAgreement, type SetAssignmentAgreementResult } from "./ass
 export {
   AGREEMENT_DELETED_MESSAGE,
   AGREEMENT_EXPIRED_MESSAGE,
+  AgreementFirmNotFoundError,
   AgreementNotUsableError,
   NotFoundError,
 } from "./errors";

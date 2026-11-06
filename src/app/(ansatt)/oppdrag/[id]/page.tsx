@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AccessDeniedError } from "@/core/access";
+import { listAgreements, suggestAgreementForAssignment } from "@/core/agreements";
 import {
   allowedTransitions,
   ASSIGNMENT_STATUSES,
@@ -26,6 +27,7 @@ import {
   yesNoUnknownLabel,
   type AssignmentProperty,
 } from "@/core/properties";
+import { todayInOslo } from "@/shared/lib/dates";
 import { isUuid } from "@/shared/lib/uuid";
 import { Card } from "@/shared/ui/card";
 import { getEmployeeContext } from "../../employee-context";
@@ -37,6 +39,7 @@ import {
   removePartyAction,
   saveCommonAreasAction,
   savePropertyAction,
+  setAgreementAction,
   setScheduleAction,
   setTeamMemberAction,
   updatePartyAction,
@@ -46,6 +49,7 @@ import {
   CommonAreasForm,
   type CommonAreasFormValues,
 } from "./common-areas-form";
+import { AgreementCard } from "./agreement-card";
 import { PartyCard } from "./party-card";
 import { AddPartySection, type PartyRoleOption } from "./party-form";
 import { PropertyDetails, PropertyForm, type PropertyFormValues } from "./property-form";
@@ -218,8 +222,12 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
   }
 
   const canEdit = context.canEditOrders;
-  const schedule = await loadSchedule(context, assignment);
   const now = new Date();
+  const [schedule, agreements, suggestion] = await Promise.all([
+    loadSchedule(context, assignment),
+    listAgreements(context.actor, context.organizationId),
+    suggestAgreementForAssignment(context.actor, context.organizationId, assignment.id, now),
+  ]);
   // Statusen er alltid en av de fire kodene (CHECK i databasen); ukjent kode gir ingen knapper.
   const status = ASSIGNMENT_STATUSES.find((code) => code === assignment.status) ?? null;
   const { next, previous } = status ? allowedTransitions(status) : { next: null, previous: null };
@@ -285,6 +293,17 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
           </p>
         )}
       </div>
+
+      <AgreementCard
+        key={assignment.agreement?.id ?? "none"}
+        assignmentId={assignment.id}
+        agreement={assignment.agreement}
+        suggestion={suggestion}
+        agreements={agreements.map((row) => ({ ...row, deletedAt: null }))}
+        today={todayInOslo(now)}
+        canEdit={canEdit}
+        action={setAgreementAction}
+      />
 
       <PropertySection assignmentId={assignment.id} data={propertyData} canEdit={canEdit} />
 

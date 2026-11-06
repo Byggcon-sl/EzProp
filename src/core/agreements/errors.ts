@@ -9,6 +9,14 @@ export class NotFoundError extends Error {
   }
 }
 
+/** Firmaet på avtalen finnes ikke i organisasjonen, eller er slettet. En `NotFoundError`. */
+export class AgreementFirmNotFoundError extends NotFoundError {
+  constructor() {
+    super("Firmaet finnes ikke.");
+    this.name = "AgreementFirmNotFoundError";
+  }
+}
+
 export const AGREEMENT_EXPIRED_MESSAGE = "Avtalen gjelder ikke i dag.";
 export const AGREEMENT_DELETED_MESSAGE = "Avtalen er fjernet.";
 
