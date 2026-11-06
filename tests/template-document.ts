@@ -1,136 +1,87 @@
-import type { TemplateDocument } from "@/core/templates";
+import type { TemplateDocumentInput } from "@/core/templates";
 
-/**
- * Et gyldig, nøytralt maldokument som bruker alle tolv tabellene (testplanen for malmotoren,
- * «Avtale om signaturer»). Oppdiktet, uten fagtekst:
- * - to seksjoner (`sec.alpha` og underseksjonen `sec.alpha.sub`),
- * - tre felt (`el.size` choice med valgene `opt.small` og `opt.large`, `el.count` number,
- *   `el.grid` table),
- * - ett kontrollpunkt `cp.one` med spørsmålene `dq.first` og `dq.second`,
- * - utfallene `out.a` og `out.b` på `dq.first`, to standardtiltak på `out.a`,
- * - tre regler (`rule.show_size` show, `rule.suggest_a` suggest_outcome, `rule.check_count`
- *   validate) med to betingelser i to grupper og to testtilfeller.
+/*
+ * Et gyldig, nøytralt maldokument til testene av malmotoren
+ * (docs/funksjoner/fase2a-malmotor-testplan.md, «Avtale om signaturer»).
  *
- * `overrides` bytter ut hele lister. Dokumentet har alle felt utfylt, slik det ser ut etter Zod,
- * og kan endres fritt av testen (ny kopi hver gang).
+ * Bruker alle tolv tabellene: to seksjoner (én underseksjon), tre felt (`choice` med to valg,
+ * `number`, `table`), ett kontrollpunkt med to avviksspørsmål, to utfall på det første spørsmålet,
+ * to standardtiltak på det ene utfallet, tre regler (`show`, `suggest_outcome`, `validate`) med to
+ * betingelser i to grupper og to testtilfeller.
+ *
+ * Alt er oppdiktet og uten fagtekst. Kodene er `sec.alpha`, `cp.one`, `el.size` osv. Hvert kall
+ * gir et nytt objekt, så testene kan endre det fritt.
  */
-export function buildTemplateDocument(overrides: Partial<TemplateDocument> = {}): TemplateDocument {
-  const document: TemplateDocument = {
+
+/** Antall rader dokumentet gir i hver tabell (uten familie og versjon). */
+export const TEMPLATE_DOCUMENT_ROWS = {
+  template_sections: 2,
+  template_elements: 3,
+  template_element_options: 2,
+  checkpoints: 1,
+  deviation_questions: 2,
+  outcomes: 2,
+  standard_measures: 2,
+  rules: 3,
+  rule_conditions: 2,
+  rule_test_cases: 2,
+} as const;
+
+/** Summen av radene i dokumentet (21). */
+export const TEMPLATE_DOCUMENT_ROW_COUNT = Object.values(TEMPLATE_DOCUMENT_ROWS).reduce(
+  (sum, n) => sum + n,
+  0,
+);
+
+type Lists = Required<TemplateDocumentInput>;
+
+/** Et nytt, gyldig dokument. `overrides` erstatter hele lister. */
+export function buildTemplateDocument(
+  overrides: Partial<TemplateDocumentInput> = {},
+): Lists & TemplateDocumentInput {
+  const document: Lists = {
     sections: [
-      {
-        key: "sec.alpha",
-        parent_key: null,
-        title: "Seksjon alfa",
-        repeat: "once",
-        room_type_groups: [],
-        optional: false,
-        standard_text: null,
-        help_text: null,
-        sort_order: 0,
-      },
-      {
-        key: "sec.alpha.sub",
-        parent_key: "sec.alpha",
-        title: "Underseksjon alfa",
-        repeat: "per_room",
-        room_type_groups: ["wet_room"],
-        optional: true,
-        standard_text: null,
-        help_text: "Hjelpetekst for test",
-        sort_order: 1,
-      },
+      { key: "sec.alpha", title: "Seksjon alfa", sort_order: 0 },
+      { key: "sec.alpha.sub", parent_key: "sec.alpha", title: "Underseksjon", sort_order: 1 },
     ],
     elements: [
       {
         key: "el.size",
-        section_key: "sec.alpha",
+        section_key: "sec.alpha.sub",
         checkpoint_key: "cp.one",
         label: "Størrelse",
         field_type: "choice",
-        multiple: false,
-        unit: null,
-        min_value: null,
-        max_value: null,
-        decimals: null,
-        table_columns: null,
-        phrase_slot: null,
-        required: true,
-        default_value: null,
-        help_text: null,
-        show_in_report: true,
         sort_order: 0,
       },
       {
         key: "el.count",
         section_key: "sec.alpha",
-        checkpoint_key: null,
         label: "Antall",
         field_type: "number",
-        multiple: false,
-        unit: "antall",
         min_value: 0,
         max_value: 100,
         decimals: 0,
-        table_columns: null,
-        phrase_slot: null,
-        required: false,
-        default_value: null,
-        help_text: null,
-        show_in_report: true,
         sort_order: 1,
       },
       {
         key: "el.grid",
-        section_key: "sec.alpha.sub",
-        checkpoint_key: null,
-        label: "Tabell",
+        section_key: "sec.alpha",
+        label: "Rutenett",
         field_type: "table",
-        multiple: false,
-        unit: null,
-        min_value: null,
-        max_value: null,
-        decimals: null,
-        table_columns: [
-          { key: "place", label: "Sted", type: "text" },
-          { key: "value", label: "Verdi", type: "number" },
-        ],
-        phrase_slot: null,
-        required: false,
-        default_value: null,
-        help_text: null,
-        show_in_report: false,
-        sort_order: 0,
+        table_columns: [{ key: "col_a", label: "Kolonne A" }],
+        sort_order: 2,
       },
     ],
     element_options: [
-      {
-        element_key: "el.size",
-        key: "opt.small",
-        label: "Liten",
-        material_code: null,
-        sort_order: 0,
-      },
-      {
-        element_key: "el.size",
-        key: "opt.large",
-        label: "Stor",
-        material_code: null,
-        sort_order: 1,
-      },
+      { element_key: "el.size", key: "opt.small", label: "Liten", sort_order: 0 },
+      { element_key: "el.size", key: "opt.large", label: "Stor", sort_order: 1 },
     ],
     checkpoints: [
       {
         key: "cp.one",
-        section_key: "sec.alpha",
+        section_key: "sec.alpha.sub",
         name: "Punkt en",
         group: "interior",
-        mandatory: true,
-        regulation_ref: null,
-        gives_tg: true,
-        scope: "building",
-        room_type_groups: [],
-        applies_to_unit: "both",
-        related_checkpoint_keys: [],
         sort_order: 0,
       },
     ],
@@ -144,10 +95,7 @@ export function buildTemplateDocument(overrides: Partial<TemplateDocument> = {})
         question_key: "dq.first",
         key: "out.a",
         kind: "tg2",
-        deviation_text: "Avvikstekst a",
-        default_cause_criterion: null,
-        default_consequence_text: "Konsekvens a",
-        source_ref: null,
+        deviation_text: "Utfallstekst a",
         sort_order: 0,
       },
       {
@@ -155,10 +103,7 @@ export function buildTemplateDocument(overrides: Partial<TemplateDocument> = {})
         question_key: "dq.first",
         key: "out.b",
         kind: "tg3",
-        deviation_text: "Avvikstekst b",
-        default_cause_criterion: null,
-        default_consequence_text: null,
-        source_ref: null,
+        deviation_text: "Utfallstekst b",
         sort_order: 1,
       },
     ],
@@ -181,110 +126,75 @@ export function buildTemplateDocument(overrides: Partial<TemplateDocument> = {})
     rules: [
       {
         key: "rule.show_size",
-        name: "Vis størrelse",
+        name: "Vis antall",
         purpose: "show",
-        match: "all",
-        target_element_key: "el.size",
-        target_section_key: null,
-        target_checkpoint_key: null,
-        target_question: null,
-        suggested_outcome: null,
-        validation_code: null,
-        severity: null,
-        message: null,
-        source_ref: null,
-        active: true,
+        target_element_key: "el.count",
         sort_order: 0,
       },
       {
-        key: "rule.suggest_a",
-        name: "Foreslå a",
+        key: "rule.suggest",
+        name: "Foreslå utfall",
         purpose: "suggest_outcome",
-        match: "any",
-        target_element_key: null,
-        target_section_key: null,
         target_checkpoint_key: "cp.one",
-        target_question: { checkpoint_key: "cp.one", question_key: "dq.first" },
         suggested_outcome: {
           checkpoint_key: "cp.one",
           question_key: "dq.first",
           outcome_key: "out.a",
         },
-        validation_code: null,
-        severity: null,
-        message: "Melding for test",
-        source_ref: null,
-        active: true,
         sort_order: 1,
       },
       {
-        key: "rule.check_count",
-        name: "Sjekk antall",
+        key: "rule.check",
+        name: "Kontroll",
         purpose: "validate",
-        match: "all",
         target_element_key: "el.count",
-        target_section_key: null,
-        target_checkpoint_key: null,
-        target_question: null,
-        suggested_outcome: null,
-        validation_code: "count_required",
         severity: "warning",
-        message: null,
-        source_ref: null,
-        active: true,
+        message: "Meldingstekst",
         sort_order: 2,
       },
     ],
     rule_conditions: [
       {
-        rule_key: "rule.suggest_a",
+        rule_key: "rule.show_size",
         group_no: 1,
         type: "option_selected",
         element_key: "el.size",
-        checkpoint_key: null,
         operator: "eq",
-        value: "opt.large",
+        value: "opt.small",
         sort_order: 0,
       },
       {
-        rule_key: "rule.suggest_a",
+        rule_key: "rule.show_size",
         group_no: 2,
         type: "number_vs_limit",
         element_key: "el.count",
-        checkpoint_key: null,
         operator: "gt",
-        value: 10,
+        value: 5,
         sort_order: 1,
       },
     ],
     rule_test_cases: [
       {
-        rule_key: "rule.suggest_a",
-        name: "Stor gir a",
-        input: { "el.size": "opt.large" },
+        rule_key: "rule.show_size",
+        name: "Liten gir vis",
+        input: { "el.size": "opt.small" },
         expect_triggered: true,
-        expected_outcome: {
-          checkpoint_key: "cp.one",
-          question_key: "dq.first",
-          outcome_key: "out.a",
-        },
         sort_order: 0,
       },
       {
-        rule_key: "rule.suggest_a",
-        name: "Liten gir ingenting",
-        input: { "el.size": "opt.small", "el.count": 1 },
+        rule_key: "rule.show_size",
+        name: "Stor gir ikke vis",
+        input: { "el.size": "opt.large" },
         expect_triggered: false,
-        expected_outcome: null,
         sort_order: 1,
       },
     ],
   };
-  return { ...structuredClone(document), ...overrides };
+  return { ...document, ...structuredClone(overrides) } as Lists & TemplateDocumentInput;
 }
 
-/** Antall rader dokumentet gir i de elleve innholdstabellene (alt under versjonen). */
-export function templateDocumentRowCount(document: TemplateDocument): number {
+/** Antall rader et dokument gir i innholdstabellene (alt under versjonen). */
+export function templateDocumentRowCount(document: Lists): number {
   return (
     document.sections.length +
     document.elements.length +

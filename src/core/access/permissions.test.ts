@@ -655,3 +655,22 @@ describe("claims.manage", () => {
     },
   );
 });
+
+// --- Malmotoren (docs/funksjoner/fase2a-malmotor-testplan.md, 1.1) ---------------------------------
+
+describe("malmotoren gir ingen ny rettighet", () => {
+  it("1.1 antallet rettigheter er uendret (12), og template.edit_structure kan fortsatt gis", () => {
+    expect(permissions).toHaveLength(12);
+    expect(grantablePermissions).toContain("template.edit_structure");
+    expect(grantablePermissions).toHaveLength(4);
+  });
+
+  it("1.1b bare admin har template.edit_structure fra rollen, med innstillingen på og av", () => {
+    for (const settings of [ON, OFF]) {
+      expect(effectivePermissions(["admin"], [], settings)).toContain("template.edit_structure");
+      for (const role of ["inspector", "office", "manager"] as const) {
+        expect(effectivePermissions([role], [], settings)).not.toContain("template.edit_structure");
+      }
+    }
+  });
+});
