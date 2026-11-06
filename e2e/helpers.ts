@@ -595,6 +595,9 @@ export function e2eDatabaseUrl(): string {
 /** Oppdiktet leder for e2e (rollen `manager`). Ingen ekte navn eller adresser. */
 export const MANAGER_EMAIL = "leder@example.com";
 
+/** Rollenavnet i feilmeldingene. */
+const ROLE_NAMES = { inspector: "takstmann", manager: "leder", office: "kontor" } as const;
+
 /** En oppdiktet ansatt for e2e: e-post, navn og rollen som skal finnes. */
 type E2eEmployee = {
   email: string;
@@ -665,7 +668,7 @@ async function ensureEmployee({ email, name, role, label }: E2eEmployee): Promis
     if (roles.some((row) => row.deleted_at === null)) return;
     if (roles.length > 0) {
       throw new Error(
-        `Rollen ${role} for den ansatte for e2e (${label}) er slettet i testdatabasen. ` +
+        `Rollen ${ROLE_NAMES[role]} for den ansatte for e2e (${label}) er slettet i testdatabasen. ` +
           "Tøm databasen eller kjør pnpm db:seed på nytt.",
       );
     }
