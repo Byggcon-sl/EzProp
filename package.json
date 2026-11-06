@@ -21,7 +21,8 @@
     "size": "node scripts/check-bundle-size.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:seed": "tsx src/db/seed/index.ts"
+    "db:seed": "tsx src/db/seed/index.ts",
+    "db:seed:testoppdrag": "tsx src/db/seed/sample-index.ts"
   },
   "dependencies": {
     "@azure/storage-blob": "12.34.0",
