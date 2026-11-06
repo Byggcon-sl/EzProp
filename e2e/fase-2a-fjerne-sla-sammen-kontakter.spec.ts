@@ -173,9 +173,23 @@ function mergeSearch(page: Page): Locator {
   return page.getByRole("main").getByRole("searchbox").or(page.getByLabel(/^Søk/)).first();
 }
 
-/** Treffet i søket på sammenslåingssiden (navnet står i knappen). */
+/**
+ * Treffet i søket på sammenslåingssiden: en knapp eller lenke som begynner med navnet. Kortet
+ * sier ikke om treffet er knapp eller lenke, så begge godtas.
+ */
 function mergeHit(page: Page, name: string): Locator {
-  return page.getByRole("main").getByRole("button", { name: new RegExp(name) });
+  const pattern = new RegExp(name.startsWith("^") ? name : `^${name}`);
+  const main = page.getByRole("main");
+  return main.getByRole("button", { name: pattern }).or(main.getByRole("link", { name: pattern }));
+}
+
+/**
+ * Søker på sammenslåingssiden. Enter sender søket; kortet sier ikke om søket går mens man
+ * skriver eller når det sendes, og Enter virker i begge tilfeller.
+ */
+async function searchForMerge(page: Page, text: string) {
+  await mergeSearch(page).fill(text);
+  await mergeSearch(page).press("Enter");
 }
 
 /** Valget «Behold denne» i kortet med navnet. */
@@ -322,7 +336,7 @@ test.describe("fjerne og slå sammen kontakter og firma (pc og ipad)", () => {
     await expect(page).toHaveURL(new RegExp(`/kontakter/${keepId}/sla-sammen$`));
 
     // Søket viser ikke den åpne kontakten, bare den andre
-    await mergeSearch(page).fill(lastName);
+    await searchForMerge(page, lastName);
     await expect(mergeHit(page, otherName)).toHaveCount(1);
     await expect(mergeHit(page, `^${keepName}`)).toHaveCount(0);
     if (isIpad) {
@@ -376,6 +390,13 @@ test.describe("fjerne og slå sammen kontakter og firma (pc og ipad)", () => {
     await page.goto(`/kontakter?q=${encodeURIComponent(lastName)}`);
     await expect(page.locator(`a[href="/kontakter/${keepId}"]`)).toHaveCount(1);
     await expect(page.locator(`a[href="/kontakter/${otherId}"]`)).toHaveCount(0);
+
+    // 4.7: søket på sammenslåingssiden viser verken den åpne eller den som er fjernet
+    await page.goto(`/kontakter/${keepId}/sla-sammen`);
+    await searchForMerge(page, lastName);
+    await expect(page.getByText("Ingen andre kontakter passer med søket.")).toBeVisible();
+    await expect(mergeHit(page, otherName)).toHaveCount(0);
+    await expect(mergeHit(page, `^${keepName}`)).toHaveCount(0);
   });
 
   test("5.4 leder slår sammen to firma", async ({ page }, testInfo) => {
@@ -398,7 +419,7 @@ test.describe("fjerne og slå sammen kontakter og firma (pc og ipad)", () => {
     await mergeLink(page).click();
     await expect(page).toHaveURL(new RegExp(`/firma/${keepId}/sla-sammen$`));
 
-    await mergeSearch(page).fill(`Dublett${suffix}`);
+    await searchForMerge(page, `Dublett${suffix}`);
     await expect(mergeHit(page, otherFirm)).toHaveCount(1);
     await mergeHit(page, otherFirm).click();
 
