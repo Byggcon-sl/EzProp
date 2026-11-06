@@ -91,6 +91,8 @@ beforeEach(() => {
     actor,
     organizationId: ORG,
     canEditOrders: true,
+    canReadClaims: false,
+    canManageClaims: false,
     officeId: null,
   });
   mocks.setAssignmentAgreement.mockResolvedValue({ changed: true });
