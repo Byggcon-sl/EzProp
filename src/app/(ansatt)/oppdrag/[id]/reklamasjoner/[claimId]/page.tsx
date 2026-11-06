@@ -42,6 +42,14 @@ export default async function ClaimPage({
   if (claim.assignmentId !== assignment.id) notFound();
 
   const canManage = context.canManageClaims;
+  const parties = partyOptions(assignment.parties);
+  // En part som er fjernet fra oppdraget etterpå, vises fortsatt som valgt klager.
+  if (claim.claimantPartyId && !parties.some((option) => option.value === claim.claimantPartyId)) {
+    parties.push({
+      value: claim.claimantPartyId,
+      label: `${claim.claimantPartyName ?? "Ukjent part"} (fjernet fra oppdraget)`,
+    });
+  }
 
   return (
     <main className="max-w-2xl">
@@ -67,7 +75,7 @@ export default async function ClaimPage({
         }}
         claimTypes={CLAIM_TYPE_OPTIONS}
         outcomes={CLAIM_OUTCOME_OPTIONS}
-        parties={partyOptions(assignment.parties)}
+        parties={parties}
         edit
         readOnly={!canManage}
         cancelHref={`/oppdrag/${id}`}

@@ -9,6 +9,8 @@ import {
   getClaim,
   removeClaim,
   updateClaim,
+  type ClaimOutcome,
+  type ClaimType,
 } from "@/core/claims";
 import { isUuid } from "@/shared/lib/uuid";
 import { errorResult, failure, type KnownError } from "../../../action-result";
@@ -68,10 +70,13 @@ function refresh(assignmentId: string) {
   revalidatePath(`/oppdrag/${assignmentId}`);
 }
 
-/** Feltene fra skjemaet i formen kjernen tar imot. */
+/**
+ * Feltene fra skjemaet i formen kjernen tar imot. Kodene sendes som de kom; kjernen validerer dem
+ * (`enum_values`) og svarer med feil ved feltet.
+ */
 function claimInput(values: Record<(typeof TEXT_FIELDS)[number], string>) {
   return {
-    claimType: values.claimType,
+    claimType: values.claimType as ClaimType,
     receivedAt: values.receivedAt,
     claimantPartyId: orNull(values.claimantPartyId),
     claimantText: orNull(values.claimantText),
@@ -133,7 +138,7 @@ export async function updateClaimAction(
   try {
     const claim = await updateClaim(context.actor, context.organizationId, claimId, {
       ...claimInput(values),
-      outcome: values.outcome,
+      outcome: values.outcome as ClaimOutcome,
       amount,
     });
     assignmentId = claim.assignmentId;
