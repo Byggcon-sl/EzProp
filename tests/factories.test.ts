@@ -38,6 +38,7 @@ import {
   createAssignmentParty,
   createBuilding,
   createCertification,
+  createClientAgreement,
   createCommonAreas,
   createContact,
   createEmployee,
@@ -1055,5 +1056,79 @@ describe("fabrikkene for firma og kontakter (fase 2a)", () => {
       const [row] = await db.select({ n: count() }).from(table);
       expect(row!.n).toBe(0);
     }
+  });
+});
+
+describe("fabrikken for avtale med oppdragsgiver (fase 2a)", () => {
+  beforeEach(resetDatabase);
+
+  it("10.1 createClientAgreement uten overstyring: gyldig på TEST_NOW, løpende, med eget firma i organisasjonen", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const agreement = await createClientAgreement(org.id);
+
+    expect(agreement).toMatchObject({
+      organizationId: org.id,
+      name: "Testavtale forsikring",
+      validFrom: "2026-01-01",
+      validTo: null,
+      premiseText: null,
+      reportProfileCode: null,
+      deletedAt: null,
+    });
+    expect(agreement.validFrom <= todayInOslo(TEST_NOW)).toBe(true);
+    const [firm] = await db.select().from(firms).where(eq(firms.id, agreement.firmId));
+    expect(firm?.organizationId).toBe(org.id);
+    expect(firm?.deletedAt).toBeNull();
+
+    // To kall lager to firma uten unik-feil
+    const second = await createClientAgreement(org.id);
+    expect(second.firmId).not.toBe(agreement.firmId);
+  });
+
+  it("10.1 createClientAgreement bruker overstyringene, også firmId, validTo og deletedAt", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const firm = await createFirm(org.id, { name: "Testforsikring AS", orgNumber: "000000019" });
+    const deletedAt = new Date("2026-11-01T08:00:00Z");
+    const agreement = await createClientAgreement(org.id, {
+      firmId: firm.id,
+      name: "Testavtale utløpt",
+      validFrom: "2026-03-01",
+      validTo: "2026-10-31",
+      premiseText: "Premiss for test. Ikke ekte tekst.",
+      reportProfileCode: "test-profil",
+      deletedAt,
+    });
+    expect(agreement).toMatchObject({
+      organizationId: org.id,
+      firmId: firm.id,
+      name: "Testavtale utløpt",
+      validFrom: "2026-03-01",
+      validTo: "2026-10-31",
+      premiseText: "Premiss for test. Ikke ekte tekst.",
+      reportProfileCode: "test-profil",
+    });
+    expect(agreement.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+    const [{ n } = { n: -1 }] = await db.execute<{ n: number }>(
+      sql`select count(*)::int as n from firms where organization_id = ${org.id}`,
+    );
+    expect(n).toBe(1);
+  });
+
+  it("10.2 RESET_TABLES har client_agreements etter assignments og før firms, og resetDatabase tømmer den", async () => {
+    const listed: readonly string[] = RESET_TABLES;
+    expect(listed).toContain("client_agreements");
+    expect(listed.indexOf("assignments")).toBeLessThan(listed.indexOf("client_agreements"));
+    expect(listed.indexOf("client_agreements")).toBeLessThan(listed.indexOf("firms"));
+    expect(listed.indexOf("firms")).toBeLessThan(listed.indexOf("organizations"));
+
+    const org = await createOrganization("Oppdiktet takst A");
+    await createClientAgreement(org.id);
+
+    await resetDatabase();
+
+    const [{ n } = { n: -1 }] = await db.execute<{ n: number }>(
+      sql`select count(*)::int as n from client_agreements`,
+    );
+    expect(n).toBe(0);
   });
 });
