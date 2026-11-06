@@ -19,7 +19,7 @@ import {
 const ON = { inspectorsEditAll: true };
 const OFF = { inspectorsEditAll: false };
 
-const allTen = [
+const allPermissions = [
   "organization.read",
   "organization.manage",
   "claims.read",
@@ -44,7 +44,7 @@ const notGrantable = [
 type Column = "inspectorOn" | "inspectorOff" | "office" | "manager" | "admin";
 
 /** Fasit: rettighetsmatrisen i oppgavekortet (Omfang 1). */
-const expected: Record<(typeof allTen)[number], Record<Column, boolean>> = {
+const expected: Record<(typeof allPermissions)[number], Record<Column, boolean>> = {
   "organization.read": {
     inspectorOn: true,
     inspectorOff: true,
@@ -128,7 +128,7 @@ const roles: EmployeeRole[] = ["inspector", "office", "manager", "admin"];
 
 const matrixCases = roles.flatMap((role) =>
   [true, false].flatMap((editAll) =>
-    allTen.map((permission) => ({
+    allPermissions.map((permission) => ({
       role,
       editAll,
       permission,
@@ -143,7 +143,7 @@ afterEach(() => {
 
 describe("permissions", () => {
   it("1. har nøyaktig de ti faste kodene", () => {
-    expect([...permissions].sort()).toEqual([...allTen].sort());
+    expect([...permissions].sort()).toEqual([...allPermissions].sort());
   });
 
   it("2. grantablePermissions er nøyaktig de fire, og en delmengde av permissions", () => {
@@ -353,14 +353,14 @@ describe("grantHasPermission og isAdmin", () => {
 // tester; rollematrisen og fasitene over er urørt. ---
 
 describe("withPublishRequiringCertification", () => {
-  const withoutPublish = allTen.filter((p) => p !== "report.publish");
+  const withoutPublish = allPermissions.filter((p) => p !== "report.publish");
 
   it("1. alle ti uten gyldig sertifisering gir de ni andre, uten report.publish", () => {
-    expect(withPublishRequiringCertification(allTen, false)).toEqual(withoutPublish);
+    expect(withPublishRequiringCertification(allPermissions, false)).toEqual(withoutPublish);
   });
 
   it("2. med gyldig sertifisering er listen uendret (innhold og rekkefølge)", () => {
-    expect(withPublishRequiringCertification(allTen, true)).toEqual([...allTen]);
+    expect(withPublishRequiringCertification(allPermissions, true)).toEqual([...allPermissions]);
   });
 
   it("3. uten report.publish i listen og uten sertifisering er listen uendret", () => {
@@ -373,7 +373,7 @@ describe("withPublishRequiringCertification", () => {
     [true, false].map((editAll) => ({
       role,
       editAll,
-      fasit: allTen.filter((p) => expected[p][column(role, editAll)]),
+      fasit: allPermissions.filter((p) => expected[p][column(role, editAll)]),
     })),
   );
 
@@ -401,10 +401,10 @@ describe("withPublishRequiringCertification", () => {
   });
 
   it("6. muterer ikke listen som sendes inn", () => {
-    const input = Object.freeze([...allTen]) as readonly Permission[];
+    const input = Object.freeze([...allPermissions]) as readonly Permission[];
     expect(() => withPublishRequiringCertification(input, false)).not.toThrow();
     expect(() => withPublishRequiringCertification(input, true)).not.toThrow();
-    expect(input).toEqual([...allTen]);
+    expect(input).toEqual([...allPermissions]);
   });
 });
 
@@ -504,8 +504,8 @@ describe("contacts.manage", () => {
         "report.publish",
         "staff.manage",
       ],
-      adminOn: [...allTen].sort(),
-      adminOff: [...allTen].sort(),
+      adminOn: [...allPermissions].sort(),
+      adminOff: [...allPermissions].sort(),
     });
   });
 });
