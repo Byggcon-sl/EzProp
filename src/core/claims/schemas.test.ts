@@ -35,6 +35,7 @@ const RULES = [
   "received_at_not_future",
   "amount_only_upheld_or_settled",
   "text_limits",
+  "no_national_id",
   "enum_values",
 ] as const;
 type Rule = (typeof RULES)[number];
@@ -188,6 +189,21 @@ const CASES: Record<Rule, RuleCase[]> = {
     accepted("bygningsdel 200 tegn", input({ buildingPartText: "a".repeat(200) })),
     rejected("bygningsdel 201 tegn", input({ buildingPartText: "a".repeat(201) }), "text_limits"),
   ],
+  no_national_id: [
+    accepted("ti sifre (telefon med 0)", input({ description: "Ring 0123456789" })),
+    rejected("beskrivelse 11 sifre", input({ description: "Nr 01019012345" }), "no_national_id"),
+    rejected(
+      "beskrivelse 11 sifre med mellomrom",
+      input({ description: "Nr 010190 12345" }),
+      "no_national_id",
+    ),
+    rejected("klager 11 sifre", input({ claimantText: "01019012345" }), "no_national_id"),
+    rejected(
+      "bygningsdel 11 sifre",
+      input({ buildingPartText: "Kjeller 01019012345" }),
+      "no_national_id",
+    ),
+  ],
   enum_values: [
     ...CLAIM_TYPES.map((claimType) => accepted(`type ${claimType}`, input({ claimType }))),
     ...CLAIM_OUTCOMES.map((outcome) => accepted(`utfall ${outcome}`, input({ outcome }))),
@@ -216,7 +232,7 @@ describe.each(RULES)("2. regelen %s", (rule) => {
 });
 
 describe("2. alle reglene har testsaker", () => {
-  it("hver av de fem regelkodene står i minst én avvist testsak", () => {
+  it("hver av regelkodene står i minst én avvist testsak", () => {
     for (const rule of RULES) {
       const cases = Object.values(CASES)
         .flat()

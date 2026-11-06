@@ -179,8 +179,8 @@ describe("permissions", () => {
 });
 
 describe("effectivePermissions: rettighetsmatrisen", () => {
-  it("har 88 tilfeller (4 roller × på/av × 11 rettigheter)", () => {
-    expect(matrixCases).toHaveLength(88);
+  it("har 96 tilfeller (4 roller × på/av × 12 rettigheter)", () => {
+    expect(matrixCases).toHaveLength(96);
   });
 
   it.each(matrixCases)(
@@ -431,7 +431,7 @@ describe("withPublishRequiringCertification", () => {
     expect(admin).toContain("staff.manage");
     expect(admin).toContain("organization.read");
     expect(admin).not.toContain("report.publish");
-    expect(admin).toHaveLength(10);
+    expect(admin).toHaveLength(11);
   });
 
   it("6. muterer ikke listen som sendes inn", () => {

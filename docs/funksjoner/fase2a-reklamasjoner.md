@@ -114,7 +114,7 @@ Valideringsregler i Zod, med testsaker:
 
 ## Testplan (test-leder, runde 1, 06.11.2026)
 Testfiler: `src/core/claims/schemas.test.ts`, `src/core/claims/claims.test.ts`, `src/core/access/*.test.ts`, `e2e/claims.spec.ts`. Fellestester: `tests/tenant-tables.ts` (`claims` med radbygger), `tests/factories.ts` (`createClaim`, `claims` i `RESET_TABLES`).
-- **Regler som data:** `claimant_required`, `received_at_not_future`, `amount_only_upheld_or_settled` (negativt og desimal avvist, 0 lov), `text_limits` (beskrivelse 0 og 2001 tegn, klager og bygningsdel 201 tegn avvist), `enum_values`.
+- **Regler som data:** `claimant_required`, `received_at_not_future`, `amount_only_upheld_or_settled` (negativt og desimal avvist, 0 lov), `text_limits` (beskrivelse 0 og 2001 tegn, klager og bygningsdel 201 tegn avvist), `no_national_id` (elleve sifre på rad i fritekstene avvist, lagt til i sikkerhetsgjennomgangen 06.11.2026), `enum_values`.
 - **Rettigheter:** rolletabellene får `claims.manage`. Takstmann har verken `claims.read` eller `claims.manage`, med innstillingen på og av. Enkeltrettighet i `employee_permissions` ignoreres. Uten gyldig sertifisering tas bare `report.publish` bort. Admin har alltid begge.
 - **Integrasjon:** full livssyklus for leder og admin; takstmann (innstilling på og av) og kontor får «finnes ikke» på alle fem tjenestene; `expectTenantIsolation` for `list`, `get`, `create`, `update`, `remove`; `closed_at`, myk sletting, revisjonsloggen uten de oppdiktede fritekstene, nøklene i `claim.registered`, `created_by`.
 - **E2e (PC og iPad):** leder registrerer, lukker med utfall og beløp, fjerner; merket går fra «Åpen» til «Lukket (utfall)». Takstmann og kontor ser ikke delen og får «finnes ikke» på direkte adresser. Hjelpeteksten vises.

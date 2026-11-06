@@ -15,7 +15,7 @@ Sidene trenger ikke virke uten nett (lederarbeid på PC, kortet «Skjermer»), s
 Fra kortet, Omfang 1–3. Avvik føres i kortet under «Avgjørelser etter gjennomgangen».
 
 - `src/core/claims/codes.ts` (eller i `schemas.ts`): `CLAIM_TYPES = ["complaint", "insurance_claim", "other"]` og `CLAIM_OUTCOMES = ["open", "rejected", "upheld", "settled", "withdrawn"]` (`as const`), med etikettfunksjoner (`claimTypeLabel`, `claimOutcomeLabel`).
-- `src/core/claims/schemas.ts`: `claimInputSchema` (for registrering og endring). Hver regel har en fast feilkode i `path`/`params` eller en egen norsk melding, slik at testsakene kan peke på regelen: `claimant_required`, `received_at_not_future`, `amount_only_upheld_or_settled`, `text_limits`, `enum_values`. Datoen i dag sendes inn som argument eller leses fra en klokke som testene kan sette (ikke `new Date()` direkte i skjemaet).
+- `src/core/claims/schemas.ts`: `claimInputSchema` (for registrering og endring). Hver regel har en fast feilkode i `path`/`params` eller en egen norsk melding, slik at testsakene kan peke på regelen: `claimant_required`, `received_at_not_future`, `amount_only_upheld_or_settled`, `text_limits`, `no_national_id`, `enum_values`. Datoen i dag sendes inn som argument eller leses fra en klokke som testene kan sette (ikke `new Date()` direkte i skjemaet).
 - Tjenester fra `@/core/claims`: `listClaimsForAssignment`, `getClaim`, `createClaim`, `updateClaim`, `removeClaim` med signaturene i kortet. Alle returnerer minst `{ id }` (eller saken / listen), så `expectTenantIsolation` kan bruke `idOf`.
 - Feil: rolle uten rettighet, annen organisasjon, fjernet oppdrag og fjernet eller fremmed sak gir alle `AccessDeniedError` (samme svar, sidene viser «finnes ikke» / 404). Ugyldig part gir en egen feil (for eksempel `ClaimantPartyNotFoundError`, norsk melding) eller en valideringsfeil; navn etter utvikler.
 - Fabrikk i `tests/factories.ts`: `createClaim(organizationId, { assignmentId?, claimType?, receivedAt?, claimantPartyId?, claimantText?, description?, buildingPartText?, outcome?, amount?, closedAt?, deletedAt?, createdBy? })`. Lager oppdrag i samme organisasjon når det mangler. `claims` står i `RESET_TABLES` før `assignments`.
@@ -38,7 +38,7 @@ Fra kortet, Omfang 1–3. Avvik føres i kortet under «Avgjørelser etter gjenn
 
 ## 2. Valideringsreglene, `src/core/claims/schemas.test.ts` (ny, ren enhetstest, regler som data)
 
-Hver regel er en tabell med testsaker (`it.each`): input, forventet godtatt/avvist og forventet regelkode. En egen test sjekker at alle fem regelkodene finnes i minst én avvist testsak.
+Hver regel er en tabell med testsaker (`it.each`): input, forventet godtatt/avvist og forventet regelkode. En egen test sjekker at alle regelkodene finnes i minst én avvist testsak.
 
 1. **`claimant_required`:**
    - bare part (gyldig uuid) → godtatt; bare fritekst «Kjøper Test» → godtatt; begge → godtatt.

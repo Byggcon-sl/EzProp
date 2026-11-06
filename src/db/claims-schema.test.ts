@@ -206,7 +206,7 @@ describe("3. databasen for claims", () => {
 
   it("3.7 migreringen 0023_reklamasjoner finnes", () => {
     const dir = path.join(process.cwd(), "src/db/migrations");
-    expect(readdirSync(dir).filter((file) => file.startsWith("0022_"))).toEqual([
+    expect(readdirSync(dir).filter((file) => file.startsWith("0023_"))).toEqual([
       "0023_reklamasjoner.sql",
     ]);
   });

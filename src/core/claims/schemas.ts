@@ -20,6 +20,8 @@ import {
  * - `claimant_party_id`: part-id-en har feil format.
  * - `claimant_required`: verken part eller fritekst for klager er fylt.
  * - `text_limits`: beskrivelsen er tom eller over 2 000 tegn, klager eller bygningsdel over 200.
+ * - `no_national_id`: klager, beskrivelse eller bygningsdel har elleve sifre på rad (ligner et
+ *   fødselsnummer). Mellomrom, punktum og bindestrek mellom sifrene teller ikke.
  * - `amount_only_upheld_or_settled`: beløp er ikke et heltall fra 0, eller er satt uten at
  *   utfallet er medhold eller forlik. Gjelder også gjenåpning: beløpet nullstilles aldri i
  *   stillhet, endringen avvises.
@@ -42,6 +44,7 @@ export type ClaimRule =
   | "claimant_party_id"
   | "claimant_required"
   | "text_limits"
+  | "no_national_id"
   | "amount_only_upheld_or_settled";
 
 const TYPE = "Velg type krav.";
@@ -54,11 +57,23 @@ const CLAIMANT_TOO_LONG = `Hvem som klaget kan ha høyst ${CLAIMANT_TEXT_MAX} te
 const DESCRIPTION = "Skriv kort hva som påstås.";
 const DESCRIPTION_TOO_LONG = "Beskrivelsen kan ha høyst 2 000 tegn.";
 const BUILDING_PART_TOO_LONG = `Bygningsdelen kan ha høyst ${BUILDING_PART_TEXT_MAX} tegn.`;
+const NATIONAL_ID = "Fødselsnummer skal ikke lagres her.";
 const AMOUNT_INVALID = "Beløpet må være et helt antall kroner, 0 eller mer.";
 const AMOUNT_NOT_ALLOWED = "Beløp kan bare fylles ut ved medhold eller forlik.";
 
 function rule(name: ClaimRule, error: string) {
   return { error, params: { rule: name } };
+}
+
+/**
+ * Elleve sifre på rad ligner et fødselsnummer (samme regel som i oppdrag, kontakter og eiendom).
+ * Mellomrom, punktum og bindestrek mellom sifrene teller ikke («010190 12345» stoppes også).
+ */
+const ELEVEN_DIGITS = /\d{11}/;
+const DIGIT_SEPARATORS = /(?<=\d)[\s.-]+(?=\d)/g;
+
+function hasNoNationalId(value: string | null): boolean {
+  return value === null || !ELEVEN_DIGITS.test(value.replace(DIGIT_SEPARATORS, ""));
 }
 
 /** Sjekker at `YYYY-MM-DD` er en dato som finnes (ikke 2026-02-30). */
@@ -83,7 +98,8 @@ function optionalText(max: number, tooLong: string) {
     .custom<string | null>(isOptionalString, rule("text_limits", tooLong))
     .optional()
     .transform(trimToNull)
-    .refine((value) => value === null || value.length <= max, rule("text_limits", tooLong));
+    .refine((value) => value === null || value.length <= max, rule("text_limits", tooLong))
+    .refine(hasNoNationalId, rule("no_national_id", NATIONAL_ID));
 }
 
 /** Skjemaet for registrering og endring. `today` er dagens dato i Europe/Oslo (`YYYY-MM-DD`). */
@@ -115,7 +131,8 @@ export function claimInputSchema(today: string) {
         .refine(
           (value) => value.length <= DESCRIPTION_MAX,
           rule("text_limits", DESCRIPTION_TOO_LONG),
-        ),
+        )
+        .refine(hasNoNationalId, rule("no_national_id", NATIONAL_ID)),
       buildingPartText: optionalText(BUILDING_PART_TEXT_MAX, BUILDING_PART_TOO_LONG),
       outcome: z
         .custom<ClaimOutcome>(
