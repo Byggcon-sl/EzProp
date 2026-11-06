@@ -877,6 +877,8 @@ const ASSIGNMENT_KEYS = [
   "companyName",
   // Statusflyten 3.7.1: merket «Rettet» (docs/funksjoner/fase2a-statusflyt-testplan.md)
   "corrected",
+  // Avtale med oppdragsgiver 5.6 (docs/funksjoner/fase2a-oppdragsgiveravtale-testplan.md)
+  "agreement",
   "team",
   "parties",
   "teamCandidates",
