@@ -131,6 +131,7 @@ const allPermissions: readonly Permission[] = [
   "organization.read",
   "organization.manage",
   "claims.read",
+  "claims.manage",
   "staff.manage",
   "assignment.edit",
   "report.edit",
@@ -153,6 +154,7 @@ const allowedWithSettingOn: Record<EmployeeRole, readonly Permission[]> = {
   manager: [
     "organization.read",
     "claims.read",
+    "claims.manage",
     "staff.manage",
     "assignment.edit",
     "report.edit",
@@ -665,4 +667,58 @@ describe("3.4 sertifisering: tenant-isolasjon i sjekken", () => {
 
   // 3.4.2: databasen avviser en rad med organisasjon A og ansatt fra B, se
   // src/db/certifications-schema.test.ts (6.1).
+});
+
+// --- Reklamasjoner med enkelt skjema (testplan docs/funksjoner/fase2a-reklamasjoner-testplan.md,
+// avsnitt 1.4 og 1.6 mot databasen). Matrisen over har fått `claims.manage`. Støtter hovedmål:
+// reklamasjoner (bare leder og admin fører sakene). ---
+
+describe("claims.manage mot databasen", () => {
+  it.each([true, false])(
+    "1.4 enkeltrettigheten claims.manage gir ikke takstmann tilgang (innstillingen %s)",
+    async (editAll) => {
+      const org = await createOrganization();
+      await setSettings(org.id, { [SETTING]: editAll });
+      const user = await createUser();
+      const inspector = await createEmployee(user, org.id, ["inspector"]);
+      await grantPermission(inspector, "claims.manage");
+      await grantPermission(inspector, "claims.read");
+
+      await expectAllowed(user, org.id, "claims.manage", false);
+      await expectAllowed(user, org.id, "claims.read", false);
+      const grant = await requireOrganizationAccess(user, org.id);
+      expect(grant.permissions).not.toContain("claims.manage");
+      expect(grant.permissions).not.toContain("claims.read");
+    },
+  );
+
+  it("1.4 kontor med enkeltrettigheten claims.manage får ikke tilgang", async () => {
+    const org = await createOrganization();
+    const user = await createUser();
+    const office = await createEmployee(user, org.id, ["office"]);
+    await grantPermission(office, "claims.manage");
+    await expectAllowed(user, org.id, "claims.manage", false);
+  });
+
+  // Regel 11: admin stenges aldri ute. Testen skal aldri fjernes.
+  it("1.6 admin uten andre roller, innstillingen av og uten sertifisering har claims.read og claims.manage", async () => {
+    const org = await createOrganization();
+    await setSettings(org.id, { [SETTING]: false });
+    const user = await createUser();
+    await createEmployee(user, org.id, ["admin"]);
+    await expectAllowed(user, org.id, "claims.read", true);
+    await expectAllowed(user, org.id, "claims.manage", true);
+  });
+
+  it("1.7 takstmann + leder har claims.manage, takstmann + kontor ikke", async () => {
+    const org = await createOrganization();
+    await setSettings(org.id, { [SETTING]: false });
+    const both = await createUser();
+    await createEmployee(both, org.id, ["inspector", "manager"]);
+    await expectAllowed(both, org.id, "claims.manage", true);
+    const neither = await createUser();
+    await createEmployee(neither, org.id, ["inspector", "office"]);
+    await expectAllowed(neither, org.id, "claims.manage", false);
+    await expectAllowed(neither, org.id, "claims.read", false);
+  });
 });

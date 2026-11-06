@@ -1171,3 +1171,104 @@ export async function assignmentAgreementId(assignmentId: string): Promise<strin
     await sql.end();
   }
 }
+
+// --- Reklamasjoner (docs/funksjoner/fase2a-reklamasjoner-testplan.md avsnitt 5) ---------------
+
+/**
+ * Et oppdrag (med ordre) i organisasjonen til admin fra seed, med én part: kjøper
+ * «Kjøper Test <suffix>». Nummeret og adressen har endingen i seg. Oppdiktede data. Bare lokal
+ * database eller testdatabasen.
+ */
+export async function createAssignmentWithParty(
+  suffix: string,
+): Promise<{ assignmentId: string; partyId: string; partyName: string }> {
+  const sql = e2eSql();
+  try {
+    const organizationId = await seedOrganizationId(sql);
+    const [office] = await sql<{ id: string }[]>`
+      select id from offices where organization_id = ${organizationId} and deleted_at is null
+      order by created_at limit 1`;
+    if (!office) throw new Error("Fant ikke et kontor fra seed (kjør pnpm db:seed)");
+    const orderId = randomUUID();
+    const assignmentId = randomUUID();
+    const partyId = randomUUID();
+    const partyName = `Kjøper Test ${suffix}`;
+    await sql`
+      insert into orders (id, organization_id, address_text, received_at, source, status,
+        requested_report_type)
+      values (${orderId}, ${organizationId}, ${`Reklamasjonsveien 1 ${suffix}, 8000 Bodø`}, now(),
+        'manual', 'received', 'condition_report')`;
+    await sql`
+      insert into assignments (id, organization_id, number, office_id, assignment_type, status,
+        order_id)
+      values (${assignmentId}, ${organizationId}, ${`E2E-REK-${suffix}`}, ${office.id},
+        'condition_report', 'in_progress', ${orderId})`;
+    await sql`
+      insert into assignment_parties (id, organization_id, assignment_id, role, name)
+      values (${partyId}, ${organizationId}, ${assignmentId}, 'buyer', ${partyName})`;
+    return { assignmentId, partyId, partyName };
+  } finally {
+    await sql.end();
+  }
+}
+
+/**
+ * En reklamasjonssak satt inn direkte på oppdraget (uten tilgangssjekk). Standard: reklamasjon
+ * mottatt 2026-11-02, klager «Kjøper Test», beskrivelsen «Fukt i kjeller ikke nevnt», åpen.
+ */
+export async function insertClaimRow(
+  assignmentId: string,
+  overrides: { description?: string; outcome?: string; amount?: number | null } = {},
+): Promise<string> {
+  const sql = e2eSql();
+  try {
+    const [row] = await sql<{ id: string }[]>`
+      insert into claims (organization_id, assignment_id, claim_type, received_at, claimant_text,
+        description, outcome, amount, closed_at, created_by)
+      select a.organization_id, a.id, 'complaint', '2026-11-02', 'Kjøper Test',
+        ${overrides.description ?? "Fukt i kjeller ikke nevnt"}, ${overrides.outcome ?? "open"},
+        ${overrides.amount ?? null},
+        ${(overrides.outcome ?? "open") === "open" ? null : new Date()}, gen_random_uuid()
+      from assignments a where a.id = ${assignmentId}
+      returning id`;
+    if (!row) throw new Error("Kunne ikke lage reklamasjonssaken for e2e");
+    return row.id;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Sakene på oppdraget (også fjernede), eldste først. Bare lesing. */
+export async function claimRowsFor(assignmentId: string): Promise<
+  {
+    id: string;
+    outcome: string;
+    amount: number | null;
+    claimantPartyId: string | null;
+    claimantText: string | null;
+    description: string;
+    deletedAt: Date | null;
+  }[]
+> {
+  const sql = e2eSql();
+  try {
+    const rows = await sql<
+      {
+        id: string;
+        outcome: string;
+        amount: number | null;
+        claimantPartyId: string | null;
+        claimantText: string | null;
+        description: string;
+        deletedAt: Date | null;
+      }[]
+    >`
+      select id, outcome, amount, claimant_party_id as "claimantPartyId",
+        claimant_text as "claimantText", description, deleted_at as "deletedAt"
+      from claims where assignment_id = ${assignmentId}
+      order by created_at`;
+    return rows.map((row) => ({ ...row, amount: row.amount === null ? null : Number(row.amount) }));
+  } finally {
+    await sql.end();
+  }
+}
