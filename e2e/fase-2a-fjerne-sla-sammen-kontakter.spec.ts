@@ -93,14 +93,9 @@ function mergeLink(page: Page): Locator {
   return page.getByRole("main").getByRole("link", { name: /^Slå sammen med/ });
 }
 
-/** Bekreftelsen: det innerste elementet med spørsmålet og knappen «Avbryt». */
+/** Bekreftelsen på siden: området med spørsmålet «Fjerne <navn>?» som navn. */
 function confirmation(page: Page, question: string): Locator {
-  return page
-    .getByRole("main")
-    .locator("div, section, form, [role=alertdialog], [role=dialog]")
-    .filter({ hasText: question })
-    .filter({ has: page.getByRole("button", { name: "Avbryt", exact: true }) })
-    .last();
+  return page.getByRole("main").getByRole("region", { name: question });
 }
 
 /** Firma via skjermen. Returnerer id-en. */
@@ -147,45 +142,53 @@ function partiesSection(page: Page): Locator {
   return page.getByRole("region", { name: "Parter", exact: true });
 }
 
-/** Legger kontakten til som megler på oppdraget som er åpent, via kontaktvelgeren. */
-async function addBrokerParty(page: Page, lastName: string, firstName: string) {
+/** Legger kontakten til som megler på oppdraget som er åpent, via kontaktvelgeren (søk på e-post). */
+async function addBrokerParty(page: Page, email: string, fullName: string) {
   const button = page.getByRole("button", { name: "Legg til part", exact: true });
   const formFilter = page.locator("form").filter({ has: page.getByLabel(/^Rolle/) });
   if ((await formFilter.count()) === 0 && (await button.count()) > 0) await button.first().click();
   const form = formFilter.first();
   await expect(form).toBeVisible();
   await form.getByLabel(/^Rolle/).selectOption({ label: "Megler" });
-  await form.getByLabel(/^Søk i kontakter/).fill(`${firstName} ${lastName}`);
-  const hit = form.getByRole("button", { name: new RegExp(`${firstName} ${lastName}`) });
+  await form.getByLabel(/^Søk i kontakter/).fill(email);
+  const hit = form.getByRole("button", { name: new RegExp(fullName) });
   await expect(hit).toHaveCount(1);
   await hit.click();
-  await expect(form.getByText(`Koblet til ${firstName} ${lastName}`)).toBeVisible();
+  await expect(form.getByText(`Koblet til ${fullName}`)).toBeVisible();
   await saveButton(form).click();
   await expect(
-    partiesSection(page)
-      .getByRole("listitem")
-      .filter({ hasText: `${firstName} ${lastName}` }),
+    partiesSection(page).getByRole("listitem").filter({ hasText: fullName }),
   ).toHaveCount(1);
 }
 
-/** Søkefeltet på sammenslåingssiden. */
+/** Søkefeltet på sammenslåingssiden (`type="search"`). */
 function mergeSearch(page: Page): Locator {
-  return page.getByRole("main").getByRole("searchbox").or(page.getByLabel(/^Søk/)).first();
+  return page.getByRole("main").getByRole("searchbox");
 }
 
-/** Treffet i søket på sammenslåingssiden (navnet står i knappen). */
+/** Søker på sammenslåingssiden (vanlig GET-skjema: skriv og trykk Enter). */
+async function searchForMerge(page: Page, text: string) {
+  await mergeSearch(page).fill(text);
+  await mergeSearch(page).press("Enter");
+  await expect(page).toHaveURL(/[?&]q=/);
+}
+
+/** Treffene i søket på sammenslåingssiden (lenker i listen «Treff»). */
+function mergeHits(page: Page): Locator {
+  return page.getByRole("main").getByRole("list", { name: "Treff" }).getByRole("link");
+}
+
+/** Treffet med navnet (navnet står først i lenken). */
 function mergeHit(page: Page, name: string): Locator {
-  return page.getByRole("main").getByRole("button", { name: new RegExp(name) });
+  return mergeHits(page).filter({ hasText: name });
 }
 
 /** Valget «Behold denne» i kortet med navnet. */
-function keepChoice(page: Page, cardText: string): Locator {
+function keepChoice(page: Page, name: string): Locator {
   return page
     .getByRole("main")
-    .locator("label, li, article, section, div")
-    .filter({ hasText: cardText })
-    .getByRole("radio", { name: /Behold denne/ })
-    .last();
+    .getByRole("group", { name, exact: true })
+    .getByRole("radio", { name: "Behold denne" });
 }
 
 function mergeButton(page: Page): Locator {
@@ -309,7 +312,7 @@ test.describe("fjerne og slå sammen kontakter og firma (pc og ipad)", () => {
 
     // Den som fjernes, er megler på et oppdrag
     const assignmentId = await newAssignment(page);
-    await addBrokerParty(page, lastName, other.firstName);
+    await addBrokerParty(page, other.email, otherName);
 
     // «Slå sammen med …» fra kontakten som beholdes
     await page.goto(`/kontakter/${keepId}`);
@@ -322,15 +325,18 @@ test.describe("fjerne og slå sammen kontakter og firma (pc og ipad)", () => {
     await expect(page).toHaveURL(new RegExp(`/kontakter/${keepId}/sla-sammen$`));
 
     // Søket viser ikke den åpne kontakten, bare den andre
-    await mergeSearch(page).fill(lastName);
+    await searchForMerge(page, lastName);
+    await expect(mergeHits(page)).toHaveCount(1);
     await expect(mergeHit(page, otherName)).toHaveCount(1);
-    await expect(mergeHit(page, `^${keepName}`)).toHaveCount(0);
+    await expect(page.getByRole("main").locator(`a[href*="med=${keepId}"]`)).toHaveCount(0);
     if (isIpad) {
+      await expectAtLeast44(mergeHit(page, otherName), "treffet i søket");
       await mergeHit(page, otherName).click();
     } else {
       await mergeSearch(page).focus();
       await tabTo(page, mergeHit(page, otherName), 5);
     }
+    await expect(page).toHaveURL(new RegExp(`med=${otherId}`));
 
     // De to side om side, med antall oppdrag; den åpne er valgt som standard
     const main = page.getByRole("main");
@@ -338,9 +344,11 @@ test.describe("fjerne og slå sammen kontakter og firma (pc og ipad)", () => {
     await expect(main).toContainText(otherName);
     await expect(main).toContainText(keep.email);
     await expect(main).toContainText(other.email);
-    await expect(main).toContainText(/oppdrag/i);
-    const keepRadio = keepChoice(page, keep.email);
-    const otherRadio = keepChoice(page, other.email);
+    const keepRadio = keepChoice(page, keepName);
+    const otherRadio = keepChoice(page, otherName);
+    await expect(page.getByRole("group", { name: otherName, exact: true })).toContainText(
+      /Oppdrag\s*1/,
+    );
     await expect(keepRadio).toBeChecked();
     await expect(main).toContainText(
       `${otherName} fjernes. Oppdrag og ordrer flyttes til ${keepName}.`,
@@ -398,7 +406,8 @@ test.describe("fjerne og slå sammen kontakter og firma (pc og ipad)", () => {
     await mergeLink(page).click();
     await expect(page).toHaveURL(new RegExp(`/firma/${keepId}/sla-sammen$`));
 
-    await mergeSearch(page).fill(`Dublett${suffix}`);
+    await searchForMerge(page, `Dublett${suffix}`);
+    await expect(mergeHits(page)).toHaveCount(1);
     await expect(mergeHit(page, otherFirm)).toHaveCount(1);
     await mergeHit(page, otherFirm).click();
 
@@ -413,7 +422,7 @@ test.describe("fjerne og slå sammen kontakter og firma (pc og ipad)", () => {
     await mergeButton(page).click();
 
     await expect(page).toHaveURL(new RegExp(`/firma/${keepId}(\\?.*)?$`));
-    await expect(page.getByText(/er slått sammen\./)).toBeVisible();
+    await expect(page.getByText("Firmaene er slått sammen.")).toBeVisible();
 
     // Kontakten står nå i firmaet som beholdes, og det fjernede firmaet gir «finnes ikke»
     await expect(page.locator(`a[href="/kontakter/${contactId}"]`)).toHaveCount(1);

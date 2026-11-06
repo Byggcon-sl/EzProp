@@ -364,10 +364,10 @@ describe("4. fjerne og slå sammen firma", () => {
     },
   );
 
-  it("4.4b removeFirmAction sender tilbake til listen etter fjerning", async () => {
+  it("4.4b removeFirmAction sender tilbake til listen etter fjerning, uten navnet i adressen", async () => {
     const url = await redirectOf(runRemove());
-    expect(url.startsWith("/firma")).toBe(true);
-    expect(url).not.toContain(REMOVE);
+    expect(url).toMatch(/^\/firma\?/);
+    for (const value of [NAME, ORG_NUMBER]) expect(url).not.toContain(value);
     expect(mocks.core.removeFirm).toHaveBeenCalledWith(actor, ORG, REMOVE);
   });
 

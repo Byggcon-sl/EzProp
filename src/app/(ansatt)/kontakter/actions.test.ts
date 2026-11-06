@@ -499,10 +499,10 @@ describe("4. fjerne og slå sammen kontakter", () => {
     },
   );
 
-  it("4.4b removeContactAction sender tilbake til listen etter fjerning", async () => {
+  it("4.4b removeContactAction sender tilbake til listen etter fjerning, uten navnet i adressen", async () => {
     const url = await redirectOf(runRemove());
-    expect(url.startsWith("/kontakter")).toBe(true);
-    expect(url).not.toContain(REMOVE);
+    expect(url).toMatch(/^\/kontakter\?/);
+    for (const value of [FIRST, LAST, EMAIL]) expect(url).not.toContain(value);
     expect(mocks.core.removeContact).toHaveBeenCalledWith(actor, ORG, REMOVE);
   });
 
