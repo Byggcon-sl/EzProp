@@ -130,7 +130,7 @@ Hovedmål for fase 1: tid og KI først (grunnlaget for befaring på iPad, der KI
 
 | PR | Oppgave | Status | Bygger på |
 |---|---|---|---|
-| (ny) | Tidsmåling, opprydding etter PR #110: doble testfiler fjernet, e2e-filen har navnet fra kortet, ustabil hjelper for org.nr. rettet (branch `fase2a-tidsmaling-opprydding`, versjon 0.3.11) | Åpnet 06.11.2026, merges med skriptet | `main` |
+| (ny) | Tidsmåling, opprydding etter PR #110: doble testfiler fjernet, e2e-filen har navnet fra kortet, ustabil hjelper for org.nr. rettet (branch `fase2a-tidsmaling-opprydding`, versjon 0.3.12) | Åpnet 06.11.2026, merges med skriptet | `main` |
 | #116 | Tilstand etter PR #115 | Åpen | `main` |
 | – | Ingen åpne PR-er etter denne tilstands-PR-en. PR #102–#115 er merget. | | |
 
