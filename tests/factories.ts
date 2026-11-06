@@ -25,6 +25,7 @@ import {
   organizations,
   properties,
   users,
+  workSessions,
   type EmployeeRole,
 } from "@/db/schema";
 import { todayInOslo } from "@/shared/lib/dates";
@@ -34,6 +35,7 @@ import { todayInOslo } from "@/shared/lib/dates";
  * sjekker at alle tabellene i databasen står i listen.
  */
 export const RESET_TABLES = [
+  "work_sessions",
   "rooms",
   "floor_areas",
   "floors",
@@ -471,6 +473,48 @@ export async function createTeamMember(
     })
     .returning();
   if (!row) throw new Error("kunne ikke opprette teamrad");
+  return row;
+}
+
+type WorkSessionOverrides = {
+  assignmentId?: string;
+  employeeId?: string;
+  phase?: string;
+  startedAt?: Date;
+  endedAt?: Date;
+  deletedAt?: Date | null;
+};
+
+/**
+ * En arbeidsøkt (`work_sessions`) satt inn direkte uten tilgangssjekk. Standard: fasen
+ * `preparation`, 30 minutter som slutter ved `TEST_NOW`. Lager oppdrag og ansatt (rolle
+ * takstmann, oppdiktet navn) i samme organisasjon når de mangler. `phase` er fri tekst, så
+ * testene kan vise at databasen avviser ukjente koder.
+ */
+export async function createWorkSession(
+  organizationId: string,
+  overrides: WorkSessionOverrides = {},
+) {
+  const assignmentId = overrides.assignmentId ?? (await createAssignment(organizationId)).id;
+  const employeeId =
+    overrides.employeeId ??
+    (await createEmployee(await createUser({ name: "Test Måling" }), organizationId, ["inspector"]))
+      .id;
+  const endedAt = overrides.endedAt ?? TEST_NOW;
+  const startedAt = overrides.startedAt ?? new Date(endedAt.getTime() - 30 * 60 * 1000);
+  const [row] = await db
+    .insert(workSessions)
+    .values({
+      organizationId,
+      assignmentId,
+      employeeId,
+      phase: overrides.phase ?? "preparation",
+      startedAt,
+      endedAt,
+      deletedAt: overrides.deletedAt ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette arbeidsøkt");
   return row;
 }
 

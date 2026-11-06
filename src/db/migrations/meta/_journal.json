@@ -155,6 +155,13 @@
       "when": 1793933568973,
       "tag": "0021_oppdragsgiveravtale",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793948073656,
+      "tag": "0022_tidsmaling",
+      "breakpoints": true
     }
   ]
 }
