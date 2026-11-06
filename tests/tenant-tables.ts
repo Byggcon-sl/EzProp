@@ -15,11 +15,13 @@ import {
   createAssignmentParty,
   createBuilding,
   createCertification,
+  createCheckpointRow,
   createClaim,
   createClientAgreement,
   createCommonAreas,
   createCompany,
   createContact,
+  createDeviationQuestionRow,
   createEmployee,
   createFile,
   createFirm,
@@ -29,13 +31,26 @@ import {
   createNumberSequence,
   createOffice,
   createOrder,
+  createOutcomeRow,
   createProperty,
   createRoom,
+  createRuleConditionRow,
+  createRuleRow,
+  createRuleTestCaseRow,
+  createStandardMeasureRow,
   createTeamMember,
+  createTemplateElementOptionRow,
+  createTemplateElementRow,
+  createTemplateFamilyRow,
+  createTemplateSectionRow,
+  createTemplateVersionRow,
   createUser,
   createWorkSession,
   grantPermission,
 } from "./factories";
+
+/** Malmotorens tolv tabeller har tenant-testene sine her (docs/funksjoner/fase2a-malmotor.md). */
+const TEMPLATES_TEST_FILE = "src/core/templates/templates.test.ts";
 
 /**
  * Én tabell med `organization_id`, slik den samlede tenant-testen
@@ -120,6 +135,11 @@ export const tenantTables: TenantTableEntry[] = [
     },
   },
   {
+    table: "checkpoints",
+    testFile: TEMPLATES_TEST_FILE,
+    insertRow: async (organizationId) => (await createCheckpointRow(organizationId)).id,
+  },
+  {
     table: "claims",
     testFile: "src/core/claims/claims.test.ts",
     insertRow: async (organizationId) => (await createClaim(organizationId)).id,
@@ -146,6 +166,11 @@ export const tenantTables: TenantTableEntry[] = [
       const firm = await createFirm(organizationId);
       return (await createContact(organizationId, { firmId: firm.id })).id;
     },
+  },
+  {
+    table: "deviation_questions",
+    testFile: TEMPLATES_TEST_FILE,
+    insertRow: async (organizationId) => (await createDeviationQuestionRow(organizationId)).id,
   },
   {
     table: "employee_permissions",
@@ -233,6 +258,11 @@ export const tenantTables: TenantTableEntry[] = [
     insertRow: async (organizationId) => (await createOrder(organizationId)).id,
   },
   {
+    table: "outcomes",
+    testFile: TEMPLATES_TEST_FILE,
+    insertRow: async (organizationId) => (await createOutcomeRow(organizationId)).id,
+  },
+  {
     table: "properties",
     testFile: "src/core/properties/properties.test.ts",
     insertRow: async (organizationId) => (await createProperty(organizationId)).property.id,
@@ -246,6 +276,51 @@ export const tenantTables: TenantTableEntry[] = [
     table: "rooms",
     testFile: "src/core/buildings/buildings.test.ts",
     insertRow: async (organizationId) => (await createRoom(organizationId)).id,
+  },
+  {
+    table: "rule_conditions",
+    testFile: TEMPLATES_TEST_FILE,
+    insertRow: async (organizationId) => (await createRuleConditionRow(organizationId)).id,
+  },
+  {
+    table: "rule_test_cases",
+    testFile: TEMPLATES_TEST_FILE,
+    insertRow: async (organizationId) => (await createRuleTestCaseRow(organizationId)).id,
+  },
+  {
+    table: "rules",
+    testFile: TEMPLATES_TEST_FILE,
+    insertRow: async (organizationId) => (await createRuleRow(organizationId)).id,
+  },
+  {
+    table: "standard_measures",
+    testFile: TEMPLATES_TEST_FILE,
+    insertRow: async (organizationId) => (await createStandardMeasureRow(organizationId)).id,
+  },
+  {
+    table: "template_element_options",
+    testFile: TEMPLATES_TEST_FILE,
+    insertRow: async (organizationId) => (await createTemplateElementOptionRow(organizationId)).id,
+  },
+  {
+    table: "template_elements",
+    testFile: TEMPLATES_TEST_FILE,
+    insertRow: async (organizationId) => (await createTemplateElementRow(organizationId)).id,
+  },
+  {
+    table: "template_families",
+    testFile: TEMPLATES_TEST_FILE,
+    insertRow: async (organizationId) => (await createTemplateFamilyRow(organizationId)).id,
+  },
+  {
+    table: "template_sections",
+    testFile: TEMPLATES_TEST_FILE,
+    insertRow: async (organizationId) => (await createTemplateSectionRow(organizationId)).id,
+  },
+  {
+    table: "template_versions",
+    testFile: TEMPLATES_TEST_FILE,
+    insertRow: async (organizationId) => (await createTemplateVersionRow(organizationId)).id,
   },
   {
     table: "trial_answers",

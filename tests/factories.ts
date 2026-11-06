@@ -10,9 +10,11 @@ import {
   auditLog,
   cadastralUnits,
   certifications,
+  checkpoints,
   commonAreas,
   companies,
   contacts,
+  deviationQuestions,
   employeePermissions,
   employeeRoleAssignments,
   employees,
@@ -23,7 +25,17 @@ import {
   offices,
   orders,
   organizations,
+  outcomes,
   properties,
+  ruleConditions,
+  rules,
+  ruleTestCases,
+  standardMeasures,
+  templateElementOptions,
+  templateElements,
+  templateFamilies,
+  templateSections,
+  templateVersions,
   users,
   workSessions,
   type EmployeeRole,
@@ -35,6 +47,18 @@ import { todayInOslo } from "@/shared/lib/dates";
  * sjekker at alle tabellene i databasen står i listen.
  */
 export const RESET_TABLES = [
+  "rule_test_cases",
+  "rule_conditions",
+  "rules",
+  "standard_measures",
+  "outcomes",
+  "deviation_questions",
+  "template_element_options",
+  "template_elements",
+  "checkpoints",
+  "template_sections",
+  "template_versions",
+  "template_families",
   "work_sessions",
   "rooms",
   "floor_areas",
@@ -1192,4 +1216,293 @@ export async function createClaim(
     deletedBy: (row.deleted_by as string | null) ?? null,
     rowVersion: Number(row.row_version),
   };
+}
+
+// --- Malmotoren (docs/funksjoner/fase2a-malmotor.md) -----------------------------------------
+//
+// Enkle radbyggere som legger én rad rett i databasen, uten tilgangssjekk og uten Zod, og lager
+// foreldrene som mangler i samme organisasjon. Kodene får et løpenummer (`section_1`,
+// `checkpoint_2` …), så to rader aldri kolliderer på den delvis unike indeksen. Oppdiktede,
+// nøytrale tekster uten fagstoff.
+
+let templateCounter = 0;
+
+function nextTemplateKey(prefix: string): string {
+  templateCounter += 1;
+  return `${prefix}_${templateCounter}`;
+}
+
+function insertedRow<T>(rows: T[], table: string): T {
+  const [row] = rows;
+  if (!row) throw new Error(`kunne ikke legge inn rad i ${table}`);
+  return row;
+}
+
+type TemplateOverrides<T> = Partial<Omit<T, "organizationId">>;
+
+/** En malfamilie. Standard: systemmal for tilstandsrapport. */
+export async function createTemplateFamilyRow(
+  organizationId: string,
+  overrides: TemplateOverrides<typeof templateFamilies.$inferInsert> = {},
+) {
+  return insertedRow(
+    await db
+      .insert(templateFamilies)
+      .values({ name: "Testmal", kind: "system", ...overrides, organizationId })
+      .returning(),
+    "template_families",
+  );
+}
+
+/**
+ * En malversjon. Lager familien når `familyId` mangler. Standard: utkast med neste ledige
+ * versjonsnummer i familien. Publisert og utgått får `publishedAt = TEST_NOW` (CHECK i databasen).
+ */
+export async function createTemplateVersionRow(
+  organizationId: string,
+  overrides: TemplateOverrides<typeof templateVersions.$inferInsert> = {},
+) {
+  const familyId = overrides.familyId ?? (await createTemplateFamilyRow(organizationId)).id;
+  const [highest] = await db
+    .select({ value: sql<number>`coalesce(max(${templateVersions.versionNumber}), 0)` })
+    .from(templateVersions)
+    .where(eq(templateVersions.familyId, familyId));
+  const status = overrides.status ?? "draft";
+  return insertedRow(
+    await db
+      .insert(templateVersions)
+      .values({
+        versionNumber: Number(highest?.value ?? 0) + 1,
+        publishedAt: status === "draft" ? null : TEST_NOW,
+        ...overrides,
+        status,
+        familyId,
+        organizationId,
+      })
+      .returning(),
+    "template_versions",
+  );
+}
+
+/** Malversjonen til en seksjon (felt og kontrollpunkt skal ha samme versjon som seksjonen). */
+async function sectionVersionId(sectionId: string): Promise<string> {
+  const [row] = await db
+    .select({ versionId: templateSections.versionId })
+    .from(templateSections)
+    .where(eq(templateSections.id, sectionId));
+  if (!row) throw new Error("fant ikke seksjonen");
+  return row.versionId;
+}
+
+/** En seksjon. Lager versjonen når `versionId` mangler. */
+export async function createTemplateSectionRow(
+  organizationId: string,
+  overrides: TemplateOverrides<typeof templateSections.$inferInsert> = {},
+) {
+  const versionId = overrides.versionId ?? (await createTemplateVersionRow(organizationId)).id;
+  return insertedRow(
+    await db
+      .insert(templateSections)
+      .values({
+        key: nextTemplateKey("section"),
+        title: "Testseksjon",
+        ...overrides,
+        versionId,
+        organizationId,
+      })
+      .returning(),
+    "template_sections",
+  );
+}
+
+/** Et kontrollpunkt. Lager seksjonen (og versjonen) når `sectionId` mangler. */
+export async function createCheckpointRow(
+  organizationId: string,
+  overrides: TemplateOverrides<typeof checkpoints.$inferInsert> = {},
+) {
+  const sectionId =
+    overrides.sectionId ??
+    (await createTemplateSectionRow(organizationId, { versionId: overrides.versionId })).id;
+  const versionId = overrides.versionId ?? (await sectionVersionId(sectionId));
+  return insertedRow(
+    await db
+      .insert(checkpoints)
+      .values({
+        key: nextTemplateKey("checkpoint"),
+        name: "Testpunkt",
+        group: "interior",
+        ...overrides,
+        sectionId,
+        versionId,
+        organizationId,
+      })
+      .returning(),
+    "checkpoints",
+  );
+}
+
+/** Et felt. Lager seksjonen (og versjonen) når `sectionId` mangler. Standard: tekstfelt. */
+export async function createTemplateElementRow(
+  organizationId: string,
+  overrides: TemplateOverrides<typeof templateElements.$inferInsert> = {},
+) {
+  const sectionId =
+    overrides.sectionId ??
+    (await createTemplateSectionRow(organizationId, { versionId: overrides.versionId })).id;
+  const versionId = overrides.versionId ?? (await sectionVersionId(sectionId));
+  return insertedRow(
+    await db
+      .insert(templateElements)
+      .values({
+        key: nextTemplateKey("element"),
+        label: "Testfelt",
+        fieldType: "text",
+        ...overrides,
+        sectionId,
+        versionId,
+        organizationId,
+      })
+      .returning(),
+    "template_elements",
+  );
+}
+
+/** Et valg i et felt. Lager et valgfelt når `elementId` mangler. */
+export async function createTemplateElementOptionRow(
+  organizationId: string,
+  overrides: TemplateOverrides<typeof templateElementOptions.$inferInsert> = {},
+) {
+  const elementId =
+    overrides.elementId ??
+    (await createTemplateElementRow(organizationId, { fieldType: "choice" })).id;
+  return insertedRow(
+    await db
+      .insert(templateElementOptions)
+      .values({
+        key: nextTemplateKey("option"),
+        label: "Testvalg",
+        ...overrides,
+        elementId,
+        organizationId,
+      })
+      .returning(),
+    "template_element_options",
+  );
+}
+
+/** Et avviksspørsmål. Lager kontrollpunktet når `checkpointId` mangler. */
+export async function createDeviationQuestionRow(
+  organizationId: string,
+  overrides: TemplateOverrides<typeof deviationQuestions.$inferInsert> = {},
+) {
+  const checkpointId = overrides.checkpointId ?? (await createCheckpointRow(organizationId)).id;
+  return insertedRow(
+    await db
+      .insert(deviationQuestions)
+      .values({
+        key: nextTemplateKey("question"),
+        text: "Testspørsmål",
+        ...overrides,
+        checkpointId,
+        organizationId,
+      })
+      .returning(),
+    "deviation_questions",
+  );
+}
+
+/** Et utfall. Lager spørsmålet når `deviationQuestionId` mangler. Standard: `tg2`. */
+export async function createOutcomeRow(
+  organizationId: string,
+  overrides: TemplateOverrides<typeof outcomes.$inferInsert> = {},
+) {
+  const deviationQuestionId =
+    overrides.deviationQuestionId ?? (await createDeviationQuestionRow(organizationId)).id;
+  return insertedRow(
+    await db
+      .insert(outcomes)
+      .values({
+        key: nextTemplateKey("outcome"),
+        kind: "tg2",
+        ...overrides,
+        deviationQuestionId,
+        organizationId,
+      })
+      .returning(),
+    "outcomes",
+  );
+}
+
+/** Et standardtiltak. Lager utfallet når `outcomeId` mangler. */
+export async function createStandardMeasureRow(
+  organizationId: string,
+  overrides: TemplateOverrides<typeof standardMeasures.$inferInsert> = {},
+) {
+  const outcomeId = overrides.outcomeId ?? (await createOutcomeRow(organizationId)).id;
+  return insertedRow(
+    await db
+      .insert(standardMeasures)
+      .values({ text: "Testtiltak", ...overrides, outcomeId, organizationId })
+      .returning(),
+    "standard_measures",
+  );
+}
+
+/** En regel. Lager versjonen når `versionId` mangler. Standard: `show` uten mål. */
+export async function createRuleRow(
+  organizationId: string,
+  overrides: TemplateOverrides<typeof rules.$inferInsert> = {},
+) {
+  const versionId = overrides.versionId ?? (await createTemplateVersionRow(organizationId)).id;
+  return insertedRow(
+    await db
+      .insert(rules)
+      .values({
+        key: nextTemplateKey("rule"),
+        name: "Testregel",
+        purpose: "show",
+        ...overrides,
+        versionId,
+        organizationId,
+      })
+      .returning(),
+    "rules",
+  );
+}
+
+/** En betingelse. Lager regelen når `ruleId` mangler. Standard: `always`. */
+export async function createRuleConditionRow(
+  organizationId: string,
+  overrides: TemplateOverrides<typeof ruleConditions.$inferInsert> = {},
+) {
+  const ruleId = overrides.ruleId ?? (await createRuleRow(organizationId)).id;
+  return insertedRow(
+    await db
+      .insert(ruleConditions)
+      .values({ type: "always", ...overrides, ruleId, organizationId })
+      .returning(),
+    "rule_conditions",
+  );
+}
+
+/** Et testtilfelle. Lager regelen når `ruleId` mangler. Standard: tomme svar, skal slå til. */
+export async function createRuleTestCaseRow(
+  organizationId: string,
+  overrides: TemplateOverrides<typeof ruleTestCases.$inferInsert> = {},
+) {
+  const ruleId = overrides.ruleId ?? (await createRuleRow(organizationId)).id;
+  return insertedRow(
+    await db
+      .insert(ruleTestCases)
+      .values({
+        name: "Testtilfelle",
+        input: {},
+        expectTriggered: true,
+        ...overrides,
+        ruleId,
+        organizationId,
+      })
+      .returning(),
+    "rule_test_cases",
+  );
 }
