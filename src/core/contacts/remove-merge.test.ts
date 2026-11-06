@@ -875,9 +875,11 @@ describe("2.5 fjerning", () => {
       graph.contactRemove.id,
     );
     // Kontaktvelgeren (searchContactsAction kaller listContacts med høyst 10 treff)
-    expect(ids(await listContacts(admin.actor, org.id, { query: FIRST, limit: 10 }))).toEqual([
-      graph.contactKeep.id,
-    ]);
+    // («Megler» treffer også etternavnet «Meglersen» på den tredje kontakten.) Før fjerningen
+    // ga søket tre treff, nå to.
+    expect(
+      ids(await listContacts(admin.actor, org.id, { query: FIRST, limit: 10 })).sort(),
+    ).toEqual([graph.contactKeep.id, graph.contactOther.id].sort());
     // Siden gir 404
     await expectDenied(getContact(admin.actor, org.id, graph.contactRemove.id));
     // Firmasiden viser den ikke
