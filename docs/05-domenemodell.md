@@ -1,7 +1,7 @@
 # EzProp – datamodell
 
 Status: **Utkast – ikke godkjent**
-Sist oppdatert: 28.10.2026 (kroker for å måle hovedmålet: `work_sessions` og `baseline_metrics`)
+Sist oppdatert: 06.11.2026 (tidsmåling: `work_sessions` bygget)
 Laget av: Claude for Ståle Limstrand (produkteier)
 Hører sammen med: `utviklingsplan.md` i samme mappe.
 
@@ -1771,6 +1771,26 @@ Kalibrering per person krever enighet med de ansatte (arbeidsmiljøloven kapitte
 
 Ingen kundeopplysninger lagres her, bare tall.
 
+**Bygget i fase 2a (06.11.2026, tidsmåling per oppdrag og fase):** Tabellen `work_sessions` (migrering `0022_tidsmaling`), kjernen i `src/core/work-sessions`, måleren `WorkSessionTracker` på `/oppdrag/[id]` og `/oppdrag/[id]/bygninger`, og siden `/statistikk/tid`. Oppgavekort: `docs/funksjoner/fase2a-tidsmaling.md`; beslutningene A119–A124.
+
+| Felt | Forklaring |
+|---|---|
+| `id`, `organization_id` | Som i alle tabeller |
+| `assignment_id` | Oppdraget (påkrevd). Sammensatt fremmednøkkel `(organization_id, assignment_id)` til `assignments` |
+| `employee_id` | Hvem som jobbet (påkrevd). Sammensatt fremmednøkkel `(organization_id, employee_id)` til `employees` |
+| `phase` | Fast kode, CHECK: `preparation`, `inspection`, `office`, `delivery` |
+| `started_at`, `ended_at` | Begge påkrevd. CHECK `ended_at >= started_at` |
+| `created_at`, `updated_at`, `deleted_at` | Sporing og myk sletting |
+
+- **Avvik fra kroken over:** `report_id` og `device_id` legges til med en migrering når tabellene `reports` og `devices` finnes; til da knyttes økten til oppdraget (A120). Ingen kolonne `source`, siden den bare ville hatt én verdi; den kommer når manuell føring kommer.
+- **Indeks** `(organization_id, assignment_id, employee_id, ended_at)` for oppslaget av siste økt og for summeringen.
+- **Fasen** regnes ut i den rene funksjonen `phaseForAssignment({ status, inspectionAt }, now)` (A119): `ordered` gir `preparation`; `in_progress` gir `preparation` når befaringsdatoen er tom eller senere enn i dag (Oslo-tid), `inspection` på befaringsdagen og `office` etter befaringsdagen; `completed` og `invoiced` gir `delivery`. Ny status eller ny befaringsdato gir ny fase ved neste aktivitet. Levering flyttes til publisering og sending når de finnes.
+- **Registrering:** `recordWorkActivity` (tilgang `organization.read`) låser oppdragsraden og finner den ansattes siste økt på oppdraget som ikke er slettet. Er den avsluttet høyst 10 minutter før og har samme fase, forlenges den; ellers lages en ny økt. Pausen er konstanten `IDLE_GAP_MINUTES = 10` i kjernen, ikke en innstilling. En slettet økt forlenges aldri. Ingen hendelse og ingen revisjonslogg per aktivitet.
+- **Av og på:** innstillingen `time_tracking.enabled` i `organizations.settings`, på som standard; bare verdien `false` slår den av (A121).
+- **Nullpunktet:** `baseline_metrics` er ikke bygget. Inntil videre lagres nullpunktet for tid i innstillingen `time_tracking.baseline` (`{ preparation, inspection, office, delivery, source }`, minutter per fase som heltall 0–10 000 og kilde høyst 200 tegn; antall oppdrag skrives i kilden) (A123). Lagringen slår sammen med de andre nøklene i `settings` og endrer aldri `access.inspectors_edit_all`. Tabellen kommer når nullpunktet for reklamasjoner også skal inn.
+- **Statistikken** (`getTimeStatistics`, rettighet `statistics.read`) teller bare ferdige og fakturerte oppdrag med minst én målt økt, gir snitt per fase og totalt, og forskjell i prosent mot nullpunktet (A122, A124). Den grupperer aldri på ansatt og returnerer aldri `employee_id` (arbeidsmiljøloven kapittel 9).
+- **Myk sletting:** ingen funksjon sletter økter permanent.
+
 ---
 
 ## 5. Rettighetsmatrise
@@ -1808,10 +1828,11 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | `template.edit_structure` | Endre struktur i systemmalen (maltilgang) | kan gis | nei | kan gis | ja |
 | `invoice.send` | Sende fakturagrunnlag (alle, 27.10.2026) | ja | ja | ja | ja |
 | `contacts.manage` | Fjerne og slå sammen kontakter og firma (05.11.2026) | nei, uansett innstilling | nei | ja | ja |
+| `statistics.read` | Se samlet tid per fase på `/statistikk/tid`, aldri per person (06.11.2026) | nei | nei | ja | ja |
 
 **Innstillingen `access.inspectors_edit_all`** ligger i `organizations.settings` og er **på** som standard (A18). Bare verdien `false` slår den av. Når den er av, har takstmann verken `assignment.edit` eller `report.edit` før team på oppdraget finnes i fase 2a (A20). Innstillingen påvirker aldri `claims.read`, `organization.manage` eller `staff.manage`.
 
-**Enkeltrettigheter** (`employee_permissions`, 4.1) kan bare være `template.edit_structure`, `assignment.edit`, `report.edit` eller `report.publish` (`grantablePermissions`, A21). Bare admin kan gi og ta bort dem, og alt revisjonslogges.
+**Enkeltrettigheter** (`employee_permissions`, 4.1) kan bare være `template.edit_structure`, `assignment.edit`, `report.edit` eller `report.publish` (`grantablePermissions`, A21). `statistics.read` er ikke en enkeltrettighet; den følger bare rollene leder og admin. Bare admin kan gi og ta bort dem, og alt revisjonslogges.
 
 ---
 
@@ -1909,6 +1930,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Finn kontakt for kobling | `findContactForLink` (`src/core/contacts`) | Intern hjelper som slår opp en kontakt i egen organisasjon (ikke slettet) og gir `{ id, firmId }` eller ingenting. Slettet firma gir `firmId: null` |
 | Kontakten finnes ikke | `ContactNotFoundError` | Feil når en part eller ordre kobles til en kontakt som ikke finnes i organisasjonen eller er slettet. Melding: «Kontakten finnes ikke.» |
 | Fjerne og slå sammen kontakter (rettighet) | `contacts.manage` | Leder og admin. Kan ikke gis som enkeltrettighet |
+| Se tidsstatistikk (rettighet) | `statistics.read` | Leder og admin. Samlet tid per fase, aldri per person. Kan ikke gis som enkeltrettighet |
 | Fjerne kontakt / fjerne firma | `removeContact`, `removeFirm` (`src/core/contacts`) | Myk sletting. Koblingene står urørt. `removeFirm` gir antall aktive kontakter i firmaet |
 | Slå sammen | merge: `mergeContacts`, `mergeFirms` (`src/core/contacts`) | Flytter koblingene fra den som fjernes til den som beholdes, og myk-sletter den andre |
 | Behold (den som beholdes) | keep: `keepId` | Kontakten eller firmaet som står igjen etter sammenslåingen. Den andre er `removeId` |
@@ -2176,8 +2198,12 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Kalibreringsbibliotek | `reference_photos` | |
 | Kalibreringsrunde | `calibration_rounds`, `calibration_answers` | |
 | KI-kostnad | `ai_usage_log.cost` | |
-| Arbeidsøkt | `work_sessions` | Tid per rapport og fase (hovedmålet) |
-| Forberedelse / befaring / kontorarbeid / levering | `preparation` / `inspection` / `office` / `delivery` | `work_sessions.phase` |
+| Arbeidsøkt | `work_sessions` (work session) | Tid én ansatt har jobbet sammenhengende i én fase på ett oppdrag. Pause over 10 minutter eller ny fase gir ny økt (hovedmålet) |
+| Fase (tidsmåling) | `WorkPhase` | `preparation` (forberedelse), `inspection` (befaring), `office` (kontorarbeid), `delivery` (levering). Fast kode i `work_sessions.phase` |
+| Forberedelse / befaring / kontorarbeid / levering | `preparation` / `inspection` / `office` / `delivery` | Verdiene i `WorkPhase` |
+| Regne ut fase | `phaseForAssignment` | Ren funksjon: fasen ut fra status og befaringsdato (A119) |
+| Mål tid (innstilling) | `time_tracking.enabled` | I `organizations.settings`. På som standard; `false` slår målingen av (A121) |
+| Nullpunkt for tid (innstilling) | `time_tracking.baseline` | Minutter per fase fra IVIT og kilde, i `organizations.settings` til `baseline_metrics` bygges (A123) |
 | Nullpunkt | `baseline_metrics` | Tall fra IVIT og de siste 3 årene |
 
 ---
@@ -2270,3 +2296,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 05.11.2026 | Koble parter og bestiller til kontakter (fase 2a): `assignment_parties.contact_id`/`firm_id` og `orders.ordered_by_contact_id`/`ordered_by_firm_id`, valgfrie, med sammensatte fremmednøkler med `organization_id`. Firmaet følger kontakten; friteksten beholdes som øyeblikksbilde. Bare id-er i revisjonsloggen, ingen kontaktdata til KI. Se «Bygget i fase 2a» i 4.2 og 4.3. | A84–A92, `docs/funksjoner/fase2a-koble-kontakter.md` |
 | 05.11.2026 | Arbeidskøen (fase 2a): `assignments.inspection_at`, `due_date` og `internal_note` tatt i bruk (notat høyst 200 tegn, internt, aldri i rapport eller PDF). Spørringene `listWorkQueue`, `countWorkQueueByStatus`, `updateAssignmentNote` og `setAssignmentSchedule`. Se «Bygget i fase 2a» i 4.3. | A99–A107, `docs/funksjoner/fase2a-arbeidsko.md` |
 | 06.11.2026 | Avtale med oppdragsgiver (fase 2a): `client_agreements` bygget med `firm_id`, `name`, `valid_from`/`valid_to` (CHECK), `premise_text` og `report_profile_code` (i stedet for `report_profile_id` inntil videre); `assignments.client_agreement_id`; ny hendelse `assignment.agreement_changed`. Forslag fra bestillerfirmaet, aldri automatisk. `price_note`, `price_list_id` og `notes` venter. Se «Bygget i fase 2a» i 4.3. | A114–A118, `docs/funksjoner/fase2a-oppdragsgiveravtale.md` |
+| 06.11.2026 | Tidsmåling per oppdrag og fase (fase 2a): `work_sessions` bygget med `assignment_id`, `employee_id`, `phase` (fire faste koder), `started_at`/`ended_at` (CHECK) og myk sletting, uten `report_id`, `device_id` og `source`. Fasen regnes ut med `phaseForAssignment`; pause over 10 minutter gir ny økt. `baseline_metrics` erstattet av innstillingen `time_tracking.baseline` inntil videre; ny innstilling `time_tracking.enabled` og ny rettighet `statistics.read` (leder og admin). Se «Bygget i fase 2a» i 4.13. | A119–A124, `docs/funksjoner/fase2a-tidsmaling.md` |

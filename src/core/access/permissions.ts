@@ -27,6 +27,8 @@ export const permissions = [
   "invoice.send",
   /** Fjerne og slå sammen kontakter og firma. Leder og admin. */
   "contacts.manage",
+  /** Se samlet statistikk, for eksempel tid per fase. Aldri per person. Leder og admin. */
+  "statistics.read",
 ] as const;
 export type Permission = (typeof permissions)[number];
 
@@ -65,6 +67,7 @@ function permissionsForRole(role: EmployeeRole, settings: AccessSettings): reado
         "report.publish",
         "invoice.send",
         "contacts.manage",
+        "statistics.read",
       ];
     case "admin":
       // Admin stenges aldri ute: alltid alle rettigheter.
