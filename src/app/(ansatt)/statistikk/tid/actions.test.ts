@@ -73,7 +73,11 @@ beforeEach(() => {
   mocks.getEmployeeContext.mockResolvedValue({ actor, organizationId: ORG });
   // Bruker det ekte skjemaet, slik at feilene ved feltene kommer fra valideringen i kjernen.
   mocks.saveTimeTrackingSettings.mockImplementation(async (_a, _o, input) => {
-    real.timeTrackingSettingsSchema.parse(input);
+    const parsed = real.timeTrackingSettingsSchema.safeParse(input);
+    if (parsed.success) return;
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) fieldErrors[issue.path.join(".")] ??= issue.message;
+    throw new real.TimeTrackingValidationError(fieldErrors);
   });
 });
 
@@ -137,7 +141,9 @@ describe("saveTimeTrackingSettingsAction", () => {
     const state = await run(
       saveTimeTrackingSettingsAction(initialFormState, settingsForm({ [field]: value })),
     );
-    expect(state?.fieldErrors[field]).toBe("Skriv et helt tall fra 0 til 10 000.");
+    expect(state?.fieldErrors[field]).toMatch(
+      /^Skriv minutter som et helt tall fra 0 til 10.000\.$/,
+    );
     expect(state?.values[field]).toBe(value);
     expect(mocks.redirect).not.toHaveBeenCalled();
   });

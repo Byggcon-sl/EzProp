@@ -1,24 +1,14 @@
 // MIDLERTIDIG STUBB for bit 2. Erstattes av bit 1.
-import { z } from "zod";
 import type { Actor } from "@/core/access";
 
 export { ACTIVITY_INTERVAL_SECONDS, shouldSendActivity } from "./activity";
+export { TimeTrackingValidationError } from "./errors";
+export { timeTrackingSettingsSchema, type TimeTrackingSettingsInput } from "./schemas";
+import { TimeTrackingValidationError } from "./errors";
+import { timeTrackingSettingsSchema } from "./schemas";
 
 export const WORK_PHASES = ["preparation", "inspection", "office", "delivery"] as const;
 export type WorkPhase = (typeof WORK_PHASES)[number];
-
-const minutes = z.number().int().min(0).max(10000);
-export const timeTrackingSettingsSchema = z.object({
-  enabled: z.boolean(),
-  baseline: z.object({
-    preparation: minutes,
-    inspection: minutes,
-    office: minutes,
-    delivery: minutes,
-    source: z.string().max(200),
-  }),
-});
-export type TimeTrackingSettingsInput = z.input<typeof timeTrackingSettingsSchema>;
 
 export type PhaseStatistics = {
   phase: WorkPhase;
@@ -73,7 +63,14 @@ export async function getTimeStatistics(
 export async function saveTimeTrackingSettings(
   _actor: Actor,
   _organizationId: string,
-  input: TimeTrackingSettingsInput,
+  input: unknown,
 ): Promise<void> {
-  timeTrackingSettingsSchema.parse(input);
+  const parsed = timeTrackingSettingsSchema.safeParse(input);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      fieldErrors[issue.path.join(".") || "form"] ??= issue.message;
+    }
+    throw new TimeTrackingValidationError(fieldErrors);
+  }
 }

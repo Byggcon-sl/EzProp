@@ -2,11 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { ZodError } from "zod";
-import { saveTimeTrackingSettings, WORK_PHASES } from "@/core/work-sessions";
+import {
+  saveTimeTrackingSettings,
+  TimeTrackingValidationError,
+  WORK_PHASES,
+} from "@/core/work-sessions";
 import { errorResult, failure } from "../../action-result";
 import { getEmployeeContext } from "../../employee-context";
-import { NO_ACCESS, type FormState } from "../../form-state";
+import { NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../../form-state";
 
 /*
  * Lagrer nullpunktet fra IVIT og bryteren «Mål tid» (docs/funksjoner/fase2a-tidsmaling.md punkt 6).
@@ -17,16 +20,7 @@ import { NO_ACCESS, type FormState } from "../../form-state";
 
 const ROUTE = "/statistikk/tid";
 
-const MINUTES_MESSAGE = "Skriv et helt tall fra 0 til 10 000.";
-const SOURCE_MESSAGE = "Kilden kan ha høyst 200 tegn.";
-
-const FIELD_MESSAGES: Record<string, string> = {
-  preparation: MINUTES_MESSAGE,
-  inspection: MINUTES_MESSAGE,
-  office: MINUTES_MESSAGE,
-  delivery: MINUTES_MESSAGE,
-  source: SOURCE_MESSAGE,
-};
+const FIELDS: readonly string[] = [...WORK_PHASES, "source"];
 
 /** Tomt felt er 0 (ikke målt i IVIT). Alt som ikke er et helt tall, blir avvist av skjemaet. */
 function toMinutes(value: string): number {
@@ -35,15 +29,22 @@ function toMinutes(value: string): number {
   return /^\d+$/.test(trimmed) ? Number(trimmed) : Number.NaN;
 }
 
-/** Første feil per felt. Feltet er siste ledd i stien, slik at nøstede nullpunktfelt også treffer. */
-function fieldErrorsFrom(error: ZodError): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const issue of error.issues) {
-    const field = [...issue.path].reverse().find((part) => typeof part === "string");
-    if (typeof field !== "string" || field in result) continue;
-    result[field] = FIELD_MESSAGES[field] ?? issue.message;
+/**
+ * Feilene fra kjernen har nøkler som `baseline.office`. Skjemafeltet er siste ledd. Feil uten felt
+ * (for eksempel `form`) vises øverst.
+ */
+function fieldErrorsFrom(error: TimeTrackingValidationError): {
+  fieldErrors: Record<string, string>;
+  message: string | null;
+} {
+  const fieldErrors: Record<string, string> = {};
+  let message: string | null = null;
+  for (const [path, text] of Object.entries(error.fieldErrors)) {
+    const field = path.split(".").pop() ?? "";
+    if (FIELDS.includes(field)) fieldErrors[field] ??= text;
+    else message ??= text;
   }
-  return result;
+  return { fieldErrors, message };
 }
 
 export async function saveTimeTrackingSettingsAction(
@@ -76,9 +77,11 @@ export async function saveTimeTrackingSettingsAction(
   try {
     await saveTimeTrackingSettings(context.actor, context.organizationId, input);
   } catch (error) {
-    if (error instanceof ZodError) {
-      const fieldErrors = fieldErrorsFrom(error);
-      if (Object.keys(fieldErrors).length > 0) return failure(previous, values, fieldErrors);
+    if (error instanceof TimeTrackingValidationError) {
+      const { fieldErrors, message } = fieldErrorsFrom(error);
+      return Object.keys(fieldErrors).length > 0
+        ? failure(previous, values, fieldErrors)
+        : failure(previous, values, {}, message ?? UNKNOWN_ERROR);
     }
     return errorResult(error, previous, values, { route: ROUTE, userId: context.actor.id });
   }
