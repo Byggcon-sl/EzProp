@@ -169,6 +169,13 @@
       "when": 1793962546204,
       "tag": "0023_reklamasjoner",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793982110192,
+      "tag": "0024_malmotor",
+      "breakpoints": true
     }
   ]
 }

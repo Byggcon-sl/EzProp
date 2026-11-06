@@ -24,3 +24,4 @@ export * from "./contacts";
 export * from "./client-agreements";
 export * from "./claims";
 export * from "./work-sessions";
+export * from "./templates";
