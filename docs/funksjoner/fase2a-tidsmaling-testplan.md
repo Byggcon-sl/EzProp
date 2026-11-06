@@ -68,7 +68,7 @@ Tabell med testsaker (`it.each`), sekunder inn, fasitsvar ut:
 8. **minutter avrundes først ved visning:** 89 s og 91 s gir 1 og 2 minutter i visningsfunksjonen; utregningen er i sekunder.
 9. **svaret har ingen ansattfelt:** nøklene i resultatet er en fast liste (ingen `employeeId`, `employee`, `name`).
 
-## 5. Kjernen, `src/core/work-sessions/record.test.ts` (ny, mot databasen)
+## 5. Kjernen, `src/core/work-sessions/record-testplan.test.ts` (ny, mot databasen)
 
 ### 5.1 Registrering og økter
 
@@ -168,7 +168,7 @@ Tabell med testsaker (`it.each`), sekunder inn, fasitsvar ut:
 
 ## 10. Tabeller og fabrikker
 
-1. **`tests/tenant-isolation-all-tables.test.ts`** er grønn med `work_sessions` i `tests/tenant-tables.ts` (radbygger og testfil `record.test.ts`).
+1. **`tests/tenant-isolation-all-tables.test.ts`** er grønn med `work_sessions` i `tests/tenant-tables.ts` (radbygger og testfil `record-testplan.test.ts`).
 2. **`createWorkSession`** lager rad i riktig organisasjon og bruker oppdrag og ansatt fra samme organisasjon som standard.
 
 ## 11. E2E, `e2e/fase-2a-tidsmaling.spec.ts` (ny, prosjektene `pc` og `ipad`)
