@@ -134,6 +134,8 @@ beforeEach(() => {
     actor,
     organizationId: ORG,
     canEditOrders: true,
+    canReadClaims: false,
+    canManageClaims: false,
     officeId: null,
   });
   mocks.core.createAgreement.mockResolvedValue({ id: AGREEMENT, organizationId: ORG });

@@ -90,6 +90,8 @@ beforeEach(() => {
     actor,
     organizationId: ORG,
     canEditOrders: true,
+    canReadClaims: false,
+    canManageClaims: false,
     canManageContacts: false,
     officeId: null,
   });
@@ -151,6 +153,8 @@ describe("3.1.4 feilkart", () => {
       actor,
       organizationId: ORG,
       canEditOrders: false,
+      canReadClaims: false,
+      canManageClaims: false,
       canManageContacts: false,
       officeId: null,
     });

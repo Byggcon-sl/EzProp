@@ -23,6 +23,7 @@ const allPermissions = [
   "organization.read",
   "organization.manage",
   "claims.read",
+  "claims.manage",
   "staff.manage",
   "assignment.edit",
   "report.edit",
@@ -37,6 +38,7 @@ const notGrantable = [
   "organization.manage",
   "staff.manage",
   "claims.read",
+  "claims.manage",
   "organization.read",
   "invoice.send",
   "contacts.manage",
@@ -62,6 +64,15 @@ const expected: Record<(typeof allPermissions)[number], Record<Column, boolean>>
     admin: true,
   },
   "claims.read": {
+    inspectorOn: false,
+    inspectorOff: false,
+    office: false,
+    manager: true,
+    admin: true,
+  },
+  // Registrere og endre reklamasjonssaker: bare leder og admin
+  // (docs/funksjoner/fase2a-reklamasjoner.md, Omfang 2)
+  "claims.manage": {
     inspectorOn: false,
     inspectorOff: false,
     office: false,
@@ -168,8 +179,8 @@ describe("permissions", () => {
 });
 
 describe("effectivePermissions: rettighetsmatrisen", () => {
-  it("har 88 tilfeller (4 roller × på/av × 11 rettigheter)", () => {
-    expect(matrixCases).toHaveLength(88);
+  it("har 96 tilfeller (4 roller × på/av × 12 rettigheter)", () => {
+    expect(matrixCases).toHaveLength(96);
   });
 
   it.each(matrixCases)(
@@ -181,11 +192,16 @@ describe("effectivePermissions: rettighetsmatrisen", () => {
   );
 
   it.each(roles)(
-    "4. innstillingen påvirker aldri claims.read, organization.manage eller staff.manage (%s)",
+    "4. innstillingen påvirker aldri claims.read, claims.manage, organization.manage eller staff.manage (%s)",
     (role) => {
       const on = effectivePermissions([role], [], ON);
       const off = effectivePermissions([role], [], OFF);
-      for (const p of ["claims.read", "organization.manage", "staff.manage"] as const) {
+      for (const p of [
+        "claims.read",
+        "claims.manage",
+        "organization.manage",
+        "staff.manage",
+      ] as const) {
         expect(on.includes(p)).toBe(off.includes(p));
       }
     },
@@ -261,10 +277,17 @@ describe("Admin stenges aldri ute, skal aldri fjernes", () => {
     { name: "innstillingen på, uten enkeltrettigheter", granted: [] as string[], settings: ON },
     {
       name: "innstillingen av, med ukjente og ikke-tillatte navn",
-      granted: ["finnes.ikke", "", "organization.manage", "claims.read", "REPORT.EDIT"],
+      granted: [
+        "finnes.ikke",
+        "",
+        "organization.manage",
+        "claims.read",
+        "claims.manage",
+        "REPORT.EDIT",
+      ],
       settings: OFF,
     },
-  ])("13. admin har alle ti: $name", ({ granted, settings }) => {
+  ])("13. admin har alle elleve: $name", ({ granted, settings }) => {
     expect([...effectivePermissions(["admin"], granted, settings)].sort()).toEqual(
       [...permissions].sort(),
     );
@@ -366,7 +389,7 @@ describe("grantHasPermission og isAdmin", () => {
 describe("withPublishRequiringCertification", () => {
   const withoutPublish = allPermissions.filter((p) => p !== "report.publish");
 
-  it("1. alle ti uten gyldig sertifisering gir de ni andre, uten report.publish", () => {
+  it("1. alle elleve uten gyldig sertifisering gir de ti andre, uten report.publish", () => {
     expect(withPublishRequiringCertification(allPermissions, false)).toEqual(withoutPublish);
   });
 
@@ -408,7 +431,7 @@ describe("withPublishRequiringCertification", () => {
     expect(admin).toContain("staff.manage");
     expect(admin).toContain("organization.read");
     expect(admin).not.toContain("report.publish");
-    expect(admin).toHaveLength(10);
+    expect(admin).toHaveLength(11);
   });
 
   it("6. muterer ikke listen som sendes inn", () => {
@@ -497,6 +520,7 @@ describe("contacts.manage", () => {
       officeOff: ["assignment.edit", "invoice.send", "organization.read"],
       managerOn: [
         "assignment.edit",
+        "claims.manage",
         "claims.read",
         "contacts.manage",
         "invoice.send",
@@ -508,6 +532,7 @@ describe("contacts.manage", () => {
       ],
       managerOff: [
         "assignment.edit",
+        "claims.manage",
         "claims.read",
         "contacts.manage",
         "invoice.send",
@@ -521,4 +546,112 @@ describe("contacts.manage", () => {
       adminOff: [...allPermissions].sort(),
     });
   });
+});
+
+// --- Reklamasjoner med enkelt skjema (testplan docs/funksjoner/fase2a-reklamasjoner-testplan.md,
+// avsnitt 1). Matrisen og fasitene over har fått raden `claims.manage`; testene under navngir hvert
+// krav for seg. Støtter hovedmål: reklamasjoner (bare leder og admin ser og fører sakene, Ståle
+// 27.10.2026, og ingen kan få rettigheten ved et uhell). ---
+
+describe("claims.manage", () => {
+  it("1.1 claims.manage står rett etter claims.read i den faste listen", () => {
+    const list = [...permissions] as string[];
+    expect(list).toContain("claims.manage");
+    expect(list.indexOf("claims.manage")).toBe(list.indexOf("claims.read") + 1);
+  });
+
+  const roleTable = [
+    { role: "inspector", read: false, manage: false },
+    { role: "office", read: false, manage: false },
+    { role: "manager", read: true, manage: true },
+    { role: "admin", read: true, manage: true },
+  ] as const;
+  const roleCases = roleTable.flatMap((row) =>
+    [
+      { name: "på", settings: ON },
+      { name: "av", settings: OFF },
+    ].map((setting) => ({ ...row, setting: setting.name, settings: setting.settings })),
+  );
+
+  it.each(roleCases)(
+    "1.2 $role med innstillingen $setting: claims.read = $read, claims.manage = $manage",
+    ({ role, settings, read, manage }) => {
+      const result = effectivePermissions([role as EmployeeRole], [], settings);
+      expect(result.includes("claims.read")).toBe(read);
+      expect(result.includes("claims.manage")).toBe(manage);
+    },
+  );
+
+  it.each(roles)(
+    "1.3 innstillingen påvirker aldri claims.read eller claims.manage (%s)",
+    (role) => {
+      const on = effectivePermissions([role], [], ON);
+      const off = effectivePermissions([role], [], OFF);
+      expect(on.includes("claims.read")).toBe(off.includes("claims.read"));
+      expect(on.includes("claims.manage")).toBe(off.includes("claims.manage"));
+    },
+  );
+
+  it("1.4 claims.manage kan ikke gis som enkeltrettighet", () => {
+    expect(grantablePermissions as readonly string[]).not.toContain("claims.manage");
+    expect(grantablePermissions as readonly string[]).not.toContain("claims.read");
+    for (const settings of [ON, OFF]) {
+      const inspector = effectivePermissions(
+        ["inspector"],
+        ["claims.manage", "claims.read"],
+        settings,
+      );
+      expect(inspector).not.toContain("claims.manage");
+      expect(inspector).not.toContain("claims.read");
+      expect(inspector).toEqual(effectivePermissions(["inspector"], [], settings));
+      expect(
+        effectivePermissions(["office"], ["claims.manage", "claims.read"], settings),
+      ).not.toContain("claims.manage");
+      expect([...effectivePermissions([], ["claims.manage", "claims.read"], settings)]).toEqual([]);
+    }
+  });
+
+  it.each([
+    { name: "på", settings: ON },
+    { name: "av", settings: OFF },
+  ])(
+    "1.5 uten gyldig sertifisering tas bare report.publish bort for leder (innstillingen $name)",
+    ({ settings }) => {
+      const manager = effectivePermissions(["manager"], [], settings);
+      const result = withPublishRequiringCertification(manager, false);
+      expect(result).toContain("claims.read");
+      expect(result).toContain("claims.manage");
+      expect(result).toEqual(manager.filter((p) => p !== "report.publish"));
+    },
+  );
+
+  // Regel 11: admin stenges aldri ute. Testen skal aldri fjernes.
+  it.each([
+    { name: "innstillingen på", settings: ON },
+    { name: "innstillingen av", settings: OFF },
+  ])(
+    "1.6 admin uten andre roller og uten sertifisering har claims.read og claims.manage: $name",
+    ({ settings }) => {
+      for (const certified of [true, false]) {
+        const admin = withPublishRequiringCertification(
+          effectivePermissions(["admin"], [], settings),
+          certified,
+        );
+        expect(admin).toContain("claims.read");
+        expect(admin).toContain("claims.manage");
+      }
+    },
+  );
+
+  it.each([ON, OFF])(
+    "1.7 flere roller: takstmann + leder har begge, takstmann + kontor ingen (%o)",
+    (settings) => {
+      const inspectorManager = effectivePermissions(["inspector", "manager"], [], settings);
+      expect(inspectorManager).toContain("claims.read");
+      expect(inspectorManager).toContain("claims.manage");
+      const inspectorOffice = effectivePermissions(["inspector", "office"], [], settings);
+      expect(inspectorOffice).not.toContain("claims.read");
+      expect(inspectorOffice).not.toContain("claims.manage");
+    },
+  );
 });

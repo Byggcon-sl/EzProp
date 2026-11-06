@@ -10,6 +10,10 @@ export type EmployeeContext = {
   canEditOrders: boolean;
   /** Bare til å vise «Fjern» og «Slå sammen med …». Selve sjekken skjer i kjernen. */
   canManageContacts: boolean;
+  /** Bare til å vise delen «Reklamasjoner». Selve sjekken skjer i kjernen (`claims.read`). */
+  canReadClaims: boolean;
+  /** Bare til å vise «Registrer reklamasjon» og skjemaet. Selve sjekken skjer i kjernen. */
+  canManageClaims: boolean;
   /** Bare til å vise skjemaet for nullpunkt og bryter i /statistikk/tid. Sjekken skjer i kjernen. */
   canManageOrganization: boolean;
   /** Bare til å vise menylenken «Statistikk». Sjekken skjer i kjernen. */
@@ -32,6 +36,8 @@ export async function getEmployeeContext(): Promise<EmployeeContext | null> {
     organizationId: found.grant.organizationId,
     canEditOrders: grantHasPermission(found.grant, "assignment.edit"),
     canManageContacts: grantHasPermission(found.grant, "contacts.manage"),
+    canReadClaims: grantHasPermission(found.grant, "claims.read"),
+    canManageClaims: grantHasPermission(found.grant, "claims.manage"),
     canManageOrganization: grantHasPermission(found.grant, "organization.manage"),
     canReadStatistics: grantHasPermission(found.grant, "statistics.read"),
     officeId: found.officeId,
