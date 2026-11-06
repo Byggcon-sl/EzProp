@@ -17,8 +17,8 @@ import { baseColumns } from "./common";
 
 /**
  * Reklamasjonssak (docs/05-domenemodell.md 4.13), enkel utgave i fase 2a
- * (docs/funksjoner/fase2a-reklamasjoner.md). Knyttet til oppdraget til rapportene finnes (A119).
- * Status «åpen/lukket» leses av utfallet (A121). Bygningsdelen er fritekst foreløpig (A122).
+ * (docs/funksjoner/fase2a-reklamasjoner.md). Knyttet til oppdraget til rapportene finnes (A125).
+ * Status «åpen/lukket» leses av utfallet (A127). Bygningsdelen er fritekst foreløpig (A128).
  * Bare leder og admin ser sakene (`claims.read`, Ståle 27.10.2026).
  *
  * Friteksten (`claimant_text`, `description`, `building_part_text`) kan inneholde

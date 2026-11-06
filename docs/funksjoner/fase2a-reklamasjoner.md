@@ -106,11 +106,11 @@ Valideringsregler i Zod, med testsaker:
 - [ ] Versjonen i `package.json` økes, personvernerklæringen, domenemodellen og ordlisten er oppdatert.
 
 ## Beslutninger tatt av agentene (autonom modus, føres i `docs/09-apne-sporsmal.md`)
-- **A119:** Saken knyttes til oppdraget (`assignment_id`) fordi rapporter og utgivelser ikke finnes ennå. `report_id` og `release_id` legges til når de finnes. Kilde: domenemodellen 4.13, planen fase 2a. Kan endres med en ny kolonne og en flytting av data.
-- **A120:** Ny rettighet `claims.manage` for å registrere og endre, ved siden av `claims.read` for å se. Bare leder og admin, kan ikke gis som enkeltrettighet. Kilde: Ståle 27.10.2026 (bare leder og admin ser reklamasjonssaker). Kan endres ved å legge den i `grantablePermissions`.
-- **A121:** Status «åpen/lukket» leses av utfallet (`outcome = open` er åpen) i stedet for et eget statusfelt, slik domenemodellen allerede har det. Det er ett felt mindre å holde i takt. Kilde: domenemodellen 4.13.
-- **A122:** Bygningsdel eller kontrollpunkt er fritekst nå; kobling til `checkpoint_key` kommer når malmotoren finnes. Typen `internal` venter til fase 4. Kilde: planen fase 2a og fase 4 (H6).
-- **A123:** Beløp er med (valgfritt, bare ved medhold eller forlik), fordi hovedmålet måles både i antall og beløp. Kilde: utviklingsplanen, «Reklamasjoner: antall … og beløp».
+- **A125:** Saken knyttes til oppdraget (`assignment_id`) fordi rapporter og utgivelser ikke finnes ennå. `report_id` og `release_id` legges til når de finnes. Kilde: domenemodellen 4.13, planen fase 2a. Kan endres med en ny kolonne og en flytting av data.
+- **A126:** Ny rettighet `claims.manage` for å registrere og endre, ved siden av `claims.read` for å se. Bare leder og admin, kan ikke gis som enkeltrettighet. Kilde: Ståle 27.10.2026 (bare leder og admin ser reklamasjonssaker). Kan endres ved å legge den i `grantablePermissions`.
+- **A127:** Status «åpen/lukket» leses av utfallet (`outcome = open` er åpen) i stedet for et eget statusfelt, slik domenemodellen allerede har det. Det er ett felt mindre å holde i takt. Kilde: domenemodellen 4.13.
+- **A128:** Bygningsdel eller kontrollpunkt er fritekst nå; kobling til `checkpoint_key` kommer når malmotoren finnes. Typen `internal` venter til fase 4. Kilde: planen fase 2a og fase 4 (H6).
+- **A129:** Beløp er med (valgfritt, bare ved medhold eller forlik), fordi hovedmålet måles både i antall og beløp. Kilde: utviklingsplanen, «Reklamasjoner: antall … og beløp».
 
 ## Testplan (test-leder, runde 1, 06.11.2026)
 Testfiler: `src/core/claims/schemas.test.ts`, `src/core/claims/claims.test.ts`, `src/core/access/*.test.ts`, `e2e/claims.spec.ts`. Fellestester: `tests/tenant-tables.ts` (`claims` med radbygger), `tests/factories.ts` (`createClaim`, `claims` i `RESET_TABLES`).

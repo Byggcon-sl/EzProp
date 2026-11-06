@@ -3,15 +3,15 @@
  * `src/db/schema/claims.ts` har de samme kodene. Etikettene er norske og vises i grensesnittet.
  */
 
-/** Typen krav. `internal` (intern avviksregistrering) kommer i fase 4 (A122). */
+/** Typen krav. `internal` (intern avviksregistrering) kommer i fase 4 (A128). */
 export const CLAIM_TYPES = ["complaint", "insurance_claim", "other"] as const;
 export type ClaimType = (typeof CLAIM_TYPES)[number];
 
-/** Utfallet. `open` er åpen sak; alle andre betyr lukket (A121). */
+/** Utfallet. `open` er åpen sak; alle andre betyr lukket (A127). */
 export const CLAIM_OUTCOMES = ["open", "rejected", "upheld", "settled", "withdrawn"] as const;
 export type ClaimOutcome = (typeof CLAIM_OUTCOMES)[number];
 
-/** Utfallene der et beløp er lov (A123). */
+/** Utfallene der et beløp er lov (A129). */
 export const CLAIM_OUTCOMES_WITH_AMOUNT = [
   "upheld",
   "settled",

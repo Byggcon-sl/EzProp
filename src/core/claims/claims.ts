@@ -17,7 +17,7 @@ import { claimInputSchema, type ClaimInput, type ClaimValues } from "./schemas";
 
 /*
  * Reklamasjonssaker på oppdraget (docs/funksjoner/fase2a-reklamasjoner.md). Bare leder og admin:
- * lesing med `claims.read`, alt annet med `claims.manage` (Ståle 27.10.2026, A120).
+ * lesing med `claims.read`, alt annet med `claims.manage` (Ståle 27.10.2026, A126).
  *
  * All filtrering bruker `grant.organizationId` fra tilgangssjekken, aldri parameteren. Ugyldig
  * id, fremmed eller fjernet oppdrag og fremmed eller fjernet sak gir `AccessDeniedError` med samme

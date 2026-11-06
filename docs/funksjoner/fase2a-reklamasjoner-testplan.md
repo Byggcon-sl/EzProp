@@ -167,7 +167,7 @@ Hver test lager egne data med `uniqueSuffix()`. Lederen er `logInAsManager` (rol
 - `package.json` har ny patch-versjon.
 - `docs/personvern/intern-personvernerklaering.md` har tabellen `claims` med fritekstfeltene beskrevet.
 - `docs/05-domenemodell.md` 4.13 og ordlisten (avsnitt 8) har `claim`, `claimant`, `claim_type`, `outcome`, `claims.manage`.
-- A119–A123 står i `docs/09-apne-sporsmal.md`.
+- A125–A129 står i `docs/09-apne-sporsmal.md`.
 - Ingen tilgangslogikk i sider eller komponenter: sidene spør `src/core/access` (eller tjenesten) og viser 404 ved `AccessDeniedError`. `grep` etter `roles.includes("manager")` og lignende i `src/app`.
 - Modulgrensene holder: `src/core/claims` importerer bare fra `src/core`, `src/shared`, `src/db` og egen mappe.
 
