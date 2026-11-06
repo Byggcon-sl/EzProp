@@ -2,12 +2,9 @@
 
 import { useActionState } from "react";
 import { Card } from "@/shared/ui/card";
-import { Field, Input, Textarea } from "@/shared/ui/form";
+import { Field, Input, Select, Textarea } from "@/shared/ui/form";
 import { FormActions, FormErrors } from "../form-parts";
 import { initialFormState, textValue, type FormState } from "../form-state";
-
-const selectClass =
-  "block min-h-11 w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 focus:border-brand-600 aria-invalid:border-red-700";
 
 export type ContactFormValues = {
   firstName: string;
@@ -92,11 +89,10 @@ export function ContactForm({
         {/* Ny nøkkel på nedtrekkslisten etter hvert forsøk: React tilbakestiller skjemaet, og
             listen tar ellers ikke valget fra forrige forsøk. */}
         <Field label="Firma" htmlFor="firmId" error={error("firmId")}>
-          <select
+          <Select
             key={state.attempt}
             id="firmId"
             name="firmId"
-            className={selectClass}
             defaultValue={textValue(state, "firmId", initial.firmId)}
           >
             <option value="">Ingen</option>
@@ -105,7 +101,7 @@ export function ContactForm({
                 {firm.name}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Notat (valgfritt)" htmlFor="notes" hint={NOTES_HINT} error={error("notes")}>
           <Textarea
