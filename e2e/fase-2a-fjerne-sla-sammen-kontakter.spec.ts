@@ -384,6 +384,13 @@ test.describe("fjerne og slå sammen kontakter og firma (pc og ipad)", () => {
     await page.goto(`/kontakter?q=${encodeURIComponent(lastName)}`);
     await expect(page.locator(`a[href="/kontakter/${keepId}"]`)).toHaveCount(1);
     await expect(page.locator(`a[href="/kontakter/${otherId}"]`)).toHaveCount(0);
+
+    // 4.7: søket på sammenslåingssiden viser verken den åpne eller den som er fjernet
+    await page.goto(`/kontakter/${keepId}/sla-sammen`);
+    await mergeSearch(page).fill(lastName);
+    await mergeSearch(page).press("Enter");
+    await expect(page.getByText("Ingen andre kontakter passer med søket.")).toBeVisible();
+    await expect(mergeHits(page)).toHaveCount(0);
   });
 
   test("5.4 leder slår sammen to firma", async ({ page }, testInfo) => {
