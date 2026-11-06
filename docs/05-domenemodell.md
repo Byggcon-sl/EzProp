@@ -1706,6 +1706,27 @@ En **krok** er en liten tabell eller et felt som legges inn nå, selv om skjerme
 
 Registreres med et enkelt skjema **fra første ekte rapport** (beslutning 27.10.2026, spørsmål 4). **Bare leder og admin ser reklamasjonssaker** (beslutning 27.10.2026). Dette er et unntak fra «alle takstmenn ser alle data». Tilgangen sjekkes i tilgangsmodulen med rettigheten `claims.read`, som leder og admin har. Den gis ikke til takstmenn gjennom innstillingen `access.inspectors_edit_all`. Etter noen år viser tabellen hvilke punkter, formuleringer og TG-valg som faktisk gir saker.
 
+**Bygget i fase 2a (06.11.2026, reklamasjoner med enkelt skjema):** Tabellen `claims` (migrering `0022_reklamasjoner`), kjernen i `src/core/claims`, delen «Reklamasjoner» på `/oppdrag/[id]` og sidene under `/oppdrag/[id]/reklamasjoner`. Oppgavekort: `docs/funksjoner/fase2a-reklamasjoner.md`; beslutningene A119–A123. Det som bygges nå, avviker fra tabellen over slik:
+
+| Felt | Nå |
+|---|---|
+| `assignment_id` | Påkrevd. Saken knyttes til **oppdraget** i stedet for rapporten, fordi rapporter og utgivelser ikke finnes ennå (A119) |
+| `claim_type` | `complaint`, `insurance_claim` eller `other`. `internal` kommer i fase 4 (A122) |
+| `received_at` | Dato, påkrevd. Ikke fram i tid (måles mot dagens dato i Europe/Oslo) |
+| `claimant_party_id` | Valgfri. En part på samme oppdrag og i samme organisasjon, ikke fjernet |
+| `claimant_text` | Valgfri fritekst (høyst 200 tegn) om hvem som klaget, når det ikke er en part. Enten part eller fritekst må fylles |
+| `description` | Påkrevd, 1–2 000 tegn. Hva som påstås, kort. Erstatter `claimed_text` |
+| `building_part_text` | Valgfri fritekst (høyst 200 tegn): kontrollpunkt eller bygningsdel. Erstatter `checkpoint_key` foreløpig (A122) |
+| `outcome` | Påkrevd, standard `open`. Status «åpen» eller «lukket» leses av utfallet; `open` er åpen, alt annet er lukket (A121) |
+| `amount` | Valgfritt, hele kroner, 0 eller mer. Bare lov når utfallet er `upheld` eller `settled` (A123) |
+| `closed_at` | Settes av serveren når utfallet går fra `open`, nullstilles når det går tilbake. Verdi fra skjemaet brukes aldri |
+| `created_by` | Den ansatte som registrerte saken, aldri en verdi fra skjemaet |
+| `deleted_at` | Myk sletting. Fjernede saker vises ikke, raden blir stående |
+
+Tilgang: se med `claims.read`, registrere, endre, lukke og fjerne med `claims.manage` (avsnitt 5). Revisjonsloggen får bare handling og feltnavn, aldri innholdet i `claimant_text`, `description` eller `building_part_text`. Hendelsen `claim.registered` har bare `claimId`, `assignmentId`, `claimType` og `receivedAt`.
+
+**Venter:** `report_id` og `release_id` (når rapporter og utgivelser finnes), `checkpoint_key` og `deviation_id` (når malmotoren og avvikene finnes), typen `internal`, `handled_by`, vedlegg og reklamasjonsmappen med egen liste over alle saker (fase 4, H6). Tallet «reklamasjoner per 100 leverte rapporter» regnes ut fra tabellen når utgivelsene finnes.
+
 **`followup_responses`** – **forkastet 27.10.2026.** Ståle svarte nei til ettårs-oppfølging av kjøper og selger (spørsmål 21). Tabellen og hendelsen `followup.received` er tatt ut.
 
 **`cost_observations`** – **faktiske kostnader** per avvikstype og region (krok S3). Lagres **uten** kobling til person eller adresse.
@@ -1801,6 +1822,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | `organization.read` | Se oppdrag og data | ja | ja | ja | ja |
 | `organization.manage` | Ansatte, roller, rettigheter, selskaper, kontorer, innstillinger | nei | nei | nei | ja |
 | `claims.read` | Se reklamasjonssaker | nei | nei | ja | ja |
+| `claims.manage` | Registrere, endre, lukke og fjerne reklamasjonssaker (06.11.2026, A120) | nei, uansett innstilling | nei | ja | ja |
 | `staff.manage` | Krav om sidemannskontroll, rutiner for alle, sperring av enheter | nei | nei | ja | ja |
 | `assignment.edit` | Endre ordre, oppdrag, parter, befaringstid, dokumenter | ja når `access.inspectors_edit_all` er på | ja | ja | ja |
 | `report.edit` | Endre rapportinnhold | ja når `access.inspectors_edit_all` er på | nei | ja | ja |
@@ -1809,7 +1831,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | `invoice.send` | Sende fakturagrunnlag (alle, 27.10.2026) | ja | ja | ja | ja |
 | `contacts.manage` | Fjerne og slå sammen kontakter og firma (05.11.2026) | nei, uansett innstilling | nei | ja | ja |
 
-**Innstillingen `access.inspectors_edit_all`** ligger i `organizations.settings` og er **på** som standard (A18). Bare verdien `false` slår den av. Når den er av, har takstmann verken `assignment.edit` eller `report.edit` før team på oppdraget finnes i fase 2a (A20). Innstillingen påvirker aldri `claims.read`, `organization.manage` eller `staff.manage`.
+**Innstillingen `access.inspectors_edit_all`** ligger i `organizations.settings` og er **på** som standard (A18). Bare verdien `false` slår den av. Når den er av, har takstmann verken `assignment.edit` eller `report.edit` før team på oppdraget finnes i fase 2a (A20). Innstillingen påvirker aldri `claims.read`, `claims.manage`, `organization.manage` eller `staff.manage`.
 
 **Enkeltrettigheter** (`employee_permissions`, 4.1) kan bare være `template.edit_structure`, `assignment.edit`, `report.edit` eller `report.publish` (`grantablePermissions`, A21). Bare admin kan gi og ta bort dem, og alt revisjonslogges.
 
@@ -2171,6 +2193,11 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Grunn til sidemannskontroll | `peer_reviews.required_reason` | |
 | Forfatter av kommentar | `peer_review_comments.author_type` | `employee` eller `ai` |
 | Reklamasjon / krav | `claims` | Bare leder og admin (`claims.read`) |
+| Reklamasjonssak | `claim` | Én rad i `claims`, knyttet til oppdraget (fase 2a) |
+| Klager | `claimant` (`claimant_party_id` / `claimant_text`) | En part på oppdraget eller fritekst |
+| Type krav | `claim_type` | `complaint` (reklamasjon), `insurance_claim` (forsikringskrav), `other` (annet); `internal` i fase 4 |
+| Utfall (reklamasjon) | `claims.outcome` | `open` (åpen), `rejected` (avvist), `upheld` (medhold), `settled` (forlik), `withdrawn` (trukket). Alt annet enn `open` er lukket |
+| Behandle reklamasjoner | `claims.manage` | Rettighet: registrere, endre, lukke og fjerne. Bare leder og admin, kan ikke gis som enkeltrettighet |
 | Ettårs-oppfølging | ~~`followup_responses`~~ | Forkastet 27.10.2026 |
 | Kostnadsbank | `cost_observations` | |
 | Kalibreringsbibliotek | `reference_photos` | |
@@ -2270,3 +2297,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 05.11.2026 | Koble parter og bestiller til kontakter (fase 2a): `assignment_parties.contact_id`/`firm_id` og `orders.ordered_by_contact_id`/`ordered_by_firm_id`, valgfrie, med sammensatte fremmednøkler med `organization_id`. Firmaet følger kontakten; friteksten beholdes som øyeblikksbilde. Bare id-er i revisjonsloggen, ingen kontaktdata til KI. Se «Bygget i fase 2a» i 4.2 og 4.3. | A84–A92, `docs/funksjoner/fase2a-koble-kontakter.md` |
 | 05.11.2026 | Arbeidskøen (fase 2a): `assignments.inspection_at`, `due_date` og `internal_note` tatt i bruk (notat høyst 200 tegn, internt, aldri i rapport eller PDF). Spørringene `listWorkQueue`, `countWorkQueueByStatus`, `updateAssignmentNote` og `setAssignmentSchedule`. Se «Bygget i fase 2a» i 4.3. | A99–A107, `docs/funksjoner/fase2a-arbeidsko.md` |
 | 06.11.2026 | Avtale med oppdragsgiver (fase 2a): `client_agreements` bygget med `firm_id`, `name`, `valid_from`/`valid_to` (CHECK), `premise_text` og `report_profile_code` (i stedet for `report_profile_id` inntil videre); `assignments.client_agreement_id`; ny hendelse `assignment.agreement_changed`. Forslag fra bestillerfirmaet, aldri automatisk. `price_note`, `price_list_id` og `notes` venter. Se «Bygget i fase 2a» i 4.3. | A114–A118, `docs/funksjoner/fase2a-oppdragsgiveravtale.md` |
+| 06.11.2026 | Reklamasjoner med enkelt skjema (fase 2a): `claims` bygget knyttet til oppdraget (`assignment_id`), med klager som part eller fritekst, `description`, `building_part_text` som fritekst, åpen/lukket lest av `outcome`, `amount` bare ved medhold eller forlik, `closed_at` satt av serveren og myk sletting. Ny rettighet `claims.manage` (leder og admin). `report_id`, `release_id`, `checkpoint_key`, `internal` og mappen venter. Se «Bygget i fase 2a» i 4.13. | A119–A123, `docs/funksjoner/fase2a-reklamasjoner.md` |
