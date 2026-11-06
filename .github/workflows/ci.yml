@@ -155,6 +155,7 @@ jobs:
         run: pnpm exec playwright install-deps chromium
       - run: pnpm db:migrate
       - run: pnpm db:seed
+      - run: pnpm db:seed:testoppdrag
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()

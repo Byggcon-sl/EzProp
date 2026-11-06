@@ -37,6 +37,11 @@ function indentOf(line: string): number {
   return line.length - line.trimStart().length;
 }
 
+/** Hele kommandoen `pnpm db:seed`, ikke `pnpm db:seed:testoppdrag`. */
+const SEED_COMMAND = /pnpm db:seed(\s|$)/;
+/** Hele kommandoen `pnpm db:seed:testoppdrag`. */
+const SEED_TESTOPPDRAG_COMMAND = /pnpm db:seed:testoppdrag(\s|$)/;
+
 /** Ikke-kommentarlinjer (YAML og bash: `#`, Bicep: `//`). */
 function isComment(line: string): boolean {
   return /^\s*(#|\/\/)/.test(line);
@@ -331,7 +336,7 @@ describe("utrullingsarbeidsflyten (deploy-azure.yml)", () => {
 
   it("migrering og seed kjører fra arbeidsflyten med riktig miljø", () => {
     expect(workflow).toContain("pnpm db:migrate");
-    expect(workflow).toContain("pnpm db:seed");
+    expect(workflow).toMatch(new RegExp(SEED_COMMAND.source, "m"));
     const migrateLine = lines.findIndex((line) => line.includes("pnpm db:migrate"));
     const before = lines.slice(Math.max(0, migrateLine - 15), migrateLine).join("\n");
     const envBlock = before.slice(before.lastIndexOf("env:"));
@@ -351,7 +356,8 @@ describe("utrullingsarbeidsflyten (deploy-azure.yml)", () => {
       (line) => line.includes("firewall-rule delete") && line.includes("github-runner"),
     );
     const migrateLine = lines.findIndex((line) => line.includes("pnpm db:migrate"));
-    const seedLine = lines.findIndex((line) => line.includes("pnpm db:seed"));
+    const seedLine = codeLine(lines, SEED_COMMAND);
+    expect(seedLine).toBeGreaterThan(-1);
     expect(createLine).toBeGreaterThan(-1);
     expect(deleteLine).toBeGreaterThan(-1);
     expect(createLine).toBeLessThan(migrateLine);
@@ -665,7 +671,8 @@ describe("synktjenestene i utrullingen (deploy-azure.yml)", () => {
 
   it("rolleskriptet kjører alltid etter seed, mens brannmuren er åpen", () => {
     const roles = codeLine(lines, "sync-trial-roles.ts");
-    const seed = lines.findIndex((line) => line.includes("pnpm db:seed"));
+    const seed = codeLine(lines, SEED_COMMAND);
+    expect(seed).toBeGreaterThan(-1);
     const close = lines.findIndex(
       (line) => line.includes("firewall-rule delete") && line.includes("github-runner"),
     );
@@ -967,6 +974,65 @@ describe("Bicep i CI (ci.yml)", () => {
     // Tellesjekk: minst fem Key Vault-ressurser, så en tom select ikke blir grønn.
     expect(job).toMatch(/-lt\s+5\b|-ge\s+5\b|<\s*5\b|>=\s*5\b/);
     expect(job).not.toContain("secrets.");
+  });
+});
+
+describe("testoppdragene i CI og utrullingen (fase 2a)", () => {
+  // Testplan: docs/funksjoner/fase2a-testoppdrag-testplan.md, avsnitt 3.
+  it("hjelperen skiller pnpm db:seed fra pnpm db:seed:testoppdrag", () => {
+    expect(SEED_COMMAND.test("pnpm db:seed")).toBe(true);
+    expect(SEED_COMMAND.test("      - run: pnpm db:seed")).toBe(true);
+    expect(SEED_COMMAND.test("pnpm db:seed && echo ok")).toBe(true);
+    expect(SEED_COMMAND.test("pnpm db:seed:testoppdrag")).toBe(false);
+    expect(SEED_TESTOPPDRAG_COMMAND.test("pnpm db:seed:testoppdrag")).toBe(true);
+    expect(SEED_TESTOPPDRAG_COMMAND.test("pnpm db:seed")).toBe(false);
+  });
+
+  it("deploy-azure.yml legger inn testoppdragene etter seed og før brannmuren lukkes", () => {
+    const lines = read(WORKFLOW_PATH).split("\n");
+    const seed = codeLine(lines, SEED_COMMAND);
+    const testoppdrag = codeLine(lines, SEED_TESTOPPDRAG_COMMAND);
+    const close = lines.findIndex(
+      (line) => line.includes("firewall-rule delete") && line.includes("github-runner"),
+    );
+    expect(seed).toBeGreaterThan(-1);
+    expect(testoppdrag).toBeGreaterThan(seed);
+    expect(close).toBeGreaterThan(testoppdrag);
+    // Samme steg som seed, så det får samme miljø (DATABASE_URL osv.).
+    expect(stepOf(lines, testoppdrag)).toEqual(stepOf(lines, seed));
+    expect(lineIndexes(lines, SEED_TESTOPPDRAG_COMMAND)).toHaveLength(1);
+  });
+
+  it("ci.yml legger inn testoppdragene etter seed og før e2e", () => {
+    const lines = read(".github/workflows/ci.yml").split("\n");
+    const seed = codeLine(lines, SEED_COMMAND);
+    const testoppdrag = codeLine(lines, SEED_TESTOPPDRAG_COMMAND);
+    const e2e = codeLine(lines, "pnpm test:e2e");
+    expect(seed).toBeGreaterThan(-1);
+    expect(testoppdrag).toBeGreaterThan(seed);
+    expect(e2e).toBeGreaterThan(testoppdrag);
+    // Samme jobb som seed, så det får samme miljø.
+    const jobOf = (index: number) =>
+      lines
+        .slice(0, index + 1)
+        .reverse()
+        .find((line) => /^ {2}[\w-]+:\s*$/.test(line));
+    expect(jobOf(testoppdrag)).toBe(jobOf(seed));
+    expect(jobOf(e2e)).toBe(jobOf(seed));
+  });
+
+  it("ingen produksjonsflyt kjører testoppdragene", () => {
+    const dir = join(process.cwd(), ".github/workflows");
+    const withStep = readdirSync(dir)
+      .filter((name) => /\.ya?ml$/.test(name))
+      .filter((name) => SEED_TESTOPPDRAG_COMMAND.test(read(`.github/workflows/${name}`)))
+      .sort();
+    expect(withStep).toEqual(["ci.yml", "deploy-azure.yml"]);
+    // Utrullingen går bare til testmiljøet.
+    const workflow = read(WORKFLOW_PATH);
+    expect(workflow).toMatch(/^\s*ENVIRONMENT_NAME:\s*test\s*$/m);
+    expect(workflow).toMatch(/^\s*RESOURCE_GROUP:\s*rg-[\w-]*-test\s*$/m);
+    expect(workflow).not.toMatch(/\bprod(uction|uksjon)?\b/i);
   });
 });
 
