@@ -6,7 +6,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 06.11.2026 kl. 15:00 UTC (fire testoppdrag som grunndata satt sammen og PR åpnet; fase 2a, neste: malmotoren)
+Sist oppdatert: 06.11.2026 (malmotoren: oppgavekortet oppdatert etter forhåndsvurdering runde 1 fra forenkler og test-leder, A141–A147; branch `fase2a-malmotor`, neste: bygging)
 Sist oppdatert: 06.11.2026 kl. 11:30 UTC (PR #110 tidsmåling merget; PR #111 reklamasjoner merget; fase 2a)
 Sist oppdatert: 04.11.2026 (intern personvernerklæring og sletteregel for betadata, «Minimum før ekte data», PR mot `main`; før det 03.11.2026: PR #73 merget kl. 09:01 UTC; nøkkelboks steg 2 utsatt, A50, bekreftet i runde 2 av forhåndsvurderingen; PR #74 flyttet til `main` og flettet)
 Sist oppdatert: 06.11.2026 (oppgavekort for reklamasjoner med enkelt skjema: `docs/funksjoner/fase2a-reklamasjoner.md`, branch `fase2a-reklamasjoner` fra `main`, beslutningene A125–A129, migrering 0022, ny rettighet `claims.manage`; roller: utvikler, testskriver, sikkerhet-personvern, test-leder)

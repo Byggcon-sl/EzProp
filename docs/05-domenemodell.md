@@ -700,9 +700,9 @@ En **egen mal** fra malbyggeren bruker seksjoner og felt, og kan ha **regler, lo
 | `name` | For eksempel «Tilstandsrapport bolig» |
 | `kind` | `system` (systemmal fra Byggcon) eller `custom` (egen mal fra malbyggeren) |
 | `report_type` | Hvilken rapporttype malen lager |
-| `owner_employee_id` | Eier (fagansvarlig for systemmaler, den som laget den for egne maler) |
-| `company_id` | Tomt = hele organisasjonen. Utfylt = bare ett selskap. |
-| `archived_at` | Ikke lenger i bruk for nye rapporter |
+| `owner_employee_id` | Eier (fagansvarlig for systemmaler, den som laget den for egne maler). *Kommer senere (A146).* |
+| `company_id` | Tomt = hele organisasjonen. Utfylt = bare ett selskap. *Kommer med egne maler (A146).* |
+| `archived_at` | Ikke lenger i bruk for nye rapporter. *Kommer med egne maler (A146).* |
 
 **`template_versions`** – én versjon av malen. **Publiserte versjoner endres aldri.**
 
@@ -714,7 +714,7 @@ En **egen mal** fra malbyggeren bruker seksjoner og felt, og kan ha **regler, lo
 | `valid_from` | Gyldig fra-dato. Befaringsdatoen avgjør hvilken versjon en ny rapport får. |
 | `ns_edition` | NS-utgaven vurderingen bygger på, for eksempel «NS 3600:2025+AC:2026» |
 | `regulation_version` | Forskriftens versjon (for eksempel endring 16.12.2025) |
-| `lifespan_table_id`, `threshold_table_id`, `cost_band_set_id` | Hvilke versjoner av levetider, terskler og kostnadsintervaller som gjelder |
+| `lifespan_table_id`, `threshold_table_id`, `cost_band_set_id` | Hvilke versjoner av levetider, terskler og kostnadsintervaller som gjelder. *Kommer med levetider, terskler og kostnadsintervaller.* |
 | `based_on_version_id` | Versjonen den er laget fra |
 | `change_note` | Hva som er endret |
 | `published_by`, `published_at` | Hvem som publiserte, og når |
@@ -810,7 +810,7 @@ Om spørsmålet vises, styres av regler («alltid», «valg X», «tall over gre
 
 TG3 krever alltid kostnad. Det trenger ikke lagres, det følger av `kind`.
 
-**`standard_measures`** – standardtiltak. Et utfall kan ha flere (beslutning 24.10: flere tiltak per avvik).
+**`standard_measures`** – standardtiltak. Uten fast kode: tiltak, betingelser og testtilfeller erstattes samlet per forelder når listen endres (A142). Et utfall kan ha flere (beslutning 24.10: flere tiltak per avvik).
 
 | Felt | Forklaring |
 |---|---|
@@ -844,11 +844,11 @@ TG3 krever alltid kostnad. Det trenger ikke lagres, det følger av `kind`.
 | `element_key` | Feltet betingelsen leser (fast kode) |
 | `operator` | `eq`, `in`, `gt`, `gte`, `lt`, `lte`, `before`, `after` |
 | `value` | Verdien det sammenlignes med |
-| `threshold_key` | Terskel fra terskeltabellen i stedet for fast verdi |
-| `age_year_element_key` | For alder: feltet med årstallet |
-| `age_source_element_key` | For alder: feltet med kilden for alderen (dokumentert / eier opplyser / byggeår) |
-| `documentation_element_key` | For alder: feltet som sier om dokumentasjon finnes |
-| `material_element_key` | For alder: feltet med materialvalget (gir materialkoden) |
+| `threshold_key` | Terskel fra terskeltabellen i stedet for fast verdi. *Kommer med regelmotoren og levetider/terskler (A147).* |
+| `age_year_element_key` | For alder: feltet med årstallet. *Kommer med regelmotoren og levetider/terskler (A147).* |
+| `age_source_element_key` | For alder: feltet med kilden for alderen (dokumentert / eier opplyser / byggeår). *Kommer med regelmotoren og levetider/terskler (A147).* |
+| `documentation_element_key` | For alder: feltet som sier om dokumentasjon finnes. *Kommer med regelmotoren og levetider/terskler (A147).* |
+| `material_element_key` | For alder: feltet med materialvalget (gir materialkoden). *Kommer med regelmotoren og levetider/terskler (A147).* |
 | `checkpoint_key` | For `checkpoint_tg`: kontrollpunktet som leses (fast kode) |
 
 **Betingelsestypene** (fem nye typer lagt til etter innspill D5):
@@ -925,7 +925,7 @@ Fritekstfeltet `special_rule` er tatt ut. Det som før skulle stå der, skrives 
 | `input` | Testsvarene (felt og verdier) |
 | `expect_triggered` | Skal regelen slå til (ja/nei) |
 | `expected_outcome_id` | Forventet utfall |
-| `last_result`, `last_run_at` | Sist kjørt, og om testen besto |
+| `last_result`, `last_run_at` | Sist kjørt, og om testen besto. *Kommer med kontrollen før publisering (A147).* |
 
 En malversjon kan ikke publiseres hvis en test feiler. Testene kjøres også automatisk i koden.
 
