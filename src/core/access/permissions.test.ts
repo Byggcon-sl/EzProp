@@ -425,9 +425,7 @@ describe("contacts.manage", () => {
     { name: "innstillingen av", settings: OFF },
   ])("1.2 admin_always_has_contacts_manage: $name, uten andre roller", ({ settings }) => {
     expect(effectivePermissions(["admin"], [], settings)).toContain("contacts.manage");
-    expect(effectivePermissions(["admin", "inspector"], [], settings)).toContain(
-      "contacts.manage",
-    );
+    expect(effectivePermissions(["admin", "inspector"], [], settings)).toContain("contacts.manage");
     // Uten gyldig sertifisering mister admin bare report.publish
     expect(
       withPublishRequiringCertification(effectivePermissions(["admin"], [], settings), false),
