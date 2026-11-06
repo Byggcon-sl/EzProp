@@ -5,6 +5,7 @@ import {
   assignmentParties,
   assignmentTeamMembers,
   assignments,
+  clientAgreements,
   companies,
   employees,
   offices,
@@ -44,6 +45,18 @@ export type AssignmentPartyEntry = {
   firmId: string | null;
 };
 
+/**
+ * Avtalen med oppdragsgiver på oppdraget. Også en fjernet eller utløpt avtale vises (A111), med
+ * `deletedAt`, så siden kan sette merket. Premisseteksten hentes ikke her (først med PDF-en).
+ */
+export type AssignmentAgreement = {
+  id: string;
+  name: string;
+  validFrom: string;
+  validTo: string | null;
+  deletedAt: Date | null;
+};
+
 export type AssignmentDetail = {
   id: string;
   number: string;
@@ -57,6 +70,8 @@ export type AssignmentDetail = {
   companyName: string | null;
   /** Merket «Rettet» (A77): Ferdig og sendt på nytt med versjon 2 eller høyere. Regnes ut. */
   corrected: boolean;
+  /** Avtalen med oppdragsgiver, eller `null`. */
+  agreement: AssignmentAgreement | null;
   /** Aktive rader, i rekkefølgen i `TEAM_ROLES`. */
   team: AssignmentTeamEntry[];
   /** Parter som ikke er fjernet, i rekkefølgen i `PARTY_ROLES` og så eldste først. */
@@ -91,12 +106,25 @@ export async function getAssignment(
       officeName: offices.name,
       orderId: orders.id,
       companyName: companies.legalName,
+      agreementId: clientAgreements.id,
+      agreementName: clientAgreements.name,
+      agreementValidFrom: clientAgreements.validFrom,
+      agreementValidTo: clientAgreements.validTo,
+      agreementDeletedAt: clientAgreements.deletedAt,
     })
     .from(assignments)
     .leftJoin(offices, and(eq(offices.id, assignments.officeId), eq(offices.organizationId, orgId)))
     .leftJoin(
       companies,
       and(eq(companies.id, assignments.companyId), eq(companies.organizationId, orgId)),
+    )
+    // Også en fjernet avtale tas med (A111)
+    .leftJoin(
+      clientAgreements,
+      and(
+        eq(clientAgreements.id, assignments.clientAgreementId),
+        eq(clientAgreements.organizationId, orgId),
+      ),
     )
     .leftJoin(
       orders,
@@ -189,5 +217,24 @@ export async function getAssignment(
   // til `report_releases` i planpunktet «Utgivelser med versjon» (A77).
   const corrected = isCorrected({ status: assignment.status, highestSentReleaseVersion: null });
 
-  return { ...assignment, corrected, team, parties, teamCandidates };
+  const {
+    agreementId,
+    agreementName,
+    agreementValidFrom,
+    agreementValidTo,
+    agreementDeletedAt,
+    ...rest
+  } = assignment;
+  const agreement: AssignmentAgreement | null =
+    agreementId !== null && agreementName !== null && agreementValidFrom !== null
+      ? {
+          id: agreementId,
+          name: agreementName,
+          validFrom: agreementValidFrom,
+          validTo: agreementValidTo,
+          deletedAt: agreementDeletedAt,
+        }
+      : null;
+
+  return { ...rest, corrected, agreement, team, parties, teamCandidates };
 }

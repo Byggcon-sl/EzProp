@@ -50,6 +50,7 @@ export {
 export { cancelAssignment, changeAssignmentStatus, type AssignmentStatusResult } from "./status";
 export {
   getAssignment,
+  type AssignmentAgreement,
   type AssignmentDetail,
   type AssignmentPartyEntry,
   type AssignmentTeamEntry,

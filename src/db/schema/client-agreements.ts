@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { check, date, foreignKey, index, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  date,
+  foreignKey,
+  index,
+  pgTable,
+  text,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { baseColumns } from "./common";
 import { firms } from "./contacts";
 
