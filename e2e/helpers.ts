@@ -624,7 +624,7 @@ async function ensureEmployee({ email, name, role, roleLabel, label }: E2eEmploy
     const [admin] = await sql<{ organization_id: string }[]>`
       select e.organization_id from employees e
       join users u on u.id = e.user_id
-      where u.email = ${ADMIN_EMAIL} and e.deleted_at is null and e.deactivated_at is null
+      where u.email = ${ADMIN_EMAIL} and e.organization_id not in (select id from organizations where settings ->> 'sampleData' = 'true') and e.deleted_at is null and e.deactivated_at is null
       limit 1`;
     if (!admin) throw new Error("Fant ikke admin fra seed (kjør pnpm db:seed)");
     const organizationId = admin.organization_id;
@@ -973,7 +973,7 @@ export async function employeeByEmail(email: string): Promise<{ id: string; name
       where u.email = ${email} and e.deleted_at is null
         and e.organization_id = (
           select a.organization_id from employees a join users au on au.id = a.user_id
-          where au.email = ${ADMIN_EMAIL} and a.deleted_at is null limit 1)
+          where au.email = ${ADMIN_EMAIL} and a.organization_id not in (select id from organizations where settings ->> 'sampleData' = 'true') and a.deleted_at is null limit 1)
       limit 1`;
     if (!row) throw new Error("Fant ikke den ansatte (kjør pnpm db:seed)");
     return row;
@@ -991,7 +991,7 @@ export async function companyOrgNumbers(): Promise<string[]> {
       where c.org_number is not null
         and c.organization_id = (
           select a.organization_id from employees a join users au on au.id = a.user_id
-          where au.email = ${ADMIN_EMAIL} and a.deleted_at is null limit 1)`;
+          where au.email = ${ADMIN_EMAIL} and a.organization_id not in (select id from organizations where settings ->> 'sampleData' = 'true') and a.deleted_at is null limit 1)`;
     return rows.map((row) => row.org_number);
   } finally {
     await sql.end();
@@ -1012,7 +1012,7 @@ export async function setInspectorsEditAll(value: boolean): Promise<boolean | un
       from organizations o
       where o.id = (
         select a.organization_id from employees a join users au on au.id = a.user_id
-        where au.email = ${ADMIN_EMAIL} and a.deleted_at is null limit 1)`;
+        where au.email = ${ADMIN_EMAIL} and a.organization_id not in (select id from organizations where settings ->> 'sampleData' = 'true') and a.deleted_at is null limit 1)`;
     if (!row) throw new Error("Fant ikke organisasjonen til admin fra seed (kjør pnpm db:seed)");
     await sql`
       update organizations
@@ -1037,7 +1037,7 @@ export async function restoreInspectorsEditAll(previous: boolean | undefined): P
       set settings = settings - 'access.inspectors_edit_all'
       where id = (
         select a.organization_id from employees a join users au on au.id = a.user_id
-        where au.email = ${ADMIN_EMAIL} and a.deleted_at is null limit 1)`;
+        where au.email = ${ADMIN_EMAIL} and a.organization_id not in (select id from organizations where settings ->> 'sampleData' = 'true') and a.deleted_at is null limit 1)`;
   } finally {
     await sql.end();
   }
@@ -1065,7 +1065,7 @@ export async function assignmentEventCount(assignmentId: string, type: string): 
 async function seedOrganizationId(sql: postgres.Sql): Promise<string> {
   const [row] = await sql<{ organization_id: string }[]>`
     select a.organization_id from employees a join users au on au.id = a.user_id
-    where au.email = ${ADMIN_EMAIL} and a.deleted_at is null and a.deactivated_at is null
+    where au.email = ${ADMIN_EMAIL} and a.organization_id not in (select id from organizations where settings ->> 'sampleData' = 'true') and a.deleted_at is null and a.deactivated_at is null
     limit 1`;
   if (!row) throw new Error("Fant ikke admin fra seed (kjør pnpm db:seed)");
   return row.organization_id;
