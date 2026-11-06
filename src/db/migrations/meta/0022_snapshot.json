@@ -1,5 +1,5 @@
 {
-  "id": "ffaa51ae-de1d-4aa6-bdc3-47957e0d00e1",
+  "id": "61efaecb-3696-480a-88a4-f1afc4df3ec7",
   "prevId": "4a180e24-6aad-49b0-aad2-490d2ddfc97a",
   "version": "7",
   "dialect": "postgresql",
@@ -5631,8 +5631,8 @@
       },
       "isRLSEnabled": false
     },
-    "public.claims": {
-      "name": "claims",
+    "public.work_sessions": {
+      "name": "work_sessions",
       "schema": "",
       "columns": {
         "id": {
@@ -5657,9 +5657,9 @@
         },
         "created_by": {
           "name": "created_by",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "updated_at": {
           "name": "updated_at",
@@ -5699,86 +5699,34 @@
           "primaryKey": false,
           "notNull": true
         },
-        "claim_type": {
-          "name": "claim_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "received_at": {
-          "name": "received_at",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "claimant_party_id": {
-          "name": "claimant_party_id",
+        "employee_id": {
+          "name": "employee_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "claimant_text": {
-          "name": "claimant_text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "description": {
-          "name": "description",
+        "phase": {
+          "name": "phase",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "building_part_text": {
-          "name": "building_part_text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "outcome": {
-          "name": "outcome",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'open'"
-        },
-        "amount": {
-          "name": "amount",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "closed_at": {
-          "name": "closed_at",
+        "started_at": {
+          "name": "started_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {
-        "claims_organization_id_id_idx": {
-          "name": "claims_organization_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "claims_organization_id_assignment_id_idx": {
-          "name": "claims_organization_id_assignment_id_idx",
+        "work_sessions_organization_id_assignment_id_employee_id_ended_at_idx": {
+          "name": "work_sessions_organization_id_assignment_id_employee_id_ended_at_idx",
           "columns": [
             {
               "expression": "organization_id",
@@ -5791,6 +5739,18 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "employee_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ended_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": false,
@@ -5800,9 +5760,9 @@
         }
       },
       "foreignKeys": {
-        "claims_organization_id_organizations_id_fk": {
-          "name": "claims_organization_id_organizations_id_fk",
-          "tableFrom": "claims",
+        "work_sessions_organization_id_organizations_id_fk": {
+          "name": "work_sessions_organization_id_organizations_id_fk",
+          "tableFrom": "work_sessions",
           "tableTo": "organizations",
           "columnsFrom": [
             "organization_id"
@@ -5813,9 +5773,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "claims_assignment_fk": {
-          "name": "claims_assignment_fk",
-          "tableFrom": "claims",
+        "work_sessions_assignment_fk": {
+          "name": "work_sessions_assignment_fk",
+          "tableFrom": "work_sessions",
           "tableTo": "assignments",
           "columnsFrom": [
             "organization_id",
@@ -5828,14 +5788,16 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "claims_claimant_party_fk": {
-          "name": "claims_claimant_party_fk",
-          "tableFrom": "claims",
-          "tableTo": "assignment_parties",
+        "work_sessions_employee_fk": {
+          "name": "work_sessions_employee_fk",
+          "tableFrom": "work_sessions",
+          "tableTo": "employees",
           "columnsFrom": [
-            "claimant_party_id"
+            "organization_id",
+            "employee_id"
           ],
           "columnsTo": [
+            "organization_id",
             "id"
           ],
           "onDelete": "no action",
@@ -5846,17 +5808,13 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "claims_claim_type_check": {
-          "name": "claims_claim_type_check",
-          "value": "\"claims\".\"claim_type\" in ('complaint', 'insurance_claim', 'other')"
+        "work_sessions_phase_check": {
+          "name": "work_sessions_phase_check",
+          "value": "\"work_sessions\".\"phase\" in ('preparation', 'inspection', 'office', 'delivery')"
         },
-        "claims_outcome_check": {
-          "name": "claims_outcome_check",
-          "value": "\"claims\".\"outcome\" in ('open', 'rejected', 'upheld', 'settled', 'withdrawn')"
-        },
-        "claims_amount_check": {
-          "name": "claims_amount_check",
-          "value": "\"claims\".\"amount\" is null or \"claims\".\"amount\" >= 0"
+        "work_sessions_period_check": {
+          "name": "work_sessions_period_check",
+          "value": "\"work_sessions\".\"ended_at\" >= \"work_sessions\".\"started_at\""
         }
       },
       "isRLSEnabled": false

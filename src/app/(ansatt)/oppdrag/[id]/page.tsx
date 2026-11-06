@@ -59,6 +59,7 @@ import { formatDueDate, formatInspectionAt, toDateTimeLocal } from "../../oslo-f
 import { ScheduleCard } from "./schedule-card";
 import { StatusCard, type StatusOption } from "./status-card";
 import { TeamMemberForm } from "./team-form";
+import { WorkSessionTracker } from "./work-session-tracker";
 
 export const metadata: Metadata = { title: "Oppdrag" };
 
@@ -274,6 +275,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
 
   return (
     <main className="max-w-2xl">
+      <WorkSessionTracker assignmentId={assignment.id} />
       {assignment.orderId && (
         <Link
           href={`/ordre/${assignment.orderId}`}

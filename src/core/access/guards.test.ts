@@ -139,6 +139,7 @@ const allPermissions: readonly Permission[] = [
   "template.edit_structure",
   "invoice.send",
   "contacts.manage",
+  "statistics.read",
 ];
 
 /** Fasit per rolle med innstillingen på. Skrevet ut for hånd, ikke regnet ut fra koden. */
@@ -161,6 +162,7 @@ const allowedWithSettingOn: Record<EmployeeRole, readonly Permission[]> = {
     "report.publish",
     "invoice.send",
     "contacts.manage",
+    "statistics.read",
   ],
   admin: allPermissions,
 };

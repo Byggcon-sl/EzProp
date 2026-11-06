@@ -204,10 +204,10 @@ describe("3. databasen for claims", () => {
     expect(claim.receivedAt).toBe("2026-11-02");
   });
 
-  it("3.7 migreringen 0022_reklamasjoner finnes", () => {
+  it("3.7 migreringen 0023_reklamasjoner finnes", () => {
     const dir = path.join(process.cwd(), "src/db/migrations");
     expect(readdirSync(dir).filter((file) => file.startsWith("0022_"))).toEqual([
-      "0022_reklamasjoner.sql",
+      "0023_reklamasjoner.sql",
     ]);
   });
 });

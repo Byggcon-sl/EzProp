@@ -69,7 +69,7 @@ Hver regel er en tabell med testsaker (`it.each`): input, forventet godtatt/avvi
 4. **standardverdier:** sak satt inn uten utfall har `outcome = 'open'`, `closed_at = null`, `deleted_at = null`.
 5. **negativt beløp** avvises (CHECK `amount >= 0`).
 6. **tenant-tabellen:** `claims` står i `tests/tenant-tables.ts` med radbyggeren `createClaim` og testfilen `src/core/claims/claims.test.ts`; `tests/tenant-isolation-all-tables.test.ts` er grønn (én tabell mer enn før).
-7. **migreringen er ren:** `0022_reklamasjoner` finnes, og `pnpm db:generate` lager ingen ny fil (sjekkes i gjennomgangen).
+7. **migreringen er ren:** `0023_reklamasjoner` finnes, og `pnpm db:generate` lager ingen ny fil (sjekkes i gjennomgangen).
 
 ## 4. Kjernen, `src/core/claims/claims.test.ts` (ny, mot databasen)
 

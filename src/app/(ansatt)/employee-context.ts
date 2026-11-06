@@ -14,6 +14,10 @@ export type EmployeeContext = {
   canReadClaims: boolean;
   /** Bare til å vise «Registrer reklamasjon» og skjemaet. Selve sjekken skjer i kjernen. */
   canManageClaims: boolean;
+  /** Bare til å vise skjemaet for nullpunkt og bryter i /statistikk/tid. Sjekken skjer i kjernen. */
+  canManageOrganization: boolean;
+  /** Bare til å vise menylenken «Statistikk». Sjekken skjer i kjernen. */
+  canReadStatistics: boolean;
   /** Kontoret på den ansattes egen rad, eller `null`. Bare til forhåndsvalget av kontor. */
   officeId: string | null;
 };
@@ -34,6 +38,8 @@ export async function getEmployeeContext(): Promise<EmployeeContext | null> {
     canManageContacts: grantHasPermission(found.grant, "contacts.manage"),
     canReadClaims: grantHasPermission(found.grant, "claims.read"),
     canManageClaims: grantHasPermission(found.grant, "claims.manage"),
+    canManageOrganization: grantHasPermission(found.grant, "organization.manage"),
+    canReadStatistics: grantHasPermission(found.grant, "statistics.read"),
     officeId: found.officeId,
   };
 }

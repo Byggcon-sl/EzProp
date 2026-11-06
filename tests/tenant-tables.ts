@@ -33,6 +33,7 @@ import {
   createRoom,
   createTeamMember,
   createUser,
+  createWorkSession,
   grantPermission,
 } from "./factories";
 
@@ -293,6 +294,11 @@ export const tenantTables: TenantTableEntry[] = [
       );
       return row.id;
     },
+  },
+  {
+    table: "work_sessions",
+    testFile: "src/core/work-sessions/record.test.ts",
+    insertRow: async (organizationId) => (await createWorkSession(organizationId)).id,
   },
 ];
 

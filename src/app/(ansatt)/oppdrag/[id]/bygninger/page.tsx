@@ -16,6 +16,7 @@ import {
 import { isUuid } from "@/shared/lib/uuid";
 import { getEmployeeContext } from "../../../employee-context";
 import { NoAccess } from "../../../no-access";
+import { WorkSessionTracker } from "../work-session-tracker";
 import { BuildingsEditor, type Codes } from "./buildings-editor";
 
 export const metadata: Metadata = { title: "Bygninger, areal og rom" };
@@ -56,6 +57,7 @@ export default async function BuildingsPage({ params }: { params: Promise<{ id: 
 
   return (
     <main className="max-w-3xl">
+      <WorkSessionTracker assignmentId={id} />
       <Link
         href={`/oppdrag/${id}`}
         className="inline-flex min-h-11 items-center text-sm font-medium text-brand-700"

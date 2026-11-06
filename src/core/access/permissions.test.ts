@@ -31,6 +31,7 @@ const allPermissions = [
   "template.edit_structure",
   "invoice.send",
   "contacts.manage",
+  "statistics.read",
 ] as const;
 
 const notGrantable = [
@@ -41,6 +42,7 @@ const notGrantable = [
   "organization.read",
   "invoice.send",
   "contacts.manage",
+  "statistics.read",
 ] as const;
 
 type Column = "inspectorOn" | "inspectorOff" | "office" | "manager" | "admin";
@@ -122,6 +124,15 @@ const expected: Record<(typeof allPermissions)[number], Record<Column, boolean>>
   // Fjerne og slå sammen kontakter og firma: bare leder og admin
   // (docs/funksjoner/fase2a-fjerne-sla-sammen-kontakter.md, Omfang 1)
   "contacts.manage": {
+    inspectorOn: false,
+    inspectorOff: false,
+    office: false,
+    manager: true,
+    admin: true,
+  },
+  // Samlet statistikk (tid per fase): bare leder og admin, aldri enkeltvis (A21)
+  // (docs/funksjoner/fase2a-tidsmaling.md, Omfang 5)
+  "statistics.read": {
     inspectorOn: false,
     inspectorOff: false,
     office: false,
@@ -517,6 +528,7 @@ describe("contacts.manage", () => {
         "report.edit",
         "report.publish",
         "staff.manage",
+        "statistics.read",
       ],
       managerOff: [
         "assignment.edit",
@@ -528,6 +540,7 @@ describe("contacts.manage", () => {
         "report.edit",
         "report.publish",
         "staff.manage",
+        "statistics.read",
       ],
       adminOn: [...allPermissions].sort(),
       adminOff: [...allPermissions].sort(),

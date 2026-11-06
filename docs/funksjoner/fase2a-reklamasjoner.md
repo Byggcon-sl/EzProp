@@ -20,7 +20,7 @@ Ikke KI nå. Det er for få saker til at KI har noe å lære av, og en reklamasj
 
 ## Omfang
 **Med:**
-1. **Ny tabell `claims`** (migrering `0022_reklamasjoner`), knyttet til oppdraget. Feltene står under «Data». Myk sletting med `deleted_at`.
+1. **Ny tabell `claims`** (migrering `0023_reklamasjoner`), knyttet til oppdraget. Feltene står under «Data». Myk sletting med `deleted_at`.
 2. **Ny rettighet `claims.manage`** (registrere, endre, lukke og fjerne reklamasjonssaker) i `src/core/access/permissions.ts`. Leder og admin har den. Den gis ikke av innstillingen `access.inspectors_edit_all` og kan ikke gis som enkeltrettighet (står ikke i `grantablePermissions`). Lesing bruker den eksisterende `claims.read`.
 3. **Tjenester i `src/core/claims`:**
    - `listClaimsForAssignment(actor, organizationId, assignmentId)` – `claims.read`.
