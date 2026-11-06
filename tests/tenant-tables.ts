@@ -372,7 +372,7 @@ export const tenantTables: TenantTableEntry[] = [
   },
   {
     table: "work_sessions",
-    testFile: "src/core/work-sessions/record.test.ts",
+    testFile: "src/core/work-sessions/record-testplan.test.ts",
     insertRow: async (organizationId) => (await createWorkSession(organizationId)).id,
   },
 ];

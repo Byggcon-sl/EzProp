@@ -11,3 +11,4 @@ pnpm install --frozen-lockfile
 pnpm db:migrate
 pnpm db:migrate "$(grep ^TEST_DATABASE_URL .env | cut -d= -f2-)"
 pnpm db:seed
+pnpm db:seed:testoppdrag

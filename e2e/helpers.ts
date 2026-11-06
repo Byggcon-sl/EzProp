@@ -944,12 +944,13 @@ export function fakeOrgNumber(): string {
 const ORG_NUMBER_WEIGHTS = [3, 2, 7, 6, 5, 4, 3, 2] as const;
 
 /**
- * Oppdiktet org.nr. som er gyldig etter modulus 11 og ikke finnes: «000», fem tilfeldige sifre og
- * kontrollsifferet. Blir kontrollsifferet 10, trekkes nye sifre.
+ * Oppdiktet org.nr. som er gyldig etter modulus 11 og ikke finnes: «0», sju tilfeldige sifre og
+ * kontrollsifferet. Blir kontrollsifferet 10, trekkes nye sifre. E2e-databasen tømmes ikke mellom
+ * kjøringene, så tallrommet må være stort for at nye firmaer ikke skal treffe et nummer som finnes.
  */
 export function fakeValidOrgNumber(): string {
   for (;;) {
-    const base = `000${String(Math.floor(Math.random() * 1e5)).padStart(5, "0")}`;
+    const base = `0${String(Math.floor(Math.random() * 1e7)).padStart(7, "0")}`;
     const sum = ORG_NUMBER_WEIGHTS.reduce(
       (total, weight, index) => total + weight * Number(base[index]),
       0,
