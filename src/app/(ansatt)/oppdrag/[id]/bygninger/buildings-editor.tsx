@@ -12,7 +12,7 @@ import type {
 } from "@/core/buildings";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
-import { Checkbox, Field, Input, Textarea } from "@/shared/ui/form";
+import { Checkbox, Field, Input, Select, Textarea } from "@/shared/ui/form";
 import { FormErrors, SubmitButton } from "../../../form-parts";
 import { initialFormState, textValue, type FormState } from "../../../form-state";
 import {
@@ -37,9 +37,6 @@ export type Codes = {
   areaTypes: CodeOption[];
   methods: CodeOption[];
 };
-
-const selectClass =
-  "block min-h-11 w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 focus:border-brand-600 aria-invalid:border-red-700";
 
 /** Etasjenavn som foreslås (kan skrives fritt). */
 const FLOOR_NAME_SUGGESTIONS = ["Kjeller", "Underetasje", "1. etasje", "2. etasje", "Loft"];
@@ -300,10 +297,9 @@ function RoomForm({
       <input type="hidden" name="floorId" value={floorId} />
       <input type="hidden" name="roomId" value={roomId ?? ""} />
       <Field label="Romtype" htmlFor={`${idPrefix}-roomType`} error={state.fieldErrors.roomType}>
-        <select
+        <Select
           id={`${idPrefix}-roomType`}
           name="roomType"
-          className={selectClass}
           defaultValue={textValue(state, "roomType", initial.roomType)}
           onChange={(event) => onRoomTypeChange(event.target.value)}
         >
@@ -317,7 +313,7 @@ function RoomForm({
               ))}
             </optgroup>
           ))}
-        </select>
+        </Select>
       </Field>
       <Field
         label="Navn på rommet"
@@ -334,10 +330,9 @@ function RoomForm({
         />
       </Field>
       <Field label="Arealtype" htmlFor={`${idPrefix}-areaType`} error={state.fieldErrors.areaType}>
-        <select
+        <Select
           id={`${idPrefix}-areaType`}
           name="areaType"
-          className={selectClass}
           value={areaType}
           onChange={(event) => setAreaType(event.target.value)}
         >
@@ -346,7 +341,7 @@ function RoomForm({
               {option.label}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
       <Checkbox
         name="belowGround"
@@ -422,10 +417,9 @@ function FloorAreaForm({
           htmlFor={`${idPrefix}-measuredBy`}
           error={state.fieldErrors.measuredBy}
         >
-          <select
+          <Select
             id={`${idPrefix}-measuredBy`}
             name="measuredBy"
-            className={selectClass}
             defaultValue={textValue(state, "measuredBy", area?.measuredBy ?? currentEmployeeId)}
           >
             {measurers.map((employee) => (
@@ -433,13 +427,12 @@ function FloorAreaForm({
                 {employee.name}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Metode" htmlFor={`${idPrefix}-method`} error={state.fieldErrors.method}>
-          <select
+          <Select
             id={`${idPrefix}-method`}
             name="method"
-            className={selectClass}
             defaultValue={textValue(state, "method", area?.method ?? "")}
           >
             <option value="">Velg metode</option>
@@ -448,7 +441,7 @@ function FloorAreaForm({
                 {option.label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
       </div>
       <Field

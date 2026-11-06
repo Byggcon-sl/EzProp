@@ -2,14 +2,11 @@
 
 import { useActionState } from "react";
 import { Card } from "@/shared/ui/card";
-import { Field, Textarea } from "@/shared/ui/form";
+import { Field, Select, Textarea } from "@/shared/ui/form";
 import { FormErrors, SubmitButton } from "../../form-parts";
 import { initialFormState, textValue, type FormState } from "../../form-state";
 
 type Action = (state: FormState, formData: FormData) => Promise<FormState>;
-
-const selectClass =
-  "block min-h-11 w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 focus:border-brand-600 aria-invalid:border-red-700";
 
 /**
  * «Gjør om til oppdrag»: velg kontor og trykk knappen, ingen dialog oppå. Uten kontorer i
@@ -45,10 +42,9 @@ export function ConvertOrderForm({
             hint="Oppdraget får nummer når du trykker på knappen."
             error={state.fieldErrors.officeId}
           >
-            <select
+            <Select
               id="officeId"
               name="officeId"
-              className={selectClass}
               defaultValue={textValue(state, "officeId", defaultOfficeId)}
             >
               {defaultOfficeId === null && <option value="">Velg kontor</option>}
@@ -57,7 +53,7 @@ export function ConvertOrderForm({
                   {office.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <SubmitButton>Gjør om til oppdrag</SubmitButton>
         </form>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, type ReactNode } from "react";
-import { Field, Input, Textarea } from "@/shared/ui/form";
+import { Field, Input, Select, Textarea } from "@/shared/ui/form";
 import { FormErrors, SubmitButton } from "../../form-parts";
 import { initialFormState, textValue, type FormState } from "../../form-state";
 import type { CodeOption } from "./property-form";
@@ -15,9 +15,6 @@ export type CommonAreasFormValues = {
   maintenancePlanStatus: string;
   notes: string;
 };
-
-const selectClass =
-  "block min-h-11 w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 focus:border-brand-600 aria-invalid:border-red-700";
 
 const MANAGING_AGENT = "Forretningsfører";
 const CONDITION_REPORT = "Finnes tilstandsrapport for fellesdelene?";
@@ -46,18 +43,13 @@ export function CommonAreasForm({
     const id = `common-areas-${name}`;
     return (
       <Field label={label} htmlFor={id} error={state.fieldErrors[name]}>
-        <select
-          id={id}
-          name={name}
-          className={selectClass}
-          defaultValue={textValue(state, name, initial[name])}
-        >
+        <Select id={id} name={name} defaultValue={textValue(state, name, initial[name])}>
           {answers.map((answer) => (
             <option key={answer.value} value={answer.value}>
               {answer.label}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
     );
   }
