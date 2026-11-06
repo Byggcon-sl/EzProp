@@ -195,6 +195,7 @@ beforeEach(() => {
     actor,
     organizationId: ORG,
     canEditOrders: true,
+    canManageContacts: false,
     officeId: null,
   });
   mocks.core.setTeamMember.mockResolvedValue(undefined);

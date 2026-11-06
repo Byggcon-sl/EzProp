@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AccessDeniedError } from "@/core/access";
 import { logger } from "@/shared/lib/logger";
@@ -7,7 +8,15 @@ import { isUuid } from "@/shared/lib/uuid";
 import { errorResult, failure, type KnownError } from "../action-result";
 import { getEmployeeContext } from "../employee-context";
 import { NO_ACCESS, type FormState } from "../form-state";
-import { createContact, FirmNotFoundError, listContacts, updateContact } from "@/core/contacts";
+import {
+  createContact,
+  FirmNotFoundError,
+  listContacts,
+  mergeContacts,
+  MergeSameRecordError,
+  removeContact,
+  updateContact,
+} from "@/core/contacts";
 import { contactName } from "./contact-name";
 
 /*
@@ -20,6 +29,14 @@ import { contactName } from "./contact-name";
 const ROUTE = "/kontakter";
 
 const FIRM_NOT_FOUND = "Firmaet finnes ikke.";
+const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
+const SAME_CONTACT = "Velg to ulike kontakter.";
+
+/** Fremmed, ukjent, fjernet eller ugyldig id og manglende rettighet gir samme melding. */
+const REMOVE_MERGE_ERRORS: readonly KnownError[] = [
+  { error: MergeSameRecordError, message: SAME_CONTACT },
+  { error: AccessDeniedError, message: CONTACT_NOT_FOUND },
+];
 
 const CONTACT_ERRORS: readonly KnownError[] = [
   { error: FirmNotFoundError, field: "firmId", message: FIRM_NOT_FOUND },
@@ -109,6 +126,78 @@ export async function updateContactAction(
     );
   }
   redirect(`${ROUTE}/${contactId}`);
+}
+
+/** Id fra skjemaet, trimmet. */
+function readId(formData: FormData, name: string): string {
+  return String(formData.get(name) ?? "").trim();
+}
+
+/** Stiene som viser kontakter, firma eller koblingene til dem. */
+function revalidateContactPaths() {
+  revalidatePath("/kontakter");
+  revalidatePath("/kontakter/[id]", "page");
+  revalidatePath("/firma/[id]", "page");
+  revalidatePath("/oppdrag/[id]", "page");
+  revalidatePath("/ordre/[id]", "page");
+}
+
+/**
+ * «Fjern» i bekreftelsen på kontaktsiden (myk sletting i kjernen, `contacts.manage`). Ved suksess
+ * går man til listen med kvitteringen «<navn> er fjernet.» (`?fjernet=<id>`; navnet slås opp på
+ * listesiden, så det står aldri i adressen).
+ */
+export async function removeContactAction(
+  previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const contactId = readId(formData, "contactId");
+  const context = await getEmployeeContext();
+  if (!context) return failure(previous, {}, {}, NO_ACCESS);
+  if (!isUuid(contactId)) return failure(previous, {}, {}, CONTACT_NOT_FOUND);
+
+  try {
+    await removeContact(context.actor, context.organizationId, contactId);
+  } catch (error) {
+    return errorResult(
+      error,
+      previous,
+      {},
+      { route: ROUTE, userId: context.actor.id, contactId },
+      { known: REMOVE_MERGE_ERRORS },
+    );
+  }
+  revalidateContactPaths();
+  redirect(`${ROUTE}?fjernet=${contactId}`);
+}
+
+/**
+ * «Slå sammen» på /kontakter/[id]/sla-sammen. Parter og ordrer flyttes til `keepId`, og `removeId`
+ * fjernes (kjernen, `contacts.manage`). Ved suksess går man til kontakten som beholdes.
+ */
+export async function mergeContactsAction(
+  previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const keepId = readId(formData, "keepId");
+  const removeId = readId(formData, "removeId");
+  const context = await getEmployeeContext();
+  if (!context) return failure(previous, {}, {}, NO_ACCESS);
+  if (!isUuid(keepId) || !isUuid(removeId)) return failure(previous, {}, {}, CONTACT_NOT_FOUND);
+
+  try {
+    await mergeContacts(context.actor, context.organizationId, { keepId, removeId });
+  } catch (error) {
+    return errorResult(
+      error,
+      previous,
+      {},
+      { route: `${ROUTE}/sla-sammen`, userId: context.actor.id, keepId, removeId },
+      { known: REMOVE_MERGE_ERRORS },
+    );
+  }
+  revalidateContactPaths();
+  redirect(`${ROUTE}/${keepId}?sammenslatt=1`);
 }
 
 /** Ett treff i kontaktvelgeren: bare det som fylles ut i skjemaet. */
