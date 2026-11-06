@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AccessDeniedError } from "@/core/access";
 import { listAgreements, suggestAgreementForAssignment } from "@/core/agreements";
+import { claimOutcomeLabel, claimTypeLabel, listClaimsForAssignment } from "@/core/claims";
 import {
   allowedTransitions,
   ASSIGNMENT_STATUSES,
@@ -50,6 +51,7 @@ import {
   type CommonAreasFormValues,
 } from "./common-areas-form";
 import { AgreementCard } from "./agreement-card";
+import { ClaimsSection, type ClaimListItem } from "./claims-section";
 import { PartyCard } from "./party-card";
 import { AddPartySection, type PartyRoleOption } from "./party-form";
 import { PropertyDetails, PropertyForm, type PropertyFormValues } from "./property-form";
@@ -198,7 +200,37 @@ function PropertySection({
 }
 
 /**
- * Oppdraget med status, eiendom (og fellesdeler), team (fem roller) og parter. Skjemaene vises
+ * Sakene til delen «Reklamasjoner», eller `null` når delen ikke skal vises. Flagget fra konteksten
+ * styrer bare om vi spør; kjernen avgjør, og `AccessDeniedError` skjuler delen.
+ */
+async function loadClaims(
+  context: NonNullable<Awaited<ReturnType<typeof getEmployeeContext>>>,
+  assignmentId: string,
+): Promise<ClaimListItem[] | null> {
+  if (!context.canReadClaims) return null;
+  try {
+    const claims = await listClaimsForAssignment(
+      context.actor,
+      context.organizationId,
+      assignmentId,
+    );
+    return claims.map((claim) => ({
+      id: claim.id,
+      receivedAt: claim.receivedAt,
+      typeLabel: claimTypeLabel(claim.claimType),
+      description: claim.description,
+      open: claim.outcome === "open",
+      outcomeLabel: claimOutcomeLabel(claim.outcome),
+    }));
+  } catch (error) {
+    if (error instanceof AccessDeniedError) return null;
+    throw error;
+  }
+}
+
+/**
+ * Oppdraget med status, eiendom (og fellesdeler), team (fem roller), parter og (for leder og admin)
+ * reklamasjoner. Skjemaene vises
  * bare med `canEditOrders`; selve sjekken skjer i kjernen. Ugyldig, ukjent, slettet (også
  * kansellert) og fremmed id gir
  * «Fant ikke siden».
@@ -223,10 +255,11 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
 
   const canEdit = context.canEditOrders;
   const now = new Date();
-  const [schedule, agreements, suggestion] = await Promise.all([
+  const [schedule, agreements, suggestion, claims] = await Promise.all([
     loadSchedule(context, assignment),
     listAgreements(context.actor, context.organizationId),
     suggestAgreementForAssignment(context.actor, context.organizationId, assignment.id, now),
+    loadClaims(context, assignment.id),
   ]);
   // Statusen er alltid en av de fire kodene (CHECK i databasen); ukjent kode gir ingen knapper.
   const status = ASSIGNMENT_STATUSES.find((code) => code === assignment.status) ?? null;
@@ -399,6 +432,14 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
           <AddPartySection assignmentId={assignment.id} roles={roles} action={addPartyAction} />
         )}
       </section>
+
+      {claims && (
+        <ClaimsSection
+          assignmentId={assignment.id}
+          claims={claims}
+          canManage={context.canManageClaims}
+        />
+      )}
     </main>
   );
 }

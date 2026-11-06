@@ -10,6 +10,10 @@ export type EmployeeContext = {
   canEditOrders: boolean;
   /** Bare til å vise «Fjern» og «Slå sammen med …». Selve sjekken skjer i kjernen. */
   canManageContacts: boolean;
+  /** Bare til å vise delen «Reklamasjoner». Selve sjekken skjer i kjernen (`claims.read`). */
+  canReadClaims: boolean;
+  /** Bare til å vise «Registrer reklamasjon» og skjemaet. Selve sjekken skjer i kjernen. */
+  canManageClaims: boolean;
   /** Kontoret på den ansattes egen rad, eller `null`. Bare til forhåndsvalget av kontor. */
   officeId: string | null;
 };
@@ -28,6 +32,8 @@ export async function getEmployeeContext(): Promise<EmployeeContext | null> {
     organizationId: found.grant.organizationId,
     canEditOrders: grantHasPermission(found.grant, "assignment.edit"),
     canManageContacts: grantHasPermission(found.grant, "contacts.manage"),
+    canReadClaims: grantHasPermission(found.grant, "claims.read"),
+    canManageClaims: grantHasPermission(found.grant, "claims.manage"),
     officeId: found.officeId,
   };
 }
