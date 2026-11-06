@@ -599,7 +599,7 @@ export const MANAGER_EMAIL = "leder@example.com";
 type E2eEmployee = {
   email: string;
   name: string;
-  role: "inspector" | "manager";
+  role: "inspector" | "manager" | "office";
   /** Navnet på konstanten i feilmeldingene, slik at det er lett å finne ut hva som må gjøres. */
   label: string;
 };
@@ -712,6 +712,20 @@ export async function ensureManager(): Promise<void> {
 export async function logInAsManager(page: Page) {
   await ensureManager();
   await logIn(page, MANAGER_EMAIL);
+}
+
+/** Oppdiktet kontoransatt for e2e (rollen `office`). Ingen ekte navn eller adresser. */
+export const OFFICE_EMAIL = "kontor@example.com";
+
+/** Logger inn som den oppdiktede kontoransatte (rolle `office`, ikke admin). */
+export async function logInAsOffice(page: Page) {
+  await ensureEmployee({
+    email: OFFICE_EMAIL,
+    name: "Oppdiktet kontoransatt",
+    role: "office",
+    label: "OFFICE_EMAIL",
+  });
+  await logIn(page, OFFICE_EMAIL);
 }
 
 // --- Prøve E, regler uten nett (docs/funksjoner/fase1-prove-e-regler-testplan.md avsnitt 5.1) ---

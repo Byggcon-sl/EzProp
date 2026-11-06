@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AccessDeniedError } from "@/core/access";
-import { FirmNotFoundError } from "@/core/contacts/errors";
+import { FirmNotFoundError, MergeSameRecordError } from "@/core/contacts/errors";
 import { contactInputSchema } from "@/core/contacts/schemas";
 import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../form-state";
 
@@ -34,6 +34,10 @@ const mocks = vi.hoisted(() => ({
     getContact: vi.fn(),
     createContact: vi.fn(),
     updateContact: vi.fn(),
+    removeContact: vi.fn(),
+    mergeContacts: vi.fn(),
+    removeFirm: vi.fn(),
+    mergeFirms: vi.fn(),
   },
 }));
 
@@ -49,8 +53,13 @@ vi.mock("@/core/contacts", async (importOriginal) => ({
   ...mocks.core,
 }));
 
-const { createContactAction, updateContactAction, searchContactsAction } =
-  await import("./actions");
+const {
+  createContactAction,
+  updateContactAction,
+  searchContactsAction,
+  removeContactAction,
+  mergeContactsAction,
+} = await import("./actions");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
 const OTHER_ORG = "0190a000-0000-7000-8000-000000000002";
@@ -375,5 +384,130 @@ describe("8. searchContactsAction (kjernen byttet ut)", () => {
     for (const value of ["Hemmeligsøk", "Testesen", EMAIL, PHONE]) {
       expect(logged, value).not.toContain(value);
     }
+  });
+});
+
+/*
+ * Fjerne og slå sammen kontakter (docs/funksjoner/fase2a-fjerne-sla-sammen-kontakter-testplan.md
+ * avsnitt 4). Kjernen er byttet ut; tjenestene testes mot databasen i src/core/contacts.
+ * Avtalt med utvikler: `removeContactAction` (id-en i `contactId`) og `mergeContactsAction`
+ * (`keepId` og `removeId`), signatur `(previous: FormState, formData: FormData)`.
+ * Støtter hovedmål: reklamasjoner (ingen 500 og ingen personopplysninger i loggen) og tid (riktig
+ * melding med én gang).
+ */
+
+const KEEP = CONTACT;
+const REMOVE = "0190a000-0000-7000-8000-000000000071";
+const CONTACT_NOT_FOUND = "Kontakten finnes ikke.";
+const SAME_CONTACT = "Velg to ulike kontakter.";
+
+function runRemove(overrides: Record<string, string> = {}) {
+  return removeContactAction(initialFormState, form({ contactId: REMOVE, ...overrides }));
+}
+
+function runMerge(overrides: Record<string, string> = {}) {
+  return mergeContactsAction(
+    initialFormState,
+    form({ keepId: KEEP, removeId: REMOVE, ...overrides }),
+  );
+}
+
+const REMOVE_MERGE = [
+  ["removeContactAction", () => mocks.core.removeContact, runRemove],
+  ["mergeContactsAction", () => mocks.core.mergeContacts, runMerge],
+] as const;
+
+describe("4. fjerne og slå sammen kontakter", () => {
+  beforeEach(() => {
+    mocks.core.removeContact.mockResolvedValue(undefined);
+    mocks.core.mergeContacts.mockResolvedValue({ partyCount: 1, orderCount: 1 });
+  });
+
+  it.each([
+    ["removeContactAction", "contactId", "abc", runRemove],
+    ["removeContactAction", "contactId", "", runRemove],
+    ["mergeContactsAction", "keepId", "abc", runMerge],
+    ["mergeContactsAction", "keepId", "", runMerge],
+    ["mergeContactsAction", "removeId", "abc", runMerge],
+    ["mergeContactsAction", "removeId", "", runMerge],
+  ] as const)(
+    "4.1 invalid_id_no_core_call: %s med %s = «%s» gir «Kontakten finnes ikke.» uten kall til kjernen",
+    async (_name, field, value, run) => {
+      const state = await run({ [field]: value });
+      expect(state.message).toBe(CONTACT_NOT_FOUND);
+      expect(coreCalls()).toBe(0);
+    },
+  );
+
+  it("4.2 same_record_message: MergeSameRecordError gir «Velg to ulike kontakter.», ikke 500", async () => {
+    mocks.core.mergeContacts.mockRejectedValue(new MergeSameRecordError("contact"));
+    const state = await runMerge({ keepId: KEEP, removeId: KEEP });
+    expect(state.message).toBe(SAME_CONTACT);
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it.each(REMOVE_MERGE)(
+    "4.3 access_denied_message: %s med AccessDeniedError gir «Kontakten finnes ikke.» uten detaljer",
+    async (_name, core, run) => {
+      core().mockRejectedValue(new AccessDeniedError());
+      const state = await run();
+      expect(state.message).toBe(CONTACT_NOT_FOUND);
+      expect(JSON.stringify(state)).not.toContain("AccessDenied");
+      expect(mocks.logError).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(REMOVE_MERGE)(
+    "4.3b %s: organisasjonen og brukeren kommer fra konteksten, ikke fra skjemaet",
+    async (_name, core, run) => {
+      await run({ organizationId: OTHER_ORG }).catch(() => undefined);
+      expect(core()).toHaveBeenCalledTimes(1);
+      expect(core().mock.calls[0]?.[0]).toEqual(actor);
+      expect(core().mock.calls[0]?.[1]).toBe(ORG);
+      expect(JSON.stringify(core().mock.calls)).not.toContain(OTHER_ORG);
+    },
+  );
+
+  it("4.3c mergeContactsAction sender keepId og removeId fra skjemaet", async () => {
+    await runMerge().catch(() => undefined);
+    expect(mocks.core.mergeContacts).toHaveBeenCalledWith(actor, ORG, {
+      keepId: KEEP,
+      removeId: REMOVE,
+    });
+  });
+
+  it.each(REMOVE_MERGE)(
+    "4.4 logger_contract: %s logger ukjent feil bare med rute, bruker-id, id-er og feilnavn",
+    async (_name, core, run) => {
+      const boom = new Error(`databasen sa nei til ${FIRST} ${LAST} ${EMAIL} ${PHONE} ${NOTE}`);
+      boom.name = "OppdiktetFeil";
+      core().mockRejectedValue(boom);
+
+      const state = await run();
+      expect(state.message).toBe(UNKNOWN_ERROR);
+      expect(mocks.logError).toHaveBeenCalledTimes(1);
+      // Id-ene kan stå i loggen; de fjernes før sjekken, fordi «00000000» finnes i test-id-ene
+      const logged = JSON.stringify(mocks.logError.mock.calls)
+        .replaceAll(KEEP, "<behold>")
+        .replaceAll(REMOVE, "<fjern>")
+        .replaceAll(ORG, "<org>");
+      expect(logged).toContain("OppdiktetFeil");
+      expect(logged).toContain(actor.id);
+      for (const value of [FIRST, LAST, EMAIL, PHONE, NOTE, "Testmegling", "databasen sa nei"]) {
+        expect(logged, value).not.toContain(value);
+      }
+    },
+  );
+
+  it("4.4b removeContactAction sender tilbake til listen etter fjerning", async () => {
+    const url = await redirectOf(runRemove());
+    expect(url.startsWith("/kontakter")).toBe(true);
+    expect(url).not.toContain(REMOVE);
+    expect(mocks.core.removeContact).toHaveBeenCalledWith(actor, ORG, REMOVE);
+  });
+
+  it("4.4c mergeContactsAction sender videre til kontakten som beholdes", async () => {
+    const url = await redirectOf(runMerge());
+    expect(url.startsWith(`/kontakter/${KEEP}`)).toBe(true);
   });
 });
