@@ -1151,7 +1151,12 @@ describe("4.5 oppførsel", () => {
 
     const result = await getAssignmentBuildings(admin, org.id, assignment.id);
     expect(asRecord(result).hasProperty).toBe(false);
-    expect(buildingsOf(result).map((row) => row.id)).toEqual([building.id, other.id]);
+    // Rekkefølgen er ikke det som testes her (to rader kan få samme created_at).
+    expect(
+      buildingsOf(result)
+        .map((row) => row.id)
+        .sort(),
+    ).toEqual([building.id, other.id].sort());
 
     await saveBuilding(admin, org.id, assignment.id, building.id, buildingInput({ name: "Hus" }));
     expect((await rowById("report_buildings", building.id)).name).toBe("Hus");
