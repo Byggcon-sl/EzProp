@@ -207,7 +207,8 @@ ok "Pakkene er på plass"
 steg "Oppdaterer databasen"
 "${PNPM[@]}" --silent db:migrate || stopp "Oppdatering av databasen feilet." "Se feilmeldingen over."
 "${PNPM[@]}" --silent db:seed || stopp "Innlegging av grunndata feilet." "Se feilmeldingen over."
-ok "Databasen er oppdatert, med organisasjonen Byggcon og admin"
+"${PNPM[@]}" --silent db:seed:testoppdrag || stopp "Innlegging av testoppdrag feilet." "Se feilmeldingen over."
+ok "Databasen er oppdatert, med organisasjonen Byggcon, admin og testoppdragene"
 
 # ---------------------------------------------------------------------------
 steg "Starter synktjenesten (PowerSync)"
