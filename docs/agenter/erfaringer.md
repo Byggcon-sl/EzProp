@@ -212,3 +212,9 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - En branch som er satt sammen («slå sammen del …»), men aldri gjennomgått, kan overtas etter 3 timer uten push. Det gikk raskt å fullføre for hånd: flette inn `main`, kjøre sjekkene, én gjennomgang fra test-leder, rette og åpne PR. Ingen ny arbeidsflyt trengs når bare gjennomgang og PR gjenstår.
 - Testplanen kan selv be om noe som bryter mønsteret: her ba den om `from`/`to` med notatteksten i revisjonsloggen. Fritekst (notater) skal aldri i revisjonsloggen, bare feltnavnet, uansett hva testplanen sier.
 - Ikke slett en testfil mens hele Vitest kjører; den feiler da med «Cannot find module». Kjør de berørte mappene på nytt etterpå.
+
+## 06.11.2026 – PR #110 og #111 (tidsmåling og reklamasjoner)
+
+- To kjøringer bygde hver sin oppgave samtidig fra samme `main`, og begge tok de samme A-numrene (A119–) og samme migreringsnummer (0022). Den som merges sist, må få nye numre: bytt numrene bare i filene branchen selv har endret (`git diff --name-only origin/main`), og lag migreringen på nytt med `pnpm db:generate` i stedet for å gi filen nytt navn.
+- Tester som teller (antall rettigheter, «migreringen 00NN finnes») brytes når to brancher legger til samme slags ting. Kjør hele Vitest etter flettingen, ikke bare de berørte mappene.
+- Når en branch som bygger på en annen er flettet med den, og den andre merges med «Squash and merge», blir det konflikter mot `main` selv om innholdet er likt. Sjekk `git diff origin/<grunnbranch> origin/main` er tom, og ta da vår side i alle konfliktene.
