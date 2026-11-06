@@ -314,7 +314,7 @@ Kontakter er personopplysninger. De vises bare for ansatte, og sendes aldri til 
 - **Sammenslåing av firma:** `contacts.firm_id` (også myk-slettede kontakter), `assignment_parties.firm_id` og `orders.ordered_by_firm_id` flyttes til firmaet som beholdes. Det andre firmaet myk-slettes; det som beholdes, endres ikke (heller ikke organisasjonsnummeret).
 - **Samtidighet:** alt skjer i én transaksjon. Radene låses med `for update` sortert på id, så to sammenslåinger A→B og B→A samtidig ikke gir vranglås: én lykkes, den andre finner en fjernet rad og får `AccessDeniedError`.
 - **Revisjonslogg** i samme transaksjon, bare id-er og antall (antallene teller også myk-slettede rader): `contact.removed { contactId }`, `firm.removed { firmId, contactCount }` (aktive kontakter i firmaet), `contact.merged { keepId, removeId, partyCount, orderCount }`, `firm.merged { keepId, removeId, contactCount, partyCount, orderCount }`. Mislykkede forsøk logges ikke. Ingen navn, e-post, telefon, notat eller organisasjonsnummer.
-- **Fjerning og sammenslåing (05.11.2026):** se «Bygget i fase 2a (05.11.2026, fjerne og slå sammen)» under.
+- **Fjerning og sammenslåing (05.11.2026):** se «Bygget i fase 2a (05.11.2026, fjerne og slå sammen)» over.
 - **Venter:** `marketing_consent` (D17: ikke i bruk nå), `invoice_email` og `address` på firma (kommer med fakturagrunnlaget), og kildekoden `broker_system` (legges til når API mot meglersystem kommer; kodene endres aldri, nye legges til).
 
 **`assignment_parties`** – **part på oppdrag**: hvem som er med på oppdraget, i hvilken rolle, og hva de skal motta.

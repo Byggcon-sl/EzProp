@@ -93,7 +93,7 @@ Ingen fagregler. Tjenestereglene over har testsaker.
 - [ ] Virker på iPad-størrelse (e2e)
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne
 
-## Beslutninger (autonom modus, føres i `docs/09-apne-sporsmal.md` med neste ledige numre fra A108)
+## Beslutninger (autonom modus, ført i `docs/09-apne-sporsmal.md` som A108–A113)
 1. **Ny rettighet `contacts.manage` for leder og admin**, ikke `staff.manage` (som gjelder ansatte) eller `assignment.edit` (som kontor og takstmenn har). Oppgaven sier leder og admin; fjerning og sammenslåing endrer mange oppdrag på én gang. Kan endres ved å gi rettigheten til flere roller i `permissionsForRole`.
 2. **Fjerning lar koblingene stå**, sammenslåing flytter dem. Friteksten på oppdraget er det som vises (A84–A92), så fjerning ødelegger ingen rapport, og historikken beholdes.
 3. **Fjernet firma: kontaktene beholdes uten firma** (ingen sperre). Det enkleste som virker, og samme filter som i dag.
