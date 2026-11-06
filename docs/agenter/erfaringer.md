@@ -219,3 +219,8 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - To kjøringer bygde hver sin oppgave samtidig fra samme `main`, og begge tok de samme A-numrene (A119–) og samme migreringsnummer (0022). Den som merges sist, må få nye numre: bytt numrene bare i filene branchen selv har endret (`git diff --name-only origin/main`), og lag migreringen på nytt med `pnpm db:generate` i stedet for å gi filen nytt navn.
 - Tester som teller (antall rettigheter, «migreringen 00NN finnes») brytes når to brancher legger til samme slags ting. Kjør hele Vitest etter flettingen, ikke bare de berørte mappene.
 - Når en branch som bygger på en annen er flettet med den, og den andre merges med «Squash and merge», blir det konflikter mot `main` selv om innholdet er likt. Sjekk `git diff origin/<grunnbranch> origin/main` er tom, og ta da vår side i alle konfliktene.
+
+## 06.11.2026 – PR #115 (fire testoppdrag)
+
+- Når admin blir ansatt i mer enn én organisasjon (her prøveorganisasjonen), blir oppslag som «organisasjonen til admin … limit 1» tilfeldige. Det slo ut i mange eldre e2e-tester i CI, men ikke lokalt da bare den nye testen ble kjørt. Kjør hele e2e-pakken (eller i det minste alle fase-2a-filene) lokalt når seed-data endres, og la testhjelperne hoppe over organisasjoner med `settings.sampleData`.
+- Lokal `main` i containeren kan være gammel historikk som ikke kan spoles fram. Arbeid fra `origin/main` i en ny branch i stedet for å nullstille `main`.
