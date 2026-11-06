@@ -1,5 +1,9 @@
 export { AccessDeniedError } from "./errors";
-export { listOrganizationsForActor, requireOrganizationAccess } from "./guards";
+export {
+  listOrganizationsForActor,
+  requireOrganizationAccess,
+  requireTemplateEditAccess,
+} from "./guards";
 export {
   effectivePermissions,
   grantablePermissions,
