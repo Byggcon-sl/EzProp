@@ -24,8 +24,8 @@ Dette er grunnlaget for å prøve KI, ikke en KI-funksjon. KI trinn 1–3 (tekst
 - Et eget seed-steg `pnpm db:seed:testoppdrag` (`src/db/seed/sample-assignments.ts` med inngang `src/db/seed/sample-index.ts`). Det er trygt å kjøre flere ganger: andre kjøring lager ingen nye rader og endrer ingen. Hvert testoppdrag kjennes igjen på ordren i prøveorganisasjonen med fast `orders.external_ref` (`sample:detached-garage`, `sample:apartment-section`, `sample:apartment-cooperative`, `sample:holiday-home`) (A131).
 - Grunndata i prøveorganisasjonen:
   - ett oppdiktet selskap (`Prøveselskap AS`, uten org.nr.) og ett kontor (`Prøvekontor`)
-  - admin fra `SEED_ADMIN_EMAIL` som ansatt med rollen admin, så admin kan bytte til prøveorganisasjonen
-  - én oppdiktet takstmann med e-post på `@example.invalid`, ansatt i prøveselskapet. Han er ansvarlig takstmann på alle fire oppdragene.
+  - admin fra `SEED_ADMIN_EMAIL` som ansatt med rollen admin (han er den som utfører kallene til tjenestene). Appen har ingen organisasjonsvelger, så admin lander fortsatt i Byggcon i appen (A135).
+  - én oppdiktet takstmann med e-post på `@example.invalid`, ansatt i prøveselskapet (`company_id` = Prøveselskap AS settes **før** han settes som ansvarlig, ellers blir ikke utstedende selskap satt av regelen, A67). Han er ansvarlig takstmann på alle fire oppdragene, og det er han e2e logger inn som.
 - **Fire testoppdrag**, hvert med ordre som er gjort om til oppdrag (med oppdragsnummer fra nummerserien), team (ansvarlig takstmann) og utstedende selskap satt av den vanlige regelen. I tillegg får hvert oppdrag eiendom med matrikkel, boligtype og eierform, bygninger, etasjer, areal per etasje (BRA-i, BRA-e, BRA-b, ALH der det passer, metode og hvem som målte), rom med romtype og «under terreng», og parter (selger, megler, kjøper der det passer):
   1. **Enebolig med garasje:** `detached` / `freehold`. Bolig med to etasjer og kjeller under terreng, og frittstående garasje som egen bygning med BRA-b.
   2. **Leilighet i sameie:** `apartment` / `section`, med seksjonsnummer og fellesdeler.
@@ -60,7 +60,7 @@ Ingen nye rettigheter. Prøveorganisasjonen er en vanlig organisasjon, og tilgan
 | takstmann (oppdiktet, i prøveorg.) | testoppdragene | som vanlig (`access.inspectors_edit_all`) |
 | kontor | finnes ikke i prøveorg. | – |
 | leder | finnes ikke i prøveorg. | – |
-| admin (`SEED_ADMIN_EMAIL`) | alt i prøveorg. etter bytte av organisasjon | alt |
+| admin (`SEED_ADMIN_EMAIL`) | admin i prøveorg., men lander i Byggcon i appen (ingen organisasjonsvelger, A135) | alt i prøveorg. via tjenestene |
 | ansatte i Byggcon (ekte org.) | ingenting fra prøveorg. | ingenting |
 
 ## Data
@@ -74,7 +74,7 @@ Ingen nye rettigheter. Prøveorganisasjonen er en vanlig organisasjon, og tilgan
 - Personvernerklæringen endres ikke. Prøveorganisasjonen har bare oppdiktede data og ingen personopplysninger.
 
 ## Skjermer
-Ingen nye. Testoppdragene vises i arbeidskøen, på `/oppdrag/[id]` og `/oppdrag/[id]/bygninger` etter at admin har byttet til prøveorganisasjonen. Antall trykk: 0 for å lage dem, mot 15–20 minutter med inntasting per oppdrag i dag.
+Ingen nye. Testoppdragene vises i arbeidskøen, på `/oppdrag/[id]` og `/oppdrag/[id]/bygninger` for prøvetakstmannen (innlogging med kode der `DEV_MAILBOX=1`, altså lokalt og i CI). En organisasjonsvelger eller demobruker for testmiljøet er ført som eget spørsmål (A135), og bygges ikke her. Antall trykk: 0 for å lage dem, mot 15–20 minutter med inntasting per oppdrag i dag.
 
 ## Regler
 Ingen nye regler. Testoppdragene er testgrunnlag for reglene som kommer.
@@ -90,7 +90,7 @@ Ingen nye regler. Testoppdragene er testgrunnlag for reglene som kommer.
 - [ ] Steget sletter aldri noe og setter aldri `deleted_at` (test)
 - [ ] Alle e-postadresser i datafilen ender på `@example.invalid`, ingen felt har fødselsnummer, telefonnummer eller org.nr., kommunenummeret er `9999`, og romtyper og arealtyper finnes i kodelistene (test som leser datafilen)
 - [ ] Utstedende selskap og oppdragsnummer er satt av de vanlige reglene (test)
-- [ ] Virker på iPad-størrelse (én liten e2e-fil, PC og iPad: admin bytter til prøveorganisasjonen, ser fire oppdrag i arbeidskøen og åpner bygningene på eneboligen og ser bolig og garasje). Mangler testoppdragene, stopper testen med meldingen «Kjør pnpm db:seed:testoppdrag først», ikke «fant ikke»
+- [ ] Virker på iPad-størrelse (én liten e2e-fil, PC og iPad: prøvetakstmannen logger inn, ser eneboligen under «Bestilt» og de tre andre under «Under arbeid», åpner bygningene på eneboligen og ser bolig og garasje, uten vannrett rulling). Mangler testoppdragene, stopper testen med meldingen «Kjør pnpm db:seed:testoppdrag først», ikke «fant ikke»
 - [ ] CI kjører steget etter `pnpm db:seed` og før `pnpm test:e2e`. `deploy-azure.yml` kjører det i testmiljøet etter `db:seed` og før brannmurregelen slettes. `tests/deploy-workflow.test.ts` sjekker de to linjene hver for seg (i dag treffer `findIndex("pnpm db:seed")` også `db:seed:testoppdrag`)
 - [ ] `start.sh` kjører steget etter `db:seed` (bash 3.2)
 - [ ] Versjonen økt (patch). Planpunktet krysset av, med bildene som egen linje under bildepunktet. Ordlisten nevner prøveorganisasjonen og testoppdrag.
@@ -102,6 +102,8 @@ Ingen nye regler. Testoppdragene er testgrunnlag for reglene som kommer.
 - **Kjøring som stopper halvveis:** test-leder foreslo én transaksjon per testoppdrag. Det krever at tjenestene i `src/core` bygges om til å ta imot en ytre transaksjon, og det er utenfor oppgaven. Avgjørelse: steget fortsetter der det stoppet (se «Oppslag og gjentatt kjøring»), med én test.
 - **E2e:** egen liten fil `e2e/fase-2a-testoppdrag.spec.ts` (ingen eksisterende test har prøveorganisasjonen). Bare de to sjekkene over. Sjekken av at Byggcon ikke viser testoppdrag gjøres i integrasjonstesten, ikke i e2e. E2e kjører ikke seed-steget selv; CI og `start.sh` gjør det.
 - **Personvernerklæringen** endres ikke (forenkler).
+- **Ingen organisasjonsvelger** (test-leder, alvorlig funn). `findEmployeeGrant` velger første organisasjon etter navn, så admin lander i Byggcon. Avgjørelse: e2e logger inn som prøvetakstmannen, og en test låser at admin fortsatt lander i Byggcon. Velger eller demobruker i testmiljøet føres som A135 og bygges ikke her.
+- **Seed-steget deles i én funksjon per del** (ordre, omgjøring, team, eiendom, bygninger, parter), så halvveis kjøring er enkel å teste.
 
 ## Åpne spørsmål
 Ingen som stopper oppgaven. Beslutningene A130–A134 står i `docs/09-apne-sporsmal.md` og kan endres av Ståle.
