@@ -162,6 +162,7 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - Nattløkken (PR #68) og oppgaveløkken (PR #69) tok samme versjonsnummer (0.2.57) fra hver sin branch. Prosjektlederen fletter `main` inn rett før PR-en åpnes og setter versjonen til neste ledige tall da, ikke når kortet skrives. Sjekk: `git show origin/main:package.json | grep version`.
 - Når `main` har fått en ny migrering siden branchen ble laget, kjøres `pnpm db:migrate "$TEST_DATABASE_URL"` før de berørte testene kjøres på nytt; ellers er røde tester en falsk alarm.
+- Det samme gjelder e2e: `pnpm db:migrate` kjøres også mot `DATABASE_URL`, fordi e2e-serveren bruker utviklingsdatabasen og `playwright.config.ts` ikke kjører migreringer. Uten det ga reklamasjonsbranchen 62 røde e2e-tester med «relation "claims" does not exist» (06.11.2026).
 - To av tre fulle `pnpm test`-kjøringer ble falskt røde fordi en annen agent tømte den delte testdatabasen samtidig (kjent fra liten oppgave (k)). Test-leder og prosjektleder kjører de berørte filene alene før de sier «rød», og CI er fasiten. Hver kjøring sin egen testdatabase (f.eks. `ezprop_test_<worktree>`) er en liten oppgave verd å ta.
 - Et funn fra en gjennomgang kan være feil: «overflødig `FOR UPDATE` i `markFileDeleted`» (o) ble avvist av sikkerhet-personvern i runde 1 med begrunnelse, og låsen står. Kortet skal si det når et funn ikke tas, så det ikke dukker opp igjen i neste liste.
 
@@ -212,3 +213,9 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - En branch som er satt sammen («slå sammen del …»), men aldri gjennomgått, kan overtas etter 3 timer uten push. Det gikk raskt å fullføre for hånd: flette inn `main`, kjøre sjekkene, én gjennomgang fra test-leder, rette og åpne PR. Ingen ny arbeidsflyt trengs når bare gjennomgang og PR gjenstår.
 - Testplanen kan selv be om noe som bryter mønsteret: her ba den om `from`/`to` med notatteksten i revisjonsloggen. Fritekst (notater) skal aldri i revisjonsloggen, bare feltnavnet, uansett hva testplanen sier.
 - Ikke slett en testfil mens hele Vitest kjører; den feiler da med «Cannot find module». Kjør de berørte mappene på nytt etterpå.
+
+## 06.11.2026 – PR #110 og #111 (tidsmåling og reklamasjoner)
+
+- To kjøringer bygde hver sin oppgave samtidig fra samme `main`, og begge tok de samme A-numrene (A119–) og samme migreringsnummer (0022). Den som merges sist, må få nye numre: bytt numrene bare i filene branchen selv har endret (`git diff --name-only origin/main`), og lag migreringen på nytt med `pnpm db:generate` i stedet for å gi filen nytt navn.
+- Tester som teller (antall rettigheter, «migreringen 00NN finnes») brytes når to brancher legger til samme slags ting. Kjør hele Vitest etter flettingen, ikke bare de berørte mappene.
+- Når en branch som bygger på en annen er flettet med den, og den andre merges med «Squash and merge», blir det konflikter mot `main` selv om innholdet er likt. Sjekk `git diff origin/<grunnbranch> origin/main` er tom, og ta da vår side i alle konfliktene.

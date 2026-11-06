@@ -34,7 +34,7 @@ async function seedOrganization(sql: Sql): Promise<{ organizationId: string; off
     from employees e
     join users u on u.id = e.user_id
     join offices o on o.organization_id = e.organization_id and o.deleted_at is null
-    where u.email = ${ADMIN_EMAIL} and e.deleted_at is null and e.deactivated_at is null
+    where u.email = ${ADMIN_EMAIL} and e.organization_id not in (select id from organizations where settings ->> 'sampleData' = 'true') and e.deleted_at is null and e.deactivated_at is null
     order by (o.name = 'Bodø') desc, o.created_at
     limit 1`;
   if (!row) throw new Error("Fant ikke admin og kontor fra seed (kjør pnpm db:seed)");

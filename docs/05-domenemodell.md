@@ -2232,6 +2232,8 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Mål tid (innstilling) | `time_tracking.enabled` | I `organizations.settings`. På som standard; `false` slår målingen av (A121) |
 | Nullpunkt for tid (innstilling) | `time_tracking.baseline` | Minutter per fase fra IVIT og kilde, i `organizations.settings` til `baseline_metrics` bygges (A123) |
 | Nullpunkt | `baseline_metrics` | Tall fra IVIT og de siste 3 årene |
+| Prøveorganisasjon | organisasjon med `settings.sampleData = true` | «Byggcon prøve». Bare oppdiktede data; seed-steget skriver aldri i en organisasjon uten merket (A130) |
+| Testoppdrag | sample assignment (`orders.external_ref` med `sample:`) | De fire faste oppdragene i prøveorganisasjonen, laget av `pnpm db:seed:testoppdrag` (A131) |
 
 ---
 

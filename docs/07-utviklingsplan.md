@@ -239,7 +239,7 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 - [x] Fjerne (myk sletting fra skjermen) og slå sammen like kontakter og firma (05.11.2026, `docs/funksjoner/fase2a-fjerne-sla-sammen-kontakter.md`, `src/core/contacts/remove-merge.ts`, knappene «Fjern» og «Slå sammen» på `/kontakter/[id]` og `/firma/[id]`, sidene `…/sla-sammen`, ny rettighet `contacts.manage`, ingen migrering, beslutningene A108–A113)
 - [x] **Tidsmåling per rapport fra første ekte rapport** (hovedmålet, 28.10.2026): arbeidsøkter per fase (forberedelse, befaring, kontorarbeid, levering) lagres automatisk fra hendelsene, slik at tiden kan sammenlignes med nullpunktet fra IVIT. **Levert 06.11.2026** (`work_sessions`, `/statistikk/tid`, A119–A124).
 - [x] **Reklamasjoner med enkelt skjema fra første ekte rapport** (beslutning 27.10.2026, spørsmål 4). **Bare leder og admin ser reklamasjonssakene** (unntak fra «alle ser alt», 27.10.2026). Reklamasjonsmappen kommer i fase 4. **Levert 06.11.2026** (`claims`, `claims.manage`, delen «Reklamasjoner» på oppdraget, A125–A129).
-- [ ] **Fire testoppdrag som grunndata** (innspill P11): enebolig med garasje, leilighet i sameie, borettslagsleilighet og fritidsbolig, med bilder uten personer. Brukes i «Prøv malen», i regeltester og i demoer.
+- [x] **Fire testoppdrag som grunndata** (innspill P11): enebolig med garasje, leilighet i sameie, borettslagsleilighet og fritidsbolig, med bilder uten personer. Brukes i «Prøv malen», i regeltester og i demoer. **Levert 06.11.2026** uten bilder (`pnpm db:seed:testoppdrag`, prøveorganisasjonen, A130–A135).
 
 **Malen og reglene**
 - [ ] Malmotoren fra `datamodell.md` 4.5: malfamilie, malversjon, seksjon, felt, kontrollpunkt, avviksspørsmål, utfall, standardtiltak og regler. Systemmalen er låst for alle uten maltilgang.
@@ -263,6 +263,7 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 - [ ] Dokumentasjonstabell, egenerklæring (mottatt eller ikke, avvik) og NS-utgave i rapporten
 - [ ] **Fraser:** felles og mine, favoritter, «mest brukt», søk som tåler skrivefeil (også med «/»), filtrert på kontrollpunkt, felt og TG, lagre ny frase fra rapporten, endringslogg og «gå tilbake». Forslag fra frasebanken uten KI.
 - [ ] **Bilder på PC:** last opp, knytt til rom, kontrollpunkt og avvik, rotering, markering som eget lag (piler, ringer, tekst, farge etter TG), bildetekst, forsidebilde og bekreftelse før sletting
+  - [ ] Bilder uten personer til de fire testoppdragene, i samme seed-steg (`pnpm db:seed:testoppdrag`), når bildemodellen finnes (A134)
 - [ ] Sammendrag (skrives av takstmannen), **oppsummering per bygningsdel** som lagres og kan redigeres (innspill D12), og oversikt over TG
 - [ ] Papirkurv og angre for sletting
 
