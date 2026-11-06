@@ -11,6 +11,7 @@ import {
   type AnyPgColumn,
   type PgTableExtraConfigValue,
 } from "drizzle-orm/pg-core";
+import { clientAgreements } from "./client-agreements";
 import { baseColumns } from "./common";
 import { orders } from "./orders";
 import { companies, offices } from "./organization-structure";
@@ -50,6 +51,11 @@ export const assignments = pgTable(
     dueDate: date("due_date", { mode: "string" }),
     /** Kort intern merknad i arbeidskøen, høyst 200 tegn (A101). Aldri i rapport eller PDF. */
     internalNote: text("internal_note"),
+    /**
+     * Avtalen med oppdragsgiver. Velges for hånd eller fra forslaget på oppdragssiden, aldri
+     * automatisk (A116). Blir stående når avtalen utløper eller fjernes (A117).
+     */
+    clientAgreementId: uuid("client_agreement_id"),
   },
   // Returtypen står fordi tabellene peker på hverandre (ellers klarer ikke TypeScript typene).
   (table): PgTableExtraConfigValue[] => [
@@ -80,6 +86,12 @@ export const assignments = pgTable(
       name: "assignments_property_fk",
       columns: [table.organizationId, table.propertyId],
       foreignColumns: [properties.organizationId, properties.id],
+    }),
+    // Avtalen må høre til samme organisasjon som oppdraget
+    foreignKey({
+      name: "assignments_client_agreement_fk",
+      columns: [table.organizationId, table.clientAgreementId],
+      foreignColumns: [clientAgreements.organizationId, clientAgreements.id],
     }),
     check(
       "assignments_assignment_type_check",

@@ -21,3 +21,4 @@ export * from "./offline-trial";
 export * from "./files";
 export * from "./integration-connections";
 export * from "./contacts";
+export * from "./client-agreements";

@@ -39,6 +39,8 @@ const notices = {
   rettigheter: "Rettighetene er lagret.",
   sluttet: "Markert som sluttet.",
   angret: "Sluttet er angret.",
+  avtale: "Avtalen er lagret.",
+  "avtale-fjernet": "Avtalen er fjernet.",
 } as const;
 
 export type NoticeKey = keyof typeof notices;

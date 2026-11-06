@@ -24,6 +24,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               </NavLink>
             </li>
             <li>
+              <NavLink href="/admin/avtaler" matchChildren variant="tab">
+                Avtaler
+              </NavLink>
+            </li>
+            <li>
               <NavLink href="/admin/kontorer" matchChildren variant="tab">
                 Kontorer
               </NavLink>

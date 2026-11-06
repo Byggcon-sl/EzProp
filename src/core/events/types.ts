@@ -17,6 +17,7 @@ export const EVENT_TYPES = [
   "assignment.reopened",
   "assignment.team_changed",
   "assignment.company_changed",
+  "assignment.agreement_changed",
   "assignment.party_added",
   "assignment.party_updated",
   "assignment.party_removed",

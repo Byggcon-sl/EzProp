@@ -22,6 +22,7 @@ const EXPECTED_EVENT_TYPES = [
   "assignment.reopened",
   "assignment.team_changed",
   "assignment.company_changed",
+  "assignment.agreement_changed",
   "assignment.party_added",
   "assignment.party_updated",
   "assignment.party_removed",
@@ -61,8 +62,8 @@ const EXPECTED_EVENT_TYPES = [
 ];
 
 describe("hendelseskodene", () => {
-  it("1. har nøyaktig de 49 kodene fra domenemodellen 4.9", () => {
-    expect(EXPECTED_EVENT_TYPES).toHaveLength(49);
+  it("1. har nøyaktig de 50 kodene fra domenemodellen 4.9", () => {
+    expect(EXPECTED_EVENT_TYPES).toHaveLength(50);
     expect([...EVENT_TYPES].sort()).toEqual([...EXPECTED_EVENT_TYPES].sort());
   });
 
@@ -72,6 +73,10 @@ describe("hendelseskodene", () => {
 
   it.each([...EVENT_TYPES])("3. %s har formen «ord.ord_med_understrek»", (code) => {
     expect(code).toMatch(/^[a-z]+(_[a-z]+)*\.[a-z]+(_[a-z]+)*$/);
+  });
+
+  it("6. assignment.agreement_changed finnes (avtale med oppdragsgiver, fase 2a)", () => {
+    expect(EVENT_TYPES as readonly string[]).toContain("assignment.agreement_changed");
   });
 
   it("4. followup.received finnes ikke (forkastet 27.10.2026)", () => {
