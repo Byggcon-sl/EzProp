@@ -247,6 +247,7 @@ jobs:
             sleep 10
           done
           pnpm db:seed
+          pnpm db:seed:testoppdrag
 
       - name: Roller for synktjenestene
         # Kjører alltid. Skriptet velger selv: bryteren på gir roller og rettigheter,
