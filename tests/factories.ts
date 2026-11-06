@@ -42,6 +42,7 @@ export const RESET_TABLES = [
   "report_buildings",
   "number_sequences",
   "orders",
+  "claims",
   "common_areas",
   "cadastral_units",
   "assignment_team_members",
@@ -1095,5 +1096,100 @@ export async function createClientAgreement(
     createdAt: new Date(row.created_at as string | Date),
     updatedAt: new Date(row.updated_at as string | Date),
     deletedAt: row.deleted_at ? new Date(row.deleted_at as string | Date) : null,
+  };
+}
+
+// --- Reklamasjoner (docs/funksjoner/fase2a-reklamasjoner.md) ----------------------------------
+
+export type TestClaim = {
+  id: string;
+  organizationId: string;
+  assignmentId: string;
+  claimType: string;
+  receivedAt: string;
+  claimantPartyId: string | null;
+  claimantText: string | null;
+  description: string;
+  buildingPartText: string | null;
+  outcome: string;
+  amount: number | null;
+  closedAt: Date | null;
+  createdAt: Date;
+  createdBy: string;
+  updatedAt: Date;
+  deletedAt: Date | null;
+  deletedBy: string | null;
+  rowVersion: number;
+};
+
+type ClaimOverrides = {
+  /** Oppdraget. Mangler det, lages et oppdrag i samme organisasjon. */
+  assignmentId?: string;
+  claimType?: string;
+  /** Mottatt dato («ÅÅÅÅ-MM-DD»). Standard 2026-11-02 (dagen før `TEST_NOW`). */
+  receivedAt?: string;
+  claimantPartyId?: string | null;
+  claimantText?: string | null;
+  description?: string;
+  buildingPartText?: string | null;
+  outcome?: string;
+  amount?: number | null;
+  closedAt?: Date | null;
+  createdAt?: Date;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+  /** Ansatt-id-en som registrerte saken. Standard: en tilfeldig uuid. */
+  createdBy?: string;
+};
+
+/**
+ * En reklamasjonssak (`claims`), satt inn med SQL uten tilgangssjekk og uten Zod, slik at testene
+ * kan lage rader kjernen ville avvist (ukjente koder, beløp på åpen sak, fjernede saker). Standard:
+ * reklamasjon mottatt 2026-11-02, klager «Kjøper Test» som fritekst, beskrivelse «Fukt i kjeller
+ * ikke nevnt», bygningsdel «Kjeller, yttervegg», åpen, uten beløp. Lager oppdraget i samme
+ * organisasjon når det mangler. Oppdiktede data.
+ */
+export async function createClaim(
+  organizationId: string,
+  overrides: ClaimOverrides = {},
+): Promise<TestClaim> {
+  const assignmentId = overrides.assignmentId ?? (await createAssignment(organizationId)).id;
+  const pick = <T>(value: T | undefined, fallback: T): T =>
+    value === undefined ? fallback : value;
+  const row = firstRowOf(
+    await db.execute(sql`
+      insert into claims (organization_id, assignment_id, claim_type, received_at,
+        claimant_party_id, claimant_text, description, building_part_text, outcome, amount,
+        closed_at, created_at, created_by, deleted_at, deleted_by)
+      values (${organizationId}, ${assignmentId}, ${overrides.claimType ?? "complaint"},
+        ${overrides.receivedAt ?? "2026-11-02"}::date, ${pick(overrides.claimantPartyId, null)},
+        ${pick(overrides.claimantText, "Kjøper Test")}, ${overrides.description ?? "Fukt i kjeller ikke nevnt"},
+        ${pick(overrides.buildingPartText, "Kjeller, yttervegg")}, ${overrides.outcome ?? "open"},
+        ${pick(overrides.amount, null)}::integer, ${isoOrNull(overrides.closedAt)}::timestamptz,
+        ${(overrides.createdAt ?? new Date()).toISOString()}::timestamptz,
+        ${overrides.createdBy ?? randomUUID()}, ${isoOrNull(overrides.deletedAt)}::timestamptz,
+        ${overrides.deletedBy ?? null})
+      returning *`),
+    "claims",
+  );
+  return {
+    id: row.id as string,
+    organizationId: row.organization_id as string,
+    assignmentId: row.assignment_id as string,
+    claimType: row.claim_type as string,
+    receivedAt: dateText(row.received_at) as string,
+    claimantPartyId: (row.claimant_party_id as string | null) ?? null,
+    claimantText: (row.claimant_text as string | null) ?? null,
+    description: row.description as string,
+    buildingPartText: (row.building_part_text as string | null) ?? null,
+    outcome: row.outcome as string,
+    amount: numberOrNull(row.amount),
+    closedAt: row.closed_at ? new Date(row.closed_at as string | Date) : null,
+    createdAt: new Date(row.created_at as string | Date),
+    createdBy: String(row.created_by),
+    updatedAt: new Date(row.updated_at as string | Date),
+    deletedAt: row.deleted_at ? new Date(row.deleted_at as string | Date) : null,
+    deletedBy: (row.deleted_by as string | null) ?? null,
+    rowVersion: Number(row.row_version),
   };
 }

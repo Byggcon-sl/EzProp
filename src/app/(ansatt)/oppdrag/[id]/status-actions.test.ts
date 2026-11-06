@@ -95,6 +95,8 @@ beforeEach(() => {
     actor,
     organizationId: ORG,
     canEditOrders: true,
+    canReadClaims: false,
+    canManageClaims: false,
     canManageContacts: false,
     officeId: null,
   });

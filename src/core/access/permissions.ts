@@ -13,6 +13,11 @@ export const permissions = [
   "organization.manage",
   /** Se reklamasjonssaker. Bare leder og admin (unntak fra «alle ser alt», 27.10.2026). */
   "claims.read",
+  /**
+   * Registrere, endre, lukke og fjerne reklamasjonssaker. Bare leder og admin (unntak fra «alle
+   * ser alt», 27.10.2026). Kan ikke gis som enkeltrettighet og gis ikke av innstillingen (A126).
+   */
+  "claims.manage",
   /** Krav om sidemannskontroll, rutiner for alle, sperring av enheter. Leder og admin. */
   "staff.manage",
   /** Endre ordre, oppdrag, parter, befaringstid og dokumenter. */
@@ -61,6 +66,7 @@ function permissionsForRole(role: EmployeeRole, settings: AccessSettings): reado
       return [
         "organization.read",
         "claims.read",
+        "claims.manage",
         "staff.manage",
         "assignment.edit",
         "report.edit",

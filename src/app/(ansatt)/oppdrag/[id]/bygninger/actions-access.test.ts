@@ -136,6 +136,8 @@ async function setup() {
     actor: inspector,
     organizationId: org.id,
     canEditOrders: false,
+    canReadClaims: false,
+    canManageClaims: false,
     canManageContacts: false,
     officeId: null,
   });
