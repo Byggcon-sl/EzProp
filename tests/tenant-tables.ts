@@ -14,6 +14,7 @@ import {
   createAssignment,
   createAssignmentParty,
   createBuilding,
+  createClientAgreement,
   createCertification,
   createCommonAreas,
   createCompany,
@@ -115,6 +116,11 @@ export const tenantTables: TenantTableEntry[] = [
       const employee = await insertEmployee(organizationId);
       return (await createCertification(employee)).id;
     },
+  },
+  {
+    table: "client_agreements",
+    testFile: "src/core/agreements/agreements.test.ts",
+    insertRow: async (organizationId) => (await createClientAgreement(organizationId)).id,
   },
   {
     table: "common_areas",

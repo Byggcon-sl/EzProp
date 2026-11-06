@@ -31,6 +31,7 @@ import {
   trialForms,
   trialPhotos,
 } from "@/db/schema";
+import { isAgreementActive } from "@/core/agreements/active";
 import { todayInOslo } from "@/shared/lib/dates";
 import { uuidv7 } from "@/shared/lib/uuid";
 import {
@@ -38,6 +39,7 @@ import {
   createAssignmentParty,
   createBuilding,
   createCertification,
+  createClientAgreement,
   createCommonAreas,
   createContact,
   createEmployee,
@@ -1055,5 +1057,69 @@ describe("fabrikkene for firma og kontakter (fase 2a)", () => {
       const [row] = await db.select({ n: count() }).from(table);
       expect(row!.n).toBe(0);
     }
+  });
+});
+
+// Avtale med oppdragsgiver, docs/funksjoner/fase2a-oppdragsgiveravtale-testplan.md avsnitt 10.
+
+describe("createClientAgreement", () => {
+  beforeEach(resetDatabase);
+
+  it("10.1 uten overstyring: gyldig på TEST_NOW, med eget firma i samme organisasjon", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+
+    const agreement = await createClientAgreement(org.id);
+
+    expect(agreement.organizationId).toBe(org.id);
+    expect(agreement.validFrom).toBe("2026-01-01");
+    expect(agreement.validTo).toBeNull();
+    expect(agreement.deletedAt).toBeNull();
+    expect(isAgreementActive(agreement, todayInOslo(TEST_NOW))).toBe(true);
+    const [firm] = await db.select().from(firms).where(eq(firms.id, agreement.firmId));
+    expect(firm?.organizationId).toBe(org.id);
+    expect(firm?.deletedAt).toBeNull();
+  });
+
+  it("10.1 overstyringene brukes (firma, navn, periode, tekst, profil, deletedAt)", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const firm = await createFirm(org.id, { name: "Testforsikring AS" });
+    const deletedAt = new Date("2026-11-01T08:00:00Z");
+
+    const agreement = await createClientAgreement(org.id, {
+      firmId: firm.id,
+      name: "Testavtale forsikring",
+      validFrom: "2026-03-01",
+      validTo: "2026-10-31",
+      premiseText: "Premiss for test. Ikke ekte tekst.",
+      reportProfileCode: "test-profil",
+      deletedAt,
+    });
+
+    expect(agreement).toMatchObject({
+      firmId: firm.id,
+      name: "Testavtale forsikring",
+      validFrom: "2026-03-01",
+      validTo: "2026-10-31",
+      premiseText: "Premiss for test. Ikke ekte tekst.",
+      reportProfileCode: "test-profil",
+    });
+    expect(agreement.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+  });
+
+  it("10.2 RESET_TABLES har client_agreements før firms og organizations, og resetDatabase tømmer den", async () => {
+    const listed: readonly string[] = RESET_TABLES;
+    expect(listed).toContain("client_agreements");
+    expect(listed.indexOf("client_agreements")).toBeLessThan(listed.indexOf("firms"));
+    expect(listed.indexOf("client_agreements")).toBeLessThan(listed.indexOf("organizations"));
+
+    const org = await createOrganization("Oppdiktet takst A");
+    await createClientAgreement(org.id);
+
+    await resetDatabase();
+
+    const [row] = (await db.execute(
+      sql`select count(*)::int as n from client_agreements`,
+    )) as unknown as { n: number }[];
+    expect(row!.n).toBe(0);
   });
 });

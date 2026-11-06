@@ -39,6 +39,7 @@ export const RESET_TABLES = [
   "floors",
   "report_buildings",
   "contacts",
+  "client_agreements",
   "firms",
   "number_sequences",
   "orders",
@@ -977,4 +978,77 @@ export async function createContact(organizationId: string, overrides: ContactOv
     .returning();
   if (!row) throw new Error("kunne ikke opprette kontakt");
   return row;
+}
+
+// --- Avtale med oppdragsgiver (docs/funksjoner/fase2a-oppdragsgiveravtale.md) -----------------
+
+export type TestClientAgreement = {
+  id: string;
+  organizationId: string;
+  firmId: string;
+  name: string;
+  validFrom: string;
+  validTo: string | null;
+  premiseText: string | null;
+  reportProfileCode: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+};
+
+type ClientAgreementOverrides = {
+  /** Firmaet. Mangler det, lages et firma i samme organisasjon. */
+  firmId?: string;
+  name?: string;
+  validFrom?: string;
+  validTo?: string | null;
+  premiseText?: string | null;
+  reportProfileCode?: string | null;
+  deletedAt?: Date | null;
+};
+
+/** Ren dato fra databasen («ÅÅÅÅ-MM-DD»), også når driveren gir `Date`. */
+function isoDateOf(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+}
+
+/**
+ * En avtale med oppdragsgiver (`client_agreements`), satt inn med SQL uten tilgangssjekk og uten
+ * Zod, slik at testene kan lage rader tjenesten ville avvist (slettet, utløpt, fremmed firma).
+ * Standard: «Testavtale forsikring», gyldig fra 2026-01-01 og løpende (gyldig på `TEST_NOW`),
+ * premissetekst og rapportprofil tomme. Uten `firmId` lages et firma i samme organisasjon.
+ * Oppdiktede data.
+ */
+export async function createClientAgreement(
+  organizationId: string,
+  overrides: ClientAgreementOverrides = {},
+): Promise<TestClientAgreement> {
+  const firmId = overrides.firmId ?? (await createFirm(organizationId)).id;
+  const row = firstRowOf(
+    await db.execute(sql`
+      insert into client_agreements (organization_id, firm_id, name, valid_from, valid_to,
+        premise_text, report_profile_code, deleted_at)
+      values (${organizationId}, ${firmId}, ${overrides.name ?? "Testavtale forsikring"},
+        ${overrides.validFrom ?? "2026-01-01"}::date,
+        ${overrides.validTo === undefined ? null : overrides.validTo}::date,
+        ${overrides.premiseText ?? null}, ${overrides.reportProfileCode ?? null},
+        ${isoOrNull(overrides.deletedAt)}::timestamptz)
+      returning *`),
+    "client_agreements",
+  );
+  return {
+    id: row.id as string,
+    organizationId: row.organization_id as string,
+    firmId: row.firm_id as string,
+    name: row.name as string,
+    validFrom: isoDateOf(row.valid_from)!,
+    validTo: isoDateOf(row.valid_to),
+    premiseText: (row.premise_text as string | null) ?? null,
+    reportProfileCode: (row.report_profile_code as string | null) ?? null,
+    createdAt: new Date(row.created_at as string | Date),
+    updatedAt: new Date(row.updated_at as string | Date),
+    deletedAt: row.deleted_at ? new Date(row.deleted_at as string | Date) : null,
+  };
 }
