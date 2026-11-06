@@ -136,6 +136,7 @@ async function setup() {
     actor: inspector,
     organizationId: org.id,
     canEditOrders: false,
+    canManageContacts: false,
     officeId: null,
   });
 

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { listContacts } from "@/core/contacts";
+import { getRemovedContactName, listContacts } from "@/core/contacts";
 import { buttonVariants } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
+import { Notice } from "@/shared/ui/notice";
 import { getEmployeeContext } from "../employee-context";
 import { NoAccess } from "../no-access";
 import { SearchBox, searchQuery } from "../search-box";
@@ -13,15 +14,22 @@ export const metadata: Metadata = { title: "Kontakter" };
 /**
  * Meglerne og de andre kontaktene i organisasjonen, sortert på navn. Alle ansatte ser listen og
  * kan søke; «Ny kontakt» vises bare for dem som kan endre (sjekken skjer i kjernen).
+ * `?fjernet=<id>` gir kvitteringen «<navn> er fjernet.» etter «Fjern» på kontaktsiden.
  */
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[] }>;
+  searchParams: Promise<{ q?: string | string[]; fjernet?: string | string[] }>;
 }) {
   const context = await getEmployeeContext();
   if (!context) return <NoAccess />;
-  const query = searchQuery((await searchParams).q);
+  const params = await searchParams;
+  const query = searchQuery(params.q);
+  // Kvitteringen etter «Fjern» (`?fjernet=<id>`). Navnet slås opp her, så det står aldri i adressen.
+  const removed =
+    context.canManageContacts && typeof params.fjernet === "string"
+      ? await getRemovedContactName(context.actor, context.organizationId, params.fjernet)
+      : null;
   const contacts = await listContacts(context.actor, context.organizationId, {
     query: query || undefined,
   });
@@ -36,6 +44,11 @@ export default async function ContactsPage({
           </Link>
         )}
       </div>
+      {removed && (
+        <div className="mt-4">
+          <Notice message={`${contactName(removed)} er fjernet.`} />
+        </div>
+      )}
       <SearchBox label="Søk på navn, e-post eller firma" query={query} />
       {contacts.length === 0 ? (
         <Card className="mt-6">

@@ -117,6 +117,7 @@ beforeEach(() => {
     actor,
     organizationId: ORG,
     canEditOrders: true,
+    canManageContacts: false,
     officeId: null,
   });
   mocks.core.createFirm.mockResolvedValue({ id: FIRM, name: NAME });

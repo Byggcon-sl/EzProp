@@ -16,6 +16,14 @@ export {
 export { createFirm, getFirm, listFirms, updateFirm } from "./firms";
 export { findContactForLink } from "./link";
 export {
+  getContactUsage,
+  getFirmUsage,
+  getRemovedContactName,
+  getRemovedFirmName,
+  type ContactUsage,
+  type FirmUsage,
+} from "./merge-view";
+export {
   mergeContacts,
   mergeFirms,
   removeContact,
