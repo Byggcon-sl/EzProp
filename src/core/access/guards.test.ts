@@ -25,6 +25,7 @@ import {
   employeeHasValidCertification,
   listOrganizationsForActor,
   requireOrganizationAccess,
+  requireTemplateEditAccess,
 } from "./guards";
 import {
   effectivePermissions,
@@ -722,5 +723,122 @@ describe("claims.manage mot databasen", () => {
     await createEmployee(neither, org.id, ["inspector", "office"]);
     await expectAllowed(neither, org.id, "claims.manage", false);
     await expectAllowed(neither, org.id, "claims.read", false);
+  });
+});
+
+// --- Malmotoren: requireTemplateEditAccess (docs/funksjoner/fase2a-malmotor-testplan.md, 1.2–1.6) ---
+//
+// Systemmalen er låst for alle uten maltilgang (`template.edit_structure`). Admin har den alltid,
+// andre bare som enkeltrettighet. Innstillingen `access.inspectors_edit_all` gir den aldri.
+
+const SYSTEM_FAMILY = { kind: "system" } as const;
+
+async function expectTemplateEdit(actor: TestActor, organizationId: string, allowed: boolean) {
+  if (allowed) {
+    const grant = await requireTemplateEditAccess(actor, organizationId, SYSTEM_FAMILY);
+    expect(grant.organizationId).toBe(organizationId);
+  } else {
+    await expect(requireTemplateEditAccess(actor, organizationId, SYSTEM_FAMILY)).rejects.toThrow(
+      AccessDeniedError,
+    );
+  }
+}
+
+describe("requireTemplateEditAccess", () => {
+  const roleCases: { name: string; roles: EmployeeRole[]; grant: boolean; allowed: boolean }[] = [
+    { name: "takstmann", roles: ["inspector"], grant: false, allowed: false },
+    { name: "kontor", roles: ["office"], grant: false, allowed: false },
+    { name: "leder", roles: ["manager"], grant: false, allowed: false },
+    { name: "takstmann med enkeltrettighet", roles: ["inspector"], grant: true, allowed: true },
+    { name: "leder med enkeltrettighet", roles: ["manager"], grant: true, allowed: true },
+    {
+      name: "admin uten andre roller og enkeltrettigheter",
+      roles: ["admin"],
+      grant: false,
+      allowed: true,
+    },
+  ];
+
+  it.each([true, false].flatMap((setting) => roleCases.map((c) => ({ ...c, setting }))))(
+    "1.2 $name, innstillingen $setting: tilgang = $allowed",
+    async ({ roles, grant, allowed, setting }) => {
+      const org = await createOrganization();
+      await setSettings(org.id, { [SETTING]: setting });
+      const user = await createUser();
+      const employee = await createEmployee(user, org.id, roles);
+      if (grant) await grantPermission(employee, "template.edit_structure");
+      await expectTemplateEdit(user, org.id, allowed);
+    },
+  );
+
+  it("1.3 innstillingen access.inspectors_edit_all gir aldri maltilgang", async () => {
+    const org = await createOrganization();
+    await setSettings(org.id, { [SETTING]: true });
+    const user = await createUser();
+    await createEmployee(user, org.id, ["inspector"]);
+    // Takstmannen kan endre oppdrag og rapport, men ikke malen
+    await expectAllowed(user, org.id, "report.edit", true);
+    await expectTemplateEdit(user, org.id, false);
+  });
+
+  it("1.4 fjernet, deaktivert og manglende ansatt får nei", async () => {
+    const org = await createOrganization();
+    const removed = await createUser();
+    const deactivated = await createUser();
+    const stranger = await createUser();
+    const a = await createEmployee(removed, org.id, ["admin"]);
+    const b = await createEmployee(deactivated, org.id, ["manager"]);
+    await grantPermission(b, "template.edit_structure");
+    await db.update(employees).set({ deletedAt: new Date() }).where(eq(employees.id, a.id));
+    await db.update(employees).set({ deactivatedAt: new Date() }).where(eq(employees.id, b.id));
+
+    await expectTemplateEdit(removed, org.id, false);
+    await expectTemplateEdit(deactivated, org.id, false);
+    await expectTemplateEdit(stranger, org.id, false);
+  });
+
+  it("1.4b slettet enkeltrettighet gir ikke lenger maltilgang", async () => {
+    const org = await createOrganization();
+    const user = await createUser();
+    const employee = await createEmployee(user, org.id, ["manager"]);
+    const row = await grantPermission(employee, "template.edit_structure");
+    await expectTemplateEdit(user, org.id, true);
+    await db
+      .update(employeePermissions)
+      .set({ deletedAt: new Date() })
+      .where(eq(employeePermissions.id, row.id));
+    await expectTemplateEdit(user, org.id, false);
+  });
+
+  it("1.5 rettighet i A gir ikke maltilgang i B", async () => {
+    const orgA = await createOrganization("A");
+    const orgB = await createOrganization("B");
+    const user = await createUser();
+    const inA = await createEmployee(user, orgA.id, ["inspector"]);
+    await createEmployee(user, orgB.id, ["inspector"]);
+    await grantPermission(inA, "template.edit_structure");
+
+    await expectTemplateEdit(user, orgA.id, true);
+    await expectTemplateEdit(user, orgB.id, false);
+  });
+
+  it("1.5b admin i A har ikke maltilgang i B", async () => {
+    const orgA = await createOrganization("A");
+    const orgB = await createOrganization("B");
+    const user = await createUser();
+    await createEmployee(user, orgA.id, ["admin"]);
+    await expectTemplateEdit(user, orgB.id, false);
+  });
+
+  // Admin stenges aldri ute (regel 11). Testen skal aldri fjernes.
+  it("1.6 admin uten sertifisering og uten andre roller får maltilgang, innstillingen av", async () => {
+    const org = await createOrganization();
+    await setSettings(org.id, { [SETTING]: false });
+    const user = await createUser();
+    const employee = await createEmployee(user, org.id, ["admin"]);
+    const grant = await requireTemplateEditAccess(user, org.id, SYSTEM_FAMILY);
+    expect(grant.employeeId).toBe(employee.id);
+    expect(grant.roles).toEqual(["admin"]);
+    expect(await employeeHasValidCertification(employee, todayInOslo())).toBe(false);
   });
 });
