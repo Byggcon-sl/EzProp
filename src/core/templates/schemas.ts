@@ -1,5 +1,23 @@
 import { z } from "zod";
 import { ROOM_TYPE_GROUPS } from "@/core/buildings";
+import {
+  CAUSE_CRITERIA,
+  CHECKPOINT_GROUPS,
+  CHECKPOINT_SCOPES,
+  CHECKPOINT_UNIT_SCOPES,
+  FIELD_TYPES,
+  OUTCOME_KINDS,
+  PHRASE_SLOTS,
+  RULE_CONDITION_OPERATORS,
+  RULE_CONDITION_TYPES,
+  RULE_MATCHES,
+  RULE_PURPOSES,
+  RULE_SEVERITIES,
+  SECTION_REPEATS,
+  TEMPLATE_KEY_PATTERN,
+  TG_RULE_PURPOSES,
+  type TemplateKind,
+} from "@/db/schema";
 import type { TemplateIssue, TemplateIssueRule } from "./errors";
 
 /*
@@ -20,60 +38,10 @@ import type { TemplateIssue, TemplateIssueRule } from "./errors";
  */
 
 /** Små bokstaver, tall og `_`, delt med punktum. Ikke tom, ikke ledende eller doble punktum. */
-export const KEY_PATTERN = /^[a-z0-9_]+(\.[a-z0-9_]+)*$/;
+export const KEY_PATTERN = TEMPLATE_KEY_PATTERN;
 export const KEY_MAX = 100;
 
-export const SECTION_REPEATS = ["once", "per_building", "per_room"] as const;
-export const ELEMENT_FIELD_TYPES = [
-  "text",
-  "checkbox",
-  "choice",
-  "number",
-  "date",
-  "photo",
-  "signature",
-  "table",
-  "phrase",
-] as const;
-export const PHRASE_SLOTS = [
-  "description",
-  "deviation",
-  "cause",
-  "consequence",
-  "measure",
-  "cost_text",
-  "summary",
-] as const;
-export const CHECKPOINT_GROUPS = ["exterior", "interior", "room", "technical", "site"] as const;
-export const CHECKPOINT_SCOPES = ["building", "room"] as const;
-export const CHECKPOINT_APPLIES_TO_UNIT = ["unit", "common", "both"] as const;
-/** Aldri `tgiu`: TGIU settes på kontrollpunktet, ikke som utfall (innspill D1). */
-export const OUTCOME_KINDS = ["tg2", "tg3", "hms", "choose_tg2_tg3"] as const;
-export const RULE_PURPOSES = ["show", "suggest_outcome", "suggest_tgiu", "validate"] as const;
-/** Regeltypene med TG-logikk. Bare tillatt i systemmalen (beslutning 27.10.2026). */
-export const TG_RULE_PURPOSES = ["suggest_outcome", "suggest_tgiu"] as const;
-export const RULE_MATCHES = ["all", "any"] as const;
-export const RULE_SEVERITIES = ["blocker", "warning"] as const;
-export const RULE_CONDITION_TYPES = [
-  "always",
-  "option_selected",
-  "number_vs_limit",
-  "age_vs_lifespan",
-  "build_year",
-  "room_type",
-  "below_ground",
-  "housing_type",
-  "ownership_form",
-  "field_filled",
-  "snow_covered",
-  "building_type",
-  "checkpoint_tg",
-  "photo_missing",
-  "tgiu_set",
-] as const;
-export const RULE_OPERATORS = ["eq", "in", "gt", "gte", "lt", "lte", "before", "after"] as const;
-export const TEMPLATE_KINDS = ["system", "custom"] as const;
-export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
+export type { TemplateKind };
 
 const SHORT_TEXT_MAX = 500;
 const LONG_TEXT_MAX = 10_000;
@@ -156,30 +124,35 @@ const sectionSchema = z.object({
   sort_order: sortOrder,
 });
 
-const elementSchema = z.object({
-  key: keySchema,
-  section_key: keySchema,
-  /** Kontrollpunktet feltet hører til (tomt i egne maler). */
-  checkpoint_key: optionalKey,
-  label: requiredText(),
-  field_type: oneOf(ELEMENT_FIELD_TYPES),
-  multiple: z.boolean().default(false),
-  unit: optionalText(SHORT_TEXT_MAX),
-  min_value: optionalNumber,
-  max_value: optionalNumber,
-  decimals: z.number({ error: SCHEMA_MESSAGE }).int().min(0).max(10).nullable().default(null),
-  /** Bare grunnsjekk nå: en liste (kortet, «Ikke med»). */
-  table_columns: z
-    .array(z.json(), { error: "Kolonnene må være en liste." })
-    .nullable()
-    .default(null),
-  phrase_slot: oneOf(PHRASE_SLOTS).nullable().default(null),
-  required: z.boolean().default(false),
-  default_value: optionalText(),
-  help_text: optionalText(),
-  show_in_report: z.boolean().default(true),
-  sort_order: sortOrder,
-});
+const elementSchema = z
+  .object({
+    key: keySchema,
+    section_key: keySchema,
+    /** Kontrollpunktet feltet hører til (tomt i egne maler). */
+    checkpoint_key: optionalKey,
+    label: requiredText(),
+    field_type: oneOf(FIELD_TYPES),
+    multiple: z.boolean().default(false),
+    unit: optionalText(SHORT_TEXT_MAX),
+    min_value: optionalNumber,
+    max_value: optionalNumber,
+    decimals: z.number({ error: SCHEMA_MESSAGE }).int().min(0).max(10).nullable().default(null),
+    /** Bare grunnsjekk nå: en liste (kortet, «Ikke med»). */
+    table_columns: z
+      .array(z.json(), { error: "Kolonnene må være en liste." })
+      .nullable()
+      .default(null),
+    phrase_slot: oneOf(PHRASE_SLOTS).nullable().default(null),
+    required: z.boolean().default(false),
+    default_value: z.json().nullable().default(null),
+    help_text: optionalText(),
+    show_in_report: z.boolean().default(true),
+    sort_order: sortOrder,
+  })
+  .refine((e) => e.min_value === null || e.max_value === null || e.min_value <= e.max_value, {
+    error: "Laveste verdi kan ikke være større enn høyeste verdi.",
+    path: ["min_value"],
+  });
 
 const optionSchema = z.object({
   element_key: keySchema,
@@ -199,7 +172,7 @@ const checkpointSchema = z.object({
   gives_tg: z.boolean().default(true),
   scope: oneOf(CHECKPOINT_SCOPES).default("building"),
   room_type_groups: roomTypeGroups,
-  applies_to_unit: oneOf(CHECKPOINT_APPLIES_TO_UNIT).nullable().default(null),
+  applies_to_unit: oneOf(CHECKPOINT_UNIT_SCOPES).default("both"),
   /** «Ses i sammenheng med». */
   related_checkpoint_keys: keyList,
   sort_order: sortOrder,
@@ -218,7 +191,7 @@ const outcomeSchema = z.object({
   key: keySchema,
   kind: outcomeKind,
   deviation_text: optionalText(),
-  default_cause_criterion: optionalText(),
+  default_cause_criterion: oneOf(CAUSE_CRITERIA).nullable().default(null),
   default_consequence_text: optionalText(),
   /** Kilde i bakgrunnen. Står aldri i rapporten. */
   source_ref: optionalText(SHORT_TEXT_MAX),
@@ -267,13 +240,14 @@ const ruleSchema = z.object({
 
 const ruleConditionSchema = z.object({
   rule_key: keySchema,
-  group_no: z.number({ error: SCHEMA_MESSAGE }).int().min(0).default(0),
+  /** Gruppen. Tom = uten gruppe (regelens `match` gjelder). */
+  group_no: z.number({ error: SCHEMA_MESSAGE }).int().min(1).nullable().default(null),
   type: oneOf(RULE_CONDITION_TYPES),
   /** Feltet betingelsen leser. */
   element_key: optionalKey,
   /** Kontrollpunktet betingelsen leser (for `checkpoint_tg`). */
   checkpoint_key: optionalKey,
-  operator: oneOf(RULE_OPERATORS).nullable().default(null),
+  operator: oneOf(RULE_CONDITION_OPERATORS).nullable().default(null),
   value: z.json().nullable().default(null),
   sort_order: sortOrder,
 });

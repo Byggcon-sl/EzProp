@@ -129,7 +129,7 @@ export function buildTemplateDocument(overrides: Partial<TemplateDocument> = {})
         gives_tg: true,
         scope: "building",
         room_type_groups: [],
-        applies_to_unit: null,
+        applies_to_unit: "both",
         related_checkpoint_keys: [],
         sort_order: 0,
       },
