@@ -13,10 +13,12 @@ export {
   KEY_MAX,
   KEY_PATTERN,
   checkNoTgLogicInCustom,
+  createTemplateFamilyInputSchema,
   parseTemplateDocument,
   templateDocumentSchema,
   toTemplateIssues,
   type CheckpointDoc,
+  type CreateTemplateFamilyInput,
   type DeviationQuestionDoc,
   type OutcomeDoc,
   type RuleConditionDoc,
@@ -30,3 +32,15 @@ export {
   type TemplateKind,
   type TemplateSectionDoc,
 } from "./schemas";
+export {
+  createDraftVersion,
+  createTemplateFamily,
+  getTemplateVersion,
+  listTemplateFamilies,
+  publishVersion,
+  saveDraftContent,
+  type TemplateContentCounts,
+  type TemplateFamilyListItem,
+  type TemplateVersionDetail,
+  type TemplateVersionSummary,
+} from "./templates";

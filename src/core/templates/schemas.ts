@@ -15,6 +15,7 @@ import {
   RULE_SEVERITIES,
   SECTION_REPEATS,
   TEMPLATE_KEY_PATTERN,
+  TEMPLATE_REPORT_TYPES,
   TG_RULE_PURPOSES,
   type TemplateKind,
 } from "@/db/schema";
@@ -299,7 +300,7 @@ function issueRule(issue: z.core.$ZodIssue): TemplateIssueRule {
 }
 
 /** Norsk melding for Zod sine egne feil. Meldinger satt i skjemaet over går foran. */
-function norwegianMessage(issue: { code?: string }): string {
+export function norwegianMessage(issue: { code?: string }): string {
   if (issue.code === "too_big") return "Verdien er for stor eller for lang.";
   if (issue.code === "too_small") return "Verdien er for liten.";
   if (issue.code === "invalid_value") return UNKNOWN_VALUE_MESSAGE;
@@ -353,3 +354,22 @@ export function checkNoTgLogicInCustom(
   });
   return issues;
 }
+
+/**
+ * Ny malfamilie. Bare systemmaler nå (A139): `custom` avvises med en egen melding. Ukjente felt
+ * (`organizationId` og andre) tas bort.
+ */
+export const createTemplateFamilyInputSchema = z.object({
+  name: requiredText(),
+  kind: z
+    .custom<TemplateKind>((value) => value === "system" || value === "custom", {
+      error: UNKNOWN_VALUE_MESSAGE,
+    })
+    .default("system")
+    .refine((value) => value === "system", { error: "Egne maler kan ikke lages ennå." }),
+  report_type: oneOf(TEMPLATE_REPORT_TYPES).default("condition_report"),
+});
+export type CreateTemplateFamilyInput = z.input<typeof createTemplateFamilyInputSchema>;
+
+/** Hva som er endret i versjonen. Valgfri; tom blir `null`. */
+export const changeNoteSchema = optionalText(2000);

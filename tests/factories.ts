@@ -2,6 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Actor } from "@/core/access";
 import type { FileStorage } from "@/core/files";
+import type { TemplateDocumentInput } from "@/core/templates";
+// Bare testfabrikken bruker denne; den eksporteres ikke fra `@/core/templates`.
+import { insertTemplateWithoutAccessCheck } from "@/core/templates/templates";
 import { db } from "@/db/client";
 import {
   assignmentParties,
@@ -1097,6 +1100,29 @@ export async function createClientAgreement(
     updatedAt: new Date(row.updated_at as string | Date),
     deletedAt: row.deleted_at ? new Date(row.deleted_at as string | Date) : null,
   };
+}
+
+// --- Malmotoren (docs/funksjoner/fase2a-malmotor.md) -------------------------------------------
+
+/**
+ * En malfamilie med én versjon og innholdet i `document`, lagt rett inn i databasen uten
+ * tilgangssjekk og uten revisjonslogg (testplanen, «Avtale om signaturer»). Standard: systemmal,
+ * utkast, versjon 1, tomt innhold. `status` `published` og `retired` får `published_at`.
+ * `familyId` legger versjonen i en familie som finnes fra før.
+ */
+export async function createTemplate(
+  organizationId: string,
+  options: {
+    status?: "draft" | "published" | "retired";
+    versionNumber?: number;
+    document?: TemplateDocumentInput;
+    deletedAt?: Date | null;
+    versionDeletedAt?: Date | null;
+    familyId?: string;
+    name?: string;
+  } = {},
+): Promise<{ familyId: string; versionId: string }> {
+  return insertTemplateWithoutAccessCheck(organizationId, options);
 }
 
 // --- Reklamasjoner (docs/funksjoner/fase2a-reklamasjoner.md) ----------------------------------
