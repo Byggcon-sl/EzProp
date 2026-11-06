@@ -53,7 +53,7 @@ export const assignments = pgTable(
     internalNote: text("internal_note"),
     /**
      * Avtalen med oppdragsgiver. Velges for hånd eller fra forslaget på oppdragssiden, aldri
-     * automatisk (A110). Blir stående når avtalen utløper eller fjernes (A111).
+     * automatisk (A116). Blir stående når avtalen utløper eller fjernes (A117).
      */
     clientAgreementId: uuid("client_agreement_id"),
   },

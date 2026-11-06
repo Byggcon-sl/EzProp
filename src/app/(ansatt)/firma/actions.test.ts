@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AccessDeniedError } from "@/core/access";
-import { FirmDuplicateError } from "@/core/contacts/errors";
+import { FirmDuplicateError, MergeSameRecordError } from "@/core/contacts/errors";
 import { firmInputSchema } from "@/core/contacts/schemas";
 import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../form-state";
 
@@ -33,6 +33,10 @@ const mocks = vi.hoisted(() => ({
     getContact: vi.fn(),
     createContact: vi.fn(),
     updateContact: vi.fn(),
+    removeContact: vi.fn(),
+    mergeContacts: vi.fn(),
+    removeFirm: vi.fn(),
+    mergeFirms: vi.fn(),
   },
 }));
 
@@ -48,7 +52,8 @@ vi.mock("@/core/contacts", async (importOriginal) => ({
   ...mocks.core,
 }));
 
-const { createFirmAction, updateFirmAction } = await import("./actions");
+const { createFirmAction, updateFirmAction, removeFirmAction, mergeFirmsAction } =
+  await import("./actions");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
 const OTHER_ORG = "0190a000-0000-7000-8000-000000000002";
@@ -112,6 +117,7 @@ beforeEach(() => {
     actor,
     organizationId: ORG,
     canEditOrders: true,
+    canManageContacts: false,
     officeId: null,
   });
   mocks.core.createFirm.mockResolvedValue({ id: FIRM, name: NAME });
@@ -249,4 +255,125 @@ describe("7.8 loggkontrakt", () => {
       }
     },
   );
+});
+
+/*
+ * Fjerne og slå sammen firma (docs/funksjoner/fase2a-fjerne-sla-sammen-kontakter-testplan.md
+ * avsnitt 4). Kjernen er byttet ut; tjenestene testes mot databasen i src/core/contacts.
+ * Avtalt med utvikler: `removeFirmAction` (id-en i `firmId`) og `mergeFirmsAction` (`keepId` og
+ * `removeId`), signatur `(previous: FormState, formData: FormData)`.
+ * Støtter hovedmål: reklamasjoner (ingen 500 og ingen navn eller organisasjonsnummer i loggen) og
+ * tid (riktig melding med én gang).
+ */
+
+const KEEP = FIRM;
+const REMOVE = EXISTING;
+const FIRM_NOT_FOUND = "Firmaet finnes ikke.";
+const SAME_FIRM = "Velg to ulike firma.";
+
+function runRemove(overrides: Record<string, string> = {}) {
+  return removeFirmAction(initialFormState, form({ firmId: REMOVE, ...overrides }));
+}
+
+function runMerge(overrides: Record<string, string> = {}) {
+  return mergeFirmsAction(initialFormState, form({ keepId: KEEP, removeId: REMOVE, ...overrides }));
+}
+
+const REMOVE_MERGE = [
+  ["removeFirmAction", () => mocks.core.removeFirm, runRemove],
+  ["mergeFirmsAction", () => mocks.core.mergeFirms, runMerge],
+] as const;
+
+describe("4. fjerne og slå sammen firma", () => {
+  beforeEach(() => {
+    mocks.core.removeFirm.mockResolvedValue({ contactCount: 1 });
+    mocks.core.mergeFirms.mockResolvedValue({ contactCount: 1, partyCount: 1, orderCount: 1 });
+  });
+
+  it.each([
+    ["removeFirmAction", "firmId", "abc", runRemove],
+    ["removeFirmAction", "firmId", "", runRemove],
+    ["mergeFirmsAction", "keepId", "abc", runMerge],
+    ["mergeFirmsAction", "keepId", "", runMerge],
+    ["mergeFirmsAction", "removeId", "abc", runMerge],
+    ["mergeFirmsAction", "removeId", "", runMerge],
+  ] as const)(
+    "4.1 invalid_id_no_core_call: %s med %s = «%s» gir «Firmaet finnes ikke.» uten kall til kjernen",
+    async (_name, field, value, run) => {
+      const state = await run({ [field]: value });
+      expect(state.message).toBe(FIRM_NOT_FOUND);
+      expect(coreCalls()).toBe(0);
+    },
+  );
+
+  it("4.2 same_record_message: MergeSameRecordError gir «Velg to ulike firma.», ikke 500", async () => {
+    mocks.core.mergeFirms.mockRejectedValue(new MergeSameRecordError("firm"));
+    const state = await runMerge({ keepId: KEEP, removeId: KEEP });
+    expect(state.message).toBe(SAME_FIRM);
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it.each(REMOVE_MERGE)(
+    "4.3 access_denied_message: %s med AccessDeniedError gir «Firmaet finnes ikke.» uten detaljer",
+    async (_name, core, run) => {
+      core().mockRejectedValue(new AccessDeniedError());
+      const state = await run();
+      expect(state.message).toBe(FIRM_NOT_FOUND);
+      expect(JSON.stringify(state)).not.toContain("AccessDenied");
+      expect(mocks.logError).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(REMOVE_MERGE)(
+    "4.3b %s: organisasjonen og brukeren kommer fra konteksten, ikke fra skjemaet",
+    async (_name, core, run) => {
+      await run({ organizationId: OTHER_ORG }).catch(() => undefined);
+      expect(core()).toHaveBeenCalledTimes(1);
+      expect(core().mock.calls[0]?.[0]).toEqual(actor);
+      expect(core().mock.calls[0]?.[1]).toBe(ORG);
+      expect(JSON.stringify(core().mock.calls)).not.toContain(OTHER_ORG);
+    },
+  );
+
+  it("4.3c mergeFirmsAction sender keepId og removeId fra skjemaet", async () => {
+    await runMerge().catch(() => undefined);
+    expect(mocks.core.mergeFirms).toHaveBeenCalledWith(actor, ORG, {
+      keepId: KEEP,
+      removeId: REMOVE,
+    });
+  });
+
+  it.each(REMOVE_MERGE)(
+    "4.4 logger_contract: %s logger ukjent feil bare med rute, bruker-id, id-er og feilnavn",
+    async (_name, core, run) => {
+      const boom = new Error(`databasen sa nei til ${NAME} ${ORG_NUMBER} ${NOTE}`);
+      boom.name = "OppdiktetFeil";
+      core().mockRejectedValue(boom);
+
+      const state = await run();
+      expect(state.message).toBe(UNKNOWN_ERROR);
+      expect(mocks.logError).toHaveBeenCalledTimes(1);
+      const logged = JSON.stringify(mocks.logError.mock.calls)
+        .replaceAll(KEEP, "<behold>")
+        .replaceAll(REMOVE, "<fjern>")
+        .replaceAll(ORG, "<org>");
+      expect(logged).toContain("OppdiktetFeil");
+      expect(logged).toContain(actor.id);
+      for (const value of [NAME, ORG_NUMBER, NOTE, "Testmegling", "databasen sa nei"]) {
+        expect(logged, value).not.toContain(value);
+      }
+    },
+  );
+
+  it("4.4b removeFirmAction sender tilbake til listen etter fjerning, uten navnet i adressen", async () => {
+    const url = await redirectOf(runRemove());
+    expect(url).toMatch(/^\/firma\?/);
+    for (const value of [NAME, ORG_NUMBER]) expect(url).not.toContain(value);
+    expect(mocks.core.removeFirm).toHaveBeenCalledWith(actor, ORG, REMOVE);
+  });
+
+  it("4.4c mergeFirmsAction sender videre til firmaet som beholdes", async () => {
+    const url = await redirectOf(runMerge());
+    expect(url.startsWith(`/firma/${KEEP}`)).toBe(true);
+  });
 });

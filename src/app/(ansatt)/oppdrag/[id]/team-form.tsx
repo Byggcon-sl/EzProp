@@ -1,14 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
-import { Field, Input } from "@/shared/ui/form";
+import { Field, Input, Select } from "@/shared/ui/form";
 import { FormErrors, SubmitButton } from "../../form-parts";
 import { initialFormState, textValue, type FormState } from "../../form-state";
 
 type Action = (state: FormState, formData: FormData) => Promise<FormState>;
-
-const selectClass =
-  "block min-h-11 w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 focus:border-brand-600 aria-invalid:border-red-700";
 
 /**
  * Én linje i teamet med nedtrekksliste, valgfri grunn og «Lagre» (to trykk per rolle). «Ingen»
@@ -43,10 +40,9 @@ export function TeamMemberForm({
         htmlFor={`${id}-employee`}
         error={state.fieldErrors.employeeId}
       >
-        <select
+        <Select
           id={`${id}-employee`}
           name="employeeId"
-          className={selectClass}
           defaultValue={textValue(state, "employeeId", currentEmployeeId)}
         >
           <option value="">Ingen</option>
@@ -55,7 +51,7 @@ export function TeamMemberForm({
               {candidate.name}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
       <Field
         label="Grunn ved bytte"

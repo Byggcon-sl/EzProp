@@ -34,7 +34,7 @@ const selectClass =
   "block min-h-11 w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 focus:border-brand-600 aria-invalid:border-red-700";
 
 /**
- * Kortet «Avtale» på oppdragssiden (A110, A111). Viser avtalen med periode og merke, forslaget
+ * Kortet «Avtale» på oppdragssiden (A116, A117). Viser avtalen med periode og merke, forslaget
  * med «Bruk avtalen», og en velger med bare gyldige avtaler. Knappene vises bare med `canEdit`
  * (siden avgjør det fra tilgangen); kjernen sjekker likevel. `today` er `todayInOslo()`.
  */

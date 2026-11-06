@@ -15,7 +15,7 @@ export type AgreementSuggestion = {
 };
 
 /**
- * Forslag om avtale på oppdraget (A110). Firmaet hentes bare fra ordrens bestillerfirma
+ * Forslag om avtale på oppdraget (A116). Firmaet hentes bare fra ordrens bestillerfirma
  * (`assignments.order_id` → `orders.ordered_by_firm_id`), aldri fra megler-parten. Forslag gis
  * bare når oppdraget ikke har avtale og firmaet (ikke slettet) har nøyaktig én avtale som ikke
  * er fjernet og gjelder i dag (`todayInOslo(now)`). Skriver ingenting; takstmannen godkjenner.

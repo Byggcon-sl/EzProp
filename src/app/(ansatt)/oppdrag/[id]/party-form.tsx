@@ -3,7 +3,7 @@
 import { useActionState, useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
-import { Checkbox, ChoiceGroup, Field, Input } from "@/shared/ui/form";
+import { Checkbox, ChoiceGroup, Field, Input, Select } from "@/shared/ui/form";
 import { ContactPicker, type ContactHit } from "../../kontakter/contact-picker";
 import { FormErrors, SubmitButton } from "../../form-parts";
 import { initialFormState, textValue, type FormState } from "../../form-state";
@@ -47,9 +47,6 @@ const RECEIVES: { name: keyof Receives; label: string }[] = [
   { name: "receivesInvoice", label: "Faktura" },
   { name: "receivesMessages", label: "Kopi av meldinger" },
 ];
-
-const selectClass =
-  "block min-h-11 w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 focus:border-brand-600 aria-invalid:border-red-700";
 
 /** Avkrysningene fra forrige mislykkede forsøk, ellers `fallback`. */
 function receivesFrom(state: FormState, fallback: Receives): Receives {
@@ -138,10 +135,9 @@ export function PartyForm({
         onSelect={onContactSelect}
       />
       <Field label="Rolle" htmlFor={`${idPrefix}-role`} error={state.fieldErrors.role}>
-        <select
+        <Select
           id={`${idPrefix}-role`}
           name="role"
-          className={selectClass}
           defaultValue={textValue(state, "role", initial.role)}
           onChange={(event) => onRoleChange(event.target.value)}
         >
@@ -151,7 +147,7 @@ export function PartyForm({
               {role.label}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
       <Field label="Navn" htmlFor={`${idPrefix}-name`} error={state.fieldErrors.name}>
         <Input

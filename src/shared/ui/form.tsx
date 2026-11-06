@@ -76,6 +76,14 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
   return <textarea className={cn(fieldClass, "min-h-32 resize-y py-2.5", className)} {...props} />;
 }
 
+const selectClass =
+  "block min-h-11 w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 focus:border-brand-600 aria-invalid:border-red-700";
+
+/** Nedtrekksliste. Samme ramme, fokus og trykkflate (minst 44 px) som `Input`. */
+export function Select({ className, ...props }: ComponentProps<"select">) {
+  return <select className={cn(selectClass, className)} {...props} />;
+}
+
 type ChoiceProps = Omit<ComponentProps<"input">, "type"> & {
   label: ReactNode;
   description?: ReactNode;

@@ -542,7 +542,7 @@ describe("5.6 getAssignment med avtalen", () => {
   it.each([
     { name: "slettet", overrides: { deletedAt: DELETED } },
     { name: "utløpt", overrides: { validFrom: "2026-01-01", validTo: YESTERDAY } },
-  ])("5.6.2 $name avtale tas med (A111)", async ({ overrides }) => {
+  ])("5.6.2 $name avtale tas med (A117)", async ({ overrides }) => {
     const { org, admin, assignment } = await setup();
     const agreement = await createClientAgreement(org.id, overrides);
     await putAgreement(assignment.id, agreement.id);

@@ -19,7 +19,7 @@ import {
 const ON = { inspectorsEditAll: true };
 const OFF = { inspectorsEditAll: false };
 
-const allNine = [
+const allPermissions = [
   "organization.read",
   "organization.manage",
   "claims.read",
@@ -29,6 +29,7 @@ const allNine = [
   "report.publish",
   "template.edit_structure",
   "invoice.send",
+  "contacts.manage",
 ] as const;
 
 const notGrantable = [
@@ -37,12 +38,13 @@ const notGrantable = [
   "claims.read",
   "organization.read",
   "invoice.send",
+  "contacts.manage",
 ] as const;
 
 type Column = "inspectorOn" | "inspectorOff" | "office" | "manager" | "admin";
 
 /** Fasit: rettighetsmatrisen i oppgavekortet (Omfang 1). */
-const expected: Record<(typeof allNine)[number], Record<Column, boolean>> = {
+const expected: Record<(typeof allPermissions)[number], Record<Column, boolean>> = {
   "organization.read": {
     inspectorOn: true,
     inspectorOff: true,
@@ -106,6 +108,15 @@ const expected: Record<(typeof allNine)[number], Record<Column, boolean>> = {
     manager: true,
     admin: true,
   },
+  // Fjerne og slå sammen kontakter og firma: bare leder og admin
+  // (docs/funksjoner/fase2a-fjerne-sla-sammen-kontakter.md, Omfang 1)
+  "contacts.manage": {
+    inspectorOn: false,
+    inspectorOff: false,
+    office: false,
+    manager: true,
+    admin: true,
+  },
 };
 
 function column(role: EmployeeRole, editAll: boolean): Column {
@@ -117,7 +128,7 @@ const roles: EmployeeRole[] = ["inspector", "office", "manager", "admin"];
 
 const matrixCases = roles.flatMap((role) =>
   [true, false].flatMap((editAll) =>
-    allNine.map((permission) => ({
+    allPermissions.map((permission) => ({
       role,
       editAll,
       permission,
@@ -131,8 +142,8 @@ afterEach(() => {
 });
 
 describe("permissions", () => {
-  it("1. har nøyaktig de ni faste kodene", () => {
-    expect([...permissions].sort()).toEqual([...allNine].sort());
+  it("1. har nøyaktig de ti faste kodene", () => {
+    expect([...permissions].sort()).toEqual([...allPermissions].sort());
   });
 
   it("2. grantablePermissions er nøyaktig de fire, og en delmengde av permissions", () => {
@@ -146,8 +157,8 @@ describe("permissions", () => {
 });
 
 describe("effectivePermissions: rettighetsmatrisen", () => {
-  it("har 72 tilfeller (4 roller × på/av × 9 rettigheter)", () => {
-    expect(matrixCases).toHaveLength(72);
+  it("har 80 tilfeller (4 roller × på/av × 10 rettigheter)", () => {
+    expect(matrixCases).toHaveLength(80);
   });
 
   it.each(matrixCases)(
@@ -242,7 +253,7 @@ describe("Admin stenges aldri ute, skal aldri fjernes", () => {
       granted: ["finnes.ikke", "", "organization.manage", "claims.read", "REPORT.EDIT"],
       settings: OFF,
     },
-  ])("13. admin har alle ni: $name", ({ granted, settings }) => {
+  ])("13. admin har alle ti: $name", ({ granted, settings }) => {
     expect([...effectivePermissions(["admin"], granted, settings)].sort()).toEqual(
       [...permissions].sort(),
     );
@@ -342,14 +353,14 @@ describe("grantHasPermission og isAdmin", () => {
 // tester; rollematrisen og fasitene over er urørt. ---
 
 describe("withPublishRequiringCertification", () => {
-  const withoutPublish = allNine.filter((p) => p !== "report.publish");
+  const withoutPublish = allPermissions.filter((p) => p !== "report.publish");
 
-  it("1. alle ni uten gyldig sertifisering gir de åtte andre, uten report.publish", () => {
-    expect(withPublishRequiringCertification(allNine, false)).toEqual(withoutPublish);
+  it("1. alle ti uten gyldig sertifisering gir de ni andre, uten report.publish", () => {
+    expect(withPublishRequiringCertification(allPermissions, false)).toEqual(withoutPublish);
   });
 
   it("2. med gyldig sertifisering er listen uendret (innhold og rekkefølge)", () => {
-    expect(withPublishRequiringCertification(allNine, true)).toEqual([...allNine]);
+    expect(withPublishRequiringCertification(allPermissions, true)).toEqual([...allPermissions]);
   });
 
   it("3. uten report.publish i listen og uten sertifisering er listen uendret", () => {
@@ -362,7 +373,7 @@ describe("withPublishRequiringCertification", () => {
     [true, false].map((editAll) => ({
       role,
       editAll,
-      fasit: allNine.filter((p) => expected[p][column(role, editAll)]),
+      fasit: allPermissions.filter((p) => expected[p][column(role, editAll)]),
     })),
   );
 
@@ -386,13 +397,115 @@ describe("withPublishRequiringCertification", () => {
     expect(admin).toContain("staff.manage");
     expect(admin).toContain("organization.read");
     expect(admin).not.toContain("report.publish");
-    expect(admin).toHaveLength(8);
+    expect(admin).toHaveLength(9);
   });
 
   it("6. muterer ikke listen som sendes inn", () => {
-    const input = Object.freeze([...allNine]) as readonly Permission[];
+    const input = Object.freeze([...allPermissions]) as readonly Permission[];
     expect(() => withPublishRequiringCertification(input, false)).not.toThrow();
     expect(() => withPublishRequiringCertification(input, true)).not.toThrow();
-    expect(input).toEqual([...allNine]);
+    expect(input).toEqual([...allPermissions]);
+  });
+});
+
+// --- Fjerne og slå sammen kontakter og firma (testplan
+// docs/funksjoner/fase2a-fjerne-sla-sammen-kontakter-testplan.md, avsnitt 1). Matrisen over har
+// fått raden `contacts.manage`; testene under navngir hvert krav for seg. Støtter hovedmål:
+// reklamasjoner (bare leder og admin kan endre mange oppdrag på én gang). ---
+
+describe("contacts.manage", () => {
+  it("1.1 manager_has_contacts_manage", () => {
+    expect(effectivePermissions(["manager"], [], ON)).toContain("contacts.manage");
+    expect(effectivePermissions(["manager"], [], OFF)).toContain("contacts.manage");
+  });
+
+  // Regel 11: admin stenges aldri ute. Testen skal aldri fjernes.
+  it.each([
+    { name: "innstillingen på", settings: ON },
+    { name: "innstillingen av", settings: OFF },
+  ])("1.2 admin_always_has_contacts_manage: $name, uten andre roller", ({ settings }) => {
+    expect(effectivePermissions(["admin"], [], settings)).toContain("contacts.manage");
+    expect(effectivePermissions(["admin", "inspector"], [], settings)).toContain("contacts.manage");
+    // Uten gyldig sertifisering mister admin bare report.publish
+    expect(
+      withPublishRequiringCertification(effectivePermissions(["admin"], [], settings), false),
+    ).toContain("contacts.manage");
+  });
+
+  it.each([
+    { name: "på", settings: ON },
+    { name: "av", settings: OFF },
+  ])("1.3 inspector_lacks_contacts_manage: innstillingen $name", ({ settings }) => {
+    expect(effectivePermissions(["inspector"], [], settings)).not.toContain("contacts.manage");
+  });
+
+  it.each([ON, OFF])("1.4 office_lacks_contacts_manage (%o)", (settings) => {
+    expect(effectivePermissions(["office"], [], settings)).not.toContain("contacts.manage");
+    expect(effectivePermissions(["inspector", "office"], [], settings)).not.toContain(
+      "contacts.manage",
+    );
+  });
+
+  it("1.5 contacts_manage_not_grantable", () => {
+    expect(grantablePermissions as readonly string[]).not.toContain("contacts.manage");
+    for (const settings of [ON, OFF]) {
+      expect(effectivePermissions(["inspector"], ["contacts.manage"], settings)).toEqual(
+        effectivePermissions(["inspector"], [], settings),
+      );
+      expect(effectivePermissions(["office"], ["contacts.manage"], settings)).not.toContain(
+        "contacts.manage",
+      );
+      expect([...effectivePermissions([], ["contacts.manage"], settings)]).toEqual([]);
+    }
+  });
+
+  // Skrevet ut for hånd. En ny rolle eller ny rettighet må føres inn her, slik at ingen får
+  // contacts.manage ved et uhell.
+  it("1.6 permission_list_snapshot", () => {
+    const sorted = (role: EmployeeRole, settings: typeof ON) =>
+      [...effectivePermissions([role], [], settings)].sort();
+    expect({
+      inspectorOn: sorted("inspector", ON),
+      inspectorOff: sorted("inspector", OFF),
+      officeOn: sorted("office", ON),
+      officeOff: sorted("office", OFF),
+      managerOn: sorted("manager", ON),
+      managerOff: sorted("manager", OFF),
+      adminOn: sorted("admin", ON),
+      adminOff: sorted("admin", OFF),
+    }).toEqual({
+      inspectorOn: [
+        "assignment.edit",
+        "invoice.send",
+        "organization.read",
+        "report.edit",
+        "report.publish",
+      ],
+      inspectorOff: ["invoice.send", "organization.read", "report.publish"],
+      officeOn: ["assignment.edit", "invoice.send", "organization.read"],
+      officeOff: ["assignment.edit", "invoice.send", "organization.read"],
+      managerOn: [
+        "assignment.edit",
+        "claims.read",
+        "contacts.manage",
+        "invoice.send",
+        "organization.read",
+        "report.edit",
+        "report.publish",
+        "staff.manage",
+      ],
+      managerOff: [
+        "assignment.edit",
+        "claims.read",
+        "contacts.manage",
+        "invoice.send",
+        "organization.read",
+        "report.edit",
+        "report.publish",
+        "staff.manage",
+      ],
+      adminOn: [...allPermissions].sort(),
+      adminOff: [...allPermissions].sort(),
+    });
   });
 });

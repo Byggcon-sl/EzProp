@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { AccessDeniedError } from "@/core/access";
 import { contactSourceLabel, getContact, listFirms } from "@/core/contacts";
 import { isUuid } from "@/shared/lib/uuid";
 import { Card } from "@/shared/ui/card";
+import { Notice } from "@/shared/ui/notice";
 import { BackLink, Detail, EMPTY } from "../../detail";
 import { getEmployeeContext } from "../../employee-context";
 import { NoAccess } from "../../no-access";
-import { updateContactAction } from "../actions";
+import { RemoveMergeActions } from "../../remove-merge-actions";
+import { removeContactAction, updateContactAction } from "../actions";
 import { ContactForm } from "../contact-form";
 import { contactName } from "../contact-name";
 
@@ -15,20 +18,30 @@ export const metadata: Metadata = { title: "Kontakt" };
 
 /**
  * Kontakten med skjema for dem som kan endre, ellers bare opplysningene. Kilden står alltid som
- * tekst. Ugyldig, ukjent, slettet og fremmed id gir samme svar som manglende tilgang.
+ * tekst. Ugyldig, ukjent, fjernet og fremmed id gir «Fant ikke siden». «Fjern» og «Slå sammen
+ * med …» vises bare med `canManageContacts`; selve sjekken skjer i kjernen.
+ * `?sammenslatt=1` gir kvitteringen etter sammenslåing.
  */
-export default async function ContactPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ContactPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ sammenslatt?: string | string[] }>;
+}) {
   const { id } = await params;
   const context = await getEmployeeContext();
-  if (!context || !isUuid(id)) return <NoAccess />;
+  if (!context) return <NoAccess />;
+  if (!isUuid(id)) notFound();
 
   let contact: Awaited<ReturnType<typeof getContact>>;
   try {
     contact = await getContact(context.actor, context.organizationId, id);
   } catch (error) {
-    if (error instanceof AccessDeniedError) return <NoAccess />;
+    if (error instanceof AccessDeniedError) notFound();
     throw error;
   }
+  const merged = (await searchParams).sammenslatt === "1";
   const name = contactName(contact);
   const sourceLabel = contactSourceLabel(contact.source);
   // Firmanavnet mangler når firmaet er slettet; da står «Ingen» i valget.
@@ -68,6 +81,11 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
       <h1 className="mt-2 mb-6 min-w-0 text-2xl font-semibold break-words text-slate-900">
         {name}
       </h1>
+      {merged && (
+        <div className="mb-4">
+          <Notice message="Kontaktene er slått sammen." />
+        </div>
+      )}
 
       {form ?? (
         <Card>
@@ -113,6 +131,19 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
           </dl>
           <p className="mt-4 text-sm text-slate-600">Kilde: {sourceLabel}</p>
         </Card>
+      )}
+
+      {context.canManageContacts && (
+        <RemoveMergeActions
+          idField="contactId"
+          id={contact.id}
+          mergeHref={`/kontakter/${contact.id}/sla-sammen`}
+          confirmLines={[
+            `Fjerne ${name}?`,
+            "Kontakten vises ikke lenger i listen og søket. Oppdrag og ordrer beholder navnet som står på dem.",
+          ]}
+          action={removeContactAction}
+        />
       )}
     </main>
   );

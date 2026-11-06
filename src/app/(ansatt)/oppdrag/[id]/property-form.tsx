@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, type ReactNode } from "react";
-import { Field, Input } from "@/shared/ui/form";
+import { Field, Input, Select } from "@/shared/ui/form";
 import { FormErrors, SubmitButton } from "../../form-parts";
 import { initialFormState, textValue, type FormState } from "../../form-state";
 
@@ -29,9 +29,6 @@ export type PropertyFormValues = {
 };
 
 type TextField = Exclude<keyof PropertyFormValues, "housingType" | "ownershipForm">;
-
-const selectClass =
-  "block min-h-11 w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 focus:border-brand-600 aria-invalid:border-red-700";
 
 /** Tekstfeltene i rekkefølgen fra oppgavekortet, delt rundt de to nedtrekkslistene. */
 const ADDRESS_FIELDS: { name: TextField; label: string; maxLength: number; numeric?: boolean }[] = [
@@ -114,19 +111,14 @@ export function PropertyForm({
     const id = `property-${name}`;
     return (
       <Field label={label} htmlFor={id} error={state.fieldErrors[name]}>
-        <select
-          id={id}
-          name={name}
-          className={selectClass}
-          defaultValue={textValue(state, name, initial[name])}
-        >
+        <Select id={id} name={name} defaultValue={textValue(state, name, initial[name])}>
           <option value="">{placeholder}</option>
           {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
     );
   }

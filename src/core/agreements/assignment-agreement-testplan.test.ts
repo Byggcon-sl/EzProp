@@ -571,7 +571,7 @@ describe("5.6 getAssignment med avtalen", () => {
       overrides: { validFrom: "2025-01-01", validTo: "2025-12-31" },
       deleted: false,
     },
-  ])("5.6.2 $name avtale tas med (A111)", async ({ overrides, deleted }) => {
+  ])("5.6.2 $name avtale tas med (A117)", async ({ overrides, deleted }) => {
     const { org, admin } = await orgWithAdmin();
     const assignment = await createAssignment(org.id);
     const agreement = await createClientAgreement(org.id, overrides);

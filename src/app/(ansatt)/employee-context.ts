@@ -8,6 +8,8 @@ export type EmployeeContext = {
   organizationId: string;
   /** Bare til å vise eller skjule knappene. Selve sjekken skjer i kjernen. */
   canEditOrders: boolean;
+  /** Bare til å vise «Fjern» og «Slå sammen med …». Selve sjekken skjer i kjernen. */
+  canManageContacts: boolean;
   /** Kontoret på den ansattes egen rad, eller `null`. Bare til forhåndsvalget av kontor. */
   officeId: string | null;
 };
@@ -25,6 +27,7 @@ export async function getEmployeeContext(): Promise<EmployeeContext | null> {
     actor,
     organizationId: found.grant.organizationId,
     canEditOrders: grantHasPermission(found.grant, "assignment.edit"),
+    canManageContacts: grantHasPermission(found.grant, "contacts.manage"),
     officeId: found.officeId,
   };
 }

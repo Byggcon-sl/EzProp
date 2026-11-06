@@ -56,6 +56,7 @@ describe("getEmployeeContext", () => {
     expect(context).toMatchObject({
       organizationId: org.id,
       canEditOrders: true,
+      canManageContacts: false,
       officeId: office.id,
     });
     expect(context?.actor.id).toBe(actor.id);
@@ -132,4 +133,36 @@ describe("getEmployeeContext", () => {
 
     expect(await getEmployeeContext()).toBeNull();
   });
+});
+
+/*
+ * Flagget for knappene «Fjern» og «Slå sammen med …» på /kontakter/[id] og /firma/[id]
+ * (docs/funksjoner/fase2a-fjerne-sla-sammen-kontakter-testplan.md 4.5). Regnes ut på serveren fra
+ * rettigheten `contacts.manage`; selve sjekken skjer i kjernen. Støtter hovedmål: reklamasjoner
+ * (takstmann og kontor ser ikke knappene, uansett innstillingen).
+ */
+describe("4.5 canManageContacts_per_role", () => {
+  it.each([
+    { role: "manager", inspectorsEditAll: false, expected: true },
+    { role: "manager", inspectorsEditAll: true, expected: true },
+    { role: "admin", inspectorsEditAll: false, expected: true },
+    { role: "admin", inspectorsEditAll: true, expected: true },
+    { role: "inspector", inspectorsEditAll: false, expected: false },
+    { role: "inspector", inspectorsEditAll: true, expected: false },
+    { role: "office", inspectorsEditAll: false, expected: false },
+    { role: "office", inspectorsEditAll: true, expected: false },
+  ] as const)(
+    "$role med innstillingen $inspectorsEditAll gir canManageContacts = $expected",
+    async ({ role, inspectorsEditAll, expected }) => {
+      const org = await createOrganization();
+      await setInspectorsEditAll(org.id, inspectorsEditAll);
+      const actor = await createUser();
+      await createEmployee(actor, org.id, [role]);
+      session.actor = actor;
+
+      const context = await getEmployeeContext();
+      expect(context?.organizationId).toBe(org.id);
+      expect(context?.canManageContacts).toBe(expected);
+    },
+  );
 });

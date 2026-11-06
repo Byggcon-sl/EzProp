@@ -15,9 +15,9 @@ import {
 
 /*
  * Server actions for avtaler med oppdragsgiver. Ingen tilgangslogikk her: organisasjonen kommer
- * fra `getEmployeeContext()`, og kjernen krever `organization.manage` (admin, A108). Et felt
+ * fra `getEmployeeContext()`, og kjernen krever `organization.manage` (admin, A114). Et felt
  * `organizationId` i skjemaet leses aldri. Id-er som ikke er uuid stoppes før kjernen kalles.
- * Loggen får bare rute, bruker-id, id-er og feilnavn, aldri premisseteksten (A112).
+ * Loggen får bare rute, bruker-id, id-er og feilnavn, aldri premisseteksten (A118).
  */
 
 const ROUTE = "/admin/avtaler";

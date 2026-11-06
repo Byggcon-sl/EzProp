@@ -46,7 +46,7 @@ export type AssignmentPartyEntry = {
 };
 
 /**
- * Avtalen med oppdragsgiver på oppdraget. Også en fjernet eller utløpt avtale vises (A111), med
+ * Avtalen med oppdragsgiver på oppdraget. Også en fjernet eller utløpt avtale vises (A117), med
  * `deletedAt`, så siden kan sette merket. Premisseteksten hentes ikke her (først med PDF-en).
  */
 export type AssignmentAgreement = {
@@ -118,7 +118,7 @@ export async function getAssignment(
       companies,
       and(eq(companies.id, assignments.companyId), eq(companies.organizationId, orgId)),
     )
-    // Også en fjernet avtale tas med (A111)
+    // Også en fjernet avtale tas med (A117)
     .leftJoin(
       clientAgreements,
       and(

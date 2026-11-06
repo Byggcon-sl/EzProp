@@ -20,7 +20,7 @@ import {
 import { suggestAgreementForAssignment } from "./index";
 
 /*
- * Forslaget om avtale på oppdraget (A110), regeltest som data mot databasen.
+ * Forslaget om avtale på oppdraget (A116), regeltest som data mot databasen.
  * Testplan: docs/funksjoner/fase2a-oppdragsgiveravtale-testplan.md avsnitt 6.
  *
  * Oppsett: ordre med `orderedByFirmId` = firma F, gjort om til oppdrag (`createAssignment` med
@@ -153,7 +153,7 @@ const CASES: ({ name: string } & Setup)[] = [
     },
   },
   {
-    name: "megler-parten er F, men ikke bestilleren → nei (A110)",
+    name: "megler-parten er F, men ikke bestilleren → nei (A116)",
     assignment: "broker_party_only",
     agreements: async (ctx) => {
       await valid(ctx);

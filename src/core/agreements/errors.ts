@@ -21,7 +21,7 @@ export const AGREEMENT_EXPIRED_MESSAGE = "Avtalen gjelder ikke i dag.";
 export const AGREEMENT_DELETED_MESSAGE = "Avtalen er fjernet.";
 
 /**
- * Avtalen kan ikke velges på oppdraget: den er fjernet, utløpt eller ikke påbegynt (A111).
+ * Avtalen kan ikke velges på oppdraget: den er fjernet, utløpt eller ikke påbegynt (A117).
  * Ingenting er endret.
  */
 export class AgreementNotUsableError extends Error {

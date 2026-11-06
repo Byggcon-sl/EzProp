@@ -140,7 +140,7 @@ For hver: `client_agreement_id` uendret, ingen hendelse, ingen loggrad.
 ### 5.6 `getAssignment` med avtalen
 
 1. har `agreement` med `id`, `name`, `validFrom`, `validTo`, `deletedAt`; `null` uten avtale.
-2. slettet og utløpt avtale tas med (A111).
+2. slettet og utløpt avtale tas med (A117).
 3. ingen premissetekst i oppdraget (hentes ikke før PDF).
 
 ## 6. Forslaget, `src/core/agreements/suggest.test.ts` (ny, regeltest som data mot databasen)
@@ -162,7 +162,7 @@ For hver: `client_agreement_id` uendret, ingen hendelse, ingen loggrad.
 | ordren har ikke bestillerfirma | nei |
 | F er slettet | nei |
 | avtalen tilhører et annet firma | nei |
-| megler-parten er F, men ikke bestilleren | nei (A110) |
+| megler-parten er F, men ikke bestilleren | nei (A116) |
 
 Pluss:
 
@@ -231,6 +231,6 @@ Admin fra seed. Egne data med `uniqueSuffix()` og `fakeValidOrgNumber()` (databa
 3. `src/core/agreements` importerer ikke fra modulene (lint).
 4. Ingen premissetekst i seed-data.
 5. Admin stenges ikke ute (4.1.5 og 5.3.3 finnes og er grønne).
-6. `package.json` 0.3.2, A108–A112 i `docs/09-apne-sporsmal.md`, ordlisten og domenemodellen oppdatert.
+6. `package.json` 0.3.2, A114–A118 i `docs/09-apne-sporsmal.md`, ordlisten og domenemodellen oppdatert.
 
 Godkjennes ikke uten 4.1, 4.2, 4.3, 5.3 og 5.4.

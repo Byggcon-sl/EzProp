@@ -28,7 +28,7 @@ export type SetAssignmentAgreementResult = {
  * Velger, bytter eller fjerner avtalen på oppdraget (`assignment.edit`; takstmann bare når
  * `access.inspectors_edit_all` er på). Oppdragsraden låses (`FOR UPDATE`), så samtidige valg
  * går etter hverandre. Avtalen hentes med organisasjonen fra tilgangssjekken; fjernet, utløpt
- * eller ikke påbegynt avtale avvises med `AgreementNotUsableError` (A111). `null` er alltid
+ * eller ikke påbegynt avtale avvises med `AgreementNotUsableError` (A117). `null` er alltid
  * lov. Hendelse og revisjonslogg bare når verdien faktisk endres.
  */
 export async function setAssignmentAgreement(

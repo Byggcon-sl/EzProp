@@ -9,12 +9,12 @@ import { agreementSchema, type AgreementInput } from "./schemas";
 
 /*
  * Avtaler med oppdragsgiver (docs/funksjoner/fase2a-oppdragsgiveravtale.md). Alle ser dem
- * (`organization.read`); bare admin oppretter, endrer og fjerner (`organization.manage`, A108).
+ * (`organization.read`); bare admin oppretter, endrer og fjerner (`organization.manage`, A114).
  * All filtrering bruker `grant.organizationId` fra tilgangssjekken, aldri parameteren. Ukjent,
  * fremmed, slettet eller ugyldig id gir `NotFoundError`. Ingen permanent sletting.
  *
  * Revisjonsloggen får bare id-er og navnene på feltene som ble endret, aldri premisseteksten
- * (A112).
+ * (A118).
  */
 
 const AGREEMENT_NOT_FOUND = "Fant ikke avtalen.";
@@ -175,7 +175,7 @@ export async function updateAgreement(
         agreementId: row.id,
         firmId: row.firmId,
         changedFields: AGREEMENT_FIELDS.filter((field) => before[field] !== row[field]),
-        // Aldri verdiene: premisseteksten er fritekst og loggen ryddes aldri (A112).
+        // Aldri verdiene: premisseteksten er fritekst og loggen ryddes aldri (A118).
       },
     });
     return row;
@@ -184,7 +184,7 @@ export async function updateAgreement(
 
 /**
  * Fjerner avtalen (myk sletting). Oppdrag som har den, beholder den med merket «Slettet»
- * (A111). Allerede fjernet avtale gir `NotFoundError` og ingen loggrad.
+ * (A117). Allerede fjernet avtale gir `NotFoundError` og ingen loggrad.
  */
 export async function deleteAgreement(actor: Actor, organizationId: string, agreementId: string) {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.manage");

@@ -8,7 +8,7 @@ import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../.
  * (docs/funksjoner/fase2a-oppdragsgiveravtale-testplan.md avsnitt 8). Kjernen og konteksten er
  * byttet ut her; kjernen testes i src/core/agreements. Testene viser at handlingene henter
  * organisasjonen på serveren, stopper id-er som ikke er uuid før kjernen kalles, gjør feilene om
- * til norske meldinger, og aldri logger premisseteksten eller navnet (A112).
+ * til norske meldinger, og aldri logger premisseteksten eller navnet (A118).
  *
  * Feltnavn i skjemaet: id (tom = ny), firmId, name, validFrom, validTo, premiseText,
  * reportProfileCode. Testdata er oppdiktet.
@@ -305,7 +305,7 @@ describe("8.4 feil fra kjernen", () => {
   });
 });
 
-describe("8.6 loggen får aldri premisseteksten eller navnet (A112)", () => {
+describe("8.6 loggen får aldri premisseteksten eller navnet (A118)", () => {
   it.each(ACTIONS)("%s: ukjent feil logges med id-er og feilnavn", async (name, action) => {
     CORE_FOR_ACTION[name].mockRejectedValue(new TypeError(`krasj med ${PREMISE}`));
     await failed(action());

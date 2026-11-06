@@ -13,7 +13,7 @@ type AgreementPeriod = {
 
 export type AgreementBadge = "Slettet" | "Utløpt" | "Ikke startet";
 
-/** Merket på avtalen (A111). «Slettet» har forrang; gyldig avtale gir `null`. */
+/** Merket på avtalen (A117). «Slettet» har forrang; gyldig avtale gir `null`. */
 export function agreementBadge(agreement: AgreementPeriod, today: string): AgreementBadge | null {
   if (agreement.deletedAt !== null) return "Slettet";
   if (agreement.validTo !== null && agreement.validTo < today) return "Utløpt";

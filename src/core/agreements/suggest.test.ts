@@ -25,7 +25,7 @@ import { suggestAgreementForAssignment } from "./index";
  * Forslaget om avtale på oppdraget, som testsaker i data mot databasen.
  * Testplan: docs/funksjoner/fase2a-oppdragsgiveravtale-testplan.md avsnitt 6 (og 5.4.2).
  *
- * Regelen (A110): firmaet hentes bare fra ordrens bestillerfirma (`orders.ordered_by_firm_id`)
+ * Regelen (A116): firmaet hentes bare fra ordrens bestillerfirma (`orders.ordered_by_firm_id`)
  * via `assignments.order_id`. Forslag gis bare når oppdraget ikke har avtale, og firmaet har
  * nøyaktig én avtale som ikke er slettet og gjelder i dag (norsk dato).
  *
@@ -248,7 +248,7 @@ const SUGGEST_CASES: SuggestCase[] = [
     },
   },
   {
-    name: "megler-parten er F, men ikke bestilleren → nei (A110)",
+    name: "megler-parten er F, men ikke bestilleren → nei (A116)",
     build: async (organizationId) => {
       const f = await insurer(organizationId);
       await createClientAgreement(organizationId, { firmId: f.id });

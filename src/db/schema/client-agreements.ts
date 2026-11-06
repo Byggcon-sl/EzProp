@@ -14,9 +14,9 @@ import { firms } from "./contacts";
 
 /**
  * Avtale med oppdragsgiver (docs/05-domenemodell.md 4.3), for eksempel Fremtind. Knyttet til et
- * firma i kontaktregisteret. Premisseteksten lagres bare til PDF-en kommer (A109, A112), og
+ * firma i kontaktregisteret. Premisseteksten lagres bare til PDF-en kommer (A115, A118), og
  * logges aldri i revisjonsloggen. `report_profile_code` er en kort tekst til `report_profiles`
- * finnes (A109).
+ * finnes (A115).
  *
  * Datoene er rene datoer (ÅÅÅÅ-MM-DD) i norsk tid. `valid_to` er siste gyldige dag; tom betyr
  * løpende.
