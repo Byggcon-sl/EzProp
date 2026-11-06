@@ -155,7 +155,8 @@ async function addBrokerParty(page: Page, lastName: string, firstName: string) {
   const form = formFilter.first();
   await expect(form).toBeVisible();
   await form.getByLabel(/^Rolle/).selectOption({ label: "Megler" });
-  await form.getByLabel(/^Søk i kontakter/).fill(`${firstName} ${lastName}`);
+  // Søket treffer ett felt om gangen, så det søkes på etternavnet (unikt per test)
+  await form.getByLabel(/^Søk i kontakter/).fill(lastName);
   const hit = form.getByRole("button", { name: new RegExp(`${firstName} ${lastName}`) });
   await expect(hit).toHaveCount(1);
   await hit.click();
@@ -192,14 +193,19 @@ async function searchForMerge(page: Page, text: string) {
   await mergeSearch(page).press("Enter");
 }
 
-/** Valget «Behold denne» i kortet med navnet. */
+/**
+ * Valget «Behold denne» i kortet med teksten. Det innerste elementet med både teksten og et
+ * valg er kortet; en ytre boks kan ha teksten i oppsummeringen («<navn> fjernes …») og begge valgene.
+ */
 function keepChoice(page: Page, cardText: string): Locator {
+  const radio = page.getByRole("radio", { name: /Behold denne/ });
   return page
     .getByRole("main")
     .locator("label, li, article, section, div")
     .filter({ hasText: cardText })
-    .getByRole("radio", { name: /Behold denne/ })
-    .last();
+    .filter({ has: radio })
+    .last()
+    .getByRole("radio", { name: /Behold denne/ });
 }
 
 function mergeButton(page: Page): Locator {
