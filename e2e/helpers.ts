@@ -999,3 +999,116 @@ export async function assignmentEventCount(assignmentId: string, type: string): 
     await sql.end();
   }
 }
+
+// --- Avtale med oppdragsgiver (docs/funksjoner/fase2a-oppdragsgiveravtale-testplan.md avsnitt 9) ---
+
+/** Organisasjonen til admin fra seed. */
+async function seedOrganizationId(sql: postgres.Sql): Promise<string> {
+  const [row] = await sql<{ organization_id: string }[]>`
+    select a.organization_id from employees a join users au on au.id = a.user_id
+    where au.email = ${ADMIN_EMAIL} and a.deleted_at is null and a.deactivated_at is null
+    limit 1`;
+  if (!row) throw new Error("Fant ikke admin fra seed (kjør pnpm db:seed)");
+  return row.organization_id;
+}
+
+/**
+ * Oppdiktet firma (type forsikringsselskap, gyldig org.nr. som ikke finnes) i organisasjonen til
+ * admin fra seed, og en kontakt i firmaet når `contactLastName` er gitt. Kontakten kan velges som
+ * bestiller på en ny ordre. Bare lokal database eller testdatabasen.
+ */
+export async function createFirmWithContact(input: {
+  firmName: string;
+  contactLastName?: string;
+}): Promise<{ firmId: string; contactId: string | null }> {
+  const sql = e2eSql();
+  try {
+    const organizationId = await seedOrganizationId(sql);
+    const [firm] = await sql<{ id: string }[]>`
+      insert into firms (organization_id, name, org_number, firm_type)
+      values (${organizationId}, ${input.firmName}, ${fakeValidOrgNumber()}, 'insurer')
+      returning id`;
+    if (!firm) throw new Error("Kunne ikke lage firmaet for e2e");
+    if (!input.contactLastName) return { firmId: firm.id, contactId: null };
+    const [contact] = await sql<{ id: string }[]>`
+      insert into contacts (organization_id, first_name, last_name, email, phone, firm_id)
+      values (${organizationId}, 'Bestiller', ${input.contactLastName},
+        ${`bestiller.${input.contactLastName.toLowerCase()}@example.com`}, '00000000', ${firm.id})
+      returning id`;
+    if (!contact) throw new Error("Kunne ikke lage kontakten for e2e");
+    return { firmId: firm.id, contactId: contact.id };
+  } finally {
+    await sql.end();
+  }
+}
+
+/**
+ * Myk sletting av firmaene testen laget, slik at firmavelgeren i /admin/avtaler/ny ikke fylles opp
+ * av gamle testfirma (e2e-databasen tømmes ikke). Bare lokal database eller testdatabasen.
+ */
+export async function softDeleteFirms(firmIds: readonly string[]): Promise<void> {
+  if (firmIds.length === 0) return;
+  const sql = e2eSql();
+  try {
+    const organizationId = await seedOrganizationId(sql);
+    await sql`
+      update firms set deleted_at = now()
+      where organization_id = ${organizationId} and id in ${sql(firmIds)} and deleted_at is null`;
+  } finally {
+    await sql.end();
+  }
+}
+
+/**
+ * Oppdiktet avtale for firmaet, lagt rett i databasen (uten premissetekst). Datoene er
+ * `YYYY-MM-DD`. Returnerer id-en. Bare lokal database eller testdatabasen.
+ */
+export async function createClientAgreementRow(input: {
+  firmId: string;
+  name: string;
+  validFrom: string;
+  validTo?: string | null;
+}): Promise<string> {
+  const sql = e2eSql();
+  try {
+    const organizationId = await seedOrganizationId(sql);
+    const [row] = await sql<{ id: string }[]>`
+      insert into client_agreements (organization_id, firm_id, name, valid_from, valid_to,
+        report_profile_code)
+      values (${organizationId}, ${input.firmId}, ${input.name}, ${input.validFrom},
+        ${input.validTo ?? null}, 'test-profil')
+      returning id`;
+    if (!row) throw new Error("Kunne ikke lage avtalen for e2e");
+    return row.id;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Avtalene med navnet i organisasjonen til admin fra seed (også slettede). Bare lesing. */
+export async function clientAgreementsByName(
+  name: string,
+): Promise<{ id: string; deletedAt: Date | null; premiseText: string | null }[]> {
+  const sql = e2eSql();
+  try {
+    const organizationId = await seedOrganizationId(sql);
+    return await sql<{ id: string; deletedAt: Date | null; premiseText: string | null }[]>`
+      select id, deleted_at as "deletedAt", premise_text as "premiseText"
+      from client_agreements
+      where organization_id = ${organizationId} and name = ${name}`;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Avtalen som står på oppdraget (`client_agreement_id`), eller `null`. Bare lesing. */
+export async function assignmentAgreementId(assignmentId: string): Promise<string | null> {
+  const sql = e2eSql();
+  try {
+    const [row] = await sql<{ client_agreement_id: string | null }[]>`
+      select client_agreement_id from assignments where id = ${assignmentId}`;
+    return row?.client_agreement_id ?? null;
+  } finally {
+    await sql.end();
+  }
+}
