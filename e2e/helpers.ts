@@ -600,6 +600,8 @@ type E2eEmployee = {
   email: string;
   name: string;
   role: "inspector" | "manager" | "office";
+  /** Rollen på norsk i feilmeldingene («takstmann», «leder», «kontor»). */
+  roleLabel: string;
   /** Navnet på konstanten i feilmeldingene, slik at det er lett å finne ut hva som må gjøres. */
   label: string;
 };
@@ -614,7 +616,7 @@ type E2eEmployee = {
  *   eller rollen bare som slettet/deaktivert, kastes en feil som sier hva som må gjøres.
  * - Gjenoppretter, sletter eller endrer ingenting.
  */
-async function ensureEmployee({ email, name, role, label }: E2eEmployee): Promise<void> {
+async function ensureEmployee({ email, name, role, roleLabel, label }: E2eEmployee): Promise<void> {
   const databaseUrl = e2eDatabaseUrl();
   assertLocalOrTestDatabase(databaseUrl, process.env.TEST_DATABASE_URL);
   const sql = postgres(databaseUrl, { max: 1, onnotice: () => {} });
@@ -665,7 +667,7 @@ async function ensureEmployee({ email, name, role, label }: E2eEmployee): Promis
     if (roles.some((row) => row.deleted_at === null)) return;
     if (roles.length > 0) {
       throw new Error(
-        `Rollen ${role} for den ansatte for e2e (${label}) er slettet i testdatabasen. ` +
+        `Rollen ${roleLabel} for den ansatte for e2e (${label}) er slettet i testdatabasen. ` +
           "Tøm databasen eller kjør pnpm db:seed på nytt.",
       );
     }
@@ -684,6 +686,7 @@ export async function ensureInspector(): Promise<void> {
     email: INSPECTOR_EMAIL,
     name: "Oppdiktet takstmann",
     role: "inspector",
+    roleLabel: "takstmann",
     label: "INSPECTOR_EMAIL",
   });
 }
@@ -704,6 +707,7 @@ export async function ensureManager(): Promise<void> {
     email: MANAGER_EMAIL,
     name: "Oppdiktet leder",
     role: "manager",
+    roleLabel: "leder",
     label: "MANAGER_EMAIL",
   });
 }
@@ -723,6 +727,7 @@ export async function logInAsOffice(page: Page) {
     email: OFFICE_EMAIL,
     name: "Oppdiktet kontoransatt",
     role: "office",
+    roleLabel: "kontor",
     label: "OFFICE_EMAIL",
   });
   await logIn(page, OFFICE_EMAIL);
