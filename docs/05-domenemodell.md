@@ -305,7 +305,17 @@ Kontakter er personopplysninger. De vises bare for ansatte, og sendes aldri til 
 - **`contacts`, med nå:** `baseColumns`, `first_name` (påkrevd, høyst 100 tegn), `last_name` (valgfri, høyst 100 tegn), `email` (valgfri, høyst 254 tegn), `phone` (valgfri, sifre, mellomrom og `+`, høyst 20 tegn), `firm_id` (valgfri, sammensatt fremmednøkkel `(organization_id, firm_id)` til `firms`), `notes` (valgfri, høyst 1000 tegn), `source` (påkrevd, CHECK: `manual`, `order`; standard `manual`; `CONTACT_SOURCES`). Indeks `(organization_id, last_name, first_name)`. Ingen sperre mot like kontakter.
 - **Tilgang:** alle ansatte i organisasjonen ser (`organization.read`), `assignment.edit` legger inn og endrer. Revisjonsloggen (`firm`, `contact`, `create`/`update`) har id-er, kodene og navnene på endrede felt, aldri navn, organisasjonsnummer, e-post, telefon eller notat.
 - **Koblet til parter og bestiller (05.11.2026):** se «Bygget i fase 2a (05.11.2026, koble parter og bestiller til kontakter)» under `assignment_parties` og i 4.3.
-- **Venter:** fjerning fra skjermen og sammenslåing av like kontakter (eget planpunkt; `deleted_at` finnes), `marketing_consent` (D17: ikke i bruk nå), `invoice_email` og `address` på firma (kommer med fakturagrunnlaget), og kildekoden `broker_system` (legges til når API mot meglersystem kommer; kodene endres aldri, nye legges til).
+
+**Bygget i fase 2a (05.11.2026, fjerne og slå sammen):** `removeContact`, `removeFirm`, `mergeContacts`, `mergeFirms` og `MergeSameRecordError` i `src/core/contacts/remove-merge.ts`, ny rettighet `contacts.manage` (avsnitt 5). Ingen nye tabeller, kolonner eller indekser. Oppgavekort: `docs/funksjoner/fase2a-fjerne-sla-sammen-kontakter.md`.
+
+- **Bare leder og admin** (`contacts.manage`). Fremmed, ukjent, allerede fjernet eller ugyldig id gir `AccessDeniedError`, og ingenting endres. `keepId === removeId` gir `MergeSameRecordError` («Velg to ulike kontakter.» / «Velg to ulike firma.») før databasen.
+- **Fjerning er myk sletting** (`deleted_at`, `deleted_by`, `updated_by`). Fjernet kontakt: koblingene på parter og ordrer står urørt, friteksten er det som vises. Fjernet firma: kontaktene beholdes med `firm_id` urørt og vises uten firma (samme filter som før). Organisasjonsnummeret blir ledig for et nytt firma.
+- **Sammenslåing av kontakter:** `assignment_parties.contact_id` og `orders.ordered_by_contact_id` flyttes fra kontakten som fjernes til den som beholdes, også på myk-slettede rader. `firm_id`/`ordered_by_firm_id` på de flyttede radene blir firmaet til kontakten som beholdes (`null` hvis den ikke har firma, eller firmaet er slettet). Friteksten røres ikke. Den andre kontakten myk-slettes; den som beholdes, endres ikke.
+- **Sammenslåing av firma:** `contacts.firm_id` (også myk-slettede kontakter), `assignment_parties.firm_id` og `orders.ordered_by_firm_id` flyttes til firmaet som beholdes. Det andre firmaet myk-slettes; det som beholdes, endres ikke (heller ikke organisasjonsnummeret).
+- **Samtidighet:** alt skjer i én transaksjon. Radene låses med `for update` sortert på id, så to sammenslåinger A→B og B→A samtidig ikke gir vranglås: én lykkes, den andre finner en fjernet rad og får `AccessDeniedError`.
+- **Revisjonslogg** i samme transaksjon, bare id-er og antall (antallene teller også myk-slettede rader): `contact.removed { contactId }`, `firm.removed { firmId, contactCount }` (aktive kontakter i firmaet), `contact.merged { keepId, removeId, partyCount, orderCount }`, `firm.merged { keepId, removeId, contactCount, partyCount, orderCount }`. Mislykkede forsøk logges ikke. Ingen navn, e-post, telefon, notat eller organisasjonsnummer.
+- **Fjerning og sammenslåing (05.11.2026):** se «Bygget i fase 2a (05.11.2026, fjerne og slå sammen)» under.
+- **Venter:** `marketing_consent` (D17: ikke i bruk nå), `invoice_email` og `address` på firma (kommer med fakturagrunnlaget), og kildekoden `broker_system` (legges til når API mot meglersystem kommer; kodene endres aldri, nye legges til).
 
 **`assignment_parties`** – **part på oppdrag**: hvem som er med på oppdraget, i hvilken rolle, og hva de skal motta.
 
@@ -1786,6 +1796,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | `report.publish` | Publisere og overstyre sperre (ansvarlig og sertifisert sjekkes i fase 2a, A19) | ja | nei | ja | ja |
 | `template.edit_structure` | Endre struktur i systemmalen (maltilgang) | kan gis | nei | kan gis | ja |
 | `invoice.send` | Sende fakturagrunnlag (alle, 27.10.2026) | ja | ja | ja | ja |
+| `contacts.manage` | Fjerne og slå sammen kontakter og firma (05.11.2026) | nei, uansett innstilling | nei | ja | ja |
 
 **Innstillingen `access.inspectors_edit_all`** ligger i `organizations.settings` og er **på** som standard (A18). Bare verdien `false` slår den av. Når den er av, har takstmann verken `assignment.edit` eller `report.edit` før team på oppdraget finnes i fase 2a (A20). Innstillingen påvirker aldri `claims.read`, `organization.manage` eller `staff.manage`.
 
@@ -1886,6 +1897,11 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Søk i kontakter | `searchContactsAction` (`src/app/(ansatt)/kontakter/`) | Server action for kontaktvelgeren. Under 2 tegn gir tom liste; ellers høyst 10 treff fra egen organisasjon (via `listContacts`). Søket skjer i vår egen database, aldri hos KI |
 | Finn kontakt for kobling | `findContactForLink` (`src/core/contacts`) | Intern hjelper som slår opp en kontakt i egen organisasjon (ikke slettet) og gir `{ id, firmId }` eller ingenting. Slettet firma gir `firmId: null` |
 | Kontakten finnes ikke | `ContactNotFoundError` | Feil når en part eller ordre kobles til en kontakt som ikke finnes i organisasjonen eller er slettet. Melding: «Kontakten finnes ikke.» |
+| Fjerne og slå sammen kontakter (rettighet) | `contacts.manage` | Leder og admin. Kan ikke gis som enkeltrettighet |
+| Fjerne kontakt / fjerne firma | `removeContact`, `removeFirm` (`src/core/contacts`) | Myk sletting. Koblingene står urørt. `removeFirm` gir antall aktive kontakter i firmaet |
+| Slå sammen | merge: `mergeContacts`, `mergeFirms` (`src/core/contacts`) | Flytter koblingene fra den som fjernes til den som beholdes, og myk-sletter den andre |
+| Behold (den som beholdes) | keep: `keepId` | Kontakten eller firmaet som står igjen etter sammenslåingen. Den andre er `removeId` |
+| Velg to ulike | `MergeSameRecordError` | Feil når samme kontakt eller firma er valgt på begge sider. Melding: «Velg to ulike kontakter.» / «Velg to ulike firma.» |
 | Kobling til kontakt (part) | `assignment_parties.contact_id`, `firm_id` | Valgfri kobling til registeret. Firmaet følger kontakten. Friteksten er det som vises |
 | Kobling til kontakt (bestiller) | `orders.ordered_by_contact_id`, `ordered_by_firm_id` | Valgfri kobling til registeret, satt når ordren legges inn |
 | Part på oppdrag | `assignment_parties` | Kontakt eller firma med rolle på oppdraget. I fase 2a fritekst (navn, firma, e-post, telefon) på oppdraget (A60) |

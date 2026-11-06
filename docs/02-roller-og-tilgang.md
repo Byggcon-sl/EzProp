@@ -1,6 +1,6 @@
 # 02 – Roller og tilgang
 
-Sist oppdatert: 28.10.2026. Fasit: rettighetsmatrisen i `docs/05-domenemodell.md` avsnitt 5.
+Sist oppdatert: 05.11.2026. Fasit: rettighetsmatrisen i `docs/05-domenemodell.md` avsnitt 5.
 
 ## Grunnregler
 
@@ -16,7 +16,7 @@ Sist oppdatert: 28.10.2026. Fasit: rettighetsmatrisen i `docs/05-domenemodell.md
 |---|---|---|
 | Takstmann | `inspector` | `organization.read` |
 | Kontor | `office` | `organization.read` |
-| Leder | `manager` | `organization.read`, `claims.read`, `staff.manage` |
+| Leder | `manager` | `organization.read`, `claims.read`, `staff.manage`, `contacts.manage` (fjerne og slå sammen kontakter og firma, 05.11.2026) |
 | Admin | `admin` | alle |
 
 Rettighetene utvides fase for fase (`src/core/access/permissions.ts`). Sidemann er en rolle på oppdraget, ikke en ansattrolle (kommer i fase 2a). Kunde og megler er visningsroller som kommer senere.
