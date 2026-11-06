@@ -162,6 +162,7 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - Nattløkken (PR #68) og oppgaveløkken (PR #69) tok samme versjonsnummer (0.2.57) fra hver sin branch. Prosjektlederen fletter `main` inn rett før PR-en åpnes og setter versjonen til neste ledige tall da, ikke når kortet skrives. Sjekk: `git show origin/main:package.json | grep version`.
 - Når `main` har fått en ny migrering siden branchen ble laget, kjøres `pnpm db:migrate "$TEST_DATABASE_URL"` før de berørte testene kjøres på nytt; ellers er røde tester en falsk alarm.
+- Det samme gjelder e2e: `pnpm db:migrate` kjøres også mot `DATABASE_URL`, fordi e2e-serveren bruker utviklingsdatabasen og `playwright.config.ts` ikke kjører migreringer. Uten det ga reklamasjonsbranchen 62 røde e2e-tester med «relation "claims" does not exist» (06.11.2026).
 - To av tre fulle `pnpm test`-kjøringer ble falskt røde fordi en annen agent tømte den delte testdatabasen samtidig (kjent fra liten oppgave (k)). Test-leder og prosjektleder kjører de berørte filene alene før de sier «rød», og CI er fasiten. Hver kjøring sin egen testdatabase (f.eks. `ezprop_test_<worktree>`) er en liten oppgave verd å ta.
 - Et funn fra en gjennomgang kan være feil: «overflødig `FOR UPDATE` i `markFileDeleted`» (o) ble avvist av sikkerhet-personvern i runde 1 med begrunnelse, og låsen står. Kortet skal si det når et funn ikke tas, så det ikke dukker opp igjen i neste liste.
 
