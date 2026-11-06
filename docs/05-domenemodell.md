@@ -494,6 +494,16 @@ Det kan bare være én aktiv ansvarlig om gangen.
 
 Egne kontrollpunkter per avtale kommer senere. Da får avtalen en kobling til en egen malversjon (`template_version_id`), uten ombygging.
 
+**Bygget i fase 2a (06.11.2026, avtale med oppdragsgiver):** Tabellen `client_agreements` (`src/db/schema/client-agreements.ts`, migrering `0021_oppdragsgiveravtale`), kolonnen `assignments.client_agreement_id`, kjernen i `src/core/agreements`, sidene `/admin/avtaler` og kortet «Avtale» på `/oppdrag/[id]`. Oppgavekort: `docs/funksjoner/fase2a-oppdragsgiveravtale.md`; beslutningene A108–A112.
+
+- **Feltene nå:** `firm_id` (påkrevd, sammensatt fremmednøkkel `(organization_id, firm_id)` til `firms`, `client_agreements_firm_fk`), `name` (1–120 tegn), `valid_from` (påkrevd dato), `valid_to` (dato, tom = løpende, siste gyldige dag), `premise_text` (høyst 10 000 tegn), `report_profile_code` (høyst 60 tegn), sporingsfelt og `deleted_at`. CHECK `client_agreements_valid_range_check`: `valid_to` er tom eller lik/etter `valid_from`. Unik `(organization_id, id)`, indeks `(organization_id, firm_id) WHERE deleted_at IS NULL`.
+- **`report_profile_code` i stedet for `report_profile_id` inntil videre (A109):** en kort tekst med navnet på PDF-profilen. Når `report_profiles` lages med PDF-punktet, legges `report_profile_id` til, og teksten brukes til å koble.
+- **På oppdraget:** `assignments.client_agreement_id` (kan være tom), sammensatt fremmednøkkel `assignments_client_agreement_fk` til `client_agreements (organization_id, id)`. Settes for hånd eller med «Bruk avtalen» fra forslaget, aldri automatisk (A110). En fjernet eller utløpt avtale blir stående med merket «Slettet» eller «Utløpt» (A111); nye valg avviser fjernet, utløpt og ikke påbegynt avtale.
+- **Forslaget:** bare fra ordrens bestillerfirma (`assignments.order_id` → `orders.ordered_by_firm_id`), og bare når firmaet (ikke slettet) har nøyaktig én avtale som ikke er fjernet og gjelder i dag (norsk dato). Megler-parten brukes ikke.
+- **Tilgang:** alle ser avtalene (`organization.read`); bare admin oppretter, endrer og fjerner (`organization.manage`, A108); valg på oppdraget med `assignment.edit`.
+- **Revisjonslogg:** `client_agreement` med `create`, `update` (`changedFields`) og `delete`; bare id-er og feltnavn, aldri premisseteksten (A112). Valg på oppdraget gir hendelsen `assignment.agreement_changed` og revisjonslogg `assignment` med `update`, bare ved faktisk endring.
+- **Venter:** `price_note`, `price_list_id`, `notes`, `report_profile_id`, bruk av premisseteksten og profilen i PDF-en, kopi til utgivelsen, egne kontrollpunkter (`template_version_id`).
+
 **`price_lists`** og **`price_list_items`** – **prisliste per avtale, som data** (krok fra `funksjonalitet-ki` A6 og funksjonskart H2). Tabellene lages nå, skjermen kommer i fase 3. En prismotor (pris etter areal, alder og avstand) kommer senere.
 
 | Felt | Forklaring |
@@ -1317,6 +1327,7 @@ Gyldig verdi er et heltall fra 1 til og med 100 (år). Mangler nøkkelen, brukes
 | `assignment.closed` / `assignment.reopened` | Lukket / gjenåpnet |
 | `assignment.team_changed` | Person satt, byttet eller fjernet i en rolle i teamet (fase 2a) |
 | `assignment.company_changed` | Utstedende selskap endret fordi ansvarlig takstmann ble satt, byttet eller fjernet (fase 2a), med `fromCompanyId` og `toCompanyId` |
+| `assignment.agreement_changed` | Avtale med oppdragsgiver valgt, byttet eller fjernet på oppdraget (fase 2a), med `fromAgreementId` og `toAgreementId` |
 | `assignment.party_added` / `assignment.party_updated` / `assignment.party_removed` | Part lagt til / endret / fjernet (fase 2a) |
 | `assignment.property_saved` | Eiendommen på oppdraget lagt inn eller endret (fase 2a), `{ propertyId, created }` |
 | `assignment.common_areas_saved` | Fellesdelene på oppdraget lagt inn eller endret (fase 2a), `{ commonAreasId, created }` |
@@ -1946,7 +1957,9 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Hendelsestype | `EventType`, `EVENT_TYPES` (`src/core/events/types.ts`) | Faste koder for hendelsene i 4.9. Står bare der; en kode endres aldri |
 | Hvem gjorde det (hendelse) | `events.actor_type` | `employee` (ansatt), `system` (systemet selv) eller `integration` (tilkobling) |
 | Skrive hendelse | `recordEvent` (`src/core/events`) | Lagrer en hendelse fra en ansatt, i samme transaksjon som endringen. Organisasjonen og den ansatte kommer fra tilgangssjekken |
-| Avtale med oppdragsgiver | `client_agreements` | For eksempel Fremtind |
+| Avtale med oppdragsgiver | `client_agreements`, `client agreement` (`src/core/agreements`) | For eksempel Fremtind. På oppdraget: `assignments.client_agreement_id` |
+| Rapportprofil (kode på avtalen) | `report_profile_code` | Kort tekst med navnet på PDF-profilen, til `report_profiles` finnes (A109) |
+| Bytte av avtale på oppdraget | `assignment.agreement_changed` | Hendelse med `fromAgreementId`, `toAgreementId` |
 | Prøve uten nett (fase 1) | `offline-trial` | Modulen med testskjemaet for fase 1. Kastes eller gjøres om til feltkomponenter i fase 2b |
 | Testskjema | `trial form` (`trialForm`, `TrialAnswers`) | Skjemaet med 40 felt som kandidatene i fase 1 prøves mot. Ikke en systemmal |
 | Testskjema (lagret), svar per felt, bilde i prøven | `trial_forms`, `trial_answers`, `trial_photos` | Tabeller **bare for prøven i fase 1** (oppgave 4, PowerSync). Har `baseColumns`. Slettes eller gjøres om i fase 2b; ikke en del av datamodellen ellers |
@@ -2240,3 +2253,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 05.11.2026 | Statusflyten (fase 2a): lovlige overganger (ett steg fram, ett steg tilbake med grunn, ingen hopp), kansellering fra Bestilt og Under arbeid som myk sletting med grunn i hendelsen `assignment.cancelled`, grunnen ved tilbake i `assignment.status_changed`. «Rettet» regnes ut (`isCorrected`) og lagres ikke. Ingen migrering; `status_changed_at` og `cancelled_reason` venter. Se «Bygget i fase 2a» i 4.3. | A74–A77, `docs/funksjoner/fase2a-statusflyt.md` |
 | 05.11.2026 | Koble parter og bestiller til kontakter (fase 2a): `assignment_parties.contact_id`/`firm_id` og `orders.ordered_by_contact_id`/`ordered_by_firm_id`, valgfrie, med sammensatte fremmednøkler med `organization_id`. Firmaet følger kontakten; friteksten beholdes som øyeblikksbilde. Bare id-er i revisjonsloggen, ingen kontaktdata til KI. Se «Bygget i fase 2a» i 4.2 og 4.3. | A84–A92, `docs/funksjoner/fase2a-koble-kontakter.md` |
 | 05.11.2026 | Arbeidskøen (fase 2a): `assignments.inspection_at`, `due_date` og `internal_note` tatt i bruk (notat høyst 200 tegn, internt, aldri i rapport eller PDF). Spørringene `listWorkQueue`, `countWorkQueueByStatus`, `updateAssignmentNote` og `setAssignmentSchedule`. Se «Bygget i fase 2a» i 4.3. | A99–A107, `docs/funksjoner/fase2a-arbeidsko.md` |
+| 06.11.2026 | Avtale med oppdragsgiver (fase 2a): `client_agreements` bygget med `firm_id`, `name`, `valid_from`/`valid_to` (CHECK), `premise_text` og `report_profile_code` (i stedet for `report_profile_id` inntil videre); `assignments.client_agreement_id`; ny hendelse `assignment.agreement_changed`. Forslag fra bestillerfirmaet, aldri automatisk. `price_note`, `price_list_id` og `notes` venter. Se «Bygget i fase 2a» i 4.3. | A108–A112, `docs/funksjoner/fase2a-oppdragsgiveravtale.md` |
