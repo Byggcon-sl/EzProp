@@ -8,6 +8,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 Sist oppdatert: 04.11.2026 (intern personvernerklæring og sletteregel for betadata, «Minimum før ekte data», PR mot `main`; før det 03.11.2026: PR #73 merget kl. 09:01 UTC; nøkkelboks steg 2 utsatt, A50, bekreftet i runde 2 av forhåndsvurderingen; PR #74 flyttet til `main` og flettet)
 Sist oppdatert: 04.11.2026 (PR #82 manuell ordre og oppdragsnummer merget kl. 17:14 UTC, fase 2a)
+Sist oppdatert: 06.11.2026 (doble testfiler for avtale med oppdragsgiver slått sammen, branch `fase2a-avtale-doble-tester` fra `main`, versjon 0.3.6; funksjonen selv er merget i PR #107)
 Sist oppdatert: 06.11.2026 (PR #107 avtale med oppdragsgiver merget, fase 2a)
 Sist oppdatert: 06.11.2026 (oppgavekort for avtale med oppdragsgiver: `docs/funksjoner/fase2a-oppdragsgiveravtale.md`, branch `fase2a-oppdragsgiveravtale` fra `main`, beslutningene A114–A118, migrering 0021)
 Sist oppdatert: 05.11.2026 (oppgavekort for arbeidskøen: `docs/funksjoner/fase2a-arbeidsko.md`, branch `fase2a-arbeidsko` fra `main`, beslutningene A99–A104; PR #97 er merget, PR #98 bygninger venter på CI og bruker migrering 0019)
