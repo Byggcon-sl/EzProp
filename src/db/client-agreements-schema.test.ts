@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -196,5 +196,12 @@ describe("3. client_agreements i databasen", () => {
       sql`select organization_id from client_agreements where id = ${id}`,
     );
     expect(row?.organization_id).toBe(org.id);
+  });
+
+  it("3.7 migreringen heter 0021_oppdragsgiveravtale.sql", () => {
+    const dir = path.join(process.cwd(), "src/db/migrations");
+    expect(readdirSync(dir).filter((file) => file.startsWith("0021_"))).toEqual([
+      "0021_oppdragsgiveravtale.sql",
+    ]);
   });
 });

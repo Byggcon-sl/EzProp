@@ -156,6 +156,7 @@ describe("5.1 sette, bytte og fjerne avtalen", () => {
   it.each([
     { name: "slettet", overrides: { deletedAt: DELETED } },
     { name: "utløpt", overrides: { validFrom: "2026-01-01", validTo: YESTERDAY } },
+    { name: "ikke påbegynt", overrides: { validFrom: TOMORROW } },
   ])("5.1.3 fjerne er lov når avtalen er $name", async ({ overrides }) => {
     const { org, admin, assignment } = await setup();
     const old = await createClientAgreement(org.id, overrides);
