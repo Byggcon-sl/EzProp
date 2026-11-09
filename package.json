@@ -1,6 +1,6 @@
 {
   "name": "ezprop",
-  "version": "0.3.13",
+  "version": "0.3.14",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",

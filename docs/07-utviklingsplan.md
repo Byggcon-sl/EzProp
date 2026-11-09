@@ -153,8 +153,8 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
   - [x] Kandidat 3, egenbygd (lokal database og endringskø), på samme skjema og samme protokoll (PR #11, 29.10.2026, `docs/funksjoner/fase1-kandidat-egenbygd.md`)
   - [x] Synktjenestene for kandidat 1 og 2 i Azure-testmiljøet, av som standard til Ståle slår dem på (PR #17, 29.10.2026, `docs/funksjoner/fase1-synk-i-azure.md`, `docs/drift/testmiljo-azure.md`)
     - [x] Småfunn fra gjennomgangen av PR #17: rydding av replikeringsplasser bare i egen database, lengdekrav på synkhemmelighetene, maskene i utrullingen og dokumentasjonen om hva tjenestene kan lese (29.10.2026, `docs/agenter/oppgaver/fase1-smafunn-synk-azure.md`)
-- [ ] **Prøve A – én takstmann uten nett (må):** flymodus i 30 minutter, alle felt fylles ut, 200 bilder tas, appen lukkes og åpnes igjen, iPaden startes på nytt. Når nettet kommer: alt synkroniseres, ingenting går tapt.
-- [ ] **Prøve B – to i samme rapport (bør):** to iPader endrer samme kontrollpunkt samtidig. Tekst flettes. TG, valg og tall følger «siste endring vinner», og den andre får varsel.
+- [ ] **Prøve A – én takstmann uten nett (må):** flymodus i 30 minutter, alle felt fylles ut, 200 bilder tas, appen lukkes og åpnes igjen, iPaden startes på nytt. Når nettet kommer: alt synkroniseres, ingenting går tapt. (se også Spectora-YouTube V1, V2)
+- [ ] **Prøve B – to i samme rapport (bør):** to iPader endrer samme kontrollpunkt samtidig. Tekst flettes. TG, valg og tall følger «siste endring vinner», og den andre får varsel. (se også Spectora-YouTube V2)
 - [x] **Prøve C – lagring i Safari:** hvor mye plass appen får, at data overlever omstart og flere dager uten bruk, og hva som skjer når plassen er brukt opp
   - [x] Småfunn fra gjennomgangen av PR #32: loggen viser bare feilnavnet, testen for åpning uten nett uten reservevei, færre doble tester, ett mønster for plassmålingen (30.10.2026, `docs/agenter/oppgaver/fase1-smafunn-prove-c.md`)
 - [x] **Prøve D – bilder:** komprimering og riktig rotering på iPaden, HEIC til JPEG, opplasting mens appen er åpen, fortsettelse etter brudd, kontroll med fingeravtrykk (PR-en fra branchen `fase1-prove-d-bilder`, 30.10.2026, `docs/funksjoner/fase1-prove-d-bilder.md`; automatiske tester i Chromium på `pc` og `ipad`; prøven på ekte iPad gjenstår, resultatmal `docs/funksjoner/fase1-prove-d-bilder-resultat.md`)
@@ -163,7 +163,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
   - [x] Småfunn fra gjennomgangen av PR #23 og det som sto igjen fra PR #26: egen test for `localWriteGeneration`, testsakene for prøvereglene bare i testene, grensetallet ett sted, færre doble tester, og loggen i synken viser bare feilmeldingen (30.10.2026, `docs/agenter/oppgaver/fase1-smafunn-prove-e.md`)
 - [x] **Prøve F – innlogging som har gått ut:** takstmannen kan fortsatt åpne og fullføre rapporten uten nett (PR-en fra branchen `fase1-prove-f-innlogging`, 30.10.2026, `docs/funksjoner/fase1-prove-f-innlogging.md`; prøven på ekte iPad gjenstår, resultatmal `docs/funksjoner/fase1-prove-f-innlogging-resultat.md`)
   - [x] Småfunn fra gjennomgangen av PR #34: færre doble tester for meldingen om innlogging og i sjekken av innloggingen, og opprydding i testhjelperne (30.10.2026, `docs/agenter/oppgaver/fase1-smafunn-prove-d-f.md`)
-- [x] Synkstatus som alltid vises: antall endringer og bilder som venter, «lagret kl.», og «Synk nå» (PR #21, 29.10.2026, `docs/funksjoner/fase1-synkstatus.md`)
+- [x] Synkstatus som alltid vises: antall endringer og bilder som venter, «lagret kl.», og «Synk nå» (PR #21, 29.10.2026, `docs/funksjoner/fase1-synkstatus.md`) (se også Spectora-YouTube V1, V19)
   - [x] Småfunn fra gjennomgangen av PR #21: egen test for «Synk nå», trygg oppretting av testtakstmannen i e2e (bare lokal database og testdatabase), loggen viser bare feilmeldingen, og opprydding i testkoden (29.10.2026, `docs/agenter/oppgaver/fase1-smafunn-synkstatus.md`)
 - [x] Sammenligning av kandidatene: virker prøvene, hvor mye arbeid, drift i EU/EØS, pris og hvor modent verktøyet er (30.10.2026, `docs/funksjoner/fase1-sammenligning.md`; bygger på de automatiske prøvene. **Foreløpig; bekreftes etter prøve A og B på ekte iPad, og Ståles godkjenning i demoen gjenstår**)
 - [x] **ADR: valg av løsning for drift uten nett**, med begrunnelse og det som ikke virket (30.10.2026, `docs/adr/0004-drift-uten-nett.md`: egenbygd, reserve PowerSync eller ElectricSQL. **Foreløpig; bekreftes etter prøve A og B på ekte iPad, og Ståles godkjenning i demoen gjenstår**)
@@ -189,7 +189,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 - [x] Admin: opprette selskaper, kontorer og ansatte, og gi roller (31.10.2026, `docs/funksjoner/fase0b-admin-organisasjon.md`, beslutninger A24–A28; minst én admin alltid)
 
 **Grunnmur**
-- [x] Revisjonslogg og hendelseslogg (grunnmuren som rapporter, maler og rutiner skriver til) (31.10.2026, `docs/funksjoner/fase0b-revisjon-hendelser.md`, beslutninger A33 og A34)
+- [x] Revisjonslogg og hendelseslogg (grunnmuren som rapporter, maler og rutiner skriver til) (31.10.2026, `docs/funksjoner/fase0b-revisjon-hendelser.md`, beslutninger A33 og A34) (se også Spectora-YouTube V61)
 - [x] Felles filtjeneste for bilder og dokumenter (lokal mappe i utvikling, fillagring i EU/EØS i drift), **bak et eget lag**, slik at bilder senere kan flyttes til et lokalt arkiv hos Byggcon (27.10.2026). Oppbevaringstidene er innstillinger. (02.11.2026, `docs/funksjoner/fase0b-filtjeneste.md`, beslutninger A39–A43; Azure-adapteren er bare kode og slås på av Ståle)
   - [x] Småfunn fra gjennomgangen rettet (liten oppgave (o)/(p)/(q), 03.11.2026, docs/agenter/oppgaver/fase0b-smafunn-filtjeneste-tilkobling.md)
 - [x] Tilkoblingslag med faste porter (regnskap, e-post, meglersystem, eiendomsdata, KI). Første tilkobling: e-post via Microsoft 365 som i Optiplan, og en «utviklingspostkasse» lokalt. (02.11.2026, `docs/funksjoner/fase0b-tilkoblingslag.md`, beslutninger A44–A48; Microsoft 365-adapteren er bare kode og slås på av Ståle med de fire secretene; `external_references` og selskap på tilkoblingen er flyttet til fase 3)
@@ -211,10 +211,10 @@ Før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerkl�
 - [ ] **Daglig sikkerhetskopi**, og én gjenoppretting som er prøvd og skrevet ned
 - [ ] **Databehandleravtaler** med leverandørene for drift, fillagring og e-post
 - [ ] **Tilgang bare for ansatte** (ingen innlogging for kunder eller meglere ennå)
-- [x] **Intern personvernerklæring:** kort om hva som lagres, hvorfor, hvor og hvor lenge (04.11.2026, `docs/personvern/intern-personvernerklaering.md`)
+- [x] **Intern personvernerklæring:** kort om hva som lagres, hvorfor, hvor og hvor lenge (04.11.2026, `docs/personvern/intern-personvernerklaering.md`) (se også Spectora-YouTube V97)
 - [x] **Regel for sletting av data fra betaen** som ikke skal beholdes (for eksempel prøverapporter som bare var for testing) (04.11.2026, `docs/personvern/sletting-av-betadata.md`)
   - Merknad 28.10.2026 (oppgave 4): `trial_*`-tabellene fra fase 1 slettes eller gjøres om her bare fordi dataene er oppdiktede. Det er ikke presedens for sletting av ekte data (regel 3: ingenting slettes permanent).
-- [ ] **Sperring av iPader** (innspill P6 og D10): kode eller Face ID påkrevd, og en mistet iPad kan sperres. Må være på plass før første ekte befaring på iPad i fase 2b.
+- [ ] **Sperring av iPader** (innspill P6 og D10): kode eller Face ID påkrevd, og en mistet iPad kan sperres. Må være på plass før første ekte befaring på iPad i fase 2b. (se også Spectora-YouTube V132)
 - [ ] **Microsoft 365 koblet til**, og koden i serverloggen for første admin er ikke lenger i bruk
 - [ ] **Privat nettverk eller VNet-integrasjon mellom app og database** (ikke brannmurregelen for alle Azure-tjenester), og egen databasebruker for appen uten eierrettigheter
 
@@ -237,48 +237,48 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 - [x] Kontakter og firma (meglere og meglerforetak) med notater, uten dubletter på organisasjonsnummer, og med kilde for opplysningene (innspill D17) (05.11.2026, `docs/funksjoner/fase2a-kontakter-firma.md`, tabellene `firms` og `contacts`, sidene `/kontakter` og `/firma`, beslutningene A79–A83)
 - [x] Koble partene på oppdraget og bestilleren til kontakter og firma (`assignment_parties.contact_id`/`firm_id`, `orders.ordered_by_contact_id`/`ordered_by_firm_id`), med søk etter kontakt fra oppdragssiden (05.11.2026, `docs/funksjoner/fase2a-koble-kontakter.md`, kontaktvelgeren «Søk i kontakter» på partene og ny ordre, sammensatte fremmednøkler med `organization_id`; A84–A92)
 - [x] Fjerne (myk sletting fra skjermen) og slå sammen like kontakter og firma (05.11.2026, `docs/funksjoner/fase2a-fjerne-sla-sammen-kontakter.md`, `src/core/contacts/remove-merge.ts`, knappene «Fjern» og «Slå sammen» på `/kontakter/[id]` og `/firma/[id]`, sidene `…/sla-sammen`, ny rettighet `contacts.manage`, ingen migrering, beslutningene A108–A113)
-- [x] **Tidsmåling per rapport fra første ekte rapport** (hovedmålet, 28.10.2026): arbeidsøkter per fase (forberedelse, befaring, kontorarbeid, levering) lagres automatisk fra hendelsene, slik at tiden kan sammenlignes med nullpunktet fra IVIT. **Levert 06.11.2026** (`work_sessions`, `/statistikk/tid`, A119–A124).
-- [x] **Reklamasjoner med enkelt skjema fra første ekte rapport** (beslutning 27.10.2026, spørsmål 4). **Bare leder og admin ser reklamasjonssakene** (unntak fra «alle ser alt», 27.10.2026). Reklamasjonsmappen kommer i fase 4. **Levert 06.11.2026** (`claims`, `claims.manage`, delen «Reklamasjoner» på oppdraget, A125–A129).
+- [x] **Tidsmåling per rapport fra første ekte rapport** (hovedmålet, 28.10.2026): arbeidsøkter per fase (forberedelse, befaring, kontorarbeid, levering) lagres automatisk fra hendelsene, slik at tiden kan sammenlignes med nullpunktet fra IVIT. **Levert 06.11.2026** (`work_sessions`, `/statistikk/tid`, A119–A124). (se også Spectora-YouTube V16, V78)
+- [x] **Reklamasjoner med enkelt skjema fra første ekte rapport** (beslutning 27.10.2026, spørsmål 4). **Bare leder og admin ser reklamasjonssakene** (unntak fra «alle ser alt», 27.10.2026). Reklamasjonsmappen kommer i fase 4. **Levert 06.11.2026** (`claims`, `claims.manage`, delen «Reklamasjoner» på oppdraget, A125–A129). (se også Spectora-YouTube V125, V126)
 - [x] **Fire testoppdrag som grunndata** (innspill P11): enebolig med garasje, leilighet i sameie, borettslagsleilighet og fritidsbolig, med bilder uten personer. Brukes i «Prøv malen», i regeltester og i demoer. **Levert 06.11.2026** uten bilder (`pnpm db:seed:testoppdrag`, prøveorganisasjonen, A130–A135).
 
 **Malen og reglene**
-- [ ] Malmotoren fra `datamodell.md` 4.5: malfamilie, malversjon, seksjon, felt, kontrollpunkt, avviksspørsmål, utfall, standardtiltak og regler. Systemmalen er låst for alle uten maltilgang.
-- [ ] **Regneark inn og ut med faste ID-er** for systemmalen. Slik redigerer fagansvarlig malen i betaen (P19); egen maleditor kommer i fase 5.
+- [ ] Malmotoren fra `datamodell.md` 4.5: malfamilie, malversjon, seksjon, felt, kontrollpunkt, avviksspørsmål, utfall, standardtiltak og regler. Systemmalen er låst for alle uten maltilgang. (se også Spectora-YouTube V13, V102)
+- [ ] **Regneark inn og ut med faste ID-er** for systemmalen. Slik redigerer fagansvarlig malen i betaen (P19); egen maleditor kommer i fase 5. (se også Spectora-YouTube V43)
 - [ ] Automatisk kontroll av malen før publisering: obligatoriske punkter finnes, TG3 har kostnad, ingen regler peker på felt som ikke finnes, og alle testtilfeller består
 - [ ] «Prøv malen»: et testskjema som viser hvilke spørsmål og TG-forslag som kommer
 - [ ] Levetider (NS 3600:2025 tillegg C som tall, **med trinn**, innspill D4), terskler (bekreftet av fagrådet) og kostnadsintervaller som egne tabeller
-- [ ] Regelmotoren som én felles kodepakke for iPad og server: vis/skjul, **TG-forslag fra materiale, alder (med kilde for alderen og om dokumentasjon finnes) og målinger**, forslag om TGIU på punktet, og kontroller. Testtilfeller per regel. De nye betingelsestypene fra innspill D5 (snødekke, bygningstype, TG på annet punkt, bilde mangler, TGIU satt).
+- [ ] Regelmotoren som én felles kodepakke for iPad og server: vis/skjul, **TG-forslag fra materiale, alder (med kilde for alderen og om dokumentasjon finnes) og målinger**, forslag om TGIU på punktet, og kontroller. Testtilfeller per regel. De nye betingelsestypene fra innspill D5 (snødekke, bygningstype, TG på annet punkt, bilde mangler, TGIU satt). (se også Spectora-YouTube V36)
 - [ ] Regler fra beslutningene: hulltaking nektet gir TGIU (på kontrollpunktet, innspill D1), loft uten adkomst gir TG2 (med unntaket), radon 100 Bq/m³, våtrom fra før 2000
-- [ ] Systemmalen for tilstandsrapport bolig og leilighet lagt inn, med Byggcons egne avvikstekster. **TG-logikk finnes bare i denne systemmalen** (27.10.2026).
-- [ ] «Handling»-frasene fra IVIT importeres som tiltak. Feltet kan hete «Konsekvens/tiltak» (27.10.2026).
-- [ ] **Fagrådet (Ståle) godkjenner malen, tekstene og grensene** i det ekte skjermbildet (bygger på «Fagråd – runde 1»)
-- [ ] Rapporten låses til malversjonen den startes med
+- [ ] Systemmalen for tilstandsrapport bolig og leilighet lagt inn, med Byggcons egne avvikstekster. **TG-logikk finnes bare i denne systemmalen** (27.10.2026). (se også Spectora-YouTube V35, V112)
+- [ ] «Handling»-frasene fra IVIT importeres som tiltak. Feltet kan hete «Konsekvens/tiltak» (27.10.2026). (se også Spectora-YouTube V112)
+- [ ] **Fagrådet (Ståle) godkjenner malen, tekstene og grensene** i det ekte skjermbildet (bygger på «Fagråd – runde 1») (se også Spectora-YouTube V40)
+- [ ] Rapporten låses til malversjonen den startes med (se også Spectora-YouTube V21, V111)
 
 **Rapporten på PC**
-- [ ] Kontrollpunkter per bygning og rom, «i»-knapp med kravet fra forskriften (med egne ord), HMS-merke, hjelpetekster, «ferdig» per punkt og fremdrift
+- [ ] Kontrollpunkter per bygning og rom, «i»-knapp med kravet fra forskriften (med egne ord), HMS-merke, hjelpetekster, «ferdig» per punkt og fremdrift (se også Spectora-YouTube V13, V37)
 - [ ] Felt for tall med enhet og gyldig område (fall, terskel, skjevhet, punkterte ruter, rekkverkshøyde, fukt) og tabell for hulltakingsmålinger
-- [ ] **Avvikskort** med alt på ett sted: TG, årsak (begrunnelse og kriterium, også «manglende dokumentasjon», innspill D7), konsekvens, flere tiltak, kostnad (ett av de fem intervallene, eller **eget beløp** i stedet for intervall) og valgfri kostnadstekst. Eget beløp rundes ikke av automatisk, men gir **advarsel** hvis det ikke er rundet av til minst nærmeste 10 000 (27.10.2026). TG2/TG3-forslag kan godtas, endres eller avvises med begrunnelse.
-- [ ] **TGIU på kontrollpunktet** med opplysningene (hvorfor, eier informert, annen kontroll og resultat, risiko, utsatt konstruksjon), og ferdig tekst som teller som utfylt. «Gjelder ikke» på et obligatorisk punkt krever begrunnelse (innspill D6).
+- [ ] **Avvikskort** med alt på ett sted: TG, årsak (begrunnelse og kriterium, også «manglende dokumentasjon», innspill D7), konsekvens, flere tiltak, kostnad (ett av de fem intervallene, eller **eget beløp** i stedet for intervall) og valgfri kostnadstekst. Eget beløp rundes ikke av automatisk, men gir **advarsel** hvis det ikke er rundet av til minst nærmeste 10 000 (27.10.2026). TG2/TG3-forslag kan godtas, endres eller avvises med begrunnelse. (se også Spectora-YouTube V112)
+- [ ] **TGIU på kontrollpunktet** med opplysningene (hvorfor, eier informert, annen kontroll og resultat, risiko, utsatt konstruksjon), og ferdig tekst som teller som utfylt. «Gjelder ikke» på et obligatorisk punkt krever begrunnelse (innspill D6). (se også Spectora-YouTube V107)
 - [ ] Befaringer: dato, klokkeslett, forhold (snø) og hvem som var til stede. **Flere befaringer per rapport** (hovedbefaring, tilleggsbefaring, etterkontroll), innspill D2.
 - [ ] Dokumentasjonstabell, egenerklæring (mottatt eller ikke, avvik) og NS-utgave i rapporten
-- [ ] **Fraser:** felles og mine, favoritter, «mest brukt», søk som tåler skrivefeil (også med «/»), filtrert på kontrollpunkt, felt og TG, lagre ny frase fra rapporten, endringslogg og «gå tilbake». Forslag fra frasebanken uten KI.
-- [ ] **Bilder på PC:** last opp, knytt til rom, kontrollpunkt og avvik, rotering, markering som eget lag (piler, ringer, tekst, farge etter TG), bildetekst, forsidebilde og bekreftelse før sletting
+- [ ] **Fraser:** felles og mine, favoritter, «mest brukt», søk som tåler skrivefeil (også med «/»), filtrert på kontrollpunkt, felt og TG, lagre ny frase fra rapporten, endringslogg og «gå tilbake». Forslag fra frasebanken uten KI. (se også Spectora-YouTube V38, V103, V115, V117)
+- [ ] **Bilder på PC:** last opp, knytt til rom, kontrollpunkt og avvik, rotering, markering som eget lag (piler, ringer, tekst, farge etter TG), bildetekst, forsidebilde og bekreftelse før sletting (se også Spectora-YouTube V10, V23)
   - [ ] Bilder uten personer til de fire testoppdragene, i samme seed-steg (`pnpm db:seed:testoppdrag`), når bildemodellen finnes (A134)
-- [ ] Sammendrag (skrives av takstmannen), **oppsummering per bygningsdel** som lagres og kan redigeres (innspill D12), og oversikt over TG
-- [ ] Papirkurv og angre for sletting
+- [ ] Sammendrag (skrives av takstmannen), **oppsummering per bygningsdel** som lagres og kan redigeres (innspill D12), og oversikt over TG (se også Spectora-YouTube V28)
+- [ ] Papirkurv og angre for sletting (se også Spectora-YouTube V6)
 
 **Publisering, PDF og sending**
-- [ ] **Publisering med sperre:** de sju kravene fra forskriften stopper, den ansatte kan krysse bort sperren aktivt, overstyringen logges, og mangelen kommer tilbake i ny versjon. Sperre nr. 1 tar hensyn til «gjelder ikke» og «gir ikke TG» (innspill D6). Andre mangler gir advarsel, blant annet påkrevd sidemannskontroll som ikke er godkjent, og eget kostnadsbeløp som ikke er rundet av (27.10.2026). Mangler vises underveis som et lite merke.
+- [ ] **Publisering med sperre:** de sju kravene fra forskriften stopper, den ansatte kan krysse bort sperren aktivt, overstyringen logges, og mangelen kommer tilbake i ny versjon. Sperre nr. 1 tar hensyn til «gjelder ikke» og «gir ikke TG» (innspill D6). Andre mangler gir advarsel, blant annet påkrevd sidemannskontroll som ikke er godkjent, og eget kostnadsbeløp som ikke er rundet av (27.10.2026). Mangler vises underveis som et lite merke. (se også Spectora-YouTube V10, V24, V37, V102)
 - [ ] **Forslag, ikke vedtatt** (fra `analyse-ivit-leilighetsrapport-2026-10-27.md` avsnitt 6, Ståle avgjør): nye advarsler i sjekken før publisering:
   - ventilasjon (samme anlegg) er beskrevet ulikt to steder i rapporten
   - forretningsfører og kilde for fellesgjeld mangler for borettslag og sameie (påkrevd eller begrunnet)
   - ny versjon uten kort kommentar om hva som er endret
-- [ ] Utgivelser med versjon: hver utgivelse låses med innhold, PDF og fingeravtrykk, og med hvem som signerte og hvilken sertifisering som gjaldt (innspill D8). Retting gir ny versjon med opprinnelig dato. **Gyldig til = ett år fra befaringsdato** (27.10.2026).
+- [ ] Utgivelser med versjon: hver utgivelse låses med innhold, PDF og fingeravtrykk, og med hvem som signerte og hvilken sertifisering som gjaldt (innspill D8). Retting gir ny versjon med opprinnelig dato. **Gyldig til = ett år fra befaringsdato** (27.10.2026). (se også Spectora-YouTube V24, V111)
 - [ ] **ADR: valg av PDF-motor** (innspill P5), med testutskrift av en rapport med 50 bilder. Krav: stående og liggende, profiler, bilder med markering, innholdsfortegnelse, norsk orddeling, samme resultat hver gang.
-- [ ] **PDF** med Byggcons profil: forside, om Byggcon (firmatekst fra selskapet), forklaring av TG, sammendrag med antall per TG, bygningene med avvik og bilder, arealer, dokumentasjon, forutsetninger, signatur og bunntekst med juridisk selskap. Ingen interne koder i teksten, og tomme deler gir ikke egne sider. Stående og liggende profil. Bildene i PDF-en har ikke GPS-posisjon (innspill D14).
+- [ ] **PDF** med Byggcons profil: forside, om Byggcon (firmatekst fra selskapet), forklaring av TG, sammendrag med antall per TG, bygningene med avvik og bilder, arealer, dokumentasjon, forutsetninger, signatur og bunntekst med juridisk selskap. Ingen interne koder i teksten, og tomme deler gir ikke egne sider. Stående og liggende profil. Bildene i PDF-en har ikke GPS-posisjon (innspill D14). (se også Spectora-YouTube V27, V31)
 - [ ] **Forslag, ikke vedtatt** (fra `analyse-ivit-leilighetsrapport-2026-10-27.md` avsnitt 6, Ståle avgjør): i PDF-profilen viser HMS-delen bare en kort liste med henvisning til punktet (ikke hele teksten på nytt), en overskrift holdes alltid sammen med teksten under, tabellkolonner har faste bredder, og lovlighet står bare ett sted.
-- [ ] **PDF under 8 MB** (innspill P8): bildene i PDF-en skaleres ned og komprimeres. Blir PDF-en likevel større, sendes en lenke eller to e-poster. Testes med rapporten med 50 bilder.
-- [ ] **«Send»-knapp** (innspill P9): rapporten sendes som vedlegg til mottakerne først når noen trykker. Status «Ferdig» settes når rapporten er sendt (innspill D16). En rettet rapport sendes manuelt av den ansvarlige (27.10.2026).
+- [ ] **PDF under 8 MB** (innspill P8): bildene i PDF-en skaleres ned og komprimeres. Blir PDF-en likevel større, sendes en lenke eller to e-poster. Testes med rapporten med 50 bilder. (se også Spectora-YouTube V32)
+- [ ] **«Send»-knapp** (innspill P9): rapporten sendes som vedlegg til mottakerne først når noen trykker. Status «Ferdig» settes når rapporten er sendt (innspill D16). En rettet rapport sendes manuelt av den ansvarlige (27.10.2026). (se også Spectora-YouTube V1, V24)
 
 **Ferdig når:** Fagrådet har gått gjennom malen og reglene i et ekte skjermbilde og godkjent tekstene der, og Ståle godtar en PDF (også testutskriften med 50 bilder, under 8 MB).
 
@@ -288,12 +288,12 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 
 Samme rapport, nå med **befaringen på iPad uten nett**, med løsningen fra fase 1.
 
-- [ ] Befaring på iPad uten nett, og samme data på PC (to visninger for konstruksjonene)
-- [ ] iPad-visning for befaringen: kontrollpunkter per bygning og rom, store trykkflater, «ferdig» per punkt og fremdrift
-- [ ] **Bilder på befaringen:** kamera ett trykk unna, serie med bilder, bildet knyttes til rom, kontrollpunkt og avvik der det tas, og kø for opplasting
-- [ ] Synkstatus og «lagret kl.» alltid synlig
-- [ ] **«Glemt noe?»** (`funksjonalitet-ki` K4): før takstmannen går videre fra et rom, vises punkter som mangler og avvik uten bilde. Faste regler, ingen KI, virker uten nett.
-- [ ] **Oppsett av iPadene** (innspill P6): kode eller Face ID påkrevd, appen på hjemskjermen, iPaden registrert som enhet i EzProp og mulig å sperre (innspill D10). **Ingen Intune nå** (27.10.2026). Det vurderes senere.
+- [ ] Befaring på iPad uten nett, og samme data på PC (to visninger for konstruksjonene) (se også Spectora-YouTube V2, V3)
+- [ ] iPad-visning for befaringen: kontrollpunkter per bygning og rom, store trykkflater, «ferdig» per punkt og fremdrift (se også Spectora-YouTube V4, V11, V12, V18, V106)
+- [ ] **Bilder på befaringen:** kamera ett trykk unna, serie med bilder, bildet knyttes til rom, kontrollpunkt og avvik der det tas, og kø for opplasting (se også Spectora-YouTube V7, V105, V109)
+- [ ] Synkstatus og «lagret kl.» alltid synlig (se også Spectora-YouTube V1, V19)
+- [ ] **«Glemt noe?»** (`funksjonalitet-ki` K4): før takstmannen går videre fra et rom, vises punkter som mangler og avvik uten bilde. Faste regler, ingen KI, virker uten nett. (se også Spectora-YouTube V5, V8)
+- [ ] **Oppsett av iPadene** (innspill P6): kode eller Face ID påkrevd, appen på hjemskjermen, iPaden registrert som enhet i EzProp og mulig å sperre (innspill D10). **Ingen Intune nå** (27.10.2026). Det vurderes senere. (se også Spectora-YouTube V132)
 - [ ] **Listen «omveier til IVIT» startes** (innspill P14): alt takstmannen likevel må gjøre i IVIT (ordrebekreftelse, verditakst, meglerlevering, kalender), føres opp fra første betarapport
 
 **Ferdig når:** Ståle (betaen er bare Ståle foreløpig, 27.10.2026) har laget to tilstandsrapporter (én enebolig og én leilighet med fellesdeler) i EzProp, ved siden av IVIT, med befaring på iPad uten nett, TG-forslag fra alder og målinger, publisering med sperre og en PDF Ståle godtar.
@@ -305,42 +305,42 @@ Samme rapport, nå med **befaringen på iPad uten nett**, med løsningen fra fas
 Flere takstmenn bruker EzProp på ekte oppdrag. IVIT brukes fortsatt for det EzProp ikke dekker.
 
 **Kvalitet**
-- [ ] Flere takstmenn og alle tre selskapene i bruk, også to i samme rapport med nett
-- [ ] **Sidemannskontroll** i EzProp: krav per ansatt satt av leder, «send til sidemann», kommentarer per sted i rapporten, sendt tilbake eller godkjent med navn og tid, logg og enkel statistikk over funnene. Manglende kontroll gir **bare advarsel**, og sidemannen **kommenterer og godkjenner, men retter ikke** (27.10.2026).
+- [ ] Flere takstmenn og alle tre selskapene i bruk, også to i samme rapport med nett (se også Spectora-YouTube V2, V98)
+- [ ] **Sidemannskontroll** i EzProp: krav per ansatt satt av leder, «send til sidemann», kommentarer per sted i rapporten, sendt tilbake eller godkjent med navn og tid, logg og enkel statistikk over funnene. Manglende kontroll gir **bare advarsel**, og sidemannen **kommenterer og godkjenner, men retter ikke** (27.10.2026). (se også Spectora-YouTube V98, V113)
 
 **Rutiner og meldinger**
-- [ ] **Hendelser og handlinger:** «når → bare hvis → gjør» med grupper av betingelser, handlingene e-post med **ekte vedlegg** (rapport-PDF), oppgave og merke, innstillinger per melding (én gang, tidsvindu, ikke helg), og regler som også gjelder oppdrag som fantes fra før
-- [ ] **De seks ferdige rutinene:** velkomst til selger (med del som ordrebekreftelse), befaringstidspunkt til megler, påminnelse dagen før (kl. 12 til selger, kopi til takstmann), rapport til kunde, rapport til megler og spørreundersøkelse til selger. Rutinene er **avanserte funksjoner som admin kan justere**, og **hver takstmann kan lage egne rutiner** (27.10.2026).
+- [ ] **Hendelser og handlinger:** «når → bare hvis → gjør» med grupper av betingelser, handlingene e-post med **ekte vedlegg** (rapport-PDF), oppgave og merke, innstillinger per melding (én gang, tidsvindu, ikke helg), og regler som også gjelder oppdrag som fantes fra før (se også Spectora-YouTube V65, V66, V69, V120)
+- [ ] **De seks ferdige rutinene:** velkomst til selger (med del som ordrebekreftelse), befaringstidspunkt til megler, påminnelse dagen før (kl. 12 til selger, kopi til takstmann), rapport til kunde, rapport til megler og spørreundersøkelse til selger. Rutinene er **avanserte funksjoner som admin kan justere**, og **hver takstmann kan lage egne rutiner** (27.10.2026). (se også Spectora-YouTube V64, V67, V68, V119, V127)
 - [ ] **Spørreundersøkelse i EzProp** (27.10.2026): spørsmål og svar lagres i databasen (ikke Microsoft Forms), slik at svarene kan brukes i malene og i meglerprofilen
 - [ ] **Automatisk sending ved publisering** kan slås på **per selskap** når køen har vist seg pålitelig (innspill P9). Til da brukes «Send»-knappen.
 - [ ] **Kø og logg per oppdrag:** planlagt, sendt, hoppet over, feilet og stoppet, med grunn i klarspråk. Forhåndsvisning av hva som vil gå, «send nå», «stopp» og «send på nytt» med oppdaterte data. Flytting av befaringen planlegger meldingene på nytt. Varsel når noe feiler.
 - [ ] Maler for e-post med flettefelt, og forklaring før bekreftelse av hva som skjer automatisk
-- [ ] Oppgaver knyttet til oppdrag og kontakt, med ansvarlig, frist, status og kommentarer, også laget av regler (for eksempel «egenerklæring mangler 2 dager før befaring»)
-- [ ] **Oppgaver på mobil og daglig oppsummering** (funksjonskart H12): egne oppgaver kan ses og krysses av på telefonen, og hver ansatt kan få en kort e-post om morgenen med dagens oppgaver og befaringer
+- [ ] Oppgaver knyttet til oppdrag og kontakt, med ansvarlig, frist, status og kommentarer, også laget av regler (for eksempel «egenerklæring mangler 2 dager før befaring») (se også Spectora-YouTube V82)
+- [ ] **Oppgaver på mobil og daglig oppsummering** (funksjonskart H12): egne oppgaver kan ses og krysses av på telefonen, og hver ansatt kan få en kort e-post om morgenen med dagens oppgaver og befaringer (se også Spectora-YouTube V63)
 - [ ] Hendelsen «rapporten nærmer seg ett år»
 
 **Kontor, kalender og økonomi**
-- [ ] **Kalender og kapasitet** (funksjonskart H1): befaringstid på oppdraget, kalender per takstmann (befaringer og fravær), ukesvisning med tidslinje som ikke flyter over, kapasitet per kontor de neste to ukene, og **kobling til Outlook begge veier** via Microsoft 365. Erstatter den enkle kalenderinvitasjonen (.ics) i den første planen.
-- [ ] **Bestillingsskjema for meglere** (funksjonskart H8): et enkelt skjema med de samme feltene som den manuelle ordren. Bestillingen blir en ordre som kontoret godkjenner. Fjerner avskrift før API mot meglersystemene finnes.
+- [ ] **Kalender og kapasitet** (funksjonskart H1): befaringstid på oppdraget, kalender per takstmann (befaringer og fravær), ukesvisning med tidslinje som ikke flyter over, kapasitet per kontor de neste to ukene, og **kobling til Outlook begge veier** via Microsoft 365. Erstatter den enkle kalenderinvitasjonen (.ics) i den første planen. (se også Spectora-YouTube V71, V77)
+- [ ] **Bestillingsskjema for meglere** (funksjonskart H8): et enkelt skjema med de samme feltene som den manuelle ordren. Bestillingen blir en ordre som kontoret godkjenner. Fjerner avskrift før API mot meglersystemene finnes. (se også Spectora-YouTube V9, V74)
 - [ ] **Fakturagrunnlag til eAccounting** gjennom tilkoblingen: fritt valgt mottaker, linjer med MVA, kontroll og «send», riktig eAccounting-klient for hvert av de tre selskapene, ingen dubletter av kunder, status tilbake som hendelsene **«faktura sendt»**, **«faktura betalt»** og «faktura forfalt». Liste over ufakturerte og ubetalte oppdrag. Her bygges også tabellen `external_references` og selskap på tilkoblingen (`company_id` eller `companies.accounting_connection_id`), flyttet fra tilkoblingslaget i fase 0b (02.11.2026, se `docs/funksjoner/fase0b-tilkoblingslag.md`, «Til fase 3»).
   - [ ] Nøkkelboksen steg 2: `readSecret` leser tilkoblingenes hemmeligheter rett fra boksen med appens identitet, av som standard (utsatt fra fase 0b 03.11.2026, A50; oppgavekort og testplan i `docs/funksjoner/fase0b-nokkelboks-kodevei.md`). Bygges i samme PR som den første tilkoblingen som trenger det; kommer en KI-tilkobling med egen nøkkel i fase 2, flyttes punktet dit.
 - [ ] **Prisliste per avtale som data** (funksjonskart H2): standardpriser og avtalepriser foreslås på fakturalinjene. En prismotor (pris etter areal, alder og avstand) kommer senere.
-- [ ] **Enkelt lederdashbord** (funksjonskart H3): oppdrag per status, befaringer neste uke, levert siste 30 dager, leveringstid, ufakturert og forfalt, per kontor og selskap, og pilotmålene
+- [ ] **Enkelt lederdashbord** (funksjonskart H3): oppdrag per status, befaringer neste uke, levert siste 30 dager, leveringstid, ufakturert og forfalt, per kontor og selskap, og pilotmålene (se også Spectora-YouTube V77, V78, V124)
 - [ ] **Søk og arkiv:** globalt søk på oppdragsnummer, adresse, matrikkel og kundenavn, arkiv med filtre, hurtigperioder, lagrede filtre og eksport til Excel
 - [ ] Oppslag i Brønnøysundregistrene for firma (som i Optiplan)
 
 **Arbeidsflaten**
 - [ ] Kopiere oppdrag og **kopiere data fra en tidligere rapport** på samme bolig, med liste over hva som ikke passer i ny malversjon
 - [ ] Radmeny i oppdragslisten: kopier, last ned siste PDF, bytt takstmann (overlevering), kopier data fra
-- [ ] Bildesenter på PC: dra bilder til riktig rom, punkt eller avvik
-- [ ] Stedsmerker (etasje, himmelretning, rom) og flagg «må fullføres på kontoret»
+- [ ] Bildesenter på PC: dra bilder til riktig rom, punkt eller avvik (se også Spectora-YouTube V23)
+- [ ] Stedsmerker (etasje, himmelretning, rom) og flagg «må fullføres på kontoret» (se også Spectora-YouTube V25, V104)
 - [ ] Privat notat per rapport
 - [ ] **Varsler som arbeidsliste** (funksjonskart H11) med lest/ulest og filter, og varselvalg per type (innspill D11). Også varsel når en sertifisering snart går ut (H5).
-- [ ] **Hjelp i appen koblet til kunnskapsbasen** (funksjonskart H7): hjelpetekst og «i» per punkt peker til Byggcons egne sider i kunnskapsbasen, ikke til en ekstern hjelpeside
+- [ ] **Hjelp i appen koblet til kunnskapsbasen** (funksjonskart H7): hjelpetekst og «i» per punkt peker til Byggcons egne sider i kunnskapsbasen, ikke til en ekstern hjelpeside (se også Spectora-YouTube V94)
 - [ ] Mørk visning som valg, og større tekst
-- [ ] Knappen «Tilbakemelding» med skjermbilde, og enkel feilsøking på iPaden («send feilsøkingsinfo»)
+- [ ] Knappen «Tilbakemelding» med skjermbilde, og enkel feilsøking på iPaden («send feilsøkingsinfo») (se også Spectora-YouTube V19)
 - [ ] Rapportprofil med flere valg for PDF (innholdsfortegnelse, avvik først)
-- [ ] Måling av pilotmålene (se «Hva vi måler i piloten»)
+- [ ] Måling av pilotmålene (se «Hva vi måler i piloten») (se også Spectora-YouTube V16, V78, V90)
 
 **Ferdig når:** Minst tre takstmenn har levert ekte rapporter fra EzProp i fire uker, sidemannskontrollen er gjort i EzProp, de seks rutinene har gått uten feil som ikke ble oppdaget, og fakturagrunnlag har gått til eAccounting for alle tre selskapene.
 
@@ -357,16 +357,16 @@ Flere takstmenn bruker EzProp på ekte oppdrag. IVIT brukes fortsatt for det EzP
 - [ ] Gjennomgang av sikkerhet og tilgjengelighet før alle tar det i bruk
 
 **Overgang fra IVIT**
-- [ ] **Flytting av frasene fra IVIT:** Fraseregisteret (Excel v13, rettet for TGIU ved hulltaking nektet og med riktig antall) kobles til kontrollpunktene og importeres med kode, tittel, TG og kilde
-- [ ] **Opplæring** av alle ansatte, med kort brukerveiledning og hjelp i appen (koblet til `04 Opplæring` i kunnskapsbasen)
-- [ ] Regel for pågående oppdrag ved overgangen (fullføres i IVIT)
+- [ ] **Flytting av frasene fra IVIT:** Fraseregisteret (Excel v13, rettet for TGIU ved hulltaking nektet og med riktig antall) kobles til kontrollpunktene og importeres med kode, tittel, TG og kilde (se også Spectora-YouTube V22, V84, V85, V115)
+- [ ] **Opplæring** av alle ansatte, med kort brukerveiledning og hjelp i appen (koblet til `04 Opplæring` i kunnskapsbasen) (se også Spectora-YouTube V83, V93, V94)
+- [ ] Regel for pågående oppdrag ved overgangen (fullføres i IVIT) (se også Spectora-YouTube V88, V89)
 - [ ] Fagrådet (Ståle) har godkjent malen, tekstene og reglene (mål 2)
 
 **Kvalitet og meglere**
-- [ ] **Registrering av reklamasjoner og reklamasjonsmappe** (funksjonskart H6 og `moonshots` S1): reklamasjoner og krav registreres på rapporten og på det konkrete punktet eller avviket, med utfall og beløp. Alt om en sak (utgivelser, bilder, målinger, hvem som var til stede, egenerklæring, logg, sidemannskontroll) samles på ett klikk.
+- [ ] **Registrering av reklamasjoner og reklamasjonsmappe** (funksjonskart H6 og `moonshots` S1): reklamasjoner og krav registreres på rapporten og på det konkrete punktet eller avviket, med utfall og beløp. Alt om en sak (utgivelser, bilder, målinger, hvem som var til stede, egenerklæring, logg, sidemannskontroll) samles på ett klikk. (se også Spectora-YouTube V125, V126, V128, V129)
 - [ ] **Intern avviksregistrering** (H6): når noe gikk galt i arbeidet (feil mottaker, glemt punkt), registreres det, så det kan læres av
 - [ ] **Adressebok med tall / meglerprofil** (funksjonskart H4): oppdrag per måned, leveringstid og svar på spørreundersøkelsen, per megler og meglerforetak
-- [ ] **Fullt CRM rett etter adresseboka** (flyttet fra «Senere» 27.10.2026, Ståle: «full CRM må komme relativt raskt i utviklingsløpet»): historikk, notater, logg og oppgaver per megler og meglerforetak, automatiske merker (for eksempel «aktiv selgermegler»), megleranalyse og egne eksporter. Spesifiseres før bygging.
+- [ ] **Fullt CRM rett etter adresseboka** (flyttet fra «Senere» 27.10.2026, Ståle: «full CRM må komme relativt raskt i utviklingsløpet»): historikk, notater, logg og oppgaver per megler og meglerforetak, automatiske merker (for eksempel «aktiv selgermegler»), megleranalyse og egne eksporter. Spesifiseres før bygging. (se også Spectora-YouTube V79, V123)
 
 *Tatt ut 27.10.2026 (Ståle: «ikke noe interaksjon foreløpig»):* oppslag i Optiplan på sameiets organisasjonsnummer (O1) og én kundebase med Optiplan (O3). Felles innlogging gjelder fortsatt. **Presisert 28.10.2026:** felles innlogging og profil for admin og ansatte, og bytte mellom løsningene med ett trykk, er med (fase 0b). Kundene holdes adskilt. Mer samspill «etter hvert».
 
@@ -378,10 +378,10 @@ Flere takstmenn bruker EzProp på ekte oppdrag. IVIT brukes fortsatt for det EzP
 
 Funksjonskartet (H9) foreslo at det kunder og meglere merker, samles i en egen fase etter produksjon. **Godkjent av Ståle 27.10.2026:** fasen kommer etter produksjon og før malbyggeren (fase 5).
 
-- [ ] **Nettrapport** for kjøper, med filter på TG og rom, bilder i full størrelse og varsel «du ser ikke hele rapporten» når et filter er på
+- [ ] **Nettrapport** for kjøper, med filter på TG og rom, bilder i full størrelse og varsel «du ser ikke hele rapporten» når et filter er på (se også Spectora-YouTube V28, V29, V113)
 - [ ] **Gyldighetsside med QR-kode** i PDF-en: lenken viser alltid siste versjon, varsler når rapporten er utgått, og har en visningslogg
-- [ ] **Selgerportal** før befaring: hva som skjer, hva selger bør finne fram (dokumentasjonstabellen som sjekkliste), opplasting av egenerklæring og dokumenter
-- [ ] **Meglerstatus:** megleren ser status på sine oppdrag og kan laste ned siste PDF
+- [ ] **Selgerportal** før befaring: hva som skjer, hva selger bør finne fram (dokumentasjonstabellen som sjekkliste), opplasting av egenerklæring og dokumenter (se også Spectora-YouTube V119)
+- [ ] **Meglerstatus:** megleren ser status på sine oppdrag og kan laste ned siste PDF (se også Spectora-YouTube V73)
 
 **Ferdig når:** En selger, en kjøper og en megler har brukt sin side på et ekte oppdrag uten å måtte ringe kontoret.
 
@@ -392,9 +392,9 @@ Kommer etter at systemmalen for tilstandsrapport virker (LES-MEG, «Målgang»).
 - [ ] Visuell malbygger der ansatte setter sammen seksjoner og felt: tekst, avkrysning, valg, tall med enhet og gyldig område, dato, bilde, signatur, tabell og frase
 - [ ] Redigering i tre kolonner (seksjoner → felt → innstillinger) med automatisk lagring
 - [ ] Regler, logikk og sjekker i egne maler (vis/skjul, kontroller før publisering og lignende), men **ikke TG-logikk**, som er forbeholdt systemmalen for tilstandsrapport (27.10.2026)
-- [ ] Flytte og kopiere seksjoner og felt, også mellom maler, og klone en mal
+- [ ] Flytte og kopiere seksjoner og felt, også mellom maler, og klone en mal (se også Spectora-YouTube V22)
 - [ ] Lagre en god rapport som ny mal
-- [ ] Versjoner og «endringer gjelder bare nye rapporter», papirkurv og angre
+- [ ] Versjoner og «endringer gjelder bare nye rapporter», papirkurv og angre (se også Spectora-YouTube V41)
 - [ ] «Prøv malen» før den tas i bruk
 - [ ] **Én felles PDF-layout for egne maler** (innspill P13): seksjon → felt → svar, bilder i rutenett, med rapportprofilene (logo, bunntekst, stående eller liggende). Systemmalene har sin egen, spesiallagde layout. Vil takstmennene ha mer, blir det en ny fase.
 - [ ] Maleditor for fagansvarlig også for systemmalen, i stedet for regneark
@@ -413,9 +413,9 @@ I rekkefølge etter nytte, Claudes forslag:
 - **API mot meglersystemer:** bestilling inn og rapport ut, med sikret webhook, nye forsøk og logg (P37)
 - **Eiendomsdata fra leverandør** (Eiendomsverdi eller PropCloud), med visning av hva som er overstyrt
 - **Microsoft-innlogging** for ansatte
-- **KI-funksjoner** i rekkefølgen fra `ki-funksjoner.md`. *Merket «vurder å flytte fram» (28.10.2026):* funksjonene som klart bidrar til hovedmålet. Ingenting er flyttet ennå.
+- **KI-funksjoner** i rekkefølgen fra `ki-funksjoner.md`. *Merket «vurder å flytte fram» (28.10.2026):* funksjonene som klart bidrar til hovedmålet. Ingenting er flyttet ennå. (se også Spectora-YouTube V44–V50, V52–V54, V59)
   - Trinn 1: logg og merking av KI-bruk (bygges før noen KI-funksjon slås på), sjekk av bildekvalitet uten KI, **evalueringssett** og **kostnadsmåling** (`funksjonalitet-ki` avsnitt 9):
-    - *Evalueringssett:* for hver KI-funksjon lages 30–50 eksempler med fasit fra fagrådet (for eksempel 50 diktater med riktig strukturering). Funksjonen slås ikke på før den treffer godt nok, og settet kjøres på nytt når modellen byttes.
+    - *Evalueringssett:* for hver KI-funksjon lages 30–50 eksempler med fasit fra fagrådet (for eksempel 50 diktater med riktig strukturering). Funksjonen slås ikke på før den treffer godt nok, og settet kjøres på nytt når modellen byttes. (se også Spectora-YouTube V53, V59)
     - *Kostnadsmåling:* kostnad per kall og per rapport måles fra første dag (`ai_usage_log.cost`), slik at det kan sammenlignes med IVITs 169 kr per rapport.
   - Trinn 2: tale til tekst (kjøpt tjeneste i EU/EØS), språkvask med «bruk, behold, nytt forslag» og angre, utkast til sammendrag. **Vurder å flytte fram** (mindre tid).
   - Trinn 3: diktat til strukturert funn (TG-feltet står tomt), forslag fra frasebanken på betydning, KI-sjekk før sidemannskontroll, bilde til utkast til observasjon, sortering og tekst på bilder. **Vurder å flytte fram:** diktat til strukturert funn (mindre tid) og KI-sjekk før sidemannskontroll (færre reklamasjoner).
@@ -431,12 +431,12 @@ I rekkefølge etter nytte, Claudes forslag:
   8. Fagrådets verktøy: kalibreringsoversikt (F2), kalibreringsbibliotek (F4) og statistikk (F5). Kalibrering kommer etter betaen (27.10.2026).
   9. Måleutstyr rett inn og LiDAR (K6, K7), først når behovet er bevist. «Alt i nettleseren» står (27.10.2026), og LiDAR kan komme via Polycam.
 - **Verditakst som systemmal nr. 2** (funksjonskart H10). Se «Rapporttyper» øverst i listen: alle maler skal inn etter hvert, og rekkefølgen tas senere (27.10.2026).
-- **Uttrekk fra IVIT** av gamle rapporter og bilder, slik at de kan søkes fram (mål 10)
+- **Uttrekk fra IVIT** av gamle rapporter og bilder, slik at de kan søkes fram (mål 10) (se også Spectora-YouTube V86, V87)
 - **Salg til andre takstfirma** (organisasjons-ID er på plass fra start)
 - Utkast til eier før endelig rapport, kompetansebeskrivelse og lyd og støy (NS 3600, besluttet «senere» 25.10)
 - Egne kontrollpunkter og regler per avtale med oppdragsgiver
 - Krav om sidemannskontroll per rapport
-- SMS via norsk leverandør med samtykke, API og MCP for KI-verktøy, full statistikk og egne dashbord, kjøreplan og forslag til takstmann, prismotor og internfakturering mellom selskapene
+- SMS via norsk leverandør med samtykke, API og MCP for KI-verktøy, full statistikk og egne dashbord, kjøreplan og forslag til takstmann, prismotor og internfakturering mellom selskapene (se også Spectora-YouTube V72, V76, V122)
 - Strekkmålene under
 - **Byggcon som datakilde:** statistikk holdes internt, vurderes igjen etter 2–3 år (27.10.2026)
 
@@ -871,6 +871,86 @@ Nye funn fra de fire innspillene. Funnene i datamodellen (D1–D18) står i endr
 | Krok: `calibration_rounds` (B7) | moonshots-ezprop-2026-10-25.md | Krok i datamodellen | Kalibreringsquiz senere, etter betaen (27.10.2026) |
 | Krok: `peer_reviews.required_reason` (O4) | moonshots-ezprop-2026-10-25.md | Krok i datamodellen | Tilfeldig stikkprøve senere |
 
+### Spectora YouTube (`spectora-youtube/spectora-youtube-funn.md`, 09.11.2026)
+
+Gjennomgangen av Spectoras YouTube-kanal (67 videoer) ga funnene V1–V132. De er **forslag, ikke beslutninger**, og ligger i `docs/kartlegging/spectora-youtube/`. Funn som passer et punkt som alt står i planen, har fått en henvisning på punktet («se også Spectora-YouTube …»), uten at punktets omfang er utvidet. Den som tar punktet, leser funnet og avgjør detaljene innenfor punktet. Funn som ville vært nye funksjoner, er **ikke** lagt inn som planpunkter, men står som forslag til Ståle i `docs/09-apne-sporsmal.md` (nr. 41–53). Spørsmålene i kapittel 7 i funn-filen står der som nr. 20–40. Tellingen over (251 funn) gjelder researchen fra oktober og er ikke endret.
+
+| Funn | Kilde (V-nr) | Fase i planen | Kort begrunnelse |
+|---|---|---|---|
+| Synkoversikt, «synket» bare når serveren har bekreftet, hjelp ved synkfeil | V1, V19 | Fase 1 (synkstatus, prøve A), 2b (synkstatus), 3 (feilsøking) | Detaljer til punkter som finnes. Listen over hvert bilde som venter er forslag nr. 44. |
+| Automatisk synk, to samtidig, batteribruk | V2 | Fase 1 (prøve A og B), 2b, 3 | Batteri er en ny ting å måle i prøvene |
+| Nattlig nedlasting av kommende oppdrag | V3 | Fase 2b (befaring uten nett) | Detalj til punktet |
+| Knapperad per funn, avkryssede funn øverst, TG-knapper i listen, faste navigasjonsknapper, plass til taleknapp | V4, V11, V12, V18, V106 | Fase 2b (iPad-visning) | Færre trykk |
+| Søk med filter «uferdig» og «flagget» som sluttsjekk, kontrollvisning | V5, V8 | Fase 2b («Glemt noe?») | Søket som sluttsjekk er forslag nr. 43; kontrollvisning til selger er spørsmål 28 |
+| Duplisere seksjon og punkt, angre sletting | V6 | Fase 2a (papirkurv og angre) | Duplisering selv kommer med iPad-visningen |
+| Kamera, fast bildeformat, flere bilder til ett funn, internt bevisbilde | V7, V105, V109 | Fase 2b (bilder på befaringen) | Prøve D i fase 1 er levert |
+| Statusmerker på oppdragskortet, svar fra bestillingen øverst | V9 | Fase 3 (bestillingsskjema), forslag nr. 53 | Merkene og «Må gjøres» er nye |
+| Tegneverktøy, advarsel om TG2/TG3-bilder uten markering | V10 | Fase 2a (bilder på PC, publisering) | Advarsel, ikke sperre |
+| «Generelt»-punkt med undersøkelsesmetode, ekte obligatoriske felt | V13, V37 | Fase 2a (malmotoren, kontrollpunkter, publisering) | Obligatoriske felt med tekst er spørsmål 26 |
+| Ringe megler fra navnet, nytt fasadebilde, vis neste oppdrag | V14, V15, V17 | Ikke tatt med nå | Liten nytte. Kan tas opp i demoen for fase 2b. |
+| Tid inn/ut per oppdrag, kontortid, ukeslogg som nullpunkt | V16, V78 | Fase 2a (tidsmåling, levert), 3 (dashbord, pilotmål), «Ved siden av fase 0 og 1» (nullpunkt) | Spørsmål 29 |
+| Forhåndsvalg som må bekreftes | V102 | Fase 2a (malmotoren, publisering) | Spørsmål 34 |
+| Funn via søk, tale eller KI gir samme status som via menyen | V103 | Fase 2a (fraser) | Krav til punktet |
+| Arbeidsnotat og flagg som stopper «Send» | V104 | Fase 3 (stedsmerker og flagg), forslag nr. 48 | At «Send» stopper, er nytt |
+| Begrenset tilgang med bilde som bevis | V107 | Fase 2a (TGIU på kontrollpunktet) | Hurtigvalg er forslag nr. 48 |
+| «Opplyst muntlig på befaring» | V108 | Forslag nr. 48 | Ny notattype |
+| Test på hver ny iPadOS-versjon | V132 | «Minimum før ekte data» (sperring av iPader), 2b (oppsett) | Risikoen er Safari på iPad |
+| Rett i forhåndsvisningen, endringer bare i rapporten | V20, V21 | Fase 2a (rapporten låst til malversjon), forslag nr. 41 | Redigering fra forhåndsvisningen er ny |
+| Kopiere og flytte punkt og funn, merke mange fraser samtidig | V22 | Fase 4 (flytting av frasene), 5 (flytte og kopiere), forslag nr. 53 | |
+| Bilder i bulk, bildesenter | V23 | Fase 2a (bilder på PC), 3 (bildesenter) | |
+| Publisering fra siste lagrede versjon, stopper hvis noe ikke er synket | V24 | Fase 2a (publisering, utgivelser, «Send») | Spørsmål 25 (stopp eller advarsel) |
+| Sted som eget felt | V25 | Fase 3 (stedsmerker) | |
+| Samme avvik flere steder i ett funn | V26 | Forslag nr. 47 | |
+| Fast innledning, sammendrag med TG2 og TG3, tellere og «bare TG3» | V27, V28, V29 | Fase 2a (PDF, sammendrag), 4b (nettrapport), forslag nr. 45 | |
+| Varsel når en endring skjuler innhold | V30 | Ikke tatt med nå | Hører til malbyggeren (fase 5) |
+| God PDF-forside | V31 | Fase 2a (PDF) | |
+| Video i PDF som lenke | V32 | Fase 2a (PDF under 8 MB), Senere (video) | Bare hvis video tas med |
+| Egne kategorier for etterkontroll | V33 | Senere (etterkontroll), fase 4 (reklamasjonsmappe) | |
+| Maler og regler etter byggeår, følgefraser | V34, V36 | Fase 2a (regelmotoren), forslag nr. 47 | Bare forslag, aldri TG |
+| Rydd frasebanken med KI før piloten, forklaringer til funn som ofte misforstås | V35 | Fase 2a (systemmalen) | Spørsmål 23 og 40 |
+| Ny frase fra iPad merket «ny, ikke gjennomgått» | V38 | Fase 2a (fraser) | Spørsmål 27 |
+| KI foreslår svaralternativer, undervalg som setter sammen tekst | V39, V116 | Senere (KI til å redigere maler) | |
+| Ekstern faglig gjennomgang av malen | V40 | Fase 2a (fagrådet godkjenner) | Spørsmål 32 |
+| Versjoner av maler som tåler mange endringer, visningsnavn | V41, V42 | Fase 5 | |
+| Fraser i regneark til språkvask | V43 | Fase 2a (regneark inn og ut) | |
+| KI-funksjonene (velger fra godkjente fraser, viser det den ikke finner, samlet godkjenning, kilde, testoppsett, prøve med takstmenn) | V44–V50, V52–V54, V59 | Senere (KI-funksjoner, evalueringssett) | Krok for opptak og transkripsjon er forslag nr. 42 |
+| Andre KI-ideer (typeskilt, gangrekkefølge, andre skjema, meldingsutkast, telefonvakt, hjelp i appen, visittkort) | V51, V55–V58, V60, V118 | Senere, ikke ført inn | KI sender og avtaler aldri selv |
+| Hendelsestabell og internt API | V61 | Fase 0b (hendelsesloggen, levert) | Internt API er spørsmål 22 |
+| Innkommende dokumenter kobles til oppdrag | V62 | Senere (e-post blir ordreforslag, A1) | |
+| Daglig e-post til takstmannen | V63 | Fase 3 (daglig oppsummering) | |
+| Ferdig utfylte rutiner, betingelser, varsel ved feil oppsett, meldinger til megler, klager uten autosvar | V64–V68, V119, V127 | Fase 3 (hendelser og handlinger, de seks rutinene) | |
+| Søk i regellisten, regler som lesbare setninger | V69, V120 | Fase 3 (hendelser og handlinger) | |
+| Kategori på tjeneste, felt for oppdragsgiver, fast definisjon av tellende oppdrag | V70, V74, V124 | Forslag nr. 52 (kroker i datamodellen), fase 3 (bestillingsskjema, dashbord) | |
+| Kalender med varsel i stedet for sperre, utkast til bestilling, kapasitet | V71, V77 | Fase 3 (kalender og kapasitet, dashbord) | |
+| Serviceområde per ukedag, kjørelengde i eksport, SMS ved ubesvart anrop | V72, V121, V122 | Senere (kjøreplan, SMS) | |
+| Meglerside | V73 | Fase 4b (meglerstatus) | |
+| Deling av rapportdata bare med samtykke | V75 | Ikke tatt med nå | Regel for når deling eventuelt bygges |
+| MCP med bare lesing for egne ledere | V76 | Senere (API og MCP) | |
+| Andel meglere som bestiller igjen, meglermerker | V79, V123 | Fase 4 (fullt CRM) | Ingen nivåer eller belønning |
+| Månedsprognose, prisoversikt for næring | V80, V81 | Senere | |
+| Kø «venter på leder» | V82 | Fase 3 (oppgaver) | |
+| Ordliste IVIT → EzProp, oppstartsløp, hjelpekanal | V83, V93, V94 | Fase 3 (hjelp i appen), 4 (opplæring) | |
+| Uttrekk av IVIT-fraser som kan filtreres og kjøres flere ganger | V84, V85 | Fase 4 (flytting av frasene), forslag nr. 46 | |
+| Hva som blir med fra IVIT, arkiv av alle IVIT-rapporter | V86, V87 | Senere (uttrekk fra IVIT) | Spørsmål 24 (undersøke nå) |
+| Fast skjæringsdato, systemene side om side | V88, V89 | Fase 4 (regel for pågående oppdrag) | |
+| Prøverapport på eget hus, bekymringer, meglerprøve, ikke tving iPad, rolig periode | V90–V92, V95, V96 | Fase 3 (pilotmål), forslag nr. 51 | |
+| Skriftlig lovnad om lagring | V97 | «Minimum før ekte data» (intern personvernerklæring) | |
+| Ny takstmann skriver sammen med erfaren | V98 | Fase 3 (flere takstmenn, sidemannskontroll) | |
+| EzProp-panel | V99 | – | Spørsmål 30 |
+| Prøvefunksjoner per bruker, side «EzProp nå» | V100, V101 | Ikke tatt med nå | Kan tas opp før piloten |
+| Krav til editorfart med stor rapport | V110 | Forslag nr. 50 | |
+| Gamle rapporter kan åpnes etter ny malversjon | V111 | Fase 2a (låst malversjon, utgivelser) | |
+| Tiltak med hva, hvem og når; «utbedre» eller «undersøk nærmere» | V112 | Fase 2a (avvikskort, systemmalen, «Handling»-frasene) | Spørsmål 33 og 40 |
+| Lesbarhetssjekk uten KI, fagordliste, «sist gjennomgått» på fraser | V113, V114 | Fase 3 (sidemannskontroll), 4b (nettrapport), forslag nr. 49 | |
+| Fast skrivemåte for frasetitler | V115 | Fase 2a (fraser), 4 (flytting av frasene) | Spørsmål 35 |
+| «Mest brukt» per takstmann | V117 | Fase 2a (fraser) | |
+| Alt kunden fikk samlet per oppdrag, henvendelser registrert | V125, V126 | Fase 2a (reklamasjoner, levert), 4 (reklamasjonsmappe) | Krok nå er spørsmål 38 |
+| Fast rekkefølge for klagesvar, reklamasjonsbefaring | V128, V129 | Fase 4 (reklamasjonsmappe) | |
+| «Kopier slik det vises» | V130 | Senere, ikke ført inn | |
+| Henvisning til regelverk på frasen | V131 | – | Spørsmål 39. Beslutningen 24.10.2026 (ingen NS-henvisning i rapportteksten) gjelder til Ståle sier noe annet. |
+| Forretning (kapittel 5 i funn-filen) | – | Ikke tatt med i planen | Gjelder Byggcon som bedrift, ikke EzProp |
+| Ikke for Norge (kapittel 6: betaling, reparasjonsliste, mersalg, anbefalte håndverkere, publisering fra mobil, KI som sender selv, egne gradnavn) | – | Ikke tatt med | Uavhengighet (§ 1-3), ingen betaling i EzProp, sidemannskontroll før levering, KI sender aldri selv |
+
 ---
 
 ## De første oppgavene (fase 0 og 1)
@@ -995,3 +1075,4 @@ Det som fortsatt er åpent:
 | 〃 | Åpne spørsmål om planen: de besvarte er fjernet, tre gjenstår. Sporbarhetstellingen oppdatert. | – |
 | 〃 | Merket «Rettet» under «Ferdig» og reklamasjonssaker bare for leder og admin (fase 2a) | Tilleggsbeslutninger 27.10.2026 |
 | 28.10.2026 | Hovedmål øverst (50 % mindre tid, halvparten så mange reklamasjoner, KI først), med måling og tabell over hva som bidrar mest per fase. Nye oppgaver 15 og 16 (nullpunkt for tid og reklamasjoner) ved siden av fase 0 og 1. Tidsmåling per rapport i 2a. Pilotmåling med de to tallmålene. KI-funksjoner i «Senere» merket «vurder å flytte fram». To nye åpne spørsmål. | Ståle i chat 28.10.2026 |
+| 09.11.2026 | Funnene fra Spectoras YouTube-kanal (V1–V132) knyttet til planen: henvisning på 61 punkter, ny underseksjon under «Sporbarhet», nye funksjoner som forslag og kapittel 7 som spørsmål i `docs/09-apne-sporsmal.md` (nr. 20–53). Ingen punkter er lagt til eller utvidet. | `spectora-youtube/spectora-youtube-funn.md` |

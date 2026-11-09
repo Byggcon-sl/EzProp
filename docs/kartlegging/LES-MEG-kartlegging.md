@@ -224,6 +224,7 @@ EzProp snakker aldri direkte med en leverandør. Kjernen bruker faste «porter»
 | `spectora-advanced-test.md` | Advanced testet i praksis 24.10.2026 |
 | `spectora-ko-oppgaver-sms.md` | Kø per oppdrag, oppgaver og SMS-innboks (24.10.2026) |
 | `smarttakst-analyse.md` | Norsk konkurrent SmartTakst (24.10.2026) |
+| `spectora-youtube/` | **Gjennomgang av Spectoras YouTube-kanal** (67 videoer, 09.11.2026): `LES-MEG.md` og `spectora-youtube-funn.md` med funn V1–V132, topp 10 og spørsmål til Ståle. Forslag, ikke beslutninger. Kopiert fra SharePoint 09.11.2026; videonotatene ligger bare i SharePoint. Knyttet til planen i `docs/07-utviklingsplan.md` (Sporbarhet) og `docs/09-apne-sporsmal.md`. |
 | `prompt-sidemannskontroll-kartlegging.md` | Oppgaven til den uavhengige sidemannskontrollen |
 | `sidemannskontroll-kartlegging-2026-10-25.md` | **Sidemannskontroll del 1:** regelverk, motsigelser, risiko og prøveeksemplene |
 | `sidemannskontroll-kartlegging-2026-10-25-del2-programvare.md` | **Sidemannskontroll del 2:** programvaren |
