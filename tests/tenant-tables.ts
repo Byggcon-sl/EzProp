@@ -11,6 +11,7 @@ import {
   trialPhotos,
 } from "@/db/schema";
 import {
+  createAiUsageLog,
   createAssignment,
   createAssignmentParty,
   createBuilding,
@@ -92,6 +93,11 @@ async function insertTrialForm(organizationId: string) {
  * `tests/tenant-isolation-all-tables.test.ts` rød. Alle verdier er oppdiktede.
  */
 export const tenantTables: TenantTableEntry[] = [
+  {
+    table: "ai_usage_log",
+    testFile: "src/core/ai/request-suggestion.test.ts",
+    insertRow: async (organizationId) => (await createAiUsageLog(organizationId)).id,
+  },
   {
     table: "assignment_parties",
     testFile: "src/core/assignments/assignment-team-parties.test.ts",

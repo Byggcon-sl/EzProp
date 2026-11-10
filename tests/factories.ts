@@ -7,6 +7,7 @@ import type { TemplateDocumentInput } from "@/core/templates";
 import { insertTemplateWithoutAccessCheck } from "@/core/templates/templates";
 import { db } from "@/db/client";
 import {
+  aiUsageLog,
   assignmentParties,
   assignments,
   assignmentTeamMembers,
@@ -62,6 +63,7 @@ export const RESET_TABLES = [
   "template_sections",
   "template_versions",
   "template_families",
+  "ai_usage_log",
   "work_sessions",
   "rooms",
   "floor_areas",
@@ -1530,5 +1532,47 @@ export async function createRuleTestCaseRow(
       })
       .returning(),
     "rule_test_cases",
+  );
+}
+
+type AiUsageLogOverrides = Partial<Omit<typeof aiUsageLog.$inferInsert, "organizationId">>;
+
+/**
+ * Én rad i KI-loggen, satt rett inn uten `@/core/ai` (rå innsetting). Standard: `language_polish`
+ * mot `fake`, utfall `ok`, status `suggested`, oppdiktet forslag, `retainUntil` om 10 år. Lager en
+ * ansatt i organisasjonen når `employeeId` mangler. For `no_match` og `error` må testen også sende
+ * `status: null` og `outputText: null` (CHECK i databasen).
+ */
+export async function createAiUsageLog(
+  organizationId: string,
+  overrides: AiUsageLogOverrides = {},
+) {
+  const employeeId =
+    overrides.employeeId ??
+    (await createEmployee(await createUser({ name: "Test KI" }), organizationId, ["inspector"])).id;
+  const retainUntil = new Date();
+  retainUntil.setFullYear(retainUntil.getFullYear() + 10);
+  return insertedRow(
+    await db
+      .insert(aiUsageLog)
+      .values({
+        id: randomUUID(),
+        feature: "language_polish",
+        provider: "fake",
+        model: "fake-v1",
+        promptVersion: "language_polish.v1",
+        targetRef: { type: "answer", id: randomUUID(), fieldKey: "text" },
+        sourceFields: ["text"],
+        inputSummary: { text: 10 },
+        outcome: "ok",
+        status: "suggested",
+        outputText: "Taket har sprekker i tekkingen.",
+        retainUntil,
+        ...overrides,
+        employeeId,
+        organizationId,
+      })
+      .returning(),
+    "ai_usage_log",
   );
 }
