@@ -1,9 +1,8 @@
 /**
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
- * Lokal kjerne: én IndexedDB-database per kandidat (rått API, ingen avhengighet, ingen wasm).
- * Flyttet fra `electricsql/storage.ts` uten logikkendring; navn, versjon og tilstandslager kommer
- * nå fra `LocalDbOptions`, og forbindelsen ligger per instans. Hjelperne her vet ingenting om synk.
+ * Lokal kjerne: én IndexedDB-database (rått API, ingen avhengighet, ingen wasm). Navn, versjon og
+ * tilstandslager kommer fra `LocalDbOptions`, og forbindelsen ligger per instans. Hjelperne her vet ingenting om synk.
  */
 import type { TrialTableName } from "../local-columns";
 import {

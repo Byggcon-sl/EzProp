@@ -16,8 +16,7 @@ import { baseColumns } from "./common";
  * Tre tabeller bare for prøven uten nett (docs/funksjoner/fase1-kandidat-powersync.md, «Data»).
  * De er ikke en del av datamodellen i docs/05 utover merknaden i ordlisten, og slettes eller gjøres
  * om i fase 2b. Alle har `baseColumns`: id laget på enheten (uuidv7), `organization_id`, myk
- * sletting og `row_version`. Synktjenesten leser dem gjennom publikasjonen `powersync`
- * (bare disse tre, aldri `FOR ALL TABLES`), se migreringen.
+ * sletting og `row_version`. Enhetene leser dem gjennom hente-ruten (egenbygd synk, ADR 0004).
  *
  * Kolonner serveren eier og klienten aldri får skrive: `organization_id`, `created_by`,
  * `updated_by`, `row_version`, og på bilder `uploaded_at`, `sha256`, `storage_path`.

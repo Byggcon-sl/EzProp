@@ -1,12 +1,10 @@
 /**
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
- * Kontrakten mellom skjermene i testskjemaet og synkløsningen (bare typer, ingen kode). Lik for
- * alle kandidater (docs/funksjoner/fase1-kandidat-electricsql.md, avgjørelse A). Skjermene og
- * bildekøen bruker bare `TrialSyncStore` og `select-store.ts`; PowerSync-utgaven ligger i
- * `sync/powersync/`, ElectricSQL-utgaven i `sync/electricsql/` og egenbygd i `sync/custom/`. De to
- * siste bygger på den lokale kjernen i `sync/local/` (lagring, kø, innfletting).
- * Ellers blir kriteriet «Arbeid» skjevt mellom kandidatene.
+ * Kontrakten mellom skjermene i testskjemaet og synkløsningen (bare typer, ingen kode). Skjermene og
+ * bildekøen bruker bare `TrialSyncStore` og `select-store.ts`. Synken er egenbygd (ADR 0004):
+ * `sync/custom/` henter fra serveren og bygger på den lokale kjernen i `sync/local/` (lagring, kø,
+ * innfletting).
  *
  * Radene speiler kolonnene i PostgreSQL (src/db/schema/offline-trial.ts) slik de ligger lokalt
  * (`sync/local-columns.ts`): tidsstempler som ISO-tekst, `value` som JSON-tekst. Svar nøkles
@@ -18,18 +16,7 @@ import type { TrialTableName } from "./local-columns";
 export type { TrialTableName } from "./local-columns";
 export { TRIAL_TABLE_NAMES, trialColumns, localColumnsOf } from "./local-columns";
 
-// Valg av kandidat (innstilling i nettleseren, ikke en kode i datamodellen).
-
-/**
- * `"custom"` er den egenbygde kandidaten (knappen «Egenbygd», `openCustom` i `select-store.ts`,
- * docs/funksjoner/fase1-kandidat-egenbygd.md). Standardvalget forblir `powersync`.
- */
-export const TRIAL_SYNC_CANDIDATES = ["powersync", "electricsql", "custom"] as const;
-export type TrialSyncCandidate = (typeof TRIAL_SYNC_CANDIDATES)[number];
-/** Nøkkel i `localStorage`. Bytte = skriv nøkkelen og `location.reload()`; lageret byttes aldri mens siden lever. */
-export const TRIAL_SYNC_CANDIDATE_KEY = "trial_sync_candidate";
-export const DEFAULT_TRIAL_SYNC_CANDIDATE: TrialSyncCandidate = "powersync";
-/** Nøkkel i `localStorage` for organisasjonen som brukte enheten sist. Ulik organisasjon tømmer all lokal lagring for alle kandidater (også hentemarkøren). */
+/** Nøkkel i `localStorage` for organisasjonen som brukte enheten sist. Ulik organisasjon tømmer all lokal lagring (også hentemarkøren) og bildene. */
 export const TRIAL_LAST_ORGANIZATION_KEY = "trial_last_organization_id";
 
 // Rader slik de ligger lokalt.
@@ -89,7 +76,7 @@ export interface TrialSyncStatus {
   online: boolean;
   /**
    * Siste runde mot serveren (sending og henting) lyktes, og ingenting har feilet etter den. Settes
-   * til `false` ved feil, tidsavbrudd og når nettet forsvinner. Hver kandidat setter feltet ut fra
+   * til `false` ved feil, tidsavbrudd og når nettet forsvinner. Lageret setter feltet ut fra
    * sine egne svar fra serveren, aldri ut fra `navigator.onLine`.
    */
   serverConfirmed: boolean;
@@ -103,7 +90,7 @@ export interface TrialSyncStatus {
 export type TrialSyncRoundResult = "ok" | "offline" | "failed";
 
 /**
- * Synklageret skjermene og bildekøen bygger mot. Én implementasjon per kandidat. Alle metoder
+ * Synklageret skjermene og bildekøen bygger mot. Alle metoder
  * virker uten nett; synk skjer i bakgrunnen. Lytterne (`subscribe`, `subscribeForms`,
  * `onStatusChange`) kalles både ved lokale skrivinger og når synk leverer rader fra serveren.
  */
@@ -126,7 +113,7 @@ export interface TrialSyncStore {
   status(): Promise<TrialSyncStatus>;
   /**
    * Varsler når noe som påvirker `status()` endres (kø, bilderader, nett, synkstatus). Det eneste
-   * måleindikatoren og bildekøen lytter på; de kjenner aldri kandidatens egne tabeller.
+   * måleindikatoren og bildekøen lytter på; de kjenner aldri lagerets egne tabeller.
    */
   onStatusChange(listener: () => void): () => void;
   /** Bilder fra denne enheten uten `uploadedAt`, i stabil rekkefølge (`createdAt`, så `id`). */
@@ -142,7 +129,7 @@ export interface TrialSyncStore {
    * «Synk nå»: sender køen og henter med en gang, og hopper over ventetiden etter en feil. Varsler
    * `onStatusChange` (bildekøen starter av det varselet). Kaster aldri. Uten nett: `"offline"` straks,
    * uten fetch. Feil eller tidsavbrudd (`SYNC_NOW_TIMEOUT_MS` i `sync/sync-now.ts`): `"failed"`.
-   * Bygges med `runSyncNow` fra `sync/sync-now.ts`, så reglene er like for alle kandidater.
+   * Bygges med `runSyncNow` fra `sync/sync-now.ts`, så reglene står ett sted.
    */
   syncNow(): Promise<TrialSyncRoundResult>;
   /** Skriver tekst som venter (ved blur, når siden skjules, ved avmelding og før siden lukkes). */
@@ -162,9 +149,8 @@ export interface TrialSyncTestable {
   readRows(table: TrialTableName, formId?: string): Promise<Record<string, unknown>[]>;
 }
 
-/** `window.__offlineTrial` (`sync/test-hooks.ts`). PowerSync-kroken har i tillegg `db` og `pendingOverride` for dagens e2e. */
+/** `window.__offlineTrial` (`sync/test-hooks.ts`). */
 export interface TrialTestHooks extends TrialSyncTestable {
-  candidate: TrialSyncCandidate;
   store: TrialSyncStore;
   deviceId: string;
   organizationId: string;
@@ -172,28 +158,20 @@ export interface TrialTestHooks extends TrialSyncTestable {
   simulateOrganizationChange(organizationId: string): void;
 }
 
-// `sync/select-store.ts`: det eneste stedet sidene velger kandidat (signaturer).
+// `sync/select-store.ts`: det eneste stedet sidene åpner lageret (signaturer).
 
 export interface OpenedTrialStore {
   store: TrialSyncStore;
   deviceId: string;
   organizationId: string;
-  candidate: TrialSyncCandidate;
 }
 
-/** Leser `localStorage[TRIAL_SYNC_CANDIDATE_KEY]`; ukjent eller manglende verdi gir standardverdien. */
-export type ReadSyncCandidate = () => TrialSyncCandidate;
-/** Skriver nøkkelen. Den som kaller, laster siden på nytt etterpå. */
-export type WriteSyncCandidate = (candidate: TrialSyncCandidate) => void;
 /**
- * Åpner lageret for kandidaten med dynamisk `import()` per kandidat, så bare den valgte SDK-en
- * lastes. Samme instans for hele siden. Organisasjonsbytte (`TRIAL_LAST_ORGANIZATION_KEY`) tømmer
- * lager, synkposisjon, kø og bilder for **alle** kandidater før det nye åpnes. Aldri under SSR.
+ * Åpner lageret med dynamisk `import()`. Samme instans for hele siden. Organisasjonsbytte
+ * (`TRIAL_LAST_ORGANIZATION_KEY`) tømmer lager, hentemarkør, kø og bilder før det nye åpnes.
+ * Aldri under SSR.
  */
-export type OpenTrialStore = (
-  candidate: TrialSyncCandidate,
-  organizationId: string,
-) => Promise<OpenedTrialStore>;
+export type OpenTrialStore = (organizationId: string) => Promise<OpenedTrialStore>;
 
 // Rene funksjoner som utvikler bygger (signaturer; implementasjonen ligger i filene som er nevnt).
 
@@ -260,13 +238,13 @@ export type ShouldReleaseLocalPhoto = (
 export type GetTrialDeviceId = () => string;
 
 /**
- * `sync/photo-uploader.ts`: `startPhotoUploader(store, organizationId)`. Kandidatuavhengig: bruker
+ * `sync/photo-uploader.ts`: `startPhotoUploader(store, organizationId)`. Bruker
  * bare `listPendingPhotos`, `markPhotoUploaded` og `onStatusChange`. Kjører ved `online`, ved
  * statusvarsel og hvert 10. sekund, én runde om gangen. Returnerer stopp.
  */
 export type StartPhotoUploader = (store: TrialSyncStore, organizationId: string) => () => void;
 
-// Endringskø og innfletting vi eier selv (ElectricSQL og egenbygd), i `sync/local/`. Rene filer:
+// Endringskø og innfletting vi eier selv, i `sync/local/`. Rene filer:
 // ingen `window`, React eller SDK. Signaturene her er bindende.
 
 /** En lokal rad i snake_case, slik den ligger i den lokale lagringen (`localColumnsOf(table)` pluss `id`). */
@@ -289,7 +267,7 @@ export interface OutboxEntry {
   data: LocalRow;
 }
 
-/** Køens tilstand som ren verdi. Lagres i objektlageret `outbox` (`seq` → operasjon) og `nextSeq` i kandidatens tilstandslager (`shape_state` eller `sync_state`, raden `outbox_next_seq`). */
+/** Køens tilstand som ren verdi. Lagres i objektlageret `outbox` (`seq` → operasjon) og `nextSeq` i tilstandslageret (`sync_state`, raden `outbox_next_seq`). */
 export interface OutboxState {
   entries: readonly OutboxEntry[];
   nextSeq: number;
@@ -321,14 +299,14 @@ export interface OutboxMachine {
 }
 
 /**
- * Ventetid før neste forsøk (sending av bunt eller henting av shape): første forsøk etter 5 s,
+ * Ventetid før neste forsøk (sending av bunt eller henting): første forsøk etter 5 s,
  * dobling til 60 s. Altså høyst ett kall per 5 s. `attempt` starter på 0 etter en feil.
  */
 export type RetryDelayMs = (attempt: number) => number;
 export const RETRY_DELAY_MIN_MS = 5_000;
 export const RETRY_DELAY_MAX_MS = 60_000;
 
-/** Én endring fra serveren, uavhengig av hvor den kom fra (Electric-shape eller egenbygd henting). */
+/** Én endring fra serveren, fra hente-ruten. */
 export interface IncomingChange {
   table: TrialTableName;
   kind: "insert" | "update" | "delete";

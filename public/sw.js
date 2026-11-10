@@ -14,7 +14,7 @@ const CACHE_NAME = "offline-trial-v1";
 const NETWORK_ONLY_PREFIXES = ["/api/", "/logg-inn", "/dev/", "/_next/image"];
 
 // (b) Static files: cache first, then network
-const STATIC_PREFIXES = ["/_next/static/", "/fonts/", "/brand/", "/@powersync/"];
+const STATIC_PREFIXES = ["/_next/static/", "/fonts/", "/brand/"];
 const STATIC_EXACT = ["/manifest.webmanifest"];
 
 // (c) Pages: network first, cache as fallback

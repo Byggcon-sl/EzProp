@@ -7,18 +7,16 @@ import {
   ADMIN_EMAIL,
   MB,
   createTrialForm,
-  hookValue,
   indicator,
   logIn,
   setStorageOverride,
   storageWarning,
-  useCandidate,
 } from "./helpers";
 
 // Testskjemaet for prøven uten nett (fase 1, oppgave 3).
 // Testplan: docs/funksjoner/fase1-testskjema-testplan.md avsnitt 6. Kjører i både pc og ipad.
-// Oppgave 4 (PowerSync): /prove/testskjema er nå en liste, og skjemaet åpnes fra «Nytt testskjema»
-// (docs/funksjoner/fase1-kandidat-powersync-testplan.md avsnitt 6.1). Uten nett: fase-1-powersync.spec.ts.
+// Oppgave 4: /prove/testskjema er en liste, og skjemaet åpnes fra «Nytt testskjema»
+// (docs/funksjoner/fase1-kandidat-powersync-testplan.md avsnitt 6.1). Synken er egenbygd (ADR 0004).
 
 const TEST_IMAGE = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -248,31 +246,6 @@ async function fillAllFields(page: Page) {
 
 test("alle 40 felt fylles ut og telleren viser 40 av 40", async ({ page }) => {
   await openTrialForm(page);
-  await fillAllFields(page);
-  await expect(counter(page)).toHaveText("40 av 40 felt utfylt");
-});
-
-// Kandidat 2 (docs/funksjoner/fase1-kandidat-electricsql-testplan.md avsnitt 6.1): samme skjema og
-// samme utfylling med ElectricSQL valgt. Resten av filen kjører med standardkandidaten (PowerSync).
-test("alle 40 felt fylles ut og telleren viser 40 av 40 med ElectricSQL valgt", async ({
-  page,
-  context,
-}) => {
-  await useCandidate(context, "electricsql");
-  await openTrialForm(page);
-  expect(await hookValue(page, "candidate")).toBe("electricsql");
-  await fillAllFields(page);
-  await expect(counter(page)).toHaveText("40 av 40 felt utfylt");
-});
-
-// Kandidat 3 (docs/funksjoner/fase1-kandidat-egenbygd-testplan.md avsnitt 6.1). Obligatorisk.
-test("alle 40 felt fylles ut og telleren viser 40 av 40 med Egenbygd valgt", async ({
-  page,
-  context,
-}) => {
-  await useCandidate(context, "custom");
-  await openTrialForm(page);
-  expect(await hookValue(page, "candidate")).toBe("custom");
   await fillAllFields(page);
   await expect(counter(page)).toHaveText("40 av 40 felt utfylt");
 });
@@ -527,28 +500,4 @@ test("felt med fokus dekkes ikke av statuslinjen når varselet om lagring vises"
   await expect(stickyLine(page).getByTestId("storage-low-warning")).toHaveCount(1);
   await expect(storageWarning(page)).toBeVisible();
   await expectFocusedFieldBelowStatusBar(page);
-});
-
-test("Synkløsning har en tom statusregion når ingenting venter", async ({ page }) => {
-  await logIn(page, ADMIN_EMAIL);
-  await page.goto("/prove/testskjema");
-  const picker = group(page, "Synkløsning");
-  await expect(picker).toBeVisible();
-  // Synkstatusen er klar når de andre kandidatene kan velges
-  for (const name of ["ElectricSQL", "Egenbygd"]) {
-    await expect(picker.getByRole("button", { name, exact: true })).toBeEnabled({
-      timeout: 20_000,
-    });
-  }
-  const region = picker.getByRole("status");
-  await expect(region).toHaveCount(1);
-  await expect(region).toHaveText("");
-  const box = await region.boundingBox();
-  expect(box).not.toBeNull();
-  expect(box!.height).toBe(0);
-  const margin = await region.evaluate((el) => {
-    const style = getComputedStyle(el);
-    return parseFloat(style.marginTop) + parseFloat(style.marginBottom);
-  });
-  expect(margin, "tom region tar ingen marg").toBe(0);
 });

@@ -1,12 +1,12 @@
 /**
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
- * Det som er særegent for kandidat 3 (egenbygd), bare typer og signaturer
+ * Det som er særegent for egenbygd synk, bare typer og signaturer
  * (docs/funksjoner/fase1-kandidat-egenbygd.md pkt. 5–9). Skriving, kø og innfletting kommer fra
  * den lokale kjernen (`sync/local/`); her ligger bare hentelesingen mot `GET /api/prove/synk/hent`.
  * Ingen ny tjeneste, ingen ny avhengighet, ingen websocket, ingen lang-polling.
  *
- * Lokal lagring: IndexedDB-databasen `offline-trial-custom` med samme lagre som Electric, pluss
+ * Lokal lagring: IndexedDB-databasen `offline-trial-custom` med lagrene fra den lokale kjernen, pluss
  * `sync_state` (nøkkel `key`) med radene `{ key: "cursor", value }` og
  * `{ key: "outbox_next_seq", nextSeq }`. Bildefilene ligger som før i `offline-trial-photos`.
  */

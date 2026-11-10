@@ -17,24 +17,21 @@ import {
   signInWithCode,
   syncNowButton,
   syncStatus,
-  useCandidate,
   waitForTrialHook,
 } from "./helpers";
 
 // Prøve F – innlogging som har gått ut (docs/funksjoner/fase1-prove-f-innlogging.md).
 // Testplan: docs/funksjoner/fase1-prove-f-innlogging-testplan.md avsnitt 2. Støtter reklamasjoner
 // (ingenting fra befaringen går tapt når innloggingen går ut uten nett) og tid (rett tilbake til
-// skjemaet etter ny innlogging). Chromium, standardkandidaten PowerSync.
+// skjemaet etter ny innlogging). Chromium, egenbygd synk.
 //
 // Testene leser markøren `data-sync-state` på `data-testid="sync-status"`, ikke norsk tekst
 // (unntak: meldingen sjekkes ordrett én gang i 2.1). Ingen faste pauser, bortsett fra de 15
 // sekundene i 2.2 som er selve målingen.
 //
-// PowerSync-tjenesten finnes ikke i e2e (se fase-1-synkstatus.spec.ts): serveren kan aldri
-// bekrefte en henting, så «Alt er lagret» (`allSaved`) kan ikke nås her. Etter innlogging godtas
-// derfor `allSaved` eller `awaitingServer` («Venter på kontakt med serveren») når køen er 0, og
-// testdatabasen viser at alt kom fram. Uten tjenesten sender SDK-en heller ikke køen av seg selv,
-// så testen trykker «Synk nå» én gang etter innlogging (samme vei som synkstatus-testene).
+// Etter innlogging godtas `allSaved` eller `awaitingServer` («Venter på kontakt med serveren») når
+// køen er 0, og testdatabasen viser at alt kom fram. Ligger noe i køen etter innloggingen, trykker
+// testen «Synk nå» én gang (samme vei som synkstatus-testene).
 // Alle data er oppdiktet.
 
 const TEST_IMAGE = path.join(
@@ -92,7 +89,7 @@ async function expectState(page: Page, state: string | RegExp, timeout?: number)
 
 /**
  * Venter til service workeren styrer siden og kopiene av listen og skjemaet ligger i
- * hurtiglageret (samme vei som prøve C og fase-1-powersync.spec.ts).
+ * hurtiglageret (samme vei som prøve C).
  */
 async function cacheListAndForm(page: Page, formId: string) {
   await page.evaluate(async () => {
@@ -125,8 +122,8 @@ async function expectFormContent(page: Page) {
 }
 
 /**
- * Etter innlogging: synker til køen er 0. Uten PowerSync-tjenesten sendes svarene først etter
- * «Synk nå» (se toppen av filen); bildet sendes av bildekøen selv.
+ * Etter innlogging: synker til køen er 0. Ligger noe i køen, trykkes «Synk nå» (se toppen av
+ * filen); bildet sendes av bildekøen selv.
  */
 async function syncAfterSignIn(page: Page, testInfo: TestInfo) {
   await waitForTrialHook(page);
@@ -144,10 +141,6 @@ async function syncAfterSignIn(page: Page, testInfo: TestInfo) {
   await expectState(page, SAVED);
   await expect(signInLink(page)).toHaveCount(0);
 }
-
-test.beforeEach(async ({ context }) => {
-  await useCandidate(context, "powersync");
-});
 
 // --- 2.1 Hovedflyt som takstmann (pc og ipad) ---
 

@@ -17,7 +17,7 @@ const config = [
       "docs/**",
       // Midlertidige arbeidskopier (git worktrees) og arbeidsflytskript for agenter
       ".claude/**",
-      // Worker og wasm fra PowerSync, kopiert av next.config.ts (prøve fase 1)
+      // Rester fra PowerSync-prøven (fjernet 10.11.2026, ADR 0004) i eldre arbeidskopier. Mappen kan slettes.
       "public/@powersync/**",
     ],
   },

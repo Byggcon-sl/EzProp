@@ -1,8 +1,7 @@
 /**
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
- * Lokal kjerne: rader fra serveren gjøres om til lokal form, felles for ElectricSQL (shapes) og
- * egenbygd (hente-ruten). Flyttet uendret fra `electricsql/shape-messages.ts`. Ren fil: ingen
+ * Lokal kjerne: rader fra serveren (hente-ruten) gjøres om til lokal form. Ren fil: ingen
  * nettleser-API, ingen SDK.
  *
  * PostgreSQL skriver verdiene som tekst (`"120"`, `"2026-10-28 10:00:00+00"`, jsonb som JSON-tekst).
