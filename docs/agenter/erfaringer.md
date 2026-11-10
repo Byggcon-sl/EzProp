@@ -229,3 +229,7 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - Når admin blir ansatt i mer enn én organisasjon (her prøveorganisasjonen), blir oppslag som «organisasjonen til admin … limit 1» tilfeldige. Det slo ut i mange eldre e2e-tester i CI, men ikke lokalt da bare den nye testen ble kjørt. Kjør hele e2e-pakken (eller i det minste alle fase-2a-filene) lokalt når seed-data endres, og la testhjelperne hoppe over organisasjoner med `settings.sampleData`.
 - Lokal `main` i containeren kan være gammel historikk som ikke kan spoles fram. Arbeid fra `origin/main` i en ny branch i stedet for å nullstille `main`.
+
+## 10.11.2026 – fase2a-forslagsmonster (forslagsmønsteret)
+
+- Når seeden for testoppdrag endres (her `ensureSampleAi`, som slår på KI i prøveorganisasjonen), må `pnpm db:seed:testoppdrag` kjøres på nytt lokalt før `pnpm test:e2e`. CI og `scripts/session-start.sh` gjør det selv, men en arbeidskopi som ble satt opp før endringen, gir røde e2e-tester («KI er av.») uten at koden er feil.
