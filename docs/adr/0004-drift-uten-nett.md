@@ -102,7 +102,7 @@ Hvert bilde har egen id og legges bare til (ingen konflikt). Serveren bekrefter 
 
 ### KI-forslag
 
-Et forslag er **ikke** en vanlig endring av verdien. Forslaget ligger i egne felt eller rader (`suggested_by_rule_id`, `suggestion_status`, `suggestion_override_reason`, og tilsvarende for KI). Takstmannens godkjenning er hans egen endring av verdien, med sin egen `field_clock`. Et forslag som kommer sent via synk, endrer bare forslagsfeltene og kan derfor aldri overskrive takstmannens verdi gjennom «siste endring vinner». KI publiserer aldri selv. Synkede rapportdata sendes ikke til KI slik de er: hva KI får se, og at personopplysninger holdes utenfor, avgjøres når KI bygges (krav om leverandør i EU/EØS og databehandleravtale). Ingen KI bygges nå.
+Et forslag er **ikke** en vanlig endring av verdien. Forslaget ligger i egne felt eller rader (`suggested_by_rule_id`, `suggestion_status`, `suggestion_override_reason` for regelforslag). Et KI-forslag er en rad i `ai_usage_log` med status `suggested`, `accepted`, `edited` eller `rejected`, og feltet får `ai_usage_id` først når takstmannen godtar (ADR 0006). Takstmannens godkjenning er hans egen endring av verdien, med sin egen `field_clock`. Et forslag som kommer sent via synk, endrer bare forslagsfeltene og kan derfor aldri overskrive takstmannens verdi gjennom «siste endring vinner». KI publiserer aldri selv. Synkede rapportdata sendes ikke til KI slik de er: hva KI får se, og at personopplysninger holdes utenfor, er avgjort i ADR 0006 (tillatt-liste per funksjon, vask på serveren, leverandør i EU/EØS med databehandleravtale). KI-køen ligger bare lokalt på iPaden og tømmes ved utlogging og sperring. Ingen KI bygges i denne ADR-en.
 
 ### Regelmotoren
 
