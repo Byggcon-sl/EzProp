@@ -23,6 +23,12 @@ import {
   resetDatabase,
 } from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
+import {
+  mergeOrganizationSettings,
+  removeOrganizationSetting,
+  requestSuggestion,
+  validRequest,
+} from "../../../tests/ai";
 import { runSeed } from "./run";
 import { findSampleOrders, runSampleSeed } from "./sample-assignments";
 import { SAMPLE_ASSIGNMENTS, SAMPLE_INSPECTOR } from "./sample-assignments.data";
@@ -1150,5 +1156,152 @@ describe("seed-steget for testoppdragene: loggen (2.9)", () => {
         `andre kjøring: ${ref} er ikke laget på nytt`,
       ).toBe(false);
     }
+  });
+});
+
+/*
+ * KI med den falske leverandøren i prøveorganisasjonen (docs/funksjoner/fase2a-ki-modul-logg-testplan.md
+ * avsnitt 13, kortet Omfang 8, A160). Seed slår på `ai.enabled` og lager én `fake`-tilkobling bare
+ * i organisasjonen med `sampleData`, bare når det mangler, og endrer aldri noe som finnes.
+ *
+ * Støtter hovedmål: de ansatte (KI kan prøves i testmiljøet uten kostnad) og KI i bunnen (én vei:
+ * leverandøren kommer fra tilkoblingen, aldri fra miljøet). Byggcon får aldri KI av seed.
+ */
+type AiConnectionRow = {
+  id: string;
+  provider: string;
+  status: string;
+  deleted_at: string | null;
+  row_version: number;
+  updated_at: string;
+};
+
+async function aiConnections(organizationId: string): Promise<AiConnectionRow[]> {
+  return rows<AiConnectionRow>(sql`
+    select id, provider, status, deleted_at::text as deleted_at, row_version, updated_at::text as updated_at
+    from integration_connections where organization_id = ${organizationId} and port = 'ai'
+    order by created_at, id`);
+}
+
+async function settingsOf(organizationId: string): Promise<Loose> {
+  const [row] = await rows<{ settings: Loose }>(
+    sql`select settings from organizations where id = ${organizationId}`,
+  );
+  return row!.settings;
+}
+
+describe("seed-steget for testoppdragene: KI med fake i prøveorganisasjonen (13)", () => {
+  beforeEach(async () => {
+    await runSeed(env);
+  });
+
+  it("13.1 første kjøring: ai.enabled = true og én aktiv fake-tilkobling på porten ai", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    const settings = await settingsOf(orgId);
+    expect(settings["ai.enabled"]).toBe(true);
+    expect(settings.sampleData).toBe(true);
+    const connections = await aiConnections(orgId);
+    expect(connections).toHaveLength(1);
+    expect(connections[0]).toMatchObject({ provider: "fake", status: "active", deleted_at: null });
+  });
+
+  it("13.2 andre kjøring: ingen ny rad, ingen endring, samme settings", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    const connectionsBefore = await aiConnections(orgId);
+    const settingsBefore = await settingsOf(orgId);
+
+    await runSampleSeed(env, TEST_NOW);
+
+    expect(await aiConnections(orgId)).toEqual(connectionsBefore);
+    expect(await settingsOf(orgId)).toEqual(settingsBefore);
+  });
+
+  it("13.3 admin har satt ai.enabled = false: seed slår det ikke på igjen", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    await mergeOrganizationSettings(orgId, { "ai.enabled": false });
+
+    await runSampleSeed(env, TEST_NOW);
+
+    expect((await settingsOf(orgId))["ai.enabled"]).toBe(false);
+  });
+
+  it.each([
+    { name: "deaktivert rad (status disabled)", change: sql`status = 'disabled'` },
+    { name: "mykt slettet rad", change: sql`deleted_at = now(), deleted_by = 'oppdiktet-admin'` },
+    { name: "rad med annen leverandørkode (13.5)", change: sql`provider = 'openai'` },
+  ])(
+    "13.4 $name på porten ai: ingen ny rad, og raden som finnes, endres ikke",
+    async ({ change }) => {
+      await runSampleSeed(env, TEST_NOW);
+      const orgId = await sampleOrgId();
+      const [existing] = await aiConnections(orgId);
+      await db.execute(
+        sql`update integration_connections set ${change} where id = ${existing!.id}`,
+      );
+      const before = await aiConnections(orgId);
+
+      await runSampleSeed(env, TEST_NOW);
+
+      expect(await aiConnections(orgId)).toEqual(before);
+      expect(before).toHaveLength(1);
+    },
+  );
+
+  it("13.6 andre nøkler i settings er uendret; ai.enabled settes bare når nøkkelen mangler", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    await removeOrganizationSetting(orgId, "ai.enabled");
+    await mergeOrganizationSettings(orgId, {
+      "access.inspectors_edit_all": false,
+      "oppdiktet.nokkel": { verdi: 7 },
+    });
+    const before = await settingsOf(orgId);
+    expect(before["ai.enabled"]).toBeUndefined();
+
+    await runSampleSeed(env, TEST_NOW);
+
+    const after = await settingsOf(orgId);
+    expect(after).toEqual({ ...before, "ai.enabled": true });
+    expect(after["access.inspectors_edit_all"]).toBe(false);
+    expect(after.sampleData).toBe(true);
+    expect(after["oppdiktet.nokkel"]).toEqual({ verdi: 7 });
+  });
+
+  it("13.7 Byggcon og en organisasjon uten sampleData får verken ai.enabled eller tilkobling", async () => {
+    const other = await rows<{ id: string }>(
+      sql`insert into organizations (name, brand_name, settings) values ('Oppdiktet Takst Annen', 'Oppdiktet Takst Annen', '{}'::jsonb) returning id`,
+    );
+    await runSampleSeed(env, TEST_NOW);
+    await runSampleSeed(env, TEST_NOW);
+    for (const orgId of [await byggconId(), other[0]!.id]) {
+      expect((await settingsOf(orgId))["ai.enabled"]).toBeUndefined();
+      expect(await aiConnections(orgId)).toEqual([]);
+    }
+  });
+
+  it("13.7 pnpm db:seed (runSeed) rører ikke KI", async () => {
+    await runSeed(env);
+    const byggcon = await byggconId();
+    expect((await settingsOf(byggcon))["ai.enabled"]).toBeUndefined();
+    expect(
+      await count(sql`select count(*)::int as n from integration_connections where port = 'ai'`),
+    ).toBe(0);
+  });
+
+  it("13.8 etter seed gir requestSuggestion for prøvetakstmannen et forslag", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    const grant = await requireOrganizationAccess(await inspectorActor(), orgId);
+    const result = await requestSuggestion(grant, validRequest());
+    expect(result.kind).toBe("suggestion");
+  });
+
+  it("13.8 Byggcon-admin får disabled etter seed (KI er ikke slått på i Byggcon)", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const grant = await requireOrganizationAccess(await adminActor(), await byggconId());
+    expect(await requestSuggestion(grant, validRequest())).toEqual({ kind: "disabled" });
   });
 });
