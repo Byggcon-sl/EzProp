@@ -125,6 +125,13 @@ Ingen nye fagregler. Overgangene for status er A162 og A164 (PR #127) og endres 
 - [ ] Serverhandlingene: organisasjons-id fra klienten ignoreres, ugyldig uuid avvises, uten `report.edit` avslag, takstmann/leder/admin lov, `audit_log` inneholder bare id og status (test).
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne. Versjon 0.5.1.
 
+## Avklaringer (utvikler, 10.11.2026)
+- **A. `getSuggestionStatus(grant, usageId)`** gir `{ status, outcome } | null`. `null` er det ene nøytrale svaret for «finnes ikke», annen organisasjon, slettet, ugyldig uuid **og** manglende rettighet for funksjonen på raden. Statusoppslaget kaster ikke `AccessDeniedError`; serverhandlingene sjekker `report.edit` i `@/core/access` før kallet. Testplan 3.3 deles derfor ikke.
+- **`checkAiTextApproved(grant, items)`** gir `{ aiUsageId, target }[]` (de som ikke er godkjent). Uten `report.edit`: `AccessDeniedError`, også for tom liste. Over `AI_APPROVAL_CHECK_MAX = 500`: `AiRequestRejectedError` uten spørring og uten delvis svar. `aiUsageId` og `target.id` sammenlignes med små bokstaver (testplan 4.15: begge godkjent).
+- **Vakten for `ai_trial`** ligger i `requestSuggestion` rett etter valget av leverandør: er leverandøren ikke den falske, svarer kjernen `{ kind: "disabled" }` uten rad og uten kall.
+- **`recordDecision`:** trinn 1 (rettighet til minst én KI-funksjon) kommer før validering av id, så kontor uten `report.edit` får `AccessDeniedError` også for ugyldig uuid.
+- **`ensureSampleAi`** gir `skipped` i en organisasjon uten `sampleData` og lager da verken innstilling eller tilkobling.
+
 ## Beslutninger (autonom modus)
 - **A166 (lett å endre):** Forslagsmønsteret prøves på en egen prøveside `/prove/ki` med måltypen `ai_trial`, fordi `answers` og rapporten ikke finnes ennå. `ai_trial` godtas bare når leverandøren er `fake`, sjekket i `src/core/ai`, fordi siden sender fritekst uten vask. Siden fjernes og `ai_trial` arkiveres når språkvask kommer på avviksteksten i 2a-2. Kilde: planen 2a-1 «Ferdig når», ADR 0006 del 4, sikkerhet-personvern 10.11.2026.
 - **A167 (lett å endre):** Knappene heter «Bruk», «Behold min tekst», «Nytt forslag» og «Angre». «Behold» er avvisning. «Endre og bruk» venter til 2a-2. Kilde: planen («bruk, behold, nytt forslag» og angre).
