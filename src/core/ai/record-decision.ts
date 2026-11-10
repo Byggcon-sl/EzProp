@@ -57,7 +57,8 @@ export async function recordDecision(
   if (!grantHasPermission(grant, definition.permission)) throw new AccessDeniedError();
 
   if (row.outcome !== "ok" || row.status === null) throw new AiDecisionError();
-  const from = row.status;
+  // CHECK-regelen i databasen sikrer at statusen er en av de faste kodene
+  const from = row.status as AiSuggestionStatus;
   const transition = transitionFor(from, decision);
   if (transition.kind === "invalid") throw new AiDecisionError();
   // Gjentatt samme avgjørelse (for eksempel fra iPaden): ingen endring, ingen linje i loggen
