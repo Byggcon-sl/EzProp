@@ -143,7 +143,7 @@ For hver rute sjekkes:
 2. **ingen endring:** ingen feil, raden uendret (også `decided_at`), ingen ny linje i `audit_log`.
 3. **feil:** riktig feiltype, raden uendret, ingen linje i `audit_log`.
 4. **`undo`** tømmer `decided_by` og `decided_at`.
-5. **`undo` fra `rejected` når det finnes et nyere `suggested`-forslag på samme mål** → feil. Når det nyere forslaget er mykt slettet → lov. Når det nyere er på et annet mål → lov.
+5. **`undo` fra `rejected` når det finnes et nyere `suggested`-forslag på samme mål** → feil. Når det nyere forslaget er mykt slettet → lov. Når det nyere er på et annet mål → lov. Når det nyere har `outcome = no_match` eller `error` → lov. Når det nyere ligger i en annen organisasjon (samme `target_ref`) → lov. Når det andre forslaget er eldre (`created_at` før) → lov. «Nyere» avgjøres på serverens `created_at`, ikke på id-en (avklaring D).
 6. **en annen ansatt med `report.edit`** (leder, eller takstmann med innstillingen på) kan avgjøre et forslag en annen ba om; `decided_by` er den som avgjorde.
 7. **`decided_by` kan ikke styres:** funksjonen tar ingen ansatt-id; testen viser at verdien er grant sin.
 8. **rader med `outcome = no_match` og `error`** → feil, ingen endring.
