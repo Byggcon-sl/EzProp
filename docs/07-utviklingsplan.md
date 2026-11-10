@@ -70,10 +70,10 @@ Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3
 | Fase | Status |
 |---|---|
 | 0a Repo og database | Ferdig 28.10.2026 |
-| 1 Prøve uten nett | Automatiske prøver ferdig. Prøvene på ekte iPad venter på Ståle (S2). Foreløpig valg: egenbygd synk (ADR 0004). |
+| 1 Prøve uten nett | Ferdig 10.11.2026. Ståle har kjørt prøvene på ekte iPad og godkjent ADR 0004 (egenbygd synk). |
 | 0b Innlogging, organisasjon, roller | Ferdig, unntatt felles innlogging med Optiplan (venter på S6) |
 | **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren ligger i PR #119. |
-| Minimum før ekte data | To av ni punkter levert. Resten trenger testmiljøet (S1). |
+| Minimum før ekte data | To av ni punkter levert. Testmiljøet er klart (S1, 10.11.2026), så resten kan bygges nå. |
 | 2b og videre | Ikke startet |
 
 ## Venter på Ståle
@@ -82,14 +82,14 @@ Dette kan bare Ståle gjøre eller bestemme. Listen er sortert etter hvor mye so
 
 | Nr | Hva | Hva som venter på det |
 |---|---|---|
-| S1 | **Testmiljøet i Azure:** ressursgruppe, nøkler som secrets i GitHub, adressen `ezprop-test.byggcon.no`, e-post via Microsoft 365, nøkkelboksen og fillagringen (`docs/drift/testmiljo-azure.md`). Kan gis til en annen som har tilgang til Azure. | Alt som skal prøves på ekte iPad, og «Minimum før ekte data» |
-| S2 | **Prøve A og B på ekte iPad**, deretter C, D og F, og godkjenne ADR 0004 (egenbygd synk). | Fase 2b bygger på synkvalget |
-| S3 | **Fagråd runde 1:** grensene og levetidene, de 10 prøveeksemplene på avvikstekster, kontrollpunktene for leilighet og fellesdeler, og de tre fagspørsmålene (TG0 på eldre våtrom, radon i leiligheter, røykvarsler). | Fagstoff kan ikke brukes i ekte rapporter før det er godkjent. Uten kontrollpunktene for leilighet kan ikke leiligheter (ca. 60 %) lages. |
+| S1 | ~~Testmiljøet i Azure~~ **Gjort (Ståle 10.11.2026: «testmiljøet er ok»).** | – |
+| S2 | ~~Prøve A og B på ekte iPad, C, D og F, og godkjenne ADR 0004~~ **Gjort (Ståle 10.11.2026: «2 og 3 også»).** ADR 0004 (egenbygd synk) er godkjent. | – |
+| S3 | ~~Fagråd runde 1~~ **Gjort (Ståle 10.11.2026: «2 og 3 også»).** Grensene, levetidene, prøveeksemplene og kontrollpunktene for leilighet og fellesdeler er godkjent. Svarene på de tre fagspørsmålene (TG0 på eldre våtrom, radon i leiligheter, røykvarsler) er ikke skrevet ned ennå. | De tre fagspørsmålene |
 | S4 | **Ansvarsforsikringen:** antall krav og beløp de siste 3 årene, **hvilken bygningsdel hvert krav gjaldt**, hvordan tidlig melding virker, og om dokumenterte rutiner gir bedre vilkår. | Nullpunktet for reklamasjonsmålet, og hvilke regler og KI-sjekker som bør komme først |
 | S5 | **Måling i IVIT:** tre takstmenn noterer tid på 20–30 oppdrag til sammen (forberedelse, befaring, kontorarbeid, levering). Målingen drøftes med de ansatte først. Tallene legges inn på `/statistikk/tid`. | Sammenligningen i piloten |
 | S6 | **Tilgang til Optiplan-oppsettet**, og bekrefte om Optiplan bruker nøkkelboks. | Felles innlogging og bytte med ett trykk (fase 0b) |
 | S7 | **Folk:** én erfaren takstmann inn i betaen nå, hvem som er med i piloten og EzProp-panelet (forslag: én takstmann per selskap og Dan-Børge fra kontoret), og hvem som er ansvarlig for overgangen fra IVIT. | Andre øyne enn Ståles på det som bygges, og piloten |
-| S8 | **KI-leverandør:** velge leverandør og si ja til kostnaden, når agentene har lagt fram beslutningsnotatet (2a-1). | KI med ekte tekst og tale. Til da bygges og prøves alt mot en falsk leverandør. |
+| S8 | **KI-leverandør: Anthropic (Ståle 10.11.2026: «vi benytter anthropic som leverandør av ki»).** Gjenstår: si ja til kostnaden når agentene har lagt fram beslutningsnotatet (modeller, pris per rapport, databehandleravtale, EU/EØS), legge inn API-nøkkelen som secret, og velge leverandør for norsk tale til tekst (Anthropic tilbyr ikke det). | KI med ekte tekst og tale. Til da bygges og prøves alt mot en falsk leverandør. |
 
 ---
 
@@ -130,7 +130,7 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 - [ ] **Vask før KI:** navn, e-post, telefon, adresse og matrikkel fjernes før noe sendes. Med test.
 - [ ] **Evalueringssett:** fast oppsett for eksempler med fasit per KI-funksjon, og en kommando som kjører settet og viser treffprosent.
 - [ ] **KI-kø:** det som trenger KI, legges i kø og behandles når nettet er tilbake. Brukes på iPaden i fase 2b.
-- [ ] **Beslutningsnotat om KI-leverandør** til Ståle (S8): alternativer for tekst og for norsk tale til tekst, pris per rapport, databehandleravtale, EU/EØS og ingen trening på våre data.
+- [ ] **Beslutningsnotat om KI-leverandør** til Ståle (S8). **Leverandøren er valgt: Anthropic (Ståle 10.11.2026).** Notatet tar for seg modellvalg per funksjon, alternativer for norsk tale til tekst, pris per rapport, databehandleravtale, EU/EØS og ingen trening på våre data.
 
 **Ferdig når:** En prøvefunksjon (språkvask av en setning) går hele veien mot den falske leverandøren: forslaget vises, takstmannen godtar eller avviser, og loggen viser det.
 
