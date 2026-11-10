@@ -229,3 +229,8 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - Når admin blir ansatt i mer enn én organisasjon (her prøveorganisasjonen), blir oppslag som «organisasjonen til admin … limit 1» tilfeldige. Det slo ut i mange eldre e2e-tester i CI, men ikke lokalt da bare den nye testen ble kjørt. Kjør hele e2e-pakken (eller i det minste alle fase-2a-filene) lokalt når seed-data endres, og la testhjelperne hoppe over organisasjoner med `settings.sampleData`.
 - Lokal `main` i containeren kan være gammel historikk som ikke kan spoles fram. Arbeid fra `origin/main` i en ny branch i stedet for å nullstille `main`.
+
+## 10.11.2026 – «KI-modulen og loggen» bygget to ganger
+
+- Hovedløkken pushet en branch midt i en arbeidsflyt (etter beskjed fra stoppkroken). En annen kjøring så branchen uten PR og trodde kjøringen hadde stanset, overtok den og merget PR #127. Den første arbeidsflyten bygget det samme ferdig i parallell, og det arbeidet ble lagt bort (`arkiv-ki-modul-logg-parallell`). Regel videre: før en arbeidsflyt startes, skriv punktet og branchen under «Gjeldende oppgave» i `docs/agenter/tilstand.md` på `main` (eller sjekk at ingen annen kjøring har det). Ikke overta en branch med commit yngre enn 60 minutter mens en arbeidsflyt kan være i gang.
+
