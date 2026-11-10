@@ -139,7 +139,7 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se og godkjenne fag og utseende tidlig, og feil i grunnstrukturen oppdages før de blir dyre.
 
 - [ ] **Malen for ett bad** lagt inn i malmotoren: kontrollpunktene for våtrom, med Byggcons egne utkast til avvikstekster (merket «ikke godkjent av fagrådet»).
-- [ ] **Reglene badet trenger,** i regelmotoren som én felles kodepakke for iPad og server: alder mot levetid (med trinn), én målegrense for fukt, våtrom fra før 2000, og hulltaking nektet gir TGIU. Testsaker per regel.
+- [ ] **Reglene badet trenger,** i regelmotoren som én felles kodepakke for iPad og server: alder mot levetid (med trinn), én målegrense for fukt, våtrom fra før 2000, og hulltaking nektet gir TGIU. Testsaker per regel. Fukt ikke målt gir ikke TG2 på grunn av alder alene på tilliggende konstruksjoner (Ståle 10.11.2026, spørsmål 59a).
 - [ ] **Badet på PC:** kontrollpunktene, avvikskort (TG, årsak, konsekvens, tiltak, kostnad) og TGIU på punktet. TG-forslag fra reglene kan godtas, endres eller avvises.
 - [ ] **KI i veien:** forslag fra frasebanken, språkvask av avviksteksten og utkast til sammendrag, gjennom KI-grunnmuren.
 - [ ] **Publisering av badet:** sperren for det som gjelder våtrom (TG2 eller TG3 uten årsak og konsekvens, TG3 uten kostnad, våtrom uten hulltaking eller begrunnelse), med aktiv overstyring og logg.
@@ -157,7 +157,7 @@ Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se
 - [ ] Regelmotoren som én felles kodepakke for iPad og server: vis/skjul, **TG-forslag fra materiale, alder (med kilde for alderen og om dokumentasjon finnes) og målinger**, forslag om TGIU på punktet, og kontroller. Testtilfeller per regel. De nye betingelsestypene fra innspill D5 (snødekke, bygningstype, TG på annet punkt, bilde mangler, TGIU satt).
 - [ ] **Informasjonstekst ut fra byggeår** (for eksempel asbest) foreslås av regler i malen. Bare forslag, aldri TG. (Svar 10.11.2026, nr. 47)
 - [ ] Regler fra beslutningene: hulltaking nektet gir TGIU (på kontrollpunktet, innspill D1), loft uten adkomst gir TG2 (med unntaket), radon 100 Bq/m³, våtrom fra før 2000
-- [ ] Systemmalen for tilstandsrapport bolig og leilighet lagt inn, med Byggcons egne avvikstekster. **TG-logikk finnes bare i denne systemmalen** (27.10.2026).
+- [ ] Systemmalen for tilstandsrapport bolig og leilighet lagt inn, med Byggcons egne avvikstekster. **TG-logikk finnes bare i denne systemmalen** (27.10.2026). Radon får aldri TG, bare HMS (spørsmål 59b). Røykvarsler og slukkeutstyr er egne punkter også for leilighet (spørsmål 59c).
 - [ ] **Forhåndsvalg i malen** bare for beskrivende tekst, aldri for avvik, tiltak eller TG. Forhåndsvalgte tekster må bekreftes før «Send» (advarsel). (Svar 10.11.2026, nr. 34)
 - [ ] «Handling»-frasene fra IVIT importeres som tiltak. Feltet kan hete «Konsekvens/tiltak» (27.10.2026).
 - [ ] **Tiltak merkes «utbedre» eller «undersøk nærmere»** som et valg på tiltaket. (Svar 10.11.2026, nr. 40)
