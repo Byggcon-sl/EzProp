@@ -2,7 +2,14 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requireOrganizationAccess } from "@/core/access";
 import { db } from "@/db/client";
-import { companies, employees, offices, organizations, users } from "@/db/schema";
+import {
+  companies,
+  employees,
+  integrationConnections,
+  offices,
+  organizations,
+  users,
+} from "@/db/schema";
 import { resetDatabase } from "../../../tests/factories";
 import { runSeed } from "./run";
 
@@ -31,6 +38,19 @@ describe("seed", () => {
       "organization.manage",
     );
     expect(grant.roles).toEqual(["admin"]);
+  });
+
+  it("slår ikke på KI i Byggcon: ingen ai.enabled og ingen tilkobling på porten ai (KI-modulen 13.7)", async () => {
+    const env = { SEED_ADMIN_EMAIL: "admin@example.com", SEED_ADMIN_NAME: "Test Admin" };
+    await runSeed(env);
+    await runSeed(env);
+    const [org] = await db.select().from(organizations);
+    expect((org!.settings as Record<string, unknown>)["ai.enabled"]).toBeUndefined();
+    const connections = await db
+      .select()
+      .from(integrationConnections)
+      .where(eq(integrationConnections.port, "ai"));
+    expect(connections).toEqual([]);
   });
 
   it("skriver aldri e-postadressen i loggen", async () => {

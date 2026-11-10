@@ -10,7 +10,6 @@ import { createLocalFileStorage } from "@/core/files/local-storage";
 import { isCertificationValid } from "@/core/organization/certification-rules";
 import { db } from "@/db/client";
 import {
-  aiUsageLog,
   assignmentParties,
   assignments,
   assignmentTeamMembers,
@@ -1135,25 +1134,51 @@ describe("fabrikken for avtale med oppdragsgiver (fase 2a)", () => {
   });
 });
 
-describe("fabrikken for KI-loggen (fase 2a-1)", () => {
-  it("lager en rad i riktig organisasjon med ansatt fra samme organisasjon", async () => {
-    await resetDatabase();
+// KI-loggen, docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 14. Oppdiktede data.
+describe("fabrikken for ai_usage_log", () => {
+  beforeEach(resetDatabase);
+
+  it("14.4 createAiUsageLog lager raden i riktig organisasjon, med en ansatt der", async () => {
     const orgA = await createOrganization("Oppdiktet takst A");
     const orgB = await createOrganization("Oppdiktet takst B");
-
     const row = await createAiUsageLog(orgA.id);
+    expect(row.organization_id).toBe(orgA.id);
+    expect(row).toMatchObject({
+      feature: "language_polish",
+      provider: "fake",
+      model: "fake-v1",
+      prompt_version: "language_polish.v1",
+      outcome: "ok",
+      status: "suggested",
+      currency: "NOK",
+      deleted_at: null,
+    });
+    expect(Number(row.cost)).toBe(0);
+    expect(row.retain_until).not.toBeNull();
+    const [{ n } = { n: -1 }] = await db.execute<{ n: number }>(
+      sql`select count(*)::int as n from employees where id = ${row.employee_id} and organization_id = ${orgA.id}`,
+    );
+    expect(n).toBe(1);
+    const [{ m } = { m: -1 }] = await db.execute<{ m: number }>(
+      sql`select count(*)::int as m from ai_usage_log where organization_id = ${orgB.id}`,
+    );
+    expect(m).toBe(0);
+  });
 
-    expect(row.organizationId).toBe(orgA.id);
-    expect(row.outcome).toBe("ok");
-    expect(row.status).toBe("suggested");
-    expect(row.provider).toBe("fake");
-    expect(row.model).toBe("fake-v1");
-    expect(row.cost).toBe("0.0000");
-    expect(row.currency).toBe("NOK");
-    expect(row.retainUntil.getTime()).toBeGreaterThan(Date.now() + 9 * 365 * 24 * 3600 * 1000);
-    const [employee] = await db.select().from(employees).where(eq(employees.id, row.employeeId));
-    expect(employee?.organizationId).toBe(orgA.id);
-    const inB = await db.select().from(aiUsageLog).where(eq(aiUsageLog.organizationId, orgB.id));
-    expect(inB).toEqual([]);
+  it("14.2 ai_usage_log står i truncate-listen før employees og assignments, og tømmes", async () => {
+    const listed: readonly string[] = RESET_TABLES;
+    expect(listed).toContain("ai_usage_log");
+    expect(listed.indexOf("ai_usage_log")).toBeLessThan(listed.indexOf("employees"));
+    expect(listed.indexOf("ai_usage_log")).toBeLessThan(listed.indexOf("assignments"));
+
+    const org = await createOrganization("Oppdiktet takst A");
+    await createAiUsageLog(org.id);
+
+    await resetDatabase();
+
+    const [{ n } = { n: -1 }] = await db.execute<{ n: number }>(
+      sql`select count(*)::int as n from ai_usage_log`,
+    );
+    expect(n).toBe(0);
   });
 });

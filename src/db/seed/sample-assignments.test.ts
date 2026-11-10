@@ -10,7 +10,7 @@ import {
   updateAssignmentNote,
   type AssignmentStatus,
 } from "@/core/assignments";
-import { AI_ENABLED_SETTING_KEY, requestSuggestion } from "@/core/ai";
+import { AI_ENABLED_SETTING_KEY, requestSuggestion as requestSuggestionService } from "@/core/ai";
 import { createOrder as createOrderService } from "@/core/orders";
 import { findEmployeeGrant } from "@/core/organization";
 import { db } from "@/db/client";
@@ -26,6 +26,12 @@ import {
   resetDatabase,
 } from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
+import {
+  mergeOrganizationSettings,
+  removeOrganizationSetting,
+  requestSuggestion,
+  validRequest,
+} from "../../../tests/ai";
 import { runSeed } from "./run";
 import { ensureSampleAi, findSampleOrders, runSampleSeed } from "./sample-assignments";
 import { SAMPLE_ASSIGNMENTS, SAMPLE_INSPECTOR } from "./sample-assignments.data";
@@ -107,7 +113,6 @@ const ORG_TABLES = [
   "events",
   "audit_log",
   "files",
-  "integration_connections",
 ] as const;
 /** Tabellene over med `updated_at` og `deleted_at` (alle unntatt `number_sequences`). */
 const ORG_TABLES_WITH_TIMESTAMPS = ORG_TABLES.filter((table) => table !== "number_sequences");
@@ -1157,24 +1162,26 @@ describe("seed-steget for testoppdragene: loggen (2.9)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------------------------
-// KI med den falske leverandøren i prøveorganisasjonen
-// (docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 13, A160)
-// ---------------------------------------------------------------------------------------------
-
+/*
+ * KI med den falske leverandøren i prøveorganisasjonen (docs/funksjoner/fase2a-ki-modul-logg-testplan.md
+ * avsnitt 13, kortet Omfang 8, A160). Seed slår på `ai.enabled` og lager én `fake`-tilkobling bare
+ * i organisasjonen med `sampleData`, bare når det mangler, og endrer aldri noe som finnes.
+ *
+ * Støtter hovedmål: de ansatte (KI kan prøves i testmiljøet uten kostnad) og KI i bunnen (én vei:
+ * leverandøren kommer fra tilkoblingen, aldri fra miljøet). Byggcon får aldri KI av seed.
+ */
 type AiConnectionRow = {
   id: string;
   provider: string;
   status: string;
+  deleted_at: string | null;
   row_version: number;
   updated_at: string;
-  deleted_at: string | null;
 };
 
 async function aiConnections(organizationId: string): Promise<AiConnectionRow[]> {
   return rows<AiConnectionRow>(sql`
-    select id::text as id, provider, status, row_version, updated_at::text as updated_at,
-      deleted_at::text as deleted_at
+    select id, provider, status, deleted_at::text as deleted_at, row_version, updated_at::text as updated_at
     from integration_connections where organization_id = ${organizationId} and port = 'ai'
     order by created_at, id`);
 }
@@ -1186,8 +1193,153 @@ async function settingsOf(organizationId: string): Promise<Loose> {
   return row!.settings;
 }
 
+describe("seed-steget for testoppdragene: KI med fake i prøveorganisasjonen (13)", () => {
+  beforeEach(async () => {
+    await runSeed(env);
+  });
+
+  it("13.1 første kjøring: ai.enabled = true og én aktiv fake-tilkobling på porten ai", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    const settings = await settingsOf(orgId);
+    expect(settings["ai.enabled"]).toBe(true);
+    expect(settings.sampleData).toBe(true);
+    const connections = await aiConnections(orgId);
+    expect(connections).toHaveLength(1);
+    expect(connections[0]).toMatchObject({ provider: "fake", status: "active", deleted_at: null });
+  });
+
+  it("13.2 andre kjøring: ingen ny rad, ingen endring, samme settings", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    const connectionsBefore = await aiConnections(orgId);
+    const settingsBefore = await settingsOf(orgId);
+
+    await runSampleSeed(env, TEST_NOW);
+
+    expect(await aiConnections(orgId)).toEqual(connectionsBefore);
+    expect(await settingsOf(orgId)).toEqual(settingsBefore);
+  });
+
+  it("13.3 admin har satt ai.enabled = false: seed slår det ikke på igjen", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    await mergeOrganizationSettings(orgId, { "ai.enabled": false });
+
+    await runSampleSeed(env, TEST_NOW);
+
+    expect((await settingsOf(orgId))["ai.enabled"]).toBe(false);
+  });
+
+  it.each([
+    { name: "deaktivert rad (status disabled)", change: sql`status = 'disabled'` },
+    { name: "mykt slettet rad", change: sql`deleted_at = now(), deleted_by = 'oppdiktet-admin'` },
+    { name: "rad med annen leverandørkode (13.5)", change: sql`provider = 'openai'` },
+  ])(
+    "13.4 $name på porten ai: ingen ny rad, og raden som finnes, endres ikke",
+    async ({ change }) => {
+      await runSampleSeed(env, TEST_NOW);
+      const orgId = await sampleOrgId();
+      const [existing] = await aiConnections(orgId);
+      await db.execute(
+        sql`update integration_connections set ${change} where id = ${existing!.id}`,
+      );
+      const before = await aiConnections(orgId);
+
+      await runSampleSeed(env, TEST_NOW);
+
+      expect(await aiConnections(orgId)).toEqual(before);
+      expect(before).toHaveLength(1);
+    },
+  );
+
+  it("13.6 andre nøkler i settings er uendret; ai.enabled settes bare når nøkkelen mangler", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    await removeOrganizationSetting(orgId, "ai.enabled");
+    await mergeOrganizationSettings(orgId, {
+      "access.inspectors_edit_all": false,
+      "oppdiktet.nokkel": { verdi: 7 },
+    });
+    const before = await settingsOf(orgId);
+    expect(before["ai.enabled"]).toBeUndefined();
+
+    await runSampleSeed(env, TEST_NOW);
+
+    const after = await settingsOf(orgId);
+    expect(after).toEqual({ ...before, "ai.enabled": true });
+    expect(after["access.inspectors_edit_all"]).toBe(false);
+    expect(after.sampleData).toBe(true);
+    expect(after["oppdiktet.nokkel"]).toEqual({ verdi: 7 });
+  });
+
+  it("13.7 Byggcon og en organisasjon uten sampleData får verken ai.enabled eller tilkobling", async () => {
+    const other = await rows<{ id: string }>(
+      sql`insert into organizations (name, brand_name, settings) values ('Oppdiktet Takst Annen', 'Oppdiktet Takst Annen', '{}'::jsonb) returning id`,
+    );
+    await runSampleSeed(env, TEST_NOW);
+    await runSampleSeed(env, TEST_NOW);
+    for (const orgId of [await byggconId(), other[0]!.id]) {
+      expect((await settingsOf(orgId))["ai.enabled"]).toBeUndefined();
+      expect(await aiConnections(orgId)).toEqual([]);
+    }
+  });
+
+  it("13.7 pnpm db:seed (runSeed) rører ikke KI", async () => {
+    await runSeed(env);
+    const byggcon = await byggconId();
+    expect((await settingsOf(byggcon))["ai.enabled"]).toBeUndefined();
+    expect(
+      await count(sql`select count(*)::int as n from integration_connections where port = 'ai'`),
+    ).toBe(0);
+  });
+
+  it("13.8 etter seed gir requestSuggestion for prøvetakstmannen et forslag", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    const grant = await requireOrganizationAccess(await inspectorActor(), orgId);
+    const result = await requestSuggestion(grant, validRequest());
+    expect(result.kind).toBe("suggestion");
+  });
+
+  it("13.8 Byggcon-admin får disabled etter seed (KI er ikke slått på i Byggcon)", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const grant = await requireOrganizationAccess(await adminActor(), await byggconId());
+    expect(await requestSuggestion(grant, validRequest())).toEqual({ kind: "disabled" });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// KI med den falske leverandøren i prøveorganisasjonen
+// (docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 13, A160)
+// ---------------------------------------------------------------------------------------------
+
+type DevAiConnectionRow = {
+  id: string;
+  provider: string;
+  status: string;
+  row_version: number;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+async function devAiConnections(organizationId: string): Promise<DevAiConnectionRow[]> {
+  return rows<DevAiConnectionRow>(sql`
+    select id::text as id, provider, status, row_version, updated_at::text as updated_at,
+      deleted_at::text as deleted_at
+    from integration_connections where organization_id = ${organizationId} and port = 'ai'
+    order by created_at, id`);
+}
+
+async function devSettingsOf(organizationId: string): Promise<Loose> {
+  const [row] = await rows<{ settings: Loose }>(
+    sql`select settings from organizations where id = ${organizationId}`,
+  );
+  return row!.settings;
+}
+
 /** Prøveorganisasjonen med admin, laget før steget, slik at testen kan legge inn rader først. */
-async function preparedSampleOrg(settings: Loose = { sampleData: true }): Promise<string> {
+async function devPreparedSampleOrg(settings: Loose = { sampleData: true }): Promise<string> {
   const [org] = await rows<{ id: string }>(sql`
     insert into organizations (name, brand_name, settings)
     values (${SAMPLE_ORG}, ${SAMPLE_ORG}, ${JSON.stringify(settings)}::jsonb)
@@ -1196,7 +1348,7 @@ async function preparedSampleOrg(settings: Loose = { sampleData: true }): Promis
   return org!.id;
 }
 
-describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => {
+describe("seed-steget for testoppdragene: KI med falsk leverandør, utviklerens tester (13)", () => {
   beforeEach(async () => {
     await runSeed(env);
   });
@@ -1204,8 +1356,8 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => 
   it("13.1 første kjøring: ai.enabled = true og én aktiv tilkobling med fake", async () => {
     await runSampleSeed(env, TEST_NOW);
     const orgId = await sampleOrgId();
-    expect((await settingsOf(orgId))[AI_ENABLED_SETTING_KEY]).toBe(true);
-    const connections = await aiConnections(orgId);
+    expect((await devSettingsOf(orgId))[AI_ENABLED_SETTING_KEY]).toBe(true);
+    const connections = await devAiConnections(orgId);
     expect(connections).toHaveLength(1);
     expect(connections[0]).toMatchObject({ provider: "fake", status: "active", deleted_at: null });
   });
@@ -1213,7 +1365,7 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => 
   it("13.1 tilkoblingen er laget med tjenesten: linje i revisjonsloggen uten verdier", async () => {
     await runSampleSeed(env, TEST_NOW);
     const orgId = await sampleOrgId();
-    const [connection] = await aiConnections(orgId);
+    const [connection] = await devAiConnections(orgId);
     const audit = await rows<{ action: string; changes: Loose }>(sql`
       select action, changes from audit_log
       where organization_id = ${orgId} and entity_type = 'integration_connection'
@@ -1226,12 +1378,12 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => 
   it("13.2 andre kjøring: ingen ny rad, raden og settings er uendret", async () => {
     await runSampleSeed(env, TEST_NOW);
     const orgId = await sampleOrgId();
-    const connectionsBefore = await aiConnections(orgId);
-    const settingsBefore = await settingsOf(orgId);
+    const connectionsBefore = await devAiConnections(orgId);
+    const settingsBefore = await devSettingsOf(orgId);
     const [orgBefore] = await organizationsNamed(SAMPLE_ORG);
     await runSampleSeed(env, TEST_NOW);
-    expect(await aiConnections(orgId)).toEqual(connectionsBefore);
-    expect(await settingsOf(orgId)).toEqual(settingsBefore);
+    expect(await devAiConnections(orgId)).toEqual(connectionsBefore);
+    expect(await devSettingsOf(orgId)).toEqual(settingsBefore);
     const [orgAfter] = await organizationsNamed(SAMPLE_ORG);
     expect(orgAfter!.updated_at).toBe(orgBefore!.updated_at);
   });
@@ -1243,7 +1395,7 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => 
       set settings = settings || ${JSON.stringify({ [AI_ENABLED_SETTING_KEY]: false })}::jsonb
       where id = ${orgId}`);
     await runSampleSeed(env, TEST_NOW);
-    expect((await settingsOf(orgId))[AI_ENABLED_SETTING_KEY]).toBe(false);
+    expect((await devSettingsOf(orgId))[AI_ENABLED_SETTING_KEY]).toBe(false);
   });
 
   it.each([
@@ -1254,15 +1406,15 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => 
   ] as const)(
     "13.4–13.5 rad %s på porten ai: ingen ny rad, og raden er urørt",
     async (_, extra) => {
-      const orgId = await preparedSampleOrg();
+      const orgId = await devPreparedSampleOrg();
       const existing = await createIntegrationConnection(orgId, {
         port: "ai",
         provider: "fake",
         ...extra,
       });
-      const before = await aiConnections(orgId);
+      const before = await devAiConnections(orgId);
       await runSampleSeed(env, TEST_NOW);
-      const after = await aiConnections(orgId);
+      const after = await devAiConnections(orgId);
       expect(after).toEqual(before);
       expect(after.map((row) => row.id)).toEqual([existing.id]);
     },
@@ -1274,15 +1426,15 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => 
       "access.inspectors_edit_all": false,
       "test.oppdiktet_nokkel": { verdi: 7 },
     };
-    const orgId = await preparedSampleOrg(others);
+    const orgId = await devPreparedSampleOrg(others);
     await runSampleSeed(env, TEST_NOW);
-    expect(await settingsOf(orgId)).toEqual({ ...others, [AI_ENABLED_SETTING_KEY]: true });
+    expect(await devSettingsOf(orgId)).toEqual({ ...others, [AI_ENABLED_SETTING_KEY]: true });
   });
 
   it("13.6 en ugyldig verdi i ai.enabled (tekst) står urørt", async () => {
-    const orgId = await preparedSampleOrg({ sampleData: true, [AI_ENABLED_SETTING_KEY]: "ja" });
+    const orgId = await devPreparedSampleOrg({ sampleData: true, [AI_ENABLED_SETTING_KEY]: "ja" });
     await runSampleSeed(env, TEST_NOW);
-    expect((await settingsOf(orgId))[AI_ENABLED_SETTING_KEY]).toBe("ja");
+    expect((await devSettingsOf(orgId))[AI_ENABLED_SETTING_KEY]).toBe("ja");
   });
 
   it("13.7 Byggcon og en organisasjon uten sampleData får verken ai.enabled eller tilkobling", async () => {
@@ -1291,8 +1443,8 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => 
     await runSeed(env);
     await runSampleSeed(env, TEST_NOW);
     for (const orgId of [await byggconId(), other.id]) {
-      expect(await settingsOf(orgId)).not.toHaveProperty(AI_ENABLED_SETTING_KEY);
-      expect(await aiConnections(orgId)).toEqual([]);
+      expect(await devSettingsOf(orgId)).not.toHaveProperty(AI_ENABLED_SETTING_KEY);
+      expect(await devAiConnections(orgId)).toEqual([]);
     }
     expect(
       await count(sql`select count(*)::int as n from integration_connections where port = 'ai'`),
@@ -1303,7 +1455,7 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => 
     await runSampleSeed(env, TEST_NOW);
     const orgId = await sampleOrgId();
     const grant = await requireOrganizationAccess(await inspectorActor(), orgId, "report.edit");
-    const result = await requestSuggestion(grant, {
+    const result = await requestSuggestionService(grant, {
       requestId: crypto.randomUUID(),
       feature: "language_polish",
       assignmentId: null,
@@ -1351,9 +1503,9 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => 
           inspectorEmployeeId: "",
           now: TEST_NOW,
         });
-        return aiConnections(grant.organizationId);
+        return devAiConnections(grant.organizationId);
       },
-      idOf: (row: AiConnectionRow) => row.id,
+      idOf: (row: DevAiConnectionRow) => row.id,
     });
   });
 
@@ -1367,7 +1519,7 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => 
       provider: "fake",
       status: "disabled",
     });
-    const before = await aiConnections(orgA.id);
+    const before = await devAiConnections(orgA.id);
     const result = await ensureSampleAi({
       actor,
       organizationId: orgB.id,
@@ -1376,9 +1528,9 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => 
       now: TEST_NOW,
     });
     expect(result).toEqual({ setting: "created", connection: "created" });
-    expect(await aiConnections(orgA.id)).toEqual(before);
+    expect(await devAiConnections(orgA.id)).toEqual(before);
     expect(before.map((row) => row.id)).toEqual([other.id]);
-    expect(await settingsOf(orgA.id)).not.toHaveProperty(AI_ENABLED_SETTING_KEY);
-    expect(await aiConnections(orgB.id)).toHaveLength(1);
+    expect(await devSettingsOf(orgA.id)).not.toHaveProperty(AI_ENABLED_SETTING_KEY);
+    expect(await devAiConnections(orgB.id)).toHaveLength(1);
   });
 });
