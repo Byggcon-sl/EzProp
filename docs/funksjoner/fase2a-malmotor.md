@@ -5,7 +5,7 @@
 - **Branch:** `fase2a-malmotor` (bygger på `main`)
 - **Status:** klar til bygging, oppdatert etter forhåndsvurdering runde 1 (forenkler og test-leder, 06.11.2026)
 - **Dato:** 06.11.2026
-- **Støtter hovedmål:** KI først og reklamasjoner (hovedsaken): kontrollpunkter, utfall og regler blir data med faste koder. Da kan regelmotoren foreslå TG og tekster, KI kan senere koble fraser, reklamasjoner og statistikk til samme punkt over mange år, og alle rapporter bygger på samme godkjente mal. Det gir færre glemte punkter og færre reklamasjoner. Tid: dette er grunnmuren for regneark-importen, «Prøv malen» og rapportskjermen, som er der tiden spares.
+- **Støtter hovedmål:** Best for de ansatte og færre reklamasjoner: alle rapporter bygger på samme godkjente mal, og ingen kan endre systemmalen ved et uhell. KI i bunnen: kontrollpunkter, utfall og regler blir data med faste koder, så regelmotoren og KI kan foreslå tekster og tiltak per punkt (KI setter aldri TG), og reklamasjoner og statistikk forblir koblet til samme punkt over mange år. Dette er grunnmuren for regneark-importen, «Prøv malen» og rapportskjermen. (Mållinjen oppdatert etter nytt hovedmål, Ståle 10.11.2026.)
 
 ## Problem
 Alle de neste punktene i fase 2a (regneark inn og ut, kontroll av malen, «Prøv malen», regelmotoren, systemmalen og selve rapporten) trenger et sted å lagre malen. I dag finnes ingen maltabeller. Uten en fast struktur med faste koder vil fraser, regler og reklamasjoner miste koblingen når malen endres, og hvem som helst kunne endre systemmalen.
