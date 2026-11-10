@@ -13,6 +13,7 @@ Dokumentet beskriver regelen. Selve oppryddingen er ikke bygd (se «Når det byg
 - Tabellene fra fase 1: `trial_forms`, `trial_answers` og `trial_photos`.
 - Oppdiktede brukere, ansatte og filer som er laget for testing.
 - Prøverapporter og prøveoppdrag som bare var for testing.
+- KI-forslag i prøveorganisasjonen (`ai_usage_log`) og tilkoblingen til den falske leverandøren (`integration_connections`, port `ai`, leverandør `fake`). `pnpm db:seed:testoppdrag` slår på KI bare i prøveorganisasjonen (A160). Radene myk-slettes som andre rader; `ai_usage_log` har `retain_until` 10 år og slettes aldri permanent.
 
 ## 2. Hvordan prøvedata merkes (A57)
 

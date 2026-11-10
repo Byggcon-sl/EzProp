@@ -10,6 +10,7 @@ import {
   updateAssignmentNote,
   type AssignmentStatus,
 } from "@/core/assignments";
+import { AI_ENABLED_SETTING_KEY, requestSuggestion } from "@/core/ai";
 import { createOrder as createOrderService } from "@/core/orders";
 import { findEmployeeGrant } from "@/core/organization";
 import { db } from "@/db/client";
@@ -18,13 +19,15 @@ import {
   TEST_NOW,
   activeAdminCount,
   createEmployee,
+  createIntegrationConnection,
   createOrder,
+  createOrganization,
   createUser,
   resetDatabase,
 } from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { runSeed } from "./run";
-import { findSampleOrders, runSampleSeed } from "./sample-assignments";
+import { ensureSampleAi, findSampleOrders, runSampleSeed } from "./sample-assignments";
 import { SAMPLE_ASSIGNMENTS, SAMPLE_INSPECTOR } from "./sample-assignments.data";
 
 /*
@@ -104,6 +107,7 @@ const ORG_TABLES = [
   "events",
   "audit_log",
   "files",
+  "integration_connections",
 ] as const;
 /** Tabellene over med `updated_at` og `deleted_at` (alle unntatt `number_sequences`). */
 const ORG_TABLES_WITH_TIMESTAMPS = ORG_TABLES.filter((table) => table !== "number_sequences");
@@ -1150,5 +1154,231 @@ describe("seed-steget for testoppdragene: loggen (2.9)", () => {
         `andre kjøring: ${ref} er ikke laget på nytt`,
       ).toBe(false);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// KI med den falske leverandøren i prøveorganisasjonen
+// (docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 13, A160)
+// ---------------------------------------------------------------------------------------------
+
+type AiConnectionRow = {
+  id: string;
+  provider: string;
+  status: string;
+  row_version: number;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+async function aiConnections(organizationId: string): Promise<AiConnectionRow[]> {
+  return rows<AiConnectionRow>(sql`
+    select id::text as id, provider, status, row_version, updated_at::text as updated_at,
+      deleted_at::text as deleted_at
+    from integration_connections where organization_id = ${organizationId} and port = 'ai'
+    order by created_at, id`);
+}
+
+async function settingsOf(organizationId: string): Promise<Loose> {
+  const [row] = await rows<{ settings: Loose }>(
+    sql`select settings from organizations where id = ${organizationId}`,
+  );
+  return row!.settings;
+}
+
+/** Prøveorganisasjonen med admin, laget før steget, slik at testen kan legge inn rader først. */
+async function preparedSampleOrg(settings: Loose = { sampleData: true }): Promise<string> {
+  const [org] = await rows<{ id: string }>(sql`
+    insert into organizations (name, brand_name, settings)
+    values (${SAMPLE_ORG}, ${SAMPLE_ORG}, ${JSON.stringify(settings)}::jsonb)
+    returning id`);
+  await createEmployee(await adminActor(), org!.id, ["admin"]);
+  return org!.id;
+}
+
+describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => {
+  beforeEach(async () => {
+    await runSeed(env);
+  });
+
+  it("13.1 første kjøring: ai.enabled = true og én aktiv tilkobling med fake", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    expect((await settingsOf(orgId))[AI_ENABLED_SETTING_KEY]).toBe(true);
+    const connections = await aiConnections(orgId);
+    expect(connections).toHaveLength(1);
+    expect(connections[0]).toMatchObject({ provider: "fake", status: "active", deleted_at: null });
+  });
+
+  it("13.1 tilkoblingen er laget med tjenesten: linje i revisjonsloggen uten verdier", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    const [connection] = await aiConnections(orgId);
+    const audit = await rows<{ action: string; changes: Loose }>(sql`
+      select action, changes from audit_log
+      where organization_id = ${orgId} and entity_type = 'integration_connection'
+        and entity_id = ${connection!.id}`);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!.action).toBe("create");
+    expect(audit[0]!.changes).toMatchObject({ port: "ai", provider: "fake", secretRef: null });
+  });
+
+  it("13.2 andre kjøring: ingen ny rad, raden og settings er uendret", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    const connectionsBefore = await aiConnections(orgId);
+    const settingsBefore = await settingsOf(orgId);
+    const [orgBefore] = await organizationsNamed(SAMPLE_ORG);
+    await runSampleSeed(env, TEST_NOW);
+    expect(await aiConnections(orgId)).toEqual(connectionsBefore);
+    expect(await settingsOf(orgId)).toEqual(settingsBefore);
+    const [orgAfter] = await organizationsNamed(SAMPLE_ORG);
+    expect(orgAfter!.updated_at).toBe(orgBefore!.updated_at);
+  });
+
+  it("13.3 admin har satt ai.enabled = false: seed slår det ikke på igjen", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    await db.execute(sql`update organizations
+      set settings = settings || ${JSON.stringify({ [AI_ENABLED_SETTING_KEY]: false })}::jsonb
+      where id = ${orgId}`);
+    await runSampleSeed(env, TEST_NOW);
+    expect((await settingsOf(orgId))[AI_ENABLED_SETTING_KEY]).toBe(false);
+  });
+
+  it.each([
+    ["deaktivert", { status: "disabled" }],
+    ["med feil", { status: "error" }],
+    ["mykt slettet", { deletedAt: TEST_NOW, deletedBy: "test" }],
+    ["med annen leverandørkode", { provider: "other_vendor" }],
+  ] as const)(
+    "13.4–13.5 rad %s på porten ai: ingen ny rad, og raden er urørt",
+    async (_, extra) => {
+      const orgId = await preparedSampleOrg();
+      const existing = await createIntegrationConnection(orgId, {
+        port: "ai",
+        provider: "fake",
+        ...extra,
+      });
+      const before = await aiConnections(orgId);
+      await runSampleSeed(env, TEST_NOW);
+      const after = await aiConnections(orgId);
+      expect(after).toEqual(before);
+      expect(after.map((row) => row.id)).toEqual([existing.id]);
+    },
+  );
+
+  it("13.6 andre nøkler i settings er uendret", async () => {
+    const others = {
+      sampleData: true,
+      "access.inspectors_edit_all": false,
+      "test.oppdiktet_nokkel": { verdi: 7 },
+    };
+    const orgId = await preparedSampleOrg(others);
+    await runSampleSeed(env, TEST_NOW);
+    expect(await settingsOf(orgId)).toEqual({ ...others, [AI_ENABLED_SETTING_KEY]: true });
+  });
+
+  it("13.6 en ugyldig verdi i ai.enabled (tekst) står urørt", async () => {
+    const orgId = await preparedSampleOrg({ sampleData: true, [AI_ENABLED_SETTING_KEY]: "ja" });
+    await runSampleSeed(env, TEST_NOW);
+    expect((await settingsOf(orgId))[AI_ENABLED_SETTING_KEY]).toBe("ja");
+  });
+
+  it("13.7 Byggcon og en organisasjon uten sampleData får verken ai.enabled eller tilkobling", async () => {
+    const other = await createOrganization("Annen organisasjon");
+    await runSampleSeed(env, TEST_NOW);
+    await runSeed(env);
+    await runSampleSeed(env, TEST_NOW);
+    for (const orgId of [await byggconId(), other.id]) {
+      expect(await settingsOf(orgId)).not.toHaveProperty(AI_ENABLED_SETTING_KEY);
+      expect(await aiConnections(orgId)).toEqual([]);
+    }
+    expect(
+      await count(sql`select count(*)::int as n from integration_connections where port = 'ai'`),
+    ).toBe(1);
+  });
+
+  it("13.8 etter seed gir requestSuggestion et forslag for prøvetakstmannen", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    const grant = await requireOrganizationAccess(await inspectorActor(), orgId, "report.edit");
+    const result = await requestSuggestion(grant, {
+      requestId: crypto.randomUUID(),
+      feature: "language_polish",
+      assignmentId: null,
+      reportId: null,
+      target: { type: "answer", id: crypto.randomUUID(), fieldKey: "text" },
+      fields: { text: "taket har noen sprekker i takstein ved mønet" },
+    });
+    expect(result.kind).toBe("suggestion");
+    expect(
+      await count(sql`select count(*)::int as n from ai_usage_log
+        where organization_id = ${orgId} and provider = 'fake' and model = 'fake-v1'`),
+    ).toBe(1);
+  });
+
+  it("13.9 loggen sier om KI ble slått på, uten e-post og navn", async () => {
+    const first = await runAndLog();
+    const second = await runAndLog();
+    expect(first.some((line) => /KI på/.test(line) && /\blaget\b/.test(line))).toBe(true);
+    const aiLine = second.find((line) => /KI på/.test(line));
+    expect(aiLine).toMatch(/finnes fra før.*finnes fra før/);
+    for (const line of [...first, ...second]) expect(line).not.toContain("@");
+  });
+
+  it("13.10 tenant-isolasjon: ensureSampleAi leser og skriver bare i egen organisasjon", async () => {
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        // A har en deaktivert rad, B en aktiv: ingen av dem får ny rad eller endring
+        const a = await createIntegrationConnection(grantA.organizationId, {
+          port: "ai",
+          provider: "fake",
+          status: "disabled",
+        });
+        const b = await createIntegrationConnection(grantB.organizationId, {
+          port: "ai",
+          provider: "fake",
+        });
+        return { a: [a.id], b: [b.id] };
+      },
+      query: async (actor, organizationId) => {
+        const grant = await requireOrganizationAccess(actor, organizationId, "organization.manage");
+        await ensureSampleAi({
+          actor,
+          organizationId: grant.organizationId,
+          officeId: "",
+          inspectorEmployeeId: "",
+          now: TEST_NOW,
+        });
+        return aiConnections(grant.organizationId);
+      },
+      idOf: (row: AiConnectionRow) => row.id,
+    });
+  });
+
+  it("13.10 en rad på porten ai i en annen organisasjon hindrer ikke at egen organisasjon får fake", async () => {
+    const actor = await createUser({ name: "Admin Test" });
+    const orgA = await createOrganization("Organisasjon A");
+    const orgB = await createOrganization("Organisasjon B");
+    await createEmployee(actor, orgB.id, ["admin"]);
+    const other = await createIntegrationConnection(orgA.id, {
+      port: "ai",
+      provider: "fake",
+      status: "disabled",
+    });
+    const before = await aiConnections(orgA.id);
+    const result = await ensureSampleAi({
+      actor,
+      organizationId: orgB.id,
+      officeId: "",
+      inspectorEmployeeId: "",
+      now: TEST_NOW,
+    });
+    expect(result).toEqual({ setting: "created", connection: "created" });
+    expect(await aiConnections(orgA.id)).toEqual(before);
+    expect(before.map((row) => row.id)).toEqual([other.id]);
+    expect(await settingsOf(orgA.id)).not.toHaveProperty(AI_ENABLED_SETTING_KEY);
+    expect(await aiConnections(orgB.id)).toHaveLength(1);
   });
 });

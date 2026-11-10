@@ -67,7 +67,7 @@ const emptySettingsSchema = z.object({}).strict();
  */
 export function settingsSchemaFor(provider: "microsoft365"): typeof microsoft365SettingsSchema;
 export function settingsSchemaFor(
-  provider: "server_log" | "dev_mailbox",
+  provider: "server_log" | "dev_mailbox" | "fake",
 ): typeof emptySettingsSchema;
 export function settingsSchemaFor(provider: string): z.ZodType<Record<string, unknown>> | null;
 export function settingsSchemaFor(provider: string): z.ZodType<Record<string, unknown>> | null {
@@ -76,6 +76,7 @@ export function settingsSchemaFor(provider: string): z.ZodType<Record<string, un
       return microsoft365SettingsSchema;
     case "dev_mailbox":
     case "server_log":
+    case "fake":
       return emptySettingsSchema;
     default:
       return null;

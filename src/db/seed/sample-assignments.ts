@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, isNull, like } from "drizzle-orm";
+import { and, asc, eq, isNull, like, sql } from "drizzle-orm";
 import type { Actor } from "@/core/access";
+import { AI_ENABLED_SETTING_KEY } from "@/core/ai";
 import { addParty, changeAssignmentStatus, setTeamMember } from "@/core/assignments";
 import { saveBuilding, saveFloor, saveFloorArea, saveRoom } from "@/core/buildings";
+import { createConnection } from "@/core/integrations";
 import { convertOrderToAssignment, createOrder } from "@/core/orders";
 import { saveAssignmentProperty, saveCommonAreas } from "@/core/properties";
 import { db } from "@/db/client";
@@ -14,6 +16,7 @@ import {
   companies,
   employeeRoleAssignments,
   employees,
+  integrationConnections,
   offices,
   orders,
   organizations,
@@ -44,6 +47,8 @@ import {
  *   vurderes samlet. Andre kjøring kaller ingen tjeneste som skriver.
  * - Et testoppdrag med avvist ordre, slettet ordre eller kansellert oppdrag hoppes over.
  * - Steget sletter aldri noe. Loggen har bare `externalRef` og resultatet, aldri e-post eller navn.
+ * - KI med den falske leverandøren slås på bare i prøveorganisasjonen (`ensureSampleAi`, A160).
+ *   `pnpm db:seed` (Byggcon) rører ikke KI.
  */
 
 export class SampleOrganizationError extends Error {
@@ -63,8 +68,16 @@ export type SampleAssignmentSummary = {
   result: SampleResult;
 };
 
+export type SampleAiSummary = {
+  /** `ai.enabled` satt nå, eller fantes fra før (også `false`). */
+  setting: SamplePartResult;
+  /** Tilkoblingen `fake` laget nå, eller fantes det fra før en rad på porten `ai`. */
+  connection: SamplePartResult;
+};
+
 export type SampleSeedSummary = {
   organization: SamplePartResult;
+  ai: SampleAiSummary;
   assignments: SampleAssignmentSummary[];
 };
 
@@ -308,6 +321,57 @@ export async function prepareSampleSeed(
 }
 
 // ---------------------------------------------------------------------------------------------
+// KI i prøveorganisasjonen (docs/funksjoner/fase2a-ki-modul-logg.md Omfang 8, A160)
+// ---------------------------------------------------------------------------------------------
+
+/** Porten for KI. Strengen er bare lov her og i `src/core/ai` (statisk test der). */
+const AI_PORT = "ai";
+
+/**
+ * Slår på KI med den falske leverandøren i prøveorganisasjonen, slik at de ansatte kan prøve
+ * KI-forslag i testmiljøet uten kostnad og uten at data sendes ut. Kalles bare etter
+ * `prepareSampleSeed`, som har sjekket at organisasjonen har `settings.sampleData = true`.
+ *
+ * - `ai.enabled = true` settes bare når nøkkelen mangler. Én spørring slår nøkkelen sammen med de
+ *   andre (`settings || …`), så ingen annen nøkkel endres. Har admin satt `false`, står det.
+ * - Tilkoblingen lages med `createConnection` (validering og revisjonslogg) bare når
+ *   organisasjonen ikke har noen rad på porten, heller ikke deaktivert, med feil, med annen
+ *   leverandør eller mykt slettet. En rad som finnes, røres ikke.
+ */
+export async function ensureSampleAi(context: SampleSeedContext): Promise<SampleAiSummary> {
+  const { organizationId } = context;
+  const updated = await db
+    .update(organizations)
+    .set({
+      settings: sql`${organizations.settings} || ${JSON.stringify({ [AI_ENABLED_SETTING_KEY]: true })}::jsonb`,
+      updatedAt: context.now,
+    })
+    .where(
+      and(
+        eq(organizations.id, organizationId),
+        sql`${organizations.settings} -> ${AI_ENABLED_SETTING_KEY} is null`,
+      ),
+    )
+    .returning({ id: organizations.id });
+  const setting: SamplePartResult = updated.length > 0 ? "created" : "existing";
+
+  const [existing] = await db
+    .select({ id: integrationConnections.id })
+    .from(integrationConnections)
+    .where(
+      and(
+        eq(integrationConnections.organizationId, organizationId),
+        eq(integrationConnections.port, AI_PORT),
+      ),
+    )
+    .limit(1);
+  if (existing) return { setting, connection: "existing" };
+
+  await createConnection(context.actor, organizationId, { port: AI_PORT, provider: "fake" });
+  return { setting, connection: "created" };
+}
+
+// ---------------------------------------------------------------------------------------------
 // Delene av ett testoppdrag, i fast rekkefølge. Hver del lager bare det som mangler.
 // ---------------------------------------------------------------------------------------------
 
@@ -548,7 +612,12 @@ export async function runSampleSeed(
   const { context, organization } = await prepareSampleSeed(env, now);
   console.log(`Prøveorganisasjon: ${RESULT_LABELS[organization]}`);
 
-  const summary: SampleSeedSummary = { organization, assignments: [] };
+  const ai = await ensureSampleAi(context);
+  console.log(
+    `KI på (falsk leverandør): ${RESULT_LABELS[ai.setting]}, tilkobling: ${RESULT_LABELS[ai.connection]}`,
+  );
+
+  const summary: SampleSeedSummary = { organization, ai, assignments: [] };
   for (const sample of SAMPLE_ASSIGNMENTS) {
     const result = await ensureSampleAssignment(context, sample);
     summary.assignments.push({ externalRef: sample.externalRef, result });
