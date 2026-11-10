@@ -1,6 +1,6 @@
 # 06 – Arkitektur
 
-Sist oppdatert: 02.11.2026. Begrunnelse for teknologivalg: [ADR 0001](adr/0001-teknologivalg.md). Testmiljø i Azure: [ADR 0002](adr/0002-testmiljo-azure.md).
+Sist oppdatert: 10.11.2026. Begrunnelse for teknologivalg: [ADR 0001](adr/0001-teknologivalg.md). Testmiljø i Azure: [ADR 0002](adr/0002-testmiljo-azure.md).
 
 ## Teknologi
 
@@ -35,6 +35,7 @@ src/
   core/                   # Kjernen
     access/               # Rettigheter og tilgangssjekk (eneste sted)
     auth/                 # Better Auth, sesjon
+    ai/                   # All KI: forslag, vask, leverandører, evalueringssett (ADR 0006, bygges i fase 2a-1)
     audit/                # Revisjonslogg
     email/
     files/                # Filtjenesten: porten FileStorage, adaptere, tabellen files
@@ -62,7 +63,7 @@ src/
 8. **Tilkoblinger bak faste porter** (regnskap, e-post, meglersystem, eiendomsdata, KI, bildelagring). Kjernen snakker aldri direkte med en leverandør. Laget ligger i `src/core/integrations`: portene og leverandørene som faste koder, tabellen `integration_connections` og tjenesten for tilkoblinger (bare admin). `readSecret` i `src/core/integrations/secrets.ts` er eneste vei til hemmeligheter: fra miljøvariabler lokalt; i Azure fylles de fra nøkkelboksen ved oppstart (ADR 0005), og en referanse som ikke ble hentet regnes som at hemmeligheten mangler. Adapterne ligger i kjernen (`src/core/email`, `src/core/files`); modulene kaller aldri en leverandør direkte. Leverandør for e-post velges i `resolveEmailSender`: utviklingspostkassen først, så en tilkobling i tabellen for organisasjonen, ellers systemvalget fra miljøet (Microsoft 365 eller serverloggen). Filtjenesten beholder `FILE_STORAGE_DRIVER` (A40) til en egen liten oppgave flytter valget til laget.
 9. **Navn og profil ett sted:** `src/shared/config/brand.ts`.
 10. **Server først.** Klientkomponenter bare der det trengs. Befaringen på iPad er unntaket (fase 1 og 2b).
-11. **KI i bunnen** (Ståle 10.11.2026). All KI går gjennom én modul i kjernen, `src/core/ai`, bak KI-porten i tilkoblingslaget (regel 8). Modulene kaller bare denne. KI lager **forslag** med kilde og status (foreslått, godtatt, endret, avvist), aldri ferdig innhold, og setter aldri TG. Hver bruk logges i `ai_usage_log` med funksjon, kostnad og hva den ansatte gjorde med forslaget. Navn, e-post, telefon, adresse og matrikkel fjernes før noe sendes. En falsk leverandør brukes i utvikling og test; ekte leverandør slås på av Ståle. Hver KI-funksjon har et evalueringssett. Detaljene avgjøres i ADR-en «KI i bunnen» (fase 2a-1).
+11. **KI i bunnen** (Ståle 10.11.2026, [ADR 0006](adr/0006-ki-i-bunnen.md)). All KI går gjennom én modul i kjernen, `src/core/ai`, bak KI-porten i tilkoblingslaget (regel 8). Bare `src/core/ai` kan bruke portene `ai` og `speech_to_text`, og modulene kaller bare de to funksjonene der (be om forslag, registrere beslutning). Ledetekstene ligger versjonert i `src/core/ai`. KI lager **forslag**, aldri ferdig innhold: én rad per kall i `ai_usage_log` med kilde (funksjon, leverandør, modell, ledetekstversjon, feltkoder), utfall (`ok`, `no_match`, `error`), status (`suggested` foreslått, `accepted` godtatt, `edited` endret, `rejected` avvist) og kostnad. Forslaget ligger aldri i verdien før den ansatte har godtatt det, og angre setter det tilbake til foreslått. KI setter aldri TG, publiserer aldri og sender aldri noe. Hver funksjon har en tillatt-liste over felt; navn, e-post, telefon, adresse og matrikkel sendes aldri, og fritekst vaskes. En falsk leverandør (`fake`) brukes i utvikling, test og testmiljøet; ekte leverandør slås på av Ståle og velges aldri fra miljøvariabler. Hver KI-funksjon har et evalueringssett som må bestås før den slås på. KI av/på er `ai.enabled` i `organizations.settings`.
 
 ## Filtjenesten (fase 0b)
 
@@ -82,6 +83,6 @@ Alle filer (bilder, PDF-er, dokumenter, senere logo og signatur) lagres og hente
 - Data i EU/EØS. Byggcon er behandlingsansvarlig. Databehandleravtaler med alle leverandører, også KI (EU/EØS, ingen trening på våre data).
 - Ingen kundeopplysninger i logg, repo eller testdata. Loggeren vasker e-post, telefon og nøkler.
 - Revisjonslogg på alle endringer. Myk sletting. Oppbevaring 10 år.
-- Adresse, gårds- og bruksnummer, seksjonsnummer, andels- eller aksjenummer og forretningsfører på eiendommen peker på én bestemt bolig og er personopplysninger. De sendes ikke til KI uten at det er vurdert i personvernerklæringen og har databehandleravtale.
+- Adresse, gårds- og bruksnummer, seksjonsnummer, andels- eller aksjenummer og forretningsfører på eiendommen peker på én bestemt bolig og er personopplysninger. De sendes **aldri** til KI, og heller ikke navn, e-post, telefon, festenummer, borettslag eller sameie og fødselsnummer (regel 14 i `CLAUDE.md`, ADR 0006 del 6). Fritekst vaskes før den sendes, men har restrisiko; databehandleravtale kreves derfor uansett.
 - Tidsmåling bare samlet til de ansatte har sagt ja (arbeidsmiljøloven kap. 9). Ståle drøfter med de ansatte.
 - Sikkerhetshoder på alle svar (`src/shared/config/security-headers.ts`).
