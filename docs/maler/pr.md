@@ -6,7 +6,7 @@
 (2–5 setninger uten faguttrykk fra programmering)
 
 ## Hvilket mål støtter dette
-Tid: … / Reklamasjoner: … / KI først: …
+De ansatte: … / KI i bunnen: … / Reklamasjoner: …
 
 ## Slik ser og tester du det
 (konkrete steg, f.eks. «åpne … på iPaden, trykk …»)

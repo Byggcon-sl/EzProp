@@ -2,6 +2,13 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger.
 
+**Endret 10.11.2026 (Ståle i chat, les dette først):**
+- **Nytt hovedmål:** best mulig system for de ansatte, KI først, og KI i bunnen. 50 % mindre tid er ikke lenger hovedmål. Se `CLAUDE.md`.
+- **Planen er lagt om og ryddet** (`docs/07-utviklingsplan.md`). Gjeldende fase er fortsatt 2a, men rekkefølgen er ny: **2a-1 KI-grunnmuren → 2a-2 Smal vei (ett våtrom fra kontrollpunkt til PDF) → 2a-3 Bredden.** Neste oppgave etter malmotoren (PR #119) er første punkt i 2a-1: «ADR: KI i bunnen». Levert arbeid står i `docs/plan/levert.md`.
+- **Testlaget (løkke G)** prøver det som er merget. Alvorlige, bekreftede feil i `docs/agenter/testlag/funn/` rettes før nytt planpunkt. Se `docs/agenter/testlag/LES-MEG.md`.
+- **Rutinene sto stille fra 07.11.2026** (slått av automatisk, ingen tilgang til repoet). PR #119 (malmotoren) ble derfor liggende, og har konflikt med main i planen: behold avkrysningen fra PR-en og teksten fra main.
+- **Rydd denne filen** (oppgave for prosjektlederen): den er over 120 000 tegn, med doble «Sist oppdatert»-linjer. Behold det som gjelder nå, og flytt historikken til `docs/agenter/arkiv/`.
+
 **Autonom modus: på** (Ståle 04.11.2026, til han sier fra: «Jeg synes det fungerte så bra at du kan kjøre videre på autonom utvikling igjen»). Ingen varsler, ingen spørsmål, ingen «Venter på Ståle». Agentene avgjør selv ut fra researchen og fører beslutningene i `docs/09-apne-sporsmal.md` («Avgjort av agentene mens Ståle var borte», nye numre fra A51). Det bare Ståle kan gjøre, samles under «Trenger Ståle når han er tilbake». Se «Autonom modus» i `CLAUDE.md`.
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
@@ -145,6 +152,8 @@ Ingen grense for hvor mange PR-er som kan vente på Ståle (Ståle 28.10.2026). 
 
 ## Trenger Ståle når han er tilbake
 
+**Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S1–S8), oppdatert 10.11.2026.** Oppskriftene står under.
+
 - **Ståles prøve på Mac 04.11.2026:** synk uten nett virket (wifi av, data synkronisert med en gang da nettet kom tilbake). Ført inn i `docs/funksjoner/fase1-sammenligning.md`. Prøve A og B på ekte iPad gjenstår.
 
 I autonom modus samles alt her. Ingen varsler.
@@ -163,6 +172,12 @@ I autonom modus samles alt her. Ingen varsler.
 - **Slå av Stedstjenester for Safari på de to iPadene før prøve D** (Innstillinger → Personvern og sikkerhet → Stedstjenester → Safari-nettsteder → Aldri). Så følg `docs/funksjoner/fase1-prove-d-bilder-resultat.md` (D1–D5). Se A7 i `docs/09-apne-sporsmal.md`.
 - **Rydd testbildene fra prøve D på testserveren etterpå** (myk sletting eller tømming av `TRIAL_UPLOAD_DIR` i testmiljøet). Det står også nederst i resultatmalen.
 - Spørsmålene i `docs/09-apne-sporsmal.md`: nr. 6, nr. 8 del (b) (GPS i originalbildene i 10 år, fase 2b; del (a) er avgjort som A7), nr. 9, nr. 10 og nr. 11 (avgjort av agentene som A13 og A14: selvdrevet, ingen skytjeneste; til gjennomgang), og nr. 12 (slå på synktjenestene i testmiljøet, kostnad).
+
+## Oppgaver fra testlaget
+
+Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Her står bare antallet. Testlaget har ikke kjørt ennå (satt opp 10.11.2026).
+
+- Åpne alvorlige feil: 0
 
 ## Oppgaver fra nattløkken
 
