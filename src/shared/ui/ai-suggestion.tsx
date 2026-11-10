@@ -110,7 +110,8 @@ export function suggestionView(state: AiSuggestionState): AiSuggestionView {
     };
   }
 
-  if (state.pending === "suggestion") {
+  // Uten nett vises aldri «KI jobber …» (ingenting skal henge)
+  if (state.pending === "suggestion" && state.online) {
     return {
       ...base,
       box: { kind: "message", tone: "working", text: AI_SUGGESTION_TEXTS.working },
@@ -278,7 +279,10 @@ export function AiSuggestion(props: AiSuggestionProps) {
         <p role="status" aria-live="polite" className="sr-only">
           {announcement}
         </p>
-        {view.buttons.use || view.buttons.keep || view.buttons.newSuggestion || view.buttons.undo ? (
+        {view.buttons.use ||
+        view.buttons.keep ||
+        view.buttons.newSuggestion ||
+        view.buttons.undo ? (
           <div
             className="mt-4 flex flex-row-reverse flex-wrap justify-start gap-2 border-t border-slate-200 pt-4 md:gap-3"
             data-testid="ai-suggestion-buttons"

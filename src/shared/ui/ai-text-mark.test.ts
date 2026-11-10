@@ -16,13 +16,16 @@ function render(props: { aiUsageId?: string | null; status: string | null }): st
 }
 
 describe("AiTextMark", () => {
-  it.each(["accepted", "edited"])("10.15 %s med aiUsageId gir «Tekst fra KI, godkjent»", (status) => {
-    const html = render({ aiUsageId: USAGE_ID, status });
-    expect(html).toContain("Tekst fra KI, godkjent");
-    expect(AI_TEXT_MARK_LABEL).toBe("Tekst fra KI, godkjent");
-    expect(html).toContain('aria-hidden="true"');
-    expect(html).toContain("bg-ai-50");
-  });
+  it.each(["accepted", "edited"])(
+    "10.15 %s med aiUsageId gir «Tekst fra KI, godkjent»",
+    (status) => {
+      const html = render({ aiUsageId: USAGE_ID, status });
+      expect(html).toContain("Tekst fra KI, godkjent");
+      expect(AI_TEXT_MARK_LABEL).toBe("Tekst fra KI, godkjent");
+      expect(html).toContain('aria-hidden="true"');
+      expect(html).toContain("bg-ai-50");
+    },
+  );
 
   it.each<[string, { aiUsageId?: string | null; status: string | null }]>([
     ["suggested", { aiUsageId: USAGE_ID, status: "suggested" }],
