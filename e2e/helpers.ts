@@ -59,22 +59,7 @@ export function indicator(page: Page): Locator {
   return page.getByTestId("sync-status-state");
 }
 
-/**
- * Testkroken `window.__offlineTrial` (bare med NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS=1).
- * `db` er den lokale databasen; `execute(sql, params)` som i PowerSync-SDK-en.
- */
-export interface OfflineTrialHook {
-  db: { execute(sql: string, params?: unknown[]): Promise<{ rows?: { _array?: unknown[] } }> };
-  deviceId: string;
-  organizationId?: string;
-  pendingOverride?: { changes: number; photos: number } | null;
-  simulateOrganizationChange?: (organizationId: string) => Promise<void> | void;
-}
-
-/**
- * Venter til testkroken og lageret er klare på siden. Venter på `store` (finnes for alle kandidater;
- * PowerSync-kroken har i tillegg `db`, så dagens tester går som før).
- */
+/** Venter til testkroken og lageret er klare på siden. */
 export async function waitForTrialHook(page: Page) {
   await page.waitForFunction(
     () =>
@@ -86,28 +71,8 @@ export async function waitForTrialHook(page: Page) {
   );
 }
 
-/** Kjører en spørring i den lokale databasen og gir radene tilbake. */
-export async function queryLocal<T = Record<string, unknown>>(
-  page: Page,
-  sql: string,
-  params: unknown[] = [],
-): Promise<T[]> {
-  await waitForTrialHook(page);
-  return page.evaluate(
-    async ([statement, args]) => {
-      const hook = (window as unknown as { __offlineTrial: OfflineTrialHook }).__offlineTrial;
-      const result = await hook.db.execute(statement, args);
-      return (result.rows?._array ?? []) as never;
-    },
-    [sql, params] as const,
-  );
-}
-
-/** Leser en verdi fra testkroken (`deviceId`, `organizationId`, `candidate`). */
-export async function hookValue(
-  page: Page,
-  key: "deviceId" | "organizationId" | "candidate",
-): Promise<string> {
+/** Leser en verdi fra testkroken (`deviceId` eller `organizationId`). */
+export async function hookValue(page: Page, key: "deviceId" | "organizationId"): Promise<string> {
   await waitForTrialHook(page);
   const value = await page.evaluate(
     (name) =>
@@ -116,45 +81,6 @@ export async function hookValue(
   );
   if (typeof value !== "string" || value === "") throw new Error(`Testkroken mangler ${key}`);
   return value;
-}
-
-/**
- * Skriver et svar rett i den lokale databasen, slik synk ville levert det fra en annen enhet.
- * Upsert på `(trial_form_id, field_key)`. PowerSync-tabellene er visninger, så det gjøres som
- * oppslag + UPDATE eller INSERT i stedet for ON CONFLICT.
- */
-export async function setAnswerViaHook(
-  page: Page,
-  formId: string,
-  fieldKey: string,
-  value: unknown,
-  deviceId: string,
-  textState: string | null = null,
-) {
-  await waitForTrialHook(page);
-  await page.evaluate(
-    async ({ formId, fieldKey, json, deviceId, textState }) => {
-      const hook = (window as unknown as { __offlineTrial: OfflineTrialHook }).__offlineTrial;
-      const now = new Date().toISOString();
-      const found = await hook.db.execute(
-        "SELECT id FROM trial_answers WHERE trial_form_id = ? AND field_key = ?",
-        [formId, fieldKey],
-      );
-      const existing = (found.rows?._array?.[0] as { id?: string } | undefined)?.id;
-      if (existing) {
-        await hook.db.execute(
-          "UPDATE trial_answers SET value = ?, text_state = ?, device_id = ?, updated_at = ? WHERE id = ?",
-          [json, textState, deviceId, now, existing],
-        );
-      } else {
-        await hook.db.execute(
-          "INSERT INTO trial_answers (id, trial_form_id, field_key, value, text_state, device_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-          [crypto.randomUUID(), formId, fieldKey, json, textState, deviceId, now, now],
-        );
-      }
-    },
-    { formId, fieldKey, json: JSON.stringify(value), deviceId, textState },
-  );
 }
 
 /**
@@ -308,23 +234,15 @@ export function viewFromServerLink(page: Page, fileName: string): Locator {
     .getByRole("link", { name: "Vis fra serveren" });
 }
 
-// --- Kandidat 2, ElectricSQL (docs/funksjoner/fase1-kandidat-electricsql-testplan.md avsnitt 6) ---
+// --- Testkroken for lageret (egenbygd synk, ADR 0004) ---
 
-export type TrialSyncCandidate = "powersync" | "electricsql" | "custom";
 export type TrialTable = "trial_forms" | "trial_answers" | "trial_photos";
-/**
- * ElectricSQL-lageret har i tillegg synkposisjonen (`shape_state`) og endringskøen som egne lagre;
- * egenbygd har `sync_state` (hentemarkøren) i stedet for `shape_state`.
- */
-export type HookTable = TrialTable | "shape_state" | "sync_state" | "outbox";
+/** Lageret har i tillegg hentemarkøren (`sync_state`) og endringskøen (`outbox`) som egne lagre. */
+export type HookTable = TrialTable | "sync_state" | "outbox";
 export type LocalRow = Record<string, unknown>;
 
-/**
- * Den delte testkroken `window.__offlineTrial` (`sync/test-hooks.ts`), lik for begge kandidater.
- * PowerSync har i tillegg `db` og `pendingOverride` (se `OfflineTrialHook`).
- */
-export interface ElectricTrialHook {
-  candidate: TrialSyncCandidate;
+/** Testkroken `window.__offlineTrial` (`sync/test-hooks.ts`, bare med NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS=1). */
+export interface TrialHook {
   store: {
     status(): Promise<{ online: boolean; pendingChanges: number; pendingPhotos: number }>;
   };
@@ -334,14 +252,6 @@ export interface ElectricTrialHook {
   readRows(table: HookTable, formId?: string): Promise<LocalRow[]>;
   simulateOrganizationChange(organizationId: string): Promise<void> | void;
   createTextState(text: string): string;
-  db?: unknown;
-}
-
-/** Velger kandidat før hver side lastes (`localStorage.trial_sync_candidate`). Kalles før `logIn`. */
-export async function useCandidate(context: BrowserContext, candidate: TrialSyncCandidate) {
-  await context.addInitScript((value) => {
-    window.localStorage.setItem("trial_sync_candidate", value);
-  }, candidate);
 }
 
 /** Leser radene i et lokalt lager via testkroken (`hook.readRows`). */
@@ -353,7 +263,7 @@ export async function readRowsViaHook(
   await waitForTrialHook(page);
   return page.evaluate(
     async ([name, id]) => {
-      const hook = (window as unknown as { __offlineTrial: ElectricTrialHook }).__offlineTrial;
+      const hook = (window as unknown as { __offlineTrial: TrialHook }).__offlineTrial;
       return hook.readRows(name, id ?? undefined);
     },
     [table, formId ?? null] as const,
@@ -362,13 +272,13 @@ export async function readRowsViaHook(
 
 /**
  * Legger rader inn som om synk leverte dem fra serveren (`hook.applySyncedRows`, samme vei som en
- * shape-melding). Rader i snake_case; `trial_answers` upsertes på `(trial_form_id, field_key)`.
+ * henting). Rader i snake_case; `trial_answers` upsertes på `(trial_form_id, field_key)`.
  */
 export async function applySyncedRowsViaHook(page: Page, table: TrialTable, rows: LocalRow[]) {
   await waitForTrialHook(page);
   await page.evaluate(
     async ([name, list]) => {
-      const hook = (window as unknown as { __offlineTrial: ElectricTrialHook }).__offlineTrial;
+      const hook = (window as unknown as { __offlineTrial: TrialHook }).__offlineTrial;
       await hook.applySyncedRows(name, list);
     },
     [table, rows] as const,
@@ -379,7 +289,7 @@ export async function applySyncedRowsViaHook(page: Page, table: TrialTable, rows
 export async function pendingChanges(page: Page): Promise<number> {
   await waitForTrialHook(page);
   return page.evaluate(async () => {
-    const hook = (window as unknown as { __offlineTrial: ElectricTrialHook }).__offlineTrial;
+    const hook = (window as unknown as { __offlineTrial: TrialHook }).__offlineTrial;
     return (await hook.store.status()).pendingChanges;
   });
 }
@@ -408,7 +318,7 @@ function globToRegExp(glob: string): RegExp {
 
 /**
  * Teller forespørsler fra siden mot adresser som passer `urlGlob` (f.eks. kall mot
- * `/api/prove/synk/shape`), med status når svaret er kommet. Registreres før `goto`.
+ * `/api/prove/synk/hent`), med status når svaret er kommet. Registreres før `goto`.
  */
 export function countRequests(page: Page, urlGlob: string) {
   const matcher = globToRegExp(urlGlob);
@@ -509,19 +419,14 @@ export function recordPulls(page: Page) {
 
 /**
  * En enhet til: ny nettleserkontekst (egen `localStorage`, egen IndexedDB og dermed egen
- * `deviceId`) med valgt kandidat og innlogget som admin. Kontekstvalgene (baseURL, skjermstørrelse)
+ * `deviceId`), innlogget som admin. Kontekstvalgene (baseURL, skjermstørrelse)
  * sendes inn fra testen, fordi `browser.newContext` ikke arver prosjektets `use`.
  */
 export async function openSecondDevice(
   browser: Browser,
-  candidate: TrialSyncCandidate,
   options: BrowserContextOptions = {},
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({ locale: "nb-NO", ...options });
-  // Samme som useCandidate (navnet med «use» tolkes som React-hook av lint utenfor testene)
-  await context.addInitScript((value) => {
-    window.localStorage.setItem("trial_sync_candidate", value);
-  }, candidate);
   const page = await context.newPage();
   await logIn(page, ADMIN_EMAIL);
   return { context, page };
@@ -550,15 +455,11 @@ export function syncMessage(page: Page): Locator {
 }
 
 /**
- * Legger «Lagret kl.» for kandidaten i `localStorage` før første lasting, som om enheten hadde
+ * Legger «Lagret kl.» i `localStorage` før første lasting, som om enheten hadde
  * lagret alt da. Skrives bare én gang per fane (merket i `sessionStorage`), så en omlasting ikke
  * legger tidspunktet tilbake etter at appen har endret eller tømt det.
  */
-export async function setSavedAt(
-  context: BrowserContext,
-  candidate: TrialSyncCandidate,
-  iso: string,
-) {
+export async function setSavedAt(context: BrowserContext, iso: string) {
   await context.addInitScript(
     ({ key, value }) => {
       const marker = `e2e_set_${key}`;
@@ -566,7 +467,7 @@ export async function setSavedAt(
       window.sessionStorage.setItem(marker, "1");
       window.localStorage.setItem(key, value);
     },
-    { key: `trial_saved_at_${candidate}`, value: iso },
+    { key: "trial_saved_at", value: iso },
   );
 }
 
@@ -919,7 +820,7 @@ export async function serverTrialData(
 export async function pendingQueue(page: Page): Promise<{ changes: number; photos: number }> {
   await waitForTrialHook(page);
   return page.evaluate(async () => {
-    const hook = (window as unknown as { __offlineTrial: ElectricTrialHook }).__offlineTrial;
+    const hook = (window as unknown as { __offlineTrial: TrialHook }).__offlineTrial;
     const status = await hook.store.status();
     return { changes: status.pendingChanges, photos: status.pendingPhotos };
   });

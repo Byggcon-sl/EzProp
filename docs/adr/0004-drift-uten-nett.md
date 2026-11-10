@@ -2,6 +2,8 @@
 
 **Status: godkjent av Ståle 10.11.2026** («2 og 3 også», etter prøvene på ekte iPad). Var foreløpig fra 30.10.2026.
 
+PowerSync og ElectricSQL fjernet fra koden 10.11.2026 (kode, pakker, `docker-compose.yml`, Bicep-delen fra ADR 0003 og migrering `0026_fjern-synkpublikasjoner`). Flyttingen til `src/core/sync` gjøres i en egen PR.
+
 Dato: 30.10.2026. Tatt av agentene i autonom modus («Slik går fase 1 videre uten Ståle» i `docs/agenter/tilstand.md`). Ståle godkjenner eller endrer valget i demoen. Grunnlag: `docs/funksjoner/fase1-sammenligning.md`, resultatfilene `fase1-prove-ab-*.md`, ADR 0003, domenemodellen 4.11 og sidemannskontrollen del 2 P20–P23. Oppgavekort: `docs/funksjoner/fase1-sammenligning-adr.md`.
 
 **Støtter hovedmål:**
@@ -137,5 +139,5 @@ Når synken blir ekte, flyttes den til `src/core/sync` (kjernen), og hver modul 
 
 - Fase 0b kan starte uten synktjeneste i databasen eller innloggingen.
 - Prøve A og B for egenbygd kan kjøres uten å slå på synktjenestene. Spørsmål nr. 12 trengs bare hvis en reserve må prøves.
-- Når Ståle har godkjent: egen PR som fjerner PowerSync og ElectricSQL (kode, avhengigheter, `docker-compose.yml`, Bicep-delen fra ADR 0003, migrering for å fjerne publikasjonene) og flytter synkmotoren til `src/core/sync`.
+- PowerSync og ElectricSQL fjernet fra koden 10.11.2026 (kode, avhengigheter, `docker-compose.yml`, Bicep-delen fra ADR 0003, migrering `0026_fjern-synkpublikasjoner`). Flyttingen av synkmotoren til `src/core/sync` gjenstår (egen PR). Skulle en reserve trengs, hentes koden fra git-historikken.
 - Holder ikke prøve A og B, skrives en ny ADR som erstatter denne.

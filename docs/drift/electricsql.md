@@ -1,5 +1,7 @@
 # Synktjenesten ElectricSQL (prøve fase 1, kandidat 2)
 
+> **Fjernet 10.11.2026.** PowerSync og ElectricSQL er tatt ut av koden etter at Ståle godkjente ADR 0004 (egenbygd synk). Dokumentet står bare som historikk; ingenting her gjelder lenger.
+
 - **Gjelder:** oppgave 5 i fase 1, andre kandidat for drift uten nett (`docs/funksjoner/fase1-kandidat-electricsql.md`).
 - **Dato:** 28.10.2026
 - **Støtter hovedmål:** tid (befaring uten nett på iPad er den største tidsbesparelsen mot IVIT) og reklamasjoner (svar og bilder bekreftes av serveren før iPaden gir slipp på dem, og hver iPad får bare sin egen organisasjons data).

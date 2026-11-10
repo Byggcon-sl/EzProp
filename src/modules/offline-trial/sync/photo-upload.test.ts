@@ -92,8 +92,8 @@ describe("isPhotoWaiting", () => {
     ).toBe(false);
   });
 
-  it("ingen av lagrene skriver uploaded_at i markPhotoUploaded", () => {
-    for (const file of ["powersync/store.ts", "local/trial-store.ts"]) {
+  it("lageret skriver ikke uploaded_at i markPhotoUploaded", () => {
+    for (const file of ["local/trial-store.ts"]) {
       const text = readFileSync(path.join(import.meta.dirname, file), "utf8");
       const start = text.indexOf("markPhotoUploaded(");
       expect(start, file).toBeGreaterThan(-1);

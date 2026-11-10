@@ -1,9 +1,8 @@
 /**
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
- * Kolonnene i den lokale lagringen på enheten, som ren data (ingen import av noen SDK), felles for
- * alle kandidater: PowerSync bygger SQLite-skjemaet sitt av dem, ElectricSQL-proxyen bruker dem som
- * `columns` i shapene, og Vitest sammenligner dem med PostgreSQL-skjemaet
+ * Kolonnene i den lokale lagringen på enheten, som ren data: hente-ruten sender nøyaktig disse, og
+ * Vitest sammenligner dem med PostgreSQL-skjemaet
  * (src/db/schema/offline-trial.ts). Samme navn som i PostgreSQL. `id` er alltid med (nøkkel).
  * `storage_path` synkes aldri til enheten, og serverstyrte kolonner klienten ikke trenger
  * (`organization_id`, `created_by`, `updated_by`, `deleted_by`, `row_version`) er ikke med.

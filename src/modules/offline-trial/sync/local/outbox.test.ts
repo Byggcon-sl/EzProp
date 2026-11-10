@@ -17,10 +17,9 @@ import {
   shouldAckBatch,
   takeBatch,
 } from "./outbox";
-import { parseShapeMessages } from "../electricsql/shape-messages";
 
-// Endringskøen vi eier selv for ElectricSQL (docs/funksjoner/fase1-kandidat-electricsql.md
-// avgjørelse D og «Avgjørelser før bygging» 1). Testplan avsnitt 2.1. Rene funksjoner over
+// Endringskøen vi eier selv (docs/funksjoner/fase1-kandidat-electricsql.md avgjørelse D og
+// «Avgjørelser før bygging» 1; brukes nå av egenbygd synk). Testplan avsnitt 2.1. Rene funksjoner over
 // OutboxState: ingen IndexedDB, ingen DOM. Testen «skjemaet sendes alltid før svarene …» er
 // erstattet av e2e-testen «createForm legger skjemaet i køen før første svar» (avgjørelse 1).
 // Alle data er oppdiktet.
@@ -207,7 +206,7 @@ describe("endringskøen (outbox.ts)", () => {
     expect(take(kept).batch).toEqual(batch);
   });
 
-  // Samme regel som PowerSync-koblingen (pkt. 5). Lageret velger ackBatch eller keepBatch med
+  // Regelen fra pkt. 5. Lageret velger ackBatch eller keepBatch med
   // shouldAckBatch; e2e viser det ende til ende («endringskøen overlever omlasting …»).
   it("ackBatch kalles bare ved 200: hjelperen shouldAckBatch", () => {
     expect(shouldAckBatch(200)).toBe(true);
@@ -240,20 +239,17 @@ describe("endringskøen (outbox.ts)", () => {
     expect(pendingKeys(empty, localRowKey).size).toBe(0);
   });
 
-  // Obligatorisk (tap av data). Selve slettingen av shape_state og synkede rader skjer i lageret
-  // (IndexedDB, bare e2e); her vises at must-refetch og ny innfletting aldri rører køen, og at
-  // nøklene i køen fortsatt beskytter de usendte endringene når shapen hentes på nytt.
-  it("må-hente-på-nytt rører aldri køen", () => {
+  // Obligatorisk (tap av data). Selve slettingen av synkede rader skjer i lageret (IndexedDB, bare
+  // e2e); her vises at ny innfletting aldri rører køen, og at nøklene i køen fortsatt beskytter de
+  // usendte endringene når alt hentes på nytt.
+  it("henting fra start rører aldri køen", () => {
     const state = enqueueAll(createOutboxState(), [
       formEntry(),
       answerEntry(ANSWER_X, "floors", 7),
     ]);
     const before = JSON.parse(JSON.stringify(state)) as OutboxState;
 
-    const parsed = parseShapeMessages("trial_answers", [{ headers: { control: "must-refetch" } }]);
-    expect(parsed.mustRefetch).toBe(true);
-
-    // Ny henting fra offset=-1: serveren har fortsatt den gamle verdien
+    // Ny henting fra start: serveren har fortsatt den gamle verdien
     const keys = pendingKeys(state, localRowKey);
     const localRow = {
       id: ANSWER_X,

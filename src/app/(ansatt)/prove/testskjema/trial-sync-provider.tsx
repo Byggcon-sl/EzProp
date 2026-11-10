@@ -3,15 +3,14 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { storageErrorLog } from "@/modules/offline-trial/storage-health";
 import { startPhotoUploader } from "@/modules/offline-trial/sync/photo-uploader";
-import { openTrialStore, readSyncCandidate } from "@/modules/offline-trial/sync/select-store";
-import type { TrialSyncCandidate, TrialSyncStore } from "@/modules/offline-trial/sync/types";
+import { openTrialStore } from "@/modules/offline-trial/sync/select-store";
+import type { TrialSyncStore } from "@/modules/offline-trial/sync/types";
 
-/** Prøve fase 1: synklageret for testskjemaet, uavhengig av hvilken kandidat som er valgt. */
+/** Prøve fase 1: synklageret for testskjemaet. */
 export interface TrialSync {
   store: TrialSyncStore;
   deviceId: string;
   organizationId: string;
-  candidate: TrialSyncCandidate;
 }
 
 const TrialSyncContext = createContext<TrialSync | null>(null);
@@ -22,24 +21,23 @@ export function useTrialSync(): TrialSync {
   return value;
 }
 
-/** Det synkstatusen trenger: status, varsel når den kan ha endret seg, «Synk nå» og kandidaten. */
+/** Det synkstatusen trenger: status, varsel når den kan ha endret seg, og «Synk nå». */
 export function useSyncStatusSource() {
-  const { store, candidate } = useTrialSync();
+  const { store } = useTrialSync();
   return useMemo(
     () => ({
       getStatus: () => store.status(),
       subscribe: (onChange: () => void) => store.onStatusChange(onChange),
       syncNow: () => store.syncNow(),
-      candidate,
     }),
-    [store, candidate],
+    [store],
   );
 }
 
 type State = { kind: "opening" } | { kind: "ready"; sync: TrialSync } | { kind: "failed" };
 
 /**
- * Åpner lageret for den valgte kandidaten i nettleseren og starter bildekøen. Organisasjons-id-en
+ * Åpner lageret i nettleseren og starter bildekøen. Organisasjons-id-en
  * kommer fra serverkomponenten (tilgangssjekken); serveren stoler uansett bare på `grant`.
  */
 export function TrialSyncProvider({
@@ -60,7 +58,7 @@ export function TrialSyncProvider({
       if (document.visibilityState === "hidden") flush();
     };
 
-    openTrialStore(readSyncCandidate(), organizationId).then(
+    openTrialStore(organizationId).then(
       (opened) => {
         if (!active) return;
         store = opened.store;
@@ -73,7 +71,6 @@ export function TrialSyncProvider({
             store: opened.store,
             deviceId: opened.deviceId,
             organizationId: opened.organizationId,
-            candidate: opened.candidate,
           },
         });
       },

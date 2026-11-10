@@ -6,7 +6,6 @@ import {
   CHANGES_PATH,
   countRequests,
   createTrialForm,
-  hookValue,
   indicator,
   isPullUrl,
   logIn,
@@ -18,10 +17,8 @@ import {
   syncMessage,
   syncNowButton,
   syncStatus,
-  useCandidate as chooseCandidate,
   waitForTrialHook,
-  type ElectricTrialHook,
-  type TrialSyncCandidate,
+  type TrialHook,
 } from "./helpers";
 
 // Synkstatus som alltid vises (fase 1). Testplan: docs/funksjoner/fase1-synkstatus-testplan.md
@@ -29,9 +26,8 @@ import {
 // lagret» vises bare når serveren har bekreftet) og tid (ett trykk på «Synk nå» i stedet for å
 // vente på neste forsøk).
 //
-// Hva hver kandidat kan nå i skyen (testplan avsnitt 0): bare egenbygd kan hente fra serveren i
-// e2e, så bare egenbygd kan vise «Alt er lagret». PowerSync og ElectricSQL viser det motsatte:
-// uten bekreftet henting står det aldri «Alt er lagret».
+// Synken er egenbygd (ADR 0004). PowerSync og ElectricSQL er fjernet, og testene for dem med.
+// Løkkene over CANDIDATES står så testnavnene er de samme som før.
 //
 // Klokke: tidssonen er Europe/Oslo, og klokkeslett settes med page.clock.setFixedTime (aldri
 // page.clock.install, som stopper tidtakerne synken trenger). 29.10.2026 er Oslo på UTC+1.
@@ -39,7 +35,8 @@ import {
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const TEST_IMAGE = path.join(DIR, "fixtures", "test-image.png");
-const CANDIDATES = ["powersync", "electricsql", "custom"] as const;
+const CANDIDATES = ["custom"] as const;
+type Candidate = (typeof CANDIDATES)[number];
 const CHANGES_ROUTE = `**${CHANGES_PATH}`;
 const PULL_ROUTE = isPullUrl;
 const PHOTO_ROUTE = "**/api/prove/bilder/**";
@@ -71,32 +68,24 @@ function floorsInput(page: Page): Locator {
   return page.getByLabel("Antall etasjer", { exact: true });
 }
 
-/** Logger inn som admin med valgt kandidat og fast klokke. */
-async function start(
-  page: Page,
-  context: BrowserContext,
-  candidate: TrialSyncCandidate,
-  at = AT_1432,
-) {
-  await chooseCandidate(context, candidate);
+/** Logger inn som admin med fast klokke. */
+async function start(page: Page, _context: BrowserContext, _candidate: Candidate, at = AT_1432) {
   await logIn(page, ADMIN_EMAIL);
   await page.clock.setFixedTime(new Date(at));
 }
 
 /** Går til listen «Testskjema» og venter på lageret. */
-async function openList(page: Page, candidate: TrialSyncCandidate) {
+async function openList(page: Page) {
   await page.goto("/prove/testskjema");
   await expect(page.getByRole("heading", { name: "Testskjema", level: 1 })).toBeVisible();
   await waitForTrialHook(page);
-  expect(await hookValue(page, "candidate")).toBe(candidate);
 }
 
 /** Lager et nytt skjema og venter på lageret. */
-async function openNewForm(page: Page, candidate: TrialSyncCandidate): Promise<string> {
+async function openNewForm(page: Page): Promise<string> {
   const id = await createTrialForm(page);
   await expect(counter(page)).toHaveText("0 av 40 felt utfylt");
   await waitForTrialHook(page);
-  expect(await hookValue(page, "candidate")).toBe(candidate);
   return id;
 }
 
@@ -109,7 +98,7 @@ async function fillFloors(page: Page, value = "3") {
 async function storeStatus(page: Page) {
   await waitForTrialHook(page);
   return page.evaluate(async () => {
-    const hook = (window as unknown as { __offlineTrial: ElectricTrialHook }).__offlineTrial;
+    const hook = (window as unknown as { __offlineTrial: TrialHook }).__offlineTrial;
     return hook.store.status();
   });
 }
@@ -118,7 +107,7 @@ function pendingText(changes: number, photos: number): string {
   return `Venter: ${changes} ${changes === 1 ? "endring" : "endringer"}, ${photos} ${photos === 1 ? "bilde" : "bilder"}`;
 }
 
-/** Venter til køen er tom og serveren har bekreftet (bare egenbygd kan det i e2e). */
+/** Venter til køen er tom og serveren har bekreftet. */
 async function waitAllSaved(page: Page) {
   await expect
     .poll(() => pendingChanges(page), { timeout: 20_000, message: "køen tømmes" })
@@ -157,9 +146,9 @@ test.describe("visning", () => {
       await start(page, context, candidate);
       // Egenbygd kan hente i e2e; uten henting er enheten fortsatt «ny» når vi ser på den
       await page.route(PULL_ROUTE, (route) => route.abort());
-      await openList(page, candidate);
+      await openList(page);
       for (const where of ["listen", "skjemaet"]) {
-        if (where === "skjemaet") await openNewForm(page, candidate);
+        if (where === "skjemaet") await openNewForm(page);
         await expect(syncStatus(page), where).toBeVisible();
         await expect(indicator(page), where).toBeVisible();
         await expect(indicator(page), where).toHaveText(/\S/);
@@ -188,8 +177,8 @@ test.describe("visning", () => {
     // Akseptkriterium
     test(`antallene stemmer med store.status() (${candidate})`, async ({ page, context }) => {
       await start(page, context, candidate);
-      await openList(page, candidate);
-      await openNewForm(page, candidate);
+      await openList(page);
+      await openNewForm(page);
       // Uten nett viser linjen «Uten nett»; antallene leses når nettet er tilbake, men sending og
       // bildeopplasting er stoppet, så alt fortsatt venter.
       await page.route(CHANGES_ROUTE, (route) => route.abort());
@@ -225,7 +214,7 @@ test.describe("visning", () => {
 
   test("Uten nett vises med tekst, ikke bare farge", async ({ page, context }) => {
     await start(page, context, "custom");
-    await openList(page, "custom");
+    await openList(page);
     try {
       await context.setOffline(true);
       await expect(indicator(page)).toHaveText("Uten nett");
@@ -239,10 +228,10 @@ test.describe("visning", () => {
 
   test("gammel måleindikator finnes ikke lenger", async ({ page, context }) => {
     await start(page, context, "custom");
-    await openList(page, "custom");
+    await openList(page);
     await expect(syncStatus(page)).toBeVisible();
     await expect(page.getByTestId("sync-indicator")).toHaveCount(0);
-    await openNewForm(page, "custom");
+    await openNewForm(page);
     await expect(syncStatus(page)).toBeVisible();
     await expect(page.getByTestId("sync-indicator")).toHaveCount(0);
   });
@@ -251,9 +240,9 @@ test.describe("visning", () => {
   test("Synk nå er minst 56 høy på iPad", async ({ page, context }, testInfo) => {
     ipadOnly(testInfo);
     await start(page, context, "custom");
-    await openList(page, "custom");
+    await openList(page);
     for (const where of ["listen", "skjemaet"]) {
-      if (where === "skjemaet") await openNewForm(page, "custom");
+      if (where === "skjemaet") await openNewForm(page);
       await expect(syncNowButton(page)).toBeVisible();
       const box = await syncNowButton(page).boundingBox();
       expect(box, where).not.toBeNull();
@@ -274,10 +263,10 @@ test.describe("Synk nå", () => {
     test(`Synk nå sender køen med en gang etter feil, uten å vente på neste forsøk (${candidate})`, async ({
       page,
       context,
-    }, testInfo) => {
+    }) => {
       await start(page, context, candidate);
       // Sendingen feiler helt til testen selv slipper den. Da kan ingen POST gå igjennom før
-      // trykket, uansett hvem som sender (PowerSync-SDK-en kaller også uploadData selv).
+      // trykket, uansett hvem som sender.
       let fail = true;
       let failures = 0;
       await page.route(CHANGES_ROUTE, (route) => {
@@ -286,23 +275,10 @@ test.describe("Synk nå", () => {
         return route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
       });
       const posts = countRequests(page, CHANGES_ROUTE);
-      await openList(page, candidate);
-      await openNewForm(page, candidate);
+      await openList(page);
+      await openNewForm(page);
       await fillFloors(page);
 
-      if (candidate === "powersync") {
-        // Uten PowerSync-tjenesten er det ikke sikkert SDK-en sender av seg selv; trykk til det
-        // har kommet minst to feil (krav K3: syncNow kaller opplastingen selv).
-        testInfo.annotations.push({
-          type: "vei",
-          description: "feil fra trykk (ingen tjeneste)",
-        });
-        for (let i = 0; i < 2 && failures < 2; i++) {
-          await syncNowButton(page).click();
-          await expect(syncNowButton(page)).toHaveText("Synk nå", { timeout: 20_000 });
-          await expect.poll(() => failures, { timeout: 20_000 }).toBeGreaterThanOrEqual(i + 1);
-        }
-      }
       // Minst to feil: neste automatiske forsøk er da minst 10 s unna, godt over grensen på 3 s
       await expect.poll(() => failures, { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
       expect(await pendingChanges(page)).toBeGreaterThan(0);
@@ -325,7 +301,7 @@ test.describe("Synk nå", () => {
       page,
       context,
     }) => {
-      await setSavedAt(context, candidate, AT_1432);
+      await setSavedAt(context, AT_1432);
       await start(page, context, candidate, AT_1510);
       // Serveren svarer 500 på sending (litt forsinket, så «Synker …» kan ses), og egenbygd får
       // ikke hente, så ingenting kan bli bekreftet i denne testen
@@ -337,8 +313,8 @@ test.describe("Synk nå", () => {
       await page.route(PULL_ROUTE, (route) =>
         route.fulfill({ status: 500, contentType: "application/json", body: "{}" }),
       );
-      await openList(page, candidate);
-      await openNewForm(page, candidate);
+      await openList(page);
+      await openNewForm(page);
       await expect(savedAt(page)).toHaveText("Lagret kl. 14:32");
       await fillFloors(page);
 
@@ -362,8 +338,8 @@ test.describe("Synk nå", () => {
       context,
     }) => {
       await start(page, context, candidate);
-      await openList(page, candidate);
-      await openNewForm(page, candidate);
+      await openList(page);
+      await openNewForm(page);
       const errors: Error[] = [];
       page.on("pageerror", (error) => errors.push(error));
       const trial = countRequests(page, "**/api/prove/**");
@@ -389,7 +365,7 @@ test.describe("Synk nå", () => {
       expect(errors).toEqual([]);
     });
 
-    test(`to raske trykk gir én runde (${candidate})`, async ({ page, context }, testInfo) => {
+    test(`to raske trykk gir én runde (${candidate})`, async ({ page, context }) => {
       await start(page, context, candidate);
       // Først feiler sendingen, så noe ligger i køen og venter på neste forsøk
       let fail = true;
@@ -404,14 +380,12 @@ test.describe("Synk nå", () => {
         await new Promise((resolve) => setTimeout(resolve, 1_000));
         return route.fallback();
       });
-      await openList(page, candidate);
-      await openNewForm(page, candidate);
+      await openList(page);
+      await openNewForm(page);
       await fillFloors(page);
       await expect.poll(() => pendingChanges(page)).toBeGreaterThan(0);
-      if (candidate !== "powersync") {
-        // To feil: neste automatiske forsøk er minst 10 s unna og blandes ikke med trykkene
-        await expect.poll(() => failures, { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
-      }
+      // To feil: neste automatiske forsøk er minst 10 s unna og blandes ikke med trykkene
+      await expect.poll(() => failures, { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
       const syncNowCalls = await countSyncNowCalls(page);
       const posts = countRequests(page, CHANGES_ROUTE);
       fail = false;
@@ -420,40 +394,7 @@ test.describe("Synk nå", () => {
       await expect(syncNowButton(page)).toHaveText("Synk nå", { timeout: 20_000 });
       // Ett kall til store.syncNow fra de to trykkene
       expect(await syncNowCalls()).toBe(1);
-      if (candidate === "powersync") {
-        // PowerSync sender én transaksjon per POST; én runde kan gi flere POST-er
-        testInfo.annotations.push({ type: "vei", description: "PowerSync: telt kall til syncNow" });
-        expect(posts.count()).toBeGreaterThanOrEqual(1);
-      } else {
-        expect(posts.count()).toBe(1);
-      }
-    });
-  }
-
-  // Akseptkriterium «Wi-Fi uten internett»
-  for (const candidate of ["powersync", "electricsql"] as const) {
-    test(`uten bekreftet henting står det aldri Alt er lagret (${candidate})`, async ({
-      page,
-      context,
-    }) => {
-      await start(page, context, candidate);
-      await openList(page, candidate);
-      await openNewForm(page, candidate);
-      await fillFloors(page);
-      await syncNowButton(page).click();
-      await expect(syncNowButton(page)).toHaveText("Synk nå", { timeout: 20_000 });
-      await expect
-        .poll(() => pendingChanges(page), { timeout: 20_000, message: "køen tømmes" })
-        .toBe(0);
-      // Køen er tom, men serveren har ikke bekreftet henting: aldri «Alt er lagret»
-      const seen = new Set<string>();
-      for (let i = 0; i < 10; i++) {
-        seen.add((await indicator(page).innerText()).trim());
-        await page.waitForTimeout(500);
-      }
-      expect([...seen].filter((text) => text === ALL_SAVED)).toEqual([]);
-      await expect(indicator(page)).toHaveText(AWAITING_SERVER);
-      await expect(savedAt(page)).toHaveText(NEVER_SAVED);
+      expect(posts.count()).toBe(1);
     });
   }
 
@@ -461,7 +402,7 @@ test.describe("Synk nå", () => {
     await start(page, context, "custom");
     // Nettleseren mener den har nett, men ingen kall kommer fram
     await page.route("**/api/prove/**", (route) => route.abort());
-    await openList(page, "custom");
+    await openList(page);
     expect(await page.evaluate(() => navigator.onLine)).toBe(true);
     const seen = new Set<string>();
     for (let i = 0; i < 20; i++) {
@@ -476,19 +417,19 @@ test.describe("Synk nå", () => {
 
   test("Lagret kl. vises etter at alt er sendt", async ({ page, context }) => {
     await start(page, context, "custom", AT_1432);
-    await openList(page, "custom");
-    await openNewForm(page, "custom");
+    await openList(page);
+    await openNewForm(page);
     await fillFloors(page);
     await waitAllSaved(page);
     await expect(savedAt(page)).toHaveText("Lagret kl. 14:32");
   });
 
   test("Lagret på en annen dag viser dato", async ({ page, context }) => {
-    await setSavedAt(context, "custom", "2026-10-28T13:32:00.000Z");
+    await setSavedAt(context, "2026-10-28T13:32:00.000Z");
     await start(page, context, "custom", "2026-10-29T08:00:00.000Z");
     // Ingen henting: «Lagret kl.» kan ikke bli flyttet til i dag før nettet går
     await page.route(PULL_ROUTE, (route) => route.abort());
-    await openList(page, "custom");
+    await openList(page);
     try {
       await context.setOffline(true);
       await expect(indicator(page)).toHaveText("Uten nett");
@@ -501,8 +442,8 @@ test.describe("Synk nå", () => {
   // Akseptkriterium
   test("trykk når alt er lagret gir nytt klokkeslett", async ({ page, context }) => {
     await start(page, context, "custom", AT_1432);
-    await openList(page, "custom");
-    await openNewForm(page, "custom");
+    await openList(page);
+    await openNewForm(page);
     await fillFloors(page);
     await waitAllSaved(page);
     await expect(savedAt(page)).toHaveText("Lagret kl. 14:32");
@@ -522,38 +463,23 @@ test.describe("Synk nå", () => {
   });
 
   // Akseptkriterium
-  test("bytte av organisasjon tømmer Lagret kl. for alle tre kandidatene", async ({
-    page,
-    context,
-  }) => {
-    for (const candidate of CANDIDATES) await setSavedAt(context, candidate, AT_1432);
+  test("bytte av organisasjon tømmer Lagret kl.", async ({ page, context }) => {
+    await setSavedAt(context, AT_1432);
     await start(page, context, "custom", AT_1510);
     // Ingen henting: etter byttet skal enheten være «ny», ikke få et nytt tidspunkt
     await page.route(PULL_ROUTE, (route) => route.abort());
-    await openList(page, "custom");
+    await openList(page);
     await expect(savedAt(page)).toHaveText("Lagret kl. 14:32");
-    const keysBefore = await page.evaluate(() =>
-      Object.keys(localStorage).filter((key) => key.startsWith("trial_saved_at_")),
-    );
-    expect(keysBefore.sort()).toEqual([
-      "trial_saved_at_custom",
-      "trial_saved_at_electricsql",
-      "trial_saved_at_powersync",
-    ]);
+    expect(await page.evaluate(() => localStorage.getItem("trial_saved_at"))).toBe(AT_1432);
 
     await page.evaluate(async (organizationId) => {
-      const hook = (window as unknown as { __offlineTrial: ElectricTrialHook }).__offlineTrial;
+      const hook = (window as unknown as { __offlineTrial: TrialHook }).__offlineTrial;
       await hook.simulateOrganizationChange(organizationId);
     }, crypto.randomUUID());
     await page.reload();
     await waitForTrialHook(page);
     await expect(savedAt(page)).toHaveText(NEVER_SAVED);
-    const keysAfter = await page.evaluate(() =>
-      ["powersync", "electricsql", "custom"].filter(
-        (candidate) => localStorage.getItem(`trial_saved_at_${candidate}`) !== null,
-      ),
-    );
-    expect(keysAfter).toEqual([]);
+    expect(await page.evaluate(() => localStorage.getItem("trial_saved_at"))).toBeNull();
   });
 });
 
@@ -565,17 +491,11 @@ test.describe("Lagret kl. etter ny lasting uten nett", () => {
       page,
       context,
     }, testInfo) => {
-      if (candidate === "custom") {
-        await start(page, context, candidate, AT_1432);
-        await openList(page, candidate);
-        await openNewForm(page, candidate);
-        await fillFloors(page);
-        await waitAllSaved(page);
-      } else {
-        await setSavedAt(context, candidate, AT_1432);
-        await start(page, context, candidate, AT_1510);
-        await openList(page, candidate);
-      }
+      await start(page, context, candidate, AT_1432);
+      await openList(page);
+      await openNewForm(page);
+      await fillFloors(page);
+      await waitAllSaved(page);
       await expect(savedAt(page)).toHaveText("Lagret kl. 14:32");
       await page.evaluate(async () => {
         await navigator.serviceWorker.ready;
@@ -618,15 +538,13 @@ test.describe("roller", () => {
   test.use({ serviceWorkers: "block" });
 
   // Akseptkriterium
-  test("takstmann ser synkstatusen og bruker Synk nå (custom)", async ({ page, context }) => {
-    await chooseCandidate(context, "custom");
+  test("takstmann ser synkstatusen og bruker Synk nå (custom)", async ({ page }) => {
     await logInAsInspector(page);
     await page.clock.setFixedTime(new Date(AT_1432));
     await expectSyncNowWorks(page);
   });
 
-  test("admin ser synkstatusen og bruker Synk nå (custom)", async ({ page, context }) => {
-    await chooseCandidate(context, "custom");
+  test("admin ser synkstatusen og bruker Synk nå (custom)", async ({ page }) => {
     await logIn(page, ADMIN_EMAIL);
     await page.clock.setFixedTime(new Date(AT_1432));
     await expectSyncNowWorks(page);
@@ -636,9 +554,9 @@ test.describe("roller", () => {
 /** Fyller ut et felt, trykker «Synk nå» og venter på 200 fra skriveruten og «Alt er lagret». */
 async function expectSyncNowWorks(page: Page) {
   const posts = countRequests(page, CHANGES_ROUTE);
-  await openList(page, "custom");
+  await openList(page);
   await expect(syncStatus(page)).toBeVisible();
-  await openNewForm(page, "custom");
+  await openNewForm(page);
   await fillFloors(page);
   await syncNowButton(page).click();
   await expect(syncNowButton(page)).toHaveText("Synk nå", { timeout: 20_000 });

@@ -125,7 +125,9 @@ else
     advarsel "Sletter alle lokale testdata (--nullstill)."
     docker compose down -v >/dev/null 2>&1 || true
   fi
-  if ! docker compose up -d db >/tmp/ezprop-docker.log 2>&1; then
+  # --remove-orphans stopper og fjerner containerne fra synkprøven (PowerSync og ElectricSQL,
+  # fjernet 10.11.2026), så migreringen kan rydde replikeringsplassene deres.
+  if ! docker compose up -d --remove-orphans db >/tmp/ezprop-docker.log 2>&1; then
     if grep -qi "port is already allocated\|address already in use" /tmp/ezprop-docker.log; then
       stopp "Port ${DB_PORT} er opptatt av en annen database på Macen." \
         "Stopp den andre databasen (f.eks. Postgres.app), eller spør Claude om hjelp."
@@ -137,13 +139,6 @@ else
     sleep 1
   done
   docker compose exec -T db pg_isready -U ezprop >/dev/null 2>&1 || stopp "Databasen svarer ikke." "Prøv ./start.sh --nullstill"
-  # Synktjenesten lagrer sin tilstand i en egen database. Eldre Docker-databaser mangler den.
-  if ! docker compose exec -T db psql -U ezprop -d postgres -tAc \
-    "select 1 from pg_database where datname = 'powersync_storage'" 2>/dev/null | grep -q 1; then
-    docker compose exec -T db createdb -U ezprop powersync_storage >/dev/null 2>&1 ||
-      stopp "Klarte ikke å lage databasen for synktjenesten." "Prøv ./start.sh --nullstill"
-    ok "Laget databasen for synktjenesten"
-  fi
   ok "Databasen er klar"
 fi
 
@@ -176,15 +171,10 @@ done
 if [ -n "$LAGT_TIL" ]; then
   ok "La til nye, tomme innstillinger i .env:$LAGT_TIL"
 fi
-# Synktjenesten (prøve fase 1) trenger verdier; tomme verdier stopper innloggingen mot den.
-# Utviklingsverdiene er de samme som i .env.example og virker bare på Macen (localhost).
+# Prøven uten nett (fase 1) trenger mappen for bildefilene. Verdien er den samme som i .env.example.
 LAGT_TIL=""
 for par in \
-  "POWERSYNC_URL=http://localhost:8080" \
-  "POWERSYNC_JWT_SECRET=utvikling-ikke-hemmelig-synknokkel-bare-for-mac-0123456789" \
-  "TRIAL_UPLOAD_DIR=var/uploads/trial" \
-  "ELECTRIC_URL=http://localhost:3010" \
-  "ELECTRIC_SECRET=utvikling-ikke-hemmelig-electricnokkel-bare-for-mac-0123456789"; do
+  "TRIAL_UPLOAD_DIR=var/uploads/trial"; do
   navn=${par%%=*}
   if ! grep -q "^${navn}=" .env; then
     if [ -z "$LAGT_TIL" ]; then
@@ -195,11 +185,13 @@ for par in \
   fi
 done
 if [ -n "$LAGT_TIL" ]; then
-  ok "La til innstillinger for synktjenesten i .env:$LAGT_TIL"
+  ok "La til innstillinger for prøven uten nett i .env:$LAGT_TIL"
 fi
 
 # ---------------------------------------------------------------------------
 steg "Installerer pakker"
+# Rester fra PowerSync-prøven (fjernet 10.11.2026): worker og wasm som next.config.ts kopierte hit.
+rm -rf public/@powersync
 "${PNPM[@]}" install --frozen-lockfile --reporter=silent || stopp "Installasjonen feilet." "Se feilmeldingen over."
 ok "Pakkene er på plass"
 
@@ -209,69 +201,6 @@ steg "Oppdaterer databasen"
 "${PNPM[@]}" --silent db:seed || stopp "Innlegging av grunndata feilet." "Se feilmeldingen over."
 "${PNPM[@]}" --silent db:seed:testoppdrag || stopp "Innlegging av testoppdrag feilet." "Se feilmeldingen over."
 ok "Databasen er oppdatert, med organisasjonen Byggcon, admin og testoppdragene"
-
-# ---------------------------------------------------------------------------
-steg "Starter synktjenesten (PowerSync)"
-if [ "${EZPROP_SKIP_DOCKER:-0}" = "1" ]; then
-  advarsel "Hopper over synktjenesten (EZPROP_SKIP_DOCKER=1)."
-else
-  # Synktjenesten vil ha nøkkelen fra .env kodet som base64url
-  HEMMELIGHET=$(grep '^POWERSYNC_JWT_SECRET=' .env | head -1 | cut -d= -f2-)
-  PS_JWT_SECRET_BASE64=$(node -e 'process.stdout.write(Buffer.from(process.argv[1], "utf8").toString("base64url"))' "$HEMMELIGHET")
-  export PS_JWT_SECRET_BASE64
-  if ! docker compose up -d --force-recreate powersync >/tmp/ezprop-powersync.log 2>&1; then
-    if grep -qi "port is already allocated\|address already in use" /tmp/ezprop-powersync.log; then
-      stopp "Port 8080 er opptatt av et annet program på Macen." \
-        "Lukk programmet som bruker port 8080, eller spør Claude om hjelp."
-    fi
-    stopp "Klarte ikke å starte synktjenesten." "$(tail -5 /tmp/ezprop-powersync.log)"
-  fi
-  PS_KLAR=0
-  for _ in $(seq 1 60); do
-    if curl -s -f -o /dev/null http://localhost:8080/probes/liveness; then
-      PS_KLAR=1
-      break
-    fi
-    sleep 1
-  done
-  if [ "$PS_KLAR" = "1" ]; then
-    ok "Synktjenesten svarer på http://localhost:8080"
-  else
-    advarsel "Synktjenesten svarer ikke ennå. Appen virker, men synk til serveren venter."
-    advarsel "Se hva som skjer med: docker compose logs powersync"
-  fi
-fi
-
-# ---------------------------------------------------------------------------
-steg "Starter synktjenesten (ElectricSQL)"
-if [ "${EZPROP_SKIP_DOCKER:-0}" = "1" ]; then
-  advarsel "Hopper over ElectricSQL (EZPROP_SKIP_DOCKER=1)."
-else
-  # Electric bruker samme nøkkel som appen (ELECTRIC_SECRET i .env)
-  ELECTRIC_SECRET=$(grep '^ELECTRIC_SECRET=' .env | head -1 | cut -d= -f2-)
-  export ELECTRIC_SECRET
-  if ! docker compose up -d --force-recreate electric >/tmp/ezprop-electric.log 2>&1; then
-    if grep -qi "port is already allocated\|address already in use" /tmp/ezprop-electric.log; then
-      stopp "Port 3010 er opptatt av et annet program på Macen." \
-        "Lukk programmet som bruker port 3010, eller spør Claude om hjelp."
-    fi
-    stopp "Klarte ikke å starte ElectricSQL." "$(tail -5 /tmp/ezprop-electric.log)"
-  fi
-  EL_KLAR=0
-  for _ in $(seq 1 60); do
-    if curl -s -f -o /dev/null http://127.0.0.1:3010/v1/health; then
-      EL_KLAR=1
-      break
-    fi
-    sleep 1
-  done
-  if [ "$EL_KLAR" = "1" ]; then
-    ok "ElectricSQL svarer på http://localhost:3010"
-  else
-    advarsel "ElectricSQL svarer ikke ennå. Appen virker, men kandidat 2 får ikke hentet data."
-    advarsel "Se hva som skjer med: docker compose logs electric"
-  fi
-fi
 
 # ---------------------------------------------------------------------------
 steg "Starter EzProp"
@@ -305,8 +234,6 @@ cat <<EOF
 
       Logg inn som:   ${FET}admin@byggcon.no${NORMAL}   (admin)
       Koden finner du: ${FET}${APP_URL}/dev/epost${NORMAL}
-      PowerSync:       ${FET}http://localhost:8080${NORMAL}   (synktjenesten, prøve uten nett)
-      ElectricSQL:     ${FET}http://localhost:3010${NORMAL}   (synktjenesten, kandidat 2)
 
       Stopp med ${FET}Ctrl + C${NORMAL}.
 

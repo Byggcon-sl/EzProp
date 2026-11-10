@@ -5,100 +5,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { storageHealthText } from "@/modules/offline-trial/storage-health";
 import { SyncStatus } from "@/modules/offline-trial/sync-status";
-import { writeSyncCandidate } from "@/modules/offline-trial/sync/select-store";
-import type {
-  TrialFormSummary,
-  TrialSyncCandidate,
-  TrialSyncStatus,
-  TrialSyncStore,
-} from "@/modules/offline-trial/sync/types";
-import { cn } from "@/shared/lib/cn";
+import type { TrialFormSummary } from "@/modules/offline-trial/sync/types";
 import { useStickyScrollPadding } from "@/shared/lib/use-sticky-scroll-padding";
 import { Button } from "@/shared/ui/button";
 import { useSyncStatusSource, useTrialSync } from "./trial-sync-provider";
 import { useStorageHealth } from "./use-storage-health";
-
-const STATUS_POLL_MS = 2000;
-
-const CANDIDATE_LABELS: Record<TrialSyncCandidate, string> = {
-  powersync: "PowerSync",
-  electricsql: "ElectricSQL",
-  custom: "Egenbygd",
-};
-
-/** Status fra lageret, oppdatert ved varsel og hvert 2. sekund. Null til første svar. */
-function useSyncStatus(store: TrialSyncStore): TrialSyncStatus | null {
-  const [status, setStatus] = useState<TrialSyncStatus | null>(null);
-  useEffect(() => {
-    let active = true;
-    const refresh = () => {
-      store.status().then(
-        (next) => {
-          if (active) setStatus(next);
-        },
-        () => undefined,
-      );
-    };
-    const dispose = store.onStatusChange(refresh);
-    const interval = setInterval(refresh, STATUS_POLL_MS);
-    refresh();
-    return () => {
-      active = false;
-      dispose();
-      clearInterval(interval);
-    };
-  }, [store]);
-  return status;
-}
-
-/**
- * Prøve fase 1: velgeren «Synkløsning». Bytte = lagre valget og last siden på nytt; bare tillatt
- * når ingenting venter på å bli sendt. Hver kandidat har sin egen lagring; ingenting slettes.
- */
-function CandidatePicker() {
-  const { store, candidate } = useTrialSync();
-  const status = useSyncStatus(store);
-  const waiting = status !== null && (status.pendingChanges > 0 || status.pendingPhotos > 0);
-
-  function choose(next: TrialSyncCandidate) {
-    if (next === candidate) return;
-    writeSyncCandidate(next);
-    window.location.reload();
-  }
-
-  return (
-    <fieldset className="mt-4">
-      <legend className="text-sm font-medium text-slate-900">Synkløsning</legend>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {(Object.keys(CANDIDATE_LABELS) as TrialSyncCandidate[]).map((option) => {
-          const selected = option === candidate;
-          return (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={selected}
-              disabled={!selected && (status === null || waiting)}
-              onClick={() => choose(option)}
-              className={cn(
-                "inline-flex min-h-11 items-center gap-1.5 rounded-xl px-4 text-base disabled:opacity-60",
-                selected
-                  ? "bg-brand-50 font-semibold text-slate-900 ring-2 ring-brand-700 ring-inset"
-                  : "bg-white text-slate-900 ring-1 ring-slate-300 ring-inset hover:bg-slate-50",
-              )}
-            >
-              {selected ? <span aria-hidden="true">✓</span> : null}
-              {CANDIDATE_LABELS[option]}
-            </button>
-          );
-        })}
-      </div>
-      {/* Står alltid i DOM, så skjermleseren leser opp meldingen når den dukker opp. Tom og uten marg tar den ingen plass. */}
-      <p role="status" className={cn("text-sm text-slate-700", waiting && "mt-2")}>
-        {waiting ? "Vent til alt er lagret på serveren før du bytter" : null}
-      </p>
-    </fieldset>
-  );
-}
 
 /**
  * Prøve C: hvor mye plass appen bruker og får på denne iPaden, og om lagringen er varig. Måles når
@@ -171,7 +82,6 @@ export function TrialFormList() {
       <p className="mt-1 text-slate-600">
         Skjemaene brukes til å prøve appen på iPad uten nett. Bare oppdiktede data.
       </p>
-      <CandidatePicker />
       <StorageHealthBox />
       <Button className="mt-4 min-h-11" onClick={createForm} disabled={creating}>
         Nytt testskjema

@@ -11,7 +11,7 @@ const ANSWER = "0192d3a0-0000-7000-8000-0000000000a1";
 const PHOTO = "0192d3a0-0000-7000-8000-0000000000b1";
 
 describe("normalizeLocalRow (local/normalize-row.ts)", () => {
-  it("normaliseringen er lik for Electric og egenbygd", () => {
+  it("normaliseringen gir lokal form", () => {
     // 1. Bilde: size_bytes som tekst blir tall, tid fra PostgreSQL blir ISO
     const photo = normalizeLocalRow("trial_photos", {
       id: PHOTO,
