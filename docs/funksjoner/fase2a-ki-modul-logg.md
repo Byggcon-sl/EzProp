@@ -4,7 +4,7 @@
 - **Modul:** kjerne (`src/core/ai`), tabell i `src/db/schema`, leverandørkode i `src/core/integrations/ports.ts`, seed i `src/db/seed/sample-assignments.ts`
 - **Status:** klar til bygging (rettet etter forenkler, KI-ansvarlig, sikkerhet og personvern og testleder 10.11.2026)
 - **Branch:** `fase2a-ki-modul-logg`
-- **Bygger på:** `fase2a-adr-ki-i-bunnen` (ADR 0006, ikke merget ennå)
+- **Bygger på:** `main` (ADR 0006 er merget i PR #123, ryddingen i PR #124). Kortet og testplanen er flyttet oppå `main` 10.11.2026.
 - **Grunnlag:** `docs/adr/0006-ki-i-bunnen.md` del 1, 3, 4, 5 og «Avgrensning for 2a-1» under Konsekvenser. `docs/05-domenemodell.md` 4.12.
 - **Støtter hovedmål:**
   - **KI i bunnen:** bygger den ene veien inn til KI og loggen som viser nytten. Alle KI-funksjoner i 2a-2 og senere bygges oppå denne.
@@ -74,7 +74,7 @@ ADR 0006 beskriver KI-grunnmuren på papir. Ingen kode finnes. Uten modulen, tab
    - At `src/core/ai` ikke importerer fra moduler, håndheves allerede av `eslint-rules/module-boundaries.js`. Ingen ny kontroll.
 10. **Ingen logging av innhold:** feil fra leverandøren logges bare med funksjon, leverandørkode, `error_code` og id. Vist med én oppførselstest på feilveien (spion på `logger`), ikke et tekstsøk.
 11. **Personvern:** ny rad for `ai_usage_log` i `docs/personvern/intern-personvernerklaering.md` (hva: hvem som ba om og avgjorde forslaget, forslagsteksten, feltkoder og antall tegn; formål: KI-forslag som den ansatte kontrollerer, og sporbarhet ved reklamasjon; hvor: database; hvor lenge: 10 år, myk sletting, spørsmål 56; hvem ser: ingen skjerm, ingen tall per person). Raden for `audit_log` får en setning om at den nå også har én linje per avgjort eller angret KI-forslag med hvem som gjorde det (spørsmål 57). Tabellen føres i `docs/personvern/sletting-av-betadata.md` der prøvedata listes.
-12. `docs/05-domenemodell.md` (4.12 og ordlisten) oppdateres om noe avviker fra ADR-en. Versjon i `package.json` økes (minor: ny tabell og ny kjernemodul).
+12. `docs/05-domenemodell.md` (4.12 og ordlisten) oppdateres om noe avviker fra ADR-en. Versjon i `package.json` økes én patch over `main` (0.4.4 → 0.4.5).
 
 **Ikke med (bevisst utelatt):**
 - Ingen skjermer, knapper eller visning av forslag (neste punkt: forslagsmønsteret).
@@ -116,6 +116,16 @@ Ingen.
 ## Regler
 Ingen fagregler. Tillatt-listen og de lovlige målene per funksjon er data i funksjonsdefinisjonen, med test.
 
+## Små funn fra liten oppgave (ad) som tas med her
+Fra gjennomgangen av ADR 0006 (`docs/agenter/tilstand.md`, liten oppgave (ad)). Bare funnene som gjelder modulen og loggen:
+- **ad-2 (hvem avviser, angre på avvist):** løst med A162 og A164: `decided_by` kommer alltid fra `grant`, forrige forslag avvises bare når det nye ga `ok`, og angre virker også på avvist forslag når det ikke finnes et nyere. Forenklerens forslag om å fjerne den automatiske avvisningen er vurdert og ikke tatt: da kan det bli to åpne forslag på samme mål, og regelen i A162 bygger på at det aldri skjer.
+- **ad-5 (seed i drift):** løst med A160: seed slår bare på KI i prøveorganisasjonen, aldri i Byggcon (Omfang 8, akseptkriterium om seed).
+- **ad-10 (to veier til leverandør):** løst med A160: én vei, bare fra en aktiv tilkobling.
+- **ad-11 (detaljtyper i ADR-en):** ADR 0006 del 1 og 2 får en setning om at typene er retning, og at koden er fasit når den er bygget.
+- **ad-12 (dobbel parentes om `PROVIDER_CODES.ai`):** den andre forekomsten i ADR 0006 del 2 fjernes.
+
+Tas ikke her: ad-1 (eget utfall for sperret fritekst uten oppdrag) og ad-3, ad-4, ad-7 tas med «Vask før KI», fordi sperren bare har mening når vasken og en ekte leverandør finnes (her finnes bare `fake`). ad-6 tas med forslagsmønsteret (publiseringssperren). ad-8 tas når samlede tall bygges. ad-9 tas etter S8.
+
 ## Akseptkriterier
 - [ ] Migreringen lager `ai_usage_log` med feltene over. Skjematest: hver sammensatte fremmednøkkel (`employee_id`, `decided_by`, `assignment_id`) avviser en rad fra en annen organisasjon; sjekken godtar `ok` med status og avviser `no_match` med status eller med `output_text`; `report_id` kan være tom; `retain_until` er opprettet + 10 år.
 - [ ] `requestSuggestion` mot `fake` gir et forslag med status `suggested` og skriver én rad med funksjon, leverandør, `fake-v1`, ledetekstversjon, kostnad 0, `NOK` og `source_fields` uten verdier.
@@ -133,6 +143,8 @@ Ingen fagregler. Tillatt-listen og de lovlige målene per funksjon er data i fun
 - [ ] De statiske kontrollene i Omfang 9 er grønne, også at `PROVIDERS_BY_PORT.ai` er nøyaktig `["fake"]`, og at ingen funksjonsdefinisjon har TG-felt eller felt fra sperrelisten.
 - [ ] Seed slår på KI med `fake` i prøveorganisasjonen og tåler to kjøringer. Den slår ikke KI på igjen når admin har satt `ai.enabled = false`, lager ikke ny rad når det finnes en deaktivert eller slettet rad på porten `ai`, endrer ikke andre nøkler i `settings`, og rører ikke Byggcon.
 - [ ] Personvernerklæringen har rad for `ai_usage_log` og setningen om `audit_log`; tabellen står i sletteregelen.
+- [ ] ADR 0006 er rettet for ad-11 og ad-12.
+- [ ] Versjon 0.4.5 i `package.json`.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne. Ingen ny avhengighet. Ingen nye e2e-tester (ingen skjerm).
 
 ## Beslutninger tatt i autonom modus (føres i `docs/09-apne-sporsmal.md`)
