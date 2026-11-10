@@ -139,11 +139,13 @@ test.describe("boksen på listen og varig lagring (5.2)", () => {
     await expect(box).toHaveAttribute("data-storage-level", /^(ok|low)$/);
     await expect(box).toContainText(/\d+\s*MB/);
     await expect(box).toContainText("Varig lagring:");
-    // Under velgeren for synkløsning
-    const pickerBox = await page.getByRole("group", { name: "Synkløsning" }).boundingBox();
+    // Under overskriften (velgeren for synkløsning er fjernet, ADR 0004)
+    const headingBox = await page
+      .getByRole("heading", { name: "Testskjema", level: 1 })
+      .boundingBox();
     const storageBoxRect = await box.boundingBox();
-    expect(pickerBox && storageBoxRect).toBeTruthy();
-    expect(storageBoxRect!.y).toBeGreaterThanOrEqual(pickerBox!.y + pickerBox!.height - 1);
+    expect(headingBox && storageBoxRect).toBeTruthy();
+    expect(storageBoxRect!.y).toBeGreaterThanOrEqual(headingBox!.y + headingBox!.height - 1);
     // Avvik fra kortet (testplan 5.2): kvoten i Chromium uten skjerm kan være under 500 MB ledig
     const estimate = await page.evaluate(async () => {
       const { usage, quota } = await navigator.storage.estimate();
