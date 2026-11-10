@@ -4,7 +4,7 @@ services:
   db:
     image: postgres:16
     # Logisk replikering trengs ikke lenger (PowerSync og ElectricSQL er fjernet,
-    # ADR 0004). Linjen står til replikeringsplassene fra prøven er ryddet bort av migrering 0025
+    # ADR 0004). Linjen står til replikeringsplassene fra prøven er ryddet bort av migrering 0026
     # på alle Macer: PostgreSQL starter ikke med en logisk plass og lavere wal_level.
     command: postgres -c wal_level=logical
     environment:
