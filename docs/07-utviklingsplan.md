@@ -72,7 +72,7 @@ Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3
 | 0a Repo og database | Ferdig 28.10.2026 |
 | 1 Prøve uten nett | Ferdig 10.11.2026. Ståle har kjørt prøvene på ekte iPad og godkjent ADR 0004 (egenbygd synk). |
 | 0b Innlogging, organisasjon, roller | Ferdig, unntatt felles innlogging med Optiplan (venter på S6) |
-| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123) og KI-modulen og loggen (PR #127) er levert. «Forslagsmønsteret» (2a-1) er levert som PR. Neste: «Vask før KI». |
+| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127) og forslagsmønsteret (PR #131) er levert. Neste: «Vask før KI» (2a-1). |
 | Minimum før ekte data | To av ni punkter levert. Testmiljøet er klart (S1, 10.11.2026), så resten kan bygges nå. |
 | 2b og videre | Ikke startet |
 

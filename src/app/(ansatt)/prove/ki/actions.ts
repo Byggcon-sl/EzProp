@@ -1,11 +1,12 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 import { AccessDeniedError, requireOrganizationAccess, type EmployeeGrant } from "@/core/access";
 import {
   AI_DECISIONS,
-  AI_TRIAL_TARGET_TYPE,
   AI_FIELD_MAX_LENGTH,
+  AI_TRIAL_TARGET_TYPE,
   AiDecisionError,
   AiRequestRejectedError,
   getSuggestionStatus,
@@ -94,6 +95,8 @@ function failure(
   log: { action: string; userId?: string; usageId?: string },
   rejectedMessage: string = NOT_FOUND,
 ): TrialFailure {
+  // Utløpt økt gir omdirigering til innlogging; den skal ikke bli til «Noe gikk galt».
+  unstable_rethrow(error);
   if (error instanceof AccessDeniedError) return failed(NO_ACCESS);
   if (error instanceof AiRequestRejectedError) return failed(rejectedMessage);
   logger.error("Prøvesiden for KI feilet", {

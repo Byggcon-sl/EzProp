@@ -67,7 +67,7 @@ Antall trykk: fra skrevet setning til godtatt forslag to trykk (be om forslag, b
    - **`recordDecision`, rekkefølgen:** rettigheten står på raden, så den kan ikke sjekkes helt før lesing. Derfor: (1) før noe leses, må `grant` ha rettigheten til minst én KI-funksjon, ellers `AccessDeniedError`; (2) etter lesing gir manglende rettighet for akkurat denne funksjonen `AiRequestRejectedError`, samme feil og melding som «finnes ikke», «annen organisasjon» og «slettet». Ved avslag endres verken raden eller `audit_log`. Admin stenges ikke ute. Lik responstid kreves ikke (kan ikke testes stabilt).
    - **`ensureSampleAi`** (`src/db/seed/sample-assignments.ts`): sjekken av `settings.sampleData` ligger i samme spørring som oppdateringen (`where`), og tilkoblingen lages heller ikke uten den. Kjøres to ganger gir samme resultat.
    - ad-6 løses i punkt 6.
-8. Versjon 0.5.2 → 0.5.3 (main var 0.5.2 da PR-en ble åpnet). Ordlisten i `docs/05-domenemodell.md` (forslagskort, KI-merke, statusoppslag, publiseringssperre for KI-tekst, `ai_trial`). Beslutninger A166–A168 i `docs/09-apne-sporsmal.md`. Én setning i spørsmål 57 om at prøvesiden også gir linjer i `audit_log` med hvem som avgjorde.
+8. Versjon 0.5.2 → 0.5.3 (etter fletting med main). Ordlisten i `docs/05-domenemodell.md` (forslagskort, KI-merke, statusoppslag, publiseringssperre for KI-tekst, `ai_trial`). Beslutninger A166–A168 i `docs/09-apne-sporsmal.md`. Én setning i spørsmål 57 om at prøvesiden også gir linjer i `audit_log` med hvem som avgjorde.
 
 **Ikke med (bevisst utelatt):**
 - **«Endre og bruk».** Planen sier «bruk, behold, nytt forslag» og angre. Statusen `edited` finnes allerede i kjernen og godtas av sperren og merket, så ingenting går tapt. Knappen legges til i 2a-2 når takstmannen redigerer en ekte avvikstekst.
@@ -124,6 +124,13 @@ Ingen nye fagregler. Overgangene for status er A162 og A164 (PR #127) og endres 
 - [ ] `ensureSampleAi` gjør ingenting (innstillinger og tilkobling) i en organisasjon uten `sampleData`, og to kall gir samme resultat (test).
 - [ ] Serverhandlingene: organisasjons-id fra klienten ignoreres, ugyldig uuid avvises, uten `report.edit` avslag, takstmann/leder/admin lov, `audit_log` inneholder bare id og status (test).
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne. Versjon 0.5.3.
+
+## Avklaringer (utvikler, 10.11.2026)
+- **A. `getSuggestionStatus(grant, usageId)`** gir `{ status, outcome } | null`. `null` er det ene nøytrale svaret for «finnes ikke», annen organisasjon, slettet, ugyldig uuid **og** manglende rettighet for funksjonen på raden. Statusoppslaget kaster ikke `AccessDeniedError`; serverhandlingene sjekker `report.edit` i `@/core/access` før kallet. Testplan 3.3 deles derfor ikke.
+- **`checkAiTextApproved(grant, items)`** gir `{ aiUsageId, target }[]` (de som ikke er godkjent). Uten `report.edit`: `AccessDeniedError`, også for tom liste. Over `AI_APPROVAL_CHECK_MAX = 500`: `AiRequestRejectedError` uten spørring og uten delvis svar. `aiUsageId` og `target.id` sammenlignes med små bokstaver (testplan 4.15: begge godkjent).
+- **Vakten for `ai_trial`** ligger i `requestSuggestion` rett etter valget av leverandør: er leverandøren ikke den falske, svarer kjernen `{ kind: "disabled" }` uten rad og uten kall.
+- **`recordDecision`:** trinn 1 (rettighet til minst én KI-funksjon) kommer før validering av id, så kontor uten `report.edit` får `AccessDeniedError` også for ugyldig uuid.
+- **`ensureSampleAi`** gir `skipped` i en organisasjon uten `sampleData` og lager da verken innstilling eller tilkobling.
 
 ## Beslutninger (autonom modus)
 - **A166 (lett å endre):** Forslagsmønsteret prøves på en egen prøveside `/prove/ki` med måltypen `ai_trial`, fordi `answers` og rapporten ikke finnes ennå. `ai_trial` godtas bare når leverandøren er `fake`, sjekket i `src/core/ai`, fordi siden sender fritekst uten vask. Siden fjernes og `ai_trial` arkiveres når språkvask kommer på avviksteksten i 2a-2. Kilde: planen 2a-1 «Ferdig når», ADR 0006 del 4, sikkerhet-personvern 10.11.2026.

@@ -53,4 +53,4 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 10.11.2026 | Svar på de tre fagspørsmålene: TG0 når det ikke er målt fukt, uansett alder; radon bare som HMS; brann og sikkerhet er punkter uansett bygningstype. S3 er helt gjort. KI-leverandør Anthropic er bekreftet, og Ståle har API-nøkkel (S8). | Ståle i chat 10.11.2026 |
 | 10.11.2026 | Fagsvarene ført inn som spørsmål 59 i `docs/09-apne-sporsmal.md` og i punktene «Reglene badet trenger» (2a-2) og systemmalen (2a-3). | Prosjektlederen |
 | 10.11.2026 | «KI-modulen og loggen» (2a-1) levert som PR #127 og flyttet til `docs/plan/levert.md`. | Læringsløkken |
-| 10.11.2026 | «Forslagsmønsteret» (2a-1) krysset av, levert som PR fra branchen `fase2a-forslagsmonster`. | Prosjektlederen |
+| 10.11.2026 | «Forslagsmønsteret» (2a-1) levert som PR #131 (påbegynt av en kjøring som stanset uten PR, fullført og åpnet av hovedløkken). Flyttes til `docs/plan/levert.md` av læringsløkken. | Prosjektlederen |
