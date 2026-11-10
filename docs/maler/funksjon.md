@@ -3,13 +3,13 @@
 - **Fase:** <nr>
 - **Modul:** kjerne / <modul>
 - **Status:** utkast / godkjent / ferdig
-- **Støtter hovedmål:** Tid: … / Reklamasjoner: … / KI først: …
+- **Støtter hovedmål:** De ansatte: … / KI i bunnen: … / Reklamasjoner: …
 
 ## Problem
 Hvilket konkret problem løser dette, og for hvem? Hva skjer hvis vi lar være?
 
-## KI først
-Kan KI gjøre eller forberede dette, slik at takstmannen bare kontrollerer og godkjenner? Hvis nei: hvorfor.
+## KI i bunnen
+Hva gjør KI her fra første dag, slik at den ansatte bare kontrollerer og godkjenner? Hvilke data lagres strukturert og med kilde, slik at KI kan bruke dem? Går alt gjennom `src/core/ai` som forslag med logg? Hvis KI ikke har noe å gjøre her: skriv hvorfor.
 
 ## Brukerhistorier
 - Som **<rolle>** vil jeg **<handling>** slik at **<nytte>**.
@@ -42,6 +42,7 @@ Regler som data, med testsaker.
 - [ ]
 - [ ] Bruker i annen organisasjon får ikke tilgang (test)
 - [ ] Virker på iPad-størrelse (e2e)
+- [ ] KI-forslag (hvis noen) kan godtas, endres og avvises, og logges (test mot falsk leverandør)
 
 ## Åpne spørsmål
 -

@@ -6,10 +6,12 @@ Instruksjoner for Claude Code i dette prosjektet. Les denne filen ved start av h
 
 **EzProp** er Byggcons eget system for tilstandsrapporter. Det erstatter IVIT. Takstingeniørene gjør befaringen på iPad Pro (også uten nett) og ferdigstiller rapporten på PC. Systemmaler med regler og TG-logikk lages av Byggcon; egne maler lages senere i en visuell malbygger.
 
-**Hovedmål (Ståle 28.10.2026), gjelder alt vi gjør:**
-1. **50 % mindre tid** per rapport for takstingeniøren, målt mot IVIT.
-2. **Halvparten så mange reklamasjoner**, målt per 100 leverte rapporter.
-3. **KI først.** For hver oppgave: kan KI gjøre eller forberede den, slik at takstmannen bare kontrollerer og godkjenner? Takstmannen har alltid siste ord og signerer. KI publiserer aldri selv.
+**Hovedmål (Ståle 10.11.2026), gjelder alt vi gjør:** «Vi skal lage et best mulig system for våre ansatte – KI først. Det betyr også at KI må ligge i bunnen, ikke komme som et tillegg senere.»
+1. **Best mulig system for de ansatte.** En enklere, raskere og tryggere arbeidsdag for takstingeniørene, kontoret og lederne. De ansatte avgjør om vi har lykkes.
+2. **KI først, og KI i bunnen.** KI er en del av grunnmuren og av hver funksjon fra første dag, ikke et tillegg senere. For hver oppgave: hva kan KI gjøre eller forberede, slik at den ansatte bare kontrollerer og godkjenner? Takstmannen har alltid siste ord og signerer. KI setter aldri TG og publiserer eller sender aldri selv.
+3. **Færre reklamasjoner** (står fra 28.10.2026): halvparten så mange per 100 leverte rapporter.
+
+50 % mindre tid per rapport er **ikke lenger hovedmål** (Ståle 10.11.2026). Tiden måles fortsatt, som ett av flere tegn på at systemet er godt.
 
 Hver oppgave og hver PR skal si hvilket mål den støtter, og hvordan.
 
@@ -19,11 +21,12 @@ Les før du gjør endringer i et område:
 - Roller og tilgang: `docs/02-roller-og-tilgang.md`
 - Domenemodell og ordliste: `docs/05-domenemodell.md` (fasit for datamodellen)
 - Arkitektur og regler: `docs/06-arkitektur.md`
-- Plan og status: `docs/07-utviklingsplan.md`
+- Plan og status: `docs/07-utviklingsplan.md` (det ene levende plandokumentet). Levert arbeid: `docs/plan/levert.md`. Sporbarhet og endringslogg: `docs/plan/`.
 - Designprinsipper (A «Fjord»): `docs/08-designprinsipper.md`
 - Åpne spørsmål: `docs/09-apne-sporsmal.md`
 - Utviklingsmiljø: `docs/10-utviklingsmiljo.md`
 - Agentlaget og løkkene: `docs/11-agentlaget.md`, tilstand i `docs/agenter/tilstand.md`
+- Testlaget (agenter som tester og validerer): `docs/agenter/testlag/LES-MEG.md`, funn i `docs/agenter/testlag/funn/`, siste rapport i `docs/agenter/testlag/rapport.md`
 - Researchen (IVIT, Spectora, SmartTakst, regelverk, Ståles svar): `docs/kartlegging/`. Start med `docs/kartlegging/LES-MEG-kartlegging.md`. Ståles svar er fasit ved motstrid; nyeste dato gjelder.
 
 ## Regler som ikke kan brytes
@@ -41,6 +44,7 @@ Les før du gjør endringer i et område:
 11. **Admin stenges aldri ute.** Nye tilgangsregler skal aldri stenge admin ute.
 12. **Fra Ståles svar 27.10.2026:** gyldig ett år fra befaringsdato · alle takstmenn ser og kan foreløpig endre alt (innstillingen `access.inspectors_edit_all`), unntatt reklamasjonssaker (bare leder og admin) · fire oppdragsstatuser: bestilt, under arbeid, ferdig, fakturert, pluss merket «Rettet» fra versjon 2 · sidemannskontroll gir advarsel, aldri sperre, og sidemannen retter ikke · alle kan sende fakturagrunnlag · eget kostnadsbeløp gir advarsel hvis det ikke er rundet til nærmeste 10 000 · rettet rapport sendes manuelt.
 13. **Øk versjonsnummeret** i `package.json` i hver PR (patch, f.eks. 0.1.0 → 0.1.1; minor ved større leveranser). Det vises i `/api/helse`.
+14. **KI i bunnen.** All KI går gjennom én modul i kjernen (`src/core/ai`) bak KI-porten. KI lager forslag som den ansatte godtar, endrer eller avviser; forslag og beslutning logges i `ai_usage_log`. Navn, e-post, telefon, adresse og matrikkel sendes aldri til KI. Alt bygges og prøves mot en falsk leverandør; ekte leverandør slås på av Ståle. Se «KI i bunnen» i planen.
 
 ## Språk
 
@@ -84,7 +88,7 @@ Ståle Limstrand er daglig leder i Byggcon og produkteier. Han er ikke utvikler,
 
 Ståle vil ikke ha meldinger, spørsmål eller noe å teste mens modusen er på. Fra 04.11.2026: «Jeg synes det fungerte så bra at du kan kjøre videre på autonom utvikling igjen.» Hans ord 29.10.2026: «Kjør utvikling og testing autonomt. Er du i tvil, gå tilbake til undersøkelsene og tolk hva du mener blir beste løsning. Løsningen er foreløpig kun i test.» Derfor, så lenge `docs/agenter/tilstand.md` sier «Autonom modus: på»:
 
-- **Agentene avgjør selv** spørsmål om fag, innhold og funksjoner innenfor planen. Grunnlaget er researchen i `docs/kartlegging/` (Ståles svar er fasit, nyeste dato gjelder), hovedmålene og forskriften. Velg det som best støtter målene (mindre tid, færre reklamasjoner, KI først), og det enkleste som virker.
+- **Agentene avgjør selv** spørsmål om fag, innhold og funksjoner innenfor planen. Grunnlaget er researchen i `docs/kartlegging/` (Ståles svar er fasit, nyeste dato gjelder), hovedmålene og forskriften. Velg det som best støtter målene (best for de ansatte, KI i bunnen, færre reklamasjoner), og det enkleste som virker.
 - **Hver slik beslutning føres** i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte» (hva, hvorfor, kilde i researchen, hvordan det kan endres), og nevnes i PR-en. PR-en merges som vanlig.
 - **Ingen PushNotification, ingen «Venter på Ståle»-PR-er.** Det som virkelig bare Ståle kan gjøre (hemmeligheter, kontoer, noe som koster penger, e-post/SMS til ekte mottakere), legges under «Trenger Ståle når han er tilbake» i tilstandsfilen, og løkken går videre med en annen oppgave.
 - **Ikke lov uansett:** noe som koster penger (for eksempel å slå på tjenester i Azure), sende e-post eller SMS til ekte mottakere, logge inn i IVIT, Spectora eller SmartTakst, rulle ut til produksjon, ekte kundedata, hemmeligheter i repoet, tekst fra NS 3600, IVIT eller SmartTakst.
@@ -95,13 +99,14 @@ Ståle vil ikke ha meldinger, spørsmål eller noe å teste mens modusen er på.
 
 Arbeidet gjøres av agentlaget i `.claude/agents/` med arbeidsflytene i `.claude/workflows/` (`docs/11-agentlaget.md`). Kort:
 
-1. Les `docs/agenter/tilstand.md` og finn neste uavkryssede punkt i gjeldende fase i `docs/07-utviklingsplan.md` (`/neste`).
+1. Les `docs/agenter/tilstand.md`. Rett først alvorlige feil som testlaget har bekreftet (`docs/agenter/testlag/funn/`, status «ny»). Finn deretter neste uavkryssede punkt i gjeldende fase i `docs/07-utviklingsplan.md` (`/neste`). Det som står under «Venter på Ståle» i planen, er ikke for agentene.
 2. Spesifiser med malen `docs/maler/funksjon.md` (`/spesifiser`). Større funksjoner får en fil i `docs/funksjoner/`.
 3. Skriv tester sammen med koden (tilgang og tenant-isolasjon alltid). Regler får testsaker.
 4. Kjør `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` før noe meldes ferdig. Åpne PR mot `main` med PR-malen i `docs/maler/pr.md`.
-5. Oppdater `docs/07-utviklingsplan.md` (kryss av), ordlisten og `docs/agenter/tilstand.md`. Commit og push ofte, minst etter hvert ferdige steg.
+5. Oppdater `docs/07-utviklingsplan.md` (kryss av; etter merge flyttes linjen til `docs/plan/levert.md`), ordlisten og `docs/agenter/tilstand.md`. Endres planen, får endringen én linje i `docs/plan/endringslogg.md`. Commit og push ofte, minst etter hvert ferdige steg.
 6. Arkitekturbeslutninger skrives som ADR i `docs/adr/`.
 7. Spørsmål du ikke kan avgjøre selv, legges i `docs/09-apne-sporsmal.md`. Ikke gjett.
+8. **Testlaget** (løkke G) prøver det som er merget, slik at Ståle ikke må teste hver leveranse. Bekreftede feil blir retteoppgaver, forbedringer innenfor planen tas med neste oppgave i samme område, og nye ideer blir forslag i `docs/09-apne-sporsmal.md`.
 
 ## Ikke gjør
 
