@@ -9,7 +9,6 @@ import {
 } from "@playwright/test";
 import {
   ADMIN_EMAIL,
-  countRequests,
   createTrialForm,
   hookValue,
   indicator,
@@ -21,10 +20,8 @@ import {
   PULL_PATH,
   readRowsViaHook,
   recordPulls,
-  useCandidate,
-  type ElectricTrialHook,
+  type TrialHook,
   type LocalRow,
-  type TrialSyncCandidate,
 } from "./helpers";
 import { PULL_BACKOFF_MAX_MS } from "../src/modules/offline-trial/sync/custom/types";
 
@@ -43,9 +40,8 @@ const ANY_STATUS =
 const NO_PHOTOS_WAITING =
   /^Venter: \d+ endring(er)?, 0 bilder$|^Alt er lagret$|^Venter på kontakt med serveren$/;
 const ALL_SAVED = "Alt er lagret";
-/** PowerSync og ElectricSQL: køen er tom, men uten henting fra serveren i e2e er ingenting bekreftet. */
+/** Køen er tom, men serveren har ikke bekreftet en henting ennå. */
 const AWAITING_SERVER = "Venter på kontakt med serveren";
-const WAIT_TEXT = "Vent til alt er lagret på serveren før du bytter";
 /** Takt 5 s pluss sending og slingringsmonn (testplan 6.2, «To enheter»). */
 const OTHER_DEVICE_TIMEOUT = 20_000;
 
@@ -93,12 +89,11 @@ function formLink(page: Page, formId: string): Locator {
   return page.locator(`a[href$="/prove/testskjema/${formId}"]`);
 }
 
-/** Logger inn, lager et nytt skjema og returnerer id-en. Testen kaller `useCandidate` først. */
+/** Logger inn, lager et nytt skjema og returnerer id-en. */
 async function openNewForm(page: Page): Promise<string> {
   await logIn(page, ADMIN_EMAIL);
   const id = await createTrialForm(page);
   await expectCount(page, 0);
-  expect(await hookValue(page, "candidate")).toBe("custom");
   return id;
 }
 
@@ -172,72 +167,17 @@ function expectNoStore(headers: Record<string, string>) {
   expect(headers["cache-control"]).toBe("private, no-store");
 }
 
-/** Leser navn, versjon og lagre (med keyPath) i en IndexedDB-database uten å lage den. */
-async function describeDatabase(page: Page, name: string) {
-  return page.evaluate(async (dbName) => {
-    const databases = await indexedDB.databases();
-    if (!databases.some((info) => info.name === dbName)) return null;
-    return new Promise<{
-      version: number;
-      stores: Record<string, string | string[] | null>;
-    }>((resolve, reject) => {
-      const request = indexedDB.open(dbName);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const database = request.result;
-        const names = Array.from(database.objectStoreNames);
-        const stores: Record<string, string | string[] | null> = {};
-        if (names.length > 0) {
-          const tx = database.transaction(names, "readonly");
-          for (const store of names) stores[store] = tx.objectStore(store).keyPath;
-        }
-        const version = database.version;
-        database.close();
-        resolve({ version, stores });
-      };
-    });
-  }, name);
-}
-
-/** Id-ene i et lager i en IndexedDB-database (direkte, ikke via kroken). */
-async function idsInStore(page: Page, dbName: string, storeName: string): Promise<string[]> {
-  return page.evaluate(
-    async ([database, store]) =>
-      new Promise<string[]>((resolve, reject) => {
-        const request = indexedDB.open(database);
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-          const db = request.result;
-          if (!db.objectStoreNames.contains(store)) {
-            db.close();
-            resolve([]);
-            return;
-          }
-          const all = db.transaction(store, "readonly").objectStore(store).getAll();
-          all.onsuccess = () => {
-            db.close();
-            resolve((all.result as { id?: string }[]).map((row) => String(row.id)));
-          };
-          all.onerror = () => reject(all.error);
-        };
-      }),
-    [dbName, storeName] as const,
-  );
-}
-
 // ---------------------------------------------------------------------------------------------
-// Lagring og kø (samme som Electric, med navnet «(Egenbygd)»)
+// Lagring og kø
 // ---------------------------------------------------------------------------------------------
 
-test("testkroken viser custom som kandidat og lageret er klart", async ({ page, context }) => {
-  await useCandidate(context, "custom");
+test("testkroken og lageret er klare", async ({ page }) => {
   await logIn(page, ADMIN_EMAIL);
   await page.goto("/prove/testskjema");
-  expect(await hookValue(page, "candidate")).toBe("custom");
   const forms = await readRowsViaHook(page, "trial_forms");
   expect(Array.isArray(forms)).toBe(true);
   const hasDb = await page.evaluate(() => {
-    const hook = (window as unknown as { __offlineTrial: ElectricTrialHook }).__offlineTrial;
+    const hook = (window as unknown as { __offlineTrial: TrialHook }).__offlineTrial;
     return "db" in hook && hook.db !== undefined;
   });
   expect(hasDb).toBe(false);
@@ -245,9 +185,7 @@ test("testkroken viser custom som kandidat og lageret er klart", async ({ page, 
 
 test("listen viser nye testskjemaer med navn og laget når, og åpner dem (Egenbygd)", async ({
   page,
-  context,
 }) => {
-  await useCandidate(context, "custom");
   const first = await openNewForm(page);
   const second = await createTrialForm(page);
   expect(first).not.toBe(second);
@@ -267,11 +205,7 @@ test("listen viser nye testskjemaer med navn og laget når, og åpner dem (Egenb
   await expectCount(page, 0);
 });
 
-test("svarene og et bilde overlever at siden lastes på nytt (Egenbygd)", async ({
-  page,
-  context,
-}) => {
-  await useCandidate(context, "custom");
+test("svarene og et bilde overlever at siden lastes på nytt (Egenbygd)", async ({ page }) => {
   const formId = await openNewForm(page);
 
   await roofTg(page, "TG2").click();
@@ -314,7 +248,6 @@ test("indikatoren viser Uten nett uten nett, og alt lagret med nett (Egenbygd)",
   page,
   context,
 }) => {
-  await useCandidate(context, "custom");
   await openNewForm(page);
   await expect(indicator(page)).toHaveText(ANY_STATUS);
 
@@ -334,7 +267,6 @@ test("skjemaet åpner fra hurtiglageret uten nett etter ett besøk (Egenbygd)", 
   page,
   context,
 }, testInfo) => {
-  await useCandidate(context, "custom");
   const formId = await openNewForm(page);
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
@@ -387,9 +319,8 @@ test("skjemaet åpner fra hurtiglageret uten nett etter ett besøk (Egenbygd)", 
   expect(cached).toEqual({ script: true, page: true });
 });
 
-test("service worker rører ikke hente-ruten", async ({ page, context }, testInfo) => {
+test("service worker rører ikke hente-ruten", async ({ page }, testInfo) => {
   pcOnly(testInfo);
-  await useCandidate(context, "custom");
   await openNewForm(page);
   const organizationId = await hookValue(page, "organizationId");
   await page.evaluate(async () => {
@@ -423,11 +354,7 @@ test.describe("egenbygd uten service worker", () => {
   test.use({ serviceWorkers: "block" });
 
   // Obligatorisk (tap av data)
-  test("endringskøen overlever omlasting og tømmes bare etter 200 (Egenbygd)", async ({
-    page,
-    context,
-  }) => {
-    await useCandidate(context, "custom");
+  test("endringskøen overlever omlasting og tømmes bare etter 200 (Egenbygd)", async ({ page }) => {
     await logIn(page, ADMIN_EMAIL);
     await page.route(CHANGES_ROUTE, (route) =>
       route.fulfill({ status: 500, contentType: "application/json", body: "{}" }),
@@ -452,9 +379,8 @@ test.describe("egenbygd uten service worker", () => {
     await waitAllSaved(page);
   });
 
-  test("avbrutt sending beholder bunten (Egenbygd)", async ({ page, context }, testInfo) => {
+  test("avbrutt sending beholder bunten (Egenbygd)", async ({ page }, testInfo) => {
     pcOnly(testInfo);
-    await useCandidate(context, "custom");
     await logIn(page, ADMIN_EMAIL);
     let attempts = 0;
     await page.route(CHANGES_ROUTE, (route) => {
@@ -480,7 +406,6 @@ test.describe("egenbygd uten service worker", () => {
     // «Alt er lagret» krever en bekreftet henting etter at køen er tom; den kan ha en hel ventetid
     // i leseren foran seg (FULL_READER_WAIT_MS), så testen får tid til den.
     test.setTimeout(60_000 + 2 * FULL_READER_WAIT_MS);
-    await useCandidate(context, "custom");
     await logIn(page, ADMIN_EMAIL);
     await context.route(CHANGES_ROUTE, (route) =>
       route.fulfill({ status: 500, contentType: "application/json", body: "{}" }),
@@ -508,10 +433,8 @@ test.describe("egenbygd uten service worker", () => {
 
   test("det som skrives mens en bunt er underveis går ikke tapt (Egenbygd)", async ({
     page,
-    context,
   }, testInfo) => {
     pcOnly(testInfo);
-    await useCandidate(context, "custom");
     await logIn(page, ADMIN_EMAIL);
     const formId = await createTrialForm(page);
     await expect.poll(() => pendingChanges(page), { timeout: 20_000 }).toBe(0);
@@ -565,9 +488,7 @@ test.describe("egenbygd uten service worker", () => {
 
   test("bildet blir liggende lokalt til serveren har bekreftet sha256, så viser indikatoren 0 bilder (Egenbygd)", async ({
     page,
-    context,
   }) => {
-    await useCandidate(context, "custom");
     const formId = await openNewForm(page);
     await expect.poll(() => pendingChanges(page), { timeout: 20_000 }).toBe(0);
 
@@ -615,85 +536,20 @@ test.describe("egenbygd uten service worker", () => {
     }
   });
 
-  test("Electric og Egenbygd har hver sin lokale database", async ({ page }, testInfo) => {
-    pcOnly(testInfo);
-    await logIn(page, ADMIN_EMAIL);
-    const switchTo = async (candidate: TrialSyncCandidate) => {
-      await page.goto("/prove/testskjema");
-      await page.evaluate(
-        (value) => localStorage.setItem("trial_sync_candidate", value),
-        candidate,
-      );
-      await page.reload();
-      expect(await hookValue(page, "candidate")).toBe(candidate);
-    };
-
-    await switchTo("electricsql");
-    const electricForm = await createTrialForm(page);
-    await expect
-      .poll(() => idsInStore(page, "offline-trial-electric", "synced_trial_forms"))
-      .toContain(electricForm);
-
-    await switchTo("custom");
-    await expect
-      .poll(async () =>
-        (await page.evaluate(() => indexedDB.databases())).map((info) => info.name).sort(),
-      )
-      .toEqual(expect.arrayContaining(["offline-trial-custom", "offline-trial-electric"]));
-
-    const electric = await describeDatabase(page, "offline-trial-electric");
-    expect(electric).not.toBeNull();
-    // Samme versjon og lagre som før kandidat 3: ingen data på enheten er flyttet
-    expect(electric!.version).toBe(1);
-    expect(electric!.stores).toEqual({
-      outbox: "seq",
-      shape_state: "table",
-      synced_trial_answers: "id",
-      synced_trial_forms: "id",
-      synced_trial_photos: "id",
-    });
-
-    const custom = await describeDatabase(page, "offline-trial-custom");
-    expect(custom).not.toBeNull();
-    expect(custom!.stores).toEqual({
-      outbox: "seq",
-      sync_state: "key",
-      synced_trial_answers: "id",
-      synced_trial_forms: "id",
-      synced_trial_photos: "id",
-    });
-    expect(custom!.stores).not.toHaveProperty("shape_state");
-
-    // Electric-skjemaet ligger bare i Electric-databasen; det egenbygde lageret kan få det via
-    // hentingen (det er på serveren), men aldri ved at databasene deler lagring
-    expect(await idsInStore(page, "offline-trial-electric", "synced_trial_forms")).toContain(
-      electricForm,
-    );
-
-    await switchTo("electricsql");
-    await expect(formLink(page, electricForm)).toBeVisible();
-  });
-
-  // -------------------------------------------------------------------------------------------
-  // Henting fra serveren (nytt for denne kandidaten)
-  // -------------------------------------------------------------------------------------------
-
   test("ny enhet får skjemaet og svarene fra serveren via hente-ruten", async ({
     page,
-    context,
     browser,
     baseURL,
     viewport,
     hasTouch,
   }) => {
-    await useCandidate(context, "custom");
     const formId = await openNewForm(page);
     await floorsInput(page).fill("7");
     await roofTg(page, "TG2").click();
     await expectCount(page, 2);
     await waitAllSaved(page);
 
-    const second = await openSecondDevice(browser, "custom", {
+    const second = await openSecondDevice(browser, {
       ...deviceOptions({ baseURL, viewport, hasTouch }),
     });
     try {
@@ -713,10 +569,8 @@ test.describe("egenbygd uten service worker", () => {
 
   test("hentingen går omtrent hvert 5. sekund med nett, aldri tettere", async ({
     page,
-    context,
   }, testInfo) => {
     pcOnly(testInfo);
-    await useCandidate(context, "custom");
     const formId = await openNewForm(page);
     await waitAllSaved(page);
 
@@ -745,10 +599,8 @@ test.describe("egenbygd uten service worker", () => {
 
   test("feil på hente-ruten gir økende ventetid, og skriving virker i mellomtiden", async ({
     page,
-    context,
   }, testInfo) => {
     pcOnly(testInfo);
-    await useCandidate(context, "custom");
     const formId = await openNewForm(page);
     await waitAllSaved(page);
     // Den gamle siden kan sende en henting rett etter svaret på «nytt skjema» (pkt. 6), mens
@@ -790,10 +642,8 @@ test.describe("egenbygd uten service worker", () => {
   // Obligatorisk (tap av data)
   test("ugyldig markør (400) gir ny henting uten siden, og køen er urørt", async ({
     page,
-    context,
   }, testInfo) => {
     pcOnly(testInfo);
-    await useCandidate(context, "custom");
     const recorder = recordPulls(page);
     const formId = await openNewForm(page);
     await expect
@@ -855,7 +705,6 @@ test.describe("egenbygd uten service worker", () => {
 
   test("ingen henting uten nett", async ({ page, context }, testInfo) => {
     pcOnly(testInfo);
-    await useCandidate(context, "custom");
     const recorder = recordPulls(page);
     await openNewForm(page);
     await expect.poll(() => recorder.count(), { timeout: 15_000 }).toBeGreaterThan(0);
@@ -879,19 +728,11 @@ test.describe("egenbygd uten service worker", () => {
       .toBeGreaterThan(0);
   });
 
-  test("Egenbygd kaller verken shape-ruten eller PowerSync", async ({
-    page,
-    context,
-  }, testInfo) => {
+  test("Egenbygd henter fra hente-ruten", async ({ page }, testInfo) => {
     pcOnly(testInfo);
-    await useCandidate(context, "custom");
-    const shapes = countRequests(page, "**/api/prove/synk/shape*");
-    const tokens = countRequests(page, "**/api/prove/synk/token*");
     const pulls = recordPulls(page);
     await openNewForm(page);
     await page.waitForTimeout(10_000);
-    expect(shapes.count()).toBe(0);
-    expect(tokens.count()).toBe(0);
     // Hentingen går mot egen rute
     expect(pulls.count()).toBeGreaterThan(0);
   });
@@ -902,20 +743,14 @@ test.describe("egenbygd uten service worker", () => {
 
   test("tekst skrevet på én enhet vises på den andre uten omlasting", async ({
     page,
-    context,
     browser,
     baseURL,
     viewport,
     hasTouch,
   }) => {
-    await useCandidate(context, "custom");
     const formId = await openNewForm(page);
     await waitAllSaved(page);
-    const second = await openSecondDevice(
-      browser,
-      "custom",
-      deviceOptions({ baseURL, viewport, hasTouch }),
-    );
+    const second = await openSecondDevice(browser, deviceOptions({ baseURL, viewport, hasTouch }));
     try {
       const other = second.page;
       await openFromList(other, formId);
@@ -940,13 +775,8 @@ test.describe("egenbygd uten service worker", () => {
     hasTouch,
   }, testInfo) => {
     pcOnly(testInfo);
-    await useCandidate(context, "custom");
     const formId = await openNewForm(page);
-    const second = await openSecondDevice(
-      browser,
-      "custom",
-      deviceOptions({ baseURL, viewport, hasTouch }),
-    );
+    const second = await openSecondDevice(browser, deviceOptions({ baseURL, viewport, hasTouch }));
     const other = second.page;
     try {
       // Felles start
@@ -1003,14 +833,9 @@ test.describe("egenbygd uten service worker", () => {
     hasTouch,
   }, testInfo) => {
     pcOnly(testInfo);
-    await useCandidate(context, "custom");
     const formId = await openNewForm(page);
     await waitAllSaved(page);
-    const second = await openSecondDevice(
-      browser,
-      "custom",
-      deviceOptions({ baseURL, viewport, hasTouch }),
-    );
+    const second = await openSecondDevice(browser, deviceOptions({ baseURL, viewport, hasTouch }));
     const other = second.page;
     try {
       await openFromList(other, formId);
@@ -1048,103 +873,6 @@ test.describe("egenbygd uten service worker", () => {
   // Velger og organisasjon
   // -------------------------------------------------------------------------------------------
 
-  test("velgeren er sperret med forklaring når noe venter på å bli sendt (Egenbygd)", async ({
-    page,
-    context,
-  }) => {
-    await useCandidate(context, "custom");
-    await logIn(page, ADMIN_EMAIL);
-    await page.route(CHANGES_ROUTE, (route) =>
-      route.fulfill({ status: 500, contentType: "application/json", body: "{}" }),
-    );
-    const selector = group(page, "Synkløsning");
-    const others = [
-      selector.getByRole("button", { name: "PowerSync", exact: true }),
-      selector.getByRole("button", { name: "ElectricSQL", exact: true }),
-    ];
-    // UU-funn 9 (docs/agenter/oppgaver/fase1-uu-nattlokken-testplan.md E3): regionen finnes før
-    // teksten kommer, så skjermleseren leser meldingen opp
-    const waitStatus = selector.getByRole("status");
-    try {
-      await page.goto("/prove/testskjema");
-      await expect(selector).toBeVisible();
-      await expect(waitStatus).toHaveCount(1);
-      await createTrialForm(page);
-      await floorsInput(page).fill("7");
-      await expectCount(page, 1);
-      await page.goto("/prove/testskjema");
-      await expect(selector).toBeVisible();
-      for (const button of others) await expect(button).toBeDisabled();
-      await expect(page.getByText(WAIT_TEXT)).toBeVisible();
-      await expect(waitStatus).toHaveCount(1);
-      await expect(waitStatus).toHaveText(WAIT_TEXT);
-    } finally {
-      await page.unroute(CHANGES_ROUTE);
-    }
-    for (const button of others) await expect(button).toBeEnabled({ timeout: 20_000 });
-    await expect(page.getByText(WAIT_TEXT)).toHaveCount(0);
-    await expect(waitStatus).toHaveCount(1);
-    await expect(waitStatus).toHaveText("");
-  });
-
-  // Obligatorisk (tap av data)
-  test("bytte mellom alle tre kandidater sletter ingenting lokalt", async ({ page }, testInfo) => {
-    pcOnly(testInfo);
-    await logIn(page, ADMIN_EMAIL);
-    const switchTo = async (candidate: TrialSyncCandidate) => {
-      await page.goto("/prove/testskjema");
-      await page.evaluate(
-        (value) => localStorage.setItem("trial_sync_candidate", value),
-        candidate,
-      );
-      await page.reload();
-      expect(await hookValue(page, "candidate")).toBe(candidate);
-    };
-
-    const forms = new Map<TrialSyncCandidate, string>();
-    for (const candidate of ["powersync", "electricsql", "custom"] as const) {
-      await switchTo(candidate);
-      const formId = await createTrialForm(page);
-      await floorsInput(page).fill("7");
-      await expectCount(page, 1);
-      await expect.poll(async () => (await answerFor(page, formId, "floors"))?.value).toBe("7");
-      forms.set(candidate, formId);
-    }
-
-    const expectKept = async (candidate: TrialSyncCandidate) => {
-      const formId = forms.get(candidate)!;
-      await expect
-        .poll(
-          async () => (await readRowsViaHook(page, "trial_forms")).some((r) => r.id === formId),
-          {
-            message: `skjemaet for ${candidate}`,
-          },
-        )
-        .toBe(true);
-      await expect
-        .poll(async () => (await answerFor(page, formId, "floors"))?.value, {
-          message: `floors for ${candidate}`,
-        })
-        .toBe("7");
-    };
-
-    for (const candidate of [
-      "powersync",
-      "electricsql",
-      "custom",
-      "powersync",
-      "electricsql",
-      "custom",
-    ] as const) {
-      await switchTo(candidate);
-      await expectKept(candidate);
-    }
-  });
-
-  // -------------------------------------------------------------------------------------------
-  // Hente-ruten
-  // -------------------------------------------------------------------------------------------
-
   test("uinnlogget gir 401 på hente-ruten", async ({ request }, testInfo) => {
     pcOnly(testInfo);
     const response = await request.get(`${PULL_PATH}?organisasjon=${randomUuid()}`);
@@ -1153,9 +881,8 @@ test.describe("egenbygd uten service worker", () => {
   });
 
   // Obligatorisk
-  test("fremmed organisasjon gir 403 på hente-ruten", async ({ page, context }, testInfo) => {
+  test("fremmed organisasjon gir 403 på hente-ruten", async ({ page }, testInfo) => {
     pcOnly(testInfo);
-    await useCandidate(context, "custom");
     await logIn(page, ADMIN_EMAIL);
     const response = await page.request.get(`${PULL_PATH}?organisasjon=${randomUuid()}`);
     expect(response.status()).toBe(403);
@@ -1165,9 +892,8 @@ test.describe("egenbygd uten service worker", () => {
     expect(body).not.toHaveProperty("markor");
   });
 
-  test("ugyldig markør gir 400 på hente-ruten", async ({ page, context }, testInfo) => {
+  test("ugyldig markør gir 400 på hente-ruten", async ({ page }, testInfo) => {
     pcOnly(testInfo);
-    await useCandidate(context, "custom");
     await openNewForm(page);
     const organizationId = await hookValue(page, "organizationId");
     for (const siden of ["søppel", "!!!", "a".repeat(10_000)]) {
@@ -1183,10 +909,8 @@ test.describe("egenbygd uten service worker", () => {
 
   test("hente-ruten svarer med endringer, markor og ferdig, og aldri storage_path", async ({
     page,
-    context,
   }, testInfo) => {
     pcOnly(testInfo);
-    await useCandidate(context, "custom");
     await openNewForm(page);
     await page.getByLabel("Forsidebilde", { exact: true }).setInputFiles(TEST_IMAGE);
     await expect.poll(() => localPhotoFileCount(page), { timeout: 20_000 }).toBe(0);
@@ -1223,37 +947,3 @@ test.describe("egenbygd uten service worker", () => {
 });
 
 // Utenfor describe: velgeren skal virke med service worker som i virkeligheten
-test("velgeren har tre knapper, og Egenbygd overlever omlasting", async ({ page }, testInfo) => {
-  await logIn(page, ADMIN_EMAIL);
-  await page.goto("/prove/testskjema");
-  const selector = group(page, "Synkløsning");
-  const powersync = selector.getByRole("button", { name: "PowerSync", exact: true });
-  const electric = selector.getByRole("button", { name: "ElectricSQL", exact: true });
-  const custom = selector.getByRole("button", { name: "Egenbygd", exact: true });
-  await expect(powersync).toBeVisible();
-  await expect(electric).toBeVisible();
-  await expect(custom).toBeVisible();
-  await expect(selector.getByRole("button")).toHaveCount(3);
-  await expect(custom).toHaveAttribute("aria-pressed", "false");
-  await expect(custom).toBeEnabled();
-  if (testInfo.project.name === "ipad") {
-    for (const button of [powersync, electric, custom]) {
-      const box = await button.boundingBox();
-      expect(box).not.toBeNull();
-      expect(box!.height).toBeGreaterThanOrEqual(44);
-    }
-  }
-  await expect(indicator(page)).toHaveText(AWAITING_SERVER);
-
-  await Promise.all([page.waitForEvent("load"), custom.click()]);
-  await page.waitForLoadState();
-  await expect(custom).toHaveAttribute("aria-pressed", "true");
-  await expect(powersync).toHaveAttribute("aria-pressed", "false");
-  await expect(electric).toHaveAttribute("aria-pressed", "false");
-  expect(await page.evaluate(() => localStorage.getItem("trial_sync_candidate"))).toBe("custom");
-  expect(await hookValue(page, "candidate")).toBe("custom");
-
-  await page.reload();
-  await expect(custom).toHaveAttribute("aria-pressed", "true");
-  expect(await hookValue(page, "candidate")).toBe("custom");
-});

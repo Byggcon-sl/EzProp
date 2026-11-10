@@ -22,14 +22,13 @@ import {
   storageWarning,
   syncStatus,
   updateStorageOverride,
-  useCandidate,
   type StorageOverride,
 } from "./helpers";
 
 // Prøve C – lagring i Safari (docs/funksjoner/fase1-prove-c-lagring.md pkt. 2–5).
 // Testplan: docs/funksjoner/fase1-prove-c-lagring-testplan.md avsnitt 5. Støtter reklamasjoner
 // (et svar eller bilde som ikke ble lagret på iPaden, gir alltid en melding og et merke på feltet)
-// og tid (varig lagring og ny lagring skjer automatisk). Kjører i pc og ipad med PowerSync.
+// og tid (varig lagring og ny lagring skjer automatisk). Kjører i pc og ipad med egenbygd synk.
 // Testene leser markørene (`data-storage-level`, `data-storage-persisted`, `data-field-saved`),
 // `role` og `data-testid`; ordrett tekst testes i Vitest (storage-health.test.ts).
 //
@@ -130,10 +129,6 @@ async function failTwoAnswers(page: Page) {
   await expect(storageError(page)).toHaveCount(1);
 }
 
-test.beforeEach(async ({ context }) => {
-  await useCandidate(context, "powersync");
-});
-
 test.describe("boksen på listen og varig lagring (5.2)", () => {
   test("takstmann ser boksen med plass og varig lagring (ekte tall)", async ({ page }) => {
     await logInAsInspector(page);
@@ -144,11 +139,13 @@ test.describe("boksen på listen og varig lagring (5.2)", () => {
     await expect(box).toHaveAttribute("data-storage-level", /^(ok|low)$/);
     await expect(box).toContainText(/\d+\s*MB/);
     await expect(box).toContainText("Varig lagring:");
-    // Under velgeren for synkløsning
-    const pickerBox = await page.getByRole("group", { name: "Synkløsning" }).boundingBox();
+    // Under overskriften (velgeren for synkløsning er fjernet, ADR 0004)
+    const headingBox = await page
+      .getByRole("heading", { name: "Testskjema", level: 1 })
+      .boundingBox();
     const storageBoxRect = await box.boundingBox();
-    expect(pickerBox && storageBoxRect).toBeTruthy();
-    expect(storageBoxRect!.y).toBeGreaterThanOrEqual(pickerBox!.y + pickerBox!.height - 1);
+    expect(headingBox && storageBoxRect).toBeTruthy();
+    expect(storageBoxRect!.y).toBeGreaterThanOrEqual(headingBox!.y + headingBox!.height - 1);
     // Avvik fra kortet (testplan 5.2): kvoten i Chromium uten skjerm kan være under 500 MB ledig
     const estimate = await page.evaluate(async () => {
       const { usage, quota } = await navigator.storage.estimate();
@@ -257,7 +254,7 @@ test.describe("data overlever lukking (5.3)", () => {
     context,
   }) => {
     const formId = await openForm(page, context);
-    // Service worker og hurtiglager klare (samme vei som fase-1-powersync.spec.ts)
+    // Service worker og hurtiglager klare (service workeren styrer siden)
     await page.evaluate(async () => {
       await navigator.serviceWorker.ready;
     });

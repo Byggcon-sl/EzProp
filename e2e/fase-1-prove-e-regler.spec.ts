@@ -14,7 +14,6 @@ import {
   numberInput,
   readRowsViaHook,
   ruleResult,
-  useCandidate,
 } from "./helpers";
 
 // Prøve E: regler uten nett (docs/funksjoner/fase1-prove-e-regler.md pkt. 5–6, AK 6).
@@ -66,10 +65,6 @@ async function browserStateFor(page: Page, entry: TrialRuleCase): Promise<string
   }
   return line.getAttribute("data-rule-state");
 }
-
-test.beforeEach(async ({ context }) => {
-  await useCandidate(context, "custom");
-});
 
 test("regelsvaret vises under begge feltene", async ({ page }) => {
   await openNewForm(page);

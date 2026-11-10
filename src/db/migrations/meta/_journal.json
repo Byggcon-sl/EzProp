@@ -183,6 +183,13 @@
       "when": 1794316337879,
       "tag": "0025_ki_logg",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794327363797,
+      "tag": "0026_fjern-synkpublikasjoner",
+      "breakpoints": true
     }
   ]
 }

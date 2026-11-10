@@ -4,7 +4,7 @@
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
  * Synkstatusen som alltid vises øverst på listen og testskjemaet (docs/funksjoner/fase1-synkstatus.md
- * og -skisse.md): tilstand, «Lagret kl.» og knappen «Synk nå». Kjenner ingen kandidat; bruker bare
+ * og -skisse.md): tilstand, «Lagret kl.» og knappen «Synk nå». Bruker bare
  * `status()`, `onStatusChange` og `syncNow` fra lageret via props.
  *
  * Prøve F (docs/funksjoner/fase1-prove-f-innlogging.md): når nettet kommer, appen blir synlig igjen
@@ -34,9 +34,9 @@ import {
   syncStatusText,
   type SyncStatusKind,
 } from "./sync-status-text";
-import { savedAtKey } from "./sync/select-store";
+import { TRIAL_SAVED_AT_KEY } from "./sync/select-store";
 import { singleFlight } from "./sync/sync-now";
-import type { TrialSyncCandidate, TrialSyncRoundResult, TrialSyncStatus } from "./sync/types";
+import type { TrialSyncRoundResult, TrialSyncStatus } from "./sync/types";
 
 const POLL_MS = 2000;
 
@@ -45,8 +45,6 @@ interface SyncStatusProps {
   /** Kaller `onChange` når køen eller synkstatusen kan ha endret seg. Returnerer avmelding. */
   subscribe?: (onChange: () => void) => () => void;
   syncNow: () => Promise<TrialSyncRoundResult>;
-  /** Bestemmer nøkkelen for «Lagret kl.» i `localStorage`. */
-  candidate: TrialSyncCandidate;
 }
 
 const PILL_CLASSES: Record<SyncStatusKind, string> = {
@@ -143,9 +141,9 @@ function SyncIcon({ spinning }: { spinning: boolean }) {
   );
 }
 
-export function SyncStatus({ getStatus, subscribe, syncNow, candidate }: SyncStatusProps) {
+export function SyncStatus({ getStatus, subscribe, syncNow }: SyncStatusProps) {
   const [status, setStatus] = useState<TrialSyncStatus | null>(null);
-  const key = savedAtKey(candidate);
+  const key = TRIAL_SAVED_AT_KEY;
   // Komponenten vises bare i nettleseren (etter at lageret er åpnet), så `localStorage` kan leses her.
   const [savedAt, setSavedAt] = useState<string | null>(() => readStored(key));
   const savedAtRef = useRef<string | null>(null);

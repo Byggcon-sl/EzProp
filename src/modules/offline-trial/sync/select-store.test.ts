@@ -1,12 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { clearSavedAt, readSyncCandidate, savedAtKey, writeSyncCandidate } from "./select-store";
-import { TRIAL_SYNC_CANDIDATE_KEY, TRIAL_SYNC_CANDIDATES } from "./types";
-
-// Valg av kandidat i nettleseren (docs/funksjoner/fase1-kandidat-electricsql.md pkt. 7).
-// Testplan avsnitt 2.4. Lagringen sendes inn (som getTrialDeviceId), så ingen DOM trengs.
-// openTrialStore (dynamisk import) testes bare i e2e.
+import { clearSavedAt, TRIAL_SAVED_AT_KEY } from "./select-store";
 
 /** `localStorage`-lik lagring over en Map. */
 function memoryStorage(initial: Record<string, string> = {}) {
@@ -20,60 +15,8 @@ function memoryStorage(initial: Record<string, string> = {}) {
   };
 }
 
-describe("readSyncCandidate og writeSyncCandidate (select-store.ts)", () => {
-  it("standard er powersync når ingenting er lagret", () => {
-    expect(readSyncCandidate(memoryStorage())).toBe("powersync");
-  });
-
-  it("lagret electricsql leses tilbake", () => {
-    expect(readSyncCandidate(memoryStorage({ trial_sync_candidate: "electricsql" }))).toBe(
-      "electricsql",
-    );
-    expect(readSyncCandidate(memoryStorage({ trial_sync_candidate: "powersync" }))).toBe(
-      "powersync",
-    );
-  });
-
-  it("lagret custom leses tilbake", () => {
-    expect(readSyncCandidate(memoryStorage({ trial_sync_candidate: "custom" }))).toBe("custom");
-  });
-
-  it("ukjent verdi gir powersync, ikke krasj", () => {
-    for (const value of ["pglite", "", "ELECTRICSQL", " electricsql", "null"]) {
-      expect(readSyncCandidate(memoryStorage({ trial_sync_candidate: value })), value).toBe(
-        "powersync",
-      );
-    }
-  });
-
-  it("writeSyncCandidate skriver nøkkelen trial_sync_candidate", () => {
-    const storage = memoryStorage();
-    writeSyncCandidate("electricsql", storage);
-    expect(storage.map.get("trial_sync_candidate")).toBe("electricsql");
-    expect(readSyncCandidate(storage)).toBe("electricsql");
-    writeSyncCandidate("powersync", storage);
-    expect(storage.map.get("trial_sync_candidate")).toBe("powersync");
-    // Ingen andre nøkler røres
-    expect(Array.from(storage.map.keys())).toEqual(["trial_sync_candidate"]);
-  });
-
-  // Kandidat 3, egenbygd (docs/funksjoner/fase1-kandidat-egenbygd-testplan.md avsnitt 2.4)
-  it("custom med store bokstaver eller norsk navn gir powersync", () => {
-    for (const value of ["CUSTOM", "Custom", " custom", "egenbygd", "Egenbygd"]) {
-      expect(readSyncCandidate(memoryStorage({ trial_sync_candidate: value })), value).toBe(
-        "powersync",
-      );
-    }
-  });
-
-  it("nøkkelen er trial_sync_candidate og verdiene powersync, electricsql og custom", () => {
-    expect(TRIAL_SYNC_CANDIDATE_KEY).toBe("trial_sync_candidate");
-    expect([...TRIAL_SYNC_CANDIDATES]).toEqual(["powersync", "electricsql", "custom"]);
-  });
-});
-
-// «Lagret kl.» per kandidat i localStorage (docs/funksjoner/fase1-synkstatus.md pkt. 7, A6).
-// Testplan synkstatus avsnitt 2.5. `clearIfOtherOrganization` laster kandidatene med dynamisk
+// «Lagret kl.» i localStorage (docs/funksjoner/fase1-synkstatus.md pkt. 7, A6).
+// Testplan synkstatus avsnitt 2.5. `clearIfOtherOrganization` laster lageret med dynamisk
 // import (IndexedDB) og kan ikke kalles i Vitest. Tømmingen ligger derfor i den rene funksjonen
 // `clearSavedAt(storage)` (krav K7), og en lesetest viser at den kalles bare ved bytte.
 
@@ -119,34 +62,21 @@ function clearIfOtherOrganizationBody(source: string): string {
 }
 
 describe("«Lagret kl.» i localStorage (select-store.ts)", () => {
-  it("nøklene for Lagret kl. er trial_saved_at_ og kandidaten", () => {
-    expect(savedAtKey("powersync")).toBe("trial_saved_at_powersync");
-    expect(savedAtKey("electricsql")).toBe("trial_saved_at_electricsql");
-    expect(savedAtKey("custom")).toBe("trial_saved_at_custom");
-    const keys = TRIAL_SYNC_CANDIDATES.map((candidate) => savedAtKey(candidate));
-    expect(new Set(keys).size).toBe(TRIAL_SYNC_CANDIDATES.length);
+  it("nøkkelen for Lagret kl. er trial_saved_at", () => {
+    expect(TRIAL_SAVED_AT_KEY).toBe("trial_saved_at");
   });
 
   // Obligatorisk
-  it.each(TRIAL_SYNC_CANDIDATES)(
-    "bytte av organisasjon tømmer Lagret kl. for alle tre kandidatene (valgt: %s)",
-    (chosen) => {
-      const storage = removableStorage({
-        trial_sync_candidate: chosen,
-        trial_last_organization_id: ORG_A,
-        trial_saved_at_powersync: SAVED_AT,
-        trial_saved_at_electricsql: SAVED_AT,
-        trial_saved_at_custom: SAVED_AT,
-      });
-      clearSavedAt(storage);
-      for (const candidate of TRIAL_SYNC_CANDIDATES) {
-        expect(storage.map.has(`trial_saved_at_${candidate}`), candidate).toBe(false);
-      }
-      // Valget av kandidat og organisasjonen røres ikke av denne tømmingen
-      expect(storage.map.get("trial_sync_candidate")).toBe(chosen);
-      expect(storage.map.get("trial_last_organization_id")).toBe(ORG_A);
-    },
-  );
+  it("bytte av organisasjon tømmer Lagret kl.", () => {
+    const storage = removableStorage({
+      trial_last_organization_id: ORG_A,
+      trial_saved_at: SAVED_AT,
+    });
+    clearSavedAt(storage);
+    expect(storage.map.has("trial_saved_at")).toBe(false);
+    // Organisasjonen røres ikke av denne tømmingen
+    expect(storage.map.get("trial_last_organization_id")).toBe(ORG_A);
+  });
 
   it("bytte av organisasjon kaller tømmingen i clearIfOtherOrganization", () => {
     const body = clearIfOtherOrganizationBody(selectStoreSource());
@@ -173,13 +103,11 @@ describe("«Lagret kl.» i localStorage (select-store.ts)", () => {
 
   it("clearSavedAt rører ingen andre nøkler", () => {
     const storage = removableStorage({
-      trial_sync_candidate: "custom",
       trial_device_id: "enhet-1",
-      trial_saved_at_custom: SAVED_AT,
+      trial_saved_at: SAVED_AT,
     });
     clearSavedAt(storage);
     expect(Object.fromEntries(storage.map)).toEqual({
-      trial_sync_candidate: "custom",
       trial_device_id: "enhet-1",
     });
   });

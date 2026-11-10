@@ -1,13 +1,13 @@
 /**
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
- * Endringskøen vi eier selv (ElectricSQL synker bare lesing). Rene funksjoner over `OutboxState`
+ * Endringskøen vi eier selv. Rene funksjoner over `OutboxState`
  * etter `OutboxMachine` i `sync/types.ts`: ingen nettleser-API, ingen SDK. Lageret (`store.ts`)
  * skriver tilstanden til objektlageret `outbox` og sender buntene.
  *
  * Regelen som hindrer tap: en bunt tas ut av køen bare når serveren svarte 200 (`ackBatch`). Det
  * som skrives mens en bunt er underveis, legges som ny operasjon og fjernes aldri av svaret på
- * den gamle bunten. Kan gjenbrukes av kandidat 3 (egenbygd).
+ * den gamle bunten.
  */
 import { TRIAL_SYNC_LIMITS } from "../../server/types";
 import type { TrialTableName } from "../local-columns";
