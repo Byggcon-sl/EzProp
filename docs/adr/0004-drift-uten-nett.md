@@ -1,6 +1,6 @@
 # ADR 0004 – Drift uten nett: egenbygd lokal lagring og endringskø
 
-**Status: foreløpig, bekreftes etter prøve A og B på ekte iPad.**
+**Status: godkjent av Ståle 10.11.2026** («2 og 3 også», etter prøvene på ekte iPad). Var foreløpig fra 30.10.2026.
 
 Dato: 30.10.2026. Tatt av agentene i autonom modus («Slik går fase 1 videre uten Ståle» i `docs/agenter/tilstand.md`). Ståle godkjenner eller endrer valget i demoen. Grunnlag: `docs/funksjoner/fase1-sammenligning.md`, resultatfilene `fase1-prove-ab-*.md`, ADR 0003, domenemodellen 4.11 og sidemannskontrollen del 2 P20–P23. Oppgavekort: `docs/funksjoner/fase1-sammenligning-adr.md`.
 
