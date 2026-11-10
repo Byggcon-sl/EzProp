@@ -17,6 +17,12 @@
   --color-aurora-teal: #4fc3d9;
   --color-aurora-violet: #833ca3;
 
+  /* KI (nordlysfiolett). Bare for KI-forslag og KI-merket, aldri for TG eller status. */
+  --color-ai-50: #f3ecf8;
+  --color-ai-200: #d9d2ea;
+  --color-ai-700: #6b3a8c;
+  --color-ai-900: #5b2a7a;
+
   /* Bakgrunnen bak kortene */
   --color-canvas: #eef2f7;
   /* Kant på skjemafelt: minst 3:1 mot hvitt (WCAG 1.4.11) */
