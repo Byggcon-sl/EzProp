@@ -133,6 +133,24 @@ export async function requireOrganizationAccess(
 }
 
 /**
+ * Maltilgang (docs/funksjoner/fase2a-malmotor.md, «Tilgang»): å endre en mal krever
+ * `template.edit_structure`. Admin har den alltid (regel 11); andre bare som enkeltrettighet.
+ * Innstillingen `access.inspectors_edit_all` gir den aldri. Systemmalen er dermed låst for alle
+ * uten maltilgang. Egne maler (`custom`) kan ikke lages ennå (A139); til regelen for dem
+ * bestemmes i fase 5, krever også de maltilgang (det strengeste valget, også for ukjent `kind`).
+ * Kaster `AccessDeniedError`.
+ */
+export async function requireTemplateEditAccess(
+  actor: Actor,
+  organizationId: string,
+  // Familien sendes med, slik at regelen for egne maler kan legges inn her uten å endre kallene.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  family: { kind: string },
+): Promise<EmployeeGrant> {
+  return requireOrganizationAccess(actor, organizationId, "template.edit_structure");
+}
+
+/**
  * Organisasjonene brukeren er ansatt i (i dag alltid én: Byggcon). Brukes av startsiden for å
  * finne hvor personen skal, uten en organisasjons-id i adressen.
  */

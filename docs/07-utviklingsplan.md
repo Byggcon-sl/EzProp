@@ -151,7 +151,7 @@ Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se
 ### 2a-3 Bredden
 
 **Malen og reglene**
-- [ ] Malmotoren fra `datamodell.md` 4.5: malfamilie, malversjon, seksjon, felt, kontrollpunkt, avviksspørsmål, utfall, standardtiltak og regler. Systemmalen er låst for alle uten maltilgang.
+- [x] Malmotoren fra `datamodell.md` 4.5: malfamilie, malversjon, seksjon, felt, kontrollpunkt, avviksspørsmål, utfall, standardtiltak og regler. Systemmalen er låst for alle uten maltilgang.
 - [ ] **Regneark inn og ut med faste ID-er** for systemmalen. Slik redigerer fagansvarlig malen i betaen (P19); egen maleditor kommer i fase 5.
 - [ ] Automatisk kontroll av malen før publisering: obligatoriske punkter finnes, TG3 har kostnad, ingen regler peker på felt som ikke finnes, og alle testtilfeller består
 - [ ] «Prøv malen»: et testskjema som viser hvilke spørsmål og TG-forslag som kommer
