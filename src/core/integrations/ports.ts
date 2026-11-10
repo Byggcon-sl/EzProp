@@ -1,7 +1,8 @@
 /*
  * Portene i tilkoblingslaget (docs/05-domenemodell.md 4.10). Faste koder: de endres aldri, de
- * arkiveres (regel 6). Hver port har en fast liste over leverandører som koden kjenner. Bare
- * e-posten har leverandører nå; de andre portene fylles ut når tilkoblingen bygges.
+ * arkiveres (regel 6). Hver port har en fast liste over leverandører som koden kjenner. E-posten
+ * har leverandører, og KI har bare den falske leverandøren `fake` til Ståle har valgt en ekte
+ * (S8, ADR 0006). De andre portene fylles ut når tilkoblingen bygges.
  */
 
 export const INTEGRATION_PORTS = [
@@ -26,7 +27,7 @@ export const PROVIDERS_BY_PORT: Record<IntegrationPort, readonly string[]> = {
   property_data: [],
   sms: [],
   speech_to_text: [],
-  ai: [],
+  ai: ["fake"],
   file_storage: [],
   energy_label: [],
   scanning: [],

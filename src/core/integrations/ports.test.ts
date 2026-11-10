@@ -24,10 +24,12 @@ describe("faste koder for tilkoblingslaget", () => {
     expect([...INTEGRATION_PORTS]).toEqual(PORTS);
   });
 
-  it("2. e-post har dev_mailbox, server_log og microsoft365; de ni andre har tom liste", () => {
+  it("2. e-post har dev_mailbox, server_log og microsoft365; ai har bare fake; de åtte andre har tom liste", () => {
     const providers = PROVIDERS_BY_PORT as Record<string, readonly string[]>;
     expect([...providers.email!]).toEqual(["dev_mailbox", "server_log", "microsoft365"]);
-    for (const port of PORTS.filter((p) => p !== "email")) {
+    // Bare den falske leverandøren før S8 (docs/funksjoner/fase2a-ki-modul-logg.md, ADR 0006 del 3)
+    expect([...providers.ai!]).toEqual(["fake"]);
+    for (const port of PORTS.filter((p) => p !== "email" && p !== "ai")) {
       expect([...(providers[port] ?? ["mangler"])], port).toEqual([]);
     }
   });
