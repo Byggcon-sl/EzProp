@@ -18,7 +18,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 - **Levert: KI-modulen og loggen** (2a-1, PR #127, versjon 0.5.0, migrering `0025_ki_logg`, A158–A165). Sikkerhet-personvern godkjent. Små funn som står (tas med «Forslagsmønsteret» eller «Vask før KI»): `ensureSampleAi` sjekker ikke selv `sampleData`; `recordDecision` leser raden før rettigheten sjekkes; mål-id-en kontrolleres mot organisasjonen når `answers` bygges. Fra liten oppgave (ad) står ad-1, ad-3, ad-4 og ad-7 (vask), ad-6 (publiseringssperren), ad-8 og ad-9.
 - **Fjerne PowerSync og ElectricSQL** (ADR 0004, Ståle 10.11.2026): bygget på branchen `fjern-powersync-electric` (versjon 0.4.6, migrering må renummereres til 0026 etter PR #127). PR åpnes av prosjektlederen.
-- **I arbeid: Forslagsmønsteret** (2a-1, branch `fase2a-forslagsmonster` fra `main`, oppgavekort `docs/funksjoner/fase2a-forslagsmonster.md`, A166–A167, versjon 0.5.1). Tar med ad-6 og småfunnene om `recordDecision` og `ensureSampleAi`. Roller: utvikler (to), testskriver, ux, sikkerhet-personvern. Steg: oppgavekort klart.
+- **I arbeid: Forslagsmønsteret** (2a-1, branch `fase2a-forslagsmonster` fra `main`, oppgavekort `docs/funksjoner/fase2a-forslagsmonster.md`, A166–A168, versjon 0.5.3, PR #131). Tar med ad-6 og småfunnene om `recordDecision` og `ensureSampleAi`. Sikkerhet-personvern godkjent 10.11.2026.
 - **Neste i 2a-1 etter det:** Deretter «Vask før KI», «Evalueringssett», «KI-kø» og «Beslutningsnotat om KI-leverandør» (med Anthropic-adapteren).
 
 ## Åpne PR-er

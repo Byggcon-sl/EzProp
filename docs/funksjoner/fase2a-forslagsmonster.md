@@ -67,7 +67,7 @@ Antall trykk: fra skrevet setning til godtatt forslag to trykk (be om forslag, b
    - **`recordDecision`, rekkefølgen:** rettigheten står på raden, så den kan ikke sjekkes helt før lesing. Derfor: (1) før noe leses, må `grant` ha rettigheten til minst én KI-funksjon, ellers `AccessDeniedError`; (2) etter lesing gir manglende rettighet for akkurat denne funksjonen `AiRequestRejectedError`, samme feil og melding som «finnes ikke», «annen organisasjon» og «slettet». Ved avslag endres verken raden eller `audit_log`. Admin stenges ikke ute. Lik responstid kreves ikke (kan ikke testes stabilt).
    - **`ensureSampleAi`** (`src/db/seed/sample-assignments.ts`): sjekken av `settings.sampleData` ligger i samme spørring som oppdateringen (`where`), og tilkoblingen lages heller ikke uten den. Kjøres to ganger gir samme resultat.
    - ad-6 løses i punkt 6.
-8. Versjon 0.5.0 → 0.5.1. Ordlisten i `docs/05-domenemodell.md` (forslagskort, KI-merke, statusoppslag, publiseringssperre for KI-tekst, `ai_trial`). Beslutninger A166–A168 i `docs/09-apne-sporsmal.md`. Én setning i spørsmål 57 om at prøvesiden også gir linjer i `audit_log` med hvem som avgjorde.
+8. Versjon 0.5.2 → 0.5.3 (etter fletting med main). Ordlisten i `docs/05-domenemodell.md` (forslagskort, KI-merke, statusoppslag, publiseringssperre for KI-tekst, `ai_trial`). Beslutninger A166–A168 i `docs/09-apne-sporsmal.md`. Én setning i spørsmål 57 om at prøvesiden også gir linjer i `audit_log` med hvem som avgjorde.
 
 **Ikke med (bevisst utelatt):**
 - **«Endre og bruk».** Planen sier «bruk, behold, nytt forslag» og angre. Statusen `edited` finnes allerede i kjernen og godtas av sperren og merket, så ingenting går tapt. Knappen legges til i 2a-2 når takstmannen redigerer en ekte avvikstekst.
@@ -123,7 +123,7 @@ Ingen nye fagregler. Overgangene for status er A162 og A164 (PR #127) og endres 
 - [ ] `recordDecision`: uten noen KI-rettighet `AccessDeniedError` før lesing; med KI-rettighet men ikke for funksjonen samme `AiRequestRejectedError` for rad som finnes, ikke finnes, annen organisasjon og slettet; raden og `audit_log` er uendret. Admin får alltid avgjøre (test).
 - [ ] `ensureSampleAi` gjør ingenting (innstillinger og tilkobling) i en organisasjon uten `sampleData`, og to kall gir samme resultat (test).
 - [ ] Serverhandlingene: organisasjons-id fra klienten ignoreres, ugyldig uuid avvises, uten `report.edit` avslag, takstmann/leder/admin lov, `audit_log` inneholder bare id og status (test).
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne. Versjon 0.5.1.
+- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne. Versjon 0.5.3.
 
 ## Avklaringer (utvikler, 10.11.2026)
 - **A. `getSuggestionStatus(grant, usageId)`** gir `{ status, outcome } | null`. `null` er det ene nøytrale svaret for «finnes ikke», annen organisasjon, slettet, ugyldig uuid **og** manglende rettighet for funksjonen på raden. Statusoppslaget kaster ikke `AccessDeniedError`; serverhandlingene sjekker `report.edit` i `@/core/access` før kallet. Testplan 3.3 deles derfor ikke.
