@@ -10,6 +10,12 @@ import type { AiFeatureCode } from "./types";
 
 export type AiTargetSpec = { type: string; fieldKey: string };
 
+/**
+ * Måltypen for prøvesiden /prove/ki (A166). Godtas bare når organisasjonens leverandør er den
+ * falske, fordi siden sender fritekst uten vask. Arkiveres når siden fjernes i 2a-2 (regel 6).
+ */
+export const AI_TRIAL_TARGET_TYPE = "ai_trial";
+
 export type AiFeatureDefinition = {
   code: AiFeatureCode;
   permission: Permission;
@@ -37,7 +43,10 @@ export const AI_FEATURES: Readonly<Record<AiFeatureCode, AiFeatureDefinition>> =
     code: "language_polish",
     permission: "report.edit",
     allowedFields: ["text"],
-    allowedTargets: [{ type: "answer", fieldKey: "text" }],
+    allowedTargets: [
+      { type: "answer", fieldKey: "text" },
+      { type: AI_TRIAL_TARGET_TYPE, fieldKey: "text" },
+    ],
     promptVersion: "language_polish.v1",
   },
 };
@@ -49,6 +58,16 @@ function isFeatureCode(code: string): code is AiFeatureCode {
 /** Definisjonen for en funksjonskode, eller `null` for en ukjent kode. */
 export function getFeatureDefinition(code: string): AiFeatureDefinition | null {
   return isFeatureCode(code) ? AI_FEATURES[code] : null;
+}
+
+/** Om målet står i `allowedTargets` for funksjonen (type og feltkode). */
+export function isAllowedTarget(
+  definition: AiFeatureDefinition,
+  target: { type: string; fieldKey: string },
+): boolean {
+  return definition.allowedTargets.some(
+    (allowed) => allowed.type === target.type && allowed.fieldKey === target.fieldKey,
+  );
 }
 
 /** Ledeteksten for en versjon, eller `null`. */

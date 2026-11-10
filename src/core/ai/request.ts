@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { isUuid } from "@/shared/lib/uuid";
-import { AI_FEATURES, getFeatureDefinition, type AiFeatureDefinition } from "./features";
+import {
+  AI_FEATURES,
+  getFeatureDefinition,
+  isAllowedTarget,
+  type AiFeatureDefinition,
+} from "./features";
 import type { AiFeatureCode } from "./types";
 
 /*
@@ -58,15 +63,6 @@ export const aiSuggestionRequestSchema = aiSuggestionRequestShapeSchema.superRef
 );
 
 export type ParsedAiSuggestionRequest = z.infer<typeof aiSuggestionRequestShapeSchema>;
-
-function isAllowedTarget(
-  definition: AiFeatureDefinition,
-  target: { type: string; fieldKey: string },
-): boolean {
-  return definition.allowedTargets.some(
-    (allowed) => allowed.type === target.type && allowed.fieldKey === target.fieldKey,
-  );
-}
 
 /** Om alle feltkodene står på funksjonens tillatt-liste. */
 export function hasOnlyAllowedFields(

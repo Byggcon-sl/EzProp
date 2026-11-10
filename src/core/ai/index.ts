@@ -1,11 +1,13 @@
 /*
  * KI-modulen: den ene veien inn til all KI (docs/adr/0006-ki-i-bunnen.md, arkitekturregel 11).
- * Modulene kaller bare `requestSuggestion` og `recordDecision`. Ingenting her lister eller teller
- * rader per ansatt (spørsmål 57).
+ * Modulene kaller bare `requestSuggestion`, `recordDecision`, `getSuggestionStatus` og
+ * `checkAiTextApproved`. Ingenting her lister eller teller rader per ansatt (spørsmål 57).
  */
 
 export { requestSuggestion } from "./request-suggestion";
 export { recordDecision } from "./record-decision";
+export { getSuggestionStatus, type AiSuggestionStatusView } from "./suggestion-status";
+export { AI_APPROVAL_CHECK_MAX, checkAiTextApproved, type AiApprovalItem } from "./approval-check";
 export {
   AI_DECISION_ERROR_MESSAGE,
   AI_REQUEST_REJECTED_MESSAGE,
@@ -14,6 +16,7 @@ export {
 } from "./errors";
 export {
   AI_FEATURES,
+  AI_TRIAL_TARGET_TYPE,
   getFeatureDefinition,
   type AiFeatureDefinition,
   type AiTargetSpec,

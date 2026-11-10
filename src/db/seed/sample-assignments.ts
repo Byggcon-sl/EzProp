@@ -69,10 +69,13 @@ export type SampleAssignmentSummary = {
 };
 
 export type SampleAiSummary = {
-  /** `ai.enabled` satt nå, eller fantes fra før (også `false`). */
-  setting: SamplePartResult;
-  /** Tilkoblingen `fake` laget nå, eller fantes det fra før en rad på porten `ai`. */
-  connection: SamplePartResult;
+  /** `ai.enabled` satt nå, eller fantes fra før (også `false`). `skipped` uten `sampleData`. */
+  setting: SampleResult;
+  /**
+   * Tilkoblingen `fake` laget nå, eller fantes det fra før en rad på porten `ai`. `skipped` uten
+   * `sampleData`.
+   */
+  connection: SampleResult;
 };
 
 export type SampleSeedSummary = {
@@ -329,8 +332,9 @@ const AI_PORT = "ai";
 
 /**
  * Slår på KI med den falske leverandøren i prøveorganisasjonen, slik at de ansatte kan prøve
- * KI-forslag i testmiljøet uten kostnad og uten at data sendes ut. Kalles bare etter
- * `prepareSampleSeed`, som har sjekket at organisasjonen har `settings.sampleData = true`.
+ * KI-forslag i testmiljøet uten kostnad og uten at data sendes ut. Kalles etter
+ * `prepareSampleSeed`, men sjekker likevel selv `settings.sampleData = true` i samme spørring som
+ * oppdateringen. Uten merket endres ingenting og ingen tilkobling lages (`skipped`).
  *
  * - `ai.enabled = true` settes bare når nøkkelen mangler. Én spørring slår nøkkelen sammen med de
  *   andre (`settings || …`), så ingen annen nøkkel endres. Har admin satt `false`, står det.
@@ -340,6 +344,8 @@ const AI_PORT = "ai";
  */
 export async function ensureSampleAi(context: SampleSeedContext): Promise<SampleAiSummary> {
   const { organizationId } = context;
+  // Merket `sampleData` sjekkes i samme spørring som oppdateringen, ikke bare i forkant
+  const isSampleOrganization = sql`${organizations.settings} -> 'sampleData' = 'true'::jsonb`;
   const updated = await db
     .update(organizations)
     .set({
@@ -349,10 +355,19 @@ export async function ensureSampleAi(context: SampleSeedContext): Promise<Sample
     .where(
       and(
         eq(organizations.id, organizationId),
+        isSampleOrganization,
         sql`${organizations.settings} -> ${AI_ENABLED_SETTING_KEY} is null`,
       ),
     )
     .returning({ id: organizations.id });
+  if (updated.length === 0) {
+    // Ingen tilkobling uten merket heller
+    const [sample] = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(and(eq(organizations.id, organizationId), isSampleOrganization));
+    if (!sample) return { setting: "skipped", connection: "skipped" };
+  }
   const setting: SamplePartResult = updated.length > 0 ? "created" : "existing";
 
   const [existing] = await db

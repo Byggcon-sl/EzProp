@@ -4,7 +4,7 @@ import { db } from "@/db/client";
 import { aiUsageLog, type AiSuggestionStatus } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { AiDecisionError, AiRequestRejectedError } from "./errors";
-import { getFeatureDefinition } from "./features";
+import { AI_FEATURES, getFeatureDefinition } from "./features";
 import { AI_DECISIONS, type AiDecision } from "./types";
 import { lockTarget, recordStatusChange, sameTargetWhere } from "./usage-log";
 
@@ -12,6 +12,9 @@ import { lockTarget, recordStatusChange, sameTargetWhere } from "./usage-log";
  * Registrer hva den ansatte gjorde med et KI-forslag (docs/funksjoner/fase2a-ki-modul-logg.md
  * Omfang 4, A162). Hvem som avgjorde, kommer bare fra `grant`. Rettigheten hentes fra funksjonen
  * på raden. Virker også når KI er av.
+ * Rekkefølgen for tilgang: uten rettighet til noen KI-funksjon gir `AccessDeniedError` før noe
+ * leses. Mangler rettigheten for funksjonen på raden, gir det samme nøytrale avslag som en rad som
+ * ikke finnes. Ved avslag endres verken raden eller `audit_log`.
  */
 
 type Transition = { kind: "change"; to: AiSuggestionStatus } | { kind: "none" } | { kind: "error" };
@@ -30,11 +33,20 @@ function isDecision(value: unknown): value is AiDecision {
   return typeof value === "string" && (AI_DECISIONS as readonly string[]).includes(value);
 }
 
+/** Om `grant` har rettigheten til minst én KI-funksjon (admin har alle). */
+function hasAnyAiPermission(grant: EmployeeGrant): boolean {
+  return Object.values(AI_FEATURES).some((definition) =>
+    grantHasPermission(grant, definition.permission),
+  );
+}
+
 export async function recordDecision(
   grant: EmployeeGrant,
   usageId: string,
   decision: AiDecision,
 ): Promise<void> {
+  // 1. Før noe leses: rettigheten til minst én KI-funksjon (forslagsmønsteret, Omfang 7)
+  if (!hasAnyAiPermission(grant)) throw new AccessDeniedError();
   if (typeof usageId !== "string" || !isUuid(usageId) || !isDecision(decision)) {
     throw new AiRequestRejectedError();
   }
@@ -55,8 +67,11 @@ export async function recordDecision(
     if (!found) throw new AiRequestRejectedError();
 
     const definition = getFeatureDefinition(found.feature);
-    if (!definition) throw new AiRequestRejectedError();
-    if (!grantHasPermission(grant, definition.permission)) throw new AccessDeniedError();
+    // 2. Etter lesing: mangler rettigheten for akkurat denne funksjonen, er svaret det samme som
+    // for «finnes ikke», så det ikke røper at raden finnes
+    if (!definition || !grantHasPermission(grant, definition.permission)) {
+      throw new AiRequestRejectedError();
+    }
 
     // Samme lås som nytt forslag på samme mål, så angre og nytt forslag ikke krysser hverandre
     await lockTarget(tx, grant.organizationId, found.feature, found.targetRef);
