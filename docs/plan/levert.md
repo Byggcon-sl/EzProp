@@ -105,6 +105,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 - [x] **Fire testoppdrag som grunndata** (innspill P11): enebolig med garasje, leilighet i sameie, borettslagsleilighet og fritidsbolig, med bilder uten personer. Brukes i «Prøv malen», i regeltester og i demoer. **Levert 06.11.2026** uten bilder (`pnpm db:seed:testoppdrag`, prøveorganisasjonen, A130–A135).
 
 - [x] **ADR: KI i bunnen.** Hvordan modulen `src/core/ai` er bygget, hvordan forslag lagres, logges og merkes, hva som aldri sendes til KI, og hvordan leverandøren byttes. Bygger på reglene over og `docs/05-domenemodell.md` 4.12. (10.11.2026, PR #123, `docs/adr/0006-ki-i-bunnen.md`, oppgavekort `docs/agenter/oppgaver/fase2a-adr-ki-i-bunnen.md`, beslutningene A148–A157, spørsmål 54–58)
+- [x] **KI-modulen og loggen:** én vei inn for all KI, tabellen `ai_usage_log` (funksjon, leverandør, kostnad, og om forslaget ble godtatt, endret eller avvist), og en **falsk leverandør** for utvikling og test, slik at alt kan bygges og prøves uten kostnad. (PR #127, 10.11.2026)
 - [x] Malmotoren fra `datamodell.md` 4.5: malfamilie, malversjon, seksjon, felt, kontrollpunkt, avviksspørsmål, utfall, standardtiltak og regler. Systemmalen er låst for alle uten maltilgang (10.11.2026, PR #119, oppgavekort `docs/funksjoner/fase2a-malmotor.md`, migreringen `0024_malmotor`, tjenestene i `src/core/templates`, beslutningene A136–A147; små funn i liten oppgave (ac))
 
 ## Minimum før ekte data (levert)

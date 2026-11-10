@@ -72,7 +72,7 @@ Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3
 | 0a Repo og database | Ferdig 28.10.2026 |
 | 1 Prøve uten nett | Ferdig 10.11.2026. Ståle har kjørt prøvene på ekte iPad og godkjent ADR 0004 (egenbygd synk). |
 | 0b Innlogging, organisasjon, roller | Ferdig, unntatt felles innlogging med Optiplan (venter på S6) |
-| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119) og ADR 0006 KI i bunnen (PR #123) er levert. Neste: «KI-modulen og loggen» (2a-1). |
+| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123) og KI-modulen og loggen (PR #127) er levert. Neste: «Forslagsmønsteret» (2a-1). |
 | Minimum før ekte data | To av ni punkter levert. Testmiljøet er klart (S1, 10.11.2026), så resten kan bygges nå. |
 | 2b og videre | Ikke startet |
 
@@ -125,7 +125,6 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 
 ### 2a-1 KI-grunnmuren
 
-- [x] **KI-modulen og loggen:** én vei inn for all KI, tabellen `ai_usage_log` (funksjon, leverandør, kostnad, og om forslaget ble godtatt, endret eller avvist), og en **falsk leverandør** for utvikling og test, slik at alt kan bygges og prøves uten kostnad.
 - [ ] **Forslagsmønsteret:** forslag med kilde og status, én felles måte å vise dem på («bruk, behold, nytt forslag» og angre), merking av KI-tekst, og sperren som hindrer publisering med KI-tekst som ikke er godkjent.
 - [ ] **Vask før KI:** navn, e-post, telefon, adresse og matrikkel fjernes før noe sendes. Med test.
 - [ ] **Evalueringssett:** fast oppsett for eksempler med fasit per KI-funksjon, og en kommando som kjører settet og viser treffprosent.
