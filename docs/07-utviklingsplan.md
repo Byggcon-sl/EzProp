@@ -125,7 +125,7 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 
 ### 2a-1 KI-grunnmuren
 
-- [ ] **KI-modulen og loggen:** én vei inn for all KI, tabellen `ai_usage_log` (funksjon, leverandør, kostnad, og om forslaget ble godtatt, endret eller avvist), og en **falsk leverandør** for utvikling og test, slik at alt kan bygges og prøves uten kostnad.
+- [x] **KI-modulen og loggen:** én vei inn for all KI, tabellen `ai_usage_log` (funksjon, leverandør, kostnad, og om forslaget ble godtatt, endret eller avvist), og en **falsk leverandør** for utvikling og test, slik at alt kan bygges og prøves uten kostnad.
 - [ ] **Forslagsmønsteret:** forslag med kilde og status, én felles måte å vise dem på («bruk, behold, nytt forslag» og angre), merking av KI-tekst, og sperren som hindrer publisering med KI-tekst som ikke er godkjent.
 - [ ] **Vask før KI:** navn, e-post, telefon, adresse og matrikkel fjernes før noe sendes. Med test.
 - [ ] **Evalueringssett:** fast oppsett for eksempler med fasit per KI-funksjon, og en kommando som kjører settet og viser treffprosent.
