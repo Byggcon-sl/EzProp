@@ -167,14 +167,15 @@ Felt som **aldri** kan stå på en tillatt-liste:
 | Tabell | Kolonner |
 |---|---|
 | `contacts` | `first_name`, `last_name`, `email`, `phone`, `notes` |
-| `firms` | `notes` |
+| `firms` | `org_number`, `notes` |
 | `assignment_parties` (partene på oppdraget) | `name`, `firm_name`, `email`, `phone` |
-| `orders` | `address_text`, `gnr`, `bnr`, `snr`, `housing_association_name`, `ordered_by_text`, `external_ref` |
+| `orders` | `address_text`, `gnr`, `bnr`, `snr`, `housing_association_name`, `ordered_by_text`, `external_ref`, `rejected_reason` |
 | `properties` | `address`, `postal_code`, `city` |
 | `cadastral_units` | `gnr`, `bnr`, `fnr` (festenummer), `snr` (seksjonsnummer), `share_number` (andels- eller aksjenummer), `association_name` (borettslag eller sameie), `association_org_number` |
-| `common_areas` | `managing_agent` (forretningsfører) |
+| `common_areas` | `managing_agent` (forretningsfører), `notes` |
 | `claims` | `claimant_text`, `description`, `building_part_text` (fritekstene) |
-| `employees` og `users` | `name`, e-post |
+| `employees` | `name` |
+| `users` | `name`, `email` |
 | `assignments` | `internal_note` |
 | Alle | Fødselsnummer. Ingen kolonne skal ha det, men mønsteret fanges i fritekst |
 
