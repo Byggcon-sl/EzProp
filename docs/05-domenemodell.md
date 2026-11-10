@@ -1651,12 +1651,21 @@ Tekst logges ikke per tastetrykk, men slik den var når endringen kom fram til s
 | `status` | **Hva den ansatte gjorde:** `suggested` (foreslått), `accepted` (godtatt), `edited` (endret og godtatt), `rejected` (avvist). Tom når utfallet ikke er `ok`. Erstatter `decision` fra første utkast |
 | `decided_by`, `decided_at` | Hvem som avgjorde, og når. Settes fra tilgangssjekken, aldri fra klienten |
 | `tokens_in`, `tokens_out` | Mengde |
-| `cost`, `currency` | **Kostnad per kall.** Gjør at KI-bruk kan måles per rapport |
-| `retain_until` | Oppbevares til (10 år) |
+| `cost`, `currency` | **Kostnad per kall.** `numeric(12,4)`, ikke flyttall; `currency` er alltid `NOK`. Gjør at KI-bruk kan måles per rapport |
+| `retain_until` | Oppbevares til. Påkrevd, settes av tjenesten til opprettet + 10 år |
 
-Sammensatte fremmednøkler med `organization_id` til `employees`, `assignments` og `reports`. Tabellen regnes som personopplysninger (`output_text` kan inneholde noe som slapp gjennom vasken): myk sletting og 10 år. **Angre** setter raden tilbake til `suggested` og tømmer `ai_usage_id` på feltet; hver statusendring står i revisjonsloggen.
+Sammensatte fremmednøkler med `organization_id` til `employees` (`employee_id` og `decided_by`) og `assignments`. `report_id` får fremmednøkkel til `reports` når tabellen bygges (A158). Tabellen regnes som personopplysninger (`output_text` kan inneholde noe som slapp gjennom vasken): myk sletting og 10 år. **Angre** setter raden tilbake til `suggested` og tømmer `ai_usage_id` på feltet; hver statusendring står i revisjonsloggen.
 
 KI setter aldri TG, publiserer aldri og sender aldri noe selv (beslutning 24.10, ADR 0006). TG-forslag kommer bare fra regelmotoren. En tekst fra KI kommer bare inn i rapporten når takstmannen godtar den, og en rapport kan ikke publiseres med en `ai_usage_id` som ikke har status `accepted` eller `edited`. Navn, e-post, telefon, adresse og matrikkel sendes aldri til KI: hver funksjon har en tillatt-liste over felt, og fritekst vaskes (ADR 0006 del 6). Fritekst uten oppdrag (e-post til ordreforslag) kan ikke vaskes for navn og adresse og går bare til den falske leverandøren til Ståle har svart (spørsmål 58). KI av/på er nøkkelen `ai.enabled` i `organizations.settings`, standard av.
+
+**Bygget i fase 2a (10.11.2026, KI-modulen og loggen):** Tabellen `ai_usage_log` i `src/db/schema/ai-usage-log.ts`, migrering `0025_ki-bruk-logg`. Oppgavekort: `docs/funksjoner/fase2a-ki-modul-logg.md`; beslutningene A148–A164.
+
+- `id` settes av tjenesten til forespørselens `requestId`. `retain_until` er påkrevd uten standardverdi og settes av tjenesten. `cost` er `numeric(12,4)` med standard 0, `currency` standard `NOK` (CHECK: bare `NOK`). `tokens_in` og `tokens_out` har standard 0.
+- `target_ref` er jsonb `{ type, id, fieldKey }`, `source_fields` er jsonb med feltkoder, `input_summary` er jsonb med feltkode → antall tegn.
+- CHECK: `outcome` i `AI_OUTCOMES`, `status` tom eller i `AI_SUGGESTION_STATUSES`, `error_code` tom eller i `AI_ERROR_CODES` (`timeout`, `rate_limited`, `unavailable`, `rejected`, `unknown`). `outcome = ok` krever `status`; ellers er `status` og `output_text` tomme.
+- Sammensatte fremmednøkler `(organization_id, employee_id)` og `(organization_id, decided_by)` til `employees`, `(organization_id, assignment_id)` til `assignments`. Ingen ON DELETE CASCADE. `report_id` uten fremmednøkkel (A158).
+- Indekser: `(organization_id, feature)` og `(organization_id, target_ref->>type, target_ref->>id, target_ref->>fieldKey)` for oppslag av forrige forslag på samme mål. Ingen indeks per ansatt (spørsmål 57).
+- Porten `ai` har bare leverandøren `fake` (`PROVIDERS_BY_PORT.ai`). `pnpm db:seed:testoppdrag` setter `ai.enabled = true` (bare når nøkkelen mangler) og lager tilkoblingen `fake` (bare når organisasjonen ikke har noen rad på porten `ai`) i prøveorganisasjonen. `pnpm db:seed` rører ikke KI (A160).
 
 **`files`** – alle filer (bilder, PDF-er, dokumenter, logoer, signaturer).
 
@@ -2208,8 +2217,11 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Revisjonslogg | `audit_log` | |
 | Logg over KI-bruk | `ai_usage_log` | Én rad per kall til KI, med forslaget og hva den ansatte gjorde (ADR 0006) |
 | Forslag (KI) | `ai_usage_log.output_text`, `AiSuggestionStatus` | Tekst KI har laget, som den ansatte godtar, endrer eller avviser. Ligger aldri i feltet før det er godtatt |
-| Foreslått / godtatt / endret / avvist | `suggested` / `accepted` / `edited` / `rejected` | Status på et forslag (`ai_usage_log.status`) |
-| Utfall (KI-kall) | `ai_usage_log.outcome` | `ok`, `no_match` (ingen treff), `error` (feil). Ikke en status |
+| Foreslått / godtatt / endret / avvist | `suggested` / `accepted` / `edited` / `rejected` | Status på et forslag (`ai_usage_log.status`, `AiSuggestionStatus`, `AI_SUGGESTION_STATUSES`) |
+| Utfall (KI-kall) | `ai_usage_log.outcome` (`AiOutcome`, `AI_OUTCOMES`) | `ok`, `no_match` (ingen treff), `error` (feil). Ikke en status |
+| Feilkode (KI-kall) | `ai_usage_log.error_code` (`AiErrorCode`, `AI_ERROR_CODES`) | `timeout`, `rate_limited`, `unavailable`, `rejected`, `unknown`. Aldri leverandørens egen melding |
+| Mål (KI-forslag) | `ai_usage_log.target_ref` | Hvor forslaget gjelder: `{ type, id, fieldKey }`. Samme mål = samme organisasjon, funksjon og `target_ref` |
+| Grunnlag (KI-kall) | `source_fields`, `input_summary` | Feltkodene som ble sendt, og antall tegn per felt. Aldri teksten |
 | KI-funksjon | `feature` (`AiFeatureCode`) | Fast kode for én bruk av KI, for eksempel `language_polish` (språkvask) |
 | Ledetekst | prompt, `prompt_version` | Instruksen til KI. Ligger versjonert i `src/core/ai/prompts`, aldri i modulene |
 | KI-porten | `ai` (port), `AiProvider` | Grensesnittet mot KI-leverandøren. Bare `src/core/ai` kan bruke den |
@@ -2220,7 +2232,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | KI-kø | AI queue (`src/core/ai/client`) | Forespørsler som venter på nett. Ligger bare lokalt på iPaden og vises som «venter på KI» |
 | KI av/på | `ai.enabled` | Innstilling i `organizations.settings`, standard av. Bare admin endrer |
 | Myk sletting | `deleted_at` | |
-| Oppbevares til | `retain_until` | Raden kan ikke merkes som slettet før tidspunktet er passert, heller ikke av admin |
+| Oppbevares til | `retain_until` | Raden kan ikke merkes som slettet før tidspunktet er passert, heller ikke av admin. På `ai_usage_log` påkrevd: opprettet + 10 år |
 | Fil | `files` | Metadata for en fil (type, størrelse, fingeravtrykk). Innholdet ligger i fillagringen |
 | Fillagring | `file storage` (`FileStorage`) | Porten for filinnhold i `src/core/files`: bare lagre (`put`) og hente (`get`), aldri slette eller skrive over. Lokal mappe i utvikling, Azure Blob Storage i drift |
 | Lagringsnøkkel | `storage key` (`storage_key`) | Hvor filen ligger i fillagringen: `<organisasjon>/<kind>/<fil-id>`, aldri et filnavn fra brukeren |
@@ -2368,4 +2380,5 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 06.11.2026 | Reklamasjoner med enkelt skjema (fase 2a): `claims` bygget knyttet til oppdraget (`assignment_id`), med klager som part eller fritekst, `description`, `building_part_text` som fritekst, åpen/lukket lest av `outcome`, `amount` bare ved medhold eller forlik, `closed_at` satt av serveren og myk sletting. Ny rettighet `claims.manage` (leder og admin). `report_id`, `release_id`, `checkpoint_key`, `internal` og mappen venter. Se «Bygget i fase 2a» i 4.13. | A125–A129, `docs/funksjoner/fase2a-reklamasjoner.md` |
 | 06.11.2026 | Tidsmåling per oppdrag og fase (fase 2a): `work_sessions` bygget med `assignment_id`, `employee_id`, `phase` (fire faste koder), `started_at`/`ended_at` (CHECK) og myk sletting, uten `report_id`, `device_id` og `source`. Fasen regnes ut med `phaseForAssignment`; pause over 10 minutter gir ny økt. `baseline_metrics` erstattet av innstillingen `time_tracking.baseline` inntil videre; ny innstilling `time_tracking.enabled` og ny rettighet `statistics.read` (leder og admin). Se «Bygget i fase 2a» i 4.13. | A119–A124, `docs/funksjoner/fase2a-tidsmaling.md` |
 | 10.11.2026 | KI i bunnen (ADR 0006, bare dokumentasjon): `ai_usage_log` er både logg og forslag (én rad per kall). `status` (`suggested`, `accepted`, `edited`, `rejected`) erstatter `decision`, og utfallet av kallet er eget felt (`outcome`). Nye felt: `prompt_version`, `source_fields`, `assignment_id`, `error_code`, `retain_until`. `answers.ai_usage_id` (4.7), portene `ai` og `speech_to_text` (4.10) og ordlisten er rettet. | A148–A157, `docs/adr/0006-ki-i-bunnen.md` |
+| 10.11.2026 | KI-modulen og loggen (fase 2a): `ai_usage_log` bygget i migrering `0025_ki-bruk-logg` med CHECK på utfall, status, feilkode og valuta, sammensatte fremmednøkler til `employees` (`employee_id`, `decided_by`) og `assignments`, `report_id` uten fremmednøkkel, `cost` som `numeric(12,4)` og påkrevd `retain_until`. Nye ord i ordlisten (feilkode, mål, grunnlag). Se «Bygget i fase 2a» i 4.12. | A158–A164, `docs/funksjoner/fase2a-ki-modul-logg.md` |
 | 06.11.2026 | Malmotoren (fase 2a): tolv tabeller fra 4.5 bygget i migrering `0024_malmotor`, med sammensatte fremmednøkler med `organization_id`, faste koder med format-CHECK og delvis unike indekser per område, ett utkast per malfamilie, CHECK mot `tgiu` som utfall og `sort_order` også på regler, betingelser og testtilfeller. `owner_employee_id`, `company_id`, `archived_at`, `lifespan_table_id`, `threshold_table_id`, `cost_band_set_id`, terskel- og alderskolonnene på betingelsene og `last_result`/`last_run_at` venter. Nye ord i ordlisten (fast kode, arkivert kode, utkast/publisert/utgått, valg, underseksjon). Se «Bygget i fase 2a» i 4.5. | A136–A147, `docs/funksjoner/fase2a-malmotor.md` |

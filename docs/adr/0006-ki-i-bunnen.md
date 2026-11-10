@@ -14,6 +14,8 @@ Støtter hovedmålene:
 
 All KI går gjennom `src/core/ai`. Den offentlige flaten har to funksjoner. Begge tar `EmployeeGrant` fra `requireOrganizationAccess`, aldri en organisasjons-ID fra kalleren.
 
+Typene under er retning. Når koden er bygget, er koden fasit (`src/core/ai/index.ts` og `src/db/schema/ai-usage-log.ts`).
+
 ```ts
 // src/core/ai/index.ts (grensesnitt utviklerne bygger mot)
 export type AiFeatureCode = "language_polish"; // fast kode, flere kommer per funksjon
@@ -74,6 +76,8 @@ src/core/ai/
 - Nøkkelen leses bare med `readSecret`. Den står aldri i `integration_connections`, `ai_usage_log` eller loggen.
 - **Tale til tekst er egen port** (`speech_to_text`) med egen tilkobling, men går gjennom `src/core/ai` og følger de samme reglene (fase 2b).
 
+Typene under er retning. Når adapterne er bygget, er koden i `src/core/ai/providers/` fasit.
+
 ```ts
 // src/core/ai/providers/types.ts
 export type AiProviderRequest = {
@@ -96,7 +100,7 @@ export interface AiProvider {
 
 **Slik byttes leverandøren:**
 
-1. Ny fast kode i `PROVIDERS_BY_PORT.ai` (`PROVIDER_CODES.ai` i oppgavekortet).
+1. Ny fast kode i `PROVIDERS_BY_PORT.ai`.
 2. Ny adapter i `src/core/ai/providers/` som oppfyller `AiProvider`.
 3. Nøkkelen legges i nøkkelboksen og leses via `readSecret`.
 4. Admin lager en rad i `integration_connections` (`port = ai`, ny leverandør, `settings.model`, tom `settings.features`).
@@ -152,7 +156,7 @@ Ingen endring i funksjonene, i modulene eller i `ai_usage_log`.
 | `cost`, `currency` | Kostnad per kall |
 | `retain_until` | Oppbevares til (10 år) |
 
-- Sammensatte fremmednøkler med `organization_id` til `employees`, `assignments` og `reports`, slik at en rad aldri kan peke på tvers av organisasjoner.
+- Sammensatte fremmednøkler med `organization_id` til `employees` (både `employee_id` og `decided_by`), `assignments` og, når tabellen finnes, `reports` (A158: `report_id` har ingen fremmednøkkel før det), slik at en rad aldri kan peke på tvers av organisasjoner.
 - **Tabellen regnes som personopplysninger.** `output_text` kan inneholde noe som slapp gjennom vasken. Derfor: myk sletting (`deleted_at`), 10 år (`retain_until`), og egen rad i den interne personvernerklæringen når tabellen bygges.
 - Teksten den ansatte endte med (ved `edited`), ligger i feltet forslaget gjaldt, ikke i loggen.
 - **Ledetekst, inndata og svar skrives aldri til `logger`.** Feil fra leverandøren logges uten innhold: bare funksjon, leverandørkode, `error_code` og id.

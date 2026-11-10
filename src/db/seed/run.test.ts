@@ -2,7 +2,14 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requireOrganizationAccess } from "@/core/access";
 import { db } from "@/db/client";
-import { companies, employees, offices, organizations, users } from "@/db/schema";
+import {
+  companies,
+  employees,
+  integrationConnections,
+  offices,
+  organizations,
+  users,
+} from "@/db/schema";
 import { resetDatabase } from "../../../tests/factories";
 import { runSeed } from "./run";
 
@@ -44,6 +51,19 @@ describe("seed", () => {
     for (const line of [...firstRun, ...secondRun]) expect(line).not.toContain("@");
     expect(firstRun.some((line) => line.includes("opprettet"))).toBe(true);
     expect(secondRun.some((line) => line.includes("finnes fra før"))).toBe(true);
+  });
+
+  it("rører ikke KI: Byggcon får verken ai.enabled eller tilkobling på porten ai (A160)", async () => {
+    const env = { SEED_ADMIN_EMAIL: "admin@example.com", SEED_ADMIN_NAME: "Test Admin" };
+    await runSeed(env);
+    await runSeed(env);
+    const [org] = await db.select().from(organizations);
+    expect(Object.prototype.hasOwnProperty.call(org!.settings, "ai.enabled")).toBe(false);
+    const connections = await db
+      .select()
+      .from(integrationConnections)
+      .where(eq(integrationConnections.port, "ai"));
+    expect(connections).toHaveLength(0);
   });
 });
 

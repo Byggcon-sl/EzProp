@@ -176,6 +176,13 @@
       "when": 1793982110192,
       "tag": "0024_malmotor",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794321203317,
+      "tag": "0025_ki-bruk-logg",
+      "breakpoints": true
     }
   ]
 }

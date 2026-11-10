@@ -7,6 +7,7 @@ import type { TemplateDocumentInput } from "@/core/templates";
 import { insertTemplateWithoutAccessCheck } from "@/core/templates/templates";
 import { db } from "@/db/client";
 import {
+  aiUsageLog,
   assignmentParties,
   assignments,
   assignmentTeamMembers,
@@ -70,6 +71,7 @@ export const RESET_TABLES = [
   "number_sequences",
   "orders",
   "claims",
+  "ai_usage_log",
   "common_areas",
   "cadastral_units",
   "assignment_team_members",
@@ -292,6 +294,47 @@ export async function createIntegrationConnection(
     })
     .returning();
   if (!row) throw new Error("kunne ikke opprette tilkobling");
+  return row;
+}
+
+type AiUsageLogOverrides = Partial<Omit<typeof aiUsageLog.$inferInsert, "organizationId">>;
+
+/**
+ * En rad i `ai_usage_log`, satt inn rått uten tilgangssjekk og uten `src/core/ai`, slik at
+ * testene kan lage rader tjenesten aldri ville laget (ugyldige koder, brudd på sjekkene,
+ * fremmede ansatte). Standard: `language_polish` mot `fake`/`fake-v1`, utfall `ok`, status
+ * `suggested`, mål `answer`/`text` med ny id, oppdiktet forslag og `retain_until` om 10 år.
+ * Lager den ansatte i samme organisasjon når `employeeId` mangler.
+ */
+export async function createAiUsageLog(
+  organizationId: string,
+  overrides: AiUsageLogOverrides = {},
+) {
+  const employeeId =
+    overrides.employeeId ??
+    (await createEmployee(await createUser(), organizationId, ["inspector"])).id;
+  const retainUntil = new Date();
+  retainUntil.setUTCFullYear(retainUntil.getUTCFullYear() + 10);
+  const [row] = await db
+    .insert(aiUsageLog)
+    .values({
+      feature: "language_polish",
+      provider: "fake",
+      model: "fake-v1",
+      promptVersion: "language_polish.v1",
+      targetRef: { type: "answer", id: randomUUID(), fieldKey: "text" },
+      sourceFields: ["text"],
+      inputSummary: { text: 10 },
+      outcome: "ok",
+      status: "suggested",
+      outputText: "Taket er gammelt og har sprekker.",
+      retainUntil,
+      ...overrides,
+      organizationId,
+      employeeId,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette KI-logg");
   return row;
 }
 
