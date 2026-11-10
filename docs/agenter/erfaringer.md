@@ -233,3 +233,7 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 ## 10.11.2026 – fase2a-forslagsmonster (forslagsmønsteret)
 
 - Når seeden for testoppdrag endres (her `ensureSampleAi`, som slår på KI i prøveorganisasjonen), må `pnpm db:seed:testoppdrag` kjøres på nytt lokalt før `pnpm test:e2e`. CI og `scripts/session-start.sh` gjør det selv, men en arbeidskopi som ble satt opp før endringen, gir røde e2e-tester («KI er av.») uten at koden er feil.
+## 10.11.2026 – «KI-modulen og loggen» bygget to ganger
+
+- Hovedløkken pushet en branch midt i en arbeidsflyt (etter beskjed fra stoppkroken). En annen kjøring så branchen uten PR og trodde kjøringen hadde stanset, overtok den og merget PR #127. Den første arbeidsflyten bygget det samme ferdig i parallell, og det arbeidet ble lagt bort (`arkiv-ki-modul-logg-parallell`). Regel videre: før en arbeidsflyt startes, skriv punktet og branchen under «Gjeldende oppgave» i `docs/agenter/tilstand.md` på `main` (eller sjekk at ingen annen kjøring har det). Ikke overta en branch med commit yngre enn 60 minutter mens en arbeidsflyt kan være i gang.
+
