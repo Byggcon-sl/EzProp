@@ -21,6 +21,7 @@ Fra kortet og ADR 0006 del 1–2. Avvik føres i kortet.
 - Falsk leverandør som et objekt testene kan spionere på, for eksempel `fakeAiProvider` i `src/core/ai/providers/fake.ts`, og de faste prøveverdiene som konstanter, for eksempel `FAKE_NO_MATCH_INPUT` og `FAKE_ERROR_INPUT` (en per feilkode eller én med kjent kode), og `FAKE_THROW_INPUT` hvis unntak prøves via inndata. Ellers bruker testen `vi.spyOn(fakeAiProvider, "complete").mockRejectedValue(...)`.
 - Feiltyper: `AccessDeniedError` fra `@/core/access` når rettigheten mangler. Én egen feil (for eksempel `AiRequestRejectedError`) med **én fast norsk melding** for alle andre avslag (ukjent funksjon, felt, mål, `reportId`, `candidates`, lengde, `requestId`, oppdrag, id hos en annen) og én (for eksempel `AiDecisionError`) for ugyldig statusendring. Nøytralt betyr: samme klasse og samme melding uansett grunn, så svaret ikke røper om id-en finnes hos en annen.
 - Fabrikk `createAiUsageLog(organizationId, overrides)` i `tests/factories.ts` (rå innsetting, standard `outcome = ok`, `status = suggested`, `provider = fake`, `model = fake-v1`, `retainUntil` satt). `ai_usage_log` i `RESET_TABLES` og i `tests/tenant-tables.ts`.
+- **Feil i samme transaksjon (6.24):** tjenesten kaller `recordAuditEvent` importert fra `@/core/audit` (ikke fra en fil inne i audit-mappen), og med transaksjonen `tx` som første argument. Testen tvinger feilen med samme mønster som `src/core/orders/orders-transaction.test.ts`: `vi.mock("@/core/audit", async (importOriginal) => ({ ...actual, recordAuditEvent: vi.fn(actual.recordAuditEvent) }))`, og `vi.mocked(recordAuditEvent).mockRejectedValueOnce(new Error("audit nede"))` rett før kallet. Testen ligger i egen fil, `src/core/ai/request-suggestion-transaction.test.ts`, så mocken ikke treffer andre tester. `vi.spyOn` på modulobjektet brukes ikke (det virker ikke med ES-moduler), og heller ikke spion på `db` (tjenesten skriver gjennom `tx`). Testen sjekker også at mocken faktisk ble kalt én gang, så den ikke blir hul.
 - Testhjelper (bare i testene) `enableAi(organizationId, { enabled, provider, status, deletedAt })` som setter `settings.ai.enabled` og lager tilkoblingen med `createIntegrationConnection({ port: "ai", provider: "fake" })`.
 
 ## 1. Skjema og migrering, `src/db/schema/ai-usage-log.test.ts` (ny, mot databasen)
@@ -87,6 +88,7 @@ Tabell (`it.each`), alle med en takstmann som har `report.edit`. Forventet svar 
 10. **miljøvariabel:** `vi.stubEnv("AI_PROVIDER", "fake")` og `vi.stubEnv("NODE_ENV", "development")` uten tilkobling → fortsatt `disabled`; med tilkobling og `AI_PROVIDER = "openai"` → fortsatt `fake`.
 11. **i alle `disabled`-tilfellene:** ingen rad i `ai_usage_log`, ingen linje i `audit_log`.
 12. **tilkoblingen i en annen organisasjon teller ikke:** B har aktiv `fake` og `ai.enabled`, A har ingenting → A får `disabled`.
+13. **innstillingen i en annen organisasjon teller ikke:** B har `ai.enabled = true`, A har aktiv `fake` men `ai.enabled = false` → A får `disabled`.
 
 ## 6. `requestSuggestion`, `src/core/ai/request-suggestion.test.ts` (ny, mot databasen)
 
@@ -122,8 +124,8 @@ Tabell (`it.each`), alle med en takstmann som har `report.edit`. Forventet svar 
 21. **samme mål i en annen organisasjon** (samme `target_ref`-verdier) røres ikke.
 22. **mykt slettet `suggested`-forslag** på samme mål røres ikke.
 23. **annet mål** (samme type og id, annen `fieldKey`; eller annen id) røres ikke.
-24. **samme transaksjon:** hvis innsettingen feiler (tving feil i `audit_log`-skrivingen med en spion), er det forrige forslaget fortsatt `suggested` og den nye raden finnes ikke.
-25. **nytt kall gir `no_match` eller `error`:** se avklaring A.
+24. **samme transaksjon** (i `src/core/ai/request-suggestion-transaction.test.ts`, se avsnitt 0): et `suggested`-forslag finnes på målet; `recordAuditEvent` gir feil én gang (`mockRejectedValueOnce`). Kallet gir feil eller `error`-svar, `recordAuditEvent` er kalt én gang, det forrige forslaget er fortsatt `suggested` (uendret `row_version`, tom `decided_by`), og den nye raden med denne `requestId` finnes ikke.
+25. **nytt kall gir `no_match` eller `error`:** det forrige `suggested`-forslaget på samme mål står urørt (fortsatt `suggested`, tom `decided_by` og `decided_at`, uendret `row_version`), og det kommer ingen ny linje i `audit_log`. Den nye raden med `no_match` eller `error` finnes (`it.each` over de to utfallene).
 
 ## 7. `recordDecision`, `src/core/ai/record-decision.test.ts` (ny, mot databasen)
 
@@ -175,8 +177,8 @@ Hver spørring får ett kall i testfilen der den testes. `query` lager grant med
 2. **oppslag av oppdrag:** `seed` lager oppdrag i A og B; `query` ber om forslag med hvert oppdrag og returnerer de godtatte oppdragene. Oppdrag i B gir avslag for A.
 3. **settet som avviser forrige forslag:** `seed` lager `suggested`-forslag på samme `target_ref` i A og B; `query` lager nytt forslag og returnerer radene som ble `rejected`. Bare egne.
 4. **lesing og endring i `recordDecision`:** `seed` lager forslag i A og B; `query` prøver å godta hvert og returnerer radene som ble endret. B sine er urørt etter at A har prøvd.
-5. **lesing av `ai.enabled`:** B har KI på, A har KI av; `query` returnerer organisasjonene der kallet ga forslag.
-6. **oppslag av tilkobling:** B har aktiv `fake`, A har ingen; samme mønster.
+5. **lesing av `ai.enabled`:** `seed` slår KI på og lager `fake`-tilkobling i **begge** organisasjonene (hjelperen krever minst én egen rad i både A og B, ellers kaster den `TenantIsolationError`). `query` ber om forslag i egen organisasjon og returnerer `usageId` fra svaret. Tilfellet «bare B har KI på, A får `disabled`» prøves som vanlige tester i 5.12 og 5.13.
+6. **oppslag av tilkobling:** samme `seed` som 9.5 (KI på og aktiv `fake` i begge); `query` returnerer `usageId` fra forslaget i egen organisasjon. Tilfellet «bare B har tilkobling, A får `disabled`» prøves som vanlig test i 5.12.
 7. `ai_usage_log` står i `tests/tenant-tables.ts` med radbygger og testfil, så `tests/tenant-isolation-all-tables.test.ts` er grønn.
 8. **direkte på tvers:** B sin admin kaller `recordDecision` med A sin `usageId` → nøytralt avslag, A sin rad uendret (alle kolonner).
 
@@ -184,7 +186,7 @@ Hver spørring får ett kall i testfilen der den testes. `query` lager grant med
 
 1. `recordDecision` på mykt slettet rad → nøytralt avslag, ingen endring, ingen linje i `audit_log`.
 2. Mykt slettet `suggested`-forslag blir ikke satt til `rejected` av nytt forslag (6.22).
-3. Mykt slettet rad blir ikke returnert når samme `requestId` kommer igjen; se avklaring C for hva svaret er.
+3. Samme `requestId` på en mykt slettet rad gir det nøytrale avslaget (samme klasse og melding som i 6.8), raden returneres ikke, og det lages ingen ny rad (fortsatt én rad med id-en, fortsatt slettet). `fake` er ikke kalt.
 4. Statisk: ingen `.delete(` på `aiUsageLog` (avsnitt 12).
 
 ## 11. Ingen innhold på avveie, `src/core/ai/no-leak.test.ts` (ny, mot databasen)
@@ -237,13 +239,13 @@ Ingen skjerm, så ingen nye e2e-tester (kortet). Hele `pnpm test:e2e` kjøres i 
 - `docs/personvern/intern-personvernerklaering.md`: rad for `ai_usage_log`, setningen om `audit_log`.
 - `docs/personvern/sletting-av-betadata.md`: tabellen er med.
 - `docs/05-domenemodell.md` 4.12 og ordlisten stemmer med skjemaet.
-- A158–A163 står i `docs/09-apne-sporsmal.md`. Versjonen i `package.json` er økt (minor).
+- A158–A163 står i `docs/09-apne-sporsmal.md`. Versjonen i `package.json` er 0.4.5 (én patch over `main`, 0.4.4).
 
 ## Avklaringer til utvikler (føres i kortet før bygging)
 
-- **A. Nytt kall med `no_match` eller `error`:** kortet sier at forrige `suggested` settes til `rejected` når ny rad settes inn, men ikke om det gjelder alle utfall. Forslag fra test-leder: **bare når det nye utfallet er `ok`.** Ellers mister takstmannen et brukbart forslag fordi neste kall feilet, og det finnes ikke noe nyere forslag å bruke. Test 6.25 skrives etter det som står i kortet.
+- **A. Nytt kall med `no_match` eller `error`:** kortet sier at forrige `suggested` settes til `rejected` når ny rad settes inn, men ikke om det gjelder alle utfall. Forslag fra test-leder: **bare når det nye utfallet er `ok`.** Ellers mister takstmannen et brukbart forslag fordi neste kall feilet, og det finnes ikke noe nyere forslag å bruke. Avgjort i kortet (A164): bare ved `ok`. Test 6.25 er skrevet etter det.
 - **B. Gjentatt kall etter at KI er slått av:** kortets rekkefølge (oppslag i trinn 5 før KI av i trinn 6) gir det lagrede svaret. Test 6.17 låser det.
-- **C. Gjentatt `requestId` når raden er mykt slettet:** kortet sier bare at raden ikke returneres. Forslag: nøytralt avslag (ny rad med samme id kan ikke lages, fordi id-en er primærnøkkel). Test 10.3 skrives etter dette.
+- **C. Gjentatt `requestId` når raden er mykt slettet:** kortet sier bare at raden ikke returneres. Forslag: nøytralt avslag (ny rad med samme id kan ikke lages, fordi id-en er primærnøkkel). Avgjort i kortet (A164): nøytralt avslag. Test 10.3 er skrevet etter det.
 - **D. «Nyere forslag» ved `undo`:** sammenlign på serverens `created_at`, ikke på id-en (som kommer fra enheten), og bare rader med `outcome = ok` som ikke er slettet.
 - **E. Lite funn (ikke stopp):** med `fake` i `PROVIDERS_BY_PORT.ai` kan admin lage en `fake`-tilkobling i Byggcon via `createConnection`. Det koster ingenting og sender ingenting ut, så det godtas. Nevnes i PR-en.
 

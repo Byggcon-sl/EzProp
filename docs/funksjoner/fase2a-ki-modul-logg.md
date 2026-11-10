@@ -160,6 +160,8 @@ Tas ikke her: ad-1 (eget utfall for sperret fritekst uten oppdrag) og ad-3, ad-4
 - **B. Samme `requestId` etter at KI er slått av:** gir det lagrede svaret (oppslaget i trinn 5 kommer før KI av/på i trinn 6). Rettigheten sjekkes fortsatt først (trinn 2).
 - **C. Samme `requestId` når raden er mykt slettet:** det nøytrale avslaget (id-en er primærnøkkel og kan ikke brukes på nytt).
 - **D. «Nyere forslag» ved `undo`:** sammenlignes på serverens `created_at`, bare rader med `outcome = ok` som ikke er slettet, på samme mål og i samme organisasjon. Aldri på id-en fra enheten.
+- **F. Feil i samme transaksjon (test 6.24, test-leder 10.11.2026):** tjenesten kaller `recordAuditEvent` importert fra `@/core/audit`, med `tx` som første argument. Testen tvinger feilen med `vi.mock("@/core/audit", importOriginal)` i egen fil (`src/core/ai/request-suggestion-transaction.test.ts`), samme mønster som `src/core/orders/orders-transaction.test.ts`. Begrunnelse: `vi.spyOn` på modulobjektet virker ikke med ES-moduler, og spion på `db` treffer ikke skriving gjennom `tx`. Mønsteret finnes og virker i repoet fra før.
+- **G. Isolasjonstestene for `ai.enabled` og tilkoblingen (9.5, 9.6):** seed slår KI på og lager `fake` i begge organisasjonene, fordi `expectTenantIsolation` krever egne rader i både A og B. «Bare B har KI på» prøves som vanlige tester (5.12, 5.13).
 - **E. `fake`-tilkobling i Byggcon:** med `fake` i `PROVIDERS_BY_PORT.ai` kan admin lage en `fake`-tilkobling via `createConnection`. Det koster ingenting og sender ingenting ut. Godtas, og nevnes i PR-en.
 
 ## Uenighet og avgjørelse
