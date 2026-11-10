@@ -63,7 +63,7 @@ src/core/ai/
 - **`src/core/ai` importerer aldri fra en modul** (regel 4). Den importerer fra `core/access`, `core/integrations`, `core/audit`, `db` og `shared`. Det modulen eier, sendes inn: for eksempel godkjente fraser som `candidates`.
 - **Hver funksjon har én definisjon** i `features/`: fast kode, hvilken rettighet som kreves, tillatt-listen (del 6), ledetekstversjon og treffgrense (del 9).
 - **`client/` importerer aldri nøkler, adaptere, `readSecret` eller noe annet som bare hører hjemme på serveren.** Klienten kaller våre egne server actions.
-- Lint-regel og statisk test (som `src/core/integrations/static-checks.test.ts`) håndhever dette. De bygges i punktet «KI-modulen og loggen».
+- En statisk test (som `src/core/integrations/static-checks.test.ts`) håndhever dette; at kjernen ikke importerer fra moduler, håndheves allerede av `eslint-rules/module-boundaries.js`. Testen bygges i punktet «KI-modulen og loggen» (A161).
 
 ### 2. KI-porten i tilkoblingslaget
 
@@ -111,8 +111,8 @@ Ingen endring i funksjonene, i modulene eller i `ai_usage_log`.
 
 - Forutsigbare svar, null kostnad, ingen nettverkskall. Samme inndata gir alltid samme svar. Faste prøveverdier gir «ingen treff» og feil, slik at alle utfall kan prøves.
 - Brukes i utvikling, test, CI og testmiljøet.
-- Utvikling og test (`NODE_ENV` er ikke `production`): `fake` er standard når organisasjonen ikke har en aktiv tilkobling.
-- Bygg for drift (også testmiljøet): leverandøren kommer **bare** fra en aktiv rad i `integration_connections`. Testmiljøet får en rad med `fake`. Uten aktiv tilkobling er KI av.
+- Leverandøren kommer **bare** fra en aktiv rad i `integration_connections`, i alle miljøer. Uten aktiv tilkobling, eller med en leverandørkode koden ikke kjenner, er KI av. Ingen reserve til `fake` ut fra `NODE_ENV` (A160, én vei å teste).
+- Seed (`pnpm db:seed:testoppdrag`) lager en rad med `fake` og slår KI på i prøveorganisasjonen, som finnes i utvikling, CI og testmiljøet. Testene lager raden med en fabrikk. Den ekte organisasjonen får aldri KI slått på av seed.
 - **En ekte leverandør velges aldri fra miljøvariabler** (ulikt `resolveEmailSender`). Da kan ikke en feil innstilling i miljøet sende data ut.
 - Bare `fake` kommer i `PROVIDERS_BY_PORT.ai` før S8. Den legges inn i punktet «KI-modulen og loggen», ikke nå.
 
@@ -277,9 +277,9 @@ Ingen ny rettighet. Rettighetene finnes i `src/core/access/permissions.ts`.
 ## Konsekvenser
 
 - Ingen produktkode, ingen migrering, ingen tabell, ingen lint-regel og ingen ny avhengighet i denne oppgaven. `ports.ts` er uendret (`ai: []`).
-- Punktet «KI-modulen og loggen» bygger `ai_usage_log`, `fake`, de to funksjonene, lint-regelen og den statiske testen. Testplanen der skal ha tenant-isolasjon for hver spørring, tester per rolle, admin ikke stengt ute, myk sletting og vasketester mot den falske leverandøren.
+- Punktet «KI-modulen og loggen» bygger `ai_usage_log`, `fake`, de to funksjonene og den statiske testen. Testplanen der skal ha tenant-isolasjon for hver spørring, tester per rolle, admin ikke stengt ute, myk sletting og vasketester mot den falske leverandøren.
 - Hver tabell som senere kan få KI-tekst, får `ai_usage_id` når den bygges, ikke i forkant.
-- **Avgrensning for 2a-1** (etter forenklerens gjennomgang): mappestrukturen i del 1 er retning, ikke krav; undermapper lages når det er mer enn én fil. Bryteren `ai.enabled` og tilkoblingen settes med seed i 2a-1 (seed slår KI på med `fake` i utvikling og test); admin-skjermen for dem bygges når den står i planen. Sperren `settings.features` og føringen av evalueringsresultater bygges når første ekte leverandør legges inn (etter S8). Evalueringssettet får bare de fasittypene første funksjon trenger. Samlede tall og visninger for leder og admin bygges ikke i 2a-1.
+- **Avgrensning for 2a-1** (etter forenklerens gjennomgang): mappestrukturen i del 1 er retning, ikke krav; undermapper lages når det er mer enn én fil. Bryteren `ai.enabled` og tilkoblingen settes med seed i 2a-1 (seed slår KI på med `fake` i prøveorganisasjonen, A160); admin-skjermen for dem bygges når den står i planen. Sperren `settings.features` og føringen av evalueringsresultater bygges når første ekte leverandør legges inn (etter S8). Evalueringssettet får bare de fasittypene første funksjon trenger. Samlede tall og visninger for leder og admin bygges ikke i 2a-1.
 - Fritekst uten oppdrag (e-post til ordreforslag) går bare til den falske leverandøren til Ståle har svart på spørsmål 58.
 - `docs/05-domenemodell.md` (4.7, 4.10, 4.12 og ordlisten), regel 11 og personvernlinjen i `docs/06-arkitektur.md` og «KI-forslag» i ADR 0004 er rettet slik at statusene og feltene er like.
 - Beslutningene står som A148–A157 i `docs/09-apne-sporsmal.md`. Fem spørsmål om personvern står til Ståle der (nr. 54–58): restrisiko i fritekst, tale og bilde til ekte leverandør, om avviste forslag skal ligge i 10 år, tall per person, og e-post til ordreforslag.
