@@ -700,9 +700,9 @@ En **egen mal** fra malbyggeren bruker seksjoner og felt, og kan ha **regler, lo
 | `name` | For eksempel «Tilstandsrapport bolig» |
 | `kind` | `system` (systemmal fra Byggcon) eller `custom` (egen mal fra malbyggeren) |
 | `report_type` | Hvilken rapporttype malen lager |
-| `owner_employee_id` | Eier (fagansvarlig for systemmaler, den som laget den for egne maler) |
-| `company_id` | Tomt = hele organisasjonen. Utfylt = bare ett selskap. |
-| `archived_at` | Ikke lenger i bruk for nye rapporter |
+| `owner_employee_id` | Eier (fagansvarlig for systemmaler, den som laget den for egne maler). *Kommer senere (A146).* |
+| `company_id` | Tomt = hele organisasjonen. Utfylt = bare ett selskap. *Kommer med egne maler (A146).* |
+| `archived_at` | Ikke lenger i bruk for nye rapporter. *Kommer med egne maler (A146).* |
 
 **`template_versions`** – én versjon av malen. **Publiserte versjoner endres aldri.**
 
@@ -714,7 +714,7 @@ En **egen mal** fra malbyggeren bruker seksjoner og felt, og kan ha **regler, lo
 | `valid_from` | Gyldig fra-dato. Befaringsdatoen avgjør hvilken versjon en ny rapport får. |
 | `ns_edition` | NS-utgaven vurderingen bygger på, for eksempel «NS 3600:2025+AC:2026» |
 | `regulation_version` | Forskriftens versjon (for eksempel endring 16.12.2025) |
-| `lifespan_table_id`, `threshold_table_id`, `cost_band_set_id` | Hvilke versjoner av levetider, terskler og kostnadsintervaller som gjelder |
+| `lifespan_table_id`, `threshold_table_id`, `cost_band_set_id` | Hvilke versjoner av levetider, terskler og kostnadsintervaller som gjelder. *Kommer med levetider, terskler og kostnadsintervaller.* |
 | `based_on_version_id` | Versjonen den er laget fra |
 | `change_note` | Hva som er endret |
 | `published_by`, `published_at` | Hvem som publiserte, og når |
@@ -810,7 +810,7 @@ Om spørsmålet vises, styres av regler («alltid», «valg X», «tall over gre
 
 TG3 krever alltid kostnad. Det trenger ikke lagres, det følger av `kind`.
 
-**`standard_measures`** – standardtiltak. Et utfall kan ha flere (beslutning 24.10: flere tiltak per avvik).
+**`standard_measures`** – standardtiltak. Uten fast kode: tiltak, betingelser og testtilfeller erstattes samlet per forelder når listen endres (A142). Et utfall kan ha flere (beslutning 24.10: flere tiltak per avvik).
 
 | Felt | Forklaring |
 |---|---|
@@ -844,11 +844,11 @@ TG3 krever alltid kostnad. Det trenger ikke lagres, det følger av `kind`.
 | `element_key` | Feltet betingelsen leser (fast kode) |
 | `operator` | `eq`, `in`, `gt`, `gte`, `lt`, `lte`, `before`, `after` |
 | `value` | Verdien det sammenlignes med |
-| `threshold_key` | Terskel fra terskeltabellen i stedet for fast verdi |
-| `age_year_element_key` | For alder: feltet med årstallet |
-| `age_source_element_key` | For alder: feltet med kilden for alderen (dokumentert / eier opplyser / byggeår) |
-| `documentation_element_key` | For alder: feltet som sier om dokumentasjon finnes |
-| `material_element_key` | For alder: feltet med materialvalget (gir materialkoden) |
+| `threshold_key` | Terskel fra terskeltabellen i stedet for fast verdi. *Kommer med regelmotoren og levetider/terskler (A147).* |
+| `age_year_element_key` | For alder: feltet med årstallet. *Kommer med regelmotoren og levetider/terskler (A147).* |
+| `age_source_element_key` | For alder: feltet med kilden for alderen (dokumentert / eier opplyser / byggeår). *Kommer med regelmotoren og levetider/terskler (A147).* |
+| `documentation_element_key` | For alder: feltet som sier om dokumentasjon finnes. *Kommer med regelmotoren og levetider/terskler (A147).* |
+| `material_element_key` | For alder: feltet med materialvalget (gir materialkoden). *Kommer med regelmotoren og levetider/terskler (A147).* |
 | `checkpoint_key` | For `checkpoint_tg`: kontrollpunktet som leses (fast kode) |
 
 **Betingelsestypene** (fem nye typer lagt til etter innspill D5):
@@ -925,9 +925,21 @@ Fritekstfeltet `special_rule` er tatt ut. Det som før skulle stå der, skrives 
 | `input` | Testsvarene (felt og verdier) |
 | `expect_triggered` | Skal regelen slå til (ja/nei) |
 | `expected_outcome_id` | Forventet utfall |
-| `last_result`, `last_run_at` | Sist kjørt, og om testen besto |
+| `last_result`, `last_run_at` | Sist kjørt, og om testen besto. *Kommer med kontrollen før publisering (A147).* |
 
 En malversjon kan ikke publiseres hvis en test feiler. Testene kjøres også automatisk i koden.
+
+**Bygget i fase 2a (06.11.2026, malmotoren):** De tolv tabellene `template_families`, `template_versions`, `template_sections`, `template_elements`, `template_element_options`, `checkpoints`, `deviation_questions`, `outcomes`, `standard_measures`, `rules`, `rule_conditions` og `rule_test_cases` i `src/db/schema/templates.ts`, migrering `0024_malmotor`. Oppgavekort: `docs/funksjoner/fase2a-malmotor.md`; beslutningene A136–A147.
+
+- **Felles:** alle har `id`, `organization_id`, `created_at`, `updated_at`, `deleted_at` (myk sletting) og sporingsfeltene. Hver rad peker på forelderen med en sammensatt fremmednøkkel `(organization_id, forelder_id)`, slik at en rad aldri kan peke inn i en annen organisasjon (som A84–A92): versjon → familie, seksjon → versjon, underseksjon → seksjon, felt → versjon og seksjon (og kontrollpunkt), valg → felt, kontrollpunkt → versjon og seksjon, spørsmål → kontrollpunkt, utfall → spørsmål, tiltak → utfall, regel → versjon (og målene og `suggested_outcome_id`), betingelse → regel, testtilfelle → regel (og `expected_outcome_id`). `based_on_version_id` peker på en versjon i samme organisasjon.
+- **`version_id`** står på seksjoner, felt, kontrollpunkter og regler, slik tabellene over sier. Valg, spørsmål, utfall, tiltak, betingelser og testtilfeller finner versjonen gjennom forelderen.
+- **Faste koder:** `key` er påkrevd på seksjon, felt, valg, kontrollpunkt, spørsmål, utfall og regel, med CHECK på formatet `^[a-z0-9_]+(\.[a-z0-9_]+)*$` (små bokstaver, tall og `_`, delt med punktum; ikke tom og ikke ledende punktum). Delvis unike indekser `where deleted_at is null`: `(version_id, key)` for seksjoner, felt, kontrollpunkter og regler, `(element_id, key)` for valg, `(checkpoint_id, key)` for spørsmål og `(deviation_question_id, key)` for utfall. `rule_conditions.element_key` og `checkpoint_key` har samme format-CHECK når de er fylt ut.
+- **Versjoner:** `status` er `draft` (standard), `published` eller `retired`. Unik `(family_id, version_number)`, og bare ett utkast per familie (delvis unik indeks `(family_id) where status = 'draft' and deleted_at is null`). Publisert og utgått har alltid `published_at` (CHECK). `published_by` er ansatt-id-en.
+- **Utfall:** `kind` er `tg2`, `tg3`, `hms` eller `choose_tg2_tg3`, og en egen CHECK sier at `kind` aldri er `tgiu`. `default_cause_criterion` har samme koder som `deviations.cause_criterion` (4.7).
+- **Rekkefølge:** `sort_order` (heltall, standard 0) på seksjoner, felt, valg, kontrollpunkter, spørsmål, utfall, tiltak, regler, betingelser og testtilfeller. På regler, betingelser og testtilfeller er den lagt til fordi listene erstattes samlet når rekkefølgen er endret (A142).
+- **Typer:** `room_type_groups` og `related_checkpoint_keys` er tekstlister (`text[]`, tom = ingen). `table_columns` er `jsonb` og må være en liste (CHECK). `default_value` og `rule_conditions.value` er `jsonb`, fordi verdien kan være tekst, tall eller en liste. `rule_test_cases.input` er et `jsonb`-objekt. `min_value` og `max_value` er `numeric`, med CHECK `min_value <= max_value`. `phrase_slot` er en av `description`, `deviation`, `cause`, `consequence`, `measure`, `cost_text` og `summary`. `rule_conditions.group_no` er tom (uten gruppe) eller minst 1.
+- **De faste kodelistene** står som `as const`-lister i `src/db/schema/templates.ts` (`TEMPLATE_KINDS`, `TEMPLATE_VERSION_STATUSES`, `FIELD_TYPES`, `PHRASE_SLOTS`, `OUTCOME_KINDS`, `RULE_PURPOSES`, `RULE_CONDITION_TYPES` med flere), og CHECK-reglene er laget fra dem.
+- **Venter:** `template_families.owner_employee_id`, `company_id` og `archived_at` (A146, kommer med egne maler i fase 5). `template_versions.lifespan_table_id`, `threshold_table_id` og `cost_band_set_id` (kommer med levetider, terskler og kostnadsintervaller). `rule_conditions.threshold_key`, `age_year_element_key`, `age_source_element_key`, `documentation_element_key` og `material_element_key`, og `rule_test_cases.last_result` og `last_run_at` (A147, kommer med regelmotoren og kontrollen før publisering). Godkjenningsstatus på fagtekstene kommer med systemmalen (eget punkt). `room_type_groups` sjekkes ikke mot romgruppene i databasen; det gjør Zod-skjemaet.
 
 ---
 
@@ -2107,9 +2119,13 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Eiendom mangler / bygning ikke tom / etasje ikke tom | `PropertyMissingError` / `BuildingNotEmptyError` / `FloorNotEmptyError` | Ny bygning uten eiendom, eller fjerning av bygning med etasjer eller etasje med rom. Ingenting lagres |
 | Malfamilie | `template_families` | |
 | Malversjon | `template_versions` | |
+| Utkast / publisert / utgått | `draft` / `published` / `retired` | `template_versions.status`. Bare ett utkast per malfamilie. Publiserte og utgåtte versjoner endres aldri |
+| Fast kode | `key` | Kode med små bokstaver, tall, `_` og `.` (for eksempel `wet_room.membrane`). Endres aldri, arkiveres (regel 6, A136–A137) |
+| Arkivert kode | – | En kode som fantes i en tidligere versjon av familien, men ikke i den siste publiserte. Tas ikke i bruk igjen (A136) |
 | Systemmal / egen mal | `system` / `custom` | `template_families.kind` |
 | Malbygger | – | Skjermen som lager egne maler (fase 5) |
-| Seksjon | `template_sections` | |
+| Seksjon / underseksjon | `template_sections`, `parent_section_id` | |
+| Valg (i et valgfelt) | `template_element_options` | Fast kode unik per felt |
 | Felt (element) | `template_elements` | |
 | Felttype | `field_type` | |
 | Tekst / avkrysning / valg / tall / dato / bilde / signatur / tabell / frase | `text` / `checkbox` / `choice` / `number` / `date` / `photo` / `signature` / `table` / `phrase` | |
@@ -2353,3 +2369,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 06.11.2026 | Reklamasjoner med enkelt skjema (fase 2a): `claims` bygget knyttet til oppdraget (`assignment_id`), med klager som part eller fritekst, `description`, `building_part_text` som fritekst, åpen/lukket lest av `outcome`, `amount` bare ved medhold eller forlik, `closed_at` satt av serveren og myk sletting. Ny rettighet `claims.manage` (leder og admin). `report_id`, `release_id`, `checkpoint_key`, `internal` og mappen venter. Se «Bygget i fase 2a» i 4.13. | A125–A129, `docs/funksjoner/fase2a-reklamasjoner.md` |
 | 06.11.2026 | Tidsmåling per oppdrag og fase (fase 2a): `work_sessions` bygget med `assignment_id`, `employee_id`, `phase` (fire faste koder), `started_at`/`ended_at` (CHECK) og myk sletting, uten `report_id`, `device_id` og `source`. Fasen regnes ut med `phaseForAssignment`; pause over 10 minutter gir ny økt. `baseline_metrics` erstattet av innstillingen `time_tracking.baseline` inntil videre; ny innstilling `time_tracking.enabled` og ny rettighet `statistics.read` (leder og admin). Se «Bygget i fase 2a» i 4.13. | A119–A124, `docs/funksjoner/fase2a-tidsmaling.md` |
 | 10.11.2026 | KI i bunnen (ADR 0006, bare dokumentasjon): `ai_usage_log` er både logg og forslag (én rad per kall). `status` (`suggested`, `accepted`, `edited`, `rejected`) erstatter `decision`, og utfallet av kallet er eget felt (`outcome`). Nye felt: `prompt_version`, `source_fields`, `assignment_id`, `error_code`, `retain_until`. `answers.ai_usage_id` (4.7), portene `ai` og `speech_to_text` (4.10) og ordlisten er rettet. | A148–A157, `docs/adr/0006-ki-i-bunnen.md` |
+| 06.11.2026 | Malmotoren (fase 2a): tolv tabeller fra 4.5 bygget i migrering `0024_malmotor`, med sammensatte fremmednøkler med `organization_id`, faste koder med format-CHECK og delvis unike indekser per område, ett utkast per malfamilie, CHECK mot `tgiu` som utfall og `sort_order` også på regler, betingelser og testtilfeller. `owner_employee_id`, `company_id`, `archived_at`, `lifespan_table_id`, `threshold_table_id`, `cost_band_set_id`, terskel- og alderskolonnene på betingelsene og `last_result`/`last_run_at` venter. Nye ord i ordlisten (fast kode, arkivert kode, utkast/publisert/utgått, valg, underseksjon). Se «Bygget i fase 2a» i 4.5. | A136–A147, `docs/funksjoner/fase2a-malmotor.md` |
