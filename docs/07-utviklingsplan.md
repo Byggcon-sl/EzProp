@@ -72,7 +72,7 @@ Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3
 | 0a Repo og database | Ferdig 28.10.2026 |
 | 1 Prøve uten nett | Ferdig 10.11.2026. Ståle har kjørt prøvene på ekte iPad og godkjent ADR 0004 (egenbygd synk). |
 | 0b Innlogging, organisasjon, roller | Ferdig, unntatt felles innlogging med Optiplan (venter på S6) |
-| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren ligger i PR #119. |
+| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119) og ADR 0006 KI i bunnen (PR #123) er levert. Neste: «KI-modulen og loggen» (2a-1). |
 | Minimum før ekte data | To av ni punkter levert. Testmiljøet er klart (S1, 10.11.2026), så resten kan bygges nå. |
 | 2b og videre | Ikke startet |
 
@@ -84,12 +84,12 @@ Dette kan bare Ståle gjøre eller bestemme. Listen er sortert etter hvor mye so
 |---|---|---|
 | S1 | ~~Testmiljøet i Azure~~ **Gjort (Ståle 10.11.2026: «testmiljøet er ok»).** | – |
 | S2 | ~~Prøve A og B på ekte iPad, C, D og F, og godkjenne ADR 0004~~ **Gjort (Ståle 10.11.2026: «2 og 3 også»).** ADR 0004 (egenbygd synk) er godkjent. | – |
-| S3 | ~~Fagråd runde 1~~ **Gjort (Ståle 10.11.2026: «2 og 3 også»).** Grensene, levetidene, prøveeksemplene og kontrollpunktene for leilighet og fellesdeler er godkjent. Svarene på de tre fagspørsmålene (TG0 på eldre våtrom, radon i leiligheter, røykvarsler) er ikke skrevet ned ennå. | De tre fagspørsmålene |
+| S3 | ~~Fagråd runde 1~~ **Gjort (Ståle 10.11.2026: «2 og 3 også»).** Grensene, levetidene, prøveeksemplene og kontrollpunktene for leilighet og fellesdeler er godkjent. De tre fagspørsmålene er besvart samme dag: TG0 gis når det ikke er målt fukt, uansett hvor gammelt badet er; radon er bare HMS; brann og sikkerhet (røykvarsler, slukkeutstyr) er punkter uansett bygningstype. | – |
 | S4 | **Ansvarsforsikringen:** antall krav og beløp de siste 3 årene, **hvilken bygningsdel hvert krav gjaldt**, hvordan tidlig melding virker, og om dokumenterte rutiner gir bedre vilkår. | Nullpunktet for reklamasjonsmålet, og hvilke regler og KI-sjekker som bør komme først |
 | S5 | **Måling i IVIT:** tre takstmenn noterer tid på 20–30 oppdrag til sammen (forberedelse, befaring, kontorarbeid, levering). Målingen drøftes med de ansatte først. Tallene legges inn på `/statistikk/tid`. | Sammenligningen i piloten |
 | S6 | **Tilgang til Optiplan-oppsettet**, og bekrefte om Optiplan bruker nøkkelboks. | Felles innlogging og bytte med ett trykk (fase 0b) |
 | S7 | **Folk:** én erfaren takstmann inn i betaen nå, hvem som er med i piloten og EzProp-panelet (forslag: én takstmann per selskap og Dan-Børge fra kontoret), og hvem som er ansvarlig for overgangen fra IVIT. | Andre øyne enn Ståles på det som bygges, og piloten |
-| S8 | **KI-leverandør: Anthropic (Ståle 10.11.2026: «vi benytter anthropic som leverandør av ki»).** Gjenstår: si ja til kostnaden når agentene har lagt fram beslutningsnotatet (modeller, pris per rapport, databehandleravtale, EU/EØS), legge inn API-nøkkelen som secret, og velge leverandør for norsk tale til tekst (Anthropic tilbyr ikke det). | KI med ekte tekst og tale. Til da bygges og prøves alt mot en falsk leverandør. |
+| S8 | **KI-leverandør: Anthropic, og Ståle har API-nøkkel (Ståle 10.11.2026: «vi har valgt anthopic - har api nøkler»).** Gjenstår: Ståle legger nøkkelen inn som secret `ANTHROPIC_API_KEY` i GitHub (aldri i chat eller repo) når adapteren er bygget, og velger leverandør for norsk tale til tekst (Anthropic tilbyr ikke det). | Ekte KI i testmiljøet. Til da prøves alt mot den falske leverandøren. |
 
 ---
 
@@ -150,7 +150,6 @@ Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se
 ### 2a-3 Bredden
 
 **Malen og reglene**
-- [x] Malmotoren fra `datamodell.md` 4.5: malfamilie, malversjon, seksjon, felt, kontrollpunkt, avviksspørsmål, utfall, standardtiltak og regler. Systemmalen er låst for alle uten maltilgang.
 - [ ] **Regneark inn og ut med faste ID-er** for systemmalen. Slik redigerer fagansvarlig malen i betaen (P19); egen maleditor kommer i fase 5.
 - [ ] Automatisk kontroll av malen før publisering: obligatoriske punkter finnes, TG3 har kostnad, ingen regler peker på felt som ikke finnes, og alle testtilfeller består
 - [ ] «Prøv malen»: et testskjema som viser hvilke spørsmål og TG-forslag som kommer
