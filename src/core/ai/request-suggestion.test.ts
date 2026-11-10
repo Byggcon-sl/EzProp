@@ -376,6 +376,7 @@ describe("requestSuggestion: samme requestId igjen (6.11–6.18, 10.3)", () => {
     const first = await requestSuggestion(a.grant, request);
     if (first.kind !== "suggestion") throw new Error("forventet forslag");
     const before = snapshot(await aiRow(request.requestId));
+    const spy = vi.spyOn(fakeAiProvider, "complete");
 
     const error = await captureError(() => requestSuggestion(b.grant, request));
     // B prøver også å sende med A sin organisasjon og ansatt i forespørselen (brukes aldri)
@@ -389,6 +390,7 @@ describe("requestSuggestion: samme requestId igjen (6.11–6.18, 10.3)", () => {
 
     expectSameRejection(error, baseline);
     expectSameRejection(withForeignIds, baseline);
+    expect(spy).not.toHaveBeenCalled();
     expect(error.message).not.toContain(first.text);
     expect(snapshot(await aiRow(request.requestId))).toBe(before);
     expect(await aiRowCount()).toBe(1);

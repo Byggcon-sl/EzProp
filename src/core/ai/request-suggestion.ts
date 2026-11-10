@@ -117,6 +117,12 @@ export async function requestSuggestion(
     }
     return toSuggestionResult(existing);
   }
+  // Id-en finnes hos en annen organisasjon eller er mykt slettet: avslag før leverandøren kalles
+  const [taken] = await db
+    .select({ id: aiUsageLog.id })
+    .from(aiUsageLog)
+    .where(eq(aiUsageLog.id, input.requestId));
+  if (taken) throw new AiRequestRejectedError();
 
   // 6. KI av: ingen rad, intet kall
   const resolved = await resolveAiProvider(grant);

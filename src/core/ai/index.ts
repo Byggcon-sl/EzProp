@@ -14,7 +14,6 @@ export {
 } from "./errors";
 export {
   AI_FEATURES,
-  AI_PROMPTS,
   getFeatureDefinition,
   type AiFeatureDefinition,
   type AiTargetSpec,
@@ -25,7 +24,6 @@ export {
   FAKE_ERROR_INPUT,
   FAKE_MODEL,
   FAKE_NO_MATCH_INPUT,
-  fakeAiProvider,
 } from "./providers/fake";
 export type { AiProvider, AiProviderRequest, AiProviderResult } from "./providers/types";
 export { AI_FIELD_MAX_LENGTH } from "./request";

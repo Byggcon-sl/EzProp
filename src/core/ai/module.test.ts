@@ -21,11 +21,11 @@ import {
   AiRequestRejectedError,
   FAKE_ERROR_CODE,
   FAKE_ERROR_INPUT,
-  fakeAiProvider,
   recordDecision,
   requestSuggestion,
   type AiSuggestionRequest,
 } from "./index";
+import { fakeAiProvider } from "./providers/fake";
 import { addYears } from "./usage-log";
 
 /*

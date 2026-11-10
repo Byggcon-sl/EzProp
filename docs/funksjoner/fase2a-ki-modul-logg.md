@@ -74,7 +74,7 @@ ADR 0006 beskriver KI-grunnmuren på papir. Ingen kode finnes. Uten modulen, tab
    - At `src/core/ai` ikke importerer fra moduler, håndheves allerede av `eslint-rules/module-boundaries.js`. Ingen ny kontroll.
 10. **Ingen logging av innhold:** feil fra leverandøren logges bare med funksjon, leverandørkode, `error_code` og id. Vist med én oppførselstest på feilveien (spion på `logger`), ikke et tekstsøk.
 11. **Personvern:** ny rad for `ai_usage_log` i `docs/personvern/intern-personvernerklaering.md` (hva: hvem som ba om og avgjorde forslaget, forslagsteksten, feltkoder og antall tegn; formål: KI-forslag som den ansatte kontrollerer, og sporbarhet ved reklamasjon; hvor: database; hvor lenge: 10 år, myk sletting, spørsmål 56; hvem ser: ingen skjerm, ingen tall per person). Raden for `audit_log` får en setning om at den nå også har én linje per avgjort eller angret KI-forslag med hvem som gjorde det (spørsmål 57). Tabellen føres i `docs/personvern/sletting-av-betadata.md` der prøvedata listes.
-12. `docs/05-domenemodell.md` (4.12 og ordlisten) oppdateres om noe avviker fra ADR-en. Versjon i `package.json` økes én patch over `main` (0.4.4 → 0.4.5).
+12. `docs/05-domenemodell.md` (4.12 og ordlisten) oppdateres om noe avviker fra ADR-en. Versjon i `package.json` økes én patch over `main` (0.4.5 → 0.5.0).
 
 **Ikke med (bevisst utelatt):**
 - Ingen skjermer, knapper eller visning av forslag (neste punkt: forslagsmønsteret).
@@ -144,7 +144,7 @@ Tas ikke her: ad-1 (eget utfall for sperret fritekst uten oppdrag) og ad-3, ad-4
 - [ ] Seed slår på KI med `fake` i prøveorganisasjonen og tåler to kjøringer. Den slår ikke KI på igjen når admin har satt `ai.enabled = false`, lager ikke ny rad når det finnes en deaktivert eller slettet rad på porten `ai`, endrer ikke andre nøkler i `settings`, og rører ikke Byggcon.
 - [ ] Personvernerklæringen har rad for `ai_usage_log` og setningen om `audit_log`; tabellen står i sletteregelen.
 - [ ] ADR 0006 er rettet for ad-11 og ad-12.
-- [ ] Versjon 0.4.5 i `package.json`.
+- [ ] Versjon 0.5.0 i `package.json`.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne. Ingen ny avhengighet. Ingen nye e2e-tester (ingen skjerm).
 
 ## Beslutninger tatt i autonom modus (føres i `docs/09-apne-sporsmal.md`)
