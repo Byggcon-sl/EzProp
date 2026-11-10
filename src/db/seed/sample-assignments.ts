@@ -69,10 +69,13 @@ export type SampleAssignmentSummary = {
 };
 
 export type SampleAiSummary = {
-  /** `ai.enabled` satt nå, eller fantes fra før (også `false`). */
-  setting: SamplePartResult;
-  /** Tilkoblingen `fake` laget nå, eller fantes det fra før en rad på porten `ai`. */
-  connection: SamplePartResult;
+  /** `ai.enabled` satt nå, fantes fra før (også `false`), eller `skipped` uten `sampleData`. */
+  setting: SampleResult;
+  /**
+   * Tilkoblingen `fake` laget nå, fantes det fra før en rad på porten `ai`, eller `skipped`
+   * uten `sampleData`.
+   */
+  connection: SampleResult;
 };
 
 export type SampleSeedSummary = {
@@ -327,16 +330,21 @@ export async function prepareSampleSeed(
 /** Porten for KI. Strengen er bare lov her og i `src/core/ai` (statisk test der). */
 const AI_PORT = "ai";
 
+/** Organisasjonen har merket `settings.sampleData = true` (boolsk, ikke tekst). */
+const IS_SAMPLE_ORGANIZATION = sql`${organizations.settings} -> 'sampleData' = 'true'::jsonb`;
+
 /**
  * Slår på KI med den falske leverandøren i prøveorganisasjonen, slik at de ansatte kan prøve
- * KI-forslag i testmiljøet uten kostnad og uten at data sendes ut. Kalles bare etter
- * `prepareSampleSeed`, som har sjekket at organisasjonen har `settings.sampleData = true`.
+ * KI-forslag i testmiljøet uten kostnad og uten at data sendes ut. Kalles etter
+ * `prepareSampleSeed`, men sjekker merket `settings.sampleData = true` selv, i samme spørring som
+ * skriver eller avgjør (docs/funksjoner/fase2a-forslagsmonster.md Omfang 7). Uten merket gjøres
+ * ingenting, og svaret er `skipped`.
  *
  * - `ai.enabled = true` settes bare når nøkkelen mangler. Én spørring slår nøkkelen sammen med de
  *   andre (`settings || …`), så ingen annen nøkkel endres. Har admin satt `false`, står det.
  * - Tilkoblingen lages med `createConnection` (validering og revisjonslogg) bare når
- *   organisasjonen ikke har noen rad på porten, heller ikke deaktivert, med feil, med annen
- *   leverandør eller mykt slettet. En rad som finnes, røres ikke.
+ *   organisasjonen har merket og ikke har noen rad på porten, heller ikke deaktivert, med feil,
+ *   med annen leverandør eller mykt slettet. En rad som finnes, røres ikke.
  */
 export async function ensureSampleAi(context: SampleSeedContext): Promise<SampleAiSummary> {
   const { organizationId } = context;
@@ -349,23 +357,30 @@ export async function ensureSampleAi(context: SampleSeedContext): Promise<Sample
     .where(
       and(
         eq(organizations.id, organizationId),
+        IS_SAMPLE_ORGANIZATION,
         sql`${organizations.settings} -> ${AI_ENABLED_SETTING_KEY} is null`,
       ),
     )
     .returning({ id: organizations.id });
-  const setting: SamplePartResult = updated.length > 0 ? "created" : "existing";
 
-  const [existing] = await db
-    .select({ id: integrationConnections.id })
-    .from(integrationConnections)
-    .where(
+  // Merket og tilkoblingen leses i samme spørring: ingen rad betyr at merket mangler
+  const [sample] = await db
+    .select({ connectionId: integrationConnections.id })
+    .from(organizations)
+    .leftJoin(
+      integrationConnections,
       and(
-        eq(integrationConnections.organizationId, organizationId),
+        eq(integrationConnections.organizationId, organizations.id),
         eq(integrationConnections.port, AI_PORT),
       ),
     )
+    .where(and(eq(organizations.id, organizationId), IS_SAMPLE_ORGANIZATION))
     .limit(1);
-  if (existing) return { setting, connection: "existing" };
+  if (!sample) {
+    return { setting: updated.length > 0 ? "created" : "skipped", connection: "skipped" };
+  }
+  const setting: SampleResult = updated.length > 0 ? "created" : "existing";
+  if (sample.connectionId !== null) return { setting, connection: "existing" };
 
   await createConnection(context.actor, organizationId, { port: AI_PORT, provider: "fake" });
   return { setting, connection: "created" };

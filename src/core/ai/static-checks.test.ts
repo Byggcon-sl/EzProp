@@ -118,3 +118,41 @@ describe("KI-modulen, statiske kontroller (12)", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/*
+ * Forslagsmønsteret (docs/funksjoner/fase2a-forslagsmonster-testplan.md avsnitt 8.3–8.5). 8.1 og
+ * 8.2 (kortet, merket og prøvesiden) ligger i src/shared/ui/ai-imports.test.ts.
+ */
+describe("forslagsmønsteret, statiske kontroller (8)", () => {
+  it("8.3 statusoppslaget og sperren nevner ikke outputText eller output_text", () => {
+    for (const name of ["suggestion-status.ts", "approval-check.ts"]) {
+      const file = join(aiDir, name);
+      expect(existsSync(file), name).toBe(true);
+      expect(read(file), name).not.toMatch(/outputText|output_text/);
+    }
+  });
+
+  it("8.4 @/core/ai eksporterer statusoppslaget og sperren, men ingen list*/count*", async () => {
+    const ai: Record<string, unknown> = await import("./index");
+    expect(Object.keys(ai)).toEqual(
+      expect.arrayContaining([
+        "getSuggestionStatus",
+        "checkAiTextApproved",
+        "AI_APPROVAL_CHECK_MAX",
+      ]),
+    );
+    expect(Object.keys(ai).filter((name) => /^(list|count)/i.test(name))).toEqual([]);
+  });
+
+  it("8.5 ai_trial står bare i features.ts, prøvesiden og testene", () => {
+    const allowed = (path: string) =>
+      path === "src/core/ai/features.ts" || path.startsWith("src/app/(ansatt)/prove/ki/");
+    const offenders = productFiles(srcDir)
+      .filter((file) => !allowed(rel(file)))
+      .filter((file) => /\bai_trial\b/.test(read(file)))
+      .map(rel);
+    expect(offenders).toEqual([]);
+    // Ikke hul: features.ts har faktisk koden
+    expect(read(join(aiDir, "features.ts"))).toMatch(/\bai_trial\b/);
+  });
+});

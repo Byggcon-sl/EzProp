@@ -94,18 +94,18 @@ function productFiles(dir: string): string[] {
 }
 
 describe("funksjonsdefinisjonene (2)", () => {
-  it("2.1 language_polish: rettighet report.edit, ledetekst v1, én feltkode og ett lovlig mål", () => {
+  it("2.1 language_polish: rettighet report.edit, ledetekst v1, én feltkode og to lovlige mål", () => {
     const definition = languagePolish();
     expect(definition.code).toBe("language_polish");
     expect(definition.permission).toBe("report.edit");
     expect(definition.promptVersion).toBe("language_polish.v1");
     expect([...definition.allowedFields]).toEqual(["text"]);
-    expect(definition.allowedTargets).toHaveLength(1);
-    const [target] = definition.allowedTargets;
-    expect(typeof target!.type).toBe("string");
-    expect(target!.type.length).toBeGreaterThan(0);
-    expect(typeof target!.fieldKey).toBe("string");
-    expect(target!.fieldKey.length).toBeGreaterThan(0);
+    // Skrevet om bevisst (docs/funksjoner/fase2a-forslagsmonster.md «Data», A166): prøvesiden
+    // /prove/ki har fått sitt eget mål `ai_trial`. Svaret i teksten (`answer`) står først.
+    expect(definition.allowedTargets.map((target) => ({ ...target }))).toEqual([
+      { type: "answer", fieldKey: "text" },
+      { type: "ai_trial", fieldKey: "text" },
+    ]);
   });
 
   it("2.2 kodene er faste: listen er nøyaktig language_polish", () => {
