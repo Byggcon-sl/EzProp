@@ -10,6 +10,7 @@ import { createLocalFileStorage } from "@/core/files/local-storage";
 import { isCertificationValid } from "@/core/organization/certification-rules";
 import { db } from "@/db/client";
 import {
+  aiUsageLog,
   assignmentParties,
   assignments,
   assignmentTeamMembers,
@@ -34,6 +35,7 @@ import {
 import { todayInOslo } from "@/shared/lib/dates";
 import { uuidv7 } from "@/shared/lib/uuid";
 import {
+  createAiUsageLog,
   createAssignment,
   createAssignmentParty,
   createBuilding,
@@ -1130,5 +1132,28 @@ describe("fabrikken for avtale med oppdragsgiver (fase 2a)", () => {
       sql`select count(*)::int as n from client_agreements`,
     );
     expect(n).toBe(0);
+  });
+});
+
+describe("fabrikken for KI-loggen (fase 2a-1)", () => {
+  it("lager en rad i riktig organisasjon med ansatt fra samme organisasjon", async () => {
+    await resetDatabase();
+    const orgA = await createOrganization("Oppdiktet takst A");
+    const orgB = await createOrganization("Oppdiktet takst B");
+
+    const row = await createAiUsageLog(orgA.id);
+
+    expect(row.organizationId).toBe(orgA.id);
+    expect(row.outcome).toBe("ok");
+    expect(row.status).toBe("suggested");
+    expect(row.provider).toBe("fake");
+    expect(row.model).toBe("fake-v1");
+    expect(row.cost).toBe("0.0000");
+    expect(row.currency).toBe("NOK");
+    expect(row.retainUntil.getTime()).toBeGreaterThan(Date.now() + 9 * 365 * 24 * 3600 * 1000);
+    const [employee] = await db.select().from(employees).where(eq(employees.id, row.employeeId));
+    expect(employee?.organizationId).toBe(orgA.id);
+    const inB = await db.select().from(aiUsageLog).where(eq(aiUsageLog.organizationId, orgB.id));
+    expect(inB).toEqual([]);
   });
 });
