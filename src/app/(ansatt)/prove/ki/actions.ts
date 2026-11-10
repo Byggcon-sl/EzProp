@@ -4,6 +4,7 @@ import { z } from "zod";
 import { AccessDeniedError, requireOrganizationAccess, type EmployeeGrant } from "@/core/access";
 import {
   AI_DECISIONS,
+  AI_TRIAL_TARGET_TYPE,
   AI_FIELD_MAX_LENGTH,
   AiDecisionError,
   AiRequestRejectedError,
@@ -28,7 +29,6 @@ import { getEmployeeContext } from "../../employee-context";
  */
 
 const ROUTE = "/prove/ki";
-const TRIAL_TARGET_TYPE = "ai_trial";
 const TRIAL_FIELD_KEY = "text";
 
 const NO_ACCESS = "Du har ikke tilgang til dette.";
@@ -92,9 +92,10 @@ function failed(message: string): TrialFailure {
 function failure(
   error: unknown,
   log: { action: string; userId?: string; usageId?: string },
+  rejectedMessage: string = NOT_FOUND,
 ): TrialFailure {
   if (error instanceof AccessDeniedError) return failed(NO_ACCESS);
-  if (error instanceof AiRequestRejectedError) return failed(NOT_FOUND);
+  if (error instanceof AiRequestRejectedError) return failed(rejectedMessage);
   logger.error("Prøvesiden for KI feilet", {
     route: ROUTE,
     ...log,
@@ -119,7 +120,7 @@ export async function requestTrialSuggestion(input: unknown): Promise<TrialSugge
       feature: "language_polish",
       assignmentId: null,
       reportId: null,
-      target: { type: TRIAL_TARGET_TYPE, id: targetId, fieldKey: TRIAL_FIELD_KEY },
+      target: { type: AI_TRIAL_TARGET_TYPE, id: targetId, fieldKey: TRIAL_FIELD_KEY },
       fields: { [TRIAL_FIELD_KEY]: text },
     });
     if (result.kind === "disabled") return { kind: "disabled" };
@@ -129,7 +130,12 @@ export async function requestTrialSuggestion(input: unknown): Promise<TrialSugge
     }
     return { kind: result.kind, usageId: result.usageId, logged };
   } catch (error) {
-    return failure(error, { action: "requestTrialSuggestion", userId, usageId: requestId });
+    // Når man ber om et nytt forslag, finnes det ikke noe forslag ennå: avslag gir «Noe gikk galt».
+    return failure(
+      error,
+      { action: "requestTrialSuggestion", userId, usageId: requestId },
+      UNKNOWN,
+    );
   }
 }
 
