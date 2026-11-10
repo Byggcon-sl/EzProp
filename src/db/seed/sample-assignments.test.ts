@@ -18,13 +18,15 @@ import {
   TEST_NOW,
   activeAdminCount,
   createEmployee,
+  createIntegrationConnection,
   createOrder,
+  createOrganization,
   createUser,
   resetDatabase,
 } from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { runSeed } from "./run";
-import { findSampleOrders, runSampleSeed } from "./sample-assignments";
+import { ensureSampleAi, findSampleOrders, runSampleSeed } from "./sample-assignments";
 import { SAMPLE_ASSIGNMENTS, SAMPLE_INSPECTOR } from "./sample-assignments.data";
 
 /*
@@ -104,6 +106,8 @@ const ORG_TABLES = [
   "events",
   "audit_log",
   "files",
+  "integration_connections",
+  "ai_usage_log",
 ] as const;
 /** Tabellene over med `updated_at` og `deleted_at` (alle unntatt `number_sequences`). */
 const ORG_TABLES_WITH_TIMESTAMPS = ORG_TABLES.filter((table) => table !== "number_sequences");
@@ -1150,5 +1154,152 @@ describe("seed-steget for testoppdragene: loggen (2.9)", () => {
         `andre kjøring: ${ref} er ikke laget på nytt`,
       ).toBe(false);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// KI med falsk leverandør i prøveorganisasjonen
+// Testplan docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 13 (A160).
+// ---------------------------------------------------------------------------------------------
+
+type AiConnectionRow = {
+  id: string;
+  provider: string;
+  status: string;
+  row_version: number;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+/** Alle rader på porten `ai` i organisasjonen, også deaktiverte og slettede. */
+async function aiConnections(organizationId: string): Promise<AiConnectionRow[]> {
+  return rows<AiConnectionRow>(sql`
+    select id, provider, status, row_version, updated_at::text as updated_at,
+      deleted_at::text as deleted_at
+    from integration_connections
+    where organization_id = ${organizationId} and port = 'ai'
+    order by created_at`);
+}
+
+async function settingsOf(organizationId: string): Promise<Loose> {
+  const [row] = await rows<{ settings: Loose }>(
+    sql`select settings from organizations where id = ${organizationId}`,
+  );
+  return row!.settings;
+}
+
+/** Lager prøveorganisasjonen selv før steget kjører, med egne innstillinger. */
+async function createSampleOrganization(settings: Loose): Promise<string> {
+  const [row] = await rows<{ id: string }>(sql`
+    insert into organizations (name, brand_name, settings)
+    values (${SAMPLE_ORG}, ${SAMPLE_ORG}, ${JSON.stringify(settings)}::jsonb)
+    returning id`);
+  return row!.id;
+}
+
+describe("seed-steget for testoppdragene: KI med falsk leverandør (13)", () => {
+  beforeEach(async () => {
+    await runSeed(env);
+  });
+
+  it("13.1 første kjøring: ai.enabled = true og én aktiv tilkobling ai/fake", async () => {
+    const summary = await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    expect((await settingsOf(orgId))["ai.enabled"]).toBe(true);
+    const connections = await aiConnections(orgId);
+    expect(connections).toHaveLength(1);
+    expect(connections[0]).toMatchObject({ provider: "fake", status: "active", deleted_at: null });
+    expect(summary.ai).toEqual({ setting: "created", connection: "created" });
+  });
+
+  it("13.2 andre kjøring: ingen ny rad, ingen endring på raden, samme settings", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    const connectionsBefore = await aiConnections(orgId);
+    const settingsBefore = await settingsOf(orgId);
+    const summary = await runSampleSeed(env, TEST_NOW);
+    expect(await aiConnections(orgId)).toEqual(connectionsBefore);
+    expect(await settingsOf(orgId)).toEqual(settingsBefore);
+    expect(summary.ai).toEqual({ setting: "existing", connection: "existing" });
+  });
+
+  it("13.3 admin har satt ai.enabled = false: seed slår det ikke på igjen", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    await db.execute(sql`update organizations
+      set settings = settings || '{"ai.enabled": false}'::jsonb where id = ${orgId}`);
+    await runSampleSeed(env, TEST_NOW);
+    expect((await settingsOf(orgId))["ai.enabled"]).toBe(false);
+  });
+
+  it("13.3 ai.enabled = false før første kjøring står, men tilkoblingen lages", async () => {
+    const orgId = await createSampleOrganization({ sampleData: true, "ai.enabled": false });
+    const summary = await runSampleSeed(env, TEST_NOW);
+    expect((await settingsOf(orgId))["ai.enabled"]).toBe(false);
+    expect(await aiConnections(orgId)).toHaveLength(1);
+    expect(summary.ai).toEqual({ setting: "existing", connection: "created" });
+  });
+
+  it.each([
+    ["deaktivert", { status: "disabled" }],
+    ["mykt slettet", { deletedAt: new Date("2026-11-01T10:00:00Z"), deletedBy: "test" }],
+    ["med feilstatus", { status: "error" }],
+  ])("13.4 %s rad på porten ai: ingen ny rad, og raden er uendret", async (_label, overrides) => {
+    const orgId = await createSampleOrganization({ sampleData: true });
+    await createIntegrationConnection(orgId, { port: "ai", provider: "fake", ...overrides });
+    const before = await aiConnections(orgId);
+    await runSampleSeed(env, TEST_NOW);
+    await runSampleSeed(env, TEST_NOW);
+    expect(await aiConnections(orgId)).toEqual(before);
+  });
+
+  it("13.5 rad med annen leverandørkode på porten ai: røres ikke, og ingen fake ved siden av", async () => {
+    const orgId = await createSampleOrganization({ sampleData: true });
+    await createIntegrationConnection(orgId, { port: "ai", provider: "oppdiktet_leverandor" });
+    const before = await aiConnections(orgId);
+    await runSampleSeed(env, TEST_NOW);
+    expect(await aiConnections(orgId)).toEqual(before);
+    expect(before[0]!.provider).toBe("oppdiktet_leverandor");
+  });
+
+  it("13.6 andre nøkler i settings er uendret etter seed", async () => {
+    const original = {
+      sampleData: true,
+      "access.inspectors_edit_all": false,
+      "test.oppdiktet_nokkel": { verdi: 3 },
+    };
+    const orgId = await createSampleOrganization(original);
+    await runSampleSeed(env, TEST_NOW);
+    await runSampleSeed(env, TEST_NOW);
+    expect(await settingsOf(orgId)).toEqual({ ...original, "ai.enabled": true });
+  });
+
+  it("13.7 Byggcon får verken ai.enabled eller tilkobling, heller ikke etter to kjøringer", async () => {
+    const byggcon = await byggconId();
+    expect((await settingsOf(byggcon))["ai.enabled"]).toBeUndefined();
+    expect(await aiConnections(byggcon)).toHaveLength(0);
+    await runSampleSeed(env, TEST_NOW);
+    await runSampleSeed(env, TEST_NOW);
+    expect((await settingsOf(byggcon))["ai.enabled"]).toBeUndefined();
+    expect(await aiConnections(byggcon)).toHaveLength(0);
+  });
+
+  it("13.7 ensureSampleAi på Byggcon eller en organisasjon uten sampleData gjør ingenting", async () => {
+    const byggcon = await byggconId();
+    const other = await createOrganization("Annet firma takst");
+    await db.execute(sql`update organizations
+      set settings = '{"sampleData": "true"}'::jsonb where id = ${other.id}`);
+    for (const orgId of [byggcon, other.id]) {
+      const settingsBefore = await settingsOf(orgId);
+      expect(await ensureSampleAi(orgId)).toEqual({ setting: "skipped", connection: "skipped" });
+      expect(await settingsOf(orgId)).toEqual(settingsBefore);
+      expect(await aiConnections(orgId)).toHaveLength(0);
+    }
+  });
+
+  it("13.7 kildeteksten lager bare fake og leser aldri NODE_ENV", () => {
+    const source = readFileSync(join(process.cwd(), "src/db/seed/sample-assignments.ts"), "utf8");
+    expect(source).not.toMatch(/NODE_ENV/);
+    expect(source).toMatch(/AI_FAKE_PROVIDER = "fake"/);
   });
 });

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, isNull, like } from "drizzle-orm";
+import { and, asc, eq, isNull, like, sql } from "drizzle-orm";
 import type { Actor } from "@/core/access";
 import { addParty, changeAssignmentStatus, setTeamMember } from "@/core/assignments";
 import { saveBuilding, saveFloor, saveFloorArea, saveRoom } from "@/core/buildings";
@@ -14,6 +14,7 @@ import {
   companies,
   employeeRoleAssignments,
   employees,
+  integrationConnections,
   offices,
   orders,
   organizations,
@@ -43,6 +44,9 @@ import {
  *   rekkefølge, og bare det som mangler lages. En del som finnes, røres ikke. Bygninger og parter
  *   vurderes samlet. Andre kjøring kaller ingen tjeneste som skriver.
  * - Et testoppdrag med avvist ordre, slettet ordre eller kansellert oppdrag hoppes over.
+ * - KI med den falske leverandøren `fake` slås på i prøveorganisasjonen (A160), så de ansatte
+ *   kan prøve KI-forslag i testmiljøet uten kostnad. Bare i organisasjoner med `sampleData`.
+ *   `pnpm db:seed` (Byggcon) rører aldri KI.
  * - Steget sletter aldri noe. Loggen har bare `externalRef` og resultatet, aldri e-post eller navn.
  */
 
@@ -63,8 +67,16 @@ export type SampleAssignmentSummary = {
   result: SampleResult;
 };
 
+export type SampleAiSummary = {
+  /** `ai.enabled`: satt nå, fantes fra før (sann eller usann), eller hoppet over (ikke prøvedata). */
+  setting: SampleResult;
+  /** Tilkoblingen på porten `ai`: laget nå, fantes fra før (uansett status), eller hoppet over. */
+  connection: SampleResult;
+};
+
 export type SampleSeedSummary = {
   organization: SamplePartResult;
+  ai: SampleAiSummary;
   assignments: SampleAssignmentSummary[];
 };
 
@@ -540,6 +552,71 @@ export async function ensureSampleAssignment(
   return parts.includes("created") ? "created" : "existing";
 }
 
+// ---------------------------------------------------------------------------------------------
+// KI i prøveorganisasjonen (docs/funksjoner/fase2a-ki-modul-logg.md Omfang 8, A160)
+// ---------------------------------------------------------------------------------------------
+
+/** Nøkkelen i `organizations.settings`, samme flate form som `access.inspectors_edit_all`. */
+const AI_ENABLED_KEY = "ai.enabled";
+const AI_PORT = "ai";
+const AI_FAKE_PROVIDER = "fake";
+
+/**
+ * Slår på KI med `fake` i organisasjonen, men bare når den har `settings.sampleData = true`.
+ *
+ * - `ai.enabled = true` settes bare når nøkkelen mangler. Har admin satt den (også til usann),
+ *   står den. Andre nøkler i `settings` røres ikke (flettes i databasen).
+ * - Tilkoblingen `fake` lages bare når organisasjonen ikke har noen rad på porten `ai`, heller
+ *   ikke deaktivert eller slettet. En rad som finnes, endres aldri.
+ * - Tåler å kjøres flere ganger.
+ */
+export async function ensureSampleAi(organizationId: string): Promise<SampleAiSummary> {
+  const [organization] = await db
+    .select({ settings: organizations.settings })
+    .from(organizations)
+    .where(eq(organizations.id, organizationId));
+  if (!organization || organization.settings.sampleData !== true) {
+    return { setting: "skipped", connection: "skipped" };
+  }
+
+  // Sjekken i `where` gjør at en verdi som kom til i mellomtiden, ikke skrives over
+  const updated = await db
+    .update(organizations)
+    .set({
+      settings: sql`${organizations.settings} || jsonb_build_object(${AI_ENABLED_KEY}::text, true)`,
+    })
+    .where(
+      and(
+        eq(organizations.id, organizationId),
+        sql`not (${organizations.settings} ? ${AI_ENABLED_KEY})`,
+      ),
+    )
+    .returning({ id: organizations.id });
+  const setting: SamplePartResult = updated.length > 0 ? "created" : "existing";
+
+  // Alle rader på porten teller, også deaktiverte og slettede
+  const [existing] = await db
+    .select({ id: integrationConnections.id })
+    .from(integrationConnections)
+    .where(
+      and(
+        eq(integrationConnections.organizationId, organizationId),
+        eq(integrationConnections.port, AI_PORT),
+      ),
+    )
+    .limit(1);
+  let connection: SamplePartResult = "existing";
+  if (!existing) {
+    const inserted = await db
+      .insert(integrationConnections)
+      .values({ organizationId, port: AI_PORT, provider: AI_FAKE_PROVIDER, status: "active" })
+      .onConflictDoNothing()
+      .returning({ id: integrationConnections.id });
+    connection = inserted.length > 0 ? "created" : "existing";
+  }
+  return { setting, connection };
+}
+
 /** `pnpm db:seed:testoppdrag`. `now` gir faste datoer i testene. */
 export async function runSampleSeed(
   env: Record<string, string | undefined> = process.env,
@@ -548,7 +625,12 @@ export async function runSampleSeed(
   const { context, organization } = await prepareSampleSeed(env, now);
   console.log(`Prøveorganisasjon: ${RESULT_LABELS[organization]}`);
 
-  const summary: SampleSeedSummary = { organization, assignments: [] };
+  const ai = await ensureSampleAi(context.organizationId);
+  console.log(
+    `KI med falsk leverandør: innstilling ${RESULT_LABELS[ai.setting]}, tilkobling ${RESULT_LABELS[ai.connection]}`,
+  );
+
+  const summary: SampleSeedSummary = { organization, ai, assignments: [] };
   for (const sample of SAMPLE_ASSIGNMENTS) {
     const result = await ensureSampleAssignment(context, sample);
     summary.assignments.push({ externalRef: sample.externalRef, result });

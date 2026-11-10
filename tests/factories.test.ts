@@ -34,6 +34,7 @@ import {
 import { todayInOslo } from "@/shared/lib/dates";
 import { uuidv7 } from "@/shared/lib/uuid";
 import {
+  createAiUsageLog,
   createAssignment,
   createAssignmentParty,
   createBuilding,
@@ -1128,6 +1129,44 @@ describe("fabrikken for avtale med oppdragsgiver (fase 2a)", () => {
 
     const [{ n } = { n: -1 }] = await db.execute<{ n: number }>(
       sql`select count(*)::int as n from client_agreements`,
+    );
+    expect(n).toBe(0);
+  });
+});
+
+describe("createAiUsageLog (fase 2a, KI-modulen og loggen)", () => {
+  it("14.4 lager en rad i riktig organisasjon med standardverdiene, og den ansatte i samme organisasjon", async () => {
+    const orgA = await createOrganization("Oppdiktet takst A");
+    await createOrganization("Oppdiktet takst B");
+    const row = await createAiUsageLog(orgA.id);
+    expect(row.organizationId).toBe(orgA.id);
+    expect(row).toMatchObject({
+      feature: "language_polish",
+      provider: "fake",
+      model: "fake-v1",
+      promptVersion: "language_polish.v1",
+      outcome: "ok",
+      status: "suggested",
+      sourceFields: ["text"],
+      inputSummary: { text: 10 },
+    });
+    expect(row.targetRef).toMatchObject({ type: "answer", fieldKey: "text" });
+    const [employee] = await db.execute<{ organization_id: string }>(
+      sql`select organization_id from employees where id = ${row.employeeId}`,
+    );
+    expect(employee?.organization_id).toBe(orgA.id);
+  });
+
+  it("14.2 RESET_TABLES har ai_usage_log før employees og assignments, og resetDatabase tømmer den", async () => {
+    const listed: readonly string[] = RESET_TABLES;
+    expect(listed.indexOf("ai_usage_log")).toBeGreaterThanOrEqual(0);
+    expect(listed.indexOf("ai_usage_log")).toBeLessThan(listed.indexOf("employees"));
+    expect(listed.indexOf("ai_usage_log")).toBeLessThan(listed.indexOf("assignments"));
+    const org = await createOrganization("Oppdiktet takst A");
+    await createAiUsageLog(org.id);
+    await resetDatabase();
+    const [{ n } = { n: -1 }] = await db.execute<{ n: number }>(
+      sql`select count(*)::int as n from ai_usage_log`,
     );
     expect(n).toBe(0);
   });

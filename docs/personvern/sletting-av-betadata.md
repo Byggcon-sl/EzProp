@@ -13,6 +13,7 @@ Dokumentet beskriver regelen. Selve oppryddingen er ikke bygd (se «Når det byg
 - Tabellene fra fase 1: `trial_forms`, `trial_answers` og `trial_photos`.
 - Oppdiktede brukere, ansatte og filer som er laget for testing.
 - Prøverapporter og prøveoppdrag som bare var for testing.
+- KI-loggen (`ai_usage_log`) i prøveorganisasjonen: forslag fra den falske leverandøren `fake` som er laget under prøving. Myk-slettes som andre rader (avsnitt 4), aldri helt. Statusendringene på forslagene står i `audit_log` og ryddes ikke (avsnitt 5).
 
 ## 2. Hvordan prøvedata merkes (A57)
 
