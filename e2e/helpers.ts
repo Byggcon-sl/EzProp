@@ -11,6 +11,7 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
+import { SAMPLE_INSPECTOR } from "../src/db/seed/sample-assignments.data";
 import { listTrialFields, trialForm } from "../src/modules/offline-trial/trial-form";
 
 /** Første admin fra seed (SEED_ADMIN_EMAIL i CI og .env.example). */
@@ -1170,6 +1171,122 @@ export async function claimRowsFor(assignmentId: string): Promise<
       from claims where assignment_id = ${assignmentId}
       order by created_at`;
     return rows.map((row) => ({ ...row, amount: row.amount === null ? null : Number(row.amount) }));
+  } finally {
+    await sql.end();
+  }
+}
+
+// --- Forslagsmønsteret, /prove/ki (docs/funksjoner/fase2a-forslagsmonster-testplan.md avsnitt 12) ---
+
+/** Oppdiktet organisasjon uten KI slått på (verken `ai.enabled` eller tilkobling). */
+export const NO_AI_ORGANIZATION_NAME = "Oppdiktet takst uten KI (e2e)";
+
+/** Oppdiktet takstmann i organisasjonen uten KI. */
+export const NO_AI_INSPECTOR_EMAIL = "uten.ki.e2e@example.invalid";
+
+const NO_AI_INSPECTOR_NAME = "Oppdiktet takstmann uten KI";
+
+/**
+ * Sørger for at organisasjonen uten KI finnes med én takstmann. Idempotent. Bare lokal database
+ * eller testdatabasen. Rører ikke andre organisasjoner, og slår aldri KI på.
+ */
+export async function ensureNoAiInspector(): Promise<void> {
+  const sql = e2eSql();
+  try {
+    let [organization] = await sql<{ id: string }[]>`
+      select id from organizations where name = ${NO_AI_ORGANIZATION_NAME} and deleted_at is null
+      order by created_at limit 1`;
+    if (!organization) {
+      [organization] = await sql<{ id: string }[]>`
+        insert into organizations (name, brand_name)
+        values (${NO_AI_ORGANIZATION_NAME}, ${NO_AI_ORGANIZATION_NAME})
+        returning id`;
+    }
+    if (!organization) throw new Error("Kunne ikke lage organisasjonen uten KI for e2e");
+    await sql`
+      insert into users (id, name, email, email_verified)
+      values (${randomUUID()}, ${NO_AI_INSPECTOR_NAME}, ${NO_AI_INSPECTOR_EMAIL}, true)
+      on conflict (email) do nothing`;
+    const [user] = await sql<{ id: string }[]>`
+      select id from users where email = ${NO_AI_INSPECTOR_EMAIL}`;
+    if (!user) throw new Error("Kunne ikke lage brukeren uten KI for e2e");
+    let [employee] = await sql<{ id: string }[]>`
+      select id from employees
+      where user_id = ${user.id} and organization_id = ${organization.id}
+        and deleted_at is null and deactivated_at is null`;
+    if (!employee) {
+      [employee] = await sql<{ id: string }[]>`
+        insert into employees (organization_id, user_id, name)
+        values (${organization.id}, ${user.id}, ${NO_AI_INSPECTOR_NAME})
+        returning id`;
+    }
+    if (!employee) throw new Error("Kunne ikke lage den ansatte uten KI for e2e");
+    const roles = await sql<{ id: string }[]>`
+      select id from employee_roles
+      where employee_id = ${employee.id} and role = 'inspector'::employee_role
+        and deleted_at is null`;
+    if (roles.length === 0) {
+      await sql`
+        insert into employee_roles (organization_id, employee_id, role)
+        values (${organization.id}, ${employee.id}, 'inspector'::employee_role)
+        on conflict do nothing`;
+    }
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Logger inn som takstmannen i organisasjonen uten KI. */
+export async function logInAsNoAiInspector(page: Page) {
+  await ensureNoAiInspector();
+  await logIn(page, NO_AI_INSPECTOR_EMAIL);
+}
+
+/** Logger inn som prøvetakstmannen (prøveorganisasjonen, KI på med `fake`, `db:seed:testoppdrag`). */
+export async function logInAsSampleInspector(page: Page) {
+  await logIn(page, SAMPLE_INSPECTOR.email);
+}
+
+export type E2eAiUsageRow = {
+  id: string;
+  status: string | null;
+  outcome: string;
+  decidedBy: string | null;
+  targetRef: { type: string; id: string; fieldKey: string };
+};
+
+/** Radene i KI-loggen der forslaget inneholder markøren, eldste først. Bare lesing. */
+export async function aiUsageRowsWithMarker(marker: string): Promise<E2eAiUsageRow[]> {
+  const sql = e2eSql();
+  try {
+    return await sql<E2eAiUsageRow[]>`
+      select id, status, outcome, decided_by as "decidedBy", target_ref as "targetRef"
+      from ai_usage_log where output_text like ${`%${marker}%`}
+      order by created_at, id`;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Radene i KI-loggen for målet (`target_ref.id`), eldste først. Bare lesing. */
+export async function aiUsageRowsForTarget(targetId: string): Promise<E2eAiUsageRow[]> {
+  const sql = e2eSql();
+  try {
+    return await sql<E2eAiUsageRow[]>`
+      select id, status, outcome, decided_by as "decidedBy", target_ref as "targetRef"
+      from ai_usage_log where target_ref ->> 'id' = ${targetId}
+      order by created_at, id`;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Linjene i `audit_log` for en rad i KI-loggen. Bare lesing. */
+export async function auditLinesFor(entityId: string): Promise<{ changes: unknown }[]> {
+  const sql = e2eSql();
+  try {
+    return await sql<{ changes: unknown }[]>`
+      select changes from audit_log where entity_id = ${entityId} order by occurred_at, id`;
   } finally {
     await sql.end();
   }

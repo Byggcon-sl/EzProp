@@ -1482,7 +1482,9 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør, utviklerens 
   it("13.10 tenant-isolasjon: ensureSampleAi leser og skriver bare i egen organisasjon", async () => {
     await expectTenantIsolation({
       seed: async (grantA, grantB) => {
-        // A har en deaktivert rad, B en aktiv: ingen av dem får ny rad eller endring
+        // Begge har merket. A har en deaktivert rad, B en aktiv: ingen av dem får ny rad
+        await mergeOrganizationSettings(grantA.organizationId, { sampleData: true });
+        await mergeOrganizationSettings(grantB.organizationId, { sampleData: true });
         const a = await createIntegrationConnection(grantA.organizationId, {
           port: "ai",
           provider: "fake",
@@ -1513,6 +1515,8 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør, utviklerens 
     const actor = await createUser({ name: "Admin Test" });
     const orgA = await createOrganization("Organisasjon A");
     const orgB = await createOrganization("Organisasjon B");
+    await mergeOrganizationSettings(orgA.id, { sampleData: true });
+    await mergeOrganizationSettings(orgB.id, { sampleData: true });
     await createEmployee(actor, orgB.id, ["admin"]);
     const other = await createIntegrationConnection(orgA.id, {
       port: "ai",
@@ -1532,5 +1536,120 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør, utviklerens 
     expect(before.map((row) => row.id)).toEqual([other.id]);
     expect(await devSettingsOf(orgA.id)).not.toHaveProperty(AI_ENABLED_SETTING_KEY);
     expect(await devAiConnections(orgB.id)).toHaveLength(1);
+  });
+});
+
+/*
+ * `ensureSampleAi` sjekker merket selv (docs/funksjoner/fase2a-forslagsmonster-testplan.md
+ * avsnitt 9, kortet Omfang 7): `settings.sampleData = true` står i samme spørring som
+ * oppdateringen, og tilkoblingen lages ikke uten merket. Kalt direkte, uten `prepareSampleSeed`.
+ *
+ * Støtter hovedmål: færre reklamasjoner og KI i bunnen (KI slås aldri på ved en feil i en ekte
+ * organisasjon, heller ikke om steget kalles fra et annet sted).
+ */
+describe("ensureSampleAi sjekker merket selv (9)", () => {
+  async function directContext(settings: Loose) {
+    const actor = await createUser({ name: "Admin Test" });
+    const organization = await createOrganization("Oppdiktet Takst Direkte");
+    await db.execute(
+      sql`update organizations set settings = ${JSON.stringify(settings)}::jsonb where id = ${organization.id}`,
+    );
+    await createEmployee(actor, organization.id, ["admin"]);
+    return {
+      organizationId: organization.id,
+      context: {
+        actor,
+        organizationId: organization.id,
+        officeId: "",
+        inspectorEmployeeId: "",
+        now: TEST_NOW,
+      },
+    };
+  }
+
+  async function organizationRow(organizationId: string) {
+    const [row] = await rows<{ settings: Loose; updated_at: string }>(sql`
+      select settings, updated_at::text as updated_at from organizations where id = ${organizationId}`);
+    return row!;
+  }
+
+  it.each([
+    { name: "nøkkelen mangler", settings: {} },
+    { name: "false", settings: { sampleData: false } },
+    { name: 'strengen "true"', settings: { sampleData: "true" } },
+    { name: "tallet 1", settings: { sampleData: 1 } },
+  ])(
+    "9.1 uten merket ($name): settings og updated_at uendret, ingen tilkobling",
+    async ({ settings }) => {
+      const { organizationId, context } = await directContext(settings);
+      const before = await organizationRow(organizationId);
+
+      const result = await ensureSampleAi(context);
+
+      expect(result).toEqual({ setting: "skipped", connection: "skipped" });
+      expect(await organizationRow(organizationId)).toEqual(before);
+      expect(await devAiConnections(organizationId)).toEqual([]);
+    },
+  );
+
+  it("9.2 med merket: ai.enabled = true og én fake-tilkobling", async () => {
+    const { organizationId, context } = await directContext({ sampleData: true });
+    expect(await ensureSampleAi(context)).toEqual({ setting: "created", connection: "created" });
+    expect((await devSettingsOf(organizationId))[AI_ENABLED_SETTING_KEY]).toBe(true);
+    const connections = await devAiConnections(organizationId);
+    expect(connections).toHaveLength(1);
+    expect(connections[0]).toMatchObject({ provider: "fake", status: "active", deleted_at: null });
+  });
+
+  it("9.3 to kall gir samme resultat: samme settings, én tilkobling med samme row_version", async () => {
+    const { organizationId, context } = await directContext({ sampleData: true });
+    await ensureSampleAi(context);
+    const orgBefore = await organizationRow(organizationId);
+    const connectionsBefore = await devAiConnections(organizationId);
+
+    expect(await ensureSampleAi(context)).toEqual({ setting: "existing", connection: "existing" });
+
+    expect(await organizationRow(organizationId)).toEqual(orgBefore);
+    expect(await devAiConnections(organizationId)).toEqual(connectionsBefore);
+    expect(connectionsBefore).toHaveLength(1);
+  });
+
+  it("9.4 merket fjernes etter at konteksten er laget: ingenting endres, ingen tilkobling", async () => {
+    const { organizationId, context } = await directContext({ sampleData: true, annen: "verdi" });
+    await removeOrganizationSetting(organizationId, "sampleData");
+    const before = await organizationRow(organizationId);
+
+    expect(await ensureSampleAi(context)).toEqual({ setting: "skipped", connection: "skipped" });
+
+    expect(await organizationRow(organizationId)).toEqual(before);
+    expect(await devAiConnections(organizationId)).toEqual([]);
+    expect(
+      await count(sql`select count(*)::int as n from audit_log
+        where organization_id = ${organizationId} and entity_type = 'integration_connection'`),
+    ).toBe(0);
+  });
+
+  it("9.4 kildeteksten: merket står i where for oppdateringen og i spørringen før tilkoblingen", () => {
+    const source = readFileSync(join(__dirname, "sample-assignments.ts"), "utf8");
+    const start = source.indexOf("export async function ensureSampleAi");
+    const body = source.slice(start, source.indexOf("\n}\n", start));
+    expect(body.match(/IS_SAMPLE_ORGANIZATION/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(source).toMatch(/IS_SAMPLE_ORGANIZATION = sql`[^`]*'sampleData' = 'true'::jsonb`/);
+  });
+
+  it("9.5 Byggcon etter pnpm db:seed: ensureSampleAi direkte gir verken ai.enabled eller tilkobling", async () => {
+    await runSeed(env);
+    const byggcon = await byggconId();
+    const before = await organizationRow(byggcon);
+    const result = await ensureSampleAi({
+      actor: await adminActor(),
+      organizationId: byggcon,
+      officeId: "",
+      inspectorEmployeeId: "",
+      now: TEST_NOW,
+    });
+    expect(result).toEqual({ setting: "skipped", connection: "skipped" });
+    expect(await organizationRow(byggcon)).toEqual(before);
+    expect(await devAiConnections(byggcon)).toEqual([]);
   });
 });

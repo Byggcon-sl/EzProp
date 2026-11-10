@@ -2211,6 +2211,11 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Språkvask | `language_polish` | Første KI-funksjon: retter språket i en kort tekst uten å endre fakta. Rettighet `report.edit`, tillatt-liste `text` |
 | Be om KI-forslag | `requestSuggestion` (`@/core/ai`) | Den ene veien inn til KI. Tar `EmployeeGrant`, sjekker funksjon, tillatt-liste og mål, kaller leverandøren og skriver én rad i `ai_usage_log` |
 | Avgjøre KI-forslag | `recordDecision` (`@/core/ai`) | Godta, endre, avvise eller angre et forslag. Tar `EmployeeGrant`; `decided_by` kommer alltid fra tilgangssjekken |
+| Forslagskort | `AiSuggestion` (`src/shared/ui/ai-suggestion.tsx`) | Det ene kortet alle KI-funksjoner viser forslag i: egen tekst og forslaget side om side, knappene «Bruk», «Behold min tekst», «Nytt forslag» og «Angre». Får all tilstand som props og vet ingenting om tilgang eller lagring |
+| KI-merke | `AiTextMark` (`src/shared/ui/ai-text-mark.tsx`) | Merket «Tekst fra KI, godkjent». Vises bare når teksten har en `ai_usage_id` og status `accepted` eller `edited` lest fra serveren |
+| Statusoppslag (KI-forslag) | `getSuggestionStatus` (`@/core/ai`) | Gir status og utfall for ett forslag i egen organisasjon, aldri teksten eller hvem. Samme nøytrale svar for alt som ikke finnes |
+| Publiseringssperre for KI-tekst | `checkAiTextApproved` (`@/core/ai`) | Gir tilbake KI-tekstene i en liste som ikke er godkjent for akkurat det feltet. Brukes av publiseringen i 2a-2; tjenesten sjekker bare listen den får |
+| Prøvemål for KI | `ai_trial` (måltype) | Målet for prøvesiden `/prove/ki` (felt `text`). Godtas bare med den falske leverandøren. Arkiveres når siden fjernes i 2a-2 |
 | Ledetekst | prompt, `prompt_version` | Instruksen til KI. Ligger versjonert i `src/core/ai` (nå `AI_PROMPTS` i `features.ts`), aldri i modulene. Versjonen har formen `<funksjon>.v<n>`, for eksempel `language_polish.v1` |
 | KI-porten | `ai` (port), `AiProvider` | Grensesnittet mot KI-leverandøren. Bare `src/core/ai` kan bruke den |
 | Falsk leverandør | `fake` (modell `fake-v1`) | Leverandør som gir forutsigbare svar uten kostnad og uten nettverk. Brukes i utvikling, test, CI og testmiljøet. Slås på av `pnpm db:seed:testoppdrag` i prøveorganisasjonen |

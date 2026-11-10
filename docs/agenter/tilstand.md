@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger. Filen holdes kort: bare det som gjelder nå. Historikken til og med 10.11.2026 står i `docs/agenter/arkiv/tilstand-til-2026-11-10.md` (der står også små funn fra tidligere leveranser, «liten oppgave (v)–(ad)»).
 
-**Autonom modus: på** (Ståle 04.11.2026, til han sier fra: «Jeg synes det fungerte så bra at du kan kjøre videre på autonom utvikling igjen»). Ingen varsler, ingen spørsmål, ingen «Venter på Ståle». Agentene avgjør selv ut fra researchen og fører beslutningene i `docs/09-apne-sporsmal.md` («Avgjort av agentene mens Ståle var borte», neste nummer etter det høyeste A-nummeret, nå A166). Det bare Ståle kan gjøre, samles under «Trenger Ståle når han er tilbake». Se «Autonom modus» i `CLAUDE.md`.
+**Autonom modus: på** (Ståle 04.11.2026, til han sier fra: «Jeg synes det fungerte så bra at du kan kjøre videre på autonom utvikling igjen»). Ingen varsler, ingen spørsmål, ingen «Venter på Ståle». Agentene avgjør selv ut fra researchen og fører beslutningene i `docs/09-apne-sporsmal.md` («Avgjort av agentene mens Ståle var borte», neste nummer etter det høyeste A-nummeret, nå A168). Det bare Ståle kan gjøre, samles under «Trenger Ståle når han er tilbake». Se «Autonom modus» i `CLAUDE.md`.
 
 **Hovedmål (Ståle 10.11.2026):** best mulig system for de ansatte, KI først og KI i bunnen, og færre reklamasjoner. 50 % mindre tid er ikke lenger hovedmål. Se `CLAUDE.md`.
 
@@ -18,7 +18,8 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 - **Levert: KI-modulen og loggen** (2a-1, PR #127, versjon 0.5.0, migrering `0025_ki_logg`, A158–A165). Sikkerhet-personvern godkjent. Små funn som står (tas med «Forslagsmønsteret» eller «Vask før KI»): `ensureSampleAi` sjekker ikke selv `sampleData`; `recordDecision` leser raden før rettigheten sjekkes; mål-id-en kontrolleres mot organisasjonen når `answers` bygges. Fra liten oppgave (ad) står ad-1, ad-3, ad-4 og ad-7 (vask), ad-6 (publiseringssperren), ad-8 og ad-9.
 - **Fjerne PowerSync og ElectricSQL** (ADR 0004, Ståle 10.11.2026): bygget på branchen `fjern-powersync-electric` (versjon 0.4.6, migrering må renummereres til 0026 etter PR #127). PR åpnes av prosjektlederen.
-- **Neste i 2a-1:** «Forslagsmønsteret». Deretter «Vask før KI», «Evalueringssett», «KI-kø» og «Beslutningsnotat om KI-leverandør» (med Anthropic-adapteren).
+- **Levert som PR: Forslagsmønsteret** (2a-1, branch `fase2a-forslagsmonster` fra `main`, oppgavekort `docs/funksjoner/fase2a-forslagsmonster.md`, A166–A168, versjon 0.5.3, PR #131). Prøvesiden `/prove/ki` med `language_polish` mot falsk leverandør, forslagskortet, KI-merket, statusoppslaget og publiseringssperren som tjeneste (`checkAiTextApproved`). Tar med ad-6 og småfunnene om `recordDecision` og `ensureSampleAi`. Roller: forenkler, ux, ki-ansvarlig, sikkerhet-personvern, test-leder, ui-designer, utvikler, testskriver. Små funn som står (tas med «Vask før KI» eller 2a-2): dobbelt sett med tester (`X.test.ts` og `X-testplan.test.ts`, rundt 3000 linjer, bør slås sammen); `getSuggestionStatus` leser raden før rettigheten sjekkes; sperren godtar rader med `ai_trial` (må stenges når listen kommer fra serveren i 2a-2); null-element i listen til sperren gir unntak (feiler lukket); vakten for `ai_trial` sammenligner leverandørobjektet direkte; `readTrialStatus` brukes ikke av siden; triks med `Object.keys(kiVariant)` i knappen; valgfri `source` i overskriften på forslagskortet.
+- **Neste i 2a-1:** «Vask før KI», «Evalueringssett», «KI-kø» og «Beslutningsnotat om KI-leverandør» (med Anthropic-adapteren).
 
 ## Åpne PR-er
 
