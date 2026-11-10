@@ -72,7 +72,7 @@ Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3
 | 0a Repo og database | Ferdig 28.10.2026 |
 | 1 Prøve uten nett | Automatiske prøver ferdig. Prøvene på ekte iPad venter på Ståle (S2). Foreløpig valg: egenbygd synk (ADR 0004). |
 | 0b Innlogging, organisasjon, roller | Ferdig, unntatt felles innlogging med Optiplan (venter på S6) |
-| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren ligger i PR #119. |
+| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119) og ADR 0006 KI i bunnen (PR #123) er levert. Neste: «KI-modulen og loggen» (2a-1). |
 | Minimum før ekte data | To av ni punkter levert. Resten trenger testmiljøet (S1). |
 | 2b og videre | Ikke startet |
 
@@ -150,7 +150,6 @@ Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se
 ### 2a-3 Bredden
 
 **Malen og reglene**
-- [x] Malmotoren fra `datamodell.md` 4.5: malfamilie, malversjon, seksjon, felt, kontrollpunkt, avviksspørsmål, utfall, standardtiltak og regler. Systemmalen er låst for alle uten maltilgang.
 - [ ] **Regneark inn og ut med faste ID-er** for systemmalen. Slik redigerer fagansvarlig malen i betaen (P19); egen maleditor kommer i fase 5.
 - [ ] Automatisk kontroll av malen før publisering: obligatoriske punkter finnes, TG3 har kostnad, ingen regler peker på felt som ikke finnes, og alle testtilfeller består
 - [ ] «Prøv malen»: et testskjema som viser hvilke spørsmål og TG-forslag som kommer
