@@ -264,6 +264,37 @@ describe("recordDecision: angre på avvist når det finnes et annet forslag (7.5
   });
 });
 
+describe("recordDecision: angre på godtatt eller endret når et nyere forslag finnes (7.5, A162)", () => {
+  it.each([["accepted"], ["edited"]] as const)(
+    "%s + nytt forslag på samme mål + undo → feil, ingen endring, ingen revisjonslinje",
+    async (decision) => {
+      const { inspector } = await aiOrganization();
+      const target = polishTarget();
+      const first = polishRequest({ target });
+      await requestSuggestion(inspector.grant, first);
+      await recordDecision(inspector.grant, first.requestId, decision);
+      const second = polishRequest({ target });
+      await requestSuggestion(inspector.grant, second);
+      // Det godtatte eller endrede forslaget røres ikke av det nye
+      expect((await usageRow(first.requestId))!.status).toBe(decision);
+      expect((await usageRow(second.requestId))!.status).toBe("suggested");
+      const before = await snapshot(first.requestId);
+      const auditBefore = await auditCount();
+
+      await expect(recordDecision(inspector.grant, first.requestId, "undo")).rejects.toThrow(
+        AiDecisionError,
+      );
+      expect(await snapshot(first.requestId)).toBe(before);
+      expect(await auditCount()).toBe(auditBefore);
+      const open = await db
+        .select({ id: aiUsageLog.id })
+        .from(aiUsageLog)
+        .where(eq(aiUsageLog.status, "suggested"));
+      expect(open, "aldri to åpne forslag på samme mål").toHaveLength(1);
+    },
+  );
+});
+
 describe("recordDecision: hvem avgjør (7.6, 7.7)", () => {
   it("7.6 en annen ansatt med report.edit kan avgjøre et forslag en annen ba om", async () => {
     const { organization, inspector } = await aiOrganization();

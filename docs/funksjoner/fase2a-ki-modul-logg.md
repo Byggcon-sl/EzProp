@@ -52,8 +52,8 @@ ADR 0006 beskriver KI-grunnmuren på papir. Ingen kode finnes. Uten modulen, tab
    | Fra | `accepted` | `edited` | `rejected` | `undo` |
    |---|---|---|---|---|
    | `suggested` | lov | lov | lov | feil |
-   | `accepted` | ingen endring (gjentatt kall) | feil, angre først | feil, angre først | lov → `suggested` |
-   | `edited` | feil, angre først | ingen endring (gjentatt kall) | feil, angre først | lov → `suggested` |
+   | `accepted` | ingen endring (gjentatt kall) | feil, angre først | feil, angre først | lov → `suggested`, men feil hvis det finnes et nyere forslag på samme mål som ikke er slettet |
+   | `edited` | feil, angre først | ingen endring (gjentatt kall) | feil, angre først | lov → `suggested`, men feil hvis det finnes et nyere forslag på samme mål som ikke er slettet |
    | `rejected` | feil | feil | ingen endring (gjentatt kall) | lov → `suggested`, men feil hvis det finnes et nyere forslag på samme mål som ikke er slettet |
 
    «Ingen endring» betyr at et gjentatt kall fra iPaden går gjennom uten ny linje i `audit_log`. Ved `undo` tømmes `decided_by` og `decided_at`. Regelen mot `undo` når et nyere forslag finnes, gjør at det aldri kan være to `suggested`-forslag på samme mål.

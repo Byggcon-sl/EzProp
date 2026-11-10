@@ -18,9 +18,7 @@ import type { AiDecision, AiSuggestionStatus } from "./types";
 const DECISIONS: readonly AiDecision[] = ["accepted", "edited", "rejected", "undo"];
 
 type Transition =
-  | { kind: "change"; to: AiSuggestionStatus }
-  | { kind: "same" }
-  | { kind: "invalid" };
+  { kind: "change"; to: AiSuggestionStatus } | { kind: "same" } | { kind: "invalid" };
 
 /** Tabellen over lovlige endringer (16 ruter). */
 function transitionFor(from: AiSuggestionStatus, decision: AiDecision): Transition {
@@ -66,8 +64,9 @@ export async function recordDecision(
   const to = transition.to;
 
   await db.transaction(async (tx) => {
-    if (from === "rejected" && to === "suggested") {
-      // Angre på avvist er bare lov når det ikke finnes et nyere forslag på samme mål (A164 D):
+    if (to === "suggested") {
+      // Angre (fra godtatt, endret eller avvist) er bare lov når det ikke finnes et nyere forslag
+      // på samme mål (A162, A164 D), ellers kan det bli to åpne forslag på samme mål:
       // serverens `created_at`, bare `ok` og ikke slettet. Aldri sammenligning på id.
       const [newer] = await tx
         .select({ found: sql<number>`1` })
