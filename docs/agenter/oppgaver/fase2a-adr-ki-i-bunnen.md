@@ -42,7 +42,7 @@ De neste punktene i 2a-1 (KI-modulen og loggen, forslagsmønsteret, vask, evalue
 - Beslutninger som agentene tar, føres i `docs/09-apne-sporsmal.md` fra **A148** (A136–A147 er brukt av malmotoren, PR #119), merket «lett å endre» eller «dyrt å endre».
 - Spørsmål til Ståle i `docs/09-apne-sporsmal.md` (ikke A-beslutninger): restrisiko i fritekst, tale og bilde til ekte leverandør, om avviste forslag skal ligge i 10 år, og når de ansatte eventuelt sier ja til tall per person.
 - Krysse av punktet i `docs/07-utviklingsplan.md`, én linje i `docs/plan/endringslogg.md` hvis planteksten endres.
-- Versjon i `package.json`: 0.4.1 → **0.4.2**. Malmotoren (PR #119) har også 0.4.2: den som merges sist, øker én patch.
+- Versjon i `package.json`: 0.4.2 → **0.4.3** (malmotoren, PR #119, ble merget først med 0.4.2).
 
 **Ikke med (bevisst utelatt):**
 - Ingen produktkode, ingen migrering, ingen tabeller, ingen lint-regel. `src/core/integrations/ports.ts` er uendret (`ai: []`); `fake` legges inn i «KI-modulen og loggen».
@@ -90,7 +90,7 @@ Ingen nye fagregler. ADR-en slår fast at TG-forslag kommer fra regelmotoren, al
 - [ ] Ordlisten har forslag, falsk leverandør, vask, evalueringssett og KI-kø.
 - [ ] Beslutningene står i `docs/09-apne-sporsmal.md` fra A148, hver med «lett å endre» eller «dyrt å endre». De fire spørsmålene til Ståle står som spørsmål, ikke som A-beslutninger.
 - [ ] Ingen modellnavn eller leverandørnavn i eksemplene, ingen kundeopplysninger, ingen tekst fra NS 3600, IVIT eller SmartTakst, ingen sitater fra `docs/kartlegging/`.
-- [ ] Diffen rører bare `docs/` og `package.json`. Versjon 0.4.2. `ports.ts` er uendret. `pnpm lint`, `pnpm typecheck` og `pnpm test` er grønne (`pnpm test:e2e` bare hvis CI krever det).
+- [ ] Diffen rører bare `docs/` og `package.json`. Versjon 0.4.3. `ports.ts` er uendret. `pnpm lint`, `pnpm typecheck` og `pnpm test` er grønne (`pnpm test:e2e` bare hvis CI krever det).
 - [ ] Punktet er krysset av i planen, og endringsloggen har én linje hvis planteksten er endret.
 - [ ] Godta, endre, avvise og tenant-isolasjon prøves ikke nå (ingen kode). Testplanen i «KI-modulen og loggen» skal ha tenant-isolasjon for hver spørring, tester per rolle, admin ikke stengt ute, myk sletting og vasketester mot falsk leverandør.
 

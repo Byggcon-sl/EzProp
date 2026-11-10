@@ -39,7 +39,7 @@ Oppgaven er bare dokumentasjon. Det skrives **ingen nye tester** og ingen produk
 | D16 | Beslutninger og spørsmål | Nye A-beslutninger starter på A148 (ingen kollisjon med A136–A147), hver merket «lett å endre» eller «dyrt å endre». De fire spørsmålene til Ståle (restrisiko i fritekst, tale og bilde, avviste forslag i 10 år, tall per person) står som spørsmål, ikke som A-beslutninger | `grep -n "A14[89]\|A15[0-9]" docs/09-apne-sporsmal.md` |
 | D17 | Ingen forbudt tekst | Ingen modellnavn eller leverandørnavn i eksemplene, ingen kundeopplysninger, ingen tekst fra NS 3600, IVIT eller SmartTakst, ingen sitater fra `docs/kartlegging/` | `git diff main -- docs` lest i sin helhet, `grep -in` på kjente modell- og leverandørnavn |
 | D18 | Diffen | `git diff --stat main` rører bare `docs/` og `package.json`. `src/core/integrations/ports.ts` er uendret (`ai: []`) | `git diff --stat main`, `git diff main -- src` er tom |
-| D19 | Versjon | `package.json` har 0.4.2 (én patch over `main`, 0.4.1). Merges PR #119 først, økes til 0.4.3 | `grep version package.json` |
+| D19 | Versjon | `package.json` har 0.4.3 (én patch over `main`, 0.4.2, etter at PR #119 ble merget) | `grep version package.json` |
 | D20 | Plan og endringslogg | Punktet er krysset av i `docs/07-utviklingsplan.md`; én linje i `docs/plan/endringslogg.md` hvis planteksten er endret | `git diff main -- docs/07-utviklingsplan.md docs/plan/` |
 
 ## 2. Eksisterende tester (skal være grønne og uendret)

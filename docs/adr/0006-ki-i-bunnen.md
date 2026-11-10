@@ -123,7 +123,7 @@ Ingen endring i funksjonene, i modulene eller i `ai_usage_log`.
 - **Utfallet av kallet er eget felt** (`outcome`): `ok`, `no_match` (ingen treff), `error` (feil). Det er ikke en status. Bare `ok` gir et forslag; ellers er `status` og `output_text` tomme.
 - **Forslaget ligger aldri i verdien før det er godtatt** (som i ADR 0004). Forslagsteksten ligger i `ai_usage_log.output_text`. Når den ansatte godtar, er det hans egen endring av feltet, med hans `field_clock`, og feltet får `ai_usage_id`.
 - **Publiseringssperren** er derfor en enkel kontroll på serveren: hver `ai_usage_id` i rapporten må peke på en rad i samme organisasjon med status `accepted` eller `edited`. Åpne forslag (`suggested`) er ikke en del av rapporten og sperrer ikke.
-- **Angre** (`recordDecision(..., "undo")`): raden går tilbake til `suggested`, og `decided_by` og `decided_at` tømmes. Var forslaget godtatt, tømmes `ai_usage_id` på feltet, og verdien settes tilbake av modulen som en vanlig endring gjort av den ansatte. Hver statusendring skrives i revisjonsloggen (`audit_log`), så historikken finnes selv om raden bare viser siste status.
+- **Angre** (`recordDecision(..., "undo")`): raden går tilbake til `suggested`, og `decided_by` og `decided_at` tømmes. Angre endrer bare raden i `ai_usage_log`. Var forslaget godtatt, nullstiller modulen som eier feltet selv verdien og `ai_usage_id` med sin vanlige endring, gjort av den ansatte; `src/core/ai` vet ikke hvor den gamle verdien ligger. Hver statusendring skrives i revisjonsloggen (`audit_log`) med bare id, gammel og ny status, aldri `output_text` eller inndata, så historikken finnes selv om raden bare viser siste status.
 - **Nytt forslag** er et nytt kall og en ny rad. Det gamle forslaget settes til `rejected` hvis det fortsatt var `suggested`.
 - **Merkingen er generell.** KI-tekst havner også utenfor `answers`: avvik, sammendrag, `peer_review_comments` (`author_type = ai`), ordre fra e-post (`orders.source = email`) og fraser (`source = ai_draft`). Hver tabell som kan få tekst fra KI, får en `ai_usage_id` med sammensatt fremmednøkkel, og `target_ref` på loggraden sier hvor forslaget gjelder (type, id og feltkode). Visningen leser merket samme sted overalt.
 - `decided_by` settes fra tilgangssjekken (`grant`), aldri fra klienten.
@@ -133,7 +133,7 @@ Ingen endring i funksjonene, i modulene eller i `ai_usage_log`.
 | Felt | Forklaring |
 |---|---|
 | Felles kolonner | `id`, `organization_id`, sporingsfelt, `deleted_at`/`deleted_by`, `row_version` (`src/db/schema/common.ts`) |
-| `id` | Forespørselens UUID v7 fra enheten. Et nytt forsøk med samme id gir ikke ny rad og ikke nytt kall; svaret fra første gang returneres |
+| `id` | Forespørselens UUID v7 fra enheten. Et nytt forsøk med samme id gir ikke ny rad og ikke nytt kall; svaret fra første gang returneres. Oppslaget filtrerer på `grant.organizationId` og samme ansatt; en id som finnes hos en annen organisasjon eller ansatt, avvises |
 | `employee_id` | Hvem som ba om forslaget |
 | `feature` | Fast kode, for eksempel `language_polish` |
 | `provider`, `model` | Leverandørkode og modell slik tilkoblingen sa det |
@@ -167,7 +167,7 @@ Felt som **aldri** kan stå på en tillatt-liste:
 | Tabell | Kolonner |
 |---|---|
 | `contacts` | `first_name`, `last_name`, `email`, `phone`, `notes` |
-| `firms` | `org_number`, `notes` |
+| `firms` | `name` (enkeltpersonforetak har personnavn i firmanavnet), `org_number`, `notes` |
 | `assignment_parties` (partene på oppdraget) | `name`, `firm_name`, `email`, `phone` |
 | `orders` | `address_text`, `gnr`, `bnr`, `snr`, `housing_association_name`, `ordered_by_text`, `external_ref`, `rejected_reason` |
 | `properties` | `address`, `postal_code`, `city` |
@@ -182,7 +182,11 @@ Felt som **aldri** kan stå på en tillatt-liste:
 **Fritekst** (premisser, notater, kommentarer, diktat, e-post til ordreforslag) kan stå på en tillatt-liste, men vaskes i tillegg på to måter:
 
 1. **Mønstre:** e-post, telefon, fødselsnummer, organisasjonsnummer og gnr/bnr (også med feste- og seksjonsnummer).
-2. **Oppdragets kjente verdier:** navn på parter, kontakter og ansatte, adresse og matrikkel. `src/core/ai` henter dem selv fra databasen for oppdraget, så modulen kan ikke glemme det.
+2. **Oppdragets kjente verdier:** navn på parter, kontakter, firma og ansatte, adresse og matrikkel. `src/core/ai` henter dem selv fra databasen for oppdraget, så modulen kan ikke glemme det. `src/core/ai` finner selv oppdraget fra `target` eller `reportId`, filtrert på `grant.organizationId`, og gir feil hvis det ikke stemmer med `assignmentId` fra kalleren.
+
+Vasken gjelder **alle tekstverdier som sendes**, også verdiene i `fields` og tekstene i `candidates`.
+
+**Fritekst uten oppdrag** (`assignmentId` er tom, for eksempel e-post til ordreforslag) har ingen kjente verdier å vaske med, og navn og adresse er der hovedinnholdet. Slik tekst sendes **bare til den falske leverandøren** til Ståle har svart (spørsmål 58). En ekte leverandør får `disabled` for slike kall.
 
 Treff erstattes med faste merker: `[navn]`, `[e-post]`, `[telefon]`, `[adresse]`, `[matrikkel]`, `[fødselsnummer]`, `[organisasjonsnummer]`.
 
@@ -241,7 +245,7 @@ Ingen ny rettighet. Rettighetene finnes i `src/core/access/permissions.ts`.
 | takstmann | Forslag på oppdrag de kan endre | Be om, godta, endre, avvise forslag der de har `report.edit` eller `assignment.edit` |
 | kontor | Forslag på oppdrag de kan endre | Samme, der de har `assignment.edit` |
 | leder | Samlede tall per funksjon og periode (antall, status, kostnad), uten forslagstekst og aldri per ansatt (`statistics.read`). Forslag i reklamasjonssaker (`claims.read`) | Forslag i reklamasjonssaker (`claims.manage`) |
-| admin | Alt, også én rad til feilsøking og reklamasjon (`organization.manage`), også når KI er av | KI av/på og leverandør (`organization.manage`) |
+| admin | Samlede tall, og én rad om gangen (via id, rapport eller felt) til feilsøking og reklamasjon (`organization.manage`), også når KI er av. Ingen liste, filter eller sortering per ansatt før spørsmål 57 er besvart | KI av/på og leverandør (`organization.manage`) |
 
 - Å be om og avgjøre et forslag krever samme rettighet som å endre feltet forslaget gjelder. Rettigheten står i funksjonens definisjon. Forslag i reklamasjonssaker følger saken (bare leder og admin).
 - Kostnaden står på raden (`cost`, `currency`) og summeres i de samlede tallene.
@@ -274,7 +278,9 @@ Ingen ny rettighet. Rettighetene finnes i `src/core/access/permissions.ts`.
 
 - Ingen produktkode, ingen migrering, ingen tabell, ingen lint-regel og ingen ny avhengighet i denne oppgaven. `ports.ts` er uendret (`ai: []`).
 - Punktet «KI-modulen og loggen» bygger `ai_usage_log`, `fake`, de to funksjonene, lint-regelen og den statiske testen. Testplanen der skal ha tenant-isolasjon for hver spørring, tester per rolle, admin ikke stengt ute, myk sletting og vasketester mot den falske leverandøren.
-- Hver tabell som senere kan få KI-tekst, får `ai_usage_id` når den bygges.
+- Hver tabell som senere kan få KI-tekst, får `ai_usage_id` når den bygges, ikke i forkant.
+- **Avgrensning for 2a-1** (etter forenklerens gjennomgang): mappestrukturen i del 1 er retning, ikke krav; undermapper lages når det er mer enn én fil. Bryteren `ai.enabled` og tilkoblingen settes med seed i 2a-1 (seed slår KI på med `fake` i utvikling og test); admin-skjermen for dem bygges når den står i planen. Sperren `settings.features` og føringen av evalueringsresultater bygges når første ekte leverandør legges inn (etter S8). Evalueringssettet får bare de fasittypene første funksjon trenger. Samlede tall og visninger for leder og admin bygges ikke i 2a-1.
+- Fritekst uten oppdrag (e-post til ordreforslag) går bare til den falske leverandøren til Ståle har svart på spørsmål 58.
 - `docs/05-domenemodell.md` (4.7, 4.10, 4.12 og ordlisten), regel 11 og personvernlinjen i `docs/06-arkitektur.md` og «KI-forslag» i ADR 0004 er rettet slik at statusene og feltene er like.
-- Beslutningene står som A148–A157 i `docs/09-apne-sporsmal.md`. Fire spørsmål om personvern står til Ståle der (nr. 54–57): restrisiko i fritekst, tale og bilde til ekte leverandør, om avviste forslag skal ligge i 10 år, og tall per person.
+- Beslutningene står som A148–A157 i `docs/09-apne-sporsmal.md`. Fem spørsmål om personvern står til Ståle der (nr. 54–58): restrisiko i fritekst, tale og bilde til ekte leverandør, om avviste forslag skal ligge i 10 år, tall per person, og e-post til ordreforslag.
 - Ekte leverandør, pris og databehandleravtale avgjøres av Ståle (S8) etter beslutningsnotatet sist i 2a-1.

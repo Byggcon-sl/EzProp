@@ -1532,11 +1532,10 @@ Status fra eAccounting hentes via tilkoblingen og blir hendelsene **«faktura se
 | `provider` | Leverandør, for eksempel `eaccounting`, `microsoft365`, senere `enova`, `polycam`, `local_archive` |
 | `status` | `active`, `disabled`, `error` |
 | `secret_ref` | **Navnet på hemmeligheten** i en sikker nøkkelboks. Selve nøkkelen lagres aldri i databasen. |
-
-**Portene `ai` og `speech_to_text`** (ADR 0006): bare `src/core/ai` kan bruke dem. Adapterne ligger i `src/core/ai/providers/`. Før Ståle har valgt leverandør (S8), finnes bare den falske leverandøren `fake`. På tilkoblingen står modellen i `settings.model`, og funksjonene som har bestått evalueringssettet for denne leverandøren og modellen, i `settings.features`. En ekte leverandør velges aldri fra miljøvariabler.
-
 | `settings` | Innstillinger (for eksempel sandbox eller ekte) |
 | `last_ok_at`, `last_error` | Sist det virket, og siste feil |
+
+**Portene `ai` og `speech_to_text`** (ADR 0006): bare `src/core/ai` kan bruke dem. Adapterne ligger i `src/core/ai/providers/`. Før Ståle har valgt leverandør (S8), finnes bare den falske leverandøren `fake`. På tilkoblingen står modellen i `settings.model`, og funksjonene som har bestått evalueringssettet for denne leverandøren og modellen, i `settings.features`. En ekte leverandør velges aldri fra miljøvariabler.
 
 **Bygget i fase 0b** (PR for tilkoblingslaget, 02.11.2026). Laget ligger i `src/core/integrations`. Tabellen ble slik:
 
@@ -1657,7 +1656,7 @@ Tekst logges ikke per tastetrykk, men slik den var når endringen kom fram til s
 
 Sammensatte fremmednøkler med `organization_id` til `employees`, `assignments` og `reports`. Tabellen regnes som personopplysninger (`output_text` kan inneholde noe som slapp gjennom vasken): myk sletting og 10 år. **Angre** setter raden tilbake til `suggested` og tømmer `ai_usage_id` på feltet; hver statusendring står i revisjonsloggen.
 
-KI setter aldri TG, publiserer aldri og sender aldri noe selv (beslutning 24.10, ADR 0006). TG-forslag kommer bare fra regelmotoren. En tekst fra KI kommer bare inn i rapporten når takstmannen godtar den, og en rapport kan ikke publiseres med en `ai_usage_id` som ikke har status `accepted` eller `edited`. Navn, e-post, telefon, adresse og matrikkel sendes aldri til KI: hver funksjon har en tillatt-liste over felt, og fritekst vaskes (ADR 0006 del 6). KI av/på er nøkkelen `ai.enabled` i `organizations.settings`, standard av.
+KI setter aldri TG, publiserer aldri og sender aldri noe selv (beslutning 24.10, ADR 0006). TG-forslag kommer bare fra regelmotoren. En tekst fra KI kommer bare inn i rapporten når takstmannen godtar den, og en rapport kan ikke publiseres med en `ai_usage_id` som ikke har status `accepted` eller `edited`. Navn, e-post, telefon, adresse og matrikkel sendes aldri til KI: hver funksjon har en tillatt-liste over felt, og fritekst vaskes (ADR 0006 del 6). Fritekst uten oppdrag (e-post til ordreforslag) kan ikke vaskes for navn og adresse og går bare til den falske leverandøren til Ståle har svart (spørsmål 58). KI av/på er nøkkelen `ai.enabled` i `organizations.settings`, standard av.
 
 **`files`** – alle filer (bilder, PDF-er, dokumenter, logoer, signaturer).
 
