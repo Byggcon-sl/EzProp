@@ -1635,28 +1635,30 @@ Tekst logges ikke per tastetrykk, men slik den var når endringen kom fram til s
 
 | Felt | Forklaring |
 |---|---|
-| Felles kolonner | `id`, `organization_id`, sporingsfelt, `deleted_at`/`deleted_by`, `row_version`. `id` er forespørselens UUID v7 fra enheten, så et nytt forsøk gir ikke dobbel rad |
+| Felles kolonner | `id`, `organization_id`, sporingsfelt, `deleted_at`/`deleted_by`, `row_version`. `id` er forespørselens UUID fra kalleren (`requestId`, ingen standardverdi i databasen), så et nytt forsøk gir ikke dobbel rad |
 | `employee_id` | Hvem som ba om forslaget |
-| `feature` | Funksjonen, fast kode, for eksempel `language_polish` (språkvask), `dictation_structuring`, `pre_review_check` |
-| `provider`, `model` | Leverandør og modell |
-| `prompt_version` | Versjonen av ledeteksten |
+| `feature` | Funksjonen, fast kode. Bygget: `language_polish` (språkvask). Senere for eksempel `dictation_structuring`, `pre_review_check` |
+| `provider`, `model` | Leverandør og modell. I dag bare `fake` med modellen `fake-v1` |
+| `prompt_version` | Versjonen av ledeteksten, for eksempel `language_polish.v1` |
 | `assignment_id` | Oppdraget. Kan være tom (ordreforslag fra e-post) |
-| `report_id` | Rapporten. Kan være tom |
-| `target_ref` | Hvor forslaget gjelder: type, id og feltkode |
-| `source_fields` | Hvilke felt som var grunnlaget. Bare feltkoder, aldri verdier |
-| `input_summary` | Bare feltnavn, referanser og antall. Aldri tekst |
+| `report_id` | Rapporten. Kan være tom. Ingen fremmednøkkel før `reports` finnes, og må være tom til da (A158) |
+| `target_ref` | Hvor forslaget gjelder (jsonb): `type`, `id` og `fieldKey`. For `language_polish`: `answer` og `text` |
+| `source_fields` | Hvilke felt som var grunnlaget (jsonb-liste). Bare feltkoder, aldri verdier |
+| `input_summary` | Feltkode og antall tegn (jsonb). Aldri tekst |
 | `outcome` | **Utfallet av kallet:** `ok`, `no_match` (ingen treff), `error` (feil) |
-| `error_code` | Fast kode ved feil. Aldri leverandørens melding |
+| `error_code` | Fast kode ved feil: `timeout`, `rate_limited`, `unavailable`, `rejected`, `unknown`. Bare når utfallet er `error`. Aldri leverandørens melding |
 | `output_text` | Forslaget KI laget. Tom når utfallet ikke er `ok` |
 | `status` | **Hva den ansatte gjorde:** `suggested` (foreslått), `accepted` (godtatt), `edited` (endret og godtatt), `rejected` (avvist). Tom når utfallet ikke er `ok`. Erstatter `decision` fra første utkast |
 | `decided_by`, `decided_at` | Hvem som avgjorde, og når. Settes fra tilgangssjekken, aldri fra klienten |
-| `tokens_in`, `tokens_out` | Mengde |
-| `cost`, `currency` | **Kostnad per kall.** Gjør at KI-bruk kan måles per rapport |
-| `retain_until` | Oppbevares til (10 år) |
+| `tokens_in`, `tokens_out` | Mengde (heltall, standard 0) |
+| `cost`, `currency` | **Kostnad per kall.** `cost` er `numeric(12,4)`, aldri flyttall; `currency` er `NOK`. Gjør at KI-bruk kan måles per rapport. 0 med `fake` |
+| `retain_until` | Oppbevares til. Påkrevd, settes av tjenesten til opprettet + 10 år |
 
-Sammensatte fremmednøkler med `organization_id` til `employees`, `assignments` og `reports`. Tabellen regnes som personopplysninger (`output_text` kan inneholde noe som slapp gjennom vasken): myk sletting og 10 år. **Angre** setter raden tilbake til `suggested` og tømmer `ai_usage_id` på feltet; hver statusendring står i revisjonsloggen.
+Sammensatte fremmednøkler med `organization_id` til `employees` (både `employee_id` og `decided_by`) og `assignments`; til `reports` når den tabellen bygges (A158). Sjekker i databasen: `status` er satt når utfallet er `ok`, og `status` og `output_text` er tomme ellers; `error_code` bare ved `error`; mengde og kostnad er ikke negative. Tabellen regnes som personopplysninger (`output_text` kan inneholde noe som slapp gjennom vasken): myk sletting og 10 år. **Angre** setter raden tilbake til `suggested` og tømmer `ai_usage_id` på feltet; hver statusendring står i revisjonsloggen.
 
 KI setter aldri TG, publiserer aldri og sender aldri noe selv (beslutning 24.10, ADR 0006). TG-forslag kommer bare fra regelmotoren. En tekst fra KI kommer bare inn i rapporten når takstmannen godtar den, og en rapport kan ikke publiseres med en `ai_usage_id` som ikke har status `accepted` eller `edited`. Navn, e-post, telefon, adresse og matrikkel sendes aldri til KI: hver funksjon har en tillatt-liste over felt, og fritekst vaskes (ADR 0006 del 6). Fritekst uten oppdrag (e-post til ordreforslag) kan ikke vaskes for navn og adresse og går bare til den falske leverandøren til Ståle har svart (spørsmål 58). KI av/på er nøkkelen `ai.enabled` i `organizations.settings`, standard av.
+
+**Bygget i fase 2a (10.11.2026, KI-modulen og loggen):** tabellen `ai_usage_log` (migrering `0025_ki_logg`, `src/db/schema/ai-usage-log.ts`) og kjernemodulen `src/core/ai` med `requestSuggestion(grant, request)` og `recordDecision(grant, usageId, decision)`. Begge tar `EmployeeGrant` fra tilgangssjekken. Én funksjon er definert: `language_polish` (rettighet `report.edit`, tillatt-liste `text`, mål `answer`/`text`, ledetekst `language_polish.v1`, ledetekstene står i `src/core/ai/features.ts`). Bare den falske leverandøren `fake` (modell `fake-v1`) finnes. Leverandøren kommer bare fra en aktiv tilkobling på porten `ai` i `integration_connections`, aldri fra miljøvariabler (A160). Nøkkelen `ai.enabled` er flat, som `access.inspectors_edit_all`. `pnpm db:seed:testoppdrag` slår på KI med `fake` bare i prøveorganisasjonen; `pnpm db:seed` rører ikke KI. Hver avgjørelse og hvert angre står i revisjonsloggen med bare gammel og ny status. Vask, evalueringssett, KI-kø, kandidater og `answers.ai_usage_id` venter. Oppgavekort: `docs/funksjoner/fase2a-ki-modul-logg.md`; beslutningene A158–A164.
 
 **`files`** – alle filer (bilder, PDF-er, dokumenter, logoer, signaturer).
 
@@ -2052,7 +2054,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Endringskø | `crud queue` / `upload queue` / `outbox` | Endringer og bilder som venter på å bli sendt fra iPaden. Vi eier køen selv (`sync/local/outbox.ts`) |
 | Synklager (kontrakten i prøven) | `TrialSyncStore` (`sync/types.ts`) | Det skjermene og bildekøen i testskjemaet bygger mot. Testkroken i e2e er `TrialSyncTestable` (`applySyncedRows`, `readRows`) |
 | Innfletting | `applyIncoming` | Nedlastede rader flettes inn i den lokale lagringen uten å legge seg over usendte endringer; `text_state` flettes alltid med Yjs |
-| Replikeringsplass | `replication slot` | Stedet i PostgreSQL der en synktjeneste holder rede på hvor langt den har lest endringene. En ubrukt plass gjør at databasen holder på gamle endringer og disken fylles. Plassene fra PowerSync og ElectricSQL ryddes av migrering `0025_fjern-synkpublikasjoner` |
+| Replikeringsplass | `replication slot` | Stedet i PostgreSQL der en synktjeneste holder rede på hvor langt den har lest endringene. En ubrukt plass gjør at databasen holder på gamle endringer og disken fylles. Plassene fra PowerSync og ElectricSQL ryddes av migrering `0026_fjern-synkpublikasjoner` |
 | Hentemarkør (egenbygd) | `pull cursor` (`cursor` i lageret `sync_state`) | Hvor langt iPaden har hentet «endringer siden sist» fra `/api/prove/synk/hent`. En tekst fra serveren som iPaden bare lagrer og sender tilbake; ugyldig markør gir henting fra start, og endringskøen røres aldri. Tømmes ved bytte av organisasjon |
 | Lokal kjerne | `sync/local/` (`createLocalTrialStore`, `createLocalDb`) | Lokal lagring, endringskø, sending og innfletting i prøven. Hentelesingen ligger for seg i `sync/custom/` |
 | Leser (synk) | `LocalTrialReader` (`sync/local/types.ts`) | Den delen som henter rader fra serveren og gir dem til den lokale kjernen: hentelesingen mot `/api/prove/synk/hent`. Skriver aldri selv i lagringen |
@@ -2206,14 +2208,17 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Foreslått / godtatt / endret / avvist | `suggested` / `accepted` / `edited` / `rejected` | Status på et forslag (`ai_usage_log.status`) |
 | Utfall (KI-kall) | `ai_usage_log.outcome` | `ok`, `no_match` (ingen treff), `error` (feil). Ikke en status |
 | KI-funksjon | `feature` (`AiFeatureCode`) | Fast kode for én bruk av KI, for eksempel `language_polish` (språkvask) |
-| Ledetekst | prompt, `prompt_version` | Instruksen til KI. Ligger versjonert i `src/core/ai/prompts`, aldri i modulene |
+| Språkvask | `language_polish` | Første KI-funksjon: retter språket i en kort tekst uten å endre fakta. Rettighet `report.edit`, tillatt-liste `text` |
+| Be om KI-forslag | `requestSuggestion` (`@/core/ai`) | Den ene veien inn til KI. Tar `EmployeeGrant`, sjekker funksjon, tillatt-liste og mål, kaller leverandøren og skriver én rad i `ai_usage_log` |
+| Avgjøre KI-forslag | `recordDecision` (`@/core/ai`) | Godta, endre, avvise eller angre et forslag. Tar `EmployeeGrant`; `decided_by` kommer alltid fra tilgangssjekken |
+| Ledetekst | prompt, `prompt_version` | Instruksen til KI. Ligger versjonert i `src/core/ai` (nå `AI_PROMPTS` i `features.ts`), aldri i modulene. Versjonen har formen `<funksjon>.v<n>`, for eksempel `language_polish.v1` |
 | KI-porten | `ai` (port), `AiProvider` | Grensesnittet mot KI-leverandøren. Bare `src/core/ai` kan bruke den |
-| Falsk leverandør | `fake` | Leverandør som gir forutsigbare svar uten kostnad og uten nettverk. Brukes i utvikling, test, CI og testmiljøet |
+| Falsk leverandør | `fake` (modell `fake-v1`) | Leverandør som gir forutsigbare svar uten kostnad og uten nettverk. Brukes i utvikling, test, CI og testmiljøet. Slås på av `pnpm db:seed:testoppdrag` i prøveorganisasjonen |
 | Vask (før KI) | scrub (`src/core/ai/scrub`) | Inndata bygges bare fra funksjonens tillatt-liste, og fritekst får navn, e-post, telefon, adresse, matrikkel, fødselsnummer og organisasjonsnummer byttet med faste merker |
 | Tillatt-liste | allowlist | Feltkodene en KI-funksjon kan sende. Alt annet stoppes |
 | Evalueringssett | `src/core/ai/evals` | 30–50 oppdiktede eksempler med fasit per KI-funksjon. Kjøres med `pnpm ai:eval` |
 | KI-kø | AI queue (`src/core/ai/client`) | Forespørsler som venter på nett. Ligger bare lokalt på iPaden og vises som «venter på KI» |
-| KI av/på | `ai.enabled` | Innstilling i `organizations.settings`, standard av. Bare admin endrer |
+| KI av/på | `ai.enabled` | Innstilling i `organizations.settings` (flat nøkkel, som `access.inspectors_edit_all`), standard av. Bare boolsk `true` slår KI på. Ingen skjerm ennå; settes av seed i prøveorganisasjonen |
 | Myk sletting | `deleted_at` | |
 | Oppbevares til | `retain_until` | Raden kan ikke merkes som slettet før tidspunktet er passert, heller ikke av admin |
 | Fil | `files` | Metadata for en fil (type, størrelse, fingeravtrykk). Innholdet ligger i fillagringen |
@@ -2362,5 +2367,6 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 06.11.2026 | Avtale med oppdragsgiver (fase 2a): `client_agreements` bygget med `firm_id`, `name`, `valid_from`/`valid_to` (CHECK), `premise_text` og `report_profile_code` (i stedet for `report_profile_id` inntil videre); `assignments.client_agreement_id`; ny hendelse `assignment.agreement_changed`. Forslag fra bestillerfirmaet, aldri automatisk. `price_note`, `price_list_id` og `notes` venter. Se «Bygget i fase 2a» i 4.3. | A114–A118, `docs/funksjoner/fase2a-oppdragsgiveravtale.md` |
 | 06.11.2026 | Reklamasjoner med enkelt skjema (fase 2a): `claims` bygget knyttet til oppdraget (`assignment_id`), med klager som part eller fritekst, `description`, `building_part_text` som fritekst, åpen/lukket lest av `outcome`, `amount` bare ved medhold eller forlik, `closed_at` satt av serveren og myk sletting. Ny rettighet `claims.manage` (leder og admin). `report_id`, `release_id`, `checkpoint_key`, `internal` og mappen venter. Se «Bygget i fase 2a» i 4.13. | A125–A129, `docs/funksjoner/fase2a-reklamasjoner.md` |
 | 06.11.2026 | Tidsmåling per oppdrag og fase (fase 2a): `work_sessions` bygget med `assignment_id`, `employee_id`, `phase` (fire faste koder), `started_at`/`ended_at` (CHECK) og myk sletting, uten `report_id`, `device_id` og `source`. Fasen regnes ut med `phaseForAssignment`; pause over 10 minutter gir ny økt. `baseline_metrics` erstattet av innstillingen `time_tracking.baseline` inntil videre; ny innstilling `time_tracking.enabled` og ny rettighet `statistics.read` (leder og admin). Se «Bygget i fase 2a» i 4.13. | A119–A124, `docs/funksjoner/fase2a-tidsmaling.md` |
+| 10.11.2026 | KI-modulen og loggen (fase 2a): `ai_usage_log` bygget i migrering `0025_ki_logg` med sammensatte fremmednøkler til `employees` (`employee_id`, `decided_by`) og `assignments`, uten fremmednøkkel til `reports` (A158), `cost` som `numeric(12,4)`, påkrevd `retain_until` og CHECK-regler for utfall, status og feilkode. `src/core/ai` med `requestSuggestion` og `recordDecision`, funksjonen `language_polish`, leverandøren `fake` (`fake-v1`) og den flate nøkkelen `ai.enabled`. Nye ord i ordlisten (språkvask, be om og avgjøre KI-forslag). Se «Bygget i fase 2a» i 4.12. | A158–A164, `docs/funksjoner/fase2a-ki-modul-logg.md` |
 | 10.11.2026 | KI i bunnen (ADR 0006, bare dokumentasjon): `ai_usage_log` er både logg og forslag (én rad per kall). `status` (`suggested`, `accepted`, `edited`, `rejected`) erstatter `decision`, og utfallet av kallet er eget felt (`outcome`). Nye felt: `prompt_version`, `source_fields`, `assignment_id`, `error_code`, `retain_until`. `answers.ai_usage_id` (4.7), portene `ai` og `speech_to_text` (4.10) og ordlisten er rettet. | A148–A157, `docs/adr/0006-ki-i-bunnen.md` |
 | 06.11.2026 | Malmotoren (fase 2a): tolv tabeller fra 4.5 bygget i migrering `0024_malmotor`, med sammensatte fremmednøkler med `organization_id`, faste koder med format-CHECK og delvis unike indekser per område, ett utkast per malfamilie, CHECK mot `tgiu` som utfall og `sort_order` også på regler, betingelser og testtilfeller. `owner_employee_id`, `company_id`, `archived_at`, `lifespan_table_id`, `threshold_table_id`, `cost_band_set_id`, terskel- og alderskolonnene på betingelsene og `last_result`/`last_run_at` venter. Nye ord i ordlisten (fast kode, arkivert kode, utkast/publisert/utgått, valg, underseksjon). Se «Bygget i fase 2a» i 4.5. | A136–A147, `docs/funksjoner/fase2a-malmotor.md` |

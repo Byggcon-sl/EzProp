@@ -11,7 +11,7 @@ import { createOrganization, resetDatabase } from "../../tests/factories";
 
 // Migreringen 0001_prove-uten-nett (docs/funksjoner/fase1-kandidat-powersync.md pkt. 10).
 // Testplan avsnitt 3.5. Publikasjonene og REPLICA IDENTITY FULL fra 0001 og 0002 er fjernet igjen
-// av 0025_fjern-synkpublikasjoner, fordi PowerSync og ElectricSQL er tatt ut (ADR 0004).
+// av 0026_fjern-synkpublikasjoner, fordi PowerSync og ElectricSQL er tatt ut (ADR 0004).
 
 beforeEach(resetDatabase);
 
