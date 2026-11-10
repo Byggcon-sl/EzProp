@@ -117,12 +117,8 @@ async function expectOnlyOriginalSaved(page: Page, fileName: string, photoId: st
   if (viewport) expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
 }
 
-/** Admin, kandidaten egenbygd og et nytt testskjema. Gir skjema- og organisasjons-id. */
+/** Admin og et nytt testskjema. Gir skjema- og organisasjons-id. */
 async function openNewForm(page: Page, context: BrowserContext, asInspector = false) {
-  // Samme som useCandidate (navnet med «use» tolkes som React-hook av lint utenfor testene)
-  await context.addInitScript(() => {
-    window.localStorage.setItem("trial_sync_candidate", "custom");
-  });
   if (asInspector) await logInAsInspector(page);
   else await logIn(page, ADMIN_EMAIL);
   const formId = await createTrialForm(page);

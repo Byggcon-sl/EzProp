@@ -2,9 +2,8 @@
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
  * Den lokale kjernen (docs/funksjoner/fase1-kandidat-egenbygd.md, forarbeid pkt. 1): det vi eier
- * selv uansett kandidat når synkverktøyet bare gir lesing. Kjernen har lokal lagring i IndexedDB,
- * skriving, endringskø, sending og innfletting. En kandidat legger bare til en leser
- * (`LocalTrialReader`): ElectricSQL leser shapes, egenbygd leser hente-ruten.
+ * selv. Kjernen har lokal lagring i IndexedDB, skriving, endringskø, sending og innfletting.
+ * Leseren (`LocalTrialReader`) i `sync/custom/` henter fra hente-ruten.
  *
  * Bare typer og signaturer. Implementasjonen ligger i `idb.ts` og `trial-store.ts`.
  */
@@ -39,10 +38,8 @@ export const LOCAL_OUTBOX_STORE = "outbox";
 export const OUTBOX_META_KEY = "outbox_next_seq";
 
 /**
- * Oppsett for én lokal database. Electric: `{ name: "offline-trial-electric", version: 1,
- * stateStore: { name: "shape_state", keyPath: "table" } }` (samme som før, ingen data flyttes).
- * Egenbygd: `{ name: "offline-trial-custom", version: 1, stateStore: { name: "sync_state",
- * keyPath: "key" } }`.
+ * Oppsett for én lokal database. Egenbygd: `{ name: "offline-trial-custom", version: 1,
+ * stateStore: { name: "sync_state", keyPath: "key" } }`.
  */
 export interface LocalDbOptions {
   name: string;

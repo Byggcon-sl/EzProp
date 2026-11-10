@@ -1,9 +1,8 @@
 /**
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
- * Felles for alle kandidater: hvordan et tekstfelt får ny tekst-tilstand (Yjs) når brukeren har
- * skrevet. Ren fil: ingen React, ingen database, ingen `window`. Flyttet hit fra PowerSync-lageret
- * så ElectricSQL-lageret bruker nøyaktig samme regel (ingen ny flettekode).
+ * Hvordan et tekstfelt får ny tekst-tilstand (Yjs) når brukeren har skrevet. Ren fil: ingen React,
+ * ingen database, ingen `window`.
  */
 import { applyTextEdit, createTextState, mergeTextStates, textOf } from "../text-merge";
 

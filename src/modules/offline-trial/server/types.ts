@@ -4,7 +4,7 @@
  * Kontrakten for serversiden av synken (bare typer og signaturer). Rutene under `/api/prove/` er
  * tynne og kaller funksjonene her; all tilgang sjekkes først med `requireOrganizationAccess`, og
  * hver spørring filtrerer på `grant.organizationId`, aldri på `organizationId` fra nyttelasten
- * (CLAUDE.md regel 2). Detaljene står i docs/funksjoner/fase1-kandidat-powersync.md pkt. 11.
+ * (CLAUDE.md regel 2). Valget av egenbygd synk står i docs/adr/0004-drift-uten-nett.md.
  */
 import type { Actor } from "@/core/access";
 import type { TrialAnswerRecord, TrialFormRecord } from "@/db/schema";
@@ -59,27 +59,6 @@ export interface TrialChangesResult {
   applied: number;
 }
 
-/** JWT-en synktjenesten godtar: HS256, bare disse claimene, aldri e-post eller navn. */
-export const SYNC_TOKEN_AUDIENCE = "powersync";
-export const SYNC_TOKEN_TTL_SECONDS = 60 * 60;
-export const SYNC_TOKEN_SECRET_MIN_BYTES = 32;
-
-export interface SyncTokenClaims {
-  /** Bruker-id fra innloggingen. */
-  sub: string;
-  /** Alltid `grant.organizationId`. Synkreglene filtrerer bøtta på denne. */
-  organization_id: string;
-  aud: typeof SYNC_TOKEN_AUDIENCE;
-  iat: number;
-  exp: number;
-}
-
-export interface SyncTokenResult {
-  token: string;
-  /** `POWERSYNC_URL`. */
-  endpoint: string;
-}
-
 /** Det ruten `PUT /api/prove/bilder/[id]` leser fra spørrestrengen og hodene. */
 export interface TrialPhotoMeta {
   trialFormId: string;
@@ -98,11 +77,8 @@ export interface StoreTrialPhotoResult {
 /** Standardgrense for `TRIAL_PHOTO_MAX_BYTES` (25 MB). Over gir 413. */
 export const TRIAL_PHOTO_DEFAULT_MAX_BYTES = 25 * 1024 * 1024;
 
-// Signaturer for de fem funksjonene i `server/`. Alle kaller `requireOrganizationAccess(actor,
+// Signaturer for funksjonene i `server/`. Alle kaller `requireOrganizationAccess(actor,
 // organizationId, "organization.read")` først og bruker `grant.organizationId` videre.
-
-/** `server/sync-token.ts`. Kaster tydelig feil uten `POWERSYNC_JWT_SECRET`; nekter utviklingsverdien utenfor localhost. */
-export type IssueSyncToken = (actor: Actor, organizationId: string) => Promise<SyncTokenResult>;
 
 /**
  * `server/apply-changes.ts`. Idempotent upsert. `trial_forms` og `trial_photos` på `id`,
@@ -139,77 +115,7 @@ export type StoreTrialPhoto = (
   bytes: Uint8Array,
 ) => Promise<StoreTrialPhotoResult>;
 
-// Kandidat 2 (ElectricSQL): proxy-ruten `GET /api/prove/synk/shape`
-// (docs/funksjoner/fase1-kandidat-electricsql.md pkt. 9 og avgjørelse B).
-
-/**
- * Det eneste klienten får sende videre til Electric, etter formatsjekk. Alt annet i spørrestrengen
- * (`table`, `where`, `columns`, `params[1]`, `replica`, `secret`, `api_secret`, …) overses.
- */
-export const SHAPE_CLIENT_PARAMS = ["offset", "handle", "live", "cursor"] as const;
-export type ShapeClientParam = (typeof SHAPE_CLIENT_PARAMS)[number];
-/** `offset`, `handle` og `cursor` må passe mønsteret; `live` må være nøyaktig `true`. Ellers 400. */
-export const SHAPE_PARAM_PATTERN = /^[A-Za-z0-9_.-]+$/;
-
-/** Filteret i hver shape. `$1` er alltid `grant.organizationId`, sendt som `params[1]`, aldri limt inn. */
-export const SHAPE_WHERE = "organization_id = $1 AND deleted_at IS NULL";
-
-/**
- * Hodene fra Electric som når klienten. `ETag`, `Age`, `Expires` og Electrics `Cache-Control`
- * gjør det aldri; proxyen setter alltid `Cache-Control: private, no-store`.
- */
-export const SHAPE_FORWARDED_HEADERS = [
-  "content-type",
-  "electric-handle",
-  "electric-offset",
-  "electric-schema",
-  "electric-cursor",
-  "electric-up-to-date",
-] as const;
-export const SHAPE_CACHE_CONTROL = "private, no-store";
-
-/** Statusene fra Electric som videresendes uendret. Nettverksfeil og tidsavbrudd gir 502 `{ feil }`. */
-export const SHAPE_FORWARDED_STATUSES = [200, 204, 400, 409, 429] as const;
-
-/** Lang-polling (`live=true`) varer opptil ca. 20 s hos Electric; proxyen gir opp litt senere. */
-export const SHAPE_UPSTREAM_TIMEOUT_MS = 30_000;
-
-/** `ELECTRIC_SECRET`: minst 32 byte; utviklingsverdien fra `.env.example` nektes utenfor localhost. Aldri med `NEXT_PUBLIC_`. */
-export const ELECTRIC_SECRET_MIN_BYTES = 32;
-
-/**
- * `server/electric-shape.ts`. Rekkefølge: `requireOrganizationAccess(actor, organizationId,
- * "organization.read")` → tabellsjekk (bare `TRIAL_CHANGE_TABLES`, ellers `InvalidTrialChangeError`
- * uten kall) → `new URL(ELECTRIC_URL + "/v1/shape")` med `searchParams.set` for `table`, `where`
- * (`SHAPE_WHERE`), `params[1]` = `grant.organizationId`, `columns` = `localColumnsOf(table)` (aldri
- * `storage_path`, `created_by`, `updated_by`, `deleted_by`), `secret` = `ELECTRIC_SECRET`, og til
- * slutt de av `SHAPE_CLIENT_PARAMS` som finnes i `clientParams` og passer `SHAPE_PARAM_PATTERN`.
- * Ulovlig format gir `InvalidTrialChangeError`. `organizationId` fra adressen brukes bare til
- * tilgangssjekken.
- */
-export type BuildTrialShapeRequest = (
-  actor: Actor,
-  organizationId: string,
-  table: string,
-  clientParams: URLSearchParams,
-) => Promise<{ url: URL }>;
-
-/**
- * `server/electric-shape.ts`. Kaller `buildTrialShapeRequest` og henter fra Electric med
- * `fetchImpl` (byttes i testene). Svaret har bare `SHAPE_FORWARDED_HEADERS` og
- * `Cache-Control: SHAPE_CACHE_CONTROL`; statusene i `SHAPE_FORWARDED_STATUSES` og kroppen
- * strømmes uendret. Nettverksfeil eller tidsavbrudd gir 502 med `{ feil }` uten Electrics tekst og
- * uten ny prøving. `ELECTRIC_URL` og `ELECTRIC_SECRET` står aldri i noe svar. Logger bare rute,
- * bruker-id, tabellnavn og status, aldri spørrestrengen.
- */
-export type ForwardTrialShape = (
-  actor: Actor,
-  organizationId: string,
-  searchParams: URLSearchParams,
-  fetchImpl?: typeof fetch,
-) => Promise<Response>;
-
-// Kandidat 3 (egenbygd): hente-ruten `GET /api/prove/synk/hent`
+// Egenbygd synk: hente-ruten `GET /api/prove/synk/hent`
 // (docs/funksjoner/fase1-kandidat-egenbygd.md, forarbeid pkt. 2 og bit 2).
 
 /** Største antall rader i ett svar, for alle tre tabellene til sammen. */

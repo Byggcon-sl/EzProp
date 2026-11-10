@@ -100,7 +100,6 @@ describe("readSecret", () => {
     ["BETTER_AUTH_SECRET"],
     ["DATABASE_URL"],
     ["TEST_DATABASE_URL"],
-    ["POWERSYNC_JWT_SECRET"],
     ["FILE_STORAGE_AZURE_CONNECTION_STRING"],
   ])("8. nektlisten: %s gir InvalidSecretRefError selv når verdien finnes", async (name) => {
     vi.stubEnv(name, SECRET);

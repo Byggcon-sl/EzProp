@@ -2,9 +2,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-// Sidene og bildekøen er kandidatuavhengige (docs/funksjoner/fase1-kandidat-electricsql.md pkt. 2
-// og avgjørelse A og E), ellers blir kriteriet «Arbeid» skjevt mellom kandidatene. Testplan
-// avsnitt 2.5. Filene leses som tekst; ingen ESLint-regel.
+// Sidene og bildekøen kjenner ikke lageret (docs/funksjoner/fase1-kandidat-electricsql.md pkt. 2
+// og avgjørelse A og E); de bruker bare `TrialSyncStore` og `select-store.ts`. Synken er egenbygd
+// (ADR 0004). Testplan avsnitt 2.5. Filene leses som tekst; ingen ESLint-regel.
 
 const ROOT = process.cwd();
 const MODULE = "src/modules/offline-trial";
@@ -12,24 +12,17 @@ const PAGES = "src/app/(ansatt)/prove/testskjema";
 const HEADER = "Prøve fase 1, kastes eller gjøres om etter ADR";
 
 /**
- * Kandidatenes pakker og mapper, også den lokale kjernen (`sync/local/`) og egenbygd
- * (`sync/custom/`). Treffer både `@/…/sync/powersync/x` og `./powersync/x`.
+ * Mappene til lageret: den lokale kjernen (`sync/local/`) og egenbygd (`sync/custom/`). Treffer
+ * både `@/…/sync/custom/x` og `./custom/x`.
  */
-const CANDIDATE_SPECIFIER =
-  /@powersync\/|@electric-sql\/|(^|\/)sync\/(powersync|electricsql|custom|local)(\/|$)|^\.\.?\/(powersync|electricsql|custom|local)(\/|$)/;
+const CANDIDATE_SPECIFIER = /(^|\/)sync\/(custom|local)(\/|$)|^\.\.?\/(custom|local)(\/|$)/;
 
-/** Rene filer: ingen nettleser-API, React eller SDK. */
+/** Rene filer: ingen nettleser-API eller React. */
 function expectPure(relative: string) {
   const text = read(relative);
   const specifiers = specifiersOf(text).map((entry) => entry.specifier);
   expect(
-    specifiers.filter(
-      (s) =>
-        s === "react" ||
-        s.startsWith("react/") ||
-        s.startsWith("@electric-sql/") ||
-        s.startsWith("@powersync/"),
-    ),
+    specifiers.filter((s) => s === "react" || s.startsWith("react/")),
     relative,
   ).toEqual([]);
   for (const word of ["window.", "indexedDB", "document.", "navigator."]) {
@@ -158,7 +151,7 @@ describe("kandidatgrensene", () => {
     );
     expect(definesNextSavedAt).toEqual([`${MODULE}/sync-status-text.ts`]);
     // Ingen kandidatfil skriver nøklene for «Lagret kl.»; bare skjermen og select-store.ts
-    const candidateFiles = ["powersync", "electricsql", "custom", "local"].flatMap((dir) =>
+    const candidateFiles = ["custom", "local"].flatMap((dir) =>
       filesUnder(`${MODULE}/sync/${dir}`, /\.tsx?$/).filter((file) => !/\.test\.tsx?$/.test(file)),
     );
     const writers = candidateFiles.filter((file) => /trial_saved_at_|savedAtKey/.test(read(file)));
@@ -169,12 +162,7 @@ describe("kandidatgrensene", () => {
     }
   });
 
-  it("de rene filene i sync/electricsql importerer ikke window, React eller @electric-sql", () => {
-    // outbox.ts og apply-incoming.ts er flyttet til sync/local (testen under).
-    expectPure(`${MODULE}/sync/electricsql/shape-messages.ts`);
-  });
-
-  it("de rene filene i sync/local og sync/custom importerer ikke window, React eller @electric-sql", () => {
+  it("de rene filene i sync/local og sync/custom importerer ikke window eller React", () => {
     for (const name of ["outbox.ts", "apply-incoming.ts", "normalize-row.ts"]) {
       expectPure(`${MODULE}/sync/local/${name}`);
     }
@@ -184,24 +172,7 @@ describe("kandidatgrensene", () => {
     }
   });
 
-  // Obligatorisk (kandidat 3 knyttes ikke til en kandidat som kanskje kastes)
-  it("sync/custom importerer aldri fra sync/electricsql eller sync/powersync", () => {
-    const files = filesUnder(`${MODULE}/sync/custom`, /\.ts$/).filter(
-      (file) => !file.endsWith(".test.ts"),
-    );
-    expect(files.length).toBeGreaterThanOrEqual(4);
-    const found = files.flatMap((file) =>
-      specifiersOf(read(file))
-        .map((entry) => entry.specifier)
-        .filter((spec) =>
-          /(^|\/)(electricsql|powersync)(\/|$)|@electric-sql\/|@powersync\//.test(spec),
-        )
-        .map((spec) => `${file}: ${spec}`),
-    );
-    expect(found).toEqual([]);
-  });
-
-  it("sync/local importerer aldri fra noen kandidat", () => {
+  it("sync/local importerer aldri fra sync/custom", () => {
     const files = filesUnder(`${MODULE}/sync/local`, /\.ts$/).filter(
       (file) => !file.endsWith(".test.ts"),
     );
@@ -209,15 +180,13 @@ describe("kandidatgrensene", () => {
     const found = files.flatMap((file) =>
       specifiersOf(read(file))
         .map((entry) => entry.specifier)
-        .filter((spec) =>
-          /(^|\/)(electricsql|powersync|custom)(\/|$)|@electric-sql\/|@powersync\//.test(spec),
-        )
+        .filter((spec) => /(^|\/)custom(\/|$)/.test(spec))
         .map((spec) => `${file}: ${spec}`),
     );
     expect(found).toEqual([]);
   });
 
-  it("select-store.ts laster kandidaten med dynamisk import", () => {
+  it("select-store.ts laster lageret med dynamisk import", () => {
     const relative = `${MODULE}/sync/select-store.ts`;
     const specifiers = specifiersOf(read(relative));
     // Bare typer (fjernes ved bygging) er lov statisk; koden lastes med import()
@@ -226,15 +195,7 @@ describe("kandidatgrensene", () => {
     );
     expect(staticCandidate.map((entry) => entry.specifier)).toEqual([]);
     const dynamic = specifiers.filter((entry) => entry.kind === "dynamic").map((e) => e.specifier);
-    expect(
-      dynamic.some((s) => /(^|\/)powersync\//.test(s)),
-      "import() for powersync",
-    ).toBe(true);
-    expect(
-      dynamic.some((s) => /(^|\/)electricsql\//.test(s)),
-      "import() for electricsql",
-    ).toBe(true);
-    // Kandidat 3 (testplan egenbygd 2.5): egen dynamisk import, ingen statisk import fra custom/ eller local/
+    // Testplan egenbygd 2.5: dynamisk import, ingen statisk import fra custom/ eller local/
     expect(
       dynamic.some((s) => /(^|\/)custom\//.test(s)),
       "import() for custom",
@@ -261,20 +222,23 @@ describe("kandidatgrensene", () => {
     }
   });
 
-  it("alle filer i sync/electricsql har hodekommentaren", () => {
-    const electric = filesUnder(`${MODULE}/sync/electricsql`, /\.ts$/).filter(
-      (file) => !file.endsWith(".test.ts"),
-    );
-    // Minst typene og de tre rene filene
-    expect(electric.length).toBeGreaterThanOrEqual(4);
-    const files = [
-      ...electric,
-      `${MODULE}/server/electric-shape.ts`,
-      `${MODULE}/sync/select-store.ts`,
-      `${MODULE}/sync/test-hooks.ts`,
-    ];
+  it("select-store.ts og test-hooks.ts har hodekommentaren", () => {
+    const files = [`${MODULE}/sync/select-store.ts`, `${MODULE}/sync/test-hooks.ts`];
     const missing = files.filter((file) => !startsWithHeader(file));
     expect(missing).toEqual([]);
+  });
+
+  it("PowerSync og ElectricSQL er fjernet (ADR 0004)", () => {
+    for (const dir of ["sync/powersync", "sync/electricsql"]) {
+      expect(existsSync(path.join(ROOT, MODULE, dir)), dir).toBe(false);
+    }
+    expect(existsSync(path.join(ROOT, MODULE, "server/electric-shape.ts"))).toBe(false);
+    const found = filesUnder("src", /\.tsx?$/).filter((file) =>
+      specifiersOf(read(file)).some((entry) =>
+        /@powersync\/|@electric-sql\/|(^|\/)(powersync|electricsql)(\/|$)/.test(entry.specifier),
+      ),
+    );
+    expect(found).toEqual([]);
   });
 
   it("alle filer i sync/local og sync/custom har hodekommentaren", () => {

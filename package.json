@@ -1,6 +1,6 @@
 {
   "name": "ezprop",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",
@@ -26,9 +26,6 @@
   },
   "dependencies": {
     "@azure/storage-blob": "12.34.0",
-    "@journeyapps/wa-sqlite": "2.0.10",
-    "@powersync/react": "2.1.0",
-    "@powersync/web": "2.5.0",
     "better-auth": "1.7.15",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

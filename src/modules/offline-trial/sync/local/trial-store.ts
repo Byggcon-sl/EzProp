@@ -1,9 +1,8 @@
 /**
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
- * Lokal kjerne: `TrialSyncStore` over én lokal database (`LocalDb`) og en kandidatleser
- * (`LocalTrialReader`). Flyttet uten logikkendring fra `electricsql/store.ts`
- * (docs/funksjoner/fase1-kandidat-egenbygd.md, forarbeid pkt. 1). Brukes av ElectricSQL og egenbygd.
+ * Lokal kjerne: `TrialSyncStore` over én lokal database (`LocalDb`) og en leser
+ * (`LocalTrialReader`) (docs/funksjoner/fase1-kandidat-egenbygd.md, forarbeid pkt. 1).
  * - Skriving: lokalt først i `synced_*` og i `outbox` i samme transaksjon. Buntene sendes i
  *   `seq`-rekkefølge til `POST /api/prove/synk/endringer` og tas ut av køen bare ved 200.
  * - Lesing: leseren henter rader og gir dem til `mergeIncoming`, som fletter dem inn med
@@ -639,7 +638,7 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
     }
   }
 
-  /** Alt for tabellen hentes på nytt (Electric: 409 eller `must-refetch`). Køen og usendte rader står. */
+  /** Alt for tabellen hentes på nytt. Køen og usendte rader står. */
   function resetTable(table: TrialTableName, stateKey: string): Promise<void> {
     return serial(async () => {
       const storeName = db.syncedStoreOf(table);
