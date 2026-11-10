@@ -358,9 +358,9 @@ describe("recordDecision", () => {
 });
 
 describe("addYears", () => {
-  it("29. februar + 10 år blir 28. februar", () => {
+  it("29. februar + 10 år blir 1. mars (minst ti år)", () => {
     expect(addYears(new Date("2028-02-29T12:00:00Z"), 10).toISOString()).toBe(
-      "2038-02-28T12:00:00.000Z",
+      "2038-03-01T12:00:00.000Z",
     );
     expect(addYears(new Date("2026-11-10T08:30:00Z"), 10).toISOString()).toBe(
       "2036-11-10T08:30:00.000Z",

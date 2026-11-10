@@ -6,8 +6,7 @@ import * as requestModule from "./request";
  * Validering av forespørselen (docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 4).
  * Ren regeltest mot Zod-skjemaet som `requestSuggestion` bruker. Ingen database.
  *
- * Avtale: `src/core/ai/request.ts` eksporterer skjemaet (et objekt med `safeParse`). Har filen
- * flere skjemaer, brukes det som har «request» i navnet.
+ * Skjemaet er `aiSuggestionRequestSchema` i `src/core/ai/request.ts` (hele valideringen).
  *
  * Støtter hovedmål: KI i bunnen (én streng vei inn) og færre reklamasjoner (KI kan ikke få TG
  * som mål, og felt utenfor tillatt-listen sendes aldri).
@@ -15,19 +14,10 @@ import * as requestModule from "./request";
 
 type SafeParse = (value: unknown) => { success: boolean; data?: unknown };
 
-function findSchema(): { safeParse: SafeParse } {
-  const entries = Object.entries(requestModule as unknown as Record<string, unknown>).filter(
-    ([, value]) =>
-      value !== null &&
-      typeof value === "object" &&
-      typeof (value as { safeParse?: unknown }).safeParse === "function",
-  );
-  const preferred = entries.find(([name]) => /request/i.test(name)) ?? entries[0];
-  if (!preferred) throw new Error("src/core/ai/request.ts eksporterer ikke et Zod-skjema");
-  return preferred[1] as { safeParse: SafeParse };
-}
+// Hele valideringen, også tillatt-listen for feltene
+const schema: { safeParse: SafeParse } = requestModule.aiSuggestionRequestSchema;
 
-const parse = (value: unknown) => findSchema().safeParse(value);
+const parse = (value: unknown) => schema.safeParse(value);
 const accepted = (value: unknown) => parse(value).success;
 
 const BASE = () => validRequest();

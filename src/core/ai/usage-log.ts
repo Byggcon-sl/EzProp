@@ -17,14 +17,12 @@ export const AI_USAGE_ENTITY_TYPE = "ai_usage_log";
 export const AI_USAGE_RETENTION_YEARS = 10;
 
 /**
- * Opprettet + antall år, i UTC. Finnes ikke datoen det året (29. februar), brukes siste dag i
- * måneden (28. februar), som `interval` i PostgreSQL.
+ * Opprettet + antall år, i UTC. Finnes ikke datoen det året (29. februar), brukes 1. mars, så
+ * raden alltid oppbevares minst så mange år (testplanen 6.3).
  */
 export function addYears(date: Date, years: number): Date {
   const result = new Date(date.getTime());
-  const month = date.getUTCMonth();
   result.setUTCFullYear(date.getUTCFullYear() + years);
-  if (result.getUTCMonth() !== month) result.setUTCDate(0);
   return result;
 }
 
