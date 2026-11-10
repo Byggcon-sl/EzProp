@@ -86,7 +86,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 
 **Ståle avgjør innen demoen:** ingenting nytt. Betaen er bare Ståle foreløpig, og eierformene og boligtypene er godkjent (27.10.2026).
 
-## Fase 2a – Rapporten på PC (levert til og med 09.11.2026)
+## Fase 2a – Rapporten på PC (levert til og med 10.11.2026)
 
 - [x] Manuell ordre (bestilling lagt inn for hånd fra e-post), med egne felt som gnr/bnr, seksjon, borettslag og om egenerklæring er mottatt, og «gjør om til oppdrag» eller «avvis» (04.11.2026, `docs/funksjoner/fase2a-manuell-ordre.md`, sidene `/ordre`, `/ordre/ny` og `/ordre/[id]`, beslutningene A51–A55; sammen med oppdragsnummeret)
 - [x] **Oppdragsnummer** som `2026-00123`, laget på serveren fra en nummerserie (innspill D9) (04.11.2026, samme kort; tabellen `number_sequences`, én serie per organisasjon og år, A52)
@@ -103,6 +103,8 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 - [x] **Tidsmåling per rapport fra første ekte rapport** (hovedmålet, 28.10.2026): arbeidsøkter per fase (forberedelse, befaring, kontorarbeid, levering) lagres automatisk fra hendelsene, slik at tiden kan sammenlignes med nullpunktet fra IVIT. **Levert 06.11.2026** (`work_sessions`, `/statistikk/tid`, A119–A124). (se også Spectora-YouTube V16, V78)
 - [x] **Reklamasjoner med enkelt skjema fra første ekte rapport** (beslutning 27.10.2026, spørsmål 4). **Bare leder og admin ser reklamasjonssakene** (unntak fra «alle ser alt», 27.10.2026). Reklamasjonsmappen kommer i fase 4. **Levert 06.11.2026** (`claims`, `claims.manage`, delen «Reklamasjoner» på oppdraget, A125–A129). (se også Spectora-YouTube V125, V126)
 - [x] **Fire testoppdrag som grunndata** (innspill P11): enebolig med garasje, leilighet i sameie, borettslagsleilighet og fritidsbolig, med bilder uten personer. Brukes i «Prøv malen», i regeltester og i demoer. **Levert 06.11.2026** uten bilder (`pnpm db:seed:testoppdrag`, prøveorganisasjonen, A130–A135).
+
+- [x] **ADR: KI i bunnen.** Hvordan modulen `src/core/ai` er bygget, hvordan forslag lagres, logges og merkes, hva som aldri sendes til KI, og hvordan leverandøren byttes. Bygger på reglene over og `docs/05-domenemodell.md` 4.12. (10.11.2026, PR #123, `docs/adr/0006-ki-i-bunnen.md`, oppgavekort `docs/agenter/oppgaver/fase2a-adr-ki-i-bunnen.md`, beslutningene A148–A157, spørsmål 54–58)
 
 ## Minimum før ekte data (levert)
 

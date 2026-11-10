@@ -2,7 +2,12 @@
 
 Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte tid. Nyeste øverst. Får Ståle stadig de samme kommentarene, legges de inn som regel i den aktuelle agentbeskrivelsen.
 
-## 31.10.2026 – PR #57 merget (sertifisering med utløpsdato)
+## 10.11.2026 – PR #123 merget (ADR 0006 KI i bunnen)
+
+- PR-en ble merget av en annen kjøring mens denne kjøringen gjorde ferdig. Den lokale branchen var 6 commits foran og 8 bak origin, og lokal `main` lå bak `origin/main`, så `git diff main...branch` lokalt viste malmotorkode som ikke hørte til. Regel: kjør `git fetch` og sjekk `gh api repos/{owner}/{repo}/pulls?head=…&state=all` før push eller ny PR; er PR-en merget, push ikke til branchen, lag ny branch fra `origin/main`.
+- En ADR uten produktkode fikk 14 småfunn. De fleste hører hjemme når koden bygges; før dem som liten oppgave knyttet til planpunktet, så de ikke blir glemt.
+
+ – PR #57 merget (sertifisering med utløpsdato)
 
 - Å skrive en dato med tastaturet i et `<input type="date">` i Playwright virker ulikt i Chromium lokalt og i CI (feltet ble tomt i CI, også når begge rekkefølger dag/måned ble prøvd). Delene inne i datofeltet styres av nettleseren. I e2e: sett datoen med `fill`, og test Tab-rekkefølge, fokus og Enter med tastaturet.
 - En e2e-test som er grønn lokalt, men rød i CI, skal reproduseres med samme forutsetning før den rettes; ett retteforsøk som bare gjetter årsaken, koster en hel CI-runde (ca. 25 min).
