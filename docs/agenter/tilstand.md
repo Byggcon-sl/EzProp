@@ -13,7 +13,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 **Slik går fase 1 videre uten Ståle:** Prøve A og B på ekte iPad, og synktjenestene i Azure (koster penger), venter til han er tilbake. Prøve C–F forberedes og kjøres så langt det går i nettleser og e2e. Deretter velger agentene synkløsning ut fra resultatene fra de automatiske prøvene og researchen, og skriver ADR-en (selvdrevet, ingen konto og ingen kostnad). Valget merkes «foreløpig, bekreftes etter prøve A og B på ekte iPad». Så går løkken videre til fase 0b og de neste fasene i planen.
 
-Sist oppdatert: 10.11.2026 (PR #123 ADR 0006 KI i bunnen merget; læringsløkken og liten oppgave (ad), versjon 0.4.4)
+Sist oppdatert: 10.11.2026 kl. 14:30 UTC (PR #119 malmotoren og PR #123 ADR 0006 merget; læringsløkken for malmotoren, versjon 0.4.5. Neste: «KI-modulen og loggen» i 2a-1)
 Sist oppdatert: 06.11.2026 (malmotoren: oppgavekortet oppdatert etter forhåndsvurdering runde 1 fra forenkler og test-leder, A141–A147; branch `fase2a-malmotor`, neste: bygging)
 Sist oppdatert: 06.11.2026 kl. 16:00 UTC (tidsmåling: den lokale branchen `fase2a-tidsmaling` var utdatert etter PR #110 og ble ikke flettet; de nyttige commitene ble flyttet til `fase2a-tidsmaling-opprydding` fra `main`)
 Sist oppdatert: 06.11.2026 kl. 15:00 UTC (fire testoppdrag som grunndata satt sammen og PR åpnet; fase 2a, neste: malmotoren)
@@ -224,6 +224,8 @@ Fra 03.11.2026: lint og typesjekk uten advarsler; e2e-ipad grønn i andre kjøri
 Ingen.
 
 ## Siste kjøring
+
+10.11.2026 kl. 10:40–14:30 UTC (hovedløkken): PR #119 (malmotoren) sto «unstable» med alle jobbene grønne (CI for `pull_request` ventet på godkjenning). Mållinjen i oppgavekortet og PR-teksten ble oppdatert til det nye hovedmålet, CI startet på nytt, og skriptet merget PR #119. Kjørte «ADR: KI i bunnen» med arbeidsflyten «oppgave» (PR #123 og #124, merget). Læringsløkken for malmotoren i en liten PR. Branchen `fase2a-adr-ki-i-bunnen` er utdatert (innholdet er i `main` via PR #123) og kan slettes. Sesjon: https://claude.ai/code/session_01JqwntzyKpHhA8USjreExSS
 
 10.11.2026 (prosjektleder): «ADR: KI i bunnen» var alt merget som PR #123 da kjøringen skulle åpne PR. Den lokale branchen lå bak origin (manglet rettingene fra runde 1), så den ble ikke pushet. Læringsløkken gjort i `fase2a-adr-ki-etter-merge` (versjon 0.4.4), og småfunnene ført som liten oppgave (ad). Sesjon: https://claude.ai/code/session_01JqwntzyKpHhA8USjreExSS
 
