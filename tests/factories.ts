@@ -44,12 +44,15 @@ import {
   type EmployeeRole,
 } from "@/db/schema";
 import { todayInOslo } from "@/shared/lib/dates";
+import { uuidv7 } from "@/shared/lib/uuid";
 
 /**
  * Tabellene `resetDatabase` tømmer. Ny tabell? Legg den til her. `tests/factories.test.ts`
  * sjekker at alle tabellene i databasen står i listen.
  */
 export const RESET_TABLES = [
+  // Før employees og assignments, som den peker på (KI-loggen, fase 2a-1)
+  "ai_usage_log",
   "rule_test_cases",
   "rule_conditions",
   "rules",
@@ -1531,4 +1534,121 @@ export async function createRuleTestCaseRow(
       .returning(),
     "rule_test_cases",
   );
+}
+
+/** En rad i `ai_usage_log` slik databasen gir den (kolonnenavn som i databasen). */
+export type TestAiUsageRow = {
+  id: string;
+  organization_id: string;
+  employee_id: string;
+  feature: string;
+  provider: string;
+  model: string;
+  prompt_version: string;
+  assignment_id: string | null;
+  report_id: string | null;
+  target_ref: { type: string; id: string; fieldKey: string };
+  source_fields: string[];
+  input_summary: Record<string, unknown>;
+  outcome: string;
+  error_code: string | null;
+  output_text: string | null;
+  status: string | null;
+  decided_by: string | null;
+  decided_at: Date | null;
+  tokens_in: number | null;
+  tokens_out: number | null;
+  cost: string | number | null;
+  currency: string | null;
+  retain_until: Date;
+  created_at: Date;
+  deleted_at: Date | null;
+  deleted_by: string | null;
+  row_version: number;
+} & Record<string, unknown>;
+
+export type AiUsageLogOverrides = {
+  id?: string;
+  /** Den ansatte som ba om forslaget. Tom: en ny takstmann i organisasjonen. */
+  employeeId?: string;
+  feature?: string;
+  provider?: string;
+  model?: string;
+  promptVersion?: string;
+  assignmentId?: string | null;
+  reportId?: string | null;
+  targetRef?: { type: string; id: string; fieldKey: string };
+  sourceFields?: string[];
+  inputSummary?: Record<string, unknown>;
+  outcome?: string;
+  errorCode?: string | null;
+  outputText?: string | null;
+  status?: string | null;
+  decidedBy?: string | null;
+  decidedAt?: Date | null;
+  tokensIn?: number;
+  tokensOut?: number;
+  cost?: string;
+  currency?: string;
+  retainUntil?: Date;
+  createdAt?: Date;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/** Samme tidspunkt ti år frem (standard for `retain_until` i fabrikken). */
+function tenYearsAfter(date: Date): Date {
+  const result = new Date(date.getTime());
+  result.setUTCFullYear(result.getUTCFullYear() + 10);
+  return result;
+}
+
+/**
+ * En rad i `ai_usage_log`, satt inn rått med SQL uten tilgangssjekk og uten validering, slik at
+ * testene kan lage rader tjenesten aldri lager (ukjente koder, slettede rader, ulike statuser).
+ * Standard: `language_polish` mot `fake`/`fake-v1`, utfall `ok`, status `suggested`, kostnad 0
+ * NOK, `retain_until` ti år frem, mål `answer`/`text` med ny id. Forslagsteksten er oppdiktet.
+ */
+export async function createAiUsageLog(
+  organizationId: string,
+  overrides: AiUsageLogOverrides = {},
+): Promise<TestAiUsageRow> {
+  const employeeId =
+    overrides.employeeId ??
+    (await createEmployee(await createUser(), organizationId, ["inspector"])).id;
+  const createdAt = overrides.createdAt ?? new Date();
+  const outcome = overrides.outcome ?? "ok";
+  const ok = outcome === "ok";
+  const pick = <T>(key: keyof AiUsageLogOverrides, fallback: T): T =>
+    key in overrides ? (overrides[key] as T) : fallback;
+  const iso = (value: Date | null) => (value === null ? null : value.toISOString());
+  const result = await db.execute(sql`
+    insert into ai_usage_log (
+      id, organization_id, employee_id, feature, provider, model, prompt_version,
+      assignment_id, report_id, target_ref, source_fields, input_summary, outcome, error_code,
+      output_text, status, decided_by, decided_at, tokens_in, tokens_out, cost, currency,
+      retain_until, created_at, deleted_at, deleted_by
+    ) values (
+      ${overrides.id ?? uuidv7()}, ${organizationId}, ${employeeId},
+      ${overrides.feature ?? "language_polish"}, ${overrides.provider ?? "fake"},
+      ${overrides.model ?? "fake-v1"}, ${overrides.promptVersion ?? "language_polish.v1"},
+      ${pick<string | null>("assignmentId", null)}, ${pick<string | null>("reportId", null)},
+      ${JSON.stringify(overrides.targetRef ?? { type: "answer", id: uuidv7(), fieldKey: "text" })}::jsonb,
+      ${JSON.stringify(overrides.sourceFields ?? ["text"])}::jsonb,
+      ${JSON.stringify(overrides.inputSummary ?? { text: 37 })}::jsonb,
+      ${outcome}, ${pick<string | null>("errorCode", null)},
+      ${pick<string | null>("outputText", ok ? "Taket er gammelt og har sprekker." : null)},
+      ${pick<string | null>("status", ok ? "suggested" : null)},
+      ${pick<string | null>("decidedBy", null)},
+      ${iso(pick<Date | null>("decidedAt", null))}::timestamptz,
+      ${overrides.tokensIn ?? 0}, ${overrides.tokensOut ?? 0},
+      ${overrides.cost ?? "0"}::numeric, ${overrides.currency ?? "NOK"},
+      ${iso(overrides.retainUntil ?? tenYearsAfter(createdAt))}::timestamptz,
+      ${createdAt.toISOString()}::timestamptz,
+      ${iso(pick<Date | null>("deletedAt", null))}::timestamptz,
+      ${pick<string | null>("deletedBy", null)}
+    ) returning *`);
+  const [row] = result as unknown as TestAiUsageRow[];
+  if (!row) throw new Error("kunne ikke opprette rad i ai_usage_log");
+  return row;
 }

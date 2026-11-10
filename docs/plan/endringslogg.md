@@ -52,3 +52,4 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 10.11.2026 | S1 (testmiljøet), S2 (prøvene på ekte iPad og ADR 0004) og S3 (fagråd runde 1) er gjort. KI-leverandør er Anthropic (S8 delvis). Fase 1 er ferdig. «Minimum før ekte data» kan bygges i testmiljøet. | Ståle i chat 10.11.2026 |
 | 10.11.2026 | Svar på de tre fagspørsmålene: TG0 når det ikke er målt fukt, uansett alder; radon bare som HMS; brann og sikkerhet er punkter uansett bygningstype. S3 er helt gjort. KI-leverandør Anthropic er bekreftet, og Ståle har API-nøkkel (S8). | Ståle i chat 10.11.2026 |
 | 10.11.2026 | Fagsvarene ført inn som spørsmål 59 i `docs/09-apne-sporsmal.md` og i punktene «Reglene badet trenger» (2a-2) og systemmalen (2a-3). | Prosjektlederen |
+| 10.11.2026 | «KI-modulen og loggen» (2a-1) levert som PR #127 og flyttet til `docs/plan/levert.md`. | Læringsløkken |
