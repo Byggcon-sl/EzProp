@@ -143,6 +143,13 @@ Ingen fagregler. Tillatt-listen og de lovlige målene per funksjon er data i fun
 - **A162:** Lovlige statusendringer som i tabellen over: avgjørelser bare fra `suggested`, bytte mellom godtatt og endret krever angre først, angre er forbudt når et nyere forslag finnes, og gjentatt samme avgjørelse gir ingen endring. Samme mål gjelder uansett ansatt, og en annen ansatt med samme rettighet kan avgjøre. **Lett å endre.**
 - **A163:** To samtidige kall med samme `requestId` gir én rad og samme svar, men leverandøren kan bli kalt to ganger. Å hindre det krever en lås rundt leverandørkallet, som holder en databasetilkobling under et nettverkskall. Med `fake` koster det ingenting; vurderes på nytt før en ekte leverandør (S8). **Lett å endre.**
 
+## Avklaringer før bygging (prosjektleder 10.11.2026, etter testplanen, A164)
+- **A. Avvise forrige forslag:** forrige `suggested`-forslag på samme mål settes til `rejected` **bare når det nye utfallet er `ok`.** Gir det nye kallet `no_match` eller `error`, står det forrige forslaget urørt, så takstmannen ikke mister et brukbart forslag.
+- **B. Samme `requestId` etter at KI er slått av:** gir det lagrede svaret (oppslaget i trinn 5 kommer før KI av/på i trinn 6). Rettigheten sjekkes fortsatt først (trinn 2).
+- **C. Samme `requestId` når raden er mykt slettet:** det nøytrale avslaget (id-en er primærnøkkel og kan ikke brukes på nytt).
+- **D. «Nyere forslag» ved `undo`:** sammenlignes på serverens `created_at`, bare rader med `outcome = ok` som ikke er slettet, på samme mål og i samme organisasjon. Aldri på id-en fra enheten.
+- **E. `fake`-tilkobling i Byggcon:** med `fake` i `PROVIDERS_BY_PORT.ai` kan admin lage en `fake`-tilkobling via `createConnection`. Det koster ingenting og sender ingenting ut. Godtas, og nevnes i PR-en.
+
 ## Uenighet og avgjørelse
 - **Valg av leverandør (forenkler, KI-ansvarlig, testleder):** forenkleren ville ha én vei, KI-ansvarlig ville at testmiljøet får KI, testleder ville at seed i drift ikke slår KI på. Løst med A160: én vei, og seed bare i prøveorganisasjonen (som allerede bare finnes i utvikling, CI og testmiljøet), uten å lese `NODE_ENV`.
 - **Lint-regel (forenkler mot testleder):** forenkleren får medhold (A161). ADR 0006 del 1 og Konsekvenser er rettet.
