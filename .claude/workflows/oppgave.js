@@ -195,7 +195,7 @@ log(`Spesifiserer: ${task}`);
 const spec = await run(
   "prosjektleder",
   `${ctx}
-Lag oppgavekortet etter docs/maler/funksjon.md. Les docs/agenter/tilstand.md og gjeldende fase i docs/07-utviklingsplan.md. Hold omfanget lite, skriv «ikke med» eksplisitt, og svar på «KI først». For større funksjoner: lagre i docs/funksjoner/<fase>-<kort-navn>.md; for små oppgaver kan kortet stå i docs/agenter/oppgaver/<branch>.md. Sørg for at branchen «${branch}» finnes (git checkout -b ${branch} fra ${base} hvis den ikke finnes) og commit kortet. Si hvilke roller oppgaven trenger (ikke flere enn nødvendig).`,
+Lag oppgavekortet etter docs/maler/funksjon.md. Les docs/agenter/tilstand.md og gjeldende fase i docs/07-utviklingsplan.md. Hold omfanget lite, skriv «ikke med» eksplisitt, og fyll ut «KI i bunnen» (hva KI gjør fra første dag, hvilke data som lagres for KI, alt gjennom src/core/ai). Sett needsAi til true for alt de ansatte ser eller bruker, og for data KI skal bruke; bare ren drift, rydding og dokumentasjon er false. For større funksjoner: lagre i docs/funksjoner/<fase>-<kort-navn>.md; for små oppgaver kan kortet stå i docs/agenter/oppgaver/<branch>.md. Sørg for at branchen «${branch}» finnes (git checkout -b ${branch} fra ${base} hvis den ikke finnes) og commit kortet. Si hvilke roller oppgaven trenger (ikke flere enn nødvendig).`,
   { label: "prosjektleder: spesifiser", phase: "Spesifiser", schema: SPEC },
 );
 if (!spec) throw new Error("Spesifikasjonen ble ikke laget");
@@ -212,11 +212,11 @@ const reviewers = [
   },
   spec.needsUx && {
     role: "ux-ansvarlig",
-    ask: "Antall trykk før og etter, tidsgevinst, virker uten nett?",
+    ask: "Blir dette bedre for de ansatte? Antall trykk før og etter, virker uten nett?",
   },
   spec.needsAi && {
     role: "ki-ansvarlig",
-    ask: "KI først: kan KI gjøre eller forberede dette? Logging?",
+    ask: "KI i bunnen: hva gjør KI her fra første dag? Går det gjennom src/core/ai som forslag med logg?",
   },
   spec.needsDomain && {
     role: "fagansvarlig",

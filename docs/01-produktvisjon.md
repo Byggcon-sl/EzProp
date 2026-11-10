@@ -1,18 +1,20 @@
 # 01 – Produktvisjon
 
-Sist oppdatert: 28.10.2026
+Sist oppdatert: 10.11.2026
 
 **EzProp** er Byggcons eget system for tilstandsrapporter etter forskriften til avhendingslova, med NS 3600:2025 som grunnlag for TG. Det erstatter IVIT. Systemet er bygget for samarbeid mellom flere selskaper (Byggcon AS, Nord, Helgeland, Troms) og mange ansatte fra start, men brukes internt i Byggcon først.
 
-## Hovedmål (Ståle 28.10.2026)
+## Hovedmål (Ståle 10.11.2026)
 
-> «Med EzProp 2.0 skal vi effektivisere takstingeniørens hverdag med 50 % (målt mot dagens IVIT), samt halvere antall reklamasjoner mot oss i ettertid. EzProp skal være laget med "AI-first"-tankegangen.»
+> «Vi skal lage et best mulig system for våre ansatte – KI først. Det betyr også at KI må ligge i bunnen, ikke komme som et tillegg senere.»
 
-| Mål | Slik måles det (Claudes forslag, Ståle bekrefter) |
-|---|---|
-| 50 % mindre tid per rapport | Samlet tid fra forberedelse til levering, per rapporttype. Nullpunkt: Ståles måling i IVIT. EzProp måler automatisk fra hendelsesloggen og arbeidsøktene. |
-| Halvparten så mange reklamasjoner | Antall reklamasjoner og krav per 100 leverte rapporter, og beløp. Nullpunkt: de siste 3 årene. Måles over flere år. |
-| KI først | Hver ny funksjon spør først om KI kan gjøre eller forberede arbeidet. Takstmannen kontrollerer, godkjenner og signerer. KI publiserer aldri selv. All KI-bruk logges med kostnad. |
+| Mål | Hva det betyr | Slik ser vi det (Claudes forslag) |
+|---|---|---|
+| **Best mulig system for de ansatte** | En enklere, raskere og tryggere arbeidsdag for takstingeniørene, kontoret og lederne. De ansatte avgjør om vi har lykkes. | Spørreskjema og EzProp-panelet i piloten: vil de heller bruke EzProp enn IVIT? Tid per rapport og antall trykk i de vanligste arbeidsflytene. |
+| **KI først, og KI i bunnen** | KI er en del av grunnmuren og av hver funksjon fra første dag. KI foreslår, den ansatte kontrollerer, godkjenner og signerer. KI setter aldri TG og sender aldri noe selv. | Andel KI-forslag som godtas, endres eller avvises, og kostnad per rapport. All KI-bruk logges. |
+| **Færre reklamasjoner** | Halvparten så mange reklamasjoner og krav per 100 leverte rapporter (målet fra 28.10.2026 står). | Nullpunkt: de siste 3 årene. Måles over flere år. |
+
+**50 % mindre tid per rapport er ikke lenger hovedmålet** (Ståle 10.11.2026). Tiden måles fortsatt, som ett av flere tegn på at systemet er godt.
 
 ## Hvem bruker det
 
@@ -23,7 +25,7 @@ Sist oppdatert: 28.10.2026
 
 ## Retningen
 
-«IVITs innhold, Spectoras drift og SmartTaksts beste detaljer, pluss TG-forslag fra regler» (godkjent 27.10.2026). Design A «Fjord»: luftig, kort-basert, mørk visning som valg.
+«IVITs innhold, Spectoras drift og SmartTaksts beste detaljer, pluss TG-forslag fra regler» (godkjent 27.10.2026). Fra 10.11.2026 ligger KI i bunnen av alt dette: se «KI i bunnen» i `docs/07-utviklingsplan.md`. Design A «Fjord»: luftig, kort-basert, mørk visning som valg.
 
 ## Grenser
 
