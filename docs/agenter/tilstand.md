@@ -50,7 +50,7 @@ Fase 1 – Prøve uten nett: Testskjemaet (PR #6), testmiljøet i Azure (PR #7),
 
 ## Gjeldende oppgave
 
-**Pågår: ADR 0006 KI i bunnen** (fase 2a-1, første punkt, 10.11.2026; branch `fase2a-adr-ki-i-bunnen` fra `main`, oppgavekort `docs/agenter/oppgaver/fase2a-adr-ki-i-bunnen.md`, beslutninger fra A136, versjon 0.4.2). Bare dokumentasjon. Roller: arkitekt, ki-ansvarlig, sikkerhet-personvern. Ingen åpne funn fra testlaget med status «ny».
+**Pågår: ADR 0006 KI i bunnen** (fase 2a-1, første punkt, 10.11.2026; branch `fase2a-adr-ki-i-bunnen` fra `main`, oppgavekort `docs/agenter/oppgaver/fase2a-adr-ki-i-bunnen.md`, beslutninger fra A148 fordi malmotoren i PR #119 har A136–A147, versjon 0.4.2; den av de to som merges sist, øker én patch). Oppgavekortet er rettet etter forhåndsvurdering runde 1. Bare dokumentasjon. Roller: arkitekt, ki-ansvarlig, sikkerhet-personvern. Ingen åpne funn fra testlaget med status «ny».
 
 **Spectora-funnene fra YouTube ligger nå i repoet** (09.11.2026, branch `spectora-youtube-funn`): `docs/kartlegging/spectora-youtube/` (V1–V132). De er knyttet til planen med «(se også Spectora-YouTube …)» på 61 punkter og en egen tabell under «Sporbarhet» i `docs/07-utviklingsplan.md`; nye funksjoner er forslag og kapittel 7 er spørsmål i `docs/09-apne-sporsmal.md` (nr. 20–53). **Prosjektlederen leser funnene det henvises til når et planpunkt med Spectora-henvisning tas**, og bruker dem innenfor punktets omfang (forslagene bygges ikke uten Ståles ja).
 

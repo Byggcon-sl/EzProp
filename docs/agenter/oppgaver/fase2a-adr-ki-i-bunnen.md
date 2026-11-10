@@ -2,7 +2,7 @@
 
 - **Fase:** 2a-1 KI-grunnmuren (første punkt)
 - **Modul:** kjerne (`src/core/ai`, KI-porten i `src/core/integrations`). Bare dokumentasjon, ingen produktkode.
-- **Status:** utkast
+- **Status:** utkast, rettet etter forhåndsvurdering runde 1 (arkitekt, sikkerhet-personvern, test-leder)
 - **Branch:** `fase2a-adr-ki-i-bunnen` (bygger på `main`)
 - **Støtter hovedmål:**
   - **KI i bunnen:** legger grunnmuren som alle KI-funksjoner bygges på. Én vei inn, samme forslagsmønster overalt, logg over nytten.
@@ -24,46 +24,52 @@ De neste punktene i 2a-1 (KI-modulen og loggen, forslagsmønsteret, vask, evalue
 
 ## Omfang
 **Med:**
-- `docs/adr/0006-ki-i-bunnen.md` med disse delene:
-  1. **Modulen `src/core/ai`:** offentlig flate (én funksjon for å be om forslag, én for å registrere beslutning), mapper, og hvordan modulene kaller den.
-  2. **KI-porten** i tilkoblingslaget (`ai` i `src/core/integrations/ports.ts`): leverandører som faste koder (`fake` først), valg av leverandør per organisasjon via `integration_connections`, nøkkel via `readSecret`. Hvordan leverandøren byttes uten endring i funksjonene.
-  3. **Falsk leverandør:** forutsigbare svar, null kostnad, brukes i utvikling, test, CI og testmiljøet. Ekte leverandør bare etter S8.
-  4. **Forslag:** hvor de lagres (egen tabell eller `ai_usage_log`, ADR-en velger det enkleste), kilde, status `suggested` / `accepted` / `edited` / `rejected`, angre, og hvordan KI-tekst merkes i svaret (`ai_usage_id` på `answers`, se 4.7).
-  5. **`ai_usage_log`:** feltene fra 4.12, med det ADR-en legger til (for eksempel `organization_id`, `status`, versjon av ledetekst). Ingen rå inndata med persondata.
-  6. **Vask før KI:** navn, e-post, telefon, adresse, matrikkel (gårds-, bruks-, seksjons-, andels- og aksjenummer) og fødselsnummer. Hvor vasken skjer (inne i `src/core/ai`, aldri i modulene), hva som erstatter dem, og at vasken har tester. Premisseteksten og andre fritekster vaskes også.
-  7. **Hva KI aldri gjør:** setter TG, publiserer, sender e-post eller SMS. Sperren mot publisering med KI-tekst som ikke er godkjent.
-  8. **KI velger fra det godkjente:** frasebanken først, «ingen treff» i stedet for oppdiktet tekst.
-  9. **Evalueringssett:** hvor eksemplene ligger, format, fasit, kommando og treffgrense før en funksjon slås på.
-  10. **KI-kø uten nett:** hvordan forespørsler legges i kø på iPaden og vises som «venter på KI», og hvordan den henger sammen med synken i ADR 0004.
-  11. **KI av/på:** innstillingen i `settings` per organisasjon, og at alt virker uten KI.
-- Oppdatere `docs/05-domenemodell.md` 4.12 (og 4.7 hvis merkingen endres) og ordlisten i avsnitt 8 der ADR-en krever det.
-- Oppdatere `docs/06-arkitektur.md` punkt 11 med henvisning til ADR 0006.
-- Beslutninger som agentene tar, føres i `docs/09-apne-sporsmal.md` fra **A136**, merket «lett å endre» eller «dyrt å endre».
+- `docs/adr/0006-ki-i-bunnen.md` med overskriftene `# ADR 0006 – KI i bunnen`, Status og Dato, Beslutning(er), Hvorfor, Forkastet og Konsekvenser (som ADR 0004 og 0005), og disse elleve delene:
+  1. **Modulen `src/core/ai`:** offentlig flate med to funksjoner (be om forslag, registrere beslutning) som begge tar `EmployeeGrant`, aldri en organisasjons-ID fra kalleren. Mapper. Ledetekstene ligger versjonert i `src/core/ai`; modulene sender aldri egen ledetekst, bare funksjonskode og felt. `src/core/ai` importerer aldri fra en modul (regel 4): modulen sender for eksempel godkjente fraser inn som kandidater. Klientdelen av modulen importerer aldri nøkler eller adaptere.
+  2. **KI-porten** i tilkoblingslaget: `ports.ts` har bare de faste kodene. Grensesnittet og adapterne ligger i `src/core/ai/providers/`, og leverandørens SDK importeres bare der (lint-regel og statisk test som i `static-checks.test.ts`). Bare `src/core/ai` kan bruke porten `ai`. Valg av leverandør per organisasjon via `integration_connections`, nøkkel bare via `readSecret` (aldri i `integration_connections`, `ai_usage_log` eller logg). Tale til tekst er egen port (`speech_to_text`) med egen tilkobling, men går gjennom `src/core/ai`. Bytte av leverandør som nummererte steg: ny kode i `PROVIDER_CODES.ai`, adapter i `providers/`, nøkkel via `readSecret`, rad i `integration_connections`, evalueringssettet kjøres på nytt. Ingen endring i funksjonene. Forutsetninger før en ekte leverandør legges inn: S8 avgjort, databehandleravtale, behandling i EU/EØS, ingen trening på våre data, ingen lagring hos leverandøren ut over kallet, oppdatert personvernerklæring.
+  3. **Falsk leverandør (`fake`):** forutsigbare svar, null kostnad. Brukes i utvikling, test, CI og testmiljøet. I drift uten aktiv tilkobling er KI av. En ekte leverandør velges aldri fra miljøvariabler (ulikt `resolveEmailSender`). Bare `fake` kommer i `PROVIDERS_BY_PORT.ai` før S8.
+  4. **Forslag:** én tabell, `ai_usage_log`, én rad per kall (ingen egen forslagstabell). Status `suggested` / `accepted` / `edited` / `rejected` erstatter `decision` (tabellen er ikke bygget, ingenting arkiveres). Utfallet av kallet er eget felt (ok, ingen treff, feil), ikke en status. Forslaget ligger aldri i verdien før det er godtatt (samsvar med ADR 0004), så publiseringssperren er en enkel kontroll på serveren. Angre: hva som skjer med `status` og `answers.ai_usage_id`, og at statusendringer går i revisjonsloggen. Merkingen er generell, fordi KI-tekst også havner utenfor `answers` (avvik, sammendrag, `peer_review_comments`, ordre fra e-post, fraser med `ai_draft`).
+  5. **`ai_usage_log`:** feltene fra 4.12 pluss felles kolonner med `organization_id`, `prompt_version`, `source_fields` (bare feltkoder, aldri verdier), `assignment_id`, `report_id` som kan være tom, `target_ref` (type, id og feltkode), utfall, `cost` og `currency`, sammensatt fremmednøkkel med `organization_id`. Id-en er forespørselens UUID v7 fra enheten, så nytt forsøk gir ikke dobbel rad. `input_summary` er bare feltnavn, referanser og antall, aldri tekst. Tabellen regnes som personopplysninger (`output_text` kan inneholde noe som slapp gjennom): myk sletting (`deleted_at`), 10 år (`retain_until`), egen rad i den interne personvernerklæringen når den bygges. Ledetekst, inndata og svar skrives aldri til `logger`; feil fra leverandøren logges uten innhold.
+  6. **Vask før KI:** tillatt-liste, ikke bare fjerning. Hver funksjon har en fast liste over felt den kan sende, og `src/core/ai` bygger inndata bare fra den. Felt som aldri kan stå på listen, med tabell og kolonne: `contacts` (navn, e-post, telefon), `firms.note`, partene på oppdraget, `orders` (adresse og matrikkel som tekst, notater), `properties` (adresse), `cadastral_units` (gårds-, bruks-, feste-, seksjons-, andels- og aksjenummer), `common_areas` (borettslag eller sameie, `association_name`, forretningsfører), `claims` (fritekstene), `employees`, og fødselsnummer. Fritekst (premisser, notater, kommentarer) vaskes i tillegg med mønstre (e-post, telefon, fødselsnummer, organisasjonsnummer, gnr/bnr) og med oppdragets kjente verdier (navn på parter, kontakter og ansatte, adresse, matrikkel), som erstattes med faste merker, for eksempel `[navn]`. Mønstrene deles med loggeren i `src/shared`, ikke kopiert. Vasken har tester med oppdiktede eksempler. ADR-en sier ærlig at fritekst har restrisiko, og at databehandleravtale derfor kreves uansett. Tale og bilde (2b) kan ikke vaskes: samme modul, EXIF og GPS fjernes fra bilder, og tale og bilde til ekte leverandør krever egen vurdering av Ståle.
+  7. **Hva KI aldri gjør:** KI setter aldri TG (TG-forslag kommer bare fra regelmotoren), publiserer aldri, sender aldri e-post eller SMS. KI har ingen verktøy, svaret er bare tekst, kjøres aldri som kommando og vises escapet. Inndata (e-post til ordreforslag, fritekst) er ikke til å stole på.
+  8. **KI velger fra det godkjente:** frasebanken først, «ingen treff» i stedet for oppdiktet tekst. Læring fra godkjente tekster (3a) krysser aldri organisasjoner.
+  9. **Evalueringssett:** i repoet, bare oppdiktede eksempler (aldri ekte rapporttekst eller kundedata, ingen tekst fra NS 3600, IVIT eller SmartTakst). Format, fasit, kommando og treffgrense før en funksjon slås på.
+  10. **KI-kø uten nett:** køen ligger bare lokalt på iPaden, ingen ny status. Vises som «venter på KI». Tømmes ved utlogging og sperring (ADR 0004). Vask og leverandørkall skjer bare på serveren, iPaden snakker aldri med leverandøren, og tilgang sjekkes på nytt når køen behandles.
+  11. **KI av/på:** nøkkelen `ai.enabled` i `organizations.settings` (tabellen `settings` er ikke bygget). Ekte leverandør krever i tillegg en aktiv tilkobling: to låser. Bare admin endrer, og endring av bryter og leverandør logges i `audit_log`. Alt virker uten KI.
+- Tilgang i ADR-en (tabellen under), med rettighetene som finnes i `src/core/access`. Ingen ny rettighet.
+- Rette `docs/05-domenemodell.md` 4.7, 4.10 og 4.12 og ordlisten i avsnitt 8, slik at statusene og feltene er like i ADR-en, domenemodellen, punkt 11 i `docs/06-arkitektur.md` og «KI-forslag» i `docs/adr/0004-drift-uten-nett.md`.
+- Rette `docs/06-arkitektur.md`: punkt 11 viser til ADR 0006, og linjen under «Personvern og sikkerhet» sier at adresse og matrikkel **aldri** sendes til KI (i dag står «uten at det er vurdert», i strid med regel 14).
+- Beslutninger som agentene tar, føres i `docs/09-apne-sporsmal.md` fra **A148** (A136–A147 er brukt av malmotoren, PR #119), merket «lett å endre» eller «dyrt å endre».
+- Spørsmål til Ståle i `docs/09-apne-sporsmal.md` (ikke A-beslutninger): restrisiko i fritekst, tale og bilde til ekte leverandør, om avviste forslag skal ligge i 10 år, og når de ansatte eventuelt sier ja til tall per person.
 - Krysse av punktet i `docs/07-utviklingsplan.md`, én linje i `docs/plan/endringslogg.md` hvis planteksten endres.
-- Versjon i `package.json`: 0.4.1 → **0.4.2**.
+- Versjon i `package.json`: 0.4.1 → **0.4.2**. Malmotoren (PR #119) har også 0.4.2: den som merges sist, øker én patch.
 
 **Ikke med (bevisst utelatt):**
-- Ingen produktkode, ingen migrering, ingen tabeller, ingen lint-regel. Det kommer i «KI-modulen og loggen» og de neste punktene.
+- Ingen produktkode, ingen migrering, ingen tabeller, ingen lint-regel. `src/core/integrations/ports.ts` er uendret (`ai: []`); `fake` legges inn i «KI-modulen og loggen».
 - Ikke valg av ekte KI-leverandør eller pris. Det er beslutningsnotatet (siste punkt i 2a-1) og S8.
 - Ikke tale til tekst og bilde til tekst (fase 2b). ADR-en sier bare at de går gjennom samme modul.
 - Ingen skjermer og ingen skisser av forslagsvisningen (forslagsmønsteret er eget punkt).
 - Ingen innhold i evalueringssett, bare oppsettet.
-- Ingen nye avhengigheter.
+- Ingen nye tester og ingen nye avhengigheter.
 
 ## Tilgang
-ADR-en beskriver tilgangen, ingen kode nå:
+ADR-en beskriver tilgangen, ingen kode nå. Ingen ny rettighet:
 
 | Rolle | Se | Endre |
 |---|---|---|
-| takstmann | Egne og oppdragets forslag | Godta, endre, avvise egne forslag |
-| kontor | Forslag på oppdrag de jobber med | Godta, endre, avvise egne forslag |
-| leder | Samlet KI-bruk og kostnad | – |
-| admin | Alt, KI av/på, leverandør i tilkoblingslaget | Innstilling og tilkobling |
+| takstmann | Forslag på oppdrag de kan endre | Be om, godta, endre, avvise forslag der de har `report.edit` eller `assignment.edit` |
+| kontor | Forslag på oppdrag de kan endre | Samme, der de har `assignment.edit` |
+| leder | Samlede tall per funksjon og periode (antall, status, kostnad), uten forslagstekst og aldri per ansatt (`statistics.read`). Forslag i reklamasjonssaker (`claims.read`) | Forslag i reklamasjonssaker (`claims.manage`) |
+| admin | Alt, også én rad til feilsøking og reklamasjon (`organization.manage`), også når KI er av | KI av/på og leverandør (`organization.manage`) |
 
-All tilgang sjekkes i `src/core/access`. Spørringer i loggen filtrerer på `grant.organizationId`.
+- Å be om og avgjøre et forslag krever samme rettighet som å endre feltet forslaget gjelder. Forslag i reklamasjonssaker følger saken (bare leder og admin).
+- `decided_by` settes fra tilgangssjekken, aldri fra klienten.
+- Det lages ingen spørring eller visning per ansatt før de ansatte har sagt ja (arbeidsmiljøloven kap. 9, som A121).
+- Admin stenges aldri ute.
+- All tilgang sjekkes i `src/core/access`. Spørringer filtrerer på `grant.organizationId`. Når tabellene bygges: `organization_id` på all KI-data, `expectTenantIsolation` og rad i `tests/tenant-tables.ts`.
 
 ## Data
-Bare i dokumentasjonen: `ai_usage_log` (4.12) får de feltene ADR-en bestemmer, og eventuelt en egen tabell for forslag. Faste koder som beskrives: leverandør `fake` på porten `ai`, status `suggested` / `accepted` / `edited` / `rejected`, funksjonen `language_polish` (prøvefunksjonen i «Ferdig når»).
+Bare i dokumentasjonen: `ai_usage_log` (4.12) får feltene i del 5, ingen egen forslagstabell. Faste koder som beskrives: leverandør `fake` på porten `ai`, port `speech_to_text`, status `suggested` / `accepted` / `edited` / `rejected`, utfall (for eksempel `ok` / `no_match` / `error`), innstillingen `ai.enabled`, funksjonen `language_polish` (prøvefunksjonen i «Ferdig når»).
 
 ## Skjermer
 Ingen.
@@ -72,17 +78,28 @@ Ingen.
 Ingen nye fagregler. ADR-en slår fast at TG-forslag kommer fra regelmotoren, aldri fra KI.
 
 ## Akseptkriterier
-- [ ] `docs/adr/0006-ki-i-bunnen.md` finnes, følger formen til ADR 0001–0005, og dekker alle elleve delene under «Med».
-- [ ] ADR-en sier tydelig: KI setter aldri TG, publiserer aldri, sender aldri, og ingen funksjon kaller en leverandør utenfor `src/core/ai`.
-- [ ] Listen over hva som aldri sendes til KI er konkret (felt for felt, med tabellene de ligger i) og sier at vasken testes.
-- [ ] Bytte av leverandør er beskrevet steg for steg, og krever ingen endring i funksjonene.
-- [ ] Forslagsstatusene og hvordan de lagres og logges stemmer mellom ADR-en, `docs/05-domenemodell.md` og `docs/06-arkitektur.md`.
-- [ ] Ordlisten har de nye ordene (for eksempel forslag, falsk leverandør, vask, evalueringssett, KI-kø).
-- [ ] Beslutningene står i `docs/09-apne-sporsmal.md` fra A136, med «lett å endre» eller «dyrt å endre».
-- [ ] Ingen modellnavn, ingen kundeopplysninger, ingen tekst fra NS 3600, IVIT eller SmartTakst.
-- [ ] Versjon 0.4.2. `pnpm lint`, `pnpm typecheck` og `pnpm test` er grønne (ingen kode er endret, men CI skal være grønn).
-- [ ] Bruker i annen organisasjon får ikke tilgang: gjelder ikke nå (ingen kode). ADR-en krever `organization_id` på all KI-data og test med `expectTenantIsolation` når tabellene bygges.
-- [ ] KI-forslag kan godtas, endres og avvises og logges: beskrevet i ADR-en, prøves i neste punkt mot falsk leverandør.
+- [ ] `docs/adr/0006-ki-i-bunnen.md` finnes, har overskriftene `# ADR 0006 – KI i bunnen`, Status og Dato, Beslutning(er), Hvorfor, Forkastet og Konsekvenser, og alle elleve delene under «Med» kan finnes igjen.
+- [ ] ADR-en sier med disse ordene: KI «setter aldri TG», «publiserer aldri», «sender aldri», og bare `src/core/ai` kan bruke porten `ai` (lint-regel og statisk test).
+- [ ] Vaskelisten har tabell og kolonne for hvert felt, med festenummer, fødselsnummer, `association_name` og fritekst. Organisasjonsnummer og e-post i fritekst er med. Kravet om vasketester med oppdiktede eksempler står.
+- [ ] Bytte av leverandør er nummererte steg (ny kode i `PROVIDER_CODES.ai`, nøkkel via `readSecret`, rad i `integration_connections`, evalueringssettet kjøres på nytt) med forutsetningene fra del 2, og krever ingen endring i funksjonene.
+- [ ] Statusene, utfallet, angre og feltene er like i ADR-en, 4.7, 4.12, ordlisten i avsnitt 8, punkt 11 i `docs/06-arkitektur.md` og «KI-forslag» i ADR 0004. 4.7 sier ikke lenger bare «hvis teksten ble godkjent».
+- [ ] `docs/06-arkitektur.md` sier at adresse og matrikkel aldri sendes til KI.
+- [ ] ADR-en sier: myk sletting (`deleted_at`), 10 år (`retain_until`), aldri fritekst i `input_summary`, aldri innhold i `logger`.
+- [ ] ADR-en har tilgangstabellen over, sier at leder ser samlede tall uten forslagstekst og aldri per ansatt, at kostnad står på raden (`cost`, `currency`), og at admin aldri stenges ute og alltid kan slå KI av og på og se loggen, også når KI er av. Rettighetene som brukes, er de som finnes.
+- [ ] ADR-en krever `organization_id` på all KI-data, filter på `grant.organizationId`, `expectTenantIsolation` og rad i `tests/tenant-tables.ts` når tabellene bygges.
+- [ ] Ordlisten har forslag, falsk leverandør, vask, evalueringssett og KI-kø.
+- [ ] Beslutningene står i `docs/09-apne-sporsmal.md` fra A148, hver med «lett å endre» eller «dyrt å endre». De fire spørsmålene til Ståle står som spørsmål, ikke som A-beslutninger.
+- [ ] Ingen modellnavn eller leverandørnavn i eksemplene, ingen kundeopplysninger, ingen tekst fra NS 3600, IVIT eller SmartTakst, ingen sitater fra `docs/kartlegging/`.
+- [ ] Diffen rører bare `docs/` og `package.json`. Versjon 0.4.2. `ports.ts` er uendret. `pnpm lint`, `pnpm typecheck` og `pnpm test` er grønne (`pnpm test:e2e` bare hvis CI krever det).
+- [ ] Punktet er krysset av i planen, og endringsloggen har én linje hvis planteksten er endret.
+- [ ] Godta, endre, avvise og tenant-isolasjon prøves ikke nå (ingen kode). Testplanen i «KI-modulen og loggen» skal ha tenant-isolasjon for hver spørring, tester per rolle, admin ikke stengt ute, myk sletting og vasketester mot falsk leverandør.
+
+## Avgjort av prosjektlederen (runde 1)
+- **A-numre fra A148, ikke A136** (test-leder T7 mot arkitekt 1): A136–A147 er tatt av malmotoren i PR #119. Arkitekten har rett.
+- **Én tabell (`ai_usage_log`), ikke egen forslagstabell** (arkitekt 6): det enkleste som virker, og `answers.ai_usage_id` peker dit fra før.
+- **Ingen ny rettighet** (test-leder 5, sikkerhet 3, arkitekt 14): `organization.manage` for KI av/på, leverandør og oppslag på én rad (bare admin), `statistics.read` for samlede tall (leder og admin, aldri per person, som A121). Å be om og avgjøre et forslag følger rettigheten for feltet.
+- **`fake` legges ikke inn i `ports.ts` nå** (test-leder T10 og sikkerhet 5 stemmer): oppgaven er bare dokumentasjon.
+- **Fire spørsmål går til Ståle i 09, ikke som A-beslutninger** (sikkerhet): de gjelder personvern, som er Ståles område også i autonom modus.
 
 ## Roller
 - **arkitekt:** skriver ADR-en og oppdaterer domenemodell og arkitektur.
@@ -91,4 +108,4 @@ Ingen nye fagregler. ADR-en slår fast at TG-forslag kommer fra regelmotoren, al
 - Ikke `utvikler` og `testskriver` (ingen kode), ikke UX/UI (ingen skjermer), ikke fagansvarlig (ingen fagtekster).
 
 ## Åpne spørsmål
-- Ingen som stopper ADR-en. Leverandørvalg og databehandleravtale ligger i S8. Det ADR-en avgjør selv, føres som A136 og videre.
+- Ingen som stopper ADR-en. Leverandørvalg og databehandleravtale ligger i S8. Det ADR-en avgjør selv, føres som A148 og videre. Restrisiko i fritekst, tale og bilde, oppbevaring av avviste forslag og tall per person føres som spørsmål til Ståle.
