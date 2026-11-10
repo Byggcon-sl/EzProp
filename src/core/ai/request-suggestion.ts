@@ -4,8 +4,9 @@ import { db } from "@/db/client";
 import { aiUsageLog, assignments, type AiErrorCode } from "@/db/schema";
 import { logger } from "@/shared/lib/logger";
 import { AiRequestRejectedError } from "./errors";
-import { buildPrompt, getFeatureDefinition } from "./features";
+import { AI_TRIAL_TARGET_TYPE, buildPrompt, getFeatureDefinition } from "./features";
 import { resolveAiProvider } from "./provider-resolution";
+import { fakeAiProvider } from "./providers/fake";
 import type { AiProviderResult } from "./providers/types";
 import { aiSuggestionRequestShapeSchema, hasOnlyAllowedFields } from "./request";
 import type { AiSuggestionRequest, AiSuggestionResult } from "./types";
@@ -22,9 +23,9 @@ import {
 /*
  * Be om et KI-forslag (docs/funksjoner/fase2a-ki-modul-logg.md Omfang 3, ADR 0006 del 1 og 4).
  * Rekkefølgen er fast: valider → rettighet → tillatt-liste → oppdrag → samme `requestId` → KI
- * av/på → kall leverandøren → én transaksjon med ny rad, avvisning av forrige forslag og
- * revisjonslogg. Alle avslag før kallet gir ingen rad, intet kall og ingen linje i `audit_log`.
- * Organisasjon og ansatt kommer bare fra `grant`.
+ * av/på (prøvemålet bare med den falske leverandøren) → kall leverandøren → én transaksjon med
+ * ny rad, avvisning av forrige forslag og revisjonslogg. Alle avslag før kallet gir ingen rad,
+ * intet kall og ingen linje i `audit_log`. Organisasjon og ansatt kommer bare fra `grant`.
  */
 
 const resultColumns = {
@@ -128,6 +129,11 @@ export async function requestSuggestion(
   const resolved = await resolveAiProvider(grant);
   if (resolved.kind === "disabled") return { kind: "disabled" };
   const { provider, model } = resolved;
+  // Prøvesiden (A166): fritekst uten vask, så målet godtas bare med den falske leverandøren.
+  // Ellers samme svar som KI av: ingen rad, intet kall.
+  if (target.type === AI_TRIAL_TARGET_TYPE && provider !== fakeAiProvider) {
+    return { kind: "disabled" };
+  }
 
   // 7. Ledeteksten bygges bare av feltene på tillatt-listen, og leverandøren kalles
   const prompt = buildPrompt(definition, input.fields);
