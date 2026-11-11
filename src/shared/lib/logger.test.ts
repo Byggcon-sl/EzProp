@@ -412,3 +412,28 @@ describe("loggeren vasker telefon i nye grupperinger (E6.7)", () => {
     );
   });
 });
+
+describe("loggeren skjuler KI-nøkkelen (testplan KI-leverandør 1.4)", () => {
+  it("1.4 KI-nøkkelen skjules i melding og felt, men vanlig «sk-»-tekst står (A4)", () => {
+    const key = "sk-ant-api03-OPPDIKTET-TESTNOKKEL-K7Q";
+    const line = formatLogLine("error", `Kallet feilet med ${key}`, {
+      note: `nøkkel=${key}`,
+      nested: { list: [key] },
+      error: new Error(`Avvist: ${key}`),
+    });
+    const text = JSON.stringify(line);
+    expect(text).not.toContain(key);
+    expect(text).not.toContain("OPPDIKTET-TESTNOKKEL");
+    expect(line.msg).toBe(`Kallet feilet med ${REDACTED}`);
+    expect(line.note).toBe(`nøkkel=${REDACTED}`);
+    for (const plain of [
+      "sk-modell",
+      "sk-ant",
+      "sk-ant-kort",
+      "risk-ant-abcdefghij",
+      "Bruk sk-tekst her",
+    ]) {
+      expect(scrubText(plain)).toBe(plain);
+    }
+  });
+});
