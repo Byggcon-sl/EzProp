@@ -43,6 +43,7 @@ vi.mock("@/core/ai/provider-resolution", async (importOriginal) => {
           kind: "enabled",
           provider: providerSwap.override,
           model: providerSwap.override.model,
+          features: null,
         };
       }
       return original.resolveAiProvider(grant);

@@ -39,7 +39,7 @@ vi.mock("./provider-resolution", async (importOriginal) => {
     ...actual,
     resolveAiProvider: async (grant: EmployeeGrant) =>
       override.provider
-        ? { kind: "enabled" as const, provider: override.provider, model: "oppdiktet-modell" }
+        ? { kind: "enabled" as const, provider: override.provider, model: "oppdiktet-modell", features: null }
         : actual.resolveAiProvider(grant),
   };
 });

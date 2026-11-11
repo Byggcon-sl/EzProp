@@ -22,7 +22,17 @@ const ADAPTERS: Readonly<Record<string, AiProvider>> = {
 };
 
 export type ResolvedAiProvider =
-  { kind: "enabled"; provider: AiProvider; model: string } | { kind: "disabled" };
+  | {
+      kind: "enabled";
+      provider: AiProvider;
+      model: string;
+      /**
+       * Funksjonene som er slått på for denne leverandøren (`settings.features`, A194).
+       * `null` betyr alle og gjelder bare `fake`. Tom liste betyr at alt er av.
+       */
+      features: readonly string[] | null;
+    }
+  | { kind: "disabled" };
 
 /** Om `ai.enabled` er boolsk `true`. Alt annet (mangler, tekst, tall) er av. */
 export function readAiEnabled(settings: unknown): boolean {
@@ -45,5 +55,5 @@ export async function resolveAiProvider(grant: EmployeeGrant): Promise<ResolvedA
     ? ADAPTERS[connection.provider]
     : undefined;
   if (!provider) return { kind: "disabled" };
-  return { kind: "enabled", provider, model: provider.model };
+  return { kind: "enabled", provider, model: provider.model, features: null };
 }

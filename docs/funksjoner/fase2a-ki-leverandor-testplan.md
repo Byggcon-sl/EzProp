@@ -142,7 +142,7 @@ Fra kortet, «Grensesnitt» og Omfang 3–7. Avvik føres i kortet under «Avgjo
 
 ## 4. Statiske tester
 
-1. **S1, ingen modellnavn,** `tests/no-model-names.test.ts` (ny): leter i `src/`, `tests/`, `e2e/`, `docs/beslutningsnotat-ki-leverandor.md` og `docs/funksjoner/fase2a-ki-leverandor*.md`. Søkeordene bygges av biter i testen. Treffer `claude-` og familienavnene, ikke ordene i filnavnet «CLAUDE.md» og mappen «.claude/». Egen kontrolltest: en tekst med et oppdiktet treff gir rødt, og «CLAUDE.md» gir grønt.
+1. **S1, ingen modellnavn,** `tests/no-model-names.test.ts` (ny): leter i `src/`, `tests/`, `e2e/`, `docs/beslutningsnotat-ki-leverandor.md` og `docs/funksjoner/fase2a-ki-leverandor*.md`. Søkeordene bygges av biter i testen. Treffer prefikset til modell-id-ene og navnene på modellfamiliene, ikke ordene i filnavnet «CLAUDE.md» og mappen «.claude/». Egen kontrolltest: en tekst med et oppdiktet treff gir rødt, og «CLAUDE.md» gir grønt.
 2. **S2, ingen nettkall:**
    - global sperre: `fetch` mot Anthropics vertsnavn i en test uten stub kaster en tydelig feil.
    - seed: `scripts`/seed-filen har ingen `anthropic`-tilkobling (kjør seed mot testdatabasen og tell rader med `provider = anthropic` → 0).
