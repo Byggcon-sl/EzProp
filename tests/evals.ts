@@ -95,7 +95,8 @@ export function testProvider(
 ): AiProvider & { prompts: string[] } {
   const prompts: string[] = [];
   return {
-    code: "test_provider",
+    // Kjøreren godtar bare koden `fake` (docs/funksjoner/fase2a-ki-leverandor.md Omfang 7)
+    code: "fake",
     model: "test-v1",
     prompts,
     async complete(request: AiProviderRequest) {
