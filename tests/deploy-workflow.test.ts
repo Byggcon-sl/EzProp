@@ -171,7 +171,12 @@ const ALLOWED_SECRETS = [
   "MAIL_FROM",
 ];
 const REQUIRED_SECRETS = ALLOWED_SECRETS.slice(0, 5);
-const ALLOWED_VARS = ["SEED_ADMIN_EMAIL", "APP_HOSTNAME", "ENABLE_KEY_VAULT"];
+const ALLOWED_VARS = [
+  "SEED_ADMIN_EMAIL",
+  "APP_HOSTNAME",
+  "ENABLE_KEY_VAULT",
+  "AZURE_RESOURCE_GROUP",
+];
 
 describe("utrullingsarbeidsflyten (deploy-azure.yml)", () => {
   const workflow = read(WORKFLOW_PATH);
@@ -587,7 +592,11 @@ describe("testoppdragene i CI og utrullingen (fase 2a)", () => {
     // Utrullingen går bare til testmiljøet.
     const workflow = read(WORKFLOW_PATH);
     expect(workflow).toMatch(/^\s*ENVIRONMENT_NAME:\s*test\s*$/m);
-    expect(workflow).toMatch(/^\s*RESOURCE_GROUP:\s*rg-[\w-]*-test\s*$/m);
+    expect(workflow).toMatch(
+      /^\s*RESOURCE_GROUP:\s*\$\{\{\s*vars\.AZURE_RESOURCE_GROUP\s*\|\|\s*'rg-ezprop-test'\s*\}\}\s*$/m,
+    );
+    // Variabelen kan bare peke på en testgruppe.
+    expect(workflow).toContain('[[ "$RESOURCE_GROUP" =~ ^rg-ezprop-test[a-z0-9-]*$ ]]');
     expect(workflow).not.toMatch(/\bprod(uction|uksjon)?\b/i);
   });
 });

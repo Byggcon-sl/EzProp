@@ -88,6 +88,11 @@ jobs:
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
           ENABLE_KEY_VAULT: ${{ vars.ENABLE_KEY_VAULT == 'true' }}
         run: |
+          # Bare testmiljøet: gruppen må hete rg-ezprop-test, eventuelt med et tillegg (rg-ezprop-test2).
+          if ! [[ "$RESOURCE_GROUP" =~ ^rg-ezprop-test[a-z0-9-]*$ ]]; then
+            echo "Ressursgruppen «$RESOURCE_GROUP» er ikke en testgruppe. Variabelen AZURE_RESOURCE_GROUP må begynne med rg-ezprop-test."
+            exit 1
+          fi
           if [ -z "$SEED_ADMIN_EMAIL" ]; then
             echo "Variabelen SEED_ADMIN_EMAIL mangler i GitHub (Settings → Variables)."
             exit 1
