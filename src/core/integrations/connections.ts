@@ -48,7 +48,7 @@ export type UpdateConnectionInput = {
 };
 
 /** Leverandører som krever navnet på en hemmelighet. */
-const PROVIDERS_REQUIRING_SECRET = ["microsoft365"];
+const PROVIDERS_REQUIRING_SECRET = ["microsoft365", "anthropic"];
 
 /** `settings` for `microsoft365`. E-postporten får skjemaet via `settingsSchemaFor`. */
 const microsoft365SettingsSchema = z
@@ -67,6 +67,18 @@ const emptySettingsSchema = z.object({}).strict();
  * `createConnection` og `updateConnection`, og på nytt når KI-leverandøren velges.
  */
 export const REQUIRED_SECRET_REF_BY_PROVIDER = { anthropic: "ANTHROPIC_API_KEY" } as const;
+
+/**
+ * Om `secretRef` er lov for leverandøren (A193, begge veier). En leverandør i
+ * `REQUIRED_SECRET_REF_BY_PROVIDER` godtar bare sitt navn, og navnene der godtas bare for sin
+ * leverandør. `null` er lov her; om leverandøren krever en hemmelighet, sjekkes for seg.
+ */
+function isSecretRefAllowedFor(provider: string, secretRef: string | null): boolean {
+  const entries = Object.entries(REQUIRED_SECRET_REF_BY_PROVIDER) as [string, string][];
+  const required = entries.find(([code]) => code === provider)?.[1];
+  if (required !== undefined) return secretRef === required;
+  return secretRef === null || !entries.some(([, name]) => name === secretRef);
+}
 
 /**
  * `settings` for `anthropic` (docs/funksjoner/fase2a-ki-leverandor.md Omfang 3, ADR 0006 del 2).
@@ -230,6 +242,9 @@ export async function createConnection(
   if (PROVIDERS_REQUIRING_SECRET.includes(provider) && !secretRef) {
     throw new ConnectionValidationError("Tilkoblingen må ha navnet på en hemmelighet.");
   }
+  if (!isSecretRefAllowedFor(provider, secretRef)) {
+    throw new ConnectionValidationError("Navnet på hemmeligheten passer ikke til leverandøren.");
+  }
   const settings = validateSettings(provider, parsed.data.settings ?? {});
 
   try {
@@ -312,6 +327,9 @@ export async function updateConnection(
       patch.settings === undefined ? undefined : validateSettings(before.provider, patch.settings);
     if (patch.secretRef === null && PROVIDERS_REQUIRING_SECRET.includes(before.provider)) {
       throw new ConnectionValidationError("Tilkoblingen må ha navnet på en hemmelighet.");
+    }
+    if (patch.secretRef !== undefined && !isSecretRefAllowedFor(before.provider, patch.secretRef)) {
+      throw new ConnectionValidationError("Navnet på hemmeligheten passer ikke til leverandøren.");
     }
 
     const changes: Record<string, unknown> = {};

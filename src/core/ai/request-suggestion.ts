@@ -6,9 +6,9 @@ import { stripUnstorableChars } from "@/shared/lib/clean-text";
 import { logger } from "@/shared/lib/logger";
 import { AiRequestRejectedError } from "./errors";
 import { AI_TRIAL_TARGET_TYPE, getFeatureDefinition } from "./features";
+import { findPromptLeaks } from "./leak-check";
 import { preparePrompt } from "./prompt";
 import { resolveAiProvider } from "./provider-resolution";
-import { fakeAiProvider } from "./providers/fake";
 import type { AiProvider, AiProviderResult } from "./providers/types";
 import { loadKnownValues } from "./redaction";
 import { aiSuggestionRequestShapeSchema, hasOnlyAllowedFields } from "./request";
@@ -28,8 +28,9 @@ import {
  * Be om et KI-forslag (docs/funksjoner/fase2a-ki-modul-logg.md Omfang 3, ADR 0006 del 1 og 4).
  * Rekkefølgen er fast (docs/funksjoner/fase2a-vask-for-ki.md Omfang 4 og 5): valider →
  * rettighet → tillatt-liste → oppdrag → samme `requestId` → «KI er av» (ingen rad) → sperret
- * (`blocked`-rad, intet kall) → vask → kall leverandøren → én transaksjon med ny rad, avvisning
- * av forrige forslag og revisjonslogg. Alle avslag før kallet gir ingen rad, intet kall og ingen
+ * (`blocked`-rad, intet kall) → funksjonen er ikke slått på for leverandøren (ingen rad, A194) →
+ * vask → lekkasjesjekk før en ekte leverandør (`blocked`-rad, intet kall, A195) → kall
+ * leverandøren → én transaksjon med ny rad, avvisning av forrige forslag og revisjonslogg. Alle avslag før kallet gir ingen rad, intet kall og ingen
  * linje i `audit_log`. Organisasjon og ansatt kommer bare fra `grant`.
  *
  * Leverandøren får bare vasket tekst, også den falske. Kaster vasken, kalles leverandøren aldri
@@ -49,12 +50,20 @@ function hasEmptyValue(fields: Readonly<Record<string, string>>): boolean {
 /** Måltyper som ikke kan kontrolleres mot organisasjonen ennå (A166, A173). */
 const FAKE_ONLY_TARGET_TYPES: ReadonlySet<string> = new Set([AI_TRIAL_TARGET_TYPE, "answer"]);
 
+/** Den falske leverandøren. Alt med en annen fast kode regnes som ekte. */
+const FAKE_PROVIDER_CODE = "fake";
+
+function isRealProvider(provider: AiProvider): boolean {
+  return provider.code !== FAKE_PROVIDER_CODE;
+}
+
 /**
  * Om forespørselen sperres (ad-1): bare den falske leverandøren får prøvemålet og
- * `answer`, og fritekst uten oppdrag går ikke til en ekte leverandør (spørsmål 58).
+ * `answer`, og fritekst uten oppdrag går ikke til en ekte leverandør (spørsmål 58). Sammenligner
+ * på fast kode, ikke på objektet, så en ny adapter aldri slipper forbi.
  */
 function isBlocked(provider: AiProvider, targetType: string, assignmentId: string | null): boolean {
-  if (provider === fakeAiProvider) return false;
+  if (!isRealProvider(provider)) return false;
   if (FAKE_ONLY_TARGET_TYPES.has(targetType)) return true;
   return assignmentId === null && targetType !== AI_TRIAL_TARGET_TYPE;
 }
@@ -167,22 +176,27 @@ export async function requestSuggestion(
   // 6. KI av: ingen rad, intet kall
   const resolved = await resolveAiProvider(grant);
   if (resolved.kind === "disabled") return { kind: "disabled" };
-  const { provider, model } = resolved;
+  const { provider, model, features } = resolved;
   const fieldKeys = Object.keys(fields).sort();
+  const blockedRow = {
+    requestId: input.requestId,
+    feature: definition.code,
+    provider: provider.code,
+    model,
+    promptVersion: definition.promptVersion,
+    assignmentId: input.assignmentId,
+    target,
+    sourceFields: fieldKeys,
+  };
 
   // 7. Sperret: rad med utfallet `blocked`, intet oppslag, ingen vask, intet kall
   if (isBlocked(provider, target.type, input.assignmentId)) {
-    return insertBlockedRow(grant, {
-      requestId: input.requestId,
-      feature: definition.code,
-      provider: provider.code,
-      model,
-      promptVersion: definition.promptVersion,
-      assignmentId: input.assignmentId,
-      target,
-      sourceFields: fieldKeys,
-    });
+    return insertBlockedRow(grant, blockedRow);
   }
+
+  // 7b. Funksjonen er ikke slått på for leverandøren (`settings.features`, A194): som «KI er
+  // av», ingen rad, ingen vask, intet kall. `null` (bare `fake`) betyr alle; tom liste betyr ingen.
+  if (features !== null && !features.includes(definition.code)) return { kind: "disabled" };
 
   // 8. Kjente verdier for oppdraget (bare med oppdrag). Kaster oppslaget, kalles leverandøren aldri.
   const known =
@@ -191,6 +205,18 @@ export async function requestSuggestion(
   // 9. Felles ledetekst: rensing, vask og ledetekst av de vaskede feltene på tillatt-listen.
   // Kaster vasken, kalles leverandøren aldri. Så kalles leverandøren.
   const prepared = preparePrompt(definition, fields, known);
+
+  // 9b. Lekkasjesjekken (A195): siste vern før teksten forlater oss. Finner sjekken persondata i
+  // den vaskede ledeteksten, får en ekte leverandør aldri kallet; raden blir `blocked`.
+  if (isRealProvider(provider) && findPromptLeaks(prepared.prompt, known).length > 0) {
+    logger.warn("KI-kallet ble stoppet av lekkasjesjekken", {
+      feature: definition.code,
+      provider: provider.code,
+      usageId: input.requestId,
+    });
+    return insertBlockedRow(grant, blockedRow);
+  }
+
   const providerResult = await callProvider(() =>
     provider.complete({
       feature: definition.code,
