@@ -1,10 +1,16 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { PII_PLACEHOLDER, PII_PLACEHOLDERS, redactPii } from "@/shared/lib/pii-patterns";
 import { getFeatureDefinition, type AiFeatureDefinition } from "../features";
 import { preparePrompt } from "../prompt";
+import {
+  findPromptLeaks,
+  normalizeSpaces,
+  wholeWordPattern,
+  WORD_END,
+  WORD_START,
+  type LeakType,
+} from "../prompt-leaks";
 import type { AiProvider, AiProviderRequest, AiProviderResult } from "../providers/types";
-import type { KnownValues } from "../redact-text";
 import {
   EVAL_CASES_FILE_SUFFIX,
   parseCasesFile,
@@ -25,6 +31,25 @@ import {
  * Mot den falske leverandøren gir bare oppsett, krasj og persondata avslutningskode 1, ikke
  * treffprosent eller mustPass (A183).
  */
+
+/** Lekkasjesjekken bor i `../prompt-leaks.ts`; eksportert herfra også for testene. */
+export {
+  findLeakedKnownValues,
+  findPatternLeaks,
+  findPromptLeaks,
+  type LeakType,
+} from "../prompt-leaks";
+
+/** Den eneste leverandørkoden kjøreren godtar. Ekte leverandører koster penger (Omfang 7). */
+const EVAL_PROVIDER_CODE = "fake";
+
+/** Kjøreren ble gitt en annen leverandør enn den falske. Ingenting er kalt. */
+export class EvalProviderNotAllowedError extends Error {
+  constructor() {
+    super("Evalueringssettet kjøres bare mot den falske leverandøren.");
+    this.name = "EvalProviderNotAllowedError";
+  }
+}
 
 export type EvalMiss = { id: string; reason: string };
 export type EvalLeak = { id: string; types: LeakType[] };
@@ -57,23 +82,6 @@ export type EvalCaseEvaluation = { passed: boolean; reasons: string[] };
 // ---------------------------------------------------------------------------------------------
 // Vurdering av ett svar mot fasiten
 
-const START = "(?<![\\p{L}\\p{N}])";
-const END = "(?![\\p{L}\\p{N}])";
-const WHITESPACE = /[\s   ]+/gu;
-
-/** NFC, og alle typer mellomrom slått sammen til ett vanlig. */
-function normalizeSpaces(text: string): string {
-  return text.normalize("NFC").replace(WHITESPACE, " ").trim();
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
-}
-
-function wholeWordPattern(word: string): RegExp {
-  return new RegExp(`${START}${escapeRegExp(normalizeSpaces(word))}${END}`, "iu");
-}
-
 /**
  * Om `word` står som hele ord i `text`, uten skille mellom store og små bokstaver. Ordgrensen er
  * Unicode-bokstaver og -sifre, så «må» ikke treffer «måling» og «12,5» ikke treffer «112,5».
@@ -84,7 +92,7 @@ export function containsWholeWord(text: string, word: string): boolean {
 }
 
 const TG_MENTION = new RegExp(
-  `${START}(?:tg[\\s-]?(?:[0-3]|iu)|tilstandsgrad\\p{L}*(?:\\s?[0-3])?)${END}`,
+  `${WORD_START}(?:tg[\\s-]?(?:[0-3]|iu)|tilstandsgrad\\p{L}*(?:\\s?[0-3])?)${WORD_END}`,
   "giu",
 );
 
@@ -143,124 +151,6 @@ export function evaluateCase(
     }
   }
   return { passed: reasons.length === 0, reasons };
-}
-
-// ---------------------------------------------------------------------------------------------
-// Persondata i teksten til leverandøren, sjekket på egne bein (ikke med vasken)
-
-export type LeakType =
-  | "navn"
-  | "e-post"
-  | "telefon"
-  | "adresse"
-  | "matrikkel"
-  | "org.nr"
-  | "fødselsnummer"
-  | "kontonummer";
-
-const PLACEHOLDER_TYPES: ReadonlyArray<readonly [string, LeakType]> = [
-  [PII_PLACEHOLDER.name, "navn"],
-  [PII_PLACEHOLDER.email, "e-post"],
-  [PII_PLACEHOLDER.phone, "telefon"],
-  [PII_PLACEHOLDER.address, "adresse"],
-  [PII_PLACEHOLDER.cadastral, "matrikkel"],
-  [PII_PLACEHOLDER.orgNumber, "org.nr"],
-  [PII_PLACEHOLDER.nationalId, "fødselsnummer"],
-  [PII_PLACEHOLDER.accountNumber, "kontonummer"],
-];
-
-const MIN_VALUE_LENGTH = 2;
-
-function digitsOf(value: string): string {
-  return value.replace(/\D/gu, "");
-}
-
-/** Telefon uten landskode foran (+47 / 0047). */
-function phoneDigits(value: string): string {
-  const digits = digitsOf(value);
-  if (digits.length === 10 && digits.startsWith("47")) return digits.slice(2);
-  if (digits.length === 12 && digits.startsWith("0047")) return digits.slice(4);
-  return digits;
-}
-
-/** Sifrene i rekkefølge, med opptil tre skilletegn (ikke bokstav eller siffer) mellom hvert. */
-function containsDigits(text: string, digits: string): boolean {
-  if (digits.length < 4) return false;
-  const source = digits.split("").join("[^\\p{L}\\p{N}]{0,3}");
-  return new RegExp(`(?<!\\p{N})${source}(?!\\p{N})`, "u").test(text);
-}
-
-function containsValue(text: string, value: string): boolean {
-  const normalized = normalizeSpaces(value).toLowerCase();
-  if (normalized.length < MIN_VALUE_LENGTH) return false;
-  return wholeWordPattern(normalized).test(text);
-}
-
-/** Navnet som helhet og hvert ord på minst to tegn. */
-function nameParts(name: string): string[] {
-  return [name, ...normalizeSpaces(name).split(" ")];
-}
-
-/** Hele adressen og hver del mellom komma. */
-function addressParts(address: string): string[] {
-  return [address, ...address.split(",")];
-}
-
-function containsCadastral(text: string, known: KnownValues): boolean {
-  for (const unit of known.cadastral.units) {
-    const numbers = [unit.gnr, unit.bnr, unit.fnr, unit.snr]
-      .filter((value): value is string => value !== null && digitsOf(value) !== "")
-      .map(digitsOf);
-    if (numbers.length < 2) continue;
-    const source = numbers.join("\\s?[/\\-]\\s?");
-    if (new RegExp(`(?<![\\p{N}/])${source}(?![\\p{N}/])`, "u").test(text)) return true;
-  }
-  return false;
-}
-
-/**
- * Typene persondata som står i teksten: rå kjente verdier fra eksempelet (store og små bokstaver
- * og mellomrom normalisert, telefon og org.nr sammenlignet bare på sifre), og treff fra de faste
- * mønstrene når plassholderne er tatt bort. Gir aldri verdien, bare typen.
- */
-export function findLeakedKnownValues(text: string, known: KnownValues): LeakType[] {
-  const found = new Set<LeakType>();
-  const normalized = normalizeSpaces(text).toLowerCase();
-
-  if (known.personNames.flatMap(nameParts).some((value) => containsValue(normalized, value))) {
-    found.add("navn");
-  }
-  if (known.phrases.some((value) => containsValue(normalized, value))) found.add("navn");
-  if (known.emails.some((value) => normalized.includes(normalizeSpaces(value).toLowerCase()))) {
-    found.add("e-post");
-  }
-  if (known.phones.some((value) => containsDigits(normalized, phoneDigits(value)))) {
-    found.add("telefon");
-  }
-  if (known.orgNumbers.some((value) => containsDigits(normalized, digitsOf(value)))) {
-    found.add("org.nr");
-  }
-  if (
-    known.addresses.full.flatMap(addressParts).some((value) => containsValue(normalized, value)) ||
-    known.addresses.places.some((value) => containsValue(normalized, value))
-  ) {
-    found.add("adresse");
-  }
-  if (containsCadastral(normalized, known)) found.add("matrikkel");
-
-  for (const type of findPatternLeaks(text)) found.add(type);
-  return Array.from(found);
-}
-
-/** Treff fra `redactPii` i teksten, med plassholderne som alt står der tatt bort først. */
-export function findPatternLeaks(text: string): LeakType[] {
-  let stripped = text;
-  for (const placeholder of PII_PLACEHOLDERS) stripped = stripped.split(placeholder).join(" ");
-  const result = redactPii(stripped);
-  if (result.count === 0) return [];
-  return PLACEHOLDER_TYPES.filter(([placeholder]) => result.text.includes(placeholder)).map(
-    ([, type]) => type,
-  );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -325,7 +215,7 @@ async function runFeature(
     try {
       const { prompt } = preparePrompt(definition, evalCase.fields, known);
       // Lekkasjesjekken før kallet: en ledetekst med persondata sendes aldri til leverandøren
-      const leaked = leaksIn(prompt, known);
+      const leaked = findPromptLeaks(prompt, known);
       if (leaked.length > 0) {
         result.leaks.push({ id: evalCase.id, types: leaked });
         continue;
@@ -337,7 +227,8 @@ async function runFeature(
         model: provider.model,
       });
       const leakedAfter = new Set<LeakType>();
-      for (const text of captured) for (const type of leaksIn(text, known)) leakedAfter.add(type);
+      for (const text of captured)
+        for (const type of findPromptLeaks(text, known)) leakedAfter.add(type);
       if (leakedAfter.size > 0) {
         result.leaks.push({ id: evalCase.id, types: Array.from(leakedAfter) });
         continue;
@@ -362,11 +253,6 @@ async function runFeature(
 }
 
 /** Kaller leverandøren og tar vare på teksten den faktisk fikk. */
-/** Persondatatypene som finnes i teksten: kjente verdier når de finnes, ellers mønstrene. */
-function leaksIn(text: string, known: KnownValues | null): LeakType[] {
-  return known === null ? findPatternLeaks(text) : findLeakedKnownValues(text, known);
-}
-
 async function completeCaptured(
   provider: AiProvider,
   captured: string[],
@@ -382,6 +268,8 @@ async function completeCaptured(
  */
 export async function runEvals(options: RunOptions): Promise<EvalResult> {
   const { provider, casesDir, feature } = options;
+  // Før alt annet: en ekte leverandør kalles aldri herfra
+  if (provider.code !== EVAL_PROVIDER_CODE) throw new EvalProviderNotAllowedError();
   const result: EvalResult = { features: [], errors: [] };
 
   let fileNames: string[];

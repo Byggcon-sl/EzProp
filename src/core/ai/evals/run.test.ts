@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PII_PLACEHOLDERS } from "@/shared/lib/pii-patterns";
 import {
   evalCases,
@@ -11,6 +11,8 @@ import {
   testProvider,
   type EvalCaseJson,
 } from "../../../../tests/evals";
+import { findLeakedKnownValues, findPatternLeaks, findPromptLeaks } from "../prompt-leaks";
+import { createAnthropicProvider } from "../providers/anthropic";
 import { fakeAiProvider } from "../providers/fake";
 import type { AiProvider, AiProviderResult } from "../providers/types";
 import { emptyKnownValues } from "../redact-text";
@@ -496,5 +498,71 @@ describe("evalueringssett: TG-omtale i bøyde former (gjennomgang 11.11.2026)", 
     expect(run.extractTgMentions("Begge tilstandsgrader ble vurdert.")).toHaveLength(1);
     expect(run.extractTgMentions("Satt til TG-2.")).toEqual(["tg-2"]);
     expect(run.extractTgMentions("Fuktmåling i kjeller.")).toEqual([]);
+  });
+});
+
+/*
+ * Vakten i `runEvals` (docs/funksjoner/fase2a-ki-leverandor-testplan.md 4.4, S4): kjøreren kaller
+ * aldri en ekte leverandør, fordi det koster penger. Falsk HTTP, ingen nettkall.
+ */
+describe("evalueringssett: bare den falske leverandøren (KI-leverandør 4.4)", () => {
+  it.each(["anthropic", "unknown_vendor", "test_provider"])(
+    "leverandør med code %s → kaster før noe kall",
+    async (code) => {
+      const complete = vi.fn(fakeAiProvider.complete);
+      const provider: AiProvider = { code, model: "test-v1", complete };
+      await expect(
+        runEvals({ provider, casesDir: dirWith(evalCases()), feature: "language_polish" }),
+      ).rejects.toThrow();
+      await expect(runEvalCommand([], dirWith(evalCases()), provider)).rejects.toThrow();
+      expect(complete).not.toHaveBeenCalled();
+    },
+  );
+
+  it("Anthropic-adapteren laget med falsk fetch → kaster, fetch er ikke kalt", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    const provider = createAnthropicProvider({
+      model: "MERKE-MODELL-K7Q",
+      apiKey: "sk-ant-api03-OPPDIKTET-TESTNOKKEL-K7Q",
+      pricing: { inputPerMillion: 30, outputPerMillion: 150, currency: "NOK" },
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    await expect(
+      runEvals({ provider, casesDir: dirWith(evalCases()), feature: "language_polish" }),
+    ).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("fake går som før", async () => {
+    const result = await runEvals({
+      provider: fakeAiProvider,
+      casesDir: dirWith(evalCases()),
+      feature: "language_polish",
+    });
+    expect(result.errors).toEqual([]);
+  });
+
+  it("lekkasjesjekken er felles: run.ts importerer den fra ../prompt-leaks og har den ikke selv", () => {
+    const source = readFileSync(join(__dirname, "run.ts"), "utf8");
+    expect(source).toMatch(/from\s+["']\.\.\/prompt-leaks["']/u);
+    expect(source).not.toMatch(/function\s+findLeakedKnownValues\b/u);
+    expect(source).not.toMatch(/function\s+findPatternLeaks\b/u);
+    expect(run.findLeakedKnownValues).toBe(findLeakedKnownValues);
+    expect(run.findPatternLeaks).toBe(findPatternLeaks);
+  });
+
+  it("evals/run.ts importerer verken database, valg av leverandør eller adapteren", () => {
+    const source = readFileSync(join(__dirname, "run.ts"), "utf8");
+    expect(source).not.toMatch(/from\s+["']@\/db/u);
+    expect(source).not.toMatch(/provider-resolution/u);
+    expect(source).not.toMatch(/providers\/anthropic/u);
+  });
+
+  it("findPromptLeaks: uten kjente verdier bare mønstrene, med kjente verdier også dem", () => {
+    const known = { ...emptyKnownValues(), personNames: ["Qxzolav Partsen"] };
+    expect(findPromptLeaks("Ring 912 34 567.", null)).toEqual(["telefon"]);
+    expect(findPromptLeaks("Qxzolav kom.", null)).toEqual([]);
+    expect(findPromptLeaks("Qxzolav kom.", known)).toEqual(["navn"]);
+    expect(findPromptLeaks("Taket er gammelt. [navn] ringte.", known)).toEqual([]);
   });
 });

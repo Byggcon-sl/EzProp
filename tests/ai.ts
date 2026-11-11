@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { expect } from "vitest";
+import { expect, vi } from "vitest";
 import { AccessDeniedError, requireOrganizationAccess, type EmployeeGrant } from "@/core/access";
 import * as aiModule from "@/core/ai";
 import * as fakeModule from "@/core/ai/providers/fake";
@@ -186,6 +186,10 @@ export async function removeOrganizationSetting(organizationId: string, key: str
  * Slår KI på eller av i organisasjonen (testplanen avsnitt 0): setter `ai.enabled` (standard
  * `true`) og lager tilkoblingen på porten `ai` (standard aktiv `fake`). `connection: false` lager
  * ingen tilkobling. Gir tilkoblingen tilbake.
+ *
+ * Raden skrives rått, forbi skjemaet og sjekken av `secret_ref` i `createConnection`, så låsene
+ * i `resolveAiProvider` kan prøves med ugyldige innstillinger (låsetabellen, testplanen for
+ * KI-leverandør 3.1). `settings` og `secretRef` står som de er gitt.
  */
 export async function enableAi(
   organizationId: string,
@@ -195,6 +199,8 @@ export async function enableAi(
     status?: string;
     deletedAt?: Date | null;
     connection?: boolean;
+    settings?: Record<string, unknown>;
+    secretRef?: string | null;
   } = {},
 ) {
   if (!("enabled" in options) || options.enabled !== undefined) {
@@ -206,6 +212,91 @@ export async function enableAi(
     provider: options.provider ?? "fake",
     status: options.status ?? "active",
     deletedAt: options.deletedAt ?? null,
+    settings: options.settings ?? {},
+    secretRef: options.secretRef ?? null,
+  });
+}
+
+/** Navnet på hemmeligheten for `anthropic` (samme som `ANTHROPIC_SECRET_REF`). */
+export const ANTHROPIC_TEST_SECRET_REF = "ANTHROPIC_API_KEY";
+
+/** Tydelig oppdiktet nøkkel med samme form som en ekte, så loggmønsteret prøves. */
+export const ANTHROPIC_TEST_KEY = "sk-ant-api03-OPPDIKTET-TESTNOKKEL-K7Q";
+
+/** Merket som brukes som modell-id, så ingen ekte modell-id står i testene. */
+export const ANTHROPIC_TEST_MODEL = "MERKE-MODELL-K7Q";
+
+/** Gyldige, oppdiktede innstillinger for `anthropic`. `overrides` erstatter nøkler på toppnivå. */
+export function anthropicSettings(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    model: ANTHROPIC_TEST_MODEL,
+    features: ["language_polish"],
+    pricing: { inputPerMillion: 30, outputPerMillion: 150, currency: "NOK" },
+    ...overrides,
+  };
+}
+
+/** Merket i feilkroppen fra falsk HTTP. Skal aldri stå i logg, feil eller database. */
+export const PROVIDER_MESSAGE_MARKER = "MERKE-LEVERANDORMELDING-K7Q";
+
+/** Et vellykket svar fra meldings-API-et, med oppdiktet tekst og mengde. */
+export function anthropicOkResponse(
+  text = "Oppdiktet svar fra leverandøren.",
+  usage: { input_tokens: number; output_tokens: number } = { input_tokens: 120, output_tokens: 40 },
+): Response {
+  return new Response(
+    JSON.stringify({
+      id: "msg_oppdiktet",
+      type: "message",
+      role: "assistant",
+      model: ANTHROPIC_TEST_MODEL,
+      content: [{ type: "text", text }],
+      stop_reason: "end_turn",
+      stop_sequence: null,
+      usage,
+    }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+/** Et feilsvar med leverandørens melding (merket) i kroppen. */
+export function anthropicErrorResponse(status: number): Response {
+  return new Response(
+    JSON.stringify({
+      type: "error",
+      error: { type: "authentication_error", message: `${PROVIDER_MESSAGE_MARKER} oppdiktet` },
+    }),
+    { status, headers: { "content-type": "application/json" } },
+  );
+}
+
+/**
+ * Falsk HTTP for integrasjonstestene: `vi.stubGlobal("fetch", …)`. Standard svar er
+ * `anthropicOkResponse()`. Ryddes med `vi.unstubAllGlobals()`. Ingen ekte nettkall.
+ */
+export function stubAnthropicFetch(respond: () => Response = () => anthropicOkResponse()) {
+  const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+    async () => respond(),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+/**
+ * KI på med en `anthropic`-tilkobling (rå rad, se `enableAi`). Standard: gyldige innstillinger og
+ * `secret_ref = ANTHROPIC_API_KEY`. Nøkkelen settes ikke her; testen bruker `vi.stubEnv`.
+ */
+export function enableAnthropic(
+  organizationId: string,
+  options: Parameters<typeof enableAi>[1] = {},
+) {
+  return enableAi(organizationId, {
+    provider: "anthropic",
+    settings: anthropicSettings(),
+    secretRef: ANTHROPIC_TEST_SECRET_REF,
+    ...options,
   });
 }
 
