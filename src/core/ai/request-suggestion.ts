@@ -5,11 +5,12 @@ import { aiUsageLog, assignments, type AiErrorCode } from "@/db/schema";
 import { stripUnstorableChars } from "@/shared/lib/clean-text";
 import { logger } from "@/shared/lib/logger";
 import { AiRequestRejectedError } from "./errors";
-import { AI_TRIAL_TARGET_TYPE, buildPrompt, getFeatureDefinition } from "./features";
+import { AI_TRIAL_TARGET_TYPE, getFeatureDefinition } from "./features";
+import { preparePrompt } from "./prompt";
 import { resolveAiProvider } from "./provider-resolution";
 import { fakeAiProvider } from "./providers/fake";
 import type { AiProvider, AiProviderResult } from "./providers/types";
-import { redactFields } from "./redaction";
+import { loadKnownValues } from "./redaction";
 import { aiSuggestionRequestShapeSchema, hasOnlyAllowedFields } from "./request";
 import type { AiSuggestionRequest, AiSuggestionResult } from "./types";
 import {
@@ -32,7 +33,7 @@ import {
  * linje i `audit_log`. Organisasjon og ansatt kommer bare fra `grant`.
  *
  * Leverandøren får bare vasket tekst, også den falske. Kaster vasken, kalles leverandøren aldri
- * (A176). `provider.complete` kalles bare her, og etter vasken.
+ * (A176). `provider.complete` kalles bare her, og etter vasken i `preparePrompt` (./prompt.ts).
  *
  * Tegn databasen ikke tar (nulltegn, ensomme surrogater) fjernes fra verdiene rett etter
  * tillatt-listen, før alt annet og før personvernvasken (rett-t0001-synkko.md Omfang 3, A180):
@@ -183,16 +184,18 @@ export async function requestSuggestion(
     });
   }
 
-  // 8. Vask: kjente verdier for oppdraget og mønstrene. Kaster den, kalles leverandøren aldri.
-  const redacted = await redactFields(grant, input.assignmentId, fields);
+  // 8. Kjente verdier for oppdraget (bare med oppdrag). Kaster oppslaget, kalles leverandøren aldri.
+  const known =
+    input.assignmentId === null ? null : await loadKnownValues(grant, input.assignmentId);
 
-  // 9. Ledeteksten bygges bare av de vaskede feltene på tillatt-listen, og leverandøren kalles
-  const prompt = buildPrompt(definition, redacted.fields);
+  // 9. Felles ledetekst: rensing, vask og ledetekst av de vaskede feltene på tillatt-listen.
+  // Kaster vasken, kalles leverandøren aldri. Så kalles leverandøren.
+  const prepared = preparePrompt(definition, fields, known);
   const providerResult = await callProvider(() =>
     provider.complete({
       feature: definition.code,
       promptVersion: definition.promptVersion,
-      prompt,
+      prompt: prepared.prompt,
       model,
     }),
   );
@@ -214,7 +217,7 @@ export async function requestSuggestion(
   // `input_summary` regnes av den vaskede teksten, det som faktisk ble sendt (A172).
   const now = new Date();
   const inputSummary = Object.fromEntries(
-    fieldKeys.map((key) => [key, (redacted.fields[key] ?? "").length]),
+    fieldKeys.map((key) => [key, (prepared.redactedFields[key] ?? "").length]),
   );
   const errorCode: AiErrorCode | null = result.outcome === "error" ? result.errorCode : null;
 
@@ -243,7 +246,7 @@ export async function requestSuggestion(
         tokensOut: result.outcome === "error" ? 0 : result.tokensOut,
         cost: result.outcome === "error" ? "0" : String(result.cost),
         currency: result.outcome === "error" ? "NOK" : result.currency,
-        redactedCount: redacted.count,
+        redactedCount: prepared.redactedCount,
         retainUntil: retainUntilFrom(now),
         createdAt: now,
         updatedAt: now,

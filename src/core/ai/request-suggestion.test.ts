@@ -43,10 +43,14 @@ import {
   seedKnownValues,
   type KnownSeed,
 } from "../../../tests/known-values";
+import { capturing, evalCases, evalFile, makeCasesDir, removeDir } from "../../../tests/evals";
+import { stubFailingRegExp } from "../../../tests/failing-regexp";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { AiRequestRejectedError } from "./errors";
 import { PROMPT_INPUT_SEPARATOR } from "./features";
-import { redactFields } from "./redaction";
+import type { AiProvider } from "./providers/types";
+import { preparePrompt } from "./prompt";
+import { emptyKnownValues, loadKnownValues, type KnownValues } from "./redaction";
 
 /*
  * `requestSuggestion` (docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 6, 9.1–9.3 og
@@ -64,8 +68,13 @@ const SECRET_MARKER = "hemmelig-markør";
 
 /*
  * Vask før KI (docs/funksjoner/fase2a-vask-for-ki-testplan.md avsnitt 4, 5 og 7): leverandøren og
- * vasken kan byttes ut i én test. Standard er de ekte funksjonene, så de andre testene prøver den
- * ekte veien.
+ * oppslaget av kjente verdier kan byttes ut i én test. Standard er de ekte funksjonene, så de andre
+ * testene prøver den ekte veien.
+ *
+ * Flyttet med vilje fra `redactFields` til `loadKnownValues` (evalueringssett, testplanen
+ * «Presisering fra prosjektleder» og E5.2): vasken er nå den rene `preparePrompt`, og bare
+ * oppslaget går mot databasen. Påstandene er de samme: oppslaget skjer én gang med `grant` og
+ * oppdraget, og aldri ved sperre, «KI er av» eller avslag.
  */
 const swap = vi.hoisted(() => ({
   provider: null as null | {
@@ -73,13 +82,7 @@ const swap = vi.hoisted(() => ({
     model: string;
     complete: (request: unknown) => Promise<unknown>;
   },
-  redact: null as
-    | null
-    | ((
-        grant: unknown,
-        assignmentId: string | null,
-        fields: Record<string, string>,
-      ) => Promise<{ fields: Record<string, string>; count: number }>),
+  load: null as null | ((grant: unknown, assignmentId: string) => Promise<unknown>),
 }));
 
 vi.mock("./provider-resolution", async (importOriginal) => {
@@ -97,20 +100,29 @@ vi.mock("./redaction", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./redaction")>();
   return {
     ...actual,
-    redactFields: vi.fn(
-      (grant: EmployeeGrant, assignmentId: string | null, fields: Record<string, string>) =>
-        swap.redact
-          ? swap.redact(grant, assignmentId, fields)
-          : actual.redactFields(grant, assignmentId, fields),
+    loadKnownValues: vi.fn((grant: EmployeeGrant, assignmentId: string) =>
+      swap.load
+        ? (swap.load(grant, assignmentId) as ReturnType<typeof actual.loadKnownValues>)
+        : actual.loadKnownValues(grant, assignmentId),
     ),
   };
 });
 
+/*
+ * Rekkefølgen i T-0001-testene (rett-t0001-synkko-testplan.md 2c): vasken skal ikke nås ved avslag.
+ * Vasken er nå `preparePrompt`; den ekte funksjonen kjøres, kallene telles.
+ */
+vi.mock("./prompt", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./prompt")>();
+  return { ...actual, preparePrompt: vi.fn(actual.preparePrompt) };
+});
+
 beforeEach(resetDatabase);
 afterEach(() => {
+  vi.mocked(preparePrompt).mockClear();
   swap.provider = null;
-  swap.redact = null;
-  vi.mocked(redactFields).mockClear();
+  swap.load = null;
+  vi.mocked(loadKnownValues).mockClear();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
@@ -142,9 +154,9 @@ function leaves(value: unknown): unknown[] {
 
 const trialTarget = () => ({ type: "ai_trial", id: uuidv7(), fieldKey: "text" });
 
-/** Antall kall til vasken med oppdrag (da slås de kjente verdiene opp). */
+/** Antall oppslag av kjente verdier (bare med oppdrag). */
 function lookupCalls(): number {
-  return vi.mocked(redactFields).mock.calls.filter((call) => call[1] !== null).length;
+  return vi.mocked(loadKnownValues).mock.calls.length;
 }
 
 /** Teksten fra den ansatte slik leverandøren fikk den (etter skillet i ledeteksten). */
@@ -365,7 +377,8 @@ describe("requestSuggestion: vellykket kall (6.1–6.4)", () => {
     expect(row.feature).toBe("language_polish");
     expect(row.provider).toBe("fake");
     expect(row.model).toBe("fake-v1");
-    expect(row.prompt_version).toBe("language_polish.v1");
+    // Endret med vilje fra v1 til v2 (evalueringssett, E5.7)
+    expect(row.prompt_version).toBe("language_polish.v2");
     expect(Number(row.cost)).toBe(0);
     expect(row.currency).toBe("NOK");
     expect(row.target_ref).toEqual(request.target);
@@ -424,14 +437,14 @@ describe("requestSuggestion: vellykket kall (6.1–6.4)", () => {
     expect((await aiRow(request.requestId))!.assignment_id).toBeNull();
   });
 
-  it("2.5 ledeteksten leverandøren får: language_polish.v1, fake-v1, med teksten og uten gjetteord", async () => {
+  it("2.5 ledeteksten leverandøren får: language_polish.v2, fake-v1, med teksten og uten gjetteord", async () => {
     const { grant } = await aiOrganization();
     const spy = vi.spyOn(fakeAiProvider, "complete");
     await requestSuggestion(grant, validRequest());
     expect(spy).toHaveBeenCalledTimes(1);
     const sent = spy.mock.calls[0]![0];
     expect(sent.feature).toBe("language_polish");
-    expect(sent.promptVersion).toBe("language_polish.v1");
+    expect(sent.promptVersion).toBe("language_polish.v2");
     expect(sent.model).toBe("fake-v1");
     expect(sent.prompt).toContain(SAMPLE_TEXT);
     const instruction = sent.prompt.replace(SAMPLE_TEXT, "").trim();
@@ -1046,16 +1059,14 @@ function realLikeProvider() {
   return { code: "other_test_provider", model: "other-test-v1", complete };
 }
 
-/** Oppdiktet vask: bytter markøren med `[telefon]` og teller ett treff. */
+/**
+ * Oppdiktede kjente verdier for oppdraget: markøren er et kjent navn, så den ekte vasken bytter
+ * den med `[navn]` og teller ett treff. Gjelder bare forespørsler med oppdrag.
+ */
 function markerRedaction() {
-  swap.redact = async (_grant, _assignmentId, fields) => ({
-    fields: Object.fromEntries(
-      Object.entries(fields).map(([key, value]) => [
-        key,
-        value.replaceAll(SECRET_MARKER, "[telefon]"),
-      ]),
-    ),
-    count: 1,
+  swap.load = async (): Promise<KnownValues> => ({
+    ...emptyKnownValues(),
+    personNames: [SECRET_MARKER],
   });
 }
 
@@ -1073,11 +1084,11 @@ describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.8)", () 
     const result = await requestSuggestion(grant, request);
 
     expect(result.kind).toBe("suggestion");
-    expect(redactFields).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(redactFields).mock.calls[0]![0]).toBe(grant);
-    expect(vi.mocked(redactFields).mock.calls[0]![1]).toBe(assignment.id);
+    expect(loadKnownValues).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(loadKnownValues).mock.calls[0]![0]).toBe(grant);
+    expect(vi.mocked(loadKnownValues).mock.calls[0]![1]).toBe(assignment.id);
     const prompt = (complete.mock.calls[0]![0] as { prompt: string }).prompt;
-    expect(prompt).toContain("Ring [telefon] om taket");
+    expect(prompt).toContain("Ring [navn] om taket");
     expect(prompt).not.toContain(SECRET_MARKER);
     const row = (await aiRow(request.requestId))!;
     expect(row.redacted_count).toBe(1);
@@ -1087,15 +1098,16 @@ describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.8)", () 
   });
 
   it("V4.4 input_summary regnes av den vaskede teksten", async () => {
-    const { grant } = await aiOrganization();
+    const { organization, grant } = await aiOrganization();
+    const assignment = await createAssignment(organization.id);
     markerRedaction();
     const text = `Ring ${SECRET_MARKER} om taket`;
-    const request = validRequest({ fields: { text } });
+    const request = validRequest({ assignmentId: assignment.id, fields: { text } });
 
     await requestSuggestion(grant, request);
 
     const row = (await aiRow(request.requestId))!;
-    expect(row.input_summary).toEqual({ text: "Ring [telefon] om taket".length });
+    expect(row.input_summary).toEqual({ text: "Ring [navn] om taket".length });
     expect(row.input_summary).not.toEqual({ text: text.length });
   });
 
@@ -1103,8 +1115,9 @@ describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.8)", () 
     "V4.3 redacted_count skrives også for utfallet %s",
     async (outcome) => {
       const { grant } = await aiOrganization();
-      swap.redact = async (_grant, _assignmentId, fields) => ({ fields: { ...fields }, count: 2 });
-      const text = outcome === "no_match" ? fakeNoMatchInput() : fakeErrorInputs()[0]!;
+      // To treff fra mønstrene (to oppdiktede telefonnumre) ved siden av prøveverdien
+      const marker = outcome === "no_match" ? fakeNoMatchInput() : fakeErrorInputs()[0]!;
+      const text = `${marker} 12345678 87654321`;
       const request = validRequest({ fields: { text } });
 
       const result = await requestSuggestion(grant, request);
@@ -1115,8 +1128,9 @@ describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.8)", () 
   );
 
   it("V4.5 kaster vasken, kalles leverandøren ikke og ingen rad skrives; markøren lekker ikke", async () => {
-    const { grant } = await aiOrganization();
-    swap.redact = async () => {
+    const { organization, grant } = await aiOrganization();
+    const assignment = await createAssignment(organization.id);
+    swap.load = async () => {
       throw new Error(SECRET_MARKER);
     };
     const complete = vi.spyOn(fakeAiProvider, "complete");
@@ -1124,7 +1138,10 @@ describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.8)", () 
     const auditBefore = await auditCount();
 
     const error = await captureError(() =>
-      requestSuggestion(grant, validRequest({ fields: { text: "Oppdiktet notat" } })),
+      requestSuggestion(
+        grant,
+        validRequest({ assignmentId: assignment.id, fields: { text: "Oppdiktet notat" } }),
+      ),
     );
 
     expect(error).toBeInstanceOf(Error);
@@ -1137,15 +1154,19 @@ describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.8)", () 
   it("V4.6 «KI er av» og blocked kjører ikke vasken", async () => {
     const off = await createOrganization("Oppdiktet Takst Av");
     const offInspector = await employeeWithGrant(off.id, ["inspector"]);
-    expect(await requestSuggestion(offInspector.grant, validRequest())).toEqual({
-      kind: "disabled",
-    });
+    const offAssignment = await createAssignment(off.id);
+    expect(
+      await requestSuggestion(offInspector.grant, validRequest({ assignmentId: offAssignment.id })),
+    ).toEqual({ kind: "disabled" });
 
     const { grant } = await aiOrganization();
     swap.provider = realLikeProvider();
-    expect(await requestSuggestion(grant, validRequest())).toEqual({ kind: "blocked" });
+    const assignment = await createAssignment(grant.organizationId);
+    expect(await requestSuggestion(grant, validRequest({ assignmentId: assignment.id }))).toEqual({
+      kind: "blocked",
+    });
 
-    expect(redactFields).not.toHaveBeenCalled();
+    expect(loadKnownValues).not.toHaveBeenCalled();
   });
 
   it("V4.7 den falske leverandøren vaskes også: ai_trial uten oppdrag gir [telefon] i forslaget", async () => {
@@ -1155,7 +1176,8 @@ describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.8)", () 
     const request = validRequest({ target: trialTarget(), fields: { text } });
     const result = await requestSuggestion(grant, request);
     expect(result.kind).toBe("suggestion");
-    expect(redactFields).toHaveBeenCalledWith(grant, null, { text });
+    // Uten oppdrag: ingen oppslag, men mønstrene vasker likevel
+    expect(loadKnownValues).not.toHaveBeenCalled();
     if (result.kind !== "suggestion") return;
     expect(result.text).toContain("[telefon]");
     expect(result.text).toContain("[e-post]");
@@ -1179,9 +1201,8 @@ describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.8)", () 
     const { grant, assignmentId } = await organizationWithKnownValues({
       parties: [{ name: "Åse Testesen", phone: "12345678" }],
     });
-    swap.redact = async (_grant, id) => {
-      if (id !== null) throw new Error("oppdiktet feil i oppslaget");
-      return { fields: {}, count: 0 };
+    swap.load = async () => {
+      throw new Error("oppdiktet feil i oppslaget");
     };
     const spy = vi.spyOn(fakeAiProvider, "complete");
     const logSpies = spyOnLogger();
@@ -1351,7 +1372,7 @@ describe("requestSuggestion: roller og organisasjon (vask før KI V7.3–V7.4)",
     );
 
     expectSameRejection(error, baseline);
-    expect(redactFields).not.toHaveBeenCalled();
+    expect(loadKnownValues).not.toHaveBeenCalled();
     expect(complete).not.toHaveBeenCalled();
     expect(await aiRowCount()).toBe(0);
   });
@@ -1373,13 +1394,13 @@ describe("requestSuggestion: roller og organisasjon (vask før KI V7.3–V7.4)",
 
     if (!allowed) {
       await expect(requestSuggestion(grant, request)).rejects.toBeInstanceOf(AccessDeniedError);
-      expect(redactFields).not.toHaveBeenCalled();
+      expect(loadKnownValues).not.toHaveBeenCalled();
       expect(await aiRowCount()).toBe(0);
       return;
     }
     const result = await requestSuggestion(grant, request);
     expect(result.kind).toBe("suggestion");
-    expect(redactFields).toHaveBeenCalledTimes(1);
+    expect(loadKnownValues).toHaveBeenCalledTimes(1);
     const row = (await aiRow(request.requestId))!;
     expect(row.outcome).toBe("ok");
     expect(row.redacted_count).toBe(1);
@@ -1544,6 +1565,101 @@ describe("vask før KI: tenant (V7.2)", () => {
 });
 
 /*
+ * Evalueringssettet (docs/funksjoner/fase2a-evalueringssett-testplan.md E5.1 og E6.2): settet går
+ * samme vei som ekte bruk (`preparePrompt`), og en feil fra `new RegExp` i vasken stenger.
+ */
+describe("evalueringssett: felles ledetekst og vasken stenger (E5.1, E6.2)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("E5.1 requestSuggestion og kjøreren gir nøyaktig samme tekst til leverandøren", async () => {
+    const known: KnownValues = {
+      ...emptyKnownValues(),
+      personNames: ["Åse Testesen"],
+      phones: ["12345678"],
+      emails: ["ase.testesen@example.com"],
+      addresses: {
+        full: ["Prøvetunet 7, 8099 Testvik"],
+        places: ["Testvik"],
+        postalCodes: ["8099"],
+      },
+      cadastral: {
+        units: [{ gnr: "999", bnr: "12", fnr: null, snr: null, shareNumber: null }],
+        municipalityNumbers: [],
+      },
+    };
+    const text =
+      "åse testesen  på Prøvetunet 7 ringte fra 123 45 678 , gnr 999 bnr 12. Det bør\u00ADskiftes. TG2";
+    const { organization, grant } = await aiOrganization();
+    const assignment = await createAssignment(organization.id);
+    swap.load = async () => known;
+    const { prompt } = await sendAndCapture(grant, assignment.id, text);
+
+    const { runEvals } = await import("./evals/run");
+    const provider = capturing(fakeAiProvider as unknown as AiProvider);
+    const dir = makeCasesDir({
+      "language_polish.cases.json": evalFile(
+        evalCases(30, "s", (item) => ({
+          ...item,
+          fields: { text },
+          known: known as unknown as Record<string, unknown>,
+          expect: { outcome: "ok" },
+        })),
+      ),
+    });
+    try {
+      const result = await runEvals({ provider, casesDir: dir, feature: "language_polish" });
+      expect(result.errors).toEqual([]);
+    } finally {
+      removeDir(dir);
+    }
+    expect(provider.prompts).toHaveLength(30);
+    expect(provider.prompts[0]).toBe(prompt);
+    // Ikke hult: teksten er faktisk vasket
+    expect(prompt).not.toMatch(/testesen|12345678|Prøvetunet|999/iu);
+  });
+
+  it("E6.2 feil fra new RegExp i vasken stenger: leverandøren kalles ikke, ingen rad, ingen kjent verdi i feil eller logg", async () => {
+    const marker = "Qzxhemmelig";
+    const { organization, grant } = await aiOrganization();
+    const assignment = await createAssignment(organization.id);
+    swap.load = async (): Promise<KnownValues> => ({
+      ...emptyKnownValues(),
+      personNames: [`${marker} Verdisen`],
+      phones: ["98989898"],
+    });
+    const complete = vi.spyOn(fakeAiProvider, "complete");
+    const logSpies = spyOnLogger();
+    const auditBefore = await auditCount();
+
+    stubFailingRegExp(marker);
+    let failure: unknown;
+    try {
+      await requestSuggestion(
+        grant,
+        validRequest({
+          assignmentId: assignment.id,
+          fields: { text: `${marker} Verdisen ringte fra 98989898.` },
+        }),
+      );
+    } catch (caught) {
+      failure = caught;
+    }
+    vi.unstubAllGlobals();
+
+    expect(failure, "feilen skal stenge (A176)").toBeInstanceOf(Error);
+    expect(complete).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+    expect(await auditCount()).toBe(auditBefore);
+    const error = failure as Error;
+    expect(error.cause).toBeUndefined();
+    const seen = `${error.message} ${error.stack ?? ""} ${loggedText(logSpies)}`;
+    for (const value of [marker, "Verdisen", "98989898"]) expect(seen).not.toContain(value);
+  });
+});
+
+/*
  * Tegn databasen ikke tar (docs/agenter/oppgaver/rett-t0001-synkko-testplan.md 2c, test 58–65 og
  * 68): nulltegn og ensomme surrogater fjernes fra verdiene før personvernvasken, og svaret fra
  * leverandøren vaskes før loggen. Feltkodene vaskes ikke.
@@ -1624,7 +1740,7 @@ describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
       );
 
       expectSameRejection(error, empty);
-      expect(redactFields).not.toHaveBeenCalled();
+      expect(preparePrompt).not.toHaveBeenCalled();
       expect(complete).not.toHaveBeenCalled();
       expect(await aiRowCount()).toBe(0);
       expect(await auditCount()).toBe(auditBefore);
@@ -1645,7 +1761,7 @@ describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
     );
 
     expectSameRejection(error, unknownField);
-    expect(redactFields).not.toHaveBeenCalled();
+    expect(preparePrompt).not.toHaveBeenCalled();
     expect(complete).not.toHaveBeenCalled();
     expect(await aiRowCount()).toBe(0);
   });
@@ -1673,7 +1789,7 @@ describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
       requestSuggestion(office.grant, validRequest({ fields: { text: "\u0000" } })),
     ).rejects.toBeInstanceOf(AccessDeniedError);
 
-    expect(redactFields).not.toHaveBeenCalled();
+    expect(preparePrompt).not.toHaveBeenCalled();
     expect(complete).not.toHaveBeenCalled();
     expect(await aiRowCount()).toBe(0);
   });
@@ -1697,7 +1813,7 @@ describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
 
     const { input, prompt, request, result } = await sendAndCapture(grant, null, text);
 
-    expect(vi.mocked(redactFields).mock.calls[0]![2]).toEqual({ text: "Ring 91234567" });
+    expect(vi.mocked(preparePrompt).mock.calls[0]![1]).toEqual({ text: "Ring 91234567" });
     for (const seen of [prompt, input]) {
       expect(seen).not.toContain("91234567");
       expect(seen).not.toContain("1234567");
@@ -1717,7 +1833,7 @@ describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
 /*
  * Funn T-0001: tegn databasen ikke tar (docs/agenter/oppgaver/rett-t0001-synkko.md Omfang 3,
  * testplan avsnitt 2c, 58–65 og 68). Vasken kommer etter trinn 1–3 og før personvernvasken
- * (`redactFields`), og svaret fra leverandøren vaskes før loggen og klienten. Bare den falske
+ * (`preparePrompt`), og svaret fra leverandøren vaskes før loggen og klienten. Bare den falske
  * leverandøren. Teksten og telefonnummeret er oppdiktet.
  */
 describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
@@ -1762,7 +1878,7 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
     const prompt = spy.mock.calls[0]![0].prompt;
     expect(prompt).not.toContain("\u0000");
     expect(sentInput(prompt)).toBe(CLEAN);
-    expect(vi.mocked(redactFields)).toHaveBeenCalledWith(grant, null, { text: CLEAN });
+    expect(vi.mocked(preparePrompt).mock.calls[0]![1]).toEqual({ text: CLEAN });
   });
 
   it("svar med nulltegn fra leverandøren lagres vasket, og klienten får samme tekst", async () => {
@@ -1796,7 +1912,7 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
   it("tekst som er tom etter vask gir avslag, ikke unntak; verken vasken eller leverandøren kalles", async () => {
     const { grant } = await aiOrganization();
     const baseline = await neutralRequestRejection(grant);
-    vi.mocked(redactFields).mockClear();
+    vi.mocked(preparePrompt).mockClear();
     const complete = vi.spyOn(fakeAiProvider, "complete");
     const auditBefore = await auditCount();
 
@@ -1807,7 +1923,7 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
       expect(error).toBeInstanceOf(AiRequestRejectedError);
       expectSameRejection(error, baseline);
     }
-    expect(redactFields).not.toHaveBeenCalled();
+    expect(preparePrompt).not.toHaveBeenCalled();
     expect(complete).not.toHaveBeenCalled();
     expect(await aiRowCount()).toBe(0);
     expect(await auditCount()).toBe(auditBefore);
@@ -1843,7 +1959,7 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
     const a = await aiOrganization("Oppdiktet Takst A");
     const assignmentA = await createAssignment(a.organization.id);
     const b = await aiOrganization("Oppdiktet Takst B");
-    vi.mocked(redactFields).mockClear();
+    vi.mocked(preparePrompt).mockClear();
     const complete = vi.spyOn(fakeAiProvider, "complete");
 
     // Tilgangssjekken mot A for en ansatt i B
@@ -1859,7 +1975,7 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
       ),
     );
     expectSameRejection(error, baseline);
-    expect(redactFields).not.toHaveBeenCalled();
+    expect(preparePrompt).not.toHaveBeenCalled();
     expect(complete).not.toHaveBeenCalled();
     expect(await aiRowCount()).toBe(0);
   });

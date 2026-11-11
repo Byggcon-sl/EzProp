@@ -230,13 +230,18 @@ Treff erstattes med faste merker: `[navn]`, `[e-post]`, `[telefon]`, `[adresse]`
 
 ### 9. Evalueringssett
 
-- Ligger i repoet: `src/core/ai/evals/<funksjon>.cases.json`, 30–50 eksempler per funksjon.
-- **Bare oppdiktede eksempler.** Aldri ekte rapporttekst eller kundedata, og ingen tekst fra NS 3600, IVIT eller SmartTakst.
-- Hvert eksempel har id, inndata (felt og eventuelle kandidater) og fasit. Fasiten er én av: forventet kandidat, forventet «ingen treff», tekst som må være med, eller tekst som ikke kan være med (for eksempel gjetteord, TG eller tall som ikke sto i inndata). Et eksempel kan merkes `must_pass`.
-- Kommando: `pnpm ai:eval [funksjon]`. Den viser treffprosent og feiler under grensen. I CI kjøres den mot den falske leverandøren (prøver oppsettet, ikke kvaliteten).
-- **Treffgrense før en funksjon slås på for en ekte leverandør:** minst 90 % av eksemplene, og 100 % av dem som er merket `must_pass`. Grensen står i funksjonens definisjon.
+- Ligger i repoet: `src/core/ai/evals/<funksjon>.cases.json`, 30–50 eksempler per funksjon. Filen leses og valideres med Zod (ukjente nøkler avvises). Toppfelt: `feature`, `status: "utkast, ikke godkjent av fagrådet"` (påkrevd til fagrådet har godkjent eksemplene, A185) og `note` med regelen om oppdiktet tekst.
+- **Bare oppdiktede eksempler.** Aldri ekte rapporttekst eller kundedata, aldri kopi eller omskriving av ekte rapporttekst eller av `ai_usage_log`, og ingen tekst fra NS 3600, IVIT eller SmartTakst. Eksemplene er prøvedata for KI og brukes aldri som avvikstekst, seed-data eller mal. Kjente verdier (navn, telefon, e-post, adresse, matrikkel) i `known` er tydelig falske.
+- Hvert eksempel har fast `id` (endres aldri), valgfri `description`, inndata `fields` (bare koder fra funksjonens tillatt-liste), valgfritt `known` (formen til `KnownValues`, alle felt valgfrie), valgfri `mustPass` (standard nei) og fasiten `expect`. Fasittypene i 2a-1 er de `language_polish` trenger:
+  - `outcome`: `ok` eller `no_match` (`no_match` kan ikke ha `mustContain`).
+  - `mustContain` og `mustNotContain`: hele ord, uten skille mellom store og små bokstaver, med Unicode-ordgrenser og mellomrom normalisert. Fanger for eksempel at «bør» blir «må», gjetteord som forsvinner, tall som ikke sto i inndata og styringsforsøk som blir fulgt.
+  - `sameTg`: TG-omtalene i svaret er de samme som i inndata (endret eller tillagt TG gir bom).
+  - Fasit med kandidater kommer med første funksjon som bruker kandidater.
+- Settet går samme vei som ekte bruk: `preparePrompt` (rensing, vask og ledetekst) og så leverandøren. Teksten leverandøren fikk, sjekkes på egne bein for persondata. Kjøringen bruker ikke databasen og skriver ikke i `ai_usage_log` (A182).
+- Kommando: `pnpm ai:eval [funksjon]`. Den viser antall, treff, treffprosent, grense og `mustPass` per funksjon, og id og grunn for hvert bom. Til Anthropic-adapteren er på plass kjører den **bare mot den falske leverandøren** (fast, uten valg), og feiler bare på oppsett, krasj og persondata, ikke på treffprosent (A183). Den falske leverandøren prøver oppsettet, ikke kvaliteten. Avslutningskode under grensen kommer med adapteren.
+- **Treffgrense før en funksjon slås på for en ekte leverandør:** minst 90 % av eksemplene, og 100 % av dem som er merket `mustPass`. Grensen står i funksjonens definisjon (`evalPassRate`).
 - En funksjon brukes bare mot en ekte leverandør når den står i `settings.features` på tilkoblingen. Ny leverandør, ny modell eller ny ledetekstversjon betyr ny kjøring. Resultatet (dato, leverandørkode, modell, ledetekstversjon, treffprosent) føres i `docs/`.
-- Denne ADR-en lager bare oppsettet. Innholdet kommer med hver funksjon.
+- Denne ADR-en lager bare oppsettet. Innholdet kommer med hver funksjon. Første sett: `language_polish` (30 eksempler, 11.11.2026).
 
 ### 10. KI-kø uten nett
 

@@ -2229,7 +2229,12 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Falsk leverandør | `fake` (modell `fake-v1`) | Leverandør som gir forutsigbare svar uten kostnad og uten nettverk. Brukes i utvikling, test, CI og testmiljøet. Slås på av `pnpm db:seed:testoppdrag` i prøveorganisasjonen |
 | Vask (før KI) | scrub (`src/core/ai/scrub`) | Inndata bygges bare fra funksjonens tillatt-liste, og fritekst får navn, e-post, telefon, adresse, matrikkel, fødselsnummer og organisasjonsnummer byttet med faste merker |
 | Tillatt-liste | allowlist | Feltkodene en KI-funksjon kan sende. Alt annet stoppes |
-| Evalueringssett | `src/core/ai/evals` | 30–50 oppdiktede eksempler med fasit per KI-funksjon. Kjøres med `pnpm ai:eval` |
+| Evalueringssett | eval set (`src/core/ai/evals/<funksjon>.cases.json`) | 30–50 eksempler med fasit per KI-funksjon. Kjøres med `pnpm ai:eval [funksjon]` mot den falske leverandøren, gjennom samme ledetekst og vask som ekte bruk, uten database. Bare oppdiktet tekst: aldri kopi eller omskriving av ekte rapporttekst eller av `ai_usage_log`, og eksemplene brukes aldri som avvikstekst, seed-data eller mal. Merket «utkast, ikke godkjent av fagrådet» til fagrådet har godkjent dem. Id-en på et eksempel (`lp-001` o.l.) endres aldri |
+| Fasit (evalueringssett) | `expect` | Det svaret på et eksempel må oppfylle: utfall (`ok` eller `no_match`), ord som må stå (`mustContain`) og ord som ikke kan stå (`mustNotContain`), som hele ord uten skille mellom store og små bokstaver, og eventuelt `sameTg` |
+| Må bestås | `mustPass` | Eksempel som alltid må gi treff (for eksempel «bør»/«må», TG og styringsforsøk). Telles for seg; 100 % kreves før ekte bruk |
+| Samme TG | `sameTg` | Fasit som krever at TG-omtalene i svaret (TG0–TG3, TGIU, «tilstandsgrad») er de samme som i inndata. Fanger både endret og tillagt TG |
+| Treffgrense | `evalPassRate` | Andelen treff en KI-funksjon må nå i evalueringssettet før den slås på for ekte bruk. Står i funksjonsdefinisjonen, nå 0,9 (A154) |
+| Klargjøre ledetekst | `preparePrompt` (`src/core/ai`) | Felles, ren funksjon som renser tegn, vasker feltene og bygger ledeteksten. Brukes både av `requestSuggestion` og av evalueringssettet, så settet prøver samme vei som ekte bruk |
 | KI-kø | AI queue (`src/core/ai/client`) | Forespørsler som venter på nett. Ligger bare lokalt på iPaden og vises som «venter på KI» |
 | KI av/på | `ai.enabled` | Innstilling i `organizations.settings` (flat nøkkel, som `access.inspectors_edit_all`), standard av. Bare boolsk `true` slår KI på. Ingen skjerm ennå; settes av seed i prøveorganisasjonen |
 | Myk sletting | `deleted_at` | |

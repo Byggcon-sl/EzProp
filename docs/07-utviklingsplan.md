@@ -125,7 +125,7 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 
 ### 2a-1 KI-grunnmuren
 
-- [ ] **Evalueringssett:** fast oppsett for eksempler med fasit per KI-funksjon, og en kommando som kjører settet og viser treffprosent.
+- [x] **Evalueringssett:** fast oppsett for eksempler med fasit per KI-funksjon, og en kommando som kjører settet og viser treffprosent.
 - [ ] **KI-kø:** det som trenger KI, legges i kø og behandles når nettet er tilbake. Brukes på iPaden i fase 2b.
 - [ ] **Beslutningsnotat om KI-leverandør** til Ståle (S8). **Leverandøren er valgt: Anthropic (Ståle 10.11.2026).** Notatet tar for seg modellvalg per funksjon, alternativer for norsk tale til tekst, pris per rapport, databehandleravtale, EU/EØS og ingen trening på våre data.
 
