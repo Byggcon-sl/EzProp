@@ -4,7 +4,7 @@
 - **Funn:** `docs/agenter/testlag/funn/T-0001-synkko-stopper-ved-avvist-endring.md` (feil, alvorlig)
 - **Fase:** 2a (retting fra testlaget)
 - **Branch:** `rett-t0001-giftig-endring` (bygger på `main`)
-- **Laget av:** test-leder, 11.11.2026 (før koding). Oppdatert 11.11.2026 etter KI-vurderingen i kortet: 60 og 62 skjerpet, 68 lagt til.
+- **Laget av:** test-leder, 11.11.2026 (før koding). Oppdatert 11.11.2026 etter KI-vurderingen i kortet: 60 og 62 skjerpet, 68 lagt til. Gått gjennom igjen mot kortet på branchen `rett-t0001-giftig-endring` 11.11.2026: E7 (takstmann) og hjelperne `syncStatus`/`syncMessage` lagt til.
 - **Støtter hovedmål:** De ansatte: takstmannen mister ikke arbeid fra iPaden fordi ett felt har et usynlig tegn, og ser hvilket felt som ikke ble sendt. KI i bunnen: tekst med nulltegn gir forslag og rad i `ai_usage_log` i stedet for feil. Færre reklamasjoner: svarene kommer fram, så rapporten får ikke hull.
 
 ## Fast oppsett
@@ -160,7 +160,7 @@ Ingen. Oppgaven har ingen regler eller TG-logikk. `src/modules/offline-trial/rul
 
 ## 6. E2E: `e2e/fase-2a-rett-t0001-giftig-endring.spec.ts` (ny), PC og iPad-størrelse
 
-Kjøres i begge prosjektene i `playwright.config.ts` (PC og iPad Pro). Bruker `logIn`, `createTrialForm`, `indicator`, `pendingChanges`, `waitForTrialHook` og `readRowsViaHook` fra `e2e/helpers.ts`. Nulltegnet settes inn med `page.evaluate` (utklippstavle-lim eller `insertText`) siden tastaturet ikke gir det.
+Kjøres i begge prosjektene i `playwright.config.ts` (PC og iPad Pro). Bruker `logIn`, `logInAsInspector`, `createTrialForm`, `indicator`, `syncStatus`, `syncMessage`, `syncNowButton`, `pendingChanges`, `waitForTrialHook` og `readRowsViaHook` fra `e2e/helpers.ts`. Nulltegnet settes inn med `page.evaluate` (utklippstavle-lim eller `insertText`) siden tastaturet ikke gir det.
 
 | # | Testnavn | Hva den viser |
 |---|---|---|
@@ -170,6 +170,7 @@ Kjøres i begge prosjektene i `playwright.config.ts` (PC og iPad Pro). Bruker `l
 | E4 | «(c) uten nett: skriv, kom på nett, samme resultat som (a)» | `context.setOffline(true)`, fyll ut som i E1, `setOffline(false)`: alle tre lagret, ingen melding. |
 | E5 | «(d) 500 legger ingenting til side» | `page.route` gir 500: «Fikk ikke sendt. Prøver igjen automatisk.», ingen «Kunne ikke sendes». Fjern ruten: alt kommer fram. Viser at bare 400 legger til side. |
 | E6 | «(e) /prove/ki med nulltegn gir forslag» | Lim inn tekst med nulltegn på `/prove/ki`, be om forslag: forslagskortet vises, ikke «Noe gikk galt». |
+| E7 | «(f) takstmann ser samme melding som admin» | Som E2, men innlogget med `logInAsInspector`: «Kunne ikke sendes: Generell beskrivelse» vises og de andre er lagret. Viser at meldingen ikke er bundet til admin. |
 
 Krav: ingen fast `waitForTimeout`; vent på tekst i statuslinjen eller `pendingChanges`. Testen rydder `page.route` selv.
 
@@ -192,5 +193,5 @@ Krav: ingen fast `waitForTimeout`; vent på tekst i statuslinjen eller `pendingC
 ## 9. Godkjenningskriterier
 
 - `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` grønne (testsuiten kjøres i bakgrunnen, den tar over 10 minutter).
-- Alle akseptkriteriene i oppgavekortet har minst én test over (kart: vask 1–10; synk 41–43; ingen evig løkke 35; 400 45, 54–55; 500 består 13, 57; én transaksjon 46–47; kø 16–31; statuslinje 36–40, E2–E3; KI 58–63, 68; KI uendret 2c-krav; tilgang 48, 56, 64, 67; e2e E1–E4; ingenting slettes 24, 30, 52).
+- Alle akseptkriteriene i oppgavekortet har minst én test over (kart: vask 1–10; synk 41–43; ingen evig løkke 35; 400 45, 54–55; 500 består 13, 57; én transaksjon 46–47; kø 16–31; statuslinje 36–40, E2–E3; KI 58–63, 68; KI uendret 2c-krav; tilgang 48, 56, 64, 67; e2e E1–E4 og E7; ingenting slettes 24, 30, 52).
 - Avvises hvis: 403-testene med giftig innhold mangler (48, 56, 64), eksisterende KI-tester er endret, eller en lagt-til-side-oppføring kan slettes.
