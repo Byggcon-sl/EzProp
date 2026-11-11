@@ -57,6 +57,11 @@ jobs:
       - name: Kort commit-id (vises i helsesjekken)
         run: echo "APP_VERSION=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
 
+      - uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: next-deploy-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**') }}
+          restore-keys: next-deploy-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Bygg
         # Samme oppdiktede verdier som i ci.yml. Ekte verdier settes i Azure, ikke i bygget.
         env:

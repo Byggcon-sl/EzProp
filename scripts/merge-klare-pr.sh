@@ -28,7 +28,11 @@ klar() {
   local runs total ok pending
   runs=$(gh api "repos/$REPO/commits/$sha/check-runs" --jq '.check_runs')
   total=$(echo "$runs" | jq 'length')
-  ok=$(echo "$runs" | jq '[.[] | select(.conclusion == "success")] | length')
+  ok=$(echo "$runs" | jq '[.[] | select(.conclusion == "success" or .conclusion == "skipped")] | length')
+  # Minst én jobb må faktisk ha kjørt grønt (på rene dokument-PR-er hoppes de tunge jobbene over).
+  local ran
+  ran=$(echo "$runs" | jq '[.[] | select(.conclusion == "success")] | length')
+  if [ "$ran" -lt 1 ]; then echo "#$nr: CI ikke ferdig"; return 3; fi
   pending=$(echo "$runs" | jq '[.[] | select(.status != "completed")] | length')
   if [ "$total" -eq 0 ]; then
     # Ingen CI på siste commit (push fra Actions starter ikke CI, og GitHub svarer av og til 502
