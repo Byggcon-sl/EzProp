@@ -5,9 +5,9 @@
  *
  * Aldri personopplysninger eller hemmeligheter i loggen: felt med følsomme navn (e-post, navn,
  * telefon, passord, token, cookie …) fjernes, og «Bearer»-tokener, parameterne i databasefeil,
- * Azure-nøkler og -signaturer og klienthemmeligheter vaskes bort fra tekst. Deretter vaskes
- * persondata (e-post, telefon, fødselsnummer, organisasjonsnummer, kontonummer, matrikkel) med de
- * samme mønstrene som vasken før KI (`pii-patterns.ts`, ADR 0006 del 6), men uten adresser.
+ * Azure-nøkler og -signaturer, klienthemmeligheter og nøkler til KI-leverandøren vaskes bort fra
+ * tekst. Deretter vaskes persondata (e-post, telefon, fødselsnummer, organisasjonsnummer,
+ * kontonummer, matrikkel) med de samme mønstrene som vasken før KI (`pii-patterns.ts`, ADR 0006 del 6), men uten adresser.
  * Bruk bruker-id, aldri e-post.
  */
 
@@ -49,6 +49,8 @@ const AZURE_SIG = /sig=[^&\s]+/gi;
 // Klienthemmeligheten i token-kall (skjemadata til Microsoft 365), uansett store og små bokstaver.
 // Ikke `client_secret_name=…` (der kommer ikke `=` rett etter).
 const CLIENT_SECRET = /(client_secret)=[^&\s]+/gi;
+// Nøkkelformatet til KI-leverandøren (prefikset «sk-ant-» og en lang hale), ekstra sikring
+const AI_PROVIDER_KEY = /\bsk-ant-[A-Za-z0-9_-]{10,}/g;
 const MAX_TEXT = 500;
 
 /** Fjerner personopplysninger og hemmeligheter fra en tekst, og korter den ned. */
@@ -61,7 +63,8 @@ export function scrubText(text: string): string {
     .replace(AZURE_SAS, "SharedAccessSignature=" + REDACTED)
     .replace(AZURE_SIG, "sig=" + REDACTED)
     .replace(CLIENT_SECRET, "$1=" + REDACTED)
-    .replace(BEARER, "$1 " + REDACTED);
+    .replace(BEARER, "$1 " + REDACTED)
+    .replace(AI_PROVIDER_KEY, REDACTED);
   const scrubbed = redactPii(withoutSecrets, { addresses: false }).text;
   return scrubbed.length > MAX_TEXT ? `${scrubbed.slice(0, MAX_TEXT)} …` : scrubbed;
 }

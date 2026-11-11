@@ -411,4 +411,15 @@ describe("loggeren vasker telefon i nye grupperinger (E6.7)", () => {
       `ref ${usageId} kl ${time} status 503`,
     );
   });
+
+  it("A4 skjuler nøkkelformatet til KI-leverandøren, men ikke vanlig tekst med sk-", () => {
+    const key = "sk-ant-api03-OPPDIKTET-TESTNOKKEL-K7Q";
+    const line = formatLogLine("error", `Kallet feilet med ${key}`, {
+      note: `nøkkel ${key}`,
+      error: new Error(`avvist: ${key}`),
+    });
+    expect(JSON.stringify(line)).not.toContain(key);
+    expect(JSON.stringify(line)).not.toContain("OPPDIKTET-TESTNOKKEL");
+    expect(scrubText("sk-ant og sk-test står")).toBe("sk-ant og sk-test står");
+  });
 });
