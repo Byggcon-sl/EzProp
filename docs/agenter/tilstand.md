@@ -45,7 +45,30 @@ Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Testlaget ha
 
 ## Oppgaver fra nattløkken
 
-Listen fra 06.11.2026 (punkt 1–23) står i arkivet. Alvorlige: (1) sårbar esbuild via drizzle-kit (bare utviklerverktøy) og (2) sårbar minimatch via eslint (bare lint). Punkt 3, 14 og 18 gjaldt synkkandidatene og faller bort når PowerSync og ElectricSQL er fjernet.
+**Nattløkken 11.11.2026** (main 0b8e3b9, versjon 0.5.4). Lint, typecheck og test grønne (6861 tester), e2e grønn når den kjøres alene (516 besto, 56 hoppet over). Erstatter listen fra 06.11.2026 (arkivet); alvorlig 1 og 2 derfra står fortsatt åpne og er tatt med under.
+
+Alvorlige:
+1. **Sårbar esbuild 0.18.20** (moderat, GHSA-67mh-4wv8-2f99) via drizzle-kit 0.31.11 > @esbuild-kit. Bare utviklerverktøy. Ingen nyere drizzle-kit: prøv `pnpm.overrides` esbuild >=0.25.0 under @esbuild-kit/core-utils, og prøv `pnpm db:generate` og `pnpm db:migrate`. Åpen siden 06.11.
+2. **Sårbar minimatch** (moderat, GHSA-g3hv-75wg-m249) via eslint-config-next > eslint-plugin-import > @typescript-eslint/typescript-estree. Bare lint. Patch-oppdateringen i rydde-PR-en 11.11 fjernet den ikke. Neste: `pnpm.overrides` minimatch >=11.0.1 og prøv `pnpm lint`. Åpen siden 06.11.
+
+Lite:
+3. **Sårbar fast-xml-parser 5.11.2** (lav, GHSA-474x-hrwr-fgx4) via @azure/storage-blob > @azure/core-xml. Produksjonsavhengighet (fillagring), lav risiko. Prøv `pnpm update fast-xml-parser --depth 3`, ellers override >=5.12.0, og kjør testene for fillagring.
+4. **Testsuiten tar 16 minutter** (943 s), over grensen på 10 minutter per kommando. Tiden går mest til `truncate` mellom testene. Agentløkkene kjører `pnpm test` i bakgrunnen eller med lengre tidsgrense. Senere: se på raskere opprydding mellom tester.
+5. **Nattløkkens oppsett:** bruk `git pull --ff-only` (eller `git fetch && git reset --hard origin/main`), rydd port 3100 før e2e eller kjør med `CI=1` (hengende server ga 16 falske røde), og kjør aldri `pnpm build` samtidig med e2e i samme mappe.
+6. **UU-sjekken trenger skall-tilgang og axe:** `@axe-core/playwright` er ikke installert (ny avhengighet, må begrunnes). Sjekken for hånd fant ingen alvorlige feil.
+7. **Hopplenke «Hopp til hovedinnhold»** i `src/app/(ansatt)/layout.tsx` (forbedring, tas med neste oppgave i rammen).
+8. **@playwright/test 1.64.1 → 1.65.0:** kan kreve nyere Chromium enn `/opt/pw-browsers/chromium`. Kjør `pnpm test:e2e` i skyen før merge.
+9. **Nye hovedversjoner, ikke nå:** @types/node 26 (skal følge Node som kjører), eslint 10, postgres 4 (databasedriveren, egen oppgave), typescript 7.
+10. **Indeks `orders (organization_id, assignment_id)`**: arbeidskøen, `getAssignment` og `properties.ts` leser alle ordrer i organisasjonen per oppdrag. Først å merkes. Krever migrering.
+11. **Indeks for arbeidskøen:** `assignments (organization_id, status) where deleted_at is null`, og `assignment_team_members (organization_id, employee_id) where to_at and deleted_at is null` for «Mine».
+12. **Indekser på `firm_id`:** `contacts`, `assignment_parties` og `orders.ordered_by_firm_id` (organization_id, firm_id).
+13. **Indekser for senere:** `audit_log (organization_id, entity_type, entity_id, occurred_at)` når historikk per oppdrag kommer; `ai_usage_log` per oppdrag og per ansatt; fremmednøkler uten indeks (38 stk, de fleste uviktige ved myk sletting); `employee_permissions`, `employee_roles` og `template_element_options` uten indeks som starter med organization_id.
+14. **Lister uten grense:** `listOrders`, `listAgreements`, `listClaimsForAssignment`. Grense eller sidevisning før ekte data.
+15. **Tilgangssjekken gjentas per kall** (4 spørringer hver gang). Mulig cache per forespørsel; må vurderes av sikkerhet-personvern.
+16. **Skriving i løkke:** `apply-changes.ts` i prøvemodulen kjører én operasjon om gangen. Mønsteret skal ikke kopieres til den ekte synken i fase 2.
+17. Notert, ingen tiltak: to lenker i løpende tekst under 44 px (lovlig etter WCAG 2.5.8); prøvesidene `/prove/testskjema*` er dobbelt så store som resten (75,8 kB, under grensen på 100 kB).
+
+Ryddet i PR «Rydding fra nattløkken 2026-11-11» (versjon 0.5.5): patch-oppdatering av next og eslint-config-next 16.4.6, better-auth 1.7.20, jose 6.2.17, tailwindcss og @tailwindcss/postcss 4.3.5, dotenv 18.0.10, typescript-eslint 8.72.2.
 
 ## Trenger Ståle (stoppet etter 3 retteforsøk)
 
