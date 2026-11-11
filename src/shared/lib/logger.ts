@@ -4,10 +4,14 @@
  * bruker-id og referansekode. Hostingen samler linjene; ingen ekstern tjeneste.
  *
  * Aldri personopplysninger eller hemmeligheter i loggen: felt med følsomme navn (e-post, navn,
- * telefon, passord, token, cookie …) fjernes, og e-postadresser, telefonnumre, «Bearer»-tokener,
- * parameterne i databasefeil, Azure-nøkler og -signaturer og klienthemmeligheter vaskes bort fra tekst. Bruk bruker-id,
- * aldri e-post.
+ * telefon, passord, token, cookie …) fjernes, og «Bearer»-tokener, parameterne i databasefeil,
+ * Azure-nøkler og -signaturer og klienthemmeligheter vaskes bort fra tekst. Deretter vaskes
+ * personopplysninger (e-post, telefon, fødselsnummer, organisasjonsnummer, kontonummer, matrikkel)
+ * med de samme mønstrene som vasken før KI (`pii-patterns.ts`, ADR 0006 del 6). Adresser vaskes
+ * ikke i loggen. Bruk bruker-id, aldri e-post.
  */
+
+import { redactPii } from "./pii-patterns";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -37,10 +41,7 @@ function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEY.test(key.toLowerCase().replace(/[-_]/g, ""));
 }
 
-const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const BEARER = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/g;
-// Norske telefonnumre: +47 / 0047 foran, eller åtte siffer med mellomrom (12 34 56 78)
-const PHONE = /(?:\+|00)47(?:[\s-]?\d){8}|\b\d{3} \d{2} \d{3}\b|\b\d{2} \d{2} \d{2} \d{2}\b/g;
 // Azure: nøkkelen i tilkoblingsstrenger og signaturen i SAS-tokener og -adresser
 const AZURE_ACCOUNT_KEY = /AccountKey=[^;]+/gi;
 const AZURE_SAS = /SharedAccessSignature=[^;]+/gi;
@@ -54,14 +55,14 @@ const MAX_TEXT = 500;
 export function scrubText(text: string): string {
   // Databasefeil (Drizzle/postgres) har verdiene etter «params:»
   const withoutParams = text.replace(/params:[\s\S]*$/i, "params: " + REDACTED);
-  const scrubbed = withoutParams
+  // Hemmelighetene først, så personopplysningene (samme mønstre som vasken før KI)
+  const withoutSecrets = withoutParams
     .replace(AZURE_ACCOUNT_KEY, "AccountKey=" + REDACTED)
     .replace(AZURE_SAS, "SharedAccessSignature=" + REDACTED)
     .replace(AZURE_SIG, "sig=" + REDACTED)
     .replace(CLIENT_SECRET, "$1=" + REDACTED)
-    .replace(EMAIL, "[e-post]")
-    .replace(BEARER, "$1 " + REDACTED)
-    .replace(PHONE, "[telefon]");
+    .replace(BEARER, "$1 " + REDACTED);
+  const scrubbed = redactPii(withoutSecrets, { addresses: false }).text;
   return scrubbed.length > MAX_TEXT ? `${scrubbed.slice(0, MAX_TEXT)} …` : scrubbed;
 }
 
