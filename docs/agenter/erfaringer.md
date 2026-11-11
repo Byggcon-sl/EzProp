@@ -242,3 +242,8 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - To kjøringer reserverte de samme A-numrene: «Vask før KI» hadde satt av A169–A179, mens oppgavekortet for T-0001 tok A169 og A170 på sin branch. Regel videre: et kort som tar A-numre, leser «nå A…» og reservasjonene i `docs/agenter/tilstand.md` på `origin/main` rett før numrene skrives, og den som merges sist, nummererer om i sine egne filer.
 - Læringsløkken etter merge ble ikke kjørt for PR #131, så testlaget meldte det som funn (T-0021). Flytt punktet til `docs/plan/levert.md` i samme kjøring som merger.
+
+## 11.11.2026 – PR #141 (evalueringssett)
+
+- En kjøring stoppet midt i arbeidet (kl. 10:30 UTC) uten PR, og branchen ble liggende bak main. Neste hovedløkke fant den ved å se på nyeste commit på åpne brancher. Regel videre: en branch uten PR og uten commit de siste 30 minuttene overtas, og main flettes inn før noe annet.
+- Ikke endre filer mens `pnpm test` kjører i samme mappe: testene som kjører etter endringen, prøver halvferdig kode og gir falske røde. Kjør de berørte testene på nytt etter endringen.
