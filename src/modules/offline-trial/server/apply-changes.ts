@@ -14,12 +14,19 @@ import { requireOrganizationAccess, type Actor, type EmployeeGrant } from "@/cor
 import type { DbExecutor } from "@/db/client";
 import { db } from "@/db/client";
 import { trialAnswers, trialForms, trialPhotos } from "@/db/schema";
+import { stripUnstorableChars } from "@/shared/lib/clean-text";
 import { logger } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
 import { mergeTextStates, textOf } from "../text-merge";
 import { listTrialFields, trialForm, type TrialField } from "../trial-form";
 import { trialChangeOperationsSchema, type ParsedTrialChangeOperation } from "./change-schema";
-import { InvalidTrialChangeError, TrialIdConflictError } from "./errors";
+import {
+  InvalidTrialChangeError,
+  isUnstorableValueError,
+  TrialChangeRejectedError,
+  TrialIdConflictError,
+  type RejectedTrialChange,
+} from "./errors";
 import type { ApplyTrialChanges, TrialChangeOperation, TrialChangesResult } from "./types";
 
 const fieldsByKey = new Map<string, TrialField>(
@@ -34,6 +41,30 @@ export function requireTrialField(fieldKey: string): TrialField {
 }
 
 type Data = Record<string, unknown>;
+
+/**
+ * Lagres urørt: koder og id-er skal aldri endres i stillhet (feil i dem gir 400), og
+ * `text_state` er Yjs-tilstand som må kunne flettes byte for byte (funn T-0001).
+ */
+const UNCLEANED_KEYS = new Set(["id", "trial_form_id", "field_key", "text_state"]);
+
+/** `data` uten tegn databasen ikke tar (nulltegn, ensomme surrogater), unntatt `UNCLEANED_KEYS`. */
+function cleanData(data: Data): Data {
+  const kept: Data = {};
+  const rest: Data = {};
+  for (const [key, value] of Object.entries(data)) {
+    (UNCLEANED_KEYS.has(key) ? kept : rest)[key] = value;
+  }
+  return { ...stripUnstorableChars(rest), ...kept };
+}
+
+/** Peker på endringen i svaret (400), uten innholdet. `field_key` bare når feltet er kjent. */
+function changeRef({ id, table, data }: ParsedTrialChangeOperation): RejectedTrialChange {
+  const fieldKey = data.field_key;
+  const known =
+    table !== "trial_forms" && typeof fieldKey === "string" && fieldsByKey.has(fieldKey);
+  return known ? { id, table, field_key: fieldKey } : { id, table };
+}
 
 function has(data: Data, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(data, key) && data[key] !== undefined;
@@ -155,7 +186,8 @@ class ChangeWriter {
     this.knownForms.add(trialFormId);
   }
 
-  async apply(operation: ParsedTrialChangeOperation) {
+  async apply(sent: ParsedTrialChangeOperation) {
+    const operation = { ...sent, data: cleanData(sent.data) };
     switch (operation.table) {
       case "trial_forms":
         return this.applyForm(operation);
@@ -236,7 +268,10 @@ class ChangeWriter {
       .limit(1);
 
     const deviceId = optionalText(data, "device_id") ?? existing?.deviceId ?? "unknown";
-    let value: unknown = has(data, "value") ? parseValue(data.value) : (existing?.value ?? null);
+    // Vasket også etter tolkingen: JSON-teksten kan ha nulltegnet som `\u0000`
+    let value: unknown = has(data, "value")
+      ? stripUnstorableChars(parseValue(data.value))
+      : (existing?.value ?? null);
     let textState: string | null = existing?.textState ?? null;
 
     if (field.type === "text") {
@@ -250,7 +285,8 @@ class ChangeWriter {
           incoming !== null && stored !== null
             ? mergeTextStates(stored, incoming)
             : (incoming ?? stored);
-        value = readText(textState as string);
+        // `text_state` lagres urørt (fletting); bare den lagrede teksten vaskes
+        value = stripUnstorableChars(readText(textState as string));
       }
     }
 
@@ -362,7 +398,18 @@ export const applyTrialChanges: ApplyTrialChanges = async (
   await db.transaction(async (tx) => {
     const writer = new ChangeWriter(tx, actor, grant);
     await writer.rejectForeignIds([...new Set(batch.map((operation) => operation.id))]);
-    for (const operation of batch) await writer.apply(operation);
+    for (const operation of batch) {
+      try {
+        await writer.apply(operation);
+      } catch (error) {
+        // Feil i selve endringen peker på den (400); alt annet kastes uendret (500).
+        // Transaksjonen rulles tilbake i begge tilfeller.
+        if (error instanceof InvalidTrialChangeError || isUnstorableValueError(error)) {
+          throw new TrialChangeRejectedError(changeRef(operation));
+        }
+        throw error;
+      }
+    }
   });
 
   // Bare antall og tabellnavn, aldri innholdet (fritekst fra skjemaet)

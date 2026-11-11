@@ -2,24 +2,42 @@ import { ZodError } from "zod";
 import { AccessDeniedError } from "@/core/access";
 import {
   InvalidTrialChangeError,
+  isUnstorableValueError,
+  TrialChangeRejectedError,
   TrialIdConflictError,
   TrialPhotoNotFoundError,
   TrialPhotoTooLargeError,
 } from "@/modules/offline-trial/server/errors";
 import { logger } from "@/shared/lib/logger";
 
+const INVALID_CHANGE = "Endringen kunne ikke lagres. Noe i den er ugyldig.";
+
 /**
  * Prøve fase 1, kastes eller gjøres om etter ADR.
  *
  * Oversetter feil fra serverfunksjonene i prøven til svar med norsk feilmelding (`{ feil }`).
  * Ingen tilgangslogikk her; den ligger i `src/core/access`. Kroppen logges aldri.
+ * En endring som ikke kan lagres, gir 400 med `endring: { id, table, field_key }`, så enheten kan
+ * legge den til side og sende resten (funn T-0001). Verdier databasen ikke tar (SQLSTATE-klasse 22
+ * og 23514) gir 400, andre databasefeil 500.
  */
 export function trialErrorResponse(error: unknown, route: string, userId: string): Response {
   if (error instanceof AccessDeniedError) {
     return errorJson(403, "Du har ikke tilgang til dette.");
   }
-  if (error instanceof InvalidTrialChangeError || error instanceof ZodError) {
-    return errorJson(400, "Endringen kunne ikke lagres. Noe i den er ugyldig.");
+  if (error instanceof TrialChangeRejectedError) {
+    // Bare id, tabell og felt, aldri innholdet (funn T-0001)
+    const { id, table, field_key } = error.change;
+    return errorJson(400, INVALID_CHANGE, {
+      endring: field_key === undefined ? { id, table } : { id, table, field_key },
+    });
+  }
+  if (
+    error instanceof InvalidTrialChangeError ||
+    error instanceof ZodError ||
+    isUnstorableValueError(error)
+  ) {
+    return errorJson(400, INVALID_CHANGE);
   }
   if (error instanceof TrialIdConflictError) {
     return errorJson(
@@ -42,10 +60,10 @@ export function notLoggedIn(): Response {
   return errorJson(401, "Du må logge inn.");
 }
 
-function errorJson(status: number, message: string): Response {
+function errorJson(status: number, message: string, extra: Record<string, unknown> = {}): Response {
   // `private, no-store` på alle feilsvar, også fra shape-proxyen (aldri mellomlagret).
   return Response.json(
-    { feil: message },
+    { feil: message, ...extra },
     { status, headers: { "Cache-Control": "private, no-store" } },
   );
 }

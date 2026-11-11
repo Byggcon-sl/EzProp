@@ -17,7 +17,7 @@ import {
 } from "../../../../tests/offline-trial";
 import { applyTextEdit, createTextState, mergeTextStates, textOf } from "../text-merge";
 import { applyTrialChanges } from "./apply-changes";
-import { InvalidTrialChangeError, TrialIdConflictError } from "./errors";
+import { InvalidTrialChangeError, TrialChangeRejectedError, TrialIdConflictError } from "./errors";
 import type { TrialChangeOperation } from "./types";
 
 // Mottak av endringsbunter fra enhetene (docs/funksjoner/fase1-kandidat-powersync.md pkt. 11).
@@ -554,5 +554,173 @@ describe("applyTrialChanges", () => {
       expect(line).not.toContain("HEMMELIG-MARKØR-1234");
       expect(line).not.toContain(textState);
     }
+  });
+});
+
+// Funn T-0001: tegn databasen ikke tar, og 400 som peker på endringen.
+// Testplan docs/agenter/oppgaver/rett-t0001-giftig-endring-testplan.md avsnitt 2a.
+describe("applyTrialChanges med giftig innhold (T-0001)", () => {
+  const POISON = "Fukt\u0000 i kjeller";
+  const LONE_SURROGATE = "a\uD800b";
+
+  async function rejectionOf(promise: Promise<unknown>): Promise<unknown> {
+    try {
+      await promise;
+    } catch (error) {
+      return error;
+    }
+    throw new Error("Ventet at bunten ble avvist.");
+  }
+
+  it("nulltegn i Generell beskrivelse først i bunten gir tre lagrede svar uten nulltegn", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+    const textState = applyTextEdit(createTextState(""), POISON);
+
+    await expect(
+      applyTrialChanges(actor, organizationId, [
+        answerOp(formId, "general_description", POISON, { text_state: textState }),
+        answerOp(formId, "building_year", 1985),
+        answerOp(formId, "summary", "Samlet\u0000 kommentar"),
+      ]),
+    ).resolves.toEqual({ applied: 3 });
+
+    const rows = await answerRows(formId);
+    expect(rows).toHaveLength(3);
+    for (const row of rows) expect(JSON.stringify(row.value)).not.toContain("\\u0000");
+    const byKey = Object.fromEntries(rows.map((row) => [row.fieldKey, row.value]));
+    expect(byKey).toEqual({
+      general_description: "Fukt i kjeller",
+      building_year: 1985,
+      summary: "Samlet kommentar",
+    });
+  });
+
+  it("ensomt surrogat i tekst og i jsonb-verdi fjernes", async () => {
+    const { actor, organizationId } = await setupOrganization();
+    const formId = await putTrialForm(actor, organizationId);
+    const rowId = "0190a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2c";
+    const table = [{ id: rowId, cells: { location: LONE_SURROGATE, value: 12, note: "x\u0000y" } }];
+
+    await applyTrialChanges(actor, organizationId, [
+      answerOp(formId, "drill_measurements", table),
+      answerOp(formId, "summary", LONE_SURROGATE),
+    ]);
+
+    const [drill] = await answerRows(formId, "drill_measurements");
+    expect(drill!.value).toEqual([{ id: rowId, cells: { location: "ab", value: 12, note: "xy" } }]);
+    const [summary] = await answerRows(formId, "summary");
+    expect(summary!.value).toBe("ab");
+  });
+
+  it("text_state lagres urørt og kan flettes etterpå", async () => {
+    const { actor, organizationId } = await setupOrganization();
+    const formId = await putTrialForm(actor, organizationId);
+    const first = applyTextEdit(createTextState(""), POISON);
+
+    await applyTrialChanges(actor, organizationId, [
+      answerOp(formId, "general_description", POISON, { text_state: first }),
+    ]);
+    const [stored] = await answerRows(formId, "general_description");
+    expect(stored!.textState).toBe(first);
+    expect(stored!.value).toBe("Fukt i kjeller");
+
+    const second = applyTextEdit(createTextState(""), "Merk: ");
+    const expected = textOf(mergeTextStates(stored!.textState!, second)).replace(/\u0000/g, "");
+    await applyTrialChanges(actor, organizationId, [
+      answerOp(formId, "general_description", "", { text_state: second }),
+    ]);
+    const [merged] = await answerRows(formId, "general_description");
+    expect(merged!.value).toBe(expected);
+    expect(merged!.value).toContain("Merk: ");
+    expect(merged!.value).toContain("Fukt i kjeller");
+  });
+
+  it("id, trial_form_id og field_key vaskes ikke", async () => {
+    const { actor, organizationId } = await setupOrganization();
+    const formId = await putTrialForm(actor, organizationId);
+
+    const badKey = answerOp(formId, "summary\u0000", "Oppdiktet");
+    const error = await rejectionOf(applyTrialChanges(actor, organizationId, [badKey]));
+    expect(error).toBeInstanceOf(InvalidTrialChangeError);
+    expect((error as TrialChangeRejectedError).change).toEqual({
+      id: badKey.id,
+      table: "trial_answers",
+    });
+
+    const badFormId = answerOp(`${formId}\u0000`, "summary", "Oppdiktet");
+    await expect(applyTrialChanges(actor, organizationId, [badFormId])).rejects.toThrow(
+      InvalidTrialChangeError,
+    );
+    await expect(
+      applyTrialChanges(actor, organizationId, [
+        { ...answerOp(formId, "summary", "Oppdiktet"), id: `${uuidv7()}\u0000` },
+      ]),
+    ).rejects.toThrow(InvalidTrialChangeError);
+    expect(await answerRows(formId)).toHaveLength(0);
+  });
+
+  it("verdi databasen ikke tar gir feil som peker på endringen, og ingenting lagres", async () => {
+    const { actor, organizationId } = await setupOrganization();
+    const formId = await putTrialForm(actor, organizationId);
+    const tooBig = photoOp(formId, "cover_photo", { size_bytes: 3_000_000_000 });
+    const good = [answerOp(formId, "building_year", 1985), answerOp(formId, "summary", POISON)];
+
+    const error = await rejectionOf(applyTrialChanges(actor, organizationId, [...good, tooBig]));
+    expect(error).toBeInstanceOf(TrialChangeRejectedError);
+    expect((error as TrialChangeRejectedError).change).toEqual({
+      id: tooBig.id,
+      table: "trial_photos",
+      field_key: "cover_photo",
+    });
+    expect((error as Error).message).not.toContain("Fukt");
+    expect(await countRows(organizationId)).toEqual({ forms: 1, answers: 0, photos: 0 });
+
+    // Sendt på nytt uten den giftige blir alle lagret, og ingenting er slettet
+    await expect(applyTrialChanges(actor, organizationId, good)).resolves.toEqual({ applied: 2 });
+    expect(await countRows(organizationId)).toEqual({ forms: 1, answers: 2, photos: 0 });
+    const rows = await answerRows(formId);
+    expect(rows.every((row) => row.deletedAt === null)).toBe(true);
+  });
+
+  it("annen databasefeil kastes uendret (ikke TrialChangeRejectedError)", async () => {
+    const { actor, organizationId } = await setupOrganization();
+    const formId = await putTrialForm(actor, organizationId);
+    const broken = Object.assign(new Error("brutt forbindelse"), { code: "08006" });
+    vi.spyOn(db, "transaction").mockRejectedValueOnce(broken);
+
+    const error = await rejectionOf(
+      applyTrialChanges(actor, organizationId, [answerOp(formId, "summary", POISON)]),
+    );
+    expect(error).toBe(broken);
+  });
+
+  it("fremmed organisasjon gir AccessDeniedError også med giftig innhold", async () => {
+    const a = await setupOrganization("admin", "Oppdiktet A AS");
+    const b = await setupOrganization("admin", "Oppdiktet B AS");
+    const formId = uuidv7();
+
+    await expect(
+      applyTrialChanges(b.actor, a.organizationId, [
+        formOp(formId, { name: POISON }),
+        answerOp(formId, "summary", POISON),
+        photoOp(formId, "cover_photo", { size_bytes: 3_000_000_000 }),
+      ]),
+    ).rejects.toThrow(AccessDeniedError);
+    expect(await countRows()).toEqual({ forms: 0, answers: 0, photos: 0 });
+  });
+
+  it.each(ALL_ROLES)("%s kan synke tekst med nulltegn", async (role: EmployeeRole) => {
+    const { actor, organizationId } = await setupOrganization(role);
+    const formId = uuidv7();
+
+    await expect(
+      applyTrialChanges(actor, organizationId, [
+        formOp(formId, { name: "Skjema\u0000 1" }),
+        answerOp(formId, "summary", POISON),
+      ]),
+    ).resolves.toEqual({ applied: 2 });
+    expect((await formRow(formId))!.name).toBe("Skjema 1");
+    expect((await answerRows(formId, "summary"))[0]!.value).toBe("Fukt i kjeller");
   });
 });
