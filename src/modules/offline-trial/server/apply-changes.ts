@@ -8,19 +8,36 @@
  *
  * Serveren eier `organization_id`, `created_by`, `updated_by`, `row_version`, `uploaded_at`,
  * `sha256` og `storage_path`; de overses fra nyttelasten. Ukjente kolonner overses også.
+ *
+ * Tegn databasen ikke tar (nulltegn, ensomme surrogater) fjernes fra verdiene før lagring
+ * (funn T-0001, A180). Id-er, feltkode og `text_state` vaskes ikke: feil i dem gir 400. Feiler én
+ * operasjon på verdien, bærer feilen en peker til den (`TrialChangeRef`), aldri verdien.
  */
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { requireOrganizationAccess, type Actor, type EmployeeGrant } from "@/core/access";
 import type { DbExecutor } from "@/db/client";
 import { db } from "@/db/client";
 import { trialAnswers, trialForms, trialPhotos } from "@/db/schema";
+import { stripUnstorableChars } from "@/shared/lib/clean-text";
 import { logger } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
 import { mergeTextStates, textOf } from "../text-merge";
 import { listTrialFields, trialForm, type TrialField } from "../trial-form";
 import { trialChangeOperationsSchema, type ParsedTrialChangeOperation } from "./change-schema";
-import { InvalidTrialChangeError, TrialIdConflictError } from "./errors";
-import type { ApplyTrialChanges, TrialChangeOperation, TrialChangesResult } from "./types";
+import {
+  InvalidTrialChangeError,
+  isValueSqlState,
+  sqlStateOf,
+  TrialChangeValueError,
+  TrialIdConflictError,
+  type TrialChangeRef,
+} from "./errors";
+import {
+  TRIAL_CHANGE_TABLES,
+  type ApplyTrialChanges,
+  type TrialChangeOperation,
+  type TrialChangesResult,
+} from "./types";
 
 const fieldsByKey = new Map<string, TrialField>(
   listTrialFields(trialForm).map((field) => [field.key, field]),
@@ -34,6 +51,18 @@ export function requireTrialField(fieldKey: string): TrialField {
 }
 
 type Data = Record<string, unknown>;
+
+/** Koder og id-er som aldri endres stille. Teksttilstanden lagres byte for byte (fletting). */
+const UNCLEANED_KEYS = new Set(["id", "trial_form_id", "field_key", "text_state"]);
+
+/** `data` med tegn databasen ikke tar fjernet fra alle verdier, unntatt `UNCLEANED_KEYS`. */
+function cleanData(data: Data): Data {
+  const cleaned: Data = {};
+  for (const [key, value] of Object.entries(data)) {
+    cleaned[key] = UNCLEANED_KEYS.has(key) ? value : stripUnstorableChars(value);
+  }
+  return cleaned;
+}
 
 function has(data: Data, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(data, key) && data[key] !== undefined;
@@ -117,6 +146,8 @@ function readText(state: string): string {
 
 class ChangeWriter {
   private readonly knownForms = new Set<string>();
+  /** Feltkoden til operasjonen som skrives nå, når den er kjent (til pekeren ved feil). */
+  currentFieldKey: string | null = null;
 
   constructor(
     private readonly tx: DbExecutor,
@@ -155,7 +186,11 @@ class ChangeWriter {
     this.knownForms.add(trialFormId);
   }
 
-  async apply(operation: ParsedTrialChangeOperation) {
+  async apply(raw: ParsedTrialChangeOperation) {
+    const operation = { ...raw, data: cleanData(raw.data) };
+    const sentFieldKey = raw.data.field_key;
+    this.currentFieldKey =
+      typeof sentFieldKey === "string" && fieldsByKey.has(sentFieldKey) ? sentFieldKey : null;
     switch (operation.table) {
       case "trial_forms":
         return this.applyForm(operation);
@@ -215,6 +250,7 @@ class ChangeWriter {
     const fieldKey = sentFieldKey ?? byId?.fieldKey;
     if (fieldKey === undefined) throw new InvalidTrialChangeError("Svaret mangler felt.");
     const field = requireTrialField(fieldKey);
+    this.currentFieldKey = fieldKey;
     await this.requireForm(trialFormId);
 
     // Upsert på (trial_form_id, field_key): finnes raden med en annen id, beholdes serverens id
@@ -236,7 +272,10 @@ class ChangeWriter {
       .limit(1);
 
     const deviceId = optionalText(data, "device_id") ?? existing?.deviceId ?? "unknown";
-    let value: unknown = has(data, "value") ? parseValue(data.value) : (existing?.value ?? null);
+    // Vasket etter parsing: JSON-teksten har nulltegnet som «\\u0000», som først blir tegnet her
+    let value: unknown = has(data, "value")
+      ? stripUnstorableChars(parseValue(data.value))
+      : (existing?.value ?? null);
     let textState: string | null = existing?.textState ?? null;
 
     if (field.type === "text") {
@@ -250,7 +289,7 @@ class ChangeWriter {
           incoming !== null && stored !== null
             ? mergeTextStates(stored, incoming)
             : (incoming ?? stored);
-        value = readText(textState as string);
+        value = stripUnstorableChars(readText(textState as string));
       }
     }
 
@@ -299,6 +338,7 @@ class ChangeWriter {
     const name = optionalText(data, "name");
     const sizeBytes = optionalInteger(data, "size_bytes");
     const deviceId = optionalNullableText(data, "device_id");
+    if (existing) this.currentFieldKey = existing.fieldKey;
 
     if (!existing) {
       const trialFormId = requireUuid(sentFormId);
@@ -349,6 +389,41 @@ class ChangeWriter {
   }
 }
 
+/**
+ * Feil i verdien (SQLSTATE-klasse 22, 23514) og `InvalidTrialChangeError` får pekeren til
+ * operasjonen. Andre feil (tilkobling, 23505 osv.) går videre urørt og gir 500 som før.
+ */
+function pointToChange(error: unknown, change: TrialChangeRef): unknown {
+  if (error instanceof InvalidTrialChangeError) {
+    return error.change ? error : new InvalidTrialChangeError(error.message, change);
+  }
+  const sqlState = sqlStateOf(error);
+  if (isValueSqlState(sqlState)) return new TrialChangeValueError(sqlState!, change);
+  return error;
+}
+
+/** Peker til operasjonen Zod-feilen gjelder, når den har gyldig id og kjent tabell. */
+function changeFromIssuePath(
+  operations: readonly TrialChangeOperation[],
+  path: readonly PropertyKey[] | undefined,
+): TrialChangeRef | undefined {
+  const index = path?.[0];
+  if (typeof index !== "number" || !Array.isArray(operations)) return undefined;
+  const raw: unknown = operations[index];
+  if (raw === null || typeof raw !== "object") return undefined;
+  const { id, table, data } = raw as { id?: unknown; table?: unknown; data?: unknown };
+  if (typeof id !== "string" || !isUuid(id)) return undefined;
+  if (typeof table !== "string" || !(TRIAL_CHANGE_TABLES as readonly string[]).includes(table)) {
+    return undefined;
+  }
+  const fieldKey = data !== null && typeof data === "object" ? (data as Data).field_key : undefined;
+  return {
+    id,
+    table,
+    field_key: typeof fieldKey === "string" && fieldsByKey.has(fieldKey) ? fieldKey : null,
+  };
+}
+
 export const applyTrialChanges: ApplyTrialChanges = async (
   actor: Actor,
   organizationId: string,
@@ -356,13 +431,32 @@ export const applyTrialChanges: ApplyTrialChanges = async (
 ): Promise<TrialChangesResult> => {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
   const parsed = trialChangeOperationsSchema.safeParse(operations);
-  if (!parsed.success) throw new InvalidTrialChangeError();
+  if (!parsed.success) {
+    // Pekeren bare når alle feilene gjelder samme operasjon; ellers prøver klienten igjen
+    const refs = parsed.error.issues.map((issue) => changeFromIssuePath(operations, issue.path));
+    const first = refs[0];
+    const single =
+      first && refs.every((ref) => ref?.id === first.id && ref.table === first.table)
+        ? first
+        : undefined;
+    throw new InvalidTrialChangeError(undefined, single);
+  }
   const batch = parsed.data;
 
   await db.transaction(async (tx) => {
     const writer = new ChangeWriter(tx, actor, grant);
     await writer.rejectForeignIds([...new Set(batch.map((operation) => operation.id))]);
-    for (const operation of batch) await writer.apply(operation);
+    for (const operation of batch) {
+      try {
+        await writer.apply(operation);
+      } catch (error) {
+        throw pointToChange(error, {
+          id: operation.id,
+          table: operation.table,
+          field_key: writer.currentFieldKey,
+        });
+      }
+    }
   });
 
   // Bare antall og tabellnavn, aldri innholdet (fritekst fra skjemaet)
