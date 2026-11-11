@@ -195,6 +195,8 @@ export async function enableAi(
     status?: string;
     deletedAt?: Date | null;
     connection?: boolean;
+    settings?: Record<string, unknown>;
+    secretRef?: string | null;
   } = {},
 ) {
   if (!("enabled" in options) || options.enabled !== undefined) {
@@ -206,7 +208,24 @@ export async function enableAi(
     provider: options.provider ?? "fake",
     status: options.status ?? "active",
     deletedAt: options.deletedAt ?? null,
+    settings: options.settings ?? {},
+    secretRef: options.secretRef ?? null,
   });
+}
+
+/** Oppdiktet nøkkel med form som en ekte, så loggmønsteret også prøves. */
+export const FAKE_ANTHROPIC_KEY = "sk-ant-api03-OPPDIKTET-TESTNOKKEL-K7Q";
+/** Brukes som `settings.model`, så ingen ekte modell-id står i testene. */
+export const TEST_MODEL = "MERKE-MODELL-K7Q";
+
+/** Gyldige innstillinger for `anthropic` (oppdiktede tall), med overstyringer. */
+export function anthropicSettings(overrides: Record<string, unknown> = {}) {
+  return {
+    model: TEST_MODEL,
+    features: ["language_polish"],
+    pricing: { inputPerMillion: 30, outputPerMillion: 150, currency: "NOK" },
+    ...overrides,
+  };
 }
 
 export type EmployeeVariant = "inspector" | "office" | "manager" | "admin";

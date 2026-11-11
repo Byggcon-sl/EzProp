@@ -85,7 +85,8 @@ export function okResult(text: string): AiProviderResult {
 
 /**
  * En testleverandør. `answer` får teksten etter skillet og hele forespørselen og gir svaret.
- * Alle ledetekster den fikk, står i `prompts`.
+ * Alle ledetekster den fikk, står i `prompts`. Koden er `fake`: `runEvals` kjører bare mot den
+ * falske leverandøren (fase2a-ki-leverandor Omfang 7), og en testleverandør er en falsk.
  */
 export function testProvider(
   answer: (
@@ -95,7 +96,7 @@ export function testProvider(
 ): AiProvider & { prompts: string[] } {
   const prompts: string[] = [];
   return {
-    code: "test_provider",
+    code: "fake",
     model: "test-v1",
     prompts,
     async complete(request: AiProviderRequest) {
