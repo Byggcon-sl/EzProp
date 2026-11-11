@@ -1,326 +1,392 @@
 /*
- * Testsett med fasit for vasken før KI (docs/funksjoner/fase2a-vask-for-ki.md, akseptkriterier,
- * testplan V3.11).
+ * Testsett med fasit for vasken før KI (docs/funksjoner/fase2a-vask-for-ki.md, akseptkriteriene
+ * «Testsett med fasit»; testplanen V3.11). Brukes bare av testene (`redaction.test.ts`).
  *
- * Hovedmål: KI i bunnen og færre reklamasjoner. Settet låser at persondata aldri går til KI
- * (`mustRemove`, krav 0 bom), og at faginnholdet KI trenger står (`mustKeep`).
+ * Alle notater, navn, adresser, telefonnumre og matrikkelnumre er oppdiktet. Ingen tekst fra
+ * NS 3600, IVIT eller SmartTakst.
  *
- * Alt er oppdiktet: navn, adresser, numre og matrikkel (gnr 999) finnes ikke. Tekstene er egne
- * formuleringer, ikke fra NS 3600, IVIT eller SmartTakst.
+ * Hver sak har teksten, de kjente verdiene for oppdraget (lagt inn som rader i testdatabasen av
+ * testen, med kolonnene i kortets punkt 2), det som må vaskes bort (`mustRemove`, krav: 0 bom) og
+ * det som må stå (`mustKeep`). Testen skriver ut hvor mange ord som ble vasket unødig.
+ *
+ * Støtter hovedmål: KI i bunnen og de ansatte (persondata i notater sendes aldri til KI).
  */
 
-import type { KnownValues } from "./redaction";
+type PersonValues = {
+  firstName: string;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  deleted?: boolean;
+};
+type FirmValues = { name: string; orgNumber?: string | null; deleted?: boolean };
+
+/** De kjente verdiene for ett oppdiktet oppdrag, med kolonnene i kortets punkt 2. */
+export type RedactionCaseKnownValues = {
+  parties?: {
+    name: string;
+    firmName?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    deleted?: boolean;
+  }[];
+  partyContacts?: (PersonValues & { firm?: FirmValues })[];
+  partyFirms?: FirmValues[];
+  order?: {
+    addressText?: string;
+    orderedByText?: string | null;
+    orderedByContact?: PersonValues;
+    orderedByFirm?: FirmValues;
+    gnr?: string | null;
+    bnr?: string | null;
+    snr?: string | null;
+    housingAssociationName?: string | null;
+  };
+  team?: { name: string; deleted?: boolean }[];
+  property?: {
+    address?: string;
+    postalCode?: string | null;
+    city?: string | null;
+    municipalityName?: string | null;
+    municipalityNumber?: string | null;
+    gnr?: string;
+    bnr?: string;
+    fnr?: string | null;
+    snr?: string | null;
+    shareNumber?: string | null;
+    associationName?: string | null;
+    associationOrgNumber?: string | null;
+    cadastralDeleted?: boolean;
+  };
+  managingAgent?: string | null;
+  commonAreasDeleted?: boolean;
+};
 
 export type RedactionCase = {
   name: string;
   input: string;
-  knownValues?: KnownValues;
+  knownValues?: RedactionCaseKnownValues;
   mustRemove: string[];
   mustKeep: string[];
 };
 
-/** Kjente verdier for et oppdiktet oppdrag. */
-export const REDACTION_CASE_KNOWN_VALUES: KnownValues = {
-  personNames: ["Åse Testesen", "Anne-Lise Prøvedal", "Bo Li", "Kåre Øvreli", "Jens Hansen"],
-  phrases: [
-    "Prøvebygg og Tak AS",
-    "Borettslaget Testlia",
-    "Testforvaltning AS",
-    "Fiktiv Megling & Co A/S",
-    "Ola Diktesen, Fiktiv Megling & Co A/S",
+/** Det oppdiktede oppdraget de fleste sakene bruker. */
+export const STANDARD_KNOWN_VALUES: RedactionCaseKnownValues = {
+  parties: [
+    { name: "Åse Testesen", email: "ase.testesen@example.no", phone: "12345678" },
+    { name: "Bjørn Prøvesen", firmName: "Prøvemegling AS", phone: "87654321" },
+    { name: "Anne-Lise Hansen" },
   ],
-  emails: ["ase.testesen@eksempel.no"],
-  phones: ["123 45 678", "+47 98765432"],
-  orgNumbers: ["999888777"],
-  addresses: {
-    full: ["Prøvegata 7B, 9999 Testby"],
-    places: ["Testby", "Diktekommune"],
-    postalCodes: ["9999"],
+  partyFirms: [{ name: "Bygg og Tak AS", orgNumber: "000111222" }],
+  order: {
+    addressText: "Prøvetunet 7, 8099 Testvik",
+    orderedByText: "Kari Bestillersen, Testmegling AS",
+    gnr: "12",
+    bnr: "34",
+    snr: "5",
+    housingAssociationName: "Borettslaget Testtunet",
   },
-  cadastral: {
-    units: [{ gnr: "999", bnr: "88", fnr: null, snr: "3", shareNumber: "42" }],
-    municipalityNumbers: ["9999"],
+  team: [{ name: "Tor Takstesen" }],
+  property: {
+    address: "Prøvetunet 7",
+    postalCode: "8099",
+    city: "Testvik",
+    municipalityName: "Testvik",
+    municipalityNumber: "1899",
+    gnr: "12",
+    bnr: "34",
+    fnr: "0",
+    snr: "5",
+    shareNumber: "17",
+    associationName: "Borettslaget Testtunet",
+    associationOrgNumber: "000222333",
   },
+  managingAgent: "Forvaltning Nordtest AS",
 };
 
-const K = REDACTION_CASE_KNOWN_VALUES;
+const S = STANDARD_KNOWN_VALUES;
 
-export const REDACTION_CASES: RedactionCase[] = [
-  // Kjente verdier: personnavn
+export const REDACTION_CASES: readonly RedactionCase[] = [
   {
-    name: "eier med fullt navn i notat",
-    input: "Åse Testesen var til stede under befaringen og viste rundt i boligen.",
-    knownValues: K,
+    name: "selger med fullt navn",
+    input: "Selger Åse Testesen opplyste at taket ble lagt om.",
+    knownValues: S,
+    mustRemove: ["Åse Testesen", "Åse", "Testesen"],
+    mustKeep: ["Selger", "taket ble lagt om"],
+  },
+  {
+    name: "fornavn alene",
+    input: "Åse sa at det har vært lekkasje ved sluket.",
+    knownValues: S,
+    mustRemove: ["Åse"],
+    mustKeep: ["lekkasje ved sluket"],
+  },
+  {
+    name: "etternavn alene",
+    input: "Testesen viste meg kjelleren.",
+    knownValues: S,
+    mustRemove: ["Testesen"],
+    mustKeep: ["viste meg kjelleren"],
+  },
+  {
+    name: "store bokstaver",
+    input: "ÅSE TESTESEN VAR TIL STEDE.",
+    knownValues: S,
     mustRemove: ["Åse", "Testesen"],
-    mustKeep: ["befaringen", "boligen"],
+    mustKeep: ["TIL STEDE"],
   },
   {
-    name: "fornavn alene med liten forbokstav",
-    input: "åse opplyste at taket ble lagt om i 2004.",
-    knownValues: K,
-    mustRemove: ["åse"],
-    mustKeep: ["taket", "2004"],
+    name: "genitiv",
+    input: "Testesens bad har fliser fra 1995.",
+    knownValues: S,
+    mustRemove: ["Testesens", "Testesen"],
+    mustKeep: ["bad har fliser fra 1995"],
   },
   {
-    name: "etternavn i store bokstaver",
-    input: "EIER: TESTESEN. Bad pusset opp 2015, TG 2 på membran.",
-    knownValues: K,
-    mustRemove: ["TESTESEN"],
-    mustKeep: ["Bad", "2015", "TG 2", "membran"],
+    name: "fornavn og telefon gruppert",
+    input: "Ring Åse på 123 45 678 for nøkkel.",
+    knownValues: S,
+    mustRemove: ["Åse", "123 45 678", "12345678"],
+    mustKeep: ["for nøkkel"],
   },
   {
-    name: "dobbelt fornavn med bindestrek",
-    input: "Anne-Lise Prøvedal har ikke dokumentasjon på våtrommet.",
-    knownValues: K,
-    mustRemove: ["Anne-Lise", "Prøvedal"],
-    mustKeep: ["dokumentasjon", "våtrommet"],
+    name: "e-post til part",
+    input: "Kontakt ase.testesen@example.no om tilgang til loftet.",
+    knownValues: S,
+    mustRemove: ["ase.testesen@example.no"],
+    mustKeep: ["om tilgang til loftet"],
   },
   {
-    name: "del av dobbelt fornavn alene",
-    input: "Lise sa at Anne hadde malt kjelleren i 2019.",
-    knownValues: K,
-    mustRemove: ["Lise", "Anne"],
-    mustKeep: ["kjelleren", "2019"],
+    name: "megler med firmanavn",
+    input: "Megler Bjørn Prøvesen fra Prøvemegling AS var med på befaringen.",
+    knownValues: S,
+    mustRemove: ["Bjørn", "Prøvesen", "Prøvemegling AS"],
+    mustKeep: ["var med på befaringen"],
   },
   {
-    name: "genitiv på etternavn",
-    input: "Hansens bad har synlige sprekker i fugene, cirka 2 mm brede.",
-    knownValues: K,
-    mustRemove: ["Hansen"],
-    mustKeep: ["bad", "sprekker", "2 mm"],
+    name: "navn med bindestrek",
+    input: "Anne-Lise viste rommet.",
+    knownValues: S,
+    mustRemove: ["Anne-Lise", "Anne", "Lise"],
+    mustKeep: ["viste rommet"],
   },
   {
-    name: "genitiv med apostrof og bindestrek",
-    input: "Anne-Lises bod og Hansen's garasje ble ikke kontrollert.",
-    knownValues: K,
-    mustRemove: ["Anne-Lise", "Hansen"],
-    mustKeep: ["bod", "garasje"],
+    name: "andre del av navn med bindestrek",
+    input: "Lise åpnet luken til loftet.",
+    knownValues: S,
+    mustRemove: ["Lise"],
+    mustKeep: ["luken til loftet"],
   },
   {
-    name: "kort navn som frase",
-    input: "Selger Bo Li var ikke til stede.",
-    knownValues: K,
-    mustRemove: ["Bo Li"],
-    mustKeep: ["Selger", "til stede"],
+    name: "genitiv av navn med bindestrek",
+    input: "Anne-Lises bod er fuktig.",
+    knownValues: S,
+    mustRemove: ["Anne-Lises", "Anne", "Lise"],
+    mustKeep: ["bod er fuktig"],
   },
   {
-    name: "ansatt på oppdraget med æøå",
-    input: "Kåre Øvreli tok fuktmåling i yttervegg mot nord, 18 vektprosent.",
-    knownValues: K,
-    mustRemove: ["Kåre", "Øvreli"],
-    mustKeep: ["fuktmåling", "yttervegg", "18 vektprosent"],
-  },
-  // Kjente verdier: firma, borettslag og forretningsfører
-  {
-    name: "firmanavn som hel frase, fagord står",
-    input: "Prøvebygg og Tak AS la nytt tak i 2012. Bygg og tak ellers uten merknad.",
-    knownValues: K,
-    mustRemove: ["Prøvebygg og Tak AS"],
-    mustKeep: ["nytt tak", "2012", "Bygg og tak"],
+    name: "takstmannen på oppdraget",
+    input: "Takstmann Tor Takstesen målte 18 % fukt i svillen.",
+    knownValues: S,
+    mustRemove: ["Tor Takstesen", "Takstesen"],
+    mustKeep: ["18 % fukt i svillen"],
   },
   {
-    name: "borettslag og forretningsfører",
-    input:
-      "Borettslaget Testlia har vedlikeholdsplan. Testforvaltning AS svarer på spørsmål om fellesareal.",
-    knownValues: K,
-    mustRemove: ["Borettslaget Testlia", "Testforvaltning"],
-    mustKeep: ["vedlikeholdsplan", "fellesareal"],
+    name: "firmanavn som frase, fagordene står",
+    input: "Bygg og Tak AS skiftet taket i 2015. Tak og bygg er i god stand.",
+    knownValues: S,
+    mustRemove: ["Bygg og Tak AS"],
+    mustKeep: ["skiftet taket i 2015", "Tak og bygg er i god stand"],
   },
   {
-    name: "firmanavn med regex-tegn",
-    input: "Bestilt av Fiktiv Megling & Co A/S. Oppdraget gjelder enebolig.",
-    knownValues: K,
-    mustRemove: ["Fiktiv Megling & Co A/S"],
-    mustKeep: ["Bestilt av", "enebolig"],
-  },
-  {
-    name: "firmanavn uten selskapsform",
-    input: "Megler fra Fiktiv Megling & Co ringte om tidspunkt.",
-    knownValues: K,
-    mustRemove: ["Fiktiv Megling & Co"],
-    mustKeep: ["Megler", "tidspunkt"],
-  },
-  {
-    name: "bestillerteksten med to deler",
-    input: "Ola Diktesen ba om rapport innen fredag.",
-    knownValues: K,
-    mustRemove: ["Ola Diktesen"],
-    mustKeep: ["rapport", "fredag"],
-  },
-  // Kjente verdier: kontakt
-  {
-    name: "kjent e-post",
-    input: "Send kopi til ase.testesen@eksempel.no når rapporten er klar.",
-    knownValues: K,
-    mustRemove: ["ase.testesen@eksempel.no"],
-    mustKeep: ["kopi", "rapporten"],
-  },
-  {
-    name: "kjent telefon skrevet sammen",
-    input: "Ring 12345678 før befaring, nøkkel i postkassen.",
-    knownValues: K,
-    mustRemove: ["12345678"],
-    mustKeep: ["befaring", "nøkkel"],
-  },
-  {
-    name: "kjent telefon med landskode",
-    input: "Kontakt på +47 987 65 432 ved spørsmål om loftet.",
-    knownValues: K,
-    mustRemove: ["987 65 432"],
-    mustKeep: ["loftet"],
-  },
-  {
-    name: "kjent organisasjonsnummer",
-    input: "Faktura til org.nr. 999 888 777, merk med oppdraget.",
-    knownValues: K,
-    mustRemove: ["999 888 777"],
-    mustKeep: ["Faktura"],
-  },
-  // Kjente verdier: adresse
-  {
-    name: "hel adresse",
-    input: "Befaring på Prøvegata 7B, 9999 Testby kl. 10.",
-    knownValues: K,
-    mustRemove: ["Prøvegata", "9999 Testby", "7B"],
-    mustKeep: ["Befaring"],
+    name: "hel adresse med postnummer og poststed",
+    input: "Boligen ligger i Prøvetunet 7, 8099 Testvik.",
+    knownValues: S,
+    mustRemove: ["Prøvetunet 7", "Prøvetunet", "8099 Testvik", "Testvik"],
+    mustKeep: ["Boligen ligger i"],
   },
   {
     name: "gatenavn alene",
-    input: "Det er mye trafikk i Prøvegata, støy fra vei.",
-    knownValues: K,
-    mustRemove: ["Prøvegata"],
-    mustKeep: ["trafikk", "støy"],
-  },
-  {
-    name: "gatenavn og nummer med mellomrom foran bokstaven",
-    input: "Naboen i Prøvegata 7 b har samme takløsning.",
-    knownValues: K,
-    mustRemove: ["Prøvegata 7 b"],
-    mustKeep: ["Naboen", "takløsning"],
-  },
-  {
-    name: "poststed og kommune alene",
-    input: "Testby har hardt klima. Diktekommune krever ferdigattest for tilbygget.",
-    knownValues: K,
-    mustRemove: ["Testby", "Diktekommune"],
-    mustKeep: ["klima", "ferdigattest", "tilbygget"],
+    input: "Garasjen mot Prøvetunet har sprekker i pussen.",
+    knownValues: S,
+    mustRemove: ["Prøvetunet"],
+    mustKeep: ["Garasjen mot", "har sprekker i pussen"],
   },
   {
     name: "postnummer alene står",
-    input: "Avstand til sjø 9999 meter er ikke relevant, se tegning 2.",
-    knownValues: K,
+    input: "Kabelen er merket 8099 på skapet.",
+    knownValues: S,
     mustRemove: [],
-    mustKeep: ["9999 meter", "tegning 2"],
-  },
-  // Kjente verdier: matrikkel
-  {
-    name: "matrikkel som brøk",
-    input: "Eiendommen 999/88 har ett bolighus og en garasje.",
-    knownValues: K,
-    mustRemove: ["999/88"],
-    mustKeep: ["bolighus", "garasje"],
+    mustKeep: ["Kabelen er merket 8099 på skapet."],
   },
   {
-    name: "matrikkel med kommunenummer og seksjon",
-    input: "Gjelder 9999-999/88/0/3 i borettslaget.",
-    knownValues: K,
-    mustRemove: ["999/88"],
-    mustKeep: ["borettslaget"],
+    name: "matrikkel med ord og kommune",
+    input: "Eiendommen er gnr 12 bnr 34 i Testvik kommune.",
+    knownValues: S,
+    mustRemove: ["gnr 12", "bnr 34", "Testvik"],
+    mustKeep: ["Eiendommen er"],
   },
   {
-    name: "matrikkelord og andelsnummer",
-    input: "Gnr 999 i kommunen, andelsnummer 42. Takvinkel 42 grader.",
-    knownValues: K,
-    mustRemove: ["Gnr 999", "andelsnummer 42"],
-    mustKeep: ["Takvinkel 42 grader"],
+    name: "matrikkel som skråstrek og andelsnummer",
+    input: "Matrikkel 12/34/0/5, andelsnummer 17.",
+    knownValues: S,
+    mustRemove: ["12/34/0/5", "andelsnummer 17"],
+    mustKeep: [],
   },
   {
-    name: "enkelttall som er lik gnr står",
-    input: "Bjelkelaget er 999 mm over grunnen og 88 mm tykk isolasjon.",
-    knownValues: K,
+    name: "matrikkel med kommunenummer",
+    input: "Se 1899-12/34 i grunnboken.",
+    knownValues: S,
+    mustRemove: ["1899-12/34", "12/34"],
+    mustKeep: ["i grunnboken"],
+  },
+  {
+    name: "mål med samme tall som matrikkelen står",
+    input: "Bjelken er 12 cm høy og 34 cm bred, fall 34 grader, avstand 123 mm.",
+    knownValues: S,
     mustRemove: [],
-    mustKeep: ["999 mm", "88 mm"],
-  },
-  // Mønstrene (uten kjente verdier)
-  {
-    name: "ukjent telefon gruppert",
-    input: "Rørlegger nås på 12 34 56 78 eller 900-11-222.",
-    mustRemove: ["12 34 56 78", "900-11-222"],
-    mustKeep: ["Rørlegger"],
+    mustKeep: ["12 cm høy", "34 cm bred", "34 grader", "123 mm"],
   },
   {
-    name: "ukjent e-post",
-    input: "Tegninger kom fra Ukjent.Person+bygg@eksempel.com i går.",
-    mustRemove: ["Ukjent.Person+bygg@eksempel.com"],
-    mustKeep: ["Tegninger"],
+    name: "borettslaget som frase",
+    input: "Borettslaget Testtunet har ansvar for taket.",
+    knownValues: S,
+    mustRemove: ["Borettslaget Testtunet"],
+    mustKeep: ["har ansvar for taket"],
   },
   {
-    name: "fødselsnummer",
-    input: "Eier oppga 010199 12345 på skjemaet, ikke nødvendig for rapporten.",
-    mustRemove: ["010199 12345"],
-    mustKeep: ["skjemaet", "rapporten"],
+    name: "forretningsfører",
+    input: "Forvaltning Nordtest AS sender vedlikeholdsplanen.",
+    knownValues: S,
+    mustRemove: ["Forvaltning Nordtest AS"],
+    mustKeep: ["sender vedlikeholdsplanen"],
+  },
+  {
+    name: "bestilleren som fritekst",
+    input: "Bestilt av Kari Bestillersen, Testmegling AS i går.",
+    knownValues: S,
+    mustRemove: ["Kari Bestillersen, Testmegling AS"],
+    mustKeep: ["Bestilt av", "i går"],
+  },
+  {
+    name: "organisasjonsnummer til borettslaget",
+    input: "Org.nr. 000222333 står på styrepapirene.",
+    knownValues: S,
+    mustRemove: ["000222333"],
+    mustKeep: ["står på styrepapirene"],
+  },
+  {
+    name: "fødselsnummer uten kjente verdier",
+    input: "Fødselsnummer 01019912345 skal ikke stå i notatet.",
+    mustRemove: ["01019912345"],
+    mustKeep: ["skal ikke stå i notatet"],
   },
   {
     name: "kontonummer",
-    input: "Depositum til 1234.56.78901 ble nevnt, ikke relevant.",
+    input: "Betal depositum til 1234.56.78901 før oppstart.",
     mustRemove: ["1234.56.78901"],
-    mustKeep: ["Depositum"],
+    mustKeep: ["før oppstart"],
   },
   {
-    name: "organisasjonsnummer med MVA",
-    input: "Entreprenør NO 987654321 MVA leverte drenering i 2018.",
-    mustRemove: ["987654321"],
-    mustKeep: ["drenering", "2018"],
+    name: "telefon med landkode",
+    input: "Ring +47 876 54 321 etter kl 16.",
+    knownValues: S,
+    mustRemove: ["+47 876 54 321", "876 54 321"],
+    mustKeep: ["etter kl 16"],
   },
   {
-    name: "ukjent matrikkel med matrikkelord",
-    input: "Garasjen står på gnr. 998 bnr. 12, egen eiendom.",
-    mustRemove: ["998", "bnr. 12"],
-    mustKeep: ["Garasjen", "egen eiendom"],
+    name: "gateadresse fra mønsteret",
+    input: "Badet i Sjøgata 4 b har membran fra 2005.",
+    mustRemove: ["Sjøgata 4 b"],
+    mustKeep: ["Badet i", "har membran fra 2005"],
   },
   {
-    name: "ukjent adresse med husnummer og postnummer",
-    input: "Tidligere eier flyttet til Diktveien 14A, 9998 Prøvestad.",
-    mustRemove: ["Diktveien 14A", "9998 Prøvestad"],
-    mustKeep: ["Tidligere eier"],
-  },
-  // Fagtekst som skal stå urørt
-  {
-    name: "avvikstekst med mål og årstall",
-    input:
-      "TG 2: Fall mot sluk er 0,25 cm per meter, for lite. Membran fra 1985. Bjelker 48x98, c/c 600 mm.",
+    name: "faguttrykk og mål står",
+    input: "Taket har TG 2, 48x98 sperrer med c/c 600 og 2 x 4 lekter.",
+    knownValues: S,
     mustRemove: [],
-    mustKeep: ["TG 2", "0,25", "1985", "48x98", "600 mm"],
+    mustKeep: ["Taket har TG 2, 48x98 sperrer med c/c 600 og 2 x 4 lekter."],
   },
   {
-    name: "datoer, beløp og 12/34 uten matrikkelord",
-    input:
-      "Befart 11.11.2026, forrige rapport 2026-11-11. Takst kr 4 500 000. Vindu 12/34 i tegning.",
+    name: "dato, tid og desimaltall står",
+    input: "Befaring 11.11.2026 kl. 10:00, fukt 0,25 og byggeår 1985.",
+    knownValues: S,
     mustRemove: [],
-    mustKeep: ["11.11.2026", "2026-11-11", "kr 4 500 000", "12/34"],
+    mustKeep: ["11.11.2026", "10:00", "0,25", "1985"],
   },
   {
-    name: "gatenavnendelse uten nummer står",
-    input: "Avrenning ved bakken og langs stien mot huset, TG 1.",
+    name: "æøå først og sist i ordet",
+    input: "Åse Ødegård har hytte på Bjørnø.",
+    knownValues: {
+      parties: [{ name: "Åse Ødegård" }],
+      property: { address: "Strandtunet 3", city: "Bjørnø" },
+    },
+    mustRemove: ["Åse Ødegård", "Ødegård", "Bjørnø"],
+    mustKeep: ["har hytte på"],
+  },
+  {
+    name: "kort navn som frase",
+    input: "Bo Li var med på befaringen.",
+    knownValues: { parties: [{ name: "Bo Li" }] },
+    mustRemove: ["Bo Li"],
+    mustKeep: ["var med på befaringen"],
+  },
+  {
+    name: "genitiv med apostrof",
+    input: "Hansen's bod har råte i gulvet.",
+    knownValues: S,
+    mustRemove: ["Hansen"],
+    mustKeep: ["bod har råte i gulvet"],
+  },
+  {
+    name: "etternavn i løpende tekst",
+    input: "Vinduene ble skiftet av Hansen i 2010.",
+    knownValues: S,
+    mustRemove: ["Hansen"],
+    mustKeep: ["Vinduene ble skiftet av", "i 2010"],
+  },
+  {
+    name: "ingen persondata",
+    input: "Drenering mangler langs nordveggen, og terrenget faller mot muren.",
+    knownValues: S,
     mustRemove: [],
-    mustKeep: ["ved bakken", "langs stien", "TG 1"],
+    mustKeep: ["Drenering mangler langs nordveggen, og terrenget faller mot muren."],
   },
   {
-    name: "alt i én tekst",
-    input:
-      "Åse Testesen (ase.testesen@eksempel.no, 123 45 678) eier Prøvegata 7B, gnr 999 bnr 88. Prøvebygg og Tak AS (org 999888777) skiftet tak i 2010. Råte i svill, TG 3.",
-    knownValues: K,
-    mustRemove: [
-      "Åse",
-      "Testesen",
-      "ase.testesen@eksempel.no",
-      "123 45 678",
-      "Prøvegata",
-      "gnr 999",
-      "bnr 88",
-      "Prøvebygg og Tak AS",
-      "999888777",
-    ],
-    mustKeep: ["skiftet tak", "2010", "Råte i svill", "TG 3"],
+    name: "firmanavn og e-post",
+    input: "Kontakt Prøvemegling AS på post@example.com om nøklene.",
+    knownValues: S,
+    mustRemove: ["Prøvemegling AS", "post@example.com"],
+    mustKeep: ["om nøklene"],
+  },
+  {
+    name: "telefon i par",
+    input: "Bjørn ringte fra 87 65 43 21 i formiddag.",
+    knownValues: S,
+    mustRemove: ["Bjørn", "87 65 43 21"],
+    mustKeep: ["i formiddag"],
+  },
+  {
+    name: "seksjonsnummer",
+    input: "Seksjon snr 5 i sameiet har egen bod.",
+    knownValues: S,
+    mustRemove: ["snr 5"],
+    mustKeep: ["i sameiet har egen bod"],
+  },
+  {
+    name: "ord som starter som et navn står",
+    input: "Torvtaket på uthuset er i god stand.",
+    knownValues: S,
+    mustRemove: [],
+    mustKeep: ["Torvtaket på uthuset er i god stand."],
+  },
+  {
+    name: "kontakt bak en part",
+    input: "Selgers representant Petter Kontaktesen ba om rapporten.",
+    knownValues: {
+      partyContacts: [{ firstName: "Petter", lastName: "Kontaktesen", email: "petter@example.no" }],
+    },
+    mustRemove: ["Petter", "Kontaktesen"],
+    mustKeep: ["ba om rapporten"],
   },
 ];

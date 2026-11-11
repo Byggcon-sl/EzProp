@@ -25,6 +25,7 @@ import {
   grantPermission,
   resetDatabase,
 } from "../../../tests/factories";
+import { seedKnownValues } from "../../../tests/known-values";
 import { AiRequestRejectedError, checkAiTextApproved, getSuggestionStatus } from "./index";
 
 /*
@@ -413,5 +414,54 @@ describe("tilgang per rolle: forslagsmønsteret (6)", () => {
       outcome: "ok",
     });
     expect((await aiRow(result.usageId))!.organization_id).toBe(organization.id);
+  });
+});
+
+/*
+ * Vask før KI per rolle (docs/funksjoner/fase2a-vask-for-ki-testplan.md V7.4, kortet «Tilgang»).
+ * Ingen ny rettighet: rollene får samme svar som før, og den som får forslag, får det vasket.
+ * Admin stenges aldri ute (regel 11): gyldig forespørsel med falsk leverandør gir vasket forslag,
+ * ikke `blocked`. Oppdiktede verdier.
+ */
+describe("tilgang per rolle: vask før KI (V7.4)", () => {
+  const TEXT = "Åse Testesen ringte fra 12345678 om lekkasjen.";
+
+  it.each(VARIANTS)("V7.4 $name: be om = $allowed, og forslaget er vasket", async (variant) => {
+    const { organization, person } = await setup(variant);
+    const assignmentId = await seedKnownValues(organization.id, {
+      parties: [{ name: "Åse Testesen", phone: "12345678" }],
+    });
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const request = validRequest({ assignmentId, fields: { text: TEXT } });
+
+    if (variant.allowed) {
+      const result = await requestSuggestion(person.grant, request);
+      expect(result.kind).toBe("suggestion");
+      if (result.kind !== "suggestion") return;
+      for (const value of ["Åse", "Testesen", "12345678"]) {
+        expect(result.text).not.toContain(value);
+        expect(spy.mock.calls[0]![0].prompt).not.toContain(value);
+      }
+      expect(result.text).toContain("[navn]");
+      expect(result.text).toContain("[telefon]");
+      expect((await aiRow(request.requestId))!.outcome).toBe("ok");
+      return;
+    }
+    const error = await captureError(() => requestSuggestion(person.grant, request));
+    expect(error).toBeInstanceOf(AccessDeniedError);
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it("V7.4 admin uten enkeltrettigheter får vasket forslag, ikke blocked (regel 11)", async () => {
+    const { organization, person } = await setup({ roles: ["admin"], inspectorsEditAll: false });
+    const assignmentId = await seedKnownValues(organization.id, {
+      parties: [{ name: "Åse Testesen", phone: "12345678" }],
+    });
+    const request = validRequest({ assignmentId, fields: { text: TEXT } });
+    const result = await requestSuggestion(person.grant, request);
+    expect(result.kind).toBe("suggestion");
+    if (result.kind === "suggestion") expect(result.text).not.toContain("Testesen");
+    expect((await aiRow(request.requestId))!.outcome).toBe("ok");
   });
 });

@@ -121,7 +121,7 @@ describe("vakten for ai_trial: leverandør × mål (2)", () => {
     expect((row!.target_ref as { type: string }).type).toBe("answer");
   });
 
-  it("2.7 / V5.1–V5.2 vakten ligger i kjernen: en annen adapter enn fake får aldri ai_trial eller answer", async () => {
+  it("2.7 vakten ligger i kjernen: en annen adapter enn fake får aldri ai_trial", async () => {
     const { grant } = await organizationWith("fake");
     const imagined: AiProvider = {
       code: "oppdiktet_leverandor",
@@ -140,16 +140,18 @@ describe("vakten for ai_trial: leverandør × mål (2)", () => {
 
     const result = await requestSuggestion(grant, validRequest({ target: trialTarget() }));
 
+    // Vask før KI (A171): sperret forespørsel gir `blocked` (én rad), ikke «KI er av»
     expect(result).toEqual({ kind: "blocked" });
     expect(imagined.complete).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(await aiRowCount()).toBe(1);
+    const rows = await allAiRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.outcome).toBe("blocked");
 
-    // Vask før KI (A173): målet answer er også sperret mot en ekte leverandør
+    // Målet answer er også sperret mot en annen adapter til `answers` finnes (A173)
     const answer = await requestSuggestion(grant, validRequest());
     expect(answer).toEqual({ kind: "blocked" });
     expect(imagined.complete).not.toHaveBeenCalled();
-    expect((await allAiRows()).map((row) => row.outcome)).toEqual(["blocked", "blocked"]);
   });
 
   it("2.8 tenant: A har fake, B annen leverandør; B får «KI er av», A sin tilkobling brukes aldri", async () => {
