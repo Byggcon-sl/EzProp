@@ -376,6 +376,52 @@ describe("11.8 og 11.9 logger og meldinger", () => {
   });
 });
 
+// Funn T-0001: tekst med nulltegn (limt inn fra PDF) gir forslag, ikke «Noe gikk galt»
+// (docs/agenter/oppgaver/rett-t0001-synkko-testplan.md avsnitt 2d, test 66–67).
+describe("T-0001 tekst med tegn databasen ikke tar", () => {
+  const POISON = "taket er\u0000 gammelt og har noen\uD800 sprekker";
+
+  it("handlingen gir forslag for tekst med nulltegn", async () => {
+    const { organization } = await signedIn();
+    const input = requestInput({ text: POISON });
+    const result = await requestTrialSuggestion(input);
+    expect(result.kind).toBe("suggestion");
+    expect(JSON.stringify(result)).not.toMatch(/\\u0000|\\ud800/i);
+    const row = await aiRow(input.requestId);
+    expect(row?.organization_id).toBe(organization.id);
+    expect(await allAiRows()).toHaveLength(1);
+  });
+
+  it("fremmed organisasjon gir nei også med giftig tekst", async () => {
+    // Organisasjon A har KI på; den innloggede har ingen ansattrad der
+    const own = await signedIn(["inspector"], "Oppdiktet Takst A");
+    const outsider = await createUser({ name: "Oppdiktet utenforstående" });
+    session.actor = outsider;
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+
+    const result = await requestTrialSuggestion(requestInput({ text: POISON }));
+    expect(result).toEqual({ kind: "failed", message: "Du har ikke tilgang til dette." });
+    expect(spy).not.toHaveBeenCalled();
+    expect(await allAiRows()).toHaveLength(0);
+
+    // Ansatt i organisasjon B med innstillingen av: nei, og ingen rad i noen organisasjon
+    const other = await createOrganization("Oppdiktet Takst B");
+    await enableAi(other.id);
+    await mergeOrganizationSettings(other.id, { "access.inspectors_edit_all": false });
+    const foreign = await createUser({ name: "Oppdiktet takstmann B" });
+    await createEmployee(foreign, other.id, ["inspector"]);
+    session.actor = foreign;
+    expect(await requestTrialSuggestion(requestInput({ text: POISON }))).toEqual({
+      kind: "failed",
+      message: "Du har ikke tilgang til dette.",
+    });
+    expect(spy).not.toHaveBeenCalled();
+    const rows = await allAiRows();
+    expect(rows.filter((row) => row.organization_id === own.organization.id)).toHaveLength(0);
+    expect(rows).toHaveLength(0);
+  });
+});
+
 describe("6 tilgang per rolle (requestTrialSuggestion og decideTrialSuggestion)", () => {
   type Setup = {
     name: string;
