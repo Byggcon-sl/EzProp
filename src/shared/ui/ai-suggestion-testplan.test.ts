@@ -27,6 +27,7 @@ const TEXTS = {
   error: "KI svarte ikke. Prøv igjen.",
   aiOff: "KI er av.",
   offline: "Krever nett. Teksten din er lagret og kan skrives videre.",
+  queued: "Venter på KI. Forslaget kommer når nettet er tilbake.",
 };
 
 type Props = Parameters<typeof AiSuggestion>[0];
@@ -161,6 +162,21 @@ describe("forslagskortet: knapper og tekst per tilstand (10.1–10.9)", () => {
       hidden: [TEXTS.undo],
       texts: [TEXTS.offline, OWN, SUGGESTION],
     },
+    // Endret med KI-køen (fase2a-ki-ko K5.4): på /prove/ki legges forespørselen i kø uten nett
+    {
+      name: "10.9 uten nett, lagt i kø før første forslag",
+      overrides: { online: false, queued: true, outcome: null, suggestionText: null, status: null },
+      shown: [],
+      hidden: [TEXTS.use, TEXTS.keep, TEXTS.undo],
+      texts: [TEXTS.queued, OWN],
+    },
+    {
+      name: "10.9 uten nett, lagt i kø med forslag fra før",
+      overrides: { online: false, queued: true },
+      shown: [],
+      hidden: [TEXTS.use, TEXTS.keep, TEXTS.undo],
+      texts: [TEXTS.queued],
+    },
   ];
 
   it.each(CASES)("$name", ({ overrides, shown, hidden, texts }) => {
@@ -191,9 +207,16 @@ describe("forslagskortet: knapper og tekst per tilstand (10.1–10.9)", () => {
       { online: false },
       { online: false, status: "rejected" as const },
       { online: false, outcome: null, suggestionText: null, status: null },
+      { online: false, queued: true },
     ]) {
-      const buttons = buttonsIn(render(overrides));
+      const html = render(overrides);
+      const buttons = buttonsIn(html);
       expect(buttons.every((button) => button.disabled)).toBe(true);
+      // I kø: «Venter på KI …» i stedet for «Krever nett …»
+      if ("queued" in overrides) {
+        expect(visibleText(html)).toContain(TEXTS.queued);
+        expect(visibleText(html)).not.toContain(TEXTS.offline);
+      }
     }
   });
 
