@@ -14,7 +14,9 @@ import {
   unsentLineText,
   type SyncStatusKind,
 } from "./sync-status-text";
-import type { TrialSyncStatus, UnsentChange } from "./sync/types";
+import type { OutboxEntry, TrialSyncStatus, UnsentChange } from "./sync/types";
+import { isUnresolvedSetAside } from "./sync/local/outbox";
+import { listTrialFields, trialForm } from "./trial-form";
 
 // Tekstene og reglene bak synkstatusen (docs/funksjoner/fase1-synkstatus.md, «Regler»).
 // Testplan avsnitt 2.1. Reglene er data: tabellene under er testsakene. Alle tidspunkt er faste,
@@ -420,5 +422,95 @@ describe("Kunne ikke sendes (sync-status-text.ts)", () => {
 
   it("5xx-beskjeden er uendret", () => {
     expect(SYNC_NOW_FAILED_MESSAGE).toBe("Fikk ikke sendt. Prøver igjen automatisk.");
+  });
+});
+
+// Funn T-0001: meldingen om endringer som er lagt til side (docs/agenter/oppgaver/
+// rett-t0001-synkko.md Omfang 8, testplan avsnitt 1e, 36–40). Køoppføringene er oppdiktet.
+// Feltnavnene hentes fra skjemadefinisjonen (`trialForm`), ikke skrevet av fra koden.
+describe("Kunne ikke sendes (setAsideMessage)", () => {
+  // Samme vei som lageret: oppføringer lagt til side og ikke løst -> UnsentChange -> tekst.
+  const setAsideMessage = (entries: readonly OutboxEntry[]) =>
+    unsentChangesText(
+      entries.filter(isUnresolvedSetAside).map((e) => ({
+        table: e.table,
+        fieldKey:
+          e.table === "trial_forms" || typeof e.data.field_key !== "string"
+            ? null
+            : e.data.field_key,
+      })),
+    );
+  const AT = "2026-11-11T09:00:00.000Z";
+  const label = (key: string) => listTrialFields(trialForm).find((f) => f.key === key)!.label;
+
+  function entry(
+    seq: number,
+    table: OutboxEntry["table"],
+    data: Record<string, unknown>,
+    setAside: { at: string; resolved?: boolean } | null = { at: AT },
+  ): OutboxEntry {
+    return {
+      seq,
+      op: "PUT",
+      table,
+      id: `0192d3a0-0000-7000-8000-00000000000${seq}`,
+      data,
+      ...(setAside && { setAside }),
+    } as OutboxEntry;
+  }
+
+  const answer = (seq: number, fieldKey: string, setAside?: { at: string; resolved?: boolean }) =>
+    entry(seq, "trial_answers", { trial_form_id: FORM_ID, field_key: fieldKey }, setAside);
+
+  it("Kunne ikke sendes: <feltnavn> med navn fra skjemaet", () => {
+    expect(label("general_description")).toBe("Generell beskrivelse");
+    expect(setAsideMessage([answer(1, "general_description")])).toBe(
+      "Kunne ikke sendes: Generell beskrivelse",
+    );
+    expect(setAsideMessage([answer(1, "roof_description")])).toBe(
+      `Kunne ikke sendes: ${label("roof_description")}`,
+    );
+  });
+
+  it("bilde gir «bilde i <feltnavn>»", () => {
+    const photo = entry(1, "trial_photos", {
+      trial_form_id: FORM_ID,
+      field_key: "cover_photo",
+      name: "test-image.png",
+      size_bytes: 120,
+    });
+    expect(setAsideMessage([photo])).toBe(`Kunne ikke sendes: bilde i ${label("cover_photo")}`);
+  });
+
+  it("testskjemaet", () => {
+    expect(setAsideMessage([entry(1, "trial_forms", { name: "Testskjema 1" })])).toBe(
+      "Kunne ikke sendes: testskjemaet",
+    );
+  });
+
+  it("flere felt skilles med komma, og samme felt nevnes én gang", () => {
+    expect(
+      setAsideMessage([
+        answer(1, "general_description"),
+        answer(2, "summary"),
+        answer(3, "general_description"),
+      ]),
+    ).toBe("Kunne ikke sendes: Generell beskrivelse, Samlet kommentar");
+  });
+
+  it("ingen melding når alt er løst, eller når ingenting er lagt til side", () => {
+    expect(setAsideMessage([])).toBeNull();
+    expect(
+      setAsideMessage([answer(1, "general_description", { at: AT, resolved: true })]),
+    ).toBeNull();
+    // Vanlige oppføringer i køen (ikke lagt til side) gir ingen melding
+    expect(setAsideMessage([entry(1, "trial_answers", { field_key: "summary" }, null)])).toBeNull();
+    // Bare de som ikke er løst, nevnes
+    expect(
+      setAsideMessage([
+        answer(1, "general_description", { at: AT, resolved: true }),
+        answer(2, "summary"),
+      ]),
+    ).toBe("Kunne ikke sendes: Samlet kommentar");
   });
 });

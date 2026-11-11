@@ -551,3 +551,123 @@ describe("lagt til side etter 400 (outbox.ts)", () => {
     }
   });
 });
+
+// Funn T-0001: endringer som er lagt til side (docs/agenter/oppgaver/rett-t0001-synkko.md
+// Omfang 6–7, testplan avsnitt 1c, 24–32). Merket `setAside` ligger på oppføringen i køen. Her
+// prøves de rene funksjonene med oppføringer som allerede har merket; hvordan merket settes ved
+// 400, prøves gjennom lageret i trial-store-set-aside.test.ts. Alle data er oppdiktet.
+type SetAsideEntry = OutboxEntry & { setAside?: { at: string; resolved?: boolean } };
+
+describe("endringskøen: lagt til side (T-0001)", () => {
+  const AT = "2026-11-11T09:00:00.000Z";
+  const answerKey = localRowKey("trial_answers", {
+    id: ANSWER_X,
+    trial_form_id: FORM,
+    field_key: "general_description",
+  });
+
+  /** Kø der svaret på «Generell beskrivelse» (seq 2) er lagt til side. */
+  function withSetAside(resolved?: boolean): OutboxState {
+    const poisoned: SetAsideEntry = {
+      ...answerEntry(ANSWER_X, "general_description", "Fukt\u0000 i kjeller"),
+      seq: 2,
+      setAside: resolved === undefined ? { at: AT } : { at: AT, resolved },
+    };
+    return createOutboxState([
+      { ...formEntry(), seq: 1 },
+      poisoned,
+      { ...answerEntry(ANSWER_Y, "building_year", 1985), seq: 3 },
+    ]);
+  }
+
+  it("lagt til side sendes ikke", () => {
+    const state = withSetAside();
+    const { batch } = take(state);
+    expect(batch.map((entry) => entry.seq)).toEqual([1, 3]);
+
+    // Står bare lagt-til-side-oppføringer igjen, gir takeBatch ingen bunt
+    const onlySetAside = createOutboxState(state.entries.filter((entry) => entry.seq === 2));
+    expect(takeBatch(onlySetAside, 500)).toBeNull();
+  });
+
+  it("lagt til side slettes aldri av ackBatch for andre endringer", () => {
+    let state = withSetAside();
+    for (let round = 0; round < 3; round++) {
+      state = enqueue(state, answerEntry(ANSWER_Y, "building_year", 1990 + round));
+      const { state: sending } = take(state);
+      state = ackBatch(sending);
+    }
+    const kept = state.entries.find((entry) => entry.seq === 2) as SetAsideEntry | undefined;
+    expect(kept, "oppføringen som er lagt til side").toBeDefined();
+    expect(kept!.setAside?.at).toBe(AT);
+    expect(kept!.data.value).toBe(JSON.stringify("Fukt\u0000 i kjeller"));
+  });
+
+  it("lagt til side overlever omlasting (createOutboxState fra lagret kø)", () => {
+    const state = withSetAside();
+    const stored = JSON.parse(JSON.stringify(state.entries)) as SetAsideEntry[];
+    // Lagret i tilfeldig rekkefølge (IndexedDB), lest inn på nytt
+    const reloaded = createOutboxState([stored[2]!, stored[0]!, stored[1]!]);
+    expect(reloaded.entries.map((entry) => entry.seq)).toEqual([1, 2, 3]);
+    expect((reloaded.entries[1] as SetAsideEntry).setAside).toEqual({ at: AT });
+    expect(reloaded.nextSeq).toBeGreaterThan(3);
+  });
+
+  it("ny endring i samme felt blir ny oppføring og fletter ikke inn i den som er lagt til side", () => {
+    const state = withSetAside();
+    const next = enqueue(state, answerEntry(ANSWER_X, "general_description", "Fukt i kjeller"));
+    expect(next.entries).toHaveLength(4);
+    const old = next.entries.find((entry) => entry.seq === 2)!;
+    expect(old.data.value).toBe(JSON.stringify("Fukt\u0000 i kjeller"));
+    const added = next.entries.find((entry) => entry.seq !== 2 && entry.id === ANSWER_X)!;
+    expect(added).toBeDefined();
+    expect(added.seq).toBeGreaterThan(3);
+    expect(added.data.value).toBe(JSON.stringify("Fukt i kjeller"));
+    expect((added as SetAsideEntry).setAside).toBeUndefined();
+    // Den nye sendes, den gamle ikke
+    const seqs = take(next).batch.map((entry) => entry.seq);
+    expect(seqs).toContain(added.seq);
+    expect(seqs).not.toContain(2);
+  });
+
+  it("pendingKeys har feltet så lenge det er lagt til side og ikke løst", () => {
+    expect(pendingKeys(withSetAside(), localRowKey).has(answerKey)).toBe(true);
+    expect(pendingKeys(withSetAside(false), localRowKey).has(answerKey)).toBe(true);
+  });
+
+  it("løst (setAside.resolved) er ute av pendingKeys, men ligger fortsatt i køen", () => {
+    const state = withSetAside(true);
+    expect(pendingKeys(state, localRowKey).has(answerKey)).toBe(false);
+    expect(state.entries.some((entry) => entry.seq === 2)).toBe(true);
+    // De andre nøklene er der som før
+    expect(pendingKeys(state, localRowKey).has(localRowKey("trial_forms", { id: FORM }))).toBe(
+      true,
+    );
+  });
+
+  it("serverens svar overskriver ikke et felt som er lagt til side og ikke løst", () => {
+    const local = {
+      id: ANSWER_X,
+      trial_form_id: FORM,
+      field_key: "general_description",
+      value: JSON.stringify("Fukt\u0000 i kjeller"),
+      text_state: null,
+    };
+    const incoming = { ...local, value: JSON.stringify("Fukt i kjeller") };
+    const result = applyIncoming(
+      "trial_answers",
+      [local],
+      [{ table: "trial_answers", kind: "update", key: answerKey, row: incoming }],
+      pendingKeys(withSetAside(), localRowKey),
+    );
+    expect(result.rows[0]!.value).toBe(JSON.stringify("Fukt\u0000 i kjeller"));
+    expect(result.skippedKeys).toEqual([answerKey]);
+  });
+
+  it("shouldAckBatch er uendret: bare 200 slipper bunten, også ved 400", () => {
+    expect(shouldAckBatch(200)).toBe(true);
+    for (const status of [201, 204, 400, 401, 403, 409, 413, 500, 503, undefined]) {
+      expect(shouldAckBatch(status), String(status)).toBe(false);
+    }
+  });
+});

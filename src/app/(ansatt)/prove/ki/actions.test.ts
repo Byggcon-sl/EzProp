@@ -525,3 +525,44 @@ describe("6 tilgang per rolle (requestTrialSuggestion og decideTrialSuggestion)"
     });
   });
 });
+
+// Funn T-0001: tekst kopiert fra PDF kan ha nulltegn (docs/agenter/oppgaver/rett-t0001-synkko.md
+// Omfang 3, testplan avsnitt 2d, 66–67). Teksten er oppdiktet.
+describe("T-0001 tekst med nulltegn på /prove/ki", () => {
+  const POISON = "taket\u0000 er gammelt";
+
+  it("handlingen gir forslag for tekst med nulltegn, ikke «Noe gikk galt»", async () => {
+    await signedIn();
+    const input = requestInput({ text: POISON });
+
+    const result = await requestTrialSuggestion(input);
+
+    expect(result.kind).toBe("suggestion");
+    if (result.kind !== "suggestion") return;
+    expect(result.text).toBe("Taket er gammelt.");
+    expect(result.logged).toEqual({ status: "suggested", outcome: "ok" });
+    const row = await aiRow(input.requestId);
+    expect(row?.output_text).toBe(result.text);
+    expect(await allAiRows()).toHaveLength(1);
+  });
+
+  it("fremmed organisasjon gir nei også med giftig tekst", async () => {
+    const other = await createOrganization("Oppdiktet Takst A");
+    await enableAi(other.id);
+    // Uten ansattrad: ingen tilgang, ingen rad
+    session.actor = await createUser();
+    expect(await requestTrialSuggestion(requestInput({ text: POISON }))).toEqual({
+      kind: "failed",
+      message: "Du har ikke tilgang til dette.",
+    });
+    expect(await allAiRows()).toHaveLength(0);
+
+    // Ansatt i B med organisasjons-id fra A i inndata: raden havner i B, aldri i A
+    const { organization } = await signedIn(["inspector"], "Oppdiktet Takst B");
+    const input = requestInput({ text: POISON, organizationId: other.id });
+    await requestTrialSuggestion(input);
+    const rows = await allAiRows();
+    expect(rows.filter((row) => row.organization_id === other.id)).toHaveLength(0);
+    expect(rows.every((row) => row.organization_id === organization.id)).toBe(true);
+  });
+});

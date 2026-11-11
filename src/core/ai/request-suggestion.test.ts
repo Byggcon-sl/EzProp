@@ -44,6 +44,7 @@ import {
   type KnownSeed,
 } from "../../../tests/known-values";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
+import { AiRequestRejectedError } from "./errors";
 import { PROMPT_INPUT_SEPARATOR } from "./features";
 import { redactFields } from "./redaction";
 
@@ -1709,6 +1710,191 @@ describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
     const stored = JSON.stringify(row);
     expect(stored).not.toContain("91234567");
     expect(stored).not.toContain("1234567");
+    expect(JSON.stringify(result)).not.toContain("1234567");
+  });
+});
+
+/*
+ * Funn T-0001: tegn databasen ikke tar (docs/agenter/oppgaver/rett-t0001-synkko.md Omfang 3,
+ * testplan avsnitt 2c, 58–65 og 68). Vasken kommer etter trinn 1–3 og før personvernvasken
+ * (`redactFields`), og svaret fra leverandøren vaskes før loggen og klienten. Bare den falske
+ * leverandøren. Teksten og telefonnummeret er oppdiktet.
+ */
+describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
+  const POISON = "Fukt\u0000 i kjeller";
+  const CLEAN = "Fukt i kjeller";
+
+  /** Ingen nulltegn eller ensomme surrogater i raden (JSON skriver dem som \u-koder). */
+  function expectStorable(value: unknown) {
+    expect(JSON.stringify(value)).not.toMatch(/\\u0000|\\ud[89a-f][0-9a-f]{2}/i);
+  }
+
+  it("tekst med nulltegn gir forslag og én rad i ai_usage_log", async () => {
+    const { grant } = await aiOrganization();
+    const request = validRequest({ fields: { text: POISON } });
+
+    const result = await requestSuggestion(grant, request);
+
+    expect(result.kind).toBe("suggestion");
+    expect(await aiRowCount()).toBe(1);
+    const row = (await aiRow(request.requestId))!;
+    expect(row.status).toBe("suggested");
+    expect(row.outcome).toBe("ok");
+    expectStorable(row);
+    expectStorable(result);
+  });
+
+  it("ensomt surrogat i teksten gir også forslag og rad", async () => {
+    const { grant } = await aiOrganization();
+    const request = validRequest({ fields: { text: "Merk\uD800 her" } });
+    const result = await requestSuggestion(grant, request);
+    expect(result.kind).toBe("suggestion");
+    expectStorable(await aiRow(request.requestId));
+  });
+
+  it("leverandøren og personvernvasken får vasket tekst", async () => {
+    const { grant } = await aiOrganization();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+
+    await requestSuggestion(grant, validRequest({ fields: { text: POISON } }));
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    const prompt = spy.mock.calls[0]![0].prompt;
+    expect(prompt).not.toContain("\u0000");
+    expect(sentInput(prompt)).toBe(CLEAN);
+    expect(vi.mocked(redactFields)).toHaveBeenCalledWith(grant, null, { text: CLEAN });
+  });
+
+  it("svar med nulltegn fra leverandøren lagres vasket, og klienten får samme tekst", async () => {
+    const { grant } = await aiOrganization();
+    vi.spyOn(fakeAiProvider, "complete").mockResolvedValue({
+      outcome: "ok",
+      text: "Bedre\u0000 tekst\uDC00.",
+      tokensIn: 3,
+      tokensOut: 2,
+      cost: 0,
+      currency: "NOK",
+    });
+    const request = validRequest();
+
+    const result = await requestSuggestion(grant, request);
+
+    expect(result.kind).toBe("suggestion");
+    if (result.kind !== "suggestion") return;
+    const row = (await aiRow(request.requestId))!;
+    expect(row.output_text).toBe("Bedre tekst.");
+    expect(result.text).toBe(row.output_text);
+  });
+
+  it("input_summary regnes av vasket tekst", async () => {
+    const { grant } = await aiOrganization();
+    const request = validRequest({ fields: { text: POISON } });
+    await requestSuggestion(grant, request);
+    expect((await aiRow(request.requestId))!.input_summary).toEqual({ text: CLEAN.length });
+  });
+
+  it("tekst som er tom etter vask gir avslag, ikke unntak; verken vasken eller leverandøren kalles", async () => {
+    const { grant } = await aiOrganization();
+    const baseline = await neutralRequestRejection(grant);
+    vi.mocked(redactFields).mockClear();
+    const complete = vi.spyOn(fakeAiProvider, "complete");
+    const auditBefore = await auditCount();
+
+    for (const text of ["\u0000\u0000", "\uD800", "\u0000\uDC00\u0000"]) {
+      const error = await captureError(() =>
+        requestSuggestion(grant, validRequest({ fields: { text } })),
+      );
+      expect(error).toBeInstanceOf(AiRequestRejectedError);
+      expectSameRejection(error, baseline);
+    }
+    expect(redactFields).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+    expect(await auditCount()).toBe(auditBefore);
+  });
+
+  it("tekst som er tom etter vask avvises før oppdraget slås opp og før sperren", async () => {
+    // Sperret leverandør ville gitt en blocked-rad; tom tekst etter vask skal avvises før det
+    const { grant } = await aiOrganization();
+    const baseline = await neutralRequestRejection(grant);
+    swap.provider = realLikeProvider();
+    const error = await captureError(() =>
+      requestSuggestion(grant, validRequest({ fields: { text: "\u0000" } })),
+    );
+    expectSameRejection(error, baseline);
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it("feltkodene vaskes ikke: feltkode med nulltegn gir samme avslag som ukjent felt", async () => {
+    const { grant } = await aiOrganization();
+    const baseline = await neutralRequestRejection(grant);
+    const complete = vi.spyOn(fakeAiProvider, "complete");
+
+    const error = await captureError(() =>
+      requestSuggestion(grant, validRequest({ fields: { "text\u0000": CLEAN } })),
+    );
+
+    expectSameRejection(error, baseline);
+    expect(complete).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it("rekkefølgen holder: annen organisasjon nektes før vask, og ingen rad skrives", async () => {
+    const a = await aiOrganization("Oppdiktet Takst A");
+    const assignmentA = await createAssignment(a.organization.id);
+    const b = await aiOrganization("Oppdiktet Takst B");
+    vi.mocked(redactFields).mockClear();
+    const complete = vi.spyOn(fakeAiProvider, "complete");
+
+    // Tilgangssjekken mot A for en ansatt i B
+    await expect(requireOrganizationAccess(b.actor, a.organization.id)).rejects.toThrow(
+      AccessDeniedError,
+    );
+    // A sitt oppdrag i en forespørsel fra B, med giftig tekst
+    const baseline = await neutralRequestRejection(b.grant);
+    const error = await captureError(() =>
+      requestSuggestion(
+        b.grant,
+        validRequest({ assignmentId: assignmentA.id, fields: { text: POISON } }),
+      ),
+    );
+    expectSameRejection(error, baseline);
+    expect(redactFields).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it("admin får forslag med giftig tekst", async () => {
+    const { organization } = await aiOrganization();
+    const admin = await employeeWithGrant(organization.id, ["admin"], "Oppdiktet Admin");
+    const request = validRequest({ fields: { text: POISON } });
+
+    const result = await requestSuggestion(admin.grant, request);
+
+    expect(result.kind).toBe("suggestion");
+    expect((await aiRow(request.requestId))!.employee_id).toBe(admin.grant.employeeId);
+  });
+
+  it("telefonnummer med nulltegn mellom sifrene blir vasket bort av personvernvasken", async () => {
+    const { grant } = await aiOrganization();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const request = validRequest({
+      target: trialTarget(),
+      fields: { text: "Ring 9\u00001234567" },
+    });
+
+    const result = await requestSuggestion(grant, request);
+
+    expect(result.kind).toBe("suggestion");
+    const input = sentInput(spy.mock.calls[0]![0].prompt);
+    expect(input).toContain("[telefon]");
+    expect(input).not.toContain("91234567");
+    expect(input).not.toContain("1234567");
+    expect(input).not.toContain("\u0000");
+    const row = (await aiRow(request.requestId))!;
+    expect(JSON.stringify(row)).not.toContain("1234567");
+    expect(JSON.stringify(row.input_summary)).not.toContain("1234567");
+    expect(row.redacted_count).toBe(1);
     expect(JSON.stringify(result)).not.toContain("1234567");
   });
 });
