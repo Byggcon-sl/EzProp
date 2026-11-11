@@ -7,6 +7,14 @@
  */
 
 export { AI_QUEUE_ALLOWED_FIELDS } from "./allowed-fields";
+export { AiQueueUnavailableError } from "./errors";
+export { createMemoryAiQueueStore } from "./memory-store";
+export type { MemoryAiQueueStore, MemoryAiQueueStoreOptions } from "./memory-store";
+export { AI_QUEUE_GAVE_UP_MESSAGE, AI_QUEUE_REJECT_MESSAGES } from "./messages";
+export { classifyQueueOutcome } from "./outcome";
+export { clearAiQueue, createAiQueue } from "./queue";
+export { createIndexedDbAiQueueStore } from "./queue-store";
+export { aiQueueEntrySchema, parseAiQueueEntry } from "./schema";
 export {
   AI_QUEUE_DB_NAME,
   AI_QUEUE_DB_VERSION,
