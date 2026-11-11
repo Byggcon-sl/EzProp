@@ -17,7 +17,7 @@ import {
 } from "../../../../tests/offline-trial";
 import { applyTextEdit, createTextState, mergeTextStates, textOf } from "../text-merge";
 import { applyTrialChanges } from "./apply-changes";
-import { InvalidTrialChangeError, TrialIdConflictError } from "./errors";
+import { InvalidTrialChangeError, TrialChangeRejectedError, TrialIdConflictError } from "./errors";
 import type { TrialChangeOperation } from "./types";
 
 // Mottak av endringsbunter fra enhetene (docs/funksjoner/fase1-kandidat-powersync.md pkt. 11).
@@ -554,5 +554,172 @@ describe("applyTrialChanges", () => {
       expect(line).not.toContain("HEMMELIG-MARKØR-1234");
       expect(line).not.toContain(textState);
     }
+  });
+});
+
+// Funn T-0001: tegn databasen ikke tar, vaskes; en verdi som likevel ikke kan lagres, gir en feil
+// som peker på endringen. Testplan docs/agenter/oppgaver/rett-t0001-synkko-testplan.md, 41-49.
+describe("applyTrialChanges med tegn og verdier databasen ikke tar", () => {
+  const POISON = "Fukt\u0000 i kjeller";
+
+  /** Falsk transaksjon: alle oppslag gir ingen rader, og `insert` feiler med `error`. */
+  function failingInsertTransaction(error: Error) {
+    const query = { from: () => query, where: () => query, limit: () => Promise.resolve([]) };
+    const tx = {
+      select: () => query,
+      insert: () => ({ values: () => Promise.reject(error) }),
+    };
+    return vi
+      .spyOn(db, "transaction")
+      .mockImplementation(((callback: (t: unknown) => Promise<unknown>) => callback(tx)) as never);
+  }
+
+  it("nulltegn i Generell beskrivelse først i bunten gir tre lagrede svar uten nulltegn", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+    const textState = applyTextEdit(createTextState(""), POISON);
+
+    await expect(
+      applyTrialChanges(actor, organizationId, [
+        answerOp(formId, "general_description", POISON, { text_state: textState }),
+        answerOp(formId, "building_year", 1985),
+        answerOp(formId, "summary", `Samlet ${POISON}`),
+      ]),
+    ).resolves.toEqual({ applied: 3 });
+
+    const rows = await answerRows(formId);
+    expect(rows).toHaveLength(3);
+    for (const row of rows) expect(JSON.stringify(row.value)).not.toContain("\\u0000");
+    const byKey = Object.fromEntries(rows.map((row) => [row.fieldKey, row]));
+    expect(byKey.general_description!.value).toBe("Fukt i kjeller");
+    expect(byKey.building_year!.value).toBe(1985);
+    expect(byKey.summary!.value).toBe("Samlet Fukt i kjeller");
+  });
+
+  it("ensomt surrogat i jsonb-verdi og i navn fjernes", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = uuidv7();
+    await applyTrialChanges(actor, organizationId, [
+      formOp(formId, { name: "Skjema a\uD800b" }),
+      answerOp(formId, "drill_measurements", [{ location: "a\uD800b", value: 3, note: null }]),
+    ]);
+    expect((await formRow(formId))!.name).toBe("Skjema ab");
+    const [row] = await answerRows(formId, "drill_measurements");
+    expect(row!.value).toEqual([{ location: "ab", value: 3, note: null }]);
+  });
+
+  it("text_state lagres urørt og kan flettes etterpå", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+    const first = applyTextEdit(createTextState(""), POISON);
+    await applyTrialChanges(actor, organizationId, [
+      answerOp(formId, "general_description", POISON, { text_state: first }),
+    ]);
+    const [stored] = await answerRows(formId, "general_description");
+    expect(stored!.textState).toBe(first);
+
+    const second = applyTextEdit(first, `${POISON} og loft`);
+    await applyTrialChanges(actor, organizationId, [
+      answerOp(formId, "general_description", "", { text_state: second }),
+    ]);
+    const [merged] = await answerRows(formId, "general_description");
+    expect(textOf(merged!.textState!)).toBe(textOf(mergeTextStates(first, second)));
+    expect(merged!.value).toBe("Fukt i kjeller og loft");
+  });
+
+  it("field_key og id vaskes ikke: nulltegn i dem gir feil, ikke stille lagring", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+    const answerId = uuidv7();
+    const error = await applyTrialChanges(actor, organizationId, [
+      answerOp(formId, "floors\u0000", 2, {}, answerId),
+    ]).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(TrialChangeRejectedError);
+    expect((error as TrialChangeRejectedError).change).toEqual({
+      id: answerId,
+      table: "trial_answers",
+      field_key: null,
+    });
+
+    await expect(
+      applyTrialChanges(actor, organizationId, [
+        answerOp(formId, "floors", 2, {}, `${answerId}\u0000`),
+      ]),
+    ).rejects.toThrow(InvalidTrialChangeError);
+    expect(await answerRows(formId)).toHaveLength(0);
+  });
+
+  it("for stor size_bytes gir feil som peker på endringen, og ingen av de gode er lagret", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+    const photoId = uuidv7();
+    const before = await countRows();
+
+    const good = [answerOp(formId, "floors", 2), answerOp(formId, "summary", "Tett tak")];
+    const error = await applyTrialChanges(actor, organizationId, [
+      ...good,
+      photoOp(formId, "cover_photo", { size_bytes: 3_000_000_000 }, photoId),
+    ]).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(TrialChangeRejectedError);
+    expect((error as TrialChangeRejectedError).change).toEqual({
+      id: photoId,
+      table: "trial_photos",
+      field_key: "cover_photo",
+    });
+    expect(await countRows()).toEqual(before);
+
+    // Sendt på nytt uten den giftige blir alle lagret
+    await expect(applyTrialChanges(actor, organizationId, good)).resolves.toEqual({ applied: 2 });
+    expect(await answerRows(formId)).toHaveLength(2);
+  });
+
+  it("fremmed organisasjon gir AccessDeniedError også med giftig innhold", async () => {
+    const a = await setupOrganization("admin", "Organisasjon A");
+    const b = await setupOrganization("admin", "Organisasjon B");
+    const formId = uuidv7();
+    await expect(
+      applyTrialChanges(b.actor, a.organizationId, [
+        formOp(formId, { name: POISON }),
+        answerOp(formId, "summary", POISON),
+        photoOp(formId, "cover_photo", { size_bytes: 3_000_000_000 }),
+      ]),
+    ).rejects.toThrow(AccessDeniedError);
+    expect(await countRows()).toEqual({ forms: 0, answers: 0, photos: 0 });
+  });
+
+  it("admin kan synke tekst med nulltegn", async () => {
+    const { actor, organizationId } = await setupOrganization("admin");
+    const formId = uuidv7();
+    await expect(
+      applyTrialChanges(actor, organizationId, [
+        formOp(formId, { name: POISON }),
+        answerOp(formId, "summary", POISON),
+      ]),
+    ).resolves.toEqual({ applied: 2 });
+    expect((await formRow(formId))!.name).toBe("Fukt i kjeller");
+  });
+
+  it("databasefeil i klasse 22 fra en operasjon pakkes inn, 23505 kastes videre uendret", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = uuidv7();
+
+    const wrapped = new Error("Failed query", {
+      cause: Object.assign(new Error("ugyldig verdi"), { code: "22021" }),
+    });
+    failingInsertTransaction(wrapped);
+    const rejected = await applyTrialChanges(actor, organizationId, [formOp(formId)]).catch(
+      (caught: unknown) => caught,
+    );
+    expect(rejected).toBeInstanceOf(TrialChangeRejectedError);
+    expect((rejected as TrialChangeRejectedError).change).toEqual({
+      id: formId,
+      table: "trial_forms",
+      field_key: null,
+    });
+    vi.restoreAllMocks();
+
+    const unique = Object.assign(new Error("duplicate key"), { code: "23505" });
+    failingInsertTransaction(unique);
+    await expect(applyTrialChanges(actor, organizationId, [formOp(formId)])).rejects.toBe(unique);
   });
 });
