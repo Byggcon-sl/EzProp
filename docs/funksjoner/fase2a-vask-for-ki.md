@@ -174,6 +174,13 @@ Ingen fagregler. Vasken er kode med testsaker (oppdiktede eksempler).
 - **Mykt slettede rader og feil som stenger:** alle tre vurderinger var enige; tatt inn.
 - **Ordlisten:** `never_fields` og `field_sources` holdes utenfor (forenkler 5).
 
+## Valg under bygging (bit 2, 11.11.2026)
+- `src/core/ai/redaction.ts`: `KnownValues` har `personNames` (frase og ord for ord), `phrases` (bare hel frase), `emails`, `phones`, `orgNumbers`, `addresses { full, places, postalCodes }` og `cadastral { units, municipalityNumbers }`. `emptyKnownValues()` eksporteres i tillegg, til tester og `redactFields` uten oppdrag.
+- Alle kolonnene i punkt 2 finnes i skjemaet; ingen mangler. Ordren finnes både via `assignments.order_id` og `orders.assignment_id`.
+- Firmanavn vaskes også uten selskapsform («Testesen Bygg AS» → «Testesen Bygg»), men bare når det står igjen minst to ord, så et enkelt fagord aldri vaskes alene. Fraser med komma (`ordered_by_text`) vaskes også del for del. Begge er fortsatt hel frase, ikke ord for ord (A174).
+- Telefon som kjent verdi treffer med og uten mellomrom, punktum og bindestrek, og med `+47`/`0047` foran. Matrikkelkombinasjonen godtar et firesifret kommunenummer foran (`1804-12/34`) også når kommunenummeret ikke er kjent.
+- Alle kjente verdier samles i ett mønster (lengste først) og kjøres i én runde, så en plassholder aldri vaskes på nytt.
+
 ## Roller
 - **ki-ansvarlig:** sjekker at vasken ligger i den eneste veien til leverandøren, utfallet `blocked`, testsettet med fasit og rettingen av ADR 0006.
 - **sikkerhet-personvern:** gjennomgår mønstrene, de kjente verdiene, «aldri»-listen og tenant-isolasjonen.
