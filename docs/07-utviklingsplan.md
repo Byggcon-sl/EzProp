@@ -72,7 +72,7 @@ Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3
 | 0a Repo og database | Ferdig 28.10.2026 |
 | 1 Prøve uten nett | Ferdig 10.11.2026. Ståle har kjørt prøvene på ekte iPad og godkjent ADR 0004 (egenbygd synk). |
 | 0b Innlogging, organisasjon, roller | Ferdig, unntatt felles innlogging med Optiplan (venter på S6) |
-| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127) og forslagsmønsteret (PR #131) er levert. Neste: «Vask før KI» (2a-1). |
+| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127) og forslagsmønsteret (PR #131) er levert. Vask før KI er bygget. Neste: «Evalueringssett» (2a-1). |
 | Minimum før ekte data | To av ni punkter levert. Testmiljøet er klart (S1, 10.11.2026), så resten kan bygges nå. |
 | 2b og videre | Ikke startet |
 
@@ -126,7 +126,7 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 ### 2a-1 KI-grunnmuren
 
 - [x] **Forslagsmønsteret:** forslag med kilde og status, én felles måte å vise dem på («bruk, behold, nytt forslag» og angre), merking av KI-tekst, og sperren som hindrer publisering med KI-tekst som ikke er godkjent.
-- [ ] **Vask før KI:** navn, e-post, telefon, adresse og matrikkel fjernes før noe sendes. Med test.
+- [x] **Vask før KI:** navn, e-post, telefon, adresse og matrikkel fjernes før noe sendes. Med test.
 - [ ] **Evalueringssett:** fast oppsett for eksempler med fasit per KI-funksjon, og en kommando som kjører settet og viser treffprosent.
 - [ ] **KI-kø:** det som trenger KI, legges i kø og behandles når nettet er tilbake. Brukes på iPaden i fase 2b.
 - [ ] **Beslutningsnotat om KI-leverandør** til Ståle (S8). **Leverandøren er valgt: Anthropic (Ståle 10.11.2026).** Notatet tar for seg modellvalg per funksjon, alternativer for norsk tale til tekst, pris per rapport, databehandleravtale, EU/EØS og ingen trening på våre data.

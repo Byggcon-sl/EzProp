@@ -152,7 +152,7 @@ Ingen fagregler. Vasken er kode med testsaker (oppdiktede eksempler).
 - [ ] KI-forslag kan fortsatt godtas, endres og avvises, og logges (eksisterende tester mot falsk leverandør grønne).
 - [ ] ADR 0006 del 5, 6 og 11 er rettet for `blocked`, `redacted_count`, `input_summary` etter vask, de kjente verdiene, restrisikoen (to-bokstavsnavn, firmanavn bare som frase) og den utvidede «aldri»-listen.
 - [ ] Ingen nye `*-testplan.test.ts`: testene legges i de filene som finnes for området.
-- [ ] Versjon 0.5.4 → 0.5.5. Lint, typesjekk, Vitest og e2e grønne.
+- [ ] Versjon 0.5.6 → 0.5.7. Lint, typesjekk, Vitest og e2e grønne.
 
 ## Beslutninger (autonom modus, føres i `docs/09-apne-sporsmal.md`)
 - **A169** Ett sett mønstre i `src/shared/lib`, brukt av både vasken og loggeren. Loggeren blir strengere, men UUID-er og tider står urørt. Kilde: ADR 0006 del 6, ad-4. **Lett å endre.**
