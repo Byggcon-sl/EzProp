@@ -57,6 +57,12 @@ param msGraphClientSecret string
 @description('Avsenderadresse for e-post. Tom til e-post kobles til.')
 param mailFrom string = ''
 
+// KI-leverandøren (ADR 0006). Tom = KI av. Nøkkelen alene slår ikke på KI: admin må også lage tilkoblingen
+// anthropic og slå på ai.enabled. Navnet ANTHROPIC_API_KEY leses bare gjennom readSecret.
+@description('KI-leverandør: API-nøkkel. Tom = KI av.')
+@secure()
+param anthropicApiKey string
+
 @description('Nøkkelboks (Key Vault) for hemmeligheter, ADR 0005. Av som standard; Ståle slår på med GitHub-variabelen ENABLE_KEY_VAULT.')
 param enableKeyVault bool = false
 
@@ -71,6 +77,7 @@ var kvName = 'kv-ezprop-${environmentName}'
 var defaultAppUrl = 'https://${appName}.azurewebsites.net'
 var betterAuthUrl = empty(appHostname) ? defaultAppUrl : 'https://${appHostname}'
 var emailConfigured = !empty(msGraphTenantId) && !empty(msGraphClientId) && !empty(msGraphClientSecret) && !empty(mailFrom)
+var aiConfigured = !empty(anthropicApiKey)
 
 // Appen snakker med databasen over TLS og sjekker sertifikatet (verify-full, ikke require).
 var databaseUrl = 'postgres://${postgresAdminLogin}:${uriComponent(postgresAdminPassword)}@${postgres.properties.fullyQualifiedDomainName}:5432/${databaseName}?sslmode=verify-full'
@@ -98,6 +105,12 @@ var emailAppSettings = emailConfigured
       { name: 'MS_GRAPH_CLIENT_ID', value: msGraphClientId }
       { name: 'MS_GRAPH_CLIENT_SECRET', value: enableKeyVault ? '@Microsoft.KeyVault(SecretUri=${kvMsGraphClientSecret!.properties.secretUri})' : msGraphClientSecret }
       { name: 'MAIL_FROM', value: mailFrom }
+    ]
+  : []
+
+var aiAppSettings = aiConfigured
+  ? [
+      { name: 'ANTHROPIC_API_KEY', value: enableKeyVault ? '@Microsoft.KeyVault(SecretUri=${kvAnthropicApiKey!.properties.secretUri})' : anthropicApiKey }
     ]
   : []
 
@@ -200,7 +213,7 @@ resource app 'Microsoft.Web/sites@2024-04-01' = {
       ftpsState: 'Disabled'
       http20Enabled: true
       healthCheckPath: '/api/helse'
-      appSettings: concat(baseAppSettings, emailAppSettings)
+      appSettings: concat(baseAppSettings, emailAppSettings, aiAppSettings)
     }
   }
 }
@@ -274,6 +287,14 @@ resource kvMsGraphClientSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = 
   name: 'ms-graph-client-secret'
   properties: {
     value: msGraphClientSecret
+  }
+}
+
+resource kvAnthropicApiKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (enableKeyVault && aiConfigured) {
+  parent: vault
+  name: 'anthropic-api-key'
+  properties: {
+    value: anthropicApiKey
   }
 }
 
