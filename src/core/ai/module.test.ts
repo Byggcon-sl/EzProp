@@ -247,7 +247,7 @@ describe("requestSuggestion", () => {
           for (const req of reqs) {
             try {
               const result = await requestSuggestion(grant, req);
-              if (result.kind !== "disabled") found.push(result.usageId);
+              if ("usageId" in result) found.push(result.usageId);
             } catch (error) {
               if (!(error instanceof AiRequestRejectedError)) throw error;
             }

@@ -458,3 +458,19 @@ describe("checkAiTextApproved: tilgang og tenant (4.23–4.24, 5.2)", () => {
     });
   });
 });
+
+describe("checkAiTextApproved: sperret forespørsel (vask før KI V5.6, ad-1)", () => {
+  it("V5.6 en blocked-rad på samme mål er aldri godkjent", async () => {
+    const ctx = await setup();
+    const target = answerTarget();
+    const blocked = await createAiUsageLog(ctx.organization.id, {
+      employeeId: ctx.grant.employeeId,
+      targetRef: target,
+      outcome: "blocked",
+      status: null,
+      outputText: null,
+    });
+    const item = { aiUsageId: blocked.id, target };
+    expect(await checkAiTextApproved(ctx.grant, [item])).toEqual([item]);
+  });
+});

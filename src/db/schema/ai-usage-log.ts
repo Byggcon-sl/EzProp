@@ -25,8 +25,10 @@ import { employees } from "./employees";
  * `report_id` har ingen fremmednøkkel før `reports` finnes (A158).
  *
  * Kodene under er faste (regel 6). CHECK-reglene må ha de samme kodene.
+ * `blocked` (ad-1, A171): forespørselen ble sperret før leverandøren ble kalt. Skilt fra «KI er av»,
+ * som ikke gir noen rad. Som `no_match` har den tom `status`, `output_text` og `error_code`.
  */
-export const AI_OUTCOMES = ["ok", "no_match", "error"] as const;
+export const AI_OUTCOMES = ["ok", "no_match", "error", "blocked"] as const;
 export type AiOutcome = (typeof AI_OUTCOMES)[number];
 
 export const AI_SUGGESTION_STATUSES = ["suggested", "accepted", "edited", "rejected"] as const;
@@ -79,6 +81,8 @@ export const aiUsageLog = pgTable(
     /** Aldri flyttall. */
     cost: numeric("cost", { precision: 12, scale: 4 }).notNull().default("0"),
     currency: text("currency").notNull().default("NOK"),
+    /** Antall vaskede treff i teksten som ble sendt (A172). Aldri verdiene. */
+    redactedCount: integer("redacted_count").notNull().default(0),
     retainUntil: timestamp("retain_until", { withTimezone: true }).notNull(),
   },
   (table) => [
@@ -112,7 +116,8 @@ export const aiUsageLog = pgTable(
       "ai_usage_log_error_code_check",
       sql`${table.errorCode} is null or (${table.outcome} = 'error' and ${table.errorCode} in (${sqlList(AI_ERROR_CODES)}))`,
     ),
-    // Forslag og status bare når utfallet er ok
+    // Forslag og status bare når utfallet er ok. Gjelder også `blocked`: tom status og tekst.
+    // `error_code` er bare satt når utfallet er `error` (sjekken over).
     check(
       "ai_usage_log_outcome_status_check",
       sql`(${table.outcome} = 'ok' and ${table.status} is not null) or (${table.outcome} <> 'ok' and ${table.status} is null and ${table.outputText} is null)`,
@@ -121,6 +126,7 @@ export const aiUsageLog = pgTable(
       "ai_usage_log_tokens_check",
       sql`${table.tokensIn} >= 0 and ${table.tokensOut} >= 0 and ${table.cost} >= 0`,
     ),
+    check("ai_usage_log_redacted_count_check", sql`${table.redactedCount} >= 0`),
   ],
 );
 export type AiUsageLogRow = typeof aiUsageLog.$inferSelect;

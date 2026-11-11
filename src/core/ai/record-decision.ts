@@ -19,6 +19,8 @@ import { lockTarget, recordStatusChange, sameTargetWhere } from "./usage-log";
  * 2. Etter lesing: manglende rettighet for akkurat funksjonen på raden gir samme nøytrale avslag
  *    som «finnes ikke», så svaret ikke røper hva raden gjelder.
  * Ved avslag endres verken raden eller `audit_log`. Admin har alle rettigheter.
+ * En `blocked`-rad (ad-1) gir samme avslag som «finnes ikke», `no_match` og `error` gir
+ * `AiDecisionError` som før.
  */
 
 /** Om `grant` har rettigheten til minst én KI-funksjon. */
@@ -64,10 +66,13 @@ export async function recordDecision(
       .select({
         feature: aiUsageLog.feature,
         targetRef: aiUsageLog.targetRef,
+        outcome: aiUsageLog.outcome,
       })
       .from(aiUsageLog)
       .where(ownRow);
     if (!found) throw new AiRequestRejectedError();
+    // ad-1: en sperret forespørsel har aldri vært et forslag. Behandles som «finnes ikke».
+    if (found.outcome === "blocked") throw new AiRequestRejectedError();
 
     const definition = getFeatureDefinition(found.feature);
     if (!definition) throw new AiRequestRejectedError();
