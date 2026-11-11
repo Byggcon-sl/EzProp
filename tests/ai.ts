@@ -195,6 +195,10 @@ export async function enableAi(
     status?: string;
     deletedAt?: Date | null;
     connection?: boolean;
+    /** `settings` på tilkoblingen (rå, forbi skjemaet). Standard `{}`. */
+    settings?: Record<string, unknown>;
+    /** `secret_ref` på tilkoblingen (rå). Standard ingen. */
+    secretRef?: string | null;
   } = {},
 ) {
   if (!("enabled" in options) || options.enabled !== undefined) {
@@ -206,6 +210,41 @@ export async function enableAi(
     provider: options.provider ?? "fake",
     status: options.status ?? "active",
     deletedAt: options.deletedAt ?? null,
+    settings: options.settings ?? {},
+    secretRef: options.secretRef ?? null,
+  });
+}
+
+/**
+ * Gyldige innstillinger for tilkoblingen `anthropic` (docs/funksjoner/fase2a-ki-leverandor-
+ * testplan.md, «Avtale om signaturer»). Modellen er et merke, ingen ekte modell-id. Prisene er
+ * oppdiktet.
+ */
+export function anthropicSettings(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    model: "MERKE-MODELL-K7Q",
+    features: ["language_polish"],
+    pricing: { inputPerMillion: 30, outputPerMillion: 150, currency: "NOK" },
+    ...overrides,
+  };
+}
+
+/**
+ * Slår KI på med en gyldig `anthropic`-tilkobling (rå rad): `ai.enabled`, `secret_ref =
+ * ANTHROPIC_API_KEY` og `anthropicSettings`. Nøkkelen settes ikke her; testen setter den med
+ * `vi.stubEnv`.
+ */
+export async function enableAnthropic(
+  organizationId: string,
+  options: Parameters<typeof enableAi>[1] = {},
+) {
+  return enableAi(organizationId, {
+    provider: "anthropic",
+    secretRef: "ANTHROPIC_API_KEY",
+    settings: anthropicSettings(),
+    ...options,
   });
 }
 

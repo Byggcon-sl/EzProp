@@ -24,11 +24,11 @@ describe("faste koder for tilkoblingslaget", () => {
     expect([...INTEGRATION_PORTS]).toEqual(PORTS);
   });
 
-  it("2. e-post har dev_mailbox, server_log og microsoft365; ai har fake; de åtte andre har tom liste", () => {
+  it("2. e-post har dev_mailbox, server_log og microsoft365; ai har fake og anthropic; de åtte andre har tom liste", () => {
     const providers = PROVIDERS_BY_PORT as Record<string, readonly string[]>;
     expect([...providers.email!]).toEqual(["dev_mailbox", "server_log", "microsoft365"]);
-    // Bare den falske leverandøren før vasken og S8 (docs/funksjoner/fase2a-ki-modul-logg.md)
-    expect([...providers.ai!]).toEqual(["fake"]);
+    // Den falske leverandøren og Anthropic (S8, docs/funksjoner/fase2a-ki-leverandor.md Omfang 2)
+    expect([...providers.ai!].sort()).toEqual(["anthropic", "fake"]);
     for (const port of PORTS.filter((p) => p !== "email" && p !== "ai")) {
       expect([...(providers[port] ?? ["mangler"])], port).toEqual([]);
     }
