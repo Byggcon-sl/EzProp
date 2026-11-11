@@ -3,7 +3,7 @@ import { grantHasPermission, type EmployeeGrant } from "@/core/access";
 import { db } from "@/db/client";
 import { aiUsageLog } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
-import { getFeatureDefinition } from "./features";
+import { AI_FEATURES, getFeatureDefinition } from "./features";
 import type { AiOutcome, AiSuggestionStatus } from "./types";
 
 /*
@@ -18,6 +18,9 @@ import type { AiOutcome, AiSuggestionStatus } from "./types";
  * - Avklaring A: `null` for alt som ikke kan vises (finnes ikke, annen organisasjon, mykt
  *   slettet, ugyldig id og manglende rettighet for funksjonen på raden), så svaret aldri røper
  *   om en id finnes.
+ * - Rettigheten sjekkes før raden leses: uten rettigheten til minst én KI-funksjon leses ingenting.
+ *   Admin har alle rettigheter (regel 11).
+ * - En sperret forespørsel (`blocked`, ad-1) er ikke et forslag og gir `null`.
  */
 
 export type AiSuggestionStatusResult = {
@@ -25,10 +28,18 @@ export type AiSuggestionStatusResult = {
   outcome: AiOutcome;
 };
 
+/** Om `grant` har rettigheten til minst én KI-funksjon. */
+function hasAnyAiPermission(grant: EmployeeGrant): boolean {
+  return Object.values(AI_FEATURES).some((definition) =>
+    grantHasPermission(grant, definition.permission),
+  );
+}
+
 export async function getSuggestionStatus(
   grant: EmployeeGrant,
   usageId: string,
 ): Promise<AiSuggestionStatusResult | null> {
+  if (!hasAnyAiPermission(grant)) return null;
   if (typeof usageId !== "string" || !isUuid(usageId)) return null;
 
   const [row] = await db
@@ -46,6 +57,7 @@ export async function getSuggestionStatus(
       ),
     );
   if (!row) return null;
+  if (row.outcome === "blocked") return null;
 
   const definition = getFeatureDefinition(row.feature);
   if (!definition || !grantHasPermission(grant, definition.permission)) return null;

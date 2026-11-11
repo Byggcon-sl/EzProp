@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createLogger, formatLogLine, REDACTED, sanitizeFields, scrubText } from "./logger";
 
@@ -278,4 +280,86 @@ describe("de elleve ordene vaskes fortsatt etter at de eksakte alternativene er 
       expect(sanitizeFields({ [key]: VALUE })).toEqual({ [key]: VALUE });
     },
   );
+});
+
+// Vask før KI (docs/funksjoner/fase2a-vask-for-ki-testplan.md avsnitt 2, ad-4, A169). Loggeren
+// bruker de samme mønstrene som vasken før KI, men uten adresser. Verdiene er oppdiktet.
+describe("loggeren bruker mønstrene fra pii-patterns.ts (V2)", () => {
+  it.each([
+    { name: "åtte sifre sammen", value: "12345678", placeholder: "[telefon]" },
+    { name: "fødselsnummer", value: "01019912345", placeholder: "[fødselsnummer]" },
+    { name: "organisasjonsnummer", value: "123456789", placeholder: "[organisasjonsnummer]" },
+    { name: "fødselsnummer med mellomrom", value: "010199 12345", placeholder: "[fødselsnummer]" },
+    {
+      name: "organisasjonsnummer med NO og MVA",
+      value: "NO 987654321 MVA",
+      placeholder: "[organisasjonsnummer]",
+    },
+    {
+      name: "telefon inntil skråstrek",
+      value: "12345678/87654321",
+      placeholder: "[telefon]/[telefon]",
+    },
+  ])("V2.1 $name vaskes i feilmelding, melding og felt i extra", ({ value, placeholder }) => {
+    expect(scrubText(`Feil for ${value} i oppslaget`)).toBe(`Feil for ${placeholder} i oppslaget`);
+    const line = formatLogLine("error", `Melding ${value}`, {
+      note: `Feltet har ${value}`,
+      nested: { detail: [`i en liste ${value}`] },
+      error: new Error(`Kunne ikke lagre ${value}`),
+    });
+    const text = JSON.stringify(line);
+    expect(text).not.toContain(value);
+    expect(text).toContain(placeholder);
+    expect(line.msg).toBe(`Melding ${placeholder}`);
+    expect(line.note).toBe(`Feltet har ${placeholder}`);
+  });
+
+  it("V2.2 usageId, ref (UUID), ISO-tid, feilkoder og HTTP-status står urørt", () => {
+    const usageId = "018f2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b";
+    const digitsUuid = "12345678-1234-7123-8123-123456789012";
+    const time = "2026-11-11T10:00:00.000Z";
+    const line = formatLogLine("warn", "KI-kallet ga feil", {
+      usageId,
+      ref: digitsUuid,
+      at: time,
+      errorCode: "unavailable",
+      fallback: "unknown",
+      status: 503,
+      statusText: "HTTP 503 etter 30000 ms",
+    });
+    expect(line.usageId).toBe(usageId);
+    expect(line.ref).toBe(digitsUuid);
+    expect(line.at).toBe(time);
+    expect(line.errorCode).toBe("unavailable");
+    expect(line.fallback).toBe("unknown");
+    expect(line.status).toBe(503);
+    expect(line.statusText).toBe("HTTP 503 etter 30000 ms");
+    expect(scrubText(`ref ${usageId} kl ${time}`)).toBe(`ref ${usageId} kl ${time}`);
+  });
+
+  it("V2.3 nøkler vaskes før tallmønstrene: en nøkkel med åtte sifre blir nøkkelplassholder", () => {
+    const account = scrubText("AccountName=fiktiv;AccountKey=12345678;EndpointSuffix=x");
+    expect(account).toContain(`AccountKey=${REDACTED}`);
+    expect(account).not.toContain("[telefon]");
+    const secret = scrubText("grant_type=x&client_secret=12345678&scope=y");
+    expect(secret).toContain(`client_secret=${REDACTED}`);
+    expect(secret).not.toContain("[telefon]");
+    expect(scrubText("Authorization: Bearer 12345678")).toBe(`Authorization: Bearer ${REDACTED}`);
+    const sig = scrubText("https://fiktiv.blob.core.windows.net/c/b?sv=2024&sig=12345678");
+    expect(sig).toContain(`sig=${REDACTED}`);
+    expect(sig).not.toContain("[telefon]");
+  });
+
+  it("V2.4 adresse vaskes ikke i loggen («Storgata 12», «8006 Bodø» står)", () => {
+    expect(scrubText("Adresse Storgata 12, 8006 Bodø")).toBe("Adresse Storgata 12, 8006 Bodø");
+  });
+
+  it("V2.5 statisk: logger.ts importerer mønstrene og har ingen egen e-post- eller telefonregex", () => {
+    const source = readFileSync(join(__dirname, "logger.ts"), "utf8");
+    expect(source).toMatch(/from\s+["']\.\/pii-patterns["']/u);
+    expect(source).not.toMatch(/const\s+(?:EMAIL|PHONE)\s*=/u);
+    // Ingen egen regex med @ (e-post) og ingen egen +47-regex (telefon)
+    expect(source).not.toMatch(/=\s*\/[^\n]*@[^\n]*\/[a-z]*;/u);
+    expect(source).not.toMatch(/\(\?:\\\+\|00\)47/u);
+  });
 });

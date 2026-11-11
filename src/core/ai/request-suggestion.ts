@@ -7,10 +7,12 @@ import { AiRequestRejectedError } from "./errors";
 import { AI_TRIAL_TARGET_TYPE, buildPrompt, getFeatureDefinition } from "./features";
 import { resolveAiProvider } from "./provider-resolution";
 import { fakeAiProvider } from "./providers/fake";
-import type { AiProviderResult } from "./providers/types";
+import type { AiProvider, AiProviderResult } from "./providers/types";
+import { redactFields } from "./redaction";
 import { aiSuggestionRequestShapeSchema, hasOnlyAllowedFields } from "./request";
 import type { AiSuggestionRequest, AiSuggestionResult } from "./types";
 import {
+  insertBlockedRow,
   lockTarget,
   normalizeTarget,
   recordStatusChange,
@@ -22,11 +24,28 @@ import {
 
 /*
  * Be om et KI-forslag (docs/funksjoner/fase2a-ki-modul-logg.md Omfang 3, ADR 0006 del 1 og 4).
- * Rekkefølgen er fast: valider → rettighet → tillatt-liste → oppdrag → samme `requestId` → KI
- * av/på (prøvemålet bare med den falske leverandøren) → kall leverandøren → én transaksjon med
- * ny rad, avvisning av forrige forslag og revisjonslogg. Alle avslag før kallet gir ingen rad,
- * intet kall og ingen linje i `audit_log`. Organisasjon og ansatt kommer bare fra `grant`.
+ * Rekkefølgen er fast (docs/funksjoner/fase2a-vask-for-ki.md Omfang 4 og 5): valider →
+ * rettighet → tillatt-liste → oppdrag → samme `requestId` → «KI er av» (ingen rad) → sperret
+ * (`blocked`-rad, intet kall) → vask → kall leverandøren → én transaksjon med ny rad, avvisning
+ * av forrige forslag og revisjonslogg. Alle avslag før kallet gir ingen rad, intet kall og ingen
+ * linje i `audit_log`. Organisasjon og ansatt kommer bare fra `grant`.
+ *
+ * Leverandøren får bare vasket tekst, også den falske. Kaster vasken, kalles leverandøren aldri
+ * (A176). `provider.complete` kalles bare her, og etter vasken.
  */
+
+/** Måltyper som ikke kan kontrolleres mot organisasjonen ennå (A166, A173). */
+const FAKE_ONLY_TARGET_TYPES: ReadonlySet<string> = new Set([AI_TRIAL_TARGET_TYPE, "answer"]);
+
+/**
+ * Om forespørselen sperres (ad-1): bare den falske leverandøren får prøvemålet og
+ * `answer`, og fritekst uten oppdrag går ikke til en ekte leverandør (spørsmål 58).
+ */
+function isBlocked(provider: AiProvider, targetType: string, assignmentId: string | null): boolean {
+  if (provider === fakeAiProvider) return false;
+  if (FAKE_ONLY_TARGET_TYPES.has(targetType)) return true;
+  return assignmentId === null && targetType !== AI_TRIAL_TARGET_TYPE;
+}
 
 const resultColumns = {
   id: aiUsageLog.id,
@@ -129,14 +148,27 @@ export async function requestSuggestion(
   const resolved = await resolveAiProvider(grant);
   if (resolved.kind === "disabled") return { kind: "disabled" };
   const { provider, model } = resolved;
-  // Prøvesiden (A166): fritekst uten vask, så målet godtas bare med den falske leverandøren.
-  // Ellers samme svar som KI av: ingen rad, intet kall.
-  if (target.type === AI_TRIAL_TARGET_TYPE && provider !== fakeAiProvider) {
-    return { kind: "disabled" };
+  const fieldKeys = Object.keys(input.fields).sort();
+
+  // 7. Sperret: rad med utfallet `blocked`, intet oppslag, ingen vask, intet kall
+  if (isBlocked(provider, target.type, input.assignmentId)) {
+    return insertBlockedRow(grant, {
+      requestId: input.requestId,
+      feature: definition.code,
+      provider: provider.code,
+      model,
+      promptVersion: definition.promptVersion,
+      assignmentId: input.assignmentId,
+      target,
+      sourceFields: fieldKeys,
+    });
   }
 
-  // 7. Ledeteksten bygges bare av feltene på tillatt-listen, og leverandøren kalles
-  const prompt = buildPrompt(definition, input.fields);
+  // 8. Vask: kjente verdier for oppdraget og mønstrene. Kaster den, kalles leverandøren aldri.
+  const redacted = await redactFields(grant, input.assignmentId, input.fields);
+
+  // 9. Ledeteksten bygges bare av de vaskede feltene på tillatt-listen, og leverandøren kalles
+  const prompt = buildPrompt(definition, redacted.fields);
   const result = await callProvider(() =>
     provider.complete({
       feature: definition.code,
@@ -154,10 +186,12 @@ export async function requestSuggestion(
     });
   }
 
-  // 8. Én transaksjon: ny rad, forrige forslag på samme mål avvist, revisjonslogg
+  // 10. Én transaksjon: ny rad, forrige forslag på samme mål avvist, revisjonslogg.
+  // `input_summary` regnes av den vaskede teksten, det som faktisk ble sendt (A172).
   const now = new Date();
-  const fieldKeys = Object.keys(input.fields).sort();
-  const inputSummary = Object.fromEntries(fieldKeys.map((key) => [key, input.fields[key]!.length]));
+  const inputSummary = Object.fromEntries(
+    fieldKeys.map((key) => [key, (redacted.fields[key] ?? "").length]),
+  );
   const errorCode: AiErrorCode | null = result.outcome === "error" ? result.errorCode : null;
 
   return db.transaction(async (tx) => {
@@ -185,6 +219,7 @@ export async function requestSuggestion(
         tokensOut: result.outcome === "error" ? 0 : result.tokensOut,
         cost: result.outcome === "error" ? "0" : String(result.cost),
         currency: result.outcome === "error" ? "NOK" : result.currency,
+        redactedCount: redacted.count,
         retainUntil: retainUntilFrom(now),
         createdAt: now,
         updatedAt: now,

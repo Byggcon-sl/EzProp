@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { FAKE_ERROR_INPUT, FAKE_NO_MATCH_INPUT } from "../src/core/ai/providers/fake";
 import {
+  aiRedactedCountsWithMarker,
   aiUsageRowsForTarget,
   aiUsageRowsWithMarker,
   auditLinesFor,
@@ -312,5 +313,47 @@ test.describe("forslagsmønsteret (pc og ipad)", () => {
     await page.goto("/prove/ki");
     await expect(page.getByRole("heading", { name: "Prøv KI: språkvask", level: 1 })).toBeVisible();
     await expect(askButton(page)).toBeVisible();
+  });
+
+  /*
+   * Vask før KI (docs/funksjoner/fase2a-vask-for-ki-testplan.md avsnitt 9). Den falske
+   * leverandøren får også bare vasket tekst, så forslaget viser plassholderne. Telefonnummer og
+   * e-post er oppdiktet.
+   */
+  test("V9.1 telefon og e-post vaskes før KI: forslaget viser [telefon] og [e-post]", async ({
+    page,
+  }) => {
+    await openTrial(page);
+    const tag = marker();
+    const text = `ring 12345678 eller skriv til ola.prove@example.no ${tag}`;
+    await field(page).fill(text);
+    await askButton(page).click();
+    const suggestion = card(page).getByTestId("ai-suggestion-text");
+    await expect(suggestion).toHaveText(polished(`ring [telefon] eller skriv til [e-post] ${tag}`));
+    await expect(suggestion).not.toContainText("12345678");
+    await expect(suggestion).not.toContainText("ola.prove@example.no");
+    await expect(logged(page)).toHaveText("Logget: forslag");
+    // Egen tekst i feltet står urørt; bare det som sendes til KI, vaskes
+    await expect(field(page)).toHaveValue(text);
+    expect(await aiRedactedCountsWithMarker(tag)).toEqual([{ outcome: "ok", redactedCount: 2 }]);
+  });
+
+  // Admin sin organisasjon (Byggcon) har KI av i seed (KI-modulen 13.7), så her vises at admin
+  // kommer inn og ber om forslag uten å bli stengt ute (regel 11), og at teksten aldri lagres.
+  // Vasket forslag for admin med falsk leverandør prøves i Vitest (access.test.ts, V7.4).
+  test("V9.3 admin kommer inn og kan be om forslag; ingen rad og egen tekst står", async ({
+    page,
+  }) => {
+    await logIn(page);
+    await page.goto("/prove/ki");
+    await expect(page.getByRole("heading", { name: "Prøv KI: språkvask", level: 1 })).toBeVisible();
+    const tag = marker();
+    const text = `admin ringte 87654321 ${tag}`;
+    await field(page).fill(text);
+    await askButton(page).click();
+    await expect(page.getByText("KI er av.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ingen tilgang" })).toHaveCount(0);
+    await expect(field(page)).toHaveValue(text);
+    expect(await aiUsageRowsWithMarker(tag)).toHaveLength(0);
   });
 });

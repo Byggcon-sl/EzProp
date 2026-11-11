@@ -190,6 +190,13 @@
       "when": 1794327363797,
       "tag": "0026_fjern-synkpublikasjoner",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794358972179,
+      "tag": "0027_ki-vask",
+      "breakpoints": true
     }
   ]
 }

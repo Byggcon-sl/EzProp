@@ -140,15 +140,18 @@ describe("vakten for ai_trial: leverandør × mål (2)", () => {
 
     const result = await requestSuggestion(grant, validRequest({ target: trialTarget() }));
 
-    expect(result).toEqual({ kind: "disabled" });
+    // Vask før KI (A171): sperret forespørsel gir `blocked` (én rad), ikke «KI er av»
+    expect(result).toEqual({ kind: "blocked" });
     expect(imagined.complete).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(await aiRowCount()).toBe(0);
+    const rows = await allAiRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.outcome).toBe("blocked");
 
-    // Samme adapter får fortsatt målet answer (vakten gjelder bare prøvemålet)
+    // Målet answer er også sperret mot en annen adapter til `answers` finnes (A173)
     const answer = await requestSuggestion(grant, validRequest());
-    expect(answer.kind).toBe("suggestion");
-    expect(imagined.complete).toHaveBeenCalledTimes(1);
+    expect(answer).toEqual({ kind: "blocked" });
+    expect(imagined.complete).not.toHaveBeenCalled();
   });
 
   it("2.8 tenant: A har fake, B annen leverandør; B får «KI er av», A sin tilkobling brukes aldri", async () => {
