@@ -1,6 +1,6 @@
 # EzProp – levert arbeid (arkiv)
 
-Sist oppdatert: 10.11.2026
+Sist oppdatert: 11.11.2026
 
 Her står det som er levert, slik det sto i planen da det ble krysset av. Filen er historikk. **Planen som gjelder, er `docs/07-utviklingsplan.md`.** Det som fortsatt venter på Ståle fra disse fasene, står under «Venter på Ståle» i planen.
 
@@ -86,7 +86,7 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 
 **Ståle avgjør innen demoen:** ingenting nytt. Betaen er bare Ståle foreløpig, og eierformene og boligtypene er godkjent (27.10.2026).
 
-## Fase 2a – Rapporten på PC (levert til og med 10.11.2026)
+## Fase 2a – Rapporten på PC (levert til og med 11.11.2026)
 
 - [x] Manuell ordre (bestilling lagt inn for hånd fra e-post), med egne felt som gnr/bnr, seksjon, borettslag og om egenerklæring er mottatt, og «gjør om til oppdrag» eller «avvis» (04.11.2026, `docs/funksjoner/fase2a-manuell-ordre.md`, sidene `/ordre`, `/ordre/ny` og `/ordre/[id]`, beslutningene A51–A55; sammen med oppdragsnummeret)
 - [x] **Oppdragsnummer** som `2026-00123`, laget på serveren fra en nummerserie (innspill D9) (04.11.2026, samme kort; tabellen `number_sequences`, én serie per organisasjon og år, A52)
@@ -106,6 +106,8 @@ Målet er å finne ut, før noe stort bygges, om befaring uten nett i nettlesere
 
 - [x] **ADR: KI i bunnen.** Hvordan modulen `src/core/ai` er bygget, hvordan forslag lagres, logges og merkes, hva som aldri sendes til KI, og hvordan leverandøren byttes. Bygger på reglene over og `docs/05-domenemodell.md` 4.12. (10.11.2026, PR #123, `docs/adr/0006-ki-i-bunnen.md`, oppgavekort `docs/agenter/oppgaver/fase2a-adr-ki-i-bunnen.md`, beslutningene A148–A157, spørsmål 54–58)
 - [x] **KI-modulen og loggen:** én vei inn for all KI, tabellen `ai_usage_log` (funksjon, leverandør, kostnad, og om forslaget ble godtatt, endret eller avvist), og en **falsk leverandør** for utvikling og test, slik at alt kan bygges og prøves uten kostnad. (PR #127, 10.11.2026)
+- [x] **Forslagsmønsteret:** forslag med kilde og status, én felles måte å vise dem på («bruk, behold, nytt forslag» og angre), merking av KI-tekst, og sperren som hindrer publisering med KI-tekst som ikke er godkjent. (10.11.2026, PR #131, oppgavekort `docs/funksjoner/fase2a-forslagsmonster.md`, prøvesiden `/prove/ki`, beslutningene A166–A168)
+- [x] **Vask før KI:** navn, e-post, telefon, adresse og matrikkel fjernes før noe sendes. Med test. (11.11.2026, PR #135, oppgavekort `docs/funksjoner/fase2a-vask-for-ki.md`, migreringen `0027_ki-vask`, `src/core/ai/redaction.ts` og `src/shared/lib/pii-patterns.ts`, beslutningene A169–A179)
 - [x] Malmotoren fra `datamodell.md` 4.5: malfamilie, malversjon, seksjon, felt, kontrollpunkt, avviksspørsmål, utfall, standardtiltak og regler. Systemmalen er låst for alle uten maltilgang (10.11.2026, PR #119, oppgavekort `docs/funksjoner/fase2a-malmotor.md`, migreringen `0024_malmotor`, tjenestene i `src/core/templates`, beslutningene A136–A147; små funn i liten oppgave (ac))
 
 ## Minimum før ekte data (levert)
