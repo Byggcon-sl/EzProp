@@ -15,6 +15,9 @@
  * - `serverConfirmed`: siste sending lyktes (eller køen var tom) og leseren har fått 200 med alt
  *   hentet. Usann etter sendefeil, tidsavbrudd og `offline`-hendelsen til neste bekreftede henting.
  *
+ * - Avvist endring (funn T-0001): svarer serveren 400 og peker på én endring, legges den til side
+ *   (merket `setAside` på oppføringen, aldri slettet), og resten sendes videre med en gang.
+ *
  * Én fane sender køen (ingen `navigator.locks`, kjent svakhet).
  */
 import { uuidv7 } from "@/shared/lib/uuid";
@@ -43,15 +46,23 @@ import { ANSWER_FORM_FIELD_INDEX, PHOTO_FORM_INDEX, requestResult } from "./idb"
 import { normalizeLocalRow } from "./normalize-row";
 import {
   ackBatch,
+  changedEntries,
   createOutboxState,
   enqueue,
   keepBatch,
   localRowKey,
   MAX_OPERATIONS_PER_BATCH,
+  openEntryFor,
   outboxBatchBody,
+  pendingCount,
   pendingKeys as outboxPendingKeys,
+  rejectedChangeOf,
+  rejectedChanges,
+  resolveSetAside,
   retryDelayMs,
+  setAsideBatch,
   shouldAckBatch,
+  shouldSetAside,
   takeBatch,
 } from "./outbox";
 import {
@@ -324,12 +335,7 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
             id: str(built.id),
             data: outboxData(table, built),
           });
-          const changed = next.entries.find(
-            (entry) =>
-              entry.table === table &&
-              entry.id === built.id &&
-              !(next.inFlight ?? []).includes(entry.seq),
-          );
+          const changed = openEntryFor(next, table, str(built.id));
           await requestResult(tx.objectStore(db.syncedStoreOf(table)).put(built));
           if (changed) await requestResult(tx.objectStore(LOCAL_OUTBOX_STORE).put(changed));
           await requestResult(
@@ -505,8 +511,9 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
       });
       if (!taken) return true;
       let status: number | undefined;
+      let response: Response | undefined;
       try {
-        const response = await fetch(CHANGES_ROUTE, {
+        response = await fetch(CHANGES_ROUTE, {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
@@ -519,21 +526,56 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
       if (shouldAckBatch(status)) {
         await serial(async () => {
           const sent = outbox.inFlight ?? [];
+          const ackedKeys = new Set(
+            taken.batch.map((entry) => localRowKey(entry.table, { ...entry.data, id: entry.id })),
+          );
+          // En senere endring på samme felt er kvittert: den som er lagt til side, er løst.
+          const resolved = resolveSetAside(outbox, ackedKeys, localRowKey);
+          const updated = changedEntries(outbox, resolved);
           await db.inTransaction([LOCAL_OUTBOX_STORE], "readwrite", async (tx) => {
             const objectStore = tx.objectStore(LOCAL_OUTBOX_STORE);
             for (const seq of sent) await requestResult(objectStore.delete(seq));
+            for (const entry of updated) await requestResult(objectStore.put(entry));
           });
           const now = Date.now();
-          for (const entry of taken.batch) {
-            confirmed.set(localRowKey(entry.table, { ...entry.data, id: entry.id }), now);
-          }
-          outbox = ackBatch(outbox);
+          for (const key of ackedKeys) confirmed.set(key, now);
+          outbox = ackBatch(resolved);
         });
         sendAttempt = 0;
         sendFailed = false;
         notify({ status: true });
         for (const listener of ackListeners) listener();
         continue;
+      }
+      if (shouldSetAside(status)) {
+        // Kroppen leses bare for `endring` (id og tabell); den logges aldri.
+        const body: unknown = await response?.json().catch(() => null);
+        const count = await serial(async () => {
+          const result = setAsideBatch(outbox, rejectedChangeOf(body), new Date().toISOString());
+          if (result.setAside === 0) {
+            outbox = keepBatch(outbox);
+            return 0;
+          }
+          const updated = changedEntries(outbox, result.state);
+          try {
+            // Bare `put`: oppføringen som er lagt til side, blir liggende i køen for alltid.
+            await db.inTransaction([LOCAL_OUTBOX_STORE], "readwrite", async (tx) => {
+              const objectStore = tx.objectStore(LOCAL_OUTBOX_STORE);
+              for (const entry of updated) await requestResult(objectStore.put(entry));
+            });
+          } catch (error) {
+            outbox = keepBatch(outbox);
+            throw error;
+          }
+          outbox = result.state;
+          return result.setAside;
+        });
+        if (count > 0) {
+          // Bare status og antall i loggen, aldri innholdet eller feltet.
+          console.warn(`Synk: serveren svarte 400 på ${count} endringer. Lagt til side.`);
+          notify({ status: true });
+          continue;
+        }
       }
       await serial(async () => {
         outbox = keepBatch(outbox);
@@ -827,7 +869,8 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
       return {
         online: isOnline(),
         serverConfirmed: !sendFailed && !contactLost && reader.serverConfirmed(),
-        pendingChanges: outbox.entries.length,
+        pendingChanges: pendingCount(outbox),
+        rejected: rejectedChanges(outbox),
         pendingPhotos: photos.length,
       };
     },

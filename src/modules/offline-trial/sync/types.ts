@@ -84,6 +84,17 @@ export interface TrialSyncStatus {
   pendingChanges: number;
   /** Bilder på denne enheten uten `uploadedAt`. */
   pendingPhotos: number;
+  /**
+   * Endringer serveren avviste (400) og som er lagt til side uten å være løst. Vises som «Kunne ikke
+   * sendes: <feltnavn>». Teller ikke i `pendingChanges`. Mangler = ingen.
+   */
+  rejected?: readonly TrialRejectedChange[];
+}
+
+/** Én endring som er lagt til side: tabellen og feltet (null for skjemaet). Aldri innholdet. */
+export interface TrialRejectedChange {
+  table: TrialTableName;
+  fieldKey: string | null;
 }
 
 /** Utfallet av én runde fra «Synk nå». */
@@ -265,6 +276,12 @@ export interface OutboxEntry {
   id: string;
   /** Kolonner i snake_case, `value` som JSON-tekst. Serverstyrte kolonner er aldri med. */
   data: LocalRow;
+  /**
+   * Lagt til side (set aside): serveren svarte 400 på denne endringen. Den sendes ikke igjen, teller
+   * ikke i ventetallet og slettes aldri. `resolved` settes når en senere endring på samme felt
+   * (samme `LocalRowKey`) er kvittert med 200; da beskytter den ikke lenger feltet.
+   */
+  setAside?: { at: string; resolved?: boolean };
 }
 
 /** Køens tilstand som ren verdi. Lagres i objektlageret `outbox` (`seq` → operasjon) og `nextSeq` i tilstandslageret (`sync_state`, raden `outbox_next_seq`). */
@@ -277,14 +294,17 @@ export interface OutboxState {
 
 /**
  * Køens tilstandsmaskin (ren):
- * - `enqueue`: ny operasjon. Finnes en operasjon med samme (tabell, id) som **ikke** er underveis,
+ * - `enqueue`: ny operasjon. Finnes en operasjon med samme (tabell, id) som **ikke** er underveis
+ *   eller lagt til side,
  *   flettes `data` inn i den og dens `seq` beholdes (koalesering). Er den underveis, legges en ny
  *   operasjon til med nytt `seq`, så et svar på den gamle bunten aldri fjerner den nye endringen.
- * - `takeBatch`: de første `limit` operasjonene i `seq`-rekkefølge som ikke er underveis
- *   (`TRIAL_SYNC_LIMITS.maxOperationsPerBatch`). Gir null når køen er tom eller en bunt er underveis.
+ * - `takeBatch`: de første `limit` operasjonene i `seq`-rekkefølge som ikke er underveis og ikke er
+ *   lagt til side (`TRIAL_SYNC_LIMITS.maxOperationsPerBatch`). Gir null når køen er tom eller en
+ *   bunt er underveis.
  * - `ackBatch`: **bare ved 200.** Fjerner bunten som var underveis.
  * - `keepBatch`: alt annet (4xx, 5xx, avbrutt, uten nett). Bunten blir liggende og `inFlight` nullstilles.
- *   Avviste bunter (400/409) blir liggende som i PR #8 (kjent svakhet).
+ *   Ved 400 som peker på én endring, legges den til side i stedet (`setAsideBatch` i
+ *   `local/outbox.ts`), og resten sendes videre (funn T-0001).
  */
 export interface OutboxMachine {
   enqueue(state: OutboxState, entry: Omit<OutboxEntry, "seq">): OutboxState;
@@ -294,7 +314,7 @@ export interface OutboxMachine {
   ): { state: OutboxState; batch: readonly OutboxEntry[] } | null;
   ackBatch(state: OutboxState): OutboxState;
   keepBatch(state: OutboxState): OutboxState;
-  /** Nøklene (`LocalRowKey`) som venter i køen, også de underveis. */
+  /** Nøklene (`LocalRowKey`) som venter i køen, også de underveis og de lagt til side som ikke er løst. */
   pendingKeys(state: OutboxState, keyOf: LocalRowKey): Set<string>;
 }
 
