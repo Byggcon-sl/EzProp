@@ -33,6 +33,7 @@ const TEXTS = {
   error: "KI svarte ikke. Prøv igjen.",
   aiOff: "KI er av.",
   offline: "Krever nett. Teksten din er lagret og kan skrives videre.",
+  queued: "Venter på KI. Forslaget kommer når nettet er tilbake.",
   mark: "Tekst fra KI, godkjent",
   fixedLine:
     "Bruk oppdiktet tekst. Ikke skriv navn, adresse eller kundeopplysninger. Forslaget lagres i KI-loggen.",
@@ -294,26 +295,34 @@ test.describe("prøvetakstmannen på /prove/ki", () => {
     await expect(cardButton(page, TEXTS.use)).toHaveCount(0);
   });
 
-  test("12.8 og 12.13 uten nett: «Krever nett …», knappen sperret, feltet kan skrives i, ingenting henger", async ({
+  // Endret med KI-køen (docs/funksjoner/fase2a-ki-ko.md, K5.4 og avsnitt 8): knappen er aktiv uten
+  // nett og legger forespørselen i kø med «Venter på KI …» i stedet for «Krever nett …».
+  test("12.8 og 12.13 uten nett: knappen legger i kø («Venter på KI …»), feltet kan skrives i, ingenting henger", async ({
     page,
     context,
   }) => {
     await expect(networkStatus(page)).toHaveText(/På nett/);
-    const { text } = sentence();
+    const { marker, text } = sentence();
     await field(page).fill(text);
 
     await context.setOffline(true);
 
     await expect(networkStatus(page)).toHaveText(/Uten nett/);
-    await expect(shown(page, TEXTS.offline).first()).toBeVisible();
-    await expect(askButton(page)).toBeDisabled();
+    await expect(askButton(page)).toBeEnabled();
+    await askButton(page).click();
+    await expect(shown(page, TEXTS.queued).first()).toBeVisible();
+    await expect(page.getByText(TEXTS.offline)).toHaveCount(0);
+    await expect(cardButton(page, TEXTS.use)).toHaveCount(0);
     await field(page).fill(`${text} og mer tekst`);
     await expect(field(page)).toHaveValue(`${text} og mer tekst`);
     await expect(page.getByText(TEXTS.working)).toHaveCount(0, { timeout: 5_000 });
+    expect(await rowsWithMarker(marker)).toHaveLength(0);
 
     await context.setOffline(false);
     await expect(networkStatus(page)).toHaveText(/På nett/);
-    await expect(askButton(page)).toBeEnabled();
+    await expect(card(page).getByText(polished(text), { exact: true })).toBeVisible();
+    await expect(field(page)).toHaveValue(`${text} og mer tekst`);
+    await expect.poll(async () => (await rowsWithMarker(marker)).length).toBe(1);
   });
 
   test("12.9 nettet faller midt i et forslag: «Krever nett …», egen tekst uendret og ikke overskrevet", async ({

@@ -17,6 +17,8 @@ const read = (file: string) => readFileSync(file, "utf8");
 
 const COMPONENTS = ["src/shared/ui/ai-suggestion.tsx", "src/shared/ui/ai-text-mark.tsx"];
 const TRIAL_DIR = join(srcDir, "app", "(ansatt)", "prove", "ki");
+/** Klientdelen av KI-modulen (KI-køen), som prøvesiden kan importere (fase2a-ki-ko). */
+const AI_CLIENT = "core/ai/client";
 
 /** Mappene kortet og merket aldri skal nå (relativt til `src/`). */
 const FORBIDDEN = ["core/access", "db", "core/ai"];
@@ -139,7 +141,9 @@ describe("8.2 prøvesiden /prove/ki", () => {
         if (target === null) continue;
         expect(target, rel(file)).not.toMatch(/^core\/ai\/providers(\/|$)/);
         expect(target, rel(file)).not.toMatch(/^core\/integrations(\/|$)/);
-        if (target.startsWith("core/ai")) expect(target, rel(file)).toBe("core/ai");
+        // KI-køen (`@/core/ai/client`) er lov her (docs/funksjoner/fase2a-ki-ko.md, ADR 0006 del 10)
+        if (target.startsWith("core/ai"))
+          expect(["core/ai", AI_CLIENT], rel(file)).toContain(target);
       }
     }
   });
@@ -150,9 +154,13 @@ describe("8.2 prøvesiden /prove/ki", () => {
     }
   });
 
-  it("klientdelen importerer ikke tilgang, database eller KI-modulen", () => {
+  // Unntak: klientdelen av KI-modulen (KI-køen). Den er et rent blad uten tilgang, database og
+  // servermoduler; det håndheves av lint-regelen for modulgrenser og src/core/ai/static-checks.
+  it("klientdelen importerer ikke tilgang, database eller KI-modulen (bare KI-køen)", () => {
     for (const file of files.filter((entry) => read(entry).startsWith('"use client"'))) {
-      const offenders = transitiveImports(file).filter((entry) => isForbidden(entry.to));
+      const offenders = transitiveImports(file).filter(
+        (entry) => isForbidden(entry.to) && entry.to !== AI_CLIENT,
+      );
       expect(offenders, rel(file)).toEqual([]);
     }
   });

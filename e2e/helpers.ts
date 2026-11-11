@@ -1309,3 +1309,204 @@ export async function auditLinesFor(entityId: string): Promise<{ changes: unknow
     await sql.end();
   }
 }
+
+// --- KI-kø uten nett (docs/funksjoner/fase2a-ki-ko-testplan.md avsnitt 8) ---
+
+/** Databasen og lageret for KI-køen. Skrevet her, ikke importert, fordi e2e ikke laster modulen. */
+export const AI_QUEUE_DB = "local-ai-queue";
+export const AI_QUEUE_STORE = "ai_queue";
+
+/**
+ * Alle poster i KI-køen på enheten, rått fra IndexedDB. Åpner ikke en database som ikke finnes
+ * (det ville laget den tom og forstyrret appen), og lukker tilkoblingen med en gang.
+ */
+export async function aiQueueEntries(page: Page): Promise<Record<string, unknown>[]> {
+  return page.evaluate(
+    async ([dbName, storeName]) => {
+      const databases = await indexedDB.databases();
+      if (!databases.some((info) => info.name === dbName)) return [];
+      return new Promise<Record<string, unknown>[]>((resolve, reject) => {
+        const request = indexedDB.open(dbName!);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const database = request.result;
+          if (!database.objectStoreNames.contains(storeName!)) {
+            database.close();
+            resolve([]);
+            return;
+          }
+          const tx = database.transaction([storeName!], "readonly");
+          const reading = tx.objectStore(storeName!).getAll();
+          tx.oncomplete = () => {
+            database.close();
+            resolve(reading.result as Record<string, unknown>[]);
+          };
+          tx.onerror = () => {
+            database.close();
+            reject(tx.error);
+          };
+        };
+      });
+    },
+    [AI_QUEUE_DB, AI_QUEUE_STORE] as const,
+  );
+}
+
+/** Oppdiktet takstmann nr. 2 i prøveorganisasjonen (KI på), for delt iPad. */
+export const SAMPLE_SECOND_INSPECTOR_EMAIL = "ki-ko-takstmann.e2e@example.com";
+/** Oppdiktet admin i prøveorganisasjonen med bare rollen admin. */
+export const SAMPLE_ADMIN_ONLY_EMAIL = "ki-ko-admin.e2e@example.com";
+
+/** Id-en til prøveorganisasjonen (`settings.sampleData = true`, `pnpm db:seed:testoppdrag`). */
+async function sampleOrganizationId(sql: postgres.Sql): Promise<string> {
+  const [row] = await sql<{ id: string }[]>`
+    select id from organizations
+    where settings ->> 'sampleData' = 'true' and deleted_at is null
+    order by created_at limit 1`;
+  if (!row) throw new Error("Fant ikke prøveorganisasjonen (kjør pnpm db:seed:testoppdrag)");
+  return row.id;
+}
+
+/**
+ * Sørger for at en oppdiktet ansatt finnes i prøveorganisasjonen med nøyaktig én aktiv rolle.
+ * Idempotent. Bare lokal database eller testdatabasen. Sletter og gjenoppretter ingenting.
+ */
+export async function ensureSampleOrgEmployee(input: {
+  email: string;
+  name: string;
+  role: "inspector" | "admin";
+}): Promise<void> {
+  const sql = e2eSql();
+  try {
+    const organizationId = await sampleOrganizationId(sql);
+    await sql`
+      insert into users (id, name, email, email_verified)
+      values (${randomUUID()}, ${input.name}, ${input.email}, true)
+      on conflict (email) do nothing`;
+    const [user] = await sql<{ id: string }[]>`select id from users where email = ${input.email}`;
+    if (!user) throw new Error("Kunne ikke lage brukeren for e2e (KI-kø)");
+    let [employee] = await sql<{ id: string }[]>`
+      select id from employees
+      where user_id = ${user.id} and organization_id = ${organizationId}
+        and deleted_at is null and deactivated_at is null`;
+    if (!employee) {
+      [employee] = await sql<{ id: string }[]>`
+        insert into employees (organization_id, user_id, name)
+        values (${organizationId}, ${user.id}, ${input.name})
+        returning id`;
+    }
+    if (!employee) throw new Error("Kunne ikke lage den ansatte for e2e (KI-kø)");
+    const roles = await sql<{ id: string }[]>`
+      select id from employee_roles
+      where employee_id = ${employee.id} and role = ${input.role}::employee_role
+        and deleted_at is null`;
+    if (roles.length === 0) {
+      await sql`
+        insert into employee_roles (organization_id, employee_id, role)
+        values (${organizationId}, ${employee.id}, ${input.role}::employee_role)
+        on conflict do nothing`;
+    }
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Logger inn som takstmann nr. 2 i prøveorganisasjonen. */
+export async function logInAsSecondSampleInspector(page: Page) {
+  await ensureSampleOrgEmployee({
+    email: SAMPLE_SECOND_INSPECTOR_EMAIL,
+    name: "Oppdiktet takstmann to",
+    role: "inspector",
+  });
+  await logIn(page, SAMPLE_SECOND_INSPECTOR_EMAIL);
+}
+
+/** Logger inn som admin (bare rollen admin) i prøveorganisasjonen. */
+export async function logInAsSampleAdminOnly(page: Page) {
+  await ensureSampleOrgEmployee({
+    email: SAMPLE_ADMIN_ONLY_EMAIL,
+    name: "Oppdiktet admin",
+    role: "admin",
+  });
+  await logIn(page, SAMPLE_ADMIN_ONLY_EMAIL);
+}
+
+/** Ansatt-id-en til e-posten i prøveorganisasjonen. Bare lesing. */
+export async function sampleEmployeeId(email: string): Promise<string> {
+  const sql = e2eSql();
+  try {
+    const organizationId = await sampleOrganizationId(sql);
+    const [row] = await sql<{ id: string }[]>`
+      select e.id from employees e join users u on u.id = e.user_id
+      where u.email = ${email.toLowerCase()} and e.organization_id = ${organizationId}
+        and e.deleted_at is null
+      limit 1`;
+    if (!row) throw new Error("Fant ikke den ansatte i prøveorganisasjonen");
+    return row.id;
+  } finally {
+    await sql.end();
+  }
+}
+
+/**
+ * Setter `ai.enabled` i prøveorganisasjonen og gir tilbake verdien før. Sett den tilbake med
+ * `restoreSampleAiEnabled` i `finally`. Playwright kjører med én arbeider.
+ */
+export async function setSampleAiEnabled(value: boolean): Promise<boolean | undefined> {
+  const sql = e2eSql();
+  try {
+    const organizationId = await sampleOrganizationId(sql);
+    const [row] = await sql<{ previous: boolean | null }[]>`
+      select (settings ->> 'ai.enabled')::boolean as previous from organizations
+      where id = ${organizationId}`;
+    await sql`
+      update organizations
+      set settings = settings || jsonb_build_object('ai.enabled', ${value}::boolean)
+      where id = ${organizationId}`;
+    return row?.previous ?? undefined;
+  } finally {
+    await sql.end();
+  }
+}
+
+export async function restoreSampleAiEnabled(previous: boolean | undefined): Promise<void> {
+  if (previous !== undefined) {
+    await setSampleAiEnabled(previous);
+    return;
+  }
+  const sql = e2eSql();
+  try {
+    const organizationId = await sampleOrganizationId(sql);
+    await sql`
+      update organizations set settings = settings - 'ai.enabled' where id = ${organizationId}`;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Radene i KI-loggen med id-en, med eier. Bare lesing. */
+export async function aiUsageRowsById(
+  id: string,
+): Promise<{ id: string; outcome: string; employeeId: string; organizationId: string }[]> {
+  const sql = e2eSql();
+  try {
+    return await sql<{ id: string; outcome: string; employeeId: string; organizationId: string }[]>`
+      select id, outcome, employee_id as "employeeId", organization_id as "organizationId"
+      from ai_usage_log where id = ${id}`;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Radene i KI-loggen der den ansatte er eier og målet er `targetId`. Bare lesing. */
+export async function aiUsageRowCountForEmployee(employeeId: string, targetId: string) {
+  const sql = e2eSql();
+  try {
+    const [row] = await sql<{ n: number }[]>`
+      select count(*)::int as n from ai_usage_log
+      where employee_id = ${employeeId} and target_ref ->> 'id' = ${targetId}`;
+    return row?.n ?? 0;
+  } finally {
+    await sql.end();
+  }
+}

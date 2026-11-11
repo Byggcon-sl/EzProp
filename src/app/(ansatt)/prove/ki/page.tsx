@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AccessDeniedError, requireOrganizationAccess } from "@/core/access";
+import { AccessDeniedError, requireOrganizationAccess, type EmployeeGrant } from "@/core/access";
 import { getEmployeeContext } from "../../employee-context";
 import { NoAccess } from "../../no-access";
 import { AiTrialClient } from "./ai-trial-client";
@@ -16,11 +16,15 @@ export const metadata: Metadata = { title: "Prøv KI: språkvask" };
 export default async function AiTrialPage() {
   const context = await getEmployeeContext();
   if (!context) return <NoAccess />;
+  let grant: EmployeeGrant;
   try {
-    await requireOrganizationAccess(context.actor, context.organizationId, "report.edit");
+    grant = await requireOrganizationAccess(context.actor, context.organizationId, "report.edit");
   } catch (error) {
     if (error instanceof AccessDeniedError) return <NoAccess />;
     throw error;
   }
-  return <AiTrialClient />;
+  // Eieren av KI-køen på enheten (fase2a-ki-ko Omfang 3). Brukes bare til lokal eiersjekk.
+  return (
+    <AiTrialClient owner={{ organizationId: grant.organizationId, employeeId: grant.employeeId }} />
+  );
 }

@@ -37,6 +37,12 @@ export const AI_SUGGESTION_TEXTS = {
   aiOff: "KI er av.",
   offline: "Krever nett. Teksten din er lagret og kan skrives videre.",
   kept: "Du beholdt din tekst.",
+  /** Forespørselen ligger i KI-køen på enheten (docs/funksjoner/fase2a-ki-ko.md Omfang 3). */
+  queued: "Venter på KI. Forslaget kommer når nettet er tilbake.",
+  /** Feltet er endret etter at forslaget ble laget (T-0004). */
+  staleSource: "Forslaget gjelder teksten før du skrev videre.",
+  /** «Angre» etter at teksten er endret: bare statusen settes tilbake (T-0005). */
+  undoStatusOnly: "Statusen er satt tilbake. Teksten din er uendret.",
 } as const;
 
 /** Det kortet trenger for å vise seg. Ingen handlinger her. */
@@ -57,6 +63,12 @@ export type AiSuggestionState = {
   staleSuggestion?: { text: string; status: AiSuggestionCardStatus } | null;
   /** Id-en i KI-loggen for forslaget som vises. Trengs for KI-merket. */
   aiUsageId?: string | null;
+  /** Forespørselen ligger i KI-køen og venter på nett. Kortet viser «Venter på KI …». */
+  queued?: boolean;
+  /** Teksten forslaget ble laget fra. Sammen med `currentText` gir den `stale` (T-0004). */
+  sourceText?: string | null;
+  /** Teksten som står i feltet nå. */
+  currentText?: string;
 };
 
 export type AiSuggestionBox =
@@ -76,6 +88,10 @@ export type AiSuggestionView = {
   announcement: string;
   /** Statusen knappene gjelder, eller `null` når ingen forslag vises. */
   shownStatus: AiSuggestionCardStatus | null;
+  /** Forslaget gjelder eldre tekst enn feltet har nå: ingen «Bruk» (T-0004). */
+  stale: boolean;
+  /** Hovedknappen: «Bruk», eller «Nytt forslag» når forslaget gjelder eldre tekst. */
+  primaryAction: "use" | "new";
 };
 
 const NO_BUTTONS = { use: false, keep: false, newSuggestion: false, undo: false } as const;
@@ -93,11 +109,25 @@ function announcementFor(status: AiSuggestionCardStatus): string {
 }
 
 /**
+ * Hva «Angre» skal gjøre etter «Bruk» (T-0005). Er feltet endret etter «Bruk», settes bare
+ * statusen tilbake og teksten beholdes; ellers gis teksten før «Bruk» tilbake som før.
+ */
+export function undoAfterEdit(currentText: string, appliedText: string): "status_only" | "restore" {
+  return currentText === appliedText ? "restore" : "status_only";
+}
+
+/**
  * Hvilke tekster og knapper kortet viser. Ren funksjon, testet for seg
  * (docs/funksjoner/fase2a-forslagsmonster-testplan.md avsnitt 10).
  */
 export function suggestionView(state: AiSuggestionState): AiSuggestionView {
-  const base = { notes: [] as string[], ownHeading: AI_SUGGESTION_TEXTS.ownText, ownDimmed: false };
+  const base = {
+    notes: [] as string[],
+    ownHeading: AI_SUGGESTION_TEXTS.ownText,
+    ownDimmed: false,
+    stale: false,
+    primaryAction: "use" as const,
+  };
 
   if (!state.aiEnabled) {
     return {
@@ -106,6 +136,18 @@ export function suggestionView(state: AiSuggestionState): AiSuggestionView {
       buttons: NO_BUTTONS,
       disabled: true,
       announcement: AI_SUGGESTION_TEXTS.aiOff,
+      shownStatus: null,
+    };
+  }
+
+  // I kø: forslaget kommer når nettet er tilbake. Ingen «Bruk» før svaret er her.
+  if (state.queued) {
+    return {
+      ...base,
+      box: { kind: "message", tone: "neutral", text: AI_SUGGESTION_TEXTS.queued },
+      buttons: NO_BUTTONS,
+      disabled: true,
+      announcement: AI_SUGGESTION_TEXTS.queued,
       shownStatus: null,
     };
   }
@@ -150,6 +192,7 @@ export function suggestionView(state: AiSuggestionState): AiSuggestionView {
   let box: AiSuggestionBox | null = messageBox;
   let ownHeading: string = AI_SUGGESTION_TEXTS.ownText;
   let ownDimmed = false;
+  let stale = false;
 
   if (shown) {
     const approved = shown.status === "accepted" || shown.status === "edited";
@@ -166,6 +209,17 @@ export function suggestionView(state: AiSuggestionState): AiSuggestionView {
     }
     buttons = buttonsFor(shown.status, !state.hasNewerSuggestion);
     if (!announcement) announcement = announcementFor(shown.status);
+    // T-0004: feltet er endret etter at forslaget ble laget. «Bruk» ville skrevet over ny tekst.
+    if (
+      !approved &&
+      state.sourceText != null &&
+      state.currentText !== undefined &&
+      state.currentText !== state.sourceText
+    ) {
+      stale = true;
+      notes.unshift(AI_SUGGESTION_TEXTS.staleSource);
+      buttons = { ...buttons, use: false, newSuggestion: true };
+    }
   } else if (messageBox) {
     buttons = { ...NO_BUTTONS, newSuggestion: true };
   }
@@ -190,6 +244,8 @@ export function suggestionView(state: AiSuggestionState): AiSuggestionView {
     disabled,
     announcement,
     shownStatus: shown?.status ?? null,
+    stale,
+    primaryAction: stale ? "new" : "use",
   };
 }
 
@@ -210,6 +266,7 @@ export function AiSuggestion(props: AiSuggestionProps) {
   const headingId = useId();
   const useButtonRef = useRef<HTMLButtonElement>(null);
   const undoRef = useRef<HTMLButtonElement>(null);
+  const newSuggestionRef = useRef<HTMLButtonElement>(null);
   // Hvor fokus skal når kallet er ferdig (designfilen avsnitt 4, «Skjermleser og fokus»)
   const focusAfter = useRef<FocusTarget>(null);
   const [undone, setUndone] = useState(false);
@@ -217,7 +274,13 @@ export function AiSuggestion(props: AiSuggestionProps) {
   useEffect(() => {
     const target = focusAfter.current;
     if (!target || view.disabled) return;
-    const button = target === "use" ? useButtonRef.current : undoRef.current;
+    // Gjelder forslaget eldre tekst, finnes ikke «Bruk»: fokus går til «Nytt forslag»
+    const button =
+      target === "undo"
+        ? undoRef.current
+        : view.primaryAction === "new"
+          ? newSuggestionRef.current
+          : useButtonRef.current;
     if (button) {
       button.focus();
       focusAfter.current = null;
@@ -327,6 +390,7 @@ export function AiSuggestion(props: AiSuggestionProps) {
             ) : null}
             {view.buttons.newSuggestion ? (
               <Button
+                ref={newSuggestionRef}
                 variant="ghost"
                 size="md"
                 className="min-w-11 ring-1 ring-slate-300 ring-inset"

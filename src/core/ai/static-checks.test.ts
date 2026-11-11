@@ -379,3 +379,71 @@ describe("evalueringssett, statiske kontroller (E7)", () => {
     ]);
   });
 });
+
+/*
+ * KI-køen på klienten (docs/funksjoner/fase2a-ki-ko-testplan.md avsnitt 4, K4.4–K4.8).
+ * Støtter hovedmål: KI i bunnen (klienten snakker aldri med leverandøren, alt går gjennom
+ * serveren) og de ansatte (teksten havner aldri utenfor den lokale køen).
+ */
+describe("KI-køen på klienten, statiske kontroller (K4.4–K4.8)", () => {
+  const clientDir = join(aiDir, "client");
+  const clientFiles = () => productFiles(clientDir);
+  const trialClient = join(srcDir, "app", "(ansatt)", "prove", "ki", "ai-trial-client.tsx");
+
+  it("klientmappen har kildefiler (ellers sier testene under ingenting)", () => {
+    const names = clientFiles().map(rel);
+    expect(names).toContain("src/core/ai/client/index.ts");
+    expect(names).toContain("src/core/ai/client/queue.ts");
+    expect(names).toContain("src/core/ai/client/queue-store.ts");
+  });
+
+  it("K4.4 src/core/ai/index.ts eksporterer ikke noe fra ./client", () => {
+    const source = read(join(aiDir, "index.ts"));
+    expect(source).not.toMatch(/from\s+["']\.\/client(\/[^"']*)?["']/);
+    expect(source).not.toMatch(/import\(\s*["']\.\/client/);
+  });
+
+  it("K4.5 ingen fil i client/ kaller .complete(, bruker console. eller nevner ai_trial", () => {
+    const offenders = clientFiles()
+      .filter((file) => /\.complete\(|console\.|ai_trial/.test(read(file)))
+      .map(rel);
+    expect(offenders).toEqual([]);
+  });
+
+  it("K4.6 tillatt-listen på klienten er lik AI_FEATURES[*].allowedFields", async () => {
+    const { AI_FEATURES } = await import("./features");
+    const { AI_QUEUE_ALLOWED_FIELDS } = await import("./client");
+    expect(Object.keys(AI_QUEUE_ALLOWED_FIELDS).sort()).toEqual(Object.keys(AI_FEATURES).sort());
+    for (const [code, definition] of Object.entries(AI_FEATURES)) {
+      expect(AI_QUEUE_ALLOWED_FIELDS[code as keyof typeof AI_QUEUE_ALLOWED_FIELDS]).toEqual(
+        definition.allowedFields,
+      );
+    }
+  });
+
+  it("K4.7 features.ts (ledetekstene) er ikke importert som verdi fra client/", () => {
+    const valueImport =
+      /^\s*(import|export)\s+(?!type\b)[^;]*?from\s+["'](\.\.\/features|@\/core\/ai\/features)["']/m;
+    const dynamicImport = /import\(\s*["'](\.\.\/features|@\/core\/ai\/features)["']\s*\)/;
+    const offenders = clientFiles()
+      .filter((file) => valueImport.test(read(file)) || dynamicImport.test(read(file)))
+      .map(rel);
+    expect(offenders).toEqual([]);
+    // Ikke hult
+    expect(valueImport.test('import { AI_FEATURES } from "../features";')).toBe(true);
+    expect(valueImport.test('import type { AiFeatureDefinition } from "../features";')).toBe(false);
+  });
+
+  it("K4.8 ingen tekst utenfor IndexedDB: client/ og prøvesiden bruker ikke localStorage, sessionStorage eller adressen", () => {
+    expect(existsSync(trialClient)).toBe(true);
+    const files = [...clientFiles(), trialClient];
+    const storage = files
+      .filter((file) => /\b(localStorage|sessionStorage)\b/.test(read(file)))
+      .map(rel);
+    expect(storage).toEqual([]);
+    const address = files
+      .filter((file) => /history\.(pushState|replaceState)|searchParams/.test(read(file)))
+      .map(rel);
+    expect(address).toEqual([]);
+  });
+});

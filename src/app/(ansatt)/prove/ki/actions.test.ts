@@ -227,6 +227,96 @@ describe("11.3 Zod: ugyldig inndata gir fast melding, ingen rad og intet kall", 
   });
 });
 
+// KI-køen leser bare den faste koden `reason`, aldri meldingen (docs/funksjoner/fase2a-ki-ko.md
+// Omfang 2, testplan avsnitt 6).
+describe("KI-kø: fast kode reason på feil", () => {
+  const NO_ACCESS = "Du har ikke tilgang til dette.";
+  const INVALID_TEXT = `Skriv en setning på høyst ${AI_FIELD_MAX_LENGTH} tegn.`;
+  const UNKNOWN = "Noe gikk galt. Teksten din er uendret. Prøv igjen.";
+
+  it("uten ansattrad (ingen tilgang fra økten): no_access og ingen rad", async () => {
+    session.actor = await createUser();
+    expect(await requestTrialSuggestion(requestInput())).toEqual({
+      kind: "failed",
+      message: NO_ACCESS,
+      reason: "no_access",
+    });
+    expect(await allAiRows()).toHaveLength(0);
+  });
+
+  it("uten report.edit (kontor): no_access og ingen rad", async () => {
+    await signedIn(["office"]);
+    expect(await requestTrialSuggestion(requestInput())).toEqual({
+      kind: "failed",
+      message: NO_ACCESS,
+      reason: "no_access",
+    });
+    expect(await allAiRows()).toHaveLength(0);
+  });
+
+  it.each<[string, Record<string, unknown>]>([
+    ["tom tekst", { text: "" }],
+    ["for lang tekst", { text: "a".repeat(AI_FIELD_MAX_LENGTH + 1) }],
+    ["ugyldig id", { requestId: "abc" }],
+  ])("Zod avviser (%s): invalid", async (_name, patch) => {
+    await signedIn();
+    expect(await requestTrialSuggestion(requestInput(patch))).toEqual({
+      kind: "failed",
+      message: INVALID_TEXT,
+      reason: "invalid",
+    });
+    expect(await allAiRows()).toHaveLength(0);
+  });
+
+  it("kjernen avviser forespørselen (tom etter vask): invalid med samme melding som før", async () => {
+    await signedIn();
+    expect(await requestTrialSuggestion(requestInput({ text: "\u0000" }))).toEqual({
+      kind: "failed",
+      message: UNKNOWN,
+      reason: "invalid",
+    });
+    expect(await allAiRows()).toHaveLength(0);
+  });
+
+  it("ukjent feil: unknown", async () => {
+    // Ingen aktør: test-økten kaster en vanlig feil, som ikke er omdirigering eller tilgangsfeil.
+    vi.spyOn(logger, "error").mockImplementation(() => {});
+    session.actor = null;
+    expect(await requestTrialSuggestion(requestInput())).toEqual({
+      kind: "failed",
+      message: UNKNOWN,
+      reason: "unknown",
+    });
+  });
+
+  it("avgjørelse og status: ugyldig id gir invalid", async () => {
+    await signedIn();
+    expect(await decideTrialSuggestion({ usageId: "abc", decision: "accepted" })).toMatchObject({
+      kind: "failed",
+      reason: "invalid",
+    });
+    expect(await readTrialStatus({ usageId: "abc" })).toMatchObject({
+      kind: "failed",
+      reason: "invalid",
+    });
+  });
+
+  it("avgjørelse og status uten ansattrad: no_access", async () => {
+    session.actor = await createUser();
+    const usageId = randomUUID();
+    expect(await decideTrialSuggestion({ usageId, decision: "accepted" })).toEqual({
+      kind: "failed",
+      message: NO_ACCESS,
+      reason: "no_access",
+    });
+    expect(await readTrialStatus({ usageId })).toEqual({
+      kind: "failed",
+      message: NO_ACCESS,
+      reason: "no_access",
+    });
+  });
+});
+
 describe("11.4 og 11.5 dobbelttrykk", () => {
   it("to kall med samme requestId samtidig gir én rad og ingen ekstra linje i audit_log", async () => {
     await signedIn();
@@ -400,7 +490,11 @@ describe("T-0001 tekst med tegn databasen ikke tar", () => {
     const spy = vi.spyOn(fakeAiProvider, "complete");
 
     const result = await requestTrialSuggestion(requestInput({ text: POISON }));
-    expect(result).toEqual({ kind: "failed", message: "Du har ikke tilgang til dette." });
+    expect(result).toEqual({
+      kind: "failed",
+      message: "Du har ikke tilgang til dette.",
+      reason: "no_access",
+    });
     expect(spy).not.toHaveBeenCalled();
     expect(await allAiRows()).toHaveLength(0);
 
@@ -414,6 +508,7 @@ describe("T-0001 tekst med tegn databasen ikke tar", () => {
     expect(await requestTrialSuggestion(requestInput({ text: POISON }))).toEqual({
       kind: "failed",
       message: "Du har ikke tilgang til dette.",
+      reason: "no_access",
     });
     expect(spy).not.toHaveBeenCalled();
     const rows = await allAiRows();
@@ -495,7 +590,11 @@ describe("6 tilgang per rolle (requestTrialSuggestion og decideTrialSuggestion)"
       expect(result.kind).toBe("suggestion");
       expect((await allAiRows()).length).toBe(before + 1);
     } else {
-      expect(result).toEqual({ kind: "failed", message: "Du har ikke tilgang til dette." });
+      expect(result).toEqual({
+        kind: "failed",
+        message: "Du har ikke tilgang til dette.",
+        reason: "no_access",
+      });
       expect((await allAiRows()).length).toBe(before);
       expect(spy).not.toHaveBeenCalled();
     }
@@ -511,7 +610,11 @@ describe("6 tilgang per rolle (requestTrialSuggestion og decideTrialSuggestion)"
       expect(undo).toMatchObject({ kind: "decided", logged: { status: "suggested" } });
       expect((await allAuditRows()).length).toBe(before + 2);
     } else {
-      expect(result).toEqual({ kind: "failed", message: "Du har ikke tilgang til dette." });
+      expect(result).toEqual({
+        kind: "failed",
+        message: "Du har ikke tilgang til dette.",
+        reason: "no_access",
+      });
       expect((await aiRow(rowId))?.status).toBe("suggested");
       expect((await allAuditRows()).length).toBe(before);
     }
@@ -522,6 +625,7 @@ describe("6 tilgang per rolle (requestTrialSuggestion og decideTrialSuggestion)"
     expect(await requestTrialSuggestion(requestInput())).toEqual({
       kind: "failed",
       message: "Du har ikke tilgang til dette.",
+      reason: "no_access",
     });
   });
 });
@@ -554,6 +658,7 @@ describe("T-0001 tekst med nulltegn på /prove/ki", () => {
     expect(await requestTrialSuggestion(requestInput({ text: POISON }))).toEqual({
       kind: "failed",
       message: "Du har ikke tilgang til dette.",
+      reason: "no_access",
     });
     expect(await allAiRows()).toHaveLength(0);
 
@@ -564,5 +669,206 @@ describe("T-0001 tekst med nulltegn på /prove/ki", () => {
     const rows = await allAiRows();
     expect(rows.filter((row) => row.organization_id === other.id)).toHaveLength(0);
     expect(rows.every((row) => row.organization_id === organization.id)).toBe(true);
+  });
+});
+
+/*
+ * KI-køen sender gjennom samme serverhandling (docs/funksjoner/fase2a-ki-ko-testplan.md
+ * avsnitt 6, K6.1–K6.6). Serveren er uendret; testene låser svarformen køen leser (`reason`) og
+ * at alt kommer fra økten, aldri fra posten. Samme requestId to ganger, KI av og
+ * tenant-isolasjonen dekkes av src/core/ai/request-suggestion.test.ts (6.11, 6.12, V5.7 og
+ * expectTenantIsolation). Teksten er oppdiktet.
+ * Støtter hovedmål: KI i bunnen (køen går uendret gjennom requestSuggestion) og færre
+ * reklamasjoner (forslaget føres alltid på den som er logget inn).
+ */
+describe("KI-køen gjennom serverhandlingen (K6.1–K6.6)", () => {
+  const NO_ACCESS = "Du har ikke tilgang til dette.";
+  const UNKNOWN = "Noe gikk galt. Teksten din er uendret. Prøv igjen.";
+  const QUEUE_TEXT = "Fukt i kjellervegg ved sluk";
+
+  /** Det køen sender: bare requestId (v4, slik køen lager den), targetId og text. */
+  function queuedInput(overrides: Record<string, unknown> = {}) {
+    return { requestId: randomUUID(), targetId: randomUUID(), text: QUEUE_TEXT, ...overrides };
+  }
+
+  it("K6.1 requestId som allerede er brukt av en annen ansatt i samme organisasjon: invalid, fast melding, ingen ny rad", async () => {
+    const { organization } = await signedIn(["inspector"]);
+    const other = await createUser({ name: "Oppdiktet kollega" });
+    const otherEmployee = await createEmployee(other, organization.id, ["inspector"]);
+    const input = queuedInput();
+    await createAiUsageLog(organization.id, {
+      id: input.requestId,
+      employeeId: otherEmployee.id,
+      targetRef: { type: "ai_trial", id: input.targetId, fieldKey: "text" },
+    });
+    const before = (await allAiRows()).length;
+
+    const result = await requestTrialSuggestion(input);
+    expect(result).toEqual({ kind: "failed", message: UNKNOWN, reason: "invalid" });
+    expect((await allAiRows()).length).toBe(before);
+  });
+
+  it("K6.1 requestId som allerede er brukt i en annen organisasjon: invalid, ingen rad hos oss", async () => {
+    const foreign = await createOrganization("Oppdiktet Takst A");
+    await enableAi(foreign.id);
+    const foreignUser = await createUser({ name: "Oppdiktet fremmed" });
+    const foreignEmployee = await createEmployee(foreignUser, foreign.id, ["inspector"]);
+    const input = queuedInput();
+    await createAiUsageLog(foreign.id, {
+      id: input.requestId,
+      employeeId: foreignEmployee.id,
+      targetRef: { type: "ai_trial", id: input.targetId, fieldKey: "text" },
+    });
+    const { organization } = await signedIn(["inspector"], "Oppdiktet Takst B");
+
+    const result = await requestTrialSuggestion(input);
+    expect(result).toMatchObject({ kind: "failed", reason: "invalid" });
+    expectFixedMessage(result as { kind: string; message?: string });
+    expect((await allAiRows()).filter((r) => r.organization_id === organization.id)).toHaveLength(
+      0,
+    );
+  });
+
+  it("K6.1 tekst over høyeste lengde og tom tekst: invalid og ingen rad", async () => {
+    await signedIn();
+    for (const text of ["", "a".repeat(AI_FIELD_MAX_LENGTH + 1)]) {
+      const result = await requestTrialSuggestion(queuedInput({ text }));
+      expect(result).toMatchObject({ kind: "failed", reason: "invalid" });
+      expectFixedMessage(result as { kind: string; message?: string });
+    }
+    expect(await allAiRows()).toHaveLength(0);
+  });
+
+  it.each<[string, "deactivatedAt" | "deletedAt"]>([
+    ["deaktivert mens posten lå i kø", "deactivatedAt"],
+    ["mykt slettet mens posten lå i kø", "deletedAt"],
+  ])("K6.2 ansatt %s: no_access og ingen rad", async (_name, column) => {
+    const { employee } = await signedIn();
+    await db
+      .update(employees)
+      .set({ [column]: new Date() })
+      .where(eq(employees.id, employee.id));
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    expect(await requestTrialSuggestion(queuedInput())).toEqual({
+      kind: "failed",
+      message: NO_ACCESS,
+      reason: "no_access",
+    });
+    expect(spy).not.toHaveBeenCalled();
+    expect(await allAiRows()).toHaveLength(0);
+  });
+
+  it("K6.2 innlogget uten ansattrad (økten gir ingen tilgang): no_access og ingen rad", async () => {
+    session.actor = await createUser();
+    expect(await requestTrialSuggestion(queuedInput())).toEqual({
+      kind: "failed",
+      message: NO_ACCESS,
+      reason: "no_access",
+    });
+    expect(await allAiRows()).toHaveLength(0);
+  });
+
+  it("K6.3 organizationId og employeeId fra posten ignoreres: raden har øktens organisasjon og ansatt", async () => {
+    const otherOrganization = await createOrganization("Oppdiktet Takst A");
+    await enableAi(otherOrganization.id);
+    const otherUser = await createUser({ name: "Oppdiktet fremmed" });
+    const otherEmployee = await createEmployee(otherUser, otherOrganization.id, ["admin"]);
+    const { organization, employee } = await signedIn(["inspector"], "Oppdiktet Takst B");
+    const colleague = await createEmployee(
+      await createUser({ name: "Oppdiktet kollega" }),
+      organization.id,
+      ["inspector"],
+    );
+
+    for (const foreignEmployeeId of [otherEmployee.id, colleague.id]) {
+      const input = queuedInput({
+        organizationId: otherOrganization.id,
+        employeeId: foreignEmployeeId,
+        queuedAt: Date.now(),
+        attempts: 2,
+      });
+      const result = await suggestion(input);
+      expect(result.usageId).toBe(input.requestId);
+      const row = await aiRow(input.requestId);
+      expect(row?.organization_id).toBe(organization.id);
+      expect(row?.employee_id).toBe(employee.id);
+    }
+    const rows = await allAiRows();
+    expect(rows.filter((r) => r.organization_id === otherOrganization.id)).toHaveLength(0);
+    expect(rows.filter((r) => r.employee_id !== employee.id)).toHaveLength(0);
+  });
+
+  it("K6.4 forslag fra køen går i samme forslagsflyt: Bruk, Angre og Behold logges som et vanlig forslag", async () => {
+    await signedIn();
+    const steps = [
+      ["accepted", "accepted"],
+      ["undo", "suggested"],
+      ["rejected", "rejected"],
+      ["undo", "suggested"],
+    ] as const;
+
+    async function runFlow(input: { requestId: string; targetId: string; text: string }) {
+      const created = await suggestion(input as ReturnType<typeof requestInput>);
+      const statuses: string[] = [];
+      for (const [decision] of steps) {
+        const result = await decideTrialSuggestion({ usageId: created.usageId, decision });
+        if (result.kind !== "decided") throw new Error(`ventet decided, fikk ${result.kind}`);
+        statuses.push(String(result.logged?.status));
+      }
+      const audit = (await allAuditRows()).filter((row) => row.entity_id === created.usageId);
+      return {
+        statuses,
+        auditActions: audit.map((row) => row.action),
+        row: await aiRow(created.usageId),
+      };
+    }
+
+    const normal = await runFlow(requestInput());
+    // Id-en slik køen lager den (crypto.randomUUID, v4)
+    const fromQueue = queuedInput();
+    expect(fromQueue.requestId.charAt(14)).toBe("4");
+    const queued = await runFlow(fromQueue);
+
+    expect(queued.statuses).toEqual(steps.map(([, expected]) => expected));
+    expect(queued.statuses).toEqual(normal.statuses);
+    expect(queued.auditActions).toEqual(normal.auditActions);
+    expect(queued.auditActions).toHaveLength(4);
+    expect(queued.row?.id).toBe(fromQueue.requestId);
+    expect(queued.row?.status).toBe(normal.row?.status);
+    expect(queued.row?.outcome).toBe(normal.row?.outcome);
+  });
+
+  it("K6.5 admin uten andre roller sender en køet forespørsel og får forslag", async () => {
+    const { organization, employee } = await signedIn(["admin"]);
+    await mergeOrganizationSettings(organization.id, { "access.inspectors_edit_all": false });
+    const input = queuedInput();
+    const result = await requestTrialSuggestion(input);
+    expect(result).toMatchObject({ kind: "suggestion", usageId: input.requestId });
+    expect((await aiRow(input.requestId))?.employee_id).toBe(employee.id);
+  });
+
+  it.each<[string, Role, boolean]>([
+    ["takstmann", "inspector", true],
+    ["leder", "manager", true],
+    ["admin", "admin", true],
+    ["kontor uten report.edit", "office", false],
+  ])("K6.6 %s: køet forespørsel gir riktig svar", async (_name, role, allowed) => {
+    await signedIn([role]);
+    const input = queuedInput();
+    const result = await requestTrialSuggestion(input);
+    if (allowed) {
+      expect(result).toMatchObject({ kind: "suggestion", usageId: input.requestId });
+      expect(await aiRow(input.requestId)).toBeDefined();
+    } else {
+      expect(result).toEqual({ kind: "failed", message: NO_ACCESS, reason: "no_access" });
+      expect(await allAiRows()).toHaveLength(0);
+    }
+  });
+
+  it("K6.6 kontor med report.edit får forslag", async () => {
+    const { employee } = await signedIn(["office"]);
+    await grantPermission(employee, "report.edit");
+    const input = queuedInput();
+    expect(await requestTrialSuggestion(input)).toMatchObject({ kind: "suggestion" });
   });
 });
