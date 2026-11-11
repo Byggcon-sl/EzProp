@@ -874,6 +874,25 @@ describe("nøkkelboksen i infrastrukturen (main.bicep)", () => {
     }
   });
 
+  it("10b. nøkkelen til KI-leverandøren havner bare i boksen når bryteren er på og nøkkelen ikke er tom", () => {
+    const block = secretBlock("anthropic-api-key");
+    expect(block, "anthropic-api-key").toBeDefined();
+    const condition = block!.lines[0]!;
+    expect(condition).toMatch(/=\s*if\s*\(\s*enableKeyVault\s*&&/);
+    // Tom verdi er lov (KI av): betingelsen sjekker at nøkkelen er satt, direkte eller via en var
+    const guard = /if\s*\((.*)\)\s*\{?\s*$/.exec(condition)?.[1] ?? "";
+    const names = guard.match(/[A-Za-z_]\w*/g) ?? [];
+    const mentionsKey = names.some(
+      (name) =>
+        name === "anthropicApiKey" ||
+        bicep
+          .split("\n")
+          .some((line) => new RegExp(`^var\\s+${name}\\s*=.*anthropicApiKey`).test(line)),
+    );
+    expect(mentionsKey, condition).toBe(true);
+    expect(bicep).toMatch(/empty\(\s*anthropicApiKey\s*\)/);
+  });
+
   it("10. ingen hemmelighet i boksen uten bryteren og e-post", () => {
     const graph = secretBlock("ms-graph-client-secret");
     expect(graph).toBeDefined();
@@ -1132,5 +1151,61 @@ describe("KI-nøkkelen i testmiljøet (4.7)", () => {
     expect(doc.split("\n").some((line) => /^\|\s*`ANTHROPIC_API_KEY`\s*\|/.test(line))).toBe(true);
     const vaultSection = doc.slice(doc.indexOf("## Nøkkelboks for hemmeligheter"));
     expect(vaultSection.split("\n").slice(0, 4).join("\n")).toContain("ANTHROPIC_API_KEY");
+  });
+});
+
+
+/*
+ * Nøkkelen til KI-leverandøren i testmiljøet (docs/funksjoner/fase2a-ki-leverandor-testplan.md
+ * 4.7, kortet Omfang 15): samme steder som MS_GRAPH_CLIENT_SECRET, som hemmelighet, og tom verdi er
+ * lov (betyr KI av). Ingen verdi i repoet.
+ *
+ * Støtter hovedmål: KI i bunnen (Ståle legger inn nøkkelen som secret, uten kodeendring).
+ */
+describe("ANTHROPIC_API_KEY i utrullingen og infrastrukturen", () => {
+  const workflow = read(WORKFLOW_PATH);
+  const lines = workflow.split("\n");
+  const bicep = read(BICEP_PATH);
+  const bicepLines = bicep.split("\n");
+
+  it("arbeidsflyten henter den fra secrets i samme steg som MS_GRAPH_CLIENT_SECRET", () => {
+    const stepLine = codeLine(lines, /^\s*-\s+name:\s*Infrastruktur \(Bicep\)/);
+    expect(stepLine).toBeGreaterThan(-1);
+    const env = subBlock(stepOf(lines, stepLine), "env");
+    expect(env).toMatch(
+      /^\s*MS_GRAPH_CLIENT_SECRET:\s*\$\{\{\s*secrets\.MS_GRAPH_CLIENT_SECRET\s*\}\}\s*$/m,
+    );
+    expect(env).toMatch(/^\s*ANTHROPIC_API_KEY:\s*\$\{\{\s*secrets\.ANTHROPIC_API_KEY\s*\}\}\s*$/m);
+  });
+
+  it("den sendes som parameter til både validate og create", () => {
+    for (const marker of ["az deployment group validate", "az deployment group create"]) {
+      const command = commandBlock(workflow, marker);
+      expect(command, marker).not.toBe("");
+      expect(parameterSources(workflow, command), marker).toMatch(
+        /"anthropicApiKey=\$\{?ANTHROPIC_API_KEY\}?"/,
+      );
+    }
+  });
+
+  it("den skrives aldri ut", () => {
+    const echoes = lines.filter((line) => !isComment(line) && /\becho\b/.test(line));
+    for (const line of echoes) expect(line).not.toContain("ANTHROPIC_API_KEY");
+  });
+
+  it("Bicep: @secure()-parameter, uten annen standardverdi enn tom", () => {
+    const index = bicepLines.findIndex((line) => /^\s*param\s+anthropicApiKey\s/.test(line));
+    expect(index, "param anthropicApiKey").toBeGreaterThan(-1);
+    expect(bicepLines[index - 1]?.trim()).toBe("@secure()");
+    expect(bicepLines[index]).toMatch(/^\s*param\s+anthropicApiKey\s+string\s*(=\s*''\s*)?$/);
+  });
+
+  it("Bicep: appinnstillingen går gjennom boksen når bryteren er på, ellers parameteren som før", () => {
+    const expression = appSettingExpression(bicep, "ANTHROPIC_API_KEY");
+    expect(expression).toBeDefined();
+    expect(expression).toContain("enableKeyVault");
+    expect(expression).toContain("@Microsoft.KeyVault(SecretUri=");
+    expect(expression).toContain(".properties.secretUri");
+    expect(expression).toMatch(/:\s*anthropicApiKey\s*\}?\s*$/);
   });
 });

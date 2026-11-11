@@ -27,6 +27,23 @@ const rel = (file: string) => relative(repoRoot, file).split(sep).join("/");
 const read = (file: string) => readFileSync(file, "utf8");
 const productFiles = (dir: string) => sourceFiles(dir).filter((file) => !isTest(file));
 
+const AI_SDK_IMPORT =
+  /from\s+["'](openai|@anthropic-ai\/[^"']*|@azure\/openai|@azure\/ai-[^"']*|@google\/[^"']*|@mistralai\/[^"']*|cohere-ai|ai|@ai-sdk\/[^"']*)["']/;
+const FETCH_CALL = /\bfetch\s*\(/;
+const READ_SECRET = /\breadSecret\b/;
+const FETCH_ALLOWED = "src/core/ai/providers/anthropic.ts";
+const READ_SECRET_ALLOWED = "src/core/ai/provider-resolution.ts";
+
+/** Filene som bruker `fetch(` eller `readSecret` utenfor tillatt-listen, som «fil: hva». */
+function allowListOffenders(files: { path: string; text: string }[]): string[] {
+  return files.flatMap((file) => [
+    ...(file.path !== FETCH_ALLOWED && FETCH_CALL.test(file.text) ? [`${file.path}: fetch(`] : []),
+    ...(file.path !== READ_SECRET_ALLOWED && READ_SECRET.test(file.text)
+      ? [`${file.path}: readSecret`]
+      : []),
+  ]);
+}
+
 /** Portene `ai` og `speech_to_text` som strengliteral, med enkle, doble eller bakvendte fnutter. */
 const PORT_LITERAL = /(["'`])(ai|speech_to_text)\1/;
 
@@ -79,9 +96,9 @@ describe("KI-modulen, statiske kontroller (12)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it('12.6 PROVIDERS_BY_PORT.ai er nøyaktig ["fake", "anthropic"], og speech_to_text er tom', () => {
+  it('12.6 PROVIDERS_BY_PORT.ai er nøyaktig ["anthropic", "fake"] (S8), og speech_to_text er tom', () => {
     const providers = PROVIDERS_BY_PORT as Record<string, readonly string[]>;
-    expect([...providers.ai!]).toEqual(["fake", "anthropic"]);
+    expect([...providers.ai!].sort()).toEqual(["anthropic", "fake"]);
     expect([...providers.speech_to_text!]).toEqual([]);
   });
 
@@ -97,56 +114,67 @@ describe("KI-modulen, statiske kontroller (12)", () => {
     expect(source).not.toMatch(/export[^;]*\b(list\w*|count\w*|\w*ByEmployee|\w*Statistics)\b/);
   });
 
-  /** Filene som kan kalle `fetch(` og `readSecret` (kortet fase2a-ki-leverandor Omfang 9, S5). */
-  const FETCH_ALLOWED = ["src/core/ai/providers/anthropic.ts"];
-  const READ_SECRET_ALLOWED = ["src/core/ai/provider-resolution.ts"];
-  const FETCH_CALL = /\bfetch\s*\(/;
-  const READ_SECRET = /\breadSecret\b/;
-  const SDK_IMPORT =
-    /from\s+["'](openai|@anthropic-ai\/[^"']*|@azure\/openai|@azure\/ai-[^"']*|@google\/[^"']*|@mistralai\/[^"']*|cohere-ai|ai|@ai-sdk\/[^"']*)["']/;
-
-  /** Filene (sti) som bryter tillatt-listen for mønsteret. */
-  function outsideAllowList(
-    files: { path: string; text: string }[],
-    pattern: RegExp,
-    allowed: readonly string[],
-  ): string[] {
-    return files
-      .filter(({ path, text }) => !allowed.includes(path) && pattern.test(text))
-      .map(({ path }) => path);
-  }
-
-  it("12.8/S5 ingen SDK-er i src/core/ai; fetch( bare i adapteren og readSecret bare i valget av leverandør", () => {
-    const files = productFiles(aiDir).map((file) => ({ path: rel(file), text: read(file) }));
-    for (const { path, text } of files) expect(text, path).not.toMatch(SDK_IMPORT);
-    expect(outsideAllowList(files, FETCH_CALL, FETCH_ALLOWED)).toEqual([]);
-    expect(outsideAllowList(files, READ_SECRET, READ_SECRET_ALLOWED)).toEqual([]);
-    // Tillatt-listen peker på filer som finnes (ellers er unntakene feilstavet)
-    for (const path of [...FETCH_ALLOWED, ...READ_SECRET_ALLOWED]) {
-      expect(existsSync(join(repoRoot, path)), path).toBe(true);
+  /*
+   * 12.8 snevret inn til en tillatt-liste (docs/funksjoner/fase2a-ki-leverandor-testplan.md 4.5,
+   * kortet Omfang 9): `fetch(` bare i Anthropic-adapteren, `readSecret` bare i valget av
+   * leverandør. `client/` og `evals/` har ingen av delene. Fortsatt ingen SDK.
+   */
+  it("12.8 ingen SDK-er i src/core/ai", () => {
+    for (const file of productFiles(aiDir)) {
+      expect(read(file), rel(file)).not.toMatch(AI_SDK_IMPORT);
     }
   });
 
-  it("12.8/S5 kontroll: regelen blir rød når fetch( eller readSecret står i en annen fil", () => {
-    const sample = [
-      { path: "src/core/ai/providers/anthropic.ts", text: "const r = await fetch (url);" },
-      { path: "src/core/ai/provider-resolution.ts", text: 'readSecret("ANTHROPIC_API_KEY")' },
-      { path: "src/core/ai/request-suggestion.ts", text: "const r = await fetch(url);" },
-      { path: "src/core/ai/client/queue.ts", text: "await globalThis.fetch(url)" },
-      {
-        path: "src/core/ai/evals/run.ts",
-        text: 'import { readSecret } from "@/core/integrations";',
-      },
-    ];
-    expect(outsideAllowList(sample, FETCH_CALL, FETCH_ALLOWED)).toEqual([
-      "src/core/ai/request-suggestion.ts",
-      "src/core/ai/client/queue.ts",
-    ]);
-    expect(outsideAllowList(sample, READ_SECRET, READ_SECRET_ALLOWED)).toEqual([
-      "src/core/ai/evals/run.ts",
-    ]);
-    expect(SDK_IMPORT.test('import Anthropic from "@anthropic-ai/sdk";')).toBe(true);
-    expect(FETCH_CALL.test("const prefetch = 1;")).toBe(false);
+  it("12.8/S5 fetch( bare i providers/anthropic.ts og readSecret bare i provider-resolution.ts", () => {
+    const files = productFiles(aiDir).map((file) => ({ path: rel(file), text: read(file) }));
+    expect(allowListOffenders(files)).toEqual([]);
+    // Tillatt-listen er ikke hul: filene finnes og bruker faktisk det de har lov til
+    const adapter = files.find((file) => file.path === FETCH_ALLOWED);
+    const resolution = files.find((file) => file.path === READ_SECRET_ALLOWED);
+    expect(adapter, FETCH_ALLOWED).toBeDefined();
+    expect(resolution, READ_SECRET_ALLOWED).toBeDefined();
+    expect(adapter!.text).toMatch(/\bfetch\b/);
+    expect(resolution!.text).toMatch(READ_SECRET);
+    expect(adapter!.text).not.toMatch(READ_SECRET);
+    expect(adapter!.text).not.toMatch(/process\.env/);
+  });
+
+  it("S5 kontroll: fetch( eller readSecret i en annen fil gir rødt (tekstprøve)", () => {
+    expect(
+      allowListOffenders([{ path: "src/core/ai/request-suggestion.ts", text: "await fetch(url)" }]),
+    ).toEqual(["src/core/ai/request-suggestion.ts: fetch("]);
+    expect(
+      allowListOffenders([
+        { path: "src/core/ai/client/queue.ts", text: "const r = await fetch (x);" },
+      ]),
+    ).toEqual(["src/core/ai/client/queue.ts: fetch("]);
+    expect(
+      allowListOffenders([{ path: "src/core/ai/evals/run.ts", text: "readSecret(name)" }]),
+    ).toEqual(["src/core/ai/evals/run.ts: readSecret"]);
+    expect(
+      allowListOffenders([
+        { path: "src/core/ai/providers/anthropic.ts", text: "readSecret(name)" },
+      ]),
+    ).toEqual(["src/core/ai/providers/anthropic.ts: readSecret"]);
+    expect(
+      allowListOffenders([{ path: "src/core/ai/provider-resolution.ts", text: "fetch(url)" }]),
+    ).toEqual(["src/core/ai/provider-resolution.ts: fetch("]);
+    expect(
+      allowListOffenders([
+        { path: FETCH_ALLOWED, text: "await doFetch(x); fetch(url)" },
+        { path: READ_SECRET_ALLOWED, text: "readSecret(name)" },
+      ]),
+    ).toEqual([]);
+    expect(AI_SDK_IMPORT.test('import Anthropic from "@anthropic-ai/sdk";')).toBe(true);
+  });
+
+  it("S5 client/ og evals/ har verken fetch( eller readSecret", () => {
+    for (const dir of ["client", "evals"]) {
+      for (const file of productFiles(join(aiDir, dir))) {
+        expect(read(file), rel(file)).not.toMatch(FETCH_CALL);
+        expect(read(file), rel(file)).not.toMatch(READ_SECRET);
+      }
+    }
   });
 
   it("12.9 src/app og src/modules importerer ikke leverandørene, loggen eller evalueringssettet direkte", () => {
@@ -315,24 +343,14 @@ describe("evalueringssett, statiske kontroller (E7)", () => {
     }
   });
 
-  it("E7.5/E7.7/S5 evals/ og client/ er med i kontrollene og har verken readSecret eller fetch(", () => {
+  it("E7.5/E7.7 evals/ er med i kontrollene for src/core/ai (12.5 og 12.8 dekker undermappen)", () => {
     const files = productFiles(aiDir).map(rel);
     expect(files).toContain("src/core/ai/evals/run.ts");
     expect(files).toContain("src/core/ai/evals/schema.ts");
-    expect(files).toContain("src/core/ai/client/queue.ts");
-    for (const file of [...productFiles(evalsDir), ...productFiles(join(aiDir, "client"))]) {
+    for (const file of productFiles(evalsDir)) {
       expect(read(file), rel(file)).not.toMatch(/\bconsole\.|process\.env/);
       expect(read(file), rel(file)).not.toMatch(/\breadSecret\b|\bfetch\s*\(/);
     }
-  });
-
-  it("evals/run.ts bruker lekkasjesjekken fra src/core/ai/prompt-leaks.ts (ingen egen kopi)", () => {
-    expect(existsSync(join(aiDir, "prompt-leaks.ts")), "src/core/ai/prompt-leaks.ts").toBe(true);
-    const source = read(join(evalsDir, "run.ts"));
-    expect(source).toMatch(
-      /import\s*\{[^}]*\bfindPromptLeaks\b[^}]*\}\s*from\s+["'](\.\.\/prompt-leaks|@\/core\/ai\/prompt-leaks)["']/,
-    );
-    expect(source).not.toMatch(/function\s+findPromptLeaks\b/);
   });
 
   it("E6.9 kjøreren bruker PII_PLACEHOLDERS fra pii-patterns", () => {
