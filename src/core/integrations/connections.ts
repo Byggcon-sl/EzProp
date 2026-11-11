@@ -4,7 +4,7 @@ import { requireOrganizationAccess, type Actor } from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
 import { isUniqueViolation } from "@/core/organization/errors";
 import { db } from "@/db/client";
-import { integrationConnections } from "@/db/schema";
+import { AI_FEATURE_CODES, integrationConnections } from "@/db/schema";
 import { logger, scrubText } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
 import { ConnectionNotFoundError, ConnectionValidationError } from "./errors";
@@ -61,11 +61,43 @@ const microsoft365SettingsSchema = z
 const emptySettingsSchema = z.object({}).strict();
 
 /**
+ * Det eneste navnet på hemmeligheten en leverandør kan peke på (A193). Gjelder begge veier:
+ * leverandøren godtar bare dette navnet, og navnet godtas bare for denne leverandøren (ellers
+ * kunne en tilkobling til en annen leverandør få nøkkelen sendt dit). Sjekkes i
+ * `createConnection` og `updateConnection`, og på nytt når KI-leverandøren velges.
+ */
+export const REQUIRED_SECRET_REF_BY_PROVIDER = { anthropic: "ANTHROPIC_API_KEY" } as const;
+
+/**
+ * `settings` for `anthropic` (docs/funksjoner/fase2a-ki-leverandor.md Omfang 3, ADR 0006 del 2).
+ * Strengt: ingen andre nøkler, og aldri en adresse. `model` er modell-id-en og står bare her,
+ * aldri i koden. `features` er funksjonene som er slått på (A194); tom liste betyr at alt er av.
+ * `pricing` er kroner per million tokens, lagt inn av admin (A196); mangler den, er KI av.
+ */
+const anthropicSettingsSchema = z
+  .object({
+    model: z.string().regex(/^[A-Za-z0-9._:-]{1,100}$/),
+    features: z.array(z.enum(AI_FEATURE_CODES)).default([]),
+    pricing: z
+      .object({
+        inputPerMillion: z.number().finite().min(0),
+        outputPerMillion: z.number().finite().min(0),
+        currency: z.literal("NOK"),
+      })
+      .strict(),
+  })
+  .strict();
+
+/** De validerte innstillingene for `anthropic`. Eneste kilde for `AiPricing` i `src/core/ai`. */
+export type AnthropicSettings = z.infer<typeof anthropicSettingsSchema>;
+
+/**
  * Zod-skjemaet for `settings` til leverandøren, eller `null` for en ukjent leverandør.
  * Brukes også når e-postporten lager en sender fra raden; med et kjent leverandørnavn gir
  * overlastene det konkrete skjemaet, så `parsed.data` får typen fra skjemaet uten cast.
  */
 export function settingsSchemaFor(provider: "microsoft365"): typeof microsoft365SettingsSchema;
+export function settingsSchemaFor(provider: "anthropic"): typeof anthropicSettingsSchema;
 export function settingsSchemaFor(
   provider: "server_log" | "dev_mailbox" | "fake",
 ): typeof emptySettingsSchema;
@@ -74,6 +106,8 @@ export function settingsSchemaFor(provider: string): z.ZodType<Record<string, un
   switch (provider) {
     case "microsoft365":
       return microsoft365SettingsSchema;
+    case "anthropic":
+      return anthropicSettingsSchema;
     case "dev_mailbox":
     case "server_log":
     case "fake":

@@ -45,6 +45,15 @@ export const AI_ERROR_CODES = [
 ] as const;
 export type AiErrorCode = (typeof AI_ERROR_CODES)[number];
 
+/**
+ * KI-funksjonene (faste koder, regel 6). Flere kommer, én per KI-funksjon. Bare en konstant:
+ * `feature` har ingen CHECK-regel, så en ny kode trenger ingen migrering. Ligger her og ikke i
+ * `src/core/ai`, slik at `src/core/integrations` kan validere `settings.features` uten å
+ * importere fra `@/core/ai` (avhengigheten går bare `core/ai` → `core/integrations`).
+ */
+export const AI_FEATURE_CODES = ["language_polish"] as const;
+export type AiFeatureCode = (typeof AI_FEATURE_CODES)[number];
+
 /** Målet for forslaget: hva slags rad, hvilken rad og hvilket felt. */
 export type AiTargetRef = { type: string; id: string; fieldKey: string };
 

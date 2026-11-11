@@ -12,7 +12,7 @@ Ingen nye skjermer, så ingen ny e2e. Eksisterende e2e for `/prove/ki` og KI-kø
 
 Fra kortet, «Grensesnitt» og Omfang 3–7. Avvik føres i kortet under «Avgjort etter gjennomgangen».
 
-- `src/core/ai/providers/anthropic.ts`: `ANTHROPIC_PROVIDER_CODE`, `ANTHROPIC_SECRET_REF`, `AiPricing`, `AnthropicProviderOptions`, `createAnthropicProvider(options)`. Adressen, versjonshodet, grensen for tokens ut, standard tidsgrense og grensen for svarstørrelse eksporteres som konstanter, slik at testene kan sammenligne uten å skrive verdiene to steder.
+- `src/core/ai/providers/anthropic.ts`: `ANTHROPIC_PROVIDER_CODE`, `AiPricing`, `AnthropicProviderOptions`, `createAnthropicProvider(options)`. Adressen, versjonshodet, grensen for tokens ut, standard tidsgrense og grensen for svarstørrelse eksporteres som konstanter, slik at testene kan sammenligne uten å skrive verdiene to steder.
 - **`fetch` slås opp ved kallet** (`options.fetch ?? globalThis.fetch` inne i `complete`, ikke når adapteren lages). Ellers virker ikke `vi.stubGlobal` i integrasjonstestene.
 - `provider-resolution.ts`: `ResolvedAiProvider` med `features: readonly string[] | null`.
 - Lekkasjesjekken flyttes til én eksportert funksjon i `src/core/ai` (for eksempel `findPromptLeaks(text, known)` i egen fil). `evals/run.ts` importerer den derfra.

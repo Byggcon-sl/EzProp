@@ -1,14 +1,18 @@
-import type { AiErrorCode, AiOutcome, AiSuggestionStatus, AiTargetRef } from "@/db/schema";
+import type {
+  AiErrorCode,
+  AiFeatureCode,
+  AiOutcome,
+  AiSuggestionStatus,
+  AiTargetRef,
+} from "@/db/schema";
 
 /*
  * Den offentlige flaten til KI-modulen (docs/adr/0006-ki-i-bunnen.md del 1 og 2).
  * Støtter hovedmål: KI i bunnen (én vei inn til all KI, alt logges likt).
  */
 
-export type { AiErrorCode, AiOutcome, AiSuggestionStatus, AiTargetRef };
-
-/** Faste funksjonskoder (regel 6). Flere kommer, én per KI-funksjon. */
-export type AiFeatureCode = "language_polish";
+/** `AiFeatureCode`: faste funksjonskoder (regel 6), utledet av `AI_FEATURE_CODES` i `@/db/schema`. */
+export type { AiErrorCode, AiFeatureCode, AiOutcome, AiSuggestionStatus, AiTargetRef };
 
 export type AiSuggestionRequest = {
   /** UUID laget på enheten. Blir id-en i `ai_usage_log`. */

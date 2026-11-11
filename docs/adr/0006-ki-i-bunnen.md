@@ -113,8 +113,7 @@ Ingen endring i funksjonene, i modulene eller i `ai_usage_log`.
 ```ts
 // src/core/ai/providers/anthropic.ts
 export const ANTHROPIC_PROVIDER_CODE = "anthropic"; // fast kode
-export const ANTHROPIC_SECRET_REF = "ANTHROPIC_API_KEY";
-export type AiPricing = { inputPerMillion: number; outputPerMillion: number; currency: "NOK" };
+export type AiPricing = AnthropicSettings["pricing"]; // { inputPerMillion; outputPerMillion; currency: "NOK" }
 export type AnthropicProviderOptions = {
   model: string;
   apiKey: string;
@@ -124,6 +123,15 @@ export type AnthropicProviderOptions = {
 };
 export function createAnthropicProvider(options: AnthropicProviderOptions): AiProvider;
 
+// src/core/integrations/connections.ts
+export const REQUIRED_SECRET_REF_BY_PROVIDER = { anthropic: "ANTHROPIC_API_KEY" } as const;
+export type AnthropicSettings = z.infer<typeof anthropicSettingsSchema>; // model, features, pricing
+export function settingsSchemaFor(provider: "anthropic"): typeof anthropicSettingsSchema;
+
+// src/db/schema/ai-usage-log.ts
+export const AI_FEATURE_CODES = ["language_polish"] as const;
+export type AiFeatureCode = (typeof AI_FEATURE_CODES)[number];
+
 // src/core/ai/provider-resolution.ts
 export type ResolvedAiProvider =
   | { kind: "enabled"; provider: AiProvider; model: string; features: readonly string[] | null } // null = alle (bare fake)
@@ -131,6 +139,9 @@ export type ResolvedAiProvider =
 ```
 
 - **Konfigurasjonen er raden i `integration_connections`:** `port = ai`, `provider = anthropic`, `secret_ref = ANTHROPIC_API_KEY`, og `settings` med strengt skjema: `model` (påkrevd), `features` (kjente funksjonskoder, standard tom) og `pricing` (påkrevd, kroner per million tokens inn og ut). Ingen andre nøkler, og ingen adresse i `settings`. Ingen ny tabell og ingen migrering (`provider` er fri tekst).
+- **Avhengigheten går bare én vei: `core/ai` → `core/integrations`.** `connections.ts` importerer ingenting fra `@/core/ai`. Derfor ligger funksjonskodene (`AI_FEATURE_CODES`) i `@/db/schema` og navnet på hemmeligheten (`REQUIRED_SECRET_REF_BY_PROVIDER`) i `connections.ts`. Skjemaet for `settings` har én kilde: `AiPricing` utledes av det, og resultatet av `settingsSchemaFor("anthropic").parse(...)` sendes rett til `createAnthropicProvider`, så typesjekken fanger avvik.
+- **Låsen på hemmeligheten gjelder begge veier (A193):** `anthropic` godtar bare `ANTHROPIC_API_KEY`, og `ANTHROPIC_API_KEY` godtas bare for `anthropic`. Ellers kunne en tilkobling til en annen leverandør få nøkkelen sendt dit.
+- **Status `error` regnes som aktiv** (som i `findActiveConnection`). Kostnaden rundes til fire desimaler (`ai_usage_log.cost` er `numeric(12,4)`). `features` er `null` bare for `fake`; for alle andre koder kommer listen fra det validerte skjemaet, aldri `null`.
 - **Modell-id står bare i `settings.model`.** Ingen modellnavn i kode, tester eller dokumenter; en test håndhever det.
 - **Adapteren bygges per tilkobling (fabrikk)**, ikke som et fast objekt. Den bruker innebygd `fetch`, uten SDK og uten ny avhengighet. Adressen er en fast konstant i adapteren. Ingen nye forsøk; KI-køen (del 10) tar dem.
 - **Låsene for `anthropic`:** `ai.enabled` er `true`, aktiv og ikke slettet tilkobling, `settings` består skjemaet, `secret_ref` er nøyaktig `ANTHROPIC_API_KEY`, og `readSecret` gir en ikke-tom nøkkel. Mangler én, er svaret `disabled` uten kall og uten rad. `readSecret` kalles bare i `provider-resolution.ts`, `fetch` bare i `providers/anthropic.ts`.
@@ -142,7 +153,7 @@ export type ResolvedAiProvider =
 - **Kjent begrensning (A193):** nøkkelen `ANTHROPIC_API_KEY` er felles for alle organisasjoner. Det holder mens bare Byggcon bruker systemet, og må løses (nøkkel per organisasjon) før selskap nummer to får KI.
 - **EU/EØS (A197):** adapteren går mot Anthropic direkte. Velger Ståle en vei med behandling i EU-region, lages en ny adapter med ny fast kode bak samme port. Funksjonene endres ikke.
 
-**Forkastet for adapteren:** leverandørens SDK (ny avhengighet uten behov; ett kall med `fetch` holder); adresse i `settings` (da kunne en feil eller ondsinnet innstilling sende ledetekst og nøkkel til en annen mottaker); pristabell per modell i koden (krever modellnavn i koden og blir fort feil); kostnad 0 eller tom når pris mangler (gir feil tall i det stille); valg av leverandør fra miljøvariabel (A160); nye forsøk i adapteren (dobbel kostnad, og køen gjør det allerede); nøkkel per organisasjon nå (ikke behov før selskap nummer to).
+**Forkastet for adapteren:** leverandørens SDK (ny avhengighet uten behov; ett kall med `fetch` holder); adresse i `settings` (da kunne en feil eller ondsinnet innstilling sende ledetekst og nøkkel til en annen mottaker); pristabell per modell i koden (krever modellnavn i koden og blir fort feil); kostnad 0 eller tom når pris mangler (gir feil tall i det stille); valg av leverandør fra miljøvariabel (A160); nye forsøk i adapteren (dobbel kostnad, og køen gjør det allerede); nøkkel per organisasjon nå (ikke behov før selskap nummer to); funksjonskodene i `src/core/ai` med import fra `connections.ts` (snur avhengigheten og gir sirkel); en kopi av prisskjemaet i `src/core/ai` (to kilder som kan gli fra hverandre).
 
 ### 3. Falsk leverandør (`fake`)
 

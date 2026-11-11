@@ -2,8 +2,9 @@ import type { AiErrorCode } from "@/db/schema";
 import type { AiFeatureCode } from "../types";
 
 /*
- * Grensesnittet mot en KI-leverandør (docs/adr/0006-ki-i-bunnen.md del 2). Bare `fake` finnes
- * før S8. En ekte leverandørs SDK importeres bare i `src/core/ai/providers/`.
+ * Grensesnittet mot en KI-leverandør (docs/adr/0006-ki-i-bunnen.md del 2). Adapterne er `fake`
+ * og `anthropic` (S8, Ståle 10.11.2026). Ingen SDK: en ekte adapter bruker innebygd `fetch`, og
+ * bare i `src/core/ai/providers/`.
  */
 
 export type AiProviderRequest = {

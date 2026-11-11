@@ -1,3 +1,4 @@
+import type { AnthropicSettings } from "@/core/integrations/connections";
 import type { AiProvider } from "./types";
 
 /*
@@ -7,7 +8,9 @@ import type { AiProvider } from "./types";
  *
  * Kontrakten:
  * - Adressen er en fast konstant her, aldri fra `settings`, miljø eller forespørsel.
- * - Nøkkelen ligger bare i lukningen og sendes bare i hodet `x-api-key`.
+ * - Nøkkelen ligger bare i lukningen og sendes bare i hodet `x-api-key`. Navnet på hemmeligheten
+ *   (`REQUIRED_SECRET_REF_BY_PROVIDER` i `@/core/integrations/connections`) trengs ikke her:
+ *   adapteren får `apiKey` fra `provider-resolution.ts`, som er eneste sted hemmeligheten leses.
  * - Kroppen har bare modell, grense for tokens ut og den vaskede ledeteksten. Ingen id-er.
  * - Ingen nye forsøk, ingen logging av forespørsel, svar eller leverandørens melding.
  * - Modell-id står bare i tilkoblingens `settings.model`, aldri i koden.
@@ -16,15 +19,12 @@ import type { AiProvider } from "./types";
 /** Fast kode i `PROVIDERS_BY_PORT.ai`. Endres aldri, arkiveres (regel 6). */
 export const ANTHROPIC_PROVIDER_CODE = "anthropic";
 
-/** Det eneste navnet på hemmeligheten som tilkoblingen `anthropic` kan peke på. */
-export const ANTHROPIC_SECRET_REF = "ANTHROPIC_API_KEY";
-
-/** Pris fra tilkoblingens `settings.pricing`, lagt inn av admin. Kostnad = tokens × pris / 1 000 000. */
-export type AiPricing = {
-  inputPerMillion: number;
-  outputPerMillion: number;
-  currency: "NOK";
-};
+/**
+ * Pris fra tilkoblingens `settings.pricing`, lagt inn av admin. Utledet av skjemaet i
+ * `connections.ts` (én kilde). Kostnad = tokens × pris / 1 000 000, i NOK, rundet til fire
+ * desimaler (`ai_usage_log.cost` er `numeric(12,4)`), aldri negativ og aldri `NaN`.
+ */
+export type AiPricing = AnthropicSettings["pricing"];
 
 export type AnthropicProviderOptions = {
   /** Fra `settings.model`. */
