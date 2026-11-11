@@ -72,8 +72,8 @@ Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3
 | 0a Repo og database | Ferdig 28.10.2026 |
 | 1 Prøve uten nett | Ferdig 10.11.2026. Ståle har kjørt prøvene på ekte iPad og godkjent ADR 0004 (egenbygd synk). |
 | 0b Innlogging, organisasjon, roller | Ferdig, unntatt felles innlogging med Optiplan (venter på S6) |
-| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127) og forslagsmønsteret (PR #131) vask før KI (PR #135) og evalueringssettet (PR #141) er levert. Det alvorlige funnet T-0001 (synkkøen) er rettet i PR #139. Neste: «KI-kø» (2a-1). |
-| Minimum før ekte data | To av ni punkter levert. Testmiljøet er klart (S1, 10.11.2026), så resten kan bygges nå. |
+| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127) forslagsmønsteret (PR #131), vask før KI (PR #135), evalueringssettet (PR #141) og KI-køen er levert. Det alvorlige funnet T-0001 (synkkøen) er rettet i PR #139. Beslutningsnotatet om KI-leverandør og Anthropic-adapteren (siste punkt i 2a-1) er ferdig. Neste: 2a-2 Smal vei. |
+| Minimum før ekte data | To av ti punkter levert. Testmiljøet er klart (S1, 10.11.2026), så resten kan bygges nå. |
 | 2b og videre | Ikke startet |
 
 ## Venter på Ståle
@@ -89,7 +89,7 @@ Dette kan bare Ståle gjøre eller bestemme. Listen er sortert etter hvor mye so
 | S5 | **Måling i IVIT:** tre takstmenn noterer tid på 20–30 oppdrag til sammen (forberedelse, befaring, kontorarbeid, levering). Målingen drøftes med de ansatte først. Tallene legges inn på `/statistikk/tid`. | Sammenligningen i piloten |
 | S6 | **Tilgang til Optiplan-oppsettet**, og bekrefte om Optiplan bruker nøkkelboks. | Felles innlogging og bytte med ett trykk (fase 0b) |
 | S7 | **Folk:** én erfaren takstmann inn i betaen nå, hvem som er med i piloten og EzProp-panelet (forslag: én takstmann per selskap og Dan-Børge fra kontoret), og hvem som er ansvarlig for overgangen fra IVIT. | Andre øyne enn Ståles på det som bygges, og piloten |
-| S8 | **KI-leverandør: Anthropic, og Ståle har API-nøkkel (Ståle 10.11.2026: «vi har valgt anthopic - har api nøkler»).** Gjenstår: Ståle legger nøkkelen inn som secret `ANTHROPIC_API_KEY` i GitHub (aldri i chat eller repo) når adapteren er bygget, og velger leverandør for norsk tale til tekst (Anthropic tilbyr ikke det). | Ekte KI i testmiljøet. Til da prøves alt mot den falske leverandøren. |
+| S8 | **KI-leverandør: Anthropic, og Ståle har API-nøkkel (Ståle 10.11.2026: «vi har valgt anthopic - har api nøkler»).** **Anthropic-adapteren er bygget bak KI-porten, og beslutningsnotatet er skrevet (11.11.2026, `docs/beslutningsnotat-ki-leverandor.md`).** Gjenstår for Ståle: velge EU/EØS-vei, godta eller signere databehandleravtalen, svare på spørsmål 54–58 og 73, vurdere forslag 64 (tak på KI-bruk), legge nøkkelen inn som secret `ANTHROPIC_API_KEY` i GitHub (aldri i chat eller repo) og lage tilkoblingen i testmiljøet, og velge leverandør for norsk tale til tekst (anbefalt: Microsoft Azure tale i Norge). | Ekte KI i testmiljøet. Til da prøves alt mot den falske leverandøren. |
 
 ---
 
@@ -126,7 +126,7 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 ### 2a-1 KI-grunnmuren
 
 - [x] **KI-kø:** det som trenger KI, legges i kø og behandles når nettet er tilbake. Brukes på iPaden i fase 2b.
-- [ ] **Beslutningsnotat om KI-leverandør** til Ståle (S8). **Leverandøren er valgt: Anthropic (Ståle 10.11.2026).** Notatet tar for seg modellvalg per funksjon, alternativer for norsk tale til tekst, pris per rapport, databehandleravtale, EU/EØS og ingen trening på våre data.
+- [x] **Beslutningsnotat om KI-leverandør** til Ståle (S8). **Leverandøren er valgt: Anthropic (Ståle 10.11.2026).** Notatet tar for seg modellvalg per funksjon, alternativer for norsk tale til tekst, pris per rapport, databehandleravtale, EU/EØS og ingen trening på våre data. Notatet: `docs/beslutningsnotat-ki-leverandor.md`. Anthropic-adapteren er bygget bak KI-porten (av til Ståle har lagt inn nøkkelen og laget tilkoblingen).
 
 **Ferdig når:** En prøvefunksjon (språkvask av en setning) går hele veien mot den falske leverandøren: forslaget vises, takstmannen godtar eller avviser, og loggen viser det.
 
@@ -201,7 +201,7 @@ Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se
 
 ---
 
-## Minimum før ekte data  `status: to av ni levert`
+## Minimum før ekte data  `status: to av ti levert`
 
 Før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerklæringer) legges inn, skal dette være på plass. Den fulle personvernpakken ligger i fase 4. De fleste punktene trenger testmiljøet (S1).
 
@@ -212,6 +212,7 @@ Før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerkl�
 - [ ] **Sperring av iPader** (innspill P6 og D10): kode eller Face ID påkrevd, og en mistet iPad kan sperres. Må være på plass før første ekte befaring på iPad i fase 2b.
 - [ ] **Microsoft 365 koblet til**, og koden i serverloggen for første admin er ikke lenger i bruk
 - [ ] **Privat nettverk eller VNet-integrasjon mellom app og database** (ikke brannmurregelen for alle Azure-tjenester), og egen databasebruker for appen uten eierrettigheter
+- [ ] **KI-leverandør:** databehandleravtale signert, EU/EØS-vei valgt og spørsmål 54–58 og 73 besvart, før tilkoblingen `anthropic` lages for en organisasjon med ekte data. Se `docs/beslutningsnotat-ki-leverandor.md`.
 
 **Ferdig når:** Ståle har sett listen krysset av og godkjent at ekte data kan legges inn.
 
