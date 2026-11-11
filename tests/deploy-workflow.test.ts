@@ -176,6 +176,8 @@ const ALLOWED_VARS = [
   "APP_HOSTNAME",
   "ENABLE_KEY_VAULT",
   "AZURE_RESOURCE_GROUP",
+  "POSTGRES_SKU",
+  "POSTGRES_LOCATION",
 ];
 
 describe("utrullingsarbeidsflyten (deploy-azure.yml)", () => {
