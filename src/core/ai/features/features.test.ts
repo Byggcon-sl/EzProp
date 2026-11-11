@@ -6,6 +6,7 @@ import {
   languagePolish,
   type AiFeatureDefinitionForTest,
 } from "../../../../tests/ai";
+import { fieldSourceViolations, NEVER_FIELDS } from "../never-fields";
 
 /*
  * Funksjonsdefinisjonene i src/core/ai (docs/funksjoner/fase2a-ki-modul-logg-testplan.md
@@ -160,5 +161,88 @@ describe("funksjonsdefinisjonene (2)", () => {
       expect(readFileSync(file, "utf8"), file).not.toMatch(/\b(antas|trolig)\b/i);
     }
     // Selve ledeteksten prøves også i request-suggestion.test.ts (det leverandøren får).
+  });
+});
+
+/*
+ * «Aldri»-kolonnene og kildene til feltkodene (docs/funksjoner/fase2a-vask-for-ki-testplan.md
+ * avsnitt 8.1–8.3, ad-7, A175). Minimumslisten er sperrelisten over (BLOCKED), skrevet fast her,
+ * så en kolonne ikke kan fjernes fra både koden og kontrollen i samme endring uten rød test.
+ */
+const NEW_NEVER_FIELDS = [
+  "assignment_team_members.handed_over_reason",
+  "certifications.certificate_number",
+  "assignments.number",
+];
+
+describe("«aldri»-kolonnene og fieldSources (8)", () => {
+  it("V8.1 hver feltkode på tillatt-listen har en kilde (tabell.kolonne eller free_text)", () => {
+    for (const definition of featureDefinitions()) {
+      const sources = definition.fieldSources;
+      expect(sources, `${definition.code}: fieldSources`).toBeDefined();
+      for (const field of definition.allowedFields) {
+        const source = sources?.[field];
+        expect(source, `${definition.code}.${field}`).toMatch(
+          /^(free_text|[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)$/,
+        );
+      }
+    }
+    expect(languagePolish().fieldSources).toEqual({ text: "free_text" });
+  });
+
+  it("V8.2 ingen kilde står på «aldri»-listen, for hver definisjon", () => {
+    for (const definition of featureDefinitions()) {
+      expect(fieldSourceViolations(definition), definition.code).toEqual([]);
+      for (const source of Object.values(definition.fieldSources ?? {})) {
+        expect(NEVER_FIELDS, `${definition.code}: ${source}`).not.toContain(source);
+      }
+    }
+  });
+
+  it("V8.2 kontrollen er ikke hul: kilde contacts.email og feltkode uten kilde blir fanget", () => {
+    const withNeverSource: AiFeatureDefinitionForTest = {
+      code: "invented_feature",
+      permission: "report.edit",
+      allowedFields: ["text", "recipient"],
+      fieldSources: { text: "free_text", recipient: "contacts.email" },
+      allowedTargets: [{ type: "answer", fieldKey: "text" }],
+      promptVersion: "invented_feature.v1",
+    };
+    expect(fieldSourceViolations(withNeverSource)).toEqual([
+      "invented_feature.recipient: kilden contacts.email står på «aldri»-listen",
+    ]);
+
+    const withoutSource: AiFeatureDefinitionForTest = {
+      ...withNeverSource,
+      allowedFields: ["text", "note"],
+      fieldSources: { text: "free_text" },
+    };
+    expect(fieldSourceViolations(withoutSource)).toEqual(["invented_feature.note: mangler kilde"]);
+
+    const noSourcesAtAll: AiFeatureDefinitionForTest = {
+      ...withoutSource,
+      fieldSources: undefined,
+    };
+    expect(fieldSourceViolations(noSourcesAtAll)).toHaveLength(2);
+
+    // De nye kolonnene fanges også
+    for (const source of NEW_NEVER_FIELDS) {
+      expect(
+        fieldSourceViolations({
+          ...withNeverSource,
+          fieldSources: { text: source, recipient: "free_text" },
+        }),
+        source,
+      ).toHaveLength(1);
+    }
+  });
+
+  it("V8.3 NEVER_FIELDS har hele minimumslisten og de tre nye kolonnene", () => {
+    const minimum = Object.entries(BLOCKED).flatMap(([table, cols]) =>
+      cols.map((col) => `${table}.${col}`),
+    );
+    expect(minimum.length).toBeGreaterThan(30);
+    expect([...NEVER_FIELDS]).toEqual(expect.arrayContaining([...minimum, ...NEW_NEVER_FIELDS]));
+    expect(new Set(NEVER_FIELDS).size, "ingen dubletter").toBe(NEVER_FIELDS.length);
   });
 });

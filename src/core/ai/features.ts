@@ -21,6 +21,11 @@ export type AiFeatureDefinition = {
   code: AiFeatureCode;
   permission: Permission;
   allowedFields: readonly string[];
+  /**
+   * Hvor hver feltkode på tillatt-listen henter fra: `tabell.kolonne`, eller `free_text` for
+   * tekst den ansatte skriver selv. Ingen kilde kan stå på «aldri»-listen (`never-fields.ts`).
+   */
+  fieldSources: Readonly<Record<string, string>>;
   allowedTargets: readonly AiTargetSpec[];
   promptVersion: string;
 };
@@ -39,11 +44,16 @@ export const AI_PROMPTS: Readonly<Record<string, string>> = {
   ].join("\n"),
 };
 
+/*
+ * Endring i tillatt-listen (`allowedFields`, `fieldSources`) krever gjennomgang av
+ * sikkerhet-personvern i PR-en (A175). «Aldri»-listen står i `never-fields.ts`.
+ */
 export const AI_FEATURES: Readonly<Record<AiFeatureCode, AiFeatureDefinition>> = {
   language_polish: {
     code: "language_polish",
     permission: "report.edit",
     allowedFields: ["text"],
+    fieldSources: { text: "free_text" },
     allowedTargets: [
       { type: "answer", fieldKey: "text" },
       { type: AI_TRIAL_TARGET_TYPE, fieldKey: "text" },

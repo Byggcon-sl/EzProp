@@ -32,6 +32,7 @@ export type AiFeatureDefinitionForTest = {
   code: string;
   permission: string;
   allowedFields: readonly string[];
+  fieldSources?: Readonly<Record<string, string>>;
   allowedTargets: readonly { type: string; fieldKey: string }[];
   promptVersion: string;
 };

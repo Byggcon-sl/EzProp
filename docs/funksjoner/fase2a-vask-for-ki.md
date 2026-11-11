@@ -66,7 +66,7 @@ I dag stopper `src/core/ai` bare felt som ikke står på tillatt-listen. Friteks
    - Svaret til kalleren er `{ kind: "blocked" }`. Samme `requestId` på nytt gir `blocked` igjen fra `toSuggestionResult`, uten ny rad og uten kall.
    - En sperret forespørsel avviser ikke forrige åpne forslag på samme mål.
    - `recordDecision`, `checkAiTextApproved` og `getSuggestionStatus` godtar aldri en `blocked`-rad.
-   - Prøvesiden viser samme tekst som når KI er av («KI er ikke tilgjengelig», ingen ny skjerm). «KI er av» gir fortsatt ingen rad. ADR 0006 del 5, 6 og 11 rettes i samme PR.
+   - Prøvesiden viser samme tekst som når KI er av («KI er av.», ingen ny skjerm og ingen ny tekst). Server-handlingen på prøvesiden gjør `blocked` om til samme svar som `disabled`. «KI er av» gir fortsatt ingen rad. ADR 0006 del 5, 6 og 11 rettes i samme PR.
 6. **Mål-id-en:** måltypen `answer` kan ikke kontrolleres før tabellen `answers` finnes (2a-2). Til da behandles `answer` som `ai_trial` i vakten som finnes: godtas bare med falsk leverandør, ellers `blocked`. Ingen ny struktur per måltype nå (bygges i 2a-2). ADR 0006 del 6 sier allerede at `src/core/ai` selv skal finne oppdraget fra målet og avvise hvis det ikke stemmer med `assignmentId`; det gjøres i 2a-2 når `answers` finnes.
 7. **«Aldri»-kolonnene som data og kontroll (ad-7):** listen fra ADR 0006 del 6 legges som data i `src/core/ai` og utvides med `assignment_team_members.handed_over_reason`, `certifications.certificate_number` og `assignments.number`. Hver funksjonsdefinisjon sier hvilken kolonne hver feltkode på tillatt-listen henter fra (`fieldSources`, eller `free_text` for tekst skrevet av den ansatte). En test feiler hvis en feltkode henter fra en «aldri»-kolonne eller mangler kilde. Testen har en fast kopi av minimumslisten (som i dag i `src/core/ai/features/`), så en kolonne ikke kan fjernes fra både kode og kontroll i samme endring uten rød test. Endring i tillatt-listen eller «aldri»-listen krever gjennomgang av sikkerhet-personvern i PR-en (står i kommentaren over listene).
 8. **`getSuggestionStatus` (småfunn):** rettigheten sjekkes før raden leses. Den ansatte må ha minst én av rettighetene som en KI-funksjon krever; etter oppslaget sjekkes rettigheten for funksjonen på raden som i dag. Svaret er fortsatt `null` for alt som ikke kan vises.
@@ -101,7 +101,7 @@ Ingen ny rettighet. Oppslaget etter kjente verdier filtrerer på `grant.organiza
 - Ingen nye faste koder utenom utfallet `blocked`.
 
 ## Skjermer
-Ingen nye. Prøvesiden `/prove/ki` viser «KI er ikke tilgjengelig» også ved `blocked`.
+Ingen nye. Prøvesiden `/prove/ki` viser «KI er av.» også ved `blocked` (samme tekst som når KI er av).
 
 ## Regler
 Ingen fagregler. Vasken er kode med testsaker (oppdiktede eksempler).
@@ -148,7 +148,7 @@ Ingen fagregler. Vasken er kode med testsaker (oppdiktede eksempler).
 - [ ] Leverandørkallet skjer etter vasken i `requestSuggestion`, og ingen andre filer kaller `provider.complete`.
 
 **Resten:**
-- [ ] Komponenttest: `blocked` gir teksten «KI er ikke tilgjengelig». Eksisterende e2e for `/prove/ki` på PC og iPad-størrelse er grønne.
+- [ ] `blocked` gir samme svar på prøvesiden som når KI er av («KI er av.»). Dekkes i `src/app/(ansatt)/prove/ki/actions.test.ts` (det finnes ingen komponenttest `.test.tsx` for siden). Eksisterende e2e for `/prove/ki` på PC og iPad-størrelse er grønne.
 - [ ] KI-forslag kan fortsatt godtas, endres og avvises, og logges (eksisterende tester mot falsk leverandør grønne).
 - [ ] ADR 0006 del 5, 6 og 11 er rettet for `blocked`, `redacted_count`, `input_summary` etter vask, de kjente verdiene, restrisikoen (to-bokstavsnavn, firmanavn bare som frase) og den utvidede «aldri»-listen.
 - [ ] Ingen nye `*-testplan.test.ts`: testene legges i de filene som finnes for området.
@@ -181,6 +181,10 @@ Ingen fagregler. Vasken er kode med testsaker (oppdiktede eksempler).
 - **testskriver:** testene i akseptkriteriene, parallelt med utvikleren, i de eksisterende testfilene.
 
 Ikke med: arkitekt (ADR 0006 finnes), ux og ui (ingen ny skjerm), fagansvarlig (ingen fagtekst).
+
+## Signaturavvik (bit D, 11.11.2026)
+- «Aldri»-listen er `NEVER_FIELDS` i `src/core/ai/never-fields.ts`, med kontrollfunksjonen `fieldSourceViolations(definition): string[]` og konstanten `FREE_TEXT_SOURCE = "free_text"`. Ingen av dem eksporteres fra `@/core/ai` (bare tester i modulen bruker dem).
+- `fieldSourceViolations` gir også feil for en kilde som verken er `free_text` eller `tabell.kolonne`.
 
 ## Åpne spørsmål
 - Ingen nye til Ståle. Spørsmål 54–58 står fortsatt og må være besvart før ekte leverandør brukes med ekte data.

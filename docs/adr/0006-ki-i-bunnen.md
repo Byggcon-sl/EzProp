@@ -142,8 +142,9 @@ Ingen endring i funksjonene, i modulene eller i `ai_usage_log`.
 | `report_id` | Rapporten. Kan være tom |
 | `target_ref` | Hvor forslaget gjelder: type, id og feltkode |
 | `source_fields` | Hvilke felt som var grunnlaget. Bare feltkoder, aldri verdier |
-| `input_summary` | Bare feltnavn, referanser og antall (for eksempel antall tegn og antall kandidater). Aldri tekst |
-| `outcome` | `ok`, `no_match`, `error` |
+| `input_summary` | Bare feltnavn, referanser og antall (for eksempel antall tegn og antall kandidater). Aldri tekst. Regnes av den **vaskede** teksten, det som faktisk ble sendt (A172) |
+| `redacted_count` | Antall treff vasken byttet ut i kallet (heltall, standard 0, aldri negativt). Bare summen, aldri verdiene og aldri fordelt per type (A172). Ingen visning eller telling per ansatt |
+| `outcome` | `ok`, `no_match`, `error`, `blocked`. `blocked` betyr at forespørselen ble sperret før leverandøren ble kalt (A171), se under |
 | `error_code` | Fast kode ved feil. Aldri leverandørens melding |
 | `output_text` | Forslaget. Tom når utfallet ikke er `ok` |
 | `status` | `suggested`, `accepted`, `edited`, `rejected`. Tom når utfallet ikke er `ok` |
@@ -154,6 +155,7 @@ Ingen endring i funksjonene, i modulene eller i `ai_usage_log`.
 
 - Sammensatte fremmednøkler med `organization_id` til `employees`, `assignments` og `reports`, slik at en rad aldri kan peke på tvers av organisasjoner.
 - **Tabellen regnes som personopplysninger.** `output_text` kan inneholde noe som slapp gjennom vasken. Derfor: myk sletting (`deleted_at`), 10 år (`retain_until`), og egen rad i den interne personvernerklæringen når tabellen bygges.
+- **Utfallet `blocked`** (A171) skrives når forespørselen er gyldig, men ikke kan sendes til leverandøren: fritekst uten oppdrag mot ekte leverandør, og måltypene `ai_trial` og `answer` mot ekte leverandør (`answer` til tabellen `answers` finnes i 2a-2, A173). Raden skrives etter rettighetssjekken; leverandøren kalles ikke; `output_text`, `status` og `error_code` er tomme; tokens, kostnad og `redacted_count` er 0. Samme `requestId` på nytt gir `blocked` uten ny rad. En `blocked`-rad kan aldri avgjøres, godkjennes eller vises som forslag. Den er skilt fra «KI er av», som ikke gir noen rad (del 11).
 - Teksten den ansatte endte med (ved `edited`), ligger i feltet forslaget gjaldt, ikke i loggen.
 - **Ledetekst, inndata og svar skrives aldri til `logger`.** Feil fra leverandøren logges uten innhold: bare funksjon, leverandørkode, `error_code` og id.
 - Når tabellen bygges: `organization_id` på all KI-data, spørringer filtrerer på `grant.organizationId`, hver spørring får `expectTenantIsolation`, og tabellen føres i `tests/tenant-tables.ts`.
@@ -176,24 +178,42 @@ Felt som **aldri** kan stå på en tillatt-liste:
 | `claims` | `claimant_text`, `description`, `building_part_text` (fritekstene) |
 | `employees` | `name` |
 | `users` | `name`, `email` |
-| `assignments` | `internal_note` |
+| `assignments` | `internal_note`, `number` (oppdragsnummeret kan kobles til kunden) |
+| `assignment_team_members` | `handed_over_reason` |
+| `certifications` | `certificate_number` |
 | Alle | Fødselsnummer. Ingen kolonne skal ha det, men mønsteret fanges i fritekst |
+
+Listen ligger som data i `src/core/ai/never-fields.ts` (ad-7). Hver funksjonsdefinisjon sier i `fieldSources` hvilken kolonne hver feltkode på tillatt-listen henter fra (`tabell.kolonne`, eller `free_text` for tekst den ansatte skriver selv). En test feiler hvis en feltkode mangler kilde eller henter fra en kolonne på listen. Testen har en fast kopi av minimumslisten, så en kolonne ikke kan fjernes fra både koden og kontrollen i samme endring. **Endring i tillatt-listen eller «aldri»-listen krever gjennomgang av sikkerhet-personvern i PR-en** (A175).
 
 **Fritekst** (premisser, notater, kommentarer, diktat, e-post til ordreforslag) kan stå på en tillatt-liste, men vaskes i tillegg på to måter:
 
-1. **Mønstre:** e-post, telefon, fødselsnummer, organisasjonsnummer og gnr/bnr (også med feste- og seksjonsnummer).
-2. **Oppdragets kjente verdier:** navn på parter, kontakter, firma og ansatte, adresse og matrikkel. `src/core/ai` henter dem selv fra databasen for oppdraget, så modulen kan ikke glemme det. `src/core/ai` finner selv oppdraget fra `target` eller `reportId`, filtrert på `grant.organizationId`, og gir feil hvis det ikke stemmer med `assignmentId` fra kalleren.
+1. **Mønstre** (`src/shared/lib/pii-patterns.ts`, A169): e-post, telefon (også åtte sifre skrevet sammen og med `+47` eller `0047`), fødselsnummer, organisasjonsnummer, kontonummer (A177), gnr/bnr/fnr/snr og adresse (gatenavn med fast liste over endelser og husnummer, postnummer med poststed). Grensene tar hensyn til æ, ø og å, og tall inne i UUID-er og lengre tall står urørt. Heller for mye enn for lite (A170): ingen kontrollsiffersjekk, og to årstall etter hverandre kan bli `[telefon]`.
+2. **Oppdragets kjente verdier** (ad-3): `src/core/ai` henter dem selv fra databasen når `assignmentId` er satt, filtrert på `grant.organizationId`, så modulen kan ikke glemme det og kalleren kan ikke sende dem inn:
+   - navn, firmanavn, e-post, telefon og organisasjonsnummer på partene (`assignment_parties`) og kontaktene og firmaene de peker på (`contacts`, `firms`);
+   - bestilleren (`orders.ordered_by_contact_id`, `orders.ordered_by_firm_id`, `orders.ordered_by_text`);
+   - navn på ansatte på oppdraget (`assignment_team_members` → `employees.name`);
+   - adressen (`orders.address_text`, `properties.address`, `postal_code`, `city`, `municipality_name`);
+   - matrikkel (`orders.gnr/bnr/snr`, `cadastral_units.gnr/bnr/fnr/snr/share_number`, `properties.municipality_number`);
+   - borettslag og sameie (`cadastral_units.association_name`, `association_org_number`, `orders.housing_association_name`, `common_areas.managing_agent`).
 
-Vasken gjelder **alle tekstverdier som sendes**, også verdiene i `fields` og tekstene i `candidates`.
+   **Mykt slettede rader tas med** (parter, kontakter, firma, teammedlemmer, matrikkel og fellesareal): en part som er fjernet fra oppdraget, står ofte fortsatt i notatene (A170). Organisasjonsfilteret står alltid. Verdiene lever bare i minnet under det ene kallet og skrives aldri til `logger`, feilmeldinger, `input_summary`, `audit_log` eller svaret.
 
-**Fritekst uten oppdrag** (`assignmentId` er tom, for eksempel e-post til ordreforslag) har ingen kjente verdier å vaske med, og navn og adresse er der hovedinnholdet. Slik tekst sendes **bare til den falske leverandøren** til Ståle har svart (spørsmål 58). En ekte leverandør får `disabled` for slike kall.
+   **Matching (A174):** personnavn som hel frase uansett lengde, og hvert ord på minst tre tegn for seg (delt på mellomrom og bindestrek, også med genitiv `-s`). Firmanavn, borettslag, sameie, forretningsfører og bestillerteksten bare som hel frase, så fagord som «Tak» og «Bygg» i et firmanavn står urørt. Adressen som hel streng, gatenavn med nummer, gatenavnet alene og poststedet. Matrikkel bare som kombinasjon (`12/34`, `1804-12/34`, «gnr 12»), aldri som enkelttall. Uten hensyn til store og små bokstaver; verdiene escapes; lengste verdi først. Kjente verdier vaskes før mønstrene, og et treff telles én gang.
 
-Treff erstattes med faste merker: `[navn]`, `[e-post]`, `[telefon]`, `[adresse]`, `[matrikkel]`, `[fødselsnummer]`, `[organisasjonsnummer]`.
+   Kontroll av at målet hører til oppdraget: `src/core/ai` skal selv finne oppdraget fra `target` eller `reportId`, filtrert på `grant.organizationId`, og gi feil hvis det ikke stemmer med `assignmentId` fra kalleren. Det bygges i 2a-2 når tabellen `answers` finnes. Til da sperres måltypen `answer` mot ekte leverandør (`blocked`, A173).
+
+Vasken gjelder **alle tekstverdier som sendes**, også verdiene i `fields` og tekstene i `candidates` (i dag avvises kandidater med innhold, så bare `fields` vaskes). Den kjører i `requestSuggestion`, rett før leverandørkallet, også mot den falske leverandøren. Rekkefølgen er: rettighet → tillatt-liste → oppdraget → samme `requestId` → «KI er av» (ingen rad) → sperret (`blocked`-rad) → oppslag av kjente verdier → vask → leverandørkall. Antall treff lagres i `ai_usage_log.redacted_count`.
+
+**Feil stenger** (A176): kaster oppslaget eller vasken, kalles leverandøren aldri, og usvasket tekst sendes aldri.
+
+**Fritekst uten oppdrag** (`assignmentId` er tom, for eksempel e-post til ordreforslag) har ingen kjente verdier å vaske med, og navn og adresse er der hovedinnholdet. Slik tekst sendes **bare til den falske leverandøren** til Ståle har svart (spørsmål 58). En ekte leverandør gir utfallet `blocked` (rad i loggen, intet kall) for slike kall.
+
+Treff erstattes med faste merker: `[navn]`, `[e-post]`, `[telefon]`, `[adresse]`, `[matrikkel]`, `[fødselsnummer]`, `[organisasjonsnummer]`, `[kontonummer]`. Merkene byttes ikke tilbake i forslaget i 2a-1 (A178).
 
 - Mønstrene deles med loggeren og ligger ett sted i `src/shared`. De kopieres ikke.
 - Vasken har tester med oppdiktede eksempler for hvert mønster og hver kjent verdi, og en test som viser at den falske leverandøren aldri får se verdiene.
 - Vasken skjer bare på serveren, rett før kallet.
-- **Restrisiko:** fritekst kan inneholde opplysninger vasken ikke kjenner igjen, for eksempel et navn skrevet feil eller en beskrivelse som peker på én bolig. Vasken gjør risikoen liten, ikke null. Databehandleravtale kreves derfor uansett (spørsmål 54 til Ståle).
+- **Restrisiko:** fritekst kan inneholde opplysninger vasken ikke kjenner igjen, for eksempel et navn skrevet feil, et navn som ikke hører til oppdraget, en beskrivelse som peker på én bolig, et to-bokstavsnavn skrevet alene («Bo») eller deler av et firmanavn (firmanavn vaskes bare som hel frase). Vasken gjør risikoen liten, ikke null. Databehandleravtale kreves derfor uansett (spørsmål 54 til Ståle).
 - **Tale og bilde (fase 2b) kan ikke vaskes.** De går gjennom samme modul, EXIF og GPS fjernes fra bilder før noe sendes, og tale og bilde til en ekte leverandør krever egen vurdering av Ståle (spørsmål 55).
 
 ### 7. Hva KI aldri gjør
@@ -234,7 +254,8 @@ Treff erstattes med faste merker: `[navn]`, `[e-post]`, `[telefon]`, `[adresse]`
 - Nøkkelen `ai.enabled` i `organizations.settings` (tabellen `settings` er ikke bygget). Standard er av.
 - **To låser** for en ekte leverandør: `ai.enabled` er på, **og** organisasjonen har en aktiv tilkobling på porten `ai`.
 - Bare admin endrer bryteren og tilkoblingen (`organization.manage`). Begge endringene logges i `audit_log`.
-- **Alt virker uten KI.** Er KI av, gir `requestSuggestion` svaret `disabled`, det lages ingen rad, og skjermene viser ingen KI-knapper. Forslag som allerede finnes, kan fortsatt avgjøres og angres.
+- **Alt virker uten KI.** Er KI av, gir `requestSuggestion` svaret `disabled`, det lages ingen rad, og skjermene viser ingen KI-knapper.
+- **Sperret er ikke det samme som av.** En gyldig forespørsel som ikke kan sendes til en ekte leverandør (del 5), gir svaret `blocked` og en rad med utfallet `blocked`, så admin kan skille den fra at KI er slått av (ad-1). Prøvesiden viser samme tekst for begge («KI er av.»). Forslag som allerede finnes, kan fortsatt avgjøres og angres.
 
 ### Tilgang
 

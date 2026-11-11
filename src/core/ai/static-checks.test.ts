@@ -156,3 +156,25 @@ describe("forslagsmønsteret, statiske kontroller (8)", () => {
     expect(read(join(aiDir, "features.ts"))).toMatch(/\bai_trial\b/);
   });
 });
+
+/*
+ * «Aldri»-listen (docs/funksjoner/fase2a-vask-for-ki-testplan.md avsnitt 8.4, A175).
+ */
+describe("vask før KI, statiske kontroller (8)", () => {
+  it("V8.4 kommentaren over «aldri»-listen og tillatt-listene krever sikkerhet-personvern", () => {
+    for (const name of ["never-fields.ts", "features.ts"]) {
+      const text = read(join(aiDir, name));
+      expect(text, name).toMatch(/sikkerhet-personvern/);
+      expect(text, name).toMatch(/A175/);
+    }
+    // Kommentaren står over listen, ikke et annet sted i filen
+    const neverFields = read(join(aiDir, "never-fields.ts"));
+    expect(neverFields.indexOf("sikkerhet-personvern")).toBeLessThan(
+      neverFields.indexOf("export const NEVER_FIELDS"),
+    );
+    const features = read(join(aiDir, "features.ts"));
+    expect(
+      features.lastIndexOf("sikkerhet-personvern", features.indexOf("export const AI_FEATURES")),
+    ).toBeGreaterThan(-1);
+  });
+});
