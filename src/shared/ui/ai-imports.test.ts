@@ -139,7 +139,10 @@ describe("8.2 prøvesiden /prove/ki", () => {
         if (target === null) continue;
         expect(target, rel(file)).not.toMatch(/^core\/ai\/providers(\/|$)/);
         expect(target, rel(file)).not.toMatch(/^core\/integrations(\/|$)/);
-        if (target.startsWith("core/ai")) expect(target, rel(file)).toBe("core/ai");
+        // KI-køen (`@/core/ai/client`) er lov på prøvesiden (docs/funksjoner/fase2a-ki-ko.md).
+        if (target.startsWith("core/ai")) {
+          expect(["core/ai", "core/ai/client"], rel(file)).toContain(target);
+        }
       }
     }
   });

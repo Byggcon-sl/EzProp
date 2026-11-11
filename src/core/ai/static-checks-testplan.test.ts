@@ -104,7 +104,8 @@ describe("forslagsmønsteret, statiske kontroller (8)", () => {
         .map((specifier) => targetInSrc(file, specifier))
         .filter((target): target is string => target !== null && target.startsWith("core/ai"));
       expect(
-        aiImports.filter((target) => target !== "core/ai"),
+        // KI-køen (`@/core/ai/client`) er lov på prøvesiden (docs/funksjoner/fase2a-ki-ko.md).
+        aiImports.filter((target) => target !== "core/ai" && target !== "core/ai/client"),
         rel(file),
       ).toEqual([]);
       expect(source, rel(file)).not.toMatch(/(["'`])(ai|speech_to_text)\1/);
