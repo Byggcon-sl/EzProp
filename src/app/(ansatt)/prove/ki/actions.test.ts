@@ -119,6 +119,22 @@ describe("11.1 be om forslag", () => {
     expect(await requestTrialSuggestion(requestInput())).toEqual({ kind: "disabled" });
     expect(await allAiRows()).toHaveLength(0);
   });
+
+  it("V5.8 blocked fra kjernen gir samme svar som KI av, og ingen ny rad", async () => {
+    const { organization, employee } = await signedIn();
+    const input = requestInput();
+    // Samme requestId som en sperret forespørsel: kjernen svarer `blocked` fra raden
+    await createAiUsageLog(organization.id, {
+      id: input.requestId,
+      employeeId: employee.id,
+      targetRef: { type: "ai_trial", id: input.targetId, fieldKey: "text" },
+      outcome: "blocked",
+      status: null,
+      outputText: null,
+    });
+    expect(await requestTrialSuggestion(input)).toEqual({ kind: "disabled" });
+    expect(await allAiRows()).toHaveLength(1);
+  });
 });
 
 describe("11.2 og 5.4 organisasjon og ansatt kommer bare fra økten", () => {

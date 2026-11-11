@@ -26,7 +26,11 @@ import { employees } from "./employees";
  *
  * Kodene under er faste (regel 6). CHECK-reglene må ha de samme kodene.
  */
-export const AI_OUTCOMES = ["ok", "no_match", "error"] as const;
+/**
+ * `blocked`: forespørselen ble sperret av modulen (ad-1), leverandøren ble ikke kalt. Skilt fra
+ * «KI er av», som ikke gir noen rad.
+ */
+export const AI_OUTCOMES = ["ok", "no_match", "error", "blocked"] as const;
 export type AiOutcome = (typeof AI_OUTCOMES)[number];
 
 export const AI_SUGGESTION_STATUSES = ["suggested", "accepted", "edited", "rejected"] as const;
@@ -79,6 +83,8 @@ export const aiUsageLog = pgTable(
     /** Aldri flyttall. */
     cost: numeric("cost", { precision: 12, scale: 4 }).notNull().default("0"),
     currency: text("currency").notNull().default("NOK"),
+    /** Antall treff som ble vasket bort før kallet. Aldri verdiene. */
+    redactedCount: integer("redacted_count").notNull().default(0),
     retainUntil: timestamp("retain_until", { withTimezone: true }).notNull(),
   },
   (table) => [
@@ -120,6 +126,12 @@ export const aiUsageLog = pgTable(
     check(
       "ai_usage_log_tokens_check",
       sql`${table.tokensIn} >= 0 and ${table.tokensOut} >= 0 and ${table.cost} >= 0`,
+    ),
+    check("ai_usage_log_redacted_count_check", sql`${table.redactedCount} >= 0`),
+    // Sperret forespørsel: intet kall, så ingen forslag, status eller feilkode
+    check(
+      "ai_usage_log_blocked_check",
+      sql`${table.outcome} <> 'blocked' or (${table.status} is null and ${table.outputText} is null and ${table.errorCode} is null)`,
     ),
   ],
 );

@@ -84,6 +84,7 @@ describe("ai_usage_log: kolonnene (1.1)", () => {
       "tokens_out",
       "cost",
       "currency",
+      "redacted_count",
       "retain_until",
     ];
     expect([...found.keys()].sort()).toEqual(expect.arrayContaining(expected.sort()));
@@ -232,6 +233,60 @@ describe("ai_usage_log: sjekken mellom utfall, status og forslag (1.6–1.9)", (
       );
     },
   );
+});
+
+describe("ai_usage_log: redacted_count og utfallet blocked (vask før KI V6.1–V6.2)", () => {
+  it("V6.1 redacted_count finnes, er ikke tom og har standard 0", async () => {
+    const found = await columns();
+    expect(found.get("redacted_count")?.data_type).toBe("integer");
+    expect(found.get("redacted_count")?.is_nullable).toBe("NO");
+    const { orgA, employeeA } = await twoOrganizations();
+    const row = await createAiUsageLog(orgA.id, { employeeId: employeeA.id });
+    // Fabrikken setter ikke kolonnen, så standardverdien gjelder
+    expect((row as unknown as { redacted_count: number }).redacted_count).toBe(0);
+  });
+
+  it("V6.1 negativt redacted_count avvises", async () => {
+    const { orgA, employeeA } = await twoOrganizations();
+    const row = await createAiUsageLog(orgA.id, { employeeId: employeeA.id });
+    await expectRejected(() =>
+      db.execute(sql`update ai_usage_log set redacted_count = -1 where id = ${row.id}`),
+    );
+    await db.execute(sql`update ai_usage_log set redacted_count = 3 where id = ${row.id}`);
+  });
+
+  it("V6.2 blocked med tom status, output_text og error_code godtas", async () => {
+    const { orgA, employeeA } = await twoOrganizations();
+    const row = await createAiUsageLog(orgA.id, {
+      employeeId: employeeA.id,
+      outcome: "blocked",
+      status: null,
+      outputText: null,
+      errorCode: null,
+    });
+    expect(row.outcome).toBe("blocked");
+    expect(row.status).toBeNull();
+    expect(row.output_text).toBeNull();
+    expect(row.error_code).toBeNull();
+  });
+
+  it.each([
+    { name: "status", overrides: { status: "suggested" } },
+    { name: "output_text", overrides: { outputText: "Oppdiktet tekst" } },
+    { name: "error_code", overrides: { errorCode: "timeout" } },
+  ])("V6.2 blocked med $name satt avvises", async ({ overrides }) => {
+    const { orgA, employeeA } = await twoOrganizations();
+    await expectRejected(() =>
+      createAiUsageLog(orgA.id, {
+        employeeId: employeeA.id,
+        outcome: "blocked",
+        status: null,
+        outputText: null,
+        errorCode: null,
+        ...overrides,
+      }),
+    );
+  });
 });
 
 describe("ai_usage_log: myk sletting (1.10)", () => {

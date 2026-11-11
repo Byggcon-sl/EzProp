@@ -55,6 +55,8 @@ function usageIdOf(item: unknown): string | null {
 /** Om elementet er godkjent KI-tekst for akkurat dette målet. */
 function isApproved(item: AiApprovalItem, row: StoredRow | undefined): boolean {
   if (!row || !isTargetRef(item.target) || !isTargetRef(row.targetRef)) return false;
+  // Sperret forespørsel (ad-1), ingen treff og feil er aldri godkjent KI-tekst
+  if (row.outcome === "blocked") return false;
   if (row.outcome !== "ok") return false;
   if (row.status !== "accepted" && row.status !== "edited") return false;
   const definition = getFeatureDefinition(row.feature);

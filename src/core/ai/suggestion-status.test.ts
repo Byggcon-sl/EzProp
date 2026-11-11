@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requireOrganizationAccess } from "@/core/access";
+import { db } from "@/db/client";
 import { uuidv7 } from "@/shared/lib/uuid";
 import {
   aiRow,
@@ -177,5 +178,57 @@ describe("getSuggestionStatus: eierskap og tenant (3.4, 3.7, 5.1)", () => {
       },
       idOf: (row) => row.id,
     });
+  });
+});
+
+describe("getSuggestionStatus: rettigheten før lesing og blocked (vask før KI V5.6, V7.5)", () => {
+  it("V7.5 uten noen KI-rettighet leses ikke raden (spion på db.select), svaret er null", async () => {
+    const { organization, grant } = await setup();
+    const row = await createAiUsageLog(organization.id, { employeeId: grant.employeeId });
+    const office = await employeeWithGrant(organization.id, ["office"], "Test Kontor");
+    const select = vi.spyOn(db, "select");
+    expect(await getSuggestionStatus(office.grant, row.id)).toBeNull();
+    expect(await getSuggestionStatus(office.grant, uuidv7())).toBeNull();
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it("V7.5 med rettighet leses raden som før, og mykt slettet rad gir null", async () => {
+    const { organization, grant } = await setup();
+    const row = await createAiUsageLog(organization.id, { employeeId: grant.employeeId });
+    const deleted = await createAiUsageLog(organization.id, {
+      employeeId: grant.employeeId,
+      deletedAt: new Date(),
+      deletedBy: "oppdiktet-admin",
+    });
+    const select = vi.spyOn(db, "select");
+    expect(await getSuggestionStatus(grant, row.id)).toEqual({
+      status: "suggested",
+      outcome: "ok",
+    });
+    expect(select).toHaveBeenCalled();
+    expect(await getSuggestionStatus(grant, deleted.id)).toBeNull();
+  });
+
+  it("V7.5 admin ser status (regel 11)", async () => {
+    const { organization, grant } = await setup();
+    const row = await createAiUsageLog(organization.id, { employeeId: grant.employeeId });
+    const admin = await employeeWithGrant(organization.id, ["admin"], "Test Admin");
+    expect(await getSuggestionStatus(admin.grant, row.id)).toEqual({
+      status: "suggested",
+      outcome: "ok",
+    });
+  });
+
+  it("V5.6 en blocked-rad gir null, også for admin", async () => {
+    const { organization, grant } = await setup();
+    const row = await createAiUsageLog(organization.id, {
+      employeeId: grant.employeeId,
+      outcome: "blocked",
+      status: null,
+      outputText: null,
+    });
+    const admin = await employeeWithGrant(organization.id, ["admin"], "Test Admin");
+    expect(await getSuggestionStatus(grant, row.id)).toBeNull();
+    expect(await getSuggestionStatus(admin.grant, row.id)).toBeNull();
   });
 });
