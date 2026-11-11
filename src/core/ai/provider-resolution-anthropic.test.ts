@@ -14,7 +14,7 @@ import {
   requestSuggestion,
   validRequest,
 } from "../../../tests/ai";
-import { fakeAnthropic, TEST_ANTHROPIC_KEY, TEST_MODEL } from "../../../tests/fake-anthropic-http";
+import { fakeAnthropic, TEST_ANTHROPIC_KEY, TEST_MODEL } from "../../../tests/fake-anthropic";
 import { createOrganization, resetDatabase } from "../../../tests/factories";
 import { resolveAiProvider } from "./provider-resolution";
 import { fakeAiProvider } from "./providers/fake";
@@ -226,7 +226,7 @@ const LOCK_CASES: LockCase[] = [
 
 describe("låsene for anthropic (3.1, R1): én lås mangler → disabled", () => {
   it.each(LOCK_CASES)(
-    "$name → disabled, intet kall, ingen rad, ingen lekkasje",
+    "R1 3.1 $name → disabled, intet kall, ingen rad, ingen lekkasje",
     async ({ setup }) => {
       const org = await createOrganization("Oppdiktet Takst A");
       await setup(org.id);
@@ -261,7 +261,7 @@ describe("låsene for anthropic (3.1, R1): én lås mangler → disabled", () =>
 });
 
 describe("låsene for anthropic: alt på plass (3.1.1)", () => {
-  it("3.1.1 enabled med adapteren anthropic, modellen og features fra innstillingene", async () => {
+  it("R1 3.1.1 enabled med adapteren anthropic, modellen og features fra innstillingene", async () => {
     const org = await createOrganization("Oppdiktet Takst A");
     await enableAnthropic(org.id, {
       settings: anthropicSettings({ features: ["language_polish"] }),
@@ -284,7 +284,7 @@ describe("låsene for anthropic: alt på plass (3.1.1)", () => {
 });
 
 describe("fake som før (3.1.2, R5)", () => {
-  it("3.1.2 fake gir samme faste objekt og features = null", async () => {
+  it("R5 3.1.2 fake gir samme faste objekt og features = null", async () => {
     const org = await createOrganization("Oppdiktet Takst A");
     await enableAi(org.id);
     const grant = await inspectorIn(org.id);
@@ -299,7 +299,7 @@ describe("fake som før (3.1.2, R5)", () => {
 });
 
 describe("miljøet velger aldri (3.1.3, A160)", () => {
-  it("3.1.3 nøkkel satt og NODE_ENV=production, men ingen tilkobling → disabled", async () => {
+  it("R1 3.1.3 nøkkel satt og NODE_ENV=production, men ingen tilkobling → disabled", async () => {
     const org = await createOrganization("Oppdiktet Takst A");
     await enableAi(org.id, { connection: false });
     const grant = await inspectorIn(org.id);
@@ -312,7 +312,7 @@ describe("miljøet velger aldri (3.1.3, A160)", () => {
     expect(await aiRowCount()).toBe(0);
   });
 
-  it("3.1.3 nøkkel satt og bare fake-tilkobling → fake", async () => {
+  it("R1 3.1.3 nøkkel satt og bare fake-tilkobling → fake", async () => {
     const org = await createOrganization("Oppdiktet Takst A");
     await enableAi(org.id);
     const grant = await inspectorIn(org.id);

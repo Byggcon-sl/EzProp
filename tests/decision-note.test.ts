@@ -35,11 +35,11 @@ function section(text: string, title: string): string {
 }
 
 describe("beslutningsnotat om KI-leverandør (D1)", () => {
-  it("1. notatet finnes", () => {
+  it("D1 5.1 notatet finnes", () => {
     expect(existsSync(join(process.cwd(), NOTE_PATH))).toBe(true);
   });
 
-  it("2. har de sju delene som egne overskrifter", () => {
+  it("D1 5.2 har de sju delene som egne overskrifter", () => {
     const found = headings(readNote());
     for (const title of [
       "EU/EØS",
@@ -54,7 +54,7 @@ describe("beslutningsnotat om KI-leverandør (D1)", () => {
     }
   });
 
-  it("3. første avsnitt etter tittelen svarer på EU/EØS", () => {
+  it("D1 5.3 første avsnitt etter tittelen svarer på EU/EØS", () => {
     const lines = readNote().split("\n");
     const titleIndex = lines.findIndex((line) => /^#\s/.test(line));
     expect(titleIndex).toBeGreaterThanOrEqual(0);
@@ -66,7 +66,7 @@ describe("beslutningsnotat om KI-leverandør (D1)", () => {
     expect(firstParagraph).toContain("EU/EØS");
   });
 
-  it("4. «Dette er usikkert» er en egen overskrift med minst ett listepunkt", () => {
+  it("D1 5.4 «Dette er usikkert» er en egen overskrift med minst ett listepunkt", () => {
     const note = readNote();
     expect(headings(note)).toContain("Dette er usikkert");
     const items = section(note, "Dette er usikkert")
@@ -75,13 +75,13 @@ describe("beslutningsnotat om KI-leverandør (D1)", () => {
     expect(items.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("5. har ingen gjetteord", () => {
+  it("D1 5.5 har ingen gjetteord", () => {
     const note = readNote().toLowerCase();
     expect(note).not.toMatch(/\bantas\b/);
     expect(note).not.toMatch(/\btrolig\b/);
   });
 
-  it("6. pris-delen har dato og sier at prisene må sjekkes på nytt", () => {
+  it("D1 5.6 pris-delen har dato og sier at prisene må sjekkes på nytt", () => {
     const prices = section(readNote(), "Pris per rapport");
     expect(prices).toMatch(/\b\d{2}\.\d{2}\.\d{4}\b/);
     expect(prices.toLowerCase()).toContain("må sjekkes på nytt");

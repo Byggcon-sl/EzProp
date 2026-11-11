@@ -2,11 +2,13 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { runSeed } from "@/db/seed/run";
 import { db } from "@/db/client";
 import { integrationConnections } from "@/db/schema";
-import { resetDatabase } from "./factories";
-import { BLOCKED_HOST_MESSAGE } from "./setup-env";
+import { runSeed } from "@/db/seed/run";
+import { runSampleSeed } from "@/db/seed/sample-assignments";
+import { resetDatabase, TEST_NOW } from "./factories";
+import { ANTHROPIC_HOST, TEST_ANTHROPIC_KEY } from "./fake-anthropic";
+import { BLOCKED_AI_FETCH_MESSAGE, isBlockedAiHost } from "./setup-env";
 
 /*
  * S2 og S3: ingen nettkall til Anthropic fra tester, CI eller e2e, ingen `anthropic`-tilkobling i
@@ -24,6 +26,7 @@ const KEY_NAME = "ANTHROPIC_API_KEY";
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 describe("global sperre mot Anthropic i testene (S2)", () => {
@@ -33,16 +36,38 @@ describe("global sperre mot Anthropic i testene (S2)", () => {
     "https://anthropic.com/",
     "https://console.anthropic.com/",
   ])("S2 fetch mot %s uten stub kaster en tydelig feil", async (url) => {
-    await expect(fetch(url, { method: "POST", body: "{}" })).rejects.toThrow(BLOCKED_HOST_MESSAGE);
+    await expect(fetch(url, { method: "POST", body: "{}" })).rejects.toThrow(
+      BLOCKED_AI_FETCH_MESSAGE,
+    );
   });
 
   it("S2 fetch med Request-objekt og URL-objekt sperres også", async () => {
-    await expect(fetch(new Request("https://api.anthropic.com/v1/messages"))).rejects.toThrow(
-      BLOCKED_HOST_MESSAGE,
-    );
-    await expect(fetch(new URL("https://api.anthropic.com/v1/messages"))).rejects.toThrow(
-      BLOCKED_HOST_MESSAGE,
-    );
+    const url = `https://${ANTHROPIC_HOST}/v1/messages`;
+    await expect(fetch(new Request(url))).rejects.toThrow(BLOCKED_AI_FETCH_MESSAGE);
+    await expect(fetch(new URL(url))).rejects.toThrow(BLOCKED_AI_FETCH_MESSAGE);
+  });
+
+  it("S2 vertsnavnet sjekkes nøyaktig, ikke som delstreng", () => {
+    expect(isBlockedAiHost(ANTHROPIC_HOST)).toBe(true);
+    expect(isBlockedAiHost(`${ANTHROPIC_HOST}.`)).toBe(true);
+    expect(isBlockedAiHost("anthropic.com")).toBe(true);
+    expect(isBlockedAiHost("notanthropic.com")).toBe(false);
+    expect(isBlockedAiHost("anthropic.com.example.no")).toBe(false);
+    expect(isBlockedAiHost("localhost")).toBe(false);
+  });
+
+  it("S2 andre adresser går til den opprinnelige fetch (vanlig feil, ikke sperren)", async () => {
+    const error = await fetch("http://127.0.0.1:1/").catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).not.toContain(BLOCKED_AI_FETCH_MESSAGE);
+  });
+
+  it("S2 vi.stubGlobal overstyrer fortsatt sperren", async () => {
+    const fake = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fake);
+    const response = await fetch(`https://${ANTHROPIC_HOST}/v1/messages`);
+    expect(response.status).toBe(200);
+    expect(fake).toHaveBeenCalledTimes(1);
   });
 
   it("S2 nøkkelen er ikke satt i testmiljøet", () => {
@@ -62,14 +87,22 @@ describe("seed har ingen anthropic-tilkobling (S2)", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
   });
 
-  it("S2 seed mot testdatabasen gir null rader med provider = anthropic", async () => {
-    vi.stubEnv(KEY_NAME, "sk-ant-api03-OPPDIKTET-TESTNOKKEL-K7Q");
-    await runSeed({ SEED_ADMIN_EMAIL: "admin@example.com", SEED_ADMIN_NAME: "Test Admin" });
+  it("S2 seed og testoppdragene gir null rader med provider = anthropic, også med nøkkel satt", async () => {
+    vi.stubEnv(KEY_NAME, TEST_ANTHROPIC_KEY);
+    const env = { SEED_ADMIN_EMAIL: "admin@example.com", SEED_ADMIN_NAME: "Test Admin" };
+    await runSeed(env);
+    await runSampleSeed(env, TEST_NOW);
     const rows = await db
       .select()
       .from(integrationConnections)
       .where(eq(integrationConnections.provider, "anthropic"));
     expect(rows).toEqual([]);
+    // Ikke hult: prøveorganisasjonen har den falske leverandøren
+    const fake = await db
+      .select({ id: integrationConnections.id })
+      .from(integrationConnections)
+      .where(eq(integrationConnections.provider, "fake"));
+    expect(fake.length).toBeGreaterThan(0);
   });
 
   it("S2 seed-filene nevner ikke anthropic", () => {
@@ -100,20 +133,20 @@ describe("CI, e2e og .env.example (S2, avsnitt 6)", () => {
     }
   });
 
-  it(".env.example har bare en tom linje for nøkkelen", () => {
+  it("S2 .env.example har bare en tom linje for nøkkelen", () => {
     const lines = read(".env.example")
       .split("\n")
       .filter((line) => line.trim().startsWith(KEY_NAME));
     expect(lines).toEqual([`${KEY_NAME}=`]);
   });
 
-  it("e2e-serveren får aldri nøkkelen (playwright.config.ts)", () => {
+  it("S2 e2e-serveren får aldri nøkkelen (playwright.config.ts)", () => {
     const config = read("playwright.config.ts");
     expect(config).not.toContain(KEY_NAME);
     expect(config).not.toMatch(/anthropic/i);
   });
 
-  it("e2e-filene setter ikke nøkkelen og lager ingen anthropic-tilkobling", () => {
+  it("S2 e2e-filene setter ikke nøkkelen og lager ingen anthropic-tilkobling", () => {
     const dir = join(repoRoot, "e2e");
     const files = readdirSync(dir, { recursive: true, withFileTypes: true })
       .filter((entry) => entry.isFile() && /\.(ts|tsx)$/.test(entry.name))

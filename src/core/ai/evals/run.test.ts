@@ -506,8 +506,8 @@ describe("evalueringssett: TG-omtale i bøyde former (gjennomgang 11.11.2026)", 
  * aldri en ekte leverandør, fordi det koster penger. Falsk HTTP, ingen nettkall.
  */
 describe("evalueringssett: bare den falske leverandøren (KI-leverandør 4.4)", () => {
-  it.each(["anthropic", "unknown_vendor", "test_provider"])(
-    "leverandør med code %s → kaster før noe kall",
+  it.each(["anthropic", "FAKE", "unknown_vendor", "test_provider"])(
+    "S4 leverandør med code %s → kaster før noe kall, også med fake sin complete",
     async (code) => {
       const complete = vi.fn(fakeAiProvider.complete);
       const provider: AiProvider = { code, model: "test-v1", complete };
@@ -519,7 +519,7 @@ describe("evalueringssett: bare den falske leverandøren (KI-leverandør 4.4)", 
     },
   );
 
-  it("Anthropic-adapteren laget med falsk fetch → kaster, fetch er ikke kalt", async () => {
+  it("S4 Anthropic-adapteren laget med falsk fetch → kaster, fetch er ikke kalt", async () => {
     const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
     const provider = createAnthropicProvider({
       model: "MERKE-MODELL-K7Q",
@@ -533,7 +533,7 @@ describe("evalueringssett: bare den falske leverandøren (KI-leverandør 4.4)", 
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("fake går som før", async () => {
+  it("S4 kontroll: fake går som før", async () => {
     const result = await runEvals({
       provider: fakeAiProvider,
       casesDir: dirWith(evalCases()),
@@ -542,7 +542,7 @@ describe("evalueringssett: bare den falske leverandøren (KI-leverandør 4.4)", 
     expect(result.errors).toEqual([]);
   });
 
-  it("lekkasjesjekken er felles: run.ts importerer den fra ../prompt-leaks og har den ikke selv", () => {
+  it("R4 3.4.3 lekkasjesjekken er felles: run.ts importerer den fra ../prompt-leaks og har den ikke selv", () => {
     const source = readFileSync(join(__dirname, "run.ts"), "utf8");
     expect(source).toMatch(/from\s+["']\.\.\/prompt-leaks["']/u);
     expect(source).not.toMatch(/function\s+findLeakedKnownValues\b/u);
@@ -551,14 +551,17 @@ describe("evalueringssett: bare den falske leverandøren (KI-leverandør 4.4)", 
     expect(run.findPatternLeaks).toBe(findPatternLeaks);
   });
 
-  it("evals/run.ts importerer verken database, valg av leverandør eller adapteren", () => {
-    const source = readFileSync(join(__dirname, "run.ts"), "utf8");
-    expect(source).not.toMatch(/from\s+["']@\/db/u);
-    expect(source).not.toMatch(/provider-resolution/u);
-    expect(source).not.toMatch(/providers\/anthropic/u);
-  });
+  it.each(["run.ts", "schema.ts"])(
+    "S4 evals/%s importerer verken database, valg av leverandør eller adapteren",
+    (file) => {
+      const source = readFileSync(join(__dirname, file), "utf8");
+      expect(source).not.toMatch(/from\s+["']@\/db/u);
+      expect(source).not.toMatch(/provider-resolution/u);
+      expect(source).not.toMatch(/providers\/anthropic/u);
+    },
+  );
 
-  it("findPromptLeaks: uten kjente verdier bare mønstrene, med kjente verdier også dem", () => {
+  it("R4 3.4.3 findPromptLeaks: uten kjente verdier bare mønstrene, med kjente verdier også dem", () => {
     const known = { ...emptyKnownValues(), personNames: ["Qxzolav Partsen"] };
     expect(findPromptLeaks("Ring 912 34 567.", null)).toEqual(["telefon"]);
     expect(findPromptLeaks("Qxzolav kom.", null)).toEqual([]);

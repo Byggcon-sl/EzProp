@@ -46,6 +46,3 @@ if (typeof originalFetch === "function") {
   };
   globalThis.fetch = guardedFetch;
 }
-
-/** Samme melding under navnet testplanen bruker (tests/no-network.test.ts). */
-export const BLOCKED_HOST_MESSAGE = BLOCKED_AI_FETCH_MESSAGE;

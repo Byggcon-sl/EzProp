@@ -1,82 +1,75 @@
+import { inspect } from "node:util";
 import { sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AccessDeniedError, requireOrganizationAccess, type EmployeeGrant } from "@/core/access";
+import { createConnection, updateConnection } from "@/core/integrations";
 import { db } from "@/db/client";
 import { logger } from "@/shared/lib/logger";
 import { uuidv7 } from "@/shared/lib/uuid";
 import {
-  ANTHROPIC_TEST_KEY,
-  ANTHROPIC_TEST_MODEL,
-  PROVIDER_MESSAGE_MARKER,
   aiRow,
   aiRowCount,
   allAiRows,
-  anthropicErrorResponse,
   anthropicSettings,
+  captureError,
   employeeWithGrant,
   enableAi,
   enableAnthropic,
-  fakeAiProvider,
+  mergeOrganizationSettings,
   recordDecision,
   requestSuggestion,
-  stubAnthropicFetch,
   validRequest,
   type EmployeeVariant,
 } from "../../../tests/ai";
 import {
+  errorReply,
+  fakeAnthropic,
+  okReply,
+  PROVIDER_MESSAGE_MARK,
+  sentPromptText,
+  TEST_ANTHROPIC_KEY,
+  TEST_MODEL,
+} from "../../../tests/fake-anthropic";
+import {
   createAssignment,
   createOrganization,
-  grantPermission,
+  createUser,
+  createEmployee,
   resetDatabase,
 } from "../../../tests/factories";
-import { STANDARD_KNOWN_VALUES } from "./redaction-cases";
-import { seedKnownValues } from "../../../tests/known-values";
+import { containsWord, seedKnownValues, type KnownSeed } from "../../../tests/known-values";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { preparePrompt } from "./prompt";
-import { createConnection } from "@/core/integrations";
-import { mergeOrganizationSettings } from "../../../tests/ai";
+import { fakeAiProvider } from "./providers/fake";
 
 /*
- * Veien til en ekte leverandør i `requestSuggestion` (docs/funksjoner/fase2a-ki-leverandor-
- * testplan.md 3.2–3.6, R2–R7). Mot testdatabasen, med falsk HTTP (`vi.stubGlobal("fetch")`):
- * ingen ekte nettkall og ingen kostnad. Nøkkelen er oppdiktet og settes med `vi.stubEnv`.
+ * `requestSuggestion` mot Anthropic-adapteren med falsk HTTP (docs/funksjoner/fase2a-ki-
+ * leverandor-testplan.md 3.2–3.6, kortet Omfang 5 og 6, R2–R7). Mot testdatabasen. Ingen nettkall:
+ * `fetch` er stubbet globalt, og adapteren slår den opp ved kallet. Nøkkel, modell, navn og
+ * adresser er oppdiktet.
  *
- * `language_polish` har i dag bare mål som er sperret mot ekte leverandør (`answer`, `ai_trial`).
- * For å prøve den åpne veien får funksjonen her et ekstra, oppdiktet mål (`TEST_TARGET_TYPE`) som
- * bare finnes i denne testfilen.
+ * Målet `answer` og prøvemålet `ai_trial` er sperret mot en ekte leverandør til `answers` finnes
+ * (A166, A173). For å prøve hele den ekte veien (3.4–3.6) får `language_polish` her et ekstra,
+ * oppdiktet mål bare i testen (`TEST_TARGET_TYPE`), med oppdrag. Det står for målene som kommer i
+ * 2a-2. Sperren for `ai_trial`, `answer` og fritekst uten oppdrag prøves med de ekte målene (3.2).
  *
  * Støtter hovedmål: KI i bunnen (bare vasket tekst som har bestått lekkasjesjekken forlater oss,
- * og bare når funksjonen er slått på) og de ansatte (forslagsflyten er den samme som med fake).
+ * og nøkkelen havner aldri i databasen eller loggen), de ansatte (godta, endre og avvis virker som
+ * før) og færre reklamasjoner (en annen organisasjons tilkobling brukes aldri).
  */
 
-const TEST_TARGET_TYPE = "oppdiktet_mal";
-
-type FakeRequest = Parameters<typeof fakeAiProvider.complete>[0];
-
-vi.mock("./features", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./features")>();
-  const patched = {
-    ...actual.AI_FEATURES.language_polish,
-    allowedTargets: [
-      ...actual.AI_FEATURES.language_polish.allowedTargets,
-      { type: "oppdiktet_mal", fieldKey: "text" },
-    ],
-  };
-  return {
-    ...actual,
-    getFeatureDefinition: (code: string) =>
-      code === "language_polish" ? patched : actual.getFeatureDefinition(code),
-  };
-});
+const TEST_TARGET_TYPE = "test_ekte_mal";
+const KEY_NAME = "ANTHROPIC_API_KEY";
 
 const swap = vi.hoisted(() => ({
+  /** Når satt: ledeteksten som «vasken» gir tilbake (for å prøve lekkasjesjekken). */
+  leakPrompt: null as null | string,
+  /** Når satt: adapteren `resolveAiProvider` gir (for å prøve sperren på fast kode). */
   provider: null as null | {
     code: string;
     model: string;
     complete: (request: unknown) => Promise<unknown>;
   },
-  features: null as null | string[],
-  prompt: null as null | string,
 }));
 
 vi.mock("./provider-resolution", async (importOriginal) => {
@@ -89,9 +82,27 @@ vi.mock("./provider-resolution", async (importOriginal) => {
             kind: "enabled" as const,
             provider: swap.provider,
             model: swap.provider.model,
-            features: swap.features,
+            features: null,
           }
         : actual.resolveAiProvider(grant),
+  };
+});
+
+vi.mock("./features", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./features")>();
+  return {
+    ...actual,
+    getFeatureDefinition: (code: string) => {
+      const definition = actual.getFeatureDefinition(code);
+      if (!definition || definition.code !== "language_polish") return definition;
+      return {
+        ...definition,
+        allowedTargets: [
+          ...definition.allowedTargets,
+          { type: TEST_TARGET_TYPE, fieldKey: "text" },
+        ],
+      };
+    },
   };
 });
 
@@ -101,52 +112,33 @@ vi.mock("./prompt", async (importOriginal) => {
     ...actual,
     preparePrompt: vi.fn((...args: Parameters<typeof actual.preparePrompt>) => {
       const prepared = actual.preparePrompt(...args);
-      return swap.prompt === null ? prepared : { ...prepared, prompt: swap.prompt };
+      if (swap.leakPrompt === null) return prepared;
+      return { ...prepared, prompt: `${prepared.prompt}\n${swap.leakPrompt}` };
     }),
   };
 });
 
-beforeEach(async () => {
-  await resetDatabase();
-  vi.stubEnv("ANTHROPIC_API_KEY", ANTHROPIC_TEST_KEY);
-});
+/** Kjente verdier på oppdraget. Alle oppdiktet. */
+const KNOWN: KnownSeed = {
+  parties: [{ name: "Åse Testesen", phone: "+47 41 23 45 67", email: "qxz.partsen@example.no" }],
+  property: { address: "Lundetunet 3", gnr: "63", bnr: "74" },
+};
+const TEXT_WITH_PII =
+  "Møtte Åse Testesen på Lundetunet 3. Ring 41234567 eller qxz.partsen@example.no. " +
+  "Matrikkel 63/74. taket er gammelt og har noen sprekker";
+const PII_VALUES = ["Åse", "Testesen", "Lundetunet", "41234567", "qxz.partsen@example.no", "63/74"];
+const REPLY_TEXT = "Taket er gammelt og har noen sprekker.";
 
-afterEach(() => {
-  swap.provider = null;
-  swap.features = null;
-  swap.prompt = null;
-  vi.mocked(preparePrompt).mockClear();
-  vi.restoreAllMocks();
-  vi.unstubAllEnvs();
-  vi.unstubAllGlobals();
-});
-
-function openTarget() {
-  return { type: TEST_TARGET_TYPE, id: uuidv7(), fieldKey: "text" };
-}
-
-/** Organisasjon med `anthropic` og en ansatt. */
-async function anthropicOrganization(
-  roles: EmployeeVariant[] = ["inspector"],
-  options: Parameters<typeof enableAnthropic>[1] = {},
-) {
-  const organization = await createOrganization("Oppdiktet Takst A");
-  const connection = await enableAnthropic(organization.id, options);
-  const person = await employeeWithGrant(organization.id, roles);
-  return { organization, connection, ...person };
-}
-
-/** En forespørsel på det åpne målet, med oppdrag. */
-async function openRequest(organizationId: string, text = "Taket er gammelt og har noen sprekker") {
-  const assignment = await createAssignment(organizationId);
-  return validRequest({ assignmentId: assignment.id, target: openTarget(), fields: { text } });
-}
+let http: ReturnType<typeof fakeAnthropic>;
+let spies: ReturnType<typeof spyOnOutput>;
 
 function spyOnOutput() {
   return [
-    ...(["log", "info", "warn", "error", "debug"] as const).map((method) =>
-      vi.spyOn(console, method).mockImplementation(() => undefined),
-    ),
+    vi.spyOn(console, "log").mockImplementation(() => {}),
+    vi.spyOn(console, "info").mockImplementation(() => {}),
+    vi.spyOn(console, "warn").mockImplementation(() => {}),
+    vi.spyOn(console, "error").mockImplementation(() => {}),
+    vi.spyOn(console, "debug").mockImplementation(() => {}),
     vi.spyOn(logger, "debug"),
     vi.spyOn(logger, "info"),
     vi.spyOn(logger, "warn"),
@@ -154,435 +146,515 @@ function spyOnOutput() {
   ];
 }
 
-function outputText(spies: ReturnType<typeof spyOnOutput>): string {
-  return JSON.stringify(spies.flatMap((spy) => spy.mock.calls));
+function outputText(): string {
+  return spies
+    .flatMap((spy) => spy.mock.calls)
+    .map((args) => inspect(args, { depth: 6 }))
+    .join("\n");
 }
 
-/** Alle rader i tabellen som JSON-tekst (alle kolonner). */
+function useHttp(...replies: Parameters<typeof fakeAnthropic>) {
+  http = fakeAnthropic(...replies);
+  vi.stubGlobal("fetch", http.fetchFn);
+}
+
+beforeEach(async () => {
+  await resetDatabase();
+  swap.leakPrompt = null;
+  swap.provider = null;
+  vi.mocked(preparePrompt).mockClear();
+  useHttp(okReply({ text: REPLY_TEXT, inputTokens: 120, outputTokens: 40 }));
+  vi.stubEnv(KEY_NAME, TEST_ANTHROPIC_KEY);
+  spies = spyOnOutput();
+});
+
+afterEach(() => {
+  swap.leakPrompt = null;
+  swap.provider = null;
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
+
+const realTarget = () => ({ type: TEST_TARGET_TYPE, id: uuidv7(), fieldKey: "text" });
+const trialTarget = () => ({ type: "ai_trial", id: uuidv7(), fieldKey: "text" });
+const answerTarget = () => ({ type: "answer", id: uuidv7(), fieldKey: "text" });
+
+/** Organisasjon med gyldig `anthropic`-tilkobling, en ansatt og et oppdrag med kjente verdier. */
+async function anthropicOrganization(
+  options: {
+    name?: string;
+    roles?: EmployeeVariant[];
+    connection?: Parameters<typeof enableAnthropic>[1];
+  } = {},
+) {
+  const organization = await createOrganization(options.name ?? "Oppdiktet Takst A");
+  const connection = await enableAnthropic(organization.id, options.connection ?? {});
+  const assignmentId = await seedKnownValues(organization.id, KNOWN);
+  const person = await employeeWithGrant(organization.id, options.roles ?? ["inspector"]);
+  return { organization, connection, assignmentId, ...person };
+}
+
+function realRequest(assignmentId: string, text = TEXT_WITH_PII) {
+  return validRequest({ assignmentId, target: realTarget(), fields: { text } });
+}
+
+/** Alle kolonner i tabellene som tekst (rad til tekst), for å lete etter verdier som ikke skal stå der. */
 async function tableText(table: "ai_usage_log" | "integration_connections" | "audit_log") {
   const rows = (await db.execute(
-    sql`select row_to_json(t)::text as j from ${sql.identifier(table)} t`,
-  )) as unknown as { j: string }[];
-  return rows.map((row) => row.j).join("\n");
+    sql`select t::text as row from ${sql.identifier(table)} t`,
+  )) as unknown as { row: string }[];
+  return rows.map((r) => r.row).join("\n");
 }
 
-/** Kroppen som ble sendt i kall nummer `index`, som tekst. */
-function sentBody(fetchMock: ReturnType<typeof stubAnthropicFetch>, index = 0): string {
-  const init = fetchMock.mock.calls[index]?.[1];
-  return typeof init?.body === "string" ? init.body : "";
-}
-
-describe("3.2 sperren for ekte leverandør (R2)", () => {
+describe("sperren for ekte leverandør (3.2, R2)", () => {
   it.each([
     {
       name: "ai_trial",
-      target: () => ({ type: "ai_trial", id: uuidv7(), fieldKey: "text" }),
-      assignment: false,
+      request: (_assignmentId: string) => validRequest({ target: trialTarget() }),
     },
     {
       name: "answer med oppdrag",
-      target: () => ({ type: "answer", id: uuidv7(), fieldKey: "text" }),
-      assignment: true,
+      request: (assignmentId: string) => validRequest({ assignmentId, target: answerTarget() }),
     },
-    { name: "fritekst uten oppdrag", target: openTarget, assignment: false },
-  ])("$name mot anthropic → blocked-rad, fetch ikke kalt", async ({ target, assignment }) => {
-    const { organization, grant } = await anthropicOrganization();
-    const fetchMock = stubAnthropicFetch();
-    const assignmentId = assignment ? (await createAssignment(organization.id)).id : null;
-    const request = validRequest({ assignmentId, target: target() });
-
-    const result = await requestSuggestion(grant, request);
-
-    expect(result).toEqual({ kind: "blocked" });
-    expect(fetchMock).not.toHaveBeenCalled();
-    const row = (await aiRow(request.requestId))!;
-    expect(row.outcome).toBe("blocked");
-    expect(row.provider).toBe("anthropic");
-    expect(row.model).toBe(ANTHROPIC_TEST_MODEL);
-  });
-
-  it.each([
-    { name: "ai_trial", target: () => ({ type: "ai_trial", id: uuidv7(), fieldKey: "text" }) },
-    { name: "fritekst uten oppdrag", target: openTarget },
-  ])("kontroll: $name mot fake → ikke blocked", async ({ target }) => {
-    const organization = await createOrganization("Oppdiktet Takst A");
-    await enableAi(organization.id);
-    const { grant } = await employeeWithGrant(organization.id);
-    const result = await requestSuggestion(grant, validRequest({ target: target() }));
-    expect(result.kind).toBe("suggestion");
-  });
-
-  it("isBlocked bruker fast kode: en annen adapter med code fake sperres ikke", async () => {
-    const organization = await createOrganization("Oppdiktet Takst A");
-    await enableAi(organization.id);
-    const { grant } = await employeeWithGrant(organization.id);
-    const complete = vi.fn(async () => ({
-      outcome: "ok" as const,
-      text: "Oppdiktet svar.",
-      tokensIn: 1,
-      tokensOut: 1,
-      cost: 0,
-      currency: "NOK",
-    }));
-    swap.provider = { code: "fake", model: "fake-kopi", complete };
-
-    const result = await requestSuggestion(
-      grant,
-      validRequest({ target: { type: "ai_trial", id: uuidv7(), fieldKey: "text" } }),
-    );
-
-    expect(result.kind).toBe("suggestion");
-    expect(complete).toHaveBeenCalledTimes(1);
-  });
-
-  it("isBlocked bruker fast kode: alt annet enn fake sperres, også et objekt som likner fake", async () => {
-    const organization = await createOrganization("Oppdiktet Takst A");
-    await enableAi(organization.id);
-    const { grant } = await employeeWithGrant(organization.id);
-    const complete = vi.fn((request: unknown) => fakeAiProvider.complete(request as FakeRequest));
-    swap.provider = { code: "fake2", model: "fake-v1", complete };
-
-    const result = await requestSuggestion(
-      grant,
-      validRequest({ target: { type: "ai_trial", id: uuidv7(), fieldKey: "text" } }),
-    );
-
-    expect(result).toEqual({ kind: "blocked" });
-    expect(complete).not.toHaveBeenCalled();
-  });
-});
-
-describe("3.3 settings.features (R3)", () => {
-  it.each([
-    { name: "tom liste", settings: anthropicSettings({ features: [] }) },
     {
-      name: "manglende liste (rå rad)",
-      settings: { model: ANTHROPIC_TEST_MODEL, pricing: anthropicSettings().pricing },
+      name: "fritekst uten oppdrag",
+      request: (_assignmentId: string) =>
+        validRequest({ assignmentId: null, target: realTarget() }),
     },
-  ])("$name → disabled, ingen rad, ingen vask, fetch ikke kalt", async ({ settings }) => {
-    const { organization, grant } = await anthropicOrganization(["inspector"], { settings });
-    const fetchMock = stubAnthropicFetch();
+  ])("R2 3.2 $name mot anthropic → blocked, blocked-rad, intet kall", async ({ request }) => {
+    const { grant, assignmentId } = await anthropicOrganization();
+    const sent = request(assignmentId);
 
-    const result = await requestSuggestion(grant, await openRequest(organization.id));
+    const result = await requestSuggestion(grant, sent);
 
-    expect(result).toEqual({ kind: "disabled" });
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(await aiRowCount()).toBe(0);
-    expect(preparePrompt).not.toHaveBeenCalled();
-  });
-
-  it("funksjon som ikke står i listen → disabled før vasken, ingen rad, intet kall", async () => {
-    const organization = await createOrganization("Oppdiktet Takst A");
-    await enableAi(organization.id);
-    const { grant } = await employeeWithGrant(organization.id);
-    const complete = vi.fn((request: unknown) => fakeAiProvider.complete(request as FakeRequest));
-    swap.provider = { code: "other_test_provider", model: "other-test-v1", complete };
-    swap.features = ["phrase_suggestion"];
-
-    const result = await requestSuggestion(grant, await openRequest(organization.id));
-
-    expect(result).toEqual({ kind: "disabled" });
-    expect(complete).not.toHaveBeenCalled();
-    expect(await aiRowCount()).toBe(0);
-    expect(preparePrompt).not.toHaveBeenCalled();
-  });
-
-  it("sperret mål går foran funksjonslisten (blocked-rad, som før)", async () => {
-    const { grant } = await anthropicOrganization(["inspector"], {
-      settings: anthropicSettings({ features: [] }),
-    });
-    const result = await requestSuggestion(
-      grant,
-      validRequest({ target: { type: "ai_trial", id: uuidv7(), fieldKey: "text" } }),
-    );
     expect(result).toEqual({ kind: "blocked" });
-  });
-
-  it("fake har ingen liste og tar alle funksjoner som før", async () => {
-    const organization = await createOrganization("Oppdiktet Takst A");
-    await enableAi(organization.id);
-    const { grant } = await employeeWithGrant(organization.id);
-    const spy = vi.spyOn(fakeAiProvider, "complete");
-    expect((await requestSuggestion(grant, validRequest())).kind).toBe("suggestion");
-    expect(spy).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("3.4 hele flyten med falsk HTTP (R4)", () => {
-  it("vellykket kall: kroppen er vasket, raden har anthropic, modellen, tokens og kostnad; forslaget kan godtas", async () => {
-    const { organization, grant } = await anthropicOrganization();
-    const assignmentId = await seedKnownValues(organization.id, STANDARD_KNOWN_VALUES);
-    const fetchMock = stubAnthropicFetch();
-    const text =
-      "Åse Testesen på Prøvetunet 7 ringte fra 12345678 om gnr 12 bnr 34. Taket bør skiftes.";
-    const request = validRequest({ assignmentId, target: openTarget(), fields: { text } });
-
-    const result = await requestSuggestion(grant, request);
-
-    expect(result.kind).toBe("suggestion");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const body = sentBody(fetchMock);
-    for (const value of ["Åse", "Testesen", "Prøvetunet", "12345678", "12/34", "gnr 12"]) {
-      expect(body).not.toContain(value);
-    }
-    expect(body).toContain("[navn]");
-    // Ingen identitet i kroppen
-    for (const id of [grant.organizationId, grant.employeeId, assignmentId, request.requestId]) {
-      expect(body).not.toContain(id);
-    }
-    expect(body).not.toContain("Oppdiktet Takst A");
-    expect(body).not.toContain(ANTHROPIC_TEST_KEY);
-
-    const row = (await aiRow(request.requestId))!;
-    expect(row.provider).toBe("anthropic");
-    expect(row.model).toBe(ANTHROPIC_TEST_MODEL);
-    expect(row.outcome).toBe("ok");
-    expect(row.tokens_in).toBe(120);
-    expect(row.tokens_out).toBe(40);
-    expect(Number(row.cost)).toBeCloseTo((120 * 30 + 40 * 150) / 1_000_000, 10);
-    expect(row.currency).toBe("NOK");
-    expect(row.status).toBe("suggested");
-
-    await recordDecision(grant, request.requestId, "accepted");
-    expect((await aiRow(request.requestId))!.status).toBe("accepted");
-  });
-
-  it.each(["edited", "rejected"])("forslaget fra anthropic kan også få %s", async (decision) => {
-    const { organization, grant } = await anthropicOrganization();
-    stubAnthropicFetch();
-    const request = await openRequest(organization.id);
-    expect((await requestSuggestion(grant, request)).kind).toBe("suggestion");
-    await recordDecision(grant, request.requestId, decision);
-    expect((await aiRow(request.requestId))!.status).toBe(decision);
+    const row = await aiRow(sent.requestId);
+    expect(row).toBeDefined();
+    expect(row!.outcome).toBe("blocked");
+    expect(row!.provider).toBe("anthropic");
+    expect(row!.output_text).toBeNull();
+    expect(http.calls).toHaveLength(0);
+    expect(vi.mocked(preparePrompt)).not.toHaveBeenCalled();
   });
 
   it.each([
-    { name: "telefon som slapp gjennom vasken", leaked: "Ring 912 34 567 i morgen." },
-    { name: "e-post som slapp gjennom vasken", leaked: "Skriv til qxz.partsen@example.no." },
-  ])("lekkasjesjekken stopper: $name → blocked-rad, fetch ikke kalt", async ({ leaked }) => {
-    const { organization, grant } = await anthropicOrganization();
-    const fetchMock = stubAnthropicFetch();
-    swap.prompt = leaked;
-    const request = await openRequest(organization.id);
+    { name: "ai_trial", target: trialTarget, withAssignment: false },
+    { name: "answer", target: answerTarget, withAssignment: true },
+  ])(
+    "R2 3.2 kontroll: $name mot fake gir forslag som før (ikke blocked)",
+    async ({ target, withAssignment }) => {
+      const organization = await createOrganization("Oppdiktet Takst A");
+      await enableAi(organization.id);
+      const assignment = await createAssignment(organization.id);
+      const { grant } = await employeeWithGrant(organization.id, ["inspector"]);
+      const result = await requestSuggestion(
+        grant,
+        validRequest({ assignmentId: withAssignment ? assignment.id : null, target: target() }),
+      );
+      expect(result.kind).toBe("suggestion");
+      expect(http.calls).toHaveLength(0);
+    },
+  );
+});
+
+describe("isBlocked bruker fast kode (3.2.1)", () => {
+  async function fakeOrganization() {
+    const organization = await createOrganization("Oppdiktet Takst A");
+    await enableAi(organization.id);
+    return (await employeeWithGrant(organization.id, ["inspector"])).grant;
+  }
+
+  it("R2 3.2.1 en adapter med code «fake» som ikke er fakeAiProvider-objektet, sperres ikke", async () => {
+    const grant = await fakeOrganization();
+    const copy = {
+      code: "fake",
+      model: fakeAiProvider.model,
+      complete: vi.fn(fakeAiProvider.complete),
+    };
+    expect(copy).not.toBe(fakeAiProvider);
+    swap.provider = copy as typeof swap.provider;
+    const result = await requestSuggestion(grant, validRequest({ target: trialTarget() }));
+    expect(result.kind).toBe("suggestion");
+    expect(copy.complete).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["anthropic", "FAKE", "fake ", "unknown_vendor"])(
+    "R2 3.2.1 alt annet enn code «fake» sperres for ai_trial, også med fake sin complete: %s",
+    async (code) => {
+      const grant = await fakeOrganization();
+      const impostor = { code, model: "fake-v1", complete: vi.fn(fakeAiProvider.complete) };
+      swap.provider = impostor as typeof swap.provider;
+      const request = validRequest({ target: trialTarget() });
+      const result = await requestSuggestion(grant, request);
+      expect(result).toEqual({ kind: "blocked" });
+      expect(impostor.complete).not.toHaveBeenCalled();
+      expect((await aiRow(request.requestId))!.outcome).toBe("blocked");
+    },
+  );
+});
+
+describe("settings.features (3.3, R3)", () => {
+  it("R3 3.3.1/3.3.3 funksjonen står ikke i listen → disabled, ingen rad, intet kall, vasken ikke kalt", async () => {
+    const { grant, assignmentId } = await anthropicOrganization({
+      connection: { settings: anthropicSettings({ features: ["phrase_suggestion"] }) },
+    });
+    const result = await requestSuggestion(grant, realRequest(assignmentId));
+    expect(result).toEqual({ kind: "disabled" });
+    expect(await aiRowCount()).toBe(0);
+    expect(http.calls).toHaveLength(0);
+    expect(vi.mocked(preparePrompt)).not.toHaveBeenCalled();
+  });
+
+  it("R3 3.3.2/3.3.3 tom liste → disabled, ingen rad, intet kall, vasken ikke kalt", async () => {
+    const { grant, assignmentId } = await anthropicOrganization({
+      connection: { settings: anthropicSettings({ features: [] }) },
+    });
+    expect(await requestSuggestion(grant, realRequest(assignmentId))).toEqual({ kind: "disabled" });
+    expect(await aiRowCount()).toBe(0);
+    expect(http.calls).toHaveLength(0);
+    expect(vi.mocked(preparePrompt)).not.toHaveBeenCalled();
+  });
+
+  it("R3 3.3.2 manglende liste (rå rad) → disabled, ingen rad, intet kall", async () => {
+    const settings = anthropicSettings();
+    delete settings.features;
+    const { grant, assignmentId } = await anthropicOrganization({ connection: { settings } });
+    expect(await requestSuggestion(grant, realRequest(assignmentId))).toEqual({ kind: "disabled" });
+    expect(await aiRowCount()).toBe(0);
+    expect(http.calls).toHaveLength(0);
+  });
+
+  it("R3 3.3.4 fake har ingen liste og tar alle funksjoner som før", async () => {
+    const organization = await createOrganization("Oppdiktet Takst A");
+    await enableAi(organization.id);
+    const assignmentId = await seedKnownValues(organization.id, KNOWN);
+    const { grant } = await employeeWithGrant(organization.id, ["inspector"]);
+    const result = await requestSuggestion(grant, realRequest(assignmentId));
+    expect(result.kind).toBe("suggestion");
+    expect(http.calls).toHaveLength(0);
+  });
+});
+
+describe("hele flyten med falsk HTTP (3.4, R4)", () => {
+  it("R4 3.4.1 vellykket kall: bare vasket tekst sendes, raden har anthropic, modell, tokens og kostnad", async () => {
+    const { grant, assignmentId } = await anthropicOrganization();
+    const request = realRequest(assignmentId);
+
+    const result = await requestSuggestion(grant, request);
+
+    expect(result.kind).toBe("suggestion");
+    if (result.kind !== "suggestion") return;
+    expect(result.text).toBe(REPLY_TEXT);
+    expect(http.calls).toHaveLength(1);
+    const call = http.calls[0]!;
+    const prompt = sentPromptText(call);
+    for (const value of PII_VALUES) {
+      expect(call.body, value).not.toContain(value);
+      expect(containsWord(prompt, value), value).toBe(false);
+    }
+    expect(prompt).toMatch(/\[[a-zæøå-]+\]/u);
+    expect(prompt).toContain("taket er gammelt");
+    expect(call.body).not.toContain(grant.organizationId);
+    expect(call.body).not.toContain(grant.employeeId);
+    expect(call.body).not.toContain(assignmentId);
+    expect(call.body).not.toContain(request.requestId);
+    expect(call.body).not.toContain("Oppdiktet Takst A");
+
+    const row = await aiRow(result.usageId);
+    expect(row!.provider).toBe("anthropic");
+    expect(row!.model).toBe(TEST_MODEL);
+    expect(row!.outcome).toBe("ok");
+    expect(row!.status).toBe("suggested");
+    expect(row!.tokens_in).toBe(120);
+    expect(row!.tokens_out).toBe(40);
+    expect(Number(row!.cost)).toBeCloseTo((120 * 30 + 40 * 150) / 1_000_000, 9);
+    expect(row!.currency).toBe("NOK");
+    expect(row!.organization_id).toBe(grant.organizationId);
+  });
+
+  it.each(["accepted", "edited", "rejected"])(
+    "R4 3.4.1 forslaget fra anthropic kan avgjøres med recordDecision: %s",
+    async (decision) => {
+      const { grant, assignmentId } = await anthropicOrganization();
+      const result = await requestSuggestion(grant, realRequest(assignmentId));
+      expect(result.kind).toBe("suggestion");
+      if (result.kind !== "suggestion") return;
+      await recordDecision(grant, result.usageId, decision);
+      const row = await aiRow(result.usageId);
+      expect(row!.status).toBe(decision);
+      expect(row!.decided_by).toBe(grant.employeeId);
+      expect(http.calls).toHaveLength(1);
+    },
+  );
+
+  it("R4 3.4.2 lekkasjesjekken stopper: en kjent verdi i ledeteksten gir blocked-rad og intet kall", async () => {
+    const { grant, assignmentId } = await anthropicOrganization();
+    swap.leakPrompt = "Eier er Åse Testesen, tlf 41234567.";
+    const request = realRequest(assignmentId, "taket er gammelt og har noen sprekker");
 
     const result = await requestSuggestion(grant, request);
 
     expect(result).toEqual({ kind: "blocked" });
-    expect(fetchMock).not.toHaveBeenCalled();
-    const row = (await aiRow(request.requestId))!;
-    expect(row.outcome).toBe("blocked");
-    expect(row.provider).toBe("anthropic");
-    expect(row.output_text).toBeNull();
+    expect(http.calls).toHaveLength(0);
+    const row = await aiRow(request.requestId);
+    expect(row).toBeDefined();
+    expect(row!.outcome).toBe("blocked");
+    expect(row!.provider).toBe("anthropic");
+    const logged = outputText();
+    expect(logged).not.toContain("Testesen");
+    expect(logged).not.toContain("41234567");
   });
 
-  it("lekkasjesjekken bruker kjente verdier fra oppdraget: et kjent navn som slapp gjennom stopper kallet", async () => {
-    const { organization, grant } = await anthropicOrganization();
-    const assignmentId = await seedKnownValues(organization.id, {
-      parties: [{ name: "Qxzolav Partsen" }],
-    });
-    const fetchMock = stubAnthropicFetch();
-    swap.prompt = "Teksten nevner Qxzolav.";
-    const request = validRequest({ assignmentId, target: openTarget() });
-
-    expect(await requestSuggestion(grant, request)).toEqual({ kind: "blocked" });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("lekkasjesjekken kjører ikke mot fake (uendret oppførsel)", async () => {
+  it("R4 3.4.2 lekkasjesjekken gjelder ikke fake (uendret oppførsel)", async () => {
     const organization = await createOrganization("Oppdiktet Takst A");
     await enableAi(organization.id);
-    const { grant } = await employeeWithGrant(organization.id);
-    swap.prompt = "Ring 912 34 567 i morgen.";
-    const result = await requestSuggestion(grant, validRequest());
+    const assignmentId = await seedKnownValues(organization.id, KNOWN);
+    const { grant } = await employeeWithGrant(organization.id, ["inspector"]);
+    const result = await requestSuggestion(grant, realRequest(assignmentId));
     expect(result.kind).toBe("suggestion");
   });
 
-  it("feil fra leverandøren: 401 gir rejected; merket og nøkkelen står ikke i logg, rader eller last_error", async () => {
-    const { organization, grant, connection } = await anthropicOrganization();
-    const fetchMock = stubAnthropicFetch(() => anthropicErrorResponse(401));
-    const spies = spyOnOutput();
-    const request = await openRequest(organization.id);
+  it("R4 3.4.4 401 fra leverandøren: feilkoden rejected, merket og nøkkelen står ingen steder", async () => {
+    useHttp(errorReply(401));
+    const { grant, assignmentId, connection } = await anthropicOrganization();
+    const request = realRequest(assignmentId);
 
     const result = await requestSuggestion(grant, request);
 
     expect(result.kind).toBe("error");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const row = (await aiRow(request.requestId))!;
-    expect(row.error_code).toBe("rejected");
+    const row = await aiRow(request.requestId);
+    expect(row!.outcome).toBe("error");
+    expect(row!.error_code).toBe("rejected");
+    expect(row!.output_text).toBeNull();
+    expect(http.calls).toHaveLength(1);
+
     for (const table of ["ai_usage_log", "integration_connections", "audit_log"] as const) {
       const text = await tableText(table);
-      expect(text, table).not.toContain(PROVIDER_MESSAGE_MARKER);
-      expect(text, table).not.toContain(ANTHROPIC_TEST_KEY);
+      expect(text, table).not.toContain(PROVIDER_MESSAGE_MARK);
+      expect(text, table).not.toContain(TEST_ANTHROPIC_KEY);
     }
     const [after] = (await db.execute(
       sql`select last_error, status from integration_connections where id = ${connection!.id}`,
     )) as unknown as { last_error: string | null; status: string }[];
-    expect(after).toEqual({ last_error: null, status: "active" });
-    const seen = outputText(spies);
-    expect(seen).not.toContain(PROVIDER_MESSAGE_MARKER);
-    expect(seen).not.toContain(ANTHROPIC_TEST_KEY);
+    expect(after!.last_error).toBeNull();
+    expect(after!.status).toBe("active");
+    const logged = outputText();
+    expect(logged).not.toContain(PROVIDER_MESSAGE_MARK);
+    expect(logged).not.toContain(TEST_ANTHROPIC_KEY);
+    expect(inspect(result)).not.toContain(PROVIDER_MESSAGE_MARK);
   });
 
-  it("nøkkelen står ingen steder i databasen etter vellykket kall og etter feil", async () => {
-    const { organization, grant } = await anthropicOrganization();
-    stubAnthropicFetch();
-    await requestSuggestion(grant, await openRequest(organization.id));
-    vi.unstubAllGlobals();
-    stubAnthropicFetch(() => anthropicErrorResponse(500));
-    await requestSuggestion(grant, await openRequest(organization.id));
+  it("R4 3.4.5 nøkkelen står ingen steder i databasen etter vellykket kall og etter feil", async () => {
+    const { grant, assignmentId } = await anthropicOrganization();
+    const ok = await requestSuggestion(grant, realRequest(assignmentId));
+    expect(ok.kind).toBe("suggestion");
+    useHttp(errorReply(500));
+    const failed = await requestSuggestion(grant, realRequest(assignmentId));
+    expect(failed.kind).toBe("error");
+    expect(http.calls).toHaveLength(1);
 
-    expect(await aiRowCount()).toBe(2);
     for (const table of ["ai_usage_log", "integration_connections", "audit_log"] as const) {
-      expect(await tableText(table), table).not.toContain(ANTHROPIC_TEST_KEY);
+      const text = await tableText(table);
+      expect(text, table).not.toContain(TEST_ANTHROPIC_KEY);
+      expect(text, table).not.toContain("OPPDIKTET-TESTNOKKEL");
     }
+    expect(outputText()).not.toContain(TEST_ANTHROPIC_KEY);
   });
 });
 
-describe("3.5 tenant-isolasjon for veien med anthropic (R6, regel 2)", () => {
-  it.each([
-    { name: "A har anthropic, B har fake", a: "anthropic", b: "fake" },
-    { name: "A har fake, B har anthropic", a: "fake", b: "anthropic" },
-  ])("$name: hver organisasjon bruker bare sin egen tilkobling", async ({ a, b }) => {
-    const providerOf = new Map<string, string>();
-    const assignmentOf = new Map<string, string>();
-    const fetchMock = stubAnthropicFetch();
-
+describe("tenant-isolasjon for veien med anthropic (3.5, R6, regel 2)", () => {
+  it("R6 3.5.1 expectTenantIsolation: A bruker anthropic, B bruker fake, aldri omvendt", async () => {
+    const assignmentByOrg = new Map<string, string>();
+    let orgA = "";
+    let orgB = "";
     await expectTenantIsolation({
       seed: async (grantA, grantB) => {
-        for (const [grant, provider] of [
-          [grantA, a],
-          [grantB, b],
-        ] as const) {
-          if (provider === "anthropic") await enableAnthropic(grant.organizationId);
-          else await enableAi(grant.organizationId);
-          providerOf.set(grant.organizationId, provider);
-          assignmentOf.set(grant.organizationId, (await createAssignment(grant.organizationId)).id);
-        }
-        return { a: [grantA.organizationId], b: [grantB.organizationId] };
+        orgA = grantA.organizationId;
+        orgB = grantB.organizationId;
+        await enableAnthropic(orgA);
+        await enableAi(orgB);
+        assignmentByOrg.set(orgA, await seedKnownValues(orgA, KNOWN));
+        assignmentByOrg.set(orgB, (await createAssignment(orgB)).id);
+        return { a: [orgA], b: [orgB] };
       },
       query: async (actor, organizationId) => {
         const grant = await requireOrganizationAccess(actor, organizationId, "report.edit");
-        const result = await requestSuggestion(
-          grant,
-          validRequest({
-            assignmentId: assignmentOf.get(grant.organizationId)!,
-            target: openTarget(),
-          }),
-        );
-        if (result.kind !== "suggestion") return [];
-        const row = (await aiRow(result.usageId))!;
-        expect(row.provider).toBe(providerOf.get(grant.organizationId));
-        return [{ id: row.organization_id }];
+        const request = realRequest(assignmentByOrg.get(grant.organizationId)!);
+        await requestSuggestion(grant, request);
+        const rows = (await db.execute(
+          sql`select organization_id from ai_usage_log where id = ${request.requestId}`,
+        )) as unknown as { organization_id: string }[];
+        return rows;
       },
-      idOf: (row) => row.id,
+      idOf: (row) => row.organization_id,
     });
 
-    // fetch er kalt bare for organisasjonen med anthropic, én gang
-    expect(fetchMock).toHaveBeenCalledTimes(1);
     const rows = await allAiRows();
-    expect(rows.map((row) => row.provider).sort()).toEqual(["anthropic", "fake"]);
-    for (const row of rows) {
-      expect(row.provider).toBe(providerOf.get(row.organization_id));
-      expect(row.model).toBe(row.provider === "anthropic" ? ANTHROPIC_TEST_MODEL : "fake-v1");
-    }
+    expect(rows).toHaveLength(2);
+    const rowA = rows.find((row) => row.organization_id === orgA);
+    const rowB = rows.find((row) => row.organization_id === orgB);
+    expect(rowA!.provider).toBe("anthropic");
+    expect(rowA!.model).toBe(TEST_MODEL);
+    expect(rowB!.provider).toBe("fake");
+    expect(http.calls).toHaveLength(1);
   });
 
-  it.each([
-    { name: "A har alt, B har bare ai.enabled → B får disabled", full: "A" },
-    { name: "B har alt, A har ingenting → A får disabled", full: "B" },
-  ])("$name", async ({ full }) => {
-    const orgA = await createOrganization("Oppdiktet Takst A");
+  it("R6 3.5.2 A har alt, B har bare ai.enabled: B får disabled, ingen rad i B, intet kall", async () => {
+    await anthropicOrganization({ name: "Oppdiktet Takst A" });
     const orgB = await createOrganization("Oppdiktet Takst B");
-    const [withAll, without] = full === "A" ? [orgA, orgB] : [orgB, orgA];
-    await enableAnthropic(withAll.id);
-    if (full === "A") await mergeOrganizationSettings(without.id, { "ai.enabled": true });
-    const { grant } = await employeeWithGrant(without.id);
-    const fetchMock = stubAnthropicFetch();
+    await mergeOrganizationSettings(orgB.id, { "ai.enabled": true });
+    const assignmentB = await createAssignment(orgB.id);
+    const { grant: grantB } = await employeeWithGrant(orgB.id, ["inspector"]);
 
-    const result = await requestSuggestion(grant, await openRequest(without.id));
-
-    expect(result).toEqual({ kind: "disabled" });
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(await aiRowCount()).toBe(0);
-  });
-
-  it("organisasjons-id i forespørselen brukes aldri: B sin tilkobling brukes for B", async () => {
-    const orgA = await createOrganization("Oppdiktet Takst A");
-    const orgB = await createOrganization("Oppdiktet Takst B");
-    await enableAnthropic(orgA.id);
-    await enableAi(orgB.id);
-    const { grant } = await employeeWithGrant(orgB.id);
-    const fetchMock = stubAnthropicFetch();
-    const request = validRequest({
-      assignmentId: (await createAssignment(orgB.id)).id,
-      target: { type: TEST_TARGET_TYPE, id: orgA.id, fieldKey: "text" },
+    expect(await requestSuggestion(grantB, realRequest(assignmentB.id))).toEqual({
+      kind: "disabled",
     });
+    expect(await aiRowCount()).toBe(0);
+    expect(http.calls).toHaveLength(0);
+  });
 
-    const result = await requestSuggestion(grant, request);
+  it("R6 3.5.2 speilvendt: B har alt, A har ingenting → A får disabled", async () => {
+    const orgA = await createOrganization("Oppdiktet Takst A");
+    const assignmentA = await createAssignment(orgA.id);
+    const { grant: grantA } = await employeeWithGrant(orgA.id, ["inspector"]);
+    await anthropicOrganization({ name: "Oppdiktet Takst B" });
 
+    expect(await requestSuggestion(grantA, realRequest(assignmentA.id))).toEqual({
+      kind: "disabled",
+    });
+    expect(await aiRowCount()).toBe(0);
+    expect(http.calls).toHaveLength(0);
+  });
+
+  it("R6 3.5.3 organisasjons-id fra forespørselen brukes aldri: B sin tilkobling brukes", async () => {
+    const a = await anthropicOrganization({ name: "Oppdiktet Takst A" });
+    const orgB = await createOrganization("Oppdiktet Takst B");
+    await enableAi(orgB.id);
+    const assignmentB = await createAssignment(orgB.id);
+    const { grant: grantB } = await employeeWithGrant(orgB.id, ["inspector"]);
+
+    const request = realRequest(
+      assignmentB.id,
+      `Gjelder organisasjon ${a.organization.id}. taket er gammelt`,
+    );
+    const result = await requestSuggestion(grantB, request);
     expect(result.kind).toBe("suggestion");
-    expect(fetchMock).not.toHaveBeenCalled();
-    const row = (await aiRow(request.requestId))!;
-    expect(row.provider).toBe("fake");
-    expect(row.organization_id).toBe(orgB.id);
+    const row = await aiRow(request.requestId);
+    expect(row!.organization_id).toBe(orgB.id);
+    expect(row!.provider).toBe("fake");
+    expect(http.calls).toHaveLength(0);
+
+    // Et ekstra felt med organisasjons-id avvises (streng validering), uten kall
+    const error = await captureError(() =>
+      requestSuggestion(grantB, {
+        ...realRequest(assignmentB.id),
+        organizationId: a.organization.id,
+      }),
+    );
+    expect(error).not.toBeInstanceOf(AccessDeniedError);
+    expect(http.calls).toHaveLength(0);
   });
 });
 
-describe("3.6 tilgang per rolle (R7)", () => {
-  it.each<{ name: string; roles: EmployeeVariant[]; reportEdit?: boolean }>([
-    { name: "takstmann", roles: ["inspector"] },
-    { name: "kontor med report.edit", roles: ["office"], reportEdit: true },
-    { name: "leder", roles: ["manager"] },
-    { name: "admin", roles: ["admin"] },
-  ])("$name kan be om forslag mot anthropic og godta det", async ({ roles, reportEdit }) => {
-    const { organization, employee, actor } = await anthropicOrganization(roles);
-    if (reportEdit) await grantPermission(employee, "report.edit");
-    const grant = await requireOrganizationAccess(actor, organization.id);
-    const fetchMock = stubAnthropicFetch();
-    const request = await openRequest(organization.id);
-    expect((await requestSuggestion(grant, request)).kind).toBe("suggestion");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    await recordDecision(grant, request.requestId, "accepted");
-  });
+describe("tilgang per rolle mot anthropic (3.6, R7)", () => {
+  const VARIANTS: {
+    name: string;
+    roles: EmployeeVariant[];
+    inspectorsEditAll: boolean;
+    allowed: boolean;
+  }[] = [
+    {
+      name: "takstmann, innstillingen på",
+      roles: ["inspector"],
+      inspectorsEditAll: true,
+      allowed: true,
+    },
+    {
+      name: "takstmann, innstillingen av",
+      roles: ["inspector"],
+      inspectorsEditAll: false,
+      allowed: false,
+    },
+    { name: "kontor", roles: ["office"], inspectorsEditAll: true, allowed: false },
+    { name: "leder", roles: ["manager"], inspectorsEditAll: true, allowed: true },
+    { name: "admin, innstillingen av", roles: ["admin"], inspectorsEditAll: false, allowed: true },
+  ];
 
-  it("kontor uten report.edit: AccessDeniedError, ingen rad, intet kall", async () => {
-    const { organization, grant } = await anthropicOrganization(["office"]);
-    const fetchMock = stubAnthropicFetch();
-    await expect(
-      requestSuggestion(grant, await openRequest(organization.id)),
-    ).rejects.toBeInstanceOf(AccessDeniedError);
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(await aiRowCount()).toBe(0);
-  });
+  it.each(VARIANTS)(
+    "R7 3.6.1 $name: be om forslag og avgjøre",
+    async ({ roles, inspectorsEditAll, allowed }) => {
+      const organization = await createOrganization("Oppdiktet Takst A");
+      await enableAnthropic(organization.id);
+      if (!inspectorsEditAll) {
+        await mergeOrganizationSettings(organization.id, { "access.inspectors_edit_all": false });
+      }
+      const assignmentId = await seedKnownValues(organization.id, KNOWN);
+      const person = await employeeWithGrant(organization.id, roles, "Test Ansatt");
 
-  // Regel 11. Denne testen skal aldri fjernes: admin stenges aldri ute.
-  it("admin uten andre roller kan slå KI på, lage anthropic-tilkoblingen og be om forslag", async () => {
+      if (allowed) {
+        const result = await requestSuggestion(person.grant, realRequest(assignmentId));
+        expect(result.kind).toBe("suggestion");
+        if (result.kind !== "suggestion") return;
+        await recordDecision(person.grant, result.usageId, "accepted");
+        expect((await aiRow(result.usageId))!.status).toBe("accepted");
+        expect(http.calls).toHaveLength(1);
+        return;
+      }
+      const error = await captureError(() =>
+        requestSuggestion(person.grant, realRequest(assignmentId)),
+      );
+      expect(error).toBeInstanceOf(AccessDeniedError);
+      expect(await aiRowCount()).toBe(0);
+      expect(http.calls).toHaveLength(0);
+    },
+  );
+
+  it("R7 3.6.2 admin uten andre roller lager anthropic, slår KI av og på og får forslag (regel 11)", async () => {
     const organization = await createOrganization("Oppdiktet Takst A");
-    await mergeOrganizationSettings(organization.id, { "access.inspectors_edit_all": false });
-    const { actor, grant } = await employeeWithGrant(organization.id, ["admin"]);
-    await mergeOrganizationSettings(organization.id, { "ai.enabled": true });
-    await createConnection(actor, organization.id, {
+    await mergeOrganizationSettings(organization.id, {
+      "ai.enabled": true,
+      "access.inspectors_edit_all": false,
+    });
+    const actor = await createUser({ name: "Test Admin Alene" });
+    await createEmployee(actor, organization.id, ["admin"]);
+    const connection = await createConnection(actor, organization.id, {
       port: "ai",
       provider: "anthropic",
-      secretRef: "ANTHROPIC_API_KEY",
+      secretRef: KEY_NAME,
       settings: anthropicSettings(),
     });
-    const fetchMock = stubAnthropicFetch();
-    const request = await openRequest(organization.id);
-
-    expect((await requestSuggestion(grant, request)).kind).toBe("suggestion");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("fjernet ansatt får AccessDeniedError før noe fetch-kall", async () => {
-    const { organization, actor } = await anthropicOrganization();
-    const fetchMock = stubAnthropicFetch();
-    await db.execute(
-      sql`update employees set deactivated_at = now() where organization_id = ${organization.id}`,
+    const assignmentId = await seedKnownValues(organization.id, KNOWN);
+    const grant: EmployeeGrant = await requireOrganizationAccess(
+      actor,
+      organization.id,
+      "report.edit",
     );
-    await expect(
-      requireOrganizationAccess(actor, organization.id, "report.edit"),
-    ).rejects.toBeInstanceOf(AccessDeniedError);
-    expect(fetchMock).not.toHaveBeenCalled();
+
+    expect((await requestSuggestion(grant, realRequest(assignmentId))).kind).toBe("suggestion");
+
+    await updateConnection(actor, organization.id, connection.id, { status: "disabled" });
+    expect(await requestSuggestion(grant, realRequest(assignmentId))).toEqual({ kind: "disabled" });
+
+    await updateConnection(actor, organization.id, connection.id, { status: "active" });
+    expect((await requestSuggestion(grant, realRequest(assignmentId))).kind).toBe("suggestion");
+    expect(http.calls).toHaveLength(2);
   });
+
+  it.each(["deleted_at", "deactivated_at"])(
+    "R7 3.6.3 fjernet ansatt (%s) får AccessDeniedError før noe fetch-kall",
+    async (column) => {
+      const { organization, actor, employee, assignmentId } = await anthropicOrganization();
+      await db.execute(
+        sql`update employees set ${sql.identifier(column)} = now() where id = ${employee.id}`,
+      );
+      const error = await captureError(async () => {
+        const grant = await requireOrganizationAccess(actor, organization.id, "report.edit");
+        return requestSuggestion(grant, realRequest(assignmentId));
+      });
+      expect(error).toBeInstanceOf(AccessDeniedError);
+      expect(await aiRowCount()).toBe(0);
+      expect(http.calls).toHaveLength(0);
+    },
+  );
 });

@@ -50,7 +50,7 @@ function findModelNames(text: string): string[] {
 }
 
 describe("S1 ingen modellnavn", () => {
-  it("kontroll: et oppdiktet treff gir rødt", () => {
+  it("S1 kontroll: et oppdiktet treff gir rødt", () => {
     expect(findModelNames(`model: "${MODEL_PREFIX}oppdiktet-1"`)).toEqual(["linje 1"]);
     for (const family of FAMILY_NAMES) {
       expect(findModelNames(`Vi bruker ${family} til språkvask.`), family).toEqual(["linje 1"]);
@@ -59,7 +59,7 @@ describe("S1 ingen modellnavn", () => {
     }
   });
 
-  it("kontroll: filnavnet og agentmappen gir grønt", () => {
+  it("S1 kontroll: filnavnet og agentmappen gir grønt", () => {
     const instructions = ["CLA", "UDE.md"].join("");
     const agents = [".cla", "ude/agents/utvikler.md"].join("");
     expect(findModelNames(`Les ${instructions} og ${agents}.`)).toEqual([]);
@@ -68,7 +68,7 @@ describe("S1 ingen modellnavn", () => {
     ).toEqual([]);
   });
 
-  it("src/, tests/ og e2e/ har ingen modellnavn", () => {
+  it("S1 src/, tests/ og e2e/ har ingen modellnavn", () => {
     const files = ["src", "tests", "e2e"].flatMap((dir) => textFiles(join(repoRoot, dir)));
     expect(files.length).toBeGreaterThan(100);
     expect(files.map(rel)).toContain("tests/no-model-names.test.ts");
@@ -78,7 +78,7 @@ describe("S1 ingen modellnavn", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("notatet og kortene for KI-leverandøren har ingen modellnavn", () => {
+  it("S1 notatet og kortene for KI-leverandøren har ingen modellnavn", () => {
     const files = docFiles();
     expect(files.map(rel)).toContain("docs/funksjoner/fase2a-ki-leverandor.md");
     expect(files.map(rel)).toContain("docs/funksjoner/fase2a-ki-leverandor-testplan.md");

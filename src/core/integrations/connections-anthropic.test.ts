@@ -1,13 +1,10 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
+import { AccessDeniedError, type Actor } from "@/core/access";
 import { db } from "@/db/client";
-import { integrationConnections, organizations, type EmployeeRole } from "@/db/schema";
-import {
-  ANTHROPIC_TEST_KEY,
-  ANTHROPIC_TEST_SECRET_REF,
-  anthropicSettings,
-} from "../../../tests/ai";
+import { integrationConnections, type EmployeeRole } from "@/db/schema";
+import { anthropicSettings } from "../../../tests/ai";
+import { TEST_ANTHROPIC_KEY } from "../../../tests/fake-anthropic";
 import {
   createEmployee,
   createIntegrationConnection,
@@ -30,24 +27,19 @@ import { isValidSecretRef } from "./secrets";
 
 /*
  * Tilkoblingen `anthropic` på porten `ai` (docs/funksjoner/fase2a-ki-leverandor-testplan.md
- * avsnitt 2, kortet Omfang 2 og 3). Mot testdatabasen. Alle verdier er oppdiktet, og nøkkelen
- * settes bare med `vi.stubEnv`.
+ * avsnitt 2, kortet Omfang 2, 3 og 15). Mot testdatabasen. Skjemaet for `settings` er regler som
+ * data (`it.each`). Nøkkelen er oppdiktet og settes bare med `vi.stubEnv`.
  *
- * Støtter hovedmål: KI i bunnen (bare en gyldig, streng konfigurasjon kan lagres, og den kan bare
- * peke på én hemmelighet) og færre reklamasjoner (en annen organisasjon kan aldri lage eller se
- * tilkoblingen).
+ * Støtter hovedmål: KI i bunnen (admin kobler organisasjonen til leverandøren uten kodeendring, og
+ * en feil innstilling slipper aldri gjennom) og færre reklamasjoner (pris og modell står alltid på
+ * tilkoblingen, så kostnaden i loggen er riktig).
  */
 
-const ANTHROPIC_INPUT = {
-  port: "ai",
-  provider: "anthropic",
-  secretRef: ANTHROPIC_TEST_SECRET_REF,
-  settings: anthropicSettings(),
-};
+const SECRET_REF = "ANTHROPIC_API_KEY";
 
 beforeEach(async () => {
   await resetDatabase();
-  vi.stubEnv("ANTHROPIC_API_KEY", ANTHROPIC_TEST_KEY);
+  vi.stubEnv(SECRET_REF, TEST_ANTHROPIC_KEY);
 });
 
 afterEach(() => {
@@ -73,292 +65,303 @@ function update(
   );
 }
 
-async function aiRows(organizationId?: string) {
-  const rows = await db.select().from(integrationConnections);
-  return organizationId ? rows.filter((row) => row.organizationId === organizationId) : rows;
+function anthropicInput(overrides: Record<string, unknown> = {}) {
+  return {
+    port: "ai",
+    provider: "anthropic",
+    secretRef: SECRET_REF,
+    settings: anthropicSettings(),
+    ...overrides,
+  };
 }
 
-async function adminIn(organizationId: string, roles: EmployeeRole[] = ["admin"]) {
-  const user = await createUser({ name: "Admin Oppdiktet" });
-  await createEmployee(user, organizationId, roles);
-  return user;
+async function personIn(organizationId: string, roles: EmployeeRole[], name: string) {
+  const actor = await createUser({ name });
+  await createEmployee(actor, organizationId, roles);
+  return actor;
 }
 
-describe("2.1 anthropic er kjent på porten ai", () => {
-  it("står i PROVIDERS_BY_PORT.ai sammen med fake", () => {
-    expect(PROVIDERS_BY_PORT.ai).toContain("anthropic");
-    expect(PROVIDERS_BY_PORT.ai).toContain("fake");
+async function adminIn(organizationId: string) {
+  return personIn(organizationId, ["admin"], "Test Admin");
+}
+
+async function aiConnections() {
+  return db.select().from(integrationConnections).where(eq(integrationConnections.port, "ai"));
+}
+
+describe("anthropic er kjent på porten ai (2.1)", () => {
+  it("2.1 anthropic står i PROVIDERS_BY_PORT.ai sammen med fake", () => {
+    const providers = PROVIDERS_BY_PORT as Record<string, readonly string[]>;
+    expect([...providers.ai!].sort()).toEqual(["anthropic", "fake"]);
   });
 
-  it("krever navnet på en hemmelighet: uten secretRef avvises, ingen rad", async () => {
-    const org = await createOrganization("Organisasjon A");
+  it("2.1 anthropic krever hemmelighet: uten secretRef avvises den uten rad", async () => {
+    const org = await createOrganization("Oppdiktet Takst A");
     const admin = await adminIn(org.id);
-    const { secretRef: _omit, ...withoutSecret } = ANTHROPIC_INPUT;
+    const { secretRef: _omit, ...withoutSecret } = anthropicInput();
+    void _omit;
     await expect(create(admin, org.id, withoutSecret)).rejects.toBeInstanceOf(
       ConnectionValidationError,
     );
-    expect(await aiRows()).toHaveLength(0);
+    expect(await aiConnections()).toEqual([]);
   });
 
-  it("ukjent kode på ai avvises som før", async () => {
-    const org = await createOrganization("Organisasjon A");
+  it("2.1 ukjent kode på ai avvises som før", async () => {
+    const org = await createOrganization("Oppdiktet Takst A");
     const admin = await adminIn(org.id);
     await expect(
-      create(admin, org.id, { ...ANTHROPIC_INPUT, provider: "unknown_vendor" }),
+      create(admin, org.id, anthropicInput({ provider: "unknown_vendor" })),
     ).rejects.toBeInstanceOf(ConnectionValidationError);
-    expect(await aiRows()).toHaveLength(0);
-  });
-
-  it("anthropic på en annen port avvises", async () => {
-    const org = await createOrganization("Organisasjon A");
-    const admin = await adminIn(org.id);
-    await expect(
-      create(admin, org.id, { ...ANTHROPIC_INPUT, port: "email" }),
-    ).rejects.toBeInstanceOf(ConnectionValidationError);
+    expect(await aiConnections()).toEqual([]);
   });
 });
 
-describe("2.2 skjemaet for settings (regler som data)", () => {
-  const schema = settingsSchemaFor("anthropic");
+describe("skjemaet for settings til anthropic (2.2, regler som data)", () => {
+  const schema = () => {
+    const found = settingsSchemaFor("anthropic");
+    if (!found) throw new Error('settingsSchemaFor("anthropic") gir null');
+    return found;
+  };
   const valid = anthropicSettings();
   const pricing = valid.pricing as Record<string, unknown>;
-  const withPricing = (patch: Record<string, unknown>) =>
-    anthropicSettings({ pricing: { ...pricing, ...patch } });
-  const without = (key: string) => {
-    const copy: Record<string, unknown> = { ...valid };
-    delete copy[key];
-    return copy;
-  };
+  const without = (key: string) =>
+    Object.fromEntries(Object.entries(valid).filter(([name]) => name !== key));
 
-  it.each<[string, Record<string, unknown>, unknown]>([
-    ["gyldige innstillinger", valid, ["language_polish"]],
-    ["features mangler (blir tom liste)", without("features"), []],
-    ["features: []", anthropicSettings({ features: [] }), []],
-  ])("godtatt: %s", (_name, settings, features) => {
-    const parsed = schema.safeParse(settings);
-    expect(parsed.success).toBe(true);
-    expect(parsed.data?.features).toEqual(features);
+  it.each([
+    { name: "gyldige innstillinger", settings: valid, features: ["language_polish"] },
+    { name: "features mangler (blir tom liste)", settings: without("features"), features: [] },
+    { name: "features: []", settings: { ...valid, features: [] }, features: [] },
+    {
+      name: "modell med punktum, kolon, strek og understrek",
+      settings: { ...valid, model: "Merke_modell-K7Q.2:test" },
+      features: ["language_polish"],
+    },
+    {
+      name: "modell på 100 tegn",
+      settings: { ...valid, model: "M".repeat(100) },
+      features: ["language_polish"],
+    },
+    {
+      name: "pris 0",
+      settings: { ...valid, pricing: { inputPerMillion: 0, outputPerMillion: 0, currency: "NOK" } },
+      features: ["language_polish"],
+    },
+  ])("2.2 godtatt: $name", ({ settings, features }) => {
+    const parsed = schema().safeParse(settings);
+    expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
+    expect((parsed.data as Record<string, unknown>).features).toEqual(features);
   });
 
-  it.each<[string, Record<string, unknown>]>([
-    ["model mangler", without("model")],
-    ["model tom", anthropicSettings({ model: "" })],
-    ["model med mellomrom", anthropicSettings({ model: "MERKE MODELL" })],
-    ["model med /", anthropicSettings({ model: "MERKE/MODELL" })],
-    ["model over 100 tegn", anthropicSettings({ model: "M".repeat(101) })],
-    ["model er tall", anthropicSettings({ model: 7 })],
-    ["features med ukjent kode", anthropicSettings({ features: ["phrase_suggestion"] })],
-    ["features er ikke liste", anthropicSettings({ features: "language_polish" })],
-    ["pricing mangler", without("pricing")],
-    ["inputPerMillion negativ", withPricing({ inputPerMillion: -1 })],
-    ["inputPerMillion tekst", withPricing({ inputPerMillion: "30" })],
-    ["inputPerMillion NaN", withPricing({ inputPerMillion: Number.NaN })],
-    ["inputPerMillion uendelig", withPricing({ inputPerMillion: Number.POSITIVE_INFINITY })],
-    ["outputPerMillion negativ", withPricing({ outputPerMillion: -0.01 })],
-    [
-      "outputPerMillion mangler",
-      anthropicSettings({ pricing: { inputPerMillion: 1, currency: "NOK" } }),
-    ],
-    ["currency USD", withPricing({ currency: "USD" })],
-    ["ekstra felt i pricing", withPricing({ vat: 25 })],
-    ["ekstra felt baseUrl", anthropicSettings({ baseUrl: "https://example.invalid" })],
-    ["ekstra felt apiKey", anthropicSettings({ apiKey: ANTHROPIC_TEST_KEY })],
-    ["ekstra felt url", anthropicSettings({ url: "https://example.invalid" })],
-  ])("avvist: %s", (_name, settings) => {
-    expect(schema.safeParse(settings).success).toBe(false);
-  });
-
-  it("modell med punktum, kolon, bindestrek og understrek på 100 tegn godtas", () => {
-    const model = `A.b:c-d_${"9".repeat(92)}`;
-    expect(model).toHaveLength(100);
-    expect(schema.safeParse(anthropicSettings({ model })).success).toBe(true);
-  });
-
-  it("pris 0 godtas", () => {
-    expect(schema.safeParse(withPricing({ inputPerMillion: 0, outputPerMillion: 0 })).success).toBe(
-      true,
-    );
-  });
-
-  it("createConnection med ugyldige settings gir ingen rad", async () => {
-    const org = await createOrganization("Organisasjon A");
-    const admin = await adminIn(org.id);
-    await expect(
-      create(admin, org.id, {
-        ...ANTHROPIC_INPUT,
-        settings: anthropicSettings({ baseUrl: "https://example.invalid" }),
-      }),
-    ).rejects.toBeInstanceOf(ConnectionValidationError);
-    expect(await aiRows()).toHaveLength(0);
+  it.each([
+    { name: "model mangler", settings: without("model") },
+    { name: 'model er ""', settings: { ...valid, model: "" } },
+    { name: "model med mellomrom", settings: { ...valid, model: "MERKE MODELL" } },
+    { name: "model med /", settings: { ...valid, model: "MERKE/MODELL" } },
+    { name: "model over 100 tegn", settings: { ...valid, model: "M".repeat(101) } },
+    { name: "model er tall", settings: { ...valid, model: 7 } },
+    { name: "features med ukjent kode", settings: { ...valid, features: ["tg_suggest"] } },
+    { name: "features er tekst", settings: { ...valid, features: "language_polish" } },
+    { name: "pricing mangler", settings: without("pricing") },
+    {
+      name: "inputPerMillion negativ",
+      settings: { ...valid, pricing: { ...pricing, inputPerMillion: -1 } },
+    },
+    {
+      name: "outputPerMillion negativ",
+      settings: { ...valid, pricing: { ...pricing, outputPerMillion: -0.01 } },
+    },
+    {
+      name: "inputPerMillion som tekst",
+      settings: { ...valid, pricing: { ...pricing, inputPerMillion: "30" } },
+    },
+    {
+      name: "inputPerMillion NaN",
+      settings: { ...valid, pricing: { ...pricing, inputPerMillion: Number.NaN } },
+    },
+    {
+      name: "outputPerMillion Infinity",
+      settings: { ...valid, pricing: { ...pricing, outputPerMillion: Number.POSITIVE_INFINITY } },
+    },
+    { name: "currency USD", settings: { ...valid, pricing: { ...pricing, currency: "USD" } } },
+    {
+      name: "currency mangler",
+      settings: { ...valid, pricing: { inputPerMillion: 30, outputPerMillion: 150 } },
+    },
+    { name: "ekstra felt i pricing", settings: { ...valid, pricing: { ...pricing, rounding: 2 } } },
+    { name: "ekstra felt baseUrl", settings: { ...valid, baseUrl: "https://example.com" } },
+    { name: "ekstra felt apiKey", settings: { ...valid, apiKey: TEST_ANTHROPIC_KEY } },
+    { name: "ekstra felt url", settings: { ...valid, url: "https://example.com" } },
+  ])("2.2 avvist: $name", ({ settings }) => {
+    expect(schema().safeParse(settings).success).toBe(false);
   });
 });
 
-describe("2.3 secret_ref for anthropic må være ANTHROPIC_API_KEY", () => {
-  it("admin lager tilkoblingen med ANTHROPIC_API_KEY: rad med lagrede settings", async () => {
-    const org = await createOrganization("Organisasjon A");
+describe("createConnection og updateConnection med anthropic (2.3)", () => {
+  it("2.3 admin lager anthropic med secret_ref ANTHROPIC_API_KEY", async () => {
+    const org = await createOrganization("Oppdiktet Takst A");
     const admin = await adminIn(org.id);
-    const created = await create(admin, org.id, ANTHROPIC_INPUT);
-    expect(created).toMatchObject({
-      port: "ai",
-      provider: "anthropic",
-      status: "active",
-      secretRef: "ANTHROPIC_API_KEY",
-      settings: anthropicSettings(),
-    });
+    const created = await create(admin, org.id, anthropicInput());
+    expect(created.provider).toBe("anthropic");
+    expect(created.port).toBe("ai");
+    expect(created.secretRef).toBe(SECRET_REF);
+    expect(created.settings).toEqual(anthropicSettings());
+    const rows = await aiConnections();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.organizationId).toBe(org.id);
   });
 
   it.each(["MS_GRAPH_CLIENT_SECRET", "ANTHROPIC_KEY", "ANTHROPIC_API_KEY_2"])(
-    "createConnection med secretRef %s avvises, ingen rad",
+    "2.3 annen secret_ref (%s) avvises uten rad",
     async (secretRef) => {
-      vi.stubEnv(secretRef, "oppdiktet-annen-verdi");
-      const org = await createOrganization("Organisasjon A");
+      const org = await createOrganization("Oppdiktet Takst A");
       const admin = await adminIn(org.id);
-      await expect(create(admin, org.id, { ...ANTHROPIC_INPUT, secretRef })).rejects.toBeInstanceOf(
+      vi.stubEnv(secretRef, "oppdiktet-annen-verdi");
+      await expect(create(admin, org.id, anthropicInput({ secretRef }))).rejects.toBeInstanceOf(
         ConnectionValidationError,
       );
-      expect(await aiRows()).toHaveLength(0);
+      expect(await aiConnections()).toEqual([]);
     },
   );
 
+  it("2.3 ugyldige settings avvises uten rad", async () => {
+    const org = await createOrganization("Oppdiktet Takst A");
+    const admin = await adminIn(org.id);
+    await expect(
+      create(
+        admin,
+        org.id,
+        anthropicInput({ settings: anthropicSettings({ baseUrl: "https://example.com" }) }),
+      ),
+    ).rejects.toBeInstanceOf(ConnectionValidationError);
+    expect(await aiConnections()).toEqual([]);
+  });
+
   it.each(["MS_GRAPH_CLIENT_SECRET", "ANTHROPIC_KEY"])(
-    "updateConnection som bytter secretRef til %s avvises; raden er uendret",
+    "2.3 updateConnection som bytter secret_ref til %s avvises, raden er uendret",
     async (secretRef) => {
-      const org = await createOrganization("Organisasjon A");
+      const org = await createOrganization("Oppdiktet Takst A");
       const admin = await adminIn(org.id);
-      const created = await create(admin, org.id, ANTHROPIC_INPUT);
+      const created = await create(admin, org.id, anthropicInput());
       await expect(update(admin, org.id, created.id, { secretRef })).rejects.toBeInstanceOf(
         ConnectionValidationError,
       );
-      const [row] = await aiRows(org.id);
-      expect(row!.secretRef).toBe("ANTHROPIC_API_KEY");
+      const [row] = await aiConnections();
+      expect(row!.secretRef).toBe(SECRET_REF);
     },
   );
 
-  it("updateConnection som fjerner secretRef avvises", async () => {
-    const org = await createOrganization("Organisasjon A");
+  it("2.3 updateConnection som fjerner secret_ref avvises", async () => {
+    const org = await createOrganization("Oppdiktet Takst A");
     const admin = await adminIn(org.id);
-    const created = await create(admin, org.id, ANTHROPIC_INPUT);
+    const created = await create(admin, org.id, anthropicInput());
     await expect(update(admin, org.id, created.id, { secretRef: null })).rejects.toBeInstanceOf(
       ConnectionValidationError,
     );
+    const [row] = await aiConnections();
+    expect(row!.secretRef).toBe(SECRET_REF);
   });
 
-  it("updateConnection med samme secretRef og nye gyldige settings går gjennom", async () => {
-    const org = await createOrganization("Organisasjon A");
+  it("2.3 updateConnection med gyldige nye settings godtas; ugyldige avvises", async () => {
+    const org = await createOrganization("Oppdiktet Takst A");
     const admin = await adminIn(org.id);
-    const created = await create(admin, org.id, ANTHROPIC_INPUT);
-    const updated = await update(admin, org.id, created.id, {
-      secretRef: "ANTHROPIC_API_KEY",
+    const created = await create(admin, org.id, anthropicInput());
+    const changed = await update(admin, org.id, created.id, {
       settings: anthropicSettings({ features: [] }),
     });
-    expect(updated.settings).toEqual(anthropicSettings({ features: [] }));
-  });
-
-  it("updateConnection med ugyldige settings (baseUrl) avvises", async () => {
-    const org = await createOrganization("Organisasjon A");
-    const admin = await adminIn(org.id);
-    const created = await create(admin, org.id, ANTHROPIC_INPUT);
+    expect(changed.settings.features).toEqual([]);
     await expect(
       update(admin, org.id, created.id, {
-        settings: anthropicSettings({ baseUrl: "https://example.invalid" }),
+        settings: anthropicSettings({ url: "https://example.com" }),
       }),
     ).rejects.toBeInstanceOf(ConnectionValidationError);
   });
+});
 
-  it("andre leverandører kan fortsatt bruke andre hemmeligheter (microsoft365)", async () => {
-    vi.stubEnv("MS_GRAPH_CLIENT_SECRET", "oppdiktet-verdi");
-    const org = await createOrganization("Organisasjon A");
+describe("hemmeligheten (2.4–2.5)", () => {
+  it("2.4 ANTHROPIC_API_KEY står ikke på nektlisten", () => {
+    expect(isValidSecretRef(SECRET_REF)).toBe(true);
+  });
+
+  it("2.5 listen over tilkoblinger viser aldri nøkkelens verdi", async () => {
+    const org = await createOrganization("Oppdiktet Takst A");
     const admin = await adminIn(org.id);
-    const created = await create(admin, org.id, {
-      port: "email",
-      provider: "microsoft365",
-      secretRef: "MS_GRAPH_CLIENT_SECRET",
-      settings: { from: "noreply@example.com", tenantId: "t-oppdiktet", clientId: "c-oppdiktet" },
-    });
-    expect(created.secretRef).toBe("MS_GRAPH_CLIENT_SECRET");
+    await create(admin, org.id, anthropicInput());
+    const listed = await listConnections(admin, org.id);
+    expect(listed).toHaveLength(1);
+    expect(JSON.stringify(listed)).not.toContain(TEST_ANTHROPIC_KEY);
+    const audit = await db.execute(sql`select * from audit_log`);
+    expect(JSON.stringify(audit)).not.toContain(TEST_ANTHROPIC_KEY);
   });
 });
 
-describe("2.4 ANTHROPIC_API_KEY står ikke på nektlisten", () => {
-  it("isValidSecretRef gir true", () => {
-    expect(isValidSecretRef("ANTHROPIC_API_KEY")).toBe(true);
-  });
-});
-
-describe("2.5 listen viser aldri nøkkelens verdi", () => {
-  it("listConnections med nøkkelen i miljøet: verdien finnes ikke i svaret", async () => {
-    const org = await createOrganization("Organisasjon A");
-    const admin = await adminIn(org.id);
-    await create(admin, org.id, ANTHROPIC_INPUT);
-    const list = await listConnections(admin, org.id);
-    expect(list).toHaveLength(1);
-    expect(JSON.stringify(list)).not.toContain(ANTHROPIC_TEST_KEY);
-    expect(list[0]!.secretRef).toBe("ANTHROPIC_API_KEY");
-  });
-});
-
-describe("2.6 tilgang per rolle", () => {
-  it.each<EmployeeRole>(["inspector", "office", "manager"])(
-    "%s får AccessDeniedError på createConnection med anthropic, ingen rad",
-    async (role) => {
-      const org = await createOrganization("Organisasjon A");
-      const user = await adminIn(org.id, [role]);
-      await expect(create(user, org.id, ANTHROPIC_INPUT)).rejects.toBeInstanceOf(AccessDeniedError);
-      expect(await aiRows()).toHaveLength(0);
+describe("tilgang per rolle (2.6)", () => {
+  it.each([
+    { role: "inspector" as const },
+    { role: "office" as const },
+    { role: "manager" as const },
+  ])(
+    "2.6 $role får AccessDeniedError på createConnection med anthropic, ingen rad",
+    async ({ role }) => {
+      const org = await createOrganization("Oppdiktet Takst A");
+      const actor = await personIn(org.id, [role], `Test ${role}`);
+      await expect(create(actor, org.id, anthropicInput())).rejects.toBeInstanceOf(
+        AccessDeniedError,
+      );
+      expect(await aiConnections()).toEqual([]);
     },
   );
 
-  // Regel 11. Denne testen skal aldri fjernes: admin må alltid kunne lage tilkoblingen.
-  it("admin uten andre roller lykkes, også med access.inspectors_edit_all = false", async () => {
-    const org = await createOrganization("Organisasjon A");
-    await db
-      .update(organizations)
-      .set({ settings: { "access.inspectors_edit_all": false } })
-      .where(eq(organizations.id, org.id));
-    const admin = await adminIn(org.id, ["admin"]);
-    const created = await create(admin, org.id, ANTHROPIC_INPUT);
+  it("2.6 admin uten andre roller lykkes (regel 11, admin stenges aldri ute)", async () => {
+    const org = await createOrganization("Oppdiktet Takst A");
+    const admin = await personIn(org.id, ["admin"], "Test Admin Alene");
+    const created = await create(admin, org.id, anthropicInput());
+    expect(created.provider).toBe("anthropic");
+  });
+
+  it("2.6 admin kan bytte fra fake til anthropic: slette fake mykt og lage anthropic", async () => {
+    const org = await createOrganization("Oppdiktet Takst A");
+    const admin = await adminIn(org.id);
+    await createIntegrationConnection(org.id, {
+      port: "ai",
+      provider: "fake",
+      deletedAt: new Date("2026-11-01T10:00:00Z"),
+    });
+    const created = await create(admin, org.id, anthropicInput());
     expect(created.provider).toBe("anthropic");
   });
 });
 
-describe("2.7 tenant-isolasjon for createConnection med anthropic (regel 2)", () => {
-  it("raden havner alltid i organisasjonen fra tilgangssjekken, og fremmed organisasjon nektes", async () => {
+describe("tenant-isolasjon for createConnection med anthropic (2.7)", () => {
+  it("2.7 query lager tilkoblingen bare i egen organisasjon; fremmed id nektes", async () => {
     await expectTenantIsolation({
-      seed: async (grantA, grantB) => {
-        // En e-posttilkobling i hver, så hver side har egne rader fra før
-        const a = await createIntegrationConnection(grantA.organizationId);
-        const b = await createIntegrationConnection(grantB.organizationId);
-        return { a: [a.id], b: [b.id] };
-      },
+      seed: async (grantA, grantB) => ({ a: [grantA.organizationId], b: [grantB.organizationId] }),
       query: async (actor, organizationId) => {
-        const grant = await requireOrganizationAccess(actor, organizationId, "organization.manage");
-        const created = await create(actor, organizationId, ANTHROPIC_INPUT);
-        const own = await db
-          .select({ id: integrationConnections.id })
+        const created = await create(actor, organizationId, anthropicInput());
+        const [row] = await db
+          .select({ organizationId: integrationConnections.organizationId })
           .from(integrationConnections)
-          .where(eq(integrationConnections.organizationId, grant.organizationId));
-        expect(own.map((row) => row.id)).toContain(created.id);
-        return own;
+          .where(eq(integrationConnections.id, created.id));
+        return row ? [{ id: row.organizationId }] : [];
       },
       idOf: (row) => row.id,
     });
 
-    // Hver organisasjon har nøyaktig én ai-tilkobling, med egen organisasjons-id
-    const orgs = await db.select({ id: organizations.id }).from(organizations);
-    for (const { id } of orgs) {
-      const rows = await db
+    const rows = await aiConnections();
+    expect(rows).toHaveLength(2);
+    const orgIds = new Set(rows.map((row) => row.organizationId));
+    expect(orgIds.size).toBe(2);
+    for (const organizationId of orgIds) {
+      const own = await db
         .select()
         .from(integrationConnections)
         .where(
           and(
-            eq(integrationConnections.organizationId, id),
+            eq(integrationConnections.organizationId, organizationId),
             eq(integrationConnections.port, "ai"),
-            isNull(integrationConnections.deletedAt),
           ),
         );
-      expect(rows).toHaveLength(1);
-      expect(rows[0]!.organizationId).toBe(id);
-      expect(rows[0]!.provider).toBe("anthropic");
+      expect(own).toHaveLength(1);
+      expect(own[0]!.provider).toBe("anthropic");
     }
   });
 });

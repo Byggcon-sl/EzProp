@@ -1154,7 +1154,6 @@ describe("KI-nøkkelen i testmiljøet (4.7)", () => {
   });
 });
 
-
 /*
  * Nøkkelen til KI-leverandøren i testmiljøet (docs/funksjoner/fase2a-ki-leverandor-testplan.md
  * 4.7, kortet Omfang 15): samme steder som MS_GRAPH_CLIENT_SECRET, som hemmelighet, og tom verdi er

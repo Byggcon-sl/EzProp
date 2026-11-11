@@ -1,42 +1,21 @@
-/**
- * Falsk HTTP for Anthropic-adapteren (docs/funksjoner/fase2a-ki-leverandor-testplan.md,
- * «Avtale om signaturer»). Registrerer hvert kall og svarer etter en plan. Ingen test gjør
- * nettkall til Anthropic. Alle verdier er oppdiktet; modellen er merket, aldri en ekte modell-id.
+/*
+ * Falsk HTTP for Anthropic-adapteren (docs/funksjoner/fase2a-ki-leverandor-testplan.md, «Avtale om
+ * signaturer»). Ingen test gjør nettkall til Anthropic: adapteren får denne `fetch` sendt inn, eller
+ * den stubbes globalt med `vi.stubGlobal("fetch", ...)`. Registrerer hvert kall og svarer etter en
+ * plan. Alle verdier er oppdiktet. Dette er den eneste hjelperen for falsk Anthropic-HTTP; konstantene
+ * under brukes av alle testene (også `anthropicSettings` i tests/ai.ts).
  *
- * Planen er ett svar (brukes ved hvert kall) eller en liste (ett per kall; det siste gjentas).
+ * Støtter hovedmål: KI i bunnen (den ekte veien kan prøves helt uten kostnad og uten at data går ut).
  */
 
-/** Oppdiktet merke i feilkroppen, så testene kan se at leverandørens melding aldri lekker. */
-export const FAKE_PROVIDER_MESSAGE = "MERKE-LEVERANDORMELDING-K7Q";
-
-/** Oppdiktet modell som brukes i stedet for en ekte modell-id. */
-export const FAKE_ANTHROPIC_MODEL = "MERKE-MODELL-K7Q";
-
-export type FakeAnthropicUsage = { input_tokens?: unknown; output_tokens?: unknown };
-
-export type FakeAnthropicBlock = { type: string; [key: string]: unknown };
-
-export type FakeAnthropicReply =
-  /** 200 med tekstblokker, `usage` og stoppårsak (standard: én tekstblokk, 120 inn, 40 ut, `end_turn`). */
-  | {
-      kind: "ok";
-      blocks?: FakeAnthropicBlock[];
-      usage?: FakeAnthropicUsage | null;
-      stopReason?: string;
-    }
-  /** Statuskode med kropp (objekt blir JSON). Standard kropp har `FAKE_PROVIDER_MESSAGE`. */
-  | { kind: "status"; status: number; body?: unknown }
-  /** `fetch` kaster denne feilen. */
-  | { kind: "throw"; error: unknown }
-  /** Løftet løses aldri, bare avvises når signalet avbrytes (som ekte `fetch`). */
-  | { kind: "hang" }
-  /** 200 med rå kropp (tekst, bytes eller strøm) og valgfrie hoder, f.eks. `content-length`. */
-  | {
-      kind: "raw";
-      body: string | Uint8Array | ReadableStream<Uint8Array> | null;
-      headers?: Record<string, string>;
-      status?: number;
-    };
+/** Tydelig oppdiktet nøkkel. Formen likner, så loggmønsteret prøves. */
+export const TEST_ANTHROPIC_KEY = "sk-ant-api03-OPPDIKTET-TESTNOKKEL-K7Q";
+/** Står i feilkroppen fra falsk HTTP. Skal aldri komme ut av adapteren. */
+export const PROVIDER_MESSAGE_MARK = "MERKE-LEVERANDORMELDING-K7Q";
+/** Brukes som `settings.model`, så ingen ekte modell-id står i testene. */
+export const TEST_MODEL = "MERKE-MODELL-K7Q";
+/** Vertsnavnet som aldri skal nås fra testene. */
+export const ANTHROPIC_HOST = "api.anthropic.com";
 
 export type FakeAnthropicCall = {
   url: string;
@@ -46,112 +25,148 @@ export type FakeAnthropicCall = {
   body: string;
   redirect: RequestRedirect | undefined;
   cache: RequestCache | undefined;
-  signal: AbortSignal | null | undefined;
+  signal: AbortSignal | undefined;
 };
 
-const DEFAULT_USAGE = { input_tokens: 120, output_tokens: 40 };
+/** Et svar: ferdig `Response`, statuskode med kropp, kastet feil eller et løfte som aldri løses. */
+export type FakeAnthropicReply =
+  | { kind: "response"; response: () => Response }
+  | { kind: "status"; status: number; body?: unknown; headers?: Record<string, string> }
+  | { kind: "throw"; error: () => unknown }
+  /** Løses aldri, uansett signal (strengeste variant). */
+  | { kind: "hang" }
+  /** Løses aldri, men avvises med `AbortError` når signalet avbrytes (som ekte `fetch`). */
+  | { kind: "hang_until_abort" }
+  /** Kaster `TypeError` hvis `redirect` er `"error"`, slik ekte `fetch` gjør ved videresending. */
+  | { kind: "redirect" };
 
-/** Et vellykket svar fra meldings-API-et med én tekstblokk. Oppdiktede verdier. */
-export function anthropicOkBody(
-  text: string,
-  usage: FakeAnthropicUsage | null = DEFAULT_USAGE,
+/** Et vellykket svar fra meldings-API-et med tekstblokker og `usage`. */
+export function messageBody(
+  options: {
+    blocks?: unknown[];
+    text?: string;
+    inputTokens?: unknown;
+    outputTokens?: unknown;
+    stopReason?: string;
+    usage?: unknown;
+  } = {},
 ): Record<string, unknown> {
-  return {
-    id: "msg_oppdiktet",
+  const blocks = options.blocks ?? [{ type: "text", text: options.text ?? "Taket er gammelt." }];
+  const body: Record<string, unknown> = {
+    id: "msg_oppdiktet_k7q",
     type: "message",
     role: "assistant",
-    model: FAKE_ANTHROPIC_MODEL,
-    content: [{ type: "text", text }],
-    stop_reason: "end_turn",
-    ...(usage !== null && { usage }),
+    model: TEST_MODEL,
+    content: blocks,
+    stop_reason: options.stopReason ?? "end_turn",
+    stop_sequence: null,
+  };
+  if (options.usage !== undefined) body.usage = options.usage;
+  else {
+    body.usage = {
+      input_tokens: options.inputTokens ?? 120,
+      output_tokens: options.outputTokens ?? 40,
+    };
+  }
+  return body;
+}
+
+export function okReply(options: Parameters<typeof messageBody>[0] = {}): FakeAnthropicReply {
+  return { kind: "status", status: 200, body: messageBody(options) };
+}
+
+/** Feilkropp i samme form som leverandøren, med merket i meldingen. */
+export function errorReply(status: number): FakeAnthropicReply {
+  return {
+    kind: "status",
+    status,
+    body: {
+      type: "error",
+      error: { type: "oppdiktet_feil", message: `${PROVIDER_MESSAGE_MARK} ${TEST_ANTHROPIC_KEY}` },
+    },
   };
 }
 
-function headersOf(init: RequestInit | undefined): Record<string, string> {
-  const out: Record<string, string> = {};
-  new Headers(init?.headers).forEach((value, key) => {
-    out[key.toLowerCase()] = value;
+function abortError(): Error {
+  const error = new Error("This operation was aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+function toResponse(reply: Extract<FakeAnthropicReply, { kind: "status" }>): Response {
+  const body =
+    reply.body === undefined
+      ? null
+      : typeof reply.body === "string"
+        ? reply.body
+        : JSON.stringify(reply.body);
+  return new Response(body, {
+    status: reply.status,
+    headers: { "content-type": "application/json", ...(reply.headers ?? {}) },
   });
-  return out;
-}
-
-function bodyOf(init: RequestInit | undefined): string {
-  const body = init?.body;
-  if (body === undefined || body === null) return "";
-  if (typeof body === "string") return body;
-  throw new Error("kroppen i testen er ikke tekst");
-}
-
-function toJson(body: unknown): string {
-  return typeof body === "string" ? body : JSON.stringify(body);
-}
-
-function hang(signal: AbortSignal | null | undefined): Promise<Response> {
-  return new Promise<Response>((_, reject) => {
-    signal?.addEventListener("abort", () => {
-      reject(new DOMException("Avbrutt", "AbortError"));
-    });
-  });
-}
-
-function respond(reply: FakeAnthropicReply, signal: AbortSignal | null | undefined) {
-  switch (reply.kind) {
-    case "ok": {
-      const content = reply.blocks ?? [{ type: "text", text: "Rettet tekst." }];
-      const usage = reply.usage === undefined ? DEFAULT_USAGE : reply.usage;
-      const body = {
-        ...anthropicOkBody("", usage),
-        content,
-        stop_reason: reply.stopReason ?? "end_turn",
-      };
-      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
-    }
-    case "status": {
-      const body =
-        reply.body === undefined
-          ? { type: "error", error: { type: "oppdiktet_feil", message: FAKE_PROVIDER_MESSAGE } }
-          : reply.body;
-      return Promise.resolve(new Response(toJson(body), { status: reply.status }));
-    }
-    case "throw":
-      return Promise.reject(reply.error);
-    case "hang":
-      return hang(signal);
-    case "raw":
-      return Promise.resolve(
-        new Response(reply.body as BodyInit | null, {
-          status: reply.status ?? 200,
-          headers: reply.headers,
-        }),
-      );
-  }
 }
 
 /**
- * Lager en falsk `fetch`. `calls` fylles i rekkefølge; tom liste betyr at den aldri ble kalt.
- * Standard plan er ett vellykket svar.
+ * Lager en falsk `fetch`. Svarene tas i rekkefølge; det siste gjentas. `calls` fylles i rekkefølge,
+ * og tom liste betyr at den aldri ble kalt.
  */
-export function createFakeAnthropicFetch(
-  plan: FakeAnthropicReply | readonly FakeAnthropicReply[] = { kind: "ok" },
-) {
-  const replies: readonly FakeAnthropicReply[] = Array.isArray(plan)
-    ? plan
-    : [plan as FakeAnthropicReply];
-  if (replies.length === 0) throw new Error("planen for falsk fetch er tom");
+export function fakeAnthropic(...replies: FakeAnthropicReply[]) {
+  const plan = replies.length > 0 ? replies : [okReply()];
   const calls: FakeAnthropicCall[] = [];
-  const fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const fetchFn = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = input instanceof Request ? input.url : String(input);
     calls.push({
       url,
       method: init?.method,
-      headers: headersOf(init),
-      body: bodyOf(init),
+      headers: Object.fromEntries(new Headers(init?.headers).entries()),
+      body: init?.body === undefined || init.body === null ? "" : String(init.body),
       redirect: init?.redirect,
       cache: init?.cache,
-      signal: init?.signal,
+      signal: init?.signal ?? undefined,
     });
-    const reply = replies[Math.min(calls.length - 1, replies.length - 1)]!;
-    return respond(reply, init?.signal);
+    const reply = plan[Math.min(calls.length - 1, plan.length - 1)]!;
+    switch (reply.kind) {
+      case "response":
+        return reply.response();
+      case "status":
+        return toResponse(reply);
+      case "throw":
+        throw reply.error();
+      case "hang":
+        return new Promise<Response>(() => {});
+      case "hang_until_abort":
+        return new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal;
+          if (signal?.aborted) return reject(abortError());
+          signal?.addEventListener("abort", () => reject(abortError()), { once: true });
+        });
+      case "redirect":
+        if (init?.redirect === "error") {
+          throw new TypeError("fetch failed", { cause: new Error("unexpected redirect") });
+        }
+        return new Response(null, { status: 307, headers: { location: "https://example.com/" } });
+    }
   };
-  return { fetch: fetch as typeof globalThis.fetch, calls };
+  return { fetchFn: fetchFn as typeof fetch, calls };
+}
+
+/** Kroppen i kallet som JSON. */
+export function parsedBody(call: FakeAnthropicCall): Record<string, unknown> {
+  return JSON.parse(call.body) as Record<string, unknown>;
+}
+
+/** Teksten i meldingene til leverandøren (innholdet som tekst eller som tekstblokker). */
+export function sentPromptText(call: FakeAnthropicCall): string {
+  const body = parsedBody(call);
+  const messages = body.messages as { role: string; content: unknown }[];
+  return messages
+    .map((message) =>
+      typeof message.content === "string"
+        ? message.content
+        : (message.content as { type: string; text?: string }[])
+            .filter((block) => block.type === "text")
+            .map((block) => block.text ?? "")
+            .join(""),
+    )
+    .join("\n");
 }
