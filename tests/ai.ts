@@ -195,7 +195,9 @@ export async function enableAi(
     status?: string;
     deletedAt?: Date | null;
     connection?: boolean;
+    /** `settings` på tilkoblingen (rå, forbi skjemaet). Standard `{}`. */
     settings?: Record<string, unknown>;
+    /** Navnet på hemmeligheten. Standard ingen. */
     secretRef?: string | null;
   } = {},
 ) {
@@ -213,20 +215,55 @@ export async function enableAi(
   });
 }
 
+/*
+ * Anthropic-tilkoblingen (docs/funksjoner/fase2a-ki-leverandor-testplan.md, «Avtale om
+ * signaturer»). Modellen er et merke og prisene er oppdiktet, så ingen ekte modell-id eller
+ * prisliste står i testene.
+ */
+export const ANTHROPIC_TEST_PRICING = {
+  inputPerMillion: 30,
+  outputPerMillion: 150,
+  currency: "NOK",
+} as const;
+
+/** Gyldige innstillinger for `anthropic` (oppdiktede tall). `overrides` erstatter hele nøkler. */
+export function anthropicSettings(overrides: Record<string, unknown> = {}) {
+  return {
+    model: "MERKE-MODELL-K7Q",
+    features: ["language_polish"],
+    pricing: { ...ANTHROPIC_TEST_PRICING },
+    ...overrides,
+  };
+}
+
+/**
+ * Slår KI på med en `anthropic`-tilkobling, lagt inn rått (forbi skjemaet), med
+ * `secret_ref = ANTHROPIC_API_KEY`. Nøkkelen settes i testen med `vi.stubEnv`.
+ */
+export async function enableAnthropic(
+  organizationId: string,
+  options: {
+    settings?: Record<string, unknown>;
+    secretRef?: string | null;
+    status?: string;
+    deletedAt?: Date | null;
+    enabled?: unknown;
+  } = {},
+) {
+  return enableAi(organizationId, {
+    provider: "anthropic",
+    settings: options.settings ?? anthropicSettings(),
+    secretRef: "secretRef" in options ? (options.secretRef ?? null) : "ANTHROPIC_API_KEY",
+    status: options.status,
+    deletedAt: options.deletedAt,
+    ...("enabled" in options ? { enabled: options.enabled } : {}),
+  });
+}
+
 /** Oppdiktet nøkkel med form som en ekte, så loggmønsteret også prøves. */
 export const FAKE_ANTHROPIC_KEY = "sk-ant-api03-OPPDIKTET-TESTNOKKEL-K7Q";
 /** Brukes som `settings.model`, så ingen ekte modell-id står i testene. */
 export const TEST_MODEL = "MERKE-MODELL-K7Q";
-
-/** Gyldige innstillinger for `anthropic` (oppdiktede tall), med overstyringer. */
-export function anthropicSettings(overrides: Record<string, unknown> = {}) {
-  return {
-    model: TEST_MODEL,
-    features: ["language_polish"],
-    pricing: { inputPerMillion: 30, outputPerMillion: 150, currency: "NOK" },
-    ...overrides,
-  };
-}
 
 export type EmployeeVariant = "inspector" | "office" | "manager" | "admin";
 

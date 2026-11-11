@@ -169,6 +169,7 @@ const ALLOWED_SECRETS = [
   "MS_GRAPH_CLIENT_ID",
   "MS_GRAPH_CLIENT_SECRET",
   "MAIL_FROM",
+  // KI-leverandøren (docs/funksjoner/fase2a-ki-leverandor.md Omfang 15). Tom verdi betyr KI av.
   "ANTHROPIC_API_KEY",
 ];
 const REQUIRED_SECRETS = ALLOWED_SECRETS.slice(0, 5);
@@ -893,6 +894,28 @@ describe("nøkkelboksen i infrastrukturen (main.bicep)", () => {
     }
   });
 
+  it("10b. KI-nøkkelen havner i boksen bare med bryteren og når den ikke er tom (tom = KI av)", () => {
+    const anthropic = secretBlock("anthropic-api-key");
+    expect(anthropic, "anthropic-api-key").toBeDefined();
+    const condition = /=\s*if\s*\((.*)\)\s*\{?\s*$/.exec(anthropic!.lines[0]!)?.[1] ?? "";
+    expect(condition).toMatch(/\benableKeyVault\b/);
+    expect(condition).not.toContain("emailConfigured");
+    // Tom verdi er lov: enten rett i betingelsen, eller via en var med !empty(anthropicApiKey)
+    const expanded = condition.replace(/\b([A-Za-z_]\w*)\b/g, (word) => {
+      const definition = new RegExp(`^var\\s+${word}\\s*=\\s*(.*)$`, "m").exec(bicep)?.[1];
+      return definition ? `(${definition})` : word;
+    });
+    expect(expanded).toMatch(/!\s*empty\(\s*anthropicApiKey\s*\)/);
+  });
+
+  it("10c. anthropicApiKey er @secure() uten standardverdi, og appen får ANTHROPIC_API_KEY", () => {
+    expect(secureParamNames(lines)).toContain("anthropicApiKey");
+    const param = lines.find((line) => /^\s*param\s+anthropicApiKey\s/.test(line));
+    expect(param, "param anthropicApiKey").toBeDefined();
+    expect(param!).not.toContain("=");
+    expect(appSettingExpression(bicep, "ANTHROPIC_API_KEY")).toBeDefined();
+  });
+
   it("11. ingen egen kodevei og ingen ny avhengighet", () => {
     const pkg = read("package.json");
     expect(pkg).not.toContain("@azure/keyvault-secrets");
@@ -1117,6 +1140,36 @@ describe("KI-nøkkelen ANTHROPIC_API_KEY i testmiljøet", () => {
       .split("\n")
       .filter((line) => line.startsWith("ANTHROPIC_API_KEY"));
     expect(example).toEqual(["ANTHROPIC_API_KEY="]);
+    expect(read(DRIFT_DOC_PATH)).toContain("ANTHROPIC_API_KEY");
+  });
+});
+
+/*
+ * KI-nøkkelen i testmiljøet (docs/funksjoner/fase2a-ki-leverandor-testplan.md 4.7, kortet Omfang
+ * 15): samme steder som MS_GRAPH_CLIENT_SECRET, som hemmelighet, og tom verdi er lov (KI av).
+ */
+describe("KI-nøkkelen i utrullingen (ANTHROPIC_API_KEY)", () => {
+  const workflow = read(WORKFLOW_PATH);
+
+  it("kommer fra secrets i steget Infrastruktur (Bicep) og sendes som anthropicApiKey", () => {
+    expect(workflow).toMatch(
+      /^\s*ANTHROPIC_API_KEY:\s*\$\{\{\s*secrets\.ANTHROPIC_API_KEY\s*\}\}\s*$/m,
+    );
+    expect(workflow).toContain('"anthropicApiKey=$ANTHROPIC_API_KEY"');
+    // Ingen sjekk som stopper utrullingen når nøkkelen er tom
+    expect(workflow).not.toMatch(/-z\s+"?\$\{?ANTHROPIC_API_KEY/);
+  });
+
+  it("start.sh legger til ANTHROPIC_API_KEY tom, som MS_GRAPH_CLIENT_SECRET", () => {
+    const start = read("start.sh");
+    const loop = start
+      .split("\n")
+      .find((line) => /^for navn in .*MS_GRAPH_CLIENT_SECRET/.test(line));
+    expect(loop, "løkken som legger til tomme innstillinger").toBeDefined();
+    expect(loop!).toMatch(/\bANTHROPIC_API_KEY\b/);
+  });
+
+  it("driftsdokumentet nevner nøkkelen", () => {
     expect(read(DRIFT_DOC_PATH)).toContain("ANTHROPIC_API_KEY");
   });
 });
