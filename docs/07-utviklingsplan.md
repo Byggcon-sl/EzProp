@@ -224,7 +224,7 @@ Før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerkl�
 
 Samme rapport, nå med **befaringen på iPad uten nett**, med løsningen fra fase 1.
 
-- [ ] Befaring på iPad uten nett, og samme data på PC (to visninger for konstruksjonene)
+- [ ] Befaring på iPad uten nett, og samme data på PC (to visninger for konstruksjonene). Den ekte synken tar med mønsteret fra funn T-0001: tekst vaskes for tegn databasen ikke tar, serveren svarer 400 (ikke 500) på en endring som ikke kan lagres, og iPaden legger den til side med feltnavn og sender resten.
 - [ ] iPad-visning for befaringen: kontrollpunkter per bygning og rom, store trykkflater, «ferdig» per punkt og fremdrift
 - [ ] **Bilder på befaringen:** kamera ett trykk unna, serie med bilder, bildet knyttes til rom, kontrollpunkt og avvik der det tas, og kø for opplasting
 - [ ] **KI: tale til tekst og diktat til ferdig funn.** Takstmannen snakker. Opptaket lagres uten nett, og når nettet er tilbake, fordeles det som er sagt, på rom og bygningsdel som utkast til avvik, årsak, konsekvens og tiltak. TG-feltet står tomt. KI finner ikke opp mål, materialer eller årsaker. Transkripsjonen lagres og kan søkes i.

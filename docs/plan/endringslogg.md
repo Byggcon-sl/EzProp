@@ -54,3 +54,4 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 10.11.2026 | Fagsvarene ført inn som spørsmål 59 i `docs/09-apne-sporsmal.md` og i punktene «Reglene badet trenger» (2a-2) og systemmalen (2a-3). | Prosjektlederen |
 | 10.11.2026 | «KI-modulen og loggen» (2a-1) levert som PR #127 og flyttet til `docs/plan/levert.md`. | Læringsløkken |
 | 10.11.2026 | «Forslagsmønsteret» (2a-1) levert som PR #131 (påbegynt av en kjøring som stanset uten PR, fullført og åpnet av hovedløkken). Flyttes til `docs/plan/levert.md` av læringsløkken. | Prosjektlederen |
+| 11.11.2026 | Fase 2b, første punkt (befaring uten nett): mønsteret fra retting av funn T-0001 (vask av tegn, 400 i stedet for 500, avvist endring legges til side) skal med i den ekte synken. | Funn T-0001, A169 og A170 |

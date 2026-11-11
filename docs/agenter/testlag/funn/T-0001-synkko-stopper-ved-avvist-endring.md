@@ -3,13 +3,13 @@ id: T-0001
 tittel: Én endring som ikke kan lagres, stopper alt annet som venter på å bli sendt fra iPaden
 type: feil
 alvor: alvorlig
-status: ny
+status: rettet
 funnet: 2026-11-11
 rolle: test-robusthet
 omrade: synk uten nett (testskjema)
 maal: de ansatte
 commit: 0b8e3b9
-forsok: 0
+forsok: 1
 pr:
 ---
 
@@ -41,3 +41,4 @@ Samme årsak på `/prove/ki`: tekst med nulltegn gir «Noe gikk galt. Teksten di
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-11: rettet i branch rett-t0001-synkko (vask av nulltegn, 400 i stedet for 500, avvist endring legges til side med feltnavn)
