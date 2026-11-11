@@ -66,7 +66,7 @@ I dag stopper `src/core/ai` bare felt som ikke står på tillatt-listen. Friteks
    - Svaret til kalleren er `{ kind: "blocked" }`. Samme `requestId` på nytt gir `blocked` igjen fra `toSuggestionResult`, uten ny rad og uten kall.
    - En sperret forespørsel avviser ikke forrige åpne forslag på samme mål.
    - `recordDecision`, `checkAiTextApproved` og `getSuggestionStatus` godtar aldri en `blocked`-rad.
-   - Prøvesiden viser samme tekst som når KI er av («KI er ikke tilgjengelig», ingen ny skjerm). «KI er av» gir fortsatt ingen rad. ADR 0006 del 5, 6 og 11 rettes i samme PR.
+   - Prøvesiden viser samme tekst som når KI er av («KI er av.», ingen ny skjerm og ingen ny tekst; se «Avvik under bygging»). «KI er av» gir fortsatt ingen rad. ADR 0006 del 5, 6 og 11 rettes i samme PR.
 6. **Mål-id-en:** måltypen `answer` kan ikke kontrolleres før tabellen `answers` finnes (2a-2). Til da behandles `answer` som `ai_trial` i vakten som finnes: godtas bare med falsk leverandør, ellers `blocked`. Ingen ny struktur per måltype nå (bygges i 2a-2). ADR 0006 del 6 sier allerede at `src/core/ai` selv skal finne oppdraget fra målet og avvise hvis det ikke stemmer med `assignmentId`; det gjøres i 2a-2 når `answers` finnes.
 7. **«Aldri»-kolonnene som data og kontroll (ad-7):** listen fra ADR 0006 del 6 legges som data i `src/core/ai` og utvides med `assignment_team_members.handed_over_reason`, `certifications.certificate_number` og `assignments.number`. Hver funksjonsdefinisjon sier hvilken kolonne hver feltkode på tillatt-listen henter fra (`fieldSources`, eller `free_text` for tekst skrevet av den ansatte). En test feiler hvis en feltkode henter fra en «aldri»-kolonne eller mangler kilde. Testen har en fast kopi av minimumslisten (som i dag i `src/core/ai/features/`), så en kolonne ikke kan fjernes fra både kode og kontroll i samme endring uten rød test. Endring i tillatt-listen eller «aldri»-listen krever gjennomgang av sikkerhet-personvern i PR-en (står i kommentaren over listene).
 8. **`getSuggestionStatus` (småfunn):** rettigheten sjekkes før raden leses. Den ansatte må ha minst én av rettighetene som en KI-funksjon krever; etter oppslaget sjekkes rettigheten for funksjonen på raden som i dag. Svaret er fortsatt `null` for alt som ikke kan vises.
@@ -101,7 +101,7 @@ Ingen ny rettighet. Oppslaget etter kjente verdier filtrerer på `grant.organiza
 - Ingen nye faste koder utenom utfallet `blocked`.
 
 ## Skjermer
-Ingen nye. Prøvesiden `/prove/ki` viser «KI er ikke tilgjengelig» også ved `blocked`.
+Ingen nye. Prøvesiden `/prove/ki` viser samme tekst som KI av («KI er av.») også ved `blocked`. Serverhandlingen gir `disabled` til klienten for begge.
 
 ## Regler
 Ingen fagregler. Vasken er kode med testsaker (oppdiktede eksempler).
@@ -148,7 +148,7 @@ Ingen fagregler. Vasken er kode med testsaker (oppdiktede eksempler).
 - [ ] Leverandørkallet skjer etter vasken i `requestSuggestion`, og ingen andre filer kaller `provider.complete`.
 
 **Resten:**
-- [ ] Komponenttest: `blocked` gir teksten «KI er ikke tilgjengelig». Eksisterende e2e for `/prove/ki` på PC og iPad-størrelse er grønne.
+- [ ] Komponenttest: `blocked` gir samme tekst som KI av («KI er av.»), låst i `src/app/(ansatt)/prove/ki/actions.test.ts` (V5.8). Eksisterende e2e for `/prove/ki` på PC og iPad-størrelse er grønne.
 - [ ] KI-forslag kan fortsatt godtas, endres og avvises, og logges (eksisterende tester mot falsk leverandør grønne).
 - [ ] ADR 0006 del 5, 6 og 11 er rettet for `blocked`, `redacted_count`, `input_summary` etter vask, de kjente verdiene, restrisikoen (to-bokstavsnavn, firmanavn bare som frase) og den utvidede «aldri»-listen.
 - [ ] Ingen nye `*-testplan.test.ts`: testene legges i de filene som finnes for området.
@@ -173,6 +173,9 @@ Ingen fagregler. Vasken er kode med testsaker (oppdiktede eksempler).
 - **Adressemønsteret:** kort, fast liste over endelser (forenkler 3) og egne saker som ikke skal vaskes.
 - **Mykt slettede rader og feil som stenger:** alle tre vurderinger var enige; tatt inn.
 - **Ordlisten:** `never_fields` og `field_sources` holdes utenfor (forenkler 5).
+
+## Avvik under bygging
+- **Teksten ved `blocked` (11.11.2026):** kortet sa først «KI er ikke tilgjengelig», men prøvesiden viser «KI er av.» når KI er av, og kortet sier «ingen ny tekst». Valgt: samme tekst som KI av («KI er av.»). Serverhandlingen svarer `disabled` til klienten både ved `disabled` og `blocked`; forskjellen står bare i loggen.
 
 ## Roller
 - **ki-ansvarlig:** sjekker at vasken ligger i den eneste veien til leverandøren, utfallet `blocked`, testsettet med fasit og rettingen av ADR 0006.

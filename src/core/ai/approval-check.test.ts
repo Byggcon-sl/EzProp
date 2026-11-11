@@ -158,6 +158,21 @@ const CASES: Case[] = [
     },
   },
   {
+    name: "V5.6 outcome blocked (sperret forespørsel)",
+    approved: false,
+    build: async (ctx) => {
+      const target = answerTarget();
+      const row = await approvedRow(ctx, target, {
+        outcome: "blocked",
+        status: null,
+        outputText: null,
+        decidedBy: null,
+        decidedAt: null,
+      });
+      return { aiUsageId: row.id, target };
+    },
+  },
+  {
     name: "4.7 mykt slettet rad (accepted)",
     approved: false,
     build: async (ctx) => {

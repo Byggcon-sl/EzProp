@@ -86,6 +86,8 @@ export async function recordDecision(
       .where(ownRow)
       .for("update");
     if (!row) throw new AiRequestRejectedError();
+    // En sperret forespørsel (ad-1) er ikke et forslag og kan aldri avgjøres
+    if (row.outcome === "blocked") throw new AiDecisionError();
     if (row.outcome !== "ok" || row.status === null) throw new AiDecisionError();
 
     const transition = transitionFor(row.status, decision);
