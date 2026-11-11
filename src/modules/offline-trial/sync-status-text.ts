@@ -5,7 +5,12 @@
  * ingen React, ingen `window`. «Lagret kl.» regnes ut bare her (`nextSavedAt`), likt for alle
  * kandidater.
  */
-import type { TrialRejectedChange, TrialSyncRoundResult, TrialSyncStatus } from "./sync/types";
+import type {
+  OutboxEntry,
+  TrialRejectedChange,
+  TrialSyncRoundResult,
+  TrialSyncStatus,
+} from "./sync/types";
 import { listTrialFields, trialForm } from "./trial-form";
 
 export const SYNC_NOW_OFFLINE_MESSAGE =
@@ -63,6 +68,29 @@ export function rejectedText(rejected: readonly TrialRejectedChange[] | undefine
   if (!rejected || rejected.length === 0) return null;
   const names = [...new Set(rejected.map(rejectedName))];
   return `${REJECTED_PREFIX}${names.join(", ")}`;
+}
+
+/**
+ * Samme tekst som `rejectedText`, men rett fra køoppføringene: bare de som er lagt til side og ikke
+ * løst (`setAside` uten `resolved`), i `seq`-rekkefølge. Feltet hentes fra radens `field_key`
+ * (også fra tidligere oppføringer på samme rad, slik at PATCH uten `field_key` får navn). Null når
+ * ingenting er uløst.
+ */
+export function setAsideText(entries: readonly OutboxEntry[]): string | null {
+  const fieldKeyOf = new Map<string, unknown>();
+  for (const entry of entries) {
+    if ("field_key" in entry.data)
+      fieldKeyOf.set(`${entry.table}/${entry.id}`, entry.data.field_key);
+  }
+  const rejected: TrialRejectedChange[] = [...entries]
+    .filter((entry) => entry.setAside !== undefined && entry.setAside.resolved !== true)
+    .sort((a, b) => a.seq - b.seq)
+    .map((entry) => {
+      if (entry.table === "trial_forms") return { table: entry.table, fieldKey: null };
+      const key = fieldKeyOf.get(`${entry.table}/${entry.id}`);
+      return { table: entry.table, fieldKey: typeof key === "string" ? key : null };
+    });
+  return rejectedText(rejected);
 }
 
 /**
