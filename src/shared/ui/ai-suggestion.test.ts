@@ -8,6 +8,7 @@ import {
   AI_SUGGESTION_TEXTS,
   AiSuggestion,
   suggestionView,
+  undoAfterEdit,
   type AiSuggestionProps,
   type AiSuggestionState,
 } from "./ai-suggestion";
@@ -139,7 +140,9 @@ describe("forslagskortet: tilstander (10.5–10.10)", () => {
     expect(labels(html)).toEqual([]);
   });
 
-  it("10.9 uten nett: «Krever nett …» og knappen for nytt forslag låst", () => {
+  // 10.9 endret med KI-køen (fase2a-ki-ko K5.4): på /prove/ki legges forespørselen i kø uten nett,
+  // og kortet viser «Venter på KI …». «Krever nett …» står igjen for kort uten kø.
+  it("10.9 uten nett, uten kø: «Krever nett …» og knappen for nytt forslag låst", () => {
     const html = render({ online: false, outcome: "error", suggestionText: null, status: null });
     expect(html).toContain("Krever nett. Teksten din er lagret og kan skrives videre.");
     const found = buttons(html);
@@ -153,6 +156,22 @@ describe("forslagskortet: tilstander (10.5–10.10)", () => {
     expect(html).toContain("Krever nett. Teksten din er lagret og kan skrives videre.");
     expect(buttons(html).every((button) => button.disabled)).toBe(true);
   });
+
+  it.each([true, false])(
+    "10.9 uten nett, lagt i kø (på nett: %s): «Venter på KI …», ingen «Krever nett …» og ingen «Bruk»",
+    (isOnline) => {
+      const html = render({
+        online: isOnline,
+        queued: true,
+        outcome: null,
+        suggestionText: null,
+        status: null,
+      });
+      expect(html).toContain("Venter på KI. Forslaget kommer når nettet er tilbake.");
+      expect(html).not.toContain("Krever nett");
+      expect(labels(html)).not.toContain(use);
+    },
+  );
 
   it.each([
     ["no_match", "KI hadde ikke noe forslag. Teksten din er uendret."],
@@ -249,6 +268,65 @@ describe("suggestionView", () => {
     const view = suggestionView({ ...base, outcome: null, suggestionText: null, status: null });
     expect(view.box).toBeNull();
     expect(Object.values(view.buttons).some(Boolean)).toBe(false);
+  });
+});
+
+describe("KI-køen og eldre tekst (fase2a-ki-ko K5)", () => {
+  it("K5.1 køteksten, og kø går foran et forslag som står fra før", () => {
+    expect(AI_SUGGESTION_TEXTS.queued).toBe(
+      "Venter på KI. Forslaget kommer når nettet er tilbake.",
+    );
+    const view = suggestionView({ ...base, queued: true });
+    expect(view.box).toEqual({
+      kind: "message",
+      tone: "neutral",
+      text: AI_SUGGESTION_TEXTS.queued,
+    });
+    expect(view.buttons.use).toBe(false);
+    expect(view.announcement).toBe(AI_SUGGESTION_TEXTS.queued);
+  });
+
+  // Samme regel for vanlig forslag og forslag fra køen: begge gir `sourceText` (teksten som ble sendt)
+  it.each(["vanlig", "fra køen"])("K5.2 T-0004 (%s): endret felt gir ikke «Bruk»", () => {
+    const view = suggestionView({ ...base, sourceText: OWN, currentText: `${OWN} og mer` });
+    expect(view.stale).toBe(true);
+    expect(view.primaryAction).toBe("new");
+    expect(view.buttons.use).toBe(false);
+    expect(view.buttons.newSuggestion).toBe(true);
+    expect(view.notes).toContain("Forslaget gjelder teksten før du skrev videre.");
+
+    const html = render({ sourceText: OWN, currentText: `${OWN} og mer` });
+    expect(labels(html)).not.toContain(use);
+    expect(labels(html)).toContain(newSuggestion);
+    expect(html).toContain("Forslaget gjelder teksten før du skrev videre.");
+  });
+
+  it("K5.2 uendret felt: «Bruk» som før", () => {
+    const view = suggestionView({ ...base, sourceText: OWN, currentText: OWN });
+    expect(view.stale).toBe(false);
+    expect(view.primaryAction).toBe("use");
+    expect(view.buttons.use).toBe(true);
+  });
+
+  it("K5.2 brukt forslag er aldri «eldre tekst» (feltet har forslaget)", () => {
+    for (const status of ["accepted", "edited"] as const) {
+      const view = suggestionView({ ...base, status, sourceText: OWN, currentText: SUGGESTION });
+      expect(view.stale).toBe(false);
+      expect(view.notes).not.toContain(AI_SUGGESTION_TEXTS.staleSource);
+    }
+  });
+
+  it("K5.2 uten `sourceText` eller `currentText`: som før", () => {
+    expect(suggestionView({ ...base, currentText: "noe annet" }).stale).toBe(false);
+    expect(suggestionView({ ...base, sourceText: OWN }).stale).toBe(false);
+  });
+
+  it("K5.3 T-0005: «Angre» etter endret tekst setter bare statusen tilbake", () => {
+    expect(undoAfterEdit(`${SUGGESTION} Og en setning til.`, SUGGESTION)).toBe("status_only");
+    expect(undoAfterEdit(SUGGESTION, SUGGESTION)).toBe("restore");
+    expect(AI_SUGGESTION_TEXTS.undoStatusOnly).toBe(
+      "Statusen er satt tilbake. Teksten din er uendret.",
+    );
   });
 });
 
