@@ -12,7 +12,9 @@ import {
   syncStatusText,
   type SyncStatusKind,
 } from "./sync-status-text";
+import * as statusTextModule from "./sync-status-text";
 import type { TrialSyncStatus } from "./sync/types";
+import { listTrialFields, trialForm } from "./trial-form";
 
 // Tekstene og reglene bak synkstatusen (docs/funksjoner/fase1-synkstatus.md, «Regler»).
 // Testplan avsnitt 2.1. Reglene er data: tabellene under er testsakene. Alle tidspunkt er faste,
@@ -353,4 +355,121 @@ describe("lenken «Logg inn» (signInHref)", () => {
   });
   // At lenken og safeNextPath passer sammen, testes i src/app/logg-inn/safe-next-path.test.ts
   // (moduler importerer ikke fra app).
+});
+
+// --- Funn T-0001: «Kunne ikke sendes: <feltnavn>» ---------------------------------------------
+//
+// docs/agenter/oppgaver/rett-t0001-giftig-endring.md Omfang 8, testplan avsnitt 1e (36–40).
+// Navnet på funksjonen avgjøres av utvikleren; testen finner den under navnene i
+// `SET_ASIDE_MESSAGE_NAMES`. Forventet form: tar køoppføringene (med merket `setAside`) og gir
+// meldingen, eller `null` når ingen er lagt til side og uløst. Feltnavnet kommer fra skjemaet
+// (`trialForm`), ikke fra koden. Alle data er oppdiktet.
+
+const SET_ASIDE_MESSAGE_NAMES = [
+  "setAsideMessage",
+  "setAsideText",
+  "unsentMessage",
+  "notSentMessage",
+  "couldNotSendMessage",
+];
+
+type QueueEntry = {
+  seq: number;
+  op: "PUT" | "PATCH";
+  table: "trial_forms" | "trial_answers" | "trial_photos";
+  id: string;
+  data: Record<string, unknown>;
+  setAside?: { at: string; resolved?: boolean };
+};
+
+function setAsideMessage(entries: readonly QueueEntry[]): string | null {
+  const exported = statusTextModule as unknown as Record<string, unknown>;
+  for (const name of SET_ASIDE_MESSAGE_NAMES) {
+    const fn = exported[name];
+    if (typeof fn === "function")
+      return (fn as (e: readonly QueueEntry[]) => string | null)(entries);
+  }
+  throw new Error(
+    `sync-status-text.ts eksporterer ingen av ${SET_ASIDE_MESSAGE_NAMES.join(", ")} (testplan T-0001 avsnitt 1e)`,
+  );
+}
+
+const T0001_FORM_ID = "0192d3a0-0000-7000-8000-000000000001";
+const AT = "2026-11-11T09:00:00.000Z";
+let nextSeq = 1;
+
+function answerAside(fieldKey: string, resolved?: boolean): QueueEntry {
+  return {
+    seq: nextSeq++,
+    op: "PUT",
+    table: "trial_answers",
+    id: `0192d3a0-0000-7000-8000-${String(nextSeq).padStart(12, "0")}`,
+    data: { trial_form_id: T0001_FORM_ID, field_key: fieldKey, value: JSON.stringify("x") },
+    setAside: resolved === undefined ? { at: AT } : { at: AT, resolved },
+  };
+}
+
+function labelOf(key: string): string {
+  const field = listTrialFields(trialForm).find((candidate) => candidate.key === key);
+  if (!field) throw new Error(`ukjent felt ${key}`);
+  return field.label;
+}
+
+describe("melding om endringer som er lagt til side (T-0001)", () => {
+  it("36 Kunne ikke sendes: <feltnavn> med navn fra skjemaet", () => {
+    expect(setAsideMessage([answerAside("general_description")])).toBe(
+      "Kunne ikke sendes: Generell beskrivelse",
+    );
+    // Navnet hentes fra skjemadefinisjonen, ikke fra koden
+    expect(setAsideMessage([answerAside("roof_description")])).toBe(
+      `Kunne ikke sendes: ${labelOf("roof_description")}`,
+    );
+  });
+
+  it("37 bilde gir «bilde i <feltnavn>»", () => {
+    const photo: QueueEntry = {
+      seq: nextSeq++,
+      op: "PUT",
+      table: "trial_photos",
+      id: "0192d3a0-0000-7000-8000-0000000000b1",
+      data: { trial_form_id: T0001_FORM_ID, field_key: "cover_photo", name: "test-image.png" },
+      setAside: { at: AT },
+    };
+    expect(setAsideMessage([photo])).toBe("Kunne ikke sendes: bilde i Forsidebilde");
+  });
+
+  it("38 testskjemaet", () => {
+    const form: QueueEntry = {
+      seq: nextSeq++,
+      op: "PUT",
+      table: "trial_forms",
+      id: T0001_FORM_ID,
+      data: { name: "Testskjema 1" },
+      setAside: { at: AT },
+    };
+    expect(setAsideMessage([form])).toBe("Kunne ikke sendes: testskjemaet");
+  });
+
+  it("39 flere felt skilles med komma, samme felt nevnes én gang", () => {
+    expect(
+      setAsideMessage([
+        answerAside("general_description"),
+        answerAside("summary"),
+        answerAside("general_description"),
+      ]),
+    ).toBe("Kunne ikke sendes: Generell beskrivelse, Samlet kommentar");
+  });
+
+  it("40 ingen melding når alt er løst", () => {
+    expect(setAsideMessage([answerAside("general_description", true)])).toBeNull();
+    expect(setAsideMessage([])).toBeNull();
+    // Vanlige oppføringer i køen (ikke lagt til side) gir heller ingen melding
+    const waiting = { ...answerAside("summary") };
+    delete waiting.setAside;
+    expect(setAsideMessage([waiting])).toBeNull();
+    // Løst og uløst: bare det uløste nevnes
+    expect(
+      setAsideMessage([answerAside("general_description", true), answerAside("summary")]),
+    ).toBe("Kunne ikke sendes: Samlet kommentar");
+  });
 });

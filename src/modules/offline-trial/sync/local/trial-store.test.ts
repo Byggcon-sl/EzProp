@@ -424,3 +424,221 @@ describe("øyeblikksbilder og nyere lokale skrivinger (localWriteGeneration)", (
     expect(valuesSeen(listener).at(-1)).toBe("4");
   });
 });
+
+// --- Funn T-0001: én endring som ikke kan lagres, stopper ikke køen ---------------------------
+//
+// docs/agenter/oppgaver/rett-t0001-giftig-endring.md Omfang 5–6, testplan avsnitt 1c og 1d. Det
+// samme som de rene køtestene (outbox.test.ts, 16–31), men gjennom lageret: falsk `fetch` svarer
+// 400 med `endring` for den giftige endringen og 200 for resten. Bruker bare lagerets offentlige
+// API (`syncNow`, `status`, `readRows("outbox")`), så testene ikke avhenger av navn i outbox.ts.
+// Nummer 33 står her og ikke i sync-now.test.ts: `runSyncNow` vet ingenting om køen, det er
+// lageret som avgjør om køen er tømt. Ventetallet (27) prøves i outbox.test.ts og e2e, fordi
+// `status()` leser bildelageret (IndexedDB), som ikke finnes her. Alle data er oppdiktet.
+
+const POISON_ID = "0192d3a0-0000-7000-8000-0000000000d1";
+const YEAR_ID = "0192d3a0-0000-7000-8000-0000000000d2";
+const SUMMARY_ID = "0192d3a0-0000-7000-8000-0000000000d3";
+const POISON_TEXT = "Fukt\u0000 i kjeller GIFTIG-MARKØR-8812";
+
+function answer(seq: number, id: string, fieldKey: string, value: unknown): OutboxEntry {
+  return {
+    seq,
+    op: "PUT",
+    table: "trial_answers",
+    id,
+    data: {
+      trial_form_id: FORM,
+      field_key: fieldKey,
+      value: JSON.stringify(value),
+      text_state: null,
+      device_id: "enhet-1",
+      created_at: NOW,
+      updated_at: NOW,
+    },
+  };
+}
+
+/** Skjemaet, så Generell beskrivelse (giftig), Byggeår og Samlet kommentar. */
+const POISON_QUEUE: OutboxEntry[] = [
+  QUEUE[0]!,
+  answer(2, POISON_ID, "general_description", POISON_TEXT),
+  answer(3, YEAR_ID, "building_year", 1985),
+  answer(4, SUMMARY_ID, "summary", "Oppdiktet samlet kommentar"),
+];
+
+type SentOperation = { op: string; table: string; id: string; data: Record<string, unknown> };
+
+function sentOperations(call: Parameters<typeof fetch>): SentOperation[] {
+  const init = call[1];
+  const body = JSON.parse(String(init?.body ?? "{}")) as { operations?: SentOperation[] };
+  return body.operations ?? [];
+}
+
+function json(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+const REJECTION = {
+  feil: "Endringen kunne ikke lagres.",
+  endring: { id: POISON_ID, table: "trial_answers", field_key: "general_description" },
+};
+
+/** 400 med `endring` når bunten har den giftige endringen, ellers 200. */
+function rejectPoison() {
+  fetchMock.mockImplementation(async (...call: Parameters<typeof fetch>) => {
+    const hasPoison = sentOperations(call).some((operation) => operation.id === POISON_ID);
+    return hasPoison ? json(400, REJECTION) : json(200, { applied: 1 });
+  });
+}
+
+type StoredEntry = OutboxEntry & { setAside?: { at: string; resolved?: boolean } };
+
+async function openOn(db: LocalDb, online = true) {
+  vi.stubGlobal("navigator", { onLine: online });
+  reader = createReader();
+  store = await createLocalTrialStore({ db, deviceId: "enhet-1", organizationId: ORG, reader });
+}
+
+describe("lagt til side ved 400 i den lokale kjernen (T-0001)", () => {
+  it("16 giftig endring først i køen: den legges til side, de andre sendes og kvitteres", async () => {
+    rejectPoison();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open(true, POISON_QUEUE);
+
+    // 33: «Synk nå» regner køen som tømt når bare lagt-til-side står igjen
+    expect(await store!.syncNow()).toBe("ok");
+
+    const queue = (await storedQueue()) as unknown as StoredEntry[];
+    expect(queue.map((entry) => entry.id)).toEqual([POISON_ID]);
+    expect(typeof queue[0]!.setAside?.at).toBe("string");
+    expect(queue[0]!.data.value).toBe(JSON.stringify(POISON_TEXT));
+    // Siste bunt hadde de andre, ikke den giftige
+    const last = sentOperations(fetchMock.mock.calls.at(-1)!);
+    expect(last.map((operation) => operation.id)).not.toContain(POISON_ID);
+    const everythingSent = fetchMock.mock.calls.flatMap((call) =>
+      sentOperations(call).map((operation) => operation.id),
+    );
+    expect(everythingSent).toEqual(expect.arrayContaining([FORM, YEAR_ID, SUMMARY_ID]));
+  });
+
+  it("24 og 25 lagt til side sendes ikke og slettes ikke i nye runder", async () => {
+    rejectPoison();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open(true, POISON_QUEUE);
+    expect(await store!.syncNow()).toBe("ok");
+    const callsBefore = fetchMock.mock.calls.length;
+
+    for (let round = 0; round < 3; round++) expect(await store!.syncNow()).toBe("ok");
+    await vi.advanceTimersByTimeAsync(retryDelayMs(10) * 2);
+
+    for (const call of fetchMock.mock.calls.slice(callsBefore)) {
+      expect(sentOperations(call).map((operation) => operation.id)).not.toContain(POISON_ID);
+    }
+    const queue = (await storedQueue()) as unknown as StoredEntry[];
+    expect(queue.map((entry) => entry.id)).toEqual([POISON_ID]);
+    expect(queue[0]!.setAside).toBeDefined();
+  });
+
+  it("20 400 uten endring og én endring i køen: legges til side", async () => {
+    fetchMock.mockResolvedValue(json(400, { feil: "Endringen kunne ikke lagres." }));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const single = [answer(1, POISON_ID, "general_description", POISON_TEXT)];
+    await open(true, single);
+
+    expect(await store!.syncNow()).toBe("ok");
+    const queue = (await storedQueue()) as unknown as StoredEntry[];
+    expect(queue).toHaveLength(1);
+    expect(queue[0]!.setAside).toBeDefined();
+  });
+
+  it("21 400 uten endring og flere i bunten: nytt forsøk, ingenting lagt til side", async () => {
+    fetchMock.mockResolvedValue(json(400, { feil: "Endringen kunne ikke lagres." }));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open(true, POISON_QUEUE);
+
+    expect(await store!.syncNow()).toBe("failed");
+    const queue = (await storedQueue()) as unknown as StoredEntry[];
+    expect(queue).toHaveLength(POISON_QUEUE.length);
+    expect(queue.filter((entry) => entry.setAside)).toEqual([]);
+  });
+
+  it.each([401, 403, 409, 413, 500, 503, "nettfeil"] as const)(
+    "23 svar %s legger ingenting til side, også med endring i kroppen",
+    async (status) => {
+      if (status === "nettfeil") fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+      else fetchMock.mockImplementation(async () => json(status, REJECTION));
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      await open(true, POISON_QUEUE);
+
+      expect(await store!.syncNow()).not.toBe("ok");
+      const queue = (await storedQueue()) as unknown as StoredEntry[];
+      expect(queue.map((entry) => entry.seq)).toEqual([1, 2, 3, 4]);
+      expect(queue.filter((entry) => entry.setAside)).toEqual([]);
+    },
+  );
+
+  it("26 lagt til side overlever omlasting og sendes ikke etterpå", async () => {
+    rejectPoison();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fake = await open(true, POISON_QUEUE);
+    expect(await store!.syncNow()).toBe("ok");
+    await store!.close();
+    store = null;
+
+    fetchMock.mockClear();
+    await openOn(fake.db);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await store!.syncNow()).toBe("ok");
+
+    const queue = (await storedQueue()) as unknown as StoredEntry[];
+    expect(queue.map((entry) => entry.id)).toEqual([POISON_ID]);
+    expect(queue[0]!.setAside).toBeDefined();
+    for (const call of fetchMock.mock.calls) {
+      expect(sentOperations(call).map((operation) => operation.id)).not.toContain(POISON_ID);
+    }
+  });
+
+  it("35 hentet vasket svar lager ingen ny køoppføring", async () => {
+    fetchMock.mockResolvedValue(json(200, { applied: 1 }));
+    await open(true, []);
+    await vi.advanceTimersByTimeAsync(0);
+    const callsBefore = fetchMock.mock.calls.length;
+
+    // Serveren har vasket teksten (uten nulltegn) og sender den tilbake
+    await store!.applySyncedRows("trial_answers", [
+      {
+        id: SUMMARY_ID,
+        trial_form_id: FORM,
+        field_key: "summary",
+        value: "Fukt i kjeller",
+        text_state: null,
+        device_id: "enhet-1",
+        created_at: NOW,
+        updated_at: NOW,
+      },
+    ]);
+    await vi.advanceTimersByTimeAsync(retryDelayMs(10) * 2);
+
+    expect(await storedQueue()).toEqual([]);
+    expect(fetchMock.mock.calls.length).toBe(callsBefore);
+  });
+
+  it("loggen ved 400 har bare status og antall, aldri feltet eller teksten", async () => {
+    rejectPoison();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await open(true, POISON_QUEUE);
+    await store!.syncNow();
+
+    const logged = JSON.stringify([warn, info, log, error].flatMap((spy) => spy.mock.calls));
+    expect(logged).not.toContain("GIFTIG-MARKØR-8812");
+    expect(logged).not.toContain("Fukt");
+    expect(logged).not.toContain("general_description");
+    expect(logged).not.toContain("Generell beskrivelse");
+  });
+});

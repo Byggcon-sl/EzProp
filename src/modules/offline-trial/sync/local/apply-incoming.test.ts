@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { applyTextEdit, createTextState, mergeTextStates, textOf } from "../../text-merge";
-import type { IncomingChange, LocalRow } from "../types";
+import type { IncomingChange, LocalRow, OutboxEntry } from "../types";
 import { applyIncoming } from "./apply-incoming";
-import { localRowKey } from "./outbox";
+import { createOutboxState, localRowKey, pendingKeys } from "./outbox";
 
 // Innfletting av nedlastede rader (docs/funksjoner/fase1-kandidat-electricsql.md avgjørelse D og
 // «Avgjørelser før bygging» 2). Testplan avsnitt 2.2. Ren funksjon: ingen IndexedDB, ingen DOM.
@@ -305,5 +305,58 @@ describe("applyIncoming (apply-incoming.ts)", () => {
       value: JSON.stringify(3),
       device_id: "annen-enhet",
     });
+  });
+});
+
+// Funn T-0001 (docs/agenter/oppgaver/rett-t0001-giftig-endring.md Omfang 7, testplan 34): et felt
+// med en endring som er lagt til side og ikke løst, er med i `pendingKeys`, så serverens vaskede
+// svar ikke overskriver det takstmannen skrev. Køen bygges fra lagrede oppføringer med merket
+// `setAside`, slik lageret leser dem etter omlasting. Teksten er oppdiktet.
+describe("applyIncoming og lagt til side (T-0001)", () => {
+  function setAsideEntry(resolved?: boolean): OutboxEntry {
+    const entry = {
+      seq: 1,
+      op: "PUT" as const,
+      table: "trial_answers" as const,
+      id: LOCAL_ID,
+      data: {
+        trial_form_id: FORM,
+        field_key: "general_description",
+        value: JSON.stringify("Fukt\u0000 i kjeller"),
+        text_state: null,
+        device_id: "enhet-1",
+      },
+      setAside: resolved === undefined ? { at: NOW } : { at: NOW, resolved },
+    };
+    return entry as OutboxEntry;
+  }
+
+  it("34 serverens vaskede svar overskriver ikke felt som er lagt til side", () => {
+    const local = answerRow("general_description", "Fukt\u0000 i kjeller");
+    const keys = pendingKeys(createOutboxState([setAsideEntry()]), localRowKey);
+    expect(keys.has(keyOf(local))).toBe(true);
+
+    const incoming = answerRow("general_description", "Oppdiktet tekst fra serveren", {
+      id: SERVER_ID,
+      device_id: "annen-enhet",
+      updated_at: LATER,
+    });
+    const result = applyIncoming("trial_answers", [local], [change("update", incoming)], keys);
+
+    expect(result.rows).toEqual([local]);
+    expect(result.skippedKeys).toEqual([keyOf(local)]);
+  });
+
+  it("34b når den er løst, beskytter den ikke lenger feltet", () => {
+    const local = answerRow("general_description", "Fukt\u0000 i kjeller");
+    const keys = pendingKeys(createOutboxState([setAsideEntry(true)]), localRowKey);
+    expect(keys.has(keyOf(local))).toBe(false);
+
+    const incoming = answerRow("general_description", "Fukt i kjeller", {
+      id: SERVER_ID,
+      updated_at: LATER,
+    });
+    const result = applyIncoming("trial_answers", [local], [change("update", incoming)], keys);
+    expect(result.rows[0]!.value).toBe(JSON.stringify("Fukt i kjeller"));
   });
 });
