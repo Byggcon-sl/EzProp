@@ -247,3 +247,11 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - En kjøring stoppet midt i arbeidet (kl. 10:30 UTC) uten PR, og branchen ble liggende bak main. Neste hovedløkke fant den ved å se på nyeste commit på åpne brancher. Regel videre: en branch uten PR og uten commit de siste 30 minuttene overtas, og main flettes inn før noe annet.
 - Ikke endre filer mens `pnpm test` kjører i samme mappe: testene som kjører etter endringen, prøver halvferdig kode og gir falske røde. Kjør de berørte testene på nytt etter endringen.
+
+## 11.11.2026 – PR #143 (KI-kø)
+
+- Igjen stoppet en kjøring etter sammensetting av bitene, før «Kjør og rett» og PR. Hovedløkken tok over: kjørte sjekkene, tre gjennomgangsroller i parallell, rettet og åpnet PR. Det tok rundt en time; regelen fra #141 virket.
+- Testskriver og utvikler hadde ulike navn på samme felt (`ownText` mot `sourceText`) og ulik oppfatning av når køen skal stoppe uten nett. Testplanen bør si eksakt hvilke felt i tilstanden testen setter.
+- En test som sorterer på tilfeldig id når tidspunktene er like, feiler bare av og til. Gi hver post sitt eget tidspunkt i testene, eller sammenlign uten rekkefølge.
+- Minneutgaven av et lager må ikke tillate poster som det ekte lageret ikke kan ha (eller må kunne slette dem): rydding ble skrevet etter nøkkel, og poster uten nøkkel ble liggende.
+
