@@ -299,6 +299,13 @@ describe("utrullingsarbeidsflyten (deploy-azure.yml)", () => {
     expect(workflow).not.toContain("--prod");
   });
 
+  it("brannmurkommandoene bruker --server-name for databasen (nyere Azure CLI)", () => {
+    const firewallLines = lines.filter((line) => line.includes("firewall-rule "));
+    expect(firewallLines.length).toBe(2);
+    expect(workflow).not.toContain("--rule-name");
+    expect(workflow.match(/--server-name "\$POSTGRES_SERVER"/g)?.length).toBe(2);
+  });
+
   it("brannmurregelen for kjøreren fjernes alltid", () => {
     const createLine = lines.findIndex(
       (line) => line.includes("firewall-rule create") && line.includes("github-runner"),

@@ -161,9 +161,9 @@ jobs:
           POSTGRES_SERVER: ${{ steps.infra.outputs.postgres_server }}
         run: |
           KJORER_IP=$(curl -fsS https://api.ipify.org || curl -fsS https://ifconfig.me/ip)
-          az postgres flexible-server firewall-rule create --rule-name github-runner \
+          az postgres flexible-server firewall-rule create --name github-runner \
             --resource-group "$RESOURCE_GROUP" \
-            --name "$POSTGRES_SERVER" \
+            --server-name "$POSTGRES_SERVER" \
             --start-ip-address "$KJORER_IP" \
             --end-ip-address "$KJORER_IP" \
             --output none
@@ -194,9 +194,9 @@ jobs:
           POSTGRES_SERVER: ${{ steps.infra.outputs.postgres_server }}
         if: always() && steps.brannmur.outcome == 'success'
         run: |
-          az postgres flexible-server firewall-rule delete --rule-name github-runner \
+          az postgres flexible-server firewall-rule delete --name github-runner \
             --resource-group "$RESOURCE_GROUP" \
-            --name "$POSTGRES_SERVER" \
+            --server-name "$POSTGRES_SERVER" \
             --yes \
             --output none
 
