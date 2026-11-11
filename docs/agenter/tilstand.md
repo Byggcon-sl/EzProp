@@ -82,6 +82,8 @@ Ingen.
 
 ## Siste kjøring
 
+11.11.2026 kveld (oppgaveløkken for «KI-kø», sesjon 01Jqwnu1yfgYRJXTjsGrENfP): fant at KI-køen allerede var merget som PR #143 fra en parallell kjøring. Den lokale branchen hadde en dobbel retting av de samme testene og ble ikke pushet. I stedet en liten PR (versjon 0.5.16): T-0004 og T-0005 satt til «rettet» med PR #143, T-0035 punkt 4 ført som rettet, og statuslinjen for fase 2a i planen sier nå at neste er «Beslutningsnotat om KI-leverandør». Erfaring: sjekk om branchen alt har en merget PR før arbeidet tas opp igjen.
+
 11.11.2026 fra kl. 16:49 UTC (hovedløkken, sesjon 01Jqwnu2WW5U6dipU34kBh3R): ingen åpne PR-er ved start. Branchen `fase2a-ki-ko` sto uten PR (siste commit 16:07). Denne kjøringen overtok den, rettet seks røde tester og to småfunn (A192), fikk godkjenning fra sikkerhet-personvern, forenkler og test-leder, og merget PR #143 (versjon 0.5.14). Læringsløkken i samme kjøring (versjon 0.5.15). Neste: «Beslutningsnotat om KI-leverandør» med Anthropic-adapteren.
 
 11.11.2026 fra kl. 11:49 UTC (hovedløkken, sesjon 01Jqwnu1FJzutvtqtJW5CWCp): ingen åpne PR-er ved start. Branchen `fase2a-evalueringssett` sto uten PR etter en kjøring som stoppet kl. 10:30. Denne kjøringen overtok den, flettet inn main (konflikt i `request-suggestion.ts` etter T-0001), fikk godkjenning fra sikkerhet-personvern og ki-ansvarlig, rettet fire små funn og merget PR #141 (versjon 0.5.12). Læringsløkken ble kjørt i samme kjøring (versjon 0.5.13).

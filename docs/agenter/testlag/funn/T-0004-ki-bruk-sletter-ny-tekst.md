@@ -3,14 +3,14 @@ id: T-0004
 tittel: «Bruk» på et KI-forslag sletter tekst takstmannen skrev etter at forslaget ble laget
 type: feil
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-11
 rolle: test-takstmann
 omrade: KI (forslagskortet)
 maal: KI i bunnen
 commit: 0b8e3b9
 forsok: 0
-pr:
+pr: 143
 ---
 
 ## Hva
@@ -36,3 +36,4 @@ Når feltet er endret etter at forslaget ble laget: merk forslaget som utdatert 
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-11: rettet i PR #143 (KI-kø), venter på ny prøve fra testlaget
