@@ -53,7 +53,7 @@ describe("V1.1 telefon", () => {
 });
 
 describe("V1.2 fødselsnummer", () => {
-  it.each(["01019912345", "010199 12345"])("V1.2 %s → [fødselsnummer]", (value) => {
+  it.each(["01019912345", "010199 12345", "010199-12345"])("V1.2 %s → [fødselsnummer]", (value) => {
     expectWhole(value, NATIONAL_ID);
     expect(redactPii(`Se ${value} her.`).text).not.toContain(PHONE);
   });
@@ -69,9 +69,12 @@ describe("V1.3 organisasjonsnummer", () => {
 });
 
 describe("V1.4 kontonummer (A177)", () => {
-  it.each(["1234.56.78901", "1234 56 78901"])("V1.4 %s → [kontonummer]", (value) => {
-    expectWhole(value, ACCOUNT);
-  });
+  it.each(["1234.56.78901", "1234 56 78901", "1234-56-78901"])(
+    "V1.4 %s → [kontonummer]",
+    (value) => {
+      expectWhole(value, ACCOUNT);
+    },
+  );
 });
 
 describe("V1.5 e-post", () => {
@@ -110,6 +113,12 @@ describe("V1.7 adresse", () => {
     "Skogstien 7",
     "Parkallé 2",
     "8006 Bodø",
+    "Storgt. 12",
+    "Storgt 12",
+    "Elvevn. 3",
+    "Elvevn 3",
+    "STORGATA 4",
+    "storgata 4",
   ])("V1.7 %s → [adresse]", (value) => {
     expectWhole(value, ADDRESS);
   });
@@ -134,11 +143,39 @@ describe("V1.8 står urørt", () => {
     "ved bakken",
     "langs stien",
     "Storgata",
+    "alle 3 rom",
+    "3f2b8c1a-9d4e-4b7a-8c2d-1e5f6a7b8c9d",
   ])("V1.8 «%s» står urørt, count 0", (value) => {
     const text = `Målt ${value} i dag.`;
     const result = redactPii(text);
     expect(result.text).toBe(text);
     expect(result.count).toBe(0);
+  });
+});
+
+describe("V1.10 telefon, fødselsnummer og kontonummer inntil skilletegn", () => {
+  it.each([
+    ["Tlf 12345678/87654321", `Tlf ${PHONE}/${PHONE}`],
+    ["Ring 12345678,87654321", `Ring ${PHONE},${PHONE}`],
+    ["mob-12345678", `mob-${PHONE}`],
+    ["12345678-ring etter 16", `${PHONE}-ring etter 16`],
+    ["(12345678)", `(${PHONE})`],
+    ["fnr:01019912345", `fnr:${NATIONAL_ID}`],
+    ["fnr 010199-12345/konto 1234-56-78901", `fnr ${NATIONAL_ID}/konto ${ACCOUNT}`],
+  ])("V1.10 «%s» vaskes", (text, expected) => {
+    expect(redactPii(text).text).toBe(expected);
+  });
+
+  it.each([
+    "12345678-1234-7123-8123-123456789012",
+    "018f2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b",
+    "2026-11-11T10:00:00.000Z",
+    "0,12345678",
+    "12345678,5 m",
+    "kl 10:12345678",
+  ])("V1.10 unntakene er smale: «%s» står urørt", (value) => {
+    const text = `Verdi ${value} her.`;
+    expect(redactPii(text)).toEqual({ text, count: 0 });
   });
 });
 
@@ -233,6 +270,19 @@ describe("V1.11 NFC", () => {
   });
 });
 
+describe("V1.11 usynlige tegn og NFKC", () => {
+  it.each([
+    ["1234\u200B5678", PHONE],
+    ["1234\u00AD5678", PHONE],
+    ["12\u200C34\u200D56\uFEFF78", PHONE],
+    ["\uFF11\uFF12\uFF13\uFF14\uFF15\uFF16\uFF17\uFF18", PHONE],
+    ["ola\u200B@example.com", EMAIL],
+    ["Stor\u00ADgata 12", ADDRESS],
+  ])("V1.11 «%s» vaskes som om tegnet ikke var der", (value, placeholder) => {
+    expectWhole(value, placeholder);
+  });
+});
+
 describe("V1.12 kjent overvask (A170, villet)", () => {
   it("V1.12 villet overvask: to årstall etter hverandre «1985 2010» blir [telefon]", () => {
     const result = redactPii("Bygget 1985 2010 ombygd.");
@@ -273,6 +323,8 @@ describe("V1.14 ytelse", () => {
     { name: "sifre uten mellomrom", text: "1".repeat(50_000) },
     { name: "sifre og bindestrek", text: "1-".repeat(25_000) },
     { name: "bokstaver uten @", text: "a.".repeat(25_000) },
+    { name: "bokstaver og @", text: "a@".repeat(25_000) },
+    { name: "matrikkelord og skråstrek", text: "gnr 1/".repeat(8_000) },
     { name: "langt ord uten endelse", text: "a".repeat(49_990) + "veien 1" },
   ])("V1.14 ond streng ($name) vaskes under 500 ms", ({ text }) => {
     expect(timeOf(text)).toBeLessThan(500);

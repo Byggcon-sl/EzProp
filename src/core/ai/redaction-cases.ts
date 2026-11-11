@@ -389,4 +389,82 @@ export const REDACTION_CASES: readonly RedactionCase[] = [
     mustRemove: ["Petter", "Kontaktesen"],
     mustKeep: ["ba om rapporten"],
   },
+  // Saker som før sto i et eget sett uten database
+  {
+    name: "firmanavn med regex-tegn, uten selskapsform og del av bestillerteksten",
+    input:
+      "Bestilt av Fiktiv Megling & Co A/S. Megler fra Fiktiv Megling & Co ringte, og Ola Diktesen ba om rapport.",
+    knownValues: {
+      partyFirms: [{ name: "Fiktiv Megling & Co A/S" }],
+      order: { orderedByText: "Ola Diktesen, Fiktiv Megling & Co A/S" },
+    },
+    mustRemove: ["Fiktiv Megling & Co A/S", "Fiktiv Megling & Co", "Ola Diktesen"],
+    mustKeep: ["Bestilt av", "Megler fra", "ba om rapport"],
+  },
+  {
+    name: "kjent adresse med bokstav, også med mellomrom foran bokstaven",
+    input: "Befaring på Prøvegata 7B. Naboen i Prøvegata 7 b har samme takløsning.",
+    knownValues: { property: { address: "Prøvegata 7B" } },
+    mustRemove: ["Prøvegata 7B", "Prøvegata 7 b", "Prøvegata"],
+    mustKeep: ["Befaring på", "Naboen i", "har samme takløsning"],
+  },
+  {
+    name: "kommunenavn alene",
+    input: "Diktekommune krever ferdigattest for tilbygget.",
+    knownValues: { property: { address: "Strandtunet 3", municipalityName: "Diktekommune" } },
+    mustRemove: ["Diktekommune"],
+    mustKeep: ["krever ferdigattest for tilbygget"],
+  },
+  // Funn fra gjennomgangen av «Vask før KI»
+  {
+    name: "telefon inntil skråstrek, komma og bindestrek",
+    input:
+      "Tlf 22334455/55443322, ring 66778899,99887766 eller mob-44556677. 33445566-ring etter 16.",
+    mustRemove: ["22334455", "55443322", "66778899", "99887766", "44556677", "33445566"],
+    mustKeep: ["Tlf", "eller mob-", "ring etter 16"],
+  },
+  {
+    name: "fødselsnummer og kontonummer med bindestrek",
+    input: "Eier oppga 010199-12345 og konto 1234-56-78901, ikke nødvendig.",
+    mustRemove: ["010199-12345", "010199", "12345", "1234-56-78901", "78901"],
+    mustKeep: ["Eier oppga", "og konto", "ikke nødvendig"],
+  },
+  {
+    name: "e-post som inneholder et kjent navn",
+    input: "Send til åse.testesen@eksempel.no i dag.",
+    knownValues: { parties: [{ name: "Åse Testesen" }] },
+    mustRemove: ["åse.testesen@eksempel.no", "eksempel.no", "[navn]"],
+    mustKeep: ["Send til [e-post] i dag."],
+  },
+  {
+    name: "adresse uten komma og med bolignummer",
+    input: "Leiligheten i Elvebredden 12 har egen bod. Selger flytter til Fjellia 3 i Testvik.",
+    knownValues: {
+      order: { addressText: "Fjellia 3 8099 Testvik" },
+      property: { address: "Elvebredden 12 H0101" },
+    },
+    mustRemove: ["Elvebredden 12", "Elvebredden", "Fjellia 3", "Fjellia", "Testvik"],
+    mustKeep: ["Leiligheten i", "har egen bod", "Selger flytter til"],
+  },
+  {
+    name: "usynlige tegn og fullbredde-sifre skjuler ikke persondata",
+    input:
+      "Ring Å\u00ADse på 1234\u200B5678 eller \uFF18\uFF17\uFF16\uFF15\uFF14\uFF13\uFF12\uFF11.",
+    knownValues: S,
+    mustRemove: [
+      "Å\u00ADse",
+      "Åse",
+      "1234\u200B5678",
+      "12345678",
+      "\uFF18\uFF17\uFF16\uFF15\uFF14\uFF13\uFF12\uFF11",
+      "87654321",
+    ],
+    mustKeep: ["Ring", "eller"],
+  },
+  {
+    name: "gateadresse forkortet og i store bokstaver",
+    input: "Badet i Storgt. 12 og boden i Elvevn 3 er fuktige, likeså kjelleren i STORGATA 4.",
+    mustRemove: ["Storgt. 12", "Storgt", "Elvevn 3", "Elvevn", "STORGATA 4"],
+    mustKeep: ["Badet i", "og boden i", "er fuktige, likeså kjelleren i"],
+  },
 ];

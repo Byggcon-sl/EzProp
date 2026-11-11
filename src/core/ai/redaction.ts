@@ -4,8 +4,9 @@
  * Hovedmål: KI i bunnen og de ansatte. All tekst vaskes her før den sendes til en leverandør, så
  * takstmannen kan skrive fritt, og navn, e-post, telefon, adresse og matrikkel sendes aldri (regel 14).
  *
- * To trinn: først de kjente verdiene for oppdraget (lengste først), deretter de faste mønstrene i
- * `@/shared/lib/pii-patterns`. En verdi som er både kjent og treffer et mønster, telles én gang.
+ * Tre trinn: først e-post (så en adresse med et kjent navn i ikke blir delvis vasket), så de kjente
+ * verdiene for oppdraget (lengste først), deretter de faste mønstrene i `@/shared/lib/pii-patterns`.
+ * En verdi som er både kjent og treffer et mønster, telles én gang.
  *
  * Kjente verdier lever bare i minnet under det ene kallet: ingen mellomlagring her, og de skrives
  * aldri til logger, feilmeldinger eller svar. Feil kastes videre (A176): ingen usvasket tekst slipper
@@ -29,7 +30,12 @@ import {
   orders,
   properties,
 } from "@/db/schema";
-import { PII_PLACEHOLDER, redactPii } from "@/shared/lib/pii-patterns";
+import {
+  normalizeForRedaction,
+  PII_PLACEHOLDER,
+  redactEmails,
+  redactPii,
+} from "@/shared/lib/pii-patterns";
 
 export type KnownCadastralUnit = {
   gnr: string | null;
@@ -105,11 +111,13 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 }
 
-/** NFC, trimmet, mellomrom slått sammen. `null` hvis verdien er for kort eller uten bokstav/siffer. */
+/**
+ * NFKC uten usynlige tegn, trimmet, mellomrom slått sammen. `null` hvis verdien er for kort eller
+ * uten bokstav/siffer.
+ */
 function clean(value: string | null | undefined, minLength = MIN_PHRASE_LENGTH): string | null {
   if (value === null || value === undefined) return null;
-  const normalized = value
-    .normalize("NFC")
+  const normalized = normalizeForRedaction(value)
     .replace(/[\s\u00A0]+/gu, " ")
     .trim();
   if (normalized.length < minLength) return null;
@@ -211,32 +219,47 @@ function normalizePhoneDigits(digits: string): string {
   return digits;
 }
 
+/** Deler «Fjellia 3 8010 Bodø» i «Fjellia 3» og «8010 Bodø» (adresse uten komma). */
+function splitAtPostalCode(part: string): string[] {
+  const match = /^(.*?\S)\s+(\d{4}\s+\p{L}.*)$/u.exec(part);
+  return match?.[1] && match[2] ? [match[1], match[2]] : [part];
+}
+
 function addAddress(alternatives: Alternative[], value: string): void {
   const cleaned = clean(value);
   if (!cleaned) return;
   addPhrase(alternatives, cleaned, PII_PLACEHOLDER.address);
   for (const rawPart of cleaned.split(",")) {
-    const part = rawPart.trim();
-    addPhrase(alternatives, part, PII_PLACEHOLDER.address);
-    // «8006 Bodø» gir også poststedet alene.
-    const postal = /^(\d{4})\s+(.+)$/u.exec(part);
-    if (postal?.[2]) {
-      addPhrase(alternatives, postal[2], PII_PLACEHOLDER.address);
-      continue;
+    addPhrase(alternatives, rawPart.trim(), PII_PLACEHOLDER.address);
+    for (const part of splitAtPostalCode(rawPart.trim())) {
+      addAddressPart(alternatives, part);
     }
-    // «Storgata 12 B» gir gatenavn + nummer (bokstav valgfri) og gatenavnet alene.
-    const street = /^(.*?\p{L})\.?\s*(\d{1,4})\s?([A-Za-z])?$/u.exec(part);
-    if (street?.[1] && street[2]) {
-      const name = clean(street[1], MIN_WORD_LENGTH);
-      if (!name) continue;
-      const letter = street[3] ? escapeRegExp(street[3]) : "[A-Ha-h]";
-      alternatives.push({
-        source: `${START}${phraseSource(name)}\\.?[\\s\\u00A0]*${street[2]}(?:[\\s\\u00A0]?${letter})?${END}`,
-        placeholder: PII_PLACEHOLDER.address,
-        weight: part.length,
-      });
-      addPhrase(alternatives, name, PII_PLACEHOLDER.address, MIN_WORD_LENGTH);
-    }
+  }
+}
+
+function addAddressPart(alternatives: Alternative[], part: string): void {
+  addPhrase(alternatives, part, PII_PLACEHOLDER.address);
+  // «8006 Bodø» gir også poststedet alene.
+  const postal = /^(\d{4})\s+(.+)$/u.exec(part);
+  if (postal?.[2]) {
+    addPhrase(alternatives, postal[2], PII_PLACEHOLDER.address);
+    return;
+  }
+  // «Storgata 12 B» gir gatenavn + nummer (bokstav valgfri) og gatenavnet alene. Uten krav om
+  // strengslutt, så «Elvebredden 12 H0101» (med bolignummer) også gir «Elvebredden 12».
+  const street = /^(.*?\p{L})\.?\s*(\d{1,4})(?!\p{N})(?:\s?([A-Za-z])(?![\p{L}\p{N}]))?/u.exec(
+    part,
+  );
+  if (street?.[1] && street[2]) {
+    const name = clean(street[1], MIN_WORD_LENGTH);
+    if (!name) return;
+    const letter = street[3] ? escapeRegExp(street[3]) : "[A-Ha-h]";
+    alternatives.push({
+      source: `${START}${phraseSource(name)}\\.?[\\s\\u00A0]*${street[2]}(?:[\\s\\u00A0]?${letter})?${END}`,
+      placeholder: PII_PLACEHOLDER.address,
+      weight: street[0].length,
+    });
+    addPhrase(alternatives, name, PII_PLACEHOLDER.address, MIN_WORD_LENGTH);
   }
 }
 
@@ -352,8 +375,10 @@ function compileKnownValues(known: KnownValues): KnownValueMatcher {
 }
 
 function applyRedaction(text: string, matcher: KnownValueMatcher): RedactionResult {
-  let result = text.normalize("NFC");
-  let count = 0;
+  // E-post først, så «åse.testesen@eksempel.no» ikke blir «[navn].[navn]@eksempel.no».
+  const emails = redactEmails(normalizeForRedaction(text));
+  let result = emails.text;
+  let count = emails.count;
   if (matcher) {
     const { pattern, placeholders } = matcher;
     result = result.replace(pattern, (...args: unknown[]) => {
@@ -387,7 +412,8 @@ function nonNull(values: (string | null | undefined)[]): string[] {
 /**
  * Henter de kjente verdiene for oppdraget, bare i organisasjonen til `grant`.
  * Mykt slettede parter, kontakter, firma, teammedlemmer, matrikkel og fellesareal tas med (A170).
- * Finnes ikke oppdraget i organisasjonen, gis ingen verdier.
+ * Finnes ikke oppdraget i organisasjonen, kastes en feil (feil skal stenge, A176), så teksten
+ * aldri sendes vasket bare med mønstrene når et oppdrag er oppgitt.
  */
 export async function loadKnownValues(
   grant: EmployeeGrant,
@@ -401,7 +427,7 @@ export async function loadKnownValues(
     .from(assignments)
     .where(and(eq(assignments.id, assignmentId), eq(assignments.organizationId, organizationId)))
     .limit(1);
-  if (!assignment) return known;
+  if (!assignment) throw new Error("Oppdraget finnes ikke i organisasjonen.");
 
   const orderMatch = assignment.orderId
     ? or(eq(orders.id, assignment.orderId), eq(orders.assignmentId, assignmentId))
