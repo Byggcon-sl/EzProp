@@ -6,12 +6,54 @@
  * og inneholder aldri innholdet i nyttelasten.
  */
 
-/** Ugyldig endring: ukjent tabell, felt eller operasjon, fremmed skjema, eller utenfor grensene. Gir 400. */
+/**
+ * Pekeren til endringen i bunten som feilet: tabell, id og feltkode (`null` for `trial_forms`, og
+ * når feltkoden ikke er kjent). Aldri verdien. Klienten bruker den til å legge endringen til side.
+ */
+export type TrialChangeRef = { id: string; table: string; field_key: string | null };
+
+/**
+ * Ugyldig endring: ukjent tabell, felt eller operasjon, fremmed skjema, eller utenfor grensene. Gir
+ * 400. `change` peker på operasjonen når feilen kan knyttes til én.
+ */
 export class InvalidTrialChangeError extends Error {
-  constructor(message = "Ugyldig endring i testskjemaet.") {
+  constructor(
+    message = "Ugyldig endring i testskjemaet.",
+    readonly change?: TrialChangeRef,
+  ) {
     super(message);
     this.name = "InvalidTrialChangeError";
   }
+}
+
+/**
+ * Databasen tok ikke imot en verdi i én operasjon (SQLSTATE-klasse 22 eller 23514). Gir 400 med
+ * pekeren. Meldingen har bare SQLSTATE, aldri verdien eller teksten fra databasen.
+ */
+export class TrialChangeValueError extends Error {
+  constructor(
+    readonly sqlState: string,
+    readonly change: TrialChangeRef,
+  ) {
+    super(`Databasen tok ikke imot en verdi (SQLSTATE ${sqlState}).`);
+    this.name = "TrialChangeValueError";
+  }
+}
+
+/** SQLSTATE fra en databasefeil: `code` på feilen eller på `cause` (Drizzle pakker feilen inn). */
+export function sqlStateOf(error: unknown): string | undefined {
+  for (let current = error, depth = 0; current && depth < 3; depth++) {
+    if (typeof current !== "object") return undefined;
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)) return code;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
+/** Feil i selve verdien (klasse 22 «data exception» og 23514 «check_violation»): 400, ikke 500. */
+export function isValueSqlState(code: string | undefined): boolean {
+  return code !== undefined && (code.startsWith("22") || code === "23514");
 }
 
 /** Innkommende `id` finnes allerede i en annen organisasjon. Ingenting skrives. Gir 409. */

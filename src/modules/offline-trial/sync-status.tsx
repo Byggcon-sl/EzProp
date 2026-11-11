@@ -32,6 +32,7 @@ import {
   syncButtonState,
   syncStatusKind,
   syncStatusText,
+  unsentLineText,
   type SyncStatusKind,
 } from "./sync-status-text";
 import { TRIAL_SAVED_AT_KEY } from "./sync/select-store";
@@ -242,6 +243,8 @@ export function SyncStatus({ getStatus, subscribe, syncNow }: SyncStatusProps) {
   const kind = status ? syncStatusKind(status, signInRequired) : null;
   // «Prøver igjen automatisk» stemmer ikke når innloggingen må fornyes; linjen over sier det.
   const message = kind === "signInRequired" ? null : view.message;
+  // «Kunne ikke sendes: …» når pillen ikke allerede sier det (A181).
+  const unsentLine = status ? unsentLineText(status, signInRequired) : null;
 
   return (
     <section
@@ -263,6 +266,11 @@ export function SyncStatus({ getStatus, subscribe, syncNow }: SyncStatusProps) {
             {kind ? <StateIcon kind={kind} /> : null}
             {status ? syncStatusText(status, signInRequired) : null}
           </p>
+          {unsentLine ? (
+            <p data-testid="sync-status-unsent" className="mt-1 text-sm font-medium text-slate-800">
+              {unsentLine}
+            </p>
+          ) : null}
           <p
             data-testid="sync-status-saved-at"
             className="mt-1 text-sm text-slate-600 tabular-nums"
