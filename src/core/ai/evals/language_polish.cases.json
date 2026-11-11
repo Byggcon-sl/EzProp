@@ -251,9 +251,9 @@
       "id": "lp-026",
       "description": "Kjent e-post og telefon gruppert 4-2-2 vaskes før KI.",
       "fields": {
-        "text": "Kontakt test.person@example.no eller 8765 43 21. Nøkkelen ligger i postkassen"
+        "text": "Kontakt test.person@example.com eller 8765 43 21. Nøkkelen ligger i postkassen"
       },
-      "known": { "emails": ["test.person@example.no"], "phones": ["87654321"] },
+      "known": { "emails": ["test.person@example.com"], "phones": ["87654321"] },
       "expect": { "outcome": "ok", "mustContain": ["postkassen"] }
     },
     {

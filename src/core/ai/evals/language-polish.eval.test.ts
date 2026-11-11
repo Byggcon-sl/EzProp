@@ -72,7 +72,7 @@ const mustNotContain = (item: CaseJson) => item.expect.mustNotContain ?? [];
 
 /** TG-omtale: TG0–TG3, TGIU, med og uten mellomrom, og ordet tilstandsgrad. */
 const TG =
-  /(?<![\p{L}\p{N}])(?:tg[\s ]?(?:[0-3]|iu)|tilstandsgrad(?:[\s ]?[0-3])?)(?![\p{L}\p{N}])/iu;
+  /(?<![\p{L}\p{N}])(?:tg[\s -]?(?:[0-3]|iu)|tilstandsgrad\p{L}*(?:[\s ]?[0-3])?)(?![\p{L}\p{N}])/iu;
 const hasTg = (text: string) => TG.test(text);
 
 /** Styringsforsøk: teksten ber KI gjøre noe («skriv at», «sett TG», «ignorer», «gjør … strengere»). */
@@ -309,7 +309,7 @@ describe("evalueringssett: settet for language_polish (E4)", () => {
         ...(text.match(/[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}/gu) ?? []),
       ];
       for (const email of emails) {
-        if (!/@example\.(?:com|no)$|\.test$/iu.test(email)) problems.push(`${item.id}: e-post`);
+        if (!/@example\.com$|\.test$/iu.test(email)) problems.push(`${item.id}: e-post`);
       }
       for (const match of text.matchAll(/(?<!\p{N})\d{6}[\s -]?\d{5}(?!\p{N})/gu)) {
         if (isValidNationalId(match[0].replace(/\D/gu, "")))

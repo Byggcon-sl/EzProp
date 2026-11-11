@@ -13,7 +13,7 @@ import {
 } from "../../../../tests/evals";
 import { fakeAiProvider } from "../providers/fake";
 import type { AiProvider, AiProviderResult } from "../providers/types";
-import { emptyKnownValues } from "../redaction";
+import { emptyKnownValues } from "../redact-text";
 import * as run from "./run";
 import { runEvalCommand, runEvals } from "./run";
 
@@ -487,5 +487,14 @@ describe("evalueringssett: vasket tekst sjekkes på egne bein (E2.11–E2.13)", 
     expect(source).not.toMatch(/\baiUsageLog\b/u);
     expect(source).not.toMatch(/insert\s+into\s+ai_usage_log/iu);
     expect(source).not.toMatch(/\.insert\s*\(/u);
+  });
+});
+
+describe("evalueringssett: TG-omtale i bøyde former (gjennomgang 11.11.2026)", () => {
+  it("bøyde former av tilstandsgrad og TG med bindestrek telles", () => {
+    expect(run.extractTgMentions("Tilstandsgraden er 2.")).toHaveLength(1);
+    expect(run.extractTgMentions("Begge tilstandsgrader ble vurdert.")).toHaveLength(1);
+    expect(run.extractTgMentions("Satt til TG-2.")).toEqual(["tg-2"]);
+    expect(run.extractTgMentions("Fuktmåling i kjeller.")).toEqual([]);
   });
 });

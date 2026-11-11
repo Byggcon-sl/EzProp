@@ -113,11 +113,12 @@ describe("evalueringssett: kommandoen (E3)", () => {
       );
       const provider = testProvider((input) => okResult(input));
       const { exitCode, lines } = await runEvalCommand([], polishDir(cases), provider);
-      // Forutsetning: verdien nådde faktisk leverandøren (vasken tok den ikke)
+      // Lekkasjen fanges før kallet: verdien når aldri leverandøren (gjennomgang 11.11.2026)
+      expect(provider.prompts).toHaveLength(29);
       expect(
         provider.prompts.map(inputOfPrompt).some((input) => input.includes(value)),
-        "verdien nådde leverandøren",
-      ).toBe(true);
+        "verdien skal ikke nå leverandøren",
+      ).toBe(false);
       expect(exitCode).toBe(1);
       const leakLine = lines.find((line) => line.includes("t-12"));
       expect(leakLine, "linjen med eksempel-id").toBeDefined();

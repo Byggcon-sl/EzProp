@@ -84,7 +84,7 @@ export function containsWholeWord(text: string, word: string): boolean {
 }
 
 const TG_MENTION = new RegExp(
-  `${START}(?:tg\\s?(?:[0-3]|iu)|tilstandsgrad(?:\\s?[0-3])?)${END}`,
+  `${START}(?:tg[\\s-]?(?:[0-3]|iu)|tilstandsgrad\\p{L}*(?:\\s?[0-3])?)${END}`,
   "giu",
 );
 
@@ -321,34 +321,34 @@ async function runFeature(
     const known = evalCase.known === undefined ? null : toKnownValues(evalCase.known);
     const captured: string[] = [];
     let answer: AiProviderResult;
+    let evaluation: ReturnType<typeof evaluateCase>;
     try {
       const { prompt } = preparePrompt(definition, evalCase.fields, known);
+      // Lekkasjesjekken før kallet: en ledetekst med persondata sendes aldri til leverandøren
+      const leaked = leaksIn(prompt, known);
+      if (leaked.length > 0) {
+        result.leaks.push({ id: evalCase.id, types: leaked });
+        continue;
+      }
       answer = await completeCaptured(provider, captured, {
         feature: definition.code,
         promptVersion: definition.promptVersion,
         prompt,
         model: provider.model,
       });
+      const leakedAfter = new Set<LeakType>();
+      for (const text of captured) for (const type of leaksIn(text, known)) leakedAfter.add(type);
+      if (leakedAfter.size > 0) {
+        result.leaks.push({ id: evalCase.id, types: Array.from(leakedAfter) });
+        continue;
+      }
+      evaluation = evaluateCase(evalCase.expect, inputTextOf(definition, evalCase.fields), answer);
     } catch {
+      // Også feil fra mønstrene i sjekkene: eksempelet føres som krasj, uten feilteksten
       result.crashes.push(evalCase.id);
       continue;
     }
 
-    const leaked = new Set<LeakType>();
-    for (const text of captured) {
-      const types = known === null ? findPatternLeaks(text) : findLeakedKnownValues(text, known);
-      for (const type of types) leaked.add(type);
-    }
-    if (leaked.size > 0) {
-      result.leaks.push({ id: evalCase.id, types: Array.from(leaked) });
-      continue;
-    }
-
-    const evaluation = evaluateCase(
-      evalCase.expect,
-      inputTextOf(definition, evalCase.fields),
-      answer,
-    );
     if (evaluation.passed) {
       result.passed += 1;
       if (evalCase.mustPass) result.mustPassPassed += 1;
@@ -362,6 +362,11 @@ async function runFeature(
 }
 
 /** Kaller leverandøren og tar vare på teksten den faktisk fikk. */
+/** Persondatatypene som finnes i teksten: kjente verdier når de finnes, ellers mønstrene. */
+function leaksIn(text: string, known: KnownValues | null): LeakType[] {
+  return known === null ? findPatternLeaks(text) : findLeakedKnownValues(text, known);
+}
+
 async function completeCaptured(
   provider: AiProvider,
   captured: string[],
