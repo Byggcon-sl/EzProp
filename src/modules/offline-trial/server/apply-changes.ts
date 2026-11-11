@@ -59,14 +59,14 @@ function cleanData(data: Data): Data {
   return { ...stripUnstorableChars(washable), ...untouched };
 }
 
-/** Hvilken operasjon som ble avvist, uten innhold. `field_key` bare når feltet er kjent. */
+/** Hvilken operasjon som ble avvist, uten innhold. `field_key` bare når den har gyldig kodeform. */
 function rejectedChange({ id, table, data }: ParsedTrialChangeOperation): RejectedTrialChange {
   const fieldKey = data.field_key;
-  const knownField =
+  const validKey =
     (table === "trial_answers" || table === "trial_photos") &&
     typeof fieldKey === "string" &&
-    fieldsByKey.has(fieldKey);
-  return { id, table, field_key: knownField ? fieldKey : null };
+    /^[a-z0-9_]{1,64}$/.test(fieldKey);
+  return { id, table, field_key: validKey ? fieldKey : null };
 }
 
 function has(data: Data, key: string): boolean {

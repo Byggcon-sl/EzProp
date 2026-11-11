@@ -9,7 +9,7 @@ rolle: test-robusthet
 omrade: synk uten nett (testskjema)
 maal: de ansatte
 commit: 0b8e3b9
-forsok: 1
+forsok: 2
 pr:
 ---
 
