@@ -41,10 +41,10 @@ export type RedactPiiOptions = {
 
 export type RedactPiiResult = { text: string; count: number };
 
-// Mellomrom mellom tallgrupper: vanlig og hardt mellomrom.
-const SP = "[ \\u00A0]";
-// Skilletegn i telefonnumre.
-const SEP = "[ \\u00A0.\\-]";
+// Mellomrom mellom tallgrupper: vanlig, hardt (U+00A0), smalt (U+2009) og smalt hardt (U+202F).
+const SP = "[ \\u00A0\\u2009\\u202F]";
+// Skilletegn i telefonnumre: mellomrommene over, punktum og bindestrek.
+const SEP = "[ \\u00A0\\u2009\\u202F.\\-]";
 
 // Tallgrenser. Ikke inntil bokstav, siffer, understrek eller bindestrek (UUID-er og koder), og
 // ikke rett etter/før siffer + skilletegn (desimaltall, datoer, klokkeslett, brøker). Brukes av
@@ -66,7 +66,7 @@ const PII_NUM_START =
 const PII_NUM_END =
   "(?![\\p{L}\\p{N}])" + `(?!-${HEX}{4}-)` + "(?![.,]\\p{N}{1,3}(?!\\p{N}))" + "(?!:\\p{N})";
 // Ordgrenser for mønstre som starter eller slutter med bokstaver. Eksportert som strenger, så
-// vasken av kjente verdier i `src/core/ai/redaction.ts` har egne grenser (uten `_`).
+// vasken av kjente verdier i `src/core/ai/redact-text.ts` har egne grenser (uten `_`).
 export const WORD_START = "(?<![\\p{L}\\p{N}_])";
 export const WORD_END = "(?![\\p{L}\\p{N}_])";
 
@@ -76,11 +76,14 @@ const EMAIL = new RegExp(
 );
 
 // Fødselsnummer: elleve sifre, også med mellomrom eller bindestrek etter de seks første.
-const NATIONAL_ID = new RegExp(`${PII_NUM_START}\\d{6}[ \\u00A0\\-]?\\d{5}${PII_NUM_END}`, "gu");
+const NATIONAL_ID = new RegExp(
+  `${PII_NUM_START}\\d{6}[ \\u00A0\\u2009\\u202F\\-]?\\d{5}${PII_NUM_END}`,
+  "gu",
+);
 
 // Kontonummer: 4-2-5 med punktum, mellomrom eller bindestrek.
 const ACCOUNT_NUMBER = new RegExp(
-  `${PII_NUM_START}\\d{4}[. \\u00A0\\-]\\d{2}[. \\u00A0\\-]\\d{5}${PII_NUM_END}`,
+  `${PII_NUM_START}\\d{4}[. \\u00A0\\u2009\\u202F\\-]\\d{2}[. \\u00A0\\u2009\\u202F\\-]\\d{5}${PII_NUM_END}`,
   "gu",
 );
 
@@ -91,8 +94,10 @@ const ORG_NUMBER = new RegExp(
 );
 
 // Telefon: åtte sifre sammen eller gruppert 3-2-3, 2-2-2-2, 4-4, med +47 eller 0047 foran.
+// Også 3-5, 4-2-2 og 2-2-4, men bare med mellomrom (SP): med punktum eller bindestrek ville
+// datoer som «11.11.2026» og «2026-11-11» blitt vasket.
 const PHONE = new RegExp(
-  `${PII_NUM_START}(?:(?:\\+|00)47${SEP}?)?(?:\\d{8}|\\d{3}${SEP}\\d{2}${SEP}\\d{3}|\\d{2}${SEP}\\d{2}${SEP}\\d{2}${SEP}\\d{2}|\\d{4}${SEP}\\d{4})${PII_NUM_END}`,
+  `${PII_NUM_START}(?:(?:\\+|00)47${SEP}?)?(?:\\d{8}|\\d{3}${SEP}\\d{2}${SEP}\\d{3}|\\d{2}${SEP}\\d{2}${SEP}\\d{2}${SEP}\\d{2}|\\d{4}${SEP}\\d{4}|\\d{3}${SP}\\d{5}|\\d{4}${SP}\\d{2}${SP}\\d{2}|\\d{2}${SP}\\d{2}${SP}\\d{4})${PII_NUM_END}`,
   "gu",
 );
 
