@@ -2,7 +2,7 @@
 
 - **Fase:** 2a (retting fra testlaget, går foran nytt planpunkt)
 - **Modul:** kjerne (`src/shared`, `src/core/ai`) / offline-trial
-- **Status:** klar for bygging (runde 1 med forenkler, ki-ansvarlig og test-leder er tatt inn 11.11.2026)
+- **Status:** klar for bygging (runde 1 med forenkler, ki-ansvarlig og test-leder er tatt inn 11.11.2026; KI-vurderingen fra ki-ansvarlig er tatt inn 11.11.2026)
 - **Funn:** `docs/agenter/testlag/funn/T-0001-synkko-stopper-ved-avvist-endring.md` (feil, alvorlig)
 - **Branch:** `rett-t0001-synkko` fra `main`
 - **Støtter hovedmål:** De ansatte: takstmannen mister ikke arbeid fra iPaden fordi ett felt har et rart tegn, og ser hvilket felt det gjelder. / KI i bunnen: tekst med nulltegn gir ikke lenger feil i KI-forslaget, og loggen i `ai_usage_log` blir skrevet. / Reklamasjoner: svar som faktisk kommer fram til serveren, gir en rapport uten hull.
@@ -21,7 +21,7 @@ KI gjør ikke noe nytt her, og vasken har ingen KI i seg. Rettingen reparerer gr
 **Med:**
 1. **Felles vask** `stripUnstorableChars` i `src/shared/lib/clean-text.ts`: fjerner U+0000 og ensomme surrogattegn (som `jsonb` avviser). Går gjennom tekst i objekter og lister, også nøkler i objekter. Tall, `true`/`false` og `null` røres ikke. Inndata endres ikke (ny verdi tilbake). Gyldige surrogatpar (emoji), linjeskift, tabulator, æøå og m² beholdes. Kodekommentar: «Bare tegn databasen ikke tar. Ikke personvernvask, erstatter ikke «Vask før KI».»
 2. **Synken:** `applyTrialChanges` vasker `data` i hver operasjon før lagring, **unntatt** `id`, `trial_form_id`, `field_key` og `text_state` (koder og id-er skal aldri endres stille; feil i dem gir 400 som i punkt 4). For tekstfelt vaskes `value` **etter** `readText` av den flettede tilstanden. `text_state` (Yjs, base64) lagres urørt, så fletting (`mergeTextStates`) virker som før.
-3. **KI-modulen:** `requestSuggestion` beholder rekkefølgen. Vasken gjøres på verdiene i `input.fields` etter trinn 1–3 (validering, rettighet, tillatt-liste) og før `buildPrompt` i trinn 7. Feltkodene (nøklene) vaskes ikke. Lengdene i `inputSummary` regnes av vasket tekst. `result.text` fra leverandøren vaskes før innsettingen i `ai_usage_log`. Tekst som er tom etter vask, gir samme avslag som tom tekst i dag (aldri 500).
+3. **KI-modulen:** `requestSuggestion` beholder trinnene sine. Rekkefølgen blir: trinn 1–3 (validering, rettighet, tillatt-liste), så `stripUnstorableChars` på verdiene i `input.fields`, så resten (oppslag, sperre, `redactFields` i trinn 8, `buildPrompt` i trinn 9, `inputSummary`) med de vaskede verdiene. Vasken må komme **før personvernvasken** (`redactFields`): et telefonnummer med nulltegn mellom sifrene (for eksempel «9\u00001234567») kjennes ellers ikke igjen av mønstrene, og blir helt når nulltegnet fjernes etterpå (CLAUDE.md regel 14). Feltkodene (nøklene) vaskes ikke. Rett etter vasken: er en verdi tom etter vask, kastes `AiRequestRejectedError` (samme avslag som tom tekst i trinn 1, aldri 500), før oppslag, sperret rad og leverandørkall. `result.text` fra leverandøren vaskes før innsettingen i `ai_usage_log` (`outputText`) og før det sendes tilbake til klienten, så takstmannen ser det samme som står i loggen.
 4. **400 i stedet for 500:** feil i verdien fra databasen (SQLSTATE-klasse 22, og 23514) og `InvalidTrialChangeError` fra én operasjon gir 400 med `{ feil, endring: { id, table, field_key } }`. Andre databasefeil (brutt forbindelse, 23505 osv.) gir 500 som før. Svaret, loggen og `ai_usage_log` får aldri selve teksten; kroppen logges ikke. Hele bunten rulles tilbake i én transaksjon (som i dag).
 5. **Klienten legger til side bare ved 400:**
    - 400 med `endring`: den endringen (alle køoppføringer med samme `table`+`id` i bunten) merkes som lagt til side, resten sendes med en gang.
@@ -74,7 +74,7 @@ Ingen fagregler.
 - [ ] **Kø (enhet):** 401, 403, 409, 413, 5xx og nettfeil gir nytt forsøk og legger ingenting til side.
 - [ ] **Kø (enhet):** lagt til side overlever ny `createOutboxState` fra lagret kø (omlasting). Ventetallet teller den ikke. `syncNow` regner køen som tømt. Ny endring i samme felt blir ny oppføring. Feltet er i `pendingKeys` til en senere endring på samme felt er kvittert; da er den gamle løst og ute av `pendingKeys`.
 - [ ] **Statuslinjen (test):** viser «Kunne ikke sendes: <feltnavn>» med navn fra skjemaet, riktig tekst for bilde og skjema, og meldingen forsvinner først etter 200 på den nye endringen.
-- [ ] **KI (falsk leverandør):** tekst med nulltegn gir forslag og en rad i `ai_usage_log`. Svar fra leverandøren med nulltegn lagres vasket i loggen. Tekst som er tom etter vask, gir avslag, ikke 500. Feltkodene vaskes ikke.
+- [ ] **KI (falsk leverandør):** tekst med nulltegn gir forslag og en rad i `ai_usage_log`. Svar fra leverandøren med nulltegn lagres vasket i loggen og sendes vasket tilbake til klienten (samme tekst begge steder). Tekst som er tom etter vask, gir avslag (`AiRequestRejectedError`), ikke 500, og verken `redactFields` eller leverandøren blir kalt. Et telefonnummer med nulltegn mellom sifrene blir vasket bort av `redactFields`, og ledeteksten leverandøren får, har ikke nummeret. Feltkodene vaskes ikke.
 - [ ] **KI uendret:** eksisterende tester i `src/core/ai` (no-leak, static-checks, access, record-decision, godtatt/endret/avvist) er grønne uten endring.
 - [ ] **Tilgang:** bruker i annen organisasjon får 403 med giftig innhold, både i synken (`applyTrialChanges`) og i KI-ruten. Ingen ny spørring, så ingen ny `expectTenantIsolation` (sjekkes i gjennomgangen).
 - [ ] **E2E (PC og iPad-størrelse, `e2e/fase-2a-rett-t0001-synkko.spec.ts`):** (a) lim inn tekst med nulltegn, synk, alle tre svarene kommer fram; (b) `page.route` gir 400 for én endring, statuslinjen viser «Kunne ikke sendes: Generell beskrivelse», de andre blir kvittert; (c) skriv uten nett, kom på nett, samme resultat som (a).
@@ -92,6 +92,12 @@ Ingen fagregler.
 - **Tenant:** ingen ny spørring, så 403-test er nok (forenkler og test-leder er enige).
 - **Ordlisten:** `set aside` og `unstorable characters` blir navn i koden, så de føres inn.
 - **Funnfilen lukkes etter bekreftelse fra testlaget**, ikke ved merge.
+
+## Avgjort (prosjektleder, KI-vurdering fra ki-ansvarlig 11.11.2026)
+- **Vasken flyttes foran personvernvasken** (`redactFields`, trinn 8), ikke bare foran `buildPrompt` (som er trinn 9, ikke 7 som kortet sa). Godtatt uten forbehold: ellers kan et nummer med nulltegn slippe gjennom til KI. Personvern går foran rekkefølgen kortet hadde.
+- **Egen sjekk for tom tekst etter vask** rett etter vasken, siden skjemaet i trinn 1 bare ser teksten før vask. Godtatt.
+- **`result.text` vaskes før både logg og svar til klienten.** Godtatt: takstmannen skal se det som er logget.
+- Ingen nye A-numre: dette er gjennomføring av A180, ikke en ny beslutning om fag eller personvern.
 
 ## Roller
 utvikler (vask, server, kø, statuslinje), testskriver (tester over, i parallell). Ingen andre roller: ingen fag, ingen ny skjerm, ingen ny KI-funksjon.
