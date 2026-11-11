@@ -8,7 +8,7 @@ import { PROVIDERS_BY_PORT } from "@/core/integrations";
  * 12, kortet Omfang 9, A161). Samme mønster som src/core/integrations/static-checks.test.ts.
  *
  * Støtter hovedmål: KI i bunnen (én vei inn: bare src/core/ai bruker KI-portene) og færre
- * reklamasjoner (ingen ekte leverandør før vasken og S8, ingenting slettes, ingen tall per ansatt).
+ * reklamasjoner (ekte leverandør bare bak tillatt-listen, ingenting slettes, ingen tall per ansatt).
  */
 
 const repoRoot = join(__dirname, "..", "..", "..");
@@ -35,6 +35,24 @@ const PORT_ALLOWED = new Set([
   "src/core/integrations/ports.ts",
   "src/db/seed/sample-assignments.ts",
 ]);
+
+const SDK_IMPORT =
+  /from\s+["'](openai|@anthropic-ai\/[^"']*|@azure\/openai|@azure\/ai-[^"']*|@google\/[^"']*|@mistralai\/[^"']*|cohere-ai|ai|@ai-sdk\/[^"']*)["']/;
+const FETCH_CALL = /\bfetch\s*\(/;
+const READ_SECRET = /\breadSecret\b/;
+const CORE_AI_IMPORT = /["']@\/core\/ai(\/[^"']*)?["']/;
+
+/** Tillatt-listen (Omfang 9): de eneste filene i src/core/ai som kaller nettet og leser nøkkelen. */
+const FETCH_ALLOWED = new Set(["src/core/ai/providers/anthropic.ts"]);
+const READ_SECRET_ALLOWED = new Set(["src/core/ai/provider-resolution.ts"]);
+
+/** Filene (sortert) der mønsteret treffer. */
+function filesUsing(files: { path: string; text: string }[], pattern: RegExp): string[] {
+  return files
+    .filter((file) => pattern.test(file.text))
+    .map((file) => file.path)
+    .sort();
+}
 
 describe("KI-modulen, statiske kontroller (12)", () => {
   it("12.1 src/core/ai har kildefiler (ellers sier testene under ingenting)", () => {
@@ -79,9 +97,9 @@ describe("KI-modulen, statiske kontroller (12)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it('12.6 PROVIDERS_BY_PORT.ai er nøyaktig ["fake"], og speech_to_text er tom', () => {
+  it('12.6 PROVIDERS_BY_PORT.ai er nøyaktig ["anthropic", "fake"], og speech_to_text er tom', () => {
     const providers = PROVIDERS_BY_PORT as Record<string, readonly string[]>;
-    expect([...providers.ai!]).toEqual(["fake"]);
+    expect([...providers.ai!].sort()).toEqual(["anthropic", "fake"]);
     expect([...providers.speech_to_text!]).toEqual([]);
   });
 
@@ -97,15 +115,62 @@ describe("KI-modulen, statiske kontroller (12)", () => {
     expect(source).not.toMatch(/export[^;]*\b(list\w*|count\w*|\w*ByEmployee|\w*Statistics)\b/);
   });
 
-  it("12.8 ingen SDK-er, ingen readSecret og ingen fetch i src/core/ai (ingen ekte leverandør ennå)", () => {
-    const sdk =
-      /from\s+["'](openai|@anthropic-ai\/[^"']*|@azure\/openai|@azure\/ai-[^"']*|@google\/[^"']*|@mistralai\/[^"']*|cohere-ai|ai|@ai-sdk\/[^"']*)["']/;
+  /*
+   * 12.8 er snevret inn til en tillatt-liste for Anthropic-adapteren
+   * (docs/funksjoner/fase2a-ki-leverandor.md Omfang 9, testplanen S3 og S5): `fetch(` bare i
+   * adapteren, `readSecret` bare i valget av leverandør. Fortsatt ingen SDK.
+   */
+  it("12.8/S3 ingen SDK-er i src/core/ai (ingen ny avhengighet for leverandøren)", () => {
     for (const file of productFiles(aiDir)) {
-      const text = read(file);
-      expect(text, rel(file)).not.toMatch(sdk);
-      expect(text, rel(file)).not.toMatch(/\breadSecret\b/);
-      expect(text, rel(file)).not.toMatch(/\bfetch\s*\(/);
+      expect(read(file), rel(file)).not.toMatch(SDK_IMPORT);
     }
+    // Ikke hult
+    expect(SDK_IMPORT.test('import Anthropic from "@anthropic-ai/sdk";')).toBe(true);
+    expect(SDK_IMPORT.test('import { z } from "zod";')).toBe(false);
+  });
+
+  it("12.8/S5 fetch( står bare i providers/anthropic.ts, readSecret bare i provider-resolution.ts", () => {
+    const files = productFiles(aiDir).map((file) => ({ path: rel(file), text: read(file) }));
+    // Filene på listen finnes (ellers er listen gammel)
+    for (const path of [...FETCH_ALLOWED, ...READ_SECRET_ALLOWED]) {
+      expect(existsSync(join(repoRoot, path)), path).toBe(true);
+    }
+    expect(filesUsing(files, FETCH_CALL).filter((path) => !FETCH_ALLOWED.has(path))).toEqual([]);
+    expect(filesUsing(files, READ_SECRET).filter((path) => !READ_SECRET_ALLOWED.has(path))).toEqual(
+      [],
+    );
+    // client/ og evals/ har ingen av delene
+    for (const { path, text } of files) {
+      if (!/^src\/core\/ai\/(client|evals)\//.test(path)) continue;
+      expect(text, path).not.toMatch(FETCH_CALL);
+      expect(text, path).not.toMatch(READ_SECRET);
+    }
+  });
+
+  it("12.8/S5 kontrollen er ikke hul: fetch( eller readSecret i en annen fil blir fanget", () => {
+    const sample = [
+      { path: "src/core/ai/providers/anthropic.ts", text: "await fetch(url, init);" },
+      { path: "src/core/ai/provider-resolution.ts", text: "const key = readSecret(ref);" },
+      { path: "src/core/ai/request-suggestion.ts", text: "const res = await fetch (url);" },
+      { path: "src/core/ai/client/queue.ts", text: "import { readSecret } from x;" },
+      { path: "src/core/ai/evals/run.ts", text: "const prefetch = 1; // ingen kall" },
+    ];
+    expect(filesUsing(sample, FETCH_CALL).filter((path) => !FETCH_ALLOWED.has(path))).toEqual([
+      "src/core/ai/request-suggestion.ts",
+    ]);
+    expect(
+      filesUsing(sample, READ_SECRET).filter((path) => !READ_SECRET_ALLOWED.has(path)),
+    ).toEqual(["src/core/ai/client/queue.ts"]);
+  });
+
+  it("S5 src/core/integrations/connections.ts importerer ikke fra @/core/ai (importretningen går bare én vei)", () => {
+    const source = read(join(srcDir, "core", "integrations", "connections.ts"));
+    expect(source).not.toMatch(CORE_AI_IMPORT);
+    // Ikke hult
+    expect(CORE_AI_IMPORT.test('import type { AiFeatureCode } from "@/core/ai/types";')).toBe(true);
+    expect(CORE_AI_IMPORT.test('import { requestSuggestion } from "@/core/ai";')).toBe(true);
+    expect(CORE_AI_IMPORT.test('const m = await import("@/core/ai");')).toBe(true);
+    expect(CORE_AI_IMPORT.test('import { readSecret } from "./secrets";')).toBe(false);
   });
 
   it("12.9 src/app og src/modules importerer ikke leverandørene, loggen eller evalueringssettet direkte", () => {
@@ -274,7 +339,7 @@ describe("evalueringssett, statiske kontroller (E7)", () => {
     }
   });
 
-  it("E7.5/E7.7 evals/ er med i kontrollene for src/core/ai (12.5 og 12.8 dekker undermappen)", () => {
+  it("E7.5/E7.7 evals/ er med i kontrollene for src/core/ai (12.5 og 12.8 dekker undermappen), og har verken fetch( eller readSecret", () => {
     const files = productFiles(aiDir).map(rel);
     expect(files).toContain("src/core/ai/evals/run.ts");
     expect(files).toContain("src/core/ai/evals/schema.ts");

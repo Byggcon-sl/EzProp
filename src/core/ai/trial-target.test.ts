@@ -39,7 +39,12 @@ vi.mock("./provider-resolution", async (importOriginal) => {
     ...actual,
     resolveAiProvider: async (grant: EmployeeGrant) =>
       override.provider
-        ? { kind: "enabled" as const, provider: override.provider, model: "oppdiktet-modell", features: null }
+        ? {
+            kind: "enabled" as const,
+            provider: override.provider,
+            model: "oppdiktet-modell",
+            features: null,
+          }
         : actual.resolveAiProvider(grant),
   };
 });
@@ -57,7 +62,8 @@ type Setup = "fake" | "other_provider" | "no_connection" | "ai_disabled";
 async function organizationWith(setup: Setup, name = "Oppdiktet Takst A") {
   const organization = await createOrganization(name);
   if (setup === "fake") await enableAi(organization.id);
-  if (setup === "other_provider") await enableAi(organization.id, { provider: "anthropic" });
+  if (setup === "other_provider")
+    await enableAi(organization.id, { provider: "unknown_test_provider" });
   if (setup === "no_connection") await enableAi(organization.id, { connection: false });
   if (setup === "ai_disabled") await enableAi(organization.id, { enabled: false });
   const inspector = await employeeWithGrant(organization.id, ["inspector"]);
