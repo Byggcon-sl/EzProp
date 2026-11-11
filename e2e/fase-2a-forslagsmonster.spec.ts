@@ -24,6 +24,7 @@ import {
 
 const PORTRAIT = { width: 834, height: 1194 } as const;
 const OFFLINE_TEXT = "Krever nett. Teksten din er lagret og kan skrives videre.";
+const QUEUED_TEXT = "Venter på KI. Forslaget kommer når nettet er tilbake.";
 const FIXED_LINE =
   "Bruk oppdiktet tekst. Ikke skriv navn, adresse eller kundeopplysninger. Forslaget lagres i KI-loggen.";
 
@@ -177,7 +178,9 @@ test.describe("forslagsmønsteret (pc og ipad)", () => {
     expect(await aiUsageRowsWithMarker(tag)).toHaveLength(0);
   });
 
-  test("12.8 og 12.13 uten nett: knappen sperret, feltet kan skrives i, nettstatus synlig", async ({
+  // Endret for KI-køen (docs/funksjoner/fase2a-ki-ko-testplan.md avsnitt 8): uten nett er knappen
+  // aktiv og legger forespørselen i køen; forslaget kommer når nettet er tilbake.
+  test("12.8 og 12.13 uten nett: «Venter på KI …», feltet kan skrives i, nettstatus synlig", async ({
     page,
     context,
   }) => {
@@ -189,17 +192,19 @@ test.describe("forslagsmønsteret (pc og ipad)", () => {
 
     await context.setOffline(true);
     await expect(status).toHaveText("Uten nett", { timeout: 5_000 });
-    await expect(page.getByText(OFFLINE_TEXT).first()).toBeVisible({ timeout: 5_000 });
-    await expect(askButton(page)).toBeDisabled();
     await field(page).fill(`${sentence(tag)} og mer`);
     await expect(field(page)).toHaveValue(`${sentence(tag)} og mer`);
+    await expect(askButton(page)).toBeEnabled();
+    await askButton(page).click();
+    await expect(page.getByText(QUEUED_TEXT).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(OFFLINE_TEXT)).toHaveCount(0);
+    await expect(field(page)).toBeEditable();
 
     await context.setOffline(false);
     await expect(status).toHaveText("På nett", { timeout: 5_000 });
-    await expect(askButton(page)).toBeEnabled();
-    await askButton(page).click();
     await expect(card(page).getByTestId("ai-suggestion-text")).toHaveText(
       polished(`${sentence(tag)} og mer`),
+      { timeout: 15_000 },
     );
   });
 

@@ -8,6 +8,7 @@ import {
   AI_SUGGESTION_TEXTS,
   AiSuggestion,
   suggestionView,
+  undoAfterEdit,
   type AiSuggestionProps,
   type AiSuggestionState,
 } from "./ai-suggestion";
@@ -290,5 +291,124 @@ describe("KI-fargene", () => {
     for (const file of ["ai-suggestion.tsx", "ai-text-mark.tsx"]) {
       expect(readFileSync(path.join(dir, file), "utf8")).not.toMatch(/#[0-9a-f]{3,6}\b/i);
     }
+  });
+});
+
+/*
+ * KI-køen og forslag på eldre tekst (docs/funksjoner/fase2a-ki-ko-testplan.md avsnitt 5,
+ * K5.1–K5.4, T-0004 og T-0005). Avtalte navn: `queued` og `currentText` i `AiSuggestionState`
+ * (feltet slik det er nå; `ownText` er teksten forslaget ble laget fra), og den rene funksjonen
+ * `undoAfterEdit(currentText, appliedText)`. Teksten er oppdiktet.
+ * Støtter hovedmål: færre reklamasjoner (et sent forslag overskriver aldri nyere egen tekst) og
+ * de ansatte (ett trykk uten nett, og «Angre» tar aldri bort det man har skrevet).
+ */
+const QUEUED_TEXT = "Venter på KI. Forslaget kommer når nettet er tilbake.";
+const STALE_TEXT = "Forslaget gjelder teksten før du skrev videre.";
+const UNDO_STATUS_ONLY_TEXT = "Statusen er satt tilbake. Teksten din er uendret.";
+
+/** Tilstanden mens forespørselen venter i køen: ingen forslag ennå. */
+const queuedState: Partial<AiSuggestionState> = {
+  queued: true,
+  online: false,
+  outcome: null,
+  suggestionText: null,
+  status: null,
+  currentText: OWN,
+};
+
+describe("K5.1 køtekst", () => {
+  it("AI_SUGGESTION_TEXTS.queued er den faste teksten", () => {
+    expect(AI_SUGGESTION_TEXTS.queued).toBe(QUEUED_TEXT);
+  });
+
+  it("kortet i tilstanden queued viser teksten og ingen «Bruk»", () => {
+    const html = render(queuedState);
+    expect(html).toContain(QUEUED_TEXT);
+    expect(labels(html)).not.toContain(use);
+    expect(suggestionView({ ...base, ...queuedState }).buttons.use).toBe(false);
+  });
+
+  it("queued med nett (sendingen er i gang) viser heller ikke «Bruk»", () => {
+    const view = suggestionView({ ...base, ...queuedState, online: true });
+    expect(view.buttons.use).toBe(false);
+  });
+});
+
+describe("K5.2 T-0004 forslag på eldre tekst", () => {
+  it.each<[string, Partial<AiSuggestionState>]>([
+    ["vanlig forslag", {}],
+    ["forslag fra køen", { queued: false }],
+  ])(
+    "%s: feltet er endret etterpå, ingen «Bruk», men «Nytt forslag» og forklaring",
+    (_n, extra) => {
+      const patch = { ...extra, ownText: "A", suggestionText: "A.", currentText: "A og mer" };
+      const view = suggestionView({ ...base, ...patch });
+      expect(view.buttons.use).toBe(false);
+      expect(view.buttons.newSuggestion).toBe(true);
+      const html = render(patch);
+      expect(html).toContain(STALE_TEXT);
+      expect(labels(html)).not.toContain(use);
+      expect(labels(html)).toContain(newSuggestion);
+      // Egen tekst står: ingenting i visningen erstatter den
+      expect(html).not.toContain("A og mer.");
+    },
+  );
+
+  it.each<[string, Partial<AiSuggestionState>]>([
+    ["vanlig forslag", {}],
+    ["forslag fra køen", { queued: false }],
+  ])("%s: feltet uendret gir «Bruk» som før", (_n, extra) => {
+    const patch = { ...extra, ownText: "A", suggestionText: "A.", currentText: "A" };
+    const view = suggestionView({ ...base, ...patch });
+    expect(view.buttons.use).toBe(true);
+    const html = render(patch);
+    expect(labels(html)).toContain(use);
+    expect(html).not.toContain(STALE_TEXT);
+  });
+
+  it("forklaringen står i AI_SUGGESTION_TEXTS (fast tekst, ikke satt sammen)", () => {
+    expect(Object.values(AI_SUGGESTION_TEXTS)).toContain(STALE_TEXT);
+  });
+
+  it("uten currentText (andre bruk av kortet) er alt som før", () => {
+    const view = suggestionView(base);
+    expect(view.buttons).toEqual({ use: true, keep: true, newSuggestion: true, undo: false });
+  });
+});
+
+describe("K5.3 T-0005 «Angre» etter at teksten er endret", () => {
+  it("feltet endret etter «Bruk»: bare status settes tilbake, teksten står", () => {
+    expect(undoAfterEdit("Taket er gammelt og har noen sprekker. Og mose.", SUGGESTION)).toBe(
+      "status_only",
+    );
+  });
+
+  it("feltet uendret etter «Bruk»: gammel tekst kommer tilbake som før", () => {
+    expect(undoAfterEdit(SUGGESTION, SUGGESTION)).toBe("restore");
+  });
+
+  it("meldingen er fast", () => {
+    expect(Object.values(AI_SUGGESTION_TEXTS)).toContain(UNDO_STATUS_ONLY_TEXT);
+  });
+});
+
+describe("K5.4 «Krever nett …» og køen", () => {
+  it("i kø uten nett vises køteksten, ikke «Krever nett …»", () => {
+    const view = suggestionView({ ...base, ...queuedState });
+    const shownTexts = [
+      view.box?.kind === "message" ? view.box.text : "",
+      ...view.notes,
+      view.announcement,
+    ].join(" ");
+    expect(shownTexts).toContain(QUEUED_TEXT);
+    expect(shownTexts).not.toContain(AI_SUGGESTION_TEXTS.offline);
+  });
+
+  it("teksten offline beholdes for andre bruk av kortet (10.9 gjelder fortsatt uten kø)", () => {
+    expect(AI_SUGGESTION_TEXTS.offline).toBe(
+      "Krever nett. Teksten din er lagret og kan skrives videre.",
+    );
+    const html = render({ online: false, outcome: "error", suggestionText: null, status: null });
+    expect(html).toContain(AI_SUGGESTION_TEXTS.offline);
   });
 });

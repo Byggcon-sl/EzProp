@@ -1,6 +1,6 @@
 import { RuleTester } from "eslint";
 import tseslint from "typescript-eslint";
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import plugin from "./module-boundaries.js";
 
 RuleTester.describe = describe;
@@ -213,4 +213,81 @@ tsRuleTester.run("module-boundaries: src/core/ai/client", rule, {
       errors: [{ messageId: "aiClientImporter" }],
     },
   ],
+});
+
+/*
+ * KI-køen, testplanen (docs/funksjoner/fase2a-ki-ko-testplan.md avsnitt 4, K4.1–K4.3). Utfyller
+ * tabellen over med det som ikke står der.
+ */
+tsRuleTester.run("module-boundaries: KI-køen K4.1–K4.3", rule, {
+  valid: [
+    // K4.1
+    { filename: AI_CLIENT_FILE, code: 'import { cn } from "@/shared/lib/cn";' },
+    {
+      filename: AI_CLIENT_FILE,
+      code: 'import { createMemoryAiQueueStore } from "./memory-store";',
+    },
+    { filename: AI_CLIENT_FILE, code: 'import type { AiFeatureCode } from "@/core/ai/types";' },
+    // K4.3
+    {
+      filename: "/repo/src/app/(ansatt)/prove/ki/ai-trial-client.tsx",
+      code: 'import { createAiQueue, createIndexedDbAiQueueStore } from "@/core/ai/client";',
+    },
+    {
+      filename: "/repo/src/app/(ansatt)/log-out-button.tsx",
+      code: 'async function f() { const { clearAiQueue } = await import("@/core/ai/client"); }',
+    },
+  ],
+  invalid: [
+    // K4.2
+    {
+      filename: AI_CLIENT_FILE,
+      code: 'import { AI_FEATURES } from "../types";',
+      errors: [{ messageId: "aiClientLeaf" }],
+    },
+    {
+      filename: AI_CLIENT_FILE,
+      code: 'import { requestSuggestion } from "../request-suggestion";',
+      errors: [{ messageId: "aiClientLeaf" }],
+    },
+    {
+      filename: AI_CLIENT_FILE,
+      code: 'import { x } from "@/modules/condition/schema";',
+      errors: [{ messageId: "aiClientLeaf" }],
+    },
+    {
+      filename: AI_CLIENT_FILE,
+      code: 'import { requireOrganizationAccess } from "@/core/access";',
+      errors: [{ messageId: "aiClientLeaf" }],
+    },
+    {
+      filename: AI_CLIENT_FILE,
+      code: 'import { openDB } from "idb";',
+      errors: [{ messageId: "aiClientLeaf" }],
+    },
+    // K4.3
+    {
+      filename: "/repo/src/app/(ansatt)/oppdrag/[id]/rapport/page.tsx",
+      code: 'import { createAiQueue } from "@/core/ai/client";',
+      errors: [{ messageId: "aiClientImporter" }],
+    },
+    {
+      filename: "/repo/src/app/(ansatt)/layout.tsx",
+      code: 'const m = import("@/core/ai/client");',
+      errors: [{ messageId: "aiClientImporter" }],
+    },
+    {
+      filename: "/repo/src/modules/condition/actions.ts",
+      code: 'import type { AiQueueEntry } from "@/core/ai/client";',
+      errors: [{ messageId: "aiClientImporter" }],
+    },
+  ],
+});
+
+describe("K4.3 feilmeldingene viser til ADR 0006 del 10", () => {
+  it("begge meldingene for KI-køen nevner ADR-en", () => {
+    const messages = rule.meta?.messages ?? {};
+    expect(messages.aiClientLeaf).toContain("ADR 0006 del 10");
+    expect(messages.aiClientImporter).toContain("ADR 0006 del 10");
+  });
 });

@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { validRequest } from "../../../tests/ai";
+import * as limitsModule from "./limits";
 import * as requestModule from "./request";
 
 /*
@@ -117,4 +120,13 @@ describe("validering av forespørselen (4)", () => {
       }
     },
   );
+});
+
+describe("K4.9 AI_FIELD_MAX_LENGTH står ett sted (docs/funksjoner/fase2a-ki-ko-testplan.md)", () => {
+  it("request.ts gir samme verdi som limits.ts, og limits.ts har ingen import", () => {
+    expect(requestModule.AI_FIELD_MAX_LENGTH).toBe(limitsModule.AI_FIELD_MAX_LENGTH);
+    const source = readFileSync(join(__dirname, "limits.ts"), "utf8");
+    expect(source).not.toMatch(/^\s*import\b/m);
+    expect(source).not.toMatch(/\brequire\(|import\(/);
+  });
 });
