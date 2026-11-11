@@ -43,12 +43,15 @@ const read = (file: string) => readFileSync(join(evalsDir, file), "utf8");
 describe("runEvals bare mot fake (S4)", () => {
   it("S4 en anthropic-adapter (falsk HTTP) gir unntak før noe kall", async () => {
     const http = fakeAnthropic(okReply());
-    const provider = createAnthropicProvider({
-      model: TEST_MODEL,
-      apiKey: TEST_ANTHROPIC_KEY,
-      pricing: { inputPerMillion: 30, outputPerMillion: 150, currency: "NOK" },
-      fetch: http.fetchFn,
-    });
+    // Kopi av adapteren (den er frosset), så `complete` kan overvåkes
+    const provider = {
+      ...createAnthropicProvider({
+        model: TEST_MODEL,
+        apiKey: TEST_ANTHROPIC_KEY,
+        pricing: { inputPerMillion: 30, outputPerMillion: 150, currency: "NOK" },
+        fetch: http.fetchFn,
+      }),
+    };
     vi.stubGlobal("fetch", http.fetchFn);
     const complete = vi.spyOn(provider, "complete");
 
