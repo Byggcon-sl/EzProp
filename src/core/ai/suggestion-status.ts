@@ -3,7 +3,7 @@ import { grantHasPermission, type EmployeeGrant } from "@/core/access";
 import { db } from "@/db/client";
 import { aiUsageLog } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
-import { getFeatureDefinition } from "./features";
+import { AI_FEATURES, getFeatureDefinition } from "./features";
 import type { AiOutcome, AiSuggestionStatus } from "./types";
 
 /*
@@ -16,9 +16,18 @@ import type { AiOutcome, AiSuggestionStatus } from "./types";
  * - Svaret er bare status og utfall. Teksten, hvem som ba om forslaget og hvem som avgjorde det,
  *   leses ikke.
  * - Avklaring A: `null` for alt som ikke kan vises (finnes ikke, annen organisasjon, mykt
- *   slettet, ugyldig id og manglende rettighet for funksjonen på raden), så svaret aldri røper
- *   om en id finnes.
+ *   slettet, ugyldig id, sperret forespørsel `blocked` og manglende rettighet for funksjonen på
+ *   raden), så svaret aldri røper om en id finnes.
+ * - Rettigheten sjekkes før raden leses (docs/funksjoner/fase2a-vask-for-ki.md Omfang 8): uten
+ *   rettigheten til minst én KI-funksjon gir `null` uten oppslag. Admin har alle rettigheter.
  */
+
+/** Om `grant` har rettigheten til minst én KI-funksjon. */
+function hasAnyAiPermission(grant: EmployeeGrant): boolean {
+  return Object.values(AI_FEATURES).some((definition) =>
+    grantHasPermission(grant, definition.permission),
+  );
+}
 
 export type AiSuggestionStatusResult = {
   status: AiSuggestionStatus | null;
@@ -29,6 +38,7 @@ export async function getSuggestionStatus(
   grant: EmployeeGrant,
   usageId: string,
 ): Promise<AiSuggestionStatusResult | null> {
+  if (!hasAnyAiPermission(grant)) return null;
   if (typeof usageId !== "string" || !isUuid(usageId)) return null;
 
   const [row] = await db
@@ -46,6 +56,8 @@ export async function getSuggestionStatus(
       ),
     );
   if (!row) return null;
+  // ad-1: en sperret forespørsel har ingen status å vise
+  if (row.outcome === "blocked") return null;
 
   const definition = getFeatureDefinition(row.feature);
   if (!definition || !grantHasPermission(grant, definition.permission)) return null;

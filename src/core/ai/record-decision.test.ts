@@ -446,3 +446,39 @@ describe("recordDecision: myk sletting og tenant-isolasjon (10.1, 9.4, 9.8)", ()
     expect(await auditCount()).toBe(auditBefore);
   });
 });
+
+describe("recordDecision: sperret forespørsel (vask før KI V5.6, ad-1)", () => {
+  it.each(["accepted", "edited", "rejected", "undo"])(
+    "V5.6 %s på en blocked-rad: samme avslag som «finnes ikke», raden og audit_log uendret",
+    async (decision) => {
+      const { organization, grant } = await aiOrganization();
+      const blocked = await createAiUsageLog(organization.id, {
+        employeeId: grant.employeeId,
+        outcome: "blocked",
+        status: null,
+        outputText: null,
+        inputSummary: {},
+      });
+      const before = snapshot(await aiRow(blocked.id));
+      const audits = await auditCount();
+      const baseline = await neutralDecisionRejection(grant);
+      const error = await captureError(() => recordDecision(grant, blocked.id, decision));
+      expectSameRejection(error, baseline);
+      expect(snapshot(await aiRow(blocked.id))).toBe(before);
+      expect(await auditCount()).toBe(audits);
+    },
+  );
+
+  it("V5.6 admin får heller ikke godta en blocked-rad (avslag, ikke utestengt)", async () => {
+    const { organization } = await aiOrganization();
+    const admin = await employeeWithGrant(organization.id, ["admin"], "Test Admin");
+    const blocked = await createAiUsageLog(organization.id, {
+      employeeId: admin.grant.employeeId,
+      outcome: "blocked",
+      status: null,
+      outputText: null,
+    });
+    const error = await captureError(() => recordDecision(admin.grant, blocked.id, "accepted"));
+    expectSameRejection(error, await neutralDecisionRejection(admin.grant));
+  });
+});

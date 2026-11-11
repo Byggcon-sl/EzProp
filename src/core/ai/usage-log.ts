@@ -1,9 +1,10 @@
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import type { EmployeeGrant } from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
-import type { DbExecutor } from "@/db/client";
+import { db, type DbExecutor } from "@/db/client";
 import { aiUsageLog, type AiSuggestionStatus, type AiTargetRef } from "@/db/schema";
-import type { AiSuggestionResult } from "./types";
+import { AiRequestRejectedError } from "./errors";
+import type { AiFeatureCode, AiSuggestionResult } from "./types";
 
 /*
  * Felles for lesing og skriving av `ai_usage_log` (docs/adr/0006-ki-i-bunnen.md del 5). Alle
@@ -104,5 +105,97 @@ export function toSuggestionResult(row: ResultRow): AiSuggestionResult {
     };
   }
   if (row.outcome === "no_match") return { kind: "no_match", usageId: row.id };
+  // Sperret forespørsel (ad-1): samme `requestId` på nytt gir `blocked` igjen, uten usageId
+  if (row.outcome === "blocked") return { kind: "blocked" };
   return { kind: "error", usageId: row.id };
+}
+
+export type BlockedRowInput = {
+  requestId: string;
+  feature: AiFeatureCode;
+  /** Koden til leverandøren som ville blitt kalt. */
+  provider: string;
+  model: string;
+  promptVersion: string;
+  assignmentId: string | null;
+  target: AiTargetRef;
+  /** Bare feltkoder, aldri verdier. */
+  sourceFields: string[];
+};
+
+const blockedResultColumns = {
+  id: aiUsageLog.id,
+  organizationId: aiUsageLog.organizationId,
+  employeeId: aiUsageLog.employeeId,
+  feature: aiUsageLog.feature,
+  targetRef: aiUsageLog.targetRef,
+  outcome: aiUsageLog.outcome,
+  outputText: aiUsageLog.outputText,
+  deletedAt: aiUsageLog.deletedAt,
+};
+
+/**
+ * Skriver raden for en sperret forespørsel (ad-1, A171): utfall `blocked`, ingen tekst, status
+ * eller feilkode, 0 tokens, 0 kr og 0 vaskede treff. `input_summary` er tom, så ingen tekst eller
+ * lengde lagres. Forrige åpne forslag på samme mål røres ikke, og leverandøren kalles ikke.
+ * Organisasjon og ansatt kommer bare fra `grant`. Kom et samtidig kall med samme id først, gis
+ * svaret fra den raden når den er vår egen, ellers avslag.
+ */
+export async function insertBlockedRow(
+  grant: EmployeeGrant,
+  input: BlockedRowInput,
+): Promise<AiSuggestionResult> {
+  const now = new Date();
+  const target = normalizeTarget(input.target);
+  const [inserted] = await db
+    .insert(aiUsageLog)
+    .values({
+      id: input.requestId,
+      organizationId: grant.organizationId,
+      employeeId: grant.employeeId,
+      feature: input.feature,
+      provider: input.provider,
+      model: input.model,
+      promptVersion: input.promptVersion,
+      assignmentId: input.assignmentId,
+      reportId: null,
+      targetRef: target,
+      sourceFields: [...input.sourceFields].sort(),
+      inputSummary: {},
+      outcome: "blocked",
+      errorCode: null,
+      outputText: null,
+      status: null,
+      tokensIn: 0,
+      tokensOut: 0,
+      cost: "0",
+      currency: "NOK",
+      redactedCount: 0,
+      retainUntil: retainUntilFrom(now),
+      createdAt: now,
+      updatedAt: now,
+      createdBy: grant.employeeId,
+      updatedBy: grant.employeeId,
+    })
+    .onConflictDoNothing({ target: aiUsageLog.id })
+    .returning(blockedResultColumns);
+  if (inserted) return toSuggestionResult(inserted);
+
+  // Et samtidig kall med samme id kom først. Bare vår egen rad leses tilbake.
+  const [winner] = await db
+    .select(blockedResultColumns)
+    .from(aiUsageLog)
+    .where(
+      and(eq(aiUsageLog.id, input.requestId), eq(aiUsageLog.organizationId, grant.organizationId)),
+    );
+  if (
+    !winner ||
+    winner.deletedAt !== null ||
+    winner.employeeId !== grant.employeeId ||
+    winner.feature !== input.feature ||
+    !sameTarget(winner.targetRef, target)
+  ) {
+    throw new AiRequestRejectedError();
+  }
+  return toSuggestionResult(winner);
 }

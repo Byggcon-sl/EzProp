@@ -34,7 +34,9 @@ export type AiSuggestionResult =
     }
   | { kind: "no_match"; usageId: string }
   | { kind: "error"; usageId: string }
-  | { kind: "disabled" };
+  | { kind: "disabled" }
+  /** Sperret før leverandøren ble kalt (ad-1). Raden finnes, men vises aldri som forslag. */
+  | { kind: "blocked" };
 
 export type AiDecision = "accepted" | "edited" | "rejected" | "undo";
 

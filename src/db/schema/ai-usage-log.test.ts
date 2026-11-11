@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
+import { AI_OUTCOMES } from "@/db/schema";
 import {
   createAiUsageLog,
   createAssignment,
@@ -83,6 +86,7 @@ describe("ai_usage_log: kolonnene (1.1)", () => {
       "cost",
       "currency",
       "retain_until",
+      "redacted_count",
     ];
     expect([...found.keys()].sort()).toEqual(expect.arrayContaining(expected.sort()));
     expect(found.get("cost")!.data_type).toBe("numeric");
@@ -230,6 +234,61 @@ describe("ai_usage_log: sjekken mellom utfall, status og forslag (1.6–1.9)", (
       );
     },
   );
+});
+
+describe("ai_usage_log: vask før KI, migrering 0027 (V6.1–V6.3)", () => {
+  it("V6 AI_OUTCOMES har de fire faste kodene", () => {
+    expect([...AI_OUTCOMES]).toEqual(["ok", "no_match", "error", "blocked"]);
+  });
+
+  it("V6.1 redacted_count er heltall, ikke tom, standard 0, og -1 avvises", async () => {
+    const found = await columns();
+    expect(found.get("redacted_count")?.data_type).toBe("integer");
+    expect(found.get("redacted_count")?.is_nullable).toBe("NO");
+    const { orgA, employeeA } = await twoOrganizations();
+    // Fabrikken setter ikke kolonnen: standardverdien gjelder
+    const row = await createAiUsageLog(orgA.id, { employeeId: employeeA.id });
+    expect(row.redacted_count).toBe(0);
+    await db.execute(sql`update ai_usage_log set redacted_count = 3 where id = ${row.id}`);
+    await expectRejected(() =>
+      db.execute(sql`update ai_usage_log set redacted_count = -1 where id = ${row.id}`),
+    );
+    await expectRejected(() =>
+      db.execute(sql`update ai_usage_log set redacted_count = null where id = ${row.id}`),
+    );
+  });
+
+  it("V6.2 blocked med tom status, output_text og error_code godtas", async () => {
+    const { orgA, employeeA } = await twoOrganizations();
+    const row = await createAiUsageLog(orgA.id, {
+      employeeId: employeeA.id,
+      outcome: "blocked",
+      status: null,
+      outputText: null,
+      errorCode: null,
+    });
+    expect(row.outcome).toBe("blocked");
+  });
+
+  it.for<{ name: string; overrides: AiUsageLogOverrides }>([
+    { name: "status", overrides: { status: "suggested", outputText: null } },
+    { name: "output_text", overrides: { status: null, outputText: "Oppdiktet tekst" } },
+    { name: "error_code", overrides: { status: null, outputText: null, errorCode: "timeout" } },
+  ])("V6.2 blocked med $name satt avvises", async ({ overrides }) => {
+    const { orgA, employeeA } = await twoOrganizations();
+    await expectRejected(() =>
+      createAiUsageLog(orgA.id, { employeeId: employeeA.id, outcome: "blocked", ...overrides }),
+    );
+  });
+
+  it("V6.3 migreringen sletter ingenting og har bare ny kolonne og sjekker", () => {
+    const text = readFileSync(
+      join(process.cwd(), "src/db/migrations/0027_ki-vask.sql"),
+      "utf8",
+    ).toUpperCase();
+    expect(text).not.toMatch(/\bDELETE\b|\bDROP\s+(TABLE|COLUMN)\b|\bTRUNCATE\b|\bUPDATE\b/);
+    expect(text).toContain('ADD COLUMN "REDACTED_COUNT" INTEGER DEFAULT 0 NOT NULL');
+  });
 });
 
 describe("ai_usage_log: myk sletting (1.10)", () => {
