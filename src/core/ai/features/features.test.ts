@@ -253,6 +253,26 @@ describe("vask før KI: «aldri»-kolonnene og fieldSources (V8.1–V8.4)", () =
     }
   });
 
+  it("V8.2 kontrollen i koden (findFieldSourceViolations) godtar definisjonene og fanger «aldri»-kilde, manglende og ugyldig kilde", async () => {
+    const { AI_FEATURES, findFieldSourceViolations } = await import("../features");
+    expect(findFieldSourceViolations(Object.values(AI_FEATURES))).toEqual([]);
+    expect(
+      findFieldSourceViolations([
+        {
+          code: "invented_feature",
+          allowedFields: ["text", "mail", "missing", "odd"],
+          fieldSources: { text: "free_text", mail: "contacts.email", odd: "email" },
+        },
+        { code: "no_sources", allowedFields: ["text"] },
+      ]),
+    ).toEqual([
+      "invented_feature.mail: contacts.email står i «aldri»-listen",
+      "invented_feature.missing: mangler kilde",
+      "invented_feature.odd: ugyldig kilde email",
+      "no_sources.text: mangler kilde",
+    ]);
+  });
+
   it("V8.3 NEVER_FIELDS har hele minimumslisten (fast kopi) og de tre nye kolonnene", async () => {
     const neverFields = await neverFieldsFromCode();
     const minimum = Object.entries(BLOCKED).flatMap(([table, columns]) =>
@@ -263,6 +283,7 @@ describe("vask før KI: «aldri»-kolonnene og fieldSources (V8.1–V8.4)", () =
       (column) => !neverFields.includes(column),
     );
     expect(missing, "mangler på «aldri»-listen").toEqual([]);
+    expect(new Set(neverFields).size, "dubletter på «aldri»-listen").toBe(neverFields.length);
   });
 
   it("V8.4 kommentaren over listene krever gjennomgang av sikkerhet-personvern (A175)", () => {

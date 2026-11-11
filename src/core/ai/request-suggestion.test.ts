@@ -21,6 +21,7 @@ import {
   fakeNoMatchInput,
   mergeOrganizationSettings,
   neutralRequestRejection,
+  recordDecision,
   requestSuggestion,
   SAMPLE_TEXT,
   snapshot,
@@ -36,12 +37,21 @@ import {
   resetDatabase,
   TEST_NOW,
 } from "../../../tests/factories";
+import {
+  containsWord,
+  placeholderCounts,
+  seedKnownValues,
+  type KnownSeed,
+} from "../../../tests/known-values";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
+import { PROMPT_INPUT_SEPARATOR } from "./features";
 import { redactFields } from "./redaction";
 
 /*
  * `requestSuggestion` (docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 6, 9.1–9.3 og
- * 10.2–10.3; kortet Omfang 3 og avklaringene A–C). Mot testdatabasen med den falske leverandøren.
+ * 10.2–10.3; kortet Omfang 3 og avklaringene A–C) og vasken før KI i `requestSuggestion`
+ * (docs/funksjoner/fase2a-vask-for-ki-testplan.md avsnitt 4, 5 og 7). Mot testdatabasen med den
+ * falske leverandøren.
  * Alle verdier er oppdiktet.
  *
  * Støtter hovedmål: KI i bunnen (én vei inn, alt logges likt), de ansatte (gjentatte kall fra
@@ -128,6 +138,207 @@ function leaves(value: unknown): unknown[] {
   if (value === null || typeof value !== "object") return [value];
   return Object.values(value as Record<string, unknown>).flatMap(leaves);
 }
+
+const trialTarget = () => ({ type: "ai_trial", id: uuidv7(), fieldKey: "text" });
+
+/** Antall kall til vasken med oppdrag (da slås de kjente verdiene opp). */
+function lookupCalls(): number {
+  return vi.mocked(redactFields).mock.calls.filter((call) => call[1] !== null).length;
+}
+
+/** Teksten fra den ansatte slik leverandøren fikk den (etter skillet i ledeteksten). */
+function sentInput(prompt: string): string {
+  const index = prompt.lastIndexOf(PROMPT_INPUT_SEPARATOR);
+  return index === -1 ? prompt : prompt.slice(index + PROMPT_INPUT_SEPARATOR.length);
+}
+
+/** Om verdien finnes i teksten: som eget ord for tekst, som delstreng for tall og e-post. */
+function stillThere(text: string, value: string): boolean {
+  if (/^[\p{L}\s'-]+$/u.test(value)) return containsWord(text, value);
+  return text.normalize("NFC").toLowerCase().includes(value.normalize("NFC").toLowerCase());
+}
+
+/** Organisasjon med KI på (`fake`), en takstmann og et oppdrag med de kjente verdiene. */
+async function organizationWithKnownValues(seed: KnownSeed) {
+  const ai = await aiOrganization();
+  const assignmentId = await seedKnownValues(ai.organization.id, seed);
+  return { ...ai, assignmentId };
+}
+
+/** Sender teksten til `language_polish` på oppdraget og gir det leverandøren fikk. */
+async function sendAndCapture(grant: EmployeeGrant, assignmentId: string | null, text: string) {
+  const spy = vi.spyOn(fakeAiProvider, "complete");
+  const request = validRequest({ assignmentId, fields: { text } });
+  const result = await requestSuggestion(grant, request);
+  expect(spy, "leverandøren skulle vært kalt én gang").toHaveBeenCalledTimes(1);
+  const prompt = spy.mock.calls[0]![0].prompt;
+  return { request, result, prompt, input: sentInput(prompt) };
+}
+
+type ColumnCase = { column: string; seed: KnownSeed; text: string; gone: string[] };
+
+/** Én rad per kolonne i kortets punkt 2 (V4.1). `gone` må ikke finnes i ledeteksten. */
+const COLUMN_CASES: ColumnCase[] = [
+  {
+    column: "assignment_parties.name (hel frase, fornavn, etternavn, annen skrift)",
+    seed: { parties: [{ name: "Åse Testesen" }] },
+    text: "Møtte Åse Testesen. Senere kom åse alene, og TESTESEN ringte.",
+    gone: ["Åse Testesen", "Åse", "Testesen"],
+  },
+  {
+    column: "assignment_parties.firm_name",
+    seed: { parties: [{ name: "Qxz Partsen", firmName: "Prøvemegling Nordtest AS" }] },
+    text: "Oppdraget kom fra Prøvemegling Nordtest AS i fjor.",
+    gone: ["Prøvemegling Nordtest AS"],
+  },
+  {
+    column: "assignment_parties.email",
+    seed: { parties: [{ name: "Qxz Partsen", email: "qxz.partsen@example.no" }] },
+    text: "Svar sendt til QXZ.Partsen@example.no i dag.",
+    gone: ["qxz.partsen@example.no"],
+  },
+  {
+    column: "assignment_parties.phone",
+    seed: { parties: [{ name: "Qxz Partsen", phone: "+47 41 23 45 67" }] },
+    text: "Ring 41234567 eller 412 34 567 for nøkkel.",
+    gone: ["41234567", "412 34 567"],
+  },
+  {
+    column: "contacts.first_name og contacts.last_name",
+    seed: { partyContacts: [{ firstName: "Kåre", lastName: "Kontaktesen" }] },
+    text: "Kåre Kontaktesen viste rundt. KÅRE sa at kontaktesen eier boden.",
+    gone: ["Kåre Kontaktesen", "Kåre", "Kontaktesen"],
+  },
+  {
+    column: "contacts.email",
+    seed: { partyContacts: [{ firstName: "Qxzkon", email: "kontakt.prove@example.no" }] },
+    text: "Kopi til kontakt.prove@example.no.",
+    gone: ["kontakt.prove@example.no"],
+  },
+  {
+    column: "contacts.phone",
+    seed: { partyContacts: [{ firstName: "Qxzkon", phone: "93456781" }] },
+    text: "Kontakten nås på 934 56 781.",
+    gone: ["934 56 781", "93456781"],
+  },
+  {
+    column: "firms.name",
+    seed: { partyFirms: [{ name: "Rørlegger Prøvesen AS", orgNumber: null }] },
+    text: "Røropplegget er lagt av Rørlegger Prøvesen AS.",
+    gone: ["Rørlegger Prøvesen AS"],
+  },
+  {
+    column: "firms.org_number",
+    seed: { partyFirms: [{ name: "Qxzfirma AS", orgNumber: "000444555" }] },
+    text: "Faktura merket 000444555.",
+    gone: ["000444555"],
+  },
+  {
+    column: "orders.ordered_by_contact_id (navn, e-post, telefon)",
+    seed: {
+      order: {
+        orderedByContact: {
+          firstName: "Berit",
+          lastName: "Bestillersen",
+          email: "berit.b@example.no",
+          phone: "45678912",
+        },
+      },
+    },
+    text: "Bestilt av Berit Bestillersen (berit.b@example.no, 45678912). Bestillersen var hjemme.",
+    gone: ["Berit Bestillersen", "Bestillersen", "Berit", "berit.b@example.no", "45678912"],
+  },
+  {
+    column: "orders.ordered_by_firm_id (navn og org.nr.)",
+    seed: { order: { orderedByFirm: { name: "Testmegling Vest AS", orgNumber: "000555666" } } },
+    text: "Bestiller er Testmegling Vest AS, org.nr. 000555666.",
+    gone: ["Testmegling Vest AS", "000555666"],
+  },
+  {
+    column: "orders.ordered_by_text",
+    seed: { order: { orderedByText: "Oppgjør og Megling Test AS" } },
+    text: "Bestilt via Oppgjør og Megling Test AS.",
+    gone: ["Oppgjør og Megling Test AS"],
+  },
+  {
+    column: "orders.address_text",
+    seed: { order: { addressText: "Måketunet 9, 8098 Prøvevåg" } },
+    text: "Befaring på Måketunet 9, 8098 Prøvevåg. Måketunet har felles innkjørsel.",
+    gone: ["Måketunet", "8098", "Prøvevåg"],
+  },
+  {
+    column: "orders.gnr/bnr/snr",
+    seed: { order: { gnr: "41", bnr: "52", snr: "6" } },
+    text: "Eiendommen 41/52/0/6 og 41/52 er befart.",
+    gone: ["41/52"],
+  },
+  {
+    column: "orders.housing_association_name",
+    seed: { order: { housingAssociationName: "Sameiet Prøvehagen" } },
+    text: "Styret i Sameiet Prøvehagen har gitt nøkkel.",
+    gone: ["Sameiet Prøvehagen"],
+  },
+  {
+    column: "employees.name via assignment_team_members",
+    seed: { team: [{ name: "Tor Takstesen" }] },
+    text: "Befart av Tor Takstesen. Takstesen tok bilder, og tor målte.",
+    gone: ["Tor Takstesen", "Takstesen", "Tor"],
+  },
+  {
+    column: "properties.address",
+    seed: { property: { address: "Lundetunet 3" } },
+    text: "Huset Lundetunet 3 er gult, og Lundetunet er stille.",
+    gone: ["Lundetunet"],
+  },
+  {
+    column: "properties.postal_code og properties.city",
+    seed: { property: { postalCode: "8097", city: "Qxzvik" } },
+    text: "Vi kjørte til 8097 Qxzvik, og Qxzvik har ferje.",
+    gone: ["Qxzvik", "8097"],
+  },
+  {
+    column: "properties.municipality_name",
+    seed: { property: { municipalityName: "Prøvekommune" } },
+    text: "Byggesaken ligger hos Prøvekommune.",
+    gone: ["Prøvekommune"],
+  },
+  {
+    column: "properties.municipality_number med matrikkelen",
+    seed: { property: { municipalityNumber: "1898", gnr: "61", bnr: "72" } },
+    text: "Matrikkel 1898-61/72 er riktig.",
+    gone: ["1898", "61/72"],
+  },
+  {
+    column: "cadastral_units.gnr/bnr/fnr/snr",
+    seed: { property: { gnr: "63", bnr: "74", fnr: "2", snr: "8" } },
+    text: "Seksjonen 63/74/2/8 er befart, og gnr 63 er samme gård.",
+    gone: ["63/74", "gnr 63"],
+  },
+  {
+    column: "cadastral_units.share_number",
+    seed: { property: { shareNumber: "29" } },
+    text: "Leiligheten har andelsnummer 29 i laget.",
+    gone: ["andelsnummer 29"],
+  },
+  {
+    column: "cadastral_units.association_name",
+    seed: { property: { associationName: "Borettslaget Testtunet" } },
+    text: "Borettslaget Testtunet har vedlikeholdsplan.",
+    gone: ["Borettslaget Testtunet"],
+  },
+  {
+    column: "cadastral_units.association_org_number",
+    seed: { property: { associationOrgNumber: "000777888" } },
+    text: "Laget har nummer 000777888.",
+    gone: ["000777888"],
+  },
+  {
+    column: "common_areas.managing_agent",
+    seed: { managingAgent: "Forvaltning Nordtest AS" },
+    text: "Forretningsfører er Forvaltning Nordtest AS.",
+    gone: ["Forvaltning Nordtest AS"],
+  },
+];
 
 describe("requestSuggestion: vellykket kall (6.1–6.4)", () => {
   it("6.1 forslag: svaret og én rad med funksjon, fake, fake-v1, ledetekstversjon, 0 NOK", async () => {
@@ -847,7 +1058,7 @@ function markerRedaction() {
   });
 }
 
-describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.7)", () => {
+describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.8)", () => {
   it("V4.3 leverandøren får bare den vaskede teksten, og redacted_count står i raden", async () => {
     const { organization, grant } = await aiOrganization();
     const assignment = await createAssignment(organization.id);
@@ -936,25 +1147,63 @@ describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.7)", () 
     expect(redactFields).not.toHaveBeenCalled();
   });
 
-  it("V4.7 den falske leverandøren får også vasket tekst (prøvemålet uten oppdrag)", async () => {
+  it("V4.7 den falske leverandøren vaskes også: ai_trial uten oppdrag gir [telefon] i forslaget", async () => {
     const { grant } = await aiOrganization();
-    markerRedaction();
-    const complete = vi.spyOn(fakeAiProvider, "complete");
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const text = "ring 12345678 og skriv til ola.prove@example.no";
+    const request = validRequest({ target: trialTarget(), fields: { text } });
+    const result = await requestSuggestion(grant, request);
+    expect(result.kind).toBe("suggestion");
+    expect(redactFields).toHaveBeenCalledWith(grant, null, { text });
+    if (result.kind !== "suggestion") return;
+    expect(result.text).toContain("[telefon]");
+    expect(result.text).toContain("[e-post]");
+    expect(result.text).not.toContain("12345678");
+    expect(result.text).not.toContain("ola.prove@example.no");
+    expect(sentInput(spy.mock.calls[0]![0].prompt)).not.toContain("12345678");
+    expect((await aiRow(request.requestId))!.redacted_count).toBe(2);
+  });
+
+  it("V4.8 assignmentId null: bare mønstrene, ingen oppslag av kjente verdier", async () => {
+    const { grant } = await aiOrganization();
+    const { input } = await sendAndCapture(grant, null, "Åse Testesen ringte fra 12345678.");
+    expect(lookupCalls()).toBe(0);
+    expect(input).toContain("[telefon]");
+    expect(input).not.toContain("12345678");
+    // Uten oppdrag er navnet ingen kjent verdi, og mønstrene kjenner ikke navn (restrisiko)
+    expect(input).toContain("Åse Testesen");
+  });
+
+  it("V4.5 oppslaget av kjente verdier kaster: leverandøren kalles ikke, ingen ok-rad, ingen verdier i feil eller logger", async () => {
+    const { grant, assignmentId } = await organizationWithKnownValues({
+      parties: [{ name: "Åse Testesen", phone: "12345678" }],
+    });
+    swap.redact = async (_grant, id) => {
+      if (id !== null) throw new Error("oppdiktet feil i oppslaget");
+      return { fields: {}, count: 0 };
+    };
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const logSpies = spyOnLogger();
     const request = validRequest({
-      target: { type: "ai_trial", id: randomUUID(), fieldKey: "text" },
-      fields: { text: `Ring ${SECRET_MARKER}` },
+      assignmentId,
+      fields: { text: "Åse Testesen ringte fra 12345678." },
     });
 
-    const result = await requestSuggestion(grant, request);
+    const failure = await captureError(() => requestSuggestion(grant, request));
 
-    expect(result.kind).toBe("suggestion");
-    expect(redactFields).toHaveBeenCalledWith(grant, null, { text: `Ring ${SECRET_MARKER}` });
-    const prompt = (complete.mock.calls[0]![0] as { prompt: string }).prompt;
-    expect(prompt).not.toContain(SECRET_MARKER);
+    expect(failure).toBeInstanceOf(Error);
+    expect(spy).not.toHaveBeenCalled();
+    expect(lookupCalls()).toBe(1);
+    const okRows = (await db.execute(
+      sql`select id from ai_usage_log where outcome = 'ok'`,
+    )) as unknown as unknown[];
+    expect(okRows).toHaveLength(0);
+    const seen = `${failure.message} ${failure.stack ?? ""} ${loggedText(logSpies)}`;
+    for (const value of ["Åse", "Testesen", "12345678"]) expect(seen).not.toContain(value);
   });
 });
 
-describe("requestSuggestion: utfallet blocked (vask før KI V5.1–V5.7)", () => {
+describe("requestSuggestion: utfallet blocked (vask før KI V5.1–V5.7, V10.1)", () => {
   async function expectBlockedRow(requestId: string) {
     const row = (await aiRow(requestId))!;
     expect(row.outcome).toBe("blocked");
@@ -999,6 +1248,9 @@ describe("requestSuggestion: utfallet blocked (vask før KI V5.1–V5.7)", () =>
       expect(fetchSpy).not.toHaveBeenCalled();
       const row = await expectBlockedRow(request.requestId);
       expect(row.assignment_id).toBe(assignmentId);
+      expect(row.target_ref).toEqual(request.target);
+      expect(row.deleted_at).toBeNull();
+      expect(await aiRowCount()).toBe(1);
       expect(row.organization_id).toBe(grant.organizationId);
       expect(row.employee_id).toBe(grant.employeeId);
       expect(await auditCount()).toBe(auditBefore);
@@ -1011,16 +1263,24 @@ describe("requestSuggestion: utfallet blocked (vask før KI V5.1–V5.7)", () =>
     expect(result.kind).toBe("suggestion");
   });
 
+  it("V5.3 ai_trial med falsk leverandør virker som før", async () => {
+    const { grant } = await aiOrganization();
+    const result = await requestSuggestion(grant, validRequest({ target: trialTarget() }));
+    expect(result.kind).toBe("suggestion");
+  });
+
   it("V5.4 en blocked-forespørsel avviser ikke forrige åpne forslag på samme mål", async () => {
     const { grant } = await aiOrganization();
     const target = validTarget();
     const first = validRequest({ target });
     await requestSuggestion(grant, first);
     swap.provider = realLikeProvider();
+    const auditBefore = await auditCount();
 
     expect(await requestSuggestion(grant, validRequest({ target }))).toEqual({ kind: "blocked" });
 
     expect((await aiRow(first.requestId))!.status).toBe("suggested");
+    expect(await auditCount()).toBe(auditBefore);
   });
 
   it("V5.5 samme requestId igjen gir blocked, ingen ny rad og intet kall", async () => {
@@ -1042,6 +1302,20 @@ describe("requestSuggestion: utfallet blocked (vask før KI V5.1–V5.7)", () =>
     expect(snapshot(await aiRow(request.requestId))).toBe(before);
   });
 
+  it("V5.6 blocked-raden fra requestSuggestion kan ikke avgjøres", async () => {
+    const { grant } = await aiOrganization();
+    swap.provider = realLikeProvider();
+    const request = validRequest();
+    await requestSuggestion(grant, request);
+    const before = snapshot(await aiRow(request.requestId));
+    for (const decision of ["accepted", "edited", "rejected", "undo"]) {
+      const error = await captureError(() => recordDecision(grant, request.requestId, decision));
+      expect(error).not.toBeInstanceOf(TypeError);
+      expect(error).not.toBeInstanceOf(ReferenceError);
+    }
+    expect(snapshot(await aiRow(request.requestId))).toBe(before);
+  });
+
   it("V5.7 «KI er av» gir fortsatt ingen rad og { kind: disabled }", async () => {
     const organization = await createOrganization("Oppdiktet Takst Av");
     await enableAi(organization.id, { enabled: false });
@@ -1049,6 +1323,17 @@ describe("requestSuggestion: utfallet blocked (vask før KI V5.1–V5.7)", () =>
 
     expect(await requestSuggestion(grant, validRequest())).toEqual({ kind: "disabled" });
     expect(await aiRowCount()).toBe(0);
+  });
+
+  it("V10.1 blocked-raden får retain_until = opprettet + 10 år", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(TEST_NOW);
+    const { grant } = await aiOrganization();
+    swap.provider = realLikeProvider();
+    const request = validRequest();
+    await requestSuggestion(grant, request);
+    const row = (await aiRow(request.requestId))!;
+    expect(new Date(row.retain_until).toISOString()).toBe(tenYearsAfter(TEST_NOW).toISOString());
   });
 });
 
@@ -1097,5 +1382,162 @@ describe("requestSuggestion: roller og organisasjon (vask før KI V7.3–V7.4)",
     const row = (await aiRow(request.requestId))!;
     expect(row.outcome).toBe("ok");
     expect(row.redacted_count).toBe(1);
+  });
+});
+
+describe("vask før KI: hver kjent verdi vaskes (V4.1)", () => {
+  it.each(COLUMN_CASES)("V4.1 $column", async ({ seed, text, gone }) => {
+    const { grant, assignmentId } = await organizationWithKnownValues(seed);
+    const { input, result } = await sendAndCapture(grant, assignmentId, text);
+    for (const value of gone) {
+      expect(stillThere(input, value), `«${value}» i ledeteksten: ${input}`).toBe(false);
+    }
+    expect(input, "plassholder mangler").toMatch(/\[[a-zæøå-]+\]/u);
+    expect(result.kind).toBe("suggestion");
+    if (result.kind === "suggestion") {
+      for (const value of gone) expect(stillThere(result.text, value), value).toBe(false);
+    }
+  });
+});
+
+describe("vask før KI: mykt slettede kilderader (V4.2, V10.2)", () => {
+  const DELETED_SEED: KnownSeed = {
+    parties: [{ name: "Pål Partsen", phone: "47112233", deleted: true }],
+    partyContacts: [
+      {
+        firstName: "Sigrun",
+        lastName: "Kontaktesen",
+        email: "slettet.k@example.no",
+        deleted: true,
+        firm: { name: "Slettet Firma AS", orgNumber: "000888999", deleted: true },
+      },
+    ],
+    partyFirms: [{ name: "Fjernet Bygg AS", orgNumber: null, deleted: true }],
+    team: [{ name: "Gunnvor Bortesen", deleted: true }],
+    property: { gnr: "81", bnr: "92", cadastralDeleted: true },
+    managingAgent: "Fjernet Forvaltning AS",
+    commonAreasDeleted: true,
+  };
+
+  it("V4.2 verdier fra mykt slettede parter, kontakter, firma, teammedlemmer, matrikkel og fellesareal vaskes", async () => {
+    const { grant, assignmentId } = await organizationWithKnownValues(DELETED_SEED);
+    const text = [
+      "Partsen ringte på 47112233.",
+      "Kontaktesen skrev fra slettet.k@example.no.",
+      "Slettet Firma AS (000888999) og Fjernet Bygg AS har jobbet her.",
+      "Bortesen var med.",
+      "Eiendommen 81/92 forvaltes av Fjernet Forvaltning AS.",
+    ].join(" ");
+    const { input } = await sendAndCapture(grant, assignmentId, text);
+    for (const value of [
+      "Partsen",
+      "47112233",
+      "Kontaktesen",
+      "slettet.k@example.no",
+      "Slettet Firma AS",
+      "000888999",
+      "Fjernet Bygg AS",
+      "Bortesen",
+      "81/92",
+      "Fjernet Forvaltning AS",
+    ]) {
+      expect(stillThere(input, value), `«${value}» i ledeteksten: ${input}`).toBe(false);
+    }
+  });
+
+  it("V10.2 vasken endrer eller sletter aldri kilderadene", async () => {
+    const { grant, assignmentId } = await organizationWithKnownValues(DELETED_SEED);
+    const tables = [
+      "assignment_parties",
+      "contacts",
+      "firms",
+      "assignment_team_members",
+      "properties",
+      "cadastral_units",
+      "common_areas",
+      "orders",
+      "employees",
+    ];
+    const before: Record<string, string> = {};
+    for (const table of tables) {
+      before[table] = JSON.stringify(
+        await db.execute(sql.raw(`select * from ${table} order by id`)),
+      );
+    }
+    await sendAndCapture(grant, assignmentId, "Partsen ringte på 47112233.");
+    for (const table of tables) {
+      expect(
+        JSON.stringify(await db.execute(sql.raw(`select * from ${table} order by id`))),
+        table,
+      ).toBe(before[table]);
+    }
+  });
+});
+
+describe("vask før KI: alt i én tekst (V4.3)", () => {
+  it("V4.3 alle mønstre og kjente verdier i samme tekst: ingen verdier i ledeteksten, redacted_count stemmer", async () => {
+    const { grant, assignmentId } = await organizationWithKnownValues({
+      parties: [{ name: "Åse Testesen", phone: "12345678" }],
+      property: { address: "Prøvetunet 7", gnr: "12", bnr: "34" },
+    });
+    const text =
+      "Åse Testesen ringte fra 12345678. Kopi til kari.prove@example.no. " +
+      "Personnummer 01019912345, org 123456789, konto 1234.56.78901. " +
+      "Naboen i Fjordveien 3B klaget. Eiendommen 12/34 i Prøvetunet 7 er befart.";
+    const values = [
+      "Åse Testesen",
+      "12345678",
+      "kari.prove@example.no",
+      "01019912345",
+      "123456789",
+      "1234.56.78901",
+      "Fjordveien 3B",
+      "12/34",
+      "Prøvetunet 7",
+    ];
+    const { input, request } = await sendAndCapture(grant, assignmentId, text);
+    for (const value of values) {
+      expect(stillThere(input, value), `«${value}» i ledeteksten: ${input}`).toBe(false);
+    }
+    expect(placeholderCounts(input)).toEqual({
+      "[navn]": 1,
+      "[telefon]": 1,
+      "[e-post]": 1,
+      "[fødselsnummer]": 1,
+      "[organisasjonsnummer]": 1,
+      "[kontonummer]": 1,
+      "[adresse]": 2,
+      "[matrikkel]": 1,
+    });
+    const row = (await aiRow(request.requestId))!;
+    expect(row.redacted_count).toBe(9);
+    expect(row.outcome).toBe("ok");
+  });
+
+  it("V4.3 tekst uten persondata gir redacted_count 0 og samme tekst til leverandøren", async () => {
+    const { grant, assignmentId } = await organizationWithKnownValues({
+      parties: [{ name: "Åse Testesen" }],
+    });
+    const { input, request } = await sendAndCapture(grant, assignmentId, SAMPLE_TEXT);
+    expect(input).toBe(SAMPLE_TEXT);
+    expect((await aiRow(request.requestId))!.redacted_count).toBe(0);
+  });
+});
+
+describe("vask før KI: tenant (V7.2)", () => {
+  it("V7.2 navnet på en part i organisasjon B vaskes ikke i teksten fra A (B sine verdier brukes aldri)", async () => {
+    const a = await organizationWithKnownValues({ parties: [{ name: "Åse Testesen" }] });
+    const orgB = await createOrganization("Oppdiktet Takst B");
+    await enableAi(orgB.id);
+    await seedKnownValues(orgB.id, {
+      parties: [{ name: "Bjarne Fremmedsen", phone: "98765432" }],
+    });
+    const { input } = await sendAndCapture(
+      a.grant,
+      a.assignmentId,
+      "Åse Testesen nevnte Bjarne Fremmedsen.",
+    );
+    expect(stillThere(input, "Åse Testesen")).toBe(false);
+    expect(input).toContain("Bjarne Fremmedsen");
   });
 });

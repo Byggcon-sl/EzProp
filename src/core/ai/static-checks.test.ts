@@ -191,6 +191,17 @@ describe("vask før KI, statiske kontroller (V8.5–V8.7)", () => {
     expect(load).toBeLessThan(apply);
   });
 
+  it("V8.6 ingen mellomlagring: redaction.ts har ingen Map, Set eller cache på toppnivå", () => {
+    const source = read(join(aiDir, "redaction.ts"));
+    const topLevel = source
+      .split("\n")
+      .filter((line) => /^(?:export\s+)?(?:const|let|var)\s/u.test(line));
+    for (const line of topLevel) {
+      expect(line, line).not.toMatch(/new\s+(?:Map|Set|WeakMap|WeakSet)\b|cache/iu);
+    }
+    expect(source).not.toMatch(/^(?:export\s+)?let\s/mu);
+  });
+
   it("V8.6 redactedCount står ikke i returtypen til requestSuggestion", () => {
     const types = read(join(aiDir, "types.ts"));
     const start = types.indexOf("export type AiSuggestionResult");
