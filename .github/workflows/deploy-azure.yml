@@ -15,7 +15,8 @@ concurrency:
 
 env:
   ENVIRONMENT_NAME: test
-  RESOURCE_GROUP: rg-ezprop-test
+  # Kan overstyres med GitHub-variabelen AZURE_RESOURCE_GROUP (for eksempel når Azure mangler kapasitet i én gruppe).
+  RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'rg-ezprop-test' }}
   LOCATION: swedencentral
 
 jobs:
