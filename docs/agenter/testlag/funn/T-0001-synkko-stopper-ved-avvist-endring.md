@@ -10,7 +10,7 @@ omrade: synk uten nett (testskjema)
 maal: de ansatte
 commit: 0b8e3b9
 forsok: 0
-pr:
+pr: 139
 ---
 
 ## Hva
