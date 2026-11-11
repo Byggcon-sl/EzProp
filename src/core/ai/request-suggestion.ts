@@ -2,6 +2,7 @@ import { and, eq, isNull, ne } from "drizzle-orm";
 import { AccessDeniedError, grantHasPermission, type EmployeeGrant } from "@/core/access";
 import { db } from "@/db/client";
 import { aiUsageLog, assignments, type AiErrorCode } from "@/db/schema";
+import { stripUnstorableChars } from "@/shared/lib/clean-text";
 import { logger } from "@/shared/lib/logger";
 import { AiRequestRejectedError } from "./errors";
 import { AI_TRIAL_TARGET_TYPE, buildPrompt, getFeatureDefinition } from "./features";
@@ -32,6 +33,11 @@ import {
  *
  * Leverandøren får bare vasket tekst, også den falske. Kaster vasken, kalles leverandøren aldri
  * (A176). `provider.complete` kalles bare her, og etter vasken.
+ *
+ * Tegn databasen ikke tar (U+0000, ensomme surrogater) fjernes fra verdiene rett etter
+ * tillatt-listen, før alt annet og før personvernvasken, så et nummer med nulltegn mellom
+ * sifrene kjennes igjen av mønstrene (funn T-0001, A180). Svaret fra leverandøren vaskes på
+ * samme måte før det lagres og sendes tilbake.
  */
 
 /** Måltyper som ikke kan kontrolleres mot organisasjonen ennå (A166, A173). */
@@ -108,6 +114,15 @@ export async function requestSuggestion(
   // 3. Bare feltkoder fra tillatt-listen
   if (!hasOnlyAllowedFields(definition, input.fields)) throw new AiRequestRejectedError();
 
+  // 3b. Tegn databasen ikke tar fjernes fra verdiene (ikke fra feltkodene). Tom tekst etter
+  // vask gir samme avslag som annen ugyldig forespørsel, før oppslag, sperre og leverandør.
+  const fields: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input.fields)) {
+    const cleaned = stripUnstorableChars(value);
+    if (cleaned.trim() === "") throw new AiRequestRejectedError();
+    fields[key] = cleaned;
+  }
+
   // 4. Oppdraget hører til organisasjonen og er ikke slettet
   if (input.assignmentId !== null) {
     const [assignment] = await db
@@ -148,7 +163,7 @@ export async function requestSuggestion(
   const resolved = await resolveAiProvider(grant);
   if (resolved.kind === "disabled") return { kind: "disabled" };
   const { provider, model } = resolved;
-  const fieldKeys = Object.keys(input.fields).sort();
+  const fieldKeys = Object.keys(fields).sort();
 
   // 7. Sperret: rad med utfallet `blocked`, intet oppslag, ingen vask, intet kall
   if (isBlocked(provider, target.type, input.assignmentId)) {
@@ -165,7 +180,7 @@ export async function requestSuggestion(
   }
 
   // 8. Vask: kjente verdier for oppdraget og mønstrene. Kaster den, kalles leverandøren aldri.
-  const redacted = await redactFields(grant, input.assignmentId, input.fields);
+  const redacted = await redactFields(grant, input.assignmentId, fields);
 
   // 9. Ledeteksten bygges bare av de vaskede feltene på tillatt-listen, og leverandøren kalles
   const prompt = buildPrompt(definition, redacted.fields);
@@ -177,6 +192,8 @@ export async function requestSuggestion(
       model,
     }),
   );
+  // Svaret vaskes én gang: det samme lagres i loggen og sendes tilbake til klienten
+  const outputText = result.outcome === "ok" ? stripUnstorableChars(result.text) : null;
   if (result.outcome === "error") {
     logger.warn("KI-kallet ga feil", {
       feature: definition.code,
@@ -213,7 +230,7 @@ export async function requestSuggestion(
         inputSummary,
         outcome: result.outcome,
         errorCode,
-        outputText: result.outcome === "ok" ? result.text : null,
+        outputText,
         status: result.outcome === "ok" ? "suggested" : null,
         tokensIn: result.outcome === "error" ? 0 : result.tokensIn,
         tokensOut: result.outcome === "error" ? 0 : result.tokensOut,
