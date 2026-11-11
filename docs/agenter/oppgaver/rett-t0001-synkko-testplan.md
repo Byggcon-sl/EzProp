@@ -184,7 +184,7 @@ Krav: ingen fast `waitForTimeout`; vent på tekst i statuslinjen eller `pendingC
 - Kodekommentaren «Bare tegn databasen ikke tar. Ikke personvernvask, erstatter ikke «Vask før KI».» står.
 - `console.warn` i `trial-store.ts` logger fortsatt bare status og antall, ikke data eller feltnavn ut over koden.
 - Ordlisten i `docs/05-domenemodell.md` har `set aside` og `unstorable characters`.
-- A169 og A170 i `docs/09-apne-sporsmal.md`.
+- A180 og A181 i `docs/09-apne-sporsmal.md`.
 - Funnfilen T-0001: status «rettet», `pr:` utfylt, logglinje. Ligger fortsatt i `funn/` (flyttes til `funn/lukket/` når testlaget har bekreftet).
 - Versjon i `package.json` er økt (patch). Ingen nye avhengigheter.
 

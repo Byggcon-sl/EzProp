@@ -32,7 +32,7 @@ KI gjør ikke noe nytt her, og vasken har ingen KI i seg. Rettingen reparerer gr
 7. **Beskyttelse mot overskriving:** et felt med en endring som er lagt til side og ikke løst, er med i `pendingKeys`, så henting fra serveren ikke overskriver det takstmannen skrev. Når en senere endring på samme felt (samme `localRowKey`) er kvittert med 200, merkes den gamle som løst (`setAside.resolved`): den er da ute av `pendingKeys` og meldingen. Ingen annen opprydding.
 8. **Synlig melding** i statuslinjen: «Kunne ikke sendes: <feltnavn>» med feltnavnet fra skjemaet. For `trial_photos`: «Kunne ikke sendes: bilde i <feltnavn>». For `trial_forms`: «Kunne ikke sendes: testskjemaet». Flere felt skilles med komma. Meldingen forsvinner først etter 200 på den nye endringen.
 9. **Funnfilen:** status «rettet», `pr:` med PR-nummer, linje i loggen. Flyttes til `funn/lukket/` først når testlaget har bekreftet rettingen etter merge (slik testløkken er lagt opp, `docs/agenter/testlag/LES-MEG.md`). Oppgaveteksten sa «når merget»; testløkken gjelder.
-10. Versjon i `package.json` økes (patch). Beslutningene A169 og A170 står i `docs/09-apne-sporsmal.md`.
+10. Versjon i `package.json` økes (patch). Beslutningene A180 og A181 står i `docs/09-apne-sporsmal.md`.
 
 **Ikke med (bevisst utelatt):**
 - Den ekte synken i fase 2b (mønsteret noteres der, bygges ikke nå).
@@ -82,8 +82,8 @@ Ingen fagregler.
 - [ ] Funnfilen T-0001 har status «rettet», PR-nummer og logglinje. Versjon økt.
 
 ## Beslutninger (autonom modus)
-- **A169:** nulltegn og ensomme surrogater fjernes stille i stedet for å avvise feltet. Tegnet er usynlig og har ingen betydning for takstmannen; enkleste løsning som ikke mister arbeid. Lett å endre.
-- **A170:** bare 400 legger en endring til side; den slettes aldri og meldes med feltnavn. Andre svar prøves på nytt som før. Lett å endre.
+- **A180:** nulltegn og ensomme surrogater fjernes stille i stedet for å avvise feltet. Tegnet er usynlig og har ingen betydning for takstmannen; enkleste løsning som ikke mister arbeid. Lett å endre.
+- **A181:** bare 400 legger en endring til side; den slettes aldri og meldes med feltnavn. Andre svar prøves på nytt som før. Lett å endre.
 
 ## Avgjort ved uenighet (prosjektleder, runde 1)
 - **Sending én og én kuttes** (forenkler). Test-leder ba om tester for den; de faller bort. Begrunnelse: vår egen server peker alltid på endringen; 400 uten opplysning og flere i bunten prøves på nytt som før. Jeg beholder test-leders tilfelle «400 uten opplysning for én endring legges til side», fordi det er trygt og ikke krever ny tilstand.
