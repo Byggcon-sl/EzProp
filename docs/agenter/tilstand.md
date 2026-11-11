@@ -41,7 +41,7 @@ Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4�
 
 Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 11.11.2026 på main 0b8e3b9 (første kjøring).
 
-- Åpne alvorlige feil: 1 (T-0001). Rettes før neste nye punkt i planen.
+- Åpne alvorlige feil: 1 (T-0001). Stoppet etter 3 retteforsøk, se «Trenger Ståle (stoppet etter 3 retteforsøk)». Løkken går videre med neste punkt i planen.
 - Åpne funn i alt: 35 (1 alvorlig, 16 middels, 18 små). Middels og små tas med neste oppgave i samme område. T-0004 og T-0005 (KI-kortet sletter tekst) og T-0003 (svar 59a) må tas før 2a-2.
 - **Til «Trenger Ståle» (prosjektlederen fører inn):** Spectora Advanced slås av før ca. 23.11.2026 (koster penger), og passordene til IVIT, Spectora og SmartTakst byttes. Se `docs/agenter/testlag/funn/T-0002-venter-pa-stale-mangler-spectora-og-passord.md`.
 
@@ -74,7 +74,7 @@ Ryddet i PR «Rydding fra nattløkken 2026-11-11» (versjon 0.5.5): patch-oppdat
 
 ## Trenger Ståle (stoppet etter 3 retteforsøk)
 
-Ingen.
+- **T-0001: én endring som ikke kan lagres, stopper alt annet som venter på å bli sendt fra iPaden** (11.11.2026, branch `rett-t0001-synkko`, ingen PR). Rettingen er laget: teksten vaskes for tegn databasen ikke tar imot, serveren svarer «kan ikke lagres» i stedet for å krasje, og iPaden legger den ene endringen til side med meldingen «Kunne ikke sendes: <feltnavn>» og sender resten. Alle vanlige tester er grønne. Én automatisk nettlesertest er fortsatt rød på PC-størrelse (grønn på iPad-størrelse): testen som slår av nettet, skriver tre svar og sjekker at de venter i køen, finner køen tom. Det ser ut som testen sjekker for tidlig eller at svarene rakk å bli sendt før nettet var av, ikke som en feil i selve rettingen. Etter tre forsøk stopper løkken her. Hva Ståle kan gjøre: ingenting haster. Neste kjøring kan prøve å gjøre testen stabil (vente til svarene faktisk er lagret på iPaden før køen sjekkes). Vil Ståle heller ha rettingen inn nå, kan han si at testen kan merkes som ustabil, så lages PR-en. Spor: `test-results/fase-2a-rett-t0001-synkko--731ec--nett-samme-resultat-som-a--pc/trace.zip` (bare lokalt).
 
 ## Siste kjøring
 

@@ -3,7 +3,7 @@ id: T-0001
 tittel: Én endring som ikke kan lagres, stopper alt annet som venter på å bli sendt fra iPaden
 type: feil
 alvor: alvorlig
-status: rettet
+status: ny
 funnet: 2026-11-11
 rolle: test-robusthet
 omrade: synk uten nett (testskjema)
