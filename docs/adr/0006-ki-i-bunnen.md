@@ -253,7 +253,7 @@ Treff erstattes med faste merker: `[navn]`, `[e-post]`, `[telefon]`, `[adresse]`
 - **To låser** for en ekte leverandør: `ai.enabled` er på, **og** organisasjonen har en aktiv tilkobling på porten `ai`.
 - Bare admin endrer bryteren og tilkoblingen (`organization.manage`). Begge endringene logges i `audit_log`.
 - **Alt virker uten KI.** Er KI av, gir `requestSuggestion` svaret `disabled`, det lages ingen rad, og skjermene viser ingen KI-knapper.
-- **«KI er av» og «sperret» er to ting.** `disabled` betyr at organisasjonen ikke bruker KI, og gir ingen rad. `blocked` betyr at KI er på, men at akkurat denne forespørselen ikke kan sendes til leverandøren (del 5 og 6); den gir en rad. Skjermen viser samme tekst for begge («KI er ikke tilgjengelig»). Forslag som allerede finnes, kan fortsatt avgjøres og angres.
+- **«KI er av» og «sperret» er to ting.** `disabled` betyr at organisasjonen ikke bruker KI, og gir ingen rad. `blocked` betyr at KI er på, men at akkurat denne forespørselen ikke kan sendes til leverandøren (del 5 og 6); den gir en rad. Skjermen viser samme tekst for begge («KI er av.», endret under «Vask før KI», PR #135). Forslag som allerede finnes, kan fortsatt avgjøres og angres.
 
 ### Tilgang
 
