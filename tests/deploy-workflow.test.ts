@@ -169,6 +169,7 @@ const ALLOWED_SECRETS = [
   "MS_GRAPH_CLIENT_ID",
   "MS_GRAPH_CLIENT_SECRET",
   "MAIL_FROM",
+  "ANTHROPIC_API_KEY",
 ];
 const REQUIRED_SECRETS = ALLOWED_SECRETS.slice(0, 5);
 const ALLOWED_VARS = ["SEED_ADMIN_EMAIL", "APP_HOSTNAME", "ENABLE_KEY_VAULT"];
@@ -257,7 +258,7 @@ describe("utrullingsarbeidsflyten (deploy-azure.yml)", () => {
 
   it("ingen hemmeligheter som verdier", () => {
     const pattern =
-      /(POSTGRES_ADMIN_PASSWORD|MS_GRAPH_CLIENT_SECRET|AZURE_CLIENT_ID|AZURE_TENANT_ID|AZURE_SUBSCRIPTION_ID)\s*:\s*[^$\s]/;
+      /(POSTGRES_ADMIN_PASSWORD|MS_GRAPH_CLIENT_SECRET|ANTHROPIC_API_KEY|AZURE_CLIENT_ID|AZURE_TENANT_ID|AZURE_SUBSCRIPTION_ID)\s*:\s*[^$\s]/;
     expect(lines.filter((line) => pattern.test(line))).toEqual([]);
   });
 
@@ -353,6 +354,10 @@ describe("infrastruktur (main.bicep)", () => {
     for (const name of ["postgresAdminPassword", "betterAuthSecret", "msGraphClientSecret"]) {
       expect(names).toContain(name);
     }
+    const anthropic = lineIndexes(lines, /^\s*param\s+anthropicApiKey\s/);
+    expect(anthropic).toHaveLength(1);
+    expect(lines[anthropic[0]! - 1]?.trim()).toBe("@secure()");
+    expect(lines[anthropic[0]!], "KI-nøkkelen har standardverdi").not.toContain("=");
     for (const index of secretParams) {
       const line = lines[index]!;
       expect(lines[index - 1]?.trim(), line).toBe("@secure()");
@@ -682,12 +687,14 @@ const KEY_VAULT_SETTINGS: Record<string, string> = {
   DATABASE_URL: "databaseUrl",
   BETTER_AUTH_SECRET: "betterAuthSecret",
   MS_GRAPH_CLIENT_SECRET: "msGraphClientSecret",
+  ANTHROPIC_API_KEY: "anthropicApiKey",
 };
 
 const KEY_VAULT_SECRETS: Record<string, string> = {
   "database-url": "databaseUrl",
   "better-auth-secret": "betterAuthSecret",
   "ms-graph-client-secret": "msGraphClientSecret",
+  "anthropic-api-key": "anthropicApiKey",
 };
 
 const NOT_THROUGH_KEY_VAULT = [
@@ -718,10 +725,10 @@ describe("nøkkelboksen i infrastrukturen (main.bicep)", () => {
   });
 
   it("2. alle Key Vault-ressurser har betingelsen enableKeyVault", () => {
-    expect(kv).toHaveLength(5);
+    expect(kv).toHaveLength(6);
     expect(kv.filter((r) => r.type === "Microsoft.KeyVault/vaults")).toHaveLength(1);
     expect(kv.filter((r) => r.type === "Microsoft.KeyVault/vaults/accessPolicies")).toHaveLength(1);
-    expect(secrets).toHaveLength(3);
+    expect(secrets).toHaveLength(4);
     for (const resource of kv) {
       expect(resource.lines[0], resource.symbol).toMatch(/=\s*if\s*\(\s*enableKeyVault\b/);
     }
@@ -773,7 +780,7 @@ describe("nøkkelboksen i infrastrukturen (main.bicep)", () => {
     }
   });
 
-  it("5. de tre hemmelighetene går gjennom boksen når bryteren er på", () => {
+  it("5. de fire hemmelighetene går gjennom boksen når bryteren er på", () => {
     for (const name of Object.keys(KEY_VAULT_SETTINGS)) {
       const expression = appSettingExpression(bicep, name);
       expect(expression, name).toBeDefined();
@@ -875,6 +882,9 @@ describe("nøkkelboksen i infrastrukturen (main.bicep)", () => {
     const graph = secretBlock("ms-graph-client-secret");
     expect(graph).toBeDefined();
     expect(graph!.lines[0]).toMatch(/=\s*if\s*\(\s*enableKeyVault\s*&&\s*emailConfigured\s*\)/);
+    const ai = secretBlock("anthropic-api-key");
+    expect(ai).toBeDefined();
+    expect(ai!.lines[0]).toMatch(/=\s*if\s*\(\s*enableKeyVault\s*&&\s*aiConfigured\s*\)/);
     for (const name of ["database-url", "better-auth-secret"]) {
       const block = secretBlock(name);
       expect(block, name).toBeDefined();
@@ -1054,5 +1064,59 @@ describe("dokumentasjon for nøkkelboksen", () => {
       ),
       "A-rad om Key Vault",
     ).toBe(true);
+  });
+});
+
+describe("KI-nøkkelen ANTHROPIC_API_KEY i testmiljøet", () => {
+  const workflow = read(WORKFLOW_PATH);
+  const workflowLines = workflow.split("\n");
+  const bicep = read(BICEP_PATH);
+
+  it("1. sendes bare i steget «Infrastruktur (Bicep)», som hemmelighet", () => {
+    const uses = workflowLines
+      .map((line, index) => ({ line, index }))
+      .filter(({ line }) => !isComment(line) && line.includes("ANTHROPIC_API_KEY"));
+    expect(uses.length).toBeGreaterThan(0);
+    const stepLine = codeLine(workflowLines, /^\s*-\s+name:\s*Infrastruktur \(Bicep\)/);
+    const step = stepOf(workflowLines, stepLine);
+    for (const { line, index } of uses) {
+      expect(stepOf(workflowLines, index), line).toEqual(step);
+    }
+    expect(subBlock(step, "env")).toMatch(
+      /^\s*ANTHROPIC_API_KEY:\s*\$\{\{\s*secrets\.ANTHROPIC_API_KEY\s*\}\}\s*$/m,
+    );
+    expect(subBlock(step, "run")).not.toMatch(/\$\{\{[^}]*ANTHROPIC_API_KEY/);
+    expect(REQUIRED_SECRETS).not.toContain("ANTHROPIC_API_KEY");
+    for (const marker of ["az deployment group validate", "az deployment group create"]) {
+      const command = commandBlock(workflow, marker);
+      expect(parameterSources(workflow, command), marker).toContain(
+        '"anthropicApiKey=$ANTHROPIC_API_KEY"',
+      );
+    }
+  });
+
+  it("2. tom verdi er lov og betyr at appen ikke får nøkkelen", () => {
+    expect(bicep).toMatch(/^var aiConfigured = !empty\(anthropicApiKey\)$/m);
+    const block = bicep.slice(bicep.indexOf("var aiAppSettings = aiConfigured"));
+    expect(block.startsWith("var aiAppSettings = aiConfigured")).toBe(true);
+    expect(block.slice(0, block.indexOf(": []"))).toContain("'ANTHROPIC_API_KEY'");
+    expect(bicep.match(/'ANTHROPIC_API_KEY'/g)).toHaveLength(1);
+    expect(bicep).toMatch(/appSettings:\s*concat\([^)]*aiAppSettings\)/);
+  });
+
+  it("3. CI og e2e får aldri nøkkelen", () => {
+    expect(read(".github/workflows/ci.yml")).not.toContain("ANTHROPIC_API_KEY");
+    expect(read(".github/workflows/oppdater-pr.yml")).not.toContain("ANTHROPIC_API_KEY");
+    const configs = readdirSync(process.cwd()).filter((name) => /^playwright\.config\./.test(name));
+    expect(configs.length).toBeGreaterThan(0);
+    for (const file of configs) expect(read(file), file).not.toContain("ANTHROPIC_API_KEY");
+  });
+
+  it("4. .env.example har bare en tom linje, og driftsdokumentet nevner nøkkelen", () => {
+    const example = read(".env.example")
+      .split("\n")
+      .filter((line) => line.startsWith("ANTHROPIC_API_KEY"));
+    expect(example).toEqual(["ANTHROPIC_API_KEY="]);
+    expect(read(DRIFT_DOC_PATH)).toContain("ANTHROPIC_API_KEY");
   });
 });

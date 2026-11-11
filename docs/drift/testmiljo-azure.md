@@ -49,6 +49,8 @@ Før du legger dem inn, sjekk dette i Microsoft 365 (samme app-registrering som 
 2. Det finnes en **tilgangspolicy i Exchange Online** som begrenser appen til postboksen i `MAIL_FROM`. Den lages i PowerShell med `New-ApplicationAccessPolicy`. **Uten policyen kan appen sende e-post fra alle postbokser i Byggcon.**
 3. Det koster ingenting ekstra. Postboksen og app-registreringen finnes fra før.
 
+Valgfri secret for KI: `ANTHROPIC_API_KEY` (API-nøkkelen fra Anthropic). Tom eller manglende betyr KI av, og nøkkelen alene slår ikke på noe; les først `docs/beslutningsnotat-ki-leverandor.md`, og legg den bare inn når du har valgt å bruke penger på KI i testmiljøet (ligger i nøkkelboksen når `ENABLE_KEY_VAULT` er på).
+
 Etter at de fire er lagt inn og utrullingen har gått: prøv én innlogging i testmiljøet med en annen adresse enn din egen. Kommer ikke koden, se feilen i serverloggen (Log stream), eller i kolonnen `last_error` i tabellen `integration_connections` hvis en tilkobling er lagt inn der.
 
 **Slik virker e-posten:**
