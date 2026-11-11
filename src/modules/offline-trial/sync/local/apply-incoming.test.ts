@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyTextEdit, createTextState, mergeTextStates, textOf } from "../../text-merge";
 import type { IncomingChange, LocalRow } from "../types";
 import { applyIncoming } from "./apply-incoming";
-import { localRowKey } from "./outbox";
+import { createOutboxState, localRowKey, pendingKeys } from "./outbox";
 
 // Innfletting av nedlastede rader (docs/funksjoner/fase1-kandidat-electricsql.md avgjørelse D og
 // «Avgjørelser før bygging» 2). Testplan avsnitt 2.2. Ren funksjon: ingen IndexedDB, ingen DOM.
@@ -305,5 +305,65 @@ describe("applyIncoming (apply-incoming.ts)", () => {
       value: JSON.stringify(3),
       device_id: "annen-enhet",
     });
+  });
+});
+
+// Rett T-0001 (A181): testplan 1d (34, 35). Serveren lagrer teksten uten nulltegn.
+describe("applyIncoming og endringer lagt til side", () => {
+  const POISON = "Fukt\u0000 i kjeller";
+  const WASHED = "Fukt i kjeller";
+
+  function setAsideQueue(resolved?: boolean) {
+    return createOutboxState([
+      {
+        seq: 4,
+        op: "PUT",
+        table: "trial_answers",
+        id: LOCAL_ID,
+        data: {
+          trial_form_id: FORM,
+          field_key: "general_description",
+          value: JSON.stringify(POISON),
+        },
+        setAside: { at: NOW, ...(resolved && { resolved }) },
+      },
+    ]);
+  }
+
+  it("serverens vaskede svar overskriver ikke felt som er lagt til side", () => {
+    const local = answerRow("general_description", POISON);
+    const incoming = answerRow("general_description", WASHED, {
+      id: SERVER_ID,
+      updated_at: LATER,
+    });
+    const result = applyIncoming(
+      "trial_answers",
+      [local],
+      [change("update", incoming)],
+      pendingKeys(setAsideQueue(), localRowKey),
+    );
+    expect(result.rows[0]!.value).toBe(JSON.stringify(POISON));
+    expect(result.skippedKeys).toEqual([keyOf(local)]);
+  });
+
+  it("når den er løst, tas serverens vaskede svar inn som vanlig", () => {
+    const local = answerRow("general_description", POISON);
+    const incoming = answerRow("general_description", WASHED, { updated_at: LATER });
+    const result = applyIncoming(
+      "trial_answers",
+      [local],
+      [change("update", incoming)],
+      pendingKeys(setAsideQueue(true), localRowKey),
+    );
+    expect(result.rows[0]!.value).toBe(JSON.stringify(WASHED));
+    expect(result.skippedKeys).toEqual([]);
+  });
+
+  it("hentet vasket svar gir bare rader tilbake, ingen ny endring", () => {
+    // Innflettingen er ren og gir bare rader; køen røres aldri (se også trial-store.test.ts).
+    const incoming = answerRow("general_description", WASHED, { id: SERVER_ID });
+    const result = applyIncoming("trial_answers", [], [change("insert", incoming)], new Set());
+    expect(Object.keys(result).sort()).toEqual(["rows", "skippedKeys"]);
+    expect(result.rows).toEqual([incoming]);
   });
 });

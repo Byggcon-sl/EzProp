@@ -10,9 +10,11 @@ import {
   SYNC_STATE_SIGN_IN_REQUIRED,
   syncStatusKind,
   syncStatusText,
+  unsentChangesText,
+  unsentLineText,
   type SyncStatusKind,
 } from "./sync-status-text";
-import type { TrialSyncStatus } from "./sync/types";
+import type { TrialSyncStatus, UnsentChange } from "./sync/types";
 
 // Tekstene og reglene bak synkstatusen (docs/funksjoner/fase1-synkstatus.md, «Regler»).
 // Testplan avsnitt 2.1. Reglene er data: tabellene under er testsakene. Alle tidspunkt er faste,
@@ -353,4 +355,70 @@ describe("lenken «Logg inn» (signInHref)", () => {
   });
   // At lenken og safeNextPath passer sammen, testes i src/app/logg-inn/safe-next-path.test.ts
   // (moduler importerer ikke fra app).
+});
+
+// Rett T-0001 (A181): «Kunne ikke sendes: <feltnavn>». Testplan 1e (36–40).
+describe("Kunne ikke sendes (sync-status-text.ts)", () => {
+  const answer = (fieldKey: string): UnsentChange => ({ table: "trial_answers", fieldKey });
+
+  it("Kunne ikke sendes: <feltnavn> med navn fra skjemaet", () => {
+    expect(unsentChangesText([answer("general_description")])).toBe(
+      "Kunne ikke sendes: Generell beskrivelse",
+    );
+    // Feltkoden vises aldri, heller ikke når den er ukjent.
+    expect(unsentChangesText([answer("ukjent_kode")])).toBe("Kunne ikke sendes: et felt");
+    expect(unsentChangesText([{ table: "trial_answers", fieldKey: null }])).not.toContain("null");
+  });
+
+  it("bilde gir bilde i <feltnavn>", () => {
+    expect(unsentChangesText([{ table: "trial_photos", fieldKey: "roof_photo" }])).toBe(
+      "Kunne ikke sendes: bilde i Tak – bilde",
+    );
+  });
+
+  it("testskjemaet", () => {
+    expect(unsentChangesText([{ table: "trial_forms", fieldKey: null }])).toBe(
+      "Kunne ikke sendes: testskjemaet",
+    );
+  });
+
+  it("flere felt skilles med komma, og samme felt nevnes én gang", () => {
+    expect(
+      unsentChangesText([
+        answer("general_description"),
+        answer("building_year"),
+        answer("general_description"),
+      ]),
+    ).toBe("Kunne ikke sendes: Generell beskrivelse, Byggeår");
+  });
+
+  it("ingen melding når alt er løst", () => {
+    // Løste endringer kommer aldri med i `unsent` (lageret filtrerer dem bort).
+    expect(unsentChangesText([])).toBeNull();
+    expect(unsentChangesText(undefined)).toBeNull();
+    expect(unsentLineText(status(true, true, 0, 0))).toBeNull();
+    expect(syncStatusText(status(true, true, 0, 0))).toBe(ALL_SAVED);
+  });
+
+  it("bare noe lagt til side: pillen viser meldingen, ikke Alt er lagret", () => {
+    const withUnsent = { ...status(true, true, 0, 0), unsent: [answer("general_description")] };
+    expect(syncStatusKind(withUnsent)).toBe("pending");
+    expect(syncStatusText(withUnsent)).toBe("Kunne ikke sendes: Generell beskrivelse");
+    expect(unsentLineText(withUnsent)).toBeNull();
+    // «Lagret kl.» flyttes ikke mens noe ikke er sendt.
+    expect(nextSavedAt(withUnsent, null, new Date("2026-11-11T10:00:00.000Z"))).toBeNull();
+  });
+
+  it("i tillegg til ventetallet og Uten nett vises meldingen på egen linje", () => {
+    const pending = { ...status(true, true, 2, 0), unsent: [answer("general_description")] };
+    expect(syncStatusText(pending)).toBe("Venter: 2 endringer, 0 bilder");
+    expect(unsentLineText(pending)).toBe("Kunne ikke sendes: Generell beskrivelse");
+    const offline = { ...status(false, true, 0, 0), unsent: [answer("general_description")] };
+    expect(syncStatusText(offline)).toBe("Uten nett");
+    expect(unsentLineText(offline)).toBe("Kunne ikke sendes: Generell beskrivelse");
+  });
+
+  it("5xx-beskjeden er uendret", () => {
+    expect(SYNC_NOW_FAILED_MESSAGE).toBe("Fikk ikke sendt. Prøver igjen automatisk.");
+  });
 });

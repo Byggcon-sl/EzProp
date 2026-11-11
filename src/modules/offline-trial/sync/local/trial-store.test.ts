@@ -11,6 +11,12 @@ import {
   type LocalTrialStore,
 } from "./types";
 
+// `status()` leser bekreftede bilder fra bildelageret (egen IndexedDB); testene har ingen bilder.
+vi.mock("../photo-store", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../photo-store")>()),
+  listConfirmedPhotoIds: () => Promise.resolve(new Set<string>()),
+}));
+
 // «Synk nå» i den lokale kjernen (docs/funksjoner/fase1-synkstatus.md, testplan
 // docs/agenter/oppgaver/fase1-smafunn-synkstatus-testplan.md avsnitt 1). Ingen IndexedDB og ingen
 // nettleser: databasen er en liten falsk `LocalDb` i minnet, leseren er en stub, `fetch` og
@@ -422,5 +428,247 @@ describe("øyeblikksbilder og nyere lokale skrivinger (localWriteGeneration)", (
 
     expect(valuesSeen(listener)).not.toContain("2");
     expect(valuesSeen(listener).at(-1)).toBe("4");
+  });
+});
+
+// Rett T-0001 (A181): 400 legger én endring til side i køen, resten sendes. Testplan
+// docs/agenter/oppgaver/rett-t0001-synkko-testplan.md 1c (23, 24, 26), 1d (33, 35) og loggen.
+describe("lagt til side etter 400 i den lokale kjernen", () => {
+  const DESCRIPTION = "0192d3a0-0000-7000-8000-0000000000a5";
+  const POISON = "Fukt\u0000 i kjeller";
+  const QUEUE_WITH_TEXT: OutboxEntry[] = [
+    ...QUEUE,
+    {
+      seq: 3,
+      op: "PUT",
+      table: "trial_answers",
+      id: DESCRIPTION,
+      data: {
+        trial_form_id: FORM,
+        field_key: "general_description",
+        value: JSON.stringify(POISON),
+        text_state: null,
+        device_id: "enhet-1",
+        created_at: NOW,
+        updated_at: NOW,
+      },
+    },
+  ];
+
+  const rejected = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  const pointingAt = (id: string, fieldKey: string | null) => ({
+    feil: "Endringen kunne ikke lagres.",
+    endring: { id, table: "trial_answers", field_key: fieldKey },
+  });
+
+  /** Operasjonene i hvert kall til fetch, som id-er. */
+  function sentIds(): string[][] {
+    return fetchMock.mock.calls.map(([, init]) => {
+      const body = JSON.parse(String(init?.body)) as { operations: { id: string }[] };
+      return body.operations.map((operation) => operation.id);
+    });
+  }
+
+  it("400 med endring: den legges til side og lagres, resten sendes med en gang og kvitteres", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rejected(pointingAt(DESCRIPTION, "general_description")))
+      .mockResolvedValue(response(200));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open(true, QUEUE_WITH_TEXT);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sentIds()).toEqual([
+      [FORM, ANSWER, DESCRIPTION],
+      [FORM, ANSWER],
+    ]);
+
+    const stored = await storedQueue();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      seq: 3,
+      id: DESCRIPTION,
+      setAside: { at: expect.any(String) },
+    });
+    const status = await store!.status();
+    expect(status.pendingChanges).toBe(0);
+    expect(status.unsent).toEqual([{ table: "trial_answers", fieldKey: "general_description" }]);
+    // Ingen ventetid: ingen nye forsøk planlagt.
+    await vi.advanceTimersByTimeAsync(retryDelayMs(0) + 1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("400 uten endring og én endring i bunten: den legges til side", async () => {
+    fetchMock.mockResolvedValueOnce(rejected({ feil: "Ugyldig." }));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open(true, [QUEUE[0]!]);
+
+    await vi.advanceTimersByTimeAsync(0);
+    const stored = await storedQueue();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.setAside).toBeDefined();
+    expect((await store!.status()).unsent).toEqual([{ table: "trial_forms", fieldKey: null }]);
+  });
+
+  it("400 uten lesbar kropp og flere i bunten: nytt forsøk, ingenting lagt til side", async () => {
+    fetchMock.mockResolvedValueOnce(new Response("ikke json", { status: 400 }));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open();
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await storedQueue()).toEqual(QUEUE);
+    expect((await store!.status()).pendingChanges).toBe(2);
+  });
+
+  it.each([401, 403, 409, 413, 500, 503, undefined])(
+    "svar %s gir nytt forsøk og legger ingenting til side",
+    async (status) => {
+      if (status === undefined) {
+        fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+      } else {
+        // Kroppen peker på en endring, men bare 400 skal lese den.
+        fetchMock.mockResolvedValue(
+          new Response(JSON.stringify(pointingAt(ANSWER, "floors")), { status }),
+        );
+      }
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      await open();
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(await storedQueue()).toEqual(QUEUE);
+      const current = await store!.status();
+      expect(current.pendingChanges).toBe(2);
+      expect(current.unsent).toEqual([]);
+    },
+  );
+
+  it("lagt til side står etter omlasting, sendes ikke og slettes aldri", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rejected(pointingAt(DESCRIPTION, "general_description")))
+      .mockResolvedValue(response(200));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fake = await open(true, QUEUE_WITH_TEXT);
+    await vi.advanceTimersByTimeAsync(0);
+    await store!.close();
+
+    // Ny lasting av siden med samme lokale database.
+    reader = createReader();
+    store = await createLocalTrialStore({
+      db: fake.db,
+      deviceId: "enhet-1",
+      organizationId: ORG,
+      reader,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const stored = await storedQueue();
+    expect(stored.map((row) => row.id)).toEqual([DESCRIPTION]);
+    expect((await store!.status()).unsent).toHaveLength(1);
+  });
+
+  it("Synk nå regner køen som tømt når bare lagt til side står igjen", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rejected(pointingAt(DESCRIPTION, "general_description")))
+      .mockResolvedValue(response(200));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open(true, QUEUE_WITH_TEXT);
+
+    expect(await store!.syncNow()).toBe("ok");
+    expect(reader.syncNow).toHaveBeenCalledTimes(1);
+    expect(await storedQueue()).toHaveLength(1);
+  });
+
+  it("200 på ny endring i samme felt løser den gamle i lageret, uten å slette den", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rejected(pointingAt(DESCRIPTION, "general_description")))
+      .mockResolvedValue(response(200));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open(true, QUEUE_WITH_TEXT);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const written = store!.setAnswer(FORM, "general_description", "Fukt i kjeller");
+    await store!.flush();
+    await written;
+    await vi.advanceTimersByTimeAsync(0);
+
+    const stored = await storedQueue();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({ seq: 3, setAside: { resolved: true } });
+    // Den gamle verdien er urørt; den nye ble sendt som egen oppføring.
+    expect((stored[0]!.data as Record<string, unknown>).value).toBe(JSON.stringify(POISON));
+    expect(sentIds().at(-1)).toHaveLength(1);
+    const status = await store!.status();
+    expect(status.unsent).toEqual([]);
+    expect(status.pendingChanges).toBe(0);
+  });
+
+  it("henting overskriver ikke feltet som er lagt til side, og lager ingen ny køoppføring", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rejected(pointingAt(DESCRIPTION, "general_description")))
+      .mockResolvedValue(response(200));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fake = await open(true, QUEUE_WITH_TEXT);
+    fake.seed(LOCAL_SYNCED_STORES.trial_answers, {
+      id: DESCRIPTION,
+      trial_form_id: FORM,
+      field_key: "general_description",
+      value: JSON.stringify(POISON),
+      text_state: null,
+      device_id: "enhet-1",
+      created_at: NOW,
+      updated_at: NOW,
+      deleted_at: null,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    // «Bekreftet» etter 200 beskytter de kvitterte feltene en stund; la den gå ut.
+    await vi.advanceTimersByTimeAsync(121_000);
+    const before = await storedQueue();
+    const context = reader.start.mock.calls[0]![0];
+
+    await context.mergeIncoming(
+      "trial_answers",
+      [
+        {
+          table: "trial_answers",
+          kind: "update",
+          key: `${FORM}:general_description`,
+          row: { id: DESCRIPTION, value: JSON.stringify("Fra serveren"), updated_at: NOW },
+        },
+        {
+          table: "trial_answers",
+          kind: "insert",
+          key: `${FORM}:floors`,
+          row: { ...QUEUE[1]!.data, id: ANSWER, value: "2", deleted_at: null },
+        },
+      ],
+      null,
+    );
+
+    const rows = await store!.readRows("trial_answers");
+    const description = rows.find((row) => row.field_key === "general_description");
+    expect(description?.value).toBe(JSON.stringify(POISON));
+    expect(rows.find((row) => row.field_key === "floors")?.value).toBe("2");
+    expect(await storedQueue()).toEqual(before);
+    expect((await store!.status()).pendingChanges).toBe(0);
+  });
+
+  it("loggen ved 400 har bare status og antall, aldri tekst eller feltnavn", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rejected(pointingAt(DESCRIPTION, "general_description")))
+      .mockResolvedValue(response(200));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open(true, QUEUE_WITH_TEXT);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(warn).toHaveBeenCalled();
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).toContain("400");
+    expect(logged).not.toContain("general_description");
+    expect(logged).not.toContain("Generell beskrivelse");
+    expect(logged).not.toContain("Fukt");
+    expect(logged).not.toContain(DESCRIPTION);
   });
 });

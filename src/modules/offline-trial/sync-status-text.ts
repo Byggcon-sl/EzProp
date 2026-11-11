@@ -5,7 +5,8 @@
  * ingen React, ingen `window`. «Lagret kl.» regnes ut bare her (`nextSavedAt`), likt for alle
  * kandidater.
  */
-import type { TrialSyncRoundResult, TrialSyncStatus } from "./sync/types";
+import type { TrialSyncRoundResult, TrialSyncStatus, UnsentChange } from "./sync/types";
+import { listTrialFields, trialForm } from "./trial-form";
 
 export const SYNC_NOW_OFFLINE_MESSAGE =
   "Du er uten nett. Alt er lagret på iPaden og sendes når nettet kommer.";
@@ -16,6 +17,10 @@ export const SYNC_STATE_ALL_SAVED = "Alt er lagret";
 export const SYNC_STATE_AWAITING_SERVER = "Venter på kontakt med serveren";
 export const SYNC_STATE_SIGN_IN_REQUIRED = "Logg inn på nytt for å sende. Alt er lagret på iPaden.";
 export const SAVED_AT_NEVER = "Ikke lagret på serveren ennå";
+export const UNSENT_PREFIX = "Kunne ikke sendes: ";
+export const UNSENT_FORM = "testskjemaet";
+/** Feltkoden finnes ikke i skjemaet: koden vises aldri. */
+export const UNSENT_UNKNOWN_FIELD = "et felt";
 
 export const SYNC_NOW_LABEL = "Synk nå";
 export const SYNC_NOW_RUNNING_LABEL = "Synker …";
@@ -25,13 +30,37 @@ export const SIGN_IN_LABEL = "Logg inn";
 export type SyncStatusKind =
   "offline" | "allSaved" | "pending" | "awaitingServer" | "signInRequired";
 
+function hasUnsent(status: TrialSyncStatus): boolean {
+  return (status.unsent?.length ?? 0) > 0;
+}
+
 function isAllSaved(status: TrialSyncStatus): boolean {
   return (
     status.online &&
     status.serverConfirmed &&
     status.pendingChanges === 0 &&
-    status.pendingPhotos === 0
+    status.pendingPhotos === 0 &&
+    !hasUnsent(status)
   );
+}
+
+const FIELD_LABELS = new Map(listTrialFields(trialForm).map((field) => [field.key, field.label]));
+
+/** Navnet på det som ikke ble sendt, fra skjemadefinisjonen (aldri feltkoden). */
+function unsentName(change: UnsentChange): string {
+  if (change.table === "trial_forms") return UNSENT_FORM;
+  const label = (change.fieldKey && FIELD_LABELS.get(change.fieldKey)) || UNSENT_UNKNOWN_FIELD;
+  return change.table === "trial_photos" ? `bilde i ${label}` : label;
+}
+
+/**
+ * «Kunne ikke sendes: Generell beskrivelse, bilde i Tak – bilde» for endringer lagt til side og
+ * ikke løst (A181). Samme navn nevnes én gang. Null når ingenting er lagt til side.
+ */
+export function unsentChangesText(unsent: readonly UnsentChange[] | undefined): string | null {
+  if (!unsent || unsent.length === 0) return null;
+  const names = [...new Set(unsent.map(unsentName))];
+  return `${UNSENT_PREFIX}${names.join(", ")}`;
 }
 
 /**
@@ -41,7 +70,7 @@ function isAllSaved(status: TrialSyncStatus): boolean {
 export function syncStatusKind(status: TrialSyncStatus, signInRequired = false): SyncStatusKind {
   if (!status.online) return "offline";
   if (signInRequired) return "signInRequired";
-  if (status.pendingChanges > 0 || status.pendingPhotos > 0) return "pending";
+  if (status.pendingChanges > 0 || status.pendingPhotos > 0 || hasUnsent(status)) return "pending";
   return status.serverConfirmed ? "allSaved" : "awaitingServer";
 }
 
@@ -60,11 +89,25 @@ export function syncStatusText(status: TrialSyncStatus, signInRequired = false):
     case "awaitingServer":
       return SYNC_STATE_AWAITING_SERVER;
     default: {
+      // Bare noe lagt til side: pillen sier det selv i stedet for «Venter: 0 endringer».
+      if (status.pendingChanges === 0 && status.pendingPhotos === 0 && hasUnsent(status)) {
+        return unsentChangesText(status.unsent)!;
+      }
       const changes = `${status.pendingChanges} ${status.pendingChanges === 1 ? "endring" : "endringer"}`;
       const photos = `${status.pendingPhotos} ${status.pendingPhotos === 1 ? "bilde" : "bilder"}`;
       return `Venter: ${changes}, ${photos}`;
     }
   }
+}
+
+/**
+ * Linjen under pillen: «Kunne ikke sendes: …» når noe er lagt til side og pillen ikke allerede
+ * viser det (for eksempel «Venter: 2 endringer, 0 bilder» eller «Uten nett»). Ellers null.
+ */
+export function unsentLineText(status: TrialSyncStatus, signInRequired = false): string | null {
+  const text = unsentChangesText(status.unsent);
+  if (text === null || syncStatusText(status, signInRequired) === text) return null;
+  return text;
 }
 
 /** «Synk nå» skjules mens «Logg inn» vises. */
