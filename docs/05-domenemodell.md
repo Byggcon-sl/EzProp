@@ -1644,8 +1644,9 @@ Tekst logges ikke per tastetrykk, men slik den var når endringen kom fram til s
 | `report_id` | Rapporten. Kan være tom. Ingen fremmednøkkel før `reports` finnes, og må være tom til da (A158) |
 | `target_ref` | Hvor forslaget gjelder (jsonb): `type`, `id` og `fieldKey`. For `language_polish`: `answer` og `text` |
 | `source_fields` | Hvilke felt som var grunnlaget (jsonb-liste). Bare feltkoder, aldri verdier |
-| `input_summary` | Feltkode og antall tegn (jsonb). Aldri tekst |
-| `outcome` | **Utfallet av kallet:** `ok`, `no_match` (ingen treff), `error` (feil) |
+| `input_summary` | Feltkode og antall tegn (jsonb), regnet av den vaskede teksten som faktisk ble sendt. Aldri tekst |
+| `outcome` | **Utfallet av kallet:** `ok`, `no_match` (ingen treff), `error` (feil), `blocked` (sperret: forespørselen kunne ikke sendes til denne leverandøren, for eksempel fritekst uten oppdrag eller prøvemålet mot en ekte leverandør; leverandøren kalles ikke). «KI er av» gir ingen rad og er ikke `blocked` |
+| `redacted_count` | **Antall vaskede treff** i teksten som ble sendt (heltall, ikke tom, standard 0, aldri negativ). Bare summen, aldri verdiene eller hvilke ord. 0 ved `blocked`. Vises eller telles aldri per ansatt (spørsmål 57) |
 | `error_code` | Fast kode ved feil: `timeout`, `rate_limited`, `unavailable`, `rejected`, `unknown`. Bare når utfallet er `error`. Aldri leverandørens melding |
 | `output_text` | Forslaget KI laget. Tom når utfallet ikke er `ok` |
 | `status` | **Hva den ansatte gjorde:** `suggested` (foreslått), `accepted` (godtatt), `edited` (endret og godtatt), `rejected` (avvist). Tom når utfallet ikke er `ok`. Erstatter `decision` fra første utkast |
@@ -1654,11 +1655,13 @@ Tekst logges ikke per tastetrykk, men slik den var når endringen kom fram til s
 | `cost`, `currency` | **Kostnad per kall.** `cost` er `numeric(12,4)`, aldri flyttall; `currency` er `NOK`. Gjør at KI-bruk kan måles per rapport. 0 med `fake` |
 | `retain_until` | Oppbevares til. Påkrevd, settes av tjenesten til opprettet + 10 år |
 
-Sammensatte fremmednøkler med `organization_id` til `employees` (både `employee_id` og `decided_by`) og `assignments`; til `reports` når den tabellen bygges (A158). Sjekker i databasen: `status` er satt når utfallet er `ok`, og `status` og `output_text` er tomme ellers; `error_code` bare ved `error`; mengde og kostnad er ikke negative. Tabellen regnes som personopplysninger (`output_text` kan inneholde noe som slapp gjennom vasken): myk sletting og 10 år. **Angre** setter raden tilbake til `suggested` og tømmer `ai_usage_id` på feltet; hver statusendring står i revisjonsloggen.
+Sammensatte fremmednøkler med `organization_id` til `employees` (både `employee_id` og `decided_by`) og `assignments`; til `reports` når den tabellen bygges (A158). Sjekker i databasen: `status` er satt når utfallet er `ok`, og `status` og `output_text` er tomme ellers; `error_code` bare ved `error` (tom ved `blocked`); mengde, kostnad og `redacted_count` er ikke negative. Tabellen regnes som personopplysninger (`output_text` kan inneholde noe som slapp gjennom vasken): myk sletting og 10 år. **Angre** setter raden tilbake til `suggested` og tømmer `ai_usage_id` på feltet; hver statusendring står i revisjonsloggen.
 
 KI setter aldri TG, publiserer aldri og sender aldri noe selv (beslutning 24.10, ADR 0006). TG-forslag kommer bare fra regelmotoren. En tekst fra KI kommer bare inn i rapporten når takstmannen godtar den, og en rapport kan ikke publiseres med en `ai_usage_id` som ikke har status `accepted` eller `edited`. Navn, e-post, telefon, adresse og matrikkel sendes aldri til KI: hver funksjon har en tillatt-liste over felt, og fritekst vaskes (ADR 0006 del 6). Fritekst uten oppdrag (e-post til ordreforslag) kan ikke vaskes for navn og adresse og går bare til den falske leverandøren til Ståle har svart (spørsmål 58). KI av/på er nøkkelen `ai.enabled` i `organizations.settings`, standard av.
 
 **Bygget i fase 2a (10.11.2026, KI-modulen og loggen):** tabellen `ai_usage_log` (migrering `0025_ki_logg`, `src/db/schema/ai-usage-log.ts`) og kjernemodulen `src/core/ai` med `requestSuggestion(grant, request)` og `recordDecision(grant, usageId, decision)`. Begge tar `EmployeeGrant` fra tilgangssjekken. Én funksjon er definert: `language_polish` (rettighet `report.edit`, tillatt-liste `text`, mål `answer`/`text`, ledetekst `language_polish.v1`, ledetekstene står i `src/core/ai/features.ts`). Bare den falske leverandøren `fake` (modell `fake-v1`) finnes. Leverandøren kommer bare fra en aktiv tilkobling på porten `ai` i `integration_connections`, aldri fra miljøvariabler (A160). Nøkkelen `ai.enabled` er flat, som `access.inspectors_edit_all`. `pnpm db:seed:testoppdrag` slår på KI med `fake` bare i prøveorganisasjonen; `pnpm db:seed` rører ikke KI. Hver avgjørelse og hvert angre står i revisjonsloggen med bare gammel og ny status. Vask, evalueringssett, KI-kø, kandidater og `answers.ai_usage_id` venter. Oppgavekort: `docs/funksjoner/fase2a-ki-modul-logg.md`; beslutningene A158–A164.
+
+**Vask før KI (fase 2a-1, 11.11.2026):** migrering `0027_ki-vask` gir kolonnen `redacted_count` og utfallet `blocked`. `requestSuggestion` vasker alle tekstverdier rett før leverandørkallet, med de felles mønstrene i `src/shared/lib/pii-patterns.ts` og oppdragets kjente verdier som `src/core/ai` henter selv i organisasjonen. Hver feltkode på en tillatt-liste har en kilde (`tabell.kolonne` eller fritekst), og en test stopper kilder fra «aldri»-listen (ADR 0006 del 6). Oppgavekort: `docs/funksjoner/fase2a-vask-for-ki.md`; beslutningene A169–A178.
 
 **`files`** – alle filer (bilder, PDF-er, dokumenter, logoer, signaturer).
 
@@ -2206,7 +2209,10 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Logg over KI-bruk | `ai_usage_log` | Én rad per kall til KI, med forslaget og hva den ansatte gjorde (ADR 0006) |
 | Forslag (KI) | `ai_usage_log.output_text`, `AiSuggestionStatus` | Tekst KI har laget, som den ansatte godtar, endrer eller avviser. Ligger aldri i feltet før det er godtatt |
 | Foreslått / godtatt / endret / avvist | `suggested` / `accepted` / `edited` / `rejected` | Status på et forslag (`ai_usage_log.status`) |
-| Utfall (KI-kall) | `ai_usage_log.outcome` | `ok`, `no_match` (ingen treff), `error` (feil). Ikke en status |
+| Utfall (KI-kall) | `ai_usage_log.outcome` | `ok`, `no_match` (ingen treff), `error` (feil), `blocked` (sperret). Ikke en status |
+| Sperret (KI-kall) | `blocked` | Utfall når forespørselen ikke kan sendes til leverandøren (for eksempel fritekst uten oppdrag mot ekte leverandør). Gir rad uten kall. Ikke det samme som «KI er av», som ikke gir rad |
+| Vask (før KI) | redaction | Navn, e-post, telefon, adresse, matrikkel, fødselsnummer, organisasjonsnummer og kontonummer byttes med faste merker (`[navn]` o.l.) før tekst sendes til KI. Skjer bare på serveren i `src/core/ai` |
+| Antall vaskede treff | `ai_usage_log.redacted_count` | Summen av treff vasken byttet ut i ett kall. Aldri verdiene |
 | KI-funksjon | `feature` (`AiFeatureCode`) | Fast kode for én bruk av KI, for eksempel `language_polish` (språkvask) |
 | Språkvask | `language_polish` | Første KI-funksjon: retter språket i en kort tekst uten å endre fakta. Rettighet `report.edit`, tillatt-liste `text` |
 | Be om KI-forslag | `requestSuggestion` (`@/core/ai`) | Den ene veien inn til KI. Tar `EmployeeGrant`, sjekker funksjon, tillatt-liste og mål, kaller leverandøren og skriver én rad i `ai_usage_log` |
