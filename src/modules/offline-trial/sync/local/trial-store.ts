@@ -4,7 +4,9 @@
  * Lokal kjerne: `TrialSyncStore` over én lokal database (`LocalDb`) og en leser
  * (`LocalTrialReader`) (docs/funksjoner/fase1-kandidat-egenbygd.md, forarbeid pkt. 1).
  * - Skriving: lokalt først i `synced_*` og i `outbox` i samme transaksjon. Buntene sendes i
- *   `seq`-rekkefølge til `POST /api/prove/synk/endringer` og tas ut av køen bare ved 200.
+ *   `seq`-rekkefølge til `POST /api/prove/synk/endringer` og tas ut av køen bare ved 200. Ved 400
+ *   legges endringen serveren peker på, til side (merke på oppføringen, slettes aldri), og resten
+ *   sendes med en gang (funn T-0001).
  * - Lesing: leseren henter rader og gir dem til `mergeIncoming`, som fletter dem inn med
  *   `applyIncoming` og skriver synkposisjonen i samme transaksjon, aldri før radene.
  * - Henting blokkerer aldri skriving; skrivingene går i kø etter hverandre (`serial`).
@@ -43,14 +45,18 @@ import { ANSWER_FORM_FIELD_INDEX, PHOTO_FORM_INDEX, requestResult } from "./idb"
 import { normalizeLocalRow } from "./normalize-row";
 import {
   ackBatch,
+  changedEntries,
   createOutboxState,
   enqueue,
   keepBatch,
   localRowKey,
   MAX_OPERATIONS_PER_BATCH,
   outboxBatchBody,
+  pendingCount,
   pendingKeys as outboxPendingKeys,
   retryDelayMs,
+  setAsideFields,
+  setAsideFromRejection,
   shouldAckBatch,
   takeBatch,
 } from "./outbox";
@@ -328,6 +334,7 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
             (entry) =>
               entry.table === table &&
               entry.id === built.id &&
+              !entry.setAside &&
               !(next.inFlight ?? []).includes(entry.seq),
           );
           await requestResult(tx.objectStore(db.syncedStoreOf(table)).put(built));
@@ -505,6 +512,7 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
       });
       if (!taken) return true;
       let status: number | undefined;
+      let body: unknown = null;
       try {
         const response = await fetch(CHANGES_ROUTE, {
           method: "POST",
@@ -513,26 +521,51 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
           body: JSON.stringify(outboxBatchBody(organizationId, taken.batch)),
         });
         status = response.status;
+        if (status === 400) body = await readJson(response);
       } catch {
         status = undefined;
       }
       if (shouldAckBatch(status)) {
         await serial(async () => {
           const sent = outbox.inFlight ?? [];
+          const next = ackBatch(outbox);
+          // Oppføringer lagt til side som nå er løst, skrives med merket. De slettes aldri.
+          const resolved = changedEntries(outbox, next);
           await db.inTransaction([LOCAL_OUTBOX_STORE], "readwrite", async (tx) => {
             const objectStore = tx.objectStore(LOCAL_OUTBOX_STORE);
             for (const seq of sent) await requestResult(objectStore.delete(seq));
+            for (const entry of resolved) await requestResult(objectStore.put(entry));
           });
           const now = Date.now();
           for (const entry of taken.batch) {
             confirmed.set(localRowKey(entry.table, { ...entry.data, id: entry.id }), now);
           }
-          outbox = ackBatch(outbox);
+          outbox = next;
         });
         sendAttempt = 0;
         sendFailed = false;
         notify({ status: true });
         for (const listener of ackListeners) listener();
+        continue;
+      }
+      // 400 for én endring: den legges til side (merket lagres), resten sendes med en gang.
+      const setAside = await serial(async () => {
+        const next = setAsideFromRejection(outbox, status, body, new Date().toISOString());
+        if (!next) return 0;
+        const marked = changedEntries(outbox, next);
+        await db.inTransaction([LOCAL_OUTBOX_STORE], "readwrite", async (tx) => {
+          const objectStore = tx.objectStore(LOCAL_OUTBOX_STORE);
+          for (const entry of marked) await requestResult(objectStore.put(entry));
+        });
+        outbox = next;
+        return marked.length;
+      });
+      if (setAside > 0) {
+        // Bare status og antall i loggen, aldri innholdet eller feltet.
+        console.warn(
+          `Synk: serveren svarte ${status} på ${taken.batch.length} endringer. ${setAside} er lagt til side.`,
+        );
+        notify({ status: true });
         continue;
       }
       await serial(async () => {
@@ -827,7 +860,8 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
       return {
         online: isOnline(),
         serverConfirmed: !sendFailed && !contactLost && reader.serverConfirmed(),
-        pendingChanges: outbox.entries.length,
+        pendingChanges: pendingCount(outbox),
+        setAside: setAsideFields(outbox),
         pendingPhotos: photos.length,
       };
     },
@@ -866,6 +900,15 @@ export const createLocalTrialStore: CreateLocalTrialStore = async ({
     readRows,
   };
 };
+
+/** Kroppen som JSON, eller `null` når den ikke kan leses (tåler ugyldig JSON). */
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return (await response.json()) as unknown;
+  } catch {
+    return null;
+  }
+}
 
 /** Bare feilmeldingen til loggen, aldri hele feilobjektet (kan bære tekst fra skjemaet). */
 function errorText(error: unknown): string {

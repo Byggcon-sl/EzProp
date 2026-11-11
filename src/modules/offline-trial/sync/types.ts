@@ -84,6 +84,18 @@ export interface TrialSyncStatus {
   pendingChanges: number;
   /** Bilder på denne enheten uten `uploadedAt`. */
   pendingPhotos: number;
+  /**
+   * Endringer serveren avviste med 400, lagt til side og ikke løst (funn T-0001). Teller ikke i
+   * `pendingChanges`. Statuslinjen viser «Kunne ikke sendes: <feltnavn>». `fieldKey` er null for
+   * `trial_forms`. Mangler når lageret ikke kjenner til slike.
+   */
+  setAside?: readonly SetAsideField[];
+}
+
+/** Ett felt med en endring som er lagt til side (`OutboxEntry.setAside`). */
+export interface SetAsideField {
+  table: TrialTableName;
+  fieldKey: string | null;
 }
 
 /** Utfallet av én runde fra «Synk nå». */
@@ -265,6 +277,12 @@ export interface OutboxEntry {
   id: string;
   /** Kolonner i snake_case, `value` som JSON-tekst. Serverstyrte kolonner er aldri med. */
   data: LocalRow;
+  /**
+   * Lagt til side (set aside, funn T-0001): serveren svarte 400 på denne endringen. Den sendes
+   * aldri igjen, teller ikke som ventende og slettes aldri. `resolved` settes når en senere endring
+   * i samme felt (`LocalRowKey`) er kvittert med 200.
+   */
+  setAside?: { at: string; resolved?: boolean };
 }
 
 /** Køens tilstand som ren verdi. Lagres i objektlageret `outbox` (`seq` → operasjon) og `nextSeq` i tilstandslageret (`sync_state`, raden `outbox_next_seq`). */
@@ -282,9 +300,12 @@ export interface OutboxState {
  *   operasjon til med nytt `seq`, så et svar på den gamle bunten aldri fjerner den nye endringen.
  * - `takeBatch`: de første `limit` operasjonene i `seq`-rekkefølge som ikke er underveis
  *   (`TRIAL_SYNC_LIMITS.maxOperationsPerBatch`). Gir null når køen er tom eller en bunt er underveis.
- * - `ackBatch`: **bare ved 200.** Fjerner bunten som var underveis.
+ * - `ackBatch`: **bare ved 200.** Fjerner bunten som var underveis, og merker oppføringer lagt til
+ *   side i samme felt (`localRowKey`) som løst (`setAside.resolved`). De slettes aldri.
  * - `keepBatch`: alt annet (4xx, 5xx, avbrutt, uten nett). Bunten blir liggende og `inFlight` nullstilles.
- *   Avviste bunter (400/409) blir liggende som i PR #8 (kjent svakhet).
+ * - Ved 400 legges endringen serveren peker på, til side (`setAsideFromRejection` i
+ *   `sync/local/outbox.ts`), og resten sendes på nytt med en gang (funn T-0001). Oppføringer lagt
+ *   til side tas aldri med i en bunt og flettes aldri inn i.
  */
 export interface OutboxMachine {
   enqueue(state: OutboxState, entry: Omit<OutboxEntry, "seq">): OutboxState;
@@ -294,7 +315,7 @@ export interface OutboxMachine {
   ): { state: OutboxState; batch: readonly OutboxEntry[] } | null;
   ackBatch(state: OutboxState): OutboxState;
   keepBatch(state: OutboxState): OutboxState;
-  /** Nøklene (`LocalRowKey`) som venter i køen, også de underveis. */
+  /** Nøklene (`LocalRowKey`) som venter i køen, også de underveis og de lagt til side som ikke er løst. */
   pendingKeys(state: OutboxState, keyOf: LocalRowKey): Set<string>;
 }
 
