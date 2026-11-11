@@ -723,3 +723,366 @@ describe("applyTrialChanges med tegn og verdier databasen ikke tar", () => {
     await expect(applyTrialChanges(actor, organizationId, [formOp(formId)])).rejects.toBe(unique);
   });
 });
+
+// --- Funn T-0001: tegn databasen ikke tar, og en endring som ikke kan lagres. Testplan
+// docs/agenter/oppgaver/rett-t0001-synkko-testplan.md avsnitt 2a (test 41–52). Mot testdatabasen.
+// Den giftige teksten bygges her. Alle data er oppdiktet.
+// Støtter hovedmål: de ansatte (svarene fra iPaden kommer fram selv om ett felt har et usynlig
+// tegn) og færre reklamasjoner (rapporten får ikke hull).
+
+const NUL = "\u0000";
+const POISON_TEXT = `Fukt${NUL} i kjeller`;
+const CLEAN_TEXT = "Fukt i kjeller";
+const TOO_BIG = 3_000_000_000;
+
+/** Ingen U+0000 og ingen ensomme surrogater noe sted i verdien (også i jsonb). */
+function expectStorable(value: unknown, label = "verdi") {
+  const json = JSON.stringify(value) ?? "";
+  expect(json, label).not.toContain("\\u0000");
+  // JSON.stringify skriver ensomme surrogater som \udxxx; gyldige par skrives som tegnet selv
+  expect(json, label).not.toMatch(/\\ud[89a-f][0-9a-f]{2}/i);
+  if (typeof value === "string") {
+    expect(value.includes(NUL), label).toBe(false);
+    expect(value.isWellFormed(), label).toBe(true);
+  }
+}
+
+/**
+ * Endringen feilen peker på: et objekt med `id`, `table` og `field_key` blant feilens egne
+ * egenskaper (navnet på egenskapen er ikke låst i kortet). Null når feilen ikke peker på noe.
+ */
+function changeCarriedBy(error: unknown): Record<string, unknown> | null {
+  if (error === null || typeof error !== "object") return null;
+  const candidates: unknown[] = [error, ...Object.values(error as Record<string, unknown>)];
+  for (const candidate of candidates) {
+    if (candidate === null || typeof candidate !== "object") continue;
+    const record = candidate as Record<string, unknown>;
+    if ("id" in record && "table" in record && ("field_key" in record || "fieldKey" in record)) {
+      return {
+        id: record.id,
+        table: record.table,
+        field_key: "field_key" in record ? record.field_key : record.fieldKey,
+      };
+    }
+  }
+  return null;
+}
+
+async function capture(call: () => Promise<unknown>): Promise<unknown> {
+  try {
+    await call();
+  } catch (error) {
+    return error;
+  }
+  throw new Error("kallet skulle gitt feil, men gikk gjennom");
+}
+
+async function softDeletedCount(): Promise<number> {
+  const rows = [
+    ...(await db.select({ d: trialForms.deletedAt }).from(trialForms)),
+    ...(await db.select({ d: trialAnswers.deletedAt }).from(trialAnswers)),
+    ...(await db.select({ d: trialPhotos.deletedAt }).from(trialPhotos)),
+  ];
+  return rows.filter((row) => row.d !== null).length;
+}
+
+/** Bunten fra funnet: giftig tekst i Generell beskrivelse først, så byggeår og samlet kommentar. */
+function poisonBatch(formId: string) {
+  const textState = applyTextEdit(createTextState(""), POISON_TEXT);
+  return {
+    textState,
+    operations: [
+      answerOp(formId, "general_description", POISON_TEXT, { text_state: textState }),
+      answerOp(formId, "building_year", 1985),
+      answerOp(formId, "summary", "Oppdiktet samlet kommentar"),
+    ],
+  };
+}
+
+describe("applyTrialChanges: tegn databasen ikke tar (T-0001)", () => {
+  it("41 nulltegn i Generell beskrivelse først i bunten gir tre lagrede svar uten nulltegn", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+    const { operations } = poisonBatch(formId);
+
+    await expect(applyTrialChanges(actor, organizationId, operations)).resolves.toEqual({
+      applied: 3,
+    });
+
+    const rows = await answerRows(formId);
+    expect(rows).toHaveLength(3);
+    for (const row of rows) expectStorable(row.value, row.fieldKey);
+    const byKey = new Map(rows.map((row) => [row.fieldKey, row.value]));
+    expect(byKey.get("general_description")).toBe(CLEAN_TEXT);
+    expect(byKey.get("building_year")).toBe(1985);
+    expect(byKey.get("summary")).toBe("Oppdiktet samlet kommentar");
+  });
+
+  it("42 ensomt surrogat i tekst og i jsonb-verdi fjernes", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+    const tableValue = [
+      {
+        id: "0190a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2c",
+        cells: { location: "Kjeller\uD800 nord", value: 12, note: `Merk${NUL}` },
+      },
+    ];
+
+    await applyTrialChanges(actor, organizationId, [
+      answerOp(formId, "roof_description", "a\uD800b"),
+      answerOp(formId, "drill_measurements", tableValue),
+    ]);
+
+    const [roof] = await answerRows(formId, "roof_description");
+    expect(roof!.value).toBe("ab");
+    const [drill] = await answerRows(formId, "drill_measurements");
+    expectStorable(drill!.value, "drill_measurements");
+    expect(drill!.value).toEqual([
+      {
+        id: "0190a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2c",
+        cells: { location: "Kjeller nord", value: 12, note: "Merk" },
+      },
+    ]);
+  });
+
+  it("43 text_state lagres urørt og kan flettes etterpå", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+    const { textState, operations } = poisonBatch(formId);
+    await applyTrialChanges(actor, organizationId, operations);
+
+    const [stored] = await answerRows(formId, "general_description");
+    expect(stored!.textState).toBe(textState);
+
+    // En annen enhet skriver videre på samme tilstand
+    const next = applyTextEdit(textState, `${POISON_TEXT}, tørr nå`);
+    const merged = mergeTextStates(stored!.textState!, next);
+    expect(textOf(merged)).toBe(`${POISON_TEXT}, tørr nå`);
+
+    await applyTrialChanges(actor, organizationId, [
+      answerOp(formId, "general_description", `${POISON_TEXT}, tørr nå`, {
+        text_state: next,
+        device_id: "enhet-2",
+      }),
+    ]);
+    const rows = await answerRows(formId, "general_description");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.value).toBe(`${CLEAN_TEXT}, tørr nå`);
+    expectStorable(rows[0]!.value);
+    expect(textOf(rows[0]!.textState!)).toBe(`${POISON_TEXT}, tørr nå`);
+  });
+
+  it("44 id, trial_form_id, field_key og text_state vaskes ikke", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+
+    // field_key med nulltegn: ukjent felt, ikke stille vasket til «summary»
+    await expect(
+      applyTrialChanges(actor, organizationId, [answerOp(formId, `summary${NUL}`, "Oppdiktet")]),
+    ).rejects.toThrow(InvalidTrialChangeError);
+    // id med nulltegn
+    await expect(
+      applyTrialChanges(actor, organizationId, [
+        answerOp(formId, "summary", "Oppdiktet", {}, `${uuidv7()}${NUL}`),
+      ]),
+    ).rejects.toThrow(InvalidTrialChangeError);
+    // trial_form_id med nulltegn
+    await expect(
+      applyTrialChanges(actor, organizationId, [
+        answerOp(formId, "summary", "Oppdiktet", { trial_form_id: `${formId}${NUL}` }),
+      ]),
+    ).rejects.toThrow(InvalidTrialChangeError);
+    // Bilde med field_key med nulltegn
+    await expect(
+      applyTrialChanges(actor, organizationId, [photoOp(formId, `cover_photo${NUL}`)]),
+    ).rejects.toThrow(InvalidTrialChangeError);
+
+    expect(await answerRows(formId)).toHaveLength(0);
+    expect(await countRows(organizationId)).toEqual({ forms: 1, answers: 0, photos: 0 });
+  });
+
+  it("45 verdi databasen ikke tar gir feil som peker på endringen", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+    const photoId = uuidv7();
+
+    const error = await capture(() =>
+      applyTrialChanges(actor, organizationId, [
+        photoOp(formId, "cover_photo", { size_bytes: TOO_BIG }, photoId),
+      ]),
+    );
+
+    expect(changeCarriedBy(error)).toEqual({
+      id: photoId,
+      table: "trial_photos",
+      field_key: "cover_photo",
+    });
+    // Feilen bærer ikke verdien eller teksten fra bunten i meldingen
+    expect(String((error as Error).message)).not.toContain(String(TOO_BIG));
+  });
+
+  it("46 én transaksjon: etter feil er ingen av de gode endringene lagret", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+    const before = await countRows(organizationId);
+
+    await capture(() =>
+      applyTrialChanges(actor, organizationId, [
+        answerOp(formId, "building_year", 1985),
+        answerOp(formId, "summary", "Oppdiktet samlet kommentar"),
+        photoOp(formId, "cover_photo", { size_bytes: TOO_BIG }),
+      ]),
+    );
+
+    expect(await countRows(organizationId)).toEqual(before);
+    expect(await answerRows(formId)).toHaveLength(0);
+  });
+
+  it("47 sendt på nytt uten den giftige blir alle lagret", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+    const good = [
+      answerOp(formId, "building_year", 1985),
+      answerOp(formId, "summary", "Oppdiktet samlet kommentar"),
+    ];
+    await capture(() =>
+      applyTrialChanges(actor, organizationId, [
+        ...good,
+        photoOp(formId, "cover_photo", { size_bytes: TOO_BIG }),
+      ]),
+    );
+
+    await expect(applyTrialChanges(actor, organizationId, good)).resolves.toEqual({ applied: 2 });
+    expect(await answerRows(formId)).toHaveLength(2);
+  });
+
+  it("48 fremmed organisasjon gir AccessDeniedError også med giftig innhold", async () => {
+    const a = await setupOrganization("admin", "Organisasjon A");
+    const b = await setupOrganization("admin", "Organisasjon B");
+    const formId = uuidv7();
+
+    await expect(
+      applyTrialChanges(b.actor, a.organizationId, [
+        formOp(formId, { name: `Skjema${NUL}` }),
+        answerOp(formId, "general_description", POISON_TEXT),
+        answerOp(formId, `ukjent${NUL}`, POISON_TEXT),
+        photoOp(formId, "cover_photo", { size_bytes: TOO_BIG }),
+      ]),
+    ).rejects.toThrow(AccessDeniedError);
+    // Også med en bunt som ikke en gang er en liste
+    await expect(
+      applyTrialChanges(
+        b.actor,
+        a.organizationId,
+        POISON_TEXT as unknown as TrialChangeOperation[],
+      ),
+    ).rejects.toThrow(AccessDeniedError);
+    expect(await countRows()).toEqual({ forms: 0, answers: 0, photos: 0 });
+  });
+
+  it("49 admin kan synke tekst med nulltegn", async () => {
+    const { actor, organizationId } = await setupOrganization("admin");
+    const formId = await putTrialForm(actor, organizationId);
+    const { operations } = poisonBatch(formId);
+
+    await expect(applyTrialChanges(actor, organizationId, operations)).resolves.toEqual({
+      applied: 3,
+    });
+    const [row] = await answerRows(formId, "general_description");
+    expect(row!.value).toBe(CLEAN_TEXT);
+  });
+
+  it.each(ALL_ROLES)("50 alle fire roller kan skrive vasket tekst (%s)", async (role) => {
+    const owner = await setupOrganization("admin");
+    const actor = await createUser({ name: `Oppdiktet ${role}` });
+    await createEmployee(actor, owner.organizationId, [role]);
+    const formId = uuidv7();
+
+    await expect(
+      applyTrialChanges(actor, owner.organizationId, [
+        formOp(formId),
+        answerOp(formId, "summary", `${role}${NUL} skrev dette`),
+      ]),
+    ).resolves.toEqual({ applied: 2 });
+    const [row] = await answerRows(formId, "summary");
+    expect(row!.value).toBe(`${role} skrev dette`);
+  });
+
+  it("51 logger aldri innholdet, heller ikke ved 400", async () => {
+    const MARKER = "GIFTIG-MARKØR-5150";
+    const lines: string[] = [];
+    const capture = (...args: unknown[]) => {
+      lines.push(
+        args
+          .map((arg) =>
+            typeof arg === "string"
+              ? arg
+              : JSON.stringify(arg, (_k, v: unknown) =>
+                  v instanceof Error
+                    ? { message: v.message, stack: v.stack, cause: String(v.cause) }
+                    : v,
+                ),
+          )
+          .join(" "),
+      );
+    };
+    for (const method of ["log", "info", "warn", "error", "debug"] as const) {
+      vi.spyOn(console, method).mockImplementation(capture);
+    }
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation((chunk: unknown) => {
+      lines.push(String(chunk));
+      return true;
+    });
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation((chunk: unknown) => {
+      lines.push(String(chunk));
+      return true;
+    });
+
+    const { actor, organizationId } = await setupOrganization();
+    const formId = uuidv7();
+    try {
+      await applyTrialChanges(actor, organizationId, [
+        formOp(formId),
+        answerOp(formId, "general_description", `${MARKER}${NUL} tekst`),
+      ]);
+      // Avvist bunt (400): verken den giftige verdien eller resten av bunten i loggen
+      await applyTrialChanges(actor, organizationId, [
+        answerOp(formId, "summary", `${MARKER} resten av bunten`),
+        photoOp(formId, "cover_photo", { size_bytes: TOO_BIG, name: `${MARKER}.png` }),
+      ]).catch(() => undefined);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+
+    for (const line of lines) {
+      expect(line).not.toContain(MARKER);
+      expect(line).not.toContain(String(TOO_BIG));
+    }
+  });
+
+  it("52 myk sletting: ingenting slettes", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+    await applyTrialChanges(actor, organizationId, poisonBatch(formId).operations);
+    const before = await countRows();
+
+    await capture(() =>
+      applyTrialChanges(actor, organizationId, [
+        answerOp(formId, "summary", "Oppdiktet ny kommentar"),
+        photoOp(formId, "cover_photo", { size_bytes: TOO_BIG }),
+      ]),
+    );
+    await applyTrialChanges(actor, organizationId, [
+      answerOp(formId, "summary", `Oppdiktet ny kommentar${NUL}`),
+      answerOp(formId, "floors", 2),
+    ]);
+
+    const after = await countRows();
+    expect(after.forms).toBeGreaterThanOrEqual(before.forms);
+    expect(after.answers).toBeGreaterThanOrEqual(before.answers);
+    expect(after.photos).toBeGreaterThanOrEqual(before.photos);
+    expect(after.answers).toBe(before.answers + 1);
+    expect(await softDeletedCount()).toBe(0);
+  });
+});

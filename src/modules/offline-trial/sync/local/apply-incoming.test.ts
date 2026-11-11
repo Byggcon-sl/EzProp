@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { applyTextEdit, createTextState, mergeTextStates, textOf } from "../../text-merge";
-import type { IncomingChange, LocalRow } from "../types";
+import type { IncomingChange, LocalRow, OutboxEntry } from "../types";
 import { applyIncoming } from "./apply-incoming";
-import { localRowKey } from "./outbox";
+import { createOutboxState, localRowKey, pendingKeys } from "./outbox";
 
 // Innfletting av nedlastede rader (docs/funksjoner/fase1-kandidat-electricsql.md avgjørelse D og
 // «Avgjørelser før bygging» 2). Testplan avsnitt 2.2. Ren funksjon: ingen IndexedDB, ingen DOM.
@@ -305,5 +305,37 @@ describe("applyIncoming (apply-incoming.ts)", () => {
       value: JSON.stringify(3),
       device_id: "annen-enhet",
     });
+  });
+});
+
+// Funn T-0001 (testplan docs/agenter/oppgaver/rett-t0001-synkko-testplan.md avsnitt 1d, test 34).
+// Et felt med en endring som er lagt til side og ikke løst, er i pendingKeys. Serverens vaskede
+// svar skal da ikke overskrive det takstmannen skrev. Test 35 (ingen ny køoppføring) står i
+// trial-store.test.ts. Alle data er oppdiktet.
+describe("applyIncoming og lagt til side (T-0001)", () => {
+  it("34 serverens vaskede svar overskriver ikke felt som er lagt til side", () => {
+    const localText = "Fukt\u0000 i kjeller";
+    const local = answerRow("general_description", localText);
+    const entry = {
+      seq: 1,
+      op: "PUT",
+      table: "trial_answers",
+      id: LOCAL_ID,
+      data: { trial_form_id: FORM, field_key: "general_description", value: local.value },
+      setAside: { at: NOW },
+    } as OutboxEntry;
+    const state = createOutboxState([entry]);
+    const keys = pendingKeys(state, localRowKey);
+    expect(keys.has(keyOf(local))).toBe(true);
+
+    const fromServer = answerRow("general_description", "Fukt i kjeller", {
+      id: SERVER_ID,
+      updated_at: LATER,
+      device_id: "enhet-1",
+    });
+    const result = applyIncoming("trial_answers", [local], [change("update", fromServer)], keys);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]!.value).toBe(JSON.stringify(localText));
+    expect(result.skippedKeys).toContain(keyOf(local));
   });
 });

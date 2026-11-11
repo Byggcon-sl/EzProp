@@ -586,3 +586,323 @@ describe("avvist endring legges til side (funn T-0001)", () => {
     expect(rows.find((row) => row.id === ANSWER)!.value).toBe(POISON.data.value);
   });
 });
+
+// --- Funn T-0001: én endring som ikke kan lagres, stopper ikke resten av køen. Testplan
+// docs/agenter/oppgaver/rett-t0001-synkko-testplan.md avsnitt 1c og 1d (test 16–24, 27, 30, 33
+// og 35). Testene går gjennom lageret, så de bruker samme køfunksjon som trial-store.ts kaller.
+// Merket på oppføringen er `setAside?: { at: string; resolved?: boolean }` (oppgavekortet, Data).
+// Alle data er oppdiktet.
+// Støtter hovedmål: de ansatte (takstmannen mister ikke arbeid fra iPaden) og færre reklamasjoner
+// (svarene kommer fram, så rapporten får ikke hull).
+
+describe("lagt til side ved 400 (T-0001)", () => {
+  const ID_TEXT = "0192d3a0-0000-7000-8000-0000000000c1";
+  const ID_YEAR = "0192d3a0-0000-7000-8000-0000000000c2";
+  const ID_SUMMARY = "0192d3a0-0000-7000-8000-0000000000c3";
+
+  type SetAside = { at: string; resolved?: boolean };
+  type StoredEntry = OutboxEntry & { setAside?: SetAside };
+
+  function answer(seq: number, id: string, fieldKey: string, value: unknown): StoredEntry {
+    return {
+      seq,
+      op: "PUT",
+      table: "trial_answers",
+      id,
+      data: {
+        trial_form_id: FORM,
+        field_key: fieldKey,
+        value: JSON.stringify(value),
+        text_state: null,
+        device_id: "enhet-1",
+        created_at: NOW,
+        updated_at: NOW,
+      },
+    };
+  }
+
+  /** Giftig tekst først, så byggeår og samlet kommentar (som i funnet). */
+  const TEXT = answer(1, ID_TEXT, "general_description", "Fukt\u0000 i kjeller");
+  const YEAR = answer(2, ID_YEAR, "building_year", 1985);
+  const SUMMARY = answer(3, ID_SUMMARY, "summary", "Oppdiktet samlet kommentar");
+  const THREE = [TEXT, YEAR, SUMMARY];
+
+  /** 400 med `endring` som peker på oppføringen (eller uten `endring`). */
+  function rejected(entry?: OutboxEntry, status = 400): Response {
+    const body = entry
+      ? {
+          feil: "Endringen kunne ikke lagres. Noe i den er ugyldig.",
+          endring: { id: entry.id, table: entry.table, field_key: entry.data.field_key ?? null },
+        }
+      : { feil: "Endringen kunne ikke lagres. Noe i den er ugyldig." };
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  /** Svarer etter tur; siste svar gjentas. Nytt `Response` hver gang (kroppen leses én gang). */
+  function respond(...answers: (() => Response)[]) {
+    let call = 0;
+    fetchMock.mockImplementation(async () => {
+      const make = answers[Math.min(call, answers.length - 1)]!;
+      call++;
+      return make();
+    });
+  }
+
+  /** Id-ene i bunten fetch fikk i kall nummer `index`. */
+  function sentIds(index: number): string[] {
+    const init = fetchMock.mock.calls[index]?.[1];
+    const body = JSON.parse(String(init?.body)) as { operations: { id: string }[] };
+    return body.operations.map((operation) => operation.id);
+  }
+
+  async function queue(): Promise<StoredEntry[]> {
+    return (await storedQueue()) as unknown as StoredEntry[];
+  }
+
+  function expectSetAside(entry: StoredEntry | undefined) {
+    expect(entry, "oppføringen ligger i køen").toBeDefined();
+    expect(entry!.setAside, `seq ${entry!.seq} er lagt til side`).toBeDefined();
+    expect(typeof entry!.setAside!.at).toBe("string");
+    expect(Number.isNaN(new Date(entry!.setAside!.at).getTime())).toBe(false);
+    expect(entry!.setAside!.resolved).toBeFalsy();
+  }
+
+  beforeEach(() => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.stubGlobal("IDBKeyRange", { bound: (lower: [string, string]) => ({ formId: lower[0] }) });
+  });
+
+  it.each<[string, OutboxEntry, string[]]>([
+    ["16 giftig endring først", TEXT, [ID_YEAR, ID_SUMMARY]],
+    ["17 giftig endring i midten", YEAR, [ID_TEXT, ID_SUMMARY]],
+    ["18 giftig endring sist", SUMMARY, [ID_TEXT, ID_YEAR]],
+  ])("%s: legges til side, resten sendes med en gang og kvitteres", async (_name, poison, rest) => {
+    respond(
+      () => rejected(poison),
+      () => response(200),
+    );
+    await open(true, THREE);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sentIds(0)).toEqual([ID_TEXT, ID_YEAR, ID_SUMMARY]);
+    expect(sentIds(1)).toEqual(rest);
+
+    const left = await queue();
+    expect(left.map((entry) => entry.seq)).toEqual([poison.seq]);
+    expectSetAside(left[0]);
+    expect(left[0]!.data).toEqual(poison.data);
+    // Ingen nye forsøk for den som er lagt til side
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("19 alle køoppføringer med samme table+id i bunten legges til side", async () => {
+    // To oppføringer for samme rad (den andre ble laget mens den første var underveis)
+    const again = { ...answer(2, ID_TEXT, "general_description", "Fukt\u0000 i kjelleren") };
+    const year = { ...YEAR, seq: 3 };
+    respond(
+      () => rejected(TEXT),
+      () => response(200),
+    );
+    await open(true, [TEXT, again, year]);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sentIds(1)).toEqual([ID_YEAR]);
+    const left = await queue();
+    expect(left.map((entry) => entry.seq)).toEqual([1, 2]);
+    for (const entry of left) expectSetAside(entry);
+  });
+
+  it("20 400 uten endring og bunt med én endring: legges til side", async () => {
+    respond(() => rejected());
+    await open(true, [TEXT]);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const left = await queue();
+    expect(left).toHaveLength(1);
+    expectSetAside(left[0]);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("21 400 uten endring og flere i bunten: nytt forsøk, ingenting lagt til side", async () => {
+    respond(() => rejected());
+    await open(true, THREE);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const left = await queue();
+    expect(left).toEqual(THREE);
+    for (const entry of left) expect(entry.setAside).toBeUndefined();
+    // Nytt forsøk etter ventetiden, med hele bunten
+    await vi.advanceTimersByTimeAsync(retryDelayMs(0) + 1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sentIds(1)).toEqual([ID_TEXT, ID_YEAR, ID_SUMMARY]);
+    expect((await queue()).every((entry) => entry.setAside === undefined)).toBe(true);
+  });
+
+  it("22 400 med endring som ikke finnes i bunten: nytt forsøk", async () => {
+    const stranger = answer(9, "0192d3a0-0000-7000-8000-0000000000ff", "floors", 2);
+    respond(() => rejected(stranger));
+    await open(true, THREE);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(await queue()).toEqual(THREE);
+    await vi.advanceTimersByTimeAsync(retryDelayMs(0) + 1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(await queue()).toEqual(THREE);
+  });
+
+  it.each<[string, number | undefined]>([
+    ["401", 401],
+    ["403", 403],
+    ["409", 409],
+    ["413", 413],
+    ["500", 500],
+    ["503", 503],
+    ["nettfeil", undefined],
+  ])("23 %s gir nytt forsøk og legger ingenting til side", async (_name, status) => {
+    if (status === undefined) {
+      fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    } else {
+      // Kroppen peker på en endring, men bare 400 skal legge til side
+      respond(() => rejected(TEXT, status));
+    }
+    await open(true, THREE);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(await queue()).toEqual(THREE);
+    expect(await store!.syncNow()).toBe("failed");
+    expect(await queue()).toEqual(THREE);
+  });
+
+  it("24 lagt til side slettes aldri", async () => {
+    respond(
+      () => rejected(TEXT),
+      () => response(200),
+    );
+    await open(true, THREE);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Flere runder med 200 for andre endringer
+    for (const value of [3, 4, 5]) {
+      await store!.setAnswer(FORM, "floors", value);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(await store!.syncNow()).toBe("ok");
+    }
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(5);
+    const left = await queue();
+    expect(left.map((entry) => entry.seq)).toEqual([TEXT.seq]);
+    expectSetAside(left[0]);
+    expect(left[0]!.data).toEqual(TEXT.data);
+  });
+
+  it("27 ventetallet teller ikke lagt til side", async () => {
+    await open(false, [{ ...TEXT, setAside: { at: NOW } } as StoredEntry, YEAR, SUMMARY]);
+    expect((await store!.status()).pendingChanges).toBe(2);
+  });
+
+  it("27 ventetallet er 0 etter 400 for én og 200 for resten", async () => {
+    respond(
+      () => rejected(TEXT),
+      () => response(200),
+    );
+    await open(true, THREE);
+    await vi.advanceTimersByTimeAsync(0);
+    expect((await store!.status()).pendingChanges).toBe(0);
+    expect(await queue()).toHaveLength(1);
+  });
+
+  it("30 200 på senere endring i samme felt løser den gamle", async () => {
+    const old: StoredEntry = {
+      ...answer(1, ID_YEAR, "building_year", 1985),
+      setAside: { at: NOW },
+    };
+    const fresh = answer(2, ID_YEAR, "building_year", 1986);
+    respond(() => response(200));
+    await open(true, [old, fresh]);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sentIds(0)).toEqual([ID_YEAR]);
+    const body = JSON.parse(String(fetchMock.mock.calls[0]![1]!.body)) as {
+      operations: { data: { value: string } }[];
+    };
+    expect(body.operations[0]!.data.value).toBe(JSON.stringify(1986));
+    const left = await queue();
+    expect(left.map((entry) => entry.seq)).toEqual([1]);
+    expect(left[0]!.setAside).toMatchObject({ at: NOW, resolved: true });
+  });
+
+  it("31 200 på et annet felt løser ikke", async () => {
+    const old: StoredEntry = { ...TEXT, setAside: { at: NOW } };
+    respond(() => response(200));
+    await open(true, [old, YEAR]);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const left = await queue();
+    expect(left.map((entry) => entry.seq)).toEqual([1]);
+    expect(left[0]!.setAside?.resolved).toBeFalsy();
+  });
+
+  it("33 «Synk nå» regner køen som tømt når bare lagt-til-side-oppføringer står igjen", async () => {
+    respond(
+      () => rejected(TEXT),
+      () => response(200),
+    );
+    await open(true, THREE);
+
+    expect(await store!.syncNow()).toBe("ok");
+    expect(reader.syncNow).toHaveBeenCalled();
+    expect(await queue()).toHaveLength(1);
+
+    // Og på nytt, når bare den lagt til side ligger der
+    const calls = fetchMock.mock.calls.length;
+    expect(await store!.syncNow()).toBe("ok");
+    expect(fetchMock.mock.calls.length).toBe(calls);
+  });
+
+  it("33 «Synk nå» med bare lagt til side fra før gir ok uten å sende", async () => {
+    await open(true, [{ ...TEXT, setAside: { at: NOW } } as StoredEntry]);
+    expect(await store!.syncNow()).toBe("ok");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("35 hentet vasket svar lager ingen ny køoppføring", async () => {
+    await open(false, []);
+    const context = reader.start.mock.calls[0]![0];
+    await context.mergeIncoming(
+      "trial_answers",
+      [
+        {
+          table: "trial_answers",
+          kind: "insert",
+          key: `${FORM}:general_description`,
+          row: {
+            id: ID_TEXT,
+            trial_form_id: FORM,
+            field_key: "general_description",
+            value: JSON.stringify("Fukt i kjeller"),
+            text_state: null,
+            device_id: "enhet-1",
+            created_at: NOW,
+            updated_at: NOW,
+            deleted_at: null,
+          },
+        },
+      ],
+      null,
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await queue()).toEqual([]);
+    expect((await store!.status()).pendingChanges).toBe(0);
+  });
+});

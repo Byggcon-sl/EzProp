@@ -12,7 +12,9 @@ import {
   syncStatusText,
   type SyncStatusKind,
 } from "./sync-status-text";
-import type { TrialSyncStatus } from "./sync/types";
+import * as statusTextModule from "./sync-status-text";
+import type { OutboxEntry, TrialSyncStatus } from "./sync/types";
+import { listTrialFields, trialForm } from "./trial-form";
 
 // Tekstene og reglene bak synkstatusen (docs/funksjoner/fase1-synkstatus.md, «Regler»).
 // Testplan avsnitt 2.1. Reglene er data: tabellene under er testsakene. Alle tidspunkt er faste,
@@ -353,4 +355,102 @@ describe("lenken «Logg inn» (signInHref)", () => {
   });
   // At lenken og safeNextPath passer sammen, testes i src/app/logg-inn/safe-next-path.test.ts
   // (moduler importerer ikke fra app).
+});
+
+// --- Funn T-0001: «Kunne ikke sendes: <feltnavn>» (testplan
+// docs/agenter/oppgaver/rett-t0001-synkko-testplan.md avsnitt 1e, test 36–40). Feltnavnet hentes
+// fra skjemadefinisjonen. Funksjonen tar køoppføringene (med merket `setAside`) og gir meldingen,
+// eller null. Navnet er ikke låst i kortet; testen slår det opp ett sted (`SET_ASIDE_TEXT_NAME`),
+// så typesjekken er grønn også før koden finnes. Alle data er oppdiktet.
+
+type SetAsideEntry = OutboxEntry & { setAside?: { at: string; resolved?: boolean } };
+
+const SET_ASIDE_TEXT_NAME = "setAsideText";
+
+function setAsideText(entries: readonly SetAsideEntry[]): string | null {
+  const fn = (statusTextModule as unknown as Record<string, unknown>)[SET_ASIDE_TEXT_NAME];
+  if (typeof fn !== "function") {
+    throw new Error(`sync-status-text.ts mangler ${SET_ASIDE_TEXT_NAME}(entries)`);
+  }
+  return (fn as (entries: readonly SetAsideEntry[]) => string | null)(entries);
+}
+
+const T_FORM = "0192d3a0-0000-7000-8000-000000000001";
+const AT = "2026-11-11T09:00:00.000Z";
+
+function setAsideEntry(
+  seq: number,
+  table: SetAsideEntry["table"],
+  fieldKey: string | null,
+  resolved = false,
+): SetAsideEntry {
+  return {
+    seq,
+    op: "PUT",
+    table,
+    id: `0192d3a0-0000-7000-8000-0000000000${String(seq).padStart(2, "0")}`,
+    data:
+      table === "trial_forms"
+        ? { name: "Testskjema 1" }
+        : { trial_form_id: T_FORM, field_key: fieldKey, value: JSON.stringify("x") },
+    setAside: resolved ? { at: AT, resolved: true } : { at: AT },
+  };
+}
+
+function labelOf(key: string): string {
+  const field = listTrialFields(trialForm).find((candidate) => candidate.key === key);
+  if (!field) throw new Error(`ukjent felt ${key}`);
+  return field.label;
+}
+
+describe("Kunne ikke sendes (T-0001)", () => {
+  it("36 «Kunne ikke sendes: <feltnavn>» med navn fra skjemaet", () => {
+    expect(setAsideText([setAsideEntry(1, "trial_answers", "general_description")])).toBe(
+      `Kunne ikke sendes: ${labelOf("general_description")}`,
+    );
+    expect(labelOf("general_description")).toBe("Generell beskrivelse");
+    expect(setAsideText([setAsideEntry(2, "trial_answers", "building_year")])).toBe(
+      "Kunne ikke sendes: Byggeår",
+    );
+  });
+
+  it("37 bilde gir «bilde i <feltnavn>»", () => {
+    expect(setAsideText([setAsideEntry(1, "trial_photos", "cover_photo")])).toBe(
+      `Kunne ikke sendes: bilde i ${labelOf("cover_photo")}`,
+    );
+  });
+
+  it("38 testskjemaet", () => {
+    expect(setAsideText([setAsideEntry(1, "trial_forms", null)])).toBe(
+      "Kunne ikke sendes: testskjemaet",
+    );
+  });
+
+  it("39 flere felt skilles med komma, samme felt nevnes én gang", () => {
+    expect(
+      setAsideText([
+        setAsideEntry(1, "trial_answers", "general_description"),
+        setAsideEntry(2, "trial_answers", "summary"),
+        setAsideEntry(3, "trial_answers", "general_description"),
+      ]),
+    ).toBe("Kunne ikke sendes: Generell beskrivelse, Samlet kommentar");
+  });
+
+  it("40 ingen melding når alt er løst", () => {
+    expect(
+      setAsideText([setAsideEntry(1, "trial_answers", "general_description", true)]),
+    ).toBeNull();
+    expect(setAsideText([])).toBeNull();
+    // Vanlige oppføringer i køen (ikke lagt til side) gir heller ingen melding
+    const plain: SetAsideEntry = { ...setAsideEntry(2, "trial_answers", "summary") };
+    delete plain.setAside;
+    expect(setAsideText([plain])).toBeNull();
+    // Løst og uløst: bare det uløste nevnes
+    expect(
+      setAsideText([
+        setAsideEntry(3, "trial_answers", "general_description", true),
+        setAsideEntry(4, "trial_answers", "summary"),
+      ]),
+    ).toBe("Kunne ikke sendes: Samlet kommentar");
+  });
 });
