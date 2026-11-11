@@ -341,3 +341,137 @@ describe("endringskøen (outbox.ts)", () => {
     );
   });
 });
+
+// --- Lagt til side (funn T-0001, testplan docs/agenter/oppgaver/rett-t0001-synkko-testplan.md
+// avsnitt 1c). Her bare det som kan vises med køens kjente funksjoner og merket `setAside` fra
+// kortet (`setAside?: { at: string; resolved?: boolean }`). Selve 400-håndteringen (16–24, 27, 30
+// og 33) testes gjennom lageret i trial-store.test.ts, så testene bruker samme funksjon som
+// trial-store.ts kaller, uansett hva den heter. Alle data er oppdiktet.
+
+type SetAside = { at: string; resolved?: boolean };
+type EntryWithSetAside = OutboxEntry & { setAside?: SetAside };
+
+const SET_ASIDE_AT = "2026-11-11T09:00:00.000Z";
+
+function stored(seq: number, entry: NewEntry, setAside?: SetAside): EntryWithSetAside {
+  return { ...entry, seq, ...(setAside && { setAside }) };
+}
+
+function answerKey(fieldKey: string): string {
+  return localRowKey("trial_answers", { trial_form_id: FORM, field_key: fieldKey });
+}
+
+describe("endringskøen: lagt til side (T-0001)", () => {
+  it("25 lagt til side sendes ikke", () => {
+    const state = createOutboxState([
+      stored(1, answerEntry(ANSWER_X, "general_description", "Fukt i kjeller"), {
+        at: SET_ASIDE_AT,
+      }),
+      stored(2, answerEntry(ANSWER_Y, "building_year", 1985)),
+    ]);
+    const { batch } = take(state);
+    expect(batch.map((entry) => entry.seq)).toEqual([2]);
+
+    // Bare lagt-til-side igjen: ingen bunt
+    const onlySetAside = createOutboxState([
+      stored(1, answerEntry(ANSWER_X, "general_description", "Fukt i kjeller"), {
+        at: SET_ASIDE_AT,
+      }),
+    ]);
+    expect(takeBatch(onlySetAside, 500)).toBeNull();
+    // Løst og lagt til side sendes heller ikke
+    const resolved = createOutboxState([
+      stored(1, answerEntry(ANSWER_X, "general_description", "x"), {
+        at: SET_ASIDE_AT,
+        resolved: true,
+      }),
+    ]);
+    expect(takeBatch(resolved, 500)).toBeNull();
+  });
+
+  it("26 lagt til side overlever omlasting", () => {
+    const saved: EntryWithSetAside[] = [
+      stored(3, answerEntry(ANSWER_Y, "summary", "Oppdiktet samlet kommentar")),
+      stored(1, answerEntry(ANSWER_X, "general_description", "Fukt i kjeller"), {
+        at: SET_ASIDE_AT,
+      }),
+      stored(2, formEntry()),
+    ];
+    // Som fra IndexedDB: JSON-rundtur
+    const reloaded = createOutboxState(JSON.parse(JSON.stringify(saved)) as OutboxEntry[]);
+    const entries = reloaded.entries as readonly EntryWithSetAside[];
+    expect(entries.map((entry) => entry.seq)).toEqual([1, 2, 3]);
+    expect(entries[0]!.setAside).toEqual({ at: SET_ASIDE_AT });
+    expect(entries[1]!.setAside).toBeUndefined();
+    expect(reloaded.nextSeq).toBe(4);
+  });
+
+  it("28 ny endring i samme felt blir ny oppføring", () => {
+    const oldData = answerEntry(ANSWER_X, "general_description", "Fukt i kjeller");
+    const state = createOutboxState([stored(1, oldData, { at: SET_ASIDE_AT })]);
+    const next = enqueue(state, answerEntry(ANSWER_X, "general_description", "Fukt i kjelleren"));
+    const entries = next.entries as readonly EntryWithSetAside[];
+    expect(entries).toHaveLength(2);
+    expect(entries[0]!.seq).toBe(1);
+    expect(entries[0]!.data).toEqual(oldData.data);
+    expect(entries[0]!.setAside).toEqual({ at: SET_ASIDE_AT });
+    expect(entries[1]!.seq).toBe(2);
+    expect(entries[1]!.setAside).toBeUndefined();
+    expect(entries[1]!.data.value).toBe(JSON.stringify("Fukt i kjelleren"));
+
+    // En tredje endring flettes inn i den nye, ikke i den som er lagt til side
+    const third = enqueue(next, answerEntry(ANSWER_X, "general_description", "Fukt i kjeller nå"));
+    const thirdEntries = third.entries as readonly EntryWithSetAside[];
+    expect(thirdEntries).toHaveLength(2);
+    expect(thirdEntries[0]!.data).toEqual(oldData.data);
+    expect(thirdEntries[1]!.data.value).toBe(JSON.stringify("Fukt i kjeller nå"));
+  });
+
+  it("29 pendingKeys har feltet så lenge det er lagt til side og ikke løst", () => {
+    const state = createOutboxState([
+      stored(1, answerEntry(ANSWER_X, "general_description", "Fukt i kjeller"), {
+        at: SET_ASIDE_AT,
+      }),
+    ]);
+    expect(pendingKeys(state, localRowKey).has(answerKey("general_description"))).toBe(true);
+  });
+
+  it("30 løst (resolved) er ute av pendingKeys, men ligger fortsatt i køen", () => {
+    const state = createOutboxState([
+      stored(1, answerEntry(ANSWER_X, "general_description", "Fukt i kjeller"), {
+        at: SET_ASIDE_AT,
+        resolved: true,
+      }),
+    ]);
+    expect(pendingKeys(state, localRowKey).has(answerKey("general_description"))).toBe(false);
+    expect(state.entries).toHaveLength(1);
+    // ackBatch på en annen bunt fjerner den ikke
+    const withOther = enqueue(state, answerEntry(ANSWER_Y, "building_year", 1985));
+    const { state: sending } = take(withOther);
+    const acked = ackBatch(sending);
+    expect(acked.entries.map((entry) => entry.seq)).toEqual([1]);
+  });
+
+  it("31 et annet felt løser ikke: feltet er fortsatt i pendingKeys", () => {
+    const state = createOutboxState([
+      stored(1, answerEntry(ANSWER_X, "general_description", "Fukt i kjeller"), {
+        at: SET_ASIDE_AT,
+      }),
+    ]);
+    const withOther = enqueue(state, answerEntry(ANSWER_Y, "building_year", 1985));
+    const { state: sending } = take(withOther);
+    const acked = ackBatch(sending);
+    const entries = acked.entries as readonly EntryWithSetAside[];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.setAside?.resolved).toBeFalsy();
+    expect(pendingKeys(acked, localRowKey).has(answerKey("general_description"))).toBe(true);
+    expect(pendingKeys(acked, localRowKey).has(answerKey("building_year"))).toBe(false);
+  });
+
+  it("32 shouldAckBatch er uendret: bare 200 slipper bunten, også ved 400", () => {
+    expect(shouldAckBatch(200)).toBe(true);
+    for (const status of [201, 204, 400, 401, 403, 409, 413, 500, 503, undefined]) {
+      expect(shouldAckBatch(status), String(status)).toBe(false);
+    }
+  });
+});

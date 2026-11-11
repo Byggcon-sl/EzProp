@@ -463,3 +463,44 @@ describe("6 tilgang per rolle (requestTrialSuggestion og decideTrialSuggestion)"
     });
   });
 });
+
+// Funn T-0001 (testplan docs/agenter/oppgaver/rett-t0001-synkko-testplan.md avsnitt 2d, test 66–67).
+// Tekst med nulltegn (typisk limt inn fra PDF) skal gi forslag, ikke «Noe gikk galt». Oppdiktet.
+describe("T-0001 tekst med nulltegn på /prove/ki", () => {
+  const NUL = "\u0000";
+  const POISON = `taket er gammelt${NUL} og har noen sprekker`;
+
+  it("66 handlingen gir forslag for tekst med nulltegn", async () => {
+    const { organization } = await signedIn();
+    const input = requestInput({ text: POISON });
+
+    const result = await requestTrialSuggestion(input);
+
+    expect(result.kind, JSON.stringify(result)).toBe("suggestion");
+    if (result.kind !== "suggestion") return;
+    expect(result.text).toBe("Taket er gammelt og har noen sprekker.");
+    expect(result.logged).toEqual({ status: "suggested", outcome: "ok" });
+    const row = await aiRow(input.requestId);
+    expect(row?.organization_id).toBe(organization.id);
+    expect(JSON.stringify(row)).not.toContain("\\u0000");
+  });
+
+  it("67 fremmed organisasjon gir nei også med giftig tekst", async () => {
+    const other = await createOrganization("Oppdiktet Takst A");
+    await enableAi(other.id);
+    // Innlogget uten ansattrad i noen organisasjon, og med organisasjons-id fra klienten
+    session.actor = await createUser();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const result = await requestTrialSuggestion(
+      requestInput({ text: POISON, organizationId: other.id }),
+    );
+    expect(result).toEqual({ kind: "failed", message: "Du har ikke tilgang til dette." });
+    expect(spy).not.toHaveBeenCalled();
+    expect(await allAiRows()).toHaveLength(0);
+
+    // Ansatt i B som sender A sin organisasjons-id: raden havner aldri i A
+    await signedIn(["admin"], "Oppdiktet Takst B");
+    await requestTrialSuggestion(requestInput({ text: POISON, organizationId: other.id }));
+    expect((await allAiRows()).filter((row) => row.organization_id === other.id)).toHaveLength(0);
+  });
+});

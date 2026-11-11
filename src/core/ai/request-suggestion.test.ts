@@ -772,3 +772,162 @@ describe("requestSuggestion: tenant-isolasjon (9.1–9.3)", () => {
     });
   });
 });
+
+/*
+ * Funn T-0001: tekst med tegn databasen ikke tar (testplan
+ * docs/agenter/oppgaver/rett-t0001-synkko-testplan.md avsnitt 2c, test 58–65). Bare den falske
+ * leverandøren. De eksisterende testene over er ikke endret. Teksten er oppdiktet.
+ * Støtter hovedmål: KI i bunnen (innlimt tekst gir forslag og rad i ai_usage_log i stedet for feil).
+ */
+describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
+  const NUL = "\u0000";
+  const POISON = `Taket${NUL} er gammelt og har noen sprekker`;
+  const CLEAN = "Taket er gammelt og har noen sprekker";
+
+  function expectNoUnstorable(value: unknown, label: string) {
+    const json = JSON.stringify(value) ?? "";
+    expect(json, label).not.toContain("\\u0000");
+    expect(json, label).not.toMatch(/\\ud[89a-f][0-9a-f]{2}/i);
+  }
+
+  it("58 tekst med nulltegn gir forslag og én rad i ai_usage_log", async () => {
+    const { grant } = await aiOrganization();
+    const request = validRequest({ fields: { text: POISON } });
+
+    const result = await requestSuggestion(grant, request);
+
+    expect(result).toMatchObject({ kind: "suggestion", status: "suggested" });
+    expect(await aiRowCount()).toBe(1);
+    const row = (await aiRow(request.requestId))!;
+    expect(row.status).toBe("suggested");
+    expect(row.outcome).toBe("ok");
+    expectNoUnstorable(row, "raden");
+    if (result.kind === "suggestion") expect(result.text.includes(NUL)).toBe(false);
+  });
+
+  it("58 ensomt surrogat gir også forslag og rad", async () => {
+    const { grant } = await aiOrganization();
+    const request = validRequest({
+      fields: { text: `Taket er gammelt\uD800 og har noen sprekker` },
+    });
+    const result = await requestSuggestion(grant, request);
+    expect(result.kind).toBe("suggestion");
+    expectNoUnstorable(await aiRow(request.requestId), "raden");
+  });
+
+  it("59 leverandøren får vasket tekst", async () => {
+    const { grant } = await aiOrganization();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+
+    await requestSuggestion(grant, validRequest({ fields: { text: POISON } }));
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    const sent = spy.mock.calls[0]![0];
+    expect(sent.prompt.includes(NUL)).toBe(false);
+    expect(sent.prompt).toContain(CLEAN);
+  });
+
+  it("60 svar med nulltegn fra leverandøren lagres vasket", async () => {
+    const { grant } = await aiOrganization();
+    vi.spyOn(fakeAiProvider, "complete").mockResolvedValue({
+      outcome: "ok",
+      text: `Bedre${NUL} tekst\uDC00.`,
+      tokensIn: 3,
+      tokensOut: 2,
+      cost: 0,
+      currency: "NOK",
+    });
+    const request = validRequest();
+
+    const result = await requestSuggestion(grant, request);
+
+    expect(result).toMatchObject({ kind: "suggestion", text: "Bedre tekst." });
+    const row = (await aiRow(request.requestId))!;
+    expect(row.output_text).toBe("Bedre tekst.");
+  });
+
+  it("61 input_summary regnes av vasket tekst", async () => {
+    const { grant } = await aiOrganization();
+    const request = validRequest({ fields: { text: POISON } });
+    await requestSuggestion(grant, request);
+    const row = (await aiRow(request.requestId))!;
+    expect(row.input_summary).toEqual({ text: CLEAN.length });
+  });
+
+  it("62 tekst som er tom etter vask gir samme utfall som tom tekst", async () => {
+    const { grant } = await aiOrganization();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+
+    const empty = await requestSuggestion(grant, validRequest({ fields: { text: "" } })).then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    const emptyCalls = spy.mock.calls.length;
+    const emptyRows = await aiRowCount();
+
+    const nulOnly = await requestSuggestion(
+      grant,
+      validRequest({ fields: { text: `${NUL}${NUL}` } }),
+    ).then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    expect(nulOnly.ok, "samme vei (svar eller avslag) som tom tekst").toBe(empty.ok);
+    if (empty.ok && nulOnly.ok) {
+      expect(nulOnly.value.kind).toBe(empty.value.kind);
+    } else if (!empty.ok && !nulOnly.ok) {
+      expectSameRejection(nulOnly.error as Error, empty.error as Error);
+    }
+    // Leverandøren kalles like mange ganger, og raden blir lik (ingen ekstra kall, ingen unntak)
+    expect(spy.mock.calls.length - emptyCalls).toBe(emptyCalls);
+    expect((await aiRowCount()) - emptyRows).toBe(emptyRows);
+  });
+
+  it("63 feltkodene vaskes ikke", async () => {
+    const { grant } = await aiOrganization();
+    const baseline = await neutralRequestRejection(grant);
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+
+    const error = await captureError(() =>
+      requestSuggestion(grant, validRequest({ fields: { [`text${NUL}`]: CLEAN } })),
+    );
+
+    expectSameRejection(error, baseline);
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it("64 rekkefølgen holder: tilgang sjekkes før vask", async () => {
+    const a = await aiOrganization("Oppdiktet Takst A");
+    const b = await aiOrganization("Oppdiktet Takst B");
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+
+    // Bruker i B mot A: tilgangssjekken stopper før KI-modulen
+    await expect(requireOrganizationAccess(b.actor, a.organization.id)).rejects.toThrow(
+      AccessDeniedError,
+    );
+
+    // Uten rettigheten (takstmann har mistet report.edit): AccessDeniedError, også med giftig
+    // tekst og giftig feltkode
+    await mergeOrganizationSettings(a.organization.id, { "access.inspectors_edit_all": false });
+    const weaker = await requireOrganizationAccess(a.actor, a.organization.id);
+    for (const fields of [{ text: POISON }, { [`text${NUL}`]: POISON }, { text: `${NUL}${NUL}` }]) {
+      const error = await captureError(() => requestSuggestion(weaker, validRequest({ fields })));
+      expect(error).toBeInstanceOf(AccessDeniedError);
+    }
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it("65 admin får forslag med giftig tekst", async () => {
+    const { organization } = await aiOrganization();
+    const admin = await employeeWithGrant(organization.id, ["admin"], "Oppdiktet Admin");
+    const request = validRequest({ fields: { text: POISON } });
+
+    const result = await requestSuggestion(admin.grant, request);
+
+    expect(result).toMatchObject({ kind: "suggestion", status: "suggested" });
+    expectNoUnstorable(await aiRow(request.requestId), "raden");
+  });
+});
