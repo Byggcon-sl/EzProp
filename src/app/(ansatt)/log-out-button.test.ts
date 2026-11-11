@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 /*
  * Utlogging tømmer KI-køen (docs/funksjoner/fase2a-ki-ko-testplan.md avsnitt 7, K7.1–K7.3).
- * Rene tester av `logOutAndClear`, som `LogOutButton` kaller. Teksten er oppdiktet.
+ * Rene tester av `logOutAndClear` (log-out.ts), som `LogOutButton` kaller. Teksten er oppdiktet.
  * Støtter hovedmål: de ansatte (på en delt iPad ser neste person aldri teksten i køen, og
  * utloggingen stopper aldri på grunn av køen).
  */
@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/core/auth/auth-client", () => ({ authClient: { signOut: vi.fn(async () => {}) } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }) }));
 
-const { logOutAndClear } = await import("./log-out-button");
+const { logOutAndClear } = await import("./log-out");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const TEXT = "Fukt i kjellervegg ved sluk";
