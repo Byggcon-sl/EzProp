@@ -109,7 +109,7 @@ const CADASTRAL = new RegExp(
 // Gateadresse: ord som slutter på en kjent endelse, husnummer og eventuell bokstav (A–H).
 // Bare disse endelsene (kortet). Ikke «alle» uten aksent, så «alle 3 rom» står urørt.
 const STREET_ENDINGS =
-  "(?:veien|vegen|veg|vei|vn\\.?|gaten|gata|gate|gt\\.?|plassen|bakken|stien|all\\u00E9)";
+  "(?:veien|vegen|veg|vei|vn\\.|gaten|gata|gate|gt\\.|plassen|bakken|stien|all\\u00E9)";
 const STREET = new RegExp(
   `${WORD_START}\\p{L}*${STREET_ENDINGS}${SP}\\d{1,4}(?:${SP}?[A-Ha-h])?${WORD_END}`,
   "giu",
@@ -123,9 +123,18 @@ const POSTAL_PLACE = new RegExp(
 // Myk bindestrek, nullbredde mellomrom/skjøt/ikke-skjøt og BOM.
 const INVISIBLE = /[\u00AD\u200B-\u200D\uFEFF]/gu;
 
-/** NFKC og uten usynlige tegn. Brukes før all vask (også av `src/core/ai`). */
+// Sifre i full bredde (０–９) gjøres om til vanlige sifre, så mønstrene treffer dem.
+const FULLWIDTH_DIGIT = /[\uFF10-\uFF19]/gu;
+
+/**
+ * NFC, vanlige sifre og uten usynlige tegn. Brukes før all vask (også av `src/core/ai`).
+ * Ikke NFKC: den ville gjort «m²» om til «m2» i teksten til KI.
+ */
 export function normalizeForRedaction(text: string): string {
-  return text.normalize("NFKC").replace(INVISIBLE, "");
+  return text
+    .normalize("NFC")
+    .replace(FULLWIDTH_DIGIT, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0))
+    .replace(INVISIBLE, "");
 }
 
 type Rule = { pattern: RegExp; placeholder: string; address?: boolean };
@@ -157,7 +166,7 @@ export function redactEmails(text: string): RedactPiiResult {
 
 /**
  * Bytter persondata i teksten med nøytrale plassholdere. `count` er antall treff.
- * Teksten normaliseres til NFKC først, og usynlige tegn (myk bindestrek, nullbredde-tegn, BOM)
+ * Teksten normaliseres til NFC først (sifre i full bredde gjøres vanlige), og usynlige tegn (myk bindestrek, nullbredde-tegn, BOM)
  * fjernes, så de ikke kan skjule persondata.
  */
 export function redactPii(text: string, options: RedactPiiOptions = {}): RedactPiiResult {

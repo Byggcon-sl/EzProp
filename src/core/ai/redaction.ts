@@ -112,7 +112,7 @@ function escapeRegExp(value: string): string {
 }
 
 /**
- * NFKC uten usynlige tegn, trimmet, mellomrom slått sammen. `null` hvis verdien er for kort eller
+ * Normalisert (NFC, vanlige sifre) uten usynlige tegn, trimmet, mellomrom slått sammen. `null` hvis verdien er for kort eller
  * uten bokstav/siffer.
  */
 function clean(value: string | null | undefined, minLength = MIN_PHRASE_LENGTH): string | null {

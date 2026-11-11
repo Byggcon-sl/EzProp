@@ -114,9 +114,7 @@ describe("V1.7 adresse", () => {
     "Parkallé 2",
     "8006 Bodø",
     "Storgt. 12",
-    "Storgt 12",
     "Elvevn. 3",
-    "Elvevn 3",
     "STORGATA 4",
     "storgata 4",
   ])("V1.7 %s → [adresse]", (value) => {
@@ -270,7 +268,7 @@ describe("V1.11 NFC", () => {
   });
 });
 
-describe("V1.11 usynlige tegn og NFKC", () => {
+describe("V1.11 usynlige tegn og sifre i full bredde", () => {
   it.each([
     ["1234\u200B5678", PHONE],
     ["1234\u00AD5678", PHONE],
@@ -281,6 +279,17 @@ describe("V1.11 usynlige tegn og NFKC", () => {
   ])("V1.11 «%s» vaskes som om tegnet ikke var der", (value, placeholder) => {
     expectWhole(value, placeholder);
   });
+});
+
+describe("V1.11b ord og måleenheter står urørt", () => {
+  it.each(["Fallet er langt 3 meter.", "Det er lagt 2 lag membran.", "Gulvet er 12 m² stort."])(
+    "V1.11b «%s» endres ikke",
+    (value) => {
+      const result = redactPii(value);
+      expect(result.text).toBe(value);
+      expect(result.count).toBe(0);
+    },
+  );
 });
 
 describe("V1.12 kjent overvask (A170, villet)", () => {

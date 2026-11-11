@@ -463,8 +463,8 @@ export const REDACTION_CASES: readonly RedactionCase[] = [
   },
   {
     name: "gateadresse forkortet og i store bokstaver",
-    input: "Badet i Storgt. 12 og boden i Elvevn 3 er fuktige, likeså kjelleren i STORGATA 4.",
-    mustRemove: ["Storgt. 12", "Storgt", "Elvevn 3", "Elvevn", "STORGATA 4"],
+    input: "Badet i Storgt. 12 og boden i Elvevn. 3 er fuktige, likeså kjelleren i STORGATA 4.",
+    mustRemove: ["Storgt. 12", "Storgt", "Elvevn. 3", "Elvevn", "STORGATA 4"],
     mustKeep: ["Badet i", "og boden i", "er fuktige, likeså kjelleren i"],
   },
 ];
