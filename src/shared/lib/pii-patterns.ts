@@ -66,7 +66,7 @@ const PII_NUM_START =
 const PII_NUM_END =
   "(?![\\p{L}\\p{N}])" + `(?!-${HEX}{4}-)` + "(?![.,]\\p{N}{1,3}(?!\\p{N}))" + "(?!:\\p{N})";
 // Ordgrenser for mønstre som starter eller slutter med bokstaver. Eksportert som strenger, så
-// vasken av kjente verdier (`src/core/ai`) bruker de samme grensene.
+// vasken av kjente verdier i `src/core/ai/redaction.ts` har egne grenser (uten `_`).
 export const WORD_START = "(?<![\\p{L}\\p{N}_])";
 export const WORD_END = "(?![\\p{L}\\p{N}_])";
 
