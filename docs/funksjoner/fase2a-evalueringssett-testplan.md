@@ -20,6 +20,12 @@ Navn kan endres av utvikleren; avvik føres i kortet.
 - `src/core/ai/evals/run.ts`: `runEvals({ provider, casesDir, feature? }) → EvalResult` og `runEvalCommand(argv, casesDir, provider) → { exitCode, lines }`. Ingen `console`, ingen `process.env`.
 - `scripts/ai-eval.ts`: sender inn `fakeAiProvider`, skriver `lines`, avslutter med `exitCode`.
 
+**Presisering fra prosjektleder (11.11.2026, før bygging):**
+- `preparePrompt(definition, fields, known: KnownValues | null)` returnerer `{ prompt, redactedFields, redactedCount }`. `redactedFields` trengs av `requestSuggestion` til `input_summary`. Med `known = null` vaskes bare med mønstrene.
+- `redact-text.ts` eksporterer i tillegg `redactFieldValues(fields, known | null) → { fields, count }` (ren). `redactFields` i `redaction.ts` fjernes. `requestSuggestion` kaller `loadKnownValues` (bare med oppdrag) og så `preparePrompt`. Testene i `request-suggestion.test.ts` som mocker `redactFields`, flyttes med vilje til å mocke/spionere på `loadKnownValues` (samme påstander: kalles én gang med `grant` og oppdraget, kalles ikke ved sperre eller «KI av»). `redaction.ts` re-eksporterer `redactText`, `compileKnownValues`, `emptyKnownValues` og `KnownValues`, så eksisterende importer virker.
+- **`known` i eksempelfilene har formen til `KnownValues`** (`personNames`, `phrases`, `emails`, `phones`, `orgNumbers`, `addresses.{full,places,postalCodes}`, `cadastral.{units,municipalityNumbers}`), alle felt valgfrie og fylt ut med `emptyKnownValues()`. Ikke radformen i `redaction-cases.ts`: den krever databasen eller en kopi av `loadKnownValues`. E1.9 prøver denne formen.
+- `RedactionPatternError` ligger i `redact-text.ts`.
+
 ## 1. Skjemaet, `src/core/ai/evals/schema.test.ts` (ny, ren)
 
 1. **E1.1** en gyldig minimal fil (30 eksempler bygd i testen) godtas.
