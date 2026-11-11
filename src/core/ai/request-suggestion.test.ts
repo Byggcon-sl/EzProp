@@ -1541,3 +1541,174 @@ describe("vask før KI: tenant (V7.2)", () => {
     expect(input).toContain("Bjarne Fremmedsen");
   });
 });
+
+/*
+ * Tegn databasen ikke tar (docs/agenter/oppgaver/rett-t0001-synkko-testplan.md 2c, test 58–65 og
+ * 68): nulltegn og ensomme surrogater fjernes fra verdiene før personvernvasken, og svaret fra
+ * leverandøren vaskes før loggen. Feltkodene vaskes ikke.
+ */
+describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
+  const POISON = "Fukt\u0000 i kjeller";
+  const CLEAN = "Fukt i kjeller";
+
+  it("58 tekst med nulltegn gir forslag og én rad i ai_usage_log", async () => {
+    const { grant } = await aiOrganization();
+    const request = validRequest({ fields: { text: POISON } });
+
+    const result = await requestSuggestion(grant, request);
+
+    expect(result.kind).toBe("suggestion");
+    if (result.kind !== "suggestion") return;
+    expect(result.status).toBe("suggested");
+    expect(await aiRowCount()).toBe(1);
+    const row = (await aiRow(request.requestId))!;
+    expect(row.outcome).toBe("ok");
+    expect(JSON.stringify(row)).not.toContain("\\u0000");
+    expect(result.text).not.toContain("\u0000");
+  });
+
+  it("59 leverandøren får vasket tekst", async () => {
+    const { grant } = await aiOrganization();
+    const { input, prompt } = await sendAndCapture(grant, null, "Fukt\u0000 i \uD800kjeller");
+    expect(prompt).not.toContain("\u0000");
+    expect(prompt).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+    expect(input).toBe(CLEAN);
+  });
+
+  it("60 svar med nulltegn fra leverandøren lagres vasket, og klienten får samme tekst", async () => {
+    const { grant } = await aiOrganization();
+    vi.spyOn(fakeAiProvider, "complete").mockResolvedValue({
+      outcome: "ok",
+      text: "Bedre\u0000 tekst\uDC00",
+      tokensIn: 1,
+      tokensOut: 1,
+      cost: 0,
+      currency: "NOK",
+    });
+    const request = validRequest({ fields: { text: CLEAN } });
+
+    const result = await requestSuggestion(grant, request);
+
+    expect(result.kind).toBe("suggestion");
+    if (result.kind !== "suggestion") return;
+    const row = (await aiRow(request.requestId))!;
+    expect(row.output_text).toBe("Bedre tekst");
+    expect(result.text).toBe(row.output_text);
+  });
+
+  it("61 input_summary regnes av vasket tekst", async () => {
+    const { grant } = await aiOrganization();
+    const request = validRequest({ fields: { text: "Fukt\u0000\u0000 i \uDC00kjeller" } });
+
+    await requestSuggestion(grant, request);
+
+    const row = (await aiRow(request.requestId))!;
+    expect(row.input_summary).toEqual({ text: CLEAN.length });
+  });
+
+  it.each(["\u0000\u0000", "\uD800", "\u0000\uDC00"])(
+    "62 tekst som er tom etter vask (%j) gir samme avslag som tom tekst",
+    async (text) => {
+      const { grant } = await aiOrganization();
+      const baseline = await neutralRequestRejection(grant);
+      const empty = await captureError(() =>
+        requestSuggestion(grant, validRequest({ fields: { text: "" } })),
+      );
+      expectSameRejection(empty, baseline);
+      const complete = vi.spyOn(fakeAiProvider, "complete");
+      const auditBefore = await auditCount();
+
+      const error = await captureError(() =>
+        requestSuggestion(grant, validRequest({ fields: { text } })),
+      );
+
+      expectSameRejection(error, empty);
+      expect(redactFields).not.toHaveBeenCalled();
+      expect(complete).not.toHaveBeenCalled();
+      expect(await aiRowCount()).toBe(0);
+      expect(await auditCount()).toBe(auditBefore);
+    },
+  );
+
+  it("63 feltkodene vaskes ikke: feltkode med nulltegn avvises som ukjent felt", async () => {
+    const { grant } = await aiOrganization();
+    const baseline = await neutralRequestRejection(grant);
+    const unknownField = await captureError(() =>
+      requestSuggestion(grant, validRequest({ fields: { email: CLEAN } })),
+    );
+    expectSameRejection(unknownField, baseline);
+    const complete = vi.spyOn(fakeAiProvider, "complete");
+
+    const error = await captureError(() =>
+      requestSuggestion(grant, validRequest({ fields: { "text\u0000": CLEAN } })),
+    );
+
+    expectSameRejection(error, unknownField);
+    expect(redactFields).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it("64 rekkefølgen holder: tilgang sjekkes før vask", async () => {
+    const a = await aiOrganization("Oppdiktet Takst A");
+    const b = await aiOrganization("Oppdiktet Takst B");
+    const complete = vi.spyOn(fakeAiProvider, "complete");
+
+    // Bruker i B mot A: stoppes i tilgangssjekken
+    await expect(
+      requireOrganizationAccess(b.actor, a.organization.id, "report.edit"),
+    ).rejects.toBeInstanceOf(AccessDeniedError);
+
+    // Rolle uten rettigheten, med giftig tekst og A sitt oppdrag: stoppes i trinn 2
+    const office = await employeeWithGrant(a.organization.id, ["office"], "Test Kontor");
+    const assignment = await createAssignment(a.organization.id);
+    await expect(
+      requestSuggestion(
+        office.grant,
+        validRequest({ assignmentId: assignment.id, fields: { text: POISON } }),
+      ),
+    ).rejects.toBeInstanceOf(AccessDeniedError);
+    await expect(
+      requestSuggestion(office.grant, validRequest({ fields: { text: "\u0000" } })),
+    ).rejects.toBeInstanceOf(AccessDeniedError);
+
+    expect(redactFields).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it("65 admin får forslag med giftig tekst", async () => {
+    const { organization } = await aiOrganization();
+    const { grant } = await employeeWithGrant(organization.id, ["admin"], "Test Admin");
+    const request = validRequest({ fields: { text: "Fukt\u0000 i \uD800kjeller" } });
+
+    const result = await requestSuggestion(grant, request);
+
+    expect(result.kind).toBe("suggestion");
+    const row = (await aiRow(request.requestId))!;
+    expect(row.outcome).toBe("ok");
+    expect(row.employee_id).toBe(grant.employeeId);
+  });
+
+  it("68 telefonnummer med nulltegn mellom sifrene blir vasket bort av personvernvasken", async () => {
+    const { grant } = await aiOrganization();
+    const text = "Ring 9\u00001234567";
+
+    const { input, prompt, request, result } = await sendAndCapture(grant, null, text);
+
+    expect(vi.mocked(redactFields).mock.calls[0]![2]).toEqual({ text: "Ring 91234567" });
+    for (const seen of [prompt, input]) {
+      expect(seen).not.toContain("91234567");
+      expect(seen).not.toContain("1234567");
+      expect(seen).not.toContain("\u0000");
+    }
+    expect(input).toContain("[telefon]");
+    const row = (await aiRow(request.requestId))!;
+    expect(row.redacted_count).toBe(1);
+    expect(row.input_summary).toEqual({ text: "Ring [telefon]".length });
+    const stored = JSON.stringify(row);
+    expect(stored).not.toContain("91234567");
+    expect(stored).not.toContain("1234567");
+    expect(JSON.stringify(result)).not.toContain("1234567");
+  });
+});
