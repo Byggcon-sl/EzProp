@@ -655,6 +655,20 @@ describe("applyTrialChanges: tegn databasen ikke tar (T-0001)", () => {
     expect(summary!.value).toBe("Tett tak");
   });
 
+  it("43b nøkkel med nulltegn («value\\u0000») blir ikke til «value» etter vasken", async () => {
+    const { actor, organizationId } = await setupOrganization("inspector");
+    const formId = await putTrialForm(actor, organizationId);
+
+    await applyTrialChanges(actor, organizationId, [
+      answerOp(formId, "summary", "Oppdiktet kort tekst", {
+        [`value${NUL}`]: "x".repeat(70 * 1024),
+      }),
+    ]);
+
+    const [summary] = await answerRows(formId, "summary");
+    expect(summary!.value).toBe("Oppdiktet kort tekst");
+  });
+
   it("43 text_state lagres urørt og kan flettes etterpå", async () => {
     const { actor, organizationId } = await setupOrganization("inspector");
     const formId = await putTrialForm(actor, organizationId);

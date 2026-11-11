@@ -188,6 +188,19 @@ function rejectedChange(body: unknown): { id: string; table: TrialTableName } | 
 }
 
 /**
+ * Om 400-svaret kommer fra vår egen synkrute (`{ feil: "…" }`). Et 400 fra noe foran appen
+ * (mellomtjener, for store hoder) har ikke denne formen, og da prøves bunten på nytt i stedet for
+ * at takstmannens endring legges til side.
+ */
+function isOwnRejection(body: unknown): boolean {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    typeof (body as { feil?: unknown }).feil === "string"
+  );
+}
+
+/**
  * Hva som skjer med bunten som er underveis når serveren ikke svarte 200 (funn T-0001, A181).
  * Gir ny tilstand med endringen lagt til side og `inFlight` nullstilt, så resten sendes med en
  * gang, eller `null` når bunten skal prøves på nytt som før (`keepBatch`):
@@ -195,6 +208,7 @@ function rejectedChange(body: unknown): { id: string; table: TrialTableName } | 
  *   ingen slik oppføring i bunten, gir den `null` (aldri feil endring til side).
  * - 400 uten `endring` og én oppføring i bunten: den legges til side.
  * - 400 uten `endring` og flere i bunten, og alle andre svar (401, 403, 409, 413, 5xx, nettfeil): `null`.
+ * - 400 som ikke kommer fra vår rute (kroppen er ikke `{ feil }`, f.eks. fra en mellomtjener): `null`.
  * Ingenting fjernes fra køen.
  */
 export function setAsideFromRejection(
@@ -204,6 +218,7 @@ export function setAsideFromRejection(
   at: string,
 ): OutboxState | null {
   if (status !== 400 || state.inFlight === null || state.inFlight.length === 0) return null;
+  if (!isOwnRejection(body)) return null;
   const inFlight = new Set(state.inFlight);
   const batch = state.entries.filter((entry) => inFlight.has(entry.seq));
   const change = rejectedChange(body);

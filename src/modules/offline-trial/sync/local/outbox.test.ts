@@ -417,8 +417,14 @@ describe("endring lagt til side ved 400 (setAsideFromRejection)", () => {
     const next = setAsideFromRejection(state, 400, { feil: "Ugyldig." }, AT)!;
     expect(next.entries[0]!.setAside).toEqual({ at: AT });
     expect(next.inFlight).toBeNull();
-    // Kropp som ikke kunne leses (ugyldig JSON gir null), gir det samme.
-    expect(setAsideFromRejection(state, 400, null, AT)!.entries[0]!.setAside).toEqual({ at: AT });
+  });
+
+  it("400 som ikke kommer fra synkruten (ikke `{ feil }`): nytt forsøk, ingenting lagt til side", () => {
+    const state = take(enqueueAll(createOutboxState(), [formEntry()])).state;
+    // Kropp som ikke kunne leses (f.eks. HTML fra en mellomtjener gir null), eller annen JSON.
+    expect(setAsideFromRejection(state, 400, null, AT)).toBeNull();
+    expect(setAsideFromRejection(state, 400, { error: "Bad Request" }, AT)).toBeNull();
+    expect(keepBatch(state).entries.some((entry) => entry.setAside)).toBe(false);
   });
 
   it("400 uten endring og flere i bunten: nytt forsøk, ingenting lagt til side", () => {
@@ -566,7 +572,9 @@ const AT = "2026-11-11T09:00:00.000Z";
 const ANSWER_Z = "0192d3a0-0000-7000-8000-0000000000a3";
 
 function setAside(state: OutboxState, change: ChangeRef, at = AT): OutboxState {
-  const body = change ? { feil: "Endringen kunne ikke lagres.", endring: change } : {};
+  const body = change
+    ? { feil: "Endringen kunne ikke lagres.", endring: change }
+    : { feil: "Endringen kunne ikke lagres." };
   return setAsideFromRejection(state, 400, body, at) ?? keepBatch(state);
 }
 

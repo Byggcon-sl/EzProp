@@ -72,7 +72,7 @@ export class TrialChangeRejectedError extends InvalidTrialChangeError {
 }
 
 /** SQLSTATE fra feilen eller fra `cause` (Drizzle pakker inn feilen fra driveren). */
-function sqlStateOf(error: unknown): string | undefined {
+export function sqlStateOf(error: unknown): string | undefined {
   let current: unknown = error;
   for (let depth = 0; depth < 3 && current !== null && typeof current === "object"; depth += 1) {
     const code = (current as { code?: unknown }).code;

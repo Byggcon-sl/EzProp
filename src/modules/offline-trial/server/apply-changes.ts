@@ -48,14 +48,22 @@ type Data = Record<string, unknown>;
  */
 const UNCLEANED_KEYS = new Set(["id", "trial_form_id", "field_key", "text_state"]);
 
-/** `data` uten tegn databasen ikke tar (nulltegn, ensomme surrogater), unntatt `UNCLEANED_KEYS`. */
+/**
+ * `data` uten tegn databasen ikke tar (nulltegn, ensomme surrogater), unntatt `UNCLEANED_KEYS`.
+ * Bare verdiene vaskes, aldri nøklene på øverste nivå: skjemaet har allerede kontrollert bunten,
+ * så «value\u0000» må ikke bli til «value» etterpå og slippe forbi størrelsesgrensene.
+ */
 function cleanData(data: Data): Data {
-  const kept: Data = {};
-  const rest: Data = {};
+  const result: Data = {};
   for (const [key, value] of Object.entries(data)) {
-    (UNCLEANED_KEYS.has(key) ? kept : rest)[key] = value;
+    Object.defineProperty(result, key, {
+      value: UNCLEANED_KEYS.has(key) ? value : stripUnstorableChars(value),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
-  return { ...stripUnstorableChars(rest), ...kept };
+  return result;
 }
 
 /** Peker på endringen i svaret (400), uten innholdet. `field_key` bare når feltet er kjent. */

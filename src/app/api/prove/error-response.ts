@@ -3,6 +3,7 @@ import { AccessDeniedError } from "@/core/access";
 import {
   InvalidTrialChangeError,
   isUnstorableValueError,
+  sqlStateOf,
   TrialChangeRejectedError,
   TrialIdConflictError,
   TrialPhotoNotFoundError,
@@ -28,15 +29,22 @@ export function trialErrorResponse(error: unknown, route: string, userId: string
   if (error instanceof TrialChangeRejectedError) {
     // Bare id, tabell og felt, aldri innholdet (funn T-0001)
     const { id, table, field_key } = error.change;
+    logger.warn("Endring avvist, svarte 400", { route, userId, table, fieldKey: field_key });
     return errorJson(400, INVALID_CHANGE, {
       endring: field_key === undefined ? { id, table } : { id, table, field_key },
     });
   }
-  if (
-    error instanceof InvalidTrialChangeError ||
-    error instanceof ZodError ||
-    isUnstorableValueError(error)
-  ) {
+  if (isUnstorableValueError(error)) {
+    // Bare SQLSTATE, aldri feilobjektet (det kan bære verdiene). Gir spor i driften om en feil i
+    // vår egen kode skulle gi klasse 22.
+    logger.warn("Verdi databasen ikke tar, svarte 400", {
+      route,
+      userId,
+      sqlState: sqlStateOf(error),
+    });
+    return errorJson(400, INVALID_CHANGE);
+  }
+  if (error instanceof InvalidTrialChangeError || error instanceof ZodError) {
     return errorJson(400, INVALID_CHANGE);
   }
   if (error instanceof TrialIdConflictError) {
