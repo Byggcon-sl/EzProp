@@ -479,3 +479,49 @@ describe("6 tilgang per rolle (requestTrialSuggestion og decideTrialSuggestion)"
     });
   });
 });
+
+// Funn T-0001 (docs/agenter/oppgaver/rett-t0001-giftig-endring.md Omfang 3, testplan avsnitt 2d,
+// 66–67): tekst med nulltegn på /prove/ki gir forslag, ikke «Noe gikk galt». Tilgangen sjekkes
+// før alt annet. Teksten er oppdiktet.
+describe("T-0001 tekst med nulltegn", () => {
+  const POISON = "taket er gammelt\u0000 og har noen sprekker";
+
+  it("66 handlingen gir forslag for tekst med nulltegn", async () => {
+    const { organization } = await signedIn();
+    const input = requestInput({ text: POISON });
+
+    const result = await requestTrialSuggestion(input);
+
+    expect(result).toMatchObject({
+      kind: "suggestion",
+      text: "Taket er gammelt og har noen sprekker.",
+      logged: { status: "suggested", outcome: "ok" },
+    });
+    const row = await aiRow(input.requestId);
+    expect(row?.organization_id).toBe(organization.id);
+    expect(JSON.stringify(row)).not.toContain("\\u0000");
+  });
+
+  it("67 fremmed organisasjon gir nei også med giftig tekst", async () => {
+    const other = await createOrganization("Oppdiktet Takst A");
+    await enableAi(other.id);
+    // Innlogget uten ansattrad: ingen tilgang, ingen rad og intet kall
+    session.actor = await createUser({ name: "Oppdiktet uten ansettelse" });
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+
+    const denied = await requestTrialSuggestion(
+      requestInput({ text: POISON, organizationId: other.id }),
+    );
+
+    expect(denied).toEqual({ kind: "failed", message: "Du har ikke tilgang til dette." });
+    expect(spy).not.toHaveBeenCalled();
+    expect(await allAiRows()).toHaveLength(0);
+
+    // Ansatt i B som sender A sin id: raden havner i B, aldri i A
+    const { organization } = await signedIn(["inspector"], "Oppdiktet Takst B");
+    const input = requestInput({ text: POISON, organizationId: other.id });
+    await requestTrialSuggestion(input);
+    expect((await allAiRows()).filter((row) => row.organization_id === other.id)).toHaveLength(0);
+    expect((await aiRow(input.requestId))?.organization_id).toBe(organization.id);
+  });
+});

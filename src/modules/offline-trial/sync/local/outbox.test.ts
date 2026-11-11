@@ -547,3 +547,254 @@ describe("endring lagt til side ved 400 (setAsideFromRejection)", () => {
     }
   });
 });
+
+// --- Funn T-0001: én endring som ikke kan lagres, stopper ikke køen ---------------------------
+//
+// docs/agenter/oppgaver/rett-t0001-giftig-endring.md Omfang 5–7, testplan avsnitt 1c (16–32).
+// Utvikleren valgte `setAsideFromRejection(state, status, body, at)`, som gir `null` når bunten
+// skal prøves på nytt som før. Hjelperen `setAside` under sender et 400-svar med `endring` (eller
+// uten) og bruker `keepBatch` ved `null`, så `inFlight` alltid nullstilles. `pendingCount` er
+// tallet bak «Venter: N endringer» (uten lagt til side). `ackBatch` merker eldre lagt-til-side på
+// samme `localRowKey` som `setAside.resolved = true`.
+// Alle data er oppdiktet.
+
+type SetAsideMark = { at: string; resolved?: boolean };
+type MarkedEntry = OutboxEntry & { setAside?: SetAsideMark };
+type ChangeRef = { id: string; table: string; field_key?: string } | null;
+
+const AT = "2026-11-11T09:00:00.000Z";
+const ANSWER_Z = "0192d3a0-0000-7000-8000-0000000000a3";
+
+function setAside(state: OutboxState, change: ChangeRef, at = AT): OutboxState {
+  const body = change ? { feil: "Endringen kunne ikke lagres.", endring: change } : {};
+  return setAsideFromRejection(state, 400, body, at) ?? keepBatch(state);
+}
+
+function marked(state: OutboxState): MarkedEntry[] {
+  return state.entries as MarkedEntry[];
+}
+
+function setAsideIds(state: OutboxState): string[] {
+  return marked(state)
+    .filter((entry) => entry.setAside)
+    .map((entry) => entry.id);
+}
+
+/** Tre svar: Generell beskrivelse (X), Byggeår (Y), Samlet kommentar (Z). */
+function threeAnswers(): OutboxState {
+  return enqueueAll(createOutboxState(), [
+    answerEntry(ANSWER_X, "general_description", "Fukt\u0000 i kjeller"),
+    answerEntry(ANSWER_Y, "building_year", 1985),
+    answerEntry(ANSWER_Z, "summary", "Oppdiktet samlet kommentar"),
+  ]);
+}
+
+const IDS = [ANSWER_X, ANSWER_Y, ANSWER_Z];
+
+function keyOfAnswer(id: string, state: OutboxState): string {
+  const entry = state.entries.find((candidate) => candidate.id === id)!;
+  return localRowKey(entry.table, { ...entry.data, id });
+}
+
+describe("endringskøen: lagt til side ved 400 (T-0001)", () => {
+  it.each([
+    ["16 giftig endring først: legges til side, resten sendes og kvitteres", 0],
+    ["17 giftig endring i midten", 1],
+    ["18 giftig endring sist", 2],
+  ] as const)("%s", (_name, index) => {
+    const poison = IDS[index]!;
+    const sending = take(threeAnswers()).state;
+
+    const afterReject = setAside(sending, { id: poison, table: "trial_answers" });
+    expect(afterReject.inFlight).toBeNull();
+    expect(setAsideIds(afterReject)).toEqual([poison]);
+
+    const next = take(afterReject);
+    expect(next.batch.map((entry) => entry.id)).toEqual(IDS.filter((id) => id !== poison));
+    const done = ackBatch(next.state);
+
+    expect(done.entries.map((entry) => entry.id)).toEqual([poison]);
+    const [left] = marked(done);
+    expect(left!.setAside?.at).toBe(AT);
+    expect(left!.data.value).toBe(sending.entries[index]!.data.value);
+  });
+
+  it("19 alle køoppføringer med samme table+id i bunten legges til side", () => {
+    let state = enqueue(createOutboxState(), answerEntry(ANSWER_X, "general_description", "a"));
+    state = take(state).state;
+    // Laget mens den første var underveis: ny oppføring for samme rad
+    state = enqueue(state, answerEntry(ANSWER_X, "general_description", "ab", "PATCH"));
+    state = keepBatch(state);
+    state = enqueue(state, answerEntry(ANSWER_Y, "building_year", 1985));
+    const sending = take(state);
+    expect(sending.batch.map((entry) => entry.id)).toEqual([ANSWER_X, ANSWER_X, ANSWER_Y]);
+
+    const afterReject = setAside(sending.state, { id: ANSWER_X, table: "trial_answers" });
+
+    expect(setAsideIds(afterReject)).toEqual([ANSWER_X, ANSWER_X]);
+    const next = take(afterReject);
+    expect(next.batch.map((entry) => entry.id)).toEqual([ANSWER_Y]);
+  });
+
+  it("19b samme id i en annen tabell legges ikke til side", () => {
+    let state = enqueueAll(createOutboxState(), [
+      answerEntry(ANSWER_X, "general_description", "a"),
+      photoEntry(PHOTO),
+    ]);
+    state = take(state).state;
+    const afterReject = setAside(state, { id: PHOTO, table: "trial_answers" });
+    expect(setAsideIds(afterReject)).toEqual([]);
+  });
+
+  it("20 400 uten endring og bunt med én endring: legges til side", () => {
+    const sending = take(enqueue(createOutboxState(), answerEntry(ANSWER_X, "summary", "x")));
+    const afterReject = setAside(sending.state, null);
+    expect(afterReject.inFlight).toBeNull();
+    expect(setAsideIds(afterReject)).toEqual([ANSWER_X]);
+    expect(takeBatch(afterReject, 500)).toBeNull();
+  });
+
+  it("21 400 uten endring og flere i bunten: nytt forsøk, ingenting lagt til side", () => {
+    const sending = take(threeAnswers());
+    const afterReject = setAside(sending.state, null);
+    expect(afterReject.inFlight).toBeNull();
+    expect(setAsideIds(afterReject)).toEqual([]);
+    expect(take(afterReject).batch.map((entry) => entry.id)).toEqual(IDS);
+  });
+
+  it("22 400 med endring som ikke finnes i bunten: nytt forsøk", () => {
+    let state = enqueue(createOutboxState(), answerEntry(ANSWER_X, "summary", "x"));
+    state = take(state).state;
+    // Y kom i køen mens X var underveis, og er ikke i bunten
+    state = enqueue(state, answerEntry(ANSWER_Y, "building_year", 1985));
+    const afterReject = setAside(state, { id: ANSWER_Y, table: "trial_answers" });
+    expect(afterReject.inFlight).toBeNull();
+    expect(setAsideIds(afterReject)).toEqual([]);
+
+    const unknown = setAside(take(threeAnswers()).state, {
+      id: "0192d3a0-0000-7000-8000-0000000000ff",
+      table: "trial_answers",
+    });
+    expect(setAsideIds(unknown)).toEqual([]);
+    expect(take(unknown).batch).toHaveLength(3);
+  });
+
+  it.each([401, 403, 409, 413, 500, 503, undefined])(
+    "23 status %s gir nytt forsøk og legger ingenting til side",
+    (status) => {
+      const sending = take(threeAnswers()).state;
+      expect(shouldAckBatch(status)).toBe(false);
+      // Alt annet enn 200 og 400 går til keepBatch, som aldri legger til side. At lageret bare
+      // kaller «legg til side» ved 400, vises i trial-store.test.ts (samme nummer).
+      const kept = keepBatch(sending);
+      expect(setAsideIds(kept)).toEqual([]);
+      expect(kept.entries.map((entry) => entry.id)).toEqual(IDS);
+      expect(take(kept).batch).toHaveLength(3);
+    },
+  );
+
+  it("24 lagt til side slettes aldri", () => {
+    let state = setAside(take(threeAnswers()).state, { id: ANSWER_X, table: "trial_answers" });
+    for (let round = 0; round < 3; round++) {
+      state = enqueue(state, answerEntry(ANSWER_Y, "building_year", 1990 + round, "PATCH"));
+      state = ackBatch(take(state).state);
+    }
+    // Også ackBatch uten noe underveis og keepBatch lar den stå
+    state = keepBatch(ackBatch(state));
+    expect(state.entries.map((entry) => entry.id)).toContain(ANSWER_X);
+    expect(marked(state).find((entry) => entry.id === ANSWER_X)!.setAside?.at).toBe(AT);
+  });
+
+  it("25 lagt til side sendes ikke", () => {
+    let state = setAside(take(threeAnswers()).state, { id: ANSWER_Y, table: "trial_answers" });
+    const next = take(state);
+    expect(next.batch.map((entry) => entry.id)).not.toContain(ANSWER_Y);
+    state = ackBatch(next.state);
+    expect(state.entries.map((entry) => entry.id)).toEqual([ANSWER_Y]);
+    expect(takeBatch(state, 500)).toBeNull();
+  });
+
+  it("26 lagt til side overlever omlasting", () => {
+    const state = setAside(take(threeAnswers()).state, { id: ANSWER_Y, table: "trial_answers" });
+    const stored = structuredClone(state.entries) as MarkedEntry[];
+    // Rekkefølgen fra IndexedDB er ikke gitt
+    const reloaded = createOutboxState([...stored].reverse(), state.nextSeq);
+
+    expect(reloaded.entries.map((entry) => entry.seq)).toEqual([1, 2, 3]);
+    expect(setAsideIds(reloaded)).toEqual([ANSWER_Y]);
+    expect(marked(reloaded).find((entry) => entry.id === ANSWER_Y)!.setAside).toEqual({ at: AT });
+    expect(take(reloaded).batch.map((entry) => entry.id)).toEqual([ANSWER_X, ANSWER_Z]);
+  });
+
+  it("27 ventetallet teller ikke lagt til side", () => {
+    const state = setAside(take(threeAnswers()).state, { id: ANSWER_X, table: "trial_answers" });
+    expect(state.entries).toHaveLength(3);
+    expect(pendingCount(state)).toBe(2);
+    expect(pendingCount(threeAnswers())).toBe(3);
+    expect(pendingCount(createOutboxState())).toBe(0);
+  });
+
+  it("28 ny endring i samme felt blir ny oppføring", () => {
+    const state = setAside(take(threeAnswers()).state, { id: ANSWER_X, table: "trial_answers" });
+    const oldData = structuredClone(state.entries[0]!.data);
+    const next = enqueue(
+      state,
+      answerEntry(ANSWER_X, "general_description", "Fukt i kjeller", "PATCH"),
+    );
+
+    expect(next.entries).toHaveLength(4);
+    const forX = marked(next).filter((entry) => entry.id === ANSWER_X);
+    expect(forX).toHaveLength(2);
+    expect(forX[0]!.setAside).toBeDefined();
+    expect(forX[0]!.data).toEqual(oldData);
+    expect(forX[1]!.setAside).toBeUndefined();
+    expect(forX[1]!.seq).toBe(state.nextSeq);
+  });
+
+  it("29 pendingKeys har feltet så lenge det er lagt til side og ikke løst", () => {
+    const sending = take(threeAnswers()).state;
+    const key = keyOfAnswer(ANSWER_X, sending);
+    let state = setAside(sending, { id: ANSWER_X, table: "trial_answers" });
+    state = ackBatch(take(state).state);
+    expect(state.entries).toHaveLength(1);
+    expect(pendingKeys(state, localRowKey).has(key)).toBe(true);
+  });
+
+  it("30 200 på senere endring i samme felt løser den gamle", () => {
+    const sending = take(threeAnswers()).state;
+    const key = keyOfAnswer(ANSWER_X, sending);
+    let state = setAside(sending, { id: ANSWER_X, table: "trial_answers" });
+    state = ackBatch(take(state).state);
+    // Takstmannen skriver feltet om: en PATCH uten nøkkelkolonnene
+    state = enqueue(state, answerEntry(ANSWER_X, "general_description", "Fukt i kjeller", "PATCH"));
+    state = ackBatch(take(state).state);
+
+    const old = marked(state).find((entry) => entry.id === ANSWER_X);
+    expect(old, "den gamle oppføringen skal ikke slettes").toBeDefined();
+    expect(old!.setAside?.resolved).toBe(true);
+    expect(old!.setAside?.at).toBe(AT);
+    expect(pendingKeys(state, localRowKey).has(key)).toBe(false);
+    expect(pendingCount(state)).toBe(0);
+    expect(takeBatch(state, 500)).toBeNull();
+  });
+
+  it("31 200 på et annet felt løser ikke", () => {
+    const sending = take(threeAnswers()).state;
+    const key = keyOfAnswer(ANSWER_X, sending);
+    let state = setAside(sending, { id: ANSWER_X, table: "trial_answers" });
+    state = ackBatch(take(state).state);
+    state = enqueue(state, answerEntry(ANSWER_Y, "building_year", 1990, "PATCH"));
+    state = ackBatch(take(state).state);
+
+    const old = marked(state).find((entry) => entry.id === ANSWER_X)!;
+    expect(old.setAside?.resolved).toBeUndefined();
+    expect(pendingKeys(state, localRowKey).has(key)).toBe(true);
+  });
+
+  it("32 shouldAckBatch er uendret: bare 200 slipper bunten", () => {
+    expect(shouldAckBatch(200)).toBe(true);
+    for (const status of [201, 204, 400, 401, 403, 409, 413, 500, 503, undefined]) {
+      expect(shouldAckBatch(status), String(status)).toBe(false);
+    }
+  });
+});
