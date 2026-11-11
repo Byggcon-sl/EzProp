@@ -3,14 +3,14 @@ id: T-0021
 tittel: Forslagsmønsteret står fortsatt i planen og er ikke flyttet til listen over levert arbeid
 type: feil
 alvor: lite
-status: ny
+status: rettet
 funnet: 2026-11-11
 rolle: test-dokumentvakt
 omrade: dokumenter (plan)
 maal: de ansatte
 commit: 0b8e3b9
 forsok: 0
-pr:
+pr: læringsløkken 11.11.2026
 ---
 
 ## Hva

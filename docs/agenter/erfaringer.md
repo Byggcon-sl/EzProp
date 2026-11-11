@@ -237,3 +237,8 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 - Hovedløkken pushet en branch midt i en arbeidsflyt (etter beskjed fra stoppkroken). En annen kjøring så branchen uten PR og trodde kjøringen hadde stanset, overtok den og merget PR #127. Den første arbeidsflyten bygget det samme ferdig i parallell, og det arbeidet ble lagt bort (`arkiv-ki-modul-logg-parallell`). Regel videre: før en arbeidsflyt startes, skriv punktet og branchen under «Gjeldende oppgave» i `docs/agenter/tilstand.md` på `main` (eller sjekk at ingen annen kjøring har det). Ikke overta en branch med commit yngre enn 60 minutter mens en arbeidsflyt kan være i gang.
 
+
+## 11.11.2026 – PR #135 (vask før KI) og retting av T-0001
+
+- To kjøringer reserverte de samme A-numrene: «Vask før KI» hadde satt av A169–A179, mens oppgavekortet for T-0001 tok A169 og A170 på sin branch. Regel videre: et kort som tar A-numre, leser «nå A…» og reservasjonene i `docs/agenter/tilstand.md` på `origin/main` rett før numrene skrives, og den som merges sist, nummererer om i sine egne filer.
+- Læringsløkken etter merge ble ikke kjørt for PR #131, så testlaget meldte det som funn (T-0021). Flytt punktet til `docs/plan/levert.md` i samme kjøring som merger.
