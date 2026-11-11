@@ -6,7 +6,31 @@ import path from "node:path";
  * - En modul (src/modules/<navn>) importerer bare fra core, shared, db og egen mappe.
  * - Kjernen (src/core) importerer aldri fra moduler eller app.
  * - Felles kode (src/shared) importerer aldri fra core, moduler eller app.
+ * - Klientdelen av KI-modulen (src/core/ai/client, KI-køen) er et rent blad, og bare prøvesiden
+ *   /prove/ki og utloggingsknappen kan importere den (docs/adr/0006-ki-i-bunnen.md del 10).
  */
+
+const AI_CLIENT = "core/ai/client";
+/** Verdi-importer klientdelen kan ha utenom egen mappe og `shared`. */
+const AI_CLIENT_VALUE_TARGETS = ["core/ai/limits"];
+/** Bare `import type` herfra: filene har ledetekster og databasetyper som ikke skal i nettleseren. */
+const AI_CLIENT_TYPE_ONLY_TARGETS = ["core/ai/types", "core/ai/features"];
+const AI_CLIENT_PACKAGES = ["zod"];
+/**
+ * Hvem som kan importere KI-køen. Køen holder fritekst ukryptert på enheten, så den brukes ikke
+ * i ekte skjermer før «Sperring av iPader» er levert (fase 2b). Da fjernes denne listen.
+ */
+const AI_CLIENT_IMPORTERS = ["app/(ansatt)/prove/ki/", "app/(ansatt)/log-out-button.tsx"];
+
+/** @param {string} target */
+function isAiClient(target) {
+  return target === AI_CLIENT || target.startsWith(`${AI_CLIENT}/`);
+}
+
+/** @param {string} target @param {string[]} files */
+function isOneOf(target, files) {
+  return files.some((file) => target === file || target === `${file}.ts`);
+}
 
 /** @param {string} filename */
 function srcRelative(filename) {
@@ -45,6 +69,10 @@ const rule = {
       moduleToModule:
         "Modulen «{{from}}» kan ikke importere fra modulen «{{to}}». Samhandling går via kjernen (tiltaksforslag).",
       forbiddenLayer: "«{{from}}» kan ikke importere fra «{{to}}» (se docs/06-arkitektur.md).",
+      aiClientLeaf:
+        "Klientdelen av KI-modulen kan ikke importere «{{to}}». Lov: egen mappe, ../limits, @/shared og zod, og bare «import type» fra ../types og ../features (ADR 0006 del 10).",
+      aiClientImporter:
+        "KI-køen (@/core/ai/client) kan bare importeres fra prøvesiden /prove/ki og utloggingsknappen til «Sperring av iPader» er levert (ADR 0006 del 10).",
     },
   },
   create(context) {
@@ -52,6 +80,9 @@ const rule = {
     // Seed-skriptene setter opp data på tvers av lagene og er unntatt.
     if (!fromFile || fromFile.startsWith("db/seed/")) return {};
     const from = layerOf(fromFile);
+    // Testfiler er ikke produktkode og er unntatt fra de to reglene for KI-køen.
+    const isTestFile = /\.test\.tsx?$/.test(fromFile);
+    const fromAiClient = isAiClient(fromFile) && !isTestFile;
 
     /** @type {Record<string, string[]>} */
     const forbidden = {
@@ -61,12 +92,40 @@ const rule = {
       modules: ["app"],
     };
 
-    /** @param {any} node AST-noden for importstien @param {unknown} value */
-    function check(node, value) {
+    /**
+     * @param {any} node AST-noden for importstien
+     * @param {unknown} value
+     * @param {boolean} [typeOnly] `import type` eller `export type`, som forsvinner ved bygging
+     */
+    function check(node, value, typeOnly = false) {
       if (typeof value !== "string") return;
       const target = resolveTarget(value, fromFile ?? "");
+
+      if (fromAiClient) {
+        const allowed = target
+          ? isAiClient(target) ||
+            target.startsWith("shared/") ||
+            isOneOf(target, AI_CLIENT_VALUE_TARGETS) ||
+            (typeOnly && isOneOf(target, AI_CLIENT_TYPE_ONLY_TARGETS))
+          : AI_CLIENT_PACKAGES.includes(value);
+        if (!allowed) {
+          context.report({ node, messageId: "aiClientLeaf", data: { to: value } });
+          return;
+        }
+      }
+
       if (!target) return;
       const to = layerOf(target);
+
+      if (
+        isAiClient(target) &&
+        !isAiClient(fromFile ?? "") &&
+        !isTestFile &&
+        !AI_CLIENT_IMPORTERS.some((importer) => (fromFile ?? "").startsWith(importer))
+      ) {
+        context.report({ node, messageId: "aiClientImporter" });
+        return;
+      }
 
       if (from.layer === "modules" && to.layer === "modules" && to.name && to.name !== from.name) {
         // registry.ts er modulregisteret og får kjenne alle moduler.
@@ -89,9 +148,13 @@ const rule = {
     }
 
     return {
-      ImportDeclaration: (node) => check(node.source, node.source.value),
-      ExportNamedDeclaration: (node) => node.source && check(node.source, node.source.value),
-      ExportAllDeclaration: (node) => check(node.source, node.source.value),
+      ImportDeclaration: (node) =>
+        check(node.source, node.source.value, /** @type {any} */ (node).importKind === "type"),
+      ExportNamedDeclaration: (node) =>
+        node.source &&
+        check(node.source, node.source.value, /** @type {any} */ (node).exportKind === "type"),
+      ExportAllDeclaration: (node) =>
+        check(node.source, node.source.value, /** @type {any} */ (node).exportKind === "type"),
       ImportExpression: (node) =>
         node.source.type === "Literal" && check(node.source, node.source.value),
     };

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isUuid } from "@/shared/lib/uuid";
 import { AI_FEATURES, getFeatureDefinition, type AiFeatureDefinition } from "./features";
+import { AI_FIELD_MAX_LENGTH } from "./limits";
 import type { AiFeatureCode } from "./types";
 
 /*
@@ -9,8 +10,8 @@ import type { AiFeatureCode } from "./types";
  * leverandør kommer aldri fra forespørselen.
  */
 
-/** Høyeste antall tegn i hver verdi i `fields`. */
-export const AI_FIELD_MAX_LENGTH = 5000;
+/** Står i `limits.ts`, slik at klientdelen kan bruke grensen uten å laste denne filen. */
+export { AI_FIELD_MAX_LENGTH };
 
 const uuidSchema = z.string().refine(isUuid);
 const featureCodes = Object.keys(AI_FEATURES) as [AiFeatureCode, ...AiFeatureCode[]];

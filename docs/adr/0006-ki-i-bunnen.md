@@ -245,12 +245,24 @@ Treff erstattes med faste merker: `[navn]`, `[e-post]`, `[telefon]`, `[adresse]`
 
 ### 10. KI-kø uten nett
 
-- Køen ligger **bare lokalt** på iPaden, i samme lokale lagring som endringskøen (ADR 0004). Ingen rad på serveren og ingen ny status før kallet er gjort.
-- En forespørsel i køen har `requestId` (blir id-en i `ai_usage_log`), funksjon og mål. Feltet vises som «venter på KI».
-- Køen tømmes ved utlogging og sperring av enheten, som resten av de lokale dataene (ADR 0004).
-- Vask og leverandørkall skjer bare på serveren. iPaden snakker aldri med leverandøren og har aldri nøkkelen.
+Rettet 11.11.2026 (A186–A191, oppgavekort `docs/funksjoner/fase2a-ki-ko.md`). Før sto det at køen ligger i samme lokale lagring som endringskøen. Den lagringen finnes bare i prøvemodulen, som kjernen ikke kan importere.
+
+- Køen ligger **bare lokalt** på enheten. Ingen rad på serveren og ingen ny status før kallet er gjort. Serveren (`requestSuggestion`) er uendret: vask, tilgang, KI av/på og logg skjer der som for alle andre kall.
+- **Plassering:** klientdelen `src/core/ai/client` med egen inngang `@/core/ai/client`. `src/core/ai/index.ts` eksporterer den ikke. Mappen er et rent blad: verdi-importer bare fra egen mappe, `src/core/ai/limits.ts`, `@/shared` og `zod`, og bare `import type` fra `types.ts` og `features.ts`. Slik havner verken ledetekstene eller databasen i nettleseren. Lint-regelen `ezprop/module-boundaries` håndhever det.
+- **Lagring (A186):** egen IndexedDB-database `local-ai-queue` versjon 1, lager `ai_queue` med nøkkel `requestId`, ingen indeks. Køen kjenner bare grensesnittet `AiQueueStore` (én `update` som leser, avgjør og skriver i én transaksjon, og `clear`). I fase 2b flyttes køen inn i den ekte lokale databasen ved å bytte utgaven av `AiQueueStore`; serveren og køens logikk endres ikke.
+- **Posten** har `requestId`, funksjon, mål (`targetType`, `targetId`, `fieldKey`, `assignmentId`), feltene fra tillatt-listen, eier (`organizationId`, `employeeId`), `queuedAt` og `attempts`. Eier, `queuedAt` og `attempts` blir på enheten: de sendes aldri og logges aldri. Feltet vises som «venter på KI».
+- **`requestId` er tilfeldig (UUID v4), ikke v7 (A191).** Id-en blir id-en i `ai_usage_log`. Med v7 står klokkeslettet i id-en, og da kunne ventetiden uten nett regnes ut per ansatt (tidsmåling). Dette er et bevisst unntak fra «UUID v7 laget på enheten» og gjelder bare forespørsler fra køen. Rekkefølgen i køen tas fra `queuedAt`, deretter `requestId`.
+- **Én post per mål og felt (A187).** En ny forespørsel på samme mål og felt erstatter den gamle i samme transaksjon og får **ny `requestId`**; ellers ville serveren svare med forslaget på den gamle teksten. Høyst 50 poster, og hver verdi høyst `AI_FIELD_MAX_LENGTH` tegn. Full kø gir fast melding, aldri stille tap.
+- **Eier på posten (A190).** Ved hver lesing slettes poster som har feil form, annen `organizationId` eller `employeeId` enn den innloggede, eller er eldre enn 7 dager (A189). De sendes aldri. Dette er den eneste mekanismen for bytte av organisasjon og ansatt på en delt enhet.
+- **Tømming:** køen tømmes ved utlogging, og tømmingen stopper en behandling som pågår. Feiler tømmingen, går utloggingen likevel videre, og eiersjekken rydder ved neste lesing. Tømming ved sperring av enheten kommer med «Sperring av iPader» (fase 2b).
+- **Behandling:** når nettet er tilbake, sendes postene én om gangen. Siden gir inn `send`, så kjernen aldri importerer app eller moduler. Tre utfall: *prøv senere* (nettfeil eller tidsavbrudd på 30 sekunder; posten blir liggende, runden stopper), *ferdig* (alle kjente svar, også avslag med fast kode `invalid` eller `no_access`; posten fjernes) og *ukjent serverfeil* (forsøket telles, runden går videre, posten fjernes etter 3 forsøk). Én dårlig post stopper aldri resten (lærdom fra T-0001). Sendes samme post to ganger, gir serveren samme rad.
+- Vask og leverandørkall skjer bare på serveren. Enheten snakker aldri med leverandøren og har aldri nøkkelen.
 - Tilgang sjekkes på nytt når køen behandles. Har den ansatte mistet tilgangen, eller er KI slått av, forkastes forespørselen.
+- **Fritekst ligger ukryptert i køen.** Derfor brukes køen nå bare på prøvesiden `/prove/ki` med oppdiktede data, og lint-regelen stopper import fra andre steder enn prøvesiden og utloggingsknappen. Sperren fjernes når «Sperring av iPader» er levert. Kryptering vurderes sammen med sperringen.
+- **Krav til fase 2b:** (1) eiersjekk og aldersrydding kjøres ved innlogging og ved oppstart av appen, ikke bare på skjermen som bruker køen (i dag ryddes det bare når `/prove/ki` åpnes); (2) en fane som ble lastet av en annen ansatt, må ikke kunne sende sin post under en ny økt (eiersjekken bruker id-ene siden fikk ved lasting); (3) køen tømmes ved sperring av enheten.
 - Opptak, bilder, frasesøk og regelsjekker virker uten nett og uten KI.
+
+**Forkastet for køen:** å legge den i prøvedatabasen (bryter regel 4, og prøvemodulen skal kastes eller gjøres om); `requestId` som UUID v7 (tidsmåling, se over); rad på serveren før kallet (ny status og ny spørring uten nytte); indeks på mål og felt (unødvendig med høyst 50 poster, og mer å flytte i 2b); et merke i localStorage for tømming som ikke ble fullført (eiersjekken dekker det); bakgrunnssynk med Service Worker (ikke nå, køen behandles når siden er åpen).
 
 ### 11. KI av/på
 
