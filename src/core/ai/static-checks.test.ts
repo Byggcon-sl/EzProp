@@ -156,3 +156,54 @@ describe("forslagsmønsteret, statiske kontroller (8)", () => {
     expect(read(join(aiDir, "features.ts"))).toMatch(/\bai_trial\b/);
   });
 });
+
+/*
+ * Vask før KI, statiske kontroller (docs/funksjoner/fase2a-vask-for-ki-testplan.md V8.5–V8.7,
+ * V10.1). Vasken ligger i den eneste veien til leverandøren, og antall vaskede treff og sperrede
+ * forespørsler kan ikke leses per ansatt (spørsmål 57).
+ */
+describe("vask før KI, statiske kontroller (V8.5–V8.7)", () => {
+  const requestFile = join(aiDir, "request-suggestion.ts");
+
+  it("V8.5 provider.complete kalles bare i src/core/ai/request-suggestion.ts", () => {
+    const offenders = productFiles(srcDir)
+      .filter((file) => /\.complete\s*\(/.test(read(file)))
+      .map(rel);
+    expect(offenders).toEqual(["src/core/ai/request-suggestion.ts"]);
+  });
+
+  it("V8.5 i request-suggestion.ts står oppslaget og vaskekallet før leverandørkallet", () => {
+    const source = read(requestFile);
+    const complete = source.search(/\.complete\s*\(/);
+    const redact = source.search(/\bredactText\s*\(/);
+    const load = source.search(/\bloadKnownValues\s*\(/);
+    expect(complete, "leverandørkallet mangler").toBeGreaterThan(-1);
+    expect(redact, "vaskekallet mangler").toBeGreaterThan(-1);
+    expect(load, "oppslaget av kjente verdier mangler").toBeGreaterThan(-1);
+    expect(redact).toBeLessThan(complete);
+    expect(load).toBeLessThan(redact);
+    // Vasken og oppslaget hentes fra ./redaction, ikke fra en kopi
+    expect(source).toMatch(/from\s+["']\.\/redaction["']/);
+  });
+
+  it("V8.6 redactedCount står ikke i returtypen til requestSuggestion", () => {
+    const types = read(join(aiDir, "types.ts"));
+    const start = types.indexOf("export type AiSuggestionResult");
+    expect(start).toBeGreaterThan(-1);
+    const end = types.indexOf(";", start);
+    expect(types.slice(start, end)).not.toMatch(/redact/i);
+  });
+
+  it("V8.7 index.ts eksporterer ingen visning, liste eller telling av redacted_count eller blocked", async () => {
+    const ai: Record<string, unknown> = await import("./index");
+    const forbidden =
+      /(list|count|stat|summary|per|show|view)\w*(redact|blocked)|(redact|blocked)\w*(list|count|stat|summary|employee|per)/i;
+    expect(Object.keys(ai).filter((name) => forbidden.test(name))).toEqual([]);
+    const exported = [...read(join(aiDir, "index.ts")).matchAll(/\b\w+\b/g)].map((m) => m[0]);
+    expect(exported.filter((name) => forbidden.test(name))).toEqual([]);
+    // Mønsteret er ikke hult
+    expect(forbidden.test("countBlockedByEmployee")).toBe(true);
+    expect(forbidden.test("listRedactedCounts")).toBe(true);
+    expect(forbidden.test("redactedCountPerEmployee")).toBe(true);
+  });
+});

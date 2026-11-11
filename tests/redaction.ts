@@ -70,4 +70,3 @@ export async function knownValuesFor(grant: EmployeeGrant, seed: KnownSeed): Pro
   const assignmentId = await seedKnownValues(grant.organizationId, seed);
   return loadKnownValues(grant, assignmentId);
 }
-

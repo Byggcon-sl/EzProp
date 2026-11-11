@@ -1268,6 +1268,24 @@ export async function aiUsageRowsWithMarker(marker: string): Promise<E2eAiUsageR
   }
 }
 
+/**
+ * Antall vaskede treff (`redacted_count`) og utfallet for radene der forslaget inneholder
+ * markøren (vask før KI, V9.1). Bare lesing; aldri verdiene.
+ */
+export async function aiRedactedCountsWithMarker(
+  marker: string,
+): Promise<{ outcome: string; redactedCount: number }[]> {
+  const sql = e2eSql();
+  try {
+    return await sql<{ outcome: string; redactedCount: number }[]>`
+      select outcome, redacted_count as "redactedCount"
+      from ai_usage_log where output_text like ${`%${marker}%`}
+      order by created_at, id`;
+  } finally {
+    await sql.end();
+  }
+}
+
 /** Radene i KI-loggen for målet (`target_ref.id`), eldste først. Bare lesing. */
 export async function aiUsageRowsForTarget(targetId: string): Promise<E2eAiUsageRow[]> {
   const sql = e2eSql();

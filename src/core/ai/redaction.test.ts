@@ -1,17 +1,21 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { EmployeeGrant } from "@/core/access";
+import { requireOrganizationAccess, type EmployeeGrant } from "@/core/access";
 import { PII_PLACEHOLDERS } from "@/shared/lib/pii-patterns";
 import { employeeWithGrant } from "../../../tests/ai";
 import { createOrganization, resetDatabase } from "../../../tests/factories";
 import {
   containsWord,
+  knownStrings,
   knownValuesFor,
+  loadKnownValues,
   placeholderCounts,
   redactText,
+  seedKnownValues,
   type KnownSeed,
 } from "../../../tests/redaction";
+import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { REDACTION_CASES, STANDARD_KNOWN_VALUES } from "./redaction-cases";
 
 /*
@@ -26,8 +30,8 @@ import { REDACTION_CASES, STANDARD_KNOWN_VALUES } from "./redaction-cases";
 
 beforeEach(resetDatabase);
 
-async function setup(): Promise<EmployeeGrant> {
-  const organization = await createOrganization("Oppdiktet Takst A");
+async function setup(name = "Oppdiktet Takst A"): Promise<EmployeeGrant> {
+  const organization = await createOrganization(name);
   return (await employeeWithGrant(organization.id, ["inspector"], "Qxz Brukersen")).grant;
 }
 
@@ -314,9 +318,10 @@ describe("V3.11 testsett med fasit (redaction-cases.ts)", () => {
     expect(REDACTION_CASES.length).toBeLessThanOrEqual(50);
     expect(new Set(REDACTION_CASES.map((c) => c.name)).size).toBe(REDACTION_CASES.length);
 
-    const grant = await setup();
     const seen = new Set<string>();
-    for (const testCase of REDACTION_CASES) {
+    for (const [index, testCase] of REDACTION_CASES.entries()) {
+      // Egen organisasjon per sak: samme oppdiktede org.nr. kan stå i flere saker
+      const grant = await setup(`Oppdiktet Takst ${index}`);
       const known = await knownValuesFor(grant, testCase.knownValues ?? {});
       for (const placeholder of Object.keys(
         placeholderCounts(redactText(testCase.input, known).text),
@@ -328,12 +333,12 @@ describe("V3.11 testsett med fasit (redaction-cases.ts)", () => {
   });
 
   it("V3.11 0 bom: ingen mustRemove finnes etter vasken, og alle mustKeep står", async () => {
-    const grant = await setup();
     const misses: string[] = [];
     const lostKeeps: string[] = [];
     let overRedacted = 0;
     const overRedactedWords: string[] = [];
-    for (const testCase of REDACTION_CASES) {
+    for (const [index, testCase] of REDACTION_CASES.entries()) {
+      const grant = await setup(`Oppdiktet Takst ${index}`);
       const known = await knownValuesFor(grant, testCase.knownValues ?? {});
       const { text } = redactText(testCase.input, known);
       for (const value of testCase.mustRemove) {
@@ -370,5 +375,79 @@ describe("V8.6 ingen mellomlagring av kjente verdier", () => {
       expect(line, line).not.toMatch(/new\s+(?:Map|Set|WeakMap|WeakSet)\b|cache/iu);
     }
     expect(source).not.toMatch(/^(?:export\s+)?let\s/mu);
+  });
+});
+
+/*
+ * Oppslaget av kjente verdier filtrerer på `grant.organizationId` (testplanen V7.1, kortet
+ * «Tilgang», regel 2). Mykt slettede rader tas med (A170), men aldri rader fra en annen
+ * organisasjon. Alle verdier er oppdiktet.
+ */
+describe("loadKnownValues: tenant-isolasjon (V7.1)", () => {
+  it("V7.1 expectTenantIsolation: B får ingen verdier fra A sitt oppdrag, og omvendt", async () => {
+    const seeded: { assignmentId: string; marker: string }[] = [];
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        const a = await seedKnownValues(grantA.organizationId, {
+          parties: [{ name: "Annlaug Aorgsen", phone: "41112222", deleted: true }],
+          property: { address: "Aorgtunet 1" },
+        });
+        const b = await seedKnownValues(grantB.organizationId, {
+          parties: [{ name: "Bertil Borgsen", phone: "42223333" }],
+          property: { address: "Borgtunet 2" },
+        });
+        seeded.push({ assignmentId: a, marker: "Aorgsen" }, { assignmentId: b, marker: "Borgsen" });
+        return { a: [a], b: [b] };
+      },
+      query: async (actor, organizationId) => {
+        const grant = await requireOrganizationAccess(actor, organizationId);
+        const visible: { id: string }[] = [];
+        for (const { assignmentId, marker } of seeded) {
+          let values: unknown;
+          try {
+            values = await loadKnownValues(grant, assignmentId);
+          } catch {
+            continue;
+          }
+          const strings = knownStrings(values).join(" ");
+          if (strings.includes(marker)) visible.push({ id: assignmentId });
+        }
+        return visible;
+      },
+      idOf: (row) => row.id,
+    });
+  });
+
+  it("V7.1 A sitt oppdrag slått opp med B sin grant gir ingen verdier fra A", async () => {
+    const orgA = await createOrganization("Oppdiktet Takst A");
+    const orgB = await createOrganization("Oppdiktet Takst B");
+    const grantB = (await employeeWithGrant(orgB.id, ["admin"], "Qxz Admin B")).grant;
+    const assignmentA = await seedKnownValues(orgA.id, {
+      parties: [{ name: "Annlaug Aorgsen", email: "annlaug@example.no", phone: "41112222" }],
+      property: { address: "Aorgtunet 1", city: "Aorgvik" },
+    });
+    let values: unknown = null;
+    try {
+      values = await loadKnownValues(grantB, assignmentA);
+    } catch {
+      values = null;
+    }
+    const strings = knownStrings(values).join(" ");
+    for (const value of [
+      "Aorgsen",
+      "Annlaug",
+      "annlaug@example.no",
+      "41112222",
+      "Aorgtunet",
+      "Aorgvik",
+    ]) {
+      expect(strings).not.toContain(value);
+    }
+    // Og vasken med det B fikk, lar A sine verdier stå
+    if (values !== null) {
+      expect(redactText("Annlaug Aorgsen i Aorgtunet", values).text).toBe(
+        "Annlaug Aorgsen i Aorgtunet",
+      );
+    }
   });
 });
