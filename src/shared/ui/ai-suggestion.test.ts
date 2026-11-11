@@ -418,7 +418,13 @@ describe("K5.2 T-0004 forslag på eldre tekst", () => {
   ])(
     "%s: feltet er endret etterpå, ingen «Bruk», men «Nytt forslag» og forklaring",
     (_n, extra) => {
-      const patch = { ...extra, ownText: "A", suggestionText: "A.", currentText: "A og mer" };
+      const patch = {
+        ...extra,
+        ownText: "A",
+        sourceText: "A",
+        suggestionText: "A.",
+        currentText: "A og mer",
+      };
       const view = suggestionView({ ...base, ...patch });
       expect(view.buttons.use).toBe(false);
       expect(view.buttons.newSuggestion).toBe(true);

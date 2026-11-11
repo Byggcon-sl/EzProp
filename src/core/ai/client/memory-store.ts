@@ -42,7 +42,8 @@ export function createMemoryAiQueueStore(
       failIfSet();
       const change = decide([...rows]);
       const removed = new Set<unknown>(change.remove);
-      rows = rows.filter((row) => !removed.has(requestIdOf(row)));
+      const dropped = new Set<unknown>(change.drop ?? []);
+      rows = rows.filter((row) => !dropped.has(row) && !removed.has(requestIdOf(row)));
       for (const entry of change.put) {
         // IndexedDB lagrer en kopi. Det gjør minneutgaven også.
         const copy = structuredClone(entry);

@@ -111,10 +111,11 @@ describe("K1.1 enqueue, list, remove og clear", () => {
     const second = await queued(queue);
     const third = await queued(queue);
     await queue.remove(second.entry.requestId);
-    expect((await listed(queue)).map((e) => e.requestId)).toEqual([
-      first.entry.requestId,
-      third.entry.requestId,
-    ]);
+    // Samme `now` gir lik `queuedAt`, så rekkefølgen avgjøres av tilfeldig `requestId` (K1.x om
+    // rekkefølge prøver den). Her gjelder bare hvilke poster som står igjen.
+    expect((await listed(queue)).map((e) => e.requestId).sort()).toEqual(
+      [first.entry.requestId, third.entry.requestId].sort(),
+    );
 
     expect(await clearAiQueue(store)).toEqual({ cleared: true });
     expect(await listed(queue)).toEqual([]);
@@ -329,6 +330,8 @@ describe("K1.8 og K1.9 lesesjekken sletter ugyldige poster og lar gyldige stå",
     ["annen organizationId", () => rawEntry({ organizationId: randomUUID() })],
     ["annen employeeId", () => rawEntry({ employeeId: randomUUID() })],
     ["queuedAt 7 dager og 1 minutt gammel", () => rawEntry({ queuedAt: NOW - 7 * DAY - MINUTE })],
+    ["queuedAt mer enn ett døgn fram i tid", () => rawEntry({ queuedAt: NOW + DAY + MINUTE })],
+    ["requestId er et tall", () => rawEntry({ requestId: 42 as unknown as string })],
   ];
 
   it("levetiden er 7 dager", () => {

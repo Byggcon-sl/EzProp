@@ -38,8 +38,8 @@ import {
  * KI-køen (docs/funksjoner/fase2a-ki-ko.md Omfang 3–5): uten nett legges forespørselen i køen på
  * enheten og sendes gjennom serverhandlingen når nettet er tilbake. Ved ny lasting hentes mål-id
  * og tekst fra køen. Kortet husker teksten forslaget ble laget fra, så et sent forslag aldri
- * skriver over nyere egen tekst (T-0004). Teksten legges aldri i localStorage, sessionStorage,
- * adressen eller konsollen.
+ * skriver over nyere egen tekst (T-0004). Teksten legges bare i IndexedDB, aldri i annen
+ * lagring i nettleseren, adressen eller konsollen.
  * Støtter hovedmål: de ansatte (ett trykk uten nett, teksten står etter ny lasting) og færre
  * reklamasjoner (et sent forslag skriver aldri over nyere egen tekst).
  */

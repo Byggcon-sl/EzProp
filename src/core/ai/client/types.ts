@@ -23,6 +23,8 @@ export const AI_QUEUE_STORE_NAME = "ai_queue";
 export const AI_QUEUE_MAX_ENTRIES = 50;
 /** Poster eldre enn dette slettes ved lesing (A189). */
 export const AI_QUEUE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+/** Hvor langt fram i tid `queuedAt` kan ligge før posten slettes (feil klokke på enheten, A192). */
+export const AI_QUEUE_MAX_CLOCK_SKEW_MS = 24 * 60 * 60 * 1000;
 /** Tidsavbrudd for ett kall til `send`. Gir «prøv senere». */
 export const AI_QUEUE_SEND_TIMEOUT_MS = 30_000;
 /** Antall forsøk ved ukjent serverfeil før posten fjernes med fast melding. */
@@ -76,6 +78,11 @@ export type AiQueueStoreChange<T> = {
   put: readonly AiQueueEntry[];
   /** `requestId` på poster som skal slettes. */
   remove: readonly string[];
+  /**
+   * Rå poster fra `stored` som skal slettes fordi de ikke passer skjemaet (også poster uten gyldig
+   * `requestId`). Minneutgaven sletter dem etter identitet, IndexedDB-utgaven etter nøkkelen.
+   */
+  drop?: readonly unknown[];
   result: T;
 };
 

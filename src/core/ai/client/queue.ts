@@ -3,6 +3,7 @@ import { classifyQueueOutcome } from "./outcome";
 import { checkAiQueueFields, isAiQueueFeature, parseAiQueueEntry } from "./schema";
 import {
   AI_QUEUE_MAX_AGE_MS,
+  AI_QUEUE_MAX_CLOCK_SKEW_MS,
   AI_QUEUE_MAX_ATTEMPTS,
   AI_QUEUE_MAX_ENTRIES,
   AI_QUEUE_SEND_TIMEOUT_MS,
@@ -72,26 +73,27 @@ function sweep(
   stored: readonly unknown[],
   owner: AiQueueOwner,
   nowMs: number,
-): { valid: AiQueueEntry[]; remove: string[] } {
+): { valid: AiQueueEntry[]; drop: unknown[] } {
   const valid: AiQueueEntry[] = [];
-  const remove: string[] = [];
+  const drop: unknown[] = [];
   const oldest = nowMs - AI_QUEUE_MAX_AGE_MS;
+  // En post fra «framtiden» (feil klokke på iPaden) ville ellers levd lenger enn 7 dager (A192).
   for (const raw of stored) {
     const entry = parseAiQueueEntry(raw);
     if (
       entry &&
       entry.organizationId === owner.organizationId &&
       entry.employeeId === owner.employeeId &&
-      entry.queuedAt >= oldest
+      entry.queuedAt >= oldest &&
+      entry.queuedAt <= nowMs + AI_QUEUE_MAX_CLOCK_SKEW_MS
     ) {
       valid.push(entry);
       continue;
     }
-    const id = requestIdOf(raw);
-    if (typeof id === "string") remove.push(id);
+    drop.push(raw);
   }
   valid.sort(compareEntries);
-  return { valid, remove };
+  return { valid, drop };
 }
 
 /** Det `send` får. Bygges med eksplisitte nøkler, så eier, tid og forsøk aldri følger med. */
@@ -175,8 +177,8 @@ export const createAiQueue: CreateAiQueue = (deps) => {
   function readAndSweep(): Promise<AiQueueEntry[]> {
     const nowMs = now();
     return store.update((stored): AiQueueStoreChange<AiQueueEntry[]> => {
-      const { valid, remove } = sweep(stored, owner, nowMs);
-      return { put: [], remove, result: valid };
+      const { valid, drop } = sweep(stored, owner, nowMs);
+      return { put: [], remove: [], drop, result: valid };
     });
   }
 
@@ -219,7 +221,7 @@ export const createAiQueue: CreateAiQueue = (deps) => {
       if (!candidate) return { kind: "rejected", reason: "invalid" };
       const entry = candidate;
       return await store.update((stored): AiQueueStoreChange<AiQueueEnqueueResult> => {
-        const { valid, remove: stale } = sweep(stored, owner, nowMs);
+        const { valid, drop } = sweep(stored, owner, nowMs);
         const same = valid.find(
           (existing) =>
             existing.targetType === entry.targetType &&
@@ -229,16 +231,18 @@ export const createAiQueue: CreateAiQueue = (deps) => {
         if (same) {
           return {
             put: [entry],
-            remove: [...stale, same.requestId],
+            remove: [same.requestId],
+            drop,
             result: { kind: "queued", entry, replacedRequestId: same.requestId },
           };
         }
         if (valid.length >= AI_QUEUE_MAX_ENTRIES) {
-          return { put: [], remove: stale, result: { kind: "rejected", reason: "full" } };
+          return { put: [], remove: [], drop, result: { kind: "rejected", reason: "full" } };
         }
         return {
           put: [entry],
-          remove: stale,
+          remove: [],
+          drop,
           result: { kind: "queued", entry, replacedRequestId: null },
         };
       });
@@ -292,6 +296,8 @@ export const createAiQueue: CreateAiQueue = (deps) => {
 
     let left = entries.length;
     for (const entry of entries) {
+      // Uten nett sendes ingenting; posten blir liggende til `online` starter en ny runde.
+      if (!isOnline()) return { kind: "stopped", reason: "offline", remaining: left };
       const attempt = await sendWithTimeout(send, toPayload(entry), sendTimeoutMs);
       if (cleared()) return stoppedCleared;
 

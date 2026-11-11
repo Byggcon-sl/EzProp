@@ -103,6 +103,11 @@ export const createIndexedDbAiQueueStore: CreateIndexedDbAiQueueStore = (): AiQu
           // `decide` er synkron, så transaksjonen lever til alt er skrevet.
           const change = decide(read.result as unknown[]);
           for (const requestId of change.remove) store.delete(requestId);
+          for (const raw of change.drop ?? []) {
+            // Med `keyPath` har hver lagret post en gyldig nøkkel, også når den ikke er tekst.
+            const key = (raw as { requestId?: IDBValidKey } | null)?.requestId;
+            if (key !== undefined) store.delete(key);
+          }
           for (const entry of change.put) store.put(entry);
           result = { value: change.result };
         } catch (error) {
