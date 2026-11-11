@@ -380,3 +380,118 @@ describe("V1.16 count", () => {
     expect(redactPii("")).toEqual({ text: "", count: 0 });
   });
 });
+
+/*
+ * Småfunn fra «Vask før KI» som tas med evalueringssettet (docs/funksjoner/
+ * fase2a-evalueringssett-testplan.md E6.3, E6.5, E6.6 og E6.8, kortet Omfang 7): telefon i flere
+ * grupperinger og med smale og tynne mellomrom, uten overvask av årstall og mål.
+ */
+const SPACE_TYPES = [
+  { name: "vanlig mellomrom", space: " " },
+  { name: "U+00A0", space: "\u00A0" },
+  { name: "U+2009", space: "\u2009" },
+  { name: "U+202F", space: "\u202F" },
+];
+const NEW_GROUPINGS = [
+  { name: "123 45678", parts: ["123", "45678"] },
+  { name: "1234 56 78", parts: ["1234", "56", "78"] },
+  { name: "12 34 5678", parts: ["12", "34", "5678"] },
+];
+
+describe("E6.3 telefon i nye grupperinger og med smale/tynne mellomrom", () => {
+  it.each(
+    NEW_GROUPINGS.flatMap((grouping) =>
+      SPACE_TYPES.map((space) => ({
+        name: `${grouping.name} med ${space.name}`,
+        value: grouping.parts.join(space.space),
+      })),
+    ),
+  )("E6.3 $name → [telefon]", ({ value }) => {
+    expectWhole(value, PHONE);
+  });
+
+  it.each(
+    [
+      ["123", "45", "678"],
+      ["12", "34", "56", "78"],
+      ["1234", "5678"],
+    ].flatMap((parts) =>
+      SPACE_TYPES.slice(2).map((space) => ({
+        name: `${parts.join(" ")} med ${space.name}`,
+        value: parts.join(space.space),
+      })),
+    ),
+  )("E6.3 de gamle grupperingene med $name → [telefon]", ({ value }) => {
+    expectWhole(value, PHONE);
+  });
+
+  it("E6.3 +47 foran ny gruppering", () => {
+    expectWhole("+47 123 45678", PHONE);
+  });
+});
+
+describe("E6.5 ingen overvask av årstall og mål", () => {
+  it.each(["bygget 1985 12 m2", "12 34 cm", "1200 45 mm", "fra 1985 til 2010", "2 x 1200 45"])(
+    "E6.5 «%s» står urørt",
+    (value) => {
+      const text = `Notat: ${value} her.`;
+      expect(redactPii(text)).toEqual({ text, count: 0 });
+    },
+  );
+
+  it("E6.5 «1985 Bad» blir [adresse]: dokumentert overvask (A170, restrisiko fra vasken, postnummer med stedsnavn)", () => {
+    const result = redactPii("Notat: 1985 Bad her.");
+    expect(result.text).toBe(`Notat: ${ADDRESS} her.`);
+  });
+
+  it("E6.5 «1985 20 10» blir [telefon]: villet overvask (A170, samme form som 1234 56 78)", () => {
+    const result = redactPii("Notat: 1985 20 10 her.");
+    expect(result.text).toBe(`Notat: ${PHONE} her.`);
+  });
+});
+
+describe("E6.6 rekkefølgen kontonummer → organisasjonsnummer → telefon med nye skilletegn", () => {
+  it.each([
+    { value: "1234\u00A056\u00A078901", placeholder: ACCOUNT },
+    { value: "1234 56 78901", placeholder: ACCOUNT },
+    { value: "123\u00A0456\u00A0789", placeholder: ORG_NUMBER },
+    { value: "123 456 789", placeholder: ORG_NUMBER },
+    { value: "01019912345", placeholder: NATIONAL_ID },
+  ])("E6.6 $value → $placeholder, ikke [telefon]", ({ value, placeholder }) => {
+    const result = redactPii(`Nummer ${value} her.`);
+    expect(result.text).toBe(`Nummer ${placeholder} her.`);
+    expect(result.text).not.toContain(PHONE);
+    expect(result.count).toBe(1);
+  });
+});
+
+describe("E6.8 ytelse med de nye skilletegnene", () => {
+  function timeOf(text: string): number {
+    const start = performance.now();
+    redactPii(text);
+    return performance.now() - start;
+  }
+
+  it.each(SPACE_TYPES)("E6.8 «1$name» gjentatt 25 000 ganger vaskes under 500 ms", ({ space }) => {
+    expect(timeOf(`1${space}`.repeat(25_000))).toBeLessThan(500);
+  });
+
+  it("E6.8 blandede grupperinger med smale mellomrom, 50 000 tegn, under 500 ms", () => {
+    const chunk = "123\u202F4567 12\u200934 567 1234\u00A056 7 ";
+    expect(timeOf(chunk.repeat(Math.ceil(50_000 / chunk.length)).slice(0, 50_000))).toBeLessThan(
+      500,
+    );
+  });
+
+  it("E6.8 kildesjekk: ingen gjentatt gruppe i telefonmønsteret (ingen nøstede gjentakelser)", () => {
+    const source = readFileSync(join(__dirname, "pii-patterns.ts"), "utf8");
+    const start = source.indexOf("const PHONE = new RegExp(");
+    expect(start, "telefonmønsteret finnes").toBeGreaterThan(-1);
+    const definition = source.slice(start, source.indexOf(");", start));
+    // En gruppe som gjentas (`)*`, `)+`, `){2,}`) gir fare for nøstede gjentakelser
+    expect(definition).not.toMatch(/\)(?:[*+]|\{\d*,\d*\})/u);
+    // Skilletegnene er tegnklasser uten gjentakelse
+    expect(source).toMatch(/\\u202F/u);
+    expect(source).toMatch(/\\u2009/u);
+  });
+});

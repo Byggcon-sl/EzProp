@@ -94,11 +94,12 @@ function productFiles(dir: string): string[] {
 }
 
 describe("funksjonsdefinisjonene (2)", () => {
-  it("2.1 language_polish: rettighet report.edit, ledetekst v1, én feltkode og to lovlige mål", () => {
+  it("2.1 language_polish: rettighet report.edit, ledetekst v2, én feltkode og to lovlige mål", () => {
     const definition = languagePolish();
     expect(definition.code).toBe("language_polish");
     expect(definition.permission).toBe("report.edit");
-    expect(definition.promptVersion).toBe("language_polish.v1");
+    // Endret med vilje fra v1 til v2 (docs/funksjoner/fase2a-evalueringssett.md Omfang 5, E5.7)
+    expect(definition.promptVersion).toBe("language_polish.v2");
     expect([...definition.allowedFields]).toEqual(["text"]);
     // Skrevet om bevisst (docs/funksjoner/fase2a-forslagsmonster.md «Data», A166): prøvesiden
     // /prove/ki har fått sitt eget mål `ai_trial`. Svaret i teksten (`answer`) står først.
@@ -300,5 +301,72 @@ describe("vask før KI: «aldri»-kolonnene og fieldSources (V8.1–V8.4)", () =
     const features = readFileSync(join(aiDir, "features.ts"), "utf8");
     const featuresAt = features.indexOf("export const AI_FEATURES");
     expect(features.slice(0, featuresAt)).toMatch(/sikkerhet-personvern/u);
+  });
+});
+
+/*
+ * Ledetekst v2 og treffgrensen (docs/funksjoner/fase2a-evalueringssett-testplan.md E5.3–E5.6,
+ * kortet Omfang 2 og 5, A184). Fasiten for v1 er skrevet inn her: en versjon endres aldri.
+ */
+const LOCKED_V1 = [
+  "Du retter språket i en kort tekst fra en tilstandsrapport.",
+  "Rett skrivefeil, tegnsetting og setninger som er tunge å lese. Skriv på norsk bokmål.",
+  "Behold alle fakta, tall og mål slik de står. Ikke legg til noe nytt, og ikke ta bort noe.",
+  "Skriv sikkert og konkret, uten ord som uttrykker gjetting.",
+  "Svar bare med den rettede teksten.",
+].join("\n");
+
+describe("evalueringssett: ledetekst v2 og treffgrense (E5.3–E5.6)", () => {
+  async function prompts(): Promise<Readonly<Record<string, string>>> {
+    return (await import("../features")).AI_PROMPTS;
+  }
+
+  it("E5.3 language_polish peker på language_polish.v2, og v1 står urørt", async () => {
+    const all = await prompts();
+    expect(languagePolish().promptVersion).toBe("language_polish.v2");
+    expect(all["language_polish.v1"]).toBe(LOCKED_V1);
+    expect(typeof all["language_polish.v2"]).toBe("string");
+    expect(all["language_polish.v2"]).not.toBe(LOCKED_V1);
+  });
+
+  it("E5.4 v2 sier at bør/må, TG og grad av sikkerhet står som før, og at innholdet aldri er instruks", async () => {
+    const v2 = (await prompts())["language_polish.v2"] ?? "";
+    expect(v2).toMatch(/\bbør\b|«bør»/u);
+    expect(v2).toMatch(/(?<![\p{L}])må(?![\p{L}])/u);
+    expect(v2).toMatch(/\bTG\b|tilstandsgrad/iu);
+    expect(v2).toMatch(/sikker/iu);
+    expect(v2).toMatch(/ikke legg til|legg aldri til|legger ikke til/iu);
+    expect(v2).toMatch(/ikke ta bort|ikke fjern|fjerner ikke/iu);
+    expect(v2).toMatch(/instruks/iu);
+    // Linjen fra v1 om å skrive uten gjetteord er tatt ut (den sier imot)
+    expect(v2).not.toContain("uten ord som uttrykker gjetting");
+    expect(v2).not.toMatch(/skriv sikkert/iu);
+    // Ingen kobling mellom bør/må og TG i ledeteksten (kortet punkt 3)
+    for (const line of v2.split("\n")) {
+      const modal = /«bør»|«må»|\bbør\b/u.test(line);
+      const tg = /\bTG\b|tilstandsgrad/iu.test(line);
+      expect(modal && tg, line).toBe(false);
+    }
+    // Regel 7: ingen gjetteord i selve ledeteksten
+    expect(v2).not.toMatch(/\b(antas|trolig)\b/iu);
+  });
+
+  it("E5.5 v2 har ingen navn, e-post, telefon, adresse eller matrikkel", async () => {
+    const { redactPii } = await import("@/shared/lib/pii-patterns");
+    const v2 = (await prompts())["language_polish.v2"] ?? "";
+    expect(v2.length).toBeGreaterThan(0);
+    expect(redactPii(v2).count).toBe(0);
+  });
+
+  it("E5.6 evalPassRate er 0.9 for language_polish; allowedFields og fieldSources er uendret", async () => {
+    const { AI_FEATURES } = await import("../features");
+    const definition = AI_FEATURES.language_polish as unknown as {
+      evalPassRate?: number;
+      allowedFields: readonly string[];
+      fieldSources: Record<string, string>;
+    };
+    expect(definition.evalPassRate).toBe(0.9);
+    expect([...definition.allowedFields]).toEqual(["text"]);
+    expect({ ...definition.fieldSources }).toEqual({ text: "free_text" });
   });
 });
