@@ -87,6 +87,8 @@ jobs:
           MS_GRAPH_CLIENT_SECRET: ${{ secrets.MS_GRAPH_CLIENT_SECRET }}
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
           ENABLE_KEY_VAULT: ${{ vars.ENABLE_KEY_VAULT == 'true' }}
+          POSTGRES_SKU: ${{ vars.POSTGRES_SKU }}
+          POSTGRES_LOCATION: ${{ vars.POSTGRES_LOCATION }}
         run: |
           # Bare testmiljøet: gruppen må hete rg-ezprop-test, eventuelt med et tillegg (rg-ezprop-test2).
           if ! [[ "$RESOURCE_GROUP" =~ ^rg-ezprop-test[a-z0-9-]*$ ]]; then
@@ -106,6 +108,8 @@ jobs:
           # De fire e-postverdiene sendes alltid (tomme når de ikke er satt); Bicep bruker dem bare når alle er gitt.
           PARAMETERE=(
             "location=$LOCATION"
+            "postgresSkuName=${POSTGRES_SKU:-Standard_B1ms}"
+            "postgresLocation=${POSTGRES_LOCATION:-$LOCATION}"
             "environmentName=$ENVIRONMENT_NAME"
             "appHostname=$APP_HOSTNAME"
             "appVersion=$APP_VERSION"

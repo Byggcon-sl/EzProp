@@ -121,6 +121,15 @@ Utrullingen kan stoppe med `Conflict` og «No available instances to satisfy thi
 
 Adressen blir den samme: `https://app-ezprop-test.azurewebsites.net`.
 
+## Hvis databasen ikke kan lages («SkuNotAvailable»)
+
+Utrullingen kan stoppe med `SkuNotAvailable` på `psql-ezprop-test`: «Specified SKU is not supported in this region». Da tilbyr ikke Azure den minste databasestørrelsen (`Standard_B1ms`) i Sweden Central for dette abonnementet. Velg én av disse med GitHub-variabler (Settings → Secrets and variables → Actions → Variables):
+
+- `POSTGRES_LOCATION` = `norwayeast`: samme størrelse og pris, men databasen ligger i Norge. Appen blir i Sweden Central. Litt lengre vei mellom app og database, men det merkes ikke i testmiljøet.
+- `POSTGRES_SKU` = `Standard_B2s`: større database i Sweden Central. Koster ca. 400–500 kr mer i måneden.
+
+Slett først databasen som feilet: ressursgruppen → `psql-ezprop-test` → Delete. Kjør så «Utrulling til Azure» på nytt. Lovlige regioner for databasen er `swedencentral`, `norwayeast`, `northeurope` og `westeurope` (alle i EU/EØS).
+
 ## Kostnad
 
 Anslag per måned ved dagens kurs:
