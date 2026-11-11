@@ -133,7 +133,7 @@ describe("KI-modulen, statiske kontroller (12)", () => {
     const resolution = files.find((file) => file.path === READ_SECRET_ALLOWED);
     expect(adapter, FETCH_ALLOWED).toBeDefined();
     expect(resolution, READ_SECRET_ALLOWED).toBeDefined();
-    expect(adapter!.text).toMatch(FETCH_CALL);
+    expect(adapter!.text).toMatch(/\bfetch\b/);
     expect(resolution!.text).toMatch(READ_SECRET);
     expect(adapter!.text).not.toMatch(READ_SECRET);
     expect(adapter!.text).not.toMatch(/process\.env/);
