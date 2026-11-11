@@ -13,8 +13,8 @@ export default defineConfig({
       "scripts/**/*.test.ts",
     ],
     globalSetup: ["./tests/global-setup.ts"],
-    // Sperren mot ekte KI-kall gjelder alle testfiler (fase2a-ki-leverandor Omfang 11).
-    setupFiles: ["./tests/setup-env.ts", "./tests/block-external-fetch.ts"],
+    // setup-env.ts legger også inn sperren mot ekte KI-kall (fase2a-ki-leverandor Omfang 11).
+    setupFiles: ["./tests/setup-env.ts"],
     // Integrasjonstestene deler én testdatabase og tømmer den mellom testene.
     fileParallelism: false,
   },

@@ -21,11 +21,17 @@ const FAMILIES = [
   ["hai", "ku"],
 ].map((parts) => parts.join(""));
 
-const MODEL_NAME = new RegExp(`${ID_PREFIX}|\\b(?:${FAMILIES.join("|")})\\b`, "iu");
+/** Prefikset til modell-id-ene og navnene på modellfamiliene, som hele ord (også ved æ, ø, å). */
+const MODEL_NAME = new RegExp(
+  `(?<![\\p{L}\\p{N}])(?:${ID_PREFIX}|(?:${FAMILIES.join("|")})(?![\\p{L}\\p{N}]))`,
+  "iu",
+);
 
-/** Mappene og enkeltfilene som skal være uten modellnavn. Notatet hoppes over til det finnes. */
+const NOTE_PATH = "docs/beslutningsnotat-ki-leverandor.md";
+
+/** Mappene og enkeltfilene som skal være uten modellnavn. */
 const DIRS = ["src", "tests", "e2e"];
-const FILES = ["docs/beslutningsnotat-ki-leverandor.md"];
+const FILES = [NOTE_PATH];
 const CARD_PATTERN = /^fase2a-ki-leverandor.*\.md$/u;
 
 const TEXT_FILE = /\.(ts|tsx|js|mjs|cjs|json|md|css|sql|ya?ml|txt|html|svg)$/u;
@@ -57,6 +63,10 @@ function hits(path: string, text: string): string[] {
 }
 
 describe("S1 ingen modellnavn i koden, testene og notatet", () => {
+  it("beslutningsnotatet finnes (ellers sier testen ingenting om det)", () => {
+    expect(existsSync(join(repoRoot, NOTE_PATH))).toBe(true);
+  });
+
   it("ingen treff i src/, tests/, e2e/, notatet og oppgavekortet", () => {
     const files = filesToScan();
     expect(files.length).toBeGreaterThan(100);
@@ -77,5 +87,14 @@ describe("S1 ingen modellnavn i koden, testene og notatet", () => {
     const agentsDir = [".cla", "ude/agents/utvikler.md"].join("");
     expect(hits("x.md", `Les ${instructions} og ${agentsDir}.`)).toEqual([]);
     expect(hits("x.md", "Leverandøren er Anthropic.")).toEqual([]);
+  });
+
+  it("kontroll: mappen for agentene og vanlige ord som ligner, gir grønt", () => {
+    for (const text of [
+      `Agentene ligger i .${ID_PREFIX.slice(0, -1)}/agents/.`,
+      "Opusvegg og sonnetter er ikke modellnavn; heller ikke haikudikt eller opusø.",
+    ]) {
+      expect(hits("x.md", text), text).toEqual([]);
+    }
   });
 });

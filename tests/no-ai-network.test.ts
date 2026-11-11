@@ -51,10 +51,25 @@ describe("S2 global sperre for nettkall", () => {
     }
   });
 
-  it("sperren treffer ikke andre vertsnavn", () => {
+  it("sperren treffer ikke vertsnavn som bare ligner", () => {
     expect(isAnthropicHost("https://example.com/anthropic.com")).toBe(false);
     expect(isAnthropicHost("https://notanthropic.com/")).toBe(false);
     expect(isAnthropicHost("ikke en adresse")).toBe(false);
+  });
+
+  it("sperren ligger under en spion: spionen ser kallet, og sperren kaster fortsatt", async () => {
+    const spy = vi.spyOn(globalThis, "fetch");
+    await expect(fetch("https://api.anthropic.com/v1/messages")).rejects.toThrow(
+      BLOCKED_AI_NETWORK_MESSAGE,
+    );
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("andre vertsnavn sperres ikke", () => {
+    expect(isAnthropicHost("https://graph.microsoft.com/v1.0/users/x")).toBe(false);
+    expect(isAnthropicHost("http://localhost:3000/api/helse")).toBe(false);
+    expect(isAnthropicHost("https://anthropic.com.example.org/")).toBe(false);
+    expect(isAnthropicHost("/relativ/sti")).toBe(false);
   });
 
   it("nøkkelen er fjernet fra miljøet i testene", () => {
