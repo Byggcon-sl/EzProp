@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createLogger, formatLogLine, REDACTED, sanitizeFields, scrubText } from "./logger";
 
@@ -278,4 +280,77 @@ describe("de elleve ordene vaskes fortsatt etter at de eksakte alternativene er 
       expect(sanitizeFields({ [key]: VALUE })).toEqual({ [key]: VALUE });
     },
   );
+});
+
+// Vask før KI (docs/funksjoner/fase2a-vask-for-ki-testplan.md avsnitt 2). Verdiene er oppdiktet.
+describe("loggeren bruker de samme mønstrene som vasken før KI", () => {
+  it("V2.1 åtte sifre sammen, fødselsnummer og organisasjonsnummer vaskes i feilmelding og felt", () => {
+    const error = new Error("Feil for 12345678, fnr 01019912345 og org 123456789");
+    const line = formatLogLine("error", "Feil", {
+      error,
+      extra: { note: "Ring 87654321, fnr 010199 12345, NO 987654321 MVA" },
+    });
+    const text = JSON.stringify(line);
+    for (const value of [
+      "12345678",
+      "87654321",
+      "01019912345",
+      "010199 12345",
+      "123456789",
+      "987654321",
+    ]) {
+      expect(text).not.toContain(value);
+    }
+    expect(line.error).toMatchObject({
+      message: "Feil for [telefon], fnr [fødselsnummer] og org [organisasjonsnummer]",
+    });
+    expect(line.extra).toEqual({
+      note: "Ring [telefon], fnr [fødselsnummer], [organisasjonsnummer]",
+    });
+  });
+
+  it("V2.2 UUID, ISO-tid, feilkoder og HTTP-status står urørt", () => {
+    const usageId = "3f2b8c1a-9d4e-4b7a-8c2d-1e5f6a7b8c9d";
+    const ref = "12345678-1234-4234-8234-123456789012";
+    const time = "2026-11-11T10:00:00.000Z";
+    const line = formatLogLine("warn", "KI-kall feilet", {
+      usageId,
+      ref,
+      at: time,
+      errorCode: "unavailable",
+      other: "unknown",
+      status: 503,
+      msg2: `HTTP 503 kl ${time} for ${usageId}`,
+    });
+    expect(line).toMatchObject({
+      usageId,
+      ref,
+      at: time,
+      errorCode: "unavailable",
+      other: "unknown",
+      status: 503,
+      msg2: `HTTP 503 kl ${time} for ${usageId}`,
+    });
+  });
+
+  it("V2.3 hemmeligheter vaskes før tallmønstrene", () => {
+    expect(scrubText("AccountKey=12345678;EndpointSuffix=x")).toBe(
+      `AccountKey=${REDACTED};EndpointSuffix=x`,
+    );
+    expect(scrubText("client_secret=12345678&x=1")).toBe(`client_secret=${REDACTED}&x=1`);
+    expect(scrubText("Authorization: Bearer 12345678")).toBe(`Authorization: Bearer ${REDACTED}`);
+    expect(scrubText("https://x.blob/a?sig=1234 5678")).not.toContain("[telefon]");
+  });
+
+  it("V2.4 adresse vaskes ikke i loggen", () => {
+    expect(scrubText("Storgata 12, 8006 Bodø")).toBe("Storgata 12, 8006 Bodø");
+  });
+
+  it("V2.5 statisk: logger.ts importerer mønstrene og har ingen egen e-post- eller telefonregex", () => {
+    const source = readFileSync(join(__dirname, "logger.ts"), "utf8");
+    expect(source).toMatch(/from "\.\/pii-patterns"/);
+    expect(source).not.toMatch(/const (EMAIL|PHONE)\b/);
+    expect(source).not.toContain("@[");
+    expect(source).not.toMatch(/\(\?:\\\+\|00\)47/);
+  });
 });
