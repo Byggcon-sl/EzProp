@@ -108,11 +108,11 @@ describe("KI-modulen, statiske kontroller (12)", () => {
     }
   });
 
-  it("12.9 src/app og src/modules importerer ikke leverandørene eller loggen direkte", () => {
+  it("12.9 src/app og src/modules importerer ikke leverandørene, loggen eller evalueringssettet direkte", () => {
     const callers = [...sourceFiles(join(srcDir, "app")), ...sourceFiles(join(srcDir, "modules"))];
     const offenders = callers
       .filter((file) =>
-        /["']@\/core\/ai\/(providers|usage-log|features|prompts)[^"']*["']/.test(read(file)),
+        /["']@\/core\/ai\/(providers|usage-log|features|prompts|evals)[^"']*["']/.test(read(file)),
       )
       .map(rel);
     expect(offenders).toEqual([]);
@@ -165,30 +165,63 @@ describe("forslagsmønsteret, statiske kontroller (8)", () => {
 describe("vask før KI, statiske kontroller (V8.5–V8.7)", () => {
   const requestFile = join(aiDir, "request-suggestion.ts");
 
-  it("V8.5 provider.complete kalles bare i src/core/ai/request-suggestion.ts", () => {
+  /*
+   * Justert med vilje for evalueringssettet (docs/funksjoner/fase2a-evalueringssett-testplan.md
+   * E7.1–E7.3): vasken og ledeteksten er flyttet til den rene `preparePrompt`, og kjøreren for
+   * settet er det andre (og eneste andre) stedet leverandøren kalles. Kravet er det samme: vask
+   * før kall, og ingen egen kopi av vask eller ledetekst.
+   */
+  it("V8.5/E7.1 .complete( kalles bare i request-suggestion.ts og evals/run.ts", () => {
     const offenders = productFiles(srcDir)
       .filter((file) => /\.complete\s*\(/.test(read(file)))
-      .map(rel);
-    expect(offenders).toEqual(["src/core/ai/request-suggestion.ts"]);
+      .map(rel)
+      .sort();
+    expect(offenders).toEqual(["src/core/ai/evals/run.ts", "src/core/ai/request-suggestion.ts"]);
   });
 
-  it("V8.5 i request-suggestion.ts står vaskekallet (oppslag og vask) før leverandørkallet", () => {
+  it("V8.5/E7.2 i begge filene står preparePrompt (som vasker) før leverandørkallet", () => {
+    for (const file of [requestFile, join(aiDir, "evals", "run.ts")]) {
+      expect(existsSync(file), rel(file)).toBe(true);
+      const source = read(file);
+      const complete = source.search(/\.complete\s*\(/);
+      const prepare = source.search(/\bpreparePrompt\s*\(/);
+      expect(complete, `${rel(file)}: leverandørkallet mangler`).toBeGreaterThan(-1);
+      expect(prepare, `${rel(file)}: preparePrompt mangler`).toBeGreaterThan(-1);
+      expect(prepare, rel(file)).toBeLessThan(complete);
+      // Ingen egen kopi: ledeteksten bygges ikke her, og preparePrompt hentes fra prompt-modulen
+      expect(source, rel(file)).not.toMatch(/\bbuildPrompt\s*\(/);
+      expect(source, rel(file)).toMatch(
+        /import\s*\{[^}]*\bpreparePrompt\b[^}]*\}\s*from\s+["'][^"']*prompt["']/,
+      );
+    }
+  });
+
+  it("V8.5/E7.2 i request-suggestion.ts slås de kjente verdiene opp før preparePrompt", () => {
     const source = read(requestFile);
-    const complete = source.search(/\.complete\s*\(/);
-    const redact = source.search(/\bredactFields\s*\(/);
-    expect(complete, "leverandørkallet mangler").toBeGreaterThan(-1);
-    expect(redact, "vaskekallet mangler").toBeGreaterThan(-1);
-    expect(redact).toBeLessThan(complete);
-    // Vasken og oppslaget hentes fra ./redaction, ikke fra en kopi
-    expect(source).toMatch(/from\s+["']\.\/redaction["']/);
-    // I redactFields slås de kjente verdiene opp før teksten vaskes
-    const redaction = read(join(aiDir, "redaction.ts"));
-    const body = redaction.slice(redaction.indexOf("export async function redactFields"));
-    const load = body.search(/\bloadKnownValues\s*\(/);
-    const apply = body.search(/\bapplyRedaction\s*\(/);
+    const load = source.search(/\bloadKnownValues\s*\(/);
+    const prepare = source.search(/\bpreparePrompt\s*\(/);
     expect(load, "oppslaget av kjente verdier mangler").toBeGreaterThan(-1);
-    expect(apply, "vasken mangler").toBeGreaterThan(-1);
-    expect(load).toBeLessThan(apply);
+    expect(prepare, "preparePrompt mangler").toBeGreaterThan(-1);
+    expect(load).toBeLessThan(prepare);
+    // Oppslaget hentes fra ./redaction, ikke fra en kopi
+    expect(source).toMatch(/from\s+["']\.\/redaction["']/);
+    expect(source).not.toMatch(/\bredactFields\b/);
+  });
+
+  it("E7.3 preparePrompt vasker før buildPrompt, og buildPrompt kalles bare der", () => {
+    const promptFile = join(aiDir, "prompt.ts");
+    expect(existsSync(promptFile), "src/core/ai/prompt.ts").toBe(true);
+    const source = read(promptFile);
+    const body = source.slice(source.search(/function\s+preparePrompt\b/));
+    const redact = body.search(/\b(redactFieldValues|redactText|applyRedaction)\s*\(/);
+    const build = body.search(/\bbuildPrompt\s*\(/);
+    expect(redact, "vasken mangler i preparePrompt").toBeGreaterThan(-1);
+    expect(build, "buildPrompt mangler i preparePrompt").toBeGreaterThan(-1);
+    expect(redact).toBeLessThan(build);
+    const callSites = productFiles(srcDir).flatMap((file) =>
+      [...read(file).matchAll(/(?<!function\s)\bbuildPrompt\s*\(/g)].map(() => rel(file)),
+    );
+    expect(callSites).toEqual(["src/core/ai/prompt.ts"]);
   });
 
   it("V8.6 ingen mellomlagring: redaction.ts har ingen Map, Set eller cache på toppnivå", () => {
@@ -221,5 +254,128 @@ describe("vask før KI, statiske kontroller (V8.5–V8.7)", () => {
     expect(forbidden.test("countBlockedByEmployee")).toBe(true);
     expect(forbidden.test("listRedactedCounts")).toBe(true);
     expect(forbidden.test("redactedCountPerEmployee")).toBe(true);
+  });
+});
+
+/*
+ * Evalueringssettet, statiske kontroller (docs/funksjoner/fase2a-evalueringssett-testplan.md
+ * E6.9 og E7.4–E7.7). Kjøreren kan ikke nås fra appen eller modulene, og den og den rene vasken
+ * laster aldri databasen.
+ */
+describe("evalueringssett, statiske kontroller (E7)", () => {
+  const evalsDir = join(aiDir, "evals");
+
+  it("E7.4 index.ts eksporterer ikke noe fra evals", async () => {
+    const source = read(join(aiDir, "index.ts"));
+    expect(source).not.toMatch(/["']\.\/evals/);
+    const ai: Record<string, unknown> = await import("./index");
+    for (const name of ["runEvals", "runEvalCommand", "parseCasesFile"]) {
+      expect(Object.keys(ai), name).not.toContain(name);
+    }
+  });
+
+  it("E7.5/E7.7 evals/ er med i kontrollene for src/core/ai (12.5 og 12.8 dekker undermappen)", () => {
+    const files = productFiles(aiDir).map(rel);
+    expect(files).toContain("src/core/ai/evals/run.ts");
+    expect(files).toContain("src/core/ai/evals/schema.ts");
+    for (const file of productFiles(evalsDir)) {
+      expect(read(file), rel(file)).not.toMatch(/\bconsole\.|process\.env/);
+      expect(read(file), rel(file)).not.toMatch(/\breadSecret\b|\bfetch\s*\(/);
+    }
+  });
+
+  it("E6.9 kjøreren bruker PII_PLACEHOLDERS fra pii-patterns", () => {
+    const source = read(join(evalsDir, "run.ts"));
+    expect(source).toMatch(
+      /import\s*\{[^}]*\bPII_PLACEHOLDERS\b[^}]*\}\s*from\s+["']@\/shared\/lib\/pii-patterns["']/,
+    );
+    expect(source.match(/\bPII_PLACEHOLDERS\b/g)?.length ?? 0).toBeGreaterThan(1);
+  });
+
+  /** Importene i en fil: kilde og om den bare gjelder typer. */
+  function importsOf(source: string): { from: string; typeOnly: boolean }[] {
+    const out: { from: string; typeOnly: boolean }[] = [];
+    const statement = /(?:^|\n)\s*(import|export)\s+(type\s+)?([^;]*?)\s*from\s+["']([^"']+)["']/g;
+    for (const match of source.matchAll(statement)) {
+      const clause = (match[3] ?? "").trim();
+      const named = /^\{([\s\S]*)\}$/.exec(clause);
+      const allNamedTypes =
+        named !== null &&
+        named[1]!
+          .split(",")
+          .map((part) => part.trim())
+          .filter((part) => part !== "")
+          .every((part) => part.startsWith("type "));
+      out.push({ from: match[4]!, typeOnly: Boolean(match[2]) || allNamedTypes });
+    }
+    for (const match of source.matchAll(/(?:^|\n)\s*import\s+["']([^"']+)["']/g)) {
+      out.push({ from: match[1]!, typeOnly: false });
+    }
+    for (const match of source.matchAll(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g)) {
+      out.push({ from: match[1]!, typeOnly: false });
+    }
+    return out;
+  }
+
+  function resolveFile(fromFile: string, specifier: string): string | null {
+    let base: string;
+    if (specifier.startsWith("@/")) base = join(srcDir, specifier.slice(2));
+    else if (specifier.startsWith(".")) base = join(fromFile, "..", specifier);
+    else return null;
+    for (const candidate of [`${base}.ts`, `${base}.tsx`, join(base, "index.ts"), base]) {
+      if (existsSync(candidate) && /\.tsx?$/.test(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  it("E7.6 ingen database: evals, redact-text.ts, prompt.ts og alt de importerer har bare typer fra @/db og @/core/access, og ingen drizzle-orm", () => {
+    const roots = [
+      ...productFiles(evalsDir),
+      join(aiDir, "redact-text.ts"),
+      join(aiDir, "prompt.ts"),
+    ];
+    for (const root of roots) expect(existsSync(root), rel(root)).toBe(true);
+    expect(productFiles(evalsDir).length).toBeGreaterThan(0);
+    const seen = new Set<string>();
+    const queue = [...roots];
+    const offenders: string[] = [];
+    while (queue.length > 0) {
+      const file = queue.shift()!;
+      if (seen.has(file) || !existsSync(file)) continue;
+      seen.add(file);
+      for (const { from, typeOnly } of importsOf(read(file))) {
+        if (/^(drizzle-orm|postgres)(\/|$)/.test(from)) offenders.push(`${rel(file)}: ${from}`);
+        if (/^@\/(db|core\/access)(\/|$)/.test(from)) {
+          if (!typeOnly) offenders.push(`${rel(file)}: ${from}`);
+          continue;
+        }
+        if (typeOnly) continue;
+        const target = resolveFile(file, from);
+        if (target !== null && !isTest(target)) queue.push(target);
+      }
+    }
+    expect(offenders).toEqual([]);
+    // Ikke hult: mengden har vasken, mønstrene og funksjonsdefinisjonene
+    const reached = [...seen].map(rel);
+    expect(reached).toContain("src/core/ai/redact-text.ts");
+    expect(reached).toContain("src/shared/lib/pii-patterns.ts");
+    expect(reached).toContain("src/core/ai/features.ts");
+  });
+
+  it("E7.6 kontrollen er ikke hul: en vanlig import fra @/db og drizzle-orm blir fanget", () => {
+    const sample = [
+      'import { db } from "@/db/client";',
+      'import type { AiErrorCode } from "@/db/schema";',
+      'import { type EmployeeGrant } from "@/core/access";',
+      'import { and } from "drizzle-orm";',
+      'export { loadKnownValues } from "./redaction";',
+    ].join("\n");
+    expect(importsOf(sample)).toEqual([
+      { from: "@/db/client", typeOnly: false },
+      { from: "@/db/schema", typeOnly: true },
+      { from: "@/core/access", typeOnly: true },
+      { from: "drizzle-orm", typeOnly: false },
+      { from: "./redaction", typeOnly: false },
+    ]);
   });
 });

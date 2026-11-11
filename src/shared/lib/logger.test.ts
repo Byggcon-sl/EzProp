@@ -363,3 +363,52 @@ describe("loggeren bruker mønstrene fra pii-patterns.ts (V2)", () => {
     expect(source).not.toMatch(/\(\?:\\\+\|00\)47/u);
   });
 });
+
+/*
+ * Loggeren bruker telefonmønsteret fra pii-patterns.ts, så de nye grupperingene og de smale og
+ * tynne mellomrommene vaskes også i loggen (docs/funksjoner/fase2a-evalueringssett-testplan.md
+ * E6.7, kortet Omfang 7). Alle verdier er oppdiktet.
+ */
+describe("loggeren vasker telefon i nye grupperinger (E6.7)", () => {
+  const values = [
+    { name: "123 45678", value: "123 45678" },
+    { name: "1234 56 78", value: "1234 56 78" },
+    { name: "12 34 5678", value: "12 34 5678" },
+    { name: "123 45678 med U+00A0", value: "123\u00A045678" },
+    { name: "1234 56 78 med U+2009", value: "1234\u200956\u200978" },
+    { name: "12 34 5678 med U+202F", value: "12\u202F34\u202F5678" },
+    { name: "123 45 678 med U+202F", value: "123\u202F45\u202F678" },
+  ];
+
+  it.each(values)("E6.7 $name vaskes i melding, felt og feilmelding", ({ value }) => {
+    expect(scrubText(`Ring ${value} i dag`)).toBe("Ring [telefon] i dag");
+    const line = formatLogLine("warn", `Melding ${value}`, {
+      note: `Feltet har ${value}`,
+      error: new Error(`Kunne ikke lagre ${value}`),
+    });
+    const text = JSON.stringify(line);
+    expect(text).not.toContain(value);
+    expect(text.replace(/\D/gu, "")).not.toContain("5678");
+    expect(line.msg).toBe("Melding [telefon]");
+  });
+
+  it("E6.7 usageId, ISO-tid og HTTP-status står urørt ved siden av en vasket telefon", () => {
+    const usageId = "018f2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b";
+    const time = "2026-11-11T10:00:00.000Z";
+    const line = formatLogLine("warn", "KI-kallet ga feil", {
+      usageId,
+      at: time,
+      status: 503,
+      statusText: "HTTP 503 etter 30000 ms",
+      note: "ring 123\u202F45678",
+    });
+    expect(line.usageId).toBe(usageId);
+    expect(line.at).toBe(time);
+    expect(line.status).toBe(503);
+    expect(line.statusText).toBe("HTTP 503 etter 30000 ms");
+    expect(line.note).toBe("ring [telefon]");
+    expect(scrubText(`ref ${usageId} kl ${time} status 503`)).toBe(
+      `ref ${usageId} kl ${time} status 503`,
+    );
+  });
+});

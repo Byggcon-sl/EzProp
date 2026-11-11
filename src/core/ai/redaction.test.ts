@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requireOrganizationAccess, type EmployeeGrant } from "@/core/access";
 import { PII_PLACEHOLDERS } from "@/shared/lib/pii-patterns";
 import { employeeWithGrant } from "../../../tests/ai";
+import { stubFailingRegExp } from "../../../tests/failing-regexp";
 import { createOrganization, resetDatabase } from "../../../tests/factories";
 import {
   containsWord,
@@ -428,4 +429,128 @@ describe("loadKnownValues: tenant-isolasjon (V7.1)", () => {
       expect(seen).not.toContain(value);
     }
   });
+});
+
+/*
+ * Småfunn fra «Vask før KI» som tas med evalueringssettet (docs/funksjoner/
+ * fase2a-evalueringssett-testplan.md E6.1 og E6.4, kortet Omfang 7). Den rene vasken ligger i
+ * `redact-text.ts` og hentes med dynamisk import, så resten av filen kjører også før den finnes.
+ */
+describe("evalueringssett: feil fra new RegExp i vasken (E6.1)", () => {
+  const MARKER = "Qzxhemmelig";
+  const SECRETS = [MARKER, "Verdisen", "98989898"];
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function pure() {
+    return import("./redact-text");
+  }
+
+  function knownWithSecrets(source: Awaited<ReturnType<typeof pure>>) {
+    return {
+      ...source.emptyKnownValues(),
+      personNames: [`${MARKER} Verdisen`],
+      phones: ["98989898"],
+    };
+  }
+
+  function expectClean(error: unknown) {
+    expect(error).toBeInstanceOf(Error);
+    const failure = error as Error;
+    const seen = `${failure.name} ${failure.message} ${failure.stack ?? ""} ${JSON.stringify(failure)}`;
+    for (const secret of SECRETS) expect(seen).not.toContain(secret);
+    expect(failure.cause).toBeUndefined();
+    expect("cause" in failure && failure.cause !== undefined).toBe(false);
+  }
+
+  it("E6.1 compileKnownValues kaster en egen feiltype uten kjente verdier i message, stack og uten cause", async () => {
+    const pureModule = await pure();
+    const { compileKnownValues, RedactionPatternError } = pureModule;
+    const known = knownWithSecrets(pureModule);
+    stubFailingRegExp(MARKER);
+    let error: unknown;
+    try {
+      compileKnownValues(known);
+    } catch (caught) {
+      error = caught;
+    }
+    vi.unstubAllGlobals();
+    expect(error, "feilen skal kastes videre (A176)").toBeDefined();
+    expect(error).toBeInstanceOf(RedactionPatternError);
+    expectClean(error);
+  });
+
+  it("E6.1 redactText stenger med samme feil: ingen tekst kommer ut usvasket", async () => {
+    const pureModule = await pure();
+    const { redactText, RedactionPatternError } = pureModule;
+    const known = knownWithSecrets(pureModule);
+    stubFailingRegExp(MARKER);
+    let error: unknown;
+    let output: unknown;
+    try {
+      output = redactText(`${MARKER} Verdisen ringte fra 98989898.`, known);
+    } catch (caught) {
+      error = caught;
+    }
+    vi.unstubAllGlobals();
+    expect(output).toBeUndefined();
+    expect(error).toBeInstanceOf(RedactionPatternError);
+    expectClean(error);
+  });
+
+  it("E6.1 stubben er ikke hul: uten markøren lages mønsteret og vasken virker", async () => {
+    const { redactText, emptyKnownValues } = await pure();
+    stubFailingRegExp("finnes-ikke-i-noe-mønster");
+    const result = redactText("Qzx Prøvesen ringte.", {
+      ...emptyKnownValues(),
+      personNames: ["Qzx Prøvesen"],
+    });
+    vi.unstubAllGlobals();
+    expect(result.text).toBe("[navn] ringte.");
+  });
+
+  it("E6.1 redaction.ts re-eksporterer den rene vasken (eksisterende importer virker)", async () => {
+    const redaction = (await import("./redaction")) as Record<string, unknown>;
+    const pureModule = (await pure()) as Record<string, unknown>;
+    for (const name of ["redactText", "compileKnownValues", "emptyKnownValues"]) {
+      expect(typeof redaction[name], name).toBe("function");
+      expect(redaction[name], name).toBe(pureModule[name]);
+    }
+  });
+});
+
+describe("evalueringssett: telefon i nye grupperinger som kjent verdi (E6.4)", () => {
+  const SPACES = [
+    { name: "vanlig mellomrom", space: " " },
+    { name: "U+00A0", space: "\u00A0" },
+    { name: "U+2009", space: "\u2009" },
+    { name: "U+202F", space: "\u202F" },
+  ];
+  const GROUPINGS = [
+    { name: "3-5", parts: ["123", "45678"] },
+    { name: "4-2-2", parts: ["1234", "56", "78"] },
+    { name: "2-2-4", parts: ["12", "34", "5678"] },
+    { name: "3-2-3", parts: ["123", "45", "678"] },
+  ];
+  const CASES = GROUPINGS.flatMap((grouping) =>
+    SPACES.map((space) => ({
+      name: `${grouping.name} med ${space.name}`,
+      value: grouping.parts.join(space.space),
+    })),
+  );
+
+  it.each(CASES)(
+    "E6.4 kjent 12345678 skrevet $name gir én [telefon] og count 1",
+    async ({ value }) => {
+      const { redactText, emptyKnownValues } = await import("./redact-text");
+      const result = redactText(`Ring ${value} i morgen.`, {
+        ...emptyKnownValues(),
+        phones: ["12345678"],
+      });
+      expect(result.text).toBe("Ring [telefon] i morgen.");
+      expect(result.count).toBe(1);
+    },
+  );
 });

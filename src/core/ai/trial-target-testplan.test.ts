@@ -88,7 +88,8 @@ describe("funksjonsdefinisjonen language_polish (1)", () => {
   it("1.1 rettighet, ledetekstversjon og én feltkode er uendret", () => {
     const definition = languagePolish();
     expect(definition.permission).toBe("report.edit");
-    expect(definition.promptVersion).toBe("language_polish.v1");
+    // Endret med vilje fra v1 til v2 (evalueringssett, E5.7)
+    expect(definition.promptVersion).toBe("language_polish.v2");
     expect([...definition.allowedFields]).toEqual(["text"]);
   });
 });

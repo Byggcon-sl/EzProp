@@ -99,7 +99,8 @@ describe("requestSuggestion", () => {
       feature: "language_polish",
       provider: "fake",
       model: "fake-v1",
-      promptVersion: "language_polish.v1",
+      // Nye forespørsler får v2 (evalueringssett, E5.7)
+      promptVersion: "language_polish.v2",
       assignmentId: assignment.id,
       reportId: null,
       targetRef: req.target,
