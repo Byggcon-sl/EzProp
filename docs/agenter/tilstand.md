@@ -39,9 +39,11 @@ Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4�
 
 ## Oppgaver fra testlaget
 
-Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Testlaget har ikke kjørt ennå (satt opp 10.11.2026).
+Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 11.11.2026 på main 0b8e3b9 (første kjøring).
 
-- Åpne alvorlige feil: 0
+- Åpne alvorlige feil: 1 (T-0001). Rettes før neste nye punkt i planen.
+- Åpne funn i alt: 35 (1 alvorlig, 16 middels, 18 små). Middels og små tas med neste oppgave i samme område. T-0004 og T-0005 (KI-kortet sletter tekst) og T-0003 (svar 59a) må tas før 2a-2.
+- **Til «Trenger Ståle» (prosjektlederen fører inn):** Spectora Advanced slås av før ca. 23.11.2026 (koster penger), og passordene til IVIT, Spectora og SmartTakst byttes. Se `docs/agenter/testlag/funn/T-0002-venter-pa-stale-mangler-spectora-og-passord.md`.
 
 ## Oppgaver fra nattløkken
 
