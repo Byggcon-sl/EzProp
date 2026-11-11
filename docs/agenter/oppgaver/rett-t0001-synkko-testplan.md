@@ -4,7 +4,7 @@
 - **Funn:** `docs/agenter/testlag/funn/T-0001-synkko-stopper-ved-avvist-endring.md` (feil, alvorlig)
 - **Fase:** 2a (retting fra testlaget)
 - **Branch:** `rett-t0001-synkko` (bygger på `main`)
-- **Laget av:** test-leder, 11.11.2026 (før koding)
+- **Laget av:** test-leder, 11.11.2026 (før koding). Oppdatert 11.11.2026 etter KI-vurderingen i kortet: 60 og 62 skjerpet, 68 lagt til.
 - **Støtter hovedmål:** De ansatte: takstmannen mister ikke arbeid fra iPaden fordi ett felt har et usynlig tegn, og ser hvilket felt som ikke ble sendt. KI i bunnen: tekst med nulltegn gir forslag og rad i `ai_usage_log` i stedet for feil. Færre reklamasjoner: svarene kommer fram, så rapporten får ikke hull.
 
 ## Fast oppsett
@@ -118,12 +118,13 @@ Køfunksjonene er rene. Testene går gjennom funksjonene som `trial-store.ts` br
 |---|---|---|
 | 58 | «tekst med nulltegn gir forslag og én rad i ai_usage_log» | Falsk leverandør, status `suggested`, én rad, ingen `\u0000` i raden. |
 | 59 | «leverandøren får vasket tekst» | Ledeteksten fra `buildPrompt` (fanget i den falske leverandøren) har ikke nulltegnet. |
-| 60 | «svar med nulltegn fra leverandøren lagres vasket» | Falsk leverandør gir `"Bedre\u0000 tekst"`; `output_text` i loggen og svaret er uten tegnet. |
+| 60 | «svar med nulltegn fra leverandøren lagres vasket» | Falsk leverandør gir `"Bedre\u0000 tekst"`; `output_text` i loggen og teksten tilbake til klienten er uten tegnet og like (`toBe`). |
 | 61 | «input_summary regnes av vasket tekst» | Antall tegn i `input_summary` er lengden etter vask. |
-| 62 | «tekst som er tom etter vask gir samme avslag som tom tekst» | `"\u0000\u0000"` gir samme avslag (samme kode) som `""`, ikke unntak, ikke 500; ingen leverandørkall. |
+| 62 | «tekst som er tom etter vask gir samme avslag som tom tekst» | `"\u0000\u0000"` gir `AiRequestRejectedError` med samme kode som `""`, ikke unntak, ikke 500; verken `redactFields` (spy) eller leverandøren blir kalt, ingen rad i `ai_usage_log`. |
 | 63 | «feltkodene vaskes ikke» | Feltkode med nulltegn gir samme avslag som ukjent felt i tillatt-listen i dag (trinn 3), ikke stille vask. |
 | 64 | «rekkefølgen holder: tilgang sjekkes før vask» | Bruker i B mot A med nulltegn: `AccessDeniedError`, ingen rad i `ai_usage_log` i noen organisasjon. |
 | 65 | «admin får forslag med giftig tekst» | Regel 11. |
+| 68 | «telefonnummer med nulltegn mellom sifrene blir vasket bort av personvernvasken» | Oppdiktet nummer `"Ring 9\u00001234567"`: ledeteksten den falske leverandøren får, har verken `91234567` eller sifrene med nulltegn; `input_summary` og raden i `ai_usage_log` har heller ikke nummeret. Viser at vasken kommer før `redactFields` (CLAUDE.md regel 14). |
 
 Krav: `no-leak.test.ts`, `static-checks*.test.ts`, `access*.test.ts`, `record-decision*.test.ts` og testene for godtatt/endret/avvist er **uendret** (`git diff --stat src/core/ai/*.test.ts` viser bare `request-suggestion.test.ts`).
 
@@ -191,5 +192,5 @@ Krav: ingen fast `waitForTimeout`; vent på tekst i statuslinjen eller `pendingC
 ## 9. Godkjenningskriterier
 
 - `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` grønne (testsuiten kjøres i bakgrunnen, den tar over 10 minutter).
-- Alle akseptkriteriene i oppgavekortet har minst én test over (kart: vask 1–10; synk 41–43; ingen evig løkke 35; 400 45, 54–55; 500 består 13, 57; én transaksjon 46–47; kø 16–31; statuslinje 36–40, E2–E3; KI 58–63; KI uendret 2c-krav; tilgang 48, 56, 64, 67; e2e E1–E4; ingenting slettes 24, 30, 52).
+- Alle akseptkriteriene i oppgavekortet har minst én test over (kart: vask 1–10; synk 41–43; ingen evig løkke 35; 400 45, 54–55; 500 består 13, 57; én transaksjon 46–47; kø 16–31; statuslinje 36–40, E2–E3; KI 58–63, 68; KI uendret 2c-krav; tilgang 48, 56, 64, 67; e2e E1–E4; ingenting slettes 24, 30, 52).
 - Avvises hvis: 403-testene med giftig innhold mangler (48, 56, 64), eksisterende KI-tester er endret, eller en lagt-til-side-oppføring kan slettes.
