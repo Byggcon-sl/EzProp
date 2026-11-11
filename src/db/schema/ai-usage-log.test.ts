@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
@@ -82,6 +84,7 @@ describe("ai_usage_log: kolonnene (1.1)", () => {
       "tokens_out",
       "cost",
       "currency",
+      "redacted_count",
       "retain_until",
     ];
     expect([...found.keys()].sort()).toEqual(expect.arrayContaining(expected.sort()));
@@ -247,6 +250,82 @@ describe("ai_usage_log: myk sletting (1.10)", () => {
     for (const rule of rules) {
       // c = cascade, n = set null, d = set default. Alle ville endret eller fjernet KI-loggen.
       expect(["a", "r"], rule.conname).toContain(rule.on_delete);
+    }
+  });
+});
+
+// Vask før KI (docs/funksjoner/fase2a-vask-for-ki-testplan.md avsnitt 6, kortet «Data», A171,
+// A172). Migrering 0027: `redacted_count` og utfallet `blocked`. Verdiene er oppdiktet.
+describe("ai_usage_log: redacted_count og blocked (V6)", () => {
+  it("V6.1 redacted_count finnes, er heltall, ikke tom, standard 0", async () => {
+    const found = await columns();
+    const column = found.get("redacted_count");
+    expect(column, "kolonnen redacted_count mangler").toBeDefined();
+    expect(column!.data_type).toBe("integer");
+    expect(column!.is_nullable).toBe("NO");
+    const [def] = (await db.execute(sql`
+      select column_default from information_schema.columns
+      where table_schema = 'public' and table_name = 'ai_usage_log'
+        and column_name = 'redacted_count'`)) as unknown as { column_default: string | null }[];
+    expect(def!.column_default).toBe("0");
+  });
+
+  it("V6.1 rad uten verdi får 0, og -1 avvises", async () => {
+    const { orgA, employeeA } = await twoOrganizations();
+    const row = await createAiUsageLog(orgA.id, { employeeId: employeeA.id });
+    expect(row.redacted_count).toBe(0);
+    await expectRejected(() =>
+      db.execute(sql`update ai_usage_log set redacted_count = -1 where id = ${row.id}`),
+    );
+    await db.execute(sql`update ai_usage_log set redacted_count = 3 where id = ${row.id}`);
+    const [updated] = (await db.execute(
+      sql`select redacted_count from ai_usage_log where id = ${row.id}`,
+    )) as unknown as { redacted_count: number }[];
+    expect(updated!.redacted_count).toBe(3);
+  });
+
+  it("V6.2 blocked med tom status, output_text og error_code godtas", async () => {
+    const { orgA, employeeA } = await twoOrganizations();
+    const row = await createAiUsageLog(orgA.id, {
+      employeeId: employeeA.id,
+      outcome: "blocked",
+      status: null,
+      outputText: null,
+      errorCode: null,
+    });
+    expect(row.outcome).toBe("blocked");
+    expect(row.status).toBeNull();
+    expect(row.output_text).toBeNull();
+    expect(row.error_code).toBeNull();
+    expect(row.redacted_count).toBe(0);
+  });
+
+  it.each<{ name: string; overrides: AiUsageLogOverrides }>([
+    { name: "status", overrides: { status: "suggested", outputText: null, errorCode: null } },
+    { name: "output_text", overrides: { status: null, outputText: "Oppdiktet", errorCode: null } },
+    { name: "error_code", overrides: { status: null, outputText: null, errorCode: "unknown" } },
+  ])("V6.2 blocked med $name satt avvises", async ({ overrides }) => {
+    const { orgA, employeeA } = await twoOrganizations();
+    await expectRejected(() =>
+      createAiUsageLog(orgA.id, { employeeId: employeeA.id, outcome: "blocked", ...overrides }),
+    );
+  });
+
+  it("V6.3 migreringen 0027 finnes, sletter ingenting og endrer ikke eksisterende rader", () => {
+    const dir = join(__dirname, "..", "migrations");
+    const files = readdirSync(dir).filter((name) => /^0027_.*\.sql$/u.test(name));
+    expect(files, "migrering 0027 mangler").toHaveLength(1);
+    const migration = readFileSync(join(dir, files[0]!), "utf8");
+    expect(migration).toMatch(/redacted_count/u);
+    expect(migration).toMatch(/blocked/u);
+    for (const forbidden of [
+      /\bdelete\s+from\b/iu,
+      /\btruncate\b/iu,
+      /\bdrop\s+table\b/iu,
+      /\bdrop\s+column\b/iu,
+      /\bupdate\s+"?ai_usage_log"?\s+set\b/iu,
+    ]) {
+      expect(migration, String(forbidden)).not.toMatch(forbidden);
     }
   });
 });

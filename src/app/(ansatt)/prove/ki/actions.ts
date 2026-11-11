@@ -126,7 +126,8 @@ export async function requestTrialSuggestion(input: unknown): Promise<TrialSugge
       target: { type: AI_TRIAL_TARGET_TYPE, id: targetId, fieldKey: TRIAL_FIELD_KEY },
       fields: { [TRIAL_FIELD_KEY]: text },
     });
-    if (result.kind === "disabled") return { kind: "disabled" };
+    // Sperret forespørsel (ad-1) viser samme tekst som KI av. Raden står i loggen som `blocked`.
+    if (result.kind === "disabled" || result.kind === "blocked") return { kind: "disabled" };
     const logged = await getSuggestionStatus(access.grant, result.usageId);
     if (result.kind === "suggestion") {
       return { kind: "suggestion", usageId: result.usageId, text: result.text, logged };

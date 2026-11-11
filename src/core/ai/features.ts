@@ -1,4 +1,5 @@
 import type { Permission } from "@/core/access";
+import { NEVER_FIELDS } from "./never-fields";
 import type { AiFeatureCode } from "./types";
 
 /*
@@ -6,6 +7,9 @@ import type { AiFeatureCode } from "./types";
  * kode, rettigheten som kreves, tillatt-listen over feltkoder, de lovlige målene og
  * ledetekstversjonen. Et felt som ikke står på tillatt-listen, sendes aldri til KI. Et TG-felt
  * kan aldri være mål (ADR 0006 del 7).
+ *
+ * GJENNOMGANG KREVES: endring i tillatt-listene (`allowedFields`, `fieldSources`) eller i
+ * «aldri»-listen (never-fields.ts) krever gjennomgang av sikkerhet-personvern i PR-en (A175).
  */
 
 export type AiTargetSpec = { type: string; fieldKey: string };
@@ -17,10 +21,19 @@ export type AiTargetSpec = { type: string; fieldKey: string };
  */
 export const AI_TRIAL_TARGET_TYPE = "ai_trial";
 
+/**
+ * Hvor en feltkode henter verdien fra: en kolonne som `tabell.kolonne`, eller `free_text` for
+ * tekst den ansatte har skrevet. Ingen kilde kan stå i `NEVER_FIELDS` (ad-7).
+ */
+export const FREE_TEXT_SOURCE = "free_text";
+export type AiFieldSource = `${string}.${string}` | typeof FREE_TEXT_SOURCE;
+
 export type AiFeatureDefinition = {
   code: AiFeatureCode;
   permission: Permission;
   allowedFields: readonly string[];
+  /** Kilden for hver feltkode på tillatt-listen. */
+  fieldSources: Readonly<Record<string, AiFieldSource>>;
   allowedTargets: readonly AiTargetSpec[];
   promptVersion: string;
 };
@@ -44,6 +57,7 @@ export const AI_FEATURES: Readonly<Record<AiFeatureCode, AiFeatureDefinition>> =
     code: "language_polish",
     permission: "report.edit",
     allowedFields: ["text"],
+    fieldSources: { text: FREE_TEXT_SOURCE },
     allowedTargets: [
       { type: "answer", fieldKey: "text" },
       { type: AI_TRIAL_TARGET_TYPE, fieldKey: "text" },
@@ -51,6 +65,44 @@ export const AI_FEATURES: Readonly<Record<AiFeatureCode, AiFeatureDefinition>> =
     promptVersion: "language_polish.v1",
   },
 };
+
+/** Det kontrollen trenger av en definisjon. Ren form, så testen kan prøve oppdiktede definisjoner. */
+export type AiFieldSourceCheckInput = {
+  code: string;
+  allowedFields: readonly string[];
+  fieldSources?: Readonly<Record<string, string>>;
+};
+
+const TABLE_COLUMN = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
+
+/**
+ * Kontrollen av feltkildene (ad-7): hver feltkode på tillatt-listen må ha en kilde, kilden må
+ * være `free_text` eller `tabell.kolonne`, og den kan ikke stå i «aldri»-listen. Gir én linje per
+ * brudd; tom liste betyr at definisjonene er i orden.
+ */
+export function findFieldSourceViolations(
+  definitions: readonly AiFieldSourceCheckInput[],
+  neverFields: readonly string[] = NEVER_FIELDS,
+): string[] {
+  const never = new Set(neverFields);
+  const out: string[] = [];
+  for (const definition of definitions) {
+    const sources = definition.fieldSources ?? {};
+    for (const field of definition.allowedFields) {
+      const source = Object.prototype.hasOwnProperty.call(sources, field)
+        ? sources[field]
+        : undefined;
+      if (source === undefined || source === "") {
+        out.push(`${definition.code}.${field}: mangler kilde`);
+      } else if (never.has(source)) {
+        out.push(`${definition.code}.${field}: ${source} står i «aldri»-listen`);
+      } else if (source !== FREE_TEXT_SOURCE && !TABLE_COLUMN.test(source)) {
+        out.push(`${definition.code}.${field}: ugyldig kilde ${source}`);
+      }
+    }
+  }
+  return out;
+}
 
 function isFeatureCode(code: string): code is AiFeatureCode {
   return Object.prototype.hasOwnProperty.call(AI_FEATURES, code);

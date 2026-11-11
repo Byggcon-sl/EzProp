@@ -162,3 +162,143 @@ describe("funksjonsdefinisjonene (2)", () => {
     // Selve ledeteksten prøves også i request-suggestion.test.ts (det leverandøren får).
   });
 });
+
+/*
+ * «Aldri»-kolonnene og kildene til feltkodene (docs/funksjoner/fase2a-vask-for-ki-testplan.md
+ * V8.1–V8.4, kortet Omfang 7, ad-7, A175). Kontrollen står i testen (`sourceProblems`) og prøves
+ * selv mot oppdiktede definisjoner, så den ikke kan være hul. Minimumslisten er `BLOCKED` over,
+ * skrevet fast her: en kolonne kan ikke fjernes fra både kode og kontroll i samme endring uten
+ * rød test.
+ */
+const NEW_NEVER_COLUMNS = [
+  "assignment_team_members.handed_over_reason",
+  "certifications.certificate_number",
+  "assignments.number",
+];
+
+/** `NEVER_FIELDS` fra koden (`never-fields.ts`, eller `features.ts` etter avtalen). */
+async function neverFieldsFromCode(): Promise<string[]> {
+  const candidates: Record<string, unknown>[] = [];
+  try {
+    candidates.push((await import("../never-fields")) as Record<string, unknown>);
+  } catch {
+    // Filen finnes ikke: listen kan stå i features.ts
+  }
+  candidates.push((await import("../features")) as Record<string, unknown>);
+  for (const candidate of candidates) {
+    const list = candidate.NEVER_FIELDS;
+    if (Array.isArray(list) || list instanceof Set) return [...list].map(String);
+  }
+  throw new Error("NEVER_FIELDS finnes verken i never-fields.ts eller features.ts (avtalen)");
+}
+
+/** Feltkoder uten kilde, med ugyldig kilde, eller med kilde på «aldri»-listen. */
+function sourceProblems(
+  definition: Pick<AiFeatureDefinitionForTest, "code" | "allowedFields"> & {
+    fieldSources?: unknown;
+  },
+  neverFields: readonly string[],
+): string[] {
+  const sources = (definition.fieldSources ?? {}) as Record<string, unknown>;
+  const problems: string[] = [];
+  for (const field of definition.allowedFields) {
+    const source = Object.prototype.hasOwnProperty.call(sources, field)
+      ? sources[field]
+      : undefined;
+    if (typeof source !== "string" || source.length === 0) {
+      problems.push(`${definition.code}.${field}: mangler kilde`);
+    } else if (source !== "free_text" && !/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/u.test(source)) {
+      problems.push(`${definition.code}.${field}: ugyldig kilde ${source}`);
+    } else if (neverFields.includes(source)) {
+      problems.push(`${definition.code}.${field}: ${source} står på «aldri»-listen`);
+    }
+  }
+  return problems;
+}
+
+describe("vask før KI: «aldri»-kolonnene og fieldSources (V8.1–V8.4)", () => {
+  it("V8.1 hver feltkode på tillatt-listen har en kilde (tabell.kolonne eller free_text)", async () => {
+    const neverFields = await neverFieldsFromCode();
+    for (const definition of featureDefinitions()) {
+      const withSources = definition as AiFeatureDefinitionForTest & { fieldSources?: unknown };
+      expect(withSources.fieldSources, `${definition.code}: fieldSources mangler`).toBeDefined();
+      expect(sourceProblems(withSources, neverFields)).toEqual([]);
+    }
+    const polish = languagePolish() as AiFeatureDefinitionForTest & { fieldSources?: unknown };
+    expect(polish.fieldSources).toEqual({ text: "free_text" });
+  });
+
+  it("V8.2 kontrollen er ikke hul: kilde på «aldri»-listen og feltkode uten kilde blir fanget", async () => {
+    const neverFields = await neverFieldsFromCode();
+    const invented = {
+      code: "invented_feature",
+      allowedFields: ["text", "recipient"],
+      fieldSources: { text: "free_text", recipient: "contacts.email" },
+    };
+    expect(sourceProblems(invented, neverFields)).toEqual([
+      "invented_feature.recipient: contacts.email står på «aldri»-listen",
+    ]);
+    expect(
+      sourceProblems({ ...invented, fieldSources: { text: "free_text" } }, neverFields),
+    ).toEqual(["invented_feature.recipient: mangler kilde"]);
+    expect(sourceProblems({ ...invented, fieldSources: undefined }, neverFields)).toHaveLength(2);
+    for (const column of NEW_NEVER_COLUMNS) {
+      expect(
+        sourceProblems(
+          { ...invented, fieldSources: { text: column, recipient: "free_text" } },
+          neverFields,
+        ),
+        column,
+      ).toHaveLength(1);
+    }
+  });
+
+  it("V8.2 kontrollen i koden (findFieldSourceViolations) godtar definisjonene og fanger «aldri»-kilde, manglende og ugyldig kilde", async () => {
+    const { AI_FEATURES, findFieldSourceViolations } = await import("../features");
+    expect(findFieldSourceViolations(Object.values(AI_FEATURES))).toEqual([]);
+    expect(
+      findFieldSourceViolations([
+        {
+          code: "invented_feature",
+          allowedFields: ["text", "mail", "missing", "odd"],
+          fieldSources: { text: "free_text", mail: "contacts.email", odd: "email" },
+        },
+        { code: "no_sources", allowedFields: ["text"] },
+      ]),
+    ).toEqual([
+      "invented_feature.mail: contacts.email står i «aldri»-listen",
+      "invented_feature.missing: mangler kilde",
+      "invented_feature.odd: ugyldig kilde email",
+      "no_sources.text: mangler kilde",
+    ]);
+  });
+
+  it("V8.3 NEVER_FIELDS har hele minimumslisten (fast kopi) og de tre nye kolonnene", async () => {
+    const neverFields = await neverFieldsFromCode();
+    const minimum = Object.entries(BLOCKED).flatMap(([table, columns]) =>
+      columns.map((column) => `${table}.${column}`),
+    );
+    expect(minimum.length).toBeGreaterThan(30);
+    const missing = [...minimum, ...NEW_NEVER_COLUMNS].filter(
+      (column) => !neverFields.includes(column),
+    );
+    expect(missing, "mangler på «aldri»-listen").toEqual([]);
+    expect(new Set(neverFields).size, "dubletter på «aldri»-listen").toBe(neverFields.length);
+  });
+
+  it("V8.4 kommentaren over listene krever gjennomgang av sikkerhet-personvern (A175)", () => {
+    const files = ["never-fields.ts", "features.ts"]
+      .map((name) => join(aiDir, name))
+      .filter((file) => existsSync(file));
+    const withList = files.filter((file) =>
+      /export const NEVER_FIELDS/u.test(readFileSync(file, "utf8")),
+    );
+    expect(withList, "NEVER_FIELDS finnes ikke i koden").toHaveLength(1);
+    const neverSource = readFileSync(withList[0]!, "utf8");
+    const listAt = neverSource.indexOf("export const NEVER_FIELDS");
+    expect(neverSource.slice(0, listAt)).toMatch(/sikkerhet-personvern/u);
+    const features = readFileSync(join(aiDir, "features.ts"), "utf8");
+    const featuresAt = features.indexOf("export const AI_FEATURES");
+    expect(features.slice(0, featuresAt)).toMatch(/sikkerhet-personvern/u);
+  });
+});

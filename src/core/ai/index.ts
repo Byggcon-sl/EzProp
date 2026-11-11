@@ -18,10 +18,15 @@ export {
 export {
   AI_FEATURES,
   AI_TRIAL_TARGET_TYPE,
+  FREE_TEXT_SOURCE,
+  findFieldSourceViolations,
   getFeatureDefinition,
   type AiFeatureDefinition,
+  type AiFieldSource,
+  type AiFieldSourceCheckInput,
   type AiTargetSpec,
 } from "./features";
+export { NEVER_FIELDS } from "./never-fields";
 export { AI_ENABLED_SETTING_KEY } from "./provider-resolution";
 export {
   FAKE_ERROR_CODE,

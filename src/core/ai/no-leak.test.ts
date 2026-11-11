@@ -12,6 +12,8 @@ import {
   validRequest,
 } from "../../../tests/ai";
 import { createAiUsageLog, resetDatabase } from "../../../tests/factories";
+import { seedKnownValues } from "../../../tests/known-values";
+import { PROMPT_INPUT_SEPARATOR } from "./features";
 
 /*
  * Ingen innhold på avveie (docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 11, ADR 0006
@@ -162,5 +164,67 @@ describe("ingen innhold på avveie (11)", () => {
     await recordDecision(grant, row.id, "rejected");
     expect(JSON.stringify(await allAuditRows())).not.toContain(MARKER);
     expect(loggedText(spies)).not.toContain(MARKER);
+  });
+});
+
+/*
+ * Vask før KI (docs/funksjoner/fase2a-vask-for-ki-testplan.md V4.4, kortet Omfang 2 og 4, A172).
+ * De kjente verdiene lever bare i minnet under kallet: de finnes ikke i raden (`input_summary`,
+ * `source_fields`, `target_ref` og resten), i `audit_log`, i loggeren eller i svaret. Alle
+ * verdier er oppdiktet.
+ */
+describe("vask før KI: ingen lekkasje av persondata (V4.4)", () => {
+  const VALUES = [
+    "Åse",
+    "Testesen",
+    "12345678",
+    "ase.testesen@example.no",
+    "Prøvetunet",
+    "Testvik",
+    "8099",
+    "12/34",
+    "01019912345",
+  ];
+
+  it("V4.4 verdiene finnes ikke i raden, audit_log, logger eller svaret; input_summary er regnet av vasket tekst", async () => {
+    const { organization, grant } = await aiOrganization();
+    const assignmentId = await seedKnownValues(organization.id, {
+      parties: [{ name: "Åse Testesen", email: "ase.testesen@example.no", phone: "12345678" }],
+      property: {
+        address: "Prøvetunet 7",
+        postalCode: "8099",
+        city: "Testvik",
+        gnr: "12",
+        bnr: "34",
+      },
+    });
+    const spies = spyOnLogger();
+    const complete = vi.spyOn(fakeAiProvider, "complete");
+    const text =
+      "Åse Testesen (ase.testesen@example.no, 12345678) bor i Prøvetunet 7, 8099 Testvik, " +
+      "eiendom 12/34. Personnummer 01019912345.";
+    const request = validRequest({ assignmentId, fields: { text } });
+
+    const result = await requestSuggestion(grant, request);
+
+    expect(result.kind).toBe("suggestion");
+    const row = (await aiRow(request.requestId))!;
+    const seen = [
+      JSON.stringify(row),
+      JSON.stringify(await allAuditRows()),
+      loggedText(spies),
+      JSON.stringify(result),
+      JSON.stringify(complete.mock.calls),
+    ].join("\n");
+    for (const value of VALUES) expect(seen, value).not.toContain(value);
+
+    // input_summary er antall tegn i den vaskede teksten, ikke i originalen
+    const prompt = complete.mock.calls[0]![0].prompt;
+    const sent = prompt.slice(
+      prompt.lastIndexOf(PROMPT_INPUT_SEPARATOR) + PROMPT_INPUT_SEPARATOR.length,
+    );
+    expect(row.input_summary).toEqual({ text: sent.length });
+    expect(sent.length).not.toBe(text.length);
+    expect(row.source_fields).toEqual(["text"]);
   });
 });
