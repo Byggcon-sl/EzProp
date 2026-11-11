@@ -15,6 +15,7 @@ import {
   type AiOutcome,
   type AiSuggestionStatus,
 } from "@/core/ai";
+import type { AiQueueFailureReason } from "@/core/ai/client";
 import { logger } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
 import { getEmployeeContext } from "../../employee-context";
@@ -41,7 +42,11 @@ const UNKNOWN = "Noe gikk galt. Teksten din er uendret. Prøv igjen.";
 /** Status og utfall lest fra KI-loggen for ett forslag, eller `null` («finnes ikke»). */
 export type TrialLogged = { status: AiSuggestionStatus | null; outcome: AiOutcome } | null;
 
-export type TrialFailure = { kind: "failed"; message: string };
+/**
+ * Feil med fast norsk melding og fast kode `reason`. Køen på klienten leser bare koden, aldri
+ * meldingen (docs/funksjoner/fase2a-ki-ko.md Omfang 2).
+ */
+export type TrialFailure = { kind: "failed"; message: string; reason: AiQueueFailureReason };
 
 export type TrialSuggestionResponse =
   | { kind: "suggestion"; usageId: string; text: string; logged: TrialLogged }
@@ -85,8 +90,8 @@ async function trialGrant(): Promise<{ grant: EmployeeGrant; userId: string } | 
   return { grant, userId: context.actor.id };
 }
 
-function failed(message: string): TrialFailure {
-  return { kind: "failed", message };
+function failed(message: string, reason: AiQueueFailureReason): TrialFailure {
+  return { kind: "failed", message, reason };
 }
 
 /** Kjente feil gir faste meldinger. Ukjente logges bare med feilnavn og id-er. */
@@ -97,26 +102,26 @@ function failure(
 ): TrialFailure {
   // Utløpt økt gir omdirigering til innlogging; den skal ikke bli til «Noe gikk galt».
   unstable_rethrow(error);
-  if (error instanceof AccessDeniedError) return failed(NO_ACCESS);
-  if (error instanceof AiRequestRejectedError) return failed(rejectedMessage);
+  if (error instanceof AccessDeniedError) return failed(NO_ACCESS, "no_access");
+  if (error instanceof AiRequestRejectedError) return failed(rejectedMessage, "invalid");
   logger.error("Prøvesiden for KI feilet", {
     route: ROUTE,
     ...log,
     errorName: error instanceof Error ? error.name : "ukjent feil",
   });
-  return failed(UNKNOWN);
+  return failed(UNKNOWN, "unknown");
 }
 
 /** Be om et forslag til språkvask av teksten. Målet er prøvesidens egen id (`ai_trial`). */
 export async function requestTrialSuggestion(input: unknown): Promise<TrialSuggestionResponse> {
   const parsed = requestSchema.safeParse(input);
-  if (!parsed.success) return failed(INVALID_TEXT);
+  if (!parsed.success) return failed(INVALID_TEXT, "invalid");
   const { requestId, targetId, text } = parsed.data;
 
   let userId: string | undefined;
   try {
     const access = await trialGrant();
-    if (!access) return failed(NO_ACCESS);
+    if (!access) return failed(NO_ACCESS, "no_access");
     userId = access.userId;
     const result = await requestSuggestion(access.grant, {
       requestId,
@@ -146,13 +151,13 @@ export async function requestTrialSuggestion(input: unknown): Promise<TrialSugge
 /** «Bruk», «Behold min tekst» eller «Angre». Svaret har status lest fra loggen. */
 export async function decideTrialSuggestion(input: unknown): Promise<TrialDecisionResponse> {
   const parsed = decisionSchema.safeParse(input);
-  if (!parsed.success) return failed(NOT_FOUND);
+  if (!parsed.success) return failed(NOT_FOUND, "invalid");
   const { usageId, decision } = parsed.data;
 
   let userId: string | undefined;
   try {
     const access = await trialGrant();
-    if (!access) return failed(NO_ACCESS);
+    if (!access) return failed(NO_ACCESS, "no_access");
     userId = access.userId;
     try {
       await recordDecision(access.grant, usageId, decision);
@@ -171,11 +176,11 @@ export async function decideTrialSuggestion(input: unknown): Promise<TrialDecisi
 /** Status og utfall for ett forslag, lest fra loggen. */
 export async function readTrialStatus(input: unknown): Promise<TrialStatusResponse> {
   const parsed = statusSchema.safeParse(input);
-  if (!parsed.success) return failed(NOT_FOUND);
+  if (!parsed.success) return failed(NOT_FOUND, "invalid");
   let userId: string | undefined;
   try {
     const access = await trialGrant();
-    if (!access) return failed(NO_ACCESS);
+    if (!access) return failed(NO_ACCESS, "no_access");
     userId = access.userId;
     return { kind: "status", logged: await getSuggestionStatus(access.grant, parsed.data.usageId) };
   } catch (error) {
