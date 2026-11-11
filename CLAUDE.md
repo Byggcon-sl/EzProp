@@ -70,6 +70,7 @@ pnpm format       # Prettier (ikke markdown)
 pnpm db:generate  # lag ny migrering etter endring i src/db/schema
 pnpm db:migrate   # kjør migreringer (valgfritt: database-URL som argument)
 pnpm db:seed      # organisasjonen Byggcon og første admin
+pnpm ai:eval [funksjon]  # kjør evalueringssettet mot den falske KI-leverandøren
 ```
 
 **`start.sh`** (og `Start EzProp.command`) er Ståles oppstartsskript på Mac. Når oppsettet endres, oppdateres skriptet i samme PR. Det må virke med bash 3.2.

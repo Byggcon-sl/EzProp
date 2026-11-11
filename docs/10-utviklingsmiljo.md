@@ -12,6 +12,14 @@ Skymiljøet har Node.js 22, pnpm og PostgreSQL 16. `scripts/session-start.sh` kj
 
 Etter dette virker `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` (med `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`).
 
+## Evalueringssettet for KI
+
+```bash
+pnpm ai:eval [funksjon]  # kjør evalueringssettet mot den falske KI-leverandøren
+```
+
+Kjører eksemplene i `src/core/ai/evals/<funksjon>.cases.json` (uten argument: alle filene) gjennom samme ledetekst og vask som ekte bruk, og viser antall eksempler, treff, treffprosent, grense og `mustPass` per funksjon, med id og grunn for hvert bom. Trenger verken database eller innlogging, og sender ingenting ut av maskinen. Avslutningskode 1 ved ugyldig fil, duplisert id, ukjent funksjon, krasj eller persondata i teksten til leverandøren, ikke ved lav treffprosent (A183). Ekte leverandør kobles til med Anthropic-adapteren (ADR 0006 del 9).
+
 ## Lokal kopi på Mac (valgfritt)
 
 Hent repoet med GitHub Desktop. Dobbeltklikk `Start EzProp.command`, eller kjør `./start.sh`. Skriptet sjekker Node og pnpm, henter siste versjon, starter databasen i Docker, lager `.env`, installerer pakker, migrerer, seeder og åpner nettleseren. `./start.sh --nullstill` gir en tom database.
