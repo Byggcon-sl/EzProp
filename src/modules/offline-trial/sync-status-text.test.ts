@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   nextSavedAt,
   savedAtText,
+  setAsideText,
   showSyncNow,
   SIGN_IN_LABEL,
   signInHref,
@@ -353,4 +354,60 @@ describe("lenken «Logg inn» (signInHref)", () => {
   });
   // At lenken og safeNextPath passer sammen, testes i src/app/logg-inn/safe-next-path.test.ts
   // (moduler importerer ikke fra app).
+});
+
+// Funn T-0001: endringer lagt til side vises med feltnavnet fra skjemaet.
+// Testplan docs/agenter/oppgaver/rett-t0001-giftig-endring-testplan.md avsnitt 1e (36–40).
+describe("Kunne ikke sendes (setAsideText)", () => {
+  it("Kunne ikke sendes: <feltnavn> med navn fra skjemaet", () => {
+    expect(setAsideText([{ table: "trial_answers", fieldKey: "general_description" }])).toBe(
+      "Kunne ikke sendes: Generell beskrivelse",
+    );
+    // Navnet kommer fra skjemadefinisjonen som sendes inn, ikke fra koden.
+    const form = {
+      groups: [
+        {
+          key: "g",
+          title: "G",
+          fields: [{ key: "general_description", label: "Annet navn", type: "text" as const }],
+        },
+      ],
+    };
+    expect(setAsideText([{ table: "trial_answers", fieldKey: "general_description" }], form)).toBe(
+      "Kunne ikke sendes: Annet navn",
+    );
+  });
+
+  it("bilde gir «bilde i <feltnavn>»", () => {
+    expect(setAsideText([{ table: "trial_photos", fieldKey: "cover_photo" }])).toBe(
+      "Kunne ikke sendes: bilde i Forsidebilde",
+    );
+  });
+
+  it("testskjemaet", () => {
+    expect(setAsideText([{ table: "trial_forms", fieldKey: null }])).toBe(
+      "Kunne ikke sendes: testskjemaet",
+    );
+  });
+
+  it("flere felt skilles med komma, samme felt nevnes én gang", () => {
+    expect(
+      setAsideText([
+        { table: "trial_answers", fieldKey: "general_description" },
+        { table: "trial_answers", fieldKey: "building_year" },
+        { table: "trial_answers", fieldKey: "general_description" },
+      ]),
+    ).toBe("Kunne ikke sendes: Generell beskrivelse, Byggeår");
+  });
+
+  it("ingen melding når ingenting er lagt til side eller alt er løst", () => {
+    expect(setAsideText([])).toBeNull();
+    expect(setAsideText(undefined)).toBeNull();
+  });
+
+  it("ukjent feltkode viser aldri koden", () => {
+    expect(setAsideText([{ table: "trial_answers", fieldKey: "secret_key" }])).toBe(
+      "Kunne ikke sendes: et felt",
+    );
+  });
 });

@@ -16,6 +16,12 @@ import {
 // nettleser: databasen er en liten falsk `LocalDb` i minnet, leseren er en stub, `fetch` og
 // `navigator` byttes ut. Tidtakerne er falske, aldri ekte venting. Alle data er oppdiktet.
 
+// Bildelageret er egen IndexedDB; `status()` spør det om bekreftede bilder. Ingen her.
+vi.mock("../photo-store", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../photo-store")>()),
+  listConfirmedPhotoIds: () => Promise.resolve(new Set<string>()),
+}));
+
 const ORG = "0192d3a0-0000-7000-8000-0000000000f1";
 const FORM = "0192d3a0-0000-7000-8000-000000000001";
 const ANSWER = "0192d3a0-0000-7000-8000-0000000000a1";
@@ -422,5 +428,100 @@ describe("øyeblikksbilder og nyere lokale skrivinger (localWriteGeneration)", (
 
     expect(valuesSeen(listener)).not.toContain("2");
     expect(valuesSeen(listener).at(-1)).toBe("4");
+  });
+});
+
+describe("endring lagt til side ved 400 i den lokale kjernen (funn T-0001)", () => {
+  // Testplan docs/agenter/oppgaver/rett-t0001-giftig-endring-testplan.md 1c, 1d (33) og avsnitt 7.
+  const rejectAnswer = () =>
+    new Response(
+      JSON.stringify({
+        feil: "Endringen kunne ikke lagres.",
+        endring: { id: ANSWER, table: "trial_answers", field_key: "floors" },
+      }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+
+  /** Operasjonene i bunten som ble sendt i kall nummer `call`. */
+  function sentTables(call: number): string[] {
+    const init = fetchMock.mock.calls[call]![1]!;
+    const body = JSON.parse(String(init.body)) as { operations: { table: string }[] };
+    return body.operations.map((operation) => operation.table);
+  }
+
+  it("400 for én endring: den legges til side, resten sendes straks, og Synk nå gir ok", async () => {
+    fetchMock.mockResolvedValueOnce(rejectAnswer()).mockResolvedValue(response(200));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open();
+
+    expect(await store!.syncNow()).toBe("ok");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sentTables(0)).toEqual(["trial_forms", "trial_answers"]);
+    expect(sentTables(1)).toEqual(["trial_forms"]);
+
+    // Ikke slettet: ligger i køen med merket, også i lagringen.
+    const queue = await storedQueue();
+    expect(queue).toHaveLength(1);
+    expect(queue[0]).toMatchObject({ seq: 2, table: "trial_answers", id: ANSWER });
+    expect(typeof (queue[0]!.setAside as { at: unknown }).at).toBe("string");
+
+    const status = await store!.status();
+    expect(status.pendingChanges).toBe(0);
+    expect(status.setAside).toEqual([{ table: "trial_answers", fieldKey: "floors" }]);
+
+    // Loggen har bare status og antall, aldri feltet eller verdien.
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).toContain("400");
+    expect(logged).not.toContain("floors");
+    expect(logged).not.toContain(ANSWER);
+  });
+
+  it("køen regnes som tømt når bare lagt-til-side-oppføringer står igjen", async () => {
+    const parked: OutboxEntry[] = [{ ...QUEUE[1]!, setAside: { at: NOW } }];
+    await open(true, parked);
+
+    expect(await store!.syncNow()).toBe("ok");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await storedQueue()).toEqual(parked);
+    expect((await store!.status()).pendingChanges).toBe(0);
+  });
+
+  it("ny endring i samme felt kvittert med 200 løser den gamle, som ikke slettes", async () => {
+    fetchMock.mockResolvedValue(response(200));
+    const parked: OutboxEntry[] = [{ ...QUEUE[1]!, setAside: { at: NOW } }];
+    await open(true, parked);
+    expect((await store!.status()).setAside).toHaveLength(1);
+
+    await store!.setAnswer(FORM, "floors", 3);
+    expect(await store!.syncNow()).toBe("ok");
+
+    const queue = await storedQueue();
+    expect(queue).toHaveLength(1);
+    expect(queue[0]).toMatchObject({ seq: 2, setAside: { at: NOW, resolved: true } });
+    expect((await store!.status()).setAside).toEqual([]);
+  });
+
+  it("hentet vasket svar overskriver ikke feltet lagt til side og lager ingen køoppføring", async () => {
+    const parked: OutboxEntry[] = [{ ...QUEUE[1]!, setAside: { at: NOW } }];
+    const { seed } = await open(false, parked);
+    seed(LOCAL_SYNCED_STORES.trial_answers, { id: ANSWER, ...QUEUE[1]!.data });
+
+    await store!.applySyncedRows("trial_answers", [
+      { ...QUEUE[1]!.data, id: ANSWER, value: "9", deleted_at: null },
+    ]);
+
+    const rows = await store!.readRows("trial_answers");
+    expect(rows.map((row) => row.value)).toEqual(["2"]);
+    expect(await storedQueue()).toEqual(parked);
+  });
+
+  it("400 uten endring og ugyldig JSON med flere i bunten: nytt forsøk, ingenting lagt til side", async () => {
+    fetchMock.mockResolvedValue(new Response("ikke json", { status: 400 }));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open();
+
+    expect(await store!.syncNow()).toBe("failed");
+    expect(await storedQueue()).toEqual(QUEUE);
+    expect((await store!.status()).pendingChanges).toBe(2);
   });
 });

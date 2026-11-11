@@ -5,7 +5,8 @@
  * ingen React, ingen `window`. «Lagret kl.» regnes ut bare her (`nextSavedAt`), likt for alle
  * kandidater.
  */
-import type { TrialSyncRoundResult, TrialSyncStatus } from "./sync/types";
+import type { SetAsideField, TrialSyncRoundResult, TrialSyncStatus } from "./sync/types";
+import { listTrialFields, trialForm, type TrialForm } from "./trial-form";
 
 export const SYNC_NOW_OFFLINE_MESSAGE =
   "Du er uten nett. Alt er lagret på iPaden og sendes når nettet kommer.";
@@ -65,6 +66,35 @@ export function syncStatusText(status: TrialSyncStatus, signInRequired = false):
       return `Venter: ${changes}, ${photos}`;
     }
   }
+}
+
+export const SET_ASIDE_PREFIX = "Kunne ikke sendes:";
+export const SET_ASIDE_FORM = "testskjemaet";
+/** Når feltkoden ikke finnes i skjemaet (skal ikke skje). */
+export const SET_ASIDE_UNKNOWN_FIELD = "et felt";
+
+/**
+ * «Kunne ikke sendes: Generell beskrivelse, bilde i Tak – bilde, testskjemaet» for endringer som er
+ * lagt til side og ikke løst (funn T-0001). Feltnavnet hentes fra skjemaet, aldri fra koden. Samme
+ * felt nevnes én gang. `null` når ingenting er lagt til side.
+ */
+export function setAsideText(
+  fields: readonly SetAsideField[] | undefined,
+  form: TrialForm = trialForm,
+): string | null {
+  if (!fields || fields.length === 0) return null;
+  const labels = new Map(listTrialFields(form).map((field) => [field.key, field.label]));
+  const names: string[] = [];
+  for (const field of fields) {
+    let name: string;
+    if (field.table === "trial_forms") name = SET_ASIDE_FORM;
+    else {
+      const label = (field.fieldKey && labels.get(field.fieldKey)) || SET_ASIDE_UNKNOWN_FIELD;
+      name = field.table === "trial_photos" ? `bilde i ${label}` : label;
+    }
+    if (!names.includes(name)) names.push(name);
+  }
+  return `${SET_ASIDE_PREFIX} ${names.join(", ")}`;
 }
 
 /** «Synk nå» skjules mens «Logg inn» vises. */

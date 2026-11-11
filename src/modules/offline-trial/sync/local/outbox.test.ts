@@ -12,8 +12,11 @@ import {
   enqueue,
   keepBatch,
   localRowKey,
+  pendingCount,
   pendingKeys,
   retryDelayMs,
+  setAsideFields,
+  setAsideFromRejection,
   shouldAckBatch,
   takeBatch,
 } from "./outbox";
@@ -339,5 +342,208 @@ describe("endringskøen (outbox.ts)", () => {
     expect(localRowKey("trial_forms", { id: FORM })).not.toBe(
       localRowKey("trial_forms", { id: ANSWER_Y }),
     );
+  });
+});
+
+// Funn T-0001: én endring serveren avviser med 400, legges til side, og resten sendes videre.
+// Testplan docs/agenter/oppgaver/rett-t0001-giftig-endring-testplan.md avsnitt 1c (16–32).
+describe("endring lagt til side ved 400 (setAsideFromRejection)", () => {
+  const AT = "2026-11-11T10:00:00.000Z";
+  const ANSWER_Z = "0192d3a0-0000-7000-8000-0000000000a3";
+  const keyOf = (fieldKey: string) =>
+    localRowKey("trial_answers", { trial_form_id: FORM, field_key: fieldKey });
+
+  /** Tre svar i køen: Generell beskrivelse, Byggeår og Bad – beskrivelse. */
+  function threeAnswers(): OutboxState {
+    return enqueueAll(createOutboxState(), [
+      answerEntry(ANSWER_X, "general_description", "Fukt i kjeller"),
+      answerEntry(ANSWER_Y, "building_year", 1985),
+      answerEntry(ANSWER_Z, "bathroom_description", "Tett"),
+    ]);
+  }
+
+  const rejection = (entry: OutboxEntry) => ({
+    feil: "Endringen kunne ikke lagres.",
+    endring: { id: entry.id, table: entry.table, field_key: entry.data.field_key },
+  });
+
+  /** Én runde: bunt, 400 for oppføringen på `poisonIndex`, så ny bunt med 200. */
+  function roundWithPoison(state: OutboxState, poisonIndex: number) {
+    const first = take(state);
+    const poison = first.batch[poisonIndex]!;
+    const afterReject = setAsideFromRejection(first.state, 400, rejection(poison), AT);
+    expect(afterReject).not.toBeNull();
+    const second = take(afterReject!);
+    expect(second.batch.map((entry) => entry.seq)).not.toContain(poison.seq);
+    expect(second.batch).toHaveLength(2);
+    return { poison, state: ackBatch(second.state) };
+  }
+
+  it.each([
+    ["først", 0],
+    ["i midten", 1],
+    ["sist", 2],
+  ])("giftig endring %s: legges til side, resten sendes og kvitteres", (_, index) => {
+    const { poison, state } = roundWithPoison(threeAnswers(), index);
+    expect(state.entries).toHaveLength(1);
+    expect(state.entries[0]!.seq).toBe(poison.seq);
+    expect(state.entries[0]!.setAside).toEqual({ at: AT });
+    expect(state.entries[0]!.data).toEqual(poison.data);
+    expect(takeBatch(state, 500)).toBeNull();
+  });
+
+  it("alle køoppføringer med samme table+id i bunten legges til side", () => {
+    // To oppføringer for samme rad: den andre kom mens den første var underveis.
+    let state = enqueueAll(createOutboxState(), [
+      answerEntry(ANSWER_X, "general_description", "a"),
+    ]);
+    state = take(state).state;
+    state = enqueueAll(state, [
+      answerEntry(ANSWER_X, "general_description", "b", "PATCH"),
+      answerEntry(ANSWER_Y, "building_year", 1985),
+    ]);
+    state = keepBatch(state);
+    const taken = take(state);
+    expect(taken.batch).toHaveLength(3);
+    const next = setAsideFromRejection(taken.state, 400, rejection(taken.batch[0]!), AT)!;
+    expect(next.entries.filter((entry) => entry.setAside).map((entry) => entry.seq)).toEqual([
+      1, 2,
+    ]);
+    expect(take(next).batch.map((entry) => entry.id)).toEqual([ANSWER_Y]);
+  });
+
+  it("400 uten endring og bunt med én endring: legges til side", () => {
+    const state = take(enqueueAll(createOutboxState(), [formEntry()])).state;
+    const next = setAsideFromRejection(state, 400, { feil: "Ugyldig." }, AT)!;
+    expect(next.entries[0]!.setAside).toEqual({ at: AT });
+    expect(next.inFlight).toBeNull();
+    // Kropp som ikke kunne leses (ugyldig JSON gir null), gir det samme.
+    expect(setAsideFromRejection(state, 400, null, AT)!.entries[0]!.setAside).toEqual({ at: AT });
+  });
+
+  it("400 uten endring og flere i bunten: nytt forsøk, ingenting lagt til side", () => {
+    const { state } = take(threeAnswers());
+    expect(setAsideFromRejection(state, 400, { feil: "Ugyldig." }, AT)).toBeNull();
+    const kept = keepBatch(state);
+    expect(kept.entries.some((entry) => entry.setAside)).toBe(false);
+    expect(kept.entries).toHaveLength(3);
+  });
+
+  it("400 med endring som ikke finnes i bunten: nytt forsøk", () => {
+    const { state } = take(threeAnswers());
+    const body = {
+      feil: "x",
+      endring: { id: "0192d3a0-0000-7000-8000-0000000000ff", table: "trial_answers" },
+    };
+    expect(setAsideFromRejection(state, 400, body, AT)).toBeNull();
+    // Ukjent tabell regnes som uten endring (flere i bunten: nytt forsøk).
+    const odd = { feil: "x", endring: { id: ANSWER_X, table: "users" } };
+    expect(setAsideFromRejection(state, 400, odd, AT)).toBeNull();
+  });
+
+  it.each([401, 403, 409, 413, 500, 503, undefined])(
+    "%s gir nytt forsøk og legger ingenting til side",
+    (status) => {
+      const { state, batch } = take(threeAnswers());
+      expect(setAsideFromRejection(state, status, rejection(batch[0]!), AT)).toBeNull();
+      const kept = keepBatch(state);
+      expect(kept.entries.some((entry) => entry.setAside)).toBe(false);
+      expect(kept.entries).toHaveLength(3);
+    },
+  );
+
+  it("lagt til side slettes aldri, heller ikke etter flere runder med 200", () => {
+    const first = roundWithPoison(threeAnswers(), 0);
+    let state = first.state;
+    for (let round = 0; round < 3; round++) {
+      state = enqueue(state, answerEntry(ANSWER_Y, "building_year", 1990 + round));
+      state = ackBatch(take(state).state);
+    }
+    expect(state.entries.map((entry) => entry.seq)).toEqual([first.poison.seq]);
+  });
+
+  it("lagt til side sendes ikke, og ventetallet teller den ikke", () => {
+    const { state } = roundWithPoison(threeAnswers(), 0);
+    expect(takeBatch(state, 500)).toBeNull();
+    expect(pendingCount(state)).toBe(0);
+    const more = enqueue(state, answerEntry(ANSWER_Y, "building_year", 2000));
+    expect(pendingCount(more)).toBe(1);
+    expect(take(more).batch).toHaveLength(1);
+  });
+
+  it("ventetallet gir 2 når 3 ligger og 1 er lagt til side", () => {
+    const { state } = take(threeAnswers());
+    const next = setAsideFromRejection(state, 400, rejection(state.entries[1]!), AT)!;
+    expect(next.entries).toHaveLength(3);
+    expect(pendingCount(next)).toBe(2);
+  });
+
+  it("lagt til side overlever omlasting", () => {
+    const { state } = roundWithPoison(threeAnswers(), 1);
+    const more = enqueue(state, formEntry());
+    const reloaded = createOutboxState(structuredClone([...more.entries]).reverse(), more.nextSeq);
+    expect(reloaded.entries).toEqual(more.entries);
+    expect(reloaded.entries[0]!.setAside).toEqual({ at: AT });
+    expect(take(reloaded).batch.map((entry) => entry.table)).toEqual(["trial_forms"]);
+  });
+
+  it("ny endring i samme felt blir ny oppføring", () => {
+    const { poison, state } = roundWithPoison(threeAnswers(), 0);
+    const next = enqueue(state, answerEntry(ANSWER_X, "general_description", "Ny tekst"));
+    expect(next.entries).toHaveLength(2);
+    expect(next.entries[0]).toEqual({ ...poison, setAside: { at: AT } });
+    expect(next.entries[1]!.seq).toBeGreaterThan(poison.seq);
+    expect(next.entries[1]!.setAside).toBeUndefined();
+  });
+
+  it("pendingKeys har feltet så lenge det er lagt til side og ikke løst", () => {
+    const { state } = roundWithPoison(threeAnswers(), 0);
+    expect(pendingKeys(state, localRowKey).has(keyOf("general_description"))).toBe(true);
+  });
+
+  it("200 på senere endring i samme felt løser den gamle", () => {
+    const { poison, state } = roundWithPoison(threeAnswers(), 0);
+    // PATCH uten nøkkelkolonner: nøkkelen lånes fra den gamle oppføringen på samme rad.
+    const next = ackBatch(
+      take(enqueue(state, answerEntry(ANSWER_X, "general_description", "Ny", "PATCH"))).state,
+    );
+    expect(next.entries).toHaveLength(1);
+    expect(next.entries[0]!.seq).toBe(poison.seq);
+    expect(next.entries[0]!.setAside).toEqual({ at: AT, resolved: true });
+    expect(pendingKeys(next, localRowKey).has(keyOf("general_description"))).toBe(false);
+    expect(setAsideFields(next)).toEqual([]);
+  });
+
+  it("200 på et annet felt løser ikke", () => {
+    const { state } = roundWithPoison(threeAnswers(), 0);
+    const next = ackBatch(take(enqueue(state, answerEntry(ANSWER_Y, "floors", 2))).state);
+    expect(next.entries[0]!.setAside?.resolved).toBeUndefined();
+    expect(pendingKeys(next, localRowKey).has(keyOf("general_description"))).toBe(true);
+  });
+
+  it("setAsideFields gir hvert felt én gang, i rekkefølge, og null for skjemaet", () => {
+    let state = enqueueAll(createOutboxState(), [
+      formEntry(),
+      photoEntry(),
+      answerEntry(ANSWER_X, "general_description", "a"),
+    ]);
+    state = take(state).state;
+    state = keepBatch(enqueue(state, answerEntry(ANSWER_X, "general_description", "b")));
+    state = {
+      ...state,
+      entries: state.entries.map((entry) => ({ ...entry, setAside: { at: AT } })),
+    };
+    expect(setAsideFields(state)).toEqual([
+      { table: "trial_forms", fieldKey: null },
+      { table: "trial_photos", fieldKey: "cover_photo" },
+      { table: "trial_answers", fieldKey: "general_description" },
+    ]);
+  });
+
+  it("shouldAckBatch er uendret: bare 200 slipper bunten", () => {
+    expect(shouldAckBatch(200)).toBe(true);
+    for (const status of [201, 204, 400, 500, undefined]) {
+      expect(shouldAckBatch(status)).toBe(false);
+    }
   });
 });

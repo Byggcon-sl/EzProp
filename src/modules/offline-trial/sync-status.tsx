@@ -26,6 +26,7 @@ import {
   SYNC_BUTTON_IDLE,
   nextSavedAt,
   savedAtText,
+  setAsideText,
   showSyncNow,
   signInHref,
   syncButtonReducer,
@@ -242,6 +243,8 @@ export function SyncStatus({ getStatus, subscribe, syncNow }: SyncStatusProps) {
   const kind = status ? syncStatusKind(status, signInRequired) : null;
   // «Prøver igjen automatisk» stemmer ikke når innloggingen må fornyes; linjen over sier det.
   const message = kind === "signInRequired" ? null : view.message;
+  // Endringer serveren avviste (funn T-0001): vises alltid, i tillegg til ventetallet.
+  const setAside = status ? setAsideText(status.setAside) : null;
 
   return (
     <section
@@ -298,9 +301,11 @@ export function SyncStatus({ getStatus, subscribe, syncNow }: SyncStatusProps) {
       <p
         data-testid="sync-status-message"
         aria-live="polite"
-        className={cn("text-sm text-slate-800", message && "mt-2")}
+        className={cn("text-sm text-slate-800", (message || setAside) && "mt-2")}
       >
         {message ?? ""}
+        {message && setAside ? " " : null}
+        {setAside ? <span data-testid="sync-status-set-aside">{setAside}</span> : null}
       </p>
     </section>
   );
