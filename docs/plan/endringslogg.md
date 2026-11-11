@@ -2,6 +2,15 @@
 
 Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og 09.11.2026).
 
+- **11.11.2026 (Prosjektlederen):** Små rettinger i ADR 0006 del 11 og domenemodellen etter «Vask før KI» (PR #137).
+- **11.11.2026 (Læringsløkken):** «Forslagsmønsteret» (PR #131) og «Vask før KI» (PR #135) flyttet fra planen til `docs/plan/levert.md`. Radene fra 10.11.2026 er flyttet fra tabellen hit, så nyeste står øverst (funn T-0021).
+- **10.11.2026 (Prosjektlederen):** «Forslagsmønsteret» (2a-1) levert som PR #131 (påbegynt av en kjøring som stanset uten PR, fullført og åpnet av hovedløkken). Flyttes til `docs/plan/levert.md` av læringsløkken.
+- **10.11.2026 (Læringsløkken):** «KI-modulen og loggen» (2a-1) levert som PR #127 og flyttet til `docs/plan/levert.md`.
+- **10.11.2026 (Prosjektlederen):** Fagsvarene ført inn som spørsmål 59 i `docs/09-apne-sporsmal.md` og i punktene «Reglene badet trenger» (2a-2) og systemmalen (2a-3).
+- **10.11.2026 (Ståle i chat):** Svar på de tre fagspørsmålene: TG0 når det ikke er målt fukt, uansett alder; radon bare som HMS; brann og sikkerhet er punkter uansett bygningstype. S3 er helt gjort. KI-leverandør Anthropic er bekreftet, og Ståle har API-nøkkel (S8).
+- **10.11.2026 (Ståle i chat):** S1 (testmiljøet), S2 (prøvene på ekte iPad og ADR 0004) og S3 (fagråd runde 1) er gjort. KI-leverandør er Anthropic (S8 delvis). Fase 1 er ferdig. «Minimum før ekte data» kan bygges i testmiljøet.
+- **10.11.2026 (Læringsløkken):** Malmotoren (2a-3) merget som PR #119 og flyttet til `docs/plan/levert.md`. Statuslinjen for 2a oppdatert.
+- **10.11.2026 (Læringsløkken):** «ADR: KI i bunnen» (2a-1) merget som PR #123 og flyttet til `docs/plan/levert.md`.
 - **10.11.2026 (Ståle i chat):** Nytt hovedmål: best mulig system for de ansatte, KI først, og KI i bunnen. 50 % mindre tid er ikke lenger hovedmål. Planen er ryddet til ett levende dokument: levert arbeid er flyttet til `docs/plan/levert.md`, sporbarheten til `docs/plan/sporbarhet.md` og loggen hit. «De første oppgavene» og «Åpne spørsmål om planen» er tatt ut (utført eller besvart). Fase 2a starter nå med KI-grunnmuren og en smal vei (ett våtrom fra kontrollpunkt til PDF). KI-funksjonene er flyttet fra «Senere» inn i fasene. Fase 3 er delt i 3a (piloten) og 3b (kontoret). Outlook-kobling én vei først; mørk visning og morgen-e-post er flyttet til «Senere». Svarene fra 10.11.2026 (`docs/kartlegging/svar-claude-pa-vegne-av-stale-2026-11-10.md`) og forslagene nr. 41–53 er ført inn i fasene. Nytt testlag (løkke G, `docs/11-agentlaget.md`). Henvisningene «(se også Spectora-YouTube V…)» er tatt ut av punktene; de står i sporbarheten.
 
 - **28.10.2026 (Ståle i chat, senere):** ingen grense for antall PR-er som venter på Ståle. Løkken stopper ikke lenger ved tre.
@@ -47,11 +56,3 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 〃 | Merket «Rettet» under «Ferdig» og reklamasjonssaker bare for leder og admin (fase 2a) | Tilleggsbeslutninger 27.10.2026 |
 | 28.10.2026 | Hovedmål øverst (50 % mindre tid, halvparten så mange reklamasjoner, KI først), med måling og tabell over hva som bidrar mest per fase. Nye oppgaver 15 og 16 (nullpunkt for tid og reklamasjoner) ved siden av fase 0 og 1. Tidsmåling per rapport i 2a. Pilotmåling med de to tallmålene. KI-funksjoner i «Senere» merket «vurder å flytte fram». To nye åpne spørsmål. | Ståle i chat 28.10.2026 |
 | 09.11.2026 | Funnene fra Spectoras YouTube-kanal (V1–V132) knyttet til planen: henvisning på 61 punkter, ny underseksjon under «Sporbarhet», nye funksjoner som forslag og kapittel 7 som spørsmål i `docs/09-apne-sporsmal.md` (nr. 20–53). Ingen punkter er lagt til eller utvidet. | `spectora-youtube/spectora-youtube-funn.md` |
-| 10.11.2026 | «ADR: KI i bunnen» (2a-1) merget som PR #123 og flyttet til `docs/plan/levert.md`. | Læringsløkken |
-| 10.11.2026 | Malmotoren (2a-3) merget som PR #119 og flyttet til `docs/plan/levert.md`. Statuslinjen for 2a oppdatert. | Læringsløkken |
-| 10.11.2026 | S1 (testmiljøet), S2 (prøvene på ekte iPad og ADR 0004) og S3 (fagråd runde 1) er gjort. KI-leverandør er Anthropic (S8 delvis). Fase 1 er ferdig. «Minimum før ekte data» kan bygges i testmiljøet. | Ståle i chat 10.11.2026 |
-| 10.11.2026 | Svar på de tre fagspørsmålene: TG0 når det ikke er målt fukt, uansett alder; radon bare som HMS; brann og sikkerhet er punkter uansett bygningstype. S3 er helt gjort. KI-leverandør Anthropic er bekreftet, og Ståle har API-nøkkel (S8). | Ståle i chat 10.11.2026 |
-| 10.11.2026 | Fagsvarene ført inn som spørsmål 59 i `docs/09-apne-sporsmal.md` og i punktene «Reglene badet trenger» (2a-2) og systemmalen (2a-3). | Prosjektlederen |
-| 10.11.2026 | «KI-modulen og loggen» (2a-1) levert som PR #127 og flyttet til `docs/plan/levert.md`. | Læringsløkken |
-| 10.11.2026 | «Forslagsmønsteret» (2a-1) levert som PR #131 (påbegynt av en kjøring som stanset uten PR, fullført og åpnet av hovedløkken). Flyttes til `docs/plan/levert.md` av læringsløkken. | Prosjektlederen |
-| 11.11.2026 | «Vask før KI» (2a-1) levert som PR #135 og flyttet til `docs/plan/levert.md`. Små rettinger i ADR 0006 del 11 og domenemodellen i PR-en etterpå. | Prosjektlederen |

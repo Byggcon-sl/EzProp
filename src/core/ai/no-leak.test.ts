@@ -215,7 +215,10 @@ describe("vask før KI: ingen lekkasje av persondata (V4.4)", () => {
       loggedText(spies),
       JSON.stringify(result),
       JSON.stringify(complete.mock.calls),
-    ].join("\n");
+    ]
+      .join("\n")
+      // Tilfeldige id-er (UUID) kan inneholde for eksempel «8099»; de er ikke persondata.
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "[id]");
     for (const value of VALUES) expect(seen, value).not.toContain(value);
 
     // input_summary er antall tegn i den vaskede teksten, ikke i originalen
