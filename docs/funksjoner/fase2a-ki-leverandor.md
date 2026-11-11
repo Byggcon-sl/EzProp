@@ -2,7 +2,7 @@
 
 - **Fase:** 2a-1 KI-grunnmuren (siste punkt)
 - **Modul:** kjerne (`src/core/ai`, `src/core/integrations`) og `docs/`
-- **Status:** klar til bygging (forhåndsvurdert 11.11.2026 av forenkler, arkitekt, sikkerhet-personvern og test-leder)
+- **Status:** klar til bygging (forhåndsvurdert 11.11.2026 av forenkler, arkitekt, sikkerhet-personvern og test-leder; runde 2 innarbeidet samme dag)
 - **Branch:** `fase2a-ki-leverandor` (bygger på `main`)
 - **Støtter hovedmål:** KI i bunnen: den ekte leverandøren kobles inn bak den ene KI-porten, slik at alle funksjonene i 2a-2 kan bruke ekte KI så snart Ståle har lagt inn nøkkelen og avtalene er på plass. De ansatte: Ståle får ett kort notat i klarspråk med det han må vite og avgjøre, i stedet for å lete selv. Reklamasjoner: notatet sier hvilken modell som brukes til hvilken funksjon, og at hver funksjon må bestå evalueringssettet før den slås på, så dårlige forslag ikke havner i rapporter.
 
@@ -35,13 +35,17 @@ Ståle har valgt Anthropic og har en API-nøkkel (10.11.2026), men koden har bar
    - **Norsk tale til tekst:** to til tre alternativer, minst ett i EU-region, vurdert på EU/EØS, databehandleravtale, lagring og pris. Opptak kan ikke vaskes (spørsmål 55). Anbefaling, men Ståle velger (S8). Ingenting bygges før 2b.
    - **Hva Ståle må gjøre**, i rekkefølge: velge EU/EØS-vei, signere avtalen, svare på spørsmål 54–58 og 73, legge nøkkelen inn som secret `ANTHROPIC_API_KEY`, velge tale-leverandør. Notatet sier at tilkoblingen `anthropic` ikke lages for en organisasjon med ekte data før avtalen er signert, EU/EØS-veien er valgt og spørsmålene er besvart. I testmiljøet (oppdiktede data) kan Ståle slå den på; det koster penger og er hans valg. Forslag 64 (tak på KI-bruk) nevnes som anbefalt før nøkkelen legges inn.
    - Notatet kopierer ikke tekst fra leverandørenes vilkår; det oppsummerer med egne ord og lenker til kilden. Ingen ansatte nevnes ved navn, og ingen visning av KI-bruk per person (spørsmål 57).
-2. **Leverandørkoden `anthropic`** i `PROVIDERS_BY_PORT.ai` (`src/core/integrations/ports.ts`) og i `PROVIDERS_REQUIRING_SECRET` (`src/core/integrations/connections.ts`). Fast kode (regel 6).
+2. **Leverandørkoden `anthropic`** i `PROVIDERS_BY_PORT.ai` (`src/core/integrations/ports.ts`) og i `PROVIDERS_REQUIRING_SECRET` (`src/core/integrations/connections.ts`). Fast kode (regel 6). Kommentarene «KI har bare den falske leverandøren» i `ports.ts` og «Bare `fake` finnes før S8» i `providers/types.ts` rettes.
+   - **Importretning:** avhengigheten går bare én vei, `core/ai` → `core/integrations`. `connections.ts` importerer ingenting fra `@/core/ai` (statisk test, S5). Derfor:
+     - `AI_FEATURE_CODES = ["language_polish"] as const` legges i `src/db/schema/ai-usage-log.ts` ved siden av `AI_ERROR_CODES` (bare en konstant, ingen CHECK, ingen migrering). `AiFeatureCode` i `src/core/ai/types.ts` utledes av den.
+     - `REQUIRED_SECRET_REF_BY_PROVIDER = { anthropic: "ANTHROPIC_API_KEY" }` legges i `src/core/integrations/connections.ts` ved `PROVIDERS_REQUIRING_SECRET`. `ANTHROPIC_SECRET_REF` flyttes dit fra `providers/anthropic.ts`; adapteren trenger den ikke (den får `apiKey`).
 3. **Strengt skjema for `settings`** i `settingsSchemaFor` (`connections.ts`), grenen `anthropic`, med `.strict()`:
    - `model`: påkrevd, `^[A-Za-z0-9._:-]{1,100}$`.
-   - `features`: liste med kjente funksjonskoder fra `features.ts`, standard tom.
-   - `pricing`: **påkrevd**, `{ inputPerMillion: number >= 0, outputPerMillion: number >= 0, currency: "NOK" }`, lagt inn av admin. Ingen pristabell, ingen modellnavn og ingen valutaomregning i koden.
+   - `features`: liste med kjente funksjonskoder fra `AI_FEATURE_CODES` (`@/db/schema`), standard tom.
+   - `pricing`: **påkrevd**, `{ inputPerMillion: number >= 0, outputPerMillion: number >= 0, currency: "NOK" }` med `.finite()` (avviser `NaN`, `Infinity`, `1e309`), lagt inn av admin. Ingen pristabell, ingen modellnavn og ingen valutaomregning i koden.
    - Ingen andre nøkler (ingen `baseUrl`). Ekstra felt avvises.
-   - `secret_ref` for `anthropic` må være nøyaktig `ANTHROPIC_API_KEY`; sjekkes i `createConnection` og `updateConnection`.
+   - `secret_ref` for `anthropic` må være nøyaktig `ANTHROPIC_API_KEY`, og **motsatt**: `ANTHROPIC_API_KEY` godtas bare for `anthropic` (ellers kunne en tilkobling til en annen leverandør få nøkkelen sendt dit). Begge sjekkes i `createConnection` og `updateConnection` via `REQUIRED_SECRET_REF_BY_PROVIDER`.
+   - `AiPricing` har én kilde: typen utledes av skjemaet (`z.infer`) eller sjekkes mot det av typecheck. Ingen kopi av skjemaet i `src/core/ai`.
 4. **Adapteren** `src/core/ai/providers/anthropic.ts`, som implementerer `AiProvider` (grensesnitt under):
    - Innebygd `fetch` mot Anthropics meldings-API. **Ingen ny avhengighet, ingen SDK.** `fetch` sendes inn (standard `globalThis.fetch`), så testene bruker falsk HTTP.
    - **Adressen er en fast konstant i adapteren**, aldri fra `settings`, miljø eller forespørsel. `fetch` kalles med `redirect: "error"` og `cache: "no-store"`, uten nye forsøk ved feil (køen fra KI-kø tar nye forsøk), med tidsgrense (AbortController) og fast øvre grense for tokens ut.
@@ -49,23 +53,23 @@ Ståle har valgt Anthropic og har en API-nøkkel (10.11.2026), men koden har bar
    - **Kroppen har bare** modell, grense for tokens ut og den vaskede ledeteksten. Ingen ansatt-id, organisasjons-id, oppdrags-id, `requestId` eller organisasjonsnavn i kropp, metadata eller hoder.
    - Svarkoder: tidsavbrudd → `timeout`, 429 → `rate_limited`, 5xx og nettverksfeil → `unavailable`, 400/401/403 → `rejected`, alt annet → `unknown`. Ingen underkoder.
    - **Svaret:** grense på størrelse før det leses. Bare tekstblokkene brukes; flere tekstblokker settes sammen, andre blokker ignoreres. Svar som stopper fordi grensen for tokens er nådd → `unknown` (en halv setning skal aldri havne i rapporten). Ugyldig JSON, uventet form, manglende `usage` eller negative tall → `unknown`. Tomt svar eller «ingen endring» → `no_match` som hos den falske leverandøren.
-   - Kostnad = tokens × `pricing` / 1 000 000, i NOK.
+   - Kostnad = tokens × `pricing` / 1 000 000, i NOK, rundet til fire desimaler (`ai_usage_log.cost` er `numeric(12,4)`). Aldri negativ og aldri `NaN`.
    - Ingen logging av forespørsel, svar, hoder eller feilobjektet fra `fetch`; bare fast feilkode. Leverandørens melding går aldri til logg, feil, `ai_usage_log` eller `last_error` (adapteren skriver ikke til tilkoblingen).
-5. **Valg av leverandør** (`provider-resolution.ts`): adapteren bygges fra tilkoblingen (fabrikk). `anthropic` er på **bare** når `ai.enabled` er `true`, det finnes en aktiv, ikke slettet tilkobling med `provider = anthropic`, `settings` består skjemaet i punkt 3, `secret_ref` er `ANTHROPIC_API_KEY`, og `readSecret` gir en ikke-tom nøkkel. `InvalidSecretRefError` og `SecretNotFoundError` fanges. Mangler noe: `disabled`, ingen kall, ingen rad, og ingen navn eller verdi lekker. Tilkoblingen hentes fortsatt bare med `grant.organizationId`. Miljøvariabler og `NODE_ENV` velger aldri leverandør (A160). `readSecret` kalles bare her.
+5. **Valg av leverandør** (`provider-resolution.ts`): adapteren bygges fra tilkoblingen (fabrikk), med resultatet av `settingsSchemaFor("anthropic").parse(...)` sendt rett til `createAnthropicProvider`, slik at typecheck fanger avvik. `anthropic` er på **bare** når `ai.enabled` er `true`, det finnes en aktiv (status ikke `disabled`; `error` regnes som aktiv, som i `findActiveConnection` i dag), ikke slettet tilkobling med `provider = anthropic`, `settings` består skjemaet i punkt 3, `secret_ref` er `ANTHROPIC_API_KEY`, og `readSecret` gir en ikke-tom nøkkel. `InvalidSecretRefError` og `SecretNotFoundError` fanges. Mangler noe: `disabled`, ingen kall, ingen rad, og ingen navn eller verdi lekker. Tilkoblingen hentes fortsatt bare med `grant.organizationId`. Miljøvariabler og `NODE_ENV` velger aldri leverandør (A160). `readSecret` kalles bare her. `features` er `null` **bare** når `provider.code === "fake"`; for alle andre koder kommer listen fra det validerte skjemaet (tom liste ved manglende felt, aldri `null`).
 6. **Sperrene i `requestSuggestion`:**
    - `isBlocked` sammenligner på fast kode: alt som ikke har `code === "fake"`, regnes som ekte. `ai_trial`, `answer` og fritekst uten oppdrag gir `blocked` mot `anthropic`, uten kall.
    - **Ny sperre `settings.features`** (A194): mellom tillatt-liste/sperre og vask. Funksjon som ikke står i listen → `disabled`, ingen rad, intet kall. Tom eller manglende liste betyr at alt er av. `fake` har ingen liste og tar alt.
    - **Lekkasjesjekken flyttes** fra evalueringskjøreren (`evals/run.ts`) til et felles sted i `src/core/ai` og kjøres på den ferdige, vaskede ledeteksten før kallet til en ekte leverandør (A195). Treff → `blocked`-rad uten kall. Evalueringskjøreren bruker den samme funksjonen.
 7. **Vakt i `runEvals`:** kaster når `provider.code !== "fake"`. `evals/` importerer fortsatt ikke database eller adapteren.
-8. **Logger:** nytt mønster for nøkkelformatet i `src/shared/lib/logger.ts` som ekstra sikring, test med tydelig oppdiktet nøkkel.
-9. **Statiske tester** (`static-checks.test.ts` 12.8 og E7.5) snevres inn til tillatt-liste, ikke fjernes: `fetch(` bare i `providers/anthropic.ts`, `readSecret` bare i `provider-resolution.ts`. `client/` og `evals/` har ingen av delene. Fortsatt ingen SDK og ingen `process.env` i `src/core/ai`.
-10. **Test mot modellnavn:** én Vitest-test (ingen lint-regel) som leter i `src/`, `tests/`, `e2e/` og notatet etter `claude-` og navnene på modellfamiliene. Testen bygger søkeordene av biter, så den selv ikke inneholder navnene, og søket treffer ikke «CLAUDE.md».
+8. **Logger:** ett nytt mønster for nøkkelformatet i `src/shared/lib/logger.ts` som ekstra sikring, og én test med tydelig oppdiktet nøkkel. Ikke mer.
+9. **Statiske tester** (`static-checks.test.ts` 12.8 og E7.5) snevres inn til tillatt-liste, ikke fjernes: `fetch(` bare i `providers/anthropic.ts`, `readSecret` bare i `provider-resolution.ts`. `client/` og `evals/` har ingen av delene. `src/core/integrations/connections.ts` importerer ikke fra `@/core/ai`. Fortsatt ingen SDK og ingen `process.env` i `src/core/ai`.
+10. **Test mot modellnavn:** én Vitest-test (ingen lint-regel) som leter i `src/`, `tests/`, `e2e/` og notatet etter prefikset til modell-id-ene og navnene på modellfamiliene. Testen bygger søkeordene av biter, så den selv ikke inneholder navnene, og søket treffer ikke «CLAUDE.md».
 11. **Ingen ekte nettverkskall i tester:** en global oppsettfil i Vitest får `fetch` til å kaste for Anthropics vertsnavn. Seed har ingen `anthropic`-tilkobling.
 12. **Eksisterende tester** som bruker `provider: "anthropic"` som «ukjent leverandør» (trial-target-testplan 2.2 og 2.8, `other_provider` i `trial-target.test.ts`) bytter til en oppdiktet ukjent kode.
 13. **ADR 0006** oppdateres: Anthropic er første ekte adapter; modell-id i `settings.model`, nøkkel i `ANTHROPIC_API_KEY`. Statuslinjen («ingen ekte leverandør er valgt») rettes. Del 2 presiseres: koden kan ligge i main, men forutsetningene (avtale, EU/EØS, trening og lagring, personvernerklæring) gjelder før tilkoblingen `anthropic` opprettes for en organisasjon med ekte data og `ai.enabled` slås på. Kjent begrensning: nøkkelen er felles for alle organisasjoner og må løses før selskap nummer to får KI (A193). «Slik byttes leverandøren»: fake-raden slettes mykt før `anthropic`-raden lages (én rad per port).
 14. **Domenemodellen** (4.10, 4.12 og ordlisten): `anthropic`, `settings.model`, `settings.features`, `settings.pricing`, «KI-adapter».
-15. **Testmiljøet:** `ANTHROPIC_API_KEY` legges inn samme steder som `MS_GRAPH_CLIENT_SECRET` (`.github/workflows/deploy-azure.yml`, `infra/azure/main.bicep`, `tests/deploy-workflow.test.ts`, eventuelt `start.sh`), i nøkkelboksen når `ENABLE_KEY_VAULT` er på (ADR 0005). Tom verdi er lov og betyr KI av. Én linje i `docs/drift/testmiljo-azure.md`. `.env.example` får bare en tom linje.
-16. **Planen:** nytt punkt i «Minimum før ekte data»: «KI-leverandør: databehandleravtale signert, EU/EØS-vei valgt og spørsmål 54–58 og 73 besvart, før tilkoblingen `anthropic` lages for en organisasjon med ekte data.» Én linje i `docs/plan/endringslogg.md`.
+15. **Testmiljøet:** `ANTHROPIC_API_KEY` legges inn samme steder som `MS_GRAPH_CLIENT_SECRET` (`.github/workflows/deploy-azure.yml`, `infra/azure/main.bicep`, `tests/deploy-workflow.test.ts`, og `start.sh`, som leser `MS_GRAPH_CLIENT_SECRET` i dag; ingenting annet nytt der), i nøkkelboksen når `ENABLE_KEY_VAULT` er på (ADR 0005). Tom verdi er lov og betyr KI av. Én linje i `docs/drift/testmiljo-azure.md`. `.env.example` får bare en tom linje.
+16. **Planen:** ingen nytt punkt. Den finnes linjen «Databehandleravtaler» i «Minimum før ekte data» utvides med KI-leverandøren og vilkåret: EU/EØS-vei valgt og spørsmål 54–58 og 73 besvart før tilkoblingen `anthropic` lages for en organisasjon med ekte data. Én linje i `docs/plan/endringslogg.md`.
 17. **Tilstandsfilen**, «Trenger Ståle»: adapteren er klar; hva som må på plass før nøkkelen brukes med ekte data (som i punkt 16); oppskrift for å legge inn nøkkelen og lage tilkoblingen i testmiljøet.
 18. Versjon `0.6.0` i `package.json` (minor, ekte leverandør er en større leveranse). Planpunktet krysses av.
 
@@ -80,6 +84,8 @@ Ståle har valgt Anthropic og har en API-nøkkel (10.11.2026), men koden har bar
 - Ingen nye KI-funksjoner. `language_polish` slås ikke på mot `anthropic` (står ikke i `settings.features` før evalueringen er kjørt).
 - Tak på KI-bruk (forslag 64) bygges ikke; det står som forslag hos Ståle.
 - Nøkkel per organisasjon (A193).
+- Modell per funksjon. Det er én modell per tilkobling (`settings.model`). Notatet beskriver modellklasse per funksjon som råd til Ståle, men R1 og R4 tester ikke ulik modell per funksjon.
+- Test av notatets oppbygning (D1 er kuttet; gjennomgangen sjekker akseptkriteriet for hånd).
 - Ingen ny kontroll av at hemmeligheten finnes ved oppstart.
 
 ## Grensesnitt
@@ -87,8 +93,13 @@ Ståle har valgt Anthropic og har en API-nøkkel (10.11.2026), men koden har bar
 ```ts
 // src/core/ai/providers/anthropic.ts
 export const ANTHROPIC_PROVIDER_CODE = "anthropic";
-export const ANTHROPIC_SECRET_REF = "ANTHROPIC_API_KEY";
-export type AiPricing = { inputPerMillion: number; outputPerMillion: number; currency: "NOK" };
+export type AiPricing = /* utledet av skjemaet i connections.ts */ { inputPerMillion: number; outputPerMillion: number; currency: "NOK" };
+
+// src/core/integrations/connections.ts
+export const REQUIRED_SECRET_REF_BY_PROVIDER = { anthropic: "ANTHROPIC_API_KEY" } as const;
+
+// src/db/schema/ai-usage-log.ts
+export const AI_FEATURE_CODES = ["language_polish"] as const;
 export type AnthropicProviderOptions = {
   model: string;
   apiKey: string;
@@ -139,17 +150,17 @@ Ingen fagregler. Tekniske regler med tester:
 
 **Enhet, adapteren med falsk `fetch`:**
 - A1: riktig adresse, `x-api-key` og versjonshode bare i hodene, modell fra `settings.model`, fast grense for tokens, vasket ledetekst, `redirect: "error"`, `cache: "no-store"`. Hele kroppen og alle hodene har ingen id-er, organisasjonsnavn eller nøkkel utenfor `x-api-key`.
-- A2: tekst, tokens inn og ut, kostnad og valuta; flere tekstblokker; tomt svar og «ingen endring» gir `no_match`.
-- A3: tabell over feil: tidsavbrudd (falsk tid), 429, 500/503, 400, 401, 403, nettverksfeil, ugyldig JSON, uventet form, avkortet svar, manglende `usage`, negative tall, for stort svar. Hver gir sin faste kode. Leverandørens melding og nøkkelen står ikke i feilen, i console-spion eller i raden. Ingen nye forsøk.
+- A2: tekst, tokens inn og ut, kostnad og valuta (rundet til fire desimaler, aldri negativ eller `NaN`); flere tekstblokker; tomt svar og «ingen endring» gir `no_match`.
+- A3: tabell over feil: tidsavbrudd (falsk tid), 429, 5xx (én rad), 400, 401, 403, nettverksfeil, ugyldig JSON, uventet form, avkortet svar, manglende `usage`, negative tall, for stort svar. Hver gir sin faste kode. Leverandørens melding og nøkkelen står ikke i feilen, i console-spion eller i raden. Ingen nye forsøk.
 - A4: loggeren skjuler oppdiktet nøkkel.
 
 **Integrasjon mot testdatabasen:**
-- R1: tabell der én lås mangler om gangen gir `disabled`: KI av, ingen tilkobling, mykt slettet eller inaktiv tilkobling, ukjent leverandør, tom eller manglende modell, manglende eller ugyldig `pricing`, ekstra felt i `settings` (f.eks. `baseUrl`), annen `secret_ref`, manglende nøkkel, tom nøkkel (""). Alt på plass gir `enabled`. Ingen unntak lekker.
+- R1: tabell der én lås mangler om gangen gir `disabled`: KI av, ingen tilkobling, mykt slettet tilkobling eller status `disabled`, ukjent leverandør, tom eller manglende modell, manglende eller ugyldig `pricing`, ekstra felt i `settings` (f.eks. `baseUrl`), annen `secret_ref`, manglende nøkkel, tom nøkkel (""). Alt på plass gir `enabled` (også med status `error`). En rå rad med `anthropic` og `features = null` gir aldri `features = null`. Ingen unntak lekker.
 - R2: `ai_trial`, `answer` og fritekst uten oppdrag mot `anthropic` gir `blocked`, `fetch` kalles ikke.
 - R3: funksjon som ikke står i `settings.features` (og tom liste) gir `disabled` uten rad og uten `fetch`.
 - R4: hele flyten med stubbet `fetch`: navn og adresse er vasket før kallet; en ledetekst med lekkasje gir `blocked` uten kall; raden har `provider = anthropic`, modell fra konfigurasjonen og ekte tokens og kostnad.
 - R5: regresjon: den falske leverandøren virker som før (fabrikk og `code`-sjekk).
-- R6: `expectTenantIsolation` for veien med `anthropic`: organisasjon A har Anthropic, B har ingenting; B får `disabled`, A sin tilkobling og modell brukes aldri, og motsatt. `createConnection` med `anthropic` og annen `secret_ref` avvises.
+- R6: `expectTenantIsolation` for veien med `anthropic`: organisasjon A har Anthropic, B har ingenting; B får `disabled`, A sin tilkobling og modell brukes aldri, og motsatt. `createConnection` med `anthropic` og annen `secret_ref` avvises, og en annen leverandør med `ANTHROPIC_API_KEY` avvises.
 - R7: tilgang per rolle som før; admin stenges ikke ute.
 
 **Statiske tester:**
@@ -157,15 +168,15 @@ Ingen fagregler. Tekniske regler med tester:
 - S2: global `fetch`-sperre for Anthropics vertsnavn; seed uten `anthropic`; `ANTHROPIC_API_KEY` tom i CI.
 - S3: ingen ny avhengighet; SDK forbudt.
 - S4: `runEvals` avviser alle leverandører unntatt `fake`.
-- S5: tillatt-listen for `fetch` og `readSecret` (punkt 9).
+- S5: tillatt-listen for `fetch` og `readSecret`, og at `connections.ts` ikke importerer fra `@/core/ai` (punkt 9).
 
-**Dokument:** D1: test som sjekker at notatet har de sju delene, og at listen «Dette er usikkert» finnes. Klarspråk sjekkes manuelt.
+**Dokument:** ingen egen test (D1 kuttet). Gjennomgangen sjekker akseptkriteriet for notatet for hånd; S1 går gjennom notatet.
 
 **E2e:** `/prove/ki` på PC og iPad-størrelse, også uten nett, grønn uten endring.
 
 ## Akseptkriterier
 
-- [ ] `docs/beslutningsnotat-ki-leverandor.md` finnes, er i klarspråk og har alle sju delene (modellvalg per funksjon, pris per rapport, EU/EØS, databehandleravtale, trening og lagring, tale til tekst, hva Ståle må gjøre). Svaret om EU/EØS står i første avsnitt, og «Dette er usikkert» er en egen liste.
+- [ ] `docs/beslutningsnotat-ki-leverandor.md` finnes, er høyst to sider, er i klarspråk og har alle sju delene (sjekkes for hånd i gjennomgangen) (modellvalg per funksjon, pris per rapport, EU/EØS, databehandleravtale, trening og lagring, tale til tekst, hva Ståle må gjøre). Svaret om EU/EØS står i første avsnitt, og «Dette er usikkert» er en egen liste.
 - [ ] Ingen modellnavn eller modell-id i notatet, koden eller testene (test). Commit-meldinger og PR-tekst sjekkes manuelt.
 - [ ] Adapteren sender riktig forespørsel og bare det den skal, og leser tekst, tokens og kostnad riktig (A1, A2).
 - [ ] Hver feiltype, også avkortet svar, gir riktig fast kode, og leverandørens melding og nøkkelen står ikke i logg eller feil (A3, A4).
@@ -192,6 +203,12 @@ Ingen fagregler. Tekniske regler med tester:
 - **Tale:** to til tre alternativer, minst ett i EU-region (forenkler).
 - **Tenant-isolasjon:** sikkerhet-personvern og test-leder ber om én test for veien med `anthropic`; forenkler mente det ikke trengs uten ny spørring. Testen tas med, fordi det er nye låser i `resolveAiProvider` (navnet på nøkkelen) som skal bevises mot en annen organisasjon.
 - **Personvern** (overføring ut av EØS, DPIA, behandlingsprotokoll, personvernerklæring, null-lagring): Ståles spørsmål, ført som nr. 73 i `docs/09-apne-sporsmal.md`, ikke som A-beslutning. Stopper ikke PR-en, fordi ingen tilkobling lages og intet sendes.
+
+- **Runde 2 (11.11.2026), alt godtatt:**
+  - Forenkler: D1 kuttes; loggermønsteret beholdes som én regel og én test (billig ekstra vern for en hemmelighet); planen får ikke nytt punkt, linjen om databehandleravtaler utvides; 5xx er én rad; notatet høyst to sider med én samlelinje for 3a og senere. `start.sh` tas med fordi det leser `MS_GRAPH_CLIENT_SECRET` i dag.
+  - Arkitekt: importretningen `core/ai` → `core/integrations` holdes (`AI_FEATURE_CODES` i `@/db/schema`, `REQUIRED_SECRET_REF_BY_PROVIDER` i `connections.ts`); `AiPricing` har én kilde; `features: null` bare for `fake`; status `error` er aktiv; kostnad rundes til fire desimaler. Den motsatte låsen (`ANTHROPIC_API_KEY` bare for `anthropic`) tas med: liten endring som hindrer at nøkkelen sendes til feil leverandør. Ført under A193.
+  - Test-leder: prefikset i punkt 10 er skrevet om, så S1 ikke treffer kortet; én modell per tilkobling står under «Ikke med»; `Infinity` og `1e309` avvises (`.finite()`); rå rad med `features = null` gir aldri `null`. Testplanen 3.3 sak 1 bruker tom liste, ellers beviser den ikke sperren.
+  - A-numrene: `origin/main` har høyest A192 og spørsmål 72. A193–A197 og nr. 73 er ledige.
 
 ## Åpne spørsmål
 

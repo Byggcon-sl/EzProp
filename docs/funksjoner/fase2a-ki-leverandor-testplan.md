@@ -39,6 +39,7 @@ Fra kortet, «Grensesnitt» og Omfang 3–7. Avvik føres i kortet under «Avgjo
 2. **kostnad** (`it.each`): `(120 × 30 + 40 × 150) / 1 000 000`; null tokens gir 0; pris 0 gir 0; store tall gir riktig desimal uten avrunding til heltall. Sammenlign med `toBeCloseTo`.
 3. **flere tekstblokker** settes sammen i rekkefølge; blokker av annen type (for eksempel `tool_use`, `thinking`) ignoreres.
 4. **`no_match`:** tomt tekstsvar, bare mellomrom, og svaret som betyr «ingen endring» (samme regel som den falske leverandøren) gir `no_match`.
+5. **kostnaden rundes** til fire desimaler (et oppdiktet tall som gir flere desimaler), er aldri negativ og aldri `NaN`.
 
 ### 1.3 Feil (A3, regeltabell)
 
@@ -48,7 +49,7 @@ Fra kortet, «Grensesnitt» og Omfang 3–7. Avvik føres i kortet under «Avgjo
 |---|---|
 | tidsavbrudd (falske tidtakere, løftet løses aldri, tiden går forbi `timeoutMs`) | `timeout` |
 | 429 | `rate_limited` |
-| 500, 502, 503, 529 | `unavailable` |
+| 5xx (500 og 503) | `unavailable` |
 | `fetch` kaster `TypeError` (nettverk) | `unavailable` |
 | `fetch` kaster fordi adressen sender videre (`redirect: "error"`) | `unavailable` |
 | 400, 401, 403 | `rejected` |
@@ -73,8 +74,8 @@ Fra kortet, «Grensesnitt» og Omfang 3–7. Avvik føres i kortet under «Avgjo
 1. **`anthropic` er kjent på porten `ai`** og står i listen over leverandører som krever hemmelighet. Ukjent kode på `ai` avvises som før.
 2. **skjemaet** (`it.each` på `settingsSchemaFor("anthropic")`, regler som data):
    - godtatt: gyldige innstillinger; `features` mangler (blir tom liste); `features: []`.
-   - avvist: `model` mangler, `""`, med mellomrom, `/`, over 100 tegn; `features` med ukjent kode; `pricing` mangler; `inputPerMillion` negativ, tekst eller `NaN`; `currency` annet enn `"NOK"`; ekstra felt i `pricing`; ekstra felt i `settings` (`baseUrl`, `apiKey`, `url`).
-3. **`createConnection` og `updateConnection`:** `anthropic` med `secret_ref = ANTHROPIC_API_KEY` godtas av admin; annen `secret_ref` (for eksempel `MS_GRAPH_CLIENT_SECRET`, `ANTHROPIC_KEY`) avvises med `ConnectionValidationError` uten rad. `updateConnection` som bytter `secret_ref` bort fra `ANTHROPIC_API_KEY` avvises.
+   - avvist: `model` mangler, `""`, med mellomrom, `/`, over 100 tegn; `features` med ukjent kode; `pricing` mangler; `inputPerMillion` negativ, tekst, `NaN`, `Infinity`, `-Infinity` eller `1e309` (`.finite()` i skjemaet); `currency` annet enn `"NOK"`; ekstra felt i `pricing`; ekstra felt i `settings` (`baseUrl`, `apiKey`, `url`).
+3. **`createConnection` og `updateConnection`:** `anthropic` med `secret_ref = ANTHROPIC_API_KEY` godtas av admin; annen `secret_ref` (for eksempel `MS_GRAPH_CLIENT_SECRET`, `ANTHROPIC_KEY`) avvises med `ConnectionValidationError` uten rad. `updateConnection` som bytter `secret_ref` bort fra `ANTHROPIC_API_KEY` avvises. **Motsatt lås:** en tilkobling med en annen leverandør (for eksempel `microsoft365`) og `secret_ref = ANTHROPIC_API_KEY` avvises, både ved oppretting og endring.
 4. **`ANTHROPIC_API_KEY` står ikke på nektlisten** (`isValidSecretRef` gir `true`).
 5. **listen over tilkoblinger viser aldri nøkkelens verdi** (`listConnections` med nøkkel satt i miljøet: verdien finnes ikke i svaret).
 6. **tilgang per rolle** (kortet «Tilgang»): takstmann, kontor og leder får `AccessDeniedError` på `createConnection` med `anthropic`; admin uten andre roller lykkes (regel 11, admin stenges aldri ute).
@@ -91,7 +92,7 @@ Fra kortet, «Grensesnitt» og Omfang 3–7. Avvik føres i kortet under «Avgjo
 | `ai.enabled` mangler / `false` / `"true"` | `disabled` |
 | ingen tilkobling | `disabled` |
 | tilkoblingen er slettet mykt | `disabled` |
-| tilkoblingen er inaktiv | `disabled` |
+| tilkoblingen har status `disabled` | `disabled` |
 | ukjent leverandørkode | `disabled` |
 | `model` mangler eller er tom (rå rad lagt inn direkte, forbi skjemaet) | `disabled` |
 | `pricing` mangler eller er ugyldig (rå rad) | `disabled` |
@@ -102,10 +103,11 @@ Fra kortet, «Grensesnitt» og Omfang 3–7. Avvik føres i kortet under «Avgjo
 | nøkkelen er `""` | `disabled` |
 | nøkkelen er bare mellomrom | `disabled` (kortet sier «ikke-tom»; `readSecret` godtar i dag mellomrom, så sjekken må ligge i `resolveAiProvider`) |
 
-1. **alt på plass:** `enabled`, `provider.code === "anthropic"`, `model === "MERKE-MODELL-K7Q"`, `features` lik listen fra innstillingene.
+1. **alt på plass:** `enabled`, `provider.code === "anthropic"`, `model === "MERKE-MODELL-K7Q"`, `features` lik listen fra innstillingene. Det samme med status `error` (regnes som aktiv).
 2. **`fake` som før (R5):** `enabled`, `provider === fakeAiProvider` (samme objekt), `features === null`.
 3. **miljøet velger aldri** (A160, eksisterende 5.10 utvides): `ANTHROPIC_API_KEY` satt og `NODE_ENV=production`, men ingen tilkobling → `disabled`. Nøkkel satt og bare `fake`-tilkobling → `fake`.
 4. **`readSecret` kalles bare med `ANTHROPIC_API_KEY`:** spion på modulen; aldri med verdien fra raden når den er en annen.
+5. **`features = null` bare for `fake`:** rå rad med `provider = anthropic` og `features: null` (eller uten `features`) gir `enabled` med tom liste eller `disabled`, men aldri `features === null`.
 
 ### 3.2 Sperren for ekte leverandør, `src/core/ai/request-suggestion.test.ts` (utvides, R2)
 
@@ -115,7 +117,7 @@ Fra kortet, «Grensesnitt» og Omfang 3–7. Avvik føres i kortet under «Avgjo
 
 ### 3.3 `settings.features` (R3)
 
-1. **funksjon ikke i listen:** `features: ["phrase_suggestion"]` og forespørsel om `language_polish` → `disabled`, ingen rad, `fetch` ikke kalt.
+1. **funksjon ikke i listen:** gyldig tilkobling med `features: []` og forespørsel om `language_polish` → `disabled`, ingen rad, `fetch` ikke kalt. (Ukjent kode som `phrase_suggestion` avvises av skjemaet og ville gitt `disabled` av feil grunn.)
 2. **tom liste** og **manglende liste** (rå rad) → `disabled` for alle funksjoner.
 3. **sperren kommer før vasken:** spion på vaskefunksjonen er ikke kalt.
 4. **`fake` har ingen liste** og tar alle funksjoner som før.
@@ -149,19 +151,13 @@ Fra kortet, «Grensesnitt» og Omfang 3–7. Avvik føres i kortet under «Avgjo
    - CI: `ANTHROPIC_API_KEY` står ikke med verdi i `.github/workflows/*.yml` for test-jobben, og `.env.example` har bare `ANTHROPIC_API_KEY=` (tom).
 3. **S3, ingen ny avhengighet:** `package.json` har ingen ny avhengighet sammenlignet med `main` (sjekkes i gjennomgangen), og SDK-forbudet i 12.8 står fortsatt.
 4. **S4, `runEvals` bare mot `fake`:** `runEvals` med en adapter der `code = "anthropic"` (laget med falsk `fetch`) kaster før noe kall; `fetch` er ikke kalt. `evals/` importerer ikke `@/db`, `provider-resolution` eller `providers/anthropic`.
-5. **S5, tillatt-listen** (12.8 og E7.5 snevres inn, fjernes ikke): `fetch(` finnes bare i `src/core/ai/providers/anthropic.ts`; `readSecret` bare i `src/core/ai/provider-resolution.ts`; `client/` og `evals/` har ingen av delene; ingen `process.env` i `src/core/ai`. Egen kontroll: testen blir rød hvis `fetch(` legges i en annen fil (bruk en tekstprøve, ikke en ekte fil).
+5. **S5, tillatt-listen og importretningen** (12.8 og E7.5 snevres inn, fjernes ikke): `src/core/integrations/connections.ts` importerer ikke fra `@/core/ai`; `fetch(` finnes bare i `src/core/ai/providers/anthropic.ts`; `readSecret` bare i `src/core/ai/provider-resolution.ts`; `client/` og `evals/` har ingen av delene; ingen `process.env` i `src/core/ai`. Egen kontroll: testen blir rød hvis `fetch(` legges i en annen fil (bruk en tekstprøve, ikke en ekte fil).
 6. **eksisterende tester:** trial-target-testplan 2.2 og 2.8 og `other_provider` i `trial-target.test.ts` bruker en oppdiktet ukjent kode (for eksempel `unknown_vendor`) og er grønne.
 7. **testmiljøet:** `tests/deploy-workflow.test.ts` sjekker at `ANTHROPIC_API_KEY` er med samme steder som `MS_GRAPH_CLIENT_SECRET` (arbeidsflyten og `main.bicep`), som hemmelighet, og at tom verdi er lov. `tests/start-script.test.ts` grønn hvis `start.sh` endres (bash 3.2).
 
-## 5. Dokumentet, `tests/decision-note.test.ts` (ny, D1)
+## 5. Dokumentet (ingen egen test)
 
-1. **notatet finnes** på `docs/beslutningsnotat-ki-leverandor.md`.
-2. **sju deler:** overskrifter for modellvalg per funksjon, pris per rapport, EU/EØS, databehandleravtale, trening og lagring, tale til tekst, og hva Ståle må gjøre.
-3. **EU/EØS i første avsnitt:** første avsnitt etter tittelen nevner «EU/EØS».
-4. **«Dette er usikkert»** er en egen overskrift med minst ett listepunkt.
-5. **ingen gjetteord** («antas», «trolig») og ingen modellnavn (dekkes av S1).
-6. **datoer på priser:** pris-delen har minst én dato og ordene «må sjekkes på nytt».
-7. Klarspråk, at tekst ikke er kopiert fra vilkårene, at trening og lagring holdes fra hverandre, og at ingen ansatte nevnes, sjekkes manuelt i gjennomgangen.
+D1 er kuttet (forenkler, runde 2). Gjennomgangen sjekker for hånd: notatet finnes, høyst to sider, sju deler, EU/EØS i første avsnitt, «Dette er usikkert» som egen liste, priser med dato og «må sjekkes på nytt», ingen gjetteord, klarspråk, ingen kopiert tekst fra vilkårene, trening og lagring holdt fra hverandre, ingen ansatte nevnt. Modellnavn dekkes av S1.
 
 ## 6. E2e (PC og iPad-størrelse, også uten nett)
 
