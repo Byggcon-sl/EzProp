@@ -49,6 +49,7 @@ import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { AiRequestRejectedError } from "./errors";
 import { PROMPT_INPUT_SEPARATOR } from "./features";
 import type { AiProvider } from "./providers/types";
+import { preparePrompt } from "./prompt";
 import { emptyKnownValues, loadKnownValues, type KnownValues } from "./redaction";
 
 /*
@@ -107,8 +108,18 @@ vi.mock("./redaction", async (importOriginal) => {
   };
 });
 
+/*
+ * Rekkefølgen i T-0001-testene (rett-t0001-synkko-testplan.md 2c): vasken skal ikke nås ved avslag.
+ * Vasken er nå `preparePrompt`; den ekte funksjonen kjøres, kallene telles.
+ */
+vi.mock("./prompt", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./prompt")>();
+  return { ...actual, preparePrompt: vi.fn(actual.preparePrompt) };
+});
+
 beforeEach(resetDatabase);
 afterEach(() => {
+  vi.mocked(preparePrompt).mockClear();
   swap.provider = null;
   swap.load = null;
   vi.mocked(loadKnownValues).mockClear();
@@ -1729,7 +1740,7 @@ describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
       );
 
       expectSameRejection(error, empty);
-      expect(redactFields).not.toHaveBeenCalled();
+      expect(preparePrompt).not.toHaveBeenCalled();
       expect(complete).not.toHaveBeenCalled();
       expect(await aiRowCount()).toBe(0);
       expect(await auditCount()).toBe(auditBefore);
@@ -1750,7 +1761,7 @@ describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
     );
 
     expectSameRejection(error, unknownField);
-    expect(redactFields).not.toHaveBeenCalled();
+    expect(preparePrompt).not.toHaveBeenCalled();
     expect(complete).not.toHaveBeenCalled();
     expect(await aiRowCount()).toBe(0);
   });
@@ -1778,7 +1789,7 @@ describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
       requestSuggestion(office.grant, validRequest({ fields: { text: "\u0000" } })),
     ).rejects.toBeInstanceOf(AccessDeniedError);
 
-    expect(redactFields).not.toHaveBeenCalled();
+    expect(preparePrompt).not.toHaveBeenCalled();
     expect(complete).not.toHaveBeenCalled();
     expect(await aiRowCount()).toBe(0);
   });
@@ -1802,7 +1813,7 @@ describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
 
     const { input, prompt, request, result } = await sendAndCapture(grant, null, text);
 
-    expect(vi.mocked(redactFields).mock.calls[0]![2]).toEqual({ text: "Ring 91234567" });
+    expect(vi.mocked(preparePrompt).mock.calls[0]![1]).toEqual({ text: "Ring 91234567" });
     for (const seen of [prompt, input]) {
       expect(seen).not.toContain("91234567");
       expect(seen).not.toContain("1234567");
@@ -1822,7 +1833,7 @@ describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
 /*
  * Funn T-0001: tegn databasen ikke tar (docs/agenter/oppgaver/rett-t0001-synkko.md Omfang 3,
  * testplan avsnitt 2c, 58–65 og 68). Vasken kommer etter trinn 1–3 og før personvernvasken
- * (`redactFields`), og svaret fra leverandøren vaskes før loggen og klienten. Bare den falske
+ * (`preparePrompt`), og svaret fra leverandøren vaskes før loggen og klienten. Bare den falske
  * leverandøren. Teksten og telefonnummeret er oppdiktet.
  */
 describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
@@ -1867,7 +1878,7 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
     const prompt = spy.mock.calls[0]![0].prompt;
     expect(prompt).not.toContain("\u0000");
     expect(sentInput(prompt)).toBe(CLEAN);
-    expect(vi.mocked(redactFields)).toHaveBeenCalledWith(grant, null, { text: CLEAN });
+    expect(vi.mocked(preparePrompt).mock.calls[0]![1]).toEqual({ text: CLEAN });
   });
 
   it("svar med nulltegn fra leverandøren lagres vasket, og klienten får samme tekst", async () => {
@@ -1901,7 +1912,7 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
   it("tekst som er tom etter vask gir avslag, ikke unntak; verken vasken eller leverandøren kalles", async () => {
     const { grant } = await aiOrganization();
     const baseline = await neutralRequestRejection(grant);
-    vi.mocked(redactFields).mockClear();
+    vi.mocked(preparePrompt).mockClear();
     const complete = vi.spyOn(fakeAiProvider, "complete");
     const auditBefore = await auditCount();
 
@@ -1912,7 +1923,7 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
       expect(error).toBeInstanceOf(AiRequestRejectedError);
       expectSameRejection(error, baseline);
     }
-    expect(redactFields).not.toHaveBeenCalled();
+    expect(preparePrompt).not.toHaveBeenCalled();
     expect(complete).not.toHaveBeenCalled();
     expect(await aiRowCount()).toBe(0);
     expect(await auditCount()).toBe(auditBefore);
@@ -1948,7 +1959,7 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
     const a = await aiOrganization("Oppdiktet Takst A");
     const assignmentA = await createAssignment(a.organization.id);
     const b = await aiOrganization("Oppdiktet Takst B");
-    vi.mocked(redactFields).mockClear();
+    vi.mocked(preparePrompt).mockClear();
     const complete = vi.spyOn(fakeAiProvider, "complete");
 
     // Tilgangssjekken mot A for en ansatt i B
@@ -1964,7 +1975,7 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
       ),
     );
     expectSameRejection(error, baseline);
-    expect(redactFields).not.toHaveBeenCalled();
+    expect(preparePrompt).not.toHaveBeenCalled();
     expect(complete).not.toHaveBeenCalled();
     expect(await aiRowCount()).toBe(0);
   });
