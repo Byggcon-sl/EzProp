@@ -11,6 +11,12 @@ import {
   type LocalTrialStore,
 } from "./types";
 
+// `status()` leser bekreftede bilder fra bildelageret (IndexedDB); i testen finnes ingen.
+vi.mock("../photo-store", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../photo-store")>()),
+  listConfirmedPhotoIds: () => Promise.resolve(new Set<string>()),
+}));
+
 // «Synk nå» i den lokale kjernen (docs/funksjoner/fase1-synkstatus.md, testplan
 // docs/agenter/oppgaver/fase1-smafunn-synkstatus-testplan.md avsnitt 1). Ingen IndexedDB og ingen
 // nettleser: databasen er en liten falsk `LocalDb` i minnet, leseren er en stub, `fetch` og
@@ -422,5 +428,161 @@ describe("øyeblikksbilder og nyere lokale skrivinger (localWriteGeneration)", (
 
     expect(valuesSeen(listener)).not.toContain("2");
     expect(valuesSeen(listener).at(-1)).toBe("4");
+  });
+});
+
+describe("avvist endring legges til side (funn T-0001)", () => {
+  // Testplan docs/agenter/oppgaver/rett-t0001-synkko-testplan.md 16, 26, 27, 30, 33 og 35, gjennom
+  // lageret: sendQueue, status, syncNow og mergeIncoming.
+  const ANSWER_2 = "0192d3a0-0000-7000-8000-0000000000a2";
+  const POISON: OutboxEntry = {
+    seq: 1,
+    op: "PUT",
+    table: "trial_answers",
+    id: ANSWER,
+    data: {
+      trial_form_id: FORM,
+      field_key: "general_description",
+      value: JSON.stringify("Fukt\u0000 i kjeller"),
+      text_state: null,
+      device_id: "enhet-1",
+      created_at: NOW,
+      updated_at: NOW,
+    },
+  };
+  const GOOD: OutboxEntry = {
+    seq: 2,
+    op: "PUT",
+    table: "trial_answers",
+    id: ANSWER_2,
+    data: {
+      trial_form_id: FORM,
+      field_key: "building_year",
+      value: "1985",
+      text_state: null,
+      device_id: "enhet-1",
+      created_at: NOW,
+      updated_at: NOW,
+    },
+  };
+
+  const rejectPoison = () =>
+    new Response(
+      JSON.stringify({
+        feil: "Endringen kunne ikke lagres.",
+        endring: { id: ANSWER, table: "trial_answers", field_key: "general_description" },
+      }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+
+  /** Svarer 400 når den giftige er med i bunten, ellers 200. */
+  function serverRejectingPoison() {
+    fetchMock.mockImplementation((_url, init) => {
+      const body = JSON.parse(String(init?.body)) as { operations: { id: string }[] };
+      const hasPoison = body.operations.some((operation) => operation.id === ANSWER);
+      return Promise.resolve(hasPoison ? rejectPoison() : response(200));
+    });
+  }
+
+  it("giftig endring først: resten kvitteres, den giftige ligger igjen lagt til side", async () => {
+    serverRejectingPoison();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open(true, [POISON, GOOD]);
+
+    expect(await store!.syncNow()).toBe("ok");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const queue = await storedQueue();
+    expect(queue).toHaveLength(1);
+    expect(queue[0]).toMatchObject({ seq: 1, id: ANSWER });
+    expect(queue[0]!.setAside).toEqual({ at: expect.any(String) });
+
+    const status = await store!.status();
+    expect(status.pendingChanges).toBe(0);
+    expect(status.rejected).toEqual([{ table: "trial_answers", fieldKey: "general_description" }]);
+    // Loggen har bare status og antall, aldri tekst eller felt.
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).toContain("400");
+    expect(logged).not.toContain("Fukt");
+    expect(logged).not.toContain("general_description");
+  });
+
+  it("lagt til side overlever omlasting og sendes ikke igjen", async () => {
+    serverRejectingPoison();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open(true, [POISON, GOOD]);
+    expect(await store!.syncNow()).toBe("ok");
+    const saved = (await storedQueue()) as unknown as OutboxEntry[];
+    await store!.close();
+
+    fetchMock.mockClear();
+    await open(true, saved);
+    expect(await store!.syncNow()).toBe("ok");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await storedQueue()).toEqual(saved);
+    expect((await store!.status()).rejected).toHaveLength(1);
+  });
+
+  it("400 uten endring for flere i bunten: nytt forsøk, ingenting lagt til side", async () => {
+    fetchMock.mockResolvedValue(response(400));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open(true, [POISON, GOOD]);
+
+    expect(await store!.syncNow()).toBe("failed");
+    expect(await storedQueue()).toEqual([POISON, GOOD]);
+    expect((await store!.status()).pendingChanges).toBe(2);
+  });
+
+  it("ny endring på feltet som kvitteres, løser den gamle (meldingen forsvinner)", async () => {
+    serverRejectingPoison();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fake = await open(true, [POISON]);
+    fake.seed(LOCAL_SYNCED_STORES.trial_answers, { ...POISON.data, id: ANSWER, deleted_at: null });
+    expect(await store!.syncNow()).toBe("ok");
+    expect((await store!.status()).rejected).toHaveLength(1);
+
+    // Et annet felt kvitteres: den gamle står.
+    fetchMock.mockResolvedValue(response(200));
+    await store!.setAnswer(FORM, "building_year", 1990);
+    expect(await store!.syncNow()).toBe("ok");
+    expect((await store!.status()).rejected).toHaveLength(1);
+
+    // Ny tekst i samme felt: ny oppføring, kvittert med 200, den gamle er løst (ikke slettet).
+    const written = store!.setAnswer(FORM, "general_description", "Fukt i kjeller");
+    await store!.flush();
+    await written;
+    expect(await store!.syncNow()).toBe("ok");
+    const status = await store!.status();
+    expect(status.rejected).toEqual([]);
+    expect(status.pendingChanges).toBe(0);
+    const queue = await storedQueue();
+    expect(queue).toHaveLength(1);
+    expect(queue[0]!.setAside).toEqual({ at: expect.any(String), resolved: true });
+  });
+
+  it("henting fra serveren lager ingen ny køoppføring og overskriver ikke feltet", async () => {
+    serverRejectingPoison();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fake = await open(true, [POISON]);
+    fake.seed(LOCAL_SYNCED_STORES.trial_answers, { ...POISON.data, id: ANSWER, deleted_at: null });
+    expect(await store!.syncNow()).toBe("ok");
+    const before = await storedQueue();
+
+    const context = reader.start.mock.calls[0]![0];
+    await context.mergeIncoming(
+      "trial_answers",
+      [
+        {
+          table: "trial_answers",
+          kind: "update",
+          key: `${FORM}:general_description`,
+          row: { id: ANSWER, value: JSON.stringify("Fra serveren"), updated_at: NOW },
+        },
+      ],
+      null,
+    );
+
+    expect(await storedQueue()).toEqual(before);
+    const rows = await store!.readRows("trial_answers");
+    expect(rows.find((row) => row.id === ANSWER)!.value).toBe(POISON.data.value);
   });
 });

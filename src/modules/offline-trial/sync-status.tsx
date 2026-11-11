@@ -25,6 +25,7 @@ import {
   SIGN_IN_LABEL,
   SYNC_BUTTON_IDLE,
   nextSavedAt,
+  rejectedText,
   savedAtText,
   showSyncNow,
   signInHref,
@@ -242,6 +243,7 @@ export function SyncStatus({ getStatus, subscribe, syncNow }: SyncStatusProps) {
   const kind = status ? syncStatusKind(status, signInRequired) : null;
   // «Prøver igjen automatisk» stemmer ikke når innloggingen må fornyes; linjen over sier det.
   const message = kind === "signInRequired" ? null : view.message;
+  const rejected = status ? rejectedText(status.rejected) : null;
 
   return (
     <section
@@ -263,6 +265,14 @@ export function SyncStatus({ getStatus, subscribe, syncNow }: SyncStatusProps) {
             {kind ? <StateIcon kind={kind} /> : null}
             {status ? syncStatusText(status, signInRequired) : null}
           </p>
+          {rejected ? (
+            <p
+              data-testid="sync-status-rejected"
+              className="mt-1 text-sm font-medium text-[#6b4405]"
+            >
+              {rejected}
+            </p>
+          ) : null}
           <p
             data-testid="sync-status-saved-at"
             className="mt-1 text-sm text-slate-600 tabular-nums"

@@ -5,7 +5,8 @@
  * ingen React, ingen `window`. «Lagret kl.» regnes ut bare her (`nextSavedAt`), likt for alle
  * kandidater.
  */
-import type { TrialSyncRoundResult, TrialSyncStatus } from "./sync/types";
+import type { TrialRejectedChange, TrialSyncRoundResult, TrialSyncStatus } from "./sync/types";
+import { listTrialFields, trialForm } from "./trial-form";
 
 export const SYNC_NOW_OFFLINE_MESSAGE =
   "Du er uten nett. Alt er lagret på iPaden og sendes når nettet kommer.";
@@ -25,13 +26,43 @@ export const SIGN_IN_LABEL = "Logg inn";
 export type SyncStatusKind =
   "offline" | "allSaved" | "pending" | "awaitingServer" | "signInRequired";
 
+export const REJECTED_PREFIX = "Kunne ikke sendes: ";
+export const REJECTED_FORM_NAME = "testskjemaet";
+const UNKNOWN_FIELD_NAME = "ukjent felt";
+
+/** Feltnavnene fra skjemadefinisjonen (samme kilde som skjemaet bruker). */
+const FIELD_LABELS = new Map(listTrialFields(trialForm).map((field) => [field.key, field.label]));
+
+function hasRejected(status: TrialSyncStatus): boolean {
+  return (status.rejected?.length ?? 0) > 0;
+}
+
 function isAllSaved(status: TrialSyncStatus): boolean {
   return (
     status.online &&
     status.serverConfirmed &&
     status.pendingChanges === 0 &&
-    status.pendingPhotos === 0
+    status.pendingPhotos === 0 &&
+    // En endring som ikke kunne sendes, er ikke lagret på serveren.
+    !hasRejected(status)
   );
+}
+
+function rejectedName(change: TrialRejectedChange): string {
+  if (change.table === "trial_forms") return REJECTED_FORM_NAME;
+  const label = (change.fieldKey && FIELD_LABELS.get(change.fieldKey)) || UNKNOWN_FIELD_NAME;
+  return change.table === "trial_photos" ? `bilde i ${label}` : label;
+}
+
+/**
+ * «Kunne ikke sendes: Generell beskrivelse» for endringer serveren avviste (lagt til side og ikke
+ * løst). Bilde: «bilde i <feltnavn>», skjemaet: «testskjemaet». Flere skilles med komma, hvert navn
+ * én gang. Null når ingenting er avvist.
+ */
+export function rejectedText(rejected: readonly TrialRejectedChange[] | undefined): string | null {
+  if (!rejected || rejected.length === 0) return null;
+  const names = [...new Set(rejected.map(rejectedName))];
+  return `${REJECTED_PREFIX}${names.join(", ")}`;
 }
 
 /**
@@ -41,7 +72,9 @@ function isAllSaved(status: TrialSyncStatus): boolean {
 export function syncStatusKind(status: TrialSyncStatus, signInRequired = false): SyncStatusKind {
   if (!status.online) return "offline";
   if (signInRequired) return "signInRequired";
-  if (status.pendingChanges > 0 || status.pendingPhotos > 0) return "pending";
+  if (status.pendingChanges > 0 || status.pendingPhotos > 0 || hasRejected(status)) {
+    return "pending";
+  }
   return status.serverConfirmed ? "allSaved" : "awaitingServer";
 }
 
