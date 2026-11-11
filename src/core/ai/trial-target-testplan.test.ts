@@ -154,7 +154,8 @@ describe("vakten for ai_trial: leverandør × mål (2)", () => {
     expect(row.outcome).toBe("ok");
   });
 
-  it("2.2 og 2.7 vakten ligger i kjernen: annen aktiv leverandør + ai_trial gir «KI er av», ingen rad og intet kall", async () => {
+  // Vask før KI V5.2: sperret forespørsel er nå utfallet `blocked` med rad, ikke «KI er av»
+  it("2.2 og 2.7 / V5.2 vakten ligger i kjernen: annen aktiv leverandør + ai_trial gir blocked-rad og intet kall", async () => {
     const { grant } = await inspectorIn({});
     const other = otherProvider();
     providerSwap.override = other;
@@ -163,22 +164,23 @@ describe("vakten for ai_trial: leverandør × mål (2)", () => {
 
     const result = await requestSuggestion(grant, validRequest({ target: trialTarget() }));
 
-    expect(result).toEqual({ kind: "disabled" });
+    expect(result).toEqual({ kind: "blocked" });
     expect(other.complete).not.toHaveBeenCalled();
     expect(fakeSpy).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(await aiRowCount()).toBe(0);
+    const rows = await allAiRows();
+    expect(rows.map((row) => row.outcome)).toEqual(["blocked"]);
   });
 
-  it("2.7 kontroll: samme andre leverandør + answer/text blir kalt (vakten gjelder bare ai_trial)", async () => {
+  it("2.7 / V5.1 samme andre leverandør + answer/text er også sperret (A173)", async () => {
     const { grant } = await inspectorIn({});
     const other = otherProvider();
     providerSwap.override = other;
 
     const result = await requestSuggestion(grant, validRequest({ target: answerTarget() }));
 
-    expect(result.kind).toBe("suggestion");
-    expect(other.complete).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ kind: "blocked" });
+    expect(other.complete).not.toHaveBeenCalled();
     expect(await aiRowCount()).toBe(1);
   });
 

@@ -34,7 +34,9 @@ export type AiSuggestionResult =
     }
   | { kind: "no_match"; usageId: string }
   | { kind: "error"; usageId: string }
-  | { kind: "disabled" };
+  | { kind: "disabled" }
+  /** Sperret av modulen (ad-1): raden står i loggen med utfallet `blocked`, intet kall. */
+  | { kind: "blocked" };
 
 export type AiDecision = "accepted" | "edited" | "rejected" | "undo";
 

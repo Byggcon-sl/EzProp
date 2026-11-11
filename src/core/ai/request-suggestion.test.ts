@@ -37,6 +37,7 @@ import {
   TEST_NOW,
 } from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
+import { redactFields } from "./redaction";
 
 /*
  * `requestSuggestion` (docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 6, 9.1–9.3 og
@@ -50,8 +51,55 @@ import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 
 const SECRET_MARKER = "hemmelig-markør";
 
+/*
+ * Vask før KI (docs/funksjoner/fase2a-vask-for-ki-testplan.md avsnitt 4, 5 og 7): leverandøren og
+ * vasken kan byttes ut i én test. Standard er de ekte funksjonene, så de andre testene prøver den
+ * ekte veien.
+ */
+const swap = vi.hoisted(() => ({
+  provider: null as null | {
+    code: string;
+    model: string;
+    complete: (request: unknown) => Promise<unknown>;
+  },
+  redact: null as
+    | null
+    | ((
+        grant: unknown,
+        assignmentId: string | null,
+        fields: Record<string, string>,
+      ) => Promise<{ fields: Record<string, string>; count: number }>),
+}));
+
+vi.mock("./provider-resolution", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./provider-resolution")>();
+  return {
+    ...actual,
+    resolveAiProvider: async (grant: EmployeeGrant) =>
+      swap.provider
+        ? { kind: "enabled" as const, provider: swap.provider, model: swap.provider.model }
+        : actual.resolveAiProvider(grant),
+  };
+});
+
+vi.mock("./redaction", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./redaction")>();
+  return {
+    ...actual,
+    redactFields: vi.fn(
+      (grant: EmployeeGrant, assignmentId: string | null, fields: Record<string, string>) =>
+        swap.redact
+          ? swap.redact(grant, assignmentId, fields)
+          : actual.redactFields(grant, assignmentId, fields),
+    ),
+  };
+});
+
 beforeEach(resetDatabase);
 afterEach(() => {
+  swap.provider = null;
+  swap.redact = null;
+  vi.mocked(redactFields).mockClear();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
@@ -770,5 +818,284 @@ describe("requestSuggestion: tenant-isolasjon (9.1–9.3)", () => {
       },
       idOf: (row) => row.id,
     });
+  });
+});
+
+/** En leverandør som ikke er `fake`. Svarer som en vanlig leverandør hvis den blir kalt. */
+function realLikeProvider() {
+  const complete = vi.fn(async (_request: unknown) => ({
+    outcome: "ok" as const,
+    text: "Oppdiktet svar fra annen leverandør.",
+    tokensIn: 3,
+    tokensOut: 4,
+    cost: 0.5,
+    currency: "NOK",
+  }));
+  return { code: "other_test_provider", model: "other-test-v1", complete };
+}
+
+/** Oppdiktet vask: bytter markøren med `[telefon]` og teller ett treff. */
+function markerRedaction() {
+  swap.redact = async (_grant, _assignmentId, fields) => ({
+    fields: Object.fromEntries(
+      Object.entries(fields).map(([key, value]) => [
+        key,
+        value.replaceAll(SECRET_MARKER, "[telefon]"),
+      ]),
+    ),
+    count: 1,
+  });
+}
+
+describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.7)", () => {
+  it("V4.3 leverandøren får bare den vaskede teksten, og redacted_count står i raden", async () => {
+    const { organization, grant } = await aiOrganization();
+    const assignment = await createAssignment(organization.id);
+    markerRedaction();
+    const complete = vi.spyOn(fakeAiProvider, "complete");
+    const request = validRequest({
+      assignmentId: assignment.id,
+      fields: { text: `Ring ${SECRET_MARKER} om taket` },
+    });
+
+    const result = await requestSuggestion(grant, request);
+
+    expect(result.kind).toBe("suggestion");
+    expect(redactFields).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(redactFields).mock.calls[0]![0]).toBe(grant);
+    expect(vi.mocked(redactFields).mock.calls[0]![1]).toBe(assignment.id);
+    const prompt = (complete.mock.calls[0]![0] as { prompt: string }).prompt;
+    expect(prompt).toContain("Ring [telefon] om taket");
+    expect(prompt).not.toContain(SECRET_MARKER);
+    const row = (await aiRow(request.requestId))!;
+    expect(row.redacted_count).toBe(1);
+    expect(JSON.stringify(row)).not.toContain(SECRET_MARKER);
+    expect(JSON.stringify(result)).not.toContain(SECRET_MARKER);
+    expect(Object.keys(result)).not.toContain("redactedCount");
+  });
+
+  it("V4.4 input_summary regnes av den vaskede teksten", async () => {
+    const { grant } = await aiOrganization();
+    markerRedaction();
+    const text = `Ring ${SECRET_MARKER} om taket`;
+    const request = validRequest({ fields: { text } });
+
+    await requestSuggestion(grant, request);
+
+    const row = (await aiRow(request.requestId))!;
+    expect(row.input_summary).toEqual({ text: "Ring [telefon] om taket".length });
+    expect(row.input_summary).not.toEqual({ text: text.length });
+  });
+
+  it.each(["no_match", "error"] as const)(
+    "V4.3 redacted_count skrives også for utfallet %s",
+    async (outcome) => {
+      const { grant } = await aiOrganization();
+      swap.redact = async (_grant, _assignmentId, fields) => ({ fields: { ...fields }, count: 2 });
+      const text = outcome === "no_match" ? fakeNoMatchInput() : fakeErrorInputs()[0]!;
+      const request = validRequest({ fields: { text } });
+
+      const result = await requestSuggestion(grant, request);
+
+      expect(result.kind).toBe(outcome);
+      expect((await aiRow(request.requestId))!.redacted_count).toBe(2);
+    },
+  );
+
+  it("V4.5 kaster vasken, kalles leverandøren ikke og ingen rad skrives; markøren lekker ikke", async () => {
+    const { grant } = await aiOrganization();
+    swap.redact = async () => {
+      throw new Error(SECRET_MARKER);
+    };
+    const complete = vi.spyOn(fakeAiProvider, "complete");
+    const logSpies = spyOnLogger();
+    const auditBefore = await auditCount();
+
+    const error = await captureError(() =>
+      requestSuggestion(grant, validRequest({ fields: { text: "Oppdiktet notat" } })),
+    );
+
+    expect(error).toBeInstanceOf(Error);
+    expect(complete).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+    expect(await auditCount()).toBe(auditBefore);
+    expect(loggedText(logSpies)).not.toContain(SECRET_MARKER);
+  });
+
+  it("V4.6 «KI er av» og blocked kjører ikke vasken", async () => {
+    const off = await createOrganization("Oppdiktet Takst Av");
+    const offInspector = await employeeWithGrant(off.id, ["inspector"]);
+    expect(await requestSuggestion(offInspector.grant, validRequest())).toEqual({
+      kind: "disabled",
+    });
+
+    const { grant } = await aiOrganization();
+    swap.provider = realLikeProvider();
+    expect(await requestSuggestion(grant, validRequest())).toEqual({ kind: "blocked" });
+
+    expect(redactFields).not.toHaveBeenCalled();
+  });
+
+  it("V4.7 den falske leverandøren får også vasket tekst (prøvemålet uten oppdrag)", async () => {
+    const { grant } = await aiOrganization();
+    markerRedaction();
+    const complete = vi.spyOn(fakeAiProvider, "complete");
+    const request = validRequest({
+      target: { type: "ai_trial", id: randomUUID(), fieldKey: "text" },
+      fields: { text: `Ring ${SECRET_MARKER}` },
+    });
+
+    const result = await requestSuggestion(grant, request);
+
+    expect(result.kind).toBe("suggestion");
+    expect(redactFields).toHaveBeenCalledWith(grant, null, { text: `Ring ${SECRET_MARKER}` });
+    const prompt = (complete.mock.calls[0]![0] as { prompt: string }).prompt;
+    expect(prompt).not.toContain(SECRET_MARKER);
+  });
+});
+
+describe("requestSuggestion: utfallet blocked (vask før KI V5.1–V5.7)", () => {
+  async function expectBlockedRow(requestId: string) {
+    const row = (await aiRow(requestId))!;
+    expect(row.outcome).toBe("blocked");
+    expect(row.status).toBeNull();
+    expect(row.output_text).toBeNull();
+    expect(row.error_code).toBeNull();
+    expect(row.tokens_in).toBe(0);
+    expect(row.tokens_out).toBe(0);
+    expect(Number(row.cost)).toBe(0);
+    expect(row.redacted_count).toBe(0);
+    expect(row.provider).toBe("other_test_provider");
+    expect(row.input_summary).toEqual({});
+    return row;
+  }
+
+  it.each([
+    { name: "V5.1 answer med oppdrag", target: "answer" as const, withAssignment: true },
+    { name: "V5.2 ai_trial uten oppdrag", target: "ai_trial" as const, withAssignment: false },
+    {
+      name: "V5.2 fritekst uten oppdrag (answer, assignmentId null)",
+      target: "answer" as const,
+      withAssignment: false,
+    },
+  ])(
+    "$name mot ekte leverandør: blocked-rad, intet kall, ingen audit",
+    async ({ target, withAssignment }) => {
+      const { organization, grant } = await aiOrganization();
+      const assignmentId = withAssignment ? (await createAssignment(organization.id)).id : null;
+      const provider = realLikeProvider();
+      swap.provider = provider;
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      const auditBefore = await auditCount();
+      const request = validRequest({
+        assignmentId,
+        target: { type: target, id: randomUUID(), fieldKey: "text" },
+      });
+
+      const result = await requestSuggestion(grant, request);
+
+      expect(result).toEqual({ kind: "blocked" });
+      expect(provider.complete).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      const row = await expectBlockedRow(request.requestId);
+      expect(row.assignment_id).toBe(assignmentId);
+      expect(row.organization_id).toBe(grant.organizationId);
+      expect(row.employee_id).toBe(grant.employeeId);
+      expect(await auditCount()).toBe(auditBefore);
+    },
+  );
+
+  it("V5.3 answer med falsk leverandør virker (A173)", async () => {
+    const { grant } = await aiOrganization();
+    const result = await requestSuggestion(grant, validRequest());
+    expect(result.kind).toBe("suggestion");
+  });
+
+  it("V5.4 en blocked-forespørsel avviser ikke forrige åpne forslag på samme mål", async () => {
+    const { grant } = await aiOrganization();
+    const target = validTarget();
+    const first = validRequest({ target });
+    await requestSuggestion(grant, first);
+    swap.provider = realLikeProvider();
+
+    expect(await requestSuggestion(grant, validRequest({ target }))).toEqual({ kind: "blocked" });
+
+    expect((await aiRow(first.requestId))!.status).toBe("suggested");
+  });
+
+  it("V5.5 samme requestId igjen gir blocked, ingen ny rad og intet kall", async () => {
+    const { grant } = await aiOrganization();
+    const provider = realLikeProvider();
+    swap.provider = provider;
+    const request = validRequest();
+    await requestSuggestion(grant, request);
+    const before = snapshot(await aiRow(request.requestId));
+
+    // Også etter at leverandøren er byttet til den falske: svaret fra første gang
+    swap.provider = null;
+    const complete = vi.spyOn(fakeAiProvider, "complete");
+    expect(await requestSuggestion(grant, request)).toEqual({ kind: "blocked" });
+
+    expect(await aiRowCount()).toBe(1);
+    expect(provider.complete).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+    expect(snapshot(await aiRow(request.requestId))).toBe(before);
+  });
+
+  it("V5.7 «KI er av» gir fortsatt ingen rad og { kind: disabled }", async () => {
+    const organization = await createOrganization("Oppdiktet Takst Av");
+    await enableAi(organization.id, { enabled: false });
+    const { grant } = await employeeWithGrant(organization.id, ["inspector"]);
+
+    expect(await requestSuggestion(grant, validRequest())).toEqual({ kind: "disabled" });
+    expect(await aiRowCount()).toBe(0);
+  });
+});
+
+describe("requestSuggestion: roller og organisasjon (vask før KI V7.3–V7.4)", () => {
+  it("V7.3 A sitt oppdrag i en forespørsel fra B avvises, ingen vask og ingen rad", async () => {
+    const a = await aiOrganization("Oppdiktet Takst A");
+    const b = await aiOrganization("Oppdiktet Takst B");
+    const assignment = await createAssignment(a.organization.id);
+    const baseline = await neutralRequestRejection(b.grant);
+    const complete = vi.spyOn(fakeAiProvider, "complete");
+
+    const error = await captureError(() =>
+      requestSuggestion(b.grant, validRequest({ assignmentId: assignment.id })),
+    );
+
+    expectSameRejection(error, baseline);
+    expect(redactFields).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it.each([
+    { role: "inspector" as const, allowed: true },
+    { role: "manager" as const, allowed: true },
+    { role: "admin" as const, allowed: true },
+    { role: "office" as const, allowed: false },
+  ])("V7.4 $role får samme svar som før (falsk leverandør, vasket)", async ({ role, allowed }) => {
+    const { organization } = await aiOrganization();
+    const assignment = await createAssignment(organization.id);
+    const { grant } = await employeeWithGrant(organization.id, [role], `Test ${role}`);
+    markerRedaction();
+    const request = validRequest({
+      assignmentId: assignment.id,
+      fields: { text: `Ring ${SECRET_MARKER}` },
+    });
+
+    if (!allowed) {
+      await expect(requestSuggestion(grant, request)).rejects.toBeInstanceOf(AccessDeniedError);
+      expect(redactFields).not.toHaveBeenCalled();
+      expect(await aiRowCount()).toBe(0);
+      return;
+    }
+    const result = await requestSuggestion(grant, request);
+    expect(result.kind).toBe("suggestion");
+    expect(redactFields).toHaveBeenCalledTimes(1);
+    const row = (await aiRow(request.requestId))!;
+    expect(row.outcome).toBe("ok");
+    expect(row.redacted_count).toBe(1);
   });
 });

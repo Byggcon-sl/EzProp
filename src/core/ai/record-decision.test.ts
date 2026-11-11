@@ -291,6 +291,8 @@ describe("recordDecision: rader uten forslag og ukjente id-er (7.8–7.9)", () =
   it.each([
     { outcome: "no_match", errorCode: null },
     { outcome: "error", errorCode: "timeout" },
+    // Vask før KI V5.6: en sperret forespørsel kan aldri avgjøres
+    { outcome: "blocked", errorCode: null },
   ])(
     "7.8 rad med outcome $outcome → feil for hver avgjørelse, ingen endring",
     async ({ outcome, errorCode }) => {
