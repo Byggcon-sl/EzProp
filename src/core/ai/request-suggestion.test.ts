@@ -772,3 +772,104 @@ describe("requestSuggestion: tenant-isolasjon (9.1–9.3)", () => {
     });
   });
 });
+
+describe("requestSuggestion: tegn databasen ikke tar (T-0001, testplanen 58–65)", () => {
+  const POISON = "Taket\u0000 er gammelt og har noen sprekker\uD800";
+  const CLEAN = "Taket er gammelt og har noen sprekker";
+
+  it("58 tekst med nulltegn gir forslag og én rad i ai_usage_log uten tegnet", async () => {
+    const { grant } = await aiOrganization();
+    const request = validRequest({ fields: { text: POISON } });
+    const result = await requestSuggestion(grant, request);
+    expect(result.kind).toBe("suggestion");
+    expect(await aiRowCount()).toBe(1);
+    const row = (await aiRow(request.requestId))!;
+    expect(row.status).toBe("suggested");
+    expect(JSON.stringify(row)).not.toMatch(/\\u0000|\\ud800/i);
+  });
+
+  it("59 leverandøren får vasket tekst", async () => {
+    const { grant } = await aiOrganization();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    await requestSuggestion(grant, validRequest({ fields: { text: POISON } }));
+    const sent = spy.mock.calls[0]![0];
+    expect(sent.prompt).toContain(CLEAN);
+    expect(sent.prompt).not.toContain("\u0000");
+    expect(sent.prompt).not.toContain("\uD800");
+  });
+
+  it("60 svar med nulltegn fra leverandøren lagres vasket", async () => {
+    const { grant } = await aiOrganization();
+    vi.spyOn(fakeAiProvider, "complete").mockResolvedValue({
+      outcome: "ok",
+      text: "Bedre\u0000 tekst",
+      tokensIn: 1,
+      tokensOut: 1,
+      cost: 0,
+      currency: "NOK",
+    });
+    const request = validRequest();
+    const result = await requestSuggestion(grant, request);
+    expect(result).toMatchObject({ kind: "suggestion", text: "Bedre tekst" });
+    expect((await aiRow(request.requestId))!.output_text).toBe("Bedre tekst");
+  });
+
+  it("61 input_summary regnes av vasket tekst", async () => {
+    const { grant } = await aiOrganization();
+    const request = validRequest({ fields: { text: POISON } });
+    await requestSuggestion(grant, request);
+    expect((await aiRow(request.requestId))!.input_summary).toEqual({ text: CLEAN.length });
+  });
+
+  it("62 tekst som er tom etter vask gir samme utfall som tom tekst, ikke unntak", async () => {
+    const { grant } = await aiOrganization();
+    const empty = await requestSuggestion(grant, validRequest({ fields: { text: "" } }));
+    const request = validRequest({ fields: { text: "\u0000\u0000" } });
+    const stripped = await requestSuggestion(grant, request);
+    expect(empty.kind).toBe("no_match");
+    expect(stripped).toEqual({ kind: empty.kind, usageId: request.requestId });
+    expect((await aiRow(request.requestId))!.input_summary).toEqual({ text: 0 });
+  });
+
+  it("63 feltkodene vaskes ikke: kode med nulltegn gir nøytralt avslag", async () => {
+    const { grant } = await aiOrganization();
+    const baseline = await neutralRequestRejection(grant);
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const error = await captureError(() =>
+      requestSuggestion(grant, validRequest({ fields: { "text\u0000": SAMPLE_TEXT } })),
+    );
+    expectSameRejection(error, baseline);
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it("64 tilgang sjekkes før vask: fremmed organisasjon og manglende rettighet gir nei", async () => {
+    const { organization } = await aiOrganization();
+    const other = await createOrganization("Oppdiktet Takst B");
+    await enableAi(other.id);
+    const { actor: foreign } = await employeeWithGrant(other.id, ["admin"], "Fremmed Admin");
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+
+    const denied = await captureError(() =>
+      requireOrganizationAccess(foreign, organization.id, "report.edit"),
+    );
+    expect(denied).toBeInstanceOf(AccessDeniedError);
+
+    await mergeOrganizationSettings(organization.id, { "access.inspectors_edit_all": false });
+    const { grant: weaker } = await employeeWithGrant(organization.id, ["inspector"]);
+    const error = await captureError(() =>
+      requestSuggestion(weaker, validRequest({ fields: { text: POISON } })),
+    );
+    expect(error).toBeInstanceOf(AccessDeniedError);
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it("65 admin får forslag med giftig tekst", async () => {
+    const { organization } = await aiOrganization();
+    const { grant } = await employeeWithGrant(organization.id, ["admin"], "Test Admin");
+    const request = validRequest({ fields: { text: POISON } });
+    expect((await requestSuggestion(grant, request)).kind).toBe("suggestion");
+    expect((await aiRow(request.requestId))!.output_text).not.toContain("\u0000");
+  });
+});

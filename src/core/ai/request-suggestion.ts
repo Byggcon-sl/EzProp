@@ -2,6 +2,7 @@ import { and, eq, isNull, ne } from "drizzle-orm";
 import { AccessDeniedError, grantHasPermission, type EmployeeGrant } from "@/core/access";
 import { db } from "@/db/client";
 import { aiUsageLog, assignments, type AiErrorCode } from "@/db/schema";
+import { stripUnstorableText } from "@/shared/lib/clean-text";
 import { logger } from "@/shared/lib/logger";
 import { AiRequestRejectedError } from "./errors";
 import { AI_TRIAL_TARGET_TYPE, buildPrompt, getFeatureDefinition } from "./features";
@@ -72,6 +73,11 @@ async function callProvider(call: () => Promise<AiProviderResult>): Promise<AiPr
   }
 }
 
+/** Svaret fra leverandøren uten tegn databasen ikke tar, før det lagres i `ai_usage_log`. */
+function cleanProviderResult(result: AiProviderResult): AiProviderResult {
+  return result.outcome === "ok" ? { ...result, text: stripUnstorableText(result.text) } : result;
+}
+
 export async function requestSuggestion(
   grant: EmployeeGrant,
   request: AiSuggestionRequest,
@@ -88,6 +94,12 @@ export async function requestSuggestion(
 
   // 3. Bare feltkoder fra tillatt-listen
   if (!hasOnlyAllowedFields(definition, input.fields)) throw new AiRequestRejectedError();
+
+  // Verdiene vaskes for tegn databasen ikke tar (T-0001). Feltkodene er sjekket mot
+  // tillatt-listen over og vaskes ikke. Tom tekst etter vask går videre som tom tekst.
+  const fields: Record<string, string> = Object.fromEntries(
+    Object.entries(input.fields).map(([key, value]) => [key, stripUnstorableText(value)]),
+  );
 
   // 4. Oppdraget hører til organisasjonen og er ikke slettet
   if (input.assignmentId !== null) {
@@ -136,14 +148,16 @@ export async function requestSuggestion(
   }
 
   // 7. Ledeteksten bygges bare av feltene på tillatt-listen, og leverandøren kalles
-  const prompt = buildPrompt(definition, input.fields);
-  const result = await callProvider(() =>
-    provider.complete({
-      feature: definition.code,
-      promptVersion: definition.promptVersion,
-      prompt,
-      model,
-    }),
+  const prompt = buildPrompt(definition, fields);
+  const result = cleanProviderResult(
+    await callProvider(() =>
+      provider.complete({
+        feature: definition.code,
+        promptVersion: definition.promptVersion,
+        prompt,
+        model,
+      }),
+    ),
   );
   if (result.outcome === "error") {
     logger.warn("KI-kallet ga feil", {
@@ -156,8 +170,8 @@ export async function requestSuggestion(
 
   // 8. Én transaksjon: ny rad, forrige forslag på samme mål avvist, revisjonslogg
   const now = new Date();
-  const fieldKeys = Object.keys(input.fields).sort();
-  const inputSummary = Object.fromEntries(fieldKeys.map((key) => [key, input.fields[key]!.length]));
+  const fieldKeys = Object.keys(fields).sort();
+  const inputSummary = Object.fromEntries(fieldKeys.map((key) => [key, fields[key]!.length]));
   const errorCode: AiErrorCode | null = result.outcome === "error" ? result.errorCode : null;
 
   return db.transaction(async (tx) => {
