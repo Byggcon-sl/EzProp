@@ -5,9 +5,13 @@
  * nøkkel med `vi.stubEnv` og falsk HTTP med `vi.stubGlobal` eller `options.fetch`.
  */
 
-/** Feilen testene får hvis noe prøver å nå KI-leverandøren. */
-export const BLOCKED_AI_NETWORK_MESSAGE =
-  "Testene gjør aldri nettkall til KI-leverandøren. Send inn falsk fetch.";
+import { BLOCKED_FETCH_MESSAGE } from "./block-external-fetch";
+
+/**
+ * Feilen testene får hvis noe prøver å nå KI-leverandøren. Samme tekst som sperren i
+ * `tests/block-external-fetch.ts`, så det ikke spiller noen rolle hvilken av dem som slår til.
+ */
+export const BLOCKED_AI_NETWORK_MESSAGE = BLOCKED_FETCH_MESSAGE;
 
 /** Om vertsnavnet er Anthropics (også underdomener). */
 export function isAnthropicHost(input: unknown): boolean {

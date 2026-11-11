@@ -349,8 +349,10 @@ describe("evalueringssett, statiske kontroller (E7)", () => {
     }
   });
 
-  it("E6.9 kjøreren bruker PII_PLACEHOLDERS fra pii-patterns", () => {
-    const source = read(join(evalsDir, "run.ts"));
+  // Lekkasjesjekken er flyttet fra kjøreren til `leak-check.ts` (A195); kjøreren bruker den.
+  it("E6.9 lekkasjesjekken bruker PII_PLACEHOLDERS fra pii-patterns, og kjøreren bruker sjekken", () => {
+    expect(read(join(evalsDir, "run.ts"))).toMatch(/from\s+["']\.\.\/leak-check["']/);
+    const source = read(join(aiDir, "leak-check.ts"));
     expect(source).toMatch(
       /import\s*\{[^}]*\bPII_PLACEHOLDERS\b[^}]*\}\s*from\s+["']@\/shared\/lib\/pii-patterns["']/,
     );

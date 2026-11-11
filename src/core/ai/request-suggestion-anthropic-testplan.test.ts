@@ -217,14 +217,16 @@ describe("settings.features (3.3, R3)", () => {
     },
   );
 
-  it("tom liste gir disabled også for mål som ellers ville vært sperret (ingen blocked-rad)", async () => {
+  // Kortet Omfang 6: sperren for features ligger etter tillatt-liste og sperre. Et mål som er
+  // sperret mot ekte leverandør (fritekst uten oppdrag), gir derfor blocked, uten kall.
+  it("tom liste og sperret mål gir blocked (sperren kommer før features), intet kall", async () => {
     const { grant } = await anthropicOrganization(
       "Oppdiktet Takst A",
       anthropicSettings({ features: [] }),
     );
     const result = await requestSuggestion(grant, validRequest());
-    expect(result).toEqual({ kind: "disabled" });
-    expect(await aiRowCount()).toBe(0);
+    expect(result.kind).toBe("blocked");
+    expect(http.calls).toHaveLength(0);
   });
 
   it("fake har ingen liste og tar language_polish som før", async () => {

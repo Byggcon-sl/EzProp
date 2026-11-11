@@ -13,7 +13,6 @@ import {
 } from "../../../../tests/fake-anthropic";
 import * as anthropicModule from "./anthropic";
 import { createAnthropicProvider, type AnthropicProviderOptions } from "./anthropic";
-import { FAKE_NO_MATCH_INPUT } from "./fake";
 import type { AiProviderRequest, AiProviderResult } from "./types";
 
 /*
@@ -329,10 +328,8 @@ describe("Anthropic-adapteren: svaret (1.2, A2)", () => {
     { name: "tomt tekstsvar", content: [{ type: "text", text: "" }] },
     { name: "bare mellomrom", content: [{ type: "text", text: "  \n\t " }] },
     { name: "ingen tekstblokker", content: [] },
-    {
-      name: "«ingen endring» (samme merke som den falske leverandøren)",
-      content: [{ type: "text", text: FAKE_NO_MATCH_INPUT }],
-    },
+    // «Ingen endring» betyr at svaret er lik inndata (kortet Omfang 4). Det prøves i
+    // anthropic.test.ts; merket til den falske leverandøren kommer aldri fra en ekte modell.
   ])("1.2.4 $name gir no_match med tokens og kostnad", async ({ content }) => {
     const { provider } = withReplies([
       { kind: "ok", content, usage: { input_tokens: 120, output_tokens: 1 } },
