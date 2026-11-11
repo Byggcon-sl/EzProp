@@ -93,11 +93,14 @@ function expectFixedFailure(response: Record<string, unknown>) {
   const message = response.message;
   expect(typeof message).toBe("string");
   expect((message as string).length).toBeGreaterThan(0);
-  const all = JSON.stringify(response);
+  // `reason` er en fast kode (K6.1) og kan selv hete «invalid»; resten sjekkes for tekniske detaljer.
+  expect(["invalid", "no_access", "unknown"]).toContain(response.reason);
+  const { reason: _reason, ...rest } = response;
+  const all = JSON.stringify(rest);
   expect(all).not.toMatch(
     /stack|\n\s+at |Error\b|select |insert |update |postgres|zod|invalid|required/i,
   );
-  expect(Object.keys(response).sort()).toEqual(["kind", "message"]);
+  expect(Object.keys(response).sort()).toEqual(["kind", "message", "reason"]);
 }
 
 describe("serverhandlingene: be om forslag (11.1, 11.2, 5.4)", () => {

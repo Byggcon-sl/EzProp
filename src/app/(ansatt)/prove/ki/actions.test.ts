@@ -227,6 +227,96 @@ describe("11.3 Zod: ugyldig inndata gir fast melding, ingen rad og intet kall", 
   });
 });
 
+// KI-køen leser bare den faste koden `reason`, aldri meldingen (docs/funksjoner/fase2a-ki-ko.md
+// Omfang 2, testplan avsnitt 6).
+describe("KI-kø: fast kode reason på feil", () => {
+  const NO_ACCESS = "Du har ikke tilgang til dette.";
+  const INVALID_TEXT = `Skriv en setning på høyst ${AI_FIELD_MAX_LENGTH} tegn.`;
+  const UNKNOWN = "Noe gikk galt. Teksten din er uendret. Prøv igjen.";
+
+  it("uten ansattrad (ingen tilgang fra økten): no_access og ingen rad", async () => {
+    session.actor = await createUser();
+    expect(await requestTrialSuggestion(requestInput())).toEqual({
+      kind: "failed",
+      message: NO_ACCESS,
+      reason: "no_access",
+    });
+    expect(await allAiRows()).toHaveLength(0);
+  });
+
+  it("uten report.edit (kontor): no_access og ingen rad", async () => {
+    await signedIn(["office"]);
+    expect(await requestTrialSuggestion(requestInput())).toEqual({
+      kind: "failed",
+      message: NO_ACCESS,
+      reason: "no_access",
+    });
+    expect(await allAiRows()).toHaveLength(0);
+  });
+
+  it.each<[string, Record<string, unknown>]>([
+    ["tom tekst", { text: "" }],
+    ["for lang tekst", { text: "a".repeat(AI_FIELD_MAX_LENGTH + 1) }],
+    ["ugyldig id", { requestId: "abc" }],
+  ])("Zod avviser (%s): invalid", async (_name, patch) => {
+    await signedIn();
+    expect(await requestTrialSuggestion(requestInput(patch))).toEqual({
+      kind: "failed",
+      message: INVALID_TEXT,
+      reason: "invalid",
+    });
+    expect(await allAiRows()).toHaveLength(0);
+  });
+
+  it("kjernen avviser forespørselen (tom etter vask): invalid med samme melding som før", async () => {
+    await signedIn();
+    expect(await requestTrialSuggestion(requestInput({ text: "\u0000" }))).toEqual({
+      kind: "failed",
+      message: UNKNOWN,
+      reason: "invalid",
+    });
+    expect(await allAiRows()).toHaveLength(0);
+  });
+
+  it("ukjent feil: unknown", async () => {
+    // Ingen aktør: test-økten kaster en vanlig feil, som ikke er omdirigering eller tilgangsfeil.
+    vi.spyOn(logger, "error").mockImplementation(() => {});
+    session.actor = null;
+    expect(await requestTrialSuggestion(requestInput())).toEqual({
+      kind: "failed",
+      message: UNKNOWN,
+      reason: "unknown",
+    });
+  });
+
+  it("avgjørelse og status: ugyldig id gir invalid", async () => {
+    await signedIn();
+    expect(await decideTrialSuggestion({ usageId: "abc", decision: "accepted" })).toMatchObject({
+      kind: "failed",
+      reason: "invalid",
+    });
+    expect(await readTrialStatus({ usageId: "abc" })).toMatchObject({
+      kind: "failed",
+      reason: "invalid",
+    });
+  });
+
+  it("avgjørelse og status uten ansattrad: no_access", async () => {
+    session.actor = await createUser();
+    const usageId = randomUUID();
+    expect(await decideTrialSuggestion({ usageId, decision: "accepted" })).toEqual({
+      kind: "failed",
+      message: NO_ACCESS,
+      reason: "no_access",
+    });
+    expect(await readTrialStatus({ usageId })).toEqual({
+      kind: "failed",
+      message: NO_ACCESS,
+      reason: "no_access",
+    });
+  });
+});
+
 describe("11.4 og 11.5 dobbelttrykk", () => {
   it("to kall med samme requestId samtidig gir én rad og ingen ekstra linje i audit_log", async () => {
     await signedIn();
@@ -400,7 +490,11 @@ describe("T-0001 tekst med tegn databasen ikke tar", () => {
     const spy = vi.spyOn(fakeAiProvider, "complete");
 
     const result = await requestTrialSuggestion(requestInput({ text: POISON }));
-    expect(result).toEqual({ kind: "failed", message: "Du har ikke tilgang til dette." });
+    expect(result).toEqual({
+      kind: "failed",
+      message: "Du har ikke tilgang til dette.",
+      reason: "no_access",
+    });
     expect(spy).not.toHaveBeenCalled();
     expect(await allAiRows()).toHaveLength(0);
 
@@ -414,6 +508,7 @@ describe("T-0001 tekst med tegn databasen ikke tar", () => {
     expect(await requestTrialSuggestion(requestInput({ text: POISON }))).toEqual({
       kind: "failed",
       message: "Du har ikke tilgang til dette.",
+      reason: "no_access",
     });
     expect(spy).not.toHaveBeenCalled();
     const rows = await allAiRows();
@@ -495,7 +590,11 @@ describe("6 tilgang per rolle (requestTrialSuggestion og decideTrialSuggestion)"
       expect(result.kind).toBe("suggestion");
       expect((await allAiRows()).length).toBe(before + 1);
     } else {
-      expect(result).toEqual({ kind: "failed", message: "Du har ikke tilgang til dette." });
+      expect(result).toEqual({
+        kind: "failed",
+        message: "Du har ikke tilgang til dette.",
+        reason: "no_access",
+      });
       expect((await allAiRows()).length).toBe(before);
       expect(spy).not.toHaveBeenCalled();
     }
@@ -511,7 +610,11 @@ describe("6 tilgang per rolle (requestTrialSuggestion og decideTrialSuggestion)"
       expect(undo).toMatchObject({ kind: "decided", logged: { status: "suggested" } });
       expect((await allAuditRows()).length).toBe(before + 2);
     } else {
-      expect(result).toEqual({ kind: "failed", message: "Du har ikke tilgang til dette." });
+      expect(result).toEqual({
+        kind: "failed",
+        message: "Du har ikke tilgang til dette.",
+        reason: "no_access",
+      });
       expect((await aiRow(rowId))?.status).toBe("suggested");
       expect((await allAuditRows()).length).toBe(before);
     }
@@ -522,6 +625,7 @@ describe("6 tilgang per rolle (requestTrialSuggestion og decideTrialSuggestion)"
     expect(await requestTrialSuggestion(requestInput())).toEqual({
       kind: "failed",
       message: "Du har ikke tilgang til dette.",
+      reason: "no_access",
     });
   });
 });
@@ -554,6 +658,7 @@ describe("T-0001 tekst med nulltegn på /prove/ki", () => {
     expect(await requestTrialSuggestion(requestInput({ text: POISON }))).toEqual({
       kind: "failed",
       message: "Du har ikke tilgang til dette.",
+      reason: "no_access",
     });
     expect(await allAiRows()).toHaveLength(0);
 
