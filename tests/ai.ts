@@ -195,6 +195,10 @@ export async function enableAi(
     status?: string;
     deletedAt?: Date | null;
     connection?: boolean;
+    /** `settings` på tilkoblingen (rå, forbi skjemaet). Standard `{}`. */
+    settings?: Record<string, unknown>;
+    /** Navnet på hemmeligheten. Standard ingen. */
+    secretRef?: string | null;
   } = {},
 ) {
   if (!("enabled" in options) || options.enabled !== undefined) {
@@ -206,6 +210,55 @@ export async function enableAi(
     provider: options.provider ?? "fake",
     status: options.status ?? "active",
     deletedAt: options.deletedAt ?? null,
+    settings: options.settings ?? {},
+    secretRef: options.secretRef ?? null,
+  });
+}
+
+/*
+ * Anthropic-tilkoblingen (docs/funksjoner/fase2a-ki-leverandor-testplan.md, «Avtale om
+ * signaturer»). Modellen er et merke og prisene er oppdiktet, så ingen ekte modell-id eller
+ * prisliste står i testene.
+ */
+export const ANTHROPIC_TEST_PRICING = {
+  inputPerMillion: 30,
+  outputPerMillion: 150,
+  currency: "NOK",
+} as const;
+
+/** Gyldige innstillinger for `anthropic`. `overrides` erstatter hele nøkler. */
+export function anthropicSettings(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    model: "MERKE-MODELL-K7Q",
+    features: ["language_polish"],
+    pricing: { ...ANTHROPIC_TEST_PRICING },
+    ...overrides,
+  };
+}
+
+/**
+ * Slår KI på med en `anthropic`-tilkobling, lagt inn rått (forbi skjemaet), med
+ * `secret_ref = ANTHROPIC_API_KEY`. Nøkkelen settes i testen med `vi.stubEnv`.
+ */
+export async function enableAnthropic(
+  organizationId: string,
+  options: {
+    settings?: Record<string, unknown>;
+    secretRef?: string | null;
+    status?: string;
+    deletedAt?: Date | null;
+    enabled?: unknown;
+  } = {},
+) {
+  return enableAi(organizationId, {
+    provider: "anthropic",
+    settings: options.settings ?? anthropicSettings(),
+    secretRef: "secretRef" in options ? (options.secretRef ?? null) : "ANTHROPIC_API_KEY",
+    status: options.status,
+    deletedAt: options.deletedAt,
+    ...("enabled" in options ? { enabled: options.enabled } : {}),
   });
 }
 

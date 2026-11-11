@@ -79,9 +79,10 @@ describe("KI-modulen, statiske kontroller (12)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it('12.6 PROVIDERS_BY_PORT.ai er nøyaktig ["fake"], og speech_to_text er tom', () => {
+  it("12.6 PROVIDERS_BY_PORT.ai er nøyaktig fake og anthropic, og speech_to_text er tom", () => {
     const providers = PROVIDERS_BY_PORT as Record<string, readonly string[]>;
-    expect([...providers.ai!]).toEqual(["fake"]);
+    // S8 (docs/funksjoner/fase2a-ki-leverandor.md Omfang 2): Anthropic er første ekte leverandør
+    expect([...providers.ai!].sort()).toEqual(["anthropic", "fake"]);
     expect([...providers.speech_to_text!]).toEqual([]);
   });
 
@@ -97,14 +98,20 @@ describe("KI-modulen, statiske kontroller (12)", () => {
     expect(source).not.toMatch(/export[^;]*\b(list\w*|count\w*|\w*ByEmployee|\w*Statistics)\b/);
   });
 
-  it("12.8 ingen SDK-er, ingen readSecret og ingen fetch i src/core/ai (ingen ekte leverandør ennå)", () => {
+  // Snevret inn til tillatt-liste i S8 (docs/funksjoner/fase2a-ki-leverandor-testplan.md S5):
+  // `fetch(` bare i Anthropic-adapteren, `readSecret` bare i valget av leverandør. Ingen SDK.
+  it("12.8 ingen SDK-er; readSecret og fetch bare i de to tillatte filene i src/core/ai", () => {
     const sdk =
       /from\s+["'](openai|@anthropic-ai\/[^"']*|@azure\/openai|@azure\/ai-[^"']*|@google\/[^"']*|@mistralai\/[^"']*|cohere-ai|ai|@ai-sdk\/[^"']*)["']/;
+    const fetchAllowed = new Set(["src/core/ai/providers/anthropic.ts"]);
+    const readSecretAllowed = new Set(["src/core/ai/provider-resolution.ts"]);
     for (const file of productFiles(aiDir)) {
       const text = read(file);
       expect(text, rel(file)).not.toMatch(sdk);
-      expect(text, rel(file)).not.toMatch(/\breadSecret\b/);
-      expect(text, rel(file)).not.toMatch(/\bfetch\s*\(/);
+      if (!readSecretAllowed.has(rel(file))) {
+        expect(text, rel(file)).not.toMatch(/\breadSecret\b/);
+      }
+      if (!fetchAllowed.has(rel(file))) expect(text, rel(file)).not.toMatch(/\bfetch\s*\(/);
     }
   });
 
