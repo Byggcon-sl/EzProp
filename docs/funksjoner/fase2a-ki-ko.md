@@ -2,7 +2,7 @@
 
 - **Fase:** 2a-1 KI-grunnmuren
 - **Modul:** kjerne (`src/core/ai/client`, ny klientdel) og prøvesiden `/prove/ki`
-- **Status:** klar til bygging etter forhåndsvurdering runde 1 (11.11.2026, branch `fase2a-ki-ko` fra `main`)
+- **Status:** klar til bygging etter forhåndsvurdering runde 1 (11.11.2026, branch `fase2a-ki-ko` fra `main`, main med evalueringssettet PR #141 og læringsløkken PR #142 flettet inn)
 - **Støtter hovedmål:**
   - **De ansatte:** takstmannen kan be om KI-hjelp også i kjelleren eller på hytta uten dekning. Han trykker én gang, skriver videre, og forslaget kommer når nettet er tilbake. På en delt iPad ser ingen en annens tekst.
   - **KI i bunnen:** KI virker likt med og uten nett. Køen er grunnmuren som tale til tekst, diktat og bilde til utkast på iPaden (fase 2b) bygger på. Alt går fortsatt uendret gjennom `requestSuggestion` på serveren, med vask, tilgang, KI av/på og logg.
