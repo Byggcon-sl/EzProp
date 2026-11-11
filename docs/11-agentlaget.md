@@ -59,6 +59,10 @@ Gjelder så lenge `docs/agenter/tilstand.md` sier «Autonom modus: på» (Ståle
 
 **Uenighet:** prosjektlederen avgjør og begrunner i PR-en. Fag, pris, personvern og nye funksjoner avgjøres av Ståle.
 
+## Raskere CI (Ståle 11.11.2026)
+
+Endrer en PR bare dokumenter som ingen test, kode eller skript leser (for eksempel planen, tilstandsfilen og erfaringer), og eventuelt versjonsnummeret, hopper CI over de tunge jobbene (`scripts/ci/kun-dokumenter.sh`). Da tar CI 1–2 minutter i stedet for rundt 25. Byggingen lagres mellom kjøringer i CI og i utrullingen. På `main` kjøres alltid alt, og nattløkken kjører hele pakken.
+
 ## Kvote
 
 - Ingen kostnadstak (Ståle 28.10.2026). Når kvoten er brukt opp, stopper kjøringen der den er, og neste kjøring fortsetter fra `tilstand.md`. Derfor commit og push etter hvert ferdige steg.
