@@ -3,6 +3,7 @@
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger. Filen holdes kort: bare det som gjelder nå. Historikken til og med 10.11.2026 står i `docs/agenter/arkiv/tilstand-til-2026-11-10.md` (der står også små funn fra tidligere leveranser, «liten oppgave (v)–(ad)»).
 
 **Autonom modus: på** (Ståle 04.11.2026, til han sier fra: «Jeg synes det fungerte så bra at du kan kjøre videre på autonom utvikling igjen»). Ingen varsler, ingen spørsmål, ingen «Venter på Ståle». Agentene avgjør selv ut fra researchen og fører beslutningene i `docs/09-apne-sporsmal.md` («Avgjort av agentene mens Ståle var borte», neste nummer etter det høyeste A-nummeret, nå A179; A180–A181 er satt av til retting av T-0001, A182–A185 til evalueringssettet). Det bare Ståle kan gjøre, samles under «Trenger Ståle når han er tilbake». Se «Autonom modus» i `CLAUDE.md`.
+**Autonom modus: på** (Ståle 04.11.2026, til han sier fra: «Jeg synes det fungerte så bra at du kan kjøre videre på autonom utvikling igjen»). Ingen varsler, ingen spørsmål, ingen «Venter på Ståle». Agentene avgjør selv ut fra researchen og fører beslutningene i `docs/09-apne-sporsmal.md` («Avgjort av agentene mens Ståle var borte», neste nummer etter det høyeste A-nummeret, nå A181). Det bare Ståle kan gjøre, samles under «Trenger Ståle når han er tilbake». Se «Autonom modus» i `CLAUDE.md`.
 
 **Hovedmål (Ståle 10.11.2026):** best mulig system for de ansatte, KI først og KI i bunnen, og færre reklamasjoner. 50 % mindre tid er ikke lenger hovedmål. Se `CLAUDE.md`.
 
@@ -23,6 +24,9 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 - **I arbeid: rett T-0001** (alvorlig funn, synkkøen stopper ved avvist endring; 11.11.2026 fra kl. 06 UTC, hovedløkken). Branch `rett-t0001-synkko` (oppgavekort og testplan i `docs/agenter/oppgaver/rett-t0001-synkko*.md`) overtas; A-numrene på branchen flyttes fra A169–A170 til A180–A181.
 - **I arbeid: Evalueringssett** (2a-1, 11.11.2026). Branch `fase2a-evalueringssett` fra `main`, oppgavekort `docs/funksjoner/fase2a-evalueringssett.md`, A182–A185 satt av. Tar med T-0032, deler av T-0034 og tre småfunn fra vasken (RegExp-feilmelding, telefongrupperinger, `PII_PLACEHOLDERS`). Roller: utvikler, testskriver, ki-ansvarlig, fagansvarlig, sikkerhet-personvern. Testplan `docs/funksjoner/fase2a-evalueringssett-testplan.md` er skrevet; byggingen er delt i fire biter (vask, felles ledetekst og v2, kjører og kommando, eksempelsett og dokumentasjon).
 - **Neste i 2a-1:** «KI-kø» og «Beslutningsnotat om KI-leverandør» (med Anthropic-adapteren).
+- **Levert: Vask før KI** (2a-1, PR #135 merget 11.11.2026, oppgavekort `docs/funksjoner/fase2a-vask-for-ki.md`, A169–A179, migrering `0027_ki-vask`, versjon 0.5.7; oppfølging med små rettinger i ADR 0006 og domenemodellen, versjon 0.5.8). Små funn som står (tas med «Evalueringssett», KI-kø eller 2a-2): feilmelding fra `new RegExp` i `compileKnownValues` kan inneholde kjente verdier og havne i loggen ved svært mange eller lange verdier; telefonmønsteret tar ikke grupperinger som «123 45678», «1234 56 78», «12 34 5678» eller smale/tynne mellomrom; «fnr 01.01.90 12345» tas som matrikkel og fødselsdatoen står igjen; adressemønsteret vasker bare siste ord i gatenavn på flere ord («Kongens gate 12»); navnet til den ansatte som ikke står i teamet, oppdragsnummeret og `orders.external_ref` vaskes ikke som kjente verdier; overvask av korte stedsnavn og etternavn som også er fagord («Ås», «Berg», matrikkel 1/2 mot brøken «1/2», ord i parentes i partsnavn); ingen grense for sperrede rader per ansatt i `ai_usage_log`; `insertBlockedRow` har egen kopi av `isOwnRequest` og `resultColumns`; `loadKnownValues` slår opp oppdraget en gang til; `PII_PLACEHOLDERS` brukes bare av testene. Restrisiko fra gjennomgangen: utenlandske numre, organisasjonsnummer med punktum og overvask av «1985 Bad».
+- **Levert: rett T-0001** (alvorlig funn, synkkøen stopper ved avvist endring; PR #139, versjon 0.5.10, A180–A181, oppgavekort og testplan i `docs/agenter/oppgaver/rett-t0001-synkko*.md`). Merget 11.11.2026 kl. 09:33 UTC. **PR #138 (`rett-t0001-giftig-endring`) retter det samme funnet og er overflødig:** den skal lukkes uten merge (innholdet er i main via #139). Små funn som står (tas med neste oppgave i synkområdet eller 2a-2): `stripValue` uten dybdegrense (dyp nesting gir 500 og stopper brukerens kø); `__proto__`-nøkkel i `stripValue` og `cleanData`; 400 fra proxy eller ugyldig JSON legger endring til side uten å kunne prøves igjen; alle fem prøveruter gir 400 for enhver feil i klasse 22; 500-grenen logger databasefeil med parametre; doble tester står igjen for `error-response`, synkruten, `apply-changes`, `trial-store` og `request-suggestion`; overflødig tom-sjekk i `requestSuggestion`; ustabil test i `photo-uploader.test.ts` linje 688.
+- **Neste i 2a-1:** «Evalueringssett», «KI-kø» og «Beslutningsnotat om KI-leverandør» (med Anthropic-adapteren).
 
 ## Åpne PR-er
 
@@ -44,7 +48,7 @@ Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4�
 
 Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 11.11.2026 på main 0b8e3b9 (første kjøring).
 
-- Åpne alvorlige feil: 1 (T-0001). Rettes før neste nye punkt i planen.
+- Åpne alvorlige feil: 0. T-0001 er rettet i PR #139 og prøves på nytt av testlaget i neste kjøring.
 - Åpne funn i alt: 35 (1 alvorlig, 16 middels, 18 små). Middels og små tas med neste oppgave i samme område. T-0004 og T-0005 (KI-kortet sletter tekst) og T-0003 (svar 59a) må tas før 2a-2.
 - **Til «Trenger Ståle» (prosjektlederen fører inn):** Spectora Advanced slås av før ca. 23.11.2026 (koster penger), og passordene til IVIT, Spectora og SmartTakst byttes. Se `docs/agenter/testlag/funn/T-0002-venter-pa-stale-mangler-spectora-og-passord.md`.
 
@@ -80,6 +84,8 @@ Ryddet i PR «Rydding fra nattløkken 2026-11-11» (versjon 0.5.5): patch-oppdat
 Ingen.
 
 ## Siste kjøring
+
+11.11.2026 kl. 05:49–09:45 UTC (hovedløkken, sesjon 01JqwntzFCH5MuHqxZ6HryN1): læringsløkken etter PR #135 (PR #136, med retting av en lekkasjetest som feilet tilfeldig når en id inneholdt «8099»). Overtok `rett-t0001-synkko` (A-numre flyttet til A180–A181) og fullførte T-0001 som PR #139. En annen kjøring arbeidet samtidig (PR #137, dobbel PR #138 for T-0001, branch `fase2a-evalueringssett`), så denne kjøringen startet ikke «Evalueringssett».
 
 10.11.2026 kl. 10:40–21:10 UTC (hovedløkken, sesjon 2psdm9): merget PR #119 (malmotoren), PR #123/#124 (ADR 0006) og PR #125 (læringsløkken for malmotoren). Arbeidsflyten for «KI-modulen og loggen» ble kjørt samtidig med en annen kjøring som merget samme punkt som PR #127; denne kjøringens utgave ligger uten PR på `arkiv-ki-modul-logg-parallell` og skal ikke merges. Lærdom i `erfaringer.md`. «Forslagsmønsteret» er i arbeid hos en annen kjøring (`fase2a-forslagsmonster`), så denne kjøringen startet ikke noe nytt. Sesjon: https://claude.ai/code/session_01JqwntzyKpHhA8USjreExSS
 

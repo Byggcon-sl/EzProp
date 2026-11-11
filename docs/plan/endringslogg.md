@@ -2,6 +2,7 @@
 
 Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og 09.11.2026).
 
+- **11.11.2026 (Prosjektlederen):** Det alvorlige funnet T-0001 (synkkøen) er rettet i PR #139. Statuslinjen for 2a oppdatert. Neste: «Evalueringssett» (2a-1).
 - **11.11.2026 (Prosjektlederen):** Små rettinger i ADR 0006 del 11 og domenemodellen etter «Vask før KI» (PR #137).
 - **11.11.2026 (Læringsløkken):** «Forslagsmønsteret» (PR #131) og «Vask før KI» (PR #135) flyttet fra planen til `docs/plan/levert.md`. Radene fra 10.11.2026 er flyttet fra tabellen hit, så nyeste står øverst (funn T-0021).
 - **10.11.2026 (Prosjektlederen):** «Forslagsmønsteret» (2a-1) levert som PR #131 (påbegynt av en kjøring som stanset uten PR, fullført og åpnet av hovedløkken). Flyttes til `docs/plan/levert.md` av læringsløkken.
