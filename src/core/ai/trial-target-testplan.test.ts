@@ -43,6 +43,7 @@ vi.mock("@/core/ai/provider-resolution", async (importOriginal) => {
           kind: "enabled",
           provider: providerSwap.override,
           model: providerSwap.override.model,
+          features: null,
         };
       }
       return original.resolveAiProvider(grant);
@@ -104,8 +105,8 @@ describe("vakten for ai_trial: leverandør × mål (2)", () => {
   const CASES: Case[] = [
     { name: "2.1 fake + ai_trial/text", setup: {}, target: "ai_trial", expected: "ok" },
     {
-      name: "2.2 rå tilkobling med annen leverandørkode (anthropic) + ai_trial",
-      setup: { provider: "anthropic" },
+      name: "2.2 rå tilkobling med annen leverandørkode (unknown_vendor) + ai_trial",
+      setup: { provider: "unknown_vendor" },
       target: "ai_trial",
       expected: "disabled",
     },
@@ -211,7 +212,7 @@ describe("vakten for ai_trial: leverandør × mål (2)", () => {
     const orgA = await createOrganization("Oppdiktet Takst A");
     const orgB = await createOrganization("Oppdiktet Takst B");
     await enableAi(orgA.id);
-    await enableAi(orgB.id, { provider: "anthropic" });
+    await enableAi(orgB.id, { provider: "unknown_vendor" });
     const inspectorB = await employeeWithGrant(orgB.id, ["inspector"], "Test Takstmann B");
     const spy = vi.spyOn(fakeAiProvider, "complete");
 

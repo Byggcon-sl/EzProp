@@ -1,6 +1,6 @@
 # ADR 0006 – KI i bunnen
 
-Dato: 10.11.2026. Status: vedtatt av agentene i autonom modus, bare dokumentasjon. Ingen KI kjører, og ingen ekte leverandør er valgt (S8). Oppgavekort: `docs/agenter/oppgaver/fase2a-adr-ki-i-bunnen.md`. Bygger på «KI i bunnen» i `docs/07-utviklingsplan.md`, `docs/05-domenemodell.md` 4.12, arkitekturregel 8 og 11 i `docs/06-arkitektur.md`, tilkoblingslaget (`src/core/integrations`), ADR 0004 («KI-forslag») og ADR 0005 (`readSecret`).
+Dato: 10.11.2026. Status: vedtatt av agentene i autonom modus, oppdatert 11.11.2026. Ståle har valgt Anthropic som KI-leverandør (10.11.2026, S8). Anthropic er første ekte adapter (`anthropic`, se del 2). Ingen ekte KI kjører før Ståle har lagt inn nøkkelen og forutsetningene i del 2 er oppfylt. Oppgavekort: `docs/agenter/oppgaver/fase2a-adr-ki-i-bunnen.md`. Bygger på «KI i bunnen» i `docs/07-utviklingsplan.md`, `docs/05-domenemodell.md` 4.12, arkitekturregel 8 og 11 i `docs/06-arkitektur.md`, tilkoblingslaget (`src/core/integrations`), ADR 0004 («KI-forslag») og ADR 0005 (`readSecret`).
 
 Støtter hovedmålene:
 
@@ -90,6 +90,7 @@ export type AiProviderResult =
 
 export interface AiProvider {
   readonly code: string; // fast kode fra PROVIDERS_BY_PORT.ai
+  readonly model: string; // modellen adapteren bruker
   complete(request: AiProviderRequest): Promise<AiProviderResult>;
 }
 ```
@@ -101,11 +102,47 @@ export interface AiProvider {
 3. Nøkkelen legges i nøkkelboksen og leses via `readSecret`.
 4. Admin lager en rad i `integration_connections` (`port = ai`, ny leverandør, `settings.model`, tom `settings.features`).
 5. Evalueringssettet kjøres på nytt for hver funksjon. Funksjoner som treffer godt nok, føres i `settings.features`.
-6. Den gamle raden settes til `disabled`.
+6. Det er én rad per port. Den gamle raden (for eksempel `fake`) slettes derfor mykt **før** den nye raden lages i punkt 4.
 
 Ingen endring i funksjonene, i modulene eller i `ai_usage_log`.
 
-**Forutsetninger før en ekte leverandør legges inn:** S8 er avgjort av Ståle, databehandleravtale er signert, behandlingen skjer i EU/EØS, leverandøren trener ikke på våre data og lagrer ingenting ut over kallet, og personvernerklæringen er oppdatert.
+**Forutsetninger før en ekte leverandør brukes** (presisert 11.11.2026): koden for adapteren kan ligge i main. Men før tilkoblingen `anthropic` lages for en organisasjon med ekte data og `ai.enabled` slås på, må dette være på plass: databehandleravtale er signert, veien for EU/EØS er valgt, trening og lagring er avklart, og personvernerklæringen er oppdatert. Dette avgjør Ståle (spørsmål 54–58 og 73 i `docs/09-apne-sporsmal.md`, `docs/beslutningsnotat-ki-leverandor.md`). Denne ADR-en sa «behandlingen skjer i EU/EØS» og «lagrer ingenting ut over kallet». Ved bruk av Anthropic direkte er ingen av delene avklart; enten avtales det, eller Ståle endrer forutsetningen. Agentene avgjør ikke dette.
+
+**Første ekte adapter: Anthropic (11.11.2026, oppgavekort `docs/funksjoner/fase2a-ki-leverandor.md`).**
+
+```ts
+// src/core/ai/providers/anthropic.ts
+export const ANTHROPIC_PROVIDER_CODE = "anthropic"; // fast kode
+export const ANTHROPIC_SECRET_REF = "ANTHROPIC_API_KEY";
+export type AiPricing = { inputPerMillion: number; outputPerMillion: number; currency: "NOK" };
+export type AnthropicProviderOptions = {
+  model: string;
+  apiKey: string;
+  pricing: AiPricing;
+  fetch?: typeof fetch;
+  timeoutMs?: number;
+};
+export function createAnthropicProvider(options: AnthropicProviderOptions): AiProvider;
+
+// src/core/ai/provider-resolution.ts
+export type ResolvedAiProvider =
+  | { kind: "enabled"; provider: AiProvider; model: string; features: readonly string[] | null } // null = alle (bare fake)
+  | { kind: "disabled" };
+```
+
+- **Konfigurasjonen er raden i `integration_connections`:** `port = ai`, `provider = anthropic`, `secret_ref = ANTHROPIC_API_KEY`, og `settings` med strengt skjema: `model` (påkrevd), `features` (kjente funksjonskoder, standard tom) og `pricing` (påkrevd, kroner per million tokens inn og ut). Ingen andre nøkler, og ingen adresse i `settings`. Ingen ny tabell og ingen migrering (`provider` er fri tekst).
+- **Modell-id står bare i `settings.model`.** Ingen modellnavn i kode, tester eller dokumenter; en test håndhever det.
+- **Adapteren bygges per tilkobling (fabrikk)**, ikke som et fast objekt. Den bruker innebygd `fetch`, uten SDK og uten ny avhengighet. Adressen er en fast konstant i adapteren. Ingen nye forsøk; KI-køen (del 10) tar dem.
+- **Låsene for `anthropic`:** `ai.enabled` er `true`, aktiv og ikke slettet tilkobling, `settings` består skjemaet, `secret_ref` er nøyaktig `ANTHROPIC_API_KEY`, og `readSecret` gir en ikke-tom nøkkel. Mangler én, er svaret `disabled` uten kall og uten rad. `readSecret` kalles bare i `provider-resolution.ts`, `fetch` bare i `providers/anthropic.ts`.
+- **Pris (A196):** `ai_usage_log.cost` er `not null`. Uten `pricing` er KI derfor av, ikke kostnad 0. Ingen pristabell og ingen valutaomregning i koden.
+- **`settings.features` (A194):** sjekkes i `requestSuggestion` mellom sperren og vasken. Funksjon som ikke står i listen: `disabled`, ingen rad, intet kall. `fake` har ingen liste (`features: null`) og tar alt.
+- **Lekkasjesjekken (A195)** kjøres på den ferdige, vaskede ledeteksten før kallet til en ekte leverandør. Treff gir `blocked`-rad uten kall. Evalueringskjøreren bruker samme funksjon.
+- **«Ekte leverandør» er alt som ikke har `code === "fake"`.** `ai_trial`, `answer` og fritekst uten oppdrag gir `blocked` mot `anthropic`.
+- **Avkortet svar gir `unknown`**, aldri et forslag. En halv setning skal ikke havne i en rapport.
+- **Kjent begrensning (A193):** nøkkelen `ANTHROPIC_API_KEY` er felles for alle organisasjoner. Det holder mens bare Byggcon bruker systemet, og må løses (nøkkel per organisasjon) før selskap nummer to får KI.
+- **EU/EØS (A197):** adapteren går mot Anthropic direkte. Velger Ståle en vei med behandling i EU-region, lages en ny adapter med ny fast kode bak samme port. Funksjonene endres ikke.
+
+**Forkastet for adapteren:** leverandørens SDK (ny avhengighet uten behov; ett kall med `fetch` holder); adresse i `settings` (da kunne en feil eller ondsinnet innstilling sende ledetekst og nøkkel til en annen mottaker); pristabell per modell i koden (krever modellnavn i koden og blir fort feil); kostnad 0 eller tom når pris mangler (gir feil tall i det stille); valg av leverandør fra miljøvariabel (A160); nye forsøk i adapteren (dobbel kostnad, og køen gjør det allerede); nøkkel per organisasjon nå (ikke behov før selskap nummer to).
 
 ### 3. Falsk leverandør (`fake`)
 
@@ -114,7 +151,7 @@ Ingen endring i funksjonene, i modulene eller i `ai_usage_log`.
 - Leverandøren kommer **bare** fra en aktiv rad i `integration_connections`, i alle miljøer. Uten aktiv tilkobling, eller med en leverandørkode koden ikke kjenner, er KI av. Ingen reserve til `fake` ut fra `NODE_ENV` (A160, én vei å teste).
 - Seed (`pnpm db:seed:testoppdrag`) lager en rad med `fake` og slår KI på i prøveorganisasjonen, som finnes i utvikling, CI og testmiljøet. Testene lager raden med en fabrikk. Den ekte organisasjonen får aldri KI slått på av seed.
 - **En ekte leverandør velges aldri fra miljøvariabler** (ulikt `resolveEmailSender`). Da kan ikke en feil innstilling i miljøet sende data ut.
-- Bare `fake` kommer i `PROVIDERS_BY_PORT.ai` før S8. Den legges inn i punktet «KI-modulen og loggen», ikke nå.
+- `PROVIDERS_BY_PORT.ai` har `fake` og, fra 11.11.2026, `anthropic`. Seed lager aldri en tilkobling med `anthropic`.
 
 ### 4. Forslag
 
@@ -267,7 +304,7 @@ Rettet 11.11.2026 (A186–A191, oppgavekort `docs/funksjoner/fase2a-ki-ko.md`). 
 ### 11. KI av/på
 
 - Nøkkelen `ai.enabled` i `organizations.settings` (tabellen `settings` er ikke bygget). Standard er av.
-- **To låser** for en ekte leverandør: `ai.enabled` er på, **og** organisasjonen har en aktiv tilkobling på porten `ai`.
+- **To låser** for en ekte leverandør: `ai.enabled` er på, **og** organisasjonen har en aktiv tilkobling på porten `ai`. For `anthropic` kommer i tillegg gyldige `settings`, riktig `secret_ref` og en nøkkel som finnes (del 2).
 - Bare admin endrer bryteren og tilkoblingen (`organization.manage`). Begge endringene logges i `audit_log`.
 - **Alt virker uten KI.** Er KI av, gir `requestSuggestion` svaret `disabled`, det lages ingen rad, og skjermene viser ingen KI-knapper.
 - **«KI er av» og «sperret» er to ting.** `disabled` betyr at organisasjonen ikke bruker KI, og gir ingen rad. `blocked` betyr at KI er på, men at akkurat denne forespørselen ikke kan sendes til leverandøren (del 5 og 6); den gir en rad. Skjermen viser samme tekst for begge («KI er av.», endret under «Vask før KI», PR #135). Forslag som allerede finnes, kan fortsatt avgjøres og angres.

@@ -58,6 +58,12 @@ Etter at de fire er lagt inn og utrullingen har gått: prøv én innlogging i te
 3. I testmiljøet med de fire secretene: e-posten sendes via Microsoft 365 fra postboksen i `MAIL_FROM`.
 4. Senere kan en tilkobling i tabellen `integration_connections` overstyre dette for én organisasjon.
 
+Valgfri secret for KI. Tom eller mangler betyr KI av. Nøkkelen alene slår ikke på noe: en organisasjon må i tillegg ha tilkoblingen `anthropic` og KI på i innstillingene. Bruk den bare med testdata til databehandleravtalen er på plass (se `docs/beslutningsnotat-ki-leverandor.md`). Bruken koster penger per kall.
+
+| Navn | Hva du legger inn |
+|---|---|
+| `ANTHROPIC_API_KEY` | API-nøkkelen fra Byggcons konto hos Anthropic (console.anthropic.com → API keys) |
+
 **Variabler** (fanen Variables):
 
 | Navn | Hva du legger inn |
@@ -146,7 +152,7 @@ PowerSync og ElectricSQL er fjernet 10.11.2026 (ADR 0004, egenbygd synk er valgt
 
 ## Nøkkelboks for hemmeligheter
 
-**Hva dette er:** en nøkkelboks (Azure Key Vault) i ressursgruppen. I testmiljøet heter den `kv-ezprop-test` (navnet er alltid `kv-ezprop-<miljø>`). Når den er på, ligger databasepassordet (`DATABASE_URL`), innloggingsnøkkelen (`BETTER_AUTH_SECRET`) og klienthemmeligheten for e-post (`MS_GRAPH_CLIENT_SECRET`) i boksen, ikke i klartekst i appinnstillingene. Appinnstillingene viser da bare en henvisning til boksen. Appen får en egen identitet som bare kan lese fra boksen. Se ADR 0005.
+**Hva dette er:** en nøkkelboks (Azure Key Vault) i ressursgruppen. I testmiljøet heter den `kv-ezprop-test` (navnet er alltid `kv-ezprop-<miljø>`). Når den er på, ligger databasepassordet (`DATABASE_URL`), innloggingsnøkkelen (`BETTER_AUTH_SECRET`), klienthemmeligheten for e-post (`MS_GRAPH_CLIENT_SECRET`) og nøkkelen til KI-leverandøren (`ANTHROPIC_API_KEY`, når den er lagt inn) i boksen, ikke i klartekst i appinnstillingene. Appinnstillingene viser da bare en henvisning til boksen. Appen får en egen identitet som bare kan lese fra boksen. Se ADR 0005.
 
 Du legger fortsatt verdiene inn i GitHub-secrets, som før. Utrullingen legger dem i boksen. Du trenger ikke legge dem inn noe annet sted.
 
@@ -161,7 +167,7 @@ Boksen står **av** til du slår den på. En merge til `main` lager ingenting ny
 
 ### Sjekke
 
-1. **Se etter grønt hakemerke:** i Azure-portalen, åpne App Service (`app-ezprop-test`) → Configuration (Environment variables). `DATABASE_URL`, `BETTER_AUTH_SECRET` og `MS_GRAPH_CLIENT_SECRET` skal ha et grønt hakemerke og teksten «Key vault reference».
+1. **Se etter grønt hakemerke:** i Azure-portalen, åpne App Service (`app-ezprop-test`) → Configuration (Environment variables). `DATABASE_URL`, `BETTER_AUTH_SECRET`, `MS_GRAPH_CLIENT_SECRET` og `ANTHROPIC_API_KEY` (de to siste når de er lagt inn) skal ha et grønt hakemerke og teksten «Key vault reference».
 2. **Er de røde rett etter første utrulling:** start appen på nytt (knappen «Restart» på App Service). Tilgangen til boksen lages etter appen, og App Service henter verdiene når appen starter. Etter omstart skal hakemerket være grønt.
 3. **Logg inn** i testmiljøet og se at det virker.
 

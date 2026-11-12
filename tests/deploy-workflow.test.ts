@@ -169,6 +169,7 @@ const ALLOWED_SECRETS = [
   "MS_GRAPH_CLIENT_ID",
   "MS_GRAPH_CLIENT_SECRET",
   "MAIL_FROM",
+  "ANTHROPIC_API_KEY",
 ];
 const REQUIRED_SECRETS = ALLOWED_SECRETS.slice(0, 5);
 const ALLOWED_VARS = [
@@ -264,7 +265,7 @@ describe("utrullingsarbeidsflyten (deploy-azure.yml)", () => {
 
   it("ingen hemmeligheter som verdier", () => {
     const pattern =
-      /(POSTGRES_ADMIN_PASSWORD|MS_GRAPH_CLIENT_SECRET|AZURE_CLIENT_ID|AZURE_TENANT_ID|AZURE_SUBSCRIPTION_ID)\s*:\s*[^$\s]/;
+      /(POSTGRES_ADMIN_PASSWORD|MS_GRAPH_CLIENT_SECRET|ANTHROPIC_API_KEY|AZURE_CLIENT_ID|AZURE_TENANT_ID|AZURE_SUBSCRIPTION_ID)\s*:\s*[^$\s]/;
     expect(lines.filter((line) => pattern.test(line))).toEqual([]);
   });
 
@@ -706,12 +707,14 @@ const KEY_VAULT_SETTINGS: Record<string, string> = {
   DATABASE_URL: "databaseUrl",
   BETTER_AUTH_SECRET: "betterAuthSecret",
   MS_GRAPH_CLIENT_SECRET: "msGraphClientSecret",
+  ANTHROPIC_API_KEY: "anthropicApiKey",
 };
 
 const KEY_VAULT_SECRETS: Record<string, string> = {
   "database-url": "databaseUrl",
   "better-auth-secret": "betterAuthSecret",
   "ms-graph-client-secret": "msGraphClientSecret",
+  "anthropic-api-key": "anthropicApiKey",
 };
 
 const NOT_THROUGH_KEY_VAULT = [
@@ -742,10 +745,10 @@ describe("nøkkelboksen i infrastrukturen (main.bicep)", () => {
   });
 
   it("2. alle Key Vault-ressurser har betingelsen enableKeyVault", () => {
-    expect(kv).toHaveLength(5);
+    expect(kv).toHaveLength(6);
     expect(kv.filter((r) => r.type === "Microsoft.KeyVault/vaults")).toHaveLength(1);
     expect(kv.filter((r) => r.type === "Microsoft.KeyVault/vaults/accessPolicies")).toHaveLength(1);
-    expect(secrets).toHaveLength(3);
+    expect(secrets).toHaveLength(4);
     for (const resource of kv) {
       expect(resource.lines[0], resource.symbol).toMatch(/=\s*if\s*\(\s*enableKeyVault\b/);
     }
@@ -797,7 +800,7 @@ describe("nøkkelboksen i infrastrukturen (main.bicep)", () => {
     }
   });
 
-  it("5. de tre hemmelighetene går gjennom boksen når bryteren er på", () => {
+  it("5. de fire hemmelighetene går gjennom boksen når bryteren er på", () => {
     for (const name of Object.keys(KEY_VAULT_SETTINGS)) {
       const expression = appSettingExpression(bicep, name);
       expect(expression, name).toBeDefined();
@@ -895,6 +898,25 @@ describe("nøkkelboksen i infrastrukturen (main.bicep)", () => {
     }
   });
 
+  it("10b. nøkkelen til KI-leverandøren havner bare i boksen når bryteren er på og nøkkelen ikke er tom", () => {
+    const block = secretBlock("anthropic-api-key");
+    expect(block, "anthropic-api-key").toBeDefined();
+    const condition = block!.lines[0]!;
+    expect(condition).toMatch(/=\s*if\s*\(\s*enableKeyVault\s*&&/);
+    // Tom verdi er lov (KI av): betingelsen sjekker at nøkkelen er satt, direkte eller via en var
+    const guard = /if\s*\((.*)\)\s*\{?\s*$/.exec(condition)?.[1] ?? "";
+    const names = guard.match(/[A-Za-z_]\w*/g) ?? [];
+    const mentionsKey = names.some(
+      (name) =>
+        name === "anthropicApiKey" ||
+        bicep
+          .split("\n")
+          .some((line) => new RegExp(`^var\\s+${name}\\s*=.*anthropicApiKey`).test(line)),
+    );
+    expect(mentionsKey, condition).toBe(true);
+    expect(bicep).toMatch(/empty\(\s*anthropicApiKey\s*\)/);
+  });
+
   it("10. ingen hemmelighet i boksen uten bryteren og e-post", () => {
     const graph = secretBlock("ms-graph-client-secret");
     expect(graph).toBeDefined();
@@ -905,6 +927,10 @@ describe("nøkkelboksen i infrastrukturen (main.bicep)", () => {
       expect(block!.lines[0], name).toMatch(/=\s*if\s*\(\s*enableKeyVault\s*\)/);
       expect(block!.lines[0], name).not.toContain("emailConfigured");
     }
+    // KI-nøkkelen havner bare i boksen når den er gitt (tom betyr KI av)
+    const ai = secretBlock("anthropic-api-key");
+    expect(ai).toBeDefined();
+    expect(ai!.lines[0]).toMatch(/=\s*if\s*\(\s*enableKeyVault\s*&&\s*aiConfigured\s*\)/);
   });
 
   it("11. ingen egen kodevei og ingen ny avhengighet", () => {
@@ -1078,5 +1104,131 @@ describe("dokumentasjon for nøkkelboksen", () => {
       ),
       "A-rad om Key Vault",
     ).toBe(true);
+  });
+});
+
+/*
+ * Nøkkelen til KI-leverandøren i testmiljøet (docs/funksjoner/fase2a-ki-leverandor-testplan.md
+ * 4.7, kortet Omfang 15). Samme steder og samme måte som MS_GRAPH_CLIENT_SECRET. Tom verdi er lov
+ * og betyr KI av. Ingenting i Azure slås på av dette alene.
+ */
+describe("KI-nøkkelen i testmiljøet (4.7)", () => {
+  const workflow = read(WORKFLOW_PATH);
+  const lines = workflow.split("\n");
+  const bicep = read(BICEP_PATH);
+  const bicepLines = bicep.split("\n");
+
+  it("arbeidsflyten henter nøkkelen fra GitHub-secrets i samme steg som e-posthemmeligheten", () => {
+    const stepLine = codeLine(lines, /^\s*-\s+name:\s*Infrastruktur \(Bicep\)/);
+    expect(stepLine).toBeGreaterThan(-1);
+    const step = stepOf(lines, stepLine);
+    const env = subBlock(step, "env");
+    expect(env).toMatch(
+      /^\s*MS_GRAPH_CLIENT_SECRET:\s*\$\{\{\s*secrets\.MS_GRAPH_CLIENT_SECRET\s*\}\}\s*$/m,
+    );
+    expect(env).toMatch(/^\s*ANTHROPIC_API_KEY:\s*\$\{\{\s*secrets\.ANTHROPIC_API_KEY\s*\}\}\s*$/m);
+    // Ingen andre steder i arbeidsflyten (ikke i bygget, migreringen eller seed)
+    const mentions = lineIndexes(lines, /ANTHROPIC_API_KEY/).filter((i) => !isComment(lines[i]!));
+    expect(mentions.length).toBeGreaterThan(0);
+    for (const index of mentions) expect(stepOf(lines, index)).toEqual(step);
+    expect(ALLOWED_SECRETS).toContain("ANTHROPIC_API_KEY");
+    expect(REQUIRED_SECRETS).not.toContain("ANTHROPIC_API_KEY");
+  });
+
+  it("nøkkelen sendes som Bicep-parameter både ved validering og utrulling, også når den er tom", () => {
+    for (const marker of ["az deployment group validate", "az deployment group create"]) {
+      const sources = parameterSources(workflow, commandBlock(workflow, marker));
+      expect(sources, marker).toContain('"msGraphClientSecret=$MS_GRAPH_CLIENT_SECRET"');
+      expect(sources, marker).toContain('"anthropicApiKey=$ANTHROPIC_API_KEY"');
+    }
+    // Ingen stopp når den mangler: tom betyr KI av
+    expect(workflow).not.toMatch(/-z\s+"?\$\{?ANTHROPIC_API_KEY/);
+    const echoes = lines.filter((line) => /\becho\b/.test(line));
+    for (const line of echoes) expect(line).not.toContain("ANTHROPIC_API_KEY");
+  });
+
+  it("main.bicep har en sikker parameter uten standardverdi", () => {
+    const index = codeLine(bicepLines, /^\s*param\s+anthropicApiKey\s/);
+    expect(index).toBeGreaterThan(-1);
+    expect(bicepLines[index]!.trim()).toBe("param anthropicApiKey string");
+    expect(bicepLines[index - 1]!.trim()).toBe("@secure()");
+    expect(secureParamNames(bicepLines)).toContain("anthropicApiKey");
+  });
+
+  it("appinnstillingen settes bare når nøkkelen er gitt, og går gjennom boksen når den er på", () => {
+    expect(bicep).toMatch(/^var aiConfigured = !empty\(anthropicApiKey\)$/m);
+    const definition = varDefinition(bicep, "aiAppSettings");
+    expect(definition).toBeDefined();
+    expect(definition!).toMatch(/^aiConfigured\s*\?/);
+    expect(definition!).toMatch(/:\s*\[\s*\]$/);
+    expect(bicep).toMatch(/appSettings:\s*concat\([^)]*\baiAppSettings\b[^)]*\)/);
+    const expression = appSettingExpression(bicep, "ANTHROPIC_API_KEY");
+    expect(expression).toBeDefined();
+    expect(expression!).toContain("kvAnthropicApiKey!.properties.secretUri");
+    expect(expression!).toMatch(/enableKeyVault\s*\?[\s\S]*:\s*anthropicApiKey\s*\}?\s*$/);
+    // Nøkkelen ligger ikke i baseAppSettings (der ville den blitt satt også når den er tom)
+    expect(varDefinition(bicep, "baseAppSettings")).not.toContain("ANTHROPIC_API_KEY");
+  });
+
+  it("driftsdokumentet har nøkkelen i tabellen og i avsnittet om nøkkelboksen", () => {
+    const doc = read(DRIFT_DOC_PATH);
+    expect(doc.split("\n").some((line) => /^\|\s*`ANTHROPIC_API_KEY`\s*\|/.test(line))).toBe(true);
+    const vaultSection = doc.slice(doc.indexOf("## Nøkkelboks for hemmeligheter"));
+    expect(vaultSection.split("\n").slice(0, 4).join("\n")).toContain("ANTHROPIC_API_KEY");
+  });
+});
+
+/*
+ * Nøkkelen til KI-leverandøren i testmiljøet (docs/funksjoner/fase2a-ki-leverandor-testplan.md
+ * 4.7, kortet Omfang 15): samme steder som MS_GRAPH_CLIENT_SECRET, som hemmelighet, og tom verdi er
+ * lov (betyr KI av). Ingen verdi i repoet.
+ *
+ * Støtter hovedmål: KI i bunnen (Ståle legger inn nøkkelen som secret, uten kodeendring).
+ */
+describe("ANTHROPIC_API_KEY i utrullingen og infrastrukturen", () => {
+  const workflow = read(WORKFLOW_PATH);
+  const lines = workflow.split("\n");
+  const bicep = read(BICEP_PATH);
+  const bicepLines = bicep.split("\n");
+
+  it("arbeidsflyten henter den fra secrets i samme steg som MS_GRAPH_CLIENT_SECRET", () => {
+    const stepLine = codeLine(lines, /^\s*-\s+name:\s*Infrastruktur \(Bicep\)/);
+    expect(stepLine).toBeGreaterThan(-1);
+    const env = subBlock(stepOf(lines, stepLine), "env");
+    expect(env).toMatch(
+      /^\s*MS_GRAPH_CLIENT_SECRET:\s*\$\{\{\s*secrets\.MS_GRAPH_CLIENT_SECRET\s*\}\}\s*$/m,
+    );
+    expect(env).toMatch(/^\s*ANTHROPIC_API_KEY:\s*\$\{\{\s*secrets\.ANTHROPIC_API_KEY\s*\}\}\s*$/m);
+  });
+
+  it("den sendes som parameter til både validate og create", () => {
+    for (const marker of ["az deployment group validate", "az deployment group create"]) {
+      const command = commandBlock(workflow, marker);
+      expect(command, marker).not.toBe("");
+      expect(parameterSources(workflow, command), marker).toMatch(
+        /"anthropicApiKey=\$\{?ANTHROPIC_API_KEY\}?"/,
+      );
+    }
+  });
+
+  it("den skrives aldri ut", () => {
+    const echoes = lines.filter((line) => !isComment(line) && /\becho\b/.test(line));
+    for (const line of echoes) expect(line).not.toContain("ANTHROPIC_API_KEY");
+  });
+
+  it("Bicep: @secure()-parameter, uten annen standardverdi enn tom", () => {
+    const index = bicepLines.findIndex((line) => /^\s*param\s+anthropicApiKey\s/.test(line));
+    expect(index, "param anthropicApiKey").toBeGreaterThan(-1);
+    expect(bicepLines[index - 1]?.trim()).toBe("@secure()");
+    expect(bicepLines[index]).toMatch(/^\s*param\s+anthropicApiKey\s+string\s*(=\s*''\s*)?$/);
+  });
+
+  it("Bicep: appinnstillingen går gjennom boksen når bryteren er på, ellers parameteren som før", () => {
+    const expression = appSettingExpression(bicep, "ANTHROPIC_API_KEY");
+    expect(expression).toBeDefined();
+    expect(expression).toContain("enableKeyVault");
+    expect(expression).toContain("@Microsoft.KeyVault(SecretUri=");
+    expect(expression).toContain(".properties.secretUri");
+    expect(expression).toMatch(/:\s*anthropicApiKey\s*\}?\s*$/);
   });
 });

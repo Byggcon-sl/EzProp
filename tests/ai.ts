@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { expect } from "vitest";
 import { AccessDeniedError, requireOrganizationAccess, type EmployeeGrant } from "@/core/access";
 import * as aiModule from "@/core/ai";
+import { ANTHROPIC_SECRET_REF } from "@/core/ai/providers/anthropic";
 import * as fakeModule from "@/core/ai/providers/fake";
 import { db } from "@/db/client";
 import { uuidv7 } from "@/shared/lib/uuid";
@@ -13,6 +14,7 @@ import {
   createUser,
   type TestAiUsageRow,
 } from "./factories";
+import { TEST_MODEL } from "./fake-anthropic";
 
 /*
  * Testhjelpere for KI-modulen (docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 0).
@@ -186,6 +188,10 @@ export async function removeOrganizationSetting(organizationId: string, key: str
  * Slår KI på eller av i organisasjonen (testplanen avsnitt 0): setter `ai.enabled` (standard
  * `true`) og lager tilkoblingen på porten `ai` (standard aktiv `fake`). `connection: false` lager
  * ingen tilkobling. Gir tilkoblingen tilbake.
+ *
+ * Raden skrives rått, forbi skjemaet og sjekken av `secret_ref` i `createConnection`, så låsene
+ * i `resolveAiProvider` kan prøves med ugyldige innstillinger (låsetabellen, testplanen for
+ * KI-leverandør 3.1). `settings` og `secretRef` står som de er gitt.
  */
 export async function enableAi(
   organizationId: string,
@@ -195,6 +201,8 @@ export async function enableAi(
     status?: string;
     deletedAt?: Date | null;
     connection?: boolean;
+    settings?: Record<string, unknown>;
+    secretRef?: string | null;
   } = {},
 ) {
   if (!("enabled" in options) || options.enabled !== undefined) {
@@ -206,6 +214,36 @@ export async function enableAi(
     provider: options.provider ?? "fake",
     status: options.status ?? "active",
     deletedAt: options.deletedAt ?? null,
+    settings: options.settings ?? {},
+    secretRef: options.secretRef ?? null,
+  });
+}
+
+/** Gyldige, oppdiktede innstillinger for `anthropic`. `overrides` erstatter nøkler på toppnivå. */
+export function anthropicSettings(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    model: TEST_MODEL,
+    features: ["language_polish"],
+    pricing: { inputPerMillion: 30, outputPerMillion: 150, currency: "NOK" },
+    ...overrides,
+  };
+}
+
+/**
+ * KI på med en `anthropic`-tilkobling (rå rad, se `enableAi`). Standard: gyldige innstillinger og
+ * `secret_ref = ANTHROPIC_API_KEY`. Nøkkelen settes ikke her; testen bruker `vi.stubEnv`.
+ */
+export function enableAnthropic(
+  organizationId: string,
+  options: Parameters<typeof enableAi>[1] = {},
+) {
+  return enableAi(organizationId, {
+    provider: "anthropic",
+    settings: anthropicSettings(),
+    secretRef: ANTHROPIC_SECRET_REF,
+    ...options,
   });
 }
 

@@ -1,6 +1,8 @@
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 import { requireOrganizationAccess, type Actor } from "@/core/access";
+import { getFeatureDefinition } from "@/core/ai/features";
+import { ANTHROPIC_PROVIDER_CODE, ANTHROPIC_SECRET_REF } from "@/core/ai/providers/anthropic";
 import { recordAuditEvent } from "@/core/audit";
 import { isUniqueViolation } from "@/core/organization/errors";
 import { db } from "@/db/client";
@@ -48,7 +50,21 @@ export type UpdateConnectionInput = {
 };
 
 /** Leverandører som krever navnet på en hemmelighet. */
-const PROVIDERS_REQUIRING_SECRET = ["microsoft365"];
+const PROVIDERS_REQUIRING_SECRET = ["microsoft365", ANTHROPIC_PROVIDER_CODE];
+
+/**
+ * Leverandører som bare kan peke på én bestemt hemmelighet. `anthropic` leser bare
+ * `ANTHROPIC_API_KEY` (docs/funksjoner/fase2a-ki-leverandor.md Omfang 3, A193).
+ */
+const FIXED_SECRET_REFS: Readonly<Record<string, string>> = {
+  [ANTHROPIC_PROVIDER_CODE]: ANTHROPIC_SECRET_REF,
+};
+
+/** Om navnet på hemmeligheten er lov for leverandøren. Uten fast navn er alt lov her. */
+function secretRefAllowedFor(provider: string, secretRef: string | null): boolean {
+  if (!Object.prototype.hasOwnProperty.call(FIXED_SECRET_REFS, provider)) return true;
+  return secretRef === FIXED_SECRET_REFS[provider];
+}
 
 /** `settings` for `microsoft365`. E-postporten får skjemaet via `settingsSchemaFor`. */
 const microsoft365SettingsSchema = z
@@ -61,11 +77,33 @@ const microsoft365SettingsSchema = z
 const emptySettingsSchema = z.object({}).strict();
 
 /**
+ * `settings` for `anthropic` (docs/funksjoner/fase2a-ki-leverandor.md Omfang 3). Strengt: ingen
+ * andre nøkler, ingen adresse. `model` er modell-id-en (står bare her, aldri i koden). `features`
+ * er funksjonene som er slått på mot leverandøren; tom liste betyr at alt er av (A194). `pricing`
+ * er påkrevd, lagt inn av admin; mangler den, er KI av (A196). Samme skjema brukes når
+ * leverandøren velges (`src/core/ai/provider-resolution.ts`).
+ */
+export const anthropicSettingsSchema = z
+  .object({
+    model: z.string().regex(/^[A-Za-z0-9._:-]{1,100}$/),
+    features: z.array(z.string().refine((code) => getFeatureDefinition(code) !== null)).default([]),
+    pricing: z
+      .object({
+        inputPerMillion: z.number().min(0),
+        outputPerMillion: z.number().min(0),
+        currency: z.literal("NOK"),
+      })
+      .strict(),
+  })
+  .strict();
+
+/**
  * Zod-skjemaet for `settings` til leverandøren, eller `null` for en ukjent leverandør.
  * Brukes også når e-postporten lager en sender fra raden; med et kjent leverandørnavn gir
  * overlastene det konkrete skjemaet, så `parsed.data` får typen fra skjemaet uten cast.
  */
 export function settingsSchemaFor(provider: "microsoft365"): typeof microsoft365SettingsSchema;
+export function settingsSchemaFor(provider: "anthropic"): typeof anthropicSettingsSchema;
 export function settingsSchemaFor(
   provider: "server_log" | "dev_mailbox" | "fake",
 ): typeof emptySettingsSchema;
@@ -74,6 +112,8 @@ export function settingsSchemaFor(provider: string): z.ZodType<Record<string, un
   switch (provider) {
     case "microsoft365":
       return microsoft365SettingsSchema;
+    case ANTHROPIC_PROVIDER_CODE:
+      return anthropicSettingsSchema;
     case "dev_mailbox":
     case "server_log":
     case "fake":
@@ -196,6 +236,7 @@ export async function createConnection(
   if (PROVIDERS_REQUIRING_SECRET.includes(provider) && !secretRef) {
     throw new ConnectionValidationError("Tilkoblingen må ha navnet på en hemmelighet.");
   }
+  if (!secretRefAllowedFor(provider, secretRef)) throw wrongSecretRefError();
   const settings = validateSettings(provider, parsed.data.settings ?? {});
 
   try {
@@ -244,6 +285,10 @@ function duplicateError() {
   return new ConnectionValidationError("Det finnes alt en tilkobling for denne porten.");
 }
 
+function wrongSecretRefError() {
+  return new ConnectionValidationError("Leverandøren kan ikke bruke denne hemmeligheten.");
+}
+
 /**
  * Endrer status (`active`/`disabled`), navnet på hemmeligheten eller `settings`. Port og
  * leverandør kan ikke endres. `last_error` og `last_ok_at` røres ikke. Ingen endring gir ingen
@@ -278,6 +323,9 @@ export async function updateConnection(
       patch.settings === undefined ? undefined : validateSettings(before.provider, patch.settings);
     if (patch.secretRef === null && PROVIDERS_REQUIRING_SECRET.includes(before.provider)) {
       throw new ConnectionValidationError("Tilkoblingen må ha navnet på en hemmelighet.");
+    }
+    if (patch.secretRef !== undefined && !secretRefAllowedFor(before.provider, patch.secretRef)) {
+      throw wrongSecretRefError();
     }
 
     const changes: Record<string, unknown> = {};

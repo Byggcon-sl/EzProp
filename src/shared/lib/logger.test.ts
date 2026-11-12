@@ -412,3 +412,74 @@ describe("loggeren vasker telefon i nye grupperinger (E6.7)", () => {
     );
   });
 });
+
+describe("loggeren skjuler KI-nøkkelen (testplan KI-leverandør 1.4)", () => {
+  it("1.4 KI-nøkkelen skjules i melding og felt, men vanlig «sk-»-tekst står (A4)", () => {
+    const key = "sk-ant-api03-OPPDIKTET-TESTNOKKEL-K7Q";
+    const line = formatLogLine("error", `Kallet feilet med ${key}`, {
+      note: `nøkkel=${key}`,
+      nested: { list: [key] },
+      error: new Error(`Avvist: ${key}`),
+    });
+    const text = JSON.stringify(line);
+    expect(text).not.toContain(key);
+    expect(text).not.toContain("OPPDIKTET-TESTNOKKEL");
+    expect(line.msg).toBe(`Kallet feilet med ${REDACTED}`);
+    expect(line.note).toBe(`nøkkel=${REDACTED}`);
+    for (const plain of [
+      "sk-modell",
+      "sk-ant",
+      "sk-ant-kort",
+      "risk-ant-abcdefghij",
+      "Bruk sk-tekst her",
+    ]) {
+      expect(scrubText(plain)).toBe(plain);
+    }
+  });
+});
+
+/*
+ * Nøkkelformatet til KI-leverandøren skjules (docs/funksjoner/fase2a-ki-leverandor-testplan.md
+ * 1.4, kortet Omfang 8). Ekstra sikring: adapteren logger aldri nøkkelen, men skulle den havne i
+ * en melding eller et felt, skal loggen likevel ikke ha den. Nøkkelen er tydelig oppdiktet.
+ *
+ * Støtter hovedmål: KI i bunnen (nøkkelen lekker aldri, så ekte KI kan slås på trygt).
+ */
+describe("logger: nøkkelformatet til KI-leverandøren (A4)", () => {
+  const KEY = "sk-ant-api03-OPPDIKTET-TESTNOKKEL-K7Q";
+
+  it("1.4.1 nøkkelen skjules i meldingen", () => {
+    const line = formatLogLine("error", `Kallet feilet med ${KEY} i teksten`);
+    expect(JSON.stringify(line)).not.toContain(KEY);
+    expect(JSON.stringify(line)).not.toContain("OPPDIKTET-TESTNOKKEL");
+    expect(scrubText(`nøkkel=${KEY};`)).not.toContain(KEY);
+  });
+
+  it("1.4.1 nøkkelen skjules i felt med vanlige navn, i lister og i feil", () => {
+    const line = formatLogLine("warn", "KI-kallet ga feil", {
+      note: `bruker ${KEY}`,
+      list: ["a", KEY],
+      nested: { value: KEY },
+      error: new Error(`401 med ${KEY}`),
+    });
+    const text = JSON.stringify(line);
+    expect(text).not.toContain(KEY);
+    expect(text).not.toContain("OPPDIKTET-TESTNOKKEL");
+  });
+
+  it("1.4.1 nøkkelen skjules også med anførselstegn, kolon, parentes og punktum rundt", () => {
+    for (const text of [`"${KEY}"`, `x-api-key:${KEY}`, `(${KEY})`, `${KEY}.`]) {
+      expect(scrubText(text), text).not.toContain("OPPDIKTET-TESTNOKKEL");
+    }
+  });
+
+  it.each([
+    "sk-",
+    "Bruk sk-ord i teksten",
+    "risk-vurdering av taket",
+    "sk-ant er et prefiks",
+    "Disk-plass",
+  ])("1.4.1 vanlig tekst skjules ikke (mønsteret er ikke grådig): %s", (text) => {
+    expect(scrubText(text)).toBe(text);
+  });
+});

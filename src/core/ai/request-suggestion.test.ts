@@ -91,7 +91,12 @@ vi.mock("./provider-resolution", async (importOriginal) => {
     ...actual,
     resolveAiProvider: async (grant: EmployeeGrant) =>
       swap.provider
-        ? { kind: "enabled" as const, provider: swap.provider, model: swap.provider.model }
+        ? {
+            kind: "enabled" as const,
+            provider: swap.provider,
+            model: swap.provider.model,
+            features: null,
+          }
         : actual.resolveAiProvider(grant),
   };
 });
