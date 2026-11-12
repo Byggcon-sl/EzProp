@@ -350,6 +350,7 @@ describe("regler bad: seed av malen med reglene", () => {
       [
         "wet_room.hole_drilling_not_done",
         "wet_room.hole_moisture_over_limit",
+        "wet_room.hole_no_elevated_moisture",
         "wet_room.membrane_before_2000",
         "wet_room.membrane_past_lifespan",
       ].sort(),
