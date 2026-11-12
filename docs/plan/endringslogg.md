@@ -74,3 +74,4 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 12.11.2026 | Nytt strekkmål 6: KI-briller med en KI-assistent på befaringen. Live diktat i fase 2b bygges slik at inngangen kan byttes. Ingenting bygges for brillene nå. | Ståle i chat 12.11.2026 |
 | 12.11.2026 | Live diktat skjer i det vanlige befaringsbildet (ingen egen dikteringsskjerm). Strekkmål 6: Ståle sier personvern er ok som retning; lovpålagte rutiner lages før bruk. | Ståle i chat 12.11.2026 |
 | 12.11.2026 | Byggcon-profilen levert (PR #176) og flyttet til `docs/plan/levert.md`. | Hovedløkken |
+| 12.11.2026 | Microsoft-innlogging levert (PR #166) og flyttet til `docs/plan/levert.md`. | Hovedløkken |
