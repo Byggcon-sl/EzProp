@@ -129,6 +129,12 @@ Alle punktene i 2a-1 er levert (12.11.2026) og står i `docs/plan/levert.md`.
 
 **Ferdig når:** En prøvefunksjon (språkvask av en setning) går hele veien mot den falske leverandøren: forslaget vises, takstmannen godtar eller avviser, og loggen viser det.
 
+### Prioritert av Ståle 12.11.2026: Microsoft-innlogging
+
+Tas **før neste punkt i 2a-2**. Ståle i chat 12.11.2026: «tror vi skal sette opp logg inn via microsoft 365 kontoene vi har, epost knyttet til @byggcon.no - så kommer vi rett inn uten kode. Vi kan ha kode i bakhånd, i tilfelle microsoft innloggingen feiler».
+
+- [ ] **Logg inn med Microsoft 365** (Byggcons kontoer, `@byggcon.no`): knappen «Logg inn med Microsoft» er hovedvalget på innloggingssiden, og de ansatte kommer rett inn uten kode. Bare Byggcons Microsoft-katalog (én tenant) godtas. Bare personer som allerede er registrert som ansatt i EzProp, slipper inn (ingen ny bruker lages av innloggingen), og e-postadressen matches uten hensyn til store og små bokstaver. **Engangskoden blir reserven** («Logg inn med kode i stedet»), slik at admin aldri stenges ute (regel 11) hvis Microsoft-innloggingen feiler. Verdiene `MS_LOGIN_TENANT_ID`, `MS_LOGIN_CLIENT_ID` og `MS_LOGIN_CLIENT_SECRET` legges inn av Ståle som secrets i GitHub (oppskrift i `docs/drift/testmiljo-azure.md`), og sendes til appen av utrullingen. Uten dem vises bare engangskoden, som i dag. Tilbakeadressen er `https://app-ezprop-test.azurewebsites.net/api/auth/callback/microsoft`. Tofaktor kommer da fra Microsoft-kontoen (gjelder mål 11 for den som logger inn med Microsoft). ADR og test for tilgang, tenant og at ukjente adresser avvises.
+
 ### 2a-2 Smal vei: ett våtrom fra kontrollpunkt til PDF
 
 Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se og godkjenne fag og utseende tidlig, og feil i grunnstrukturen oppdages før de blir dyre.
@@ -375,7 +381,7 @@ Krever lite eller ingen kode, og kan gjøres av agentene når som helst. Hver en
 - **Kalender:** kobling til Outlook begge veier, kjøreplan og forslag til takstmann.
 - **Arbeidsflaten:** mørk visning og større tekst, oppgaver på mobil og daglig oppsummering på e-post, følgefraser når én frase krysses av.
 - **Kalibrering per takstmann** (etter betaen, med enighet fra de ansatte), og krav om sidemannskontroll per rapport.
-- **Intune** for styring av iPadene, og Microsoft-innlogging for ansatte.
+- **Intune** for styring av iPadene. (Microsoft-innlogging for ansatte er flyttet til fase 2a, Ståle 12.11.2026.)
 - **Uttrekk fra IVIT** av gamle rapporter og bilder, slik at de kan søkes fram.
 - **Fra NS 3600:** utkast til eier før endelig rapport, kompetansebeskrivelse, og lyd og støy.
 - **Egne kontrollpunkter og regler per avtale** med oppdragsgiver.
