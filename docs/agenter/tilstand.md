@@ -7,7 +7,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 **Hovedmål (Ståle 10.11.2026):** best mulig system for de ansatte, KI først og KI i bunnen, og færre reklamasjoner. 50 % mindre tid er ikke lenger hovedmål. Se `CLAUDE.md`.
 
 **Ståle 10.11.2026 (i chat):**
-- S1, S2 og S3 er gjort: testmiljøet i Azure virker, prøvene på ekte iPad er kjørt, ADR 0004 (egenbygd synk) er godkjent, og fagråd runde 1 er godkjent. De tre fagspørsmålene er besvart (spørsmål 59 i `docs/09-apne-sporsmal.md`, ført inn i PR #128).
+- S1, S2 og S3 er gjort: testmiljøet i Azure virker (bekreftet 12.11.2026 med første vellykkede utrulling til `rg-ezprop-test2`, database i Norway East), prøvene på ekte iPad er kjørt, ADR 0004 (egenbygd synk) er godkjent, og fagråd runde 1 er godkjent. De tre fagspørsmålene er besvart (spørsmål 59 i `docs/09-apne-sporsmal.md`, ført inn i PR #128).
 - KI-leverandør er Anthropic, og Ståle har API-nøkkel. Anthropic-adapteren bygges bak KI-porten (ADR 0006) og kobles til secret `ANTHROPIC_API_KEY` via `readSecret`. Beslutningsnotatet (siste punkt i 2a-1) må si om behandlingen kan skje i EU/EØS.
 
 ## Gjeldende fase
