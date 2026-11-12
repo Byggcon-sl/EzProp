@@ -13,6 +13,16 @@ import {
 import { AI_ENABLED_SETTING_KEY, requestSuggestion as requestSuggestionService } from "@/core/ai";
 import { createOrder as createOrderService } from "@/core/orders";
 import { findEmployeeGrant } from "@/core/organization";
+import {
+  TemplateNotFoundError,
+  createDraftVersion,
+  createTemplateFamily,
+  getTemplateVersion,
+  isSameTemplateContent,
+  listTemplateFamilies,
+  parseTemplateDocument,
+  type TemplateDocumentInput,
+} from "@/core/templates";
 import { db } from "@/db/client";
 import { brand } from "@/shared/config/brand";
 import {
@@ -20,6 +30,7 @@ import {
   activeAdminCount,
   createEmployee,
   createIntegrationConnection,
+  createOffice,
   createOrder,
   createOrganization,
   createUser,
@@ -33,7 +44,13 @@ import {
   validRequest,
 } from "../../../tests/ai";
 import { runSeed } from "./run";
-import { ensureSampleAi, findSampleOrders, runSampleSeed } from "./sample-assignments";
+import {
+  ensureSampleAi,
+  ensureSampleTemplate,
+  findSampleOrders,
+  prepareSampleSeed,
+  runSampleSeed,
+} from "./sample-assignments";
 import { SAMPLE_ASSIGNMENTS, SAMPLE_INSPECTOR } from "./sample-assignments.data";
 
 /*
@@ -113,6 +130,19 @@ const ORG_TABLES = [
   "events",
   "audit_log",
   "files",
+  // Systemmalen med badet (fase2a-mal-bad-testplan.md 3.9)
+  "template_families",
+  "template_versions",
+  "template_sections",
+  "template_elements",
+  "template_element_options",
+  "checkpoints",
+  "deviation_questions",
+  "outcomes",
+  "standard_measures",
+  "rules",
+  "rule_conditions",
+  "rule_test_cases",
 ] as const;
 /** Tabellene over med `updated_at` og `deleted_at` (alle unntatt `number_sequences`). */
 const ORG_TABLES_WITH_TIMESTAMPS = ORG_TABLES.filter((table) => table !== "number_sequences");
@@ -1651,5 +1681,373 @@ describe("ensureSampleAi sjekker merket selv (9)", () => {
     expect(result).toEqual({ setting: "skipped", connection: "skipped" });
     expect(await organizationRow(byggcon)).toEqual(before);
     expect(await devAiConnections(byggcon)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Systemmalen med badet i prøveorganisasjonen (docs/funksjoner/fase2a-mal-bad-testplan.md avsnitt 3)
+//
+// Støtter hovedmål: de ansatte (badet finnes på testoppdragene, så regler, skjerm og PDF kan
+// prøves), KI i bunnen (samme faste koder hver gang) og færre reklamasjoner (publiserte versjoner
+// endres aldri, og tekstene er merket utkast til fagrådet har godkjent dem). Byggcon er urørt.
+// ---------------------------------------------------------------------------------------------
+
+const TEMPLATE_FAMILY_NAME = "Tilstandsrapport bolig";
+
+/** Malfilen lastes dynamisk, så resten av filen kjører selv om den mangler. */
+async function wetRoomDocument(): Promise<TemplateDocumentInput> {
+  const { wetRoomTemplate } = await import("./templates/wet-room");
+  return wetRoomTemplate;
+}
+
+async function parsedWetRoom() {
+  const result = parseTemplateDocument(await wetRoomDocument());
+  if (!result.success) throw new Error(`malen for badet er ugyldig: ${result.issues.length} feil`);
+  return result.document;
+}
+
+async function sampleFamilies() {
+  const orgId = await sampleOrgId();
+  return listTemplateFamilies(await adminActor(), orgId);
+}
+
+const TEMPLATE_TABLES = [
+  "template_families",
+  "template_versions",
+  "template_sections",
+  "template_elements",
+  "template_element_options",
+  "checkpoints",
+  "deviation_questions",
+  "outcomes",
+  "standard_measures",
+  "rules",
+  "rule_conditions",
+  "rule_test_cases",
+] as const;
+
+/** Antall rader i alle maltabellene i organisasjonen (også slettede). */
+async function templateRowCount(organizationId: string): Promise<number> {
+  let total = 0;
+  for (const table of TEMPLATE_TABLES) {
+    total += await count(
+      sql`select count(*)::int as n from ${sql.identifier(table)} where organization_id = ${organizationId}`,
+    );
+  }
+  return total;
+}
+
+type TextRow = { id: string; text_status: string; deleted_at: string | null };
+
+/** Utfall og tiltak (aktive og slettede) i én versjon, med tekststatus og slettemerke. */
+async function textRowsOfVersion(versionId: string) {
+  const outcomes = await rows<TextRow>(sql`
+    select o.id, o.text_status, o.deleted_at::text as deleted_at from outcomes o
+    join deviation_questions q on q.id = o.deviation_question_id
+    join checkpoints c on c.id = q.checkpoint_id where c.version_id = ${versionId} order by o.id`);
+  const measures = await rows<TextRow>(sql`
+    select m.id, m.text_status, m.deleted_at::text as deleted_at from standard_measures m
+    join outcomes o on o.id = m.outcome_id
+    join deviation_questions q on q.id = o.deviation_question_id
+    join checkpoints c on c.id = q.checkpoint_id where c.version_id = ${versionId} order by m.id`);
+  return { outcomes, measures };
+}
+
+async function auditCount(organizationId: string): Promise<number> {
+  return count(
+    sql`select count(*)::int as n from audit_log where organization_id = ${organizationId}`,
+  );
+}
+
+async function eventCount(organizationId: string): Promise<number> {
+  return count(
+    sql`select count(*)::int as n from events where organization_id = ${organizationId}`,
+  );
+}
+
+const CHANGED_DEVIATION = "Oppdiktet endret avvikstekst for testen.";
+
+async function changedWetRoom(): Promise<TemplateDocumentInput> {
+  const changed = structuredClone(await wetRoomDocument());
+  changed.outcomes![0]!.deviation_text = CHANGED_DEVIATION;
+  return changed;
+}
+
+describe("seed-steget: systemmalen med badet (mal for bad 3)", () => {
+  beforeEach(async () => {
+    await runSeed(env);
+  });
+
+  it("3.1 seed_creates_published_v1: én familie, én publisert versjon, åtte punkter, alt utkast", async () => {
+    const summary = await runSampleSeed(env, TEST_NOW);
+    expect((summary as unknown as { template?: unknown }).template).toBe("created");
+    const families = await sampleFamilies();
+    expect(families).toHaveLength(1);
+    const family = families[0]!;
+    expect(family).toMatchObject({
+      name: TEMPLATE_FAMILY_NAME,
+      kind: "system",
+      reportType: "condition_report",
+    });
+    expect(family.versions.map((v) => [v.versionNumber, v.status])).toEqual([[1, "published"]]);
+
+    const orgId = await sampleOrgId();
+    const { document } = await getTemplateVersion(
+      await adminActor(),
+      orgId,
+      family.versions[0]!.id,
+    );
+    expect(document.checkpoints).toHaveLength(8);
+
+    const statuses = await rows<{ t: string; text_status: string; n: number }>(sql`
+      select 'outcomes' as t, text_status, count(*)::int as n from outcomes
+        where organization_id = ${orgId} group by text_status
+      union all
+      select 'standard_measures' as t, text_status, count(*)::int as n from standard_measures
+        where organization_id = ${orgId} group by text_status`);
+    for (const row of statuses) expect(row.text_status, row.t).toBe("draft");
+    expect(statuses.map((r) => r.t).sort()).toEqual(["outcomes", "standard_measures"]);
+  });
+
+  it("3.2 seed_matches_template_file: innholdet i databasen er det samme som malfilen", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    const [family] = await sampleFamilies();
+    const { document } = await getTemplateVersion(
+      await adminActor(),
+      orgId,
+      family!.versions[0]!.id,
+    );
+    expect(isSameTemplateContent(document, await parsedWetRoom())).toBe(true);
+  });
+
+  it("3.3 seed_twice_no_new_version: andre kjøring gir existing, ingen ny versjon, ikke noe utkast, ingen loggrader", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const { context } = await prepareSampleSeed(env, TEST_NOW);
+    const orgId = context.organizationId;
+    const auditBefore = await auditCount(orgId);
+    const eventsBefore = await eventCount(orgId);
+    const rowsBefore = await templateRowCount(orgId);
+    const updatedBefore = await updatedAtSnapshot(orgId);
+
+    await expect(ensureSampleTemplate(context)).resolves.toBe("existing");
+    const summary = await runSampleSeed(env, TEST_NOW);
+    expect((summary as unknown as { template?: unknown }).template).toBe("existing");
+
+    const families = await sampleFamilies();
+    expect(families).toHaveLength(1);
+    expect(families[0]!.versions.map((v) => v.status)).toEqual(["published"]);
+    expect(await templateRowCount(orgId)).toBe(rowsBefore);
+    expect(await auditCount(orgId)).toBe(auditBefore);
+    expect(await eventCount(orgId)).toBe(eventsBefore);
+    expect(await updatedAtSnapshot(orgId)).toEqual(updatedBefore);
+  });
+
+  it("3.4 seed_changed_document_new_version: endret avvikstekst gir v2 published, v1 retired og urørt", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const { context } = await prepareSampleSeed(env, TEST_NOW);
+    const orgId = context.organizationId;
+    const admin = await adminActor();
+    const [family] = await sampleFamilies();
+    const v1 = family!.versions[0]!.id;
+    const v1Document = (await getTemplateVersion(admin, orgId, v1)).document;
+    const v1Rows = await textRowsOfVersion(v1);
+    const fileBefore = JSON.stringify(await wetRoomDocument());
+
+    await expect(ensureSampleTemplate(context, await changedWetRoom())).resolves.toBe("created");
+
+    const [after] = await sampleFamilies();
+    expect(after!.versions.map((v) => [v.versionNumber, v.status])).toEqual([
+      [2, "published"],
+      [1, "retired"],
+    ]);
+    const v2 = after!.versions[0]!.id;
+    const v2Document = (await getTemplateVersion(admin, orgId, v2)).document;
+    expect(JSON.stringify(v2Document)).toContain(CHANGED_DEVIATION);
+    // v1 er urørt: samme innhold, samme rader, ingenting slettet
+    expect((await getTemplateVersion(admin, orgId, v1)).document).toEqual(v1Document);
+    expect(await textRowsOfVersion(v1)).toEqual(v1Rows);
+    for (const row of [...v1Rows.outcomes, ...v1Rows.measures]) expect(row.deleted_at).toBeNull();
+    // Malfilen er ikke endret av testen
+    expect(JSON.stringify(await wetRoomDocument())).toBe(fileBefore);
+  });
+
+  it("3.5 seed_existing_draft: utkast med samme innhold står, og seed gir existing uten feil", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const { context } = await prepareSampleSeed(env, TEST_NOW);
+    const orgId = context.organizationId;
+    const [family] = await sampleFamilies();
+    const { versionId: draft } = await createDraftVersion(await adminActor(), orgId, family!.id);
+    const rowsBefore = await templateRowCount(orgId);
+
+    await expect(ensureSampleTemplate(context)).resolves.toBe("existing");
+    const [after] = await sampleFamilies();
+    expect(after!.versions.map((v) => [v.id, v.status])).toEqual([
+      [draft, "draft"],
+      [family!.versions[0]!.id, "published"],
+    ]);
+    expect(await templateRowCount(orgId)).toBe(rowsBefore);
+  });
+
+  it("3.5 seed_existing_draft: utkast og endret innhold bruker utkastet som finnes (ingen v3)", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const { context } = await prepareSampleSeed(env, TEST_NOW);
+    const orgId = context.organizationId;
+    const [family] = await sampleFamilies();
+    const v1 = family!.versions[0]!.id;
+    const { versionId: draft } = await createDraftVersion(await adminActor(), orgId, family!.id);
+
+    await expect(ensureSampleTemplate(context, await changedWetRoom())).resolves.toBe("created");
+
+    const [after] = await sampleFamilies();
+    expect(after!.versions.map((v) => [v.id, v.versionNumber, v.status])).toEqual([
+      [draft, 2, "published"],
+      [v1, 1, "retired"],
+    ]);
+  });
+
+  it("3.5 seed_existing_draft: familie med tomt utkast v1 (avbrutt kjøring) publiserer v1", async () => {
+    const { context } = await prepareSampleSeed(env, TEST_NOW);
+    const orgId = context.organizationId;
+    const { familyId, versionId } = await createTemplateFamily(await adminActor(), orgId, {
+      name: TEMPLATE_FAMILY_NAME,
+      kind: "system",
+      report_type: "condition_report",
+    });
+
+    await expect(ensureSampleTemplate(context)).resolves.toBe("created");
+    const families = await sampleFamilies();
+    expect(families.map((f) => f.id)).toEqual([familyId]);
+    expect(families[0]!.versions.map((v) => [v.id, v.status])).toEqual([[versionId, "published"]]);
+    const { document } = await getTemplateVersion(await adminActor(), orgId, versionId);
+    expect(isSameTemplateContent(document, await parsedWetRoom())).toBe(true);
+  });
+
+  it.each<{ name: string; settings: Record<string, unknown> | "none" }>([
+    { name: "nøkkelen sampleData mangler", settings: "none" },
+    { name: "sampleData = false", settings: { sampleData: false } },
+    { name: 'sampleData = "true" (tekst)', settings: { sampleData: "true" } },
+    { name: "sampleData = 1", settings: { sampleData: 1 } },
+  ])("3.6 seed_only_sample_org: $name gir skipped og ingen malrader", async ({ settings }) => {
+    const organization = await createOrganization("Oppdiktet Malfirma");
+    const value = JSON.stringify(settings === "none" ? {} : settings);
+    await db.execute(
+      sql`update organizations set settings = ${value}::jsonb where id = ${organization.id}`,
+    );
+    const admin = await createUser({ name: "Test Admin Mal" });
+    await createEmployee(admin, organization.id, ["admin"]);
+    const inspector = await createEmployee(
+      await createUser({ name: "Test Takstmann Mal" }),
+      organization.id,
+      ["inspector"],
+    );
+    const office = await createOffice(organization.id);
+    const auditBefore = await auditCount(organization.id);
+
+    await expect(
+      ensureSampleTemplate({
+        actor: admin,
+        organizationId: organization.id,
+        officeId: office.id,
+        inspectorEmployeeId: inspector.id,
+        now: TEST_NOW,
+      }),
+    ).resolves.toBe("skipped");
+    expect(await templateRowCount(organization.id)).toBe(0);
+    expect(await auditCount(organization.id)).toBe(auditBefore);
+  });
+
+  it("3.6 seed_only_sample_org: Byggcon har ingen malfamilie etter db:seed:testoppdrag, heller ikke kalt direkte", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const byggcon = await byggconId();
+    expect(await templateRowCount(byggcon)).toBe(0);
+    expect(await listTemplateFamilies(await adminActor(), byggcon)).toEqual([]);
+
+    await expect(
+      ensureSampleTemplate({
+        actor: await adminActor(),
+        organizationId: byggcon,
+        officeId: "",
+        inspectorEmployeeId: "",
+        now: TEST_NOW,
+      }),
+    ).resolves.toBe("skipped");
+    expect(await templateRowCount(byggcon)).toBe(0);
+  });
+
+  it("3.7 seed_family_not_visible_in_other_org: annen organisasjon ser ingen familie og får nei på versjonen", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    const [family] = await sampleFamilies();
+    const versionId = family!.versions[0]!.id;
+
+    const other = await createOrganization("Oppdiktet Annet Takstfirma");
+    const otherAdmin = await createUser({ name: "Test Admin Annen" });
+    await createEmployee(otherAdmin, other.id, ["admin"]);
+
+    expect(await listTemplateFamilies(otherAdmin, other.id)).toEqual([]);
+    await expect(getTemplateVersion(otherAdmin, other.id, versionId)).rejects.toThrow(
+      TemplateNotFoundError,
+    );
+    await expect(getTemplateVersion(otherAdmin, orgId, versionId)).rejects.toThrow(
+      AccessDeniedError,
+    );
+    await expect(listTemplateFamilies(otherAdmin, orgId)).rejects.toThrow(AccessDeniedError);
+    expect(await templateRowCount(other.id)).toBe(0);
+  });
+
+  it("3.8 seed_uses_services: created_by og published_by er admin i prøveorganisasjonen, og revisjonsloggen har radene", async () => {
+    await runSampleSeed(env, TEST_NOW);
+    const orgId = await sampleOrgId();
+    const adminEmployeeId = await employeeIdOf(await adminActor(), orgId);
+    const [family] = await sampleFamilies();
+    const versionId = family!.versions[0]!.id;
+
+    const [familyRow] = await rows<{ created_by: string | null }>(
+      sql`select created_by from template_families where id = ${family!.id}`,
+    );
+    expect(familyRow!.created_by).toBe(adminEmployeeId);
+    const [versionRow] = await rows<{ created_by: string | null; published_by: string | null }>(
+      sql`select created_by, published_by::text as published_by from template_versions where id = ${versionId}`,
+    );
+    expect(versionRow!.published_by).toBe(adminEmployeeId);
+    expect(versionRow!.created_by).toBe(adminEmployeeId);
+
+    const audit = await rows<{ actor_employee_id: string | null }>(sql`
+      select actor_employee_id::text as actor_employee_id from audit_log
+      where organization_id = ${orgId}
+        and (entity_id::text = ${versionId} or changes->>'versionId' = ${versionId})`);
+    // Laget, lagret og publisert
+    expect(audit.length).toBeGreaterThanOrEqual(3);
+    for (const row of audit) expect(row.actor_employee_id).toBe(adminEmployeeId);
+  });
+
+  it("3.8 loggen fra seed har ingen tekst fra malen", async () => {
+    const log = await runAndLog();
+    const document = await parsedWetRoom();
+    const texts = [
+      ...document.outcomes.flatMap((o) => [o.deviation_text, o.default_consequence_text]),
+      ...document.checkpoints.map((c) => c.name),
+    ].filter((t): t is string => t !== null);
+    for (const line of log) {
+      for (const text of texts) expect(line.includes(text), line).toBe(false);
+    }
+  });
+
+  it("kildeteksten: ensureSampleTemplate sjekker merket med samme vilkår som ensureSampleAi og har ingen rå spørring", () => {
+    const source = readFileSync(join(__dirname, "sample-assignments.ts"), "utf8");
+    const start = source.indexOf("export async function ensureSampleTemplate");
+    expect(start, "ensureSampleTemplate finnes").toBeGreaterThan(-1);
+    const body = source.slice(start, source.indexOf("\n}\n", start));
+    expect(body).toMatch(/isSampleOrganization\(/);
+    expect(body, "ingen egen spørring mot databasen i seed").not.toMatch(
+      /\bdb\s*\.\s*(select|insert|update|delete|execute)/,
+    );
+    expect(body).not.toMatch(/organizations\.settings|sampleData/);
+
+    const helperStart = source.indexOf("export async function isSampleOrganization");
+    expect(helperStart, "isSampleOrganization finnes").toBeGreaterThan(-1);
+    const helper = source.slice(helperStart, source.indexOf("\n}\n", helperStart));
+    expect(helper).toMatch(/IS_SAMPLE_ORGANIZATION/);
   });
 });
