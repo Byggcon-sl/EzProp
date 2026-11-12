@@ -560,6 +560,8 @@ const KEY_SNAPSHOT = [
   "rule wet_room.membrane_before_2000",
   "rule wet_room.hole_moisture_over_limit",
   "rule wet_room.hole_drilling_not_done",
+  // Ny i fase2a-svar-regler-bygninger (F1)
+  "rule wet_room.hole_no_elevated_moisture",
   "lifespan_set wet_room_membrane_lifespans",
   "lifespan membrane.liquid_membrane.without",
   "lifespan membrane.liquid_membrane.with",
@@ -1097,6 +1099,7 @@ const PAST_LIFESPAN = "wet_room.membrane_past_lifespan";
 const BEFORE_2000 = "wet_room.membrane_before_2000";
 const MOISTURE = "wet_room.hole_moisture_over_limit";
 const NOT_DRILLED = "wet_room.hole_drilling_not_done";
+const NO_MOISTURE = "wet_room.hole_no_elevated_moisture";
 
 /** Reglene i kortet (Omfang 4): formål, kontrollpunkt og foreslått utfall. */
 const RULE_TABLE = [
@@ -1131,6 +1134,7 @@ const RULE_TABLE = [
     },
   },
   { key: NOT_DRILLED, purpose: "suggest_tgiu", checkpoint: "wet_room.adjacent", outcome: null },
+  { key: NO_MOISTURE, purpose: "suggest_tg0", checkpoint: "wet_room.adjacent", outcome: null },
 ] as const;
 
 const PAST_LIFESPAN_QUESTION = "wet_room.membrane_drain.membrane_past_lifespan";
@@ -1140,7 +1144,7 @@ function conditionsOf(doc: TemplateDocument, ruleKey: string) {
 }
 
 describe("3 reglene i badmalen (datatest)", () => {
-  it("3.1 four_rules: nøyaktig de fire reglene i kortet, med formål, punkt, kilde og melding", () => {
+  it("3.1 five_rules: nøyaktig de fem reglene i kortene, med formål, punkt, kilde og melding", () => {
     const doc = parsedTemplate();
     expect(sorted(doc.rules.map((r) => r.key))).toEqual(sorted(RULE_TABLE.map((r) => r.key)));
     for (const wanted of RULE_TABLE) {
@@ -1196,7 +1200,8 @@ describe("3 reglene i badmalen (datatest)", () => {
       expect(copiedRun(message), r.key).toBeNull();
       // Kilden står i bakgrunnen, ikke i meldingen
       expect(message.includes(r.source_ref ?? "(ingen kilde)"), r.key).toBe(false);
-      expect(message, r.key).not.toMatch(/TG\s*0/i);
+      // TG0 nevnes bare i meldingen til regelen som foreslår TG0
+      if (r.purpose !== "suggest_tg0") expect(message, r.key).not.toMatch(/TG\s*0/i);
     }
     const moisture = doc.rules.find((r) => r.key === MOISTURE)!;
     expect(moisture.message).toMatch(/treverk/i);
@@ -1313,11 +1318,14 @@ describe("3 reglene i badmalen (datatest)", () => {
     expect(JSON.stringify(doc.rule_conditions)).not.toContain("wet_room.building_code");
   });
 
-  it("3.9 no_tg0: ingen regel peker på et utfall uten TG, og ingen testsak forventer TG0", () => {
+  it("3.9 tg0_only_from_purpose: TG0 bare fra suggest_tg0 på tilliggende, aldri som utfall", () => {
     const doc = parsedTemplate();
     for (const r of doc.rules) {
       if (r.suggested_outcome === null) {
-        expect(r.purpose, r.key).toBe("suggest_tgiu");
+        expect(["suggest_tgiu", "suggest_tg0"], r.key).toContain(r.purpose);
+        if (r.purpose === "suggest_tg0") {
+          expect(r.target_checkpoint_key, r.key).toBe("wet_room.adjacent");
+        }
         continue;
       }
       const outcome = doc.outcomes.find(
@@ -1327,8 +1335,65 @@ describe("3 reglene i badmalen (datatest)", () => {
       )!;
       expect(["tg2", "tg3", "choose_tg2_tg3"], r.key).toContain(outcome.kind);
     }
-    expect(JSON.stringify(doc.rules)).not.toMatch(/tg0|TG\s*0/i);
-    expect(JSON.stringify(doc.rule_test_cases)).not.toMatch(/tg0|TG\s*0/i);
+    // Ingen testsak forventer et utfall med TG0 (TG0 er ikke et avvik)
+    for (const tc of doc.rule_test_cases) {
+      if (tc.expected_outcome === null) continue;
+      expect(tc.expected_outcome.outcome_key, tc.name).not.toMatch(/tg0/i);
+    }
+    expect(doc.outcomes.map((o) => o.kind)).not.toContain("tg0");
+  });
+
+  it("R3.2 tg0_rule_exists: TG0-regelen har formål, mål, kilde og melding fra kortet", () => {
+    const r = parsedTemplate().rules.find((x) => x.key === NO_MOISTURE)!;
+    expect(r).toMatchObject({
+      purpose: "suggest_tg0",
+      target_checkpoint_key: "wet_room.adjacent",
+      suggested_outcome: null,
+      active: true,
+    });
+    expect(r.source_ref).toContain("Ståles beslutning 12.11.2026 (F1)");
+    expect(r.source_ref).toContain("utkast, ikke godkjent av fagrådet");
+    expect(r.source_ref).not.toMatch(/\bNS\b/);
+    expect(r.message).toMatch(/treverk/);
+  });
+
+  it("R3.3 tg0_same_threshold: TG0-regelen snur samme terskel som fuktregelen", () => {
+    const doc = parsedTemplate();
+    const over = conditionsOf(doc, MOISTURE).find((c) => c.type === "number_vs_limit")!;
+    const under = conditionsOf(doc, NO_MOISTURE).find((c) => c.type === "number_vs_limit")!;
+    expect(under.threshold_key).toBe(over.threshold_key);
+    expect(under.negate).toBe(true);
+    expect(over.negate).toBe(false);
+    expect(WET_ROOM_THRESHOLDS.entries).toHaveLength(1);
+    // Bare «utført uten funn» (A238)
+    const drilling = conditionsOf(doc, NO_MOISTURE).find((c) => c.type === "option_selected")!;
+    expect(drilling).toMatchObject({
+      element_key: "wet_room.hole_drilling",
+      value: "done_no_findings",
+      negate: false,
+    });
+  });
+
+  it("R3.8 gte_everywhere: alle terskler regner «lik eller over», ingen betingelse har gt", () => {
+    const doc = parsedTemplate();
+    for (const t of WET_ROOM_THRESHOLDS.entries) expect(t.comparator, t.key).toBe("gte");
+    for (const c of doc.rule_conditions) expect(c.operator, c.rule_key).not.toBe("gt");
+  });
+
+  it("R3.11 messages: fast tekst før 2000, alder uten «levetid», TGIU med begrunnelse", () => {
+    const doc = parsedTemplate();
+    const byKey = (key: string) => doc.rules.find((r) => r.key === key)!;
+    expect(byKey(BEFORE_2000).message).toBe("Sjiktet er fra før 2000.");
+    expect(byKey(PAST_LIFESPAN).message).toContain("funksjonen er usikker på grunn av alder");
+    expect(byKey(PAST_LIFESPAN).source_ref).toBe(WET_ROOM_LIFESPANS.entries[0]!.source_ref);
+    const pastOutcome = doc.outcomes.find((o) => o.question_key === PAST_LIFESPAN_QUESTION)!;
+    expect(pastOutcome.default_cause_text).toMatch(/usikker på grunn av alder/);
+    expect(pastOutcome.source_ref).toBe(WET_ROOM_LIFESPANS.entries[0]!.source_ref);
+    expect(byKey(NOT_DRILLED).message).toMatch(/begrunnelse og risikovurdering/);
+    expect(byKey(NOT_DRILLED).source_ref).toBe(
+      "NS 3600:2025 og forskriften § 2-2; Ståle 25.10.2026 og 12.11.2026 (F2)",
+    );
+    for (const r of doc.rules) expect(r.message ?? "", r.key).not.toMatch(/levetid/i);
   });
 
   it("3.10 no_threshold_height_rule: ingen regel leser terskelhøyden (A229)", () => {

@@ -27,7 +27,8 @@ import { wetRoomTemplate } from "./wet-room";
  * - Færre reklamasjoner: et bad uten hulltaking ender alltid med TGIU-forslag, alder alene gir aldri
  *   TG2 på tilliggende konstruksjoner, og tomme felt gir «ikke vurdert», aldri «ingen avvik».
  * - De ansatte: forslaget og begrunnelsen er like hver gang.
- * - KI i bunnen: begrunnelsen har bare koder og tall (ingen persondata), og ingen regel foreslår TG0.
+ * - KI i bunnen: begrunnelsen har bare koder og tall (ingen persondata). TG0 foreslås bare av
+ *   `hole_no_elevated_moisture` på tilliggende konstruksjoner (F1).
  *
  * Testdata er oppdiktet. Befaringsåret er fast (2026).
  */
@@ -39,7 +40,8 @@ const PAST_LIFESPAN = "wet_room.membrane_past_lifespan";
 const BEFORE_2000 = "wet_room.membrane_before_2000";
 const MOISTURE = "wet_room.hole_moisture_over_limit";
 const NOT_DRILLED = "wet_room.hole_drilling_not_done";
-const RULE_KEYS = [PAST_LIFESPAN, BEFORE_2000, MOISTURE, NOT_DRILLED] as const;
+const NO_MOISTURE = "wet_room.hole_no_elevated_moisture";
+const RULE_KEYS = [PAST_LIFESPAN, BEFORE_2000, MOISTURE, NOT_DRILLED, NO_MOISTURE] as const;
 
 const MEMBRANE_DRAIN = "wet_room.membrane_drain";
 const ADJACENT = "wet_room.adjacent";
@@ -458,6 +460,70 @@ const LISTED: ListedCase[] = [
     spec: { [HOLE]: EMPTY },
     expected: "not_evaluated",
   },
+  // --- TG0 ved hull uten funn og fukt under grensen (F1, R3.4) ---
+  {
+    id: "T1",
+    rule: NO_MOISTURE,
+    spec: { [HOLE]: "done_no_findings", [READING]: 14.9, [UNIT]: "weight_percent" },
+    expected: "triggered",
+    check: (results) => {
+      expect(resultOf(results, NO_MOISTURE).suggestion).toEqual({
+        kind: "tg0",
+        checkpoint_key: ADJACENT,
+      });
+      expect(resultOf(results, MOISTURE).state).toBe("not_triggered");
+    },
+  },
+  {
+    id: "T2",
+    rule: NO_MOISTURE,
+    spec: { [HOLE]: "done_no_findings", [READING]: 15, [UNIT]: "weight_percent" },
+    expected: "not_triggered",
+    check: (results) => {
+      expect(resultOf(results, MOISTURE).suggestion).toEqual(MOISTURE_OUTCOME);
+    },
+  },
+  {
+    id: "T3",
+    rule: NO_MOISTURE,
+    spec: { [HOLE]: "done_with_findings", [READING]: 14.9, [UNIT]: "weight_percent" },
+    expected: "not_triggered",
+  },
+  {
+    id: "T4",
+    rule: NO_MOISTURE,
+    spec: { [HOLE]: "done_no_findings", [READING]: 0, [UNIT]: "weight_percent" },
+    expected: "triggered",
+  },
+  ...(
+    [
+      [85, "relative_humidity"],
+      [EMPTY, "weight_percent"],
+      [14.9, EMPTY],
+      [-1, "weight_percent"],
+      ["abc", "weight_percent"],
+    ] as const
+  ).map(([reading, unit], index): ListedCase => ({
+    id: `T5.${index + 1}`,
+    rule: NO_MOISTURE,
+    spec: { [HOLE]: "done_no_findings", [READING]: reading, [UNIT]: unit },
+    expected: "not_evaluated",
+  })),
+  {
+    id: "T6",
+    rule: NO_MOISTURE,
+    spec: { [HOLE]: "not_done", [READING]: EMPTY, [UNIT]: EMPTY },
+    expected: "not_triggered",
+    check: (results) => {
+      expect(resultOf(results, NOT_DRILLED).state).toBe("triggered");
+    },
+  },
+  {
+    id: "T7",
+    rule: NO_MOISTURE,
+    spec: { [HOLE]: EMPTY, [READING]: 14.9, [UNIT]: "weight_percent" },
+    expected: "not_evaluated",
+  },
 ];
 
 // =================================================================================================
@@ -564,28 +630,28 @@ describe("4 regeltestene for badet", () => {
 describe("4.6–4.8 svar 59a (T-0003, kan ikke fjernes)", () => {
   const below = Math.round((LIMIT - 1) * 10) / 10;
 
-  it.each(["done_no_findings", "done_with_findings"])(
-    "4.6 59a_per_checkpoint: bad fra 1985, %s, fukt under grensen",
-    (hole) => {
-      const results = evaluate({
-        [BUILD_YEAR]: 1985,
-        [HOLE]: hole,
-        [READING]: below,
-        [UNIT]: LIMIT_UNIT,
-      });
-      // Ingen forslag på tilliggende konstruksjoner
-      const onAdjacent = results.filter(
-        (r) => r.state === "triggered" && r.suggestion?.checkpoint_key === ADJACENT,
-      );
-      expect(onAdjacent).toEqual([]);
-      expect(resultOf(results, MOISTURE).state).toBe("not_triggered");
-      expect(resultOf(results, NOT_DRILLED).state).toBe("not_triggered");
-      // TG3-forslaget på det vanntette sjiktet kommer fortsatt
-      const before2000 = resultOf(results, BEFORE_2000);
-      expect(before2000.state).toBe("triggered");
-      expect(before2000.suggestion).toEqual(BEFORE_2000_OUTCOME);
-    },
-  );
+  it.each([
+    { hole: "done_no_findings", adjacent: [{ kind: "tg0", checkpoint_key: ADJACENT }] },
+    { hole: "done_with_findings", adjacent: [] },
+  ])("4.6 59a_per_checkpoint: bad fra 1985, $hole, fukt under grensen", ({ hole, adjacent }) => {
+    const results = evaluate({
+      [BUILD_YEAR]: 1985,
+      [HOLE]: hole,
+      [READING]: below,
+      [UNIT]: LIMIT_UNIT,
+    });
+    // Uten funn: TG0 på tilliggende uansett alder (F1). Med funn: ingen forslag der (A238).
+    const onAdjacent = results.filter(
+      (r) => r.state === "triggered" && r.suggestion?.checkpoint_key === ADJACENT,
+    );
+    expect(onAdjacent.map((r) => r.suggestion)).toEqual(adjacent);
+    expect(resultOf(results, MOISTURE).state).toBe("not_triggered");
+    expect(resultOf(results, NOT_DRILLED).state).toBe("not_triggered");
+    // TG3-forslaget på det vanntette sjiktet kommer fortsatt
+    const before2000 = resultOf(results, BEFORE_2000);
+    expect(before2000.state).toBe("triggered");
+    expect(before2000.suggestion).toEqual(BEFORE_2000_OUTCOME);
+  });
 
   it.each(["done_no_findings", "done_with_findings"])(
     "4.6 59a: %s med fukt lik grensen gir valg mellom TG2 og TG3 på tilliggende",
@@ -612,7 +678,9 @@ describe("4.6–4.8 svar 59a (T-0003, kan ikke fjernes)", () => {
       (r) =>
         r.target_checkpoint_key === ADJACENT || r.suggested_outcome?.checkpoint_key === ADJACENT,
     );
-    expect(adjacentRules.map((r) => r.key).sort()).toEqual([MOISTURE, NOT_DRILLED].sort());
+    expect(adjacentRules.map((r) => r.key).sort()).toEqual(
+      [MOISTURE, NOT_DRILLED, NO_MOISTURE].sort(),
+    );
     for (const r of adjacentRules) {
       const conditions = TEMPLATE.rule_conditions.filter((c) => c.rule_key === r.key);
       for (const c of conditions) {
@@ -687,10 +755,14 @@ describe("4.9 og 10.2 begrunnelsen og forslagene", () => {
     }
   });
 
-  it("10.2 no_tg0_suggestion: forslagene er bare utfall med TG2, TG3 eller valg, og TGIU", () => {
+  it("R3.10 suggestions_allowed: utfall med TG2, TG3 eller valg, TGIU, og TG0 bare på tilliggende", () => {
     for (const { result } of allResults()) {
       if (result.suggestion === null) continue;
-      expect(["outcome", "tgiu"]).toContain(result.suggestion.kind);
+      expect(["outcome", "tgiu", "tg0"]).toContain(result.suggestion.kind);
+      if (result.suggestion.kind === "tg0") {
+        expect(result.purpose).toBe("suggest_tg0");
+        expect(result.suggestion.checkpoint_key).toBe(ADJACENT);
+      }
       if (result.suggestion.kind === "outcome") {
         const { checkpoint_key, question_key, outcome_key } = result.suggestion;
         const outcome = TEMPLATE.outcomes.find(
@@ -702,7 +774,70 @@ describe("4.9 og 10.2 begrunnelsen og forslagene", () => {
         expect(outcome, `${question_key}/${outcome_key} finnes`).toBeDefined();
         expect(["tg2", "tg3", "choose_tg2_tg3"]).toContain(outcome!.kind);
       }
-      expect(JSON.stringify(result)).not.toMatch(/tg0/i);
+    }
+  });
+
+  it("R3.6 no_conflict_on_checkpoint: ingen testsak gir TG0 og et annet forslag på samme punkt", () => {
+    for (const tc of TEMPLATE.rule_test_cases) {
+      const results = evaluate(tc.input, tc.inspection_year);
+      const suggestions = results.flatMap((r) => (r.suggestion ? [r.suggestion] : []));
+      for (const tg0 of suggestions.filter((x) => x.kind === "tg0")) {
+        const others = suggestions.filter(
+          (x) => x.kind !== "tg0" && x.checkpoint_key === tg0.checkpoint_key,
+        );
+        expect(others, `${tc.rule_key}: ${tc.name}`).toEqual([]);
+      }
+    }
+  });
+});
+
+describe("F1, F4 og F5: grensen og kantene", () => {
+  it.each([LIMIT - 0.1, LIMIT, LIMIT + 0.1, 0])(
+    "R3.5 never_both_or_none: %s vekt-% uten funn gir nøyaktig én av TG0 og forhøyet fukt",
+    (reading) => {
+      const results = evaluate({
+        [HOLE]: "done_no_findings",
+        [READING]: Math.round(reading * 10) / 10,
+        [UNIT]: LIMIT_UNIT,
+      });
+      const triggered = [NO_MOISTURE, MOISTURE].filter(
+        (key) => resultOf(results, key).state === "triggered",
+      );
+      expect(triggered).toHaveLength(1);
+      expect(triggered[0]).toBe(reading >= LIMIT ? MOISTURE : NO_MOISTURE);
+    },
+  );
+
+  it.each(RULE_KEYS)("R3.7 edge_per_rule: %s har minst én testsak med «kant» i navnet", (key) => {
+    const edges = TEMPLATE.rule_test_cases.filter(
+      (tc) => tc.rule_key === key && /kant/.test(tc.name),
+    );
+    expect(edges.length).toBeGreaterThan(0);
+  });
+
+  it("R3.7 edge_per_rule: hver aktiv regel i malen har en kantsak", () => {
+    for (const r of TEMPLATE.rules.filter((x) => x.active)) {
+      const found = TEMPLATE.rule_test_cases.some(
+        (tc) => tc.rule_key === r.key && /kant/.test(tc.name),
+      );
+      expect(found, r.key).toBe(true);
+    }
+  });
+
+  it("R3.7 edge_per_rule: alder lik tabellverdien gir TG2 og ett år yngre gir ikke, per materiale", () => {
+    const cases = TEMPLATE.rule_test_cases.filter(
+      (tc) => tc.rule_key === PAST_LIFESPAN && tc.name.startsWith("A10 "),
+    );
+    const materials = new Set(
+      WET_ROOM_LIFESPANS.entries
+        .filter((e) => e.material_code !== null && e.outcome_kind === "tg2")
+        .map((e) => e.material_code),
+    );
+    for (const material of materials) {
+      const forMaterial = cases.filter((tc) => tc.input[TYPE] === material);
+      expect(forMaterial.map((tc) => tc.expected_state).sort(), material!).toEqual(
+        expect.arrayContaining(["not_triggered", "triggered"]),
+      );
     }
   });
 });
