@@ -195,7 +195,11 @@ export function checkMicrosoftProfile(
     }
 
     const idp = nonEmptyString(claims.idp);
-    const ownIdps = [`https://sts.windows.net/${expected.tenantId}/`, expected.tenantId];
+    const ownIdps = [
+      `https://sts.windows.net/${expected.tenantId}/`,
+      `https://login.microsoftonline.com/${expected.tenantId}/v2.0`,
+      expected.tenantId,
+    ];
     if (
       (idp !== null && !ownIdps.includes(idp)) ||
       hasGuestMarker(claims.preferred_username) ||

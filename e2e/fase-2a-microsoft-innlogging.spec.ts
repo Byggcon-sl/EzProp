@@ -98,6 +98,17 @@ test("avvist innlogging gir samme norske melding uten feilkode, og kodeskjemaet 
   }
 });
 
+test("teknisk feil hos Microsoft gir egen melding, ikke «ingen tilgang»", async ({ page }) => {
+  await page.goto("/logg-inn?error=state_mismatch");
+  await expect(
+    page.getByText(
+      "Innloggingen med Microsoft virket ikke denne gangen. Prøv igjen, eller logg inn med kode.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByText(REJECTED)).toHaveCount(0);
+  await expect(page.getByLabel("E-postadresse")).toBeVisible();
+});
+
 test("uten nett er begge knappene sperret, og siden sier at innlogging trenger nett", async ({
   page,
   context,

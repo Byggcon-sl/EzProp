@@ -22,6 +22,13 @@ function tooManyRequestsMessage(message: string | undefined): string {
 export const MICROSOFT_REJECTED_MESSAGE =
   "Du har ikke tilgang med denne kontoen. Be leder eller admin legge deg inn som ansatt, eller logg inn med kode.";
 
+/** Når runden hos Microsoft feilet av tekniske grunner (avbrutt, utløpt, feil hos Microsoft). */
+export const MICROSOFT_TECHNICAL_MESSAGE =
+  "Innloggingen med Microsoft virket ikke denne gangen. Prøv igjen, eller logg inn med kode.";
+
+/** Hvorfor forrige Microsoft-innlogging ikke gikk. Feilkoden selv vises aldri. */
+export type LoginFailure = "rejected" | "technical" | null;
+
 export const OFFLINE_LOGIN_MESSAGE =
   "Du er uten nett. Innlogging trenger nett. Det du har lagret på iPaden, er trygt og synkes når du er inne igjen.";
 
@@ -49,20 +56,20 @@ function useOnline(): boolean {
  * Innlogging. Med Microsoft satt opp er «Logg inn med Microsoft» hovedvalget, og koden er
  * reserven (ADR 0008). Koden går i to steg: e-postadresse, så koden fra e-posten.
  * `next` er siden brukeren sendes til etter innlogging (sjekkes på nytt her og på serveren).
- * `rejected`: Microsoft-innloggingen ble avvist; meldingen vises og kodeskjemaet er åpent.
+ * `failure`: forrige Microsoft-innlogging gikk ikke; meldingen vises og kodeskjemaet er åpent.
  */
 export function LoginForm({
   next = DEFAULT_NEXT_PATH,
   microsoft = false,
-  rejected = false,
+  failure = null,
 }: {
   next?: string;
   microsoft?: boolean;
-  rejected?: boolean;
+  failure?: LoginFailure;
 }) {
   const router = useRouter();
   const online = useOnline();
-  const [showCode, setShowCode] = useState(!microsoft || rejected);
+  const [showCode, setShowCode] = useState(!microsoft || failure !== null);
   const [redirecting, setRedirecting] = useState(false);
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
@@ -186,7 +193,8 @@ export function LoginForm({
           {OFFLINE_LOGIN_MESSAGE}
         </p>
       )}
-      {rejected && <FormMessage message={MICROSOFT_REJECTED_MESSAGE} />}
+      {failure === "rejected" && <FormMessage message={MICROSOFT_REJECTED_MESSAGE} />}
+      {failure === "technical" && <FormMessage message={MICROSOFT_TECHNICAL_MESSAGE} />}
       {microsoft && (
         <Button
           size="lg"

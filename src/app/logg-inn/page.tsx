@@ -4,8 +4,31 @@ import { isMicrosoftLoginEnabled } from "@/core/auth/microsoft-login";
 import { getCurrentActor } from "@/core/auth/session";
 import { brand } from "@/shared/config/brand";
 import { Card } from "@/shared/ui/card";
-import { LoginForm } from "./login-form";
+import { LoginForm, type LoginFailure } from "./login-form";
 import { safeNextPath } from "./safe-next-path";
+
+/**
+ * Feilkoder fra Better Auth som betyr at noe teknisk gikk galt i runden (utløpt eller avbrutt
+ * innlogging, feil hos Microsoft), ikke at personen er avvist. Alt annet regnes som avvist (A215).
+ */
+const TECHNICAL_ERRORS = new Set([
+  "state_mismatch",
+  "state_not_found",
+  "invalid_code",
+  "no_code",
+  "no_callback_url",
+  "please_restart_the_process",
+  "oauth_provider_not_found",
+  "invalid_callback_request",
+  "internal_server_error",
+  "access_denied",
+]);
+
+function loginFailure(error: string | string[] | undefined): LoginFailure {
+  if (error === undefined) return null;
+  const code = Array.isArray(error) ? error[0] : error;
+  return code !== undefined && TECHNICAL_ERRORS.has(code) ? "technical" : "rejected";
+}
 
 export const metadata: Metadata = { title: "Logg inn" };
 
@@ -19,7 +42,7 @@ export default async function LoginPage({
   if (await getCurrentActor()) redirect(next);
   // Bare en boolsk verdi går til siden (ADR 0008). Feilkoden fra Better Auth vises ikke (A215).
   const microsoft = isMicrosoftLoginEnabled();
-  const rejected = error !== undefined;
+  const failure = loginFailure(error);
   return (
     <main className="flex min-h-[calc(100dvh-4px)] items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
@@ -34,7 +57,7 @@ export default async function LoginPage({
               : "Skriv inn e-postadressen din. Vi sender deg en kode. Du trenger ikke passord."}
           </p>
           <div className="mt-6">
-            <LoginForm next={next} microsoft={microsoft} rejected={rejected} />
+            <LoginForm next={next} microsoft={microsoft} failure={failure} />
           </div>
         </Card>
         <p className="mt-6 text-center text-sm text-slate-600">
