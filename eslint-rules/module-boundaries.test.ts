@@ -291,3 +291,53 @@ describe("K4.3 feilmeldingene viser til ADR 0006 del 10", () => {
     expect(messages.aiClientImporter).toContain("ADR 0006 del 10");
   });
 });
+
+const RULES_FILE = "/repo/src/core/rules/evaluate.ts";
+
+tsRuleTester.run("module-boundaries: src/core/rules", rule, {
+  valid: [
+    { filename: RULES_FILE, code: 'import { x } from "./types";' },
+    { filename: RULES_FILE, code: 'import { x } from "@/core/rules/codes";' },
+    { filename: "/repo/src/core/rules/data/lifespans.ts", code: 'import { x } from "../codes";' },
+    { filename: RULES_FILE, code: 'import { x } from "@/shared/lib/cn";' },
+    { filename: RULES_FILE, code: 'import type { TemplateDocument } from "@/core/templates";' },
+    { filename: RULES_FILE, code: 'import type { OutcomeKind } from "@/db/schema";' },
+    { filename: RULES_FILE, code: 'import type { OutcomeKind } from "@/db/schema/templates";' },
+    { filename: RULES_FILE, code: 'export type { TemplateKind } from "@/core/templates";' },
+    // Testfiler er unntatt: de trenger vitest og badmalen.
+    { filename: "/repo/src/core/rules/evaluate.test.ts", code: 'import { it } from "vitest";' },
+    // Andre kan bruke regelmotoren.
+    { filename: "/repo/src/core/assignments/x.ts", code: 'import { x } from "@/core/rules";' },
+    { filename: "/repo/src/app/page.tsx", code: 'import { x } from "@/core/rules";' },
+    {
+      filename: "/repo/src/core/templates/templates.test.ts",
+      code: 'import { x } from "@/core/rules";',
+    },
+  ],
+  invalid: [
+    ...[
+      'import { rules } from "@/db/schema";',
+      'import { db } from "@/db/client";',
+      'import { parseTemplateDocument } from "@/core/templates";',
+      'export { TEMPLATE_KINDS } from "@/db/schema";',
+      'export * from "@/core/templates";',
+      'import type { AiFeature } from "@/core/ai";',
+      'import { x } from "@/core/ai";',
+      'import { x } from "@/core/access";',
+      'import "server-only";',
+      'import { readFile } from "node:fs";',
+      'import { z } from "zod";',
+      'const m = import("@/db/schema");',
+    ].map((code) => ({ filename: RULES_FILE, code, errors: [{ messageId: "rulesLeaf" }] })),
+    {
+      filename: "/repo/src/core/templates/document.ts",
+      code: 'import { evaluateRules } from "@/core/rules";',
+      errors: [{ messageId: "templatesToRules" }],
+    },
+    {
+      filename: "/repo/src/core/templates/document.ts",
+      code: 'import type { RuleResult } from "../rules/types";',
+      errors: [{ messageId: "templatesToRules" }],
+    },
+  ],
+});

@@ -204,6 +204,13 @@
       "when": 1794456082274,
       "tag": "0028_mal-tekststatus",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794467548644,
+      "tag": "0029_regler-bad",
+      "breakpoints": true
     }
   ]
 }

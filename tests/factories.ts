@@ -1526,7 +1526,7 @@ export async function createRuleTestCaseRow(
       .values({
         name: "Testtilfelle",
         input: {},
-        expectTriggered: true,
+        expectedState: "triggered",
         ...overrides,
         ruleId,
         organizationId,
