@@ -260,9 +260,10 @@ describe("1.7 suggestAreaType", () => {
     expect(OTHERS).toHaveLength(27);
     expect(OTHERS.every(([, type]) => type === "bra_i")).toBe(true);
     expect(AREA_TYPE_CASES.filter(([, type]) => type === "bra_i")).toHaveLength(28);
-    expect(
-      AREA_TYPE_CASES.filter(([, type]) => type === "not_bra").map(([key]) => key),
-    ).toEqual(["crawl_space", "unfinished_attic"]);
+    expect(AREA_TYPE_CASES.filter(([, type]) => type === "not_bra").map(([key]) => key)).toEqual([
+      "crawl_space",
+      "unfinished_attic",
+    ]);
   });
 
   it.each(AREA_TYPE_CASES)("%s: romtypens defaultAreaType er %s", (key, expected) => {
