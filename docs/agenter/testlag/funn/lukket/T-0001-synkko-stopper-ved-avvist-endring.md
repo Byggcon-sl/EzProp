@@ -3,7 +3,7 @@ id: T-0001
 tittel: Én endring som ikke kan lagres, stopper alt annet som venter på å bli sendt fra iPaden
 type: feil
 alvor: alvorlig
-status: rettet
+status: lukket
 funnet: 2026-11-11
 rolle: test-robusthet
 omrade: synk uten nett (testskjema)
@@ -42,3 +42,4 @@ Samme årsak på `/prove/ki`: tekst med nulltegn gir «Noe gikk galt. Teksten di
 ## Logg
 - 2026-11-11: funnet
 - 2026-11-11: rettet på branchen `rett-t0001-synkko`. Nulltegn og ensomme surrogattegn fjernes før lagring i synken og i KI-modulen (`stripUnstorableChars`, A180). Serveren svarer 400 i stedet for 500 på en endring som ikke kan lagres; iPaden legger bare den endringen til side, sender resten og viser «Kunne ikke sendes: <feltnavn>» (A181). Prøvd i e2e på PC og iPad-størrelse (`e2e/fase-2a-rett-t0001-synkko.spec.ts`). Flyttes til `funn/lukket/` når testlaget har bekreftet rettingen.
+- 2026-11-12: prøvd på nytt av kontrolløren på main 11672aa: rettet bekreftet. Kontrolløren fulgte stegene: synken svarte uten feil, statuslinjen sa «Alt er lagret», og alle tre svarene lå i databasen. Grenen med «Kunne ikke sendes» ble ikke prøvd. Lukket.
