@@ -17,7 +17,7 @@ function Hint({ id, children }: { id: string; children: ReactNode }) {
 
 function FieldError({ id, message }: { id: string; message: string }) {
   return (
-    <p id={`${id}-error`} className="text-sm text-red-800">
+    <p id={`${id}-error`} className="text-sm text-urgent-text">
       <span className="sr-only">Feil: </span>
       {message}
     </p>
@@ -65,7 +65,7 @@ export function Field({
 }
 
 const fieldClass =
-  "block w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 placeholder:text-slate-500 focus:border-brand-600 disabled:bg-slate-100 disabled:text-slate-600 aria-invalid:border-red-700";
+  "block w-full rounded-lg border border-field bg-white px-3 text-base text-slate-900 placeholder:text-slate-500 focus:border-fjord disabled:bg-sand disabled:text-slate-600 aria-invalid:border-urgent-line";
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
   return <input className={cn(fieldClass, "min-h-11", className)} {...props} />;
@@ -77,7 +77,7 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
 }
 
 const selectClass =
-  "block min-h-11 w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 focus:border-brand-600 aria-invalid:border-red-700";
+  "block min-h-11 w-full rounded-lg border border-field bg-white px-3 text-base text-slate-900 focus:border-fjord disabled:bg-sand disabled:text-slate-600 aria-invalid:border-urgent-line";
 
 /** Nedtrekksliste. Samme ramme, fokus og trykkflate (minst 44 px) som `Input`. */
 export function Select({ className, ...props }: ComponentProps<"select">) {
@@ -103,7 +103,7 @@ function Choice({
         className,
       )}
     >
-      <input type={type} className="mt-0.5 size-5 shrink-0 accent-brand-600" {...props} />
+      <input type={type} className="mt-0.5 size-5 shrink-0 accent-fjord" {...props} />
       <span className="min-w-0 break-words">
         <span className="block text-base text-slate-900">{label}</span>
         {description && <span className="block text-sm text-slate-600">{description}</span>}
@@ -159,7 +159,7 @@ export function ChoiceGroup({
 /** Feilmelding knyttet til et skjema. Leses opp av skjermleser. */
 export function FormMessage({ message }: { message: string }) {
   return (
-    <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+    <p role="alert" className="rounded-xl bg-urgent-fill px-3 py-2 text-sm text-urgent-text">
       {message}
     </p>
   );

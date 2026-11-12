@@ -44,8 +44,8 @@ export function showsAiTextMark({ aiUsageId, status }: AiTextMarkProps): boolean
 export function AiTextMark(props: AiTextMarkProps) {
   if (!showsAiTextMark(props)) return null;
   return (
-    <span className="inline-flex h-6 items-center gap-1 rounded-full bg-ai-50 px-2.5 text-xs font-medium whitespace-nowrap text-ai-900 ring-1 ring-ai-200 ring-inset">
-      <AiSparkIcon />
+    <span className="inline-flex h-6 items-center gap-1 rounded-full bg-ai-50 px-2.5 text-xs font-medium whitespace-nowrap text-ai-900 ring-1 ring-ai-line ring-inset">
+      <AiSparkIcon className="text-ai-700" />
       {AI_TEXT_MARK_LABEL}
     </span>
   );
