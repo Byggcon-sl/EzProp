@@ -55,6 +55,7 @@ Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4�
 - **Tofaktor før ekte data (fra svarene 12.11.2026, I2 og I3):** engangskoden er reserve for alle, og Microsoft krever ikke tofaktor i dag. Da er det ingen tofaktor med ekte data, og det står mot mål 11. Velg: slå på tofaktor i Microsoft for `@byggcon.no` før ekte data, eller endre mål 11.
 - **Beløpsgrense hos KI-leverandøren** (K9, ingen tak i EzProp): sett en månedlig grense i Anthropics konsoll før nøkkelen brukes.
 - **Fuktgrensen ved hulltaking og alderstabellen for vanntett sjikt (F3):** svaret er at verdiene i NS 3600:2025 gjelder. Agentene har ikke standarden, så tallene (15 vekt-% i treverk, A225, og årene i alderstabellen i `src/core/rules/data/lifespans.ts`) står som utkast med kilden «NS 3600:2025 (Ståle 12.11.2026, F3); tallene er ikke kontrollert mot standarden». Sjekk tallene mot standarden og si fra hvis noen er annerledes.
+- **Fuktgrensen ved hulltaking (F3):** svaret er at verdiene i NS 3600:2025 gjelder. Agentene har ikke standarden, så tallet (15 vekt-% i treverk, A225) står som utkast. Sjekk tallet mot standarden og si fra hvis det er et annet.
 
 ## Oppgaver fra testlaget
 
