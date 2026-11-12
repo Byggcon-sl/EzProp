@@ -248,3 +248,4 @@ Besvart:
 | 25.10.2026 | HMS-avvik uten konsekvens og tiltak gir advarsel. | Sidemannskontroll del 1, R5 |
 | 25.10.2026 | Merknad om at alderstabellene er veiledende, og at tiltaket ved alder normalt er nærmere undersøkelse. Kostnadsanslag med fritt beløp vist som «ca.». Radon flyttet til besvart. | Sidemannskontroll del 1, R2. LES-MEG 23.10 og 25.10.2026 |
 | 25.10.2026 | Åpne spørsmål flyttet fra avsnitt 6 til avsnitt 8. | – |
+| 12.11.2026 | Unntak fra «TG0 bare ved 0–5 år» for tilliggende konstruksjoner i våtrom: er hull tatt uten funn og fukten målt under grensen, foreslår regelen `wet_room.hole_no_elevated_moisture` TG0 uansett alder. Kontrollen «TG0 bare ved 0–5 år» (avsnitt 5.3 punkt 3) skal ikke advare på `wet_room.adjacent` når den bygges. Utkast til fagrådet svarer (spørsmål 77). | Ståle 12.11.2026 (F1), `docs/kartlegging/svar-fra-stale-2026-11-12.md`; A238 |

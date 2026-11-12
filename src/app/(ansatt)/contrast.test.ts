@@ -90,7 +90,7 @@ const textPairs: [text: string, background: string, usage: string][] = [
   ),
   // Dempet tekst (stone = slate-500), designspesifikasjonen avsnitt 8
   ...BACKGROUNDS.map((bg): [string, string, string] => ["slate-500", bg, "dempet tekst"]),
-  // 2.5 hovedknapp og deaktivert hovedknapp (D3, A226)
+  // 2.5 hovedknapp og deaktivert hovedknapp (D3, A243)
   ["white", "night", "hovedknapp"],
   ["white", "slate-500", "deaktivert hovedknapp (stone)"],
   ["white", "ai-700", "«Bruk» i KI-kortet"],
@@ -122,7 +122,7 @@ const nonTextPairs: [ring: string, background: string, usage: string][] = [
   // 2.6 kant på sekundærknapp (slate-700) og skjemafelt
   ...BACKGROUNDS.map((bg): [string, string, string] => ["slate-700", bg, "kant sekundærknapp"]),
   ...BACKGROUNDS.map((bg): [string, string, string] => ["field", bg, "kant skjemafelt"]),
-  // 2.7 fokusramme i fjord (D1, A224)
+  // 2.7 fokusramme i fjord (D1, A241)
   ...[...BACKGROUNDS, "night"].map((bg): [string, string, string] => ["fjord", bg, "fokusramme"]),
   ["brand-600", "canvas", "fokusring (brand-600 = fjord) på canvas"],
   // 2.10 kanten på KI-merket og forslagsboksen

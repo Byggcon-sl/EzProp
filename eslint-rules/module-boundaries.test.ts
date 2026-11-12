@@ -291,3 +291,116 @@ describe("K4.3 feilmeldingene viser til ADR 0006 del 10", () => {
     expect(messages.aiClientImporter).toContain("ADR 0006 del 10");
   });
 });
+
+const RULES_FILE = "/repo/src/core/rules/evaluate.ts";
+
+tsRuleTester.run("module-boundaries: src/core/rules", rule, {
+  valid: [
+    { filename: RULES_FILE, code: 'import { x } from "./types";' },
+    { filename: RULES_FILE, code: 'import { x } from "@/core/rules/codes";' },
+    { filename: "/repo/src/core/rules/data/lifespans.ts", code: 'import { x } from "../codes";' },
+    { filename: RULES_FILE, code: 'import { x } from "@/shared/lib/cn";' },
+    { filename: RULES_FILE, code: 'import type { TemplateDocument } from "@/core/templates";' },
+    { filename: RULES_FILE, code: 'import type { OutcomeKind } from "@/db/schema";' },
+    { filename: RULES_FILE, code: 'import type { OutcomeKind } from "@/db/schema/templates";' },
+    { filename: RULES_FILE, code: 'export type { TemplateKind } from "@/core/templates";' },
+    // Testfiler er unntatt: de trenger vitest og badmalen.
+    { filename: "/repo/src/core/rules/evaluate.test.ts", code: 'import { it } from "vitest";' },
+    // Andre kan bruke regelmotoren.
+    { filename: "/repo/src/core/assignments/x.ts", code: 'import { x } from "@/core/rules";' },
+    { filename: "/repo/src/app/page.tsx", code: 'import { x } from "@/core/rules";' },
+    {
+      filename: "/repo/src/core/templates/templates.test.ts",
+      code: 'import { x } from "@/core/rules";',
+    },
+  ],
+  invalid: [
+    ...[
+      'import { rules } from "@/db/schema";',
+      'import { db } from "@/db/client";',
+      'import { parseTemplateDocument } from "@/core/templates";',
+      'export { TEMPLATE_KINDS } from "@/db/schema";',
+      'export * from "@/core/templates";',
+      'import type { AiFeature } from "@/core/ai";',
+      'import { x } from "@/core/ai";',
+      'import { x } from "@/core/access";',
+      'import "server-only";',
+      'import { readFile } from "node:fs";',
+      'import { z } from "zod";',
+      'const m = import("@/db/schema");',
+    ].map((code) => ({ filename: RULES_FILE, code, errors: [{ messageId: "rulesLeaf" }] })),
+    {
+      filename: "/repo/src/core/templates/document.ts",
+      code: 'import { evaluateRules } from "@/core/rules";',
+      errors: [{ messageId: "templatesToRules" }],
+    },
+    {
+      filename: "/repo/src/core/templates/document.ts",
+      code: 'import type { RuleResult } from "../rules/types";',
+      errors: [{ messageId: "templatesToRules" }],
+    },
+  ],
+});
+
+// Reglene badet trenger (docs/funksjoner/fase2a-regler-bad-testplan.md avsnitt 8): flere importer
+// som må stoppes i regelmotoren, også i data/, og prøve E (src/modules/offline-trial) står urørt.
+tsRuleTester.run("module-boundaries: src/core/rules (testplan 8)", rule, {
+  valid: [
+    { filename: RULES_FILE, code: 'import type { TemplateKind } from "../templates";' },
+    { filename: RULES_FILE, code: 'import type { RuleResult } from "./types";' },
+    {
+      filename: "/repo/src/core/rules/data/thresholds.ts",
+      code: 'import type { ThresholdSet } from "../types";',
+    },
+    // Testfilene for badmalen kan bruke motoren
+    {
+      filename: "/repo/src/db/seed/templates/wet-room.rules.test.ts",
+      code: 'import { evaluateRules } from "@/core/rules";',
+    },
+  ],
+  invalid: [
+    // 8.1 verdi-importer stoppes
+    ...[
+      'import { db } from "@/db";',
+      'import { templates } from "@/db/schema/templates";',
+      'import { TEMPLATE_KINDS } from "@/db/schema";',
+      'import { saveDraftContent } from "@/core/templates/templates";',
+      'import { checkDocumentKeys } from "../templates/document";',
+      'import { requestSuggestion } from "@/core/ai/client";',
+      'import { x } from "@/core/ai/features";',
+      'import { readFileSync } from "fs";',
+      'import path from "node:path";',
+      'import { z } from "zod/v4";',
+      'import { headers } from "next/headers";',
+      'import { x } from "@/modules/assignments";',
+      'import { x } from "@/app/page";',
+    ].map((code) => ({ filename: RULES_FILE, code, errors: [{ messageId: "rulesLeaf" }] })),
+    // 8.1 også fra data/
+    ...['import { db } from "@/db/client";', 'import { z } from "zod";'].map((code) => ({
+      filename: "/repo/src/core/rules/data/lifespans.ts",
+      code,
+      errors: [{ messageId: "rulesLeaf" }],
+    })),
+    // 8.2 import type er bare lov fra malmotoren og skjemaet
+    ...[
+      'import type { AiFeature } from "@/core/ai/types";',
+      'import type { Actor } from "@/core/access";',
+      'import type { X } from "@/modules/offline-trial/rules";',
+    ].map((code) => ({ filename: RULES_FILE, code, errors: [{ messageId: "rulesLeaf" }] })),
+    // 8.4 prøve E gjenbrukes ikke
+    ...[
+      'import { evaluate } from "@/modules/offline-trial/rules";',
+      'import { evaluate } from "../../modules/offline-trial/rules/evaluate";',
+    ].map((code) => ({ filename: RULES_FILE, code, errors: [{ messageId: "rulesLeaf" }] })),
+    // 8.3 malmotoren kan ikke importere regelmotoren, heller ikke data/
+    ...[
+      'import { WET_ROOM_LIFESPANS } from "@/core/rules/data/lifespans";',
+      'import { evaluateRules } from "../rules";',
+      'export { evaluateRules } from "@/core/rules";',
+    ].map((code) => ({
+      filename: "/repo/src/core/templates/templates.ts",
+      code,
+      errors: [{ messageId: "templatesToRules" }],
+    })),
+  ],
+});

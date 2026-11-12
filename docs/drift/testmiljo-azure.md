@@ -64,6 +64,14 @@ Valgfri secret for KI. Tom eller mangler betyr KI av. Nøkkelen alene slår ikke
 |---|---|
 | `ANTHROPIC_API_KEY` | API-nøkkelen fra Byggcons konto hos Anthropic (console.anthropic.com → API keys) |
 
+Valgfrie secrets for «Logg inn med Microsoft» (ADR 0008). Legg inn **alle tre sammen**. Mangler én, vises bare innlogging med kode; appen stopper ikke. Oppskriften står i punkt g.
+
+| Navn | Hva du legger inn |
+|---|---|
+| `MS_LOGIN_TENANT_ID` | Directory (tenant) ID for Byggcons Microsoft-katalog |
+| `MS_LOGIN_CLIENT_ID` | Application (client) ID fra app-registreringen for innlogging (ikke den for e-post) |
+| `MS_LOGIN_CLIENT_SECRET` | Klienthemmeligheten (Value) fra samme app-registrering |
+
 **Variabler** (fanen Variables):
 
 | Navn | Hva du legger inn |
@@ -115,6 +123,26 @@ Hvis helsesjekken ikke svarer: appen lytter på `HOSTNAME`, og oppsettet setter 
 
 **Merk:** når `APP_HOSTNAME` er satt, virker innlogging bare på den adressen, ikke lenger på `app-ezprop-test.azurewebsites.net`.
 
+## g) Logg inn med Microsoft 365
+
+Med dette kommer de ansatte inn med Byggcon-kontoen sin (`@byggcon.no`) med ett trykk, uten kode. Koden virker fortsatt som reserve, så ingen stenges ute. Det koster ingenting. Bare personer som allerede er lagt inn som ansatt i EzProp, slipper inn.
+
+1. **Lag en egen app-registrering.** Gå til portal.azure.com → Microsoft Entra ID → App registrations → New registration.
+   - Name: for eksempel `EzProp innlogging test`.
+   - Supported account types: **Accounts in this organizational directory only** (bare Byggcons katalog, én tenant). Ikke velg «any organizational directory» eller personlige kontoer.
+   - Redirect URI: velg **Web** og skriv `https://app-ezprop-test.azurewebsites.net/api/auth/callback/microsoft`.
+   - Trykk Register. Bruk ikke app-registreringen for e-post (`MS_GRAPH_*`); den har andre rettigheter.
+2. **Skriv ned to verdier** fra Overview: «Application (client) ID» og «Directory (tenant) ID».
+3. **Sjekk rettighetene:** API permissions. Bare `openid`, `profile` og `email` (Microsoft Graph, Delegated). Fjern `User.Read` hvis den står der, og legg ikke til andre. Trykk «Grant admin consent for Byggcon», så slipper de ansatte å godkjenne selv.
+4. **Lag klienthemmelighet:** Certificates & secrets → New client secret. Velg utløp (høyst 24 måneder). Kopier **Value** med en gang (den vises bare én gang). **Skriv ned utløpsdatoen** i kalenderen. Når hemmeligheten går ut, virker bare innlogging med kode til du lager en ny og legger den inn i GitHub.
+5. **Legg inn tre secrets i GitHub** (Settings → Secrets and variables → Actions → Secrets) med nøyaktig disse navnene: `MS_LOGIN_TENANT_ID` (Directory (tenant) ID), `MS_LOGIN_CLIENT_ID` (Application (client) ID) og `MS_LOGIN_CLIENT_SECRET` (Value fra punkt 4). Lim dem bare inn i GitHub, aldri i chat eller e-post.
+6. **Kjør utrullingen:** Actions → «Utrulling til Azure» → «Run workflow».
+7. **Prøv:** åpne `https://app-ezprop-test.azurewebsites.net/logg-inn`. Trykk «Logg inn med Microsoft» og logg inn med Byggcon-kontoen din. Du skal komme rett inn. Prøv også «Logg inn med kode i stedet», så du vet at reserven virker.
+
+Får du «Du har ikke tilgang med denne kontoen»: sjekk at personen er lagt inn som ansatt i EzProp med samme e-postadresse som i Microsoft. Vises ikke knappen: sjekk at alle tre secrets er lagt inn, og se etter en advarsel i serverloggen (Log stream).
+
+**Merk:** setter du `APP_HOSTNAME` (punkt f), må tilbakeadressen i app-registreringen endres til `https://<adressen>/api/auth/callback/microsoft`.
+
 ## Hvis Azure mangler kapasitet («No available instances»)
 
 Utrullingen kan stoppe med `Conflict` og «No available instances to satisfy this request» på `plan-ezprop-test`. Det betyr at Microsoft er tom for ledige maskiner for appen i den delen av datasenteret ressursgruppen ligger i. Det er ikke en feil i oppsettet. Prøv først igjen senere. Hjelper ikke det, flytt til en ny ressursgruppe:
@@ -152,7 +180,7 @@ PowerSync og ElectricSQL er fjernet 10.11.2026 (ADR 0004, egenbygd synk er valgt
 
 ## Nøkkelboks for hemmeligheter
 
-**Hva dette er:** en nøkkelboks (Azure Key Vault) i ressursgruppen. I testmiljøet heter den `kv-ezprop-test` (navnet er alltid `kv-ezprop-<miljø>`). Når den er på, ligger databasepassordet (`DATABASE_URL`), innloggingsnøkkelen (`BETTER_AUTH_SECRET`), klienthemmeligheten for e-post (`MS_GRAPH_CLIENT_SECRET`) og nøkkelen til KI-leverandøren (`ANTHROPIC_API_KEY`, når den er lagt inn) i boksen, ikke i klartekst i appinnstillingene. Appinnstillingene viser da bare en henvisning til boksen. Appen får en egen identitet som bare kan lese fra boksen. Se ADR 0005.
+**Hva dette er:** en nøkkelboks (Azure Key Vault) i ressursgruppen. I testmiljøet heter den `kv-ezprop-test` (navnet er alltid `kv-ezprop-<miljø>`). Når den er på, ligger databasepassordet (`DATABASE_URL`), innloggingsnøkkelen (`BETTER_AUTH_SECRET`), klienthemmeligheten for e-post (`MS_GRAPH_CLIENT_SECRET`), klienthemmeligheten for Microsoft-innloggingen (`MS_LOGIN_CLIENT_SECRET`, når den er lagt inn) og nøkkelen til KI-leverandøren (`ANTHROPIC_API_KEY`, når den er lagt inn) i boksen, ikke i klartekst i appinnstillingene. Appinnstillingene viser da bare en henvisning til boksen. Appen får en egen identitet som bare kan lese fra boksen. Se ADR 0005.
 
 Du legger fortsatt verdiene inn i GitHub-secrets, som før. Utrullingen legger dem i boksen. Du trenger ikke legge dem inn noe annet sted.
 
@@ -167,7 +195,7 @@ Boksen står **av** til du slår den på. En merge til `main` lager ingenting ny
 
 ### Sjekke
 
-1. **Se etter grønt hakemerke:** i Azure-portalen, åpne App Service (`app-ezprop-test`) → Configuration (Environment variables). `DATABASE_URL`, `BETTER_AUTH_SECRET`, `MS_GRAPH_CLIENT_SECRET` og `ANTHROPIC_API_KEY` (de to siste når de er lagt inn) skal ha et grønt hakemerke og teksten «Key vault reference».
+1. **Se etter grønt hakemerke:** i Azure-portalen, åpne App Service (`app-ezprop-test`) → Configuration (Environment variables). `DATABASE_URL`, `BETTER_AUTH_SECRET`, `MS_GRAPH_CLIENT_SECRET`, `MS_LOGIN_CLIENT_SECRET` og `ANTHROPIC_API_KEY` (de tre siste når de er lagt inn) skal ha et grønt hakemerke og teksten «Key vault reference».
 2. **Er de røde rett etter første utrulling:** start appen på nytt (knappen «Restart» på App Service). Tilgangen til boksen lages etter appen, og App Service henter verdiene når appen starter. Etter omstart skal hakemerket være grønt.
 3. **Logg inn** i testmiljøet og se at det virker.
 
@@ -191,6 +219,7 @@ Alt i gruppen slettes, også databasen. Koden ligger fortsatt i GitHub, så milj
 Alt dette skal på plass før ekte data:
 
 - E-post via Microsoft 365 prøvd mot ekte konto (sendingen er bygget, venter på at de fire secretene legges inn)
+- Logg inn med Microsoft 365 prøvd mot ekte konto (bygget, venter på at de tre secretene `MS_LOGIN_*` legges inn, se punkt g)
 - Nøkkelboksen er bygget, av til Ståle slår den på (`ENABLE_KEY_VAULT`, se avsnittet «Nøkkelboks for hemmeligheter»)
 - Privat nettverk mellom app og database
 - Egen databasebruker for appen

@@ -241,7 +241,7 @@ describe("forslagskortet: sikkerhet og oppbygging (10.11–10.14)", () => {
 
   /*
    * Byggcon-profilen (docs/funksjoner/fase2a-byggcon-profil-testplan.md avsnitt 3, punkt 1 og
-   * designspesifikasjonen 4.7, D4/A227). Ordene bygges av biter (søket etter forbudte ord i src/).
+   * designspesifikasjonen 4.7, D4/A244). Ordene bygges av biter (søket etter forbudte ord i src/).
    */
   it("Byggcon-profilen: «Forslag fra KI», ingen nordlys eller fargeovergang i kortet", () => {
     const html = render();

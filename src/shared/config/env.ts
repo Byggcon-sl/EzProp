@@ -47,6 +47,14 @@ const envSchema = z.object({
     emptyToUndefined,
     z.email("MAIL_FROM må være en e-postadresse").optional(),
   ),
+  /*
+   * Logg inn med Microsoft 365 (ADR 0008). Valgfrie, og valideres ikke strengt her: feil i dette
+   * oppsettet skal slå av Microsoft-knappen, aldri stoppe appen (regel 11). Gyldighet og «alle
+   * eller ingen» avgjøres i `src/core/auth/microsoft-login.ts`. `MS_LOGIN_CLIENT_SECRET` står
+   * ikke her; den leses bare med `readSecret`.
+   */
+  MS_LOGIN_TENANT_ID: optionalSecret,
+  MS_LOGIN_CLIENT_ID: optionalSecret,
   /** Første admin (lages av seed). */
   SEED_ADMIN_EMAIL: z.preprocess(emptyToUndefined, z.string().trim().toLowerCase().optional()),
   SEED_ADMIN_NAME: z.preprocess(emptyToUndefined, z.string().trim().optional()),

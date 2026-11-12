@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 import { authClient } from "@/core/auth/auth-client";
 import { Button } from "@/shared/ui/button";
 import { Field, FormMessage, Input } from "@/shared/ui/form";
@@ -18,17 +18,81 @@ function tooManyRequestsMessage(message: string | undefined): string {
   return message?.trim().startsWith("For mange") ? message.trim() : TOO_MANY_REQUESTS_FALLBACK;
 }
 
+/** Samme tekst for alle avviste Microsoft-innlogginger; feilkoden vises ikke (A215). */
+export const MICROSOFT_REJECTED_MESSAGE =
+  "Du har ikke tilgang med denne kontoen. Be leder eller admin legge deg inn som ansatt, eller logg inn med kode.";
+
+/** Når runden hos Microsoft feilet av tekniske grunner (avbrutt, utløpt, feil hos Microsoft). */
+export const MICROSOFT_TECHNICAL_MESSAGE =
+  "Innloggingen med Microsoft virket ikke denne gangen. Prøv igjen, eller logg inn med kode.";
+
+/** Hvorfor forrige Microsoft-innlogging ikke gikk. Feilkoden selv vises aldri. */
+export type LoginFailure = "rejected" | "technical" | null;
+
+export const OFFLINE_LOGIN_MESSAGE =
+  "Du er uten nett. Innlogging trenger nett. Det du har lagret på iPaden, er trygt og synkes når du er inne igjen.";
+
+/** Leverandør-id-en i Better Auth (samme som `MICROSOFT_PROVIDER_ID` på serveren). */
+const MICROSOFT = "microsoft";
+
+function subscribeOnline(onChange: () => void) {
+  window.addEventListener("online", onChange);
+  window.addEventListener("offline", onChange);
+  return () => {
+    window.removeEventListener("online", onChange);
+    window.removeEventListener("offline", onChange);
+  };
+}
+
+function useOnline(): boolean {
+  return useSyncExternalStore(
+    subscribeOnline,
+    () => navigator.onLine,
+    () => true,
+  );
+}
+
 /**
- * Innlogging i to steg: e-postadresse, så koden fra e-posten.
- * `next` er siden brukeren sendes til etter riktig kode (sjekkes på nytt her).
+ * Innlogging. Med Microsoft satt opp er «Logg inn med Microsoft» hovedvalget, og koden er
+ * reserven (ADR 0008). Koden går i to steg: e-postadresse, så koden fra e-posten.
+ * `next` er siden brukeren sendes til etter innlogging (sjekkes på nytt her og på serveren).
+ * `failure`: forrige Microsoft-innlogging gikk ikke; meldingen vises og kodeskjemaet er åpent.
  */
-export function LoginForm({ next = DEFAULT_NEXT_PATH }: { next?: string }) {
+export function LoginForm({
+  next = DEFAULT_NEXT_PATH,
+  microsoft = false,
+  failure = null,
+}: {
+  next?: string;
+  microsoft?: boolean;
+  failure?: LoginFailure;
+}) {
   const router = useRouter();
+  const online = useOnline();
+  const [showCode, setShowCode] = useState(!microsoft || failure !== null);
+  const [redirecting, setRedirecting] = useState(false);
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  async function signInWithMicrosoft() {
+    if (redirecting) return;
+    setRedirecting(true);
+    setError(null);
+    // Omdirigering i samme vindu, aldri sprettoppvindu (virker i appen på hjemskjermen)
+    const { error } = await authClient.signIn.social({
+      provider: MICROSOFT,
+      callbackURL: safeNextPath(next),
+      errorCallbackURL: "/logg-inn",
+    });
+    if (error) {
+      setRedirecting(false);
+      setError("Vi fikk ikke kontakt med Microsoft. Prøv igjen, eller logg inn med kode.");
+      setShowCode(true);
+    }
+  }
 
   async function sendCode(event: FormEvent) {
     event.preventDefault();
@@ -70,8 +134,9 @@ export function LoginForm({ next = DEFAULT_NEXT_PATH }: { next?: string }) {
     router.refresh();
   }
 
+  let codeForm;
   if (step === "code") {
-    return (
+    codeForm = (
       <form onSubmit={verifyCode} className="space-y-4">
         <p role="status" className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-slate-700">
           Hvis <strong className="break-all">{email.trim()}</strong> har tilgang, har vi sendt en
@@ -92,7 +157,7 @@ export function LoginForm({ next = DEFAULT_NEXT_PATH }: { next?: string }) {
           />
         </Field>
         {error && <FormMessage message={error} />}
-        <Button type="submit" size="lg" disabled={pending} className="w-full">
+        <Button type="submit" size="lg" disabled={pending || !online} className="w-full">
           {pending ? "Logger inn …" : "Logg inn"}
         </Button>
         <Button variant="ghost" className="w-full" onClick={() => setStep("email")}>
@@ -100,24 +165,57 @@ export function LoginForm({ next = DEFAULT_NEXT_PATH }: { next?: string }) {
         </Button>
       </form>
     );
+  } else {
+    codeForm = (
+      <form onSubmit={sendCode} className="space-y-4">
+        <Field label="E-postadresse" htmlFor="email">
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        </Field>
+        {error && <FormMessage message={error} />}
+        <Button type="submit" size="lg" disabled={pending || !online} className="w-full">
+          {pending ? "Sender …" : "Send meg en kode"}
+        </Button>
+      </form>
+    );
   }
 
   return (
-    <form onSubmit={sendCode} className="space-y-4">
-      <Field label="E-postadresse" htmlFor="email">
-        <Input
-          id="email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-        />
-      </Field>
-      {error && <FormMessage message={error} />}
-      <Button type="submit" size="lg" disabled={pending} className="w-full">
-        {pending ? "Sender …" : "Send meg en kode"}
-      </Button>
-    </form>
+    <div className="space-y-4">
+      {!online && (
+        <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-slate-800">
+          {OFFLINE_LOGIN_MESSAGE}
+        </p>
+      )}
+      {failure === "rejected" && <FormMessage message={MICROSOFT_REJECTED_MESSAGE} />}
+      {failure === "technical" && <FormMessage message={MICROSOFT_TECHNICAL_MESSAGE} />}
+      {microsoft && (
+        <Button
+          size="lg"
+          className="w-full"
+          disabled={redirecting || !online}
+          onClick={signInWithMicrosoft}
+        >
+          {redirecting ? "Åpner Microsoft …" : "Logg inn med Microsoft"}
+        </Button>
+      )}
+      {microsoft && !showCode && (
+        <Button
+          variant="secondary"
+          className="w-full"
+          disabled={!online}
+          onClick={() => setShowCode(true)}
+        >
+          Logg inn med kode i stedet
+        </Button>
+      )}
+      {showCode && codeForm}
+    </div>
   );
 }

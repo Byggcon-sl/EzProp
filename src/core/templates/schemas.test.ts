@@ -3,6 +3,7 @@ import { OUTCOME_KINDS } from "@/db/schema";
 import { buildTemplateDocument } from "../../../tests/template-document";
 import {
   TEMPLATE_ISSUE_RULES,
+  checkNoBlockerInCustom,
   checkNoTgLogicInCustom,
   isSameTemplateContent,
   parseTemplateDocument,
@@ -279,6 +280,12 @@ const tgCases: {
     rejected: true,
   },
   {
+    name: "custom med suggest_tg0",
+    kind: "custom",
+    change: onlyRules("suggest_tg0"),
+    rejected: true,
+  },
+  {
     name: "custom med show og validate",
     kind: "custom",
     change: onlyRules("show", "validate"),
@@ -304,6 +311,19 @@ const tgCases: {
     },
     rejected: false,
   },
+  {
+    name: "R4.2 system med suggest_tg0",
+    kind: "system",
+    change: (doc) => {
+      doc.rules.push({
+        key: "rule.tg0",
+        name: "TG0-forslag",
+        purpose: "suggest_tg0",
+        target_checkpoint_key: "cp.one",
+      });
+    },
+    rejected: false,
+  },
 ];
 
 describe("2.5 checkNoTgLogicInCustom (beslutning 27.10.2026)", () => {
@@ -316,6 +336,74 @@ describe("2.5 checkNoTgLogicInCustom (beslutning 27.10.2026)", () => {
     } else {
       expect(issues).toEqual([]);
     }
+  });
+});
+
+// --- R4.4 checkNoBlockerInCustom (Ståle 12.11.2026, F9) ------------------------------------------
+
+function validateRule(severity: "blocker" | "warning"): Change {
+  return (doc) => {
+    onlyRules()(doc);
+    doc.rules = [
+      {
+        key: "rule.stopp",
+        name: "Kontroll",
+        purpose: "validate",
+        target_element_key: "el.count",
+        severity,
+        message: "Meldingstekst",
+      },
+    ];
+  };
+}
+
+describe("R4.4 checkNoBlockerInCustom (F9)", () => {
+  it.each<{ kind: "system" | "custom"; severity: "blocker" | "warning"; rejected: boolean }>([
+    { kind: "custom", severity: "blocker", rejected: true },
+    { kind: "custom", severity: "warning", rejected: false },
+    { kind: "system", severity: "blocker", rejected: false },
+    { kind: "system", severity: "warning", rejected: false },
+  ])("$kind med $severity: avvist = $rejected", ({ kind, severity, rejected }) => {
+    const issues = checkNoBlockerInCustom(kind, parsedDocument(validateRule(severity)));
+    if (!rejected) {
+      expect(issues).toEqual([]);
+      return;
+    }
+    expect(issues).toEqual([expect.objectContaining({ path: "rules.0.severity", rule: "schema" })]);
+    expect(issues[0]!.message).toContain("rule.stopp");
+    expect(issues[0]!.message).toMatch(/egen mal/);
+  });
+
+  it("R4.5 kalles på samme sted som checkNoTgLogicInCustom (begge lagringsveiene)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(new URL("./templates.ts", import.meta.url), "utf8");
+    expect(source).toMatch(
+      /checkNoTgLogicInCustom\(kind, parsed\.document\),\s*\.\.\.checkNoBlockerInCustom\(kind, parsed\.document\)/,
+    );
+  });
+});
+
+describe("R4.7 negate i dokumentformatet", () => {
+  it("betingelse uten negate leses som false", () => {
+    expect(parsedDocument().rule_conditions.every((c) => c.negate === false)).toBe(true);
+  });
+
+  it("negate som tekst avvises", () => {
+    expectRejected(
+      (doc) => {
+        (doc.rule_conditions[0] as Record<string, unknown>).negate = "ja";
+      },
+      "schema",
+      "rule_conditions.0.negate",
+    );
+  });
+
+  it("to dokumenter som bare skiller seg i negate er ikke like", () => {
+    const a = parsedDocument();
+    const b = parsedDocument((doc) => {
+      (doc.rule_conditions[0] as Record<string, unknown>).negate = true;
+    });
+    expect(isSameTemplateContent(a, b)).toBe(false);
   });
 });
 
@@ -486,6 +574,122 @@ describe("mal for bad 2.5: isSameTemplateContent", () => {
     );
     expect(isSameTemplateContent(a, b)).toBe(false);
   });
+});
+
+// --- Reglene badet trenger: expected_state og regelfeltene (testplan 6.10) ----------------------
+
+const RULE_CONDITION_KEY_COLUMNS = [
+  "threshold_key",
+  "age_year_element_key",
+  "age_fallback_year_element_key",
+  "age_source_element_key",
+  "documentation_element_key",
+  "material_element_key",
+  "unit_element_key",
+] as const;
+
+/** Engelske ord fra Zod som ikke skal stå i en melding til brukeren. */
+const ZOD_ENGLISH = /\b(invalid|expected|received|required|undefined|input)\b/i;
+
+describe("regler bad 6.10: expected_state og regelfeltene i dokumentformatet", () => {
+  it.each(["triggered", "not_triggered", "not_evaluated"] as const)(
+    "godtar expected_state = %s",
+    (state) => {
+      const result = expectAccepted((doc) => {
+        doc.rule_test_cases[0]!.expected_state = state;
+      });
+      if (result.success) expect(result.document.rule_test_cases[0]!.expected_state).toBe(state);
+    },
+  );
+
+  it.each([
+    { name: "ukjent verdi", value: "maybe" as unknown },
+    { name: "boolsk (gammelt format)", value: true as unknown },
+    { name: "tom tekst", value: "" as unknown },
+    { name: "null", value: null as unknown },
+  ])("avviser expected_state med $name, med norsk melding", ({ value }) => {
+    const issues = expectRejected(
+      (doc) => {
+        (doc.rule_test_cases[0] as Record<string, unknown>).expected_state = value;
+      },
+      "schema",
+      "rule_test_cases.0.expected_state",
+    );
+    for (const issue of issues) expect(issue.message, issue.message).not.toMatch(ZOD_ENGLISH);
+  });
+
+  it("expected_state som mangler avvises, også når det gamle expect_triggered er satt", () => {
+    const issues = expectRejected(
+      (doc) => {
+        const testCase = doc.rule_test_cases[0] as Record<string, unknown>;
+        delete testCase.expected_state;
+        testCase.expect_triggered = true;
+      },
+      "schema",
+      "rule_test_cases.0.expected_state",
+    );
+    for (const issue of issues) expect(issue.message).not.toMatch(ZOD_ENGLISH);
+  });
+
+  it("expect_triggered ved siden av expected_state lagres ikke stille (tas bort)", () => {
+    const result = expectAccepted((doc) => {
+      Object.assign(doc.rule_test_cases[0]!, { expect_triggered: false });
+    });
+    if (!result.success) return;
+    const testCase = result.document.rule_test_cases[0]!;
+    expect(testCase).not.toHaveProperty("expect_triggered");
+    expect(testCase.expected_state).toBe("triggered");
+  });
+
+  it("inspection_year: tom godtas og blir null", () => {
+    const result = expectAccepted(() => {});
+    if (result.success) {
+      for (const t of result.document.rule_test_cases) expect(t.inspection_year).toBeNull();
+    }
+    expectAccepted((doc) => {
+      doc.rule_test_cases[0]!.inspection_year = 2026;
+    });
+  });
+
+  it.each([
+    { name: "1700", value: 1700 as unknown },
+    { name: "3000", value: 3000 as unknown },
+    { name: "desimal", value: 2026.5 as unknown },
+    { name: "tekst", value: "2026" as unknown },
+  ])("inspection_year: $name avvises med schema", ({ value }) => {
+    expectRejected(
+      (doc) => {
+        (doc.rule_test_cases[0] as Record<string, unknown>).inspection_year = value;
+      },
+      "schema",
+      "rule_test_cases.0.inspection_year",
+    );
+  });
+
+  it.each(RULE_CONDITION_KEY_COLUMNS)(
+    "%s: gyldig kode og null godtas, ugyldig kode avvises",
+    (column) => {
+      const accepted = expectAccepted((doc) => {
+        (doc.rule_conditions[0] as Record<string, unknown>)[column] = "x.valid_code";
+      });
+      if (accepted.success) {
+        expect((accepted.document.rule_conditions[0] as Record<string, unknown>)[column]).toBe(
+          "x.valid_code",
+        );
+      }
+      const empty = expectAccepted(() => {});
+      if (empty.success) {
+        expect((empty.document.rule_conditions[0] as Record<string, unknown>)[column]).toBeNull();
+      }
+      expectRejected(
+        (doc) => {
+          (doc.rule_conditions[0] as Record<string, unknown>)[column] = "Ugyldig Kode";
+        },
+        "key_format",
+        `rule_conditions.0.${column}`,
+      );
+    },
+  );
 });
 
 // --- Dekning: hver regelkode finnes i minst én avvist testsak -----------------------------------

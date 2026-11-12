@@ -36,8 +36,12 @@ import { baseColumns } from "./common";
  *
  * Kolonner som venter (A146, A147): `template_families.company_id`, `archived_at`,
  * `owner_employee_id`; `template_versions.lifespan_table_id`, `threshold_table_id`,
- * `cost_band_set_id`; `rule_conditions.threshold_key` og alder-feltene; `rule_test_cases.last_result`
- * og `last_run_at`.
+ * `cost_band_set_id`; `rule_test_cases.last_result` og `last_run_at`.
+ *
+ * Regelmotoren (ADR 0009, migrering `0030_regler-bad`): `rule_conditions` har `threshold_key`,
+ * alder-feltene og `unit_element_key`, og `rule_test_cases` har `expected_state` (tre tilstander)
+ * og `inspection_year`. Migrering `0031`: `rules.purpose` har fått `suggest_tg0`, og
+ * `rule_conditions` har `negate` (betingelsen snus, A237).
  *
  * Listene under er de faste kodene. CHECK-reglene bygges fra dem, og `@/core/templates` bruker dem
  * i Zod-skjemaet.
@@ -91,9 +95,19 @@ export const CAUSE_CRITERIA = [
   "missing_documentation",
   "other",
 ] as const;
-export const RULE_PURPOSES = ["show", "suggest_outcome", "suggest_tgiu", "validate"] as const;
+/**
+ * Regelformålene. `suggest_tg0` (Ståle 12.11.2026, F1; A234) foreslår TG0 på kontrollpunktet i
+ * `target_checkpoint_key`, uten utfall: TG0 er ikke et avvik. Nye koder legges til sist.
+ */
+export const RULE_PURPOSES = [
+  "show",
+  "suggest_outcome",
+  "suggest_tgiu",
+  "validate",
+  "suggest_tg0",
+] as const;
 /** Regeltypene som er TG-logikk, og som bare er lov i systemmalen (beslutning 27.10.2026). */
-export const TG_RULE_PURPOSES = ["suggest_outcome", "suggest_tgiu"] as const;
+export const TG_RULE_PURPOSES = ["suggest_outcome", "suggest_tgiu", "suggest_tg0"] as const;
 export const RULE_MATCHES = ["all", "any"] as const;
 export const RULE_SEVERITIES = ["blocker", "warning"] as const;
 export const RULE_CONDITION_TYPES = [
@@ -113,6 +127,15 @@ export const RULE_CONDITION_TYPES = [
   "photo_missing",
   "tgiu_set",
 ] as const;
+/**
+ * Tilstandene et regelsvar kan ha (ADR 0009). `not_evaluated` = regelen kunne ikke vurderes
+ * (tomt eller ugyldig felt, ukjent betingelsestype). Brukes av `rule_test_cases.expected_state` og
+ * av regelmotoren i `@/core/rules`. Kodene endres aldri (regel 6).
+ */
+export const RULE_RESULT_STATES = ["triggered", "not_triggered", "not_evaluated"] as const;
+/** Første og siste befaringsår en testsak kan ha. */
+export const RULE_TEST_INSPECTION_YEAR_MIN = 1900;
+export const RULE_TEST_INSPECTION_YEAR_MAX = 2200;
 export const RULE_CONDITION_OPERATORS = [
   "eq",
   "in",
@@ -134,6 +157,7 @@ export type TextStatus = (typeof TEXT_STATUSES)[number];
 export type RulePurpose = (typeof RULE_PURPOSES)[number];
 export type RuleConditionType = (typeof RULE_CONDITION_TYPES)[number];
 export type RuleConditionOperator = (typeof RULE_CONDITION_OPERATORS)[number];
+export type RuleResultState = (typeof RULE_RESULT_STATES)[number];
 
 /** `kolonne in ('a', 'b')` fra en fast liste, slik at CHECK og koden har de samme kodene. */
 function inList(column: AnyPgColumn, values: readonly string[]): SQL {
@@ -588,6 +612,28 @@ export const ruleConditions = pgTable(
     checkpointKey: text("checkpoint_key"),
     operator: text("operator"),
     value: jsonb("value"),
+    /**
+     * For `number_vs_limit`: terskelens faste kode i stedet for fast verdi. Retningen står da på
+     * terskelen, og `operator` og `value` er tomme (kontrolleres i `@/core/templates`).
+     */
+    thresholdKey: text("threshold_key"),
+    /** For `age_vs_lifespan`: feltet med årstallet (fast kode). */
+    ageYearElementKey: text("age_year_element_key"),
+    /** For `age_vs_lifespan`: feltet som brukes når årstallet mangler (byggeåret). */
+    ageFallbackYearElementKey: text("age_fallback_year_element_key"),
+    /** For `age_vs_lifespan`: feltet med kilden for alderen. Tas bare med i begrunnelsen. */
+    ageSourceElementKey: text("age_source_element_key"),
+    /** For `age_vs_lifespan`: feltet som sier om dokumentasjon finnes. */
+    documentationElementKey: text("documentation_element_key"),
+    /** For `age_vs_lifespan`: feltet med materialvalget (valgkoden er materialkoden). */
+    materialElementKey: text("material_element_key"),
+    /** For `number_vs_limit` med terskel: feltet med enheten målingen er gjort i. */
+    unitElementKey: text("unit_element_key"),
+    /**
+     * Snur betingelsen (A237): sann blir usann og usann blir sann. «Ikke vurdert» står. Brukes for
+     * «under grensen» mot samme terskel som «lik eller over», så tallet står ett sted.
+     */
+    negate: boolean("negate").notNull().default(false),
     sortOrder: sortOrder(),
   },
   (table) => [
@@ -611,6 +657,34 @@ export const ruleConditions = pgTable(
       "rule_conditions_checkpoint_key_check",
       sql`${table.checkpointKey} is null or ${keyFormat(table.checkpointKey)}`,
     ),
+    check(
+      "rule_conditions_threshold_key_check",
+      sql`${table.thresholdKey} is null or ${keyFormat(table.thresholdKey)}`,
+    ),
+    check(
+      "rule_conditions_age_year_element_key_check",
+      sql`${table.ageYearElementKey} is null or ${keyFormat(table.ageYearElementKey)}`,
+    ),
+    check(
+      "rule_conditions_age_fallback_year_element_key_check",
+      sql`${table.ageFallbackYearElementKey} is null or ${keyFormat(table.ageFallbackYearElementKey)}`,
+    ),
+    check(
+      "rule_conditions_age_source_element_key_check",
+      sql`${table.ageSourceElementKey} is null or ${keyFormat(table.ageSourceElementKey)}`,
+    ),
+    check(
+      "rule_conditions_documentation_element_key_check",
+      sql`${table.documentationElementKey} is null or ${keyFormat(table.documentationElementKey)}`,
+    ),
+    check(
+      "rule_conditions_material_element_key_check",
+      sql`${table.materialElementKey} is null or ${keyFormat(table.materialElementKey)}`,
+    ),
+    check(
+      "rule_conditions_unit_element_key_check",
+      sql`${table.unitElementKey} is null or ${keyFormat(table.unitElementKey)}`,
+    ),
   ],
 );
 export type RuleCondition = typeof ruleConditions.$inferSelect;
@@ -624,7 +698,10 @@ export const ruleTestCases = pgTable(
     name: text("name").notNull(),
     /** Testsvarene: fast kode på feltet → verdi. */
     input: jsonb("input").notNull().default({}),
-    expectTriggered: boolean("expect_triggered").notNull(),
+    /** Forventet tilstand: slår til, slår ikke til eller ikke vurdert (`RULE_RESULT_STATES`). */
+    expectedState: text("expected_state").$type<RuleResultState>().notNull(),
+    /** Befaringsåret testsaken regner alder mot. Tom = regelen bruker ikke alder. */
+    inspectionYear: integer("inspection_year"),
     expectedOutcomeId: uuid("expected_outcome_id"),
     sortOrder: sortOrder(),
   },
@@ -641,6 +718,11 @@ export const ruleTestCases = pgTable(
       foreignColumns: [outcomes.organizationId, outcomes.id],
     }),
     check("rule_test_cases_input_check", sql`jsonb_typeof(${table.input}) = 'object'`),
+    check("rule_test_cases_expected_state_check", inList(table.expectedState, RULE_RESULT_STATES)),
+    check(
+      "rule_test_cases_inspection_year_check",
+      sql`${table.inspectionYear} is null or ${table.inspectionYear} between ${sql.raw(String(RULE_TEST_INSPECTION_YEAR_MIN))} and ${sql.raw(String(RULE_TEST_INSPECTION_YEAR_MAX))}`,
+    ),
   ],
 );
 export type RuleTestCase = typeof ruleTestCases.$inferSelect;

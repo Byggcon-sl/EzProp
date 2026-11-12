@@ -107,7 +107,7 @@ describe("alle variantene", () => {
   });
 });
 
-describe("6 fokusrammen i fjord fra globals.css (D1, A224)", () => {
+describe("6 fokusrammen i fjord fra globals.css (D1, A241)", () => {
   it(":focus-visible har outline i fjord, ikke mørk fjord", () => {
     const css = readFileSync(
       path.join(path.dirname(fileURLToPath(import.meta.url)), "../../app/globals.css"),

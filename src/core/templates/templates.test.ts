@@ -302,6 +302,56 @@ function docWithTextFields(mark = "A"): Doc {
   return doc;
 }
 
+/**
+ * Dokumentet med regelfeltene (reglene badet trenger, docs/funksjoner/fase2a-regler-bad-testplan.md
+ * avsnitt 6 og 7): en betingelse med terskelkode og enhetsfelt, en med alle alderfeltene, og en
+ * testsak med forventet tilstand og befaringsår. `mark` skiller testsakene mellom organisasjoner.
+ * Bygger på `docWithTextFields`, så også tekstfeltene fra malen for bad er med.
+ */
+function docWithRuleFields(mark = "A"): Doc {
+  const doc = docWithTextFields(mark);
+  doc.rule_conditions.push(
+    {
+      rule_key: "rule.suggest",
+      type: "number_vs_limit",
+      element_key: "el.count",
+      threshold_key: "x_limit",
+      unit_element_key: "el.size",
+      sort_order: 0,
+    },
+    {
+      rule_key: "rule.suggest",
+      group_no: 1,
+      type: "age_vs_lifespan",
+      ...AGE_FIELDS,
+      value: ["opt.small"],
+      sort_order: 1,
+    },
+  );
+  doc.rule_test_cases.push({
+    rule_key: "rule.suggest",
+    name: `Alder og terskel ${mark}`,
+    input: { "el.count": 1990, "el.size": "opt.small" },
+    expected_state: "triggered",
+    inspection_year: 2026,
+    expected_outcome: { checkpoint_key: "cp.one", question_key: "dq.first", outcome_key: "out.a" },
+    sort_order: 0,
+  });
+  return doc;
+}
+
+/** Alderfeltene i `docWithRuleFields`. */
+const AGE_FIELDS = {
+  age_year_element_key: "el.count",
+  age_fallback_year_element_key: "el.count",
+  age_source_element_key: "el.size",
+  documentation_element_key: "el.size",
+  material_element_key: "el.size",
+} as const;
+
+/** Rader i `docWithRuleFields`: to betingelser og én testsak mer enn grunndokumentet. */
+const RULE_DOC_ROW_COUNT = TEMPLATE_DOCUMENT_ROW_COUNT + 3;
+
 function parsed(doc: Doc) {
   const result = parseTemplateDocument(doc);
   if (!result.success) throw new Error(`ugyldig testdokument: ${JSON.stringify(result.issues)}`);
@@ -361,9 +411,10 @@ describe("4.1 tilgang per rolle", () => {
   it("4.1.2 takstmann uten rettighet får nei på alle fire endringstjenestene, ingen rader endret", async () => {
     const { org } = await orgWithAdmin();
     const draft = await createTemplate(org.id);
+    // Med regelfeltene (reglene badet trenger, testplan 7.2)
     const published = await createTemplate(org.id, {
       status: "published",
-      document: buildTemplateDocument(),
+      document: docWithRuleFields(),
     });
     const { actor } = await person(org.id, ["inspector"]);
     const before = await rowCounts();
@@ -376,7 +427,7 @@ describe("4.1 tilgang per rolle", () => {
       AccessDeniedError,
     );
     await expect(
-      saveDraftContent(actor, org.id, draft.versionId, buildTemplateDocument()),
+      saveDraftContent(actor, org.id, draft.versionId, docWithRuleFields()),
     ).rejects.toThrow(AccessDeniedError);
     await expect(publishVersion(actor, org.id, draft.versionId, null)).rejects.toThrow(
       AccessDeniedError,
@@ -465,15 +516,16 @@ describe("4.2 tenant-isolasjon", () => {
 
   it("4.2.2 getTemplateVersion gir aldri en versjon fra en annen organisasjon", async () => {
     const versionFor = new Map<string, string>();
-    // Dokumentet har text_status og default_cause_text (mal for bad, testplan 2.17), så det vises at
-    // heller ikke de nye feltene lekker til en annen organisasjon.
+    // Dokumentet har text_status og default_cause_text (mal for bad, testplan 2.17) og regelfeltene
+    // (terskelkode, alderfeltene, expected_state og inspection_year; reglene badet trenger, testplan
+    // 7.1), så det vises at heller ikke de nye feltene lekker til en annen organisasjon.
     await expectTenantIsolation({
       seed: async (grantA, grantB) => {
         const a = await createTemplate(grantA.organizationId, {
-          document: docWithTextFields("A"),
+          document: docWithRuleFields("A"),
         });
         const b = await createTemplate(grantB.organizationId, {
-          document: docWithTextFields("B"),
+          document: docWithRuleFields("B"),
         });
         versionFor.set(grantA.organizationId, a.versionId);
         versionFor.set(grantB.organizationId, b.versionId);
@@ -2038,6 +2090,17 @@ describe("mal for bad: text_status og default_cause_text i malmotoren", () => {
     const wanted = parseTemplateDocument(wetRoomTemplate);
     if (!wanted.success) throw new Error("malen for badet er ugyldig");
     expect(sortedLists(document)).toEqual(sortedLists(wanted.document));
+    // Reglene badet trenger (testplan 6.9): fem regler (TG0-regelen fra F1) og alle testsakene
+    expect(document.rules).toHaveLength(5);
+    // `negate` lagres og leses tilbake (M5.5)
+    expect(document.rule_conditions.filter((c) => c.negate).map((c) => c.rule_key)).toEqual([
+      "wet_room.hole_no_elevated_moisture",
+    ]);
+    expect(document.rule_test_cases).toHaveLength(wanted.document.rule_test_cases.length);
+    expect(document.rule_test_cases.length).toBeGreaterThan(0);
+    expect(document.rule_conditions.some((c) => c.threshold_key !== null)).toBe(true);
+    expect(document.rule_conditions.some((c) => c.type === "age_vs_lifespan")).toBe(true);
+    for (const t of document.rule_test_cases) expect(t.inspection_year).not.toBeNull();
   });
 
   // --- Tilgang per rolle (utvider 4.1 med de nye feltene) ---
@@ -2121,6 +2184,329 @@ describe("mal for bad: text_status og default_cause_text i malmotoren", () => {
     const own = await getTemplateVersion(adminA, orgA.id, a.versionId);
     expect(JSON.stringify(own.document)).toContain("Oppdiktet årsak a A");
     expect(JSON.stringify(own.document)).not.toContain("årsak a B");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Reglene badet trenger (docs/funksjoner/fase2a-regler-bad-testplan.md avsnitt 5.7, 6 og 7)
+// ---------------------------------------------------------------------------------------------
+
+describe("regler bad: de nye regelfeltene i malmotoren", () => {
+  it("2.18 save_and_read_rule_fields: saveDraftContent lagrer, getTemplateVersion gir dem tilbake", async () => {
+    const { org, admin, versionId } = await draftSetup();
+    await expect(saveDraftContent(admin, org.id, versionId, docWithRuleFields())).resolves.toEqual({
+      added: RULE_DOC_ROW_COUNT,
+      changed: 0,
+      removed: 0,
+    });
+
+    const { document } = await getTemplateVersion(admin, org.id, versionId);
+    expect(sortedLists(document)).toEqual(sortedLists(parsed(docWithRuleFields())));
+    const threshold = document.rule_conditions.find((c) => c.threshold_key !== null)!;
+    expect(threshold).toMatchObject({
+      rule_key: "rule.suggest",
+      type: "number_vs_limit",
+      threshold_key: "x_limit",
+      unit_element_key: "el.size",
+      operator: null,
+      value: null,
+    });
+    const age = document.rule_conditions.find((c) => c.type === "age_vs_lifespan")!;
+    expect(age).toMatchObject(AGE_FIELDS);
+    expect(age.value).toEqual(["opt.small"]);
+    const testCase = document.rule_test_cases.find((t) => t.rule_key === "rule.suggest")!;
+    expect(testCase).toMatchObject({ expected_state: "triggered", inspection_year: 2026 });
+    expect(testCase).not.toHaveProperty("expect_triggered");
+    for (const t of document.rule_test_cases) expect(t).not.toHaveProperty("expect_triggered");
+
+    // Og i databasen
+    const rows = await versionRows(versionId);
+    expect(rows.rule_conditions.find((r) => r.threshold_key === "x_limit")).toMatchObject({
+      unit_element_key: "el.size",
+      operator: null,
+    });
+    expect(rows.rule_conditions.find((r) => r.type === "age_vs_lifespan")).toMatchObject({
+      age_year_element_key: "el.count",
+      age_fallback_year_element_key: "el.count",
+      age_source_element_key: "el.size",
+      documentation_element_key: "el.size",
+      material_element_key: "el.size",
+    });
+    const caseRow = rows.rule_test_cases.find((r) => r.inspection_year === 2026)!;
+    expect(caseRow).toMatchObject({ expected_state: "triggered" });
+    expect(caseRow).not.toHaveProperty("expect_triggered");
+    expect(rows.rule_test_cases.map((r) => r.expected_state).sort()).toEqual(
+      ["not_triggered", "triggered", "triggered"].sort(),
+    );
+  });
+
+  it("2.19 copy_rule_fields: createDraftVersion kopierer de nye feltene", async () => {
+    const { org, admin, familyId, v1 } = await publishedSetup(docWithRuleFields());
+    const { versionId: v2 } = await createDraftVersion(admin, org.id, familyId);
+    const copy = (await getTemplateVersion(admin, org.id, v2)).document;
+    const source = (await getTemplateVersion(admin, org.id, v1)).document;
+    expect(copy).toEqual(source);
+    expect(copy.rule_conditions.find((c) => c.type === "age_vs_lifespan")).toMatchObject(
+      AGE_FIELDS,
+    );
+    expect(copy.rule_conditions.some((c) => c.threshold_key === "x_limit")).toBe(true);
+    expect(copy.rule_test_cases.find((t) => t.inspection_year === 2026)?.expected_state).toBe(
+      "triggered",
+    );
+    // Kopien i databasen, med nye id-er
+    const rowsV1 = await versionRows(v1);
+    const rowsV2 = await versionRows(v2);
+    const strip = (r: DbRow) => ({
+      threshold_key: r.threshold_key,
+      age_year_element_key: r.age_year_element_key,
+      age_fallback_year_element_key: r.age_fallback_year_element_key,
+      age_source_element_key: r.age_source_element_key,
+      documentation_element_key: r.documentation_element_key,
+      material_element_key: r.material_element_key,
+      unit_element_key: r.unit_element_key,
+    });
+    const sortJson = (list: unknown[]) => list.map((x) => JSON.stringify(x)).sort();
+    expect(sortJson(rowsV2.rule_conditions.map(strip))).toEqual(
+      sortJson(rowsV1.rule_conditions.map(strip)),
+    );
+    expect(
+      sortJson(rowsV2.rule_test_cases.map((r) => [r.expected_state, r.inspection_year])),
+    ).toEqual(sortJson(rowsV1.rule_test_cases.map((r) => [r.expected_state, r.inspection_year])));
+    const idsV1 = new Set(rowsV1.rule_conditions.map((r) => r.id));
+    for (const row of rowsV2.rule_conditions) expect(idsV1.has(row.id)).toBe(false);
+  });
+
+  it("2.20 idempotent_and_changed: samme dokument gir 0/0/0, og endret terskelkode eller tilstand blir sett", async () => {
+    const { org, admin, versionId } = await draftSetup();
+    await saveDraftContent(admin, org.id, versionId, docWithRuleFields());
+    const before = await versionRows(versionId);
+    await expect(saveDraftContent(admin, org.id, versionId, docWithRuleFields())).resolves.toEqual({
+      added: 0,
+      changed: 0,
+      removed: 0,
+    });
+    expect(await versionRows(versionId)).toEqual(before);
+
+    // Bare terskelkoden endret. Betingelser har ingen kode, så listen under regelen erstattes
+    // samlet (A142): de to betingelsene under rule.suggest fjernes mykt og legges inn på nytt.
+    const conditionsUnderRule = before.rule_conditions.filter(
+      (r) => r.deleted_at === null && r.threshold_key !== null,
+    );
+    expect(conditionsUnderRule).toHaveLength(1);
+    const changedThreshold = docWithRuleFields();
+    changedThreshold.rule_conditions.find((c) => c.threshold_key === "x_limit")!.threshold_key =
+      "x_other_limit";
+    const thresholdCounts = await saveDraftContent(admin, org.id, versionId, changedThreshold);
+    expect(thresholdCounts).toEqual({ added: 2, changed: 0, removed: 2 });
+    const afterThreshold = await versionRows(versionId);
+    const active = afterThreshold.rule_conditions.filter((r) => r.deleted_at === null);
+    expect(active.map((r) => r.threshold_key)).toContain("x_other_limit");
+    expect(active.map((r) => r.threshold_key)).not.toContain("x_limit");
+    // Den gamle raden står igjen, myk slettet og uendret
+    const old = afterThreshold.rule_conditions.find((r) => r.id === conditionsUnderRule[0]!.id)!;
+    expect(old.deleted_at).not.toBeNull();
+    expect(old.threshold_key).toBe("x_limit");
+
+    // Bare forventet tilstand endret på en testsak
+    const changedState = structuredClone(changedThreshold);
+    changedState.rule_test_cases.find((t) => t.rule_key === "rule.suggest")!.expected_state =
+      "not_evaluated";
+    await expect(saveDraftContent(admin, org.id, versionId, changedState)).resolves.toEqual({
+      added: 1,
+      changed: 0,
+      removed: 1,
+    });
+    // Og bare befaringsåret endret
+    const changedYear = structuredClone(changedState);
+    changedYear.rule_test_cases.find((t) => t.rule_key === "rule.suggest")!.inspection_year = 2025;
+    await expect(saveDraftContent(admin, org.id, versionId, changedYear)).resolves.toEqual({
+      added: 1,
+      changed: 0,
+      removed: 1,
+    });
+    const { document } = await getTemplateVersion(admin, org.id, versionId);
+    expect(document.rule_test_cases.find((t) => t.rule_key === "rule.suggest")).toMatchObject({
+      expected_state: "not_evaluated",
+      inspection_year: 2025,
+    });
+  });
+
+  // --- 5.7 kontrollene stopper lagring ---
+
+  const badRuleDocuments: { name: string; change: (doc: Doc) => void }[] = [
+    {
+      name: "suggest_outcome uten suggested_outcome",
+      change: (doc) => {
+        doc.rules.find((r) => r.key === "rule.suggest")!.suggested_outcome = null;
+      },
+    },
+    {
+      name: "regelen på ett punkt, utfallet på et annet",
+      change: (doc) => {
+        doc.checkpoints.push({
+          key: "cp.two",
+          section_key: "sec.alpha",
+          name: "Punkt to",
+          group: "interior",
+          sort_order: 1,
+        });
+        doc.rules.find((r) => r.key === "rule.suggest")!.target_checkpoint_key = "cp.two";
+      },
+    },
+    {
+      name: "TG-forslag mot punkt med gives_tg = false",
+      change: (doc) => {
+        doc.checkpoints[0]!.gives_tg = false;
+      },
+    },
+    {
+      name: "threshold_key sammen med operator og value",
+      change: (doc) => {
+        const c = doc.rule_conditions.find((x) => x.threshold_key === "x_limit")!;
+        c.operator = "gte";
+        c.value = 15;
+      },
+    },
+    {
+      name: "age_vs_lifespan uten material_element_key",
+      change: (doc) => {
+        doc.rule_conditions.find((x) => x.type === "age_vs_lifespan")!.material_element_key = null;
+      },
+    },
+  ];
+
+  it.each(badRuleDocuments)(
+    "4.5.14 save_rejects_bad_rules: $name gir TemplateValidationError, ingen rader og ingen logg",
+    async ({ change }) => {
+      const { org, admin, versionId } = await draftSetup();
+      await saveDraftContent(admin, org.id, versionId, docWithRuleFields());
+      const before = await snapshot();
+      const countsBefore = await rowCounts();
+      const doc = docWithRuleFields();
+      change(doc);
+      const issues = await validationIssues(saveDraftContent(admin, org.id, versionId, doc));
+      expect(issues.length).toBeGreaterThan(0);
+      for (const issue of issues) {
+        expect(issue.path).toMatch(/^(rules|rule_conditions)\.\d+/);
+        expect(issue.message).toMatch(/rule\.suggest/);
+      }
+      expect(await snapshot()).toEqual(before);
+      expect(await rowCounts()).toEqual(countsBefore);
+    },
+  );
+
+  it("4.5.14 en tom versjon får heller ingen rader når første lagring har feil regel", async () => {
+    const { org, admin, versionId } = await draftSetup();
+    const countsBefore = await rowCounts();
+    const doc = docWithRuleFields();
+    doc.rules.find((r) => r.key === "rule.suggest")!.suggested_outcome = null;
+    await validationIssues(saveDraftContent(admin, org.id, versionId, doc));
+    expect(await rowCounts()).toEqual(countsBefore);
+  });
+
+  // --- 7 tilgang og tenant-isolasjon ---
+
+  it.each([
+    { name: "takstmann", roles: ["inspector"] as EmployeeRole[] },
+    { name: "kontor", roles: ["office"] as EmployeeRole[] },
+    { name: "leder", roles: ["manager"] as EmployeeRole[] },
+  ])("7.4 $name leser malen med reglene", async ({ roles }) => {
+    const { org } = await orgWithAdmin();
+    const { versionId } = await createTemplate(org.id, {
+      status: "published",
+      document: docWithRuleFields(),
+    });
+    const { actor } = await person(org.id, roles);
+    const { document } = await getTemplateVersion(actor, org.id, versionId);
+    expect(document.rule_conditions.find((c) => c.type === "age_vs_lifespan")).toMatchObject(
+      AGE_FIELDS,
+    );
+    expect(document.rule_test_cases.some((t) => t.inspection_year === 2026)).toBe(true);
+  });
+
+  it.each([
+    { name: "leder uten template.edit_structure", roles: ["manager"] as EmployeeRole[] },
+    { name: "takstmann uten template.edit_structure", roles: ["inspector"] as EmployeeRole[] },
+    { name: "kontor", roles: ["office"] as EmployeeRole[] },
+  ])("7.4 $name får nei på saveDraftContent med regler, ingen rader endret", async ({ roles }) => {
+    const { org } = await orgWithAdmin();
+    const { versionId } = await createTemplate(org.id, { document: buildTemplateDocument() });
+    const { actor } = await person(org.id, roles);
+    const before = await snapshot();
+    const counts = await rowCounts();
+    await expect(saveDraftContent(actor, org.id, versionId, docWithRuleFields())).rejects.toThrow(
+      AccessDeniedError,
+    );
+    expect(await snapshot()).toEqual(before);
+    expect(await rowCounts()).toEqual(counts);
+  });
+
+  it("7.4 deaktivert admin får nei på saveDraftContent med regler", async () => {
+    const { org } = await orgWithAdmin();
+    const { versionId } = await createTemplate(org.id);
+    const { actor, employee } = await person(org.id, ["admin"]);
+    await db
+      .update(employees)
+      .set({ deactivatedAt: new Date() })
+      .where(eq(employees.id, employee.id));
+    const counts = await rowCounts();
+    await expect(saveDraftContent(actor, org.id, versionId, docWithRuleFields())).rejects.toThrow(
+      AccessDeniedError,
+    );
+    expect(await rowCounts()).toEqual(counts);
+  });
+
+  it("7.3 admin stenges aldri ute (regel 11, skal aldri fjernes): admin uten enkeltrettigheter lagrer og publiserer badmalen med reglene", async () => {
+    const { wetRoomTemplate } = await import("@/db/seed/templates/wet-room");
+    const org = await createOrganization();
+    await setInspectorsEditAll(org.id, false);
+    const { actor: admin } = await person(org.id, ["admin"]);
+    const { versionId } = await createTemplate(org.id);
+    const counts = await saveDraftContent(admin, org.id, versionId, wetRoomTemplate);
+    expect(counts.added).toBeGreaterThan(100);
+    await expect(publishVersion(admin, org.id, versionId, null)).resolves.toEqual({ versionId });
+    const { document } = await getTemplateVersion(admin, org.id, versionId);
+    expect(document.rules).toHaveLength(5);
+    expect(document.rule_test_cases.length).toBeGreaterThan(0);
+  });
+
+  it("7.6 organization_id på nye regelrader er grant.organizationId", async () => {
+    const { org, admin, versionId } = await draftSetup();
+    const other = await createOrganization("Annen organisasjon");
+    await createTemplate(other.id, { document: docWithRuleFields("B") });
+    const doc = docWithRuleFields();
+    for (const c of doc.rule_conditions) {
+      Object.assign(c, { organizationId: other.id, organization_id: other.id });
+    }
+    for (const t of doc.rule_test_cases) {
+      Object.assign(t, { organizationId: other.id, organization_id: other.id });
+    }
+    await saveDraftContent(admin, org.id, versionId, doc);
+    const rows = await versionRows(versionId);
+    expect(rows.rule_conditions.length).toBe(TEMPLATE_DOCUMENT_ROWS.rule_conditions + 2);
+    expect(rows.rule_test_cases.length).toBe(TEMPLATE_DOCUMENT_ROWS.rule_test_cases + 1);
+    for (const table of ["rule_conditions", "rule_test_cases"] as const) {
+      for (const row of rows[table]) expect(row.organization_id, table).toBe(org.id);
+    }
+    expect(rows.rule_conditions.some((r) => r.threshold_key === "x_limit")).toBe(true);
+    expect(rows.rule_test_cases.some((r) => r.inspection_year === 2026)).toBe(true);
+  });
+
+  it("7.1 tenant: en annen organisasjon ser ikke regelfeltene, og egen versjon har bare egne testsaker", async () => {
+    const { org: orgA, admin: adminA } = await orgWithAdmin("Testfirma A");
+    const { org: orgB, admin: adminB } = await orgWithAdmin("Testfirma B");
+    const a = await createTemplate(orgA.id, { document: docWithRuleFields("A") });
+    await createTemplate(orgB.id, { document: docWithRuleFields("B") });
+
+    await expect(getTemplateVersion(adminB, orgB.id, a.versionId)).rejects.toThrow(
+      TemplateNotFoundError,
+    );
+    await expect(getTemplateVersion(adminB, orgA.id, a.versionId)).rejects.toThrow(
+      AccessDeniedError,
+    );
+    const own = await getTemplateVersion(adminA, orgA.id, a.versionId);
+    expect(JSON.stringify(own.document)).toContain("Alder og terskel A");
+    expect(JSON.stringify(own.document)).not.toContain("Alder og terskel B");
   });
 });
 

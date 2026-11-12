@@ -143,7 +143,7 @@ function localFontCalls(source: string): string[] {
   }
 }
 
-describe("1.5 forhåndslasting (D2, A225)", () => {
+describe("1.5 forhåndslasting (D2, A242)", () => {
   const layout = () => readFileSync(join(repoRoot, "src", "app", "layout.tsx"), "utf8");
   const calls = () => localFontCalls(layout());
 

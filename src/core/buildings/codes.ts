@@ -4,14 +4,19 @@
  * skal den få ny betydning, arkiveres den og det lages en ny (regel 6). Nye koder legges til sist.
  */
 
-/** Arealtype for rom og areal (forskriften § 2-20). ALH er ikke en arealtype for rom. */
-export const AREA_TYPES = ["bra_i", "bra_e", "bra_b"] as const;
+/**
+ * Arealtype for rom (forskriften § 2-20). ALH er ikke en arealtype for rom. `not_bra` («Ikke del
+ * av BRA», Ståle 12.11.2026, F6; A235) er en merking på rommet for kryperom og uinnredet loft. Den
+ * påvirker ikke summene: BRA regnes fra etasjearealet (`sumFloorArea`), og rom har ikke areal.
+ */
+export const AREA_TYPES = ["bra_i", "bra_e", "bra_b", "not_bra"] as const;
 export type AreaType = (typeof AREA_TYPES)[number];
 
 const AREA_TYPE_LABELS: Record<AreaType, string> = {
   bra_i: "BRA-i",
   bra_e: "BRA-e",
   bra_b: "BRA-b",
+  not_bra: "Ikke del av BRA",
 };
 
 /** Norsk navn på arealtypen. Ukjent kode gis tilbake som den er. */
@@ -283,8 +288,8 @@ export const ROOM_TYPES = [
     key: "crawl_space",
     label: "Kryperom",
     group: "other",
-    defaultAreaType: "bra_i",
-    defaultBelowGround: true,
+    defaultAreaType: "not_bra",
+    defaultBelowGround: false,
     draft: true,
   },
   {
@@ -299,7 +304,7 @@ export const ROOM_TYPES = [
     key: "unfinished_attic",
     label: "Loft, uinnredet",
     group: "other",
-    defaultAreaType: "bra_i",
+    defaultAreaType: "not_bra",
     defaultBelowGround: false,
     draft: true,
   },
@@ -368,6 +373,51 @@ export function suggestBelowGround({
 }): boolean {
   return floorBelowGround || (findRoomType(roomType)?.defaultBelowGround ?? false);
 }
+
+/** Forslaget når et etasjenavn velges fra listen: etasjenummer og «under terreng». */
+export type FloorSuggestion = { level: number; belowGround: boolean };
+
+/** Etasjenavn som foreslås på skjermen (kan skrives fritt). */
+export const FLOOR_NAME_SUGGESTIONS = [
+  "Kjeller",
+  "Underetasje",
+  "1. etasje",
+  "2. etasje",
+  "Loft",
+] as const;
+
+/** Laveste og høyeste etasjenummer (`floors_level_check`). */
+const MIN_LEVEL = -3;
+const MAX_LEVEL = 20;
+
+/**
+ * Dataregel (Ståle 12.11.2026, F7; A236): forslag til etasjenummer og «under terreng» fra
+ * etasjenavnet. Ren funksjon; skjermen (klientkode) importerer den fra denne fila.
+ *
+ * - Navnet sammenlignes uten forskjell på store og små bokstaver og uten mellomrom foran og bak.
+ * - «Kjeller» og «Underetasje» gir `{ level: -1, belowGround: true }`, også når -1 er i bruk.
+ * - «Loft» gir `max(høyeste i existingLevels, 0) + 1`, aldri over 20, og `belowGround: false`.
+ * - Alt annet gir `null`: da gjelder neste ledige nummer, og «under terreng» endres ikke.
+ * - `existingLevels` er numrene på etasjene i bygningen som ikke er slettet.
+ *
+ * Bare et forslag: takstmannen kan endre begge feltene før lagring.
+ */
+export type SuggestFloor = (
+  name: string,
+  existingLevels: readonly number[],
+) => FloorSuggestion | null;
+
+export const suggestFloor: SuggestFloor = (name, existingLevels) => {
+  const normalized = name.trim().toLocaleLowerCase("nb");
+  if (normalized === "kjeller" || normalized === "underetasje") {
+    return { level: -1, belowGround: true };
+  }
+  if (normalized === "loft") {
+    const highest = Math.max(0, ...existingLevels);
+    return { level: Math.max(MIN_LEVEL, Math.min(MAX_LEVEL, highest + 1)), belowGround: false };
+  }
+  return null;
+};
 
 /** Arealfeltene i én etasje. Tomme felt (`null` eller mangler) teller som 0. */
 export type AreaValues = {

@@ -3,14 +3,14 @@ id: T-0015
 tittel: Testsakene i malen kan ikke si «ikke vurdert» når data mangler
 type: forbedring
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-11
 rolle: test-fag
 omrade: mal, regler
 maal: reklamasjoner
 commit: 0b8e3b9
 forsok: 0
-pr:
+pr: #167 (12.11.2026)
 ---
 
 ## Hva
@@ -34,3 +34,4 @@ Ikke etterprøvd (forbedring).
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-12: rettet i PR #167 (branch `fase2a-regler-bad`): testsakene har tilstanden «ikke vurdert» (`expected_state`), og tomt eller ugyldig felt gir «ikke vurdert».

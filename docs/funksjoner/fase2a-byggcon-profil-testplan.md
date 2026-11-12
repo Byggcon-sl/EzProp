@@ -24,7 +24,7 @@ Går gjennom alle filer under `src/` og `public/` (tekst og filnavn). Testfilen 
 2. **ingen Google-skrift:** `fonts.googleapis`, `fonts.gstatic` og `next/font/google` finnes ikke.
 3. **skriftfilene finnes:** `public/fonts` har Inter 400, 500, 600, 700 og Schibsted Grotesk 500, 600, 700 (filnavn som i `docs/design/byggcon-profil/fonts/`), og ingen `Roboto-*`.
 4. **lisensen:** `public/fonts/README.md` nevner «SIL OFL 1.1», Inter og Schibsted Grotesk, og nevner ikke Roboto eller PDF-bruk av Roboto. Lisensfilene (`OFL-*.txt`) ligger ved siden av.
-5. **forhåndslasting (D2 i designspesifikasjonen, A225):** `src/app/layout.tsx` har nøyaktig ett `preload: true` (Inter-familien, alle fire vektene) og `preload: false` for Schibsted Grotesk (leses som tekst). `next/font/local` styrer forhåndslasting per familie, ikke per vekt. Ingen `display` annet enn `"swap"`, og `adjustFontFallback` er ikke satt til `false`.
+5. **forhåndslasting (D2 i designspesifikasjonen, A242):** `src/app/layout.tsx` har nøyaktig ett `preload: true` (Inter-familien, alle fire vektene) og `preload: false` for Schibsted Grotesk (leses som tekst). `next/font/local` styrer forhåndslasting per familie, ikke per vekt. Ingen `display` annet enn `"swap"`, og `adjustFontFallback` er ikke satt til `false`.
 6. **ingen fast hex i synkstatusen:** `src/modules/offline-trial/sync-status.tsx` har ingen `#[0-9a-f]{3,6}` (bruker `--color-sync-*`).
 
 ## 2. Kontrast, `src/app/(ansatt)/contrast.test.ts` (utvides, ren)
@@ -35,9 +35,9 @@ Temaet leses først; `slate-*` fjernes fra `fixed` og leses fra `@theme` (de omd
 2. **paletten finnes:** `snow`, `sand`, `night`, `fjord`, mørk fjord (navnet ui-designer velger), `stone`, `line` (12 %) og `line-strong` (25 %) som `#rrggbb` (linjene som ferdig blandet hex mot snow, ikke `rgba`).
 3. **`canvas` er snow** og `brand-*`/`slate-*` finnes og er ikke de gamle verdiene (`#326ca1` og Tailwinds `#0f172a`, `#334155`, `#475569` er borte).
 4. **tekst** (`it.each`): slate-600, slate-700, slate-900 og night mot snow, hvit og sand: minst 4,5:1.
-5. **hovedknapp:** lys tekst mot night minst 4,5:1; deaktivert hovedknapp er hvit mot slate-500 (stone, D3, A226), minst 4,5:1.
+5. **hovedknapp:** lys tekst mot night minst 4,5:1; deaktivert hovedknapp er hvit mot slate-500 (stone, D3, A243), minst 4,5:1.
 6. **kanter** (`it.each`): kanten på sekundærknapp og skjemafelt mot snow, hvit og sand: minst 3:1.
-7. **fokusramme (D1, A224):** fjord (`#316aa0`) mot snow, hvit, sand og night: minst 3:1. Mørk fjord brukes ikke til fokus (2,5:1 mot night).
+7. **fokusramme (D1, A241):** fjord (`#316aa0`) mot snow, hvit, sand og night: minst 3:1. Mørk fjord brukes ikke til fokus (2,5:1 mot night).
 8. **TG** (`it.each` over `tg0`, `tg1`, `tg2`, `tg3`, `tgiu`): alle fem finnes, hver med tekst- og flatetoken, tekst mot flate minst 4,5:1.
 9. **synk** (`it.each` over alle `--color-sync-*` par): tekst mot flate minst 4,5:1.
 10. **KI:** KI-merkets tekst mot flate og forslagskortets tekst mot flate minst 4,5:1; kanten på merket/kortet mot snow og hvit minst 3:1.

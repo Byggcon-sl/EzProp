@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import packageJson from "../package.json" with { type: "json" };
-import { ADMIN_EMAIL, logIn, uniqueSuffix } from "./helpers";
+import { ADMIN_EMAIL, chooseCodeLogin, logIn, uniqueSuffix } from "./helpers";
 
 test("helsesjekken svarer med versjonen fra package.json uten innlogging", async ({ request }) => {
   const response = await request.get("/api/helse");
@@ -31,10 +31,11 @@ test("admin logger inn med kode på e-post og ser arbeidskøen, og kan logge ut"
 
 test("feil kode avvises", async ({ page }) => {
   await page.goto("/logg-inn");
+  await chooseCodeLogin(page);
   await page.getByLabel("E-postadresse").fill(ADMIN_EMAIL);
   await page.getByRole("button", { name: "Send meg en kode" }).click();
   await page.getByLabel("Kode fra e-posten").fill("000000");
-  await page.getByRole("button", { name: "Logg inn" }).click();
+  await page.getByRole("button", { name: "Logg inn", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Koden" })).toContainText(
     "Koden stemmer ikke",
   );
@@ -46,6 +47,7 @@ test("ukjent e-post får ingen kode og ingen bekreftelse på at adressen finnes"
   // Unik adresse: e2e-databasen tømmes ikke, og bestillingsgrensen per adresse ville slått inn
   const unknownEmail = `ukjent.${uniqueSuffix()}@eksempel.no`;
   await page.goto("/logg-inn");
+  await chooseCodeLogin(page);
   await page.getByLabel("E-postadresse").fill(unknownEmail);
   await page.getByRole("button", { name: "Send meg en kode" }).click();
   // Samme skjerm som for kjente adresser (lekker ikke hvem som har tilgang)

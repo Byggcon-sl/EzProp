@@ -72,7 +72,7 @@ Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3
 | 0a Repo og database | Ferdig 28.10.2026 |
 | 1 Prøve uten nett | Ferdig 10.11.2026. Ståle har kjørt prøvene på ekte iPad og godkjent ADR 0004 (egenbygd synk). |
 | 0b Innlogging, organisasjon, roller | Ferdig, unntatt felles innlogging med Optiplan (venter på S6) |
-| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127), forslagsmønsteret (PR #131), vask før KI (PR #135), evalueringssettet (PR #141) og KI-køen (PR #143) er levert. Det alvorlige funnet T-0001 (synkkøen) er rettet i PR #139. Beslutningsnotatet om KI-leverandør og Anthropic-adapteren (siste punkt i 2a-1) er ferdig. 2a-2: malen for ett bad er levert (PR #159). Neste: reglene badet trenger. |
+| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127), forslagsmønsteret (PR #131), vask før KI (PR #135), evalueringssettet (PR #141) og KI-køen (PR #143) er levert. Det alvorlige funnet T-0001 (synkkøen) er rettet i PR #139. Beslutningsnotatet om KI-leverandør og Anthropic-adapteren (siste punkt i 2a-1) er ferdig. 2a-2: malen for ett bad er levert (PR #159), og reglene badet trenger er levert (PR #167). Neste: Byggcon-profilen, deretter badet på PC. |
 | Minimum før ekte data | To av ti punkter levert. Testmiljøet (S1) er oppe fra 12.11.2026, så resten kan bygges og prøves der. |
 | 2b og videre | Ikke startet |
 
@@ -133,7 +133,7 @@ Alle punktene i 2a-1 er levert (12.11.2026) og står i `docs/plan/levert.md`.
 
 Tas **før neste punkt i 2a-2**. Ståle i chat 12.11.2026: «tror vi skal sette opp logg inn via microsoft 365 kontoene vi har, epost knyttet til @byggcon.no - så kommer vi rett inn uten kode. Vi kan ha kode i bakhånd, i tilfelle microsoft innloggingen feiler».
 
-- [ ] **Logg inn med Microsoft 365** (Byggcons kontoer, `@byggcon.no`): knappen «Logg inn med Microsoft» er hovedvalget på innloggingssiden, og de ansatte kommer rett inn uten kode. Bare Byggcons Microsoft-katalog (én tenant) godtas. Bare personer som allerede er registrert som ansatt i EzProp, slipper inn (ingen ny bruker lages av innloggingen), og e-postadressen matches uten hensyn til store og små bokstaver. **Engangskoden blir reserven** («Logg inn med kode i stedet»), slik at admin aldri stenges ute (regel 11) hvis Microsoft-innloggingen feiler. Verdiene `MS_LOGIN_TENANT_ID`, `MS_LOGIN_CLIENT_ID` og `MS_LOGIN_CLIENT_SECRET` legges inn av Ståle som secrets i GitHub (oppskrift i `docs/drift/testmiljo-azure.md`), og sendes til appen av utrullingen. Uten dem vises bare engangskoden, som i dag. Tilbakeadressen er `https://app-ezprop-test.azurewebsites.net/api/auth/callback/microsoft`. Tofaktor kommer da fra Microsoft-kontoen (gjelder mål 11 for den som logger inn med Microsoft). ADR og test for tilgang, tenant og at ukjente adresser avvises.
+- [x] **Logg inn med Microsoft 365** (Byggcons kontoer, `@byggcon.no`): knappen «Logg inn med Microsoft» er hovedvalget på innloggingssiden, og de ansatte kommer rett inn uten kode. Bare Byggcons Microsoft-katalog (én tenant) godtas. Bare personer som allerede er registrert som ansatt i EzProp, slipper inn (ingen ny bruker lages av innloggingen), og e-postadressen matches uten hensyn til store og små bokstaver. **Engangskoden blir reserven** («Logg inn med kode i stedet»), slik at admin aldri stenges ute (regel 11) hvis Microsoft-innloggingen feiler. Verdiene `MS_LOGIN_TENANT_ID`, `MS_LOGIN_CLIENT_ID` og `MS_LOGIN_CLIENT_SECRET` legges inn av Ståle som secrets i GitHub (oppskrift i `docs/drift/testmiljo-azure.md`), og sendes til appen av utrullingen. Uten dem vises bare engangskoden, som i dag. Tilbakeadressen er `https://app-ezprop-test.azurewebsites.net/api/auth/callback/microsoft`. Tofaktor kommer da fra Microsoft-kontoen (gjelder mål 11 for den som logger inn med Microsoft). ADR og test for tilgang, tenant og at ukjente adresser avvises.
 
 ### Prioritert av Ståle 12.11.2026: Byggcon-profilen
 
@@ -141,11 +141,21 @@ Tas **etter Microsoft-innlogging og før neste punkt i 2a-2**, slik at skjermene
 
 - [ ] **Byggcon-profilen i EzProp**, samme grep som Optiplan gjorde 10.11.2026: paletten fra byggcon.no (snow, sand, night, fjord), Inter i brødtekst og Schibsted Grotesk i overskrifter (Roboto ut), pilleknapper, kort med tynn kant og 12 px hjørner, ingen nordlys og ingen fargeoverganger. Grunnlaget ligger i `docs/design/byggcon-profil/` (skrifter, Optiplans tema og skjermbilder). Gjøres i temaet (`src/app/globals.css`) og felleskomponentene, slik at sidene følger med. **Luften og trykkflatene på iPad beholdes** (beslutningen 24.10.2026 står). TG-fargene får samme toner som statusfargene i Optiplan, alltid med tekst. KI-merket får et eget uttrykk i paletten. `docs/08-designprinsipper.md` oppdateres. Ingen brudd på WCAG 2.1 AA, og skjermbilder før og etter på PC og iPad.
 
+### Fra Ståles svar 12.11.2026
+
+Første punkt tas **før Byggcon-profilen**, fordi det retter reglene som alt er merget. Resten tas etter Byggcon-profilen og før neste punkt i 2a-2, i denne rekkefølgen. Svarene står i `docs/kartlegging/svar-fra-stale-2026-11-12.md`.
+
+- [x] **Svarene i reglene og bygningene** (F1–F7): hulltaking med måling uten forhøyet fukt gir forslag om TG0 på tilliggende konstruksjoner uansett alder (F1); ikke tatt hull og ikke målt gir TGIU med begrunnelse og risikovurdering (F2); kilden for fuktgrensen og levetidene er NS 3600:2025 (F3); lik eller over grensen gir forslag (F4, F5); kryperom og lavt, uinnredet loft kan føres som «ikke del av BRA», og kryperom følger reglene for krypkjeller uten krav om hulltaking (F6, T-0016); «Kjeller» og «Underetasje» får etasjenummer -1 og «Under terreng» forhåndsvalgt, som takstmannen kan endre (F7, T-0010). Egne maler kan bare lage advarsler, aldri nye sperrer (F9).
+- [ ] **Rette en ordre etter at den er lagret** (T1, «full redigeringstilgang. alltid»): også etter at ordren er blitt oppdrag. Endrer A55 og A87. Endringene logges.
+- [ ] **Søk i ordrelisten og i arbeidskøen** (T2).
+- [ ] **Varsel om mulig dublett** (T3): fast regel uten KI (samme adresse eller matrikkel og overlappende tid). Varselet stopper ikke lagringen.
+- [ ] **Flere rom på én gang med færrest mulig trykk** (T4). KI som foreslår rom (for eksempel fra plantegning) står i 2a-3 og tas så tidlig som det lar seg gjøre.
+- [ ] **Oppbevaringstid for avviste KI-forslag som innstilling** (K7), 10 år som standard. Endrer A157.
+
 ### 2a-2 Smal vei: ett våtrom fra kontrollpunkt til PDF
 
 Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se og godkjenne fag og utseende tidlig, og feil i grunnstrukturen oppdages før de blir dyre.
 
-- [ ] **Reglene badet trenger,** i regelmotoren som én felles kodepakke for iPad og server: alder mot levetid (med trinn), én målegrense for fukt, våtrom fra før 2000, og hulltaking nektet gir TGIU. Testsaker per regel. Fukt ikke målt gir ikke TG2 på grunn av alder alene på tilliggende konstruksjoner (Ståle 10.11.2026, spørsmål 59a).
 - [ ] **Badet på PC:** kontrollpunktene, avvikskort (TG, årsak, konsekvens, tiltak, kostnad) og TGIU på punktet. TG-forslag fra reglene kan godtas, endres eller avvises.
 - [ ] **KI i veien:** forslag fra frasebanken, språkvask av avviksteksten og utkast til sammendrag, gjennom KI-grunnmuren.
 - [ ] **Publisering av badet:** sperren for det som gjelder våtrom (TG2 eller TG3 uten årsak og konsekvens, TG3 uten kostnad, våtrom uten hulltaking eller begrunnelse), med aktiv overstyring og logg.
@@ -159,6 +169,7 @@ Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se
 - [ ] **Regneark inn og ut med faste ID-er** for systemmalen. Slik redigerer fagansvarlig malen i betaen (P19); egen maleditor kommer i fase 5.
 - [ ] Automatisk kontroll av malen før publisering: obligatoriske punkter finnes, TG3 har kostnad, ingen regler peker på felt som ikke finnes, og alle testtilfeller består
 - [ ] «Prøv malen»: et testskjema som viser hvilke spørsmål og TG-forslag som kommer
+- [ ] **KI: forslag til rom fra plantegning** (Ståle 12.11.2026, T4: «ki first»): takstmannen laster opp plantegningen, og KI foreslår rommene med romtype og etasje. Takstmannen godtar, endrer eller fjerner. Aldri areal som fasit, aldri TG.
 - [ ] Levetider (NS 3600:2025 tillegg C som tall, **med trinn**, innspill D4), terskler (bekreftet av fagrådet) og kostnadsintervaller som egne tabeller
 - [ ] Regelmotoren som én felles kodepakke for iPad og server: vis/skjul, **TG-forslag fra materiale, alder (med kilde for alderen og om dokumentasjon finnes) og målinger**, forslag om TGIU på punktet, og kontroller. Testtilfeller per regel. De nye betingelsestypene fra innspill D5 (snødekke, bygningstype, TG på annet punkt, bilde mangler, TGIU satt).
 - [ ] **Informasjonstekst ut fra byggeår** (for eksempel asbest) foreslås av regler i malen. Bare forslag, aldri TG. (Svar 10.11.2026, nr. 47)
@@ -211,7 +222,7 @@ Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se
 
 ---
 
-## Minimum før ekte data  `status: to av ti levert`
+## Minimum før ekte data  `status: to av elleve levert`
 
 Før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerklæringer) legges inn, skal dette være på plass. Den fulle personvernpakken ligger i fase 4. De fleste punktene trenger testmiljøet (S1).
 
@@ -222,7 +233,8 @@ Før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerkl�
 - [ ] **Sperring av iPader** (innspill P6 og D10): kode eller Face ID påkrevd, og en mistet iPad kan sperres. Må være på plass før første ekte befaring på iPad i fase 2b.
 - [ ] **Microsoft 365 koblet til**, og koden i serverloggen for første admin er ikke lenger i bruk
 - [ ] **Privat nettverk eller VNet-integrasjon mellom app og database** (ikke brannmurregelen for alle Azure-tjenester), og egen databasebruker for appen uten eierrettigheter
-- [ ] **KI-leverandør:** databehandleravtale signert, EU/EØS-vei valgt og spørsmål 54–58 og 73 besvart, før tilkoblingen `anthropic` lages for en organisasjon med ekte data. Se `docs/beslutningsnotat-ki-leverandor.md`.
+- [ ] **KI-leverandør:** databehandleravtale signert og behandlingen i EU/EØS (Ståle 12.11.2026, K1: Anthropic direkte bare i testmiljøet med oppdiktede data), før tilkoblingen `anthropic` lages for en organisasjon med ekte data. Spørsmål 54–58 og 73 er besvart 12.11.2026. Leverandørens vanlige oppbevaringstid godtas og skrives inn i personvernerklæringen (K2). Se `docs/beslutningsnotat-ki-leverandor.md`.
+- [ ] **Personvernkonsekvensvurdering (DPIA), kort utkast** fra agentene som Ståle godkjenner (K3, 12.11.2026). Før ekte data, ikke før testing.
 
 **Ferdig når:** Ståle har sett listen krysset av og godkjent at ekte data kan legges inn.
 
@@ -300,6 +312,7 @@ Rutiner, kalender og økonomi. Kan bygges mens piloten går.
 - [ ] **Fakturagrunnlag til eAccounting** gjennom tilkoblingen: fritt valgt mottaker, linjer med MVA, kontroll og «send», riktig eAccounting-klient for hvert av de tre selskapene, ingen dubletter av kunder, status tilbake som hendelsene **«faktura sendt»**, **«faktura betalt»** og «faktura forfalt». Liste over ufakturerte og ubetalte oppdrag. Her bygges også tabellen `external_references` og selskap på tilkoblingen (`company_id` eller `companies.accounting_connection_id`), flyttet fra tilkoblingslaget i fase 0b (02.11.2026, se `docs/funksjoner/fase0b-tilkoblingslag.md`, «Til fase 3»).
   - [ ] Nøkkelboksen steg 2: `readSecret` leser tilkoblingenes hemmeligheter rett fra boksen med appens identitet, av som standard (utsatt fra fase 0b 03.11.2026, A50; oppgavekort og testplan i `docs/funksjoner/fase0b-nokkelboks-kodevei.md`). Bygges i samme PR som den første tilkoblingen som trenger det; kommer en KI-tilkobling med egen nøkkel i fase 2, flyttes punktet dit.
 - [ ] **Prisliste per avtale som data** (funksjonskart H2): standardpriser og avtalepriser foreslås på fakturalinjene. En prismotor (pris etter areal, alder og avstand) kommer senere.
+- [ ] **Tall om KI-bruk per ansatt, også for leder** (Ståle 12.11.2026, K8). Bygges først når det er drøftet med de ansatte (arbeidsmiljøloven kapittel 9).
 - [ ] **Enkelt lederdashbord** (funksjonskart H3): oppdrag per status, befaringer neste uke, levert siste 30 dager, leveringstid, ufakturert og forfalt, per kontor og selskap, og pilotmålene
 - [ ] Oppslag i Brønnøysundregistrene for firma (som i Optiplan)
 
@@ -315,7 +328,7 @@ Rutiner, kalender og økonomi. Kan bygges mens piloten går.
 - [ ] **Personvern, full pakke:** behandlingsgrunnlag, personvernerklæring, protokoll over behandlinger, databehandleravtaler med alle leverandørene (drift, e-post, fillagring, tale til tekst, KI), og vurdering av personvernkonsekvenser for KI. Byggcon eier arbeidet, med Ståle som daglig leder (beslutning 25.10.2026). Claude lager utkast. Det grunnleggende er allerede gjort i «Minimum før ekte data».
 - [ ] **Sikkerhetskopi:** daglig kopi har gått siden «Minimum før ekte data». Ny prøvegjenoppretting gjøres og dokumenteres før alle tar EzProp i bruk.
 - [ ] **Oppbevaring i minst 10 år:** låste utgivelser, bilder og måledata kan ikke slettes, og originalbildene følger innstillingene (avviksbilder i original 10 år, andre originaler 2 år, komprimert 10 år, besluttet 27.10.2026)
-- [ ] Tofaktor eller tilsvarende sikker innlogging (mål 11). Sperre etter gjentatte feil kom i fase 0b.
+- [ ] Tofaktor eller tilsvarende sikker innlogging (mål 11). Sperre etter gjentatte feil kom i fase 0b. **Merk (12.11.2026):** Ståle svarte at engangskoden er reserve for alle, og at Byggcon ikke krever tofaktor i Microsoft i dag. Da er det ingen tofaktor med ekte data. Ståle avgjør om målet endres, eller om tofaktor slås på i Microsoft før ekte data.
 - [ ] Drift i EU/EØS med overvåking og varsel, som Optiplan (Azure)
 - [ ] Gjennomgang av sikkerhet og tilgjengelighet før alle tar det i bruk
 

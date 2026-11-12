@@ -45,6 +45,11 @@ export default defineConfig({
       TRIAL_UPLOAD_DIR: "var/uploads/trial",
       // Testkroken window.__offlineTrial. Aldri i .env.example.
       NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS: "1",
+      // Microsoft-innlogging slått på med oppdiktede verdier (ADR 0008). Ingen ekte tenant eller
+      // hemmelighet; nettleseren når aldri Microsoft (e2e/fase-2a-microsoft-innlogging.spec.ts).
+      MS_LOGIN_TENANT_ID: "00000000-0000-4000-8000-0000000e2e01",
+      MS_LOGIN_CLIENT_ID: "00000000-0000-4000-8000-0000000e2e02",
+      MS_LOGIN_CLIENT_SECRET: "oppdiktet-e2e-verdi",
     },
   },
 });

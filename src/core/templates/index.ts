@@ -1,4 +1,11 @@
-export { checkDocumentKeys } from "./document";
+export {
+  checkDocumentKeys,
+  checkDocumentRules,
+  checkRuleCheckpointGivesTg,
+  checkRuleConditionShape,
+  checkRuleOutcomeSameCheckpoint,
+  checkRuleSuggestsOutcome,
+} from "./document";
 export {
   TEMPLATE_DRAFT_EXISTS_MESSAGE,
   TEMPLATE_ISSUE_RULES,
@@ -12,6 +19,7 @@ export {
 export {
   KEY_MAX,
   KEY_PATTERN,
+  checkNoBlockerInCustom,
   checkNoTgLogicInCustom,
   createTemplateFamilyInputSchema,
   parseTemplateDocument,

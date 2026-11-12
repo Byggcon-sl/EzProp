@@ -1,0 +1,43 @@
+# ADR 0009 – Regelmotoren: ett rent blad i `src/core/rules`, svar i faste koder
+
+Dato: 12.11.2026. Status: vedtatt av agentene i autonom modus (A231, A232); Ståle kan endre. Rettet 12.11.2026 etter Ståles svar F1 og F9 (punkt 6, 7, 9 og 13, A234 og A237, oppgavekort `docs/funksjoner/fase2a-svar-regler-bygninger.md`). Oppgavekort: `docs/funksjoner/fase2a-regler-bad.md`. Bygger på malmotoren (`0024_malmotor`, A136–A147) og ADR 0006 (KI i bunnen) og 0007 (tekststatus).
+
+Støtter hovedmålene: **færre reklamasjoner** (TG-forslag kommer likt hver gang fra regler med testsaker, og «ikke vurdert» blir aldri stille til «slår ikke til»), **de ansatte** (samme forslag på iPaden uten nett og på PC, med begrunnelse) og **KI i bunnen** (regelsvaret er strukturerte koder og tall som KI senere kan bygge årsakstekst og sammendrag på; KI setter aldri TG og kalles aldri av motoren).
+
+## Beslutninger
+
+1. **Regelmotoren ligger i `src/core/rules`** som rene funksjoner: `evaluateRules` og `runRuleTestCases`. Typene står i `src/core/rules/types.ts` (`EvaluateRules`, `RunRuleTestCases`), kodene i `src/core/rules/codes.ts`. Ingen database, ingen server- eller nettleser-API, ingen dagens dato. Befaringsåret tas inn som argument.
+2. **Rent blad, håndhevet med lint** (`eslint-rules/module-boundaries.js`, meldingen `rulesLeaf`): filene i `src/core/rules` får bare importere fra egen mappe og `@/shared`, og bare `import type` fra `@/core/templates` og `@/db/schema`. Ingen pakker (heller ikke `zod`, `server-only` eller `node:*`). Testfiler er unntatt. `src/core/templates` får ikke importere `src/core/rules` (`templatesToRules`), så det ikke oppstår en sirkel.
+3. **Samme kode på iPaden og på serveren.** Det finnes én motor. Regelen i `CLAUDE.md` (regel 5) er dermed en egenskap ved koden, ikke en avtale.
+4. **Inndata er maldokumentet, ikke databaserader.** Motoren leser `rules`, `rule_conditions`, `outcomes` og `element_options` fra `TemplateDocument`, svarene som `feltkode → verdi`, og levetider og terskler som argument. Den bruker bare faste koder, aldri id-er.
+5. **Tre tilstander:** `triggered`, `not_triggered` og `not_evaluated` (`RULE_RESULT_STATES` i `src/db/schema/templates.ts`). Treverdilogikk: med `all` gir én usann `not_triggered`, ellers gir én ukjent `not_evaluated`, ellers `triggered`; med `any` gir én sann `triggered`, ellers gir én ukjent `not_evaluated`, ellers `not_triggered`. Grupper (`group_no`) slås sammen på samme måte. Tomt eller ugyldig felt, og en betingelsestype motoren ikke kjører, gir alltid `not_evaluated`.
+6. **Motoren avgjør selv hva som kjøres.** Bare aktive regler og betingelser. Bare formålene `suggest_outcome`, `suggest_tgiu` og `suggest_tg0` (`EVALUATED_RULE_PURPOSES` i `src/core/rules/codes.ts`, lik `TG_RULE_PURPOSES` i skjemaet, vist med en test), og bare når malen er `system` + `condition_report`. Bare betingelsestypene `option_selected`, `number_vs_limit` og `age_vs_lifespan` nå (`SUPPORTED_CONDITION_TYPES`). Alt annet gir `not_evaluated` med en kode.
+7. **Regelsvaret (`RuleResult`) har bare faste koder og tall:** regelkoden, tilstanden, forslaget (utfall med tre koder, eller TGIU eller TG0 på et kontrollpunkt), én begrunnelse per betingelse (én variant per betingelsestype), og kodene på levetids- og terskelsettet som ble lest. Ingen fritekst, ingen id-er, ingen persondata. Valgkoder i begrunnelsen tas bare med når de finnes som valg i malen. **TG0 foreslås bare av formålet `suggest_tg0`** (A234, Ståle 12.11.2026, F1): forslaget er `{ kind: "tg0", checkpoint_key }`, regelen har `target_checkpoint_key` på et kontrollpunkt med `gives_tg` og ikke noe utfall, for TG0 er ikke et avvik. Motoren løser ikke motstrid mellom regler: at ingen svar gir både TG0 og et annet forslag på samme kontrollpunkt, sikres av testsakene i malen.
+8. **Levetider og terskler er kodedata nå** (`src/core/rules/data/lifespans.ts` og `thresholds.ts`), med samme form som `lifespan_entries` og `threshold_entries` i domenemodellen 4.5. Hver rad har fast `key` og `status` (`draft` = «utkast, ikke godkjent av fagrådet»). Hvert sett har en fast settkode (`LifespanSet.key`, `ThresholdSet.key`). Motoren importerer aldri `data/`; den som kaller, sender settene inn. Når tabellene kommer i 2a-3, fylles de med de samme kodene, og motoren endres ikke.
+9. **Feltkodene står i malen, ikke i motoren.** `rule_conditions` har fått `threshold_key`, `age_year_element_key`, `age_fallback_year_element_key`, `age_source_element_key`, `documentation_element_key`, `material_element_key` og `unit_element_key` (alle valgfrie, med samme format-CHECK som `element_key`). Retningen på en terskel står bare på terskelen; har betingelsen `threshold_key`, er `operator` og `value` tomme. For `age_vs_lifespan` er `value` listen over valgkodene som betyr «uten dokumentasjon». **`rule_conditions.negate`** (A237, migrering `0031_svar-regler-bygninger`, også i dokumentformatet, standard `false`) snur betingelsen: sann blir usann og usann blir sann, og «ikke vurdert» står. Begrunnelsen har `negated`, og `truth` er verdien etter snuing. Slik leser «under grensen» samme terskel som «lik eller over», så en måling lik grensen aldri gir begge forslag og en måling rett under aldri gir ingen.
+10. **Strengeste trinn vinner.** En `age_vs_lifespan`-betingelse er sann når det strengeste levetidstrinnet som passer, har samme `outcome_kind` som regelens foreslåtte utfall. Ett sjikt gir derfor ett forslag, ikke både TG2 og TG3.
+11. **`rule_test_cases.expected_state` erstatter `expect_triggered`** (A232), og testsaken har fått `inspection_year`. Migrering `0030_regler-bad` fyller `expected_state` fra den gamle kolonnen (`true` → `triggered`, `false` → `not_triggered`) og fjerner den i samme migrering. Dokumentformatet følger med.
+12. **Kodene endres aldri** (regel 6): tilstandene, begrunnelseskodene, settkodene, kodene på levetidstrinn og terskler. Nye koder legges til i listene.
+13. **Egne maler kan bare lage advarsler** (Ståle 12.11.2026, F9). En `validate`-regel med `severity = blocker` avvises i en egen mal ved lagring og publisering (`@/core/templates`). Når motoren tar i bruk `validate`, skal den i tillegg behandle `blocker` utenfor systemmalen som advarsel. Bare de sju kravene fra forskriften sperrer.
+
+## Forkastet
+
+- **Motoren inne i `src/core/templates`:** malmotoren importerer databasen og tilgangssjekken. Da kan ikke motoren kjøre i nettleseren uten å dra dem med.
+- **Motoren i `src/shared`:** `shared` skal ikke kjenne domenet, og kan ikke bruke typene fra malmotoren.
+- **Gjenbruk av prøve E (`src/modules/offline-trial/rules`):** den er en modul, ikke kjerne, og har et eget, smalere regelformat. Den står urørt.
+- **Levetider og terskler som tabeller nå:** står ikke i fasen (2a-3). Kodedata med faste koder gir samme form uten skjermer, tilgang og tenant-tester.
+- **To tilstander (ja/nei):** «ikke vurdert» kan da ikke testes, og et tomt felt ser ut som «alt i orden» (T-0015).
+- **Både `expect_triggered` og `expected_state`:** to kolonner for det samme gir to sannheter.
+- **Feltkoder skrevet inn i motoren** (for eksempel `wet_room.build_year`): da må motoren endres for hvert nytt rom.
+- **Fritekst i begrunnelsen:** kan inneholde persondata, og kan ikke oversettes, telles eller brukes trygt av KI.
+- **Egen terskel for «under grensen»** (samme tall med `lt`): to tall som må rettes samtidig. Rettes bare det ene, gir en måling enten to forslag eller ingen.
+- **Fast verdi på betingelsen for «under grensen»:** tallet står da i malen og ikke i terskelsettet, uten kilde, status og settkode.
+- **TG0 som utfall (`outcomes.kind`):** et utfall er et avvik med årsak, konsekvens og tiltak. TG0 har ingen av delene.
+- **En regelpakke fra andre** (for eksempel et bibliotek for JSON-regler): ny avhengighet, og treverdilogikken og levetidstrinnene måtte uansett bygges utenpå.
+
+## Følger
+
+- Skjermen for badet (neste punkt) kaller `evaluateRules` med svarene i rommet og viser forslagene. Regelsvaret lagres sammen med `deviations.suggested_by_rule_id`, som slås opp fra regelkoden ved lagring. Et godtatt TG0-forslag er ikke et avvik og passer ikke der; hvor det lagres, avgjøres med «Badet på PC».
+- Kontrollen før publisering (2a-3) kaller `runRuleTestCases` og fyller `last_result` og `last_run_at`. Til da sikres testsakene av en Vitest-test på malfilen.
+- Nye betingelsestyper og formålene `show` og `validate` legges til i motoren uten å endre svaret: de går fra `not_evaluated` til en egen begrunnelsesvariant.
+- **Dyrt å endre:** plasseringen, formen på regelsvaret og de faste kodene, når regelsvar først er lagret i rapporter. **Lett å endre:** tallene i levetidene og tersklene, og reglene i malen (data og testsaker).
