@@ -17,9 +17,22 @@ import { listTrialFields, trialForm } from "../src/modules/offline-trial/trial-f
 /** Første admin fra seed (SEED_ADMIN_EMAIL i CI og .env.example). */
 export const ADMIN_EMAIL = "admin@byggcon.no";
 
+/**
+ * Velger engangskoden når Microsoft-innlogging er satt opp (e2e-serveren har et oppdiktet
+ * oppsett, ADR 0008). Uten oppsett vises kodeskjemaet med en gang, og ingenting skjer.
+ */
+export async function chooseCodeLogin(page: Page) {
+  const codeInstead = page.getByRole("button", { name: "Logg inn med kode i stedet" });
+  const email = page.getByLabel("E-postadresse");
+  await expect(codeInstead.or(email).first()).toBeVisible();
+  if (await codeInstead.isVisible()) await codeInstead.click();
+  await expect(email).toBeVisible();
+}
+
 /** Logger inn med engangskode hentet fra utviklings-postkassen (/dev/epost). */
 export async function logIn(page: Page, email = ADMIN_EMAIL) {
   await page.goto("/logg-inn");
+  await chooseCodeLogin(page);
   await page.getByLabel("E-postadresse").fill(email);
   await page.getByRole("button", { name: "Send meg en kode" }).click();
   await expect(page.getByLabel("Kode fra e-posten")).toBeVisible();
@@ -32,7 +45,7 @@ export async function logIn(page: Page, email = ADMIN_EMAIL) {
   if (!code) throw new Error(`Fant ingen innloggingskode i «${subject}»`);
 
   await page.getByLabel("Kode fra e-posten").fill(code);
-  await page.getByRole("button", { name: "Logg inn" }).click();
+  await page.getByRole("button", { name: "Logg inn", exact: true }).click();
   await expect(page).toHaveURL(/\/arbeidskoe$/);
 }
 
@@ -708,6 +721,7 @@ export function fieldSaved(page: Page, label: string): Locator {
  * Sjekker ikke hvor siden sender etterpå; det gjør testen selv med `toHaveURL`.
  */
 export async function signInWithCode(page: Page, email: string) {
+  await chooseCodeLogin(page);
   await page.getByLabel("E-postadresse").fill(email);
   await page.getByRole("button", { name: "Send meg en kode" }).click();
   await expect(page.getByLabel("Kode fra e-posten")).toBeVisible();
