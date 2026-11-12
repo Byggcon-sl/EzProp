@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Badge } from "./badge";
-import { Checkbox, ChoiceGroup, Field, Input, Radio, Textarea } from "./form";
+import { Checkbox, ChoiceGroup, Field, Input, Radio, Select, Textarea } from "./form";
 import { Notice } from "./notice";
 
 function field(props: { hint?: string; error?: string }) {
@@ -45,7 +45,7 @@ describe("Field", () => {
 describe("Input og Textarea", () => {
   it("får rød kant bare ved aria-invalid", () => {
     const html = renderToStaticMarkup(createElement(Input, {}));
-    expect(html).toContain("aria-invalid:border-red-700");
+    expect(html).toContain("aria-invalid:border-urgent-line");
     expect(html).toContain("min-h-11");
   });
 
@@ -54,6 +54,42 @@ describe("Input og Textarea", () => {
     expect(html).toContain("<textarea");
     expect(html).toContain("border-field");
     expect(html).toContain("resize-y");
+  });
+});
+
+/*
+ * Byggcon-profilen (docs/funksjoner/fase2a-byggcon-profil-testplan.md avsnitt 3, form.test.ts):
+ * felt med 8 px hjørner (`rounded-lg`) og kanten fra temaet (`border-field`, minst 3:1, sjekket i
+ * contrast.test.ts). Ingen krav over er svekket.
+ */
+describe("feltene i Byggcon-profilen", () => {
+  const fields = [
+    ["Input", () => renderToStaticMarkup(createElement(Input, {}))],
+    ["Textarea", () => renderToStaticMarkup(createElement(Textarea, {}))],
+    ["Select", () => renderToStaticMarkup(createElement(Select, {}))],
+  ] as const;
+
+  function classes(html: string): string[] {
+    return (/class="([^"]*)"/.exec(html)?.[1] ?? "").split(/\s+/).filter(Boolean);
+  }
+
+  it.each(fields)("%s har rounded-lg (8 px), border og border-field", (_name, html) => {
+    const list = classes(html());
+    expect(list).toContain("rounded-lg");
+    expect(list).not.toContain("rounded-xl");
+    expect(list).toContain("border");
+    expect(list).toContain("border-field");
+  });
+
+  it.each(fields)("%s er minst 44 px høyt og får urgent-kant ved feil", (_name, html) => {
+    const list = classes(html());
+    expect(list.some((name) => /^min-h-(11|14|20|32)$/.test(name))).toBe(true);
+    expect(list).toContain("aria-invalid:border-urgent-line");
+  });
+
+  it("feilen ved feltet bruker urgent-text", () => {
+    const html = field({ error: "Skriv inn navnet." });
+    expect(html).toMatch(/<p id="name-error" class="[^"]*text-urgent-text/);
   });
 });
 
@@ -92,7 +128,7 @@ describe("Badge og Notice", () => {
   it("merket bærer teksten, ikke bare fargen", () => {
     const html = renderToStaticMarkup(Badge({ tone: "warning", children: "Forsikring utløpt" }));
     expect(html).toContain("Forsikring utløpt");
-    expect(html).toContain("bg-amber-50 text-amber-900");
+    expect(html).toContain("bg-watch-fill text-watch-text");
   });
 
   it("kvitteringen leses opp som status", () => {

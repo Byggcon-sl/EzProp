@@ -8,8 +8,8 @@ export const brand = {
   supportEmail: "post@byggcon.no",
   companyWebsite: "https://byggcon.no",
   companyHeadOffice: "Bodø",
-  /** Byggcon-blå: temafarge for appen på hjemskjermen og bakgrunn i app-ikonet. */
-  color: "#326CA1",
+  /** Fjord fra Byggcon-profilen: temafarge for appen på hjemskjermen og bakgrunn i app-ikonet. */
+  color: "#316AA0",
   /** Byggcon-logo (fra byggcon.no). 494 × 202 px. */
   companyLogo: { src: "/brand/byggcon-logo.png", width: 494, height: 202 },
 } as const;

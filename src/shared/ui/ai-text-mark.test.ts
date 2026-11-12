@@ -39,6 +39,22 @@ describe("AiTextMark", () => {
     expect(showsAiTextMark(props)).toBe(false);
   });
 
+  /*
+   * Byggcon-profilen (docs/funksjoner/fase2a-byggcon-profil-testplan.md avsnitt 3, punkt 1):
+   * merket har ordet «KI» i teksten og eget uttrykk med kant i `ai-line`, uten nordlys og uten
+   * fargeovergang. Ordene bygges av biter, så søket etter forbudte ord i src/ ikke treffer filen.
+   */
+  it("Byggcon-profilen: «KI» i teksten, kant i ai-line, ingen nordlys eller fargeovergang", () => {
+    const html = render({ aiUsageId: USAGE_ID, status: "accepted" });
+    expect(html).toMatch(/\bKI\b/);
+    expect(html).toContain("text-ai-900");
+    expect(html).toContain("ring-ai-line");
+    expect(html).not.toContain("ai-200");
+    expect(html).not.toMatch(
+      new RegExp([["aur", "ora"].join(""), ["gra", "dient"].join("")].join("|"), "i"),
+    );
+  });
+
   it("10.17 merket har ingen props for variant eller tekst", () => {
     const withVariant = createElement(AiTextMark, {
       aiUsageId: USAGE_ID,

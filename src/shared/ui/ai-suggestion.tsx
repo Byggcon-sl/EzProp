@@ -323,7 +323,7 @@ export function AiSuggestion(props: AiSuggestionProps) {
           </div>
           <div>
             <h3 className="flex items-center gap-1.5 text-sm font-medium text-ai-900">
-              <AiSparkIcon />
+              <AiSparkIcon className="text-ai-700" />
               {heading}
             </h3>
             {box?.kind === "suggestion" && box.showMark ? (
@@ -347,7 +347,7 @@ export function AiSuggestion(props: AiSuggestionProps) {
         view.buttons.newSuggestion ||
         view.buttons.undo ? (
           <div
-            className="mt-4 flex flex-row-reverse flex-wrap justify-start gap-2 border-t border-slate-200 pt-4 md:gap-3"
+            className="mt-4 flex flex-row-reverse flex-wrap justify-start gap-2 border-t border-line pt-4 md:gap-3"
             data-testid="ai-suggestion-buttons"
           >
             {view.buttons.use ? (
@@ -391,9 +391,9 @@ export function AiSuggestion(props: AiSuggestionProps) {
             {view.buttons.newSuggestion ? (
               <Button
                 ref={newSuggestionRef}
-                variant="ghost"
+                variant="secondary"
                 size="md"
-                className="min-w-11 ring-1 ring-slate-300 ring-inset"
+                className="min-w-11"
                 disabled={view.disabled}
                 aria-disabled={view.disabled || undefined}
                 onClick={() => act(onNewSuggestion, "use")}
@@ -413,8 +413,8 @@ function SuggestionBox({ box }: { box: AiSuggestionBox }) {
     return (
       <p
         className={cn(
-          "mt-2 rounded-xl border border-ai-200 bg-gradient-to-br from-brand-50 to-ai-50 p-4 text-base leading-relaxed whitespace-pre-wrap text-slate-900",
-          box.dimmed && "opacity-70",
+          "mt-2 rounded-xl border border-l-4 border-ai-line bg-ai-50 p-4 text-base leading-relaxed whitespace-pre-wrap text-slate-900",
+          box.dimmed && "text-slate-600",
         )}
         data-testid="ai-suggestion-text"
       >
@@ -426,7 +426,7 @@ function SuggestionBox({ box }: { box: AiSuggestionBox }) {
     <p
       className={cn(
         "mt-2 rounded-xl p-4 text-base leading-relaxed",
-        box.tone === "warning" ? "bg-amber-50 text-amber-900" : "bg-slate-50 text-slate-900",
+        box.tone === "warning" ? "bg-watch-fill text-watch-text" : "bg-snow text-slate-900",
         box.tone === "working" && "motion-safe:animate-pulse",
       )}
       data-testid="ai-suggestion-message"

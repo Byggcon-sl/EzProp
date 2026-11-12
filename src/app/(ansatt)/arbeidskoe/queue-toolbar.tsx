@@ -16,7 +16,7 @@ const SEARCH_LABEL = "Søk på adresse eller oppdragsnummer";
 const segmentList = "flex flex-wrap gap-1 rounded-xl bg-white/60 p-1 ring-1 ring-slate-200/60";
 const segmentLink =
   "inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-base text-slate-700 hover:bg-white";
-const segmentCurrent = "bg-white font-medium text-slate-900 shadow-card";
+const segmentCurrent = "bg-white font-medium text-slate-900 ring-1 ring-line";
 
 function SearchIcon() {
   return (

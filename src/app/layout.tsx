@@ -5,15 +5,30 @@ import { brand } from "@/shared/config/brand";
 import "./globals.css";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 
-// Roboto fra prosjektets egne filer. Ingen kall til Google, så byggingen virker uten internett.
-const roboto = localFont({
+// Skriftene fra prosjektets egne filer (public/fonts). Ingen kall til Google, så byggingen virker
+// uten internett, og sw.js legger filene i bufferen for bruk uten nett på iPaden.
+// Inter (brødtekst og knapper) lastes på forhånd; Schibsted Grotesk (overskrifter) ved behov.
+const inter = localFont({
   src: [
-    { path: "../../public/fonts/Roboto-Regular.ttf", weight: "400", style: "normal" },
-    { path: "../../public/fonts/Roboto-Medium.ttf", weight: "500", style: "normal" },
-    { path: "../../public/fonts/Roboto-Bold.ttf", weight: "700", style: "normal" },
+    { path: "../../public/fonts/Inter-Regular.ttf", weight: "400", style: "normal" },
+    { path: "../../public/fonts/Inter-Medium.ttf", weight: "500", style: "normal" },
+    { path: "../../public/fonts/Inter-SemiBold.ttf", weight: "600", style: "normal" },
+    { path: "../../public/fonts/Inter-Bold.ttf", weight: "700", style: "normal" },
   ],
-  variable: "--font-roboto",
+  variable: "--font-inter",
   display: "swap",
+  preload: true,
+});
+
+const schibsted = localFont({
+  src: [
+    { path: "../../public/fonts/SchibstedGrotesk-Medium.ttf", weight: "500", style: "normal" },
+    { path: "../../public/fonts/SchibstedGrotesk-SemiBold.ttf", weight: "600", style: "normal" },
+    { path: "../../public/fonts/SchibstedGrotesk-Bold.ttf", weight: "700", style: "normal" },
+  ],
+  variable: "--font-schibsted",
+  display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -34,9 +49,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="nb" className={roboto.variable}>
+    <html lang="nb" className={`${inter.variable} ${schibsted.variable}`}>
       <body>
-        <div className="aurora-bar" aria-hidden="true" />
         {children}
         <ServiceWorkerRegistration />
       </body>

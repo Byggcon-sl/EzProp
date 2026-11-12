@@ -119,7 +119,7 @@ function ForeignChangeNotice() {
 /** Merket på et felt som ikke er lagret på enheten. Ingen role: meldingen øverst er varselet. */
 function NotSavedMark() {
   return (
-    <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-2 py-1 text-sm font-medium text-red-800">
+    <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-urgent-fill px-2 py-1 text-sm font-medium text-urgent-text">
       <svg
         aria-hidden="true"
         viewBox="0 0 16 16"
@@ -137,7 +137,7 @@ function NotSavedMark() {
 }
 
 const inputClass =
-  "block min-h-11 w-full rounded-xl border border-field bg-white px-3 py-2 text-base text-slate-900 focus:border-brand-600";
+  "block min-h-11 w-full rounded-lg border border-field bg-white px-3 py-2 text-base text-slate-900 focus:border-fjord";
 const labelClass = "mb-1.5 block text-sm font-medium text-slate-700";
 
 function fieldId(key: string): string {

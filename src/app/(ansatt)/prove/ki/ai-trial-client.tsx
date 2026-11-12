@@ -394,7 +394,7 @@ export function AiTrialClient({ owner }: { owner: AiQueueOwner }) {
         >
           <span
             aria-hidden="true"
-            className={cn("size-2.5 rounded-full", online ? "bg-emerald-600" : "bg-slate-400")}
+            className={cn("size-2.5 rounded-full", online ? "bg-fjord" : "bg-slate-400")}
           />
           {online ? "På nett" : "Uten nett"}
         </p>

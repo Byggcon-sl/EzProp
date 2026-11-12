@@ -49,12 +49,13 @@ interface SyncStatusProps {
 }
 
 const PILL_CLASSES: Record<SyncStatusKind, string> = {
-  allSaved: "bg-[#d9f2e6] text-[#155e3e]",
-  pending: "bg-brand-50 text-brand-700",
-  offline: "bg-[#fbe7b5] text-[#6b4405]",
-  awaitingServer: "bg-[#e2e8f0] text-[#334155]",
+  // Egne synktoner: aldri TG-grønn, TG-gul eller rød, så synk ikke kan leses som TG.
+  allSaved: "bg-sync-saved-bg text-sync-saved-text",
+  pending: "bg-sync-pending-bg text-sync-pending-text",
+  offline: "bg-sync-offline-bg text-sync-offline-text",
+  awaitingServer: "bg-sync-waiting-bg text-sync-waiting-text",
   // Advarsel, samme som «Venter …»: ingenting er tapt.
-  signInRequired: "bg-brand-50 text-brand-700",
+  signInRequired: "bg-sync-pending-bg text-sync-pending-text",
 };
 
 function isOnline(): boolean {
@@ -260,7 +261,7 @@ export function SyncStatus({ getStatus, subscribe, syncNow }: SyncStatusProps) {
             data-testid="sync-status-state"
             className={cn(
               "inline-flex min-h-9 items-center gap-2 rounded-full px-3 py-1.5 text-base font-medium",
-              kind ? PILL_CLASSES[kind] : "min-w-40 bg-[#e2e8f0]",
+              kind ? PILL_CLASSES[kind] : "min-w-40 bg-sync-offline-bg",
             )}
           >
             {kind ? <StateIcon kind={kind} /> : null}
