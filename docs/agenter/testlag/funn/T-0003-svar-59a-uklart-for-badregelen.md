@@ -10,7 +10,7 @@ omrade: regler (2a-2), plan
 maal: reklamasjoner
 commit: 0b8e3b9
 forsok: 0
-pr: fase2a-regler-bad (12.11.2026)
+pr: #167 (12.11.2026)
 ---
 
 ## Hva
