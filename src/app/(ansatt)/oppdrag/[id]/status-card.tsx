@@ -113,7 +113,11 @@ function ReasonForm({
 function DangerSubmit({ children }: { children: string }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" className="bg-urgent-line text-white hover:bg-urgent-text" disabled={pending}>
+    <Button
+      type="submit"
+      className="bg-urgent-line text-white hover:bg-urgent-text"
+      disabled={pending}
+    >
       {pending ? "Lagrer …" : children}
     </Button>
   );

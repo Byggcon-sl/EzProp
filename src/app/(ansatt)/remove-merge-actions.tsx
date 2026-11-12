@@ -15,7 +15,11 @@ type Action = (state: FormState, formData: FormData) => Promise<FormState>;
 function RemoveSubmit() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" className="bg-urgent-line text-white hover:bg-urgent-text" disabled={pending}>
+    <Button
+      type="submit"
+      className="bg-urgent-line text-white hover:bg-urgent-text"
+      disabled={pending}
+    >
       {pending ? "Fjerner …" : "Fjern"}
     </Button>
   );
