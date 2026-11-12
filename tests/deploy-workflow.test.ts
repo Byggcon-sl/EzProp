@@ -338,6 +338,12 @@ describe("utrullingsarbeidsflyten (deploy-azure.yml)", () => {
     expect(afterDeploy).toContain("exit 1");
   });
 
+  it("pakkene installeres flatt, så standalone-bygget virker i Azure", () => {
+    expect(workflow).toContain("pnpm install --frozen-lockfile --config.node-linker=hoisted");
+    expect(workflow).toContain("node_modules/.pnpm");
+    expect(workflow).toContain("cp -RL .next/standalone");
+  });
+
   it("zip lages fra innsiden av standalone", () => {
     expect(workflow).toContain(".next/standalone/.next/static");
     expect(workflow).toContain(".next/standalone/public");
