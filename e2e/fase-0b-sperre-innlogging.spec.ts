@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { uniqueSuffix } from "./helpers";
+import { chooseCodeLogin, uniqueSuffix } from "./helpers";
 
 /*
  * Sperre etter mange feil ved innlogging (docs/funksjoner/fase0b-sperre-innlogging-testplan.md
@@ -15,6 +15,7 @@ test("sperre etter 5 feil koder viser når man kan prøve igjen", async ({ page 
   const email = `sperre.${testInfo.project.name}.${uniqueSuffix()}@eksempel.no`;
 
   await page.goto("/logg-inn");
+  await chooseCodeLogin(page);
   await page.getByLabel("E-postadresse").fill(email);
   await page.getByRole("button", { name: "Send meg en kode" }).click();
   await expect(page.getByLabel("Kode fra e-posten")).toBeVisible();
