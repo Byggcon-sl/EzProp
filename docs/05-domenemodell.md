@@ -748,7 +748,7 @@ Godkjenning av en annen person (`approved_by`) kan slås på senere (beslutning 
 | `multiple` | For `choice`: flervalg tillatt |
 | `unit` | For `number`: enhet (mm, %, Bq/m³, m, antall, år) |
 | `min_value`, `max_value`, `decimals` | For `number`: gyldig område og antall desimaler |
-| `table_columns` | For `table`: kolonnene (navn, type, enhet). Brukes for eksempel til hulltakingsmålinger: sted, verdi, enhet, lufttemperatur, oppbygging, eiers samtykke, bilde. |
+| `table_columns` | For `table`: kolonnene (navn, type, enhet). Brukes for eksempel til hulltakingsmålinger: sted, verdi, enhet, lufttemperatur, oppbygging, bilde. I badmalen fra 2a-2 er hulltakingsmålingene enkeltfelt (én måling per bad); de blir `table` i 2a-3, og enkeltfeltene arkiveres da (A202). |
 | `phrase_slot` | For `phrase`: hvilken type fraser som foreslås (beskrivelse, avvik, årsak, konsekvens, tiltak, kostnadstekst, sammendrag) |
 | `required` | Må fylles ut (gir advarsel, eller sperre når en regel sier det) |
 | `default_value` | Standardverdi |
@@ -763,7 +763,7 @@ Når et felt bare skal vises under en betingelse, er det en **regel** med formå
 | Felt | Forklaring |
 |---|---|
 | `element_id` | Feltet |
-| `key`, `label` | Fast kode og tekst (for eksempel `membrane_foil`, «Foliemembran») |
+| `key`, `label` | Fast kode og tekst (for eksempel `foil`, «Folie»). Koden er unik under feltet (A141) |
 | `material_code` | Materialkode som brukes mot levetidstabellen |
 | `sort_order` | Rekkefølge |
 
@@ -772,7 +772,7 @@ Når et felt bare skal vises under en betingelse, er det en **regel** med formå
 | Felt | Forklaring |
 |---|---|
 | `version_id`, `section_id` | Malversjon og seksjon |
-| `key` | Fast kode, for eksempel `wet_room.membrane`. **Frasene kobles til denne koden**, slik at de følger med til nye versjoner. |
+| `key` | Fast kode, for eksempel `wet_room.membrane_drain`. **Frasene kobles til denne koden**, slik at de følger med til nye versjoner. |
 | `name` | For eksempel «Vanntett sjikt, membran og sluk» |
 | `group` | `exterior` (utvendig), `interior` (innvendig), `room` (rom), `technical` (tekniske installasjoner), `site` (tomteforhold) |
 | `mandatory` | **Obligatorisk etter forskriften** (ja/nei) |
@@ -803,7 +803,9 @@ Om spørsmålet vises, styres av regler («alltid», «valg X», «tall over gre
 | `key` | Fast kode |
 | `kind` | `tg2`, `tg3`, `hms` eller `choose_tg2_tg3` («velg TG2 eller TG3»). **Ikke `tgiu`:** TGIU betyr «ikke undersøkt» og settes på kontrollpunktet, ikke som avvik (innspill D1). |
 | `deviation_text` | Standard avvikstekst (Byggcons egen, godkjent av fagrådet) |
+| `default_cause_text` | Standard årsak som tekst (A201). Valgfri |
 | `default_cause_criterion` | Standard TG-kriterium (se avvik i 4.7) |
+| `text_status` | `draft` (utkast, ikke godkjent av fagrådet) eller `approved`. Standard `draft`. Gjelder rapporttekstene på utfallet samlet. Finnes også på `standard_measures`, per tiltak (ADR 0007) |
 | `default_consequence_text` | Standard konsekvens |
 | `source_ref` | Kilde **i bakgrunnen**, for eksempel punkt i NS 3600. Står ikke i rapporten (beslutning 24.10). |
 | `sort_order` | Rekkefølge |
@@ -939,7 +941,14 @@ En malversjon kan ikke publiseres hvis en test feiler. Testene kjøres også aut
 - **Rekkefølge:** `sort_order` (heltall, standard 0) på seksjoner, felt, valg, kontrollpunkter, spørsmål, utfall, tiltak, regler, betingelser og testtilfeller. På regler, betingelser og testtilfeller er den lagt til fordi listene erstattes samlet når rekkefølgen er endret (A142).
 - **Typer:** `room_type_groups` og `related_checkpoint_keys` er tekstlister (`text[]`, tom = ingen). `table_columns` er `jsonb` og må være en liste (CHECK). `default_value` og `rule_conditions.value` er `jsonb`, fordi verdien kan være tekst, tall eller en liste. `rule_test_cases.input` er et `jsonb`-objekt. `min_value` og `max_value` er `numeric`, med CHECK `min_value <= max_value`. `phrase_slot` er en av `description`, `deviation`, `cause`, `consequence`, `measure`, `cost_text` og `summary`. `rule_conditions.group_no` er tom (uten gruppe) eller minst 1.
 - **De faste kodelistene** står som `as const`-lister i `src/db/schema/templates.ts` (`TEMPLATE_KINDS`, `TEMPLATE_VERSION_STATUSES`, `FIELD_TYPES`, `PHRASE_SLOTS`, `OUTCOME_KINDS`, `RULE_PURPOSES`, `RULE_CONDITION_TYPES` med flere), og CHECK-reglene er laget fra dem.
-- **Venter:** `template_families.owner_employee_id`, `company_id` og `archived_at` (A146, kommer med egne maler i fase 5). `template_versions.lifespan_table_id`, `threshold_table_id` og `cost_band_set_id` (kommer med levetider, terskler og kostnadsintervaller). `rule_conditions.threshold_key`, `age_year_element_key`, `age_source_element_key`, `documentation_element_key` og `material_element_key`, og `rule_test_cases.last_result` og `last_run_at` (A147, kommer med regelmotoren og kontrollen før publisering). Godkjenningsstatus på fagtekstene kommer med systemmalen (eget punkt). `room_type_groups` sjekkes ikke mot romgruppene i databasen; det gjør Zod-skjemaet.
+- **Venter:** `template_families.owner_employee_id`, `company_id` og `archived_at` (A146, kommer med egne maler i fase 5). `template_versions.lifespan_table_id`, `threshold_table_id` og `cost_band_set_id` (kommer med levetider, terskler og kostnadsintervaller). `rule_conditions.threshold_key`, `age_year_element_key`, `age_source_element_key`, `documentation_element_key` og `material_element_key`, og `rule_test_cases.last_result` og `last_run_at` (A147, kommer med regelmotoren og kontrollen før publisering). `room_type_groups` sjekkes ikke mot romgruppene i databasen; det gjør Zod-skjemaet.
+
+**Bygget i fase 2a (12.11.2026, malen for ett bad):** Systemmalen «Tilstandsrapport bolig» med ett våtrom, som data i `src/db/seed/templates/wet-room.ts`. Oppgavekort: `docs/funksjoner/fase2a-mal-bad.md`; beslutningene A200–A209 og ADR 0007.
+
+- **Tekststatus og årsak (migrering `0028_mal-tekststatus`):** `outcomes` og `standard_measures` har fått `text_status` (`TEXT_STATUSES` = `draft`, `approved`; påkrevd, standard `draft`, CHECK laget fra listen). Eksisterende rader fikk `draft`. `outcomes` har fått `default_cause_text` (valgfri). Begge lagres, leses, kopieres til nytt utkast og telles i «endret» (A144). Standardtiltak har ingen kode, så ny status på et tiltak gir fjernet + lagt til (A142). Merket «utkast, ikke godkjent av fagrådet» er `text_status = draft`. Det finnes ingen godkjenningstjeneste ennå; godkjenning betyr nytt utkast og ny publisert versjon.
+- **Innholdet:** én seksjon `wet_room` (`repeat = per_room`, romgruppen `wet_room`) med åtte kontrollpunkter for rom: `wet_room.general`, `wet_room.documentation`, `wet_room.walls_ceiling`, `wet_room.floor`, `wet_room.membrane_drain`, `wet_room.fixtures`, `wet_room.ventilation` og `wet_room.adjacent`. `general`, `membrane_drain` og `adjacent` er obligatoriske. Alle felt er valgfrie i denne versjonen. Avviksspørsmålene har ett utfall hvert, og alle tekster er utkast. Ingen regler ennå (neste punkt).
+- **Hulltaking er enkeltfelt nå** (`wet_room.hole_moisture_reading`, `hole_moisture_unit`, `hole_moisture_location`, `hole_air_temperature`, `hole_construction`), fordi betingelsene leser ett felt og formatet på `table_columns` ikke er bestemt. De blir ett `table`-felt i 2a-3, og disse kodene arkiveres da (A202). Det samme gjelder 4.7 og 4.11, som beskriver målingene som tabell.
+- **Sammenligning og seed:** `isSameTemplateContent(a, b)` i `src/core/templates` sier om to maldokumenter har samme innhold, uavhengig av rekkefølgen i listene. `ensureSampleTemplate` legger malen i prøveorganisasjonen som publisert versjon, og lager ny versjon bare når innholdet er endret (A205, A209).
 
 ---
 
@@ -2121,7 +2130,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Malfamilie | `template_families` | |
 | Malversjon | `template_versions` | |
 | Utkast / publisert / utgått | `draft` / `published` / `retired` | `template_versions.status`. Bare ett utkast per malfamilie. Publiserte og utgåtte versjoner endres aldri |
-| Fast kode | `key` | Kode med små bokstaver, tall, `_` og `.` (for eksempel `wet_room.membrane`). Endres aldri, arkiveres (regel 6, A136–A137) |
+| Fast kode | `key` | Kode med små bokstaver, tall, `_` og `.` (for eksempel `wet_room.membrane_drain`). Endres aldri, arkiveres (regel 6, A136–A137) |
 | Arkivert kode | – | En kode som fantes i en tidligere versjon av familien, men ikke i den siste publiserte. Tas ikke i bruk igjen (A136) |
 | Systemmal / egen mal | `system` / `custom` | `template_families.kind` |
 | Malbygger | – | Skjermen som lager egne maler (fase 5) |
@@ -2141,6 +2150,19 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Utfall | `outcomes` | |
 | Velg TG2 eller TG3 | `choose_tg2_tg3` | |
 | Standardtiltak | `standard_measures` | |
+| Tekststatus | `text_status`, `TEXT_STATUSES` | Status på en fagtekst i malen, på utfall og standardtiltak: `draft` = utkast, ikke godkjent av fagrådet; `approved` = godkjent. Godkjenning gir ny malversjon (ADR 0007, A200) |
+| Standard årsak | `default_cause_text` | Årsak som tekst på utfallet, ved siden av `default_cause_criterion` (A201) |
+| Samme malinnhold | `isSameTemplateContent` | Ren sammenligning av to maldokumenter i `src/core/templates`. Rekkefølgen i listene teller ikke; tekst, `text_status` og `default_cause_text` gjør det |
+| Legg prøvemalen inn | `ensureSampleTemplate` | Seed-steget som legger badmalen i prøveorganisasjonen og lager ny versjon bare når innholdet er endret (A205, A209) |
+| Våtrom (seksjon i tilstandsrapporten) | `wet_room` | Seksjonen for våtrom, gjentas per rom (`per_room`) |
+| Generelt (våtrom) | `wet_room.general` | Kontrollpunkt: byggeår, kilde for byggeåret og byggeforskrift |
+| Dokumentasjon for våtrom | `wet_room.documentation` | Kontrollpunkt. Gir bare TG2 |
+| Overflater vegger og himling | `wet_room.walls_ceiling` | Kontrollpunkt |
+| Overflater gulv | `wet_room.floor` | Kontrollpunkt: gulvtype, varme, fall (mm/m, negativ = motfall) og høyde ved terskel |
+| Vanntett sjikt, membran og sluk | `wet_room.membrane_drain` | Kontrollpunkt: membrantype (med materialkode), årstall for sjiktet og sluktype |
+| Sanitærutstyr og innredning | `wet_room.fixtures` | Kontrollpunkt. Varmgang på el-punkter er HMS, ikke TG (A204) |
+| Ventilasjon (våtrom) | `wet_room.ventilation` | Kontrollpunkt |
+| Tilliggende konstruksjoner våtrom | `wet_room.adjacent` | Kontrollpunkt: hulltaking, målingene (enkeltfelt til 2a-3, A202) og opplysningene når hull ikke er tatt |
 | Regel | `rules` | |
 | Betingelse | `rule_conditions` | |
 | Vis / foreslå utfall / foreslå TGIU / valider | `show` / `suggest_outcome` / `suggest_tgiu` / `validate` | `rules.purpose` |
@@ -2399,3 +2421,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 06.11.2026 | Malmotoren (fase 2a): tolv tabeller fra 4.5 bygget i migrering `0024_malmotor`, med sammensatte fremmednøkler med `organization_id`, faste koder med format-CHECK og delvis unike indekser per område, ett utkast per malfamilie, CHECK mot `tgiu` som utfall og `sort_order` også på regler, betingelser og testtilfeller. `owner_employee_id`, `company_id`, `archived_at`, `lifespan_table_id`, `threshold_table_id`, `cost_band_set_id`, terskel- og alderskolonnene på betingelsene og `last_result`/`last_run_at` venter. Nye ord i ordlisten (fast kode, arkivert kode, utkast/publisert/utgått, valg, underseksjon). Se «Bygget i fase 2a» i 4.5. | A136–A147, `docs/funksjoner/fase2a-malmotor.md` |
 | 11.11.2026 | KI-kø uten nett (fase 2a, grensesnitt): klientdelen `src/core/ai/client` med typene `AiQueueEntry`, `AiQueueStore` og `AiQueue`. Ingen ny tabell og ingen migrering; køen ligger bare på enheten i IndexedDB-databasen `local-ai-queue`. `requestId` fra køen er UUID v4, ikke v7 (A191). `AI_FIELD_MAX_LENGTH` flyttet til `src/core/ai/limits.ts`. Nye ord i ordlisten (post i KI-køen, venter på KI, lagt i kø, eier av posten, lager for KI-køen). | A186–A191, `docs/funksjoner/fase2a-ki-ko.md`, ADR 0006 del 10 |
 | 11.11.2026 | KI-leverandør (fase 2a, grensesnitt): leverandørkoden `anthropic` på porten `ai` med `secret_ref = ANTHROPIC_API_KEY` og `settings.model`, `settings.features` og `settings.pricing`. `ResolvedAiProvider` har fått `features`. Ingen ny tabell og ingen migrering. Nye ord i ordlisten (KI-adapter, modell, påslåtte KI-funksjoner, KI-pris). | A193–A197, `docs/funksjoner/fase2a-ki-leverandor.md`, ADR 0006 del 2 |
+| 12.11.2026 | Malen for ett bad (fase 2a): `text_status` (`TEXT_STATUSES`) på `outcomes` og `standard_measures` og `default_cause_text` på `outcomes` i migrering `0028_mal-tekststatus`. Eksemplet `wet_room.membrane` er byttet til `wet_room.membrane_drain`. Hulltakingsmålingene er enkeltfelt nå og blir `table` i 2a-3. Nye ord i ordlisten (`isSameTemplateContent`, `ensureSampleTemplate`, seksjonen og de åtte kontrollpunktene for våtrom). Se «Bygget i fase 2a» i 4.5. | A200–A209, `docs/funksjoner/fase2a-mal-bad.md`, ADR 0007 |

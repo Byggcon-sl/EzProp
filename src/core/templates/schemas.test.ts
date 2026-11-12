@@ -4,6 +4,7 @@ import { buildTemplateDocument } from "../../../tests/template-document";
 import {
   TEMPLATE_ISSUE_RULES,
   checkNoTgLogicInCustom,
+  isSameTemplateContent,
   parseTemplateDocument,
   type TemplateDocument,
   type TemplateIssue,
@@ -315,6 +316,175 @@ describe("2.5 checkNoTgLogicInCustom (beslutning 27.10.2026)", () => {
     } else {
       expect(issues).toEqual([]);
     }
+  });
+});
+
+// --- Mal for bad: tekststatus, årsak og samme innhold (fase2a-mal-bad-testplan.md avsnitt 2) ---
+
+/*
+ * Støtter hovedmål: færre reklamasjoner og KI i bunnen. Hver fagtekst har status («utkast, ikke
+ * godkjent av fagrådet» eller godkjent), og seed lager bare ny malversjon når innholdet faktisk er
+ * endret.
+ */
+
+describe("mal for bad 2.1–2.4: text_status og default_cause_text i dokumentformatet (A200, A201, A209)", () => {
+  it("2.1 text_status_default_draft: utfall og tiltak uten text_status får draft", () => {
+    const doc = parsedDocument((d) => {
+      for (const o of d.outcomes) delete (o as { text_status?: unknown }).text_status;
+      for (const m of d.standard_measures) delete (m as { text_status?: unknown }).text_status;
+    });
+    expect(doc.outcomes.length).toBeGreaterThan(0);
+    expect(doc.standard_measures.length).toBeGreaterThan(0);
+    for (const o of doc.outcomes) expect(o.text_status, o.key).toBe("draft");
+    for (const m of doc.standard_measures) expect(m.text_status, m.text).toBe("draft");
+  });
+
+  it("2.2 text_status_approved_accepted: approved godtas på utfall og tiltak (A209)", () => {
+    const doc = parsedDocument((d) => {
+      d.outcomes[0]!.text_status = "approved";
+      d.standard_measures[0]!.text_status = "approved";
+    });
+    expect(doc.outcomes[0]!.text_status).toBe("approved");
+    expect(doc.standard_measures[0]!.text_status).toBe("approved");
+    // Det andre utfallet og tiltaket står som utkast
+    expect(doc.outcomes[1]!.text_status).toBe("draft");
+    expect(doc.standard_measures[1]!.text_status).toBe("draft");
+  });
+
+  it.each(
+    (["outcomes", "standard_measures"] as const).flatMap((list) =>
+      (["godkjent", "", null, "DRAFT", 1] as unknown[]).map((value) => ({
+        list,
+        value,
+        label: JSON.stringify(value),
+      })),
+    ),
+  )("2.3 unknown_text_status_rejected_by_schema: $list text_status = $label", ({ list, value }) => {
+    expectRejected(
+      (d) => {
+        (d[list][0] as { text_status?: unknown }).text_status = value;
+      },
+      "schema",
+      `${list}.0.text_status`,
+    );
+  });
+
+  it("2.4 default_cause_text_optional: mangler, null og tom streng gir null", () => {
+    const missing = parsedDocument();
+    expect(missing.outcomes[0]!.default_cause_text).toBeNull();
+    for (const value of [null, "", "   "]) {
+      const doc = parsedDocument((d) => {
+        d.outcomes[0]!.default_cause_text = value;
+      });
+      expect(doc.outcomes[0]!.default_cause_text, JSON.stringify(value)).toBeNull();
+    }
+    const filled = parsedDocument((d) => {
+      d.outcomes[0]!.default_cause_text = "  Oppdiktet årsak.  ";
+    });
+    expect(filled.outcomes[0]!.default_cause_text).toBe("Oppdiktet årsak.");
+  });
+
+  it("2.4 default_cause_text som ikke er tekst avvises med schema", () => {
+    expectRejected(
+      (d) => {
+        (d.outcomes[0] as { default_cause_text?: unknown }).default_cause_text = 42;
+      },
+      "schema",
+      "outcomes.0.default_cause_text",
+    );
+  });
+});
+
+/** Hver liste i omvendt rekkefølge. */
+function reversedLists(doc: TemplateDocument): TemplateDocument {
+  const copy = structuredClone(doc);
+  for (const list of Object.keys(copy) as (keyof TemplateDocument)[]) {
+    (copy[list] as unknown[]).reverse();
+  }
+  return copy;
+}
+
+const sameContentCases: { name: string; change: Change; same: boolean }[] = [
+  { name: "samme dokument", change: () => {}, same: true },
+  {
+    name: "endret avvikstekst",
+    change: (d) => {
+      d.outcomes[0]!.deviation_text = "Endret avvikstekst";
+    },
+    same: false,
+  },
+  {
+    name: "default_cause_text lagt til",
+    change: (d) => {
+      d.outcomes[0]!.default_cause_text = "Oppdiktet årsak";
+    },
+    same: false,
+  },
+  {
+    name: "text_status på utfall",
+    change: (d) => {
+      d.outcomes[0]!.text_status = "approved";
+    },
+    same: false,
+  },
+  {
+    name: "text_status på tiltak",
+    change: (d) => {
+      d.standard_measures[0]!.text_status = "approved";
+    },
+    same: false,
+  },
+  {
+    name: "ett felt mer",
+    change: (d) => {
+      d.elements.push({
+        key: "el.extra",
+        section_key: "sec.alpha",
+        label: "Ekstra",
+        field_type: "text",
+      });
+    },
+    same: false,
+  },
+  {
+    name: "endret tiltakstekst",
+    change: (d) => {
+      d.standard_measures[1]!.text = "Tiltak to endret";
+    },
+    same: false,
+  },
+];
+
+describe("mal for bad 2.5: isSameTemplateContent", () => {
+  it.each(sameContentCases)("is_same_template_content: $name gir $same", ({ change, same }) => {
+    const a = parsedDocument();
+    const b = parsedDocument(change);
+    const aBefore = structuredClone(a);
+    const bBefore = structuredClone(b);
+    expect(isSameTemplateContent(a, b)).toBe(same);
+    expect(isSameTemplateContent(b, a), "symmetrisk").toBe(same);
+    // Funksjonen endrer ikke argumentene
+    expect(a).toEqual(aBefore);
+    expect(b).toEqual(bBefore);
+  });
+
+  it("is_same_template_content: samme innhold med listene i annen rekkefølge gir true", () => {
+    const a = parsedDocument();
+    const b = reversedLists(a);
+    expect(b.sections[0]!.key).not.toBe(a.sections[0]!.key);
+    const bBefore = structuredClone(b);
+    expect(isSameTemplateContent(a, b)).toBe(true);
+    expect(b).toEqual(bBefore);
+  });
+
+  it("is_same_template_content: endret innhold i annen rekkefølge gir fortsatt false", () => {
+    const a = parsedDocument();
+    const b = reversedLists(
+      parsedDocument((d) => {
+        d.outcomes[1]!.text_status = "approved";
+      }),
+    );
+    expect(isSameTemplateContent(a, b)).toBe(false);
   });
 });
 

@@ -536,10 +536,12 @@ function toDocument(content: Content): TemplateDocument {
       key: o.row.key,
       kind: o.row.kind as Doc["outcomes"][number]["kind"],
       deviation_text: o.row.deviationText,
+      default_cause_text: o.row.defaultCauseText,
       default_cause_criterion: o.row
         .defaultCauseCriterion as Doc["outcomes"][number]["default_cause_criterion"],
       default_consequence_text: o.row.defaultConsequenceText,
       source_ref: o.row.sourceRef,
+      text_status: o.row.textStatus,
       sort_order: o.row.sortOrder,
     })),
     standard_measures: measures.map((m) => ({
@@ -547,6 +549,7 @@ function toDocument(content: Content): TemplateDocument {
       question_key: m.questionKey,
       outcome_key: m.outcomeKey,
       text: m.row.text,
+      text_status: m.row.textStatus,
       sort_order: m.row.sortOrder,
     })),
     rules: ruleRows.map((r) => ({
@@ -590,6 +593,53 @@ function toDocument(content: Content): TemplateDocument {
       sort_order: t.row.sortOrder,
     })),
   };
+}
+
+/**
+ * Dokumentet med hver liste i fast rekkefølge: etter kodene (med forelderens kode der koden bare
+ * er unik under forelderen), så `sort_order`, så hele raden. Rader uten kode (standardtiltak,
+ * betingelser, testtilfeller) sorteres etter forelderen, `sort_order` og innholdet.
+ */
+function sortedDocument(doc: TemplateDocument): TemplateDocument {
+  const whole = (item: unknown) => canonical(item);
+  return {
+    sections: sortBy(doc.sections, (s) => [s.key]),
+    elements: sortBy(doc.elements, (e) => [e.key]),
+    element_options: sortBy(doc.element_options, (o) => [o.element_key, o.key]),
+    checkpoints: sortBy(doc.checkpoints, (c) => [c.key]),
+    deviation_questions: sortBy(doc.deviation_questions, (q) => [q.checkpoint_key, q.key]),
+    outcomes: sortBy(doc.outcomes, (o) => [o.checkpoint_key, o.question_key, o.key]),
+    standard_measures: sortBy(doc.standard_measures, (m) => [
+      m.checkpoint_key,
+      m.question_key,
+      m.outcome_key,
+      m.sort_order,
+      m.text,
+      whole(m),
+    ]),
+    rules: sortBy(doc.rules, (r) => [r.key]),
+    rule_conditions: sortBy(doc.rule_conditions, (c) => [
+      c.rule_key,
+      c.group_no ?? 0,
+      c.sort_order,
+      whole(c),
+    ]),
+    rule_test_cases: sortBy(doc.rule_test_cases, (t) => [
+      t.rule_key,
+      t.sort_order,
+      t.name,
+      whole(t),
+    ]),
+  };
+}
+
+/**
+ * Har to maldokumenter samme innhold? Rekkefølgen i listene teller ikke; alt annet gjør det,
+ * også `sort_order`, tekstene, `text_status` og `default_cause_text`. Ren funksjon uten database.
+ * Brukes av seed for å avgjøre om det trengs en ny versjon (A209).
+ */
+export function isSameTemplateContent(a: TemplateDocument, b: TemplateDocument): boolean {
+  return canonical(sortedDocument(a)) === canonical(sortedDocument(b));
 }
 
 // --- Skriving av innholdet -------------------------------------------------------------------
@@ -912,9 +962,11 @@ async function applyDocument(
         key: o.key,
         kind: o.kind,
         deviationText: o.deviation_text,
+        defaultCauseText: o.default_cause_text,
         defaultCauseCriterion: o.default_cause_criterion,
         defaultConsequenceText: o.default_consequence_text,
         sourceRef: o.source_ref,
+        textStatus: o.text_status,
         sortOrder: o.sort_order,
       },
     })),
@@ -929,11 +981,14 @@ async function applyDocument(
     tx,
     ctx,
     standardMeasures,
-    ["outcomeId", "text", "sortOrder"],
+    ["outcomeId", "text", "textStatus", "sortOrder"],
     existing.measures.map((m) => ({ parentId: m.row.outcomeId, row: m.row })),
     doc.standard_measures.map((m) => {
       const id = required(out.idOf, outcomeScope(m.checkpoint_key, m.question_key, m.outcome_key));
-      return { parentId: id, values: { outcomeId: id, text: m.text, sortOrder: m.sort_order } };
+      return {
+        parentId: id,
+        values: { outcomeId: id, text: m.text, textStatus: m.text_status, sortOrder: m.sort_order },
+      };
     }),
     counts,
   );

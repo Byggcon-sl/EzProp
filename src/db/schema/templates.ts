@@ -76,6 +76,12 @@ export const CHECKPOINT_SCOPES = ["building", "room"] as const;
 export const CHECKPOINT_UNIT_SCOPES = ["unit", "common", "both"] as const;
 /** Utfall. Aldri `tgiu`: TGIU settes på kontrollpunktet (innspill D1). */
 export const OUTCOME_KINDS = ["tg2", "tg3", "hms", "choose_tg2_tg3"] as const;
+/**
+ * Status på en fagtekst (utfall og standardtiltak), ADR 0007 og A200.
+ * `draft` = «utkast, ikke godkjent av fagrådet». `approved` = godkjent av fagrådet.
+ * Kodene endres aldri (regel 6). Ny status legges til i listen, CHECK-ene følger med.
+ */
+export const TEXT_STATUSES = ["draft", "approved"] as const;
 export const CAUSE_CRITERIA = [
   "symptom_of_damage",
   "age_uncertain_function",
@@ -124,6 +130,7 @@ export type SectionRepeat = (typeof SECTION_REPEATS)[number];
 export type FieldType = (typeof FIELD_TYPES)[number];
 export type PhraseSlot = (typeof PHRASE_SLOTS)[number];
 export type OutcomeKind = (typeof OUTCOME_KINDS)[number];
+export type TextStatus = (typeof TEXT_STATUSES)[number];
 export type RulePurpose = (typeof RULE_PURPOSES)[number];
 export type RuleConditionType = (typeof RULE_CONDITION_TYPES)[number];
 export type RuleConditionOperator = (typeof RULE_CONDITION_OPERATORS)[number];
@@ -138,6 +145,8 @@ function keyFormat(column: AnyPgColumn): SQL {
 }
 
 const sortOrder = () => integer("sort_order").notNull().default(0);
+/** Nye og eksisterende fagtekster er utkast til fagrådet har godkjent dem (ADR 0007). */
+const textStatus = () => text("text_status").$type<TextStatus>().notNull().default("draft");
 const textArray = (name: string) =>
   text(name)
     .array()
@@ -432,10 +441,14 @@ export const outcomes = pgTable(
     key: text("key").notNull(),
     kind: text("kind").notNull(),
     deviationText: text("deviation_text"),
+    /** Årsak som tekst (A201). Kriteriet står i `default_cause_criterion`. */
+    defaultCauseText: text("default_cause_text"),
     defaultCauseCriterion: text("default_cause_criterion"),
     defaultConsequenceText: text("default_consequence_text"),
     /** Kilde i bakgrunnen. Står aldri i rapporten. */
     sourceRef: text("source_ref"),
+    /** Gjelder alle rapporttekstene på utfallet samlet (avvik, årsak, konsekvens). */
+    textStatus: textStatus(),
     sortOrder: sortOrder(),
   },
   (table) => [
@@ -456,6 +469,7 @@ export const outcomes = pgTable(
       "outcomes_default_cause_criterion_check",
       sql`${table.defaultCauseCriterion} is null or ${inList(table.defaultCauseCriterion, CAUSE_CRITERIA)}`,
     ),
+    check("outcomes_text_status_check", inList(table.textStatus, TEXT_STATUSES)),
   ],
 );
 export type Outcome = typeof outcomes.$inferSelect;
@@ -467,6 +481,7 @@ export const standardMeasures = pgTable(
     ...baseColumns,
     outcomeId: uuid("outcome_id").notNull(),
     text: text("text").notNull(),
+    textStatus: textStatus(),
     sortOrder: sortOrder(),
   },
   (table) => [
@@ -479,6 +494,7 @@ export const standardMeasures = pgTable(
       columns: [table.organizationId, table.outcomeId],
       foreignColumns: [outcomes.organizationId, outcomes.id],
     }),
+    check("standard_measures_text_status_check", inList(table.textStatus, TEXT_STATUSES)),
   ],
 );
 export type StandardMeasure = typeof standardMeasures.$inferSelect;

@@ -15,6 +15,8 @@ import {
 import {
   createEmployee,
   createOrganization,
+  createOutcomeRow,
+  createStandardMeasureRow,
   createTemplate,
   createUser,
   grantPermission,
@@ -287,6 +289,19 @@ function sortedLists(document: unknown) {
   return result;
 }
 
+/**
+ * Dokumentet med de nye feltene (mal for bad, A200/A201): årsakstekst og `approved` på det første
+ * utfallet og det første tiltaket. `mark` skiller tekstene mellom organisasjoner.
+ */
+function docWithTextFields(mark = "A"): Doc {
+  const doc = buildTemplateDocument();
+  doc.outcomes[0]!.default_cause_text = `Oppdiktet årsak a ${mark}`;
+  doc.outcomes[0]!.text_status = "approved";
+  doc.outcomes[1]!.default_cause_text = `Oppdiktet årsak b ${mark}`;
+  doc.standard_measures[0]!.text_status = "approved";
+  return doc;
+}
+
 function parsed(doc: Doc) {
   const result = parseTemplateDocument(doc);
   if (!result.success) throw new Error(`ugyldig testdokument: ${JSON.stringify(result.issues)}`);
@@ -450,13 +465,15 @@ describe("4.2 tenant-isolasjon", () => {
 
   it("4.2.2 getTemplateVersion gir aldri en versjon fra en annen organisasjon", async () => {
     const versionFor = new Map<string, string>();
+    // Dokumentet har text_status og default_cause_text (mal for bad, testplan 2.17), så det vises at
+    // heller ikke de nye feltene lekker til en annen organisasjon.
     await expectTenantIsolation({
       seed: async (grantA, grantB) => {
         const a = await createTemplate(grantA.organizationId, {
-          document: buildTemplateDocument(),
+          document: docWithTextFields("A"),
         });
         const b = await createTemplate(grantB.organizationId, {
-          document: buildTemplateDocument(),
+          document: docWithTextFields("B"),
         });
         versionFor.set(grantA.organizationId, a.versionId);
         versionFor.set(grantB.organizationId, b.versionId);
@@ -1732,6 +1749,380 @@ describe("4.6 revisjonsloggen og hendelser", () => {
 // ---------------------------------------------------------------------------------------------
 // Dekning av regelkodene gjennom tjenesten (kjøres sist i filen)
 // ---------------------------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------------------------
+// Mal for bad: text_status og default_cause_text i malmotoren
+// (docs/funksjoner/fase2a-mal-bad-testplan.md avsnitt 2, 2.6–2.18)
+//
+// Støtter hovedmål: færre reklamasjoner (hver fagtekst er merket utkast til fagrådet har godkjent
+// den, og publiserte versjoner endres aldri) og KI i bunnen (tekstene er strukturert og merket, så
+// KI senere bare velger godkjente tekster i ekte bruk).
+// ---------------------------------------------------------------------------------------------
+
+/** Venter at databasen avviser med akkurat denne CHECK-en, så testen ikke blir grønn av en annen feil. */
+async function expectViolation(write: PromiseLike<unknown>, constraint: string) {
+  const error: unknown = await Promise.resolve(write).then(
+    () => null,
+    (caught: unknown) => caught,
+  );
+  expect(error, `forventet at ${constraint} avviste skrivingen`).toBeInstanceOf(Error);
+  const cause = (error as { cause?: { constraint_name?: string } }).cause;
+  expect(cause?.constraint_name).toBe(constraint);
+}
+
+/** Dokumentet der `out.b` har ett eget tiltak, så endring av ett tiltak gir 1 fjernet og 1 lagt til. */
+function docWithSingleMeasure(): Doc {
+  const doc = buildTemplateDocument();
+  doc.standard_measures.push({
+    checkpoint_key: "cp.one",
+    question_key: "dq.first",
+    outcome_key: "out.b",
+    text: "Tiltak for b",
+    sort_order: 0,
+  });
+  return doc;
+}
+
+describe("mal for bad: text_status og default_cause_text i malmotoren", () => {
+  it("2.6 migration_text_status_check: ukjent verdi avvises av CHECK, rad uten verdi får draft", async () => {
+    const org = await createOrganization();
+    // Fabrikkene kjenner ikke kolonnen: radene får standardverdien
+    const outcome = await createOutcomeRow(org.id);
+    const measure = await createStandardMeasureRow(org.id, { outcomeId: outcome.id });
+    expect(outcome.textStatus).toBe("draft");
+    expect(outcome.defaultCauseText).toBeNull();
+    expect(measure.textStatus).toBe("draft");
+
+    // Rå innsetting uten kolonnen får også draft
+    const [rawMeasure] = await db.execute<{ text_status: string }>(sql`
+      insert into standard_measures (organization_id, outcome_id, text)
+      values (${org.id}, ${outcome.id}, 'Rått tiltak') returning text_status`);
+    expect(rawMeasure!.text_status).toBe("draft");
+
+    for (const bad of ["godkjent", "", "DRAFT"]) {
+      await expectViolation(
+        createOutcomeRow(org.id, {
+          deviationQuestionId: outcome.deviationQuestionId,
+          textStatus: bad as never,
+        }),
+        "outcomes_text_status_check",
+      );
+      await expectViolation(
+        createStandardMeasureRow(org.id, { outcomeId: outcome.id, textStatus: bad as never }),
+        "standard_measures_text_status_check",
+      );
+      await expectViolation(
+        db.execute(sql`update outcomes set text_status = ${bad} where id = ${outcome.id}`),
+        "outcomes_text_status_check",
+      );
+      await expectViolation(
+        db.execute(sql`update standard_measures set text_status = ${bad} where id = ${measure.id}`),
+        "standard_measures_text_status_check",
+      );
+    }
+    // approved godtas av databasen
+    await db.execute(sql`update outcomes set text_status = 'approved' where id = ${outcome.id}`);
+    await db.execute(
+      sql`update standard_measures set text_status = 'approved' where id = ${measure.id}`,
+    );
+  });
+
+  it("2.6 migration_text_status_check: kolonnene er NOT NULL med standard draft", async () => {
+    const columns = await db.execute<{
+      table_name: string;
+      column_name: string;
+      is_nullable: string;
+      column_default: string | null;
+    }>(sql`
+      select table_name, column_name, is_nullable, column_default from information_schema.columns
+      where table_schema = current_schema()
+        and ((table_name in ('outcomes', 'standard_measures') and column_name = 'text_status')
+          or (table_name = 'outcomes' and column_name = 'default_cause_text'))
+      order by table_name, column_name`);
+    const byName = Object.fromEntries(
+      [...columns].map((c) => [`${c.table_name}.${c.column_name}`, c]),
+    );
+    expect(Object.keys(byName).sort()).toEqual([
+      "outcomes.default_cause_text",
+      "outcomes.text_status",
+      "standard_measures.text_status",
+    ]);
+    expect(byName["outcomes.text_status"]!.is_nullable).toBe("NO");
+    expect(byName["outcomes.text_status"]!.column_default).toContain("draft");
+    expect(byName["standard_measures.text_status"]!.is_nullable).toBe("NO");
+    expect(byName["standard_measures.text_status"]!.column_default).toContain("draft");
+    expect(byName["outcomes.default_cause_text"]!.is_nullable).toBe("YES");
+  });
+
+  it("2.7 save_and_read_new_fields: saveDraftContent lagrer, getTemplateVersion gir dem tilbake", async () => {
+    const { org, admin, versionId } = await draftSetup();
+    await saveDraftContent(admin, org.id, versionId, docWithTextFields());
+
+    const { document } = await getTemplateVersion(admin, org.id, versionId);
+    const a = document.outcomes.find((o) => o.key === "out.a")!;
+    const b = document.outcomes.find((o) => o.key === "out.b")!;
+    expect(a).toMatchObject({ default_cause_text: "Oppdiktet årsak a A", text_status: "approved" });
+    expect(b).toMatchObject({ default_cause_text: "Oppdiktet årsak b A", text_status: "draft" });
+    expect(document.standard_measures.map((m) => [m.text, m.text_status])).toEqual([
+      ["Tiltak en", "approved"],
+      ["Tiltak to", "draft"],
+    ]);
+
+    // Og i databasen
+    const rows = await versionRows(versionId);
+    const rowA = rows.outcomes.find((r) => r.key === "out.a")!;
+    expect(rowA).toMatchObject({
+      default_cause_text: "Oppdiktet årsak a A",
+      text_status: "approved",
+    });
+    expect(
+      rows.standard_measures.filter((r) => r.text_status === "approved").map((r) => r.text),
+    ).toEqual(["Tiltak en"]);
+  });
+
+  it("2.8 copy_to_new_draft: createDraftVersion kopierer default_cause_text og approved", async () => {
+    const document = docWithTextFields();
+    // Alt godkjent, så standardverdien draft ikke kan skjule en kopi som mangler
+    for (const o of document.outcomes) o.text_status = "approved";
+    for (const m of document.standard_measures) m.text_status = "approved";
+    const { org, admin, familyId, v1 } = await publishedSetup(document);
+
+    const { versionId: v2 } = await createDraftVersion(admin, org.id, familyId);
+    const copy = (await getTemplateVersion(admin, org.id, v2)).document;
+    const source = (await getTemplateVersion(admin, org.id, v1)).document;
+    expect(copy.outcomes.map((o) => [o.key, o.default_cause_text, o.text_status])).toEqual([
+      ["out.a", "Oppdiktet årsak a A", "approved"],
+      ["out.b", "Oppdiktet årsak b A", "approved"],
+    ]);
+    expect(copy.standard_measures.map((m) => m.text_status)).toEqual(["approved", "approved"]);
+    expect(copy).toEqual(source);
+    // Kopien i databasen, ikke bare det som leses ut
+    const rows = await versionRows(v2);
+    expect(rows.outcomes.every((r) => r.text_status === "approved")).toBe(true);
+    expect(rows.standard_measures.every((r) => r.text_status === "approved")).toBe(true);
+  });
+
+  it("2.9 idempotent_save: samme dokument med de nye feltene to ganger gir 0/0/0", async () => {
+    const { org, admin, versionId } = await draftSetup();
+    await saveDraftContent(admin, org.id, versionId, docWithTextFields());
+    const before = await versionRows(versionId);
+    await expect(saveDraftContent(admin, org.id, versionId, docWithTextFields())).resolves.toEqual({
+      added: 0,
+      changed: 0,
+      removed: 0,
+    });
+    expect(await versionRows(versionId)).toEqual(before);
+  });
+
+  it("2.9 idempotent_save: text_status som mangler er det samme som draft (0/0/0)", async () => {
+    const { org, admin, versionId } = await draftSetup();
+    const explicit = buildTemplateDocument();
+    for (const o of explicit.outcomes) o.text_status = "draft";
+    for (const m of explicit.standard_measures) m.text_status = "draft";
+    await saveDraftContent(admin, org.id, versionId, explicit);
+    await expect(
+      saveDraftContent(admin, org.id, versionId, buildTemplateDocument()),
+    ).resolves.toEqual({ added: 0, changed: 0, removed: 0 });
+  });
+
+  it("2.10 text_status_only_counts_changed: utfall gir 0/1/0", async () => {
+    const { org, admin, versionId } = await draftSetup();
+    await saveDraftContent(admin, org.id, versionId, buildTemplateDocument());
+    const before = await versionRows(versionId);
+    const doc = buildTemplateDocument();
+    doc.outcomes[1]!.text_status = "approved";
+    await expect(saveDraftContent(admin, org.id, versionId, doc)).resolves.toEqual({
+      added: 0,
+      changed: 1,
+      removed: 0,
+    });
+    const after = await versionRows(versionId);
+    const row = after.outcomes.find((r) => r.key === "out.b")!;
+    expect(row.id).toBe(before.outcomes.find((r) => r.key === "out.b")!.id);
+    expect(row.text_status).toBe("approved");
+    expect(row.deleted_at).toBeNull();
+  });
+
+  it("2.10 text_status_only_counts_changed: tiltak gir ett fjernet og ett lagt til (A142)", async () => {
+    const { org, admin, versionId } = await draftSetup();
+    await saveDraftContent(admin, org.id, versionId, docWithSingleMeasure());
+    const before = await versionRows(versionId);
+    const old = before.standard_measures.find((r) => r.text === "Tiltak for b")!;
+
+    const doc = docWithSingleMeasure();
+    doc.standard_measures.find((m) => m.outcome_key === "out.b")!.text_status = "approved";
+    await expect(saveDraftContent(admin, org.id, versionId, doc)).resolves.toEqual({
+      added: 1,
+      changed: 0,
+      removed: 1,
+    });
+
+    const after = await versionRows(versionId);
+    const gone = after.standard_measures.find((r) => r.id === old.id)!;
+    expect(gone, "det gamle tiltaket står igjen").toBeDefined();
+    expect(gone.deleted_at).not.toBeNull();
+    expect(gone.text_status, "den gamle raden er ikke overskrevet").toBe("draft");
+    const active = after.standard_measures.filter(
+      (r) => r.text === "Tiltak for b" && r.deleted_at === null,
+    );
+    expect(active).toHaveLength(1);
+    expect(active[0]!.text_status).toBe("approved");
+    expect(active[0]!.id).not.toBe(old.id);
+  });
+
+  it("2.11 default_cause_text_counts_changed: bare årsaken endret gir 0/1/0", async () => {
+    const { org, admin, versionId } = await draftSetup();
+    await saveDraftContent(admin, org.id, versionId, docWithTextFields());
+    const doc = docWithTextFields();
+    doc.outcomes[0]!.default_cause_text = "Oppdiktet årsak a endret";
+    await expect(saveDraftContent(admin, org.id, versionId, doc)).resolves.toEqual({
+      added: 0,
+      changed: 1,
+      removed: 0,
+    });
+    // Årsaken tatt bort (null) er også en endring
+    const removedCause = docWithTextFields();
+    removedCause.outcomes[0]!.default_cause_text = null;
+    await expect(saveDraftContent(admin, org.id, versionId, removedCause)).resolves.toEqual({
+      added: 0,
+      changed: 1,
+      removed: 0,
+    });
+    const row = (await versionRows(versionId)).outcomes.find((r) => r.key === "out.a")!;
+    expect(row.default_cause_text).toBeNull();
+  });
+
+  it("2.12 published_version_untouched: ny tekststatus publiseres som v2, v1 er urørt og retired", async () => {
+    const { org, admin, familyId, v1 } = await publishedSetup(docWithSingleMeasure());
+    const v1RowsBefore = await versionRows(v1);
+    const v1DocBefore = (await getTemplateVersion(admin, org.id, v1)).document;
+
+    const { versionId: v2 } = await createDraftVersion(admin, org.id, familyId);
+    const doc = docWithSingleMeasure();
+    for (const o of doc.outcomes) o.text_status = "approved";
+    for (const m of doc.standard_measures) m.text_status = "approved";
+    await saveDraftContent(admin, org.id, v2, doc);
+    await publishVersion(admin, org.id, v2, "Godkjente tekster");
+
+    expect((await versionRow(v1)).status).toBe("retired");
+    expect((await versionRow(v2)).status).toBe("published");
+    const v1RowsAfter = await versionRows(v1);
+    expect(v1RowsAfter).toEqual(v1RowsBefore);
+    for (const table of ["outcomes", "standard_measures"] as const) {
+      for (const row of v1RowsAfter[table]) {
+        expect(row.text_status, table).toBe("draft");
+        expect(row.deleted_at, table).toBeNull();
+      }
+    }
+    expect((await getTemplateVersion(admin, org.id, v1)).document).toEqual(v1DocBefore);
+    const v2Doc = (await getTemplateVersion(admin, org.id, v2)).document;
+    expect(v2Doc.outcomes.every((o) => o.text_status === "approved")).toBe(true);
+    expect(v2Doc.standard_measures.every((m) => m.text_status === "approved")).toBe(true);
+  });
+
+  it("2.13 wet_room_template_saves: hele malen for badet lagres og publiseres", async () => {
+    // Dynamisk, så resten av filen kjører selv om malfilen mangler
+    const { wetRoomTemplate } = await import("@/db/seed/templates/wet-room");
+    const { org, admin, versionId } = await draftSetup();
+    const counts = await saveDraftContent(admin, org.id, versionId, wetRoomTemplate);
+    expect(counts.changed).toBe(0);
+    expect(counts.removed).toBe(0);
+    expect(counts.added).toBeGreaterThan(100);
+    await expect(publishVersion(admin, org.id, versionId, "Badet")).resolves.toEqual({
+      versionId,
+    });
+    const { document } = await getTemplateVersion(admin, org.id, versionId);
+    expect(document.checkpoints).toHaveLength(8);
+    expect(document.outcomes.every((o) => o.text_status === "draft")).toBe(true);
+    expect(document.standard_measures.every((m) => m.text_status === "draft")).toBe(true);
+    const wanted = parseTemplateDocument(wetRoomTemplate);
+    if (!wanted.success) throw new Error("malen for badet er ugyldig");
+    expect(sortedLists(document)).toEqual(sortedLists(wanted.document));
+  });
+
+  // --- Tilgang per rolle (utvider 4.1 med de nye feltene) ---
+
+  const readers: { name: string; roles: EmployeeRole[] }[] = [
+    { name: "takstmann", roles: ["inspector"] },
+    { name: "kontor", roles: ["office"] },
+    { name: "leder", roles: ["manager"] },
+  ];
+
+  it.each(readers)(
+    "2.14 role_read_new_fields: $name leser text_status og årsak",
+    async ({ roles }) => {
+      const { org } = await orgWithAdmin();
+      const { versionId } = await createTemplate(org.id, {
+        status: "published",
+        document: docWithTextFields(),
+      });
+      const { actor } = await person(org.id, roles);
+      const { document } = await getTemplateVersion(actor, org.id, versionId);
+      expect(document.outcomes.find((o) => o.key === "out.a")).toMatchObject({
+        default_cause_text: "Oppdiktet årsak a A",
+        text_status: "approved",
+      });
+      expect(document.standard_measures.map((m) => m.text_status)).toEqual(["approved", "draft"]);
+    },
+  );
+
+  const nonEditors: { name: string; roles: EmployeeRole[] }[] = [
+    { name: "takstmann uten template.edit_structure", roles: ["inspector"] },
+    { name: "leder uten template.edit_structure", roles: ["manager"] },
+    { name: "kontor", roles: ["office"] },
+  ];
+
+  it.each(nonEditors)(
+    "2.15 role_cannot_save_new_fields: $name får AccessDeniedError, ingen rader endret",
+    async ({ roles }) => {
+      const { org } = await orgWithAdmin();
+      const { versionId } = await createTemplate(org.id, { document: buildTemplateDocument() });
+      const { actor } = await person(org.id, roles);
+      const before = await snapshot();
+      const counts = await rowCounts();
+      await expect(saveDraftContent(actor, org.id, versionId, docWithTextFields())).rejects.toThrow(
+        AccessDeniedError,
+      );
+      expect(await snapshot()).toEqual(before);
+      expect(await rowCounts()).toEqual(counts);
+    },
+  );
+
+  it("2.16 admin_always_saves (regel 11, skal aldri fjernes): admin uten enkeltrettigheter lagrer ny tekststatus og publiserer", async () => {
+    const org = await createOrganization();
+    await setInspectorsEditAll(org.id, false);
+    const { actor: admin } = await person(org.id, ["admin"]);
+    const { versionId } = await createTemplate(org.id, { document: buildTemplateDocument() });
+
+    // To utfall endret (årsak og status); tiltakene under out.a erstattes samlet (A142): 2 + 2
+    await expect(saveDraftContent(admin, org.id, versionId, docWithTextFields())).resolves.toEqual({
+      added: 2,
+      changed: 2,
+      removed: 2,
+    });
+    await expect(publishVersion(admin, org.id, versionId, null)).resolves.toEqual({ versionId });
+    const { document } = await getTemplateVersion(admin, org.id, versionId);
+    expect(document.outcomes.find((o) => o.key === "out.a")!.text_status).toBe("approved");
+    expect(document.standard_measures[0]!.text_status).toBe("approved");
+  });
+
+  it("2.17 tenant: en annen organisasjon ser ikke de nye feltene, og egen versjon har bare egne tekster", async () => {
+    const { org: orgA, admin: adminA } = await orgWithAdmin("Testfirma A");
+    const { org: orgB, admin: adminB } = await orgWithAdmin("Testfirma B");
+    const a = await createTemplate(orgA.id, { document: docWithTextFields("A") });
+    await createTemplate(orgB.id, { document: docWithTextFields("B") });
+
+    await expect(getTemplateVersion(adminB, orgB.id, a.versionId)).rejects.toThrow(
+      TemplateNotFoundError,
+    );
+    await expect(getTemplateVersion(adminB, orgA.id, a.versionId)).rejects.toThrow(
+      AccessDeniedError,
+    );
+    const own = await getTemplateVersion(adminA, orgA.id, a.versionId);
+    expect(JSON.stringify(own.document)).toContain("Oppdiktet årsak a A");
+    expect(JSON.stringify(own.document)).not.toContain("årsak a B");
+  });
+});
 
 describe("dekning av regelkodene", () => {
   it("alle verdiene i TemplateIssueRule er sett i et avvist kall til saveDraftContent", () => {

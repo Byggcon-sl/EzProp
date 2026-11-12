@@ -16,6 +16,7 @@ import {
   SECTION_REPEATS,
   TEMPLATE_KEY_PATTERN,
   TEMPLATE_REPORT_TYPES,
+  TEXT_STATUSES,
   TG_RULE_PURPOSES,
   type TemplateKind,
 } from "@/db/schema";
@@ -104,6 +105,12 @@ const keyList = z.array(keySchema).default([]);
 const roomTypeGroups = z.array(oneOf(ROOM_TYPE_GROUPS)).default([]);
 
 /** Utfall: `tgiu` har egen regelkode (innspill D1), andre ukjente verdier er `schema`. */
+/**
+ * Status på fagteksten (ADR 0007). Mangler feltet, er teksten utkast. `approved` godtas i formatet
+ * (A209); ukjent verdi er `schema`.
+ */
+const textStatus = oneOf(TEXT_STATUSES).default("draft");
+
 const outcomeKind = z.unknown().superRefine((value, ctx) => {
   if (value === "tgiu") {
     ctx.addIssue({ code: "custom", message: TGIU_MESSAGE, params: { rule: "outcome_tgiu" } });
@@ -192,10 +199,14 @@ const outcomeSchema = z.object({
   key: keySchema,
   kind: outcomeKind,
   deviation_text: optionalText(),
+  /** Årsak som tekst (A201). */
+  default_cause_text: optionalText(),
   default_cause_criterion: oneOf(CAUSE_CRITERIA).nullable().default(null),
   default_consequence_text: optionalText(),
   /** Kilde i bakgrunnen. Står aldri i rapporten. */
   source_ref: optionalText(SHORT_TEXT_MAX),
+  /** Gjelder rapporttekstene på utfallet samlet. */
+  text_status: textStatus,
   sort_order: sortOrder,
 });
 
@@ -204,6 +215,7 @@ const standardMeasureSchema = z.object({
   question_key: keySchema,
   outcome_key: keySchema,
   text: requiredText(LONG_TEXT_MAX),
+  text_status: textStatus,
   sort_order: sortOrder,
 });
 
