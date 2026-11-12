@@ -166,12 +166,13 @@ const AREA_TYPE_CASES: [string, string][] = EXPECTED_ROOM_TYPES.map(([key]) => [
 const USUALLY_BELOW_GROUND = ["basement_living_room", "basement_room", "crawl_space"];
 
 describe("1.1–1.4 faste koder og etiketter", () => {
-  it("1.1 AREA_TYPES er bra_i, bra_e, bra_b i fast rekkefølge, med BRA-i, BRA-e, BRA-b", () => {
-    expect(keysOf(AREA_TYPES)).toEqual(["bra_i", "bra_e", "bra_b"]);
+  it("1.1 AREA_TYPES er bra_i, bra_e, bra_b, not_bra i fast rekkefølge, med norske navn", () => {
+    expect(keysOf(AREA_TYPES)).toEqual(["bra_i", "bra_e", "bra_b", "not_bra"]);
     expect(keysOf(AREA_TYPES).map((key) => labelOf(AREA_TYPES, "area", key))).toEqual([
       "BRA-i",
       "BRA-e",
       "BRA-b",
+      "Ikke del av BRA",
     ]);
   });
 

@@ -644,8 +644,8 @@ Hvilke kontrollpunkter som gjelder leilighet og fellesdeler, styres av **regler*
 | `key` | Fast kode, for eksempel `bathroom`. Regler bruker koden, aldri navnet (lærdom fra SmartTakst). |
 | `name` | Navn, for eksempel «Bad» |
 | `group` | `wet_room` (våtrom), `kitchen` (kjøkken), `toilet` (toalettrom), `special` (spesialrom: badstue, fyrrom, kjølerom), `other` |
-| `default_area_type` | Vanlig arealtype: BRA-i, BRA-e eller BRA-b |
-| `default_below_ground` | Om rommet vanligvis er under terreng |
+| `default_area_type` | Vanlig arealtype: BRA-i, BRA-e, BRA-b eller «Ikke del av BRA» (`not_bra`, for kryperom og uinnredet loft; Ståle 12.11.2026, F6) |
+| `default_below_ground` | Om rommet vanligvis er under terreng. Kryperom er ikke det (F6); står kryperommet i en etasje under terreng, følger det etasjen (A239). |
 | `active`, `sort_order` | I bruk, og rekkefølge |
 
 Romtypens **gruppe** styrer hvilke grupper av kontrollpunkter rommet får (våtrom får våtromspunktene, kjøkken får kjøkkenpunktene).
@@ -657,8 +657,8 @@ Romtypens **gruppe** styrer hvilke grupper av kontrollpunkter rommet får (våtr
 | `floor_id` | Etasjen |
 | `room_type_id` | Romtypen |
 | `name` | For eksempel «Bad 2. etasje» |
-| `area_type` | BRA-i, BRA-e eller BRA-b (forslag fra romtypen) |
-| `below_ground` | **Under terreng** (forslag fra romtype og etasje, kan endres). Styrer forskriften § 2-15 (hulltaking). |
+| `area_type` | BRA-i, BRA-e, BRA-b eller «Ikke del av BRA» (`not_bra`) (forslag fra romtypen, kan endres). `not_bra` er en merking på rommet og påvirker ikke summene: BRA regnes fra `floor_areas` (A235). |
+| `below_ground` | **Under terreng** (forslag fra romtype og etasje, kan endres). Styrer forskriften § 2-15 (hulltaking). Kryperom følger reglene for krypkjeller uten krav om hulltaking (F6): når kravet om hulltaking i rom under terreng bygges, knyttes unntaket til romtypen `crawl_space`, aldri til `below_ground = false` (A239). |
 | `sort_order` | Rekkefølge |
 | `geometry` | Romskisse som mangekant (valgfritt, tomt nå). Krok for plantegning, LiDAR og fuktkart senere (K7, B9). |
 
@@ -668,7 +668,7 @@ Romtypens **gruppe** styrer hvilke grupper av kontrollpunkter rommet får (våtr
 - **`report_buildings`** har `assignment_id` (påkrevd, til `assignments`) og `name`. Per oppdrag til rapportene finnes; da får tabellen `report_id` (A94). Ingen `property_id`: eiendommen finnes via `assignments.property_id`.
 - **`floors`** har `report_building_id`, `name`, `level` (CHECK −3 til 20) og `below_ground` (standard `false`).
 - **`floor_areas`** har `floor_id`, `bra_i`, `bra_e`, `bra_b` og `alh` (`numeric(7,1)`, valgfrie, CHECK `>= 0`), `measured_by` (sammensatt fremmednøkkel til `employees`), `method` (CHECK `laser`, `drawing`, `other`) og `comment`. Én aktiv rad per etasje (unik delvis indeks der `deleted_at is null`). BRA = BRA-i + BRA-e + BRA-b regnes i koden (`sumFloorArea`, i tideler), og ALH tas ikke med (A96). «Målt av» settes til den innloggede når areal føres uten måler; en tidligere måler som har sluttet, godtas som før.
-- **`rooms`** har `floor_id`, `room_type` (fast kode, CHECK med de 33 kodene), `name` (tom = romtypens navn), `area_type` (CHECK `bra_i`, `bra_e`, `bra_b`) og `below_ground`. Arealtype og «under terreng» foreslås fra romtype og etasje (`suggestAreaType`, `suggestBelowGround`, A97).
+- **`rooms`** har `floor_id`, `room_type` (fast kode, CHECK med de 33 kodene), `name` (tom = romtypens navn), `area_type` (CHECK `bra_i`, `bra_e`, `bra_b`, `not_bra`; `not_bra` fra migrering `0031_svar-regler-bygninger`, eksisterende rader er ikke endret) og `below_ground`. Arealtype og «under terreng» foreslås fra romtype og etasje (`suggestAreaType`, `suggestBelowGround`, A97). Etasjenummer og «under terreng» på etasjen foreslås fra etasjenavnet (`suggestFloor`, typen `SuggestFloor` i `src/core/buildings/codes.ts`; F7, A236): «Kjeller» og «Underetasje» gir -1 og under terreng, «Loft» gir høyeste + 1.
 - **Romtypene er kode, ikke tabell ennå:** `ROOM_TYPES` i `src/core/buildings/codes.ts` med `key`, navn, gruppe, standard arealtype og standard «under terreng», merket utkast, ikke godkjent av fagrådet (A95). `room_types` som tabell kommer med maleditoren.
 - **Fjerning** er myk sletting, og bare når bygningen ikke har aktive etasjer eller etasjen ikke har aktive rom (A98). Arealraden fjernes sammen med etasjen.
 - **Hendelser og revisjonslogg:** `assignment.building_saved`, `assignment.building_removed`, `assignment.floor_saved`, `assignment.floor_removed`, `assignment.floor_area_saved`, `assignment.room_saved` og `assignment.room_removed`, alle med `{ <id>, created }`; revisjonslogg `report_building`, `floor`, `floor_area` og `room` med `create`/`update`/`delete`, bare id-er, koder og navnene på endrede felt. Aldri navn på bygning, etasje eller rom, kommentar eller arealtall.
@@ -828,16 +828,16 @@ TG3 krever alltid kostnad. Det trenger ikke lagres, det følger av `kind`.
 |---|---|
 | `version_id` | Malversjonen |
 | `key`, `name` | Fast kode og navn, for eksempel «Membran eldre enn levetiden» |
-| `purpose` | `show` (vis felt, spørsmål eller seksjon), `suggest_outcome` (foreslå utfall), `suggest_tgiu` (foreslå TGIU på kontrollpunktet, for eksempel når eier nekter hulltaking, innspill D1), `validate` (kontroll før publisering) |
+| `purpose` | `show` (vis felt, spørsmål eller seksjon), `suggest_outcome` (foreslå utfall), `suggest_tgiu` (foreslå TGIU på kontrollpunktet, for eksempel når eier nekter hulltaking, innspill D1), `validate` (kontroll før publisering), `suggest_tg0` (foreslå TG0 på kontrollpunktet, uten utfall; Ståle 12.11.2026, F1, A234) |
 | `match` | `all` (alle betingelser) eller `any` (minst én) for betingelsene uten gruppe |
-| `target_element_id` / `target_question_id` / `target_section_id` / `target_checkpoint_id` | Hva regelen gjelder: det som vises (for `show`), punktet som får forslaget (for `suggest_tgiu`), og stedet mangelen peker på (for `validate`, slik at «Gå til» virker, innspill D5) |
+| `target_element_id` / `target_question_id` / `target_section_id` / `target_checkpoint_id` | Hva regelen gjelder: det som vises (for `show`), punktet som får forslaget (for `suggest_tgiu` og `suggest_tg0`), og stedet mangelen peker på (for `validate`, slik at «Gå til» virker, innspill D5) |
 | `suggested_outcome_id` | Utfallet som foreslås (for `suggest_outcome`) |
 | `validation_code`, `severity` | For `validate`: hvilken kontroll, og om den er `blocker` (sperre) eller `warning` (advarsel) |
 | `message` | Tekst til takstmannen, for eksempel begrunnelsen for forslaget |
 | `source_ref` | Kilde i bakgrunnen (for eksempel tabell i NS 3600) |
 | `active` | I bruk |
 
-**Regler i egne maler (beslutning 27.10.2026):** I en egen mal (`template_families.kind = custom`) er `show` og `validate` tillatt, og flere slags sjekker og logikk kan legges til. `suggest_outcome` og `suggest_tgiu` (TG-logikk) er bare tillatt i systemmalen for tilstandsrapport. Regelmotoren er den samme, så malbyggeren trenger ingen egen motor.
+**Regler i egne maler (beslutning 27.10.2026):** I en egen mal (`template_families.kind = custom`) er `show` og `validate` tillatt, og flere slags sjekker og logikk kan legges til. `suggest_outcome`, `suggest_tgiu` og `suggest_tg0` (TG-logikk) er bare tillatt i systemmalen for tilstandsrapport. En egen mal kan bare lage advarsler: `validate` med `severity = blocker` avvises (Ståle 12.11.2026, F9). Regelmotoren er den samme, så malbyggeren trenger ingen egen motor.
 
 **`rule_conditions`** – betingelsene. **Et lite, fast sett typer** (P10). Betingelser kan samles i grupper (`group_no`), der hver gruppe er «alle» eller «minst én».
 
@@ -855,6 +855,7 @@ TG3 krever alltid kostnad. Det trenger ikke lagres, det følger av `kind`.
 | `documentation_element_key` | For alder: feltet som sier om dokumentasjon finnes. `value` på betingelsen er listen over valgkodene som betyr «uten dokumentasjon». |
 | `material_element_key` | For alder: feltet med materialvalget (gir materialkoden). |
 | `unit_element_key` | For tall mot terskel: feltet med enheten målingen er gjort i. Annen enhet enn terskelens gir «ikke vurdert». |
+| `negate` | Snur betingelsen (standard `false`): sann blir usann og usann blir sann, «ikke vurdert» står. Brukes for «under grensen» mot samme terskel som «lik eller over» (A237). |
 | `checkpoint_key` | For `checkpoint_tg`: kontrollpunktet som leses (fast kode) |
 
 **Betingelsestypene** (fem nye typer lagt til etter innspill D5):
@@ -964,10 +965,11 @@ En malversjon kan ikke publiseres hvis en test feiler. Testene kjøres også aut
 
 **Bygget i fase 2a (12.11.2026, regelmotoren):** Oppgavekort: `docs/funksjoner/fase2a-regler-bad.md`; ADR 0009; beslutningene A224–A232.
 
-- **Regelmotoren** ligger i `src/core/rules` som rene funksjoner (`evaluateRules`, `runRuleTestCases`) og kjører likt på iPaden og på serveren. Den leser maldokumentet, svarene (`feltkode → verdi`), befaringsåret, levetidene og tersklene, og gir ett regelsvar (`RuleResult`) per aktive regel. Svaret har bare faste koder og tall: regelkode, tilstand, forslag (utfall eller TGIU på kontrollpunktet), én begrunnelse per betingelse og settkodene. Typene står i `src/core/rules/types.ts`, kodene i `src/core/rules/codes.ts`.
+- **Regelmotoren** ligger i `src/core/rules` som rene funksjoner (`evaluateRules`, `runRuleTestCases`) og kjører likt på iPaden og på serveren. Den leser maldokumentet, svarene (`feltkode → verdi`), befaringsåret, levetidene og tersklene, og gir ett regelsvar (`RuleResult`) per aktive regel. Svaret har bare faste koder og tall: regelkode, tilstand, forslag (utfall, eller TGIU eller TG0 på kontrollpunktet), én begrunnelse per betingelse og settkodene. Typene står i `src/core/rules/types.ts`, kodene i `src/core/rules/codes.ts`.
 - **Tre tilstander** (`RULE_RESULT_STATES`): `triggered`, `not_triggered` og `not_evaluated`. Tomt eller ugyldig felt gir `not_evaluated`, aldri en stille «slår ikke til».
-- **Kjøres nå:** formålene `suggest_outcome` og `suggest_tgiu` (bare i systemmalen for tilstandsrapport) og betingelsestypene `option_selected`, `number_vs_limit` og `age_vs_lifespan`. Resten gir `not_evaluated` til de bygges i 2a-3.
+- **Kjøres nå:** formålene `suggest_outcome`, `suggest_tgiu` og `suggest_tg0` (bare i systemmalen for tilstandsrapport) og betingelsestypene `option_selected`, `number_vs_limit` og `age_vs_lifespan`. Resten gir `not_evaluated` til de bygges i 2a-3.
 - **Migrering `0030_regler-bad`:** `rule_conditions` har fått `threshold_key`, `age_year_element_key`, `age_fallback_year_element_key`, `age_source_element_key`, `documentation_element_key`, `material_element_key` og `unit_element_key` (valgfrie, samme format-CHECK som `element_key`). `rule_test_cases` har fått `expected_state` (påkrevd, CHECK fra `RULE_RESULT_STATES`; fylt fra `expect_triggered`, som er fjernet) og `inspection_year` (valgfri, 1900–2200). Alle lagres, leses, kopieres til nytt utkast og telles i «endret».
+- **Migrering `0031_svar-regler-bygninger`** (Ståle 12.11.2026): `rules.purpose` godtar `suggest_tg0`, `rule_conditions` har fått `negate` (påkrevd, standard `false`, lagres og leses som de andre kolonnene), og `rooms.area_type` godtar `not_bra`.
 - **Levetider og terskler er kodedata nå**, ikke tabeller: `src/core/rules/data/lifespans.ts` og `thresholds.ts`, med samme form som `lifespan_entries` og `threshold_entries` over. Hver rad har fast `key` og `status`, og hvert sett har en fast settkode. Tabellene `lifespan_tables`, `lifespan_entries`, `threshold_tables` og `threshold_entries` kommer i 2a-3 og fylles med de samme kodene. Til da har terskelen ikke `outcome_kind`, `verified_by` eller `verified_at`: hva som foreslås, står på regelen.
 
 ### 4.6 Fraser
@@ -2138,7 +2140,9 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Byggeår | `build_year` | |
 | Etasje | `floors`, `floor` | `level` (−3 til 20) gir rekkefølgen |
 | Areal per etasje | `floor_areas`, `floor_area` | Én aktiv rad per etasje (A96) |
-| Arealtype | `area_type`, `AREA_TYPES` | `bra_i`, `bra_e` eller `bra_b`, på rommet |
+| Arealtype | `area_type`, `AREA_TYPES` | `bra_i`, `bra_e`, `bra_b` eller `not_bra`, på rommet |
+| Ikke del av BRA | `not_bra` | Arealtype for kryperom og uinnredet loft (F6). Merking på rommet, ikke med i summene |
+| Etasjeforslag | `suggestFloor`, `FloorSuggestion` | Etasjenummer og «under terreng» foreslått fra etasjenavnet (F7) |
 | BRA-i / BRA-e / BRA-b | `bra_i` / `bra_e` / `bra_b` | Bruksareal internt, eksternt, innglasset. BRA er summen av de tre (`sumFloorArea`) |
 | ALH | `alh` | Areal med lav himlingshøyde. Vises, men tas ikke med i BRA |
 | Målt av | `measured_by` | Den ansatte som målte arealet. Forhåndsvalgt med den innloggede |
@@ -2187,7 +2191,9 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Tilliggende konstruksjoner våtrom | `wet_room.adjacent` | Kontrollpunkt: hulltaking, målingene (enkeltfelt til 2a-3, A202) og opplysningene når hull ikke er tatt |
 | Regel | `rules` | |
 | Betingelse | `rule_conditions` | |
-| Vis / foreslå utfall / foreslå TGIU / valider | `show` / `suggest_outcome` / `suggest_tgiu` / `validate` | `rules.purpose` |
+| Vis / foreslå utfall / foreslå TGIU / valider / foreslå TG0 | `show` / `suggest_outcome` / `suggest_tgiu` / `validate` / `suggest_tg0` | `rules.purpose` |
+| TG0-forslag | `tg0` | `RuleSuggestion.kind`. Forslag om TG0 på kontrollpunktet, bare fra `suggest_tg0` |
+| Snudd betingelse | `negate`, `negated` | `rule_conditions.negate`; `negated` i begrunnelsen. Sann og usann byttes, «ikke vurdert» står |
 | Levetidstabell | `lifespan_tables`, `lifespan_entries` | |
 | Terskeltabell | `threshold_tables`, `threshold_entries` | |
 | Kostnadsintervall | `cost_bands` | |
@@ -2458,3 +2464,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 12.11.2026 | Malen for ett bad (fase 2a): `text_status` (`TEXT_STATUSES`) på `outcomes` og `standard_measures` og `default_cause_text` på `outcomes` i migrering `0028_mal-tekststatus`. Eksemplet `wet_room.membrane` er byttet til `wet_room.membrane_drain`. Hulltakingsmålingene er enkeltfelt nå og blir `table` i 2a-3. Nye ord i ordlisten (`isSameTemplateContent`, `ensureSampleTemplate`, seksjonen og de åtte kontrollpunktene for våtrom). Se «Bygget i fase 2a» i 4.5. | A200–A209, `docs/funksjoner/fase2a-mal-bad.md`, ADR 0007 |
 | 12.11.2026 | Microsoft-innlogging (fase 2a, grensesnitt, ADR 0008): ingen ny tabell og ingen migrering. `accounts` beskrevet (`provider_id = 'microsoft'`, `account_id` = `oid`, tokens lagres ikke). Reservert hemmelighetsnavn `MS_LOGIN_CLIENT_SECRET`. Ordlisten: Microsoft-innlogging, Microsoft-katalog, aktivt ansattforhold, reservert hemmelighetsnavn. |
 | 12.11.2026 | Regelmotoren (fase 2a, ADR 0009): `src/core/rules` med regelsvar i faste koder og tre tilstander (`RULE_RESULT_STATES`). Migrering `0030_regler-bad`: sju nye kolonner på `rule_conditions` (`threshold_key`, alder-feltene, `unit_element_key`), og `expected_state` og `inspection_year` på `rule_test_cases` (`expect_triggered` er fjernet). Levetidstrinn og terskler har fått `key` og `status`, og settene en settkode; de er kodedata til tabellene kommer i 2a-3. |
+| 12.11.2026 | Svarene i reglene og bygningene (fase 2a, Ståle 12.11.2026 F1, F6, F7, F9; ADR 0009 rettet): migrering `0031_svar-regler-bygninger` med `suggest_tg0` i `rules.purpose`, `rule_conditions.negate` og `not_bra` i `rooms.area_type`. Ny forslagstype `tg0` og `negated` i regelsvaret. `suggestFloor` for etasjeforslag. Ordlisten: ikke del av BRA, etasjeforslag, TG0-forslag, snudd betingelse (A234–A237, A239) |
