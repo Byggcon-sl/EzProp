@@ -210,12 +210,30 @@ test.describe("rette ordre (pc og ipad)", () => {
   test("5.3 gjort-om ordre kan rettes, og oppdraget endres ikke", async ({ page }) => {
     const suffix = uniqueSuffix();
     await logIn(page);
-    await createOrderViaUi(page, oldAddress(suffix));
+    const id = await createOrderViaUi(page, oldAddress(suffix));
     await field.office(page).selectOption({ label: "Bodø" });
     await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
     const main = page.getByRole("main");
     await expect(main).toContainText("Gjort om til oppdrag");
 
+    // Eiendommen lagres på oppdraget. Før det er skjemaet bare forhåndsutfylt fra ordren.
+    await main.getByRole("link", { name: NUMBER }).click();
+    await expect(page).toHaveURL(ASSIGNMENT_URL);
+    const assignmentUrl = page.url();
+    const property = page.getByRole("region", { name: "Eiendom", exact: true });
+    await expect(property.getByLabel(/^Adresse/)).toHaveValue(oldAddress(suffix));
+    await property.getByLabel(/^Boligtype/).selectOption({ label: "Enebolig" });
+    await property.getByLabel(/^Eierform/).selectOption({ label: "Selveier" });
+    await property.getByLabel(/^Gårdsnummer/).fill("12");
+    await property.getByLabel(/^Bruksnummer/).fill("34");
+    await property.getByRole("button", { name: "Lagre eiendom", exact: true }).click();
+    await expect(property.getByText("Fylt ut fra ordren", { exact: false })).toHaveCount(0);
+    await page.reload();
+    await expect(property.getByLabel(/^Boligtype/).locator("option:checked")).toHaveText(
+      "Enebolig",
+    );
+
+    await page.goto(`/ordre/${id}`);
     await openEdit(page);
     await expect(page.getByText(CONVERTED_NOTE)).toBeVisible();
     await field.address(page).fill(newAddress(suffix));
@@ -229,8 +247,8 @@ test.describe("rette ordre (pc og ipad)", () => {
     const assignmentLink = main.getByRole("link", { name: NUMBER });
     await expect(assignmentLink).toBeVisible();
     await assignmentLink.click();
-    await expect(page).toHaveURL(ASSIGNMENT_URL);
-    await expect(page.getByRole("main")).toContainText(oldAddress(suffix));
+    await expect(page).toHaveURL(assignmentUrl);
+    await expect(property.getByLabel(/^Adresse/)).toHaveValue(oldAddress(suffix));
     await expect(page.getByRole("main")).not.toContainText(newAddress(suffix));
   });
 
