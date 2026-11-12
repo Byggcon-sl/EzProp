@@ -1,6 +1,6 @@
 # EzProp – utviklingsplan
 
-Sist oppdatert: 10.11.2026
+Sist oppdatert: 12.11.2026
 Eier: Ståle Limstrand (produkteier). Prosjektlederen i agentlaget holder planen ved like.
 
 **Dette er det ene levende plandokumentet.** Det viser bare det som gjelder nå og det som kommer.
@@ -125,7 +125,7 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 
 ### 2a-1 KI-grunnmuren
 
-- [x] **Beslutningsnotat om KI-leverandør** til Ståle (S8). **Leverandøren er valgt: Anthropic (Ståle 10.11.2026).** Notatet tar for seg modellvalg per funksjon, alternativer for norsk tale til tekst, pris per rapport, databehandleravtale, EU/EØS og ingen trening på våre data. Notatet: `docs/beslutningsnotat-ki-leverandor.md`. Anthropic-adapteren er bygget bak KI-porten (av til Ståle har lagt inn nøkkelen og laget tilkoblingen).
+Alle punktene i 2a-1 er levert (12.11.2026) og står i `docs/plan/levert.md`.
 
 **Ferdig når:** En prøvefunksjon (språkvask av en setning) går hele veien mot den falske leverandøren: forslaget vises, takstmannen godtar eller avviser, og loggen viser det.
 
