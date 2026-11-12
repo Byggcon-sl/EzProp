@@ -1,6 +1,10 @@
 import type { TemplateDocument } from "@/core/templates";
 import type { RuleConditionType, RuleResultState } from "@/db/schema";
-import { LIFESPAN_OUTCOME_KINDS, SUPPORTED_CONDITION_TYPES } from "./codes";
+import {
+  EVALUATED_RULE_PURPOSES,
+  LIFESPAN_OUTCOME_KINDS,
+  SUPPORTED_CONDITION_TYPES,
+} from "./codes";
 import type {
   AgeVsLifespanReason,
   ConditionReasonCode,
@@ -403,7 +407,7 @@ function notEvaluated(rule: Rule, code: RuleResult["code"]): RuleResult {
 }
 
 function evaluateRule(rule: Rule, tgLogicAllowed: boolean, context: Context): RuleResult {
-  if (rule.purpose !== "suggest_outcome" && rule.purpose !== "suggest_tgiu") {
+  if (!(EVALUATED_RULE_PURPOSES as readonly string[]).includes(rule.purpose)) {
     return notEvaluated(rule, "purpose_not_supported");
   }
   if (!tgLogicAllowed) return notEvaluated(rule, "tg_logic_not_allowed");
@@ -414,8 +418,10 @@ function evaluateRule(rule: Rule, tgLogicAllowed: boolean, context: Context): Ru
     const { checkpoint_key, question_key, outcome_key } = rule.suggested_outcome;
     suggestion = { kind: "outcome", checkpoint_key, question_key, outcome_key };
   } else {
+    // `suggest_tgiu` og `suggest_tg0`: forslag på kontrollpunktet, uten utfall.
     if (!rule.target_checkpoint_key) return notEvaluated(rule, "target_missing");
-    suggestion = { kind: "tgiu", checkpoint_key: rule.target_checkpoint_key };
+    const kind = rule.purpose === "suggest_tg0" ? "tg0" : "tgiu";
+    suggestion = { kind, checkpoint_key: rule.target_checkpoint_key };
   }
 
   const conditions = context.document.rule_conditions

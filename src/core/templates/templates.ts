@@ -52,6 +52,7 @@ import {
 } from "./errors";
 import {
   changeNoteSchema,
+  checkNoBlockerInCustom,
   checkNoTgLogicInCustom,
   createTemplateFamilyInputSchema,
   norwegianMessage,
@@ -1335,6 +1336,7 @@ function validated(document: unknown, kind: TemplateKind): TemplateDocument {
     ...checkDocumentKeys(parsed.document),
     ...checkDocumentRules(parsed.document),
     ...checkNoTgLogicInCustom(kind, parsed.document),
+    ...checkNoBlockerInCustom(kind, parsed.document),
   ];
   if (issues.length > 0) throw new TemplateValidationError(issues);
   return parsed.document;

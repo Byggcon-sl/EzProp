@@ -19,6 +19,7 @@ export {
 export {
   KEY_MAX,
   KEY_PATTERN,
+  checkNoBlockerInCustom,
   checkNoTgLogicInCustom,
   createTemplateFamilyInputSchema,
   parseTemplateDocument,

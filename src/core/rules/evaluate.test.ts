@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TemplateDocument } from "@/core/templates";
-import { RULE_CONDITION_TYPES } from "@/db/schema";
+import { RULE_CONDITION_TYPES, TG_RULE_PURPOSES } from "@/db/schema";
 import {
   CONDITION_REASON_CODES,
+  EVALUATED_RULE_PURPOSES,
   SUPPORTED_CONDITION_TYPES,
   evaluateRules,
   runRuleTestCases,
@@ -119,6 +120,10 @@ function rule(key: string, extra: Partial<RuleDoc> = {}): RuleDoc {
 
 function tgiuRule(key: string, extra: Partial<RuleDoc> = {}): RuleDoc {
   return rule(key, { purpose: "suggest_tgiu", suggested_outcome: null, ...extra });
+}
+
+function tg0Rule(key: string, extra: Partial<RuleDoc> = {}): RuleDoc {
+  return rule(key, { purpose: "suggest_tg0", suggested_outcome: null, ...extra });
 }
 
 function condition(ruleKey: string, extra: Partial<ConditionDoc> = {}): ConditionDoc {
@@ -1046,6 +1051,76 @@ describe("1.6 age_vs_lifespan", () => {
   });
 });
 
+describe("negate (A237)", () => {
+  it.each<{ name: string; document: Doc; yes: Answers; no: Answers }>([
+    {
+      name: "terskel",
+      document: doc([tgiuRule("x.n")], [thresholdLimit("x.n", { negate: true })]),
+      yes: { "x.reading": LIMIT, "x.unit": "wp" },
+      no: { "x.reading": LIMIT - 0.1, "x.unit": "wp" },
+    },
+    {
+      name: "fast grense",
+      document: doc([tgiuRule("x.n")], [fixedLimit("x.n", "gte", 10, { negate: true })]),
+      yes: { "x.reading": 10 },
+      no: { "x.reading": 9.9 },
+    },
+    {
+      name: "valg",
+      document: doc([tgiuRule("x.n")], [flagIsYes("x.n", "x.p", { negate: true })]),
+      yes: { "x.p": "yes" },
+      no: { "x.p": "no" },
+    },
+    {
+      name: "alder",
+      document: doc([rule("x.n")], [ageCondition("x.n", { negate: true })]),
+      yes: { ...MIXED_TRIGGERING, "x.year": YEAR - PLATE_WITHOUT },
+      no: { ...MIXED_TRIGGERING, "x.year": YEAR - PLATE_WITHOUT + 1 },
+    },
+  ])("R1.1 negate_flips: $name, sann blir usann og usann blir sann", ({ document, yes, no }) => {
+    expect(stateOf(document, yes, "x.n")).toBe("not_triggered");
+    expect(stateOf(document, no, "x.n")).toBe("triggered");
+  });
+
+  it.each<{ name: string; answers: Answers; extra?: Partial<ConditionDoc> }>([
+    { name: "tom måling", answers: { "x.unit": "wp" } },
+    { name: "annen enhet", answers: { "x.reading": 1, "x.unit": "rh" } },
+    { name: "tekst", answers: { "x.reading": "abc", "x.unit": "wp" } },
+    {
+      name: "ukjent terskel",
+      answers: { "x.reading": 1, "x.unit": "wp" },
+      extra: { threshold_key: "x_missing" },
+    },
+  ])("R1.2 negate_keeps_unknown: $name gir samme kode som uten negate", ({ answers, extra }) => {
+    const document = doc(
+      [tgiuRule("x.plain"), tgiuRule("x.neg")],
+      [thresholdLimit("x.plain", extra), thresholdLimit("x.neg", { ...extra, negate: true })],
+    );
+    const results = evaluate(document, answers);
+    const plain = one(results, "x.plain");
+    const negated = one(results, "x.neg");
+    expect(negated.state).toBe("not_evaluated");
+    expect(negated.reasons[0]!.truth).toBe("unknown");
+    expect(negated.reasons[0]!.code).toBe(plain.reasons[0]!.code);
+    expect(negated.reasons[0]!.code).not.toBeNull();
+  });
+
+  it("R1.3 negate_in_reasons: negated og truth etter snuing", () => {
+    const document = doc(
+      [tgiuRule("x.plain"), tgiuRule("x.neg")],
+      [thresholdLimit("x.plain"), thresholdLimit("x.neg", { negate: true })],
+    );
+    const results = evaluate(document, { "x.reading": LIMIT - 1, "x.unit": "wp" });
+    expect(one(results, "x.plain").reasons[0]).toMatchObject({ negated: false, truth: "false" });
+    expect(one(results, "x.neg").reasons[0]).toMatchObject({
+      negated: true,
+      truth: "true",
+      comparator: "gte",
+      limit: LIMIT,
+    });
+  });
+});
+
 describe("1.7 forslag", () => {
   it("1.7.31 suggestion_outcome: koder fra dokumentet", () => {
     const result = one(evaluate(mixedDocument(), MIXED_TRIGGERING), "x.age_rule");
@@ -1076,10 +1151,55 @@ describe("1.7 forslag", () => {
     }
   });
 
-  it("forslaget er aldri TG0 og bare outcome eller tgiu", () => {
-    for (const result of evaluate(mixedDocument(), MIXED_TRIGGERING)) {
-      expect(["outcome", "tgiu"]).toContain(result.suggestion!.kind);
-      expect(JSON.stringify(result)).not.toMatch(/tg0/i);
+  it("R1.5 suggestion_tg0: suggest_tg0 som slår til gir TG0 på kontrollpunktet", () => {
+    const document = doc([tg0Rule("x.tg0")], [flagIsYes("x.tg0", "x.p")]);
+    const triggered = one(evaluate(document, { "x.p": "yes" }), "x.tg0");
+    expect(triggered.state).toBe("triggered");
+    expect(triggered.suggestion).toEqual({ kind: "tg0", checkpoint_key: CP });
+    const notTriggered = one(evaluate(document, { "x.p": "no" }), "x.tg0");
+    expect(notTriggered.state).toBe("not_triggered");
+    expect(notTriggered.suggestion).toBeNull();
+    const notEvaluated = one(evaluate(document, {}), "x.tg0");
+    expect(notEvaluated.state).toBe("not_evaluated");
+    expect(notEvaluated.suggestion).toBeNull();
+  });
+
+  it("R1.6 tg0_only_from_purpose: TG0 kommer bare fra formålet suggest_tg0", () => {
+    const document = doc(
+      [...mixedDocument().rules, tg0Rule("x.tg0")],
+      [...mixedDocument().rule_conditions, flagIsYes("x.tg0", "x.p")],
+    );
+    for (const result of evaluate(document, MIXED_TRIGGERING)) {
+      const kind = result.suggestion!.kind;
+      if (result.purpose === "suggest_tg0") expect(kind, result.rule_key).toBe("tg0");
+      else expect(["outcome", "tgiu"], result.rule_key).toContain(kind);
+    }
+  });
+
+  it("R1.7 tg0_target_missing: suggest_tg0 uten kontrollpunkt gir target_missing", () => {
+    const document = doc(
+      [tg0Rule("x.tg0", { target_checkpoint_key: null })],
+      [flagIsYes("x.tg0", "x.p")],
+    );
+    const result = one(evaluate(document, { "x.p": "yes" }), "x.tg0");
+    expect(result.state).toBe("not_evaluated");
+    expect(result.code).toBe("target_missing");
+    expect(result.suggestion).toBeNull();
+  });
+
+  it("R1.8 purposes_match_schema: motorens formål er lik TG_RULE_PURPOSES", () => {
+    expect([...EVALUATED_RULE_PURPOSES]).toEqual([...TG_RULE_PURPOSES]);
+  });
+
+  it("R1.9 result_shape_codes_only: også for suggest_tg0", () => {
+    const document = doc([tg0Rule("x.tg0")], [thresholdLimit("x.tg0", { negate: true })]);
+    for (const answers of [{ "x.reading": LIMIT - 1, "x.unit": "wp" }, {}] as Answers[]) {
+      const result = one(evaluate(document, answers), "x.tg0");
+      for (const text of stringsIn(result)) {
+        expect(UUID.test(text), `id i svaret: ${text}`).toBe(false);
+        expect(/\s/.test(text), `fritekst i svaret: «${text}»`).toBe(false);
+      }
+      expect(JSON.stringify(result)).not.toContain("Oppdiktet");
     }
   });
 

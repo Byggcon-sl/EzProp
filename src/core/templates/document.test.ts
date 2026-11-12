@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildTemplateDocument } from "../../../tests/template-document";
 import {
+  checkDocumentKeys,
   checkDocumentRules,
   checkRuleCheckpointGivesTg,
   checkRuleConditionShape,
@@ -33,6 +34,7 @@ const SUGGEST = "chk.forslag";
 const TGIU = "chk.ikke_undersokt";
 const AGE = "chk.alder";
 const LIMIT = "chk.grense";
+const TG0 = "chk.uten_funn";
 
 /**
  * Et godt dokument med regler: buildTemplateDocument med et ekstra kontrollpunkt (`cp.two`), en
@@ -96,7 +98,23 @@ function goodDocument(): Doc {
       sort_order: 5,
     },
   );
+  doc.rules.push({
+    key: TG0,
+    name: "Uten funn",
+    purpose: "suggest_tg0",
+    target_checkpoint_key: "cp.one",
+    sort_order: 6,
+  });
   doc.rule_conditions.push(
+    {
+      rule_key: TG0,
+      type: "number_vs_limit",
+      element_key: "el.count",
+      threshold_key: "x_limit",
+      unit_element_key: "el.size",
+      negate: true,
+      sort_order: 0,
+    },
     {
       rule_key: TGIU,
       type: "option_selected",
@@ -203,6 +221,51 @@ const BAD_RULE_DOCUMENTS: {
       doc.deviation_questions = doc.deviation_questions.filter(
         (q) => q.checkpoint_key !== "cp.two",
       );
+    },
+  },
+  {
+    id: "R4.1",
+    name: "suggest_tg0 mot punkt med gives_tg = false",
+    check: checkRuleCheckpointGivesTg,
+    ruleKey: TG0,
+    change: (doc) => {
+      ruleOf(doc, TG0).target_checkpoint_key = "cp.two";
+      doc.checkpoints.find((c) => c.key === "cp.two")!.gives_tg = false;
+      doc.outcomes = doc.outcomes.filter((o) => o.checkpoint_key !== "cp.two");
+      doc.deviation_questions = doc.deviation_questions.filter(
+        (q) => q.checkpoint_key !== "cp.two",
+      );
+    },
+  },
+  {
+    id: "R4.1",
+    name: "suggest_tg0 uten kontrollpunkt",
+    check: checkRuleSuggestsOutcome,
+    ruleKey: TG0,
+    change: (doc) => {
+      ruleOf(doc, TG0).target_checkpoint_key = null;
+    },
+  },
+  {
+    id: "R4.1",
+    name: "suggest_tg0 med avvik",
+    check: checkRuleSuggestsOutcome,
+    ruleKey: TG0,
+    change: (doc) => {
+      ruleOf(doc, TG0).suggested_outcome = {
+        checkpoint_key: "cp.one",
+        question_key: "dq.first",
+        outcome_key: "out.a",
+      };
+    },
+  },
+  {
+    id: "R4.1",
+    name: "suggest_tgiu uten kontrollpunkt",
+    check: checkRuleSuggestsOutcome,
+    ruleKey: TGIU,
+    change: (doc) => {
+      ruleOf(doc, TGIU).target_checkpoint_key = null;
     },
   },
   {
@@ -319,5 +382,29 @@ describe("5 kontrollene i malmotoren", () => {
       );
     });
     expect(checkRuleCheckpointGivesTg(document)).toEqual([]);
+  });
+});
+
+describe("R4.6 checkDocumentKeys: feltkodene på betingelsene", () => {
+  const fields = [
+    { rule: AGE, field: "age_year_element_key" },
+    { rule: AGE, field: "age_fallback_year_element_key" },
+    { rule: AGE, field: "age_source_element_key" },
+    { rule: AGE, field: "documentation_element_key" },
+    { rule: AGE, field: "material_element_key" },
+    { rule: LIMIT, field: "unit_element_key" },
+  ] as const;
+
+  it("kjente feltkoder godtas", () => {
+    expect(checkDocumentKeys(parsed(goodDocument()))).toEqual([]);
+  });
+
+  it.each(fields)("ukjent kode i $field avvises", ({ rule, field }) => {
+    const doc = goodDocument();
+    const index = doc.rule_conditions.findIndex((c) => c.rule_key === rule);
+    (doc.rule_conditions[index] as Record<string, unknown>)[field] = "el.finnes_ikke";
+    expect(checkDocumentKeys(parsed(doc))).toEqual([
+      expect.objectContaining({ path: `rule_conditions.${index}.${field}`, rule: "key_unknown" }),
+    ]);
   });
 });
