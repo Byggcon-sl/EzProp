@@ -3,7 +3,7 @@ id: T-0004
 tittel: «Bruk» på et KI-forslag sletter tekst takstmannen skrev etter at forslaget ble laget
 type: feil
 alvor: middels
-status: rettet
+status: lukket
 funnet: 2026-11-11
 rolle: test-takstmann
 omrade: KI (forslagskortet)
@@ -37,3 +37,4 @@ Når feltet er endret etter at forslaget ble laget: merk forslaget som utdatert 
 ## Logg
 - 2026-11-11: funnet
 - 2026-11-11: rettet i PR #143 (KI-kø), venter på ny prøve fra testlaget
+- 2026-11-12: prøvd på nytt av kontrolløren på main 11672aa: rettet bekreftet. Kortet viser «Forslaget gjelder teksten før du skrev videre.», «Bruk» er borte, og egen tekst står. Lukket.

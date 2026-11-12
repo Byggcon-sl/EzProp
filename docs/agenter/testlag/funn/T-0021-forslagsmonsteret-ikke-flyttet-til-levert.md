@@ -3,13 +3,13 @@ id: T-0021
 tittel: Forslagsmønsteret står fortsatt i planen og er ikke flyttet til listen over levert arbeid
 type: feil
 alvor: lite
-status: rettet
+status: ny
 funnet: 2026-11-11
 rolle: test-dokumentvakt
 omrade: dokumenter (plan)
 maal: de ansatte
 commit: 0b8e3b9
-forsok: 0
+forsok: 1
 pr: læringsløkken 11.11.2026
 ---
 
@@ -35,3 +35,4 @@ Ikke etterprøvd (lite).
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-12: prøvd på nytt på main 11672aa: fortsatt feil. Forslagsmønsteret står nå i `levert.md`, men endringsloggen har igjen nye rader (11.–12.11) nederst i den eldre tabellen, og rad 64 viser til en overflødig branch. Samme mønster på nytt: «[x] Beslutningsnotat om KI-leverandør» står i planen (linje 128) etter at PR #154 er merget, og mangler i `levert.md`. Planen sier «Sist oppdatert: 10.11.2026». Satt tilbake til «ny», forsøk 1.

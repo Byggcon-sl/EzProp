@@ -2,7 +2,7 @@
 id: T-0034
 tittel: Instruksen og takstmannens tekst sendes til KI som én tekst
 type: forbedring
-alvor: lite
+alvor: middels
 status: ny
 funnet: 2026-11-11
 rolle: test-ki
@@ -34,3 +34,4 @@ Ikke etterprøvd (forbedring).
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-12: hevet til middels. Koblingen til ekte leverandør (PR #154) sender fortsatt instruks og tekst som én melding. Bør rettes før første KI-funksjon slås på mot ekte modell.

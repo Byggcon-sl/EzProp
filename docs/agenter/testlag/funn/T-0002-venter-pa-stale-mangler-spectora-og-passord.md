@@ -36,3 +36,4 @@ Legg Spectora Advanced (med frist) og passordbyttet inn som nye S-punkter øvers
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-12: fortsatt åpent. Spectora Advanced må slås av før ca. 23.11.2026 og står fortsatt ikke under «Trenger Ståle». Dokumentvakten meldte også at spørsmålene til fagrådet (65–72) ikke har henvisning fra «Trenger Ståle»; kontrolløren dømte det som duplikat av dette funnet (se også T-0003 og T-0007).

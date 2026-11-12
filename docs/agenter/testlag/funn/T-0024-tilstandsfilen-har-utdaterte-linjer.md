@@ -35,3 +35,4 @@ Ikke etterprøvd (lite).
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-12: flere linjer er kommet til (main 11672aa): «Levert: KI-kø uten nett» står to ganger; «Neste i 2a-1: Beslutningsnotat» er utdatert; linjen om KI-leverandør nevner to brancher; «når PR-en for `fase2a-ki-leverandor` er merget» (den er merget som #154); pekeren «(S4–S8)» tar ikke med resten av S1 (første innlogging og iPad).

@@ -1,8 +1,8 @@
 # Beslutninger som er dyre å endre
 
-Sist oppdatert: 11.11.2026 (testlagets første kjøring, laget av dokumentvakten og kvalitetslederen)
+Sist oppdatert: 12.11.2026 (testlaget, dokumentvakten og kvalitetslederen)
 
-Mens Ståle var borte, har agentene tatt 167 beslutninger (A1–A168, A22 er ikke brukt). De står i `docs/09-apne-sporsmal.md`, tabellen «Avgjort av agentene mens Ståle var borte». **De fleste er lette å endre.** Her er bare de som blir dyre å endre senere, fordi data må flyttes, fordi de står på rapportene, eller fordi de gjelder personvern og sikkerhet. Det er disse Ståle bør lese først.
+Mens Ståle var borte, har agentene tatt 198 beslutninger (A1–A199, A22 er ikke brukt). De står i `docs/09-apne-sporsmal.md`, tabellen «Avgjort av agentene mens Ståle var borte». **De fleste er lette å endre.** Her er bare de som blir dyre å endre senere, fordi data må flyttes, fordi de står på rapportene, eller fordi de gjelder personvern og sikkerhet. Det er disse Ståle bør lese først.
 
 Alle beslutninger som ikke står her, er lette å endre.
 
@@ -15,6 +15,7 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A151 | Instruksene til KI har versjonsnummer og ligger ett sted i kjernen. | Alle KI-funksjoner bygger på dette. |
 | A154 | En KI-funksjon slås ikke på før den treffer 90 % av eksemplene, og 100 % av dem som må treffe. | Avgjør hva KI får lov til å bidra med i rapporten. |
 | A157 | Loggen over KI-bruk regnes som personopplysninger og lagres i 10 år, også forslag som ble avvist. KI har ingen verktøy. | Gjelder personvern. Venter på svar på spørsmål 56. |
+| A171 | Nytt utfall «sperret» i loggen over KI-bruk, for forespørsler som ikke kan sendes til leverandøren. | Fast kode som lagres i data i 10 år. |
 
 ## Sikkerhet og tilgang
 
@@ -30,6 +31,7 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A58 | Loggen over hendelser ryddes aldri. | Vokser over tid, og gjelder personvern. |
 | A64 | Grunnen ved bytte i teamet er fritekst. | Risiko for at noen skriver helseopplysninger der. |
 | A121 | Tidsmåling er på som standard. I betaen er tallene i praksis per person. | Arbeidsmiljøloven kapittel 9. Bør drøftes med de ansatte (se også funn T-0012). |
+| A193 | Koblingen til KI-leverandøren kan bare bruke én felles nøkkel, lik for alle organisasjoner. | Gjelder sikkerhet. Før selskap nummer to får KI, trengs egen nøkkel per organisasjon. |
 
 ## Datamodell og faste koder
 
