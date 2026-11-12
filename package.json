@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@azure/storage-blob": "12.34.0",
-    "better-auth": "1.7.20",
+    "better-auth": "1.7.21",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "drizzle-orm": "0.45.4",
@@ -52,7 +52,7 @@
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.6",
     "eslint-config-prettier": "10.1.8",
-    "prettier": "3.9.10",
+    "prettier": "3.10.0",
     "tailwindcss": "4.3.5",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
