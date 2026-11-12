@@ -64,8 +64,8 @@ Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten ti
 
 Alvorlige:
 1. **Indeks `orders (organization_id, assignment_id)`** (løftet fra lite 11.11). Arbeidskøen (`work-queue.ts`, `orderAddress`), `getAssignment` (`assignments.ts` linje 129–136) og `properties.ts` linje 292–300 slår opp ordren med `orders.id = assignments.order_id OR orders.assignment_id = assignments.id`. Målt med 20 000 oppdiktede oppdrag: telling med adressesøk 33 299 ms uten indeks, 51 ms med. Tas før ekte data. Krever migrering; ta `employee_permissions` og `template_element_options` (ingen indeks som starter med organization_id) med i samme migrering.
-2. **Sårbar esbuild <=0.24.2** (moderat, GHSA-67mh-4wv8-2f99) via drizzle-kit 0.31.11 > @esbuild-kit/core-utils. Bare utviklerverktøy. Prøv `pnpm.overrides` esbuild >=0.25.0 under @esbuild-kit/core-utils, og prøv `pnpm db:generate` og `pnpm db:migrate`. Åpen siden 06.11.
-3. **Sårbar minimatch >=7.0.0 <11.0.1** (moderat, GHSA-g3hv-75wg-m249) via eslint-config-next 16.4.6 > eslint-plugin-import > @typescript-eslint/typescript-estree. Bare lint. Prøv `pnpm.overrides` minimatch >=11.0.1 og `pnpm lint`. Åpen siden 06.11.
+2. *(Rettet 12.11.2026, versjon 0.6.5: `overrides` i `pnpm-workspace.yaml` gir esbuild 0.25.12 under drizzle-kit og minimatch 11.0.8 under eslint-config-next. `pnpm audit` viser ingen sårbarheter; lint, typecheck, `db:generate` og `db:migrate` virker.)*
+3. *(Rettet sammen med punkt 2.)*
 
 Lite:
 4. **Skjermleser: like knappenavn «Endre» og «Fjern»** i `buildings-editor.tsx` (linje 133, 543, 607, 717) og `party-card.tsx` (linje 41, 107). Legg på skjult tekst som i `certification-section.tsx` linje 150 (`Endre<span className="sr-only"> {title}</span>`). WCAG 2.4.6/2.4.9. Tas med neste oppgave i samme område.
@@ -90,6 +90,8 @@ Ryddet i PR «Rydding fra nattløkken 2026-11-12» (versjon 0.6.3): fast-xml-par
 Ingen.
 
 ## Siste kjøring
+
+12.11.2026 fra kl. 05:49 UTC (hovedløkken, sesjon 01JqwntyXmQUDAqfPuMeArSb): ingen åpne PR-er. Branchen `fase2a-mal-bad` («Malen for ett bad», 2a-2) var i arbeid hos en annen kjøring (siste commit 04:58, ingen PR ennå), så denne kjøringen startet ikke 2a-2. Rettet i stedet de to sårbare pakkene fra nattløkken (punkt 2 og 3, versjon 0.6.5). Neste kjøring: sjekk om `fase2a-mal-bad` har fått PR; står den fortsatt uten PR og uten ny commit i over 2 timer, overta den.
 
 11.11.2026 kl. 16:49 – 12.11.2026 kl. 01:55 UTC (hovedløkken, sesjon 01Jqwnu2WW5U6dipU34kBh3R): overtok `fase2a-ki-ko` som sto uten PR, rettet seks røde tester og A192, merget PR #143 (KI-kø) og læringsløkken PR #144. Kjørte deretter arbeidsflyten for «Beslutningsnotat om KI-leverandør» med Anthropic-adapteren; den tok rundt 8 timer og ble merget som PR #154 (versjon 0.6.1, A193–A199). 2a-1 er dermed ferdig. Neste: 2a-2 Smal vei. Lærdom: arbeidsflyten for en hel funksjon kan ta mange timer; en parallell kjøring begynte på samme punkt i mellomtiden.
 
