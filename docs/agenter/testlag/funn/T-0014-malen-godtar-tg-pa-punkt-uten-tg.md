@@ -3,14 +3,14 @@ id: T-0014
 tittel: Malen godtar TG og TG-regler på kontrollpunkter som ikke skal gi TG, og regler som ikke henger sammen
 type: forbedring
 alvor: middels
-status: ny
+status: delvis rettet
 funnet: 2026-11-11
 rolle: test-fag
 omrade: mal
 maal: reklamasjoner
 commit: 0b8e3b9
 forsok: 0
-pr:
+pr: #167 (12.11.2026)
 ---
 
 ## Hva
@@ -38,3 +38,4 @@ Ikke etterprøvd (forbedring).
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-12: delvis rettet i PR #167 (branch `fase2a-regler-bad`): punkt 2, 3 og 4 rettet med kontrollene i malmotoren; punkt 1 og 5 gjenstår til den automatiske kontrollen før publisering i 2a-3.
