@@ -72,7 +72,7 @@ Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3
 | 0a Repo og database | Ferdig 28.10.2026 |
 | 1 Prøve uten nett | Ferdig 10.11.2026. Ståle har kjørt prøvene på ekte iPad og godkjent ADR 0004 (egenbygd synk). |
 | 0b Innlogging, organisasjon, roller | Ferdig, unntatt felles innlogging med Optiplan (venter på S6) |
-| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127), forslagsmønsteret (PR #131), vask før KI (PR #135), evalueringssettet (PR #141) og KI-køen (PR #143) er levert. Det alvorlige funnet T-0001 (synkkøen) er rettet i PR #139. Beslutningsnotatet om KI-leverandør og Anthropic-adapteren (siste punkt i 2a-1) er ferdig. 2a-2: malen for ett bad er levert (PR #159), og reglene badet trenger er levert (PR #167). Neste: Byggcon-profilen, deretter badet på PC. |
+| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127), forslagsmønsteret (PR #131), vask før KI (PR #135), evalueringssettet (PR #141) og KI-køen (PR #143) er levert. Det alvorlige funnet T-0001 (synkkøen) er rettet i PR #139. Beslutningsnotatet om KI-leverandør og Anthropic-adapteren (siste punkt i 2a-1) er ferdig. 2a-2: malen for ett bad er levert (PR #159), og reglene badet trenger er levert (PR #167). Byggcon-profilen er levert (PR #176). Neste: resten av «Fra Ståles svar 12.11.2026», deretter badet på PC. |
 | Minimum før ekte data | To av ti punkter levert. Testmiljøet (S1) er oppe fra 12.11.2026, så resten kan bygges og prøves der. |
 | 2b og videre | Ikke startet |
 
@@ -135,15 +135,9 @@ Tas **før neste punkt i 2a-2**. Ståle i chat 12.11.2026: «tror vi skal sette 
 
 - [x] **Logg inn med Microsoft 365** (Byggcons kontoer, `@byggcon.no`): knappen «Logg inn med Microsoft» er hovedvalget på innloggingssiden, og de ansatte kommer rett inn uten kode. Bare Byggcons Microsoft-katalog (én tenant) godtas. Bare personer som allerede er registrert som ansatt i EzProp, slipper inn (ingen ny bruker lages av innloggingen), og e-postadressen matches uten hensyn til store og små bokstaver. **Engangskoden blir reserven** («Logg inn med kode i stedet»), slik at admin aldri stenges ute (regel 11) hvis Microsoft-innloggingen feiler. Verdiene `MS_LOGIN_TENANT_ID`, `MS_LOGIN_CLIENT_ID` og `MS_LOGIN_CLIENT_SECRET` legges inn av Ståle som secrets i GitHub (oppskrift i `docs/drift/testmiljo-azure.md`), og sendes til appen av utrullingen. Uten dem vises bare engangskoden, som i dag. Tilbakeadressen er `https://app-ezprop-test.azurewebsites.net/api/auth/callback/microsoft`. Tofaktor kommer da fra Microsoft-kontoen (gjelder mål 11 for den som logger inn med Microsoft). ADR og test for tilgang, tenant og at ukjente adresser avvises.
 
-### Prioritert av Ståle 12.11.2026: Byggcon-profilen
-
-Tas **etter Microsoft-innlogging og før neste punkt i 2a-2**, slik at skjermene og PDF-en i 2a-2 bygges i den nye profilen fra start. Ståle i chat 12.11.2026: «vi har oppdatert designet på optiplan, får å reflektere vår design på hjemmesiden. Jeg ønsker at vi også gjør samme grep for EzProp.»
-
-- [ ] **Byggcon-profilen i EzProp**, samme grep som Optiplan gjorde 10.11.2026: paletten fra byggcon.no (snow, sand, night, fjord), Inter i brødtekst og Schibsted Grotesk i overskrifter (Roboto ut), pilleknapper, kort med tynn kant og 12 px hjørner, ingen nordlys og ingen fargeoverganger. Grunnlaget ligger i `docs/design/byggcon-profil/` (skrifter, Optiplans tema og skjermbilder). Gjøres i temaet (`src/app/globals.css`) og felleskomponentene, slik at sidene følger med. **Luften og trykkflatene på iPad beholdes** (beslutningen 24.10.2026 står). TG-fargene får samme toner som statusfargene i Optiplan, alltid med tekst. KI-merket får et eget uttrykk i paletten. `docs/08-designprinsipper.md` oppdateres. Ingen brudd på WCAG 2.1 AA, og skjermbilder før og etter på PC og iPad.
-
 ### Fra Ståles svar 12.11.2026
 
-Første punkt tas **før Byggcon-profilen**, fordi det retter reglene som alt er merget. Resten tas etter Byggcon-profilen og før neste punkt i 2a-2, i denne rekkefølgen. Svarene står i `docs/kartlegging/svar-fra-stale-2026-11-12.md`.
+Første punkt tas **før Byggcon-profilen**, fordi det retter reglene som alt er merget. Resten tas etter Byggcon-profilen (levert, PR #176) og før neste punkt i 2a-2, i denne rekkefølgen. Svarene står i `docs/kartlegging/svar-fra-stale-2026-11-12.md`.
 
 - [ ] **Rette en ordre etter at den er lagret** (T1, «full redigeringstilgang. alltid»): også etter at ordren er blitt oppdrag. Endrer A55 og A87. Endringene logges.
 - [ ] **Søk i ordrelisten og i arbeidskøen** (T2).

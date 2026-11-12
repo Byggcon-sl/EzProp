@@ -267,3 +267,9 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Nok en kjøring stoppet midt i «Bygg», med bygningsdelen og beslutningene på to worktree-brancher og regeldelen ikke pushet. Hovedløkken slo sammen branchene og lot én utvikler bygge resten etter kortet; det gikk raskere enn å starte arbeidsflyten på nytt, fordi kortet og testplanen var ferdige og presise.
 - Branchen var laget oppå en plan-PR, og main fikk tre plan-PR-er til før merge. Flett inn main før PR-en åpnes, ikke etter gjennomgangen.
 - Lokal utviklingsdatabase uten nyeste migrering gjør e2e rød. Kjør `pnpm db:migrate` etter å ha hentet en branch med ny migrering.
+
+**PR #176 (Byggcon-profilen, 12.11.2026):**
+- Kjøringen stoppet etter fletting av main, uten etter-bilder og uten PR. Hovedløkken tok bildene, kjørte e2e og åpnet PR-en. E2e-testene i oppgaven var skrevet før Microsoft-innloggingen kom inn: innloggingssiden har Microsoft som hovedvalg også i e2e, så tester som starter på `/logg-inn` må kalle `chooseCodeLogin` først. Testplanen sa det motsatte; sjekk `e2e/helpers.ts` før testplanen skrives.
+- CI kjører `pnpm format:check` før testene. Kjør `pnpm format:check` lokalt før push, ellers taper man en hel CI-runde.
+- Hele `pnpm test` lokalt ble stoppet etter 30 minutter uten å bli ferdig. Kjør de berørte testfilene lokalt og la CI kjøre hele pakken.
+
