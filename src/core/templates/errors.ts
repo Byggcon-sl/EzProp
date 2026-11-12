@@ -24,7 +24,8 @@ export class TemplateStateError extends Error {
 
 /**
  * Faste regelkoder for feil i maldokumentet. Testene sjekker koden, ikke meldingsteksten.
- * - `schema`: feil type, manglende felt eller ukjent verdi (Zod).
+ * - `schema`: feil type, manglende felt eller ukjent verdi (Zod), eller felt som ikke passer
+ *   sammen (seksjoner i ring, regler med feil form, se `checkDocumentRules`).
  * - `key_format`: koden har feil format.
  * - `key_duplicate`: samme kode to ganger i samme område (A141).
  * - `key_unknown`: en referanse peker på en kode som ikke finnes i dokumentet.

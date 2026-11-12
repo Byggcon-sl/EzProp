@@ -35,7 +35,13 @@ import {
   type TemplateVersionStatus,
 } from "@/db/schema";
 import { isUuid, uuidv7 } from "@/shared/lib/uuid";
-import { checkDocumentKeys, optionScope, outcomeScope, questionScope } from "./document";
+import {
+  checkDocumentKeys,
+  checkDocumentRules,
+  optionScope,
+  outcomeScope,
+  questionScope,
+} from "./document";
 import {
   TEMPLATE_DRAFT_EXISTS_MESSAGE,
   TEMPLATE_NOT_DRAFT_MESSAGE,
@@ -1323,6 +1329,7 @@ function validated(document: unknown, kind: TemplateKind): TemplateDocument {
   if (!parsed.success) throw new TemplateValidationError(parsed.issues);
   const issues = [
     ...checkDocumentKeys(parsed.document),
+    ...checkDocumentRules(parsed.document),
     ...checkNoTgLogicInCustom(kind, parsed.document),
   ];
   if (issues.length > 0) throw new TemplateValidationError(issues);
@@ -1709,7 +1716,7 @@ export async function insertTemplateWithoutAccessCheck(
 ): Promise<{ familyId: string; versionId: string }> {
   const now = options.now ?? new Date();
   const document = templateDocumentSchema.parse(options.document ?? {});
-  const issues = checkDocumentKeys(document);
+  const issues = [...checkDocumentKeys(document), ...checkDocumentRules(document)];
   if (issues.length > 0) throw new TemplateValidationError(issues);
   const status = options.status ?? "draft";
   const versionId = uuidv7();

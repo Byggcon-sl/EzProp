@@ -1,4 +1,11 @@
-export { checkDocumentKeys } from "./document";
+export {
+  checkDocumentKeys,
+  checkDocumentRules,
+  checkRuleCheckpointGivesTg,
+  checkRuleConditionShape,
+  checkRuleOutcomeSameCheckpoint,
+  checkRuleSuggestsOutcome,
+} from "./document";
 export {
   TEMPLATE_DRAFT_EXISTS_MESSAGE,
   TEMPLATE_ISSUE_RULES,
