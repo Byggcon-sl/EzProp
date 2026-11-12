@@ -536,10 +536,12 @@ function toDocument(content: Content): TemplateDocument {
       key: o.row.key,
       kind: o.row.kind as Doc["outcomes"][number]["kind"],
       deviation_text: o.row.deviationText,
+      default_cause_text: o.row.defaultCauseText,
       default_cause_criterion: o.row
         .defaultCauseCriterion as Doc["outcomes"][number]["default_cause_criterion"],
       default_consequence_text: o.row.defaultConsequenceText,
       source_ref: o.row.sourceRef,
+      text_status: o.row.textStatus,
       sort_order: o.row.sortOrder,
     })),
     standard_measures: measures.map((m) => ({
@@ -547,6 +549,7 @@ function toDocument(content: Content): TemplateDocument {
       question_key: m.questionKey,
       outcome_key: m.outcomeKey,
       text: m.row.text,
+      text_status: m.row.textStatus,
       sort_order: m.row.sortOrder,
     })),
     rules: ruleRows.map((r) => ({
@@ -912,9 +915,11 @@ async function applyDocument(
         key: o.key,
         kind: o.kind,
         deviationText: o.deviation_text,
+        defaultCauseText: o.default_cause_text,
         defaultCauseCriterion: o.default_cause_criterion,
         defaultConsequenceText: o.default_consequence_text,
         sourceRef: o.source_ref,
+        textStatus: o.text_status,
         sortOrder: o.sort_order,
       },
     })),
@@ -929,11 +934,14 @@ async function applyDocument(
     tx,
     ctx,
     standardMeasures,
-    ["outcomeId", "text", "sortOrder"],
+    ["outcomeId", "text", "textStatus", "sortOrder"],
     existing.measures.map((m) => ({ parentId: m.row.outcomeId, row: m.row })),
     doc.standard_measures.map((m) => {
       const id = required(out.idOf, outcomeScope(m.checkpoint_key, m.question_key, m.outcome_key));
-      return { parentId: id, values: { outcomeId: id, text: m.text, sortOrder: m.sort_order } };
+      return {
+        parentId: id,
+        values: { outcomeId: id, text: m.text, textStatus: m.text_status, sortOrder: m.sort_order },
+      };
     }),
     counts,
   );

@@ -803,7 +803,9 @@ Om spørsmålet vises, styres av regler («alltid», «valg X», «tall over gre
 | `key` | Fast kode |
 | `kind` | `tg2`, `tg3`, `hms` eller `choose_tg2_tg3` («velg TG2 eller TG3»). **Ikke `tgiu`:** TGIU betyr «ikke undersøkt» og settes på kontrollpunktet, ikke som avvik (innspill D1). |
 | `deviation_text` | Standard avvikstekst (Byggcons egen, godkjent av fagrådet) |
+| `default_cause_text` | Standard årsak som tekst (A201). Valgfri |
 | `default_cause_criterion` | Standard TG-kriterium (se avvik i 4.7) |
+| `text_status` | `draft` (utkast, ikke godkjent av fagrådet) eller `approved`. Standard `draft`. Gjelder rapporttekstene på utfallet samlet. Finnes også på `standard_measures`, per tiltak (ADR 0007) |
 | `default_consequence_text` | Standard konsekvens |
 | `source_ref` | Kilde **i bakgrunnen**, for eksempel punkt i NS 3600. Står ikke i rapporten (beslutning 24.10). |
 | `sort_order` | Rekkefølge |
@@ -2141,6 +2143,8 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Utfall | `outcomes` | |
 | Velg TG2 eller TG3 | `choose_tg2_tg3` | |
 | Standardtiltak | `standard_measures` | |
+| Tekststatus | `text_status`, `TEXT_STATUSES` | Status på en fagtekst i malen, på utfall og standardtiltak: `draft` = utkast, ikke godkjent av fagrådet; `approved` = godkjent. Godkjenning gir ny malversjon (ADR 0007, A200) |
+| Standard årsak | `default_cause_text` | Årsak som tekst på utfallet, ved siden av `default_cause_criterion` (A201) |
 | Regel | `rules` | |
 | Betingelse | `rule_conditions` | |
 | Vis / foreslå utfall / foreslå TGIU / valider | `show` / `suggest_outcome` / `suggest_tgiu` / `validate` | `rules.purpose` |
