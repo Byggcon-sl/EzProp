@@ -119,11 +119,19 @@ function runCases(document: RunRuleTestCasesInput["document"] = TEMPLATE) {
 
 /** Tom verdi i en testsak: feltet mangler, er `null` eller tom tekst. */
 const EMPTY = Symbol("tomt");
-type Spec = Record<string, JsonValue | typeof EMPTY>;
+/**
+ * En måling over grensen der kortet ikke låser tallet (F4, F5 tom enhet): i malen godtas ethvert
+ * tall som ikke er negativt, og testen kjører motoren med grensen pluss 5.
+ */
+const ANY_READING = Symbol("et tall");
+type Spec = Record<string, JsonValue | typeof EMPTY | typeof ANY_READING>;
 
 function answersOf(spec: Spec): Answers {
   const out: Answers = {};
-  for (const [key, value] of Object.entries(spec)) if (value !== EMPTY) out[key] = value;
+  for (const [key, value] of Object.entries(spec)) {
+    if (value === EMPTY) continue;
+    out[key] = value === ANY_READING ? LIMIT + 5 : value;
+  }
   return out;
 }
 
@@ -131,6 +139,7 @@ function inputMatches(input: Record<string, JsonValue>, spec: Spec): boolean {
   return Object.entries(spec).every(([key, value]) => {
     const actual = input[key];
     if (value === EMPTY) return actual === undefined || actual === null || actual === "";
+    if (value === ANY_READING) return typeof actual === "number" && actual >= 0;
     return isDeepStrictEqual(actual, value);
   });
 }
@@ -379,7 +388,7 @@ const LISTED: ListedCase[] = [
   {
     id: "F4",
     rule: MOISTURE,
-    spec: { [HOLE]: "done_with_findings", [READING]: LIMIT + 50, [UNIT]: "relative_humidity" },
+    spec: { [HOLE]: "done_with_findings", [READING]: ANY_READING, [UNIT]: "relative_humidity" },
     expected: "not_evaluated",
     check: (results) => {
       const codes = reasonsOf(results, MOISTURE).map((r) => r.code);
@@ -395,7 +404,7 @@ const LISTED: ListedCase[] = [
   {
     id: "F5 tom enhet",
     rule: MOISTURE,
-    spec: { [HOLE]: "done_with_findings", [READING]: LIMIT + 5, [UNIT]: EMPTY },
+    spec: { [HOLE]: "done_with_findings", [READING]: ANY_READING, [UNIT]: EMPTY },
     expected: "not_evaluated",
   },
   {
