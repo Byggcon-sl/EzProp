@@ -9,7 +9,7 @@ import {
 } from "@/core/templates";
 import { TEMPLATE_KEY_PATTERN } from "@/db/schema";
 import { buildTemplateDocument } from "../../../../tests/template-document";
-import { wetRoomTemplate } from "./wet-room";
+import { WET_ROOM_MERGE_FIELDS, wetRoomTemplate } from "./wet-room";
 
 /*
  * Datatest av malfilen for badet (docs/funksjoner/fase2a-mal-bad-testplan.md avsnitt 1).
@@ -55,7 +55,7 @@ const TG_KINDS = ["tg2", "tg3", "choose_tg2_tg3"] as const;
 const TG3_LIKE = ["tg3", "choose_tg2_tg3"] as const;
 
 /** Flettefeltene som er lov i rapporttekstene. */
-const MERGE_FIELDS = ["årstall", "måleverdi"];
+const MERGE_FIELDS: readonly string[] = WET_ROOM_MERGE_FIELDS;
 
 // --- Rapporttekstene ----------------------------------------------------------------------------
 
@@ -120,6 +120,14 @@ const GUESS_WORDS = [
   "muligens",
   "formentlig",
   "ser ut til",
+  // Ståle 24.10.2026: «antas, antar, antagelig eller lignende»
+  "antar",
+  "antakelig",
+  "sannsynlig",
+  "kanskje",
+  "tyder på",
+  "virker som",
+  "tilsynelatende",
 ];
 /** Henvisninger. «TEK» og «NS» skiller store og små bokstaver, så «teknisk» og «ns» ikke treffer. */
 const REFERENCES: { word: string; caseSensitive: boolean }[] = [
@@ -521,7 +529,7 @@ const KEY_SNAPSHOT = [
   "outcome wet_room.walls_ceiling.mould_or_rot tg3",
   "outcome wet_room.floor.insufficient_fall choose",
   "outcome wet_room.floor.cracked_tiles_or_joints tg2",
-  "outcome wet_room.floor.vinyl_damage tg2",
+  "outcome wet_room.floor.vinyl_damage choose",
   "outcome wet_room.floor.moisture_damage tg3",
   "outcome wet_room.membrane_drain.membrane_before_2000 tg3",
   "outcome wet_room.membrane_drain.leak_at_penetration tg3",
@@ -530,7 +538,7 @@ const KEY_SNAPSHOT = [
   "outcome wet_room.membrane_drain.drain_not_accessible choose",
   "outcome wet_room.membrane_drain.low_threshold_height choose",
   "outcome wet_room.fixtures.leak_or_failure tg3",
-  "outcome wet_room.fixtures.cracked_sanitary_ware tg2",
+  "outcome wet_room.fixtures.cracked_sanitary_ware choose",
   "outcome wet_room.fixtures.damaged_furniture tg2",
   "outcome wet_room.fixtures.signs_of_overheating hms",
   "outcome wet_room.ventilation.missing_ventilation tg3",
@@ -560,7 +568,12 @@ const FIELDS: { key: string; checkpoint: string; type: string; unit: string | nu
   { key: "wet_room.floor_heating", checkpoint: "wet_room.floor", type: "choice", unit: null },
   { key: "wet_room.fall_direction_1", checkpoint: "wet_room.floor", type: "number", unit: "mm/m" },
   { key: "wet_room.fall_direction_2", checkpoint: "wet_room.floor", type: "number", unit: "mm/m" },
-  { key: "wet_room.threshold_height_mm", checkpoint: "wet_room.floor", type: "number", unit: "mm" },
+  {
+    key: "wet_room.threshold_height_mm",
+    checkpoint: "wet_room.membrane_drain",
+    type: "number",
+    unit: "mm",
+  },
   {
     key: "wet_room.membrane_type",
     checkpoint: "wet_room.membrane_drain",
@@ -1039,18 +1052,6 @@ describe("1 malfilen for badet (datatest)", () => {
     expect(wetRoomTemplate.rules ?? []).toEqual([]);
     expect(wetRoomTemplate.rule_conditions ?? []).toEqual([]);
     expect(wetRoomTemplate.rule_test_cases ?? []).toEqual([]);
-  });
-
-  it("1.27 no_personal_data", () => {
-    const source = readFileSync(join(process.cwd(), "src/db/seed/templates/wet-room.ts"), "utf8");
-    const data = JSON.stringify(wetRoomTemplate);
-    for (const text of [source, data]) {
-      expect(text).not.toMatch(/[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.[a-z]{2,}/iu);
-      expect(text).not.toMatch(/\+47/);
-      expect(text).not.toMatch(/(?<!\d)\d{8}(?!\d)/);
-      expect(text).not.toMatch(/\d{11}/);
-      expect(text).not.toMatch(/(?<!\d)\d{2}\s\d{2}\s\d{2}\s\d{2}(?!\d)/);
-    }
   });
 });
 

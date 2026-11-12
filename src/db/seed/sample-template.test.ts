@@ -109,6 +109,13 @@ describe("isSampleOrganization", () => {
     expect(await isSampleOrganization(sample.organizationId)).toBe(true);
     expect(await isSampleOrganization(other.organizationId)).toBe(false);
   });
+
+  it('nei når sampleData er teksten "true" eller false', async () => {
+    const asText = await contextFor({ sampleData: "true" }, "Tekst C");
+    const asFalse = await contextFor({ sampleData: false }, "Usann D");
+    expect(await isSampleOrganization(asText.organizationId)).toBe(false);
+    expect(await isSampleOrganization(asFalse.organizationId)).toBe(false);
+  });
 });
 
 describe("ensureSampleTemplate", () => {

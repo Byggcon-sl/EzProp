@@ -133,7 +133,7 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 
 Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se og godkjenne fag og utseende tidlig, og feil i grunnstrukturen oppdages før de blir dyre.
 
-- [ ] **Malen for ett bad** lagt inn i malmotoren: kontrollpunktene for våtrom, med Byggcons egne utkast til avvikstekster (merket «ikke godkjent av fagrådet»).
+- [x] **Malen for ett bad** lagt inn i malmotoren: kontrollpunktene for våtrom, med Byggcons egne utkast til avvikstekster (merket «ikke godkjent av fagrådet»).
 - [ ] **Reglene badet trenger,** i regelmotoren som én felles kodepakke for iPad og server: alder mot levetid (med trinn), én målegrense for fukt, våtrom fra før 2000, og hulltaking nektet gir TGIU. Testsaker per regel. Fukt ikke målt gir ikke TG2 på grunn av alder alene på tilliggende konstruksjoner (Ståle 10.11.2026, spørsmål 59a).
 - [ ] **Badet på PC:** kontrollpunktene, avvikskort (TG, årsak, konsekvens, tiltak, kostnad) og TGIU på punktet. TG-forslag fra reglene kan godtas, endres eller avvises.
 - [ ] **KI i veien:** forslag fra frasebanken, språkvask av avviksteksten og utkast til sammendrag, gjennom KI-grunnmuren.

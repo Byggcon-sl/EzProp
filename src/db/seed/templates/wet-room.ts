@@ -21,7 +21,7 @@ import type {
  */
 
 /** Flettefeltene tekstene bruker, skrevet som `{navn}` i teksten. */
-export const WET_ROOM_MERGE_FIELDS = ["årstall", "måleverdi"] as const;
+export const WET_ROOM_MERGE_FIELDS = ["årstall", "måleverdi", "enhet"] as const;
 
 const SECTION = "wet_room";
 const SOURCE_WET_ROOM = "Forskrift til avhendingslova § 2-2; NS 3600:2025 tillegg A, våtrom";
@@ -143,10 +143,14 @@ const elements: TemplateElementDoc[] = [
   // Generelt
   element(GENERAL, "wet_room.build_year", "Byggeår for våtrommet", "number", {
     decimals: 0,
-    help_text: "Året våtrommet ble bygget eller sist pusset opp.",
+    help_text:
+      "Året våtrommet ble bygget eller fikk nytt vanntett sjikt. Nye overflater alene teller ikke.",
   }),
   element(GENERAL, "wet_room.build_year_source", "Kilde for byggeåret", "choice"),
-  element(GENERAL, "wet_room.building_code", "Byggeforskrift da våtrommet ble bygget", "choice"),
+  // Brukes av regler og statistikk; forskriften nevnes ikke i rapporten (svar 39)
+  element(GENERAL, "wet_room.building_code", "Byggeforskrift da våtrommet ble bygget", "choice", {
+    show_in_report: false,
+  }),
   // Dokumentasjon
   element(DOCUMENTATION, "wet_room.documentation_type", "Dokumentasjon som er lagt fram", "choice"),
   // Vegger og himling
@@ -164,12 +168,12 @@ const elements: TemplateElementDoc[] = [
     decimals: 1,
     help_text: "Fall mot sluk per meter. Negativ verdi betyr motfall.",
   }),
-  element(FLOOR, "wet_room.threshold_height_mm", "Høyde ved terskel", "number", {
+  // Vanntett sjikt, membran og sluk
+  element(MEMBRANE_DRAIN, "wet_room.threshold_height_mm", "Høyde ved terskel", "number", {
     unit: "mm",
     decimals: 0,
-    help_text: "Fra topp slukrist til topp membran ved terskelen.",
+    help_text: "Målt fra overkant slukrist opp til overkant membran der terskelen står.",
   }),
-  // Vanntett sjikt, membran og sluk
   element(MEMBRANE_DRAIN, "wet_room.membrane_type", "Vanntett sjikt", "choice"),
   element(MEMBRANE_DRAIN, "wet_room.membrane_year", "Årstall for det vanntette sjiktet", "number", {
     decimals: 0,
@@ -195,7 +199,7 @@ const elements: TemplateElementDoc[] = [
   element(
     ADJACENT,
     "wet_room.owner_informed",
-    "Eier er informert om utvidet ansvar når hull ikke er tatt",
+    "Eier som nektet hulltaking, er informert om utvidet ansvar",
     "checkbox",
   ),
   element(ADJACENT, "wet_room.other_moisture_method", "Annen fuktundersøkelse, metode", "text"),
@@ -322,8 +326,7 @@ const questionSpecs: QuestionSpec[] = [
       "Våtrommet har flere avvik som samlet gjør at rommet ikke fungerer som et trygt våtrom.",
     cause: "Avvikene gjelder flere deler av rommet og kan ikke rettes hver for seg.",
     criterion: "functional_failure",
-    consequence:
-      "Fortsatt bruk gir høy risiko for at vann kommer inn i konstruksjonen og gir fukt- og soppskader.",
+    consequence: "Ved fortsatt bruk kan vann komme inn i konstruksjonen og gi fukt- og soppskader.",
     measures: ["Våtrommet må bygges om med nytt vanntett sjikt, sluk og overflater."],
     source: SOURCE_WET_ROOM,
   },
@@ -348,7 +351,7 @@ const questionSpecs: QuestionSpec[] = [
     question: "Mangler det dokumentasjon på det vanntette sjiktet?",
     kind: "tg2",
     deviation: "Eier har ikke kunnet vise papirer på hvordan det vanntette sjiktet ble lagt.",
-    cause: "Uten dokumentasjon kan utførelsen av det skjulte sjiktet ikke kontrolleres.",
+    cause: "Uten dokumentasjon kan utførelsen av sjiktet ikke kontrolleres.",
     criterion: "missing_documentation",
     consequence: "Feil i sjiktet kan være skjult og først vise seg som lekkasje eller fuktskade.",
     measures: [
@@ -403,7 +406,7 @@ const questionSpecs: QuestionSpec[] = [
     question: "Er det muggsopp, råte eller påvist fuktskade i vegger eller himling?",
     kind: "tg3",
     deviation: "Det er påvist muggsopp, råte eller fuktskade i vegg eller himling i våtrommet.",
-    cause: "Skaden viser at fukt har trengt inn i konstruksjonen.",
+    cause: "Skaden viser at fukt har virket på materialene over tid.",
     criterion: "symptom_of_damage",
     consequence: "Skaden øker så lenge fukten får virke, og kan gi dårlig inneluft.",
     measures: [
@@ -419,11 +422,12 @@ const questionSpecs: QuestionSpec[] = [
     question: "Er fallet mot sluk for lite, eller er det motfall?",
     kind: "choose_tg2_tg3",
     deviation: "Fallet mot sluk er målt til {måleverdi} mm per meter.",
-    cause: "Fallet er for lite til at vann på gulvet renner sikkert til sluket.",
+    cause: "Fallet er mindre enn det som trengs for at vann på gulvet renner sikkert til sluket.",
     criterion: "significant_deviation",
     consequence: "Vann kan bli stående på gulvet eller renne mot terskel og vegger.",
     measures: [
-      "Gulvet må rettes slik at vannet renner til sluket, og det vanntette sjiktet må fornyes samtidig.",
+      "Ved motfall eller stående vann må gulvet rettes, og det vanntette sjiktet må fornyes samtidig.",
+      "Ved svakt fall må vannet holdes borte fra terskel og vegger, og fallet må rettes ved neste oppussing.",
     ],
     source: SOURCE_FALL,
   },
@@ -443,12 +447,12 @@ const questionSpecs: QuestionSpec[] = [
     checkpoint: FLOOR,
     key: "vinyl_damage",
     question: "Er vinylbelegget på gulvet skadet eller løst i skjøter?",
-    kind: "tg2",
+    kind: "choose_tg2_tg3",
     deviation: "Vinylbelegget på gulvet har hull, rifter eller skjøter som har løsnet.",
-    cause: "Belegget er selve det vanntette sjiktet, og skaden gjør det utett.",
+    cause: "Belegget er selve det vanntette sjiktet, og skaden svekker tettheten.",
     criterion: "significant_deviation",
     consequence: "Vann kan komme gjennom belegget og ned i gulvkonstruksjonen.",
-    measures: ["Skadet belegg bør repareres av fagperson eller skiftes."],
+    measures: ["Skadet belegg må repareres av fagperson eller skiftes."],
     source: SOURCE_WET_ROOM,
   },
   {
@@ -470,12 +474,12 @@ const questionSpecs: QuestionSpec[] = [
     key: "membrane_before_2000",
     question: "Er det vanntette sjiktet fra før år 2000?",
     kind: "tg3",
-    deviation: "Det vanntette sjiktet i våtrommet er fra {årstall}.",
+    deviation: "Det vanntette sjiktet i våtrommet er registrert som fra {årstall}.",
     cause: "Sjiktet er fra før år 2000, og funksjonen kan ikke lenger regnes som sikker.",
     criterion: "age_uncertain_function",
     consequence:
       "Et gammelt sjikt kan slippe gjennom vann uten synlige tegn, og skader kan oppstå i skjulte deler.",
-    measures: ["Våtrommet må fornyes med nytt vanntett sjikt og nytt sluk."],
+    measures: ["Det må påregnes at våtrommet må fornyes med nytt vanntett sjikt og nytt sluk."],
     source: SOURCE_AGE,
   },
   {
@@ -530,11 +534,10 @@ const questionSpecs: QuestionSpec[] = [
   {
     checkpoint: MEMBRANE_DRAIN,
     key: "low_threshold_height",
-    question: "Er høyden fra topp slukrist til topp membran ved terskel under 25 mm?",
+    question: "Er høyden fra sluket opp til membranen ved terskelen for lav?",
     kind: "choose_tg2_tg3",
-    deviation:
-      "Høyden fra topp slukrist til topp membran ved terskelen er målt til {måleverdi} mm.",
-    cause: "Høyden er under 25 mm, så vann kan nå terskelen før det renner til sluket.",
+    deviation: "Høyden fra slukristen opp til membranen ved terskelen er målt til {måleverdi} mm.",
+    cause: "Høyden er for lav til å holde vannet inne i rommet hvis sluket går tett.",
     criterion: "significant_deviation",
     consequence: "Vann kan renne over terskelen og inn i rommet utenfor.",
     measures: ["Gulvet eller terskelen må endres slik at vannet holdes inne i våtrommet."],
@@ -548,22 +551,22 @@ const questionSpecs: QuestionSpec[] = [
     kind: "tg3",
     deviation:
       "Det er lekkasje eller funksjonssvikt på sanitærutstyr eller synlige rør i våtrommet.",
-    cause: "Utstyret holder ikke på vannet der det skal.",
+    cause: "Utstyret holder ikke tett eller virker ikke som det skal.",
     criterion: "functional_failure",
     consequence: "Lekkasjen kan gi vannskade på gulv, vegger og innredning.",
-    measures: ["Lekkasjen må utbedres av rørlegger, og omfanget av skaden må kontrolleres."],
+    measures: ["Feilen må utbedres av rørlegger, og det må kontrolleres om vann har gitt skade."],
     source: SOURCE_WET_ROOM,
   },
   {
     checkpoint: FIXTURES,
     key: "cracked_sanitary_ware",
     question: "Er det sprekker eller avskalling på servant, toalett eller badekar?",
-    kind: "tg2",
+    kind: "choose_tg2_tg3",
     deviation: "Det er sprekker eller avskalling på sanitærutstyr i våtrommet.",
     cause: "Sprekker svekker utstyret og kan utvikle seg til lekkasje.",
     criterion: "significant_deviation",
     consequence: "Utstyret kan begynne å lekke eller knekke ved belastning.",
-    measures: ["Skadet utstyr bør skiftes."],
+    measures: ["Utstyr med sprekker må skiftes. Riss og avskalling må holdes under oppsyn."],
     source: SOURCE_WET_ROOM,
   },
   {
@@ -581,11 +584,12 @@ const questionSpecs: QuestionSpec[] = [
   {
     checkpoint: FIXTURES,
     key: "signs_of_overheating",
-    question: "Er det merker etter varmgang på armatur eller el-punkter?",
+    question: "Er det merker etter varme ved stikkontakt, lysarmatur eller andre el-punkter?",
     kind: "hms",
-    deviation: "Det er merker etter varmgang ved armatur eller el-punkt i våtrommet.",
+    deviation: "Det er merker etter varmgang ved el-punkt i våtrommet.",
     cause: null,
-    criterion: "danger_to_life_health",
+    // HMS gir ikke TG, så utfallet har ikke noe TG-kriterium (A204)
+    criterion: null,
     consequence: "Varmgang kan føre til brann eller strømgjennomgang.",
     measures: ["Punktet må kontrolleres av registrert elektroinstallatør før det brukes videre."],
     source: SOURCE_HMS,
@@ -634,11 +638,14 @@ const questionSpecs: QuestionSpec[] = [
     key: "elevated_moisture",
     question: "Er det målt forhøyet fukt ved hulltaking?",
     kind: "choose_tg2_tg3",
-    deviation: "Det er målt {måleverdi} ved hulltaking i konstruksjonen ved siden av våtrommet.",
+    deviation:
+      "Ved hulltaking i konstruksjonen ved siden av våtrommet er fukten målt til {måleverdi} {enhet}.",
     cause: "Fuktverdien er høyere enn det som er normalt for konstruksjonen.",
     criterion: "symptom_of_damage",
     consequence: "Fukt i konstruksjonen kan gi råte og muggsopp som ikke vises fra rommet.",
-    measures: ["Fuktkilden må finnes, og omfanget av skaden må kartlegges med flere målinger."],
+    measures: [
+      "Fuktkilden må finnes, og flere målinger må vise om fukten har gitt skade og hvor langt den går.",
+    ],
     source: SOURCE_HOLE,
   },
 ];
