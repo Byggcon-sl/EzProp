@@ -1,6 +1,6 @@
 # ADR 0008 – Logg inn med Microsoft 365 ved siden av engangskoden
 
-Dato: 12.11.2026. Status: vedtatt av agentene i autonom modus (A214–A222); Ståle kan endre. Oppgavekort: `docs/funksjoner/fase2a-microsoft-innlogging.md`. Bygger på ADR 0001 (Better Auth) og ADR 0005 (nøkkelboksen).
+Dato: 12.11.2026. Status: vedtatt av agentene i autonom modus (A214–A223); Ståle kan endre. Oppgavekort: `docs/funksjoner/fase2a-microsoft-innlogging.md`. Bygger på ADR 0001 (Better Auth) og ADR 0005 (nøkkelboksen).
 
 Støtter hovedmålene: **de ansatte** (ett trykk med kontoen de bruker hver dag, ingen kode å hente på e-post, særlig på iPaden), **KI i bunnen** (ingen KI i innloggingen; ingenting fra Microsoft går til KI, men hvem som godtok et forslag er sikrere identifisert) og **færre reklamasjoner** (indirekte: vi vet sikrere hvem som signerer).
 
@@ -22,6 +22,8 @@ Støtter hovedmålene: **de ansatte** (ett trykk med kontoen de bruker hver dag,
 14. **Endepunkter vi ikke bruker, er stengt:** `/link-social`, `/unlink-account`, `/refresh-token`, `/get-access-token`, `/account-info`, og `/sign-in/social` med `idToken` i kroppen. Bare omdirigeringsflyten er åpen. Ingen kobler til eller fra selv, så ingenting slettes i `accounts` (regel 3).
 15. **Lik feilmelding for alle avvisninger** (A215). Årsaken (`MicrosoftRejectionReason`) logges som kode uten e-post, `oid`, token eller hemmelighet, og vises aldri på siden.
 16. **Ingen migrering** (A220). Microsoft-kontoen bruker den eksisterende tabellen `accounts` med `provider_id = 'microsoft'`.
+17. **ID-tokenet: `aud`, `iss` og `exp` sjekkes av oss, signaturen ikke** (A223). I omdirigeringsflyten dekoder Better Auth bare tokenet. `checkMicrosoftProfile` krever derfor at `aud` er vår klient-id, at `iss` er `https://login.microsoftonline.com/<tenant>/v2.0`, og at `exp` ikke er passert, før `tid` og resten sjekkes (årsakskode `invalid_token`). Signaturen sjekkes ikke: tokenet hentes av serveren direkte fra Microsofts token-adresse over TLS, med klienthemmeligheten, og OpenID Connect Core 3.1.3.7 punkt 6 tillater da å stole på TLS i stedet for signaturen. Flyten der klienten sender tokenet selv (`/sign-in/social` med `idToken`), er stengt (punkt 14). Det gir ingen henting av nøkler (JWKS) og ingen ekstra nettverkskall. Åpnes en flyt der tokenet ikke kommer rett fra token-adressen, må signaturen sjekkes der.
+18. **Adresser utenfor appen følges ikke.** Better Auth sin sjekk av `callbackURL` og `errorCallbackURL` mot egen adresse (`trustedOrigins`, bare `BETTER_AUTH_URL`) står på, også i tester (`advanced.disableOriginCheck: false`; Better Auth slår den ellers av når `NODE_ENV` er «test»). Avviste innlogginger sendes til `/logg-inn?error=…` (`onAPIError.errorURL`).
 
 ## Forholdet til felles innlogging med Optiplan (S6)
 
@@ -41,7 +43,7 @@ Denne beslutningen avgjør ikke S6. Microsoft-innloggingen ligger i EzProps egen
 - **Unik indeks på `accounts (provider_id, account_id)` (migrering 0030):** arkitekten foreslo den; prosjektlederen valgte ingen migrering. Risikoen er to like rader for samme bruker ved to samtidige første innlogginger. Kan legges til senere med en liten migrering.
 - **Streng validering av `MS_LOGIN_*` i `env.ts`:** en skrivefeil ville stoppet appen og stengt admin ute (regel 11).
 - **Å lagre tokens for senere kall til Graph:** vi har ingen bruk for dem, og de er personopplysninger og nøkler vi da måtte vokte.
-- **Falsk Microsoft-side i e2e:** hele flyten prøves i integrasjonstester med falsk `fetch` og falsk JWKS (A222).
+- **Falsk Microsoft-side i e2e:** hele flyten prøves i integrasjonstester med falsk `fetch` for token-adressen (A222, A223).
 
 ## Følger
 

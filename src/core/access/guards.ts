@@ -157,11 +157,22 @@ export async function requireTemplateEditAccess(
  * Gir ingen rettigheter og tar ikke `organizationId`; rettigheter kommer bare fra
  * `requireOrganizationAccess`. Kaster ikke for ukjent bruker, gir `false`.
  */
-export async function hasActiveEmployment(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  userId: string,
-): Promise<boolean> {
-  throw new Error("Ikke bygget: hasActiveEmployment (fase2a-microsoft-innlogging)");
+export async function hasActiveEmployment(userId: string): Promise<boolean> {
+  if (typeof userId !== "string" || userId === "") return false;
+  const [row] = await db
+    .select({ found: sql<number>`1` })
+    .from(employees)
+    .innerJoin(organizations, eq(organizations.id, employees.organizationId))
+    .where(
+      and(
+        eq(employees.userId, userId),
+        isNull(employees.deletedAt),
+        isNull(employees.deactivatedAt),
+        isNull(organizations.deletedAt),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
 }
 
 /**
