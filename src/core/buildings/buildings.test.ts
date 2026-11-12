@@ -15,6 +15,7 @@ import {
   saveFloor,
   saveFloorArea,
   saveRoom,
+  suggestFloor,
   sumAssignmentArea,
 } from "@/core/buildings";
 import { db } from "@/db/client";
@@ -1692,5 +1693,86 @@ describe("4.6 hendelser og revisjonslogg", () => {
     await caught(removeFloor(admin, org.id, floor.id));
     expect(await rowCount("events")).toBe(0);
     expect(await rowCount("audit_log")).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Svarene i bygningene (F6, F7): docs/funksjoner/fase2a-svar-regler-bygninger-testplan.md 6 og 7
+// ---------------------------------------------------------------------------------------------
+
+describe("B6.8 og T7.3 not_bra og to etasjer på -1", () => {
+  const SAVERS = [
+    { name: "admin", roles: ["admin"] as EmployeeRole[] },
+    { name: "takstmann med access.inspectors_edit_all", roles: ["inspector"] as EmployeeRole[] },
+  ];
+
+  it.each(SAVERS)("$name lagrer og leser tilbake", async ({ roles }) => {
+    const { org, admin, assignment } = await orgWithAdmin();
+    await setInspectorsEditAll(org.id, true);
+    const actor = roles[0] === "admin" ? admin : (await person(org.id, roles)).actor;
+    const building = await createBuilding(org.id, { assignmentId: assignment.id });
+
+    const basement = await saveFloor(
+      actor,
+      org.id,
+      building.id,
+      null,
+      floorInput({ name: BASEMENT, level: "-1", belowGround: true }),
+    );
+    const lower = await saveFloor(
+      actor,
+      org.id,
+      building.id,
+      null,
+      floorInput({ name: "Underetasje", level: "-1", belowGround: true }),
+    );
+    await saveRoom(actor, org.id, basement.id, null, roomInput({ roomType: "crawl_space" }));
+    await saveRoom(
+      actor,
+      org.id,
+      lower.id,
+      null,
+      roomInput({ roomType: "unfinished_attic", areaType: "not_bra" }),
+    );
+
+    const result = await getAssignmentBuildings(actor, org.id, assignment.id);
+    const floors = floorsOf(buildingsOf(result)[0]!);
+    expect(floors.map((floor) => [floor.level, floor.belowGround])).toEqual([
+      [-1, true],
+      [-1, true],
+    ]);
+    const rooms = floors.flatMap((floor) => roomsOf(floor));
+    expect(rooms.map((room) => [room.roomType, room.areaType]).sort()).toEqual([
+      ["crawl_space", "not_bra"],
+      ["unfinished_attic", "not_bra"],
+    ]);
+    // Kryperom i etasje under terreng er fortsatt under terreng (A239).
+    expect(rooms.find((room) => room.roomType === "crawl_space")?.belowGround).toBe(true);
+  });
+
+  it("kryperom i etasje over terreng får not_bra og ikke «under terreng»", async () => {
+    const { org, admin, assignment } = await orgWithAdmin();
+    const building = await createBuilding(org.id, { assignmentId: assignment.id });
+    const floor = await createFloor(org.id, { buildingId: building.id, level: 1 });
+    await saveRoom(admin, org.id, floor.id, null, roomInput({ roomType: "crawl_space" }));
+    const [row] = await rawRows("rooms");
+    expect([row!.area_type, row!.below_ground]).toEqual(["not_bra", false]);
+  });
+});
+
+describe("B6.9 etasjelisten har ikke myk-slettede etasjer", () => {
+  it("slettet etasje 3 er borte fra listen, så «Loft» gir 3", async () => {
+    const { org, admin, assignment } = await orgWithAdmin();
+    const building = await createBuilding(org.id, { assignmentId: assignment.id });
+    await createFloor(org.id, { buildingId: building.id, level: 1 });
+    await createFloor(org.id, { buildingId: building.id, level: 2, name: "2. etasje" });
+    const third = await createFloor(org.id, { buildingId: building.id, level: 3, name: "Tredje" });
+    await removeFloor(admin, org.id, third.id);
+
+    const result = await getAssignmentBuildings(admin, org.id, assignment.id);
+    const levels = floorsOf(buildingsOf(result)[0]!).map((floor) => floor.level as number);
+    expect([...levels].sort()).toEqual([1, 2]);
+    expect(suggestFloor("Loft", levels)).toEqual({ level: 3, belowGround: false });
+    expect(await rawRows("floors")).toHaveLength(3);
   });
 });

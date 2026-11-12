@@ -385,6 +385,126 @@ test.describe("bygninger, areal og rom (pc og ipad)", () => {
     }
   });
 
+  /*
+   * Svarene i bygningene (Ståle 12.11.2026, F6 og F7; T-0010 og T-0016).
+   * Testplan: docs/funksjoner/fase2a-svar-regler-bygninger-testplan.md avsnitt 8.
+   * Navnet velges med `fill` på feltet med datalisten (samme input-hendelse som et ekte valg).
+   */
+
+  /** Åpner «Legg til etasje» i bygningen. Gir feltene i det nye skjemaet. */
+  async function startFloor(page: Page) {
+    const scope = block(page, BUILDING);
+    await button(scope, "Legg til etasje").click();
+    return {
+      name: scope.getByLabel(LABEL.floorName).last(),
+      level: scope.getByLabel(LABEL.level).last(),
+      belowGround: scope.getByLabel(LABEL.belowGround).last(),
+      save: button(scope, "Lagre").last(),
+    };
+  }
+
+  test("E8.1–E8.3 «Kjeller» gir -1 og under terreng; -2 overskrives ikke og står etter ny lasting; «Underetasje» gir -1", async ({
+    page,
+  }) => {
+    await logIn(page);
+    await newAssignmentWithProperty(page);
+    await openBuildings(page);
+    await addBuilding(page, BUILDING);
+
+    const basement = await startFloor(page);
+    await expect(basement.level).toHaveValue("1");
+    await expect(basement.belowGround).not.toBeChecked();
+    await basement.name.fill(BASEMENT);
+    await expect(basement.level).toHaveValue("-1");
+    await expect(basement.belowGround).toBeChecked();
+
+    // E8.2 Nummeret takstmannen har endret, overskrives ikke når navnet står uendret
+    await basement.level.fill("-2");
+    await basement.name.focus();
+    await basement.name.blur();
+    await expect(basement.level).toHaveValue("-2");
+    await expect(basement.belowGround).toBeChecked();
+    await clickAndWaitForSave(page, basement.save);
+    await expect(block(block(page, BUILDING), BASEMENT)).toBeVisible();
+
+    await page.reload();
+    const saved = block(block(page, BUILDING), BASEMENT);
+    await expect(saved).toContainText("Etasjenummer -2");
+    await expect(saved).toContainText("Under terreng");
+
+    // E8.3 «Underetasje» gir -1 og under terreng, også når en annen etasje er under terreng
+    const lower = await startFloor(page);
+    await lower.name.fill("Underetasje");
+    await expect(lower.level).toHaveValue("-1");
+    await expect(lower.belowGround).toBeChecked();
+    await clickAndWaitForSave(page, lower.save);
+    await page.reload();
+    const savedLower = block(block(page, BUILDING), "Underetasje");
+    await expect(savedLower).toContainText("Etasjenummer -1");
+    await expect(savedLower).toContainText("Under terreng");
+  });
+
+  test("E8.4–E8.5 «Loft» gir høyeste + 1 uten under terreng; fritekst gir neste nummer og endrer ikke under terreng", async ({
+    page,
+  }) => {
+    await logIn(page);
+    await newAssignmentWithProperty(page);
+    await openBuildings(page);
+    await addBuilding(page, BUILDING);
+    await addFloor(page, BUILDING, { name: FIRST_FLOOR, level: "1", belowGround: false });
+    await addFloor(page, BUILDING, { name: BASEMENT, level: "-1", belowGround: true });
+
+    // E8.4 Først «Kjeller» (krysser av), så «Loft»: 2 og ikke under terreng
+    const attic = await startFloor(page);
+    await attic.name.fill(BASEMENT);
+    await expect(attic.belowGround).toBeChecked();
+    await attic.name.fill("Loft");
+    await expect(attic.level).toHaveValue("2");
+    await expect(attic.belowGround).not.toBeChecked();
+    await clickAndWaitForSave(page, attic.save);
+    await expect(block(block(page, BUILDING), "Loft")).toContainText("Etasjenummer 2");
+
+    // E8.5 Fritekst: nummeret er neste ledige (3), og «under terreng» endres ikke
+    const free = await startFloor(page);
+    await free.name.fill("Mellometasje");
+    await expect(free.level).toHaveValue("3");
+    await expect(free.belowGround).not.toBeChecked();
+    await free.belowGround.check();
+    await free.name.fill("Mellometasje vest");
+    await expect(free.level).toHaveValue("3");
+    await expect(free.belowGround).toBeChecked();
+  });
+
+  test("E8.6 kryperom og uinnredet loft foreslås som «Ikke del av BRA», som kan endres og står etter ny lasting", async ({
+    page,
+  }) => {
+    await logIn(page);
+    await newAssignmentWithProperty(page);
+    await openBuildings(page);
+    await addBuilding(page, BUILDING);
+    await addFloor(page, BUILDING, { name: FIRST_FLOOR, level: "1", belowGround: false });
+    const upper = block(block(page, BUILDING), FIRST_FLOOR);
+
+    const crawl = await startRoom(upper, "Kryperom");
+    await expect(crawl.areaType.locator("option:checked")).toHaveText("Ikke del av BRA");
+    await expect(crawl.belowGround).not.toBeChecked();
+    await crawl.areaType.selectOption({ label: "BRA-i" });
+    await upper.getByLabel(LABEL.name).last().fill("Kryperom vest");
+    await clickAndWaitForSave(page, crawl.save);
+
+    const attic = await startRoom(upper, "Loft, uinnredet");
+    await expect(attic.areaType.locator("option:checked")).toHaveText("Ikke del av BRA");
+    await clickAndWaitForSave(page, attic.save);
+
+    await page.reload();
+    const floor = block(block(page, BUILDING), FIRST_FLOOR);
+    const crawlRoom = floor.getByRole("listitem", { name: /^Kryperom vest/ });
+    await expect(crawlRoom).toContainText("BRA-i");
+    await expect(crawlRoom).not.toContainText("Ikke del av BRA");
+    const atticRoom = floor.getByRole("listitem", { name: /^Loft, uinnredet/ });
+    await expect(atticRoom).toContainText("Ikke del av BRA");
+  });
+
   test("7.8 ukjent id i adressen gir «Fant ikke siden» eller «Ingen tilgang», aldri 500", async ({
     page,
   }) => {

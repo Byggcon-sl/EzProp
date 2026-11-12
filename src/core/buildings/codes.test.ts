@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import * as codes from "./codes";
 import {
@@ -10,6 +12,7 @@ import {
   sumFloorArea,
   suggestAreaType,
   suggestBelowGround,
+  suggestFloor,
 } from "./codes";
 
 /*
@@ -152,18 +155,24 @@ const GROUP_CASES: [string, string][] = [
   ["other", "other"],
 ];
 
-/** 1.7 Arealtype som testsaker. Én rad per romtype. */
+/**
+ * 1.7 Arealtype som testsaker. Én rad per romtype. Kryperom og uinnredet loft er «Ikke del av
+ * BRA» (Ståle 12.11.2026, F6; B6.2). Uinnredet kjellerrom er fortsatt BRA-i (A240).
+ */
 const NOT_BRA_I: Record<string, string> = {
   garage: "bra_e",
   external_storage: "bra_e",
   glazed_balcony: "bra_b",
+  crawl_space: "not_bra",
+  unfinished_attic: "not_bra",
 };
 const AREA_TYPE_CASES: [string, string][] = EXPECTED_ROOM_TYPES.map(([key]) => [
   key,
   NOT_BRA_I[key] ?? "bra_i",
 ]);
 
-const USUALLY_BELOW_GROUND = ["basement_living_room", "basement_room", "crawl_space"];
+/** Kryperom er ikke lenger «under terreng» som standard (F6, A239; B6.3). */
+const USUALLY_BELOW_GROUND = ["basement_living_room", "basement_room"];
 
 describe("1.1–1.4 faste koder og etiketter", () => {
   it("1.1 AREA_TYPES er bra_i, bra_e, bra_b, not_bra i fast rekkefølge, med norske navn", () => {
@@ -234,20 +243,26 @@ describe("1.7 suggestAreaType", () => {
     ["garage", "bra_e"],
     ["external_storage", "bra_e"],
     ["glazed_balcony", "bra_b"],
-  ])("%s → %s", (key, expected) => {
+    ["crawl_space", "not_bra"],
+    ["unfinished_attic", "not_bra"],
+    ["basement_room", "bra_i"],
+  ])("%s → %s (B6.2)", (key, expected) => {
     expect(suggestAreaType(key as never)).toBe(expected);
   });
 
   const OTHERS = AREA_TYPE_CASES.filter(([key]) => !(key in NOT_BRA_I) && key !== "bathroom");
 
-  it.each(OTHERS)("%s → %s (alle andre 29 gir bra_i)", (key, expected) => {
+  it.each(OTHERS)("%s → %s (alle andre 27 gir bra_i)", (key, expected) => {
     expect(suggestAreaType(key as never)).toBe(expected);
   });
 
-  it("de andre 29 gir bra_i, og 30 av 33 romtyper (med bad) gir bra_i", () => {
-    expect(OTHERS).toHaveLength(29);
+  it("de andre 27 gir bra_i, 28 av 33 romtyper (med bad) gir bra_i, og 2 gir not_bra", () => {
+    expect(OTHERS).toHaveLength(27);
     expect(OTHERS.every(([, type]) => type === "bra_i")).toBe(true);
-    expect(AREA_TYPE_CASES.filter(([, type]) => type === "bra_i")).toHaveLength(30);
+    expect(AREA_TYPE_CASES.filter(([, type]) => type === "bra_i")).toHaveLength(28);
+    expect(
+      AREA_TYPE_CASES.filter(([, type]) => type === "not_bra").map(([key]) => key),
+    ).toEqual(["crawl_space", "unfinished_attic"]);
   });
 
   it.each(AREA_TYPE_CASES)("%s: romtypens defaultAreaType er %s", (key, expected) => {
@@ -266,7 +281,7 @@ describe("1.8 suggestBelowGround (A97)", () => {
   });
 
   it.each(EXPECTED_ROOM_TYPES.map(([key]) => key))(
-    "%s i etasje over terreng: sann bare for kjellerstue, kjellerrom og kryperom",
+    "%s i etasje over terreng: sann bare for kjellerstue og kjellerrom",
     (key) => {
       const expected = USUALLY_BELOW_GROUND.includes(key);
       expect(suggestBelowGround({ roomType: key as never, floorBelowGround: false })).toBe(
@@ -275,6 +290,12 @@ describe("1.8 suggestBelowGround (A97)", () => {
       expect(ROOMS.find((row) => row.key === key)?.defaultBelowGround).toBe(expected);
     },
   );
+
+  it("B6.3 kryperom: defaultBelowGround er false, men i etasje under terreng gir det sann (A239)", () => {
+    expect(ROOMS.find((row) => row.key === "crawl_space")?.defaultBelowGround).toBe(false);
+    expect(suggestBelowGround({ roomType: "crawl_space", floorBelowGround: false })).toBe(false);
+    expect(suggestBelowGround({ roomType: "crawl_space", floorBelowGround: true })).toBe(true);
+  });
 
   it.each(EXPECTED_ROOM_TYPES.map(([key]) => key))(
     "%s i etasje under terreng: alltid sann",
@@ -420,6 +441,82 @@ describe("1.10 sumBuildingArea og sumAssignmentArea", () => {
       braI: 12.3,
       bra: 12.3,
     });
+  });
+});
+
+describe("B6.4 summene er uendret med not_bra", () => {
+  it("AreaSum har bare braI, braE, braB og bra", () => {
+    expect(Object.keys(floorSum(area({ braI: 12.3 }))).sort()).toEqual([
+      "bra",
+      "braB",
+      "braE",
+      "braI",
+    ]);
+  });
+
+  it("summene regnes fra etasjearealet, ikke fra rommene", () => {
+    const floors = [area({ braI: 56.7 }), area({ braI: 123.4 })];
+    const withRooms = floorsOf(floors).map((floor) => ({
+      ...floor,
+      rooms: [{ areaType: "not_bra" }, { areaType: "bra_i" }],
+    }));
+    expect(sumBuildingArea(withRooms as never)).toEqual(buildingSum(floors));
+  });
+});
+
+describe("B6.6 suggestFloor (F7, A236)", () => {
+  it.each([
+    ["Kjeller", []],
+    ["Underetasje", []],
+    ["kjeller", [1]],
+    ["  UNDERETASJE  ", [1, 2]],
+    ["Kjeller", [-1, 1]],
+  ] as [string, number[]][])("«%s» med %j → -1 og under terreng", (name, levels) => {
+    expect(suggestFloor(name, levels)).toEqual({ level: -1, belowGround: true });
+  });
+
+  it.each([
+    [[], 1],
+    [[-1], 1],
+    [[-1, 1, 2], 3],
+    [[0], 1],
+    [[19], 20],
+    [[20], 20],
+    [[-2, -1], 1],
+  ] as [number[], number][])("«Loft» med %j → %i, ikke under terreng", (levels, level) => {
+    expect(suggestFloor("Loft", levels)).toEqual({ level, belowGround: false });
+  });
+
+  it("«  loft » sammenlignes uten store bokstaver og mellomrom", () => {
+    expect(suggestFloor("  loft ", [1])).toEqual({ level: 2, belowGround: false });
+  });
+
+  it.each(["1. etasje", "2. etasje", "Loftet", "Kjelleren", "", "   ", "Mellometasje"])(
+    "«%s» → null (neste ledige nummer gjelder)",
+    (name) => {
+      expect(suggestFloor(name, [1, 2])).toBeNull();
+    },
+  );
+
+  it("B6.7 FLOOR_NAME_SUGGESTIONS står i codes.ts", () => {
+    expect([...codes.FLOOR_NAME_SUGGESTIONS]).toEqual([
+      "Kjeller",
+      "Underetasje",
+      "1. etasje",
+      "2. etasje",
+      "Loft",
+    ]);
+  });
+
+  it("B6.7 skjermen har ikke egen liste og importerer ikke service.ts", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/app/(ansatt)/oppdrag/[id]/bygninger/buildings-editor.tsx"),
+      "utf8",
+    );
+    expect(source).not.toMatch(/const FLOOR_NAME_SUGGESTIONS\s*=/);
+    expect(source).toMatch(/from "@\/core\/buildings\/codes"/);
+    expect(source).not.toMatch(/core\/buildings\/service/);
+    expect(source).toMatch(/suggestFloor\(/);
   });
 });
 

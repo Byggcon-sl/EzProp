@@ -1,5 +1,6 @@
 export {
   AREA_TYPES,
+  FLOOR_NAME_SUGGESTIONS,
   MEASURING_METHODS,
   ROOM_TYPE_GROUPS,
   ROOM_TYPE_KEYS,
@@ -10,6 +11,7 @@ export {
   roomTypeLabel,
   suggestAreaType,
   suggestBelowGround,
+  suggestFloor,
   sumAssignmentArea,
   sumBuildingArea,
   sumFloorArea,

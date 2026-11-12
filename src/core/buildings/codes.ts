@@ -288,8 +288,8 @@ export const ROOM_TYPES = [
     key: "crawl_space",
     label: "Kryperom",
     group: "other",
-    defaultAreaType: "bra_i",
-    defaultBelowGround: true,
+    defaultAreaType: "not_bra",
+    defaultBelowGround: false,
     draft: true,
   },
   {
@@ -304,7 +304,7 @@ export const ROOM_TYPES = [
     key: "unfinished_attic",
     label: "Loft, uinnredet",
     group: "other",
-    defaultAreaType: "bra_i",
+    defaultAreaType: "not_bra",
     defaultBelowGround: false,
     draft: true,
   },
@@ -377,10 +377,22 @@ export function suggestBelowGround({
 /** Forslaget når et etasjenavn velges fra listen: etasjenummer og «under terreng». */
 export type FloorSuggestion = { level: number; belowGround: boolean };
 
+/** Etasjenavn som foreslås på skjermen (kan skrives fritt). */
+export const FLOOR_NAME_SUGGESTIONS = [
+  "Kjeller",
+  "Underetasje",
+  "1. etasje",
+  "2. etasje",
+  "Loft",
+] as const;
+
+/** Laveste og høyeste etasjenummer (`floors_level_check`). */
+const MIN_LEVEL = -3;
+const MAX_LEVEL = 20;
+
 /**
  * Dataregel (Ståle 12.11.2026, F7; A236): forslag til etasjenummer og «under terreng» fra
- * etasjenavnet. Ren funksjon, bygges i denne fila som `suggestFloor` og brukes av skjermen
- * (klientkode importerer fra denne fila, ikke fra `service.ts`).
+ * etasjenavnet. Ren funksjon; skjermen (klientkode) importerer den fra denne fila.
  *
  * - Navnet sammenlignes uten forskjell på store og små bokstaver og uten mellomrom foran og bak.
  * - «Kjeller» og «Underetasje» gir `{ level: -1, belowGround: true }`, også når -1 er i bruk.
@@ -394,6 +406,18 @@ export type SuggestFloor = (
   name: string,
   existingLevels: readonly number[],
 ) => FloorSuggestion | null;
+
+export const suggestFloor: SuggestFloor = (name, existingLevels) => {
+  const normalized = name.trim().toLocaleLowerCase("nb");
+  if (normalized === "kjeller" || normalized === "underetasje") {
+    return { level: -1, belowGround: true };
+  }
+  if (normalized === "loft") {
+    const highest = Math.max(0, ...existingLevels);
+    return { level: Math.max(MIN_LEVEL, Math.min(MAX_LEVEL, highest + 1)), belowGround: false };
+  }
+  return null;
+};
 
 /** Arealfeltene i én etasje. Tomme felt (`null` eller mangler) teller som 0. */
 export type AreaValues = {

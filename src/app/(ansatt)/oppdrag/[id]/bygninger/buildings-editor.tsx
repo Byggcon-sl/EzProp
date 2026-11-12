@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useCallback, useEffect, useState, type ReactNode } from "react";
+import { useActionState, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   AreaSum,
   AssignmentBuildings,
@@ -10,6 +10,7 @@ import type {
   FloorDetail,
   RoomDetail,
 } from "@/core/buildings";
+import { FLOOR_NAME_SUGGESTIONS, suggestFloor } from "@/core/buildings/codes";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { Checkbox, Field, Input, Select, Textarea } from "@/shared/ui/form";
@@ -38,8 +39,6 @@ export type Codes = {
   methods: CodeOption[];
 };
 
-/** Etasjenavn som foreslås (kan skrives fritt). */
-const FLOOR_NAME_SUGGESTIONS = ["Kjeller", "Underetasje", "1. etasje", "2. etasje", "Loft"];
 const FLOOR_NAMES_LIST = "floor-name-suggestions";
 
 /** Areal med én desimal og komma, som «180,1». */
@@ -185,22 +184,39 @@ function BuildingForm({
 
 type FloorValues = { name: string; level: string; belowGround: boolean };
 
-/** Etasjen: navn (med forslag), etasjenummer og «Under terreng». */
+/**
+ * Etasjen: navn (med forslag), etasjenummer og «Under terreng». Når navnet endres til et kjent
+ * forslag («Kjeller», «Underetasje», «Loft»), fylles nummer og «Under terreng» ut (F7, A236).
+ * Feltene kan endres etterpå; de overskrives bare når navnet endres igjen.
+ */
 function FloorForm({
   idPrefix,
   buildingId,
   floorId,
   initial,
+  existingLevels,
   onDone,
 }: {
   idPrefix: string;
   buildingId: string;
   floorId: string | null;
   initial: FloorValues;
+  /** Numrene på de andre etasjene i bygningen (ikke slettet, uten denne etasjen). */
+  existingLevels: readonly number[];
   onDone: () => void;
 }) {
   const [state, formAction] = useActionState(saveFloorAction, initialFormState);
   useOnSaved(state, onDone);
+  const levelRef = useRef<HTMLInputElement>(null);
+  const belowGroundRef = useRef<HTMLInputElement>(null);
+
+  function onNameChange(name: string) {
+    const suggestion = suggestFloor(name, existingLevels);
+    if (!suggestion) return;
+    if (levelRef.current) levelRef.current.value = String(suggestion.level);
+    if (belowGroundRef.current) belowGroundRef.current.checked = suggestion.belowGround;
+  }
+
   const belowGround =
     state.message !== null ? state.values.belowGround === "on" : initial.belowGround;
   return (
@@ -221,6 +237,7 @@ function FloorForm({
           maxLength={50}
           autoComplete="off"
           defaultValue={textValue(state, "name", initial.name)}
+          onChange={(event) => onNameChange(event.target.value)}
         />
       </Field>
       <Field
@@ -238,6 +255,7 @@ function FloorForm({
           max={20}
           step={1}
           className="max-w-32"
+          ref={levelRef}
           defaultValue={textValue(state, "level", initial.level)}
         />
       </Field>
@@ -245,6 +263,7 @@ function FloorForm({
         key={`${state.attempt}`}
         name="belowGround"
         label="Under terreng"
+        ref={belowGroundRef}
         defaultChecked={belowGround}
       />
       <FormButtons onCancel={onDone} />
@@ -555,12 +574,15 @@ function RoomItem({
 function FloorBlock({
   floor,
   buildingId,
+  otherLevels,
   data,
   canEdit,
   codes,
 }: {
   floor: FloorDetail;
   buildingId: string;
+  /** Numrene på de andre etasjene i bygningen, til forslaget for «Loft». */
+  otherLevels: readonly number[];
   data: AssignmentBuildings;
   canEdit: boolean;
   codes: Codes;
@@ -588,6 +610,7 @@ function FloorBlock({
               level: String(floor.level),
               belowGround: floor.belowGround,
             }}
+            existingLevels={otherLevels}
             onDone={close}
           />
         </>
@@ -734,6 +757,9 @@ function BuildingCard({
                 key={floor.id}
                 floor={floor}
                 buildingId={building.id}
+                otherLevels={building.floors
+                  .filter((other) => other.id !== floor.id)
+                  .map((other) => other.level)}
                 data={data}
                 canEdit={canEdit}
                 codes={codes}
@@ -751,6 +777,7 @@ function BuildingCard({
                   buildingId={building.id}
                   floorId={null}
                   initial={{ name: "", level: nextLevel(building), belowGround: false }}
+                  existingLevels={building.floors.map((floor) => floor.level)}
                   onDone={close}
                 />
               )}
