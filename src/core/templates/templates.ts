@@ -595,6 +595,53 @@ function toDocument(content: Content): TemplateDocument {
   };
 }
 
+/**
+ * Dokumentet med hver liste i fast rekkefølge: etter kodene (med forelderens kode der koden bare
+ * er unik under forelderen), så `sort_order`, så hele raden. Rader uten kode (standardtiltak,
+ * betingelser, testtilfeller) sorteres etter forelderen, `sort_order` og innholdet.
+ */
+function sortedDocument(doc: TemplateDocument): TemplateDocument {
+  const whole = (item: unknown) => canonical(item);
+  return {
+    sections: sortBy(doc.sections, (s) => [s.key]),
+    elements: sortBy(doc.elements, (e) => [e.key]),
+    element_options: sortBy(doc.element_options, (o) => [o.element_key, o.key]),
+    checkpoints: sortBy(doc.checkpoints, (c) => [c.key]),
+    deviation_questions: sortBy(doc.deviation_questions, (q) => [q.checkpoint_key, q.key]),
+    outcomes: sortBy(doc.outcomes, (o) => [o.checkpoint_key, o.question_key, o.key]),
+    standard_measures: sortBy(doc.standard_measures, (m) => [
+      m.checkpoint_key,
+      m.question_key,
+      m.outcome_key,
+      m.sort_order,
+      m.text,
+      whole(m),
+    ]),
+    rules: sortBy(doc.rules, (r) => [r.key]),
+    rule_conditions: sortBy(doc.rule_conditions, (c) => [
+      c.rule_key,
+      c.group_no ?? 0,
+      c.sort_order,
+      whole(c),
+    ]),
+    rule_test_cases: sortBy(doc.rule_test_cases, (t) => [
+      t.rule_key,
+      t.sort_order,
+      t.name,
+      whole(t),
+    ]),
+  };
+}
+
+/**
+ * Har to maldokumenter samme innhold? Rekkefølgen i listene teller ikke; alt annet gjør det,
+ * også `sort_order`, tekstene, `text_status` og `default_cause_text`. Ren funksjon uten database.
+ * Brukes av seed for å avgjøre om det trengs en ny versjon (A209).
+ */
+export function isSameTemplateContent(a: TemplateDocument, b: TemplateDocument): boolean {
+  return canonical(sortedDocument(a)) === canonical(sortedDocument(b));
+}
+
 // --- Skriving av innholdet -------------------------------------------------------------------
 
 type WriteContext = {

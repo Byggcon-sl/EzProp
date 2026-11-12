@@ -36,6 +36,7 @@ export {
   createDraftVersion,
   createTemplateFamily,
   getTemplateVersion,
+  isSameTemplateContent,
   listTemplateFamilies,
   publishVersion,
   saveDraftContent,
