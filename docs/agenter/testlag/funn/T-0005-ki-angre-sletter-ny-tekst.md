@@ -3,14 +3,14 @@ id: T-0005
 tittel: «Angre» etter «Bruk» sletter det takstmannen har skrevet etterpå, uten varsel
 type: feil
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-11
 rolle: test-robusthet, test-takstmann
 omrade: KI (forslagskortet)
 maal: KI i bunnen
 commit: 0b8e3b9
 forsok: 0
-pr:
+pr: 143
 ---
 
 ## Hva
@@ -39,3 +39,4 @@ Når feltet er endret etter «Bruk», skal «Angre» ikke overskrive teksten, el
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-11: rettet i PR #143 (KI-kø), venter på ny prøve fra testlaget

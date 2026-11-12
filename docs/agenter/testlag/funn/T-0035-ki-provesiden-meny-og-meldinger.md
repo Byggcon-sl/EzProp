@@ -10,7 +10,7 @@ omrade: KI (prøveside)
 maal: de ansatte
 commit: 0b8e3b9
 forsok: 0
-pr:
+pr: 143 (bare punkt 4, resten står åpent)
 ---
 
 ## Hva
@@ -36,3 +36,4 @@ Ikke etterprøvd (forbedring). Menyfunnet er meldt av tre testere og slått samm
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-11: punkt 4 (teksten står igjen etter ny lasting) rettet i PR #143 (KI-kø). Resten står åpent.

@@ -115,6 +115,27 @@ Hvis helsesjekken ikke svarer: appen lytter på `HOSTNAME`, og oppsettet setter 
 
 **Merk:** når `APP_HOSTNAME` er satt, virker innlogging bare på den adressen, ikke lenger på `app-ezprop-test.azurewebsites.net`.
 
+## Hvis Azure mangler kapasitet («No available instances»)
+
+Utrullingen kan stoppe med `Conflict` og «No available instances to satisfy this request» på `plan-ezprop-test`. Det betyr at Microsoft er tom for ledige maskiner for appen i den delen av datasenteret ressursgruppen ligger i. Det er ikke en feil i oppsettet. Prøv først igjen senere. Hjelper ikke det, flytt til en ny ressursgruppe:
+
+1. Slett den gamle gruppen `rg-ezprop-test` i portalen (Resource groups → rg-ezprop-test → Delete resource group). Da frigjøres navnet på databasen, som må være unikt i hele Azure.
+2. Lag en ny gruppe i Sweden Central med et nytt navn, for eksempel `rg-ezprop-test2`. Bruk et nytt navn, ikke det gamle.
+3. Gi `GitHub EzProp test` rollen Contributor på den nye gruppen (som i punkt a4).
+4. I GitHub: lag variabelen `AZURE_RESOURCE_GROUP` med det nye navnet (Settings → Secrets and variables → Actions → Variables).
+5. Kjør «Utrulling til Azure» på nytt.
+
+Adressen blir den samme: `https://app-ezprop-test.azurewebsites.net`.
+
+## Hvis databasen ikke kan lages («SkuNotAvailable»)
+
+Utrullingen kan stoppe med `SkuNotAvailable` på `psql-ezprop-test`: «Specified SKU is not supported in this region». Da tilbyr ikke Azure den minste databasestørrelsen (`Standard_B1ms`) i Sweden Central for dette abonnementet. Velg én av disse med GitHub-variabler (Settings → Secrets and variables → Actions → Variables):
+
+- `POSTGRES_LOCATION` = `norwayeast`: samme størrelse og pris, men databasen ligger i Norge. Appen blir i Sweden Central. Litt lengre vei mellom app og database, men det merkes ikke i testmiljøet.
+- `POSTGRES_SKU` = `Standard_B2s`: større database i Sweden Central. Koster ca. 400–500 kr mer i måneden.
+
+Slett først databasen som feilet: ressursgruppen → `psql-ezprop-test` → Delete. Kjør så «Utrulling til Azure» på nytt. Lovlige regioner for databasen er `swedencentral`, `norwayeast`, `northeurope` og `westeurope` (alle i EU/EØS).
+
 ## Kostnad
 
 Anslag per måned ved dagens kurs:

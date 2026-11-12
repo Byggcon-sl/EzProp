@@ -15,7 +15,8 @@ concurrency:
 
 env:
   ENVIRONMENT_NAME: test
-  RESOURCE_GROUP: rg-ezprop-test
+  # Kan overstyres med GitHub-variabelen AZURE_RESOURCE_GROUP (for eksempel når Azure mangler kapasitet i én gruppe).
+  RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'rg-ezprop-test' }}
   LOCATION: swedencentral
 
 jobs:
@@ -51,11 +52,18 @@ jobs:
           node-version: 22
           cache: pnpm
       # Alle pakker (ikke bare drift): migrering og seed trenger tsx og dotenv.
-      - run: pnpm install --frozen-lockfile
+      # Flate pakker (uten pnpm sine snarveier), ellers mangler Next.js sine hjelpepakker i Azure
+      # («Cannot find module '@swc/helpers/...'»). Samme løsning som i Optiplan.
+      - run: pnpm install --frozen-lockfile --config.node-linker=hoisted
 
       - name: Kort commit-id (vises i helsesjekken)
         run: echo "APP_VERSION=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
 
+      - uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: next-deploy-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**') }}
+          restore-keys: next-deploy-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Bygg
         # Samme oppdiktede verdier som i ci.yml. Ekte verdier settes i Azure, ikke i bygget.
         env:
@@ -87,7 +95,14 @@ jobs:
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ENABLE_KEY_VAULT: ${{ vars.ENABLE_KEY_VAULT == 'true' }}
+          POSTGRES_SKU: ${{ vars.POSTGRES_SKU }}
+          POSTGRES_LOCATION: ${{ vars.POSTGRES_LOCATION }}
         run: |
+          # Bare testmiljøet: gruppen må hete rg-ezprop-test, eventuelt med et tillegg (rg-ezprop-test2).
+          if ! [[ "$RESOURCE_GROUP" =~ ^rg-ezprop-test[a-z0-9-]*$ ]]; then
+            echo "Ressursgruppen «$RESOURCE_GROUP» er ikke en testgruppe. Variabelen AZURE_RESOURCE_GROUP må begynne med rg-ezprop-test."
+            exit 1
+          fi
           if [ -z "$SEED_ADMIN_EMAIL" ]; then
             echo "Variabelen SEED_ADMIN_EMAIL mangler i GitHub (Settings → Variables)."
             exit 1
@@ -102,6 +117,8 @@ jobs:
           # Nøkkelen til KI-leverandøren sendes også alltid; tom betyr KI av.
           PARAMETERE=(
             "location=$LOCATION"
+            "postgresSkuName=${POSTGRES_SKU:-Standard_B1ms}"
+            "postgresLocation=${POSTGRES_LOCATION:-$LOCATION}"
             "environmentName=$ENVIRONMENT_NAME"
             "appHostname=$APP_HOSTNAME"
             "appVersion=$APP_VERSION"
@@ -149,9 +166,9 @@ jobs:
           POSTGRES_SERVER: ${{ steps.infra.outputs.postgres_server }}
         run: |
           KJORER_IP=$(curl -fsS https://api.ipify.org || curl -fsS https://ifconfig.me/ip)
-          az postgres flexible-server firewall-rule create --rule-name github-runner \
+          az postgres flexible-server firewall-rule create --name github-runner \
             --resource-group "$RESOURCE_GROUP" \
-            --name "$POSTGRES_SERVER" \
+            --server-name "$POSTGRES_SERVER" \
             --start-ip-address "$KJORER_IP" \
             --end-ip-address "$KJORER_IP" \
             --output none
@@ -182,17 +199,26 @@ jobs:
           POSTGRES_SERVER: ${{ steps.infra.outputs.postgres_server }}
         if: always() && steps.brannmur.outcome == 'success'
         run: |
-          az postgres flexible-server firewall-rule delete --rule-name github-runner \
+          az postgres flexible-server firewall-rule delete --name github-runner \
             --resource-group "$RESOURCE_GROUP" \
-            --name "$POSTGRES_SERVER" \
+            --server-name "$POSTGRES_SERVER" \
             --yes \
             --output none
 
       - name: Pakk standalone-bygget
         # Zip lages fra innsiden av .next/standalone, så server.js ligger øverst i pakken.
         run: |
+          if [ -d .next/standalone/node_modules/.pnpm ]; then
+            echo "Pakkene er installert med pnpm sine snarveier. Installer med --config.node-linker=hoisted."
+            exit 1
+          fi
           cp -r .next/static .next/standalone/.next/static
           cp -r public .next/standalone/public
+          # De få snarveiene som er igjen, blir ekte kopier, så pakken virker etter zip. Brutte snarveier fjernes.
+          find .next/standalone -xtype l -delete
+          cp -RL .next/standalone .next/standalone-flat
+          rm -rf .next/standalone
+          mv .next/standalone-flat .next/standalone
           cd .next/standalone
           zip -qr "$GITHUB_WORKSPACE/app.zip" .
 
@@ -218,3 +244,25 @@ jobs:
           done
           echo "Helsesjekken svarte ikke med commit $APP_VERSION. Se App Service → Log stream."
           exit 1
+
+      - name: "Feilsøking: siste linjer fra appens logg"
+        # Bare når noe feilet etter at infrastrukturen var på plass. Hemmelighetene skjules i loggen.
+        if: failure() && steps.infra.outcome == 'success'
+        env:
+          APP_NAME: ${{ steps.infra.outputs.app_name }}
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+        run: |
+          echo "::add-mask::$POSTGRES_ADMIN_PASSWORD"
+          echo "::add-mask::$(node -e 'process.stdout.write(encodeURIComponent(process.env.POSTGRES_ADMIN_PASSWORD || ""))')"
+          echo "::add-mask::$BETTER_AUTH_SECRET"
+          if ! az webapp log download --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --log-file applogg.zip; then
+            echo "Fant ikke appens logg. Se App Service → Log stream."
+            exit 0
+          fi
+          mkdir -p applogg
+          unzip -qo applogg.zip -d applogg
+          find applogg -iname '*docker*.log' -newermt '-3 hours' | sort | while read -r fil; do
+            echo "== $fil"
+            grep -vi "docker run" "$fil" | tail -n 80
+          done

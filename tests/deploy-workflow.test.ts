@@ -172,7 +172,14 @@ const ALLOWED_SECRETS = [
   "ANTHROPIC_API_KEY",
 ];
 const REQUIRED_SECRETS = ALLOWED_SECRETS.slice(0, 5);
-const ALLOWED_VARS = ["SEED_ADMIN_EMAIL", "APP_HOSTNAME", "ENABLE_KEY_VAULT"];
+const ALLOWED_VARS = [
+  "SEED_ADMIN_EMAIL",
+  "APP_HOSTNAME",
+  "ENABLE_KEY_VAULT",
+  "AZURE_RESOURCE_GROUP",
+  "POSTGRES_SKU",
+  "POSTGRES_LOCATION",
+];
 
 describe("utrullingsarbeidsflyten (deploy-azure.yml)", () => {
   const workflow = read(WORKFLOW_PATH);
@@ -293,6 +300,13 @@ describe("utrullingsarbeidsflyten (deploy-azure.yml)", () => {
     expect(workflow).not.toContain("--prod");
   });
 
+  it("brannmurkommandoene bruker --server-name for databasen (nyere Azure CLI)", () => {
+    const firewallLines = lines.filter((line) => line.includes("firewall-rule "));
+    expect(firewallLines.length).toBe(2);
+    expect(workflow).not.toContain("--rule-name");
+    expect(workflow.match(/--server-name "\$POSTGRES_SERVER"/g)?.length).toBe(2);
+  });
+
   it("brannmurregelen for kjøreren fjernes alltid", () => {
     const createLine = lines.findIndex(
       (line) => line.includes("firewall-rule create") && line.includes("github-runner"),
@@ -323,6 +337,12 @@ describe("utrullingsarbeidsflyten (deploy-azure.yml)", () => {
     expect(afterDeploy).toContain("versjon");
     expect(afterDeploy).toMatch(/grep|jq/);
     expect(afterDeploy).toContain("exit 1");
+  });
+
+  it("pakkene installeres flatt, så standalone-bygget virker i Azure", () => {
+    expect(workflow).toContain("pnpm install --frozen-lockfile --config.node-linker=hoisted");
+    expect(workflow).toContain("node_modules/.pnpm");
+    expect(workflow).toContain("cp -RL .next/standalone");
   });
 
   it("zip lages fra innsiden av standalone", () => {
@@ -588,7 +608,11 @@ describe("testoppdragene i CI og utrullingen (fase 2a)", () => {
     // Utrullingen går bare til testmiljøet.
     const workflow = read(WORKFLOW_PATH);
     expect(workflow).toMatch(/^\s*ENVIRONMENT_NAME:\s*test\s*$/m);
-    expect(workflow).toMatch(/^\s*RESOURCE_GROUP:\s*rg-[\w-]*-test\s*$/m);
+    expect(workflow).toMatch(
+      /^\s*RESOURCE_GROUP:\s*\$\{\{\s*vars\.AZURE_RESOURCE_GROUP\s*\|\|\s*'rg-ezprop-test'\s*\}\}\s*$/m,
+    );
+    // Variabelen kan bare peke på en testgruppe.
+    expect(workflow).toContain('[[ "$RESOURCE_GROUP" =~ ^rg-ezprop-test[a-z0-9-]*$ ]]');
     expect(workflow).not.toMatch(/\bprod(uction|uksjon)?\b/i);
   });
 });

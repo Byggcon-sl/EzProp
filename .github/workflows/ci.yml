@@ -18,8 +18,24 @@ env:
   NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS: "1"
 
 jobs:
+  # Endrer PR-en bare dokumenter (docs/ og .md-filer som ingen test leser) og versjonsnummeret,
+  # hoppes de tunge jobbene over. På main kjøres alltid alt.
+  endringer:
+    name: Hva er endret
+    runs-on: ubuntu-latest
+    outputs:
+      kun_dokumenter: ${{ steps.sjekk.outputs.kun_dokumenter }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: sjekk
+        run: bash scripts/ci/kun-dokumenter.sh "${{ github.ref }}" >> "$GITHUB_OUTPUT"
+
   check:
     name: Lint, typesjekk, test og bygg
+    needs: endringer
+    if: needs.endringer.outputs.kun_dokumenter != 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -90,6 +106,8 @@ jobs:
 
   e2e:
     name: Ende-til-ende (Playwright, PC og iPad)
+    needs: endringer
+    if: needs.endringer.outputs.kun_dokumenter != 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -124,6 +142,11 @@ jobs:
       - run: pnpm db:migrate
       - run: pnpm db:seed
       - run: pnpm db:seed:testoppdrag
+      - uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: next-e2e-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**') }}
+          restore-keys: next-e2e-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()

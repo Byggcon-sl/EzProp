@@ -92,7 +92,7 @@ Kilder: [Azure tale, lagring](https://learn.microsoft.com/en-us/azure/ai-foundry
 5. Legge nøkkelen inn som secret `ANTHROPIC_API_KEY` i GitHub. Aldri i chat, e-post eller repo.
 6. Velge leverandør for tale til tekst (før fase 2b).
 
-KI-tilkoblingen lages ikke for en organisasjon med ekte data før avtalen er på plass, EU/EØS-veien er valgt og spørsmålene er besvart. I testmiljøet med oppdiktede data kan Ståle slå den på når nøkkelen er lagt inn. Det koster penger og er hans valg. Ingen funksjon slås på før den har bestått evalueringssettet.
+KI-tilkoblingen lages ikke for en organisasjon med ekte data før avtalen er på plass, EU/EØS-veien er valgt og spørsmålene er besvart. I testmiljøet med oppdiktede data kan Ståle slå den på når nøkkelen er lagt inn. Det koster penger og er hans valg. Ingen funksjon slås på før den har bestått evalueringssettet mot den ekte modellen. Evalueringsprogrammet kjører i dag bare mot den falske leverandøren; det må utvides i en egen liten oppgave, og selve kjøringen mot den ekte modellen koster litt penger og gjøres først når Ståle har sagt ja.
 
 ## Dette er usikkert
 

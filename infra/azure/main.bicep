@@ -15,6 +15,18 @@ targetScope = 'resourceGroup'
 @description('Region. Samme som Optiplan (Sweden Central, EU).')
 param location string = 'swedencentral'
 
+@description('Størrelse på databasen. Standard_B* er Burstable (billigst). Kan byttes når Azure mangler kapasitet.')
+param postgresSkuName string = 'Standard_B1ms'
+
+@description('Region for databasen. Standard er samme som appen. Bare EU/EØS.')
+@allowed([
+  'swedencentral'
+  'norwayeast'
+  'northeurope'
+  'westeurope'
+])
+param postgresLocation string = location
+
 @description('Miljønavn. Inngår i alle ressursnavn, så prod kan legges til senere uten kollisjon.')
 @minLength(2)
 @maxLength(10)
@@ -117,12 +129,14 @@ var aiAppSettings = aiConfigured
 
 // ---------- Database ----------
 
+var postgresTier = startsWith(postgresSkuName, 'Standard_B') ? 'Burstable' : (startsWith(postgresSkuName, 'Standard_E') ? 'MemoryOptimized' : 'GeneralPurpose')
+
 resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   name: postgresServerName
-  location: location
+  location: postgresLocation
   sku: {
-    name: 'Standard_B1ms'
-    tier: 'Burstable'
+    name: postgresSkuName
+    tier: postgresTier
   }
   properties: {
     version: '16'
