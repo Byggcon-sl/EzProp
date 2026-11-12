@@ -20,7 +20,12 @@ function sameOutcome(result: RuleResult, expected: OutcomeRef): boolean {
   );
 }
 
-export const runRuleTestCases: RunRuleTestCases = ({ template, document, lifespans, thresholds }) => {
+export const runRuleTestCases: RunRuleTestCases = ({
+  template,
+  document,
+  lifespans,
+  thresholds,
+}) => {
   const testCases = [...document.rule_test_cases].sort(
     (a, b) =>
       compareText(a.rule_key, b.rule_key) ||

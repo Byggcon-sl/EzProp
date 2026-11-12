@@ -800,7 +800,7 @@ const rules: RuleDoc[] = [
     "suggest_outcome",
     MEMBRANE_DRAIN,
     OUTCOME_BEFORE_2000,
-    "Det vanntette sjiktet er fra før år 2000. Forslaget er TG3 uansett type sjikt.",
+    "Sjiktet ble lagt før 2000. Forslaget er TG3 uansett type sjikt.",
     SOURCE_RULE_AGE,
     1,
   ),

@@ -42,6 +42,7 @@ export type {
   RuleTestFailure,
   RunRuleTestCases,
   RunRuleTestCasesInput,
+  NumberComparator,
   ThresholdComparator,
   ThresholdEntry,
   ThresholdSet,

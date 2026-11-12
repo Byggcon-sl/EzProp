@@ -10,6 +10,7 @@ import type {
   JsonValue,
   LifespanEntry,
   LifespanOutcomeKind,
+  NumberComparator,
   NumberVsLimitReason,
   OptionSelectedReason,
   RuleReason,
@@ -79,8 +80,17 @@ function isStringList(value: JsonValue | null): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
-function compare(value: number, comparator: ThresholdComparator, limit: number): boolean {
+/** En rad gjelder bare når den ikke er slått av og ikke er slettet. Leses defensivt. */
+function isLive(row: object): boolean {
+  const { active, deleted_at: deletedAt } = row as { active?: unknown; deleted_at?: unknown };
+  if (active === false) return false;
+  return deletedAt === null || deletedAt === undefined;
+}
+
+function compare(value: number, comparator: NumberComparator, limit: number): boolean {
   switch (comparator) {
+    case "eq":
+      return value === limit;
     case "gt":
       return value > limit;
     case "gte":
@@ -168,7 +178,7 @@ function numberVsLimit(condition: Condition, context: Context): NumberVsLimitRea
 
   let threshold: { unit: string } | null = null;
   let limit: number;
-  let comparator: ThresholdComparator;
+  let comparator: NumberComparator;
   if (condition.threshold_key) {
     const entry = context.thresholds.entries.find((t) => t.key === condition.threshold_key);
     if (!entry) return unknown("threshold_unknown");
@@ -179,11 +189,16 @@ function numberVsLimit(condition: Condition, context: Context): NumberVsLimitRea
     threshold = { unit: entry.unit };
   } else {
     const fixed = typeof condition.value === "number" ? condition.value : null;
-    if (!isComparator(condition.operator) || fixed === null || !Number.isFinite(fixed)) {
+    const operator = condition.operator;
+    if (
+      !(isComparator(operator) || operator === "eq") ||
+      fixed === null ||
+      !Number.isFinite(fixed)
+    ) {
       return unknown("condition_incomplete");
     }
     limit = fixed;
-    comparator = condition.operator;
+    comparator = operator;
   }
   base.limit = limit;
   base.comparator = comparator;
@@ -395,7 +410,7 @@ function evaluateRule(rule: Rule, tgLogicAllowed: boolean, context: Context): Ru
 
   const conditions = context.document.rule_conditions
     .map((condition, index) => ({ condition, index }))
-    .filter(({ condition }) => condition.rule_key === rule.key)
+    .filter(({ condition }) => condition.rule_key === rule.key && isLive(condition))
     .sort((a, b) => a.condition.sort_order - b.condition.sort_order || a.index - b.index)
     .map(({ condition }) => condition);
   if (conditions.length === 0) return notEvaluated(rule, "no_conditions");
@@ -439,7 +454,7 @@ export const evaluateRules: EvaluateRules = (input) => {
   const { template, ...context } = input;
   const tgLogicAllowed = template.kind === "system" && template.reportType === "condition_report";
   return context.document.rules
-    .filter((rule) => rule.active)
+    .filter(isLive)
     .slice()
     .sort(byOrderThenKey)
     .map((rule) => evaluateRule(rule, tgLogicAllowed, context));

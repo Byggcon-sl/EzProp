@@ -27,6 +27,8 @@ export type ConditionTruth = (typeof CONDITION_TRUTHS)[number];
 export type LifespanDocumentation = (typeof LIFESPAN_DOCUMENTATION)[number];
 export type LifespanOutcomeKind = (typeof LIFESPAN_OUTCOME_KINDS)[number];
 export type ThresholdComparator = (typeof THRESHOLD_COMPARATORS)[number];
+/** Sammenligning i `number_vs_limit`. `eq` er bare lov med fast verdi, ikke i terskeldata. */
+export type NumberComparator = ThresholdComparator | "eq";
 export type ConditionReasonCode = (typeof CONDITION_REASON_CODES)[number];
 export type RuleReasonCode = (typeof RULE_REASON_CODES)[number];
 export type RuleTestFailure = (typeof RULE_TEST_FAILURES)[number];
@@ -168,7 +170,7 @@ export type NumberVsLimitReason = ConditionReasonBase & {
   /** Terskelens kode. `null` når betingelsen har fast verdi. */
   threshold_key: string | null;
   limit: number | null;
-  comparator: ThresholdComparator | null;
+  comparator: NumberComparator | null;
   /** Om terskelen er godkjent av fagrådet. `null` ved fast verdi. */
   threshold_status: TextStatus | null;
 };
@@ -249,7 +251,8 @@ export type RuleTestCaseResult = {
  * Kjører alle aktive regler i dokumentet mot svarene. Ren funksjon: samme inndata gir samme svar.
  *
  * - Ett svar per aktive regel, sortert på `sort_order` og så `key`. Regler og betingelser med
- *   `active = false` gir ingen svar. (Dokumentet inneholder aldri myk-slettede rader.)
+ *   `active = false` eller `deleted_at` satt gir ingen svar. Motoren sjekker dette selv og stoler
+ *   ikke på at dokumentet er rent.
  * - Bare `suggest_outcome` og `suggest_tgiu` kjøres (`show` og `validate` gir `not_evaluated`
  *   med `purpose_not_supported`), og bare når malen er `system` + `condition_report` (ellers
  *   `not_evaluated` med `tg_logic_not_allowed`).
