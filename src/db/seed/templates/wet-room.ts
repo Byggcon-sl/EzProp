@@ -848,6 +848,7 @@ function condition(
     documentation_element_key: null,
     material_element_key: null,
     unit_element_key: null,
+    negate: false,
     sort_order: sortOrder,
     ...extra,
   };

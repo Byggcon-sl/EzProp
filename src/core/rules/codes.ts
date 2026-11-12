@@ -10,6 +10,12 @@ export const SUPPORTED_CONDITION_TYPES = [
   "age_vs_lifespan",
 ] as const;
 
+/**
+ * Formålene motoren kjører: de som gir TG-forslag. Samme liste som `TG_RULE_PURPOSES` i
+ * `@/db/schema` (motoren kan bare `import type` derfra); en test viser at listene er like.
+ */
+export const EVALUATED_RULE_PURPOSES = ["suggest_outcome", "suggest_tgiu", "suggest_tg0"] as const;
+
 /** Sannhetsverdien til én betingelse eller gruppe (treverdilogikk). */
 export const CONDITION_TRUTHS = ["true", "false", "unknown"] as const;
 
@@ -67,7 +73,10 @@ export const RULE_REASON_CODES = [
   "tg_logic_not_allowed",
   /** Regelen har ingen aktive betingelser. */
   "no_conditions",
-  /** `suggest_outcome` uten utfall, eller `suggest_tgiu` uten kontrollpunkt. Feil i malen. */
+  /**
+   * `suggest_outcome` uten utfall, eller `suggest_tgiu` eller `suggest_tg0` uten kontrollpunkt.
+   * Feil i malen.
+   */
   "target_missing",
 ] as const;
 

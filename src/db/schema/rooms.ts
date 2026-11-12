@@ -42,7 +42,10 @@ export const rooms = pgTable(
       "rooms_room_type_check",
       sql`${table.roomType} in ('bathroom', 'laundry', 'bathroom_laundry', 'room_with_drain', 'other_wet_room', 'kitchen', 'living_kitchen', 'toilet', 'sauna', 'boiler_room', 'technical_room', 'cold_room', 'swimming_pool', 'living_room', 'bedroom', 'office', 'family_room', 'dining_room', 'entrance', 'hallway', 'stairwell', 'wardrobe', 'storage', 'external_storage', 'basement_living_room', 'basement_room', 'crawl_space', 'attic_living_room', 'unfinished_attic', 'garage', 'glazed_balcony', 'workshop', 'other')`,
     ),
-    check("rooms_area_type_check", sql`${table.areaType} in ('bra_i', 'bra_e', 'bra_b')`),
+    check(
+      "rooms_area_type_check",
+      sql`${table.areaType} in ('bra_i', 'bra_e', 'bra_b', 'not_bra')`,
+    ),
   ],
 );
 export type Room = typeof rooms.$inferSelect;

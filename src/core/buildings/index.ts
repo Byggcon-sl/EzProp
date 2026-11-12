@@ -16,9 +16,11 @@ export {
   type AreaSum,
   type AreaType,
   type AreaValues,
+  type FloorSuggestion,
   type MeasuringMethod,
   type RoomType,
   type RoomTypeGroup,
+  type SuggestFloor,
 } from "./codes";
 export { BuildingNotEmptyError, FloorNotEmptyError, PropertyMissingError } from "./errors";
 export {

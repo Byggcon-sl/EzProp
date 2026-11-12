@@ -136,6 +136,7 @@ function optionSelected(condition: Condition, context: Context): OptionSelectedR
   ): OptionSelectedReason => ({
     type: "option_selected",
     group_no: condition.group_no,
+    negated: condition.negate,
     truth,
     code,
     element_key: condition.element_key,
@@ -161,6 +162,7 @@ function numberVsLimit(condition: Condition, context: Context): NumberVsLimitRea
   const base: NumberVsLimitReason = {
     type: "number_vs_limit",
     group_no: condition.group_no,
+    negated: condition.negate,
     truth: "unknown",
     code: null,
     element_key: condition.element_key,
@@ -237,6 +239,7 @@ function ageVsLifespan(rule: Rule, condition: Condition, context: Context): AgeV
   const base: AgeVsLifespanReason = {
     type: "age_vs_lifespan",
     group_no: condition.group_no,
+    negated: condition.negate,
     truth: "unknown",
     code: null,
     year: null,
@@ -367,14 +370,21 @@ function evaluateCondition(rule: Rule, condition: Condition, context: Context): 
     return {
       type: "unsupported",
       group_no: condition.group_no,
+      negated: condition.negate,
       truth: "unknown",
       code: "condition_type_not_supported",
       condition_type: type,
     };
   }
-  if (type === "option_selected") return optionSelected(condition, context);
-  if (type === "number_vs_limit") return numberVsLimit(condition, context);
-  return ageVsLifespan(rule, condition, context);
+  let reason: RuleReason;
+  if (type === "option_selected") reason = optionSelected(condition, context);
+  else if (type === "number_vs_limit") reason = numberVsLimit(condition, context);
+  else reason = ageVsLifespan(rule, condition, context);
+  // `negate` (A237): sann og usann snus, «ikke vurdert» står. Ett sted, likt for alle typer.
+  if (condition.negate && reason.truth !== "unknown") {
+    return { ...reason, truth: reason.truth === "true" ? "false" : "true" };
+  }
+  return reason;
 }
 
 // --- Regelen -------------------------------------------------------------------------------

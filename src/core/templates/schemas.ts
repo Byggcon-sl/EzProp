@@ -279,6 +279,8 @@ const ruleConditionSchema = z.object({
   material_element_key: optionalKey,
   /** For `number_vs_limit` med terskel: feltet med enheten. */
   unit_element_key: optionalKey,
+  /** Snur betingelsen (A237): sann blir usann, usann blir sann, «ikke vurdert» står. */
+  negate: z.boolean({ error: SCHEMA_MESSAGE }).default(false),
   sort_order: sortOrder,
 });
 
