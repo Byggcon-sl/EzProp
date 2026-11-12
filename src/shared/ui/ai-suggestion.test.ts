@@ -130,7 +130,7 @@ describe("forslagskortet: tilstander (10.5–10.10)", () => {
   it("10.7 error", () => {
     const html = render({ outcome: "error", suggestionText: null, status: null });
     expect(html).toContain("KI svarte ikke. Prøv igjen.");
-    expect(html).toContain("bg-amber-50");
+    expect(html).toContain("bg-watch-fill");
     expect(labels(html)).toEqual([newSuggestion]);
   });
 
@@ -236,6 +236,43 @@ describe("forslagskortet: sikkerhet og oppbygging (10.11–10.14)", () => {
     expect(html).toMatch(/<button[^>]*bg-ai-700[^>]*min-h-14[^>]*>Bruk<\/button>/);
     expect(html).toMatch(/<button[^>]*min-h-11[^>]*>Behold min tekst<\/button>/);
     expect(html).toMatch(/<button[^>]*min-h-11[^>]*>Nytt forslag<\/button>/);
+  });
+
+  /*
+   * Byggcon-profilen (docs/funksjoner/fase2a-byggcon-profil-testplan.md avsnitt 3, punkt 1 og
+   * designspesifikasjonen 4.7, D4/A227). Ordene bygges av biter (søket etter forbudte ord i src/).
+   */
+  it("Byggcon-profilen: «Forslag fra KI», ingen nordlys eller fargeovergang i kortet", () => {
+    const html = render();
+    expect(html).toContain("Forslag fra KI");
+    expect(html).not.toMatch(
+      new RegExp([["aur", "ora"].join(""), ["gra", "dient"].join("")].join("|"), "i"),
+    );
+    expect(html).toMatch(/data-testid="ai-suggestion-text"/);
+    expect(html).toMatch(
+      /<p class="[^"]*bg-ai-50[^"]*border-ai-line|<p class="[^"]*border-ai-line[^"]*bg-ai-50/,
+    );
+  });
+
+  it("D4: «Nytt forslag» er sekundærknapp med samme klasser som andre sekundærknapper", () => {
+    const html = render();
+    const keepClasses = /<button[^>]*class="([^"]*)"[^>]*>Behold min tekst<\/button>/.exec(
+      html,
+    )?.[1];
+    const newClasses = /<button[^>]*class="([^"]*)"[^>]*>Nytt forslag<\/button>/.exec(html)?.[1];
+    expect(keepClasses).toBeDefined();
+    expect(newClasses).toBeDefined();
+    expect(newClasses).toContain("bg-transparent");
+    expect(newClasses).toContain("rounded-full");
+    expect(newClasses).not.toMatch(/ring-slate-300/);
+    expect(newClasses!.split(/\s+/).sort()).toEqual(keepClasses!.split(/\s+/).sort());
+  });
+
+  it("avvist forslag nedtones med tekstfarge, ikke opacity", () => {
+    const html = render({ status: "rejected" });
+    const box = /<p class="([^"]*)"[^>]*data-testid="ai-suggestion-text"/.exec(html)?.[1];
+    expect(box).toBeDefined();
+    expect(box).not.toMatch(/opacity-/);
   });
 
   it("to kolonner fra lg, statusområde med aria-live polite og skjult overskrift", () => {
@@ -355,9 +392,10 @@ describe("KI-fargene", () => {
     return (light! + 0.05) / (dark! + 0.05);
   }
 
+  // Byggcon-profilen (fase2a-byggcon-profil-design.md 2.5): hex og navn byttet, kravene står.
   it("tokenene finnes og har kontrast minst 4,5:1 (designfilen avsnitt 2)", () => {
-    expect(color("ai-50")).toBe("#f3ecf8");
-    expect(color("ai-200")).toBe("#d9d2ea");
+    expect(color("ai-50")).toBe("#e8f1f1");
+    expect(color("ai-line")).toBe("#4d7f84");
     expect(contrast("#ffffff", color("ai-700"))).toBeGreaterThanOrEqual(4.5);
     expect(contrast("#ffffff", color("ai-900"))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(color("ai-50"), color("ai-900"))).toBeGreaterThanOrEqual(4.5);
