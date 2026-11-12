@@ -394,6 +394,10 @@ export const templateElementOptions = pgTable(
     sortOrder: sortOrder(),
   },
   (table) => [
+    index("template_element_options_organization_id_element_id_idx").on(
+      table.organizationId,
+      table.elementId,
+    ),
     uniqueIndex("template_element_options_element_id_key_idx")
       .on(table.elementId, table.key)
       .where(sql`${table.deletedAt} is null`),
