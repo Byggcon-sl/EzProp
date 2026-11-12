@@ -1,6 +1,6 @@
 # EzProp – levert arbeid (arkiv)
 
-Sist oppdatert: 11.11.2026
+Sist oppdatert: 12.11.2026
 
 Her står det som er levert, slik det sto i planen da det ble krysset av. Filen er historikk. **Planen som gjelder, er `docs/07-utviklingsplan.md`.** Det som fortsatt venter på Ståle fra disse fasene, står under «Venter på Ståle» i planen.
 
@@ -188,3 +188,7 @@ Hver oppgave kan gis til en egen Claude-tråd. Rekkefølgen følger planen: **0a
 > Finn ut hvor tallene for reklamasjoner og krav de siste 3 årene finnes (Byggcons egne oversikter eller ansvarsforsikringen), og sett opp antall, beløp og antall leverte rapporter per år. Ingen kundeopplysninger skal skrives ned, bare tall. Ferdig når nullpunktet er skrevet ned med kilde.
 
 ---
+
+## Fase 2a-2 – Smal vei: ett våtrom fra kontrollpunkt til PDF
+
+- [x] **Malen for ett bad** lagt inn i malmotoren: kontrollpunktene for våtrom, med Byggcons egne utkast til avvikstekster (merket «ikke godkjent av fagrådet»). (12.11.2026, PR #159, oppgavekort `docs/funksjoner/fase2a-mal-bad.md`, migreringen `0028_mal-tekststatus`, beslutningene A200–A213, versjon 0.6.5)
