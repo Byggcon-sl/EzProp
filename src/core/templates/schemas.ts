@@ -12,7 +12,10 @@ import {
   RULE_CONDITION_TYPES,
   RULE_MATCHES,
   RULE_PURPOSES,
+  RULE_RESULT_STATES,
   RULE_SEVERITIES,
+  RULE_TEST_INSPECTION_YEAR_MAX,
+  RULE_TEST_INSPECTION_YEAR_MIN,
   SECTION_REPEATS,
   TEMPLATE_KEY_PATTERN,
   TEMPLATE_REPORT_TYPES,
@@ -262,6 +265,20 @@ const ruleConditionSchema = z.object({
   checkpoint_key: optionalKey,
   operator: oneOf(RULE_CONDITION_OPERATORS).nullable().default(null),
   value: z.json().nullable().default(null),
+  /** Terskelens faste kode (for `number_vs_limit`). Da er `operator` og `value` tomme. */
+  threshold_key: optionalKey,
+  /** For `age_vs_lifespan`: feltet med årstallet. */
+  age_year_element_key: optionalKey,
+  /** For `age_vs_lifespan`: feltet som brukes når årstallet mangler. */
+  age_fallback_year_element_key: optionalKey,
+  /** For `age_vs_lifespan`: feltet med kilden for alderen (bare til begrunnelsen). */
+  age_source_element_key: optionalKey,
+  /** For `age_vs_lifespan`: feltet som sier om dokumentasjon finnes. */
+  documentation_element_key: optionalKey,
+  /** For `age_vs_lifespan`: feltet med materialvalget. */
+  material_element_key: optionalKey,
+  /** For `number_vs_limit` med terskel: feltet med enheten. */
+  unit_element_key: optionalKey,
   sort_order: sortOrder,
 });
 
@@ -270,7 +287,16 @@ const ruleTestCaseSchema = z.object({
   name: requiredText(),
   /** Testsvarene: felt (kode) og verdi. */
   input: z.record(z.string(), z.json()).default({}),
-  expect_triggered: z.boolean({ error: SCHEMA_MESSAGE }),
+  /** Forventet tilstand: slår til, slår ikke til eller ikke vurdert. */
+  expected_state: oneOf(RULE_RESULT_STATES),
+  /** Befaringsåret testsaken regner alder mot. Tom = regelen bruker ikke alder. */
+  inspection_year: z
+    .number({ error: SCHEMA_MESSAGE })
+    .int()
+    .min(RULE_TEST_INSPECTION_YEAR_MIN)
+    .max(RULE_TEST_INSPECTION_YEAR_MAX)
+    .nullable()
+    .default(null),
   expected_outcome: outcomeRefSchema.nullable().default(null),
   sort_order: sortOrder,
 });
