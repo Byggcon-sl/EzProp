@@ -21,7 +21,7 @@ export type AgreementFormValues = {
 };
 
 const selectClass =
-  "block min-h-11 w-full rounded-xl border border-field bg-white px-3 text-base text-slate-900 focus:border-brand-600 aria-invalid:border-red-700";
+  "block min-h-11 w-full rounded-lg border border-field bg-white px-3 text-base text-slate-900 focus:border-brand-600 aria-invalid:border-urgent-line";
 
 /**
  * Skjema for ny og eksisterende avtale med oppdragsgiver. Vises bare for admin (siden avgjør

@@ -113,7 +113,7 @@ function ReasonForm({
 function DangerSubmit({ children }: { children: string }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" className="bg-red-700 hover:bg-red-800" disabled={pending}>
+    <Button type="submit" className="bg-urgent-line text-white hover:bg-urgent-text" disabled={pending}>
       {pending ? "Lagrer …" : children}
     </Button>
   );
@@ -183,7 +183,7 @@ export function StatusCard({
                 {cancellable && (
                   <Button
                     variant="ghost"
-                    className="text-red-800"
+                    className="text-urgent-text"
                     onClick={() => setOpen("cancel")}
                   >
                     Kanseller oppdraget

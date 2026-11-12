@@ -166,7 +166,7 @@ export function ContactPicker({
         </>
       )}
       {error && (
-        <p id={`${idPrefix}-contact-error`} className="text-sm text-red-800">
+        <p id={`${idPrefix}-contact-error`} className="text-sm text-urgent-text">
           <span className="sr-only">Feil: </span>
           {error}
         </p>
