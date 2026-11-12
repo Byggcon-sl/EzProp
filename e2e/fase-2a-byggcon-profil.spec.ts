@@ -12,6 +12,7 @@ import {
 } from "@playwright/test";
 import {
   ADMIN_EMAIL,
+  chooseCodeLogin,
   createTrialForm,
   expireOwnSession,
   logIn,
@@ -19,7 +20,6 @@ import {
   logInAsManager,
   logInAsOffice,
   logInAsSampleInspector,
-  chooseCodeLogin,
   syncNowButton,
   syncStatus,
 } from "./helpers";
@@ -236,6 +236,11 @@ async function focusSkipLink(page: Page): Promise<Locator> {
 
 async function expectLoginTouchTargets(page: Page) {
   await page.goto("/logg-inn");
+  await expectHeight(
+    page.getByRole("button", { name: "Logg inn med Microsoft" }),
+    56,
+    "«Logg inn med Microsoft»",
+  );
   await chooseCodeLogin(page);
   await expectHeight(
     page.getByRole("button", { name: "Send meg en kode" }),
@@ -365,6 +370,10 @@ test.describe("5.2 former (pc og iPad liggende)", () => {
     page,
   }) => {
     await page.goto("/logg-inn");
+    await expectPill(
+      page.getByRole("button", { name: "Logg inn med Microsoft" }),
+      "«Logg inn med Microsoft»",
+    );
     await chooseCodeLogin(page);
     await expectPill(page.getByRole("button", { name: "Send meg en kode" }), "«Send meg en kode»");
     await logIn(page, ADMIN_EMAIL);
@@ -506,20 +515,12 @@ test.describe("5.4 hopplenken (pc og iPad liggende)", () => {
     await logIn(page, ADMIN_EMAIL);
     await focusSkipLink(page);
     await page.keyboard.press("Enter");
-    // Sidene har selv `<main>`, så målet for hopplenken er rammen `#hovedinnhold` rundt den
-    // (layout.tsx). Fokus er riktig når det står i main eller på målet som holder main.
     await expect
-      .poll(
-        () =>
-          page.evaluate(() => {
-            const active = document.activeElement;
-            if (!active) return false;
-            if (active.closest("main")) return true;
-            return active.id === "hovedinnhold" && active.querySelector("main") !== null;
-          }),
-        { message: "fokus er i main (eller på målet rundt main) etter Enter" },
-      )
+      .poll(() => page.evaluate(() => Boolean(document.activeElement?.closest("main"))), {
+        message: "fokus er i main etter Enter",
+      })
       .toBe(true);
+    expect(await page.evaluate(() => document.activeElement?.tagName.toLowerCase())).toBe("main");
 
     await page.keyboard.press("Tab");
     const next = await page.evaluate(() => {
@@ -527,11 +528,11 @@ test.describe("5.4 hopplenken (pc og iPad liggende)", () => {
       return {
         tag: active?.tagName.toLowerCase() ?? "",
         inMain: Boolean(active?.closest("main")),
-        // Menyen og topplinjen utenfor main (en side kan ha egen nav inne i main, for eksempel faner)
-        inNav: Boolean(
-          active?.closest('nav[aria-label="Hovedmeny"]') ||
-          (active?.closest("header") && !active?.closest("main")),
-        ),
+        // Bare rammen regnes som meny: hovedmenyen og topplinjen. Sideinnhold kan ha
+        // egen <nav> (statusfanene på arbeidskøen), og den regnes som innhold.
+        inNav:
+          Boolean(active?.closest('nav[aria-label="Hovedmeny"]')) ||
+          (Boolean(active?.closest("header")) && !active?.closest("main")),
       };
     });
     expect(next.inMain, `neste Tab (${next.tag}) er i main`).toBe(true);

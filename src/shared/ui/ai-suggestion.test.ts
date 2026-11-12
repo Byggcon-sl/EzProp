@@ -100,6 +100,8 @@ describe("forslagskortet: knapper og tekster per tilstand (10.1–10.4)", () => 
     const html = render({ status: "rejected" });
     expect(html).toContain("Du beholdt din tekst.");
     // Byggcon-profilen: nedtonet med tekstfarge, ikke opacity (designfilen 2.5)
+    const box = /<p class="([^"]*)"[^>]*data-testid="ai-suggestion-text"/.exec(html)?.[1];
+    expect(box).toMatch(/(^|\s)text-slate-600(\s|$)/);
     expect(html).not.toContain("opacity-70");
     expect(html).not.toContain("Tekst fra KI, godkjent");
   });
@@ -274,7 +276,15 @@ describe("forslagskortet: sikkerhet og oppbygging (10.11–10.14)", () => {
     const html = render({ status: "rejected" });
     const box = /<p class="([^"]*)"[^>]*data-testid="ai-suggestion-text"/.exec(html)?.[1];
     expect(box).toBeDefined();
+    expect(box).toMatch(/(^|\s)text-slate-600(\s|$)/);
     expect(box).not.toMatch(/opacity-/);
+    for (const status of ["suggested", "accepted", "edited"] as const) {
+      const other = /<p class="([^"]*)"[^>]*data-testid="ai-suggestion-text"/.exec(
+        render({ status }),
+      )?.[1];
+      expect(other).toBeDefined();
+      expect(other).not.toMatch(/text-slate-600/);
+    }
   });
 
   it("to kolonner fra lg, statusområde med aria-live polite og skjult overskrift", () => {

@@ -8,6 +8,7 @@ import { getEmployeeContext } from "./employee-context";
 import { LogOutButton } from "./log-out-button";
 import { NavLink } from "./nav-link";
 import { organizationLabel } from "./organization-label";
+import { SkipLink } from "./skip-link";
 
 /** Første bokstav i de to første ordene i navnet. Tomt navn: første bokstav i e-posten. */
 function initials(name: string, email: string): string {
@@ -162,7 +163,8 @@ function PeopleIcon() {
  * for innloggede ansatte: topplinje, meny og innholdsflate. Menyen står fast til venstre fra `lg`
  * (PC og iPad liggende) og som rad under topplinjen på smalere skjermer (iPad stående).
  * Topplinjen er ikke sticky og rammen har ingen egen rulling, så statuslinjen i /prove virker som
- * før. Sidene har selv `<main>`. Hopplenken «Hopp til hovedinnhold» er første fokuserbare element.
+ * før. Sidene har selv `<main>`. Hopplenken «Hopp til hovedinnhold» er første fokuserbare element
+ * og flytter fokus til sidens `<main>` (`skip-link.tsx`).
  */
 export default async function EmployeeLayout({ children }: { children: ReactNode }) {
   const actor = await requireActor();
@@ -176,12 +178,7 @@ export default async function EmployeeLayout({ children }: { children: ReactNode
 
   return (
     <>
-      <a
-        href="#hovedinnhold"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:inline-flex focus:min-h-11 focus:items-center focus:rounded-full focus:bg-night focus:px-5 focus:font-semibold focus:text-white"
-      >
-        Hopp til hovedinnhold
-      </a>
+      <SkipLink />
       <header className="flex h-14 items-center gap-4 border-b border-slate-200 bg-white px-5">
         <Link
           href="/arbeidskoe"
@@ -297,7 +294,7 @@ export default async function EmployeeLayout({ children }: { children: ReactNode
             </p>
           )}
         </nav>
-        {/* Målet for hopplenken. Sidene har selv `<main>`, så målet er rammen rundt (ikke en main til). */}
+        {/* Reserven for hopplenken uten JS. Med JS får sidens egen `<main>` fokus (skip-link.tsx). */}
         <div id="hovedinnhold" tabIndex={-1} className="min-w-0 flex-1">
           <div className="mx-auto w-full max-w-6xl px-5 py-6 lg:px-8 lg:py-8">{children}</div>
         </div>
