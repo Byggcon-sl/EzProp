@@ -21,13 +21,13 @@ Oppgaven endrer bare utseendet. KI får ingen nye oppgaver og ingen nye data, og
 
 ## Omfang
 **Med:**
-- **Temaet i `src/app/globals.css`**, samme grep som Optiplan (`docs/design/byggcon-profil/optiplan-globals.css.txt` som referanse, ikke kopi): paletten snow, sand, night, fjord, mørk fjord, stone, linje (12 % og 25 %); `brand`-skalaen følger fjord; `slate`-skalaen omdefineres til Byggcon-tonene (så de rundt 300 slate-klassene i sidene følger med uten håndredigering); `canvas` blir snow; `--radius-card` 12 px; skygge bare på lag som flyter over innholdet; fokusramme i mørk fjord. Kanten på skjemafelt minst 3:1 mot bakgrunnen.
+- **Temaet i `src/app/globals.css`**, samme grep som Optiplan (`docs/design/byggcon-profil/optiplan-globals.css.txt` som referanse, ikke kopi): paletten snow, sand, night, fjord, mørk fjord, stone, linje (12 % og 25 %); `brand`-skalaen følger fjord; `slate`-skalaen omdefineres til Byggcon-tonene (så de rundt 300 slate-klassene i sidene følger med uten håndredigering); `canvas` blir snow; `--radius-card` 12 px; skygge bare på lag som flyter over innholdet; fokusramme i fjord (A224). Kanten på skjemafelt minst 3:1 mot bakgrunnen.
 - **Skrift:** Inter (400, 500, 600, 700) i brødtekst og Schibsted Grotesk (500, 600, 700) i overskrifter, lokale filer i `public/fonts` med `next/font/local` (ingen kall til Google). Roboto-filene og lisensteksten fjernes, `public/fonts/README.md` oppdateres med lisensene (SIL OFL 1.1, filene fra `docs/design/byggcon-profil/fonts/`).
 - **Nordlysstripen** (`.aurora-bar` i `layout.tsx`) og alle `aurora`-farger fjernes. Ingen `gradient` igjen i `src/`.
 - **Felleskomponentene** i `src/shared/ui`: `button.tsx` (pilleform; hovedknapp night med lys tekst, sekundær gjennomsiktig med mørk kant; ingen gul knapp; ghost-knappen bare til tredje handling, med kant eller understreking så den synes i sollys, og fortsatt `min-h-11`; deaktivert hovedknapp skal ha lesbar tekst, ikke `opacity-60` på night, ui-designer velger løsningen), `card.tsx` (tynn kant, 12 px, ingen skygge; framhevet flate i sand uten kant), `badge.tsx` (statusmerker er flate, uten kant og uten night-fyll, og lavere enn 44 px, så de ikke ligner en knapp), `notice.tsx`, `form.tsx` (felt med 8 px hjørner), `ai-text-mark.tsx` og `ai-suggestion.tsx` (KI-uttrykket).
 - **TG-tokens i temaet** (`--color-tg-*` for TG0, TG1, TG2, TG3, TGIU) med samme toner som statusfargene i Optiplan (grønn, gul, rød, varm grå), hver med tekstfarge som gir minst 4,5:1. Dokumenteres i designprinsippene med regelen «TG alltid med tekst».
 - **Synkstatusen** (`src/modules/offline-trial/sync-status.tsx`) får egne tokens i temaet (`--color-sync-*`) i stedet for hex skrevet rett inn. «Uten nett» får verken rød eller TG-gul tone (ingenting er tapt), og «Alt lagret» ikke TG0-grønn. Ikon og tekst er alltid med, så synkstatus aldri kan leses som TG.
-- **Skriftlasting uten hopp:** `next/font/local` med `display: "swap"` og `adjustFontFallback` (standard), så knappene ikke flytter seg når skriften lastes, også uten nett med tom buffer. Bare Inter 400/600 og Schibsted Grotesk 600 lastes på forhånd (`preload`); resten lastes ved behov. Skriftene ligger i `/_next/static/media`, som `public/sw.js` allerede buffrer.
+- **Skriftlasting uten hopp:** `next/font/local` med `display: "swap"` og `adjustFontFallback` (standard), så knappene ikke flytter seg når skriften lastes, også uten nett med tom buffer. Inter (alle fire vektene) lastes på forhånd (`preload`), Schibsted Grotesk ved behov (A225; `next/font/local` styrer forhåndslasting per familie). Skriftene ligger i `/_next/static/media`, som `public/sw.js` allerede buffrer.
 - **`.claude/agents/ui-designer.md`** oppdateres til Byggcon-profilen (ikke lenger «Byggcon-blå, Roboto, nordlys»).
 - **Merkevarefargen** i `src/shared/config/brand.ts` (`themeColor` og manifest) settes til en farge fra paletten.
 - **Høyden på trykkflater beholdes:** minst 44 pt, hovedknapper 56–72 pt (beslutningen 24.10.2026). Ingen klasser for høyde eller luft endres i sidene.
@@ -73,12 +73,12 @@ Ingen regler eller TG-logikk endres.
 - [ ] **Forbudte ord** (én vitest, ingen lint-regel): ingen `aurora`, `gradient` eller `roboto` (store og små bokstaver, også i filnavn) og ingen `fonts.googleapis`, `fonts.gstatic` eller `next/font/google` i `src/` og `public/`. Testen viser også at Inter- og Schibsted-filene ligger i `public/fonts`, og at `public/fonts/README.md` nevner SIL OFL 1.1 og ikke lenger sier at Roboto brukes i PDF.
 - [ ] **Skrift** (e2e): `getComputedStyle` viser Inter på `body` og Schibsted Grotesk på `h1`, og `document.fonts.check` er sann. Byggingen virker uten internett.
 - [ ] **Former** (e2e): knappen har `border-radius` minst halve høyden; kortet har 12 px hjørner, 1 px kant og `box-shadow: none`; skjemafeltet har 8 px hjørner.
-- [ ] **Trykkflater** (e2e, `boundingBox`, iPad liggende 1194 × 834 og stående 1024 × 1366): hovedknappen i innloggingen, en knapp i et skjema, «Bruk», «Endre» og «Avvis» i KI-kortet og «Synk nå»/«Logg inn» i synkstatusen er minst 56 px; hopplenken og menypunkter minst 44 px. Den eksisterende e2e-testen uten nett er grønn.
+- [ ] **Trykkflater** (e2e, `boundingBox`, iPad liggende 1194 × 834 og stående 1024 × 1366): hovedknappen i innloggingen, en knapp i et skjema, «Bruk» i KI-kortet og «Synk nå»/«Logg inn» i synkstatusen er minst 56 px; «Behold min tekst» og «Nytt forslag» i KI-kortet, hopplenken og menypunkter minst 44 px (høydeklassene endres ikke). Den eksisterende e2e-testen uten nett er grønn.
 - [ ] **Kontrast** (enhetstest i `src/app/(ansatt)/contrast.test.ts`, regner fra tokenene i `globals.css`, ingen ny avhengighet). Temaet leses først, og slate-verdiene fjernes fra `fixed`. `readThemeColors` feiler hvis en `--color-*` i `@theme` ikke er skrevet som `#rrggbb`. Parene som testes:
   - tekst (slate-600, slate-700, slate-900 og night) mot snow, hvit og sand: minst 4,5:1;
-  - lys tekst mot night på hovedknappen, også deaktivert: minst 4,5:1;
+  - lys tekst mot night på hovedknappen, og hvit mot stone (slate-500) på deaktivert hovedknapp (A226): minst 4,5:1;
   - kant på sekundærknapp og skjemafelt mot snow, hvit og sand: minst 3:1;
-  - fokusramme (mørk fjord) mot snow, hvit, sand og night: minst 3:1;
+  - fokusramme (fjord, A224) mot snow, hvit, sand og night: minst 3:1;
   - hver `--color-tg-*` og `--color-sync-*`, tekst mot flate: minst 4,5:1;
   - KI-merket og forslagskortet: tekst mot flate minst 4,5:1, kant mot bakgrunn minst 3:1.
 - [ ] **KI-merket** har eget uttrykk: KI-tokenene er ikke like noen TG-, synk- eller statustoken (enhetstest), og merket har teksten «KI» eller «KI-forslag» i HTML. Godta, endre og avvis og loggingen i `ai_usage_log` virker som før (eksisterende tester og e2e for `/prove/ki` grønne).
@@ -90,16 +90,19 @@ Ingen regler eller TG-logikk endres.
 - [ ] `docs/08-designprinsipper.md` beskriver Byggcon-profilen (palett med tokens, skrift, former, TG-toner, synkstatus, KI-merket) og at luften og trykkflatene står. `.claude/agents/ui-designer.md` er oppdatert.
 - [ ] **Skjermbilder:** `ezprop-for-*` og `ezprop-etter-*` finnes for PC og iPad i `docs/design/byggcon-profil/bilder/` (testen sjekker at filene finnes).
 - [ ] **Tilgang og tenant-isolasjon:** diffen rører ikke `src/db`, `src/core/access` eller spørringer, så ingen ny `expectTenantIsolation`. `tests/tenant-isolation-all-tables.test.ts` og tilgangstestene er grønne. Admin kan fortsatt logge inn og åpne adminsidene.
-- [ ] **Ytelse:** `pnpm size` viser at første lasting ikke blir merkbart tyngre (bare tre skriftvekter lastes på forhånd).
+- [ ] **Ytelse:** `pnpm size` viser at første lasting ikke blir merkbart tyngre (egen JS per side øker ikke; bare Inter lastes på forhånd).
 - [ ] Main (med PR #166 hvis den er merget) er flettet inn før PR, og hele e2e er kjørt på nytt etterpå. `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` og `pnpm size` er grønne, og versjonen er 0.7.x.
 
-## Beslutninger (autonom modus, føres i `docs/09-apne-sporsmal.md` fra A214; høyeste nå er A213)
-- TG-komponenten venter til «Badet på PC»; bare tokenene lages nå (lett å endre).
-- Gråskalaen omdefineres i temaet i stedet for å bytte klasser i sidene, som i Optiplan (lett å endre).
-- KI-merkets farge velges av ui-designer innenfor paletten (fjord-familien eller en egen dempet tone), alltid med teksten «KI» (lett å endre).
+## Beslutninger (autonom modus, føres i `docs/09-apne-sporsmal.md` som A224–A231; A214–A223 er tatt av PR #166 Microsoft-innlogging)
+- A229: TG-komponenten venter til «Badet på PC»; bare tokenene lages nå (lett å endre).
+- A230: gråskalaen omdefineres i temaet i stedet for å bytte klasser i sidene, som i Optiplan (lett å endre).
 
-- Synkstatusen får egne tokens som verken ligner TG eller feil; «Uten nett» er en nøytral, rolig tone (lett å endre).
-- Bare tre skriftvekter lastes på forhånd, resten ved behov (lett å endre).
+- A231: synkstatusen får egne tokens som verken ligner TG eller feil; «Uten nett» er en nøytral, rolig tone (lett å endre).
+- A224: fokusrammen er fjord `#316aa0`, ikke mørk fjord, fordi mørk fjord gir 2,5:1 mot night (D1, lett å endre).
+- A225: Inter (alle fire vektene) lastes på forhånd, Schibsted Grotesk ved behov; forhåndslasting styres per familie (D2, lett å endre).
+- A226: deaktivert hovedknapp er stone (slate-500) med hvit tekst, 5,7:1, i stedet for `opacity` (D3, lett å endre).
+- A227: «Nytt forslag» i KI-kortet er sekundærknapp, fordi den er hovedhandling når teksten er endret siden (T-0004) (D4, lett å endre).
+- A228: KI-merket får egen dempet blågrønn tone («hav», `ai-50/ai-line/ai-700/ai-900`) og er det eneste merket med kant (lett å endre).
 
 ## Avgjort ved uenighet (runde 1)
 - **Skjermbilder av iPad liggende:** droppes (forenkler). Trykkflatene måles likevel både liggende og stående i e2e (test-leder, ux-ansvarlig), fordi det er billig og sikrer beslutningen 24.10.2026, mens 10 ekstra bilder ikke sier noe nytt.

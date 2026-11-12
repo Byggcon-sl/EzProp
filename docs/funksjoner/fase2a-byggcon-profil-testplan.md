@@ -1,7 +1,7 @@
 # Testplan: Byggcon-profilen i EzProp
 
 - **Oppgavekort:** `docs/funksjoner/fase2a-byggcon-profil.md`
-- **Dato:** 12.11.2026 (test-leder, før bygging)
+- **Dato:** 12.11.2026 (test-leder, før bygging; avvikene D1–D4 fra designspesifikasjonen `docs/funksjoner/fase2a-byggcon-profil-design.md` er tatt inn av prosjektlederen 12.11.2026)
 - **Støtter hovedmål:** de ansatte (testene låser at trykkflatene og luften på iPad står, at skriften virker uten nett og at kontrasten holder i sollys), KI i bunnen (testene viser at KI-merket har eget uttrykk med teksten «KI» og at godta/behold/nytt forslag og `ai_usage_log` virker som før) og færre reklamasjoner (TG-tokenene har lesbar tekst og kan ikke forveksles med synkstatus eller KI).
 
 Oppgaven endrer bare utseendet. Ingen nye tabeller, spørringer, tilgangsregler eller TG-regler. Testdata er oppdiktet (prøveorganisasjonen og e2e-brukerne i `e2e/helpers.ts`). Ingen ny avhengighet (ingen `@axe-core/playwright`).
@@ -24,7 +24,7 @@ Går gjennom alle filer under `src/` og `public/` (tekst og filnavn). Testfilen 
 2. **ingen Google-skrift:** `fonts.googleapis`, `fonts.gstatic` og `next/font/google` finnes ikke.
 3. **skriftfilene finnes:** `public/fonts` har Inter 400, 500, 600, 700 og Schibsted Grotesk 500, 600, 700 (filnavn som i `docs/design/byggcon-profil/fonts/`), og ingen `Roboto-*`.
 4. **lisensen:** `public/fonts/README.md` nevner «SIL OFL 1.1», Inter og Schibsted Grotesk, og nevner ikke Roboto eller PDF-bruk av Roboto. Lisensfilene (`OFL-*.txt`) ligger ved siden av.
-5. **forhåndslasting:** `src/app/layout.tsx` har `preload: true` bare for Inter 400 og 600 og Schibsted Grotesk 600 (leses som tekst; tre treff), resten `preload: false`. Ingen `display` annet enn `"swap"`, og `adjustFontFallback` er ikke satt til `false`.
+5. **forhåndslasting (D2 i designspesifikasjonen, A225):** `src/app/layout.tsx` har nøyaktig ett `preload: true` (Inter-familien, alle fire vektene) og `preload: false` for Schibsted Grotesk (leses som tekst). `next/font/local` styrer forhåndslasting per familie, ikke per vekt. Ingen `display` annet enn `"swap"`, og `adjustFontFallback` er ikke satt til `false`.
 6. **ingen fast hex i synkstatusen:** `src/modules/offline-trial/sync-status.tsx` har ingen `#[0-9a-f]{3,6}` (bruker `--color-sync-*`).
 
 ## 2. Kontrast, `src/app/(ansatt)/contrast.test.ts` (utvides, ren)
@@ -35,13 +35,13 @@ Temaet leses først; `slate-*` fjernes fra `fixed` og leses fra `@theme` (de omd
 2. **paletten finnes:** `snow`, `sand`, `night`, `fjord`, mørk fjord (navnet ui-designer velger), `stone`, `line` (12 %) og `line-strong` (25 %) som `#rrggbb` (linjene som ferdig blandet hex mot snow, ikke `rgba`).
 3. **`canvas` er snow** og `brand-*`/`slate-*` finnes og er ikke de gamle verdiene (`#326ca1` og Tailwinds `#0f172a`, `#334155`, `#475569` er borte).
 4. **tekst** (`it.each`): slate-600, slate-700, slate-900 og night mot snow, hvit og sand: minst 4,5:1.
-5. **hovedknapp:** lys tekst mot night minst 4,5:1; deaktivert hovedknapp (tekst- og flatefargen ui-designer velger) minst 4,5:1.
+5. **hovedknapp:** lys tekst mot night minst 4,5:1; deaktivert hovedknapp er hvit mot slate-500 (stone, D3, A226), minst 4,5:1.
 6. **kanter** (`it.each`): kanten på sekundærknapp og skjemafelt mot snow, hvit og sand: minst 3:1.
-7. **fokusramme:** mørk fjord mot snow, hvit, sand og night: minst 3:1.
+7. **fokusramme (D1, A224):** fjord (`#316aa0`) mot snow, hvit, sand og night: minst 3:1. Mørk fjord brukes ikke til fokus (2,5:1 mot night).
 8. **TG** (`it.each` over `tg0`, `tg1`, `tg2`, `tg3`, `tgiu`): alle fem finnes, hver med tekst- og flatetoken, tekst mot flate minst 4,5:1.
 9. **synk** (`it.each` over alle `--color-sync-*` par): tekst mot flate minst 4,5:1.
 10. **KI:** KI-merkets tekst mot flate og forslagskortets tekst mot flate minst 4,5:1; kanten på merket/kortet mot snow og hvit minst 3:1.
-11. **KI, TG og synk er ulike:** ingen KI-token har samme hex som noen `tg-*`, `sync-*`, `danger`/`warning`/`success` (statusmerker). Ingen `sync-*` flate er lik `tg0`, `tg2` eller `tg3` flate.
+11. **KI, TG og synk er ulike:** ingen KI-token har samme hex som noen `tg-*`, `sync-*`, `ok-*`/`watch-*`/`urgent-*`/`unknown-*` (statustokens). Ingen `sync-*` flate er lik `tg0`, `tg2` eller `tg3` flate.
 12. eksisterende par for adminområdet og «Forfalt» står, men leses fra temaet der fargen nå er omdefinert.
 
 ## 3. Felleskomponentene (ren, markup)
@@ -52,7 +52,7 @@ Temaet leses først; `slate-*` fjernes fra `fixed` og leses fra `@theme` (de omd
 3. ingen variant gir gul eller `amber`-flate; ingen `gradient` eller `shadow` i noen variant.
 4. ghost-knappen har kant eller understreking og `min-h-11`.
 5. deaktivert hovedknapp bruker ikke `opacity-` på night (egne farger i stedet).
-6. fokus: `focus-visible:outline` (eller ring) i mørk fjord på alle varianter.
+6. fokus: knappene arver fokusrammen i fjord fra `:focus-visible` i `globals.css` (D1); ingen variant setter `outline-none` uten egen ramme.
 
 `card.test.ts` (ny):
 1. vanlig kort: 1 px kant, `rounded-card` (12 px), ingen `shadow`.
@@ -146,6 +146,6 @@ Finnes en ny spørring i diffen, avvises PR-en til den har sin egen `expectTenan
 ## 10. Kjøring og godkjenning
 
 1. Flett inn `main` (med PR #166 hvis merget) før PR. Kjør `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm size` og hele `pnpm test:e2e` på nytt etter flettingen.
-2. **Ytelse:** `pnpm size` før (fra `main`) og etter; første lasting øker med mindre enn de tre forhåndslastede skriftfilene (noteres i rapporten).
+2. **Ytelse:** `pnpm size` før (fra `main`) og etter; egen JS per side øker ikke (skriftene er filer, ikke JS). Bare Inter-filene lastes på forhånd (D2); størrelsen noteres i rapporten.
 3. Versjonen i `package.json` er 0.7.x og vises i `/api/helse`.
 4. **Avvises hvis:** et kontrastpar under kravet, en trykkflate under 44/56 px, en låst test er svekket (ikke bare byttet hex), en ny spørring uten tenant-test, admin kommer ikke inn, eller `aurora`/`gradient`/`roboto` finnes i `src/` eller `public/`.
