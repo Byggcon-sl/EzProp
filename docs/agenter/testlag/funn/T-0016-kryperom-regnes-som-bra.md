@@ -3,14 +3,14 @@ id: T-0016
 tittel: Kryperom regnes som BRA og «under terreng», og det finnes ikke noe valg for «ikke del av BRA»
 type: forbedring
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-11
 rolle: test-fag
 omrade: bygninger, areal og rom
 maal: reklamasjoner
 commit: 0b8e3b9
 forsok: 0
-pr:
+pr: PR #? (12.11.2026)
 ---
 
 ## Hva
@@ -35,3 +35,4 @@ Ikke etterprøvd (forbedring).
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-12: rettet i PR #? (branch `svar-stale-regler-bygninger`). Rettet etter Ståles svar F6 12.11.2026: ny arealtype «Ikke del av BRA» (`not_bra`), foreslått for kryperom og uinnredet loft (A235, A240). «Under terreng» følger etasjen, og unntaket fra hulltaking knyttes til romtypen kryperom (A239).
