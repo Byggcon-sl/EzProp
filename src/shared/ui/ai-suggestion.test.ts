@@ -99,7 +99,8 @@ describe("forslagskortet: knapper og tekster per tilstand (10.1–10.4)", () => 
   it("rejected: «Du beholdt din tekst.» og forslaget nedtonet, ikke KI-merket", () => {
     const html = render({ status: "rejected" });
     expect(html).toContain("Du beholdt din tekst.");
-    expect(html).toContain("opacity-70");
+    // Byggcon-profilen: nedtonet med tekstfarge, ikke opacity (designfilen 2.5)
+    expect(html).not.toContain("opacity-70");
     expect(html).not.toContain("Tekst fra KI, godkjent");
   });
 });
@@ -264,7 +265,8 @@ describe("forslagskortet: sikkerhet og oppbygging (10.11–10.14)", () => {
     expect(newClasses).toBeDefined();
     expect(newClasses).toContain("bg-transparent");
     expect(newClasses).toContain("rounded-full");
-    expect(newClasses).not.toMatch(/ring-slate-300/);
+    // Egen ring er fjernet; bare deaktivert tilstand bruker ring-slate-300.
+    expect(newClasses).not.toMatch(/(^|\s)ring-slate-300/);
     expect(newClasses!.split(/\s+/).sort()).toEqual(keepClasses!.split(/\s+/).sort());
   });
 
