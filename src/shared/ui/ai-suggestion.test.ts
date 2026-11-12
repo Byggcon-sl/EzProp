@@ -356,8 +356,9 @@ describe("KI-fargene", () => {
   }
 
   it("tokenene finnes og har kontrast minst 4,5:1 (designfilen avsnitt 2)", () => {
-    expect(color("ai-50")).toBe("#f3ecf8");
-    expect(color("ai-200")).toBe("#d9d2ea");
+    // Byggcon-profilen: KI-tonen «hav» (docs/funksjoner/fase2a-byggcon-profil-design.md 2.5)
+    expect(color("ai-50")).toBe("#e8f1f1");
+    expect(color("ai-line")).toBe("#4d7f84");
     expect(contrast("#ffffff", color("ai-700"))).toBeGreaterThanOrEqual(4.5);
     expect(contrast("#ffffff", color("ai-900"))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(color("ai-50"), color("ai-900"))).toBeGreaterThanOrEqual(4.5);

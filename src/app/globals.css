@@ -1,37 +1,121 @@
 @import "tailwindcss";
 
 /*
- * Design A «Fjord» (docs/08-designprinsipper.md): luftig, kort-basert, Byggcon-blå (#326CA1),
- * Roboto, nordlysfarger som aksent. Mørk visning er et valg (kommer i fase 3).
- * Store trykkflater på iPad: minst 44 pt, hovedknapper 56 pt.
+ * Byggcon-profilen (docs/08-designprinsipper.md, docs/funksjoner/fase2a-byggcon-profil-design.md):
+ * varm lys bakgrunn (snow), sandfargede paneler, nesten svart blå tekst og hovedknapp (night),
+ * blå aksent (fjord). Inter i brødtekst, Schibsted Grotesk i overskrifter. Kort med tynn kant og
+ * 12 px hjørner, pilleformede knapper, ingen skygge på knapper og felt, ingen fargeoverganger.
+ * Store trykkflater på iPad står: minst 44 pt, hovedknapper 56 pt.
+ *
+ * Alle --color-* skrives som #rrggbb, så kontrasttesten (src/app/(ansatt)/contrast.test.ts)
+ * kan regne på dem.
  */
 @theme {
-  --color-brand-50: #eef4fa;
-  --color-brand-100: #d6e4f2;
-  --color-brand-200: #b3cce5;
-  --color-brand-400: #6f9cc8;
-  --color-brand-600: #326ca1;
-  --color-brand-700: #285786;
-  --color-brand-900: #16314d;
-  --color-aurora-green: #3ccf91;
-  --color-aurora-teal: #4fc3d9;
-  --color-aurora-violet: #833ca3;
+  /* Paletten fra byggcon.no. Gult («sun») er utelatt: gult betyr TG2 og «følg med». */
+  --color-snow: #f5f4f0;
+  --color-sand: #eeebe3;
+  --color-night: #0f1924;
+  --color-fjord: #316aa0;
+  /* Lenketekst. Ikke fokusramme: bare 2,5:1 mot night. */
+  --color-fjord-dark: #255a8c;
+  /* Dempet tekst (4,8:1 også på sand) og deaktivert hovedknapp */
+  --color-stone: #5d6774;
+  /* Linjer: night med ca. 12 % og 25 % dekning, ferdig blandet mot snow */
+  --color-line: #dfdcd4;
+  --color-line-strong: #c6c3bb;
 
-  /* KI (nordlysfiolett). Bare for KI-forslag og KI-merket, aldri for TG eller status. */
-  --color-ai-50: #f3ecf8;
-  --color-ai-200: #d9d2ea;
-  --color-ai-700: #6b3a8c;
-  --color-ai-900: #5b2a7a;
+  /* Bakgrunnen bak kortene (= snow) */
+  --color-canvas: #f5f4f0;
+  /* Kant på skjemafelt: minst 3:1 mot hvitt, snow og sand (WCAG 1.4.11) */
+  --color-field: #7a828d;
 
-  /* Bakgrunnen bak kortene */
-  --color-canvas: #eef2f7;
-  /* Kant på skjemafelt: minst 3:1 mot hvitt (WCAG 1.4.11) */
-  --color-field: #8391a5;
+  /* Blåskalaen følger fjord: 600 er fjord, 700 er lenkefargen. Navnet beholdes for sidene. */
+  --color-brand-50: #eef3f8;
+  --color-brand-100: #dbe6f1;
+  --color-brand-200: #b9cde2;
+  --color-brand-400: #6e97bf;
+  --color-brand-600: #316aa0;
+  --color-brand-700: #255a8c;
+  --color-brand-900: #16324f;
 
-  --radius-card: 1rem;
-  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 2px 8px rgb(15 23 42 / 0.05);
+  /*
+   * Gråskalaen byttet mot Byggcon-tonene, så slate-klassene i sidene får profilen uten
+   * håndredigering: 50 = snow, 100 = sand, 200 og 300 er linjer, 500 = stone, 900 = night.
+   * 400 er bare pynt.
+   */
+  --color-slate-50: #f5f4f0;
+  --color-slate-100: #eeebe3;
+  --color-slate-200: #dfdcd4;
+  --color-slate-300: #c6c3bb;
+  --color-slate-400: #858d98;
+  --color-slate-500: #5d6774;
+  --color-slate-600: #414b58;
+  --color-slate-700: #303a47;
+  --color-slate-800: #1d2732;
+  --color-slate-900: #0f1924;
+  --color-slate-950: #0a1119;
 
-  --font-sans: var(--font-roboto), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /*
+   * Status, samme toner som i Optiplan: ok = i orden, watch = følg med, urgent = bør utbedres
+   * snart (også fyll på knapper som fjerner noe), unknown = ikke undersøkt.
+   * -fill er flate, -text er tekst på flaten, -line er kant og strek.
+   */
+  --color-ok-fill: #cdeedd;
+  --color-ok-text: #155e3e;
+  --color-ok-line: #1f8a5b;
+  --color-watch-fill: #fbe7b5;
+  --color-watch-text: #6b4405;
+  --color-watch-line: #b7791f;
+  --color-urgent-fill: #f8d0cc;
+  --color-urgent-text: #8b2a1f;
+  --color-urgent-line: #c0392b;
+  --color-unknown-fill: #e4e1d8;
+  --color-unknown-text: #4a463f;
+  --color-unknown-line: #6e6a62;
+
+  /*
+   * Tilstandsgrad. Samme toner som status. TG vises alltid med tekst («TG2»), aldri bare farge;
+   * TG0 og TG1 har samme tone, teksten skiller dem.
+   */
+  --color-tg0-bg: #cdeedd;
+  --color-tg0-text: #155e3e;
+  --color-tg1-bg: #cdeedd;
+  --color-tg1-text: #155e3e;
+  --color-tg2-bg: #fbe7b5;
+  --color-tg2-text: #6b4405;
+  --color-tg3-bg: #f8d0cc;
+  --color-tg3-text: #8b2a1f;
+  --color-tgiu-bg: #e4e1d8;
+  --color-tgiu-text: #4a463f;
+
+  /* Synkstatus: blå og grå toner, aldri TG-grønn, TG-gul eller rød. Ikon og tekst står alltid med. */
+  --color-sync-saved-bg: #dbe6f1;
+  --color-sync-saved-text: #16324f;
+  --color-sync-pending-bg: #eeebe3;
+  --color-sync-pending-text: #0f1924;
+  --color-sync-offline-bg: #dfdcd4;
+  --color-sync-offline-text: #303a47;
+  --color-sync-waiting-bg: #eef3f8;
+  --color-sync-waiting-text: #255a8c;
+
+  /*
+   * KI («hav»): dempet blågrønn, ulik fjord, TG, synk og status. Bare for KI-merket og
+   * KI-forslag. KI-merket er det eneste merket med kant (ai-line).
+   */
+  --color-ai-50: #e8f1f1;
+  --color-ai-line: #4d7f84;
+  --color-ai-700: #255a60;
+  --color-ai-900: #173f44;
+
+  --radius-card: 0.75rem;
+  /* Bare menyer og dialoger som flyter over innholdet */
+  --shadow-pop: 0 0 0 1px #dfdcd4, 0 8px 24px rgb(15 25 36 / 0.1);
+  /* Knapper og felt har ikke skygge: kanten bærer formen */
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 0 #0000;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-schibsted), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 /*
@@ -49,19 +133,19 @@ body {
 }
 
 @layer base {
-  :focus-visible {
-    @apply outline-2 outline-offset-2 outline-brand-600;
+  /* Overskrifter i Schibsted Grotesk, som på byggcon.no. h3 og under: Inter. */
+  h1,
+  h2 {
+    font-family: var(--font-display);
   }
-}
 
-/* Tynn nordlysstripe øverst på siden */
-.aurora-bar {
-  height: 4px;
-  background: linear-gradient(
-    90deg,
-    var(--color-brand-600),
-    var(--color-aurora-teal),
-    var(--color-aurora-green),
-    var(--color-aurora-violet)
-  );
+  /* Fokusramme i fjord: minst 3:1 mot snow, sand, hvitt og night (WCAG 2.4.7 og 1.4.11) */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-fjord;
+  }
+
+  /* Mål for hopplenken: får fokus fra koden, ikke med tab, og trenger ingen ramme */
+  [tabindex="-1"]:focus {
+    outline: none;
+  }
 }
