@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -442,5 +442,180 @@ describe("3.7 migreringen", () => {
     const dir = path.join(process.cwd(), "src/db/migrations");
     const files = readdirSync(dir).filter((name) => name.startsWith("0024_"));
     expect(files).toEqual(["0024_malmotor.sql"]);
+  });
+});
+
+// --- Reglene badet trenger: migrering 0029_regler-bad (testplan 6.1–6.5) --------------------------
+
+const NOT_NULL = "23502";
+type ConditionOverrides = Parameters<typeof createRuleConditionRow>[1];
+
+const RULE_CONDITION_KEY_COLUMNS = [
+  { column: "threshold_key", field: "thresholdKey" },
+  { column: "age_year_element_key", field: "ageYearElementKey" },
+  { column: "age_fallback_year_element_key", field: "ageFallbackYearElementKey" },
+  { column: "age_source_element_key", field: "ageSourceElementKey" },
+  { column: "documentation_element_key", field: "documentationElementKey" },
+  { column: "material_element_key", field: "materialElementKey" },
+  { column: "unit_element_key", field: "unitElementKey" },
+] as const;
+
+const MIGRATIONS_DIR = path.join(process.cwd(), "src/db/migrations");
+
+describe("regler bad: migrering 0029", () => {
+  it.each(RULE_CONDITION_KEY_COLUMNS)(
+    "6.1 0029_columns_format_check: $column godtar gyldig kode og null, avviser ugyldig kode",
+    async ({ column, field }) => {
+      const org = await createOrganization();
+      const valid = await createRuleConditionRow(org.id, {
+        [field]: "wet_room.membrane_year",
+      } as ConditionOverrides);
+      expect((valid as Record<string, unknown>)[field]).toBe("wet_room.membrane_year");
+      const empty = await createRuleConditionRow(org.id, { [field]: null } as ConditionOverrides);
+      expect((empty as Record<string, unknown>)[field]).toBeNull();
+      const plain = await createRuleConditionRow(org.id, {
+        [field]: "weight_percent_15",
+      } as ConditionOverrides);
+      expect((plain as Record<string, unknown>)[field]).toBe("weight_percent_15");
+      for (const bad of ["Ugyldig Kode", "", ".start", "slutt.", "to..punkt", "ÆØÅ"]) {
+        await expectPgError(
+          createRuleConditionRow(org.id, { [field]: bad } as ConditionOverrides),
+          CHECK,
+        );
+      }
+      // Kolonnen er tekst og kan være tom
+      const [info] = await db.execute<{ data_type: string; is_nullable: string }>(sql`
+        select data_type, is_nullable from information_schema.columns
+        where table_name = 'rule_conditions' and column_name = ${column}`);
+      expect(info).toMatchObject({ data_type: "text", is_nullable: "YES" });
+    },
+  );
+
+  it("6.2 expected_state_check: NOT NULL og bare de tre tilstandene", async () => {
+    const org = await createOrganization();
+    for (const state of ["triggered", "not_triggered", "not_evaluated"] as const) {
+      const row = await createRuleTestCaseRow(org.id, { expectedState: state });
+      expect(row.expectedState).toBe(state);
+    }
+    await expectPgError(
+      createRuleTestCaseRow(org.id, { expectedState: "maybe" as "triggered" }),
+      CHECK,
+    );
+    await expectPgError(
+      createRuleTestCaseRow(org.id, { expectedState: "TRIGGERED" as "triggered" }),
+      CHECK,
+    );
+    const rule = await createRuleRow(org.id);
+    await expectPgError(
+      db.execute(sql`insert into rule_test_cases (organization_id, rule_id, name, input)
+        values (${org.id}, ${rule.id}, 'Uten tilstand', '{}'::jsonb)`),
+      NOT_NULL,
+    );
+    await expectPgError(
+      db.execute(sql`insert into rule_test_cases (organization_id, rule_id, name, input, expected_state)
+        values (${org.id}, ${rule.id}, 'Tom tilstand', '{}'::jsonb, null)`),
+      NOT_NULL,
+    );
+    const columns = await db.execute<{ column_name: string; is_nullable: string }>(sql`
+      select column_name, is_nullable from information_schema.columns
+      where table_name = 'rule_test_cases'`);
+    const names = columns.map((c) => c.column_name);
+    expect(names).not.toContain("expect_triggered");
+    expect(names).toEqual(expect.arrayContaining(["expected_state", "inspection_year"]));
+    expect(columns.find((c) => c.column_name === "expected_state")!.is_nullable).toBe("NO");
+  });
+
+  it("6.3 inspection_year_check: tomt godtas, rimelig år godtas, urimelig år avvises", async () => {
+    const org = await createOrganization();
+    expect((await createRuleTestCaseRow(org.id)).inspectionYear).toBeNull();
+    for (const year of [1900, 2026, 2200]) {
+      expect((await createRuleTestCaseRow(org.id, { inspectionYear: year })).inspectionYear).toBe(
+        year,
+      );
+    }
+    for (const year of [1700, 1899, 2201, 3000, -2026, 0]) {
+      await expectPgError(createRuleTestCaseRow(org.id, { inspectionYear: year }), CHECK);
+    }
+  });
+
+  it("6.4 migration_keeps_meaning: expect_triggered true og false blir triggered og not_triggered", async () => {
+    const migration = readFileSync(path.join(MIGRATIONS_DIR, "0029_regler-bad.sql"), "utf8");
+    // Setningene i migreringen som gjelder testsakene, kjørt på en kopi av tabellen slik den var
+    // etter 0028 (bare kolonnene migreringen leser), i et eget skjema.
+    const statements = migration
+      .split("--> statement-breakpoint")
+      .map((part) =>
+        part
+          .split("\n")
+          .filter((line) => !line.trim().startsWith("--"))
+          .join("\n")
+          .trim(),
+      )
+      .filter((part) => /^(ALTER TABLE|UPDATE)\s+"rule_test_cases"/i.test(part));
+    expect(statements.length).toBeGreaterThanOrEqual(4);
+    expect(statements.some((s) => /^UPDATE/i.test(s))).toBe(true);
+
+    const schema = `test_mig_0029_${Date.now()}`;
+    try {
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(sql.raw(`create schema "${schema}"`));
+        await tx.execute(
+          sql.raw(`create table "${schema}"."rule_test_cases" (
+            id serial primary key,
+            name text not null,
+            expect_triggered boolean not null,
+            deleted_at timestamptz
+          )`),
+        );
+        await tx.execute(
+          sql.raw(`insert into "${schema}"."rule_test_cases" (name, expect_triggered, deleted_at)
+            values ('sann', true, null), ('usann', false, null),
+                   ('sann slettet', true, now()), ('usann slettet', false, now())`),
+        );
+        await tx.execute(sql.raw(`set local search_path to "${schema}"`));
+        for (const statement of statements) await tx.execute(sql.raw(statement));
+        const rows = await tx.execute<{ name: string; expected_state: string }>(
+          sql.raw(`select name, expected_state from "${schema}"."rule_test_cases" order by id`),
+        );
+        const columns = await tx.execute<{ column_name: string }>(
+          sql`select column_name from information_schema.columns
+              where table_schema = ${schema} and table_name = 'rule_test_cases'`,
+        );
+        return { rows: [...rows], columns: columns.map((c) => c.column_name) };
+      });
+      expect(result.rows).toEqual([
+        { name: "sann", expected_state: "triggered" },
+        { name: "usann", expected_state: "not_triggered" },
+        { name: "sann slettet", expected_state: "triggered" },
+        { name: "usann slettet", expected_state: "not_triggered" },
+      ]);
+      expect(result.columns).not.toContain("expect_triggered");
+      expect(result.columns).toEqual(expect.arrayContaining(["expected_state", "inspection_year"]));
+    } finally {
+      await db.execute(sql.raw(`drop schema if exists "${schema}" cascade`));
+    }
+  });
+
+  it("6.5 migration_number_free: 0029_regler-bad er den eneste med nummer 0029", () => {
+    const files = readdirSync(MIGRATIONS_DIR).filter((name) => name.startsWith("0029_"));
+    expect(files).toEqual(["0029_regler-bad.sql"]);
+    const snapshots = readdirSync(path.join(MIGRATIONS_DIR, "meta")).filter((name) =>
+      name.startsWith("0029_"),
+    );
+    expect(snapshots).toEqual(["0029_snapshot.json"]);
+  });
+
+  it("myk sletting: en testsak med de nye kolonnene kan slettes mykt og står igjen", async () => {
+    const org = await createOrganization();
+    const row = await createRuleTestCaseRow(org.id, {
+      expectedState: "not_evaluated",
+      inspectionYear: 2026,
+      deletedAt: DELETED_AT,
+    });
+    const [found] = await db.execute<{ expected_state: string; deleted_at: Date | null }>(
+      sql`select expected_state, deleted_at from rule_test_cases where id = ${row.id}`,
+    );
+    expect(found!.expected_state).toBe("not_evaluated");
+    expect(found!.deleted_at).not.toBeNull();
   });
 });

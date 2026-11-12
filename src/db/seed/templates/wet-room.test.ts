@@ -1,8 +1,15 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { WET_ROOM_LIFESPANS } from "@/core/rules/data/lifespans";
+import { WET_ROOM_THRESHOLDS } from "@/core/rules/data/thresholds";
 import {
   checkDocumentKeys,
+  checkDocumentRules,
+  checkRuleCheckpointGivesTg,
+  checkRuleConditionShape,
+  checkRuleOutcomeSameCheckpoint,
+  checkRuleSuggestsOutcome,
   parseTemplateDocument,
   type TemplateDocument,
   type TemplateDocumentInput,
@@ -12,8 +19,9 @@ import { buildTemplateDocument } from "../../../../tests/template-document";
 import { WET_ROOM_MERGE_FIELDS, wetRoomTemplate } from "./wet-room";
 
 /*
- * Datatest av malfilen for badet (docs/funksjoner/fase2a-mal-bad-testplan.md avsnitt 1).
- * Uten database. «Regeltestene» her er datatester over malfilen: malen har ingen regler ennå.
+ * Datatest av malfilen for badet (docs/funksjoner/fase2a-mal-bad-testplan.md avsnitt 1, og
+ * docs/funksjoner/fase2a-regler-bad-testplan.md avsnitt 3 for reglene). Uten database. Reglene
+ * kjøres med testsakene i `wet-room.rules.test.ts`; her sjekkes formen på reglene som data.
  *
  * Kontrollene på malen er rene funksjoner i denne filen. Hver av dem prøves først på et lite
  * dokument som skal feile (1.28), så vi vet at en grønn kontroll på malen betyr noe.
@@ -545,6 +553,31 @@ const KEY_SNAPSHOT = [
   "outcome wet_room.ventilation.weak_extract tg2",
   "outcome wet_room.ventilation.poor_air_supply tg2",
   "outcome wet_room.adjacent.elevated_moisture choose",
+  // Reglene badet trenger (fase 2a-2, docs/funksjoner/fase2a-regler-bad.md Data)
+  "question wet_room.membrane_drain.membrane_past_lifespan",
+  "outcome wet_room.membrane_drain.membrane_past_lifespan tg2",
+  "rule wet_room.membrane_past_lifespan",
+  "rule wet_room.membrane_before_2000",
+  "rule wet_room.hole_moisture_over_limit",
+  "rule wet_room.hole_drilling_not_done",
+  "lifespan_set wet_room_membrane_lifespans",
+  "lifespan membrane.liquid_membrane.without",
+  "lifespan membrane.liquid_membrane.with",
+  "lifespan membrane.foil.without",
+  "lifespan membrane.foil.with",
+  "lifespan membrane.sheet_membrane.without",
+  "lifespan membrane.sheet_membrane.with",
+  "lifespan membrane.membrane_boards.without",
+  "lifespan membrane.membrane_boards.with",
+  "lifespan membrane.bathroom_cabin.without",
+  "lifespan membrane.bathroom_cabin.with",
+  "lifespan membrane.bathroom_panel.without",
+  "lifespan membrane.bathroom_panel.with",
+  "lifespan membrane.wet_room_wallpaper_paint.any",
+  "lifespan membrane.wet_room_vinyl.any",
+  "lifespan membrane.before_2000",
+  "threshold_set wet_room_thresholds",
+  "threshold wet_room_hole_moisture_weight_percent",
 ];
 
 /** Feltene i kortet (Omfang 2): punkt, type og enhet. */
@@ -772,6 +805,11 @@ describe("1 malfilen for badet (datatest)", () => {
       ...doc.element_options.map((o) => `option ${o.element_key} ${o.key}`),
       ...doc.deviation_questions.map((q) => `question ${q.key}`),
       ...doc.outcomes.map((o) => `outcome ${o.question_key} ${o.key}`),
+      ...doc.rules.map((r) => `rule ${r.key}`),
+      `lifespan_set ${WET_ROOM_LIFESPANS.key}`,
+      ...WET_ROOM_LIFESPANS.entries.map((e) => `lifespan ${e.key}`),
+      `threshold_set ${WET_ROOM_THRESHOLDS.key}`,
+      ...WET_ROOM_THRESHOLDS.entries.map((t) => `threshold ${t.key}`),
     ];
     expect(sorted(actual)).toEqual(sorted(KEY_SNAPSHOT));
     expect(new Set(KEY_SNAPSHOT).size, "ingen dobbel kode i listen").toBe(KEY_SNAPSHOT.length);
@@ -1048,10 +1086,329 @@ describe("1 malfilen for badet (datatest)", () => {
     expect(hole.default_value).toBeNull();
   });
 
-  it("1.26 no_rules", () => {
-    expect(wetRoomTemplate.rules ?? []).toEqual([]);
-    expect(wetRoomTemplate.rule_conditions ?? []).toEqual([]);
-    expect(wetRoomTemplate.rule_test_cases ?? []).toEqual([]);
+  // 1.26 no_rules er erstattet av 3.1 four_rules (reglene badet trenger, fase 2a-2)
+});
+
+// =================================================================================================
+// 3 Reglene som data (docs/funksjoner/fase2a-regler-bad-testplan.md avsnitt 3)
+// =================================================================================================
+
+const PAST_LIFESPAN = "wet_room.membrane_past_lifespan";
+const BEFORE_2000 = "wet_room.membrane_before_2000";
+const MOISTURE = "wet_room.hole_moisture_over_limit";
+const NOT_DRILLED = "wet_room.hole_drilling_not_done";
+
+/** Reglene i kortet (Omfang 4): formål, kontrollpunkt og foreslått utfall. */
+const RULE_TABLE = [
+  {
+    key: PAST_LIFESPAN,
+    purpose: "suggest_outcome",
+    checkpoint: "wet_room.membrane_drain",
+    outcome: {
+      checkpoint_key: "wet_room.membrane_drain",
+      question_key: "wet_room.membrane_drain.membrane_past_lifespan",
+      outcome_key: "tg2",
+    },
+  },
+  {
+    key: BEFORE_2000,
+    purpose: "suggest_outcome",
+    checkpoint: "wet_room.membrane_drain",
+    outcome: {
+      checkpoint_key: "wet_room.membrane_drain",
+      question_key: "wet_room.membrane_drain.membrane_before_2000",
+      outcome_key: "tg3",
+    },
+  },
+  {
+    key: MOISTURE,
+    purpose: "suggest_outcome",
+    checkpoint: "wet_room.adjacent",
+    outcome: {
+      checkpoint_key: "wet_room.adjacent",
+      question_key: "wet_room.adjacent.elevated_moisture",
+      outcome_key: "choose",
+    },
+  },
+  { key: NOT_DRILLED, purpose: "suggest_tgiu", checkpoint: "wet_room.adjacent", outcome: null },
+] as const;
+
+const PAST_LIFESPAN_QUESTION = "wet_room.membrane_drain.membrane_past_lifespan";
+
+function conditionsOf(doc: TemplateDocument, ruleKey: string) {
+  return doc.rule_conditions.filter((c) => c.rule_key === ruleKey);
+}
+
+describe("3 reglene i badmalen (datatest)", () => {
+  it("3.1 four_rules: nøyaktig de fire reglene i kortet, med formål, punkt, kilde og melding", () => {
+    const doc = parsedTemplate();
+    expect(sorted(doc.rules.map((r) => r.key))).toEqual(sorted(RULE_TABLE.map((r) => r.key)));
+    for (const wanted of RULE_TABLE) {
+      const r = doc.rules.find((x) => x.key === wanted.key)!;
+      expect(r, wanted.key).toMatchObject({
+        purpose: wanted.purpose,
+        target_checkpoint_key: wanted.checkpoint,
+        suggested_outcome: wanted.outcome,
+        active: true,
+      });
+      expect(r.source_ref, wanted.key).toBeTruthy();
+      expect(r.message, wanted.key).toBeTruthy();
+      expect(conditionsOf(doc, r.key).length, `${r.key} har betingelser`).toBeGreaterThan(0);
+    }
+    // Bare de tre betingelsestypene motoren kjører
+    for (const c of doc.rule_conditions) {
+      expect(["option_selected", "number_vs_limit", "age_vs_lifespan"], c.rule_key).toContain(
+        c.type,
+      );
+    }
+    // Testsakene peker på reglene i malen
+    const ruleKeys = new Set(doc.rules.map((r) => r.key));
+    for (const tc of doc.rule_test_cases) expect(ruleKeys.has(tc.rule_key), tc.name).toBe(true);
+  });
+
+  it("3.3 rule_outcome_same_checkpoint: regel og foreslått utfall står på samme punkt (T-0014)", () => {
+    const doc = parsedTemplate();
+    for (const r of doc.rules) {
+      if (r.suggested_outcome === null) continue;
+      expect(r.suggested_outcome.checkpoint_key, r.key).toBe(r.target_checkpoint_key);
+      const outcome = doc.outcomes.find(
+        (o) =>
+          o.checkpoint_key === r.suggested_outcome!.checkpoint_key &&
+          o.question_key === r.suggested_outcome!.question_key &&
+          o.key === r.suggested_outcome!.outcome_key,
+      );
+      expect(outcome, `${r.key}: utfallet finnes`).toBeDefined();
+    }
+    for (const tc of doc.rule_test_cases) {
+      if (tc.expected_outcome === null) continue;
+      const r = doc.rules.find((x) => x.key === tc.rule_key)!;
+      expect(tc.expected_outcome, tc.name).toEqual(r.suggested_outcome);
+    }
+  });
+
+  it("3.4 messages_clean: meldingene har ingen gjetteord, henvisninger eller kopi, og er korte", () => {
+    const doc = parsedTemplate();
+    for (const r of doc.rules) {
+      const message = r.message ?? "";
+      expect(guessWordsAndReferencesIn(message), r.key).toEqual([]);
+      expect(message.length, r.key).toBeLessThanOrEqual(MAX_CHARS);
+      expect(sentenceCount(message), r.key).toBeLessThanOrEqual(MAX_SENTENCES);
+      expect(copiedRun(message), r.key).toBeNull();
+      // Kilden står i bakgrunnen, ikke i meldingen
+      expect(message.includes(r.source_ref ?? "(ingen kilde)"), r.key).toBe(false);
+      expect(message, r.key).not.toMatch(/TG\s*0/i);
+    }
+    const moisture = doc.rules.find((r) => r.key === MOISTURE)!;
+    expect(moisture.message).toMatch(/treverk/i);
+  });
+
+  it("3.4 messages_clean: den nye utfallsteksten består sjekkene for rapporttekst", () => {
+    const doc = parsedTemplate();
+    const only: TemplateDocument = {
+      ...doc,
+      outcomes: doc.outcomes.filter((o) => o.question_key === PAST_LIFESPAN_QUESTION),
+    };
+    const texts = reportTexts(only);
+    expect(texts.length).toBeGreaterThanOrEqual(4);
+    expect(checkGuessWordsAndReferences(only)).toEqual([]);
+    expect(checkTextLength(only)).toEqual([]);
+    for (const { where, field, text } of texts) {
+      expect(copiedRun(text), `${where} ${field}`).toBeNull();
+    }
+  });
+
+  it("3.5 new_outcome_text: alder gir usikker funksjon, ikke utslitt eller lekk", () => {
+    const doc = parsedTemplate();
+    const question = doc.deviation_questions.find((q) => q.key === PAST_LIFESPAN_QUESTION);
+    expect(question?.checkpoint_key).toBe("wet_room.membrane_drain");
+    const outcomes = doc.outcomes.filter((o) => o.question_key === PAST_LIFESPAN_QUESTION);
+    expect(outcomes).toHaveLength(1);
+    const outcome = outcomes[0]!;
+    expect(outcome).toMatchObject({
+      key: "tg2",
+      kind: "tg2",
+      default_cause_criterion: "age_uncertain_function",
+      text_status: "draft",
+    });
+    expect(outcome.source_ref).toBeTruthy();
+    // Samme form som A213: «registrert som fra {årstall}»
+    expect(outcome.deviation_text).toContain("{årstall}");
+    const texts = [
+      outcome.deviation_text,
+      outcome.default_cause_text,
+      outcome.default_consequence_text,
+    ].filter((t): t is string => t !== null);
+    const measures = measuresOf(doc, outcome).map((m) => m.text);
+    expect(measures.length).toBeGreaterThan(0);
+    for (const text of [...texts, ...measures]) {
+      expect(text).not.toMatch(/utslitt|lekker|lekk(?!asje)/i);
+    }
+    for (const text of measures) expect(text, "tiltaket er ikke utskifting").not.toMatch(/skift/i);
+    // Ingen varianter per membrantype
+    expect(
+      doc.deviation_questions.filter((q) => q.key.includes("past_lifespan")).map((q) => q.key),
+    ).toEqual([PAST_LIFESPAN_QUESTION]);
+  });
+
+  it("3.6 documentation_value_list: «uten dokumentasjon» er none og other_written (A217)", () => {
+    const doc = parsedTemplate();
+    const age = conditionsOf(doc, PAST_LIFESPAN).find((c) => c.type === "age_vs_lifespan");
+    expect(age, "aldersregelen har age_vs_lifespan").toBeDefined();
+    expect(age).toMatchObject({
+      age_year_element_key: "wet_room.membrane_year",
+      age_fallback_year_element_key: "wet_room.build_year",
+      age_source_element_key: "wet_room.build_year_source",
+      documentation_element_key: "wet_room.documentation_type",
+      material_element_key: "wet_room.membrane_type",
+      threshold_key: null,
+    });
+    expect(Array.isArray(age!.value)).toBe(true);
+    expect(sorted(age!.value as string[])).toEqual(sorted(["none", "other_written"]));
+    const options = doc.element_options
+      .filter((o) => o.element_key === "wet_room.documentation_type")
+      .map((o) => o.key);
+    for (const code of age!.value as string[]) expect(options).toContain(code);
+    // Regelen for før 2000 leser årstallet på samme måte
+    const before = conditionsOf(doc, BEFORE_2000).find((c) => c.type === "age_vs_lifespan");
+    expect(before).toMatchObject({
+      age_year_element_key: "wet_room.membrane_year",
+      age_fallback_year_element_key: "wet_room.build_year",
+      age_source_element_key: "wet_room.build_year_source",
+      material_element_key: "wet_room.membrane_type",
+    });
+  });
+
+  it("3.7 threshold_condition_shape: fuktregelen bruker terskelkoden uten egen grense", () => {
+    const doc = parsedTemplate();
+    const limits = conditionsOf(doc, MOISTURE).filter((c) => c.type === "number_vs_limit");
+    expect(limits).toHaveLength(1);
+    expect(limits[0]).toMatchObject({
+      element_key: "wet_room.hole_moisture_reading",
+      unit_element_key: "wet_room.hole_moisture_unit",
+      operator: null,
+      value: null,
+    });
+    const keys = WET_ROOM_THRESHOLDS.entries.map((t) => t.key);
+    expect(keys).toContain(limits[0]!.threshold_key);
+    // Ingen betingelse har fast tallgrense: grensene står i terskeldataene
+    for (const c of doc.rule_conditions.filter((c) => c.type === "number_vs_limit")) {
+      expect(c.threshold_key, c.rule_key).not.toBeNull();
+    }
+  });
+
+  it("3.8 building_code_labels: navnene overlapper ikke, kodene er uendret", () => {
+    const doc = parsedTemplate();
+    const options = doc.element_options.filter((o) => o.element_key === "wet_room.building_code");
+    expect(options.map((o) => [o.key, o.label])).toEqual([
+      ["before_1997", "Før 1997"],
+      ["from_1997_to_2010", "TEK97 (1997–2010)"],
+      ["tek10", "TEK10 (2010–2017)"],
+      ["tek17", "TEK17 (fra 2017)"],
+      ["unknown", "Ukjent"],
+    ]);
+    // Feltet vises ikke i rapporten og leses ikke av noen regel (A212)
+    expect(doc.elements.find((e) => e.key === "wet_room.building_code")!.show_in_report).toBe(
+      false,
+    );
+    expect(JSON.stringify(doc.rule_conditions)).not.toContain("wet_room.building_code");
+  });
+
+  it("3.9 no_tg0: ingen regel peker på et utfall uten TG, og ingen testsak forventer TG0", () => {
+    const doc = parsedTemplate();
+    for (const r of doc.rules) {
+      if (r.suggested_outcome === null) {
+        expect(r.purpose, r.key).toBe("suggest_tgiu");
+        continue;
+      }
+      const outcome = doc.outcomes.find(
+        (o) =>
+          o.question_key === r.suggested_outcome!.question_key &&
+          o.key === r.suggested_outcome!.outcome_key,
+      )!;
+      expect(["tg2", "tg3", "choose_tg2_tg3"], r.key).toContain(outcome.kind);
+    }
+    expect(JSON.stringify(doc.rules)).not.toMatch(/tg0|TG\s*0/i);
+    expect(JSON.stringify(doc.rule_test_cases)).not.toMatch(/tg0|TG\s*0/i);
+  });
+
+  it("3.10 no_threshold_height_rule: ingen regel leser terskelhøyden (A219)", () => {
+    const doc = parsedTemplate();
+    expect(JSON.stringify(doc.rule_conditions)).not.toContain("wet_room.threshold_height_mm");
+    expect(JSON.stringify(doc.rules)).not.toContain("low_threshold_height");
+  });
+});
+
+// --- 3.11 Kontrollene i malmotoren (document.ts) på badmalen -------------------------------------
+
+type RuleCheck = (doc: TemplateDocument) => unknown[];
+
+const ruleChecks: [string, RuleCheck][] = [
+  ["checkRuleSuggestsOutcome", checkRuleSuggestsOutcome],
+  ["checkRuleOutcomeSameCheckpoint", checkRuleOutcomeSameCheckpoint],
+  ["checkRuleCheckpointGivesTg", checkRuleCheckpointGivesTg],
+  ["checkRuleConditionShape", checkRuleConditionShape],
+];
+
+/** Badmalen med én feil i reglene, laget for å feile. */
+const brokenTemplates: {
+  name: string;
+  check: RuleCheck;
+  change: (doc: TemplateDocument) => void;
+}[] = [
+  {
+    name: "suggest_outcome uten utfall",
+    check: checkRuleSuggestsOutcome,
+    change: (doc) => {
+      doc.rules.find((r) => r.key === PAST_LIFESPAN)!.suggested_outcome = null;
+    },
+  },
+  {
+    name: "fuktregelen gjelder et annet punkt enn utfallet",
+    check: checkRuleOutcomeSameCheckpoint,
+    change: (doc) => {
+      doc.rules.find((r) => r.key === MOISTURE)!.target_checkpoint_key = "wet_room.membrane_drain";
+    },
+  },
+  {
+    name: "TGIU på et punkt som ikke gir TG",
+    check: checkRuleCheckpointGivesTg,
+    change: (doc) => {
+      doc.checkpoints.find((c) => c.key === "wet_room.adjacent")!.gives_tg = false;
+    },
+  },
+  {
+    name: "terskel og egen grense samtidig",
+    check: checkRuleConditionShape,
+    change: (doc) => {
+      const c = doc.rule_conditions.find((x) => x.rule_key === MOISTURE && x.threshold_key)!;
+      c.operator = "gte";
+      c.value = 20;
+    },
+  },
+  {
+    name: "alder uten materialfelt",
+    check: checkRuleConditionShape,
+    change: (doc) => {
+      const c = doc.rule_conditions.find((x) => x.type === "age_vs_lifespan")!;
+      c.material_element_key = null;
+    },
+  },
+];
+
+describe("3.11 kontrollene i malmotoren på badmalen", () => {
+  it("checkDocumentRules gir ingen feil på badmalen", () => {
+    expect(checkDocumentRules(parsedTemplate())).toEqual([]);
+  });
+
+  it.each(ruleChecks)("%s gir ingen feil på badmalen", (_, check) => {
+    expect(check(parsedTemplate())).toEqual([]);
+  });
+
+  it.each(brokenTemplates)("feiler på badmalen med «$name»", ({ check, change }) => {
+    const doc = structuredClone(parsedTemplate());
+    change(doc);
+    expect(check(doc).length).toBeGreaterThan(0);
+    expect(checkDocumentRules(doc).length).toBeGreaterThan(0);
   });
 });
 
