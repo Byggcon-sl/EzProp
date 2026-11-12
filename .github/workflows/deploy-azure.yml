@@ -230,3 +230,25 @@ jobs:
           done
           echo "Helsesjekken svarte ikke med commit $APP_VERSION. Se App Service → Log stream."
           exit 1
+
+      - name: "Feilsøking: siste linjer fra appens logg"
+        # Bare når noe feilet etter at infrastrukturen var på plass. Hemmelighetene skjules i loggen.
+        if: failure() && steps.infra.outcome == 'success'
+        env:
+          APP_NAME: ${{ steps.infra.outputs.app_name }}
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+        run: |
+          echo "::add-mask::$POSTGRES_ADMIN_PASSWORD"
+          echo "::add-mask::$(node -e 'process.stdout.write(encodeURIComponent(process.env.POSTGRES_ADMIN_PASSWORD || ""))')"
+          echo "::add-mask::$BETTER_AUTH_SECRET"
+          if ! az webapp log download --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --log-file applogg.zip; then
+            echo "Fant ikke appens logg. Se App Service → Log stream."
+            exit 0
+          fi
+          mkdir -p applogg
+          unzip -qo applogg.zip -d applogg
+          find applogg -iname '*docker*.log' -newermt '-3 hours' | sort | while read -r fil; do
+            echo "== $fil"
+            grep -vi "docker run" "$fil" | tail -n 80
+          done
