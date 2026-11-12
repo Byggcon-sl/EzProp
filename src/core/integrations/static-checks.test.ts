@@ -103,6 +103,11 @@ describe("tilkoblingslaget, statiske kontroller", () => {
         );
       })
       .map(rel);
-    expect(users).toEqual(["src/core/email/graph.ts"]);
+    // `microsoft-login.ts` har bare utstederen (`iss`) som tekst å sammenligne med, ingen kall
+    // (ADR 0008 punkt 17). Den får verken Graph-adressen eller `fetch`.
+    expect(users).toEqual(["src/core/auth/microsoft-login.ts", "src/core/email/graph.ts"]);
+    const login = read(join(srcDir, "core", "auth", "microsoft-login.ts"));
+    expect(login).not.toContain("graph.microsoft.com");
+    expect(login).not.toMatch(/\bfetch\s*\(/);
   });
 });
