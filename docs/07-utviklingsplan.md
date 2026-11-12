@@ -72,7 +72,7 @@ Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3
 | 0a Repo og database | Ferdig 28.10.2026 |
 | 1 Prøve uten nett | Ferdig 10.11.2026. Ståle har kjørt prøvene på ekte iPad og godkjent ADR 0004 (egenbygd synk). |
 | 0b Innlogging, organisasjon, roller | Ferdig, unntatt felles innlogging med Optiplan (venter på S6) |
-| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127), forslagsmønsteret (PR #131), vask før KI (PR #135), evalueringssettet (PR #141) og KI-køen (PR #143) er levert. Det alvorlige funnet T-0001 (synkkøen) er rettet i PR #139. Beslutningsnotatet om KI-leverandør og Anthropic-adapteren (siste punkt i 2a-1) er ferdig. Neste: 2a-2 Smal vei. |
+| **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127), forslagsmønsteret (PR #131), vask før KI (PR #135), evalueringssettet (PR #141) og KI-køen (PR #143) er levert. Det alvorlige funnet T-0001 (synkkøen) er rettet i PR #139. Beslutningsnotatet om KI-leverandør og Anthropic-adapteren (siste punkt i 2a-1) er ferdig. 2a-2: malen for ett bad er levert (PR #159). Neste: reglene badet trenger. |
 | Minimum før ekte data | To av ti punkter levert. Testmiljøet (S1) er oppe fra 12.11.2026, så resten kan bygges og prøves der. |
 | 2b og videre | Ikke startet |
 
@@ -133,7 +133,6 @@ Tilstandsrapport for **bolig og leilighet** som systemmal, laget og publisert **
 
 Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se og godkjenne fag og utseende tidlig, og feil i grunnstrukturen oppdages før de blir dyre.
 
-- [x] **Malen for ett bad** lagt inn i malmotoren: kontrollpunktene for våtrom, med Byggcons egne utkast til avvikstekster (merket «ikke godkjent av fagrådet»).
 - [ ] **Reglene badet trenger,** i regelmotoren som én felles kodepakke for iPad og server: alder mot levetid (med trinn), én målegrense for fukt, våtrom fra før 2000, og hulltaking nektet gir TGIU. Testsaker per regel. Fukt ikke målt gir ikke TG2 på grunn av alder alene på tilliggende konstruksjoner (Ståle 10.11.2026, spørsmål 59a).
 - [ ] **Badet på PC:** kontrollpunktene, avvikskort (TG, årsak, konsekvens, tiltak, kostnad) og TGIU på punktet. TG-forslag fra reglene kan godtas, endres eller avvises.
 - [ ] **KI i veien:** forslag fra frasebanken, språkvask av avviksteksten og utkast til sammendrag, gjennom KI-grunnmuren.

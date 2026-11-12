@@ -2,6 +2,12 @@
 
 Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte tid. Nyeste øverst. Får Ståle stadig de samme kommentarene, legges de inn som regel i den aktuelle agentbeskrivelsen.
 
+## 12.11.2026 – PR #159 merget (malen for ett bad)
+
+- Arbeidsflyten for én mal tok rundt tre timer. En annen kjøring av hovedløkken startet i mellomtiden, så branchen uten PR og lot den være. Det virket: regelen «branch med commit siste 2 timer er i arbeid» hindret dobbelt arbeid.
+- Funn om faste koder (`key`) må rettes før merge, fordi kodene ikke kan endres etterpå. Gjennomgangen fant fire slike (A210–A213); de ble rettet i samme PR i stedet for å bli småfunn.
+- En PR som står med «unstable» etter automatisk fletting fra github-actions[bot] får CI i gang igjen med en ekte commit (her versjonshevingen én over main).
+
 ## 10.11.2026 – PR #123 merget (ADR 0006 KI i bunnen)
 
 - PR-en ble merget av en annen kjøring mens denne kjøringen gjorde ferdig. Den lokale branchen var 6 commits foran og 8 bak origin, og lokal `main` lå bak `origin/main`, så `git diff main...branch` lokalt viste malmotorkode som ikke hørte til. Regel: kjør `git fetch` og sjekk `gh api repos/{owner}/{repo}/pulls?head=…&state=all` før push eller ny PR; er PR-en merget, push ikke til branchen, lag ny branch fra `origin/main`.

@@ -63,3 +63,4 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 12.11.2026 | S1 gjort: første vellykkede utrulling til Azure (PR #149–#152: databaseregion, brannmurkommando, appens logg ved feil og flate pakker). | Utrullingen 12.11.2026 |
 | 12.11.2026 | Statuslinjen for fase 2a: alle punktene i 2a-1 er levert; neste er 2a-2 Smal vei. | Beslutningsnotatet og Anthropic-adapteren (branch `fase2a-ki-leverandor`) |
 | 12.11.2026 | 2a-2: «Malen for ett bad» krysset av (systemmalen med ett våtrom i malmotoren, tekster som utkast, A200–A213). | Branch `fase2a-mal-bad` |
+| 12.11.2026 | «Malen for ett bad» flyttet til `docs/plan/levert.md` (PR #159 merget). Statuslinjen for 2a: neste er reglene badet trenger. | Læringsløkken |
