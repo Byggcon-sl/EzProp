@@ -244,3 +244,13 @@ Temaet leses først; `fixed` har bare `white: #ffffff`.
 ## 9. Til skjermbildene
 
 Samme fem skjermer før og etter: innlogging, arbeidskøen, ett oppdrag, testskjemaet med synkstatus, `/prove/ki` med et forslag vist. PC 1440 × 900 og iPad stående 1024 × 1366. Bare oppdiktede data.
+
+## 10. Tillegg etter flettingen av main (12.11.2026)
+
+Kontroll av nye sider fra main (PR #166, #167, #174): søk etter Tailwinds standardfarger, hex, `aurora`, `gradient` og `shadow-card` i `src/**/*.tsx` gir bare ett treff ut over `apple-icon.tsx`.
+
+| Fil | Fra | Til | Hvorfor |
+|---|---|---|---|
+| `src/app/logg-inn/login-form.tsx` (melding uten nett, linje 192) | `rounded-lg bg-amber-50 text-slate-800` | `rounded-xl bg-sync-offline-bg text-sync-offline-text` | Uten nett er ingenting tapt (A248): nøytral tone, ikke gul (gult betyr TG2). `rounded-xl` som `FormMessage`. Kontrast 8,4:1. |
+
+Bygningsredigeringen og regelvisningen bruker bare felleskomponentene og `slate`/`brand`, og følger temaet uten endring. Etter rettingen skal søket i avsnitt 5 bare treffe `apple-icon.tsx`.
