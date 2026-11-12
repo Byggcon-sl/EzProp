@@ -112,7 +112,7 @@ Dette er fagstoff. Det gjelder ikke før Ståle har godkjent det som fagråd (K3
 
 | Spørsmål | Forslag |
 |---|---|
-| Kan «tilliggende konstruksjoner våtrom» få TG0 når badet er ca. 20 år og membranen får TG2 for alder? | Nei. TG0 hører til nye bygningsdeler med dokumentasjon. Er hulltakingen tørr og uten avvik, gis TG1. |
+| Kan «tilliggende konstruksjoner våtrom» få TG0 når badet er ca. 20 år og membranen får TG2 for alder? | **Erstattet av Ståles svar 10.11.2026 (spørsmål 59a), tolket i A224 i `docs/09-apne-sporsmal.md`.** Tidligere forslag: Nei. TG0 hører til nye bygningsdeler med dokumentasjon. Er hulltakingen tørr og uten avvik, gis TG1. |
 | Skal radon-HMS gjelde leiligheter som ikke ligger mot grunnen? | Spørsmålet stilles for boliger med oppholdsrom i de tre laveste etasjene over bakken. For leiligheter høyere opp settes «ikke aktuelt» automatisk, med begrunnelse. |
 | Skal røykvarsler og slukkeutstyr være egne punkter i leilighetsmalen? | Ja, to egne punkter under brann, slik forskriften lister dem. |
 

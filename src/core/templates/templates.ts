@@ -35,7 +35,13 @@ import {
   type TemplateVersionStatus,
 } from "@/db/schema";
 import { isUuid, uuidv7 } from "@/shared/lib/uuid";
-import { checkDocumentKeys, optionScope, outcomeScope, questionScope } from "./document";
+import {
+  checkDocumentKeys,
+  checkDocumentRules,
+  optionScope,
+  outcomeScope,
+  questionScope,
+} from "./document";
 import {
   TEMPLATE_DRAFT_EXISTS_MESSAGE,
   TEMPLATE_NOT_DRAFT_MESSAGE,
@@ -463,7 +469,20 @@ function toDocument(content: Content): TemplateDocument {
     ruleIndex.get(c.ruleKey) ?? -1,
     c.row.sortOrder,
     c.row.groupNo ?? 0,
-    canonical([c.row.type, c.row.elementKey, c.row.checkpointKey, c.row.operator, c.row.value]),
+    canonical([
+      c.row.type,
+      c.row.elementKey,
+      c.row.checkpointKey,
+      c.row.operator,
+      c.row.value,
+      c.row.thresholdKey,
+      c.row.ageYearElementKey,
+      c.row.ageFallbackYearElementKey,
+      c.row.ageSourceElementKey,
+      c.row.documentationElementKey,
+      c.row.materialElementKey,
+      c.row.unitElementKey,
+    ]),
   ]);
   const testCases = sortBy(content.testCases, (t) => [
     ruleIndex.get(t.ruleKey) ?? -1,
@@ -579,13 +598,21 @@ function toDocument(content: Content): TemplateDocument {
       checkpoint_key: c.row.checkpointKey,
       operator: c.row.operator as Doc["rule_conditions"][number]["operator"],
       value: c.row.value as Doc["rule_conditions"][number]["value"],
+      threshold_key: c.row.thresholdKey,
+      age_year_element_key: c.row.ageYearElementKey,
+      age_fallback_year_element_key: c.row.ageFallbackYearElementKey,
+      age_source_element_key: c.row.ageSourceElementKey,
+      documentation_element_key: c.row.documentationElementKey,
+      material_element_key: c.row.materialElementKey,
+      unit_element_key: c.row.unitElementKey,
       sort_order: c.row.sortOrder,
     })),
     rule_test_cases: testCases.map((t) => ({
       rule_key: t.ruleKey,
       name: t.row.name,
       input: t.row.input as Doc["rule_test_cases"][number]["input"],
-      expect_triggered: t.row.expectTriggered,
+      expected_state: t.row.expectedState,
+      inspection_year: t.row.inspectionYear,
       expected_outcome:
         t.row.expectedOutcomeId === null
           ? null
@@ -1032,7 +1059,23 @@ async function applyDocument(
     tx,
     ctx,
     ruleConditions,
-    ["ruleId", "groupNo", "type", "elementKey", "checkpointKey", "operator", "value", "sortOrder"],
+    [
+      "ruleId",
+      "groupNo",
+      "type",
+      "elementKey",
+      "checkpointKey",
+      "operator",
+      "value",
+      "thresholdKey",
+      "ageYearElementKey",
+      "ageFallbackYearElementKey",
+      "ageSourceElementKey",
+      "documentationElementKey",
+      "materialElementKey",
+      "unitElementKey",
+      "sortOrder",
+    ],
     existing.conditions.map((c) => ({ parentId: c.row.ruleId, row: c.row })),
     doc.rule_conditions.map((c) => {
       const ruleId = required(ru.idOf, c.rule_key);
@@ -1046,6 +1089,13 @@ async function applyDocument(
           checkpointKey: c.checkpoint_key,
           operator: c.operator,
           value: c.value,
+          thresholdKey: c.threshold_key,
+          ageYearElementKey: c.age_year_element_key,
+          ageFallbackYearElementKey: c.age_fallback_year_element_key,
+          ageSourceElementKey: c.age_source_element_key,
+          documentationElementKey: c.documentation_element_key,
+          materialElementKey: c.material_element_key,
+          unitElementKey: c.unit_element_key,
           sortOrder: c.sort_order,
         },
       };
@@ -1057,7 +1107,15 @@ async function applyDocument(
     tx,
     ctx,
     ruleTestCases,
-    ["ruleId", "name", "input", "expectTriggered", "expectedOutcomeId", "sortOrder"],
+    [
+      "ruleId",
+      "name",
+      "input",
+      "expectedState",
+      "inspectionYear",
+      "expectedOutcomeId",
+      "sortOrder",
+    ],
     existing.testCases.map((t) => ({ parentId: t.row.ruleId, row: t.row })),
     doc.rule_test_cases.map((t) => {
       const ruleId = required(ru.idOf, t.rule_key);
@@ -1067,7 +1125,8 @@ async function applyDocument(
           ruleId,
           name: t.name,
           input: t.input,
-          expectTriggered: t.expect_triggered,
+          expectedState: t.expected_state,
+          inspectionYear: t.inspection_year,
           expectedOutcomeId: outcomeId(t.expected_outcome),
           sortOrder: t.sort_order,
         },
@@ -1270,6 +1329,7 @@ function validated(document: unknown, kind: TemplateKind): TemplateDocument {
   if (!parsed.success) throw new TemplateValidationError(parsed.issues);
   const issues = [
     ...checkDocumentKeys(parsed.document),
+    ...checkDocumentRules(parsed.document),
     ...checkNoTgLogicInCustom(kind, parsed.document),
   ];
   if (issues.length > 0) throw new TemplateValidationError(issues);
@@ -1656,7 +1716,7 @@ export async function insertTemplateWithoutAccessCheck(
 ): Promise<{ familyId: string; versionId: string }> {
   const now = options.now ?? new Date();
   const document = templateDocumentSchema.parse(options.document ?? {});
-  const issues = checkDocumentKeys(document);
+  const issues = [...checkDocumentKeys(document), ...checkDocumentRules(document)];
   if (issues.length > 0) throw new TemplateValidationError(issues);
   const status = options.status ?? "draft";
   const versionId = uuidv7();

@@ -193,3 +193,140 @@ export function checkDocumentKeys(document: TemplateDocument): TemplateIssue[] {
 
   return issues;
 }
+
+/*
+ * Kontrollene som beskytter reglene i systemmalen (docs/funksjoner/fase2a-regler-bad.md, Omfang 7,
+ * testlagsfunn T-0014 punkt 2, 3 og 4). Rene funksjoner: samme dokument gir samme feil. Meldingene
+ * er norske og nevner regelkoden, slik at den som lager malen finner regelen. Kodene som pekes på,
+ * sjekkes av `checkDocumentKeys`; finnes et kontrollpunkt ikke, hoppes kontrollen over her (feilen
+ * meldes der). Regelkoden for feilen er `schema` (feltene i regelen passer ikke sammen).
+ */
+
+/** Regelformålene som gir TG-forslag (samme som `TG_RULE_PURPOSES` i skjemaet). */
+function givesTgSuggestion(purpose: string): boolean {
+  return purpose === "suggest_outcome" || purpose === "suggest_tgiu";
+}
+
+function ruleIssue(issues: TemplateIssue[], path: string, message: string) {
+  issues.push({ path, rule: "schema", message });
+}
+
+/** En regel som foreslår et avvik, må si hvilket avvik (T-0014 punkt 3). */
+export function checkRuleSuggestsOutcome(document: TemplateDocument): TemplateIssue[] {
+  const issues: TemplateIssue[] = [];
+  document.rules.forEach((r, i) => {
+    if (r.purpose === "suggest_outcome" && r.suggested_outcome === null) {
+      ruleIssue(
+        issues,
+        `rules.${i}.suggested_outcome`,
+        `Regelen «${r.key}» skal foreslå en tilstandsgrad, men det er ikke valgt hvilket avvik den foreslår.`,
+      );
+    }
+  });
+  return issues;
+}
+
+/**
+ * Regelen og avviket den foreslår, må høre til samme kontrollpunkt (T-0014 punkt 4). En regel som
+ * foreslår et avvik, må ha kontrollpunktet satt; det hentes ikke stille fra avviket.
+ */
+export function checkRuleOutcomeSameCheckpoint(document: TemplateDocument): TemplateIssue[] {
+  const issues: TemplateIssue[] = [];
+  document.rules.forEach((r, i) => {
+    if (r.purpose !== "suggest_outcome") return;
+    if (r.target_checkpoint_key === null) {
+      ruleIssue(
+        issues,
+        `rules.${i}.target_checkpoint_key`,
+        `Regelen «${r.key}» foreslår en tilstandsgrad, men det er ikke valgt hvilket kontrollpunkt den gjelder.`,
+      );
+      return;
+    }
+    if (
+      r.suggested_outcome !== null &&
+      r.suggested_outcome.checkpoint_key !== r.target_checkpoint_key
+    ) {
+      ruleIssue(
+        issues,
+        `rules.${i}.suggested_outcome.checkpoint_key`,
+        `Regelen «${r.key}» foreslår et avvik fra et annet kontrollpunkt enn det regelen gjelder.`,
+      );
+    }
+  });
+  return issues;
+}
+
+/** En regel som foreslår TG eller TGIU, kan ikke gjelde et punkt som ikke gir TG (T-0014 punkt 2). */
+export function checkRuleCheckpointGivesTg(document: TemplateDocument): TemplateIssue[] {
+  const issues: TemplateIssue[] = [];
+  const givesTg = new Map(document.checkpoints.map((c) => [c.key, c.gives_tg]));
+  document.rules.forEach((r, i) => {
+    if (!givesTgSuggestion(r.purpose)) return;
+    const targets: { key: string; path: string }[] = [];
+    if (r.target_checkpoint_key !== null) {
+      targets.push({ key: r.target_checkpoint_key, path: `rules.${i}.target_checkpoint_key` });
+    }
+    if (r.suggested_outcome !== null) {
+      targets.push({
+        key: r.suggested_outcome.checkpoint_key,
+        path: `rules.${i}.suggested_outcome.checkpoint_key`,
+      });
+    }
+    // Ett funn per regel, også når kontrollpunktet og avviket peker på samme punkt.
+    const hit = targets.find((t) => givesTg.get(t.key) === false);
+    if (hit) {
+      ruleIssue(
+        issues,
+        hit.path,
+        `Regelen «${r.key}» foreslår tilstandsgrad på et kontrollpunkt som ikke gir tilstandsgrad.`,
+      );
+    }
+  });
+  return issues;
+}
+
+/**
+ * Betingelsen må ha riktige felt for typen. Med terskelkode står grensen i terskelen, så
+ * sammenligning og verdi er tomme. Alder mot levetid trenger feltet med årstallet og feltet med
+ * materialet.
+ */
+export function checkRuleConditionShape(document: TemplateDocument): TemplateIssue[] {
+  const issues: TemplateIssue[] = [];
+  document.rule_conditions.forEach((c, i) => {
+    const path = `rule_conditions.${i}`;
+    if (c.threshold_key !== null && (c.operator !== null || c.value !== null)) {
+      ruleIssue(
+        issues,
+        `${path}.threshold_key`,
+        `En betingelse i regelen «${c.rule_key}» har både terskel og egen grense. Bruk bare terskelen.`,
+      );
+    }
+    if (c.type === "age_vs_lifespan") {
+      if (c.age_year_element_key === null) {
+        ruleIssue(
+          issues,
+          `${path}.age_year_element_key`,
+          `Alderskontrollen i regelen «${c.rule_key}» mangler feltet med årstallet.`,
+        );
+      }
+      if (c.material_element_key === null) {
+        ruleIssue(
+          issues,
+          `${path}.material_element_key`,
+          `Alderskontrollen i regelen «${c.rule_key}» mangler feltet med materialet.`,
+        );
+      }
+    }
+  });
+  return issues;
+}
+
+/** De fire kontrollene av reglene over. Tom liste = reglene henger sammen. */
+export function checkDocumentRules(document: TemplateDocument): TemplateIssue[] {
+  return [
+    ...checkRuleSuggestsOutcome(document),
+    ...checkRuleOutcomeSameCheckpoint(document),
+    ...checkRuleCheckpointGivesTg(document),
+    ...checkRuleConditionShape(document),
+  ];
+}

@@ -848,11 +848,13 @@ TG3 krever alltid kostnad. Det trenger ikke lagres, det følger av `kind`.
 | `element_key` | Feltet betingelsen leser (fast kode) |
 | `operator` | `eq`, `in`, `gt`, `gte`, `lt`, `lte`, `before`, `after` |
 | `value` | Verdien det sammenlignes med |
-| `threshold_key` | Terskel fra terskeltabellen i stedet for fast verdi. *Kommer med regelmotoren og levetider/terskler (A147).* |
-| `age_year_element_key` | For alder: feltet med årstallet. *Kommer med regelmotoren og levetider/terskler (A147).* |
-| `age_source_element_key` | For alder: feltet med kilden for alderen (dokumentert / eier opplyser / byggeår). *Kommer med regelmotoren og levetider/terskler (A147).* |
-| `documentation_element_key` | For alder: feltet som sier om dokumentasjon finnes. *Kommer med regelmotoren og levetider/terskler (A147).* |
-| `material_element_key` | For alder: feltet med materialvalget (gir materialkoden). *Kommer med regelmotoren og levetider/terskler (A147).* |
+| `threshold_key` | Terskelens faste kode i stedet for fast verdi. Retningen står da på terskelen, og `operator` og `value` er tomme. |
+| `age_year_element_key` | For alder: feltet med årstallet. |
+| `age_fallback_year_element_key` | For alder: feltet som brukes når årstallet mangler (byggeåret). |
+| `age_source_element_key` | For alder: feltet med kilden for alderen (dokumentert / eier opplyser / byggeår). |
+| `documentation_element_key` | For alder: feltet som sier om dokumentasjon finnes. `value` på betingelsen er listen over valgkodene som betyr «uten dokumentasjon». |
+| `material_element_key` | For alder: feltet med materialvalget (gir materialkoden). |
+| `unit_element_key` | For tall mot terskel: feltet med enheten målingen er gjort i. Annen enhet enn terskelens gir «ikke vurdert». |
 | `checkpoint_key` | For `checkpoint_tg`: kontrollpunktet som leses (fast kode) |
 
 **Betingelsestypene** (fem nye typer lagt til etter innspill D5):
@@ -890,7 +892,9 @@ TG3 krever alltid kostnad. Det trenger ikke lagres, det følger av `kind`.
 | Felt | Forklaring |
 |---|---|
 | `lifespan_tables.name`, `ns_edition`, `valid_from` | Tabellens navn, NS-utgave og gyldig fra |
-| `lifespan_entries.material_code` | Materialkoden (samme som i valgene) |
+| `lifespan_tables.key` | Fast settkode. Følger med i regelsvaret. |
+| `lifespan_entries.key` | Fast kode på trinnet |
+| `lifespan_entries.material_code` | Materialkoden (samme som i valgene). Tom = alle materialer. |
 | `lifespan_entries.component` | Komponent, for eksempel «Skjult vanntett sjikt – foliemembran» |
 | `from_year`, `to_year` | Trinnet gjelder løsninger fra og til dette året (tom = ingen grense) |
 | `min_age` | Eller: alder i år før trinnet slår til |
@@ -898,6 +902,7 @@ TG3 krever alltid kostnad. Det trenger ikke lagres, det følger av `kind`.
 | `outcome_kind` | Hva som foreslås: `tg2` eller `tg3` |
 | `source_ref` | Kilde i bakgrunnen (tabellnummer) |
 | `sort_order` | Rekkefølge. Passer flere trinn, vinner det strengeste. |
+| `status` | `draft` (utkast, ikke godkjent av fagrådet) eller `approved`. Samme koder som `text_status`. |
 
 Fritekstfeltet `special_rule` er tatt ut. Det som før skulle stå der, skrives som trinn.
 
@@ -905,11 +910,13 @@ Fritekstfeltet `special_rule` er tatt ut. Det som før skulle stå der, skrives 
 
 | Felt | Forklaring |
 |---|---|
+| `threshold_tables.key` | Fast settkode. Følger med i regelsvaret. |
 | `threshold_entries.key` | Fast kode, for eksempel `floor_local_deviation_mm` |
 | `description` | Hva som måles |
 | `unit`, `value`, `comparator` | Enhet, grenseverdi og retning (over/under) |
 | `outcome_kind` | Hva som foreslås når grensen passeres |
 | `source_ref` | Kilde i bakgrunnen |
+| `status` | `draft` (utkast, ikke godkjent av fagrådet) eller `approved` |
 | `verified_by`, `verified_at` | Fagrådet har bekreftet grensen (del 1 R8: grensene må verifiseres før bruk) |
 
 **`cost_band_sets`** og **`cost_bands`** – kostnadsintervaller (IVITs fem beholdes, beslutning 23.10 og 27.10.2026). I tillegg kan takstmannen skrive et eget beløp i stedet for intervall (se `deviations.cost_amount` i 4.7).
@@ -927,7 +934,8 @@ Fritekstfeltet `special_rule` er tatt ut. Det som før skulle stå der, skrives 
 | `rule_id` | Regelen |
 | `name` | For eksempel «Folie 2004 uten dokumentasjon gir TG2» |
 | `input` | Testsvarene (felt og verdier) |
-| `expect_triggered` | Skal regelen slå til (ja/nei) |
+| `expected_state` | Forventet tilstand: `triggered` (slår til), `not_triggered` (slår ikke til) eller `not_evaluated` (ikke vurdert). Erstatter `expect_triggered` (A232). |
+| `inspection_year` | Befaringsåret testsaken regner alder mot. Tom = regelen bruker ikke alder. |
 | `expected_outcome_id` | Forventet utfall |
 | `last_result`, `last_run_at` | Sist kjørt, og om testen besto. *Kommer med kontrollen før publisering (A147).* |
 
@@ -943,7 +951,7 @@ En malversjon kan ikke publiseres hvis en test feiler. Testene kjøres også aut
 - **Rekkefølge:** `sort_order` (heltall, standard 0) på seksjoner, felt, valg, kontrollpunkter, spørsmål, utfall, tiltak, regler, betingelser og testtilfeller. På regler, betingelser og testtilfeller er den lagt til fordi listene erstattes samlet når rekkefølgen er endret (A142).
 - **Typer:** `room_type_groups` og `related_checkpoint_keys` er tekstlister (`text[]`, tom = ingen). `table_columns` er `jsonb` og må være en liste (CHECK). `default_value` og `rule_conditions.value` er `jsonb`, fordi verdien kan være tekst, tall eller en liste. `rule_test_cases.input` er et `jsonb`-objekt. `min_value` og `max_value` er `numeric`, med CHECK `min_value <= max_value`. `phrase_slot` er en av `description`, `deviation`, `cause`, `consequence`, `measure`, `cost_text` og `summary`. `rule_conditions.group_no` er tom (uten gruppe) eller minst 1.
 - **De faste kodelistene** står som `as const`-lister i `src/db/schema/templates.ts` (`TEMPLATE_KINDS`, `TEMPLATE_VERSION_STATUSES`, `FIELD_TYPES`, `PHRASE_SLOTS`, `OUTCOME_KINDS`, `RULE_PURPOSES`, `RULE_CONDITION_TYPES` med flere), og CHECK-reglene er laget fra dem.
-- **Venter:** `template_families.owner_employee_id`, `company_id` og `archived_at` (A146, kommer med egne maler i fase 5). `template_versions.lifespan_table_id`, `threshold_table_id` og `cost_band_set_id` (kommer med levetider, terskler og kostnadsintervaller). `rule_conditions.threshold_key`, `age_year_element_key`, `age_source_element_key`, `documentation_element_key` og `material_element_key`, og `rule_test_cases.last_result` og `last_run_at` (A147, kommer med regelmotoren og kontrollen før publisering). `room_type_groups` sjekkes ikke mot romgruppene i databasen; det gjør Zod-skjemaet.
+- **Venter:** `template_families.owner_employee_id`, `company_id` og `archived_at` (A146, kommer med egne maler i fase 5). `template_versions.lifespan_table_id`, `threshold_table_id` og `cost_band_set_id` (kommer med levetider, terskler og kostnadsintervaller). `rule_test_cases.last_result` og `last_run_at` (A147, kommer med kontrollen før publisering). `room_type_groups` sjekkes ikke mot romgruppene i databasen; det gjør Zod-skjemaet.
 
 **Bygget i fase 2a (12.11.2026, malen for ett bad):** Systemmalen «Tilstandsrapport bolig» med ett våtrom, som data i `src/db/seed/templates/wet-room.ts`. Oppgavekort: `docs/funksjoner/fase2a-mal-bad.md`; beslutningene A200–A209 og ADR 0007.
 
@@ -953,6 +961,14 @@ En malversjon kan ikke publiseres hvis en test feiler. Testene kjøres også aut
 - **Sammenligning og seed:** `isSameTemplateContent(a, b)` i `src/core/templates` sier om to maldokumenter har samme innhold, uavhengig av rekkefølgen i listene. `ensureSampleTemplate` legger malen i prøveorganisasjonen som publisert versjon, og lager ny versjon bare når innholdet er endret (A205, A209).
 
 ---
+
+**Bygget i fase 2a (12.11.2026, regelmotoren):** Oppgavekort: `docs/funksjoner/fase2a-regler-bad.md`; ADR 0009; beslutningene A224–A232.
+
+- **Regelmotoren** ligger i `src/core/rules` som rene funksjoner (`evaluateRules`, `runRuleTestCases`) og kjører likt på iPaden og på serveren. Den leser maldokumentet, svarene (`feltkode → verdi`), befaringsåret, levetidene og tersklene, og gir ett regelsvar (`RuleResult`) per aktive regel. Svaret har bare faste koder og tall: regelkode, tilstand, forslag (utfall eller TGIU på kontrollpunktet), én begrunnelse per betingelse og settkodene. Typene står i `src/core/rules/types.ts`, kodene i `src/core/rules/codes.ts`.
+- **Tre tilstander** (`RULE_RESULT_STATES`): `triggered`, `not_triggered` og `not_evaluated`. Tomt eller ugyldig felt gir `not_evaluated`, aldri en stille «slår ikke til».
+- **Kjøres nå:** formålene `suggest_outcome` og `suggest_tgiu` (bare i systemmalen for tilstandsrapport) og betingelsestypene `option_selected`, `number_vs_limit` og `age_vs_lifespan`. Resten gir `not_evaluated` til de bygges i 2a-3.
+- **Migrering `0030_regler-bad`:** `rule_conditions` har fått `threshold_key`, `age_year_element_key`, `age_fallback_year_element_key`, `age_source_element_key`, `documentation_element_key`, `material_element_key` og `unit_element_key` (valgfrie, samme format-CHECK som `element_key`). `rule_test_cases` har fått `expected_state` (påkrevd, CHECK fra `RULE_RESULT_STATES`; fylt fra `expect_triggered`, som er fjernet) og `inspection_year` (valgfri, 1900–2200). Alle lagres, leses, kopieres til nytt utkast og telles i «endret».
+- **Levetider og terskler er kodedata nå**, ikke tabeller: `src/core/rules/data/lifespans.ts` og `thresholds.ts`, med samme form som `lifespan_entries` og `threshold_entries` over. Hver rad har fast `key` og `status`, og hvert sett har en fast settkode. Tabellene `lifespan_tables`, `lifespan_entries`, `threshold_tables` og `threshold_entries` kommer i 2a-3 og fylles med de samme kodene. Til da har terskelen ikke `outcome_kind`, `verified_by` eller `verified_at`: hva som foreslås, står på regelen.
 
 ### 4.6 Fraser
 
@@ -2176,6 +2192,18 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Terskeltabell | `threshold_tables`, `threshold_entries` | |
 | Kostnadsintervall | `cost_bands` | |
 | Testtilfelle | `rule_test_cases` | |
+| Regelmotor | `src/core/rules`, `evaluateRules` | Rene funksjoner, samme kode på iPad og server (ADR 0009) |
+| Regelsvar | `RuleResult` | Svaret fra én regel: kode, tilstand, forslag og begrunnelse |
+| Slår til / slår ikke til / ikke vurdert | `triggered` / `not_triggered` / `not_evaluated` | `RULE_RESULT_STATES`. Også `rule_test_cases.expected_state` |
+| Forventet tilstand | `expected_state` | På testtilfellet. Erstatter `expect_triggered` |
+| Befaringsår | `inspectionYear`, `inspection_year` | Alder regnes mot dette, ikke dagens dato |
+| Forslag (fra regel) | `RuleSuggestion` | Utfall eller TGIU på kontrollpunktet. Aldri TG0 |
+| Begrunnelse (regel) | `RuleReason`, `reasons` | Én per betingelse, bare koder og tall |
+| Begrunnelseskode | `ConditionReasonCode`, `RuleReasonCode` | For eksempel `material_unknown`, `unit_not_supported` |
+| Terskelkode | `threshold_key` | Fast kode på en terskel, for eksempel `wet_room_hole_moisture_weight_percent` |
+| Levetidssett / terskelsett | `LifespanSet` / `ThresholdSet` | Kodedata med fast settkode (`key`) til tabellene kommer i 2a-3 |
+| Settkode | `lifespan_set_key`, `threshold_set_key` | Hvilket sett regelsvaret er regnet med |
+| Reserveårstall | `age_fallback_year_element_key` | Feltet som brukes når årstallet mangler (byggeåret) |
 | Kilde (i bakgrunnen) | `source_ref` | Står ikke i rapporten |
 | Frase | `phrases` | |
 | Felles / mine | `common` / `mine` | `phrases.level` |
@@ -2429,3 +2457,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 11.11.2026 | KI-leverandør (fase 2a, grensesnitt): leverandørkoden `anthropic` på porten `ai` med `secret_ref = ANTHROPIC_API_KEY` og `settings.model`, `settings.features` og `settings.pricing`. `ResolvedAiProvider` har fått `features`. Ingen ny tabell og ingen migrering. Nye ord i ordlisten (KI-adapter, modell, påslåtte KI-funksjoner, KI-pris). | A193–A197, `docs/funksjoner/fase2a-ki-leverandor.md`, ADR 0006 del 2 |
 | 12.11.2026 | Malen for ett bad (fase 2a): `text_status` (`TEXT_STATUSES`) på `outcomes` og `standard_measures` og `default_cause_text` på `outcomes` i migrering `0028_mal-tekststatus`. Eksemplet `wet_room.membrane` er byttet til `wet_room.membrane_drain`. Hulltakingsmålingene er enkeltfelt nå og blir `table` i 2a-3. Nye ord i ordlisten (`isSameTemplateContent`, `ensureSampleTemplate`, seksjonen og de åtte kontrollpunktene for våtrom). Se «Bygget i fase 2a» i 4.5. | A200–A209, `docs/funksjoner/fase2a-mal-bad.md`, ADR 0007 |
 | 12.11.2026 | Microsoft-innlogging (fase 2a, grensesnitt, ADR 0008): ingen ny tabell og ingen migrering. `accounts` beskrevet (`provider_id = 'microsoft'`, `account_id` = `oid`, tokens lagres ikke). Reservert hemmelighetsnavn `MS_LOGIN_CLIENT_SECRET`. Ordlisten: Microsoft-innlogging, Microsoft-katalog, aktivt ansattforhold, reservert hemmelighetsnavn. |
+| 12.11.2026 | Regelmotoren (fase 2a, ADR 0009): `src/core/rules` med regelsvar i faste koder og tre tilstander (`RULE_RESULT_STATES`). Migrering `0030_regler-bad`: sju nye kolonner på `rule_conditions` (`threshold_key`, alder-feltene, `unit_element_key`), og `expected_state` og `inspection_year` på `rule_test_cases` (`expect_triggered` er fjernet). Levetidstrinn og terskler har fått `key` og `status`, og settene en settkode; de er kodedata til tabellene kommer i 2a-3. |
