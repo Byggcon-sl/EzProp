@@ -2,6 +2,7 @@
 
 Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og 09.11.2026).
 
+- **12.11.2026 (Branch `fase2a-regler-bad`, PR #167):** 2a-2: «Reglene badet trenger» krysset av (regelmotoren i `src/core/rules`, fire regler med testsaker i badmalen, levetider og fuktgrense som utkast, A224–A232). Statuslinjen for 2a oppdatert.
 - **12.11.2026 (Branch `fase2a-regler-bad`, funn T-0003):** Planlinjen for «Reglene badet trenger» (2a-2) presisert etter Ståles svar 10.11.2026 (59a): er det tatt hull og målt uten forhøyet fukt, gir alderen alene ikke TG2 på tilliggende konstruksjoner; hulltaking ikke utført gir TGIU (A224).
 - **12.11.2026 (Prosjektlederen, funn T-0021):** «Beslutningsnotat om KI-leverandør» flyttet til `docs/plan/levert.md` (PR #154). Radene fra 11.–12.11.2026 flyttet fra tabellen hit, så nyeste står øverst. Planen sier «Sist oppdatert: 12.11.2026».
 - **12.11.2026 (Læringsløkken):** «Malen for ett bad» flyttet til `docs/plan/levert.md` (PR #159 merget). Statuslinjen for 2a: neste er reglene badet trenger.
