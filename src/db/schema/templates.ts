@@ -40,7 +40,8 @@ import { baseColumns } from "./common";
  *
  * Regelmotoren (ADR 0009, migrering `0030_regler-bad`): `rule_conditions` har `threshold_key`,
  * alder-feltene og `unit_element_key`, og `rule_test_cases` har `expected_state` (tre tilstander)
- * og `inspection_year`.
+ * og `inspection_year`. Migrering `0031`: `rules.purpose` har fått `suggest_tg0`, og
+ * `rule_conditions` har `negate` (betingelsen snus, A237).
  *
  * Listene under er de faste kodene. CHECK-reglene bygges fra dem, og `@/core/templates` bruker dem
  * i Zod-skjemaet.
@@ -94,9 +95,19 @@ export const CAUSE_CRITERIA = [
   "missing_documentation",
   "other",
 ] as const;
-export const RULE_PURPOSES = ["show", "suggest_outcome", "suggest_tgiu", "validate"] as const;
+/**
+ * Regelformålene. `suggest_tg0` (Ståle 12.11.2026, F1; A234) foreslår TG0 på kontrollpunktet i
+ * `target_checkpoint_key`, uten utfall: TG0 er ikke et avvik. Nye koder legges til sist.
+ */
+export const RULE_PURPOSES = [
+  "show",
+  "suggest_outcome",
+  "suggest_tgiu",
+  "validate",
+  "suggest_tg0",
+] as const;
 /** Regeltypene som er TG-logikk, og som bare er lov i systemmalen (beslutning 27.10.2026). */
-export const TG_RULE_PURPOSES = ["suggest_outcome", "suggest_tgiu"] as const;
+export const TG_RULE_PURPOSES = ["suggest_outcome", "suggest_tgiu", "suggest_tg0"] as const;
 export const RULE_MATCHES = ["all", "any"] as const;
 export const RULE_SEVERITIES = ["blocker", "warning"] as const;
 export const RULE_CONDITION_TYPES = [
@@ -618,6 +629,11 @@ export const ruleConditions = pgTable(
     materialElementKey: text("material_element_key"),
     /** For `number_vs_limit` med terskel: feltet med enheten målingen er gjort i. */
     unitElementKey: text("unit_element_key"),
+    /**
+     * Snur betingelsen (A237): sann blir usann og usann blir sann. «Ikke vurdert» står. Brukes for
+     * «under grensen» mot samme terskel som «lik eller over», så tallet står ett sted.
+     */
+    negate: boolean("negate").notNull().default(false),
     sortOrder: sortOrder(),
   },
   (table) => [

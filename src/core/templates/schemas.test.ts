@@ -3,6 +3,7 @@ import { OUTCOME_KINDS } from "@/db/schema";
 import { buildTemplateDocument } from "../../../tests/template-document";
 import {
   TEMPLATE_ISSUE_RULES,
+  checkNoBlockerInCustom,
   checkNoTgLogicInCustom,
   isSameTemplateContent,
   parseTemplateDocument,
@@ -279,6 +280,12 @@ const tgCases: {
     rejected: true,
   },
   {
+    name: "custom med suggest_tg0",
+    kind: "custom",
+    change: onlyRules("suggest_tg0"),
+    rejected: true,
+  },
+  {
     name: "custom med show og validate",
     kind: "custom",
     change: onlyRules("show", "validate"),
@@ -304,6 +311,19 @@ const tgCases: {
     },
     rejected: false,
   },
+  {
+    name: "R4.2 system med suggest_tg0",
+    kind: "system",
+    change: (doc) => {
+      doc.rules.push({
+        key: "rule.tg0",
+        name: "TG0-forslag",
+        purpose: "suggest_tg0",
+        target_checkpoint_key: "cp.one",
+      });
+    },
+    rejected: false,
+  },
 ];
 
 describe("2.5 checkNoTgLogicInCustom (beslutning 27.10.2026)", () => {
@@ -316,6 +336,74 @@ describe("2.5 checkNoTgLogicInCustom (beslutning 27.10.2026)", () => {
     } else {
       expect(issues).toEqual([]);
     }
+  });
+});
+
+// --- R4.4 checkNoBlockerInCustom (Ståle 12.11.2026, F9) ------------------------------------------
+
+function validateRule(severity: "blocker" | "warning"): Change {
+  return (doc) => {
+    onlyRules()(doc);
+    doc.rules = [
+      {
+        key: "rule.stopp",
+        name: "Kontroll",
+        purpose: "validate",
+        target_element_key: "el.count",
+        severity,
+        message: "Meldingstekst",
+      },
+    ];
+  };
+}
+
+describe("R4.4 checkNoBlockerInCustom (F9)", () => {
+  it.each<{ kind: "system" | "custom"; severity: "blocker" | "warning"; rejected: boolean }>([
+    { kind: "custom", severity: "blocker", rejected: true },
+    { kind: "custom", severity: "warning", rejected: false },
+    { kind: "system", severity: "blocker", rejected: false },
+    { kind: "system", severity: "warning", rejected: false },
+  ])("$kind med $severity: avvist = $rejected", ({ kind, severity, rejected }) => {
+    const issues = checkNoBlockerInCustom(kind, parsedDocument(validateRule(severity)));
+    if (!rejected) {
+      expect(issues).toEqual([]);
+      return;
+    }
+    expect(issues).toEqual([expect.objectContaining({ path: "rules.0.severity", rule: "schema" })]);
+    expect(issues[0]!.message).toContain("rule.stopp");
+    expect(issues[0]!.message).toMatch(/egen mal/);
+  });
+
+  it("R4.5 kalles på samme sted som checkNoTgLogicInCustom (begge lagringsveiene)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(new URL("./templates.ts", import.meta.url), "utf8");
+    expect(source).toMatch(
+      /checkNoTgLogicInCustom\(kind, parsed\.document\),\s*\.\.\.checkNoBlockerInCustom\(kind, parsed\.document\)/,
+    );
+  });
+});
+
+describe("R4.7 negate i dokumentformatet", () => {
+  it("betingelse uten negate leses som false", () => {
+    expect(parsedDocument().rule_conditions.every((c) => c.negate === false)).toBe(true);
+  });
+
+  it("negate som tekst avvises", () => {
+    expectRejected(
+      (doc) => {
+        (doc.rule_conditions[0] as Record<string, unknown>).negate = "ja";
+      },
+      "schema",
+      "rule_conditions.0.negate",
+    );
+  });
+
+  it("to dokumenter som bare skiller seg i negate er ikke like", () => {
+    const a = parsedDocument();
+    const b = parsedDocument((doc) => {
+      (doc.rule_conditions[0] as Record<string, unknown>).negate = true;
+    });
+    expect(isSameTemplateContent(a, b)).toBe(false);
   });
 });
 

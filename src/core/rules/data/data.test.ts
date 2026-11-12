@@ -3,8 +3,8 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { TEMPLATE_KEY_PATTERN } from "@/db/schema";
 import { wetRoomTemplate } from "@/db/seed/templates/wet-room";
-import { WET_ROOM_LIFESPANS } from "./lifespans";
-import { WET_ROOM_THRESHOLDS } from "./thresholds";
+import { SOURCE_RULE_AGE, WET_ROOM_LIFESPANS } from "./lifespans";
+import { SOURCE_RULE_MOISTURE, WET_ROOM_THRESHOLDS } from "./thresholds";
 
 /*
  * Levetidene og terskelen som kodedata (docs/funksjoner/fase2a-regler-bad-testplan.md avsnitt 2
@@ -71,9 +71,36 @@ describe("2 levetider og terskel", () => {
     for (const t of WET_ROOM_THRESHOLDS.entries) {
       expect(t.status, t.key).toBe("draft");
       expect(t.source_ref.trim().length, t.key).toBeGreaterThan(0);
-      // Grensen er ikke bekreftet mot en kilde (spørsmål 71): ingen NS-punkt eller Byggforsk-blad
-      expect(t.source_ref, t.key).not.toMatch(/\bNS\b|NS\s*\d|Byggforsk|SINTEF|\d{3}\.\d{3}/i);
-      expect(t.source_ref, t.key).toMatch(/71/);
+    }
+  });
+
+  it("R2.1 source_ns3600: kilden for fukt og alder er NS 3600:2025, Ståles svar og utkast (F3)", () => {
+    for (const source of [SOURCE_RULE_MOISTURE, SOURCE_RULE_AGE]) {
+      expect(source).toContain("NS 3600:2025");
+      expect(source).toContain("Ståle 12.11.2026");
+      expect(source).toContain("utkast, ikke godkjent av fagrådet");
+      // Ingen punkt eller blad fra en kilde: bare navnet på standarden
+      expect(source).not.toMatch(/Byggforsk|SINTEF|tillegg|pkt\.|\d{3}\.\d{3}/i);
+    }
+    for (const t of WET_ROOM_THRESHOLDS.entries)
+      expect(t.source_ref, t.key).toBe(SOURCE_RULE_MOISTURE);
+    for (const e of entries) expect(e.source_ref, e.key).toBe(SOURCE_RULE_AGE);
+  });
+
+  it("R2.2 source_short: kildeteksten er kort (ingen tekst fra standarden)", () => {
+    for (const source of [SOURCE_RULE_MOISTURE, SOURCE_RULE_AGE]) {
+      expect(source.length).toBeLessThanOrEqual(200);
+    }
+  });
+
+  it("R2.4 no_guess_words: ingen gjetteord eller «levetid» i kilder og meldinger", () => {
+    const texts = [
+      ...entries.map((e) => e.source_ref),
+      ...WET_ROOM_THRESHOLDS.entries.map((t) => t.source_ref),
+      ...(wetRoomTemplate.rules ?? []).flatMap((r) => [r.message ?? "", r.source_ref ?? ""]),
+    ];
+    for (const text of texts) {
+      expect(text).not.toMatch(/antas|trolig|sannsynligvis|levetid/i);
     }
   });
 

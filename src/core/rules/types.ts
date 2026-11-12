@@ -136,15 +136,27 @@ export type OutcomeRef = {
 };
 
 /**
- * Forslaget fra en regel som slo til. Aldri TG0, og aldri en ferdig satt TG: takstmannen godtar,
- * endrer eller avviser. `tgiu` er et forslag om TGIU på kontrollpunktet, ikke et utfall.
+ * Forslaget fra en regel som slo til. Aldri en ferdig satt TG: takstmannen godtar, endrer eller
+ * avviser. `tgiu` og `tg0` er forslag om TGIU eller TG0 på kontrollpunktet, ikke utfall (TG0 er
+ * ikke et avvik). `tg0` kommer bare fra formålet `suggest_tg0` (Ståle 12.11.2026, F1; A234).
+ * Motoren løser ikke motstrid: reglene i malen skal ikke gi `tg0` og et annet forslag på samme
+ * kontrollpunkt for samme svar (sikres av testsakene i malen).
  */
 export type RuleSuggestion =
-  ({ kind: "outcome" } & OutcomeRef) | { kind: "tgiu"; checkpoint_key: string };
+  | ({ kind: "outcome" } & OutcomeRef)
+  | { kind: "tgiu"; checkpoint_key: string }
+  | { kind: "tg0"; checkpoint_key: string };
 
 type ConditionReasonBase = {
   /** Gruppen betingelsen hører til. `null` = uten gruppe. */
   group_no: number | null;
+  /** Om betingelsen er snudd (`rule_conditions.negate`, A237). */
+  negated: boolean;
+  /**
+   * Verdien etter snuing: med `negated` blir `true` til `false` og `false` til `true`. `unknown`
+   * står. De andre feltene i begrunnelsen (verdi, grense, retning) viser sammenligningen før
+   * snuing.
+   */
   truth: ConditionTruth;
   /** Hvorfor betingelsen er `unknown`, eller en opplysning om forslaget. `null` = ingen. */
   code: ConditionReasonCode | null;
@@ -253,7 +265,8 @@ export type RuleTestCaseResult = {
  * - Ett svar per aktive regel, sortert på `sort_order` og så `key`. Regler og betingelser med
  *   `active = false` eller `deleted_at` satt gir ingen svar. Motoren sjekker dette selv og stoler
  *   ikke på at dokumentet er rent.
- * - Bare `suggest_outcome` og `suggest_tgiu` kjøres (`show` og `validate` gir `not_evaluated`
+ * - Bare `suggest_outcome`, `suggest_tgiu` og `suggest_tg0` kjøres (`EVALUATED_RULE_PURPOSES`;
+ *   `show` og `validate` gir `not_evaluated`
  *   med `purpose_not_supported`), og bare når malen er `system` + `condition_report` (ellers
  *   `not_evaluated` med `tg_logic_not_allowed`).
  * - Treverdilogikk. `all`: én usann gir `not_triggered`, ellers gir én ukjent `not_evaluated`,

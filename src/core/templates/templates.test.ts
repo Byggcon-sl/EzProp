@@ -2090,8 +2090,12 @@ describe("mal for bad: text_status og default_cause_text i malmotoren", () => {
     const wanted = parseTemplateDocument(wetRoomTemplate);
     if (!wanted.success) throw new Error("malen for badet er ugyldig");
     expect(sortedLists(document)).toEqual(sortedLists(wanted.document));
-    // Reglene badet trenger (testplan 6.9): fire regler og alle testsakene
-    expect(document.rules).toHaveLength(4);
+    // Reglene badet trenger (testplan 6.9): fem regler (TG0-regelen fra F1) og alle testsakene
+    expect(document.rules).toHaveLength(5);
+    // `negate` lagres og leses tilbake (M5.5)
+    expect(document.rule_conditions.filter((c) => c.negate).map((c) => c.rule_key)).toEqual([
+      "wet_room.hole_no_elevated_moisture",
+    ]);
     expect(document.rule_test_cases).toHaveLength(wanted.document.rule_test_cases.length);
     expect(document.rule_test_cases.length).toBeGreaterThan(0);
     expect(document.rule_conditions.some((c) => c.threshold_key !== null)).toBe(true);
@@ -2462,7 +2466,7 @@ describe("regler bad: de nye regelfeltene i malmotoren", () => {
     expect(counts.added).toBeGreaterThan(100);
     await expect(publishVersion(admin, org.id, versionId, null)).resolves.toEqual({ versionId });
     const { document } = await getTemplateVersion(admin, org.id, versionId);
-    expect(document.rules).toHaveLength(4);
+    expect(document.rules).toHaveLength(5);
     expect(document.rule_test_cases.length).toBeGreaterThan(0);
   });
 

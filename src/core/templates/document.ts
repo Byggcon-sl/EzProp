@@ -1,3 +1,4 @@
+import { TG_RULE_PURPOSES } from "@/db/schema";
 import type { TemplateIssue } from "./errors";
 import type { TemplateDocument } from "./schemas";
 
@@ -21,6 +22,16 @@ export function outcomeScope(checkpointKey: string, questionKey: string, outcome
 export function optionScope(elementKey: string, optionKey: string): string {
   return `${elementKey}${SEP}${optionKey}`;
 }
+
+/** Feltkodene på en betingelse utenom `element_key`. Alle skal peke på et felt i dokumentet. */
+const CONDITION_ELEMENT_FIELDS = [
+  "age_year_element_key",
+  "age_fallback_year_element_key",
+  "age_source_element_key",
+  "documentation_element_key",
+  "material_element_key",
+  "unit_element_key",
+] as const;
 
 function duplicateIssues(
   issues: TemplateIssue[],
@@ -185,6 +196,13 @@ export function checkDocumentKeys(document: TemplateDocument): TemplateIssue[] {
     if (c.checkpoint_key !== null && !checkpoints.has(c.checkpoint_key)) {
       unknown(issues, `rule_conditions.${i}.checkpoint_key`, NO_CHECKPOINT);
     }
+    // Feltene alderskontrollen og målingen leser (småfunn fra #167).
+    for (const field of CONDITION_ELEMENT_FIELDS) {
+      const key = c[field];
+      if (key !== null && !elements.has(key)) {
+        unknown(issues, `rule_conditions.${i}.${field}`, NO_ELEMENT);
+      }
+    }
   });
   d.rule_test_cases.forEach((t, i) => {
     if (!rules.has(t.rule_key)) unknown(issues, `rule_test_cases.${i}.rule_key`, NO_RULE);
@@ -202,16 +220,24 @@ export function checkDocumentKeys(document: TemplateDocument): TemplateIssue[] {
  * meldes der). Regelkoden for feilen er `schema` (feltene i regelen passer ikke sammen).
  */
 
-/** Regelformålene som gir TG-forslag (samme som `TG_RULE_PURPOSES` i skjemaet). */
+/** Regelformålene som gir TG-forslag (`TG_RULE_PURPOSES` i skjemaet). */
 function givesTgSuggestion(purpose: string): boolean {
-  return purpose === "suggest_outcome" || purpose === "suggest_tgiu";
+  return (TG_RULE_PURPOSES as readonly string[]).includes(purpose);
+}
+
+/** Formålene som foreslår TGIU eller TG0 på kontrollpunktet, uten utfall. */
+function suggestsOnCheckpoint(purpose: string): boolean {
+  return purpose === "suggest_tgiu" || purpose === "suggest_tg0";
 }
 
 function ruleIssue(issues: TemplateIssue[], path: string, message: string) {
   issues.push({ path, rule: "schema", message });
 }
 
-/** En regel som foreslår et avvik, må si hvilket avvik (T-0014 punkt 3). */
+/**
+ * En regel som foreslår et avvik, må si hvilket avvik (T-0014 punkt 3). En regel som foreslår TGIU
+ * eller TG0, må si hvilket kontrollpunkt, og foreslår ikke et avvik (TG0 er ikke et avvik, A234).
+ */
 export function checkRuleSuggestsOutcome(document: TemplateDocument): TemplateIssue[] {
   const issues: TemplateIssue[] = [];
   document.rules.forEach((r, i) => {
@@ -220,6 +246,21 @@ export function checkRuleSuggestsOutcome(document: TemplateDocument): TemplateIs
         issues,
         `rules.${i}.suggested_outcome`,
         `Regelen «${r.key}» skal foreslå en tilstandsgrad, men det er ikke valgt hvilket avvik den foreslår.`,
+      );
+    }
+    if (!suggestsOnCheckpoint(r.purpose)) return;
+    if (r.target_checkpoint_key === null) {
+      ruleIssue(
+        issues,
+        `rules.${i}.target_checkpoint_key`,
+        `Regelen «${r.key}» foreslår en tilstandsgrad, men det er ikke valgt hvilket kontrollpunkt den gjelder.`,
+      );
+    }
+    if (r.suggested_outcome !== null) {
+      ruleIssue(
+        issues,
+        `rules.${i}.suggested_outcome`,
+        `Regelen «${r.key}» foreslår TGIU eller TG0 og skal ikke ha et avvik.`,
       );
     }
   });
@@ -256,7 +297,10 @@ export function checkRuleOutcomeSameCheckpoint(document: TemplateDocument): Temp
   return issues;
 }
 
-/** En regel som foreslår TG eller TGIU, kan ikke gjelde et punkt som ikke gir TG (T-0014 punkt 2). */
+/**
+ * En regel som foreslår TG, TGIU eller TG0, kan ikke gjelde et punkt som ikke gir TG (T-0014
+ * punkt 2).
+ */
 export function checkRuleCheckpointGivesTg(document: TemplateDocument): TemplateIssue[] {
   const issues: TemplateIssue[] = [];
   const givesTg = new Map(document.checkpoints.map((c) => [c.key, c.gives_tg]));

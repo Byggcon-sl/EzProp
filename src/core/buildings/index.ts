@@ -1,5 +1,6 @@
 export {
   AREA_TYPES,
+  FLOOR_NAME_SUGGESTIONS,
   MEASURING_METHODS,
   ROOM_TYPE_GROUPS,
   ROOM_TYPE_KEYS,
@@ -10,15 +11,18 @@ export {
   roomTypeLabel,
   suggestAreaType,
   suggestBelowGround,
+  suggestFloor,
   sumAssignmentArea,
   sumBuildingArea,
   sumFloorArea,
   type AreaSum,
   type AreaType,
   type AreaValues,
+  type FloorSuggestion,
   type MeasuringMethod,
   type RoomType,
   type RoomTypeGroup,
+  type SuggestFloor,
 } from "./codes";
 export { BuildingNotEmptyError, FloorNotEmptyError, PropertyMissingError } from "./errors";
 export {

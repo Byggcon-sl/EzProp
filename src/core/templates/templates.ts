@@ -52,6 +52,7 @@ import {
 } from "./errors";
 import {
   changeNoteSchema,
+  checkNoBlockerInCustom,
   checkNoTgLogicInCustom,
   createTemplateFamilyInputSchema,
   norwegianMessage,
@@ -482,6 +483,7 @@ function toDocument(content: Content): TemplateDocument {
       c.row.documentationElementKey,
       c.row.materialElementKey,
       c.row.unitElementKey,
+      c.row.negate,
     ]),
   ]);
   const testCases = sortBy(content.testCases, (t) => [
@@ -605,6 +607,7 @@ function toDocument(content: Content): TemplateDocument {
       documentation_element_key: c.row.documentationElementKey,
       material_element_key: c.row.materialElementKey,
       unit_element_key: c.row.unitElementKey,
+      negate: c.row.negate,
       sort_order: c.row.sortOrder,
     })),
     rule_test_cases: testCases.map((t) => ({
@@ -1074,6 +1077,7 @@ async function applyDocument(
       "documentationElementKey",
       "materialElementKey",
       "unitElementKey",
+      "negate",
       "sortOrder",
     ],
     existing.conditions.map((c) => ({ parentId: c.row.ruleId, row: c.row })),
@@ -1096,6 +1100,7 @@ async function applyDocument(
           documentationElementKey: c.documentation_element_key,
           materialElementKey: c.material_element_key,
           unitElementKey: c.unit_element_key,
+          negate: c.negate,
           sortOrder: c.sort_order,
         },
       };
@@ -1331,6 +1336,7 @@ function validated(document: unknown, kind: TemplateKind): TemplateDocument {
     ...checkDocumentKeys(parsed.document),
     ...checkDocumentRules(parsed.document),
     ...checkNoTgLogicInCustom(kind, parsed.document),
+    ...checkNoBlockerInCustom(kind, parsed.document),
   ];
   if (issues.length > 0) throw new TemplateValidationError(issues);
   return parsed.document;

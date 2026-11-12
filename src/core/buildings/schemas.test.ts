@@ -332,11 +332,11 @@ describe("2.11 arealtype og under terreng på rom", () => {
     expect(expectAccepted(parse(roomInputSchema, VALID_ROOM)).areaType).toBeUndefined();
   });
 
-  it.each(["bra_i", "bra_e", "bra_b"])("%s godtas", (areaType) => {
+  it.each(["bra_i", "bra_e", "bra_b", "not_bra"])("%s godtas (B6.5: not_bra, F6)", (areaType) => {
     expect(expectAccepted(parseRoom({ areaType })).areaType).toBe(areaType);
   });
 
-  it.each(["alh", "bra", "BRA-i", "ukjent"])("%s avvises", (areaType) => {
+  it.each(["alh", "bra", "BRA-i", "ukjent", "not-bra", "NOT_BRA"])("%s avvises", (areaType) => {
     expectRejected(parseRoom({ areaType }), "areaType");
   });
 

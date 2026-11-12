@@ -198,13 +198,19 @@ describe("3.1 CHECK på faste koder", () => {
     await insertRoomSql({ organizationId: org.id, floorId, roomType: code });
   });
 
-  it.each(["alh", "", "bra", "BRA-i"])("ukjent area_type «%s» avvises", async (code) => {
-    const org = await createOrganization();
-    const floorId = await ownFloor(org.id);
-    await expectPgError(insertRoomSql({ organizationId: org.id, floorId, areaType: code }), CHECK);
-  });
+  it.each(["alh", "", "bra", "BRA-i", "not-bra"])(
+    "M5.3 ukjent area_type «%s» avvises",
+    async (code) => {
+      const org = await createOrganization();
+      const floorId = await ownFloor(org.id);
+      await expectPgError(
+        insertRoomSql({ organizationId: org.id, floorId, areaType: code }),
+        CHECK,
+      );
+    },
+  );
 
-  it.each(["bra_i", "bra_e", "bra_b"])("area_type %s godtas", async (code) => {
+  it.each(["bra_i", "bra_e", "bra_b", "not_bra"])("M5.3 area_type %s godtas", async (code) => {
     const org = await createOrganization();
     const floorId = await ownFloor(org.id);
     await insertRoomSql({ organizationId: org.id, floorId, areaType: code });

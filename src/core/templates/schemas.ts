@@ -279,6 +279,8 @@ const ruleConditionSchema = z.object({
   material_element_key: optionalKey,
   /** For `number_vs_limit` med terskel: feltet med enheten. */
   unit_element_key: optionalKey,
+  /** Snur betingelsen (A237): sann blir usann, usann blir sann, «ikke vurdert» står. */
+  negate: z.boolean({ error: SCHEMA_MESSAGE }).default(false),
   sort_order: sortOrder,
 });
 
@@ -365,7 +367,8 @@ export function parseTemplateDocument(
 
 /**
  * TG-logikk finnes bare i systemmalen (beslutning 27.10.2026). En egen mal (`custom`) kan ikke ha
- * kontrollpunkter eller reglene `suggest_outcome` og `suggest_tgiu`; `show` og `validate` er lov.
+ * kontrollpunkter eller reglene `suggest_outcome`, `suggest_tgiu` og `suggest_tg0`; `show` og
+ * `validate` er lov.
  * Ren funksjon: tom liste = godkjent.
  */
 export function checkNoTgLogicInCustom(
@@ -387,6 +390,29 @@ export function checkNoTgLogicInCustom(
         path: `rules.${index}.purpose`,
         rule: "tg_logic_in_custom",
         message: "Regler som foreslår TG kan bare brukes i systemmalen.",
+      });
+    }
+  });
+  return issues;
+}
+
+/**
+ * En egen mal (`custom`) kan bare advare, aldri stoppe (Ståle 12.11.2026, F9): `validate`-regler
+ * med `severity = blocker` avvises, `warning` godtas. Systemmalen kan ha `blocker`. Ren funksjon:
+ * tom liste = godkjent.
+ */
+export function checkNoBlockerInCustom(
+  kind: TemplateKind,
+  document: Pick<TemplateDocument, "rules">,
+): TemplateIssue[] {
+  if (kind !== "custom") return [];
+  const issues: TemplateIssue[] = [];
+  document.rules.forEach((item, index) => {
+    if (item.purpose === "validate" && item.severity === "blocker") {
+      issues.push({
+        path: `rules.${index}.severity`,
+        rule: "schema",
+        message: `Regelen «${item.key}» kan bare advare i en egen mal, ikke stoppe.`,
       });
     }
   });

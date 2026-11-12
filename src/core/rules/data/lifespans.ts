@@ -9,7 +9,12 @@ import type { LifespanDocumentation, LifespanEntry, LifespanSet } from "../types
  * badmalen. «Ukjent» har ingen rad: da gjelder bare radene uten materialkode.
  */
 
-const SOURCE = "NS 3600:2025 tillegg C, levetider for vanntett sjikt i våtrom";
+/**
+ * Kilden for alderstabellen (Ståle 12.11.2026, F3). Bare navnet på standarden og tallene, ingen
+ * tekst fra den. Tallene er ikke kontrollert mot standarden ennå (spørsmål 77).
+ */
+export const SOURCE_RULE_AGE =
+  "NS 3600:2025 (Ståle 12.11.2026, F3); tallene er ikke kontrollert mot standarden; utkast, ikke godkjent av fagrådet";
 
 type Row = [material: string, component: string, withoutDoc: number, withDoc: number | null];
 
@@ -41,7 +46,7 @@ function entry(
     min_age: minAge,
     documentation,
     outcome_kind: "tg2",
-    source_ref: SOURCE,
+    source_ref: SOURCE_RULE_AGE,
     sort_order: sortOrder,
     status: "draft",
   };
@@ -65,7 +70,7 @@ const BEFORE_2000: LifespanEntry = {
   min_age: null,
   documentation: "any",
   outcome_kind: "tg3",
-  source_ref: "NS 3600:2025 tillegg C, vanntett sjikt i våtrom fra før 2000",
+  source_ref: SOURCE_RULE_AGE,
   sort_order: 0,
   status: "draft",
 };

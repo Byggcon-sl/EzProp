@@ -1,6 +1,10 @@
 import type { TemplateDocument } from "@/core/templates";
 import type { RuleConditionType, RuleResultState } from "@/db/schema";
-import { LIFESPAN_OUTCOME_KINDS, SUPPORTED_CONDITION_TYPES } from "./codes";
+import {
+  EVALUATED_RULE_PURPOSES,
+  LIFESPAN_OUTCOME_KINDS,
+  SUPPORTED_CONDITION_TYPES,
+} from "./codes";
 import type {
   AgeVsLifespanReason,
   ConditionReasonCode,
@@ -136,6 +140,7 @@ function optionSelected(condition: Condition, context: Context): OptionSelectedR
   ): OptionSelectedReason => ({
     type: "option_selected",
     group_no: condition.group_no,
+    negated: condition.negate,
     truth,
     code,
     element_key: condition.element_key,
@@ -161,6 +166,7 @@ function numberVsLimit(condition: Condition, context: Context): NumberVsLimitRea
   const base: NumberVsLimitReason = {
     type: "number_vs_limit",
     group_no: condition.group_no,
+    negated: condition.negate,
     truth: "unknown",
     code: null,
     element_key: condition.element_key,
@@ -237,6 +243,7 @@ function ageVsLifespan(rule: Rule, condition: Condition, context: Context): AgeV
   const base: AgeVsLifespanReason = {
     type: "age_vs_lifespan",
     group_no: condition.group_no,
+    negated: condition.negate,
     truth: "unknown",
     code: null,
     year: null,
@@ -367,14 +374,21 @@ function evaluateCondition(rule: Rule, condition: Condition, context: Context): 
     return {
       type: "unsupported",
       group_no: condition.group_no,
+      negated: condition.negate,
       truth: "unknown",
       code: "condition_type_not_supported",
       condition_type: type,
     };
   }
-  if (type === "option_selected") return optionSelected(condition, context);
-  if (type === "number_vs_limit") return numberVsLimit(condition, context);
-  return ageVsLifespan(rule, condition, context);
+  let reason: RuleReason;
+  if (type === "option_selected") reason = optionSelected(condition, context);
+  else if (type === "number_vs_limit") reason = numberVsLimit(condition, context);
+  else reason = ageVsLifespan(rule, condition, context);
+  // `negate` (A237): sann og usann snus, «ikke vurdert» står. Ett sted, likt for alle typer.
+  if (condition.negate && reason.truth !== "unknown") {
+    return { ...reason, truth: reason.truth === "true" ? "false" : "true" };
+  }
+  return reason;
 }
 
 // --- Regelen -------------------------------------------------------------------------------
@@ -393,7 +407,7 @@ function notEvaluated(rule: Rule, code: RuleResult["code"]): RuleResult {
 }
 
 function evaluateRule(rule: Rule, tgLogicAllowed: boolean, context: Context): RuleResult {
-  if (rule.purpose !== "suggest_outcome" && rule.purpose !== "suggest_tgiu") {
+  if (!(EVALUATED_RULE_PURPOSES as readonly string[]).includes(rule.purpose)) {
     return notEvaluated(rule, "purpose_not_supported");
   }
   if (!tgLogicAllowed) return notEvaluated(rule, "tg_logic_not_allowed");
@@ -404,8 +418,10 @@ function evaluateRule(rule: Rule, tgLogicAllowed: boolean, context: Context): Ru
     const { checkpoint_key, question_key, outcome_key } = rule.suggested_outcome;
     suggestion = { kind: "outcome", checkpoint_key, question_key, outcome_key };
   } else {
+    // `suggest_tgiu` og `suggest_tg0`: forslag på kontrollpunktet, uten utfall.
     if (!rule.target_checkpoint_key) return notEvaluated(rule, "target_missing");
-    suggestion = { kind: "tgiu", checkpoint_key: rule.target_checkpoint_key };
+    const kind = rule.purpose === "suggest_tg0" ? "tg0" : "tgiu";
+    suggestion = { kind, checkpoint_key: rule.target_checkpoint_key };
   }
 
   const conditions = context.document.rule_conditions
