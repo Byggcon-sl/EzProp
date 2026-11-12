@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+/*
+ * Byggcon-profilen (designutkast A, valgt av Ståle 2026-11-10), hentet fra byggcon.no:
+ * varm lys bakgrunn (snow), sandfargede paneler, nesten svart blå tekst og hovedknapp (night),
+ * blå aksent (fjord). Inter i brødtekst, Schibsted Grotesk i overskrifter.
+ *
+ * Designspråk (docs/08-designprinsipper.md): rolig varm flate, kort med tynn kant (ingen
+ * skygge), pilleformede knapper, statuspiller og enkle diagrammer.
+ */
+@theme {
+  /* Paletten fra byggcon.no. Gult («sun») er bevisst utelatt: gult betyr «følg med» i appen. */
+  --color-snow: #f5f4f0;
+  --color-sand: #eeebe3;
+  --color-night: #0f1924;
+  --color-fjord: #316aa0;
+  /* Lenketekst og fokusramme: mørkere fjord for kontrast (6,5:1 på snow) */
+  --color-fjord-dark: #255a8c;
+  /* Bare pynt, eller tekst på night. (Dempet tekst, «stone» #5D6774, er `slate-500`.) */
+  --color-mist: #a8b3c2;
+  /* Linjer: night med 12 % dekning, sterkere kant 25 % */
+  --color-line: rgb(15 25 36 / 0.12);
+  --color-line-strong: rgb(15 25 36 / 0.25);
+
+  /*
+   * Blåskalaen («brand») følger fjord: 600 er fjord, 700 er lenkefargen, 900 er mørk fjord.
+   * Navnet beholdes, så komponentene ikke må skrives om.
+   */
+  --color-brand-50: #eef3f8;
+  --color-brand-100: #dbe6f1;
+  --color-brand-200: #b9cde2;
+  --color-brand-400: #6e97bf;
+  --color-brand-600: #316aa0;
+  --color-brand-700: #255a8c;
+  --color-brand-900: #16324f;
+
+  /*
+   * Gråskalaen («slate») er byttet mot Byggcon-tonene, så de ca. 1 700 slate-klassene i
+   * komponentene får den nye profilen uten håndredigering: 50 = snow, 100 = sand, 200–300 er
+   * linjer, 500 = stone (dempet tekst, 4,8:1 også på sand), 600 er tydeligere sekundærtekst,
+   * 900 = night. 400 er bare til pynt (piler, plassholdere).
+   */
+  --color-slate-50: #f5f4f0;
+  --color-slate-100: #eeebe3;
+  --color-slate-200: #dfdcd4;
+  --color-slate-300: #c6c3bb;
+  --color-slate-400: #858d98;
+  --color-slate-500: #5d6774;
+  --color-slate-600: #414b58;
+  --color-slate-700: #303a47;
+  --color-slate-800: #1d2732;
+  --color-slate-900: #0f1924;
+  --color-slate-950: #0a1119;
+
+  /* Bakgrunnen bak kortene */
+  --color-canvas: #f5f4f0;
+  /* Kant på skjemafelt: minst 3:1 mot hvitt, snow og sand (WCAG 1.4.11) */
+  --color-field: #7a828d;
+
+  /*
+   * Statusfarger, felles for tilstand, vedlikehold og energi:
+   * ok = i orden, watch = følg med, urgent = bør utbedres snart, unknown = ikke undersøkt
+   * (varm grå), info = søylene (hel fjord).
+   * «-fill» er fyll i diagrammer, «-line» er kant og strek (minst 3:1 mot hvitt, snow og sand).
+   * Verdiene er de samme som i PDF-ene (`chartColors` i src/shared/charts/chart-data.ts, testet
+   * i chart-data.test.ts).
+   */
+  --color-ok-fill: #cdeedd;
+  --color-ok-line: #1f8a5b;
+  --color-watch-fill: #fbe7b5;
+  --color-watch-line: #b7791f;
+  --color-urgent-fill: #f8d0cc;
+  --color-urgent-line: #c0392b;
+  --color-unknown-fill: #e4e1d8;
+  --color-unknown-line: #6e6a62;
+  --color-info-fill: #316aa0;
+  --color-info-line: #316aa0;
+
+  --radius-card: 0.75rem;
+  /* Kort har tynn kant, ikke skygge. Kanten tegnes som en skygge uten uskarphet, så ingen
+     komponent endrer størrelse. */
+  --shadow-card: 0 0 0 1px var(--color-line);
+  /* Lag som flyter over innholdet (menyer, dialoger): kant og en diskré skygge */
+  --shadow-pop: 0 0 0 1px var(--color-line), 0 8px 24px rgb(15 25 36 / 0.1);
+  /* Små skygger på knapper og felt er tatt bort: kanten bærer formen */
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 0 #0000;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display:
+    var(--font-schibsted), var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+}
+
+body {
+  @apply bg-canvas text-slate-900 antialiased;
+}
+
+@layer base {
+  /* Overskrifter i Schibsted Grotesk, som på byggcon.no */
+  h1,
+  h2 {
+    font-family: var(--font-display);
+  }
+
+  /*
+   * Fokusmarkering for tastatur (WCAG 2.4.7). I `base`-laget, så en komponent kan legge rammen
+   * innenfor seg (`focus-visible:-outline-offset-2`) der en ramme utenfor ville blitt kuttet av
+   * en beholder som ruller eller har `overflow-hidden` (faner, listerader, varsler).
+   * Mørk fjord har minst 3:1 mot snow, sand og hvitt (rammen står utenfor elementet, på bunnen).
+   */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-fjord-dark;
+  }
+
+  /* Mål for «Hopp til innholdet»: får fokus fra koden, ikke med tab, og trenger ingen ramme */
+  [tabindex="-1"]:focus {
+    outline: none;
+  }
+}
+
+@media print {
+  body {
+    background: white;
+  }
+}
