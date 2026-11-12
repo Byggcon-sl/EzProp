@@ -8,7 +8,20 @@ import path from "node:path";
  * - Felles kode (src/shared) importerer aldri fra core, moduler eller app.
  * - Klientdelen av KI-modulen (src/core/ai/client, KI-køen) er et rent blad, og bare prøvesiden
  *   /prove/ki og utloggingsknappen kan importere den (docs/adr/0006-ki-i-bunnen.md del 10).
+ * - Regelmotoren (src/core/rules) er et rent blad som kjører likt på iPaden og på serveren: bare
+ *   egen mappe og shared, og bare `import type` fra malmotoren og databaseskjemaet. Ingen pakker.
+ *   Malmotoren (src/core/templates) importerer ikke regelmotoren (docs/adr/0009-regelmotoren.md).
  */
+
+const RULES = "core/rules";
+/** Bare `import type` herfra: malmotoren og skjemaet drar med databasen. */
+const RULES_TYPE_ONLY_TARGETS = ["core/templates", "db/schema"];
+const TEMPLATES = "core/templates";
+
+/** @param {string} target @param {string} dir */
+function isInDir(target, dir) {
+  return target === dir || target.startsWith(`${dir}/`);
+}
 
 const AI_CLIENT = "core/ai/client";
 /** Verdi-importer klientdelen kan ha utenom egen mappe og `shared`. */
@@ -71,6 +84,10 @@ const rule = {
       forbiddenLayer: "«{{from}}» kan ikke importere fra «{{to}}» (se docs/06-arkitektur.md).",
       aiClientLeaf:
         "Klientdelen av KI-modulen kan ikke importere «{{to}}». Lov: egen mappe, ../limits, @/shared og zod, og bare «import type» fra ../types og ../features (ADR 0006 del 10).",
+      rulesLeaf:
+        "Regelmotoren kan ikke importere «{{to}}». Lov: egen mappe og @/shared, og bare «import type» fra @/core/templates og @/db/schema. Ingen pakker (ADR 0009).",
+      templatesToRules:
+        "Malmotoren (@/core/templates) kan ikke importere regelmotoren (@/core/rules) (ADR 0009).",
       aiClientImporter:
         "KI-køen (@/core/ai/client) kan bare importeres fra prøvesiden /prove/ki og utloggingsknappen til «Sperring av iPader» er levert (ADR 0006 del 10).",
     },
@@ -83,6 +100,8 @@ const rule = {
     // Testfiler er ikke produktkode og er unntatt fra de to reglene for KI-køen.
     const isTestFile = /\.test\.tsx?$/.test(fromFile);
     const fromAiClient = isAiClient(fromFile) && !isTestFile;
+    const fromRules = isInDir(fromFile, RULES) && !isTestFile;
+    const fromTemplates = isInDir(fromFile, TEMPLATES) && !isTestFile;
 
     /** @type {Record<string, string[]>} */
     const forbidden = {
@@ -114,8 +133,25 @@ const rule = {
         }
       }
 
+      if (fromRules) {
+        const allowed = target
+          ? isInDir(target, RULES) ||
+            target.startsWith("shared/") ||
+            (typeOnly && RULES_TYPE_ONLY_TARGETS.some((dir) => isInDir(target, dir)))
+          : false;
+        if (!allowed) {
+          context.report({ node, messageId: "rulesLeaf", data: { to: value } });
+          return;
+        }
+      }
+
       if (!target) return;
       const to = layerOf(target);
+
+      if (fromTemplates && isInDir(target, RULES)) {
+        context.report({ node, messageId: "templatesToRules" });
+        return;
+      }
 
       if (
         isAiClient(target) &&

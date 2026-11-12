@@ -66,6 +66,7 @@ Dette er to forskjellige ting.
 - **Flagget innhold:** blir noe flagget som brudd på bruksreglene, kan det ligge hos Anthropic i opptil 2 år.
 - **Null-lagring** (ingenting lagres etter svaret) krever en egen avtale med Anthropic, og må bes om.
 - ADR 0006 bygger på at leverandøren ikke lagrer noe ut over kallet. Det stemmer bare med null-lagring. **Enten avtales null-lagring, eller Ståle endrer forutsetningen** (spørsmål 73 b).
+- **Avgjort av Ståle 12.11.2026 (K2):** null-lagring kreves ikke. Leverandørens vanlige oppbevaringstid godtas og skrives inn i personvernerklæringen. **K1:** Anthropic direkte brukes bare i testmiljøet med oppdiktede data; behandlingen skal skje i EU/EØS før ekte kundedata. **K3:** agentene lager et kort utkast til personvernkonsekvensvurdering før ekte data. **K9:** ingen tak på KI-kall i EzProp; Ståle bør sette en beløpsgrense hos leverandøren.
 
 Kilder: [personvernsiden om lagring](https://privacy.anthropic.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data) · [lagring og null-lagring](https://platform.claude.com/docs/en/manage-claude/api-and-data-retention). Lest 11.11.2026.
 

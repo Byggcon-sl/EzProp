@@ -3,7 +3,7 @@ id: T-0011
 tittel: Kontoransatte kan velges som ansvarlig takstmann og sidemann, og sertifisering vises ikke
 type: forbedring
 alvor: middels
-status: ny
+status: lukket
 funnet: 2026-11-11
 rolle: test-kontor, test-fag
 omrade: oppdrag (team)
@@ -36,3 +36,4 @@ Ikke etterprøvd (forbedring). Meldt av to testere hver for seg.
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-12: lukket. Ståle svarte 12.11.2026 (F8, spørsmål 67): ingen kontroll ved valg av ansvarlig takstmann og sertifisering; kontrollen skjer bare ved publisering, som i dag.

@@ -178,15 +178,247 @@ export function buildTemplateDocument(
         rule_key: "rule.show_size",
         name: "Liten gir vis",
         input: { "el.size": "opt.small" },
-        expect_triggered: true,
+        expected_state: "triggered",
         sort_order: 0,
       },
       {
         rule_key: "rule.show_size",
         name: "Stor gir ikke vis",
         input: { "el.size": "opt.large" },
-        expect_triggered: false,
+        expected_state: "not_triggered",
         sort_order: 1,
+      },
+    ],
+  };
+  return { ...document, ...structuredClone(overrides) } as Lists & TemplateDocumentInput;
+}
+
+/*
+ * Et lite, gyldig dokument med regler til testene av regelmotoren og kontrollene i malmotoren
+ * (docs/funksjoner/fase2a-regler-bad-testplan.md, avsnitt 0, 1, 5, 6 og 7.2).
+ *
+ * Ett kontrollpunkt som gir TG (`cp.room`), ett avviksspørsmål og ett utfall (`out.worn`, TG2).
+ * Tre regler, én per betingelsestype:
+ * - `chk.membrane` (`suggest_tgiu`): `option_selected` med `in` og en liste med valg.
+ * - `chk.moisture` (`suggest_outcome`): `number_vs_limit` med terskelkode og enhetsfelt, uten
+ *   egen sammenligning eller verdi.
+ * - `chk.age` (`suggest_outcome`): `age_vs_lifespan` med alle fem alderfeltene og en liste med
+ *   dokumentasjonsvalg som betyr «uten dokumentasjon».
+ * Én testsak med `expected_state` og `inspection_year`.
+ *
+ * Regelkodene og feltkodene inneholder ingen engelske ord som «rule» eller «outcome», slik at
+ * testene kan sjekke at feilmeldingene er norske selv om de nevner koden. Alt er oppdiktet og uten
+ * fagtekst. Hvert kall gir et nytt objekt.
+ */
+
+/** Terskelkoden betingelsen `chk.moisture` bruker. Testene lager et terskelsett med denne koden. */
+export const RULE_DOCUMENT_THRESHOLD_KEY = "x.moisture_limit";
+
+/** Befaringsåret i testsaken (fast, aldri dagens dato). */
+export const RULE_DOCUMENT_INSPECTION_YEAR = 2026;
+
+/** Et nytt, gyldig dokument med regler. `overrides` erstatter hele lister. */
+export function ruleDocument(
+  overrides: Partial<TemplateDocumentInput> = {},
+): Lists & TemplateDocumentInput {
+  const document: Lists = {
+    sections: [{ key: "sec.room", title: "Rom", sort_order: 0 }],
+    elements: [
+      {
+        key: "x.material",
+        section_key: "sec.room",
+        checkpoint_key: "cp.room",
+        label: "Materiale",
+        field_type: "choice",
+        sort_order: 0,
+      },
+      {
+        key: "x.moisture",
+        section_key: "sec.room",
+        checkpoint_key: "cp.room",
+        label: "Måling",
+        field_type: "number",
+        min_value: 0,
+        max_value: 100,
+        decimals: 1,
+        sort_order: 1,
+      },
+      {
+        key: "x.unit",
+        section_key: "sec.room",
+        checkpoint_key: "cp.room",
+        label: "Enhet",
+        field_type: "choice",
+        sort_order: 2,
+      },
+      {
+        key: "x.year",
+        section_key: "sec.room",
+        label: "Årstall",
+        field_type: "number",
+        min_value: 1800,
+        max_value: 2200,
+        decimals: 0,
+        sort_order: 3,
+      },
+      {
+        key: "x.year_fallback",
+        section_key: "sec.room",
+        label: "Årstall for bygget",
+        field_type: "number",
+        min_value: 1800,
+        max_value: 2200,
+        decimals: 0,
+        sort_order: 4,
+      },
+      {
+        key: "x.year_source",
+        section_key: "sec.room",
+        label: "Kilde for årstallet",
+        field_type: "choice",
+        sort_order: 5,
+      },
+      {
+        key: "x.documentation",
+        section_key: "sec.room",
+        label: "Dokumentasjon",
+        field_type: "choice",
+        sort_order: 6,
+      },
+    ],
+    element_options: [
+      {
+        element_key: "x.material",
+        key: "opt.sheet",
+        label: "Plate",
+        material_code: "sheet",
+        sort_order: 0,
+      },
+      {
+        element_key: "x.material",
+        key: "opt.paint",
+        label: "Maling",
+        material_code: "paint",
+        sort_order: 1,
+      },
+      { element_key: "x.material", key: "opt.unknown", label: "Ukjent", sort_order: 2 },
+      { element_key: "x.unit", key: "opt.weight_percent", label: "Vektprosent", sort_order: 0 },
+      { element_key: "x.year_source", key: "opt.owner", label: "Eier", sort_order: 0 },
+      { element_key: "x.year_source", key: "opt.papers", label: "Papirer", sort_order: 1 },
+      { element_key: "x.documentation", key: "opt.yes", label: "Ja", sort_order: 0 },
+      { element_key: "x.documentation", key: "opt.no", label: "Nei", sort_order: 1 },
+      {
+        element_key: "x.documentation",
+        key: "opt.not_given",
+        label: "Ikke oppgitt",
+        sort_order: 2,
+      },
+    ],
+    checkpoints: [
+      {
+        key: "cp.room",
+        section_key: "sec.room",
+        name: "Punkt rom",
+        group: "room",
+        gives_tg: true,
+        sort_order: 0,
+      },
+    ],
+    deviation_questions: [
+      { checkpoint_key: "cp.room", key: "dq.state", text: "Spørsmål tilstand", sort_order: 0 },
+    ],
+    outcomes: [
+      {
+        checkpoint_key: "cp.room",
+        question_key: "dq.state",
+        key: "out.worn",
+        kind: "tg2",
+        deviation_text: "Utfallstekst slitt",
+        sort_order: 0,
+      },
+    ],
+    standard_measures: [],
+    rules: [
+      {
+        key: "chk.membrane",
+        name: "Ukjent materiale",
+        purpose: "suggest_tgiu",
+        target_checkpoint_key: "cp.room",
+        message: "Meldingstekst materiale",
+        source_ref: "Oppdiktet kilde",
+        sort_order: 0,
+      },
+      {
+        key: "chk.moisture",
+        name: "Måling over grensen",
+        purpose: "suggest_outcome",
+        target_checkpoint_key: "cp.room",
+        suggested_outcome: {
+          checkpoint_key: "cp.room",
+          question_key: "dq.state",
+          outcome_key: "out.worn",
+        },
+        message: "Meldingstekst måling",
+        source_ref: "Oppdiktet kilde",
+        sort_order: 1,
+      },
+      {
+        key: "chk.age",
+        name: "Alder over levetid",
+        purpose: "suggest_outcome",
+        target_checkpoint_key: "cp.room",
+        suggested_outcome: {
+          checkpoint_key: "cp.room",
+          question_key: "dq.state",
+          outcome_key: "out.worn",
+        },
+        message: "Meldingstekst alder",
+        source_ref: "Oppdiktet kilde",
+        sort_order: 2,
+      },
+    ],
+    rule_conditions: [
+      {
+        rule_key: "chk.membrane",
+        type: "option_selected",
+        element_key: "x.material",
+        operator: "in",
+        value: ["opt.unknown"],
+        sort_order: 0,
+      },
+      {
+        rule_key: "chk.moisture",
+        type: "number_vs_limit",
+        element_key: "x.moisture",
+        threshold_key: RULE_DOCUMENT_THRESHOLD_KEY,
+        unit_element_key: "x.unit",
+        sort_order: 0,
+      },
+      {
+        rule_key: "chk.age",
+        type: "age_vs_lifespan",
+        age_year_element_key: "x.year",
+        age_fallback_year_element_key: "x.year_fallback",
+        age_source_element_key: "x.year_source",
+        documentation_element_key: "x.documentation",
+        material_element_key: "x.material",
+        value: ["opt.no", "opt.not_given"],
+        sort_order: 0,
+      },
+    ],
+    rule_test_cases: [
+      {
+        rule_key: "chk.age",
+        name: "Gammelt og uten dokumentasjon",
+        input: {
+          "x.year": 1990,
+          "x.year_source": "opt.papers",
+          "x.documentation": "opt.no",
+          "x.material": "opt.sheet",
+        },
+        expected_state: "triggered",
+        inspection_year: RULE_DOCUMENT_INSPECTION_YEAR,
+        sort_order: 0,
       },
     ],
   };

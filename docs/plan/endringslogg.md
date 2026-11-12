@@ -2,6 +2,8 @@
 
 Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og 09.11.2026).
 
+- **12.11.2026 (Branch `fase2a-regler-bad`, PR #167):** 2a-2: «Reglene badet trenger» krysset av (regelmotoren i `src/core/rules`, fire regler med testsaker i badmalen, levetider og fuktgrense som utkast, A224–A232). Statuslinjen for 2a oppdatert.
+- **12.11.2026 (Branch `fase2a-regler-bad`, funn T-0003):** Planlinjen for «Reglene badet trenger» (2a-2) presisert etter Ståles svar 10.11.2026 (59a): er det tatt hull og målt uten forhøyet fukt, gir alderen alene ikke TG2 på tilliggende konstruksjoner; hulltaking ikke utført gir TGIU (A224).
 - **12.11.2026 (Prosjektlederen, funn T-0021):** «Beslutningsnotat om KI-leverandør» flyttet til `docs/plan/levert.md` (PR #154). Radene fra 11.–12.11.2026 flyttet fra tabellen hit, så nyeste står øverst. Planen sier «Sist oppdatert: 12.11.2026».
 - **12.11.2026 (Læringsløkken):** «Malen for ett bad» flyttet til `docs/plan/levert.md` (PR #159 merget). Statuslinjen for 2a: neste er reglene badet trenger.
 - **12.11.2026 (Branch `fase2a-mal-bad`):** 2a-2: «Malen for ett bad» krysset av (systemmalen med ett våtrom i malmotoren, tekster som utkast, A200–A213).
@@ -67,3 +69,7 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 09.11.2026 | Funnene fra Spectoras YouTube-kanal (V1–V132) knyttet til planen: henvisning på 61 punkter, ny underseksjon under «Sporbarhet», nye funksjoner som forslag og kapittel 7 som spørsmål i `docs/09-apne-sporsmal.md` (nr. 20–53). Ingen punkter er lagt til eller utvidet. | `spectora-youtube/spectora-youtube-funn.md` |
 | 12.11.2026 | Microsoft-innlogging for ansatte flyttet fra «Senere» til fase 2a og prioritert før 2a-2, med engangskoden som reserve. | Ståle i chat 12.11.2026 |
 | 12.11.2026 | Ny oppgave i fase 2a: Byggcon-profilen (samme grep som Optiplan), etter Microsoft-innlogging og før 2a-2. Grunnlaget kopiert til `docs/design/byggcon-profil/`. | Ståle i chat 12.11.2026 |
+| 12.11.2026 | Svarene fra Ståle 12.11.2026 ført inn: ny del «Fra Ståles svar 12.11.2026» i 2a (reglene og bygningene, rette ordre, søk, dublettvarsel, flere rom, oppbevaring som innstilling), KI-forslag til rom fra plantegning i 2a-3, DPIA-utkast i «Minimum før ekte data», tall om KI-bruk per ansatt i 3b, og merknad om tofaktor i fase 4. Tak på KI-bruk (forslag 64) bygges ikke. | `docs/kartlegging/svar-fra-stale-2026-11-12.md` |
+| 12.11.2026 | Fase 2b: «diktat til ferdig funn» er nå live mens takstmannen snakker, fordelt på rom, bygningsdel og felt med godkjente fraser, automatisk rombytte, retting med stemmen, og TG bare når takstmannen sier den selv. | Ståle i chat 12.11.2026 |
+| 12.11.2026 | Nytt strekkmål 6: KI-briller med en KI-assistent på befaringen. Live diktat i fase 2b bygges slik at inngangen kan byttes. Ingenting bygges for brillene nå. | Ståle i chat 12.11.2026 |
+| 12.11.2026 | Live diktat skjer i det vanlige befaringsbildet (ingen egen dikteringsskjerm). Strekkmål 6: Ståle sier personvern er ok som retning; lovpålagte rutiner lages før bruk. | Ståle i chat 12.11.2026 |

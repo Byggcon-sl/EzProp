@@ -261,3 +261,4 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - En test som sorterer på tilfeldig id når tidspunktene er like, feiler bare av og til. Gi hver post sitt eget tidspunkt i testene, eller sammenlign uten rekkefølge.
 - Minneutgaven av et lager må ikke tillate poster som det ekte lageret ikke kan ha (eller må kunne slette dem): rydding ble skrevet etter nøkkel, og poster uten nøkkel ble liggende.
 
+- Gammel next-server på port 3100 gjør e2e ugyldig (reuseExistingServer). Stopp den før kjøring.
