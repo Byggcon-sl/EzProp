@@ -2,7 +2,7 @@
 
 - **Fase:** 2a (prioritert av Ståle 12.11.2026, før neste punkt i 2a-2)
 - **Modul:** kjerne / tema (`src/app/globals.css`, `src/app/layout.tsx`) og felleskomponentene (`src/shared/ui`)
-- **Status:** godkjent etter runde 1 (forenkler, ux-ansvarlig, test-leder); bygget, main flettet inn 12.11.2026 (PR #166, #167, #174), gjenstår kontroll, e2e og PR
+- **Status:** godkjent etter runde 1 (forenkler, ux-ansvarlig, test-leder); bygget, main flettet inn 12.11.2026 (PR #166, #167, #174), etter-bilder tatt og e2e rettet etter Microsoft-innloggingen 12.11.2026, PR åpnet
 - **Branch:** `byggcon-profil` fra `main` (main med PR #174 flettet inn 12.11.2026)
 - **Støtter hovedmål:** De ansatte: samme uttrykk som byggcon.no og Optiplan, så de ansatte møter ett Byggcon og ikke to systemer med hver sin stil; rolig, høy kontrast for sollys på iPad. / KI i bunnen: KI-merket får et eget, tydelig uttrykk i den nye paletten, så KI-tekst alltid kan skilles fra takstmannens tekst og kontrolleres før den godtas. / Reklamasjoner: indirekte. TG vises alltid med tekst og med de samme tonene som i Optiplan, så TG ikke kan leses feil på grunn av farge.
 

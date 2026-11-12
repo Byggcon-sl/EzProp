@@ -137,7 +137,7 @@ function NotSavedMark() {
 }
 
 const inputClass =
-  "block min-h-11 w-full rounded-xl border border-field bg-white px-3 py-2 text-base text-slate-900 focus:border-brand-600";
+  "block min-h-11 w-full rounded-lg border border-field bg-white px-3 py-2 text-base text-slate-900 focus:border-fjord";
 const labelClass = "mb-1.5 block text-sm font-medium text-slate-700";
 
 function fieldId(key: string): string {
