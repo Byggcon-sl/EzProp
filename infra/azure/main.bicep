@@ -69,6 +69,18 @@ param msGraphClientSecret string
 @description('Avsenderadresse for e-post. Tom til e-post kobles til.')
 param mailFrom string = ''
 
+// Logg inn med Microsoft 365 (ADR 0008). Egen app-registrering, ikke den for e-post. Alle tre eller ingen;
+// uten alle tre settes ingen av dem, og appen viser bare engangskoden.
+@description('Microsoft-innlogging: tenant-id (Byggcons katalog). Tom betyr bare engangskode.')
+param msLoginTenantId string = ''
+
+@description('Microsoft-innlogging: app-id (client-id). Tom betyr bare engangskode.')
+param msLoginClientId string = ''
+
+@description('Microsoft-innlogging: klienthemmelighet. Tom betyr bare engangskode.')
+@secure()
+param msLoginClientSecret string
+
 // KI-leverandøren (ADR 0006). Tom betyr KI av. Nøkkelen alene slår ikke på KI: organisasjonen må
 // også ha en anthropic-tilkobling og ai.enabled (docs/funksjoner/fase2a-ki-leverandor.md).
 @description('KI-leverandøren Anthropic: API-nøkkel. Tom betyr KI av.')
@@ -90,6 +102,7 @@ var defaultAppUrl = 'https://${appName}.azurewebsites.net'
 var betterAuthUrl = empty(appHostname) ? defaultAppUrl : 'https://${appHostname}'
 var emailConfigured = !empty(msGraphTenantId) && !empty(msGraphClientId) && !empty(msGraphClientSecret) && !empty(mailFrom)
 var aiConfigured = !empty(anthropicApiKey)
+var loginConfigured = !empty(msLoginTenantId) && !empty(msLoginClientId) && !empty(msLoginClientSecret)
 
 // Appen snakker med databasen over TLS og sjekker sertifikatet (verify-full, ikke require).
 var databaseUrl = 'postgres://${postgresAdminLogin}:${uriComponent(postgresAdminPassword)}@${postgres.properties.fullyQualifiedDomainName}:5432/${databaseName}?sslmode=verify-full'
@@ -117,6 +130,15 @@ var emailAppSettings = emailConfigured
       { name: 'MS_GRAPH_CLIENT_ID', value: msGraphClientId }
       { name: 'MS_GRAPH_CLIENT_SECRET', value: enableKeyVault ? '@Microsoft.KeyVault(SecretUri=${kvMsGraphClientSecret!.properties.secretUri})' : msGraphClientSecret }
       { name: 'MAIL_FROM', value: mailFrom }
+    ]
+  : []
+
+// Uten alle tre settes ingen av dem (bare engangskoden).
+var loginAppSettings = loginConfigured
+  ? [
+      { name: 'MS_LOGIN_TENANT_ID', value: msLoginTenantId }
+      { name: 'MS_LOGIN_CLIENT_ID', value: msLoginClientId }
+      { name: 'MS_LOGIN_CLIENT_SECRET', value: enableKeyVault ? '@Microsoft.KeyVault(SecretUri=${kvMsLoginClientSecret!.properties.secretUri})' : msLoginClientSecret }
     ]
   : []
 
@@ -228,7 +250,7 @@ resource app 'Microsoft.Web/sites@2024-04-01' = {
       ftpsState: 'Disabled'
       http20Enabled: true
       healthCheckPath: '/api/helse'
-      appSettings: concat(baseAppSettings, emailAppSettings, aiAppSettings)
+      appSettings: concat(baseAppSettings, emailAppSettings, loginAppSettings, aiAppSettings)
     }
   }
 }
@@ -302,6 +324,14 @@ resource kvMsGraphClientSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = 
   name: 'ms-graph-client-secret'
   properties: {
     value: msGraphClientSecret
+  }
+}
+
+resource kvMsLoginClientSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (enableKeyVault && loginConfigured) {
+  parent: vault
+  name: 'ms-login-client-secret'
+  properties: {
+    value: msLoginClientSecret
   }
 }
 
