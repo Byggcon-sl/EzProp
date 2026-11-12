@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { ORDER_EDITABLE_FIELDS } from "./codes";
+import * as schemas from "./schemas";
 import { orderInputSchema, rejectReasonSchema } from "./schemas";
 
 /*
@@ -235,5 +237,59 @@ describe("3.2 orderedByContactId på ordren (koble kontakter)", () => {
       orderedByFirmId: "0190a000-0000-7000-8000-000000000060",
     });
     expect(data).not.toHaveProperty("orderedByFirmId");
+  });
+});
+
+/*
+ * Rette en ordre etter lagring (docs/funksjoner/fase2a-rette-ordre-testplan.md 1.4). Rettingen
+ * bruker `orderInputSchema` selv, ikke en kopi, så meldingene er de samme som på «Ny ordre».
+ * Integrasjonstesten 2.4.9 i update-order.test.ts viser at `updateOrder` gir de samme meldingene.
+ */
+describe("1.4 rettingsskjemaet er orderInputSchema", () => {
+  it("modulen har ingen egen kopi av ordreskjemaet", () => {
+    const exported = Object.entries(schemas)
+      .filter(([, value]) => typeof value === "function" || typeof value === "object")
+      .map(([name]) => name)
+      .sort();
+    expect(exported).toEqual(["orderInputSchema", "rejectReasonSchema"]);
+  });
+
+  it("skjemaets felt er nøyaktig de rettbare feltene (ORDER_EDITABLE_FIELDS)", () => {
+    expect(Object.keys(orderInputSchema(NOW).shape).sort()).toEqual(
+      [...ORDER_EDITABLE_FIELDS].sort(),
+    );
+  });
+
+  it("status, avvisningsgrunn, oppdrag, kilde, rapporttype og organisasjon tas bort", () => {
+    const data = ok({
+      status: "rejected",
+      rejectReason: "Feil registrering",
+      rejectedReason: "Feil registrering",
+      assignmentId: "0190a000-0000-7000-8000-000000000080",
+      source: "email",
+      requestedReportType: "bolig",
+      organizationId: "0190a000-0000-7000-8000-000000000090",
+    });
+    for (const key of [
+      "status",
+      "rejectReason",
+      "rejectedReason",
+      "assignmentId",
+      "source",
+      "requestedReportType",
+      "organizationId",
+    ]) {
+      expect(data).not.toHaveProperty(key);
+    }
+  });
+
+  it.each([
+    ["addressText", { addressText: "" }, "Skriv inn adressen."],
+    ["gnr", { gnr: "12a" }, "Gårdsnummer kan bare ha sifre."],
+    ["bnr", { bnr: "3 4" }, "Bruksnummer kan bare ha sifre."],
+    ["snr", { snr: "-1" }, "Seksjonsnummer kan bare ha sifre."],
+    ["receivedAt", { receivedAt: "ikke en dato" }, "Mottatt må være en dato og et klokkeslett."],
+  ])("%s: samme melding som «Ny ordre»", (field, input, message) => {
+    expect(messagesFor(parse(input), field)).toContain(message);
   });
 });

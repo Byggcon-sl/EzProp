@@ -178,13 +178,15 @@ const DETAIL_KEYS = [
   "receivedAt",
   "rejectedReason",
   "requestedReportType",
+  // Rette ordre 2.7.6 (docs/funksjoner/fase2a-rette-ordre-testplan.md): versjonen til skjemaet
+  "rowVersion",
   "sellerDeclarationReceived",
   "snr",
   "source",
   "status",
 ].sort();
 
-const TRACKING_KEYS = ["createdBy", "updatedBy", "deletedAt", "deletedBy", "rowVersion"];
+const TRACKING_KEYS = ["createdBy", "updatedBy", "deletedAt", "deletedBy"];
 
 // ---------------------------------------------------------------------------------------------
 // 4.1 Tilgang per rolle
@@ -729,7 +731,7 @@ describe("4.4 legge inn og liste", () => {
     expect(await listOrders(admin, org.id)).toEqual([]);
   });
 
-  it("4.4.5 listOrders og getOrder gir faste feltlister uten sporingsfelt", async () => {
+  it("4.4.5 listOrders og getOrder gir faste feltlister uten sporingsfelt (getOrder med rowVersion)", async () => {
     const { org, admin } = await orgWithAdmin();
     const { order } = await insertConvertedOrder(org.id);
     await insertOrder(org.id);
@@ -741,6 +743,9 @@ describe("4.4 legge inn og liste", () => {
     const detail = await getOrder(admin, org.id, order.id);
     expect(Object.keys(detail).sort()).toEqual(DETAIL_KEYS);
     for (const key of [...TRACKING_KEYS, "organizationId"]) expect(detail).not.toHaveProperty(key);
+    // Listen har ingen versjon; bare enkeltordren, som skjemaet «Rett ordren» bruker
+    for (const row of rows) expect(row).not.toHaveProperty("rowVersion");
+    expect(detail.rowVersion).toEqual(expect.any(Number));
   });
 });
 

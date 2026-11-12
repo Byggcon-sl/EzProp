@@ -13,7 +13,7 @@ import {
   createUser,
   resetDatabase,
 } from "../../../tests/factories";
-import { convertOrderToAssignment, createOrder, rejectOrder } from "./index";
+import { convertOrderToAssignment, createOrder, rejectOrder, updateOrder } from "./index";
 
 /*
  * Hendelser og revisjonslogg skrives i samme transaksjon som endringen
@@ -167,4 +167,51 @@ describe("4.6.5 feiler hendelsen eller loggen, finnes ingenting", () => {
       expect(result.assignment.number).toBe("2026-00004");
     },
   );
+});
+
+/*
+ * Rette ordre (docs/funksjoner/fase2a-rette-ordre-testplan.md 2.6.8 og 2.6.9): retting, logg og
+ * hendelse er én transaksjon. Feiler en av dem, er ordren som før (verdier og `row_version`).
+ * Støtter hovedmål: færre reklamasjoner (aldri en retting uten spor).
+ */
+describe("2.6.8–2.6.9 retting: feiler loggen eller hendelsen, er ordren uendret", () => {
+  it.each([
+    ["2.6.8 feiler loggen, er ordren uendret og ingen hendelse", failAuditOnce],
+    ["2.6.9 feiler hendelsen, er ordren uendret og ingen loggrad", failEventOnce],
+  ])("%s", async (_name, fail) => {
+    const { org, admin } = await orgWithAdmin();
+    const order = await insertOrder(org.id, { gnr: "12", bnr: "34" });
+    const [before] = await db.select().from(orders).where(eq(orders.id, order.id));
+    fail();
+
+    await expect(
+      updateOrder(
+        admin,
+        org.id,
+        order.id,
+        { addressText: "Prøvegata 7, 8006 Bodø", gnr: "56", bnr: "78" },
+        order.rowVersion,
+        NOW,
+      ),
+    ).rejects.toThrow();
+
+    const [after] = await db.select().from(orders).where(eq(orders.id, order.id));
+    expect(after).toEqual(before);
+    expect(after?.rowVersion).toBe(order.rowVersion);
+    expect(await rowCount(events)).toBe(0);
+    expect(await rowCount(auditLog)).toBe(0);
+
+    // Neste forsøk med samme versjon lykkes: ingenting ble brukt opp
+    const result = await updateOrder(
+      admin,
+      org.id,
+      order.id,
+      { addressText: "Prøvegata 7, 8006 Bodø", gnr: "56", bnr: "78" },
+      order.rowVersion,
+      NOW,
+    );
+    expect(result.changedFields).toEqual(["addressText", "gnr", "bnr"]);
+    expect(await rowCount(events)).toBe(1);
+    expect(await rowCount(auditLog)).toBe(1);
+  });
 });

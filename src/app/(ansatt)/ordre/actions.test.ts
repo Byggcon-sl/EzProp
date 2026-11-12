@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AccessDeniedError } from "@/core/access";
 import { ContactNotFoundError } from "@/core/contacts";
-import { OfficeNotFoundError, OrderAlreadyHandledError } from "@/core/orders/errors";
+import {
+  OfficeNotFoundError,
+  OrderAlreadyHandledError,
+  OrderChangedError,
+} from "@/core/orders/errors";
 import { orderInputSchema } from "@/core/orders/schemas";
 import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../form-state";
 
@@ -28,6 +32,7 @@ const mocks = vi.hoisted(() => ({
     convertOrderToAssignment: vi.fn(),
     listOrders: vi.fn(),
     getOrder: vi.fn(),
+    updateOrder: vi.fn(),
   },
 }));
 
@@ -43,7 +48,8 @@ vi.mock("@/core/orders", async (importOriginal) => ({
   ...mocks.core,
 }));
 
-const { createOrderAction, rejectOrderAction, convertOrderAction } = await import("./actions");
+const { createOrderAction, rejectOrderAction, convertOrderAction, updateOrderAction } =
+  await import("./actions");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
 const OTHER_ORG = "0190a000-0000-7000-8000-000000000002";
@@ -445,5 +451,200 @@ describe("8 bestilleren fra kontaktregisteret", () => {
     expect(logged).not.toContain(ORDERED_BY);
     expect(logged).not.toContain("Testmegleren");
     expect(logged).not.toContain(ADDRESS);
+  });
+});
+
+/*
+ * «Rett ordren» (docs/funksjoner/fase2a-rette-ordre-testplan.md avsnitt 3). Skjemaet sender
+ * orderId, rowVersion og de samme feltene som «Ny ordre». Mottatt er påkrevd ved retting.
+ * Støtter hovedmål: de ansatte (riktig norsk melding per feil) og færre reklamasjoner (aldri feil
+ * organisasjon, aldri stille overskriving, ingen personopplysninger i loggen).
+ */
+describe("3 updateOrderAction", () => {
+  const ORDER_CHANGED = "Ordren er endret av en annen. Last siden på nytt.";
+  const CONTACT_ID = "0190a000-0000-7000-8000-000000000092";
+  const GNR = "56";
+  const BNR = "78";
+  const EXTERNAL_REF = "TEST-ORD-0002";
+  const NEW_ADDRESS = "Prøvegata 7, 8006 Bodø";
+
+  function updateForm(overrides: Record<string, string> = {}) {
+    return form({
+      orderId: ORDER,
+      rowVersion: "3",
+      addressText: NEW_ADDRESS,
+      receivedAt: "2026-11-02T09:00",
+      orderedByText: ORDERED_BY,
+      externalRef: EXTERNAL_REF,
+      gnr: GNR,
+      bnr: BNR,
+      ...overrides,
+    });
+  }
+
+  function updated() {
+    mocks.core.updateOrder.mockResolvedValue({ id: ORDER, changedFields: ["addressText"] });
+  }
+
+  it("3.1 gyldig retting kaller updateOrder med organisasjonen fra innloggingen og går til /ordre/<id>?rettet=1", async () => {
+    updated();
+    const url = await redirectOf(
+      updateOrderAction(initialFormState, updateForm({ organizationId: OTHER_ORG })),
+    );
+    expect(url).toBe(`/ordre/${ORDER}?rettet=1`);
+    expect(mocks.core.updateOrder).toHaveBeenCalledTimes(1);
+    const [calledActor, organizationId, orderId, input, rowVersion] =
+      mocks.core.updateOrder.mock.calls[0]!;
+    expect(calledActor).toBe(actor);
+    expect(organizationId).toBe(ORG);
+    expect(orderId).toBe(ORDER);
+    expect(rowVersion).toBe(3);
+    expect(input).toMatchObject({
+      addressText: NEW_ADDRESS,
+      orderedByText: ORDERED_BY,
+      externalRef: EXTERNAL_REF,
+      gnr: GNR,
+      bnr: BNR,
+      receivedAt: new Date("2026-11-02T08:00:00.000Z").toISOString(),
+    });
+    expect(JSON.stringify(mocks.core.updateOrder.mock.calls)).not.toContain(OTHER_ORG);
+  });
+
+  it("3.1 orderedByFirmId fra skjemaet sendes aldri til kjernen", async () => {
+    updated();
+    await redirectOf(
+      updateOrderAction(
+        initialFormState,
+        updateForm({
+          orderedByContactId: CONTACT_ID,
+          orderedByFirmId: "0190a000-0000-7000-8000-000000000093",
+        }),
+      ),
+    );
+    const input = mocks.core.updateOrder.mock.calls[0]?.[3] as Record<string, unknown>;
+    expect(input.orderedByContactId).toBe(CONTACT_ID);
+    expect(input).not.toHaveProperty("orderedByFirmId");
+  });
+
+  it("3.1 uten kontekst gir «ingen tilgang» uten kall til kjernen", async () => {
+    mocks.getEmployeeContext.mockResolvedValue(null);
+    const state = await updateOrderAction(initialFormState, updateForm());
+    expect(state.message).toBe(NO_ACCESS);
+    expect(coreCalls()).toBe(0);
+  });
+
+  it.each(["", "abc", "1", "../x", `${ORDER}x`])(
+    "3.2 ordre-id «%s» som ikke er uuid gir NO_ACCESS uten kall til kjernen",
+    async (orderId) => {
+      const state = await updateOrderAction(initialFormState, updateForm({ orderId }));
+      expect(state.message).toBe(NO_ACCESS);
+      expect(coreCalls()).toBe(0);
+    },
+  );
+
+  it("3.3 AccessDeniedError gir NO_ACCESS", async () => {
+    mocks.core.updateOrder.mockRejectedValue(new AccessDeniedError());
+    const state = await updateOrderAction(initialFormState, updateForm());
+    expect(state.message).toBe(NO_ACCESS);
+  });
+
+  it("3.3 OrderChangedError gir «Ordren er endret av en annen. Last siden på nytt.» uten logg", async () => {
+    mocks.core.updateOrder.mockRejectedValue(new OrderChangedError());
+    const state = await updateOrderAction(initialFormState, updateForm());
+    expect(state.message).toBe(ORDER_CHANGED);
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it("3.3 ZodError fra kjernen gir feltfeil med samme tekster som «Ny ordre»", async () => {
+    const result = orderInputSchema(new Date()).safeParse({ addressText: " ", gnr: "12a" });
+    expect(result.success).toBe(false);
+    mocks.core.updateOrder.mockRejectedValue(result.error);
+
+    const state = await updateOrderAction(
+      initialFormState,
+      updateForm({ addressText: " ", gnr: "12a" }),
+    );
+    expect(state.fieldErrors.addressText).toBe("Skriv inn adressen.");
+    expect(state.fieldErrors.gnr).toBe("Gårdsnummer kan bare ha sifre.");
+  });
+
+  it("3.3 ContactNotFoundError gir feltfeil ved kontakten og ingen logg", async () => {
+    mocks.core.updateOrder.mockRejectedValue(new ContactNotFoundError());
+    const state = await updateOrderAction(
+      initialFormState,
+      updateForm({ orderedByContactId: CONTACT_ID }),
+    );
+    expect(state.fieldErrors.orderedByContactId).toBe("Kontakten finnes ikke.");
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it("3.3 kontakt-id som ikke er uuid gir feltfeil uten kall til kjernen", async () => {
+    const state = await updateOrderAction(
+      initialFormState,
+      updateForm({ orderedByContactId: "ikke-en-id" }),
+    );
+    expect(state.fieldErrors.orderedByContactId).toBe("Kontakten finnes ikke.");
+    expect(coreCalls()).toBe(0);
+  });
+
+  it.each(["", "   ", "i går", "2026-13-40T25:00"])(
+    "3.3 mottatt «%s» gir «Skriv inn dato og klokkeslett.» ved feltet uten kall",
+    async (receivedAt) => {
+      const state = await updateOrderAction(initialFormState, updateForm({ receivedAt }));
+      expect(state.fieldErrors.receivedAt).toBe("Skriv inn dato og klokkeslett.");
+      expect(coreCalls()).toBe(0);
+    },
+  );
+
+  it("3.3 skjemaverdiene står igjen i svaret ved feil", async () => {
+    mocks.core.updateOrder.mockRejectedValue(new OrderChangedError());
+    const state = await updateOrderAction(initialFormState, updateForm());
+    expect(JSON.stringify(state)).toContain(NEW_ADDRESS);
+  });
+
+  it("3.4 loggeren får aldri skjemaverdier (adresse, bestiller, matrikkel) ved ukjent feil", async () => {
+    const boom = new Error(`databasen sa nei til ${NEW_ADDRESS}`);
+    boom.name = "OppdiktetFeil";
+    mocks.core.updateOrder.mockRejectedValue(boom);
+
+    const state = await updateOrderAction(
+      initialFormState,
+      updateForm({ housingAssociationName: "Testtoppen borettslag", snr: "9" }),
+    );
+    expect(state.message).toBe(UNKNOWN_ERROR);
+    expect(mocks.logError).toHaveBeenCalledTimes(1);
+    const logged = JSON.stringify(mocks.logError.mock.calls);
+    expect(logged).toContain("OppdiktetFeil");
+    expect(logged).toContain(actor.id);
+    for (const value of [
+      NEW_ADDRESS,
+      "Prøvegata",
+      ORDERED_BY,
+      "Testmegleren",
+      EXTERNAL_REF,
+      "Testtoppen",
+      `"gnr"`,
+      `"bnr"`,
+    ]) {
+      expect(logged).not.toContain(value);
+    }
+  });
+
+  it.each(["", "abc", "1.5", "-1", "1e3", " 2 x"])(
+    "3.5 rowVersion «%s» som ikke er et heltall gir meldingen om endret ordre, ikke 500, uten kall",
+    async (rowVersion) => {
+      const state = await updateOrderAction(initialFormState, updateForm({ rowVersion }));
+      expect(state.message).toBe(ORDER_CHANGED);
+      expect(state.message).not.toBe(UNKNOWN_ERROR);
+      expect(coreCalls()).toBe(0);
+    },
+  );
+
+  it("3.5 rowVersion mangler helt gir meldingen om endret ordre uten kall", async () => {
+    const data = updateForm();
+    data.delete("rowVersion");
+    const state = await updateOrderAction(initialFormState, data);
+    expect(state.message).toBe(ORDER_CHANGED);
+    expect(coreCalls()).toBe(0);
   });
 });
