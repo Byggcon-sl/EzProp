@@ -786,7 +786,7 @@ export function BuildingsEditor({
       </datalist>
 
       {!data.hasProperty && (
-        <p className="rounded-xl bg-amber-50 px-4 py-3 text-amber-900">
+        <p className="rounded-xl bg-watch-fill px-4 py-3 text-watch-text">
           Legg inn eiendommen først.
         </p>
       )}

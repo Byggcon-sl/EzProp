@@ -293,7 +293,7 @@ export function TrialFormPage({ formId }: { formId: string }) {
           <p
             role="status"
             data-testid="storage-low-warning"
-            className="mt-2 rounded-xl bg-[#fbe7b5] px-3 py-2 text-sm font-medium text-[#6b4405]"
+            className="mt-2 rounded-xl bg-watch-fill px-3 py-2 text-sm font-medium text-watch-text"
           >
             {LOW_STORAGE_WARNING_TEXT}
           </p>
@@ -302,7 +302,7 @@ export function TrialFormPage({ formId }: { formId: string }) {
           <div
             role="alert"
             data-testid="storage-error"
-            className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-red-800"
+            className="mt-2 rounded-xl bg-urgent-fill px-3 py-2 text-urgent-text"
           >
             {/* Fast høyde: linjen vokser ikke når det kommer flere feil. */}
             <p className="h-15 overflow-y-auto text-sm leading-5">

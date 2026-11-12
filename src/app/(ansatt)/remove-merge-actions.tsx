@@ -15,7 +15,7 @@ type Action = (state: FormState, formData: FormData) => Promise<FormState>;
 function RemoveSubmit() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" className="bg-red-700 text-white hover:bg-red-800" disabled={pending}>
+    <Button type="submit" className="bg-urgent-line text-white hover:bg-urgent-text" disabled={pending}>
       {pending ? "Fjerner …" : "Fjern"}
     </Button>
   );
@@ -66,14 +66,14 @@ export function RemoveMergeActions({
           <Button
             ref={removeRef}
             variant="secondary"
-            className="text-red-800"
+            className="text-urgent-text"
             onClick={() => setOpen(true)}
           >
             Fjern
           </Button>
         </div>
       ) : (
-        <Card role="region" aria-labelledby={questionId} className="ring-red-200">
+        <Card role="region" aria-labelledby={questionId} className="border-urgent-line">
           <h2
             id={questionId}
             ref={questionRef}

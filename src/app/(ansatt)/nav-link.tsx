@@ -31,7 +31,7 @@ export function NavLink({
         "flex min-h-11 min-w-11 items-center gap-2 rounded-[10px] px-4 text-sm",
         variant === "menu" && "lg:gap-2.5 lg:px-3",
         active
-          ? "bg-brand-100 font-medium text-brand-900"
+          ? "bg-night font-medium text-white"
           : "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-brand-50",
         !active && variant === "menu" && "lg:bg-transparent lg:ring-0 lg:hover:bg-white",
       )}
