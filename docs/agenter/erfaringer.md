@@ -262,3 +262,8 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Minneutgaven av et lager må ikke tillate poster som det ekte lageret ikke kan ha (eller må kunne slette dem): rydding ble skrevet etter nøkkel, og poster uten nøkkel ble liggende.
 
 - Gammel next-server på port 3100 gjør e2e ugyldig (reuseExistingServer). Stopp den før kjøring.
+
+**PR #174 (svarene i reglene og bygningene, 12.11.2026):**
+- Nok en kjøring stoppet midt i «Bygg», med bygningsdelen og beslutningene på to worktree-brancher og regeldelen ikke pushet. Hovedløkken slo sammen branchene og lot én utvikler bygge resten etter kortet; det gikk raskere enn å starte arbeidsflyten på nytt, fordi kortet og testplanen var ferdige og presise.
+- Branchen var laget oppå en plan-PR, og main fikk tre plan-PR-er til før merge. Flett inn main før PR-en åpnes, ikke etter gjennomgangen.
+- Lokal utviklingsdatabase uten nyeste migrering gjør e2e rød. Kjør `pnpm db:migrate` etter å ha hentet en branch med ny migrering.
