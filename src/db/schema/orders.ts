@@ -55,6 +55,8 @@ export const orders = pgTable(
     // Mål for sammensatte fremmednøkler fra andre tabeller (samme organisasjon)
     uniqueIndex("orders_organization_id_id_idx").on(table.organizationId, table.id),
     index("orders_organization_id_received_at_idx").on(table.organizationId, table.receivedAt),
+    // Oppslag fra oppdraget til ordren (arbeidskøen, oppdraget, eiendommen). Nattløkken 12.11.2026.
+    index("orders_organization_id_assignment_id_idx").on(table.organizationId, table.assignmentId),
     // Oppdraget må høre til samme organisasjon som ordren. `AnyPgColumn` fordi tabellene peker
     // på hverandre (ordre → oppdrag og oppdrag → ordre).
     foreignKey({

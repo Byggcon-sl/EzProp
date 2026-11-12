@@ -89,6 +89,10 @@ export const employeePermissions = pgTable(
     permission: text("permission").notNull(),
   },
   (table) => [
+    index("employee_permissions_organization_id_employee_id_idx").on(
+      table.organizationId,
+      table.employeeId,
+    ),
     // Den ansatte må høre til samme organisasjon som raden
     foreignKey({
       name: "employee_permissions_employee_fk",
