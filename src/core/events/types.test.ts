@@ -11,6 +11,7 @@ import { EVENT_TYPES, type EventType } from "@/core/events";
 const EXPECTED_EVENT_TYPES = [
   "order.received",
   "order.rejected",
+  "order.updated",
   "assignment.created",
   "assignment.assigned",
   "assignment.handed_over",
@@ -62,8 +63,8 @@ const EXPECTED_EVENT_TYPES = [
 ];
 
 describe("hendelseskodene", () => {
-  it("1. har nøyaktig de 50 kodene fra domenemodellen 4.9", () => {
-    expect(EXPECTED_EVENT_TYPES).toHaveLength(50);
+  it("1. har nøyaktig de 51 kodene fra domenemodellen 4.9", () => {
+    expect(EXPECTED_EVENT_TYPES).toHaveLength(51);
     expect([...EVENT_TYPES].sort()).toEqual([...EXPECTED_EVENT_TYPES].sort());
   });
 

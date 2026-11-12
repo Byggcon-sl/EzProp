@@ -3,16 +3,20 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { AccessDeniedError } from "@/core/access";
 import { listOffices } from "@/core/organization";
-import { getOrder } from "@/core/orders";
+import { getOrder, listOrderHistory } from "@/core/orders";
 import { isUuid } from "@/shared/lib/uuid";
+import { buttonVariants } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
+import { Notice } from "@/shared/ui/notice";
 import { getEmployeeContext } from "../../employee-context";
 import { NoAccess } from "../../no-access";
-import { convertOrderAction, rejectOrderAction } from "../actions";
+import { convertOrderAction, rejectOrderAction, updateOrderAction } from "../actions";
 import { officeChoice } from "../office-choice";
 import { OrderStatusBadge } from "../order-status-badge";
-import { formatOsloDateTime } from "../received-at";
+import { formatOsloDateTime, osloDateTimeLocal } from "../received-at";
+import { EditOrderForm } from "./edit-order-form";
 import { ConvertOrderForm, RejectOrderForm } from "./order-actions";
+import { OrderHistory } from "./order-history";
 
 export const metadata: Metadata = { title: "Ordre" };
 
@@ -28,23 +32,39 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
 const EMPTY = <span className="text-slate-500">Ikke oppgitt</span>;
 
 /**
- * Ordren med «Gjør om til oppdrag» og «Avvis» når den er mottatt og den ansatte kan endre.
- * Ugyldig, ukjent og fremmed id gir samme svar som manglende tilgang.
+ * Ordren med «Gjør om til oppdrag» og «Avvis» når den er mottatt og den ansatte kan endre, og
+ * «Rett ordren» i alle statuser (T1). `?rett=1` åpner skjemaet på samme side, `?rettet=1` gir
+ * beskjeden etter lagring. Under ordren står «Endringer». Ugyldig, ukjent og fremmed id gir samme
+ * svar som manglende tilgang.
  */
-export default async function OrderPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function OrderPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ rett?: string | string[]; rettet?: string | string[] }>;
+}) {
   const { id } = await params;
   const context = await getEmployeeContext();
   if (!context || !isUuid(id)) return <NoAccess />;
 
   let order: Awaited<ReturnType<typeof getOrder>>;
+  let history: Awaited<ReturnType<typeof listOrderHistory>>;
   try {
-    order = await getOrder(context.actor, context.organizationId, id);
+    [order, history] = await Promise.all([
+      getOrder(context.actor, context.organizationId, id),
+      listOrderHistory(context.actor, context.organizationId, id),
+    ]);
   } catch (error) {
     if (error instanceof AccessDeniedError) return <NoAccess />;
     throw error;
   }
 
-  const canHandle = order.status === "received" && context.canEditOrders;
+  const search = await searchParams;
+  // Knappen og skjemaet vises bare for dem som kan endre; selve sjekken skjer i kjernen.
+  const editing = search.rett === "1" && context.canEditOrders;
+  const corrected = search.rettet === "1" && !editing;
+  const canHandle = order.status === "received" && context.canEditOrders && !editing;
   const choice = canHandle
     ? officeChoice(await listOffices(context.actor, context.organizationId), context.officeId)
     : null;
@@ -64,6 +84,12 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         </h1>
         <OrderStatusBadge status={order.status} />
       </div>
+
+      {corrected && (
+        <div className="mb-6">
+          <Notice message="Ordren er rettet." />
+        </div>
+      )}
 
       {order.status === "converted" && order.assignmentNumber && (
         <Card className="mb-6">
@@ -97,31 +123,67 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         </Card>
       )}
 
-      <Card>
-        <dl>
-          <Detail label="Adresse">{order.addressText}</Detail>
-          <Detail label="Mottatt">{formatOsloDateTime(order.receivedAt)}</Detail>
-          <Detail label="Hvem bestilte">
-            {order.orderedByText || EMPTY}
-            {order.orderedByContactId && (
+      {editing ? (
+        <EditOrderForm
+          action={updateOrderAction}
+          orderId={order.id}
+          rowVersion={order.rowVersion}
+          converted={order.status === "converted"}
+          defaults={{
+            addressText: order.addressText,
+            receivedAt: osloDateTimeLocal(order.receivedAt),
+            orderedByText: order.orderedByText ?? "",
+            orderedByContact: order.orderedByContactId
+              ? {
+                  id: order.orderedByContactId,
+                  name: order.orderedByText || "kontakten i registeret",
+                }
+              : null,
+            externalRef: order.externalRef ?? "",
+            gnr: order.gnr ?? "",
+            bnr: order.bnr ?? "",
+            snr: order.snr ?? "",
+            housingAssociationName: order.housingAssociationName ?? "",
+            sellerDeclarationReceived: order.sellerDeclarationReceived,
+          }}
+        />
+      ) : (
+        <Card>
+          <dl>
+            <Detail label="Adresse">{order.addressText}</Detail>
+            <Detail label="Mottatt">{formatOsloDateTime(order.receivedAt)}</Detail>
+            <Detail label="Hvem bestilte">
+              {order.orderedByText || EMPTY}
+              {order.orderedByContactId && (
+                <Link
+                  href={`/kontakter/${order.orderedByContactId}`}
+                  className="mt-1 flex min-h-11 w-fit items-center font-medium text-brand-700 underline"
+                >
+                  Kontakt i registeret
+                </Link>
+              )}
+            </Detail>
+            <Detail label="Ekstern referanse">{order.externalRef || EMPTY}</Detail>
+            <Detail label="Gårdsnummer">{order.gnr || EMPTY}</Detail>
+            <Detail label="Bruksnummer">{order.bnr || EMPTY}</Detail>
+            <Detail label="Seksjonsnummer">{order.snr || EMPTY}</Detail>
+            <Detail label="Borettslag eller sameie">{order.housingAssociationName || EMPTY}</Detail>
+            <Detail label="Egenerklæring mottatt">
+              {order.sellerDeclarationReceived ? "Ja" : "Nei"}
+            </Detail>
+          </dl>
+          {context.canEditOrders && (
+            <div className="mt-4 border-t border-slate-200 pt-4">
               <Link
-                href={`/kontakter/${order.orderedByContactId}`}
-                className="mt-1 flex min-h-11 w-fit items-center font-medium text-brand-700 underline"
+                href={`/ordre/${order.id}?rett=1`}
+                className={buttonVariants({ variant: "secondary", size: "md" })}
               >
-                Kontakt i registeret
+                Rett ordren
               </Link>
-            )}
-          </Detail>
-          <Detail label="Ekstern referanse">{order.externalRef || EMPTY}</Detail>
-          <Detail label="Gårdsnummer">{order.gnr || EMPTY}</Detail>
-          <Detail label="Bruksnummer">{order.bnr || EMPTY}</Detail>
-          <Detail label="Seksjonsnummer">{order.snr || EMPTY}</Detail>
-          <Detail label="Borettslag eller sameie">{order.housingAssociationName || EMPTY}</Detail>
-          <Detail label="Egenerklæring mottatt">
-            {order.sellerDeclarationReceived ? "Ja" : "Nei"}
-          </Detail>
-        </dl>
-      </Card>
+            </div>
+          )}
+        </Card>
+      )}
 
       {choice && (
         <div className="mt-6 space-y-6">
@@ -135,6 +197,8 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
           <RejectOrderForm orderId={order.id} action={rejectOrderAction} />
         </div>
       )}
+
+      <OrderHistory entries={history} />
     </main>
   );
 }
