@@ -1,7 +1,7 @@
 # Testplan: Byggcon-profilen i EzProp
 
 - **Oppgavekort:** `docs/funksjoner/fase2a-byggcon-profil.md`
-- **Dato:** 12.11.2026 (test-leder, før bygging; avvikene D1–D4 fra designspesifikasjonen `docs/funksjoner/fase2a-byggcon-profil-design.md` er tatt inn av prosjektlederen 12.11.2026)
+- **Dato:** 12.11.2026 (test-leder, før bygging; avvikene D1–D4 fra designspesifikasjonen `docs/funksjoner/fase2a-byggcon-profil-design.md` er tatt inn av prosjektlederen 12.11.2026; oppdatert av test-leder 12.11.2026 etter at main med PR #166, #167 og #174 ble flettet inn, beslutningene heter nå A241–A248)
 - **Støtter hovedmål:** de ansatte (testene låser at trykkflatene og luften på iPad står, at skriften virker uten nett og at kontrasten holder i sollys), KI i bunnen (testene viser at KI-merket har eget uttrykk med teksten «KI» og at godta/behold/nytt forslag og `ai_usage_log` virker som før) og færre reklamasjoner (TG-tokenene har lesbar tekst og kan ikke forveksles med synkstatus eller KI).
 
 Oppgaven endrer bare utseendet. Ingen nye tabeller, spørringer, tilgangsregler eller TG-regler. Testdata er oppdiktet (prøveorganisasjonen og e2e-brukerne i `e2e/helpers.ts`). Ingen ny avhengighet (ingen `@axe-core/playwright`).
@@ -14,7 +14,7 @@ Oppgaven endrer bare utseendet. Ingen nye tabeller, spørringer, tilgangsregler 
 - Merkevarefargen: `src/app/manifest.test.ts` (utvides).
 - E2e: `e2e/fase-2a-byggcon-profil.spec.ts`. Kjører i begge prosjektene (`pc` og `ipad` = 1194 × 834). Stående iPad (1024 × 1366) i egen `test.describe` med `test.use({ viewport: { width: 1024, height: 1366 }, hasTouch: true })`.
 - **Skriftnavn:** `next/font/local` gir familienavn som `__inter_abc123`. E2e sjekker derfor `fontFamily` mot `/inter/i` og `/schibsted/i`, og `document.fonts.check` bruker det første familienavnet fra `getComputedStyle`, ikke en fast streng. Variablene i `layout.tsx` må hete noe med `inter` og `schibsted`.
-- **KI-kortets knapper** heter i koden «Bruk», «Behold min tekst» og «Nytt forslag» (ikke «Endre»/«Avvis» som i kortet). Testene bruker navnene i koden. «Bruk» er hovedknapp (`lg`, minst 56 px); de andre minst 44 px, som den låste testen i `ai-suggestion.test.ts`. Kortet sier «Ingen klasser for høyde endres», så kravet om 56 px på alle tre i akseptkriteriene leses som en skrivefeil (lite funn, rettes i kortet).
+- **KI-kortets knapper** heter i koden «Bruk», «Behold min tekst» og «Nytt forslag» (ikke «Endre»/«Avvis» som i kortet). Testene bruker navnene i koden. «Bruk» er hovedknapp (`lg`, minst 56 px); «Behold min tekst» og «Nytt forslag» (sekundærknapp, A244) minst 44 px, som den låste testen i `ai-suggestion.test.ts` og akseptkriteriet i kortet (rettet i kortet).
 
 ## 1. Forbudte ord og skriftfiler, `tests/byggcon-profile.test.ts` (ny, ren)
 
@@ -26,6 +26,7 @@ Går gjennom alle filer under `src/` og `public/` (tekst og filnavn). Testfilen 
 4. **lisensen:** `public/fonts/README.md` nevner «SIL OFL 1.1», Inter og Schibsted Grotesk, og nevner ikke Roboto eller PDF-bruk av Roboto. Lisensfilene (`OFL-*.txt`) ligger ved siden av.
 5. **forhåndslasting (D2 i designspesifikasjonen, A242):** `src/app/layout.tsx` har nøyaktig ett `preload: true` (Inter-familien, alle fire vektene) og `preload: false` for Schibsted Grotesk (leses som tekst). `next/font/local` styrer forhåndslasting per familie, ikke per vekt. Ingen `display` annet enn `"swap"`, og `adjustFontFallback` er ikke satt til `false`.
 6. **ingen fast hex i synkstatusen:** `src/modules/offline-trial/sync-status.tsx` har ingen `#[0-9a-f]{3,6}` (bruker `--color-sync-*`).
+7. **sidene fra main følger temaet:** ingen `.tsx` under `src/app` og `src/modules` har fast hex i `className` eller `style` (`/\[#[0-9a-f]{3,6}\]|#[0-9a-f]{6}/i`). Unntak listes ved navn i testen: `src/shared/config/brand.ts`, `src/app/apple-icon.tsx` og `src/app/manifest.ts` (de bruker palettfarger, se 4). Dekker innloggingen med Microsoft (PR #166), bygningsredigeringen (`buildings-editor.tsx`) og regelvisningen (PR #167, #174).
 
 ## 2. Kontrast, `src/app/(ansatt)/contrast.test.ts` (utvides, ren)
 
@@ -90,11 +91,11 @@ Temaet leses først; `slate-*` fjernes fra `fixed` og leses fra `@theme` (de omd
 1. hovedknappen i innloggingen og en knapp på `/arbeidskoe`: `border-radius` ≥ halve høyden.
 2. et kort (testid eller rolle i arbeidskøen/oppdraget): `border-radius: 12px`, `border-width: 1px`, `box-shadow: none`.
 3. et skjemafelt (`/prove/testskjema`): `border-radius: 8px`.
-4. ingen element på `/arbeidskoe`, ett oppdrag, `/prove/testskjema` og `/prove/ki` har `background-image` med `gradient` (`getComputedStyle` over alle elementer).
+4. ingen element på `/arbeidskoe`, ett oppdrag, `/prove/testskjema` og `/prove/ki` har `background-image` med `gradient` (`getComputedStyle` over alle elementer). Bygningsredigeringen (`/oppdrag/[id]/bygninger`) tas med som femte side, siden den kom fra main etter planen ble skrevet.
 5. nordlysstripen er borte: ingen `.aurora-bar`.
 
 ### 5.3 Trykkflater (iPad liggende 1194 × 834 og stående 1024 × 1366, `boundingBox`)
-1. «Send meg en kode» og «Logg inn» i innloggingen: høyde ≥ 56.
+1. «Send meg en kode» og «Logg inn» i innloggingen: høyde ≥ 56. (I e2e er Microsoft ikke satt opp, så kodeskjemaet er hovedvalget. «Logg inn med Microsoft» er `size="lg"` og «Logg inn med kode i stedet» `secondary` med `min-h-11`; det låses med markup i enhetstesten for innloggingsskjemaet, ikke i e2e.)
 2. hovedknappen i testskjemaet: ≥ 56.
 3. KI-kortet på `/prove/ki` (prøvetakstmannen): «Bruk» ≥ 56; «Behold min tekst» og «Nytt forslag» ≥ 44.
 4. «Synk nå» (og «Logg inn» i synkstatusen når økten er utløpt, med `expireOwnSession`): ≥ 56.
@@ -145,7 +146,7 @@ Finnes en ny spørring i diffen, avvises PR-en til den har sin egen `expectTenan
 
 ## 10. Kjøring og godkjenning
 
-1. Flett inn `main` (med PR #166 hvis merget) før PR. Kjør `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm size` og hele `pnpm test:e2e` på nytt etter flettingen.
+1. `main` med PR #166, #167 og #174 er flettet inn (12.11.2026). Flettes `main` inn igjen før PR, kjøres alt på nytt. Kjør `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm size` og hele `pnpm test:e2e` på nytt etter flettingen.
 2. **Ytelse:** `pnpm size` før (fra `main`) og etter; egen JS per side øker ikke (skriftene er filer, ikke JS). Bare Inter-filene lastes på forhånd (D2); størrelsen noteres i rapporten.
-3. Versjonen i `package.json` er 0.7.x og vises i `/api/helse`.
-4. **Avvises hvis:** et kontrastpar under kravet, en trykkflate under 44/56 px, en låst test er svekket (ikke bare byttet hex), en ny spørring uten tenant-test, admin kommer ikke inn, eller `aurora`/`gradient`/`roboto` finnes i `src/` eller `public/`.
+3. Versjonen i `package.json` er 0.10.0 og vises i `/api/helse` (eksisterende helsetest).
+4. **Avvises hvis:** et kontrastpar under kravet, en trykkflate under 44/56 px, en låst test er svekket (ikke bare byttet hex), en ny spørring uten tenant-test, admin kommer ikke inn, `aurora`/`gradient`/`roboto` finnes i `src/` eller `public/`, en side fra main har fast hex, eller «etter»-bildene mangler.
