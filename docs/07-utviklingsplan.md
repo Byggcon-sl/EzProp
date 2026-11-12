@@ -73,7 +73,7 @@ Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3
 | 1 Prøve uten nett | Ferdig 10.11.2026. Ståle har kjørt prøvene på ekte iPad og godkjent ADR 0004 (egenbygd synk). |
 | 0b Innlogging, organisasjon, roller | Ferdig, unntatt felles innlogging med Optiplan (venter på S6) |
 | **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127) og forslagsmønsteret (PR #131), vask før KI (PR #135), evalueringssettet (PR #141) og KI-køen (PR #143) er levert. Det alvorlige funnet T-0001 (synkkøen) er rettet i PR #139. Neste: «Beslutningsnotat om KI-leverandør» (2a-1). |
-| Minimum før ekte data | To av ni punkter levert. Resten trenger testmiljøet (S1), som ikke er satt opp for EzProp ennå (11.11.2026). |
+| Minimum før ekte data | To av ni punkter levert. Testmiljøet (S1) er oppe fra 12.11.2026, så resten kan bygges og prøves der. |
 | 2b og videre | Ikke startet |
 
 ## Venter på Ståle
@@ -82,7 +82,7 @@ Dette kan bare Ståle gjøre eller bestemme. Listen er sortert etter hvor mye so
 
 | Nr | Hva | Hva som venter på det |
 |---|---|---|
-| S1 | **Testmiljøet i Azure for EzProp.** Ståle sa «testmiljøet er ok» 10.11.2026, men 11.11.2026 hopper «Utrulling til Azure» fortsatt over utrullingen fordi `AZURE_CLIENT_ID` mangler i GitHub. Ståle setter det opp etter `docs/drift/testmiljo-azure.md` (punkt a–e). | Alt som skal prøves i testmiljøet, og «Minimum før ekte data» |
+| S1 | ~~Testmiljøet i Azure for EzProp~~ **Gjort 12.11.2026.** Første vellykkede utrulling: appen `app-ezprop-test` (Sweden Central) og databasen (Norway East, fordi den minste størrelsen ikke var ledig i Sweden Central) i ressursgruppen `rg-ezprop-test2`. Helsesjekken svarer ok. Gjenstår for Ståle: første innlogging og iPad (`docs/drift/testmiljo-azure.md`, punkt d og e). | – |
 | S2 | ~~Prøve A og B på ekte iPad, C, D og F, og godkjenne ADR 0004~~ **Gjort (Ståle 10.11.2026: «2 og 3 også»).** ADR 0004 (egenbygd synk) er godkjent. | – |
 | S3 | ~~Fagråd runde 1~~ **Gjort (Ståle 10.11.2026: «2 og 3 også»).** Grensene, levetidene, prøveeksemplene og kontrollpunktene for leilighet og fellesdeler er godkjent. De tre fagspørsmålene er besvart samme dag: TG0 gis når det ikke er målt fukt, uansett hvor gammelt badet er; radon er bare HMS; brann og sikkerhet (røykvarsler, slukkeutstyr) er punkter uansett bygningstype. | – |
 | S4 | **Ansvarsforsikringen:** antall krav og beløp de siste 3 årene, **hvilken bygningsdel hvert krav gjaldt**, hvordan tidlig melding virker, og om dokumenterte rutiner gir bedre vilkår. | Nullpunktet for reklamasjonsmålet, og hvilke regler og KI-sjekker som bør komme først |

@@ -59,3 +59,4 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 09.11.2026 | Funnene fra Spectoras YouTube-kanal (V1–V132) knyttet til planen: henvisning på 61 punkter, ny underseksjon under «Sporbarhet», nye funksjoner som forslag og kapittel 7 som spørsmål i `docs/09-apne-sporsmal.md` (nr. 20–53). Ingen punkter er lagt til eller utvidet. | `spectora-youtube/spectora-youtube-funn.md` |
 | 11.11.2026 | Statuslinjen for fase 2a: KI-køen (PR #143) levert, neste er «Beslutningsnotat om KI-leverandør». | Hovedløkken etter PR #143 |
 | 11.11.2026 | S1 satt tilbake til åpen: utrullingen til Azure hopper fortsatt over fordi `AZURE_CLIENT_ID` mangler. | Kontroll av arbeidsflyten «Utrulling til Azure» |
+| 12.11.2026 | S1 gjort: første vellykkede utrulling til Azure (PR #149–#152: databaseregion, brannmurkommando, appens logg ved feil og flate pakker). | Utrullingen 12.11.2026 |
