@@ -7,6 +7,16 @@ import { saveBuilding, saveFloor, saveFloorArea, saveRoom } from "@/core/buildin
 import { createConnection } from "@/core/integrations";
 import { convertOrderToAssignment, createOrder } from "@/core/orders";
 import { saveAssignmentProperty, saveCommonAreas } from "@/core/properties";
+import {
+  createDraftVersion,
+  createTemplateFamily,
+  getTemplateVersion,
+  isSameTemplateContent,
+  listTemplateFamilies,
+  parseTemplateDocument,
+  publishVersion,
+  saveDraftContent,
+} from "@/core/templates";
 import { db } from "@/db/client";
 import {
   assignmentParties,
@@ -32,6 +42,7 @@ import {
   SAMPLE_ORGANIZATION_NAME,
   type SampleAssignment,
 } from "./sample-assignments.data";
+import { wetRoomTemplate } from "./templates/wet-room";
 
 /*
  * `pnpm db:seed:testoppdrag` (A130–A134): fire oppdiktede testoppdrag i prøveorganisasjonen.
@@ -49,6 +60,9 @@ import {
  * - Steget sletter aldri noe. Loggen har bare `externalRef` og resultatet, aldri e-post eller navn.
  * - KI med den falske leverandøren slås på bare i prøveorganisasjonen (`ensureSampleAi`, A160).
  *   `pnpm db:seed` (Byggcon) rører ikke KI.
+ * - Systemmalen «Tilstandsrapport bolig» med badet (`ensureSampleTemplate`) publiseres bare i
+ *   prøveorganisasjonen, gjennom tjenestene i `src/core/templates`. Ny versjon bare når innholdet
+ *   er endret. `pnpm db:seed` (Byggcon) rører ikke maler.
  */
 
 export class SampleOrganizationError extends Error {
@@ -81,6 +95,8 @@ export type SampleAiSummary = {
 export type SampleSeedSummary = {
   organization: SamplePartResult;
   ai: SampleAiSummary;
+  /** Systemmalen med badet: ny versjon publisert, uendret, eller `skipped` uten `sampleData`. */
+  template: SampleResult;
   assignments: SampleAssignmentSummary[];
 };
 
@@ -334,6 +350,19 @@ const AI_PORT = "ai";
 const IS_SAMPLE_ORGANIZATION = sql`${organizations.settings} -> 'sampleData' = 'true'::jsonb`;
 
 /**
+ * Organisasjonen finnes og har merket `settings.sampleData = true`. Samme vilkår som
+ * `ensureSampleAi` (`IS_SAMPLE_ORGANIZATION`), så alle deler av seed sjekker merket likt.
+ */
+export async function isSampleOrganization(organizationId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(and(eq(organizations.id, organizationId), IS_SAMPLE_ORGANIZATION))
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
  * Slår på KI med den falske leverandøren i prøveorganisasjonen, slik at de ansatte kan prøve
  * KI-forslag i testmiljøet uten kostnad og uten at data sendes ut. Kalles etter
  * `prepareSampleSeed`, men sjekker merket `settings.sampleData = true` selv, i samme spørring som
@@ -384,6 +413,76 @@ export async function ensureSampleAi(context: SampleSeedContext): Promise<Sample
 
   await createConnection(context.actor, organizationId, { port: AI_PORT, provider: "fake" });
   return { setting, connection: "created" };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Systemmalen med badet i prøveorganisasjonen (docs/funksjoner/fase2a-mal-bad.md Omfang 6)
+// ---------------------------------------------------------------------------------------------
+
+/** Familien for systemmalen for tilstandsrapport. */
+const SAMPLE_TEMPLATE_FAMILY = {
+  name: "Tilstandsrapport bolig",
+  kind: "system",
+  report_type: "condition_report",
+} as const;
+
+const SAMPLE_TEMPLATE_CHANGE_NOTE =
+  "Lagt inn av seed i prøveorganisasjonen. Tekstene er utkast, ikke godkjent av fagrådet.";
+
+/**
+ * Publiserer systemmalen «Tilstandsrapport bolig» med badet i prøveorganisasjonen, slik at
+ * regler, skjerm og PDF kan prøves på testoppdragene. Admin fra `context` utfører, og alt går
+ * gjennom tjenestene i `src/core/templates` (tilgang, validering, revisjonslogg).
+ *
+ * - Uten merket `settings.sampleData = true` (`isSampleOrganization`): `skipped`, ingenting skrives.
+ * - Familien finnes ikke: `createTemplateFamily` (lager tomt utkast v1).
+ * - Siste publiserte versjon har samme innhold som `document`: `existing`. Ingenting skrives, og
+ *   et utkast som finnes, står.
+ * - Ellers brukes utkastet som finnes, eller et nytt lages med `createDraftVersion`. Innholdet
+ *   lagres og publiseres: `created`. Forrige publiserte versjon blir `retired` av tjenesten.
+ *
+ * `document` er et argument, så testene kan prøve endret innhold uten å endre malfilen.
+ */
+export async function ensureSampleTemplate(
+  context: SampleSeedContext,
+  document: unknown = wetRoomTemplate,
+): Promise<SampleResult> {
+  const { actor, organizationId, now } = context;
+  if (!(await isSampleOrganization(organizationId))) return "skipped";
+
+  const parsed = parseTemplateDocument(document);
+  if (!parsed.success) {
+    throw new Error(
+      `Malen for badet er ugyldig (${parsed.issues.length} feil). Ingenting er endret.`,
+    );
+  }
+
+  const families = await listTemplateFamilies(actor, organizationId);
+  let family = families.find(
+    (candidate) =>
+      candidate.name === SAMPLE_TEMPLATE_FAMILY.name &&
+      candidate.kind === SAMPLE_TEMPLATE_FAMILY.kind &&
+      candidate.reportType === SAMPLE_TEMPLATE_FAMILY.report_type,
+  );
+  if (!family) {
+    const { familyId } = await createTemplateFamily(actor, organizationId, SAMPLE_TEMPLATE_FAMILY);
+    family = (await listTemplateFamilies(actor, organizationId)).find((f) => f.id === familyId);
+    if (!family) throw new Error("fant ikke malfamilien etter at den ble laget");
+  }
+
+  // Versjonene kommer med høyeste versjonsnummer først
+  const published = family.versions.find((version) => version.status === "published");
+  if (published) {
+    const current = await getTemplateVersion(actor, organizationId, published.id);
+    if (isSameTemplateContent(current.document, parsed.document)) return "existing";
+  }
+
+  const draft = family.versions.find((version) => version.status === "draft");
+  const versionId =
+    draft?.id ?? (await createDraftVersion(actor, organizationId, family.id, now)).versionId;
+  await saveDraftContent(actor, organizationId, versionId, parsed.document, now);
+  await publishVersion(actor, organizationId, versionId, SAMPLE_TEMPLATE_CHANGE_NOTE, now);
+  return "created";
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -632,7 +731,10 @@ export async function runSampleSeed(
     `KI på (falsk leverandør): ${RESULT_LABELS[ai.setting]}, tilkobling: ${RESULT_LABELS[ai.connection]}`,
   );
 
-  const summary: SampleSeedSummary = { organization, ai, assignments: [] };
+  const template = await ensureSampleTemplate(context);
+  console.log(`Systemmal med bad: ${RESULT_LABELS[template]}`);
+
+  const summary: SampleSeedSummary = { organization, ai, template, assignments: [] };
   for (const sample of SAMPLE_ASSIGNMENTS) {
     const result = await ensureSampleAssignment(context, sample);
     summary.assignments.push({ externalRef: sample.externalRef, result });
