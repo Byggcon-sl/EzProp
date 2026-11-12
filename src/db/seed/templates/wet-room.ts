@@ -2,6 +2,9 @@ import type {
   CheckpointDoc,
   DeviationQuestionDoc,
   OutcomeDoc,
+  RuleConditionDoc,
+  RuleDoc,
+  RuleTestCaseDoc,
   StandardMeasureDoc,
   TemplateDocument,
   TemplateElementDoc,
@@ -16,7 +19,11 @@ import type {
  * - Kodene (`key`) er faste og endres aldri etter merge (regel 6). Skal noe få ny betydning,
  *   arkiveres koden og det lages en ny. Testen `key_snapshot` vokter dem.
  * - Kilden står bare i `source_ref` (bakgrunn), aldri i rapportteksten.
- * - Ingen regler ennå (neste punkt i 2a-2). Hulltakingsmålingene er enkeltfelt nå (A202).
+ * - Fire regler med testsaker (docs/funksjoner/fase2a-regler-bad.md): alder mot levetid, sjikt fra
+ *   før 2000, forhøyet fukt ved hulltaking og hulltaking ikke utført (TGIU). Reglene gir bare
+ *   forslag; takstmannen setter TG. Levetidene og fuktgrensen er utkast, ikke godkjent av
+ *   fagrådet, og ligger i regelmotorens data (`src/core/rules/data`), ikke i malen.
+ * - Hulltakingsmålingene er enkeltfelt nå (A202).
  * - Flettefelt i tekstene: se `WET_ROOM_MERGE_FIELDS`.
  */
 
@@ -227,9 +234,11 @@ const elementOptions: TemplateElementOptionDoc[] = [
   ]),
   ...options("wet_room.building_code", [
     ["before_1997", "Før 1997"],
-    ["from_1997_to_2010", "1997–2010"],
-    ["tek10", "TEK10"],
-    ["tek17", "TEK17"],
+    // Bare navnene er rettet (2a-2); kodene står (regel 6). Årstallene overlapper ved
+    // overgangene fordi forskriftene hadde overgangsperioder.
+    ["from_1997_to_2010", "TEK97 (1997–2010)"],
+    ["tek10", "TEK10 (2010–2017)"],
+    ["tek17", "TEK17 (fra 2017)"],
     ["unknown", "Ukjent"],
   ]),
   ...options("wet_room.documentation_type", [
@@ -483,6 +492,25 @@ const questionSpecs: QuestionSpec[] = [
     source: SOURCE_AGE,
   },
   {
+    // Foreslås av regelen `wet_room.membrane_past_lifespan` (2a-2, A220). Sier at funksjonen er
+    // usikker på grunn av alder, ikke at sjiktet er ødelagt. Tiltaket er undersøkelse og oppfølging.
+    checkpoint: MEMBRANE_DRAIN,
+    key: "membrane_past_lifespan",
+    question: "Er det vanntette sjiktet så gammelt at funksjonen er usikker?",
+    kind: "tg2",
+    deviation: "Det vanntette sjiktet i våtrommet er registrert som fra {årstall}.",
+    cause:
+      "Sjiktet har nådd en alder der det ikke lenger kan regnes med at det holder tett, selv uten synlige skader.",
+    criterion: "age_uncertain_function",
+    consequence:
+      "Svakheter i et eldre sjikt synes ofte ikke fra rommet, og vann kan over tid nå konstruksjonen bak.",
+    measures: [
+      "Sjiktet bør undersøkes nærmere, særlig ved sluk, rørgjennomføringer og overgangen mellom gulv og vegg.",
+      "Våtrommet bør følges opp jevnlig med tanke på tegn til fukt.",
+    ],
+    source: SOURCE_AGE,
+  },
+  {
     checkpoint: MEMBRANE_DRAIN,
     key: "leak_at_penetration",
     question: "Er det utetthet ved rørgjennomføringer i det vanntette sjiktet?",
@@ -682,6 +710,488 @@ const standardMeasures: StandardMeasureDoc[] = questionSpecs.flatMap((q) =>
   })),
 );
 
+// --- Reglene (TG-forslag som takstmannen godtar, endrer eller avviser) ---------------------------
+//
+// Reglene er data og kjøres av regelmotoren i `src/core/rules`, likt på iPaden og på serveren. De
+// foreslår aldri TG0, og ingen regel kaller KI. Levetidene og fuktgrensen sendes inn til motoren
+// fra `src/core/rules/data` og er utkast, ikke godkjent av fagrådet.
+//
+// Svar 59a (Ståle 10.11.2026, A214): ingen regel gir TG2 på tilliggende konstruksjoner på grunn
+// av alder. Er det tatt hull og målt uten forhøyet fukt, gir reglene ikke noe forslag på
+// `wet_room.adjacent`. Terskelhøyden (`wet_room.threshold_height_mm`) leses ikke av noen regel (A219).
+
+const RULE_PAST_LIFESPAN = "wet_room.membrane_past_lifespan";
+const RULE_BEFORE_2000 = "wet_room.membrane_before_2000";
+const RULE_HOLE_MOISTURE = "wet_room.hole_moisture_over_limit";
+const RULE_HOLE_NOT_DONE = "wet_room.hole_drilling_not_done";
+
+/** Fast kode for fuktgrensen i `src/core/rules/data/thresholds.ts`. */
+const THRESHOLD_HOLE_MOISTURE = "wet_room_hole_moisture_weight_percent";
+
+/** Dokumentasjonsvalgene som gir trinnene «uten dokumentasjon» (A217). Tomt felt gir også «uten». */
+const WITHOUT_DOCUMENTATION = ["none", "other_written"];
+
+const OUTCOME_PAST_LIFESPAN = {
+  checkpoint_key: MEMBRANE_DRAIN,
+  question_key: `${MEMBRANE_DRAIN}.membrane_past_lifespan`,
+  outcome_key: "tg2",
+};
+const OUTCOME_BEFORE_2000 = {
+  checkpoint_key: MEMBRANE_DRAIN,
+  question_key: `${MEMBRANE_DRAIN}.membrane_before_2000`,
+  outcome_key: "tg3",
+};
+const OUTCOME_ELEVATED_MOISTURE = {
+  checkpoint_key: ADJACENT,
+  question_key: `${ADJACENT}.elevated_moisture`,
+  outcome_key: "choose",
+};
+
+const SOURCE_RULE_AGE =
+  "NS 3600:2025 tillegg C, levetider for vanntett sjikt i våtrom (utkast, ikke godkjent av fagrådet)";
+const SOURCE_RULE_MOISTURE =
+  "Bransjepraksis for fukt i treverk, ikke bekreftet mot kilde (utkast, ikke godkjent av fagrådet, spørsmål 71)";
+const SOURCE_RULE_HOLE =
+  "Forskrift til avhendingslova § 2-2, hulltaking ved våtrom; svar fra Ståle 10.11.2026 (59a)";
+
+function rule(
+  key: string,
+  name: string,
+  purpose: RuleDoc["purpose"],
+  checkpointKey: string,
+  suggestedOutcome: RuleDoc["suggested_outcome"],
+  message: string,
+  sourceRef: string,
+  sortOrder: number,
+): RuleDoc {
+  return {
+    key,
+    name,
+    purpose,
+    match: "all",
+    target_element_key: null,
+    target_section_key: null,
+    target_checkpoint_key: checkpointKey,
+    target_question: null,
+    suggested_outcome: suggestedOutcome,
+    validation_code: null,
+    severity: null,
+    message,
+    source_ref: sourceRef,
+    active: true,
+    sort_order: sortOrder,
+  };
+}
+
+const rules: RuleDoc[] = [
+  rule(
+    RULE_PAST_LIFESPAN,
+    "Vanntett sjikt over levetiden",
+    "suggest_outcome",
+    MEMBRANE_DRAIN,
+    OUTCOME_PAST_LIFESPAN,
+    "Det vanntette sjiktet har nådd alderen i levetidstabellen for denne typen sjikt. Forslaget er TG2 fordi funksjonen er usikker på grunn av alder.",
+    SOURCE_RULE_AGE,
+    0,
+  ),
+  rule(
+    RULE_BEFORE_2000,
+    "Vanntett sjikt fra før 2000",
+    "suggest_outcome",
+    MEMBRANE_DRAIN,
+    OUTCOME_BEFORE_2000,
+    "Det vanntette sjiktet er fra før år 2000. Forslaget er TG3 uansett type sjikt.",
+    SOURCE_RULE_AGE,
+    1,
+  ),
+  rule(
+    RULE_HOLE_MOISTURE,
+    "Forhøyet fukt ved hulltaking",
+    "suggest_outcome",
+    ADJACENT,
+    OUTCOME_ELEVATED_MOISTURE,
+    "Fuktmålingen i hullet er lik eller over grensen for treverk. Grensen gjelder bare treverk, så måling i andre materialer vurderer du selv.",
+    SOURCE_RULE_MOISTURE,
+    2,
+  ),
+  rule(
+    RULE_HOLE_NOT_DONE,
+    "Hulltaking ikke utført",
+    "suggest_tgiu",
+    ADJACENT,
+    null,
+    "Hulltaking er ikke utført, så tilliggende konstruksjoner er ikke undersøkt. Forslaget er TGIU uansett grunn.",
+    SOURCE_RULE_HOLE,
+    3,
+  ),
+];
+
+/** Standardverdiene for en betingelse; bare det som trengs settes i hver betingelse. */
+function condition(
+  ruleKey: string,
+  type: RuleConditionDoc["type"],
+  sortOrder: number,
+  extra: Partial<RuleConditionDoc>,
+): RuleConditionDoc {
+  return {
+    rule_key: ruleKey,
+    group_no: null,
+    type,
+    element_key: null,
+    checkpoint_key: null,
+    operator: null,
+    value: null,
+    threshold_key: null,
+    age_year_element_key: null,
+    age_fallback_year_element_key: null,
+    age_source_element_key: null,
+    documentation_element_key: null,
+    material_element_key: null,
+    unit_element_key: null,
+    sort_order: sortOrder,
+    ...extra,
+  };
+}
+
+/** Alder mot levetid: sjiktets årstall, ellers byggeåret for våtrommet. */
+const AGE_CONDITION: Partial<RuleConditionDoc> = {
+  age_year_element_key: "wet_room.membrane_year",
+  age_fallback_year_element_key: "wet_room.build_year",
+  age_source_element_key: "wet_room.build_year_source",
+  documentation_element_key: "wet_room.documentation_type",
+  material_element_key: "wet_room.membrane_type",
+  value: WITHOUT_DOCUMENTATION,
+};
+
+const ruleConditions: RuleConditionDoc[] = [
+  condition(RULE_PAST_LIFESPAN, "age_vs_lifespan", 0, AGE_CONDITION),
+  condition(RULE_BEFORE_2000, "age_vs_lifespan", 0, AGE_CONDITION),
+  // Gjelder også «utført uten funn» (59a): måling lik eller over grensen gir forslag
+  condition(RULE_HOLE_MOISTURE, "option_selected", 0, {
+    element_key: "wet_room.hole_drilling",
+    operator: "in",
+    value: ["done_no_findings", "done_with_findings"],
+  }),
+  condition(RULE_HOLE_MOISTURE, "number_vs_limit", 1, {
+    element_key: "wet_room.hole_moisture_reading",
+    threshold_key: THRESHOLD_HOLE_MOISTURE,
+    unit_element_key: "wet_room.hole_moisture_unit",
+  }),
+  // Uansett grunn, også når ingen grunn er valgt
+  condition(RULE_HOLE_NOT_DONE, "option_selected", 0, {
+    element_key: "wet_room.hole_drilling",
+    operator: "eq",
+    value: "not_done",
+  }),
+];
+
+// --- Testsakene (oppdiktede svar, befaringsår 2026) ----------------------------------------------
+//
+// Navnet starter med nummeret i testplanen (docs/funksjoner/fase2a-regler-bad-testplan.md, avsnitt
+// 4), og kantverdier har «kant» i navnet. Fuktsakene bruker 15 og 14.9; testene sjekker at 15 er
+// grensen i `thresholds.ts`. Der to regler prøves med samme svar (B2, B3, 59a), har hver regel
+// sin egen testsak.
+
+const INSPECTION_YEAR = 2026;
+
+type Answers = RuleTestCaseDoc["input"];
+
+const testCaseCount = new Map<string, number>();
+function testCase(
+  ruleKey: string,
+  name: string,
+  input: Answers,
+  expectedState: RuleTestCaseDoc["expected_state"],
+  expectedOutcome: RuleTestCaseDoc["expected_outcome"] = null,
+): RuleTestCaseDoc {
+  const sortOrder = testCaseCount.get(ruleKey) ?? 0;
+  testCaseCount.set(ruleKey, sortOrder + 1);
+  return {
+    rule_key: ruleKey,
+    name,
+    input,
+    expected_state: expectedState,
+    inspection_year: INSPECTION_YEAR,
+    expected_outcome: expectedOutcome,
+    sort_order: sortOrder,
+  };
+}
+
+/** Sjiktet: type, dokumentasjon og årstall. */
+function membrane(type: string | null, documentation: string | null, year: number | null): Answers {
+  return {
+    "wet_room.membrane_type": type,
+    "wet_room.documentation_type": documentation,
+    "wet_room.membrane_year": year,
+  };
+}
+
+/** Hulltaking med måling. */
+function hole(
+  drilling: string | null,
+  reading: number | string | null,
+  unit: string | null,
+): Answers {
+  return {
+    "wet_room.hole_drilling": drilling,
+    "wet_room.hole_moisture_reading": reading,
+    "wet_room.hole_moisture_unit": unit,
+  };
+}
+
+/** Svar 59a: bad fra 1985, sjiktets årstall tomt, hull tatt og fukt under grensen. */
+function case59a(drilling: "done_no_findings" | "done_with_findings"): Answers {
+  return {
+    "wet_room.build_year": 1985,
+    ...membrane(null, null, null),
+    ...hole(drilling, 14.9, "weight_percent"),
+  };
+}
+
+const ruleTestCases: RuleTestCaseDoc[] = [
+  // A: alder mot levetid (TG2)
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "A1 folie uten dokumentasjon 17 år (kant)",
+    membrane("foil", "none", 2009),
+    "not_triggered",
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "A2 folie uten dokumentasjon 18 år (kant)",
+    membrane("foil", "none", 2008),
+    "triggered",
+    OUTCOME_PAST_LIFESPAN,
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "A3 folie med samsvarserklæring 18 år",
+    membrane("foil", "declaration_of_conformity", 2008),
+    "not_triggered",
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "A4 folie med tom dokumentasjon 18 år gir trinnet uten",
+    membrane("foil", null, 2008),
+    "triggered",
+    OUTCOME_PAST_LIFESPAN,
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "A5 folie med annen skriftlig dokumentasjon 18 år gir trinnet uten",
+    membrane("foil", "other_written", 2008),
+    "triggered",
+    OUTCOME_PAST_LIFESPAN,
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "A6 ukjent type fra 2005 er ikke vurdert",
+    membrane("unknown", "none", 2005),
+    "not_evaluated",
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "A7 årstall etter befaringsåret er ikke vurdert",
+    membrane("foil", "none", 2027),
+    "not_evaluated",
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "A8 uten sjiktets årstall brukes byggeåret 2008 opplyst av eier",
+    {
+      ...membrane("foil", "none", null),
+      "wet_room.build_year": 2008,
+      "wet_room.build_year_source": "owner_stated",
+    },
+    "triggered",
+    OUTCOME_PAST_LIFESPAN,
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "A9 uten sjiktets årstall og byggeår er ikke vurdert",
+    { ...membrane("foil", "none", null), "wet_room.build_year": null },
+    "not_evaluated",
+  ),
+  // B: sjikt fra før 2000 (TG3)
+  testCase(
+    RULE_BEFORE_2000,
+    "B1 folie fra 1999 (kant)",
+    membrane("foil", "none", 1999),
+    "triggered",
+    OUTCOME_BEFORE_2000,
+  ),
+  testCase(
+    RULE_BEFORE_2000,
+    "B2 folie uten dokumentasjon fra 2000 gir ikke TG3 (kant)",
+    membrane("foil", "none", 2000),
+    "not_triggered",
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "B2 folie uten dokumentasjon fra 2000 gir TG2 for alder",
+    membrane("foil", "none", 2000),
+    "triggered",
+    OUTCOME_PAST_LIFESPAN,
+  ),
+  testCase(
+    RULE_BEFORE_2000,
+    "B3 folie fra 1990 gir TG3",
+    membrane("foil", "none", 1990),
+    "triggered",
+    OUTCOME_BEFORE_2000,
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "B3 folie fra 1990 gir ikke TG2 i tillegg",
+    membrane("foil", "none", 1990),
+    "not_triggered",
+  ),
+  testCase(
+    RULE_BEFORE_2000,
+    "B4 ukjent type fra 1990",
+    membrane("unknown", "none", 1990),
+    "triggered",
+    OUTCOME_BEFORE_2000,
+  ),
+  testCase(
+    RULE_BEFORE_2000,
+    "B4 tom type fra 1990",
+    membrane(null, "none", 1990),
+    "triggered",
+    OUTCOME_BEFORE_2000,
+  ),
+  testCase(
+    RULE_BEFORE_2000,
+    "B5 bad fra 1990 med sjikt fra 2015",
+    { ...membrane("foil", "none", 2015), "wet_room.build_year": 1990 },
+    "not_triggered",
+  ),
+  testCase(
+    RULE_BEFORE_2000,
+    "B6 anslått byggeår 1995 uten sjiktets årstall",
+    {
+      ...membrane("foil", "none", null),
+      "wet_room.build_year": 1995,
+      "wet_room.build_year_source": "estimated",
+    },
+    "triggered",
+    OUTCOME_BEFORE_2000,
+  ),
+  testCase(
+    RULE_BEFORE_2000,
+    "B7 uten sjiktets årstall og byggeår er ikke vurdert",
+    { ...membrane("foil", "none", null), "wet_room.build_year": null },
+    "not_evaluated",
+  ),
+  // F: forhøyet fukt ved hulltaking (vekt-% i treverk)
+  testCase(
+    RULE_HOLE_MOISTURE,
+    "F1 utført med funn 14.9 vekt-% under grensen (kant)",
+    hole("done_with_findings", 14.9, "weight_percent"),
+    "not_triggered",
+  ),
+  testCase(
+    RULE_HOLE_MOISTURE,
+    "F2 utført med funn 15 vekt-% lik grensen (kant)",
+    hole("done_with_findings", 15, "weight_percent"),
+    "triggered",
+    OUTCOME_ELEVATED_MOISTURE,
+  ),
+  testCase(
+    RULE_HOLE_MOISTURE,
+    "F3 utført uten funn 15 vekt-% lik grensen (kant)",
+    hole("done_no_findings", 15, "weight_percent"),
+    "triggered",
+    OUTCOME_ELEVATED_MOISTURE,
+  ),
+  testCase(
+    RULE_HOLE_MOISTURE,
+    "F4 måling i RF % er ikke vurdert",
+    hole("done_with_findings", 85, "relative_humidity"),
+    "not_evaluated",
+  ),
+  testCase(
+    RULE_HOLE_MOISTURE,
+    "F5 tom måleverdi er ikke vurdert",
+    hole("done_with_findings", null, "weight_percent"),
+    "not_evaluated",
+  ),
+  testCase(
+    RULE_HOLE_MOISTURE,
+    "F5 tom enhet er ikke vurdert",
+    hole("done_with_findings", 15, null),
+    "not_evaluated",
+  ),
+  testCase(
+    RULE_HOLE_MOISTURE,
+    "F5 negativ måleverdi er ikke vurdert",
+    hole("done_with_findings", -1, "weight_percent"),
+    "not_evaluated",
+  ),
+  testCase(
+    RULE_HOLE_MOISTURE,
+    "F5 måleverdi som tekst er ikke vurdert",
+    hole("done_with_findings", "abc", "weight_percent"),
+    "not_evaluated",
+  ),
+  testCase(
+    RULE_HOLE_MOISTURE,
+    "F6 ikke utført med tom måling",
+    hole("not_done", null, null),
+    "not_triggered",
+  ),
+  testCase(
+    RULE_HOLE_MOISTURE,
+    "F7 tom hulltaking er ikke vurdert",
+    hole(null, 15, "weight_percent"),
+    "not_evaluated",
+  ),
+  // H: hulltaking ikke utført gir TGIU, uansett grunn
+  ...(["owner_refused", "no_access", "concrete_or_masonry", "other"] as const).map((reason) =>
+    testCase(
+      RULE_HOLE_NOT_DONE,
+      `H1 ikke utført med grunnen ${reason}`,
+      { "wet_room.hole_drilling": "not_done", "wet_room.hole_drilling_reason": reason },
+      "triggered",
+    ),
+  ),
+  testCase(
+    RULE_HOLE_NOT_DONE,
+    "H1 ikke utført uten valgt grunn (kant)",
+    { "wet_room.hole_drilling": "not_done", "wet_room.hole_drilling_reason": null },
+    "triggered",
+  ),
+  testCase(
+    RULE_HOLE_NOT_DONE,
+    "H2 utført uten funn",
+    { "wet_room.hole_drilling": "done_no_findings" },
+    "not_triggered",
+  ),
+  testCase(
+    RULE_HOLE_NOT_DONE,
+    "H3 tom hulltaking er ikke vurdert",
+    { "wet_room.hole_drilling": null },
+    "not_evaluated",
+  ),
+  // Svar 59a (T-0003): hull tatt og fukt under grensen gir ikke forslag på tilliggende, men
+  // sjiktet fra før 2000 gir fortsatt TG3-forslag på membran og sluk
+  ...(["done_no_findings", "done_with_findings"] as const).flatMap((drilling) => [
+    testCase(
+      RULE_HOLE_MOISTURE,
+      `59a bad fra 1985 ${drilling} 14.9 vekt-% gir ikke forslag på tilliggende`,
+      case59a(drilling),
+      "not_triggered",
+    ),
+    testCase(
+      RULE_BEFORE_2000,
+      `59a bad fra 1985 ${drilling} 14.9 vekt-% gir TG3 på sjiktet`,
+      case59a(drilling),
+      "triggered",
+      OUTCOME_BEFORE_2000,
+    ),
+  ]),
+];
+
 /** Badet (ett våtrom) i systemmalen for tilstandsrapport. Tekstene er utkast. */
 export const wetRoomTemplate: TemplateDocument = {
   sections: [
@@ -703,7 +1213,7 @@ export const wetRoomTemplate: TemplateDocument = {
   deviation_questions: deviationQuestions,
   outcomes,
   standard_measures: standardMeasures,
-  rules: [],
-  rule_conditions: [],
-  rule_test_cases: [],
+  rules,
+  rule_conditions: ruleConditions,
+  rule_test_cases: ruleTestCases,
 };
