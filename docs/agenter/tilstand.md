@@ -48,11 +48,15 @@ Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4�
 
 ## Oppgaver fra testlaget
 
-Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 11.11.2026 på main 0b8e3b9 (første kjøring).
+Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 12.11.2026 på main 11672aa (det som var nytt siden 0b8e3b9).
 
-- Åpne alvorlige feil: 0. T-0001 er rettet i PR #139 og prøves på nytt av testlaget i neste kjøring.
-- Åpne funn i alt: 35 (1 alvorlig, 16 middels, 18 små). Middels og små tas med neste oppgave i samme område. T-0004 og T-0005 (KI-kortet sletter tekst) og T-0003 (svar 59a) må tas før 2a-2.
-- **Til «Trenger Ståle» (prosjektlederen fører inn):** Spectora Advanced slås av før ca. 23.11.2026 (koster penger), og passordene til IVIT, Spectora og SmartTakst byttes. Se `docs/agenter/testlag/funn/T-0002-venter-pa-stale-mangler-spectora-og-passord.md`.
+- Åpne alvorlige feil: 0. T-0001, T-0004 og T-0005 er prøvd på nytt og lukket.
+- Åpne funn i alt: 46 (0 alvorlige, 20 middels, 26 små). Middels og små tas med neste oppgave i samme område.
+- **Må tas før 2a-2 (forslagskortet på avviksteksten):** T-0036 (KI-kortet bytter målinger med «[telefon]» ved «Bruk»; avgjøres sammen med A178) og T-0003 (svar 59a).
+- **Må tas før ekte KI slås på:** T-0044 (hull i vasken), T-0046 (svaret kontrolleres ikke for TG), T-0047 (evalueringssettet måler ikke nytte), T-0034 (hevet til middels) og T-0038 (evaluering mot ekte modell mangler i planen).
+- T-0037 («Logg ut» uten nett) tas med «Sperring av iPader» i 2b, eller før. T-0021 er fortsatt feil (forsøk 1): planen og endringsloggen er ikke ryddet etter PR #154.
+- **Til «Trenger Ståle» (prosjektlederen fører inn):** Spectora Advanced slås av før ca. 23.11.2026 (koster penger), og passordene til IVIT, Spectora og SmartTakst byttes. Se `docs/agenter/testlag/funn/T-0002-venter-pa-stale-mangler-spectora-og-passord.md`. Åpent siden 11.11.
+- Til testlagets oppsett: testtakstmannen bør stå i teamet på testoppdragene, så «Mine» kan prøves. Playwright må startes med `executablePath: "/opt/pw-browsers/chromium"`.
 
 ## Oppgaver fra nattløkken
 

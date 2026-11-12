@@ -35,3 +35,4 @@ Legg inn radene fra 10.11.2026 med kilde, og oppdater «Sist oppdatert», synkav
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-12: fortsatt åpent. Nytt: `docs/11-agentlaget.md` linje 62 viser til «Ståle 11.11.2026» (raskere CI), som heller ikke står i beslutningstabellen.
