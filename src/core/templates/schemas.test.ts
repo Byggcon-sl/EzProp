@@ -488,6 +488,122 @@ describe("mal for bad 2.5: isSameTemplateContent", () => {
   });
 });
 
+// --- Reglene badet trenger: expected_state og regelfeltene (testplan 6.10) ----------------------
+
+const RULE_CONDITION_KEY_COLUMNS = [
+  "threshold_key",
+  "age_year_element_key",
+  "age_fallback_year_element_key",
+  "age_source_element_key",
+  "documentation_element_key",
+  "material_element_key",
+  "unit_element_key",
+] as const;
+
+/** Engelske ord fra Zod som ikke skal stå i en melding til brukeren. */
+const ZOD_ENGLISH = /\b(invalid|expected|received|required|undefined|input)\b/i;
+
+describe("regler bad 6.10: expected_state og regelfeltene i dokumentformatet", () => {
+  it.each(["triggered", "not_triggered", "not_evaluated"] as const)(
+    "godtar expected_state = %s",
+    (state) => {
+      const result = expectAccepted((doc) => {
+        doc.rule_test_cases[0]!.expected_state = state;
+      });
+      if (result.success) expect(result.document.rule_test_cases[0]!.expected_state).toBe(state);
+    },
+  );
+
+  it.each([
+    { name: "ukjent verdi", value: "maybe" as unknown },
+    { name: "boolsk (gammelt format)", value: true as unknown },
+    { name: "tom tekst", value: "" as unknown },
+    { name: "null", value: null as unknown },
+  ])("avviser expected_state med $name, med norsk melding", ({ value }) => {
+    const issues = expectRejected(
+      (doc) => {
+        (doc.rule_test_cases[0] as Record<string, unknown>).expected_state = value;
+      },
+      "schema",
+      "rule_test_cases.0.expected_state",
+    );
+    for (const issue of issues) expect(issue.message, issue.message).not.toMatch(ZOD_ENGLISH);
+  });
+
+  it("expected_state som mangler avvises, også når det gamle expect_triggered er satt", () => {
+    const issues = expectRejected(
+      (doc) => {
+        const testCase = doc.rule_test_cases[0] as Record<string, unknown>;
+        delete testCase.expected_state;
+        testCase.expect_triggered = true;
+      },
+      "schema",
+      "rule_test_cases.0.expected_state",
+    );
+    for (const issue of issues) expect(issue.message).not.toMatch(ZOD_ENGLISH);
+  });
+
+  it("expect_triggered ved siden av expected_state lagres ikke stille (tas bort)", () => {
+    const result = expectAccepted((doc) => {
+      Object.assign(doc.rule_test_cases[0]!, { expect_triggered: false });
+    });
+    if (!result.success) return;
+    const testCase = result.document.rule_test_cases[0]!;
+    expect(testCase).not.toHaveProperty("expect_triggered");
+    expect(testCase.expected_state).toBe("triggered");
+  });
+
+  it("inspection_year: tom godtas og blir null", () => {
+    const result = expectAccepted(() => {});
+    if (result.success) {
+      for (const t of result.document.rule_test_cases) expect(t.inspection_year).toBeNull();
+    }
+    expectAccepted((doc) => {
+      doc.rule_test_cases[0]!.inspection_year = 2026;
+    });
+  });
+
+  it.each([
+    { name: "1700", value: 1700 as unknown },
+    { name: "3000", value: 3000 as unknown },
+    { name: "desimal", value: 2026.5 as unknown },
+    { name: "tekst", value: "2026" as unknown },
+  ])("inspection_year: $name avvises med schema", ({ value }) => {
+    expectRejected(
+      (doc) => {
+        (doc.rule_test_cases[0] as Record<string, unknown>).inspection_year = value;
+      },
+      "schema",
+      "rule_test_cases.0.inspection_year",
+    );
+  });
+
+  it.each(RULE_CONDITION_KEY_COLUMNS)(
+    "%s: gyldig kode og null godtas, ugyldig kode avvises",
+    (column) => {
+      const accepted = expectAccepted((doc) => {
+        (doc.rule_conditions[0] as Record<string, unknown>)[column] = "x.valid_code";
+      });
+      if (accepted.success) {
+        expect((accepted.document.rule_conditions[0] as Record<string, unknown>)[column]).toBe(
+          "x.valid_code",
+        );
+      }
+      const empty = expectAccepted(() => {});
+      if (empty.success) {
+        expect((empty.document.rule_conditions[0] as Record<string, unknown>)[column]).toBeNull();
+      }
+      expectRejected(
+        (doc) => {
+          (doc.rule_conditions[0] as Record<string, unknown>)[column] = "Ugyldig Kode";
+        },
+        "key_format",
+        `rule_conditions.0.${column}`,
+      );
+    },
+  );
+});
+
 // --- Dekning: hver regelkode finnes i minst én avvist testsak -----------------------------------
 
 /**

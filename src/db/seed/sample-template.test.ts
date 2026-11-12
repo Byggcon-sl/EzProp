@@ -284,3 +284,117 @@ describe("runSampleSeed med malen", () => {
     expect(families[0]!.organization_id).toBe(sample!.id);
   });
 });
+
+// --- Reglene badet trenger (docs/funksjoner/fase2a-regler-bad-testplan.md avsnitt 9) ------------
+
+/** Navnene på byggeforskrift fra PR #159, før de ble rettet. */
+const OLD_BUILDING_CODE_LABELS: Record<string, string> = {
+  before_1997: "Før 1997",
+  from_1997_to_2010: "1997–2010",
+  tek10: "TEK10",
+  tek17: "TEK17",
+  unknown: "Ukjent",
+};
+
+const PAST_LIFESPAN_QUESTION = "wet_room.membrane_drain.membrane_past_lifespan";
+
+/** Malinnholdet slik det var i v1 fra PR #159: uten regler, uten det nye utfallet, gamle navn. */
+function previousDocument(): TemplateDocument {
+  const document = structuredClone(parsed(wetRoomTemplate));
+  document.rules = [];
+  document.rule_conditions = [];
+  document.rule_test_cases = [];
+  document.deviation_questions = document.deviation_questions.filter(
+    (q) => q.key !== PAST_LIFESPAN_QUESTION,
+  );
+  document.outcomes = document.outcomes.filter((o) => o.question_key !== PAST_LIFESPAN_QUESTION);
+  document.standard_measures = document.standard_measures.filter(
+    (m) => m.question_key !== PAST_LIFESPAN_QUESTION,
+  );
+  document.element_options = document.element_options.map((o) =>
+    o.element_key === "wet_room.building_code"
+      ? { ...o, label: OLD_BUILDING_CODE_LABELS[o.key] ?? o.label }
+      : o,
+  );
+  return document;
+}
+
+function buildingCodeOptions(document: TemplateDocument) {
+  return document.element_options
+    .filter((o) => o.element_key === "wet_room.building_code")
+    .map((o) => [o.key, o.label]);
+}
+
+describe("regler bad: seed av malen med reglene", () => {
+  it("9.1 seed_new_version_on_change: v1 fra PR #159 gir ny publisert v2 med reglene, v1 urørt", async () => {
+    const context = await contextFor({ sampleData: true });
+    expect(await ensureSampleTemplate(context, previousDocument())).toBe("created");
+    const [v1] = await versions(context.organizationId);
+    const v1Document = (await getTemplateVersion(context.actor, context.organizationId, v1!.id))
+      .document;
+    expect(v1Document.rules).toEqual([]);
+    expect(buildingCodeOptions(v1Document).map(([, label]) => label)).toContain("1997–2010");
+
+    // Ny seed med dagens malfil
+    expect(await ensureSampleTemplate(context)).toBe("created");
+    const after = await versions(context.organizationId);
+    expect(after.map((v) => [v.version_number, v.status])).toEqual([
+      [1, "retired"],
+      [2, "published"],
+    ]);
+    const v2Document = (
+      await getTemplateVersion(context.actor, context.organizationId, after[1]!.id)
+    ).document;
+    expect(isSameTemplateContent(v2Document, parsed(wetRoomTemplate))).toBe(true);
+    expect(v2Document.rules.map((r) => r.key).sort()).toEqual(
+      [
+        "wet_room.hole_drilling_not_done",
+        "wet_room.hole_moisture_over_limit",
+        "wet_room.membrane_before_2000",
+        "wet_room.membrane_past_lifespan",
+      ].sort(),
+    );
+    expect(v2Document.rule_test_cases.length).toBe(parsed(wetRoomTemplate).rule_test_cases.length);
+    expect(buildingCodeOptions(v2Document)).toEqual([
+      ["before_1997", "Før 1997"],
+      ["from_1997_to_2010", "TEK97 (1997–2010)"],
+      ["tek10", "TEK10 (2010–2017)"],
+      ["tek17", "TEK17 (fra 2017)"],
+      ["unknown", "Ukjent"],
+    ]);
+    // v1 er urørt
+    const v1After = await getTemplateVersion(context.actor, context.organizationId, v1!.id);
+    expect(v1After.document).toEqual(v1Document);
+  });
+
+  it("9.2 seed_idempotent: seed to ganger med reglene gir ingen ny versjon", async () => {
+    const context = await contextFor({ sampleData: true });
+    expect(await ensureSampleTemplate(context, previousDocument())).toBe("created");
+    expect(await ensureSampleTemplate(context)).toBe("created");
+    const before = await versions(context.organizationId);
+    const audit = await countFor("audit_log", context.organizationId);
+    expect(await ensureSampleTemplate(context)).toBe("existing");
+    expect(await ensureSampleTemplate(context)).toBe("existing");
+    expect(await versions(context.organizationId)).toEqual(before);
+    expect(await countFor("audit_log", context.organizationId)).toBe(audit);
+  });
+
+  it("9.3 codes_unchanged: valgkodene for byggeforskrift er de samme i v1 og v2", async () => {
+    const context = await contextFor({ sampleData: true });
+    await ensureSampleTemplate(context, previousDocument());
+    await ensureSampleTemplate(context);
+    const [v1, v2] = await versions(context.organizationId);
+    const codes = async (id: string) =>
+      buildingCodeOptions(
+        (await getTemplateVersion(context.actor, context.organizationId, id)).document,
+      ).map(([key]) => key);
+    expect(await codes(v2!.id)).toEqual(await codes(v1!.id));
+    expect(await codes(v1!.id)).toEqual([
+      "before_1997",
+      "from_1997_to_2010",
+      "tek10",
+      "tek17",
+      "unknown",
+    ]);
+  });
+});
