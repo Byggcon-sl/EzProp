@@ -20,6 +20,13 @@ export const DENIED_SECRET_REFS: readonly string[] = [
   "FILE_STORAGE_AZURE_CONNECTION_STRING",
 ];
 
+/**
+ * Reserverte navn (ADR 0008): hemmeligheter appen selv leser med `readSecret`, men som aldri kan
+ * være `secret_ref` på en tilkobling. `connections.ts` avviser dem for alle leverandører, ved
+ * lagring og ved oppslag. De kan ikke stå på nektlisten over, for da kunne ikke eieren lese dem.
+ */
+export const RESERVED_SECRET_REFS: readonly string[] = ["MS_LOGIN_CLIENT_SECRET"];
+
 /** Navnet på hemmeligheten er ugyldig eller står på nektlisten. */
 export class InvalidSecretRefError extends Error {
   constructor() {

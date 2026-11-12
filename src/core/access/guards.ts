@@ -151,6 +151,20 @@ export async function requireTemplateEditAccess(
 }
 
 /**
+ * Om brukeren har aktivt ansattforhold i minst én organisasjon (ADR 0008, A217). Samme vilkår
+ * som `findGrant`: rad i `employees` med `user_id` lik brukeren, `deactivated_at` og `deleted_at`
+ * tomme, og organisasjonen ikke slettet. Brukes av innloggingen før en Microsoft-økt lages.
+ * Gir ingen rettigheter og tar ikke `organizationId`; rettigheter kommer bare fra
+ * `requireOrganizationAccess`. Kaster ikke for ukjent bruker, gir `false`.
+ */
+export async function hasActiveEmployment(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  userId: string,
+): Promise<boolean> {
+  throw new Error("Ikke bygget: hasActiveEmployment (fase2a-microsoft-innlogging)");
+}
+
+/**
  * Organisasjonene brukeren er ansatt i (i dag alltid én: Byggcon). Brukes av startsiden for å
  * finne hvor personen skal, uten en organisasjons-id i adressen.
  */
