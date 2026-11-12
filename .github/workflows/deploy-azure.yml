@@ -93,6 +93,9 @@ jobs:
           MS_GRAPH_CLIENT_ID: ${{ secrets.MS_GRAPH_CLIENT_ID }}
           MS_GRAPH_CLIENT_SECRET: ${{ secrets.MS_GRAPH_CLIENT_SECRET }}
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          MS_LOGIN_TENANT_ID: ${{ secrets.MS_LOGIN_TENANT_ID }}
+          MS_LOGIN_CLIENT_ID: ${{ secrets.MS_LOGIN_CLIENT_ID }}
+          MS_LOGIN_CLIENT_SECRET: ${{ secrets.MS_LOGIN_CLIENT_SECRET }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ENABLE_KEY_VAULT: ${{ vars.ENABLE_KEY_VAULT == 'true' }}
           POSTGRES_SKU: ${{ vars.POSTGRES_SKU }}
@@ -115,6 +118,7 @@ jobs:
           fi
           # De fire e-postverdiene sendes alltid (tomme når de ikke er satt); Bicep bruker dem bare når alle er gitt.
           # Nøkkelen til KI-leverandøren sendes også alltid; tom betyr KI av.
+          # De tre for Microsoft-innloggingen sendes alltid; uten alle tre virker bare engangskoden.
           PARAMETERE=(
             "location=$LOCATION"
             "postgresSkuName=${POSTGRES_SKU:-Standard_B1ms}"
@@ -129,6 +133,9 @@ jobs:
             "msGraphClientId=$MS_GRAPH_CLIENT_ID"
             "msGraphClientSecret=$MS_GRAPH_CLIENT_SECRET"
             "mailFrom=$MAIL_FROM"
+            "msLoginTenantId=$MS_LOGIN_TENANT_ID"
+            "msLoginClientId=$MS_LOGIN_CLIENT_ID"
+            "msLoginClientSecret=$MS_LOGIN_CLIENT_SECRET"
             "anthropicApiKey=$ANTHROPIC_API_KEY"
             "enableKeyVault=$NOKKELBOKS"
           )

@@ -44,6 +44,41 @@ describe("start.sh", () => {
     }
   });
 
+  // M10.1 (docs/funksjoner/fase2a-microsoft-innlogging-testplan.md): Microsoft-innloggingen legges
+  // til tomme i en eldre .env, i den samme løkken som e-postverdiene. Ingen egen sjekk.
+  it("legger de tre verdiene for Microsoft-innloggingen inn i løkken for valgfrie verdier", () => {
+    const loops = lines.filter((line) => /^\s*for\s+navn\s+in\s+MS_GRAPH_TENANT_ID\b/.test(line));
+    expect(loops).toHaveLength(1);
+    const names = loops[0]!
+      .replace(/^\s*for\s+navn\s+in\s+/, "")
+      .replace(/;\s*do\s*$/, "")
+      .split(/\s+/);
+    for (const name of [
+      "MS_GRAPH_TENANT_ID",
+      "MS_GRAPH_CLIENT_ID",
+      "MS_GRAPH_CLIENT_SECRET",
+      "MAIL_FROM",
+      "MS_LOGIN_TENANT_ID",
+      "MS_LOGIN_CLIENT_ID",
+      "MS_LOGIN_CLIENT_SECRET",
+    ]) {
+      expect(names, name).toContain(name);
+    }
+    // Ingen ny sjekk som stopper skriptet når verdiene mangler
+    const mentions = lines.filter((line) => !/^\s*#/.test(line) && line.includes("MS_LOGIN_"));
+    expect(mentions).toEqual(loops);
+  });
+
+  it(".env.example har de tre verdiene for Microsoft-innloggingen uten verdier (M10.3)", () => {
+    const example = read(".env.example").split("\n");
+    for (const name of ["MS_LOGIN_TENANT_ID", "MS_LOGIN_CLIENT_ID", "MS_LOGIN_CLIENT_SECRET"]) {
+      expect(
+        example.filter((line) => line.startsWith(`${name}=`)),
+        name,
+      ).toEqual([`${name}=`]);
+    }
+  });
+
   it("Start EzProp.command kjører bare start.sh, uten egne seed-linjer", () => {
     const command = read("Start EzProp.command");
     expect(command).toContain("./start.sh");
