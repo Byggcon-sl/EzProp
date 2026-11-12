@@ -93,7 +93,7 @@ Bygges med små dokumenter laget i testen (ikke badmalen), så motoren prøves u
 7. **threshold_condition_shape:** fuktregelen bruker `threshold_key`, og `operator` og `value` er tomme.
 8. **building_code_labels:** navnene er «Før 1997», «TEK97 (1997–2010)», «TEK10 (2010–2017)», «TEK17 (fra 2017)», «Ukjent», og kodene er uendret (`before_1997`, `from_1997_to_2010`, `tek10`, `tek17`, `unknown`).
 9. **no_tg0:** ingen regel peker på et utfall med TG0, og ingen testsak forventer TG0.
-10. **no_threshold_height_rule:** ingen regel leser `wet_room.threshold_height_mm` (A219).
+10. **no_threshold_height_rule:** ingen regel leser `wet_room.threshold_height_mm` (A229).
 11. **1.28 kontrollene kan feile** utvides med de nye kontrollene i 5 (hver med et dokument som skal feile).
 
 ## 4. Regeltestene (testsaker som data), `src/db/seed/templates/wet-room.rules.test.ts` (ny, ren)
@@ -156,11 +156,11 @@ I `src/core/templates/templates.test.ts` (mot databasen):
 ## 6. Migrering og dokumentformat (mot databasen)
 
 I `src/db/templates-schema.test.ts`:
-1. **0029_columns_format_check:** hver av de sju nye kolonnene i `rule_conditions` godtar en gyldig kode og `null`, og avviser en ugyldig kode (`"Ugyldig Kode"`) med CHECK-feil (`it.each` over kolonnene).
+1. **0030_columns_format_check:** hver av de sju nye kolonnene i `rule_conditions` godtar en gyldig kode og `null`, og avviser en ugyldig kode (`"Ugyldig Kode"`) med CHECK-feil (`it.each` over kolonnene).
 2. **expected_state_check:** `expected_state` er `NOT NULL` og godtar bare `triggered`, `not_triggered`, `not_evaluated`. `expect_triggered` finnes ikke lenger.
 3. **inspection_year_check:** tomt godtas, urimelig årstall (for eksempel 1700 og 3000) avvises.
-4. **migration_keeps_meaning:** migreringen kjørt på en database med `expect_triggered = true` og `false` gir `triggered` og `not_triggered` (egen test som kjører migreringen 0028 → 0029 på et eget skjema, eller SQL-en fra migreringen mot rader satt inn før; testskriver velger, men testen må vise begge verdiene).
-5. **migration_number_free:** bare én migrering med prefiks `0029` i `drizzle/` (sjekkes også av gjennomgangen før merge).
+4. **migration_keeps_meaning:** migreringen kjørt på en database med `expect_triggered = true` og `false` gir `triggered` og `not_triggered` (egen test som kjører migreringen 0029 → 0030 på et eget skjema, eller SQL-en fra migreringen mot rader satt inn før; testskriver velger, men testen må vise begge verdiene).
+5. **migration_number_free:** bare én migrering med prefiks `0030` i `drizzle/` (sjekkes også av gjennomgangen før merge).
 
 I `src/core/templates/templates.test.ts`:
 6. **2.18 save_and_read_rule_fields:** `saveDraftContent` lagrer de sju kolonnene, `expected_state` og `inspection_year`; `getTemplateVersion` gir dem tilbake likt.

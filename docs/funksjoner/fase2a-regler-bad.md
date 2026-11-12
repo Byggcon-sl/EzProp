@@ -93,7 +93,7 @@ Regelen foreslår aldri TG0 (TG0 er ikke et utfall). Om TG0 kan gis på tilligge
    - **Fukt:** under grensen gir ikke forslag; lik grensen gir forslag; `done_no_findings` lik eller over grensen gir forslag; RF % gir `not_evaluated` med `unit_not_supported`; tom måleverdi, tom enhet, negativ verdi eller tekst gir `not_evaluated`; `not_done` med tom måling gir `not_triggered`.
    - **Hulltaking:** `not_done` med hver av de fire grunnene og uten grunn gir TGIU; tomt felt gir `not_evaluated`.
    - **59a (bad fra 1985, hull tatt, fukt under grensen):** ingen forslag på `wet_room.adjacent`, og TG3-forslaget på `wet_room.membrane_drain` kommer fortsatt.
-6. **Datamodellen for regler** (A147 løses nå for det som trengs), én migrering `0029_regler-bad` (sjekk før merge at ingen annen branch har tatt 0029):
+6. **Datamodellen for regler** (A147 løses nå for det som trengs), én migrering `0030_regler-bad` (sjekk før merge at ingen annen branch har tatt 0030; 0029 ble tatt av PR #162, så migreringen er laget på nytt som 0030):
    - `rule_conditions`, nye kolonner, alle `text`, kan være tomme, med samme format-CHECK som `element_key`: `threshold_key`, `age_year_element_key`, `age_fallback_year_element_key`, `age_source_element_key`, `documentation_element_key`, `material_element_key`, `unit_element_key`. Ingen nye indekser.
    - `rule_test_cases`: ny `expected_state text not null` med CHECK (`triggered`, `not_triggered`, `not_evaluated`). Migreringen fyller den fra `expect_triggered` (true gir `triggered`, false gir `not_triggered`) og fjerner `expect_triggered` i samme migrering. Ny `inspection_year integer` (kan være tom, CHECK på rimelig årstall). Befaringsåret ligger ikke i `input`.
    - Dokumentformatet: `expected_state` erstatter `expect_triggered`. Med i `schemas.ts`, `getTemplateVersion`, kopien i `createDraftVersion`, tellingen «endret», `tests/template-document.ts` og `tests/factories.ts`.
@@ -106,8 +106,8 @@ Regelen foreslår aldri TG0 (TG0 er ikke et utfall). Om TG0 kan gis på tilligge
    T-0014 punkt 1 (TG-utfall på punkt uten TG) og punkt 5 (TG-regel uten annen betingelse enn `always`) tas i den automatiske kontrollen før publisering i 2a-3. T-0014 settes til «delvis rettet», og det står hvilke punkter som gjenstår.
 8. **Små funn fra PR #159 som hører til reglene:** navnene på valgene for `wet_room.building_code` overlapper («1997–2010» og «TEK10»). Bare navnene rettes, kodene står (regel 6): «Før 1997», «TEK97 (1997–2010)», «TEK10 (2010–2017)», «TEK17 (fra 2017)», «Ukjent». Feltet vises ikke i rapporten (A212), og ingen regel leser det. Seed lager ny publisert versjon når innholdet er endret (finnes fra PR #159).
 9. **Testlagsfunn:** T-0003 og T-0015 settes til «rettet» med PR-nummeret, T-0014 til «delvis rettet» (punkt 2, 3 og 4 rettet; 1 og 5 i 2a-3).
-10. **ADR `docs/adr/0008-regelmotoren.md`:** plassering i `src/core/rules`, rent blad håndhevet med lint, treverdilogikk, svar med faste koder, levetider og terskler som kodedata med settkode til tabellene kommer i 2a-3. Forkastet: motoren inne i `core/templates` (drar med databasen), tabeller for levetider nå (ikke i fasen), gjenbruk av prøve E (modul, ikke kjerne).
-11. **Dokumentasjon:** domenemodellen 4.5 (nye kolonner, `key` og `status` på levetidstrinn og terskler, settkode, at levetider og terskler er kodedata nå og blir tabeller i 2a-3 med samme koder), ordlisten (`evaluateRules`, regelsvar, levetidstrinn, terskelkode, settkode `lifespan set` / `threshold set`, `expected_state`, `not_evaluated`), planlinjen for 59a («målt uten forhøyet fukt») og én linje i `docs/plan/endringslogg.md`, beslutninger fra A214 i `docs/09-apne-sporsmal.md` (se under), `package.json` 0.6.6 → 0.7.0.
+10. **ADR `docs/adr/0009-regelmotoren.md`:** plassering i `src/core/rules`, rent blad håndhevet med lint, treverdilogikk, svar med faste koder, levetider og terskler som kodedata med settkode til tabellene kommer i 2a-3. Forkastet: motoren inne i `core/templates` (drar med databasen), tabeller for levetider nå (ikke i fasen), gjenbruk av prøve E (modul, ikke kjerne).
+11. **Dokumentasjon:** domenemodellen 4.5 (nye kolonner, `key` og `status` på levetidstrinn og terskler, settkode, at levetider og terskler er kodedata nå og blir tabeller i 2a-3 med samme koder), ordlisten (`evaluateRules`, regelsvar, levetidstrinn, terskelkode, settkode `lifespan set` / `threshold set`, `expected_state`, `not_evaluated`), planlinjen for 59a («målt uten forhøyet fukt») og én linje i `docs/plan/endringslogg.md`, beslutninger fra A224 i `docs/09-apne-sporsmal.md` (se under), `package.json` 0.7.0 → 0.8.0 (main var allerede 0.7.0 etter PR #166).
 
 **Ikke med (bevisst utelatt):**
 - **Skjerm** for badet, avvikskort, TGIU-feltene og visning av TG-forslag (neste punkt «Badet på PC»). Ingen lagring av regelsvar i rapporten ennå.
@@ -133,7 +133,7 @@ Ingen ny tilgang og ingen nye spørringer. Regelmotoren er en ren funksjon uten 
 | admin | ja | ja (alltid) |
 
 ## Data
-- **Endret:** `rule_conditions` (sju kolonner for terskel, alder og enhet), `rule_test_cases` (`expected_state` erstatter `expect_triggered`, ny `inspection_year`). Migrering `0029_regler-bad`. Ingen nye tabeller, så `tests/tenant-tables.ts` er uendret.
+- **Endret:** `rule_conditions` (sju kolonner for terskel, alder og enhet), `rule_test_cases` (`expected_state` erstatter `expect_triggered`, ny `inspection_year`). Migrering `0030_regler-bad`. Ingen nye tabeller, så `tests/tenant-tables.ts` er uendret.
 - **Endret i dokumentformatet:** `expect_triggered` erstattes av `expected_state`, og testsakene får `inspection_year`.
 - **Nytt (kodedata, ikke tabeller):** `src/core/rules/data/lifespans.ts` og `thresholds.ts` med faste koder, settkode og `status = draft`.
 - **Faste koder som tas i bruk:** de fire regelkodene, spørsmålet `wet_room.membrane_drain.membrane_past_lifespan` med utfallet `tg2`, terskelkoden `wet_room_hole_moisture_weight_percent`, settkodene, begrunnelseskodene (for eksempel `material_unknown`, `unit_not_supported`) og kodene på levetidstrinnene. De endres aldri etter merge (regel 6); `key_snapshot` i malens test utvides.
@@ -169,20 +169,20 @@ Se Omfang 4 og 5. Reglene er data i badmalen med testsaker, og kjøres av én mo
 - **`expected_state` erstatter `expect_triggered` i samme migrering (arkitekten):** to kolonner for det samme gir to sannheter, og ingen data går tapt.
 - **Navnene på byggeforskrift:** fagansvarligs forslag. Overlappen i årstall ved overgangene er reell (overgangsperioder), og feltet styrer ingen regel.
 
-**Beslutninger som føres i `docs/09-apne-sporsmal.md` fra A214 i PR-en:**
-- A214 tolkningen av 59a (tabellen over). **Lett å endre** (regeldata og testsaker).
-- A215 fuktgrensen 15 vekt-% i treverk, lik eller over gir forslag, `status = draft`. Alternativet 20 vekt-% står i spørsmål 74. **Lett å endre** (ett tall).
-- A216 grensene: alder lik `min_age` gir forslag, fukt lik grensen gir forslag (spørsmål 69 og 70 foreløpig avgjort slik). **Lett å endre.**
-- A217 «med dokumentasjon» betyr samsvarserklæring eller våtromssertifikat. «Annen skriftlig dokumentasjon» og tomt felt gir trinnet «uten». Grunn: forsiktig side gir færre reklamasjoner, og takstmannen kan alltid endre forslaget. Fagansvarlig pekte på at kortets første valg ga lengre levetid. **Lett å endre** (verdilisten på betingelsen).
-- A218 ukjent membrantype: før 2000 gir TG3-forslag; etter 2000 gir ikke vurdert, ikke korteste levetid. **Lett å endre.**
-- A219 terskelhøyde utsatt til 2a-3 (ikke bindende etter tillegg A). **Lett å endre.**
-- A220 det nye utfallet `wet_room.membrane_drain.membrane_past_lifespan` (TG2, `age_uncertain_function`). **Dyrt å endre** (fast kode).
-- A221 regelmotoren i `src/core/rules` med svar i faste koder og kodedata med settkode (ADR 0008). **Dyrt å endre** (arkitektur, faste koder).
-- A222 `expected_state` erstatter `expect_triggered`. **Dyrt å endre** (kolonne og dokumentformat).
+**Beslutninger som føres i `docs/09-apne-sporsmal.md` fra A224 i PR-en:**
+- A224 tolkningen av 59a (tabellen over). **Lett å endre** (regeldata og testsaker).
+- A225 fuktgrensen 15 vekt-% i treverk, lik eller over gir forslag, `status = draft`. Alternativet 20 vekt-% står i spørsmål 76. **Lett å endre** (ett tall).
+- A226 grensene: alder lik `min_age` gir forslag, fukt lik grensen gir forslag (spørsmål 69 og 70 foreløpig avgjort slik). **Lett å endre.**
+- A227 «med dokumentasjon» betyr samsvarserklæring eller våtromssertifikat. «Annen skriftlig dokumentasjon» og tomt felt gir trinnet «uten». Grunn: forsiktig side gir færre reklamasjoner, og takstmannen kan alltid endre forslaget. Fagansvarlig pekte på at kortets første valg ga lengre levetid. **Lett å endre** (verdilisten på betingelsen).
+- A228 ukjent membrantype: før 2000 gir TG3-forslag; etter 2000 gir ikke vurdert, ikke korteste levetid. **Lett å endre.**
+- A229 terskelhøyde utsatt til 2a-3 (ikke bindende etter tillegg A). **Lett å endre.**
+- A230 det nye utfallet `wet_room.membrane_drain.membrane_past_lifespan` (TG2, `age_uncertain_function`). **Dyrt å endre** (fast kode).
+- A231 regelmotoren i `src/core/rules` med svar i faste koder og kodedata med settkode (ADR 0009). **Dyrt å endre** (arkitektur, faste koder).
+- A232 `expected_state` erstatter `expect_triggered`. **Dyrt å endre** (kolonne og dokumentformat).
 
 ## Åpne spørsmål
 - Spørsmål 71 (fuktgrensen) og 72 (TG0 på tilliggende i eldre bad) står åpne for fagrådet. Reglene bygges med agentenes valg, merket utkast, og føres som beslutninger (lett å endre).
-- Spørsmål 74 (ført 12.11.2026): fuktgrensen 15 eller 20 vekt-% og kilde, hva som teller som dokumentasjon, ukjent membrantype etter 2000, egen grense for RF %, og «lik grensen» for alder og fukt. Stopper ikke bygging.
+- Spørsmål 76 (ført 12.11.2026): fuktgrensen 15 eller 20 vekt-% og kilde, hva som teller som dokumentasjon, ukjent membrantype etter 2000, egen grense for RF %, og «lik grensen» for alder og fukt. Stopper ikke bygging.
 
 ## Roller
 forenkler, arkitekt, fagansvarlig, test-leder (forhåndsvurdering), utvikler og testskriver (bygging), gjennomgang. Ki-ansvarlig trengs ikke: ingen KI-kall. Ikke ux, ui-designer eller sikkerhet-personvern: ingen skjerm, ingen nye spørringer, ingen persondata.

@@ -2,7 +2,7 @@ import { evaluateRules } from "./evaluate";
 import type { OutcomeRef, RuleResult, RuleTestCaseResult, RunRuleTestCases } from "./types";
 
 /**
- * Kjører testsakene i maldokumentet (docs/adr/0008-regelmotoren.md). Hver testsak kjører bare sin
+ * Kjører testsakene i maldokumentet (docs/adr/0009-regelmotoren.md). Hver testsak kjører bare sin
  * egen regel, med testsakens svar og befaringsår. Ren funksjon.
  */
 

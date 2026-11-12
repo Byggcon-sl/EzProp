@@ -1,6 +1,6 @@
-# ADR 0008 – Regelmotoren: ett rent blad i `src/core/rules`, svar i faste koder
+# ADR 0009 – Regelmotoren: ett rent blad i `src/core/rules`, svar i faste koder
 
-Dato: 12.11.2026. Status: vedtatt av agentene i autonom modus (A221, A222); Ståle kan endre. Oppgavekort: `docs/funksjoner/fase2a-regler-bad.md`. Bygger på malmotoren (`0024_malmotor`, A136–A147) og ADR 0006 (KI i bunnen) og 0007 (tekststatus).
+Dato: 12.11.2026. Status: vedtatt av agentene i autonom modus (A231, A232); Ståle kan endre. Oppgavekort: `docs/funksjoner/fase2a-regler-bad.md`. Bygger på malmotoren (`0024_malmotor`, A136–A147) og ADR 0006 (KI i bunnen) og 0007 (tekststatus).
 
 Støtter hovedmålene: **færre reklamasjoner** (TG-forslag kommer likt hver gang fra regler med testsaker, og «ikke vurdert» blir aldri stille til «slår ikke til»), **de ansatte** (samme forslag på iPaden uten nett og på PC, med begrunnelse) og **KI i bunnen** (regelsvaret er strukturerte koder og tall som KI senere kan bygge årsakstekst og sammendrag på; KI setter aldri TG og kalles aldri av motoren).
 
@@ -16,7 +16,7 @@ Støtter hovedmålene: **færre reklamasjoner** (TG-forslag kommer likt hver gan
 8. **Levetider og terskler er kodedata nå** (`src/core/rules/data/lifespans.ts` og `thresholds.ts`), med samme form som `lifespan_entries` og `threshold_entries` i domenemodellen 4.5. Hver rad har fast `key` og `status` (`draft` = «utkast, ikke godkjent av fagrådet»). Hvert sett har en fast settkode (`LifespanSet.key`, `ThresholdSet.key`). Motoren importerer aldri `data/`; den som kaller, sender settene inn. Når tabellene kommer i 2a-3, fylles de med de samme kodene, og motoren endres ikke.
 9. **Feltkodene står i malen, ikke i motoren.** `rule_conditions` har fått `threshold_key`, `age_year_element_key`, `age_fallback_year_element_key`, `age_source_element_key`, `documentation_element_key`, `material_element_key` og `unit_element_key` (alle valgfrie, med samme format-CHECK som `element_key`). Retningen på en terskel står bare på terskelen; har betingelsen `threshold_key`, er `operator` og `value` tomme. For `age_vs_lifespan` er `value` listen over valgkodene som betyr «uten dokumentasjon».
 10. **Strengeste trinn vinner.** En `age_vs_lifespan`-betingelse er sann når det strengeste levetidstrinnet som passer, har samme `outcome_kind` som regelens foreslåtte utfall. Ett sjikt gir derfor ett forslag, ikke både TG2 og TG3.
-11. **`rule_test_cases.expected_state` erstatter `expect_triggered`** (A222), og testsaken har fått `inspection_year`. Migrering `0029_regler-bad` fyller `expected_state` fra den gamle kolonnen (`true` → `triggered`, `false` → `not_triggered`) og fjerner den i samme migrering. Dokumentformatet følger med.
+11. **`rule_test_cases.expected_state` erstatter `expect_triggered`** (A232), og testsaken har fått `inspection_year`. Migrering `0030_regler-bad` fyller `expected_state` fra den gamle kolonnen (`true` → `triggered`, `false` → `not_triggered`) og fjerner den i samme migrering. Dokumentformatet følger med.
 12. **Kodene endres aldri** (regel 6): tilstandene, begrunnelseskodene, settkodene, kodene på levetidstrinn og terskler. Nye koder legges til i listene.
 
 ## Forkastet

@@ -5,7 +5,7 @@ ALTER TABLE "rule_conditions" ADD COLUMN "age_source_element_key" text;--> state
 ALTER TABLE "rule_conditions" ADD COLUMN "documentation_element_key" text;--> statement-breakpoint
 ALTER TABLE "rule_conditions" ADD COLUMN "material_element_key" text;--> statement-breakpoint
 ALTER TABLE "rule_conditions" ADD COLUMN "unit_element_key" text;--> statement-breakpoint
--- Tre tilstander erstatter ja/nei (ADR 0008). Eksisterende testsaker beholder betydningen:
+-- Tre tilstander erstatter ja/nei (ADR 0009). Eksisterende testsaker beholder betydningen:
 -- true -> 'triggered', false -> 'not_triggered'. Gjelder også myk-slettede rader.
 ALTER TABLE "rule_test_cases" ADD COLUMN "expected_state" text;--> statement-breakpoint
 UPDATE "rule_test_cases" SET "expected_state" = CASE WHEN "expect_triggered" THEN 'triggered' ELSE 'not_triggered' END;--> statement-breakpoint

@@ -934,7 +934,7 @@ Fritekstfeltet `special_rule` er tatt ut. Det som før skulle stå der, skrives 
 | `rule_id` | Regelen |
 | `name` | For eksempel «Folie 2004 uten dokumentasjon gir TG2» |
 | `input` | Testsvarene (felt og verdier) |
-| `expected_state` | Forventet tilstand: `triggered` (slår til), `not_triggered` (slår ikke til) eller `not_evaluated` (ikke vurdert). Erstatter `expect_triggered` (A222). |
+| `expected_state` | Forventet tilstand: `triggered` (slår til), `not_triggered` (slår ikke til) eller `not_evaluated` (ikke vurdert). Erstatter `expect_triggered` (A232). |
 | `inspection_year` | Befaringsåret testsaken regner alder mot. Tom = regelen bruker ikke alder. |
 | `expected_outcome_id` | Forventet utfall |
 | `last_result`, `last_run_at` | Sist kjørt, og om testen besto. *Kommer med kontrollen før publisering (A147).* |
@@ -962,12 +962,12 @@ En malversjon kan ikke publiseres hvis en test feiler. Testene kjøres også aut
 
 ---
 
-**Bygget i fase 2a (12.11.2026, regelmotoren):** Oppgavekort: `docs/funksjoner/fase2a-regler-bad.md`; ADR 0008; beslutningene A214–A222.
+**Bygget i fase 2a (12.11.2026, regelmotoren):** Oppgavekort: `docs/funksjoner/fase2a-regler-bad.md`; ADR 0009; beslutningene A224–A232.
 
 - **Regelmotoren** ligger i `src/core/rules` som rene funksjoner (`evaluateRules`, `runRuleTestCases`) og kjører likt på iPaden og på serveren. Den leser maldokumentet, svarene (`feltkode → verdi`), befaringsåret, levetidene og tersklene, og gir ett regelsvar (`RuleResult`) per aktive regel. Svaret har bare faste koder og tall: regelkode, tilstand, forslag (utfall eller TGIU på kontrollpunktet), én begrunnelse per betingelse og settkodene. Typene står i `src/core/rules/types.ts`, kodene i `src/core/rules/codes.ts`.
 - **Tre tilstander** (`RULE_RESULT_STATES`): `triggered`, `not_triggered` og `not_evaluated`. Tomt eller ugyldig felt gir `not_evaluated`, aldri en stille «slår ikke til».
 - **Kjøres nå:** formålene `suggest_outcome` og `suggest_tgiu` (bare i systemmalen for tilstandsrapport) og betingelsestypene `option_selected`, `number_vs_limit` og `age_vs_lifespan`. Resten gir `not_evaluated` til de bygges i 2a-3.
-- **Migrering `0029_regler-bad`:** `rule_conditions` har fått `threshold_key`, `age_year_element_key`, `age_fallback_year_element_key`, `age_source_element_key`, `documentation_element_key`, `material_element_key` og `unit_element_key` (valgfrie, samme format-CHECK som `element_key`). `rule_test_cases` har fått `expected_state` (påkrevd, CHECK fra `RULE_RESULT_STATES`; fylt fra `expect_triggered`, som er fjernet) og `inspection_year` (valgfri, 1900–2200). Alle lagres, leses, kopieres til nytt utkast og telles i «endret».
+- **Migrering `0030_regler-bad`:** `rule_conditions` har fått `threshold_key`, `age_year_element_key`, `age_fallback_year_element_key`, `age_source_element_key`, `documentation_element_key`, `material_element_key` og `unit_element_key` (valgfrie, samme format-CHECK som `element_key`). `rule_test_cases` har fått `expected_state` (påkrevd, CHECK fra `RULE_RESULT_STATES`; fylt fra `expect_triggered`, som er fjernet) og `inspection_year` (valgfri, 1900–2200). Alle lagres, leses, kopieres til nytt utkast og telles i «endret».
 - **Levetider og terskler er kodedata nå**, ikke tabeller: `src/core/rules/data/lifespans.ts` og `thresholds.ts`, med samme form som `lifespan_entries` og `threshold_entries` over. Hver rad har fast `key` og `status`, og hvert sett har en fast settkode. Tabellene `lifespan_tables`, `lifespan_entries`, `threshold_tables` og `threshold_entries` kommer i 2a-3 og fylles med de samme kodene. Til da har terskelen ikke `outcome_kind`, `verified_by` eller `verified_at`: hva som foreslås, står på regelen.
 
 ### 4.6 Fraser
@@ -2192,7 +2192,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Terskeltabell | `threshold_tables`, `threshold_entries` | |
 | Kostnadsintervall | `cost_bands` | |
 | Testtilfelle | `rule_test_cases` | |
-| Regelmotor | `src/core/rules`, `evaluateRules` | Rene funksjoner, samme kode på iPad og server (ADR 0008) |
+| Regelmotor | `src/core/rules`, `evaluateRules` | Rene funksjoner, samme kode på iPad og server (ADR 0009) |
 | Regelsvar | `RuleResult` | Svaret fra én regel: kode, tilstand, forslag og begrunnelse |
 | Slår til / slår ikke til / ikke vurdert | `triggered` / `not_triggered` / `not_evaluated` | `RULE_RESULT_STATES`. Også `rule_test_cases.expected_state` |
 | Forventet tilstand | `expected_state` | På testtilfellet. Erstatter `expect_triggered` |
@@ -2457,4 +2457,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 11.11.2026 | KI-leverandør (fase 2a, grensesnitt): leverandørkoden `anthropic` på porten `ai` med `secret_ref = ANTHROPIC_API_KEY` og `settings.model`, `settings.features` og `settings.pricing`. `ResolvedAiProvider` har fått `features`. Ingen ny tabell og ingen migrering. Nye ord i ordlisten (KI-adapter, modell, påslåtte KI-funksjoner, KI-pris). | A193–A197, `docs/funksjoner/fase2a-ki-leverandor.md`, ADR 0006 del 2 |
 | 12.11.2026 | Malen for ett bad (fase 2a): `text_status` (`TEXT_STATUSES`) på `outcomes` og `standard_measures` og `default_cause_text` på `outcomes` i migrering `0028_mal-tekststatus`. Eksemplet `wet_room.membrane` er byttet til `wet_room.membrane_drain`. Hulltakingsmålingene er enkeltfelt nå og blir `table` i 2a-3. Nye ord i ordlisten (`isSameTemplateContent`, `ensureSampleTemplate`, seksjonen og de åtte kontrollpunktene for våtrom). Se «Bygget i fase 2a» i 4.5. | A200–A209, `docs/funksjoner/fase2a-mal-bad.md`, ADR 0007 |
 | 12.11.2026 | Microsoft-innlogging (fase 2a, grensesnitt, ADR 0008): ingen ny tabell og ingen migrering. `accounts` beskrevet (`provider_id = 'microsoft'`, `account_id` = `oid`, tokens lagres ikke). Reservert hemmelighetsnavn `MS_LOGIN_CLIENT_SECRET`. Ordlisten: Microsoft-innlogging, Microsoft-katalog, aktivt ansattforhold, reservert hemmelighetsnavn. |
-| 12.11.2026 | Regelmotoren (fase 2a, ADR 0008): `src/core/rules` med regelsvar i faste koder og tre tilstander (`RULE_RESULT_STATES`). Migrering `0029_regler-bad`: sju nye kolonner på `rule_conditions` (`threshold_key`, alder-feltene, `unit_element_key`), og `expected_state` og `inspection_year` på `rule_test_cases` (`expect_triggered` er fjernet). Levetidstrinn og terskler har fått `key` og `status`, og settene en settkode; de er kodedata til tabellene kommer i 2a-3. |
+| 12.11.2026 | Regelmotoren (fase 2a, ADR 0009): `src/core/rules` med regelsvar i faste koder og tre tilstander (`RULE_RESULT_STATES`). Migrering `0030_regler-bad`: sju nye kolonner på `rule_conditions` (`threshold_key`, alder-feltene, `unit_element_key`), og `expected_state` og `inspection_year` på `rule_test_cases` (`expect_triggered` er fjernet). Levetidstrinn og terskler har fått `key` og `status`, og settene en settkode; de er kodedata til tabellene kommer i 2a-3. |

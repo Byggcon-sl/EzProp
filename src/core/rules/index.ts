@@ -1,5 +1,5 @@
 /**
- * Regelmotoren (docs/adr/0008-regelmotoren.md). Rent blad: samme kode på iPaden og på serveren.
+ * Regelmotoren (docs/adr/0009-regelmotoren.md). Rent blad: samme kode på iPaden og på serveren.
  * `evaluateRules` og `runRuleTestCases` bygges mot typene `EvaluateRules` og `RunRuleTestCases`
  * og eksporteres herfra. Levetider og terskler ligger i `./data` og sendes alltid inn som
  * argument; motoren importerer dem aldri selv. `./data` eksporteres ikke herfra: den som kaller,

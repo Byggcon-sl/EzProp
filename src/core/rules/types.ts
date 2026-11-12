@@ -11,7 +11,7 @@ import type {
 } from "./codes";
 
 /**
- * Grensesnittet til regelmotoren (docs/adr/0008-regelmotoren.md,
+ * Grensesnittet til regelmotoren (docs/adr/0009-regelmotoren.md,
  * docs/funksjoner/fase2a-regler-bad.md).
  *
  * Motoren er rene funksjoner uten database, server eller nettleser-API, slik at samme kode kjører
