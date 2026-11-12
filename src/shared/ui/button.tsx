@@ -7,19 +7,27 @@ import { cn } from "@/shared/lib/cn";
  * avsnitt 3). Navnet hentes fra nøkkelen, så portnavnet aldri står som strengliteral utenfor
  * src/core/ai (statisk sjekk 12.2 i src/core/ai/static-checks.test.ts).
  */
-const kiVariant = { ai: "bg-ai-700 text-white shadow-sm hover:bg-ai-900" } as const;
+const kiVariant = {
+  ai: "bg-ai-700 text-white hover:bg-ai-900 disabled:bg-slate-500 disabled:text-white",
+} as const;
 export const AI_BUTTON_VARIANT = Object.keys(kiVariant)[0] as keyof typeof kiVariant;
 
-/** Knapper. Minst 44 px høye (iPad), hovedknapper 56 px (docs/08-designprinsipper.md). */
+/**
+ * Pilleknapper (Byggcon-profilen, docs/funksjoner/fase2a-byggcon-profil-design.md avsnitt 4.1).
+ * Minst 44 px høye (iPad), hovedknapper 56 px (docs/08-designprinsipper.md). Deaktivert knapp får
+ * egen farge i stedet for gjennomsiktighet, så teksten holder kontrastkravet.
+ */
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-1.5 rounded-xl text-base font-medium transition-colors disabled:pointer-events-none disabled:opacity-60",
+  "inline-flex items-center justify-center gap-1.5 rounded-full text-base font-semibold transition-colors disabled:pointer-events-none",
   {
     variants: {
       variant: {
-        primary: "bg-brand-600 text-white shadow-sm hover:bg-brand-700",
+        primary: "bg-night text-white hover:bg-slate-800 disabled:bg-slate-500 disabled:text-white",
         secondary:
-          "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300 ring-inset hover:bg-slate-50",
-        ghost: "text-slate-700 hover:bg-slate-100",
+          "bg-transparent text-slate-900 ring-1 ring-slate-700 ring-inset hover:bg-slate-100 disabled:text-slate-500 disabled:ring-slate-300",
+        /** Bare tredje handling. Understreket, så den ses som handling uten fyll. */
+        ghost:
+          "text-slate-900 underline decoration-1 underline-offset-4 hover:bg-slate-100 disabled:text-slate-500",
         ...kiVariant,
       },
       size: {

@@ -1,12 +1,16 @@
 import type { ComponentProps } from "react";
 import { cn } from "@/shared/lib/cn";
 
-/** Hvitt kort med runde hjørner og myk skygge (design A). */
-export function Card({ className, ...props }: ComponentProps<"div">) {
-  return (
-    <div
-      className={cn("rounded-card bg-white p-6 shadow-card ring-1 ring-slate-200/60", className)}
-      {...props}
-    />
-  );
+const tones = {
+  default: "border border-line bg-white",
+  sand: "bg-sand",
+} as const;
+
+/** Kort med tynn kant og 12 px hjørner (Byggcon-profilen). `sand` er flate uten kant. */
+export function Card({
+  className,
+  tone = "default",
+  ...props
+}: ComponentProps<"div"> & { tone?: keyof typeof tones }) {
+  return <div className={cn("rounded-card p-6", tones[tone], className)} {...props} />;
 }
