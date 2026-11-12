@@ -2,3 +2,9 @@ onlyBuiltDependencies:
   - esbuild
   - sharp
   - unrs-resolver
+
+# Sårbare pakker i utviklerverktøy (nattløkken 12.11.2026):
+# esbuild GHSA-67mh-4wv8-2f99 via drizzle-kit, minimatch GHSA-g3hv-75wg-m249 via eslint-config-next.
+overrides:
+  "@esbuild-kit/core-utils>esbuild": ">=0.25.0"
+  "minimatch@>=7.0.0 <11.0.1": ">=11.0.1"
