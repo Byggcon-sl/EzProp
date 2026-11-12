@@ -106,6 +106,8 @@ export interface AiProvider {
 
 Ingen endring i funksjonene, i modulene eller i `ai_usage_log`.
 
+**Endret av Ståle 12.11.2026** (`docs/kartlegging/svar-fra-stale-2026-11-12.md`, K1, K2, K7): leverandørens vanlige oppbevaringstid godtas (null-lagring kreves ikke) og skrives inn i personvernerklæringen. Anthropic direkte brukes bare i testmiljøet med oppdiktede data; behandlingen skal skje i EU/EØS før ekte kundedata. Oppbevaringstiden for avviste forslag blir en innstilling med 10 år som standard.
+
 **Forutsetninger før en ekte leverandør brukes** (presisert 11.11.2026): koden for adapteren kan ligge i main. Men før tilkoblingen `anthropic` lages for en organisasjon med ekte data og `ai.enabled` slås på, må dette være på plass: databehandleravtale er signert, veien for EU/EØS er valgt, trening og lagring er avklart, og personvernerklæringen er oppdatert. Dette avgjør Ståle (spørsmål 54–58 og 73 i `docs/09-apne-sporsmal.md`, `docs/beslutningsnotat-ki-leverandor.md`). Denne ADR-en sa «behandlingen skjer i EU/EØS» og «lagrer ingenting ut over kallet». Ved bruk av Anthropic direkte er ingen av delene avklart; enten avtales det, eller Ståle endrer forutsetningen. Agentene avgjør ikke dette.
 
 **Første ekte adapter: Anthropic (11.11.2026, oppgavekort `docs/funksjoner/fase2a-ki-leverandor.md`).**
