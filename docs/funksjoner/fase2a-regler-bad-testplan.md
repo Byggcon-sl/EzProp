@@ -93,7 +93,7 @@ Bygges med små dokumenter laget i testen (ikke badmalen), så motoren prøves u
 7. **threshold_condition_shape:** fuktregelen bruker `threshold_key`, og `operator` og `value` er tomme.
 8. **building_code_labels:** navnene er «Før 1997», «TEK97 (1997–2010)», «TEK10 (2010–2017)», «TEK17 (fra 2017)», «Ukjent», og kodene er uendret (`before_1997`, `from_1997_to_2010`, `tek10`, `tek17`, `unknown`).
 9. **no_tg0:** ingen regel peker på et utfall med TG0, og ingen testsak forventer TG0.
-10. **no_threshold_height_rule:** ingen regel leser `wet_room.threshold_height_mm` (A219).
+10. **no_threshold_height_rule:** ingen regel leser `wet_room.threshold_height_mm` (A237).
 11. **1.28 kontrollene kan feile** utvides med de nye kontrollene i 5 (hver med et dokument som skal feile).
 
 ## 4. Regeltestene (testsaker som data), `src/db/seed/templates/wet-room.rules.test.ts` (ny, ren)

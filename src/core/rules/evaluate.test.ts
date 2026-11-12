@@ -569,7 +569,7 @@ describe("1.3 treverdilogikk", () => {
 
   /*
    * Datamodellen har ikke egen `match` per gruppe: gruppen slås sammen med regelens `match`, og så
-   * slås gruppene og betingelsene uten gruppe sammen med samme `match` (types.ts, ADR 0008).
+   * slås gruppene og betingelsene uten gruppe sammen med samme `match` (types.ts, ADR 0009).
    * Tabellen prøver at en ukjent eller usann verdi inne i en gruppe går riktig videre.
    */
   it.each<{

@@ -1,0 +1,3 @@
+CREATE INDEX "employee_permissions_organization_id_employee_id_idx" ON "employee_permissions" USING btree ("organization_id","employee_id");--> statement-breakpoint
+CREATE INDEX "orders_organization_id_assignment_id_idx" ON "orders" USING btree ("organization_id","assignment_id");--> statement-breakpoint
+CREATE INDEX "template_element_options_organization_id_element_id_idx" ON "template_element_options" USING btree ("organization_id","element_id");

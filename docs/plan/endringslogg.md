@@ -2,6 +2,14 @@
 
 Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og 09.11.2026).
 
+- **12.11.2026 (Prosjektlederen, funn T-0021):** «Beslutningsnotat om KI-leverandør» flyttet til `docs/plan/levert.md` (PR #154). Radene fra 11.–12.11.2026 flyttet fra tabellen hit, så nyeste står øverst. Planen sier «Sist oppdatert: 12.11.2026».
+- **12.11.2026 (Læringsløkken):** «Malen for ett bad» flyttet til `docs/plan/levert.md` (PR #159 merget). Statuslinjen for 2a: neste er reglene badet trenger.
+- **12.11.2026 (Branch `fase2a-mal-bad`):** 2a-2: «Malen for ett bad» krysset av (systemmalen med ett våtrom i malmotoren, tekster som utkast, A200–A213).
+- **12.11.2026 (Beslutningsnotatet og Anthropic-adapteren, branch `fase2a-ki-leverandor`):** Statuslinjen for fase 2a: alle punktene i 2a-1 er levert; neste er 2a-2 Smal vei.
+- **12.11.2026 (Utrullingen 12.11.2026):** S1 gjort: første vellykkede utrulling til Azure (PR #149–#152: databaseregion, brannmurkommando, appens logg ved feil og flate pakker).
+- **11.11.2026 (Ståle 10.11.2026, Anthropic valgt):** 2a-1: «Beslutningsnotat om KI-leverandør» krysset av (notatet `docs/beslutningsnotat-ki-leverandor.md`, Anthropic-adapteren bygget). Nytt punkt i «Minimum før ekte data» om KI-leverandør (avtale, EU/EØS-vei, spørsmål 54–58 og 73); telleren er nå to av ti. S8 viser hva som gjenstår for Ståle.
+- **11.11.2026 (Kontroll av arbeidsflyten «Utrulling til Azure»):** S1 satt tilbake til åpen: utrullingen til Azure hopper fortsatt over fordi `AZURE_CLIENT_ID` mangler.
+- **11.11.2026 (Hovedløkken etter PR #143):** Statuslinjen for fase 2a: KI-køen (PR #143) levert, neste er «Beslutningsnotat om KI-leverandør».
 - **11.11.2026 (Prosjektlederen):** Det alvorlige funnet T-0001 (synkkøen) er rettet i PR #139. Statuslinjen for 2a oppdatert. Neste: «Evalueringssett» (2a-1).
 - **11.11.2026 (Prosjektlederen):** Små rettinger i ADR 0006 del 11 og domenemodellen etter «Vask før KI» (PR #137).
 - **11.11.2026 (Læringsløkken):** «Forslagsmønsteret» (PR #131) og «Vask før KI» (PR #135) flyttet fra planen til `docs/plan/levert.md`. Radene fra 10.11.2026 er flyttet fra tabellen hit, så nyeste står øverst (funn T-0021).
@@ -57,10 +65,5 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 〃 | Merket «Rettet» under «Ferdig» og reklamasjonssaker bare for leder og admin (fase 2a) | Tilleggsbeslutninger 27.10.2026 |
 | 28.10.2026 | Hovedmål øverst (50 % mindre tid, halvparten så mange reklamasjoner, KI først), med måling og tabell over hva som bidrar mest per fase. Nye oppgaver 15 og 16 (nullpunkt for tid og reklamasjoner) ved siden av fase 0 og 1. Tidsmåling per rapport i 2a. Pilotmåling med de to tallmålene. KI-funksjoner i «Senere» merket «vurder å flytte fram». To nye åpne spørsmål. | Ståle i chat 28.10.2026 |
 | 09.11.2026 | Funnene fra Spectoras YouTube-kanal (V1–V132) knyttet til planen: henvisning på 61 punkter, ny underseksjon under «Sporbarhet», nye funksjoner som forslag og kapittel 7 som spørsmål i `docs/09-apne-sporsmal.md` (nr. 20–53). Ingen punkter er lagt til eller utvidet. | `spectora-youtube/spectora-youtube-funn.md` |
-| 11.11.2026 | Statuslinjen for fase 2a: KI-køen (PR #143) levert, neste er «Beslutningsnotat om KI-leverandør». | Hovedløkken etter PR #143 |
-| 11.11.2026 | S1 satt tilbake til åpen: utrullingen til Azure hopper fortsatt over fordi `AZURE_CLIENT_ID` mangler. | Kontroll av arbeidsflyten «Utrulling til Azure» |
-| 11.11.2026 | 2a-1: «Beslutningsnotat om KI-leverandør» krysset av (notatet `docs/beslutningsnotat-ki-leverandor.md`, Anthropic-adapteren bygget). Nytt punkt i «Minimum før ekte data» om KI-leverandør (avtale, EU/EØS-vei, spørsmål 54–58 og 73); telleren er nå to av ti. S8 viser hva som gjenstår for Ståle. | Ståle 10.11.2026 (Anthropic valgt) |
-| 12.11.2026 | S1 gjort: første vellykkede utrulling til Azure (PR #149–#152: databaseregion, brannmurkommando, appens logg ved feil og flate pakker). | Utrullingen 12.11.2026 |
-| 12.11.2026 | Statuslinjen for fase 2a: alle punktene i 2a-1 er levert; neste er 2a-2 Smal vei. | Beslutningsnotatet og Anthropic-adapteren (branch `fase2a-ki-leverandor`) |
-| 12.11.2026 | 2a-2: «Malen for ett bad» krysset av (systemmalen med ett våtrom i malmotoren, tekster som utkast, A200–A213). | Branch `fase2a-mal-bad` |
-| 12.11.2026 | «Malen for ett bad» flyttet til `docs/plan/levert.md` (PR #159 merget). Statuslinjen for 2a: neste er reglene badet trenger. | Læringsløkken |
+| 12.11.2026 | Microsoft-innlogging for ansatte flyttet fra «Senere» til fase 2a og prioritert før 2a-2, med engangskoden som reserve. | Ståle i chat 12.11.2026 |
+| 12.11.2026 | Ny oppgave i fase 2a: Byggcon-profilen (samme grep som Optiplan), etter Microsoft-innlogging og før 2a-2. Grunnlaget kopiert til `docs/design/byggcon-profil/`. | Ståle i chat 12.11.2026 |

@@ -11,7 +11,7 @@ import { logger, scrubText } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
 import { ConnectionNotFoundError, ConnectionValidationError } from "./errors";
 import { INTEGRATION_PORTS, PROVIDERS_BY_PORT, type ConnectionStatus } from "./ports";
-import { isValidSecretRef } from "./secrets";
+import { isValidSecretRef, RESERVED_SECRET_REFS } from "./secrets";
 
 export { ConnectionNotFoundError, ConnectionValidationError } from "./errors";
 
@@ -60,8 +60,17 @@ const FIXED_SECRET_REFS: Readonly<Record<string, string>> = {
   [ANTHROPIC_PROVIDER_CODE]: ANTHROPIC_SECRET_REF,
 };
 
-/** Om navnet på hemmeligheten er lov for leverandøren. Uten fast navn er alt lov her. */
+/** Reservert navn (ADR 0008): appen leser det selv, men ingen tilkobling får peke på det. */
+function isReservedSecretRef(secretRef: string | null): boolean {
+  return secretRef !== null && RESERVED_SECRET_REFS.includes(secretRef);
+}
+
+/**
+ * Om navnet på hemmeligheten er lov for leverandøren. Reserverte navn er aldri lov. Uten fast
+ * navn er alt annet lov her.
+ */
 function secretRefAllowedFor(provider: string, secretRef: string | null): boolean {
+  if (isReservedSecretRef(secretRef)) return false;
   if (!Object.prototype.hasOwnProperty.call(FIXED_SECRET_REFS, provider)) return true;
   return secretRef === FIXED_SECRET_REFS[provider];
 }
@@ -403,7 +412,8 @@ export async function markConnectionDeleted(
 
 /**
  * Tilkoblingen laget selv bruker for porten: ikke slettet og ikke `disabled`, eller `null`.
- * Uten tilgangssjekk. Kalles bare med `grant.organizationId` eller organisasjonen laget selv
+ * Peker raden på et reservert hemmelighetsnavn (lagt inn utenom tjenesten), avvises den med
+ * samme feil som ved lagring, så hemmeligheten aldri sendes til en adapter. Uten tilgangssjekk. Kalles bare med `grant.organizationId` eller organisasjonen laget selv
  * kjenner, aldri med en id fra adressen eller skjemaet. Eksporteres ikke fra `index.ts`.
  */
 export async function findActiveConnection(
@@ -422,6 +432,7 @@ export async function findActiveConnection(
         ne(integrationConnections.status, "disabled"),
       ),
     );
+  if (row && isReservedSecretRef(row.secretRef)) throw wrongSecretRefError();
   return row ?? null;
 }
 

@@ -1,5 +1,5 @@
 /**
- * Faste koder for regelmotoren (docs/adr/0008-regelmotoren.md). Kodene endres aldri etter at de
+ * Faste koder for regelmotoren (docs/adr/0009-regelmotoren.md). Kodene endres aldri etter at de
  * er tatt i bruk (regel 6). Nye koder legges til i listene.
  */
 

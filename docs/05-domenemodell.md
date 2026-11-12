@@ -171,6 +171,8 @@ Disse feltene finnes i **alle** tabeller (med få unntak, som er nevnt). De stå
 
 **`users`** – innloggingen. **Felles med Optiplan** (engangskode på e-post). EzProp eier ikke denne tabellen. Hvordan delingen gjøres teknisk, avgjøres i fase 0 (se åpne spørsmål).
 
+**`accounts`** – innloggingsmåtene til en bruker (Better Auth sin tabell, ingen `organization_id`). For Microsoft-innlogging (ADR 0008): `provider_id = 'microsoft'` og `account_id` er Microsofts `oid` (en personopplysning, ikke `sub`). E-post brukes bare til første kobling; etterpå gjelder `oid`. Tokenkolonnene (`access_token`, `refresh_token`, `id_token` og utløpstidene) er alltid tomme. Ingen kobler til eller fra selv, så rader slettes ikke.
+
 | Felt | Forklaring |
 |---|---|
 | `email`, `name` | E-post (innlogging) og navn |
@@ -960,12 +962,12 @@ En malversjon kan ikke publiseres hvis en test feiler. Testene kjøres også aut
 
 ---
 
-**Bygget i fase 2a (12.11.2026, regelmotoren):** Oppgavekort: `docs/funksjoner/fase2a-regler-bad.md`; ADR 0008; beslutningene A214–A222.
+**Bygget i fase 2a (12.11.2026, regelmotoren):** Oppgavekort: `docs/funksjoner/fase2a-regler-bad.md`; ADR 0009; beslutningene A232–A240.
 
 - **Regelmotoren** ligger i `src/core/rules` som rene funksjoner (`evaluateRules`, `runRuleTestCases`) og kjører likt på iPaden og på serveren. Den leser maldokumentet, svarene (`feltkode → verdi`), befaringsåret, levetidene og tersklene, og gir ett regelsvar (`RuleResult`) per aktive regel. Svaret har bare faste koder og tall: regelkode, tilstand, forslag (utfall eller TGIU på kontrollpunktet), én begrunnelse per betingelse og settkodene. Typene står i `src/core/rules/types.ts`, kodene i `src/core/rules/codes.ts`.
 - **Tre tilstander** (`RULE_RESULT_STATES`): `triggered`, `not_triggered` og `not_evaluated`. Tomt eller ugyldig felt gir `not_evaluated`, aldri en stille «slår ikke til».
 - **Kjøres nå:** formålene `suggest_outcome` og `suggest_tgiu` (bare i systemmalen for tilstandsrapport) og betingelsestypene `option_selected`, `number_vs_limit` og `age_vs_lifespan`. Resten gir `not_evaluated` til de bygges i 2a-3.
-- **Migrering `0029_regler-bad`:** `rule_conditions` har fått `threshold_key`, `age_year_element_key`, `age_fallback_year_element_key`, `age_source_element_key`, `documentation_element_key`, `material_element_key` og `unit_element_key` (valgfrie, samme format-CHECK som `element_key`). `rule_test_cases` har fått `expected_state` (påkrevd, CHECK fra `RULE_RESULT_STATES`; fylt fra `expect_triggered`, som er fjernet) og `inspection_year` (valgfri, 1900–2200). Alle lagres, leses, kopieres til nytt utkast og telles i «endret».
+- **Migrering `0030_regler-bad`:** `rule_conditions` har fått `threshold_key`, `age_year_element_key`, `age_fallback_year_element_key`, `age_source_element_key`, `documentation_element_key`, `material_element_key` og `unit_element_key` (valgfrie, samme format-CHECK som `element_key`). `rule_test_cases` har fått `expected_state` (påkrevd, CHECK fra `RULE_RESULT_STATES`; fylt fra `expect_triggered`, som er fjernet) og `inspection_year` (valgfri, 1900–2200). Alle lagres, leses, kopieres til nytt utkast og telles i «endret».
 - **Levetider og terskler er kodedata nå**, ikke tabeller: `src/core/rules/data/lifespans.ts` og `thresholds.ts`, med samme form som `lifespan_entries` og `threshold_entries` over. Hver rad har fast `key` og `status`, og hvert sett har en fast settkode. Tabellene `lifespan_tables`, `lifespan_entries`, `threshold_tables` og `threshold_entries` kommer i 2a-3 og fylles med de samme kodene. Til da har terskelen ikke `outcome_kind`, `verified_by` eller `verified_at`: hva som foreslås, står på regelen.
 
 ### 4.6 Fraser
@@ -1570,7 +1572,7 @@ Status fra eAccounting hentes via tilkoblingen og blir hendelsene **«faktura se
 | `port` | Fast kode, en av de ti portene over |
 | `provider` | Fast kode, kjent liste per port. Nå `dev_mailbox`, `server_log` og `microsoft365` for `email`. De andre portene har tom liste, så en tilkobling for dem avvises til leverandøren er lagt inn i koden. |
 | `status` | `active`, `disabled`, `error`. Admin setter bare `active` eller `disabled`. `error` settes av laget når en sending feiler, og går tilbake til `active` ved neste vellykkede sending. |
-| `secret_ref` | Bare navnet på hemmeligheten, aldri verdien. Leses gjennom `readSecret` (`src/core/integrations/secrets.ts`). Appens egne hemmeligheter (innlogging, database, synk, fillagring) står på en nektliste og kan aldri leses gjennom laget. Påkrevd for `microsoft365`. Navnet er navnet på miljøvariabelen; i Azure fylles miljøvariabelen fra nøkkelboksen ved oppstart (ADR 0005), i utvikling fra `.env`. Navnet i boksen finnes bare i Bicep. |
+| `secret_ref` | Bare navnet på hemmeligheten, aldri verdien. Leses gjennom `readSecret` (`src/core/integrations/secrets.ts`). Appens egne hemmeligheter (innlogging, database, synk, fillagring) står på en nektliste og kan aldri leses gjennom laget. `MS_LOGIN_CLIENT_SECRET` er et **reservert navn** (`RESERVED_SECRET_REFS`, ADR 0008): innloggingen leser det selv, og det avvises som `secret_ref` for alle leverandører, ved lagring og ved oppslag. Påkrevd for `microsoft365`. Navnet er navnet på miljøvariabelen; i Azure fylles miljøvariabelen fra nøkkelboksen ved oppstart (ADR 0005), i utvikling fra `.env`. Navnet i boksen finnes bare i Bicep. |
 | `settings` | jsonb, sjekkes per leverandør. `microsoft365`: `from`, `tenantId`, `clientId` (alle påkrevd). `dev_mailbox` og `server_log`: tomme. |
 | `last_ok_at` | Sist en sending gikk gjennom tilkoblingen |
 | `last_error` | Siste feil, vasket, høyst 500 tegn, aldri adresse, kode eller hemmelig verdi. Beholdes når admin setter `active` igjen, nullstilles ved neste vellykkede sending. |
@@ -1952,6 +1954,10 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Kontor | `offices` | Bodø, Mo i Rana osv. |
 | Ansatt | `employees` | Person som jobber i Byggcon |
 | Bruker / innlogging | `users` | Felles med Optiplan |
+| Microsoft-innlogging | `microsoft` (`src/core/auth/microsoft-login.ts`) | Logg inn med Microsoft 365-kontoen. Én Microsoft-katalog (tenant), bare registrerte ansatte, ingen ny bruker. Engangskoden er reserven (ADR 0008) |
+| Microsoft-katalog | tenant (`MS_LOGIN_TENANT_ID`) | Byggcons katalog i Entra ID. Bare kontoer herfra godtas; gjester avvises |
+| Aktivt ansattforhold | `hasActiveEmployment` (`src/core/access`) | Ansatt-rad som ikke er deaktivert eller slettet, i en organisasjon som ikke er slettet. Sjekkes ved hver Microsoft-innlogging |
+| Reservert hemmelighetsnavn | `RESERVED_SECRET_REFS` | Navn appen leser selv, men som aldri kan stå som `secret_ref` på en tilkobling (`MS_LOGIN_CLIENT_SECRET`) |
 | Innloggingssperre | `login throttle` (`src/core/auth/login-throttle.ts`) | Midlertidig sperre per e-postadresse etter 5 feil koder eller 5 kodebestillinger på 15 minutter. Går ut av seg selv etter 15 minutter, gjelder alle (også admin) |
 | Innloggingsforsøk | `login_attempts` | Ett forsøk per rad (bestilling, feil kode eller riktig kode). Ingen organisasjons-ID, ingen adresse i klartekst. Radene endres aldri |
 | Adresse-HMAC | `email_hash` | HMAC-SHA256 av e-postadressen (trim og små bokstaver), med nøkkel avledet fra innloggingshemmeligheten. Adressen lagres aldri i klartekst |
@@ -2186,7 +2192,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Terskeltabell | `threshold_tables`, `threshold_entries` | |
 | Kostnadsintervall | `cost_bands` | |
 | Testtilfelle | `rule_test_cases` | |
-| Regelmotor | `src/core/rules`, `evaluateRules` | Rene funksjoner, samme kode på iPad og server (ADR 0008) |
+| Regelmotor | `src/core/rules`, `evaluateRules` | Rene funksjoner, samme kode på iPad og server (ADR 0009) |
 | Regelsvar | `RuleResult` | Svaret fra én regel: kode, tilstand, forslag og begrunnelse |
 | Slår til / slår ikke til / ikke vurdert | `triggered` / `not_triggered` / `not_evaluated` | `RULE_RESULT_STATES`. Også `rule_test_cases.expected_state` |
 | Forventet tilstand | `expected_state` | På testtilfellet. Erstatter `expect_triggered` |
@@ -2450,4 +2456,5 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 11.11.2026 | KI-kø uten nett (fase 2a, grensesnitt): klientdelen `src/core/ai/client` med typene `AiQueueEntry`, `AiQueueStore` og `AiQueue`. Ingen ny tabell og ingen migrering; køen ligger bare på enheten i IndexedDB-databasen `local-ai-queue`. `requestId` fra køen er UUID v4, ikke v7 (A191). `AI_FIELD_MAX_LENGTH` flyttet til `src/core/ai/limits.ts`. Nye ord i ordlisten (post i KI-køen, venter på KI, lagt i kø, eier av posten, lager for KI-køen). | A186–A191, `docs/funksjoner/fase2a-ki-ko.md`, ADR 0006 del 10 |
 | 11.11.2026 | KI-leverandør (fase 2a, grensesnitt): leverandørkoden `anthropic` på porten `ai` med `secret_ref = ANTHROPIC_API_KEY` og `settings.model`, `settings.features` og `settings.pricing`. `ResolvedAiProvider` har fått `features`. Ingen ny tabell og ingen migrering. Nye ord i ordlisten (KI-adapter, modell, påslåtte KI-funksjoner, KI-pris). | A193–A197, `docs/funksjoner/fase2a-ki-leverandor.md`, ADR 0006 del 2 |
 | 12.11.2026 | Malen for ett bad (fase 2a): `text_status` (`TEXT_STATUSES`) på `outcomes` og `standard_measures` og `default_cause_text` på `outcomes` i migrering `0028_mal-tekststatus`. Eksemplet `wet_room.membrane` er byttet til `wet_room.membrane_drain`. Hulltakingsmålingene er enkeltfelt nå og blir `table` i 2a-3. Nye ord i ordlisten (`isSameTemplateContent`, `ensureSampleTemplate`, seksjonen og de åtte kontrollpunktene for våtrom). Se «Bygget i fase 2a» i 4.5. | A200–A209, `docs/funksjoner/fase2a-mal-bad.md`, ADR 0007 |
-| 12.11.2026 | Regelmotoren (fase 2a, ADR 0008): `src/core/rules` med regelsvar i faste koder og tre tilstander (`RULE_RESULT_STATES`). Migrering `0029_regler-bad`: sju nye kolonner på `rule_conditions` (`threshold_key`, alder-feltene, `unit_element_key`), og `expected_state` og `inspection_year` på `rule_test_cases` (`expect_triggered` er fjernet). Levetidstrinn og terskler har fått `key` og `status`, og settene en settkode; de er kodedata til tabellene kommer i 2a-3. |
+| 12.11.2026 | Regelmotoren (fase 2a, ADR 0009): `src/core/rules` med regelsvar i faste koder og tre tilstander (`RULE_RESULT_STATES`). Migrering `0030_regler-bad`: sju nye kolonner på `rule_conditions` (`threshold_key`, alder-feltene, `unit_element_key`), og `expected_state` og `inspection_year` på `rule_test_cases` (`expect_triggered` er fjernet). Levetidstrinn og terskler har fått `key` og `status`, og settene en settkode; de er kodedata til tabellene kommer i 2a-3. |
+| 12.11.2026 | Microsoft-innlogging (fase 2a, grensesnitt, ADR 0008): ingen ny tabell og ingen migrering. `accounts` beskrevet (`provider_id = 'microsoft'`, `account_id` = `oid`, tokens lagres ikke). Reservert hemmelighetsnavn `MS_LOGIN_CLIENT_SECRET`. Ordlisten: Microsoft-innlogging, Microsoft-katalog, aktivt ansattforhold, reservert hemmelighetsnavn. |

@@ -1,5 +1,5 @@
 {
-  "id": "85b8ec7e-03c4-4348-89a0-1f21b9c4756b",
+  "id": "3c03123f-caa6-49ba-93eb-ef70071791a2",
   "prevId": "bdcda7d5-a1f5-425f-93c2-1b8b05a4d4cf",
   "version": "7",
   "dialect": "postgresql",
@@ -917,6 +917,27 @@
         }
       },
       "indexes": {
+        "employee_permissions_organization_id_employee_id_idx": {
+          "name": "employee_permissions_organization_id_employee_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "employee_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "employee_permissions_employee_id_permission_idx": {
           "name": "employee_permissions_employee_id_permission_idx",
           "columns": [
@@ -2075,6 +2096,27 @@
             },
             {
               "expression": "received_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "orders_organization_id_assignment_id_idx": {
+          "name": "orders_organization_id_assignment_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "assignment_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6836,48 +6878,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "threshold_key": {
-          "name": "threshold_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "age_year_element_key": {
-          "name": "age_year_element_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "age_fallback_year_element_key": {
-          "name": "age_fallback_year_element_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "age_source_element_key": {
-          "name": "age_source_element_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "documentation_element_key": {
-          "name": "documentation_element_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "material_element_key": {
-          "name": "material_element_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "unit_element_key": {
-          "name": "unit_element_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "sort_order": {
           "name": "sort_order",
           "type": "integer",
@@ -6962,34 +6962,6 @@
         "rule_conditions_checkpoint_key_check": {
           "name": "rule_conditions_checkpoint_key_check",
           "value": "\"rule_conditions\".\"checkpoint_key\" is null or \"rule_conditions\".\"checkpoint_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
-        },
-        "rule_conditions_threshold_key_check": {
-          "name": "rule_conditions_threshold_key_check",
-          "value": "\"rule_conditions\".\"threshold_key\" is null or \"rule_conditions\".\"threshold_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
-        },
-        "rule_conditions_age_year_element_key_check": {
-          "name": "rule_conditions_age_year_element_key_check",
-          "value": "\"rule_conditions\".\"age_year_element_key\" is null or \"rule_conditions\".\"age_year_element_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
-        },
-        "rule_conditions_age_fallback_year_element_key_check": {
-          "name": "rule_conditions_age_fallback_year_element_key_check",
-          "value": "\"rule_conditions\".\"age_fallback_year_element_key\" is null or \"rule_conditions\".\"age_fallback_year_element_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
-        },
-        "rule_conditions_age_source_element_key_check": {
-          "name": "rule_conditions_age_source_element_key_check",
-          "value": "\"rule_conditions\".\"age_source_element_key\" is null or \"rule_conditions\".\"age_source_element_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
-        },
-        "rule_conditions_documentation_element_key_check": {
-          "name": "rule_conditions_documentation_element_key_check",
-          "value": "\"rule_conditions\".\"documentation_element_key\" is null or \"rule_conditions\".\"documentation_element_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
-        },
-        "rule_conditions_material_element_key_check": {
-          "name": "rule_conditions_material_element_key_check",
-          "value": "\"rule_conditions\".\"material_element_key\" is null or \"rule_conditions\".\"material_element_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
-        },
-        "rule_conditions_unit_element_key_check": {
-          "name": "rule_conditions_unit_element_key_check",
-          "value": "\"rule_conditions\".\"unit_element_key\" is null or \"rule_conditions\".\"unit_element_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
         }
       },
       "isRLSEnabled": false
@@ -7075,17 +7047,11 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
-        "expected_state": {
-          "name": "expected_state",
-          "type": "text",
+        "expect_triggered": {
+          "name": "expect_triggered",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": true
-        },
-        "inspection_year": {
-          "name": "inspection_year",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
         },
         "expected_outcome_id": {
           "name": "expected_outcome_id",
@@ -7176,14 +7142,6 @@
         "rule_test_cases_input_check": {
           "name": "rule_test_cases_input_check",
           "value": "jsonb_typeof(\"rule_test_cases\".\"input\") = 'object'"
-        },
-        "rule_test_cases_expected_state_check": {
-          "name": "rule_test_cases_expected_state_check",
-          "value": "\"rule_test_cases\".\"expected_state\" in ('triggered', 'not_triggered', 'not_evaluated')"
-        },
-        "rule_test_cases_inspection_year_check": {
-          "name": "rule_test_cases_inspection_year_check",
-          "value": "\"rule_test_cases\".\"inspection_year\" is null or \"rule_test_cases\".\"inspection_year\" between 1900 and 2200"
         }
       },
       "isRLSEnabled": false
@@ -7771,6 +7729,27 @@
         }
       },
       "indexes": {
+        "template_element_options_organization_id_element_id_idx": {
+          "name": "template_element_options_organization_id_element_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "element_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "template_element_options_element_id_key_idx": {
           "name": "template_element_options_element_id_key_idx",
           "columns": [

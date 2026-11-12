@@ -1,5 +1,6 @@
 export { AccessDeniedError } from "./errors";
 export {
+  hasActiveEmployment,
   listOrganizationsForActor,
   requireOrganizationAccess,
   requireTemplateEditAccess,

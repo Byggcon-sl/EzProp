@@ -1250,7 +1250,7 @@ describe("3 reglene i badmalen (datatest)", () => {
     ).toEqual([PAST_LIFESPAN_QUESTION]);
   });
 
-  it("3.6 documentation_value_list: «uten dokumentasjon» er none og other_written (A217)", () => {
+  it("3.6 documentation_value_list: «uten dokumentasjon» er none og other_written (A235)", () => {
     const doc = parsedTemplate();
     const age = conditionsOf(doc, PAST_LIFESPAN).find((c) => c.type === "age_vs_lifespan");
     expect(age, "aldersregelen har age_vs_lifespan").toBeDefined();
@@ -1331,7 +1331,7 @@ describe("3 reglene i badmalen (datatest)", () => {
     expect(JSON.stringify(doc.rule_test_cases)).not.toMatch(/tg0|TG\s*0/i);
   });
 
-  it("3.10 no_threshold_height_rule: ingen regel leser terskelhøyden (A219)", () => {
+  it("3.10 no_threshold_height_rule: ingen regel leser terskelhøyden (A237)", () => {
     const doc = parsedTemplate();
     expect(JSON.stringify(doc.rule_conditions)).not.toContain("wet_room.threshold_height_mm");
     expect(JSON.stringify(doc.rules)).not.toContain("low_threshold_height");

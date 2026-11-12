@@ -445,7 +445,7 @@ describe("3.7 migreringen", () => {
   });
 });
 
-// --- Reglene badet trenger: migrering 0029_regler-bad (testplan 6.1–6.5) --------------------------
+// --- Reglene badet trenger: migrering 0030_regler-bad (testplan 6.1–6.5) --------------------------
 
 const NOT_NULL = "23502";
 type ConditionOverrides = Parameters<typeof createRuleConditionRow>[1];
@@ -539,7 +539,7 @@ describe("regler bad: migrering 0029", () => {
   });
 
   it("6.4 migration_keeps_meaning: expect_triggered true og false blir triggered og not_triggered", async () => {
-    const migration = readFileSync(path.join(MIGRATIONS_DIR, "0029_regler-bad.sql"), "utf8");
+    const migration = readFileSync(path.join(MIGRATIONS_DIR, "0030_regler-bad.sql"), "utf8");
     // Setningene i migreringen som gjelder testsakene, kjørt på en kopi av tabellen slik den var
     // etter 0028 (bare kolonnene migreringen leser), i et eget skjema.
     const statements = migration
@@ -596,9 +596,9 @@ describe("regler bad: migrering 0029", () => {
     }
   });
 
-  it("6.5 migration_number_free: 0029_regler-bad er den eneste med nummer 0029", () => {
+  it("6.5 migration_number_free: 0030_regler-bad er den eneste med nummer 0029", () => {
     const files = readdirSync(MIGRATIONS_DIR).filter((name) => name.startsWith("0029_"));
-    expect(files).toEqual(["0029_regler-bad.sql"]);
+    expect(files).toEqual(["0030_regler-bad.sql"]);
     const snapshots = readdirSync(path.join(MIGRATIONS_DIR, "meta")).filter((name) =>
       name.startsWith("0029_"),
     );

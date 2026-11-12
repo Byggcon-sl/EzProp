@@ -38,7 +38,7 @@ import { baseColumns } from "./common";
  * `owner_employee_id`; `template_versions.lifespan_table_id`, `threshold_table_id`,
  * `cost_band_set_id`; `rule_test_cases.last_result` og `last_run_at`.
  *
- * Regelmotoren (ADR 0008, migrering `0029_regler-bad`): `rule_conditions` har `threshold_key`,
+ * Regelmotoren (ADR 0009, migrering `0030_regler-bad`): `rule_conditions` har `threshold_key`,
  * alder-feltene og `unit_element_key`, og `rule_test_cases` har `expected_state` (tre tilstander)
  * og `inspection_year`.
  *
@@ -117,7 +117,7 @@ export const RULE_CONDITION_TYPES = [
   "tgiu_set",
 ] as const;
 /**
- * Tilstandene et regelsvar kan ha (ADR 0008). `not_evaluated` = regelen kunne ikke vurderes
+ * Tilstandene et regelsvar kan ha (ADR 0009). `not_evaluated` = regelen kunne ikke vurderes
  * (tomt eller ugyldig felt, ukjent betingelsestype). Brukes av `rule_test_cases.expected_state` og
  * av regelmotoren i `@/core/rules`. Kodene endres aldri (regel 6).
  */
@@ -407,6 +407,10 @@ export const templateElementOptions = pgTable(
     sortOrder: sortOrder(),
   },
   (table) => [
+    index("template_element_options_organization_id_element_id_idx").on(
+      table.organizationId,
+      table.elementId,
+    ),
     uniqueIndex("template_element_options_element_id_key_idx")
       .on(table.elementId, table.key)
       .where(sql`${table.deletedAt} is null`),

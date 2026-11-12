@@ -157,9 +157,9 @@ sed -i '' \
   .env
 ok "Database på port ${DB_PORT}, EzProp på ${APP_URL} (Optiplan kan kjøre samtidig)"
 # Nye innstillinger legges til tomme i en eldre .env, så det er lett å se hva som finnes.
-# Tomme verdier betyr «ikke i bruk»: lokalt vises e-post på /dev/epost.
+# Tomme verdier betyr «ikke i bruk»: lokalt vises e-post på /dev/epost, og innlogging skjer med kode.
 LAGT_TIL=""
-for navn in MS_GRAPH_TENANT_ID MS_GRAPH_CLIENT_ID MS_GRAPH_CLIENT_SECRET MAIL_FROM; do
+for navn in MS_GRAPH_TENANT_ID MS_GRAPH_CLIENT_ID MS_GRAPH_CLIENT_SECRET MAIL_FROM MS_LOGIN_TENANT_ID MS_LOGIN_CLIENT_ID MS_LOGIN_CLIENT_SECRET; do
   if ! grep -q "^${navn}=" .env; then
     if [ -z "$LAGT_TIL" ]; then
       printf '\n# Lagt til av start.sh. Tomme verdier = ikke i bruk. Forklaring i .env.example.\n' >>.env

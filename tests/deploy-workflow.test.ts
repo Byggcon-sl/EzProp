@@ -170,6 +170,9 @@ const ALLOWED_SECRETS = [
   "MS_GRAPH_CLIENT_SECRET",
   "MAIL_FROM",
   "ANTHROPIC_API_KEY",
+  "MS_LOGIN_TENANT_ID",
+  "MS_LOGIN_CLIENT_ID",
+  "MS_LOGIN_CLIENT_SECRET",
 ];
 const REQUIRED_SECRETS = ALLOWED_SECRETS.slice(0, 5);
 const ALLOWED_VARS = [
@@ -265,7 +268,7 @@ describe("utrullingsarbeidsflyten (deploy-azure.yml)", () => {
 
   it("ingen hemmeligheter som verdier", () => {
     const pattern =
-      /(POSTGRES_ADMIN_PASSWORD|MS_GRAPH_CLIENT_SECRET|ANTHROPIC_API_KEY|AZURE_CLIENT_ID|AZURE_TENANT_ID|AZURE_SUBSCRIPTION_ID)\s*:\s*[^$\s]/;
+      /(POSTGRES_ADMIN_PASSWORD|MS_GRAPH_CLIENT_SECRET|MS_LOGIN_CLIENT_SECRET|ANTHROPIC_API_KEY|AZURE_CLIENT_ID|AZURE_TENANT_ID|AZURE_SUBSCRIPTION_ID)\s*:\s*[^$\s]/;
     expect(lines.filter((line) => pattern.test(line))).toEqual([]);
   });
 
@@ -707,6 +710,7 @@ const KEY_VAULT_SETTINGS: Record<string, string> = {
   DATABASE_URL: "databaseUrl",
   BETTER_AUTH_SECRET: "betterAuthSecret",
   MS_GRAPH_CLIENT_SECRET: "msGraphClientSecret",
+  MS_LOGIN_CLIENT_SECRET: "msLoginClientSecret",
   ANTHROPIC_API_KEY: "anthropicApiKey",
 };
 
@@ -714,6 +718,7 @@ const KEY_VAULT_SECRETS: Record<string, string> = {
   "database-url": "databaseUrl",
   "better-auth-secret": "betterAuthSecret",
   "ms-graph-client-secret": "msGraphClientSecret",
+  "ms-login-client-secret": "msLoginClientSecret",
   "anthropic-api-key": "anthropicApiKey",
 };
 
@@ -721,6 +726,8 @@ const NOT_THROUGH_KEY_VAULT = [
   "MS_GRAPH_TENANT_ID",
   "MS_GRAPH_CLIENT_ID",
   "MAIL_FROM",
+  "MS_LOGIN_TENANT_ID",
+  "MS_LOGIN_CLIENT_ID",
   "BETTER_AUTH_URL",
   "SEED_ADMIN_EMAIL",
   "APP_VERSION",
@@ -745,10 +752,10 @@ describe("nøkkelboksen i infrastrukturen (main.bicep)", () => {
   });
 
   it("2. alle Key Vault-ressurser har betingelsen enableKeyVault", () => {
-    expect(kv).toHaveLength(6);
+    expect(kv).toHaveLength(7);
     expect(kv.filter((r) => r.type === "Microsoft.KeyVault/vaults")).toHaveLength(1);
     expect(kv.filter((r) => r.type === "Microsoft.KeyVault/vaults/accessPolicies")).toHaveLength(1);
-    expect(secrets).toHaveLength(4);
+    expect(secrets).toHaveLength(5);
     for (const resource of kv) {
       expect(resource.lines[0], resource.symbol).toMatch(/=\s*if\s*\(\s*enableKeyVault\b/);
     }
@@ -800,7 +807,7 @@ describe("nøkkelboksen i infrastrukturen (main.bicep)", () => {
     }
   });
 
-  it("5. de fire hemmelighetene går gjennom boksen når bryteren er på", () => {
+  it("5. hemmelighetene går gjennom boksen når bryteren er på", () => {
     for (const name of Object.keys(KEY_VAULT_SETTINGS)) {
       const expression = appSettingExpression(bicep, name);
       expect(expression, name).toBeDefined();
@@ -1230,5 +1237,109 @@ describe("ANTHROPIC_API_KEY i utrullingen og infrastrukturen", () => {
     expect(expression).toContain("@Microsoft.KeyVault(SecretUri=");
     expect(expression).toContain(".properties.secretUri");
     expect(expression).toMatch(/:\s*anthropicApiKey\s*\}?\s*$/);
+  });
+});
+
+/*
+ * M10.2 (docs/funksjoner/fase2a-microsoft-innlogging-testplan.md): de tre verdiene for
+ * Microsoft-innloggingen sendes til appen fra GitHub secrets, samme vei som MS_GRAPH_*.
+ * Hemmeligheten går via nøkkelboksen når den er på, og tomme verdier stopper ikke utrullingen
+ * (uten alle tre virker bare engangskoden, regel 11).
+ *
+ * Støtter hovedmål: best for de ansatte (Ståle slår på innloggingen uten kodeendring).
+ */
+describe("Microsoft-innloggingen i utrullingen og infrastrukturen (M10.2)", () => {
+  const workflow = read(WORKFLOW_PATH);
+  const lines = workflow.split("\n");
+  const bicep = read(BICEP_PATH);
+  const bicepLines = bicep.split("\n");
+  const PARAMS: Record<string, string> = {
+    MS_LOGIN_TENANT_ID: "msLoginTenantId",
+    MS_LOGIN_CLIENT_ID: "msLoginClientId",
+    MS_LOGIN_CLIENT_SECRET: "msLoginClientSecret",
+  };
+  const NAMES = Object.keys(PARAMS);
+
+  it("arbeidsflyten henter de tre fra secrets bare i steget Infrastruktur (Bicep)", () => {
+    const stepLine = codeLine(lines, /^\s*-\s+name:\s*Infrastruktur \(Bicep\)/);
+    expect(stepLine).toBeGreaterThan(-1);
+    const step = stepOf(lines, stepLine);
+    const env = subBlock(step, "env");
+    for (const name of NAMES) {
+      const fromSecrets = env
+        .split("\n")
+        .some((line) => line.trim() === `${name}: \${{ secrets.${name} }}`);
+      expect(fromSecrets, name).toBe(true);
+      expect(ALLOWED_SECRETS).toContain(name);
+      expect(REQUIRED_SECRETS).not.toContain(name);
+      const mentions = lines
+        .map((line, index) => ({ line, index }))
+        .filter(({ line }) => !isComment(line) && line.includes(name));
+      expect(mentions.length, name).toBeGreaterThan(0);
+      for (const { index } of mentions) expect(stepOf(lines, index), name).toEqual(step);
+    }
+  });
+
+  it("de tre sendes som parametere til både validate og create, også når de er tomme", () => {
+    for (const marker of ["az deployment group validate", "az deployment group create"]) {
+      const sources = parameterSources(workflow, commandBlock(workflow, marker));
+      for (const [name, param] of Object.entries(PARAMS)) {
+        expect(sources, `${marker}: ${name}`).toContain(`"${param}=$${name}"`);
+      }
+    }
+    // Ingen stopp når de mangler: da virker bare engangskoden
+    for (const name of NAMES) {
+      expect(workflow.includes(`-z "$${name}"`), name).toBe(false);
+      expect(workflow.includes(`-z "\${${name}`), name).toBe(false);
+    }
+    const echoes = lines.filter((line) => !isComment(line) && /\becho\b/.test(line));
+    for (const line of echoes) expect(line).not.toContain("MS_LOGIN_");
+  });
+
+  it("Bicep: hemmeligheten er en @secure()-parameter, id-ene er vanlige med tom standard", () => {
+    const secret = codeLine(bicepLines, /^\s*param\s+msLoginClientSecret\s/);
+    expect(secret).toBeGreaterThan(-1);
+    expect(bicepLines[secret]!.trim()).toBe("param msLoginClientSecret string");
+    expect(bicepLines[secret - 1]!.trim()).toBe("@secure()");
+    expect(bicep).toMatch(/^param msLoginTenantId string = ''$/m);
+    expect(bicep).toMatch(/^param msLoginClientId string = ''$/m);
+  });
+
+  it("Bicep: innstillingene settes bare når alle tre er gitt, og hemmeligheten går via boksen", () => {
+    expect(bicep).toMatch(
+      /^var loginConfigured = !empty\(msLoginTenantId\) && !empty\(msLoginClientId\) && !empty\(msLoginClientSecret\)$/m,
+    );
+    const definition = varDefinition(bicep, "loginAppSettings");
+    expect(definition).toBeDefined();
+    expect(definition!).toMatch(/^loginConfigured\s*\?/);
+    expect(definition!).toMatch(/:\s*\[\s*\]$/);
+    expect(bicep).toMatch(/appSettings:\s*concat\([^)]*\bloginAppSettings\b[^)]*\)/);
+    for (const name of NAMES) {
+      expect(varDefinition(bicep, "baseAppSettings"), name).not.toContain(name);
+    }
+    const expression = appSettingExpression(bicep, "MS_LOGIN_CLIENT_SECRET");
+    expect(expression).toBeDefined();
+    expect(expression!).toContain("kvMsLoginClientSecret!.properties.secretUri");
+    expect(expression!).toMatch(/enableKeyVault\s*\?[\s\S]*:\s*msLoginClientSecret\s*\}?\s*$/);
+  });
+
+  it("Bicep: hemmeligheten havner bare i boksen når bryteren er på og alle tre er gitt", () => {
+    const line = bicepLines.find((l) => /^resource\s+kvMsLoginClientSecret\s/.test(l));
+    expect(line).toBeDefined();
+    expect(line!).toMatch(/=\s*if\s*\(\s*enableKeyVault\s*&&\s*loginConfigured\s*\)/);
+  });
+
+  it("driftsdokumentet har de tre i tabellen, tilbakeadressen og hemmeligheten under nøkkelboksen", () => {
+    const doc = read(DRIFT_DOC_PATH);
+    const docLines = doc.split("\n");
+    for (const name of NAMES) {
+      expect(
+        docLines.some((line) => line.startsWith(`| \`${name}\` |`)),
+        name,
+      ).toBe(true);
+    }
+    expect(doc).toContain("https://app-ezprop-test.azurewebsites.net/api/auth/callback/microsoft");
+    const vaultSection = doc.slice(doc.indexOf("## Nøkkelboks for hemmeligheter"));
+    expect(vaultSection.split("\n").slice(0, 4).join("\n")).toContain("MS_LOGIN_CLIENT_SECRET");
   });
 });

@@ -20,7 +20,7 @@ import type {
 } from "./types";
 
 /**
- * Regelmotoren (docs/adr/0008-regelmotoren.md). Ren funksjon: ingen database, ingen dato, ingen
+ * Regelmotoren (docs/adr/0009-regelmotoren.md). Ren funksjon: ingen database, ingen dato, ingen
  * KI. Feltkoder og valgkoder kommer bare fra maldokumentet, aldri skrevet inn her.
  */
 

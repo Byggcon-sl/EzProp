@@ -10,7 +10,7 @@ import path from "node:path";
  *   /prove/ki og utloggingsknappen kan importere den (docs/adr/0006-ki-i-bunnen.md del 10).
  * - Regelmotoren (src/core/rules) er et rent blad som kjører likt på iPaden og på serveren: bare
  *   egen mappe og shared, og bare `import type` fra malmotoren og databaseskjemaet. Ingen pakker.
- *   Malmotoren (src/core/templates) importerer ikke regelmotoren (docs/adr/0008-regelmotoren.md).
+ *   Malmotoren (src/core/templates) importerer ikke regelmotoren (docs/adr/0009-regelmotoren.md).
  */
 
 const RULES = "core/rules";
@@ -85,9 +85,9 @@ const rule = {
       aiClientLeaf:
         "Klientdelen av KI-modulen kan ikke importere «{{to}}». Lov: egen mappe, ../limits, @/shared og zod, og bare «import type» fra ../types og ../features (ADR 0006 del 10).",
       rulesLeaf:
-        "Regelmotoren kan ikke importere «{{to}}». Lov: egen mappe og @/shared, og bare «import type» fra @/core/templates og @/db/schema. Ingen pakker (ADR 0008).",
+        "Regelmotoren kan ikke importere «{{to}}». Lov: egen mappe og @/shared, og bare «import type» fra @/core/templates og @/db/schema. Ingen pakker (ADR 0009).",
       templatesToRules:
-        "Malmotoren (@/core/templates) kan ikke importere regelmotoren (@/core/rules) (ADR 0008).",
+        "Malmotoren (@/core/templates) kan ikke importere regelmotoren (@/core/rules) (ADR 0009).",
       aiClientImporter:
         "KI-køen (@/core/ai/client) kan bare importeres fra prøvesiden /prove/ki og utloggingsknappen til «Sperring av iPader» er levert (ADR 0006 del 10).",
     },

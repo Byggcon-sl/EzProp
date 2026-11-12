@@ -242,7 +242,7 @@ const LISTED: ListedCase[] = [
     expected: "not_evaluated",
     check: (results) => {
       expect(ageReason(results, PAST_LIFESPAN).code).toBe("material_unknown");
-      // Regelen for sjikt fra før 2000 gjelder alle typer og slår ikke til i 2005 (A218)
+      // Regelen for sjikt fra før 2000 gjelder alle typer og slår ikke til i 2005 (A236)
       expect(resultOf(results, BEFORE_2000).state).toBe("not_triggered");
     },
   },

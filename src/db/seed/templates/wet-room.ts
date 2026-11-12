@@ -492,7 +492,7 @@ const questionSpecs: QuestionSpec[] = [
     source: SOURCE_AGE,
   },
   {
-    // Foreslås av regelen `wet_room.membrane_past_lifespan` (2a-2, A220). Sier at funksjonen er
+    // Foreslås av regelen `wet_room.membrane_past_lifespan` (2a-2, A238). Sier at funksjonen er
     // usikker på grunn av alder, ikke at sjiktet er ødelagt. Tiltaket er undersøkelse og oppfølging.
     checkpoint: MEMBRANE_DRAIN,
     key: "membrane_past_lifespan",
@@ -716,9 +716,9 @@ const standardMeasures: StandardMeasureDoc[] = questionSpecs.flatMap((q) =>
 // foreslår aldri TG0, og ingen regel kaller KI. Levetidene og fuktgrensen sendes inn til motoren
 // fra `src/core/rules/data` og er utkast, ikke godkjent av fagrådet.
 //
-// Svar 59a (Ståle 10.11.2026, A214): ingen regel gir TG2 på tilliggende konstruksjoner på grunn
+// Svar 59a (Ståle 10.11.2026, A232): ingen regel gir TG2 på tilliggende konstruksjoner på grunn
 // av alder. Er det tatt hull og målt uten forhøyet fukt, gir reglene ikke noe forslag på
-// `wet_room.adjacent`. Terskelhøyden (`wet_room.threshold_height_mm`) leses ikke av noen regel (A219).
+// `wet_room.adjacent`. Terskelhøyden (`wet_room.threshold_height_mm`) leses ikke av noen regel (A237).
 
 const RULE_PAST_LIFESPAN = "wet_room.membrane_past_lifespan";
 const RULE_BEFORE_2000 = "wet_room.membrane_before_2000";
@@ -728,7 +728,7 @@ const RULE_HOLE_NOT_DONE = "wet_room.hole_drilling_not_done";
 /** Fast kode for fuktgrensen i `src/core/rules/data/thresholds.ts`. */
 const THRESHOLD_HOLE_MOISTURE = "wet_room_hole_moisture_weight_percent";
 
-/** Dokumentasjonsvalgene som gir trinnene «uten dokumentasjon» (A217). Tomt felt gir også «uten». */
+/** Dokumentasjonsvalgene som gir trinnene «uten dokumentasjon» (A235). Tomt felt gir også «uten». */
 const WITHOUT_DOCUMENTATION = ["none", "other_written"];
 
 const OUTCOME_PAST_LIFESPAN = {
