@@ -462,9 +462,9 @@ const RULE_CONDITION_KEY_COLUMNS = [
 
 const MIGRATIONS_DIR = path.join(process.cwd(), "src/db/migrations");
 
-describe("regler bad: migrering 0029", () => {
+describe("regler bad: migrering 0030", () => {
   it.each(RULE_CONDITION_KEY_COLUMNS)(
-    "6.1 0029_columns_format_check: $column godtar gyldig kode og null, avviser ugyldig kode",
+    "6.1 0030_columns_format_check: $column godtar gyldig kode og null, avviser ugyldig kode",
     async ({ column, field }) => {
       const org = await createOrganization();
       const valid = await createRuleConditionRow(org.id, {
@@ -555,7 +555,7 @@ describe("regler bad: migrering 0029", () => {
     expect(statements.length).toBeGreaterThanOrEqual(4);
     expect(statements.some((s) => /^UPDATE/i.test(s))).toBe(true);
 
-    const schema = `test_mig_0029_${Date.now()}`;
+    const schema = `test_mig_0030_${Date.now()}`;
     try {
       const result = await db.transaction(async (tx) => {
         await tx.execute(sql.raw(`create schema "${schema}"`));
@@ -596,13 +596,13 @@ describe("regler bad: migrering 0029", () => {
     }
   });
 
-  it("6.5 migration_number_free: 0030_regler-bad er den eneste med nummer 0029", () => {
-    const files = readdirSync(MIGRATIONS_DIR).filter((name) => name.startsWith("0029_"));
+  it("6.5 migration_number_free: 0030_regler-bad er den eneste med nummer 0030", () => {
+    const files = readdirSync(MIGRATIONS_DIR).filter((name) => name.startsWith("0030_"));
     expect(files).toEqual(["0030_regler-bad.sql"]);
     const snapshots = readdirSync(path.join(MIGRATIONS_DIR, "meta")).filter((name) =>
-      name.startsWith("0029_"),
+      name.startsWith("0030_"),
     );
-    expect(snapshots).toEqual(["0029_snapshot.json"]);
+    expect(snapshots).toEqual(["0030_snapshot.json"]);
   });
 
   it("myk sletting: en testsak med de nye kolonnene kan slettes mykt og står igjen", async () => {
