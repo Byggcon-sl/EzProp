@@ -44,8 +44,8 @@
 | I6 | `nøkler sendt med i input kommer aldri inn` | Input med ekstra felt (`access.inspectors_edit_all: false`, `organizationId`) endrer ikke andre nøkler. |
 | I7 | `revisjonslogg: én rad med nøkkel, gammel og ny verdi som tall` | 10 → 3 gir én rad via `auditRows`, med nøkkelen og `{ old: 10, new: 3 }` (eller tilsvarende felt), begge `typeof number`. Ingen andre nøkler fra `settings` i raden. |
 | I8 | `ugyldig input avvises uten å gjengi det som ble skrevet` (tabelltest) | 0, 11, 2.5, «abc», tom verdi, -1: feilen har teksten «Skriv et helt antall år fra 1 til 10.», feilmeldingen og `logger`-kall inneholder ikke inputen, `settings` er uendret og ingen ny rad i revisjonsloggen. |
-| I9 | `gammel verdi er 10 når det som stod var ugyldig eller manglet` (A267) | Lagret `"5"` (tekst) og manglende nøkkel: revisjonsloggen får gammel verdi 10, aldri `"5"` eller `null`. |
-| I10 | `samme verdi som før: ingen skriving og ingen rad i revisjonsloggen` (A267) | Lagre 3 to ganger: én rad i revisjonsloggen totalt, `organizations.updated_at` uendret ved andre lagring, og funksjonen gir vanlig suksess. Også: ingenting lagret (standard 10) og lagre 10 gir ingen rad. Avgjør: ingen skriving da heller. |
+| I9 | `gammel verdi er 10 når det som stod var ugyldig eller manglet` (A275) | Lagret `"5"` (tekst) og manglende nøkkel: revisjonsloggen får gammel verdi 10, aldri `"5"` eller `null`. |
+| I10 | `samme verdi som før: ingen skriving og ingen rad i revisjonsloggen` (A275) | Lagre 3 to ganger: én rad i revisjonsloggen totalt, `organizations.updated_at` uendret ved andre lagring, og funksjonen gir vanlig suksess. Også: ingenting lagret (standard 10) og lagre 10 gir ingen rad. Avgjør: ingen skriving da heller. |
 | I11 | `samtidig lagring mister ingen nøkkel` | `Promise.all` med denne lagringen og lagring av `time_tracking.enabled` (`src/core/work-sessions/settings.ts`): begge nøklene står etterpå (radlåsen virker). |
 | I12 | `tenant-isolasjon: lagring` | `expectTenantIsolation` der `query` lagrer en verdi med `organizationId` og returnerer organisasjonsraden (`[{ id }]`). Viser at admin i A med Bs id får `AccessDeniedError`. I tillegg: Bs `settings` og revisjonslogg er uendret etter forsøket. |
 | I13 | `tenant-isolasjon: lesing` | `expectTenantIsolation` på lesefunksjonen fra I3. B har innstilling 2, A har 7: hver ser bare sin. |
@@ -70,7 +70,7 @@ Innstillingen 2 i organisasjonen hvis ikke annet står. Rad laget med `createAiU
 | D6 | `angre fra godtatt og fra endret gir 10 år` | +10 etter angre. |
 | D7 | `grensene 1 og 10` | Innstilling 1 gir +1, innstilling 10 gir +10. |
 | D8 | `29. februar ved manuell avvisning` | `created_at` 2028-02-29T12:00:00Z, innstilling 1: 2029-03-01T12:00:00Z, lik `addYears`. |
-| D9 | `A265: kortere og lengre virker bare fremover` | Rad R1 avvist med innstilling 10 (+10). Sett 2. R1 er fortsatt +10. Rad R2 avvist nå (+2). Sett 10. R2 er fortsatt +2. |
+| D9 | `A273: kortere og lengre virker bare fremover` | Rad R1 avvist med innstilling 10 (+10). Sett 2. R1 er fortsatt +10. Rad R2 avvist nå (+2). Sett 10. R2 er fortsatt +2. |
 | D10 | `ugyldig innstilling i databasen gir 10 år` | `"5"` som tekst: avvist rad får +10, og advarsel logges uten verdien. |
 | D11 | `innstillingen leses fra grant.organizationId` | Organisasjon A har 1, B har 10. Admin i B avviser en rad i B: +10. Admin i A avviser i A: +1. Ingen rad i A endres av avvisningen i B (`retain_until`, `status`, `updated_at` uendret). |
 | D12 | `ingen rad slettes` | Etter alle overgangene i D1–D9: antall rader i `ai_usage_log` er det samme, og ingen har fått `deleted_at`. |
@@ -101,7 +101,7 @@ Samme mønster som `src/app/(ansatt)/admin/actions.test.ts` (kjernen og `getAdmi
 | A2 | `organisasjonen kommer fra økten, aldri fra skjemaet` | `FormData` med `organizationId` fra en annen organisasjon: kjernen kalles med organisasjonen fra `getAdminContext`. |
 | A3 | `tekst fra skjemaet sendes videre og lagres som tall` | `"3"` gir kall med verdien som blir 3, og kvittering. |
 | A4 | `feil ved feltet uten å gjengi inputen` | Ugyldig verdi gir feltfeil «Skriv et helt antall år fra 1 til 10.»; tilstanden som returneres inneholder ikke inputen i meldingen. |
-| A5 | `samme verdi gir vanlig kvittering` | Ingen feil vises når kjernen ikke skrev noe (A267). |
+| A5 | `samme verdi gir vanlig kvittering` | Ingen feil vises når kjernen ikke skrev noe (A275). |
 
 ## 4. Regeltester
 
@@ -116,7 +116,7 @@ Ingen fagregler eller TG-logikk i denne oppgaven. Ingen testsaker som data. `ret
 | ST3 | `grep -rn "rejected_retention_years" src/app` | Siden og action leser ikke `settings` direkte; bare via `src/core/ai`. Ingen rollesjekk i komponenten. |
 | ST4 | `git diff --stat main` | Ingen endring i `src/core/orders`, ordresidene, `src/db/migrations` eller `tests/tenant-tables.ts`. Versjon i `package.json` er én patch over main. |
 | ST5 | `git diff main \| grep -iE 'claude\|opus\|sonnet\|gpt\|NS 3600'` | Ingen modellnavn, ingen fremmed fagtekst. |
-| ST6 | Dokumentene | A157 merket «endret av Ståle 12.11.2026 (K7), se A264»; A264–A267 og spørsmål 81 står; ADR 0006, domenemodell 4.12 og innstillingslisten, ordlisten, skjemakommentaren i `src/db/schema/ai-usage-log.ts`, personvernerklæringen og T-0068 oppdatert. Personvernerklæringen lover ikke automatisk sletting. |
+| ST6 | Dokumentene | A157 merket «endret av Ståle 12.11.2026 (K7), se A272»; A272–A275 og spørsmål 81 står; ADR 0006, domenemodell 4.12 og innstillingslisten, ordlisten, skjemakommentaren i `src/db/schema/ai-usage-log.ts`, personvernerklæringen og T-0068 oppdatert. Personvernerklæringen lover ikke automatisk sletting. |
 
 ## 6. E2e: `e2e/fase-2a-ki-oppbevaring.spec.ts` (prosjektene `pc` og `ipad`)
 
@@ -141,7 +141,7 @@ Kjøres i serie (testene deler innstillingen). Verdien leses før og settes tilb
 | Innstilling 2: manuelt og ved nytt forslag + 2; godtatt, endret, sperret, feilet + 10 | D2, D3, S1, L1, U2 |
 | Angre gir + 10 igjen, alle veier | D4, D5, D6 |
 | Hver erstattet rad egen dato | S2 |
-| A265 bare fremover | D9 |
+| A273 bare fremover | D9 |
 | Grensene og 29. februar, manuelt og automatisk | U3, U4, D7, D8, S3 |
 | Ugyldige verdier i databasen gir 10 og advarsel uten verdien | U7, D10 |
 | Lagring avviser ugyldig uten å gjengi | U8, I8, A4 |
