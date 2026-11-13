@@ -223,10 +223,12 @@ function AddCertificationForm({ areas, action }: { areas: readonly AreaChoice[];
           <p className="text-slate-900">{onlyArea.label}</p>
         </div>
       ) : (
+        // Ny nøkkel på valgene etter hvert forsøk: React tilbakestiller skjemaet, og valgene tar
+        // ellers ikke det som ble valgt i forrige forsøk.
         <ChoiceGroup id="area" legend="Område" error={error("area")}>
           {areas.map((area) => (
             <Radio
-              key={area.key}
+              key={`${area.key}-${state.attempt}`}
               name="area"
               value={area.key}
               label={area.label}

@@ -6,7 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { Field } from "@/shared/ui/form";
 import { FormErrors, SubmitButton } from "../../form-parts";
-import { initialFormState, type FormState } from "../../form-state";
+import { initialFormState, textValue, type FormState } from "../../form-state";
 import {
   agreementBadge,
   agreementPeriodText,
@@ -107,14 +107,19 @@ export function AgreementCard({
           {showSelect && (
             <form action={formAction} noValidate className="space-y-3">
               <input type="hidden" name="assignmentId" value={assignmentId} />
+              {/* Ny nøkkel på listen etter hvert forsøk: React tilbakestiller skjemaet, og
+                  listen tar ellers ikke valget fra forrige forsøk. */}
               <Field label="Avtale" htmlFor="agreement-select">
                 <select
+                  key={state.attempt}
                   id="agreement-select"
                   name="agreementId"
                   className={selectClass}
-                  defaultValue={
-                    agreement && options.some((o) => o.id === agreement.id) ? agreement.id : ""
-                  }
+                  defaultValue={textValue(
+                    state,
+                    "agreementId",
+                    agreement && options.some((o) => o.id === agreement.id) ? agreement.id : "",
+                  )}
                 >
                   <option value="">Ingen avtale</option>
                   {options.map((option) => (
