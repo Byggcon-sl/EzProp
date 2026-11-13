@@ -3,13 +3,13 @@ id: T-0050
 tittel: Nedtrekkslister og avkrysninger hopper tilbake etter en feilmelding, og neste lagring lagrer feil verdi uten varsel
 type: feil
 alvor: alvorlig
-status: ny
+status: rettet
 funnet: 2026-11-13
 rolle: test-robusthet, test-kontor
 omrade: skjemaer: areal, eiendom, reklamasjon, part, avtale
 maal: reklamasjoner
 commit: e013fde7
-forsok: 0
+forsok: 1
 pr:
 ---
 
@@ -49,3 +49,4 @@ Gi listene og avkrysningene `key` ut fra svaret fra lagringen (for eksempel `key
 
 ## Logg
 - 2026-11-13: funnet
+- 2026-11-13: rettet på branch `rett-t0050-valg-etter-feil` (versjon 0.10.7): ny `key` per forsøk på nedtrekkslister, avkrysninger og radioknapper i 14 skjemaer, startverdien fra det som ble sendt. E2e `e2e/fase-2a-rett-t0050-valg-etter-feil.spec.ts` (areal, eiendom, reklamasjon, part).
