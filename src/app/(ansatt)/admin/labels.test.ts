@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { grantablePermissions } from "@/core/access";
+import { ORDER_EDITABLE_FIELDS, orderFieldLabel } from "@/core/orders/codes";
 import { employeeRoles } from "@/db/schema";
 import { todayInOslo } from "@/shared/lib/dates";
 import {
   auditActionLabel,
   auditEntityLabel,
+  auditFieldLabels,
   formatAuditChanges,
   formatDate,
   formatIsoDate,
@@ -87,6 +89,7 @@ describe("revisjonsloggen: visningstekster", () => {
     ["company", "Selskap"],
     ["office", "Kontor"],
     ["certification", "Sertifisering"],
+    ["order", "Ordre"],
   ])("1. entity_type %s vises som «%s»", (code, label) => {
     expect(auditEntityLabel(code)).toBe(label);
   });
@@ -160,5 +163,65 @@ describe("revisjonsloggen: visningstekster", () => {
 
   it("8. tom changes gir ingen linjer", () => {
     expect(formatAuditChanges({})).toEqual([]);
+  });
+});
+
+/*
+ * Endring av ordre i /admin/logg: bare feltetikettene, aldri verdiene under `values`.
+ * Testplan: docs/funksjoner/fase2a-rette-ordre-testplan.md 5.2 og 5.3.
+ * Støtter hovedmål: færre reklamasjoner (det står hvem som endret hva) uten at adresser og navn
+ * spres til adminloggen.
+ */
+describe("revisjonsloggen: endring av ordre", () => {
+  const MARKERS = {
+    addressText: "MARKOR-ADR-5a7e 1",
+    orderedByText: "MARKOR-NAVN-5a7e",
+    externalRef: "MARKOR-REF-5a7e",
+    housingAssociationName: "MARKOR-BRL-5a7e",
+    gnr: "9173",
+    orderedByContactId: "0190a000-0000-7000-8000-00000000a5e7",
+  };
+
+  it("5.2 fields gir «Endret: Adresse, Bestiller …» og ingen verdier", () => {
+    const changes = {
+      fields: ["addressText", "orderedByContactId"],
+      values: {
+        addressText: { from: MARKERS.addressText, to: `${MARKERS.addressText}1` },
+        orderedByContactId: { from: null, to: MARKERS.orderedByContactId },
+        orderedByText: { from: MARKERS.orderedByText, to: null },
+        externalRef: { from: null, to: MARKERS.externalRef },
+        housingAssociationName: { from: MARKERS.housingAssociationName, to: "" },
+        gnr: { from: MARKERS.gnr, to: "1" },
+      },
+    };
+    const lines = formatAuditChanges(changes);
+    expect(lines).toEqual([
+      `Endret: ${orderFieldLabel("addressText")}, ${orderFieldLabel("orderedByContactId")}`,
+    ]);
+    expect(lines[0]).toMatch(/^Endret: Adresse, Bestiller/);
+    const text = lines.join("\n");
+    for (const marker of Object.values(MARKERS)) expect(text).not.toContain(marker);
+    expect(text).not.toContain("MARKOR");
+  });
+
+  it("5.2 values vises ikke, heller ikke når den alene ligner fra/til", () => {
+    expect(formatAuditChanges({ values: { from: "MARKOR-X", to: "MARKOR-Y" } })).toEqual([]);
+  });
+
+  it.each(ORDER_EDITABLE_FIELDS.map((code) => [code]))(
+    "5.3 auditFieldLabels har etiketten fra ordresiden for %s",
+    (code) => {
+      const label = auditFieldLabels[code];
+      expect(label).toBeTruthy();
+      expect(label).toBe(orderFieldLabel(code));
+      expect(label).not.toBe(code);
+      expect(label).not.toMatch(/\brett(et)?\b/i);
+    },
+  );
+
+  it("5.3 alle elleve ordrefeltene vises med etikett i «Endret: …»", () => {
+    const [line] = formatAuditChanges({ fields: [...ORDER_EDITABLE_FIELDS] });
+    expect(ORDER_EDITABLE_FIELDS).toHaveLength(11);
+    for (const code of ORDER_EDITABLE_FIELDS) expect(line).not.toMatch(new RegExp(`\\b${code}\\b`));
   });
 });

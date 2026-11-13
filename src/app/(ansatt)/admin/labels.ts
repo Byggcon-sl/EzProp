@@ -1,4 +1,5 @@
 import type { GrantablePermission } from "@/core/access";
+import { ORDER_EDITABLE_FIELDS, orderFieldLabel } from "@/core/orders/codes";
 import type { EmployeeRole } from "@/db/schema";
 
 /** Rollene i den rekkefølgen de står i skjemaene (oftest brukt først). */
@@ -78,6 +79,7 @@ const auditEntityLabels: Record<string, string> = {
   company: "Selskap",
   office: "Kontor",
   certification: "Sertifisering",
+  order: "Ordre",
 };
 
 /** Norske navn på `action` i revisjonsloggen. */
@@ -91,8 +93,13 @@ const auditActionLabels: Record<string, string> = {
   reactivate: "Aktivert igjen",
 };
 
-/** Norske navn på feltene som står i `changes`. Ukjent felt vises med koden. */
-const auditFieldLabels: Record<string, string> = {
+/**
+ * Norske navn på feltene som står i `changes`. Ukjent felt vises med koden. Ordrefeltene kommer
+ * fra den faste listen i kjernen, så etikettene er de samme som på ordresiden. De hentes fra
+ * `codes` og ikke fra `@/core/orders`, fordi filen også brukes i klientkomponenter (uten databasen).
+ */
+export const auditFieldLabels: Record<string, string> = {
+  ...Object.fromEntries(ORDER_EDITABLE_FIELDS.map((code) => [code, orderFieldLabel(code)])),
   name: "Navn",
   email: "E-post",
   jobTitle: "Stilling",
@@ -146,10 +153,12 @@ function isFromTo(value: unknown): value is { from: unknown; to: unknown } {
  * Endringene i en rad i revisjonsloggen som korte linjer: «Gate: Storgata 1 → Storgata 2» for
  * fra/til, «Endret: Navn, Stilling» for en liste med feltkoder. Alt annet (id-er, lister over
  * roller, objekter) hoppes over, så det aldri står «null», «undefined» eller «[object Object]».
+ * Verdiene under `values` (gammel og ny verdi på en ordre) vises aldri her, bare på ordresiden.
  */
 export function formatAuditChanges(changes: Record<string, unknown>): string[] {
   const lines: string[] = [];
   for (const [field, value] of Object.entries(changes)) {
+    if (field === "values") continue;
     if (field === "fields" && Array.isArray(value)) {
       const names = value
         .filter((item): item is string => typeof item === "string")

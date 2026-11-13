@@ -11,9 +11,12 @@ import {
   createOrder,
   OfficeNotFoundError,
   OrderAlreadyHandledError,
+  OrderChangedError,
   rejectOrder,
+  updateOrder,
 } from "@/core/orders";
-import { parseOsloDateTimeLocal } from "./received-at";
+import { ORDER_CHANGED } from "./order-messages";
+import { osloDateTimeLocal, parseOsloDateTimeLocal } from "./received-at";
 
 /*
  * Server actions i /ordre. Ingen tilgangslogikk her: organisasjonen kommer fra
@@ -162,4 +165,80 @@ export async function convertOrderAction(
     );
   }
   redirect(`${ROUTE}/${orderId}`);
+}
+
+/** Feilene ved «Endre ordren»: som ved ny ordre, pluss at en annen har lagret i mellomtiden. */
+const UPDATE_ERRORS: readonly KnownError[] = [
+  ...ORDER_ERRORS,
+  { error: OrderChangedError, message: ORDER_CHANGED },
+];
+
+/**
+ * Mottatt slik det sto da skjemaet ble åpnet. Står feltet uendret, sendes det lagrede tidspunktet
+ * (med sekunder), så en lagring uten endring ikke blir en endring av «Mottatt».
+ */
+function unchangedReceivedAt(text: string, originalIso: string): string | null {
+  const original = new Date(originalIso);
+  if (originalIso === "" || Number.isNaN(original.getTime())) return null;
+  return osloDateTimeLocal(original) === text ? original.toISOString() : null;
+}
+
+/**
+ * «Lagre» i «Endre ordren» på ordresiden, i alle statuser. `rowVersion` er versjonen skjemaet ble
+ * åpnet med; kjernen avviser lagringen hvis en annen har lagret siden. Ved suksess går man til
+ * ordresiden med kvitteringen. Loggen får bare id-er og feilnavn, aldri verdiene i skjemaet.
+ */
+export async function updateOrderAction(
+  previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const orderId = String(formData.get("orderId") ?? "");
+  const values = readOrder(formData);
+  const context = await getEmployeeContext();
+  if (!context || !isUuid(orderId)) return failure(previous, values, {}, NO_ACCESS);
+
+  // Versjonen skal være et heltall fra skjemaet. Mangler den, må siden lastes på nytt.
+  const rowVersionText = String(formData.get("rowVersion") ?? "").trim();
+  const expectedRowVersion = /^\d{1,9}$/.test(rowVersionText) ? Number(rowVersionText) : null;
+  if (expectedRowVersion === null) return failure(previous, values, {}, ORDER_CHANGED);
+
+  // Mottatt kan ikke tømmes på en lagret ordre (tomt ville gitt «nå»).
+  const receivedAtText = (values.receivedAt ?? "").trim();
+  const receivedAt = parseOsloDateTimeLocal(receivedAtText);
+  if (receivedAt === null) {
+    return failure(previous, values, { receivedAt: "Skriv inn dato og klokkeslett." });
+  }
+  const orderedByContactId = optional(values.orderedByContactId) ?? null;
+  if (orderedByContactId !== null && !isUuid(orderedByContactId)) {
+    return failure(previous, values, { orderedByContactId: CONTACT_NOT_FOUND });
+  }
+
+  // Tomt felt sendes som `null`, så det som er tømt, blir tomt.
+  const input = {
+    addressText: (values.addressText ?? "").trim(),
+    receivedAt:
+      unchangedReceivedAt(receivedAtText, String(formData.get("receivedAtOriginal") ?? "")) ??
+      receivedAt.toISOString(),
+    externalRef: optional(values.externalRef) ?? null,
+    orderedByText: optional(values.orderedByText) ?? null,
+    orderedByContactId,
+    gnr: optional(values.gnr) ?? null,
+    bnr: optional(values.bnr) ?? null,
+    snr: optional(values.snr) ?? null,
+    housingAssociationName: optional(values.housingAssociationName) ?? null,
+    sellerDeclarationReceived: values.sellerDeclarationReceived === "on",
+  };
+
+  try {
+    await updateOrder(context.actor, context.organizationId, orderId, input, expectedRowVersion);
+  } catch (error) {
+    return errorResult(
+      error,
+      previous,
+      values,
+      { route: ROUTE, userId: context.actor.id, orderId },
+      { known: UPDATE_ERRORS },
+    );
+  }
+  redirect(`${ROUTE}/${orderId}?lagret=endret`);
 }
