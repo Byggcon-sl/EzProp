@@ -77,3 +77,4 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 12.11.2026 | Microsoft-innlogging levert (PR #166) og flyttet til `docs/plan/levert.md`. | Hovedløkken |
 | 12.11.2026 | «Minimum før ekte data»: DPIA-punktet (K3) har fått en linje om verdier i revisjonsloggen ved endring av ordre (spørsmål 79, A252). | Prosjektleder, forhåndsvurdering av T1 |
 | 13.11.2026 | «Rette en ordre etter at den er lagret» (T1) krysset av under «Fra Ståles svar 12.11.2026», bygget på branch `rette-ordre` (`docs/funksjoner/fase2a-rette-ordre.md`, A249–A254). | Utvikler, rette-ordre |
+| 13.11.2026 | «Flere rom på én gang med færrest mulig trykk» (T4) krysset av under «Fra Ståles svar 12.11.2026», bygget på branch `flere-rom-samtidig` (`docs/funksjoner/fase2a-flere-rom.md`, A270–A274). | Utvikler, flere-rom-samtidig |
