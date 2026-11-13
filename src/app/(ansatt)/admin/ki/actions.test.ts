@@ -143,7 +143,7 @@ describe("server action for /admin/ki", () => {
     expectReceipt(outcome);
     expect(mocks.save).toHaveBeenCalledTimes(1);
     const input = mocks.save.mock.calls[0]![2];
-    // Teksten går videre til kjernen, som gjør den om til tallet 3 (I4 i retention-testplan)
+    // Teksten går videre til kjernen, som gjør den om til tallet 3 (I4 i testplanen)
     expect(sentValue(input)).toBe("3");
   });
 
