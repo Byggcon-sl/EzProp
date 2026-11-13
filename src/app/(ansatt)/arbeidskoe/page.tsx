@@ -16,6 +16,7 @@ import { Card } from "@/shared/ui/card";
 import { FormMessage } from "@/shared/ui/form";
 import { Notice } from "@/shared/ui/notice";
 import { getEmployeeContext } from "../employee-context";
+import { loadListOrError } from "../list-error";
 import { QueueCard } from "./queue-card";
 import { isNoteErrorCode, otherTabHits, queueHref, type NoteErrorCode } from "./queue-href";
 import { QueueToolbar } from "./queue-toolbar";
@@ -118,13 +119,26 @@ async function WorkQueue({
   params: SearchParams;
 }) {
   const queue = parseWorkQueueParams(params, { defaultMineOnly: defaultMine });
-  const [{ items }, counts] = await Promise.all([
-    listWorkQueue(actor, organizationId, queue),
-    countWorkQueueByStatus(actor, organizationId, {
-      mineOnly: queue.mineOnly,
-      query: queue.query,
-    }),
-  ]);
+  const result = await loadListOrError("/arbeidskoe", actor.id, () =>
+    Promise.all([
+      listWorkQueue(actor, organizationId, queue),
+      countWorkQueueByStatus(actor, organizationId, {
+        mineOnly: queue.mineOnly,
+        query: queue.query,
+      }),
+    ]),
+  );
+  if (!result.ok) {
+    return (
+      <>
+        <QueueToolbar queue={queue} />
+        <div className="mt-6">
+          <FormMessage message={result.message} />
+        </div>
+      </>
+    );
+  }
+  const [{ items }, counts] = result.value;
   const total = counts[queue.status];
   const statusLabel = assignmentStatusLabel(queue.status);
   const noteError = noteErrorFrom(params);
