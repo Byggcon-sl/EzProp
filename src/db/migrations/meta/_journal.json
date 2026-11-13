@@ -225,6 +225,13 @@
       "when": 1794500912038,
       "tag": "0031_svar-regler-bygninger",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794535351274,
+      "tag": "0032_indekser-firma-status",
+      "breakpoints": true
     }
   ]
 }
