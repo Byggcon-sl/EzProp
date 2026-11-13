@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import { AccessDeniedError } from "@/core/access";
 import { getContact } from "@/core/contacts";
 import { listOffices } from "@/core/organization";
-import { getOrder, listOrderHistory } from "@/core/orders";
+import { findPossibleDuplicateOrders, getOrder, listOrderHistory } from "@/core/orders";
+import { logger } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
 import { Card } from "@/shared/ui/card";
 import { Notice } from "@/shared/ui/notice";
@@ -18,6 +19,7 @@ import { formatOsloDateTime, osloDateTimeLocal } from "../received-at";
 import { ConvertOrderForm, RejectOrderForm } from "./order-actions";
 import { OrderEditSection } from "./order-edit-form";
 import { OrderHistory } from "./order-history";
+import { PossibleDuplicatesNotice } from "./possible-duplicates-notice";
 
 export const metadata: Metadata = { title: "Ordre" };
 
@@ -32,10 +34,35 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
 
 const EMPTY = <span className="text-slate-500">Ikke oppgitt</span>;
 
+type Duplicates = Awaited<ReturnType<typeof findPossibleDuplicateOrders>>;
+const NO_DUPLICATES: Duplicates = { items: [], hasMore: false };
+
+/**
+ * Treffene til varselet «Mulig dublett» (T3). Varselet stopper aldri siden: feiler oppslaget, vises
+ * siden uten varsel, og loggen får bare en fast melding (ingen feiltekst, adresse eller matrikkel).
+ */
+async function loadDuplicates(
+  context: NonNullable<Awaited<ReturnType<typeof getEmployeeContext>>>,
+  orderId: string,
+): Promise<Duplicates> {
+  try {
+    return await findPossibleDuplicateOrders(context.actor, context.organizationId, orderId);
+  } catch (error) {
+    logger.error("Kunne ikke hente mulige dubletter", {
+      route: "/ordre/[id]",
+      userId: context.actor.id,
+      errorName: error instanceof Error ? error.name : "ukjent feil",
+    });
+    return NO_DUPLICATES;
+  }
+}
+
 /**
  * Ordren med «Endre ordren» (alle statuser, T1) og «Gjør om til oppdrag» og «Avvis» når den er
  * mottatt, når den ansatte kan endre. Under ordren står «Endringer». Ugyldig, ukjent og fremmed id
- * gir samme svar som manglende tilgang. `?endret=1` viser kvitteringen etter «Lagre».
+ * gir samme svar som manglende tilgang. `?endret=1` viser kvitteringen etter «Lagre». Under den står
+ * varselet «Mulig dublett» (T3) når en annen ordre har samme adresse eller matrikkel; det stopper
+ * ingenting.
  */
 export default async function OrderPage({
   params,
@@ -58,6 +85,10 @@ export default async function OrderPage({
     if (error instanceof AccessDeniedError) return <NoAccess />;
     throw error;
   }
+
+  // Avvist ordre får aldri varsel (kjernen gir uansett tom liste), så oppslaget spares.
+  const duplicates =
+    order.status === "rejected" ? NO_DUPLICATES : await loadDuplicates(context, order.id);
 
   // Velgeren viser navnet fra kontaktregisteret, ikke friteksten om bestilleren.
   let linkedContactName: string | null = null;
@@ -114,6 +145,8 @@ export default async function OrderPage({
           <Notice message="Endringene er lagret." />
         </div>
       )}
+
+      <PossibleDuplicatesNotice items={duplicates.items} hasMore={duplicates.hasMore} />
 
       {order.status === "converted" && order.assignmentNumber && (
         <Card className="mb-6">
