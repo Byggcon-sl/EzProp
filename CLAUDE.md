@@ -74,6 +74,7 @@ pnpm format       # Prettier (ikke markdown)
 pnpm db:generate  # lag ny migrering etter endring i src/db/schema
 pnpm db:migrate   # kjør migreringer (valgfritt: database-URL som argument)
 pnpm db:seed      # organisasjonen Byggcon og første admin
+pnpm db:seed:testdata  # oppdiktet arbeidshverdag i Byggcon (TD-/testdata.invalid); stopper utenfor development/test
 pnpm ai:eval [funksjon]  # kjør evalueringssettet mot den falske KI-leverandøren
 ```
 

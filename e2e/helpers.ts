@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { promisify } from "node:util";
 import postgres from "postgres";
 import { assertLocalOrTestDatabase } from "./database-guard";
 import {
@@ -16,6 +18,8 @@ import { listTrialFields, trialForm } from "../src/modules/offline-trial/trial-f
 
 /** Første admin fra seed (SEED_ADMIN_EMAIL i CI og .env.example). */
 export const ADMIN_EMAIL = "admin@byggcon.no";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Velger engangskoden når Microsoft-innlogging er satt opp (e2e-serveren har et oppdiktet
@@ -735,6 +739,35 @@ export async function signInWithCode(page: Page, email: string) {
 
   await page.getByLabel("Kode fra e-posten").fill(code);
   await page.getByRole("button", { name: "Logg inn", exact: true }).click();
+}
+
+/**
+ * Legger inn testdataene (`pnpm db:seed:testdata`, `runTestdataSeed`) i databasen appen i e2e
+ * bruker. Idempotent, så den tåler å kjøres fra flere spec-filer og prosjekter.
+ *
+ * - Sjekker først at databasen er lokal eller testdatabasen (`assertLocalOrTestDatabase`).
+ * - Kjører inngangen `src/db/seed/testdata-index.ts` som egen prosess med `APP_ENVIRONMENT=test`
+ *   mot `DATABASE_URL`. Produksjonsvakten i skriptet sjekker en gang til. Egen prosess fordi
+ *   seed-steget bruker appens databaseklient og miljøverdier (`.env`), som Playwright ikke laster.
+ * - Feilmeldingen viser skriptets egen melding (bare antall, TD-nøkler og norsk tekst, aldri adressen).
+ */
+export async function seedTestdata(): Promise<void> {
+  const databaseUrl = e2eDatabaseUrl();
+  assertLocalOrTestDatabase(databaseUrl, process.env.TEST_DATABASE_URL);
+  const tsx = path.join(process.cwd(), "node_modules", ".bin", "tsx");
+  try {
+    await execFileAsync(tsx, [path.join("src", "db", "seed", "testdata-index.ts")], {
+      cwd: process.cwd(),
+      env: { ...process.env, DATABASE_URL: databaseUrl, APP_ENVIRONMENT: "test" },
+      maxBuffer: 10 * 1024 * 1024,
+    });
+  } catch (error) {
+    const stderr =
+      typeof error === "object" && error !== null && "stderr" in error
+        ? String(error.stderr).trim()
+        : "";
+    throw new Error(`Innlegging av testdata for e2e feilet. ${stderr}`.trim());
+  }
 }
 
 /** Better Auth kaller kapselen `better-auth.session_token` (med `__Secure-` foran over https). */

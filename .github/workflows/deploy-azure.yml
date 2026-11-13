@@ -185,6 +185,9 @@ jobs:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           SEED_ADMIN_EMAIL: ${{ vars.SEED_ADMIN_EMAIL }}
+          # Produksjonsvakten i pnpm db:seed:testdata leser denne. Hentes fra miljønavnet, ikke fast
+          # tekst, slik at en kopi av arbeidsflyten for produksjon stopper testdataene.
+          APP_ENVIRONMENT: ${{ env.ENVIRONMENT_NAME }}
         run: |
           # Brannmurregelen kan bruke opptil ett minutt på å virke. Prøver derfor flere ganger.
           for forsok in 1 2 3 4 5 6; do
@@ -200,6 +203,7 @@ jobs:
           done
           pnpm db:seed
           pnpm db:seed:testoppdrag
+          pnpm db:seed:testdata
 
       - name: Lukk databasen for kjøreren igjen
         env:

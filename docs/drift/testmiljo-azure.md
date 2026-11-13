@@ -91,11 +91,31 @@ Dette skjer, i rekkefølge:
 1. Appen bygges.
 2. Appen og databasen lages (første gang) eller oppdateres.
 3. Databasen migreres.
-4. Første admin legges inn (adressen i `SEED_ADMIN_EMAIL`).
+4. Første admin legges inn (adressen i `SEED_ADMIN_EMAIL`), deretter testoppdragene og testdataene (se «Testdata» under).
 5. Appen rulles ut.
 6. Helsesjekken sjekkes. Den må svare med riktig commit.
 
 Første kjøring tar lengre tid, fordi databasen lages. Du kan kjøre arbeidsflyten på nytt uten ny merge: Actions → «Utrulling til Azure» → «Run workflow».
+
+### Testdata
+
+Utrullingen kjører `pnpm db:seed:testdata` i steget «Migrering og seed», rett etter `pnpm db:seed:testoppdrag`. Skriptet legger oppdiktede data som ligner en vanlig arbeidshverdag inn i organisasjonen de ansatte logger inn i (Byggcon), slik at alt vises med en gang:
+
+- oppdiktede ansatte i alle roller unntatt admin, med sertifiseringer,
+- oppdiktede meglerfirma, meglere, selgere og kjøpere,
+- rundt 50 oppdiktede eiendommer (eneboliger, leiligheter i sameie og borettslag, fritidsboliger) med matrikkel, bygninger, etasjer, rom og areal,
+- ordre og oppdrag i alle statuser over flere måneder, med befaringstid, team, parter, tidsregistrering og noen reklamasjoner.
+
+Alt er merket, så det er lett å skille fra ekte arbeid: ordrene har ekstern referanse `TD-0001`, `TD-0002` osv., og alle e-postadresser slutter på `@testdata.invalid`. Gårdsnummer er 9001–9099, og telefonnummer har formen `+47 000 NN NNN`. Skriptet endrer aldri data som fantes fra før, og sletter ingenting. Det kan kjøres på nytt: andre kjøring legger ikke inn noe nytt. Loggen viser bare antall og `TD-`-nøkler.
+
+**Bare testmiljøet.** Skriptet har en produksjonsvakt som stopper før databasen åpnes, med mindre begge disse holder:
+
+1. `APP_ENVIRONMENT` er nøyaktig `development` eller `test`. Utrullingen setter den fra `ENVIRONMENT_NAME` i arbeidsflyten, ikke som fast tekst.
+2. Databaseverten er lokal eller testserveren `psql-ezprop-test.…`.
+
+En utrulling til produksjon skal aldri ha steget `pnpm db:seed:testdata`. Lages en arbeidsflyt for produksjon som kopi av denne, skal linjen fjernes. Vakten stopper den uansett, men steget skal ikke stå der. Testmiljøets database kan aldri bli produksjonsdatabasen, fordi testdataene ligger ved siden av det som ellers legges inn der (A267).
+
+De oppdiktede ansatte kan ikke logge inn. Ber noen om innloggingskode til en `@testdata.invalid`-adresse mens Microsoft 365 er koblet til, kan ikke posten leveres, og det kommer bare en returmelding til `MAIL_FROM`. Det er ufarlig.
 
 ## d) Første innlogging
 
