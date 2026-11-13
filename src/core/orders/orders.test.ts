@@ -150,6 +150,8 @@ async function auditFor(organizationId: string) {
 
 const LIST_KEYS = [
   "addressText",
+  // T-0031 (docs/funksjoner/fase2a-rette-ordre-testplan.md 11b)
+  "assignmentCancelled",
   "assignmentId",
   "assignmentNumber",
   "externalRef",
@@ -178,13 +180,15 @@ const DETAIL_KEYS = [
   "receivedAt",
   "rejectedReason",
   "requestedReportType",
+  // Endre ordren (A253): skjemaet sender `rowVersion` tilbake
+  "rowVersion",
   "sellerDeclarationReceived",
   "snr",
   "source",
   "status",
 ].sort();
 
-const TRACKING_KEYS = ["createdBy", "updatedBy", "deletedAt", "deletedBy", "rowVersion"];
+const TRACKING_KEYS = ["createdBy", "updatedBy", "deletedAt", "deletedBy"];
 
 // ---------------------------------------------------------------------------------------------
 // 4.1 Tilgang per rolle

@@ -25,3 +25,48 @@ const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 export function orderStatusLabel(code: string): string {
   return (ORDER_STATUS_LABELS as Record<string, string>)[code] ?? code;
 }
+
+/**
+ * Feltene som kan endres på en lagret ordre (T1, A250), i fast rekkefølge. Rekkefølgen brukes i
+ * `fields` i revisjonsloggen og i hendelsen `order.updated`. Kodene er navnene i koden og endres
+ * aldri (regel 6). `orderedByFirmId` står her fordi firmaet kan endres, men det settes bare av
+ * serveren fra kontakten, aldri fra skjemaet.
+ */
+export const ORDER_EDITABLE_FIELDS = [
+  "receivedAt",
+  "externalRef",
+  "orderedByText",
+  "orderedByContactId",
+  "orderedByFirmId",
+  "addressText",
+  "gnr",
+  "bnr",
+  "snr",
+  "housingAssociationName",
+  "sellerDeclarationReceived",
+] as const;
+export type OrderEditableField = (typeof ORDER_EDITABLE_FIELDS)[number];
+
+const ORDER_FIELD_LABELS: Record<OrderEditableField, string> = {
+  receivedAt: "Mottatt",
+  externalRef: "Ekstern referanse",
+  orderedByText: "Bestilt av (tekst)",
+  orderedByContactId: "Bestiller",
+  orderedByFirmId: "Firma",
+  addressText: "Adresse",
+  gnr: "Gnr",
+  bnr: "Bnr",
+  snr: "Snr",
+  housingAssociationName: "Borettslag",
+  sellerDeclarationReceived: "Egenerklæring mottatt",
+};
+
+/** Sant hvis koden er et felt som kan endres på ordren. */
+export function isOrderEditableField(code: unknown): code is OrderEditableField {
+  return typeof code === "string" && (ORDER_EDITABLE_FIELDS as readonly string[]).includes(code);
+}
+
+/** Norsk etikett for et ordrefelt. Ukjent kode gir koden tilbake, aldri unntak. */
+export function orderFieldLabel(code: string): string {
+  return isOrderEditableField(code) ? ORDER_FIELD_LABELS[code] : String(code);
+}

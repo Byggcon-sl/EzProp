@@ -6,6 +6,7 @@
 export const EVENT_TYPES = [
   "order.received",
   "order.rejected",
+  "order.updated",
   "assignment.created",
   "assignment.assigned",
   "assignment.handed_over",

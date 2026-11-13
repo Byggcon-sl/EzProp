@@ -4,21 +4,30 @@ import { nextAssignmentNumber } from "@/core/assignments";
 import { recordAuditEvent } from "@/core/audit";
 import { ContactNotFoundError, findContactForLink } from "@/core/contacts";
 import { recordEvent } from "@/core/events";
-import { db } from "@/db/client";
+import { db, type DbExecutor } from "@/db/client";
 import { assignments, offices, orders } from "@/db/schema";
 import { todayInOslo } from "@/shared/lib/dates";
 import { isUuid } from "@/shared/lib/uuid";
-import type { OrderSource } from "./codes";
-import { OfficeNotFoundError, OrderAlreadyHandledError } from "./errors";
-import { orderInputSchema, rejectReasonSchema, type OrderInput } from "./schemas";
+import { ORDER_EDITABLE_FIELDS, type OrderEditableField, type OrderSource } from "./codes";
+import { OfficeNotFoundError, OrderAlreadyHandledError, OrderChangedError } from "./errors";
+import {
+  orderInputSchema,
+  orderUpdateSchema,
+  rejectReasonSchema,
+  type OrderInput,
+  type OrderUpdateInput,
+} from "./schemas";
 
 /*
  * Ordre (docs/05-domenemodell.md 4.3). Se med `organization.read`, legge inn, avvise og gjøre om
  * med `assignment.edit` (A53). All filtrering bruker `grant.organizationId` fra tilgangssjekken,
  * aldri parameteren. Fremmed, ukjent, slettet eller ugyldig ordre-id gir `AccessDeniedError`.
  *
- * Hendelser og revisjonslogg skrives i samme transaksjon som endringen, og får aldri adresse,
- * bestiller, matrikkel eller borettslag. Raden er kilden.
+ * Hendelser og revisjonslogg skrives i samme transaksjon som endringen. Hendelsene og
+ * applikasjonsloggen får aldri adresse, bestiller, matrikkel, borettslag eller ekstern referanse;
+ * bare id-er og feltkoder. Revisjonsloggen får heller ikke verdiene ved oppretting, avvisning og
+ * gjøre om. Unntaket er endring (`update`, T1): der står gammel og ny verdi for hvert endret felt
+ * under `values` (A252, spørsmål 78 til Ståle før ekte data). Raden er kilden.
  */
 
 const MANUAL_SOURCE: OrderSource = "manual";
@@ -43,7 +52,7 @@ function assignmentJoin(organizationId: string) {
  */
 export async function listOrders(actor: Actor, organizationId: string) {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
-  return db
+  const rows = await db
     .select({
       id: orders.id,
       receivedAt: orders.receivedAt,
@@ -54,18 +63,25 @@ export async function listOrders(actor: Actor, organizationId: string) {
       status: orders.status,
       assignmentId: orders.assignmentId,
       assignmentNumber: assignments.number,
+      assignmentDeletedAt: assignments.deletedAt,
     })
     .from(orders)
     .leftJoin(assignments, assignmentJoin(grant.organizationId))
     .where(and(eq(orders.organizationId, grant.organizationId), isNull(orders.deletedAt)))
     .orderBy(desc(orders.receivedAt), desc(orders.id));
+  // T-0031: kansellert oppdrag vises som på ordresiden. Uten oppdrag: false.
+  return rows.map(({ assignmentDeletedAt, ...order }) => ({
+    ...order,
+    assignmentCancelled: assignmentDeletedAt !== null,
+  }));
 }
 
-/** Én ordre med alle feltene og oppdragsnummeret. Ingen sporingsfelt. */
-export async function getOrder(actor: Actor, organizationId: string, orderId: string) {
-  const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
-  if (!isUuid(orderId)) throw new AccessDeniedError();
-  const [row] = await db
+/**
+ * Én ordre med alle feltene, oppdragsnummeret og `rowVersion` (skjemaet for endring sender den
+ * tilbake, A253). Ingen andre sporingsfelt. `null` når ordren ikke finnes i organisasjonen.
+ */
+async function selectOrder(executor: DbExecutor, organizationId: string, orderId: string) {
+  const [row] = await executor
     .select({
       id: orders.id,
       receivedAt: orders.receivedAt,
@@ -86,20 +102,164 @@ export async function getOrder(actor: Actor, organizationId: string, orderId: st
       assignmentId: orders.assignmentId,
       assignmentNumber: assignments.number,
       assignmentDeletedAt: assignments.deletedAt,
+      rowVersion: orders.rowVersion,
     })
     .from(orders)
-    .leftJoin(assignments, assignmentJoin(grant.organizationId))
+    .leftJoin(assignments, assignmentJoin(organizationId))
     .where(
       and(
         eq(orders.id, orderId),
-        eq(orders.organizationId, grant.organizationId),
+        eq(orders.organizationId, organizationId),
         isNull(orders.deletedAt),
       ),
     );
-  if (!row) throw new AccessDeniedError();
+  if (!row) return null;
   // Kansellert oppdrag (myk sletting, A76): nummeret vises fortsatt, uten lenke. Uten oppdrag: false.
   const { assignmentDeletedAt, ...order } = row;
   return { ...order, assignmentCancelled: assignmentDeletedAt !== null };
+}
+
+/** Én ordre med alle feltene, oppdragsnummeret og `rowVersion`. */
+export async function getOrder(actor: Actor, organizationId: string, orderId: string) {
+  const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
+  if (!isUuid(orderId)) throw new AccessDeniedError();
+  const order = await selectOrder(db, grant.organizationId, orderId);
+  if (!order) throw new AccessDeniedError();
+  return order;
+}
+
+/** Verdien slik den lagres i `values` i revisjonsloggen: tom tekst er `null`, dato som ISO. */
+type AuditValue = string | boolean | null;
+
+function toAuditValue(value: string | boolean | Date | null | undefined): AuditValue {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") return value.trim() === "" ? null : value;
+  return value ?? null;
+}
+
+/** Normalisert sammenligning: tom tekst = `null`, dato på millisekund. */
+function sameValue(a: string | boolean | Date | null, b: string | boolean | Date | null) {
+  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+  return toAuditValue(a) === toAuditValue(b);
+}
+
+/**
+ * Endrer feltene på en lagret ordre (T1, «full redigeringstilgang. alltid»), i alle statuser:
+ * mottatt, gjort om og avvist (A250). Krever `assignment.edit` (A249).
+ *
+ * - Bare feltene i `ORDER_EDITABLE_FIELDS` skrives. Status, avvisningsgrunn, oppdrag, kilde og
+ *   ønsket rapport endres aldri, og oppdraget endres ikke (A251).
+ * - Tom mottatt beholder verdien; tomme valgfrie felt tømmes; adressen kan ikke tømmes.
+ * - Firmaet utledes bare fra kontakten (aldri fra skjemaet). Ny kontakt som er fremmed, ukjent
+ *   eller slettet gir `ContactNotFoundError`. Uendret kontakt slås ikke opp på nytt, slik at en
+ *   ordre med en kontakt som senere er fjernet fortsatt kan endres.
+ * - `expectedRowVersion` er `rowVersion` fra `getOrder` da skjemaet ble åpnet. Er raden endret
+ *   siden, gir det `OrderChangedError` (A253).
+ * - Ingen endring: ingen oppdatering, ingen loggrad, ingen hendelse.
+ * - Revisjonsloggen får `fields` (feltkoder i fast rekkefølge) og `values` (gammel og ny verdi,
+ *   bestiller og firma som id). Hendelsen `order.updated` får bare `orderId` og `fields`.
+ * - Ingen KI-kall. Verdiene sendes aldri til applikasjonsloggen.
+ */
+export async function updateOrder(
+  actor: Actor,
+  organizationId: string,
+  orderId: string,
+  input: OrderUpdateInput,
+  expectedRowVersion: number,
+  now: Date = new Date(),
+) {
+  const grant = await requireOrganizationAccess(actor, organizationId, "assignment.edit");
+  if (!isUuid(orderId)) throw new AccessDeniedError();
+  const values = orderUpdateSchema(now).parse(input);
+
+  return db.transaction(async (tx) => {
+    const where = and(
+      eq(orders.id, orderId),
+      eq(orders.organizationId, grant.organizationId),
+      isNull(orders.deletedAt),
+    );
+    const [before] = await tx
+      .select({
+        rowVersion: orders.rowVersion,
+        receivedAt: orders.receivedAt,
+        externalRef: orders.externalRef,
+        orderedByText: orders.orderedByText,
+        orderedByContactId: orders.orderedByContactId,
+        orderedByFirmId: orders.orderedByFirmId,
+        addressText: orders.addressText,
+        gnr: orders.gnr,
+        bnr: orders.bnr,
+        snr: orders.snr,
+        housingAssociationName: orders.housingAssociationName,
+        sellerDeclarationReceived: orders.sellerDeclarationReceived,
+      })
+      .from(orders)
+      .where(where)
+      .for("update");
+    if (!before) throw new AccessDeniedError();
+    if (before.rowVersion !== expectedRowVersion) throw new OrderChangedError();
+
+    // Firmaet følger kontakten. Uendret kontakt: firmaet står som det er.
+    let orderedByFirmId = before.orderedByFirmId;
+    if (values.orderedByContactId === null) {
+      orderedByFirmId = null;
+    } else if (values.orderedByContactId !== before.orderedByContactId) {
+      const contact = await findContactForLink(tx, grant.organizationId, values.orderedByContactId);
+      if (!contact) throw new ContactNotFoundError();
+      orderedByFirmId = contact.firmId;
+    }
+
+    const next: Record<OrderEditableField, string | boolean | Date | null> = {
+      receivedAt: values.receivedAt ?? before.receivedAt,
+      externalRef: values.externalRef,
+      orderedByText: values.orderedByText,
+      orderedByContactId: values.orderedByContactId,
+      orderedByFirmId,
+      addressText: values.addressText,
+      gnr: values.gnr,
+      bnr: values.bnr,
+      snr: values.snr,
+      housingAssociationName: values.housingAssociationName,
+      sellerDeclarationReceived: values.sellerDeclarationReceived,
+    };
+
+    const fields = ORDER_EDITABLE_FIELDS.filter((field) => !sameValue(before[field], next[field]));
+    if (fields.length === 0) {
+      const unchanged = await selectOrder(tx, grant.organizationId, orderId);
+      if (!unchanged) throw new AccessDeniedError();
+      return unchanged;
+    }
+
+    const changedValues: Partial<Record<OrderEditableField, { from: AuditValue; to: AuditValue }>> =
+      {};
+    const set: Partial<typeof orders.$inferInsert> = {};
+    for (const field of fields) {
+      changedValues[field] = { from: toAuditValue(before[field]), to: toAuditValue(next[field]) };
+      Object.assign(set, { [field]: next[field] });
+    }
+
+    const [updated] = await tx
+      .update(orders)
+      .set({ ...set, rowVersion: before.rowVersion + 1, updatedBy: grant.employeeId })
+      .where(where)
+      .returning({ id: orders.id });
+    if (!updated) throw new AccessDeniedError();
+
+    await recordAuditEvent(tx, grant, {
+      entityType: "order",
+      entityId: updated.id,
+      action: "update",
+      changes: { fields, values: changedValues },
+    });
+    await recordEvent(tx, grant, {
+      type: "order.updated",
+      data: { orderId: updated.id, fields },
+    });
+
+    const order = await selectOrder(tx, grant.organizationId, orderId);
+    if (!order) throw new AccessDeniedError();
+    return order;
+  });
 }
 
 /**
@@ -179,16 +339,22 @@ export async function rejectOrder(
       isNull(orders.deletedAt),
     );
     const [before] = await tx
-      .select({ id: orders.id, status: orders.status })
+      .select({ id: orders.id, status: orders.status, rowVersion: orders.rowVersion })
       .from(orders)
       .where(where)
       .for("update");
     if (!before) throw new AccessDeniedError();
     if (before.status !== "received") throw new OrderAlreadyHandledError();
 
+    // `row_version` økes, så et åpent endringsskjema får `OrderChangedError` (A253)
     const [row] = await tx
       .update(orders)
-      .set({ status: "rejected", rejectedReason, updatedBy: grant.employeeId })
+      .set({
+        status: "rejected",
+        rejectedReason,
+        rowVersion: before.rowVersion + 1,
+        updatedBy: grant.employeeId,
+      })
       .where(where)
       .returning();
     if (!row) throw new AccessDeniedError();
@@ -233,7 +399,7 @@ export async function convertOrderToAssignment(
       isNull(orders.deletedAt),
     );
     const [before] = await tx
-      .select({ id: orders.id, status: orders.status })
+      .select({ id: orders.id, status: orders.status, rowVersion: orders.rowVersion })
       .from(orders)
       .where(orderWhere)
       .for("update");
@@ -280,10 +446,16 @@ export async function convertOrderToAssignment(
       });
     if (!assignment) throw new Error("Fant ikke oppdraget etter at det ble lagret. Prøv igjen.");
 
-    // (6) Ordren peker på oppdraget
+    // (6) Ordren peker på oppdraget. `row_version` økes, så et åpent endringsskjema får
+    // `OrderChangedError` (A253).
     const [order] = await tx
       .update(orders)
-      .set({ status: "converted", assignmentId: assignment.id, updatedBy: grant.employeeId })
+      .set({
+        status: "converted",
+        assignmentId: assignment.id,
+        rowVersion: before.rowVersion + 1,
+        updatedBy: grant.employeeId,
+      })
       .where(orderWhere)
       .returning();
     if (!order) throw new AccessDeniedError();

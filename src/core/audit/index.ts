@@ -8,7 +8,12 @@ export type AuditEventInput = {
   entityId: string;
   /** `create`, `update`, `delete`, `restore`, `permission_change` … */
   action: string;
-  /** Gammel og ny verdi per felt. Aldri passord, nøkler eller mer enn nødvendig. */
+  /**
+   * Hva som er endret. Vanligvis feltkoder (`fields`) eller id-er og koder, ikke verdiene.
+   * Unntaket er ordre `update` (T1, A252): `{ fields, values }`, der `values` har gammel og ny
+   * verdi (`from`/`to`) for hvert endret felt (spørsmål 78 til Ståle før ekte data). Aldri
+   * passord, nøkler eller mer enn nødvendig.
+   */
   changes?: Record<string, unknown>;
   /** Tiden på enheten. Tom = nå. */
   occurredAt?: Date;

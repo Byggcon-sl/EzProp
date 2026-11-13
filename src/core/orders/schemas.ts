@@ -50,6 +50,28 @@ function digitsOnly(message: string) {
 }
 
 /**
+ * Mottatt: dato og klokkeslett, ikke frem i tid. Tom eller manglende gir `whenEmpty` (`now` ved
+ * oppretting, `null` = «behold verdien på raden» ved endring).
+ */
+function receivedAtField<T extends Date | null>(now: Date, whenEmpty: T) {
+  return z
+    .union([z.string(), z.date()], { error: RECEIVED_INVALID })
+    .nullish()
+    .transform((value, ctx): Date | T => {
+      if (value === null || value === undefined || value === "") return whenEmpty;
+      const parsed = parseOsloDateTime(value);
+      if (!parsed) {
+        ctx.addIssue({ code: "custom", message: RECEIVED_INVALID });
+        return z.NEVER;
+      }
+      return parsed;
+    })
+    .refine((value) => value === null || value.getTime() <= now.getTime(), {
+      error: RECEIVED_IN_FUTURE,
+    });
+}
+
+/**
  * Skjemaet for en ny ordre. `now` sendes inn, så «frem i tid» kan testes med fast tid; mangler
  * mottatt, blir det `now`.
  */
@@ -60,19 +82,7 @@ export function orderInputSchema(now: Date) {
       .trim()
       .min(1, { error: ADDRESS })
       .max(300, { error: ADDRESS_TOO_LONG }),
-    receivedAt: z
-      .union([z.string(), z.date()], { error: RECEIVED_INVALID })
-      .nullish()
-      .transform((value, ctx) => {
-        if (value === null || value === undefined || value === "") return now;
-        const parsed = parseOsloDateTime(value);
-        if (!parsed) {
-          ctx.addIssue({ code: "custom", message: RECEIVED_INVALID });
-          return z.NEVER;
-        }
-        return parsed;
-      })
-      .refine((value) => value.getTime() <= now.getTime(), { error: RECEIVED_IN_FUTURE }),
+    receivedAt: receivedAtField(now, now),
     externalRef: optionalText(200, TEXT_TOO_LONG),
     orderedByText: optionalText(200, TEXT_TOO_LONG).refine(
       (value) => value === null || !ELEVEN_DIGITS.test(value),
@@ -100,6 +110,18 @@ export function orderInputSchema(now: Date) {
 }
 export type OrderInput = z.input<ReturnType<typeof orderInputSchema>>;
 export type OrderValues = z.output<ReturnType<typeof orderInputSchema>>;
+
+/**
+ * Skjemaet for å endre en lagret ordre (T1). Samme regler og meldinger som `orderInputSchema`;
+ * eneste forskjell er at tom eller manglende mottatt gir `null`, som betyr «behold verdien på
+ * raden». Tomme valgfrie felt betyr «tøm». Firma-id, status og andre felt utenfor
+ * `ORDER_EDITABLE_FIELDS` tas bort av Zod og skrives aldri.
+ */
+export function orderUpdateSchema(now: Date) {
+  return orderInputSchema(now).extend({ receivedAt: receivedAtField(now, null) });
+}
+export type OrderUpdateInput = z.input<ReturnType<typeof orderUpdateSchema>>;
+export type OrderUpdateValues = z.output<ReturnType<typeof orderUpdateSchema>>;
 
 /** Grunnen for å avvise en ordre: 1–500 tegn, trimmet, uten fødselsnummer. */
 export const rejectReasonSchema = z
