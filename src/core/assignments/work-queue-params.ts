@@ -1,4 +1,5 @@
 import type { EmployeeRole } from "@/db/schema";
+import { SEARCH_QUERY_MAX_LENGTH } from "@/shared/lib/like-pattern";
 import { ASSIGNMENT_STATUSES, type AssignmentStatus } from "./codes";
 
 /*
@@ -12,9 +13,6 @@ export const WORK_QUEUE_LIMIT = 50;
 
 /** Fanen som vises uten valg (A99). */
 export const DEFAULT_WORK_QUEUE_STATUS: AssignmentStatus = "in_progress";
-
-/** Lengste søketekst. Lengre tekst kuttes. */
-export const WORK_QUEUE_QUERY_MAX_LENGTH = 100;
 
 export type WorkQueueParams = {
   status: AssignmentStatus;
@@ -56,8 +54,6 @@ export function parseWorkQueueParams(
   const mineOnly =
     params.mine === "1" ? true : params.mine === "0" ? false : options.defaultMineOnly;
   const query =
-    typeof params.q === "string"
-      ? params.q.trim().slice(0, WORK_QUEUE_QUERY_MAX_LENGTH).trim()
-      : "";
+    typeof params.q === "string" ? params.q.trim().slice(0, SEARCH_QUERY_MAX_LENGTH).trim() : "";
   return { status, mineOnly, query };
 }

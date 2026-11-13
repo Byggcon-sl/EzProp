@@ -17,7 +17,7 @@ import { FormMessage } from "@/shared/ui/form";
 import { Notice } from "@/shared/ui/notice";
 import { getEmployeeContext } from "../employee-context";
 import { QueueCard } from "./queue-card";
-import { isNoteErrorCode, type NoteErrorCode } from "./queue-href";
+import { isNoteErrorCode, otherTabHits, queueHref, type NoteErrorCode } from "./queue-href";
 import { QueueToolbar } from "./queue-toolbar";
 
 export const metadata: Metadata = { title: "Arbeidskø" };
@@ -85,6 +85,7 @@ export default async function WorkQueuePage({
           actor={context.actor}
           organizationId={context.organizationId}
           canEdit={context.canEditOrders}
+          defaultMine={context.defaultMineOnly}
           params={params}
         />
       ) : (
@@ -106,14 +107,17 @@ async function WorkQueue({
   actor,
   organizationId,
   canEdit,
+  defaultMine,
   params,
 }: {
   actor: Awaited<ReturnType<typeof requireActor>>;
   organizationId: string;
   canEdit: boolean;
+  /** Fra rollene i tilgangssjekken (`defaultMineOnly(grant.roles)`), aldri fra adressen. */
+  defaultMine: boolean;
   params: SearchParams;
 }) {
-  const queue = parseWorkQueueParams(params);
+  const queue = parseWorkQueueParams(params, { defaultMineOnly: defaultMine });
   const [{ items }, counts] = await Promise.all([
     listWorkQueue(actor, organizationId, queue),
     countWorkQueueByStatus(actor, organizationId, {
@@ -127,6 +131,8 @@ async function WorkQueue({
   const fieldError = noteError && FIELD_ERRORS.includes(noteError.code) ? noteError : null;
   const pageError = noteError && !fieldError ? NOTE_ERROR_TEXT[noteError.code] : null;
   const now = new Date();
+  const hitsElsewhere =
+    items.length === 0 && queue.query !== "" ? otherTabHits(counts, queue.status) : [];
 
   return (
     <>
@@ -139,7 +145,28 @@ async function WorkQueue({
       <div className="mt-6">
         {items.length === 0 ? (
           <Card data-testid="work-queue-empty">
-            <p className="text-slate-900">Ingen oppdrag med status {statusLabel}.</p>
+            {hitsElsewhere.length > 0 ? (
+              <p
+                data-testid="work-queue-hits"
+                className="flex flex-wrap items-center text-slate-900"
+              >
+                <span className="mr-1">Ingen treff i denne fanen. Treff i:</span>
+                {hitsElsewhere.map((hit, index) => (
+                  <span key={hit.status} className="inline-flex items-center">
+                    <Link
+                      href={queueHref({ ...queue, status: hit.status })}
+                      data-testid={`work-queue-hits-${hit.status}`}
+                      className="inline-flex min-h-11 items-center font-medium text-brand-700 hover:underline"
+                    >
+                      {assignmentStatusLabel(hit.status)} ({hit.count})
+                    </Link>
+                    {index < hitsElsewhere.length - 1 ? <span className="mr-1">,</span> : "."}
+                  </span>
+                ))}
+              </p>
+            ) : (
+              <p className="text-slate-900">Ingen oppdrag med status {statusLabel}.</p>
+            )}
             {queue.status === "ordered" && (
               <Link href="/ordre/ny" className={cn(buttonVariants({ variant: "primary" }), "mt-4")}>
                 Ny ordre

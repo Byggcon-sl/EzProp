@@ -61,7 +61,6 @@ export { isOverdue } from "./overdue";
 export {
   DEFAULT_WORK_QUEUE_STATUS,
   WORK_QUEUE_LIMIT,
-  WORK_QUEUE_QUERY_MAX_LENGTH,
   defaultMineOnly,
   parseWorkQueueParams,
   type ParseWorkQueueOptions,
