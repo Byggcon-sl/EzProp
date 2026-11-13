@@ -118,24 +118,27 @@ function OrderEditForm({
   headingRef: RefObject<HTMLHeadingElement | null>;
   onCancel: () => void;
 }) {
-  const [state, formAction] = useActionState(async (previous: EditState, formData: FormData): Promise<EditState> => {
-    // Endring krever nett. Uten nett sendes ingenting, og det som er skrevet står igjen.
-    if (isOffline()) return offlineState(previous, formData);
-    try {
-      const result = await action(previous, formData);
-      return {
-        ...result,
-        stale: previous.stale === true || result.message === ORDER_CHANGED_MESSAGE,
-      };
-    } catch (error) {
-      // Nettet falt under sending (fetch gir TypeError). Videresending etter lagring og andre
-      // feil kastes videre til Next.
-      if (isOffline() || error instanceof TypeError) {
-        return offlineState(previous, formData);
+  const [state, formAction] = useActionState(
+    async (previous: EditState, formData: FormData): Promise<EditState> => {
+      // Endring krever nett. Uten nett sendes ingenting, og det som er skrevet står igjen.
+      if (isOffline()) return offlineState(previous, formData);
+      try {
+        const result = await action(previous, formData);
+        return {
+          ...result,
+          stale: previous.stale === true || result.message === ORDER_CHANGED_MESSAGE,
+        };
+      } catch (error) {
+        // Nettet falt under sending (fetch gir TypeError). Videresending etter lagring og andre
+        // feil kastes videre til Next.
+        if (isOffline() || error instanceof TypeError) {
+          return offlineState(previous, formData);
+        }
+        throw error;
       }
-      throw error;
-    }
-  }, initialFormState as EditState);
+    },
+    initialFormState as EditState,
+  );
 
   return (
     <Card>

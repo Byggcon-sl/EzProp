@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AccessDeniedError } from "@/core/access";
+import { getContact } from "@/core/contacts";
 import { listOffices } from "@/core/organization";
 import { getOrder, listOrderHistory } from "@/core/orders";
 import { isUuid } from "@/shared/lib/uuid";
 import { Card } from "@/shared/ui/card";
 import { Notice } from "@/shared/ui/notice";
 import { getEmployeeContext } from "../../employee-context";
+import { contactName } from "../../kontakter/contact-name";
 import { NoAccess } from "../../no-access";
 import { convertOrderAction, rejectOrderAction, updateOrderAction } from "../actions";
 import { officeChoice } from "../office-choice";
@@ -55,6 +57,21 @@ export default async function OrderPage({
   } catch (error) {
     if (error instanceof AccessDeniedError) return <NoAccess />;
     throw error;
+  }
+
+  // Velgeren viser navnet fra kontaktregisteret, ikke friteksten om bestilleren.
+  let linkedContactName: string | null = null;
+  if (order.orderedByContactId && context.canEditOrders) {
+    try {
+      const contact = await getContact(
+        context.actor,
+        context.organizationId,
+        order.orderedByContactId,
+      );
+      linkedContactName = contactName(contact);
+    } catch (error) {
+      if (!(error instanceof AccessDeniedError)) throw error;
+    }
   }
 
   const canHandle = order.status === "received" && context.canEditOrders;
@@ -170,7 +187,7 @@ export default async function OrderPage({
             externalRef: order.externalRef ?? "",
             orderedByText: order.orderedByText ?? "",
             orderedByContact: order.orderedByContactId
-              ? { id: order.orderedByContactId, name: order.orderedByText || "kontakten" }
+              ? { id: order.orderedByContactId, name: linkedContactName ?? "(fjernet kontakt)" }
               : null,
             gnr: order.gnr ?? "",
             bnr: order.bnr ?? "",

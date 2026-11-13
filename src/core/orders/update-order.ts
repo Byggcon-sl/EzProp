@@ -28,6 +28,17 @@ function comparable(value: Date | string | boolean | null): FieldValue {
   return value instanceof Date ? value.toISOString() : value;
 }
 
+/**
+ * Skjemaet viser «Mottatt» med hele minutter. Har ordren sekunder (satt til «nå» ved oppretting,
+ * eller fra e-post), skal en lagring med samme minutt ikke telle som endring.
+ */
+function sameMinute(stored: Date, submitted: Date): boolean {
+  return (
+    submitted.getTime() % 60_000 === 0 &&
+    Math.floor(stored.getTime() / 60_000) === submitted.getTime() / 60_000
+  );
+}
+
 function isEmptyReceivedAt(input: OrderInput): boolean {
   const value = input.receivedAt;
   return value === null || value === undefined || value === "";
@@ -43,7 +54,8 @@ function isEmptyReceivedAt(input: OrderInput): boolean {
  *   `OrderChangedError` og ingenting endres (A253). Raden låses med `FOR UPDATE`.
  * - Bestilleren kobles som ved oppretting: firmaet følger kontakten. Fremmed, ukjent eller slettet
  *   kontakt gir `ContactNotFoundError`.
- * - Tom «Mottatt» betyr uendret (ved oppretting betyr den «nå»).
+ * - Tom «Mottatt» betyr uendret (ved oppretting betyr den «nå»). Samme minutt som lagret betyr
+ *   også uendret, fordi skjemaet viser hele minutter.
  * - Ingen endring: ingen oppdatering, ingen loggrad, ingen hendelse, `row_version` uendret.
  */
 export async function updateOrder(
@@ -94,7 +106,10 @@ export async function updateOrder(
     }
 
     const next = {
-      receivedAt: keepReceivedAt ? before.receivedAt : parsed.receivedAt,
+      receivedAt:
+        keepReceivedAt || sameMinute(before.receivedAt, parsed.receivedAt)
+          ? before.receivedAt
+          : parsed.receivedAt,
       externalRef: parsed.externalRef,
       orderedByText: parsed.orderedByText,
       orderedByContactId: parsed.orderedByContactId,

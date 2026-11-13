@@ -1400,6 +1400,32 @@ describe("2.6 revisjonslogg, hendelse og applikasjonslogg", () => {
     },
   );
 
+  it("2.6.5b «Mottatt» med sekunder: samme minutt fra skjemaet er ingen endring, nytt minutt er det", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const order = await savedOrder(admin, org.id, { receivedAt: "2026-11-02T08:00:37.000Z" });
+    const before = await snapshot(org.id, order.id);
+
+    await updateOrder(
+      admin,
+      org.id,
+      order.id,
+      editInput(order, { receivedAt: "2026-11-02T08:00:00.000Z" }),
+      order.rowVersion,
+    );
+    await expectUnchanged(org.id, order.id, before);
+    expect(await updateAuditFor(org.id)).toEqual([]);
+
+    await updateOrder(
+      admin,
+      org.id,
+      order.id,
+      editInput(order, { receivedAt: "2026-11-02T08:01:00.000Z" }),
+      order.rowVersion,
+    );
+    const updates = await updateAuditFor(org.id, order.id);
+    expect(updates.map((update) => update.changes.fields)).toEqual([["receivedAt"]]);
+  });
+
   it("2.6.6 bare kontakten byttes: firmaet med i fields bare når firmaet også endres", async () => {
     const { org, admin } = await orgWithAdmin();
     const firmOne = await createFirm(org.id, { name: "Testmegling En AS" });
