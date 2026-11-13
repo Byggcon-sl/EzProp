@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AccessDeniedError } from "@/core/access";
 import { ContactNotFoundError } from "@/core/contacts";
-import { OfficeNotFoundError, OrderAlreadyHandledError } from "@/core/orders/errors";
+import {
+  OfficeNotFoundError,
+  OrderAlreadyHandledError,
+  OrderChangedError,
+} from "@/core/orders/errors";
 import { orderInputSchema } from "@/core/orders/schemas";
 import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../form-state";
 
@@ -22,12 +26,17 @@ const mocks = vi.hoisted(() => ({
     throw new Error(`REDIRECT ${url}`);
   }),
   logError: vi.fn(),
+  logWarn: vi.fn(),
+  logInfo: vi.fn(),
+  logDebug: vi.fn(),
   core: {
     createOrder: vi.fn(),
     rejectOrder: vi.fn(),
     convertOrderToAssignment: vi.fn(),
     listOrders: vi.fn(),
     getOrder: vi.fn(),
+    updateOrder: vi.fn(),
+    listOrderHistory: vi.fn(),
   },
 }));
 
@@ -35,7 +44,12 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/shared/lib/logger", () => ({
-  logger: { error: mocks.logError, warn: vi.fn(), info: vi.fn() },
+  logger: {
+    error: mocks.logError,
+    warn: mocks.logWarn,
+    info: mocks.logInfo,
+    debug: mocks.logDebug,
+  },
 }));
 vi.mock("../employee-context", () => ({ getEmployeeContext: mocks.getEmployeeContext }));
 vi.mock("@/core/orders", async (importOriginal) => ({
@@ -43,7 +57,8 @@ vi.mock("@/core/orders", async (importOriginal) => ({
   ...mocks.core,
 }));
 
-const { createOrderAction, rejectOrderAction, convertOrderAction } = await import("./actions");
+const { createOrderAction, rejectOrderAction, convertOrderAction, updateOrderAction } =
+  await import("./actions");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
 const OTHER_ORG = "0190a000-0000-7000-8000-000000000002";
@@ -445,5 +460,181 @@ describe("8 bestilleren fra kontaktregisteret", () => {
     expect(logged).not.toContain(ORDERED_BY);
     expect(logged).not.toContain("Testmegleren");
     expect(logged).not.toContain(ADDRESS);
+  });
+});
+
+/*
+ * «Lagre» når ordren endres (docs/funksjoner/fase2a-rette-ordre-testplan.md avsnitt 3). Skjemaet
+ * sender orderId, rowVersion og feltene fra «Ny ordre». Ved suksess går action-en enten videre
+ * til /ordre/<id> eller gir et svar uten feil; begge godtas her (skjermen testes i e2e).
+ * Støtter hovedmål: de ansatte (riktig norsk melding per feil, ingenting går tapt) og færre
+ * reklamasjoner (aldri feil organisasjon, aldri verdier i loggen).
+ */
+describe("3 updateOrderAction", () => {
+  const NEW_ADDRESS = "Prøvegata 7, 8006 Bodø";
+  const HOUSING = "Testtoppen borettslag";
+  const EXTERNAL_REF = "TEST-ORD-0002";
+  const CONTACT = "0190a000-0000-7000-8000-000000000060";
+  const CONFLICT = "Ordren er endret av en annen. Last siden på nytt.";
+  const LEAK_VALUES = [
+    NEW_ADDRESS,
+    "Prøvegata",
+    ORDERED_BY,
+    "Testmegleren",
+    HOUSING,
+    "Testtoppen",
+    EXTERNAL_REF,
+    "98761",
+    "43219",
+  ];
+
+  function editForm(overrides: Record<string, string> = {}): FormData {
+    return form({
+      orderId: ORDER,
+      rowVersion: "3",
+      addressText: NEW_ADDRESS,
+      receivedAt: "2026-11-02T09:00",
+      externalRef: EXTERNAL_REF,
+      orderedByText: ORDERED_BY,
+      orderedByContactId: "",
+      gnr: "98761",
+      bnr: "43219",
+      snr: "",
+      housingAssociationName: HOUSING,
+      ...overrides,
+    });
+  }
+
+  /** Kjører action-en; videresending gir `null`, ellers svaret. */
+  async function run(data: FormData): Promise<FormState | null> {
+    try {
+      return await updateOrderAction(initialFormState, data);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("REDIRECT ")) return null;
+      throw error;
+    }
+  }
+
+  function allLogged(): string {
+    return JSON.stringify([
+      mocks.logError.mock.calls,
+      mocks.logWarn.mock.calls,
+      mocks.logInfo.mock.calls,
+      mocks.logDebug.mock.calls,
+    ]);
+  }
+
+  function expectNoValuesLogged() {
+    const logged = allLogged();
+    for (const value of LEAK_VALUES) expect(logged, value).not.toContain(value);
+  }
+
+  it("3.1 kjernen kalles med organisasjonen fra innloggingen, aldri fra skjemaet", async () => {
+    mocks.core.updateOrder.mockResolvedValue({ id: ORDER, rowVersion: 4 });
+    const state = await run(editForm({ organizationId: OTHER_ORG }));
+    if (state !== null) {
+      expect(state.fieldErrors).toEqual({});
+      expect(state.message ?? "").not.toBe(UNKNOWN_ERROR);
+    }
+    expect(mocks.core.updateOrder).toHaveBeenCalledTimes(1);
+    const call = mocks.core.updateOrder.mock.calls[0]!;
+    expect(call[0]).toEqual(actor);
+    expect(call[1]).toBe(ORG);
+    expect(call[2]).toBe(ORDER);
+    expect(call[4]).toBe(3);
+    expect(call[3]).toMatchObject({ addressText: NEW_ADDRESS, gnr: "98761", bnr: "43219" });
+    expect(JSON.stringify(mocks.core.updateOrder.mock.calls)).not.toContain(OTHER_ORG);
+    expect(call[3]).not.toHaveProperty("organizationId");
+  });
+
+  it("3.1 suksess gir «Endringene er lagret.» eller sender videre til ordresiden", async () => {
+    mocks.core.updateOrder.mockResolvedValue({ id: ORDER, rowVersion: 4 });
+    let url: string | null = null;
+    let state: FormState | null = null;
+    try {
+      state = await updateOrderAction(initialFormState, editForm());
+    } catch (error) {
+      const match = /^REDIRECT (.+)$/.exec((error as Error).message);
+      if (!match) throw error;
+      url = match[1]!;
+    }
+    if (url !== null) expect(url.startsWith(`/ordre/${ORDER}`)).toBe(true);
+    else expect(state?.message).toBe("Endringene er lagret.");
+  });
+
+  it("3.1 uten kontekst gir «ingen tilgang» uten kall til kjernen", async () => {
+    mocks.getEmployeeContext.mockResolvedValue(null);
+    const state = await run(editForm());
+    expect(state?.message).toBe(NO_ACCESS);
+    expect(coreCalls()).toBe(0);
+  });
+
+  it.each(["ikke-en-id", "", "../../admin"])(
+    "3.2 ordre-id «%s» gir NO_ACCESS uten kall til kjernen",
+    async (orderId) => {
+      const state = await run(editForm({ orderId }));
+      expect(state?.message).toBe(NO_ACCESS);
+      expect(coreCalls()).toBe(0);
+    },
+  );
+
+  it("3.3 AccessDeniedError gir NO_ACCESS", async () => {
+    mocks.core.updateOrder.mockRejectedValue(new AccessDeniedError());
+    const state = await run(editForm());
+    expect(state?.message).toBe(NO_ACCESS);
+    expectNoValuesLogged();
+  });
+
+  it("3.3 OrderChangedError gir «Ordren er endret av en annen. Last siden på nytt.», og det som er skrevet står", async () => {
+    mocks.core.updateOrder.mockRejectedValue(new OrderChangedError());
+    const state = await run(editForm());
+    expect(state?.message).toBe(CONFLICT);
+    expect(state?.values.addressText).toBe(NEW_ADDRESS);
+    expectNoValuesLogged();
+  });
+
+  it("3.3 ZodError gir feil ved feltene", async () => {
+    const result = orderInputSchema(new Date()).safeParse({ addressText: " ", gnr: "12a" });
+    expect(result.success).toBe(false);
+    mocks.core.updateOrder.mockRejectedValue(result.error);
+
+    const state = await run(editForm({ addressText: " ", gnr: "12a" }));
+    expect(state?.fieldErrors.addressText).toBe("Skriv inn adressen.");
+    expect(state?.fieldErrors.gnr).toBe("Gårdsnummer kan bare ha sifre.");
+    expectNoValuesLogged();
+  });
+
+  it("3.3 ContactNotFoundError gir feil ved kontakten", async () => {
+    mocks.core.updateOrder.mockRejectedValue(new ContactNotFoundError());
+    const state = await run(editForm({ orderedByContactId: CONTACT }));
+    expect(state?.fieldErrors.orderedByContactId).toBe("Kontakten finnes ikke.");
+    expectNoValuesLogged();
+  });
+
+  it.each(["abc", "", "1.5", "-1x", "9".repeat(30)])(
+    "3.4 rowVersion «%s» fra skjemaet gir konfliktmelding eller feltfeil, ikke unntak",
+    async (rowVersion) => {
+      mocks.core.updateOrder.mockRejectedValue(new OrderChangedError());
+      const state = await run(editForm({ rowVersion }));
+      expect(state, "ingen videresending med ugyldig versjon").not.toBeNull();
+      const conflict = state?.message === CONFLICT;
+      const fieldError = Object.keys(state?.fieldErrors ?? {}).length > 0;
+      expect(conflict || fieldError, JSON.stringify(state)).toBe(true);
+      expect(state?.message).not.toBe(UNKNOWN_ERROR);
+      // Kjernen får aldri noe annet enn et heltall
+      for (const call of mocks.core.updateOrder.mock.calls) {
+        expect(Number.isInteger(call[4])).toBe(true);
+      }
+    },
+  );
+
+  it("3.5 ukjent feil gir UNKNOWN_ERROR, og ingen gren logger skjemaverdier", async () => {
+    const boom = new Error(`databasen sa nei til ${NEW_ADDRESS} og ${HOUSING}`);
+    boom.name = "OppdiktetFeil";
+    mocks.core.updateOrder.mockRejectedValue(boom);
+    const state = await run(editForm());
+    expect(state?.message).toBe(UNKNOWN_ERROR);
+    expect(allLogged()).toContain("OppdiktetFeil");
+    expectNoValuesLogged();
   });
 });
