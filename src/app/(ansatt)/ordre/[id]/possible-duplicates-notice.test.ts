@@ -100,7 +100,7 @@ describe("PossibleDuplicatesNotice", () => {
     const html = render([item()]);
     expect(html).toContain(`href="/ordre/${OTHER_ID}"`);
     expect(html).toMatch(/<a[^>]*class="[^"]*min-h-11[^"]*"/);
-    expect(html).toMatch(/<a[^>]*class="[^"]*break-words[^"]*"/);
+    expect(html).toMatch(/<a[^>]*><span class="[^"]*\[overflow-wrap:anywhere\][^"]*"/);
   });
 
   it("én lenke per treff", () => {

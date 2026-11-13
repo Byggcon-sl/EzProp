@@ -71,9 +71,12 @@ export function PossibleDuplicatesNotice({
               <li key={item.id}>
                 <Link
                   href={`/ordre/${item.id}`}
-                  className="flex min-h-11 items-center py-1 text-sm font-medium break-words underline [overflow-wrap:anywhere]"
+                  className="flex min-h-11 items-center py-1 text-sm font-medium underline"
                 >
-                  {possibleDuplicateLine(item)}
+                  {/* Eget element: teksten i en flex-boks brytes ellers ikke, og lange ord gir vannrett rulling. */}
+                  <span className="min-w-0 [overflow-wrap:anywhere]">
+                    {possibleDuplicateLine(item)}
+                  </span>
                 </Link>
               </li>
             ))}

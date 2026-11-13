@@ -124,7 +124,7 @@ export default async function OrderPage({
         Tilbake til ordre
       </Link>
       <div className="mt-2 mb-6 flex flex-wrap items-center gap-3">
-        <h1 className="min-w-0 text-2xl font-semibold break-words text-slate-900">
+        <h1 className="min-w-0 text-2xl font-semibold text-slate-900 [overflow-wrap:anywhere]">
           {order.addressText}
         </h1>
         <OrderStatusBadge status={order.status} />
