@@ -11,6 +11,7 @@ import { EVENT_TYPES, type EventType } from "@/core/events";
 const EXPECTED_EVENT_TYPES = [
   "order.received",
   "order.rejected",
+  "order.updated",
   "assignment.created",
   "assignment.assigned",
   "assignment.handed_over",
@@ -62,8 +63,8 @@ const EXPECTED_EVENT_TYPES = [
 ];
 
 describe("hendelseskodene", () => {
-  it("1. har nøyaktig de 50 kodene fra domenemodellen 4.9", () => {
-    expect(EXPECTED_EVENT_TYPES).toHaveLength(50);
+  it("1. har nøyaktig de 51 kodene fra domenemodellen 4.9", () => {
+    expect(EXPECTED_EVENT_TYPES).toHaveLength(51);
     expect([...EVENT_TYPES].sort()).toEqual([...EXPECTED_EVENT_TYPES].sort());
   });
 
@@ -77,6 +78,10 @@ describe("hendelseskodene", () => {
 
   it("6. assignment.agreement_changed finnes (avtale med oppdragsgiver, fase 2a)", () => {
     expect(EVENT_TYPES as readonly string[]).toContain("assignment.agreement_changed");
+  });
+
+  it("7. order.updated finnes (endre en lagret ordre, T1, fase 2a)", () => {
+    expect(EVENT_TYPES as readonly string[]).toContain("order.updated");
   });
 
   it("4. followup.received finnes ikke (forkastet 27.10.2026)", () => {
