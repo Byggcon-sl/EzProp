@@ -50,14 +50,14 @@ export type OrderEditableField = (typeof ORDER_EDITABLE_FIELDS)[number];
 const ORDER_FIELD_LABELS: Record<OrderEditableField, string> = {
   receivedAt: "Mottatt",
   externalRef: "Ekstern referanse",
-  orderedByText: "Bestilt av (tekst)",
+  orderedByText: "Hvem bestilte",
   orderedByContactId: "Bestiller",
   orderedByFirmId: "Firma",
   addressText: "Adresse",
-  gnr: "Gnr",
-  bnr: "Bnr",
-  snr: "Snr",
-  housingAssociationName: "Borettslag",
+  gnr: "Gårdsnummer",
+  bnr: "Bruksnummer",
+  snr: "Seksjonsnummer",
+  housingAssociationName: "Borettslag eller sameie",
   sellerDeclarationReceived: "Egenerklæring mottatt",
 };
 

@@ -150,7 +150,7 @@ async function auditFor(organizationId: string) {
 
 const LIST_KEYS = [
   "addressText",
-  // T-0031 (docs/funksjoner/fase2a-rette-ordre-testplan.md 11b)
+  // T-0031: ordrelisten viser «kansellert» (docs/funksjoner/fase2a-rette-ordre-testplan.md 11b)
   "assignmentCancelled",
   "assignmentId",
   "assignmentNumber",
@@ -180,7 +180,7 @@ const DETAIL_KEYS = [
   "receivedAt",
   "rejectedReason",
   "requestedReportType",
-  // Endre ordren (A253): skjemaet sender `rowVersion` tilbake
+  // Endre ordren: skjemaet sender rowVersion tilbake (docs/funksjoner/fase2a-rette-ordre-testplan.md 0)
   "rowVersion",
   "sellerDeclarationReceived",
   "snr",
@@ -1123,6 +1123,69 @@ describe("statusflyt 3.7.2 getOrder(...).assignmentCancelled", () => {
     const order = await insertOrder(org.id);
     const detail = await getOrder(admin, org.id, order.id);
     expect(detail).toHaveProperty("assignmentCancelled", false);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// T-0031: ordrelisten viser «kansellert» som ordresiden
+// (docs/funksjoner/fase2a-rette-ordre-testplan.md 11b og 7.7). 4.6 er urørt.
+// ---------------------------------------------------------------------------------------------
+
+describe("T-0031 listOrders(...).assignmentCancelled", () => {
+  it("11b.1 true for myk-slettet oppdrag, false for aktivt oppdrag og for ordre uten oppdrag", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const cancelled = await insertConvertedOrder(org.id);
+    const active = await insertConvertedOrder(org.id);
+    const received = await insertOrder(org.id);
+    await cancelAssignment(admin, org.id, cancelled.assignment.id, {
+      expectedStatus: "ordered",
+      reason: "Kunden trakk bestillingen",
+    });
+
+    const rows = await listOrders(admin, org.id);
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    expect(byId.get(cancelled.order.id)).toMatchObject({
+      assignmentCancelled: true,
+      assignmentNumber: cancelled.assignment.number,
+    });
+    expect(byId.get(active.order.id)).toHaveProperty("assignmentCancelled", false);
+    expect(byId.get(received.id)).toHaveProperty("assignmentCancelled", false);
+  });
+
+  it("7.7 kansellert oppdrag i A og B: A ser bare sine egne, og merket gjelder egen rad", async () => {
+    let orgA = "";
+    let orgB = "";
+    const cancelledIn = new Map<string, string>();
+    const activeIn = new Map<string, string>();
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        orgA = grantA.organizationId;
+        orgB = grantB.organizationId;
+        for (const grant of [grantA, grantB]) {
+          const cancelled = await insertConvertedOrder(grant.organizationId);
+          const active = await insertConvertedOrder(grant.organizationId);
+          await db
+            .update(assignments)
+            .set({ deletedAt: new Date("2026-11-02T08:00:00Z") })
+            .where(eq(assignments.id, cancelled.assignment.id));
+          cancelledIn.set(grant.organizationId, cancelled.order.id);
+          activeIn.set(grant.organizationId, active.order.id);
+        }
+        return {
+          a: [cancelledIn.get(grantA.organizationId)!, activeIn.get(grantA.organizationId)!],
+          b: [cancelledIn.get(grantB.organizationId)!, activeIn.get(grantB.organizationId)!],
+        };
+      },
+      query: async (actor, organizationId) => {
+        const rows = await listOrders(actor, organizationId);
+        for (const row of rows) {
+          expect(row.assignmentCancelled).toBe(row.id === cancelledIn.get(organizationId));
+        }
+        return rows;
+      },
+      idOf: (row) => row.id,
+    });
+    expect(orgA).not.toBe(orgB);
   });
 });
 

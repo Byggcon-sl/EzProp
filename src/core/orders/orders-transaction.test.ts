@@ -13,7 +13,8 @@ import {
   createUser,
   resetDatabase,
 } from "../../../tests/factories";
-import { convertOrderToAssignment, createOrder, rejectOrder } from "./index";
+import { logger } from "@/shared/lib/logger";
+import { convertOrderToAssignment, createOrder, getOrder, rejectOrder, updateOrder } from "./index";
 
 /*
  * Hendelser og revisjonslogg skrives i samme transaksjon som endringen
@@ -167,4 +168,82 @@ describe("4.6.5 feiler hendelsen eller loggen, finnes ingenting", () => {
       expect(result.assignment.number).toBe("2026-00004");
     },
   );
+});
+
+/*
+ * Endre ordren (docs/funksjoner/fase2a-rette-ordre-testplan.md 2.25 og 3.2, databasefeilen).
+ * Samme innpakning som over: revisjonsloggen eller hendelsen kaster én gang.
+ */
+describe("2.25 updateOrder: feiler loggen eller hendelsen, er ordren uendret", () => {
+  const MARKERS = {
+    addressText: "MARKOR-ADR-91c2 1",
+    orderedByText: "MARKOR-NAVN-91c2",
+    externalRef: "MARKOR-REF-91c2",
+    housingAssociationName: "MARKOR-BRL-91c2",
+    gnr: "9173",
+  };
+
+  it.each([
+    ["recordAuditEvent", failAuditOnce],
+    ["recordEvent", failEventOnce],
+  ])(
+    "%s kaster: samme rad, row_version lik, ingen hendelse og ingen loggrad",
+    async (_name, fail) => {
+      const { org, admin } = await orgWithAdmin();
+      const order = await insertOrder(org.id);
+      const [before] = await db.select().from(orders).where(eq(orders.id, order.id));
+      const { rowVersion } = await getOrder(admin, org.id, order.id);
+      fail();
+
+      await expect(
+        updateOrder(
+          admin,
+          org.id,
+          order.id,
+          {
+            addressText: "Testveien 14, 8000 Bodø",
+            receivedAt: before!.receivedAt.toISOString(),
+          } as never,
+          rowVersion,
+        ),
+      ).rejects.toThrow();
+
+      const [after] = await db.select().from(orders).where(eq(orders.id, order.id));
+      expect(after).toEqual(before);
+      expect(await rowCount(events)).toBe(0);
+      expect(await rowCount(auditLog)).toBe(0);
+    },
+  );
+
+  it("3.2 databasefeil: ingen markør i logger, i feilmeldingen eller i hendelser", async () => {
+    const spies = (["debug", "info", "warn", "error"] as const).map((level) =>
+      vi.spyOn(logger, level),
+    );
+    const { org, admin } = await orgWithAdmin();
+    const order = await insertOrder(org.id);
+    const { rowVersion } = await getOrder(admin, org.id, order.id);
+    failAuditOnce();
+
+    const error = await updateOrder(
+      admin,
+      org.id,
+      order.id,
+      { ...MARKERS, receivedAt: order.receivedAt.toISOString() } as never,
+      rowVersion,
+    ).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(Error);
+
+    const logged = JSON.stringify(spies.map((spy) => spy.mock.calls));
+    const message = `${(error as Error).message} ${(error as Error).stack ?? ""}`;
+    const eventText = JSON.stringify(await db.select().from(events));
+    for (const marker of Object.values(MARKERS)) {
+      expect(logged).not.toContain(marker);
+      expect(message).not.toContain(marker);
+      expect(eventText).not.toContain(marker);
+    }
+    for (const spy of spies) spy.mockRestore();
+  });
 });

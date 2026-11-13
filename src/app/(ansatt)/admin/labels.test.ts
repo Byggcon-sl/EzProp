@@ -205,3 +205,47 @@ describe("ordreendring i adminloggen", () => {
     expect(auditActionLabel("convert")).toBe("Gjort om til oppdrag");
   });
 });
+
+/*
+ * Ordreendringer i /admin/logg (docs/funksjoner/fase2a-rette-ordre-testplan.md 5.2 og 5.3, AK 14).
+ * Raden har `fields` (feltkoder) og `values` (gammel og ny verdi). Adminloggen viser bare
+ * feltetikettene, aldri verdiene. Etiketten er enten den fra `orderFieldLabel` eller feltkoden
+ * som reserve (kortet godtar begge).
+ */
+describe("revisjonsloggen: ordreendringer uten verdier", () => {
+  const ORDER_FIELDS = [
+    "receivedAt",
+    "externalRef",
+    "orderedByText",
+    "orderedByContactId",
+    "orderedByFirmId",
+    "addressText",
+    "gnr",
+    "bnr",
+    "snr",
+    "housingAssociationName",
+    "sellerDeclarationReceived",
+  ];
+
+  it("5.2 fields + values gir én linje «Endret: …» uten markørene", () => {
+    const lines = formatAuditChanges({
+      fields: ["addressText", "orderedByContactId"],
+      values: {
+        addressText: { from: "MARKOR-ADR-91c2 1", to: "MARKOR-ADR-91c2 2" },
+        orderedByContactId: { from: null, to: "MARKOR-KONTAKT-91c2" },
+      },
+    });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^Endret: /);
+    expect(lines.join(" ")).not.toContain("MARKOR");
+  });
+
+  it.each(ORDER_FIELDS)(
+    "5.3 %s vises med etiketten fra orderFieldLabel eller feltkoden",
+    (code) => {
+      const [line] = formatAuditChanges({ fields: [code] });
+      const shown = line?.replace(/^Endret: /, "");
+      expect([orderFieldLabel(code), code]).toContain(shown);
+    },
+  );
+});

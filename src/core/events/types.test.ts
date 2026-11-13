@@ -11,6 +11,7 @@ import { EVENT_TYPES, type EventType } from "@/core/events";
 const EXPECTED_EVENT_TYPES = [
   "order.received",
   "order.rejected",
+  // Endre ordren (docs/funksjoner/fase2a-rette-ordre-testplan.md 2.27)
   "order.updated",
   "assignment.created",
   "assignment.assigned",
@@ -78,6 +79,10 @@ describe("hendelseskodene", () => {
 
   it("6. assignment.agreement_changed finnes (avtale med oppdragsgiver, fase 2a)", () => {
     expect(EVENT_TYPES as readonly string[]).toContain("assignment.agreement_changed");
+  });
+
+  it("2.27 order.updated finnes (endre ordren, T1)", () => {
+    expect(EVENT_TYPES as readonly string[]).toContain("order.updated");
   });
 
   it("4. followup.received finnes ikke (forkastet 27.10.2026)", () => {

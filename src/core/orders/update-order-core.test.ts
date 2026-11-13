@@ -688,11 +688,15 @@ describe("listOrderHistory", () => {
       },
       { field: "orderedByFirmId", label: "Firma", from: "(fjernet firma)", to: null },
     ]);
-    expect(history[2]?.changes).toEqual([{ field: "bnr", label: "Bnr", from: null, to: null }]);
+    expect(history[2]?.changes).toEqual([
+      { field: "bnr", label: "Bruksnummer", from: null, to: null },
+    ]);
     expect(history[3]?.changes).toEqual([
       { field: "addressText", label: "Adresse", from: null, to: null },
     ]);
-    expect(history[4]?.changes).toEqual([{ field: "gnr", label: "Gnr", from: "1", to: "2" }]);
+    expect(history[4]?.changes).toEqual([
+      { field: "gnr", label: "Gårdsnummer", from: "1", to: "2" },
+    ]);
     expect(JSON.stringify(history)).not.toContain("secretField");
   });
 
