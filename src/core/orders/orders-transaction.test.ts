@@ -13,7 +13,8 @@ import {
   createUser,
   resetDatabase,
 } from "../../../tests/factories";
-import { convertOrderToAssignment, createOrder, rejectOrder } from "./index";
+import { logger } from "@/shared/lib/logger";
+import { convertOrderToAssignment, createOrder, rejectOrder, updateOrder } from "./index";
 
 /*
  * Hendelser og revisjonslogg skrives i samme transaksjon som endringen
@@ -167,4 +168,113 @@ describe("4.6.5 feiler hendelsen eller loggen, finnes ingenting", () => {
       expect(result.assignment.number).toBe("2026-00004");
     },
   );
+});
+
+/*
+ * Endre en ordre (docs/funksjoner/fase2a-rette-ordre-testplan.md 2.6.11–2.6.12, og databasefeilen
+ * i 2.6.8). Feiler loggen eller hendelsen, står ordren som før (verdier og row_version), og
+ * applikasjonsloggen får ingen av verdiene. Oppdiktede data.
+ * Støtter hovedmål: færre reklamasjoner (aldri en endring uten spor).
+ */
+describe("2.6.11–2.6.12 endring av ordre i samme transaksjon som logg og hendelse", () => {
+  const NEW_ADDRESS = "Prøvegata 7, 8006 Bodø";
+  const VALUES = [
+    "Testveien 12, 8000 Bodø",
+    NEW_ADDRESS,
+    "Testveien",
+    "Prøvegata",
+    "Megler Testesen",
+    "Megler Prøvesen",
+    "Testtoppen borettslag",
+    "TEST-ORD-0001",
+    "TEST-ORD-0002",
+    "98761",
+    "43219",
+  ];
+
+  async function savedOrder() {
+    const { org, admin } = await orgWithAdmin();
+    const order = await insertOrder(org.id, {
+      externalRef: "TEST-ORD-0001",
+      orderedByText: "Megler Testesen",
+      gnr: "98761",
+      bnr: "43219",
+      housingAssociationName: "Testtoppen borettslag",
+    });
+    return { org, admin, order };
+  }
+
+  function changedInput(order: typeof orders.$inferSelect) {
+    return {
+      addressText: NEW_ADDRESS,
+      receivedAt: order.receivedAt.toISOString(),
+      externalRef: "TEST-ORD-0002",
+      orderedByText: "Megler Prøvesen",
+      orderedByContactId: "",
+      gnr: "98761",
+      bnr: "43219",
+      snr: "",
+      housingAssociationName: "Testtoppen borettslag",
+      sellerDeclarationReceived: false,
+    } as Parameters<typeof updateOrder>[3];
+  }
+
+  async function orderEvents(organizationId: string) {
+    return db.select().from(events).where(eq(events.organizationId, organizationId));
+  }
+
+  it.each([
+    ["2.6.11 feiler loggen", failAuditOnce],
+    ["2.6.12 feiler hendelsen", failEventOnce],
+  ])("%s: ordren er uendret, ingen hendelse og ingen loggrad", async (_name, fail) => {
+    const { org, admin, order } = await savedOrder();
+    fail();
+
+    await expect(
+      updateOrder(admin, org.id, order.id, changedInput(order), order.rowVersion),
+    ).rejects.toThrow();
+
+    const [after] = await db.select().from(orders).where(eq(orders.id, order.id));
+    expect(after).toEqual(order);
+    expect(await orderEvents(org.id)).toEqual([]);
+    expect(await rowCount(auditLog)).toBe(0);
+
+    // Neste forsøk med samme versjon lykkes (ingen halv endring stod igjen)
+    const updated = await updateOrder(
+      admin,
+      org.id,
+      order.id,
+      changedInput(order),
+      order.rowVersion,
+    );
+    expect(updated.addressText).toBe(NEW_ADDRESS);
+  });
+
+  it("2.6.8 databasefeil: applikasjonsloggen og feilmeldingen har ingen av verdiene", async () => {
+    const spies = (["debug", "info", "warn", "error"] as const).map((level) =>
+      vi.spyOn(logger, level),
+    );
+    const { org, admin, order } = await savedOrder();
+    failAuditOnce();
+
+    const error = await updateOrder(
+      admin,
+      org.id,
+      order.id,
+      changedInput(order),
+      order.rowVersion,
+    ).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(Error);
+
+    const logged = JSON.stringify(spies.map((spy) => spy.mock.calls));
+    const message = (error as Error).message;
+    for (const value of VALUES) {
+      expect(logged, `applikasjonsloggen har ${value}`).not.toContain(value);
+      expect(message, `feilmeldingen har ${value}`).not.toContain(value);
+    }
+    for (const spy of spies) spy.mockRestore();
+  });
 });

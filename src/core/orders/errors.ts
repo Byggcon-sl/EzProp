@@ -6,6 +6,17 @@ export class OrderAlreadyHandledError extends Error {
   }
 }
 
+/**
+ * Ordren er endret (også avvist eller gjort om) siden skjemaet ble åpnet: `row_version` stemmer
+ * ikke. Ingenting er lagret. Meldingen har aldri verdier fra ordren.
+ */
+export class OrderChangedError extends Error {
+  constructor() {
+    super("Ordren er endret av en annen. Last siden på nytt.");
+    this.name = "OrderChangedError";
+  }
+}
+
 /** Kontoret finnes ikke i organisasjonen, eller er slettet. */
 export class OfficeNotFoundError extends Error {
   constructor() {

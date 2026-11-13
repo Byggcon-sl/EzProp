@@ -1,4 +1,6 @@
 import type { GrantablePermission } from "@/core/access";
+// Direkte fra kodene: filen brukes også i klientkomponenter, og `@/core/orders` drar med databasen.
+import { ORDER_EDITABLE_FIELDS, orderFieldLabel } from "@/core/orders/codes";
 import type { EmployeeRole } from "@/db/schema";
 
 /** Rollene i den rekkefølgen de står i skjemaene (oftest brukt først). */
@@ -78,6 +80,7 @@ const auditEntityLabels: Record<string, string> = {
   company: "Selskap",
   office: "Kontor",
   certification: "Sertifisering",
+  order: "Ordre",
 };
 
 /** Norske navn på `action` i revisjonsloggen. */
@@ -89,10 +92,16 @@ const auditActionLabels: Record<string, string> = {
   permission_change: "Rettigheter endret",
   deactivate: "Deaktivert",
   reactivate: "Aktivert igjen",
+  reject: "Avvist",
+  convert: "Gjort om til oppdrag",
 };
 
-/** Norske navn på feltene som står i `changes`. Ukjent felt vises med koden. */
+/**
+ * Norske navn på feltene som står i `changes`. Ukjent felt vises med koden. Ordrefeltene (T1)
+ * hentes fra ordremodulen, så etikettene står ett sted.
+ */
 const auditFieldLabels: Record<string, string> = {
+  ...Object.fromEntries(ORDER_EDITABLE_FIELDS.map((code) => [code, orderFieldLabel(code)])),
   name: "Navn",
   email: "E-post",
   jobTitle: "Stilling",

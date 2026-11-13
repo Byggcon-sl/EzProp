@@ -25,3 +25,50 @@ const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 export function orderStatusLabel(code: string): string {
   return (ORDER_STATUS_LABELS as Record<string, string>)[code] ?? code;
 }
+
+/**
+ * Feltene på en lagret ordre som kan endres (T1, Ståle 12.11.2026), i fast rekkefølge. Bare disse
+ * kodene står i `fields` og `values` i revisjonsloggen. Kodene endres aldri (regel 6). Status,
+ * avvisningsgrunn, oppdrag, kilde og ønsket rapport er bevisst ikke med.
+ */
+export const ORDER_EDITABLE_FIELDS = [
+  "receivedAt",
+  "externalRef",
+  "orderedByText",
+  "orderedByContactId",
+  "orderedByFirmId",
+  "addressText",
+  "gnr",
+  "bnr",
+  "snr",
+  "housingAssociationName",
+  "sellerDeclarationReceived",
+] as const;
+export type OrderEditableField = (typeof ORDER_EDITABLE_FIELDS)[number];
+
+const ORDER_FIELD_LABELS = new Map<string, string>([
+  ["receivedAt", "Mottatt"],
+  ["externalRef", "Ekstern referanse"],
+  ["orderedByText", "Hvem bestilte"],
+  ["orderedByContactId", "Bestiller"],
+  ["orderedByFirmId", "Firma"],
+  ["addressText", "Adresse"],
+  ["gnr", "Gårdsnummer"],
+  ["bnr", "Bruksnummer"],
+  ["snr", "Seksjonsnummer"],
+  ["housingAssociationName", "Borettslag"],
+  ["sellerDeclarationReceived", "Egenerklæring mottatt"],
+] satisfies [OrderEditableField, string][]);
+
+/**
+ * Norsk etikett for en feltkode på ordren. Ukjent kode gir koden tilbake (også `__proto__` og
+ * `toString`; oppslaget er en `Map`, ikke et vanlig objekt).
+ */
+export function orderFieldLabel(code: string): string {
+  return ORDER_FIELD_LABELS.get(code) ?? code;
+}
+
+/** Er koden en av feltkodene som kan endres? */
+export function isOrderEditableField(code: unknown): code is OrderEditableField {
+  return typeof code === "string" && (ORDER_EDITABLE_FIELDS as readonly string[]).includes(code);
+}
