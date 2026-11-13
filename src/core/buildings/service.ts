@@ -7,6 +7,7 @@ import {
 } from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
 import { recordEvent } from "@/core/events";
+import type { HousingType } from "@/core/properties";
 import { db, type DbExecutor } from "@/db/client";
 import {
   assignments,
@@ -26,12 +27,15 @@ import {
   sumFloorArea,
   type AreaSum,
 } from "./codes";
+import { numberRoomDrafts } from "./room-presets";
 import { BuildingNotEmptyError, FloorNotEmptyError, PropertyMissingError } from "./errors";
 import {
+  addRoomsInputSchema,
   buildingInputSchema,
   floorAreaInputSchema,
   floorInputSchema,
   roomInputSchema,
+  type AddRoomsInput,
   type BuildingInput,
   type FloorAreaInput,
   type FloorInput,
@@ -95,6 +99,8 @@ export type BuildingDetail = {
 export type AssignmentBuildings = {
   /** Om oppdraget har en aktiv eiendom. Uten den kan det ikke legges til bygninger. */
   hasProperty: boolean;
+  /** Boligtypen på den aktive eiendommen, til forslaget om ferdig sett. `null` uten eiendom. */
+  housingType: HousingType | null;
   /** Aktive ansatte i organisasjonen, til «Målt av». */
   employees: EmployeeOption[];
   /** Den innloggede ansatte, forhåndsvalgt i «Målt av». */
@@ -161,6 +167,26 @@ async function propertyIsActive(tx: DbExecutor, orgId: string, propertyId: strin
       ),
     );
   return row !== undefined;
+}
+
+/** Boligtypen på den aktive eiendommen, eller `null`. */
+async function findHousingType(
+  tx: DbExecutor,
+  orgId: string,
+  propertyId: string | null,
+): Promise<HousingType | null> {
+  if (propertyId === null) return null;
+  const [row] = await tx
+    .select({ housingType: properties.housingType })
+    .from(properties)
+    .where(
+      and(
+        eq(properties.id, propertyId),
+        eq(properties.organizationId, orgId),
+        isNull(properties.deletedAt),
+      ),
+    );
+  return row ? (row.housingType as HousingType) : null;
 }
 
 /** Bygningen, låst, med oppdraget. Bygning og oppdrag er ikke slettet. */
@@ -341,8 +367,8 @@ export async function getAssignmentBuildings(
     );
   if (!assignment) throw new AccessDeniedError();
 
-  const [hasProperty, employeeRows, buildingRows] = await Promise.all([
-    propertyIsActive(db, orgId, assignment.propertyId),
+  const [housingType, employeeRows, buildingRows] = await Promise.all([
+    findHousingType(db, orgId, assignment.propertyId),
     db
       .select({ id: employees.id, name: employees.name })
       .from(employees)
@@ -481,7 +507,8 @@ export async function getAssignmentBuildings(
   });
 
   return {
-    hasProperty,
+    hasProperty: housingType !== null,
+    housingType,
     employees: employeeRows,
     currentEmployeeId: grant.employeeId,
     buildings,
@@ -909,6 +936,79 @@ export async function saveRoom(
       data: { roomId: room.id, created: false },
     });
     return { id: room.id, created: false, changed: true };
+  });
+}
+
+/**
+ * Legger til flere rom i én etasje i én transaksjon (T4, A270–A273). Navnene lages her, etter at
+ * etasjen er låst, mot de aktive rommene i databasen (`numberRoomDrafts`), så samtidige lagringer
+ * aldri gir like navn. Arealtype og «under terreng» kommer fra forslagene, som for ett rom. Ett rom
+ * om gangen med revisjonslogg (kilde og sett, aldri navn) og hendelse; feiler noe, lagres
+ * ingenting. Samme inngang skal brukes av KI-forslaget fra plantegning (2a-3), én etasje per kall.
+ */
+export async function addRooms(
+  actor: Actor,
+  organizationId: string,
+  floorId: string,
+  input: AddRoomsInput,
+): Promise<{ ids: string[]; names: string[] }> {
+  const grant = await requireOrganizationAccess(actor, organizationId, "assignment.edit");
+  const values = addRoomsInputSchema.parse(input);
+  requireUuid(floorId);
+  const orgId = grant.organizationId;
+
+  return db.transaction(async (tx) => {
+    const floor = await lockFloor(tx, orgId, floorId);
+    const existing = await tx
+      .select({ roomType: rooms.roomType, name: rooms.name })
+      .from(rooms)
+      .where(
+        and(eq(rooms.organizationId, orgId), eq(rooms.floorId, floor.id), isNull(rooms.deletedAt)),
+      );
+    const planned = numberRoomDrafts(values.drafts, existing);
+
+    const ids: string[] = [];
+    const names: string[] = [];
+    for (const room of planned) {
+      const areaType = suggestAreaType(room.roomType);
+      const [row] = await tx
+        .insert(rooms)
+        .values({
+          organizationId: orgId,
+          floorId: floor.id,
+          roomType: room.roomType,
+          name: room.name === "" ? null : room.name,
+          areaType,
+          belowGround: suggestBelowGround({
+            roomType: room.roomType,
+            floorBelowGround: floor.belowGround,
+          }),
+          createdBy: grant.employeeId,
+        })
+        .returning({ id: rooms.id });
+      if (!row) throw new Error("Fant ikke rommet etter at det ble lagret. Prøv igjen.");
+      await recordAuditEvent(tx, grant, {
+        entityType: "room",
+        entityId: row.id,
+        action: "create",
+        changes: {
+          assignmentId: floor.assignmentId,
+          floorId: floor.id,
+          roomType: room.roomType,
+          areaType,
+          source: values.source,
+          ...(values.presetKey === undefined ? {} : { presetKey: values.presetKey }),
+        },
+      });
+      await recordEvent(tx, grant, {
+        type: "assignment.room_saved",
+        assignmentId: floor.assignmentId,
+        data: { roomId: row.id, created: true },
+      });
+      ids.push(row.id);
+      names.push(room.name);
+    }
+    return { ids, names };
   });
 }
 
