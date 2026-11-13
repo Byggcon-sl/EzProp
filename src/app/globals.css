@@ -144,8 +144,13 @@ body {
     @apply outline-2 outline-offset-2 outline-fjord;
   }
 
-  /* Mål for hopplenken: får fokus fra koden, ikke med tab, og trenger ingen ramme */
-  [tabindex="-1"]:focus {
+  /*
+   * Mål for hopplenken (#hovedinnhold, eller sidens <main> som lenken gir tabindex=-1): får fokus
+   * fra koden og trenger ingen ramme rundt hele innholdet. Andre elementer som får fokus fra koden
+   * (kortet i arbeidskøen, feilmeldinger, bekreftelser) skal vise fjord-ringen (WCAG 2.4.7).
+   */
+  #hovedinnhold[tabindex="-1"]:focus,
+  #hovedinnhold main[tabindex="-1"]:focus {
     outline: none;
   }
 }
