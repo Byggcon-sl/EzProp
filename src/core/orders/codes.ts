@@ -72,3 +72,26 @@ export function orderFieldLabel(code: string): string {
 export function isOrderEditableField(code: unknown): code is OrderEditableField {
   return typeof code === "string" && (ORDER_EDITABLE_FIELDS as readonly string[]).includes(code);
 }
+
+/**
+ * Grunnen til at en annen ordre er en mulig dublett (T3, docs/05-domenemodell.md 4.3), i fast
+ * rekkefølge. Kodene endres aldri (regel 6).
+ */
+export const DUPLICATE_REASONS = ["address", "cadastre"] as const;
+export type DuplicateReason = (typeof DUPLICATE_REASONS)[number];
+
+/**
+ * Største avstand mellom to ordres `received_at` for at en ordre som ikke lenger er åpen, regnes
+ * som mulig dublett. Fast varighet: 90 × 24 timer, før eller etter, grensen teller med.
+ */
+export const MAX_DUPLICATE_WINDOW_DAYS = 90;
+
+const DUPLICATE_REASON_LABELS: Record<DuplicateReason, string> = {
+  address: "samme adresse",
+  cadastre: "samme matrikkel",
+};
+
+/** Norsk tekst for grunnen, med liten forbokstav (står midt i en linje). Ukjent kode gir koden. */
+export function duplicateReasonLabel(reason: string): string {
+  return (DUPLICATE_REASON_LABELS as Record<string, string>)[reason] ?? reason;
+}

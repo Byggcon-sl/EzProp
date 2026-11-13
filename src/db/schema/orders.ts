@@ -73,6 +73,8 @@ export const orders = pgTable(
       table.organizationId,
       table.orderedByFirmId,
     ),
+    // Uttrykksindeksene for mulig dublett (adressenøkkel og gnr/bnr) står bare i migreringen
+    // 0033_indekser-mulig-dublett.sql, fordi uttrykkene eies av src/core/orders/duplicate-sql.ts.
     // Bestilleren og firmaet må høre til samme organisasjon som ordren
     foreignKey({
       name: "orders_ordered_by_contact_fk",
