@@ -12,9 +12,20 @@ export { AI_APPROVAL_CHECK_MAX, checkAiTextApproved, type AiApprovalItem } from 
 export {
   AI_DECISION_ERROR_MESSAGE,
   AI_REQUEST_REJECTED_MESSAGE,
+  AI_RETENTION_YEARS_ERROR,
   AiDecisionError,
   AiRequestRejectedError,
+  AiRetentionValidationError,
 } from "./errors";
+export {
+  AI_REJECTED_RETENTION_KEY,
+  AI_REJECTED_RETENTION_MAX,
+  AI_REJECTED_RETENTION_MIN,
+  getAiRetentionSettings,
+  readRejectedRetentionYears,
+  retainUntilFor,
+  saveAiRetentionSettings,
+} from "./retention";
 export {
   AI_FEATURES,
   AI_TRIAL_TARGET_TYPE,
