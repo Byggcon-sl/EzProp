@@ -73,7 +73,7 @@ Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3
 | 1 Prøve uten nett | Ferdig 10.11.2026. Ståle har kjørt prøvene på ekte iPad og godkjent ADR 0004 (egenbygd synk). |
 | 0b Innlogging, organisasjon, roller | Ferdig, unntatt felles innlogging med Optiplan (venter på S6) |
 | **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127), forslagsmønsteret (PR #131), vask før KI (PR #135), evalueringssettet (PR #141) og KI-køen (PR #143) er levert. Det alvorlige funnet T-0001 (synkkøen) er rettet i PR #139. Beslutningsnotatet om KI-leverandør og Anthropic-adapteren (siste punkt i 2a-1) er ferdig. 2a-2: malen for ett bad er levert (PR #159), og reglene badet trenger er levert (PR #167). Byggcon-profilen er levert (PR #176). Neste: resten av «Fra Ståles svar 12.11.2026», deretter badet på PC. |
-| Minimum før ekte data | To av ti punkter levert. Testmiljøet (S1) er oppe fra 12.11.2026, så resten kan bygges og prøves der. |
+| Minimum før ekte data | To av tolv punkter levert. Testmiljøet (S1) er oppe fra 12.11.2026, så resten kan bygges og prøves der. |
 | 2b og videre | Ikke startet |
 
 ## Venter på Ståle
@@ -214,7 +214,7 @@ Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se
 
 ---
 
-## Minimum før ekte data  `status: to av elleve levert`
+## Minimum før ekte data  `status: to av tolv levert`
 
 Før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerklæringer) legges inn, skal dette være på plass. Den fulle personvernpakken ligger i fase 4. De fleste punktene trenger testmiljøet (S1).
 
@@ -228,6 +228,7 @@ Før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerkl�
 - [ ] **KI-leverandør:** databehandleravtale signert og behandlingen i EU/EØS (Ståle 12.11.2026, K1: Anthropic direkte bare i testmiljøet med oppdiktede data), før tilkoblingen `anthropic` lages for en organisasjon med ekte data. Spørsmål 54–58 og 73 er besvart 12.11.2026. Leverandørens vanlige oppbevaringstid godtas og skrives inn i personvernerklæringen (K2). Se `docs/beslutningsnotat-ki-leverandor.md`.
 - [ ] **Personvernkonsekvensvurdering (DPIA), kort utkast** fra agentene som Ståle godkjenner (K3, 12.11.2026). Før ekte data, ikke før testing.
   - Utkastet skal ta med revisjonsloggen for endring av ordre: gammel og ny verdi (adresse, matrikkel, bestiller som tekst) lagres i en logg som aldri ryddes. Spørsmål 79 må være besvart (A252).
+- [ ] **HTTP-loggen i Azure slås av eller tømmes for adresser med søketekst før ekte data (A263).** Søket i ordrelisten og arbeidskøen står i adressen (`?q=`), og HTTP-loggen (`infra/azure/main.bicep`, `httpLogs`) lagrer hele adressen i 3 dager.
 
 **Ferdig når:** Ståle har sett listen krysset av og godkjent at ekte data kan legges inn.
 

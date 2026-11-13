@@ -1,6 +1,6 @@
 # ADR 0010 – Søk uten egne søkeindekser foreløpig
 
-Dato: 13.11.2026. Status: vedtatt av agentene i autonom modus (føres i `docs/09-apne-sporsmal.md` fra A254, se oppgavekortet); Ståle kan endre. Oppgavekort: `docs/funksjoner/fase2a-sok-ordre-arbeidsko.md` (T2, Ståle 12.11.2026). Avgjør nattløkkens punkt 5 (indeks for `ILIKE '%tekst%'`) og punkt 6 (sidegrense på ordrelisten) fra 13.11.2026.
+Dato: 13.11.2026. Status: vedtatt av agentene i autonom modus (føres i `docs/09-apne-sporsmal.md` fra A256, se oppgavekortet); Ståle kan endre. Oppgavekort: `docs/funksjoner/fase2a-sok-ordre-arbeidsko.md` (T2, Ståle 12.11.2026). Avgjør nattløkkens punkt 5 (indeks for `ILIKE '%tekst%'`) og punkt 6 (sidegrense på ordrelisten) fra 13.11.2026.
 
 Støtter hovedmålene: **de ansatte** (kontoret finner ordren eller oppdraget med ett søk mens megleren er i telefonen, og listen blir ikke treg når den vokser), **færre reklamasjoner** (matrikkel sammenlignes del for del, så kontoret ikke havner på feil oppdrag) og **KI i bunnen** (søket bruker de samme strukturerte feltene som KI skal bruke senere; søketeksten sendes aldri til KI).
 
@@ -12,7 +12,7 @@ Støtter hovedmålene: **de ansatte** (kontoret finner ordren eller oppdraget me
 4. **Undertabeller hentes bare med `EXISTS`**, aldri med join. Hver `EXISTS` filtrerer selv på `grant.organizationId` og `deleted_at is null` og kobler på id. Det gir ingen doble rader og ingen treff på tvers av organisasjoner, heller ikke når en rad i en annen organisasjon peker på samme id.
 5. **Matrikkel er likhet per del, ikke delvis tekst.** Ser søket ut som `gnr/bnr[/fnr[/snr]]`, legges det til en egen gren der delene må være like etter trimming. «12/34» finner 12/34 og 12/34/0/5, men ikke 112/34. Tomt festenummer regnes som 0. Ordren har ikke festenummer, så `fnr` sammenlignes bare mot `cadastral_units`. Ingen ny kolonne.
 6. **Ordrelisten får grense:** `ORDER_LIST_LIMIT` = 50 rader, sortert `received_at desc, id desc` (indeksen `orders_organization_id_received_at_idx`). `listOrders` gir `{ items, total }`, og `total` telles med samme WHERE. Ingen «neste side»; søket er veien til eldre ordre. Grensesnittet står i `src/core/orders/list.ts`.
-7. **Søketeksten er personopplysninger** (navn, adresse, matrikkel). Den sendes aldri til KI, og skrives ikke i `ai_usage_log`, revisjonsloggen, hendelsene eller serverloggen. Søket bare leser.
+7. **Søketeksten er personopplysninger** (navn, adresse, matrikkel). Den sendes aldri til KI, og skrives ikke i `ai_usage_log`, revisjonsloggen eller hendelsene. Søket bare leser. **Søketeksten skrives ikke i applikasjonsloggen; HTTP-loggen i testmiljøet har adressen i 3 dager og slås av før ekte data** (`infra/azure/main.bicep`, `httpLogs`; A263, «Minimum før ekte data»). Søketeksten blir også liggende i nettleserhistorikken på delte iPader; det er et åpent spørsmål (nr. 80).
 
 ## Begrunnelse
 

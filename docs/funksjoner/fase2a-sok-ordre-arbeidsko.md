@@ -11,7 +11,7 @@ Ordrelisten (`/ordre`) har ikke søk og viser alle ordrer uten grense. Med ca. 2
 
 ## KI i bunnen
 - KI gjør ingenting i selve søket nå. Søket er en fast spørring i databasen, virker likt hver gang og trenger ikke KI. Søk med vanlig språk og «globalt søk» hører til «Søk og arkiv» i en senere fase.
-- Søketeksten kan inneholde navn, adresse og matrikkel. Den sendes **aldri** til KI, logges ikke i `ai_usage_log`, skrives ikke i revisjonsloggen eller hendelser, og logges ikke med `console` på serveren.
+- Søketeksten kan inneholde navn, adresse og matrikkel. Den sendes **aldri** til KI, logges ikke i `ai_usage_log`, og skrives ikke i revisjonsloggen eller hendelser. Søketeksten skrives ikke i applikasjonsloggen; HTTP-loggen i testmiljøet har adressen i 3 dager og slås av før ekte data (A263). Søketeksten i nettleserhistorikken på delte iPader er åpent spørsmål nr. 80.
 - Søket bare leser. Ingen nye data lagres.
 
 ## Brukerhistorier
