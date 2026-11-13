@@ -13,7 +13,13 @@ export function SearchBox({ label, query }: { label: string; query: string }) {
         <label htmlFor="q" className="block text-sm font-medium text-slate-700">
           {label}
         </label>
-        <Input id="q" name="q" type="search" maxLength={SEARCH_QUERY_MAX_LENGTH} defaultValue={query} />
+        <Input
+          id="q"
+          name="q"
+          type="search"
+          maxLength={SEARCH_QUERY_MAX_LENGTH}
+          defaultValue={query}
+        />
       </div>
       <Button type="submit" variant="secondary">
         Søk
