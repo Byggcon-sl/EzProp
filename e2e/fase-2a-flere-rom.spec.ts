@@ -358,8 +358,8 @@ test.describe("flere rom på én gang (pc og ipad)", () => {
     // Dobbelttrykk og Enter mens den jobber
     await submit.click({ force: true }).catch(() => {});
     await page.keyboard.press("Enter");
+    // Ruten står til testen er ferdig: å fjerne den mens svaret holdes, gir «Route is already handled».
     release();
-    await page.unroute("**/oppdrag/**/bygninger");
 
     await expect(d).toBeHidden();
     await page.reload();

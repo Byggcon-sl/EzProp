@@ -544,7 +544,8 @@ test.describe("bygninger, areal og rom (pc og ipad)", () => {
       );
     expect(inGroups).toBe(33);
 
-    // E13.2: startRoom virker fortsatt (valg på etikett)
+    // E13.2: startRoom virker fortsatt (valg på etikett). Lukk skjemaet først.
+    await button(upper, "Avbryt").click();
     const room = await startRoom(upper, "Bad");
     await expect(room.areaType.locator("option:checked")).toHaveText("BRA-i");
     await clickAndWaitForSave(page, room.save);
