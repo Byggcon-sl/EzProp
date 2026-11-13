@@ -1383,7 +1383,7 @@ describe("3 reglene i badmalen (datatest)", () => {
   it("R3.11 messages: fast tekst før 2000, alder uten «levetid», TGIU med begrunnelse", () => {
     const doc = parsedTemplate();
     const byKey = (key: string) => doc.rules.find((r) => r.key === key)!;
-    expect(byKey(BEFORE_2000).message).toBe("Sjiktet er fra før 2000.");
+    expect(byKey(BEFORE_2000).message).toBe("Sjiktet er fra før 2000. Forslaget er TG3.");
     expect(byKey(PAST_LIFESPAN).message).toContain("funksjonen er usikker på grunn av alder");
     expect(byKey(PAST_LIFESPAN).source_ref).toBe(WET_ROOM_LIFESPANS.entries[0]!.source_ref);
     const pastOutcome = doc.outcomes.find((o) => o.question_key === PAST_LIFESPAN_QUESTION)!;
