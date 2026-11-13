@@ -3,7 +3,7 @@
 - **Fase:** 2a («Fra Ståles svar 12.11.2026», siste punkt)
 - **Modul:** kjerne / `src/core/ai`, admin-side
 - **Branch:** `ki-oppbevaring-avviste` fra `main` (13.11.2026, main flettet inn på nytt kl. 19 UTC). Beslutningene flyttet fra A264–A267 til A272–A275, fordi A264–A271 er testdata-kortets.
-- **Status:** klar til bygging (forhåndsvurdering runde 1 innarbeidet 13.11.2026: sikkerhet-personvern og test-leder)
+- **Status:** klar til bygging (forhåndsvurdering runde 1 innarbeidet 13.11.2026: sikkerhet-personvern og test-leder; forenkler innarbeidet 13.11.2026)
 - **Støtter hovedmål:**
   - **KI i bunnen:** loggen over KI-forslag er grunnlaget for å måle og forbedre KI. Oppbevaringen blir en tydelig, styrbar del av grunnmuren, med 10 år som standard slik at grunnlaget beholdes.
   - **De ansatte:** admin kan selv korte ned hvor lenge avviste forslag (som kan inneholde rester av personopplysninger) står, uten å be utviklerne om det.
@@ -25,10 +25,11 @@ KI lager ingen forslag her. Oppgaven styrer hvor lenge KI-forslag og beslutninge
 ## Omfang
 
 **Med:**
-1. **Innstillingen** `ai.rejected_retention_years` i `organizations.settings` (samme mønster som `photo.retention.*` i `src/core/files/retention.ts` og `time_tracking.enabled`). Heltall fra 1 til og med 10, **lagret som tall i JSON** (aldri tekst; en lagret tekst «5» er ugyldig). Mangler den eller er den ugyldig: 10, og en advarsel logges med bare organisasjon og nøkkel (aldri verdien).
+1. **Innstillingen** `ai.rejected_retention_years` i `organizations.settings` (samme mønster som `photo.retention.*` i `src/core/files/retention.ts` og `time_tracking.enabled`). Heltall fra 1 til og med 10, **lagret som tall i JSON** (aldri tekst; en lagret tekst «5» er ugyldig). Mangler den: 10 uten advarsel (det er normaltilstanden). Er den ugyldig: 10, og en advarsel logges med bare organisasjon og nøkkel (aldri verdien).
 2. **Ny fil `src/core/ai/retention.ts`:**
    - `readRejectedRetentionYears(organizationId, settings)`: validert tall eller 10.
    - `retainUntilFor(status, createdAt, rejectedYears)`: **den ene funksjonen** som gir `retain_until` (status + `created_at` + år → dato, med `addYears` fra `usage-log.ts`). Brukes ved ny rad og ved **hver** statusovergang, så en rad som ender som `accepted` eller `edited` aldri blir stående med kort dato, uansett vei (også via angre).
+   - `getAiRetentionSettings(actor, organizationId)`: lesefunksjonen siden bruker. Krever `organization.manage` via `requireOrganizationAccess` og leser med `grant.organizationId`. Siden leser aldri `settings` direkte.
    - `saveAiRetentionSettings(actor, organizationId, input)`: krever `organization.manage` via `requireOrganizationAccess` og bruker bare `grant.organizationId`. Validerer med Zod (tekst fra skjemaet gjøres om til heltall). Feilmeldingen og loggen gjengir aldri det som ble skrevet inn. I én transaksjon: les raden med radlås (`for update`), finn gammel verdi med `readRejectedRetentionYears` (verdien som faktisk gjaldt, altså 10 når nøkkelen mangler eller er ugyldig, aldri råverdien fra JSONB), slå sammen med de andre nøklene (aldri overskriv andre nøkler, som i `src/core/work-sessions/settings.ts`) og skriv én rad i revisjonsloggen (`recordAuditEvent`) med nøkkel, gammel og ny verdi (bare tall). **Samme verdi som før:** ingen skriving og ingen rad i revisjonsloggen, men skjemaet viser vanlig kvittering (A275).
 3. **Utregningen av `retain_until`** i `src/core/ai`, alltid med `retainUntilFor` og innstillingen lest med `grant.organizationId` (aldri organisasjonen fra raden, målet eller skjemaet):
    - Ny rad (alle utfall, også `blocked` og feil): `created_at` + 10 år, som i dag.
@@ -37,7 +38,7 @@ KI lager ingen forslag her. Oppgaven styrer hvor lenge KI-forslag og beslutninge
    - «Angre» fra `rejected` tilbake til `suggested`: `created_at` + 10 år igjen.
    - Konstanten `AI_USAGE_RETENTION_YEARS` (10) blir stående for alt unntatt avviste.
 4. **Admin-side `/admin/ki`** med fanen «KI» i adminmenyen: ett tallfelt «Oppbevar avviste KI-forslag minst (år)», hjelpetekst «Tallet er hvor lenge et avvist forslag minst oppbevares. Ingenting fjernes automatisk ennå. Godtatte og endrede forslag oppbevares alltid i minst 10 år. Endringen gjelder bare forslag som avvises etter at du har lagret.» Siden lover aldri sletting. Siden og server action bruker tilgangssjekken i `src/core/access` (ingen rollesjekk i komponenten); organisasjonen kommer fra økten. knappen «Lagre», kvittering og feilmelding på norsk. Server action kaller `saveAiRetentionSettings`. Bruk eksisterende skjemadeler (`form-parts.tsx`, `form-state.ts`) og Fjord-profilen; ingen nye komponenter.
-5. **Dokumenter:** ny A272 (og A273–A275 under) i «Avgjort av agentene» i `docs/09-apne-sporsmal.md`; A157 får merknaden «Oppbevaringstiden endret av Ståle 12.11.2026 (K7), se A272»; ADR 0006 linje 193 og 198 rettes (ikke lenger fast 10 år for alt); `docs/05-domenemodell.md` (4.12 `retain_until` rundt linje 1693, og listen over innstillinger) og ordlisten (`rejected_retention_years`); kommentaren i `src/db/schema/ai-usage-log.ts` linje 23; den interne personvernerklæringen `docs/personvern/intern-personvernerklaering.md`, rad `ai_usage_log` (innstilling 1–10 år, standard 10, satt av admin, ingen automatisk rydding ennå, se spørsmål 81); T-0068 settes til «rettet» for A157-delen med PR-nummer (A55 og A87 sjekkes; er de ikke merket, merkes de også, én linje hver). Planen krysses av.
+5. **Dokumenter:** ny A272 (og A273–A275 under) i «Avgjort av agentene» i `docs/09-apne-sporsmal.md`; A157 får merknaden «Oppbevaringstiden endret av Ståle 12.11.2026 (K7), se A272»; ADR 0006 linje 193 og 198 rettes (ikke lenger fast 10 år for alt); `docs/05-domenemodell.md` (4.12 `retain_until` rundt linje 1693, og listen over innstillinger) og ordlisten (`rejected_retention_years`); kommentaren i `src/db/schema/ai-usage-log.ts` linje 23; den interne personvernerklæringen `docs/personvern/intern-personvernerklaering.md`, rad `ai_usage_log` (innstilling 1–10 år, standard 10, satt av admin, ingen automatisk rydding ennå, se spørsmål 81); T-0068 settes til «rettet» for A157-delen med PR-nummer. A55 og A87 hører ikke til K7 og røres ikke her. Planen krysses av.
 6. Versjon: neste patch over det main har når PR-en åpnes (main har 0.11.1 13.11.2026 kl. 19 UTC).
 
 **Ikke med (bevisst utelatt):**
@@ -87,15 +88,15 @@ Ingen fagregler eller TG-logikk.
 
 - [ ] Uten innstilling får en avvist rad `retain_until` = `created_at` + 10 år (test).
 - [ ] Med innstillingen 2 får en manuelt avvist rad og en rad avvist ved nytt forslag `created_at` + 2 år; godtatt og endret rad får + 10 år; sperret og feilet rad + 10 år (test).
-- [ ] Angre fra avvist gir + 10 år igjen, og avvist med 2 år → angre → godtatt gir + 10 år; angre fra godtatt eller endret gir + 10 år (test).
+- [ ] Én angre-test: avvist med 2 år → angre (+ 10 år igjen) → godtatt gir + 10 år (test). Andre angre-veier dekkes av at `retainUntilFor` brukes ved hver overgang.
 - [ ] Når et nytt forslag erstatter gamle, får hver avvist rad sin egen dato ut fra egen `created_at` (test med minst to rader med ulik `created_at`).
 - [ ] A273: rad avvist med innstilling 10 beholder + 10 år etter at innstillingen settes til 2, og rad avvist med 2 beholder + 2 år etter at den settes til 10 igjen (test).
-- [ ] Grensene 1 og 10 gir riktig dato, og 29. februar gir samme dato som `addYears` (1. mars) både ved manuell og automatisk avvisning (test).
-- [ ] Ugyldige verdier i databasen (0, 11, 2.5, "5", null, -1, {}, og `settings` = null) gir 10 og en advarsel med bare organisasjon og nøkkel, aldri verdien (test med spion på `logger.warn`).
+- [ ] Grensene 1 og 10 gir riktig dato, og 29. februar gir 1. mars, i enhetstesten av `retainUntilFor` (test). Integrasjonstestene bruker vanlige datoer; den statiske sjekken ST1 viser at ingen `interval` i SQL brukes for `retain_until`.
+- [ ] Ugyldige verdier i databasen (0, 11, 2.5, "5", null, -1, {}, og `settings` = null) gir 10 og en advarsel med bare organisasjon og nøkkel, aldri verdien: én tabelltest (`it.each`) med spion på `logger.warn`. Manglende nøkkel gir 10 uten advarsel (test).
 - [ ] `saveAiRetentionSettings` avviser 0, 11, 2.5, «abc», tom verdi og negativt tall med «Skriv et helt antall år fra 1 til 10.» uten å gjengi det som ble skrevet, og skriver ingenting (test).
 - [ ] Lagring beholder andre nøkler (`access.inspectors_edit_all`, `time_tracking.*`, `photo.retention.*`), lagrer verdien som tall (`typeof` number) også når skjemaet sender tekst, og skriver én rad i revisjonsloggen med nøkkel, gammel og ny verdi som tall. Gammel verdi er 10 når det som stod var ugyldig. Samme verdi som før gir ingen ny rad (test).
 - [ ] Takstmann, kontor og leder får ingen tilgang til lagring eller siden; admin har alltid tilgang (test).
-- [ ] Bruker i annen organisasjon får ikke tilgang (`expectTenantIsolation` på både lagring og lesing; testen sender `organizationId` fra en annen organisasjon), og innstilling 1 i én organisasjon endrer ikke `retain_until` når noe avvises i en annen (test).
+- [ ] Bruker i annen organisasjon får ikke tilgang (`expectTenantIsolation` på både `saveAiRetentionSettings` og `getAiRetentionSettings`; testen sender `organizationId` fra en annen organisasjon), og innstilling 1 i én organisasjon endrer ikke `retain_until` når noe avvises i en annen (test).
 - [ ] Ingen rad i `ai_usage_log` slettes permanent eller får `deleted_at` av denne endringen; antall rader er det samme etter alle overgangene (test).
 - [ ] Hjelpeteksten på `/admin/ki` sier «minst» og at ingenting fjernes automatisk ennå (e2e).
 - [ ] Eksisterende `record-decision-order*.test.ts` og `suggestion-status*.test.ts` er grønne uendret.
@@ -117,6 +118,13 @@ Ikke med: arkitekt (følger eksisterende mønster for innstillinger), ux/ui (ett
 - **Gammel verdi i revisjonsloggen:** sikkerhet-personvern foreslo `null` når nøkkelen mangler eller er ugyldig; test-leder foreslo verdien som faktisk gjaldt (10). Valgt: verdien som gjaldt. Den forteller hvilken oppbevaring som styrte avvisningene før endringen, er alltid et validert tall, og kravet fra sikkerhet-personvern (aldri råverdien fra JSONB) er oppfylt. (A275)
 - **Samme verdi som før:** ingen skriving og ingen rad i revisjonsloggen. Loggen skal vise endringer, ikke trykk på «Lagre». (A275)
 - **Skuddår:** utregning i koden per rad med dagens `addYears`, ikke SQL-intervall, så samme regel gjelder overalt. (A275)
+- **Forenkler (13.11.2026), godtatt:**
+  - A55 og A87 tas ut av omfanget. De er ikke K7; testlaget tar dem.
+  - Angre: én test (avvist med 2 år → angre → godtatt). `retainUntilFor` brukes ved hver overgang, så flere angre-tester gir ikke mer trygghet.
+  - Ugyldige verdier i databasen: én tabelltest.
+  - Skuddår testes bare i enhetstesten av `retainUntilFor` (U4). Faren for SQL-intervall i den automatiske avvisningen dekkes av den statiske sjekken ST1 (ingen `interval` for `retain_until`), ikke av egne skuddårstester i integrasjon.
+  - Ingen nye komponenter, avhengigheter, migreringer eller rettigheter.
+- **Funn F1 og F2 i testplanen:** F1: mangler nøkkelen, gis 10 uten advarsel (mangler er normalt, advarsel per avvisning blir støy); bare ugyldig verdi gir advarsel. F2: lesefunksjonen `getAiRetentionSettings` med tilgangssjekk er lagt inn i omfanget.
 - **Spørsmål til Ståle:** kortet sa «ingen». Det holder ikke: hva som skjer når tiden er ute, er personvern og Ståles. Lagt inn som spørsmål 81 (stopper ikke bygging). Nr. 80 er tatt av T2.
 
 ## Åpne spørsmål

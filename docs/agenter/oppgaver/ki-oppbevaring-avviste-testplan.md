@@ -26,7 +26,7 @@
 | U3 | `retainUntilFor: grensene 1 og 10` | `rejected` med 1 gir +1 år, med 10 gir +10 år. |
 | U4 | `retainUntilFor: 29. februar gir 1. mars` | `created_at` 2028-02-29T12:00:00Z med 1 år gir 2029-03-01T12:00:00Z (fast tekst), og er lik `addYears`. Med 4 år gir 2032-02-29. |
 | U5 | `readRejectedRetentionYears: gyldige tall` | 1, 5 og 10 gir samme tall; ingen advarsel (`logger.warn` ikke kalt). |
-| U6 | `readRejectedRetentionYears: mangler gir 10 uten advarsel` | `{}` og settings uten nøkkelen gir 10. Avgjør i testen: mangler er normalt, så **ingen** advarsel. (Kortet sier «mangler eller ugyldig: 10, og en advarsel». Utvikler og testskriver følger kortet hvis de leser det som advarsel også ved mangler; testen skal da sjekke det. Avklares ved bygging, se Funn F1.) |
+| U6 | `readRejectedRetentionYears: mangler gir 10 uten advarsel` | `{}` og settings uten nøkkelen gir 10, og `logger.warn` kalles ikke (avgjort i kortet, F1). |
 | U7 | `readRejectedRetentionYears: ugyldige verdier gir 10 og advarsel uten verdien` (tabelltest) | 0, 11, 2.5, `"5"`, `null`, -1, `{}`, `[]`, `true`, `NaN`-lignende tekst, og `settings` = `null` og `settings` = tekst. Hver gir 10. `logger.warn` kalles med organisasjons-id og nøkkelen `ai.rejected_retention_years`; spionen sjekker at ingen argument (serialisert med `JSON.stringify`) inneholder den ugyldige verdien. |
 | U8 | `saveAiRetentionSettings: Zod-skjemaet` (ren validering om skjemaet er eksportert, ellers i integrasjon I8) | `"3"` blir 3 (number), `" 3 "` godtas eller avvises likt med skjemaet i `form-parts`; `"0"`, `"11"`, `"2.5"`, `"abc"`, `""`, `"-1"`, `"1e1"` avvises. |
 
@@ -65,15 +65,12 @@ Innstillingen 2 i organisasjonen hvis ikke annet står. Rad laget med `createAiU
 | D1 | `avvist uten innstilling gir 10 år` | Ingen nøkkel: `reject` gir `addYears(created_at, 10)`. |
 | D2 | `avvist med innstilling 2 gir 2 år` | `reject` gir `addYears(created_at, 2)`. |
 | D3 | `godtatt og endret gir 10 år` | `accept` og `edit` gir `addYears(created_at, 10)`, også når raden ble laget med kort dato (rådata med `retain_until` = +2 år før overgangen). Viser at `record-decision.ts` nå setter `retain_until`. |
-| D4 | `angre fra avvist gir 10 år igjen` | `reject` (+2) → `undo` → status `suggested` og +10. |
-| D5 | `avvist → angre → godtatt gir 10 år` | Hele veien ender på +10. |
-| D6 | `angre fra godtatt og fra endret gir 10 år` | +10 etter angre. |
+| D4 | `avvist → angre → godtatt gir 10 år` | `reject` (+2) → `undo` gir `suggested` og +10 → `accept` gir +10. Eneste angre-test (forenkler). |
 | D7 | `grensene 1 og 10` | Innstilling 1 gir +1, innstilling 10 gir +10. |
-| D8 | `29. februar ved manuell avvisning` | `created_at` 2028-02-29T12:00:00Z, innstilling 1: 2029-03-01T12:00:00Z, lik `addYears`. |
 | D9 | `A273: kortere og lengre virker bare fremover` | Rad R1 avvist med innstilling 10 (+10). Sett 2. R1 er fortsatt +10. Rad R2 avvist nå (+2). Sett 10. R2 er fortsatt +2. |
 | D10 | `ugyldig innstilling i databasen gir 10 år` | `"5"` som tekst: avvist rad får +10, og advarsel logges uten verdien. |
 | D11 | `innstillingen leses fra grant.organizationId` | Organisasjon A har 1, B har 10. Admin i B avviser en rad i B: +10. Admin i A avviser i A: +1. Ingen rad i A endres av avvisningen i B (`retain_until`, `status`, `updated_at` uendret). |
-| D12 | `ingen rad slettes` | Etter alle overgangene i D1–D9: antall rader i `ai_usage_log` er det samme, og ingen har fått `deleted_at`. |
+| D12 | `ingen rad slettes` | Etter alle overgangene i D1–D9 (D5, D6 og D8 er tatt ut): antall rader i `ai_usage_log` er det samme, og ingen har fått `deleted_at`. |
 
 ### 2d. `src/core/ai/request-suggestion.test.ts` (tillegg): avvist fordi nytt forslag erstatter
 
@@ -81,7 +78,6 @@ Innstillingen 2 i organisasjonen hvis ikke annet står. Rad laget med `createAiU
 |---|---|---|
 | S1 | `erstattet forslag får innstillingen` | Innstilling 2. Eldre `suggested` rad på samme mål. Nytt forslag (utfall `ok`): den gamle blir `rejected` med `addYears(created_at, 2)`. Det nye forslaget har +10. |
 | S2 | `hver erstattet rad får sin egen dato` | To eldre `suggested` rader på samme mål med `created_at` 2026-11-01 og 2026-11-05: hver får +2 fra **egen** `created_at` (to ulike datoer). |
-| S3 | `29. februar ved automatisk avvisning` | Eldre rad med `created_at` 2028-02-29, innstilling 1: 2029-03-01, lik `addYears`. Viser at datoen ikke regnes med SQL-intervall. |
 | S4 | `uten innstilling: erstattet rad får 10 år` | Ingen nøkkel gir +10. |
 | S5 | `nytt forslag som ikke er brukbart avviser ingenting` | Utfall `blocked` eller feil: eldre rad er fortsatt `suggested` med uendret `retain_until` (avklaring A holder). |
 | S6 | `rader på andre mål og i andre organisasjoner røres ikke` | Organisasjon B har en `suggested` rad på samme feature og et mål med samme id-mønster, og innstilling 1. Nytt forslag i A: Bs rad er uendret. As erstattede rad får As innstilling, ikke Bs. |
@@ -139,10 +135,10 @@ Kjøres i serie (testene deler innstillingen). Verdien leses før og settes tilb
 |---|---|
 | Uten innstilling: avvist + 10 år | D1, S4, U6 |
 | Innstilling 2: manuelt og ved nytt forslag + 2; godtatt, endret, sperret, feilet + 10 | D2, D3, S1, L1, U2 |
-| Angre gir + 10 igjen, alle veier | D4, D5, D6 |
+| Én angre-test: avvist 2 år → angre → godtatt gir + 10 | D4 |
 | Hver erstattet rad egen dato | S2 |
 | A273 bare fremover | D9 |
-| Grensene og 29. februar, manuelt og automatisk | U3, U4, D7, D8, S3 |
+| Grensene, og 29. februar i enhetstesten | U3, U4, D7, ST1 |
 | Ugyldige verdier i databasen gir 10 og advarsel uten verdien | U7, D10 |
 | Lagring avviser ugyldig uten å gjengi | U8, I8, A4 |
 | Beholder andre nøkler, tall, revisjonslogg, gammel 10, samme verdi ingen rad | I4, I5, I6, I7, I9, I10, I11 |
@@ -156,6 +152,8 @@ Kjøres i serie (testene deler innstillingen). Verdien leses før og settes tilb
 | `pnpm lint`, `typecheck`, `test`, `test:e2e` grønne | kjøres av test-leder til slutt |
 
 ## 8. Funn i kortet før bygging
+
+Begge funnene er avgjort i kortet (13.11.2026): F1 ingen advarsel når nøkkelen mangler; F2 lesefunksjonen `getAiRetentionSettings` er med i omfanget.
 
 - **F1 (lite):** Kortet sier advarsel når nøkkelen «mangler eller er ugyldig». Mangler er normaltilstanden (ingen har lagret ennå), og en advarsel per avvisning blir støy i loggen. Testplanen foreslår advarsel bare ved ugyldig verdi (U6). Velger utvikleren å følge kortet ordrett, skal U6 sjekke advarselen i stedet; begge godtas, men testen må sjekke det som er bygget.
 - **F2 (lite):** Kortet nevner ikke en egen lesefunksjon med tilgangssjekk for siden, men krever `expectTenantIsolation` på lesing. Testplanen forutsetter en lesefunksjon i `src/core/ai` (I3, I13). Uten den avvises leveransen.
