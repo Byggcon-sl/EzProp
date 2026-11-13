@@ -5,13 +5,15 @@ import {
   type countWorkQueueByStatus,
 } from "@/core/assignments";
 import { cn } from "@/shared/lib/cn";
+import { SEARCH_QUERY_MAX_LENGTH } from "@/shared/lib/like-pattern";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/form";
 import { QUEUE_PATH, queueHref, type QueueState } from "./queue-href";
 
 export type WorkQueueCounts = Awaited<ReturnType<typeof countWorkQueueByStatus>>;
 
-const SEARCH_LABEL = "Søk på adresse eller oppdragsnummer";
+/** Samme tekst som i ordrelisten. Ingen autofokus (tastaturet skal ikke sprette opp på iPad). */
+const SEARCH_LABEL = "Søk på adresse, nummer, megler eller gnr/bnr";
 
 const segmentList = "flex flex-wrap gap-1 rounded-xl bg-white/60 p-1 ring-1 ring-slate-200/60";
 const segmentLink =
@@ -100,7 +102,7 @@ export function QueueToolbar({ queue, counts }: { queue: QueueState; counts: Wor
           className="flex min-w-64 flex-1 items-center gap-3"
         >
           <input type="hidden" name="status" value={queue.status} />
-          {!queue.mineOnly && <input type="hidden" name="mine" value="0" />}
+          <input type="hidden" name="mine" value={queue.mineOnly ? "1" : "0"} />
           <label htmlFor="work-queue-q" className="sr-only">
             {SEARCH_LABEL}
           </label>
@@ -110,7 +112,7 @@ export function QueueToolbar({ queue, counts }: { queue: QueueState; counts: Wor
               id="work-queue-q"
               name="q"
               type="search"
-              maxLength={100}
+              maxLength={SEARCH_QUERY_MAX_LENGTH}
               placeholder={SEARCH_LABEL}
               defaultValue={queue.query}
               className="pl-10"

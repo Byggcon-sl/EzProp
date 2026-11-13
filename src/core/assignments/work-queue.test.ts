@@ -4,10 +4,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 import { AccessDeniedError, type Actor } from "@/core/access";
 import { db } from "@/db/client";
-import { assignments, auditLog, employees, organizations, type EmployeeRole } from "@/db/schema";
+import {
+  assignments,
+  auditLog,
+  cadastralUnits as cadastralUnitsTable,
+  employees,
+  organizations,
+  type EmployeeRole,
+} from "@/db/schema";
 import {
   auditRows,
   createAssignment,
+  createAssignmentParty,
   createEmployee,
   createOffice,
   createOrder,
@@ -568,6 +576,163 @@ describe("2.4 søk", () => {
       deletedAt: TEST_NOW,
     });
     expect(await search(setup, "Slettetveien")).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 2.4b Søk på de samme feltene som ordrelisten (T2, docs/funksjoner/fase2a-sok-ordre-arbeidsko.md)
+// ---------------------------------------------------------------------------------------------
+
+describe("2.4b søk på de samme feltene som ordrelisten", () => {
+  async function search(setup: Setup, query: string, status: AssignmentStatus = "ordered") {
+    return (await list(setup.admin, setup.org.id, { status, mineOnly: false, query })).map(
+      (r) => r.id,
+    );
+  }
+
+  it.each([
+    { field: "meglerens ordrenummer", order: { externalRef: "MEG-4711" }, query: "meg-47" },
+    { field: "oppdragsgiver", order: { orderedByText: "Fjordmegler Bodø" }, query: "FJORDMEG" },
+    { field: "ordreadressen", order: { addressText: "Ordreveien 3" }, query: "ordreveien" },
+  ])("$field på ordren gir treff (via assignments.order_id)", async ({ order, query }) => {
+    const setup = await orgWithAdmin();
+    const row = await createOrder(setup.org.id, order);
+    const hit = await newAssignment(setup, { orderId: row.id });
+    await newAssignment(setup);
+    expect(await search(setup, query)).toEqual([hit.id]);
+  });
+
+  it("ordren nås også via orders.assignment_id (konvertert ordre)", async () => {
+    const setup = await orgWithAdmin();
+    const hit = await newAssignment(setup);
+    await createOrder(setup.org.id, {
+      externalRef: "MEG-0815",
+      status: "converted",
+      assignmentId: hit.id,
+    });
+    await newAssignment(setup);
+    expect(await search(setup, "MEG-0815")).toEqual([hit.id]);
+  });
+
+  it("partens navn og firma gir treff; to treffende parter gir ett kort", async () => {
+    const setup = await orgWithAdmin();
+    const hit = await newAssignment(setup);
+    await createAssignmentParty(setup.org.id, {
+      assignmentId: hit.id,
+      name: "Kari Testmegler",
+      firmName: "Testmegling AS",
+    });
+    await createAssignmentParty(setup.org.id, {
+      assignmentId: hit.id,
+      role: "seller",
+      name: "Ola Testmegler",
+    });
+    await newAssignment(setup);
+    expect(await search(setup, "testmegler")).toEqual([hit.id]);
+    expect(await search(setup, "TESTMEGLING")).toEqual([hit.id]);
+    expect(
+      (await count(setup.admin, setup.org.id, { mineOnly: false, query: "testmegler" })).ordered,
+    ).toBe(1);
+  });
+
+  it("e-post og telefon til parter gir ikke treff; slettet part gir ikke treff", async () => {
+    const setup = await orgWithAdmin();
+    const row = await newAssignment(setup);
+    await createAssignmentParty(setup.org.id, {
+      assignmentId: row.id,
+      name: "Per Partsen",
+      email: "kontakt@eksempel.test",
+      phone: "40000000",
+    });
+    await createAssignmentParty(setup.org.id, {
+      assignmentId: row.id,
+      name: "Slettet Partsen",
+      deletedAt: TEST_NOW,
+    });
+    expect(await search(setup, "eksempel.test")).toEqual([]);
+    expect(await search(setup, "40000000")).toEqual([]);
+    expect(await search(setup, "Slettet Partsen")).toEqual([]);
+  });
+
+  it("matrikkel fra cadastral_units: «12/34» finner 12/34 og 12/34/0/5, ikke 112/34 eller 12/345", async () => {
+    const setup = await orgWithAdmin();
+    const ids = new Map<string, string>();
+    for (const [gnr, bnr, snr] of [
+      ["12", "34", null],
+      ["12", "34", "5"],
+      ["112", "34", null],
+      ["12", "345", null],
+    ] as const) {
+      const row = await newAssignment(setup);
+      await createProperty(setup.org.id, { assignmentId: row.id, gnr, bnr, snr });
+      ids.set(`${gnr}/${bnr}/${snr ?? ""}`, row.id);
+    }
+    expect((await search(setup, "12 / 34")).sort()).toEqual(
+      [ids.get("12/34/"), ids.get("12/34/5")].sort(),
+    );
+    expect(await search(setup, "12/34/0/5")).toEqual([ids.get("12/34/5")]);
+  });
+
+  it("matrikkel fra ordren gir treff", async () => {
+    const setup = await orgWithAdmin();
+    const order = await createOrder(setup.org.id, { gnr: "77", bnr: "8" });
+    const hit = await newAssignment(setup, { orderId: order.id });
+    await newAssignment(setup);
+    expect(await search(setup, "77/8")).toEqual([hit.id]);
+  });
+
+  it("slettet ordre og slettet matrikkel gir ikke treff", async () => {
+    const setup = await orgWithAdmin();
+    const order = await createOrder(setup.org.id, {
+      externalRef: "MEG-SLETTET",
+      deletedAt: TEST_NOW,
+    });
+    await newAssignment(setup, { orderId: order.id });
+    const row = await newAssignment(setup);
+    const { cadastralUnit } = await createProperty(setup.org.id, {
+      assignmentId: row.id,
+      gnr: "55",
+      bnr: "66",
+    });
+    await db
+      .update(cadastralUnitsTable)
+      .set({ deletedAt: TEST_NOW })
+      .where(eq(cadastralUnitsTable.id, cadastralUnit.id));
+    expect(await search(setup, "MEG-SLETTET")).toEqual([]);
+    expect(await search(setup, "55/66")).toEqual([]);
+  });
+
+  it("kansellert oppdrag gir aldri treff i arbeidskøen", async () => {
+    const setup = await orgWithAdmin();
+    const order = await createOrder(setup.org.id, { externalRef: "MEG-KANS" });
+    await newAssignment(setup, { orderId: order.id, deletedAt: TEST_NOW });
+    expect(await search(setup, "MEG-KANS")).toEqual([]);
+    expect(await count(setup.admin, setup.org.id, { mineOnly: false, query: "MEG-KANS" })).toEqual({
+      ordered: 0,
+      in_progress: 0,
+      completed: 0,
+      invoiced: 0,
+    });
+  });
+
+  it("tellingene per fane følger søket på de nye feltene (treff i andre faner)", async () => {
+    const setup = await orgWithAdmin();
+    const order = await createOrder(setup.org.id, { externalRef: "MEG-FANE" });
+    await newAssignment(setup, { orderId: order.id, status: "completed" });
+    await newAssignment(setup, { status: "in_progress" });
+    const counts = await count(setup.admin, setup.org.id, { mineOnly: false, query: "meg-fane" });
+    expect(counts).toEqual({ ordered: 0, in_progress: 0, completed: 1, invoiced: 0 });
+    expect(await search(setup, "meg-fane", "in_progress")).toEqual([]);
+    expect(await search(setup, "meg-fane", "completed")).toHaveLength(1);
+  });
+
+  it("søket lager ingen rader i revisjonsloggen", async () => {
+    const setup = await orgWithAdmin();
+    await newAssignment(setup);
+    const before = await auditCount();
+    await search(setup, "Testveien");
+    await count(setup.admin, setup.org.id, { mineOnly: false, query: "12/34" });
+    expect(await auditCount()).toBe(before);
   });
 });
 
@@ -1228,6 +1393,61 @@ describe("2.9 tenant-isolasjon", () => {
       ).map((r) => r.id);
       expect(idsA).toEqual([rowA.id]);
       expect((await count(a.admin, a.org.id, { mineOnly: false, query })).ordered).toBe(1);
+    }
+  });
+
+  it("2.9.4 søk på alle feltene: samme tekst i A og B gir bare egne oppdrag", async () => {
+    const queries = [
+      "Testveien",
+      "MEG-4711",
+      "Fjordmegler",
+      "Kari Testmegler",
+      "Testmegling",
+      "12/34",
+    ];
+    for (const query of queries) {
+      await resetDatabase();
+      await expectTenantIsolation<Item>({
+        seed: async (grantA, grantB) => {
+          const ids: Record<string, string[]> = {};
+          for (const grant of [grantA, grantB]) {
+            const order = await createOrder(grant.organizationId, {
+              addressText: "Testveien 12, 8000 Bodø",
+              externalRef: "MEG-4711",
+              orderedByText: "Fjordmegler Bodø",
+              gnr: "12",
+              bnr: "34",
+            });
+            const row = await createAssignment(grant.organizationId, {
+              orderId: order.id,
+            } as Parameters<typeof createAssignment>[1]);
+            await createProperty(grant.organizationId, {
+              assignmentId: row.id,
+              address: "Testveien 12",
+              gnr: "12",
+              bnr: "34",
+            });
+            await createAssignmentParty(grant.organizationId, {
+              assignmentId: row.id,
+              name: "Kari Testmegler",
+              firmName: "Testmegling AS",
+            });
+            ids[grant.organizationId] = [row.id];
+          }
+          return { a: ids[grantA.organizationId]!, b: ids[grantB.organizationId]! };
+        },
+        query: async (actor, organizationId) => {
+          const items = await list(actor, organizationId, {
+            status: "ordered",
+            mineOnly: false,
+            query,
+          });
+          const counts = await count(actor, organizationId, { mineOnly: false, query });
+          expect(counts.ordered).toBe(items.length);
+          return items;
+        },
+        idOf: (row) => row.id,
+      });
     }
   });
 
