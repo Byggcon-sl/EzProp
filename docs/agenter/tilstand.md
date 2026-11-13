@@ -106,7 +106,7 @@ Ingen.
 ## Pågår
 
 - **K7 Oppbevaringstid for avviste KI-forslag** (fase 2a), branch `ki-oppbevaring-avviste`, overtatt og arbeidsflyten startet 13.11.2026 kl. 18:55 UTC av hovedløkken (sesjon 01Jqwnu2bCrAdQw2xz4RiABh). K7 flyttes til A272–A275 (A264–A271 er testdata-kortets).
-- **T3 Varsel om mulig dublett** (fase 2a): PR #198 åpnet 13.11.2026 (branch `varsel-dublett`, versjon 0.11.3, migrering `0033_indekser-mulig-dublett`, A285–A291). Merges med skriptet når CI er grønn. Små funn som står (tas med neste ordreoppgave): EXPLAIN uten adresse og matrikkel samtidig, doble testfiler, kontrastsjekk i stedet for axe, ulike lengdegrenser i dublettjenesten og ordreskjemaet, unødige eksporter i `src/core/orders/index.ts`.
+- **T3 Varsel om mulig dublett** (fase 2a): PR #198 åpnet 13.11.2026 (branch `varsel-dublett`, versjon 0.11.3, migrering `0033_indekser-mulig-dublett`, A285–A291). Merges med skriptet når CI er grønn. **CI rød ved åpning:** e2e 7.13 på iPad stående (`e2e/fase-2a-varsel-dublett.spec.ts`) gir sidebredde 836 mot 834 i CI på begge forsøk, men er grønn lokalt; noe på ordresiden med lange adresser er 2 px for bredt i CI. Hovedløkken retter. Små funn som står (tas med neste ordreoppgave): EXPLAIN uten adresse og matrikkel samtidig, doble testfiler, kontrastsjekk i stedet for axe, ulike lengdegrenser i dublettjenesten og ordreskjemaet, unødige eksporter i `src/core/orders/index.ts`.
 - **Testdata som ligner en ekte arbeidshverdag**, branch `testdata-arbeidshverdag` (oppgavekort, siste commit 15:16 UTC). Står den uten ny commit i over 2 timer, overtar neste kjøring den. Kortet bruker A264–A271, som overlapper med K7 (A264–A267 på `ki-oppbevaring-avviste`): den som merges sist, flytter numrene.
 
 ## Siste kjøring
