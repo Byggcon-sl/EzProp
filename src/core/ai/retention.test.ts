@@ -74,9 +74,7 @@ describe("retainUntilFor og readRejectedRetentionYears (U1–U7)", () => {
   it("U4 retainUntilFor: 29. februar gir 1. mars", () => {
     const leap = new Date("2028-02-29T12:00:00Z");
     expect(retainUntilFor("rejected", leap, 1).toISOString()).toBe("2029-03-01T12:00:00.000Z");
-    expect(retainUntilFor("rejected", leap, 1).toISOString()).toBe(
-      addYears(leap, 1).toISOString(),
-    );
+    expect(retainUntilFor("rejected", leap, 1).toISOString()).toBe(addYears(leap, 1).toISOString());
     expect(retainUntilFor("rejected", leap, 4).toISOString()).toBe("2032-02-29T12:00:00.000Z");
   });
 
