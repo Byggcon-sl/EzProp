@@ -151,7 +151,7 @@ export async function updateOrder(
       await recordEvent(tx, grant, { type: "order.updated", data: { orderId, fields } });
     }
 
-    const order = await selectOrder(tx, grant.organizationId, orderId);
+    const order = await selectOrder(tx, grant, orderId);
     if (!order) throw new AccessDeniedError();
     return order;
   });

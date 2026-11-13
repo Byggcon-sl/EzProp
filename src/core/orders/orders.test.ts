@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { count, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ZodError } from "zod";
-import { AccessDeniedError, type Actor } from "@/core/access";
+import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
 import { cancelAssignment } from "@/core/assignments";
 import { ContactNotFoundError } from "@/core/contacts";
 import { db } from "@/db/client";
@@ -38,7 +38,6 @@ import {
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { OfficeNotFoundError, OrderAlreadyHandledError } from "./errors";
 import {
-  ORDER_LIST_LIMIT,
   convertOrderToAssignment,
   createOrder,
   getOrder,
@@ -46,6 +45,8 @@ import {
   orderListSummary,
   rejectOrder,
 } from "./index";
+import { ORDER_LIST_LIMIT } from "./list";
+import { selectOrder } from "./orders";
 
 /** Radene i ordrelisten, for testene som bare ser på radene. */
 async function listOrderItems(actor: Actor, organizationId: string, query?: string) {
@@ -534,6 +535,20 @@ describe("4.3 fremmed, ukjent og slettet id", () => {
 
     expect(await tableCounts()).toEqual(before);
     expect((await orderRow(orderB.id)).status).toBe("received");
+  });
+
+  it("4.3.1 selectOrder er ikke en åpen eksport fra @/core/orders", async () => {
+    expect(Object.keys(await import("@/core/orders"))).not.toContain("selectOrder");
+  });
+
+  it("4.3.1 selectOrder med grant fra B og ordre-id i A gir ingen rad; grant fra A gir raden", async () => {
+    const { a, b } = await twoOrgs();
+    const orderA = await insertOrder(a.org.id);
+    const grantA = await requireOrganizationAccess(a.admin, a.org.id, "organization.read");
+    const grantB = await requireOrganizationAccess(b.admin, b.org.id, "organization.read");
+
+    expect(await selectOrder(db, grantB, orderA.id)).toBeNull();
+    expect((await selectOrder(db, grantA, orderA.id))?.id).toBe(orderA.id);
   });
 
   it("4.3.2 kontor fra B gir OfficeNotFoundError; ingen oppdrag, ingen serie, ingen hendelse", async () => {

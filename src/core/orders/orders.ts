@@ -1,5 +1,10 @@
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
-import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
+import {
+  AccessDeniedError,
+  requireOrganizationAccess,
+  type Actor,
+  type EmployeeGrant,
+} from "@/core/access";
 import { assignmentFieldsMatch, nextAssignmentNumber, orderFieldsMatch } from "@/core/assignments";
 import { recordAuditEvent } from "@/core/audit";
 import { ContactNotFoundError, findContactForLink } from "@/core/contacts";
@@ -94,11 +99,13 @@ export const listOrders: ListOrders = async (actor, organizationId, options = {}
 
 /**
  * Leser én ordre med alle feltene, oppdragsnummeret og `rowVersion` (versjonen skjemaet for
- * endring sender tilbake, A253). Ingen andre sporingsfelt. `organizationId` skal komme fra
- * tilgangssjekken hos den som kaller. Gir `null` når ordren ikke finnes i organisasjonen eller er
- * slettet.
+ * endring sender tilbake, A253). Ingen andre sporingsfelt. Tar `grant` fra tilgangssjekken og
+ * filtrerer på `grant.organizationId`, så den kan ikke kalles med en id fra adressen. Gir `null`
+ * når ordren ikke finnes i organisasjonen eller er slettet. Intern for `core/orders`: eksporteres
+ * ikke fra `index.ts`.
  */
-export async function selectOrder(executor: DbExecutor, organizationId: string, orderId: string) {
+export async function selectOrder(executor: DbExecutor, grant: EmployeeGrant, orderId: string) {
+  const organizationId = grant.organizationId;
   const [row] = await executor
     .select({
       id: orders.id,
@@ -144,7 +151,7 @@ export async function selectOrder(executor: DbExecutor, organizationId: string, 
 export async function getOrder(actor: Actor, organizationId: string, orderId: string) {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
   if (!isUuid(orderId)) throw new AccessDeniedError();
-  const order = await selectOrder(db, grant.organizationId, orderId);
+  const order = await selectOrder(db, grant, orderId);
   if (!order) throw new AccessDeniedError();
   return order;
 }

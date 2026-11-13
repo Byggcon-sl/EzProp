@@ -27,7 +27,8 @@ import {
   TEST_NOW,
 } from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
-import { ORDER_LIST_LIMIT, listOrders, orderListSummary, type OrderListItem } from "./index";
+import { listOrders, orderListSummary } from "./index";
+import { ORDER_LIST_LIMIT, type OrderListItem } from "./list";
 
 /*
  * Søk, grense og total i ordrelisten mot databasen
