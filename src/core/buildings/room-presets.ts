@@ -134,7 +134,8 @@ function highestNumber(label: string, names: readonly (string | null)[]): number
     const trimmed = (name ?? "").trim().toLocaleLowerCase("nb");
     if (!trimmed.startsWith(prefix)) continue;
     const digits = trimmed.slice(prefix.length);
-    if (!/^\d+$/.test(digits)) continue;
+    // Bare tall på høyst fire sifre teller, slik at et urimelig tall i et navn ikke gir like navn.
+    if (!/^\d{1,4}$/.test(digits)) continue;
     highest = Math.max(highest, Number(digits));
   }
   return highest;

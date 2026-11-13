@@ -452,7 +452,9 @@ function expectNorwegian(result: ReturnType<typeof addRoomsInputSchema.safeParse
   expect(result.success).toBe(false);
   if (result.success) return;
   for (const issue of result.error.issues) {
-    expect(issue.message, `norsk melding, ikke «${issue.message}»`).toMatch(/[æøå]|rom|sett|antall/i);
+    expect(issue.message, `norsk melding, ikke «${issue.message}»`).toMatch(
+      /[æøå]|rom|sett|antall/i,
+    );
     expect(issue.message).not.toMatch(/expected|required|invalid|must contain|unrecognized/i);
   }
 }
@@ -537,6 +539,15 @@ describe("F4 addRoomsInputSchema", () => {
     if (!result.success) {
       expect(result.error.issues.map((issue) => issue.message).join(" ")).toMatch(/40/);
     }
+  });
+
+  it("F4.5b list_too_long: flere linjer enn det finnes romtyper avvises", () => {
+    const keys = ROOM_TYPES.map((type) => type.key);
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [...keys, keys[0]].map((roomType) => ({ roomType, count: 1 })),
+      source: "manual",
+    });
+    expect(result.success).toBe(false);
   });
 
   it("F4.6 empty_drafts: tom liste avvises", () => {

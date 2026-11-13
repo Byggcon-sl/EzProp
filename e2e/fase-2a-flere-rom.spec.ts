@@ -1,5 +1,11 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { logIn, logInAsInspector, restoreInspectorsEditAll, setInspectorsEditAll, uniqueSuffix } from "./helpers";
+import {
+  logIn,
+  logInAsInspector,
+  restoreInspectorsEditAll,
+  setInspectorsEditAll,
+  uniqueSuffix,
+} from "./helpers";
 
 /*
  * Flere rom på én gang (T4). Dialogen «Legg til flere rom» på bygningssiden.
@@ -82,7 +88,9 @@ async function newAssignmentWithHousing(page: Page, housingLabel: string): Promi
   await property.getByLabel(/^Boligtype/).selectOption({ label: housingLabel });
   await property.getByLabel(/^Eierform/).selectOption({ label: "Selveier" });
   await clickAndWaitForSave(page, button(property, "Lagre eiendom"));
-  await expect(property.getByLabel(/^Boligtype/).locator("option:checked")).toHaveText(housingLabel);
+  await expect(property.getByLabel(/^Boligtype/).locator("option:checked")).toHaveText(
+    housingLabel,
+  );
   return assignmentId;
 }
 
@@ -258,7 +266,9 @@ test.describe("flere rom på én gang (pc og ipad)", () => {
     await expect(floor).toContainText("Under terreng");
   });
 
-  test("E7 existing_and_numbering: «allerede N rom» og nummerering fortsetter", async ({ page }) => {
+  test("E7 existing_and_numbering: «allerede N rom» og nummerering fortsetter", async ({
+    page,
+  }) => {
     test.slow();
     await logIn(page);
     await apartmentWithFloor(page);
@@ -322,7 +332,9 @@ test.describe("flere rom på én gang (pc og ipad)", () => {
     await expect(block(block(page, BUILDING), FIRST_FLOOR).getByRole("listitem")).toHaveCount(0);
   });
 
-  test("E10 no_double_save: hovedknappen sperres, dobbelttrykk gir bare 7 rom", async ({ page }) => {
+  test("E10 no_double_save: hovedknappen sperres, dobbelttrykk gir bare 7 rom", async ({
+    page,
+  }) => {
     test.slow();
     await logIn(page);
     await apartmentWithFloor(page);
@@ -354,7 +366,9 @@ test.describe("flere rom på én gang (pc og ipad)", () => {
     await expect(block(block(page, BUILDING), FIRST_FLOOR).getByRole("listitem")).toHaveCount(7);
   });
 
-  test("E11 discard_prompt: lukking med tellere over 0 spør «Forkaste N rom?»", async ({ page }) => {
+  test("E11 discard_prompt: lukking med tellere over 0 spør «Forkaste N rom?»", async ({
+    page,
+  }) => {
     await logIn(page);
     await apartmentWithFloor(page);
     const d = await openDialog(page, BUILDING, FIRST_FLOOR);
@@ -438,9 +452,10 @@ test.describe("iPad (prosjektet ipad)", () => {
     expect(minusBox!.height, "«–» minst 44 px").toBeGreaterThanOrEqual(44);
     expect(minusBox!.width, "«–» minst 44 px bred").toBeGreaterThanOrEqual(44);
     // Avstand mellom flis og «–» minst 8 px
-    expect(minusBox!.x - (tileBox!.x + tileBox!.width), "avstand minst 8 px").toBeGreaterThanOrEqual(
-      8 - 1,
-    );
+    expect(
+      minusBox!.x - (tileBox!.x + tileBox!.width),
+      "avstand minst 8 px",
+    ).toBeGreaterThanOrEqual(8 - 1);
 
     const submit = d.getByTestId("add-rooms-submit");
     const submitBox = await submit.boundingBox();

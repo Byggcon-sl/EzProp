@@ -120,7 +120,9 @@ describe("F1 ferdige sett (ROOM_PRESETS)", () => {
       for (const draft of preset.drafts) {
         expect(draft.count, `${key}.${draft.roomType} er 1–20`).toBeGreaterThanOrEqual(1);
         expect(draft.count).toBeLessThanOrEqual(20);
-        expect(seen.has(draft.roomType), `${draft.roomType} står bare én gang i ${key}`).toBe(false);
+        expect(seen.has(draft.roomType), `${draft.roomType} står bare én gang i ${key}`).toBe(
+          false,
+        );
         seen.add(draft.roomType);
         total += draft.count;
       }
@@ -244,8 +246,22 @@ describe("F3 nummerering (numberRoomDrafts)", () => {
     expect(names(result)).toEqual([`${bedroom} 3`]);
   });
 
+  it("F3.4b huge_number_ignored: et urimelig tall i navnet teller ikke", () => {
+    const result = numberRoomDrafts(
+      drafts([["bedroom", 1]]),
+      existing([
+        ["bedroom", `${bedroom} 9007199254740992`],
+        ["bedroom", `${bedroom} 2`],
+      ]),
+    );
+    expect(names(result)).toEqual([`${bedroom} 3`]);
+  });
+
   it("F3.4 gap_uses_max: bare Soverom 2 finnes, +1 gir Soverom 3", () => {
-    const result = numberRoomDrafts(drafts([["bedroom", 1]]), existing([["bedroom", `${bedroom} 2`]]));
+    const result = numberRoomDrafts(
+      drafts([["bedroom", 1]]),
+      existing([["bedroom", `${bedroom} 2`]]),
+    );
     expect(names(result)).toEqual([`${bedroom} 3`]);
   });
 
@@ -331,8 +347,7 @@ describe("F3 nummerering (numberRoomDrafts)", () => {
         const roomType = types[rand(types.length)]!;
         const label = roomTypeLabel(roomType);
         const choice = rand(3);
-        const name =
-          choice === 0 ? null : choice === 1 ? `${label} ${rand(5) + 1}` : "Fritekst";
+        const name = choice === 0 ? null : choice === 1 ? `${label} ${rand(5) + 1}` : "Fritekst";
         existingRooms.push({ roomType, name });
         if (name) existingNames.push(name);
       }
@@ -354,9 +369,10 @@ describe("F3 nummerering (numberRoomDrafts)", () => {
       expect(new Set(newNames).size, `runde ${round}: nye navn unike`).toBe(newNames.length);
       const existingSet = new Set(existingNames);
       for (const name of newNames) {
-        expect(existingSet.has(name), `runde ${round}: ${name} krasjer med et navn som finnes`).toBe(
-          false,
-        );
+        expect(
+          existingSet.has(name),
+          `runde ${round}: ${name} krasjer med et navn som finnes`,
+        ).toBe(false);
       }
     }
   });

@@ -529,9 +529,9 @@ test.describe("bygninger, areal og rom (pc og ipad)", () => {
     await button(upper, "Legg til rom").click();
     const select = upper.getByLabel(LABEL.roomType).last();
     // Gruppene vises som optgroup med norske gruppenavn
-    const groupLabels = await select.locator("optgroup").evaluateAll((groups) =>
-      groups.map((group) => (group as HTMLOptGroupElement).label),
-    );
+    const groupLabels = await select
+      .locator("optgroup")
+      .evaluateAll((groups) => groups.map((group) => (group as HTMLOptGroupElement).label));
     expect(groupLabels.length, "minst én optgroup").toBeGreaterThan(0);
     for (const label of ["Våtrom", "Kjøkken", "Toalett", "Spesialrom", "Andre rom"]) {
       expect(groupLabels, `gruppe «${label}»`).toContain(label);
@@ -539,7 +539,9 @@ test.describe("bygninger, areal og rom (pc og ipad)", () => {
     // Alle 33 romtypene står i en gruppe (option under optgroup, uten den tomme «Velg romtype»)
     const inGroups = await select
       .locator("optgroup > option")
-      .evaluateAll((options) => options.filter((o) => (o as HTMLOptionElement).value !== "").length);
+      .evaluateAll(
+        (options) => options.filter((o) => (o as HTMLOptionElement).value !== "").length,
+      );
     expect(inGroups).toBe(33);
 
     // E13.2: startRoom virker fortsatt (valg på etikett)

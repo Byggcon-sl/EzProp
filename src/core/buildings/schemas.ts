@@ -213,7 +213,8 @@ export const addRoomsInputSchema = z
           ),
           { error: DRAFTS_EMPTY },
         )
-        .min(1, { error: DRAFTS_EMPTY }),
+        .min(1, { error: DRAFTS_EMPTY })
+        .max(ROOM_TYPE_KEYS.length, { error: DRAFTS_TOO_MANY }),
       source: z.enum(ROOM_DRAFT_SOURCES, { error: DRAFT_SOURCE }),
       presetKey: z.enum(ROOM_PRESET_KEYS, { error: PRESET_KEY }).optional(),
     },

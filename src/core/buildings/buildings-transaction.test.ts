@@ -69,7 +69,8 @@ const FAILURES = [
  */
 function failAuditOnCall(callNumber: number) {
   const actual = vi.mocked(recordAuditEvent).getMockImplementation()!;
-  for (let i = 1; i < callNumber; i += 1) vi.mocked(recordAuditEvent).mockImplementationOnce(actual);
+  for (let i = 1; i < callNumber; i += 1)
+    vi.mocked(recordAuditEvent).mockImplementationOnce(actual);
   vi.mocked(recordAuditEvent).mockImplementationOnce(async () => {
     throw new Error(`revisjonsloggen feilet på kall ${callNumber} (test)`);
   });
@@ -249,13 +250,7 @@ describe("F10 addRooms feiler midt i: alt eller ingenting", () => {
     await expect(addRooms(admin, org.id, floor.id, FIVE_BEDROOMS)).rejects.toThrow();
 
     const result = await addRooms(admin, org.id, floor.id, FIVE_BEDROOMS);
-    expect(result.names).toEqual([
-      "Soverom 1",
-      "Soverom 2",
-      "Soverom 3",
-      "Soverom 4",
-      "Soverom 5",
-    ]);
+    expect(result.names).toEqual(["Soverom 1", "Soverom 2", "Soverom 3", "Soverom 4", "Soverom 5"]);
     const saved = await rows("rooms");
     const bedrooms = saved.filter((row) => row.room_type === "bedroom" && row.deleted_at === null);
     expect(bedrooms).toHaveLength(5);

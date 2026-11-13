@@ -641,7 +641,11 @@ describe("4.2 tenant-isolasjon", () => {
     });
 
     // Ingen av Bs id-er står i As svar
-    const resultA = await getAssignmentBuildings(await adminActorOf(orgA), orgA, assignmentFor.get(orgA)!);
+    const resultA = await getAssignmentBuildings(
+      await adminActorOf(orgA),
+      orgA,
+      assignmentFor.get(orgA)!,
+    );
     const text = JSON.stringify(resultA);
     for (const table of TABLES) {
       for (const row of await rawRows(table, sql`organization_id = ${orgB}`)) {
@@ -651,7 +655,11 @@ describe("4.2 tenant-isolasjon", () => {
 
     // F7.5: A får sin egen boligtype, aldri Bs; B får sin
     expect(asRecord(resultA).housingType).toBe("apartment");
-    const resultB = await getAssignmentBuildings(await adminActorOf(orgB), orgB, assignmentFor.get(orgB)!);
+    const resultB = await getAssignmentBuildings(
+      await adminActorOf(orgB),
+      orgB,
+      assignmentFor.get(orgB)!,
+    );
     expect(asRecord(resultB).housingType).toBe("farm");
     expect(text).not.toContain("farm");
 
@@ -1109,18 +1117,21 @@ describe("4.3 fremmed, ukjent og ugyldig id", () => {
     ["ukjent uuid", randomUUID()],
     ["abc", "abc"],
     ["tom", ""],
-  ])("4.3.8 addRooms med etasje-id %s gir AccessDeniedError, aldri databasefeil", async (_name, id) => {
-    const s = await writeSetup();
-    const counts = await tableCounts();
-    const error = await caught(
-      addRooms(s.admin, s.org.id, id, {
-        drafts: [{ roomType: "bedroom", count: 2 }],
-        source: "manual",
-      }),
-    );
-    expect(error).toBeInstanceOf(AccessDeniedError);
-    expect(await tableCounts()).toEqual(counts);
-  });
+  ])(
+    "4.3.8 addRooms med etasje-id %s gir AccessDeniedError, aldri databasefeil",
+    async (_name, id) => {
+      const s = await writeSetup();
+      const counts = await tableCounts();
+      const error = await caught(
+        addRooms(s.admin, s.org.id, id, {
+          drafts: [{ roomType: "bedroom", count: 2 }],
+          source: "manual",
+        }),
+      );
+      expect(error).toBeInstanceOf(AccessDeniedError);
+      expect(await tableCounts()).toEqual(counts);
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -1998,9 +2009,7 @@ describe("F5 addRooms", () => {
     for (const row of saved) {
       const roomType = row.room_type as string;
       expect(row.area_type).toBe(suggestAreaType(roomType));
-      expect(row.below_ground).toBe(
-        suggestBelowGround({ roomType, floorBelowGround: false }),
-      );
+      expect(row.below_ground).toBe(suggestBelowGround({ roomType, floorBelowGround: false }));
     }
 
     // Settet basement i etasje under terreng → alle under terreng
@@ -2209,9 +2218,7 @@ describe("F9 eksport og KI-grense", () => {
   it("F9.2 pure_no_server: room-presets.ts importerer ikke server, database eller Next", () => {
     const source = readFileSync(new URL("./room-presets.ts", import.meta.url), "utf8");
     for (const forbidden of ["@/db", "drizzle-orm", "server-only", "next/", "./service"]) {
-      expect(source, `room-presets.ts importerer ${forbidden}`).not.toContain(
-        `from "${forbidden}`,
-      );
+      expect(source, `room-presets.ts importerer ${forbidden}`).not.toContain(`from "${forbidden}`);
     }
   });
 
