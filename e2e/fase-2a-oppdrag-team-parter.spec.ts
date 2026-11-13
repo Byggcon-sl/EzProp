@@ -10,6 +10,7 @@ import {
   logInAsInspector,
   ensureInspector,
   uniqueSuffix,
+  convertedAssignmentLink,
 } from "./helpers";
 
 /*
@@ -148,13 +149,13 @@ async function createConvertedOrder(page: Page): Promise<string> {
 
   await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
   await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(page.getByRole("main")).toContainText("Gjort om til oppdrag");
+  await expect(convertedAssignmentLink(page)).toBeVisible();
   return orderId;
 }
 
 /** Fra ordresiden: lenken til oppdraget. Returnerer oppdrags-id. */
 async function openAssignmentFromOrder(page: Page): Promise<string> {
-  await page.getByRole("main").getByRole("link", { name: NUMBER }).click();
+  await convertedAssignmentLink(page).click();
   await expect(page).toHaveURL(ASSIGNMENT_URL);
   return ASSIGNMENT_URL.exec(page.url())![1]!;
 }
@@ -658,7 +659,7 @@ test.describe("statusflyten på oppdraget (pc og ipad)", () => {
     await expect(page.getByRole("main")).toContainText(
       `Gjort om til oppdrag ${number} (kansellert)`,
     );
-    await expect(page.getByRole("main").getByRole("link", { name: NUMBER })).toHaveCount(0);
+    await expect(convertedAssignmentLink(page)).toHaveCount(0);
     await expect(page.locator(`a[href$="/oppdrag/${assignmentId}"]`)).toHaveCount(0);
 
     // 5.5 oppdraget direkte

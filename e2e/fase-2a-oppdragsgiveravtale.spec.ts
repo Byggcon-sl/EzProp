@@ -12,6 +12,7 @@ import {
   setInspectorsEditAll,
   softDeleteFirms,
   uniqueSuffix,
+  convertedAssignmentLink,
 } from "./helpers";
 
 /*
@@ -40,7 +41,6 @@ const PORTRAIT = { width: 834, height: 1194 } as const;
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
 const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
-const NUMBER = /\d{4}-\d{5}/;
 const EVENT = "assignment.agreement_changed";
 const PREMISE = "Premiss for test. Ikke ekte tekst.";
 const PROFILE = "test-profil";
@@ -126,8 +126,8 @@ async function newAssignment(page: Page, ordererLastName?: string): Promise<stri
   await expect(page).toHaveURL(ORDER_URL);
   await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
   await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(page.getByRole("main")).toContainText("Gjort om til oppdrag");
-  await page.getByRole("main").getByRole("link", { name: NUMBER }).click();
+  await expect(convertedAssignmentLink(page)).toBeVisible();
+  await convertedAssignmentLink(page).click();
   await expect(page).toHaveURL(ASSIGNMENT_URL);
   return ASSIGNMENT_URL.exec(page.url())![1]!;
 }

@@ -5,6 +5,7 @@ import {
   restoreInspectorsEditAll,
   setInspectorsEditAll,
   uniqueSuffix,
+  convertedAssignmentLink,
 } from "./helpers";
 
 /*
@@ -30,7 +31,6 @@ const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
 const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
 const BUILDINGS_URL = new RegExp(`/oppdrag/(${UUID})/bygninger$`);
-const NUMBER = /\d{4}-\d{5}/;
 
 const LINK = "Bygninger, areal og rom";
 const BUILDING = "Bolighus";
@@ -74,9 +74,9 @@ async function newAssignment(page: Page): Promise<string> {
 
   await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
   await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(page.getByRole("main")).toContainText("Gjort om til oppdrag");
+  await expect(convertedAssignmentLink(page)).toBeVisible();
 
-  await page.getByRole("main").getByRole("link", { name: NUMBER }).click();
+  await convertedAssignmentLink(page).click();
   await expect(page).toHaveURL(ASSIGNMENT_URL);
   return ASSIGNMENT_URL.exec(page.url())![1]!;
 }

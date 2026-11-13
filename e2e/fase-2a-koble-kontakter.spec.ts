@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { fakeValidOrgNumber, logIn, uniqueSuffix } from "./helpers";
+import { convertedAssignmentLink, fakeValidOrgNumber, logIn, uniqueSuffix } from "./helpers";
 
 /*
  * Koble partene og bestilleren til kontakter og firma (fase 2a).
@@ -26,7 +26,6 @@ const FIRM_URL = new RegExp(`/firma/(${UUID})$`);
 const CONTACT_URL = new RegExp(`/kontakter/(${UUID})$`);
 const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
 const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
-const NUMBER = /\d{4}-\d{5}/;
 const NO_HITS = "Ingen kontakter passer.";
 
 function mainNav(page: Page): Locator {
@@ -90,8 +89,8 @@ async function newAssignment(page: Page): Promise<string> {
   await expect(page).toHaveURL(ORDER_URL);
   await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
   await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(page.getByRole("main")).toContainText("Gjort om til oppdrag");
-  await page.getByRole("main").getByRole("link", { name: NUMBER }).click();
+  await expect(convertedAssignmentLink(page)).toBeVisible();
+  await convertedAssignmentLink(page).click();
   await expect(page).toHaveURL(ASSIGNMENT_URL);
   return ASSIGNMENT_URL.exec(page.url())![1]!;
 }

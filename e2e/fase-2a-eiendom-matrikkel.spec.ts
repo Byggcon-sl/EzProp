@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
-import { logIn, logInAsInspector, uniqueSuffix } from "./helpers";
+import { convertedAssignmentLink, logIn, logInAsInspector, uniqueSuffix } from "./helpers";
 
 /*
  * Eiendom og matrikkel på oppdraget, med fellesdeler for leilighet (fase 2a).
@@ -26,7 +26,6 @@ const PORTRAIT = { width: 834, height: 1194 } as const;
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
 const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
-const NUMBER = /\d{4}-\d{5}/;
 
 const PREFILL_LINE = "Fylt ut fra ordren. Kontroller før du lagrer.";
 const ASSOCIATION = "Borettslaget Test";
@@ -146,9 +145,9 @@ async function newAssignmentFromOrder(
 
   await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
   await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(page.getByRole("main")).toContainText("Gjort om til oppdrag");
+  await expect(convertedAssignmentLink(page)).toBeVisible();
 
-  await page.getByRole("main").getByRole("link", { name: NUMBER }).click();
+  await convertedAssignmentLink(page).click();
   await expect(page).toHaveURL(ASSIGNMENT_URL);
   return ASSIGNMENT_URL.exec(page.url())![1]!;
 }

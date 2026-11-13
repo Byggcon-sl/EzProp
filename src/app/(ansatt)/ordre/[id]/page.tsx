@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import { AccessDeniedError } from "@/core/access";
 import { getContact } from "@/core/contacts";
 import { listOffices } from "@/core/organization";
-import { getOrder, listOrderHistory } from "@/core/orders";
+import { findPossibleDuplicateOrders, getOrder, listOrderHistory } from "@/core/orders";
+import { logger } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
 import { Card } from "@/shared/ui/card";
 import { Notice } from "@/shared/ui/notice";
@@ -18,6 +19,7 @@ import { formatOsloDateTime, osloDateTimeLocal } from "../received-at";
 import { ConvertOrderForm, RejectOrderForm } from "./order-actions";
 import { OrderEditSection } from "./order-edit-form";
 import { OrderHistory } from "./order-history";
+import { PossibleDuplicatesNotice } from "./possible-duplicates-notice";
 
 export const metadata: Metadata = { title: "Ordre" };
 
@@ -35,7 +37,8 @@ const EMPTY = <span className="text-slate-500">Ikke oppgitt</span>;
 /**
  * Ordren med «Endre ordren» (alle statuser, T1) og «Gjør om til oppdrag» og «Avvis» når den er
  * mottatt, når den ansatte kan endre. Under ordren står «Endringer». Ugyldig, ukjent og fremmed id
- * gir samme svar som manglende tilgang. `?endret=1` viser kvitteringen etter «Lagre».
+ * gir samme svar som manglende tilgang. `?endret=1` viser kvitteringen etter «Lagre». Varselet
+ * «Mulig dublett» står under kvitteringen når kjernen finner andre ordre på samme bolig.
  */
 export default async function OrderPage({
   params,
@@ -74,6 +77,24 @@ export default async function OrderPage({
     }
   }
 
+  // Varselet «Mulig dublett» (T3) skal aldri gjøre ordresiden utilgjengelig: feiler oppslaget,
+  // vises siden uten varsel. Loggen får bare ordre-id, bruker-id og feilnavnet, aldri adresse,
+  // matrikkel eller feilteksten.
+  let duplicates: Awaited<ReturnType<typeof findPossibleDuplicateOrders>> = {
+    items: [],
+    hasMore: false,
+  };
+  try {
+    duplicates = await findPossibleDuplicateOrders(context.actor, context.organizationId, order.id);
+  } catch (error) {
+    logger.error("Kunne ikke sjekke mulig dublett", {
+      route: "/ordre/[id]",
+      orderId: order.id,
+      userId: context.actor.id,
+      errorName: error instanceof Error ? error.name : "ukjent feil",
+    });
+  }
+
   const canHandle = order.status === "received" && context.canEditOrders;
   const choice = canHandle
     ? officeChoice(await listOffices(context.actor, context.organizationId), context.officeId)
@@ -103,7 +124,7 @@ export default async function OrderPage({
         Tilbake til ordre
       </Link>
       <div className="mt-2 mb-6 flex flex-wrap items-center gap-3">
-        <h1 className="min-w-0 text-2xl font-semibold break-words text-slate-900">
+        <h1 className="min-w-0 text-2xl font-semibold text-slate-900 [overflow-wrap:anywhere]">
           {order.addressText}
         </h1>
         <OrderStatusBadge status={order.status} />
@@ -114,6 +135,8 @@ export default async function OrderPage({
           <Notice message="Endringene er lagret." />
         </div>
       )}
+
+      <PossibleDuplicatesNotice items={duplicates.items} hasMore={duplicates.hasMore} />
 
       {order.status === "converted" && order.assignmentNumber && (
         <Card className="mb-6">

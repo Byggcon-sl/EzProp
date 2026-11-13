@@ -2,7 +2,14 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
 import postgres from "postgres";
 import { assertLocalOrTestDatabase } from "./database-guard";
-import { e2eDatabaseUrl, logIn, logInAsInspector, signInWithCode, uniqueSuffix } from "./helpers";
+import {
+  convertedAssignmentNumber,
+  e2eDatabaseUrl,
+  logIn,
+  logInAsInspector,
+  signInWithCode,
+  uniqueSuffix,
+} from "./helpers";
 
 /*
  * Manuell ordre og oppdragsnummer (fase 2a).
@@ -20,7 +27,6 @@ import { e2eDatabaseUrl, logIn, logInAsInspector, signInWithCode, uniqueSuffix }
  */
 
 const PORTRAIT = { width: 834, height: 1194 } as const;
-const NUMBER = /\d{4}-\d{5}/;
 const ORDER_URL = /\/ordre\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 /**
@@ -167,9 +173,7 @@ test.describe("ordre (pc og ipad)", () => {
     await field.office(page).selectOption({ label: "Bodø" });
     await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
 
-    await expect(main).toContainText("Gjort om til oppdrag");
-    await expect(main).toContainText(NUMBER);
-    const number = NUMBER.exec((await main.textContent()) ?? "")![0];
+    const number = await convertedAssignmentNumber(page);
     await expect(
       page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }),
     ).toHaveCount(0);
