@@ -141,7 +141,7 @@ Levert i PR #166 (12.11.2026), se `docs/plan/levert.md`.
 
 Første punkt tas **før Byggcon-profilen**, fordi det retter reglene som alt er merget. Resten tas etter Byggcon-profilen (levert, PR #176) og før neste punkt i 2a-2, i denne rekkefølgen. Svarene står i `docs/kartlegging/svar-fra-stale-2026-11-12.md`.
 
-- [ ] **Søk i ordrelisten og i arbeidskøen** (T2).
+- [x] **Søk i ordrelisten og i arbeidskøen** (T2). Branch `sok-ordre-arbeidsko`, `docs/funksjoner/fase2a-sok-ordre-arbeidsko.md`, ADR 0010, A256–A263.
 - [ ] **Varsel om mulig dublett** (T3): fast regel uten KI (samme adresse eller matrikkel og overlappende tid). Varselet stopper ikke lagringen.
 - [ ] **Flere rom på én gang med færrest mulig trykk** (T4). KI som foreslår rom (for eksempel fra plantegning) står i 2a-3 og tas så tidlig som det lar seg gjøre.
 - [ ] **Oppbevaringstid for avviste KI-forslag som innstilling** (K7), 10 år som standard. Endrer A157.
