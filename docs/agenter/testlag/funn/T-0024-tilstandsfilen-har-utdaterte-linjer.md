@@ -36,3 +36,4 @@ Ikke etterprøvd (lite).
 ## Logg
 - 2026-11-11: funnet
 - 2026-11-12: flere linjer er kommet til (main 11672aa): «Levert: KI-kø uten nett» står to ganger; «Neste i 2a-1: Beslutningsnotat» er utdatert; linjen om KI-leverandør nevner to brancher; «når PR-en for `fase2a-ki-leverandor` er merget» (den er merget som #154); pekeren «(S4–S8)» tar ikke med resten av S1 (første innlogging og iPad).
+- 2026-11-13: flere utdaterte linjer på main e013fde7: «PR åpnet: Småfunn etter svarene i reglene» (merget som #180), og «Ingen åpne PR-er» med gammelt klokkeslett; «Svar også på spørsmål 74 og 75» (besvart, I1 og I2) og «når PR-en `microsoft-innlogging` er merget» (merget som #166); «T-0003 må tas før 2a-2» (regelen er rettet); to linjer som motsier hverandre om T-0021; T-0010 og T-0016 omtalt som lukket før de var etterprøvd. «Gjeldende oppgave» har 17 punkter, de fleste levert historikk.

@@ -3,7 +3,7 @@ id: T-0010
 tittel: Etasjen «Kjeller» får etasjenummer 2 og blir ikke merket «under terreng»
 type: forbedring
 alvor: middels
-status: rettet
+status: lukket
 funnet: 2026-11-11
 rolle: test-takstmann
 omrade: bygninger, etasjer
@@ -36,3 +36,4 @@ Ikke etterprøvd (forbedring).
 ## Logg
 - 2026-11-11: funnet
 - 2026-11-12: rettet i PR #174 (branch `svar-stale-regler-bygninger`). Rettet etter Ståles svar F7 12.11.2026: «Kjeller» og «Underetasje» gir etasjenummer -1 og «Under terreng» forhåndsvalgt, «Loft» gir høyeste etasje + 1 (A236). Takstmannen kan endre alt.
+- 2026-11-13: prøvd på nytt på main e013fde7: rettet bekreftet. «Kjeller» og «Underetasje» gir etasjenummer -1 og «Under terreng» krysset av, på iPad og PC. Lukket. Kantene (1. og 2. etasje fra forslagslisten, og rommene som ikke følger etasjen) er egne funn: T-0053 og T-0054.

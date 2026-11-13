@@ -36,3 +36,4 @@ Legg inn radene fra 10.11.2026 med kilde, og oppdater «Sist oppdatert», synkav
 ## Logg
 - 2026-11-11: funnet
 - 2026-11-12: fortsatt åpent. Nytt: `docs/11-agentlaget.md` linje 62 viser til «Ståle 11.11.2026» (raskere CI), som heller ikke står i beslutningstabellen.
+- 2026-11-13: fortsatt åpent, og gjelder nå også 12.11.2026. `docs/kartlegging/LES-MEG-kartlegging.md` (sist oppdatert 28.10.2026) viser ikke til `svar-fra-stale-2026-11-12.md`, og beslutningstabellen mangler Ståles chat 12.11.2026: Microsoft-innlogging, Byggcon-profilen, live diktat og KI-briller (se T-0052).

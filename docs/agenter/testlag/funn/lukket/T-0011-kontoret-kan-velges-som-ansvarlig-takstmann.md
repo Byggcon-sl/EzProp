@@ -37,3 +37,4 @@ Ikke etterprøvd (forbedring). Meldt av to testere hver for seg.
 ## Logg
 - 2026-11-11: funnet
 - 2026-11-12: lukket. Ståle svarte 12.11.2026 (F8, spørsmål 67): ingen kontroll ved valg av ansvarlig takstmann og sertifisering; kontrollen skjer bare ved publisering, som i dag.
+- 2026-11-13: flyttet til `funn/lukket/` (sto med status «lukket» i `funn/`).

@@ -3,7 +3,7 @@ id: T-0015
 tittel: Testsakene i malen kan ikke si «ikke vurdert» når data mangler
 type: forbedring
 alvor: middels
-status: rettet
+status: lukket
 funnet: 2026-11-11
 rolle: test-fag
 omrade: mal, regler
@@ -35,3 +35,4 @@ Ikke etterprøvd (forbedring).
 ## Logg
 - 2026-11-11: funnet
 - 2026-11-12: rettet i PR #167 (branch `fase2a-regler-bad`): testsakene har tilstanden «ikke vurdert» (`expected_state`), og tomt eller ugyldig felt gir «ikke vurdert».
+- 2026-11-13: prøvd på nytt på main e013fde7: rettet bekreftet. Testsakene har `expected_state` med «ikke vurdert», og tomt eller ugyldig felt gir «ikke vurdert». Lukket. At ukjent alder ikke henter byggeåret for bygningen, er eget funn: T-0051.
