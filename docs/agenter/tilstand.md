@@ -61,16 +61,15 @@ Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4�
 
 ## Oppgaver fra testlaget
 
-Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 12.11.2026 på main 11672aa (det som var nytt siden 0b8e3b9).
+Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 13.11.2026 på main e013fde7 (det som var nytt siden 11672aa).
 
-- Åpne alvorlige feil: 0. T-0001, T-0004 og T-0005 er prøvd på nytt og lukket.
-- Åpne funn i alt: 46 (0 alvorlige, 20 middels, 26 små). Middels og små tas med neste oppgave i samme område.
-- **Må tas før 2a-2 (forslagskortet på avviksteksten):** T-0036 (KI-kortet bytter målinger med «[telefon]» ved «Bruk»; avgjøres sammen med A178) og T-0003 (svar 59a).
-- **Må tas før ekte KI slås på:** T-0044 (hull i vasken), T-0046 (svaret kontrolleres ikke for TG), T-0047 (evalueringssettet måler ikke nytte), T-0034 (hevet til middels) og T-0038 (evaluering mot ekte modell mangler i planen).
-- T-0037 («Logg ut» uten nett) tas med «Sperring av iPader» i 2b, eller før. T-0021 er fortsatt feil (forsøk 1): planen og endringsloggen er ikke ryddet etter PR #154.
-- T-0002 (Spectora Advanced og passordene) er ført inn under «Trenger Ståle når han er tilbake» 12.11.2026.
-- T-0021 (planen og endringsloggen ikke ryddet etter PR #154) rettet 12.11.2026 i PR-en `rydd-plan-t0021`.
-- Til testlagets oppsett: testtakstmannen bør stå i teamet på testoppdragene, så «Mine» kan prøves. Playwright må startes med `executablePath: "/opt/pw-browsers/chromium"`.
+- **Åpne alvorlige feil: 1. T-0050** (nedtrekkslister hopper tilbake etter feilmelding, og feil verdi lagres). Rettes før neste nye punkt i planen.
+- Åpne funn i alt: 61 (1 alvorlig, 19 middels, 41 små). Middels og små tas med neste oppgave i samme område. Lukket denne gangen: T-0010, T-0015 og T-0016.
+- **Før fase 2b:** T-0052 (planen har mistet live diktat og strekkmål 6 fra 12.11).
+- **Før «Badet på PC»:** T-0051, T-0059 og T-0060, og T-0014 (punkt 1 og 5) i 2a-3.
+- **Må tas før ekte KI slås på:** T-0044, T-0046, T-0047, T-0034 og T-0038 (uendret).
+- Fortsatt feil etter retting: T-0021 (forsøk 2) og T-0003 (forsøk 1, nå bare S3-raden i planen).
+- Til testlagets oppsett: testlaget trenger en admin i prøveorganisasjonen (admin fra seed havner i «Byggcon», så avtaler kan ikke prøves sammen med kontorbrukeren). Badmalen og reglene har ingen skjerm ennå og prøves bare i data.
 
 ## Oppgaver fra nattløkken
 

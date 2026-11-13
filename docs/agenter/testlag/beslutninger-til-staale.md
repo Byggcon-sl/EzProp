@@ -1,8 +1,8 @@
 # Beslutninger som er dyre å endre
 
-Sist oppdatert: 12.11.2026 (testlaget, dokumentvakten og kvalitetslederen)
+Sist oppdatert: 13.11.2026 (testlaget, dokumentvakten og kvalitetslederen)
 
-Mens Ståle var borte, har agentene tatt 198 beslutninger (A1–A199, A22 er ikke brukt). De står i `docs/09-apne-sporsmal.md`, tabellen «Avgjort av agentene mens Ståle var borte». **De fleste er lette å endre.** Her er bare de som blir dyre å endre senere, fordi data må flyttes, fordi de står på rapportene, eller fordi de gjelder personvern og sikkerhet. Det er disse Ståle bør lese først.
+Mens Ståle var borte, har agentene tatt 247 beslutninger (A1–A248, A22 er ikke brukt). De står i `docs/09-apne-sporsmal.md`, tabellen «Avgjort av agentene mens Ståle var borte». **De fleste er lette å endre.** Her er bare de som blir dyre å endre senere, fordi data må flyttes, fordi de står på rapportene, eller fordi de gjelder personvern og sikkerhet. Det er disse Ståle bør lese først.
 
 Alle beslutninger som ikke står her, er lette å endre.
 
@@ -14,7 +14,7 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A150 | Det som sendes til KI, styres av en liste over felt som er lov per funksjon. | Gjelder personvern. Et bytte krever ny vurdering. |
 | A151 | Instruksene til KI har versjonsnummer og ligger ett sted i kjernen. | Alle KI-funksjoner bygger på dette. |
 | A154 | En KI-funksjon slås ikke på før den treffer 90 % av eksemplene, og 100 % av dem som må treffe. | Avgjør hva KI får lov til å bidra med i rapporten. |
-| A157 | Loggen over KI-bruk regnes som personopplysninger og lagres i 10 år, også forslag som ble avvist. KI har ingen verktøy. | Gjelder personvern. Venter på svar på spørsmål 56. |
+| A157 | Loggen over KI-bruk regnes som personopplysninger og lagres i 10 år, også forslag som ble avvist. KI har ingen verktøy. | Gjelder personvern. Ståle svarte 12.11.2026 (K7, spørsmål 56): oppbevaringstiden blir en innstilling, 10 år som standard. Ikke bygget ennå (se funn T-0068). |
 | A171 | Nytt utfall «sperret» i loggen over KI-bruk, for forespørsler som ikke kan sendes til leverandøren. | Fast kode som lagres i data i 10 år. |
 
 ## Sikkerhet og tilgang
@@ -32,6 +32,9 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A64 | Grunnen ved bytte i teamet er fritekst. | Risiko for at noen skriver helseopplysninger der. |
 | A121 | Tidsmåling er på som standard. I betaen er tallene i praksis per person. | Arbeidsmiljøloven kapittel 9. Bør drøftes med de ansatte (se også funn T-0012). |
 | A193 | Koblingen til KI-leverandøren kan bare bruke én felles nøkkel, lik for alle organisasjoner. | Gjelder sikkerhet. Før selskap nummer to får KI, trengs egen nøkkel per organisasjon. |
+| A216 | Microsoft-kontoen kobles til den ansatte på e-post første gang, deretter på Microsofts egen id. | Gjelder sikkerhet. Står lett i listen, men å endre koblingen etter at kontoene er i bruk krever opprydding. |
+| A217 | Engangskoden sjekker ikke selv at den ansatte er aktiv. Tilgangen stopper likevel i tilgangssjekken. | Gjelder sikkerhet. Kontrollert av testlaget 13.11.2026: en deaktivert ansatt kommer ikke inn. |
+| A223 | Signaturen på ID-tokenet fra Microsoft sjekkes ikke (tokenet hentes rett fra Microsoft over kryptert forbindelse). | Gjelder sikkerhet. Bør vurderes på nytt før ekte data. |
 
 ## Datamodell og faste koder
 
@@ -53,6 +56,18 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A142 | Standardtiltak, vilkår i regler og testsaker har ingen fast kode og erstattes samlet. | Grunnmur for malen. |
 | A27 | Roller tas bort med myk sletting. | Låst i databasen. |
 | A30 | Ett område for sertifisering: tilstandsrapport. | Flere områder krever endring i data. |
+| A200 | Merket «utkast, ikke godkjent av fagrådet» står per utfall og per tiltak. | Kolonne i databasen. Godkjenning gir ny malversjon. |
+| A202 | Badet har åtte kontrollpunkter; målingene ved hulltaking er enkeltfelt til 2a-3. | Faste koder. De arkiveres og erstattes i 2a-3. |
+| A208 | Fall i mm per meter med fortegn, og eget valg for enhet på fuktmålingen. | Faste koder og tall som lagres i rapportene. |
+| A210 | Skadet vinyl og sprekker i sanitærutstyr gir valget TG2 eller TG3. | Fast utfallskode i malen. |
+| A211 | Høyden ved terskel er et felt under vanntett sjikt, membran og sluk. | Fast feltkode. |
+| A212 | Byggeåret for våtrommet betyr året sjiktet ble lagt. | Fast betydning av en kode (regel 6). Aldersreglene bygger på det. |
+| A230 | Nytt utfall «sjikt over levetid» (TG2). | Fast utfallskode. |
+| A231 | Regelmotoren ligger i kjernen som rene funksjoner med faste svarkoder (ADR 0009). | Grunnmur for alle regler på iPad og server. |
+| A232 | Testsakene har tre svar (slår til, slår ikke til, ikke vurdert), som erstatter det gamle ja/nei. | Kolonne i databasen. |
+| A234 | TG0 er et eget formål for regler, ikke et utfall. | Fast kode i regeldata. |
+| A235 | Arealtypen «Ikke del av BRA» er en egen kode. | Fast kode i data. Påvirker areal, en vanlig grunn til reklamasjon. |
+| A237 | «Under grensen» er samme terskel snudd, ikke en egen terskel. | Mønster for alle terskelregler. |
 
 ## Fag
 
@@ -65,6 +80,9 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A96 | Areal per etasje, BRA som sum, og koder for målemetode. | Areal er en vanlig grunn til reklamasjon. |
 | A97 | Forslaget om «under terreng» styrer kravet om hulltaking. | Påvirker TG i våtrom og kjeller (se funn T-0010). |
 | A118 | Teksten om forutsetninger logges uten innhold. | Sporbarhet ved reklamasjon. |
+| A225 | Fuktgrensen ved hulltaking er 15 vekt-% i treverk. | Avgjør TG-forslag i alle bad. Ikke kontrollert mot NS 3600:2025 (F3). Tallet er lett å endre, men Ståle bør se det. |
+| A227, A228 | Hva «med dokumentasjon» betyr i levetidstrinnene, og hva ukjent membrantype gir. | Avgjør TG-forslag på alder. |
+| A238 | TG0-forslag bare ved «utført uten funn», og 0 vekt-% regnes som en måling. | Avgjør TG0 i rapporten. Se spørsmål 77 (a) og (e). |
 
 ## Til vurdering
 
