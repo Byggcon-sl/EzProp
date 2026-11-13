@@ -2068,8 +2068,9 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Merket «Rettet» | – | Regnes ut fra `report_releases` (versjon 2 eller høyere er sendt) |
 | Bestilt / under arbeid / ferdig / fakturert | `ordered` / `in_progress` / `completed` / `invoiced` | `ASSIGNMENT_STATUSES`, `assignmentStatusLabel` |
 | Rettet | `corrected` (`isCorrected`, `src/core/assignments/status-flow.ts`) | Merket under «Ferdig» for en rapport som er rettet og sendt på nytt. Ingen egen status; regnes ut fra utgivelsene og lagres ikke (A77) |
+| Grense i ordrelisten | `ORDER_LIST_LIMIT` (`src/core/orders/list.ts`) | Ordrelisten viser høyst 50 rader, nyeste først. Søket er veien til eldre ordre (ADR 0010) |
 | Arbeidskø | `work queue` (`listWorkQueue`, `countWorkQueueByStatus`, `src/core/assignments`) | Startsiden `/arbeidskoe`: oppdragene som kort i fire faner etter status, med antall per fane |
-| Mine / Alle | `mineOnly` | Hurtigfilter i køen. «Mine» viser oppdrag der den innloggede ansatte er i teamet (`grant.employeeId`). Standard er «Mine» (A102) |
+| Mine / Alle | `mineOnly` | Hurtigfilter i køen. «Mine» viser oppdrag der den innloggede ansatte er i teamet (`grant.employeeId`). Standard er «Mine» for den som har takstmann-rollen og «Alle» for andre (`defaultMineOnly`, T-0029; før A102) |
 | Avtalt befaring | `inspection at` (`assignments.inspection_at`) | Tidspunkt for befaringen. Settes for hånd til befaringene finnes (A100) |
 | Frist | `due date` (`assignments.due_date`) | Dato for levering |
 | Forfalt | `overdue` (`isOverdue`) | Fristen er passert (norsk tid) og status er Bestilt eller Under arbeid |
@@ -2121,6 +2122,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Premissetekst / forutsetninger | `premise_text` | |
 | Eiendom | `properties`, `property` | Adresse, kommune, boligtype og eierform. Én per oppdrag nå (A70), `assignments.property_id` |
 | Matrikkel | `cadastral_units`, `cadastral_unit` | gnr, bnr, fnr, snr, borettslag, organisasjonsnummer og andelsnummer. Skjermen viser én rad (A70) |
+| Matrikkelsøk | `parseCadastralQuery` (`src/core/assignments/search.ts`) | Søk skrevet som gnr/bnr, eventuelt /fnr/snr. Delene må være like, ikke delvis treff: «12/34» finner ikke 112/34. Tomt festenummer regnes som 0 (ADR 0010) |
 | Festenummer | `fnr` | Del av matrikkelen, bare sifre |
 | Bruksenhetsnummer | `unit_number` | |
 | Boligtype | `housing_type`, `HOUSING_TYPES`, `housingTypeLabel` | Åtte faste koder (`src/core/properties/codes.ts`) |
@@ -2465,3 +2467,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 12.11.2026 | Microsoft-innlogging (fase 2a, grensesnitt, ADR 0008): ingen ny tabell og ingen migrering. `accounts` beskrevet (`provider_id = 'microsoft'`, `account_id` = `oid`, tokens lagres ikke). Reservert hemmelighetsnavn `MS_LOGIN_CLIENT_SECRET`. Ordlisten: Microsoft-innlogging, Microsoft-katalog, aktivt ansattforhold, reservert hemmelighetsnavn. |
 | 12.11.2026 | Regelmotoren (fase 2a, ADR 0009): `src/core/rules` med regelsvar i faste koder og tre tilstander (`RULE_RESULT_STATES`). Migrering `0030_regler-bad`: sju nye kolonner på `rule_conditions` (`threshold_key`, alder-feltene, `unit_element_key`), og `expected_state` og `inspection_year` på `rule_test_cases` (`expect_triggered` er fjernet). Levetidstrinn og terskler har fått `key` og `status`, og settene en settkode; de er kodedata til tabellene kommer i 2a-3. |
 | 12.11.2026 | Svarene i reglene og bygningene (fase 2a, Ståle 12.11.2026 F1, F6, F7, F9; ADR 0009 rettet): migrering `0031_svar-regler-bygninger` med `suggest_tg0` i `rules.purpose`, `rule_conditions.negate` og `not_bra` i `rooms.area_type`. Ny forslagstype `tg0` og `negated` i regelsvaret. `suggestFloor` for etasjeforslag. Ordlisten: ikke del av BRA, etasjeforslag, TG0-forslag, snudd betingelse (A234–A237, A239) |
+| 13.11.2026 | Søk i ordrelisten og arbeidskøen (fase 2a, T2, ADR 0010): ingen ny tabell, ingen ny indeks og ingen migrering. Søkevilkåret står i `src/core/assignments/search.ts` (`orderFieldsMatch`, `assignmentFieldsMatch`), mønsteret i `src/shared/lib/like-pattern.ts`. `listOrders` gir `{ items, total }` med grense 50. Ordlisten: matrikkelsøk, grense i ordrelisten, og «Mine / Alle» rettet (`defaultMineOnly`). |
