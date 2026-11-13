@@ -142,9 +142,17 @@ Levert i PR #166 (12.11.2026), se `docs/plan/levert.md`.
 
 ### Prioritert av Ståle 13.11.2026: rike testdata i testmiljøet
 
+
 Tas **nå, før punktene under**. Ståle i chat 13.11.2026: «vi kjører på testmiljøet frem til vi overfører til faktisk produksjonsmiljø. Legg inn testdata og fiktive navn, eiendommer, bilder med mer for å teste løsningen. Reelle data kommer i produksjonsmiljøet, slik at vi holder det adskilt. Det betyr også at vi ikke trenger å være forsiktig med dataene i løsningen, det er kun testdata som ikke har verdi.»
 
 - [ ] **Testdata som ligner en ekte arbeidshverdag** i testmiljøet, lagt inn av utrullingen og kjørbar på nytt (`pnpm db:seed:testdata`): de tre selskapene med kontorer og 10–15 oppdiktede ansatte i alle roller, oppdiktede meglerfirma, meglere, selgere og kjøpere, rundt 50 oppdiktede eiendommer (eneboliger, leiligheter med sameie og borettslag, fritidsboliger) med matrikkel, byggeår og areal, og oppdrag i alle statuser over flere måneder, med befaringstider, rapporter med funn, TG, målinger, fakturagrunnlag og noen reklamasjoner. **Bilder** (og senere video) som er laget for testen, uten personer og uten rettigheter til andre, knyttet til rom og avvik. Alle navn, adresser, telefonnumre og e-poster er oppdiktet og kan ikke forveksles med ekte personer (for eksempel e-post på et domene som ikke kan motta post). Dataene ligger i **organisasjonen de ansatte logger inn i** i testmiljøet, slik at alt vises med en gang. **Kjøres aldri i produksjonsmiljøet:** skriptet stopper hvis miljøet er produksjon.
+
+### Prioritert av Ståle 13.11.2026: rett på oppdrag, tilbud ved behov
+
+Tas **etter testdataene og før punktene under**. Ståle i chat 13.11.2026: «Det er svært sjelden vi oppretter ordre, men stort sett går vi rett på oppdrag. Jeg ønsker at vi i utgangspunktet skal gå rett på oppdrag, men ha mulighet for å opprette ett tilbud. Tilbud vil fungere som ett tilbud/lead, som deretter kan konverteres til oppdrag. Men det trenger ikke være "fremst" i løsningen, det vil være kanskje ett eller to av hundre oppdrag.»
+
+- [ ] **«Nytt oppdrag» er hovedveien:** knappen står i arbeidskøen og øverst i menyen, og ett skjema (adresse, matrikkel, bestiller, rapporttype, kontor, ansvarlig takstmann og eventuelt befaringstid) lager oppdraget direkte med status «bestilt». Ingen ordre i mellom. Alt som i dag kan gjøres med en ordre (rette etter lagring, dublettvarsel, søk), virker på oppdraget.
+- [ ] **Tilbud i stedet for ordre:** «Ordre» heter nå **«Tilbud»** og ligger lenger ned i menyen. Et tilbud er en mulig jobb (lead) med de samme feltene, og kan **gjøres om til oppdrag med ett trykk** (alt fylles inn), avslås med grunn, eller gå ut på dato. Tilbud teller ikke i arbeidskøen. Ordrene som finnes, blir tilbud uten at data går tapt. Datamodell og navn avgjøres i en ADR (faste koder endres ikke, de arkiveres).
 
 ### Fra Ståles svar 12.11.2026
 
@@ -202,7 +210,7 @@ Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full 
 - [ ] **KI: utkast til oppsummering per bygningsdel og til sammendraget,** laget fra godkjente funn og sortert etter alvor. Takstmannen godkjenner.
 - [ ] Papirkurv og angre for sletting
 - [ ] **Fart:** krav til hvor rask rapporten skal være på PC, og en prøve med en stor rapport (mange bygninger og bilder): ett rullefelt, og innhold som ikke hopper mens det lastes. (Svar 10.11.2026, nr. 50)
-- [ ] **KI: e-post blir ordreforslag.** En bestilling på e-post limes inn og blir et utkast til ordre som kontoret kontrollerer.
+- [ ] **KI: e-post blir oppdragsforslag.** En bestilling på e-post limes inn og blir et utkast til oppdrag (eller til tilbud, når det er en forespørsel) som kontoret kontrollerer og lagrer.
 - [ ] **Reklamasjonskoblingen:** oppdrag → henvendelse eller reklamasjon → ny befaring, som kobling i datamodellen. (Svar 10.11.2026, nr. 38)
 
 **Publisering, PDF og sending**
@@ -320,10 +328,11 @@ Rutiner, kalender og økonomi. Kan bygges mens piloten går.
 
 **Kalender og økonomi**
 - [ ] **Kapasitet:** ukesvisning per takstmann, fravær, og kapasitet per kontor de neste to ukene. Kobling til Outlook begge veier står i «Senere».
-- [ ] **Bestillingsskjema for meglere** (funksjonskart H8): et skjema med de samme feltene som den manuelle ordren. Bestillingen blir en ordre som kontoret godkjenner. Fjerner avskrift før API mot meglersystemene finnes.
+- [ ] **Bestillingsskjema for meglere** (funksjonskart H8): et skjema med de samme feltene som «Nytt oppdrag». Bestillingen blir et oppdrag med status «bestilt», merket «fra bestillingsskjema», som kontoret ser over (eller et tilbud når megleren ber om pris). Fjerner avskrift før API mot meglersystemene finnes.
 - [ ] **Fakturagrunnlag til eAccounting** gjennom tilkoblingen: fritt valgt mottaker, linjer med MVA, kontroll og «send», riktig eAccounting-klient for hvert av de tre selskapene, ingen dubletter av kunder, status tilbake som hendelsene **«faktura sendt»**, **«faktura betalt»** og «faktura forfalt». Liste over ufakturerte og ubetalte oppdrag. Her bygges også tabellen `external_references` og selskap på tilkoblingen (`company_id` eller `companies.accounting_connection_id`), flyttet fra tilkoblingslaget i fase 0b (02.11.2026, se `docs/funksjoner/fase0b-tilkoblingslag.md`, «Til fase 3»).
   - [ ] Nøkkelboksen steg 2: `readSecret` leser tilkoblingenes hemmeligheter rett fra boksen med appens identitet, av som standard (utsatt fra fase 0b 03.11.2026, A50; oppgavekort og testplan i `docs/funksjoner/fase0b-nokkelboks-kodevei.md`). Bygges i samme PR som den første tilkoblingen som trenger det; kommer en KI-tilkobling med egen nøkkel i fase 2, flyttes punktet dit.
 - [ ] **Prisliste per avtale som data** (funksjonskart H2): standardpriser og avtalepriser foreslås på fakturalinjene. En prismotor (pris etter areal, alder og avstand) kommer senere.
+- [ ] **Tilbud med pris:** pris fra prislisten på tilbudet, gyldig til-dato, og tilbudet som PDF i Byggcon-profilen som den ansatte sender selv. Når tilbudet godtas, gjøres det om til oppdrag med prisen på fakturagrunnlaget. (Ståle 13.11.2026)
 - [ ] **Tall om KI-bruk per ansatt, også for leder** (Ståle 12.11.2026, K8). Bygges først når det er drøftet med de ansatte (arbeidsmiljøloven kapittel 9).
 - [ ] **Lederdashbord** (funksjonskart H3): oppdrag per status, befaringer neste uke, levert siste 30 dager, leveringstid, ufakturert og forfalt, per kontor og selskap, og pilotmålene
 - [ ] Oppslag i Brønnøysundregistrene for firma (som i Optiplan)
