@@ -15,6 +15,7 @@ export {
 } from "./errors";
 export { createFirm, getFirm, listFirms, updateFirm } from "./firms";
 export { findContactForLink } from "./link";
+export { lookupContactAndFirmNames, type ContactAndFirmNames } from "./names";
 export {
   getContactUsage,
   getFirmUsage,
