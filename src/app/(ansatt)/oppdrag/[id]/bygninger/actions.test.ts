@@ -1,5 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ZodError } from "zod";
 import { AccessDeniedError } from "@/core/access";
 import {
   BuildingNotEmptyError,
@@ -44,6 +45,7 @@ const mocks = vi.hoisted(() => ({
     saveFloorArea: vi.fn(),
     saveRoom: vi.fn(),
     removeRoom: vi.fn(),
+    addRooms: vi.fn(),
   },
 }));
 
@@ -67,6 +69,7 @@ const {
   saveFloorAreaAction,
   saveRoomAction,
   removeRoomAction,
+  addRoomsAction,
 } = await import("./actions");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
@@ -127,6 +130,16 @@ const FORMS = {
     areaType: "bra_i",
   },
   removeRoomAction: { assignmentId: ASSIGNMENT, roomId: ROOM },
+  addRoomsAction: {
+    assignmentId: ASSIGNMENT,
+    floorId: FLOOR,
+    source: "preset",
+    presetKey: "apartment",
+    drafts: JSON.stringify([
+      { roomType: "bedroom", count: 2 },
+      { roomType: "bathroom", count: 1 },
+    ]),
+  },
 } as const;
 
 type ActionName = keyof typeof FORMS;
@@ -139,6 +152,7 @@ const ACTION_FNS = {
   saveFloorAreaAction,
   saveRoomAction,
   removeRoomAction,
+  addRoomsAction,
 } as const;
 
 const CORE_FOR_ACTION = {
@@ -149,6 +163,7 @@ const CORE_FOR_ACTION = {
   saveFloorAreaAction: mocks.core.saveFloorArea,
   saveRoomAction: mocks.core.saveRoom,
   removeRoomAction: mocks.core.removeRoom,
+  addRoomsAction: mocks.core.addRooms,
 } as const;
 
 const ACTION_NAMES = Object.keys(FORMS) as ActionName[];
@@ -166,6 +181,7 @@ const ID_FIELDS: Record<ActionName, string[]> = {
   saveFloorAreaAction: ["floorId"],
   saveRoomAction: ["floorId"],
   removeRoomAction: ["roomId"],
+  addRoomsAction: ["floorId"],
 };
 
 /** Valgfrie id-er («» = ny), som likevel må være uuid når de er fylt ut. */
@@ -455,5 +471,65 @@ describe("6.5 loggkontrakt", () => {
     for (const name of ACTION_NAMES) await run(call(name));
     const logged = loggedWithoutIds();
     for (const value of [...PERSONAL, ...AREAS]) expect(logged, value).not.toContain(value);
+  });
+});
+
+describe("F11 addRoomsAction (flere rom på én gang)", () => {
+  const TOO_MANY = "Du kan legge til høyst 40 rom om gangen.";
+
+  it("F11.3 gyldig sett: kjernen får (etasje, { drafts, source, presetKey }) og siden friskes opp", async () => {
+    const state = await run(call("addRoomsAction"));
+    expect(state?.message ?? null).toBeNull();
+    const [calledActor, calledOrg, floorId, input] = mocks.core.addRooms.mock.calls[0]!;
+    expect([calledActor, calledOrg, floorId]).toEqual([actor, ORG, FLOOR]);
+    expect(input).toEqual({
+      drafts: [
+        { roomType: "bedroom", count: 2 },
+        { roomType: "bathroom", count: 1 },
+      ],
+      source: "preset",
+      presetKey: "apartment",
+    });
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith("/oppdrag/[id]/bygninger", "page");
+  });
+
+  it("F11.3 manuell: tomt presetKey sendes ikke videre", async () => {
+    await run(call("addRoomsAction", { source: "manual", presetKey: "" }));
+    const input = mocks.core.addRooms.mock.calls[0]![3] as Record<string, unknown>;
+    expect(input.source).toBe("manual");
+    expect("presetKey" in input).toBe(false);
+  });
+
+  it("F11.3 navn fra klienten sendes aldri videre (kjernen lager navnene)", async () => {
+    await run(call("addRoomsAction", { name: ROOM_NAME, names: ROOM_NAME }));
+    expect(JSON.stringify(mocks.core.addRooms.mock.calls)).not.toContain(ROOM_NAME);
+  });
+
+  it.each(["", "ikke json", "[{", "{roomType: bedroom}"])(
+    "F11.2 ugyldig JSON «%s» → norsk melding uten kall til kjernen",
+    async (drafts) => {
+      const state = await failed(call("addRoomsAction", { drafts }));
+      expect(state.message).toBe("Noe gikk galt med romlisten. Prøv igjen.");
+      expect(state.values.drafts).toBe(drafts);
+      expect(coreCalls()).toBe(0);
+      expect(mocks.logError).not.toHaveBeenCalled();
+    },
+  );
+
+  it("F11.2 over 40 rom: meldingen fra kjernen vises, verdiene står igjen, ingen oppfrisking", async () => {
+    mocks.core.addRooms.mockRejectedValue(
+      new ZodError([{ code: "custom", path: ["drafts"], message: TOO_MANY, input: undefined }]),
+    );
+    const drafts = JSON.stringify([
+      { roomType: "bedroom", count: 20 },
+      { roomType: "storage", count: 20 },
+      { roomType: "bathroom", count: 1 },
+    ]);
+    const state = await failed(call("addRoomsAction", { source: "manual", presetKey: "", drafts }));
+    expect(allMessages(state)).toContain(TOO_MANY);
+    expect(state.message).not.toBe(UNKNOWN_ERROR);
+    expect(state.values.drafts).toBe(drafts);
+    expect(vi.mocked(revalidatePath)).not.toHaveBeenCalled();
+    expect(mocks.logError).not.toHaveBeenCalled();
   });
 });
