@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -1555,5 +1555,38 @@ export async function aiUsageRowCountForEmployee(employeeId: string, targetId: s
     return row?.n ?? 0;
   } finally {
     await sql.end();
+  }
+}
+
+// --- Testdata som ligner en ekte arbeidshverdag (docs/funksjoner/fase2a-testdata-arbeidshverdag-testplan.md avsnitt 7) ---
+
+/**
+ * Legger inn testdataene i e2e-databasen med inngangen til `pnpm db:seed:testdata`, som utrullingen
+ * gjør. Sjekker først at databasen er lokal eller testdatabasen (`assertLocalOrTestDatabase`), og
+ * kjører med `APP_ENVIRONMENT=test`, så produksjonsvakten i skriptet også slipper gjennom. Skriptet
+ * er idempotent, så det kan kjøres før hvert e2e-sett. Feilmeldingen viser aldri adressen.
+ */
+export function seedTestdataForE2e(): void {
+  const databaseUrl = e2eDatabaseUrl();
+  assertLocalOrTestDatabase(databaseUrl, process.env.TEST_DATABASE_URL);
+  const result = spawnSync(
+    path.join(process.cwd(), "node_modules", ".bin", "tsx"),
+    [path.join("src", "db", "seed", "testdata-index.ts")],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        APP_ENVIRONMENT: "test",
+        DATABASE_URL: databaseUrl,
+        SEED_ADMIN_EMAIL: process.env.SEED_ADMIN_EMAIL ?? ADMIN_EMAIL,
+      },
+      encoding: "utf8",
+      timeout: 170_000,
+    },
+  );
+  if (result.status !== 0) {
+    throw new Error(
+      `Testdataene kunne ikke legges inn (kode ${String(result.status)}): ${result.stderr.slice(0, 500)}`,
+    );
   }
 }
