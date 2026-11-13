@@ -8,11 +8,16 @@ import {
   auditCount,
   captureError,
   employeeWithGrant,
+  fakeErrorInputs,
+  fakeNoMatchInput,
+  mergeOrganizationSettings,
+  requestSuggestion,
+  validRequest,
 } from "../../../tests/ai";
 import { createAiUsageLog, resetDatabase } from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { AiRequestRejectedError } from "./errors";
-import { insertBlockedRow, retainUntilFrom, toSuggestionResult } from "./usage-log";
+import { addYears, insertBlockedRow, retainUntilFrom, toSuggestionResult } from "./usage-log";
 
 /*
  * Sperret forespørsel i KI-loggen (docs/funksjoner/fase2a-vask-for-ki.md Omfang 5, ad-1;
@@ -147,5 +152,42 @@ describe("insertBlockedRow (V5.1, V5.4, V5.5, V10.1)", () => {
       },
       idOf: (row) => row.id,
     });
+  });
+});
+
+/*
+ * K7 (docs/agenter/oppgaver/ki-oppbevaring-avviste-testplan.md 2b, L1): en ny rad får alltid
+ * 10 år, uansett innstillingen for avviste forslag. Bare en avvisning bruker innstillingen.
+ */
+describe("K7 L1 ny rad får alltid 10 år", () => {
+  async function expectTenYears(id: string) {
+    const row = (await aiRow(id))!;
+    expect(new Date(row.retain_until).toISOString()).toBe(
+      addYears(new Date(row.created_at), 10).toISOString(),
+    );
+    expect(row.deleted_at).toBeNull();
+  }
+
+  it("L1 ny rad får alltid 10 år, uansett innstilling (ok, no_match, error og blocked)", async () => {
+    const { organization, grant } = await aiOrganization();
+    await mergeOrganizationSettings(organization.id, { "ai.rejected_retention_years": 1 });
+
+    const ok = validRequest();
+    expect((await requestSuggestion(grant, ok)).kind).toBe("suggestion");
+    await expectTenYears(ok.requestId);
+
+    const noMatch = validRequest({ fields: { text: fakeNoMatchInput() } });
+    expect((await requestSuggestion(grant, noMatch)).kind).toBe("no_match");
+    await expectTenYears(noMatch.requestId);
+
+    for (const text of fakeErrorInputs()) {
+      const failed = validRequest({ fields: { text } });
+      expect((await requestSuggestion(grant, failed)).kind).toBe("error");
+      await expectTenYears(failed.requestId);
+    }
+
+    const blocked = blockedInput();
+    expect(await insertBlockedRow(grant, blocked)).toEqual({ kind: "blocked" });
+    await expectTenYears(blocked.requestId);
   });
 });

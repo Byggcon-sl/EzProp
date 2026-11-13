@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AccessDeniedError, requireOrganizationAccess } from "@/core/access";
 import { db } from "@/db/client";
+import { logger } from "@/shared/lib/logger";
 import { uuidv7 } from "@/shared/lib/uuid";
 import {
   aiOrganization,
@@ -20,6 +21,7 @@ import {
 import { createAiUsageLog, resetDatabase, TEST_NOW } from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import * as aiModule from "./index";
+import { addYears } from "./usage-log";
 
 /*
  * `recordDecision` (docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 7, 9.4, 9.8 og
@@ -446,5 +448,225 @@ describe("recordDecision: myk sletting og tenant-isolasjon (10.1, 9.4, 9.8)", ()
     expect(snapshot(await aiRow(row.id))).toBe(before);
     expect(snapshot(await aiRow(accepted.id))).toBe(beforeAccepted);
     expect(await auditCount()).toBe(auditBefore);
+  });
+});
+
+/*
+ * K7: oppbevaringstid for avviste forslag (docs/agenter/oppgaver/ki-oppbevaring-avviste-testplan.md
+ * 2c, D1–D12; kortet A272–A275). Innstillingen `ai.rejected_retention_years` settes rått i
+ * `organizations.settings`. Radene lages med fast `created_at`, og forventet dato regnes med
+ * `addYears` fra `usage-log.ts`. Sammenlignes som ISO-tekst på hele tidsstempelet.
+ *
+ * Støtter hovedmål: KI i bunnen (loggen står minst så lenge innstillingen sier) og færre
+ * reklamasjoner (godtatte og endrede forslag står alltid i 10 år, også etter angre).
+ */
+describe("K7 oppbevaringstid ved manuelle overganger (D1–D12)", () => {
+  const RETENTION_KEY = "ai.rejected_retention_years";
+  const CREATED = new Date("2026-11-02T09:00:00Z");
+  const LATER = new Date("2026-11-04T08:30:00Z");
+  /** Antall rader scenarioene har laget (D12 sammenligner med tabellen). */
+  let created = 0;
+
+  async function setRetention(organizationId: string, value: unknown) {
+    await mergeOrganizationSettings(organizationId, { [RETENTION_KEY]: value });
+  }
+
+  async function retainUntilOf(id: string): Promise<string> {
+    return new Date((await aiRow(id))!.retain_until).toISOString();
+  }
+
+  function plus(years: number, from: Date = CREATED): string {
+    return addYears(from, years).toISOString();
+  }
+
+  async function suggestedRow(
+    organizationId: string,
+    employeeId: string,
+    extra: Parameters<typeof createAiUsageLog>[1] = {},
+  ) {
+    created += 1;
+    return createAiUsageLog(organizationId, {
+      employeeId,
+      createdAt: CREATED,
+      targetRef: validTarget(),
+      ...extra,
+    });
+  }
+
+  async function rowCounts() {
+    const [row] = (await db.execute(
+      sql`select count(*)::int as total, count(deleted_at)::int as deleted from ai_usage_log`,
+    )) as unknown as { total: number; deleted: number }[];
+    return row!;
+  }
+
+  /** Overgangene fra D1–D4, D7 og D9. Brukes også av D12. */
+  const scenarios = {
+    async d1() {
+      const { organization, grant } = await aiOrganization();
+      const row = await suggestedRow(organization.id, grant.employeeId);
+      await recordDecision(grant, row.id, "rejected");
+      expect((await aiRow(row.id))!.status).toBe("rejected");
+      expect(await retainUntilOf(row.id)).toBe(plus(10));
+    },
+    async d2() {
+      const { organization, grant } = await aiOrganization();
+      await setRetention(organization.id, 2);
+      const row = await suggestedRow(organization.id, grant.employeeId);
+      await recordDecision(grant, row.id, "rejected");
+      expect((await aiRow(row.id))!.status).toBe("rejected");
+      expect(await retainUntilOf(row.id)).toBe(plus(2));
+    },
+    async d3() {
+      const { organization, grant } = await aiOrganization();
+      await setRetention(organization.id, 2);
+      for (const decision of ["accepted", "edited"] as const) {
+        // Rådata med kort dato før overgangen: koden må sette retain_until selv
+        const row = await suggestedRow(organization.id, grant.employeeId, {
+          retainUntil: addYears(CREATED, 2),
+        });
+        await recordDecision(grant, row.id, decision);
+        expect((await aiRow(row.id))!.status).toBe(decision);
+        expect(await retainUntilOf(row.id)).toBe(plus(10));
+      }
+    },
+    async d4() {
+      const { organization, grant } = await aiOrganization();
+      await setRetention(organization.id, 2);
+      const row = await suggestedRow(organization.id, grant.employeeId);
+      await recordDecision(grant, row.id, "rejected");
+      expect(await retainUntilOf(row.id)).toBe(plus(2));
+      await recordDecision(grant, row.id, "undo");
+      expect((await aiRow(row.id))!.status).toBe("suggested");
+      expect(await retainUntilOf(row.id)).toBe(plus(10));
+      await recordDecision(grant, row.id, "accepted");
+      expect((await aiRow(row.id))!.status).toBe("accepted");
+      expect(await retainUntilOf(row.id)).toBe(plus(10));
+    },
+    async d7() {
+      for (const years of [1, 10]) {
+        const { organization, grant } = await aiOrganization(`Oppdiktet Takst grense ${years}`);
+        await setRetention(organization.id, years);
+        const row = await suggestedRow(organization.id, grant.employeeId);
+        await recordDecision(grant, row.id, "rejected");
+        expect(await retainUntilOf(row.id)).toBe(plus(years));
+      }
+    },
+    async d9() {
+      const { organization, grant } = await aiOrganization();
+      await setRetention(organization.id, 10);
+      const r1 = await suggestedRow(organization.id, grant.employeeId);
+      await recordDecision(grant, r1.id, "rejected");
+      expect(await retainUntilOf(r1.id)).toBe(plus(10));
+
+      await setRetention(organization.id, 2);
+      expect(await retainUntilOf(r1.id)).toBe(plus(10));
+      const r2 = await suggestedRow(organization.id, grant.employeeId, { createdAt: LATER });
+      await recordDecision(grant, r2.id, "rejected");
+      expect(await retainUntilOf(r2.id)).toBe(plus(2, LATER));
+
+      await setRetention(organization.id, 10);
+      expect(await retainUntilOf(r1.id)).toBe(plus(10));
+      expect(await retainUntilOf(r2.id)).toBe(plus(2, LATER));
+    },
+  };
+
+  it("D1 avvist uten innstilling gir 10 år", scenarios.d1);
+  it("D2 avvist med innstilling 2 gir 2 år", scenarios.d2);
+  it("D3 godtatt og endret gir 10 år, også når raden hadde kort dato", scenarios.d3);
+  it("D4 avvist → angre → godtatt gir 10 år", scenarios.d4);
+  it("D7 grensene 1 og 10", scenarios.d7);
+  it("D9 A273: kortere og lengre virker bare fremover", scenarios.d9);
+
+  it("D10 ugyldig innstilling («5» som tekst) gir 10 år og advarsel uten verdien", async () => {
+    const { organization, grant } = await aiOrganization();
+    await setRetention(organization.id, "5");
+    const row = await suggestedRow(organization.id, grant.employeeId);
+    const warn = vi.spyOn(logger, "warn");
+
+    await recordDecision(grant, row.id, "rejected");
+
+    expect(await retainUntilOf(row.id)).toBe(plus(10));
+    expect(warn).toHaveBeenCalled();
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).toContain(organization.id);
+    expect(logged).toContain(RETENTION_KEY);
+    expect(logged).not.toContain('"5"');
+    expect(logged).not.toMatch(/[:[,]\s*5\s*[,}\]]/);
+  });
+
+  it.each([
+    ["0", 0],
+    ["11", 11],
+    ["2.5", 2.5],
+    ["null", null],
+    ["-1", -1],
+    ["tomt objekt", {}],
+  ])("D10 ugyldig innstilling %s gir også 10 år", async (_label, value) => {
+    const { organization, grant } = await aiOrganization();
+    await setRetention(organization.id, value);
+    const row = await suggestedRow(organization.id, grant.employeeId);
+    await recordDecision(grant, row.id, "rejected");
+    expect(await retainUntilOf(row.id)).toBe(plus(10));
+  });
+
+  it("D11 innstillingen leses fra grant.organizationId", async () => {
+    const a = await aiOrganization("Oppdiktet Takst A");
+    const b = await aiOrganization("Oppdiktet Takst B");
+    await setRetention(a.organization.id, 1);
+    await setRetention(b.organization.id, 10);
+    const adminA = await employeeWithGrant(a.organization.id, ["admin"], "Test Admin A");
+    const adminB = await employeeWithGrant(b.organization.id, ["admin"], "Test Admin B");
+    const inA = await suggestedRow(a.organization.id, a.grant.employeeId);
+    const otherInA = await suggestedRow(a.organization.id, a.grant.employeeId);
+    const inB = await suggestedRow(b.organization.id, b.grant.employeeId);
+    const beforeInA = snapshot(await aiRow(inA.id));
+    const beforeOtherInA = snapshot(await aiRow(otherInA.id));
+
+    await recordDecision(adminB.grant, inB.id, "rejected");
+    expect(await retainUntilOf(inB.id)).toBe(plus(10));
+    // Avvisningen i B endret ingenting i A (retain_until, status, updated_at)
+    expect(snapshot(await aiRow(inA.id))).toBe(beforeInA);
+    expect(snapshot(await aiRow(otherInA.id))).toBe(beforeOtherInA);
+
+    await recordDecision(adminA.grant, inA.id, "rejected");
+    expect(await retainUntilOf(inA.id)).toBe(plus(1));
+    expect(await retainUntilOf(inB.id)).toBe(plus(10));
+    expect(snapshot(await aiRow(otherInA.id))).toBe(beforeOtherInA);
+  });
+
+  it("D11 admin i B kan ikke avvise en rad i A; As rad er uendret", async () => {
+    const a = await aiOrganization("Oppdiktet Takst A");
+    const b = await aiOrganization("Oppdiktet Takst B");
+    await setRetention(a.organization.id, 7);
+    await setRetention(b.organization.id, 1);
+    const adminB = await employeeWithGrant(b.organization.id, ["admin"], "Test Admin B");
+    const inA = await suggestedRow(a.organization.id, a.grant.employeeId);
+    const before = snapshot(await aiRow(inA.id));
+
+    const error = await captureError(() => recordDecision(adminB.grant, inA.id, "rejected"));
+
+    expect(error).not.toBeInstanceOf(AccessDeniedError);
+    expect(snapshot(await aiRow(inA.id))).toBe(before);
+  });
+
+  it("D12 ingen rad slettes", async () => {
+    for (const [name, run] of Object.entries(scenarios)) {
+      await resetDatabase();
+      created = 0;
+      await run();
+      expect({ name, ...(await rowCounts()) }).toEqual({ name, total: created, deleted: 0 });
+    }
+    // Hver overgang for seg endrer aldri antallet og gir aldri deleted_at
+    await resetDatabase();
+    const { organization, grant } = await aiOrganization();
+    await setRetention(organization.id, 2);
+    const row = await suggestedRow(organization.id, grant.employeeId);
+    const before = await rowCounts();
+    expect(before.deleted).toBe(0);
+    for (const decision of ["rejected", "undo", "edited", "undo", "accepted"]) {
+      await recordDecision(grant, row.id, decision);
+      expect(await rowCounts()).toEqual(before);
+    }
   });
 });
