@@ -13,6 +13,8 @@ Instruksjoner for Claude Code i dette prosjektet. Les denne filen ved start av h
 
 50 % mindre tid per rapport er **ikke lenger hovedmål** (Ståle 10.11.2026). Tiden måles fortsatt, som ett av flere tegn på at systemet er godt.
 
+**Full kvalitet (Ståle 13.11.2026):** det som står i planen, bygges ferdig og godt første gang, uten midlertidige mellomløsninger. EzProp lanseres ikke før det er klart. «Hold det enkelt» betyr fortsatt: bygg bare det som står i planen.
+
 Hver oppgave og hver PR skal si hvilket mål den støtter, og hvordan.
 
 Les før du gjør endringer i et område:
