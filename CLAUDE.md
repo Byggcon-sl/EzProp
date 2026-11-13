@@ -13,7 +13,9 @@ Instruksjoner for Claude Code i dette prosjektet. Les denne filen ved start av h
 
 50 % mindre tid per rapport er **ikke lenger hovedmål** (Ståle 10.11.2026). Tiden måles fortsatt, som ett av flere tegn på at systemet er godt.
 
-**Full kvalitet (Ståle 13.11.2026):** det som står i planen, bygges ferdig og godt første gang, uten midlertidige mellomløsninger. EzProp lanseres ikke før det er klart. «Hold det enkelt» betyr fortsatt: bygg bare det som står i planen.
+**Produksjonsklar, full kvalitet (Ståle 13.11.2026):** «Løsningen vi koder skal benyttes til drift, og være 100% produksjonsklar. Ikke fokuser på midlertidige løsninger eller snarveier.» Det som står i planen, bygges ferdig for drift første gang: ingen minimumsløsninger, prototyper, prøvesider som erstatning for ekte skjermer, eller «første versjon» som må bygges om. EzProp lanseres ikke før det er klart. «Hold det enkelt» betyr fortsatt: bygg bare det som står i planen, og velg den enkleste løsningen som er god nok for drift.
+
+**Ferdig betyr klart for drift:** feilhåndtering og tydelige feilmeldinger, logging uten persondata, tilgang og tenant-isolasjon, ytelse med ekte datamengder, universell utforming, uten-nett der planen krever det, migreringer som tåler ekte data, tester på alle nivåer, og dokumentasjon for drift. Testdata i repoet er fortsatt oppdiktet (regel 8).
 
 Hver oppgave og hver PR skal si hvilket mål den støtter, og hvordan.
 
@@ -89,7 +91,7 @@ Ståle Limstrand er daglig leder i Byggcon og produkteier. Han er ikke utvikler,
 
 ## Autonom modus (Ståle 29.10.2026, slått på igjen 04.11.2026, gjelder til Ståle sier fra)
 
-Ståle vil ikke ha meldinger, spørsmål eller noe å teste mens modusen er på. Fra 04.11.2026: «Jeg synes det fungerte så bra at du kan kjøre videre på autonom utvikling igjen.» Hans ord 29.10.2026: «Kjør utvikling og testing autonomt. Er du i tvil, gå tilbake til undersøkelsene og tolk hva du mener blir beste løsning. Løsningen er foreløpig kun i test.» Derfor, så lenge `docs/agenter/tilstand.md` sier «Autonom modus: på»:
+Ståle vil ikke ha meldinger, spørsmål eller noe å teste mens modusen er på. Fra 04.11.2026: «Jeg synes det fungerte så bra at du kan kjøre videre på autonom utvikling igjen.» Hans ord 29.10.2026: «Kjør utvikling og testing autonomt. Er du i tvil, gå tilbake til undersøkelsene og tolk hva du mener blir beste løsning.» (Fra 13.11.2026 bygges alt for drift, se «Produksjonsklar» over.) Derfor, så lenge `docs/agenter/tilstand.md` sier «Autonom modus: på»:
 
 - **Agentene avgjør selv** spørsmål om fag, innhold og funksjoner innenfor planen. Grunnlaget er researchen i `docs/kartlegging/` (Ståles svar er fasit, nyeste dato gjelder), hovedmålene og forskriften. Velg det som best støtter målene (best for de ansatte, KI i bunnen, færre reklamasjoner), og det enkleste som virker.
 - **Hver slik beslutning føres** i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte» (hva, hvorfor, kilde i researchen, hvordan det kan endres), og nevnes i PR-en. PR-en merges som vanlig.

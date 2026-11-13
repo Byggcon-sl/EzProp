@@ -203,7 +203,7 @@ resource requireTls 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@20
 }
 
 // Lar App Service nå databasen. Kjent avveining: regelen åpner for alle Azure-kunders IP-adresser
-// (ADR 0002). Privat nettverk eller VNet-integrasjon står i «Minimum før ekte data».
+// (ADR 0002). Privat nettverk eller VNet-integrasjon står i «Klar for drift».
 resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
   parent: postgres
   name: 'AllowAllAzureServicesAndResourcesWithinAzureIps'
@@ -284,7 +284,7 @@ resource appLogs 'Microsoft.Web/sites/config@2024-04-01' = {
 
 // ---------- Nøkkelboks for hemmeligheter (bare når bryteren er på, ADR 0005) ----------
 // Standard prisnivå, betaling per oppslag. Myk sletting og slettesperre er på, så en hemmelighet kan ikke
-// fjernes for godt ved et uhell. Ingen nettverksregler her (privat nettverk står i «Minimum før ekte data»).
+// fjernes for godt ved et uhell. Ingen nettverksregler her (privat nettverk står i «Klar for drift»).
 // Verdiene kommer fra de samme parameterne som før; de står aldri som fast tekst.
 
 resource vault 'Microsoft.KeyVault/vaults@2023-07-01' = if (enableKeyVault) {

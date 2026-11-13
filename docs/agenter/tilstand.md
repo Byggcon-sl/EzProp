@@ -12,7 +12,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 ## Gjeldende fase
 
-**Fase 2a – Rapporten på PC**, i rekkefølgen **2a-1 KI-grunnmuren → 2a-2 Smal vei (ett våtrom fra kontrollpunkt til PDF) → 2a-3 Bredden.** Fase 0a og 1 er ferdige. Fase 0b er ferdig unntatt felles innlogging med Optiplan (venter på S6). «Minimum før ekte data» kan nå bygges i testmiljøet (S1 gjort). Levert arbeid står i `docs/plan/levert.md`.
+**Fase 2a – Rapporten på PC**, i rekkefølgen **2a-1 KI-grunnmuren → 2a-2 Hele veien først (ett våtrom fra kontrollpunkt til PDF, i produksjonskvalitet) → 2a-3 Bredden.** Fase 0a og 1 er ferdige. Fase 0b er ferdig unntatt felles innlogging med Optiplan (venter på S6). «Klar for drift» kan nå bygges i testmiljøet (S1 gjort). Levert arbeid står i `docs/plan/levert.md`.
 
 ## Gjeldende oppgave
 

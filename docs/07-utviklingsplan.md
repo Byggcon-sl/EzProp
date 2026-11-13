@@ -39,6 +39,8 @@ Hver oppgave og hver PR sier hvilket av de tre målene den støtter, og hvordan.
 
 **Full kvalitet, ingen midlertidige løsninger** (Ståle 13.11.2026: «Jeg ønsker full utvikling - ikke en "midlertidig dårlig admin løsning" - vi lanserer ikke ezprop prematurt - så vi har tid å utvikle systemet til det beste systemet i verden»). Det som står i planen, bygges ferdig og godt første gang. Vi lager ikke enkle mellomløsninger som må byttes ut senere. EzProp lanseres ikke før det er klart.
 
+**Produksjonsklar fra første linje** (Ståle 13.11.2026: «jeg synes vi har for stort fokus på minimumsløsninger, og at løsningen kun skal testes, uten ekte data med mer. Løsningen vi koder skal benyttes til drift, og være 100% produksjonsklar. Ikke fokuser på midlertidige løsninger eller snarveier»). Hver leveranse er ferdig for drift: feilhåndtering og tydelige feilmeldinger, logging uten persondata, tilgang og tenant-isolasjon, ytelse med ekte datamengder, universell utforming, migreringer som tåler ekte data, tester på alle nivåer og dokumentasjon for drift. Testmiljøet er der vi prøver; koden er den samme som skal i drift. Oppdiktede data i repoet og testene gjelder fortsatt (regel 8).
+
 **Slik ser vi om vi lykkes** (Claudes forslag):
 
 | Tegn | Hvordan vi ser det |
@@ -62,8 +64,8 @@ Hver oppgave og hver PR sier hvilket av de tre målene den støtter, og hvordan.
 
 ```
 Levert:  0a Repo og database · 1 Prøve uten nett (automatiske prøver) · 0b Innlogging, organisasjon og roller · 2a Oppdrag og eiendom
-Nå:      2a Rapporten på PC   →  2a-1 KI-grunnmuren  →  2a-2 Smal vei  →  2a-3 Bredden
-Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3b Kontoret
+Nå:      2a Rapporten på PC   →  2a-1 KI-grunnmuren  →  2a-2 Hele veien først  →  2a-3 Bredden
+Så:      Klar for drift → 2b Befaringen på iPad → 3a Piloten → 3b Kontoret
          → 4 Produksjon → 4b Kundesiden → 5 Malbygger → Senere
 ```
 
@@ -75,7 +77,7 @@ Så:      Minimum før ekte data → 2b Befaringen på iPad → 3a Piloten → 3
 | 1 Prøve uten nett | Ferdig 10.11.2026. Ståle har kjørt prøvene på ekte iPad og godkjent ADR 0004 (egenbygd synk). |
 | 0b Innlogging, organisasjon, roller | Ferdig, unntatt felles innlogging med Optiplan (venter på S6) |
 | **2a Rapporten på PC** | **Gjeldende fase.** Oppdrag, eiendom, kontakter, tidsmåling og reklamasjonsskjema er levert. Malmotoren (PR #119), ADR 0006 KI i bunnen (PR #123), KI-modulen og loggen (PR #127), forslagsmønsteret (PR #131), vask før KI (PR #135), evalueringssettet (PR #141) og KI-køen (PR #143) er levert. Det alvorlige funnet T-0001 (synkkøen) er rettet i PR #139. Beslutningsnotatet om KI-leverandør og Anthropic-adapteren (siste punkt i 2a-1) er ferdig. 2a-2: malen for ett bad er levert (PR #159), og reglene badet trenger er levert (PR #167). Byggcon-profilen er levert (PR #176). Neste: resten av «Fra Ståles svar 12.11.2026», deretter badet på PC. |
-| Minimum før ekte data | To av ti punkter levert. Testmiljøet (S1) er oppe fra 12.11.2026, så resten kan bygges og prøves der. |
+| Klar for drift | To av ti punkter levert. Testmiljøet (S1) er oppe fra 12.11.2026, så resten kan bygges og prøves der. |
 | 2b og videre | Ikke startet |
 
 ## Venter på Ståle
@@ -92,6 +94,7 @@ Dette kan bare Ståle gjøre eller bestemme. Listen er sortert etter hvor mye so
 | S6 | **Tilgang til Optiplan-oppsettet**, og bekrefte om Optiplan bruker nøkkelboks. | Felles innlogging og bytte med ett trykk (fase 0b) |
 | S7 | **Folk:** én erfaren takstmann inn i betaen nå, hvem som er med i piloten og EzProp-panelet (forslag: én takstmann per selskap og Dan-Børge fra kontoret), og hvem som er ansvarlig for overgangen fra IVIT. | Andre øyne enn Ståles på det som bygges, og piloten |
 | S8 | **KI-leverandør: Anthropic, og Ståle har API-nøkkel (Ståle 10.11.2026: «vi har valgt anthopic - har api nøkler»).** **Anthropic-adapteren er bygget bak KI-porten, og beslutningsnotatet er skrevet (11.11.2026, `docs/beslutningsnotat-ki-leverandor.md`).** Gjenstår for Ståle: velge EU/EØS-vei, godta eller signere databehandleravtalen, svare på spørsmål 54–58 og 73, vurdere forslag 64 (tak på KI-bruk), legge nøkkelen inn som secret `ANTHROPIC_API_KEY` i GitHub (aldri i chat eller repo) og lage tilkoblingen i testmiljøet, og velge leverandør for norsk tale til tekst (anbefalt: Microsoft Azure tale i Norge). | Ekte KI i testmiljøet. Til da prøves alt mot den falske leverandøren. |
+| S9 | **Produksjonsmiljø i Azure** (Ståle 13.11.2026: løsningen skal være produksjonsklar). Agentene lager oppsettet i kode og oppskriften; Ståle sier ja til kostnaden, oppretter ressursgruppen og legger inn nøklene, slik som for testmiljøet. Anslått kostnad legges fram før oppretting. | «Klar for drift» og første ekte oppdrag |
 
 ---
 
@@ -146,14 +149,14 @@ Første punkt tas **før Byggcon-profilen**, fordi det retter reglene som alt er
 - [ ] **Flere rom på én gang med færrest mulig trykk** (T4). KI som foreslår rom (for eksempel fra plantegning) står i 2a-3 og tas så tidlig som det lar seg gjøre.
 - [ ] **Oppbevaringstid for avviste KI-forslag som innstilling** (K7), 10 år som standard. Endrer A157.
 
-### 2a-2 Smal vei: ett våtrom fra kontrollpunkt til PDF
+### 2a-2 Hele veien først: ett våtrom fra kontrollpunkt til PDF
 
-Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se og godkjenne fag og utseende tidlig, og feil i grunnstrukturen oppdages før de blir dyre.
+Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full produksjonskvalitet (ikke en prototype som bygges om senere). Da kan Ståle se og godkjenne fag og utseende tidlig, og feil i grunnstrukturen oppdages før de blir dyre.
 
 - [ ] **Badet på PC:** kontrollpunktene, avvikskort (TG, årsak, konsekvens, tiltak, kostnad) og TGIU på punktet. TG-forslag fra reglene kan godtas, endres eller avvises.
 - [ ] **KI i veien:** forslag fra frasebanken, språkvask av avviksteksten og utkast til sammendrag, gjennom KI-grunnmuren.
 - [ ] **Publisering av badet:** sperren for det som gjelder våtrom (TG2 eller TG3 uten årsak og konsekvens, TG3 uten kostnad, våtrom uten hulltaking eller begrunnelse), med aktiv overstyring og logg.
-- [ ] **ADR: valg av PDF-motor,** og en enkel PDF av badet med Byggcons profil. Krav til motoren: stående og liggende, profiler, bilder med markering, innholdsfortegnelse, norsk orddeling og samme resultat hver gang. Testutskriften med 50 bilder kommer i bredden.
+- [ ] **ADR: valg av PDF-motor,** og PDF-en av badet i Byggcons profil, i ferdig kvalitet. Krav til motoren: stående og liggende, profiler, bilder med markering, innholdsfortegnelse, norsk orddeling og samme resultat hver gang. Testutskriften med 50 bilder kommer i bredden.
 
 **Ferdig når:** På ett testoppdrag kan badet fylles ut, få TG-forslag fra reglene og tekstforslag fra KI, publiseres og bli til en PDF. Testlaget har prøvd veien, og Ståle har sett den.
 
@@ -219,19 +222,24 @@ Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se
 
 ---
 
-## Minimum før ekte data  `status: to av elleve levert`
+## Klar for drift  `status: to av elleve levert`
 
-Før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerklæringer) legges inn, skal dette være på plass. Den fulle personvernpakken ligger i fase 4. De fleste punktene trenger testmiljøet (S1).
+EzProp bygges for drift, ikke for test (Ståle 13.11.2026: «Løsningen vi koder skal benyttes til drift, og være 100% produksjonsklar»). Alt i denne listen bygges i full produksjonskvalitet og er på plass før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerklæringer) legges inn. Punktene er ikke et minimum som skal bygges ut senere.
 
 - [ ] **Lagring i EU/EØS med HTTPS** for drift, database og fillagring
 - [ ] **Daglig sikkerhetskopi**, og én gjenoppretting som er prøvd og skrevet ned
 - [ ] **Databehandleravtaler** med leverandørene for drift, fillagring og e-post
+- [ ] **Eget produksjonsmiljø** i Azure ved siden av testmiljøet, med samme oppsett fra kode (Bicep), egen database, egne nøkler i nøkkelboksen og eget domene. Ståle ruller ut til produksjon selv. Oppretting koster penger og krever Ståles ja (står under «Venter på Ståle»).
+- [ ] **Overvåking og varsel:** oppetid, feil, treghet og fulle køer varsles til Byggcon; feillogg uten persondata; helsesjekk som også sjekker database, fillagring og køer.
+- [ ] **Sikkerhetsgjennomgang** før ekte data: tilgang og tenant-isolasjon på alle sider og API-er, avhengigheter uten kjente sårbarheter, sikre hoder, og en skriftlig gjennomgang fra sikkerhet-personvern.
+- [ ] **Ytelse under ekte last:** 2 000 rapporter i året med 15–50 bilder hver og flere års historikk gir ingen merkbar treghet på iPad eller PC. Målt med en lasttest på oppdiktede data i samme mengde.
+- [ ] **Driftsrutiner skrevet ned:** utrulling, tilbakerulling, gjenoppretting, nøkkelbytte og hva som gjøres ved feil.
 - [ ] **Tilgang bare for ansatte** (ingen innlogging for kunder eller meglere ennå)
 - [ ] **Sperring av iPader** (innspill P6 og D10): kode eller Face ID påkrevd, og en mistet iPad kan sperres. Må være på plass før første ekte befaring på iPad i fase 2b.
 - [ ] **Microsoft 365 koblet til**, og koden i serverloggen for første admin er ikke lenger i bruk
 - [ ] **Privat nettverk eller VNet-integrasjon mellom app og database** (ikke brannmurregelen for alle Azure-tjenester), og egen databasebruker for appen uten eierrettigheter
 - [ ] **KI-leverandør:** databehandleravtale signert og behandlingen i EU/EØS (Ståle 12.11.2026, K1: Anthropic direkte bare i testmiljøet med oppdiktede data), før tilkoblingen `anthropic` lages for en organisasjon med ekte data. Spørsmål 54–58 og 73 er besvart 12.11.2026. Leverandørens vanlige oppbevaringstid godtas og skrives inn i personvernerklæringen (K2). Se `docs/beslutningsnotat-ki-leverandor.md`.
-- [ ] **Personvernkonsekvensvurdering (DPIA), kort utkast** fra agentene som Ståle godkjenner (K3, 12.11.2026). Før ekte data, ikke før testing.
+- [ ] **Personvernkonsekvensvurdering (DPIA)** fra agentene som Ståle godkjenner (K3, 12.11.2026). Før ekte data.
   - Utkastet skal ta med revisjonsloggen for endring av ordre: gammel og ny verdi (adresse, matrikkel, bestiller som tekst) lagres i en logg som aldri ryddes. Spørsmål 79 må være besvart (A252).
 
 **Ferdig når:** Ståle har sett listen krysset av og godkjent at ekte data kan legges inn.
@@ -279,12 +287,12 @@ Flere takstmenn bruker EzProp på ekte oppdrag. Fasen har bare det piloten treng
 - [ ] Bildesenter på PC: dra bilder til riktig rom, punkt eller avvik
 - [ ] Stedsmerker (etasje, himmelretning, rom) og flagg «må fullføres på kontoret»
 - [ ] Privat notat per rapport
-- [ ] **Befaringstid og kalender, første versjon:** befaringstid på oppdraget, kalender per takstmann, og befaringen vises i Outlook (én vei, fra EzProp til Outlook).
+- [ ] **Befaringstid og kalender:** befaringstid på oppdraget, kalender per takstmann, og befaringen vises i Outlook (én vei, fra EzProp til Outlook).
 - [ ] **Søk og arkiv:** globalt søk på oppdragsnummer, adresse, matrikkel og kundenavn, arkiv med filtre, hurtigperioder, lagrede filtre og eksport til Excel
 - [ ] **KI: Spør EzProp** (Ståle 13.11.2026: «legg inn "spør ezprop"»): i søkefeltet øverst kan den ansatte spørre på vanlig norsk, for eksempel «Hvilke bad fra 80-tallet ga reklamasjon i fjor?» eller «Hva skrev vi om drenering i Fjordveien 3 i 2021?». KI gjør spørsmålet om til et søk med filtre; søket kjøres i EzProp med vanlig tilgangssjekk (`src/core/access`), så svaret bare viser det den ansatte har lov til å se, og reklamasjonssaker bare for leder og admin. Svaret viser alltid kildene (oppdrag, rapport, punkt) med lenke, og sier «fant ingenting» i stedet for å gjette. Navn, adresse og matrikkel sendes ikke til KI: KI lager bare søket, og treffene hentes fra databasen. Svarer, endrer ingenting, sender ingenting og setter aldri TG. Logges i `ai_usage_log` og får eget evalueringssett. Bygger på «Søk og arkiv».
 - [ ] **Varsler som arbeidsliste** (funksjonskart H11) med lest/ulest og filter, og varselvalg per type (innspill D11). Også varsel når en sertifisering snart går ut (H5).
 - [ ] **Hjelp i appen koblet til kunnskapsbasen** (funksjonskart H7): hjelpetekst og «i» per punkt peker til Byggcons egne sider i kunnskapsbasen, ikke til en ekstern hjelpeside
-- [ ] Knappen «Tilbakemelding» med skjermbilde, og enkel feilsøking på iPaden («send feilsøkingsinfo»)
+- [ ] Knappen «Tilbakemelding» med skjermbilde, og feilsøking på iPaden («send feilsøkingsinfo»)
 - [ ] Rapportprofil med flere valg for PDF (innholdsfortegnelse, avvik først)
 - [ ] Måling av pilotmålene (se «Hva vi måler i piloten»)
 - [ ] **Fast løp for overgangen fra IVIT** (svar 10.11.2026, nr. 51), skrevet som plan: kort ordliste IVIT → EzProp, prøverapport på eget hus før første kundeoppdrag, samle takstfolkenes bekymringer før piloten, vise meglere en prøverapport tidlig, og meglerundersøkelsen (fem spørsmål) som nullpunkt.
@@ -308,12 +316,12 @@ Rutiner, kalender og økonomi. Kan bygges mens piloten går.
 
 **Kalender og økonomi**
 - [ ] **Kapasitet:** ukesvisning per takstmann, fravær, og kapasitet per kontor de neste to ukene. Kobling til Outlook begge veier står i «Senere».
-- [ ] **Bestillingsskjema for meglere** (funksjonskart H8): et enkelt skjema med de samme feltene som den manuelle ordren. Bestillingen blir en ordre som kontoret godkjenner. Fjerner avskrift før API mot meglersystemene finnes.
+- [ ] **Bestillingsskjema for meglere** (funksjonskart H8): et skjema med de samme feltene som den manuelle ordren. Bestillingen blir en ordre som kontoret godkjenner. Fjerner avskrift før API mot meglersystemene finnes.
 - [ ] **Fakturagrunnlag til eAccounting** gjennom tilkoblingen: fritt valgt mottaker, linjer med MVA, kontroll og «send», riktig eAccounting-klient for hvert av de tre selskapene, ingen dubletter av kunder, status tilbake som hendelsene **«faktura sendt»**, **«faktura betalt»** og «faktura forfalt». Liste over ufakturerte og ubetalte oppdrag. Her bygges også tabellen `external_references` og selskap på tilkoblingen (`company_id` eller `companies.accounting_connection_id`), flyttet fra tilkoblingslaget i fase 0b (02.11.2026, se `docs/funksjoner/fase0b-tilkoblingslag.md`, «Til fase 3»).
   - [ ] Nøkkelboksen steg 2: `readSecret` leser tilkoblingenes hemmeligheter rett fra boksen med appens identitet, av som standard (utsatt fra fase 0b 03.11.2026, A50; oppgavekort og testplan i `docs/funksjoner/fase0b-nokkelboks-kodevei.md`). Bygges i samme PR som den første tilkoblingen som trenger det; kommer en KI-tilkobling med egen nøkkel i fase 2, flyttes punktet dit.
 - [ ] **Prisliste per avtale som data** (funksjonskart H2): standardpriser og avtalepriser foreslås på fakturalinjene. En prismotor (pris etter areal, alder og avstand) kommer senere.
 - [ ] **Tall om KI-bruk per ansatt, også for leder** (Ståle 12.11.2026, K8). Bygges først når det er drøftet med de ansatte (arbeidsmiljøloven kapittel 9).
-- [ ] **Enkelt lederdashbord** (funksjonskart H3): oppdrag per status, befaringer neste uke, levert siste 30 dager, leveringstid, ufakturert og forfalt, per kontor og selskap, og pilotmålene
+- [ ] **Lederdashbord** (funksjonskart H3): oppdrag per status, befaringer neste uke, levert siste 30 dager, leveringstid, ufakturert og forfalt, per kontor og selskap, og pilotmålene
 - [ ] Oppslag i Brønnøysundregistrene for firma (som i Optiplan)
 
 **Ferdig når:** De seks rutinene har gått uten feil som ikke ble oppdaget, og fakturagrunnlag har gått til eAccounting for alle tre selskapene.
@@ -325,8 +333,8 @@ Rutiner, kalender og økonomi. Kan bygges mens piloten går.
 ## Fase 4 – Produksjon  `status: ikke startet`
 
 **Sikkerhet og personvern**
-- [ ] **Personvern, full pakke:** behandlingsgrunnlag, personvernerklæring, protokoll over behandlinger, databehandleravtaler med alle leverandørene (drift, e-post, fillagring, tale til tekst, KI), og vurdering av personvernkonsekvenser for KI. Byggcon eier arbeidet, med Ståle som daglig leder (beslutning 25.10.2026). Claude lager utkast. Det grunnleggende er allerede gjort i «Minimum før ekte data».
-- [ ] **Sikkerhetskopi:** daglig kopi har gått siden «Minimum før ekte data». Ny prøvegjenoppretting gjøres og dokumenteres før alle tar EzProp i bruk.
+- [ ] **Personvern, full pakke:** behandlingsgrunnlag, personvernerklæring, protokoll over behandlinger, databehandleravtaler med alle leverandørene (drift, e-post, fillagring, tale til tekst, KI), og vurdering av personvernkonsekvenser for KI. Byggcon eier arbeidet, med Ståle som daglig leder (beslutning 25.10.2026). Claude lager utkast. Det grunnleggende er allerede gjort i «Klar for drift».
+- [ ] **Sikkerhetskopi:** daglig kopi har gått siden «Klar for drift». Ny prøvegjenoppretting gjøres og dokumenteres før alle tar EzProp i bruk.
 - [ ] **Oppbevaring i minst 10 år:** låste utgivelser, bilder og måledata kan ikke slettes, og originalbildene følger innstillingene (avviksbilder i original 10 år, andre originaler 2 år, komprimert 10 år, besluttet 27.10.2026)
 - [ ] Tofaktor eller tilsvarende sikker innlogging (mål 11). Sperre etter gjentatte feil kom i fase 0b. **Merk (12.11.2026):** Ståle svarte at engangskoden er reserve for alle, og at Byggcon ikke krever tofaktor i Microsoft i dag. Da er det ingen tofaktor med ekte data. Ståle avgjør om målet endres, eller om tofaktor slås på i Microsoft før ekte data.
 - [ ] Drift i EU/EØS med overvåking og varsel, som Optiplan (Azure)
@@ -439,7 +447,7 @@ EzProp er i mål når Byggcon kan gå over fra IVIT uten å miste noe takstmenne
 | 8 | Fakturagrunnlag går til eAccounting for alle tre selskapene | 3b |
 | 9 | De seks automatiske rutinene virker | 3b |
 | 10 | Gamle rapporter og bilder fra IVIT kan søkes fram | Senere |
-| 11 | Personvern, sikkerhetskopi, tofaktor og oppbevaring i minst 10 år | 0b, «Minimum før ekte data» og 4 |
+| 11 | Personvern, sikkerhetskopi, tofaktor og oppbevaring i minst 10 år | 0b, «Klar for drift» og 4 |
 | 12 | Alle ansatte har fått opplæring og bruker EzProp for nye oppdrag | 4 |
 
 ## Hva vi måler i piloten
@@ -466,8 +474,8 @@ EzProp er i mål når Byggcon kan gå over fra IVIT uten å miste noe takstmenne
 | **Synk uten nett er ikke prøvd på ekte iPad** | Fase 2b bygger på et foreløpig valg (egenbygd, ADR 0004). Appen må ligge på hjemskjermen, og iPad laster ikke opp når appen er lukket. | Prøve A og B på ekte iPad (S2) før 2b bygges i bredden. Reserve: PowerSync eller ElectricSQL. |
 | **KI koster penger og behandler tekst og tale** | Leverandør må velges, og avtalene må være på plass | Alt bygges mot en falsk leverandør. Beslutningsnotat til Ståle (S8). Persondata vaskes bort før KI. |
 | **KI gir feil eller finner på ting** | Feil tekst i en rapport kan gi reklamasjon | KI setter aldri TG, velger fra godkjente fraser, og alt godkjennes av takstmannen. Evalueringssett før en funksjon slås på. |
-| **Fagrådets godkjenning** | Malen, tekstene, reglene og kontrollpunktene for leilighet må godkjennes av Ståle | Smal vei (2a-2) viser fag og utseende tidlig. Alt er utkast til det er godkjent (S3). |
-| **Ekte kundedata i betaen** | Betaen bruker ekte adresser, selgere og bilder lenge før fase 4 | «Minimum før ekte data» |
+| **Fagrådets godkjenning** | Malen, tekstene, reglene og kontrollpunktene for leilighet må godkjennes av Ståle | Hele veien først (2a-2) viser fag og utseende tidlig. Alt er utkast til det er godkjent (S3). |
+| **Ekte kundedata i betaen** | Betaen bruker ekte adresser, selgere og bilder lenge før fase 4 | «Klar for drift» |
 | **Mistet iPad** | iPaden har personopplysninger og bilder lagret lokalt | Kode eller Face ID, sperring av enheten og tømming ved utlogging |
 | **Meglersystemene** | Ordrene kommer i dag rett inn i IVIT. Håndregistrering gir kontoret mer arbeid. | Undersøkelse nå, bestillingsskjema i 3b, og Ståle avgjør API før produksjon |
 | **eAccounting-API-et** | Ikke prøvd: kunder uten dubletter, fakturautkast, status, kreditnota, tre klienter | Fire kall prøves i prøvemiljøet (undersøkelse) |
