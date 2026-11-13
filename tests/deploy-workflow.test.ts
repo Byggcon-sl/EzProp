@@ -1377,7 +1377,9 @@ describe("testdataene i utrullingen (fase 2a)", () => {
     expect(testdata).toBeGreaterThan(testoppdrag);
     expect(testoppdrag).toBeGreaterThan(seed);
     expect(close).toBeGreaterThan(testdata);
-    expect(lineIndexes(lines, SEED_TESTDATA_COMMAND)).toHaveLength(1);
+    expect(
+      lineIndexes(lines, SEED_TESTDATA_COMMAND).filter((i) => !isComment(lines[i]!)),
+    ).toHaveLength(1);
     // Samme steg som seed og testoppdragene («Migrering og seed»)
     const step = stepOf(lines, testdata);
     expect(step).toEqual(stepOf(lines, seed));

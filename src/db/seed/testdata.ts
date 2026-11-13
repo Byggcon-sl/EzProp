@@ -1559,12 +1559,12 @@ async function backdate(context: SeedContext, targets: readonly BackdateTarget[]
 // ---------------------------------------------------------------------------------------------
 
 /**
- * `pnpm db:seed:testdata`. `now` gir faste datoer i testene; den brukes bare som datoanker når
+ * `pnpm db:seed:testdata`. `now` kommer fra inngangen (klokka) eller testene (faste datoer); den brukes bare som datoanker når
  * `TD-0001` ikke finnes. Vakten kjøres før noe annet.
  */
 export async function runTestdataSeed(
-  env: Record<string, string | undefined> = process.env,
-  now: Date = new Date(),
+  env: Record<string, string | undefined>,
+  now: Date,
 ): Promise<TestdataSummary> {
   assertTestdataAllowed(env);
 

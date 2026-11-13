@@ -24,7 +24,7 @@ const { db } = await import("@/db/client");
 
 let exitCode = 0;
 try {
-  const summary = await runTestdataSeed(process.env);
+  const summary = await runTestdataSeed(process.env, new Date());
   console.log(JSON.stringify(summary, null, 2));
 } catch (error) {
   exitCode = 1;
