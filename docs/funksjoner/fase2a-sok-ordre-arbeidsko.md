@@ -134,3 +134,17 @@ Bitene som kan bygges hver for seg:
 - B: arbeidskøen bruker `search.ts` + T-0029 (a og b, `queueHref`, søkeskjemaet).
 - C: fokusringen + ADR 0010 + tilstandsfilen.
 B bygger på `search.ts` fra A; lag den først (grensesnittet over er fast), så kan A og B gå parallelt.
+
+## Fortsettelse 13.11.2026 kl. 07 UTC (prosjektleder)
+Branchen ble bygget fra main før PR #184 (T1) var merget, og står uten PR (siste commit 05:36 UTC). Denne kjøringen overtar den. Gjenstår:
+1. **Flett inn main** (PR #184 og #185). Konflikter ventes i `src/core/orders/orders.ts`, `orders.test.ts`, `src/core/orders/index.ts`, `src/app/(ansatt)/ordre/page.tsx`, `ordre/actions.ts`, `ordre/[id]/page.tsx`, `package.json`, `docs/09-apne-sporsmal.md` og tilstandsfilen. Alt fra T1 (`updateOrder`, `history.ts`, skjemaet for endring, e2e for rette ordre) skal stå igjen etter flettingen.
+2. **A-numrene flyttes:** main bruker A249–A255 (T1). Branchens A254–A260 blir **A256–A262**, også i ADR 0010, oppgavekortet og testplanen.
+3. **Småfunn fra PR #184 i samme område (tas med nå):**
+   - `selectOrder` skal ikke være en åpen eksport uten tilgangssjekk. Den tar `grant` (fra `requireOrganizationAccess`) i stedet for `organizationId`, eller flyttes til en intern fil som bare `getOrder` og `updateOrder` bruker.
+   - `listOrderHistory` henter kontakt- og firmanavn gjennom en funksjon i `src/core/contacts` (filtrert på organisasjon og `deleted_at is null`), ikke med egne spørringer mot `contacts`/`firms` i `src/core/orders`. Test for tenant-isolasjon følger med.
+   - Ubrukte eksporter i `src/core/orders/index.ts` fjernes.
+   - Resten av småfunnene fra #184 (firmalinjen i «Endringer», `valueText`, `readFields`/`readValues`, TypeError som «uten nett») tas med neste oppgave i ordreskjemaet.
+4. Versjon: neste patch etter main (main står på 0.10.9 eller høyere ved fletting).
+5. `pnpm lint`, `typecheck`, `test`, `test:e2e` grønne, så PR mot `main` og merge med skriptet.
+
+Roller for resten: utvikler (fletting og småfunn) og testskriver i parallell (tester for `selectOrder`/navneoppslaget og at T1-testene står), sikkerhet-personvern i gjennomgangen (tilgang i undertabeller, `q` logges ikke). Arkitekt og ux har alt sagt sitt; trengs ikke på nytt. KI-ansvarlig: bare sjekk at søketeksten ikke går til KI.
