@@ -7,18 +7,22 @@ import { cancelAssignment } from "@/core/assignments";
 import { ContactNotFoundError } from "@/core/contacts";
 import { db } from "@/db/client";
 import {
+  aiUsageLog,
   assignments,
   auditLog,
+  cadastralUnits,
   employees,
   events,
   numberSequences,
   offices,
   orders,
   organizations,
+  properties,
   type EmployeeRole,
 } from "@/db/schema";
 import {
   createAssignment,
+  createAssignmentParty,
   createContact,
   createEmployee,
   createFirm,
@@ -26,13 +30,27 @@ import {
   createOffice,
   createOrder as insertOrder,
   createOrganization,
+  createProperty,
   createUser,
   grantPermission,
   resetDatabase,
 } from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { OfficeNotFoundError, OrderAlreadyHandledError } from "./errors";
-import { convertOrderToAssignment, createOrder, getOrder, listOrders, rejectOrder } from "./index";
+import {
+  ORDER_LIST_LIMIT,
+  convertOrderToAssignment,
+  createOrder,
+  getOrder,
+  listOrders,
+  orderListSummary,
+  rejectOrder,
+} from "./index";
+
+/** Radene i ordrelisten, for testene som bare ser på radene. */
+async function listOrderItems(actor: Actor, organizationId: string, query?: string) {
+  return (await listOrders(actor, organizationId, { query })).items;
+}
 
 /*
  * Manuell ordre og oppdragsnummer: kjernen i src/core/orders.
@@ -207,7 +225,7 @@ describe("4.1 tilgang per rolle", () => {
     const order = await insertOrder(org.id);
     const { actor } = await person(org.id, roles);
 
-    const rows = await listOrders(actor, org.id);
+    const rows = await listOrderItems(actor, org.id);
     expect(rows.map((row) => row.id)).toEqual([order.id]);
     const detail = await getOrder(actor, org.id, order.id);
     expect(detail.id).toBe(order.id);
@@ -308,7 +326,7 @@ describe("4.1 tilgang per rolle", () => {
 
     const first = await createOrder(admin, org.id, orderInput(), NOW);
     const second = await createOrder(admin, org.id, orderInput(), NOW);
-    expect((await listOrders(admin, org.id)).map((row) => row.id).sort()).toEqual(
+    expect((await listOrderItems(admin, org.id)).map((row) => row.id).sort()).toEqual(
       [first.id, second.id].sort(),
     );
     expect((await getOrder(admin, org.id, first.id)).id).toBe(first.id);
@@ -344,7 +362,7 @@ describe("4.2 tenant-isolasjon", () => {
         numberB = convertedB.assignment.number;
         return { a: [convertedA.order.id, receivedA.id], b: [convertedB.order.id] };
       },
-      query: listOrders,
+      query: listOrderItems,
       idOf: (row) => row.id,
     });
 
@@ -354,7 +372,7 @@ describe("4.2 tenant-isolasjon", () => {
       .from(employees)
       .where(eq(employees.organizationId, orgA));
     const actorA: Actor = { id: adminA!.userId!, email: "a@example.com", name: "Admin A" };
-    const rowsA = await listOrders(actorA, orgA);
+    const rowsA = await listOrderItems(actorA, orgA);
     expect(rowsA.map((row) => row.id)).not.toContain(deletedA);
     expect(rowsA.map((row) => row.assignmentNumber).filter(Boolean)).toEqual([numberA]);
     expect(JSON.stringify(rowsA)).not.toContain(numberB);
@@ -596,7 +614,7 @@ describe("4.3 fremmed, ukjent og slettet id", () => {
     await expect(
       convertOrderToAssignment(admin, org.id, deleted.id, { officeId: office.id, now: NOW }),
     ).rejects.toThrow(AccessDeniedError);
-    expect(await listOrders(admin, org.id)).toEqual([]);
+    expect(await listOrderItems(admin, org.id)).toEqual([]);
     expect((await orderRow(deleted.id)).status).toBe("received");
   });
 });
@@ -714,7 +732,7 @@ describe("4.4 legge inn og liste", () => {
       deletedAt: new Date(),
     });
 
-    const rows = await listOrders(admin, org.id);
+    const rows = await listOrderItems(admin, org.id);
     expect(rows.map((row) => row.id)).toEqual([newest.id, middle.id, oldest.id]);
     expect(rows.map((row) => row.assignmentNumber ?? null)).toEqual([
       null,
@@ -726,7 +744,7 @@ describe("4.4 legge inn og liste", () => {
 
   it("4.4.4 tom organisasjon gir tom liste", async () => {
     const { org, admin } = await orgWithAdmin();
-    expect(await listOrders(admin, org.id)).toEqual([]);
+    expect(await listOrderItems(admin, org.id)).toEqual([]);
   });
 
   it("4.4.5 listOrders og getOrder gir faste feltlister uten sporingsfelt", async () => {
@@ -734,7 +752,7 @@ describe("4.4 legge inn og liste", () => {
     const { order } = await insertConvertedOrder(org.id);
     await insertOrder(org.id);
 
-    const rows = await listOrders(admin, org.id);
+    const rows = await listOrderItems(admin, org.id);
     expect(rows.length).toBe(2);
     for (const row of rows) expect(Object.keys(row).sort()).toEqual(LIST_KEYS);
 
@@ -763,7 +781,7 @@ describe("4.5 avvise og gjøre om", () => {
       assignmentId: null,
       deletedAt: null,
     });
-    const list = await listOrders(admin, org.id);
+    const list = await listOrderItems(admin, org.id);
     expect(list.map((item) => [item.id, item.status])).toEqual([[order.id, "rejected"]]);
     expect((await getOrder(admin, org.id, order.id)).rejectedReason).toBe("Feil registrering");
   });
@@ -1321,5 +1339,225 @@ describe("5. bestiller fra kontaktregisteret", () => {
       },
       idOf: (row) => row.id,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Søk og grense i ordrelisten (docs/funksjoner/fase2a-sok-ordre-arbeidsko.md, ADR 0010)
+// ---------------------------------------------------------------------------------------------
+
+describe("søk og grense i ordrelisten", () => {
+  /** Ordre med oppdrag, eiendom, matrikkel og to parter. Alt oppdiktet. */
+  async function searchableOrder(organizationId: string) {
+    const { order, assignment } = await insertConvertedOrder(organizationId, {
+      addressText: "Søkeveien 7, 8000 Bodø",
+      externalRef: "MEGL-4711",
+      orderedByText: "Bestiller Bestillersen",
+      gnr: "41",
+      bnr: "7",
+      snr: null,
+    });
+    await createProperty(organizationId, {
+      assignmentId: assignment.id,
+      address: "Eiendomsgata 3",
+      gnr: "77",
+      bnr: "88",
+      fnr: null,
+      snr: "2",
+    });
+    await createAssignmentParty(organizationId, {
+      assignmentId: assignment.id,
+      name: "Parti Partisen",
+      firmName: "Firmaet Fiktiv AS",
+      email: "parti@example.com",
+      phone: "99999999",
+    });
+    await createAssignmentParty(organizationId, {
+      assignmentId: assignment.id,
+      name: "Parti Partisen junior",
+      firmName: "Firmaet Fiktiv AS",
+    });
+    return { order, assignment };
+  }
+
+  it("finner på alle feltene, uten forskjell på store og små bokstaver, og uten doble rader", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const { order, assignment } = await searchableOrder(org.id);
+    const other = await insertOrder(org.id, { addressText: "Annenveien 1" });
+
+    for (const query of [
+      "søkeveien", // adresse på ordren
+      "EIENDOMSGATA", // adresse på eiendommen
+      assignment.number.toLowerCase(), // oppdragsnummer
+      "megl-47", // ordrenummer
+      "bestillersen", // oppdragsgiver
+      "partisen", // partsnavn (to parter treffer)
+      "fiktiv", // partens firma (to parter treffer)
+      "41/7", // matrikkel på ordren
+      "77 / 88", // matrikkel fra cadastral_units
+      "77/88/0/2", // med festenummer 0 og seksjonsnummer
+    ]) {
+      const result = await listOrders(admin, org.id, { query });
+      expect(
+        result.items.map((row) => row.id),
+        query,
+      ).toEqual([order.id]);
+      expect(result.total, query).toBe(1);
+    }
+    expect((await listOrders(admin, org.id, { query: "  " })).total).toBe(2);
+    expect((await listOrderItems(admin, org.id, "Annenveien")).map((row) => row.id)).toEqual([
+      other.id,
+    ]);
+  });
+
+  it("matrikkel sammenlignes del for del", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const exact = await insertOrder(org.id, { gnr: "12", bnr: "34", snr: null });
+    const withSection = await insertOrder(org.id, { gnr: "12", bnr: "34", snr: "5" });
+    await insertOrder(org.id, { gnr: "112", bnr: "34" });
+    await insertOrder(org.id, { gnr: "12", bnr: "345" });
+
+    const ids = (await listOrderItems(admin, org.id, "12/34")).map((row) => row.id).sort();
+    expect(ids).toEqual([exact.id, withSection.id].sort());
+    expect((await listOrderItems(admin, org.id, "12/34/0/5")).map((row) => row.id)).toEqual([
+      withSection.id,
+    ]);
+  });
+
+  it("e-post, telefon og jokertegn gir ikke treff; slettet ordre og part gir ikke treff", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const { assignment } = await searchableOrder(org.id);
+    await insertOrder(org.id, { addressText: "Slettaveien 9", deletedAt: new Date() });
+    await createAssignmentParty(org.id, {
+      assignmentId: assignment.id,
+      name: "Slettet Person",
+      deletedAt: new Date(),
+    });
+
+    for (const query of ["parti@example.com", "99999999", "%", "_", "\\", "Slettaveien"]) {
+      expect((await listOrders(admin, org.id, { query })).total, query).toBe(0);
+    }
+    expect(await listOrderItems(admin, org.id, "Slettet Person")).toEqual([]);
+  });
+
+  it("slettet matrikkel og slettet eiendom gir ikke treff", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const { assignment } = await insertConvertedOrder(org.id, { addressText: "Ordreveien 1" });
+    const { property, cadastralUnit } = await createProperty(org.id, {
+      assignmentId: assignment.id,
+      address: "Borteveien 2",
+      gnr: "61",
+      bnr: "62",
+    });
+    expect((await listOrders(admin, org.id, { query: "61/62" })).total).toBe(1);
+    expect((await listOrders(admin, org.id, { query: "Borteveien" })).total).toBe(1);
+    await db
+      .update(cadastralUnits)
+      .set({ deletedAt: new Date() })
+      .where(eq(cadastralUnits.id, cadastralUnit.id));
+    expect((await listOrders(admin, org.id, { query: "61/62" })).total).toBe(0);
+    await db
+      .update(properties)
+      .set({ deletedAt: new Date() })
+      .where(eq(properties.id, property.id));
+    expect((await listOrders(admin, org.id, { query: "Borteveien" })).total).toBe(0);
+  });
+
+  it("ordre med kansellert oppdrag finnes ved søk på oppdragsnummer, parter og eiendom", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const { order, assignment } = await searchableOrder(org.id);
+    await cancelAssignment(admin, org.id, assignment.id, {
+      expectedStatus: "ordered",
+      reason: "Kunden trakk bestillingen",
+    });
+    for (const query of [assignment.number, "Partisen", "Eiendomsgata"]) {
+      expect(
+        (await listOrderItems(admin, org.id, query)).map((row) => row.id),
+        query,
+      ).toEqual([order.id]);
+    }
+  });
+
+  it("viser høyst 50, nyeste først, og total stemmer med og uten søk", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const base = Date.parse("2026-01-01T08:00:00Z");
+    for (let index = 0; index < ORDER_LIST_LIMIT + 3; index += 1) {
+      await insertOrder(org.id, {
+        addressText: index % 2 === 0 ? `Partallsveien ${index}` : `Oddeveien ${index}`,
+        receivedAt: new Date(base + index * 60_000),
+      });
+    }
+
+    const all = await listOrders(admin, org.id);
+    expect(all.items).toHaveLength(ORDER_LIST_LIMIT);
+    expect(all.total).toBe(ORDER_LIST_LIMIT + 3);
+    expect(all.items[0]?.addressText).toBe(`Partallsveien ${ORDER_LIST_LIMIT + 2}`);
+    const times = all.items.map((row) => row.receivedAt.getTime());
+    expect(times).toEqual([...times].sort((a, b) => b - a));
+
+    const even = await listOrders(admin, org.id, { query: "partallsveien" });
+    expect(even.total).toBe(27);
+    expect(even.items).toHaveLength(27);
+  });
+
+  it("orderListSummary gir meldingen bare når listen er kuttet", () => {
+    expect(orderListSummary(50, 50)).toBeNull();
+    expect(orderListSummary(3, 3)).toBeNull();
+    expect(orderListSummary(50, 73)).toBe("Viser 50 av 73. Bruk søket for å finne flere.");
+  });
+
+  it("søket lager ingen rader i revisjonsloggen, hendelsene eller KI-loggen", async () => {
+    const { org, admin } = await orgWithAdmin();
+    await searchableOrder(org.id);
+    const counts = async () => {
+      const [ai] = await db.select({ n: count() }).from(aiUsageLog);
+      return [await rowCount(auditLog), await rowCount(events), ai?.n ?? 0];
+    };
+    const before = await counts();
+    await listOrders(admin, org.id, { query: "Partisen" });
+    await listOrders(admin, org.id, { query: "12/34" });
+    expect(await counts()).toEqual(before);
+  });
+
+  it("tenant-isolasjon: samme tekst i A og B gir bare A sine ordre", async () => {
+    for (const query of [
+      "Partisen",
+      "Fiktiv",
+      "Søkeveien",
+      "Eiendomsgata",
+      "MEGL-4711",
+      "Bestillersen",
+      "77/88",
+      "41/7",
+    ]) {
+      await expectTenantIsolation({
+        seed: async (grantA, grantB) => {
+          const a = await searchableOrder(grantA.organizationId);
+          const b = await searchableOrder(grantB.organizationId);
+          return { a: [a.order.id], b: [b.order.id] };
+        },
+        query: (actor, organizationId) => listOrderItems(actor, organizationId, query),
+        idOf: (row) => row.id,
+      });
+    }
+  });
+
+  it("tenant-isolasjon: eiendom og matrikkel i B gir ikke treff i A, og B får ikke tilgang", async () => {
+    const { org: orgA, admin: adminA } = await orgWithAdmin("Testfirma A");
+    const { org: orgB, admin: adminB } = await orgWithAdmin("Testfirma B");
+    const { assignment } = await insertConvertedOrder(orgA.id, { addressText: "Aveien 1" });
+
+    // Partsraden i B kan ikke peke på oppdraget i A (sammensatt fremmednøkkel i databasen).
+    await expect(
+      createAssignmentParty(orgB.id, { assignmentId: assignment.id, name: "Fremmed Navn" }),
+    ).rejects.toThrow();
+    await createProperty(orgB.id, { address: "Fremmedveien 5", gnr: "91", bnr: "92" });
+
+    for (const query of ["Fremmed Navn", "Fremmedveien", "91/92"]) {
+      expect((await listOrders(adminA, orgA.id, { query })).total, query).toBe(0);
+    }
+    await expect(listOrders(adminB, orgA.id, { query: "Aveien" })).rejects.toThrow(
+      AccessDeniedError,
+    );
   });
 });

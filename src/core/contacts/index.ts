@@ -39,4 +39,4 @@ export {
   type FirmInput,
   type FirmValues,
 } from "./schemas";
-export { MAX_QUERY_LENGTH, type ListOptions } from "./search";
+export { type ListOptions } from "./search";

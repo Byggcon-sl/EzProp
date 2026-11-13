@@ -48,3 +48,12 @@ export type ListOrders = (
   organizationId: string,
   options?: ListOrdersOptions,
 ) => Promise<OrderListResult>;
+
+/**
+ * Meldingen over ordrelisten når den er kuttet: «Viser 50 av 73. Bruk søket for å finne flere.»
+ * Gir `null` når alle radene vises. Ren funksjon, slik at den kan testes uten nettleser.
+ */
+export function orderListSummary(shown: number, total: number): string | null {
+  if (total <= shown) return null;
+  return `Viser ${shown} av ${total}. Bruk søket for å finne flere.`;
+}
