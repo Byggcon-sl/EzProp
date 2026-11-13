@@ -68,6 +68,11 @@ export const orders = pgTable(
       table.organizationId,
       table.orderedByContactId,
     ),
+    // Ordrene bestilt av et firma (slå sammen firma). Nattløkken 13.11.2026.
+    index("orders_organization_id_ordered_by_firm_id_idx").on(
+      table.organizationId,
+      table.orderedByFirmId,
+    ),
     // Bestilleren og firmaet må høre til samme organisasjon som ordren
     foreignKey({
       name: "orders_ordered_by_contact_fk",

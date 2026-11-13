@@ -3,6 +3,7 @@ import {
   check,
   date,
   foreignKey,
+  index,
   pgTable,
   text,
   timestamp,
@@ -63,6 +64,10 @@ export const assignments = pgTable(
     uniqueIndex("assignments_organization_id_id_idx").on(table.organizationId, table.id),
     // Aldri to oppdrag med samme nummer i organisasjonen
     uniqueIndex("assignments_organization_id_number_idx").on(table.organizationId, table.number),
+    // Arbeidskøen filtrerer og teller per status. Nattløkken 13.11.2026.
+    index("assignments_organization_id_status_idx")
+      .on(table.organizationId, table.status)
+      .where(sql`${table.deletedAt} is null`),
     // Kontor og ordre må høre til samme organisasjon som oppdraget
     foreignKey({
       name: "assignments_office_fk",
