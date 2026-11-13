@@ -78,6 +78,7 @@ const auditEntityLabels: Record<string, string> = {
   company: "Selskap",
   office: "Kontor",
   certification: "Sertifisering",
+  order: "Ordre",
 };
 
 /** Norske navn på `action` i revisjonsloggen. */
@@ -89,6 +90,8 @@ const auditActionLabels: Record<string, string> = {
   permission_change: "Rettigheter endret",
   deactivate: "Deaktivert",
   reactivate: "Aktivert igjen",
+  reject: "Avvist",
+  convert: "Gjort om til oppdrag",
 };
 
 /** Norske navn på feltene som står i `changes`. Ukjent felt vises med koden. */
@@ -110,6 +113,20 @@ const auditFieldLabels: Record<string, string> = {
   liabilityInsurer: "Forsikringsselskap",
   liabilityPolicyNumber: "Polisenummer",
   liabilityValidTo: "Forsikring gyldig til",
+  // Ordrefeltene, samme tekster som `orderFieldLabel` i src/core/orders (testen sammenligner).
+  // Skrevet inn her fordi filen også brukes i klientkomponenter. Verdiene under `values` vises
+  // aldri i adminloggen, bare feltetikettene fra `fields`.
+  receivedAt: "Mottatt",
+  externalRef: "Ekstern referanse",
+  orderedByText: "Hvem bestilte",
+  orderedByContactId: "Bestiller",
+  orderedByFirmId: "Firma",
+  addressText: "Adresse",
+  gnr: "Gårdsnummer",
+  bnr: "Bruksnummer",
+  snr: "Seksjonsnummer",
+  housingAssociationName: "Borettslag eller sameie",
+  sellerDeclarationReceived: "Egenerklæring mottatt",
 };
 
 function labelFrom(labels: Record<string, string>, code: string): string {
@@ -146,6 +163,8 @@ function isFromTo(value: unknown): value is { from: unknown; to: unknown } {
  * Endringene i en rad i revisjonsloggen som korte linjer: «Gate: Storgata 1 → Storgata 2» for
  * fra/til, «Endret: Navn, Stilling» for en liste med feltkoder. Alt annet (id-er, lister over
  * roller, objekter) hoppes over, så det aldri står «null», «undefined» eller «[object Object]».
+ * En ordreendring har verdiene samlet under `values` (ikke fra/til); den hoppes over, så
+ * adminloggen bare viser «Endret: Adresse, Bestiller».
  */
 export function formatAuditChanges(changes: Record<string, unknown>): string[] {
   const lines: string[] = [];
@@ -157,6 +176,8 @@ export function formatAuditChanges(changes: Record<string, unknown>): string[] {
       if (names.length > 0) lines.push(`Endret: ${names.join(", ")}`);
       continue;
     }
+    // Gammel og ny verdi for en ordreendring vises bare på ordresiden.
+    if (field === "values") continue;
     if (!isFromTo(value)) continue;
     const from = auditValueText(value.from);
     const to = auditValueText(value.to);

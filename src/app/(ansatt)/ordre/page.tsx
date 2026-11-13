@@ -51,8 +51,13 @@ export default async function OrdersPage() {
                   </span>
                   <span className="flex shrink-0 flex-wrap items-center gap-2">
                     {order.assignmentNumber && (
-                      <span className="text-sm font-medium text-slate-900 tabular-nums">
-                        {order.assignmentNumber}
+                      // Kansellert oppdrag (T-0031): nummeret står, merket «kansellert», som på
+                      // ordresiden. Raden lenker til ordren, aldri til oppdraget.
+                      <span className="text-sm font-medium text-slate-900">
+                        <span className="tabular-nums">{order.assignmentNumber}</span>
+                        {order.assignmentCancelled && (
+                          <span className="font-normal text-slate-600"> (kansellert)</span>
+                        )}
                       </span>
                     )}
                     <OrderStatusBadge status={order.status} />

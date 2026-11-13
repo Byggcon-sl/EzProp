@@ -1,18 +1,28 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { logger } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
 import { errorResult, failure, type KnownError } from "../action-result";
 import { getEmployeeContext } from "../employee-context";
-import { NO_ACCESS, type FormState } from "../form-state";
+import { NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../form-state";
 import { ContactNotFoundError } from "@/core/contacts";
 import {
   convertOrderToAssignment,
   createOrder,
   OfficeNotFoundError,
   OrderAlreadyHandledError,
+  OrderChangedError,
   rejectOrder,
+  updateOrder,
 } from "@/core/orders";
+import {
+  initialOrderEditState,
+  ORDER_CHANGED_MESSAGE,
+  type OrderEditState,
+  type OrderFormErrorCode,
+} from "./order-form-error";
 import { parseOsloDateTimeLocal } from "./received-at";
 
 /*
@@ -162,4 +172,96 @@ export async function convertOrderAction(
     );
   }
   redirect(`${ROUTE}/${orderId}`);
+}
+
+/** Feilkoden til skjemaet «Endre ordren» ut fra meldingen øverst. Feil ved feltene har ingen kode. */
+function editCode(state: FormState): OrderFormErrorCode | null {
+  if (state.message === NO_ACCESS) return "NO_ACCESS";
+  if (state.message === UNKNOWN_ERROR) return "UNKNOWN";
+  return null;
+}
+
+function editFailure(state: FormState): OrderEditState {
+  return { ...state, code: editCode(state), saved: false };
+}
+
+/** Tomt valgfritt felt sendes som `null`, slik at det kan tømmes ved endring. */
+function clearable(value: string | undefined) {
+  const trimmed = (value ?? "").trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+/**
+ * «Lagre» i skjemaet «Endre ordren» på ordresiden. Ordre-id og `rowVersion` kommer fra skjulte
+ * felt. Alle innsendte verdier følger med tilbake ved feil, så ingenting som er skrevet går tapt.
+ * `orderedByFirmId` sendes aldri: firmaet utledes av kjernen fra kontakten. Logglinjene har bare
+ * rute, bruker-id, ordre-id og feilkode, aldri verdier fra skjemaet.
+ */
+export async function updateOrderAction(
+  previous: OrderEditState,
+  formData: FormData,
+): Promise<OrderEditState> {
+  const orderId = String(formData.get("orderId") ?? "");
+  const values: Record<string, string> = {
+    ...readOrder(formData),
+    receivedAtInitial: String(formData.get("receivedAtInitial") ?? ""),
+  };
+  const context = await getEmployeeContext();
+  if (!context || !isUuid(orderId)) {
+    return { ...failure(previous, values, {}, NO_ACCESS), code: "NO_ACCESS", saved: false };
+  }
+  const log = { route: `${ROUTE}/${orderId}`, userId: context.actor.id, orderId };
+
+  const rowVersionText = String(formData.get("rowVersion") ?? "").trim();
+  const expectedRowVersion = /^\d{1,9}$/.test(rowVersionText) ? Number(rowVersionText) : null;
+  if (expectedRowVersion === null) return orderChanged(previous, values, log);
+
+  // Tomt felt eller uendret tidspunkt: kjernen beholder verdien på raden (sekundene går ikke tapt).
+  const receivedAtText = (values.receivedAt ?? "").trim();
+  const keepReceivedAt = receivedAtText === "" || receivedAtText === values.receivedAtInitial;
+  const receivedAt = keepReceivedAt ? undefined : parseOsloDateTimeLocal(receivedAtText);
+  if (receivedAt === null) {
+    return editFailure(failure(previous, values, { receivedAt: "Skriv inn dato og klokkeslett." }));
+  }
+  const orderedByContactId = clearable(values.orderedByContactId);
+  if (orderedByContactId !== null && !isUuid(orderedByContactId)) {
+    return editFailure(failure(previous, values, { orderedByContactId: CONTACT_NOT_FOUND }));
+  }
+
+  const input = {
+    addressText: (values.addressText ?? "").trim(),
+    receivedAt: receivedAt?.toISOString(),
+    externalRef: clearable(values.externalRef),
+    orderedByText: clearable(values.orderedByText),
+    orderedByContactId,
+    gnr: clearable(values.gnr),
+    bnr: clearable(values.bnr),
+    snr: clearable(values.snr),
+    housingAssociationName: clearable(values.housingAssociationName),
+    sellerDeclarationReceived: values.sellerDeclarationReceived === "on",
+  };
+
+  try {
+    await updateOrder(context.actor, context.organizationId, orderId, input, expectedRowVersion);
+  } catch (error) {
+    if (error instanceof OrderChangedError) return orderChanged(previous, values, log);
+    return editFailure(errorResult(error, previous, values, log, { known: ORDER_ERRORS }));
+  }
+  revalidatePath(`${ROUTE}/${orderId}`);
+  revalidatePath(ROUTE);
+  return { ...initialOrderEditState, attempt: previous.attempt + 1, saved: true };
+}
+
+/** En annen har lagret ordren etter at skjemaet ble åpnet. Det som er skrevet, står igjen. */
+function orderChanged(
+  previous: OrderEditState,
+  values: Record<string, string>,
+  log: { route: string; userId: string; orderId: string },
+): OrderEditState {
+  logger.warn("Ordren er endret av en annen", { ...log, code: "ORDER_CHANGED" });
+  return {
+    ...failure(previous, values, {}, ORDER_CHANGED_MESSAGE),
+    code: "ORDER_CHANGED",
+    saved: false,
+  };
 }
