@@ -176,3 +176,18 @@ utvikler (skript, vakt, utrulling), testskriver (testplanen over), sikkerhet-per
 - Ingen som stopper oppgaven. Til Ståle når han er tilbake (føres i `docs/09-apne-sporsmal.md` og under «Trenger Ståle når han er tilbake» i tilstandsfilen): A303 (testdatabasen kan aldri løftes til produksjon, og de ansatte må ikke legge ekte kundeopplysninger i testmiljøet, heller ikke når det ser ut som en ekte arbeidsdag), og kontrollene i A301 (nummerserien `000` og gnr over 9000) og A305.
 - Forslag (ny idé, bygges ikke): synlig merke «Testmiljø – bare oppdiktede data» på skjermen.
 - Liten oppgave til planen: produksjonsvakt også på `pnpm db:seed:testoppdrag` (`src/db/seed/sample-index.ts`).
+
+## Avvik (utvikler, del B: frøgenerator, datafil og ren plan, 13.11.2026)
+Kontrakten står i `src/db/seed/testdata.types.ts`. Der den avviker fra oppgaveteksten til del B:
+- **Plassering:** `buildTestdataPlan` ligger i `src/db/seed/testdata-plan.ts` (ikke i `testdata.ts`); del C eksporterer den videre fra `testdata.ts`.
+- **Statuskoder:** statusmålet bruker appens koder `ordered | in_progress | completed | invoiced` (ikke `done`).
+- **Statusbytter:** `statusTimes` er en liste `{ toStatus, at }` i rekkefølge etter bestilt, og `convertedAt` er når ordren ble gjort om. Ingen kolonne for statustider finnes; tidene er for hendelsene.
+- **Eiendommen** har formen til `PropertyInput` (`address`, `postalCode`, `city`, `municipalityNumber`, `municipalityName`, `gnr`, `bnr`, `fnr`, `snr`, `associationName`, `shareNumber`) pluss `key` (`kommune-gnr-bnr-fnr-snr`) og `buildYear` (bare i planen, A300), ikke et eget `cadastral`-objekt. Da kan del C sende den rett til `saveAssignmentProperty`.
+- **Parter** har ikke adresse, fordi `partyInputSchema` ikke har feltet. Megleren har `contactKey`; selger og kjøper har `null`. Kjøper legges bare på oppdragene med reklamasjon (klageren er `claimantPartyRole: "buyer"`).
+- **Reklamasjon:** `receivedAt` er en dato (`YYYY-MM-DD`) som i skjemaet, og `registeredAt` er tidspunktet saken ble registrert (for hendelsen).
+- **Rom** har `yearRenovated` (bare i planen, A300) for aldersreglene. Areal har `method`; «målt av» settes av del C til ansvarlig takstmann. Kryperom-etasjen har `area: null`.
+- **Ordrefeltene** heter `fields` (form som `OrderInput` uten `externalRef`, `receivedAt` og `orderedByContactId`), og bestilleren er `orderedByContactKey`. Det interne notatet står på oppdraget (`internalNote`), fordi ordren ikke har notatfelt.
+- **Tid:** alle tidspunkter regnes fra midnatt UTC på ankerets dato, i hele dager og klokkeslett i arbeidstiden. Et anker som flyttes et helt antall dager, flytter alle datoer like mye; et anker som flyttes noen timer samme døgn, gir samme plan. Byggeår og oppussingsår regnes fra ankerets årstall.
+- **Sertifiseringene** har gyldighetsdatoer utenfor tidsspennet på fire måneder bak og fem uker fram (tre års varighet, utløpt for én takstmann 20 dager før ankeret). Tidsspennet gjelder ordre, oppdrag, økter og reklamasjoner.
+- **Firma** er bare meglerfirma; kontakter er bare meglerne. Borettslagene står som navn på eiendommen og ordren, ikke som firma.
+- **Ekstra eksport** fra `testdata.data.ts`: `TESTDATA_ORDER_PREFIX`, `TESTDATA_SHARED_STORAGE_NAME` («Fellesbod», det eneste arealet fra tegning), `TESTDATA_EMPLOYEES`, `TESTDATA_CLAIMS`, `TESTDATA_MANAGING_AGENTS`, `TESTDATA_ASSIGNMENT_NOTES`, `TESTDATA_CERTIFICATION_ISSUER` og `TESTDATA_PRIVATE_ORDER_TEXT`.
