@@ -73,6 +73,10 @@ export const orders = pgTable(
       table.organizationId,
       table.orderedByFirmId,
     ),
+    // Mulig dublett (T3): to uttrykksindekser på normalisert adresse og gnr/bnr står bare i
+    // migreringen 0033, ikke her, fordi uttrykkene skal stå ett sted (`@/core/orders/duplicate-sql`)
+    // og `src/db` ikke importerer fra kjernen. Snapshotet for 0033 har dem derfor ikke, og
+    // `db:generate` lager ingen endring for dem.
     // Bestilleren og firmaet må høre til samme organisasjon som ordren
     foreignKey({
       name: "orders_ordered_by_contact_fk",

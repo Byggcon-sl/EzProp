@@ -130,3 +130,12 @@ Ikke fagregler. Testsakene for regelen (tabelltest):
 - **A289 (forenkler):** skrevet om til henvisning; planpunktet finnes alt.
 - **Tidsvindu, gnr «0», egen avvist ordre, fast rekkefølge (test-leder):** tatt inn i regelen og testsakene over.
 - **Rekkefølge, `h2`, statusord, datoformat, 11/10 treff (ux-ansvarlig):** tatt inn.
+
+## Valgt under bygging (utvikler, 13.11.2026)
+- **Små bokstaver i SQL med `translate`, ikke `lower`:** `lower` og `[[:alnum:]]` avhenger av `LC_CTYPE` i databasen (med `C` blir ikke «Ø» liten). Uttrykket bruker `translate` med A–Z og ÆØÅ og klassen `[^a-z0-9æøå]`; TS gjør det samme. Andre bokstaver (é, ü) tas bort på begge sider. Mellomrom i gnr/bnr/snr er mellomrom, tab, linjeskift og hardt mellomrom.
+- **Tidsvinduet** regnes som to grenser i TS (`received_at` mellom `receivedAt ± 90 × 24 timer`) og sendes som parametre, i stedet for `interval '2160 hours'` i SQL. Samme svar, og indeksen på mottatt-tid kan brukes.
+- **Fast rekkefølge:** `received_at` synkende, så `id` synkende (som ordrelisten).
+- **Feil i oppslaget** gir `PossibleDuplicatesLookupError` uten SQL-tekst; loggen får bare feilnavn og PostgreSQL-kode.
+- **Ugyldige felt** (dato, `excludeOrderId` som ikke er uuid) gir `ZodError`.
+- **EXPLAIN-testen** må ha noen hundre ordre og `analyze orders` først; med tom tabell velger planleggeren indeksen på mottatt-tid (ingen Seq Scan, men heller ikke den nye indeksen).
+- **Indeksene står ikke i Drizzle-skjemaet**, bare i migreringen (custom), fordi uttrykkene står ett sted i kjernen og `src/db` ikke importerer fra kjernen.

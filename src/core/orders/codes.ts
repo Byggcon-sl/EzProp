@@ -68,6 +68,23 @@ export function orderFieldLabel(code: string): string {
   return ORDER_FIELD_LABELS.get(code) ?? code;
 }
 
+/**
+ * Grunnene til at en annen ordre er en mulig dublett (T3), i fast rekkefølge. Kodene endres aldri
+ * (regel 6). Regelen står i `./duplicates.ts`.
+ */
+export const DUPLICATE_REASONS = ["address", "cadastre"] as const;
+export type DuplicateReason = (typeof DUPLICATE_REASONS)[number];
+
+const DUPLICATE_REASON_LABELS = new Map<string, string>([
+  ["address", "samme adresse"],
+  ["cadastre", "samme matrikkel"],
+] satisfies [DuplicateReason, string][]);
+
+/** Norsk tekst for en grunn til mulig dublett. Ukjent kode gir koden tilbake. */
+export function duplicateReasonLabel(code: string): string {
+  return DUPLICATE_REASON_LABELS.get(code) ?? code;
+}
+
 /** Er koden en av feltkodene som kan endres? */
 export function isOrderEditableField(code: unknown): code is OrderEditableField {
   return typeof code === "string" && (ORDER_EDITABLE_FIELDS as readonly string[]).includes(code);
