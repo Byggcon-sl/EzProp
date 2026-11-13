@@ -179,7 +179,10 @@ describe("testdata: inngangen og loggen (5)", () => {
     expect(source).toMatch(/new Date\(\)/);
     expect(source).toMatch(/\bTESTDATA_SEED\b/);
     expect(source).not.toMatch(/Math\.random|Date\.now/);
-    expect(source).toMatch(/process\.exit(Code)?\s*(\(\s*1\s*\)|=\s*1)/);
+    // Koden fra runTestdataCli (1 ved feil, se 5.2 og 5.3) blir prosessens avslutningskode
+    expect(source).toMatch(
+      /process\.exit(Code)?\s*(\(\s*(1|await runTestdataCli\(\))\s*\)|=\s*(1|await runTestdataCli\(\)))/,
+    );
     expect(TESTDATA_SEED).toBeTypeOf("number");
   });
 });

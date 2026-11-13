@@ -503,6 +503,7 @@ async function ensureEmployees(
     const found = existing.get(employee.email);
     if (found) {
       summary.existing.employees += 1;
+      if (available(found)) await ensureCertification(db, organizationId, employee, found, summary);
       result.set(employee.key, {
         employeeId: found.employeeId,
         actor: { id: found.userId, email: found.email, name: found.name },
@@ -521,6 +522,46 @@ async function ensureEmployees(
     );
   }
   return result;
+}
+
+/**
+ * Sertifiseringen til en oppdiktet ansatt som finnes fra før, hvis den mangler (avbrutt eller
+ * delvis kjøring). En mykt slettet sertifisering med samme nummer teller som «finnes».
+ */
+async function ensureCertification(
+  db: Db,
+  organizationId: string,
+  employee: TestdataEmployee,
+  found: TestdataEmployeeRow,
+  summary: TestdataSummary,
+) {
+  const certification = employee.certification;
+  if (!certification) return;
+  const [existing] = await db
+    .select({ id: certifications.id })
+    .from(certifications)
+    .where(
+      and(
+        eq(certifications.organizationId, organizationId),
+        eq(certifications.employeeId, found.employeeId),
+        eq(certifications.certificateNumber, certification.certificateNumber),
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    summary.existing.certifications += 1;
+    return;
+  }
+  await db.insert(certifications).values({
+    organizationId,
+    employeeId: found.employeeId,
+    area: certification.area,
+    issuer: certification.issuer,
+    certificateNumber: certification.certificateNumber,
+    validFrom: certification.validFrom,
+    validTo: certification.validTo,
+  });
+  summary.created.certifications += 1;
 }
 
 /** Bruker (gjenbrukes hvis den finnes uten ansatt), ansatt, roller og sertifisering samlet. */

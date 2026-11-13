@@ -30,8 +30,15 @@ import {
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { runSeed } from "./run";
 import { runSampleSeed } from "./sample-assignments";
-import * as testdataModule from "./testdata";
-import { seedTestdata } from "./testdata";
+import {
+  findAnchorOrder,
+  findTestdataContacts,
+  findTestdataEmployees,
+  findTestdataFirms,
+  findTestdataOrders,
+  findTestdataProperties,
+  seedTestdata,
+} from "./testdata";
 import { TESTDATA_EMAIL_DOMAIN, TESTDATA_LAST_NAMES, TESTDATA_SEED } from "./testdata.data";
 import { buildTestdataPlan } from "./testdata-plan";
 import type { TestdataAssignment, TestdataOrder, TestdataPlan } from "./testdata.types";
@@ -266,17 +273,6 @@ async function tdOrders(organizationId: string): Promise<Map<string, TdOrderRow>
     where o.organization_id = ${organizationId} and o.external_ref like 'TD-%'
     order by o.external_ref`);
   return new Map(found.map((row) => [row.external_ref, row]));
-}
-
-/** Oppslagene i skriptet som tar `organizationId` (kontrakten i testplanen). */
-const td = testdataModule as unknown as Record<string, unknown>;
-async function lookup(name: string, organizationId: string): Promise<{ id: string }[]> {
-  const fn = td[name];
-  if (typeof fn !== "function") throw new Error(`testdata.ts eksporterer ikke ${name}`);
-  const call = fn as (...args: unknown[]) => Promise<unknown>;
-  const result = call.length >= 2 ? await call(db, organizationId) : await call(organizationId);
-  if (result === null || result === undefined) return [];
-  return (Array.isArray(result) ? result : [result]) as { id: string }[];
 }
 
 /** Lager en trigger som stopper innsetting i tabellen når betingelsen holder. */
@@ -539,21 +535,25 @@ describe("testdata: første kjøring (4.1)", () => {
     const future = await count(sql`
       select count(*)::int as n from events ev join orders o on o.assignment_id = ev.assignment_id
       where ev.organization_id = ${orgId} and o.external_ref like 'TD-%'
-        and ev.type = 'assignment.status_changed' and ev.occurred_at > ${TEST_NOW}`);
+        and ev.type = 'assignment.status_changed'
+        and ev.occurred_at > ${TEST_NOW.toISOString()}::timestamptz`);
     expect(future).toBe(0);
   });
 
   it("4.1.8 revisjonsloggen er urørt: TD-radene har kjøretidspunktet, ikke planlagt dato", async () => {
     await runSeed(env);
-    const start = await rows<{ now: Date }>(sql`select clock_timestamp() as now`);
+    const [start] = await rows<{ now: string }>(sql`select clock_timestamp()::text as now`);
     await seed();
-    const end = await rows<{ now: Date }>(sql`select clock_timestamp() as now`);
+    const [end] = await rows<{ now: string }>(sql`select clock_timestamp()::text as now`);
+    const startAt = start!.now;
+    const endAt = end!.now;
     const orgId = await byggconId();
     const outside = await count(sql`
       select count(*)::int as n from audit_log
       where organization_id = ${orgId}
-        and (received_at < ${start[0]!.now} or received_at > ${end[0]!.now}
-          or occurred_at < ${start[0]!.now} - interval '1 minute' or occurred_at > ${end[0]!.now})`);
+        and (received_at < ${startAt}::timestamptz or received_at > ${endAt}::timestamptz
+          or occurred_at < ${startAt}::timestamptz - interval '1 minute'
+          or occurred_at > ${endAt}::timestamptz)`);
     expect(
       await count(sql`select count(*)::int as n from audit_log where organization_id = ${orgId}`),
     ).toBeGreaterThan(0);
@@ -1192,18 +1192,36 @@ describe("testdata: tenant-isolasjon (4.6)", () => {
     }
   });
 
+  /** Oppslagene i skriptet som tar `organizationId`, kalt med nøklene fra planen. */
   const LOOKUPS: {
     name: string;
     seed: (orgId: string, side: "a" | "b") => Promise<string>;
+    query: (orgId: string) => Promise<string[]>;
   }[] = [
     {
       name: "findTestdataOrders",
       seed: async (orgId) => (await createOrder(orgId, { externalRef: "TD-0001" })).id,
+      query: async (orgId) =>
+        (
+          await findTestdataOrders(
+            db,
+            orgId,
+            plan.orders.map((order) => order.externalRef),
+          )
+        ).map((row) => row.id),
     },
     {
       name: "findTestdataContacts",
       seed: async (orgId) =>
         (await createContact(orgId, { email: plan.contacts[0]!.email.toLowerCase() })).id,
+      query: async (orgId) =>
+        (
+          await findTestdataContacts(
+            db,
+            orgId,
+            plan.contacts.map((contact) => contact.email.toLowerCase()),
+          )
+        ).map((row) => row.id),
     },
     {
       name: "findTestdataFirms",
@@ -1215,6 +1233,14 @@ describe("testdata: tenant-isolasjon (4.6)", () => {
             orgNumber: null,
           })
         ).id,
+      query: async (orgId) =>
+        (
+          await findTestdataFirms(
+            db,
+            orgId,
+            plan.firms.map((firm) => firm.name),
+          )
+        ).map((row) => row.id),
     },
     {
       name: "findTestdataProperties",
@@ -1232,6 +1258,14 @@ describe("testdata: tenant-isolasjon (4.6)", () => {
         });
         return created.property.id;
       },
+      query: async (orgId) =>
+        (
+          await findTestdataProperties(
+            db,
+            orgId,
+            planAssignments.map((entry) => entry.assignment.property),
+          )
+        ).map((row) => row.propertyId),
     },
     {
       name: "findTestdataEmployees",
@@ -1240,16 +1274,28 @@ describe("testdata: tenant-isolasjon (4.6)", () => {
         const user = await createUser({ name: employee.name, email: employee.email.toLowerCase() });
         return (await createEmployee(user, orgId, ["inspector"])).id;
       },
+      query: async (orgId) =>
+        (
+          await findTestdataEmployees(
+            db,
+            orgId,
+            plan.employees.map((employee) => employee.email.toLowerCase()),
+          )
+        ).map((row) => row.employeeId),
     },
     {
       name: "findAnchorOrder",
       seed: async (orgId) => (await createOrder(orgId, { externalRef: "TD-0001" })).id,
+      query: async (orgId) => {
+        const anchor = await findAnchorOrder(db, orgId);
+        return anchor ? [anchor.id] : [];
+      },
     },
   ];
 
   it.each(LOOKUPS)(
     "4.6.32 $name gir bare rader fra egen organisasjon",
-    async ({ name, seed: put }) => {
+    async ({ seed: put, query: lookup }) => {
       await expectTenantIsolation({
         seed: async (grantA, grantB) => ({
           a: [await put(grantA.organizationId, "a")],
@@ -1257,9 +1303,9 @@ describe("testdata: tenant-isolasjon (4.6)", () => {
         }),
         query: async (actor, organizationId) => {
           const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
-          return lookup(name, grant.organizationId);
+          return lookup(grant.organizationId);
         },
-        idOf: (row: { id: string }) => row.id,
+        idOf: (id: string) => id,
       });
     },
   );
@@ -1494,9 +1540,23 @@ describe("testdata: tilgang per rolle (4.8)", () => {
   });
 
   it("4.8.43 admin stenges ikke ute: tilgang til hver rettighet etter kjøringen", async () => {
-    const orgId = await seedAll();
+    await runSeed(env);
+    const orgId = await byggconId();
     const admin = await adminActor();
+    const before = await requireOrganizationAccess(admin, orgId);
+    await seed();
+    const after = await requireOrganizationAccess(admin, orgId);
+    expect(after.permissions).toEqual(before.permissions);
+    // Seed-admin har ingen sertifisering, så bare report.publish mangler (A29, regel 11).
+    // Skriptet gir ikke admin sertifisering (4.7.35).
     for (const permission of PERMISSIONS) {
+      if (permission === "report.publish") {
+        await expect(
+          requireOrganizationAccess(admin, orgId, permission),
+          permission,
+        ).rejects.toBeInstanceOf(AccessDeniedError);
+        continue;
+      }
       const grant = await requireOrganizationAccess(admin, orgId, permission);
       expect(grant.organizationId, permission).toBe(orgId);
     }
