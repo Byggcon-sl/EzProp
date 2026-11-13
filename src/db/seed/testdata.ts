@@ -44,6 +44,7 @@ import { buildTestdataPlan } from "./testdata-plan";
 import { TESTDATA_ORDER_PREFIX } from "./testdata.data";
 import type {
   TestdataAssignment,
+  TestdataCertification,
   TestdataContact,
   TestdataEmployee,
   TestdataFirm,
@@ -509,6 +510,17 @@ async function ensureEmployees(
         available: available(found),
         roles: employee.roles,
       });
+      // Sertifiseringen kan mangle selv om den ansatte finnes (avbrutt kjøring eller rader lagt
+      // inn uten sertifisering). Uten den faller publiseringssperren som testdataene skal vise.
+      // Slettede eller deaktiverte ansatte røres ikke (myk sletting respekteres).
+      if (employee.certification && available(found))
+        await ensureCertification(
+          db,
+          organizationId,
+          found.employeeId,
+          employee.certification,
+          summary,
+        );
       continue;
     }
     const companyId = companyIds.get(employee.companyLegalName);
@@ -553,18 +565,8 @@ async function insertEmployee(
     await tx
       .insert(employeeRoleAssignments)
       .values(employee.roles.map((role) => ({ organizationId, employeeId: row.id, role })));
-    if (employee.certification) {
-      await tx.insert(certifications).values({
-        organizationId,
-        employeeId: row.id,
-        area: employee.certification.area,
-        issuer: employee.certification.issuer,
-        certificateNumber: employee.certification.certificateNumber,
-        validFrom: employee.certification.validFrom,
-        validTo: employee.certification.validTo,
-      });
-      summary.created.certifications += 1;
-    }
+    if (employee.certification)
+      await ensureCertification(tx, organizationId, row.id, employee.certification, summary);
     summary.created.employees += 1;
     return {
       employeeId: row.id,
@@ -573,6 +575,44 @@ async function insertEmployee(
       roles: employee.roles,
     };
   });
+}
+
+type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/** Legger inn sertifiseringen hvis den mangler (samme organisasjon, ansatt og sertifikatnummer). */
+async function ensureCertification(
+  db: DbOrTx,
+  organizationId: string,
+  employeeId: string,
+  cert: TestdataCertification,
+  summary: TestdataSummary,
+): Promise<void> {
+  const [existing] = await db
+    .select({ id: certifications.id })
+    .from(certifications)
+    .where(
+      and(
+        eq(certifications.organizationId, organizationId),
+        eq(certifications.employeeId, employeeId),
+        eq(certifications.certificateNumber, cert.certificateNumber),
+        isNull(certifications.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    summary.existing.certifications += 1;
+    return;
+  }
+  await db.insert(certifications).values({
+    organizationId,
+    employeeId,
+    area: cert.area,
+    issuer: cert.issuer,
+    certificateNumber: cert.certificateNumber,
+    validFrom: cert.validFrom,
+    validTo: cert.validTo,
+  });
+  summary.created.certifications += 1;
 }
 
 // ---------------------------------------------------------------------------------------------

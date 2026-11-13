@@ -270,13 +270,19 @@ async function tdOrders(organizationId: string): Promise<Map<string, TdOrderRow>
 
 /** Oppslagene i skriptet som tar `organizationId` (kontrakten i testplanen). */
 const td = testdataModule as unknown as Record<string, unknown>;
-async function lookup(name: string, organizationId: string): Promise<{ id: string }[]> {
+type LookupRow = Record<string, unknown>;
+async function lookup(
+  name: string,
+  organizationId: string,
+  args: readonly unknown[],
+  idOf: (row: LookupRow) => string,
+): Promise<{ id: string }[]> {
   const fn = td[name];
   if (typeof fn !== "function") throw new Error(`testdata.ts eksporterer ikke ${name}`);
   const call = fn as (...args: unknown[]) => Promise<unknown>;
-  const result = call.length >= 2 ? await call(db, organizationId) : await call(organizationId);
+  const result = await call(db, organizationId, ...args);
   if (result === null || result === undefined) return [];
-  return (Array.isArray(result) ? result : [result]) as { id: string }[];
+  return (Array.isArray(result) ? result : [result]).map((row: LookupRow) => ({ id: idOf(row) }));
 }
 
 /** Lager en trigger som stopper innsetting i tabellen når betingelsen holder. */
@@ -539,7 +545,7 @@ describe("testdata: første kjøring (4.1)", () => {
     const future = await count(sql`
       select count(*)::int as n from events ev join orders o on o.assignment_id = ev.assignment_id
       where ev.organization_id = ${orgId} and o.external_ref like 'TD-%'
-        and ev.type = 'assignment.status_changed' and ev.occurred_at > ${TEST_NOW}`);
+        and ev.type = 'assignment.status_changed' and ev.occurred_at > ${TEST_NOW.toISOString()}::timestamptz`);
     expect(future).toBe(0);
   });
 
@@ -552,8 +558,9 @@ describe("testdata: første kjøring (4.1)", () => {
     const outside = await count(sql`
       select count(*)::int as n from audit_log
       where organization_id = ${orgId}
-        and (received_at < ${start[0]!.now} or received_at > ${end[0]!.now}
-          or occurred_at < ${start[0]!.now} - interval '1 minute' or occurred_at > ${end[0]!.now})`);
+        and (received_at < ${start[0]!.now}::timestamptz or received_at > ${end[0]!.now}::timestamptz
+          or occurred_at < ${start[0]!.now}::timestamptz - interval '1 minute'
+          or occurred_at > ${end[0]!.now}::timestamptz)`);
     expect(
       await count(sql`select count(*)::int as n from audit_log where organization_id = ${orgId}`),
     ).toBeGreaterThan(0);
@@ -1195,15 +1202,22 @@ describe("testdata: tenant-isolasjon (4.6)", () => {
   const LOOKUPS: {
     name: string;
     seed: (orgId: string, side: "a" | "b") => Promise<string>;
+    /** Nøkkellisten fra planen (tredje argument) som skriptet slår opp med. */
+    args: readonly unknown[];
+    idOf: (row: LookupRow) => string;
   }[] = [
     {
       name: "findTestdataOrders",
       seed: async (orgId) => (await createOrder(orgId, { externalRef: "TD-0001" })).id,
+      args: [plan.orders.map((o) => o.externalRef)],
+      idOf: (row) => row.id as string,
     },
     {
       name: "findTestdataContacts",
       seed: async (orgId) =>
         (await createContact(orgId, { email: plan.contacts[0]!.email.toLowerCase() })).id,
+      args: [plan.contacts.map((c) => c.email.toLowerCase())],
+      idOf: (row) => row.id as string,
     },
     {
       name: "findTestdataFirms",
@@ -1215,6 +1229,8 @@ describe("testdata: tenant-isolasjon (4.6)", () => {
             orgNumber: null,
           })
         ).id,
+      args: [plan.firms.map((f) => f.name)],
+      idOf: (row) => row.id as string,
     },
     {
       name: "findTestdataProperties",
@@ -1232,6 +1248,8 @@ describe("testdata: tenant-isolasjon (4.6)", () => {
         });
         return created.property.id;
       },
+      args: [planAssignments.map((a) => a.assignment.property)],
+      idOf: (row) => row.propertyId as string,
     },
     {
       name: "findTestdataEmployees",
@@ -1240,16 +1258,20 @@ describe("testdata: tenant-isolasjon (4.6)", () => {
         const user = await createUser({ name: employee.name, email: employee.email.toLowerCase() });
         return (await createEmployee(user, orgId, ["inspector"])).id;
       },
+      args: [plan.employees.map((e) => e.email.toLowerCase())],
+      idOf: (row) => row.employeeId as string,
     },
     {
       name: "findAnchorOrder",
       seed: async (orgId) => (await createOrder(orgId, { externalRef: "TD-0001" })).id,
+      args: [],
+      idOf: (row) => row.id as string,
     },
   ];
 
   it.each(LOOKUPS)(
     "4.6.32 $name gir bare rader fra egen organisasjon",
-    async ({ name, seed: put }) => {
+    async ({ name, seed: put, args, idOf }) => {
       await expectTenantIsolation({
         seed: async (grantA, grantB) => ({
           a: [await put(grantA.organizationId, "a")],
@@ -1257,7 +1279,7 @@ describe("testdata: tenant-isolasjon (4.6)", () => {
         }),
         query: async (actor, organizationId) => {
           const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
-          return lookup(name, grant.organizationId);
+          return lookup(name, grant.organizationId, args, idOf);
         },
         idOf: (row: { id: string }) => row.id,
       });
@@ -1494,12 +1516,19 @@ describe("testdata: tilgang per rolle (4.8)", () => {
   });
 
   it("4.8.43 admin stenges ikke ute: tilgang til hver rettighet etter kjøringen", async () => {
-    const orgId = await seedAll();
+    await runSeed(env);
+    const orgId = await byggconId();
     const admin = await adminActor();
-    for (const permission of PERMISSIONS) {
+    const before = await requireOrganizationAccess(admin, orgId);
+    await seed();
+    // `report.publish` styres av gyldig sertifisering (A29), ikke av testdataene. Admin fra
+    // `runSeed` har ingen sertifisering. Testdataene skal ikke endre admins rettigheter.
+    for (const permission of PERMISSIONS.filter((p) => p !== "report.publish")) {
       const grant = await requireOrganizationAccess(admin, orgId, permission);
       expect(grant.organizationId, permission).toBe(orgId);
     }
+    const after = await requireOrganizationAccess(admin, orgId);
+    expect(after.permissions).toEqual(before.permissions);
   });
 });
 
