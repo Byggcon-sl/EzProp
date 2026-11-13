@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { grantablePermissions } from "@/core/access";
+import { ORDER_EDITABLE_FIELDS, orderFieldLabel } from "@/core/orders";
 import { employeeRoles } from "@/db/schema";
 import { todayInOslo } from "@/shared/lib/dates";
 import {
@@ -160,5 +161,47 @@ describe("revisjonsloggen: visningstekster", () => {
 
   it("8. tom changes gir ingen linjer", () => {
     expect(formatAuditChanges({})).toEqual([]);
+  });
+});
+
+/*
+ * Ordreendringer i /admin/logg (docs/funksjoner/fase2a-rette-ordre-testplan.md 5.2 og 5.3):
+ * bare feltetikettene, aldri verdiene under `values`. Støtter hovedmål: færre reklamasjoner
+ * (det står hva som ble endret) uten at adresser og navn spres til flere skjermer.
+ */
+describe("ordreendring i adminloggen", () => {
+  it("5.2 viser «Endret: Adresse, Bestiller» og ingen verdier", () => {
+    const lines = formatAuditChanges({
+      fields: ["addressText", "orderedByContactId"],
+      values: {
+        addressText: { from: "MARKOR-ADR-1", to: "MARKOR-ADR-2" },
+        orderedByContactId: { from: null, to: "MARKOR-ID" },
+      },
+    });
+    expect(lines).toEqual(["Endret: Adresse, Bestiller"]);
+    expect(lines.join("\n")).not.toContain("MARKOR");
+  });
+
+  it("5.2 også når `values` er ødelagt eller ligner fra/til, vises ingen verdi", () => {
+    const lines = formatAuditChanges({
+      fields: ["addressText"],
+      values: { from: "MARKOR-FRA", to: "MARKOR-TIL" },
+    });
+    expect(lines).toEqual(["Endret: Adresse"]);
+  });
+
+  it("5.3 etikettene for ordrefeltene er de samme som orderFieldLabel", () => {
+    for (const field of ORDER_EDITABLE_FIELDS) {
+      expect(formatAuditChanges({ fields: [field] })).toEqual([
+        `Endret: ${orderFieldLabel(field)}`,
+      ]);
+    }
+  });
+
+  it("ordre og handlingene på ordre har norske navn", () => {
+    expect(auditEntityLabel("order")).toBe("Ordre");
+    expect(auditActionLabel("update")).toBe("Endret");
+    expect(auditActionLabel("reject")).toBe("Avvist");
+    expect(auditActionLabel("convert")).toBe("Gjort om til oppdrag");
   });
 });

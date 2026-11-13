@@ -3,16 +3,18 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { AccessDeniedError } from "@/core/access";
 import { listOffices } from "@/core/organization";
-import { getOrder } from "@/core/orders";
+import { getOrder, listOrderHistory } from "@/core/orders";
 import { isUuid } from "@/shared/lib/uuid";
 import { Card } from "@/shared/ui/card";
 import { getEmployeeContext } from "../../employee-context";
 import { NoAccess } from "../../no-access";
-import { convertOrderAction, rejectOrderAction } from "../actions";
+import { convertOrderAction, rejectOrderAction, updateOrderAction } from "../actions";
 import { officeChoice } from "../office-choice";
 import { OrderStatusBadge } from "../order-status-badge";
-import { formatOsloDateTime } from "../received-at";
+import { formatOsloDateTime, osloDateTimeLocal } from "../received-at";
 import { ConvertOrderForm, RejectOrderForm } from "./order-actions";
+import { OrderEditor } from "./order-edit-form";
+import { OrderHistory } from "./order-history";
 
 export const metadata: Metadata = { title: "Ordre" };
 
@@ -28,8 +30,9 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
 const EMPTY = <span className="text-slate-500">Ikke oppgitt</span>;
 
 /**
- * Ordren med «Gjør om til oppdrag» og «Avvis» når den er mottatt og den ansatte kan endre.
- * Ugyldig, ukjent og fremmed id gir samme svar som manglende tilgang.
+ * Ordren med «Endre ordren» (alle statuser) når den ansatte kan endre, og «Gjør om til oppdrag»
+ * og «Avvis» når den er mottatt. Under ordren står «Endringer». Ugyldig, ukjent og fremmed id gir
+ * samme svar som manglende tilgang.
  */
 export default async function OrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -37,8 +40,12 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   if (!context || !isUuid(id)) return <NoAccess />;
 
   let order: Awaited<ReturnType<typeof getOrder>>;
+  let history: Awaited<ReturnType<typeof listOrderHistory>>;
   try {
-    order = await getOrder(context.actor, context.organizationId, id);
+    [order, history] = await Promise.all([
+      getOrder(context.actor, context.organizationId, id),
+      listOrderHistory(context.actor, context.organizationId, id),
+    ]);
   } catch (error) {
     if (error instanceof AccessDeniedError) return <NoAccess />;
     throw error;
@@ -48,6 +55,19 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const choice = canHandle
     ? officeChoice(await listOffices(context.actor, context.organizationId), context.officeId)
     : null;
+
+  const handleForms = choice && (
+    <div className="mt-6 space-y-6">
+      <ConvertOrderForm
+        orderId={order.id}
+        offices={choice.offices.map((office) => ({ id: office.id, name: office.name }))}
+        defaultOfficeId={choice.defaultOfficeId}
+        emptyMessage={choice.emptyMessage}
+        action={convertOrderAction}
+      />
+      <RejectOrderForm orderId={order.id} action={rejectOrderAction} />
+    </div>
+  );
 
   return (
     <main className="max-w-2xl">
@@ -123,18 +143,32 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         </dl>
       </Card>
 
-      {choice && (
-        <div className="mt-6 space-y-6">
-          <ConvertOrderForm
-            orderId={order.id}
-            offices={choice.offices.map((office) => ({ id: office.id, name: office.name }))}
-            defaultOfficeId={choice.defaultOfficeId}
-            emptyMessage={choice.emptyMessage}
-            action={convertOrderAction}
-          />
-          <RejectOrderForm orderId={order.id} action={rejectOrderAction} />
-        </div>
+      {context.canEditOrders ? (
+        <OrderEditor
+          order={{
+            id: order.id,
+            rowVersion: order.rowVersion,
+            receivedAtLocal: osloDateTimeLocal(new Date(order.receivedAt)),
+            addressText: order.addressText,
+            externalRef: order.externalRef,
+            orderedByText: order.orderedByText,
+            orderedByContactId: order.orderedByContactId,
+            gnr: order.gnr,
+            bnr: order.bnr,
+            snr: order.snr,
+            housingAssociationName: order.housingAssociationName,
+            sellerDeclarationReceived: order.sellerDeclarationReceived,
+          }}
+          converted={order.status === "converted"}
+          action={updateOrderAction}
+        >
+          {handleForms}
+        </OrderEditor>
+      ) : (
+        handleForms
       )}
+
+      <OrderHistory entries={history} />
     </main>
   );
 }
