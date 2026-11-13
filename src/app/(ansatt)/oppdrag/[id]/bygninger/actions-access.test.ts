@@ -240,6 +240,7 @@ describe("6.4 takstmann uten skriverett får NO_ACCESS fra kjernen", () => {
           removeRoomAction,
           form({ assignmentId: assignment.id, roomId: room.id }),
         ],
+        // F11.1: også addRoomsAction gir NO_ACCESS fra kjernen for takstmann uten skriverett
         [
           "addRoomsAction",
           addRoomsAction,
