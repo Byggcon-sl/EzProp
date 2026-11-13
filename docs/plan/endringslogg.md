@@ -90,3 +90,5 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 13.11.2026 | «Varsel om mulig dublett» (T3) krysset av under «Fra Ståles svar 12.11.2026», bygget på branch `varsel-dublett` (`docs/funksjoner/fase2a-varsel-dublett.md`, A285–A291). Varsel for kontakter og firma er ikke med (forslag 62, A289). | Prosjektlederen, varsel-dublett |
 | 13.11.2026 | «Varsel om mulig dublett» (T3) levert (PR #198) og flyttet til `docs/plan/levert.md`. | Hovedløkken |
 | 13.11.2026 | Rett på oppdrag: «Nytt oppdrag» er hovedveien, «Ordre» blir «Tilbud» (lead som gjøres om til oppdrag med ett trykk), lenger ned i menyen. Tilbud med pris og PDF i 3b. E-post-KI og bestillingsskjema lager oppdrag, ikke ordre. | Ståle i chat 13.11.2026 |
+| 14.11.2026 | Gjenopprettet live diktat (fase 2b) og strekkmål 6 (KI-briller), som PR #174 skrev over ved en feil (testlagets funn T-0052). | Ståles beslutninger 12.11.2026 |
+| 14.11.2026 | Frasebanken fylles fra Byggcons fraser i SharePoint, både fra IVIT-malene og Byggcons egne, i én felles bank (flyttet fra fase 4 til 2a-3). S10: rett til IVIT-malfrasene. | Ståle i chat 13.11.2026 |
