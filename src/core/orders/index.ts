@@ -10,6 +10,7 @@ export { orderInputSchema, rejectReasonSchema, type OrderInput } from "./schemas
 export { convertOrderToAssignment, createOrder, getOrder, listOrders, rejectOrder } from "./orders";
 export {
   ORDER_LIST_LIMIT,
+  orderListSummary,
   type ListOrders,
   type ListOrdersOptions,
   type OrderListItem,

@@ -1,6 +1,6 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
-import { nextAssignmentNumber } from "@/core/assignments";
+import { assignmentFieldsMatch, nextAssignmentNumber, orderFieldsMatch } from "@/core/assignments";
 import { recordAuditEvent } from "@/core/audit";
 import { ContactNotFoundError, findContactForLink } from "@/core/contacts";
 import { recordEvent } from "@/core/events";
@@ -8,8 +8,9 @@ import { db } from "@/db/client";
 import { assignments, offices, orders } from "@/db/schema";
 import { todayInOslo } from "@/shared/lib/dates";
 import { isUuid } from "@/shared/lib/uuid";
-import type { OrderSource } from "./codes";
+import type { OrderSource, OrderStatus } from "./codes";
 import { OfficeNotFoundError, OrderAlreadyHandledError } from "./errors";
+import { ORDER_LIST_LIMIT, type ListOrders, type OrderListItem } from "./list";
 import { orderInputSchema, rejectReasonSchema, type OrderInput } from "./schemas";
 
 /*
@@ -38,28 +39,53 @@ function assignmentJoin(organizationId: string) {
 }
 
 /**
- * Ordrene i organisasjonen som ikke er slettet, nyeste mottatt først. Fast feltliste, ingen
- * sporingsfelt.
+ * Ordrene i organisasjonen som ikke er slettet, nyeste mottatt først, høyst `ORDER_LIST_LIMIT`.
+ * Kontrakten står i `./list.ts`. Søket (`options.query`) bruker det samme vilkåret som
+ * arbeidskøen (`orderFieldsMatch` og `assignmentFieldsMatch`). Oppdraget er en left join på én
+ * rad per ordre, og undertabellene hentes med `EXISTS`, så det blir aldri doble rader. Ordre med
+ * kansellert oppdrag er med, også i søket. Søketeksten logges ikke.
  */
-export async function listOrders(actor: Actor, organizationId: string) {
+export const listOrders: ListOrders = async (actor, organizationId, options = {}) => {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
-  return db
-    .select({
-      id: orders.id,
-      receivedAt: orders.receivedAt,
-      source: orders.source,
-      externalRef: orders.externalRef,
-      orderedByText: orders.orderedByText,
-      addressText: orders.addressText,
-      status: orders.status,
-      assignmentId: orders.assignmentId,
-      assignmentNumber: assignments.number,
-    })
-    .from(orders)
-    .leftJoin(assignments, assignmentJoin(grant.organizationId))
-    .where(and(eq(orders.organizationId, grant.organizationId), isNull(orders.deletedAt)))
-    .orderBy(desc(orders.receivedAt), desc(orders.id));
-}
+  const query = options.query ?? "";
+  const where = and(
+    eq(orders.organizationId, grant.organizationId),
+    isNull(orders.deletedAt),
+    or(orderFieldsMatch(query), assignmentFieldsMatch(grant.organizationId, query)),
+  );
+
+  const [rows, [counted]] = await Promise.all([
+    db
+      .select({
+        id: orders.id,
+        receivedAt: orders.receivedAt,
+        source: orders.source,
+        externalRef: orders.externalRef,
+        orderedByText: orders.orderedByText,
+        addressText: orders.addressText,
+        status: orders.status,
+        assignmentId: orders.assignmentId,
+        assignmentNumber: assignments.number,
+      })
+      .from(orders)
+      .leftJoin(assignments, assignmentJoin(grant.organizationId))
+      .where(where)
+      .orderBy(desc(orders.receivedAt), desc(orders.id))
+      .limit(ORDER_LIST_LIMIT),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(orders)
+      .leftJoin(assignments, assignmentJoin(grant.organizationId))
+      .where(where),
+  ]);
+
+  const items: OrderListItem[] = rows.map((row) => ({
+    ...row,
+    source: row.source as OrderSource,
+    status: row.status as OrderStatus,
+  }));
+  return { items, total: Number(counted?.count ?? 0) };
+};
 
 /** Én ordre med alle feltene og oppdragsnummeret. Ingen sporingsfelt. */
 export async function getOrder(actor: Actor, organizationId: string, orderId: string) {
