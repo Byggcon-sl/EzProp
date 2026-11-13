@@ -42,7 +42,7 @@ Les før du gjør endringer i et område:
 5. **Regler og TG-logikk er data med testsaker.** De kjører både på iPaden og på serveren. TG-logikk finnes bare i systemmalen for tilstandsrapport.
 6. **En fast kode (`key`) endres aldri, den arkiveres.** Gjelder kontrollpunkt, felt, valg, utfall, regel, romtype og terskel. Skal noe få ny betydning, arkiveres den gamle koden og det lages en ny.
 7. **Fagstoff:** egne formuleringer, aldri tekst fra NS 3600, IVIT eller SmartTakst. Tallverdier (levetider, grenser) er fakta. Kilden står i bakgrunnen, ikke i rapportteksten. Ingen gjetteord («antas», «trolig»). Tekstene i `docs/kartlegging/` er referanse og skal aldri inn i kode, seed-data eller maler.
-8. **Ingen kundeopplysninger, passord eller nøkler** i repoet, loggene eller testdata. Testdata er oppdiktet.
+8. **Ingen kundeopplysninger, passord eller nøkler** i repoet, loggene eller testdata. Testdata er oppdiktet. **Testmiljøet har bare oppdiktede data, og produksjonsmiljøet har de ekte dataene; de holdes adskilt, og ekte data kopieres aldri til test** (Ståle 13.11.2026). Testdataene har ingen verdi, så i testmiljøet kan de brukes fritt, også mot ekte KI. Koden behandler likevel alle data som ekte, slik at den er klar for produksjon.
 9. **Ingen nye avhengigheter uten begrunnelse** i PR-en.
 10. **Produktnavnet står ett sted:** `src/shared/config/brand.ts`. Lint stopper «EzProp» andre steder i `src/`.
 11. **Admin stenges aldri ute.** Nye tilgangsregler skal aldri stenge admin ute.

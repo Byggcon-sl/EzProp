@@ -140,6 +140,12 @@ Tas **før neste punkt i 2a-2**. Ståle i chat 12.11.2026: «tror vi skal sette 
 
 Levert i PR #166 (12.11.2026), se `docs/plan/levert.md`.
 
+### Prioritert av Ståle 13.11.2026: rike testdata i testmiljøet
+
+Tas **nå, før punktene under**. Ståle i chat 13.11.2026: «vi kjører på testmiljøet frem til vi overfører til faktisk produksjonsmiljø. Legg inn testdata og fiktive navn, eiendommer, bilder med mer for å teste løsningen. Reelle data kommer i produksjonsmiljøet, slik at vi holder det adskilt. Det betyr også at vi ikke trenger å være forsiktig med dataene i løsningen, det er kun testdata som ikke har verdi.»
+
+- [ ] **Testdata som ligner en ekte arbeidshverdag** i testmiljøet, lagt inn av utrullingen og kjørbar på nytt (`pnpm db:seed:testdata`): de tre selskapene med kontorer og 10–15 oppdiktede ansatte i alle roller, oppdiktede meglerfirma, meglere, selgere og kjøpere, rundt 50 oppdiktede eiendommer (eneboliger, leiligheter med sameie og borettslag, fritidsboliger) med matrikkel, byggeår og areal, og oppdrag i alle statuser over flere måneder, med befaringstider, rapporter med funn, TG, målinger, fakturagrunnlag og noen reklamasjoner. **Bilder** (og senere video) som er laget for testen, uten personer og uten rettigheter til andre, knyttet til rom og avvik. Alle navn, adresser, telefonnumre og e-poster er oppdiktet og kan ikke forveksles med ekte personer (for eksempel e-post på et domene som ikke kan motta post). Dataene ligger i **organisasjonen de ansatte logger inn i** i testmiljøet, slik at alt vises med en gang. **Kjøres aldri i produksjonsmiljøet:** skriptet stopper hvis miljøet er produksjon.
+
 ### Fra Ståles svar 12.11.2026
 
 Første punkt tas **før Byggcon-profilen**, fordi det retter reglene som alt er merget. Resten tas etter Byggcon-profilen (levert, PR #176) og før neste punkt i 2a-2, i denne rekkefølgen. Svarene står i `docs/kartlegging/svar-fra-stale-2026-11-12.md`.
