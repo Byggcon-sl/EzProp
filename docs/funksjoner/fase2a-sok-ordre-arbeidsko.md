@@ -3,7 +3,7 @@
 - **Fase:** 2a (punkt fra Ståles svar 12.11.2026, T2: «Ja, nå»)
 - **Modul:** kjerne (`src/core/orders`, `src/core/assignments`, felles søkehjelper i `src/shared/lib`)
 - **Branch:** `sok-ordre-arbeidsko` (bygger på main)
-- **Status:** klar til bygging (13.11.2026, prosjektleder, etter gjennomgang av forenkler, arkitekt, ux og test-leder)
+- **Status:** klar til bygging (13.11.2026, prosjektleder, etter gjennomgang av forenkler, arkitekt, ux og test-leder; fortsettelsen gjennomgått av sikkerhet-personvern og test-leder samme dag)
 - **Støtter hovedmål:** De ansatte: kontoret finner ordren eller oppdraget med ett søk når megleren ringer, uansett om de husker adressen, nummeret, megleren eller gnr/bnr. / KI i bunnen: søket bruker de samme strukturerte feltene som KI skal bruke senere, og søketeksten sendes aldri til KI. / Reklamasjoner: mindre fare for at kontoret retter eller svarer på feil oppdrag (matrikkel sammenlignes del for del, og raden viser meglerens ordrenummer).
 
 ## Problem
@@ -63,7 +63,7 @@ Ordrelisten (`/ordre`) har ikke søk og viser alle ordrer uten grense. Med ca. 2
    - når vi bytter: når testlaget eller de ansatte melder at søket er tregt (rettesnor: over 200 ms), eller senest ved «Søk og arkiv».
    Ført som «lett å endre».
 9. **Nattløkkens punkt 6 (sidegrense):** ordrelisten får grensen i punkt 4. `listAgreements` og sertifiseringslistene er ikke med (små lister, egen oppgave ved behov).
-10. Versjon: neste ledige patch etter main ved merge (branchen står på 0.10.7). Beslutninger føres i `docs/09-apne-sporsmal.md` («Avgjort av agentene …») fra **A254** (T1-branchen bruker A249–A253; sjekk på nytt før merge). Ordlisten (avsnitt 8): «Matrikkelsøk» = `parseCadastralQuery` og «Grense i ordrelisten» = `ORDER_LIST_LIMIT`. Nattløkkens punkt 3, 5 og 6 merkes ryddet i tilstandsfilen.
+10. Versjon: neste ledige patch etter main ved merge (branchen står på 0.10.7). Beslutninger føres i `docs/09-apne-sporsmal.md` («Avgjort av agentene …») fra **A256** (main bruker A249–A255; se «Fortsettelse» punkt 2). Ordlisten (avsnitt 8): «Matrikkelsøk» = `parseCadastralQuery` og «Grense i ordrelisten» = `ORDER_LIST_LIMIT`. Nattløkkens punkt 3, 5 og 6 merkes ryddet i tilstandsfilen.
 
 **Ikke med (bevisst utelatt):**
 - Rette en ordre etter lagring (T1) og T-0031 («kansellert» i ordrelisten). Det gjøres på branchen `rette-ordre-etter-lagring`. Ikke rør `updateOrder`, ordresiden eller ordreskjemaet. T1 rører også `ordre/page.tsx` og `orders.test.ts`: main flettes inn og konflikter løses før merge.
@@ -108,7 +108,12 @@ Ingen fagregler. Søkeregelen (felter og matrikkelformat) testes med enhetsteste
 - [ ] Tenant-isolasjon: `expectTenantIsolation` for `listOrders` med søk og for arbeidskøen med søk, der `seed` legger **samme tekst i A og B** i hvert søkefelt (adresse, ordrenummer, partsnavn, firma, matrikkel, `ordered_by_text`). Egen test der en part, eiendom eller matrikkel i B peker på et oppdrag i A uten å gi treff i A. Ansatt i annen organisasjon får `AccessDeniedError`.
 - [ ] Takstmann, kontor, leder og admin kan alle søke. Standardvalget per rolle (takstmann, kontor, leder, admin, takstmann + leder) er testet, og `mine=0`/`mine=1` overstyrer (test).
 - [ ] Ordrelisten viser høyst 50 rader, nyeste først, `total` stemmer, og meldingen «Viser 50 av N …» vises når det er flere (test).
-- [ ] Søket lager ingen nye rader i `audit_log`, hendelsene eller `ai_usage_log` (én test), og `q` logges ikke i koden.
+- [ ] Søket lager ingen nye rader i `audit_log`, hendelsene eller `ai_usage_log`. Én test som kjører både et søk i ordrelisten og et søk i arbeidskøen. At `q` ikke logges i koden, sjekkes ved kodegjennomgang (grep etter `console`, `logger` og hendelser med `q`/`query`).
+- [ ] Databasefeil på `/ordre` og `/arbeidskoe` (ikke `AccessDeniedError`) fanges på siden, logges med `logger` med bare `route`, `userId` og `errorName`, og den ansatte ser en vanlig feilmelding. Én test viser at loggen ikke inneholder søketeksten (fortsettelse punkt 3d).
+- [ ] `selectOrder` er ikke lenger en åpen eksport som tar `organizationId`: den tar `grant` fra `requireOrganizationAccess`, eller ligger i en intern fil og eksporteres ikke fra `src/core/orders/index.ts`. Testen viser det, og at `getOrder` og `updateOrder` fortsatt gir `AccessDeniedError` for en ansatt i en annen organisasjon (fortsettelse punkt 3a).
+- [ ] Kontakt- og firmanavn i ordrehistorikken hentes med en ny funksjon i `src/core/contacts`, filtrert på `grant.organizationId` og `deleted_at is null`. `history.ts` importerer ikke lenger `contacts` eller `firms` fra `@/db/schema`. Testfilen til funksjonen har `expectTenantIsolation`: kontakter og firma med samme navn i B vises ikke i As historikk. Slettet kontakt eller firma vises som `REMOVED_CONTACT_LABEL` eller `REMOVED_FIRM_LABEL`, som før (fortsettelse punkt 3b).
+- [ ] Etter at main er flettet inn står alle T1-testene fra PR #184 (`updateOrder`, `history.ts`, e2e for å rette en ordre) igjen og er grønne. Ingen er slettet eller hoppet over. `orders.test.ts` har både T1-testene og `listOrders` med grense og total. Ubrukte eksporter fjernet fra `index.ts`, sjekket med `pnpm typecheck` og `pnpm lint`.
+- [ ] `docs/09-apne-sporsmal.md` har én linje om at søketeksten blir liggende i nettleserhistorikken på delte iPader, og at det vurderes sammen med sperring av mistet iPad (fase 2b / «Minimum før ekte data»).
 - [ ] E2e (én felles spesifikasjon på iPad-størrelse og PC): søk i ordrelisten og åpne ordren; «Ingen ordre passer søket.»; søk i arbeidskøen; tom fane viser «Treff i: …» med lenke som virker; kontoret starter på «Alle», velger «Mine», søker og bytter fane, og «Mine» står fortsatt.
 - [ ] Fokusringen: i den eksisterende e2e-testen for arbeidskøen har kortet synlig ring etter lagret notat (beregnet `outline`), og `#hovedinnhold` har fortsatt ingen ring etter hopplenken.
 - [ ] T-0029 settes til «rettet» med PR-nummeret.
@@ -122,9 +127,12 @@ Ingen fagregler. Søkeregelen (felter og matrikkelformat) testes med enhetsteste
 - **E2e:** én felles spesifikasjon for begge listene; fokusringen i den eksisterende arbeidskø-testen. E2e-tiden er allerede et problem (nattløkkens punkt 14). Ingen egen test med over 50 ordre i e2e; grensen dekkes av integrasjonstesten.
 - **Kansellert oppdrag i ordrelisten:** finnes ved søk (arkitektens forslag), fordi ordren står i listen uansett og kontoret ellers tror den mangler.
 - **Fokusring på fire andre elementer:** ønsket, se omfang punkt 7.
+- **HTTP-loggen i Azure (sikkerhet-personvern foreslo å slå den av eller føre den i planen):** føres under «Minimum før ekte data», ikke slått av i T2. Dataene i testmiljøet er oppdiktet, loggen er nyttig ved feilsøking i testmiljøet, og en endring i infra må rulles ut av Ståle. Det samme gjelder `/kontakter`, `/firma` og dagens arbeidskø, så det hører hjemme i en samlet sjekk før ekte data. Lett å endre (A263).
+- **Feilfangst på listesidene:** tas med i T2 (liten, to sider, samme mønster som `kontakter/actions.ts`). Søket legger fritekst med navn inn i spørringen, så det hører til denne oppgaven.
+- **Test-leder krevde akseptkriterier for småfunnene og flettingen:** godtatt i sin helhet. `selectOrder` og navneoppslaget gjelder tilgang og tenant-isolasjon og regnes som alvorlige; PR-en merges ikke uten dem.
 
 ## Åpne spørsmål
-- Ingen som stopper. Beslutningene (ADR 0010, grense 50, «Alle» som standard uten takstmann-rolle, matrikkel per del, kansellert finnes ved søk, ingen søk på e-post/telefon) føres som «lett å endre» i `docs/09-apne-sporsmal.md` fra A254.
+- Ingen som stopper. Beslutningene (ADR 0010, grense 50, «Alle» som standard uten takstmann-rolle, matrikkel per del, kansellert finnes ved søk, ingen søk på e-post/telefon) føres som «lett å endre» i `docs/09-apne-sporsmal.md` som A256–A262, og HTTP-loggen som A263.
 
 ## Roller
 arkitekt (ADR 0010, `search.ts`, spørringen), ux (søkefelt, tom fane, fokusring), sikkerhet-personvern (tenant-isolasjon i undertabellene, søketekst i adressen og loggene), utvikler og testskriver i parallell. KI-rollen sjekker bare at søketeksten ikke går til KI.
@@ -143,8 +151,11 @@ Branchen ble bygget fra main før PR #184 (T1) var merget, og står uten PR (sis
    - `selectOrder` skal ikke være en åpen eksport uten tilgangssjekk. Den tar `grant` (fra `requireOrganizationAccess`) i stedet for `organizationId`, eller flyttes til en intern fil som bare `getOrder` og `updateOrder` bruker.
    - `listOrderHistory` henter kontakt- og firmanavn gjennom en funksjon i `src/core/contacts` (filtrert på organisasjon og `deleted_at is null`), ikke med egne spørringer mot `contacts`/`firms` i `src/core/orders`. Test for tenant-isolasjon følger med.
    - Ubrukte eksporter i `src/core/orders/index.ts` fjernes.
+   - **(d, fra sikkerhet-personvern)** `/ordre` og `/arbeidskoe` fanger feil fra `listOrders`/`listWorkQueue` som ikke er `AccessDeniedError`, logger bare `route`, `userId` og `errorName` med `logger` (som i `kontakter/actions.ts`) og viser en vanlig feilmelding («Kunne ikke hente listen. Prøv igjen.»). Ellers kan Drizzle-feilen skrive `%søketekst%` rått til applikasjonsloggen.
+   - **(e, fra sikkerhet-personvern)** HTTP-loggen i Azure (`infra/azure/main.bicep`, `httpLogs.fileSystem`) skriver hele adressen med `?q=`. Infra endres ikke i T2. Det føres som eget punkt under «Minimum før ekte data» i planen (én linje i `docs/plan/endringslogg.md`), og ADR 0010 punkt 7 og dette kortet rettes til: «søketeksten skrives ikke i applikasjonsloggen; HTTP-loggen i testmiljøet har adressen i 3 dager og slås av før ekte data». Beslutningen føres som A263 («lett å endre»).
+   - **(f)** Én linje i `docs/09-apne-sporsmal.md`: søketeksten i nettleserhistorikken på delte iPader godtas nå og vurderes sammen med sperring av mistet iPad.
    - Resten av småfunnene fra #184 (firmalinjen i «Endringer», `valueText`, `readFields`/`readValues`, TypeError som «uten nett») tas med neste oppgave i ordreskjemaet.
 4. Versjon: neste patch etter main (main står på 0.10.9 eller høyere ved fletting).
 5. `pnpm lint`, `typecheck`, `test`, `test:e2e` grønne, så PR mot `main` og merge med skriptet.
 
-Roller for resten: utvikler (fletting og småfunn) og testskriver i parallell (tester for `selectOrder`/navneoppslaget og at T1-testene står), sikkerhet-personvern i gjennomgangen (tilgang i undertabeller, `q` logges ikke). Arkitekt og ux har alt sagt sitt; trengs ikke på nytt. KI-ansvarlig: bare sjekk at søketeksten ikke går til KI.
+Roller for resten: utvikler (fletting, småfunn a–f) og testskriver i parallell (tester for `selectOrder`, navneoppslaget, feilfangsten på listesidene, loggtesten med begge listene, og at T1-testene står), sikkerhet-personvern i gjennomgangen (tilgang i undertabeller, `q` logges ikke). Arkitekt og ux har alt sagt sitt; trengs ikke på nytt. KI-ansvarlig: bare sjekk at søketeksten ikke går til KI.

@@ -133,7 +133,7 @@ Eksisterende 2.4 i `work-queue.test.ts` beholdes og skal fortsatt være grønn.
 
 ## 6. Loggene, `src/core/orders/order-search.test.ts` (én test)
 
-1. **søket lager ingen rader:** tell `audit_log`, `events` og `ai_usage_log` før og etter `listOrders` med søk og arbeidskøen med søk (tekst med oppdiktet navn og matrikkel) → uendret.
+1. **søket lager ingen rader:** tell `audit_log`, `events` og `ai_usage_log` før og etter både `listOrders` med søk og arbeidskøen med søk, i samme test (tekst med oppdiktet navn og matrikkel) → uendret.
 2. **ingen `console` med søketekst** (kodegjennomgang ved godkjenning: `q`/`query` sendes ikke til `console`, `logger`, hendelser, revisjonslogg eller `src/core/ai`).
 
 ## 7. E2e, `e2e/fase-2a-sok-ordre-arbeidsko.spec.ts` (ny, prosjektene `pc` og `ipad`)
@@ -159,5 +159,17 @@ Endring i `e2e/fase-2a-arbeidsko.spec.ts` (4.1, ingen ny test):
 - Tilgang per rolle er testet for begge listene, og admin uten andre roller kan søke.
 - Ingen eksisterende test er slettet; 1.2.1 er endret, ikke fjernet.
 - Kodegjennomgang: hver `EXISTS` har `organization_id`, `deleted_at is null` og kobling på id; søketeksten logges ikke.
-- ADR 0010 finnes; nattløkkens punkt 3, 5 og 6 er merket ryddet; T-0029 er «rettet» med PR-nummeret; A254 og videre er ført.
+- ADR 0010 finnes; nattløkkens punkt 3, 5 og 6 er merket ryddet; T-0029 er «rettet» med PR-nummeret; A256–A263 er ført.
 - Testrapporten sier at søket trenger nett, og at befaringen og synken ikke berøres.
+
+## 9. Fortsettelse 13.11.2026 (småfunn fra PR #184 og fletting)
+
+Tillegg etter test-lederens gjennomgang av fortsettelsen. Testnavnene er faste.
+
+1. `src/core/orders/orders.test.ts`, **«selectOrder er ikke en åpen eksport»**: `selectOrder` tar `grant` (typesjekk + kall med grant fra annen organisasjon gir ingen rad), eller finnes ikke blant eksportene fra `@/core/orders` (`expect(Object.keys(ordersModule)).not.toContain("selectOrder")`).
+2. `src/core/orders/orders.test.ts`, **«getOrder og updateOrder gir AccessDeniedError for annen organisasjon»**: står fra T1; skal finnes og være grønn etter flettingen.
+3. `src/core/contacts/<ny fil>.test.ts`, **«navn til ordrehistorikken: tenant-isolasjon»**: `expectTenantIsolation` med kontakt og firma med samme navn og samme id-mønster i A og B; As historikk viser aldri Bs navn.
+4. Samme fil, **«slettet kontakt og firma gir REMOVED_CONTACT_LABEL og REMOVED_FIRM_LABEL»**.
+5. Kodegjennomgang: `src/core/orders/history.ts` importerer ikke `contacts` eller `firms` fra `@/db/schema`.
+6. **«listesiden logger ikke søketeksten ved databasefeil»** (ordrelisten og arbeidskøen): feil fra listefunksjonen gir `logger`-kall med bare `route`, `userId`, `errorName`; søketeksten finnes ikke i noen loggargument.
+7. **Fletting:** alle T1-tester fra PR #184 (`updateOrder`, `history.ts`, e2e for å rette en ordre) står og er grønne; ingen `skip`/`only`, ingen slettet. `orders.test.ts` har både T1-testene og `listOrders` med grense og total. Sjekkes ved godkjenning med `git diff origin/main -- '*.test.ts' e2e/` (bare tillegg og endringer, ingen fjernede tester).

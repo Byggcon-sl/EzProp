@@ -101,7 +101,7 @@ Ingen.
 
 ## Pågår
 
-- **T2 Søk i ordrelisten og i arbeidskøen** (fase 2a), branch `sok-ordre-arbeidsko`, versjon 0.10.8. Oppgavekort `docs/funksjoner/fase2a-sok-ordre-arbeidsko.md`, ADR 0010. Tar med T-0029 og nattløkkens punkt 3, 5 og 6. Beslutninger A254–A260.
+- **T2 Søk i ordrelisten og i arbeidskøen** (fase 2a), branch `sok-ordre-arbeidsko`, versjon 0.10.8. Oppgavekort `docs/funksjoner/fase2a-sok-ordre-arbeidsko.md`, ADR 0010. Tar med T-0029 og nattløkkens punkt 3, 5 og 6. Beslutninger A254–A260. 13.11.2026: oppgavekortet utvidet etter sikkerhet-personvern og test-leder (akseptkriterier for `selectOrder`, navneoppslaget i `src/core/contacts`, feilfangst på listesidene, fletting av main; A-numrene flyttes til A256–A263). Neste steg: flette main og bygge småfunnene.
 - **T1 Rette en ordre etter lagring**, branch `rette-ordre-etter-lagring` (annen kjøring, A249–A253).
 
 ## Siste kjøring
