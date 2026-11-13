@@ -370,6 +370,8 @@ En person kan ha flere roller på samme oppdrag (for eksempel selger og fakturam
 | `rejected_reason` | Grunn ved avvisning |
 | `assignment_id` | Oppdraget ordren ble til |
 
+**Endre en lagret ordre** (T1, Ståle 12.11.2026: «full redigeringstilgang. alltid»; A249–A253). Ordren kan endres i alle statuser (mottatt, gjort om og avvist), også etter at den er blitt oppdrag. Feltene som kan endres, står i `ORDER_EDITABLE_FIELDS`: `receivedAt`, `externalRef`, `orderedByText`, `orderedByContactId`, `orderedByFirmId`, `addressText`, `gnr`, `bnr`, `snr`, `housingAssociationName`, `sellerDeclarationReceived`. `status`, `rejected_reason`, `assignment_id`, `source` og `requested_report_type` endres ikke. Oppdraget endres ikke når ordren endres (A251). `row_version` øker ved hver endring, også ved avvisning og konvertering; skjemaet sender med versjonen det ble åpnet med, og er den endret, stoppes lagringen med `OrderChangedError` (A253). Lagring uten endring gir ingen loggrad. `order`/`update` er den eneste ordrehandlingen med verdier i revisjonsloggen (se 4.12); oppretting, avvisning og konvertering logger fortsatt bare feltkoder og id-er. Hendelsen `order.updated` har bare `orderId` og feltkodene.
+
 **`assignments`** – oppdraget. Navet for alt annet.
 
 | Felt | Forklaring |
@@ -1654,6 +1656,8 @@ Oppdraget fjernes fra iPaden et antall dager etter levering (bekreftet 27.10.202
 | `entity_type`, `entity_id` | Hva som ble endret |
 | `action` | `create`, `update`, `delete`, `restore`, `permission_change` og så videre |
 | `changes` | Gammel og ny verdi per felt |
+
+**`changes` for `order`/`update`** (A252, agentenes valg, spørsmål 78 må besvares før ekte data): `{ fields: [...], values: { felt: { from, to } } }`. `fields` er en liste med feltkoder fra `ORDER_EDITABLE_FIELDS`, i fast rekkefølge og bare de som ble endret, samme format som resten av systemet. `values` har gammel og ny verdi per endret felt; bestilleren lagres som id-er, datoer som ISO-tekst. Verdiene ligger samlet under `values` slik at de kan tømmes med én endring; `fields` står da igjen. Verdiene sendes aldri til applikasjonsloggen eller til KI, og `/admin/logg` viser bare feltetikettene. Verdiene vises bare per ordre (`listOrderHistory`).
 | `device_id` | Hvilken enhet (iPad eller PC, se `devices`) |
 | `occurred_at` | Når endringen ble gjort (på enheten) |
 | `received_at` | Når serveren fikk den |
@@ -2047,6 +2051,12 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Gjøre om til oppdrag | `convertOrderToAssignment` (`src/core/orders`) | Lager oppdraget med nytt nummer og setter ordren til `converted` |
 | Avvise ordre | `rejectOrder` (`src/core/orders`) | Setter ordren til `rejected` med grunn. Ordren blir stående |
 | Ordren er allerede behandlet | `OrderAlreadyHandledError` | Ordren er alt avvist eller gjort om |
+| Endre ordren | `updateOrder` (`src/core/orders`) | Endrer en lagret ordre i alle statuser, også etter at den er blitt oppdrag. Krever `assignment.edit`. Endrer ikke status eller oppdraget (A249–A251) |
+| Ordren er endret av en annen | `OrderChangedError` | Feil når noen andre har lagret ordren etter at skjemaet ble åpnet (`row_version` er endret). Melding: «Ordren er endret av en annen. Last siden på nytt.» (A253) |
+| Endringer på ordren | `listOrderHistory` (`src/core/orders`) | Henter loggen for én ordre: hvem, når, handling, og gammel og ny verdi per felt for endringer. Nyeste først, høyst 200 rader. Krever `organization.read` |
+| Feltetikett på ordre | `orderFieldLabel` | Norsk navn på et ordrefelt i loggen, for eksempel «Adresse» for `addressText` |
+| Felt som kan endres på ordren | `ORDER_EDITABLE_FIELDS` | Fast liste med feltkodene som kan endres og stå i loggen. Kodene endres aldri (regel 6) |
+| Ordren er endret (hendelse) | `order.updated` | Hendelse når en ordre er endret. Har bare `orderId` og feltkodene, aldri verdier |
 | Kontoret finnes ikke | `OfficeNotFoundError` | Kontoret er ikke i organisasjonen eller er slettet |
 | Oppdrag | `assignments` | Jobben |
 | Oppdragstype | `assignments.assignment_type` | Nå bare `condition_report` (`ASSIGNMENT_TYPES`) |
