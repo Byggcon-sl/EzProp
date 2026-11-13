@@ -106,10 +106,11 @@ test.describe("arbeidskøen (pc og ipad)", () => {
     await setAdminResponsible(page, admin);
     await startWork(page);
 
-    // Startsiden: «Under arbeid» og «Mine» er valgt, alle fire faner har antall
+    // Startsiden: «Under arbeid» er valgt, alle fire faner har antall. Admin fra seed har ikke
+    // takstmann-rollen, så standarden er «Alle» (T-0029, docs/funksjoner/fase2a-sok-ordre-arbeidsko.md).
     await page.goto("/arbeidskoe");
     await expect(tab(page, "Under arbeid")).toHaveAttribute("aria-current", "page");
-    await expect(filterNav(page).getByRole("link", { name: "Mine" })).toHaveAttribute(
+    await expect(filterNav(page).getByRole("link", { name: "Alle" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -119,7 +120,7 @@ test.describe("arbeidskøen (pc og ipad)", () => {
 
     // Bytt fane og tilbake
     await tab(page, "Bestilt").click();
-    await expect(page).toHaveURL(/\?status=ordered$/);
+    await expect(page).toHaveURL(/\?status=ordered&mine=0$/);
     await expect(tab(page, "Bestilt")).toHaveAttribute("aria-current", "page");
     await page.goBack();
     await expect(page).toHaveURL(/\/arbeidskoe$/);
@@ -129,7 +130,7 @@ test.describe("arbeidskøen (pc og ipad)", () => {
     await filterNav(page).getByRole("link", { name: "Alle" }).click();
     await expect(page).toHaveURL(/mine=0/);
     await page
-      .getByRole("searchbox", { name: "Søk på adresse eller oppdragsnummer" })
+      .getByRole("searchbox", { name: "Søk på adresse, nummer, megler eller gnr/bnr" })
       .fill(created.suffix);
     await page.getByRole("button", { name: "Søk", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`q=${created.suffix}`));
@@ -154,6 +155,44 @@ test.describe("arbeidskøen (pc og ipad)", () => {
     await expect(page).toHaveURL(new RegExp(`#kort-${created.id}$`));
     await expect(page).toHaveURL(/status=in_progress&mine=0/);
     await expect(cards(page).first()).toContainText("Venter på nøkkel");
+
+    // Fokusringen (nattløkkens punkt 3, testplan T2 7.7): kortet har fokus og synlig ring
+    await expect(page.locator(`#kort-${created.id}`)).toBeFocused();
+    const ring = await page.locator(`#kort-${created.id}`).evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) };
+    });
+    expect(ring.style, "kortet har synlig fokusring").not.toBe("none");
+    expect(ring.width, "fokusringen er bredere enn 0").toBeGreaterThan(0);
+
+    // Hopplenken (testplan T2 7.8): målet får fokus og fortsatt ingen ring
+    await page.evaluate(() => {
+      (document.activeElement as HTMLElement | null)?.blur();
+      window.scrollTo(0, 0);
+    });
+    await page.keyboard.press("Tab");
+    const skip = page.getByRole("link", { name: "Hopp til hovedinnhold" });
+    await expect(skip).toBeFocused();
+    await page.keyboard.press("Enter");
+    const target = await page.evaluate(() => {
+      const active = document.activeElement as HTMLElement | null;
+      const style = active ? getComputedStyle(active) : null;
+      return {
+        inTarget: Boolean(active?.closest("#hovedinnhold")),
+        tag: active?.tagName.toLowerCase() ?? "",
+        id: active?.id ?? "",
+        outline: style?.outlineStyle ?? "",
+        width: style ? parseFloat(style.outlineWidth) : 0,
+      };
+    });
+    expect(target.inTarget, "fokus er i #hovedinnhold").toBe(true);
+    expect(["main", "div"]).toContain(target.tag);
+    expect(target.tag === "main" || target.id === "hovedinnhold").toBe(true);
+    expect(
+      target.outline === "none" || target.width === 0,
+      `ingen ring rundt hovedinnholdet (${target.outline} ${target.width}px)`,
+    ).toBe(true);
+
     await page.reload();
     await expect(cards(page).first()).toContainText("Venter på nøkkel");
     await expect(cards(page).first().getByLabel("Notat")).toBeHidden();
