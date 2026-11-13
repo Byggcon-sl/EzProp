@@ -178,13 +178,15 @@ const DETAIL_KEYS = [
   "receivedAt",
   "rejectedReason",
   "requestedReportType",
+  // Endre ordren (docs/funksjoner/fase2a-rette-ordre-testplan.md 2.7.8): låsen med row_version
+  "rowVersion",
   "sellerDeclarationReceived",
   "snr",
   "source",
   "status",
 ].sort();
 
-const TRACKING_KEYS = ["createdBy", "updatedBy", "deletedAt", "deletedBy", "rowVersion"];
+const TRACKING_KEYS = ["createdBy", "updatedBy", "deletedAt", "deletedBy"];
 
 // ---------------------------------------------------------------------------------------------
 // 4.1 Tilgang per rolle

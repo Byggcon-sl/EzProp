@@ -5,7 +5,13 @@ import {
   NUMBER_SEQUENCE_SCOPES,
   assignmentStatusLabel,
 } from "@/core/assignments/codes";
-import { ORDER_SOURCES, ORDER_STATUSES, orderStatusLabel } from "./codes";
+import {
+  ORDER_EDITABLE_FIELDS,
+  ORDER_SOURCES,
+  ORDER_STATUSES,
+  orderFieldLabel,
+  orderStatusLabel,
+} from "./codes";
 
 /*
  * Faste koder for ordre og oppdrag (docs/funksjoner/fase2a-manuell-ordre-testplan.md 1.1–1.2,
@@ -58,5 +64,63 @@ describe("etiketter", () => {
   it("1.2 ukjent kode gir koden tilbake, aldri undefined", () => {
     expect(orderStatusLabel("lost" as never)).toBe("lost");
     expect(assignmentStatusLabel("cancelled" as never)).toBe("cancelled");
+  });
+});
+
+/*
+ * Endre en ordre etter at den er lagret (docs/funksjoner/fase2a-rette-ordre-testplan.md 1.1–1.3).
+ * Feltkodene er faste (regel 6). Rød test her betyr at listen er endret, ikke at testen skal rettes.
+ * Støtter hovedmål: KI i bunnen (feltkodene i loggen er grunnlaget for treffprosent per felt når
+ * e-post-til-ordre kommer) og færre reklamasjoner (status og oppdrag kan aldri bli et ordrefelt).
+ */
+describe("felt som kan endres på en ordre", () => {
+  it("1.1 ORDER_EDITABLE_FIELDS er nøyaktig de elleve feltene, i fast rekkefølge", () => {
+    expect([...ORDER_EDITABLE_FIELDS]).toEqual([
+      "receivedAt",
+      "externalRef",
+      "orderedByText",
+      "orderedByContactId",
+      "orderedByFirmId",
+      "addressText",
+      "gnr",
+      "bnr",
+      "snr",
+      "housingAssociationName",
+      "sellerDeclarationReceived",
+    ]);
+  });
+
+  it.each([
+    "status",
+    "rejectReason",
+    "rejectedReason",
+    "assignmentId",
+    "source",
+    "requestedReportType",
+    "organizationId",
+  ])("1.1 %s kan aldri bli en feltkode", (code) => {
+    expect(ORDER_EDITABLE_FIELDS as readonly string[]).not.toContain(code);
+  });
+
+  it("1.2 orderFieldLabel gir en norsk etikett for hver feltkode, aldri koden selv", () => {
+    for (const code of ORDER_EDITABLE_FIELDS) {
+      const label = orderFieldLabel(code);
+      expect(typeof label, code).toBe("string");
+      expect(label.trim(), code).not.toBe("");
+      expect(label, code).not.toBe(code);
+    }
+    expect(orderFieldLabel("addressText")).toBe("Adresse");
+  });
+
+  it("1.2 to feltkoder deler ikke etikett (ellers kan «Endringer» ikke leses)", () => {
+    const labels = ORDER_EDITABLE_FIELDS.map((code) => orderFieldLabel(code));
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+
+  it("1.3 ukjent kode gir koden selv, også navn fra Object.prototype", () => {
+    expect(orderFieldLabel("ukjentFelt")).toBe("ukjentFelt");
+    expect(orderFieldLabel("__proto__")).toBe("__proto__");
+    expect(orderFieldLabel("toString")).toBe("toString");
+    expect(orderFieldLabel("constructor")).toBe("constructor");
   });
 });
