@@ -3,7 +3,7 @@
 - **Fase:** 2a – Rapporten på PC, delen «Fra Ståles svar 12.11.2026», første gjenstående punkt (T1)
 - **Modul:** kjerne (`src/core/orders`, `src/core/audit`), siden `/ordre/[id]`
 - **Branch:** `rette-ordre` (bygger på `main`, 13.11.2026). Kortet er overtatt fra `rette-ordre-etter-lagring` (tre runder forhåndsvurdering 12.11.2026, ikke bygget). Testplanen fra `origin/rette-ordre-testplan-reserve` (`docs/funksjoner/fase2a-rette-ordre-testplan.md`) er laget fra runde 2 og må rettes etter runde 3 (`fields` som liste, `values`) før den brukes.
-- **Status:** klar for bygging (13.11.2026, prosjektleder). Runde 3: forhåndsvurderingen fra ux, sikkerhet-personvern og test-leder er tatt inn (se nederst). Versjon 0.10.3 → 0.10.4 (sjekk `package.json` på main ved start).
+- **Status:** klar for bygging (13.11.2026, prosjektleder). Runde 3 (ux, sikkerhet-personvern, test-leder) og runde 4 (forenkler) er tatt inn (se nederst). Versjon 0.10.3 → 0.10.4 (sjekk `package.json` på main ved start).
 - **Kilde:** `docs/kartlegging/svar-fra-stale-2026-11-12.md`, T1 (spørsmål 60): «ja, full redigeringstilgang. alltid». Også etter at ordren er blitt oppdrag. Endrer A55 og A87. «Gammel og ny verdi» i loggen kommer fra oppgaveteksten, ikke fra Ståle (se A252 og spørsmål 78).
 - **Støtter hovedmål:**
   - **De ansatte:** en skrivefeil i adressen eller bestilleren rettes på stedet med tre trykk (rundt 20–40 sekunder). I dag må kontoret avvise ordren og legge den inn på nytt (rundt 15 trykk, 2–4 minutter og en dobbel ordre i listen).
@@ -81,6 +81,8 @@ Dette er de eneste feltkodene som kan stå i `fields` og i `values`. `orderedByT
 - Endring av kontakter, oppdrag eller eiendom fra ordresiden.
 - Endring uten nett (ordre er kontorarbeid med nett, som oppretting). Skjemaet mister likevel ikke det som er skrevet.
 - KI-forslag til endring.
+- Synk mellom ordre og eiendom. Forhåndsutfyllingen leser fra ordren; en lagret eiendom er ikke en kopi som oppdateres.
+- Ny visning i `/admin/logg` utover feltetikettene. `formatAuditChanges` brukes slik den er.
 - Søk og dublettvarsel (T2 og T3, egne punkter).
 
 ## Tilgang
@@ -121,8 +123,7 @@ Ingen fagregler.
 - [ ] Rettighetsmatrisen over (tabelltest mot `updateOrder` og `listOrderHistory`).
 - [ ] Tenant-isolasjon: `expectTenantIsolation` for `updateOrder` (innpakning som endrer én egen ordre og returnerer raden) og `listOrderHistory`. I tillegg: bruker i A med A sin organisasjons-id og ordre-id fra B får `AccessDeniedError` på begge, og B sin ordre og logg er uendret.
 - [ ] Testene i 4.6 for oppretting, avvisning og konvertering står uendret og er grønne.
-- [ ] Ingen KI-kall og ingen rad i `ai_usage_log` fra endring (test).
-- [ ] e2e på `pc` og `ipad` (`e2e/fase-2a-rette-ordre.spec.ts`): ny ordre → «Endre ordren» → endre adresse → «Lagre» → «Endringene er lagret.» → «Endringer» viser gammel og ny adresse, navn og tidspunkt; gjort-om ordre kan endres, oppdragsnummeret er uendret og linjen «Oppdraget endres ikke…» vises; «Avbryt» lagrer ingenting; to faner gir «Ordren er endret av en annen. Last siden på nytt.» med knappen «Last siden på nytt», og det som er skrevet står igjen; takstmann med innstillingen av ser ikke knappen; på iPad er knappene minst 44 px, ingen vannrett rulling i stående, og «Endringer» kan leses.
+- [ ] e2e på `pc` og `ipad` (`e2e/fase-2a-rette-ordre.spec.ts`): ny ordre → «Endre ordren» → endre adresse → «Lagre» → «Endringene er lagret.» → «Endringer» viser gammel og ny adresse, navn og tidspunkt; gjort-om ordre kan endres, oppdragsnummeret er uendret og linjen «Oppdraget endres ikke…» vises; «Avbryt» lagrer ingenting; to faner gir «Ordren er endret av en annen. Last siden på nytt.» med knappen «Last siden på nytt», og det som er skrevet står igjen (bare meldingen, knappen og teksten sjekkes; samtidig lagring dekkes av enhetstesten); på iPad er knappene minst 44 px, ingen vannrett rulling i stående, og «Endringer» kan leses.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne.
 
 ## Beslutninger (autonom modus, føres i `docs/09-apne-sporsmal.md`)
@@ -141,6 +142,8 @@ Ingen fagregler.
 - **Uenighet avgjort:** test-leder foreslo `<feltkode>: { from, to }` direkte i `changes`, som `/admin/logg` viser med verdier. Sikkerhet-personvern vil ikke ha verdiene i adminloggen. Avgjort: `fields` som liste (test-leder) og verdiene under `values` (sikkerhet). Da viser adminloggen bare feltetikettene uten egen kode, og verdiene kan tømmes ett sted.
 - **e2e for avvist ordre:** ikke med. Avvist ordre bruker samme skjema og samme tjeneste som mottatt; enhetstesten dekker statusen, og e2e for mottatt og gjort-om dekker skjermen.
 - **Kontakt fra B til ordre i A:** dekkes av kriteriet om `ContactNotFoundError` (kontakt fra annen organisasjon).
+
+- **Runde 4, godtatt fra forenkler (13.11.2026):** kriteriet om ingen KI-kall er kuttet (koden går ikke gjennom `src/core/ai`, så testen viser ikke noe nytt); e2e for takstmann med innstillingen av er kuttet (dekkes av tabelltesten mot `updateOrder`, og knappen styres bare av `canEditOrders`); e2e med to faner sjekker bare melding, knapp og at teksten står igjen; ingen synk mellom ordre og eiendom og ingen ny visning i `/admin/logg` (står under «Ikke med»). Står fast: `values` (A252, med forbehold om spørsmål 78), låsen med `row_version`, linjen «Oppdraget endres ikke…», tenant-testene og A55/A87. Ingen uenighet.
 
 ## Roller
 utvikler (kjerne + side + action), testskriver (i parallell: tilgang, isolasjon, logg, e2e), sikkerhet-personvern (gjennomgang av logg og applikasjonslogg), ki-ansvarlig (kort: at feltkodene i loggen holder for treffprosent senere, og at ingenting går til KI). Ux er tatt inn i runde 3 og trengs ikke igjen. Ikke arkitekt, ui eller fag: ingen migrering, skjemaet gjenbrukes, ingen fagstoff.
