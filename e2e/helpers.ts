@@ -1524,3 +1524,31 @@ export async function aiUsageRowCountForEmployee(employeeId: string, targetId: s
     await sql.end();
   }
 }
+
+// --- Testdata som ligner en ekte arbeidshverdag (docs/funksjoner/fase2a-testdata-arbeidshverdag.md) ---
+
+/**
+ * Legger testdataene i Byggcon-organisasjonen i e2e-databasen (`pnpm db:seed:testdata` som
+ * funksjon). Idempotent: kjøres den flere ganger, lages ingenting nytt.
+ *
+ * - Skriver bare til lokal database eller testdatabasen (`assertLocalOrTestDatabase`), sjekket før
+ *   noe kobler til. Produksjonsvakten i `seedTestdata` kjører i tillegg, med
+ *   `APP_ENVIRONMENT=test` (satt bare i testprosessen, ikke for appen).
+ * - De oppdiktede ansatte kan ikke logge inn. Innlogging i e2e bruker egne innloggingsbrukere med
+ *   riktig rolle i Byggcon (`logInAsInspector`, `logInAsOffice`, `logInAsManager`, admin).
+ * - Databaseklienten og tjenestene lastes først her, etter at `DATABASE_URL` er satt, så de
+ *   kobler til samme database som appen i e2e.
+ */
+export async function seedTestdataForE2e(): Promise<void> {
+  const databaseUrl = e2eDatabaseUrl();
+  assertLocalOrTestDatabase(databaseUrl, process.env.TEST_DATABASE_URL);
+  process.env.DATABASE_URL = databaseUrl;
+  process.env.APP_ENVIRONMENT = "test";
+  await import("dotenv/config");
+  const [{ db }, { seedTestdata }, { TESTDATA_SEED }] = await Promise.all([
+    import("../src/db/client"),
+    import("../src/db/seed/testdata"),
+    import("../src/db/seed/testdata.data"),
+  ]);
+  await seedTestdata({ db, now: new Date(), seed: TESTDATA_SEED });
+}
