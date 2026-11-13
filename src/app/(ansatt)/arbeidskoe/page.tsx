@@ -17,6 +17,7 @@ import { FormMessage } from "@/shared/ui/form";
 import { Notice } from "@/shared/ui/notice";
 import { getEmployeeContext } from "../employee-context";
 import { loadListOrError } from "../list-error";
+import { FocusCard } from "./focus-card";
 import { QueueCard } from "./queue-card";
 import { isNoteErrorCode, otherTabHits, queueHref, type NoteErrorCode } from "./queue-href";
 import { QueueToolbar } from "./queue-toolbar";
@@ -74,6 +75,7 @@ export default async function WorkQueuePage({
 
   return (
     <main className="max-w-3xl">
+      <FocusCard />
       {notice && (
         <div className="mb-4">
           <Notice message={notice} />
@@ -164,7 +166,7 @@ async function WorkQueue({
                 data-testid="work-queue-hits"
                 className="flex flex-wrap items-center text-slate-900"
               >
-                <span className="mr-1">Ingen treff i denne fanen. Treff i:</span>
+                <span>Ingen treff i denne fanen. Treff i:{"\u00a0"}</span>
                 {hitsElsewhere.map((hit, index) => (
                   <span key={hit.status} className="inline-flex items-center">
                     <Link
@@ -174,7 +176,7 @@ async function WorkQueue({
                     >
                       {assignmentStatusLabel(hit.status)} ({hit.count})
                     </Link>
-                    {index < hitsElsewhere.length - 1 ? <span className="mr-1">,</span> : "."}
+                    {index < hitsElsewhere.length - 1 ? <span>,{"\u00a0"}</span> : "."}
                   </span>
                 ))}
               </p>
