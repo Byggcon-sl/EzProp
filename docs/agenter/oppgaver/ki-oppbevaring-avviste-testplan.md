@@ -3,7 +3,7 @@
 - **Oppgavekort:** `docs/agenter/oppgaver/ki-oppbevaring-avviste.md`
 - **Fase:** 2a («Fra Ståles svar 12.11.2026», siste punkt)
 - **Branch:** `ki-oppbevaring-avviste` (bygger på main)
-- **Laget av:** test-leder, 13.11.2026 (før bygging)
+- **Laget av:** test-leder, 13.11.2026 (før bygging). Gjennomgått på nytt 13.11.2026 etter at main (0.11.2) ble flettet inn: kortet, A272–A275 og hjelperne i `tests/factories.ts` og `e2e/helpers.ts` stemmer med planen.
 - **Støtter hovedmål:**
   - **KI i bunnen:** testene viser at loggen over forslag og beslutninger står minst så lenge innstillingen sier, regnet ut ett sted (`retainUntilFor`), og at ingenting slettes.
   - **De ansatte:** admin endrer tallet selv på PC eller iPad, med tydelig feilmelding og kvittering.
@@ -70,7 +70,7 @@ Innstillingen 2 i organisasjonen hvis ikke annet står. Rad laget med `createAiU
 | D9 | `A273: kortere og lengre virker bare fremover` | Rad R1 avvist med innstilling 10 (+10). Sett 2. R1 er fortsatt +10. Rad R2 avvist nå (+2). Sett 10. R2 er fortsatt +2. |
 | D10 | `ugyldig innstilling i databasen gir 10 år` | `"5"` som tekst: avvist rad får +10, og advarsel logges uten verdien. |
 | D11 | `innstillingen leses fra grant.organizationId` | Organisasjon A har 1, B har 10. Admin i B avviser en rad i B: +10. Admin i A avviser i A: +1. Ingen rad i A endres av avvisningen i B (`retain_until`, `status`, `updated_at` uendret). |
-| D12 | `ingen rad slettes` | Etter alle overgangene i D1–D9 (D5, D6 og D8 er tatt ut): antall rader i `ai_usage_log` er det samme, og ingen har fått `deleted_at`. |
+| D12 | `ingen rad slettes` | Etter alle overgangene i D1–D4, D7 og D9 (D5, D6 og D8 er tatt ut av forenkleren): antall rader i `ai_usage_log` er det samme, og ingen har fått `deleted_at`. |
 
 ### 2d. `src/core/ai/request-suggestion.test.ts` (tillegg): avvist fordi nytt forslag erstatter
 
@@ -155,8 +155,9 @@ Kjøres i serie (testene deler innstillingen). Verdien leses før og settes tilb
 
 Begge funnene er avgjort i kortet (13.11.2026): F1 ingen advarsel når nøkkelen mangler; F2 lesefunksjonen `getAiRetentionSettings` er med i omfanget.
 
-- **F1 (lite):** Kortet sier advarsel når nøkkelen «mangler eller er ugyldig». Mangler er normaltilstanden (ingen har lagret ennå), og en advarsel per avvisning blir støy i loggen. Testplanen foreslår advarsel bare ved ugyldig verdi (U6). Velger utvikleren å følge kortet ordrett, skal U6 sjekke advarselen i stedet; begge godtas, men testen må sjekke det som er bygget.
-- **F2 (lite):** Kortet nevner ikke en egen lesefunksjon med tilgangssjekk for siden, men krever `expectTenantIsolation` på lesing. Testplanen forutsetter en lesefunksjon i `src/core/ai` (I3, I13). Uten den avvises leveransen.
+- **F1 (lite, avgjort):** Mangler nøkkelen, gis 10 uten advarsel; bare ugyldig verdi gir advarsel. U6 sjekker at `logger.warn` ikke kalles.
+- **F2 (lite, avgjort):** `getAiRetentionSettings` med tilgangssjekk er i omfanget. I3 og I13 bruker den. Leser siden `settings` uten den, avvises leveransen (ST3).
+- **F3 (lite):** Kortet sier versjon «over 0.11.1»; main har nå 0.11.2. ST4 krever én patch over det main har når PR-en åpnes (0.11.3 i dag).
 
 ## 9. Godkjenning (til slutt)
 
