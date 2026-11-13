@@ -8,7 +8,12 @@ export type AuditEventInput = {
   entityId: string;
   /** `create`, `update`, `delete`, `restore`, `permission_change` … */
   action: string;
-  /** Gammel og ny verdi per felt. Aldri passord, nøkler eller mer enn nødvendig. */
+  /**
+   * Gammel og ny verdi per felt. Aldri passord, nøkler eller mer enn nødvendig.
+   * For ordre (`entityType: "order"`) er `update` eneste handling med verdier:
+   * `{ fields: [feltkoder], values: { [feltkode]: { from, to } } }` (A252, spørsmål 78 til
+   * Ståle). `create`, `reject` og `convert` på ordre får aldri adresse, bestiller eller matrikkel.
+   */
   changes?: Record<string, unknown>;
   /** Tiden på enheten. Tom = nå. */
   occurredAt?: Date;
