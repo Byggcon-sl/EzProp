@@ -2,8 +2,8 @@
 
 - **Fase:** 2a – Rapporten på PC, delen «Fra Ståles svar 12.11.2026», punktet T3
 - **Modul:** kjerne (`src/core/orders`), siden `/ordre/[id]`
-- **Branch:** `varsel-dublett` (bygger på `main`, 13.11.2026)
-- **Status:** klar for bygging (13.11.2026, prosjektleder, etter forhåndsvurdering fra forenkler, ux-ansvarlig, ki-ansvarlig og test-leder). Versjon 0.10.18 → 0.10.19 (sjekk `package.json` på main ved start). Neste migrering er 0033 hvis den trengs (sjekk `drizzle/` ved start).
+- **Branch:** `varsel-dublett-tester` (bygger på `main`, flettet med main 13.11.2026; testene og testplanen `docs/funksjoner/fase2a-varsel-dublett-testplan.md` ligger her)
+- **Status:** klar for bygging (13.11.2026, prosjektleder, etter forhåndsvurdering fra forenkler, ux-ansvarlig, ki-ansvarlig og test-leder). Versjon: én patch over main når PR-en åpnes (main har 0.11.2, branchen har 0.11.4). Neste migrering er 0033 (`src/db/migrations`). Beslutningene er A285–A291; neste ledige A-nummer er A308 (A300–A307 er tatt av testdata-branchen).
 - **Kilde:** `docs/kartlegging/svar-fra-stale-2026-11-12.md`, T3 (forslag 62): «Ja, nå. Fast regel uten KI, og varselet stopper ikke lagringen.» Planteksten: «samme adresse eller matrikkel og overlappende tid».
 - **Støtter hovedmål:**
   - **De ansatte:** kontoret ser med en gang at samme bolig er bestilt før (for eksempel to meglere i samme firma som sender samme bestilling, eller en ordre som er lagt inn to ganger). I dag oppdages det først når to takstmenn står på samme adresse, eller når fakturaen går ut to ganger.
