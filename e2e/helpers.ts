@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -1520,6 +1521,174 @@ export async function aiUsageRowCountForEmployee(employeeId: string, targetId: s
       select count(*)::int as n from ai_usage_log
       where employee_id = ${employeeId} and target_ref ->> 'id' = ${targetId}`;
     return row?.n ?? 0;
+  } finally {
+    await sql.end();
+  }
+}
+
+// --- Testdata som ligner en ekte arbeidshverdag (docs/funksjoner/fase2a-testdata-arbeidshverdag-testplan.md avsnitt 7) ---
+
+/**
+ * Kjører `pnpm db:seed:testdata` (inngangen `src/db/seed/testdata-index.ts`) mot e2e-databasen,
+ * slik utrullingen gjør. Sjekker først at databasen er lokal eller testdatabasen
+ * (`assertLocalOrTestDatabase`); produksjonsvakten i skriptet kjører i tillegg, med
+ * `APP_ENVIRONMENT=test`. Skriver ingenting andre gang. Utskriften fra skriptet har bare antall og
+ * `TD-`-nøkler, så den kan vises i feilmeldingen.
+ */
+export function seedTestdataForE2e(): void {
+  const databaseUrl = e2eDatabaseUrl();
+  assertLocalOrTestDatabase(databaseUrl, process.env.TEST_DATABASE_URL);
+  const result = spawnSync(
+    path.join(process.cwd(), "node_modules/.bin/tsx"),
+    [path.join(process.cwd(), "src/db/seed/testdata-index.ts")],
+    {
+      cwd: process.cwd(),
+      env: { ...process.env, DATABASE_URL: databaseUrl, APP_ENVIRONMENT: "test" },
+      encoding: "utf8",
+      timeout: 240_000,
+    },
+  );
+  if (result.status !== 0) {
+    const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.slice(-2000);
+    throw new Error(`pnpm db:seed:testdata feilet (kode ${result.status}): ${output}`);
+  }
+}
+
+/** Et TD-oppdrag i Byggcon, med det e2e trenger for å finne det på skjermen. */
+export type E2eTestdataAssignment = {
+  externalRef: string;
+  assignmentId: string;
+  number: string;
+  status: "ordered" | "in_progress" | "completed" | "invoiced";
+  address: string;
+  inspectionAt: Date | null;
+  claimId: string | null;
+  brokerLastName: string | null;
+  buildingName: string | null;
+  floorName: string | null;
+  roomName: string | null;
+};
+
+/** TD-oppdragene i organisasjonen til admin fra seed (Byggcon). Bare lesing. */
+export async function testdataAssignments(): Promise<E2eTestdataAssignment[]> {
+  const sql = e2eSql();
+  try {
+    const found = await sql<
+      {
+        external_ref: string;
+        assignment_id: string;
+        number: string;
+        status: E2eTestdataAssignment["status"];
+        address: string;
+        inspection_at: Date | null;
+        claim_id: string | null;
+        broker_last_name: string | null;
+        building_name: string | null;
+        floor_name: string | null;
+        room_name: string | null;
+      }[]
+    >`
+      with org as (
+        select e.organization_id as id from employees e join users u on u.id = e.user_id
+        where u.email = ${ADMIN_EMAIL} and e.deleted_at is null
+          and e.organization_id not in (select id from organizations where settings ->> 'sampleData' = 'true')
+        limit 1)
+      select o.external_ref, a.id as assignment_id, a.number, a.status,
+        coalesce(p.address, o.address_text) as address, a.inspection_at,
+        (select c.id from claims c where c.organization_id = a.organization_id
+          and c.assignment_id = a.id and c.deleted_at is null limit 1) as claim_id,
+        ct.last_name as broker_last_name,
+        b.name as building_name, f.name as floor_name, r.name as room_name
+      from orders o
+      join org on org.id = o.organization_id
+      join assignments a on a.id = o.assignment_id and a.organization_id = o.organization_id
+      left join properties p on p.id = a.property_id and p.organization_id = a.organization_id
+      left join contacts ct on ct.id = o.ordered_by_contact_id and ct.organization_id = o.organization_id
+      left join lateral (select id, name from report_buildings
+        where organization_id = a.organization_id and assignment_id = a.id and deleted_at is null
+        order by name limit 1) b on true
+      left join lateral (select id, name from floors
+        where report_building_id = b.id and deleted_at is null order by level, name limit 1) f on true
+      left join lateral (select name from rooms
+        where floor_id = f.id and deleted_at is null order by name limit 1) r on true
+      where o.external_ref like 'TD-%' and o.deleted_at is null and a.deleted_at is null
+      order by o.external_ref`;
+    return found.map((row) => ({
+      externalRef: row.external_ref,
+      assignmentId: row.assignment_id,
+      number: row.number,
+      status: row.status,
+      address: row.address,
+      inspectionAt: row.inspection_at === null ? null : new Date(row.inspection_at),
+      claimId: row.claim_id,
+      brokerLastName: row.broker_last_name,
+      buildingName: row.building_name,
+      floorName: row.floor_name,
+      roomName: row.room_name,
+    }));
+  } finally {
+    await sql.end();
+  }
+}
+
+/** TD-ordrene som ikke er gjort om (status mottatt) i Byggcon. Bare lesing. */
+export async function testdataOpenOrderRefs(): Promise<string[]> {
+  const sql = e2eSql();
+  try {
+    const found = await sql<{ external_ref: string }[]>`
+      select o.external_ref from orders o
+      where o.external_ref like 'TD-%' and o.status = 'received' and o.deleted_at is null
+        and o.organization_id = (
+          select e.organization_id from employees e join users u on u.id = e.user_id
+          where u.email = ${ADMIN_EMAIL} and e.deleted_at is null
+            and e.organization_id not in (select id from organizations where settings ->> 'sampleData' = 'true')
+          limit 1)
+      order by o.external_ref`;
+    return found.map((row) => row.external_ref);
+  } finally {
+    await sql.end();
+  }
+}
+
+/**
+ * Setter en innstilling i Byggcon (organisasjonen til admin fra seed) og gir tilbake verdien som sto
+ * der før (`undefined` når den manglet). Sett den tilbake med `restoreByggconSetting` i `finally`.
+ */
+export async function setByggconSetting(key: string, value: unknown): Promise<unknown> {
+  const sql = e2eSql();
+  try {
+    const [row] = await sql<{ id: string; previous: unknown }[]>`
+      select o.id, o.settings -> ${key} as previous from organizations o
+      where o.id = (
+        select e.organization_id from employees e join users u on u.id = e.user_id
+        where u.email = ${ADMIN_EMAIL} and e.deleted_at is null
+          and e.organization_id not in (select id from organizations where settings ->> 'sampleData' = 'true')
+        limit 1)`;
+    if (!row) throw new Error("Fant ikke organisasjonen til admin fra seed (kjør pnpm db:seed)");
+    await sql`
+      update organizations set settings = settings || jsonb_build_object(${key}::text, ${sql.json(value as never)}::jsonb)
+      where id = ${row.id}`;
+    return row.previous ?? undefined;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Setter innstillingen tilbake til verdien fra `setByggconSetting` (fjerner den når den manglet). */
+export async function restoreByggconSetting(key: string, previous: unknown): Promise<void> {
+  if (previous !== undefined) {
+    await setByggconSetting(key, previous);
+    return;
+  }
+  const sql = e2eSql();
+  try {
+    await sql`
+      update organizations set settings = settings - ${key}::text
+      where id = (
+        select e.organization_id from employees e join users u on u.id = e.user_id
+        where u.email = ${ADMIN_EMAIL} and e.deleted_at is null
+          and e.organization_id not in (select id from organizations where settings ->> 'sampleData' = 'true')
+        limit 1)`;
   } finally {
     await sql.end();
   }
