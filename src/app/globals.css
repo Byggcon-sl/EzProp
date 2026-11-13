@@ -145,6 +145,15 @@ body {
   }
 
   /*
+   * Elementer som bare kan få fokus fra koden (tabindex=-1), for eksempel kortet etter lagret
+   * notat, viser ringen også når «Lagre» ble trykket med mus eller finger. Der gjelder ikke
+   * :focus-visible (A262).
+   */
+  [tabindex="-1"]:focus {
+    @apply outline-2 outline-offset-2 outline-fjord;
+  }
+
+  /*
    * Mål for hopplenken (#hovedinnhold, eller sidens <main> som lenken gir tabindex=-1): får fokus
    * fra koden og trenger ingen ramme rundt hele innholdet. Andre elementer som får fokus fra koden
    * (kortet i arbeidskøen, feilmeldinger, bekreftelser) skal vise fjord-ringen (WCAG 2.4.7).

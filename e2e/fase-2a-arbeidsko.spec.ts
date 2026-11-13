@@ -165,11 +165,9 @@ test.describe("arbeidskøen (pc og ipad)", () => {
     expect(ring.style, "kortet har synlig fokusring").not.toBe("none");
     expect(ring.width, "fokusringen er bredere enn 0").toBeGreaterThan(0);
 
-    // Hopplenken (testplan T2 7.8): målet får fokus og fortsatt ingen ring
-    await page.evaluate(() => {
-      (document.activeElement as HTMLElement | null)?.blur();
-      window.scrollTo(0, 0);
-    });
+    // Hopplenken (testplan T2 7.8): målet får fokus og fortsatt ingen ring. Siden lastes på nytt
+    // uten #kort-, så Tab starter øverst og ikke fra kortet som hadde fokus.
+    await page.goto(page.url().split("#")[0]!);
     await page.keyboard.press("Tab");
     const skip = page.getByRole("link", { name: "Hopp til hovedinnhold" });
     await expect(skip).toBeFocused();
