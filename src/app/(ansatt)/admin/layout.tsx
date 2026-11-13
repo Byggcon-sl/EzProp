@@ -39,6 +39,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               </NavLink>
             </li>
             <li>
+              <NavLink href="/admin/ki" variant="tab">
+                KI
+              </NavLink>
+            </li>
+            <li>
               <NavLink href="/admin/logg" variant="tab">
                 Logg
               </NavLink>

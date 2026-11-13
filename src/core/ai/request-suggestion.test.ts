@@ -51,6 +51,7 @@ import { PROMPT_INPUT_SEPARATOR } from "./features";
 import type { AiProvider } from "./providers/types";
 import { preparePrompt } from "./prompt";
 import { emptyKnownValues, loadKnownValues, type KnownValues } from "./redaction";
+import { addYears } from "./usage-log";
 
 /*
  * `requestSuggestion` (docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 6, 9.1–9.3 og
@@ -2017,5 +2018,166 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
     expect(JSON.stringify(row.input_summary)).not.toContain("1234567");
     expect(row.redacted_count).toBe(1);
     expect(JSON.stringify(result)).not.toContain("1234567");
+  });
+});
+
+/*
+ * K7: avvist fordi et nytt forslag erstatter det gamle
+ * (docs/agenter/oppgaver/ki-oppbevaring-avviste-testplan.md 2d, S1–S7; kortet A272–A275).
+ * Innstillingen settes rått i `organizations.settings`. Eldre rader lages med fast `created_at`,
+ * og forventet dato regnes med `addYears` fra `usage-log.ts`, per rad fra egen `created_at`.
+ *
+ * Støtter hovedmål: KI i bunnen (avviste forslag står så lenge innstillingen sier, regnet likt
+ * overalt) og færre reklamasjoner (rader i andre organisasjoner og på andre mål røres aldri).
+ */
+describe("K7 avvist fordi nytt forslag erstatter (S1–S7)", () => {
+  const RETENTION_KEY = "ai.rejected_retention_years";
+  const NOV_1 = new Date("2026-11-01T07:45:00Z");
+  const NOV_2 = new Date("2026-11-02T09:00:00Z");
+  const NOV_5 = new Date("2026-11-05T13:20:00Z");
+
+  function iso(value: Date | string): string {
+    return new Date(value).toISOString();
+  }
+
+  async function oldSuggestion(
+    organizationId: string,
+    employeeId: string,
+    target: ReturnType<typeof validTarget>,
+    createdAt: Date,
+  ) {
+    return createAiUsageLog(organizationId, { employeeId, targetRef: target, createdAt });
+  }
+
+  it("S1 erstattet forslag får innstillingen, det nye forslaget har 10 år", async () => {
+    const { organization, grant } = await aiOrganization();
+    await mergeOrganizationSettings(organization.id, { [RETENTION_KEY]: 2 });
+    const target = validTarget();
+    const old = await oldSuggestion(organization.id, grant.employeeId, target, NOV_2);
+
+    const next = validRequest({ target });
+    expect((await requestSuggestion(grant, next)).kind).toBe("suggestion");
+
+    const replaced = (await aiRow(old.id))!;
+    expect(replaced.status).toBe("rejected");
+    expect(iso(replaced.retain_until)).toBe(addYears(NOV_2, 2).toISOString());
+    const fresh = (await aiRow(next.requestId))!;
+    expect(fresh.status).toBe("suggested");
+    expect(iso(fresh.retain_until)).toBe(addYears(new Date(fresh.created_at), 10).toISOString());
+  });
+
+  it("S1 også et forslag laget med requestSuggestion får innstillingen når det erstattes", async () => {
+    const { organization, grant } = await aiOrganization();
+    await mergeOrganizationSettings(organization.id, { [RETENTION_KEY]: 3 });
+    const target = validTarget();
+    const first = validRequest({ target });
+    await requestSuggestion(grant, first);
+    await requestSuggestion(grant, validRequest({ target }));
+
+    const replaced = (await aiRow(first.requestId))!;
+    expect(replaced.status).toBe("rejected");
+    expect(iso(replaced.retain_until)).toBe(
+      addYears(new Date(replaced.created_at), 3).toISOString(),
+    );
+  });
+
+  it("S2 hver erstattet rad får sin egen dato", async () => {
+    const { organization, grant } = await aiOrganization();
+    await mergeOrganizationSettings(organization.id, { [RETENTION_KEY]: 2 });
+    const target = validTarget();
+    const early = await oldSuggestion(organization.id, grant.employeeId, target, NOV_1);
+    const late = await oldSuggestion(organization.id, grant.employeeId, target, NOV_5);
+
+    await requestSuggestion(grant, validRequest({ target }));
+
+    const earlyAfter = (await aiRow(early.id))!;
+    const lateAfter = (await aiRow(late.id))!;
+    expect(earlyAfter.status).toBe("rejected");
+    expect(lateAfter.status).toBe("rejected");
+    expect(iso(earlyAfter.retain_until)).toBe("2028-11-01T07:45:00.000Z");
+    expect(iso(lateAfter.retain_until)).toBe("2028-11-05T13:20:00.000Z");
+    expect(iso(earlyAfter.retain_until)).toBe(addYears(NOV_1, 2).toISOString());
+    expect(iso(lateAfter.retain_until)).toBe(addYears(NOV_5, 2).toISOString());
+  });
+
+  it("S4 uten innstilling: erstattet rad får 10 år", async () => {
+    const { organization, grant } = await aiOrganization();
+    const target = validTarget();
+    const old = await oldSuggestion(organization.id, grant.employeeId, target, NOV_2);
+    // Kort dato fra før viser at datoen faktisk regnes ut ved avvisningen
+    await db.execute(
+      sql`update ai_usage_log set retain_until = ${addYears(NOV_2, 1).toISOString()}::timestamptz where id = ${old.id}`,
+    );
+
+    await requestSuggestion(grant, validRequest({ target }));
+
+    const replaced = (await aiRow(old.id))!;
+    expect(replaced.status).toBe("rejected");
+    expect(iso(replaced.retain_until)).toBe(addYears(NOV_2, 10).toISOString());
+  });
+
+  it.each([
+    { name: "no_match", setup: () => ({ text: fakeNoMatchInput(), real: false }) },
+    { name: "error", setup: () => ({ text: fakeErrorInputs()[0]!, real: false }) },
+    { name: "blocked", setup: () => ({ text: SAMPLE_TEXT, real: true }) },
+  ])("S5 nytt forslag som ikke er brukbart ($name) avviser ingenting", async ({ name, setup }) => {
+    const { organization, grant } = await aiOrganization();
+    await mergeOrganizationSettings(organization.id, { [RETENTION_KEY]: 1 });
+    const target = validTarget();
+    const old = await oldSuggestion(organization.id, grant.employeeId, target, NOV_2);
+    const before = snapshot(await aiRow(old.id));
+    const { text, real } = setup();
+    if (real) swap.provider = realLikeProvider();
+
+    const result = await requestSuggestion(grant, validRequest({ target, fields: { text } }));
+
+    expect(result.kind).toBe(name);
+    const after = (await aiRow(old.id))!;
+    expect(after.status).toBe("suggested");
+    expect(iso(after.retain_until)).toBe(addYears(NOV_2, 10).toISOString());
+    expect(snapshot(after)).toBe(before);
+  });
+
+  it("S6 rader på andre mål og i andre organisasjoner røres ikke", async () => {
+    const a = await aiOrganization("Oppdiktet Takst A");
+    const b = await aiOrganization("Oppdiktet Takst B");
+    await mergeOrganizationSettings(a.organization.id, { [RETENTION_KEY]: 7 });
+    await mergeOrganizationSettings(b.organization.id, { [RETENTION_KEY]: 1 });
+    const target = validTarget();
+    const inA = await oldSuggestion(a.organization.id, a.grant.employeeId, target, NOV_2);
+    const inB = await oldSuggestion(b.organization.id, b.grant.employeeId, target, NOV_2);
+    const otherTargetInA = await oldSuggestion(
+      a.organization.id,
+      a.grant.employeeId,
+      validTarget(),
+      NOV_2,
+    );
+    const beforeB = snapshot(await aiRow(inB.id));
+    const beforeOther = snapshot(await aiRow(otherTargetInA.id));
+
+    await requestSuggestion(a.grant, validRequest({ target }));
+
+    expect(snapshot(await aiRow(inB.id))).toBe(beforeB);
+    expect(snapshot(await aiRow(otherTargetInA.id))).toBe(beforeOther);
+    const replaced = (await aiRow(inA.id))!;
+    expect(replaced.status).toBe("rejected");
+    expect(iso(replaced.retain_until)).toBe(addYears(NOV_2, 7).toISOString());
+  });
+
+  it("S7 ingen rad slettes: antallet øker med nøyaktig én", async () => {
+    const { organization, grant } = await aiOrganization();
+    await mergeOrganizationSettings(organization.id, { [RETENTION_KEY]: 2 });
+    const target = validTarget();
+    await oldSuggestion(organization.id, grant.employeeId, target, NOV_1);
+    await oldSuggestion(organization.id, grant.employeeId, target, NOV_5);
+    const before = await aiRowCount();
+
+    await requestSuggestion(grant, validRequest({ target }));
+
+    expect(await aiRowCount()).toBe(before + 1);
+    const [deleted] = (await db.execute(
+      sql`select count(*)::int as n from ai_usage_log where deleted_at is not null`,
+    )) as unknown as { n: number }[];
+    expect(deleted!.n).toBe(0);
   });
 });

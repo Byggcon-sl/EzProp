@@ -190,12 +190,12 @@ export type ResolvedAiProvider =
 | `decided_by`, `decided_at` | Hvem som avgjorde, og når. Fra tilgangssjekken |
 | `tokens_in`, `tokens_out` | Mengde |
 | `cost`, `currency` | Kostnad per kall |
-| `retain_until` | Oppbevares til (10 år) |
+| `retain_until` | Oppbevares minst til: opprettet + 10 år, men for avviste forslag opprettet + innstillingen `ai.rejected_retention_years` (1–10 år, standard 10). Regnes ut på nytt ved hver statusendring (A272) |
 
 - **`blocked`** betyr at forespørselen var gyldig nok til å passere rettighetssjekken, men ikke kan sendes til den leverandøren organisasjonen har. I dag gjelder det fritekst uten oppdrag og måltypene `ai_trial` og `answer` mot en ekte leverandør. Raden skrives uten kall: `output_text`, `status` og `error_code` er tomme, og mengde, kostnad og `redacted_count` er 0. Samme `requestId` på nytt gir `blocked` igjen uten ny rad. En `blocked`-rad kan aldri godtas, ikke regnes som godkjent KI-tekst og avviser ikke et åpent forslag på samme mål. «KI er av» er noe annet og gir ingen rad (del 11).
 - **`redacted_count` og `blocked` vises ikke per ansatt.** Modulen eksporterer ingen visning, liste eller telling av dem per person (spørsmål 57). Samlede tall for leder kommer eventuelt senere.
 - Sammensatte fremmednøkler med `organization_id` til `employees`, `assignments` og `reports`, slik at en rad aldri kan peke på tvers av organisasjoner.
-- **Tabellen regnes som personopplysninger.** `output_text` kan inneholde noe som slapp gjennom vasken. Derfor: myk sletting (`deleted_at`), 10 år (`retain_until`), og egen rad i den interne personvernerklæringen når tabellen bygges.
+- **Tabellen regnes som personopplysninger.** `output_text` kan inneholde noe som slapp gjennom vasken. Derfor: myk sletting (`deleted_at`), oppbevaring i `retain_until` (10 år, unntatt avviste forslag, som følger innstillingen `ai.rejected_retention_years`, 1–10 år og standard 10, satt av admin; endret av Ståle 12.11.2026, K7, se A272). Ingenting ryddes automatisk når tiden er ute (spørsmål 81). Tabellen har også egen rad i den interne personvernerklæringen når tabellen bygges.
 - Teksten den ansatte endte med (ved `edited`), ligger i feltet forslaget gjaldt, ikke i loggen.
 - **Ledetekst, inndata og svar skrives aldri til `logger`.** Feil fra leverandøren logges uten innhold: bare funksjon, leverandørkode, `error_code` og id.
 - Når tabellen bygges: `organization_id` på all KI-data, spørringer filtrerer på `grant.organizationId`, hver spørring får `expectTenantIsolation`, og tabellen føres i `tests/tenant-tables.ts`.

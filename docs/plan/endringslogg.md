@@ -86,3 +86,4 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 13.11.2026 | «Søk i ordrelisten og i arbeidskøen» (T2) levert (PR #190) og flyttet til `docs/plan/levert.md`. | Hovedløkken |
 | 13.11.2026 | «Flere rom på én gang med færrest mulig trykk» (T4) krysset av under «Fra Ståles svar 12.11.2026», bygget på branch `flere-rom-samtidig` (`docs/funksjoner/fase2a-flere-rom.md`, A280–A284). | Utvikler, flere-rom-samtidig |
 | 13.11.2026 | «Flere rom på én gang» (T4) levert (PR #194) og flyttet til `docs/plan/levert.md`. | Hovedløkken |
+| 13.11.2026 | «Oppbevaringstid for avviste KI-forslag som innstilling» (K7) krysset av under «Fra Ståles svar 12.11.2026», levert som PR fra branch `ki-oppbevaring-avviste` (`docs/agenter/oppgaver/ki-oppbevaring-avviste.md`, A272–A275). | Utvikler |

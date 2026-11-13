@@ -25,3 +25,19 @@ export class AiDecisionError extends Error {
     this.name = "AiDecisionError";
   }
 }
+
+/**
+ * Ugyldig oppbevaringstid for avviste KI-forslag (K7). Meldingen og `fieldErrors` gjengir aldri
+ * det som ble skrevet.
+ */
+export const AI_RETENTION_YEARS_ERROR = "Skriv et helt antall år fra 1 til 10.";
+
+export class AiRetentionValidationError extends Error {
+  /** Norsk melding per felt, for eksempel `rejectedRetentionYears`. */
+  readonly fieldErrors: Record<string, string>;
+  constructor(fieldErrors: Record<string, string> = {}, message = "Innstillingen er ugyldig.") {
+    super(message);
+    this.name = "AiRetentionValidationError";
+    this.fieldErrors = fieldErrors;
+  }
+}
