@@ -438,6 +438,16 @@ Neste nummer hentes med lås i databasen, slik at to kontorer aldri får samme n
 - **Historikk:** `listOrderHistory(actor, organizationId, orderId)` (`organization.read`) leser revisjonsloggen for én ordre, nyeste først, høyst 200 rader, og returnerer en fast form der bare kjente feltkoder slipper gjennom. Ordresiden viser den under «Endringer»; `/admin/logg` viser bare feltetikettene (`orderFieldLabel`). Loggen vises bare per ordre, aldri som oppsummering per ansatt.
 - Ingen migrering. Oppgavekort: `docs/funksjoner/fase2a-rette-ordre.md`; beslutningene A249–A254.
 
+**Mulig dublett (T3, fase 2a, 13.11.2026, Ståle 12.11.2026: «Fast regel uten KI, og varselet stopper ikke lagringen»):** En annen ordre er en mulig dublett når alt dette gjelder. Regelen er fast kode i `src/core/orders` (`duplicates.ts`, SQL-uttrykkene i `duplicate-sql.ts`), ikke KI.
+
+- **Hvilke ordre:** samme organisasjon (`grant.organizationId`), ikke myk-slettet, og ikke ordren selv. Regelen ser bare på ordrene, ikke på eiendommen på oppdraget (A285).
+- **Samme adresse eller samme matrikkel:** adressenøkkelen er delen av `address_text` før første komma, med små bokstaver og bare bokstaver og tall (æ, ø og å beholdes); tom nøkkel gir aldri treff. Matrikkel er samme `gnr`, `bnr` og `snr` etter at mellomrom og innledende nuller er tatt bort. `gnr` eller `bnr` som er tom eller bare nuller, regnes som ikke utfylt og gir aldri treff; `snr` tom og «0» er like. Uten kommunenummer, fordi ordren ikke har det (A286).
+- **Overlappende tid:** den andre ordren er fortsatt åpen (mottatt, eller oppdraget er bestilt eller under arbeid), eller avstanden mellom de to `received_at` er høyst 90 × 24 timer (`MAX_DUPLICATE_WINDOW_DAYS = 90`), før eller etter. Grensen teller med (A287, A291). Avviste ordre og kansellerte oppdrag (`assignments.deleted_at` satt) teller ikke. Er ordren selv avvist, gir tjenesten tom liste.
+- **Beregnes hver gang, lagres ikke.** Ingen nye tabeller eller felt. Svaret har høyst 10 treff (nyeste først, så `id`) og `hasMore`, med grunnene `address` og/eller `cadastre`.
+- **Ytelse:** migrering `0033_indekser-mulig-dublett` har uttrykksindekser på `(organization_id, adressenøkkel)` og `(organization_id, gnr-nøkkel, bnr-nøkkel)`, med nøyaktig samme uttrykk som spørringen (A291).
+- **Varselet** «Mulig dublett» står øverst på `/ordre/[id]` når regelen gir treff, og stopper ingenting (A288). Adressen vises bare på skjermen i samme organisasjon; den logges aldri og sendes aldri til KI (A290).
+- Oppgavekort: `docs/funksjoner/fase2a-varsel-dublett.md`; beslutningene A285–A291.
+
 **Bygget i fase 2a (05.11.2026, utstedende selskap):** Kolonnen `assignments.company_id` og regelen i `setTeamMember` (`src/core/assignments/team.ts`). Oppgavekort: `docs/agenter/oppgaver/fase2a-utstedende-selskap.md`; beslutningene A65–A68.
 
 - **`company_id`** (kan være tom) med sammensatt fremmednøkkel `(organization_id, company_id)` til `companies` (`assignments_company_fk`), så selskapet alltid hører til samme organisasjon.
@@ -2061,6 +2071,12 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Endringer på ordren | `listOrderHistory` (`src/core/orders`) | Revisjonsloggen for én ordre, nyeste først, høyst 200 rader |
 | Etikett for ordrefelt | `orderFieldLabel` | Norsk navn på en feltkode i `ORDER_EDITABLE_FIELDS`, for eksempel «Adresse» |
 | Ordre endret (hendelse) | `order.updated` | `{ orderId, fields }`, bare feltkoder |
+| Mulig dublett | possible duplicate (`src/core/orders/duplicates.ts`) | En annen ordre i samme organisasjon med samme adresse eller matrikkel og overlappende tid. Beregnes hver gang, lagres ikke. Bare et varsel, stopper ikke lagringen (T3, A285–A291) |
+| Finne mulige dubletter | `findPossibleDuplicateOrdersFor` / `findPossibleDuplicateOrders` (`src/core/orders`) | `findPossibleDuplicateOrdersFor` tar ordrefeltene (også for et forslag som ikke er lagret); `findPossibleDuplicateOrders` tar en lagret ordre. Begge med `organization.read`, høyst 10 treff og `hasMore` |
+| Treff på mulig dublett | `PossibleDuplicateOrder` | Den andre ordren: id, mottatt, adresse, status, oppdragsnummer og -status, og grunnene |
+| Adressenøkkel | `normalizeAddressKey` | Delen av adressen før første komma, små bokstaver, bare bokstaver og tall. Samme uttrykk i SQL (`ORDER_ADDRESS_KEY_SQL`) |
+| Matrikkelnummer, normalisert | `normalizeCadastreNumber` | Gnr, bnr eller snr uten mellomrom og innledende nuller; bare nuller = ikke utfylt |
+| Grunn for mulig dublett | `address`, `cadastre` | Faste koder (regel 6): samme adresse, samme matrikkel |
 | Ordren er allerede behandlet | `OrderAlreadyHandledError` | Ordren er alt avvist eller gjort om |
 | Kontoret finnes ikke | `OfficeNotFoundError` | Kontoret er ikke i organisasjonen eller er slettet |
 | Oppdrag | `assignments` | Jobben |

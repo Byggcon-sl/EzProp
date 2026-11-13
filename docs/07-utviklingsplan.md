@@ -150,7 +150,7 @@ Tas **nå, før punktene under**. Ståle i chat 13.11.2026: «vi kjører på tes
 
 Første punkt tas **før Byggcon-profilen**, fordi det retter reglene som alt er merget. Resten tas etter Byggcon-profilen (levert, PR #176) og før neste punkt i 2a-2, i denne rekkefølgen. Svarene står i `docs/kartlegging/svar-fra-stale-2026-11-12.md`.
 
-- [ ] **Varsel om mulig dublett** (T3): fast regel uten KI (samme adresse eller matrikkel og overlappende tid). Varselet stopper ikke lagringen.
+- [x] **Varsel om mulig dublett** (T3): fast regel uten KI (samme adresse eller matrikkel og overlappende tid). Varselet stopper ikke lagringen.
 - [ ] **Varsel om like kontakter og firma** (forslag 62): når en kontakt eller et firma lages, varsler appen hvis en lignende finnes (fast regel uten KI). Varselet stopper ikke lagringen.
 - [ ] **Oppbevaringstid for avviste KI-forslag som innstilling** (K7), 10 år som standard. Endrer A157.
 
