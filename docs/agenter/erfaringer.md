@@ -279,3 +279,4 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Kjør aldri to `vitest run` samtidig mot samme testdatabase (heller ikke via en gjennomgangsagent): det gir tilfeldige røde tester (fremmednøkkel, deadlock i `truncate`).
 - Parallelle kjøringer tar ofte de samme A-numrene (T4 og testdata-kortet brukte begge A270–A271). Sjekk høyeste A-nummer på alle åpne og ventende brancher (`git grep -oh "A2[0-9][0-9]" origin/<branch> -- docs`), ikke bare på main, før numrene settes.
 - Testskriverens e2e-tester kan være skrevet uten å ha kjørt grønt. Kjør dem før PR, også når en stoppet kjøring overtas. Fjern ikke en `page.route` mens svaret holdes (gir «Route is already handled»).
+- Tekst rett inne i en `flex`-boks brytes ikke med `break-words`, og lange ord gjør siden bredere (grønt lokalt, rødt i CI med andre skriftmål). Legg teksten i et eget element med `min-w-0 [overflow-wrap:anywhere]`.

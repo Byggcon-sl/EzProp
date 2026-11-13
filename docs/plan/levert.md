@@ -201,6 +201,7 @@ Hver oppgave kan gis til en egen Claude-tråd. Rekkefølgen følger planen: **0a
 - [x] **Rette en ordre etter at den er lagret** (T1, «full redigeringstilgang. alltid»): også etter at ordren er blitt oppdrag. Endrer A55 og A87. Endringene logges. Bygget på branch `rette-ordre` (13.11.2026, PR #184): «Endre ordren» på ordresiden, alle statuser, oppdraget endres ikke, endringene i revisjonsloggen. Se `docs/funksjoner/fase2a-rette-ordre.md`, A249–A254. Merget 13.11.2026 (PR #184).
 - [x] **Søk i ordrelisten og i arbeidskøen** (T2). Branch `sok-ordre-arbeidsko`, `docs/funksjoner/fase2a-sok-ordre-arbeidsko.md`, ADR 0010, A256–A263. PR #190 merget 13.11.2026.
 - [x] **Flere rom på én gang med færrest mulig trykk** (T4). KI som foreslår rom (for eksempel fra plantegning) står i 2a-3 og tas så tidlig som det lar seg gjøre. Branch `flere-rom-samtidig`, `docs/funksjoner/fase2a-flere-rom.md`, A280–A284. PR #194 merget 13.11.2026.
+- [x] **Varsel om mulig dublett** (T3): fast regel uten KI (samme adresse eller matrikkel og overlappende tid). Varselet stopper ikke lagringen. Branch `varsel-dublett`, `docs/funksjoner/fase2a-varsel-dublett.md`, A285–A291. PR #198 merget 13.11.2026.
 
 ## Fase 2a – Prioritert av Ståle 12.11.2026
 
