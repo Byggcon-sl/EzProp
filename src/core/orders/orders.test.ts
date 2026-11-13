@@ -178,6 +178,8 @@ const DETAIL_KEYS = [
   "receivedAt",
   "rejectedReason",
   "requestedReportType",
+  // Endre en lagret ordre (docs/funksjoner/fase2a-rette-ordre-testplan.md 9.1): getOrder gir rowVersion
+  "rowVersion",
   "sellerDeclarationReceived",
   "snr",
   "source",
@@ -740,7 +742,9 @@ describe("4.4 legge inn og liste", () => {
 
     const detail = await getOrder(admin, org.id, order.id);
     expect(Object.keys(detail).sort()).toEqual(DETAIL_KEYS);
-    for (const key of [...TRACKING_KEYS, "organizationId"]) expect(detail).not.toHaveProperty(key);
+    for (const key of [...TRACKING_KEYS, "organizationId"]) {
+      if (key !== "rowVersion") expect(detail).not.toHaveProperty(key);
+    }
   });
 });
 

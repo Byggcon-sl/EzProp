@@ -165,7 +165,11 @@ describe("2.1–2.3 vellykket endring", () => {
   it("2.2 alle feltene i listen kan endres i én lagring", async () => {
     const { org, admin } = await setup();
     const firm = await createFirm(org.id, { name: "Testmegling Nord AS" });
-    const contact = await createContact(org.id, { firstName: "Kari", lastName: "Testesen", firmId: firm.id });
+    const contact = await createContact(org.id, {
+      firstName: "Kari",
+      lastName: "Testesen",
+      firmId: firm.id,
+    });
     const inserted = await insertOrder(org.id);
 
     const result = await edit(admin, org.id, inserted.id, {
@@ -610,7 +614,10 @@ describe("2.18 kontakt som ikke kan kobles", () => {
       const before = await orderRow(inserted.id);
 
       await expect(
-        edit(admin, org.id, inserted.id, { orderedByContactId: contactId, addressText: NEW_ADDRESS }),
+        edit(admin, org.id, inserted.id, {
+          orderedByContactId: contactId,
+          addressText: NEW_ADDRESS,
+        }),
       ).rejects.toBeInstanceOf(ContactNotFoundError);
 
       expect(await orderRow(inserted.id)).toEqual(before);
@@ -822,7 +829,10 @@ describe("7. tenant-isolasjon for updateOrder", () => {
   it("7.3 ansatt i A med A sin organisasjons-id og B sin ordre-id får AccessDeniedError", async () => {
     const { orgA, orgB, userA, orderB } = await twoOrganizations();
     const before = await orderRow(orderB.id);
-    const auditBefore = await db.select().from(auditLog).where(eq(auditLog.organizationId, orgB.id));
+    const auditBefore = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.organizationId, orgB.id));
 
     await expect(
       updateOrder(userA, orgA.id, orderB.id, { addressText: NEW_ADDRESS }, before.rowVersion),

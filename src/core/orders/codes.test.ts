@@ -113,7 +113,9 @@ describe("feltene som kan endres på ordren", () => {
 
   it("1.4 ingen etikett bruker ordet «rett»/«rettet» (reservert for rapportversjon 2)", () => {
     for (const code of EXPECTED_EDITABLE_FIELDS) {
-      expect(orderFieldLabel(code).toLowerCase()).not.toMatch(/(^|[^a-zæøå])rett(et)?([^a-zæøå]|$)/);
+      expect(orderFieldLabel(code).toLowerCase()).not.toMatch(
+        /(^|[^a-zæøå])rett(et)?([^a-zæøå]|$)/,
+      );
     }
   });
 });

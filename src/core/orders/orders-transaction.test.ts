@@ -4,6 +4,7 @@ import { recordAuditEvent } from "@/core/audit";
 import { recordEvent } from "@/core/events";
 import { db } from "@/db/client";
 import { assignments, auditLog, events, numberSequences, orders } from "@/db/schema";
+import { logger } from "@/shared/lib/logger";
 import {
   createEmployee,
   createNumberSequence,
@@ -13,7 +14,7 @@ import {
   createUser,
   resetDatabase,
 } from "../../../tests/factories";
-import { convertOrderToAssignment, createOrder, rejectOrder } from "./index";
+import { convertOrderToAssignment, createOrder, getOrder, rejectOrder, updateOrder } from "./index";
 
 /*
  * Hendelser og revisjonslogg skrives i samme transaksjon som endringen
@@ -167,4 +168,59 @@ describe("4.6.5 feiler hendelsen eller loggen, finnes ingenting", () => {
       expect(result.assignment.number).toBe("2026-00004");
     },
   );
+});
+
+/*
+ * Endre en lagret ordre (docs/funksjoner/fase2a-rette-ordre-testplan.md 2.25 og 3.2,
+ * databasefeil). Revisjonsloggen og hendelsen skrives i samme transaksjon som endringen.
+ */
+describe("2.25 updateOrder: feiler loggen eller hendelsen, er ordren uendret", () => {
+  const MARKER = "MARKOR-ADR-55e1";
+
+  it.each([
+    ["recordEvent", failEventOnce],
+    ["recordAuditEvent", failAuditOnce],
+  ])("%s kaster: ordren, row_version, hendelser og logg er som før", async (_name, fail) => {
+    const { org, admin } = await orgWithAdmin();
+    const order = await insertOrder(org.id);
+    const opened = await getOrder(admin, org.id, order.id);
+    const [before] = await db.select().from(orders).where(eq(orders.id, order.id));
+    fail();
+
+    await expect(
+      updateOrder(admin, org.id, order.id, { addressText: MARKER }, opened.rowVersion),
+    ).rejects.toThrow();
+
+    const [after] = await db.select().from(orders).where(eq(orders.id, order.id));
+    expect(after).toEqual(before);
+    expect(await rowCount(events)).toBe(0);
+    expect(await rowCount(auditLog)).toBe(0);
+  });
+
+  it("3.2 databasefeil: ingen verdier i logger eller feilmelding", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const order = await insertOrder(org.id);
+    const opened = await getOrder(admin, org.id, order.id);
+    const spies = [
+      vi.spyOn(logger, "debug"),
+      vi.spyOn(logger, "info"),
+      vi.spyOn(logger, "warn"),
+      vi.spyOn(logger, "error"),
+    ];
+    vi.mocked(recordAuditEvent).mockImplementationOnce(async () => {
+      throw new Error("databasefeil (test)");
+    });
+
+    let caught: unknown = null;
+    try {
+      await updateOrder(admin, org.id, order.id, { addressText: MARKER }, opened.rowVersion);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).not.toContain(MARKER);
+    expect(JSON.stringify(spies.map((spy) => spy.mock.calls))).not.toContain(MARKER);
+    for (const spy of spies) spy.mockRestore();
+  });
 });

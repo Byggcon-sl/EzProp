@@ -141,7 +141,9 @@ export async function listOrderHistory(
     .orderBy(desc(auditLog.occurredAt), desc(auditLog.id))
     .limit(ORDER_HISTORY_LIMIT);
 
-  const parsed = rows.map((row) => (row.action === "update" ? parseUpdateChanges(row.changes) : []));
+  const parsed = rows.map((row) =>
+    row.action === "update" ? parseUpdateChanges(row.changes) : [],
+  );
 
   const contactIds = collectIds(parsed, "orderedByContactId");
   const firmIds = collectIds(parsed, "orderedByFirmId");
@@ -182,7 +184,9 @@ export async function listOrderHistory(
   function display(field: OrderEditableField, value: OrderHistoryValue): OrderHistoryValue {
     if (value === null) return null;
     if (field === "orderedByContactId") {
-      return typeof value === "string" ? (contactNames.get(value) ?? REMOVED_CONTACT) : REMOVED_CONTACT;
+      return typeof value === "string"
+        ? (contactNames.get(value) ?? REMOVED_CONTACT)
+        : REMOVED_CONTACT;
     }
     if (field === "orderedByFirmId") {
       return typeof value === "string" ? (firmNames.get(value) ?? REMOVED_FIRM) : REMOVED_FIRM;
