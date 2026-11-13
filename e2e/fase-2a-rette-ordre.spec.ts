@@ -13,6 +13,7 @@ import {
   signInWithCode,
   softDeleteFirms,
   uniqueSuffix,
+  convertedAssignmentNumber,
 } from "./helpers";
 
 /*
@@ -36,7 +37,6 @@ import {
 const PORTRAIT = { width: 834, height: 1194 } as const;
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const ORDER_URL = new RegExp(`/ordre/(${UUID})(\\?.*)?$`);
-const NUMBER = /\d{4}-\d{5}/;
 const SAVED = "Endringene er lagret.";
 const CONFLICT = "Ordren er endret av en annen. Last siden på nytt.";
 const OFFLINE = "Du er uten nett. Endringen er ikke lagret.";
@@ -120,10 +120,7 @@ async function openEditForm(page: Page) {
 async function convert(page: Page): Promise<string> {
   await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
   await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  const main = page.getByRole("main");
-  await expect(main).toContainText("Gjort om til oppdrag");
-  await expect(main).toContainText(NUMBER);
-  return NUMBER.exec((await main.textContent()) ?? "")![0];
+  return await convertedAssignmentNumber(page);
 }
 
 /** Oppdiktet innlogging uten ansattrad. Bare lokal database eller testdatabasen. */

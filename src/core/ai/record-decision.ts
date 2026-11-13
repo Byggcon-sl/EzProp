@@ -6,7 +6,13 @@ import { isUuid } from "@/shared/lib/uuid";
 import { AiDecisionError, AiRequestRejectedError } from "./errors";
 import { AI_FEATURES, getFeatureDefinition } from "./features";
 import { AI_DECISIONS, type AiDecision } from "./types";
-import { lockTarget, recordStatusChange, sameTargetWhere } from "./usage-log";
+import { loadRejectedRetentionYears, retainUntilFor } from "./retention";
+import {
+  AI_USAGE_RETENTION_YEARS,
+  lockTarget,
+  recordStatusChange,
+  sameTargetWhere,
+} from "./usage-log";
 
 /*
  * Registrer hva den ansatte gjorde med et KI-forslag (docs/funksjoner/fase2a-ki-modul-logg.md
@@ -112,10 +118,16 @@ export async function recordDecision(
     }
 
     const undo = transition.to === "suggested";
+    // Oppbevaringstiden følger ny status (K7): innstillingen for avviste, ellers 10 år
+    const rejectedYears =
+      transition.to === "rejected"
+        ? await loadRejectedRetentionYears(tx, grant.organizationId)
+        : AI_USAGE_RETENTION_YEARS;
     const [updated] = await tx
       .update(aiUsageLog)
       .set({
         status: transition.to,
+        retainUntil: retainUntilFor(transition.to, row.createdAt, rejectedYears),
         decidedBy: undo ? null : grant.employeeId,
         decidedAt: undo ? null : new Date(),
         updatedBy: grant.employeeId,

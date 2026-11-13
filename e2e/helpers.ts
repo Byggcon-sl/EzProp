@@ -1699,4 +1699,22 @@ export async function restoreByggconSetting(key: string, previous: unknown): Pro
   } finally {
     await sql.end();
   }
+/**
+ * Lenken i kortet «Gjort om til oppdrag» på ordresiden. Navnet er «Gjort om til oppdrag
+ * 2026-NNNNN». Lenkene i varselet «Mulig dublett» begynner med adressen, så det forankrede
+ * uttrykket treffer bare kortet.
+ */
+export const ASSIGNMENT_LINK_NAME = /^Gjort om til oppdrag\s+(\d{4}-\d{5})$/;
+
+export function convertedAssignmentLink(page: Page) {
+  return page.getByRole("main").getByRole("link", { name: ASSIGNMENT_LINK_NAME });
+}
+
+/** Venter på kortlenken og gir oppdragsnummeret i den. */
+export async function convertedAssignmentNumber(page: Page): Promise<string> {
+  await expect(convertedAssignmentLink(page)).toBeVisible();
+  const text = ((await convertedAssignmentLink(page).textContent()) ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return ASSIGNMENT_LINK_NAME.exec(text)![1]!;
 }

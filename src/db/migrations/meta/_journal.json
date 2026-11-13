@@ -232,6 +232,13 @@
       "when": 1794535351274,
       "tag": "0032_indekser-firma-status",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1794587407908,
+      "tag": "0033_indekser-mulig-dublett",
+      "breakpoints": true
     }
   ]
 }
