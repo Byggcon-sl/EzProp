@@ -151,7 +151,7 @@ Tas **nå, før punktene under**. Ståle i chat 13.11.2026: «vi kjører på tes
 Første punkt tas **før Byggcon-profilen**, fordi det retter reglene som alt er merget. Resten tas etter Byggcon-profilen (levert, PR #176) og før neste punkt i 2a-2, i denne rekkefølgen. Svarene står i `docs/kartlegging/svar-fra-stale-2026-11-12.md`.
 
 - [ ] **Varsel om mulig dublett** (T3): fast regel uten KI (samme adresse eller matrikkel og overlappende tid). Varselet stopper ikke lagringen.
-- [ ] **Oppbevaringstid for avviste KI-forslag som innstilling** (K7), 10 år som standard. Endrer A157.
+- [x] **Oppbevaringstid for avviste KI-forslag som innstilling** (K7), 10 år som standard. Endrer A157. Bygget på branch `ki-oppbevaring-avviste` (`docs/agenter/oppgaver/ki-oppbevaring-avviste.md`, A272–A275).
 
 ### 2a-2 Hele veien først: ett våtrom fra kontrollpunkt til PDF
 
