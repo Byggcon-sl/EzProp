@@ -85,7 +85,8 @@ export function PartyForm({
   const [receives, setReceives] = useState<Receives>(() => receivesFrom(state, initial));
   const [lastAttempt, setLastAttempt] = useState(state.attempt);
 
-  // Etter hvert forsøk: lagret gir `onSaved`; feil gir avkrysningene som ble sendt.
+  // Etter hvert forsøk: lagret gir `onSaved`; feil gir avkrysningene som ble sendt. React
+  // tilbakestiller skjemaet, så rollen og avkrysningene får ny nøkkel per forsøk og viser valget.
   if (state.attempt !== lastAttempt) {
     setLastAttempt(state.attempt);
     if (state.message !== null) setReceives(receivesFrom(state, receives));
@@ -136,6 +137,7 @@ export function PartyForm({
       />
       <Field label="Rolle" htmlFor={`${idPrefix}-role`} error={state.fieldErrors.role}>
         <Select
+          key={state.attempt}
           id={`${idPrefix}-role`}
           name="role"
           defaultValue={textValue(state, "role", initial.role)}
@@ -194,7 +196,7 @@ export function PartyForm({
       <ChoiceGroup id={`${idPrefix}-receives`} legend="Mottar">
         {RECEIVES.map((item) => (
           <Checkbox
-            key={item.name}
+            key={`${item.name}-${state.attempt}`}
             name={item.name}
             label={item.label}
             checked={receives[item.name]}

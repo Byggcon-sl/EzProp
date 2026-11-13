@@ -93,8 +93,15 @@ export function ClaimForm({
         <FormErrors state={state} />
         <input type="hidden" name={hidden.name} value={hidden.value} />
         <fieldset disabled={readOnly} className="min-w-0 space-y-5">
+          {/* Ny nøkkel på listene etter hvert forsøk: React tilbakestiller skjemaet, og listene
+              tar ellers ikke valget fra forrige forsøk. */}
           <Field label="Type" htmlFor="claim-type" error={error("claimType")}>
-            <Select id="claim-type" name="claimType" defaultValue={value("claimType")}>
+            <Select
+              key={state.attempt}
+              id="claim-type"
+              name="claimType"
+              defaultValue={value("claimType")}
+            >
               {claimTypes.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -118,6 +125,7 @@ export function ClaimForm({
               error={error("claimantPartyId")}
             >
               <Select
+                key={state.attempt}
                 id="claim-claimantPartyId"
                 name="claimantPartyId"
                 defaultValue={value("claimantPartyId")}
@@ -178,6 +186,7 @@ export function ClaimForm({
           {edit && (
             <Field label="Utfall" htmlFor="claim-outcome" error={error("outcome")}>
               <Select
+                key={state.attempt}
                 id="claim-outcome"
                 name="outcome"
                 value={outcome}

@@ -298,6 +298,17 @@ function RoomForm({
   useOnSaved(state, onDone);
   const [areaType, setAreaType] = useState(initial.areaType);
   const [belowGround, setBelowGround] = useState(initial.belowGround);
+  const [lastAttempt, setLastAttempt] = useState(state.attempt);
+
+  // React tilbakestiller skjemaet etter hvert forsøk. Ved feil settes arealtype og «Under terreng»
+  // til det som ble sendt, og listene og avkrysningen får ny nøkkel, slik at valgene står igjen.
+  if (state.attempt !== lastAttempt) {
+    setLastAttempt(state.attempt);
+    if (state.message !== null) {
+      setAreaType(textValue(state, "areaType", areaType));
+      setBelowGround(state.values.belowGround === "on");
+    }
+  }
 
   function onRoomTypeChange(value: string) {
     for (const group of codes.roomTypeGroups) {
@@ -317,6 +328,7 @@ function RoomForm({
       <input type="hidden" name="roomId" value={roomId ?? ""} />
       <Field label="Romtype" htmlFor={`${idPrefix}-roomType`} error={state.fieldErrors.roomType}>
         <Select
+          key={state.attempt}
           id={`${idPrefix}-roomType`}
           name="roomType"
           defaultValue={textValue(state, "roomType", initial.roomType)}
@@ -350,6 +362,7 @@ function RoomForm({
       </Field>
       <Field label="Arealtype" htmlFor={`${idPrefix}-areaType`} error={state.fieldErrors.areaType}>
         <Select
+          key={state.attempt}
           id={`${idPrefix}-areaType`}
           name="areaType"
           value={areaType}
@@ -363,6 +376,7 @@ function RoomForm({
         </Select>
       </Field>
       <Checkbox
+        key={state.attempt}
         name="belowGround"
         label="Under terreng"
         checked={belowGround}
@@ -430,6 +444,8 @@ function FloorAreaForm({
       <p className="text-sm text-slate-600">
         Areal i m² med høyst én desimal. BRA er summen av BRA-i, BRA-e og BRA-b; ALH tas ikke med.
       </p>
+      {/* Ny nøkkel på listene etter hvert forsøk: React tilbakestiller skjemaet, og listene tar
+          ellers ikke valget fra forrige forsøk. */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Field
           label="Målt av"
@@ -437,6 +453,7 @@ function FloorAreaForm({
           error={state.fieldErrors.measuredBy}
         >
           <Select
+            key={state.attempt}
             id={`${idPrefix}-measuredBy`}
             name="measuredBy"
             defaultValue={textValue(state, "measuredBy", area?.measuredBy ?? currentEmployeeId)}
@@ -450,6 +467,7 @@ function FloorAreaForm({
         </Field>
         <Field label="Metode" htmlFor={`${idPrefix}-method`} error={state.fieldErrors.method}>
           <Select
+            key={state.attempt}
             id={`${idPrefix}-method`}
             name="method"
             defaultValue={textValue(state, "method", area?.method ?? "")}

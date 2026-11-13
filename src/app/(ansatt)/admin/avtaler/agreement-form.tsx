@@ -46,6 +46,8 @@ export function AgreementForm({
       <Card className="space-y-5">
         <FormErrors state={state} />
         <input type="hidden" name="id" value={agreement?.id ?? ""} />
+        {/* Ny nøkkel på listen etter hvert forsøk: React tilbakestiller skjemaet, og listen tar
+            ellers ikke valget fra forrige forsøk. */}
         <Field
           label="Firma"
           htmlFor="firmId"
@@ -56,7 +58,13 @@ export function AgreementForm({
           }
           error={error("firmId")}
         >
-          <select id="firmId" name="firmId" className={selectClass} defaultValue={value("firmId")}>
+          <select
+            key={state.attempt}
+            id="firmId"
+            name="firmId"
+            className={selectClass}
+            defaultValue={value("firmId")}
+          >
             <option value="">Velg firma</option>
             {firms.map((firm) => (
               <option key={firm.id} value={firm.id}>

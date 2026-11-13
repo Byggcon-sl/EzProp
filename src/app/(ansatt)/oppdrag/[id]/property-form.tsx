@@ -109,9 +109,16 @@ export function PropertyForm({
     options: CodeOption[],
   ) {
     const id = `property-${name}`;
+    // Ny nøkkel på listen etter hvert forsøk: React tilbakestiller skjemaet, og listen tar ellers
+    // ikke valget fra forrige forsøk.
     return (
       <Field label={label} htmlFor={id} error={state.fieldErrors[name]}>
-        <Select id={id} name={name} defaultValue={textValue(state, name, initial[name])}>
+        <Select
+          key={state.attempt}
+          id={id}
+          name={name}
+          defaultValue={textValue(state, name, initial[name])}
+        >
           <option value="">{placeholder}</option>
           {options.map((option) => (
             <option key={option.value} value={option.value}>

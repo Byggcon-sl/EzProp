@@ -174,7 +174,10 @@ export function MergeForm({
                   ))}
                 </dl>
                 <label className="mt-4 flex min-h-11 cursor-pointer items-center gap-3 font-medium text-slate-900">
+                  {/* Ny nøkkel etter hvert forsøk: React tilbakestiller skjemaet, og valget
+                      følger ellers ikke tilstanden. */}
                   <input
+                    key={state.attempt}
                     type="radio"
                     name="keepChoice"
                     value={candidate.id}

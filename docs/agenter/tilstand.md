@@ -63,7 +63,7 @@ Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4�
 
 Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 13.11.2026 på main e013fde7 (det som var nytt siden 11672aa).
 
-- **Åpne alvorlige feil: 1. T-0050** (nedtrekkslister hopper tilbake etter feilmelding, og feil verdi lagres). Rettes før neste nye punkt i planen.
+- **Åpne alvorlige feil: ingen.** T-0050 (nedtrekkslister hopper tilbake etter feilmelding) rettet 13.11.2026 i PR «Rett T-0050», versjon 0.10.7; testlaget prøver på nytt.
 - Åpne funn i alt: 61 (1 alvorlig, 19 middels, 41 små). Middels og små tas med neste oppgave i samme område. Lukket denne gangen: T-0010, T-0015 og T-0016.
 - **Før fase 2b:** T-0052 (planen har mistet live diktat og strekkmål 6 fra 12.11).
 - **Før «Badet på PC»:** T-0051, T-0059 og T-0060, og T-0014 (punkt 1 og 5) i 2a-3.
@@ -100,6 +100,8 @@ Lite:
 Ingen.
 
 ## Siste kjøring
+
+13.11.2026 fra kl. 03:49 UTC (hovedløkken): ingen åpne PR-er. Rettet det alvorlige funnet T-0050 (valg i 14 skjemaer står igjen etter feilmelding, e2e for areal, eiendom, reklamasjon og part; versjon 0.10.7). Startet ikke T1, fordi branchen `rette-ordre-etter-lagring` (oppgavekort og testplan, siste commit 01:57) er i arbeid hos en annen kjøring. Neste: T1 når den kjøringen er ferdig, ellers T2.
 
 13.11.2026 (nattløkken): ingen alvorlige funn. Fire indekser, better-auth og prettier ryddet i PR «Rydding fra nattløkken 2026-11-13» (versjon 0.10.5). Resten står under «Oppgaver fra nattløkken».
 
