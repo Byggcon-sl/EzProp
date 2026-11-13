@@ -47,7 +47,7 @@ export function FormErrors({ state }: { state: FormState }) {
   }, [state.attempt]);
   if (!state.message) return null;
   return (
-    <div ref={ref} tabIndex={-1}>
+    <div ref={ref} tabIndex={-1} className="rounded-xl">
       <FormMessage message={state.message} />
     </div>
   );

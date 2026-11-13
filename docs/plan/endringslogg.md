@@ -77,7 +77,9 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 12.11.2026 | Microsoft-innlogging levert (PR #166) og flyttet til `docs/plan/levert.md`. | Hovedløkken |
 | 12.11.2026 | «Minimum før ekte data»: DPIA-punktet (K3) har fått en linje om verdier i revisjonsloggen ved endring av ordre (spørsmål 79, A252). | Prosjektleder, forhåndsvurdering av T1 |
 | 13.11.2026 | «Rette en ordre etter at den er lagret» (T1) krysset av under «Fra Ståles svar 12.11.2026», bygget på branch `rette-ordre` (`docs/funksjoner/fase2a-rette-ordre.md`, A249–A254). | Utvikler, rette-ordre |
+| 13.11.2026 | «Minimum før ekte data»: nytt punkt om at HTTP-loggen i Azure slås av eller tømmes for adresser med søketekst før ekte data (A263, søk T2). Telleren er nå to av tolv. | Utvikler, sok-ordre-arbeidsko |
 | 13.11.2026 | Nytt punkt i fase 3a: «Spør EzProp», spørsmål på vanlig norsk som blir søk med tilgangssjekk og kilder, uten persondata til KI. | Ståle i chat 13.11.2026 |
 | 13.11.2026 | Prinsipp: full kvalitet, ingen midlertidige løsninger. Regnearket for systemmalen er erstattet av en full mal- og regeleditor i fase 2a-3 (flyttet fra fase 5), med regelbygger for alle felt, tekst lagt inn automatisk av regler, og ytelseskrav på under 50 ms. | Ståle i chat 13.11.2026 |
 | 13.11.2026 | Fase 2b: video overalt der bilder kan legges til, og video som er huket av for leseren vises som QR-kode med kommentar i PDF-en. | Ståle i chat 13.11.2026 |
 | 13.11.2026 | Prinsipp: produksjonsklar fra første linje. «Minimum før ekte data» heter nå «Klar for drift» og har fått produksjonsmiljø, overvåking, sikkerhetsgjennomgang, lasttest og driftsrutiner. «Smal vei» heter «Hele veien først». Ord som «enkel» og «første versjon» er tatt bort fra punktene. | Ståle i chat 13.11.2026 |
+| 13.11.2026 | «Søk i ordrelisten og i arbeidskøen» (T2) levert (PR #190) og flyttet til `docs/plan/levert.md`. | Hovedløkken |

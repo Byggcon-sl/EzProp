@@ -4,10 +4,11 @@ import { recordAuditEvent } from "@/core/audit";
 import { isUniqueViolation } from "@/core/organization/errors";
 import { db } from "@/db/client";
 import { contacts, firms } from "@/db/schema";
+import { likePattern } from "@/shared/lib/like-pattern";
 import { isUuid } from "@/shared/lib/uuid";
 import { FirmDuplicateError } from "./errors";
 import { firmInputSchema, type FirmInput, type FirmValues } from "./schemas";
-import { LIST_LIMIT, matchesAny, searchPattern, type ListOptions } from "./search";
+import { LIST_LIMIT, matchesAny, type ListOptions } from "./search";
 
 /*
  * Firma (docs/05-domenemodell.md 4.2). Se med `organization.read`, legge inn og endre med
@@ -36,7 +37,7 @@ const firmColumns = {
 /** Firma i organisasjonen som ikke er slettet, sortert på navn. Høyst 200, valgfritt søk. */
 export async function listFirms(actor: Actor, organizationId: string, options: ListOptions = {}) {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
-  const pattern = searchPattern(options.query);
+  const pattern = likePattern(options.query);
   return db
     .select({
       id: firms.id,

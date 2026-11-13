@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { ASSIGNMENT_STATUSES } from "./codes";
+import type { EmployeeRole } from "@/db/schema";
 import {
   DEFAULT_WORK_QUEUE_STATUS,
   WORK_QUEUE_LIMIT,
+  defaultMineOnly,
   parseWorkQueueParams,
 } from "./work-queue-params";
 
@@ -52,13 +54,20 @@ describe("1.2 tolking av adressen", () => {
   });
 
   it.each([
-    ["mine=1", "1"],
     ["mine=ja", "ja"],
     ["mangler", undefined],
     ["liste", ["0", "0"]],
     ["tom", ""],
-  ] as const)("1.2.4 %s → Mine", (_name, mine) => {
-    expect(parse({ mine: mine as string | string[] | undefined }).mineOnly).toBe(true);
+  ] as const)("1.2.4 %s → standardvalget (Mine eller Alle)", (_name, mine) => {
+    const params = { mine: mine as string | string[] | undefined };
+    expect(parse(params).mineOnly).toBe(true);
+    expect(parseWorkQueueParams(params as Params, { defaultMineOnly: true }).mineOnly).toBe(true);
+    expect(parseWorkQueueParams(params as Params, { defaultMineOnly: false }).mineOnly).toBe(false);
+  });
+
+  it.each([true, false])("1.2.4 mine=1 → Mine og mine=0 → Alle, uansett standard (%s)", (std) => {
+    expect(parseWorkQueueParams({ mine: "1" }, { defaultMineOnly: std }).mineOnly).toBe(true);
+    expect(parseWorkQueueParams({ mine: "0" }, { defaultMineOnly: std }).mineOnly).toBe(false);
   });
 
   it("1.2.5 q trimmes", () => {
@@ -92,5 +101,20 @@ describe("1.2 tolking av adressen", () => {
       mineOnly: true,
       query: "",
     });
+  });
+});
+
+describe("T-0029 standardvalget Mine/Alle etter rolle", () => {
+  it.each([
+    ["takstmann", ["inspector"], true],
+    ["takstmann + leder", ["inspector", "manager"], true],
+    ["takstmann + admin", ["admin", "inspector"], true],
+    ["kontor", ["office"], false],
+    ["leder", ["manager"], false],
+    ["admin", ["admin"], false],
+    ["kontor + leder", ["office", "manager"], false],
+    ["ingen roller", [], false],
+  ] as const)("%s → %s", (_name, roles, expected) => {
+    expect(defaultMineOnly(roles as readonly EmployeeRole[])).toBe(expected);
   });
 });
