@@ -38,9 +38,10 @@ function SearchIcon() {
 
 /**
  * Fanene etter status (med antall), Mine/Alle og søket. Fanene og filteret er lenker i `<nav>`
- * med `aria-current`, så tilbake-knappen virker. Søket er et vanlig GET-skjema.
+ * med `aria-current`, så tilbake-knappen virker. Søket er et vanlig GET-skjema. Uten `counts`
+ * (listen kunne ikke hentes) vises fanene uten antall, så ingen ser «0» som ikke stemmer.
  */
-export function QueueToolbar({ queue, counts }: { queue: QueueState; counts: WorkQueueCounts }) {
+export function QueueToolbar({ queue, counts }: { queue: QueueState; counts?: WorkQueueCounts }) {
   return (
     <>
       <nav aria-label="Status" className="mt-6">
@@ -55,16 +56,20 @@ export function QueueToolbar({ queue, counts }: { queue: QueueState; counts: Wor
                   className={cn(segmentLink, current && segmentCurrent)}
                 >
                   {assignmentStatusLabel(status)}
-                  <span
-                    data-testid={`work-queue-count-${status}`}
-                    className={cn(
-                      "rounded-full px-2 text-sm tabular-nums",
-                      current ? "bg-brand-50 text-brand-700" : "bg-slate-100 text-slate-700",
-                    )}
-                  >
-                    {counts[status]}
-                  </span>
-                  <span className="sr-only"> oppdrag</span>
+                  {counts && (
+                    <>
+                      <span
+                        data-testid={`work-queue-count-${status}`}
+                        className={cn(
+                          "rounded-full px-2 text-sm tabular-nums",
+                          current ? "bg-brand-50 text-brand-700" : "bg-slate-100 text-slate-700",
+                        )}
+                      >
+                        {counts[status]}
+                      </span>
+                      <span className="sr-only"> oppdrag</span>
+                    </>
+                  )}
                 </Link>
               </li>
             );
