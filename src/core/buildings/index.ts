@@ -26,10 +26,25 @@ export {
 } from "./codes";
 export { BuildingNotEmptyError, FloorNotEmptyError, PropertyMissingError } from "./errors";
 export {
+  COMMON_ROOM_TYPES,
+  ROOM_DRAFT_SOURCES,
+  ROOM_PRESET_KEYS,
+  ROOM_PRESETS,
+  numberRoomDrafts,
+  suggestRoomPreset,
+  type RoomDraft,
+  type RoomDraftSource,
+  type RoomPreset,
+  type RoomPresetKey,
+} from "./room-presets";
+export {
+  addRoomsInputSchema,
   buildingInputSchema,
   floorAreaInputSchema,
   floorInputSchema,
   roomInputSchema,
+  type AddRoomsInput,
+  type AddRoomsValues,
   type BuildingInput,
   type BuildingValues,
   type FloorAreaInput,
@@ -40,6 +55,7 @@ export {
   type RoomValues,
 } from "./schemas";
 export {
+  addRooms,
   getAssignmentBuildings,
   removeBuilding,
   removeFloor,
