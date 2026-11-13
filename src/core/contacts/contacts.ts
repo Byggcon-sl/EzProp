@@ -3,11 +3,12 @@ import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core
 import { recordAuditEvent } from "@/core/audit";
 import { db, type DbExecutor } from "@/db/client";
 import { contacts, firms } from "@/db/schema";
+import { likePattern } from "@/shared/lib/like-pattern";
 import { isUuid } from "@/shared/lib/uuid";
 import type { ContactSource } from "./codes";
 import { FirmNotFoundError } from "./errors";
 import { contactInputSchema, type ContactInput } from "./schemas";
-import { listLimit, matchesAny, searchPattern, type ListOptions } from "./search";
+import { listLimit, matchesAny, type ListOptions } from "./search";
 
 /*
  * Kontakter (docs/05-domenemodell.md 4.2): personer utenfor organisasjonen, for eksempel
@@ -58,7 +59,7 @@ export async function listContacts(
   options: ListOptions = {},
 ) {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
-  const pattern = searchPattern(options.query);
+  const pattern = likePattern(options.query);
   return db
     .select({
       id: contacts.id,

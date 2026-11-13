@@ -1,6 +1,11 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
-import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
-import { nextAssignmentNumber } from "@/core/assignments";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import {
+  AccessDeniedError,
+  requireOrganizationAccess,
+  type Actor,
+  type EmployeeGrant,
+} from "@/core/access";
+import { assignmentFieldsMatch, nextAssignmentNumber, orderFieldsMatch } from "@/core/assignments";
 import { recordAuditEvent } from "@/core/audit";
 import { ContactNotFoundError, findContactForLink } from "@/core/contacts";
 import { recordEvent } from "@/core/events";
@@ -8,8 +13,9 @@ import { db, type DbExecutor } from "@/db/client";
 import { assignments, offices, orders } from "@/db/schema";
 import { todayInOslo } from "@/shared/lib/dates";
 import { isUuid } from "@/shared/lib/uuid";
-import type { OrderSource } from "./codes";
+import type { OrderSource, OrderStatus } from "./codes";
 import { OfficeNotFoundError, OrderAlreadyHandledError } from "./errors";
+import { ORDER_LIST_LIMIT, type ListOrders, type OrderListItem } from "./list";
 import { orderInputSchema, rejectReasonSchema, type OrderInput } from "./schemas";
 
 /*
@@ -43,36 +49,63 @@ function assignmentJoin(organizationId: string) {
 }
 
 /**
- * Ordrene i organisasjonen som ikke er slettet, nyeste mottatt først. Fast feltliste, ingen
- * sporingsfelt.
+ * Ordrene i organisasjonen som ikke er slettet, nyeste mottatt først, høyst `ORDER_LIST_LIMIT`.
+ * Kontrakten står i `./list.ts`. Søket (`options.query`) bruker det samme vilkåret som
+ * arbeidskøen (`orderFieldsMatch` og `assignmentFieldsMatch`). Oppdraget er en left join på én
+ * rad per ordre, og undertabellene hentes med `EXISTS`, så det blir aldri doble rader. Ordre med
+ * kansellert oppdrag er med, også i søket. Søketeksten logges ikke.
  */
-export async function listOrders(actor: Actor, organizationId: string) {
+export const listOrders: ListOrders = async (actor, organizationId, options = {}) => {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
-  return db
-    .select({
-      id: orders.id,
-      receivedAt: orders.receivedAt,
-      source: orders.source,
-      externalRef: orders.externalRef,
-      orderedByText: orders.orderedByText,
-      addressText: orders.addressText,
-      status: orders.status,
-      assignmentId: orders.assignmentId,
-      assignmentNumber: assignments.number,
-    })
-    .from(orders)
-    .leftJoin(assignments, assignmentJoin(grant.organizationId))
-    .where(and(eq(orders.organizationId, grant.organizationId), isNull(orders.deletedAt)))
-    .orderBy(desc(orders.receivedAt), desc(orders.id));
-}
+  const query = options.query ?? "";
+  const where = and(
+    eq(orders.organizationId, grant.organizationId),
+    isNull(orders.deletedAt),
+    or(orderFieldsMatch(query), assignmentFieldsMatch(grant.organizationId, query)),
+  );
+
+  const [rows, [counted]] = await Promise.all([
+    db
+      .select({
+        id: orders.id,
+        receivedAt: orders.receivedAt,
+        source: orders.source,
+        externalRef: orders.externalRef,
+        orderedByText: orders.orderedByText,
+        addressText: orders.addressText,
+        status: orders.status,
+        assignmentId: orders.assignmentId,
+        assignmentNumber: assignments.number,
+      })
+      .from(orders)
+      .leftJoin(assignments, assignmentJoin(grant.organizationId))
+      .where(where)
+      .orderBy(desc(orders.receivedAt), desc(orders.id))
+      .limit(ORDER_LIST_LIMIT),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(orders)
+      .leftJoin(assignments, assignmentJoin(grant.organizationId))
+      .where(where),
+  ]);
+
+  const items: OrderListItem[] = rows.map((row) => ({
+    ...row,
+    source: row.source as OrderSource,
+    status: row.status as OrderStatus,
+  }));
+  return { items, total: Number(counted?.count ?? 0) };
+};
 
 /**
  * Leser én ordre med alle feltene, oppdragsnummeret og `rowVersion` (versjonen skjemaet for
- * endring sender tilbake, A253). Ingen andre sporingsfelt. `organizationId` skal komme fra
- * tilgangssjekken hos den som kaller. Gir `null` når ordren ikke finnes i organisasjonen eller er
- * slettet.
+ * endring sender tilbake, A253). Ingen andre sporingsfelt. Tar `grant` fra tilgangssjekken og
+ * filtrerer på `grant.organizationId`, så den kan ikke kalles med en id fra adressen. Gir `null`
+ * når ordren ikke finnes i organisasjonen eller er slettet. Intern for `core/orders`: eksporteres
+ * ikke fra `index.ts`.
  */
-export async function selectOrder(executor: DbExecutor, organizationId: string, orderId: string) {
+export async function selectOrder(executor: DbExecutor, grant: EmployeeGrant, orderId: string) {
+  const organizationId = grant.organizationId;
   const [row] = await executor
     .select({
       id: orders.id,
@@ -118,7 +151,7 @@ export async function selectOrder(executor: DbExecutor, organizationId: string, 
 export async function getOrder(actor: Actor, organizationId: string, orderId: string) {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
   if (!isUuid(orderId)) throw new AccessDeniedError();
-  const order = await selectOrder(db, grant.organizationId, orderId);
+  const order = await selectOrder(db, grant, orderId);
   if (!order) throw new AccessDeniedError();
   return order;
 }

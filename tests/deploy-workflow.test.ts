@@ -498,7 +498,7 @@ describe("dokumentasjon for testmiljøet", () => {
       "APP_HOSTNAME",
       "kr",
       "az group delete",
-      "Minimum før ekte data",
+      "Klar for drift",
     ]) {
       expect(doc, text).toContain(text);
     }

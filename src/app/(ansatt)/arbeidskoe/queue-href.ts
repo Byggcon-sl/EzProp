@@ -1,4 +1,4 @@
-import type { AssignmentStatus } from "@/core/assignments";
+import { ASSIGNMENT_STATUSES, type AssignmentStatus } from "@/core/assignments";
 
 /*
  * Adressene i arbeidskøen. Fanene, Mine/Alle, «Avbryt», «Tøm søk» og svaret etter «Lagre» lages
@@ -30,8 +30,9 @@ export function isNoteErrorCode(value: unknown): value is NoteErrorCode {
 }
 
 /**
- * Adressen til køen. `status` står alltid med; `mine=0` bare for «Alle»; `q` bare når søket ikke
- * er tomt. `noteError` gir `notatfeil` og `feil`; `hash` legges til sist (`#kort-{id}`).
+ * Adressen til køen. `status` og `mine` (`1` for «Mine», `0` for «Alle») står alltid med, slik at
+ * valget ikke byttes av standardvalget for rollen ved søk eller fanebytte (T-0029); `q` bare når
+ * søket ikke er tomt. `noteError` gir `notatfeil` og `feil`; `hash` legges til sist (`#kort-{id}`).
  */
 export function queueHref(
   state: QueueState,
@@ -39,7 +40,7 @@ export function queueHref(
 ): string {
   const params = new URLSearchParams();
   params.set("status", state.status);
-  if (!state.mineOnly) params.set("mine", "0");
+  params.set("mine", state.mineOnly ? "1" : "0");
   if (state.query !== "") params.set("q", state.query);
   if (options.noteError) {
     if (options.noteError.assignmentId) params.set("notatfeil", options.noteError.assignmentId);
@@ -52,4 +53,20 @@ export function queueHref(
 /** Id-en til kortet, som `#kort-{id}` peker til. */
 export function cardAnchor(assignmentId: string): string {
   return `kort-${assignmentId}`;
+}
+
+/** En annen fane med treff for samme søk og samme «Mine»/«Alle». */
+export type OtherTabHit = { status: AssignmentStatus; count: number };
+
+/**
+ * Fanene utenom `currentTab` som har treff, i fast rekkefølge (T-0029). Brukes når gjeldende fane
+ * er tom: «Ingen treff i denne fanen. Treff i: Ferdig (1).» Ren funksjon.
+ */
+export function otherTabHits(
+  counts: Record<AssignmentStatus, number>,
+  currentTab: AssignmentStatus,
+): OtherTabHit[] {
+  return ASSIGNMENT_STATUSES.filter((status) => status !== currentTab && counts[status] > 0).map(
+    (status) => ({ status, count: counts[status] }),
+  );
 }

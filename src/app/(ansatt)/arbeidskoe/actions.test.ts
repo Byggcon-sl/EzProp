@@ -203,9 +203,9 @@ describe("3.1.5 tilbake til samme kø", () => {
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/arbeidskoe");
   });
 
-  it("«Mine» (mine=1) gir ingen mine-parameter", async () => {
+  it("«Mine» (mine=1) gir mine=1 tilbake (T-0029)", async () => {
     const url = await redirectOf(noteForm({ mine: "1", q: "" }));
-    expect(url.searchParams.has("mine")).toBe(false);
+    expect(url.searchParams.get("mine")).toBe("1");
     expect(url.searchParams.has("q")).toBe(false);
   });
 
@@ -218,7 +218,7 @@ describe("3.1.5 tilbake til samme kø", () => {
     expect(url.origin).toBe("http://localhost");
     expect(url.pathname).toBe("/arbeidskoe");
     if (field === "status") expect(url.searchParams.get("status")).toBe("in_progress");
-    if (field === "mine") expect(url.searchParams.has("mine")).toBe(false);
+    if (field === "mine") expect(url.searchParams.get("mine")).toBe("1");
   });
 
   it("søket kuttes og trimmes som i adressen, og skrives trygt", async () => {
