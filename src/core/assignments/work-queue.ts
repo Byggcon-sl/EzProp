@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 import {
   AccessDeniedError,
   requireOrganizationAccess,
@@ -15,6 +15,7 @@ import {
   assignmentScheduleSchema,
   type AssignmentScheduleInput,
 } from "./schemas";
+import { assignmentFieldsMatch, orderFieldsMatch } from "./search";
 import { isCorrected } from "./status-flow";
 import { WORK_QUEUE_LIMIT } from "./work-queue-params";
 
@@ -58,20 +59,35 @@ function orderAddress(organizationId: string): SQL<string | null> {
   )`;
 }
 
-/** Eiendommens adresse, ellers ordrens. Brukes både i søket og på kortet. */
+/** Eiendommens adresse, ellers ordrens. Vises på kortet. */
 function addressExpression(organizationId: string): SQL<string | null> {
   return sql<string | null>`coalesce(${properties.address}, ${orderAddress(organizationId)})`;
 }
 
-/** Søketeksten som vanlige tegn i `ILIKE`: `\`, `%` og `_` escapes. */
-function likePattern(query: string): string {
-  return `%${query.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+/**
+ * Søket i arbeidskøen: de samme feltene som ordrelisten (`search.ts`). Feltene på oppdraget
+ * direkte, og feltene på ordren via `EXISTS` med samme kobling som adressen på kortet. Ordren
+ * hentes bare fra samme organisasjon og bare når den ikke er slettet. Tomt søk gir `undefined`.
+ */
+function searchMatch(organizationId: string, query: string): SQL | undefined {
+  const orderMatch = orderFieldsMatch(query);
+  if (orderMatch === undefined) return undefined;
+  return or(
+    assignmentFieldsMatch(organizationId, query),
+    sql`exists (
+      select 1 from ${orders}
+      where ${orders.organizationId} = ${organizationId}
+        and ${orders.deletedAt} is null
+        and (${orders.id} = ${assignments.orderId} or ${orders.assignmentId} = ${assignments.id})
+        and ${orderMatch}
+    )`,
+  );
 }
 
 /**
  * Det felles filteret for begge lesespørringene: organisasjonen fra tilgangssjekken, ikke
  * kansellert, «Mine» (aktiv, ikke slettet teamrad for den innloggede ansatte, uansett rolle) og
- * søk på nummer og adresse. EXISTS gir aldri doble rader.
+ * søket (`searchMatch`). Søketeksten logges aldri. EXISTS gir aldri doble rader.
  */
 function workQueueWhere(grant: EmployeeGrant, filter: WorkQueueFilter): SQL {
   const orgId = grant.organizationId;
@@ -89,13 +105,7 @@ function workQueueWhere(grant: EmployeeGrant, filter: WorkQueueFilter): SQL {
         and ${assignmentTeamMembers.deletedAt} is null
     )`);
   }
-  const query = filter.query.trim();
-  if (query) {
-    const pattern = likePattern(query);
-    conditions.push(
-      sql`(${assignments.number} ilike ${pattern} escape '\\' or ${addressExpression(orgId)} ilike ${pattern} escape '\\')`,
-    );
-  }
+  conditions.push(searchMatch(orgId, filter.query));
   return and(...conditions)!;
 }
 

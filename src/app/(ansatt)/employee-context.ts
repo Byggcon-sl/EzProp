@@ -1,6 +1,7 @@
 import "server-only";
 import { grantHasPermission, type Actor } from "@/core/access";
 import { requireActor } from "@/core/auth/session";
+import { defaultMineOnly } from "@/core/assignments";
 import { findEmployeeGrant } from "@/core/organization";
 
 export type EmployeeContext = {
@@ -18,6 +19,11 @@ export type EmployeeContext = {
   canManageOrganization: boolean;
   /** Bare til å vise menylenken «Statistikk». Sjekken skjer i kjernen. */
   canReadStatistics: boolean;
+  /**
+   * Standardvalget «Mine» i arbeidskøen (T-0029), regnet fra rollene i tilgangssjekken (`grant`),
+   * aldri fra adressen. `mine=0`/`mine=1` i adressen overstyrer.
+   */
+  defaultMineOnly: boolean;
   /** Kontoret på den ansattes egen rad, eller `null`. Bare til forhåndsvalget av kontor. */
   officeId: string | null;
 };
@@ -40,6 +46,7 @@ export async function getEmployeeContext(): Promise<EmployeeContext | null> {
     canManageClaims: grantHasPermission(found.grant, "claims.manage"),
     canManageOrganization: grantHasPermission(found.grant, "organization.manage"),
     canReadStatistics: grantHasPermission(found.grant, "statistics.read"),
+    defaultMineOnly: defaultMineOnly(found.grant.roles),
     officeId: found.officeId,
   };
 }

@@ -27,7 +27,7 @@ import { FormMessage } from "@/shared/ui/form";
 import { FIX_FIELDS, initialFormState } from "../../../form-state";
 import { addRoomsAction } from "./actions";
 
-/** Høyeste antall per romtype i dialogen (A272). 40 totalt sjekkes av serveren. */
+/** Høyeste antall per romtype i dialogen (A282). 40 totalt sjekkes av serveren. */
 export const MAX_PER_ROOM_TYPE = 20;
 
 /** Et ferdig sett slik siden sender det (nøkkel, norsk navn og romutkastene). */

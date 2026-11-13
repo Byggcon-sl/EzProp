@@ -2,7 +2,7 @@ import type { HousingType } from "@/core/properties";
 import { roomTypeLabel, type RoomType } from "./codes";
 
 /*
- * Flere rom på én gang (T4, A270–A273). Rene funksjoner uten server, database eller Next, slik at
+ * Flere rom på én gang (T4, A280–A283). Rene funksjoner uten server, database eller Next, slik at
  * dialogen, kjernen, befaringsvisningen uten nett (2b) og KI-forslaget fra plantegning (2a-3) kan
  * bruke dem uendret. Romutkastene (`RoomDraft`) er den ene listen som settene, tellerne og senere
  * KI-forslaget fyller; `addRooms` i kjernen lagrer dem.
@@ -21,13 +21,13 @@ export type RoomDraftSource = (typeof ROOM_DRAFT_SOURCES)[number];
 type RoomPresetDefinition = {
   readonly key: string;
   readonly label: string;
-  /** Utkast, ikke godkjent av fagrådet (A270). */
+  /** Utkast, ikke godkjent av fagrådet (A280). */
   readonly draft: true;
   readonly drafts: readonly RoomDraft[];
 };
 
 /**
- * Ferdige sett med rom (A270). Utkast, ikke godkjent av fagrådet. Romtypenøkler, ikke navn.
+ * Ferdige sett med rom (A280). Utkast, ikke godkjent av fagrådet. Romtypenøkler, ikke navn.
  * Rekkefølgen er den som vises i dialogen (etter det foreslåtte settet).
  */
 export const ROOM_PRESETS = [
@@ -141,7 +141,7 @@ function highestNumber(label: string, names: readonly (string | null)[]): number
 }
 
 /**
- * Navnene på de nye rommene (A271). `existingRooms` er de aktive rommene i etasjen. Har en romtype
+ * Navnene på de nye rommene (A281). `existingRooms` er de aktive rommene i etasjen. Har en romtype
  * bare ett rom i etasjen totalt, får det nye rommet tomt navn. Ellers får de nye
  * «<romtypens navn> N», der første N er høyeste av antall rom av typen og høyeste nummer i
  * navnene i etasjen, pluss 1. «soverom 7» teller som 7 (store og små bokstaver likt); «Soverommet 3»,

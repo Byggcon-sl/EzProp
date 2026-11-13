@@ -185,12 +185,12 @@ function objectError(issue: { code?: string }): string {
   return issue.code === "unrecognized_keys" ? DRAFT_FIELDS : DRAFTS_EMPTY;
 }
 
-/** Høyst rom per romtype og per operasjon (A272). */
+/** Høyst rom per romtype og per operasjon (A282). */
 const MAX_PER_ROOM_TYPE = 20;
 const MAX_ROOMS = 40;
 
 /**
- * Flere rom på én gang i én etasje (T4, A270–A273). Romtypen må være en aktiv kode (`ROOM_TYPES`
+ * Flere rom på én gang i én etasje (T4, A280–A283). Romtypen må være en aktiv kode (`ROOM_TYPES`
  * har ingen arkiverte koder i dag). Samme romtype to ganger avvises, og ukjente felt (også `name`)
  * avvises: navnet lages alltid på serveren. `presetKey` er påkrevd ved `preset` og forbudt ved
  * `manual`.

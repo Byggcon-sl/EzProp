@@ -40,7 +40,7 @@ Takstmannen legger i dag inn ett rom om gangen: «Legg til rom», velg romtype i
    - **Rommene som blir lagt til:** en kort liste med navnene slik de blir lagret («Soverom 3, Soverom 4 …»), laget med `numberRoomDrafts` mot rommene som finnes i etasjen. Ingen redigering per rad.
    - Nederst, fast og synlig uten å rulle på iPad i stående format (56–72 pt): hovedknappen **«Legg til N rom i <etasje>»**. Knappen er av når tellerne er 0, og er av og viser at den jobber mens lagringen pågår (ingen dobbel lagring).
    - Etter lagring lukkes dialogen, og rommene står i etasjen. Lukkes dialogen med tellere over 0, spørres det: «Forkaste N rom?» [Forkast] [Fortsett].
-3. **Ferdige sett** som data i `src/core/buildings/room-presets.ts` (A270), merket «utkast, ikke godkjent av fagrådet», med romtypenøkler (ikke navn):
+3. **Ferdige sett** som data i `src/core/buildings/room-presets.ts` (A280), merket «utkast, ikke godkjent av fagrådet», med romtypenøkler (ikke navn):
    - `apartment` (Leilighet): `entrance`, `living_room`, `kitchen`, `bathroom`, `bedroom` ×2, `storage`
    - `house_main_floor` (Bolig, inngangsetasje): `entrance`, `hallway`, `living_room`, `kitchen`, `bathroom`, `toilet`, `bedroom`, `storage`
    - `house_upper_floor` (Bolig, etasje over): `hallway`, `bedroom` ×3, `bathroom`
@@ -52,14 +52,14 @@ Takstmannen legger i dag inn ett rom om gangen: «Legg til rom», velg romtype i
      4. Ellers `house_upper_floor`.
      `detached`, `semi_detached`, `terraced`, `holiday_home`, `farm`, `other` og manglende eiendom (`null`) går til punkt 3 og 4. Er det feil, retter takstmannen det med ett trykk på et annet sett.
 4. **Boligtypen til dialogen:** `getAssignmentBuildings` utvides med `housingType: HousingType | null` fra eiendommen på oppdraget, hentet med `grant.organizationId`. Tenant-testen 4.2.1 utvides til å vise at boligtypen aldri kommer fra organisasjon B.
-5. **Nummerering** (A271), ren funksjon `numberRoomDrafts(drafts, existingRooms)`:
+5. **Nummerering** (A281), ren funksjon `numberRoomDrafts(drafts, existingRooms)`:
    - `existingRooms` er de aktive rommene i etasjen (`roomType`, `name`). Myk-slettede rom telles ikke.
    - Har en romtype bare ett rom i etasjen totalt (nye pluss de som finnes), får det nye rommet tomt navn (romtypens navn vises, som i dag).
    - Ellers får de nye «<romtypens navn> N». Første N er `max(antall aktive rom av typen, høyeste N i navn på formen «<romtypens navn> N») + 1`. Det gir aldri to like navn, også når «Soverom 2» finnes uten «Soverom 1».
    - Rom som finnes, endres aldri. Ett rom med tomt navn fra før beholder det tomme navnet, og det nye blir «Soverom 2».
    - Typene påvirker ikke hverandre.
    - **På serveren** kjøres nummereringen inne i transaksjonen etter `lockFloor`, mot rommene i databasen. Listen i dialogen er bare forhåndsvisning; klienten sender aldri navn.
-6. **Lagring i kjernen:** `addRooms` i `src/core/buildings/service.ts`. `requireOrganizationAccess(actor, organizationId, "assignment.edit")`, alle spørringer filtrerer på `grant.organizationId`. Låser etasjen (`lockFloor`), henter aktive rom, nummererer og setter inn alle rommene **i én transaksjon**: feiler noe midt i, lagres ingenting. Arealtype og «under terreng» fra `suggestAreaType` og `suggestBelowGround`, som for ett rom. Revisjonslogg `room`/`create` per rom med `source` og eventuelt `presetKey` i `changes` (aldri romnavn), og hendelsen `assignment.room_saved` per rom, som i dag. Zod-skjemaet `addRoomsInputSchema`: romtype må være en aktiv kode, `count` 1–20 per romtype, høyst 40 rom per operasjon (A272), `source` og `presetKey` som over. Norske feilmeldinger.
+6. **Lagring i kjernen:** `addRooms` i `src/core/buildings/service.ts`. `requireOrganizationAccess(actor, organizationId, "assignment.edit")`, alle spørringer filtrerer på `grant.organizationId`. Låser etasjen (`lockFloor`), henter aktive rom, nummererer og setter inn alle rommene **i én transaksjon**: feiler noe midt i, lagres ingenting. Arealtype og «under terreng» fra `suggestAreaType` og `suggestBelowGround`, som for ett rom. Revisjonslogg `room`/`create` per rom med `source` og eventuelt `presetKey` i `changes` (aldri romnavn), og hendelsen `assignment.room_saved` per rom, som i dag. Zod-skjemaet `addRoomsInputSchema`: romtype må være en aktiv kode, `count` 1–20 per romtype, høyst 40 rom per operasjon (A282), `source` og `presetKey` som over. Norske feilmeldinger.
 7. **Serverhandling** i `src/app/(ansatt)/oppdrag/[id]/bygninger/actions.ts`, uten egen tilgangslogikk, med samme feilmeldingsmønster som de andre handlingene (tellerne står igjen etter feil, jf. T-0050).
 8. **Lite funn tatt med (samme område):** T-0018: nedtrekkslisten for ett rom grupperes med `optgroup` etter `group`. Funnet settes til «rettet» med PR-nummer.
 
@@ -120,10 +120,10 @@ Ingen TG-regler. De rene funksjonene `suggestRoomPreset` og `numberRoomDrafts` h
 - [ ] Versjonen i `package.json` er økt (minor: 0.11.0).
 
 ## Beslutninger (autonom modus, føres i `docs/09-apne-sporsmal.md`)
-- **A270 (lett å endre):** fire ferdige sett (leilighet, inngangsetasje, etasje over, kjeller), valgt ut fra boligtype og etasje, som kode og utkast. Grunn: «færrest klikk» (T4); romtypene og gruppene fra A95. Endres i `room-presets.ts`, senere i maleditoren.
-- **A271 (lett å endre):** like rom nummereres «Soverom 1, 2 …» på serveren; første nye nummer er høyeste av antall aktive rom og høyeste nummer i navnet, pluss 1. Grunn: rommene må kunne skilles i rapporten og ved reklamasjon, og to like navn skal ikke oppstå.
-- **A272 (lett å endre):** høyst 40 rom per operasjon og 20 per romtype. Grunn: vern mot feiltrykk og tunge sider (T-0058); en stor enebolig ligger godt under.
-- **A273 (lett å endre):** én etasje per lagring og per dialog, ingen ny tabell eller kolonne; kilden (`manual`, `preset` + `presetKey`) står i revisjonsloggen. KI-punktet kaller `addRooms` én gang per etasje. Grunn: det enkleste som virker, og samme inngang for KI-forslaget fra plantegning.
+- **A280 (lett å endre):** fire ferdige sett (leilighet, inngangsetasje, etasje over, kjeller), valgt ut fra boligtype og etasje, som kode og utkast. Grunn: «færrest klikk» (T4); romtypene og gruppene fra A95. Endres i `room-presets.ts`, senere i maleditoren.
+- **A281 (lett å endre):** like rom nummereres «Soverom 1, 2 …» på serveren; første nye nummer er høyeste av antall aktive rom og høyeste nummer i navnet, pluss 1. Grunn: rommene må kunne skilles i rapporten og ved reklamasjon, og to like navn skal ikke oppstå.
+- **A282 (lett å endre):** høyst 40 rom per operasjon og 20 per romtype. Grunn: vern mot feiltrykk og tunge sider (T-0058); en stor enebolig ligger godt under.
+- **A283 (lett å endre):** én etasje per lagring og per dialog, ingen ny tabell eller kolonne; kilden (`manual`, `preset` + `presetKey`) står i revisjonsloggen. KI-punktet kaller `addRooms` én gang per etasje. Grunn: det enkleste som virker, og samme inngang for KI-forslaget fra plantegning.
 
 ## Avgjort ved uenighet i forhåndsvurderingen (prosjektleder, 13.11.2026)
 - **Bytte etasje i dialogen:** kuttes (forenkler), ikke segmentknapper (ux). Dialogen åpnes fra knappen på etasjen, så bytte sparer ingen trykk, men koster tilstand, et felt og et e2e-steg. Ux sitt hensyn (rommene skal ikke havne i feil etasje) ivaretas av at etasjen står øverst og i hovedknappen.
@@ -138,4 +138,4 @@ Ingen TG-regler. De rene funksjonene `suggestRoomPreset` og `numberRoomDrafts` h
 utvikler (kjerne, handling og dialog), testskriver (tabelltester, transaksjon, tenant-isolasjon, rollematrise, e2e iPad og PC). ui-designer (utseendet på dialogen i Fjord). Ux har gitt sine krav i forhåndsvurderingen.
 
 ## Åpne spørsmål
-- Ingen som stopper. Settene er utkast som fagrådet kan rette (A270). Neste ledige spørsmålsnummer er 82, om det trengs.
+- Ingen som stopper. Settene er utkast som fagrådet kan rette (A280). Neste ledige spørsmålsnummer er 82, om det trengs.

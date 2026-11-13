@@ -12,7 +12,7 @@ import {
 import { HOUSING_TYPES, type HousingType } from "@/core/properties";
 
 /*
- * Flere rom på én gang (T4, A270–A273). De rene funksjonene: ferdige sett (F1), forslag til sett
+ * Flere rom på én gang (T4, A280–A283). De rene funksjonene: ferdige sett (F1), forslag til sett
  * (F2) og nummerering (F3). Ingen database, ingen Next, ingen KI.
  * Testplan: docs/funksjoner/fase2a-flere-rom-testplan.md F1–F3.
  *

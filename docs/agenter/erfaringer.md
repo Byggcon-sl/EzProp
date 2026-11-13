@@ -274,3 +274,6 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Hele `pnpm test` lokalt ble stoppet etter 30 minutter uten å bli ferdig. Kjør de berørte testfilene lokalt og la CI kjøre hele pakken.
 - En CI-jobb kan bli rød av tidsavbrudd i en test som ikke har med PR-en å gjøre (delt testdatabase, f.eks. `orders.test.ts` 4.5.3). Kjør jobben på nytt (`gh api -X POST repos/.../actions/jobs/<id>/rerun`) før man leter etter feil, særlig på rene dokument-PR-er.
 - Bygger en arbeidsflyt på en branch som merges før arbeidsflyten åpner PR, må PR-en flyttes til `main` etterpå (skriptet flytter bare PR-er som finnes ved merge).
+- Next.js ruller til `#anker` etter `redirect` fra en serverhandling, men flytter ikke fokus. Skal et element få fokus, trengs en liten klientkomponent (se `arbeidskoe/focus-card.tsx`). `:focus-visible` gjelder ikke når fokus settes fra koden etter et museklikk, så elementer med `tabindex=-1` trenger egen ring på `:focus`.
+- I en flex-rad forsvinner mellomrom i slutten av et tekstelement («Treff i:Ferdig»). Bruk ` ` eller legg teksten utenfor flex.
+- Kjør aldri to `vitest run` samtidig mot samme testdatabase (heller ikke via en gjennomgangsagent): det gir tilfeldige røde tester (fremmednøkkel, deadlock i `truncate`).

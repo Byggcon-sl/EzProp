@@ -940,7 +940,7 @@ export async function saveRoom(
 }
 
 /**
- * Legger til flere rom i én etasje i én transaksjon (T4, A270–A273). Navnene lages her, etter at
+ * Legger til flere rom i én etasje i én transaksjon (T4, A280–A283). Navnene lages her, etter at
  * etasjen er låst, mot de aktive rommene i databasen (`numberRoomDrafts`), så samtidige lagringer
  * aldri gir like navn. Arealtype og «under terreng» kommer fra forslagene, som for ett rom. Ett rom
  * om gangen med revisjonslogg (kilde og sett, aldri navn) og hendelse; feiler noe, lagres
