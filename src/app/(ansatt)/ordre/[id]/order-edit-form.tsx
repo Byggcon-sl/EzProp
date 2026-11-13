@@ -10,6 +10,9 @@ import { ORDER_CHANGED_MESSAGE, ORDER_OFFLINE_MESSAGE, readOrderValues } from ".
 
 type Action = (state: FormState, formData: FormData) => Promise<FormState>;
 
+/** Skjemaets tilstand. `stale`: ordren er endret av andre siden siden ble lastet (settes aldri tilbake). */
+type EditState = FormState & { stale?: boolean };
+
 /**
  * «Endre ordren» på ordresiden (T1). Knappen står rett under ordrekortet for alle statuser; kjernen
  * sjekker tilgangen. Skjemaet åpnes på samme side, og mens det er åpent skjules «Gjør om» og «Avvis»
@@ -88,12 +91,13 @@ function isOffline(): boolean {
 }
 
 /** Et mislykket forsøk uten nett. Verdiene står igjen i feltene. */
-function offlineState(previous: FormState, formData: FormData): FormState {
+function offlineState(previous: EditState, formData: FormData): EditState {
   return {
     fieldErrors: {},
     message: ORDER_OFFLINE_MESSAGE,
     values: readOrderValues(formData),
     attempt: previous.attempt + 1,
+    stale: previous.stale === true,
   };
 }
 
@@ -114,11 +118,15 @@ function OrderEditForm({
   headingRef: RefObject<HTMLHeadingElement | null>;
   onCancel: () => void;
 }) {
-  const [state, formAction] = useActionState(async (previous: FormState, formData: FormData) => {
+  const [state, formAction] = useActionState(async (previous: EditState, formData: FormData): Promise<EditState> => {
     // Endring krever nett. Uten nett sendes ingenting, og det som er skrevet står igjen.
     if (isOffline()) return offlineState(previous, formData);
     try {
-      return await action(previous, formData);
+      const result = await action(previous, formData);
+      return {
+        ...result,
+        stale: previous.stale === true || result.message === ORDER_CHANGED_MESSAGE,
+      };
     } catch (error) {
       // Nettet falt under sending (fetch gir TypeError). Videresending etter lagring og andre
       // feil kastes videre til Next.
@@ -127,7 +135,7 @@ function OrderEditForm({
       }
       throw error;
     }
-  }, initialFormState);
+  }, initialFormState as EditState);
 
   return (
     <Card>
@@ -141,8 +149,10 @@ function OrderEditForm({
           </p>
         )}
         <FormErrors state={state} />
-        {state.message === ORDER_CHANGED_MESSAGE && (
-          // En iPad-app på hjemskjermen har ingen synlig knapp for å laste siden på nytt.
+        {state.stale && (
+          // Knappen står så lenge skjemaet har en utdatert versjon, også etter et forsøk uten nett:
+          // nye lagreforsøk gir konflikt igjen. En iPad-app på hjemskjermen har ingen annen synlig
+          // knapp for å laste siden på nytt.
           <Button variant="secondary" onClick={() => window.location.reload()}>
             Last siden på nytt
           </Button>
