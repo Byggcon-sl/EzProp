@@ -62,7 +62,9 @@ export function PossibleDuplicatesNotice({
           <path d="M12 17.5h.01" />
         </svg>
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold">Mulig dublett</h2>
+          <h2 id="mulig-dublett-tittel" className="text-base font-semibold">
+            Mulig dublett
+          </h2>
           <p className="mt-1 text-sm break-words">{POSSIBLE_DUPLICATES_TEXT}</p>
           <ul className="mt-2">
             {items.map((item) => (

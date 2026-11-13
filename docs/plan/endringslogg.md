@@ -86,4 +86,4 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 13.11.2026 | «Søk i ordrelisten og i arbeidskøen» (T2) levert (PR #190) og flyttet til `docs/plan/levert.md`. | Hovedløkken |
 | 13.11.2026 | «Flere rom på én gang med færrest mulig trykk» (T4) krysset av under «Fra Ståles svar 12.11.2026», bygget på branch `flere-rom-samtidig` (`docs/funksjoner/fase2a-flere-rom.md`, A280–A284). | Utvikler, flere-rom-samtidig |
 | 13.11.2026 | «Flere rom på én gang» (T4) levert (PR #194) og flyttet til `docs/plan/levert.md`. | Hovedløkken |
-| 13.11.2026 | Nytt punkt etter T3: varsel om like kontakter og firma (forslag 62), fordi T3 i planen bare gjelder ordre (A289). | Prosjektlederen, Ståles svar 12.11.2026 |
+| 13.11.2026 | «Varsel om mulig dublett» (T3) krysset av under «Fra Ståles svar 12.11.2026», bygget på branch `varsel-dublett` (`docs/funksjoner/fase2a-varsel-dublett.md`, A285–A291). Varsel for kontakter og firma er ikke med (forslag 62, A289). | Prosjektlederen, varsel-dublett |
