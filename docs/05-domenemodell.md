@@ -428,9 +428,17 @@ Neste nummer hentes med lås i databasen, slik at to kontorer aldri får samme n
 - **Gjør om til oppdrag** låser ordreraden (`FOR UPDATE`) før status og kontor sjekkes og før nummeret hentes. Da får to samtidige forsøk på samme ordre ett oppdrag, og den som taper, bruker ikke opp et nummer.
 - **Hendelser og revisjonslogg:** `order.received` (`{ orderId, source }`), `order.rejected` (`{ orderId }`), `assignment.created` (`{ number, orderId }`); revisjonslogg `order` med `create`, `reject` og `convert`, og `assignment` med `create`. Ingen adresse, bestiller, matrikkel eller borettslag i hendelser eller logg; raden er kilden.
 
-**Bygget i fase 2a (05.11.2026, bestilleren koblet til kontakter):** `orders.ordered_by_contact_id` og `ordered_by_firm_id` (valgfrie) med sammensatte fremmednøkler `(organization_id, ordered_by_contact_id)` til `contacts` (`orders_ordered_by_contact_fk`) og `(organization_id, ordered_by_firm_id)` til `firms` (`orders_ordered_by_firm_fk`). Indeks `(organization_id, ordered_by_contact_id)`. `createOrder` tar `contactId` (feltet `orderedByContactId` i skjemaet), og firmaet følger kontakten som for partene (4.2). `ordered_by_text` beholdes og er det som vises; valgt kontakt fyller det med «Navn, Firma». Ordren kobles bare når den legges inn (A55). `getOrder` gir id-ene, og ordresiden lenker til kontakten. Revisjonsloggen har `orderedByContactId` og `orderedByFirmId` (bare id-er). Oppgavekort: `docs/funksjoner/fase2a-koble-kontakter.md`; beslutningene A84–A92.
+**Bygget i fase 2a (05.11.2026, bestilleren koblet til kontakter):** `orders.ordered_by_contact_id` og `ordered_by_firm_id` (valgfrie) med sammensatte fremmednøkler `(organization_id, ordered_by_contact_id)` til `contacts` (`orders_ordered_by_contact_fk`) og `(organization_id, ordered_by_firm_id)` til `firms` (`orders_ordered_by_firm_fk`). Indeks `(organization_id, ordered_by_contact_id)`. `createOrder` tar `contactId` (feltet `orderedByContactId` i skjemaet), og firmaet følger kontakten som for partene (4.2). `ordered_by_text` beholdes og er det som vises; valgt kontakt fyller det med «Navn, Firma». Ordren ble først koblet bare når den ble lagt inn (A55); fra 13.11.2026 kan bestilleren kobles, byttes og fjernes etterpå (se under). `getOrder` gir id-ene, og ordresiden lenker til kontakten. Revisjonsloggen har `orderedByContactId` og `orderedByFirmId` (bare id-er). Oppgavekort: `docs/funksjoner/fase2a-koble-kontakter.md`; beslutningene A84–A92.
 
-**Venter (egne planpunkter):** `raw_payload` (e-post-til-ordre og API), og på oppdraget `external_ref`, `company_id`, `client_agreement_id`, `report_profile_id`, `status_changed_at` og `cancelled_reason`. De legges til når planpunktene som bruker dem, bygges (samme mønster som A17), fordi ingen skjerm bruker dem nå. `inspection_at`, `due_date` og `internal_note` kom med arbeidskøen 05.11.2026 (se under). En ordre kan ikke endres etter at den er lagret (A55). Eiendom og matrikkel som egne tabeller, med `assignments.property_id`, kom 05.11.2026 (se «Bygget i fase 2a» i 4.4); adresse og matrikkel på ordren står fortsatt som tekst og brukes til forhåndsutfylling.
+**Bygget i fase 2a (13.11.2026, endre en ordre etter lagring):** Ståle 12.11.2026 (T1): «ja, full redigeringstilgang. alltid». Ingen migrering. Oppgavekort: `docs/funksjoner/fase2a-rette-ordre.md`; beslutningene A249–A253.
+
+- **Hvem og når:** alle med `assignment.edit` kan endre en lagret ordre, i alle statuser: mottatt, gjort om og avvist (A249, A250). `updateOrder` i `src/core/orders` endrer bare feltene i den faste listen `ORDER_EDITABLE_FIELDS`: `receivedAt`, `externalRef`, `orderedByText`, `orderedByContactId`, `orderedByFirmId`, `addressText`, `gnr`, `bnr`, `snr`, `housingAssociationName`, `sellerDeclarationReceived`. Status, avvisningsgrunn, `assignment_id`, `source` og `requested_report_type` endres ikke. Firmaet utledes på serveren fra kontakten og leses aldri fra skjemaet. Tom `receivedAt` beholder verdien på raden.
+- **Oppdraget endres ikke** når ordren endres (A251).
+- **`row_version`** øker ved endring, avvisning og konvertering. Lagring med en eldre `row_version` gir `OrderChangedError` («Ordren er endret av en annen. Last siden på nytt.») (A253). Lagring uten endring gir ingen loggrad, ingen hendelse og samme `row_version`.
+- **Logg:** `update` er den eneste ordrehandlingen med verdier i revisjonsloggen (gammel og ny verdi, se 4.12; A252, spørsmål 78). `create`, `reject` og `convert` har fortsatt ingen adresse, bestiller, matrikkel eller borettslag. Hendelsen `order.updated` (`{ orderId, fields }`) og applikasjonsloggen får bare feltkoder og id-er.
+- **Historikken:** `listOrderHistory` (rettighet `organization.read`) viser endringene på ordresiden under «Endringer», nyeste først, høyst 200 rader. Etikettene kommer fra `orderFieldLabel`.
+
+**Venter (egne planpunkter):** `raw_payload` (e-post-til-ordre og API), og på oppdraget `external_ref`, `company_id`, `client_agreement_id`, `report_profile_id`, `status_changed_at` og `cancelled_reason`. De legges til når planpunktene som bruker dem, bygges (samme mønster som A17), fordi ingen skjerm bruker dem nå. `inspection_at`, `due_date` og `internal_note` kom med arbeidskøen 05.11.2026 (se under). En ordre kan endres etter at den er lagret (se under; A55 er endret). Eiendom og matrikkel som egne tabeller, med `assignments.property_id`, kom 05.11.2026 (se «Bygget i fase 2a» i 4.4); adresse og matrikkel på ordren står fortsatt som tekst og brukes til forhåndsutfylling.
 **Bygget i fase 2a (05.11.2026, utstedende selskap):** Kolonnen `assignments.company_id` og regelen i `setTeamMember` (`src/core/assignments/team.ts`). Oppgavekort: `docs/agenter/oppgaver/fase2a-utstedende-selskap.md`; beslutningene A65–A68.
 
 - **`company_id`** (kan være tom) med sammensatt fremmednøkkel `(organization_id, company_id)` til `companies` (`assignments_company_fk`), så selskapet alltid hører til samme organisasjon.
@@ -1369,6 +1377,7 @@ Gyldig verdi er et heltall fra 1 til og med 100 (år). Mangler nøkkelen, brukes
 |---|---|
 | `order.received` | Ordre mottatt |
 | `order.rejected` | Ordre avvist |
+| `order.updated` | Ordre endret etter lagring (fase 2a), `{ orderId, fields }` med bare feltkoder |
 | `assignment.created` | Oppdrag opprettet |
 | `assignment.assigned` | Oppdrag tildelt |
 | `assignment.handed_over` | Oppdrag overlevert til annen takstmann eller annet selskap |
@@ -1653,7 +1662,7 @@ Oppdraget fjernes fra iPaden et antall dager etter levering (bekreftet 27.10.202
 | `actor_employee_id` | Hvem |
 | `entity_type`, `entity_id` | Hva som ble endret |
 | `action` | `create`, `update`, `delete`, `restore`, `permission_change` og så videre |
-| `changes` | Gammel og ny verdi per felt |
+| `changes` | Hva som ble endret. Vanligvis `fields` (liste med feltkoder) og gammel og ny verdi per felt. For `order`/`update`: `{ fields: [feltkoder], values: { felt: { from, to } } }`, der feltkodene står i fast rekkefølge (`ORDER_EDITABLE_FIELDS`), bare endrede felt er med, bestilleren lagres som id-er og datoer som ISO-tekst. Verdiene ligger samlet under `values`, slik at de kan tømmes ett sted (A252, spørsmål 78). `/admin/logg` viser bare feltetikettene, ikke `values` |
 | `device_id` | Hvilken enhet (iPad eller PC, se `devices`) |
 | `occurred_at` | Når endringen ble gjort (på enheten) |
 | `received_at` | Når serveren fikk den |
@@ -2020,7 +2029,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Behold (den som beholdes) | keep: `keepId` | Kontakten eller firmaet som står igjen etter sammenslåingen. Den andre er `removeId` |
 | Velg to ulike | `MergeSameRecordError` | Feil når samme kontakt eller firma er valgt på begge sider. Melding: «Velg to ulike kontakter.» / «Velg to ulike firma.» |
 | Kobling til kontakt (part) | `assignment_parties.contact_id`, `firm_id` | Valgfri kobling til registeret. Firmaet følger kontakten. Friteksten er det som vises |
-| Kobling til kontakt (bestiller) | `orders.ordered_by_contact_id`, `ordered_by_firm_id` | Valgfri kobling til registeret, satt når ordren legges inn |
+| Kobling til kontakt (bestiller) | `orders.ordered_by_contact_id`, `ordered_by_firm_id` | Valgfri kobling til registeret. Settes når ordren legges inn, og kan kobles, byttes og fjernes etterpå med `updateOrder` |
 | Part på oppdrag | `assignment_parties` | Kontakt eller firma med rolle på oppdraget. I fase 2a fritekst (navn, firma, e-post, telefon) på oppdraget (A60) |
 | Partsroller | `PARTY_ROLES`, `partyRoleLabel` (`src/core/assignments/codes.ts`) | De fem rollekodene en part kan ha, i fast rekkefølge |
 | Firma (part, fritekst) | `assignment_parties.firm_name` | For eksempel meglerforetaket, til firma-registeret kommer |
@@ -2047,6 +2056,12 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Gjøre om til oppdrag | `convertOrderToAssignment` (`src/core/orders`) | Lager oppdraget med nytt nummer og setter ordren til `converted` |
 | Avvise ordre | `rejectOrder` (`src/core/orders`) | Setter ordren til `rejected` med grunn. Ordren blir stående |
 | Ordren er allerede behandlet | `OrderAlreadyHandledError` | Ordren er alt avvist eller gjort om |
+| Endre ordren | `updateOrder` (`src/core/orders`) | Endrer feltene i `ORDER_EDITABLE_FIELDS` på en lagret ordre, i alle statuser. Rettighet `assignment.edit`. Endrer ikke oppdraget |
+| Felt som kan endres på ordren | `ORDER_EDITABLE_FIELDS` | Den faste listen med feltkoder som `updateOrder` kan endre, og som kan stå i revisjonsloggen for `order`/`update` |
+| Ordren er endret av en annen | `OrderChangedError` | Lagring med eldre `row_version` enn raden. Melding: «Ordren er endret av en annen. Last siden på nytt.» |
+| Endringer (på ordren) | `listOrderHistory` (`src/core/orders`) | Revisjonsloggen for én ordre, nyeste først, høyst 200 rader. Rettighet `organization.read` |
+| Feltnavn på ordren | `orderFieldLabel` | Norsk etikett for hver feltkode i `ORDER_EDITABLE_FIELDS`, for eksempel `addressText` → «Adresse» |
+| Ordre endret (hendelse) | `order.updated` | Hendelse når en lagret ordre endres, med `{ orderId, fields }`, aldri verdier |
 | Kontoret finnes ikke | `OfficeNotFoundError` | Kontoret er ikke i organisasjonen eller er slettet |
 | Oppdrag | `assignments` | Jobben |
 | Oppdragstype | `assignments.assignment_type` | Nå bare `condition_report` (`ASSIGNMENT_TYPES`) |
@@ -2465,3 +2480,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 12.11.2026 | Microsoft-innlogging (fase 2a, grensesnitt, ADR 0008): ingen ny tabell og ingen migrering. `accounts` beskrevet (`provider_id = 'microsoft'`, `account_id` = `oid`, tokens lagres ikke). Reservert hemmelighetsnavn `MS_LOGIN_CLIENT_SECRET`. Ordlisten: Microsoft-innlogging, Microsoft-katalog, aktivt ansattforhold, reservert hemmelighetsnavn. |
 | 12.11.2026 | Regelmotoren (fase 2a, ADR 0009): `src/core/rules` med regelsvar i faste koder og tre tilstander (`RULE_RESULT_STATES`). Migrering `0030_regler-bad`: sju nye kolonner på `rule_conditions` (`threshold_key`, alder-feltene, `unit_element_key`), og `expected_state` og `inspection_year` på `rule_test_cases` (`expect_triggered` er fjernet). Levetidstrinn og terskler har fått `key` og `status`, og settene en settkode; de er kodedata til tabellene kommer i 2a-3. |
 | 12.11.2026 | Svarene i reglene og bygningene (fase 2a, Ståle 12.11.2026 F1, F6, F7, F9; ADR 0009 rettet): migrering `0031_svar-regler-bygninger` med `suggest_tg0` i `rules.purpose`, `rule_conditions.negate` og `not_bra` i `rooms.area_type`. Ny forslagstype `tg0` og `negated` i regelsvaret. `suggestFloor` for etasjeforslag. Ordlisten: ikke del av BRA, etasjeforslag, TG0-forslag, snudd betingelse (A234–A237, A239) |
+| 13.11.2026 | Endre en ordre etter lagring (fase 2a, Ståle 12.11.2026 T1): ingen migrering. 4.3 sier at ordren kan endres i alle statuser av alle med `assignment.edit`, og at `row_version` øker ved endring, avvisning og konvertering. 4.12: `changes` for `order`/`update` er `{ fields, values: { felt: { from, to } } }`. Hendelsen `order.updated`. Ordlisten: `updateOrder`, `ORDER_EDITABLE_FIELDS`, `OrderChangedError`, `listOrderHistory`, `orderFieldLabel`, `order.updated`. A249–A253. |
