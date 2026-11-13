@@ -9,6 +9,7 @@ import { AI_TRIAL_TARGET_TYPE, getFeatureDefinition } from "./features";
 import { preparePrompt } from "./prompt";
 import { findPromptLeaks } from "./prompt-leaks";
 import { resolveAiProvider } from "./provider-resolution";
+import { loadRejectedRetentionYears, retainUntilFor } from "./retention";
 import type { AiProvider, AiProviderResult } from "./providers/types";
 import { loadKnownValues } from "./redaction";
 import { aiSuggestionRequestShapeSchema, hasOnlyAllowedFields } from "./request";
@@ -301,24 +302,42 @@ export async function requestSuggestion(
 
     // Avklaring A: forrige forslag avvises bare når det nye er brukbart
     if (inserted.outcome === "ok") {
-      const replaced = await tx
-        .update(aiUsageLog)
-        .set({
-          status: "rejected",
-          decidedBy: grant.employeeId,
-          decidedAt: now,
-          updatedBy: grant.employeeId,
-        })
+      const toReject = await tx
+        .select({ id: aiUsageLog.id, createdAt: aiUsageLog.createdAt })
+        .from(aiUsageLog)
         .where(
           and(
             sameTargetWhere(grant.organizationId, definition.code, target),
             eq(aiUsageLog.status, "suggested"),
             ne(aiUsageLog.id, inserted.id),
           ),
-        )
-        .returning({ id: aiUsageLog.id });
-      for (const row of replaced) {
-        await recordStatusChange(tx, grant, row.id, "suggested", "rejected");
+        );
+      if (toReject.length > 0) {
+        // Hver avvist rad får dato fra sin egen `created_at` og innstillingen (K7)
+        const rejectedYears = await loadRejectedRetentionYears(tx, grant.organizationId);
+        for (const candidate of toReject) {
+          const [replaced] = await tx
+            .update(aiUsageLog)
+            .set({
+              status: "rejected",
+              retainUntil: retainUntilFor("rejected", candidate.createdAt, rejectedYears),
+              decidedBy: grant.employeeId,
+              decidedAt: now,
+              updatedBy: grant.employeeId,
+            })
+            .where(
+              and(
+                eq(aiUsageLog.id, candidate.id),
+                eq(aiUsageLog.organizationId, grant.organizationId),
+                eq(aiUsageLog.status, "suggested"),
+                isNull(aiUsageLog.deletedAt),
+              ),
+            )
+            .returning({ id: aiUsageLog.id });
+          if (replaced) {
+            await recordStatusChange(tx, grant, replaced.id, "suggested", "rejected");
+          }
+        }
       }
     }
     return toSuggestionResult(inserted);

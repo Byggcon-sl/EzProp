@@ -20,7 +20,9 @@ import { employees } from "./employees";
  * Én rad per kall til KI gjennom `@/core/ai`: hvem som ba om forslaget, funksjon, leverandør,
  * mål, utfall, forslaget, hvem som avgjorde det og når, mengde og kostnad.
  *
- * Personopplysninger (A157): myk sletting, `retain_until` settes av tjenesten til opprettet + 10 år.
+ * Personopplysninger (A157, endret av K7/A272): myk sletting. `retain_until` settes av tjenesten
+ * ved ny rad og ved hver statusendring: avviste får `created_at` + innstillingen
+ * `ai.rejected_retention_years` (1–10, standard 10), alle andre `created_at` + 10 år.
  * `source_fields` har bare feltkoder og `input_summary` bare feltnavn og antall tegn, aldri tekst.
  * `report_id` har ingen fremmednøkkel før `reports` finnes (A158).
  *
