@@ -198,6 +198,7 @@ Hver oppgave kan gis til en egen Claude-tråd. Rekkefølgen følger planen: **0a
 ## Fase 2a – Fra Ståles svar 12.11.2026
 
 - [x] **Svarene i reglene og bygningene** (F1–F7): hulltaking med måling uten forhøyet fukt gir forslag om TG0 på tilliggende konstruksjoner uansett alder (F1); ikke tatt hull og ikke målt gir TGIU med begrunnelse og risikovurdering (F2); kilden for fuktgrensen og levetidene er NS 3600:2025 (F3); lik eller over grensen gir forslag (F4, F5); kryperom og lavt, uinnredet loft kan føres som «ikke del av BRA», og kryperom følger reglene for krypkjeller uten krav om hulltaking (F6, T-0016); «Kjeller» og «Underetasje» får etasjenummer -1 og «Under terreng» forhåndsvalgt, som takstmannen kan endre (F7, T-0010). Egne maler kan bare lage advarsler, aldri nye sperrer (F9). (12.11.2026, PR #174, oppgavekort `docs/funksjoner/fase2a-svar-regler-bygninger.md`, A234–A240, migrering `0031_svar-regler-bygninger`, versjon 0.9.0)
+- [x] **Rette en ordre etter at den er lagret** (T1, «full redigeringstilgang. alltid»): også etter at ordren er blitt oppdrag. Endrer A55 og A87. Endringene logges. Bygget på branch `rette-ordre` (13.11.2026, PR #184): «Endre ordren» på ordresiden, alle statuser, oppdraget endres ikke, endringene i revisjonsloggen. Se `docs/funksjoner/fase2a-rette-ordre.md`, A249–A254. Merget 13.11.2026 (PR #184).
 
 ## Fase 2a – Prioritert av Ståle 12.11.2026
 
