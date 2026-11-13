@@ -23,7 +23,7 @@ import { orderInputSchema, rejectReasonSchema, type OrderInput } from "./schemas
  *
  * Hendelser og revisjonslogg skrives i samme transaksjon som endringen. Oppretting, avvisning og
  * konvertering får aldri adresse, bestiller, matrikkel eller borettslag. Endring (`update`) er
- * eneste ordrehandling med gamle og nye verdier, og bare i revisjonsloggen (A252, spørsmål 78).
+ * eneste ordrehandling med gamle og nye verdier, og bare i revisjonsloggen (A252, spørsmål 79).
  */
 
 const MANUAL_SOURCE: OrderSource = "manual";

@@ -44,6 +44,8 @@ export const assignmentParties = pgTable(
       table.organizationId,
       table.contactId,
     ),
+    // Partene som peker på et firma (slå sammen firma). Nattløkken 13.11.2026.
+    index("assignment_parties_organization_id_firm_id_idx").on(table.organizationId, table.firmId),
     // Kontakten og firmaet må høre til samme organisasjon som parten
     foreignKey({
       name: "assignment_parties_contact_fk",

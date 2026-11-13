@@ -212,5 +212,5 @@ Fil: `e2e/fase-2a-rette-ordre.spec.ts` (ny). Bruker `logIn`, `logInAsOffice` og 
 - 2.6.4, 2.6.8 og 3.5 leter etter de faktiske verdiene, ikke bare nøkkelnavn.
 - Ingen tilgangslogikk i `page.tsx` eller komponentene (bare `canEditOrders` for å vise knappen).
 - Ingenting slettes permanent; slettet ordre forblir slettet (2.3.2).
-- A55 og A87 er merket som endret av T1, A249–A254 og spørsmål 78 er ført i `docs/09-apne-sporsmal.md`.
+- A55 og A87 er merket som endret av T1, A249–A254 og spørsmål 79 er ført i `docs/09-apne-sporsmal.md`.
 - Versjonen i `package.json` er økt (0.10.3 → 0.10.4).

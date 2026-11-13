@@ -2,14 +2,14 @@
 id: T-0003
 tittel: Ståles svar om fukt i eldre bad (59a) står med ulik mening i planen, og det strider mot TG-vilkårene
 type: feil
-alvor: middels
-status: rettet
+alvor: lite
+status: ny
 funnet: 2026-11-11
 rolle: test-fag, test-dokumentvakt
 omrade: regler (2a-2), plan
 maal: reklamasjoner
 commit: 0b8e3b9
-forsok: 0
+forsok: 1
 pr: #167 (12.11.2026)
 ---
 
@@ -38,3 +38,4 @@ Før regelen for badet lages: skriv planlinjen om til «målt uten forhøyet fuk
 ## Logg
 - 2026-11-11: funnet
 - 2026-11-12: rettet på branch `fase2a-regler-bad`: én tolkning (A224), planlinjen sier «målt uten forhøyet fukt», svaret som anbefalte TG1 er merket erstattet, og reglene har testsaker for hvert tilfelle (`docs/funksjoner/fase2a-regler-bad.md`).
+- 2026-11-13: prøvd på nytt på main e013fde7: fortsatt feil, men bare i ett dokument. Regelen og testsakene er riktige (F1, F2). S3-raden under «Venter på Ståle» i `docs/07-utviklingsplan.md` (ca. linje 87) sier fortsatt «TG0 gis når det ikke er målt fukt, uansett hvor gammelt badet er». Det strider mot Ståles svar F2 (ikke hull og ikke målt gir TGIU). Satt tilbake til «ny», forsøk 1, alvor senket til lite etter råd fra kontrolløren. Rett S3-raden til «TG0 når det er tatt hull og målt uten forhøyet fukt; ikke målt gir TGIU».

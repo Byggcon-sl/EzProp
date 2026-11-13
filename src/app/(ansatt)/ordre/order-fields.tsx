@@ -141,7 +141,10 @@ export function OrderFields({
           defaultValue={textValue(state, "housingAssociationName", defaults.housingAssociationName)}
         />
       </Field>
+      {/* Ny nøkkel på avkrysningen etter hvert forsøk: React tilbakestiller skjemaet, og den tar
+          ellers ikke valget fra forrige forsøk. */}
       <Checkbox
+        key={state.attempt}
         name="sellerDeclarationReceived"
         label="Egenerklæring mottatt"
         defaultChecked={sellerDeclarationChecked}

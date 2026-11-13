@@ -1,42 +1,41 @@
 # Rapport fra testlaget
 
-**Kjøring 12.11.2026.** Det som er nytt siden 11.11 ble prøvd: vask av persondata før KI, KI-køen uten nett, evalueringssettet, koblingen til KI-leverandør, rettingen av synkfeilen og dokumentene. Fem testere: takstmann, kontor, robusthet, KI og dokumentvakt. Hovedløkken og nattløkken er begge slått på.
+**Kjøring 13.11.2026.** Det som er nytt siden 12.11 ble prøvd: Microsoft-innloggingen, Byggcon-profilen og hopplenken, reglene og malen for badet, etasjer og rom, og dokumentene. Fem testere: takstmann, kontor, robusthet, fag og dokumentvakt. Hovedløkken og nattløkken er begge slått på.
 
 ## Hva er prøvd
-KI-prøvesiden med og uten nett på iPad-størrelse og PC, utlogging og innlogging, to faner, dobbelttrykk, lange og rare tekster, 40 skrivemåter av persondata gjennom vasken, tilgang for kontor, leder og annen organisasjon, kontorets hovedflyt fra ordre til oppdrag, og om plan, beslutninger og kode stemmer overens. Kontrollpunkter, avvik, TG, publisering og PDF er ikke bygget ennå.
+Bygninger, etasjer, areal og rom på iPad-størrelse og PC. Kontorets flyt fra ordre til fakturert, parter, reklamasjon og avtaler. Innlogging med Microsoft og kode, også med feil og avbrudd. Tilgang for kontor, leder og annen organisasjon. Badreglene med 85 testsaker og 21 egne grensetilfeller. Om planen og beslutningene stemmer med det som er bygget. Badet har ingen skjerm ennå, så TG, avvik, publisering og PDF er bare prøvd i data.
 
 ## Hva virker
-- **De tre viktigste feilene fra i går er rettet og lukket:** synken stopper ikke lenger på én endring (T-0001), og KI-kortet sletter ikke lenger egen tekst ved «Bruk» eller «Angre» (T-0004, T-0005).
-- **KI uten nett:** ett trykk legger teksten i kø, og forslaget kommer av seg selv når nettet er tilbake. Logger en annen ansatt inn, slettes køen uten å bli sendt.
-- **KI i bunnen holder:** én vei inn, alt logges, bare vasket tekst sendes, og ekte leverandør kan ikke slås på ved en feil. Ingen persondata i serverloggen.
-- **Tilgang holder:** annen organisasjon ser ingenting, kontoret ser ikke KI, admin eller reklamasjoner.
-- **Kontorets arbeid** er ikke ødelagt av endringene.
+- **Tre funn fra forrige gang er rettet og lukket:** kjeller får riktig etasje og «under terreng» (T-0010), kryperom og uinnredet loft regnes ikke som BRA (T-0016), og reglene kan si «ikke vurdert» når data mangler (T-0015).
+- **Microsoft-innloggingen er trygg:** feil, avbrudd og forsøk på å lure den sender tilbake til innloggingen med en norsk melding. Ingen persondata i loggen. En ansatt som er tatt bort, kommer ikke inn.
+- **Badreglene følger Ståles svar:** grensene for alder og fukt slår til der de skal, og manglende data gir «ikke vurdert», aldri et stille nei.
+- **Tilgang holder,** og kontorets arbeid virker. Profilen gir store nok trykkflater og ingen sidelengs rulling på iPad.
 
 ## Hva virker ikke (viktigst først)
-1. **KI-hjelpen kan fjerne målinger fra teksten.** Fire fuktmålinger eller to årstall etter hverandre blir tatt for et telefonnummer. Trykker takstmannen «Bruk», står det «[telefon]» der målingene sto, uten varsel (T-0036). Må rettes før kortet brukes på avviksteksten i badet.
-2. **«Logg ut» uten nett gjør ingenting og sier ikke fra.** Den ansatte er fortsatt innlogget, og tekst som venter på KI, blir liggende. På en delt iPad kan han tro at han er ute (T-0037).
-3. **Vasken slipper gjennom noen skrivemåter:** «(at)» i e-post, telefon skrevet siffer for siffer, «N-8006 Bodø» og gatenavn som Solsvingen og Granlia (T-0044). Trygt nå fordi bare den falske KI-en finnes. Må tettes før ekte KI.
-4. **Ingenting stopper en TG som KI selv legger til** i et forslag. I dag hindres det bare av instruksen til KI (T-0046).
-5. **Evalueringssettet viser 100 %, men måler ikke nytte.** Den falske KI-en gjentar bare teksten og består likevel (T-0047). Bør utvides før det brukes penger på en kjøring mot ekte KI.
-6. **Dokumentene henger etter igjen:** planen er ikke ryddet etter siste leveranse (T-0021, forsøk 1), og tilstandsfilen har flere doble linjer (T-0024).
+1. **Valg i nedtrekkslister hopper tilbake etter en feilmelding, og feil verdi blir lagret uten varsel** (alvorlig, T-0050). Gjelder areal (målemetode, målt av), eiendom (boligtype, eierform), reklamasjon (forsikringskrav blir lagret som reklamasjon), parter og avtaler. Feil kan havne i rapporten. Rettes før neste nye punkt.
+2. **Planen har mistet Ståles beslutninger fra 12.11** om live diktat og KI-briller som strekkmål 6 (T-0052). En senere endring skrev over dem.
+3. **Valget «Ukjent (byggeåret for bygningen brukes)» gjør ikke det det lover.** Et gammelt bad med ukjent alder får ikke TG3-forslaget (T-0051).
+4. **To ting i badmalen kan gi en rapport som sier imot seg selv:** «utført uten funn» sammen med forhøyet fukt (T-0059), og «må» i tiltaket når TG2 velges (T-0060).
+5. **Rommene følger ikke etasjen** når den endres til eller fra «under terreng», og «1. etasje» gir ikke alltid etasjenummer 1 (T-0053, T-0054).
+6. **Dokumentene henger etter:** endringsloggen er ikke ryddet (T-0021, forsøk 2), planen har en gammel linje om fukt i bad (T-0003), og flere grunndokumenter er ikke oppdatert etter 12.11.
 
-I tillegg kom 9 små ting, mest i dokumentene.
+I tillegg kom 12 små ting, blant annet at en ansatt kan endre sitt eget visningsnavn utenom admin (T-0057).
 
 ## Tall
 | Nye funn | Åpne | Lukket |
 |---|---|---|
-| 14 (0 alvorlige, 5 middels, 9 små) | 46 (0 alvorlige, 20 middels, 26 små) | 3 |
+| 19 (1 alvorlig, 4 middels, 14 små) | 61 (1 alvorlig, 19 middels, 41 små) | 3 |
 
-En uavhengig kontrollør gjenskapte T-0036 og T-0037. Fire rettede funn ble prøvd på nytt: tre er lukket, ett er fortsatt feil (T-0021). T-0034 er hevet fra lite til middels.
+En uavhengig kontrollør gjenskapte de alvorlige og middels funnene. Seks rettede funn ble prøvd på nytt: tre er lukket, T-0014 er fortsatt delvis rettet, og T-0003 og T-0021 er fortsatt feil.
 
-**Ikke bekreftet:** dokumentvakten meldte at spørsmålene til fagrådet (65–72) ikke står under «Trenger Ståle». Kontrolløren dømte det som duplikat av T-0002, T-0003 og T-0007.
+**Ikke bekreftet:** ingen. Ett funn om etasjenummer ble dømt «ikke feil» (det står slik i oppgavekortet), og er tatt som forbedring (T-0054).
 
-**Til Ståle:** ingen nye forslag eller spørsmål denne gangen. To nye rader (A171 og A193) i `docs/agenter/testlag/beslutninger-til-staale.md`.
+**Til Ståle:** ingen nye forslag. Fire nye spørsmål til fagrådet (nr. 78 i `docs/09-apne-sporsmal.md`). 18 nye rader (A200–A238) i `docs/agenter/testlag/beslutninger-til-staale.md`.
 
 ## De tre viktigste tingene
-1. **Ståle må selv:** slå av Spectora Advanced før ca. 23.11.2026 (ellers koster det penger), og bytte passordene til IVIT, Spectora og SmartTakst (T-0002, åpent siden 11.11).
-2. **Før badet bygges (2a-2):** KI-kortet må slutte å bytte målinger med «[telefon]» (T-0036), og svaret om fukt i eldre bad (59a) må avklares (T-0003).
-3. **Før ekte KI slås på:** tett hullene i vasken, kontroller svaret for TG, og la evalueringssettet måle nytte (T-0044, T-0046, T-0047, T-0034).
+1. **Rett nedtrekkslistene** (T-0050), så det den ansatte valgte, faktisk blir lagret.
+2. **Før live diktat og strekkmål 6 tilbake i planen** (T-0052), så fase 2b bygges slik Ståle vil.
+3. **Før «Badet på PC»:** byggeår når alderen er ukjent, motstriden om fukt, og «bør» ved TG2 (T-0051, T-0059, T-0060).
 
-Sist kjørt på commit: 11672aa
-Dato: 12.11.2026
+Sist kjørt på commit: e013fde7
+Dato: 13.11.2026

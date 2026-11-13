@@ -35,12 +35,15 @@ export function TeamMemberForm({
       <FormErrors state={state} />
       <input type="hidden" name="assignmentId" value={assignmentId} />
       <input type="hidden" name="teamRole" value={teamRole} />
+      {/* Ny nøkkel på listen etter hvert forsøk: React tilbakestiller skjemaet, og listen tar
+          ellers ikke valget fra forrige forsøk. */}
       <Field
         label={`Velg ${roleLabel.toLowerCase()}`}
         htmlFor={`${id}-employee`}
         error={state.fieldErrors.employeeId}
       >
         <Select
+          key={state.attempt}
           id={`${id}-employee`}
           name="employeeId"
           defaultValue={textValue(state, "employeeId", currentEmployeeId)}

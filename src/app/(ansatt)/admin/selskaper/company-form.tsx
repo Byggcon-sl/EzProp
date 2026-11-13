@@ -59,7 +59,10 @@ export function CompanyForm({
             />
           </Field>
         </div>
+        {/* Ny nøkkel på avkrysningen etter hvert forsøk: React tilbakestiller skjemaet, og den tar
+            ellers ikke valget fra forrige forsøk. */}
         <Checkbox
+          key={state.attempt}
           name="vatRegistered"
           label="Registrert i MVA-registeret"
           defaultChecked={vatRegistered}

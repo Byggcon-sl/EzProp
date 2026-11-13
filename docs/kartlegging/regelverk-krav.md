@@ -60,7 +60,7 @@ Hører sammen med `kravdokument.md` i samme mappe.
 
 | TG | Vilkår (kort, egne ord) | Må ha med (forskriften § 2-22 + NS 3600) |
 |---|---|---|
-| TG0 | Tilnærmet ny (0–5 år), ingen avvik, og dokumentasjon på god utførelse. Alle vilkår må være oppfylt. | – |
+| TG0 | Tilnærmet ny (0–5 år), ingen avvik, og dokumentasjon på god utførelse. Alle vilkår må være oppfylt. Unntak (Ståle 12.11.2026, F1): tilliggende konstruksjoner i våtrom ved hulltaking uten funn og måling under grensen. | – |
 | TG1 | Mindre avvik og normal slitasje, eller ny men uten dokumentasjon | – |
 | TG2 | Vesentlige avvik, symptom på skade, behov for tiltak snart, eller usikker fremtidig funksjon på grunn av alder (tillegg C) | Årsak og konsekvens |
 | TG3 | Store eller alvorlige avvik, funksjonssvikt, fare for liv og helse | Årsak, konsekvens **og kostnadsanslag** |
@@ -123,7 +123,7 @@ Disse er TG-vilkår og gjelder derfor. Vilkårene bør likevel bekreftes av fagr
 | Loft uten adkomst i **nyere konstruksjoner der det ikke er meningen at man skal komme inn** | Unntak: gir ikke TG2 bare fordi adkomst mangler | – |
 | Dokumentasjon av vanntett sjikt i våtrom | TG0, TG1, TG2 | TG3 |
 | Dokumentasjon av diffusjonstetting i våtrom | TG0, TG2 | TG1, TG3 |
-| Del eldre enn 5 år | TG1–TG3 | TG0 |
+| Del eldre enn 5 år | TG1–TG3 (unntak F1: tilliggende konstruksjoner i våtrom kan få TG0 etter hulltaking) | TG0 |
 | TG3 bare på grunn av alder | bare for vanntett sjikt i våtrom fra før 2000 | alt annet |
 
 Kilde: krypkjeller NS 3600 A.2.7.1 og tabell 2 (sidemannskontroll del 1, R4). Loft A.3.18.1 (LES-MEG 25.10.2026).
@@ -204,7 +204,7 @@ Alle andre mangler gir vanlig advarsel. Publisering tross advarsel logges. Eksem
 
 1. El, rekkverk og lovlighet/HMS: beskrivelse uten TG.
 2. Areal: BRA totalt og fordelt på BRA-i, BRA-e og BRA-b.
-3. TG-vilkårene: TG0 bare ved 0–5 år og dokumentasjon. TG3 på alder bare for våtrom fra før 2000.
+3. TG-vilkårene: TG0 bare ved 0–5 år og dokumentasjon, unntatt tilliggende konstruksjoner i våtrom etter hulltaking uten funn (F1, `wet_room.adjacent`). TG3 på alder bare for våtrom fra før 2000.
 4. Låste grader for krypkjeller og loft (avsnitt 2).
 5. Gyldighet: varsel når rapporten nærmer seg ett år.
 

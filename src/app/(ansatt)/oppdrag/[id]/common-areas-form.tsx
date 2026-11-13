@@ -41,9 +41,16 @@ export function CommonAreasForm({
 
   function answerSelect(name: "conditionReportStatus" | "maintenancePlanStatus", label: string) {
     const id = `common-areas-${name}`;
+    // Ny nøkkel på listen etter hvert forsøk: React tilbakestiller skjemaet, og listen tar ellers
+    // ikke valget fra forrige forsøk.
     return (
       <Field label={label} htmlFor={id} error={state.fieldErrors[name]}>
-        <Select id={id} name={name} defaultValue={textValue(state, name, initial[name])}>
+        <Select
+          key={state.attempt}
+          id={id}
+          name={name}
+          defaultValue={textValue(state, name, initial[name])}
+        >
           {answers.map((answer) => (
             <option key={answer.value} value={answer.value}>
               {answer.label}

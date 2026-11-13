@@ -63,6 +63,8 @@ export const contacts = pgTable(
       table.lastName,
       table.firstName,
     ),
+    // Kontaktene i et firma (firmasiden, slå sammen firma). Nattløkken 13.11.2026.
+    index("contacts_organization_id_firm_id_idx").on(table.organizationId, table.firmId),
     // Firmaet må høre til samme organisasjon som kontakten
     foreignKey({
       name: "contacts_firm_fk",

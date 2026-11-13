@@ -149,7 +149,10 @@ export function EmployeeDetailsForm({
             defaultValue={textValue(state, "jobTitle", employee?.jobTitle)}
           />
         </Field>
+        {/* Ny nøkkel på valgene etter hvert forsøk: React tilbakestiller skjemaet, og valgene tar
+            ellers ikke det som ble valgt i forrige forsøk. */}
         <ChoiceRadios
+          key={`companyId-${state.attempt}`}
           id="companyId"
           legend="Selskap (valgfritt)"
           choices={companies}
@@ -157,6 +160,7 @@ export function EmployeeDetailsForm({
           error={error("companyId")}
         />
         <ChoiceRadios
+          key={`officeId-${state.attempt}`}
           id="officeId"
           legend="Kontor (valgfritt)"
           choices={offices}
@@ -165,6 +169,7 @@ export function EmployeeDetailsForm({
         />
         {isNew && (
           <RoleChoices
+            key={state.attempt}
             selected={listValue(state, "roles", ["inspector"])}
             error={error("roles")}
             withDescriptions={false}
@@ -218,7 +223,8 @@ export function RolesForm({
   locked: boolean;
 }) {
   const [state, formAction] = useActionState(action, initialFormState);
-  // Stoppes endringen (for eksempel siste admin), står avkryssingen slik den var før.
+  // Stoppes endringen (for eksempel siste admin), står avkryssingen slik den var før. Ny nøkkel
+  // per forsøk, fordi React tilbakestiller skjemaet og avkrysningene ellers ikke følger med.
   const selected = state.message ? roles : listValue(state, "roles", roles);
   return (
     <form action={formAction} noValidate>
@@ -226,7 +232,12 @@ export function RolesForm({
         <FormErrors state={state} />
         {locked && <p className="text-sm text-slate-600">{LOCKED}</p>}
         <fieldset disabled={locked} className="min-w-0 space-y-5">
-          <RoleChoices selected={selected} error={state.fieldErrors.roles} withDescriptions />
+          <RoleChoices
+            key={state.attempt}
+            selected={selected}
+            error={state.fieldErrors.roles}
+            withDescriptions
+          />
           <SubmitButton variant="secondary" size="md">
             Lagre roller
           </SubmitButton>
@@ -259,7 +270,7 @@ export function PermissionsForm({
           <ChoiceGroup id="permissions" legend="Rettigheter" hint="I tillegg til rollene.">
             {grantable.map((permission) => (
               <Checkbox
-                key={permission}
+                key={`${permission}-${state.attempt}`}
                 name="permissions"
                 value={permission}
                 label={permissionLabels[permission]}

@@ -39,3 +39,4 @@ Ikke etterprøvd (forbedring).
 ## Logg
 - 2026-11-11: funnet
 - 2026-11-12: delvis rettet i PR #167 (branch `fase2a-regler-bad`): punkt 2, 3 og 4 rettet med kontrollene i malmotoren; punkt 1 og 5 gjenstår til den automatiske kontrollen før publisering i 2a-3.
+- 2026-11-13: prøvd på nytt på main e013fde7: fortsatt delvis rettet. Punkt 2, 3 og 4 er rettet. Punkt 1 (`gives_tg = false` med utfallet tg3) og punkt 5 (TG3-forslag uten betingelse) godtas fortsatt, og er lagt til den automatiske kontrollen i 2a-3. Status «delvis rettet» står, alvor middels. Forsøk økes ikke, fordi punkt 1 og 5 ikke er meldt rettet.

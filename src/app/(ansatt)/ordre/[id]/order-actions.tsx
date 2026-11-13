@@ -36,6 +36,8 @@ export function ConvertOrderForm({
         <form action={formAction} noValidate className="space-y-5">
           <FormErrors state={state} />
           <input type="hidden" name="orderId" value={orderId} />
+          {/* Ny nøkkel på listen etter hvert forsøk: React tilbakestiller skjemaet, og listen tar
+              ellers ikke valget fra forrige forsøk. */}
           <Field
             label="Kontor"
             htmlFor="officeId"
@@ -43,6 +45,7 @@ export function ConvertOrderForm({
             error={state.fieldErrors.officeId}
           >
             <Select
+              key={state.attempt}
               id="officeId"
               name="officeId"
               defaultValue={textValue(state, "officeId", defaultOfficeId)}

@@ -37,3 +37,4 @@ Ikke etterprøvd (lite). To funn fra dokumentvakten er slått sammen her.
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-13: nytt: spørsmål 77 står to ganger i tabellen «Spørsmål til Ståle» i `docs/09-apne-sporsmal.md` (to like rader).

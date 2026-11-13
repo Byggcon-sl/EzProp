@@ -17,7 +17,7 @@ export const auditLog = pgTable(
     action: text("action").notNull(),
     /**
      * Gammel og ny verdi per felt. Aldri passord eller nøkler. For ordre er `update` eneste
-     * handling med verdier: `{ fields, values: { [feltkode]: { from, to } } }` (A252, spørsmål 78).
+     * handling med verdier: `{ fields, values: { [feltkode]: { from, to } } }` (A252, spørsmål 79).
      */
     changes: jsonb("changes").$type<Record<string, unknown>>().notNull().default({}),
     deviceId: uuid("device_id"),

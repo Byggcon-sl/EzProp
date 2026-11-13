@@ -18,7 +18,7 @@ import { orderInputSchema, type OrderInput } from "./schemas";
  *
  * Personvern: input, raden, endringene og Zod-feilen sendes aldri til `logger`, og ingen feil som
  * kastes her har verdier i meldingen. Hendelsen får bare feltkodene. Gamle og nye verdier står bare
- * i revisjonsloggen under `values` (A252, spørsmål 78).
+ * i revisjonsloggen under `values` (A252, spørsmål 79).
  */
 
 type FieldValue = string | boolean | null;

@@ -363,6 +363,7 @@ export function suggestAreaType(roomType: string): AreaType {
 /**
  * Dataregel (A97): forslag til «under terreng» for et rom. Sant når etasjen er under terreng, eller
  * romtypen vanligvis er det. Hellere ett forslag for mye enn ett for lite (styrer hulltaking).
+ * Unntak (F6, A239): kryperom har aldri krav om hulltaking, selv om rommet står under terreng.
  */
 export function suggestBelowGround({
   roomType,
