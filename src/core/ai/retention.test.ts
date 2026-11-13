@@ -371,8 +371,11 @@ describe("lagring og lesing av innstillingen (I1–I13)", () => {
     // Radlåsen gjør at den andre ser den første: to rader, kjedet gammel → ny
     const rows = await auditRows(organization.id);
     expect(rows).toHaveLength(2);
-    const [first, second] = rows.map((row) => row.changes as { old: number; new: number });
-    expect(first!.old).toBe(10);
+    // Radene kan ha samme tidspunkt, så rekkefølgen finnes fra kjeden, ikke fra sorteringen
+    const changes = rows.map((row) => row.changes as { old: number; new: number });
+    const first = changes.find((change) => change.old === 10);
+    const second = changes.find((change) => change !== first);
+    expect(first).toBeDefined();
     expect(second!.old).toBe(first!.new);
     expect(second!.new).toBe(final);
   });
