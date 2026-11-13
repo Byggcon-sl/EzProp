@@ -3,16 +3,19 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { AccessDeniedError } from "@/core/access";
 import { listOffices } from "@/core/organization";
-import { getOrder } from "@/core/orders";
+import { getOrder, listOrderHistory } from "@/core/orders";
 import { isUuid } from "@/shared/lib/uuid";
 import { Card } from "@/shared/ui/card";
+import { Notice } from "@/shared/ui/notice";
 import { getEmployeeContext } from "../../employee-context";
 import { NoAccess } from "../../no-access";
-import { convertOrderAction, rejectOrderAction } from "../actions";
+import { convertOrderAction, rejectOrderAction, updateOrderAction } from "../actions";
 import { officeChoice } from "../office-choice";
 import { OrderStatusBadge } from "../order-status-badge";
-import { formatOsloDateTime } from "../received-at";
+import { formatOsloDateTime, osloDateTimeLocal } from "../received-at";
 import { ConvertOrderForm, RejectOrderForm } from "./order-actions";
+import { OrderEditSection } from "./order-edit-form";
+import { OrderHistory } from "./order-history";
 
 export const metadata: Metadata = { title: "Ordre" };
 
@@ -28,17 +31,27 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
 const EMPTY = <span className="text-slate-500">Ikke oppgitt</span>;
 
 /**
- * Ordren med «Gjør om til oppdrag» og «Avvis» når den er mottatt og den ansatte kan endre.
- * Ugyldig, ukjent og fremmed id gir samme svar som manglende tilgang.
+ * Ordren med «Endre ordren» (alle statuser, T1) og «Gjør om til oppdrag» og «Avvis» når den er
+ * mottatt, når den ansatte kan endre. Under ordren står «Endringer». Ugyldig, ukjent og fremmed id
+ * gir samme svar som manglende tilgang. `?endret=1` viser kvitteringen etter «Lagre».
  */
-export default async function OrderPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function OrderPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id } = await params;
+  const { endret } = await searchParams;
   const context = await getEmployeeContext();
   if (!context || !isUuid(id)) return <NoAccess />;
 
   let order: Awaited<ReturnType<typeof getOrder>>;
+  let history: Awaited<ReturnType<typeof listOrderHistory>>;
   try {
     order = await getOrder(context.actor, context.organizationId, id);
+    history = await listOrderHistory(context.actor, context.organizationId, id);
   } catch (error) {
     if (error instanceof AccessDeniedError) return <NoAccess />;
     throw error;
@@ -48,6 +61,20 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const choice = canHandle
     ? officeChoice(await listOffices(context.actor, context.organizationId), context.officeId)
     : null;
+
+  // «Gjør om» og «Avvis» skjules mens «Endre ordren» er åpent (bare én «Lagre» på siden).
+  const handling = choice && (
+    <div className="mt-6 space-y-6">
+      <ConvertOrderForm
+        orderId={order.id}
+        offices={choice.offices.map((office) => ({ id: office.id, name: office.name }))}
+        defaultOfficeId={choice.defaultOfficeId}
+        emptyMessage={choice.emptyMessage}
+        action={convertOrderAction}
+      />
+      <RejectOrderForm orderId={order.id} action={rejectOrderAction} />
+    </div>
+  );
 
   return (
     <main className="max-w-2xl">
@@ -64,6 +91,12 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         </h1>
         <OrderStatusBadge status={order.status} />
       </div>
+
+      {endret === "1" && (
+        <div className="mb-6">
+          <Notice message="Endringene er lagret." />
+        </div>
+      )}
 
       {order.status === "converted" && order.assignmentNumber && (
         <Card className="mb-6">
@@ -123,18 +156,36 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         </dl>
       </Card>
 
-      {choice && (
-        <div className="mt-6 space-y-6">
-          <ConvertOrderForm
-            orderId={order.id}
-            offices={choice.offices.map((office) => ({ id: office.id, name: office.name }))}
-            defaultOfficeId={choice.defaultOfficeId}
-            emptyMessage={choice.emptyMessage}
-            action={convertOrderAction}
-          />
-          <RejectOrderForm orderId={order.id} action={rejectOrderAction} />
-        </div>
+      {context.canEditOrders ? (
+        // Ny nøkkel etter lagring (versjonen øker), så skjemaet lukkes og viser den nye ordren.
+        <OrderEditSection
+          key={order.rowVersion}
+          orderId={order.id}
+          rowVersion={order.rowVersion}
+          converted={order.status === "converted"}
+          action={updateOrderAction}
+          defaults={{
+            addressText: order.addressText,
+            receivedAt: osloDateTimeLocal(new Date(order.receivedAt)),
+            externalRef: order.externalRef ?? "",
+            orderedByText: order.orderedByText ?? "",
+            orderedByContact: order.orderedByContactId
+              ? { id: order.orderedByContactId, name: order.orderedByText || "kontakten" }
+              : null,
+            gnr: order.gnr ?? "",
+            bnr: order.bnr ?? "",
+            snr: order.snr ?? "",
+            housingAssociationName: order.housingAssociationName ?? "",
+            sellerDeclarationReceived: order.sellerDeclarationReceived,
+          }}
+        >
+          {handling}
+        </OrderEditSection>
+      ) : (
+        handling
       )}
+
+      <OrderHistory entries={history} />
     </main>
   );
 }
