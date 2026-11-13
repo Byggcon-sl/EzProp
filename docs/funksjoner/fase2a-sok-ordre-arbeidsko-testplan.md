@@ -1,7 +1,7 @@
 # Testplan: Søk i ordrelisten og i arbeidskøen (T2)
 
 - **Oppgavekort:** `docs/funksjoner/fase2a-sok-ordre-arbeidsko.md`
-- **Dato:** 13.11.2026 (test-leder, før bygging)
+- **Dato:** 13.11.2026 (test-leder, før bygging; oppdatert samme dag etter fortsettelsen)
 - **Støtter hovedmål:** de ansatte (testene låser at kontoret finner riktig ordre eller oppdrag med ett søk, uansett hvilket felt megleren oppgir, og at kontoret starter på «Alle»), reklamasjoner (matrikkel sammenlignes del for del, så «12/34» aldri gir 112/34; ingen treff fra andre organisasjoner) og KI i bunnen (testene viser at søketeksten aldri går til KI eller loggene).
 
 Alle Vitest-tester mot databasen bruker `TEST_DATABASE_URL` og `resetDatabase` i `beforeEach`. Testdata er oppdiktet (adresser som «Fjordgata 7», meglere som «Megler Test», gnr/bnr 12/34 og 999). Ingen ekte navn, adresser eller matrikler.
@@ -118,7 +118,7 @@ Eksisterende 2.4 i `work-queue.test.ts` beholdes og skal fortsatt være grønn.
 6. **tellingene per fane følger søket:** oppdrag «Fjordgata» i Bestilt (1) og Ferdig (2), annet i Under arbeid; søk «fjordgata» → Bestilt 1, Under arbeid 0, Ferdig 2.
 7. **«Treff i andre faner»** (ren hjelper): tom fane + tellinger → lenker bare til faner med treff, i fanerekkefølgen, med antall; tom fane uten treff andre steder → ingen lenker.
 8. **«Mine» og søk sammen:** `mineOnly = true` + søk gir bare egne treff, og tellingene følger.
-9. **tilgang per rolle:** takstmann, kontor, leder og admin kan søke; admin uten andre roller kan søke; ansatt uten roller → `AccessDeniedError`.
+9. **tilgang per rolle:** takstmann, kontor, leder og admin kan søke; admin uten andre roller kan søke; ansatt uten roller → `AccessDeniedError`; ansatt i B mot A sin id → `AccessDeniedError`.
 10. **tenant-isolasjon:** `expectTenantIsolation` for arbeidskøen med søk, `it.each` over feltene som i 3.8.1 (samme tekst i A og B); kryss-koblingen fra 3.8.3; tellingene i A teller aldri B-rader.
 
 ## 5. Standardvalg og lenker, `src/core/assignments/work-queue-params.test.ts` (endres, ingenting slettes)
@@ -140,7 +140,7 @@ Eksisterende 2.4 i `work-queue.test.ts` beholdes og skal fortsatt være grønn.
 
 Én felles spesifikasjon. Testdata legges inn via skjema eller seed med oppdiktede verdier.
 
-1. **ordrelisten:** logg inn som kontor; søkefeltet har etikett «Søk på adresse, nummer, megler eller gnr/bnr» og har **ikke** fokus når siden åpnes; søk på ordrenummeret → raden viser ordrenummeret → trykk raden → ordresiden åpnes. «Tøm søk» viser hele listen igjen.
+1. **ordrelisten:** logg inn som kontor; søkefeltet har etikett «Søk på adresse, nummer, megler eller gnr/bnr» og har **ikke** fokus når siden åpnes; søk på ordrenummeret → adressen har `?q=` → **last siden på nytt: søket står i feltet og treffet er det samme** → raden viser ordrenummeret → trykk raden → ordresiden åpnes. «Tøm søk» viser hele listen igjen og fjerner `q` fra adressen.
 2. **ingen treff:** søk «finnesikke» → «Ingen ordre passer søket.»
 3. **arbeidskøen:** kontoret starter på «Alle» (uten `mine` i adressen); søk på partsnavn → kortet vises.
 4. **tom fane med treff andre steder:** stå i «Under arbeid», søk på adresse som bare finnes i Ferdig → «Ingen treff i denne fanen. Treff i: Ferdig (1).» → trykk lenken → fanen Ferdig med kortet, søket står fortsatt i feltet.
@@ -171,5 +171,20 @@ Tillegg etter test-lederens gjennomgang av fortsettelsen. Testnavnene er faste.
 3. `src/core/contacts/<ny fil>.test.ts`, **«navn til ordrehistorikken: tenant-isolasjon»**: `expectTenantIsolation` med kontakt og firma med samme navn og samme id-mønster i A og B; As historikk viser aldri Bs navn.
 4. Samme fil, **«slettet kontakt og firma gir REMOVED_CONTACT_LABEL og REMOVED_FIRM_LABEL»**.
 5. Kodegjennomgang: `src/core/orders/history.ts` importerer ikke `contacts` eller `firms` fra `@/db/schema`.
-6. **«listesiden logger ikke søketeksten ved databasefeil»** (ordrelisten og arbeidskøen): feil fra listefunksjonen gir `logger`-kall med bare `route`, `userId`, `errorName`; søketeksten finnes ikke i noen loggargument.
-7. **Fletting:** alle T1-tester fra PR #184 (`updateOrder`, `history.ts`, e2e for å rette en ordre) står og er grønne; ingen `skip`/`only`, ingen slettet. `orders.test.ts` har både T1-testene og `listOrders` med grense og total. Sjekkes ved godkjenning med `git diff origin/main -- '*.test.ts' e2e/` (bare tillegg og endringer, ingen fjernede tester).
+6. **«listesiden logger ikke søketeksten ved databasefeil»** (ordrelisten og arbeidskøen, `it.each` over begge): listefunksjonen kastes med en vanlig `Error` som har `%søketekst%` i meldingen (`vi.spyOn`/`vi.mock`); `logger` kalles med bare `route`, `userId`, `errorName`; søketeksten finnes ikke i noe loggargument (`JSON.stringify` av alle kall); den ansatte får «Kunne ikke hente listen. Prøv igjen.». Ligger feilfangsten i siden, legges den i en liten ren hjelper som kan testes uten nettleser (navn fritt).
+7. **«AccessDeniedError fanges ikke som databasefeil»:** samme hjelper slipper `AccessDeniedError` videre (vanlig avvisning, ingen `logger.error`).
+8. `src/core/contacts/<ny fil>.test.ts`, **«navn til ordrehistorikken: kryss-kobling gir ikke navn fra B»**: en historikkrad i A som peker på en kontakt-id og en firma-id som tilhører B → vises som `REMOVED_CONTACT_LABEL`/`REMOVED_FIRM_LABEL`, aldri Bs navn. Funksjonen tar `grant` (eller `organizationId` fra `grant`), ikke en id fra adressen.
+9. **Fletting:** alle T1-tester fra PR #184 (`updateOrder`, `history.ts`, e2e for å rette en ordre) står og er grønne; ingen `skip`/`only`, ingen slettet. `orders.test.ts` har både T1-testene og `listOrders` med grense og total. Sjekkes ved godkjenning med `git diff origin/main -- '*.test.ts' e2e/` (bare tillegg og endringer, ingen fjernede tester).
+10. **Ubrukte eksporter** fjernet fra `src/core/orders/index.ts`: `pnpm typecheck` og `pnpm lint` grønne (ingen egen test).
+
+### 9.1 Dokumenter som sjekkes ved godkjenning (ingen test)
+
+- A-numrene er flyttet til A256–A263 overalt (`docs/09-apne-sporsmal.md`, ADR 0010, kortet, denne planen); ingen dobbel A-linje mot main (A249–A255 er T1).
+- ADR 0010 punkt 7 sier: «søketeksten skrives ikke i applikasjonsloggen; HTTP-loggen i testmiljøet har adressen i 3 dager og slås av før ekte data».
+- «Minimum før ekte data» i planen har punktet om HTTP-loggen, med én linje i `docs/plan/endringslogg.md`.
+- `docs/09-apne-sporsmal.md` har linjen om søketekst i nettleserhistorikken på delte iPader.
+- Testrapporten sier at søket trenger nett, og at befaringen og synken ikke berøres.
+
+### 9.2 Alvorlighet ved godkjenning
+
+Mangler noe av dette, avvises PR-en (alvorlig): `expectTenantIsolation` for `listOrders` med søk, for arbeidskøen med søk og for navneoppslaget i `src/core/contacts`; kryss-koblingstestene (3.8.3, 4.10 og avsnitt 9 nr. 8); tilgang per rolle med admin uten andre roller; testen for `selectOrder` (avsnitt 9 nr. 1); loggtesten (6.1) og feilfangsttesten (avsnitt 9 nr. 6). Resten (tekster, 44 px, fokusring) er lite og kan rettes i neste oppgave i samme område.
