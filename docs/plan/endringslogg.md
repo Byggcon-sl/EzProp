@@ -2,7 +2,7 @@
 
 Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og 09.11.2026).
 
-- **13.11.2026 (Branch `testdata-arbeidshverdag`):** «Testdata som ligner en ekte arbeidshverdag» delt i to (A264). Del 1 (ansatte, firma, kontakter, eiendommer med areal, oppdrag i alle statuser, tidsregistrering og reklamasjoner) er krysset av. Del 2 (bilder laget av skriptet, funn, TG fra regelmotoren, målinger per kontrollpunkt og byggeår) er flyttet til 2a-2 under «Badet på PC», fordi datamodellen ikke har plass til dem ennå.
+- **13.11.2026 (Branch `testdata-arbeidshverdag`):** «Testdata som ligner en ekte arbeidshverdag» delt i to (A300). Del 1 (ansatte, firma, kontakter, eiendommer med areal, oppdrag i alle statuser, tidsregistrering og reklamasjoner) er krysset av. Del 2 (bilder laget av skriptet, funn, TG fra regelmotoren, målinger per kontrollpunkt og byggeår) er flyttet til 2a-2 under «Badet på PC», fordi datamodellen ikke har plass til dem ennå. Ny liten oppgave: produksjonsvakt også på `pnpm db:seed:testoppdrag`.
 - **12.11.2026 (Branch `fase2a-regler-bad`, PR #167):** 2a-2: «Reglene badet trenger» krysset av (regelmotoren i `src/core/rules`, fire regler med testsaker i badmalen, levetider og fuktgrense som utkast, A224–A232). Statuslinjen for 2a oppdatert.
 - **12.11.2026 (Branch `fase2a-regler-bad`, funn T-0003):** Planlinjen for «Reglene badet trenger» (2a-2) presisert etter Ståles svar 10.11.2026 (59a): er det tatt hull og målt uten forhøyet fukt, gir alderen alene ikke TG2 på tilliggende konstruksjoner; hulltaking ikke utført gir TGIU (A224).
 - **12.11.2026 (Prosjektlederen, funn T-0021):** «Beslutningsnotat om KI-leverandør» flyttet til `docs/plan/levert.md` (PR #154). Radene fra 11.–12.11.2026 flyttet fra tabellen hit, så nyeste står øverst. Planen sier «Sist oppdatert: 12.11.2026».
@@ -85,3 +85,5 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 13.11.2026 | Prinsipp: produksjonsklar fra første linje. «Minimum før ekte data» heter nå «Klar for drift» og har fått produksjonsmiljø, overvåking, sikkerhetsgjennomgang, lasttest og driftsrutiner. «Smal vei» heter «Hele veien først». Ord som «enkel» og «første versjon» er tatt bort fra punktene. | Ståle i chat 13.11.2026 |
 | 13.11.2026 | Nytt prioritert punkt: rike testdata i testmiljøet (selskaper, ansatte, meglere, eiendommer, oppdrag i alle statuser, rapporter og bilder), aldri i produksjon. Testmiljø og produksjon holdes adskilt. | Ståle i chat 13.11.2026 |
 | 13.11.2026 | «Søk i ordrelisten og i arbeidskøen» (T2) levert (PR #190) og flyttet til `docs/plan/levert.md`. | Hovedløkken |
+| 13.11.2026 | «Flere rom på én gang med færrest mulig trykk» (T4) krysset av under «Fra Ståles svar 12.11.2026», bygget på branch `flere-rom-samtidig` (`docs/funksjoner/fase2a-flere-rom.md`, A280–A284). | Utvikler, flere-rom-samtidig |
+| 13.11.2026 | «Flere rom på én gang» (T4) levert (PR #194) og flyttet til `docs/plan/levert.md`. | Hovedløkken |

@@ -187,6 +187,12 @@ done
 if [ -n "$LAGT_TIL" ]; then
   ok "La til innstillinger for prøven uten nett i .env:$LAGT_TIL"
 fi
+# Miljøet maskinen er (A302). Testdata (pnpm db:seed:testdata) kan bare legges inn i development
+# eller test. Legges til i en eldre .env; en verdi som står der fra før, endres ikke.
+if ! grep -q "^APP_ENVIRONMENT=" .env; then
+  printf '\n# Lagt til av start.sh. Forklaring i .env.example.\nAPP_ENVIRONMENT=development\n' >>.env
+  ok "La til APP_ENVIRONMENT=development i .env"
+fi
 
 # ---------------------------------------------------------------------------
 steg "Installerer pakker"

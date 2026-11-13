@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { recordAuditEvent } from "@/core/audit";
-import { saveBuilding, saveFloorArea, removeFloor } from "@/core/buildings";
+import { addRooms, saveBuilding, saveFloorArea, removeFloor } from "@/core/buildings";
 import { recordEvent } from "@/core/events";
 import { db } from "@/db/client";
 import {
@@ -12,6 +12,7 @@ import {
   createFloorArea,
   createOrganization,
   createProperty,
+  createRoom,
   createUser,
   resetDatabase,
 } from "../../../tests/factories";
@@ -60,6 +61,28 @@ const FAILURES = [
   ["recordEvent", failEventOnce],
   ["recordAuditEvent", failAuditOnce],
 ] as const;
+
+/**
+ * Lar den ekte funksjonen gå på de første `callNumber - 1` kallene og kaster på kall nr.
+ * `callNumber` (engangs, så ingenting lekker til neste test). For addRooms kalles
+ * `recordAuditEvent`/`recordEvent` én gang per rom, så «feil på kall nr. 3» er «feil på rom nr. 3».
+ */
+function failAuditOnCall(callNumber: number) {
+  const actual = vi.mocked(recordAuditEvent).getMockImplementation()!;
+  for (let i = 1; i < callNumber; i += 1)
+    vi.mocked(recordAuditEvent).mockImplementationOnce(actual);
+  vi.mocked(recordAuditEvent).mockImplementationOnce(async () => {
+    throw new Error(`revisjonsloggen feilet på kall ${callNumber} (test)`);
+  });
+}
+
+function failEventOnCall(callNumber: number) {
+  const actual = vi.mocked(recordEvent).getMockImplementation()!;
+  for (let i = 1; i < callNumber; i += 1) vi.mocked(recordEvent).mockImplementationOnce(actual);
+  vi.mocked(recordEvent).mockImplementationOnce(async () => {
+    throw new Error(`hendelsen feilet på kall ${callNumber} (test)`);
+  });
+}
 
 type DbRow = Record<string, unknown>;
 
@@ -167,4 +190,69 @@ describe("4.6.5 feiler hendelsen eller loggen, finnes ingen endring", () => {
       for (const row of [...beforeFloors, ...beforeAreas]) expect(row.deleted_at).toBeNull();
     },
   );
+});
+
+// ---------------------------------------------------------------------------------------------
+// F10 addRooms: alt eller ingenting (flere rom i én transaksjon)
+// docs/funksjoner/fase2a-flere-rom-testplan.md F10
+// ---------------------------------------------------------------------------------------------
+
+/** Organisasjon, admin og en etasje med ett rom som finnes fra før. */
+async function addRoomsSetup() {
+  const org = await createOrganization();
+  const admin = await createUser({ name: "Test Admin" });
+  await createEmployee(admin, org.id, ["admin"]);
+  const assignment = await createAssignment(org.id);
+  await createProperty(org.id, { assignmentId: assignment.id });
+  const building = await createBuilding(org.id, { assignmentId: assignment.id });
+  const floor = await createFloor(org.id, { buildingId: building.id });
+  const existing = await createRoom(org.id, {
+    floorId: floor.id,
+    roomType: "living_room",
+    name: "Stue",
+  });
+  return { org, admin, floor, existing };
+}
+
+const FIVE_BEDROOMS = {
+  drafts: [{ roomType: "bedroom", count: 5 }],
+  source: "manual",
+} as unknown as Parameters<typeof addRooms>[3];
+
+describe("F10 addRooms feiler midt i: alt eller ingenting", () => {
+  it("F10.1 audit_fails_mid: feil på rom nr. 3 av 5 gir 0 nye rom, loggrader og hendelser", async () => {
+    const { org, admin, floor, existing } = await addRoomsSetup();
+    const before = await counts();
+    const existingBefore = await rows("rooms");
+    failAuditOnCall(3);
+
+    await expect(addRooms(admin, org.id, floor.id, FIVE_BEDROOMS)).rejects.toThrow();
+
+    expect(await counts()).toEqual(before);
+    expect(await rows("rooms")).toEqual(existingBefore);
+    // Rommet som fantes er uendret
+    const [still] = (await rows("rooms")).filter((row) => row.id === existing.id);
+    expect(still?.name).toBe("Stue");
+  });
+
+  it("F10.2 event_fails_mid: feil i hendelsen på rom nr. 3 gir 0 endring", async () => {
+    const { org, admin, floor } = await addRoomsSetup();
+    const before = await counts();
+    failEventOnCall(3);
+
+    await expect(addRooms(admin, org.id, floor.id, FIVE_BEDROOMS)).rejects.toThrow();
+    expect(await counts()).toEqual(before);
+  });
+
+  it("F10.3 retry_after_fail: nytt kall etter feil lagrer alle 5 uten hull i numrene", async () => {
+    const { org, admin, floor } = await addRoomsSetup();
+    failAuditOnCall(3);
+    await expect(addRooms(admin, org.id, floor.id, FIVE_BEDROOMS)).rejects.toThrow();
+
+    const result = await addRooms(admin, org.id, floor.id, FIVE_BEDROOMS);
+    expect(result.names).toEqual(["Soverom 1", "Soverom 2", "Soverom 3", "Soverom 4", "Soverom 5"]);
+    const saved = await rows("rooms");
+    const bedrooms = saved.filter((row) => row.room_type === "bedroom" && row.deleted_at === null);
+    expect(bedrooms).toHaveLength(5);
+  });
 });

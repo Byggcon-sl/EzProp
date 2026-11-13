@@ -8,7 +8,7 @@ Alle Vitest-tester mot databasen bruker `TEST_DATABASE_URL`, `resetDatabase` i `
 
 ## Avvik mellom oppgaveteksten og kortet (gjelder testplanen)
 
-Oppgaveteksten nevner bilder, funn, TG og målinger. Kortet (A264) flytter dette til del 2 under 2a-2 «Badet på PC», fordi datamodellen ikke har plass (`files` har ingen kobling til rom eller avvik, ingen tabell for rapportsvar, ingen byggeår-kolonne). Testplanen følger kortet. Den har derfor en **negativ** test (6.4): skriptet lager ingen `files`, ingen TG og ingen rader i regel- eller maltabellene. Når del 2 bygges, får den egen testplan.
+Oppgaveteksten nevner bilder, funn, TG og målinger. Kortet (A300) flytter dette til del 2 under 2a-2 «Badet på PC», fordi datamodellen ikke har plass (`files` har ingen kobling til rom eller avvik, ingen tabell for rapportsvar, ingen byggeår-kolonne). Testplanen følger kortet. Den har derfor en **negativ** test (6.4): skriptet lager ingen `files`, ingen TG og ingen rader i regel- eller maltabellene. Når del 2 bygges, får den egen testplan.
 
 ## Avtale om signaturer (utvikler og testskriver)
 
@@ -39,7 +39,7 @@ Navnene kan endres, men avvik føres i kortet.
 
 ## 3. Datafilen, `src/db/seed/testdata.data.test.ts` (ny, ren)
 
-### 3.1 Ingen ekte-lignende data (A265)
+### 3.1 Ingen ekte-lignende data (A301)
 
 1. **e-post:** hver streng med `@` i hele datafilen (regex over `JSON.stringify`) ender på `@testdata.invalid`.
 2. **telefon:** hvert telefonnummer følger `TESTDATA_PHONE_PATTERN` og går gjennom telefonvalideringen i `src/core/contacts/schemas.ts`.
@@ -65,7 +65,7 @@ Navnene kan endres, men avvik føres i kortet.
 
 ### 3.3 Faglige krav (regeltester, `it.each` over eiendommene)
 
-1. **arealtype følger `suggestAreaType`** (`src/core/buildings/codes.ts`) for hver romtype; garasje og utebod er `bra_e`; `bra_b` bare på innglasset balkong (A269).
+1. **arealtype følger `suggestAreaType`** (`src/core/buildings/codes.ts`) for hver romtype; garasje og utebod er `bra_e`; `bra_b` bare på innglasset balkong (A305).
 2. **etasjens arealtyper:** BRA-e og BRA-b i etasjen har rom med samme arealtype.
 3. **ALH** bare på loft og hems, og aldri samtidig talt som BRA.
 4. **`not_bra`** på kryperom og uinnredet loft.
@@ -157,7 +157,7 @@ Brukere: én TD-ansatt per rolle (aktør gjennom `requireOrganizationAccess`), p
 
 1. **stdout og stderr** fra to kjøringer (og fra en vaktstopp) har ingen `@`, ingen navn, gatenavn, telefonnummer eller firmanavn fra datafilen (`it.each` over alle strenger i datafilen med lengde ≥ 4), bare antall og `TD-`-nøkler.
 
-### 4.11 Ytelse (akseptkriterium 13, A270)
+### 4.11 Ytelse (akseptkriterium 13, A306)
 
 1. **`listWorkQueue`** for hver fane, og **`listOrders`** med og uten søkeord, svarer på under 2 s med full testdata (median av 3 kall, etter ett oppvarmingskall).
 2. **ordrelisten over grensen:** med flere TD-ordre enn `ORDER_LIST_LIMIT` (50) gir `listOrders` 50 rader og riktig `total`, og `orderListSummary` gir teksten om at ikke alle vises.
@@ -178,7 +178,7 @@ Brukere: én TD-ansatt per rolle (aktør gjennom `requireOrganizationAccess`), p
 1. ingen nye rader i `ai_usage_log` (også i 4.2.1).
 2. ingen rader i `sessions` eller `accounts` for TD-brukere.
 3. ingen endring i prøveorganisasjonen (`countRows(prøveorg)` uendret når `runSampleSeed` er kjørt før).
-4. ingen `files`, ingen rader i regel-, mal- eller svartabellene, ingen TG (A264).
+4. ingen `files`, ingen rader i regel-, mal- eller svartabellene, ingen TG (A300).
 5. ingen `client_agreements`.
 
 ## 7. E2e, `e2e/fase-2a-testdata.spec.ts` (ny, `pc` og `ipad`)
@@ -203,4 +203,4 @@ Brukere: én TD-ansatt per rolle (aktør gjennom `requireOrganizationAccess`), p
 - **F1 (lite):** kortets e2e-kriterium sier «ordrelisten viser alle statuser og statusfilteret virker», men ordrelisten (`/ordre`) har bare søk, ingen statusfilter. Statusfilteret finnes i arbeidskøen. Testplanen prøver filteret der. Kortet bør rettes, ikke ny funksjon bygges.
 - **F2 (lite):** det finnes ingen samlet reklamasjonsliste; sakene vises per oppdrag (`/oppdrag/[id]/reklamasjoner/…`). E2e 7.4 prøver dem der.
 - **F3 (lite):** vertsjekken «starter med `psql-ezprop-test`» slipper også `psql-ezprop-testprod…` gjennom. Servernavnet er `psql-ezprop-${environmentName}` (`infra/azure/main.bicep`), så verten er `psql-ezprop-test.postgres.database.azure.com`. Foreslår å kreve at verten starter med `psql-ezprop-test.` (med punktum). Test 2.3 krever at `psql-ezprop-testprod…` stoppes.
-- **F4 (lite):** oppgaveteksten ber om bilder, funn og TG; kortet utsetter dem (A264). Testplanen følger kortet og tester at de ikke lages (6.4).
+- **F4 (lite):** oppgaveteksten ber om bilder, funn og TG; kortet utsetter dem (A300). Testplanen følger kortet og tester at de ikke lages (6.4).

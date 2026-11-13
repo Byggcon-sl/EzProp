@@ -1,5 +1,5 @@
 /**
- * Produksjonsvakten for `pnpm db:seed:testdata` (A266). Ren funksjon uten database: kalles før
+ * Produksjonsvakten for `pnpm db:seed:testdata` (A302). Ren funksjon uten database: kalles før
  * databasen åpnes, og stopper med mindre begge sperrene holder.
  *
  * 1. `APP_ENVIRONMENT` er nøyaktig `development` eller `test`. `NODE_ENV` teller ikke, fordi

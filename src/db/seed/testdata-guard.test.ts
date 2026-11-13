@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { TestdataGuardError, assertTestdataAllowed } from "./testdata-guard";
 
 /*
- * Produksjonsvakten for `pnpm db:seed:testdata` (A266). Testplan:
+ * Produksjonsvakten for `pnpm db:seed:testdata` (A302). Testplan:
  * docs/funksjoner/fase2a-testdata-arbeidshverdag-testplan.md avsnitt 2. Ren funksjon, ingen database.
  *
  * Støtter hovedmål: de ansatte (ekte data i produksjon blandes aldri med oppdiktede) og færre

@@ -171,7 +171,7 @@ function readEnvExample(key: string): string {
 }
 
 // ---------------------------------------------------------------------------------------------
-// 3.1 Ingen ekte-lignende data (A265)
+// 3.1 Ingen ekte-lignende data (A301)
 // ---------------------------------------------------------------------------------------------
 
 describe("3.1 ingen ekte-lignende data", () => {
@@ -806,7 +806,7 @@ describe("3.3 faglige krav per eiendom", () => {
       expect(employee.certification!.validFromDay).toBeLessThanOrEqual(0);
       expect(employee.certification!.validToDay).toBeGreaterThanOrEqual(0);
     }
-    // Sertifiseringene har oppdiktet utsteder og nummer (A271)
+    // Sertifiseringene har oppdiktet utsteder og nummer (A307)
     for (const employee of inspectors) {
       expect(employee.certification!.issuer).toMatch(/oppdiktet/i);
     }

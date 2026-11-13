@@ -5,9 +5,11 @@ import { AccessDeniedError } from "@/core/access";
 import {
   AREA_TYPES,
   areaTypeLabel,
+  COMMON_ROOM_TYPES,
   getAssignmentBuildings,
   MEASURING_METHODS,
   measuringMethodLabel,
+  ROOM_PRESETS,
   ROOM_TYPE_GROUPS,
   ROOM_TYPES,
   roomTypeGroupLabel,
@@ -32,6 +34,12 @@ const CODES: Codes = {
       belowGround: type.defaultBelowGround,
     })),
   })),
+  roomPresets: ROOM_PRESETS.map((preset) => ({
+    key: preset.key,
+    label: preset.label,
+    drafts: preset.drafts.map((draft) => ({ roomType: draft.roomType, count: draft.count })),
+  })),
+  commonRoomTypes: [...COMMON_ROOM_TYPES],
   areaTypes: AREA_TYPES.map((code) => ({ value: code, label: areaTypeLabel(code) })),
   methods: MEASURING_METHODS.map((code) => ({ value: code, label: measuringMethodLabel(code) })),
 };

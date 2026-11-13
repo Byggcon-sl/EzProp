@@ -29,19 +29,19 @@ Testmiljøet har i dag bare fire testoppdrag i en egen prøveorganisasjon (`pnpm
 - Nytt skript `pnpm db:seed:testdata` (`src/db/seed/testdata-index.ts`, `testdata.ts`, data i `testdata.data.ts`, vakten i `testdata-guard.ts`, frøgeneratoren i `seeded-random.ts`). Bygger på `runSeed` (organisasjonen Byggcon, selskapene og kontorene) og mønsteret i `sample-assignments.ts` (sjekk først, lag bare det som mangler).
 - **Organisasjonen:** dataene legges i organisasjonen fra `pnpm db:seed` (Byggcon), den de ansatte logger inn i. Ikke i prøveorganisasjonen.
 - **Selskaper og kontorer:** de som `runSeed` lager. Ingen nye.
-- **Ansatte:** 12 oppdiktede ansatte fordelt på selskapene og kontorene, i **alle roller unntatt admin** (A268). Alle roller i `employeeRoles` (`src/db/schema/organizations.ts`) unntatt `admin` brukes; testen leser konstanten, slik at en ny rolle gjør den rød. Etternavnene tas fra en fast, oppdiktet liste i `testdata.data.ts`, slik at de er lette å kjenne igjen i ansattlisten. Ingen deler fullt navn eller e-postdomene med `SEED_ADMIN_NAME`/`SEED_ADMIN_EMAIL`. De kan ikke logge inn (e-post på `testdata.invalid`, ingen `sessions` eller `accounts`).
-- **Sertifiseringer** (`certifications`), fordi publiseringssperren i `src/core/access/guards.ts` bruker dem: takstmennene har gyldig sertifisering på befaringsdagen for sine ferdige oppdrag, og én takstmann har utløpt sertifisering, slik at bortfallet av `report.publish` kan prøves. Oppdiktet utsteder og nummer (A271).
+- **Ansatte:** 12 oppdiktede ansatte fordelt på selskapene og kontorene, i **alle roller unntatt admin** (A304). Alle roller i `employeeRoles` (`src/db/schema/organizations.ts`) unntatt `admin` brukes; testen leser konstanten, slik at en ny rolle gjør den rød. Etternavnene tas fra en fast, oppdiktet liste i `testdata.data.ts`, slik at de er lette å kjenne igjen i ansattlisten. Ingen deler fullt navn eller e-postdomene med `SEED_ADMIN_NAME`/`SEED_ADMIN_EMAIL`. De kan ikke logge inn (e-post på `testdata.invalid`, ingen `sessions` eller `accounts`).
+- **Sertifiseringer** (`certifications`), fordi publiseringssperren i `src/core/access/guards.ts` bruker dem: takstmennene har gyldig sertifisering på befaringsdagen for sine ferdige oppdrag, og én takstmann har utløpt sertifisering, slik at bortfallet av `report.publish` kan prøves. Oppdiktet utsteder og nummer (A307).
 - **Kontakter og firma:** 4–5 oppdiktede meglerfirma med meglere, og selgere og kjøpere som parter på oppdragene. Firmanavnene ligner ikke ekte kjeder (test mot en kort liste med kjente kjedenavn i testen). Organisasjonsnummer står tomt.
-- **Eiendommer:** rundt 50 av de tre slagene planen nevner: **enebolig** (rekkehus og tomannsbolig er varianter av bolig, `housing_type` `terraced`/`semi_detached`), **leilighet** i sameie eller borettslag, og **fritidsbolig**. Med matrikkel, kommune og areal (bygninger, etasjer, rom og `floor_areas`). **Byggeår** står bare i datafilen, som i testoppdragene, fordi datamodellen ikke har kolonnen; det vises ikke i testmiljøet før kolonnen finnes (A264). Årstallene velges nå slik at de senere treffer aldersreglene (bad fra før 2000, bad på 0–5 år, og alder rundt tersklene).
+- **Eiendommer:** rundt 50 av de tre slagene planen nevner: **enebolig** (rekkehus og tomannsbolig er varianter av bolig, `housing_type` `terraced`/`semi_detached`), **leilighet** i sameie eller borettslag, og **fritidsbolig**. Med matrikkel, kommune og areal (bygninger, etasjer, rom og `floor_areas`). **Byggeår** står bare i datafilen, som i testoppdragene, fordi datamodellen ikke har kolonnen; det vises ikke i testmiljøet før kolonnen finnes (A300). Årstallene velges nå slik at de senere treffer aldersreglene (bad fra før 2000, bad på 0–5 år, og alder rundt tersklene).
 - **Fellesarealer** (`common_areas`) bare på sameie og borettslag, fordi oppdragssiden viser dem i dag.
 - **Bygninger, etasjer, rom og arealmålinger** (`report_buildings`, `floors`, `rooms`, `floor_areas`) på oppdragene som er befart. Arealmålingene er «målingene» i denne leveransen.
 - **Oppdrag i alle fire statuser** (bestilt, under arbeid, ferdig, fakturert) og noen ordre som ikke er gjort om ennå, spredd over rundt fire måneder bakover og fire uker fremover, med befaringstid, frist, team (ansvarlig, sidemann, kontor) og parter. Fakturert oppdrag er fakturagrunnlaget som finnes i datamodellen i dag.
 - **Tidsregistrering** (`work_sessions`) på ferdige og fakturerte oppdrag, bare på de oppdiktede ansatte.
 - **Reklamasjoner:** 4–5 saker (`claims`) med utfallene åpen, avvist, medhold, forlik og trukket.
-- **Oppdiktede verdier som ikke kan forveksles med ekte (A265):**
+- **Oppdiktede verdier som ikke kan forveksles med ekte (A301):**
   - e-post på domenet `testdata.invalid` (RFC 2606: `.invalid` kan aldri motta post),
-  - telefon i formen `+47 000 NN NNN`, eksportert som `TESTDATA_PHONE_PATTERN = /^\+47 000 \d{2} \d{3}$/` fra `testdata.data.ts`. Begrunnelse som står i koden: i den norske nummerplanen (Nkom) starter åttesifrede nummer på 2–9; nummer som starter på 0 er femsifrede tjenestenummer, så `000 NN NNN` er ikke et abonnentnummer. Mønsteret passer valideringen i `src/core/contacts/schemas.ts` (sifre, mellomrom og +, under 20 tegn), og vasken fanger det (10 sifre, `+47` normaliseres bort til 8 sifre, over grensen på 5). Ikke kontrollert mot nummerplanen i denne kjøringen, derfor ført til kontroll (A265),
-  - gårdsnummer 9001–9099, både i `cadastral_units.gnr` og i `orders.gnr` der ordren har matrikkel. Bare kommunene i den faste listen brukes. At ingen av dem har så høye gårdsnummer (sammenslåtte kommuner kan ha det), er ikke kontrollert mot matrikkelen og er ført til kontroll (A265),
+  - telefon i formen `+47 000 NN NNN`, eksportert som `TESTDATA_PHONE_PATTERN = /^\+47 000 \d{2} \d{3}$/` fra `testdata.data.ts`. Begrunnelse som står i koden: i den norske nummerplanen (Nkom) starter åttesifrede nummer på 2–9; nummer som starter på 0 er femsifrede tjenestenummer, så `000 NN NNN` er ikke et abonnentnummer. Mønsteret passer valideringen i `src/core/contacts/schemas.ts` (sifre, mellomrom og +, under 20 tegn), og vasken fanger det (10 sifre, `+47` normaliseres bort til 8 sifre, over grensen på 5). Ikke kontrollert mot nummerplanen i denne kjøringen, derfor ført til kontroll (A301),
+  - gårdsnummer 9001–9099, både i `cadastral_units.gnr` og i `orders.gnr` der ordren har matrikkel. Bare kommunene i den faste listen brukes. At ingen av dem har så høye gårdsnummer (sammenslåtte kommuner kan ha det), er ikke kontrollert mot matrikkelen og er ført til kontroll (A301),
   - gatenavn fra en fast liste med oppdiktede navn, ekte postnummer og kommune i Nordland og Troms (for at kart og kommune skal se riktige ut),
   - fritekst (ordrenotat, reklamasjonstekst, `orderedByText`) har aldri elleve sifre på rad, ingen helseopplysninger eller andre særlige kategorier, og ingen tekst fra `docs/kartlegging/`.
 - **Fast tilfeldighetsfrø** (egen liten generator i koden, ingen ny pakke).
@@ -62,7 +62,7 @@ Testmiljøet har i dag bare fire testoppdrag i en egen prøveorganisasjon (`pnpm
   En rad som er mykt slettet, teller som «finnes»: den gjenopplives ikke, og det lages ingen kopi. En avbrutt kjøring fylles ut av neste.
 - **Aktør:** oppdrag, ordre, statusbytter og reklamasjoner lages gjennom tjenestene i `src/core`, med en oppdiktet ansatt med riktig rolle som aktør (kontor lager ordre og oppdrag, ansvarlig takstmann bytter status, leder registrerer reklamasjoner). Admin fra `SEED_ADMIN_EMAIL` er aldri aktør, så revisjonsloggen ikke viser ham som den som har gjort hundrevis av handlinger. «Fakturert» nås bare gjennom gyldige statusbytter. Tidspunktene som tjenestene setter til «nå» (mottatt, statusbytter, hendelser), flyttes bakover til planlagt dato rett etter kallet, i samme transaksjon og bare på TD-rader.
 - **Ekte arbeid røres ikke:** skriptet endrer, kobler til eller legger roller på ingen ansatte, kontakter eller ordre som fantes fra før, og setter aldri `deleted_at`.
-- **Produksjonsvakt med to sperrer, begge før første skriving (A266):**
+- **Produksjonsvakt med to sperrer, begge før første skriving (A302):**
   1. `APP_ENVIRONMENT` må være nøyaktig `development` eller `test`. `production`, tom, manglende, `Production`, ` test ` og ukjent verdi stopper.
   2. Verten i `DATABASE_URL` må være `localhost`, `127.0.0.1`, `[::1]` eller starte med `psql-ezprop-test.` (med punktum; Azure-serveren for test er `psql-ezprop-test.postgres.database.azure.com`, `postgresServerName` i `infra/azure/main.bicep`). Punktumet gjør at for eksempel `psql-ezprop-testprod…` stoppes (funn F3 i testplanen). Alt annet stopper.
 
@@ -72,20 +72,20 @@ Testmiljøet har i dag bare fire testoppdrag i en egen prøveorganisasjon (`pnpm
 - Dokumentasjon: avsnittet i `docs/drift/testmiljo-azure.md`, kommandoen i `CLAUDE.md`, `APP_ENVIRONMENT` og «testdata» i ordlisten. Versjon i `package.json` økes (minor).
 
 **Ikke med (bevisst utelatt):**
-- **Bilder, funn, avvik, TG og målinger per kontrollpunkt, og byggeår i databasen** (A264). `files` har ingen kobling til rom eller avvik, tabellene for rapportsvar og avvikskort finnes ikke, og det finnes ingen byggeår-kolonne. TG lagt rett i data uten regelmotoren ville brutt regel 5. Dette blir del 2 av planpunktet og legges under 2a-2 «Badet på PC».
+- **Bilder, funn, avvik, TG og målinger per kontrollpunkt, og byggeår i databasen** (A300). `files` har ingen kobling til rom eller avvik, tabellene for rapportsvar og avvikskort finnes ikke, og det finnes ingen byggeår-kolonne. TG lagt rett i data uten regelmotoren ville brutt regel 5. Dette blir del 2 av planpunktet og legges under 2a-2 «Badet på PC».
 - **Video.** Kommer senere, etter planen.
 - `client_agreements`: står ikke i planpunktet og trengs ikke for noe akseptkriterium.
 - Nye tabeller, nye kolonner eller migreringer.
-- Endring av `pnpm db:seed:testoppdrag` og prøveorganisasjonen. Garasjen i `sample:detached-garage` (ført som BRA-b) rettes ikke her; den føres som A269.
+- Endring av `pnpm db:seed:testoppdrag` og prøveorganisasjonen. Garasjen i `sample:detached-garage` (ført som BRA-b) rettes ikke her; den føres som A305.
 - Sletting eller rydding av testdata (regel 3). Et «nullstill testdata»-skript er ikke med.
 - Innlogging for de oppdiktede ansatte, og oppdiktet admin.
 - Kjøring mot produksjon på noen måte.
 
 ## Faglige krav til dataene (fagansvarlig)
-- **Arealtype** følger `suggestAreaType` i `src/core/buildings/codes.ts`, ikke testoppdragene: garasje og utebod er BRA-e, BRA-b bare for innglasset balkong (A269). Etasjens BRA-e og BRA-b har rom med samme arealtype. ALH bare på loft og hems, aldri i BRA. Kryperom og uinnredet loft er `not_bra`. «Under terreng» stemmer med etasjen (unntaket for kryperom gjelder). Hver bolig har minst ett bad og ett kjøkken (eller stue/kjøkken). Metode `drawing` bare der det er naturlig (fellesbod), ellers `laser`. Størrelser: leilighet ca. 35–120 m², enebolig ca. 90–250 m², fritidsbolig ca. 30–120 m².
+- **Arealtype** følger `suggestAreaType` i `src/core/buildings/codes.ts`, ikke testoppdragene: garasje og utebod er BRA-e, BRA-b bare for innglasset balkong (A305). Etasjens BRA-e og BRA-b har rom med samme arealtype. ALH bare på loft og hems, aldri i BRA. Kryperom og uinnredet loft er `not_bra`. «Under terreng» stemmer med etasjen (unntaket for kryperom gjelder). Hver bolig har minst ett bad og ett kjøkken (eller stue/kjøkken). Metode `drawing` bare der det er naturlig (fellesbod), ellers `laser`. Størrelser: leilighet ca. 35–120 m², enebolig ca. 90–250 m², fritidsbolig ca. 30–120 m².
 - **Eierform og matrikkel henger sammen:** sameie har seksjonsnummer og ingen andel; borettslag har lagets navn og andelsnummer og ingen seksjon; enebolig og varianter er selveier; fritidsbolig er selveier, noen med festenummer (`fnr`). Borettslagsnavn ligner ikke ekte lag.
 - **Reklamasjoner:** bare på ferdige eller fakturerte oppdrag; mottatt etter at oppdraget ble ferdig; beløp bare ved medhold og forlik; bygningsdelene spres (våtrom, tak, drenering, areal). Beskrivelsene er egne ord, uten gjetteord, uten TG-påstander, uten trekk fra ekte saker i `docs/kartlegging/`, og ingen tekst framstiller «eier nektet hulltaking gir TG2» som riktig.
-- **Tid og team:** ferdige og fakturerte oppdrag har befaring i fortiden og før ferdig-tidspunktet; bestilte kan ha befaring fram i tid; egenerklæring er mottatt på ferdige oppdrag (står bare i datafila, som byggeår, til datamodellen har et felt for det, A272); sidemann er aldri samme person som ansvarlig; alt ligger innenfor fire måneder (gyldighet ett år brytes ikke).
+- **Tid og team:** ferdige og fakturerte oppdrag har befaring i fortiden og før ferdig-tidspunktet; bestilte kan ha befaring fram i tid; egenerklæring er mottatt på ferdige oppdrag (står bare i datafila, som byggeår, til datamodellen har et felt for det, A300); sidemann er aldri samme person som ansvarlig; alt ligger innenfor fire måneder (gyldighet ett år brytes ikke).
 - **Tidsregistrering:** befaring 1–3 timer og rapportskriving 2–5 timer, leilighet lavest og enebolig med kjeller høyest. Tallene er oppdiktede og sier ingenting om faktisk tidsbruk i Byggcon.
 
 ## Tilgang
@@ -147,26 +147,26 @@ Den fulle testplanen står i `docs/funksjoner/fase2a-testdata-arbeidshverdag-tes
 - **Rekkehus:** ikke eget slag i kriteriet; brukes som variant av bolig. Kortet og planen sier det samme.
 - **Test mot `docs/kartlegging/`:** test-leder ville skanne mappen, forenkler ville kutte det. Kuttet: navn og gater kommer bare fra de faste oppdiktede listene i `testdata.data.ts`, og de faste sjekkene (`.invalid`, telefonmønster, gnr, elleve sifre, kjedenavn) holder. Å lese researchmappen i en test er skjørt.
 - **Datoanker:** lagres ikke (forenkler, sikkerhet-personvern, test-leder er enige om at det leses av TD-radene). Avgjort: `created_at` på `TD-0001`.
-- **Admin i testdataene:** planen sier «alle roller», men en oppdiktet admin teller med i `countActiveAdmins` og kan svekke regel 11. Avgjort: ingen oppdiktet admin (A268).
+- **Admin i testdataene:** planen sier «alle roller», men en oppdiktet admin teller med i `countActiveAdmins` og kan svekke regel 11. Avgjort: ingen oppdiktet admin (A304).
 
 ## Plan
-Planpunktet deles i to (én linje i `docs/plan/endringslogg.md`, med henvisning til A264):
+Planpunktet deles i to (én linje i `docs/plan/endringslogg.md`, med henvisning til A300):
 - **Del 1** (denne PR-en) krysses av: «Testdata som ligner en ekte arbeidshverdag».
 - **Del 2** flyttes til 2a-2 «Badet på PC» i samme PR: testdataene utvides med bilder laget av skriptet (uten personer), funn, TG og målinger per kontrollpunkt, og byggeår når kolonnen finnes. TG og funn kommer fra regelmotoren og malens testsaker, aldri skrevet fritt i seed; tekstene merkes «utkast, ikke godkjent av fagrådet». TG3 har kostnadsanslag, TG2 og TG3 årsak og konsekvens, og el, rekkverk og HMS får ingen TG. ki-ansvarlig vurderer på nytt.
 
-## Beslutninger i autonom modus (ført i `docs/09-apne-sporsmal.md`, A264–A272)
-- **A264 (lett å endre):** Bilder, funn, TG, målinger per kontrollpunkt og byggeår i databasen legges inn som del 2 under 2a-2 «Badet på PC», ikke nå. Datamodellen har ikke plass, og oppgaven sier «bare der datamodellen har plass». Byggeår står i datafilen til da.
-- **A265 (lett å endre):** Oppdiktede kontaktdata: e-post på `testdata.invalid`, telefon `+47 000 NN NNN` (åttesifrede abonnentnummer starter på 2–9 i nummerplanen; minst 5 sifre og `+47`/`0047` normaliseres av vasken), gnr 9001–9099 i både eiendom og ordre. **Til kontroll:** at serien `000` ikke kan tildeles (Nkom) og at ingen av kommunene i listen har gnr over 9000. Endres i `testdata.data.ts`.
-- **A266 (dyrt å endre):** Produksjonsvakten har to sperrer: `APP_ENVIRONMENT` (development, test, production; ikke `NODE_ENV`, fordi testmiljøet også kjører med `NODE_ENV=production`) og databaseverten (lokal eller starter med `psql-ezprop-test.`, med punktum, funn F3). Begge må holde før første skriving.
-- **A267 (dyrt å endre):** Testdataene ligger i Byggcon-organisasjonen som de ansatte logger inn i, ved siden av ekte arbeid i testmiljøet, merket med `TD-`/`testdata.invalid`. Følge: testmiljøets database kan aldri løftes til produksjon; produksjon starter med tom database (regel 3 og 8). **Ståle bør bekrefte dette før ekte data.**
-- **A268 (lett å endre):** Ingen oppdiktet ansatt får rollen admin (regel 11, `countActiveAdmins`). Avviker fra «alle roller» i planteksten; rollen dekkes av admin fra `pnpm db:seed`.
-- **A269 (lett å endre):** Frittstående garasje og utebod er BRA-e i testdataene, som romtypens standard. Testoppdraget `sample:detached-garage` fører garasjen som BRA-b og rettes i en egen liten oppgave. **Til kontroll mot NS 3940:2023** (ikke tilgjengelig i denne kjøringen).
-- **A270 (lett å endre):** Ytelsen (under 2 s) måles i integrasjonstest på tjenestene, ikke i e2e.
-- **A271 (lett å endre):** Sertifiseringene i testdataene har oppdiktet utsteder og nummer, ikke ekte utstedernavn.
-- **A272 (lett å endre):** «Egenerklæring mottatt» står bare i datafila, som byggeår, til datamodellen har et felt for det.
+## Beslutninger i autonom modus (ført i `docs/09-apne-sporsmal.md`, A300–A307)
+- **A300 (lett å endre):** Bilder, funn, TG, målinger per kontrollpunkt og byggeår i databasen legges inn som del 2 under 2a-2 «Badet på PC», ikke nå. Datamodellen har ikke plass, og oppgaven sier «bare der datamodellen har plass». Byggeår står i datafilen til da.
+- **A301 (lett å endre):** Oppdiktede kontaktdata: e-post på `testdata.invalid`, telefon `+47 000 NN NNN` (åttesifrede abonnentnummer starter på 2–9 i nummerplanen; minst 5 sifre og `+47`/`0047` normaliseres av vasken), gnr 9001–9099 i både eiendom og ordre. **Til kontroll:** at serien `000` ikke kan tildeles (Nkom) og at ingen av kommunene i listen har gnr over 9000. Endres i `testdata.data.ts`.
+- **A302 (dyrt å endre):** Produksjonsvakten har to sperrer: `APP_ENVIRONMENT` (development, test, production; ikke `NODE_ENV`, fordi testmiljøet også kjører med `NODE_ENV=production`) og databaseverten (lokal eller starter med `psql-ezprop-test.`, med punktum, funn F3). Begge må holde før første skriving.
+- **A303 (dyrt å endre):** Testdataene ligger i Byggcon-organisasjonen som de ansatte logger inn i, ved siden av ekte arbeid i testmiljøet, merket med `TD-`/`testdata.invalid`. Følge: testmiljøets database kan aldri løftes til produksjon; produksjon starter med tom database (regel 3 og 8). **Ståle bør bekrefte dette før ekte data.**
+- **A304 (lett å endre):** Ingen oppdiktet ansatt får rollen admin (regel 11, `countActiveAdmins`). Avviker fra «alle roller» i planteksten; rollen dekkes av admin fra `pnpm db:seed`.
+- **A305 (lett å endre):** Frittstående garasje og utebod er BRA-e i testdataene, som romtypens standard. Testoppdraget `sample:detached-garage` fører garasjen som BRA-b og rettes i en egen liten oppgave. **Til kontroll mot NS 3940:2023** (ikke tilgjengelig i denne kjøringen).
+- **A306 (lett å endre):** Ytelsen (under 2 s) måles i integrasjonstest på tjenestene, ikke i e2e.
+- **A307 (lett å endre):** Sertifiseringene i testdataene har oppdiktet utsteder og nummer, ikke ekte utstedernavn.
+- **A300 (lett å endre):** «Egenerklæring mottatt» står bare i datafila, som byggeår, til datamodellen har et felt for det.
 
 ## Roller
 utvikler (skript, vakt, utrulling), testskriver (testplanen over), sikkerhet-personvern (vakten, at ingenting ligner ekte data, admin og ekte ansatte urørt), fagansvarlig (de faglige kravene), ki-ansvarlig (vasketesten).
 
 ## Åpne spørsmål
-- Ingen som stopper oppgaven. Til Ståle når han er tilbake: A267 (testdatabasen kan ikke bli produksjon) og kontrollene i A265 og A269.
+- Ingen som stopper oppgaven. Til Ståle når han er tilbake: A303 (testdatabasen kan ikke bli produksjon) og kontrollene i A301 og A305.

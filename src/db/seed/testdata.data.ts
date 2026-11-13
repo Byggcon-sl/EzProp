@@ -24,7 +24,7 @@ import type {
  * relativt til datoankeret (dag 0 = dagen ordren `TD-0001` ble laget). Seed-steget
  * (`testdata.ts`) gjør dem om til datoer.
  *
- * Alt er oppdiktet og kan ikke forveksles med ekte personer (A265):
+ * Alt er oppdiktet og kan ikke forveksles med ekte personer (A301):
  * - e-post på `testdata.invalid` (RFC 2606: kan aldri motta post),
  * - telefon i formen `+47 000 NN NNN` (se `TESTDATA_PHONE_PATTERN`),
  * - gårdsnummer 9001–9099, oppdiktede gatenavn og etternavn som starter på «Test»,
@@ -32,7 +32,7 @@ import type {
  *
  * Fagstoffet følger kortet: arealtype etter romtypens standard (`suggestAreaType`), ALH bare på
  * loft og hems, eierform og matrikkel henger sammen, og reklamasjonene har egne ord uten TG.
- * Byggeår og badets år har ingen kolonne ennå (A264); de står her for aldersreglene som kommer.
+ * Byggeår og badets år har ingen kolonne ennå (A300); de står her for aldersreglene som kommer.
  */
 
 /** Fast frø for generatoren i `seeded-random.ts`. Endres ikke, ellers endres testdataene. */
@@ -46,13 +46,13 @@ export const TESTDATA_EMAIL_DOMAIN = "testdata.invalid";
  * åttesifrede nummer på 2–9; nummer som starter på 0 er femsifrede tjenestenummer, så
  * `000 NN NNN` er ikke et abonnentnummer. Mønsteret passer valideringen i
  * `src/core/contacts/schemas.ts` (sifre, mellomrom og +, under 20 tegn), og vasken før KI fanger
- * det (ti sifre, `+47` normaliseres bort til åtte). Ikke kontrollert mot nummerplanen (A265).
+ * det (ti sifre, `+47` normaliseres bort til åtte). Ikke kontrollert mot nummerplanen (A301).
  */
 export const TESTDATA_PHONE_PATTERN = /^\+47 000 \d{2} \d{3}$/;
 
 /**
  * Gårdsnummer i testdataene, både på eiendom og ordre. At ingen av kommunene under har så høye
- * gårdsnummer, er ikke kontrollert mot matrikkelen (A265).
+ * gårdsnummer, er ikke kontrollert mot matrikkelen (A301).
  */
 export const TESTDATA_GNR_RANGE = [9001, 9099] as const;
 
@@ -258,9 +258,9 @@ function testdataPhone(series: number, serial: number): string {
 // ---------------------------------------------------------------------------------------------
 
 export type TestdataCertification = {
-  /** Oppdiktet utsteder (A271). */
+  /** Oppdiktet utsteder (A307). */
   issuer: string;
-  /** Oppdiktet sertifikatnummer (A271). */
+  /** Oppdiktet sertifikatnummer (A307). */
   number: string;
   validFromDay: number;
   /** Siste gyldige dag. */
@@ -313,7 +313,7 @@ function employee(
 }
 
 /**
- * Tolv oppdiktede ansatte i alle roller unntatt admin (A268). Takstmennene har gyldig
+ * Tolv oppdiktede ansatte i alle roller unntatt admin (A304). Takstmennene har gyldig
  * sertifisering for alle befaringsdagene i dataene (dag −120 til +28), unntatt `emp10`, som har
  * utløpt sertifisering og derfor aldri er ansvarlig takstmann, bare sidemann.
  */
@@ -384,7 +384,7 @@ export type TestdataBroker = { name: string; email: string; phone: string };
 export type TestdataFirm = {
   name: string;
   firmType: FirmType;
-  /** Ingen organisasjonsnummer (A265). */
+  /** Ingen organisasjonsnummer (A301). */
   brokers: readonly TestdataBroker[];
 };
 
@@ -449,9 +449,9 @@ export type TestdataProperty = {
   cooperativeName?: string;
   /** Andelsnummer, bare for andel i borettslag. */
   shareNumber?: string;
-  /** Byggeår for hovedbygningen. Ingen kolonne ennå (A264). */
+  /** Byggeår for hovedbygningen. Ingen kolonne ennå (A300). */
   buildYear: number;
-  /** Året badet ble bygget eller sist pusset opp. Ingen kolonne ennå (A264). */
+  /** Året badet ble bygget eller sist pusset opp. Ingen kolonne ennå (A300). */
   bathroomYear: number;
   /** Fellesdelene, bare for sameie og borettslag. */
   commonAreas?: CommonAreasInput;

@@ -113,7 +113,7 @@ Alt er merket, så det er lett å skille fra ekte arbeid: ordrene har ekstern re
 1. `APP_ENVIRONMENT` er nøyaktig `development` eller `test`. Utrullingen setter den fra `ENVIRONMENT_NAME` i arbeidsflyten, ikke som fast tekst.
 2. Databaseverten er lokal eller testserveren `psql-ezprop-test.…`.
 
-En utrulling til produksjon skal aldri ha steget `pnpm db:seed:testdata`. Lages en arbeidsflyt for produksjon som kopi av denne, skal linjen fjernes. Vakten stopper den uansett, men steget skal ikke stå der. Testmiljøets database kan aldri bli produksjonsdatabasen, fordi testdataene ligger ved siden av det som ellers legges inn der (A267).
+En utrulling til produksjon skal aldri ha steget `pnpm db:seed:testdata`. Lages en arbeidsflyt for produksjon som kopi av denne, skal linjen fjernes. Vakten stopper den uansett, men steget skal ikke stå der. Testmiljøets database kan aldri bli produksjonsdatabasen, fordi testdataene ligger ved siden av det som ellers legges inn der (A303).
 
 De oppdiktede ansatte kan ikke logge inn. Ber noen om innloggingskode til en `@testdata.invalid`-adresse mens Microsoft 365 er koblet til, kan ikke posten leveres, og det kommer bare en returmelding til `MAIL_FROM`. Det er ufarlig.
 
