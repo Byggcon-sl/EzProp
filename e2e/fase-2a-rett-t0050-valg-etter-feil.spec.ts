@@ -5,6 +5,7 @@ import {
   logIn,
   logInAsManager,
   uniqueSuffix,
+  convertedAssignmentLink,
 } from "./helpers";
 
 /*
@@ -22,7 +23,6 @@ import {
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
 const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
-const NUMBER = /\d{4}-\d{5}/;
 const AREA_ERROR = "Arealet må være et tall mellom 0 og 9999,9 med høyst én desimal.";
 const INSPECTOR_NAME = "Oppdiktet takstmann";
 
@@ -61,9 +61,9 @@ async function newAssignment(page: Page): Promise<string> {
 
   await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
   await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(page.getByRole("main")).toContainText("Gjort om til oppdrag");
+  await expect(convertedAssignmentLink(page)).toBeVisible();
 
-  await page.getByRole("main").getByRole("link", { name: NUMBER }).click();
+  await convertedAssignmentLink(page).click();
   await expect(page).toHaveURL(ASSIGNMENT_URL);
   return ASSIGNMENT_URL.exec(page.url())![1]!;
 }

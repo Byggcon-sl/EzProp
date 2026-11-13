@@ -1,5 +1,11 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { ADMIN_EMAIL, employeeByEmail, logIn, uniqueSuffix } from "./helpers";
+import {
+  convertedAssignmentLink,
+  ADMIN_EMAIL,
+  employeeByEmail,
+  logIn,
+  uniqueSuffix,
+} from "./helpers";
 
 /*
  * Oppdragslisten som arbeidskø (fase 2a).
@@ -35,8 +41,8 @@ async function newAssignment(page: Page): Promise<Created> {
   await expect(page).toHaveURL(ORDER_URL);
   await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
   await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(page.getByRole("main")).toContainText("Gjort om til oppdrag");
-  await page.getByRole("main").getByRole("link", { name: NUMBER }).click();
+  await expect(convertedAssignmentLink(page)).toBeVisible();
+  await convertedAssignmentLink(page).click();
   await expect(page).toHaveURL(ASSIGNMENT_URL);
   const id = ASSIGNMENT_URL.exec(page.url())![1]!;
   const heading = await page.getByRole("heading", { level: 1 }).innerText();

@@ -9,6 +9,7 @@ import {
   logInAsInspector,
   logInAsOffice,
   uniqueSuffix,
+  convertedAssignmentLink,
 } from "./helpers";
 
 /*
@@ -361,6 +362,13 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
     await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
     await expect(page.getByRole("main")).toContainText(/Gjort om til oppdrag\s*\d{4}-\d{5}/);
+    // Varsel og kort på samme side: bare kortlenken treffer, og den går til oppdraget.
+    await expect(notice(page)).toBeVisible();
+    await expect(convertedAssignmentLink(page)).toHaveCount(1);
+    await expect(convertedAssignmentLink(page)).toHaveAttribute(
+      "href",
+      /\/oppdrag\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
     await expect(
       page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }),
     ).toHaveCount(0);
