@@ -24,7 +24,7 @@ import { initialFormState, NO_ACCESS, type FormState } from "../../../form-state
  * Testplan: docs/funksjoner/fase2a-bygninger-areal-rom-testplan.md punkt 6.4. Oppgavekort:
  * docs/funksjoner/fase2a-bygninger-areal-rom.md punkt 9.
  *
- * Hver av de sju handlingene får gyldige uuid-er og gyldige skjemaverdier. Svaret skal være
+ * Hver av de åtte handlingene (F11.1 i docs/funksjoner/fase2a-flere-rom-testplan.md) får gyldige uuid-er og gyldige skjemaverdier. Svaret skal være
  * NO_ACCESS, ingen rader skal være laget eller endret, ingen hendelser eller loggrader, og
  * loggeren skal ikke ha fått skjemaverdier.
  *
@@ -53,6 +53,7 @@ const {
   saveFloorAreaAction,
   saveRoomAction,
   removeRoomAction,
+  addRoomsAction,
 } = await import("./actions");
 
 const TABLES = ["report_buildings", "floors", "floor_areas", "rooms"] as const;
@@ -146,7 +147,7 @@ async function setup() {
 }
 
 describe("6.4 takstmann uten skriverett får NO_ACCESS fra kjernen", () => {
-  it("alle sju handlingene gir NO_ACCESS, og ingenting lagres eller logges", async () => {
+  it("alle åtte handlingene gir NO_ACCESS, og ingenting lagres eller logges", async () => {
     const { org, adminEmployee, assignment, building, floor, room, emptyBuilding, emptyFloor } =
       await setup();
 
@@ -238,6 +239,18 @@ describe("6.4 takstmann uten skriverett får NO_ACCESS fra kjernen", () => {
           "removeRoomAction",
           removeRoomAction,
           form({ assignmentId: assignment.id, roomId: room.id }),
+        ],
+        // F11.1: også addRoomsAction gir NO_ACCESS fra kjernen for takstmann uten skriverett
+        [
+          "addRoomsAction",
+          addRoomsAction,
+          form({
+            assignmentId: assignment.id,
+            floorId: emptyFloor.id,
+            source: "preset",
+            presetKey: "apartment",
+            drafts: JSON.stringify([{ roomType: "bedroom", count: 2 }]),
+          }),
         ],
       ];
 

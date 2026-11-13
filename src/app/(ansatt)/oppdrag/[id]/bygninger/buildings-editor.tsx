@@ -10,12 +10,13 @@ import type {
   FloorDetail,
   RoomDetail,
 } from "@/core/buildings";
-import { FLOOR_NAME_SUGGESTIONS, suggestFloor } from "@/core/buildings/codes";
+import { FLOOR_NAME_SUGGESTIONS, suggestFloor, type RoomType } from "@/core/buildings/codes";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { Checkbox, Field, Input, Select, Textarea } from "@/shared/ui/form";
 import { FormErrors, SubmitButton } from "../../../form-parts";
 import { initialFormState, textValue, type FormState } from "../../../form-state";
+import { AddRoomsDialog, type AddRoomsFloor, type RoomPresetOption } from "./add-rooms-dialog";
 import {
   removeBuildingAction,
   removeFloorAction,
@@ -35,6 +36,10 @@ export type RoomTypeGroupOption = { label: string; options: RoomTypeOption[] };
 /** Kodelistene fra kjernen, med norske etiketter (siden lager dem). */
 export type Codes = {
   roomTypeGroups: RoomTypeGroupOption[];
+  /** Ferdige sett til «Legg til flere rom». */
+  roomPresets: RoomPresetOption[];
+  /** Romtypene som vises som fliser i «Legg til flere rom». */
+  commonRoomTypes: RoomType[];
   areaTypes: CodeOption[];
   methods: CodeOption[];
 };
@@ -596,6 +601,7 @@ function FloorBlock({
   data,
   canEdit,
   codes,
+  onAddRooms,
 }: {
   floor: FloorDetail;
   buildingId: string;
@@ -604,6 +610,8 @@ function FloorBlock({
   data: AssignmentBuildings;
   canEdit: boolean;
   codes: Codes;
+  /** Åpner dialogen «Legg til flere rom» for etasjen. */
+  onAddRooms: (floor: FloorDetail) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const close = useCallback(() => setEditing(false), []);
@@ -684,28 +692,47 @@ function FloorBlock({
           </ul>
         )}
         {canEdit && (
-          <AddSection label="Legg til rom">
-            {(close) => (
-              <RoomForm
-                idPrefix={`new-room-${floor.id}`}
-                floorId={floor.id}
-                roomId={null}
-                floorBelowGround={floor.belowGround}
-                initial={{
-                  roomType: "",
-                  name: "",
-                  areaType: "bra_i",
-                  belowGround: floor.belowGround,
-                }}
-                codes={codes}
-                onDone={close}
-              />
-            )}
-          </AddSection>
+          <div className="space-y-3">
+            <AddSection label="Legg til rom">
+              {(close) => (
+                <RoomForm
+                  idPrefix={`new-room-${floor.id}`}
+                  floorId={floor.id}
+                  roomId={null}
+                  floorBelowGround={floor.belowGround}
+                  initial={{
+                    roomType: "",
+                    name: "",
+                    areaType: "bra_i",
+                    belowGround: floor.belowGround,
+                  }}
+                  codes={codes}
+                  onDone={close}
+                />
+              )}
+            </AddSection>
+            <Button
+              variant="secondary"
+              data-testid="add-rooms-open"
+              onClick={() => onAddRooms(floor)}
+            >
+              Legg til flere rom
+            </Button>
+          </div>
         )}
       </div>
     </section>
   );
+}
+
+/** Etasjen som dialogen «Legg til flere rom» er åpen for, med de aktive rommene. */
+function findFloor(data: AssignmentBuildings, floorId: string | null): AddRoomsFloor | null {
+  if (floorId === null) return null;
+  for (const building of data.buildings) {
+    const floor = building.floors.find((candidate) => candidate.id === floorId);
+    if (floor) return floor;
+  }
+  return null;
 }
 
 /** Forslag til etasjenummer for en ny etasje: én over den høyeste, eller 1. */
@@ -721,12 +748,14 @@ function BuildingCard({
   data,
   canEdit,
   codes,
+  onAddRooms,
 }: {
   building: BuildingDetail;
   assignmentId: string;
   data: AssignmentBuildings;
   canEdit: boolean;
   codes: Codes;
+  onAddRooms: (floor: FloorDetail) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const close = useCallback(() => setEditing(false), []);
@@ -781,6 +810,7 @@ function BuildingCard({
                 data={data}
                 canEdit={canEdit}
                 codes={codes}
+                onAddRooms={onAddRooms}
               />
             ))}
           </div>
@@ -822,6 +852,16 @@ export function BuildingsEditor({
   canEdit: boolean;
   codes: Codes;
 }) {
+  // Én dialog for hele siden (T-0058): id-en til etasjen som er åpen, og en teller per åpning.
+  const [addRooms, setAddRooms] = useState<{ floorId: string; session: number } | null>(null);
+  const openAddRooms = useCallback(
+    (floor: FloorDetail) =>
+      setAddRooms((current) => ({ floorId: floor.id, session: (current?.session ?? 0) + 1 })),
+    [],
+  );
+  const closeAddRooms = useCallback(() => setAddRooms((current) => (current ? null : current)), []);
+  const addRoomsFloor = findFloor(data, addRooms?.floorId ?? null);
+
   return (
     <div className="space-y-6">
       <datalist id={FLOOR_NAMES_LIST}>
@@ -847,8 +887,20 @@ export function BuildingsEditor({
             data={data}
             canEdit={canEdit}
             codes={codes}
+            onAddRooms={openAddRooms}
           />
         ))
+      )}
+
+      {canEdit && (
+        <AddRoomsDialog
+          floor={addRoomsFloor}
+          session={addRooms?.session ?? 0}
+          housingType={data.housingType}
+          presets={codes.roomPresets}
+          commonRoomTypes={codes.commonRoomTypes}
+          onClose={closeAddRooms}
+        />
       )}
 
       {canEdit && data.hasProperty && (

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  addRooms,
   BuildingNotEmptyError,
   FloorNotEmptyError,
   PropertyMissingError,
@@ -216,6 +217,45 @@ export async function saveRoomAction(previous: FormState, formData: FormData): P
       floorId,
       ...(roomId ? { roomId } : {}),
     });
+  }
+  refresh();
+  return saved(previous);
+}
+
+/** Meldingen når romlisten fra dialogen ikke kan leses. */
+const BAD_ROOM_LIST = "Noe gikk galt med romlisten. Prøv igjen.";
+
+type AddRoomsInput = Parameters<typeof addRooms>[3];
+
+/**
+ * «Legg til N rom i <etasje>» fra dialogen «Legg til flere rom». `drafts` er romutkastene som
+ * JSON (`[{ roomType, count }]`). Kjernen validerer listen, kilden og settet, og lager navnene;
+ * klienten sender aldri navn. Romnavn logges aldri (bare id-er og feilnavn).
+ */
+export async function addRoomsAction(previous: FormState, formData: FormData): Promise<FormState> {
+  const floorId = requiredId(formData, "floorId");
+  const values = readFields(formData, ["source", "presetKey", "drafts"] as const);
+  const context = await getEmployeeContext();
+  if (!context || floorId === false) return failure(previous, values, {}, NO_ACCESS);
+
+  let drafts: unknown;
+  try {
+    drafts = JSON.parse(values.drafts);
+  } catch {
+    return failure(previous, values, {}, BAD_ROOM_LIST);
+  }
+
+  // Kjernen validerer alt med Zod; typen her er bare det handlingen sender videre.
+  const input = {
+    drafts,
+    source: values.source,
+    ...(values.presetKey === "" ? {} : { presetKey: values.presetKey }),
+  } as AddRoomsInput;
+
+  try {
+    await addRooms(context.actor, context.organizationId, floorId, input);
+  } catch (error) {
+    return handle(error, previous, values, context.actor.id, { floorId });
   }
   refresh();
   return saved(previous);
