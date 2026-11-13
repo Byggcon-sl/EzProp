@@ -1343,3 +1343,150 @@ describe("Microsoft-innloggingen i utrullingen og infrastrukturen (M10.2)", () =
     expect(vaultSection.split("\n").slice(0, 4).join("\n")).toContain("MS_LOGIN_CLIENT_SECRET");
   });
 });
+
+/*
+ * Testdata som ligner en ekte arbeidshverdag (docs/funksjoner/fase2a-testdata-arbeidshverdag-
+ * testplan.md avsnitt 5): utrullingen til testmiljøet kaller `pnpm db:seed:testdata` etter
+ * testoppdragene, med miljøet fra `ENVIRONMENT_NAME` (ikke fast tekst), og ingen annen arbeidsflyt
+ * kaller det. Ingen nye avhengigheter.
+ *
+ * Støtter hovedmål: de ansatte (testmiljøet har en full arbeidsdag etter hver utrulling) og færre
+ * reklamasjoner (en kopi av utrullingen for produksjon kan ikke arve «test»).
+ */
+describe("testdataene i utrullingen (fase 2a)", () => {
+  /** Hele kommandoen `pnpm db:seed:testdata`. */
+  const SEED_TESTDATA_COMMAND = /pnpm db:seed:testdata(\s|$)/;
+
+  it("hjelperne skiller de tre seed-kommandoene", () => {
+    expect(SEED_TESTDATA_COMMAND.test("pnpm db:seed:testdata")).toBe(true);
+    expect(SEED_TESTDATA_COMMAND.test("pnpm db:seed")).toBe(false);
+    expect(SEED_TESTDATA_COMMAND.test("pnpm db:seed:testoppdrag")).toBe(false);
+    expect(SEED_COMMAND.test("pnpm db:seed:testdata")).toBe(false);
+    expect(SEED_TESTOPPDRAG_COMMAND.test("pnpm db:seed:testdata")).toBe(false);
+  });
+
+  it("5.1 deploy-azure.yml kaller skriptet etter testoppdragene og før brannmuren lukkes, én gang", () => {
+    const lines = read(WORKFLOW_PATH).split("\n");
+    const seed = codeLine(lines, SEED_COMMAND);
+    const testoppdrag = codeLine(lines, SEED_TESTOPPDRAG_COMMAND);
+    const testdata = codeLine(lines, SEED_TESTDATA_COMMAND);
+    const close = lines.findIndex(
+      (line) => line.includes("firewall-rule delete") && line.includes("github-runner"),
+    );
+    expect(testdata).toBeGreaterThan(-1);
+    expect(testdata).toBeGreaterThan(testoppdrag);
+    expect(testoppdrag).toBeGreaterThan(seed);
+    expect(close).toBeGreaterThan(testdata);
+    expect(lineIndexes(lines, SEED_TESTDATA_COMMAND)).toHaveLength(1);
+    // Samme steg som seed og testoppdragene («Migrering og seed»)
+    const step = stepOf(lines, testdata);
+    expect(step).toEqual(stepOf(lines, seed));
+    expect(step[0]).toMatch(/-\s+name:\s*Migrering og seed\s*$/);
+  });
+
+  it("5.2 steget har APP_ENVIRONMENT fra ENVIRONMENT_NAME, ikke fast tekst", () => {
+    const lines = read(WORKFLOW_PATH).split("\n");
+    const index = codeLine(lines, SEED_TESTDATA_COMMAND);
+    expect(index).toBeGreaterThan(-1);
+    const env = subBlock(stepOf(lines, index), "env");
+    expect(env).toMatch(/^\s*APP_ENVIRONMENT:\s*\$\{\{\s*env\.ENVIRONMENT_NAME\s*\}\}\s*$/m);
+    const workflow = read(WORKFLOW_PATH);
+    expect(workflow).not.toMatch(/APP_ENVIRONMENT:\s*["']?(test|development|production)["']?\s*$/m);
+    // Kommandoen setter heller ikke miljøet selv på linjen
+    expect(lines[index]!).not.toMatch(/APP_ENVIRONMENT=/);
+  });
+
+  it("5.3 ingen annen arbeidsflyt kaller skriptet (heller ikke ci.yml)", () => {
+    const dir = join(process.cwd(), ".github/workflows");
+    const withStep = readdirSync(dir)
+      .filter((name) => /\.ya?ml$/.test(name))
+      .filter((name) => /db:seed:testdata\b/.test(read(`.github/workflows/${name}`)))
+      .sort();
+    expect(withStep).toEqual(["deploy-azure.yml"]);
+  });
+
+  it("5.4 .env.example har APP_ENVIRONMENT=development", () => {
+    const lines = read(".env.example").split("\n");
+    expect(lines.filter((line) => /^APP_ENVIRONMENT=/.test(line))).toEqual([
+      "APP_ENVIRONMENT=development",
+    ]);
+  });
+
+  it("5.5 package.json: db:seed:testdata peker på testdata-index.ts; de andre seed-skriptene er uendret", () => {
+    const pkg = JSON.parse(read("package.json")) as {
+      version: string;
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts["db:seed:testdata"]).toBe("tsx src/db/seed/testdata-index.ts");
+    expect(pkg.scripts["db:seed"]).toBe("tsx src/db/seed/index.ts");
+    expect(pkg.scripts["db:seed:testoppdrag"]).toBe("tsx src/db/seed/sample-index.ts");
+    // Versjonen er økt (minor) fra 0.10.x, som den var før denne oppgaven
+    const [major, minor] = pkg.version.split(".").map(Number);
+    expect(major).toBe(0);
+    expect(minor).toBeGreaterThanOrEqual(11);
+  });
+
+  it("5.6 ingen nye avhengigheter", () => {
+    const pkg = JSON.parse(read("package.json")) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    // Listene fra main før oppgaven. En ny pakke krever begrunnelse i PR-en (regel 9).
+    expect(Object.keys(pkg.dependencies).sort()).toEqual([
+      "@azure/storage-blob",
+      "better-auth",
+      "class-variance-authority",
+      "clsx",
+      "drizzle-orm",
+      "jose",
+      "next",
+      "postgres",
+      "react",
+      "react-dom",
+      "server-only",
+      "tailwind-merge",
+      "yjs",
+      "zod",
+    ]);
+    expect(Object.keys(pkg.devDependencies).sort()).toEqual([
+      "@playwright/test",
+      "@tailwindcss/postcss",
+      "@types/node",
+      "@types/react",
+      "@types/react-dom",
+      "dotenv",
+      "drizzle-kit",
+      "eslint",
+      "eslint-config-next",
+      "eslint-config-prettier",
+      "prettier",
+      "tailwindcss",
+      "tsx",
+      "typescript",
+      "typescript-eslint",
+      "vitest",
+    ]);
+  });
+
+  it("5.7 start.sh: kaller den testdataene, settes APP_ENVIRONMENT til development når den mangler", () => {
+    const script = read("start.sh");
+    const lines = script.split("\n").filter((line) => !isComment(line));
+    const calls = lines.filter((line) => /db:seed:testdata\b/.test(line));
+    // Kortet: start.sh endres bare hvis det trengs. Kaller den ikke skriptet, er det ingenting å sjekke.
+    if (calls.length === 0) return;
+    expect(calls).toHaveLength(1);
+    expect(script).toMatch(/APP_ENVIRONMENT=?["']?development/);
+    const testoppdrag = lines.findIndex((line) => /db:seed:testoppdrag\b/.test(line));
+    const testdata = lines.findIndex((line) => /db:seed:testdata\b/.test(line));
+    expect(testdata).toBeGreaterThan(testoppdrag);
+  });
+
+  it("driftsdokumentet nevner skriptet, at produksjon aldri skal ha steget, og .invalid-adressene", () => {
+    const doc = read(DRIFT_DOC_PATH);
+    expect(doc).toContain("db:seed:testdata");
+    expect(doc).toContain("APP_ENVIRONMENT");
+    expect(doc).toContain("testdata.invalid");
+    const section = doc.slice(doc.indexOf("db:seed:testdata"));
+    expect(section).toMatch(/produksjon/i);
+  });
+});
