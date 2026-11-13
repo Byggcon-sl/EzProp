@@ -30,6 +30,7 @@ const CHANGED = "Ordren er endret av en annen. Last siden på nytt.";
 const OFFLINE = "Du er uten nett. Endringen er ikke lagret.";
 const CONVERTED_NOTE =
   "Oppdraget endres ikke. Eiendom og bestiller på oppdraget endres på oppdraget.";
+const PREFILL_LINE = "Fylt ut fra ordren. Kontroller før du lagrer.";
 
 function addressField(scope: Page | Locator): Locator {
   return scope.getByLabel(/^Adresse/);
@@ -101,6 +102,43 @@ async function openEditForm(page: Page) {
   await expect(saveButton(page)).toBeVisible();
 }
 
+/** Delen «Eiendom» på oppdragssiden. */
+function propertySection(page: Page): Locator {
+  return page.getByRole("region", { name: "Eiendom", exact: true });
+}
+
+/**
+ * Trykk knappen og vent på svaret fra server-handlingen (POST med «next-action»). Kopiert fra
+ * e2e/fase-2a-eiendom-matrikkel.spec.ts.
+ */
+async function clickAndWaitForSave(page: Page, button: Locator) {
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.request().headers()["next-action"] !== undefined,
+  );
+  await button.click();
+  const response = await saved;
+  expect(response.status(), "lagringen gir ikke 500").toBeLessThan(500);
+}
+
+/**
+ * På oppdragssiden: oppdiktet gnr/bnr 999 (ordren har ingen matrikkel), første gyldige boligtype
+ * og eierform → «Lagre eiendom».
+ */
+async function saveAssignmentProperty(page: Page) {
+  const property = propertySection(page);
+  await property.getByLabel(/^Gårdsnummer/).fill("999");
+  await property.getByLabel(/^Bruksnummer/).fill("999");
+  await property.getByLabel(/^Boligtype/).selectOption({ index: 1 });
+  await property.getByLabel(/^Eierform/).selectOption({ index: 1 });
+  await clickAndWaitForSave(
+    page,
+    property.getByRole("button", { name: "Lagre eiendom", exact: true }),
+  );
+  await expect(property).not.toContainText(PREFILL_LINE);
+}
+
 /** Ny adresse i skjemaet → «Lagre» → «Endringene er lagret.» */
 async function changeAddress(page: Page, address: string) {
   await openEditForm(page);
@@ -141,7 +179,7 @@ test.describe("endre ordren (pc og ipad)", () => {
     await expect(changes).toContainText(`Adresse: ${oldAddress} → ${newAddress}`);
   });
 
-  test("11.2 endre gjort-om ordre: linjen om oppdraget vises, nummeret og lenken er uendret, oppdraget har gammel adresse", async ({
+  test("11.2 endre gjort-om ordre: linjen om oppdraget vises, nummeret og lenken er uendret, lagret eiendom på oppdraget har gammel adresse", async ({
     page,
   }) => {
     const suffix = uniqueSuffix();
@@ -153,6 +191,13 @@ test.describe("endre ordren (pc og ipad)", () => {
     const link = page.getByRole("main").getByRole("link", { name: NUMBER });
     const hrefBefore = await link.getAttribute("href");
 
+    // Lagre eiendommen på oppdraget først (adressen er fylt ut fra ordren)
+    await link.click();
+    await expect(page).toHaveURL(ASSIGNMENT_URL);
+    await expect(addressField(propertySection(page))).toHaveValue(oldAddress);
+    await saveAssignmentProperty(page);
+
+    await page.goto(`/ordre/${orderId}`);
     await openEditForm(page);
     await expect(page.getByText(CONVERTED_NOTE)).toBeVisible();
     await addressField(page).fill(newAddress);
@@ -168,6 +213,24 @@ test.describe("endre ordren (pc og ipad)", () => {
     const html = await page.content();
     expect(html, "oppdraget viser fortsatt gammel adresse").toContain(oldAddress);
     expect(html, "oppdraget har ikke fått ny adresse").not.toContain(newAddress);
+  });
+
+  test("11.2b gjort-om ordre uten lagret eiendom: oppdraget foreslår den rettede adressen", async ({
+    page,
+  }) => {
+    const suffix = uniqueSuffix();
+    const oldAddress = `Testveien 12 ${suffix}, 8000 Bodø`;
+    const newAddress = `Testveien 14 ${suffix}, 8000 Bodø`;
+    await logIn(page);
+    await createOrder(page, oldAddress);
+    await convert(page);
+    await changeAddress(page, newAddress);
+
+    await page.getByRole("main").getByRole("link", { name: NUMBER }).click();
+    await expect(page).toHaveURL(ASSIGNMENT_URL);
+    const property = propertySection(page);
+    await expect(addressField(property)).toHaveValue(newAddress);
+    await expect(property).toContainText(PREFILL_LINE);
   });
 
   test("11.3 én lagreknapp: mens skjemaet er åpent, finnes ikke «Gjør om» og «Avvis»", async ({

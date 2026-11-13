@@ -69,7 +69,7 @@ Dette er de eneste feltkodene som kan stå i `fields` og i `values`. `orderedByT
    - For en ordre som er gjort om, står over skjemaet: «Oppdraget endres ikke. Eiendom og bestiller på oppdraget endres på oppdraget.» Lenken til oppdraget finnes alt og gjenbrukes (A251).
    - Delen **«Endringer»** under ordren: én linje per hendelse, nyeste først, med dato og klokkeslett, navn og handling («Endret» for endringer). Én underlinje per felt: «Adresse: Storgata 1 → Storgata 11». Synlig for alle med `organization.read` (se spørsmål 78 c). Tom verdi «(tom)», ja/nei «Ja»/«Nei», bestilleren med navnet fra kontaktregisteret (eller «(fjernet kontakt)»).
 5. **Server action** `updateOrderAction` i `src/app/(ansatt)/ordre/actions.ts`, samme mønster som de andre (ikke-uuid gir `NO_ACCESS`; logglinjer uten skjemaverdier, også i feilgrenene).
-6. **Beslutningene:** A55 og A87 får en linje om at de er endret av T1 (12.11.2026). A249–A253 føres i `docs/09-apne-sporsmal.md`. Spørsmål 78 til Ståle er ført.
+6. **Beslutningene:** A55 og A87 får en linje om at de er endret av T1 (12.11.2026). A249–A253 føres i `docs/09-apne-sporsmal.md`. Spørsmål 78 til Ståle er ført. Ved A251: Så lenge eiendommen ikke er lagret på oppdraget, fyller oppdraget ut skjemaet fra ordren (A73), så en rettet adresse følger med som forslag. Lagret eiendom endres ikke.
 7. **Småfunn i samme område, T-0031 (lite):** ordrelisten `/ordre` viser «kansellert» for en ordre der oppdraget er kansellert (myk-slettet), med samme sjekk som ordresiden (`assignmentCancelled`). Funnet settes til «rettet» med PR-nummeret.
 8. **Dokumenter:** toppkommentaren i `src/core/orders/orders.ts` («får aldri adresse, bestiller, matrikkel») og kommentaren «Gammel og ny verdi per felt» i `src/db/schema/audit.ts` rettes så de sier at `update` er unntaket. Domenemodellen 4.3 (ordren kan endres; `update` er eneste ordrehandling med verdier i loggen) og 4.12 (`values` med `from`/`to` for ordre). Kommentarene i `src/core/orders/orders.ts`, `src/core/audit/index.ts` og `src/db/schema/audit.ts` oppdateres på samme måte. Ordlisten: `updateOrder`, `OrderChangedError`, `listOrderHistory`, `orderFieldLabel`, `order.updated`. Planen krysses av.
 
@@ -112,7 +112,7 @@ Ingen fagregler.
 - [ ] Bestilleren kan kobles, byttes og fjernes etter lagring; firmaet følger kontakten.
 - [ ] En firma-id fra en annen organisasjon i skjemaet ignoreres; `orderedByFirmId` er uendret (test).
 - [ ] Lagring uten endring der `receivedAt` er tom: `received_at` uendret, ingen loggrad.
-- [ ] Status, avvisningsgrunn, `assignment_id`, `source` og `requested_report_type` endres ikke; oppdraget (nummer, eiendom, parter) er uendret etter endring av en gjort-om ordre.
+- [ ] Status, avvisningsgrunn, `assignment_id`, `source` og `requested_report_type` endres ikke; oppdragets nummer, lagret eiendom og parter på oppdraget er uendret etter endring av en gjort-om ordre.
 - [ ] Ugyldige verdier gir de samme norske feilmeldingene som «Ny ordre» (samme schema).
 - [ ] Gammel `rowVersion` (etter en annen endring, avvisning eller konvertering) gir `OrderChangedError` og ingen endring. Første endring etter oppretting godtas. To samtidige lagringer med samme `rowVersion`: nøyaktig én lykkes.
 - [ ] Kontakt fra annen organisasjon, ukjent eller myk-slettet kontakt gir `ContactNotFoundError`; ingen endring, ingen loggrad, `row_version` lik.
@@ -138,7 +138,7 @@ Ingen fagregler.
 ## Beslutninger (autonom modus, føres i `docs/09-apne-sporsmal.md`)
 - **A249 (lett å endre):** endring krever `assignment.edit`, samme som å legge inn ordre. Ståle sa «full redigeringstilgang», og rettigheten finnes.
 - **A250 (lett å endre):** alle statuser kan endres, også avvist («alltid»). Status og grunn endres ikke her.
-- **A251 (lett å endre):** endring av ordren endrer ikke oppdraget. Å skrive over oppdragets eiendom og parter stille kan gi feil i rapporten.
+- **A251 (lett å endre):** endring av ordren endrer ikke oppdraget. Å skrive over oppdragets eiendom og parter stille kan gi feil i rapporten. Så lenge eiendommen ikke er lagret på oppdraget, fyller oppdraget ut skjemaet fra ordren (A73), så en rettet adresse følger med som forslag. Lagret eiendom endres ikke.
 - **A252 (dyrt å endre, agentenes valg):** revisjonsloggen får gammel og ny verdi per felt under `values`; applikasjonsloggen og hendelsene får bare feltkoder. Kilden er oppgaveteksten («hvem, når, gammel og ny verdi»), **ikke** et svar fra Ståle; han sa bare «full redigeringstilgang. alltid» og planen «endringene logges». Dyrt fordi `audit_log` aldri endres eller ryddes (A58), så en feil adresse eller et feil navn blir stående i loggen i 10 år, og innsyn, retting og sletting (GDPR art. 15–17) må da dekke loggen. Bygges i test med oppdiktede data. Spørsmål 78 må være besvart før ekte data, og står som linje under DPIA-punktet (K3) i «Minimum før ekte data». Sier Ståle nei, tømmes `values` med én endring. I tillegg ser alle med `organization.read` hvem som har endret ordren (`/admin/logg` krever `staff.manage`); dette er spørsmål 78 c.
 - **A253 (lett å endre):** samtidige lagringer stoppes med `row_version`, ikke «siste vinner». `updated_at` er valgt bort fordi databasen lagrer mikrosekunder og en JS-dato millisekunder.
 
