@@ -106,6 +106,7 @@ Ingen.
 
 ## Pågår
 
+- **K7 Oppbevaringstid for avviste KI-forslag** (fase 2a), branch `ki-oppbevaring-avviste`, overtatt og arbeidsflyten startet 13.11.2026 kl. 18:55 UTC av hovedløkken (sesjon 01Jqwnu2bCrAdQw2xz4RiABh). K7 flyttes til A272–A275 (A264–A271 er testdata-kortets).
 - **T3 Varsel om mulig dublett** (fase 2a), branch `varsel-dublett` fra `main`, arbeidsflyten startet 13.11.2026 kl. 16:30 UTC av hovedløkken. A285 og oppover.
 - **Testdata som ligner en ekte arbeidshverdag**, branch `testdata-arbeidshverdag` (oppgavekort, siste commit 15:16 UTC). Står den uten ny commit i over 2 timer, overtar neste kjøring den. Kortet bruker A264–A271, som overlapper med K7 (A264–A267 på `ki-oppbevaring-avviste`): den som merges sist, flytter numrene.
 
