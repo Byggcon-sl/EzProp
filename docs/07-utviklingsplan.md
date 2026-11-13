@@ -37,6 +37,8 @@ Eier: Ståle Limstrand (produkteier). Prosjektlederen i agentlaget holder planen
 
 Hver oppgave og hver PR sier hvilket av de tre målene den støtter, og hvordan.
 
+**Full kvalitet, ingen midlertidige løsninger** (Ståle 13.11.2026: «Jeg ønsker full utvikling - ikke en "midlertidig dårlig admin løsning" - vi lanserer ikke ezprop prematurt - så vi har tid å utvikle systemet til det beste systemet i verden»). Det som står i planen, bygges ferdig og godt første gang. Vi lager ikke enkle mellomløsninger som må byttes ut senere. EzProp lanseres ikke før det er klart.
+
 **Slik ser vi om vi lykkes** (Claudes forslag):
 
 | Tegn | Hvordan vi ser det |
@@ -158,13 +160,16 @@ Før bredden bygges, lages én smal vei gjennom hele rapporten. Da kan Ståle se
 ### 2a-3 Bredden
 
 **Malen og reglene**
-- [ ] **Regneark inn og ut med faste ID-er** for systemmalen. Slik redigerer fagansvarlig malen i betaen (P19); egen maleditor kommer i fase 5.
+- [ ] **Mal- og regeleditor for systemmalen** (Ståle 13.11.2026, erstatter regnearket som mellomløsning): fagansvarlig og de som har fått retten i admin, redigerer seksjoner, felt, valg, kontrollpunkter, utfall, tiltak og regler i EzProp, med versjoner, endringslogg og «Prøv malen» før en ny versjon tas i bruk. Faste koder (`key`) endres aldri, de arkiveres. Samme editor brukes senere for egne maler (fase 5).
+- [ ] **Regelbygger: avanserte regler på alle felt** (Ståle 13.11.2026: «reglene må kunne settes på alle felt - være en avansert flyt»). Visuell «når … bare hvis … så …»: betingelser på **ethvert felt** i malen (tekst, valg, tall, dato, byggeår, romtype, TG på et annet punkt, svar i et annet rom), grupper med «alle» og «minst én» som kan nøstes, og **flere handlinger per regel**. Handlingene: **legg inn tekst automatisk** (se under), vis eller skjul felt, spørsmål og seksjoner, gjør felt eller bilde påkrevd, kontroll før levering (sperre bare for forskriftens sju krav, ellers advarsel), og TG-forslag (bare i systemmalen; regler setter aldri TG selv). Regler kan bygge på hverandre, og editoren stopper sirkler. Hver regel har testtilfeller som må bestå før den tas i bruk, og «Prøv regelen» viser resultatet på et eksempel.
+- [ ] **Tekst lagt inn automatisk av regler** (Ståle 13.11.2026: «vi skal legge inn teksten automatisk, basert på de regler vi setter opp»): når en regel slår til, legges frasen inn i riktig felt med en gang, for eksempel asbest når boligen er oppført før 1980. Teksten merkes «lagt til av regel» med regelnavnet, kan fjernes eller endres av takstmannen, og alt logges. Slutter regelen å gjelde (byggeåret rettes), fjernes teksten igjen hvis den ikke er endret; er den endret, spør skjermen. Gjelder tekst, aldri TG.
+- [ ] **Regler uten treghet** (Ståle 13.11.2026: «systemet må takle dette uten at vi opplever treghet»): regelmotoren kjører lokalt på iPaden og PC-en og regner bare om reglene som avhenger av feltet som ble endret. Krav: under 50 ms fra endring til synlig resultat for en full mal med minst 2 000 regler, på iPaden. Måles med en ytelsestest i CI som feiler ved brudd.
 - [ ] Automatisk kontroll av malen før publisering: obligatoriske punkter finnes, TG3 har kostnad, ingen regler peker på felt som ikke finnes, og alle testtilfeller består
 - [ ] «Prøv malen»: et testskjema som viser hvilke spørsmål og TG-forslag som kommer
 - [ ] **KI: forslag til rom fra plantegning** (Ståle 12.11.2026, T4: «ki first»): takstmannen laster opp plantegningen, og KI foreslår rommene med romtype og etasje. Takstmannen godtar, endrer eller fjerner. Aldri areal som fasit, aldri TG.
 - [ ] Levetider (NS 3600:2025 tillegg C som tall, **med trinn**, innspill D4), terskler (bekreftet av fagrådet) og kostnadsintervaller som egne tabeller
 - [ ] Regelmotoren som én felles kodepakke for iPad og server: vis/skjul, **TG-forslag fra materiale, alder (med kilde for alderen og om dokumentasjon finnes) og målinger**, forslag om TGIU på punktet, og kontroller. Testtilfeller per regel. De nye betingelsestypene fra innspill D5 (snødekke, bygningstype, TG på annet punkt, bilde mangler, TGIU satt).
-- [ ] **Informasjonstekst ut fra byggeår** (for eksempel asbest) foreslås av regler i malen. Bare forslag, aldri TG. (Svar 10.11.2026, nr. 47)
+- [ ] **Informasjonstekst ut fra byggeår** (for eksempel asbest) legges inn **automatisk** av regler i malen (endret fra «forslag», Ståle 13.11.2026), merket «lagt til av regel». Aldri TG.
 - [ ] Regler fra beslutningene: hulltaking nektet gir TGIU (på kontrollpunktet, innspill D1), loft uten adkomst gir TG2 (med unntaket), radon 100 Bq/m³, våtrom fra før 2000
 - [ ] Systemmalen for tilstandsrapport bolig og leilighet lagt inn, med Byggcons egne avvikstekster. **TG-logikk finnes bare i denne systemmalen** (27.10.2026). Radon får aldri TG, bare HMS (spørsmål 59b). Røykvarsler og slukkeutstyr er egne punkter også for leilighet (spørsmål 59c).
 - [ ] **Forhåndsvalg i malen** bare for beskrivende tekst, aldri for avvik, tiltak eller TG. Forhåndsvalgte tekster må bekreftes før «Send» (advarsel). (Svar 10.11.2026, nr. 34)
@@ -370,7 +375,6 @@ Kommer etter at systemmalen for tilstandsrapport virker. Bruker samme datamodell
 - [ ] Versjoner og «endringer gjelder bare nye rapporter», papirkurv og angre
 - [ ] «Prøv malen» før den tas i bruk
 - [ ] **Én felles PDF-layout for egne maler** (innspill P13): seksjon → felt → svar, bilder i rutenett, med rapportprofilene (logo, bunntekst, stående eller liggende). Systemmalene har sin egen, spesiallagde layout. Vil takstmennene ha mer, blir det en ny fase.
-- [ ] Maleditor for fagansvarlig også for systemmalen, i stedet for regneark
 - [ ] **KI hjelper til med å lage maler:** en ansatt beskriver rapporttypen, og KI foreslår seksjoner og felt som den ansatte retter på.
 
 **Ferdig når:** En ansatt uten hjelp har laget en ny rapporttype i malbyggeren, brukt den på et oppdrag og fått en PDF.
