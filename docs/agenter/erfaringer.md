@@ -277,3 +277,5 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Next.js ruller til `#anker` etter `redirect` fra en serverhandling, men flytter ikke fokus. Skal et element få fokus, trengs en liten klientkomponent (se `arbeidskoe/focus-card.tsx`). `:focus-visible` gjelder ikke når fokus settes fra koden etter et museklikk, så elementer med `tabindex=-1` trenger egen ring på `:focus`.
 - I en flex-rad forsvinner mellomrom i slutten av et tekstelement («Treff i:Ferdig»). Bruk ` ` eller legg teksten utenfor flex.
 - Kjør aldri to `vitest run` samtidig mot samme testdatabase (heller ikke via en gjennomgangsagent): det gir tilfeldige røde tester (fremmednøkkel, deadlock i `truncate`).
+- Parallelle kjøringer tar ofte de samme A-numrene (T4 og testdata-kortet brukte begge A270–A271). Sjekk høyeste A-nummer på alle åpne og ventende brancher (`git grep -oh "A2[0-9][0-9]" origin/<branch> -- docs`), ikke bare på main, før numrene settes.
+- Testskriverens e2e-tester kan være skrevet uten å ha kjørt grønt. Kjør dem før PR, også når en stoppet kjøring overtas. Fjern ikke en `page.route` mens svaret holdes (gir «Route is already handled»).
