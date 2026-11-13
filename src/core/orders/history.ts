@@ -1,8 +1,9 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
+import { lookupContactAndFirmNames } from "@/core/contacts";
 import { db } from "@/db/client";
-import { auditLog, contacts, employees, firms, orders } from "@/db/schema";
+import { auditLog, employees, orders } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { ORDER_EDITABLE_FIELDS, isOrderEditableField, type OrderEditableField } from "./codes";
 
@@ -92,44 +93,6 @@ function idsFor(entries: OrderHistoryValue[][], field: OrderEditableField): stri
   return [...ids];
 }
 
-/** Navn på aktive kontakter i organisasjonen. Slettede og fremmede er ikke med. */
-async function contactNames(organizationId: string, ids: string[]) {
-  const names = new Map<string, string>();
-  if (ids.length === 0) return names;
-  const rows = await db
-    .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName })
-    .from(contacts)
-    .where(
-      and(
-        inArray(contacts.id, ids),
-        eq(contacts.organizationId, organizationId),
-        isNull(contacts.deletedAt),
-      ),
-    );
-  for (const row of rows) {
-    names.set(row.id, [row.firstName, row.lastName].filter(Boolean).join(" "));
-  }
-  return names;
-}
-
-/** Navn på aktive firma i organisasjonen. Slettede og fremmede er ikke med. */
-async function firmNames(organizationId: string, ids: string[]) {
-  const names = new Map<string, string>();
-  if (ids.length === 0) return names;
-  const rows = await db
-    .select({ id: firms.id, name: firms.name })
-    .from(firms)
-    .where(
-      and(
-        inArray(firms.id, ids),
-        eq(firms.organizationId, organizationId),
-        isNull(firms.deletedAt),
-      ),
-    );
-  for (const row of rows) names.set(row.id, row.name);
-  return names;
-}
-
 function nameOrRemoved(
   value: string | boolean | null,
   names: Map<string, string>,
@@ -198,10 +161,10 @@ export async function listOrderHistory(
   });
 
   const allValues = parsed.map((entry) => entry.values);
-  const [contactsById, firmsById] = await Promise.all([
-    contactNames(grant.organizationId, idsFor(allValues, "orderedByContactId")),
-    firmNames(grant.organizationId, idsFor(allValues, "orderedByFirmId")),
-  ]);
+  const { contacts: contactsById, firms: firmsById } = await lookupContactAndFirmNames(grant, {
+    contactIds: idsFor(allValues, "orderedByContactId"),
+    firmIds: idsFor(allValues, "orderedByFirmId"),
+  });
 
   return parsed.map(({ row, fields, values }) => ({
     id: row.id,

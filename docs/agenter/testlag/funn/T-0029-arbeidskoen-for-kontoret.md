@@ -3,14 +3,14 @@ id: T-0029
 tittel: Arbeidskøen starter tom for kontoret, og søket viser ikke treff i andre faner
 type: forbedring
 alvor: lite
-status: ny
+status: rettet
 funnet: 2026-11-11
 rolle: test-kontor
 omrade: arbeidskø
 maal: de ansatte
 commit: 0b8e3b9
 forsok: 0
-pr:
+pr: PR #? (sok-ordre-arbeidsko)
 ---
 
 ## Hva
@@ -34,3 +34,4 @@ Ikke etterprøvd (forbedring). To funn er slått sammen.
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-13: rettet på branch `sok-ordre-arbeidsko` (T2, versjon 0.10.8): «Alle» som standard uten takstmann-rolle, og «Treff i: …» med lenker når fanen er tom. PR #? (sok-ordre-arbeidsko)

@@ -182,7 +182,11 @@ test.describe("arbeidskøen med data fra databasen (pc og ipad)", () => {
     await expect(page.getByTestId("work-queue-count-in_progress")).toHaveText(/^\d+$/);
   });
 
-  test("1.2 ugyldige parametre gir Under arbeid og Mine, aldri feilside", async ({ page }) => {
+  // Admin fra seed har ikke takstmann-rollen, så standarden er «Alle» (T-0029,
+  // docs/funksjoner/fase2a-sok-ordre-arbeidsko.md). Ugyldig `mine` gir standarden.
+  test("1.2 ugyldige parametre gir Under arbeid og standarden Alle, aldri feilside", async ({
+    page,
+  }) => {
     await logIn(page);
     const response = await page.goto("/arbeidskoe?status=cancelled&mine=ja&q=%25");
     expect(response?.status()).toBe(200);
@@ -192,7 +196,7 @@ test.describe("arbeidskøen med data fra databasen (pc og ipad)", () => {
       "page",
     );
     await expect(
-      page.getByRole("navigation", { name: "Filter" }).getByRole("link", { name: "Mine" }),
+      page.getByRole("navigation", { name: "Filter" }).getByRole("link", { name: "Alle" }),
     ).toHaveAttribute("aria-current", "page");
   });
 

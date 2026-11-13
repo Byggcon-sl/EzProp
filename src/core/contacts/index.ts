@@ -15,6 +15,7 @@ export {
 } from "./errors";
 export { createFirm, getFirm, listFirms, updateFirm } from "./firms";
 export { findContactForLink } from "./link";
+export { lookupContactAndFirmNames, type ContactAndFirmNames } from "./names";
 export {
   getContactUsage,
   getFirmUsage,
@@ -39,4 +40,4 @@ export {
   type FirmInput,
   type FirmValues,
 } from "./schemas";
-export { MAX_QUERY_LENGTH, type ListOptions } from "./search";
+export { type ListOptions } from "./search";
