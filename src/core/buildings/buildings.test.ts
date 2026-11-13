@@ -1,25 +1,35 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { count, eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 import { AccessDeniedError, type Actor } from "@/core/access";
 import {
+  addRooms,
   BuildingNotEmptyError,
   FloorNotEmptyError,
   getAssignmentBuildings,
+  numberRoomDrafts,
   PropertyMissingError,
   removeBuilding,
   removeFloor,
   removeRoom,
+  ROOM_PRESETS,
+  roomTypeLabel,
   saveBuilding,
   saveFloor,
   saveFloorArea,
   saveRoom,
+  suggestAreaType,
+  suggestBelowGround,
   suggestFloor,
   sumAssignmentArea,
 } from "@/core/buildings";
 import { db } from "@/db/client";
 import {
+  aiUsageLog,
   assignments,
   auditLog,
   employees,
@@ -371,8 +381,27 @@ const WRITES = [
   "saveFloorArea",
   "saveRoom",
   "removeRoom",
+  "addRooms",
 ] as const;
 type WriteName = (typeof WRITES)[number];
+
+/** Romutkastene som `runWrite("addRooms")` bruker (F6.1): to soverom i én operasjon. */
+const ADD_ROOMS_INPUT = { drafts: [{ roomType: "bedroom", count: 2 }], source: "manual" } as const;
+
+/**
+ * Hvor mange hendelser og loggrader hver skriving lager. Alle lager én, bortsett fra `addRooms`
+ * som lager én per rom (her to). Brukt der testene teller nøyaktig, så de ikke svekkes til «minst».
+ */
+const EVENTS_PER_WRITE: Record<WriteName, number> = {
+  saveBuilding: 1,
+  removeBuilding: 1,
+  saveFloor: 1,
+  removeFloor: 1,
+  saveFloorArea: 1,
+  saveRoom: 1,
+  removeRoom: 1,
+  addRooms: 2,
+};
 
 function runWrite(name: WriteName, actor: Actor, organizationId: string, s: WriteSetup) {
   switch (name) {
@@ -390,6 +419,8 @@ function runWrite(name: WriteName, actor: Actor, organizationId: string, s: Writ
       return saveRoom(actor, organizationId, s.floorId, null, roomInput());
     case "removeRoom":
       return removeRoom(actor, organizationId, s.roomId);
+    case "addRooms":
+      return addRooms(actor, organizationId, s.emptyFloorId, ADD_ROOMS_INPUT);
   }
 }
 
@@ -440,7 +471,7 @@ describe("4.1 tilgang per rolle", () => {
       await runWrite(write, actor, s.org.id, s);
 
       const after = await tableCounts();
-      expect(after.events, "en hendelse er skrevet").toBe(before.events! + 1);
+      expect(after.events, "hendelse(r) er skrevet").toBe(before.events! + EVENTS_PER_WRITE[write]);
       expect(after.audit_log, "en loggrad er skrevet").toBeGreaterThan(before.audit_log!);
     },
   );
@@ -470,7 +501,7 @@ describe("4.1 tilgang per rolle", () => {
       await grantPermission(employee, "assignment.edit");
 
       await runWrite(write, actor, s.org.id, s);
-      expect(await rowCount("events")).toBe(1);
+      expect(await rowCount("events")).toBe(EVENTS_PER_WRITE[write]);
     },
   );
 
@@ -485,6 +516,8 @@ describe("4.1 tilgang per rolle", () => {
     await expect(runWrite("saveBuilding", stranger, s.org.id, s)).rejects.toThrow(
       AccessDeniedError,
     );
+    // F6.3: også addRooms avvises for en uten ansattrad
+    await expect(runWrite("addRooms", stranger, s.org.id, s)).rejects.toThrow(AccessDeniedError);
     expect(await tableCounts()).toEqual(before);
   });
 
@@ -516,10 +549,13 @@ describe("4.1 tilgang per rolle", () => {
       AccessDeniedError,
     );
     await expect(runWrite("saveRoom", actor, s.org.id, s)).rejects.toThrow(AccessDeniedError);
+    // F6.3: også addRooms avvises for en ansatt uten roller
+    await expect(runWrite("addRooms", actor, s.org.id, s)).rejects.toThrow(AccessDeniedError);
   });
 
   // Regel 11: admin stenges aldri ute. Testen skal aldri fjernes.
-  it("4.1.5 admin uten andre roller og med innstillingen av kan lese og bruke alle sju skrivetjenestene", async () => {
+  // F6.4: admin uten andre roller og med innstillingen av kan også bruke addRooms (i save-løkken under).
+  it("4.1.5 admin uten andre roller og med innstillingen av kan lese og bruke alle åtte skrivetjenestene", async () => {
     const s = await writeSetup();
     await setInspectorsEditAll(s.org.id, false);
 
@@ -534,13 +570,31 @@ describe("4.1 tilgang per rolle", () => {
     expect(ids).not.toContain(s.emptyFloorId);
     expect(ids).not.toContain(s.roomId);
 
-    // De fire lagringene, hver på et nytt oppsett med admin og innstillingen av
-    for (const write of ["saveBuilding", "saveFloor", "saveFloorArea", "saveRoom"] as const) {
+    // De fem lagringene, hver på et nytt oppsett med admin og innstillingen av (F6.4: addRooms med)
+    for (const write of [
+      "saveBuilding",
+      "saveFloor",
+      "saveFloorArea",
+      "saveRoom",
+      "addRooms",
+    ] as const) {
       const fresh = await writeSetup();
       await setInspectorsEditAll(fresh.org.id, false);
       await runWrite(write, fresh.admin, fresh.org.id, fresh);
     }
-    expect(await rowCount("events")).toBe(WRITES.length);
+    // Nøyaktig antall hendelser: tre fjerninger + fem lagringer, addRooms teller to.
+    const ran: WriteName[] = [
+      "removeRoom",
+      "removeFloor",
+      "removeBuilding",
+      "saveBuilding",
+      "saveFloor",
+      "saveFloorArea",
+      "saveRoom",
+      "addRooms",
+    ];
+    const expectedEvents = ran.reduce((sum, write) => sum + EVENTS_PER_WRITE[write], 0);
+    expect(await rowCount("events")).toBe(expectedEvents);
   });
 });
 
@@ -551,16 +605,23 @@ describe("4.1 tilgang per rolle", () => {
 describe("4.2 tenant-isolasjon", () => {
   it("4.2.1 getAssignmentBuildings gir aldri bygning, etasje, areal eller rom fra en annen organisasjon", async () => {
     const assignmentFor = new Map<string, string>();
+    // F7.5: A og B har hver sin boligtype, så vi kan vise at housingType aldri lekker.
+    const housingFor = new Map<string, string>();
     let orgA = "";
     let orgB = "";
     await expectTenantIsolation({
       seed: async (grantA, grantB) => {
         orgA = grantA.organizationId;
         orgB = grantB.organizationId;
+        housingFor.set(orgA, "apartment");
+        housingFor.set(orgB, "farm");
         const ids: Record<string, string[]> = {};
         for (const grant of [grantA, grantB]) {
           const assignment = await createAssignment(grant.organizationId);
-          await createProperty(grant.organizationId, { assignmentId: assignment.id });
+          await createProperty(grant.organizationId, {
+            assignmentId: assignment.id,
+            housingType: housingFor.get(grant.organizationId),
+          });
           const { building, floor, room } = await tree(grant.organizationId, assignment.id);
           assignmentFor.set(grant.organizationId, assignment.id);
           // Arealradens id er ikke nødvendigvis med i svaret; den sjekkes under (Bs id-er)
@@ -580,14 +641,24 @@ describe("4.2 tenant-isolasjon", () => {
     });
 
     // Ingen av Bs id-er står i As svar
-    const text = JSON.stringify(
-      await getAssignmentBuildings(await adminActorOf(orgA), orgA, assignmentFor.get(orgA)!),
-    );
+    const resultA = await getAssignmentBuildings(await adminActorOf(orgA), orgA, assignmentFor.get(orgA)!);
+    const text = JSON.stringify(resultA);
     for (const table of TABLES) {
       for (const row of await rawRows(table, sql`organization_id = ${orgB}`)) {
         expect(text).not.toContain(row.id as string);
       }
     }
+
+    // F7.5: A får sin egen boligtype, aldri Bs; B får sin
+    expect(asRecord(resultA).housingType).toBe("apartment");
+    const resultB = await getAssignmentBuildings(await adminActorOf(orgB), orgB, assignmentFor.get(orgB)!);
+    expect(asRecord(resultB).housingType).toBe("farm");
+    expect(text).not.toContain("farm");
+
+    // F7.5: oppdrag uten eiendom gir housingType null
+    const noProperty = await createAssignment(orgA);
+    const resultNone = await getAssignmentBuildings(await adminActorOf(orgA), orgA, noProperty.id);
+    expect(asRecord(resultNone).housingType).toBeNull();
   });
 
   it("4.2.2 saveBuilding lagrer alltid i egen organisasjon", async () => {
@@ -711,6 +782,37 @@ describe("4.2 tenant-isolasjon", () => {
       for (const row of await auditFor(org)) expect(row.entityId).toBe(own[0]!.id);
     }
     expect(await rowCount("rooms")).toBe(2);
+  });
+
+  // F7.1: addRooms lagrer bare i egen organisasjon, og B får aldri rom inn i A.
+  it("4.2.2 addRooms lagrer alltid i egen organisasjon", async () => {
+    const floorFor = new Map<string, string>();
+    const orgs: string[] = [];
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        for (const grant of [grantA, grantB]) {
+          floorFor.set(grant.organizationId, (await createFloor(grant.organizationId)).id);
+          orgs.push(grant.organizationId);
+        }
+        return { a: [grantA.organizationId], b: [grantB.organizationId] };
+      },
+      query: async (actor, organizationId) => {
+        const floorId = floorFor.get(organizationId) ?? randomUUID();
+        await addRooms(actor, organizationId, floorId, {
+          drafts: [{ roomType: "bedroom", count: 2 }],
+          source: "manual",
+        });
+        return rawRows("rooms", sql`floor_id = ${floorId}`);
+      },
+      idOf: (row) => row.organization_id as string,
+    });
+
+    for (const org of orgs) {
+      const own = await rawRows("rooms", sql`organization_id = ${org}`);
+      expect(own).toHaveLength(2);
+      for (const row of own) expect(row.floor_id).toBe(floorFor.get(org));
+    }
+    expect(await rowCount("rooms")).toBe(4);
   });
 
   /*
@@ -883,6 +985,13 @@ describe("4.3 fremmed, ukjent og ugyldig id", () => {
     await expectDeniedWithoutChange(o, () =>
       saveRoom(a.admin, a.org.id, treeB.floor.id, null, roomInput()),
     );
+    // F7.2: etasje-id fra B i addRooms gir AccessDeniedError, 0 nye rader i begge organisasjoner
+    await expectDeniedWithoutChange(o, () =>
+      addRooms(a.admin, a.org.id, treeB.floor.id, {
+        drafts: [{ roomType: "bedroom", count: 2 }],
+        source: "manual",
+      }),
+    );
   });
 
   it("4.3.4 Bs rom-id i saveRoom og removeRoom", async () => {
@@ -959,6 +1068,15 @@ describe("4.3 fremmed, ukjent og ugyldig id", () => {
         ["saveRoom (etasje)", () => saveRoom(s.admin, s.org.id, id, null, roomInput())],
         ["saveRoom (rom)", () => saveRoom(s.admin, s.org.id, s.floorId, id, roomInput())],
         ["removeRoom", () => removeRoom(s.admin, s.org.id, id)],
+        // F7.4: ukjent og ugyldig etasje-id i addRooms gir AccessDeniedError, aldri databasefeil
+        [
+          "addRooms (etasje)",
+          () =>
+            addRooms(s.admin, s.org.id, id, {
+              drafts: [{ roomType: "bedroom", count: 2 }],
+              source: "manual",
+            }),
+        ],
       ];
       for (const [name, call] of calls) {
         const error = await caught(call());
@@ -969,6 +1087,40 @@ describe("4.3 fremmed, ukjent og ugyldig id", () => {
       expect(await tableCounts()).toEqual(counts);
     },
   );
+
+  // F7.3: bruker i A som sender organizationId = B får AccessDeniedError fra tilgangssjekken,
+  // aldri en databasefeil, og ingenting endres.
+  it("4.3.7 addRooms med organizationId = B gir AccessDeniedError (tilgangssjekken)", async () => {
+    const o = await twoOrgs();
+    const { a, b } = o;
+    const counts = await tableCounts();
+    const error = await caught(
+      addRooms(a.admin, b.org.id, a.floorId, {
+        drafts: [{ roomType: "bedroom", count: 2 }],
+        source: "manual",
+      }),
+    );
+    expect(error).toBeInstanceOf(AccessDeniedError);
+    expect(await tableCounts()).toEqual(counts);
+  });
+
+  // F7.4: ukjent uuid og ugyldig uuid («abc», «») som etasje-id i addRooms gir AccessDeniedError.
+  it.each([
+    ["ukjent uuid", randomUUID()],
+    ["abc", "abc"],
+    ["tom", ""],
+  ])("4.3.8 addRooms med etasje-id %s gir AccessDeniedError, aldri databasefeil", async (_name, id) => {
+    const s = await writeSetup();
+    const counts = await tableCounts();
+    const error = await caught(
+      addRooms(s.admin, s.org.id, id, {
+        drafts: [{ roomType: "bedroom", count: 2 }],
+        source: "manual",
+      }),
+    );
+    expect(error).toBeInstanceOf(AccessDeniedError);
+    expect(await tableCounts()).toEqual(counts);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -993,6 +1145,13 @@ describe("4.4 slettede id-er og myk sletting", () => {
     await expect(
       saveBuilding(s.admin, s.org.id, s.assignment.id, s.emptyBuildingId, buildingInput()),
     ).rejects.toThrow(AccessDeniedError);
+    // F8.1: addRooms på en etasje under et myk-slettet oppdrag gir også AccessDeniedError
+    await expect(
+      addRooms(s.admin, s.org.id, s.floorId, {
+        drafts: [{ roomType: "bedroom", count: 2 }],
+        source: "manual",
+      }),
+    ).rejects.toThrow(AccessDeniedError);
     expect(await tableCounts()).toEqual(counts);
   });
 
@@ -1006,6 +1165,9 @@ describe("4.4 slettede id-er og myk sletting", () => {
     ["myk-slettet etasje i saveRoom", "floor", "saveRoom"],
     ["myk-slettet rom i saveRoom", "room", "saveRoom"],
     ["myk-slettet rom i removeRoom", "room", "removeRoom"],
+    // F8.1: addRooms på en etasje som selv er slettet, eller under en slettet bygning
+    ["myk-slettet etasje i addRooms", "floor", "addRooms"],
+    ["myk-slettet bygning i addRooms", "building", "addRooms"],
   ] as const;
 
   it.each(DELETED_CASES)("4.4.2 %s gir AccessDeniedError", async (_name, kind, service) => {
@@ -1045,6 +1207,11 @@ describe("4.4 slettede id-er og myk sletting", () => {
             : saveRoom(admin, org.id, floor.id, null, roomInput());
         case "removeRoom":
           return removeRoom(admin, org.id, room.id);
+        case "addRooms":
+          return addRooms(admin, org.id, floor.id, {
+            drafts: [{ roomType: "bedroom", count: 2 }],
+            source: "manual",
+          });
       }
     })();
     await expect(call).rejects.toThrow(AccessDeniedError);
@@ -1774,5 +1941,296 @@ describe("B6.9 etasjelisten har ikke myk-slettede etasjer", () => {
     expect([...levels].sort()).toEqual([1, 2]);
     expect(suggestFloor("Loft", levels)).toEqual({ level: 3, belowGround: false });
     expect(await rawRows("floors")).toHaveLength(3);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// F5 addRooms (flere rom på én gang): tjenesten mot testdatabasen
+// docs/funksjoner/fase2a-flere-rom-testplan.md F5
+// ---------------------------------------------------------------------------------------------
+
+const BEDROOM = roomTypeLabel("bedroom"); // «Soverom»
+
+/** Organisasjon, admin og en etasje (valgfritt under terreng) klar for addRooms. */
+async function addRoomsSetup(belowGround = false) {
+  const { org, admin, assignment } = await orgWithAdmin();
+  const building = await createBuilding(org.id, { assignmentId: assignment.id });
+  const floor = await createFloor(org.id, { buildingId: building.id, belowGround });
+  return { org, admin, assignment, building, floor };
+}
+
+describe("F5 addRooms", () => {
+  it("F5.1 saves_all: settet apartment i tom etasje gir 7 aktive rom i org A", async () => {
+    const { org, admin, floor } = await addRoomsSetup();
+    const apartment = ROOM_PRESETS.find((preset) => preset.key === "apartment")!;
+    const result = await addRooms(admin, org.id, floor.id, {
+      drafts: apartment.drafts.map((draft) => ({ roomType: draft.roomType, count: draft.count })),
+      source: "preset",
+      presetKey: "apartment",
+    });
+
+    const saved = await rawRows("rooms", sql`floor_id = ${floor.id} and deleted_at is null`);
+    expect(saved).toHaveLength(7);
+    for (const row of saved) expect(row.organization_id).toBe(org.id);
+    // Returverdien har de samme rommene (id og navn)
+    expect(result.ids).toHaveLength(7);
+    const expected = numberRoomDrafts(
+      apartment.drafts.map((draft) => ({ roomType: draft.roomType, count: draft.count })),
+      [],
+    );
+    expect(result.names).toEqual(expected.map((room) => room.name));
+    // De to sovrommene ble nummerert
+    const names = saved.map((row) => row.name as string | null);
+    expect(names).toContain(`${BEDROOM} 1`);
+    expect(names).toContain(`${BEDROOM} 2`);
+  });
+
+  it("F5.2 area_and_below_ground: arealtype og under terreng som forslagene; kjeller gir belowGround", async () => {
+    const { org, admin, floor } = await addRoomsSetup();
+    await addRooms(admin, org.id, floor.id, {
+      drafts: [
+        { roomType: "bedroom", count: 1 },
+        { roomType: "garage", count: 1 },
+      ],
+      source: "manual",
+    });
+    const saved = await rawRows("rooms", sql`floor_id = ${floor.id} and deleted_at is null`);
+    for (const row of saved) {
+      const roomType = row.room_type as string;
+      expect(row.area_type).toBe(suggestAreaType(roomType));
+      expect(row.below_ground).toBe(
+        suggestBelowGround({ roomType, floorBelowGround: false }),
+      );
+    }
+
+    // Settet basement i etasje under terreng → alle under terreng
+    const basement = await addRoomsSetup(true);
+    const basementPreset = ROOM_PRESETS.find((preset) => preset.key === "basement")!;
+    await addRooms(basement.admin, basement.org.id, basement.floor.id, {
+      drafts: basementPreset.drafts.map((draft) => ({
+        roomType: draft.roomType,
+        count: draft.count,
+      })),
+      source: "preset",
+      presetKey: "basement",
+    });
+    const basementRooms = await rawRows(
+      "rooms",
+      sql`floor_id = ${basement.floor.id} and deleted_at is null`,
+    );
+    for (const row of basementRooms) expect(row.below_ground).toBe(true);
+  });
+
+  it("F5.3 numbering_server: fortsetter etter rom som finnes", async () => {
+    const { org, admin, floor } = await addRoomsSetup();
+    await createRoom(org.id, { floorId: floor.id, roomType: "bedroom", name: `${BEDROOM} 1` });
+    await createRoom(org.id, { floorId: floor.id, roomType: "bedroom", name: `${BEDROOM} 2` });
+    const result = await addRooms(admin, org.id, floor.id, {
+      drafts: [{ roomType: "bedroom", count: 1 }],
+      source: "manual",
+    });
+    expect(result.names).toEqual([`${BEDROOM} 3`]);
+
+    const { org: org2, admin: admin2, floor: floor2 } = await addRoomsSetup();
+    await createRoom(org2.id, { floorId: floor2.id, roomType: "bedroom", name: `${BEDROOM} 2` });
+    const result2 = await addRooms(admin2, org2.id, floor2.id, {
+      drafts: [{ roomType: "bedroom", count: 1 }],
+      source: "manual",
+    });
+    expect(result2.names).toEqual([`${BEDROOM} 3`]);
+  });
+
+  it("F5.4 deleted_not_counted: myk-slettet rom telles ikke og endres ikke", async () => {
+    const { org, admin, floor } = await addRoomsSetup();
+    await createRoom(org.id, { floorId: floor.id, roomType: "bedroom", name: `${BEDROOM} 1` });
+    const deleted = await createRoom(org.id, {
+      floorId: floor.id,
+      roomType: "bedroom",
+      name: `${BEDROOM} 2`,
+      deletedAt: DELETED_AT,
+    });
+    const before = await rowById("rooms", deleted.id);
+    const result = await addRooms(admin, org.id, floor.id, {
+      drafts: [{ roomType: "bedroom", count: 1 }],
+      source: "manual",
+    });
+    expect(result.names).toEqual([`${BEDROOM} 2`]);
+    expect(await rowById("rooms", deleted.id)).toEqual(before);
+  });
+
+  it("F5.5 existing_untouched: rom som finnes er uendret etter addRooms", async () => {
+    const { org, admin, floor } = await addRoomsSetup();
+    const existingRoom = await createRoom(org.id, {
+      floorId: floor.id,
+      roomType: "bedroom",
+      name: `${BEDROOM} 1`,
+    });
+    const before = await rowById("rooms", existingRoom.id);
+    await addRooms(admin, org.id, floor.id, {
+      drafts: [{ roomType: "bedroom", count: 1 }],
+      source: "manual",
+    });
+    expect(await rowById("rooms", existingRoom.id)).toEqual(before);
+  });
+
+  it("F5.6 concurrent_unique_names: to samtidige addRooms gir 6 unike navn (lockFloor)", async () => {
+    for (let round = 0; round < 5; round += 1) {
+      const { org, admin, floor } = await addRoomsSetup();
+      await Promise.all([
+        addRooms(admin, org.id, floor.id, {
+          drafts: [{ roomType: "bedroom", count: 3 }],
+          source: "manual",
+        }),
+        addRooms(admin, org.id, floor.id, {
+          drafts: [{ roomType: "bedroom", count: 3 }],
+          source: "manual",
+        }),
+      ]);
+      const saved = await rawRows("rooms", sql`floor_id = ${floor.id} and deleted_at is null`);
+      expect(saved).toHaveLength(6);
+      const names = saved.map((row) => row.name as string);
+      expect(new Set(names).size, `runde ${round}: unike navn`).toBe(6);
+      const expected = Array.from({ length: 6 }, (_, i) => `${BEDROOM} ${i + 1}`);
+      expect([...names].sort()).toEqual([...expected].sort());
+    }
+  });
+
+  it("F5.7 other_floor_unaffected: rom i annen etasje teller ikke i nummereringen", async () => {
+    const { org, admin, building, floor } = await addRoomsSetup();
+    const otherFloor = await createFloor(org.id, {
+      buildingId: building.id,
+      level: 2,
+      name: "2. etasje",
+    });
+    await createRoom(org.id, {
+      floorId: otherFloor.id,
+      roomType: "bedroom",
+      name: `${BEDROOM} 5`,
+    });
+    const result = await addRooms(admin, org.id, floor.id, {
+      drafts: [{ roomType: "bedroom", count: 2 }],
+      source: "manual",
+    });
+    expect(result.names).toEqual([`${BEDROOM} 1`, `${BEDROOM} 2`]);
+  });
+
+  it("F5.8 audit_per_room: én create per rom med source og presetKey, uten romnavn", async () => {
+    const { org, admin, floor } = await addRoomsSetup();
+    await addRooms(admin, org.id, floor.id, {
+      drafts: [{ roomType: "bedroom", count: 2 }],
+      source: "preset",
+      presetKey: "apartment",
+    });
+    const audit = await auditFor(org.id, "room");
+    const creates = audit.filter((row) => row.action === "create");
+    expect(creates).toHaveLength(2);
+    for (const row of creates) {
+      const changes = row.changes as Record<string, unknown>;
+      expect(changes.source).toBe("preset");
+      expect(changes.presetKey).toBe("apartment");
+    }
+    // Ingen loggrad inneholder romnavnet
+    expect(JSON.stringify(audit)).not.toContain(BEDROOM);
+  });
+
+  it("F5.9 event_per_room: én assignment.room_saved per rom i org A", async () => {
+    const { org, admin, floor } = await addRoomsSetup();
+    await addRooms(admin, org.id, floor.id, {
+      drafts: [{ roomType: "bedroom", count: 2 }],
+      source: "manual",
+    });
+    const roomEvents = await eventsFor(org.id, "assignment.room_saved");
+    expect(roomEvents).toHaveLength(2);
+    for (const row of roomEvents) expect(row.organizationId).toBe(org.id);
+  });
+
+  it("F5.10 no_name_from_client: et ekstra name sendt forbi skjemaet styrer ikke navnet", async () => {
+    const { org, admin, floor } = await addRoomsSetup();
+    // Skjemaet er strict og avviser ekstra felt. Da lagres ingenting, og det smuglede navnet
+    // kommer aldri inn. Skulle utvikleren heller fjerne feltet (strip), skal navnene uansett
+    // bli de nummererte, aldri «Smuglet navn».
+    const error = await caught(
+      addRooms(admin, org.id, floor.id, {
+        drafts: [{ roomType: "bedroom", count: 2, name: "Smuglet navn" }],
+        source: "manual",
+      } as never),
+    );
+    const saved = await rawRows("rooms", sql`floor_id = ${floor.id} and deleted_at is null`);
+    const names = saved.map((row) => (row.name as string | null) ?? "");
+    expect(names).not.toContain("Smuglet navn");
+    if (error === null) {
+      expect([...names].sort()).toEqual([`${BEDROOM} 1`, `${BEDROOM} 2`]);
+    } else {
+      expect(error).toBeInstanceOf(ZodError);
+      expect(saved).toHaveLength(0);
+    }
+  });
+
+  it("F5.11 max_from_server: 41 rom gir valideringsfeil og 0 nye rader", async () => {
+    const { org, admin, floor } = await addRoomsSetup();
+    const before = await tableCounts();
+    await expect(
+      addRooms(admin, org.id, floor.id, {
+        drafts: [
+          { roomType: "bedroom", count: 20 },
+          { roomType: "storage", count: 20 },
+          { roomType: "kitchen", count: 1 },
+        ],
+        source: "manual",
+      }),
+    ).rejects.toThrow();
+    expect(await tableCounts()).toEqual(before);
+  });
+
+  it("F5.12 no_delete: addRooms og room-presets.ts inneholder ingen delete", () => {
+    const service = readFileSync(new URL("./service.ts", import.meta.url), "utf8");
+    const addRoomsBody = service.slice(service.indexOf("export async function addRooms"));
+    expect(addRoomsBody).not.toMatch(/\.delete\(|DELETE/);
+    const presets = readFileSync(new URL("./room-presets.ts", import.meta.url), "utf8");
+    expect(presets).not.toMatch(/\.delete\(|DELETE/);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// F9 Eksport og KI-grense (kildesjekk + DB)
+// docs/funksjoner/fase2a-flere-rom-testplan.md F9
+// ---------------------------------------------------------------------------------------------
+
+describe("F9 eksport og KI-grense", () => {
+  it("F9.1 exports: romutkast, sett og addRooms kan importeres fra @/core/buildings", async () => {
+    const mod = await import("@/core/buildings");
+    expect(typeof mod.addRooms).toBe("function");
+    expect(typeof mod.suggestRoomPreset).toBe("function");
+    expect(typeof mod.numberRoomDrafts).toBe("function");
+    expect(Array.isArray(mod.ROOM_PRESETS)).toBe(true);
+    expect(Array.isArray(mod.ROOM_DRAFT_SOURCES)).toBe(true);
+  });
+
+  it("F9.2 pure_no_server: room-presets.ts importerer ikke server, database eller Next", () => {
+    const source = readFileSync(new URL("./room-presets.ts", import.meta.url), "utf8");
+    for (const forbidden of ["@/db", "drizzle-orm", "server-only", "next/", "./service"]) {
+      expect(source, `room-presets.ts importerer ${forbidden}`).not.toContain(
+        `from "${forbidden}`,
+      );
+    }
+  });
+
+  it("F9.3 no_ai_import: ingen fil i src/core/buildings importerer fra @/core/ai", () => {
+    const dir = fileURLToPath(new URL(".", import.meta.url));
+    for (const file of readdirSync(dir)) {
+      if (!file.endsWith(".ts") || file.endsWith(".test.ts")) continue;
+      const source = readFileSync(join(dir, file), "utf8");
+      expect(source, `${file} importerer @/core/ai`).not.toMatch(/from ["']@?\/?core\/ai/);
+    }
+  });
+
+  it("F9.4 no_ai_call: ai_usage_log har 0 rader etter addRooms", async () => {
+    const { org, admin, floor } = await addRoomsSetup();
+    await addRooms(admin, org.id, floor.id, {
+      drafts: [{ roomType: "bedroom", count: 2 }],
+      source: "manual",
+    });
+    const [row] = await db.select({ n: count() }).from(aiUsageLog);
+    expect(row?.n ?? 0).toBe(0);
   });
 });

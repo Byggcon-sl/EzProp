@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AccessDeniedError } from "@/core/access";
 import {
+  addRoomsInputSchema,
   BuildingNotEmptyError,
   buildingInputSchema,
   FloorNotEmptyError,
@@ -44,6 +45,7 @@ const mocks = vi.hoisted(() => ({
     saveFloorArea: vi.fn(),
     saveRoom: vi.fn(),
     removeRoom: vi.fn(),
+    addRooms: vi.fn(),
   },
 }));
 
@@ -67,6 +69,7 @@ const {
   saveFloorAreaAction,
   saveRoomAction,
   removeRoomAction,
+  addRoomsAction,
 } = await import("./actions");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
@@ -127,6 +130,12 @@ const FORMS = {
     areaType: "bra_i",
   },
   removeRoomAction: { assignmentId: ASSIGNMENT, roomId: ROOM },
+  addRoomsAction: {
+    floorId: FLOOR,
+    source: "manual",
+    presetKey: "",
+    drafts: JSON.stringify([{ roomType: "bedroom", count: 2 }]),
+  },
 } as const;
 
 type ActionName = keyof typeof FORMS;
@@ -139,6 +148,7 @@ const ACTION_FNS = {
   saveFloorAreaAction,
   saveRoomAction,
   removeRoomAction,
+  addRoomsAction,
 } as const;
 
 const CORE_FOR_ACTION = {
@@ -149,6 +159,7 @@ const CORE_FOR_ACTION = {
   saveFloorAreaAction: mocks.core.saveFloorArea,
   saveRoomAction: mocks.core.saveRoom,
   removeRoomAction: mocks.core.removeRoom,
+  addRoomsAction: mocks.core.addRooms,
 } as const;
 
 const ACTION_NAMES = Object.keys(FORMS) as ActionName[];
@@ -166,6 +177,7 @@ const ID_FIELDS: Record<ActionName, string[]> = {
   saveFloorAreaAction: ["floorId"],
   saveRoomAction: ["floorId"],
   removeRoomAction: ["roomId"],
+  addRoomsAction: ["floorId"],
 };
 
 /** Valgfrie id-er («» = ny), som likevel må være uuid når de er fylt ut. */
@@ -455,5 +467,58 @@ describe("6.5 loggkontrakt", () => {
     for (const name of ACTION_NAMES) await run(call(name));
     const logged = loggedWithoutIds();
     for (const value of [...PERSONAL, ...AREAS]) expect(logged, value).not.toContain(value);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// F11 addRoomsAction (serverhandlingen for flere rom)
+// docs/funksjoner/fase2a-flere-rom-testplan.md F11
+// ---------------------------------------------------------------------------------------------
+
+describe("F11 addRoomsAction", () => {
+  it("F11.2 action_error_shape: 41 rom gir ZodError fra kjernen med norsk melding, aldri 500", async () => {
+    const parsed = addRoomsInputSchema.safeParse({
+      drafts: [
+        { roomType: "bedroom", count: 20 },
+        { roomType: "storage", count: 20 },
+        { roomType: "kitchen", count: 1 },
+      ],
+      source: "manual",
+    });
+    expect(parsed.success).toBe(false);
+    mocks.core.addRooms.mockRejectedValue(parsed.error);
+
+    const state = await failed(
+      call("addRoomsAction", {
+        drafts: JSON.stringify([
+          { roomType: "bedroom", count: 20 },
+          { roomType: "storage", count: 20 },
+          { roomType: "kitchen", count: 1 },
+        ]),
+      }),
+    );
+    expect(state.message).not.toBe(UNKNOWN_ERROR);
+    const messages = allMessages(state).join(" ");
+    expect(messages).toMatch(/40/);
+    expect(messages).not.toMatch(/expected|required|invalid/i);
+  });
+
+  it("F11.2 action_error_shape: ugyldig JSON i romlisten gir norsk melding, aldri 500", async () => {
+    const state = await failed(call("addRoomsAction", { drafts: "{ikke json" }));
+    expect(state.message).not.toBe(UNKNOWN_ERROR);
+    expect(state.message ?? "").toMatch(/[æøå]|rom/i);
+    // Kjernen ble aldri kalt med ødelagt liste
+    expect(mocks.core.addRooms).not.toHaveBeenCalled();
+  });
+
+  it("F11.3 action_ok: gyldig sett gir ok og revalidatePath for bygningssiden", async () => {
+    const state = await run(call("addRoomsAction"));
+    expect(state?.message ?? null).toBeNull();
+    expect(mocks.core.addRooms).toHaveBeenCalledTimes(1);
+    const [, org, floorId, input] = mocks.core.addRooms.mock.calls[0]!;
+    expect(org).toBe(ORG);
+    expect(floorId).toBe(FLOOR);
+    expect(input).toMatchObject({ source: "manual" });
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalled();
   });
 });

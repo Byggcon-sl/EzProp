@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ROOM_TYPES } from "./codes";
 import { BuildingNotEmptyError, FloorNotEmptyError, PropertyMissingError } from "./errors";
 import {
+  addRoomsInputSchema,
   buildingInputSchema,
   floorAreaInputSchema,
   floorInputSchema,
@@ -438,5 +439,172 @@ describe("hele skjemaene", () => {
 describe("2.14 alle meldingene i kortet er dekket", () => {
   it("hver norske melding i kortet punkt 7–8 er brukt i en test over", () => {
     expect(CARD_MESSAGES.filter((message) => !usedMessages.has(message))).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// F4 Flere rom på én gang: addRoomsInputSchema
+// docs/funksjoner/fase2a-flere-rom-testplan.md F4
+// ---------------------------------------------------------------------------------------------
+
+/** Ingen engelsk Zod-standardtekst skal slippe ut; meldingen skal være norsk. */
+function expectNorwegian(result: ReturnType<typeof addRoomsInputSchema.safeParse>) {
+  expect(result.success).toBe(false);
+  if (result.success) return;
+  for (const issue of result.error.issues) {
+    expect(issue.message, `norsk melding, ikke «${issue.message}»`).toMatch(/[æøå]|rom|sett|antall/i);
+    expect(issue.message).not.toMatch(/expected|required|invalid|must contain|unrecognized/i);
+  }
+}
+
+describe("F4 addRoomsInputSchema", () => {
+  it("F4.1 valid_manual: ett sett med soverom og kilde manual godtas", () => {
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [{ roomType: "bedroom", count: 2 }],
+      source: "manual",
+    });
+    expect(result.success, JSON.stringify(result.success ? null : result.error.issues)).toBe(true);
+  });
+
+  it("F4.2 valid_preset: source preset med presetKey apartment godtas", () => {
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [{ roomType: "bedroom", count: 2 }],
+      source: "preset",
+      presetKey: "apartment",
+    });
+    expect(result.success, JSON.stringify(result.success ? null : result.error.issues)).toBe(true);
+  });
+
+  it("F4.3 unknown_room_type: ukjent romtype avvises med norsk melding", () => {
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [{ roomType: "ballroom", count: 1 }],
+      source: "manual",
+    });
+    expectNorwegian(result);
+    // Arkivert romtype: ROOM_TYPES har ingen arkiverte koder i dag (rapporten noterer «ikke testbart»).
+  });
+
+  it.each([
+    ["0", 0],
+    ["-1", -1],
+    ["21", 21],
+    ["1,5", 1.5],
+  ])("F4.4 count_bounds: count %s avvises", (_name, count) => {
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [{ roomType: "bedroom", count }],
+      source: "manual",
+    });
+    expectNorwegian(result);
+  });
+
+  it("F4.4 count_bounds: tekst «2» avvises (tall kreves)", () => {
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [{ roomType: "bedroom", count: "2" }],
+      source: "manual",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it.each([1, 20])("F4.4 count_bounds: count %s godtas", (count) => {
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [{ roomType: "bedroom", count }],
+      source: "manual",
+    });
+    expect(result.success, JSON.stringify(result.success ? null : result.error.issues)).toBe(true);
+  });
+
+  it("F4.5 total_max_40: 40 rom totalt godtas", () => {
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [
+        { roomType: "bedroom", count: 20 },
+        { roomType: "storage", count: 20 },
+      ],
+      source: "manual",
+    });
+    expect(result.success, JSON.stringify(result.success ? null : result.error.issues)).toBe(true);
+  });
+
+  it("F4.5 total_max_40: 41 rom avvises med melding om høyst 40", () => {
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [
+        { roomType: "bedroom", count: 20 },
+        { roomType: "storage", count: 20 },
+        { roomType: "kitchen", count: 1 },
+      ],
+      source: "manual",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.message).join(" ")).toMatch(/40/);
+    }
+  });
+
+  it("F4.6 empty_drafts: tom liste avvises", () => {
+    const result = addRoomsInputSchema.safeParse({ drafts: [], source: "manual" });
+    expectNorwegian(result);
+  });
+
+  it("F4.7 duplicate_type: samme romtype to ganger avvises (låst valg: avvis)", () => {
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [
+        { roomType: "bedroom", count: 1 },
+        { roomType: "bedroom", count: 1 },
+      ],
+      source: "manual",
+    });
+    // Utvikleren avviser duplikat (schemas.ts: DRAFTS_DUPLICATE). Summen teller mot 40 uansett.
+    expect(result.success).toBe(false);
+  });
+
+  it.each([
+    ["mangler", undefined],
+    ["ai_floor_plan", "ai_floor_plan"],
+    ["ai", "ai"],
+    ["tom", ""],
+  ])("F4.8 source_closed: source %s avvises", (_name, source) => {
+    const input: Record<string, unknown> = { drafts: [{ roomType: "bedroom", count: 1 }] };
+    if (source !== undefined) input.source = source;
+    const result = addRoomsInputSchema.safeParse(input);
+    expectNorwegian(result);
+  });
+
+  it("F4.9 preset_key_rules: preset uten presetKey avvises", () => {
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [{ roomType: "bedroom", count: 1 }],
+      source: "preset",
+    });
+    expectNorwegian(result);
+  });
+
+  it("F4.9 preset_key_rules: preset med ukjent presetKey «villa» avvises", () => {
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [{ roomType: "bedroom", count: 1 }],
+      source: "preset",
+      presetKey: "villa",
+    });
+    expectNorwegian(result);
+  });
+
+  it("F4.9 preset_key_rules: manual med presetKey avvises", () => {
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [{ roomType: "bedroom", count: 1 }],
+      source: "manual",
+      presetKey: "apartment",
+    });
+    expectNorwegian(result);
+  });
+
+  it("F4.10 no_name_field: et ekstra name i utkastet slipper ikke gjennom", () => {
+    const result = addRoomsInputSchema.safeParse({
+      drafts: [{ roomType: "bedroom", count: 1, name: "Hovedsoverom" }],
+      source: "manual",
+    });
+    // Låst valg: strict avviser ekstra felt (schemas.ts: strictObject på utkastet).
+    if (result.success) {
+      // Dersom utvikleren heller bruker strip: navnet skal uansett ikke være med i resultatet.
+      expect((result.data.drafts[0] as Record<string, unknown>).name).toBeUndefined();
+    } else {
+      expect(result.success).toBe(false);
+    }
   });
 });

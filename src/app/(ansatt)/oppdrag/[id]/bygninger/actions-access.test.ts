@@ -53,6 +53,7 @@ const {
   saveFloorAreaAction,
   saveRoomAction,
   removeRoomAction,
+  addRoomsAction,
 } = await import("./actions");
 
 const TABLES = ["report_buildings", "floors", "floor_areas", "rooms"] as const;
@@ -146,7 +147,7 @@ async function setup() {
 }
 
 describe("6.4 takstmann uten skriverett får NO_ACCESS fra kjernen", () => {
-  it("alle sju handlingene gir NO_ACCESS, og ingenting lagres eller logges", async () => {
+  it("alle åtte handlingene gir NO_ACCESS, og ingenting lagres eller logges", async () => {
     const { org, adminEmployee, assignment, building, floor, room, emptyBuilding, emptyFloor } =
       await setup();
 
@@ -238,6 +239,20 @@ describe("6.4 takstmann uten skriverett får NO_ACCESS fra kjernen", () => {
           "removeRoomAction",
           removeRoomAction,
           form({ assignmentId: assignment.id, roomId: room.id }),
+        ],
+        // F11.1: også addRoomsAction gir NO_ACCESS fra kjernen for takstmann uten skriverett
+        [
+          "addRoomsAction",
+          addRoomsAction,
+          form({
+            floorId: floor.id,
+            source: "preset",
+            presetKey: "apartment",
+            drafts: JSON.stringify([
+              { roomType: "bedroom", count: 2 },
+              { roomType: "bathroom", count: 1 },
+            ]),
+          }),
         ],
       ];
 
