@@ -52,6 +52,15 @@ function strings(value: unknown): string[] {
   return Object.values(value).flatMap(strings);
 }
 
+/** Alle strenger utenom de interne nøklene (`key`, `contactKey`, `firmKey` osv.). */
+function freeTexts(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (value instanceof Date || value === null || typeof value !== "object") return [];
+  return Object.entries(value)
+    .filter(([name]) => !/key$/i.test(name))
+    .flatMap(([, inner]) => freeTexts(inner));
+}
+
 /** Alle `Date` i et objekt, rekursivt. */
 function dates(value: unknown): Date[] {
   if (value instanceof Date) return [value];
@@ -217,7 +226,11 @@ describe("testdataplanen: ingen ekte-lignende data (2.3)", () => {
 
   it("2.3.17 ingen streng i planen har elleve sifre på rad", () => {
     for (const text of strings(plan)) expect(text).not.toMatch(/\d{11}/);
-    for (const text of strings(plan)) expect(text.replace(/[\s.-]/g, "")).not.toMatch(/\d{11}/);
+    // Fritekst (ikke de interne nøklene): heller ikke med mellomrom, punktum eller bindestrek
+    // mellom sifrene, slik sperren i skjemaene leser det.
+    for (const text of freeTexts(plan)) {
+      expect(text.replace(/(?<=\d)[\s.-]+(?=\d)/g, "")).not.toMatch(/\d{11}/);
+    }
   });
 
   // Kort liste over kjente kjeder og foretak i bransjen. Treff også som delstreng.

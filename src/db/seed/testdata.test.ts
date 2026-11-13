@@ -268,9 +268,6 @@ async function tdOrders(organizationId: string): Promise<Map<string, TdOrderRow>
   return new Map(found.map((row) => [row.external_ref, row]));
 }
 
-/** E-postene til de oppdiktede ansatte. */
-const TD_EMPLOYEE_EMAILS = plan.employees.map((e) => e.email.toLowerCase());
-
 /** Oppslagene i skriptet som tar `organizationId` (kontrakten i testplanen). */
 const td = testdataModule as unknown as Record<string, unknown>;
 async function lookup(name: string, organizationId: string): Promise<{ id: string }[]> {
