@@ -2,7 +2,7 @@
 
 Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Alle steg tåler å kjøres to ganger. Filen holdes kort: bare det som gjelder nå. Historikken til og med 10.11.2026 står i `docs/agenter/arkiv/tilstand-til-2026-11-10.md` (der står også små funn fra tidligere leveranser, «liten oppgave (v)–(ad)»).
 
-**Autonom modus: på** (Ståle 04.11.2026, til han sier fra: «Jeg synes det fungerte så bra at du kan kjøre videre på autonom utvikling igjen»). Ingen varsler, ingen spørsmål, ingen «Venter på Ståle». Agentene avgjør selv ut fra researchen og fører beslutningene i `docs/09-apne-sporsmal.md` («Avgjort av agentene mens Ståle var borte», neste nummer etter det høyeste A-nummeret, nå A255). Det bare Ståle kan gjøre, samles under «Trenger Ståle når han er tilbake». Se «Autonom modus» i `CLAUDE.md`.
+**Autonom modus: på** (Ståle 04.11.2026, til han sier fra: «Jeg synes det fungerte så bra at du kan kjøre videre på autonom utvikling igjen»). Ingen varsler, ingen spørsmål, ingen «Venter på Ståle». Agentene avgjør selv ut fra researchen og fører beslutningene i `docs/09-apne-sporsmal.md` («Avgjort av agentene mens Ståle var borte», neste nummer etter det høyeste A-nummeret, nå A263; T1 bruker A249–A255 og søket (T2) A256–A263). Det bare Ståle kan gjøre, samles under «Trenger Ståle når han er tilbake». Se «Autonom modus» i `CLAUDE.md`.
 
 **Hovedmål (Ståle 10.11.2026):** best mulig system for de ansatte, KI først og KI i bunnen, og færre reklamasjoner. 50 % mindre tid er ikke lenger hovedmål. Se `CLAUDE.md`.
 
@@ -81,10 +81,10 @@ Alvorlige: ingen.
 Lite:
 1. *(Ryddet i PR «Rydding fra nattløkken 2026-11-13», versjon 0.10.5, migrering `0032_indekser-firma-status`.)* Indekser på `firm_id` i `contacts`, `assignment_parties` og `orders.ordered_by_firm_id`, og `assignments (organization_id, status) where deleted_at is null` for arbeidskøen. Gjenstår: `assignment_team_members (organization_id, employee_id) where to_at is null and deleted_at is null` for «Mine» når den spørringen trenger det.
 2. *(Ryddet i samme PR.)* better-auth 1.7.21 → 1.7.22 og prettier 3.10.0 → 3.10.1 (patch). CI kjører e2e for innloggingen før merge.
-3. **Fokusringen er skrudd av for alle med `tabindex="-1"`** (`src/app/globals.css` linje 148–150). Treffer også kortet i arbeidskøen (`queue-card.tsx` linje 93): når siden hopper tilbake til kortet etter lagret notat, ser ikke tastaturbrukeren hvor fokus er. Avgrens regelen til `#hovedinnhold`, eller gi kortet en synlig ring i fjord. Endrer utseendet, så tas med neste oppgave i arbeidskøen.
+3. *(Ryddet på branch `sok-ordre-arbeidsko` (T2), versjon 0.10.8: regelen gjelder bare `#hovedinnhold` og sidens `<main>`; kortet i arbeidskøen har ring i fjord. A262, se T2-oppgavekortet `docs/funksjoner/fase2a-sok-ordre-arbeidsko.md`.)* **Fokusringen er skrudd av for alle med `tabindex="-1"`** (`src/app/globals.css` linje 148–150). Treffer også kortet i arbeidskøen (`queue-card.tsx` linje 93): når siden hopper tilbake til kortet etter lagret notat, ser ikke tastaturbrukeren hvor fokus er. Avgrens regelen til `#hovedinnhold`, eller gi kortet en synlig ring i fjord. Endrer utseendet, så tas med neste oppgave i arbeidskøen.
 4. **Skjermleser: like knappenavn «Endre» og «Fjern»** i `buildings-editor.tsx` og `party-card.tsx`. Skjult tekst som i `certification-section.tsx`. Tas med neste oppgave i samme område. Fra 12.11.
-5. **Søk med `ILIKE '%tekst%'`** kan ikke bruke vanlig indeks (arbeidskøen, kontakter, firma i `src/core/contacts/search.ts`). Avgjøres sammen med «søk (T2)»: pg_trgm-indekser (utvidelse i PostgreSQL, ingen ny pakke) eller dagens løsning med begrunnelse i en ADR.
-6. **Lister uten grense:** `listOrders` (vokser med alle bestillinger), `listAgreements`, sertifiseringslistene. Sidegrense på ordrelisten, gjerne med T1 eller T2.
+5. *(Ryddet på branch `sok-ordre-arbeidsko` (T2): ADR 0010 «Søk uten egne søkeindekser foreløpig», dagens `ILIKE` beholdes, ingen pg_trgm nå. A256, `docs/adr/0010-sok-uten-egne-sokeindekser.md`.)* **Søk med `ILIKE '%tekst%'`** kan ikke bruke vanlig indeks (arbeidskøen, kontakter, firma i `src/core/contacts/search.ts`). Avgjøres sammen med «søk (T2)»: pg_trgm-indekser (utvidelse i PostgreSQL, ingen ny pakke) eller dagens løsning med begrunnelse i en ADR.
+6. *(Ryddet for ordrelisten på branch `sok-ordre-arbeidsko` (T2): `ORDER_LIST_LIMIT = 50` med søk, uten bla-sider. A257, ADR 0010 punkt 6. `listAgreements` og sertifiseringslistene er små og tas ved behov.)* **Lister uten grense:** `listOrders` (vokser med alle bestillinger), `listAgreements`, sertifiseringslistene. Sidegrense på ordrelisten, gjerne med T1 eller T2.
 7. **Tilgangssjekken gjentas per kall** (4 spørringer, rundt 30 per visning av oppdragssiden), og `findEmployeeGrant`/`findAdminOrganizationId` går i løkke over organisasjonene. Mulig mellomlagring per forespørsel i `src/core/access`; må vurderes av sikkerhet-personvern.
 8. **Vasken før KI leser `common_areas` uten `deleted_at is null`** (`src/core/ai/redaction.ts` rundt linje 140), og treffer da ingen indeks. Ki-ansvarlig avklarer om slettede rader skal med; ellers vanlig indeks `(organization_id, assignment_id)`.
 9. **`ai_usage_log`:** oppslag på samme mål uten status (`sameTargetWhere`, brukt i `record-decision.ts`) treffer bare indeksen på organization_id. Indeks `(organization_id, feature, target_ref)` eller status i spørringen før KI slås på for ekte. `ai_usage_log (organization_id, assignment_id)` og `audit_log (organization_id, entity_type, entity_id, occurred_at)` når lister per oppdrag kommer.
@@ -99,6 +99,10 @@ Lite:
 ## Trenger Ståle (stoppet etter 3 retteforsøk)
 
 Ingen.
+
+## Pågår
+
+- **T2 Søk i ordrelisten og i arbeidskøen** (fase 2a), branch `sok-ordre-arbeidsko`, versjon 0.10.8. Oppgavekort `docs/funksjoner/fase2a-sok-ordre-arbeidsko.md`, ADR 0010. Tar med T-0029 og nattløkkens punkt 3, 5 og 6. Beslutninger A256–A263, åpent spørsmål nr. 80 (søketekst i nettleserhistorikken). 13.11.2026: oppgavekortet utvidet etter sikkerhet-personvern og test-leder (akseptkriterier for `selectOrder`, navneoppslaget i `src/core/contacts`, feilfangst på listesidene, fletting av main; A-numrene flyttes til A256–A263). Neste steg: flette main og bygge småfunnene.
 
 ## Siste kjøring
 

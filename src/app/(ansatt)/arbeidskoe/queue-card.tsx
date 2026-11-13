@@ -90,7 +90,12 @@ export function QueueCard({
   const noteId = `note-${item.id}`;
   const noteTextId = `note-text-${item.id}`;
   return (
-    <li id={cardAnchor(item.id)} tabIndex={-1} data-testid="work-queue-card">
+    <li
+      id={cardAnchor(item.id)}
+      tabIndex={-1}
+      data-testid="work-queue-card"
+      className="rounded-card"
+    >
       <Card className="p-5">
         <Link
           href={`/oppdrag/${item.id}`}
