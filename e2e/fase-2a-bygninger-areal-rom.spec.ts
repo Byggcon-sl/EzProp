@@ -516,6 +516,41 @@ test.describe("bygninger, areal og rom (pc og ipad)", () => {
       await expect(button(page, "Legg til bygning")).toHaveCount(0);
     }
   });
+
+  // E13 (T-0018): nedtrekkslisten for ett rom er gruppert med optgroup, og startRoom virker.
+  test("E13.1 nedtrekkslisten for ett rom er gruppert med optgroup (T-0018)", async ({ page }) => {
+    await logIn(page);
+    await newAssignmentWithProperty(page);
+    await openBuildings(page);
+    await addBuilding(page, BUILDING);
+    await addFloor(page, BUILDING, { name: FIRST_FLOOR, level: "1", belowGround: false });
+    const upper = block(block(page, BUILDING), FIRST_FLOOR);
+
+    await button(upper, "Legg til rom").click();
+    const select = upper.getByLabel(LABEL.roomType).last();
+    // Gruppene vises som optgroup med norske gruppenavn
+    const groupLabels = await select
+      .locator("optgroup")
+      .evaluateAll((groups) => groups.map((group) => (group as HTMLOptGroupElement).label));
+    expect(groupLabels.length, "minst én optgroup").toBeGreaterThan(0);
+    for (const label of ["Våtrom", "Kjøkken", "Toalett", "Spesialrom", "Andre rom"]) {
+      expect(groupLabels, `gruppe «${label}»`).toContain(label);
+    }
+    // Alle 33 romtypene står i en gruppe (option under optgroup, uten den tomme «Velg romtype»)
+    const inGroups = await select
+      .locator("optgroup > option")
+      .evaluateAll(
+        (options) => options.filter((o) => (o as HTMLOptionElement).value !== "").length,
+      );
+    expect(inGroups).toBe(33);
+
+    // E13.2: startRoom virker fortsatt (valg på etikett). Lukk skjemaet først.
+    await button(upper, "Avbryt").click();
+    const room = await startRoom(upper, "Bad");
+    await expect(room.areaType.locator("option:checked")).toHaveText("BRA-i");
+    await clickAndWaitForSave(page, room.save);
+    await expect(upper).toContainText("Bad");
+  });
 });
 
 test.describe("iPad (prosjektet ipad)", () => {

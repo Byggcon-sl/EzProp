@@ -3,14 +3,14 @@ id: T-0018
 tittel: Listen over romtyper er ikke delt i grupper
 type: feil
 alvor: lite
-status: ny
+status: rettet
 funnet: 2026-11-11
 rolle: test-takstmann
 omrade: bygninger, rom
 maal: de ansatte
 commit: 0b8e3b9
 forsok: 0
-pr:
+pr: kommer
 ---
 
 ## Hva
@@ -34,3 +34,4 @@ Ikke etterprøvd (lite).
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-13: rettet på branch `flere-rom-samtidig`: nedtrekkslisten for ett rom er gruppert med `optgroup` etter romgruppe (`docs/funksjoner/fase2a-flere-rom.md`). PR: kommer
