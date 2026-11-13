@@ -3,7 +3,7 @@
 - **Fase:** 2a – Rapporten på PC, delen «Fra Ståles svar 12.11.2026», første gjenstående punkt (T1)
 - **Modul:** kjerne (`src/core/orders`, `src/core/audit`), siden `/ordre/[id]`
 - **Branch:** `rette-ordre-etter-lagring` (bygger på `main`)
-- **Status:** klar for bygging (12.11.2026, prosjektleder). Runde 3: forhåndsvurderingen fra ux, sikkerhet-personvern og test-leder er tatt inn (se nederst). Versjon 0.10.3 → 0.10.4.
+- **Status:** klar for bygging (12.11.2026, prosjektleder). Runde 3: forhåndsvurderingen fra ux, sikkerhet-personvern og test-leder er tatt inn (se nederst). Oppdatert 13.11.2026: main flettet inn (etter PR #180), versjon 0.10.4 → 0.10.5, småfunnet T-0031 tatt med. Branchen `rette-ordre` (en parallell kjøring natt til 13.11.2026) er overflødig og skal ikke merges; denne branchen gjelder.
 - **Kilde:** `docs/kartlegging/svar-fra-stale-2026-11-12.md`, T1 (spørsmål 60): «ja, full redigeringstilgang. alltid». Også etter at ordren er blitt oppdrag. Endrer A55 og A87. «Gammel og ny verdi» i loggen kommer fra oppgaveteksten, ikke fra Ståle (se A252 og spørsmål 78).
 - **Støtter hovedmål:**
   - **De ansatte:** en skrivefeil i adressen eller bestilleren rettes på stedet med tre trykk (rundt 20–40 sekunder). I dag må kontoret avvise ordren og legge den inn på nytt (rundt 15 trykk, 2–4 minutter og en dobbel ordre i listen).
@@ -67,7 +67,8 @@ Dette er de eneste feltkodene som kan stå i `fields` og i `values`. `orderedByT
    - Delen **«Endringer»** under ordren: én linje per hendelse, nyeste først, med dato og klokkeslett, navn og handling («Endret» for endringer). Én underlinje per felt: «Adresse: Storgata 1 → Storgata 11». Tom verdi «(tom)», ja/nei «Ja»/«Nei», bestilleren med navnet fra kontaktregisteret (eller «(fjernet kontakt)»).
 5. **Server action** `updateOrderAction` i `src/app/(ansatt)/ordre/actions.ts`, samme mønster som de andre (ikke-uuid gir `NO_ACCESS`; logglinjer uten skjemaverdier, også i feilgrenene).
 6. **Beslutningene:** A55 og A87 får en linje om at de er endret av T1 (12.11.2026). A249–A253 føres i `docs/09-apne-sporsmal.md`. Spørsmål 78 til Ståle er ført.
-7. **Dokumenter:** domenemodellen 4.3 (ordren kan endres; `update` er eneste ordrehandling med verdier i loggen) og 4.12 (`values` med `from`/`to` for ordre). Kommentarene i `src/core/orders/orders.ts`, `src/core/audit/index.ts` og `src/db/schema/audit.ts` oppdateres på samme måte. Ordlisten: `updateOrder`, `OrderChangedError`, `listOrderHistory`, `orderFieldLabel`, `order.updated`. Planen krysses av.
+7. **Småfunn i samme område, T-0031 (lite):** ordrelisten `/ordre` viser «kansellert» for en ordre der oppdraget er kansellert (myk-slettet), med samme sjekk som ordresiden (`assignmentCancelled`). Funnet settes til «rettet» med PR-nummeret.
+8. **Dokumenter:** domenemodellen 4.3 (ordren kan endres; `update` er eneste ordrehandling med verdier i loggen) og 4.12 (`values` med `from`/`to` for ordre). Kommentarene i `src/core/orders/orders.ts`, `src/core/audit/index.ts` og `src/db/schema/audit.ts` oppdateres på samme måte. Ordlisten: `updateOrder`, `OrderChangedError`, `listOrderHistory`, `orderFieldLabel`, `order.updated`. Planen krysses av.
 
 **Ikke med (bevisst utelatt):**
 - Endring av oppdraget når ordren endres (A251).
@@ -80,6 +81,8 @@ Dette er de eneste feltkodene som kan stå i `fields` og i `values`. `orderedByT
 - Endring uten nett (ordre er kontorarbeid med nett, som oppretting). Skjemaet mister likevel ikke det som er skrevet.
 - KI-forslag til endring.
 - Søk og dublettvarsel (T2 og T3, egne punkter).
+- Ny indeks på `audit_log (organization_id, entity_type, entity_id, occurred_at)` (nattløkken punkt 13). Historikken for én ordre er liten, og indeksen `audit_log_entity_idx` finnes; ingen migrering i denne oppgaven.
+- Andre åpne funn i nærheten (T-0009 Lagre-knapper på oppdraget, T-0030 like kontakter): eget område, ikke med.
 
 ## Tilgang
 | Rolle | Se ordre og endringer | Endre |
@@ -121,6 +124,8 @@ Ingen fagregler.
 - [ ] Testene i 4.6 for oppretting, avvisning og konvertering står uendret og er grønne.
 - [ ] Ingen KI-kall og ingen rad i `ai_usage_log` fra endring (test).
 - [ ] e2e på `pc` og `ipad` (`e2e/fase-2a-rette-ordre.spec.ts`): ny ordre → «Endre ordren» → endre adresse → «Lagre» → «Endringene er lagret.» → «Endringer» viser gammel og ny adresse, navn og tidspunkt; gjort-om ordre kan endres, oppdragsnummeret er uendret og linjen «Oppdraget endres ikke…» vises; «Avbryt» lagrer ingenting; to faner gir «Ordren er endret av en annen. Last siden på nytt.» med knappen «Last siden på nytt», og det som er skrevet står igjen; takstmann med innstillingen av ser ikke knappen; på iPad er knappene minst 44 px, ingen vannrett rulling i stående, og «Endringer» kan leses.
+- [ ] T-0031: ordrelisten viser «kansellert» når oppdraget er kansellert, og nummeret uten lenke, som ordresiden (test).
+- [ ] Versjonen i `package.json` er 0.10.5.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` er grønne.
 
 ## Beslutninger (autonom modus, føres i `docs/09-apne-sporsmal.md`)
