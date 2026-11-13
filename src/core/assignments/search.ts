@@ -61,10 +61,12 @@ function sameTrimmed(column: AnyColumn, value: string): SQL {
 }
 
 /**
- * Matrikkelen på ordren. Ordren har ikke festenummer, så `fnr` i søket sammenlignes bare mot
- * `cadastral_units`.
+ * Matrikkelen på ordren. Ordren har ikke festenummer, så et søk med festenummer (annet enn 0)
+ * gir aldri treff på ordren, bare i `cadastral_units`. Ellers ville «12/34/7» funnet alle
+ * ordre på 12/34.
  */
 function orderCadastralMatch(cadastral: CadastralQuery): SQL | undefined {
+  if (cadastral.fnr !== undefined && Number(cadastral.fnr) !== 0) return undefined;
   return and(
     sameTrimmed(orders.gnr, cadastral.gnr),
     sameTrimmed(orders.bnr, cadastral.bnr),

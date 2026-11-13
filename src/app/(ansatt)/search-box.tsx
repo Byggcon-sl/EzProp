@@ -1,3 +1,4 @@
+import { SEARCH_QUERY_MAX_LENGTH } from "@/shared/lib/like-pattern";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/form";
 
@@ -12,7 +13,7 @@ export function SearchBox({ label, query }: { label: string; query: string }) {
         <label htmlFor="q" className="block text-sm font-medium text-slate-700">
           {label}
         </label>
-        <Input id="q" name="q" type="search" maxLength={100} defaultValue={query} />
+        <Input id="q" name="q" type="search" maxLength={SEARCH_QUERY_MAX_LENGTH} defaultValue={query} />
       </div>
       <Button type="submit" variant="secondary">
         Søk
@@ -24,5 +25,5 @@ export function SearchBox({ label, query }: { label: string; query: string }) {
 /** Søket fra adressen: første verdi, trimmet. */
 export function searchQuery(value: string | string[] | undefined): string {
   const first = Array.isArray(value) ? value[0] : value;
-  return (first ?? "").trim().slice(0, 100);
+  return (first ?? "").trim().slice(0, SEARCH_QUERY_MAX_LENGTH);
 }

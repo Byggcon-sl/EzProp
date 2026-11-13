@@ -363,6 +363,17 @@ describe("3.3 matrikkel del for del", () => {
     expect(ids).not.toContain(otherBnr);
   });
 
+  it("3.3.3b «12/34/7» treffer ikke ordren, som ikke har festenummer, men finner 12/34/7 på eiendommen", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const onOrder = (await insertOrder(org.id, { gnr: "12", bnr: "34" })).id;
+    const onUnit = await orderWithCadastre(org.id, { gnr: "12", bnr: "34", fnr: "7" });
+
+    const ids = await searchIds(admin, org.id, "12/34/7");
+    expect(ids).toEqual([onUnit]);
+    expect(ids).not.toContain(onOrder);
+    expect(await searchIds(admin, org.id, "12/34/0")).toContain(onOrder);
+  });
+
   it.each([
     ["tom tekst", ""],
     ["null", null],
