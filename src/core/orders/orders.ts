@@ -4,7 +4,7 @@ import { assignmentFieldsMatch, nextAssignmentNumber, orderFieldsMatch } from "@
 import { recordAuditEvent } from "@/core/audit";
 import { ContactNotFoundError, findContactForLink } from "@/core/contacts";
 import { recordEvent } from "@/core/events";
-import { db } from "@/db/client";
+import { db, type DbExecutor } from "@/db/client";
 import { assignments, offices, orders } from "@/db/schema";
 import { todayInOslo } from "@/shared/lib/dates";
 import { isUuid } from "@/shared/lib/uuid";
@@ -18,8 +18,13 @@ import { orderInputSchema, rejectReasonSchema, type OrderInput } from "./schemas
  * med `assignment.edit` (A53). All filtrering bruker `grant.organizationId` fra tilgangssjekken,
  * aldri parameteren. Fremmed, ukjent, slettet eller ugyldig ordre-id gir `AccessDeniedError`.
  *
- * Hendelser og revisjonslogg skrives i samme transaksjon som endringen, og får aldri adresse,
- * bestiller, matrikkel eller borettslag. Raden er kilden.
+ * Ordren kan endres etter lagring i alle statuser, også etter at den er gjort om til oppdrag
+ * (`updateOrder` i `update-order.ts`; T1, Ståle 12.11.2026, endrer A55 og A87). Oppdraget endres
+ * ikke av det (A251).
+ *
+ * Hendelser og revisjonslogg skrives i samme transaksjon som endringen. Oppretting, avvisning og
+ * konvertering får aldri adresse, bestiller, matrikkel eller borettslag. Endring (`update`) er
+ * eneste ordrehandling med gamle og nye verdier, og bare i revisjonsloggen (A252, spørsmål 79).
  */
 
 const MANUAL_SOURCE: OrderSource = "manual";
@@ -87,11 +92,14 @@ export const listOrders: ListOrders = async (actor, organizationId, options = {}
   return { items, total: Number(counted?.count ?? 0) };
 };
 
-/** Én ordre med alle feltene og oppdragsnummeret. Ingen sporingsfelt. */
-export async function getOrder(actor: Actor, organizationId: string, orderId: string) {
-  const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
-  if (!isUuid(orderId)) throw new AccessDeniedError();
-  const [row] = await db
+/**
+ * Leser én ordre med alle feltene, oppdragsnummeret og `rowVersion` (versjonen skjemaet for
+ * endring sender tilbake, A253). Ingen andre sporingsfelt. `organizationId` skal komme fra
+ * tilgangssjekken hos den som kaller. Gir `null` når ordren ikke finnes i organisasjonen eller er
+ * slettet.
+ */
+export async function selectOrder(executor: DbExecutor, organizationId: string, orderId: string) {
+  const [row] = await executor
     .select({
       id: orders.id,
       receivedAt: orders.receivedAt,
@@ -112,20 +120,33 @@ export async function getOrder(actor: Actor, organizationId: string, orderId: st
       assignmentId: orders.assignmentId,
       assignmentNumber: assignments.number,
       assignmentDeletedAt: assignments.deletedAt,
+      rowVersion: orders.rowVersion,
     })
     .from(orders)
-    .leftJoin(assignments, assignmentJoin(grant.organizationId))
+    .leftJoin(assignments, assignmentJoin(organizationId))
     .where(
       and(
         eq(orders.id, orderId),
-        eq(orders.organizationId, grant.organizationId),
+        eq(orders.organizationId, organizationId),
         isNull(orders.deletedAt),
       ),
     );
-  if (!row) throw new AccessDeniedError();
+  if (!row) return null;
   // Kansellert oppdrag (myk sletting, A76): nummeret vises fortsatt, uten lenke. Uten oppdrag: false.
   const { assignmentDeletedAt, ...order } = row;
   return { ...order, assignmentCancelled: assignmentDeletedAt !== null };
+}
+
+/**
+ * Én ordre med alle feltene, oppdragsnummeret og `rowVersion` (til skjemaet for endring). Ingen
+ * andre sporingsfelt.
+ */
+export async function getOrder(actor: Actor, organizationId: string, orderId: string) {
+  const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
+  if (!isUuid(orderId)) throw new AccessDeniedError();
+  const order = await selectOrder(db, grant.organizationId, orderId);
+  if (!order) throw new AccessDeniedError();
+  return order;
 }
 
 /**
@@ -187,7 +208,10 @@ export async function createOrder(
   });
 }
 
-/** Avviser en mottatt ordre med grunn (A55). Ordren blir stående i listen. */
+/**
+ * Avviser en mottatt ordre med grunn (A55). Ordren blir stående i listen, og feltene kan fortsatt
+ * endres (T1). `row_version` øker, så et åpent endringsskjema får `OrderChangedError`.
+ */
 export async function rejectOrder(
   actor: Actor,
   organizationId: string,
@@ -240,7 +264,7 @@ type ConvertOptions = {
  * Gjør en mottatt ordre om til et oppdrag med nytt nummer (`2026-00001`). Rekkefølgen er fast:
  * ordreraden låses først (`FOR UPDATE`), så sjekkes status og kontor, og først da hentes
  * nummeret. Slik får to samtidige forsøk på samme ordre ett oppdrag, og taperen bruker ikke opp
- * et nummer.
+ * et nummer. `row_version` på ordren øker, så et åpent endringsskjema får `OrderChangedError`.
  */
 export async function convertOrderToAssignment(
   actor: Actor,

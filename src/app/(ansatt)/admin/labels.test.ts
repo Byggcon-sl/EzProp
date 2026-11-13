@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { grantablePermissions } from "@/core/access";
+import { ORDER_EDITABLE_FIELDS, orderFieldLabel } from "@/core/orders/codes";
 import { employeeRoles } from "@/db/schema";
 import { todayInOslo } from "@/shared/lib/dates";
 import {
@@ -160,5 +161,63 @@ describe("revisjonsloggen: visningstekster", () => {
 
   it("8. tom changes gir ingen linjer", () => {
     expect(formatAuditChanges({})).toEqual([]);
+  });
+});
+
+/*
+ * Ordreendringer i /admin/logg (docs/funksjoner/fase2a-rette-ordre-testplan.md 1.7–1.8). Adminloggen
+ * viser bare feltetikettene; verdiene under `values` vises bare på ordresiden. Oppdiktede data.
+ * Støtter hovedmål: færre reklamasjoner (hvem endret hva) uten adresser og navn i adminloggen.
+ */
+describe("ordreendring i adminloggen", () => {
+  const OLD_ADDRESS = "Testveien 12, 8000 Bodø";
+  const NEW_ADDRESS = "Prøvegata 7, 8006 Bodø";
+  const CONTACT_ID = "0b7f6c1e-2d3a-4f5b-8c9d-0e1f2a3b4c5d";
+  const FIRM_ID = "0b7f6c1e-2d3a-4f5b-8c9d-0e1f2a3b4c5e";
+
+  it("1.7 order/update viser «Endret: Adresse, …» og ingen av verdiene i values", () => {
+    const changes = {
+      fields: [
+        "orderedByText",
+        "orderedByContactId",
+        "orderedByFirmId",
+        "addressText",
+        "externalRef",
+      ],
+      values: {
+        orderedByText: { from: null, to: "Megler Testesen" },
+        orderedByContactId: { from: null, to: CONTACT_ID },
+        orderedByFirmId: { from: null, to: FIRM_ID },
+        addressText: { from: OLD_ADDRESS, to: NEW_ADDRESS },
+        externalRef: { from: "TEST-ORD-0001", to: "TEST-ORD-0002" },
+      },
+    };
+    const lines = formatAuditChanges(changes);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^Endret: /);
+    expect(lines[0]).toContain("Adresse");
+    const text = lines.join("\n");
+    for (const value of [
+      OLD_ADDRESS,
+      NEW_ADDRESS,
+      "Testveien",
+      "Prøvegata",
+      "Megler Testesen",
+      CONTACT_ID,
+      FIRM_ID,
+      "TEST-ORD-0001",
+      "TEST-ORD-0002",
+      "→",
+    ]) {
+      expect(text).not.toContain(value);
+    }
+  });
+
+  it("1.8 hver feltkode i ORDER_EDITABLE_FIELDS har norsk etikett i adminloggen", () => {
+    for (const code of ORDER_EDITABLE_FIELDS) {
+      const lines = formatAuditChanges({ fields: [code] });
+      expect(lines, code).toEqual([`Endret: ${orderFieldLabel(code)}`]);
+      expect(lines[0], code).not.toBe(`Endret: ${code}`);
+    }
   });
 });

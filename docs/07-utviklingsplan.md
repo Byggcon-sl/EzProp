@@ -1,6 +1,6 @@
 # EzProp – utviklingsplan
 
-Sist oppdatert: 12.11.2026
+Sist oppdatert: 13.11.2026
 Eier: Ståle Limstrand (produkteier). Prosjektlederen i agentlaget holder planen ved like.
 
 **Dette er det ene levende plandokumentet.** Det viser bare det som gjelder nå og det som kommer.
@@ -139,7 +139,6 @@ Levert i PR #166 (12.11.2026), se `docs/plan/levert.md`.
 
 Første punkt tas **før Byggcon-profilen**, fordi det retter reglene som alt er merget. Resten tas etter Byggcon-profilen (levert, PR #176) og før neste punkt i 2a-2, i denne rekkefølgen. Svarene står i `docs/kartlegging/svar-fra-stale-2026-11-12.md`.
 
-- [ ] **Rette en ordre etter at den er lagret** (T1, «full redigeringstilgang. alltid»): også etter at ordren er blitt oppdrag. Endrer A55 og A87. Endringene logges.
 - [ ] **Søk i ordrelisten og i arbeidskøen** (T2).
 - [ ] **Varsel om mulig dublett** (T3): fast regel uten KI (samme adresse eller matrikkel og overlappende tid). Varselet stopper ikke lagringen.
 - [ ] **Flere rom på én gang med færrest mulig trykk** (T4). KI som foreslår rom (for eksempel fra plantegning) står i 2a-3 og tas så tidlig som det lar seg gjøre.
@@ -228,6 +227,7 @@ Før det første ekte oppdraget (med ekte adresser, selgere, bilder og egenerkl�
 - [ ] **Privat nettverk eller VNet-integrasjon mellom app og database** (ikke brannmurregelen for alle Azure-tjenester), og egen databasebruker for appen uten eierrettigheter
 - [ ] **KI-leverandør:** databehandleravtale signert og behandlingen i EU/EØS (Ståle 12.11.2026, K1: Anthropic direkte bare i testmiljøet med oppdiktede data), før tilkoblingen `anthropic` lages for en organisasjon med ekte data. Spørsmål 54–58 og 73 er besvart 12.11.2026. Leverandørens vanlige oppbevaringstid godtas og skrives inn i personvernerklæringen (K2). Se `docs/beslutningsnotat-ki-leverandor.md`.
 - [ ] **Personvernkonsekvensvurdering (DPIA), kort utkast** fra agentene som Ståle godkjenner (K3, 12.11.2026). Før ekte data, ikke før testing.
+  - Utkastet skal ta med revisjonsloggen for endring av ordre: gammel og ny verdi (adresse, matrikkel, bestiller som tekst) lagres i en logg som aldri ryddes. Spørsmål 79 må være besvart (A252).
 
 **Ferdig når:** Ståle har sett listen krysset av og godkjent at ekte data kan legges inn.
 

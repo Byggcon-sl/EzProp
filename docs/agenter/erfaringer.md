@@ -272,4 +272,5 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Kjøringen stoppet etter fletting av main, uten etter-bilder og uten PR. Hovedløkken tok bildene, kjørte e2e og åpnet PR-en. E2e-testene i oppgaven var skrevet før Microsoft-innloggingen kom inn: innloggingssiden har Microsoft som hovedvalg også i e2e, så tester som starter på `/logg-inn` må kalle `chooseCodeLogin` først. Testplanen sa det motsatte; sjekk `e2e/helpers.ts` før testplanen skrives.
 - CI kjører `pnpm format:check` før testene. Kjør `pnpm format:check` lokalt før push, ellers taper man en hel CI-runde.
 - Hele `pnpm test` lokalt ble stoppet etter 30 minutter uten å bli ferdig. Kjør de berørte testfilene lokalt og la CI kjøre hele pakken.
-
+- En CI-jobb kan bli rød av tidsavbrudd i en test som ikke har med PR-en å gjøre (delt testdatabase, f.eks. `orders.test.ts` 4.5.3). Kjør jobben på nytt (`gh api -X POST repos/.../actions/jobs/<id>/rerun`) før man leter etter feil, særlig på rene dokument-PR-er.
+- Bygger en arbeidsflyt på en branch som merges før arbeidsflyten åpner PR, må PR-en flyttes til `main` etterpå (skriptet flytter bare PR-er som finnes ved merge).
