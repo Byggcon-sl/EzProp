@@ -14,6 +14,13 @@ import {
 import { SAMPLE_INSPECTOR } from "../src/db/seed/sample-assignments.data";
 import { listTrialFields, trialForm } from "../src/modules/offline-trial/trial-form";
 
+/*
+ * E2e-hjelperne kjører seed-funksjoner mot e2e-databasen. Produksjonsvakten for testdata
+ * (src/db/seed/testdata-guard.ts) godtar bare development og test; verten sjekkes i tillegg
+ * av assertLocalOrTestDatabase. Settes bare i testprosessen, ikke for appen.
+ */
+process.env.APP_ENVIRONMENT = "test";
+
 /** Første admin fra seed (SEED_ADMIN_EMAIL i CI og .env.example). */
 export const ADMIN_EMAIL = "admin@byggcon.no";
 
