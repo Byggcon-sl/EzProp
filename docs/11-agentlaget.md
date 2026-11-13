@@ -63,6 +63,11 @@ Gjelder så lenge `docs/agenter/tilstand.md` sier «Autonom modus: på» (Ståle
 
 Endrer en PR bare dokumenter som ingen test, kode eller skript leser (for eksempel planen, tilstandsfilen og erfaringer), og eventuelt versjonsnummeret, hopper CI over de tunge jobbene (`scripts/ci/kun-dokumenter.sh`). Da tar CI 1–2 minutter i stedet for rundt 25. Byggingen lagres mellom kjøringer i CI og i utrullingen. På `main` kjøres alltid alt, og nattløkken kjører hele pakken.
 
+## Raskere utvikling (Ståle 14.11.2026: «ja, slå på begge»)
+
+1. **Tre oppgaver samtidig.** Hovedløkken starter hver time. Den avslutter bare hvis **tre** andre kjøringer med taggen `ezprop-utvikling` er i arbeid (før: én). Hver kjøring **reserverer** oppgaven sin før den starter: den lager branchen og pusher en tom commit med meldingen «Pågår: <punktet>». En kjøring hopper over punkter som allerede har en slik branch eller en åpen PR, og velger helst et punkt i et annet område (andre filer og moduler) enn de som pågår, slik at det blir færrest mulig konflikter. Felles dokumenter (planen, tilstand, endringsloggen) flettes med begge sider.
+2. **Lett prosess for små oppgaver.** Arbeidsflyten `oppgave` tar `lett: true` for rettinger av testlagets funn, småfunn og små endringer i skjermer eller tekst. Den hopper over forhåndsvurdering og design, og gjennomgangen gjøres av test-leder (pluss sikkerhet-personvern når tilgang eller persondata berøres). Testene og kravet om produksjonskvalitet er de samme. **Full prosess alltid** for nye funksjoner, datamodell og migreringer, tilgang, KI, regler og TG, og alt som berører personvern.
+
 ## Kvote
 
 - Ingen kostnadstak (Ståle 28.10.2026). Når kvoten er brukt opp, stopper kjøringen der den er, og neste kjøring fortsetter fra `tilstand.md`. Derfor commit og push etter hvert ferdige steg.
