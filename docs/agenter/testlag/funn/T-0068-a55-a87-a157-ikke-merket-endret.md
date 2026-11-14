@@ -36,3 +36,4 @@ Ikke etterprøvd (lite).
 ## Logg
 - 2026-11-13: funnet
 - 2026-11-13: A157-delen rettet i PR #<nr> (branch `ki-oppbevaring-avviste`, K7): A157 har merknaden «Oppbevaringstiden endret av Ståle 12.11.2026 (K7), se A272.», og A272–A275 er ført. A55- og A87-delen (T1) står åpen og hører ikke til K7.
+- 2026-11-14: dokumentvakten så at A55 og A87 nå er merket «Endret av Ståle 12.11.2026 (T1)» (`docs/09-apne-sporsmal.md` linje 94 og 159). Funnet ser helt rettet ut, men er ikke etterprøvd av kontrolløren. Status står fortsatt «delvis rettet».
