@@ -1,6 +1,6 @@
 {
   "name": "ezprop",
-  "version": "0.11.8",
+  "version": "0.13.1",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",
@@ -23,11 +23,12 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed/index.ts",
     "db:seed:testoppdrag": "tsx src/db/seed/sample-index.ts",
+    "db:seed:testdata": "tsx src/db/seed/testdata-index.ts",
     "ai:eval": "tsx scripts/ai-eval.ts"
   },
   "dependencies": {
     "@azure/storage-blob": "12.34.0",
-    "better-auth": "1.7.22",
+    "better-auth": "1.7.23",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "drizzle-orm": "0.45.4",

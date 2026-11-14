@@ -19,7 +19,7 @@ import type { INSPECTION_YEAR_SOURCES } from "./logic/codes";
 import type { CheckpointStatus, CheckpointTg, CheckpointWarning } from "./logic/types";
 
 /**
- * Grensesnittet til rapportkjernen (`@/core/reports`, ADR 0011,
+ * Grensesnittet til rapportkjernen (`@/core/reports`, ADR 0013,
  * docs/funksjoner/fase2a-badet-pc.md). Utvikleren bygger tjenesten mot funksjonstypene nederst.
  *
  * Felles for alle funksjonene:
@@ -455,7 +455,7 @@ export type RemoveMeasure = (
 /**
  * Setter eller fjerner TG direkte (`report.edit`). TG0 og TG1 avvises når punktet har avvik med
  * TG; TGIU sammen med TG2 eller TG3 avvises (`ReportValidationError`). TGIU lager `tgiu_details`
- * når settet mangler. TG0 settes uten kontroll av vilkårene nå (A323).
+ * når settet mangler. TG0 settes uten kontroll av vilkårene nå (A348).
  */
 export type SetTgDirect = (
   actor: Actor,

@@ -405,7 +405,7 @@ tsRuleTester.run("module-boundaries: src/core/rules (testplan 8)", rule, {
   ],
 });
 
-// De rene funksjonene for rapporten (ADR 0011, docs/funksjoner/fase2a-badet-pc.md Omfang 3):
+// De rene funksjonene for rapporten (ADR 0013, docs/funksjoner/fase2a-badet-pc.md Omfang 3):
 // klientkomponentene importerer herfra, så ingenting her kan dra med databasen eller pakker.
 const REPORTS_LOGIC_FILE = "/repo/src/core/reports/logic/tg.ts";
 

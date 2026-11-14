@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, or } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import {
   AccessDeniedError,
   requireOrganizationAccess,
@@ -8,7 +8,7 @@ import {
 import { recordAuditEvent } from "@/core/audit";
 import { recordEvent } from "@/core/events";
 import { db, type DbExecutor } from "@/db/client";
-import { assignments, cadastralUnits, commonAreas, orders, properties } from "@/db/schema";
+import { assignments, cadastralUnits, commonAreas, properties } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { hasCommonAreas } from "./codes";
 import { CommonAreasNotApplicableError } from "./errors";
@@ -266,7 +266,7 @@ async function findCommonAreas(tx: DbExecutor, organizationId: string, assignmen
 
 /**
  * Eiendommen på oppdraget med én matrikkelrad, fellesdelene (når de gjelder) og
- * forhåndsutfyllingen fra ordren. Ukjent, fremmed, slettet eller ugyldig oppdrags-id gir
+ * forhåndsutfyllingen fra bestillingen på oppdraget. Ukjent, fremmed, slettet eller ugyldig oppdrags-id gir
  * `AccessDeniedError`.
  */
 export async function getAssignmentProperty(
@@ -278,26 +278,19 @@ export async function getAssignmentProperty(
   if (!isUuid(assignmentId)) throw new AccessDeniedError();
   const orgId = grant.organizationId;
 
+  // Forhåndsutfyllingen kommer fra bestillingen på oppdraget selv (ADR 0011, A292), også for
+  // oppdrag som er laget uten ordre.
   const [assignment] = await db
     .select({
       id: assignments.id,
       propertyId: assignments.propertyId,
-      orderAddress: orders.addressText,
-      orderGnr: orders.gnr,
-      orderBnr: orders.bnr,
-      orderSnr: orders.snr,
-      orderAssociationName: orders.housingAssociationName,
+      bookingAddress: assignments.addressText,
+      bookingGnr: assignments.gnr,
+      bookingBnr: assignments.bnr,
+      bookingSnr: assignments.snr,
+      bookingAssociationName: assignments.housingAssociationName,
     })
     .from(assignments)
-    .leftJoin(
-      orders,
-      // Ordren oppdraget ble laget fra. «Gjør om» setter begge koblingene; begge godtas.
-      and(
-        or(eq(orders.id, assignments.orderId), eq(orders.assignmentId, assignments.id)),
-        eq(orders.organizationId, orgId),
-        isNull(orders.deletedAt),
-      ),
-    )
     .where(
       and(
         eq(assignments.id, assignmentId),
@@ -305,7 +298,6 @@ export async function getAssignmentProperty(
         isNull(assignments.deletedAt),
       ),
     )
-    .orderBy(asc(orders.createdAt), asc(orders.id))
     .limit(1);
   if (!assignment) throw new AccessDeniedError();
 
@@ -315,11 +307,11 @@ export async function getAssignmentProperty(
       property: null,
       commonAreas: null,
       prefill: {
-        address: assignment.orderAddress ?? null,
-        gnr: assignment.orderGnr ?? null,
-        bnr: assignment.orderBnr ?? null,
-        snr: assignment.orderSnr ?? null,
-        associationName: assignment.orderAssociationName ?? null,
+        address: assignment.bookingAddress,
+        gnr: assignment.bookingGnr,
+        bnr: assignment.bookingBnr,
+        snr: assignment.bookingSnr,
+        associationName: assignment.bookingAssociationName,
       },
     };
   }

@@ -61,7 +61,7 @@ import {
 const TEMPLATES_TEST_FILE = "src/core/templates/templates.test.ts";
 
 /**
- * Rapportens sju tabeller (migrering `0034`, ADR 0011) har tenant-testene sine i testfilen til
+ * Rapportens sju tabeller (migrering `0034`, ADR 0013) har tenant-testene sine i testfilen til
  * `src/core/reports` (docs/funksjoner/fase2a-badet-pc.md, testplan). Filen skrives sammen med
  * tjenesten; til den finnes, er `tests/tenant-isolation-all-tables.test.ts` rød med vilje.
  */

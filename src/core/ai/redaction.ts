@@ -62,8 +62,23 @@ export async function loadKnownValues(
   const organizationId = grant.organizationId;
   const known = emptyKnownValues();
 
+  // Oppdraget eier bestillingsopplysningene (ADR 0011, A292): de leses herfra også når
+  // `order_id` og `property_id` er tomme. Ordren og eiendommen er ekstra kilder (en ordre som er
+  // rettet etter omgjøring kan ha andre verdier enn oppdraget).
   const [assignment] = await db
-    .select({ orderId: assignments.orderId, propertyId: assignments.propertyId })
+    .select({
+      orderId: assignments.orderId,
+      propertyId: assignments.propertyId,
+      orderedByText: assignments.orderedByText,
+      orderedByContactId: assignments.orderedByContactId,
+      orderedByFirmId: assignments.orderedByFirmId,
+      addressText: assignments.addressText,
+      gnr: assignments.gnr,
+      bnr: assignments.bnr,
+      snr: assignments.snr,
+      housingAssociationName: assignments.housingAssociationName,
+      externalRef: assignments.externalRef,
+    })
     .from(assignments)
     .where(and(eq(assignments.id, assignmentId), eq(assignments.organizationId, organizationId)))
     .limit(1);
@@ -83,6 +98,7 @@ export async function loadKnownValues(
         bnr: orders.bnr,
         snr: orders.snr,
         housingAssociationName: orders.housingAssociationName,
+        externalRef: orders.externalRef,
       })
       .from(orders)
       .where(and(eq(orders.organizationId, organizationId), orderMatch)),
@@ -146,9 +162,10 @@ export async function loadKnownValues(
       ),
   ]);
 
+  const bookingRows = [assignment, ...orderRows];
   const contactIds = nonNull([
     ...partyRows.map((p) => p.contactId),
-    ...orderRows.map((o) => o.orderedByContactId),
+    ...bookingRows.map((o) => o.orderedByContactId),
   ]);
   const contactRows =
     contactIds.length > 0
@@ -166,7 +183,7 @@ export async function loadKnownValues(
 
   const firmIds = nonNull([
     ...partyRows.map((p) => p.firmId),
-    ...orderRows.map((o) => o.orderedByFirmId),
+    ...bookingRows.map((o) => o.orderedByFirmId),
     ...contactRows.map((c) => c.firmId),
   ]);
   const firmRows =
@@ -212,17 +229,20 @@ export async function loadKnownValues(
     pushValue(known.phrases, firm.name);
     pushValue(known.orgNumbers, firm.orgNumber);
   }
-  for (const order of orderRows) {
-    pushValue(known.phrases, order.orderedByText);
-    pushValue(known.phrases, order.housingAssociationName);
-    pushValue(known.addresses.full, order.addressText);
-    known.cadastral.units.push({
-      gnr: order.gnr,
-      bnr: order.bnr,
-      fnr: null,
-      snr: order.snr,
-      shareNumber: null,
-    });
+  for (const booking of bookingRows) {
+    pushValue(known.phrases, booking.orderedByText);
+    pushValue(known.phrases, booking.housingAssociationName);
+    pushValue(known.phrases, booking.externalRef);
+    pushValue(known.addresses.full, booking.addressText);
+    if (booking.gnr !== null || booking.bnr !== null || booking.snr !== null) {
+      known.cadastral.units.push({
+        gnr: booking.gnr,
+        bnr: booking.bnr,
+        fnr: null,
+        snr: booking.snr,
+        shareNumber: null,
+      });
+    }
   }
   for (const member of teamRows) pushValue(known.personNames, member.name);
   for (const property of propertyRows) {

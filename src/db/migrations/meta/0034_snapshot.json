@@ -1,5 +1,5 @@
 {
-  "id": "bf7f5551-2fc3-4643-a8b5-0789a4261d88",
+  "id": "88b71563-b04e-4374-8479-dc8dd7aefc13",
   "prevId": "c74c11ff-2ade-4cce-893d-f2cbfd570d9b",
   "version": "7",
   "dialect": "postgresql",
@@ -2725,6 +2725,87 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'manual'"
+        },
+        "external_ref": {
+          "name": "external_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ordered_by_text": {
+          "name": "ordered_by_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ordered_by_contact_id": {
+          "name": "ordered_by_contact_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ordered_by_firm_id": {
+          "name": "ordered_by_firm_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "address_text": {
+          "name": "address_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gnr": {
+          "name": "gnr",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bnr": {
+          "name": "bnr",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "snr": {
+          "name": "snr",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "housing_association_name": {
+          "name": "housing_association_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seller_declaration_received": {
+          "name": "seller_declaration_received",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "creation_key": {
+          "name": "creation_key",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -2791,6 +2872,69 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "assignments_organization_id_creation_key_idx": {
+          "name": "assignments_organization_id_creation_key_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "creation_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "assignments_organization_id_ordered_by_contact_id_idx": {
+          "name": "assignments_organization_id_ordered_by_contact_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ordered_by_contact_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "assignments_organization_id_ordered_by_firm_id_idx": {
+          "name": "assignments_organization_id_ordered_by_firm_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ordered_by_firm_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2802,6 +2946,36 @@
             "organization_id"
           ],
           "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "assignments_ordered_by_contact_fk": {
+          "name": "assignments_ordered_by_contact_fk",
+          "tableFrom": "assignments",
+          "tableTo": "contacts",
+          "columnsFrom": [
+            "organization_id",
+            "ordered_by_contact_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "assignments_ordered_by_firm_fk": {
+          "name": "assignments_ordered_by_firm_fk",
+          "tableFrom": "assignments",
+          "tableTo": "firms",
+          "columnsFrom": [
+            "organization_id",
+            "ordered_by_firm_id"
+          ],
+          "columnsTo": [
+            "organization_id",
             "id"
           ],
           "onDelete": "no action",
@@ -2887,6 +3061,10 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "assignments_source_check": {
+          "name": "assignments_source_check",
+          "value": "\"assignments\".\"source\" in ('manual', 'email')"
+        },
         "assignments_assignment_type_check": {
           "name": "assignments_assignment_type_check",
           "value": "\"assignments\".\"assignment_type\" in ('condition_report')"
@@ -7731,12 +7909,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "applies_to_tg": {
-          "name": "applies_to_tg",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
         "text_status": {
           "name": "text_status",
           "type": "text",
@@ -7812,10 +7984,6 @@
         "standard_measures_text_status_check": {
           "name": "standard_measures_text_status_check",
           "value": "\"standard_measures\".\"text_status\" in ('draft', 'approved')"
-        },
-        "standard_measures_applies_to_tg_check": {
-          "name": "standard_measures_applies_to_tg_check",
-          "value": "\"standard_measures\".\"applies_to_tg\" is null or \"standard_measures\".\"applies_to_tg\" in (2, 3)"
         }
       },
       "isRLSEnabled": false
@@ -9162,27 +9330,6 @@
           "method": "btree",
           "with": {}
         },
-        "ai_usage_log_organization_id_id_idx": {
-          "name": "ai_usage_log_organization_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "ai_usage_log_open_target_idx": {
           "name": "ai_usage_log_open_target_idx",
           "columns": [
@@ -9270,21 +9417,6 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
-        },
-        "ai_usage_log_report_fk": {
-          "name": "ai_usage_log_report_fk",
-          "tableFrom": "ai_usage_log",
-          "tableTo": "reports",
-          "columnsFrom": [
-            "organization_id",
-            "report_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -9318,2030 +9450,6 @@
         "ai_usage_log_blocked_check": {
           "name": "ai_usage_log_blocked_check",
           "value": "\"ai_usage_log\".\"outcome\" <> 'blocked' or (\"ai_usage_log\".\"status\" is null and \"ai_usage_log\".\"output_text\" is null and \"ai_usage_log\".\"error_code\" is null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.checkpoint_results": {
-      "name": "checkpoint_results",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "report_id": {
-          "name": "report_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "checkpoint_id": {
-          "name": "checkpoint_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "report_building_id": {
-          "name": "report_building_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "room_id": {
-          "name": "room_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tg_direct": {
-          "name": "tg_direct",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "description_text": {
-          "name": "description_text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "done": {
-          "name": "done",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "done_by": {
-          "name": "done_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "done_at": {
-          "name": "done_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "checkpoint_results_organization_id_report_id_id_idx": {
-          "name": "checkpoint_results_organization_id_report_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "checkpoint_results_place_idx": {
-          "name": "checkpoint_results_place_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "checkpoint_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "coalesce(\"report_building_id\", '00000000-0000-0000-0000-000000000000'::uuid)",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "coalesce(\"room_id\", '00000000-0000-0000-0000-000000000000'::uuid)",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"checkpoint_results\".\"deleted_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "checkpoint_results_organization_id_room_id_idx": {
-          "name": "checkpoint_results_organization_id_room_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "room_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "checkpoint_results_organization_id_organizations_id_fk": {
-          "name": "checkpoint_results_organization_id_organizations_id_fk",
-          "tableFrom": "checkpoint_results",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "checkpoint_results_report_fk": {
-          "name": "checkpoint_results_report_fk",
-          "tableFrom": "checkpoint_results",
-          "tableTo": "reports",
-          "columnsFrom": [
-            "organization_id",
-            "report_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "checkpoint_results_checkpoint_fk": {
-          "name": "checkpoint_results_checkpoint_fk",
-          "tableFrom": "checkpoint_results",
-          "tableTo": "checkpoints",
-          "columnsFrom": [
-            "organization_id",
-            "checkpoint_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "checkpoint_results_report_building_fk": {
-          "name": "checkpoint_results_report_building_fk",
-          "tableFrom": "checkpoint_results",
-          "tableTo": "report_buildings",
-          "columnsFrom": [
-            "organization_id",
-            "report_building_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "checkpoint_results_room_fk": {
-          "name": "checkpoint_results_room_fk",
-          "tableFrom": "checkpoint_results",
-          "tableTo": "rooms",
-          "columnsFrom": [
-            "organization_id",
-            "room_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "checkpoint_results_done_by_fk": {
-          "name": "checkpoint_results_done_by_fk",
-          "tableFrom": "checkpoint_results",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "organization_id",
-            "done_by"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "checkpoint_results_tg_direct_check": {
-          "name": "checkpoint_results_tg_direct_check",
-          "value": "\"checkpoint_results\".\"tg_direct\" is null or \"checkpoint_results\".\"tg_direct\" in ('0', '1', 'IU')"
-        },
-        "checkpoint_results_place_check": {
-          "name": "checkpoint_results_place_check",
-          "value": "num_nonnulls(\"checkpoint_results\".\"report_building_id\", \"checkpoint_results\".\"room_id\") = 1"
-        },
-        "checkpoint_results_done_check": {
-          "name": "checkpoint_results_done_check",
-          "value": "(\"checkpoint_results\".\"done\" and \"checkpoint_results\".\"done_by\" is not null and \"checkpoint_results\".\"done_at\" is not null) or (not \"checkpoint_results\".\"done\" and \"checkpoint_results\".\"done_by\" is null and \"checkpoint_results\".\"done_at\" is null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.deviation_measures": {
-      "name": "deviation_measures",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "report_id": {
-          "name": "report_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "deviation_id": {
-          "name": "deviation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "text": {
-          "name": "text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "text_source": {
-          "name": "text_source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        }
-      },
-      "indexes": {
-        "deviation_measures_organization_id_report_id_id_idx": {
-          "name": "deviation_measures_organization_id_report_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "deviation_measures_organization_id_deviation_id_idx": {
-          "name": "deviation_measures_organization_id_deviation_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "deviation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "deviation_measures_organization_id_organizations_id_fk": {
-          "name": "deviation_measures_organization_id_organizations_id_fk",
-          "tableFrom": "deviation_measures",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "deviation_measures_report_fk": {
-          "name": "deviation_measures_report_fk",
-          "tableFrom": "deviation_measures",
-          "tableTo": "reports",
-          "columnsFrom": [
-            "organization_id",
-            "report_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "deviation_measures_deviation_fk": {
-          "name": "deviation_measures_deviation_fk",
-          "tableFrom": "deviation_measures",
-          "tableTo": "deviations",
-          "columnsFrom": [
-            "organization_id",
-            "report_id",
-            "deviation_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "report_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "deviation_measures_text_source_check": {
-          "name": "deviation_measures_text_source_check",
-          "value": "\"deviation_measures\".\"text_source\" in ('template', 'edited', 'free')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.deviations": {
-      "name": "deviations",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "report_id": {
-          "name": "report_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "checkpoint_result_id": {
-          "name": "checkpoint_result_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "deviation_question_id": {
-          "name": "deviation_question_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "outcome_id": {
-          "name": "outcome_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tg": {
-          "name": "tg",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deviation_text": {
-          "name": "deviation_text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cause_criterion": {
-          "name": "cause_criterion",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cause_text": {
-          "name": "cause_text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "consequence_text": {
-          "name": "consequence_text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cost_type": {
-          "name": "cost_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'none'"
-        },
-        "cost_band_key": {
-          "name": "cost_band_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cost_amount": {
-          "name": "cost_amount",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cost_text": {
-          "name": "cost_text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "measurement_value": {
-          "name": "measurement_value",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "measurement_unit": {
-          "name": "measurement_unit",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "text_source": {
-          "name": "text_source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "suggested_by_rule_id": {
-          "name": "suggested_by_rule_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ai_usage_id": {
-          "name": "ai_usage_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        }
-      },
-      "indexes": {
-        "deviations_organization_id_report_id_id_idx": {
-          "name": "deviations_organization_id_report_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "deviations_organization_id_checkpoint_result_id_idx": {
-          "name": "deviations_organization_id_checkpoint_result_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "checkpoint_result_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "deviations_organization_id_organizations_id_fk": {
-          "name": "deviations_organization_id_organizations_id_fk",
-          "tableFrom": "deviations",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "deviations_report_fk": {
-          "name": "deviations_report_fk",
-          "tableFrom": "deviations",
-          "tableTo": "reports",
-          "columnsFrom": [
-            "organization_id",
-            "report_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "deviations_checkpoint_result_fk": {
-          "name": "deviations_checkpoint_result_fk",
-          "tableFrom": "deviations",
-          "tableTo": "checkpoint_results",
-          "columnsFrom": [
-            "organization_id",
-            "report_id",
-            "checkpoint_result_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "report_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "deviations_deviation_question_fk": {
-          "name": "deviations_deviation_question_fk",
-          "tableFrom": "deviations",
-          "tableTo": "deviation_questions",
-          "columnsFrom": [
-            "organization_id",
-            "deviation_question_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "deviations_outcome_fk": {
-          "name": "deviations_outcome_fk",
-          "tableFrom": "deviations",
-          "tableTo": "outcomes",
-          "columnsFrom": [
-            "organization_id",
-            "outcome_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "deviations_suggested_by_rule_fk": {
-          "name": "deviations_suggested_by_rule_fk",
-          "tableFrom": "deviations",
-          "tableTo": "rules",
-          "columnsFrom": [
-            "organization_id",
-            "suggested_by_rule_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "deviations_ai_usage_fk": {
-          "name": "deviations_ai_usage_fk",
-          "tableFrom": "deviations",
-          "tableTo": "ai_usage_log",
-          "columnsFrom": [
-            "organization_id",
-            "ai_usage_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "deviations_kind_check": {
-          "name": "deviations_kind_check",
-          "value": "\"deviations\".\"kind\" in ('tg', 'hms')"
-        },
-        "deviations_tg_check": {
-          "name": "deviations_tg_check",
-          "value": "(\"deviations\".\"kind\" = 'hms' and \"deviations\".\"tg\" is null) or (\"deviations\".\"kind\" = 'tg' and (\"deviations\".\"tg\" is null or \"deviations\".\"tg\" in (2, 3)))"
-        },
-        "deviations_outcome_question_check": {
-          "name": "deviations_outcome_question_check",
-          "value": "\"deviations\".\"outcome_id\" is null or \"deviations\".\"deviation_question_id\" is not null"
-        },
-        "deviations_cause_criterion_check": {
-          "name": "deviations_cause_criterion_check",
-          "value": "\"deviations\".\"cause_criterion\" is null or \"deviations\".\"cause_criterion\" in ('symptom_of_damage', 'age_uncertain_function', 'significant_deviation', 'functional_failure', 'danger_to_life_health', 'missing_documentation', 'other')"
-        },
-        "deviations_cost_type_check": {
-          "name": "deviations_cost_type_check",
-          "value": "\"deviations\".\"cost_type\" in ('band', 'approx', 'none')"
-        },
-        "deviations_cost_check": {
-          "name": "deviations_cost_check",
-          "value": "(\"deviations\".\"cost_type\" = 'band' and \"deviations\".\"cost_band_key\" is not null and \"deviations\".\"cost_amount\" is null) or (\"deviations\".\"cost_type\" = 'approx' and \"deviations\".\"cost_amount\" is not null and \"deviations\".\"cost_amount\" > 0 and \"deviations\".\"cost_band_key\" is null) or (\"deviations\".\"cost_type\" = 'none' and \"deviations\".\"cost_band_key\" is null and \"deviations\".\"cost_amount\" is null)"
-        },
-        "deviations_cost_band_key_check": {
-          "name": "deviations_cost_band_key_check",
-          "value": "\"deviations\".\"cost_band_key\" is null or \"deviations\".\"cost_band_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
-        },
-        "deviations_measurement_unit_check": {
-          "name": "deviations_measurement_unit_check",
-          "value": "\"deviations\".\"measurement_unit\" is null or \"deviations\".\"measurement_unit\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
-        },
-        "deviations_text_source_check": {
-          "name": "deviations_text_source_check",
-          "value": "\"deviations\".\"text_source\" in ('template', 'edited', 'free')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.field_answers": {
-      "name": "field_answers",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "report_id": {
-          "name": "report_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "element_id": {
-          "name": "element_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "report_building_id": {
-          "name": "report_building_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "room_id": {
-          "name": "room_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "checkpoint_result_id": {
-          "name": "checkpoint_result_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "repeat_index": {
-          "name": "repeat_index",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "value_text": {
-          "name": "value_text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "value_number": {
-          "name": "value_number",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "value_option_keys": {
-          "name": "value_option_keys",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ai_usage_id": {
-          "name": "ai_usage_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "field_answers_organization_id_report_id_id_idx": {
-          "name": "field_answers_organization_id_report_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "field_answers_place_idx": {
-          "name": "field_answers_place_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "element_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "coalesce(\"report_building_id\", '00000000-0000-0000-0000-000000000000'::uuid)",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "coalesce(\"room_id\", '00000000-0000-0000-0000-000000000000'::uuid)",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "coalesce(\"checkpoint_result_id\", '00000000-0000-0000-0000-000000000000'::uuid)",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "repeat_index",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"field_answers\".\"deleted_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "field_answers_organization_id_room_id_idx": {
-          "name": "field_answers_organization_id_room_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "room_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "field_answers_organization_id_organizations_id_fk": {
-          "name": "field_answers_organization_id_organizations_id_fk",
-          "tableFrom": "field_answers",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "field_answers_report_fk": {
-          "name": "field_answers_report_fk",
-          "tableFrom": "field_answers",
-          "tableTo": "reports",
-          "columnsFrom": [
-            "organization_id",
-            "report_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "field_answers_element_fk": {
-          "name": "field_answers_element_fk",
-          "tableFrom": "field_answers",
-          "tableTo": "template_elements",
-          "columnsFrom": [
-            "organization_id",
-            "element_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "field_answers_report_building_fk": {
-          "name": "field_answers_report_building_fk",
-          "tableFrom": "field_answers",
-          "tableTo": "report_buildings",
-          "columnsFrom": [
-            "organization_id",
-            "report_building_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "field_answers_room_fk": {
-          "name": "field_answers_room_fk",
-          "tableFrom": "field_answers",
-          "tableTo": "rooms",
-          "columnsFrom": [
-            "organization_id",
-            "room_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "field_answers_checkpoint_result_fk": {
-          "name": "field_answers_checkpoint_result_fk",
-          "tableFrom": "field_answers",
-          "tableTo": "checkpoint_results",
-          "columnsFrom": [
-            "organization_id",
-            "report_id",
-            "checkpoint_result_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "report_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "field_answers_ai_usage_fk": {
-          "name": "field_answers_ai_usage_fk",
-          "tableFrom": "field_answers",
-          "tableTo": "ai_usage_log",
-          "columnsFrom": [
-            "organization_id",
-            "ai_usage_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "field_answers_repeat_index_check": {
-          "name": "field_answers_repeat_index_check",
-          "value": "\"field_answers\".\"repeat_index\" >= 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.reports": {
-      "name": "reports",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "assignment_id": {
-          "name": "assignment_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "template_version_id": {
-          "name": "template_version_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "report_type": {
-          "name": "report_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'draft'"
-        }
-      },
-      "indexes": {
-        "reports_organization_id_id_idx": {
-          "name": "reports_organization_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "reports_one_current_per_assignment_idx": {
-          "name": "reports_one_current_per_assignment_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "assignment_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"reports\".\"deleted_at\" is null and \"reports\".\"status\" <> 'superseded'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "reports_organization_id_organizations_id_fk": {
-          "name": "reports_organization_id_organizations_id_fk",
-          "tableFrom": "reports",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "reports_assignment_fk": {
-          "name": "reports_assignment_fk",
-          "tableFrom": "reports",
-          "tableTo": "assignments",
-          "columnsFrom": [
-            "organization_id",
-            "assignment_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "reports_template_version_fk": {
-          "name": "reports_template_version_fk",
-          "tableFrom": "reports",
-          "tableTo": "template_versions",
-          "columnsFrom": [
-            "organization_id",
-            "template_version_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "reports_report_type_check": {
-          "name": "reports_report_type_check",
-          "value": "\"reports\".\"report_type\" in ('condition_report')"
-        },
-        "reports_status_check": {
-          "name": "reports_status_check",
-          "value": "\"reports\".\"status\" in ('draft', 'published', 'superseded')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.rule_suggestion_decisions": {
-      "name": "rule_suggestion_decisions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "report_id": {
-          "name": "report_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "checkpoint_result_id": {
-          "name": "checkpoint_result_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "rule_key": {
-          "name": "rule_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "suggestion": {
-          "name": "suggestion",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reasons": {
-          "name": "reasons",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "lifespan_set_key": {
-          "name": "lifespan_set_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "threshold_set_key": {
-          "name": "threshold_set_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "inspection_year": {
-          "name": "inspection_year",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "decision": {
-          "name": "decision",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "chosen_tg": {
-          "name": "chosen_tg",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "chosen_outcome_key": {
-          "name": "chosen_outcome_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "override_reason": {
-          "name": "override_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deviation_id": {
-          "name": "deviation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "decided_by": {
-          "name": "decided_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "decided_at": {
-          "name": "decided_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "rule_suggestion_decisions_organization_id_report_id_id_idx": {
-          "name": "rule_suggestion_decisions_organization_id_report_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "rule_suggestion_decisions_checkpoint_result_rule_idx": {
-          "name": "rule_suggestion_decisions_checkpoint_result_rule_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "checkpoint_result_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "rule_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "decided_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "rule_suggestion_decisions_organization_id_organizations_id_fk": {
-          "name": "rule_suggestion_decisions_organization_id_organizations_id_fk",
-          "tableFrom": "rule_suggestion_decisions",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "rule_suggestion_decisions_report_fk": {
-          "name": "rule_suggestion_decisions_report_fk",
-          "tableFrom": "rule_suggestion_decisions",
-          "tableTo": "reports",
-          "columnsFrom": [
-            "organization_id",
-            "report_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "rule_suggestion_decisions_checkpoint_result_fk": {
-          "name": "rule_suggestion_decisions_checkpoint_result_fk",
-          "tableFrom": "rule_suggestion_decisions",
-          "tableTo": "checkpoint_results",
-          "columnsFrom": [
-            "organization_id",
-            "report_id",
-            "checkpoint_result_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "report_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "rule_suggestion_decisions_deviation_fk": {
-          "name": "rule_suggestion_decisions_deviation_fk",
-          "tableFrom": "rule_suggestion_decisions",
-          "tableTo": "deviations",
-          "columnsFrom": [
-            "organization_id",
-            "report_id",
-            "deviation_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "report_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "rule_suggestion_decisions_decided_by_fk": {
-          "name": "rule_suggestion_decisions_decided_by_fk",
-          "tableFrom": "rule_suggestion_decisions",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "organization_id",
-            "decided_by"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "rule_suggestion_decisions_rule_key_check": {
-          "name": "rule_suggestion_decisions_rule_key_check",
-          "value": "\"rule_suggestion_decisions\".\"rule_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
-        },
-        "rule_suggestion_decisions_suggestion_check": {
-          "name": "rule_suggestion_decisions_suggestion_check",
-          "value": "jsonb_typeof(\"rule_suggestion_decisions\".\"suggestion\") = 'object' and \"rule_suggestion_decisions\".\"suggestion\"->>'kind' in ('outcome', 'tgiu', 'tg0')"
-        },
-        "rule_suggestion_decisions_reasons_check": {
-          "name": "rule_suggestion_decisions_reasons_check",
-          "value": "jsonb_typeof(\"rule_suggestion_decisions\".\"reasons\") = 'array' and length(\"rule_suggestion_decisions\".\"reasons\"::text) <= 16000"
-        },
-        "rule_suggestion_decisions_inspection_year_check": {
-          "name": "rule_suggestion_decisions_inspection_year_check",
-          "value": "\"rule_suggestion_decisions\".\"inspection_year\" between 1900 and 2200"
-        },
-        "rule_suggestion_decisions_decision_check": {
-          "name": "rule_suggestion_decisions_decision_check",
-          "value": "\"rule_suggestion_decisions\".\"decision\" in ('accepted', 'changed', 'rejected')"
-        },
-        "rule_suggestion_decisions_chosen_tg_check": {
-          "name": "rule_suggestion_decisions_chosen_tg_check",
-          "value": "\"rule_suggestion_decisions\".\"chosen_tg\" is null or \"rule_suggestion_decisions\".\"chosen_tg\" in ('0', '1', '2', '3', 'IU')"
-        },
-        "rule_suggestion_decisions_chosen_outcome_key_check": {
-          "name": "rule_suggestion_decisions_chosen_outcome_key_check",
-          "value": "\"rule_suggestion_decisions\".\"chosen_outcome_key\" is null or \"rule_suggestion_decisions\".\"chosen_outcome_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
-        },
-        "rule_suggestion_decisions_lifespan_set_key_check": {
-          "name": "rule_suggestion_decisions_lifespan_set_key_check",
-          "value": "\"rule_suggestion_decisions\".\"lifespan_set_key\" is null or \"rule_suggestion_decisions\".\"lifespan_set_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
-        },
-        "rule_suggestion_decisions_threshold_set_key_check": {
-          "name": "rule_suggestion_decisions_threshold_set_key_check",
-          "value": "\"rule_suggestion_decisions\".\"threshold_set_key\" is null or \"rule_suggestion_decisions\".\"threshold_set_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
-        },
-        "rule_suggestion_decisions_override_reason_check": {
-          "name": "rule_suggestion_decisions_override_reason_check",
-          "value": "\"rule_suggestion_decisions\".\"decision\" = 'accepted' or length(btrim(coalesce(\"rule_suggestion_decisions\".\"override_reason\", ''))) > 0"
-        },
-        "rule_suggestion_decisions_rejected_check": {
-          "name": "rule_suggestion_decisions_rejected_check",
-          "value": "\"rule_suggestion_decisions\".\"decision\" <> 'rejected' or (\"rule_suggestion_decisions\".\"chosen_tg\" is null and \"rule_suggestion_decisions\".\"chosen_outcome_key\" is null and \"rule_suggestion_decisions\".\"deviation_id\" is null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.tgiu_details": {
-      "name": "tgiu_details",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "report_id": {
-          "name": "report_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "checkpoint_result_id": {
-          "name": "checkpoint_result_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "owner_informed": {
-          "name": "owner_informed",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "owner_informed_at": {
-          "name": "owner_informed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "alternative_check_method": {
-          "name": "alternative_check_method",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "alternative_check_result": {
-          "name": "alternative_check_result",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "risk_assessment": {
-          "name": "risk_assessment",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "construction_vulnerable": {
-          "name": "construction_vulnerable",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "how_to_examine": {
-          "name": "how_to_examine",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "tgiu_details_organization_id_report_id_id_idx": {
-          "name": "tgiu_details_organization_id_report_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tgiu_details_one_per_checkpoint_result_idx": {
-          "name": "tgiu_details_one_per_checkpoint_result_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "checkpoint_result_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"tgiu_details\".\"deleted_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "tgiu_details_organization_id_organizations_id_fk": {
-          "name": "tgiu_details_organization_id_organizations_id_fk",
-          "tableFrom": "tgiu_details",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "tgiu_details_report_fk": {
-          "name": "tgiu_details_report_fk",
-          "tableFrom": "tgiu_details",
-          "tableTo": "reports",
-          "columnsFrom": [
-            "organization_id",
-            "report_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "tgiu_details_checkpoint_result_fk": {
-          "name": "tgiu_details_checkpoint_result_fk",
-          "tableFrom": "tgiu_details",
-          "tableTo": "checkpoint_results",
-          "columnsFrom": [
-            "organization_id",
-            "report_id",
-            "checkpoint_result_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "report_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "tgiu_details_construction_vulnerable_check": {
-          "name": "tgiu_details_construction_vulnerable_check",
-          "value": "\"tgiu_details\".\"construction_vulnerable\" is null or \"tgiu_details\".\"construction_vulnerable\" in ('yes', 'no', 'unknown')"
-        },
-        "tgiu_details_owner_informed_at_check": {
-          "name": "tgiu_details_owner_informed_at_check",
-          "value": "\"tgiu_details\".\"owner_informed_at\" is null or \"tgiu_details\".\"owner_informed\" is true"
         }
       },
       "isRLSEnabled": false

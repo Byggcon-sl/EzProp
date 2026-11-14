@@ -1,5 +1,5 @@
 /**
- * Faste koder for rapporten som både nettleseren og serveren bruker (ADR 0011,
+ * Faste koder for rapporten som både nettleseren og serveren bruker (ADR 0013,
  * docs/funksjoner/fase2a-badet-pc.md). Rent blad: ingen database, ingen pakker.
  *
  * Kodene endres aldri (regel 6). Nye koder legges til sist. Kodene som også står i CHECK-regler,
@@ -74,7 +74,7 @@ export const MAX_MEASURES_PER_DEVIATION = 20;
 export const INSPECTION_YEAR_SOURCES = ["assignment", "today"] as const;
 
 /**
- * KI-målene i rapporten (`AiTargetRef.type` og `fieldKey`, ADR 0006 og A325). Tomme kroker nå:
+ * KI-målene i rapporten (`AiTargetRef.type` og `fieldKey`, ADR 0006 og A350). Tomme kroker nå:
  * ingen KI-kall bygges i «Badet på PC». For `field_answer` er `fieldKey` feltets faste kode.
  */
 export const REPORT_AI_TARGET_FIELDS = {

@@ -1,5 +1,5 @@
 import "server-only";
-import { grantHasPermission, type Actor } from "@/core/access";
+import { canCreateAssignments, grantHasPermission, type Actor } from "@/core/access";
 import { requireActor } from "@/core/auth/session";
 import { defaultMineOnly } from "@/core/assignments";
 import { findEmployeeGrant } from "@/core/organization";
@@ -9,6 +9,11 @@ export type EmployeeContext = {
   organizationId: string;
   /** Bare til å vise eller skjule knappene. Selve sjekken skjer i kjernen. */
   canEditOrders: boolean;
+  /**
+   * Bare til å vise «Nytt oppdrag» i arbeidskøen og menyen. Regnet ut i `src/core/access`; selve
+   * sjekken skjer i `createAssignment`.
+   */
+  canCreateAssignments: boolean;
   /** Bare til å vise «Fjern» og «Slå sammen med …». Selve sjekken skjer i kjernen. */
   canManageContacts: boolean;
   /** Bare til å vise delen «Reklamasjoner». Selve sjekken skjer i kjernen (`claims.read`). */
@@ -41,6 +46,7 @@ export async function getEmployeeContext(): Promise<EmployeeContext | null> {
     actor,
     organizationId: found.grant.organizationId,
     canEditOrders: grantHasPermission(found.grant, "assignment.edit"),
+    canCreateAssignments: canCreateAssignments(found.grant),
     canManageContacts: grantHasPermission(found.grant, "contacts.manage"),
     canReadClaims: grantHasPermission(found.grant, "claims.read"),
     canManageClaims: grantHasPermission(found.grant, "claims.manage"),

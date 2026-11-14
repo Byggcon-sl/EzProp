@@ -243,8 +243,15 @@
     {
       "idx": 34,
       "version": "7",
-      "when": 1794622154836,
-      "tag": "0034_badet-pc",
+      "when": 1794618027591,
+      "tag": "0034_oppdrag-bestilling",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1794653467644,
+      "tag": "0035_badet-pc",
       "breakpoints": true
     }
   ]

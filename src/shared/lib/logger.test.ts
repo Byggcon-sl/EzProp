@@ -483,3 +483,39 @@ describe("logger: nøkkelformatet til KI-leverandøren (A4)", () => {
     expect(scrubText(text)).toBe(text);
   });
 });
+
+describe("loggeren fjerner bestillingsfeltene (testplan «Nytt oppdrag» 1.3)", () => {
+  const VALUE = "Qxzloggveien 7";
+  const KEYS = [
+    "addressText",
+    "orderedByText",
+    "gnr",
+    "bnr",
+    "snr",
+    "externalRef",
+    "housingAssociationName",
+  ] as const;
+
+  it.each(KEYS)("%s fjernes på toppnivå og i snake_case", (key) => {
+    const snake = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+    expect(sanitizeFields({ [key]: VALUE, [snake]: VALUE })).toEqual({
+      [key]: REDACTED,
+      [snake]: REDACTED,
+    });
+  });
+
+  it.each(KEYS)("%s fjernes nøstet i input og values", (key) => {
+    const line = formatLogLine("error", "Lagring feilet", {
+      input: { [key]: VALUE, officeId: "kontor-1" },
+      values: { [key]: VALUE },
+    });
+    expect(line.input).toEqual({ [key]: REDACTED, officeId: "kontor-1" });
+    expect(line.values).toEqual({ [key]: REDACTED });
+    expect(JSON.stringify(line)).not.toContain(VALUE);
+  });
+
+  it("feltkodene som verdier (fields) står, så loggen viser hva som ble endret", () => {
+    const line = formatLogLine("info", "Endret", { fields: ["addressText", "gnr"] });
+    expect(line.fields).toEqual(["addressText", "gnr"]);
+  });
+});

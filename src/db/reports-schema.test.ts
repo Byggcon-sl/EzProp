@@ -31,7 +31,7 @@ import {
 } from "../../tests/factories";
 
 /*
- * Databasen selv holder rapportdataene riktige (migrering `0034_badet-pc`, ADR 0011,
+ * Databasen selv holder rapportdataene riktige (migrering `0035_badet-pc`, ADR 0013,
  * docs/funksjoner/fase2a-badet-pc.md): ingen rad peker inn i en annen organisasjon eller en annen
  * rapport, unike nøkler holder også når bygning eller rom er tom, og CHECK-reglene stopper
  * ugyldig TG, kostnad og beslutning. Direkte innsetting med radbyggerne, utenom kjernen og Zod.

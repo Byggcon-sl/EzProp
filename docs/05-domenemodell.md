@@ -438,6 +438,16 @@ Neste nummer hentes med lås i databasen, slik at to kontorer aldri får samme n
 - **Historikk:** `listOrderHistory(actor, organizationId, orderId)` (`organization.read`) leser revisjonsloggen for én ordre, nyeste først, høyst 200 rader, og returnerer en fast form der bare kjente feltkoder slipper gjennom. Ordresiden viser den under «Endringer»; `/admin/logg` viser bare feltetikettene (`orderFieldLabel`). Loggen vises bare per ordre, aldri som oppsummering per ansatt.
 - Ingen migrering. Oppgavekort: `docs/funksjoner/fase2a-rette-ordre.md`; beslutningene A249–A254.
 
+**Oppdraget eier bestillingsopplysningene (fase 2a, 14.11.2026, Ståle 13.11.2026: «rett på oppdrag», ADR 0011, A292–A299):** «Nytt oppdrag» lager oppdraget direkte, uten ordre (`assignments.order_id` er tom). Derfor står bestillingsopplysningene nå på `assignments`, med samme kolonnenavn og regler som på ordren:
+- **Nye kolonner på `assignments`:** `received_at` (påkrevd), `source` (`manual`, `email`; CHECK `assignments_source_check`), `external_ref`, `ordered_by_text`, `ordered_by_contact_id`, `ordered_by_firm_id` (sammensatte fremmednøkler med `organization_id` til `contacts` og `firms`, med indekser), `address_text` (påkrevd, A296), `gnr`, `bnr`, `snr`, `housing_association_name`, `seller_declaration_received` og `creation_key` (uuid, valgfri, unik per organisasjon: vern mot dobbel lagring, A298).
+- **Bestilleren, adressen og matrikkelen leses fra oppdraget**, ikke fra ordren, for alle oppdrag: arbeidskøen, søket, eiendomsforslaget, vasken før KI, avtaleforslaget, sammenslåing av kontakter og firma, dublettregelen og historikken. Dette erstatter tidligere tekst i 4.2–4.4 som sier at de leses fra ordren (`assignments.order_id` → `orders.…`).
+- **Ordren beholder sin kopi** som «slik bestillingen kom». `convertOrderToAssignment` kopierer feltene til oppdraget i samme transaksjon. Rettelser for et oppdrag gjøres på oppdraget; en gjort-om ordre kan fortsatt endres (T1), men det flytter ikke oppdraget (A251).
+- **Migrering `0034_oppdrag-bestilling`:** fyller kolonnene fra ordren for eksisterende oppdrag (uten å røre `row_version`), ellers adressen fra eiendommen. Finnes et oppdrag uten begge, stopper migreringen med antallet, og ingenting endres. To uttrykksindekser for dublett på `assignments` med samme uttrykk som i 0033.
+- **Tjenester (`src/core/assignments`, grensesnitt i `booking/contract.ts`):** `createAssignment`, `updateAssignmentBooking`, `listAssignmentBookingHistory`, `findPossibleDuplicatesFor`, `findPossibleDuplicatesForAssignment` og `getNewAssignmentFormOptions`. Faste koder for bestillingen (kilde, feltkoder, dublettgrunn) står i `booking/codes.ts` og er felles for ordre og oppdrag.
+- **Hendelser og logg:** `assignment.created` med `{ number, orderId: null }` og revisjonslogg `assignment`/`create` uten verdier; `assignment.booking_updated` med `{ assignmentId, fields }` og revisjonslogg `assignment`/`update` med `fields` og `values` i samme form som for ordren (A252, spørsmål 79).
+- **Aldri til KI:** de nye fritekst- og matrikkelkolonnene står i `NEVER_FIELDS`, og vasken leser kjente verdier fra oppdraget.
+- **Mulig dublett** gjelder nå både ordre (bare `received`) og oppdrag; et oppdrag fra en ordre gir ett treff (A297).
+
 **Mulig dublett (fase 2a, 13.11.2026, Ståle 12.11.2026 T3: «fast regel uten KI, og varselet stopper ikke lagringen»):** En annen ordre er en **mulig dublett** når alt dette gjelder (A285–A291):
 - **Samme organisasjon** (`grant.organizationId`), ikke myk-slettet, ikke ordren selv, ikke avvist, og oppdraget er ikke kansellert (`assignments.deleted_at` er tom).
 - **Samme adresse eller samme matrikkel.** Adressenøkkelen er delen av `address_text` før første komma, med små bokstaver og bare a–z, 0–9 og æøå (`normalizeAddressKey`; «Storgata 1A, 8006 Bodø» = «storgata 1 a»). Matrikkelen er `gnr` + `bnr` + `snr` uten mellomrom og innledende nuller (`normalizeCadastreNumber`); `gnr` eller `bnr` som er tom eller bare nuller, gir aldri treff, og `snr` tom = «0». Ingen kommune (ordren har ikke kommune, A286). Regelen ser bare på ordrene, ikke på eiendommen på oppdraget (A285).
@@ -837,7 +847,7 @@ TG3 krever alltid kostnad. Det trenger ikke lagres, det følger av `kind`.
 |---|---|
 | `outcome_id` | Utfallet |
 | `text` | Tiltaket |
-| `applies_to_tg` | TG tiltaket gjelder for: tom = uansett TG, `2` eller `3` = bare den TG-en. Bare på utfall av typen `choose_tg2_tg3` (bør ved TG2, må ved TG3, T-0060). Migrering `0034` |
+| `applies_to_tg` | TG tiltaket gjelder for: tom = uansett TG, `2` eller `3` = bare den TG-en. Bare på utfall av typen `choose_tg2_tg3` (bør ved TG2, må ved TG3, T-0060). Migrering `0035` |
 | `sort_order` | Rekkefølge |
 
 **`rules`** – **regler som data**. Fagansvarlig lager dem i et skjema, ikke i kode.
@@ -1065,7 +1075,7 @@ Koblingen går til **faste koder**, ikke til en bestemt malversjon. Da følger f
 | `copied_from_report_id` | Rapporten data ble kopiert fra |
 | `training` | **Øvingsrapport** (ja/nei). Krok for skyggemodus (`moonshots` B6): en ny takstmann gjør samme befaring på egen iPad, og rapportene sammenlignes punkt for punkt. En øvingsrapport kan aldri publiseres eller sendes. |
 
-**Bygget i fase 2a (14.11.2026, «Badet på PC», migrering `0034_badet-pc`, ADR 0011):** `assignment_id`, `template_version_id`, `report_type` og `status`. De andre feltene kommer med funksjonene som bruker dem. **Én gjeldende rapport per oppdrag:** delvis unik indeks på (`organization_id`, `assignment_id`) for rader som ikke er slettet eller `superseded`. Bygninger og rom har ikke `report_id` (A94, A322). Alle barnetabellene under har `report_id` og peker på forelderen med (`organization_id`, `report_id`, forelderens id), slik at en rad aldri kan henge på en annen rapport (A326).
+**Bygget i fase 2a (14.11.2026, «Badet på PC», migrering `0035_badet-pc`, ADR 0013):** `assignment_id`, `template_version_id`, `report_type` og `status`. De andre feltene kommer med funksjonene som bruker dem. **Én gjeldende rapport per oppdrag:** delvis unik indeks på (`organization_id`, `assignment_id`) for rader som ikke er slettet eller `superseded`. Bygninger og rom har ikke `report_id` (A94, A347). Alle barnetabellene under har `report_id` og peker på forelderen med (`organization_id`, `report_id`, forelderens id), slik at en rad aldri kan henge på en annen rapport (A351).
 
 **`inspections`** – **befaringer**. **En rapport kan ha flere befaringer** (innspill D2), for eksempel når taket var snødekt første gang og takstmannen kommer tilbake, eller når megler ber om tilleggsbefaring av garasjen.
 
@@ -1110,7 +1120,7 @@ Hver befaring har egen dato, egne forhold og egne tilstedeværende. Hvert kontro
 | `ai_usage_id` | Satt når teksten kom fra et KI-forslag som takstmannen godtok (status `accepted` eller `edited` i `ai_usage_log`, se 4.12 og ADR 0006). Forslaget ligger aldri i verdien før det er godtatt. Ved angre tømmes feltet. Andre tabeller som kan få KI-tekst (avvik, sammendrag, `peer_review_comments`, ordre fra e-post, fraser), merkes på samme måte |
 | `instrument_id` | Måleinstrumentet, for tall som er målt (krok B3, se `instruments`). I tabeller (for eksempel hulltakingsmålinger) lagres det per rad. |
 
-**Hvor svaret hører hjemme** er tre ekte koblinger (bygning, rom, kontrollpunkt) pluss `repeat_index`, ikke en tekstnøkkel (innspill D3). Det er lettere å spørre på, kan ikke skrives feil, og tåler kopiering og synk. Unik nøkkel: (`report_id`, `element_id`, `report_building_id`, `room_id`, `checkpoint_result_id`, `repeat_index`). Nøkkelen holder også når koblingene er tomme: indeksen bruker `coalesce` mot en fast tom id og gjelder rader som ikke er slettet (A327). **Bygget 14.11.2026:** `value_text`, `value_number`, `value_option_keys` og `ai_usage_id`. `value_bool`, `value_date`, `value_json`, `text_crdt`, `field_clock` og `instrument_id` kommer når de brukes. KI-målet for et svar har typen `field_answer` (A325).
+**Hvor svaret hører hjemme** er tre ekte koblinger (bygning, rom, kontrollpunkt) pluss `repeat_index`, ikke en tekstnøkkel (innspill D3). Det er lettere å spørre på, kan ikke skrives feil, og tåler kopiering og synk. Unik nøkkel: (`report_id`, `element_id`, `report_building_id`, `room_id`, `checkpoint_result_id`, `repeat_index`). Nøkkelen holder også når koblingene er tomme: indeksen bruker `coalesce` mot en fast tom id og gjelder rader som ikke er slettet (A352). **Bygget 14.11.2026:** `value_text`, `value_number`, `value_option_keys` og `ai_usage_id`. `value_bool`, `value_date`, `value_json`, `text_crdt`, `field_clock` og `instrument_id` kommer når de brukes. KI-målet for et svar har typen `field_answer` (A350).
 
 **`checkpoint_results`** – resultatet per kontrollpunkt (per bygning eller per rom).
 
@@ -1120,7 +1130,7 @@ Hver befaring har egen dato, egne forhold og egne tilstedeværende. Hvert kontro
 | `report_building_id` / `room_id` | Hvor punktet gjelder |
 | `inspection_id` | Befaringen punktet ble vurdert i (innspill D2) |
 | `tg_direct` | TG satt direkte når det **ikke** er avvik: `0`, `1` eller `IU`. **TGIU registreres bare her**, ikke som avvik (innspill D1). |
-| `tg_computed` | **TG for punktet = høyeste TG blant avvikene**, ellers `tg_direct`. **Lagres ikke** (A317): regnes av `computeCheckpointTg` i `src/core/reports/logic` hver gang den leses. |
+| `tg_computed` | **TG for punktet = høyeste TG blant avvikene**, ellers `tg_direct`. **Lagres ikke** (A342): regnes av `computeCheckpointTg` i `src/core/reports/logic` hver gang den leses. |
 | `not_applicable` | Gjelder ikke (for eksempel ingen krypkjeller). Kommer i 2a-3 |
 | `not_applicable_reason` | Kort begrunnelse for «gjelder ikke». **Påkrevd når punktet er obligatorisk**, ellers blir «gjelder ikke» en bakdør forbi sperren (innspill D6). |
 | `description_text` | Beskrivelse av hva som er der og hvordan det er undersøkt |
@@ -1135,7 +1145,7 @@ Et punkt kan være TGIU **og** ha et HMS-avvik (for eksempel loft uten adkomst d
 |---|---|
 | `checkpoint_result_id` | Kontrollpunktet |
 | `deviation_question_id`, `outcome_id` | Spørsmål og utfall (tomt for avvik skrevet fritt) |
-| `kind` | `tg` (avvik med tilstandsgrad) eller `hms` (A328; var `tg2`/`tg3`/`hms`). (`tgiu` er tatt ut, se `checkpoint_results`, innspill D1.) |
+| `kind` | `tg` (avvik med tilstandsgrad) eller `hms` (A353; var `tg2`/`tg3`/`hms`). (`tgiu` er tatt ut, se `checkpoint_results`, innspill D1.) |
 | `tg` | TG: `2` eller `3`. Tomt for HMS, og for `tg` til takstmannen har valgt («velg TG2 eller TG3», gir advarsel). |
 | `deviation_text` | Hva som er galt (avvikstekst) |
 | `cause_text` | **Årsak – begrunnelse:** hvorfor denne TG-en |
@@ -1152,7 +1162,7 @@ Et punkt kan være TGIU **og** ha et HMS-avvik (for eksempel loft uten adkomst d
 | `measurement_instrument_id` | Instrumentet målingen er gjort med (krok B3) |
 | `sort_order` | Rekkefølge |
 
-Hva takstmannen gjorde med regelforslaget, står **ikke** på avviket (`suggestion_status` og `suggestion_override_reason` er tatt ut, A320). Det står i `rule_suggestion_decisions` under.
+Hva takstmannen gjorde med regelforslaget, står **ikke** på avviket (`suggestion_status` og `suggestion_override_reason` er tatt ut, A345). Det står i `rule_suggestion_decisions` under.
 
 **HMS** er et avvik med `kind = hms` og uten TG. Det har konsekvens og tiltak som andre avvik (NS 3600 pkt. 13). Manglende konsekvens eller tiltak på HMS gir advarsel.
 
@@ -1180,9 +1190,9 @@ Hva takstmannen gjorde med regelforslaget, står **ikke** på avviket (`suggesti
 | `construction_vulnerable` | **Utsatt konstruksjon** (skadeutsatt): `yes` / `no` / `unknown` |
 | `how_to_examine` | Hva som må til for å kunne undersøke |
 
-Delvis unik indeks: ett sett per kontrollpunkt blant rader som ikke er slettet. Fjernet TGIU sletter settet mykt. Hvilke opplysninger som kreves, følger grunnen (A324).
+Delvis unik indeks: ett sett per kontrollpunkt blant rader som ikke er slettet. Fjernet TGIU sletter settet mykt. Hvilke opplysninger som kreves, følger grunnen (A349).
 
-**`rule_suggestion_decisions`** – **beslutninger om forslag fra reglene** (ikke KI). Eneste fasit for hva takstmannen gjorde med et regelforslag (A320, ADR 0011). **Bare tillegg:** en ny beslutning er en ny rad, aldri en oppdatering.
+**`rule_suggestion_decisions`** – **beslutninger om forslag fra reglene** (ikke KI). Eneste fasit for hva takstmannen gjorde med et regelforslag (A345, ADR 0013). **Bare tillegg:** en ny beslutning er en ny rad, aldri en oppdatering.
 
 | Felt | Forklaring |
 |---|---|
@@ -1191,7 +1201,7 @@ Delvis unik indeks: ett sett per kontrollpunkt blant rader som ikke er slettet. 
 | `suggestion` | Forslaget slik **serveren** regnet det (jsonb, samme form som `RuleSuggestion`): `outcome` med tre koder, `tgiu` eller `tg0` på et kontrollpunkt |
 | `reasons` | Regelmotorens begrunnelser (jsonb-liste). Bare faste koder og tall, med øvre størrelse |
 | `lifespan_set_key`, `threshold_set_key` | Settene regelen leste |
-| `inspection_year` | Befaringsåret reglene ble kjørt med (A329) |
+| `inspection_year` | Befaringsåret reglene ble kjørt med (A354) |
 | `decision` | `accepted` (godtatt), `changed` (endret) eller `rejected` (avvist). Egne koder: `changed` betyr alltid regelforslag, `edited` alltid KI-tekst |
 | `chosen_tg` | TG takstmannen endte på: `0`, `1`, `2`, `3` eller `IU`. Tom ved avvist og ved HMS |
 | `chosen_outcome_key` | Utfallet takstmannen endte på |
@@ -1199,9 +1209,9 @@ Delvis unik indeks: ett sett per kontrollpunkt blant rader som ikke er slettet. 
 | `deviation_id` | Avviket som ble laget |
 | `decided_by`, `decided_at` | Hvem (ansatt fra tilgangssjekken) og når |
 
-Klienten sender bare regelkode, beslutning, valg og begrunnelse. Serveren kjører reglene på lagrede svar og lagrer sitt eget regelsvar (A321). Godtatt `tgiu` gir `tg_direct = IU`, og godtatt `tg0` gir `tg_direct = 0`.
+Klienten sender bare regelkode, beslutning, valg og begrunnelse. Serveren kjører reglene på lagrede svar og lagrer sitt eget regelsvar (A346). Godtatt `tgiu` gir `tg_direct = IU`, og godtatt `tg0` gir `tg_direct = 0`.
 
-**Lagring per felt** (A322, ADR 0011): hver endring er ett felt med ny verdi og verdien klienten så (`ReportFieldChange` i `src/core/reports/types.ts`). Er feltet endret av andre i mellomtiden, lagres ingenting, og den ansatte får nyeste verdi.
+**Lagring per felt** (A347, ADR 0013): hver endring er ett felt med ny verdi og verdien klienten så (`ReportFieldChange` i `src/core/reports/types.ts`). Er feltet endret av andre i mellomtiden, lagres ingenting, og den ansatte får nyeste verdi.
 
 **`documentation_items`** – **dokumentasjonstabellen** (NS 3600-tillegg valgt 25.10).
 
@@ -1416,7 +1426,8 @@ Gyldig verdi er et heltall fra 1 til og med 100 (år). Mangler nøkkelen, brukes
 | `order.received` | Ordre mottatt |
 | `order.rejected` | Ordre avvist |
 | `order.updated` | Ordre endret (`{ orderId, fields }`, bare feltkoder) |
-| `assignment.created` | Oppdrag opprettet |
+| `assignment.created` | Oppdrag opprettet (`{ number, orderId }`; `orderId` er `null` når oppdraget er laget direkte) |
+| `assignment.booking_updated` | Bestillingsopplysningene på oppdraget endret (`{ assignmentId, fields }`, bare feltkoder) |
 | `assignment.assigned` | Oppdrag tildelt |
 | `assignment.handed_over` | Oppdrag overlevert til annen takstmann eller annet selskap |
 | `assignment.status_changed` | Status endret |
@@ -1717,8 +1728,8 @@ Tekst logges ikke per tastetrykk, men slik den var når endringen kom fram til s
 | `provider`, `model` | Leverandør og modell. I dag bare `fake` med modellen `fake-v1` |
 | `prompt_version` | Versjonen av ledeteksten, for eksempel `language_polish.v1` |
 | `assignment_id` | Oppdraget. Kan være tom (ordreforslag fra e-post) |
-| `report_id` | Rapporten. Kan være tom. Sammensatt fremmednøkkel (`organization_id`, `report_id`) mot `reports` fra migrering `0034` (A158) |
-| `target_ref` | Hvor forslaget gjelder (jsonb): `type`, `id` og `fieldKey`. Faste koder for rapporten (A325, `REPORT_AI_TARGET_FIELDS`): `deviation` (`description`, `cause_text`, `consequence_text`), `deviation_measure` (`text`), `checkpoint_result` (`description_text`) og `field_answer` (feltkoden). Prøvefunksjonen `language_polish` bruker fortsatt `answer` og `text` mot den falske leverandøren |
+| `report_id` | Rapporten. Kan være tom. Sammensatt fremmednøkkel (`organization_id`, `report_id`) mot `reports` fra migrering `0035` (A158) |
+| `target_ref` | Hvor forslaget gjelder (jsonb): `type`, `id` og `fieldKey`. Faste koder for rapporten (A350, `REPORT_AI_TARGET_FIELDS`): `deviation` (`description`, `cause_text`, `consequence_text`), `deviation_measure` (`text`), `checkpoint_result` (`description_text`) og `field_answer` (feltkoden). Prøvefunksjonen `language_polish` bruker fortsatt `answer` og `text` mot den falske leverandøren |
 | `source_fields` | Hvilke felt som var grunnlaget (jsonb-liste). Bare feltkoder, aldri verdier |
 | `input_summary` | Feltkode og antall tegn (jsonb), regnet av den vaskede teksten som faktisk ble sendt. Aldri tekst |
 | `outcome` | **Utfallet av kallet:** `ok`, `no_match` (ingen treff), `error` (feil), `blocked` (sperret: forespørselen kunne ikke sendes til denne leverandøren, for eksempel fritekst uten oppdrag eller prøvemålet mot en ekte leverandør; leverandøren kalles ikke). «KI er av» gir ingen rad og er ikke `blocked` |
@@ -2094,6 +2105,12 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Gjøre om til oppdrag | `convertOrderToAssignment` (`src/core/orders`) | Lager oppdraget med nytt nummer og setter ordren til `converted` |
 | Avvise ordre | `rejectOrder` (`src/core/orders`) | Setter ordren til `rejected` med grunn. Ordren blir stående |
 | Endre ordren | `updateOrder` (`src/core/orders`) | Endrer feltene på en lagret ordre i alle statuser. Oppdraget endres ikke. Knappen heter «Endre ordren» (aldri «Rett», som er rapportversjon 2) |
+| Bestilling (på oppdraget) | `booking` (`AssignmentBooking`, `src/core/assignments/booking/`) | Bestillingsopplysningene oppdraget eier: mottatt, kilde, meglerens ordrenummer, bestiller, adresse, matrikkel og borettslag (ADR 0011). Kortet heter «Bestilling» |
+| Nytt oppdrag | `createAssignment` | Lager oppdraget direkte med status Bestilt, uten ordre |
+| Endre bestillingen | `updateAssignmentBooking` | Endrer bestillingsfeltene på et lagret oppdrag i alle statuser, med `row_version`-kontroll |
+| Engangsnøkkel | `creation_key` (`creationKey`) | Uuid laget når skjemaet «Nytt oppdrag» åpnes. Samme nøkkel to ganger gir det første oppdraget (A298) |
+| Bestilling endret (hendelse) | `assignment.booking_updated` | `{ assignmentId, fields }`, bare feltkoder |
+| Dubletttreff (ordre eller oppdrag) | `PossibleDuplicate`, `DuplicateKind` (`order`, `assignment`) | Ett treff i varselet om mulig dublett, med type, id, nummer, status, adresse og grunn |
 | Mulig dublett | `PossibleDuplicateOrder` | En annen ordre i organisasjonen med samme adresse eller matrikkel og overlappende tid (T3, se 4.3). Bare et varsel, stopper aldri lagringen |
 | Slå opp mulige dubletter (lagret ordre) | `findPossibleDuplicateOrders` | Mulige dubletter for en lagret ordre. Avvist ordre gir tom liste |
 | Slå opp mulige dubletter (ordrefelt) | `findPossibleDuplicateOrdersFor` | Mulige dubletter for ordrefelt, også for en ordre som ikke er lagret (e-post-til-ordre senere) |
@@ -2442,6 +2459,8 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Nullpunkt | `baseline_metrics` | Tall fra IVIT og de siste 3 årene |
 | Prøveorganisasjon | organisasjon med `settings.sampleData = true` | «Byggcon prøve». Bare oppdiktede data; seed-steget skriver aldri i en organisasjon uten merket (A130) |
 | Testoppdrag | sample assignment (`orders.external_ref` med `sample:`) | De fire faste oppdragene i prøveorganisasjonen, laget av `pnpm db:seed:testoppdrag` (A131) |
+| Testdata (oppdiktet arbeidshverdag) | testdata (`src/db/seed/testdata*.ts`, `pnpm db:seed:testdata`) | Oppdiktede ansatte, kontakter, eiendommer, oppdrag og reklamasjoner i Byggcon-organisasjonen i testmiljøet. Kjennes igjen på ordrenøkkelen `TD-0001` osv. (`orders.external_ref`), e-post på `testdata.invalid`, telefon `+47 000 NN NNN` og gnr 9001–9099 (A300–A307) |
+| Miljø | `APP_ENVIRONMENT` | `development` (lokalt), `test` (testmiljøet) eller `production`. Produksjonsvakten for testdata (`assertTestdataAllowed`) godtar bare `development` og `test`. Ikke det samme som `NODE_ENV`, som er `production` også i testmiljøet (A302) |
 
 ---
 
@@ -2547,5 +2566,6 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 13.11.2026 | Søk i ordrelisten og arbeidskøen (fase 2a, T2, ADR 0010): ingen ny tabell, ingen ny indeks og ingen migrering. Søkevilkåret står i `src/core/assignments/search.ts` (`orderFieldsMatch`, `assignmentFieldsMatch`), mønsteret i `src/shared/lib/like-pattern.ts`. `listOrders` gir `{ items, total }` med grense 50. Ordlisten: matrikkelsøk, grense i ordrelisten, og «Mine / Alle» rettet (`defaultMineOnly`). |
 | 13.11.2026 | Endre ordren (fase 2a, Ståle 12.11.2026 T1): en lagret ordre kan endres i alle statuser med `assignment.edit`; oppdraget endres ikke; `row_version` hindrer stille overskriving. `order`/`update` i revisjonsloggen med `fields` og `values` (`{ from, to }`), den eneste ordrehandlingen med verdier. Ny hendelse `order.updated`. Ingen migrering. Se «Endre ordren» i 4.3 og `audit_log` i 4.12. | A249–A254, spørsmål 79, `docs/funksjoner/fase2a-rette-ordre.md` |
 | 13.11.2026 | Mulig dublett (fase 2a, Ståle 12.11.2026 T3): fast regel i `src/core/orders` (`findPossibleDuplicateOrders`, `findPossibleDuplicateOrdersFor`, `DUPLICATE_REASONS`). Ingen ny tabell. Migrering `0033_indekser-mulig-dublett` med to uttrykksindekser på `orders` (adressenøkkel og gnr/bnr). Se «Mulig dublett» i 4.3. Ordlisten: mulig dublett, adressenøkkel, normalisert matrikkelnummer, grunn til mulig dublett. | A285–A291, `docs/funksjoner/fase2a-varsel-dublett.md` |
+| 14.11.2026 | Oppdraget eier bestillingsopplysningene (fase 2a, Ståle 13.11.2026: rett på oppdrag): nye kolonner på `assignments` (`received_at`, `source`, `external_ref`, `ordered_by_*`, `address_text`, `gnr`, `bnr`, `snr`, `housing_association_name`, `seller_declaration_received`, `creation_key`), migrering `0034_oppdrag-bestilling` med utfylling fra ordren, ny hendelse `assignment.booking_updated`, felles koder i `src/core/assignments/booking/codes.ts`. Bestilleren leses fra oppdraget. Se «Oppdraget eier bestillingsopplysningene» i 4.3. | ADR 0011, A292–A299, `docs/funksjoner/fase2a-nytt-oppdrag.md` |
 | 13.11.2026 | Oppbevaringstid for avviste KI-forslag (fase 2a, Ståle 12.11.2026 K7): ny innstilling `ai.rejected_retention_years` i `organizations.settings` (1–10 år, standard 10); `ai_usage_log.retain_until` regnes ut på nytt ved hver statusendring. Ingen ny tabell og ingen migrering. | A272–A275, `docs/agenter/oppgaver/ki-oppbevaring-avviste.md` |
-| 14.11.2026 | Badet på PC (fase 2a-2, ADR 0011): migrering `0034_badet-pc` med `reports`, `field_answers`, `checkpoint_results`, `deviations`, `deviation_measures`, `tgiu_details` og ny tabell `rule_suggestion_decisions` (eneste fasit for regelforslag, bare tillegg). `deviations.kind` er `tg`/`hms`, `cost_band_key` erstatter `cost_band_id`, `text_source` er ny, og `suggestion_status` og `suggestion_override_reason` er tatt ut. `tg_computed` lagres ikke. `standard_measures.applies_to_tg`. Fremmednøkkel på `ai_usage_log.report_id`. KI-målet `answer` heter `field_answer` i rapporten. Grensesnitt i `src/core/reports/types.ts` og `src/core/reports/logic/`. | A315–A329, T-0060 |
+| 14.11.2026 | Badet på PC (fase 2a-2, ADR 0013): migrering `0035_badet-pc` med `reports`, `field_answers`, `checkpoint_results`, `deviations`, `deviation_measures`, `tgiu_details` og ny tabell `rule_suggestion_decisions` (eneste fasit for regelforslag, bare tillegg). `deviations.kind` er `tg`/`hms`, `cost_band_key` erstatter `cost_band_id`, `text_source` er ny, og `suggestion_status` og `suggestion_override_reason` er tatt ut. `tg_computed` lagres ikke. `standard_measures.applies_to_tg`. Fremmednøkkel på `ai_usage_log.report_id`. KI-målet `answer` heter `field_answer` i rapporten. Grensesnitt i `src/core/reports/types.ts` og `src/core/reports/logic/`. | A340–A354, T-0060 |

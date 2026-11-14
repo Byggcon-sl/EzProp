@@ -7,7 +7,7 @@ import {
 } from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
 import { db, type DbExecutor } from "@/db/client";
-import { assignmentTeamMembers, assignments, employees, orders, properties } from "@/db/schema";
+import { assignmentTeamMembers, assignments, employees, properties } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import type { AssignmentStatus } from "./codes";
 import {
@@ -15,7 +15,7 @@ import {
   assignmentScheduleSchema,
   type AssignmentScheduleInput,
 } from "./schemas";
-import { assignmentFieldsMatch, orderFieldsMatch } from "./search";
+import { assignmentBookingFieldsMatch, assignmentFieldsMatch } from "./search";
 import { isCorrected } from "./status-flow";
 import { WORK_QUEUE_LIMIT } from "./work-queue-params";
 
@@ -32,7 +32,7 @@ export type WorkQueueFilter = { mineOnly: boolean; query: string };
 export type WorkQueueItem = {
   id: string;
   number: string;
-  /** Eiendommens adresse, ellers adressen fra ordren. */
+  /** Eiendommens adresse, ellers adressen i bestillingen på oppdraget (ADR 0011). */
   address: string | null;
   status: AssignmentStatus;
   /** Merket «Rettet» (A77), fra `isCorrected`. */
@@ -47,41 +47,24 @@ export type WorkQueueItem = {
 
 export type WorkQueueCounts = Record<AssignmentStatus, number>;
 
-/** Adressen fra ordren til oppdraget (eldste ikke-slettede ordre i samme organisasjon). */
-function orderAddress(organizationId: string): SQL<string | null> {
-  return sql<string | null>`(
-    select ${orders.addressText} from ${orders}
-    where ${orders.organizationId} = ${organizationId}
-      and ${orders.deletedAt} is null
-      and (${orders.id} = ${assignments.orderId} or ${orders.assignmentId} = ${assignments.id})
-    order by ${orders.createdAt}, ${orders.id}
-    limit 1
-  )`;
-}
-
-/** Eiendommens adresse, ellers ordrens. Vises på kortet. */
-function addressExpression(organizationId: string): SQL<string | null> {
-  return sql<string | null>`coalesce(${properties.address}, ${orderAddress(organizationId)})`;
+/**
+ * Eiendommens adresse, ellers adressen i bestillingen på oppdraget. Oppdraget eier
+ * bestillingsopplysningene (ADR 0011, A292) og har alltid adresse etter migrering 0034.
+ */
+function addressExpression(): SQL<string | null> {
+  return sql<string | null>`coalesce(${properties.address}, ${assignments.addressText})`;
 }
 
 /**
- * Søket i arbeidskøen: de samme feltene som ordrelisten (`search.ts`). Feltene på oppdraget
- * direkte, og feltene på ordren via `EXISTS` med samme kobling som adressen på kortet. Ordren
- * hentes bare fra samme organisasjon og bare når den ikke er slettet. Tomt søk gir `undefined`.
+ * Søket i arbeidskøen: oppdragsnummeret, eiendommen, partene og matrikkelen
+ * (`assignmentFieldsMatch`), og bestillingsfeltene på oppdraget selv: adresse, matrikkel,
+ * bestiller og meglerens ordrenummer (`assignmentBookingFieldsMatch`). Ingen underspørring mot
+ * `orders`. Tomt søk gir `undefined`.
  */
 function searchMatch(organizationId: string, query: string): SQL | undefined {
-  const orderMatch = orderFieldsMatch(query);
-  if (orderMatch === undefined) return undefined;
-  return or(
-    assignmentFieldsMatch(organizationId, query),
-    sql`exists (
-      select 1 from ${orders}
-      where ${orders.organizationId} = ${organizationId}
-        and ${orders.deletedAt} is null
-        and (${orders.id} = ${assignments.orderId} or ${orders.assignmentId} = ${assignments.id})
-        and ${orderMatch}
-    )`,
-  );
+  const bookingMatch = assignmentBookingFieldsMatch(query);
+  if (bookingMatch === undefined) return undefined;
+  return or(assignmentFieldsMatch(organizationId, query), bookingMatch);
 }
 
 /**
@@ -180,7 +163,7 @@ export async function listWorkQueue(
       .select({
         id: assignments.id,
         number: assignments.number,
-        address: addressExpression(orgId),
+        address: addressExpression(),
         status: assignments.status,
         inspectionAt: assignments.inspectionAt,
         dueDate: assignments.dueDate,

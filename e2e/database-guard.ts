@@ -1,5 +1,7 @@
-/** Verter som regnes som lokale. `URL.hostname` gir IPv6 med klammer. */
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+import { LOCAL_DATABASE_HOSTS } from "../src/shared/config/database-hosts";
+
+/** Verter som regnes som lokale. Felles konstant med produksjonsvakten for testdata. */
+export const LOCAL_HOSTS = LOCAL_DATABASE_HOSTS;
 
 /**
  * Stopper e2e før den kobler til en database som ikke er lokal eller testdatabasen.

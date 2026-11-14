@@ -106,7 +106,7 @@ Trykk per avvik: med regelforslag 2 (Godta, Ferdig); 3 når TG må velges («TG2
     - TG alltid med tekst, ikke bare farge (A246: TG-komponenten bygges her). Tastatur hele veien, fokus synlig.
     - `source_ref` kan vises for takstmannen på skjermen, men flettes aldri inn i avvikstekst, årsak, konsekvens eller tiltak.
     - Lenke «Fyll ut badet» på hvert våtrom i «Bygninger og rom».
-13. **Dokumentasjon:** ADR 0011 «Rapportens datamodell og logg for regelforslag» (sjekk nummeret mot åpne brancher) med dyrt å endre: beslutningstabellen som eneste fasit, serveren regner forslaget, skriveformen per felt, ingen `field_clock` og ingen `report_id` nå (med unik indeks i stedet), unike nøkler med tomme kolonner, rene funksjoner i `logic/`; og det forkastede (felt på avviket som fasit, `report_id` nå, `field_clock` nå, `row_version` per rad som konfliktsjekk, lagret `tg_computed`). Domenemodellen 4.7 og 4.12, ordlisten, `package.json` 0.11.8 → 0.12.0 (kolliderer med `testdata-arbeidshverdag`; den som merges sist, flytter), beslutningene i `docs/09-apne-sporsmal.md`.
+13. **Dokumentasjon:** ADR 0013 «Rapportens datamodell og logg for regelforslag» (sjekk nummeret mot åpne brancher) med dyrt å endre: beslutningstabellen som eneste fasit, serveren regner forslaget, skriveformen per felt, ingen `field_clock` og ingen `report_id` nå (med unik indeks i stedet), unike nøkler med tomme kolonner, rene funksjoner i `logic/`; og det forkastede (felt på avviket som fasit, `report_id` nå, `field_clock` nå, `row_version` per rad som konfliktsjekk, lagret `tg_computed`). Domenemodellen 4.7 og 4.12, ordlisten, `package.json` 0.11.8 → 0.12.0 (kolliderer med `testdata-arbeidshverdag`; den som merges sist, flytter), beslutningene i `docs/09-apne-sporsmal.md`.
 
 **Ikke med (bevisst utelatt):**
 - **KI-forslag** (frasebank, språkvask, sammendrag): neste punkt «KI i veien». Krokene står klare.
@@ -192,15 +192,15 @@ Ingen nye regler. De fem reglene i malen brukes som de er: fire fra PR #167 og `
 - **E2e** (`e2e/fase-2a-badet-pc.spec.ts`): PC hovedflyt; Endre og Avvis; bør/må; TGIU og advarsel; kostnad 37 500 og intervall; lagringsfeil (`route.abort`); to faner; kontor skrivebeskyttet; iPad liggende og stående; tastatur og axe.
 
 ## Avgjort ved forhåndsvurderingen (prosjektlederen 14.11.2026)
-- **Tilgang når innstillingen er av:** arkitekten (ingen egen regel i rapportkoden) framfor sikkerhet og test-leder (bygg «egne oppdrag»). Innstillingen står på (Ståle 27.10.2026), oppdragene har ikke regelen i dag, og en regel bare for rapporten gir ulik oppførsel. Teamregelen hører til `src/core/access` for alle moduler og føres som spørsmål 89. A319, lett å endre.
-- **«Gjelder ikke» og fritt avvik** flyttes til 2a-3 (forenkler), selv om ux tegnet knappen: begge står i 2a-3, og badet trenger dem ikke for å gå hele veien. A315, lett å endre.
-- **Reglene bare på serveren** (forenkler, arkitekt). A316, lett å endre.
-- **`tg_computed` regnes ved lesing**, lagres ikke (forenkler). Kan legges til som kolonne senere uten å endre data. A317, lett å endre.
-- **`ns_edition` og ansvarlig** lagres ikke på rapporten nå (forenkler). A318, lett å endre.
-- **Beslutningstabellen er fasit, serveren regner forslaget, skriveform per felt, ingen `report_id`/`field_clock` nå** (arkitekt). A320–A322, dyrt å endre (ADR 0011).
-- **TG0 direkte uten kontroll av vilkårene nå** (fagansvarlig ga valget). A323, lett å endre.
-- **TGIU-opplysninger etter grunn, og advarsel (ikke sperre) ved hulltaking ikke utført** (fagansvarlig; spørsmål 88 til fagrådet). A324, lett å endre.
-- **KI-målkoden `field_answer`** i stedet for «answer» (KI-ansvarlig). A325, dyrt å endre (fast kode).
+- **Tilgang når innstillingen er av:** arkitekten (ingen egen regel i rapportkoden) framfor sikkerhet og test-leder (bygg «egne oppdrag»). Innstillingen står på (Ståle 27.10.2026), oppdragene har ikke regelen i dag, og en regel bare for rapporten gir ulik oppførsel. Teamregelen hører til `src/core/access` for alle moduler og føres som spørsmål 89. A344, lett å endre.
+- **«Gjelder ikke» og fritt avvik** flyttes til 2a-3 (forenkler), selv om ux tegnet knappen: begge står i 2a-3, og badet trenger dem ikke for å gå hele veien. A340, lett å endre.
+- **Reglene bare på serveren** (forenkler, arkitekt). A341, lett å endre.
+- **`tg_computed` regnes ved lesing**, lagres ikke (forenkler). Kan legges til som kolonne senere uten å endre data. A342, lett å endre.
+- **`ns_edition` og ansvarlig** lagres ikke på rapporten nå (forenkler). A343, lett å endre.
+- **Beslutningstabellen er fasit, serveren regner forslaget, skriveform per felt, ingen `report_id`/`field_clock` nå** (arkitekt). A345–A347, dyrt å endre (ADR 0013).
+- **TG0 direkte uten kontroll av vilkårene nå** (fagansvarlig ga valget). A348, lett å endre.
+- **TGIU-opplysninger etter grunn, og advarsel (ikke sperre) ved hulltaking ikke utført** (fagansvarlig; spørsmål 88 til fagrådet). A349, lett å endre.
+- **KI-målkoden `field_answer`** i stedet for «answer» (KI-ansvarlig). A350, dyrt å endre (fast kode).
 
 ## Åpne spørsmål
 - Spørsmål 78 (a), (b) og (d) står; agentene bygger advarsel og bør/må som utkast.

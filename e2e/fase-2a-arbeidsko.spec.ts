@@ -250,14 +250,17 @@ test.describe("arbeidskøen (pc og ipad)", () => {
     await expect(cards(page).first().getByText("Forfalt", { exact: true })).toHaveCount(0);
   });
 
-  test("4.3 tom fane: tekst og «Ny ordre» i Bestilt", async ({ page }) => {
+  // Endret med «Nytt oppdrag» (docs/funksjoner/fase2a-nytt-oppdrag.md, Omfang 9): «Ny ordre» i
+  // den tomme fanen er byttet med «Nytt oppdrag».
+  test("4.3 tom fane: tekst og «Nytt oppdrag» i Bestilt", async ({ page }) => {
     await logIn(page);
     await page.goto(queueUrl("ordered", `finnes-ikke-${uniqueSuffix()}`));
     const empty = page.getByTestId("work-queue-empty");
     await expect(empty).toContainText("Ingen oppdrag med status Bestilt.");
     await expect(cards(page)).toHaveCount(0);
-    await empty.getByRole("link", { name: "Ny ordre", exact: true }).click();
-    await expect(page).toHaveURL(/\/ordre\/ny$/);
+    await expect(empty.getByRole("link", { name: "Ny ordre", exact: true })).toHaveCount(0);
+    await empty.getByRole("link", { name: "Nytt oppdrag", exact: true }).click();
+    await expect(page).toHaveURL(/\/oppdrag\/ny$/);
   });
 
   test("4.5 notat med fødselsnummer avvises ved feltet, ingenting lagres", async ({ page }) => {

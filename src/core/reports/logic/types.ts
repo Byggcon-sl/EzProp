@@ -20,7 +20,7 @@ import type {
 } from "./codes";
 
 /**
- * Grensesnittet til de rene funksjonene for rapporten (ADR 0011,
+ * Grensesnittet til de rene funksjonene for rapporten (ADR 0013,
  * docs/funksjoner/fase2a-badet-pc.md Omfang 3). Rent blad: ingen database, ingen pakker, ingen
  * dagens dato. Samme kode i nettleseren og på serveren, og klar for iPaden uten nett i 2b.
  * Klientkomponenter importerer bare fra `@/core/reports/logic`, aldri fra `@/core/reports`.
@@ -68,7 +68,7 @@ export type TgiuState = {
 };
 
 /**
- * Hvilke opplysninger TGIU krever på dette punktet (fagansvarlig 14.11.2026, A324). Kommer som
+ * Hvilke opplysninger TGIU krever på dette punktet (fagansvarlig 14.11.2026, A349). Kommer som
  * data fra den som kaller, slik at feltkoder for våtrom aldri står i de generelle funksjonene.
  */
 export type TgiuRequirements = {
@@ -134,7 +134,7 @@ export type DirectTgConflict =
 
 /**
  * TG for kontrollpunktet: høyeste TG blant avvikene, ellers `tg_direct`. HMS-avvik og avvik uten
- * valgt TG teller ikke. Lagres aldri (A317): regnes hver gang den leses.
+ * valgt TG teller ikke. Lagres aldri (A342): regnes hver gang den leses.
  */
 export type ComputeCheckpointTg = (
   input: Pick<CheckpointState, "tgDirect" | "deviations">,

@@ -14,7 +14,7 @@ import path from "node:path";
  * - De rene funksjonene for rapporten (src/core/reports/logic) er et rent blad som kjører likt i
  *   nettleseren og på serveren: bare egen mappe, shared og regelmotoren, og bare `import type` fra
  *   resten av src/core/reports, malmotoren og databaseskjemaet. Ingen pakker
- *   (docs/adr/0011-rapportens-datamodell.md).
+ *   (docs/adr/0013-rapportens-datamodell.md).
  */
 
 const RULES = "core/rules";
@@ -95,7 +95,7 @@ const rule = {
       rulesLeaf:
         "Regelmotoren kan ikke importere «{{to}}». Lov: egen mappe og @/shared, og bare «import type» fra @/core/templates og @/db/schema. Ingen pakker (ADR 0009).",
       reportsLogicLeaf:
-        "De rene funksjonene for rapporten kan ikke importere «{{to}}». Lov: egen mappe, @/shared og @/core/rules, og bare «import type» fra @/core/reports, @/core/templates og @/db/schema. Ingen pakker (ADR 0011).",
+        "De rene funksjonene for rapporten kan ikke importere «{{to}}». Lov: egen mappe, @/shared og @/core/rules, og bare «import type» fra @/core/reports, @/core/templates og @/db/schema. Ingen pakker (ADR 0013).",
       templatesToRules:
         "Malmotoren (@/core/templates) kan ikke importere regelmotoren (@/core/rules) (ADR 0009).",
       aiClientImporter:

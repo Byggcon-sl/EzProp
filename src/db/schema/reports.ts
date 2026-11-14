@@ -33,7 +33,7 @@ import {
 } from "./templates";
 
 /**
- * Rapporten (docs/05-domenemodell.md 4.7, docs/adr/0011-rapportens-datamodell.md,
+ * Rapporten (docs/05-domenemodell.md 4.7, docs/adr/0013-rapportens-datamodell.md,
  * docs/funksjoner/fase2a-badet-pc.md).
  *
  * Rapport → svar per felt og resultat per kontrollpunkt → avvik → tiltak, opplysninger ved TGIU,
@@ -46,9 +46,9 @@ import {
  * - Myk sletting (`deleted_at`), aldri `ON DELETE CASCADE`. `row_version` øker ved hver endring.
  * - Id-er lages i nettleseren (UUID v7). `organization_id` settes alltid fra grant.
  * - TG for kontrollpunktet lagres ikke: den regnes fra avvikene og `tg_direct` når den leses
- *   (`computeCheckpointTg` i `@/core/reports/logic`, A317).
+ *   (`computeCheckpointTg` i `@/core/reports/logic`, A342).
  * - `rule_suggestion_decisions` er eneste fasit for hva takstmannen gjorde med et regelforslag.
- *   Tabellen er bare tillegg: en ny beslutning er en ny rad, aldri en oppdatering (A320).
+ *   Tabellen er bare tillegg: en ny beslutning er en ny rad, aldri en oppdatering (A345).
  * - Unike nøkler med kolonner som kan være tomme, bruker `coalesce` mot `NIL_UUID` i indeksen,
  *   slik at to rader med tom bygning og samme rom regnes som like.
  *

@@ -58,7 +58,7 @@ import { uuidv7 } from "@/shared/lib/uuid";
  * sjekker at alle tabellene i databasen står i listen.
  */
 export const RESET_TABLES = [
-  // Rapporten (Badet på PC, ADR 0011). Før KI-loggen, malene, rommene og oppdragene de peker på.
+  // Rapporten (Badet på PC, ADR 0013). Før KI-loggen, malene, rommene og oppdragene de peker på.
   "rule_suggestion_decisions",
   "tgiu_details",
   "deviation_measures",
@@ -442,6 +442,10 @@ export async function createAssignment(
       number: `TEST-${String(assignmentCounter).padStart(5, "0")}`,
       assignmentType: "condition_report",
       status: "ordered",
+      // Påkrevd fra migrering 0034 (ADR 0011). Oppdiktet, som i `createOrder`.
+      addressText: "Testveien 12, 8000 Bodø",
+      receivedAt: TEST_NOW,
+      source: "manual",
       ...overrides,
       officeId,
       organizationId,
@@ -1668,7 +1672,7 @@ export async function createAiUsageLog(
   return row;
 }
 
-// --- Rapporten (Badet på PC, ADR 0011) ---------------------------------------------------------
+// --- Rapporten (Badet på PC, ADR 0013) ---------------------------------------------------------
 //
 // Rå rader uten tjenesten, slik at testene kan prøve databasen direkte (CHECK, unike nøkler og
 // sammensatte fremmednøkler). Foreldre lages når id-en mangler. Alle verdier er oppdiktede.

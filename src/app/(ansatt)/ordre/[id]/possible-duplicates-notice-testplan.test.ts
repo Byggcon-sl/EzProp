@@ -27,6 +27,7 @@ const ID_2 = "0190a000-0000-7000-8000-000000000102";
 
 function item(overrides: Partial<PossibleDuplicateOrder> = {}): PossibleDuplicateOrder {
   return {
+    kind: "order",
     id: ID_1,
     receivedAt: new Date("2026-11-11T23:30:00Z"),
     addressText: "Storgata 1A, 8006 Bodø",

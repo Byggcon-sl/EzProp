@@ -1,4 +1,4 @@
--- Badet på PC (docs/funksjoner/fase2a-badet-pc.md, docs/adr/0011-rapportens-datamodell.md).
+-- Badet på PC (docs/funksjoner/fase2a-badet-pc.md, docs/adr/0013-rapportens-datamodell.md).
 -- Sju nye tabeller for rapporten, `standard_measures.applies_to_tg` (T-0060) og fremmednøkkel på
 -- `ai_usage_log.report_id` (A158).
 -- Rekkefølgen er rettet for hånd: de unike indeksene lages før fremmednøklene som peker på dem.

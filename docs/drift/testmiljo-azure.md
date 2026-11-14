@@ -91,7 +91,7 @@ Dette skjer, i rekkefølge:
 1. Appen bygges.
 2. Appen og databasen lages (første gang) eller oppdateres.
 3. Databasen migreres.
-4. Første admin legges inn (adressen i `SEED_ADMIN_EMAIL`).
+4. Første admin legges inn (adressen i `SEED_ADMIN_EMAIL`), deretter testoppdragene og testdataene (se punkt h).
 5. Appen rulles ut.
 6. Helsesjekken sjekkes. Den må svare med riktig commit.
 
@@ -142,6 +142,28 @@ Med dette kommer de ansatte inn med Byggcon-kontoen sin (`@byggcon.no`) med ett 
 Får du «Du har ikke tilgang med denne kontoen»: sjekk at personen er lagt inn som ansatt i EzProp med samme e-postadresse som i Microsoft. Vises ikke knappen: sjekk at alle tre secrets er lagt inn, og se etter en advarsel i serverloggen (Log stream).
 
 **Merk:** setter du `APP_HOSTNAME` (punkt f), må tilbakeadressen i app-registreringen endres til `https://<adressen>/api/auth/callback/microsoft`.
+
+## h) Testdata: en oppdiktet arbeidshverdag
+
+Utrullingen legger inn testdata i Byggcon-organisasjonen, den de ansatte logger inn i, slik at testmiljøet ser ut som en vanlig arbeidsdag. Alt er oppdiktet. Oppgavekort: `docs/funksjoner/fase2a-testdata-arbeidshverdag.md`.
+
+**Hva skriptet lager** (`pnpm db:seed:testdata`): 12 oppdiktede ansatte i alle roller unntatt admin, sertifiseringer, meglerfirma med meglere, selgere og kjøpere, rundt 50 eiendommer (enebolig, leilighet i sameie og borettslag, fritidsbolig) med bygninger, etasjer, rom og areal, ordre og oppdrag i alle fire statuser fra rundt fire måneder bakover til fire uker fremover, tidsregistrering og noen reklamasjoner. Ordrene har nøkkelen `TD-0001` og oppover, e-postene slutter på `@testdata.invalid`, telefonnumrene har formen `+47 000 NN NNN`, og gårdsnumrene er 9001–9099.
+
+**Når det kjøres:** ved hver utrulling til testmiljøet, i steget «Migrering og seed», etter `pnpm db:seed` og `pnpm db:seed:testoppdrag`. Skriptet er idempotent: andre gang skriver det ingenting, og datoene flytter seg ikke. Det sletter aldri noe, og det rører ikke ansatte, kontakter eller ordre som ikke er testdata. Det logger bare antall og `TD-`-nøkler, aldri navn eller adresser.
+
+**To sperrer (A302).** Skriptet stopper før første skriving hvis
+1. `APP_ENVIRONMENT` ikke er nøyaktig `development` eller `test` (utrullingen setter den fra `ENVIRONMENT_NAME`), eller
+2. verten i `DATABASE_URL` ikke er en lokal vert (`localhost`, `127.0.0.1`, `[::1]`) eller nøyaktig `psql-ezprop-test.postgres.database.azure.com`.
+
+Meldingen viser aldri adressen, verten eller passordet.
+
+**Produksjon:** en utrulling til produksjon skal aldri ha steget `pnpm db:seed:testdata`, og `APP_ENVIRONMENT` skal være `production` der. Testdatabasen kan aldri løftes eller kopieres til produksjon: den har oppdiktede data blandet med det de ansatte har prøvd ut. Produksjon starter med en tom database (A303).
+
+**E-post til oppdiktede ansatte:** de oppdiktede ansatte kan ikke logge inn. Ber noen om kode til en `@testdata.invalid`-adresse mens e-post via Microsoft 365 er slått på, kommer det en returmelding («kan ikke leveres») til postboksen i `MAIL_FROM`. Det er ufarlig, fordi `.invalid` aldri kan motta post.
+
+**Tidsstatistikk:** skriptet slår ikke på tidsmåling (og ikke KI). Tidsregistreringen ligger i databasen, men statistikken vises først når admin slår på tidsmåling under innstillingene.
+
+**Kjøre for hånd:** `pnpm db:seed:testdata` lokalt (`.env` har `APP_ENVIRONMENT=development`) eller via «Run workflow» i Actions.
 
 ## Hvis Azure mangler kapasitet («No available instances»)
 

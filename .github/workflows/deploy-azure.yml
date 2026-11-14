@@ -185,6 +185,9 @@ jobs:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           SEED_ADMIN_EMAIL: ${{ vars.SEED_ADMIN_EMAIL }}
+          # Vakten i db:seed:testdata godtar bare development og test (A302). Fra miljønavnet,
+          # ikke fast tekst, så en kopi av flyten for et annet miljø ikke arver «test».
+          APP_ENVIRONMENT: ${{ env.ENVIRONMENT_NAME }}
         run: |
           # Brannmurregelen kan bruke opptil ett minutt på å virke. Prøver derfor flere ganger.
           for forsok in 1 2 3 4 5 6; do
@@ -200,6 +203,8 @@ jobs:
           done
           pnpm db:seed
           pnpm db:seed:testoppdrag
+          # Oppdiktet arbeidshverdag i Byggcon-organisasjonen. Skriver ingenting andre gang.
+          pnpm db:seed:testdata
 
       - name: Lukk databasen for kjøreren igjen
         env:

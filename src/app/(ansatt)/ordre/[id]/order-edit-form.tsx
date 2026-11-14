@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
@@ -24,14 +25,17 @@ export function OrderEditSection({
   rowVersion,
   defaults,
   converted,
+  assignmentLink = null,
   action,
   children,
 }: {
   orderId: string;
   rowVersion: number;
   defaults: OrderFieldDefaults;
-  /** Ordren er gjort om til oppdrag: linjen om at oppdraget ikke endres, vises. */
+  /** Ordren er gjort om til oppdrag: linjen om at rettelser gjøres på oppdraget, vises. */
   converted: boolean;
+  /** Oppdraget ordren ble gjort om til, når det ikke er kansellert. Gir lenken «Gå til oppdrag». */
+  assignmentLink?: { id: string; number: string } | null;
   action: Action;
   children?: ReactNode;
 }) {
@@ -65,6 +69,7 @@ export function OrderEditSection({
           rowVersion={rowVersion}
           defaults={defaults}
           converted={converted}
+          assignmentLink={assignmentLink}
           action={action}
           headingRef={headingRef}
           onCancel={hide}
@@ -106,6 +111,7 @@ function OrderEditForm({
   rowVersion,
   defaults,
   converted,
+  assignmentLink,
   action,
   headingRef,
   onCancel,
@@ -114,6 +120,7 @@ function OrderEditForm({
   rowVersion: number;
   defaults: OrderFieldDefaults;
   converted: boolean;
+  assignmentLink: { id: string; number: string } | null;
   action: Action;
   headingRef: RefObject<HTMLHeadingElement | null>;
   onCancel: () => void;
@@ -147,9 +154,20 @@ function OrderEditForm({
           Endre ordren
         </h2>
         {converted && (
-          <p className="text-slate-700">
-            Oppdraget endres ikke. Eiendom og bestiller på oppdraget endres på oppdraget.
-          </p>
+          // Én kilde for opplysningene om oppdraget (ADR 0011): rettelser gjøres på oppdraget.
+          <div>
+            <p className="text-slate-700">
+              Rettelser for oppdraget gjøres på oppdraget. Endringer her flytter ikke oppdraget.
+            </p>
+            {assignmentLink && (
+              <Link
+                href={`/oppdrag/${assignmentLink.id}`}
+                className="inline-flex min-h-11 items-center font-medium text-fjord-dark underline"
+              >
+                Gå til oppdrag&nbsp;<span className="tabular-nums">{assignmentLink.number}</span>
+              </Link>
+            )}
+          </div>
         )}
         <FormErrors state={state} />
         {state.stale && (
