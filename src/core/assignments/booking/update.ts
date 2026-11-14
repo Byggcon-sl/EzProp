@@ -151,7 +151,7 @@ export async function firmForContact(
 }
 
 /** Kolonnene i bestillingen på oppdraget, i samme form som `BookingSnapshot`. */
-const assignmentBookingColumns = {
+export const assignmentBookingColumns = {
   receivedAt: assignments.receivedAt,
   externalRef: assignments.externalRef,
   orderedByText: assignments.orderedByText,
@@ -249,7 +249,7 @@ export const updateAssignmentBooking: UpdateAssignmentBooking = async (
 };
 
 /** Bestillingen i formen skjermen viser (`AssignmentBooking`), med navn i stedet for id-er. */
-function toAssignmentBooking(
+export function toAssignmentBooking(
   booking: BookingSnapshot,
   source: string,
   contactNames: Map<string, string>,

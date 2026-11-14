@@ -76,6 +76,7 @@ export {
   listAssignmentBookingHistory,
 } from "./booking/history";
 export { updateAssignmentBooking } from "./booking/update";
+export { getAssignmentBooking, type AssignmentBookingView } from "./booking/read";
 export { getNewAssignmentFormOptions } from "./booking/form-options";
 export { createAssignment } from "./create";
 export { nextAssignmentNumber } from "./number-sequence";

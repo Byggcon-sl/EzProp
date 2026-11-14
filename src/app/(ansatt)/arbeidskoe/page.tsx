@@ -24,6 +24,26 @@ import { QueueToolbar } from "./queue-toolbar";
 
 export const metadata: Metadata = { title: "Arbeidskø" };
 
+/** Plusstegnet foran «Nytt oppdrag». */
+function PlusIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
 type SearchParams = Record<string, string | string[] | undefined>;
 
 /**
@@ -81,13 +101,24 @@ export default async function WorkQueuePage({
           <Notice message={notice} />
         </div>
       )}
-      <h1 className="text-2xl font-semibold text-slate-900">Arbeidskø</h1>
-      <p className="mt-1 text-slate-600">Hei, {actor.name}.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold text-slate-900">Arbeidskø</h1>
+          <p className="mt-1 text-slate-600">Hei, {actor.name}.</p>
+        </div>
+        {context?.canCreateAssignments && (
+          <Link href="/oppdrag/ny" className={buttonVariants({ variant: "primary", size: "lg" })}>
+            <PlusIcon />
+            Nytt oppdrag
+          </Link>
+        )}
+      </div>
       {context ? (
         <WorkQueue
           actor={context.actor}
           organizationId={context.organizationId}
           canEdit={context.canEditOrders}
+          canCreate={context.canCreateAssignments}
           defaultMine={context.defaultMineOnly}
           params={params}
         />
@@ -110,12 +141,15 @@ async function WorkQueue({
   actor,
   organizationId,
   canEdit,
+  canCreate,
   defaultMine,
   params,
 }: {
   actor: Awaited<ReturnType<typeof requireActor>>;
   organizationId: string;
   canEdit: boolean;
+  /** Viser «Nytt oppdrag» i tom fane «Bestilt». Selve sjekken skjer i kjernen. */
+  canCreate: boolean;
   /** Fra rollene i tilgangssjekken (`defaultMineOnly(grant.roles)`), aldri fra adressen. */
   defaultMine: boolean;
   params: SearchParams;
@@ -183,9 +217,13 @@ async function WorkQueue({
             ) : (
               <p className="text-slate-900">Ingen oppdrag med status {statusLabel}.</p>
             )}
-            {queue.status === "ordered" && (
-              <Link href="/ordre/ny" className={cn(buttonVariants({ variant: "primary" }), "mt-4")}>
-                Ny ordre
+            {/* Sekundær: hovedknappen «Nytt oppdrag» står allerede øverst (én hovedhandling). */}
+            {queue.status === "ordered" && canCreate && (
+              <Link
+                href="/oppdrag/ny"
+                className={cn(buttonVariants({ variant: "secondary", size: "md" }), "mt-4")}
+              >
+                Nytt oppdrag
               </Link>
             )}
           </Card>
