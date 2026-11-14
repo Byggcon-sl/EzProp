@@ -280,3 +280,9 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Parallelle kjøringer tar ofte de samme A-numrene (T4 og testdata-kortet brukte begge A270–A271). Sjekk høyeste A-nummer på alle åpne og ventende brancher (`git grep -oh "A2[0-9][0-9]" origin/<branch> -- docs`), ikke bare på main, før numrene settes.
 - Testskriverens e2e-tester kan være skrevet uten å ha kjørt grønt. Kjør dem før PR, også når en stoppet kjøring overtas. Fjern ikke en `page.route` mens svaret holdes (gir «Route is already handled»).
 - Tekst rett inne i en `flex`-boks brytes ikke med `break-words`, og lange ord gjør siden bredere (grønt lokalt, rødt i CI med andre skriftmål). Legg teksten i et eget element med `min-w-0 [overflow-wrap:anywhere]`.
+
+**PR #209 («Nytt oppdrag», 14.11.2026):**
+- En stoppet kjøring med ferdig kjerne kan overtas uten å starte arbeidsflyten på nytt: flett inn main, gi to utviklere hvert sitt filområde (kjerne og skjermer) i samme arbeidstre, og la testskriver og sikkerhet-personvern gå i parallell etterpå. Commit etter hver agent, og mellomlagre når stopp-kroken ber om det.
+- Når kjernen får en ny form (her `kind` for ordre eller oppdrag), sjekk alle gamle lesesteder som filtrerer bort det nye tilfellet (`orderId === null` på ordresiden). Testskriverens testsaker på tvers av tabeller fant det.
+- En retter skal ikke endre vedtatte skjermkrav. Gi den et konkret valg (her: behold dato og tekst, ta bare med de manglende treffene).
+
