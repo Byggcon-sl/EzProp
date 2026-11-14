@@ -1,12 +1,12 @@
 # 11 – Agentlaget og løkkene
 
-Sist oppdatert: 10.11.2026 (ryddet, og testlaget lagt til som løkke G)
+Sist oppdatert: 14.11.2026 (forbedreren erstatter forenkleren; 10.11.2026: ryddet, og testlaget lagt til som løkke G)
 
 EzProp bygges av et lag av agenter som jobber selvstendig i løkker. Rollene står i `.claude/agents/<rolle>.md`. Tilstanden lagres i repoet (`docs/agenter/tilstand.md` og `docs/agenter/erfaringer.md`), fordi en kjøring kan stoppe når som helst. Alle steg tåler å kjøres to ganger.
 
 ## Rollene
 
-**Ledere** (planlegger, setter krav, godkjenner, skriver sjelden kode): `prosjektleder` (eneste som skriver til Ståle, har siste ord), `arkitekt`, `fagansvarlig` (bestemmer ikke fag, det gjør Ståle), `ux-ansvarlig`, `ui-designer`, `ki-ansvarlig`, `test-leder`, `feilrettingsleder`, `sikkerhet-personvern` og `forenkler`.
+**Ledere** (planlegger, setter krav, godkjenner, skriver sjelden kode): `prosjektleder` (eneste som skriver til Ståle, har siste ord), `arkitekt`, `fagansvarlig` (bestemmer ikke fag, det gjør Ståle), `ux-ansvarlig`, `ui-designer`, `ki-ansvarlig`, `test-leder`, `feilrettingsleder`, `sikkerhet-personvern` og `forbedrer` (spør «kan dette gjøres bedre?» om brukervennlighet, design, funksjonalitet, KI først, effektivitet og smarthet; erstatter forenkleren, Ståle 14.11.2026).
 
 **Utøvere** (skriver koden, egen worktree, starter aldri nye agenter): `utvikler`, `testskriver` og `retter`.
 
@@ -25,7 +25,7 @@ BACKLOG → SPESIFISERT → DESIGNET → BYGGET → TESTET → GJENNOMGÅTT → 
 | **A. Hovedløkken** | Annenhver time, i ny sesjon. Merger PR-er som er klare, retter PR-er med konflikt eller rød CI, retter alvorlige feil fra testlaget, og starter B for neste punkt i planen. | Rutine, se `docs/agenter/rutiner.md` |
 | **B. Oppgaveløkken** | Spesifiser → forhåndsvurdering (bare rollene oppgaven trenger) → design og testplan → bygg (utvikler og testskriver hver for seg) → alle sjekker → gjennomgang (D) → PR. | `.claude/workflows/oppgave.js` |
 | **C. Retteløkken** | Feilrettingsleder finner årsaken, retter fikser, testene kjøres på nytt. Etter tre forsøk går saken til Ståle. | Inne i `oppgave.js` |
-| **D. Gjennomgangsløkken** | Test-leder, sikkerhet, forenkler og fagansvarlig (bare ved fagstoff), hver for seg. Alvorlige funn går tilbake til design eller bygg. | Inne i `oppgave.js` |
+| **D. Gjennomgangsløkken** | Test-leder, sikkerhet, forbedrer og fagansvarlig (bare ved fagstoff), hver for seg. Alvorlige funn går tilbake til design eller bygg. | Inne i `oppgave.js` |
 | **E. Nattløkken** | Hele testpakken, e2e på iPad-størrelse, universell utforming, sårbare pakker, appstørrelse og trege spørringer. Funn blir oppgaver i `tilstand.md`. Trygg rydding samles i én PR. | `.claude/workflows/natt.js`, rutine hver natt |
 | **F. Læringsløkken** | Etter merge: oppdater `erfaringer.md` og ordlisten, og flytt det leverte punktet fra planen til `docs/plan/levert.md`. | I hovedløkken |
 | **G. Testlaget** | Agenter med ulike roller bruker appen slik de ansatte vil gjøre. Funnene etterprøves av en uavhengig kontrollør og blir retteoppgaver, forbedringer eller forslag. Rapport til Ståle i klarspråk. | `.claude/workflows/testlag.js`, rutine hver natt |

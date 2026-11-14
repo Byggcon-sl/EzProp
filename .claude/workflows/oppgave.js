@@ -10,7 +10,7 @@ export const meta = {
     { title: "Design", detail: "Arkitekt, UI-designer og testplan" },
     { title: "Bygg", detail: "Utvikler og testskriver i parallell, egen worktree" },
     { title: "Kjør og rett", detail: "Alle sjekker; retteløkken ved rødt (maks 3)" },
-    { title: "Gjennomgang", detail: "Test-leder, sikkerhet, forenkler, fagansvarlig" },
+    { title: "Gjennomgang", detail: "Test-leder, sikkerhet, forbedrer, fagansvarlig" },
     { title: "PR", detail: "Prosjektlederen åpner PR og oppdaterer tilstanden" },
   ],
 };
@@ -212,7 +212,10 @@ log(`Oppgavekort: ${spec.specPath} · Mål: ${spec.goal}`);
 const reviewers = light
   ? []
   : [
-      { role: "forenkler", ask: "Hva kan kuttes nå, for målet?" },
+      {
+        role: "forbedrer",
+        ask: "Kan dette gjøres bedre? Brukervennlighet, design, funksjonalitet, KI først, effektivitet og smarthet. Gi de 1–5 forbedringene som betyr mest, innenfor planpunktet. Nye funksjoner utenfor planen blir forslag til Ståle, de bygges ikke.",
+      },
       spec.needsArchitect && {
         role: "arkitekt",
         ask: "Stemmer datamodell, modulgrenser og adapterlag?",
@@ -416,8 +419,8 @@ const reviewRoles = light
         ask: "Tilgang bare i core/access, ingen kundedata, myk sletting, logg uten personopplysninger. Bruk /security-review hvis det passer.",
       },
       {
-        role: "forenkler",
-        ask: "Hva i diffen trengs ikke for akseptkriteriene? Bruk /simplify hvis det passer, men ikke endre kode selv.",
+        role: "forbedrer",
+        ask: "Kan dette gjøres bedre? Brukervennlighet, design, funksjonalitet, KI først, effektivitet og smarthet. Har oppgaven en skjerm: start appen fra bygget, bruk skjermen i iPad-størrelse og på PC, og ta skjermbilder (bare i var/forbedrer/). Alvorlig er det som er klart dårligere for den ansatte enn oppgaven kan gi med rimelig innsats. Ikke endre kode selv.",
       },
       spec.needsDomain && {
         role: "fagansvarlig",
