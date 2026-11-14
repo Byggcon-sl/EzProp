@@ -108,6 +108,7 @@ Ingen.
 
 ## Pågår
 
+- **«Nytt oppdrag» er hovedveien**, branch `nytt-oppdrag-hovedvei` fra `main` (14.11.2026). Oppgavekort `docs/funksjoner/fase2a-nytt-oppdrag.md` (utkast). Krever ADR for oppdrag uten ordre (neste ledige nummer, 0011). Beslutninger fra A292. Roller: arkitekt, ux, ui, sikkerhet-personvern, utvikler, testskriver. Endrer ikke seed-filene for testdata (PR #203).
 - **Testdata som ligner en ekte arbeidshverdag**, branch `testdata-arbeidshverdag` (i arbeid hos en annen kjøring, siste commit 20:12 UTC, versjon 0.12.0, ingen PR ennå). Står den uten ny commit i over 2 timer, overtar neste kjøring den. Kortet bruker A264–A271, som overlapper med K7 (A264–A267 på `ki-oppbevaring-avviste`): den som merges sist, flytter numrene.
 
 ## Siste kjøring
