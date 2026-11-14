@@ -214,7 +214,7 @@ const reviewers = light
   : [
       {
         role: "forbedrer",
-        ask: "Kan dette gjøres bedre? Brukervennlighet, design, funksjonalitet, KI først, effektivitet og smarthet. Gi de 1–5 forbedringene som betyr mest, innenfor planpunktet. Nye funksjoner utenfor planen blir forslag til Ståle, de bygges ikke.",
+        ask: "Kan dette gjøres bedre? Brukervennlighet, design, funksjonalitet, KI først, effektivitet og smarthet. Gi de 1–5 forbedringene som betyr mest, også nye funksjoner som ikke står i planen: det du foreslår, bygges (Ståle 14.11.2026, se «Forbedreren» i CLAUDE.md). Merk hvert forslag «i oppgaven», «nytt planpunkt» (høyst ett) eller «forslag til Ståle» (fag, pris, personvern, penger).",
       },
       spec.needsArchitect && {
         role: "arkitekt",
@@ -260,7 +260,7 @@ if (stops.length === 0 && changes.length > 0) {
   log(`${changes.length} ber om endring. Prosjektlederen oppdaterer kortet.`);
   await run(
     "prosjektleder",
-    `${ctx}\nOppgavekort: ${spec.specPath}\n\nDisse rollene ber om endring:\n${changes.map((c) => `- ${c.role}: ${c.notes}`).join("\n")}\n\nOppdater oppgavekortet. Du avgjør ved uenighet og begrunner i kortet. Fag, pris, personvern og nye funksjoner går til docs/09-apne-sporsmal.md. Commit.`,
+    `${ctx}\nOppgavekort: ${spec.specPath}\n\nDisse rollene ber om endring:\n${changes.map((c) => `- ${c.role}: ${c.notes}`).join("\n")}\n\nOppdater oppgavekortet. Du avgjør ved uenighet og begrunner i kortet. Forbedrerens forslag bygges (Ståle 14.11.2026, «Forbedreren» i CLAUDE.md): det som er merket «i oppgaven», tas inn i kortet under «Lagt til av forbedreren»; «nytt planpunkt» legges inn i docs/07-utviklingsplan.md under «Fra forbedreren» i gjeldende fase (lag overskriften hvis den mangler) med én linje i docs/plan/endringslogg.md. Før hvert tillegg inn i docs/plan/forbedrerens-tillegg.md. Fag, pris og personvern, og nye funksjoner fra andre roller enn forbedreren, går til docs/09-apne-sporsmal.md. Commit.`,
     { label: "prosjektleder: oppdater kort", phase: "Forhåndsvurdering" },
   );
   verdicts = (await preReview(2)).filter(Boolean);
@@ -420,7 +420,7 @@ const reviewRoles = light
       },
       {
         role: "forbedrer",
-        ask: "Kan dette gjøres bedre? Brukervennlighet, design, funksjonalitet, KI først, effektivitet og smarthet. Har oppgaven en skjerm: start appen fra bygget, bruk skjermen i iPad-størrelse og på PC, og ta skjermbilder (bare i var/forbedrer/). Alvorlig er det som er klart dårligere for den ansatte enn oppgaven kan gi med rimelig innsats. Ikke endre kode selv.",
+        ask: "Kan dette gjøres bedre? Brukervennlighet, design, funksjonalitet, KI først, effektivitet og smarthet. Har oppgaven en skjerm: start appen fra bygget, bruk skjermen i iPad-størrelse og på PC, og ta skjermbilder (bare i var/forbedrer/). Alvorlig er det som er klart dårligere for den ansatte enn oppgaven kan gi med rimelig innsats, og et tillegg fra forhåndsvurderingen som ikke er bygget. En større ny funksjon du ser nå, meldes som lite funn merket «nytt planpunkt». Ikke endre kode selv.",
       },
       spec.needsDomain && {
         role: "fagansvarlig",
@@ -492,7 +492,7 @@ Sjekkene er ${allGreen ? "grønne" : "IKKE grønne (si det tydelig i PR-en)"}.
 Alvorlige funn som står igjen: ${serious.length === 0 ? "ingen" : serious.map((f) => `${f.file}: ${f.description}`).join("; ")}
 Små funn (nevnes i PR-en): ${minor.length === 0 ? "ingen" : minor.map((f) => `${f.file}: ${f.description}`).join("; ")}
 
-Gjør ferdig: øk versjonsnummeret i package.json (patch), kryss av punktet i docs/07-utviklingsplan.md, oppdater ordlisten hvis nye begreper, oppdater docs/agenter/tilstand.md (åpne PR-er, venter på Ståle). Commit og push branchen «${branch}» (git push -u origin ${branch}). Åpne PR mot ${base} med REST (gh pr create virker ikke i skyen): gh api repos/{owner}/{repo}/pulls -f title=… -f head=${branch} -f base=${base} -f body=… . Norsk tittel, og teksten etter docs/maler/pr.md i klarspråk til Ståle, med statuslinjen øverst. Er autonom modus på (docs/agenter/tilstand.md): ingen «Venter på Ståle» og ingen PushNotification; beslutninger du har tatt selv føres i docs/09-apne-sporsmal.md under «Avgjort av agentene mens Ståle var borte», og PR-en merges med skriptet. Ellers: trenger PR-en en beslutning eller handling fra Ståle før merge, starter tittelen med «Venter på Ståle: », du legger på merket venter-pa-stale (gh api repos/{owner}/{repo}/issues/<nr>/labels -f 'labels[]=venter-pa-stale') og sender ETT varsel med PushNotification. Ellers: kjør bash scripts/merge-klare-pr.sh <nr> --vent, som venter på CI og merger når alt er grønt (Ståle 29.10.2026). Blir CI rød, si det i rapporten; hovedløkken retter. ${base === "main" ? "" : `PR-en bygger på branchen ${base} som ikke er merget: skriv det under «Bygger på».`} Aldri modellnavn. Rapporter PR-lenken, og om den ble merget.`,
+Gjør ferdig: fyll ut «Lagt til av forbedreren» i PR-en (tom hvis ingenting) og sjekk at hvert tillegg står i docs/plan/forbedrerens-tillegg.md med PR-nummer; et lite funn merket «nytt planpunkt» legges inn i planen under «Fra forbedreren». Øk versjonsnummeret i package.json (patch), kryss av punktet i docs/07-utviklingsplan.md, oppdater ordlisten hvis nye begreper, oppdater docs/agenter/tilstand.md (åpne PR-er, venter på Ståle). Commit og push branchen «${branch}» (git push -u origin ${branch}). Åpne PR mot ${base} med REST (gh pr create virker ikke i skyen): gh api repos/{owner}/{repo}/pulls -f title=… -f head=${branch} -f base=${base} -f body=… . Norsk tittel, og teksten etter docs/maler/pr.md i klarspråk til Ståle, med statuslinjen øverst. Er autonom modus på (docs/agenter/tilstand.md): ingen «Venter på Ståle» og ingen PushNotification; beslutninger du har tatt selv føres i docs/09-apne-sporsmal.md under «Avgjort av agentene mens Ståle var borte», og PR-en merges med skriptet. Ellers: trenger PR-en en beslutning eller handling fra Ståle før merge, starter tittelen med «Venter på Ståle: », du legger på merket venter-pa-stale (gh api repos/{owner}/{repo}/issues/<nr>/labels -f 'labels[]=venter-pa-stale') og sender ETT varsel med PushNotification. Ellers: kjør bash scripts/merge-klare-pr.sh <nr> --vent, som venter på CI og merger når alt er grønt (Ståle 29.10.2026). Blir CI rød, si det i rapporten; hovedløkken retter. ${base === "main" ? "" : `PR-en bygger på branchen ${base} som ikke er merget: skriv det under «Bygger på».`} Aldri modellnavn. Rapporter PR-lenken, og om den ble merget.`,
   { label: "prosjektleder: PR", phase: "PR", schema: PR },
 );
 return {

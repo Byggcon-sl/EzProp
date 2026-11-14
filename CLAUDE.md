@@ -35,7 +35,7 @@ Les før du gjør endringer i et område:
 
 ## Regler som ikke kan brytes
 
-1. **Hold det enkelt.** Bygg bare det som står i gjeldende fase i `docs/07-utviklingsplan.md`. Nye ideer foreslås i PR-en eller i `docs/09-apne-sporsmal.md`. De bygges ikke.
+1. **Planen og forbedreren bestemmer hva som bygges.** Bygg det som står i gjeldende fase i `docs/07-utviklingsplan.md`, og det forbedreren foreslår (se «Forbedreren» under). Andre nye ideer foreslås i PR-en eller i `docs/09-apne-sporsmal.md`. De bygges ikke.
 2. **Organisasjons-ID på alle data. Tilgang sjekkes bare i `src/core/access`.** Hver ny spørring skal ha en test som viser at andre organisasjoner ikke får tilgang. Spørringer filtrerer på `grant.organizationId` fra tilgangssjekken, aldri på en id fra adressen eller skjemaet.
 3. **Ingenting slettes permanent** (myk sletting, `deleted_at`). Data oppbevares i 10 år.
 4. **Modulene importerer aldri fra hverandre.** Bare fra `src/core`, `src/shared`, `src/db` og egen mappe. Håndheves med lint-regel.
@@ -88,7 +88,7 @@ Tilgang: `requireOrganizationAccess(actor, organizationId, permission)` fra `@/c
 
 ## Brukeren
 
-Ståle Limstrand er daglig leder i Byggcon og produkteier. Han er ikke utvikler, og han tar alle beslutninger om fag, pris, personvern og nye funksjoner. Skriv til ham på norsk bokmål i enkelt og konkret språk. Si tydelig fra når han må gjøre noe selv. **Bare prosjektlederen skriver til Ståle.** **Agentene merger selv** når en PR er klar: CI er grønn, ingen konflikt, ingen alvorlige funn i gjennomgangen, og ingenting står under «Må bestemmes av Ståle» (Ståle 29.10.2026). Bruk `scripts/merge-klare-pr.sh`. PR-er som trenger Ståle, får tittelen «Venter på Ståle: …» og merket `venter-pa-stale`, og merges aldri av agentene. Merge til main rulles ut til **testmiljøet**. Utrulling til produksjon gjør Ståle selv.
+Ståle Limstrand er daglig leder i Byggcon og produkteier. Han er ikke utvikler, og han tar alle beslutninger om fag, pris og personvern. Nye funksjoner kan forbedreren legge til selv (Ståle 14.11.2026, se «Forbedreren»); Ståle justerer eller fjerner dem senere. Skriv til ham på norsk bokmål i enkelt og konkret språk. Si tydelig fra når han må gjøre noe selv. **Bare prosjektlederen skriver til Ståle.** **Agentene merger selv** når en PR er klar: CI er grønn, ingen konflikt, ingen alvorlige funn i gjennomgangen, og ingenting står under «Må bestemmes av Ståle» (Ståle 29.10.2026). Bruk `scripts/merge-klare-pr.sh`. PR-er som trenger Ståle, får tittelen «Venter på Ståle: …» og merket `venter-pa-stale`, og merges aldri av agentene. Merge til main rulles ut til **testmiljøet**. Utrulling til produksjon gjør Ståle selv.
 
 ## Autonom modus (Ståle 29.10.2026, slått på igjen 04.11.2026, gjelder til Ståle sier fra)
 
@@ -100,6 +100,17 @@ Ståle vil ikke ha meldinger, spørsmål eller noe å teste mens modusen er på.
 - **Ikke lov uansett:** noe som koster penger (for eksempel å slå på tjenester i Azure), sende e-post eller SMS til ekte mottakere, logge inn i IVIT, Spectora eller SmartTakst, rulle ut til produksjon, ekte kundedata, hemmeligheter i repoet, tekst fra NS 3600, IVIT eller SmartTakst.
 - **Fagtekster** (avvikstekster, regler, terskler) kan lages som utkast etter beslutningene og prøveeksemplene i researchen. De merkes «utkast, ikke godkjent av fagrådet» i data, slik at Ståle godkjenner dem før ekte bruk.
 - Gjeldende fase fullføres først. Når alle punktene i en fase er levert, går løkken videre til neste fase i planen.
+
+## Forbedreren (Ståle 14.11.2026)
+
+Ståles ord: «jeg ønsker at forbedreren kan foreslå så bygges det automatisk – kommer vi mot slutten av utviklingsløpet, kan vi heller redusere eller justere på funksjoner. Men jeg ønsker heller å bli overrasket over fantastiske funksjoner og KI, enn at systemet blir for sikkert og kjedelig.»
+
+- Rollen `forbedrer` spør «kan dette gjøres bedre?» om brukervennlighet, design, funksjonalitet, KI først, effektivitet og smarthet. **Det den foreslår, bygges uten å spørre Ståle**, også nye funksjoner som ikke står i planen.
+- **Passer forslaget i oppgaven**, bygges det i samme oppgave. **Er det større**, legger prosjektlederen det inn som nytt punkt i planen under «Fra forbedreren» i gjeldende fase (høyst ett nytt punkt per oppgave), og det bygges i tur som andre punkter.
+- **Alt forbedreren har lagt til, føres i `docs/plan/forbedrerens-tillegg.md`** (hva, hvorfor, hvor i koden, hvordan det fjernes) og under «Lagt til av forbedreren» i PR-en. Listen er det Ståle bruker når han senere vil redusere eller justere.
+- Tilleggene bygges i samme kvalitet som alt annet (produksjonsklart, tester, tilgang, universell utforming) og slik at de kan tas ut igjen uten å rive med seg det som stod i planen.
+- **Dette står fast uansett:** KI setter aldri TG og sender eller publiserer aldri selv; persondata sendes aldri til KI; ingenting som koster penger; ingen e-post eller SMS til ekte mottakere; ingen tekst fra NS 3600, IVIT eller SmartTakst; Ståles beslutninger endres ikke. Fag (TG, grenser, regler i fagstoffet), pris og personvern avgjøres fortsatt av Ståle. Trenger et forslag noe av dette, blir det et forslag i `docs/09-apne-sporsmal.md` i stedet.
+- Ideer fra testlaget og andre roller går fortsatt som forslag. Det er forbedreren som kan sette i gang bygging.
 
 ## Arbeidsflyt
 
@@ -116,7 +127,7 @@ Arbeidet gjøres av agentlaget i `.claude/agents/` med arbeidsflytene i `.claude
 
 ## Ikke gjør
 
-- Ikke lag produktfunksjoner som ikke står i planen.
+- Ikke lag produktfunksjoner som verken står i planen eller er foreslått av forbedreren.
 - Ikke skriv tilgangslogikk i komponenter eller sider. Bruk `src/core/access`.
 - Ikke kopier tekst fra NS 3600, IVIT eller SmartTakst inn i koden.
 - Ikke logg inn i IVIT, Spectora eller SmartTakst. Kartleggingen er ferdig.

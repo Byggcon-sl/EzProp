@@ -39,7 +39,7 @@ BACKLOG → SPESIFISERT → DESIGNET → BYGGET → TESTET → GJENNOMGÅTT → 
 3. Bekreftede alvorlige feil ligger som funnfiler i `docs/agenter/testlag/funn/` med status «ny».
 4. Hovedløkken retter dem før neste nye punkt (høyst tre per kjøring), og setter status «rettet».
 5. Testlaget prøver dem på nytt og lukker dem, eller åpner dem igjen.
-6. Ideer til nye funksjoner går til Ståle som forslag i `docs/09-apne-sporsmal.md`.
+6. Ideer til nye funksjoner fra testlaget går til Ståle som forslag i `docs/09-apne-sporsmal.md`.
 
 ## Merge og åpne PR-er
 
@@ -57,7 +57,11 @@ Gjelder så lenge `docs/agenter/tilstand.md` sier «Autonom modus: på» (Ståle
 - Aldri: noe som koster penger, e-post eller SMS til ekte mottakere, innlogging i IVIT, Spectora eller SmartTakst, utrulling til produksjon, ekte kundedata, eller tekst fra NS 3600, IVIT eller SmartTakst.
 - Fagtekster lages som utkast, merket «ikke godkjent av fagrådet».
 
-**Uenighet:** prosjektlederen avgjør og begrunner i PR-en. Fag, pris, personvern og nye funksjoner avgjøres av Ståle.
+**Uenighet:** prosjektlederen avgjør og begrunner i PR-en. Fag, pris og personvern avgjøres av Ståle.
+
+## Forbedreren bygger (Ståle 14.11.2026)
+
+Det forbedreren foreslår, bygges uten å spørre Ståle, også nye funksjoner som ikke står i planen. Passer forslaget i oppgaven, bygges det der. Er det større, blir det et nytt punkt i planen under «Fra forbedreren» i gjeldende fase (høyst ett per oppgave). Alt føres i `docs/plan/forbedrerens-tillegg.md`, som er listen Ståle bruker når han vil redusere eller justere mot slutten. Reglene som står fast, står i `CLAUDE.md` under «Forbedreren». Ideer fra testlaget går fortsatt som forslag.
 
 ## Raskere CI (Ståle 11.11.2026)
 
