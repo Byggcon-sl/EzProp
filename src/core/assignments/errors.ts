@@ -33,3 +33,44 @@ export class AssignmentCannotBeCancelledError extends Error {
     this.name = "AssignmentCannotBeCancelledError";
   }
 }
+
+/** Kontoret finnes ikke i organisasjonen, er arkivert eller slettet. Ingenting er lagret. */
+export class OfficeNotFoundError extends Error {
+  constructor() {
+    super("Kontoret finnes ikke.");
+    this.name = "OfficeNotFoundError";
+  }
+}
+
+/**
+ * Den som er valgt som ansvarlig, har ikke rollen takstmann (`inspector`). Ingenting er lagret.
+ * Fremmed, ukjent, slettet eller deaktivert ansatt gir `EmployeeNotFoundError`.
+ */
+export class ResponsibleNotInspectorError extends Error {
+  constructor() {
+    super("Ansvarlig må være takstmann.");
+    this.name = "ResponsibleNotInspectorError";
+  }
+}
+
+/**
+ * Bestillingen på oppdraget er endret av noen andre siden skjemaet ble åpnet: `row_version`
+ * stemmer ikke. Ingenting er lagret. Meldingen har aldri verdier fra oppdraget.
+ */
+export class AssignmentChangedError extends Error {
+  constructor() {
+    super("Oppdraget er endret av en annen. Last siden på nytt.");
+    this.name = "AssignmentChangedError";
+  }
+}
+
+/**
+ * Oppslaget om mulig dublett feilet i databasen. Meldingen har aldri verdier fra bestillingen
+ * eller SQL-teksten. Felles for ordre og oppdrag (ADR 0011).
+ */
+export class PossibleDuplicatesLookupError extends Error {
+  constructor() {
+    super("Oppslaget om mulig dublett feilet.");
+    this.name = "PossibleDuplicatesLookupError";
+  }
+}

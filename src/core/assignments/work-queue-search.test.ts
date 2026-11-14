@@ -21,8 +21,10 @@ import { countWorkQueueByStatus, listWorkQueue, type WorkQueueItem } from "./wor
 
 /*
  * Søket i arbeidskøen mot databasen (docs/funksjoner/fase2a-sok-ordre-arbeidsko-testplan.md
- * avsnitt 4). Samme felt som ordrelisten: feltene på oppdraget direkte, og feltene på ordren via
- * begge koblingene (`orders.id = assignments.order_id` og `orders.assignment_id = assignments.id`).
+ * avsnitt 4). Samme felt som ordrelisten. Oppdraget eier bestillingsopplysningene (ADR 0011), så
+ * adresse, matrikkel, bestiller og meglerens ordrenummer søkes på oppdraget selv. Oppdrag laget fra
+ * ordre lages med bestillingen på begge, som `convertOrderToAssignment` gjør, gjennom begge
+ * koblingene (`orders.id = assignments.order_id` og `orders.assignment_id = assignments.id`).
  * De eksisterende testene i `work-queue.test.ts` (2.4) gjelder fortsatt.
  *
  * Testdata er oppdiktet: «Fjordgata 7», «Kari Hansevik», gnr/bnr 12/34 og 999/999.
@@ -71,10 +73,29 @@ async function counts(actor: Actor, organizationId: string, query: string, mineO
 
 type OrderFields = Partial<typeof orders.$inferInsert>;
 
-/** Oppdrag (Bestilt) der ordren peker på oppdraget via `assignments.order_id`. */
+/** Bestillingsfeltene som `convertOrderToAssignment` og migrering 0034 kopierer til oppdraget. */
+function bookingCopy(fields: OrderFields) {
+  const copy: Partial<typeof assignments.$inferInsert> = {};
+  if (fields.addressText !== undefined) copy.addressText = fields.addressText;
+  if (fields.externalRef !== undefined) copy.externalRef = fields.externalRef;
+  if (fields.orderedByText !== undefined) copy.orderedByText = fields.orderedByText;
+  if (fields.gnr !== undefined) copy.gnr = fields.gnr;
+  if (fields.bnr !== undefined) copy.bnr = fields.bnr;
+  if (fields.snr !== undefined) copy.snr = fields.snr;
+  return copy;
+}
+
+/**
+ * Oppdrag (Bestilt) laget fra en ordre via `assignments.order_id`. Bestillingen står på begge,
+ * slik `convertOrderToAssignment` lager dem (ADR 0011); køen leser fra oppdraget.
+ */
 async function viaOrderId(organizationId: string, fields: OrderFields, status?: AssignmentStatus) {
   const order = await createOrder(organizationId, fields);
-  return createAssignment(organizationId, { orderId: order.id, ...(status ? { status } : {}) });
+  return createAssignment(organizationId, {
+    orderId: order.id,
+    ...bookingCopy(fields),
+    ...(status ? { status } : {}),
+  });
 }
 
 /** Oppdrag (Bestilt) der ordren peker på oppdraget via `orders.assignment_id` (gjort om). */
@@ -83,7 +104,10 @@ async function viaAssignmentId(
   fields: OrderFields,
   status?: AssignmentStatus,
 ) {
-  const assignment = await createAssignment(organizationId, status ? { status } : {});
+  const assignment = await createAssignment(organizationId, {
+    ...bookingCopy(fields),
+    ...(status ? { status } : {}),
+  });
   await createOrder(organizationId, {
     ...fields,
     status: "converted",
@@ -225,11 +249,40 @@ describe("4.1 treff per felt", () => {
     expect((await queueIds(admin, org.id, "")).sort()).toEqual([...noise].sort());
   });
 
-  it("slettet ordre gir ikke treff på ordrefeltene", async () => {
+  it("bare oppdragets bestilling søkes: verdier som bare står på ordren (rettet etterpå eller slettet) gir ikke treff (ADR 0011)", async () => {
     const { org, admin } = await orgWithAdmin();
-    await viaOrderId(org.id, { externalRef: "ORD-ABC-551", deletedAt: TEST_NOW });
-    await viaAssignmentId(org.id, { externalRef: "ORD-ABC-552", deletedAt: TEST_NOW });
+    const first = await createAssignment(org.id);
+    await createOrder(org.id, {
+      externalRef: "ORD-ABC-551",
+      status: "converted",
+      assignmentId: first.id,
+    });
+    const second = await createAssignment(org.id);
+    await createOrder(org.id, {
+      externalRef: "ORD-ABC-552",
+      status: "converted",
+      assignmentId: second.id,
+      deletedAt: TEST_NOW,
+    });
     expect(await queueIds(admin, org.id, "ORD-ABC")).toEqual([]);
+  });
+
+  it("oppdrag laget uten ordre finnes på adresse, matrikkel, bestiller og meglerens ordrenummer", async () => {
+    const { org, admin } = await orgWithAdmin();
+    const direct = await createAssignment(org.id, {
+      orderId: null,
+      addressText: "Qxzsøkeveien 41, 8005 Bodø",
+      gnr: "4411",
+      bnr: "4412",
+      orderedByText: "Qxzbestiller Søkesen",
+      externalRef: "QXZ-REF-8812",
+    });
+    await createAssignment(org.id);
+    for (const query of ["qxzsøkeveien", "4411/4412", "søkesen", "ref-8812"]) {
+      expect(await queueIds(admin, org.id, query), query).toEqual([direct.id]);
+    }
+    const [card] = await queue(admin, org.id, "qxzsøkeveien");
+    expect(card?.address).toBe("Qxzsøkeveien 41, 8005 Bodø");
   });
 });
 

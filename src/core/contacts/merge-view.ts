@@ -1,7 +1,16 @@
-import { and, countDistinct, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import {
+  and,
+  countDistinct,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+  type AnyColumn,
+} from "drizzle-orm";
 import { requireOrganizationAccess, type Actor } from "@/core/access";
 import { db } from "@/db/client";
-import { assignmentParties, contacts, firms, orders } from "@/db/schema";
+import { assignmentParties, assignments, contacts, firms, orders } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 
 /*
@@ -31,8 +40,38 @@ function validIds(ids: readonly string[]): string[] {
 }
 
 /**
- * Hvor mange oppdrag (aktive parter, hvert oppdrag én gang) og ordrer som peker på hver kontakt.
- * Id-er uten treff gir 0.
+ * Antall oppdrag per kontakt eller firma: aktive parter og bestilleren på oppdraget (ADR 0011),
+ * hvert oppdrag én gang selv om det treffer begge. Kansellerte oppdrag telles ikke som bestiller.
+ */
+async function assignmentUsage(
+  organizationId: string,
+  ids: string[],
+  partyColumn: AnyColumn,
+  orderedByColumn: AnyColumn,
+): Promise<{ id: string | null; count: number }[]> {
+  const rows = await db.execute<{ id: string | null; count: number }>(sql`
+    select usage.ref_id as id, count(distinct usage.assignment_id)::int as count
+    from (
+      select ${partyColumn} as ref_id, ${assignmentParties.assignmentId} as assignment_id
+      from ${assignmentParties}
+      where ${assignmentParties.organizationId} = ${organizationId}
+        and ${assignmentParties.deletedAt} is null
+        and ${inArray(partyColumn, ids)}
+      union all
+      select ${orderedByColumn} as ref_id, ${assignments.id} as assignment_id
+      from ${assignments}
+      where ${assignments.organizationId} = ${organizationId}
+        and ${assignments.deletedAt} is null
+        and ${inArray(orderedByColumn, ids)}
+    ) as usage
+    group by usage.ref_id
+  `);
+  return [...rows].map((row) => ({ id: row.id, count: Number(row.count) }));
+}
+
+/**
+ * Hvor mange oppdrag (aktive parter og bestilleren på oppdraget, hvert oppdrag én gang) og ordrer
+ * som peker på hver kontakt. Id-er uten treff gir 0.
  */
 export async function getContactUsage(
   actor: Actor,
@@ -45,20 +84,12 @@ export async function getContactUsage(
   for (const id of ids) result[id] = { assignmentCount: 0, orderCount: 0 };
   if (ids.length === 0) return result;
 
-  const partyRows = await db
-    .select({
-      id: assignmentParties.contactId,
-      count: countDistinct(assignmentParties.assignmentId),
-    })
-    .from(assignmentParties)
-    .where(
-      and(
-        eq(assignmentParties.organizationId, grant.organizationId),
-        inArray(assignmentParties.contactId, ids),
-        isNull(assignmentParties.deletedAt),
-      ),
-    )
-    .groupBy(assignmentParties.contactId);
+  const partyRows = await assignmentUsage(
+    grant.organizationId,
+    ids,
+    assignmentParties.contactId,
+    assignments.orderedByContactId,
+  );
   const orderRows = await db
     .select({ id: orders.orderedByContactId, count: countDistinct(orders.id) })
     .from(orders)
@@ -99,17 +130,12 @@ export async function getFirmUsage(
       ),
     )
     .groupBy(contacts.firmId);
-  const partyRows = await db
-    .select({ id: assignmentParties.firmId, count: countDistinct(assignmentParties.assignmentId) })
-    .from(assignmentParties)
-    .where(
-      and(
-        eq(assignmentParties.organizationId, grant.organizationId),
-        inArray(assignmentParties.firmId, ids),
-        isNull(assignmentParties.deletedAt),
-      ),
-    )
-    .groupBy(assignmentParties.firmId);
+  const partyRows = await assignmentUsage(
+    grant.organizationId,
+    ids,
+    assignmentParties.firmId,
+    assignments.orderedByFirmId,
+  );
   const orderRows = await db
     .select({ id: orders.orderedByFirmId, count: countDistinct(orders.id) })
     .from(orders)

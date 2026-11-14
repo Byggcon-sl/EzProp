@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { requireOrganizationAccess, type Actor } from "@/core/access";
 import { db } from "@/db/client";
-import { assignments, clientAgreements, firms, orders } from "@/db/schema";
+import { assignments, clientAgreements, firms } from "@/db/schema";
 import { todayInOslo } from "@/shared/lib/dates";
 import { isUuid } from "@/shared/lib/uuid";
 import { isAgreementActive } from "./active";
@@ -15,8 +15,8 @@ export type AgreementSuggestion = {
 };
 
 /**
- * Forslag om avtale på oppdraget (A116). Firmaet hentes bare fra ordrens bestillerfirma
- * (`assignments.order_id` → `orders.ordered_by_firm_id`), aldri fra megler-parten. Forslag gis
+ * Forslag om avtale på oppdraget (A116). Firmaet hentes bare fra bestillerfirmaet på oppdraget
+ * (`assignments.ordered_by_firm_id`, ADR 0011), aldri fra megler-parten. Forslag gis
  * bare når oppdraget ikke har avtale og firmaet (ikke slettet) har nøyaktig én avtale som ikke
  * er fjernet og gjelder i dag (`todayInOslo(now)`). Skriver ingenting; takstmannen godkjenner.
  */
@@ -39,17 +39,9 @@ export async function suggestAgreementForAssignment(
     })
     .from(assignments)
     .leftJoin(
-      orders,
-      and(
-        eq(orders.id, assignments.orderId),
-        eq(orders.organizationId, orgId),
-        isNull(orders.deletedAt),
-      ),
-    )
-    .leftJoin(
       firms,
       and(
-        eq(firms.id, orders.orderedByFirmId),
+        eq(firms.id, assignments.orderedByFirmId),
         eq(firms.organizationId, orgId),
         isNull(firms.deletedAt),
       ),

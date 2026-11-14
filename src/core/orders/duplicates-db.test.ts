@@ -5,7 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 import { AccessDeniedError, type Actor } from "@/core/access";
 import { db } from "@/db/client";
-import { auditLog, employees, events, orders, organizations, type EmployeeRole } from "@/db/schema";
+import {
+  assignments,
+  auditLog,
+  employees,
+  events,
+  orders,
+  organizations,
+  type EmployeeRole,
+} from "@/db/schema";
 import { logger } from "@/shared/lib/logger";
 import {
   createAssignment,
@@ -101,7 +109,14 @@ async function otherOrder(organizationId: string, other: Other = {}) {
     return { ...order, assignmentNumber: null as string | null };
   }
   if (status === "converted") {
+    // Oppdraget eier bestillingen (ADR 0011): feltene kopieres fra ordren, som i
+    // `convertOrderToAssignment`, og oppdraget peker på ordren.
     const assignment = await createAssignment(organizationId, {
+      addressText: base.addressText,
+      gnr: base.gnr,
+      bnr: base.bnr,
+      snr: base.snr,
+      receivedAt: base.receivedAt,
       status: other.assignmentStatus ?? "ordered",
       deletedAt: other.assignmentDeleted ? new Date("2026-11-02T08:00:00Z") : null,
     });
@@ -110,6 +125,10 @@ async function otherOrder(organizationId: string, other: Other = {}) {
       status: "converted",
       assignmentId: assignment.id,
     });
+    await db
+      .update(assignments)
+      .set({ orderId: order.id })
+      .where(eq(assignments.id, assignment.id));
     return { ...order, assignmentNumber: assignment.number as string | null };
   }
   return { ...(await createOrder(organizationId, base)), assignmentNumber: null as string | null };
@@ -458,6 +477,7 @@ describe("3.2 svaret", () => {
           "assignmentNumber",
           "assignmentStatus",
           "id",
+          "kind",
           "reasons",
           "receivedAt",
           "status",
@@ -465,6 +485,7 @@ describe("3.2 svaret", () => {
       );
     }
     expect(items[0]).toEqual({
+      kind: "order",
       id: received.id,
       receivedAt: received.receivedAt,
       addressText: ADDRESS,

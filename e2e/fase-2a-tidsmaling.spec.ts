@@ -76,9 +76,10 @@ async function insertAssignment(): Promise<string> {
     const { organizationId, officeId } = await seedOrganization(sql);
     const id = randomUUID();
     await sql`
-      insert into assignments (id, organization_id, number, office_id, assignment_type, status)
+      insert into assignments (id, organization_id, number, office_id, assignment_type, status,
+        address_text, received_at, source)
       values (${id}, ${organizationId}, ${`E2E-TID-${suffix}`}, ${officeId}, 'condition_report',
-        'in_progress')`;
+        'in_progress', ${`Tidsveien 1 ${suffix}, 8000 Bodø`}, now(), 'manual')`;
     return id;
   });
 }

@@ -67,10 +67,10 @@ async function insertAssignments(
         'condition_report')`;
     await sql`
       insert into assignments (id, organization_id, number, office_id, assignment_type, status,
-        order_id, due_date, inspection_at)
+        order_id, due_date, inspection_at, address_text, received_at, source)
       values (${id}, ${organizationId}, ${number}, ${officeId}, 'condition_report',
         ${row.status ?? "in_progress"}, ${orderId}, ${row.dueDate ?? null},
-        ${row.inspectionAt ?? null})`;
+        ${row.inspectionAt ?? null}, ${address}, now(), 'manual')`;
     created.push({ id, number, address });
   }
   return created;

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   date,
   foreignKey,
@@ -14,6 +15,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { clientAgreements } from "./client-agreements";
 import { baseColumns } from "./common";
+import { contacts, firms } from "./contacts";
 import { orders } from "./orders";
 import { companies, offices } from "./organization-structure";
 import { properties } from "./properties";
@@ -21,7 +23,13 @@ import { properties } from "./properties";
 /**
  * Oppdraget (docs/05-domenemodell.md 4.3), minimalt i fase 2a (A54): nummer, kontor, type,
  * status, koblingen til ordren, utstedende selskap og eiendommen. Arbeidskøen la til befaring,
- * frist og internt notat. Ekstern referanse legges til av planpunktet som bruker den.
+ * frist og internt notat.
+ *
+ * Oppdraget eier bestillingsopplysningene (ADR 0011, A292): mottatt, kilde, meglerens
+ * ordrenummer, bestiller, adresse, matrikkel og borettslag. Kolonnene har samme navn og regler
+ * som på ordren. Alt som viser eller bruker dem, leser herfra, også for oppdrag som kom fra en
+ * ordre (da kopieres de i `convertOrderToAssignment`). Ordren beholder sin kopi som «slik
+ * bestillingen kom». Kolonnene sendes aldri til KI (`@/core/ai/never-fields`).
  *
  * `number` lages bare på serveren fra nummerserien (`nextAssignmentNumber`, D9) og er unikt per
  * organisasjon, også blant slettede rader. Faste koder står i `@/core/assignments/codes`.
@@ -32,7 +40,7 @@ export const assignments = pgTable(
     ...baseColumns,
     number: text("number").notNull(),
     officeId: uuid("office_id").notNull(),
-    /** Ordren oppdraget ble laget fra. Tom når oppdraget lages direkte (senere). */
+    /** Ordren oppdraget ble laget fra. Tom når oppdraget er laget direkte («Nytt oppdrag»). */
     orderId: uuid("order_id"),
     /** Eiendommen. Høyst én per oppdrag, og hvert oppdrag har sin egen nå (A70). Tom til den er lagt inn. */
     propertyId: uuid("property_id"),
@@ -57,6 +65,31 @@ export const assignments = pgTable(
      * automatisk (A116). Blir stående når avtalen utløper eller fjernes (A117).
      */
     clientAgreementId: uuid("client_agreement_id"),
+    /** Når bestillingen kom inn. Ved direkte oppretting: «nå» hvis skjemaet ikke sier noe annet. */
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Hvor bestillingen kom fra. Samme koder som `orders.source`. Settes av kjernen, aldri fra skjemaet. */
+    source: text("source").notNull().default("manual"),
+    /** Ordrenummer eller referanse fra megleren. */
+    externalRef: text("external_ref"),
+    /** Hvem som bestilte (navn og firma som fritekst). */
+    orderedByText: text("ordered_by_text"),
+    /** Bestilleren i kontaktregisteret (valgfritt). Firmaet følger kontakten. */
+    orderedByContactId: uuid("ordered_by_contact_id"),
+    orderedByFirmId: uuid("ordered_by_firm_id"),
+    addressText: text("address_text").notNull(),
+    gnr: text("gnr"),
+    bnr: text("bnr"),
+    /** Seksjonsnummer. */
+    snr: text("snr"),
+    /** Borettslag eller sameie. */
+    housingAssociationName: text("housing_association_name"),
+    /** Følger med fra ordren. Ikke i skjemaet «Nytt oppdrag». */
+    sellerDeclarationReceived: boolean("seller_declaration_received").notNull().default(false),
+    /**
+     * Engangsnøkkel fra skjemaet «Nytt oppdrag» (A298): samme nøkkel to ganger gir det første
+     * oppdraget tilbake, aldri et nytt nummer. Tom for oppdrag fra ordre.
+     */
+    creationKey: uuid("creation_key"),
   },
   // Returtypen står fordi tabellene peker på hverandre (ellers klarer ikke TypeScript typene).
   (table): PgTableExtraConfigValue[] => [
@@ -68,6 +101,35 @@ export const assignments = pgTable(
     index("assignments_organization_id_status_idx")
       .on(table.organizationId, table.status)
       .where(sql`${table.deletedAt} is null`),
+    // Vern mot dobbel lagring: én nøkkel gir ett oppdrag per organisasjon (tomme er aldri like)
+    uniqueIndex("assignments_organization_id_creation_key_idx").on(
+      table.organizationId,
+      table.creationKey,
+    ),
+    // Oppdragene til en bestiller eller et firma (slå sammen kontakter og firma, avtaleforslag)
+    index("assignments_organization_id_ordered_by_contact_id_idx").on(
+      table.organizationId,
+      table.orderedByContactId,
+    ),
+    index("assignments_organization_id_ordered_by_firm_id_idx").on(
+      table.organizationId,
+      table.orderedByFirmId,
+    ),
+    // Mulig dublett: to uttrykksindekser på normalisert adresse og gnr/bnr står bare i
+    // migreringen 0034, ikke her, av samme grunn som for `orders` (uttrykkene står ett sted i
+    // kjernen, og `src/db` importerer ikke derfra).
+    // Bestilleren og firmaet må høre til samme organisasjon som oppdraget
+    foreignKey({
+      name: "assignments_ordered_by_contact_fk",
+      columns: [table.organizationId, table.orderedByContactId],
+      foreignColumns: [contacts.organizationId, contacts.id],
+    }),
+    foreignKey({
+      name: "assignments_ordered_by_firm_fk",
+      columns: [table.organizationId, table.orderedByFirmId],
+      foreignColumns: [firms.organizationId, firms.id],
+    }),
+    check("assignments_source_check", sql`${table.source} in ('manual', 'email')`),
     // Kontor og ordre må høre til samme organisasjon som oppdraget
     foreignKey({
       name: "assignments_office_fk",

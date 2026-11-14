@@ -10,7 +10,10 @@ import {
   assignmentStatusLabel,
   canCancel,
   defaultReceives,
+  findPossibleDuplicatesForAssignment,
   getAssignment,
+  getAssignmentBooking,
+  listAssignmentBookingHistory,
   listWorkQueue,
   PARTY_ROLES,
   partyRoleLabel,
@@ -28,9 +31,12 @@ import {
   yesNoUnknownLabel,
   type AssignmentProperty,
 } from "@/core/properties";
+import { logger } from "@/shared/lib/logger";
 import { todayInOslo } from "@/shared/lib/dates";
 import { isUuid } from "@/shared/lib/uuid";
 import { Card } from "@/shared/ui/card";
+import { Notice } from "@/shared/ui/notice";
+import { Detail, EMPTY } from "../../detail";
 import { getEmployeeContext } from "../../employee-context";
 import { NoAccess } from "../../no-access";
 import {
@@ -50,7 +56,12 @@ import {
   CommonAreasForm,
   type CommonAreasFormValues,
 } from "./common-areas-form";
+import { formatOsloDateTime, osloDateTimeLocal } from "../../ordre/received-at";
+import { BookingDuplicatesNotice } from "../../possible-duplicates-notice";
 import { AgreementCard } from "./agreement-card";
+import { updateAssignmentBookingAction } from "./booking-actions";
+import { BookingCard } from "./booking-card";
+import { AssignmentBookingHistory } from "./booking-history";
 import { ClaimsSection, type ClaimListItem } from "./claims-section";
 import { PartyCard } from "./party-card";
 import { AddPartySection, type PartyRoleOption } from "./party-form";
@@ -230,24 +241,70 @@ async function loadClaims(
 }
 
 /**
+ * Varselet «Mulig dublett» (T3) skal aldri gjøre oppdragssiden utilgjengelig: feiler oppslaget,
+ * vises siden uten varsel. Loggen får bare id-er og feilnavnet, aldri adresse eller matrikkel.
+ */
+async function loadDuplicates(
+  context: NonNullable<Awaited<ReturnType<typeof getEmployeeContext>>>,
+  assignmentId: string,
+) {
+  try {
+    return await findPossibleDuplicatesForAssignment(
+      context.actor,
+      context.organizationId,
+      assignmentId,
+    );
+  } catch (error) {
+    logger.error("Kunne ikke sjekke mulig dublett", {
+      route: "/oppdrag/[id]",
+      assignmentId,
+      userId: context.actor.id,
+      errorName: error instanceof Error ? error.name : "ukjent feil",
+    });
+    return { items: [], hasMore: false };
+  }
+}
+
+/** «Gnr. 12, bnr. 34, snr. 5», eller `null` når alle tre mangler. */
+function cadastreText(booking: { gnr: string | null; bnr: string | null; snr: string | null }) {
+  const parts = [
+    booking.gnr ? `Gnr. ${booking.gnr}` : null,
+    booking.bnr ? `bnr. ${booking.bnr}` : null,
+    booking.snr ? `snr. ${booking.snr}` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
+/**
  * Oppdraget med status, eiendom (og fellesdeler), team (fem roller), parter og (for leder og admin)
  * reklamasjoner. Skjemaene vises
  * bare med `canEditOrders`; selve sjekken skjer i kjernen. Ugyldig, ukjent, slettet (også
  * kansellert) og fremmed id gir
  * «Fant ikke siden».
  */
-export default async function AssignmentPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AssignmentPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id } = await params;
+  const { ny, endret } = await searchParams;
   const context = await getEmployeeContext();
   if (!context) return <NoAccess />;
   if (!isUuid(id)) notFound();
 
   let assignment: Awaited<ReturnType<typeof getAssignment>>;
   let propertyData: AssignmentProperty;
+  let bookingView: Awaited<ReturnType<typeof getAssignmentBooking>>;
+  let bookingHistory: Awaited<ReturnType<typeof listAssignmentBookingHistory>>;
   try {
-    [assignment, propertyData] = await Promise.all([
+    [assignment, propertyData, bookingView, bookingHistory] = await Promise.all([
       getAssignment(context.actor, context.organizationId, id),
       getAssignmentProperty(context.actor, context.organizationId, id),
+      getAssignmentBooking(context.actor, context.organizationId, id),
+      listAssignmentBookingHistory(context.actor, context.organizationId, id),
     ]);
   } catch (error) {
     if (error instanceof AccessDeniedError) notFound();
@@ -256,12 +313,15 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
 
   const canEdit = context.canEditOrders;
   const now = new Date();
-  const [schedule, agreements, suggestion, claims] = await Promise.all([
+  const [schedule, agreements, suggestion, claims, duplicates] = await Promise.all([
     loadSchedule(context, assignment),
     listAgreements(context.actor, context.organizationId),
     suggestAgreementForAssignment(context.actor, context.organizationId, assignment.id, now),
     loadClaims(context, assignment.id),
+    loadDuplicates(context, assignment.id),
   ]);
+  const booking = bookingView.booking;
+  const cadastre = cadastreText(booking);
   // Statusen er alltid en av de fire kodene (CHECK i databasen); ukjent kode gir ingen knapper.
   const status = ASSIGNMENT_STATUSES.find((code) => code === assignment.status) ?? null;
   const { next, previous } = status ? allowedTransitions(status) : { next: null, previous: null };
@@ -290,6 +350,22 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
           Oppdrag <span className="tabular-nums">{assignment.number}</span>
         </h1>
       </div>
+      {/* Kvitteringene: nummeret kommer fra oppdraget, aldri fra adressen. */}
+      {ny === "1" && (
+        <div className="mb-4">
+          <Notice message={`Oppdrag ${assignment.number} er lagret.`} />
+        </div>
+      )}
+      {endret === "1" && (
+        <div className="mb-4">
+          <Notice message="Endringene er lagret." />
+        </div>
+      )}
+      <BookingDuplicatesNotice
+        items={duplicates.items}
+        hasMore={duplicates.hasMore}
+        className="mb-4"
+      />
       <StatusCard
         key={assignment.status}
         assignmentId={assignment.id}
@@ -328,6 +404,62 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
           </p>
         )}
       </div>
+
+      <BookingCard
+        key={bookingView.rowVersion}
+        assignmentId={assignment.id}
+        rowVersion={bookingView.rowVersion}
+        canEdit={canEdit}
+        sellerDeclarationReceived={booking.sellerDeclarationReceived}
+        action={updateAssignmentBookingAction}
+        defaults={{
+          addressText: booking.addressText,
+          receivedAt: osloDateTimeLocal(new Date(booking.receivedAt)),
+          externalRef: booking.externalRef ?? "",
+          orderedByText: booking.orderedByText ?? "",
+          orderedByContact: booking.orderedByContactId
+            ? {
+                id: booking.orderedByContactId,
+                name: booking.orderedByContactName ?? "(fjernet kontakt)",
+              }
+            : null,
+          gnr: booking.gnr ?? "",
+          bnr: booking.bnr ?? "",
+          snr: booking.snr ?? "",
+          housingAssociationName: booking.housingAssociationName ?? "",
+        }}
+      >
+        <dl>
+          <Detail label="Adresse">{booking.addressText}</Detail>
+          <Detail label="Matrikkel">{cadastre ?? EMPTY}</Detail>
+          <Detail label="Hvem bestilte">
+            {booking.orderedByText || EMPTY}
+            {booking.orderedByContactId && (
+              <Link
+                href={`/kontakter/${booking.orderedByContactId}`}
+                className="mt-1 flex min-h-11 w-fit items-center font-medium text-brand-700 underline"
+              >
+                Kontakt i registeret
+                <span aria-hidden="true">&nbsp;›</span>
+              </Link>
+            )}
+          </Detail>
+          <Detail label="Meglerens ordrenummer">{booking.externalRef || EMPTY}</Detail>
+          <Detail label="Borettslag eller sameie">{booking.housingAssociationName || EMPTY}</Detail>
+          <Detail label="Mottatt">{formatOsloDateTime(booking.receivedAt)}</Detail>
+          {assignment.orderId && (
+            <Detail label="Fra ordre">
+              <Link
+                href={`/ordre/${assignment.orderId}`}
+                className="flex min-h-11 w-fit items-center font-medium text-brand-700 underline"
+              >
+                Åpne ordren
+              </Link>
+            </Detail>
+          )}
+        </dl>
+      </BookingCard>
+      <AssignmentBookingHistory entries={bookingHistory} />
 
       <AgreementCard
         key={assignment.agreement?.id ?? "none"}
