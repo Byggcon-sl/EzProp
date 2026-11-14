@@ -9,4 +9,4 @@ Lag en spesifikasjon for: $ARGUMENTS
 2. Sjekk at funksjonen hører til gjeldende fase. Hvis ikke: si fra og stopp.
 3. Fyll ut malen i `docs/maler/funksjon.md` og lagre som `docs/funksjoner/<fase>-<kort-navn>.md`. Si hvilket hovedmål den støtter, og svar på «KI først».
 4. Hold omfanget lite. Skriv eksplisitt hva som er utelatt.
-5. Ta fornuftige tekniske valg der det er uklart, og skriv dem under «Åpne spørsmål». Fag, pris, personvern og nye funksjoner avgjøres av Ståle: legg dem i `docs/09-apne-sporsmal.md`.
+5. Ta fornuftige tekniske valg der det er uklart, og skriv dem under «Åpne spørsmål». Fag, pris og personvern avgjøres av Ståle: legg dem i `docs/09-apne-sporsmal.md`. Nye funksjoner bygges bare når forbedreren har foreslått dem («Forbedreren» i `CLAUDE.md`).
