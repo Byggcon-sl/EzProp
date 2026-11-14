@@ -4,7 +4,7 @@
 - **Funn:** `docs/agenter/testlag/funn/T-0050-nedtrekkslister-hopper-tilbake-etter-feil.md`
 - **Støtter hovedmål:** færre reklamasjoner (riktig arealtype lagres), best for de ansatte (valget står igjen etter feil).
 
-## E2e: `e2e/fase-2a-rett-t0050-arealtype.spec.ts` (kjører i prosjektene pc og ipad)
+## E2e: `e2e/fase-2a-rett-t0050-arealtype-takstmann.spec.ts` (kjører i prosjektene pc og ipad)
 
 Oppsett per test: logg inn som takstmann, lag eget oppdrag med `uniqueSuffix()` (som i `e2e/fase-2a-rett-t0050-valg-etter-feil.spec.ts`), åpne «Bygninger, areal og rom», legg til bygning og én etasje over terreng (se `e2e/fase-2a-bygninger-areal-rom.spec.ts` for stegene). Testdata er oppdiktet. Navnet med elleve sifre er `12345678901` (oppdiktet, gir feil fordi det ligner fødselsnummer).
 

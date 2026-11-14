@@ -22,7 +22,7 @@ KI gjør ikke noe nytt her. Rettingen sikrer at dataene KI senere bruker (romtyp
 
 ## Omfang
 **Med:**
-1. **Rød test først:** e2e `e2e/fase-2a-rett-t0050-arealtype.spec.ts` som gjør stegene i funnet, på PC og iPad (begge prosjektene):
+1. **Rød test først:** e2e `e2e/fase-2a-rett-t0050-arealtype-takstmann.spec.ts` som gjør stegene i funnet, på PC og iPad (begge prosjektene):
    - Kjøkken, Arealtype BRA-e, kryss av «Under terreng», navn `12345678901`, Lagre → feilmelding. Sjekk at Arealtype står på BRA-e og «Under terreng» er krysset av. Rett navnet, lagre, og sjekk i listen over rom (og helst i databasen) at rommet har BRA-e.
    - Det samme med «Bod, inne» og BRA-b.
    - Testen skal være rød på `main` før rettingen (skriv i PR-en at den var rød).
