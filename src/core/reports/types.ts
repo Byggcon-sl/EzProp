@@ -39,7 +39,7 @@ import type { CheckpointStatus, CheckpointTg, CheckpointWarning } from "./logic/
 type MutuallyAssignable<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 type Assert<T extends true> = T;
 /**
- * Lagret forslag og forslaget fra regelmotoren skal ha samme form (ADR 0009 og 0011). Endres den
+ * Lagret forslag og forslaget fra regelmotoren skal ha samme form (ADR 0009 og 0013). Endres den
  * ene uten den andre, stopper typesjekken her.
  */
 export type StoredSuggestionMatchesRuleEngine = Assert<

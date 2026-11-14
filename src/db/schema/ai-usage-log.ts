@@ -28,7 +28,7 @@ import { reports } from "./reports";
  * `ai.rejected_retention_years` (1–10, standard 10), alle andre `created_at` + 10 år.
  * `source_fields` har bare feltkoder og `input_summary` bare feltnavn og antall tegn, aldri tekst.
  * `report_id` peker på rapporten i samme organisasjon (sammensatt fremmednøkkel fra migrering
- * `0034`, A158). `reports.ts` og denne filen importerer hverandre; det går bra fordi tabellene
+ * `0035_badet-pc`, A158). `reports.ts` og denne filen importerer hverandre; det går bra fordi tabellene
  * bare leses inne i funksjonen som bygger nøkler og indekser.
  *
  * Kodene under er faste (regel 6). CHECK-reglene må ha de samme kodene.
