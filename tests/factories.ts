@@ -13,14 +13,18 @@ import {
   auditLog,
   cadastralUnits,
   certifications,
+  checkpointResults,
   checkpoints,
   commonAreas,
   companies,
   contacts,
+  deviationMeasures,
   deviationQuestions,
+  deviations,
   employeePermissions,
   employeeRoleAssignments,
   employees,
+  fieldAnswers,
   files,
   firms,
   integrationConnections,
@@ -30,8 +34,10 @@ import {
   organizations,
   outcomes,
   properties,
+  reports,
   ruleConditions,
   rules,
+  ruleSuggestionDecisions,
   ruleTestCases,
   standardMeasures,
   templateElementOptions,
@@ -39,6 +45,7 @@ import {
   templateFamilies,
   templateSections,
   templateVersions,
+  tgiuDetails,
   users,
   workSessions,
   type EmployeeRole,
@@ -51,6 +58,14 @@ import { uuidv7 } from "@/shared/lib/uuid";
  * sjekker at alle tabellene i databasen står i listen.
  */
 export const RESET_TABLES = [
+  // Rapporten (Badet på PC, ADR 0011). Før KI-loggen, malene, rommene og oppdragene de peker på.
+  "rule_suggestion_decisions",
+  "tgiu_details",
+  "deviation_measures",
+  "deviations",
+  "field_answers",
+  "checkpoint_results",
+  "reports",
   // Før employees og assignments, som den peker på (KI-loggen, fase 2a-1)
   "ai_usage_log",
   "rule_test_cases",
@@ -1651,4 +1666,193 @@ export async function createAiUsageLog(
   const [row] = result as unknown as TestAiUsageRow[];
   if (!row) throw new Error("kunne ikke opprette rad i ai_usage_log");
   return row;
+}
+
+// --- Rapporten (Badet på PC, ADR 0011) ---------------------------------------------------------
+//
+// Rå rader uten tjenesten, slik at testene kan prøve databasen direkte (CHECK, unike nøkler og
+// sammensatte fremmednøkler). Foreldre lages når id-en mangler. Alle verdier er oppdiktede.
+
+type ReportOverrides<T> = Partial<Omit<T, "organizationId">>;
+
+/** En rapport under arbeid. Lager oppdrag og malversjon når de mangler. */
+export async function createReportRow(
+  organizationId: string,
+  overrides: ReportOverrides<typeof reports.$inferInsert> = {},
+) {
+  const assignmentId = overrides.assignmentId ?? (await createAssignment(organizationId)).id;
+  const templateVersionId =
+    overrides.templateVersionId ?? (await createTemplateVersionRow(organizationId)).id;
+  return insertedRow(
+    await db
+      .insert(reports)
+      .values({
+        id: uuidv7(),
+        reportType: "condition_report",
+        ...overrides,
+        assignmentId,
+        templateVersionId,
+        organizationId,
+      })
+      .returning(),
+    "reports",
+  );
+}
+
+/** Resultatet for et kontrollpunkt i et rom. Lager rapport, kontrollpunkt og rom når de mangler. */
+export async function createCheckpointResultRow(
+  organizationId: string,
+  overrides: ReportOverrides<typeof checkpointResults.$inferInsert> = {},
+) {
+  const reportId = overrides.reportId ?? (await createReportRow(organizationId)).id;
+  const checkpointId = overrides.checkpointId ?? (await createCheckpointRow(organizationId)).id;
+  const hasPlace = "roomId" in overrides || "reportBuildingId" in overrides;
+  const roomId = hasPlace ? (overrides.roomId ?? null) : (await createRoom(organizationId)).id;
+  return insertedRow(
+    await db
+      .insert(checkpointResults)
+      .values({ id: uuidv7(), ...overrides, reportId, checkpointId, roomId, organizationId })
+      .returning(),
+    "checkpoint_results",
+  );
+}
+
+/** Et svar på et felt i et rom. Lager rapport, felt og rom når de mangler. */
+export async function createFieldAnswerRow(
+  organizationId: string,
+  overrides: ReportOverrides<typeof fieldAnswers.$inferInsert> = {},
+) {
+  const reportId = overrides.reportId ?? (await createReportRow(organizationId)).id;
+  const elementId = overrides.elementId ?? (await createTemplateElementRow(organizationId)).id;
+  const roomId = "roomId" in overrides ? overrides.roomId : (await createRoom(organizationId)).id;
+  return insertedRow(
+    await db
+      .insert(fieldAnswers)
+      .values({
+        id: uuidv7(),
+        valueText: "Testsvar",
+        ...overrides,
+        reportId,
+        elementId,
+        roomId,
+        organizationId,
+      })
+      .returning(),
+    "field_answers",
+  );
+}
+
+/** Et avvik med TG3 skrevet fritt. Lager kontrollpunktresultatet (og rapporten) når det mangler. */
+export async function createDeviationRow(
+  organizationId: string,
+  overrides: ReportOverrides<typeof deviations.$inferInsert> = {},
+) {
+  const parent =
+    overrides.checkpointResultId && overrides.reportId
+      ? { id: overrides.checkpointResultId, reportId: overrides.reportId }
+      : await createCheckpointResultRow(organizationId, { reportId: overrides.reportId });
+  return insertedRow(
+    await db
+      .insert(deviations)
+      .values({
+        id: uuidv7(),
+        kind: "tg",
+        tg: 3,
+        deviationText: "Testavvik",
+        textSource: "free",
+        ...overrides,
+        reportId: parent.reportId,
+        checkpointResultId: parent.id,
+        organizationId,
+      })
+      .returning(),
+    "deviations",
+  );
+}
+
+/** Et tiltak. Lager avviket når det mangler. */
+export async function createDeviationMeasureRow(
+  organizationId: string,
+  overrides: ReportOverrides<typeof deviationMeasures.$inferInsert> = {},
+) {
+  const parent =
+    overrides.deviationId && overrides.reportId
+      ? { id: overrides.deviationId, reportId: overrides.reportId }
+      : await createDeviationRow(organizationId, { reportId: overrides.reportId });
+  return insertedRow(
+    await db
+      .insert(deviationMeasures)
+      .values({
+        id: uuidv7(),
+        text: "Testtiltak",
+        textSource: "free",
+        ...overrides,
+        reportId: parent.reportId,
+        deviationId: parent.id,
+        organizationId,
+      })
+      .returning(),
+    "deviation_measures",
+  );
+}
+
+/** Opplysninger ved TGIU. Lager kontrollpunktresultatet med `tg_direct = IU` når det mangler. */
+export async function createTgiuDetailsRow(
+  organizationId: string,
+  overrides: ReportOverrides<typeof tgiuDetails.$inferInsert> = {},
+) {
+  const parent =
+    overrides.checkpointResultId && overrides.reportId
+      ? { id: overrides.checkpointResultId, reportId: overrides.reportId }
+      : await createCheckpointResultRow(organizationId, {
+          reportId: overrides.reportId,
+          tgDirect: "IU",
+        });
+  return insertedRow(
+    await db
+      .insert(tgiuDetails)
+      .values({
+        id: uuidv7(),
+        ...overrides,
+        reportId: parent.reportId,
+        checkpointResultId: parent.id,
+        organizationId,
+      })
+      .returning(),
+    "tgiu_details",
+  );
+}
+
+/** En godtatt beslutning om et TGIU-forslag. Lager kontrollpunktresultat og ansatt når de mangler. */
+export async function createRuleSuggestionDecisionRow(
+  organizationId: string,
+  overrides: ReportOverrides<typeof ruleSuggestionDecisions.$inferInsert> = {},
+) {
+  const parent =
+    overrides.checkpointResultId && overrides.reportId
+      ? { id: overrides.checkpointResultId, reportId: overrides.reportId }
+      : await createCheckpointResultRow(organizationId, { reportId: overrides.reportId });
+  const decidedBy =
+    overrides.decidedBy ??
+    (await createEmployee(await createUser(), organizationId, ["inspector"])).id;
+  return insertedRow(
+    await db
+      .insert(ruleSuggestionDecisions)
+      .values({
+        id: uuidv7(),
+        ruleKey: "test.rule",
+        suggestion: { kind: "tgiu", checkpoint_key: "test.checkpoint" },
+        reasons: [],
+        inspectionYear: 2026,
+        decision: "accepted",
+        chosenTg: "IU",
+        ...overrides,
+        reportId: parent.reportId,
+        checkpointResultId: parent.id,
+        decidedBy,
+        organizationId,
+      })
+      .returning(),
+    "rule_suggestion_decisions",
+  );
 }

@@ -502,13 +502,23 @@ export const outcomes = pgTable(
 );
 export type Outcome = typeof outcomes.$inferSelect;
 
-/** Standardtiltak. Uten fast kode: erstattes samlet per utfall når listen endres (A142). */
+/** TG et standardtiltak kan gjelde for (`applies_to_tg`). */
+export const MEASURE_APPLIES_TO_TG = [2, 3] as const;
+export type MeasureAppliesToTg = (typeof MEASURE_APPLIES_TO_TG)[number];
+
+/**
+ * Standardtiltak. Uten fast kode: erstattes samlet per utfall når listen endres (A142).
+ * `applies_to_tg` (T-0060, migrering `0034`): tom = tiltaket gjelder uansett TG; 2 eller 3 = bare
+ * for den TG-en. Brukes på utfall av typen `choose_tg2_tg3` (bør ved TG2, må ved TG3); at verdien
+ * bare står der, kontrolleres i `@/core/templates`.
+ */
 export const standardMeasures = pgTable(
   "standard_measures",
   {
     ...baseColumns,
     outcomeId: uuid("outcome_id").notNull(),
     text: text("text").notNull(),
+    appliesToTg: integer("applies_to_tg").$type<MeasureAppliesToTg>(),
     textStatus: textStatus(),
     sortOrder: sortOrder(),
   },
@@ -523,6 +533,10 @@ export const standardMeasures = pgTable(
       foreignColumns: [outcomes.organizationId, outcomes.id],
     }),
     check("standard_measures_text_status_check", inList(table.textStatus, TEXT_STATUSES)),
+    check(
+      "standard_measures_applies_to_tg_check",
+      sql`${table.appliesToTg} is null or ${table.appliesToTg} in (2, 3)`,
+    ),
   ],
 );
 export type StandardMeasure = typeof standardMeasures.$inferSelect;

@@ -404,3 +404,50 @@ tsRuleTester.run("module-boundaries: src/core/rules (testplan 8)", rule, {
     })),
   ],
 });
+
+// De rene funksjonene for rapporten (ADR 0011, docs/funksjoner/fase2a-badet-pc.md Omfang 3):
+// klientkomponentene importerer herfra, så ingenting her kan dra med databasen eller pakker.
+const REPORTS_LOGIC_FILE = "/repo/src/core/reports/logic/tg.ts";
+
+tsRuleTester.run("module-boundaries: src/core/reports/logic", rule, {
+  valid: [
+    { filename: REPORTS_LOGIC_FILE, code: 'import { x } from "./codes";' },
+    { filename: REPORTS_LOGIC_FILE, code: 'import { x } from "@/core/reports/logic/cost-bands";' },
+    { filename: REPORTS_LOGIC_FILE, code: 'import { x } from "@/shared/lib/cn";' },
+    { filename: REPORTS_LOGIC_FILE, code: 'import { evaluateRules } from "@/core/rules";' },
+    { filename: REPORTS_LOGIC_FILE, code: 'import type { RuleResult } from "@/core/rules";' },
+    { filename: REPORTS_LOGIC_FILE, code: 'import type { RoomReportView } from "../types";' },
+    {
+      filename: REPORTS_LOGIC_FILE,
+      code: 'import type { TemplateDocument } from "@/core/templates";',
+    },
+    { filename: REPORTS_LOGIC_FILE, code: 'import type { TgDirect } from "@/db/schema";' },
+    // Testfiler er unntatt
+    { filename: "/repo/src/core/reports/logic/tg.test.ts", code: 'import { it } from "vitest";' },
+    // Resten av rapportkjernen og skjermene kan bruke bladet og databasen
+    { filename: "/repo/src/core/reports/service.ts", code: 'import { db } from "@/db/client";' },
+    { filename: "/repo/src/core/reports/service.ts", code: 'import { x } from "./logic";' },
+    { filename: "/repo/src/app/page.tsx", code: 'import { x } from "@/core/reports/logic";' },
+  ],
+  invalid: [
+    ...[
+      'import { db } from "@/db/client";',
+      'import { COST_TYPES } from "@/db/schema";',
+      'import { saveFieldChange } from "../service";',
+      'import { x } from "@/core/reports";',
+      'import { parseTemplateDocument } from "@/core/templates";',
+      'import { x } from "@/core/access";',
+      'import { x } from "@/core/ai";',
+      'import type { AiFeature } from "@/core/ai";',
+      'import type { Actor } from "@/core/access";',
+      'import { z } from "zod";',
+      'import "server-only";',
+      'import { readFile } from "node:fs";',
+      'const m = import("@/db/schema");',
+    ].map((code) => ({
+      filename: REPORTS_LOGIC_FILE,
+      code,
+      errors: [{ messageId: "reportsLogicLeaf" }],
+    })),
+  ],
+});

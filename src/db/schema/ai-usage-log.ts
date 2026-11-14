@@ -7,13 +7,16 @@ import {
   jsonb,
   numeric,
   pgTable,
+  type PgTableExtraConfigValue,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { assignments } from "./assignments";
 import { baseColumns } from "./common";
 import { employees } from "./employees";
+import { reports } from "./reports";
 
 /**
  * KI-loggen (docs/adr/0006-ki-i-bunnen.md del 5, docs/funksjoner/fase2a-ki-modul-logg.md).
@@ -24,7 +27,9 @@ import { employees } from "./employees";
  * ved ny rad og ved hver statusendring: avviste får `created_at` + innstillingen
  * `ai.rejected_retention_years` (1–10, standard 10), alle andre `created_at` + 10 år.
  * `source_fields` har bare feltkoder og `input_summary` bare feltnavn og antall tegn, aldri tekst.
- * `report_id` har ingen fremmednøkkel før `reports` finnes (A158).
+ * `report_id` peker på rapporten i samme organisasjon (sammensatt fremmednøkkel fra migrering
+ * `0034`, A158). `reports.ts` og denne filen importerer hverandre; det går bra fordi tabellene
+ * bare leses inne i funksjonen som bygger nøkler og indekser.
  *
  * Kodene under er faste (regel 6). CHECK-reglene må ha de samme kodene.
  */
@@ -67,7 +72,7 @@ export const aiUsageLog = pgTable(
     model: text("model").notNull(),
     promptVersion: text("prompt_version").notNull(),
     assignmentId: uuid("assignment_id"),
-    /** Ingen fremmednøkkel før `reports` finnes (A158). */
+    /** Rapporten forslaget gjelder. Samme organisasjon (sammensatt fremmednøkkel). */
     reportId: uuid("report_id"),
     targetRef: jsonb("target_ref").$type<AiTargetRef>().notNull(),
     /** Bare feltkoder, aldri verdier. */
@@ -89,8 +94,10 @@ export const aiUsageLog = pgTable(
     redactedCount: integer("redacted_count").notNull().default(0),
     retainUntil: timestamp("retain_until", { withTimezone: true }).notNull(),
   },
-  (table) => [
+  (table): PgTableExtraConfigValue[] => [
     index("ai_usage_log_organization_id_idx").on(table.organizationId),
+    // Mål for `ai_usage_id` på svar og avvik (samme organisasjon)
+    uniqueIndex("ai_usage_log_organization_id_id_idx").on(table.organizationId, table.id),
     // Forrige forslag på samme mål som fortsatt venter på avgjørelse
     index("ai_usage_log_open_target_idx")
       .on(table.organizationId, table.feature, table.targetRef)
@@ -110,6 +117,11 @@ export const aiUsageLog = pgTable(
       name: "ai_usage_log_assignment_fk",
       columns: [table.organizationId, table.assignmentId],
       foreignColumns: [assignments.organizationId, assignments.id],
+    }),
+    foreignKey({
+      name: "ai_usage_log_report_fk",
+      columns: [table.organizationId, table.reportId],
+      foreignColumns: [reports.organizationId, reports.id],
     }),
     check("ai_usage_log_outcome_check", sql`${table.outcome} in (${sqlList(AI_OUTCOMES)})`),
     check(

@@ -11,12 +11,20 @@ import path from "node:path";
  * - Regelmotoren (src/core/rules) er et rent blad som kjører likt på iPaden og på serveren: bare
  *   egen mappe og shared, og bare `import type` fra malmotoren og databaseskjemaet. Ingen pakker.
  *   Malmotoren (src/core/templates) importerer ikke regelmotoren (docs/adr/0009-regelmotoren.md).
+ * - De rene funksjonene for rapporten (src/core/reports/logic) er et rent blad som kjører likt i
+ *   nettleseren og på serveren: bare egen mappe, shared og regelmotoren, og bare `import type` fra
+ *   resten av src/core/reports, malmotoren og databaseskjemaet. Ingen pakker
+ *   (docs/adr/0011-rapportens-datamodell.md).
  */
 
 const RULES = "core/rules";
 /** Bare `import type` herfra: malmotoren og skjemaet drar med databasen. */
 const RULES_TYPE_ONLY_TARGETS = ["core/templates", "db/schema"];
 const TEMPLATES = "core/templates";
+
+const REPORTS_LOGIC = "core/reports/logic";
+/** Bare `import type` herfra: resten av rapportkjernen, malmotoren og skjemaet drar med databasen. */
+const REPORTS_LOGIC_TYPE_ONLY_TARGETS = ["core/reports", "core/templates", "db/schema"];
 
 /** @param {string} target @param {string} dir */
 function isInDir(target, dir) {
@@ -86,6 +94,8 @@ const rule = {
         "Klientdelen av KI-modulen kan ikke importere «{{to}}». Lov: egen mappe, ../limits, @/shared og zod, og bare «import type» fra ../types og ../features (ADR 0006 del 10).",
       rulesLeaf:
         "Regelmotoren kan ikke importere «{{to}}». Lov: egen mappe og @/shared, og bare «import type» fra @/core/templates og @/db/schema. Ingen pakker (ADR 0009).",
+      reportsLogicLeaf:
+        "De rene funksjonene for rapporten kan ikke importere «{{to}}». Lov: egen mappe, @/shared og @/core/rules, og bare «import type» fra @/core/reports, @/core/templates og @/db/schema. Ingen pakker (ADR 0011).",
       templatesToRules:
         "Malmotoren (@/core/templates) kan ikke importere regelmotoren (@/core/rules) (ADR 0009).",
       aiClientImporter:
@@ -102,6 +112,7 @@ const rule = {
     const fromAiClient = isAiClient(fromFile) && !isTestFile;
     const fromRules = isInDir(fromFile, RULES) && !isTestFile;
     const fromTemplates = isInDir(fromFile, TEMPLATES) && !isTestFile;
+    const fromReportsLogic = isInDir(fromFile, REPORTS_LOGIC) && !isTestFile;
 
     /** @type {Record<string, string[]>} */
     const forbidden = {
@@ -141,6 +152,19 @@ const rule = {
           : false;
         if (!allowed) {
           context.report({ node, messageId: "rulesLeaf", data: { to: value } });
+          return;
+        }
+      }
+
+      if (fromReportsLogic) {
+        const allowed = target
+          ? isInDir(target, REPORTS_LOGIC) ||
+            target.startsWith("shared/") ||
+            isInDir(target, RULES) ||
+            (typeOnly && REPORTS_LOGIC_TYPE_ONLY_TARGETS.some((dir) => isInDir(target, dir)))
+          : false;
+        if (!allowed) {
+          context.report({ node, messageId: "reportsLogicLeaf", data: { to: value } });
           return;
         }
       }

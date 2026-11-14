@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
@@ -8,6 +9,7 @@ import {
   createAssignment,
   createEmployee,
   createOrganization,
+  createReportRow,
   createUser,
   resetDatabase,
   type AiUsageLogOverrides,
@@ -140,21 +142,21 @@ describe("ai_usage_log: sammensatte fremmednøkler (1.2–1.5)", () => {
     expect(ok.assignment_id).toBe(assignmentA.id);
   });
 
-  it("1.5 report_id kan være tom, og har ingen fremmednøkkel (A158)", async () => {
-    const { orgA, employeeA } = await twoOrganizations();
+  it("1.5 report_id kan være tom, og peker ellers på en rapport i samme organisasjon (A158)", async () => {
+    const { orgA, orgB, employeeA } = await twoOrganizations();
     const empty = await createAiUsageLog(orgA.id, { employeeId: employeeA.id, reportId: null });
     expect(empty.report_id).toBeNull();
-    const foreignKeys = (await db.execute(sql`
-      select kcu.column_name from information_schema.table_constraints tc
-      join information_schema.key_column_usage kcu
-        on kcu.constraint_name = tc.constraint_name and kcu.table_schema = tc.table_schema
-      where tc.table_schema = 'public' and tc.table_name = 'ai_usage_log'
-        and tc.constraint_type = 'FOREIGN KEY'`)) as unknown as { column_name: string }[];
-    const columnsWithForeignKey = new Set(foreignKeys.map((row) => row.column_name));
-    expect(columnsWithForeignKey.has("report_id")).toBe(false);
-    for (const name of ["organization_id", "employee_id", "decided_by", "assignment_id"]) {
-      expect(columnsWithForeignKey.has(name), name).toBe(true);
-    }
+
+    const reportA = await createReportRow(orgA.id);
+    const reportB = await createReportRow(orgB.id);
+    const ok = await createAiUsageLog(orgA.id, { employeeId: employeeA.id, reportId: reportA.id });
+    expect(ok.report_id).toBe(reportA.id);
+    await expectRejected(() =>
+      createAiUsageLog(orgA.id, { employeeId: employeeA.id, reportId: reportB.id }),
+    );
+    await expectRejected(() =>
+      createAiUsageLog(orgA.id, { employeeId: employeeA.id, reportId: randomUUID() }),
+    );
   });
 });
 

@@ -837,6 +837,7 @@ TG3 krever alltid kostnad. Det trenger ikke lagres, det følger av `kind`.
 |---|---|
 | `outcome_id` | Utfallet |
 | `text` | Tiltaket |
+| `applies_to_tg` | TG tiltaket gjelder for: tom = uansett TG, `2` eller `3` = bare den TG-en. Bare på utfall av typen `choose_tg2_tg3` (bør ved TG2, må ved TG3, T-0060). Migrering `0034` |
 | `sort_order` | Rekkefølge |
 
 **`rules`** – **regler som data**. Fagansvarlig lager dem i et skjema, ikke i kode.
@@ -1064,6 +1065,8 @@ Koblingen går til **faste koder**, ikke til en bestemt malversjon. Da følger f
 | `copied_from_report_id` | Rapporten data ble kopiert fra |
 | `training` | **Øvingsrapport** (ja/nei). Krok for skyggemodus (`moonshots` B6): en ny takstmann gjør samme befaring på egen iPad, og rapportene sammenlignes punkt for punkt. En øvingsrapport kan aldri publiseres eller sendes. |
 
+**Bygget i fase 2a (14.11.2026, «Badet på PC», migrering `0034_badet-pc`, ADR 0011):** `assignment_id`, `template_version_id`, `report_type` og `status`. De andre feltene kommer med funksjonene som bruker dem. **Én gjeldende rapport per oppdrag:** delvis unik indeks på (`organization_id`, `assignment_id`) for rader som ikke er slettet eller `superseded`. Bygninger og rom har ikke `report_id` (A94, A322). Alle barnetabellene under har `report_id` og peker på forelderen med (`organization_id`, `report_id`, forelderens id), slik at en rad aldri kan henge på en annen rapport (A326).
+
 **`inspections`** – **befaringer**. **En rapport kan ha flere befaringer** (innspill D2), for eksempel når taket var snødekt første gang og takstmannen kommer tilbake, eller når megler ber om tilleggsbefaring av garasjen.
 
 | Felt | Forklaring |
@@ -1101,13 +1104,13 @@ Hver befaring har egen dato, egne forhold og egne tilstedeværende. Hvert kontro
 | `value_number` | Tall |
 | `value_bool` | Avkrysning |
 | `value_date` | Dato |
-| `value_option_keys` | Valgte valg (koder) |
+| `value_option_keys` | Valgte valg (koder). Tom = ikke svart |
 | `value_json` | Tabell og signatur |
 | `field_clock` | **Versjon per felt** (se 4.11) |
 | `ai_usage_id` | Satt når teksten kom fra et KI-forslag som takstmannen godtok (status `accepted` eller `edited` i `ai_usage_log`, se 4.12 og ADR 0006). Forslaget ligger aldri i verdien før det er godtatt. Ved angre tømmes feltet. Andre tabeller som kan få KI-tekst (avvik, sammendrag, `peer_review_comments`, ordre fra e-post, fraser), merkes på samme måte |
 | `instrument_id` | Måleinstrumentet, for tall som er målt (krok B3, se `instruments`). I tabeller (for eksempel hulltakingsmålinger) lagres det per rad. |
 
-**Hvor svaret hører hjemme** er tre ekte koblinger (bygning, rom, kontrollpunkt) pluss `repeat_index`, ikke en tekstnøkkel (innspill D3). Det er lettere å spørre på, kan ikke skrives feil, og tåler kopiering og synk. Unik nøkkel: (`report_id`, `element_id`, `report_building_id`, `room_id`, `checkpoint_result_id`, `repeat_index`).
+**Hvor svaret hører hjemme** er tre ekte koblinger (bygning, rom, kontrollpunkt) pluss `repeat_index`, ikke en tekstnøkkel (innspill D3). Det er lettere å spørre på, kan ikke skrives feil, og tåler kopiering og synk. Unik nøkkel: (`report_id`, `element_id`, `report_building_id`, `room_id`, `checkpoint_result_id`, `repeat_index`). Nøkkelen holder også når koblingene er tomme: indeksen bruker `coalesce` mot en fast tom id og gjelder rader som ikke er slettet (A327). **Bygget 14.11.2026:** `value_text`, `value_number`, `value_option_keys` og `ai_usage_id`. `value_bool`, `value_date`, `value_json`, `text_crdt`, `field_clock` og `instrument_id` kommer når de brukes. KI-målet for et svar har typen `field_answer` (A325).
 
 **`checkpoint_results`** – resultatet per kontrollpunkt (per bygning eller per rom).
 
@@ -1117,8 +1120,8 @@ Hver befaring har egen dato, egne forhold og egne tilstedeværende. Hvert kontro
 | `report_building_id` / `room_id` | Hvor punktet gjelder |
 | `inspection_id` | Befaringen punktet ble vurdert i (innspill D2) |
 | `tg_direct` | TG satt direkte når det **ikke** er avvik: `0`, `1` eller `IU`. **TGIU registreres bare her**, ikke som avvik (innspill D1). |
-| `tg_computed` | **TG for punktet = høyeste TG blant avvikene**, ellers `tg_direct`. Regnes ut, lagres for lister og PDF. |
-| `not_applicable` | Gjelder ikke (for eksempel ingen krypkjeller) |
+| `tg_computed` | **TG for punktet = høyeste TG blant avvikene**, ellers `tg_direct`. **Lagres ikke** (A317): regnes av `computeCheckpointTg` i `src/core/reports/logic` hver gang den leses. |
+| `not_applicable` | Gjelder ikke (for eksempel ingen krypkjeller). Kommer i 2a-3 |
 | `not_applicable_reason` | Kort begrunnelse for «gjelder ikke». **Påkrevd når punktet er obligatorisk**, ellers blir «gjelder ikke» en bakdør forbi sperren (innspill D6). |
 | `description_text` | Beskrivelse av hva som er der og hvordan det er undersøkt |
 | `done` | Takstmannen har merket punktet som ferdig |
@@ -1132,22 +1135,24 @@ Et punkt kan være TGIU **og** ha et HMS-avvik (for eksempel loft uten adkomst d
 |---|---|
 | `checkpoint_result_id` | Kontrollpunktet |
 | `deviation_question_id`, `outcome_id` | Spørsmål og utfall (tomt for avvik skrevet fritt) |
-| `kind` | `tg2`, `tg3` eller `hms`. (`tgiu` er tatt ut, se `checkpoint_results`, innspill D1.) |
-| `tg` | TG: `2` eller `3`. Tomt for HMS. |
+| `kind` | `tg` (avvik med tilstandsgrad) eller `hms` (A328; var `tg2`/`tg3`/`hms`). (`tgiu` er tatt ut, se `checkpoint_results`, innspill D1.) |
+| `tg` | TG: `2` eller `3`. Tomt for HMS, og for `tg` til takstmannen har valgt («velg TG2 eller TG3», gir advarsel). |
 | `deviation_text` | Hva som er galt (avvikstekst) |
 | `cause_text` | **Årsak – begrunnelse:** hvorfor denne TG-en |
 | `cause_criterion` | **Årsak – kriterium:** `symptom_of_damage` (symptom på skade), `age_uncertain_function` (usikker funksjon på grunn av alder), `significant_deviation` (vesentlig avvik), `functional_failure` (funksjonssvikt), `danger_to_life_health` (fare for liv og helse), `missing_documentation` (manglende dokumentasjon, for eksempel våtrom uten dokumentert utførelse, innspill D7), `other` |
 | `consequence_text` | Konsekvens |
 | `cost_type` | `band` (intervall), `approx` (eget beløp i stedet for intervall), `none` |
-| `cost_band_id` | Valgt intervall |
-| `cost_amount` | Eget beløp i stedet for intervall. **Rundes ikke av automatisk.** Sjekken `cost_amount_not_rounded` gir **advarsel** (ikke sperre) hvis beløpet ikke er rundet av til minst nærmeste 10 000, for eksempel 37 500 (beslutning 27.10.2026, erstatter «vises avrundet med ca.» fra 25.10). |
+| `cost_band_key` | Valgt intervall (fast kode fra `COST_BANDS` i `src/core/reports/logic/cost-bands.ts`; tabell i 2a-3 med de samme kodene). CHECK: `band` krever kode, `approx` krever beløp over 0, `none` ingen av delene |
+| `cost_amount` | Eget beløp i stedet for intervall, i hele kroner. **Rundes ikke av automatisk.** Sjekken `cost_amount_not_rounded` gir **advarsel** (ikke sperre) hvis beløpet ikke er rundet av til minst nærmeste 10 000, for eksempel 37 500 (beslutning 27.10.2026, erstatter «vises avrundet med ca.» fra 25.10). |
 | `cost_text` | Valgfri kostnadstekst, også fra fraser |
 | `suggested_by_rule_id` | Regelen som foreslo avviket (tomt hvis takstmannen la det inn selv) |
-| `suggestion_status` | `accepted` (godtatt), `changed` (endret, for eksempel TG3 i stedet for TG2), `rejected` (avvist) |
-| `suggestion_override_reason` | Begrunnelse når takstmannen gikk bort fra forslaget |
+| `text_source` | Hvor tekstene kom fra: `template` (standardteksten fra malen, urørt), `edited` (standardteksten endret) eller `free` (skrevet fritt) |
+| `ai_usage_id` | Som på `field_answers`. Settes og tømmes bare av serveren |
 | `measurement_value`, `measurement_unit` | Målingen som utløste avviket, vises i rapporten |
 | `measurement_instrument_id` | Instrumentet målingen er gjort med (krok B3) |
 | `sort_order` | Rekkefølge |
+
+Hva takstmannen gjorde med regelforslaget, står **ikke** på avviket (`suggestion_status` og `suggestion_override_reason` er tatt ut, A320). Det står i `rule_suggestion_decisions` under.
 
 **HMS** er et avvik med `kind = hms` og uten TG. Det har konsekvens og tiltak som andre avvik (NS 3600 pkt. 13). Manglende konsekvens eller tiltak på HMS gir advarsel.
 
@@ -1157,7 +1162,8 @@ Et punkt kan være TGIU **og** ha et HMS-avvik (for eksempel loft uten adkomst d
 |---|---|
 | `deviation_id` | Avviket |
 | `text` | Tiltaket |
-| `standard_measure_id` / `phrase_id` | Standardtiltaket eller frasen det kom fra |
+| `text_source` | `template`, `edited` eller `free`, som på avviket |
+| `standard_measure_id` / `phrase_id` | Standardtiltaket eller frasen det kom fra. Kommer med frasebanken |
 | `sort_order` | Rekkefølge (vises som nummerert liste) |
 
 **`tgiu_details`** – **opplysninger ved TGIU** (del 1 R3, beslutning 25.10). **Ett sett per kontrollpunkt** med TGIU (`checkpoint_results.tg_direct = IU`), innspill D1.
@@ -1173,6 +1179,29 @@ Et punkt kan være TGIU **og** ha et HMS-avvik (for eksempel loft uten adkomst d
 | `risk_assessment` | **Risikovurdering** |
 | `construction_vulnerable` | **Utsatt konstruksjon** (skadeutsatt): `yes` / `no` / `unknown` |
 | `how_to_examine` | Hva som må til for å kunne undersøke |
+
+Delvis unik indeks: ett sett per kontrollpunkt blant rader som ikke er slettet. Fjernet TGIU sletter settet mykt. Hvilke opplysninger som kreves, følger grunnen (A324).
+
+**`rule_suggestion_decisions`** – **beslutninger om forslag fra reglene** (ikke KI). Eneste fasit for hva takstmannen gjorde med et regelforslag (A320, ADR 0011). **Bare tillegg:** en ny beslutning er en ny rad, aldri en oppdatering.
+
+| Felt | Forklaring |
+|---|---|
+| `report_id`, `checkpoint_result_id` | Rapporten og kontrollpunktet |
+| `rule_key` | Regelens faste kode i den låste malversjonen |
+| `suggestion` | Forslaget slik **serveren** regnet det (jsonb, samme form som `RuleSuggestion`): `outcome` med tre koder, `tgiu` eller `tg0` på et kontrollpunkt |
+| `reasons` | Regelmotorens begrunnelser (jsonb-liste). Bare faste koder og tall, med øvre størrelse |
+| `lifespan_set_key`, `threshold_set_key` | Settene regelen leste |
+| `inspection_year` | Befaringsåret reglene ble kjørt med (A329) |
+| `decision` | `accepted` (godtatt), `changed` (endret) eller `rejected` (avvist). Egne koder: `changed` betyr alltid regelforslag, `edited` alltid KI-tekst |
+| `chosen_tg` | TG takstmannen endte på: `0`, `1`, `2`, `3` eller `IU`. Tom ved avvist og ved HMS |
+| `chosen_outcome_key` | Utfallet takstmannen endte på |
+| `override_reason` | Begrunnelse (fritekst). Påkrevd ved `changed` og `rejected`. Står bare her, aldri i logger |
+| `deviation_id` | Avviket som ble laget |
+| `decided_by`, `decided_at` | Hvem (ansatt fra tilgangssjekken) og når |
+
+Klienten sender bare regelkode, beslutning, valg og begrunnelse. Serveren kjører reglene på lagrede svar og lagrer sitt eget regelsvar (A321). Godtatt `tgiu` gir `tg_direct = IU`, og godtatt `tg0` gir `tg_direct = 0`.
+
+**Lagring per felt** (A322, ADR 0011): hver endring er ett felt med ny verdi og verdien klienten så (`ReportFieldChange` i `src/core/reports/types.ts`). Er feltet endret av andre i mellomtiden, lagres ingenting, og den ansatte får nyeste verdi.
 
 **`documentation_items`** – **dokumentasjonstabellen** (NS 3600-tillegg valgt 25.10).
 
@@ -1688,8 +1717,8 @@ Tekst logges ikke per tastetrykk, men slik den var når endringen kom fram til s
 | `provider`, `model` | Leverandør og modell. I dag bare `fake` med modellen `fake-v1` |
 | `prompt_version` | Versjonen av ledeteksten, for eksempel `language_polish.v1` |
 | `assignment_id` | Oppdraget. Kan være tom (ordreforslag fra e-post) |
-| `report_id` | Rapporten. Kan være tom. Ingen fremmednøkkel før `reports` finnes, og må være tom til da (A158) |
-| `target_ref` | Hvor forslaget gjelder (jsonb): `type`, `id` og `fieldKey`. For `language_polish`: `answer` og `text` |
+| `report_id` | Rapporten. Kan være tom. Sammensatt fremmednøkkel (`organization_id`, `report_id`) mot `reports` fra migrering `0034` (A158) |
+| `target_ref` | Hvor forslaget gjelder (jsonb): `type`, `id` og `fieldKey`. Faste koder for rapporten (A325, `REPORT_AI_TARGET_FIELDS`): `deviation` (`description`, `cause_text`, `consequence_text`), `deviation_measure` (`text`), `checkpoint_result` (`description_text`) og `field_answer` (feltkoden). Prøvefunksjonen `language_polish` bruker fortsatt `answer` og `text` mot den falske leverandøren |
 | `source_fields` | Hvilke felt som var grunnlaget (jsonb-liste). Bare feltkoder, aldri verdier |
 | `input_summary` | Feltkode og antall tegn (jsonb), regnet av den vaskede teksten som faktisk ble sendt. Aldri tekst |
 | `outcome` | **Utfallet av kallet:** `ok`, `no_match` (ingen treff), `error` (feil), `blocked` (sperret: forespørselen kunne ikke sendes til denne leverandøren, for eksempel fritekst uten oppdrag eller prøvemålet mot en ekte leverandør; leverandøren kalles ikke). «KI er av» gir ingen rad og er ikke `blocked` |
@@ -2232,7 +2261,8 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Snudd betingelse | `negate`, `negated` | `rule_conditions.negate`; `negated` i begrunnelsen. Sann og usann byttes, «ikke vurdert» står |
 | Levetidstabell | `lifespan_tables`, `lifespan_entries` | |
 | Terskeltabell | `threshold_tables`, `threshold_entries` | |
-| Kostnadsintervall | `cost_bands` | |
+| Kostnadsintervall | `cost_bands`, `COST_BANDS`, `deviations.cost_band_key` | Fem intervaller med faste koder (`under_20000` … `over_500000`). Kodedata nå, tabell i 2a-3 |
+| Eget beløp | `cost_type = approx`, `cost_amount` | Eget beløp i hele kroner i stedet for intervall. Advarsel når det ikke er rundet til nærmeste 10 000 (`cost_amount_not_rounded`) |
 | Testtilfelle | `rule_test_cases` | |
 | Regelmotor | `src/core/rules`, `evaluateRules` | Rene funksjoner, samme kode på iPad og server (ADR 0009) |
 | Regelsvar | `RuleResult` | Svaret fra én regel: kode, tilstand, forslag og begrunnelse |
@@ -2258,7 +2288,19 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Svar per felt | `field_answers` | |
 | Resultat per kontrollpunkt | `checkpoint_results` | |
 | Tilstandsgrad (TG) | `tg_direct`, `tg_computed`, `deviations.tg` | |
-| Avvik | `deviations` | |
+| Avvik | `deviations` | `kind` er `tg` eller `hms`; TG står i `tg` |
+| Tekstkilde | `text_source` (`template` / `edited` / `free`) | Om teksten er standardteksten fra malen, endret standardtekst eller skrevet fritt |
+| Rapport | `reports` | Låst til malversjonen. Én gjeldende per oppdrag |
+| Svar | `field_answers` | Ett svar per felt og sted. KI-mål: `field_answer` |
+| Resultat per kontrollpunkt | `checkpoint_results` | TG direkte, beskrivelse og ferdig. TG for punktet regnes, lagres ikke |
+| Beslutning om regelforslag | `rule_suggestion_decisions` (`accepted` / `changed` / `rejected`) | Godtatt, endret eller avvist forslag fra reglene. Ny rad hver gang. Ikke KI (KI-tekst bruker `edited`, aldri `changed`) |
+| Endring per felt | `ReportFieldChange` | Én lagring: tabell, rad, felt, ny verdi og verdien klienten så |
+| Endret av andre | `conflict` | Feltet er endret siden klienten leste det. Ingenting lagres, nyeste verdi vises |
+| Forslaget gjelder ikke lenger | `stale`, `suggestion_no_longer_applies` | Godtatt eller endret forslag der regelen ikke lenger slår til. Regnes ved visning, fjerner aldri et avvik |
+| Status på kontrollpunkt | `CheckpointStatus` (`not_started` / `in_progress` / `done` / `tgiu`) | Ikke startet, i arbeid, ferdig, TGIU |
+| Advarsel på kontrollpunkt | `CheckpointWarning` (`CHECKPOINT_WARNING_CODES`) | Mangler som vises, men aldri sperrer før publisering |
+| Flettefelt | `MERGE_FIELD_KEYS` | `{årstall}`, `{måleverdi}`, `{enhet}`, `{sted}` i standardtekstene |
+| Tiltak gjelder for TG | `standard_measures.applies_to_tg` | Bør-tiltak ved TG2, må-tiltak ved TG3 |
 | Årsak – begrunnelse / kriterium | `cause_text` / `cause_criterion` | |
 | Konsekvens | `consequence_text` | |
 | Tiltak | `deviation_measures` | |
@@ -2506,3 +2548,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 13.11.2026 | Endre ordren (fase 2a, Ståle 12.11.2026 T1): en lagret ordre kan endres i alle statuser med `assignment.edit`; oppdraget endres ikke; `row_version` hindrer stille overskriving. `order`/`update` i revisjonsloggen med `fields` og `values` (`{ from, to }`), den eneste ordrehandlingen med verdier. Ny hendelse `order.updated`. Ingen migrering. Se «Endre ordren» i 4.3 og `audit_log` i 4.12. | A249–A254, spørsmål 79, `docs/funksjoner/fase2a-rette-ordre.md` |
 | 13.11.2026 | Mulig dublett (fase 2a, Ståle 12.11.2026 T3): fast regel i `src/core/orders` (`findPossibleDuplicateOrders`, `findPossibleDuplicateOrdersFor`, `DUPLICATE_REASONS`). Ingen ny tabell. Migrering `0033_indekser-mulig-dublett` med to uttrykksindekser på `orders` (adressenøkkel og gnr/bnr). Se «Mulig dublett» i 4.3. Ordlisten: mulig dublett, adressenøkkel, normalisert matrikkelnummer, grunn til mulig dublett. | A285–A291, `docs/funksjoner/fase2a-varsel-dublett.md` |
 | 13.11.2026 | Oppbevaringstid for avviste KI-forslag (fase 2a, Ståle 12.11.2026 K7): ny innstilling `ai.rejected_retention_years` i `organizations.settings` (1–10 år, standard 10); `ai_usage_log.retain_until` regnes ut på nytt ved hver statusendring. Ingen ny tabell og ingen migrering. | A272–A275, `docs/agenter/oppgaver/ki-oppbevaring-avviste.md` |
+| 14.11.2026 | Badet på PC (fase 2a-2, ADR 0011): migrering `0034_badet-pc` med `reports`, `field_answers`, `checkpoint_results`, `deviations`, `deviation_measures`, `tgiu_details` og ny tabell `rule_suggestion_decisions` (eneste fasit for regelforslag, bare tillegg). `deviations.kind` er `tg`/`hms`, `cost_band_key` erstatter `cost_band_id`, `text_source` er ny, og `suggestion_status` og `suggestion_override_reason` er tatt ut. `tg_computed` lagres ikke. `standard_measures.applies_to_tg`. Fremmednøkkel på `ai_usage_log.report_id`. KI-målet `answer` heter `field_answer` i rapporten. Grensesnitt i `src/core/reports/types.ts` og `src/core/reports/logic/`. | A315–A329, T-0060 |

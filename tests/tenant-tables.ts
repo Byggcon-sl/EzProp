@@ -16,14 +16,18 @@ import {
   createAssignmentParty,
   createBuilding,
   createCertification,
+  createCheckpointResultRow,
   createCheckpointRow,
   createClaim,
   createClientAgreement,
   createCommonAreas,
   createCompany,
   createContact,
+  createDeviationMeasureRow,
   createDeviationQuestionRow,
+  createDeviationRow,
   createEmployee,
+  createFieldAnswerRow,
   createFile,
   createFirm,
   createFloor,
@@ -34,9 +38,11 @@ import {
   createOrder,
   createOutcomeRow,
   createProperty,
+  createReportRow,
   createRoom,
   createRuleConditionRow,
   createRuleRow,
+  createRuleSuggestionDecisionRow,
   createRuleTestCaseRow,
   createStandardMeasureRow,
   createTeamMember,
@@ -45,6 +51,7 @@ import {
   createTemplateFamilyRow,
   createTemplateSectionRow,
   createTemplateVersionRow,
+  createTgiuDetailsRow,
   createUser,
   createWorkSession,
   grantPermission,
@@ -52,6 +59,13 @@ import {
 
 /** Malmotorens tolv tabeller har tenant-testene sine her (docs/funksjoner/fase2a-malmotor.md). */
 const TEMPLATES_TEST_FILE = "src/core/templates/templates.test.ts";
+
+/**
+ * Rapportens sju tabeller (migrering `0034`, ADR 0011) har tenant-testene sine i testfilen til
+ * `src/core/reports` (docs/funksjoner/fase2a-badet-pc.md, testplan). Filen skrives sammen med
+ * tjenesten; til den finnes, er `tests/tenant-isolation-all-tables.test.ts` rød med vilje.
+ */
+const REPORTS_TEST_FILE = "src/core/reports/reports.test.ts";
 
 /**
  * Én tabell med `organization_id`, slik den samlede tenant-testen
@@ -141,6 +155,11 @@ export const tenantTables: TenantTableEntry[] = [
     },
   },
   {
+    table: "checkpoint_results",
+    testFile: REPORTS_TEST_FILE,
+    insertRow: async (organizationId) => (await createCheckpointResultRow(organizationId)).id,
+  },
+  {
     table: "checkpoints",
     testFile: TEMPLATES_TEST_FILE,
     insertRow: async (organizationId) => (await createCheckpointRow(organizationId)).id,
@@ -174,9 +193,19 @@ export const tenantTables: TenantTableEntry[] = [
     },
   },
   {
+    table: "deviation_measures",
+    testFile: REPORTS_TEST_FILE,
+    insertRow: async (organizationId) => (await createDeviationMeasureRow(organizationId)).id,
+  },
+  {
     table: "deviation_questions",
     testFile: TEMPLATES_TEST_FILE,
     insertRow: async (organizationId) => (await createDeviationQuestionRow(organizationId)).id,
+  },
+  {
+    table: "deviations",
+    testFile: REPORTS_TEST_FILE,
+    insertRow: async (organizationId) => (await createDeviationRow(organizationId)).id,
   },
   {
     table: "employee_permissions",
@@ -222,6 +251,11 @@ export const tenantTables: TenantTableEntry[] = [
       );
       return row.id;
     },
+  },
+  {
+    table: "field_answers",
+    testFile: REPORTS_TEST_FILE,
+    insertRow: async (organizationId) => (await createFieldAnswerRow(organizationId)).id,
   },
   {
     table: "files",
@@ -279,6 +313,11 @@ export const tenantTables: TenantTableEntry[] = [
     insertRow: async (organizationId) => (await createBuilding(organizationId)).id,
   },
   {
+    table: "reports",
+    testFile: REPORTS_TEST_FILE,
+    insertRow: async (organizationId) => (await createReportRow(organizationId)).id,
+  },
+  {
     table: "rooms",
     testFile: "src/core/buildings/buildings.test.ts",
     insertRow: async (organizationId) => (await createRoom(organizationId)).id,
@@ -287,6 +326,11 @@ export const tenantTables: TenantTableEntry[] = [
     table: "rule_conditions",
     testFile: TEMPLATES_TEST_FILE,
     insertRow: async (organizationId) => (await createRuleConditionRow(organizationId)).id,
+  },
+  {
+    table: "rule_suggestion_decisions",
+    testFile: REPORTS_TEST_FILE,
+    insertRow: async (organizationId) => (await createRuleSuggestionDecisionRow(organizationId)).id,
   },
   {
     table: "rule_test_cases",
@@ -327,6 +371,11 @@ export const tenantTables: TenantTableEntry[] = [
     table: "template_versions",
     testFile: TEMPLATES_TEST_FILE,
     insertRow: async (organizationId) => (await createTemplateVersionRow(organizationId)).id,
+  },
+  {
+    table: "tgiu_details",
+    testFile: REPORTS_TEST_FILE,
+    insertRow: async (organizationId) => (await createTgiuDetailsRow(organizationId)).id,
   },
   {
     table: "trial_answers",

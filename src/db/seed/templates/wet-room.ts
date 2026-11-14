@@ -707,6 +707,7 @@ const standardMeasures: StandardMeasureDoc[] = questionSpecs.flatMap((q) =>
     question_key: `${q.checkpoint}.${q.key}`,
     outcome_key: outcomeKey(q.kind),
     text,
+    applies_to_tg: null,
     text_status: "draft" as const,
     sort_order: index,
   })),

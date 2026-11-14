@@ -218,6 +218,14 @@ const standardMeasureSchema = z.object({
   question_key: keySchema,
   outcome_key: keySchema,
   text: requiredText(LONG_TEXT_MAX),
+  /**
+   * TG tiltaket gjelder for (T-0060): `null` = uansett TG, 2 eller 3 = bare den TG-en. Bare lov
+   * på utfall av typen `choose_tg2_tg3` (kontrolleres i `document.ts`).
+   */
+  applies_to_tg: z
+    .union([z.literal(2), z.literal(3)])
+    .nullable()
+    .default(null),
   text_status: textStatus,
   sort_order: sortOrder,
 });
