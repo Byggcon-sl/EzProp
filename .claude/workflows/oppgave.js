@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Oppgaveløkken for EzProp (løkke B, C og D): spesifiser, vurder, design, bygg, test, rett, gjennomgå og lag PR",
   whenToUse:
-    "Én oppgave fra docs/07-utviklingsplan.md, fra oppgavekort til pull request. args: { task, phase, branch, base?, date? }",
+    "Én oppgave fra docs/07-utviklingsplan.md, fra oppgavekort til pull request. args: { task, phase, branch, base?, date?, lett? }. lett: true gir lett prosess for små oppgaver (Ståle 14.11.2026).",
   phases: [
     { title: "Spesifiser", detail: "Prosjektlederen lager oppgavekortet" },
     { title: "Forhåndsvurdering", detail: "Bare rollene oppgaven trenger, i parallell" },
@@ -62,6 +62,11 @@ const branch = (args && args.branch) || "oppgave";
 // Bygger oppgaven på en PR som ikke er merget ennå, er base den branchen (ellers main)
 const base = (args && args.base) || "main";
 const today = (args && args.date) || "i dag";
+// Lett prosess (Ståle 14.11.2026: «ja, slå på begge»): for rettinger av funn, småfunn og små
+// endringer. Hopper over forhåndsvurdering og design, og gjennomgangen gjøres av test-leder
+// (pluss sikkerhet-personvern når oppgaven berører tilgang eller persondata). Samme tester og
+// samme krav til produksjonskvalitet. Nye funksjoner, datamodell, tilgang og KI går alltid full vei.
+const light = !!(args && args.lett);
 
 const VERDICT = {
   type: "object",
@@ -204,30 +209,32 @@ log(`Oppgavekort: ${spec.specPath} · Mål: ${spec.goal}`);
 // ---------------------------------------------------------------------------
 // 2. Forhåndsvurdering (bare rollene oppgaven trenger)
 // ---------------------------------------------------------------------------
-const reviewers = [
-  { role: "forenkler", ask: "Hva kan kuttes nå, for målet?" },
-  spec.needsArchitect && {
-    role: "arkitekt",
-    ask: "Stemmer datamodell, modulgrenser og adapterlag?",
-  },
-  spec.needsUx && {
-    role: "ux-ansvarlig",
-    ask: "Blir dette bedre for de ansatte? Antall trykk før og etter, virker uten nett?",
-  },
-  spec.needsAi && {
-    role: "ki-ansvarlig",
-    ask: "KI i bunnen: hva gjør KI her fra første dag? Går det gjennom src/core/ai som forslag med logg?",
-  },
-  spec.needsDomain && {
-    role: "fagansvarlig",
-    ask: "Stemmer fag, TG og regler med forskriften og NS 3600?",
-  },
-  spec.needsSecurity && {
-    role: "sikkerhet-personvern",
-    ask: "Tilgang, kundedata, oppbevaring, GDPR?",
-  },
-  { role: "test-leder", ask: "Er akseptkriteriene testbare? Hva må testplanen dekke?" },
-].filter(Boolean);
+const reviewers = light
+  ? []
+  : [
+      { role: "forenkler", ask: "Hva kan kuttes nå, for målet?" },
+      spec.needsArchitect && {
+        role: "arkitekt",
+        ask: "Stemmer datamodell, modulgrenser og adapterlag?",
+      },
+      spec.needsUx && {
+        role: "ux-ansvarlig",
+        ask: "Blir dette bedre for de ansatte? Antall trykk før og etter, virker uten nett?",
+      },
+      spec.needsAi && {
+        role: "ki-ansvarlig",
+        ask: "KI i bunnen: hva gjør KI her fra første dag? Går det gjennom src/core/ai som forslag med logg?",
+      },
+      spec.needsDomain && {
+        role: "fagansvarlig",
+        ask: "Stemmer fag, TG og regler med forskriften og NS 3600?",
+      },
+      spec.needsSecurity && {
+        role: "sikkerhet-personvern",
+        ask: "Tilgang, kundedata, oppbevaring, GDPR?",
+      },
+      { role: "test-leder", ask: "Er akseptkriteriene testbare? Hva må testplanen dekke?" },
+    ].filter(Boolean);
 
 async function preReview(round) {
   return parallel(
@@ -271,20 +278,22 @@ log("Forhåndsvurdering: godkjent");
 // 3. Design
 // ---------------------------------------------------------------------------
 phase("Design");
-const designers = [
-  spec.needsArchitect && {
-    role: "arkitekt",
-    ask: "Lag skjema/migrering (hvis nytt), grensesnitt (typer og funksjonssignaturer) og ADR hvis det er en arkitekturbeslutning. Commit.",
-  },
-  spec.needsUi && {
-    role: "ui-designer",
-    ask: "Lag komponentspesifikasjon eller skisse etter design A, lagret ved siden av oppgavekortet. Commit.",
-  },
-  {
-    role: "test-leder",
-    ask: "Lag testplanen (tilgang, tenant-isolasjon, regeltester, e2e på iPad-størrelse) lagret ved siden av oppgavekortet som <kort>-testplan.md. Commit.",
-  },
-].filter(Boolean);
+const designers = light
+  ? []
+  : [
+      spec.needsArchitect && {
+        role: "arkitekt",
+        ask: "Lag skjema/migrering (hvis nytt), grensesnitt (typer og funksjonssignaturer) og ADR hvis det er en arkitekturbeslutning. Commit.",
+      },
+      spec.needsUi && {
+        role: "ui-designer",
+        ask: "Lag komponentspesifikasjon eller skisse etter design A, lagret ved siden av oppgavekortet. Commit.",
+      },
+      {
+        role: "test-leder",
+        ask: "Lag testplanen (tilgang, tenant-isolasjon, regeltester, e2e på iPad-størrelse) lagret ved siden av oppgavekortet som <kort>-testplan.md. Commit.",
+      },
+    ].filter(Boolean);
 const designNotes = (
   await parallel(
     designers.map(
@@ -386,24 +395,35 @@ log("Alle sjekker grønne");
 // 6. Gjennomgang (løkke D). Alvorlige funn går tilbake til bygg én gang.
 // ---------------------------------------------------------------------------
 phase("Gjennomgang");
-const reviewRoles = [
-  {
-    role: "test-leder",
-    ask: "Dekker testene akseptkriteriene, tilgang og tenant-isolasjon? Godkjenn eller avvis.",
-  },
-  {
-    role: "sikkerhet-personvern",
-    ask: "Tilgang bare i core/access, ingen kundedata, myk sletting, logg uten personopplysninger. Bruk /security-review hvis det passer.",
-  },
-  {
-    role: "forenkler",
-    ask: "Hva i diffen trengs ikke for akseptkriteriene? Bruk /simplify hvis det passer, men ikke endre kode selv.",
-  },
-  spec.needsDomain && {
-    role: "fagansvarlig",
-    ask: "Fag, TG, regler og tekster: egne formuleringer, ingen gjetteord, riktig TG.",
-  },
-].filter(Boolean);
+const reviewRoles = light
+  ? [
+      {
+        role: "test-leder",
+        ask: "Dekker testene endringen, tilgang og tenant-isolasjon? Godkjenn eller avvis.",
+      },
+      spec.needsSecurity && {
+        role: "sikkerhet-personvern",
+        ask: "Tilgang bare i core/access, ingen kundedata, logg uten personopplysninger.",
+      },
+    ].filter(Boolean)
+  : [
+      {
+        role: "test-leder",
+        ask: "Dekker testene akseptkriteriene, tilgang og tenant-isolasjon? Godkjenn eller avvis.",
+      },
+      {
+        role: "sikkerhet-personvern",
+        ask: "Tilgang bare i core/access, ingen kundedata, myk sletting, logg uten personopplysninger. Bruk /security-review hvis det passer.",
+      },
+      {
+        role: "forenkler",
+        ask: "Hva i diffen trengs ikke for akseptkriteriene? Bruk /simplify hvis det passer, men ikke endre kode selv.",
+      },
+      spec.needsDomain && {
+        role: "fagansvarlig",
+        ask: "Fag, TG, regler og tekster: egne formuleringer, ingen gjetteord, riktig TG.",
+      },
+    ].filter(Boolean);
 
 async function review(round) {
   const results = await parallel(
