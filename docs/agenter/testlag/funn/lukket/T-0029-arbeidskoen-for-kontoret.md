@@ -3,7 +3,7 @@ id: T-0029
 tittel: Arbeidskøen starter tom for kontoret, og søket viser ikke treff i andre faner
 type: forbedring
 alvor: lite
-status: rettet
+status: lukket
 funnet: 2026-11-11
 rolle: test-kontor
 omrade: arbeidskø
@@ -30,8 +30,11 @@ Køen starter tom, og valget huskes ikke. Søket sier «Ingen oppdrag med status
 La «Alle» være standard for den som ikke er på noe team (eller for kontorrollen), eller husk siste valg (`parseWorkQueueParams`). Ved tom liste: «Ingen her. 1 treff under Ferdig» med lenke.
 
 ## Etterprøvd
+2026-11-14, rettet bekreftet. Kontor og leder starter på «Alle» med tall i fanene. Søk i «Under arbeid» gir «Ingen treff i denne fanen. Treff i: Ferdig (1)». Samme beskjed mangler for en takstmann som søker under «Mine»; det er ført som eget funn (T-0083).
+
 Ikke etterprøvd (forbedring). To funn er slått sammen.
 
 ## Logg
 - 2026-11-11: funnet
 - 2026-11-13: rettet på branch `sok-ordre-arbeidsko` (T2, versjon 0.10.8): «Alle» som standard uten takstmann-rolle, og «Treff i: …» med lenker når fanen er tom. PR #? (sok-ordre-arbeidsko)
+- 2026-11-14: rettet bekreftet av testlaget på main a1ca41d9. Lukket.

@@ -1,8 +1,8 @@
 # Beslutninger som er dyre å endre
 
-Sist oppdatert: 13.11.2026 (testlaget, dokumentvakten og kvalitetslederen)
+Sist oppdatert: 14.11.2026 (testlaget, dokumentvakten og kvalitetslederen)
 
-Mens Ståle var borte, har agentene tatt 247 beslutninger (A1–A248, A22 er ikke brukt). De står i `docs/09-apne-sporsmal.md`, tabellen «Avgjort av agentene mens Ståle var borte». **De fleste er lette å endre.** Her er bare de som blir dyre å endre senere, fordi data må flyttes, fordi de står på rapportene, eller fordi de gjelder personvern og sikkerhet. Det er disse Ståle bør lese først.
+Mens Ståle var borte, har agentene tatt 278 beslutninger (A1–A291; A22, A264–A271 og A276–A279 er ikke brukt). Listen her er gått gjennom til og med A291. De står i `docs/09-apne-sporsmal.md`, tabellen «Avgjort av agentene mens Ståle var borte». **De fleste er lette å endre.** Her er bare de som blir dyre å endre senere, fordi data må flyttes, fordi de står på rapportene, eller fordi de gjelder personvern og sikkerhet. Det er disse Ståle bør lese først.
 
 Alle beslutninger som ikke står her, er lette å endre.
 
@@ -14,7 +14,9 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A150 | Det som sendes til KI, styres av en liste over felt som er lov per funksjon. | Gjelder personvern. Et bytte krever ny vurdering. |
 | A151 | Instruksene til KI har versjonsnummer og ligger ett sted i kjernen. | Alle KI-funksjoner bygger på dette. |
 | A154 | En KI-funksjon slås ikke på før den treffer 90 % av eksemplene, og 100 % av dem som må treffe. | Avgjør hva KI får lov til å bidra med i rapporten. |
-| A157 | Loggen over KI-bruk regnes som personopplysninger og lagres i 10 år, også forslag som ble avvist. KI har ingen verktøy. | Gjelder personvern. Ståle svarte 12.11.2026 (K7, spørsmål 56): oppbevaringstiden blir en innstilling, 10 år som standard. Ikke bygget ennå (se funn T-0068). |
+| A157 | Loggen over KI-bruk regnes som personopplysninger og lagres i 10 år, også forslag som ble avvist. KI har ingen verktøy. | Gjelder personvern. Ståle svarte 12.11.2026 (K7, spørsmål 56): oppbevaringstiden blir en innstilling, 10 år som standard. Bygget 13.11.2026, se A272–A275. |
+| A252 | Når en ordre endres, får revisjonsloggen gammel og ny verdi per felt (blant annet adresse, matrikkel og bestiller). | Gjelder personvern. Revisjonsloggen ryddes aldri, så en feil adresse eller et feil navn står i 10 år, og innsyn, retting og sletting må dekke loggen. Se spørsmål 79. |
+| A272, A273 | Avviste KI-forslag får en dato for hvor lenge de minst oppbevares, regnet ut fra innstillingen da de ble avvist. En endring av innstillingen virker bare fremover. | Gjelder personvern. Datoen står per rad, så en annen regel senere krever at alle radene regnes om. Står som «Lett å endre» i spørsmålsfilen (funn T-0082). Se spørsmål 81. |
 | A171 | Nytt utfall «sperret» i loggen over KI-bruk, for forespørsler som ikke kan sendes til leverandøren. | Fast kode som lagres i data i 10 år. |
 
 ## Sikkerhet og tilgang
@@ -68,6 +70,7 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A234 | TG0 er et eget formål for regler, ikke et utfall. | Fast kode i regeldata. |
 | A235 | Arealtypen «Ikke del av BRA» er en egen kode. | Fast kode i data. Påvirker areal, en vanlig grunn til reklamasjon. |
 | A237 | «Under grensen» er samme terskel snudd, ikke en egen terskel. | Mønster for alle terskelregler. |
+| A280, A283 | Fire ferdige romsett med faste koder, og kilden til nye rom (`manual` eller `preset` med settkoden) lagres i revisjonsloggen. | Kodene står i revisjonsloggen i 10 år og kan ikke endres, bare arkiveres (regel 6). Står som «Lett å endre» i spørsmålsfilen (funn T-0082). |
 
 ## Fag
 
@@ -83,6 +86,7 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A225 | Fuktgrensen ved hulltaking er 15 vekt-% i treverk. | Avgjør TG-forslag i alle bad. Ikke kontrollert mot NS 3600:2025 (F3). Tallet er lett å endre, men Ståle bør se det. |
 | A227, A228 | Hva «med dokumentasjon» betyr i levetidstrinnene, og hva ukjent membrantype gir. | Avgjør TG-forslag på alder. |
 | A238 | TG0-forslag bare ved «utført uten funn», og 0 vekt-% regnes som en måling. | Avgjør TG0 i rapporten. Se spørsmål 77 (a) og (e). |
+| A289 | Varsel om like kontakter og firma ble ikke bygget sammen med varselet om like ordre, fordi agentene mente Ståle ikke hadde sagt ja. | Ståle sa ja 12.11.2026 (forslag 62, T3). Beslutningen utelater noe han har bestemt (funn T-0072). Doble kontakter kan gi rapport til feil person. |
 
 ## Til vurdering
 

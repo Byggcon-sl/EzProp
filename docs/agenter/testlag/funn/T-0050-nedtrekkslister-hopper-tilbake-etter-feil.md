@@ -3,20 +3,31 @@ id: T-0050
 tittel: Nedtrekkslister og avkrysninger hopper tilbake etter en feilmelding, og neste lagring lagrer feil verdi uten varsel
 type: feil
 alvor: alvorlig
-status: rettet
+status: ny
 funnet: 2026-11-13
 rolle: test-robusthet, test-kontor
-omrade: skjemaer: areal, eiendom, reklamasjon, part, avtale
+omrade: skjemaer: «Legg til rom» (arealtype); før også areal, eiendom, reklamasjon, part, avtale
 maal: reklamasjoner
 commit: e013fde7
-forsok: 1
+forsok: 2
 pr:
 ---
 
 ## Hva
+**Står igjen 14.11.2026 (forsøk 2):** bare arealtypen i «Legg til rom» (ett rom). Velger takstmannen en annen arealtype enn forslaget og får en feilmelding, hopper arealtypen tilbake til forslaget for romtypen. Lagrer han etter å ha rettet feilen, blir feil arealtype lagret uten varsel. Feil areal kan havne i rapporten. De ti andre skjemaene virker nå (se «Etterprøvd»).
+
+Opprinnelig funn:
 Får den ansatte en feilmelding i et skjema, står tekstfeltene igjen, men nedtrekkslistene går tilbake til gammel verdi eller tomt, og avkrysninger nullstilles. Lagrer han på nytt etter å ha rettet feilen, blir feil verdi lagret uten varsel. Feil målemetode, feil måler, feil eierform eller feil type reklamasjonssak kan da havne i rapporten og i tallene.
 
 ## Slik gjenskapes det
+Det som står igjen (14.11.2026):
+1. Logg inn som takstmann. Åpne «Bygninger, areal og rom» på et oppdrag med bygning og etasje.
+2. «Legg til rom» (ett rom): velg romtypen Kjøkken, sett Arealtype til BRA-e, kryss av «Under terreng», og skriv et navn med 11 sifre (for eksempel 12345678901), så lagringen gir feilmelding.
+3. Trykk Lagre. Etter feilmeldingen står Arealtype på BRA-i (forslaget for Kjøkken). «Under terreng» står som valgt.
+4. Rett navnet og lagre. Rommet er lagret med arealtype BRA-i (`area_type = bra_i`), ikke BRA-e, uten varsel.
+5. Det samme skjer med romtypen «Bod, inne» og arealtypen BRA-b.
+
+Opprinnelig (13.11.2026, nå rettet):
 A) Areal:
 1. Åpne «Bygninger, areal og rom» på et oppdrag med en etasje.
 2. Skriv BRA-i 12,345, velg Metode «Fra tegning» og «Målt av» en annen ansatt.
@@ -45,8 +56,11 @@ Nedtrekkslistene får verdien bare én gang når skjemaet vises (`defaultValue`)
 Gi listene og avkrysningene `key` ut fra svaret fra lagringen (for eksempel `key={state.attempt}`, slik «Under terreng» i etasjeskjemaet alt gjør), eller gjør dem styrte med verdien fra `state.values`. Rett det helst én gang i felles `Select`-hjelper. Legg til én e2e- eller komponenttest per skjema: feilmelding, lagre på nytt, og sjekk at valget står. Tas før neste nye punkt i planen.
 
 ## Etterprøvd
+2026-11-14, **fortsatt feil (alvorlig)**. Funn-kontrolløren prøvde alle skjemaene på nytt på main a1ca41d9. Rettet i ti skjemaer, der valgene står etter feilmeldingen og databasen har riktige verdier: areal, eiendom, fellesdeler, team, part, reklamasjon, avtale, selskap, ansatt og «Endre ordren». Står igjen: arealtypen i «Legg til rom» (ett rom, `buildings-editor.tsx`), som går tilbake til forslaget for romtypen etter feil og lagres feil (se stegene). Mulig årsak, ikke sjekket i koden: forslaget for romtypen settes på nytt når skjemaet vises etter feilen, og overstyrer det som ble sendt. Mål: færre reklamasjoner.
+
 2026-11-13, bekreftet (alvorlig). Funn-kontrolløren gjenskapte feilen i areal, eiendom, reklamasjon, part og avtale, og fant feil verdi i databasen etter lagring (areal uten metode og med feil måler; reklamasjon lagret som `complaint` i stedet for forsikringskrav; eiendom med gammel boligtype og eierform). Meldt av to testere hver for seg (robusthet som alvorlig, kontor som middels); slått sammen hit. Ikke duplikat av T-0009, som gjelder felt som ikke blir lagret i det hele tatt.
 
 ## Logg
 - 2026-11-13: funnet
 - 2026-11-13: rettet på branch `rett-t0050-valg-etter-feil` (versjon 0.10.7): ny `key` per forsøk på nedtrekkslister, avkrysninger og radioknapper i 14 skjemaer, startverdien fra det som ble sendt. E2e `e2e/fase-2a-rett-t0050-valg-etter-feil.spec.ts` (areal, eiendom, reklamasjon, part).
+- 2026-11-14: prøvd på nytt av testlaget på main a1ca41d9: fortsatt feil i arealtypen i «Legg til rom». Status tilbake til «ny», forsøk 2. Tas før neste nye punkt i planen.
