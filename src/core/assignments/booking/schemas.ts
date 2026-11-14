@@ -29,9 +29,10 @@ const CREATION_KEY = "Skjemaet er ugyldig. Last siden på nytt.";
 
 /**
  * Elleve sifre på rad ligner et fødselsnummer (A299). Mellomrom mellom sifrene teller ikke
- * («010190 12345» stoppes). Ti sifre (telefon) og tolv eller flere (lange ordrenummer) godtas.
+ * («010190 12345» stoppes), heller ikke hardt, smalt eller tynt mellomrom fra innliming (`\s`).
+ * Ti sifre (telefon) og tolv eller flere (lange ordrenummer) godtas.
  */
-const DIGIT_SPACES = /(?<=\d)[ \t ]+(?=\d)/g;
+const DIGIT_SPACES = /(?<=\d)\s+(?=\d)/g;
 const ELEVEN_DIGIT_RUN = /(?<!\d)\d{11}(?!\d)/;
 
 /** Sann når teksten ikke har elleve sifre på rad. Tom tekst er greit. */
