@@ -1118,16 +1118,18 @@ export async function createAssignmentWithParty(
     const assignmentId = randomUUID();
     const partyId = randomUUID();
     const partyName = `Kjøper Test ${suffix}`;
+    const address = `Reklamasjonsveien 1 ${suffix}, 8000 Bodø`;
     await sql`
       insert into orders (id, organization_id, address_text, received_at, source, status,
         requested_report_type)
-      values (${orderId}, ${organizationId}, ${`Reklamasjonsveien 1 ${suffix}, 8000 Bodø`}, now(),
+      values (${orderId}, ${organizationId}, ${address}, now(),
         'manual', 'received', 'condition_report')`;
+    // Bestillingsfeltene står også på oppdraget (ADR 0011, påkrevd fra migrering 0034).
     await sql`
       insert into assignments (id, organization_id, number, office_id, assignment_type, status,
-        order_id)
+        order_id, address_text, received_at, source)
       values (${assignmentId}, ${organizationId}, ${`E2E-REK-${suffix}`}, ${office.id},
-        'condition_report', 'in_progress', ${orderId})`;
+        'condition_report', 'in_progress', ${orderId}, ${address}, now(), 'manual')`;
     await sql`
       insert into assignment_parties (id, organization_id, assignment_id, role, name)
       values (${partyId}, ${organizationId}, ${assignmentId}, 'buyer', ${partyName})`;
