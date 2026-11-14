@@ -63,3 +63,14 @@ export class AssignmentChangedError extends Error {
     this.name = "AssignmentChangedError";
   }
 }
+
+/**
+ * Oppslaget om mulig dublett feilet i databasen. Meldingen har aldri verdier fra bestillingen
+ * eller SQL-teksten. Felles for ordre og oppdrag (ADR 0011).
+ */
+export class PossibleDuplicatesLookupError extends Error {
+  constructor() {
+    super("Oppslaget om mulig dublett feilet.");
+    this.name = "PossibleDuplicatesLookupError";
+  }
+}
