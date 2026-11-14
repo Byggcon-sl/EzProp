@@ -4,6 +4,8 @@ const env = process.env as Record<string, string | undefined>;
 env.DATABASE_URL = testDatabaseUrl();
 env.NODE_ENV = "test";
 env.DEV_MAILBOX = "1";
+// Produksjonsvakten for testdata (src/db/seed/testdata-guard.ts) godtar bare development og test.
+env.APP_ENVIRONMENT = "test";
 env.BETTER_AUTH_SECRET ??= "test-secret-som-er-lang-nok-for-better-auth";
 
 /*

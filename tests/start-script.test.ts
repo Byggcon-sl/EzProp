@@ -79,6 +79,38 @@ describe("start.sh", () => {
     }
   });
 
+  // Testplan docs/funksjoner/fase2a-testdata-arbeidshverdag-testplan.md, avsnitt 6.2 (5–7).
+  it(".env.example har APP_ENVIRONMENT=development (6.2.5)", () => {
+    const example = read(".env.example").split("\n");
+    expect(example.filter((line) => line.startsWith("APP_ENVIRONMENT="))).toEqual([
+      "APP_ENVIRONMENT=development",
+    ]);
+  });
+
+  it("legger APP_ENVIRONMENT=development i en eldre .env uten å endre en verdi som finnes (6.2.6)", () => {
+    const check = lines.findIndex((line) => /grep -q "\^APP_ENVIRONMENT="\s+\.env/.test(line));
+    expect(check).toBeGreaterThan(-1);
+    expect(lines[check]).toMatch(/^\s*if\s+!\s+grep/);
+    expect(lines[check + 1]).toContain("APP_ENVIRONMENT=development");
+    expect(lines[check + 1]).toContain(">>.env");
+    // Etter at .env er laget, og før databasen oppdateres.
+    expect(check).toBeGreaterThan(code(/cp \.env\.example \.env/));
+    expect(check).toBeLessThan(code(/db:migrate/));
+    // Ingen sed eller annen omskriving av verdien.
+    const rewrites = lines.filter((line) => /sed\b.*APP_ENVIRONMENT/.test(line));
+    expect(rewrites).toEqual([]);
+  });
+
+  it("package.json har db:seed:testdata og versjon fra 0.12.0 (6.2.7)", () => {
+    const pkg = JSON.parse(read("package.json")) as {
+      version: string;
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts["db:seed:testdata"]).toBe("tsx src/db/seed/testdata-index.ts");
+    const [major, minor] = pkg.version.split(".").map(Number);
+    expect(major === 0 && minor! >= 12).toBe(true);
+  });
+
   it("Start EzProp.command kjører bare start.sh, uten egne seed-linjer", () => {
     const command = read("Start EzProp.command");
     expect(command).toContain("./start.sh");

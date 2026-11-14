@@ -1343,3 +1343,57 @@ describe("Microsoft-innloggingen i utrullingen og infrastrukturen (M10.2)", () =
     expect(vaultSection.split("\n").slice(0, 4).join("\n")).toContain("MS_LOGIN_CLIENT_SECRET");
   });
 });
+
+describe("testdataene i utrullingen (fase 2a, A302)", () => {
+  // Testplan: docs/funksjoner/fase2a-testdata-arbeidshverdag-testplan.md, avsnitt 6.1.
+  const SEED_TESTDATA_COMMAND = /pnpm db:seed:testdata(\s|$)/;
+  const workflowLines = () => read(WORKFLOW_PATH).split("\n");
+
+  it("6.1.1 steget «Migrering og seed» kaller db:seed:testdata etter db:seed:testoppdrag", () => {
+    const lines = workflowLines();
+    const testoppdrag = codeLine(lines, SEED_TESTOPPDRAG_COMMAND);
+    const testdata = codeLine(lines, SEED_TESTDATA_COMMAND);
+    const close = lines.findIndex(
+      (line) => line.includes("firewall-rule delete") && line.includes("github-runner"),
+    );
+    expect(testoppdrag).toBeGreaterThan(-1);
+    expect(testdata).toBeGreaterThan(testoppdrag);
+    expect(close).toBeGreaterThan(testdata);
+    const step = stepOf(lines, testdata);
+    expect(step).toEqual(stepOf(lines, testoppdrag));
+    expect(step[0]).toMatch(/-\s+name:\s*Migrering og seed\s*$/);
+    const calls = lineIndexes(lines, SEED_TESTDATA_COMMAND).filter((i) => !isComment(lines[i]!));
+    expect(calls).toHaveLength(1);
+  });
+
+  it("6.1.2 steget har APP_ENVIRONMENT fra ENVIRONMENT_NAME, ikke fast tekst", () => {
+    const lines = workflowLines();
+    const step = stepOf(lines, codeLine(lines, SEED_TESTDATA_COMMAND));
+    expect(subBlock(step, "env")).toMatch(
+      /^\s*APP_ENVIRONMENT:\s*\$\{\{\s*env\.ENVIRONMENT_NAME\s*\}\}\s*$/m,
+    );
+    const settings = lines.filter(
+      (line) => !isComment(line) && /APP_ENVIRONMENT\s*[:=]/.test(line),
+    );
+    expect(settings).toHaveLength(1);
+    // Arbeidsflyten går bare til testmiljøet.
+    expect(read(WORKFLOW_PATH)).toMatch(/^\s*ENVIRONMENT_NAME:\s*test\s*$/m);
+  });
+
+  it("6.1.3 SEED_ADMIN_EMAIL skrives ikke ut i steget", () => {
+    const lines = workflowLines();
+    const run = subBlock(stepOf(lines, codeLine(lines, SEED_TESTDATA_COMMAND)), "run");
+    expect(run).toContain("pnpm db:seed:testdata");
+    expect(run).not.toMatch(/\b(echo|printf)\b[^\n]*SEED_ADMIN_EMAIL/);
+    expect(run).not.toMatch(/set\s+-[a-z]*x/);
+  });
+
+  it("6.1.4 ingen annen arbeidsflyt kaller db:seed:testdata", () => {
+    const dir = join(process.cwd(), ".github/workflows");
+    const withStep = readdirSync(dir)
+      .filter((name) => /\.ya?ml$/.test(name))
+      .filter((name) => read(`.github/workflows/${name}`).includes("db:seed:testdata"))
+      .sort();
+    expect(withStep).toEqual(["deploy-azure.yml"]);
+  });
+});
