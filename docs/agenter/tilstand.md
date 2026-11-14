@@ -44,7 +44,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 ## Åpne PR-er
 
-- #210 «Rett T-0050: arealtypen i «Legg til rom» står igjen etter feilmelding» (branch `rett-t0050-arealtype`), hos en annen kjøring.
+- #212 «Agentlaget: forbedreren erstatter forenkleren (Ståle 14.11.2026)», hos en annen kjøring.
 
 Ingen PR venter på Ståle.
 
@@ -110,16 +110,12 @@ Ingen.
 
 ## Pågår
 
-- **Rett T-0050, forsøk 2** (branch `rett-t0050-arealtype`, oppgavekort `docs/agenter/oppgaver/rett-t0050-arealtype.md`, versjon 0.12.3, ingen migrering, ingen nye beslutninger). Årsak: den styrte listen «Arealtype» har ingen startverdi i DOM-en, så Reacts tilbakestilling av skjemaet etter et forsøk satte den til første valg (BRA-i). Retting i `RoomForm` (ustyrte felt med verdien som ble sendt, forslaget A97 settes rett i feltene). Bekreftet rød før og grønn etter lokalt på pc og ipad. E2e på branchen: `e2e/fase-2a-rett-t0050-arealtype-takstmann.spec.ts` (E1–E6, også databasen) og `e2e/fase-2a-rett-t0050-valg-etter-feil.spec.ts`. En tredje fil som prøvde de samme sakene, er fjernet for å spare CI-tid. PR #210.
-- **«Nytt oppdrag» er hovedveien**, branch `nytt-oppdrag-hovedvei` fra `main` (14.11.2026). Oppgavekort `docs/funksjoner/fase2a-nytt-oppdrag.md` (utkast). Krever ADR for oppdrag uten ordre (neste ledige nummer, 0011). Beslutninger fra A292. Roller: arkitekt, ux, ui, sikkerhet-personvern, utvikler, testskriver. Endrer ikke seed-filene for testdata (PR #203).
-- **Testdata som ligner en ekte arbeidshverdag**, branch `testdata-arbeidshverdag` (i arbeid hos en annen kjøring, siste commit 20:12 UTC, versjon 0.12.0, ingen PR ennå). Står den uten ny commit i over 2 timer, overtar neste kjøring den. Kortet bruker A264–A271, som overlapper med K7 (A264–A267 på `ki-oppbevaring-avviste`): den som merges sist, flytter numrene.
-- **Testdata som ligner en ekte arbeidshverdag, del 1**: PR #203 (branch `testdata-overtatt`, versjon 0.12.0). Hovedløkken overtok arbeidet 13.11.2026 kl. 23:50 UTC, fordi det hadde stått stille i to timer. Den flettet inn main og kjørte testene lokalt: typecheck og lint grønne, 837 tester for testdata grønne og e2e for testdata grønn på PC og iPad. Alle fire CI-jobbene er grønne på siste commit, men GitHub sier «unstable» fordi en CI-kjøring fra `pull_request` står på «action_required». Neste kjøring av `scripts/merge-klare-pr.sh` merger PR-en når den blir «clean». Branchene `testdata-arbeidshverdag`, `testdata-retting-hovedlop-2111` og `arkiv-testdata-arbeidshverdag-parallell` blir overflødige når den er merget. Første CI-kjøring var rød bare på den kjente ustabile testen i `photo-uploader.test.ts` (bildekøen, «hang»).
-- **Neste:** «Nytt oppdrag» er hovedveien (Prioritert av Ståle 13.11.2026: rett på oppdrag), deretter «Tilbud i stedet for ordre». Begge trenger en ADR om datamodell og navn.
-- **Rett T-0050 (forsøk 2)**: PR #210, hos en annen kjøring.
 - **Badet på PC** (branch `badet-pc`, oppgavekort og testplan, mellomlagret 14.11.2026 kl. 02:32 uten PR). Står stille; neste kjøring kan overta den hvis ingen har gjort det.
 - Overflødige brancher etter PR #203: `testdata-arbeidshverdag`, `testdata-retting-hovedlop-2111`, `arkiv-testdata-arbeidshverdag-parallell`, `testdata-overtatt`. Etter PR #209: `worktree-wf_b4502702-3aa-19`.
 
 ## Siste kjøring
+14.11.2026 kl. 06:50–10:40 UTC (hovedløkken, sesjon 01JqwntzQZ64Vqmh6pCvtb8u): ingen åpne PR-er ved start. Bygde «Produksjonsvakt også på `pnpm db:seed:testoppdrag`» (lett, A308) og merget PR #208. Overtok T-0050 forsøk 2 (`rett-t0050-arealtype`, stoppet kl. 03:53 etter testplanen), arbeidsflyten gjorde den ferdig, og PR #210 ble merget etter en ny commit med versjon 0.13.2 (CI ventet på godkjenning etter automatisk fletting). T-0050 venter nå på at testlaget bekrefter rettingen. Neste: «Tilbud i stedet for ordre», eller overta «Badet på PC» (`badet-pc`, stille siden kl. 02:32, bruker A315–A329; A315–A317 er nå også brukt av PR #209, så badet må flytte numrene).
+
 14.11.2026 fra kl. 07:50 UTC (hovedløkken, sesjon 01Jqwnu1H9sPHLGbCiFfvpHT): ingen åpne PR-er ved start. T-0050 var hos en annen kjøring. Overtok «Nytt oppdrag» (stoppet kl. 02:30 uten PR), gjorde den ferdig og merget PR #209 (versjon 0.13.0). Læringsløkken for PR #203, #208 og #209 i denne PR-en (linjene flyttet til `docs/plan/levert.md`). Neste: «Tilbud i stedet for ordre», eller overta «Badet på PC».
 
 14.11.2026 (nattløkken): ingen alvorlige funn. better-auth 1.7.23 ryddet i PR «Rydding fra nattløkken 2026-11-14» (versjon 0.12.1). Resten står under «Oppgaver fra nattløkken».
