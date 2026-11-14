@@ -1,6 +1,6 @@
 {
   "name": "ezprop",
-  "version": "0.11.9",
+  "version": "0.11.10",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",
@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@azure/storage-blob": "12.34.0",
-    "better-auth": "1.7.22",
+    "better-auth": "1.7.23",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "drizzle-orm": "0.45.4",
