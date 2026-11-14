@@ -14,6 +14,8 @@ const EXPECTED_EVENT_TYPES = [
   // Endre en ordre etter at den er lagret (docs/funksjoner/fase2a-rette-ordre-testplan.md 1.6)
   "order.updated",
   "assignment.created",
+  // Bestillingen på oppdraget endret etter lagring (ADR 0011)
+  "assignment.booking_updated",
   "assignment.assigned",
   "assignment.handed_over",
   "assignment.status_changed",
@@ -64,8 +66,8 @@ const EXPECTED_EVENT_TYPES = [
 ];
 
 describe("hendelseskodene", () => {
-  it("1. har nøyaktig de 51 kodene fra domenemodellen 4.9", () => {
-    expect(EXPECTED_EVENT_TYPES).toHaveLength(51);
+  it("1. har nøyaktig de 52 kodene fra domenemodellen 4.9", () => {
+    expect(EXPECTED_EVENT_TYPES).toHaveLength(52);
     expect([...EVENT_TYPES].sort()).toEqual([...EXPECTED_EVENT_TYPES].sort());
   });
 

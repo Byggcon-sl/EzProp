@@ -16,8 +16,11 @@ import { MAX_DUPLICATE_WINDOW_MS } from "./duplicates";
  * `normalizeAddressKey` og `normalizeCadastreNumber` i `./duplicates.ts`. Tom nøkkel blir `NULL`
  * (`nullif(..., '')`), som `null` i TS, og `NULL` er aldri lik noe.
  *
- * Kolonnene står uten tabellnavn, slik indeksen har dem. Ingen annen tabell i spørringen har
- * kolonner med disse navnene.
+ * Konstantene har kolonnene uten tabellnavn, slik indeksen har dem. Fra migrering 0034 har også
+ * `assignments` kolonnene `address_text`, `gnr`, `bnr` og `snr` (ADR 0011). Spørringen under
+ * kobler på `assignments` og skriver derfor kolonnene med tabellnavn (`forOrders`); PostgreSQL
+ * bruker fortsatt indeksen. Når spørringen deles i to delspørringer med `UNION ALL` (ADR 0011
+ * punkt 10) og filen flyttes til `@/core/assignments/booking/`, faller dette bort.
  */
 
 /** Normalisert adresse: delen før første komma, små bokstaver, bare a–z, 0–9 og æøå. */
@@ -32,6 +35,11 @@ function cadastreNumberSql(column: "gnr" | "bnr" | "snr"): string {
 export const ORDER_GNR_KEY_SQL = cadastreNumberSql("gnr");
 export const ORDER_BNR_KEY_SQL = cadastreNumberSql("bnr");
 export const ORDER_SNR_KEY_SQL = cadastreNumberSql("snr");
+
+/** Uttrykket med kolonnen skrevet som `"orders".kolonne`, til spørringer som kobler på `assignments`. */
+function forOrders(expression: string): string {
+  return expression.replace(/\b(address_text|gnr|bnr|snr)\b/g, '"orders".$1');
+}
 
 /** Navnene på indeksene i migreringen. */
 export const ORDER_ADDRESS_KEY_INDEX = "orders_organization_id_address_key_idx";
@@ -64,13 +72,13 @@ export function possibleDuplicatesQuery(
   const addressMatch: SQL =
     criteria.addressKey === null
       ? sql`false`
-      : sql`${sql.raw(ORDER_ADDRESS_KEY_SQL)} = ${criteria.addressKey}`;
+      : sql`${sql.raw(forOrders(ORDER_ADDRESS_KEY_SQL))} = ${criteria.addressKey}`;
   const cadastreMatch: SQL =
     criteria.cadastre === null
       ? sql`false`
-      : sql`(${sql.raw(ORDER_GNR_KEY_SQL)} = ${criteria.cadastre.gnr} and ${sql.raw(
-          ORDER_BNR_KEY_SQL,
-        )} = ${criteria.cadastre.bnr} and coalesce(${sql.raw(ORDER_SNR_KEY_SQL)}, '') = ${
+      : sql`(${sql.raw(forOrders(ORDER_GNR_KEY_SQL))} = ${criteria.cadastre.gnr} and ${sql.raw(
+          forOrders(ORDER_BNR_KEY_SQL),
+        )} = ${criteria.cadastre.bnr} and coalesce(${sql.raw(forOrders(ORDER_SNR_KEY_SQL))}, '') = ${
           criteria.cadastre.snr
         })`;
 

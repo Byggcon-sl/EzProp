@@ -9,6 +9,11 @@ export const EVENT_TYPES = [
   /** Ordren er endret etter lagring (T1). `data: { orderId, fields }`, aldri verdier. */
   "order.updated",
   "assignment.created",
+  /**
+   * Bestillingsopplysningene på oppdraget er endret etter lagring (ADR 0011).
+   * `data: { assignmentId, fields }`, aldri verdier.
+   */
+  "assignment.booking_updated",
   "assignment.assigned",
   "assignment.handed_over",
   "assignment.status_changed",

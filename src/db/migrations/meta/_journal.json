@@ -239,6 +239,13 @@
       "when": 1794587407908,
       "tag": "0033_indekser-mulig-dublett",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1794618027591,
+      "tag": "0034_oppdrag-bestilling",
+      "breakpoints": true
     }
   ]
 }

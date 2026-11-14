@@ -17,10 +17,5 @@ export class OrderChangedError extends Error {
   }
 }
 
-/** Kontoret finnes ikke i organisasjonen, eller er slettet. */
-export class OfficeNotFoundError extends Error {
-  constructor() {
-    super("Kontoret finnes ikke.");
-    this.name = "OfficeNotFoundError";
-  }
-}
+/** Felles med «Nytt oppdrag» (ADR 0011). Står i `@/core/assignments/errors`. */
+export { OfficeNotFoundError } from "@/core/assignments/errors";
