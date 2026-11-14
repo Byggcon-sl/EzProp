@@ -10,7 +10,7 @@ omrade: skjemaer: «Legg til rom» (arealtype); før også areal, eiendom, rekla
 maal: reklamasjoner
 commit: e013fde7
 forsok: 2
-pr:
+pr: 210
 ---
 
 ## Hva
