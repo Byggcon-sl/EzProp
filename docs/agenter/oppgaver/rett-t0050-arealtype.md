@@ -4,7 +4,9 @@
 - **Modul:** app-siden «Bygninger, areal og rom» (`src/app/(ansatt)/oppdrag/[id]/bygninger/`)
 - **Status:** klar for bygging
 - **Funn:** `docs/agenter/testlag/funn/T-0050-nedtrekkslister-hopper-tilbake-etter-feil.md` (feil, alvorlig, forsøk 2)
-- **Branch:** `rett-t0050-arealtype` fra `main`
+- **Branch:** `rett-t0050-arealtype` fra `main` (main flettet inn 14.11.2026)
+- **Roller:** utvikler og testskriver (i parallell: testskriver lager rød e2e, utvikler retter `RoomForm`), deretter gjennomgang
+- **Beslutningsnumre:** A309–A314 er ledige hvis rettingen krever en beslutning (føres i `docs/09-apne-sporsmal.md`, merket «lett å endre» eller «dyrt å endre»)
 - **Støtter hovedmål:** Reklamasjoner: arealtypen takstmannen velger, er den som lagres, så feil BRA-i/BRA-e/BRA-b ikke havner i rapporten og arealtabellen. / De ansatte: valget står igjen etter en feilmelding, så takstmannen slipper å velge på nytt og slipper å oppdage feilen senere. / KI i bunnen: riktig arealtype er grunndata som KI-forslag om areal og rom senere bygger på.
 
 ## Problem
