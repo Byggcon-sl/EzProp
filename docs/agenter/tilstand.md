@@ -113,7 +113,7 @@ Ingen.
 - **Neste:** «Nytt oppdrag» er hovedveien (Prioritert av Ståle 13.11.2026: rett på oppdrag), deretter «Tilbud i stedet for ordre». Begge trenger en ADR om datamodell og navn.
 
 ## Siste kjøring
-14.11.2026 (nattløkken): ingen alvorlige funn. better-auth 1.7.23 ryddet i PR «Rydding fra nattløkken 2026-11-14» (versjon 0.11.10). Resten står under «Oppgaver fra nattløkken».
+14.11.2026 (nattløkken): ingen alvorlige funn. better-auth 1.7.23 ryddet i PR «Rydding fra nattløkken 2026-11-14» (versjon 0.12.1). Resten står under «Oppgaver fra nattløkken».
 
 13.11.2026 kl. 23:49 – 14.11.2026 kl. 02:10 UTC (hovedløkken, sesjon 01Jqwnu2YGk7uVnDzXtciujq): PR #201 og #202 var i arbeid hos andre kjøringer og ble ikke rørt. Overtok testdataene og åpnet PR #203. Den er ikke merget ennå, fordi GitHub sier «unstable» selv om all CI er grønn (se «Pågår»).
 
