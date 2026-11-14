@@ -477,6 +477,7 @@ describe("3.2 svaret", () => {
           "assignmentNumber",
           "assignmentStatus",
           "id",
+          "kind",
           "reasons",
           "receivedAt",
           "status",
@@ -484,6 +485,7 @@ describe("3.2 svaret", () => {
       );
     }
     expect(items[0]).toEqual({
+      kind: "order",
       id: received.id,
       receivedAt: received.receivedAt,
       addressText: ADDRESS,

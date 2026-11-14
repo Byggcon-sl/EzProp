@@ -25,21 +25,28 @@ export type { PossibleDuplicateFields } from "@/core/assignments/booking/contrac
  * `@/core/assignments`, som også gir oppdrag laget direkte.
  *
  * Et oppdrag som kom fra en ordre vises som ordren, «gjort om» med oppdragsnummeret. Et oppdrag
- * laget direkte har ingen ordre å lenke til og er ikke med her.
+ * laget direkte («Nytt oppdrag») har ingen ordre og vises som oppdraget (`kind: "assignment"`),
+ * med lenke til oppdraget (kortet, «Regler»: «ordre mot oppdrag»).
  *
  * Personvern: loggen får bare antall treff, id-er og organisasjonen (se tjenesten i kjernen).
  */
 
 /** Én annen ordre som kan være samme bestilling. Fast nøkkelliste, uten matrikkel og kontakter. */
 export type PossibleDuplicateOrder = {
+  /**
+   * `order`: en ordre (også gjort om), `id` er ordre-id. `assignment`: et oppdrag laget direkte
+   * uten ordre, `id` er oppdrags-id.
+   */
+  kind: "order" | "assignment";
   id: string;
   receivedAt: Date;
   /** Vises bare på skjermen i samme organisasjon (A290). Logges aldri og sendes aldri til KI. */
   addressText: string;
-  status: OrderStatus;
-  /** Oppdragsnummeret når ordren er gjort om, ellers `null`. */
+  /** Ordrestatusen. `null` for et oppdrag laget direkte (det har ingen ordre). */
+  status: OrderStatus | null;
+  /** Oppdragsnummeret når ordren er gjort om eller treffet er et oppdrag, ellers `null`. */
   assignmentNumber: string | null;
-  /** Oppdragsstatusen når ordren er gjort om, ellers `null`. */
+  /** Oppdragsstatusen når ordren er gjort om eller treffet er et oppdrag, ellers `null`. */
   assignmentStatus: string | null;
   reasons: DuplicateReason[];
 };
@@ -51,11 +58,12 @@ const EMPTY: PossibleDuplicateOrders = { items: [], hasMore: false };
 /** Rettigheten for oppslaget: den samme som for å lese ordren. */
 const PERMISSION = "organization.read";
 
-/** Treffet i ordreform, eller `null` for et oppdrag uten ordre. */
-function toOrderForm(row: PossibleDuplicateRow): PossibleDuplicateOrder | null {
+/** Treffet i ordreform. Et oppdrag uten ordre gir `kind: "assignment"`. */
+function toOrderForm(row: PossibleDuplicateRow): PossibleDuplicateOrder {
   const reasons = rowReasons(row);
   if (row.kind === "order") {
     return {
+      kind: "order",
       id: row.id,
       receivedAt: row.receivedAt,
       addressText: row.addressText,
@@ -65,8 +73,20 @@ function toOrderForm(row: PossibleDuplicateRow): PossibleDuplicateOrder | null {
       reasons,
     };
   }
-  if (row.orderId === null) return null;
+  if (row.orderId === null) {
+    return {
+      kind: "assignment",
+      id: row.id,
+      receivedAt: row.receivedAt,
+      addressText: row.addressText,
+      status: null,
+      assignmentNumber: row.number ?? null,
+      assignmentStatus: row.status,
+      reasons,
+    };
+  }
   return {
+    kind: "order",
     id: row.orderId,
     receivedAt: row.receivedAt,
     addressText: row.addressText,
@@ -82,7 +102,7 @@ async function lookupOrders(
   fields: PossibleDuplicateFields,
 ): Promise<PossibleDuplicateOrders> {
   const { rows, hasMore } = await lookupPossibleDuplicateRows(grant, fields);
-  const items = rows.map(toOrderForm).filter((item) => item !== null);
+  const items = rows.map(toOrderForm);
   return { items, hasMore };
 }
 

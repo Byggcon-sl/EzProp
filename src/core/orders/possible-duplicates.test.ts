@@ -215,6 +215,7 @@ describe("oppslaget mot databasen", () => {
         "assignmentNumber",
         "assignmentStatus",
         "id",
+        "kind",
         "reasons",
         "receivedAt",
         "status",
