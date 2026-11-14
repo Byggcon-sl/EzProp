@@ -3,7 +3,7 @@ id: T-0052
 tittel: Planen har mistet Ståles beslutninger fra 12.11 om live diktat og strekkmål 6 (KI-briller)
 type: feil
 alvor: middels
-status: rettet
+status: lukket
 funnet: 2026-11-13
 rolle: test-dokumentvakt
 omrade: dokumenter (plan)
@@ -31,7 +31,10 @@ Fase 2b har den gamle teksten, planen sier «Fem strekkmål», og beslutningene 
 Hent tilbake linjene fra c4b8bfc7 (fase 2b og strekkmålene). Før beslutningene inn i beslutningstabellen i kartleggingen (se T-0008). Sjekk om andre PR-er bygget på gamle brancher har skrevet over dokumenter, og sammenlign planen med main før merge (diff), så linjer ikke forsvinner ved fletting.
 
 ## Etterprøvd
+2026-11-14, rettet bekreftet. Rettet i e42e51bd (PR #201). Live diktat i fase 2b og raden for KI-briller i strekkmålene er tegn for tegn like c4b8bfc7, og planen sier «Fem strekkmål … og nr. 6 fra Ståle 12.11.2026».
+
 2026-11-13, bekreftet (middels). Funn-kontrolløren fant teksten i c4b8bfc7, så at c4afc1a3 fjernet den, og at main sier «Fem strekkmål».
 
 ## Logg
 - 2026-11-13: funnet
+- 2026-11-14: rettet bekreftet av testlaget på main a1ca41d9 (rettet i PR #201). Lukket.

@@ -34,3 +34,4 @@ Ikke etterprøvd (lite).
 
 ## Logg
 - 2026-11-13: funnet
+- 2026-11-14: tallmotsigelsen er rettet. Linjen om regelpunktet (nå linje 160 i planen) står igjen og sier fortsatt ikke at punktet er levert.
