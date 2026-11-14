@@ -3,14 +3,14 @@ id: T-0050
 tittel: Nedtrekkslister og avkrysninger hopper tilbake etter en feilmelding, og neste lagring lagrer feil verdi uten varsel
 type: feil
 alvor: alvorlig
-status: ny
+status: rettet
 funnet: 2026-11-13
 rolle: test-robusthet, test-kontor
 omrade: skjemaer: «Legg til rom» (arealtype); før også areal, eiendom, reklamasjon, part, avtale
 maal: reklamasjoner
 commit: e013fde7
 forsok: 2
-pr:
+pr: 210
 ---
 
 ## Hva
@@ -64,3 +64,4 @@ Gi listene og avkrysningene `key` ut fra svaret fra lagringen (for eksempel `key
 - 2026-11-13: funnet
 - 2026-11-13: rettet på branch `rett-t0050-valg-etter-feil` (versjon 0.10.7): ny `key` per forsøk på nedtrekkslister, avkrysninger og radioknapper i 14 skjemaer, startverdien fra det som ble sendt. E2e `e2e/fase-2a-rett-t0050-valg-etter-feil.spec.ts` (areal, eiendom, reklamasjon, part).
 - 2026-11-14: prøvd på nytt av testlaget på main a1ca41d9: fortsatt feil i arealtypen i «Legg til rom». Status tilbake til «ny», forsøk 2. Tas før neste nye punkt i planen.
+- 2026-11-14: forsøk 2, 14.11.2026: årsak: listen «Arealtype» i `RoomForm` var styrt (`value`). React tilbakestiller skjemaet etter hvert forsøk, og en styrt liste har ingen startverdi i DOM-en, så tilbakestillingen satte den til første valg (BRA-i); React rettet den ikke, fordi tilstanden var uendret. Rettet ved å gjøre «Arealtype» og «Under terreng» ustyrte (`defaultValue`/`defaultChecked` fra det som ble sendt, ny nøkkel per forsøk), og forslaget for romtypen (A97) settes rett i feltene. Gjelder både «Legg til rom» og «Endre rom». «Legg til flere rom» har ingen arealtype-liste eller avkrysning i skjemaet, så ingen retting der. Bekreftet rød før og grønn etter med lokal e2e (pc og ipad). Versjon 0.12.3. E2e: `e2e/fase-2a-rett-t0050-arealtype-takstmann.spec.ts` (E1–E6, også databasen) og `e2e/fase-2a-rett-t0050-valg-etter-feil.spec.ts`.

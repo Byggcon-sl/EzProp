@@ -1722,3 +1722,25 @@ export async function convertedAssignmentNumber(page: Page): Promise<string> {
     .trim();
   return ASSIGNMENT_LINK_NAME.exec(text)![1]!;
 }
+
+// --- Rom på oppdraget (rett T-0050 forsøk 2, docs/agenter/oppgaver/rett-t0050-arealtype-testplan.md)
+
+export type E2eRoomRow = { name: string | null; areaType: string; belowGround: boolean };
+
+/** Rommene (ikke slettede) på oppdraget med navn, arealtype og «Under terreng». Bare lesing. */
+export async function roomsOnAssignment(assignmentId: string): Promise<E2eRoomRow[]> {
+  const sql = e2eSql();
+  try {
+    return await sql<E2eRoomRow[]>`
+      select r.name, r.area_type as "areaType", r.below_ground as "belowGround"
+      from rooms r
+      join floors f on f.id = r.floor_id and f.organization_id = r.organization_id
+      join report_buildings b on b.id = f.report_building_id
+        and b.organization_id = f.organization_id
+      where b.assignment_id = ${assignmentId}
+        and r.deleted_at is null
+      order by r.created_at`;
+  } finally {
+    await sql.end();
+  }
+}
