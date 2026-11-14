@@ -3,7 +3,7 @@ id: T-0018
 tittel: Listen over romtyper er ikke delt i grupper
 type: feil
 alvor: lite
-status: rettet
+status: lukket
 funnet: 2026-11-11
 rolle: test-takstmann
 omrade: bygninger, rom
@@ -30,8 +30,11 @@ Oppgavekortet `docs/funksjoner/fase2a-bygninger-areal-rom.md`: «Romtypen er en 
 Del listen i grupper (for eksempel våtrom, kjøkken, tekniske rom, andre), eller vis de 6–8 vanligste som knapper.
 
 ## Etterprøvd
+2026-11-14, rettet bekreftet. Funn-kontrolløren så at nedtrekkslisten for romtype har 34 valg i fem grupper: Våtrom (5), Kjøkken (2), Toalett (1), Spesialrom (5) og Andre rom (20). At dialogen «Legg til flere rom» bruker andre grupper, er ført som eget funn (T-0090).
+
 Ikke etterprøvd (lite).
 
 ## Logg
 - 2026-11-11: funnet
 - 2026-11-13: rettet på branch `flere-rom-samtidig`: nedtrekkslisten for ett rom er gruppert med `optgroup` etter romgruppe (`docs/funksjoner/fase2a-flere-rom.md`). PR: kommer
+- 2026-11-14: rettet bekreftet av testlaget på main a1ca41d9. Lukket.

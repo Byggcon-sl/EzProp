@@ -1,41 +1,42 @@
 # Rapport fra testlaget
 
-**Kjøring 13.11.2026.** Det som er nytt siden 12.11 ble prøvd: Microsoft-innloggingen, Byggcon-profilen og hopplenken, reglene og malen for badet, etasjer og rom, og dokumentene. Fem testere: takstmann, kontor, robusthet, fag og dokumentvakt. Hovedløkken og nattløkken er begge slått på.
+**Kjøring 14.11.2026.** Det som er nytt siden 13.11 ble prøvd: rette en ordre, søk i ordrelisten og arbeidskøen, varsel om mulig dublett, legge til flere rom på én gang, oppbevaringstid for avviste KI-forslag, og dokumentene. Seks testere: takstmann, kontor, robusthet, fag, KI og dokumentvakt.
 
 ## Hva er prøvd
-Bygninger, etasjer, areal og rom på iPad-størrelse og PC. Kontorets flyt fra ordre til fakturert, parter, reklamasjon og avtaler. Innlogging med Microsoft og kode, også med feil og avbrudd. Tilgang for kontor, leder og annen organisasjon. Badreglene med 85 testsaker og 21 egne grensetilfeller. Om planen og beslutningene stemmer med det som er bygget. Badet har ingen skjerm ennå, så TG, avvik, publisering og PDF er bare prøvd i data.
+Hele veien fra ny ordre til ferdig romliste på iPad (liggende og stående) og PC, som takstmann, kontor, leder og admin. To faner samtidig, dobbelttrykk, uten nett, utløpt innlogging, rare tegn og forsøk på å se en annen organisasjons data. Romsettene og romtypene mot forskriften og dine svar. KI-vasken og loggen med den falske KI-tjenesten. Om planen og beslutningene stemmer med det som er bygget. Kontrollpunkter, avvik, bilder, fraser og rapportutskrift finnes ikke ennå, så de er ikke prøvd.
 
 ## Hva virker
-- **Tre funn fra forrige gang er rettet og lukket:** kjeller får riktig etasje og «under terreng» (T-0010), kryperom og uinnredet loft regnes ikke som BRA (T-0016), og reglene kan si «ikke vurdert» når data mangler (T-0015).
-- **Microsoft-innloggingen er trygg:** feil, avbrudd og forsøk på å lure den sender tilbake til innloggingen med en norsk melding. Ingen persondata i loggen. En ansatt som er tatt bort, kommer ikke inn.
-- **Badreglene følger Ståles svar:** grensene for alder og fukt slår til der de skal, og manglende data gir «ikke vurdert», aldri et stille nei.
-- **Tilgang holder,** og kontorets arbeid virker. Profilen gir store nok trykkflater og ingen sidelengs rulling på iPad.
+- **Flere rom på én gang sparer mye tid:** en enebolig med tre etasjer tar 9 trykk mot rundt 84 før. Fra ordre til ferdig romliste tar rundt 36 trykk og felt.
+- **Kontoret kan rette en ordre** i alle tilstander. Endringene vises med gammel og ny verdi, og to som lagrer samtidig får beskjed uten at noe går tapt.
+- **Søket finner** ordrenummer, oppdragsnummer, gårds- og bruksnummer og adresse. **Dublettvarselet** kjenner igjen samme adresse skrevet ulikt, og stopper ingenting.
+- **Tilgang og skille mellom organisasjonene holder** overalt, også når noen tukler med skjemaene. Ingen adresser eller navn i loggene.
+- **KI:** avviste forslag får oppbevaringstiden admin har valgt, ingenting slettes, og KI satte aldri TG eller sendte noe.
+- **Tre funn er lukket:** romtypene er delt i grupper (T-0018), kontoret starter på «Alle» i arbeidskøen (T-0029), og live diktat og strekkmål 6 er tilbake i planen (T-0052).
 
 ## Hva virker ikke (viktigst først)
-1. **Valg i nedtrekkslister hopper tilbake etter en feilmelding, og feil verdi blir lagret uten varsel** (alvorlig, T-0050). Gjelder areal (målemetode, målt av), eiendom (boligtype, eierform), reklamasjon (forsikringskrav blir lagret som reklamasjon), parter og avtaler. Feil kan havne i rapporten. Rettes før neste nye punkt.
-2. **Planen har mistet Ståles beslutninger fra 12.11** om live diktat og KI-briller som strekkmål 6 (T-0052). En senere endring skrev over dem.
-3. **Valget «Ukjent (byggeåret for bygningen brukes)» gjør ikke det det lover.** Et gammelt bad med ukjent alder får ikke TG3-forslaget (T-0051).
-4. **To ting i badmalen kan gi en rapport som sier imot seg selv:** «utført uten funn» sammen med forhøyet fukt (T-0059), og «må» i tiltaket når TG2 velges (T-0060).
-5. **Rommene følger ikke etasjen** når den endres til eller fra «under terreng», og «1. etasje» gir ikke alltid etasjenummer 1 (T-0053, T-0054).
-6. **Dokumentene henger etter:** endringsloggen er ikke ryddet (T-0021, forsøk 2), planen har en gammel linje om fukt i bad (T-0003), og flere grunndokumenter er ikke oppdatert etter 12.11.
+1. **Arealtypen i «Legg til rom» hopper tilbake etter en feilmelding,** og feil arealtype blir lagret uten varsel (alvorlig, T-0050, andre forsøk). De ti andre skjemaene er rettet. Feil areal kan havne i rapporten.
+2. **Det du sa ja til om varsel ved like kontakter og firma, falt ut av planen** da svarene ble ført inn. Bare varselet på ordre er bygget (T-0072).
+3. **Går innloggingen ut midt i et skjema, er det som er skrevet borte** (T-0070). **Faller nettet idet man lagrer eiendom eller rom, kommer en engelsk feilside** (T-0071).
+4. **Rom som legges til samtidig, kommer i tilfeldig rekkefølge** (T-0069). «Legg til rom» med ett rom gir ikke nummer, så det kan bli «Soverom» ved siden av «Soverom 1» (T-0084).
+5. **Dokumentene:** punktet om personvernvurdering (DPIA) er skrevet om uten at du har sagt det (T-0078), og fire beslutninger som er dyre å endre, er merket lette (T-0082).
 
-I tillegg kom 12 små ting, blant annet at en ansatt kan endre sitt eget visningsnavn utenom admin (T-0057).
+I tillegg kom 16 små ting, blant annet at dublettvarselet bommer når adressen mangler komma (T-0086). Liten ting fra takstmannen: eierform blir ikke fylt ut på eiendommen selv om ordren sier borettslag.
 
 ## Tall
 | Nye funn | Åpne | Lukket |
 |---|---|---|
-| 19 (1 alvorlig, 4 middels, 14 små) | 61 (1 alvorlig, 19 middels, 41 små) | 3 |
+| 23 (5 middels, 18 små) | 81 (1 alvorlig, 23 middels, 57 små) | 3 |
 
-En uavhengig kontrollør gjenskapte de alvorlige og middels funnene. Seks rettede funn ble prøvd på nytt: tre er lukket, T-0014 er fortsatt delvis rettet, og T-0003 og T-0021 er fortsatt feil.
+En uavhengig kontrollør gjenskapte de alvorlige og middels funnene. Fire rettede funn ble prøvd på nytt: tre er lukket, og T-0050 er fortsatt feil.
 
-**Ikke bekreftet:** ingen. Ett funn om etasjenummer ble dømt «ikke feil» (det står slik i oppgavekortet), og er tatt som forbedring (T-0054).
+**Ikke bekreftet:** ingen. Ett funn om nummerering av ett rom ble dømt «ikke feil» mot oppgaven, og er tatt som forbedring (T-0084).
 
-**Til Ståle:** ingen nye forslag. Fire nye spørsmål til fagrådet (nr. 78 i `docs/09-apne-sporsmal.md`). 18 nye rader (A200–A238) i `docs/agenter/testlag/beslutninger-til-staale.md`.
+**Til deg:** ingen nye forslag. Fem nye spørsmål til fagrådet om rom, romsett, fraser og automatisk tekst (nr. 82 i `docs/09-apne-sporsmal.md`). Fire nye rader i listen over dyre beslutninger (`docs/agenter/testlag/beslutninger-til-staale.md`), som nå er gått gjennom til A291.
 
 ## De tre viktigste tingene
-1. **Rett nedtrekkslistene** (T-0050), så det den ansatte valgte, faktisk blir lagret.
-2. **Før live diktat og strekkmål 6 tilbake i planen** (T-0052), så fase 2b bygges slik Ståle vil.
-3. **Før «Badet på PC»:** byggeår når alderen er ukjent, motstriden om fukt, og «bør» ved TG2 (T-0051, T-0059, T-0060).
+1. **Rett arealtypen i «Legg til rom»** (T-0050), så det takstmannen valgte, faktisk blir lagret.
+2. **Før varselet om like kontakter og firma inn i planen igjen** (T-0072), slik du sa ja til 12.11.
+3. **Ingenting skal gå tapt ved utløpt innlogging eller brudd i nettet** (T-0070, T-0071). Det hører til «klar for drift».
 
-Sist kjørt på commit: e013fde7
-Dato: 13.11.2026
+Sist kjørt på commit: a1ca41d9
+Dato: 14.11.2026

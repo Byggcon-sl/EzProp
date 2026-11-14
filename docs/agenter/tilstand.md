@@ -68,15 +68,16 @@ Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4�
 
 ## Oppgaver fra testlaget
 
-Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 13.11.2026 på main e013fde7 (det som var nytt siden 11672aa).
+Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 14.11.2026 på main a1ca41d9 (det som var nytt siden e013fde7).
 
-- **Åpne alvorlige feil: ingen.** T-0050 (nedtrekkslister hopper tilbake etter feilmelding) rettet 13.11.2026 i PR «Rett T-0050», versjon 0.10.7; testlaget prøver på nytt.
-- Åpne funn i alt: 61 (1 alvorlig, 19 middels, 41 små). Middels og små tas med neste oppgave i samme område. Lukket denne gangen: T-0010, T-0015 og T-0016.
-- **Før fase 2b:** T-0052 (planen har mistet live diktat og strekkmål 6 fra 12.11).
+- **Åpne alvorlige feil: 1.** T-0050 (arealtypen i «Legg til rom» hopper tilbake etter feilmelding og lagres feil). Fortsatt feil etter retting, forsøk 2. De ti andre skjemaene er rettet. Tas før neste nye punkt i planen.
+- Åpne funn i alt: 81 (1 alvorlig, 23 middels, 57 små). Nye denne gangen: T-0069–T-0091. Middels og små tas med neste oppgave i samme område. Lukket denne gangen: T-0018, T-0029 og T-0052.
+- **Før «klar for drift»:** T-0070 (utløpt innlogging sletter skjema) og T-0071 (engelsk feilside når nettet faller).
+- **Plan og beslutninger:** T-0072 (Ståles ja til varsel om like kontakter og firma falt ut av T3), T-0078 (DPIA-punktet skrevet om).
 - **Før «Badet på PC»:** T-0051, T-0059 og T-0060, og T-0014 (punkt 1 og 5) i 2a-3.
 - **Må tas før ekte KI slås på:** T-0044, T-0046, T-0047, T-0034 og T-0038 (uendret).
-- Fortsatt feil etter retting: T-0021 (forsøk 2) og T-0003 (forsøk 1, nå bare S3-raden i planen).
-- Til testlagets oppsett: testlaget trenger en admin i prøveorganisasjonen (admin fra seed havner i «Byggcon», så avtaler kan ikke prøves sammen med kontorbrukeren). Badmalen og reglene har ingen skjerm ennå og prøves bare i data.
+- Fortsatt feil etter retting: T-0050 (forsøk 2), T-0021 (forsøk 2) og T-0003 (forsøk 1).
+- Til testlagets oppsett: testlaget trenger en admin i prøveorganisasjonen (admin fra seed havner i «Byggcon», så avtaler kan ikke prøves sammen med kontorbrukeren). Kontrollpunkter, avvik, bilder, fraser og PDF har ingen skjerm ennå og er ikke prøvd.
 
 ## Oppgaver fra nattløkken
 
