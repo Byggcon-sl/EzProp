@@ -27,13 +27,32 @@ export type KnownSeed = RedactionCaseKnownValues;
 /** Nøytralt partnavn uten treff i testtekstene (to ord, så det ikke blir et vanlig ord). */
 export const NEUTRAL_PARTY_NAME = "Qxzpart Qxzrolle";
 
+export type SeedKnownValuesOptions = {
+  /**
+   * Bestillingen (`seed.order`) legges på oppdraget selv, som for «Nytt oppdrag» (ADR 0011):
+   * ingen ordre, og oppdraget har verken `order_id` eller `property_id`.
+   */
+  onAssignment?: boolean;
+};
+
 /**
  * Lager et oppdrag i organisasjonen og legger de kjente verdiene inn i radene kortets punkt 2
  * nevner. Gir id-en til oppdraget.
  */
-export async function seedKnownValues(organizationId: string, seed: KnownSeed): Promise<string> {
+export async function seedKnownValues(
+  organizationId: string,
+  seed: KnownSeed,
+  options: SeedKnownValuesOptions = {},
+): Promise<string> {
   const deletedAt = new Date("2026-11-01T10:00:00Z");
-  const assignment = await createAssignment(organizationId);
+  const booking =
+    options.onAssignment && seed.order
+      ? await assignmentBooking(organizationId, seed.order, deletedAt)
+      : {};
+  const assignment = await createAssignment(organizationId, {
+    ...booking,
+    ...(options.onAssignment ? { orderId: null, propertyId: null } : {}),
+  });
   const assignmentId = assignment.id;
 
   for (const party of seed.parties ?? []) {
@@ -80,7 +99,7 @@ export async function seedKnownValues(organizationId: string, seed: KnownSeed): 
       firmId: firm.id,
     });
   }
-  if (seed.order) {
+  if (seed.order && !options.onAssignment) {
     const order = seed.order;
     const contact = order.orderedByContact
       ? await createContact(organizationId, {
@@ -158,6 +177,40 @@ export async function seedKnownValues(organizationId: string, seed: KnownSeed): 
     });
   }
   return assignmentId;
+}
+
+/** Bestillingsfeltene fra `seed.order` som kolonner på oppdraget, med kontakt og firma. */
+async function assignmentBooking(
+  organizationId: string,
+  order: NonNullable<KnownSeed["order"]>,
+  deletedAt: Date,
+) {
+  const contact = order.orderedByContact
+    ? await createContact(organizationId, {
+        firstName: order.orderedByContact.firstName,
+        lastName: order.orderedByContact.lastName ?? null,
+        email: order.orderedByContact.email ?? null,
+        phone: order.orderedByContact.phone ?? null,
+        deletedAt: order.orderedByContact.deleted ? deletedAt : null,
+      })
+    : null;
+  const firm = order.orderedByFirm
+    ? await createFirm(organizationId, {
+        name: order.orderedByFirm.name,
+        orgNumber: order.orderedByFirm.orgNumber ?? null,
+        deletedAt: order.orderedByFirm.deleted ? deletedAt : null,
+      })
+    : null;
+  return {
+    addressText: order.addressText ?? "Qxzadresse 1",
+    orderedByText: order.orderedByText ?? null,
+    orderedByContactId: contact?.id ?? null,
+    orderedByFirmId: firm?.id ?? null,
+    gnr: order.gnr ?? null,
+    bnr: order.bnr ?? null,
+    snr: order.snr ?? null,
+    housingAssociationName: order.housingAssociationName ?? null,
+  };
 }
 
 /** Antall forekomster av hver plassholder i teksten. */

@@ -31,11 +31,13 @@ export const REDACTED = "[fjernet]";
 
 /**
  * Feltnavn som aldri skal i loggen (sammenlignes uten store bokstaver, «-» og «_»): eksakte ord
- * for personopplysninger og rammeverksfelt, pluss nøkler som slutter på et hemmelighetsord
+ * for personopplysninger og rammeverksfelt (også bestillingsfeltene på ordre og oppdrag: adresse,
+ * bestiller, matrikkel, meglerens ordrenummer og borettslag, ADR 0011), pluss nøkler som slutter
+ * på et hemmelighetsord
  * (f.eks. `password`, `graphRefreshToken`, `FILE_STORAGE_AZURE_CONNECTION_STRING`).
  */
 const SENSITIVE_KEY =
-  /^(e?mail|epost|emailaddress|to|from|cc|bcc|name|navn|fullname|firstname|lastname|phone|telefon|mobil|mobile|address|adresse|ip|ipaddress|useragent|authorization|cookie|cookies|setcookie|otp|code|kode|session|headers|body|formdata|details|sas|.*(?:connectionstring|accountkey|clientsecret|secret|token|password|passord|apikey))$/;
+  /^(e?mail|epost|emailaddress|to|from|cc|bcc|name|navn|fullname|firstname|lastname|phone|telefon|mobil|mobile|address|adresse|addresstext|orderedbytext|gnr|bnr|snr|externalref|housingassociationname|ip|ipaddress|useragent|authorization|cookie|cookies|setcookie|otp|code|kode|session|headers|body|formdata|details|sas|.*(?:connectionstring|accountkey|clientsecret|secret|token|password|passord|apikey))$/;
 
 function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEY.test(key.toLowerCase().replace(/[-_]/g, ""));

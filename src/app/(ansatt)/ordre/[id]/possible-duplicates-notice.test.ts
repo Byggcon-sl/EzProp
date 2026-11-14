@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { assignmentStatusLabel } from "@/core/assignments/codes";
 import {
   DUPLICATE_REASONS,
   duplicateReasonLabel,
@@ -24,6 +25,7 @@ const OTHER_ID = "11111111-1111-4111-8111-111111111111";
 
 function item(overrides: Partial<PossibleDuplicateOrder> = {}): PossibleDuplicateOrder {
   return {
+    kind: "order",
     id: OTHER_ID,
     receivedAt: new Date("2026-11-11T23:30:00Z"),
     addressText: "Storgata 1A, 8006 Bodø",
@@ -86,6 +88,21 @@ describe("PossibleDuplicatesNotice", () => {
     );
     expect(line).toContain(orderStatusLabel("converted"));
     expect(line).toContain("oppdrag A-2026-0042");
+  });
+
+  it("et oppdrag laget uten ordre lenker til oppdraget og viser nummer og oppdragsstatus", () => {
+    const html = render([
+      item({
+        kind: "assignment",
+        status: null,
+        assignmentNumber: "2026-00042",
+        assignmentStatus: "ordered",
+      }),
+    ]);
+    expect(html).toContain(`href="/oppdrag/${OTHER_ID}"`);
+    expect(text(html)).toContain(
+      `Storgata 1A, 8006 Bodø – mottatt 12.11.2026 – Oppdrag 2026-00042 – ${assignmentStatusLabel("ordered")} – samme adresse`,
+    );
   });
 
   it.each([

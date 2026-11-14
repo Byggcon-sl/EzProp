@@ -60,6 +60,14 @@ export const NEVER_FIELDS: readonly string[] = [
   // assignments
   "assignments.internal_note",
   "assignments.number",
+  // assignments: bestillingsopplysningene (ADR 0011, samme felt som på ordren)
+  "assignments.address_text",
+  "assignments.gnr",
+  "assignments.bnr",
+  "assignments.snr",
+  "assignments.housing_association_name",
+  "assignments.ordered_by_text",
+  "assignments.external_ref",
   // Utvidet i fase 2a-1 (vask før KI)
   "assignment_team_members.handed_over_reason",
   "certifications.certificate_number",

@@ -17,6 +17,7 @@ import {
   commonAreas,
   employees,
   events,
+  orders,
   organizations,
   properties,
   type EmployeeRole,
@@ -151,14 +152,23 @@ async function person(organizationId: string, roles: EmployeeRole[], name?: stri
 
 /**
  * Et oppdrag gjort om fra en ordre: ordren er `converted` og peker på oppdraget, og oppdraget
- * peker på ordren (begge retninger, som når kontoret gjør om ordren).
+ * peker på ordren (begge retninger, som når kontoret gjør om ordren). Bestillingsfeltene kopieres
+ * til oppdraget, som `convertOrderToAssignment` gjør (ADR 0011).
  */
 async function assignmentFromOrder(
   organizationId: string,
   officeId: string,
   orderValues: Parameters<typeof createOrder>[1],
 ) {
-  const assignment = await createAssignment(organizationId, { officeId });
+  const values = orderValues ?? {};
+  const assignment = await createAssignment(organizationId, {
+    officeId,
+    ...(values.addressText === undefined ? {} : { addressText: values.addressText }),
+    gnr: values.gnr ?? null,
+    bnr: values.bnr ?? null,
+    snr: values.snr ?? null,
+    housingAssociationName: values.housingAssociationName ?? null,
+  });
   const order = await createOrder(organizationId, {
     ...orderValues,
     status: "converted",
@@ -947,13 +957,37 @@ describe("4.5 getAssignmentProperty", () => {
     }
   });
 
-  it("4.5.3 uten eiendom og uten ordre: prefill har tomme verdier", async () => {
-    const { org, admin, assignment } = await orgWithAdmin();
+  it("4.5.3 uten eiendom og uten ordre: prefill kommer fra bestillingen på oppdraget (ADR 0011)", async () => {
+    const { org, admin, office } = await orgWithAdmin();
+    const assignment = await createAssignment(org.id, {
+      officeId: office.id,
+      orderId: null,
+      addressText: ADDRESS,
+      gnr: GNR,
+      bnr: BNR,
+      snr: SNR,
+      housingAssociationName: ASSOCIATION,
+    });
     const result = await getAssignmentProperty(admin, org.id, assignment.id);
     expect(result.property).toBeNull();
     expect(result.commonAreas).toBeNull();
     expect(Object.keys(result.prefill).sort()).toEqual(PREFILL_KEYS);
-    expectBlankPrefill(result.prefill);
+    expect(result.prefill).toEqual({
+      address: ADDRESS,
+      gnr: GNR,
+      bnr: BNR,
+      snr: SNR,
+      associationName: ASSOCIATION,
+    });
+  });
+
+  it("4.5.3 uten eiendom, ordre og matrikkel: adressen fylles ut, resten er tomt", async () => {
+    const { org, admin, assignment } = await orgWithAdmin();
+    const { prefill } = await getAssignmentProperty(admin, org.id, assignment.id);
+    expect(prefill.address).toBe(assignment.addressText);
+    for (const key of ["gnr", "bnr", "snr", "associationName"] as const) {
+      expect(isBlank(prefill[key]), key).toBe(true);
+    }
   });
 
   it("4.5.4 med eiendom: property har feltene og én matrikkelrad; prefill er tom eller mangler", async () => {
@@ -985,17 +1019,22 @@ describe("4.5 getAssignmentProperty", () => {
     expect(flatProperty(result.property)).toMatchObject({ gnr: GNR, bnr: BNR });
   });
 
-  it("4.5.6 myk-slettet ordre gir tom prefill", async () => {
+  it("4.5.6 prefill leses fra oppdraget: ordren rettet etter omgjøring eller myk-slettet endrer den ikke", async () => {
     const { org, admin, office } = await orgWithAdmin();
     const assignment = await assignmentFromOrder(org.id, office.id, {
       addressText: ADDRESS,
       gnr: GNR,
       bnr: BNR,
-      deletedAt: DELETED_AT,
     });
+    await db
+      .update(orders)
+      .set({ addressText: "Rettet ordreveien 1", gnr: "1", deletedAt: DELETED_AT })
+      .where(eq(orders.id, assignment.orderId));
 
     const { prefill } = await getAssignmentProperty(admin, org.id, assignment.id);
-    expectBlankPrefill(prefill);
+    expect(prefill.address).toBe(ADDRESS);
+    expect(prefill.gnr).toBe(GNR);
+    expect(prefill.bnr).toBe(BNR);
   });
 
   it("4.5.7 fellesdeler som ikke gjelder (enebolig/selveier) gir commonAreas = null, selv om raden finnes", async () => {

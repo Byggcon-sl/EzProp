@@ -427,6 +427,10 @@ export async function createAssignment(
       number: `TEST-${String(assignmentCounter).padStart(5, "0")}`,
       assignmentType: "condition_report",
       status: "ordered",
+      // Påkrevd fra migrering 0034 (ADR 0011). Oppdiktet, som i `createOrder`.
+      addressText: "Testveien 12, 8000 Bodø",
+      receivedAt: TEST_NOW,
+      source: "manual",
       ...overrides,
       officeId,
       organizationId,

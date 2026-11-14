@@ -64,8 +64,15 @@ async function convertedOrder(
   assignmentOverrides: Partial<typeof assignments.$inferInsert> = {},
 ) {
   const order = await insertOrder(organizationId, orderOverrides);
+  // Oppdraget eier bestillingen (ADR 0011): feltene kopieres fra ordren, som i
+  // `convertOrderToAssignment`.
   const assignment = await createAssignment(organizationId, {
     orderId: order.id,
+    addressText: order.addressText,
+    gnr: order.gnr,
+    bnr: order.bnr,
+    snr: order.snr,
+    receivedAt: order.receivedAt,
     ...assignmentOverrides,
   });
   await db
@@ -208,6 +215,7 @@ describe("oppslaget mot databasen", () => {
         "assignmentNumber",
         "assignmentStatus",
         "id",
+        "kind",
         "reasons",
         "receivedAt",
         "status",
