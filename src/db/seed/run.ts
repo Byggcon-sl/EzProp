@@ -19,13 +19,13 @@ import { brand } from "@/shared/config/brand";
  *   forsikring og firmatekst fylles ut av admin. Admin får ikke selskap eller kontor her.
  * Ingen kundeopplysninger, ingen eksempeloppdrag.
  */
-const seedCompanies = [
+export const SEED_COMPANIES = [
   "Byggcon AS",
   "Byggcon Nord AS",
   "Byggcon Helgeland AS",
   "Byggcon Troms AS",
 ] as const;
-const seedOffices = ["Bodø", "Mo i Rana", "Mosjøen", "Narvik", "Tromsø"] as const;
+export const SEED_OFFICES = ["Bodø", "Mo i Rana", "Mosjøen", "Narvik", "Tromsø"] as const;
 
 export async function runSeed(env: Record<string, string | undefined> = process.env) {
   const adminEmail = env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
@@ -77,7 +77,7 @@ export async function runSeed(env: Record<string, string | undefined> = process.
     .from(companies)
     .where(eq(companies.organizationId, organization.id));
   const existingNames = new Set(existingCompanies.map((company) => company.legalName));
-  const newCompanies = seedCompanies.filter((legalName) => !existingNames.has(legalName));
+  const newCompanies = SEED_COMPANIES.filter((legalName) => !existingNames.has(legalName));
   if (newCompanies.length > 0) {
     await db
       .insert(companies)
@@ -91,9 +91,11 @@ export async function runSeed(env: Record<string, string | undefined> = process.
     .from(offices)
     .where(eq(offices.organizationId, organization.id));
   const existingOfficeNames = new Set(existingOffices.map((office) => office.name));
-  const newOffices = seedOffices
-    .map((name, index) => ({ organizationId: organization.id, name, sortOrder: index + 1 }))
-    .filter((office) => !existingOfficeNames.has(office.name));
+  const newOffices = SEED_OFFICES.map((name, index) => ({
+    organizationId: organization.id,
+    name,
+    sortOrder: index + 1,
+  })).filter((office) => !existingOfficeNames.has(office.name));
   if (newOffices.length > 0) {
     await db.insert(offices).values(newOffices);
   }
