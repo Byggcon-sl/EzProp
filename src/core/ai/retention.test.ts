@@ -78,6 +78,13 @@ describe("retainUntilFor og readRejectedRetentionYears (U1–U7)", () => {
     expect(retainUntilFor("rejected", leap, 4).toISOString()).toBe("2032-02-29T12:00:00.000Z");
   });
 
+  it("U4 retainUntilFor endrer ikke datoen den får", () => {
+    const input = new Date("2026-11-02T09:00:00Z");
+    retainUntilFor("rejected", input, 3);
+    retainUntilFor("accepted", input, 3);
+    expect(input.toISOString()).toBe("2026-11-02T09:00:00.000Z");
+  });
+
   it("U5 readRejectedRetentionYears: gyldige tall", () => {
     const warn = vi.spyOn(logger, "warn");
     for (const value of [1, 5, 10]) {
@@ -106,6 +113,7 @@ describe("retainUntilFor og readRejectedRetentionYears (U1–U7)", () => {
     { name: "tekst", settings: { [AI_REJECTED_RETENTION_KEY]: "mange-år" }, marker: "mange-år" },
     { name: "settings = null", settings: null, marker: null },
     { name: "settings = tekst", settings: "ugyldig-oppsett", marker: "ugyldig-oppsett" },
+    { name: "settings = liste", settings: [1, 2], marker: null },
   ];
 
   it.each(invalid)(
@@ -168,6 +176,20 @@ describe("lagring og lesing av innstillingen (I1–I13)", () => {
       expect((await auditRows(organization.id)).length).toBe(auditBefore);
     },
   );
+
+  it("I1 leder med alle andre roller unntatt admin får heller ikke lagre", async () => {
+    const { organization } = await orgWithAdmin();
+    const { actor } = await employeeWithGrant(
+      organization.id,
+      ["inspector", "office", "manager"],
+      "Alt unntatt admin",
+    );
+    await expect(
+      saveAiRetentionSettings(actor, organization.id, { rejectedRetentionYears: 3 }),
+    ).rejects.toBeInstanceOf(AccessDeniedError);
+    expect(await rawSettings(organization.id)).not.toHaveProperty(AI_REJECTED_RETENTION_KEY);
+    expect(await auditRows(organization.id)).toHaveLength(0);
+  });
 
   it("I2 admin med bare adminrollen lagrer (regel 11, skal aldri fjernes)", async () => {
     const { organization, admin } = await orgWithAdmin();
@@ -276,8 +298,21 @@ describe("lagring og lesing av innstillingen (I1–I13)", () => {
     },
   );
 
+  it("U8 input som ikke er et objekt avvises", async () => {
+    const { organization, admin } = await orgWithAdmin();
+    for (const input of [null, "3", 3, []]) {
+      const caught = await saveAiRetentionSettings(admin, organization.id, input).catch(
+        (e: unknown) => e,
+      );
+      expect(caught).toBeInstanceOf(AiRetentionValidationError);
+    }
+    expect(await rawSettings(organization.id)).not.toHaveProperty(AI_REJECTED_RETENTION_KEY);
+    expect(await auditRows(organization.id)).toHaveLength(0);
+  });
+
   it.each([
     { name: "tekst «5»", settings: { [AI_REJECTED_RETENTION_KEY]: "5" } },
+    { name: "0", settings: { [AI_REJECTED_RETENTION_KEY]: 0 } },
     { name: "manglende nøkkel", settings: {} },
   ])("I9 gammel verdi er 10 når det som stod var ugyldig ($name)", async ({ settings }) => {
     const { organization, admin } = await orgWithAdmin();
@@ -321,6 +356,30 @@ describe("lagring og lesing av innstillingen (I1–I13)", () => {
     expect(settings["time_tracking.enabled"]).toBe(false);
   });
 
+  it("I11 to samtidige lagringer av innstillingen gir én gyldig verdi og ingen tapt nøkkel", async () => {
+    const { organization, admin } = await orgWithAdmin();
+    const others = { "access.inspectors_edit_all": true, "time_tracking.enabled": false };
+    await setOrgSettings(organization.id, others);
+    await Promise.all([
+      saveAiRetentionSettings(admin, organization.id, { rejectedRetentionYears: 2 }),
+      saveAiRetentionSettings(admin, organization.id, { rejectedRetentionYears: 7 }),
+    ]);
+    const settings = await rawSettings(organization.id);
+    const final = settings[AI_REJECTED_RETENTION_KEY];
+    expect([2, 7]).toContain(final);
+    expect(settings).toEqual({ ...others, [AI_REJECTED_RETENTION_KEY]: final });
+    // Radlåsen gjør at den andre ser den første: to rader, kjedet gammel → ny
+    const rows = await auditRows(organization.id);
+    expect(rows).toHaveLength(2);
+    // Radene kan ha samme tidspunkt, så rekkefølgen finnes fra kjeden, ikke fra sorteringen
+    const changes = rows.map((row) => row.changes as { old: number; new: number });
+    const first = changes.find((change) => change.old === 10);
+    const second = changes.find((change) => change !== first);
+    expect(first).toBeDefined();
+    expect(second!.old).toBe(first!.new);
+    expect(second!.new).toBe(final);
+  });
+
   it("I12 tenant-isolasjon: lagring", async () => {
     let orgB = "";
     await expectTenantIsolation({
@@ -346,6 +405,9 @@ describe("lagring og lesing av innstillingen (I1–I13)", () => {
     await expect(
       saveAiRetentionSettings(a.admin, orgB.id, { rejectedRetentionYears: 2 }),
     ).rejects.toBeInstanceOf(AccessDeniedError);
+    await expect(getAiRetentionSettings(a.admin, orgB.id)).rejects.toBeInstanceOf(
+      AccessDeniedError,
+    );
     expect(await rawSettings(orgB.id)).toEqual({ [AI_REJECTED_RETENTION_KEY]: 6 });
     expect(await auditRows(orgB.id)).toHaveLength(0);
   });
