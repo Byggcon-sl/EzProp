@@ -1,8 +1,13 @@
-import { and, count, eq, isNull } from "drizzle-orm";
-import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
+import { and, asc, count, eq, isNull } from "drizzle-orm";
+import {
+  AccessDeniedError,
+  requireOrganizationAccess,
+  type Actor,
+  type EmployeeGrant,
+} from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
 import { db, type DbExecutor } from "@/db/client";
-import { assignmentParties, contacts, firms, orders } from "@/db/schema";
+import { assignmentParties, assignments, contacts, firms, orders } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { MergeSameRecordError } from "./errors";
 
@@ -18,6 +23,11 @@ import { MergeSameRecordError } from "./errors";
  *
  * Revisjonsloggen får bare id-er og antall, aldri navn, e-post, telefon, notat eller
  * organisasjonsnummer. Mislykkede forsøk logges ikke (transaksjonen rulles tilbake).
+ *
+ * Bestilleren står både på ordren og på oppdraget (ADR 0011). Når den flyttes, øker `row_version`
+ * på hver rad (et åpent endringsskjema får da «endret av en annen»), og hver rad får en loggrad
+ * `update` med feltkodene og id-ene under `values`, i samme form som `updateOrder` og
+ * `updateAssignmentBooking`. Da viser «Endringer» byttet.
  */
 
 export type MergeInput = { keepId: string; removeId: string };
@@ -79,6 +89,42 @@ async function activeFirmId(tx: DbExecutor, organizationId: string, firmId: stri
     )
     .for("share");
   return row?.id ?? null;
+}
+
+/** Bestillerfeltene som flyttes ved sammenslåing (feltkodene i revisjonsloggen). */
+type MovedBookingField = "orderedByContactId" | "orderedByFirmId";
+
+type BookingMove = {
+  id: string;
+  values: Partial<Record<MovedBookingField, { from: string | null; to: string | null }>>;
+};
+
+/**
+ * Én loggrad `update` per flyttet ordre eller oppdrag, med feltkodene i fast rekkefølge og
+ * id-ene under `values` (A252). Rader uten endring får ingen loggrad.
+ */
+async function recordBookingMoves(
+  tx: DbExecutor,
+  grant: EmployeeGrant,
+  entityType: "order" | "assignment",
+  moves: BookingMove[],
+) {
+  const order: MovedBookingField[] = ["orderedByContactId", "orderedByFirmId"];
+  for (const move of moves) {
+    const fields = order.filter((field) => move.values[field] !== undefined);
+    if (fields.length === 0) continue;
+    await recordAuditEvent(tx, grant, {
+      entityType,
+      entityId: move.id,
+      action: "update",
+      changes: { fields, values: move.values },
+    });
+  }
+}
+
+/** Én endring av en id: med i loggraden bare når verdien faktisk endres. */
+function change(from: string | null, to: string | null) {
+  return from === to ? undefined : { from, to };
 }
 
 /** Fjerner en kontakt (myk sletting). Koblingene på parter og ordrer står urørt. */
@@ -158,16 +204,16 @@ export async function removeFirm(
 }
 
 /**
- * Slår sammen to kontakter. Parter og ordrer (også myk-slettede) flyttes fra `removeId` til
- * `keepId`, og firmaet på de flyttede radene blir firmaet til kontakten som beholdes (slettet
- * eller manglende firma gir `null`). Friteksten røres ikke. `removeId` myk-slettes; `keepId`
- * endres ikke.
+ * Slår sammen to kontakter. Parter, ordrer og bestilleren på oppdrag (også myk-slettede og
+ * kansellerte) flyttes fra `removeId` til `keepId`, og firmaet på de flyttede radene blir firmaet
+ * til kontakten som beholdes (slettet eller manglende firma gir `null`). Friteksten røres ikke.
+ * `removeId` myk-slettes; `keepId` endres ikke.
  */
 export async function mergeContacts(
   actor: Actor,
   organizationId: string,
   input: MergeInput,
-): Promise<{ partyCount: number; orderCount: number }> {
+): Promise<{ partyCount: number; orderCount: number; assignmentCount: number }> {
   const grant = await requireOrganizationAccess(actor, organizationId, "contacts.manage");
   checkMergeIds("contact", input);
   const { keepId, removeId } = input;
@@ -189,11 +235,43 @@ export async function mergeContacts(
         and(eq(assignmentParties.organizationId, orgId), eq(assignmentParties.contactId, removeId)),
       )
       .returning({ id: assignmentParties.id });
+    // Firmaet før flyttingen, til loggraden. Radene låses i fast rekkefølge.
+    const ordersBefore = await tx
+      .select({ id: orders.id, firmId: orders.orderedByFirmId })
+      .from(orders)
+      .where(and(eq(orders.organizationId, orgId), eq(orders.orderedByContactId, removeId)))
+      .orderBy(asc(orders.id))
+      .for("update");
     const movedOrders = await tx
       .update(orders)
       .set({ orderedByContactId: keepId, orderedByFirmId: firmId, updatedBy: grant.employeeId })
       .where(and(eq(orders.organizationId, orgId), eq(orders.orderedByContactId, removeId)))
       .returning({ id: orders.id });
+    const assignmentsBefore = await tx
+      .select({ id: assignments.id, firmId: assignments.orderedByFirmId })
+      .from(assignments)
+      .where(
+        and(eq(assignments.organizationId, orgId), eq(assignments.orderedByContactId, removeId)),
+      )
+      .orderBy(asc(assignments.id))
+      .for("update");
+    const movedAssignments = await tx
+      .update(assignments)
+      .set({ orderedByContactId: keepId, orderedByFirmId: firmId, updatedBy: grant.employeeId })
+      .where(
+        and(eq(assignments.organizationId, orgId), eq(assignments.orderedByContactId, removeId)),
+      )
+      .returning({ id: assignments.id });
+
+    const contactMove = (row: { id: string; firmId: string | null }): BookingMove => ({
+      id: row.id,
+      values: {
+        orderedByContactId: { from: removeId, to: keepId },
+        orderedByFirmId: change(row.firmId, firmId),
+      },
+    });
+    await recordBookingMoves(tx, grant, "order", ordersBefore.map(contactMove));
+    await recordBookingMoves(tx, grant, "assignment", assignmentsBefore.map(contactMove));
 
     const now = new Date();
     await tx
@@ -206,7 +284,11 @@ export async function mergeContacts(
       })
       .where(and(eq(contacts.id, removeId), eq(contacts.organizationId, orgId)));
 
-    const result = { partyCount: movedParties.length, orderCount: movedOrders.length };
+    const result = {
+      partyCount: movedParties.length,
+      orderCount: movedOrders.length,
+      assignmentCount: movedAssignments.length,
+    };
     await recordAuditEvent(tx, grant, {
       entityType: "contact",
       entityId: removeId,
@@ -218,14 +300,20 @@ export async function mergeContacts(
 }
 
 /**
- * Slår sammen to firma. Kontakter (også myk-slettede), parter og ordrer flyttes fra `removeId`
- * til `keepId`, og `removeId` myk-slettes. Firmaet som beholdes, endres ikke.
+ * Slår sammen to firma. Kontakter (også myk-slettede), parter, ordrer og bestillerfirmaet på
+ * oppdrag flyttes fra `removeId` til `keepId`, og `removeId` myk-slettes. Firmaet som beholdes,
+ * endres ikke.
  */
 export async function mergeFirms(
   actor: Actor,
   organizationId: string,
   input: MergeInput,
-): Promise<{ contactCount: number; partyCount: number; orderCount: number }> {
+): Promise<{
+  contactCount: number;
+  partyCount: number;
+  orderCount: number;
+  assignmentCount: number;
+}> {
   const grant = await requireOrganizationAccess(actor, organizationId, "contacts.manage");
   checkMergeIds("firm", input);
   const { keepId, removeId } = input;
@@ -253,6 +341,18 @@ export async function mergeFirms(
       .set({ orderedByFirmId: keepId, updatedBy: grant.employeeId })
       .where(and(eq(orders.organizationId, orgId), eq(orders.orderedByFirmId, removeId)))
       .returning({ id: orders.id });
+    const movedAssignments = await tx
+      .update(assignments)
+      .set({ orderedByFirmId: keepId, updatedBy: grant.employeeId })
+      .where(and(eq(assignments.organizationId, orgId), eq(assignments.orderedByFirmId, removeId)))
+      .returning({ id: assignments.id });
+
+    const firmMove = (row: { id: string }): BookingMove => ({
+      id: row.id,
+      values: { orderedByFirmId: { from: removeId, to: keepId } },
+    });
+    await recordBookingMoves(tx, grant, "order", movedOrders.map(firmMove));
+    await recordBookingMoves(tx, grant, "assignment", movedAssignments.map(firmMove));
 
     const now = new Date();
     await tx
@@ -269,6 +369,7 @@ export async function mergeFirms(
       contactCount: movedContacts.length,
       partyCount: movedParties.length,
       orderCount: movedOrders.length,
+      assignmentCount: movedAssignments.length,
     };
     await recordAuditEvent(tx, grant, {
       entityType: "firm",

@@ -10,10 +10,11 @@ import { SEARCH_QUERY_MAX_LENGTH, likePattern } from "@/shared/lib/like-pattern"
  * - Begge spørringene har `assignments` med (arbeidskøen i FROM, ordrelisten som LEFT JOIN).
  *   `assignmentFieldsMatch` peker på den raden. Uten oppdrag (LEFT JOIN uten treff) gir den usant.
  * - `orderFieldsMatch` peker på `orders`-raden der den står. Ordrelisten har `orders` i FROM.
- *   Arbeidskøen legger den inn i en `EXISTS` mot `orders` med organisasjon, `deleted_at is null`
- *   og samme kobling som adressen på kortet
- *   (`orders.id = assignments.order_id or orders.assignment_id = assignments.id`).
- * - Den som kaller, setter de to sammen med `or` og legger resultatet i sin egen WHERE, som
+ * - `assignmentBookingFieldsMatch` peker på de samme bestillingsfeltene på `assignments`-raden.
+ *   Oppdraget eier bestillingsopplysningene (ADR 0011, A292), så arbeidskøen søker i dem direkte,
+ *   uten underspørring mot `orders`. Et oppdrag laget uten ordre finnes da på adresse, matrikkel,
+ *   bestiller og meglerens ordrenummer.
+ * - Den som kaller, setter vilkårene sammen med `or` og legger resultatet i sin egen WHERE, som
  *   allerede filtrerer på `grant.organizationId`.
  *
  * Regler:
@@ -60,17 +61,30 @@ function sameTrimmed(column: AnyColumn, value: string): SQL {
   return sql`trim(${column}) = ${value}`;
 }
 
+/** Bestillingsfeltene som søkes i. Samme navn på `orders` og `assignments` (ADR 0011). */
+type BookingColumns = {
+  addressText: AnyColumn;
+  externalRef: AnyColumn;
+  orderedByText: AnyColumn;
+  gnr: AnyColumn;
+  bnr: AnyColumn;
+  snr: AnyColumn;
+};
+
 /**
- * Matrikkelen på ordren. Ordren har ikke festenummer, så et søk med festenummer (annet enn 0)
- * gir aldri treff på ordren, bare i `cadastral_units`. Ellers ville «12/34/7» funnet alle
- * ordre på 12/34.
+ * Matrikkelen i bestillingen. Bestillingen har ikke festenummer, så et søk med festenummer
+ * (annet enn 0) gir aldri treff her, bare i `cadastral_units`. Ellers ville «12/34/7» funnet alle
+ * bestillinger på 12/34.
  */
-function orderCadastralMatch(cadastral: CadastralQuery): SQL | undefined {
+function bookingCadastralMatch(
+  columns: BookingColumns,
+  cadastral: CadastralQuery,
+): SQL | undefined {
   if (cadastral.fnr !== undefined && Number(cadastral.fnr) !== 0) return undefined;
   return and(
-    sameTrimmed(orders.gnr, cadastral.gnr),
-    sameTrimmed(orders.bnr, cadastral.bnr),
-    cadastral.snr === undefined ? undefined : sameTrimmed(orders.snr, cadastral.snr),
+    sameTrimmed(columns.gnr, cadastral.gnr),
+    sameTrimmed(columns.bnr, cadastral.bnr),
+    cadastral.snr === undefined ? undefined : sameTrimmed(columns.snr, cadastral.snr),
   );
 }
 
@@ -80,19 +94,32 @@ function cadastralFrom(query: string): CadastralQuery | null {
 }
 
 /**
- * Treff i feltene på ordren: adressen (`address_text`), meglerens ordrenummer (`external_ref`),
+ * Treff i bestillingsfeltene: adressen (`address_text`), meglerens ordrenummer (`external_ref`),
  * oppdragsgiveren (`ordered_by_text`) og matrikkelen. Tekstfeltene gir delvis treff. Matrikkelen
  * sammenlignes del for del når søket ser ut som matrikkel: «12/34» finner 12/34, ikke 112/34.
  * Tomt søk gir `undefined` (ingen filtrering).
  */
-export function orderFieldsMatch(query: string): SQL | undefined {
+function bookingFieldsMatch(columns: BookingColumns, query: string): SQL | undefined {
   const pattern = likePattern(query);
   if (pattern === null) return undefined;
   const cadastral = cadastralFrom(query);
   return or(
-    containsAny(pattern, [orders.addressText, orders.externalRef, orders.orderedByText]),
-    cadastral === null ? undefined : orderCadastralMatch(cadastral),
+    containsAny(pattern, [columns.addressText, columns.externalRef, columns.orderedByText]),
+    cadastral === null ? undefined : bookingCadastralMatch(columns, cadastral),
   );
+}
+
+/** Bestillingsfeltene på ordren (`orders`-raden i spørringen). Se `bookingFieldsMatch`. */
+export function orderFieldsMatch(query: string): SQL | undefined {
+  return bookingFieldsMatch(orders, query);
+}
+
+/**
+ * Bestillingsfeltene på oppdraget (`assignments`-raden i spørringen). Se `bookingFieldsMatch`.
+ * Brukes av arbeidskøen; ingen underspørring, så det treffer indeksene på `assignments`.
+ */
+export function assignmentBookingFieldsMatch(query: string): SQL | undefined {
+  return bookingFieldsMatch(assignments, query);
 }
 
 /**
