@@ -93,3 +93,4 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 14.11.2026 | Gjenopprettet live diktat (fase 2b) og strekkmål 6 (KI-briller), som PR #174 skrev over ved en feil (testlagets funn T-0052). | Ståles beslutninger 12.11.2026 |
 | 14.11.2026 | Frasebanken fylles fra Byggcons fraser i SharePoint, både fra IVIT-malene og Byggcons egne, i én felles bank (flyttet fra fase 4 til 2a-3). S10: rett til IVIT-malfrasene. | Ståle i chat 13.11.2026 |
 | 14.11.2026 | S10 gjort: Ståle bekrefter at avtalen med IVIT tillater at Byggcon tar med seg frasene fra IVIT-malene. | Ståle i chat 14.11.2026 |
+| 14.11.2026 | Raskere utvikling: tre oppgaver samtidig i hovedløkken, og lett prosess for små oppgaver i arbeidsflyten `oppgave`. | Ståle i chat 14.11.2026 |
