@@ -13,6 +13,8 @@ env:
   BETTER_AUTH_SECRET: ci-hemmelighet-som-bare-brukes-i-tester-0123456789
   BETTER_AUTH_URL: http://localhost:3000
   SEED_ADMIN_EMAIL: admin@byggcon.no
+  # Produksjonsvakten for testdata og testoppdrag (A302) godtar bare development og test
+  APP_ENVIRONMENT: test
   DEV_MAILBOX: "1"
   TRIAL_UPLOAD_DIR: var/uploads/trial
   NEXT_PUBLIC_OFFLINE_TRIAL_TEST_HOOKS: "1"
