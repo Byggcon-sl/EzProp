@@ -3,7 +3,7 @@ id: T-0052
 tittel: Planen har mistet Ståles beslutninger fra 12.11 om live diktat og strekkmål 6 (KI-briller)
 type: feil
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-13
 rolle: test-dokumentvakt
 omrade: dokumenter (plan)
