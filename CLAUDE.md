@@ -41,7 +41,7 @@ Les før du gjør endringer i et område:
 4. **Modulene importerer aldri fra hverandre.** Bare fra `src/core`, `src/shared`, `src/db` og egen mappe. Håndheves med lint-regel.
 5. **Regler og TG-logikk er data med testsaker.** De kjører både på iPaden og på serveren. TG-logikk finnes bare i systemmalen for tilstandsrapport.
 6. **En fast kode (`key`) endres aldri, den arkiveres.** Gjelder kontrollpunkt, felt, valg, utfall, regel, romtype og terskel. Skal noe få ny betydning, arkiveres den gamle koden og det lages en ny.
-7. **Fagstoff:** egne formuleringer, aldri tekst fra NS 3600, IVIT eller SmartTakst. Tallverdier (levetider, grenser) er fakta. Kilden står i bakgrunnen, ikke i rapportteksten. Ingen gjetteord («antas», «trolig»). Tekstene i `docs/kartlegging/` er referanse og skal aldri inn i kode, seed-data eller maler.
+7. **Fagstoff:** egne formuleringer, aldri tekst fra NS 3600, IVIT eller SmartTakst. Tallverdier (levetider, grenser) er fakta. Kilden står i bakgrunnen, ikke i rapportteksten. Ingen gjetteord («antas», «trolig»). Tekstene i `docs/kartlegging/` er referanse og skal aldri inn i kode, seed-data eller maler. **Unntak (Ståle 13.11.2026):** Byggcons fraser i SharePoint, både fra IVIT-malene og Byggcons egne, legges inn i frasebanken som data gjennom importen i admin. De står aldri i koden, seed-dataene eller repoet.
 8. **Ingen kundeopplysninger, passord eller nøkler** i repoet, loggene eller testdata. Testdata er oppdiktet. **Testmiljøet har bare oppdiktede data, og produksjonsmiljøet har de ekte dataene; de holdes adskilt, og ekte data kopieres aldri til test** (Ståle 13.11.2026). Testdataene har ingen verdi, så i testmiljøet kan de brukes fritt, også mot ekte KI. Koden behandler likevel alle data som ekte, slik at den er klar for produksjon.
 9. **Ingen nye avhengigheter uten begrunnelse** i PR-en.
 10. **Produktnavnet står ett sted:** `src/shared/config/brand.ts`. Lint stopper «EzProp» andre steder i `src/`.
@@ -111,7 +111,7 @@ Arbeidet gjøres av agentlaget i `.claude/agents/` med arbeidsflytene i `.claude
 4. Kjør `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` før noe meldes ferdig. Åpne PR mot `main` med PR-malen i `docs/maler/pr.md`.
 5. Oppdater `docs/07-utviklingsplan.md` (kryss av; etter merge flyttes linjen til `docs/plan/levert.md`), ordlisten og `docs/agenter/tilstand.md`. Endres planen, får endringen én linje i `docs/plan/endringslogg.md`. Commit og push ofte, minst etter hvert ferdige steg.
 6. Arkitekturbeslutninger skrives som ADR i `docs/adr/`.
-7. Spørsmål du ikke kan avgjøre selv, legges i `docs/09-apne-sporsmal.md`. Ikke gjett.
+7. Spørsmål du ikke kan avgjøre selv, legges i `docs/09-apne-sporsmal.md`. Ikke gjett. **Ståles beslutninger i planen fjernes eller skrives aldri om uten at Ståle har sagt det.** Ved konflikt i planen beholdes begge versjonene og flettes; se `git log` for punktet før du sletter noe (14.11.2026, funn T-0052).
 8. **Testlaget** (løkke G) prøver det som er merget, slik at Ståle ikke må teste hver leveranse. Bekreftede feil blir retteoppgaver, forbedringer innenfor planen tas med neste oppgave i samme område, og nye ideer blir forslag i `docs/09-apne-sporsmal.md`.
 
 ## Ikke gjør
