@@ -1699,6 +1699,8 @@ export async function restoreByggconSetting(key: string, previous: unknown): Pro
   } finally {
     await sql.end();
   }
+}
+
 /**
  * Lenken i kortet «Gjort om til oppdrag» på ordresiden. Navnet er «Gjort om til oppdrag
  * 2026-NNNNN». Lenkene i varselet «Mulig dublett» begynner med adressen, så det forankrede
