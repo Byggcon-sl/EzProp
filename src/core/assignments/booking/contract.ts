@@ -247,6 +247,9 @@ export const POSSIBLE_DUPLICATES_LIMIT = 10;
  * - Samme adressenøkkel eller samme gnr/bnr/snr, og overlappende tid: ordren er `received`,
  *   oppdraget er `ordered` eller `in_progress`, eller høyst 90 × 24 timer mellom mottakstidene
  *   (grensen teller med, A291).
+ * - Fra ADR 0012 (tilbud): en ordre med `received` gir treff uansett alder bare når
+ *   `valid_until >= today`. Er den utløpt, gjelder 90-dagersvinduet (A325). `today` kommer fra
+ *   `todayInOslo` og sendes inn i `PossibleDuplicatesCriteria`.
  * - Høyst `POSSIBLE_DUPLICATES_LIMIT`, nyeste mottatt først og så `id`; `hasMore` når det finnes
  *   flere. Uten adressenøkkel og matrikkel: tom liste uten spørring.
  * - Ugyldige felt gir `ZodError`. Feiler databasen, kastes `PossibleDuplicatesLookupError` uten

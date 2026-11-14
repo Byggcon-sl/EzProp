@@ -356,17 +356,18 @@ En person kan ha flere roller på samme oppdrag (for eksempel selger og fakturam
 
 **Beslutninger:** ordre registreres for hånd i starten, API senere (25.10); avtaler med oppdragsgiver har egen rapportprofil og premissetekst, egne kontrollpunkter senere (25.10); rapportdesign per avtale, for eksempel liggende A4 (24.10). Sidemannskontrollen P1 og P2.
 
-**`orders`** – en bestilling som kommer inn. Holdes adskilt fra oppdraget, slik IVIT gjør, fordi en ordre kan avvises.
+**`orders`** – heter **«Tilbud»** i grensesnittet fra 14.11.2026 (ADR 0012); tabellen og de faste kodene beholder `order`. En mulig jobb som kan gjøres om til oppdrag, avslås med grunn eller gå ut på dato. Opprinnelig: en bestilling som kommer inn. Holdes adskilt fra oppdraget, slik IVIT gjør, fordi en ordre kan avvises.
 
 | Felt | Forklaring |
 |---|---|
 | `received_at` | Når ordren kom |
+| `valid_until` | **Gyldig til:** siste dag tilbudet er åpent (ren norsk dato, påkrevd, ingen standardverdi i databasen). Nytt tilbud foreslås med i dag + 30 dager (ADR 0012) |
 | `source` | `manual` (lagt inn for hånd), `email` (forslag laget fra en e-post, senere med KI, krok A1), senere `broker_system` |
 | `external_ref` | Ordrenummer fra megler eller meglersystem |
 | `ordered_by_contact_id`, `ordered_by_firm_id` | Hvem som bestilte |
 | `address_text`, `requested_report_type` | Adresse og ønsket rapport, slik bestillingen sa det |
 | `raw_payload` | Hele bestillingen slik den kom (fra API senere) |
-| `status` | `received` (mottatt), `converted` (gjort om til oppdrag), `rejected` (avvist) |
+| `status` | `received` (vises som «Åpent»), `converted` («Gjort om til oppdrag»), `rejected` («Avslått»). «Utløpt» lagres ikke; det regnes ut fra `valid_until` (ADR 0012) |
 | `rejected_reason` | Grunn ved avvisning |
 | `assignment_id` | Oppdraget ordren ble til |
 
@@ -447,6 +448,13 @@ Neste nummer hentes med lås i databasen, slik at to kontorer aldri får samme n
 - **Hendelser og logg:** `assignment.created` med `{ number, orderId: null }` og revisjonslogg `assignment`/`create` uten verdier; `assignment.booking_updated` med `{ assignmentId, fields }` og revisjonslogg `assignment`/`update` med `fields` og `values` i samme form som for ordren (A252, spørsmål 79).
 - **Aldri til KI:** de nye fritekst- og matrikkelkolonnene står i `NEVER_FIELDS`, og vasken leser kjente verdier fra oppdraget.
 - **Mulig dublett** gjelder nå både ordre (bare `received`) og oppdrag; et oppdrag fra en ordre gir ett treff (A297).
+
+**Tilbud i stedet for ordre (fase 2a, 14.11.2026, Ståle 13.11.2026, ADR 0012, A318–A328):** «Ordre» heter «Tilbud» på skjermen. Datamodell og grensesnitt (`src/core/orders/contract.ts`):
+- **Utløpsregelen:** et tilbud er utløpt når `status = received` og `valid_until` er før dagens norske dato (`isOfferExpired`; samme regel som SQL-uttrykk, med paritetstest). Dagens dato kommer fra `todayInOslo()` og sendes som parameter. Ingen lagret status og ingen bakgrunnsjobb; ny dato gjør tilbudet åpent igjen. Utløpte tilbud kan gjøres om til oppdrag og avslås.
+- **Visningsstatus:** `OfferDisplayStatus` = `open`, `expired`, `converted`, `rejected`. Filteret i listen har i tillegg `all`; standard er `open`.
+- **Feltkoden `validUntil`** står bare i `ORDER_EDITABLE_FIELDS`, aldri blant oppdragets bestillingsfelt, og kan bare endres når lagret status er `received` (`OfferValidUntilLockedError` ellers). Fra i dag til høyst 365 dager fram. Kopieres ikke til oppdraget.
+- **Dublettvilkåret for tilbud:** `received` og ikke utløpt gir treff uansett alder; utløpt gir bare treff når mottakstidene er høyst 90 × 24 timer fra hverandre (A325). Dette erstatter «bare `received`» i avsnittene om mulig dublett.
+- **Migrering `0035_tilbud`:** `valid_until` = norsk dato for `received_at` + 30 dager for alle rader; indeks `(organization_id, status, valid_until) where deleted_at is null`. Åpne ordre eldre enn 30 dager vises som «Utløpt» etter migreringen.
 
 **Mulig dublett (fase 2a, 13.11.2026, Ståle 12.11.2026 T3: «fast regel uten KI, og varselet stopper ikke lagringen»):** En annen ordre er en **mulig dublett** når alt dette gjelder (A285–A291):
 - **Samme organisasjon** (`grant.organizationId`), ikke myk-slettet, ikke ordren selv, ikke avvist, og oppdraget er ikke kansellert (`assignments.deleted_at` er tom).
@@ -2062,7 +2070,13 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Kjøper | `buyer` | Rolle |
 | Selgers representant | `seller_representative` | Rolle |
 | Fakturamottaker | `invoice_recipient` | Rolle |
-| Ordre | `orders` | Bestilling som kommer inn |
+| Tilbud (før: Ordre) | `orders`, `order` | En mulig jobb (lead) som kan gjøres om til oppdrag, avslås med grunn eller gå ut på dato. «Tilbud» er navnet i grensesnittet; tabellen, modulen og de faste kodene heter fortsatt `order` (ADR 0012) |
+| Åpent / Avslått / Gjort om til oppdrag | `received` / `rejected` / `converted` (`ORDER_STATUSES`) | Lagret status på tilbudet. Kodene er de samme som for ordre |
+| Utløpt (tilbud) | `isOfferExpired`, `expired` i `OfferDisplayStatus` | `received` og `valid_until` før dagens norske dato. Regnes ut, lagres aldri som status |
+| Visningsstatus (tilbud) | `OfferDisplayStatus` | `open`, `expired`, `converted`, `rejected`. Brukes i filter og etiketter. Filteret har også `all` (`OfferListFilter`) |
+| Gyldig til | `orders.valid_until`, feltkoden `validUntil` | Siste dag tilbudet er åpent. Forslag: i dag + 30 dager (`OFFER_VALID_DAYS`), høyst 365 dager fram (`OFFER_VALID_UNTIL_MAX_DAYS`) |
+| Gyldig til kan ikke endres | `OfferValidUntilLockedError` | Tilbudet er gjort om eller avslått. «Gyldig til kan bare endres på åpne og utløpte tilbud.» |
+| Gjør om til oppdrag | `convertOrderToAssignment` | Ett trykk: lager oppdraget og kopierer bestillingsfeltene (ikke `valid_until`) |
 | Kilde (ordre) | `orders.source` | Hvor ordren kom fra: `manual` (lagt inn for hånd) eller `email` (forslag fra e-post, senere med KI) |
 | Mottatt / gjort om til oppdrag / avvist | `received` / `converted` / `rejected` | Ordrestatus (`orders.status`, `ORDER_STATUSES`, `orderStatusLabel`) |
 | Mottatt (tid) | `orders.received_at` | Når bestillingen kom. Kan ikke være frem i tid |

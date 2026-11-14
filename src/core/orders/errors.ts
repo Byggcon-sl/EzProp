@@ -17,5 +17,16 @@ export class OrderChangedError extends Error {
   }
 }
 
+/**
+ * «Gyldig til» ble forsøkt endret på et tilbud som er gjort om til oppdrag eller avslått
+ * (ADR 0012). Ingenting er lagret. Meldingen har aldri verdier fra tilbudet.
+ */
+export class OfferValidUntilLockedError extends Error {
+  constructor() {
+    super("Gyldig til kan bare endres på åpne og utløpte tilbud.");
+    this.name = "OfferValidUntilLockedError";
+  }
+}
+
 /** Felles med «Nytt oppdrag» (ADR 0011). Står i `@/core/assignments/errors`. */
 export { OfficeNotFoundError } from "@/core/assignments/errors";

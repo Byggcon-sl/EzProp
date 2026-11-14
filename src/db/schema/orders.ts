@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  date,
   foreignKey,
   index,
   pgTable,
@@ -17,7 +18,9 @@ import { baseColumns } from "./common";
 import { contacts, firms } from "./contacts";
 
 /**
- * Ordren: bestillingen slik den kom inn (docs/05-domenemodell.md 4.3). Lagt inn for hånd fra
+ * Ordren, som heter «Tilbud» i grensesnittet (ADR 0012): en mulig jobb som kan gjøres om til
+ * oppdrag, avslås med grunn eller gå ut på dato. Tabellen, kolonnene og de faste kodene beholder
+ * navnene sine. Bestillingen slik den kom inn (docs/05-domenemodell.md 4.3). Lagt inn for hånd fra
  * e-posten nå (`source = manual`); `email` er kroken for e-post-til-ordre senere (KI først).
  * Adresse, matrikkel, borettslag og bestiller er tekst til eiendom og kontakter får egne
  * tabeller (A51). En avvist ordre blir stående med grunn (A55); den slettes ikke.
@@ -29,6 +32,12 @@ export const orders = pgTable(
   {
     ...baseColumns,
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * «Gyldig til» (ADR 0012): siste dag tilbudet er åpent, som ren norsk dato. Uten standardverdi
+     * i databasen; forslaget (i dag + `OFFER_VALID_DAYS`) settes i kjernen. «Utløpt» lagres ikke
+     * som status, det regnes ut fra denne datoen og dagens dato (`isOfferExpired`).
+     */
+    validUntil: date("valid_until", { mode: "string" }).notNull(),
     source: text("source").notNull().default("manual"),
     /** Ordrenummer eller referanse fra megleren. */
     externalRef: text("external_ref"),
@@ -55,6 +64,11 @@ export const orders = pgTable(
     // Mål for sammensatte fremmednøkler fra andre tabeller (samme organisasjon)
     uniqueIndex("orders_organization_id_id_idx").on(table.organizationId, table.id),
     index("orders_organization_id_received_at_idx").on(table.organizationId, table.receivedAt),
+    // Tilbudslisten «Åpne» og «Utløpt» og tellingen (ADR 0012): status og «gyldig til» for
+    // tilbud som ikke er slettet.
+    index("orders_organization_id_status_valid_until_idx")
+      .on(table.organizationId, table.status, table.validUntil)
+      .where(sql`${table.deletedAt} is null`),
     // Oppslag fra oppdraget til ordren (arbeidskøen, oppdraget, eiendommen). Nattløkken 12.11.2026.
     index("orders_organization_id_assignment_id_idx").on(table.organizationId, table.assignmentId),
     // Oppdraget må høre til samme organisasjon som ordren. `AnyPgColumn` fordi tabellene peker

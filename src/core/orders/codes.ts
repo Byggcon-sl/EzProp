@@ -1,5 +1,6 @@
 /**
- * Faste koder for ordre (docs/05-domenemodell.md 4.3). Kodene står bare her og i CHECK-reglene i
+ * Faste koder for ordre, som heter «Tilbud» i grensesnittet (ADR 0012, docs/05-domenemodell.md
+ * 4.3). Kodene beholdes: `received` vises som «Åpent», `rejected` som «Avslått». Kodene står bare her og i CHECK-reglene i
  * `src/db/schema/orders.ts`. En kode endres aldri; skal den få ny betydning, arkiveres den og det
  * lages en ny (regel 6). Nye koder kan legges til.
  */
@@ -40,6 +41,19 @@ const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 export function orderStatusLabel(code: string): string {
   return (ORDER_STATUS_LABELS as Record<string, string>)[code] ?? code;
 }
+
+/**
+ * Visningsstatusen for et tilbud (ADR 0012). «Utløpt» (`expired`) regnes ut fra `valid_until` og
+ * dagens dato og lagres aldri i `orders.status`; CHECK-regelen har bare `ORDER_STATUSES`.
+ * `open` er `received` som ikke er utløpt. Kodene står i adressen (`?status=`) og er faste.
+ */
+export const OFFER_DISPLAY_STATUSES = ["open", "expired", "converted", "rejected"] as const;
+export type OfferDisplayStatus = (typeof OFFER_DISPLAY_STATUSES)[number];
+
+/** Filtrene i tilbudslisten: hver visningsstatus og `all`. Standard er `open`. */
+export const OFFER_LIST_FILTERS = [...OFFER_DISPLAY_STATUSES, "all"] as const;
+export type OfferListFilter = (typeof OFFER_LIST_FILTERS)[number];
+export const DEFAULT_OFFER_LIST_FILTER: OfferListFilter = "open";
 
 /**
  * Feltene på en lagret ordre som kan endres (T1, Ståle 12.11.2026), i fast rekkefølge. Listen er
