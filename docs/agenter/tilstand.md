@@ -108,9 +108,12 @@ Ingen.
 
 ## Pågår
 
-- **Testdata som ligner en ekte arbeidshverdag**, branch `testdata-arbeidshverdag` (i arbeid hos en annen kjøring, siste commit 20:12 UTC, versjon 0.12.0, ingen PR ennå). Står den uten ny commit i over 2 timer, overtar neste kjøring den. Kortet bruker A264–A271, som overlapper med K7 (A264–A267 på `ki-oppbevaring-avviste`): den som merges sist, flytter numrene.
+- **Testdata som ligner en ekte arbeidshverdag, del 1**: PR #203 (branch `testdata-overtatt`, versjon 0.12.0). Hovedløkken overtok arbeidet 13.11.2026 kl. 23:50 UTC, fordi det hadde stått stille i to timer. Den flettet inn main og kjørte testene lokalt: typecheck og lint grønne, 837 tester for testdata grønne og e2e for testdata grønn på PC og iPad. Alle fire CI-jobbene er grønne på siste commit, men GitHub sier «unstable» fordi en CI-kjøring fra `pull_request` står på «action_required». Neste kjøring av `scripts/merge-klare-pr.sh` merger PR-en når den blir «clean». Branchene `testdata-arbeidshverdag`, `testdata-retting-hovedlop-2111` og `arkiv-testdata-arbeidshverdag-parallell` blir overflødige når den er merget. Første CI-kjøring var rød bare på den kjente ustabile testen i `photo-uploader.test.ts` (bildekøen, «hang»).
+- **Neste:** «Nytt oppdrag» er hovedveien (Prioritert av Ståle 13.11.2026: rett på oppdrag), deretter «Tilbud i stedet for ordre». Begge trenger en ADR om datamodell og navn.
 
 ## Siste kjøring
+13.11.2026 kl. 23:49 – 14.11.2026 kl. 02:10 UTC (hovedløkken, sesjon 01Jqwnu2YGk7uVnDzXtciujq): PR #201 og #202 var i arbeid hos andre kjøringer og ble ikke rørt. Overtok testdataene og åpnet PR #203. Den er ikke merget ennå, fordi GitHub sier «unstable» selv om all CI er grønn (se «Pågår»).
+
 13.11.2026 fra kl. 16:06 UTC (hovedløkken, sesjon 01Jqwnu292FY69B72E5MvSiK): ingen åpne PR-er ved start. Overtok T4 (`flere-rom-samtidig`, stoppet kl. 10:14 uten PR), gjorde den ferdig og merget som PR #194. Startet T3 (varsel om dublett) med arbeidsflyten; e2e 7.13 var rød i CI, hovedløkken rettet tekstbrytingen, flettet inn main (K7) og merget som PR #198 kl. 23 UTC.
 
 
