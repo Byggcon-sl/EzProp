@@ -2417,6 +2417,8 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Nullpunkt | `baseline_metrics` | Tall fra IVIT og de siste 3 årene |
 | Prøveorganisasjon | organisasjon med `settings.sampleData = true` | «Byggcon prøve». Bare oppdiktede data; seed-steget skriver aldri i en organisasjon uten merket (A130) |
 | Testoppdrag | sample assignment (`orders.external_ref` med `sample:`) | De fire faste oppdragene i prøveorganisasjonen, laget av `pnpm db:seed:testoppdrag` (A131) |
+| Testdata (oppdiktet arbeidshverdag) | testdata (`src/db/seed/testdata*.ts`, `pnpm db:seed:testdata`) | Oppdiktede ansatte, kontakter, eiendommer, oppdrag og reklamasjoner i Byggcon-organisasjonen i testmiljøet. Kjennes igjen på ordrenøkkelen `TD-0001` osv. (`orders.external_ref`), e-post på `testdata.invalid`, telefon `+47 000 NN NNN` og gnr 9001–9099 (A300–A307) |
+| Miljø | `APP_ENVIRONMENT` | `development` (lokalt), `test` (testmiljøet) eller `production`. Produksjonsvakten for testdata (`assertTestdataAllowed`) godtar bare `development` og `test`. Ikke det samme som `NODE_ENV`, som er `production` også i testmiljøet (A302) |
 
 ---
 

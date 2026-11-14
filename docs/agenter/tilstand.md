@@ -68,39 +68,40 @@ Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4�
 
 ## Oppgaver fra testlaget
 
-Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 13.11.2026 på main e013fde7 (det som var nytt siden 11672aa).
+Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 14.11.2026 på main a1ca41d9 (det som var nytt siden e013fde7).
 
-- **Åpne alvorlige feil: ingen.** T-0050 (nedtrekkslister hopper tilbake etter feilmelding) rettet 13.11.2026 i PR «Rett T-0050», versjon 0.10.7; testlaget prøver på nytt.
-- Åpne funn i alt: 61 (1 alvorlig, 19 middels, 41 små). Middels og små tas med neste oppgave i samme område. Lukket denne gangen: T-0010, T-0015 og T-0016.
-- **Før fase 2b:** T-0052 (planen har mistet live diktat og strekkmål 6 fra 12.11).
+- **Åpne alvorlige feil: 1.** T-0050 (arealtypen i «Legg til rom» hopper tilbake etter feilmelding og lagres feil). Fortsatt feil etter retting, forsøk 2. De ti andre skjemaene er rettet. Tas før neste nye punkt i planen.
+- Åpne funn i alt: 81 (1 alvorlig, 23 middels, 57 små). Nye denne gangen: T-0069–T-0091. Middels og små tas med neste oppgave i samme område. Lukket denne gangen: T-0018, T-0029 og T-0052.
+- **Før «klar for drift»:** T-0070 (utløpt innlogging sletter skjema) og T-0071 (engelsk feilside når nettet faller).
+- **Plan og beslutninger:** T-0072 (Ståles ja til varsel om like kontakter og firma falt ut av T3), T-0078 (DPIA-punktet skrevet om).
 - **Før «Badet på PC»:** T-0051, T-0059 og T-0060, og T-0014 (punkt 1 og 5) i 2a-3.
 - **Må tas før ekte KI slås på:** T-0044, T-0046, T-0047, T-0034 og T-0038 (uendret).
-- Fortsatt feil etter retting: T-0021 (forsøk 2) og T-0003 (forsøk 1, nå bare S3-raden i planen).
-- Til testlagets oppsett: testlaget trenger en admin i prøveorganisasjonen (admin fra seed havner i «Byggcon», så avtaler kan ikke prøves sammen med kontorbrukeren). Badmalen og reglene har ingen skjerm ennå og prøves bare i data.
+- Fortsatt feil etter retting: T-0050 (forsøk 2), T-0021 (forsøk 2) og T-0003 (forsøk 1).
+- Til testlagets oppsett: testlaget trenger en admin i prøveorganisasjonen (admin fra seed havner i «Byggcon», så avtaler kan ikke prøves sammen med kontorbrukeren). Kontrollpunkter, avvik, bilder, fraser og PDF har ingen skjerm ennå og er ikke prøvd.
 
 ## Oppgaver fra nattløkken
 
-**Nattløkken 13.11.2026** (main 08a1de3, versjon 0.10.4). Lint, typecheck og test grønne (252 testfiler, 9083 tester, 939 s). E2e grønn (614 besto, 70 hoppet over bevisst, 0 feil, 26,8 min); drift uten nett på iPad kjørt for seg og grønn. Størrelse grønn (største side 76,4 kB av 100 kB). `pnpm audit`: ingen sårbarheter. Erstatter listen fra 12.11.2026; det som fortsatt er åpent derfra, er tatt med under. Rettet derfra: hopplenken (PR #178).
+**Nattløkken 14.11.2026** (main 6e5d25f, versjon 0.11.8). Lint, typecheck og test grønne (276 testfiler, 9981 tester, 1174 s). E2e grønn (808 tester: 726 besto, 82 hoppet over bevisst, 0 feil, 35 min; alle 65 uten-nett-tester grønne på begge enheter). Størrelse grønn (største side 76,3 kB av 100 kB, største ekte side `/oppdrag/[id]/bygninger` 41,8 kB). `pnpm audit`: ingen sårbarheter. Erstatter listen fra 13.11.2026. Rettet derfra: fokusringen for `tabindex="-1"` (punkt 3, T2), søk og sidegrense på ordrelisten (ADR 0010).
 
 Alvorlige: ingen.
 
 Lite:
-1. *(Ryddet i PR «Rydding fra nattløkken 2026-11-13», versjon 0.10.5, migrering `0032_indekser-firma-status`.)* Indekser på `firm_id` i `contacts`, `assignment_parties` og `orders.ordered_by_firm_id`, og `assignments (organization_id, status) where deleted_at is null` for arbeidskøen. Gjenstår: `assignment_team_members (organization_id, employee_id) where to_at is null and deleted_at is null` for «Mine» når den spørringen trenger det.
-2. *(Ryddet i samme PR.)* better-auth 1.7.21 → 1.7.22 og prettier 3.10.0 → 3.10.1 (patch). CI kjører e2e for innloggingen før merge.
-3. *(Ryddet på branch `sok-ordre-arbeidsko` (T2), versjon 0.10.8: regelen gjelder bare `#hovedinnhold` og sidens `<main>`; kortet i arbeidskøen har ring i fjord. A262, se T2-oppgavekortet `docs/funksjoner/fase2a-sok-ordre-arbeidsko.md`.)* **Fokusringen er skrudd av for alle med `tabindex="-1"`** (`src/app/globals.css` linje 148–150). Treffer også kortet i arbeidskøen (`queue-card.tsx` linje 93): når siden hopper tilbake til kortet etter lagret notat, ser ikke tastaturbrukeren hvor fokus er. Avgrens regelen til `#hovedinnhold`, eller gi kortet en synlig ring i fjord. Endrer utseendet, så tas med neste oppgave i arbeidskøen.
-4. **Skjermleser: like knappenavn «Endre» og «Fjern»** i `buildings-editor.tsx` og `party-card.tsx`. Skjult tekst som i `certification-section.tsx`. Tas med neste oppgave i samme område. Fra 12.11.
-5. *(Ryddet på branch `sok-ordre-arbeidsko` (T2): ADR 0010 «Søk uten egne søkeindekser foreløpig», dagens `ILIKE` beholdes, ingen pg_trgm nå. A256, `docs/adr/0010-sok-uten-egne-sokeindekser.md`.)* **Søk med `ILIKE '%tekst%'`** kan ikke bruke vanlig indeks (arbeidskøen, kontakter, firma i `src/core/contacts/search.ts`). Avgjøres sammen med «søk (T2)»: pg_trgm-indekser (utvidelse i PostgreSQL, ingen ny pakke) eller dagens løsning med begrunnelse i en ADR.
-6. *(Ryddet for ordrelisten på branch `sok-ordre-arbeidsko` (T2): `ORDER_LIST_LIMIT = 50` med søk, uten bla-sider. A257, ADR 0010 punkt 6. `listAgreements` og sertifiseringslistene er små og tas ved behov.)* **Lister uten grense:** `listOrders` (vokser med alle bestillinger), `listAgreements`, sertifiseringslistene. Sidegrense på ordrelisten, gjerne med T1 eller T2.
-7. **Tilgangssjekken gjentas per kall** (4 spørringer, rundt 30 per visning av oppdragssiden), og `findEmployeeGrant`/`findAdminOrganizationId` går i løkke over organisasjonene. Mulig mellomlagring per forespørsel i `src/core/access`; må vurderes av sikkerhet-personvern.
-8. **Vasken før KI leser `common_areas` uten `deleted_at is null`** (`src/core/ai/redaction.ts` rundt linje 140), og treffer da ingen indeks. Ki-ansvarlig avklarer om slettede rader skal med; ellers vanlig indeks `(organization_id, assignment_id)`.
-9. **`ai_usage_log`:** oppslag på samme mål uten status (`sameTargetWhere`, brukt i `record-decision.ts`) treffer bare indeksen på organization_id. Indeks `(organization_id, feature, target_ref)` eller status i spørringen før KI slås på for ekte. `ai_usage_log (organization_id, assignment_id)` og `audit_log (organization_id, entity_type, entity_id, occurred_at)` når lister per oppdrag kommer.
-10. **Skriving rad for rad i løkke:** `templates.ts` (linje 772 og 881), `apply-changes.ts` i prøvemodulen. Greit nå; mønsteret skal ikke kopieres til den ekte synken i 2b.
-11. **Fremmednøkler uten indeks** (39). Legges til først når en spørring filtrerer på dem (for eksempel «Mine oppdrag» eller dublettvarsel T3).
-12. **@playwright/test 1.64.1 → 1.65.0:** kan kreve nyere Chromium enn `/opt/pw-browsers/chromium`. Egen PR der nettleseren i skyen og CI oppdateres samtidig.
-13. **Nye hovedversjoner, ikke nå:** postgres 4.1.1 (egen oppgave med full testkjøring), typescript 7.0.2, eslint 10.14.0 (lint håndhever regel 4 og 10). @types/node holdes på 22-linjen til Node heves.
-14. **Nattløkkens oppsett:** `pnpm test` tok 939 s og e2e 26,8 min. Første e2e-kjøring ble stoppet av tidsgrensen etter 144 av 684 tester: sett grensen til minst 40 minutter, eller kjør pc og ipad hver for seg. Størrelsessjekken og e2e brukte samme mappe samtidig igjen (byggelåsen i Next avviste bygget): kjør dem etter hverandre. Vitest foreslår `isolate: false` (ca. 32 s), men det endrer isoleringen mellom tester, så ikke uten egen vurdering.
-15. **UU-sjekken trenger skall og axe:** ble ikke kjørt i nettleseren 13.11 heller. `@axe-core/playwright` er ikke installert (ny avhengighet, må begrunnes). Gjennomgang av koden: trykkflater, kontrast, fokusring og skjermleserkobling er i orden, unntatt punkt 3.
-16. Notert, ingen tiltak: prøvesidene `/prove/testskjema*` og `/prove/ki` er størst (70–76 kB, under grensen); to lenker i løpende tekst under 44 px (lovlig etter WCAG 2.5.8).
+1. *(Ryddet i PR «Rydding fra nattløkken 2026-11-14», versjon 0.11.10.)* better-auth 1.7.22 → 1.7.23 (patch). Endringsloggen kunne ikke leses fra skyen; `pnpm test` kjørt lokalt, CI kjører e2e for kode- og Microsoft-innlogging før merge.
+2. **Testene er trege og uten fremdrift:** `pnpm test` tar nå 1174 s (19,5 min, var 939 s 13.11) og skriver ingenting før den er ferdig uten terminal. Går over grensen på 600 s i agentløkkene, så den må kjøres i bakgrunnen. Stor gevinst: la integrasjonstestene kjøre parallelt (i dag `fileParallelism: false`), for eksempel med egen testdatabase per arbeidsprosess, og en reporter som skriver fremdrift. `isolate: false` sparer bare ca. 34 s og endrer isoleringen, så ikke uten egen vurdering. Egen oppgave i testoppsettet.
+3. **Skjermleser: like knappenavn «Endre» og «Fjern»** i `buildings-editor.tsx` (linje 586/588, 657/659, 788/790: rom, etasje, bygning) og `party-card.tsx` (linje 41 og 108). Skjult tekst (`sr-only`) med navnet, som i `certification-section.tsx`. Tas med neste oppgave i samme område. Fra 12.11.
+4. **`ai_usage_log` mangler indeks for «nyere forslag på samme mål»** ved angre fra avvist (`src/core/ai/record-decision.ts` linje 104–116): delvis indeks `ai_usage_log_open_target_idx` gjelder bare `status='suggested'`, så spørringen ble Parallel Seq Scan over 200 000 rader. Tabellen blir den største (10 års oppbevaring). Indeks `(organization_id, feature, target_ref)` uten status-vilkår før KI slås på for ekte. `ai_usage_log (organization_id, assignment_id)` og `audit_log (organization_id, entity_type, entity_id, occurred_at)` når lister per oppdrag kommer.
+5. **«Mine» i arbeidskøen uten indeks:** `assignment_team_members (organization_id, employee_id) where to_at is null and deleted_at is null` (`src/core/assignments/work-queue.ts`, `workQueueWhere`). Leste hele teamtabellen (40 000 rader), 8 ms nå, vokser lineært.
+6. **Søk i arbeidskøen** kjører én underspørring mot `orders` per oppdrag (`searchMatch`, `ILIKE` via `EXISTS`), 100–240 ms for 20 000 oppdrag, to ganger per visning (`listWorkQueue` + `countByStatus`). ADR 0010 beholder `ILIKE` foreløpig; når det trengs: pg_trgm eller join (ny ADR og migrering). Kontakt- og firmasøk (`src/core/contacts/`) 21 ms for 15 000 kontakter, akseptabelt.
+7. **Tidsstatistikken** (`src/core/work-sessions/statistics-db.ts`) leser alle arbeidsøkter og oppdrag hver gang (70 ms for 80 000 økter, 16 000 grupper summeres i appen). Summer per fase i databasen eller avgrens på periode når det vokser.
+8. **Tilgangssjekken gjentas per kall** (4 spørringer, alle på indeks; bevisst etter regel 2). Mulig mellomlagring per forespørsel i `src/core/access`; krever ADR og vurdering av sikkerhet-personvern.
+9. **Vasken før KI leser `common_areas` uten `deleted_at is null`** (`src/core/ai/redaction.ts` rundt linje 140). Ki-ansvarlig avklarer om slettede rader skal med. Fra 13.11.
+10. **Skriving rad for rad i løkke:** `templates.ts`, `apply-changes.ts` i prøvemodulen. Greit nå; mønsteret skal ikke kopieres til den ekte synken i 2b. Ikke gjennomgått linje for linje 14.11: `src/core/templates/templates.ts`, `src/core/buildings/service.ts`, `src/core/orders/possible-duplicates.ts`.
+11. **Fremmednøkler uten indeks** (30). Legges til først når en spørring filtrerer på dem (for eksempel «alle oppdrag på eiendommen», KI-logg per oppdrag).
+12. **Store innlegginger:** 200 000 rader i `ai_usage_log` i samme transaksjon som 20 000 nye oppdrag fikk tidsavbrudd (120 s) i fremmednøkkelsjekken; etter `ANALYZE` tok det 4 s. Importer og migreringer med ekte data skal kjøre `ANALYZE` etter store innlegginger.
+13. **Pakker, ikke rydding:** @playwright/test 1.64.1 → 1.65.1 (egen PR der Chromium i `/opt/pw-browsers` og CI oppdateres samtidig). Nye hovedversjoner: postgres 4.1.1 (egen oppgave, full testkjøring med migreringer og tenant-isolasjon), typescript 7.0.2, eslint 10.15.0 (egne lint-regler for regel 4 og 10 må prøves). @types/node holdes på 22-linjen til Node heves.
+14. **Nattløkkens oppsett:** e2e tar nå 35 min; gi e2e-sjekken minst 45 min (første kjøring stoppet etter 10 min). Størrelsessjekken og en e2e-kjøring brukte samme mappe samtidig igjen (størrelsen ble derfor målt på e2e-bygget), og `pnpm test` gikk samtidig med en e2e-kjøring: kjør test, e2e og størrelse etter hverandre.
+15. **UU-sjekken trenger skall og axe:** ikke kjørt i nettleseren 14.11 heller. `@axe-core/playwright` er ikke installert (ny avhengighet, må begrunnes). Gjennomgang av koden: fokusring (2 px fjord), trykkflater (minst 44 px), alt-tekster, `aria-describedby`/`aria-invalid`, `role=alert`/`role=status` og kontrast er i orden, unntatt punkt 3.
+16. Notert, ingen tiltak: prøvesidene `/prove/testskjema*` og `/prove/ki` er størst (70–76 kB, under grensen).
 
 ## Trenger Ståle (stoppet etter 3 retteforsøk)
 
@@ -110,8 +111,14 @@ Ingen.
 
 - **«Nytt oppdrag» er hovedveien**, branch `nytt-oppdrag-hovedvei` fra `main` (14.11.2026). Oppgavekort `docs/funksjoner/fase2a-nytt-oppdrag.md` (utkast). Krever ADR for oppdrag uten ordre (neste ledige nummer, 0011). Beslutninger fra A292. Roller: arkitekt, ux, ui, sikkerhet-personvern, utvikler, testskriver. Endrer ikke seed-filene for testdata (PR #203).
 - **Testdata som ligner en ekte arbeidshverdag**, branch `testdata-arbeidshverdag` (i arbeid hos en annen kjøring, siste commit 20:12 UTC, versjon 0.12.0, ingen PR ennå). Står den uten ny commit i over 2 timer, overtar neste kjøring den. Kortet bruker A264–A271, som overlapper med K7 (A264–A267 på `ki-oppbevaring-avviste`): den som merges sist, flytter numrene.
+- **Testdata som ligner en ekte arbeidshverdag, del 1**: PR #203 (branch `testdata-overtatt`, versjon 0.12.0). Hovedløkken overtok arbeidet 13.11.2026 kl. 23:50 UTC, fordi det hadde stått stille i to timer. Den flettet inn main og kjørte testene lokalt: typecheck og lint grønne, 837 tester for testdata grønne og e2e for testdata grønn på PC og iPad. Alle fire CI-jobbene er grønne på siste commit, men GitHub sier «unstable» fordi en CI-kjøring fra `pull_request` står på «action_required». Neste kjøring av `scripts/merge-klare-pr.sh` merger PR-en når den blir «clean». Branchene `testdata-arbeidshverdag`, `testdata-retting-hovedlop-2111` og `arkiv-testdata-arbeidshverdag-parallell` blir overflødige når den er merget. Første CI-kjøring var rød bare på den kjente ustabile testen i `photo-uploader.test.ts` (bildekøen, «hang»).
+- **Neste:** «Nytt oppdrag» er hovedveien (Prioritert av Ståle 13.11.2026: rett på oppdrag), deretter «Tilbud i stedet for ordre». Begge trenger en ADR om datamodell og navn.
 
 ## Siste kjøring
+14.11.2026 (nattløkken): ingen alvorlige funn. better-auth 1.7.23 ryddet i PR «Rydding fra nattløkken 2026-11-14» (versjon 0.12.1). Resten står under «Oppgaver fra nattløkken».
+
+13.11.2026 kl. 23:49 – 14.11.2026 kl. 02:10 UTC (hovedløkken, sesjon 01Jqwnu2YGk7uVnDzXtciujq): PR #201 og #202 var i arbeid hos andre kjøringer og ble ikke rørt. Overtok testdataene og åpnet PR #203. Den er ikke merget ennå, fordi GitHub sier «unstable» selv om all CI er grønn (se «Pågår»).
+
 13.11.2026 fra kl. 16:06 UTC (hovedløkken, sesjon 01Jqwnu292FY69B72E5MvSiK): ingen åpne PR-er ved start. Overtok T4 (`flere-rom-samtidig`, stoppet kl. 10:14 uten PR), gjorde den ferdig og merget som PR #194. Startet T3 (varsel om dublett) med arbeidsflyten; e2e 7.13 var rød i CI, hovedløkken rettet tekstbrytingen, flettet inn main (K7) og merget som PR #198 kl. 23 UTC.
 
 
