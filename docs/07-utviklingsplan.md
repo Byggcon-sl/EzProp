@@ -96,6 +96,7 @@ Dette kan bare Ståle gjøre eller bestemme. Listen er sortert etter hvor mye so
 | S8 | **KI-leverandør: Anthropic, og Ståle har API-nøkkel (Ståle 10.11.2026: «vi har valgt anthopic - har api nøkler»).** **Anthropic-adapteren er bygget bak KI-porten, og beslutningsnotatet er skrevet (11.11.2026, `docs/beslutningsnotat-ki-leverandor.md`).** Gjenstår for Ståle: velge EU/EØS-vei, godta eller signere databehandleravtalen, svare på spørsmål 54–58 og 73, vurdere forslag 64 (tak på KI-bruk), legge nøkkelen inn som secret `ANTHROPIC_API_KEY` i GitHub (aldri i chat eller repo) og lage tilkoblingen i testmiljøet, og velge leverandør for norsk tale til tekst (anbefalt: Microsoft Azure tale i Norge). | Ekte KI i testmiljøet. Til da prøves alt mot den falske leverandøren. |
 | S9 | **Produksjonsmiljø i Azure** (Ståle 13.11.2026: løsningen skal være produksjonsklar). Agentene lager oppsettet i kode og oppskriften; Ståle sier ja til kostnaden, oppretter ressursgruppen og legger inn nøklene, slik som for testmiljøet. Anslått kostnad legges fram før oppretting. | «Klar for drift» og første ekte oppdrag |
 | S10 | ~~Rett til å bruke frasene fra IVIT-malene~~ **Gjort 14.11.2026** (Ståle: «bekrefter avtale med ivit»). Byggcon kan ta med seg både IVIT-malfrasene og egne fraser. | – |
+| S11 | **Drøfte kvalitetstallene per ansatt med de ansatte** før de vises per person (arbeidsmiljøloven kapittel 9, kontrolltiltak), slik som tidsmålingen i S5. Tallene for hele firmaet og per kontor kan vises uten dette. | Visning av kvalitetstallene per person (fase 3a) |
 
 ---
 
@@ -291,6 +292,15 @@ Flere takstmenn bruker EzProp på ekte oppdrag. Fasen har bare det piloten treng
 
 - [ ] Flere takstmenn og alle tre selskapene i bruk, også to i samme rapport med nett
 - [ ] **Sidemannskontroll** i EzProp: krav per ansatt satt av leder, «send til sidemann», kommentarer per sted i rapporten, sendt tilbake eller godkjent med navn og tid, logg og enkel statistikk over funnene. Manglende kontroll gir **bare advarsel**, og sidemannen **kommenterer og godkjenner, men retter ikke** (27.10.2026).
+- [ ] **Kvalitetstall som måles løpende** (Ståle 16.11.2026: «ja det var gode forslag»). EzProp måler selv, fra første rapport, og viser utviklingen over tid. Kjernesettet:
+  1. **Utfylt på befaringen:** andel bygningsdeler med vurdering, TG og bilde registrert mens befaringen pågår (tidsstempel per felt fra iPaden). Retning: opp, rundt 90 %. Vises alltid sammen med nr. 6, slik at tallet ikke kan pyntes med TG uten bilde.
+  2. **Leveringstid:** virkedager fra befaring til levert rapport, snitt og lengste. Retning: ned.
+  3. **Godkjent første gang:** andel rapporter sidemannen godkjenner uten å sende tilbake. Retning: opp.
+  4. **Funn per rapport, etter type:** sidemannens kommentarer i fire faste typer: TG og vurdering, mangler dokumentasjon, språk og uklarhet, formalia (Ståle 16.11.2026: «ja»). Retning: ned.
+  5. **Alvorlige funn per 100 rapporter:** funn sidemannen merker som alvorlige (for eksempel feil TG, manglende bygningsdel, manglende fuktmåling). Retning: ned.
+  6. **Dokumentasjon på avvik:** andel TG2 og TG3 med bilde, og måleverdi der det skal måles. Retning: opp, 100 %.
+  7. **Rettet etter levering og reklamasjoner:** nye versjoner etter levering, og reklamasjoner per 100 rapporter. Retning: ned, halvparten.
+  I tillegg: andel rapporter med sidemannskontroll, hvor lenge rapporten venter hos sidemannen, og hvor mange av KI-sidemannens funn sidemannen er enig i. **Hvem ser hva** (Ståle 16.11.2026: «Leder, admin og den ansatte»): alle ser tallene for hele firmaet og per kontor; tall per person ser bare den ansatte selv, leder og admin. Tilgangen sjekkes i `src/core/access`. Visning per person venter på S11.
 - [ ] **KI-sidemann før sidemannskontrollen:** en KI-gjennomgang mot Byggcons kunnskapsbase (samme kunnskap som skillen for sidemannskontroll) finner gjengangere, motstrid og uklart språk, slik at sidemannen får en renere rapport. Den stiller spørsmål og endrer ingenting selv.
 - [ ] **Læring fra sidemannskontrollen:** hver måned foreslår KI nye fraser og gjengangere, som går til fagrådet via innsamlingen i kunnskapsbasen.
 - [ ] Kopiere oppdrag og **kopiere data fra en tidligere rapport** på samme bolig, med liste over hva som ikke passer i ny malversjon
@@ -336,7 +346,7 @@ Rutiner, kalender og økonomi. Kan bygges mens piloten går.
 - [ ] **Prisliste per avtale som data** (funksjonskart H2): standardpriser og avtalepriser foreslås på fakturalinjene. En prismotor (pris etter areal, alder og avstand) kommer senere.
 - [ ] **Tilbud med pris:** pris fra prislisten på tilbudet, gyldig til-dato, og tilbudet som PDF i Byggcon-profilen som den ansatte sender selv. Når tilbudet godtas, gjøres det om til oppdrag med prisen på fakturagrunnlaget. (Ståle 13.11.2026)
 - [ ] **Tall om KI-bruk per ansatt, også for leder** (Ståle 12.11.2026, K8). Bygges først når det er drøftet med de ansatte (arbeidsmiljøloven kapittel 9).
-- [ ] **Lederdashbord** (funksjonskart H3): oppdrag per status, befaringer neste uke, levert siste 30 dager, leveringstid, ufakturert og forfalt, per kontor og selskap, og pilotmålene
+- [ ] **Lederdashbord** (funksjonskart H3): oppdrag per status, befaringer neste uke, levert siste 30 dager, leveringstid, ufakturert og forfalt, per kontor og selskap, og pilotmålene, med kvalitetstallene fra fase 3a over tid
 - [ ] Oppslag i Brønnøysundregistrene for firma (som i Optiplan)
 
 **Ferdig når:** De seks rutinene har gått uten feil som ikke ble oppdaget, og fakturagrunnlag har gått til eAccounting for alle tre selskapene.
@@ -475,6 +485,7 @@ EzProp er i mål når Byggcon kan gå over fra IVIT uten å miste noe takstmenne
 | Tap av data uten nett | Konfliktloggen, synkfeil og takstmannens melding | Null tap |
 | Sperrer og advarsler | Antall per rapport, og hvor mange som ble overstyrt | Følges, ingen fast grense |
 | Rettinger etter sidemannskontroll | Antall kommentarer per rapport og kategori | Synker over tid |
+| Kvalitetstallene (fase 3a) | De sju tallene i kjernesettet, målt løpende av EzProp | Riktig retning over tid |
 | TG-forslag fra reglene | Andel som godtas, endres eller avvises | Viser om reglene treffer |
 | Rapporter rettet etter levering | Antall nye versjoner | Ikke flere enn i IVIT |
 | PDF-størrelse | Størrelse på sendte PDF-er | Under 8 MB |
