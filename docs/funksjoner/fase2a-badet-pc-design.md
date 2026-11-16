@@ -2,7 +2,7 @@
 
 - **Hører til:** `docs/funksjoner/fase2a-badet-pc.md` (2a-2, punkt 3)
 - **Fasit:** oppsett og luft fra A «Fjord» (`docs/design/bilder/A-konstr-pc.png`, `A-ipad-liggende.png`, `A-ipad-staende.png`), uttrykket fra Byggcon-profilen (`docs/08-designprinsipper.md`, `docs/design/byggcon-profil/bilder/`, `docs/funksjoner/fase2a-byggcon-profil-design.md`)
-- **Laget av:** ui-designer, 14.11.2026
+- **Laget av:** ui-designer, 14.11.2026. Rettet av prosjektlederen 16.11.2026 etter forbedrerens tillegg A380–A383, A388 og A389 og vurderingen fra forbedrer, ux og arkitekt (begrunnelse med knapper, «Rett nå», søk, snarveier, motsatt TGIU-konflikt). Ved motstrid gjelder oppgavekortet.
 - **Støtter hovedmål:**
   - **Færre reklamasjoner:** skjermen viser forskriftens struktur (TG, årsak, konsekvens, tiltak, kostnad; TGIU med begrunnelse) som faste felt, og mangler står som advarsel på punktet og i listen før rapporten går ut.
   - **De ansatte:** ett skjermbilde for hele badet, to trykk fra regelforslag til ferdig avvik, ingen «Lagre»-knapp, lagrestatus alltid synlig.
@@ -167,7 +167,7 @@ Regelforslag er ikke KI: **aldri ordet «KI», aldri gnisteikonet, aldri `ai-*`-
 ```
 
 - **Forslagstypen** står i klartekst: `outcome` viser TG og utfallets navn; `tgiu` viser `TgBadge` «TGIU» og «Sett TGIU på punktet»; `tg0` viser «TG0» og «Sett TG0 på punktet». Utfall med «velg TG2 eller TG3» viser to merker: «TG2 eller TG3».
-- **Hvorfor:** begrunnelsen oversatt fra koder i `reasons` (én oversettelsesfil i `src/core/reports/logic/`). Tall med enhet, aldri råkoder.
+- **Hvorfor:** begrunnelsen oversatt fra koder i `reasons` (én oversettelsesfil i `src/core/reports/logic/`). Tall med enhet, aldri råkoder. Hver linje som bygger på et felt, er en lenke (`<a>` med tekst som linjen, `underline`) som flytter fokus til feltet verdien kom fra, samme mønster som «Gå til feltet» i `not_evaluated` (A389). Feltkoden står i `reasons`. Skjermleseren får «Sjiktet er fra 1990, gå til feltet».
 - **Kilde** (`source_ref`) vises bare her, i dempet tekst. Den flettes aldri inn i avvikstekstene.
 - **Knapper:** DOM- og tabulatorrekkefølge Godta, Endre, Avvis.
   - «Godta»: `Button size="lg"` (56 pt), minst 160 px bred.
@@ -181,18 +181,21 @@ Regelforslag er ikke KI: **aldri ordet «KI», aldri gnisteikonet, aldri `ai-*`-
 | Tilstand | Hva vises | Knapper |
 |---|---|---|
 | `suggested` | Som over. | Godta · Endre · Avvis |
-| `changing` | Samme kort. Under begrunnelsen: `ChoiceButtons` «Velg TG» (TG2, TG3 for utfall; TG0, TG1, TGIU for `tgiu`/`tg0`) og, når spørsmålet har flere utfall, `ChoiceButtons` «Annet utfall». `Textarea` «Begrunnelse for endringen» (påkrevd, `min-h-24`). | «Lagre endringen» (`primary lg`), låst til begrunnelse og et valg som skiller seg fra forslaget finnes, med hjelpeteksten «Skriv en begrunnelse for å lagre.» · «Avbryt» (`ghost`) |
-| `rejecting` | `Textarea` «Hvorfor avviser du forslaget?» (påkrevd). | «Avvis forslaget» (`primary lg`), låst til begrunnelsen er fylt ut, med samme hjelpetekst · «Avbryt» (`ghost`) |
+| `changing` | Samme kort. Under begrunnelsen: `ChoiceButtons` «Velg TG» (TG2, TG3 for utfall; TG0, TG1, TGIU for `tgiu`/`tg0`) og, når spørsmålet har flere utfall, `ChoiceButtons` «Annet utfall». Så `ChoiceButtons` «Hvorfor endrer du?» med de fem grunnene (A380, se under). Ved «Annet»: `Textarea` «Skriv grunnen» (påkrevd bare da, `min-h-24`). Ellers vises «Legg til en forklaring (valgfri)» som `ghost`-knapp som åpner tekstfeltet. | «Lagre endringen» (`primary lg`), låst til en grunn og et valg som skiller seg fra forslaget finnes (og tekst ved «Annet»), med hjelpeteksten «Velg en grunn for å lagre.» · «Avbryt» (`ghost`) |
+| `rejecting` | `ChoiceButtons` «Hvorfor avviser du forslaget?» med de fem grunnene. Tekstfelt som i `changing`: påkrevd bare ved «Annet», ellers valgfritt. | «Avvis forslaget» (`primary lg`), låst til en grunn er valgt (og tekst ved «Annet»), med samme hjelpetekst · «Avbryt» (`ghost`) |
 | `accepted` | Kortet krymper til én linje i hvit flate med kant `line`: hakeikon, «Godtatt: TG3 – Vanntett sjikt fra før 2000 …» og lenke «Gå til avvik 1» (for `outcome`). | Ingen |
-| `changed` | Én linje: «Endret: forslag TG3, du valgte TG2.» og «Begrunnelse: …» (den ansattes egen tekst, trimmet til to linjer). | Ingen |
-| `rejected` | Én linje: «Avvist: TG3 – … » og begrunnelsen. | Ingen |
-| `stale` | `Warning`: «Forslaget gjelder ikke lenger. Feltet det bygde på er endret. Avviket du godtok, står fortsatt.» Avviket fjernes aldri av seg selv. | Lenke «Gå til avvik 1» når det finnes |
+| `changed` | Én linje: «Endret: forslag TG3, du valgte TG2.» og «Grunn: Synlig skade» (knappeteksten for koden). Egen tekst vises bare når den finnes, trimmet til to linjer. | Ingen |
+| `rejected` | Én linje: «Avvist: TG3 – … » og «Grunn: …» som over. | Ingen |
+| `stale` | `Warning`: «Forslaget gjelder ikke lenger. Feltet det bygde på er endret. Avviket du godtok, står fortsatt.» Avviket fjernes aldri av seg selv. | Når et godtatt avvik henger på forslaget (A388): «Fjern avviket» (`secondary md`, samme tjeneste og angre-linje som i `DeviationCard`) og «Behold avviket» (`ghost`, lagrer ingenting, flytter fokus til avvikskortet). Ellers lenke «Gå til avvik 1» når det finnes |
 | `not_evaluated` | Linje i hvit flate med kant `line`, ikon «i»: «Ikke vurdert: Fyll ut årstall for sjiktet.» Lenken «Gå til feltet» flytter fokus til feltet. | Ingen |
 | `busy` | Alle knapper låst, valgt knapp viser «Lagrer …». | Låst |
 | `error` | `FormMessage` under knappene. Tekstene i avsnitt 14. Begrunnelsen beholdes. | Som før feilen |
 
-- Endre og Avvis skjer på samme flate, ikke i dialog. Fokus går til første valg (`changing`) eller tekstfeltet (`rejecting`). Avbryt setter fokus tilbake på knappen som åpnet.
+- **Grunnene** (A380, faste koder i `override_reason_code`, tekstene er utkast i oversettelsesfilen): «Dokumentasjon er lagt fram» (`documentation_present`), «Synlig skade» (`visible_damage`), «Målt på nytt» (`measured_again`), «Alderen er kjent på annen måte» (`age_known_otherwise`), «Annet» (`other`). `ChoiceButtons`, aldri nedtrekk. Skriving trengs bare ved «Annet».
+- Endre og Avvis skjer på samme flate, ikke i dialog. Fokus går til første valg (`changing`) eller første grunn (`rejecting`). Velges «Annet», går fokus til tekstfeltet. Avbryt setter fokus tilbake på knappen som åpnet.
+- **Godta på lang side:** står forslagskortet utenfor skjermen (for eksempel når takstmannen har rullet ned til feltene), vises Godta (og Godta som TG2/TG3) også i den nedre linjen (`sticky bottom-0`). Ellers står Godta bare i kortet, som tegnet. Ingen tast alene godtar eller avviser.
 - **Godta på punkt med TGIU** (forslag `outcome` med TG2/TG3): kortet går til tilstanden `tgiu_conflict` før noe lagres: `Warning` «Punktet har TGIU. Et avvik med TG3 kan ikke stå sammen med TGIU.» og knappene «Fjern TGIU og legg til avviket» (`primary lg`) og «Behold TGIU» (`secondary md`, avbryter). Samme valg vises når takstmannen legger til avvik med TG2/TG3 fra «+ Avvik». HMS-avvik gir ikke konflikten.
+- **Godta TGIU eller TG0 på punkt med avvik med TG2/TG3** (motsatt vei, serverstatus `tgiu_conflicts_with_deviation`): `Warning` «Punktet har avvik med TG. TGIU (eller TG0) kan ikke stå sammen med dem.» og knappene «Fjern avvikene med TG og sett TGIU» / «… sett TG0» (`primary lg`, sender `remove_tg_deviations`; avvikene får angre-linjer) og «Behold avvikene» (`secondary md`). «Behold avvikene» lagrer ingenting: forslaget står åpent med linjen «Punktet har avvik med TG. Forslaget står åpent til du godtar, endrer eller avviser det.» Det samme gjelder TG-valget i «TG uten avvik».
 - Etter Godta (`outcome`) flyttes fokus til overskriften i det nye avvikskortet, og statusområdet sier «Avvik lagt til, TG3». Etter Godta (`tgiu`) går fokus til TGIU-kortets overskrift («TGIU satt på punktet»). Etter Godta (`tg0`): «TG0 satt på punktet», fokus på «Ferdig med punktet».
 
 ## 9. `DeviationCard`
@@ -270,7 +273,9 @@ Advarsler sperrer aldri. De har **ikke** TG-tonene (gult er TG2): flate `sand`, 
 
 - **Ved feltet:** `Warning` rett under feltet det gjelder, koblet med `aria-describedby`.
 - **«Å se over»** på punktet: `Card` med `h3` «Å se over (2)» og en liste med lenker som flytter fokus til feltet. Vises bare når det finnes advarsler. `role="status" aria-live="polite"` på antallet.
+- **«Rett nå»** (A381): en advarsel med én opplagt retting får knappen i `Warning`s `action` (`secondary md`). Handlingen kommer fra den rene funksjonen `warningFix`: T-0059 «Endre til utført med funn» (retter valget); TG3 uten kostnad, TG2/TG3 uten årsak, konsekvens eller tiltak og TGIU-opplysning som mangler: «Rett nå» flytter fokus til feltet; forslag som ikke gjelder lenger: rull og fokus til forslaget, og «Fjern avviket» / «Behold avviket» når et godtatt avvik henger på det (A388); punkt ferdig uten TG: fokus til «TG uten avvik». Andre advarsler har ingen knapp. Ingen retting skjer uten trykk.
 - **I listen:** «2 å se over» i statuslinjen.
+- **Listehodet** (A381): under «3 av 8 ferdig» står «3 å se over – gå til neste» som knapp (`ghost`, min. 44 pt) når minst ett punkt har advarsler. Telleren teller punkter, ikke advarsler. Knappen åpner neste punkt med advarsel etter det åpne (går rundt) og legger fokus på første advarsel. Teksten oppdateres i statusområdet.
 - **Etter «Ferdig med punktet»** med advarsler: ingen dialog. Punktet markeres ferdig, neste punkt som ikke er ferdig åpnes, og statusområdet sier «Punktet er ferdig, med 2 ting å se over. Åpnet: Ventilasjon.» Advarslene står fortsatt i listen.
 
 Advarselstekstene (endelige tekster i oversettelsesfilen, `src/core/reports/logic/`):
@@ -284,7 +289,9 @@ Advarselstekstene (endelige tekster i oversettelsesfilen, `src/core/reports/logi
 | TGIU-opplysning mangler | Fyll ut dette for TGIU. |
 | Hulltaking ikke utført, ikke TGIU på tilliggende konstruksjoner | Hulltaking er ikke utført. Punktet bør ha TGIU. |
 | «Utført uten funn» med måling over grensen (T-0059) | Målingen er på eller over grensen. Endre til «Utført med funn»? med knappen «Endre til utført med funn» (`secondary md`) |
-| Forslag gjelder ikke lenger | Et forslag fra reglene gjelder ikke lenger. |
+| Forslag gjelder ikke lenger | Et forslag fra reglene gjelder ikke lenger. (med «Fjern avviket» / «Behold avviket» når et godtatt avvik henger på det) |
+| Punktet er ferdig uten TG (`checkpoint_done_without_tg`, A385) | Punktet er ferdig uten TG. Velg TG eller legg til avvik. med «Rett nå» (fokus til «TG uten avvik») |
+| TG3 bare på grunn av alder (`tg3_on_age_only`, A358) | TG3 er satt bare på grunn av alder. Se over om skade eller annen svikt er beskrevet, eller bruk TG2. |
 | Flettefelt mangler | Fyll inn {navn} i teksten. |
 
 ## 14. Felles byggeklosser i `src/shared/ui`
@@ -337,14 +344,14 @@ Utseende i avsnitt 13. Ikke `role="alert"` (sperrer ikke, skal ikke avbryte); op
 Felles for avvik, årsak, konsekvens, tiltak, beskrivelse av punktet og TGIU-feltene.
 
 - `Field` + `Textarea` (`min-h-24`, vokser med innholdet til 12 linjer), `SaveState` under til høyre, `Warning` under ved behov.
-- Over feltet, venstrejustert, en plass for `AiTextMark` (vises bare når serveren sier `aiUsageId` og status `accepted`/`edited`; tom nå). Under feltet en plass for `AiSuggestion` (tom nå). Ingen KI-knapp i denne oppgaven.
+- Over feltet, venstrejustert, en plass for `AiTextMark` (vises bare når serveren finner en KI-tekst med status `accepted`/`edited` i `ai_usage_log` for feltet (`target_ref`, A355); tom nå). Under feltet en plass for `AiSuggestion` (tom nå). Ingen KI-knapp i denne oppgaven.
 - Lagrer per felt når feltet forlates og etter 800 ms uten tasting.
 - Teller tegn når 80 % av grensen er brukt: «1 640 av 2 000 tegn». Over grensen: feil «Teksten er for lang. Grensen er 2 000 tegn.»
 - Fødselsnummer (elleve sifre): feil «Teksten ser ut til å inneholde et fødselsnummer. Fjern det.» Lagres ikke; teksten beholdes i feltet.
 
 ## 16. `AddDeviationPanel`
 
-Åpnes av «+ Avvik» på samme flate, rett over knappen (ingen dialog). Fokus til første utfall.
+Åpnes av «+ Avvik» på samme flate, rett over knappen (ingen dialog). Fokus til søkefeltet.
 
 ```
 ┌ flate sand, p-5 ──────────────────────────────────────────────┐
@@ -361,6 +368,7 @@ Felles for avvik, årsak, konsekvens, tiltak, beskrivelse av punktet og TGIU-fel
 - Ett trykk på et utfall lager avviket med standardtekstene, lukker panelet og setter fokus på det nye kortet («Avvik lagt til, TG2»). Ved «TG2 eller TG3» lages avviket uten TG, og TG-valget i kortet får fokus.
 - Ved TGIU på punktet og utfall med TG: konfliktvalget fra avsnitt 8 vises i panelet først.
 - Eksempeltekstene i skissen er plassholdere; tekstene kommer fra malen.
+- **Søk** (A382): øverst i panelet `Input type="search"` med etiketten «Søk etter avvik i badet» (synlig etikett). Søket kjøres i nettleseren over maldokumentet som alt er lastet (`searchOutcomes`), ingen KI og ingen serverkall. Mens det står tekst i feltet, erstattes spørsmålslisten av en **synlig liste med knapper** (`<ul>` med `secondary md`-knapper, ikke combobox og ikke noe som klapper seg ut): utfallets navn, TG som tekst, og punktnavnet når treffet hører til et annet punkt («Fuktskade ved sluk · TG3 · Sluk»). Pil ned fra søkefeltet går til første treff, pil opp/ned mellom treffene, Enter velger. Antall treff i `aria-live` («4 treff»). Null treff: «Ingen avvik passer.» Valg på annet punkt åpner punktet (uten ny innlasting) og lager avviket der; fokus på det nye avvikskortet. Tomt søkefelt viser spørsmålene som før.
 
 ## 17. «Ferdig med punktet»
 
@@ -400,7 +408,20 @@ På hver rad for våtrom: lenke formet som `Button variant="secondary" size="md"
 
 ## 21. Ikke med (som oppgavekortet)
 
-Bilder, frasebank, KI-knapper, «Gjelder ikke», fritt avvik uten spørsmål, publiseringssperre, PDF, hurtigtaster, kompakt visning, mørk visning, befaringsvisning uten nett, kommentarer og sidemann.
+Bilder, frasebank, KI-knapper, «Gjelder ikke», fritt avvik uten spørsmål, publiseringssperre, PDF, kompakt visning, mørk visning, befaringsvisning uten nett, kommentarer og sidemann.
+
+## 21a. Snarveier på PC (A383)
+
+| Snarvei | Virker | Gjør |
+|---|---|---|
+| Ctrl/Cmd+Enter | overalt, også i tekstfelt | «Ferdig med punktet» (lagrer det som venter først, som knappen) |
+| Alt+↑ / Alt+↓ | bare når fokus ikke står i et tekstfelt | forrige / neste punkt |
+| Ctrl/Cmd+K | overalt | åpner «+ Avvik» og legger fokus i søkefeltet |
+| ? | bare utenfor tekstfelt | viser listen over snarveiene (panel på samme flate, lukkes med Esc, fokus tilbake) |
+
+- Ingen snarvei godtar eller avviser et forslag, og ingen énkastsnarvei finnes.
+- Snarveiene tar aldri taster fra tekstfelt eller skjermleser: i tekstfelt flytter Alt+piltast markøren, og «?» skrives som tegn.
+- Lenken «Snarveier (?)» står i nedre linje på PC, slik at listen kan finnes uten tastatur.
 
 ## 22. Sjekkliste for utvikler
 
@@ -411,6 +432,9 @@ Bilder, frasebank, KI-knapper, «Gjelder ikke», fritt avvik uten spørsmål, pu
 - [ ] `TgBadge` viser alltid tekst; kort form har `aria-label` med lang form.
 - [ ] Hovedknapper 56 pt, alle andre trykkflater minst 44 pt (e2e måler).
 - [ ] Avvis står ikke ved Godta (min. 48 px, egen linje på smal skjerm).
+- [ ] E2e måler hovedknappene (min. 56 pt) og avstanden fra Avvis til Godta/Endre (min. 48 px) i både liggende og stående iPad-størrelse.
+- [ ] Begrunnelse ved Endre og Avvis er knapper; tekst kreves bare ved «Annet».
+- [ ] Søketreffene er en synlig liste med knapper, ikke combobox.
 - [ ] Fokusflyt etter Godta, Ferdig, Fjern og bytte av punkt som i avsnitt 8, 9 og 17.
 - [ ] Flettefelt vises aldri som `{…}`.
 - [ ] Komponentene i `src/shared/ui` importerer ikke `src/core`, `src/db` eller moduler; klientkomponentene i rutemappen importerer bare `src/core/reports/logic/`, ikke indeksen.
