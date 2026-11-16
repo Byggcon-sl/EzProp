@@ -89,6 +89,29 @@ describe("V3 vasken med kjente verdier", () => {
     },
   );
 
+  // Papirkurven (docs/funksjoner/fase2a-papirkurv-testplan.md 7.7): en fjernet part ligger i
+  // papirkurven og kan hentes tilbake, så navnet, e-posten og telefonen vaskes fortsatt bort.
+  it("7.7 fjernet part (i papirkurven): navn, e-post og telefon vaskes fortsatt bort", async () => {
+    const result = await redactOne(
+      {
+        parties: [
+          {
+            name: "Ola Testmann",
+            email: "ola.testmann@example.invalid",
+            phone: "90000000",
+            deleted: true,
+          },
+        ],
+      },
+      "Ola Testmann var til stede. Ring 90000000 eller skriv til ola.testmann@example.invalid.",
+    );
+    expect(result.text).not.toContain("Ola");
+    expect(result.text).not.toContain("Testmann");
+    expect(result.text).not.toContain("90000000");
+    expect(result.text).not.toContain("ola.testmann@example.invalid");
+    expect(result.text).toContain("[navn]");
+  });
+
   it("V3.3 personnavn: hel frase og hvert ord på minst tre tegn", async () => {
     const results = await redactWith({ parties: [{ name: "Åse Testesen" }] }, [
       "Åse Testesen kom.",

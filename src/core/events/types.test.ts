@@ -39,6 +39,11 @@ const EXPECTED_EVENT_TYPES = [
   "assignment.floor_area_saved",
   "assignment.room_saved",
   "assignment.room_removed",
+  // Papirkurv og angre (docs/funksjoner/fase2a-papirkurv-testplan.md 2.3)
+  "assignment.building_restored",
+  "assignment.floor_restored",
+  "assignment.room_restored",
+  "assignment.party_restored",
   "inspection.scheduled",
   "inspection.rescheduled",
   "inspection.cancelled",
@@ -66,8 +71,8 @@ const EXPECTED_EVENT_TYPES = [
 ];
 
 describe("hendelseskodene", () => {
-  it("1. har nøyaktig de 52 kodene fra domenemodellen 4.9", () => {
-    expect(EXPECTED_EVENT_TYPES).toHaveLength(52);
+  it("1. har nøyaktig de 56 kodene fra domenemodellen 4.9", () => {
+    expect(EXPECTED_EVENT_TYPES).toHaveLength(56);
     expect([...EVENT_TYPES].sort()).toEqual([...EXPECTED_EVENT_TYPES].sort());
   });
 

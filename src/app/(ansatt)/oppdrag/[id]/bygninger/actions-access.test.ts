@@ -297,3 +297,92 @@ describe("6.4 takstmann uten skriverett får NO_ACCESS fra kjernen", () => {
     expect(row!.n).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Papirkurv (docs/funksjoner/fase2a-papirkurv-testplan.md avsnitt 8): gjenopprettingshandlingene
+// med ekte kjerne. Navnene og feltene er som i actions.test.ts (restoreBuildingAction,
+// restoreFloorAction, restoreRoomAction med buildingId, floorId, roomId og how). De slås opp
+// dynamisk, så filen kan typesjekkes før de finnes.
+// ---------------------------------------------------------------------------------------------
+
+type RestoreAction = (previous: FormState, data: FormData) => Promise<FormState>;
+const restoreActions = (await import("./actions")) as unknown as Record<
+  string,
+  RestoreAction | undefined
+>;
+
+function restoreAction(name: string): RestoreAction {
+  const action = restoreActions[name];
+  expect(action, `${name} finnes i actions.ts`).toBeTypeOf("function");
+  return action!;
+}
+
+describe("8. gjenoppretting gjennom handlingene", () => {
+  it("takstmann uten skriverett får NO_ACCESS på alle tre, og ingenting endres", async () => {
+    const { org, adminEmployee, assignment, building, room } = await setup();
+    const removedAt = new Date("2026-11-03T10:00:00Z");
+    await db.execute(sql`update rooms set deleted_at = ${removedAt.toISOString()}::timestamptz,
+      deleted_by = ${adminEmployee.id} where id = ${room.id}`);
+    const removedFloor = await createFloor(org.id, {
+      buildingId: building.id,
+      name: "Loft test",
+      level: 3,
+      deletedAt: removedAt,
+      deletedBy: adminEmployee.id,
+    });
+    const removedBuilding = await createBuilding(org.id, {
+      assignmentId: assignment.id,
+      name: "Anneks test",
+      deletedAt: removedAt,
+      deletedBy: adminEmployee.id,
+    });
+    const before = await snapshot(org.id);
+    const countsBefore = await eventAndAuditCounts();
+
+    for (const [name, data] of [
+      ["restoreRoomAction", form({ roomId: room.id, how: "undo" })],
+      ["restoreFloorAction", form({ floorId: removedFloor.id, how: "trash" })],
+      ["restoreBuildingAction", form({ buildingId: removedBuilding.id, how: "trash" })],
+    ] as const) {
+      const state = await restoreAction(name)(initialFormState, data);
+      expect(state.message, name).toBe(NO_ACCESS);
+    }
+    expect(await snapshot(org.id)).toBe(before);
+    expect(await eventAndAuditCounts()).toEqual(countsBefore);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("8.1 admin i A med rom-id fra B og organizationId = B i skjemaet: NO_ACCESS, og B er uendret", async () => {
+    const a = await setup();
+    const orgB = await createOrganization("Organisasjon B");
+    const adminB = await createUser({ name: "Admin B" });
+    const adminBEmployee = await createEmployee(adminB, orgB.id, ["admin"]);
+    const buildingB = await createBuilding(orgB.id, { name: "Bolighus B test" });
+    const floorB = await createFloor(orgB.id, { buildingId: buildingB.id });
+    const roomB = await createRoom(orgB.id, {
+      floorId: floorB.id,
+      deletedAt: new Date("2026-11-03T10:00:00Z"),
+      deletedBy: adminBEmployee.id,
+    });
+    const adminA = await createUser({ name: "Admin A" });
+    await createEmployee(adminA, a.org.id, ["admin"]);
+    mocks.getEmployeeContext.mockResolvedValue({
+      actor: adminA,
+      organizationId: a.org.id,
+      canEditOrders: true,
+      canReadClaims: true,
+      canManageClaims: true,
+      canManageContacts: true,
+      officeId: null,
+    });
+    const beforeB = await snapshot(orgB.id);
+
+    const state = await restoreAction("restoreRoomAction")(
+      initialFormState,
+      form({ roomId: roomB.id, how: "trash", organizationId: orgB.id }),
+    );
+
+    expect(state.message).toBe(NO_ACCESS);
+    expect(await snapshot(orgB.id)).toBe(beforeB);
+  });
+});

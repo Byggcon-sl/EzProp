@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ROOM_TYPES } from "./codes";
-import { BuildingNotEmptyError, FloorNotEmptyError, PropertyMissingError } from "./errors";
+import * as errors from "./errors";
+import { PropertyMissingError } from "./errors";
 import {
   addRoomsInputSchema,
   buildingInputSchema,
@@ -30,8 +31,6 @@ const AREA = "Arealet må være et tall mellom 0 og 9999,9 med høyst én desima
 const ROOM_TYPE = "Velg romtype.";
 const NATIONAL_ID = "Fødselsnummer skal ikke lagres her.";
 const PROPERTY_MISSING = "Legg inn eiendommen før du legger til bygninger.";
-const BUILDING_NOT_EMPTY = "Fjern etasjene først.";
-const FLOOR_NOT_EMPTY = "Fjern rommene først.";
 
 /** Alle norske meldinger i kortet punkt 7 og 8. Hver må brukes i minst én test (2.14). */
 const CARD_MESSAGES = [
@@ -42,8 +41,6 @@ const CARD_MESSAGES = [
   ROOM_TYPE,
   NATIONAL_ID,
   PROPERTY_MISSING,
-  BUILDING_NOT_EMPTY,
-  FLOOR_NOT_EMPTY,
 ];
 const usedMessages = new Set<string>();
 
@@ -423,16 +420,22 @@ describe("hele skjemaene", () => {
     });
   });
 
-  it.each([
-    [PROPERTY_MISSING, "PropertyMissingError", () => new PropertyMissingError()],
-    [BUILDING_NOT_EMPTY, "BuildingNotEmptyError", () => new BuildingNotEmptyError()],
-    [FLOOR_NOT_EMPTY, "FloorNotEmptyError", () => new FloorNotEmptyError()],
-  ] as const)("feilen har kortets tekst «%s» (%s)", (message, name, make) => {
-    const error = make();
-    expect(error).toBeInstanceOf(Error);
-    expect(error.message).toBe(message);
-    expect(error.name).toBe(name);
-    usedMessages.add(message);
+  it.each([[PROPERTY_MISSING, "PropertyMissingError", () => new PropertyMissingError()]] as const)(
+    "feilen har kortets tekst «%s» (%s)",
+    (message, name, make) => {
+      const error = make();
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe(message);
+      expect(error.name).toBe(name);
+      usedMessages.add(message);
+    },
+  );
+
+  // Papirkurven (A414, docs/funksjoner/fase2a-papirkurv-testplan.md): «Fjern» tar med innholdet,
+  // så feilene «Fjern etasjene først.» og «Fjern rommene først.» er fjernet.
+  it("BuildingNotEmptyError og FloorNotEmptyError finnes ikke lenger", () => {
+    expect(errors).not.toHaveProperty("BuildingNotEmptyError");
+    expect(errors).not.toHaveProperty("FloorNotEmptyError");
   });
 });
 

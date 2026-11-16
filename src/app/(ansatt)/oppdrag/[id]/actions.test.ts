@@ -38,12 +38,14 @@ const mocks = vi.hoisted(() => ({
     throw new Error(`REDIRECT ${url}`);
   }),
   logError: vi.fn(),
+  revalidatePath: vi.fn(),
   core: {
     getAssignment: vi.fn(),
     setTeamMember: vi.fn(),
     addParty: vi.fn(),
     updateParty: vi.fn(),
     removeParty: vi.fn(),
+    restoreParty: vi.fn(),
     setAssignmentSchedule: vi.fn(),
   },
   properties: {
@@ -55,7 +57,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: vi.fn() }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/shared/lib/logger", () => ({
   logger: { error: mocks.logError, warn: vi.fn(), info: vi.fn() },
 }));
@@ -871,5 +873,84 @@ describe("befaring og frist", () => {
     const logged = loggedWithoutIds();
     expect(logged).toContain("OppdiktetFeil");
     expect(logged).not.toContain("2026-11-06T09:00");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Papirkurv: «Angre» og «Gjenopprett» for parter (docs/funksjoner/fase2a-papirkurv-testplan.md
+// avsnitt 8). Kortet navngir ikke handlingen. Testene bruker restorePartyAction(previous,
+// formData) med feltene partyId og how («undo» eller «trash»), som «Fjern». Den slås opp
+// dynamisk, så filen kan typesjekkes før den finnes; avviker navnet, rettes det her.
+// ---------------------------------------------------------------------------------------------
+
+type PartyAction = (previous: FormState, data: FormData) => Promise<FormState>;
+const partyActions = (await import("./actions")) as unknown as Record<
+  string,
+  PartyAction | undefined
+>;
+
+function restorePartyAction(): PartyAction {
+  const action = partyActions.restorePartyAction;
+  expect(action, "restorePartyAction finnes i actions.ts").toBeTypeOf("function");
+  return action!;
+}
+
+function restoreForm(entries: Record<string, string>): FormData {
+  const data = new FormData();
+  for (const [key, value] of Object.entries(entries)) data.append(key, value);
+  return data;
+}
+
+describe("8. restorePartyAction", () => {
+  beforeEach(() => {
+    mocks.core.restoreParty.mockResolvedValue({
+      restored: [{ type: "party", id: PARTY_ID, organizationId: ORG }],
+      changed: true,
+      notices: [],
+    });
+  });
+
+  it("8.1 organisasjonen kommer fra sesjonen, skjemafeltet organizationId leses aldri", async () => {
+    await run(
+      restorePartyAction()(
+        initialFormState,
+        restoreForm({ partyId: PARTY_ID, how: "undo", organizationId: OTHER_ORG }),
+      ),
+    );
+    expect(mocks.core.restoreParty).toHaveBeenCalledTimes(1);
+    const [calledActor, calledOrg, calledId, how] = mocks.core.restoreParty.mock.calls[0]!;
+    expect(calledActor).toEqual(actor);
+    expect(calledOrg).toBe(ORG);
+    expect(calledId).toBe(PARTY_ID);
+    expect(how).toBe("undo");
+    expect(JSON.stringify(mocks.core.restoreParty.mock.calls)).not.toContain(OTHER_ORG);
+  });
+
+  it("8.1 id som ikke er uuid stoppes før kjernen", async () => {
+    const state = await failed(
+      restorePartyAction()(initialFormState, restoreForm({ partyId: "ikke-en-id", how: "undo" })),
+    );
+    expect(state.message).toBe(NO_ACCESS);
+    expect(mocks.core.restoreParty).not.toHaveBeenCalled();
+  });
+
+  it("8.2 AccessDeniedError gir den faste teksten, uten id, navn eller stakk i svaret", async () => {
+    mocks.core.restoreParty.mockRejectedValue(new AccessDeniedError());
+    const state = await failed(
+      restorePartyAction()(initialFormState, restoreForm({ partyId: PARTY_ID, how: "trash" })),
+    );
+    expect(state.message).toBe(NO_ACCESS);
+    const text = JSON.stringify(state);
+    expect(text).not.toContain(PARTY_ID);
+    expect(text).not.toContain(PARTY_NAME);
+    expect(text).not.toMatch(/\bat \S+\.(ts|js)/);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("8.4 oppdragssiden revalideres etter gjenoppretting", async () => {
+    await run(
+      restorePartyAction()(initialFormState, restoreForm({ partyId: PARTY_ID, how: "trash" })),
+    );
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/oppdrag/[id]", "page");
   });
 });

@@ -1,12 +1,13 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { revalidatePath } from "next/cache";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 import { AccessDeniedError } from "@/core/access";
 import {
   addRoomsInputSchema,
-  BuildingNotEmptyError,
   buildingInputSchema,
-  FloorNotEmptyError,
   floorAreaInputSchema,
   floorInputSchema,
   PropertyMissingError,
@@ -47,6 +48,9 @@ const mocks = vi.hoisted(() => ({
     saveRoom: vi.fn(),
     removeRoom: vi.fn(),
     addRooms: vi.fn(),
+    restoreBuilding: vi.fn(),
+    restoreFloor: vi.fn(),
+    restoreRoom: vi.fn(),
   },
 }));
 
@@ -90,8 +94,6 @@ const AREAS = ["123,4", "56,7", "8,9", "210,3"];
 const PERSONAL = [BUILDING_NAME, FLOOR_NAME, ROOM_NAME, "Målt langs innvendig vegg"];
 
 const PROPERTY_MISSING = "Legg inn eiendommen før du legger til bygninger.";
-const BUILDING_NOT_EMPTY = "Fjern etasjene først.";
-const FLOOR_NOT_EMPTY = "Fjern rommene først.";
 
 function form(entries: Record<string, string>): FormData {
   const data = new FormData();
@@ -377,17 +379,16 @@ describe("6.4 feil fra kjernen", () => {
     expect(state.message).toBe(NO_ACCESS);
   });
 
-  it.each([
-    ["saveBuildingAction", () => new PropertyMissingError(), PROPERTY_MISSING],
-    ["removeBuildingAction", () => new BuildingNotEmptyError(), BUILDING_NOT_EMPTY],
-    ["removeFloorAction", () => new FloorNotEmptyError(), FLOOR_NOT_EMPTY],
-  ] as const)("%s: kjent feil → «%s»", async (name, make, message) => {
-    CORE_FOR_ACTION[name].mockRejectedValue(make());
-    const state = await failed(call(name));
-    expect(allMessages(state)).toContain(message);
-    expect(state.message).not.toBe(UNKNOWN_ERROR);
-    expect(mocks.logError).not.toHaveBeenCalled();
-  });
+  it.each([["saveBuildingAction", () => new PropertyMissingError(), PROPERTY_MISSING]] as const)(
+    "%s: kjent feil → «%s»",
+    async (name, make, message) => {
+      CORE_FOR_ACTION[name].mockRejectedValue(make());
+      const state = await failed(call(name));
+      expect(allMessages(state)).toContain(message);
+      expect(state.message).not.toBe(UNKNOWN_ERROR);
+      expect(mocks.logError).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     [
@@ -425,17 +426,16 @@ describe("6.4 feil fra kjernen", () => {
     expect(state.values[field]).toBe((bad as Record<string, string>)[field]);
   });
 
-  it.each([
-    ["PropertyMissingError", () => new PropertyMissingError()],
-    ["BuildingNotEmptyError", () => new BuildingNotEmptyError()],
-    ["FloorNotEmptyError", () => new FloorNotEmptyError()],
-  ] as const)("%s → aldri UNKNOWN_ERROR i noen handling", async (_name, make) => {
-    for (const name of ACTION_NAMES) {
-      CORE_FOR_ACTION[name].mockRejectedValue(make());
-      const state = await failed(call(name));
-      expect(state.message, name).not.toBe(UNKNOWN_ERROR);
-    }
-  });
+  it.each([["PropertyMissingError", () => new PropertyMissingError()]] as const)(
+    "%s → aldri UNKNOWN_ERROR i noen handling",
+    async (_name, make) => {
+      for (const name of ACTION_NAMES) {
+        CORE_FOR_ACTION[name].mockRejectedValue(make());
+        const state = await failed(call(name));
+        expect(state.message, name).not.toBe(UNKNOWN_ERROR);
+      }
+    },
+  );
 
   it.each(ACTION_NAMES)("%s: ukjent feil → UNKNOWN_ERROR", async (name) => {
     CORE_FOR_ACTION[name].mockRejectedValue(new Error("oppdiktet feil"));
@@ -466,8 +466,6 @@ describe("6.5 loggkontrakt", () => {
 
   it("ingen kall til loggeren gir skjemaverdier, heller ikke ved kjente feil", async () => {
     mocks.core.saveBuilding.mockRejectedValue(new PropertyMissingError());
-    mocks.core.removeBuilding.mockRejectedValue(new BuildingNotEmptyError());
-    mocks.core.removeFloor.mockRejectedValue(new FloorNotEmptyError());
     mocks.core.saveFloorArea.mockRejectedValue(new AccessDeniedError());
     for (const name of ACTION_NAMES) await run(call(name));
     const logged = loggedWithoutIds();
@@ -585,5 +583,103 @@ describe("F11 addRoomsAction (feilformer og ok)", () => {
     expect(floorId).toBe(FLOOR);
     expect(input).toMatchObject({ source: "preset" });
     expect(vi.mocked(revalidatePath)).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Papirkurv: «Angre» og «Gjenopprett» (docs/funksjoner/fase2a-papirkurv-testplan.md avsnitt 8)
+// ---------------------------------------------------------------------------------------------
+
+/*
+ * Kortet navngir ikke handlingene. Testene bruker restoreBuildingAction, restoreFloorAction og
+ * restoreRoomAction med samme form som «Fjern» (previous, formData) og feltene buildingId,
+ * floorId eller roomId pluss how («undo» eller «trash»). Avviker utvikleren, rettes navnene her
+ * ved sammenslåingen. Handlingene slås opp dynamisk, så filen kan typesjekkes før de finnes.
+ */
+type Action = (previous: FormState, data: FormData) => Promise<FormState>;
+const restoreModule = (await import("./actions")) as unknown as Record<string, Action | undefined>;
+
+const RESTORES = [
+  ["restoreBuildingAction", "buildingId", BUILDING, mocks.core.restoreBuilding],
+  ["restoreFloorAction", "floorId", FLOOR, mocks.core.restoreFloor],
+  ["restoreRoomAction", "roomId", ROOM, mocks.core.restoreRoom],
+] as const;
+
+function restoreAction(name: string): Action {
+  const action = restoreModule[name];
+  expect(action, `${name} finnes i actions.ts`).toBeTypeOf("function");
+  return action!;
+}
+
+describe("8. gjenopprettingshandlingene", () => {
+  beforeEach(() => {
+    for (const [, , id, core] of RESTORES) {
+      core.mockResolvedValue({
+        restored: [{ type: "room", id, organizationId: ORG }],
+        changed: true,
+        notices: [],
+      });
+    }
+  });
+
+  it.each(RESTORES)(
+    "8.1 %s: organisasjonen kommer fra sesjonen, skjemafeltet organizationId leses aldri",
+    async (name, field, id, core) => {
+      await run(
+        restoreAction(name)(
+          initialFormState,
+          form({ [field]: id, how: "trash", organizationId: OTHER_ORG }),
+        ),
+      );
+      expect(core).toHaveBeenCalledTimes(1);
+      const [calledActor, calledOrg, calledId, how] = core.mock.calls[0]!;
+      expect(calledActor).toEqual(actor);
+      expect(calledOrg).toBe(ORG);
+      expect(calledId).toBe(id);
+      expect(["undo", "trash"]).toContain(how);
+      expect(JSON.stringify(core.mock.calls)).not.toContain(OTHER_ORG);
+    },
+  );
+
+  it.each(RESTORES)(
+    "8.1 %s: id som ikke er uuid stoppes før kjernen",
+    async (name, field, _id, core) => {
+      const state = await failed(
+        restoreAction(name)(initialFormState, form({ [field]: "ikke-en-id", how: "undo" })),
+      );
+      expect(state.message).toBe(NO_ACCESS);
+      expect(core).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(RESTORES)(
+    "8.2 %s: AccessDeniedError gir den faste teksten, uten stakk eller id i svaret, og uten revalidering",
+    async (name, field, id, core) => {
+      core.mockRejectedValue(new AccessDeniedError());
+      const state = await failed(
+        restoreAction(name)(initialFormState, form({ [field]: id, how: "undo" })),
+      );
+      expect(state.message).toBe(NO_ACCESS);
+      const text = JSON.stringify(state);
+      expect(text).not.toContain(id);
+      expect(text).not.toMatch(/\bat \S+\.(ts|js)/);
+      expect(vi.mocked(revalidatePath)).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(RESTORES)(
+    "8.4 %s: bygningssiden revalideres etter gjenoppretting",
+    async (name, field, id) => {
+      await run(restoreAction(name)(initialFormState, form({ [field]: id, how: "trash" })));
+      expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith("/oppdrag/[id]/bygninger", "page");
+    },
+  );
+
+  it("8.3 BuildingNotEmptyError og FloorNotEmptyError er borte fra actions.ts", () => {
+    const source = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "actions.ts"),
+      "utf8",
+    );
+    expect(source).not.toContain("NotEmptyError");
   });
 });

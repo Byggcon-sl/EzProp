@@ -1182,3 +1182,33 @@ describe("fabrikken for ai_usage_log", () => {
     expect(n).toBe(0);
   });
 });
+
+// Papirkurven (docs/funksjoner/fase2a-papirkurv-testplan.md, «Avtale om signaturer»): fabrikkene
+// for bygning, etasje, arealrad, rom og part tar `deletedAt` og `deletedBy`, slik at testene kan
+// lage fjernede rader og slettegrupper.
+describe("fabrikkene tar deletedAt og deletedBy (papirkurv)", () => {
+  it("createBuilding, createFloor, createFloorArea, createRoom og createAssignmentParty lagrer begge", async () => {
+    const org = await createOrganization("Testfirma takst");
+    const employee = await createEmployee(await createUser(), org.id, ["admin"]);
+    const at = new Date("2026-11-03T10:00:00.000Z");
+    const removed = { deletedAt: at, deletedBy: employee.id };
+    const building = await createBuilding(org.id, removed);
+    const floor = await createFloor(org.id, { buildingId: building.id, ...removed });
+    const area = await createFloorArea(org.id, { floorId: floor.id, ...removed });
+    const room = await createRoom(org.id, { floorId: floor.id, ...removed });
+    const party = await createAssignmentParty(org.id, {
+      assignmentId: building.assignmentId,
+      ...removed,
+    });
+    for (const [name, row] of [
+      ["building", building],
+      ["floor", floor],
+      ["floor_area", area],
+      ["room", room],
+      ["party", party],
+    ] as const) {
+      expect(row.deletedAt?.getTime(), name).toBe(at.getTime());
+      expect(row.deletedBy, name).toBe(employee.id);
+    }
+  });
+});

@@ -1,12 +1,16 @@
 import { count, eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { AccessDeniedError, type Actor } from "@/core/access";
-import { cancelAssignment } from "@/core/assignments";
+import { cancelAssignment, restoreParty } from "@/core/assignments";
 import {
   getAssignmentBuildings,
+  listTrash,
   removeBuilding,
   removeFloor,
   removeRoom,
+  restoreBuilding,
+  restoreFloor,
+  restoreRoom,
   saveBuilding,
   saveFloor,
   saveFloorArea,
@@ -16,6 +20,7 @@ import { db } from "@/db/client";
 import { assignments, auditLog, events, type EmployeeRole } from "@/db/schema";
 import {
   createAssignment,
+  createAssignmentParty,
   createBuilding,
   createEmployee,
   createFloor,
@@ -228,5 +233,103 @@ describe("4.4.1b kansellert oppdrag: bygninger, etasjer, areal og rom er låst",
     ).toBeInstanceOf(AccessDeniedError);
     expect(await snapshot(org.id)).toBe(before);
     expect(await eventAndAuditCounts(org.id)).toEqual(countsBefore);
+  });
+});
+
+/*
+ * Papirkurven på kansellert oppdrag (A416). Testplan: docs/funksjoner/fase2a-papirkurv-testplan.md
+ * avsnitt 6. Oppgavekort: docs/funksjoner/fase2a-papirkurv.md («Kansellert oppdrag»).
+ * `listTrash` og alle fire `restore*` gir `AccessDeniedError` for alle roller, også admin, uten
+ * endring i radene og uten nye hendelser eller loggrader. Det kansellerte oppdraget står aldri i
+ * papirkurven for et annet oppdrag. Tenant-isolasjonen for funksjonene står i trash.test.ts og
+ * party-restore.test.ts.
+ */
+describe("6. papirkurven på kansellert oppdrag (A416)", () => {
+  /** Oppsettet over, med en fjernet bygning, etasje, rom og part før kanselleringen. */
+  async function cancelledWithTrash() {
+    const base = await setup();
+    const { org, people, assignment, building, floor, room } = base;
+    const removedBuilding = await createBuilding(org.id, {
+      assignmentId: assignment.id,
+      name: "Anneks test",
+    });
+    await removeBuilding(people.admin, org.id, removedBuilding.id);
+    await removeRoom(people.admin, org.id, room.id);
+    const removedFloor = await createFloor(org.id, { buildingId: building.id, name: "Loft test" });
+    await removeFloor(people.admin, org.id, removedFloor.id);
+    const party = await createAssignmentParty(org.id, {
+      assignmentId: assignment.id,
+      role: "buyer",
+      name: "Ola Testmann",
+      deletedAt: new Date("2026-11-03T10:00:00Z"),
+    });
+
+    // Kontroll: før kansellering ser admin papirkurven.
+    const before = (await listTrash(people.admin, org.id, assignment.id)) as unknown as unknown[];
+    expect(before.length).toBeGreaterThan(0);
+
+    await cancelAssignment(people.admin, org.id, assignment.id, {
+      expectedStatus: "ordered",
+      reason: "Kunden trakk bestillingen test",
+    });
+    return { ...base, removedBuilding, removedFloor, floor, party };
+  }
+
+  it("6.1–6.2 listTrash og alle fire restore* gir AccessDeniedError for alle roller, uten endring og uten nye rader", async () => {
+    const { org, people, assignment, removedBuilding, removedFloor, room, party } =
+      await cancelledWithTrash();
+    const rows = await snapshot(org.id);
+    const parties = JSON.stringify(
+      await db.execute(
+        sql`select * from assignment_parties where organization_id = ${org.id} order by id`,
+      ),
+    );
+    const counts = await eventAndAuditCounts(org.id);
+
+    for (const role of ROLES) {
+      const actor = people[role];
+      const calls: [string, () => Promise<unknown>][] = [
+        ["listTrash", () => listTrash(actor, org.id, assignment.id)],
+        ["restoreBuilding", () => restoreBuilding(actor, org.id, removedBuilding.id, "trash")],
+        ["restoreFloor", () => restoreFloor(actor, org.id, removedFloor.id, "trash")],
+        ["restoreRoom", () => restoreRoom(actor, org.id, room.id, "undo")],
+        ["restoreParty", () => restoreParty(actor, org.id, party.id, "trash")],
+      ];
+      for (const [name, run] of calls) {
+        expect(await caught(run()), `${role}: ${name}`).toBeInstanceOf(AccessDeniedError);
+      }
+    }
+
+    expect(await snapshot(org.id)).toBe(rows);
+    expect(
+      JSON.stringify(
+        await db.execute(
+          sql`select * from assignment_parties where organization_id = ${org.id} order by id`,
+        ),
+      ),
+    ).toBe(parties);
+    expect(await eventAndAuditCounts(org.id)).toEqual(counts);
+  });
+
+  it("6.3 det kansellerte oppdraget og radene på det står aldri i papirkurven for et annet oppdrag", async () => {
+    const { org, people, assignment, removedBuilding, removedFloor, room, party } =
+      await cancelledWithTrash();
+    const other = await createAssignment(org.id);
+    const otherBuilding = await createBuilding(org.id, { assignmentId: other.id, name: "Garasje" });
+    await removeBuilding(people.admin, org.id, otherBuilding.id);
+
+    for (const role of ROLES) {
+      const result = (await listTrash(people[role], org.id, other.id)) as unknown as {
+        id: string;
+      }[];
+      const text = JSON.stringify(result);
+      expect(
+        result.map((line) => line.id),
+        role,
+      ).toEqual([otherBuilding.id]);
+      for (const id of [assignment.id, removedBuilding.id, removedFloor.id, room.id, party.id]) {
+        expect(text, `${role}: ${id}`).not.toContain(id);
+      }
+    }
   });
 });
