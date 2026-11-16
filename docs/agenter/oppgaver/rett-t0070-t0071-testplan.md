@@ -68,7 +68,6 @@ Innlogging tilbake: lag en hjelper (for eksempel `logInFromCurrentPage(page, ema
 |---|---|---|---|
 | E1 | «Lagre eiendom», utløpt (funnet steg 1–4, på eiendom i stedet for ordre) | Fyll ut eiendomsskjemaet, slett informasjonskapslene, Lagre | Skjemaet står med verdiene. Meldingen «Du er logget ut. Logg inn igjen.» vises (`role="alert"`). Lenken «Logg inn» har `href` `/logg-inn?neste=%2Foppdrag%2F<id>`. Eiendommen er ikke endret |
 | E2 | Tilbake etter innlogging | Fortsettelse av E1: trykk «Logg inn», logg inn med kode | Man havner på `/oppdrag/<id>`, ikke arbeidskøen |
-
 | E3 | «Legg til flere rom», utløpt | Bygninger: legg til bygning og etasje, åpne «Legg til flere rom», sett tellere og valg, slett informasjonskapslene, Lagre | Dialogen er åpen, tellere og valg står, meldingen og lenken (`neste` = `/oppdrag/<id>/bygninger`) vises. Ingen rom er lagt til |
 | E4 | Bygninger, utløpt | Legg til bygning (eller etasje), slett informasjonskapslene, Lagre | Verdiene står, meldingen og lenken (`neste` = `/oppdrag/<id>/bygninger`) vises. Etter innlogging via lenken: tilbake på bygningssiden |
 | E5 | «Lagre eiendom», uten nett | Fyll ut, `setOffline(true)`, Lagre | «Du er uten nett. Endringen er ikke lagret.» vises, verdiene står, ingen engelsk feilside. Slå på nett, Lagre: lagres |
