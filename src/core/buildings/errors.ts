@@ -5,19 +5,3 @@ export class PropertyMissingError extends Error {
     this.name = "PropertyMissingError";
   }
 }
-
-/** Bygningen har aktive etasjer og kan ikke fjernes (A98). Ingenting er endret. */
-export class BuildingNotEmptyError extends Error {
-  constructor() {
-    super("Fjern etasjene først.");
-    this.name = "BuildingNotEmptyError";
-  }
-}
-
-/** Etasjen har aktive rom og kan ikke fjernes (A98). Ingenting er endret. */
-export class FloorNotEmptyError extends Error {
-  constructor() {
-    super("Fjern rommene først.");
-    this.name = "FloorNotEmptyError";
-  }
-}

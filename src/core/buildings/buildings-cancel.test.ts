@@ -4,9 +4,13 @@ import { AccessDeniedError, type Actor } from "@/core/access";
 import { cancelAssignment } from "@/core/assignments";
 import {
   getAssignmentBuildings,
+  listTrash,
   removeBuilding,
   removeFloor,
   removeRoom,
+  restoreBuilding,
+  restoreFloor,
+  restoreRoom,
   saveBuilding,
   saveFloor,
   saveFloorArea,
@@ -38,8 +42,11 @@ import {
  * `AccessDeniedError` for admin, leder, kontor og takstmann (innstillingen på), radene i de fire
  * tabellene skal være helt uendret, og det skal ikke komme nye hendelser eller loggrader.
  *
- * Ingen ny spørring testes her (bare eksisterende tjenester), så filen har ikke
- * `expectTenantIsolation`; den står i buildings.test.ts.
+ * Papirkurven (docs/funksjoner/fase2a-papirkurv-testplan.md avsnitt 6, A416): `listTrash` og
+ * `restore*` gir også `AccessDeniedError` på et kansellert oppdrag, for alle roller, uten spor.
+ *
+ * Ingen ny spørring testes her (bare tjenester som er testet andre steder), så filen har ikke
+ * `expectTenantIsolation`; den står i buildings.test.ts og trash.test.ts.
  *
  * Testdata er oppdiktet. Støtter hovedmål: reklamasjoner (et kansellert oppdrag kan ikke få
  * endret areal eller rom i ettertid).
@@ -228,5 +235,64 @@ describe("4.4.1b kansellert oppdrag: bygninger, etasjer, areal og rom er låst",
     ).toBeInstanceOf(AccessDeniedError);
     expect(await snapshot(org.id)).toBe(before);
     expect(await eventAndAuditCounts(org.id)).toEqual(countsBefore);
+  });
+});
+
+describe("6. papirkurven på kansellert oppdrag (A416)", () => {
+  /** Oppsettet over, med en fjernet bygning, etasje og rom før kanselleringen. */
+  async function removedSetup() {
+    const base = await setup();
+    const { org, people, assignment, building, room, emptyBuilding, emptyFloor } = base;
+    const removedRoom = await createRoom(org.id, { floorId: base.floor.id, name: "Bad test" });
+    await removeRoom(people.admin, org.id, removedRoom.id);
+    await removeFloor(people.admin, org.id, emptyFloor.id);
+    await removeBuilding(people.admin, org.id, emptyBuilding.id);
+    // Kontroll: før kansellering ser admin papirkurven.
+    expect((await listTrash(people.admin, org.id, assignment.id)).length).toBe(3);
+    return { ...base, building, room, removedRoom };
+  }
+
+  it("6.1–6.2 listTrash og restore* gir avslag for alle roller, også admin, uten endring", async () => {
+    const { org, people, assignment, emptyBuilding, emptyFloor, removedRoom } =
+      await removedSetup();
+    await cancelAssignment(people.admin, org.id, assignment.id, {
+      expectedStatus: "ordered",
+      reason: "Kunden trakk bestillingen test",
+    });
+    const before = await snapshot(org.id);
+    const countsBefore = await eventAndAuditCounts(org.id);
+
+    for (const role of ROLES) {
+      const actor = people[role];
+      const calls: [string, () => Promise<unknown>][] = [
+        ["listTrash", () => listTrash(actor, org.id, assignment.id)],
+        ["restoreBuilding", () => restoreBuilding(actor, org.id, emptyBuilding.id, "trash")],
+        ["restoreFloor", () => restoreFloor(actor, org.id, emptyFloor.id, "trash")],
+        ["restoreRoom", () => restoreRoom(actor, org.id, removedRoom.id, "undo")],
+      ];
+      for (const [name, run] of calls) {
+        expect(await caught(run()), `${role}: ${name}`).toBeInstanceOf(AccessDeniedError);
+      }
+    }
+    expect(await snapshot(org.id)).toBe(before);
+    expect(await eventAndAuditCounts(org.id)).toEqual(countsBefore);
+  });
+
+  it("6.3 det kansellerte oppdraget og radene på det står aldri i papirkurven til et annet oppdrag", async () => {
+    const { org, people, assignment, building } = await removedSetup();
+    await cancelAssignment(people.admin, org.id, assignment.id, {
+      expectedStatus: "ordered",
+      reason: "Kunden trakk bestillingen test",
+    });
+    const other = await createAssignment(org.id);
+    await createProperty(org.id, { assignmentId: other.id });
+    const otherBuilding = await createBuilding(org.id, { assignmentId: other.id });
+    await removeBuilding(people.admin, org.id, otherBuilding.id);
+
+    const lines = await listTrash(people.admin, org.id, other.id);
+    expect(lines.map((line) => line.id)).toEqual([otherBuilding.id]);
+    const text = JSON.stringify(lines);
+    expect(text).not.toContain(assignment.id);
+    expect(text).not.toContain(building.id);
   });
 });
