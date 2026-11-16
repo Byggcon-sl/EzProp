@@ -1,9 +1,5 @@
 import Link from "next/link";
-import {
-  DEFAULT_OFFER_LIST_FILTER,
-  OFFER_LIST_FILTERS,
-  type OfferListFilter,
-} from "@/core/orders/codes";
+import { OFFER_LIST_FILTERS, offerListFilterLabel, type OfferListFilter } from "@/core/orders/codes";
 import { cn } from "@/shared/lib/cn";
 import { segmentClass, segmentCount, segmentCountCurrent, segmentList } from "../segments";
 
@@ -15,23 +11,6 @@ import { segmentClass, segmentCount, segmentCountCurrent, segmentList } from "..
  */
 
 export const OFFER_LIST_PATH = "/tilbud";
-
-/** Rekkefølgen og etikettene på knappene. */
-export const OFFER_FILTER_OPTIONS: readonly { filter: OfferListFilter; label: string }[] = [
-  { filter: "open", label: "Åpne" },
-  { filter: "expired", label: "Utløpt" },
-  { filter: "rejected", label: "Avslått" },
-  { filter: "converted", label: "Gjort om til oppdrag" },
-  { filter: "all", label: "Alle" },
-];
-
-/** Filteret fra adressen. Utelatt eller ukjent verdi gir «Åpne» (kjernen gjør det samme). */
-export function offerFilterFromParam(value: string | string[] | undefined): OfferListFilter {
-  const first = Array.isArray(value) ? value[0] : value;
-  return (OFFER_LIST_FILTERS as readonly string[]).includes(first ?? "")
-    ? (first as OfferListFilter)
-    : DEFAULT_OFFER_LIST_FILTER;
-}
 
 /** Teksten i en tom liste per filter, uten søk. Med søk: «Ingen tilbud passer søket.» */
 const EMPTY_TEXTS: Record<OfferListFilter, string> = {
@@ -76,7 +55,7 @@ export function OfferFilterNav({
   return (
     <nav aria-label="Status" className="mt-6">
       <ul className={segmentList}>
-        {OFFER_FILTER_OPTIONS.map(({ filter, label }) => {
+        {OFFER_LIST_FILTERS.map((filter) => {
           const selected = filter === current;
           return (
             <li key={filter}>
@@ -85,7 +64,7 @@ export function OfferFilterNav({
                 aria-current={selected ? "page" : undefined}
                 className={segmentClass(selected)}
               >
-                {label}
+                {offerListFilterLabel(filter)}
                 {counts && (
                   <>
                     <span className="sr-only">,</span>{" "}

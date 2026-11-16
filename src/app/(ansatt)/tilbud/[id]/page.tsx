@@ -4,14 +4,14 @@ import { AccessDeniedError } from "@/core/access";
 import { getContact } from "@/core/contacts";
 import { listOffices } from "@/core/organization";
 import {
-  OFFER_EXPIRING_SOON_DAYS,
   OFFER_REJECTION_REASON_KEYS,
   OFFER_VALID_UNTIL_MAX_DAYS,
+  canExtendOffer,
   findPossibleDuplicateOrders,
   getOrder,
   listOrderHistory,
-  offerDaysLeft,
   offerDisplayStatus,
+  offerExpiresLabel,
   offerRejectionReasonLabel,
 } from "@/core/orders";
 import { addDays, todayInOslo } from "@/shared/lib/dates";
@@ -29,7 +29,7 @@ import {
   updateOfferAction,
 } from "../actions";
 import { officeChoice } from "../office-choice";
-import { OfferStatusBadge, canExtendOffer, offerExpiryText } from "../offer-status-badge";
+import { OfferStatusBadge } from "../offer-status-badge";
 import { formatIsoDate, formatOsloDateTime, osloDateTimeLocal } from "../received-at";
 import {
   CreatedNotice,
@@ -85,8 +85,7 @@ export default async function OfferPage({
 
   const today = todayInOslo();
   const displayStatus = offerDisplayStatus(order.status, order.validUntil, today);
-  const daysLeft = displayStatus === "open" ? offerDaysLeft(order.validUntil, today) : null;
-  const expiryText = offerExpiryText(daysLeft, OFFER_EXPIRING_SOON_DAYS);
+  const expiryText = offerExpiresLabel(order.status, order.validUntil, today);
   const handleable = order.status === "received";
 
   // Velgeren viser navnet fra kontaktregisteret, ikke friteksten om bestilleren.
@@ -148,7 +147,7 @@ export default async function OfferPage({
         orderId={order.id}
         rowVersion={order.rowVersion}
         office={office}
-        canExtend={canExtendOffer(displayStatus, daysLeft, OFFER_EXPIRING_SOON_DAYS)}
+        canExtend={canExtendOffer(order.status, order.validUntil, today)}
         hasDuplicates={duplicates.items.length > 0}
         reasons={reasons}
         convertAction={convertOfferAction}

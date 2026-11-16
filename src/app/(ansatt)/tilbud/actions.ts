@@ -12,7 +12,7 @@ import {
   convertOrderToAssignment,
   createOrder,
   getOrder,
-  OFFER_REJECTION_REASON_KEYS,
+  isOfferRejectionReasonKey,
   OFFER_VALID_DAYS,
   OfferValidUntilLockedError,
   OfficeNotFoundError,
@@ -21,7 +21,7 @@ import {
   rejectOrder,
   updateOrder,
 } from "@/core/orders";
-import type { OfferInput } from "@/core/orders/contract";
+import type { OfferInput } from "@/core/orders";
 import { ORDER_CHANGED_MESSAGE, readOfferValues } from "../order-values";
 import { formatIsoDate, parseOsloDateTimeLocal } from "./received-at";
 
@@ -267,11 +267,6 @@ export async function extendOfferAction(
   }
 }
 
-/** Er koden en av de faste avslagsgrunnene (F4)? */
-function isReasonKey(value: string): value is (typeof OFFER_REJECTION_REASON_KEYS)[number] {
-  return (OFFER_REJECTION_REASON_KEYS as readonly string[]).includes(value);
-}
-
 /**
  * «Avslå tilbudet» (F4, A361): en fast grunn er påkrevd, og «Mer om grunnen» er påkrevd ved
  * «Annet». Etter lagring vises siden som avslått; kortet «Avslått: …» er kvitteringen.
@@ -290,7 +285,7 @@ export async function rejectOfferAction(
 
   const reasonKey = values.reasonKey.trim();
   const reasonText = values.reasonText.trim();
-  if (!isReasonKey(reasonKey)) return failure(previous, values, { reasonKey: CHOOSE_REASON });
+  if (!isOfferRejectionReasonKey(reasonKey)) return failure(previous, values, { reasonKey: CHOOSE_REASON });
   if (reasonKey === "other" && reasonText === "") {
     return failure(previous, values, { reasonText: WRITE_REASON });
   }

@@ -35,7 +35,7 @@ export type EmployeeContext = {
 
 /**
  * Innlogget bruker og organisasjonen der hen er ansatt (`organization.read`), eller `null`.
- * Brukes av hver side og hver server action i /ordre. Organisasjons-id-en kommer alltid herfra,
+ * Brukes av hver side og hver server action i /tilbud og de andre områdene. Organisasjons-id-en kommer alltid herfra,
  * aldri fra adressen eller skjemaet. Selve tilgangssjekken skjer i `src/core`.
  */
 export async function getEmployeeContext(): Promise<EmployeeContext | null> {

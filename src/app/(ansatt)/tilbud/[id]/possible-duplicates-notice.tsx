@@ -5,23 +5,12 @@ import {
   PossibleDuplicateLink,
   PossibleDuplicatesFrame,
 } from "../../possible-duplicates-notice";
-import { OFFER_DISPLAY_STATUS_LABELS } from "../offer-status-badge";
 import { formatOsloDate } from "../received-at";
 
 /** Teksten under overskriften «Mulig dublett». */
 export const POSSIBLE_DUPLICATES_TEXT =
   "Samme adresse eller matrikkel som et annet oppdrag eller et tilbud. Sjekk at boligen ikke blir tatt to ganger.";
 
-/** Statusordet for et tilbud i treffet, som i statusmerket. Treffet har lagret status. */
-const OFFER_STATUS_WORDS: Record<string, string> = {
-  received: OFFER_DISPLAY_STATUS_LABELS.open,
-  converted: OFFER_DISPLAY_STATUS_LABELS.converted,
-  rejected: OFFER_DISPLAY_STATUS_LABELS.rejected,
-};
-
-function offerStatusWord(status: string): string {
-  return OFFER_STATUS_WORDS[status] ?? orderStatusLabel(status);
-}
 
 export { POSSIBLE_DUPLICATES_MORE_TEXT };
 
@@ -40,8 +29,8 @@ export function possibleDuplicateLine(item: PossibleDuplicateOrder): string {
           .filter(Boolean)
           .join(" – ")
       : item.status === "converted" && item.assignmentNumber
-        ? `${offerStatusWord(item.status)} ${item.assignmentNumber}`
-        : offerStatusWord(item.status ?? "");
+        ? `${orderStatusLabel(item.status)} ${item.assignmentNumber}`
+        : orderStatusLabel(item.status ?? "");
   const reasons = item.reasons.map((reason) => duplicateReasonLabel(reason)).join(" og ");
   return [
     item.kind === "assignment" ? "" : "Tilbud",

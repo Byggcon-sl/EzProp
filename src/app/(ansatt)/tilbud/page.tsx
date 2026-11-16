@@ -5,10 +5,11 @@ import { Card } from "@/shared/ui/card";
 import { FormMessage } from "@/shared/ui/form";
 import { todayInOslo } from "@/shared/lib/dates";
 import {
-  OFFER_EXPIRING_SOON_DAYS,
+  canExtendOffer,
   listOrders,
-  offerDaysLeft,
+  offerExpiresLabel,
   orderListSummary,
+  parseOfferListFilter,
 } from "@/core/orders";
 import { getEmployeeContext } from "../employee-context";
 import { loadListOrError } from "../list-error";
@@ -19,12 +20,10 @@ import {
   OFFER_LIST_PATH,
   OfferFilterNav,
   emptyOfferListText,
-  offerFilterFromParam,
   offerListHref,
   offerListParams,
 } from "./offer-filters";
 import { OfferList, type OfferRow } from "./offer-list";
-import { canExtendOffer, offerExpiryText } from "./offer-status-badge";
 import { formatIsoDate, formatOsloDate } from "./received-at";
 
 export const metadata: Metadata = { title: "Tilbud" };
@@ -44,7 +43,9 @@ export default async function OffersPage({
   if (!context) return <NoAccess />;
   const params = await searchParams;
   const query = searchQuery(params.q);
-  const requested = offerFilterFromParam(params.status);
+  const requested = parseOfferListFilter(
+    Array.isArray(params.status) ? params.status[0] : params.status,
+  );
   const now = new Date();
   const today = todayInOslo(now);
   const result = await loadListOrError(OFFER_LIST_PATH, context.actor.id, () =>
@@ -59,7 +60,6 @@ export default async function OffersPage({
   const summary = result.ok ? orderListSummary(items.length, result.value.total) : null;
 
   const rows: OfferRow[] = items.map((item) => {
-    const daysLeft = item.displayStatus === "open" ? offerDaysLeft(item.validUntil, today) : null;
     const showValidUntil = item.displayStatus === "open" || item.displayStatus === "expired";
     return {
       id: item.id,
@@ -70,12 +70,10 @@ export default async function OffersPage({
       displayStatus: item.displayStatus,
       validUntil: item.validUntil,
       validUntilText: showValidUntil ? `Gyldig til ${formatIsoDate(item.validUntil)}` : null,
-      expiryText: offerExpiryText(daysLeft, OFFER_EXPIRING_SOON_DAYS),
+      expiryText: offerExpiresLabel(item.status, item.validUntil, today),
       assignmentNumber: item.assignmentNumber,
       assignmentCancelled: item.assignmentCancelled,
-      canExtend:
-        context.canEditOrders &&
-        canExtendOffer(item.displayStatus, daysLeft, OFFER_EXPIRING_SOON_DAYS),
+      canExtend: context.canEditOrders && canExtendOffer(item.status, item.validUntil, today),
     };
   });
 
