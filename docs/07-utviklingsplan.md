@@ -1,6 +1,6 @@
 # EzProp – utviklingsplan
 
-Sist oppdatert: 13.11.2026
+Sist oppdatert: 16.11.2026
 Eier: Ståle Limstrand (produkteier). Prosjektlederen i agentlaget holder planen ved like.
 
 **Dette er det ene levende plandokumentet.** Det viser bare det som gjelder nå og det som kommer.
@@ -237,6 +237,9 @@ Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full 
 - [ ] **PDF under 8 MB** (innspill P8): bildene i PDF-en skaleres ned og komprimeres. Blir PDF-en likevel større, sendes en lenke eller to e-poster. Testes med rapporten med 50 bilder.
 - [ ] **«Send»-knapp** (innspill P9): rapporten sendes som vedlegg til mottakerne først når noen trykker. Status «Ferdig» settes når rapporten er sendt (innspill D16). En rettet rapport sendes manuelt av den ansvarlige (27.10.2026).
 - [ ] **Rydding av innloggingsdata:** tellere for innloggingssperren og utløpte koder slettes etter 24 timer, utløpte økter etter 30 dager. (Svar 10.11.2026, nr. 15 og 18)
+
+**Fra forbedreren**
+- [ ] **Historikk på oppdraget, med KI-sammendrag av endringer** (forbedreren 16.11.2026, fra papirkurven): en fane «Historikk» på oppdraget viser en tidslinje over hvem som la til, endret, fjernet og hentet tilbake hva, fra revisjonsloggen og hendelsene som finnes. Den kan filtreres på bygning, etasje, rom og person, og fjernede ting har «Gjenopprett» (samme kjernefunksjon som papirkurven). Leder og admin bruker den ved reklamasjoner. KI lager et utkast til «hva er endret siden forrige versjon» eller «siden i går» ut fra strukturerte hendelser, uten navn (ansatte vises som rolle eller «du»); takstmannen godtar, endrer eller avviser, og det logges i `ai_usage_log`. Utkastet blir grunnlaget for kommentaren om ny versjon i sjekken før publisering. Ingen nye tabeller; indeks på (`organization_id`, `assignment_id`, `created_at`). Tilgang `organization.read`; reklamasjonssaker bare for leder og admin (regel 12); tenant-isolasjon testet.
 
 **Ferdig når:** Fagrådet har gått gjennom malen og reglene i et ekte skjermbilde og godkjent tekstene der, og Ståle godtar en PDF (også testutskriften med 50 bilder, under 8 MB).
 
