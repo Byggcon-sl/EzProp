@@ -69,6 +69,20 @@ async function assignmentsWithAddress(address: string): Promise<AssignmentRow[]>
   }
 }
 
+/** Tilbudene (ikke slettet) med adressen. */
+async function offersWithAddress(
+  address: string,
+): Promise<{ id: string; status: string; ordered_by_text: string | null; valid_until: string }[]> {
+  const db = sql();
+  try {
+    return await db`
+      select id, status, ordered_by_text, to_char(valid_until, 'YYYY-MM-DD') as valid_until
+      from orders where address_text = ${address} and deleted_at is null`;
+  } finally {
+    await db.end();
+  }
+}
+
 /** Antall oppdrag (også slettede) der adressen eller bestilleren har merket. */
 async function assignmentCountWithMarker(marker: string): Promise<number> {
   const db = sql();
@@ -673,6 +687,57 @@ test.describe("nytt oppdrag (pc og ipad)", () => {
     await page.getByRole("link", { name: /^Gå til oppdrag \d{4}-\d{5}$/ }).click();
     await expect(page).toHaveURL(ASSIGNMENT_URL);
     await expect(page.getByText("Oppdraget er laget.")).toHaveCount(0);
+  });
+
+  test("5.22 «Lagre som tilbud i stedet»: tilbud med feltene, uten oppdrag, kvittering og bare id i adressen (F2 a)", async ({
+    page,
+  }) => {
+    const suffix = uniqueSuffix();
+    const address = `Testveien 12 lt${suffix}, 8000 Bodø`;
+    await logIn(page);
+    await page.goto("/oppdrag/ny");
+    await fillRequired(page, address);
+    await page.getByLabel(/^Hvem bestilte/).fill(`Megler Testesen ${suffix}`);
+    await page.getByRole("button", { name: "Lagre som tilbud i stedet", exact: true }).click();
+
+    await expect(page).toHaveURL(OFFER_URL);
+    expect(page.url()).not.toContain(suffix);
+    await expect(page.getByRole("status").filter({ hasText: "Tilbudet er laget." })).toContainText(
+      /Gyldig til \d{2}\.\d{2}\.\d{4}\./,
+    );
+    const offers = await offersWithAddress(address);
+    expect(offers).toHaveLength(1);
+    expect(offers[0]!.status).toBe("received");
+    expect(offers[0]!.ordered_by_text).toBe(`Megler Testesen ${suffix}`);
+    expect(await assignmentsWithAddress(address)).toHaveLength(0);
+  });
+
+  test("5.23 dublettreff på et åpent tilbud gir «Gjør om tilbudet», som åpner tilbudet ved «Gjør om til oppdrag» (F2 b)", async ({
+    page,
+  }) => {
+    const address = `Testveien 12 gt${uniqueSuffix()}, 8000 Bodø`;
+    await logIn(page);
+    await page.goto("/oppdrag/ny");
+    await addressField(page).fill(address);
+    await page.getByRole("button", { name: "Lagre som tilbud i stedet", exact: true }).click();
+    await expect(page).toHaveURL(OFFER_URL);
+    const offerId = OFFER_URL.exec(page.url())![1]!;
+
+    await page.goto("/oppdrag/ny");
+    await addressField(page).fill(address);
+    await addressField(page).press("Tab");
+    const notice = duplicateNotice(page);
+    await expect(notice).toContainText(`Tilbud – ${address} – Åpent – samme adresse`);
+    const convert = notice.getByRole("link", { name: "Gjør om tilbudet", exact: true });
+    await expect(convert).toHaveAttribute("href", `/tilbud/${offerId}#gjor-om`);
+    const box = await convert.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    await convert.click();
+    await expect(page).toHaveURL(new RegExp(`/tilbud/${offerId}#gjor-om$`));
+    await expect(
+      page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }),
+    ).toBeVisible();
+    expect(await assignmentsWithAddress(address)).toHaveLength(0);
   });
 
   test("5.18 tastatur: adresse, piltaster i radiogruppene og Enter lagrer; alle felt har etikett", async ({
