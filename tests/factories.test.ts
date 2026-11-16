@@ -443,12 +443,8 @@ describe("fabrikkene for ordre, oppdrag og nummerserie", () => {
 
   it("6.1 createOrder tar overstyring av «Gyldig til», også en dato i fortiden (utløpt)", async () => {
     const org = await createOrganization("Oppdiktet takst A");
-    expect((await createOrder(org.id, { validUntil: "2026-11-20" })).validUntil).toBe(
-      "2026-11-20",
-    );
-    expect((await createOrder(org.id, { validUntil: "2026-01-14" })).validUntil).toBe(
-      "2026-01-14",
-    );
+    expect((await createOrder(org.id, { validUntil: "2026-11-20" })).validUntil).toBe("2026-11-20");
+    expect((await createOrder(org.id, { validUntil: "2026-01-14" })).validUntil).toBe("2026-01-14");
   });
 
   it("6.1 createOrder med status rejected uten grunn får fast grunn, så CHECK-regelen slipper den gjennom", async () => {
