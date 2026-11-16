@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { count, eq, sql } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requireOrganizationAccess } from "@/core/access";
 import { isValidOrgNumber } from "@/core/contacts";
 import { createLocalFileStorage } from "@/core/files/local-storage";
@@ -31,7 +31,7 @@ import {
   trialForms,
   trialPhotos,
 } from "@/db/schema";
-import { todayInOslo } from "@/shared/lib/dates";
+import { addDays, todayInOslo } from "@/shared/lib/dates";
 import { uuidv7 } from "@/shared/lib/uuid";
 import {
   createAiUsageLog,
@@ -415,6 +415,47 @@ describe("fabrikkene for ordre, oppdrag og nummerserie", () => {
     const deletedAt = new Date("2026-11-01T08:00:00Z");
     const deleted = await createOrder(org.id, { deletedAt });
     expect(deleted.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+  });
+
+  /*
+   * Tilbud (docs/funksjoner/fase2a-tilbud-testplan.md 6.1): standard «Gyldig til» er
+   * `todayInOslo(TEST_NOW) + 30`. Fabrikken tar den seneste av den og dagens dato + 30, så et
+   * tilbud fra fabrikken også er åpent for tester som bruker klokka. Begge låses her.
+   */
+  it("6.1 createOrder: «Gyldig til» er todayInOslo(TEST_NOW) + 30 når klokka står på TEST_NOW", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: TEST_NOW });
+    try {
+      const org = await createOrganization("Oppdiktet takst A");
+      const row = await createOrder(org.id);
+      expect(row.validUntil).toBe(addDays(todayInOslo(TEST_NOW), 30));
+      expect(row.validUntil).toBe("2026-12-03");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("6.1 createOrder: med ekte klokke er tilbudet fra fabrikken åpent både på TEST_NOW og i dag", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const row = await createOrder(org.id);
+    expect(row.validUntil >= addDays(todayInOslo(TEST_NOW), 30)).toBe(true);
+    expect(row.validUntil >= todayInOslo()).toBe(true);
+  });
+
+  it("6.1 createOrder tar overstyring av «Gyldig til», også en dato i fortiden (utløpt)", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    expect((await createOrder(org.id, { validUntil: "2026-11-20" })).validUntil).toBe(
+      "2026-11-20",
+    );
+    expect((await createOrder(org.id, { validUntil: "2026-01-14" })).validUntil).toBe(
+      "2026-01-14",
+    );
+  });
+
+  it("6.1 createOrder med status rejected uten grunn får fast grunn, så CHECK-regelen slipper den gjennom", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const rejected = await createOrder(org.id, { status: "rejected" });
+    expect(rejected.status).toBe("rejected");
+    expect(rejected.rejectedReasonKey).not.toBeNull();
   });
 
   it("5.2 createAssignment lager kontor selv i samme organisasjon, og to kall gir ulike nummer", async () => {
