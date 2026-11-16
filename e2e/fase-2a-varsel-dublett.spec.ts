@@ -306,7 +306,7 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
 
     await page.goto(`/tilbud/${converted.id}`);
     await editButton(page).click();
-    await page.getByLabel(/^Ekstern referanse/).fill(`E2E-DUB-${suffix}`);
+    await page.getByLabel(/^Meglerens ordrenummer/).fill(`E2E-DUB-${suffix}`);
     await saveButton(page).click();
 
     const saved = page.getByText(SAVED, { exact: true });
