@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { OFFER_LIST_FILTERS, offerListFilterLabel, type OfferListFilter } from "@/core/orders/codes";
+import {
+  OFFER_LIST_FILTERS,
+  offerListFilterLabel,
+  type OfferListFilter,
+} from "@/core/orders/codes";
 import { cn } from "@/shared/lib/cn";
 import { segmentClass, segmentCount, segmentCountCurrent, segmentList } from "../segments";
 

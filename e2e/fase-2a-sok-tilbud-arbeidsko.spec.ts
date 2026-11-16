@@ -5,7 +5,8 @@ import { assertLocalOrTestDatabase } from "./database-guard";
 import { ADMIN_EMAIL, e2eDatabaseUrl, logInAsOffice, uniqueSuffix } from "./helpers";
 
 /*
- * Søk i ordrelisten og i arbeidskøen (T2).
+ * Søk i tilbudslisten (var ordrelisten) og i arbeidskøen (T2; «Ordre» heter nå «Tilbud», ADR 0012
+ * og docs/funksjoner/fase2a-tilbud-testplan.md avsnitt 5).
  * Testplan: docs/funksjoner/fase2a-sok-ordre-arbeidsko-testplan.md avsnitt 7.1–7.6. Kjører i
  * prosjektene pc og ipad; 7.6 bare i ipad.
  *
@@ -47,7 +48,15 @@ async function seedOrganization(sql: Sql): Promise<{ organizationId: string; off
   return { organizationId: row.organization_id, officeId: row.office_id };
 }
 
-/** En ordre som ikke er gjort om. Mottatt nå, så den står øverst i ordrelisten. */
+/** «Gyldig til» for et åpent tilbud: 30 dager fra i dag (norsk dato). */
+function validUntilIn30Days(): string {
+  const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Oslo" }).format(new Date());
+  const [y, m, d] = today.split("-").map(Number);
+  const date = new Date(Date.UTC(y!, m! - 1, d! + 30));
+  return date.toISOString().slice(0, 10);
+}
+
+/** Et tilbud som ikke er gjort om. Mottatt nå og åpent, så det står i «Åpne». */
 async function insertOrder(
   sql: Sql,
   input: { address: string; externalRef: string; orderedBy: string },
@@ -56,13 +65,13 @@ async function insertOrder(
   const id = randomUUID();
   await sql`
     insert into orders (id, organization_id, address_text, received_at, source, status,
-      requested_report_type, external_ref, ordered_by_text)
+      requested_report_type, external_ref, ordered_by_text, valid_until)
     values (${id}, ${organizationId}, ${input.address}, now(), 'manual', 'received',
-      'condition_report', ${input.externalRef}, ${input.orderedBy})`;
+      'condition_report', ${input.externalRef}, ${input.orderedBy}, ${validUntilIn30Days()})`;
   return id;
 }
 
-/** Ordre og oppdrag (koblet begge veier) med én part. Gir oppdragets id og nummer. */
+/** Tilbud og oppdrag (koblet begge veier) med én part. Gir oppdragets id og nummer. */
 async function insertAssignment(
   sql: Sql,
   input: { suffix: string; address: string; status: string; partyName?: string },
@@ -73,9 +82,9 @@ async function insertAssignment(
   const number = `E2E-SOK-${input.suffix}`;
   await sql`
     insert into orders (id, organization_id, address_text, received_at, source, status,
-      requested_report_type)
+      requested_report_type, valid_until)
     values (${orderId}, ${organizationId}, ${input.address}, now(), 'manual', 'received',
-      'condition_report')`;
+      'condition_report', ${validUntilIn30Days()})`;
   await sql`
     insert into assignments (id, organization_id, number, office_id, assignment_type, status,
       order_id, address_text, received_at, source)
@@ -132,8 +141,16 @@ async function expectNoHorizontalScroll(page: Page) {
   expect(overflow.scrollWidth, "ingen vannrett rulling").toBeLessThanOrEqual(overflow.clientWidth);
 }
 
-test.describe("søk i ordrelisten (pc og ipad)", () => {
-  test("7.1 søk på ordrenummeret, åpne ordren, og «Tøm søk» viser hele listen", async ({
+/** Radene i tilbudslisten (ikke filterknappene, som også er listepunkter). */
+function offerRows(page: Page): Locator {
+  return page
+    .getByRole("main")
+    .getByRole("listitem")
+    .filter({ has: page.locator('a[href^="/tilbud/"]') });
+}
+
+test.describe("søk i tilbudslisten (pc og ipad)", () => {
+  test("7.1 søk på meglerens ordrenummer, åpne tilbudet, og «Tøm søk» viser hele listen", async ({
     page,
   }) => {
     const suffix = uniqueSuffix();
@@ -151,7 +168,7 @@ test.describe("søk i ordrelisten (pc og ipad)", () => {
     }
 
     await logInAsOffice(page);
-    await page.goto("/ordre");
+    await page.goto("/tilbud");
     await expect(searchBox(page)).toBeVisible();
     await expect(
       searchBox(page),
@@ -160,31 +177,31 @@ test.describe("søk i ordrelisten (pc og ipad)", () => {
 
     // Søk med små bokstaver på meglerens ordrenummer
     await submitSearch(page, externalRef.toLowerCase());
-    await expect(page).toHaveURL(/\/ordre\?q=/);
-    const rows = page.getByRole("main").getByRole("listitem");
+    await expect(page).toHaveURL(/\/tilbud\?q=/);
+    const rows = offerRows(page);
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText(externalRef);
     await expect(searchBox(page)).toHaveValue(externalRef.toLowerCase());
 
     await rows.first().getByRole("link").click();
-    await expect(page).toHaveURL(new RegExp(`/ordre/${orderId}$`));
+    await expect(page).toHaveURL(new RegExp(`/tilbud/${orderId}$`));
 
     // Tilbake, så «Tøm søk»
-    await page.goto(`/ordre?q=${encodeURIComponent(externalRef)}`);
+    await page.goto(`/tilbud?q=${encodeURIComponent(externalRef)}`);
     await page.getByRole("link", { name: "Tøm søk", exact: true }).click();
-    await expect(page).toHaveURL(/\/ordre$/);
+    await expect(page).toHaveURL(/\/tilbud$/);
     await expect(searchBox(page)).toHaveValue("");
     await expect(page.getByRole("link", { name: "Tøm søk", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("main").getByRole("listitem").first()).toBeVisible();
-    expect(await page.getByRole("main").getByRole("listitem").count()).toBeLessThanOrEqual(50);
+    await expect(offerRows(page).first()).toBeVisible();
+    expect(await offerRows(page).count()).toBeLessThanOrEqual(50);
   });
 
-  test("7.2 ingen treff: «Ingen ordre passer søket.»", async ({ page }) => {
+  test("7.2 ingen treff: «Ingen tilbud passer søket.»", async ({ page }) => {
     await logInAsOffice(page);
-    await page.goto("/ordre");
+    await page.goto("/tilbud");
     await submitSearch(page, `finnesikke${uniqueSuffix()}`);
-    await expect(page.getByText("Ingen ordre passer søket.", { exact: true })).toBeVisible();
-    await expect(page.getByRole("main").getByRole("listitem")).toHaveCount(0);
+    await expect(page.getByText("Ingen tilbud passer søket.", { exact: true })).toBeVisible();
+    await expect(offerRows(page)).toHaveCount(0);
   });
 });
 
@@ -306,12 +323,12 @@ test.describe("søk i arbeidskøen (pc og ipad)", () => {
         "«Tøm søk» i arbeidskøen",
       );
 
-      await page.goto(`/ordre?q=${query}`);
+      await page.goto(`/tilbud?q=${query}`);
       await expectNoHorizontalScroll(page);
-      await expectAtLeast44(searchBox(page), "søkefeltet i ordrelisten");
+      await expectAtLeast44(searchBox(page), "søkefeltet i tilbudslisten");
       await expectAtLeast44(
         page.getByRole("link", { name: "Tøm søk", exact: true }),
-        "«Tøm søk» i ordrelisten",
+        "«Tøm søk» i tilbudslisten",
       );
     }
   });

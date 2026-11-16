@@ -285,7 +285,8 @@ export async function rejectOfferAction(
 
   const reasonKey = values.reasonKey.trim();
   const reasonText = values.reasonText.trim();
-  if (!isOfferRejectionReasonKey(reasonKey)) return failure(previous, values, { reasonKey: CHOOSE_REASON });
+  if (!isOfferRejectionReasonKey(reasonKey))
+    return failure(previous, values, { reasonKey: CHOOSE_REASON });
   if (reasonKey === "other" && reasonText === "") {
     return failure(previous, values, { reasonText: WRITE_REASON });
   }

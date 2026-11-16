@@ -3,11 +3,7 @@ import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import {
-  CONVERTED_COPY_TEXT,
-  OfferEditSection,
-  VALID_UNTIL_LOCKED_TEXT,
-} from "./offer-edit-form";
+import { CONVERTED_COPY_TEXT, OfferEditSection, VALID_UNTIL_LOCKED_TEXT } from "./offer-edit-form";
 
 /*
  * «Endre tilbudet» (docs/funksjoner/fase2a-tilbud-testplan.md 4.1.4 og 4.3.2, design 5.6).

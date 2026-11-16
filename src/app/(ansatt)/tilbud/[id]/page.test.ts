@@ -180,7 +180,9 @@ describe("4.2 rekkefølge, knapper og kontor", () => {
     for (const position of positions) expect(position).toBeGreaterThan(-1);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
     // Hovedknappen er 56 px.
-    expect(html).toMatch(/<button[^>]*type="submit"[^>]*class="[^"]*min-h-14[^"]*"[^>]*>Gjør om til oppdrag/);
+    expect(html).toMatch(
+      /<button[^>]*type="submit"[^>]*class="[^"]*min-h-14[^"]*"[^>]*>Gjør om til oppdrag/,
+    );
   });
 
   it.each([

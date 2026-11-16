@@ -11,7 +11,6 @@ import { formatOsloDate } from "../received-at";
 export const POSSIBLE_DUPLICATES_TEXT =
   "Samme adresse eller matrikkel som et annet oppdrag eller et tilbud. Sjekk at boligen ikke blir tatt to ganger.";
 
-
 export { POSSIBLE_DUPLICATES_MORE_TEXT };
 
 /**

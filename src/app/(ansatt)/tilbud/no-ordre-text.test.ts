@@ -48,15 +48,12 @@ const TEXT_FILES = [
 ];
 
 describe("1.6 ingen synlig «ordre» om tilbud", () => {
-  it.each(TEXT_FILES.map((file) => [path.relative(APP, file), file]))(
-    "1.6.1 %s",
-    (_name, file) => {
-      const offending = visibleTexts(readFileSync(file, "utf8")).filter((text) =>
-        ORDER_WORD.test(text),
-      );
-      expect(offending).toEqual([]);
-    },
-  );
+  it.each(TEXT_FILES.map((file) => [path.relative(APP, file), file]))("1.6.1 %s", (_name, file) => {
+    const offending = visibleTexts(readFileSync(file, "utf8")).filter((text) =>
+      ORDER_WORD.test(text),
+    );
+    expect(offending).toEqual([]);
+  });
 
   it("1.6.2 ingen lenke, videresending eller revalidatePath til /ordre i src/app", () => {
     const offending = filesUnder(APP).filter((file) =>

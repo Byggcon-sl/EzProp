@@ -8,14 +8,19 @@ import { cn } from "@/shared/lib/cn";
 import { SEARCH_QUERY_MAX_LENGTH } from "@/shared/lib/like-pattern";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/form";
-import { segmentCount, segmentCountCurrent, segmentCurrent, segmentLink, segmentList } from "../segments";
+import {
+  segmentCount,
+  segmentCountCurrent,
+  segmentCurrent,
+  segmentLink,
+  segmentList,
+} from "../segments";
 import { QUEUE_PATH, queueHref, type QueueState } from "./queue-href";
 
 export type WorkQueueCounts = Awaited<ReturnType<typeof countWorkQueueByStatus>>;
 
 /** Samme tekst som i tilbudslisten. Ingen autofokus (tastaturet skal ikke sprette opp på iPad). */
 const SEARCH_LABEL = "Søk på adresse, nummer, megler eller gnr/bnr";
-
 
 function SearchIcon() {
   return (

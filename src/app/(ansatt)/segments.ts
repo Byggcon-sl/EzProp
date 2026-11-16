@@ -6,7 +6,8 @@ import { cn } from "@/shared/lib/cn";
  */
 
 /** Rammen rundt fanene. Brytes til flere linjer på smale skjermer (ingen vannrett rulling). */
-export const segmentList = "flex flex-wrap gap-1 rounded-xl bg-white/60 p-1 ring-1 ring-slate-200/60";
+export const segmentList =
+  "flex flex-wrap gap-1 rounded-xl bg-white/60 p-1 ring-1 ring-slate-200/60";
 
 /** Én fane. */
 export const segmentLink =
