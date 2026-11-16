@@ -120,9 +120,17 @@ async function person(organizationId: string, roles: EmployeeRole[], name = "Tes
   return { actor, employee };
 }
 
+/**
+ * Adressen i bestillingen når testen ikke setter en (påkrevd fra migrering 0034, ADR 0011). Den
+ * treffer ingen av søkene i filen, så søketestene styres av eiendommen, partene og feltene testen
+ * setter selv.
+ */
+const NEUTRAL_ADDRESS = "Qxz Nøytral";
+
 function newAssignment(setup: Setup, overrides: Record<string, unknown> = {}) {
   return createAssignment(setup.org.id, {
     officeId: setup.office.id,
+    addressText: NEUTRAL_ADDRESS,
     ...overrides,
   } as Parameters<typeof createAssignment>[1]);
 }
@@ -503,10 +511,9 @@ describe("2.4 søk", () => {
     expect(await search(setup, "eien 1")).toEqual([hit.id]);
   });
 
-  it("2.4.3 adressen fra ordren når eiendom mangler", async () => {
+  it("2.4.3 adressen fra oppdragets bestilling når eiendom mangler (ADR 0011)", async () => {
     const setup = await orgWithAdmin();
-    const order = await createOrder(setup.org.id, { addressText: "Ordreveien 3, 8000 Bodø" });
-    const hit = await newAssignment(setup, { orderId: order.id });
+    const hit = await newAssignment(setup, { addressText: "Ordreveien 3, 8000 Bodø" });
     await newAssignment(setup);
     expect(await search(setup, "ORDREveien")).toEqual([hit.id]);
     const [item] = await listAll(setup.admin, setup.org.id, "ordered").then((items) =>
@@ -515,10 +522,9 @@ describe("2.4 søk", () => {
     expect(item?.address).toBe("Ordreveien 3, 8000 Bodø");
   });
 
-  it("2.4.4 eiendomsadressen vinner over ordreadressen på kortet", async () => {
+  it("2.4.4 eiendomsadressen vinner over adressen i bestillingen på kortet", async () => {
     const setup = await orgWithAdmin();
-    const order = await createOrder(setup.org.id, { addressText: "Testveien 12, 8000 Bodø" });
-    const row = await newAssignment(setup, { orderId: order.id });
+    const row = await newAssignment(setup, { addressText: "Testveien 12, 8000 Bodø" });
     await createProperty(setup.org.id, { assignmentId: row.id, address: "Fjordgata 1" });
     const [item] = await listAll(setup.admin, setup.org.id, "ordered");
     expect(item?.address).toBe("Fjordgata 1");
@@ -591,27 +597,32 @@ describe("2.4b søk på de samme feltene som ordrelisten", () => {
   }
 
   it.each([
-    { field: "meglerens ordrenummer", order: { externalRef: "MEG-4711" }, query: "meg-47" },
-    { field: "oppdragsgiver", order: { orderedByText: "Fjordmegler Bodø" }, query: "FJORDMEG" },
-    { field: "ordreadressen", order: { addressText: "Ordreveien 3" }, query: "ordreveien" },
-  ])("$field på ordren gir treff (via assignments.order_id)", async ({ order, query }) => {
+    { field: "meglerens ordrenummer", booking: { externalRef: "MEG-4711" }, query: "meg-47" },
+    { field: "oppdragsgiver", booking: { orderedByText: "Fjordmegler Bodø" }, query: "FJORDMEG" },
+    { field: "adressen", booking: { addressText: "Ordreveien 3" }, query: "ordreveien" },
+  ])("$field i bestillingen på oppdraget gir treff (ADR 0011)", async ({ booking, query }) => {
     const setup = await orgWithAdmin();
-    const row = await createOrder(setup.org.id, order);
-    const hit = await newAssignment(setup, { orderId: row.id });
+    const hit = await newAssignment(setup, booking);
     await newAssignment(setup);
     expect(await search(setup, query)).toEqual([hit.id]);
   });
 
-  it("ordren nås også via orders.assignment_id (konvertert ordre)", async () => {
+  it("oppdrag fra ordre: treff på oppdragets kopi; verdi som bare står på ordren gir ikke treff", async () => {
     const setup = await orgWithAdmin();
-    const hit = await newAssignment(setup);
+    const hit = await newAssignment(setup, { externalRef: "MEG-0815" });
     await createOrder(setup.org.id, {
       externalRef: "MEG-0815",
       status: "converted",
       assignmentId: hit.id,
     });
-    await newAssignment(setup);
+    const onlyOnOrder = await newAssignment(setup);
+    await createOrder(setup.org.id, {
+      externalRef: "MEG-0816",
+      status: "converted",
+      assignmentId: onlyOnOrder.id,
+    });
     expect(await search(setup, "MEG-0815")).toEqual([hit.id]);
+    expect(await search(setup, "MEG-0816")).toEqual([]);
   });
 
   it("partens navn og firma gir treff; to treffende parter gir ett kort", async () => {
@@ -673,10 +684,9 @@ describe("2.4b søk på de samme feltene som ordrelisten", () => {
     expect(await search(setup, "12/34/0/5")).toEqual([ids.get("12/34/5")]);
   });
 
-  it("matrikkel fra ordren gir treff", async () => {
+  it("matrikkel i bestillingen på oppdraget gir treff", async () => {
     const setup = await orgWithAdmin();
-    const order = await createOrder(setup.org.id, { gnr: "77", bnr: "8" });
-    const hit = await newAssignment(setup, { orderId: order.id });
+    const hit = await newAssignment(setup, { gnr: "77", bnr: "8" });
     await newAssignment(setup);
     expect(await search(setup, "77/8")).toEqual([hit.id]);
   });
@@ -704,8 +714,7 @@ describe("2.4b søk på de samme feltene som ordrelisten", () => {
 
   it("kansellert oppdrag gir aldri treff i arbeidskøen", async () => {
     const setup = await orgWithAdmin();
-    const order = await createOrder(setup.org.id, { externalRef: "MEG-KANS" });
-    await newAssignment(setup, { orderId: order.id, deletedAt: TEST_NOW });
+    await newAssignment(setup, { externalRef: "MEG-KANS", deletedAt: TEST_NOW });
     expect(await search(setup, "MEG-KANS")).toEqual([]);
     expect(await count(setup.admin, setup.org.id, { mineOnly: false, query: "MEG-KANS" })).toEqual({
       ordered: 0,
@@ -717,8 +726,7 @@ describe("2.4b søk på de samme feltene som ordrelisten", () => {
 
   it("tellingene per fane følger søket på de nye feltene (treff i andre faner)", async () => {
     const setup = await orgWithAdmin();
-    const order = await createOrder(setup.org.id, { externalRef: "MEG-FANE" });
-    await newAssignment(setup, { orderId: order.id, status: "completed" });
+    await newAssignment(setup, { externalRef: "MEG-FANE", status: "completed" });
     await newAssignment(setup, { status: "in_progress" });
     const counts = await count(setup.admin, setup.org.id, { mineOnly: false, query: "meg-fane" });
     expect(counts).toEqual({ ordered: 0, in_progress: 0, completed: 1, invoiced: 0 });
@@ -771,12 +779,12 @@ describe("2.5 kortet", () => {
     expect(item!.corrected).toBe(false);
   });
 
-  it("2.5.2 ingen ansvarlig → responsibleName er null", async () => {
+  it("2.5.2 ingen ansvarlig → responsibleName er null; uten eiendom vises bestillingens adresse", async () => {
     const setup = await orgWithAdmin();
     await newAssignment(setup);
     const [item] = await listAll(setup.admin, setup.org.id, "ordered");
     expect(item!.responsibleName).toBeNull();
-    expect(item!.address).toBeNull();
+    expect(item!.address).toBe(NEUTRAL_ADDRESS);
     expect(item!.inspectionAt).toBeNull();
     expect(item!.dueDate).toBeNull();
     expect(item!.internalNote).toBeNull();
@@ -1411,15 +1419,17 @@ describe("2.9 tenant-isolasjon", () => {
         seed: async (grantA, grantB) => {
           const ids: Record<string, string[]> = {};
           for (const grant of [grantA, grantB]) {
-            const order = await createOrder(grant.organizationId, {
+            const booking = {
               addressText: "Testveien 12, 8000 Bodø",
               externalRef: "MEG-4711",
               orderedByText: "Fjordmegler Bodø",
               gnr: "12",
               bnr: "34",
-            });
+            };
+            const order = await createOrder(grant.organizationId, booking);
             const row = await createAssignment(grant.organizationId, {
               orderId: order.id,
+              ...booking,
             } as Parameters<typeof createAssignment>[1]);
             await createProperty(grant.organizationId, {
               assignmentId: row.id,
@@ -1451,16 +1461,16 @@ describe("2.9 tenant-isolasjon", () => {
     }
   });
 
-  it("2.9.4 ordreadressen fra en annen organisasjon brukes aldri", async () => {
+  it("2.9.4 adressen i en annen organisasjon brukes aldri", async () => {
     const a = await orgWithAdmin("Organisasjon A");
     const b = await orgWithAdmin("Organisasjon B");
     const orderB = await createOrder(b.org.id, { addressText: "Fremmedveien 7, 8000 Bodø" });
-    await newAssignment(b, { orderId: orderB.id });
+    await newAssignment(b, { orderId: orderB.id, addressText: "Fremmedveien 7, 8000 Bodø" });
     const rowA = await newAssignment(a);
 
     const [item] = await listAll(a.admin, a.org.id, "ordered");
     expect(item!.id).toBe(rowA.id);
-    expect(item!.address).toBeNull();
+    expect(item!.address).toBe(NEUTRAL_ADDRESS);
     expect(
       await list(a.admin, a.org.id, { status: "ordered", mineOnly: false, query: "Fremmedveien" }),
     ).toEqual([]);

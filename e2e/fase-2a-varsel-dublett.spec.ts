@@ -109,11 +109,19 @@ async function insertOrder(seed: OrderSeed): Promise<{ id: string; number: strin
     if (seed.organizationId) throw new Error("Gjort om i en annen organisasjon brukes ikke her");
     const assignmentId = randomUUID();
     const number = `E2E-DUB-${uniqueSuffix()}`.slice(0, 30);
+    // Bestillingsfeltene kopieres fra ordren, slik `convertOrderToAssignment` gjør (ADR 0011,
+    // `address_text` og `received_at` er påkrevd fra migrering 0034).
     await sql`
       insert into assignments (id, organization_id, number, office_id, assignment_type, status,
-        order_id)
-      values (${assignmentId}, ${organizationId}, ${number}, ${own.officeId}, 'condition_report',
-        ${seed.assignmentStatus ?? "ordered"}, ${id})`;
+        order_id, address_text, gnr, bnr, snr, received_at, source, ordered_by_text,
+        ordered_by_contact_id, ordered_by_firm_id, external_ref, housing_association_name,
+        seller_declaration_received)
+      select ${assignmentId}, o.organization_id, ${number}, ${own.officeId}, 'condition_report',
+        ${seed.assignmentStatus ?? "ordered"}, o.id, o.address_text, o.gnr, o.bnr, o.snr,
+        o.received_at, o.source, o.ordered_by_text, o.ordered_by_contact_id, o.ordered_by_firm_id,
+        o.external_ref, o.housing_association_name, o.seller_declaration_received
+      from orders o
+      where o.id = ${id} and o.organization_id = ${organizationId}`;
     await sql`
       update orders set status = 'converted', assignment_id = ${assignmentId}
       where id = ${id} and organization_id = ${organizationId}`;

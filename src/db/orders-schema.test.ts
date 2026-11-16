@@ -76,11 +76,13 @@ function insertAssignmentSql(values: {
   status?: string;
 }) {
   return db.execute(sql`
-    insert into assignments (organization_id, number, office_id, order_id, assignment_type, status)
+    insert into assignments
+      (organization_id, number, office_id, order_id, assignment_type, status, address_text)
     values (
       ${values.organizationId}, ${values.number ?? `TEST-${randomUUID().slice(0, 8)}`},
       ${values.officeId}, ${values.orderId ?? null},
-      ${values.assignmentType ?? "condition_report"}, ${values.status ?? "ordered"}
+      ${values.assignmentType ?? "condition_report"}, ${values.status ?? "ordered"},
+      'Testveien 12, 8000 Bodø'
     )`);
 }
 

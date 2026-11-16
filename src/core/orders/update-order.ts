@@ -1,12 +1,16 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
-import { ContactNotFoundError, findContactForLink } from "@/core/contacts";
 import { recordEvent } from "@/core/events";
 import { db } from "@/db/client";
 import { orders } from "@/db/schema";
+import {
+  diffBooking,
+  firmForContact,
+  isEmptyReceivedAt,
+  nextBooking,
+} from "@/core/assignments/booking/update";
 import { isUuid } from "@/shared/lib/uuid";
-import { ORDER_EDITABLE_FIELDS, type OrderEditableField } from "./codes";
 import { OrderChangedError } from "./errors";
 import { selectOrder } from "./orders";
 import { orderInputSchema, type OrderInput } from "./schemas";
@@ -16,33 +20,13 @@ import { orderInputSchema, type OrderInput } from "./schemas";
  * A87). Virker i alle statuser (A250). Status, avvisningsgrunn, oppdrag, kilde og ønsket rapport
  * endres aldri her, og oppdraget endres ikke (A251).
  *
+ * Sammenligningen av gammel og ny verdi er felles med oppdraget (`diffBooking` i
+ * `@/core/assignments/booking/update`, ADR 0011), slik at formen i revisjonsloggen er lik.
+ *
  * Personvern: input, raden, endringene og Zod-feilen sendes aldri til `logger`, og ingen feil som
  * kastes her har verdier i meldingen. Hendelsen får bare feltkodene. Gamle og nye verdier står bare
  * i revisjonsloggen under `values` (A252, spørsmål 79).
  */
-
-type FieldValue = string | boolean | null;
-
-/** Verdien slik den sammenlignes og lagres i loggen: datoer som ISO-tekst. */
-function comparable(value: Date | string | boolean | null): FieldValue {
-  return value instanceof Date ? value.toISOString() : value;
-}
-
-/**
- * Skjemaet viser «Mottatt» med hele minutter. Har ordren sekunder (satt til «nå» ved oppretting,
- * eller fra e-post), skal en lagring med samme minutt ikke telle som endring.
- */
-function sameMinute(stored: Date, submitted: Date): boolean {
-  return (
-    submitted.getTime() % 60_000 === 0 &&
-    Math.floor(stored.getTime() / 60_000) === submitted.getTime() / 60_000
-  );
-}
-
-function isEmptyReceivedAt(input: OrderInput): boolean {
-  const value = input.receivedAt;
-  return value === null || value === undefined || value === "";
-}
 
 /**
  * Endrer feltene i `ORDER_EDITABLE_FIELDS` på en lagret ordre og gir ordren tilbake i samme form
@@ -98,40 +82,13 @@ export async function updateOrder(
     if (!before) throw new AccessDeniedError();
     if (before.rowVersion !== expectedRowVersion) throw new OrderChangedError();
 
-    let orderedByFirmId: string | null = null;
-    if (parsed.orderedByContactId !== null) {
-      const contact = await findContactForLink(tx, grant.organizationId, parsed.orderedByContactId);
-      if (!contact) throw new ContactNotFoundError();
-      orderedByFirmId = contact.firmId;
-    }
-
-    const next = {
-      receivedAt:
-        keepReceivedAt || sameMinute(before.receivedAt, parsed.receivedAt)
-          ? before.receivedAt
-          : parsed.receivedAt,
-      externalRef: parsed.externalRef,
-      orderedByText: parsed.orderedByText,
-      orderedByContactId: parsed.orderedByContactId,
-      orderedByFirmId,
-      addressText: parsed.addressText,
-      gnr: parsed.gnr,
-      bnr: parsed.bnr,
-      snr: parsed.snr,
-      housingAssociationName: parsed.housingAssociationName,
-      sellerDeclarationReceived: parsed.sellerDeclarationReceived,
-    } satisfies Record<OrderEditableField, Date | string | boolean | null>;
-
-    const fields: OrderEditableField[] = [];
-    const values: Partial<Record<OrderEditableField, { from: FieldValue; to: FieldValue }>> = {};
-    const fromValues = before satisfies Record<OrderEditableField, unknown>;
-    for (const field of ORDER_EDITABLE_FIELDS) {
-      const from = comparable(fromValues[field]);
-      const to = comparable(next[field]);
-      if (from === to) continue;
-      fields.push(field);
-      values[field] = { from, to };
-    }
+    const orderedByFirmId = await firmForContact(
+      tx,
+      grant.organizationId,
+      parsed.orderedByContactId,
+    );
+    const next = nextBooking(before, parsed, { keepReceivedAt, orderedByFirmId });
+    const { fields, values } = diffBooking(before, next);
 
     if (fields.length > 0) {
       const [row] = await tx

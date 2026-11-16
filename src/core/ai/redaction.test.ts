@@ -3,7 +3,14 @@ import { requireOrganizationAccess, type EmployeeGrant } from "@/core/access";
 import { PII_PLACEHOLDERS } from "@/shared/lib/pii-patterns";
 import { employeeWithGrant } from "../../../tests/ai";
 import { stubFailingRegExp } from "../../../tests/failing-regexp";
-import { createOrganization, resetDatabase } from "../../../tests/factories";
+import {
+  createAssignment,
+  createContact,
+  createFirm,
+  createOrder,
+  createOrganization,
+  resetDatabase,
+} from "../../../tests/factories";
 import {
   containsWord,
   knownStrings,
@@ -428,6 +435,112 @@ describe("loadKnownValues: tenant-isolasjon (V7.1)", () => {
     ]) {
       expect(seen).not.toContain(value);
     }
+  });
+});
+
+/*
+ * Oppdraget eier bestillingsopplysningene (ADR 0011, A292, testplan for «Nytt oppdrag» 4.10).
+ * Vasken leser dem fra oppdraget selv, også når `order_id` og `property_id` er tomme.
+ * Alle verdier er oppdiktet.
+ */
+describe("loadKnownValues: bestillingen leses fra oppdraget (ADR 0011)", () => {
+  it("4.10.1 oppdrag uten ordre og eiendom: adresse, matrikkel, borettslag, ordrenummer og bestiller vaskes", async () => {
+    const grant = await setup();
+    const organizationId = grant.organizationId;
+    const firm = await createFirm(organizationId, { name: "Qxzmegling Bestiller AS" });
+    const contact = await createContact(organizationId, {
+      firstName: "Qxzolav",
+      lastName: "Bestillersen",
+      email: "qxzolav@example.no",
+      phone: "47771234",
+      firmId: firm.id,
+    });
+    const assignment = await createAssignment(organizationId, {
+      orderId: null,
+      propertyId: null,
+      addressText: "Qxzbestillingsveien 17, 8019 Qxzby",
+      gnr: "7781",
+      bnr: "7782",
+      snr: "3",
+      housingAssociationName: "Qxztunet Borettslag",
+      externalRef: "QXZREF-7731",
+      orderedByText: "Qxzbestiller Fritekst",
+      orderedByContactId: contact.id,
+      orderedByFirmId: firm.id,
+    });
+    expect(assignment.orderId).toBeNull();
+    expect(assignment.propertyId).toBeNull();
+
+    const known = await loadKnownValues(grant, assignment.id);
+    const text =
+      "Befaring i Qxzbestillingsveien 17, gnr. 7781 bnr. 7782 snr. 3 i Qxztunet Borettslag. " +
+      "Ref QXZREF-7731 fra Qxzbestiller Fritekst. Kontakt Qxzolav Bestillersen i " +
+      "Qxzmegling Bestiller AS, qxzolav@example.no, 47771234.";
+    const result = redactText(text, known);
+
+    for (const value of [
+      "Qxzbestillingsveien",
+      "7781",
+      "7782",
+      "Qxztunet",
+      "QXZREF-7731",
+      "Qxzbestiller Fritekst",
+      "Qxzolav",
+      "Bestillersen",
+      "Qxzmegling",
+      "qxzolav@example.no",
+      "47771234",
+    ]) {
+      expect(result.text, `${value} står igjen`).not.toContain(value);
+    }
+    expect(result.text).toContain("Befaring i");
+  });
+
+  it("4.10.2 oppdrag fra ordre der ordren er rettet etterpå: både ordrens og oppdragets verdi vaskes", async () => {
+    const grant = await setup();
+    const organizationId = grant.organizationId;
+    const assignment = await createAssignment(organizationId, {
+      addressText: "Qxzoppdragsveien 3, 8006 Qxzby",
+      orderedByText: "Qxzoppdrag Bestiller",
+    });
+    await createOrder(organizationId, {
+      status: "converted",
+      assignmentId: assignment.id,
+      addressText: "Qxzordreveien 9, 8006 Qxzby",
+      orderedByText: "Qxzordre Bestiller",
+      externalRef: "QXZORD-5512",
+    });
+
+    const known = await loadKnownValues(grant, assignment.id);
+    const result = redactText(
+      "Qxzoppdragsveien 3 og Qxzordreveien 9. Qxzoppdrag Bestiller, Qxzordre Bestiller, QXZORD-5512.",
+      known,
+    );
+    for (const value of [
+      "Qxzoppdragsveien",
+      "Qxzordreveien",
+      "Qxzoppdrag Bestiller",
+      "Qxzordre Bestiller",
+      "QXZORD-5512",
+    ]) {
+      expect(result.text, `${value} står igjen`).not.toContain(value);
+    }
+  });
+
+  it("4.10 bestillingen på et oppdrag i en annen organisasjon gir feil, ingen verdier", async () => {
+    const grantA = await setup("Oppdiktet Takst A");
+    const orgB = await createOrganization("Oppdiktet Takst B");
+    const assignmentB = await createAssignment(orgB.id, {
+      addressText: "Qxzborgveien 4, 8000 Qxzby",
+      orderedByText: "Qxzborg Bestiller",
+    });
+    const error = await loadKnownValues(grantA, assignmentB.id).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(Error);
+    const seen = `${(error as Error).message} ${(error as Error).stack ?? ""}`;
+    expect(seen).not.toContain("Qxzborg");
   });
 });
 

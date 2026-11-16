@@ -36,6 +36,24 @@ function HomeIcon() {
   );
 }
 
+function PlusIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
 function DocumentIcon() {
   return (
     <svg
@@ -208,6 +226,14 @@ export default async function EmployeeLayout({ children }: { children: ReactNode
           className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-5 py-3 lg:min-h-[calc(100dvh-60px)] lg:w-58 lg:shrink-0 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-0.5 lg:border-b-0 lg:px-3 lg:py-4"
         >
           <ul className="flex flex-wrap gap-2 lg:flex-col lg:gap-0.5">
+            {employee?.canCreateAssignments && (
+              <li>
+                <NavLink href="/oppdrag/ny">
+                  <PlusIcon />
+                  Nytt oppdrag
+                </NavLink>
+              </li>
+            )}
             <li>
               <NavLink href="/arbeidskoe">
                 <HomeIcon />

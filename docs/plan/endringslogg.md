@@ -2,6 +2,7 @@
 
 Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og 09.11.2026).
 
+- **14.11.2026 (Ståle i chat, PR #212):** Forbedreren erstatter forenkleren, og det forbedreren foreslår, bygges uten å spørre Ståle. Større tillegg blir punkter under «Fra forbedreren» i gjeldende fase. Alle tillegg føres i `docs/plan/forbedrerens-tillegg.md`.
 - **12.11.2026 (Branch `fase2a-regler-bad`, PR #167):** 2a-2: «Reglene badet trenger» krysset av (regelmotoren i `src/core/rules`, fire regler med testsaker i badmalen, levetider og fuktgrense som utkast, A224–A232). Statuslinjen for 2a oppdatert.
 - **12.11.2026 (Branch `fase2a-regler-bad`, funn T-0003):** Planlinjen for «Reglene badet trenger» (2a-2) presisert etter Ståles svar 10.11.2026 (59a): er det tatt hull og målt uten forhøyet fukt, gir alderen alene ikke TG2 på tilliggende konstruksjoner; hulltaking ikke utført gir TGIU (A224).
 - **12.11.2026 (Prosjektlederen, funn T-0021):** «Beslutningsnotat om KI-leverandør» flyttet til `docs/plan/levert.md` (PR #154). Radene fra 11.–12.11.2026 flyttet fra tabellen hit, så nyeste står øverst. Planen sier «Sist oppdatert: 12.11.2026».
@@ -95,3 +96,6 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 14.11.2026 | Frasebanken fylles fra Byggcons fraser i SharePoint, både fra IVIT-malene og Byggcons egne, i én felles bank (flyttet fra fase 4 til 2a-3). S10: rett til IVIT-malfrasene. | Ståle i chat 13.11.2026 |
 | 14.11.2026 | S10 gjort: Ståle bekrefter at avtalen med IVIT tillater at Byggcon tar med seg frasene fra IVIT-malene. | Ståle i chat 14.11.2026 |
 | 14.11.2026 | Raskere utvikling: tre oppgaver samtidig i hovedløkken, og lett prosess for små oppgaver i arbeidsflyten `oppgave`. | Ståle i chat 14.11.2026 |
+| 16.11.2026 | Kvalitetstall som måles løpende lagt til i fase 3a (sju i kjernesettet og tre til), med hvem som ser hva, og S11 (drøfting med de ansatte før tall per person vises). Lederdashbordet viser tallene over tid. | Ståle i chat 16.11.2026 |
+| 16.11.2026 | Flere PDF-utgaver av samme rapport: PDF-profiler med ulik layout, design og farger fra de samme dataene, knyttet til kunde eller segment (2a-3). Kravet til PDF-motoren (2a-2) utvidet. | Ståle i chat 16.11.2026 |
+| 16.11.2026 | Endelig rapport lagres som låst PDF med versjonslogg; bare admin kan slette (myk sletting med begrunnelse, 10 år). Utkast stemples «UTKAST» og lagres ikke (2a-3). | Ståle i chat 16.11.2026 |

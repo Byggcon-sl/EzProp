@@ -78,9 +78,9 @@ async function insertAssignment(
       'condition_report')`;
   await sql`
     insert into assignments (id, organization_id, number, office_id, assignment_type, status,
-      order_id)
+      order_id, address_text, received_at, source)
     values (${id}, ${organizationId}, ${number}, ${officeId}, 'condition_report',
-      ${input.status}, ${orderId})`;
+      ${input.status}, ${orderId}, ${input.address}, now(), 'manual')`;
   await sql`
     update orders set status = 'converted', assignment_id = ${id}
     where id = ${orderId} and organization_id = ${organizationId}`;

@@ -1013,13 +1013,17 @@ describe("2.4 endring", () => {
     expect(emptied.snr).toBeNull();
   });
 
-  it("2.4.12 eiendom som ikke er lagret: forhåndsutfyllingen viser den nye adressen", async () => {
+  it("2.4.12 eiendom som ikke er lagret: forhåndsutfyllingen kommer fra oppdraget, ikke fra den rettede ordren (ADR 0011, A251)", async () => {
     const { org, admin } = await orgWithAdmin();
     const { order, assignment } = await insertConvertedOrder(org.id, {
       gnr: "12",
       bnr: "34",
       housingAssociationName: HOUSING,
     });
+    await db
+      .update(assignments)
+      .set({ gnr: "12", bnr: "34", housingAssociationName: HOUSING })
+      .where(eq(assignments.id, assignment.id));
 
     await updateOrder(
       admin,
@@ -1037,10 +1041,10 @@ describe("2.4 endring", () => {
     const view = await getAssignmentProperty(admin, org.id, assignment.id);
     expect(view.property).toBeNull();
     expect(view.prefill).toMatchObject({
-      address: NEW_ADDRESS,
-      gnr: "56",
-      bnr: "78",
-      associationName: "Prøvehøgda sameie",
+      address: assignment.addressText,
+      gnr: "12",
+      bnr: "34",
+      associationName: HOUSING,
     });
   });
 

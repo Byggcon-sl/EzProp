@@ -40,8 +40,9 @@ const ORDER_URL = new RegExp(`/ordre/(${UUID})(\\?.*)?$`);
 const SAVED = "Endringene er lagret.";
 const CONFLICT = "Ordren er endret av en annen. Last siden på nytt.";
 const OFFLINE = "Du er uten nett. Endringen er ikke lagret.";
+// Endret med «Nytt oppdrag» (ADR 0011): rettelser for oppdraget gjøres på oppdraget.
 const CONVERTED_NOTE =
-  "Oppdraget endres ikke. Eiendom og bestiller på oppdraget endres på oppdraget.";
+  "Rettelser for oppdraget gjøres på oppdraget. Endringer her flytter ikke oppdraget.";
 
 function deniedHeading(page: Page): Locator {
   return page.getByRole("heading", { name: /^(Ingen tilgang|Fant ikke siden)$/, level: 1 });

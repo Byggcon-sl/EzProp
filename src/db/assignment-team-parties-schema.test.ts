@@ -376,9 +376,9 @@ function insertAssignmentSql(values: {
   companyId: string | null;
 }) {
   return db.execute(sql`
-    insert into assignments (organization_id, number, office_id, company_id)
+    insert into assignments (organization_id, number, office_id, company_id, address_text)
     values (${values.organizationId}, ${`SQL-${randomUUID().slice(0, 8)}`}, ${values.officeId},
-      ${values.companyId})
+      ${values.companyId}, 'Testveien 12, 8000 Bodø')
     returning id, company_id`);
 }
 

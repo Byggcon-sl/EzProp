@@ -290,7 +290,22 @@ export async function convertOrderToAssignment(
       isNull(orders.deletedAt),
     );
     const [before] = await tx
-      .select({ id: orders.id, status: orders.status })
+      .select({
+        id: orders.id,
+        status: orders.status,
+        receivedAt: orders.receivedAt,
+        source: orders.source,
+        externalRef: orders.externalRef,
+        orderedByText: orders.orderedByText,
+        orderedByContactId: orders.orderedByContactId,
+        orderedByFirmId: orders.orderedByFirmId,
+        addressText: orders.addressText,
+        gnr: orders.gnr,
+        bnr: orders.bnr,
+        snr: orders.snr,
+        housingAssociationName: orders.housingAssociationName,
+        sellerDeclarationReceived: orders.sellerDeclarationReceived,
+      })
       .from(orders)
       .where(orderWhere)
       .for("update");
@@ -326,6 +341,20 @@ export async function convertOrderToAssignment(
         orderId: before.id,
         assignmentType: "condition_report",
         status: "ordered",
+        // Oppdraget eier bestillingsopplysningene (ADR 0011): kopieres fra ordren i samme
+        // transaksjon. Ordren beholder sin kopi som «slik bestillingen kom».
+        receivedAt: before.receivedAt,
+        source: before.source,
+        externalRef: before.externalRef,
+        orderedByText: before.orderedByText,
+        orderedByContactId: before.orderedByContactId,
+        orderedByFirmId: before.orderedByFirmId,
+        addressText: before.addressText,
+        gnr: before.gnr,
+        bnr: before.bnr,
+        snr: before.snr,
+        housingAssociationName: before.housingAssociationName,
+        sellerDeclarationReceived: before.sellerDeclarationReceived,
         createdBy: grant.employeeId,
       })
       .returning({

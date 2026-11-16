@@ -106,6 +106,27 @@ describe("getEmployeeContext", () => {
     expect((await getEmployeeContext())?.canEditOrders).toBe(true);
   });
 
+  // «Nytt oppdrag» (docs/funksjoner/fase2a-nytt-oppdrag-testplan.md 1.4). Admin-raden skal aldri fjernes (regel 11).
+  it.each([
+    { roles: ["inspector"] as const, editAll: true, expected: true },
+    { roles: ["inspector"] as const, editAll: false, expected: false },
+    { roles: ["office"] as const, editAll: false, expected: true },
+    { roles: ["manager"] as const, editAll: false, expected: true },
+    { roles: ["admin"] as const, editAll: true, expected: true },
+    { roles: ["admin"] as const, editAll: false, expected: true },
+  ])(
+    "canCreateAssignments for $roles med innstillingen $editAll er $expected",
+    async ({ roles, editAll, expected }) => {
+      const org = await createOrganization();
+      await setInspectorsEditAll(org.id, editAll);
+      const actor = await createUser();
+      await createEmployee(actor, org.id, [...roles]);
+      session.actor = actor;
+
+      expect((await getEmployeeContext())?.canCreateAssignments).toBe(expected);
+    },
+  );
+
   it("bruker uten ansattrad gir null", async () => {
     await createOrganization();
     session.actor = await createUser();

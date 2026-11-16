@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { assignmentFieldsMatch, orderFieldsMatch, parseCadastralQuery } from "./search";
+import {
+  assignmentBookingFieldsMatch,
+  assignmentFieldsMatch,
+  orderFieldsMatch,
+  parseCadastralQuery,
+} from "./search";
 
 /*
  * Matrikkelsøket som regeltest (docs/funksjoner/fase2a-sok-ordre-arbeidsko-testplan.md avsnitt 2).
@@ -74,11 +79,13 @@ describe("2.4 tomt søk gir intet filter", () => {
     (q) => {
       expect(orderFieldsMatch(q)).toBeUndefined();
       expect(assignmentFieldsMatch(ORG, q)).toBeUndefined();
+      expect(assignmentBookingFieldsMatch(q)).toBeUndefined();
     },
   );
 
   it.each(["Fjordgata", "12/34", "%"])("søk (%j) gir et vilkår", (q) => {
     expect(orderFieldsMatch(q)).toBeDefined();
     expect(assignmentFieldsMatch(ORG, q)).toBeDefined();
+    expect(assignmentBookingFieldsMatch(q)).toBeDefined();
   });
 });

@@ -1118,16 +1118,18 @@ export async function createAssignmentWithParty(
     const assignmentId = randomUUID();
     const partyId = randomUUID();
     const partyName = `Kjøper Test ${suffix}`;
+    const address = `Reklamasjonsveien 1 ${suffix}, 8000 Bodø`;
     await sql`
       insert into orders (id, organization_id, address_text, received_at, source, status,
         requested_report_type)
-      values (${orderId}, ${organizationId}, ${`Reklamasjonsveien 1 ${suffix}, 8000 Bodø`}, now(),
+      values (${orderId}, ${organizationId}, ${address}, now(),
         'manual', 'received', 'condition_report')`;
+    // Bestillingsfeltene står også på oppdraget (ADR 0011, påkrevd fra migrering 0034).
     await sql`
       insert into assignments (id, organization_id, number, office_id, assignment_type, status,
-        order_id)
+        order_id, address_text, received_at, source)
       values (${assignmentId}, ${organizationId}, ${`E2E-REK-${suffix}`}, ${office.id},
-        'condition_report', 'in_progress', ${orderId})`;
+        'condition_report', 'in_progress', ${orderId}, ${address}, now(), 'manual')`;
     await sql`
       insert into assignment_parties (id, organization_id, assignment_id, role, name)
       values (${partyId}, ${organizationId}, ${assignmentId}, 'buyer', ${partyName})`;
@@ -1719,4 +1721,26 @@ export async function convertedAssignmentNumber(page: Page): Promise<string> {
     .replace(/\s+/g, " ")
     .trim();
   return ASSIGNMENT_LINK_NAME.exec(text)![1]!;
+}
+
+// --- Rom på oppdraget (rett T-0050 forsøk 2, docs/agenter/oppgaver/rett-t0050-arealtype-testplan.md)
+
+export type E2eRoomRow = { name: string | null; areaType: string; belowGround: boolean };
+
+/** Rommene (ikke slettede) på oppdraget med navn, arealtype og «Under terreng». Bare lesing. */
+export async function roomsOnAssignment(assignmentId: string): Promise<E2eRoomRow[]> {
+  const sql = e2eSql();
+  try {
+    return await sql<E2eRoomRow[]>`
+      select r.name, r.area_type as "areaType", r.below_ground as "belowGround"
+      from rooms r
+      join floors f on f.id = r.floor_id and f.organization_id = r.organization_id
+      join report_buildings b on b.id = f.report_building_id
+        and b.organization_id = f.organization_id
+      where b.assignment_id = ${assignmentId}
+        and r.deleted_at is null
+      order by r.created_at`;
+  } finally {
+    await sql.end();
+  }
 }

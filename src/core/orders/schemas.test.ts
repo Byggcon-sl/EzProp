@@ -66,8 +66,10 @@ describe("adresse (1.3)", () => {
     expect(ok({ addressText: `  ${ADDRESS}  ` }).addressText).toBe(ADDRESS);
   });
 
-  it("11 sifre på rad i adressen godtas (ingen fødselsnummersperre der, 1.10)", () => {
-    expect(ok({ addressText: "Testveien 12345678901" }).addressText).toBe("Testveien 12345678901");
+  it("11 sifre på rad i adressen avvises (A299, sperren gjelder alle fritekstfelt)", () => {
+    expect(messagesFor(parse({ addressText: "Testveien 12345678901" }), "addressText")).toContain(
+      PNR,
+    );
   });
 });
 
@@ -175,8 +177,8 @@ describe("fødselsnummer i fritekst (1.10)", () => {
     expect(ok({ orderedByText: "Ola 1234567890" }).orderedByText).toBe("Ola 1234567890");
   });
 
-  it("ekstern referanse med 11 sifre på rad godtas (ingen sperre der)", () => {
-    expect(ok({ externalRef: "TEST-12345678901" }).externalRef).toBe("TEST-12345678901");
+  it("ekstern referanse med 11 sifre på rad avvises (A299)", () => {
+    expect(messagesFor(parse({ externalRef: "TEST-12345678901" }), "externalRef")).toContain(PNR);
   });
 });
 

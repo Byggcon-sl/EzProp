@@ -203,6 +203,11 @@ export default async function OrderPage({
           orderId={order.id}
           rowVersion={order.rowVersion}
           converted={order.status === "converted"}
+          assignmentLink={
+            order.assignmentId && order.assignmentNumber && !order.assignmentCancelled
+              ? { id: order.assignmentId, number: order.assignmentNumber }
+              : null
+          }
           action={updateOrderAction}
           defaults={{
             addressText: order.addressText,

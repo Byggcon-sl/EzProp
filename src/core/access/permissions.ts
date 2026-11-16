@@ -157,6 +157,16 @@ export function grantHasPermission(grant: EmployeeGrant, permission: Permission)
   return grant.permissions.includes(permission);
 }
 
+/**
+ * Om den ansatte kan lage oppdrag («Nytt oppdrag», docs/funksjoner/fase2a-nytt-oppdrag.md): samme
+ * rettighet som oppretting i kjernen (`assignment.edit`). Takstmann har den bare når
+ * `access.inspectors_edit_all` er på; admin har den alltid (regel 11). Brukes bare til å vise
+ * knappen og menypunktet; selve sjekken skjer i `createAssignment`.
+ */
+export function canCreateAssignments(grant: EmployeeGrant): boolean {
+  return grantHasPermission(grant, "assignment.edit");
+}
+
 /** Admin stenges aldri ute (regel fra Optiplan, videreført i CLAUDE.md). */
 export function isAdmin(grant: EmployeeGrant) {
   return grant.roles.includes("admin");

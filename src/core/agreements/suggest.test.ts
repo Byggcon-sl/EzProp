@@ -25,8 +25,8 @@ import { suggestAgreementForAssignment } from "./index";
  * Forslaget om avtale på oppdraget, som testsaker i data mot databasen.
  * Testplan: docs/funksjoner/fase2a-oppdragsgiveravtale-testplan.md avsnitt 6 (og 5.4.2).
  *
- * Regelen (A116): firmaet hentes bare fra ordrens bestillerfirma (`orders.ordered_by_firm_id`)
- * via `assignments.order_id`. Forslag gis bare når oppdraget ikke har avtale, og firmaet har
+ * Regelen (A116): firmaet hentes bare fra bestillerfirmaet på oppdraget
+ * (`assignments.ordered_by_firm_id`, ADR 0011). Forslag gis bare når oppdraget ikke har avtale, og firmaet har
  * nøyaktig én avtale som ikke er slettet og gjelder i dag (norsk dato).
  *
  * Fast tid: TEST_NOW = 03.11.2026 kl. 11 i Oslo. Testdata er oppdiktet: «Testforsikring AS»,
@@ -58,10 +58,13 @@ async function insurer(
   return createFirm(organizationId, { name: FIRM_NAME, firmType: "insurer", ...overrides });
 }
 
-/** Ordre med bestillerfirma (eller uten), gjort om til oppdrag med `orderId`. */
+/**
+ * Ordre med bestillerfirma (eller uten), gjort om til oppdrag med `orderId`. Bestillerfirmaet
+ * står på oppdraget, som `convertOrderToAssignment` kopierer det (ADR 0011).
+ */
 async function assignmentOrderedBy(organizationId: string, firmId: string | null) {
   const order = await createOrder(organizationId, { orderedByFirmId: firmId });
-  return createAssignment(organizationId, { orderId: order.id });
+  return createAssignment(organizationId, { orderId: order.id, orderedByFirmId: firmId });
 }
 
 async function putAgreement(assignmentId: string, agreementId: string | null) {
@@ -396,6 +399,19 @@ describe("6.2–6.4 tilgang, ingen skriving og ingen automatikk", () => {
     // Forslaget finnes, men takstmannen må godkjenne det selv
     const suggestion = await suggestAgreementForAssignment(admin, org.id, assignment.id, TEST_NOW);
     expect(suggestion?.agreementId).toBe(agreement.id);
+  });
+
+  it("oppdrag laget uten ordre: bestillerfirmaet på oppdraget gir forslag (ADR 0011)", async () => {
+    const org = await createOrganization();
+    const admin = await createUser({ name: "Test Admin" });
+    await createEmployee(admin, org.id, ["admin"]);
+    const firm = await insurer(org.id);
+    const agreement = await createClientAgreement(org.id, { firmId: firm.id });
+    const assignment = await createAssignment(org.id, { orderId: null, orderedByFirmId: firm.id });
+
+    const suggestion = await suggestAgreementForAssignment(admin, org.id, assignment.id, TEST_NOW);
+    expect(suggestion?.agreementId).toBe(agreement.id);
+    expect(suggestion?.firmId).toBe(firm.id);
   });
 });
 

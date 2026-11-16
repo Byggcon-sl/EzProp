@@ -6,6 +6,7 @@ export {
   requireTemplateEditAccess,
 } from "./guards";
 export {
+  canCreateAssignments,
   effectivePermissions,
   grantablePermissions,
   grantHasPermission,

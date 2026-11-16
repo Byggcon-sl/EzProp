@@ -6,6 +6,7 @@ import { recordAuditEvent } from "@/core/audit";
 import { db } from "@/db/client";
 import {
   assignmentParties,
+  assignments,
   auditLog,
   contacts,
   employees,
@@ -16,6 +17,7 @@ import {
 } from "@/db/schema";
 import {
   TEST_NOW,
+  createAssignment,
   createAssignmentParty,
   createContact as insertContact,
   createEmployee,
@@ -89,8 +91,8 @@ const EVENT_CODES: Record<ServiceName, string> = {
 const METADATA_KEYS: Record<ServiceName, string[]> = {
   removeContact: ["contactId"],
   removeFirm: ["contactCount", "firmId"],
-  mergeContacts: ["keepId", "orderCount", "partyCount", "removeId"],
-  mergeFirms: ["contactCount", "keepId", "orderCount", "partyCount", "removeId"],
+  mergeContacts: ["assignmentCount", "keepId", "orderCount", "partyCount", "removeId"],
+  mergeFirms: ["assignmentCount", "contactCount", "keepId", "orderCount", "partyCount", "removeId"],
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -118,7 +120,9 @@ async function person(organizationId: string, roles: EmployeeRole[], name = "Tes
  *   og en myk-slettet kontakt i `firmRemove`,
  * - parter: én per kontakt (firmaet følger kontakten), én myk-slettet på `contactRemove`, og én
  *   med bare `firmRemove`,
- * - ordrer: én per kontakt, og én med bare `firmRemove`.
+ * - ordrer: én per kontakt, og én med bare `firmRemove`,
+ * - oppdrag med bestiller (ADR 0011): ett på `contactKeep`, ett på `contactRemove`, ett kansellert
+ *   (myk-slettet) på `contactRemove`, og ett med bare `firmRemove`.
  * Fritekstene er de oppdiktede verdiene over.
  */
 async function createGraph(organizationId: string) {
@@ -202,6 +206,28 @@ async function createGraph(organizationId: string) {
     orderedByFirmId: firmKeep.id,
   });
 
+  const assignmentKeep = await createAssignment(organizationId, {
+    orderedByText,
+    orderedByContactId: contactKeep.id,
+    orderedByFirmId: firmKeep.id,
+  });
+  const assignmentRemove = await createAssignment(organizationId, {
+    orderedByText,
+    orderedByContactId: contactRemove.id,
+    orderedByFirmId: firmRemove.id,
+  });
+  const assignmentRemoveCancelled = await createAssignment(organizationId, {
+    orderedByText,
+    orderedByContactId: contactRemove.id,
+    orderedByFirmId: firmRemove.id,
+    deletedAt: DELETED,
+  });
+  const assignmentFirmOnly = await createAssignment(organizationId, {
+    orderedByText,
+    orderedByContactId: null,
+    orderedByFirmId: firmRemove.id,
+  });
+
   return {
     organizationId,
     firmKeep,
@@ -219,14 +245,18 @@ async function createGraph(organizationId: string) {
     orderRemove,
     orderFirmOnly,
     orderOther,
+    assignmentKeep,
+    assignmentRemove,
+    assignmentRemoveCancelled,
+    assignmentFirmOnly,
   };
 }
 type Graph = Awaited<ReturnType<typeof createGraph>>;
 
 /** Antallene grafen over gir, skrevet ut for hånd (også myk-slettede rader). */
 const GRAPH_COUNTS = {
-  mergeContacts: { partyCount: 2, orderCount: 1 },
-  mergeFirms: { contactCount: 2, partyCount: 3, orderCount: 2 },
+  mergeContacts: { partyCount: 2, orderCount: 1, assignmentCount: 2 },
+  mergeFirms: { contactCount: 2, partyCount: 3, orderCount: 2, assignmentCount: 3 },
   removeFirm: { contactCount: 1 },
 };
 
@@ -286,6 +316,15 @@ async function snapshotContactGraph() {
       })
       .from(orders)
       .orderBy(asc(orders.id)),
+    assignments: await db
+      .select({
+        id: assignments.id,
+        orderedByContactId: assignments.orderedByContactId,
+        orderedByFirmId: assignments.orderedByFirmId,
+        rowVersion: assignments.rowVersion,
+      })
+      .from(assignments)
+      .orderBy(asc(assignments.id)),
   };
 }
 
@@ -328,6 +367,22 @@ async function partyRow(id: string) {
 async function orderRow(id: string) {
   const [row] = await db.select().from(orders).where(eq(orders.id, id));
   return row!;
+}
+
+async function assignmentRow(id: string) {
+  const [row] = await db.select().from(assignments).where(eq(assignments.id, id));
+  return row!;
+}
+
+/** Loggradene `update` for bestillingen på ordre og oppdrag (alle organisasjoner). */
+async function bookingAuditRows() {
+  return db
+    .select()
+    .from(auditLog)
+    .where(
+      and(inArray(auditLog.entityType, ["order", "assignment"]), eq(auditLog.action, "update")),
+    )
+    .orderBy(asc(auditLog.receivedAt), asc(auditLog.createdAt));
 }
 
 /** Ett oppsett: organisasjon A med admin og graf, og organisasjon B med graf. */
@@ -980,7 +1035,11 @@ async function rowsPointingToContact(contactId: string) {
     .select({ id: orders.id })
     .from(orders)
     .where(eq(orders.orderedByContactId, contactId));
-  return [...parties, ...orderRows];
+  const assignmentRows = await db
+    .select({ id: assignments.id })
+    .from(assignments)
+    .where(eq(assignments.orderedByContactId, contactId));
+  return [...parties, ...orderRows, ...assignmentRows];
 }
 
 describe("2.6 sammenslåing av kontakter", () => {
@@ -1172,7 +1231,11 @@ async function rowsPointingToFirm(firmId: string) {
     .select({ id: orders.id })
     .from(orders)
     .where(eq(orders.orderedByFirmId, firmId));
-  return [...contactRows, ...parties, ...orderRows];
+  const assignmentRows = await db
+    .select({ id: assignments.id })
+    .from(assignments)
+    .where(eq(assignments.orderedByFirmId, firmId));
+  return [...contactRows, ...parties, ...orderRows, ...assignmentRows];
 }
 
 describe("2.7 sammenslåing av firma", () => {
@@ -1255,6 +1318,181 @@ describe("2.7 sammenslåing av firma", () => {
     expect(await rowsPointingToFirm(graph.firmRemove.id)).not.toHaveLength(0);
     await merge(graph, admin.actor);
     expect(await rowsPointingToFirm(graph.firmRemove.id)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 4.11 Bestilleren på oppdrag og ordre (docs/funksjoner/fase2a-nytt-oppdrag-testplan.md 4.11)
+// ---------------------------------------------------------------------------------------------
+
+describe("4.11 sammenslåing flytter bestilleren på oppdrag og ordre", () => {
+  it("4.11.1 kontakt: bestilleren flyttes på oppdrag (også kansellert), firmaet følger kontakten", async () => {
+    const { admin, graph } = await oneOrg();
+    await mergeContacts(admin.actor, graph.organizationId, {
+      keepId: graph.contactKeep.id,
+      removeId: graph.contactRemove.id,
+    });
+    for (const id of [graph.assignmentRemove.id, graph.assignmentRemoveCancelled.id]) {
+      const row = await assignmentRow(id);
+      expect(row.orderedByContactId).toBe(graph.contactKeep.id);
+      expect(row.orderedByFirmId).toBe(graph.firmKeep.id);
+      expect(row.rowVersion).toBe(2);
+    }
+    // Bare firmaet: ikke flyttet ved sammenslåing av kontakter
+    const firmOnly = await assignmentRow(graph.assignmentFirmOnly.id);
+    expect(firmOnly.orderedByFirmId).toBe(graph.firmRemove.id);
+    expect(firmOnly.rowVersion).toBe(1);
+    expect((await assignmentRow(graph.assignmentKeep.id)).rowVersion).toBe(1);
+    // Friteksten røres ikke
+    expect((await assignmentRow(graph.assignmentRemove.id)).orderedByText).toBe(
+      graph.assignmentRemove.orderedByText,
+    );
+  });
+
+  it("4.11.2 firma: bestillerfirmaet flyttes på oppdrag og ordre, row_version øker", async () => {
+    const { admin, graph } = await oneOrg();
+    await mergeFirms(admin.actor, graph.organizationId, {
+      keepId: graph.firmKeep.id,
+      removeId: graph.firmRemove.id,
+    });
+    for (const id of [
+      graph.assignmentRemove.id,
+      graph.assignmentRemoveCancelled.id,
+      graph.assignmentFirmOnly.id,
+    ]) {
+      const row = await assignmentRow(id);
+      expect(row.orderedByFirmId).toBe(graph.firmKeep.id);
+      expect(row.rowVersion).toBe(2);
+    }
+    expect((await assignmentRow(graph.assignmentRemove.id)).orderedByContactId).toBe(
+      graph.contactRemove.id,
+    );
+    for (const id of [graph.orderRemove.id, graph.orderFirmOnly.id]) {
+      expect((await orderRow(id)).rowVersion).toBe(2);
+    }
+    expect((await orderRow(graph.orderKeep.id)).rowVersion).toBe(1);
+  });
+
+  it("4.11.4 kontakt: ordren får høyere row_version og én loggrad med feltkoder og id-er (var rødt før)", async () => {
+    const { admin, graph } = await oneOrg();
+    await mergeContacts(admin.actor, graph.organizationId, {
+      keepId: graph.contactKeep.id,
+      removeId: graph.contactRemove.id,
+    });
+    expect((await orderRow(graph.orderRemove.id)).rowVersion).toBe(2);
+    expect((await orderRow(graph.orderKeep.id)).rowVersion).toBe(1);
+
+    const rows = await bookingAuditRows();
+    const byEntity = new Map(rows.map((row) => [`${row.entityType}:${row.entityId}`, row]));
+    expect(rows).toHaveLength(3);
+    const expected = {
+      fields: ["orderedByContactId", "orderedByFirmId"],
+      values: {
+        orderedByContactId: { from: graph.contactRemove.id, to: graph.contactKeep.id },
+        orderedByFirmId: { from: graph.firmRemove.id, to: graph.firmKeep.id },
+      },
+    };
+    for (const key of [
+      `order:${graph.orderRemove.id}`,
+      `assignment:${graph.assignmentRemove.id}`,
+      `assignment:${graph.assignmentRemoveCancelled.id}`,
+    ]) {
+      const row = byEntity.get(key);
+      expect(row, key).toBeDefined();
+      expect(row!.changes).toEqual(expected);
+      expect(row!.actorEmployeeId).toBe(admin.employee.id);
+      expect(row!.organizationId).toBe(graph.organizationId);
+    }
+    // Bare id-er, aldri navn eller fritekst
+    const text = JSON.stringify(rows.map((row) => row.changes));
+    for (const value of [FIRST, LAST, FIRM_NAME, EMAIL, PHONE, NOTE]) {
+      expect(text).not.toContain(value);
+    }
+  });
+
+  it("4.11.4 kontakt med samme firma: loggraden har bare kontakten", async () => {
+    const { admin, graph } = await oneOrg();
+    await db
+      .update(contacts)
+      .set({ firmId: graph.firmRemove.id })
+      .where(eq(contacts.id, graph.contactKeep.id));
+    await mergeContacts(admin.actor, graph.organizationId, {
+      keepId: graph.contactKeep.id,
+      removeId: graph.contactRemove.id,
+    });
+    const rows = await bookingAuditRows();
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(row.changes).toEqual({
+        fields: ["orderedByContactId"],
+        values: { orderedByContactId: { from: graph.contactRemove.id, to: graph.contactKeep.id } },
+      });
+    }
+  });
+
+  it("4.11.2 firma: én loggrad per flyttet ordre og oppdrag", async () => {
+    const { admin, graph } = await oneOrg();
+    await mergeFirms(admin.actor, graph.organizationId, {
+      keepId: graph.firmKeep.id,
+      removeId: graph.firmRemove.id,
+    });
+    const rows = await bookingAuditRows();
+    expect(rows.map((row) => `${row.entityType}:${row.entityId}`).sort()).toEqual(
+      [
+        `order:${graph.orderRemove.id}`,
+        `order:${graph.orderFirmOnly.id}`,
+        `assignment:${graph.assignmentRemove.id}`,
+        `assignment:${graph.assignmentRemoveCancelled.id}`,
+        `assignment:${graph.assignmentFirmOnly.id}`,
+      ].sort(),
+    );
+    for (const row of rows) {
+      expect(row.changes).toEqual({
+        fields: ["orderedByFirmId"],
+        values: { orderedByFirmId: { from: graph.firmRemove.id, to: graph.firmKeep.id } },
+      });
+    }
+  });
+
+  it("4.11 tenant: sammenslåing i A rører ikke oppdrag, ordre eller logg i B", async () => {
+    const { orgA, orgB, admin, graphA, graphB } = await twoOrgs();
+    const before = await db
+      .select()
+      .from(assignments)
+      .where(eq(assignments.organizationId, orgB.id))
+      .orderBy(asc(assignments.id));
+    await mergeContacts(admin.actor, orgA.id, {
+      keepId: graphA.contactKeep.id,
+      removeId: graphA.contactRemove.id,
+    });
+    await mergeFirms(admin.actor, orgA.id, {
+      keepId: graphA.firmKeep.id,
+      removeId: graphA.firmRemove.id,
+    });
+    const after = await db
+      .select()
+      .from(assignments)
+      .where(eq(assignments.organizationId, orgB.id))
+      .orderBy(asc(assignments.id));
+    expect(after).toEqual(before);
+    expect((await assignmentRow(graphB.assignmentRemove.id)).orderedByContactId).toBe(
+      graphB.contactRemove.id,
+    );
+    const rowsB = (await bookingAuditRows()).filter((row) => row.organizationId === orgB.id);
+    expect(rowsB).toEqual([]);
+  });
+
+  it("4.11 B sin kontakt kan ikke slås sammen fra A, og B sine oppdrag står urørt", async () => {
+    const { orgA, admin, graphB } = await twoOrgs();
+    const before = await snapshotContactGraph();
+    await expectDenied(
+      mergeContacts(admin.actor, orgA.id, {
+        keepId: graphB.contactKeep.id,
+        removeId: graphB.contactRemove.id,
+      }),
+    );
+    expect(await snapshotContactGraph()).toEqual(before);
+    expect(await bookingAuditRows()).toEqual([]);
   });
 });
 

@@ -59,7 +59,10 @@ async function setInspectorsEditAll(organizationId: string, value: boolean) {
     .where(eq(organizations.id, organizationId));
 }
 
-/** Ett aktivt og ett fjernet firma og én aktiv og én fjernet kontakt, med én part og én ordre. */
+/**
+ * Ett aktivt og ett fjernet firma og én aktiv og én fjernet kontakt, med én part, én ordre og ett
+ * oppdrag med kontakten som bestiller (ADR 0011).
+ */
 async function seedOrganization(organizationId: string) {
   const firm = await createFirm(organizationId);
   const removedFirm = await createFirm(organizationId, { deletedAt: DELETED });
@@ -67,6 +70,10 @@ async function seedOrganization(organizationId: string) {
   const removedContact = await createContact(organizationId, { deletedAt: DELETED });
   await createAssignmentParty(organizationId, { contactId: contact.id, firmId: firm.id });
   await createOrder(organizationId, {
+    orderedByContactId: contact.id,
+    orderedByFirmId: firm.id,
+  });
+  await createAssignment(organizationId, {
     orderedByContactId: contact.id,
     orderedByFirmId: firm.id,
   });
@@ -285,6 +292,50 @@ describe("getContactUsage", () => {
 
     expect(usage[contact.id]).toEqual({ assignmentCount: 0, orderCount: 0 });
     expect(usage[other.id]).toEqual({ assignmentCount: 1, orderCount: 1 });
+  });
+});
+
+describe("4.11.3 oppdrag med bestilleren telles (ADR 0011)", () => {
+  it("kontakt: bestiller på oppdrag teller; part og bestiller på samme oppdrag teller én gang; kansellert teller ikke", async () => {
+    const org = await createOrganization();
+    const { actor } = await person(org.id, ["manager"]);
+    const contact = await createContact(org.id);
+    const both = await createAssignment(org.id, { orderedByContactId: contact.id });
+    await createAssignmentParty(org.id, { assignmentId: both.id, contactId: contact.id });
+    await createAssignment(org.id, { orderedByContactId: contact.id });
+    await createAssignment(org.id, { orderedByContactId: contact.id, deletedAt: DELETED });
+    await createAssignmentParty(org.id, { contactId: contact.id });
+
+    const usage = await getContactUsage(actor, org.id, [contact.id]);
+
+    expect(usage).toEqual({ [contact.id]: { assignmentCount: 3, orderCount: 0 } });
+  });
+
+  it("firma: bestillerfirma på oppdrag teller, også uten part", async () => {
+    const org = await createOrganization();
+    const { actor } = await person(org.id, ["manager"]);
+    const firm = await createFirm(org.id);
+    const both = await createAssignment(org.id, { orderedByFirmId: firm.id });
+    await createAssignmentParty(org.id, { assignmentId: both.id, firmId: firm.id });
+    await createAssignment(org.id, { orderId: null, orderedByFirmId: firm.id });
+
+    const usage = await getFirmUsage(actor, org.id, [firm.id]);
+
+    expect(usage).toEqual({ [firm.id]: { contactCount: 0, assignmentCount: 2, orderCount: 0 } });
+  });
+
+  it("bestiller på oppdrag i en annen organisasjon teller ikke", async () => {
+    const orgA = await createOrganization("Organisasjon A");
+    const orgB = await createOrganization("Organisasjon B");
+    const { actor } = await person(orgA.id, ["manager"]);
+    const contact = await createContact(orgA.id);
+    const contactB = await createContact(orgB.id);
+    await createAssignment(orgB.id, { orderedByContactId: contactB.id });
+
+    const usage = await getContactUsage(actor, orgA.id, [contact.id, contactB.id]);
+
+    expect(usage[contact.id]).toEqual({ assignmentCount: 0, orderCount: 0 });
+    expect(usage[contactB.id]).toEqual({ assignmentCount: 0, orderCount: 0 });
   });
 });
 
