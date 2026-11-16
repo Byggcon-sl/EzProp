@@ -9,7 +9,7 @@ import { recordAuditEvent } from "@/core/audit";
 import { ContactNotFoundError, findContactForLink } from "@/core/contacts";
 import { recordEvent } from "@/core/events";
 import { db, type DbExecutor } from "@/db/client";
-import { assignmentParties, assignments } from "@/db/schema";
+import { assignmentParties, assignments, contacts, firms } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { partyInputSchema, type PartyInput, type PartyValues } from "./schemas";
 import { lockAssignment } from "./shared";
@@ -246,5 +246,158 @@ export async function removeParty(
       changes: { assignmentId: before.assignmentId, role: before.role },
     });
     return { id: before.id };
+  });
+}
+
+/** Hvordan parten hentes tilbake: «Angre» i meldingen eller «Gjenopprett» i papirkurven. */
+export type RestoreHow = "undo" | "trash";
+
+/** Svaret fra `restoreParty`. Raden har `organizationId`, så tenant-testen kan sammenligne. */
+export type RestorePartyResult = {
+  restored: { type: "party"; id: string; organizationId: string }[];
+  changed: boolean;
+  notices: string[];
+};
+
+/** Beskjed når kontakten parten var koblet til, er fjernet (A415). */
+export const PARTY_CONTACT_REMOVED_NOTICE =
+  "Parten kom tilbake, men kontakten den var koblet til, er fjernet.";
+/** Beskjed når firmaet parten var koblet til, er fjernet (A415). */
+export const PARTY_FIRM_REMOVED_NOTICE =
+  "Parten kom tilbake, men firmaet den var koblet til, er fjernet.";
+
+/** Om kontakten finnes og ikke er fjernet, i organisasjonen fra tilgangssjekken. */
+async function isActiveContact(tx: DbExecutor, organizationId: string, contactId: string) {
+  const [row] = await tx
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.id, contactId),
+        eq(contacts.organizationId, organizationId),
+        isNull(contacts.deletedAt),
+      ),
+    );
+  return row !== undefined;
+}
+
+/** Om firmaet finnes og ikke er fjernet, i organisasjonen fra tilgangssjekken. */
+async function isActiveFirm(tx: DbExecutor, organizationId: string, firmId: string) {
+  const [row] = await tx
+    .select({ id: firms.id })
+    .from(firms)
+    .where(
+      and(eq(firms.id, firmId), eq(firms.organizationId, organizationId), isNull(firms.deletedAt)),
+    );
+  return row !== undefined;
+}
+
+/**
+ * Henter tilbake en fjernet part (papirkurven, A413 og A415). Bare id-en til parten tas inn;
+ * oppdraget slås opp fra raden med organisasjonen fra tilgangssjekken, og raden låses. Ukjent id,
+ * annen organisasjon, ugyldig UUID og kansellert oppdrag gir samme `AccessDeniedError`.
+ *
+ * Er parten allerede aktiv, skrives ingenting (`changed: false`, ingen hendelse eller logg), så
+ * dobbelttrykk og ny sending er trygt. Parten står da likevel i `restored`, slik at skjermen kan
+ * sette fokus på den.
+ *
+ * Koblingen (A415): er kontakten fjernet, kommer parten tilbake uten kontakt og firma (som når
+ * kontakten tas bort i skjemaet). Er bare firmaet fjernet, settes bare firmaet til `null`.
+ * Navnet og verdiene står slik de var. Sammenslått kontakt er allerede flyttet og står.
+ *
+ * Hendelse og revisjonslogg har bare id, rolle og koblings-id-er, aldri navn, e-post eller telefon.
+ */
+export async function restoreParty(
+  actor: Actor,
+  organizationId: string,
+  partyId: string,
+  how: RestoreHow,
+): Promise<RestorePartyResult> {
+  const grant = await requireOrganizationAccess(actor, organizationId, "assignment.edit");
+  if (!isUuid(partyId)) throw new AccessDeniedError();
+  // Verdien går inn i hendelsen, så bare de to kodene slipper gjennom (også fra server-handlinger)
+  if (how !== "undo" && how !== "trash") throw new Error("Ukjent måte å hente tilbake parten på.");
+
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({
+        id: assignmentParties.id,
+        organizationId: assignmentParties.organizationId,
+        assignmentId: assignmentParties.assignmentId,
+        role: assignmentParties.role,
+        contactId: assignmentParties.contactId,
+        firmId: assignmentParties.firmId,
+        deletedAt: assignmentParties.deletedAt,
+      })
+      .from(assignmentParties)
+      .innerJoin(
+        assignments,
+        and(
+          eq(assignments.id, assignmentParties.assignmentId),
+          eq(assignments.organizationId, grant.organizationId),
+          isNull(assignments.deletedAt),
+        ),
+      )
+      .where(
+        and(
+          eq(assignmentParties.id, partyId),
+          eq(assignmentParties.organizationId, grant.organizationId),
+        ),
+      )
+      .for("update");
+    if (!row) throw new AccessDeniedError();
+
+    const restored = [{ type: "party" as const, id: row.id, organizationId: grant.organizationId }];
+    if (row.deletedAt === null) return { restored, changed: false, notices: [] };
+
+    const notices: string[] = [];
+    let contactId = row.contactId;
+    let firmId = row.firmId;
+    if (contactId !== null && !(await isActiveContact(tx, grant.organizationId, contactId))) {
+      // Uten kontakt er det heller ikke noe firma fra kontakten (som i `withContactLink`)
+      contactId = null;
+      firmId = null;
+      notices.push(PARTY_CONTACT_REMOVED_NOTICE);
+    } else if (firmId !== null && !(await isActiveFirm(tx, grant.organizationId, firmId))) {
+      firmId = null;
+      notices.push(PARTY_FIRM_REMOVED_NOTICE);
+    }
+
+    const now = new Date();
+    const secondsSinceRemoval = Math.max(
+      0,
+      Math.round((now.getTime() - row.deletedAt.getTime()) / 1000),
+    );
+
+    await tx
+      .update(assignmentParties)
+      .set({ deletedAt: null, deletedBy: null, updatedBy: grant.employeeId, contactId, firmId })
+      .where(
+        and(
+          eq(assignmentParties.id, row.id),
+          eq(assignmentParties.organizationId, grant.organizationId),
+        ),
+      );
+
+    await recordEvent(tx, grant, {
+      type: "assignment.party_restored",
+      assignmentId: row.assignmentId,
+      data: { partyId: row.id, role: row.role, how, secondsSinceRemoval },
+    });
+    const changes: Record<string, unknown> = {
+      assignmentId: row.assignmentId,
+      role: row.role,
+      how,
+    };
+    // Bare id-er, og bare når koblingen er tatt bort fordi kontakten eller firmaet er fjernet
+    if (contactId !== row.contactId) changes.contactId = { from: row.contactId, to: contactId };
+    if (firmId !== row.firmId) changes.firmId = { from: row.firmId, to: firmId };
+    await recordAuditEvent(tx, grant, {
+      entityType: "assignment_party",
+      entityId: row.id,
+      action: "restore",
+      changes,
+    });
+    return { restored, changed: true, notices };
   });
 }

@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requireOrganizationAccess, type EmployeeGrant } from "@/core/access";
+import { removeParty, restoreParty } from "@/core/assignments";
+import { removeContact } from "@/core/contacts";
 import { PII_PLACEHOLDERS } from "@/shared/lib/pii-patterns";
 import { employeeWithGrant } from "../../../tests/ai";
 import { stubFailingRegExp } from "../../../tests/failing-regexp";
 import {
   createAssignment,
+  createAssignmentParty,
   createContact,
   createFirm,
   createOrder,
@@ -666,4 +669,57 @@ describe("evalueringssett: telefon i nye grupperinger som kjent verdi (E6.4)", (
       expect(result.count).toBe(1);
     },
   );
+});
+
+/*
+ * Papirkurven (docs/funksjoner/fase2a-papirkurv-testplan.md 7.7, A170): en part som er fjernet
+ * med «Fjern», ligger fortsatt i oppdraget, og navnet kan stå i notatene. Vasken skal derfor
+ * fortsatt vaske det bort, også etter at parten er hentet tilbake uten kobling. Alle verdier er
+ * oppdiktet.
+ */
+describe("loadKnownValues: fjernet og gjenopprettet part (papirkurv 7.7)", () => {
+  async function removedPartyCase() {
+    const grant = await setup();
+    const organizationId = grant.organizationId;
+    const { actor: admin } = await employeeWithGrant(organizationId, ["admin"], "Qxz Adminsen");
+    const contact = await createContact(organizationId, {
+      firstName: "Qxzkari",
+      lastName: "Fjernetsen",
+      email: "qxzkari@example.no",
+      phone: "48881234",
+    });
+    const assignment = await createAssignment(organizationId);
+    const party = await createAssignmentParty(organizationId, {
+      assignmentId: assignment.id,
+      role: "seller",
+      name: "Qxzkari Fjernetsen",
+      email: "qxzkari@example.no",
+      phone: "48881234",
+      contactId: contact.id,
+    });
+    await removeParty(admin, organizationId, party.id);
+    return { grant, admin, organizationId, contact, assignment, party };
+  }
+
+  const TEXT = "Selger Qxzkari Fjernetsen var til stede, tlf. 48881234, qxzkari@example.no.";
+  const VALUES = ["Qxzkari", "Fjernetsen", "48881234", "qxzkari@example.no"];
+
+  it("7.7 parten er fjernet: navnet, telefonen og e-posten vaskes fortsatt", async () => {
+    const { grant, assignment } = await removedPartyCase();
+
+    const result = redactText(TEXT, await loadKnownValues(grant, assignment.id));
+
+    for (const value of VALUES) expect(result.text, `${value} står igjen`).not.toContain(value);
+    expect(result.text).toContain("var til stede");
+  });
+
+  it("7.7 parten er hentet tilbake uten kobling (kontakten er fjernet): navnet vaskes fortsatt", async () => {
+    const { grant, admin, organizationId, contact, assignment, party } = await removedPartyCase();
+    await removeContact(admin, organizationId, contact.id);
+    await restoreParty(admin, organizationId, party.id, "trash");
+
+    const result = redactText(TEXT, await loadKnownValues(grant, assignment.id));
+
+    for (const value of VALUES) expect(result.text, `${value} står igjen`).not.toContain(value);
+  });
 });

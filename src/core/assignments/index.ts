@@ -124,7 +124,16 @@ export {
   type AssignmentTeamEntry,
 } from "./assignments";
 export { setTeamMember, type SetTeamMemberInput } from "./team";
-export { addParty, removeParty, updateParty } from "./parties";
+export {
+  PARTY_CONTACT_REMOVED_NOTICE,
+  PARTY_FIRM_REMOVED_NOTICE,
+  addParty,
+  removeParty,
+  restoreParty,
+  updateParty,
+  type RestoreHow,
+  type RestorePartyResult,
+} from "./parties";
 export { isOverdue } from "./overdue";
 export {
   DEFAULT_WORK_QUEUE_STATUS,
