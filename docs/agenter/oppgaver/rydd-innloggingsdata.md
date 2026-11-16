@@ -56,7 +56,7 @@ KI har ingen oppgave her. Dette er ren drift og rydding av tekniske innloggingsd
    - Hopper over uten feil når hemmelighet eller adresse mangler (samme mønster som «Utrulling til Azure»).
    - Samme GitHub-secret som utrullingen bruker.
 
-6. **ADR 0012** `docs/adr/0012-rydding-av-innloggingsdata.md` (0011 er tatt av `0011-rapportens-datamodell.md` på en branch som ikke er merget). Skal ha:
+6. **ADR 0014** `docs/adr/0014-rydding-av-innloggingsdata.md` (0011 er på main; 0012 og 0013 er tatt av `tilbud-i-stedet-for-ordre` og `badet-pc`). Skal ha:
    - Unntaket fra myk sletting (regel 3) gjelder bare `login_attempts`, `verifications` og `sessions`: tekniske innloggingsdata uten `organization_id`, ikke fagdata. `users`, `accounts` og alt med `organization_id` slettes aldri hardt.
    - Ærlig hjemmel: svar gitt på Ståles oppdrag, status «til gjennomgang», ført inn i planen 10.11.2026. Ført som A-beslutning med «hvordan det kan endres». Regel 3 i `CLAUDE.md` skrives ikke om.
    - Oppbevaringstidene og hvorfor de er trygge (sperrevindu 15 min, tilbakeblikk 2 t; økter varer 30 dager og fornyes ved bruk, så en økt slettes tidligst rundt 60 dager etter siste bruk).
@@ -68,8 +68,8 @@ KI har ingen oppgave her. Dette er ren drift og rydding av tekniske innloggingsd
 7. **Driftsdokumentasjon** i `docs/drift/testmiljo-azure.md` (eget avsnitt): hva jobben gjør, hvilken GitHub-secret Ståle legger inn (bare som GitHub-secret, aldri i chat, e-post eller repo), at utrullingen må kjøres på nytt etterpå, hvordan den kjøres manuelt (`workflow_dispatch`), hvordan man ser at den gikk (Actions-loggen og appens logg), hva man gjør ved feil, hvordan hemmeligheten byttes, og at produksjon trenger egen adresse og egen hemmelighet som Ståle setter opp ved utrulling.
 
 8. **Dokumenter som i dag sier det motsatte**, rettes i samme PR:
-   - `docs/05-domenemodell.md`: raden for `login_attempts` («Radene endres aldri», rundt linje 1982) får «slettes etter 24 timer»; avsnittet om felles kolonner får unntaket med henvisning til ADR 0012; ordlisten får `auth_cleanup` / «rydding av innloggingsdata» og `operations secret` / «driftshemmelighet».
-   - `docs/06-arkitektur.md` (myk sletting, 10 år, rundt linje 85): henvisning til ADR 0012.
+   - `docs/05-domenemodell.md`: raden for `login_attempts` («Radene endres aldri», rundt linje 1982) får «slettes etter 24 timer»; avsnittet om felles kolonner får unntaket med henvisning til ADR 0014; ordlisten får `auth_cleanup` / «rydding av innloggingsdata» og `operations secret` / «driftshemmelighet».
+   - `docs/06-arkitektur.md` (myk sletting, 10 år, rundt linje 85): henvisning til ADR 0014.
    - Oppbevaringstidene (24 t, 24 t, 30 dager etter utløp) føres der behandlingene av innloggingsdata beskrives, så de kan inn i behandlingsprotokollen.
    - Kommentarene i `src/core/auth/login-throttle.ts` og `src/db/schema/auth.ts` («ingenting slettes»).
 
@@ -126,7 +126,7 @@ Ingen TG-regler. Grensene (24 timer, 30 dager) er konstanter med testsaker.
 - [ ] Hemmelighetssjekken ligger i `src/core/access` og bruker hash + `timingSafeEqual` (test).
 - [ ] `AUTH_CLEANUP_SECRET` valideres (minst 32 tegn, ingen uløst referanse) og føres gjennom Bicep og utrullingen.
 - [ ] Planlagt arbeidsflyt med `workflow_dispatch`, `permissions: {}`, hopper over uten feil når hemmelighet eller adresse mangler.
-- [ ] ADR 0012 med innholdet over.
+- [ ] ADR 0014 med innholdet over.
 - [ ] Driftsdokumentasjon i `docs/drift/testmiljo-azure.md`; domenemodell, arkitektur og kodekommentarer rettet.
 - [ ] «Trenger Ståle når han er tilbake» i tilstandsfilen: legg inn GitHub-secret og kjør utrullingen på nytt; bekreft unntaket fra myk sletting før ekte data.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` grønne. Versjon økt.
@@ -140,16 +140,16 @@ Ingen TG-regler. Grensene (24 timer, 30 dager) er konstanter med testsaker.
 - **Kommando `pnpm auth:cleanup`:** kuttet etter forenkleren. Endepunktet når databasen fra innsiden av Azure, og `workflow_dispatch` dekker manuell kjøring. Én vei å teste og dokumentere. Lokal kjøring dekkes av testene. Arkitektens krav om egen fil uten import av `./auth` beholdes, så en kommando kan legges til senere som tynn innpakning.
 
 ## Beslutninger i autonom modus (føres i `docs/09-apne-sporsmal.md`, «Avgjort av agentene mens Ståle var borte»)
-- A309: Unntak fra myk sletting for `login_attempts`, `verifications` og `sessions`, bygd på svar 10.11.2026 nr. 15 og 18 (gitt på Ståles oppdrag, til gjennomgang). Kan endres ved å slå av arbeidsflyten eller fjerne hemmeligheten. **Dyrt å endre** (slettede rader kommer ikke tilbake).
-- A310: Kjøremåte: planlagt GitHub Actions som kaller et beskyttet internt endepunkt, i stedet for en Azure-tjeneste som koster. **Lett å endre.**
-- A311: Grensen for koder og økter måles fra `expires_at`, for tellere fra `created_at`. **Lett å endre.**
-- A312: Ingen indeks; endepunktet svarer 404 på alt som ikke er godkjent. **Lett å endre.**
+- A400: Unntak fra myk sletting for `login_attempts`, `verifications` og `sessions`, bygd på svar 10.11.2026 nr. 15 og 18 (gitt på Ståles oppdrag, til gjennomgang). Kan endres ved å slå av arbeidsflyten eller fjerne hemmeligheten. **Dyrt å endre** (slettede rader kommer ikke tilbake).
+- A401: Kjøremåte: planlagt GitHub Actions som kaller et beskyttet internt endepunkt, i stedet for en Azure-tjeneste som koster. **Lett å endre.**
+- A402: Grensen for koder og økter måles fra `expires_at`, for tellere fra `created_at`. **Lett å endre.**
+- A403: Ingen indeks; endepunktet svarer 404 på alt som ikke er godkjent. **Lett å endre.**
 
 ## Spørsmål til Ståle (stopper ikke bygging)
 - Føres i `docs/09-apne-sporsmal.md` (personvern): trengs innloggingshistorikk for å undersøke sikkerhetshendelser? Etter rydding finnes bare `users.last_login_at` og driftsloggen. Jobben bygges som planlagt.
 
 ## Roller
-- `arkitekt`: ADR 0012.
+- `arkitekt`: ADR 0014.
 - `utvikler`: bit A – `auth-cleanup.ts`, `verifyOperationsSecret`, ruten, `env.ts`, `.env.example`. Bit B – arbeidsflyt, Bicep, utrulling, driftsdokumentasjon, retting av dokumenter og kommentarer.
 - `testskriver` i parallell med utvikleren, mot grensesnittet over.
 - `sikkerhet-personvern`: gjennomgang av endepunkt, arbeidsflyt og logging før PR.
