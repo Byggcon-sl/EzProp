@@ -269,7 +269,9 @@ test.describe("tilbud (pc og ipad)", () => {
     const data = newOrderData(uniqueSuffix());
     await logInAsInspector(page);
     const id = await createOrderViaUi(page, data);
-    await page.goto("/tilbud");
+    // Søk på adressen: «Åpne» er sortert etter «Gyldig til», så et nytt tilbud kan stå utenfor
+    // første side når testdatabasen har mange åpne tilbud.
+    await page.goto(`/tilbud?q=${encodeURIComponent(data.address)}`);
     await expect(page.getByRole("main")).toContainText(data.address);
     expect(id).toBeTruthy();
   });
