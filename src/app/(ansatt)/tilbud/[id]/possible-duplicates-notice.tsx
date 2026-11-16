@@ -1,5 +1,6 @@
 import { assignmentStatusLabel } from "@/core/assignments/codes";
 import { duplicateReasonLabel, orderStatusLabel, type PossibleDuplicateOrder } from "@/core/orders";
+import { offerDisplayStatusLabel } from "@/core/orders/codes";
 import {
   POSSIBLE_DUPLICATES_MORE_TEXT,
   PossibleDuplicateLink,
@@ -9,16 +10,22 @@ import { formatOsloDate } from "../received-at";
 
 /** Teksten under overskriften «Mulig dublett». */
 export const POSSIBLE_DUPLICATES_TEXT =
-  "Samme adresse eller matrikkel som en annen ordre. Sjekk at boligen ikke blir bestilt eller tatt to ganger.";
+  "Samme adresse eller matrikkel som et annet oppdrag eller et tilbud. Sjekk at boligen ikke blir tatt to ganger.";
 
 export { POSSIBLE_DUPLICATES_MORE_TEXT };
 
 /**
- * Én linje for et treff: «Storgata 1A, 8006 Bodø – mottatt 12.11.2026 – Gjort om til oppdrag
- * A-2026-0042 – samme adresse». Statusordet er det samme som i `OrderStatusBadge`. Et oppdrag
+ * Én linje for et treff: «Tilbud – Storgata 1A, 8006 Bodø – mottatt 12.11.2026 – Gjort om til
+ * oppdrag A-2026-0042 – samme adresse». Statusordet er det samme som i statusmerket («Utløpt» når
+ * kjernen gir visningsstatusen). Et oppdrag
  * laget direkte får «Oppdrag 2026-00042 – Bestilt» med statusordet fra køen.
  */
 export function possibleDuplicateLine(item: PossibleDuplicateOrder): string {
+  // Visningsstatusen («Utløpt») når kjernen gir den, ellers den lagrede statusen.
+  const display = (item as { displayStatus?: string | null }).displayStatus;
+  const offerStatus = display
+    ? offerDisplayStatusLabel(display)
+    : orderStatusLabel(item.status ?? "");
   const status =
     item.kind === "assignment"
       ? [
@@ -28,18 +35,25 @@ export function possibleDuplicateLine(item: PossibleDuplicateOrder): string {
           .filter(Boolean)
           .join(" – ")
       : item.status === "converted" && item.assignmentNumber
-        ? `${orderStatusLabel(item.status)} ${item.assignmentNumber}`
-        : orderStatusLabel(item.status ?? "");
+        ? `${offerStatus} ${item.assignmentNumber}`
+        : offerStatus;
   const reasons = item.reasons.map((reason) => duplicateReasonLabel(reason)).join(" og ");
-  return [item.addressText, `mottatt ${formatOsloDate(item.receivedAt)}`, status, reasons]
+  return [
+    item.kind === "assignment" ? "" : "Tilbud",
+    item.addressText,
+    `mottatt ${formatOsloDate(item.receivedAt)}`,
+    status,
+    reasons,
+  ]
     .filter(Boolean)
     .join(" – ");
 }
 
 /**
- * Varselet «Mulig dublett» på ordresiden (T3). Bare visning: treffene kommer fra
+ * Varselet «Mulig dublett» på tilbudssiden (T3). Bare visning: treffene kommer fra
  * `findPossibleDuplicateOrders` i kjernen. Ingen treff gir ingenting. Varselet stopper ingenting;
- * det er en advarsel med lenker til de andre ordrene, og til oppdrag laget uten ordre.
+ * det er en advarsel med lenker til de andre tilbudene, og til oppdrag laget uten tilbud. Det står
+ * under handlingsblokken (A369).
  */
 export function PossibleDuplicatesNotice({
   items,
@@ -58,7 +72,7 @@ export function PossibleDuplicatesNotice({
       {items.map((item) => (
         <PossibleDuplicateLink
           key={`${item.kind}-${item.id}`}
-          href={item.kind === "assignment" ? `/oppdrag/${item.id}` : `/ordre/${item.id}`}
+          href={item.kind === "assignment" ? `/oppdrag/${item.id}` : `/tilbud/${item.id}`}
         >
           {possibleDuplicateLine(item)}
         </PossibleDuplicateLink>

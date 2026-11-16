@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ORDER_FORM_TEXT_FIELDS, readOrderValues } from "./order-values";
+import { ORDER_FORM_TEXT_FIELDS, readOfferValues, readOrderValues } from "./order-values";
 
 describe("readOrderValues", () => {
   it("leser alle tekstfeltene, og manglende felt blir tom tekst", () => {
@@ -30,5 +30,21 @@ describe("readOrderValues", () => {
     expect(values).not.toHaveProperty("organizationId");
     expect(values).not.toHaveProperty("status");
     expect(values).not.toHaveProperty("rowVersion");
+  });
+});
+
+describe("readOfferValues", () => {
+  it("leser bestillingsfeltene og «Gyldig til»", () => {
+    const formData = new FormData();
+    formData.set("addressText", "Testveien 12, 8000 Bodø");
+    formData.set("validUntil", "2026-12-03");
+    const values = readOfferValues(formData);
+    expect(values.addressText).toBe("Testveien 12, 8000 Bodø");
+    expect(values.validUntil).toBe("2026-12-03");
+    expect(Object.keys(values).sort()).toEqual([...ORDER_FORM_TEXT_FIELDS, "validUntil"].sort());
+  });
+
+  it("manglende «Gyldig til» blir tom tekst", () => {
+    expect(readOfferValues(new FormData()).validUntil).toBe("");
   });
 });

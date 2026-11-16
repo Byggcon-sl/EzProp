@@ -3,12 +3,25 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/form";
 
 /**
- * Søkefelt for listene (/kontakter og /firma). Vanlig GET-skjema med parameteren `q`, så søket
- * virker uten klientkode og kan deles som lenke. `type="search"` gir søketasten på iPaden.
+ * Søkefelt for listene (/kontakter, /firma og /tilbud). Vanlig GET-skjema med parameteren `q`, så
+ * søket virker uten klientkode og kan deles som lenke. `type="search"` gir søketasten på iPaden.
+ * `hidden` blir skjulte felt i skjemaet, slik at for eksempel filteret i tilbudslisten følger med
+ * når man søker.
  */
-export function SearchBox({ label, query }: { label: string; query: string }) {
+export function SearchBox({
+  label,
+  query,
+  hidden = {},
+}: {
+  label: string;
+  query: string;
+  hidden?: Record<string, string>;
+}) {
   return (
     <form role="search" method="get" className="mt-6 flex flex-wrap items-end gap-3">
+      {Object.entries(hidden).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
       <div className="min-w-0 flex-1 basis-56 space-y-1.5">
         <label htmlFor="q" className="block text-sm font-medium text-slate-700">
           {label}

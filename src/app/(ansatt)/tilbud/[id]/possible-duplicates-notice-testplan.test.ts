@@ -13,14 +13,14 @@ import { PossibleDuplicatesNotice } from "./possible-duplicates-notice";
  * Varselet «Mulig dublett» som komponent (T3). Testplan:
  * docs/funksjoner/fase2a-varsel-dublett-testplan.md avsnitt 5, skrevet av testskriveren mot kortet
  * (tekstene står her, ikke importert fra komponenten, så en endret tekst gjør testen rød).
- * Oppdiktede adresser og ordre.
+ * Oppdiktede adresser og tilbud.
  *
  * Støtter hovedmål: de ansatte (tydelig varsel med lenke, lest opp av skjermleser, ikke bare farge)
  * og færre reklamasjoner (samme bolig blir ikke bestilt eller tatt to ganger).
  */
 
 const TEXT =
-  "Samme adresse eller matrikkel som en annen ordre. Sjekk at boligen ikke blir bestilt eller tatt to ganger.";
+  "Samme adresse eller matrikkel som et annet oppdrag eller et tilbud. Sjekk at boligen ikke blir tatt to ganger.";
 const MORE = "Viser de 10 nyeste.";
 const ID_1 = "0190a000-0000-7000-8000-000000000101";
 const ID_2 = "0190a000-0000-7000-8000-000000000102";
@@ -36,7 +36,7 @@ function item(overrides: Partial<PossibleDuplicateOrder> = {}): PossibleDuplicat
     assignmentStatus: null,
     reasons: ["address"],
     ...overrides,
-  };
+  } as PossibleDuplicateOrder;
 }
 
 function render(items: PossibleDuplicateOrder[], hasMore = false): string {
@@ -131,9 +131,9 @@ describe("5 varselet «Mulig dublett»", () => {
     expect(line).not.toMatch(/\d{4}-\d{5}/);
   });
 
-  it("5.4 lenken går til /ordre/<id> for den andre ordren, én lenke per treff", () => {
+  it("5.4 lenken går til /tilbud/<id> for den andre ordren, én lenke per treff", () => {
     const html = render([item(), item({ id: ID_2, addressText: "storgata 1 a" })]);
-    expect(links(html).map(([href]) => href)).toEqual([`/ordre/${ID_1}`, `/ordre/${ID_2}`]);
+    expect(links(html).map(([href]) => href)).toEqual([`/tilbud/${ID_1}`, `/tilbud/${ID_2}`]);
   });
 
   it("5.5 hasMore viser «Viser de 10 nyeste.», ellers ikke", () => {
