@@ -27,7 +27,7 @@ const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
 const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
 
-const PREFILL_LINE = "Fylt ut fra ordren. Kontroller før du lagrer.";
+const PREFILL_LINE = "Fylt ut fra bestillingen. Kontroller før du lagrer.";
 const ASSOCIATION = "Borettslaget Test";
 const AGENT = "Forvalter Test";
 const NOTES = "Sett trapperom og kjeller";

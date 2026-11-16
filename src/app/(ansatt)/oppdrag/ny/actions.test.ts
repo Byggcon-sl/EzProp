@@ -182,7 +182,7 @@ describe("findDraftDuplicatesAction", () => {
     receivedAt: "2026-11-14T09:12",
   };
 
-  it("gir bare type, id, nummer, status, adresse og grunn", async () => {
+  it("gir bare type, id, nummer, status, adresse, grunn og visningsstatus", async () => {
     mocks.findPossibleDuplicatesFor.mockResolvedValue({
       items: [
         {
@@ -193,6 +193,7 @@ describe("findDraftDuplicatesAction", () => {
           receivedAt: new Date(),
           addressText: "Testveien 12, 8000 Bodø",
           reasons: ["address"],
+          displayStatus: null,
         },
       ],
       hasMore: false,
@@ -206,6 +207,7 @@ describe("findDraftDuplicatesAction", () => {
         status: "ordered",
         addressText: "Testveien 12, 8000 Bodø",
         reasons: ["address"],
+        displayStatus: null,
       },
     ]);
     const [, organizationId, sent] = mocks.findPossibleDuplicatesFor.mock.calls[0]!;

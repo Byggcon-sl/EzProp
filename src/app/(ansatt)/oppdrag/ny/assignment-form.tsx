@@ -2,22 +2,26 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { buttonVariants } from "@/shared/ui/button";
+import { useFormStatus } from "react-dom";
+import { Button, buttonVariants } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { ChoiceGroup, Field, Input, Radio } from "@/shared/ui/form";
-import { FormErrors, SubmitButton } from "../../form-parts";
+import { FormErrors } from "../../form-parts";
 import { initialFormState, textValue, type FormState } from "../../form-state";
+import { ORDER_OFFLINE_MESSAGE } from "../../order-values";
 import {
   OrderedByFields,
   OrderMoreFields,
   OrderPropertyFields,
   type BookingFieldDefaults,
-} from "../../ordre/order-fields";
+} from "../../tilbud/offer-fields";
 import { BookingDuplicatesNotice } from "../../possible-duplicates-notice";
 import type { DraftDuplicatesResult } from "./actions";
 import {
   ASSIGNMENT_OFFLINE_MESSAGE,
   readAssignmentValues,
+  SAVE_AS_OFFER_INTENT,
+  SAVE_INTENT_FIELD,
   type DraftDuplicateFields,
 } from "./assignment-values";
 import { InspectorChoice } from "./inspector-choice";
@@ -52,14 +56,55 @@ function isOffline(): boolean {
   return typeof navigator !== "undefined" && !navigator.onLine;
 }
 
-/** Et mislykket forsøk uten nett. Alt som er skrevet står igjen; ingenting lagres lokalt. */
-function offlineState(previous: FormState, formData: FormData): FormState {
+/** Ble skjemaet sendt med «Lagre som tilbud i stedet»? */
+function isOfferIntent(formData: FormData | null | undefined): boolean {
+  return formData?.get(SAVE_INTENT_FIELD) === SAVE_AS_OFFER_INTENT;
+}
+
+/**
+ * Et mislykket forsøk uten nett. Alt som er skrevet står igjen; ingenting lagres lokalt. «Lagre
+ * som tilbud i stedet» får samme tekst som skjemaene for tilbud (A360).
+ */
+export function offlineState(previous: FormState, formData: FormData): FormState {
   return {
     fieldErrors: {},
-    message: ASSIGNMENT_OFFLINE_MESSAGE,
+    message: isOfferIntent(formData) ? ORDER_OFFLINE_MESSAGE : ASSIGNMENT_OFFLINE_MESSAGE,
     values: readAssignmentValues(formData),
     attempt: previous.attempt + 1,
   };
+}
+
+/**
+ * En lagreknapp i skjemaet. Begge knappene er låst mens skjemaet sendes, men bare den som ble
+ * trykket viser «Lagrer …» (`useFormStatus` gir skjemadataene med knappens `intent`).
+ */
+function SaveButton({
+  intent,
+  variant,
+  size,
+  disabled,
+  children,
+}: {
+  intent: string;
+  variant: "primary" | "secondary";
+  size: "md" | "lg";
+  disabled: boolean;
+  children: ReactNode;
+}) {
+  const { pending, data } = useFormStatus();
+  const pressed = pending && (data?.get(SAVE_INTENT_FIELD) ?? null) === intent;
+  return (
+    <Button
+      type="submit"
+      name={SAVE_INTENT_FIELD}
+      value={intent}
+      variant={variant}
+      size={size}
+      disabled={disabled || pending}
+    >
+      {pressed ? "Lagrer …" : children}
+    </Button>
+  );
 }
 
 function SectionCard({ id, title, children }: { id: string; title: string; children: ReactNode }) {
@@ -79,17 +124,21 @@ function SectionCard({ id, title, children }: { id: string; title: string; child
  * Skjemaet «Nytt oppdrag» (docs/funksjoner/fase2a-nytt-oppdrag-design.md avsnitt 4). Fire kort i
  * fast rekkefølge: eiendom, bestiller, befaring og ansvar, og «Mer om bestillingen». Kontor og
  * ansvarlig er radioknapper med forhåndsvalg. «Lagre» låses mens lagringen pågår, og
- * engangsnøkkelen `creationKey` gjør at et nytt trykk gir det samme oppdraget. Oppretting krever
- * nett: uten nett sendes ingenting, og ingenting lagres i nettleseren.
+ * engangsnøkkelen `creationKey` gjør at et nytt trykk gir det samme oppdraget. «Lagre som tilbud i
+ * stedet» sender det samme skjemaet til `offerAction` (F2 a). Oppretting krever nett: uten nett
+ * sendes ingenting, og ingenting lagres i nettleseren.
  */
 export function AssignmentForm({
   action,
+  offerAction,
   duplicatesAction,
   options,
   creationKey,
   receivedAtDefault,
 }: {
   action: Action;
+  /** «Lagre som tilbud i stedet»: lager et tilbud av bestillingsfeltene. */
+  offerAction: Action;
   duplicatesAction: DuplicatesAction;
   options: AssignmentFormOptions;
   /** Uuid laget på serveren én gang per skjema. */
@@ -108,8 +157,9 @@ export function AssignmentForm({
   const [state, formAction] = useActionState(
     async (previous: FormState, formData: FormData): Promise<FormState> => {
       if (isOffline()) return offlineState(previous, formData);
+      const save = isOfferIntent(formData) ? offerAction : action;
       try {
-        return await action(previous, formData);
+        return await save(previous, formData);
       } catch (error) {
         // Nettet falt under sending (fetch gir TypeError). Videresending etter lagring og andre
         // feil kastes videre til Next.
@@ -239,10 +289,16 @@ export function AssignmentForm({
         hasMore={duplicates.hasMore}
         headingId={duplicatesHeadingId}
         className=""
+        offerAction
       />
       <FormErrors state={state} />
       <div className="flex flex-wrap items-center gap-3">
-        <SubmitButton disabled={cannotSave}>Lagre</SubmitButton>
+        <SaveButton intent="assignment" variant="primary" size="lg" disabled={cannotSave}>
+          Lagre
+        </SaveButton>
+        <SaveButton intent={SAVE_AS_OFFER_INTENT} variant="secondary" size="md" disabled={false}>
+          Lagre som tilbud i stedet
+        </SaveButton>
         <Link href="/arbeidskoe" className={buttonVariants({ variant: "ghost", size: "md" })}>
           Avbryt
         </Link>
