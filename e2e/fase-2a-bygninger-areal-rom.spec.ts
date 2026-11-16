@@ -290,6 +290,7 @@ test.describe("bygninger, areal og rom (pc og ipad)", () => {
   test("7.4 fjerning: etasje med rom fjernes med ett trykk (A414), og er borte etter ny lasting", async ({
     page,
   }) => {
+    // Skrevet om fra «Fjern rommene først.» (A98) etter docs/funksjoner/fase2a-papirkurv-testplan.md 10.2.
     await logIn(page);
     await newAssignmentWithProperty(page);
     await openBuildings(page);
@@ -306,6 +307,11 @@ test.describe("bygninger, areal og rom (pc og ipad)", () => {
     await clickAndWaitForSave(page, removeButtons.first());
     await expect(block(building, FIRST_FLOOR)).toHaveCount(0);
     await expect(page.getByText("1. etasje og 1 rom er fjernet.")).toBeVisible();
+    await expect(
+      page.getByRole("status").filter({ hasText: "1. etasje og 1 rom er fjernet." }),
+    ).toBeVisible();
+    await expect(block(building, FIRST_FLOOR)).toHaveCount(0);
+    await expect(page.getByText("Fjern rommene først.")).toHaveCount(0);
 
     await page.reload();
     await expect(block(block(page, BUILDING), FIRST_FLOOR)).toHaveCount(0);

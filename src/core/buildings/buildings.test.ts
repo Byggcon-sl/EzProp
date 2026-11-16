@@ -1387,6 +1387,17 @@ describe("4.5 oppførsel", () => {
     expect(timeOf((await rowById("floors", floor.id)).deleted_at)).toBe(floorAt);
   });
 
+  it("4.5.3 BuildingNotEmptyError og FloorNotEmptyError er fjernet fra kjernen", async () => {
+    const core = (await import("@/core/buildings")) as Record<string, unknown>;
+    expect(core).not.toHaveProperty("BuildingNotEmptyError");
+    expect(core).not.toHaveProperty("FloorNotEmptyError");
+    const source = readFileSync(
+      join(fileURLToPath(new URL(".", import.meta.url)), "service.ts"),
+      "utf8",
+    );
+    expect(source).not.toContain("NotEmptyError");
+  });
+
   it("4.5.3 med bare myk-slettede barn går fjerningen gjennom, og de gamle radene røres ikke", async () => {
     const { org, admin, assignment } = await orgWithAdmin();
     const building = await createBuilding(org.id, { assignmentId: assignment.id });
@@ -1889,6 +1900,9 @@ describe("4.6 hendelser og revisjonslogg", () => {
   });
 
   it("4.6.4 ingen hendelse ved avvist tilgang, valideringsfeil eller manglende eiendom", async () => {
+    // «Fjern» på etasje med rom og bygning med etasjer er ikke lenger en feil (A414,
+    // docs/funksjoner/fase2a-papirkurv-testplan.md), så de to kallene er tatt ut her og
+    // testet i 4.5.3 og src/core/buildings/trash.test.ts.
     const { org, admin, assignment } = await orgWithAdmin();
     await setInspectorsEditAll(org.id, false);
     const { actor: inspector } = await person(org.id, ["inspector"]);

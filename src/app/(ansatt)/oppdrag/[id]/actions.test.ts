@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
     throw new Error(`REDIRECT ${url}`);
   }),
   logError: vi.fn(),
+  revalidatePath: vi.fn(),
   core: {
     getAssignment: vi.fn(),
     setTeamMember: vi.fn(),
@@ -57,7 +58,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: vi.fn() }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/shared/lib/logger", () => ({
   logger: { error: mocks.logError, warn: vi.fn(), info: vi.fn() },
 }));

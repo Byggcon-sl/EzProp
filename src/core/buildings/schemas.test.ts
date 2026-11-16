@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ROOM_TYPES } from "./codes";
+import * as errors from "./errors";
 import { PropertyMissingError } from "./errors";
 import {
   addRoomsInputSchema,
@@ -430,6 +431,13 @@ describe("hele skjemaene", () => {
       usedMessages.add(message);
     },
   );
+
+  // Papirkurven (A414, docs/funksjoner/fase2a-papirkurv-testplan.md): «Fjern» tar med innholdet,
+  // så feilene «Fjern etasjene først.» og «Fjern rommene først.» er fjernet.
+  it("BuildingNotEmptyError og FloorNotEmptyError finnes ikke lenger", () => {
+    expect(errors).not.toHaveProperty("BuildingNotEmptyError");
+    expect(errors).not.toHaveProperty("FloorNotEmptyError");
+  });
 });
 
 describe("2.14 alle meldingene i kortet er dekket", () => {
