@@ -1,46 +1,67 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { AccessDeniedError } from "@/core/access";
 import { getContact } from "@/core/contacts";
 import { listOffices } from "@/core/organization";
-import { findPossibleDuplicateOrders, getOrder, listOrderHistory } from "@/core/orders";
+import {
+  OFFER_EXPIRING_SOON_DAYS,
+  OFFER_REJECTION_REASON_KEYS,
+  OFFER_VALID_UNTIL_MAX_DAYS,
+  findPossibleDuplicateOrders,
+  getOrder,
+  listOrderHistory,
+  offerDaysLeft,
+  offerDisplayStatus,
+  offerRejectionReasonLabel,
+} from "@/core/orders";
+import { addDays, todayInOslo } from "@/shared/lib/dates";
 import { logger } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
 import { Card } from "@/shared/ui/card";
-import { Notice } from "@/shared/ui/notice";
+import { Detail, EMPTY } from "../../detail";
 import { getEmployeeContext } from "../../employee-context";
 import { contactName } from "../../kontakter/contact-name";
 import { NoAccess } from "../../no-access";
-import { convertOrderAction, rejectOrderAction, updateOrderAction } from "../actions";
+import {
+  convertOfferAction,
+  extendOfferAction,
+  rejectOfferAction,
+  updateOfferAction,
+} from "../actions";
 import { officeChoice } from "../office-choice";
-import { OrderStatusBadge } from "../order-status-badge";
-import { formatOsloDateTime, osloDateTimeLocal } from "../received-at";
-import { ConvertOrderForm, RejectOrderForm } from "./order-actions";
-import { OrderEditSection } from "./order-edit-form";
-import { OrderHistory } from "./order-history";
+import { OfferStatusBadge, canExtendOffer, offerExpiryText } from "../offer-status-badge";
+import { formatIsoDate, formatOsloDateTime, osloDateTimeLocal } from "../received-at";
+import {
+  CreatedNotice,
+  OfferActions,
+  RejectedCard,
+  type ConvertOffice,
+  type ReasonOption,
+} from "./offer-actions";
+import { OfferEditSection } from "./offer-edit-form";
+import { OfferHistory } from "./offer-history";
 import { PossibleDuplicatesNotice } from "./possible-duplicates-notice";
 
-export const metadata: Metadata = { title: "Ordre" };
+export const metadata: Metadata = { title: "Tilbud" };
 
-function Detail({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="border-t border-slate-200 py-3 first:border-t-0 first:pt-0 last:pb-0">
-      <dt className="text-sm text-slate-600">{label}</dt>
-      <dd className="mt-0.5 break-words text-slate-900">{children}</dd>
-    </div>
-  );
+/** «Gnr. 12, bnr. 34, snr. 5», eller `null` når ingen av dem er fylt ut. */
+function cadastreText(order: { gnr: string | null; bnr: string | null; snr: string | null }) {
+  const parts = [
+    order.gnr && `Gnr. ${order.gnr}`,
+    order.bnr && `bnr. ${order.bnr}`,
+    order.snr && `snr. ${order.snr}`,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : null;
 }
 
-const EMPTY = <span className="text-slate-500">Ikke oppgitt</span>;
-
 /**
- * Ordren med «Endre ordren» (alle statuser, T1) og «Gjør om til oppdrag» og «Avvis» når den er
- * mottatt, når den ansatte kan endre. Under ordren står «Endringer». Ugyldig, ukjent og fremmed id
- * gir samme svar som manglende tilgang. `?endret=1` viser kvitteringen etter «Lagre». Varselet
- * «Mulig dublett» står under kvitteringen når kjernen finner andre ordre på samme bolig.
+ * Tilbudssiden (docs/funksjoner/fase2a-tilbud-design.md avsnitt 5). Rekkefølgen er låst: tittel og
+ * merke, «Gyldig til», kvittering, handlingsblokken med «Gjør om til oppdrag» øverst (ett trykk
+ * uten rulling på iPad), «Avslå tilbudet», dublettvarselet (A369), detaljkortet, «Endre tilbudet»
+ * og «Endringer». Ugyldig, ukjent, slettet og fremmed id gir samme svar som manglende tilgang.
+ * `?ny=1` viser «Tilbudet er laget.» én gang (A373); andre kvitteringer kommer fra handlingene.
  */
-export default async function OrderPage({
+export default async function OfferPage({
   params,
   searchParams,
 }: {
@@ -48,7 +69,7 @@ export default async function OrderPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params;
-  const { endret } = await searchParams;
+  const { ny } = await searchParams;
   const context = await getEmployeeContext();
   if (!context || !isUuid(id)) return <NoAccess />;
 
@@ -61,6 +82,12 @@ export default async function OrderPage({
     if (error instanceof AccessDeniedError) return <NoAccess />;
     throw error;
   }
+
+  const today = todayInOslo();
+  const displayStatus = offerDisplayStatus(order.status, order.validUntil, today);
+  const daysLeft = displayStatus === "open" ? offerDaysLeft(order.validUntil, today) : null;
+  const expiryText = offerExpiryText(daysLeft, OFFER_EXPIRING_SOON_DAYS);
+  const handleable = order.status === "received";
 
   // Velgeren viser navnet fra kontaktregisteret, ikke friteksten om bestilleren.
   let linkedContactName: string | null = null;
@@ -77,9 +104,8 @@ export default async function OrderPage({
     }
   }
 
-  // Varselet «Mulig dublett» (T3) skal aldri gjøre ordresiden utilgjengelig: feiler oppslaget,
-  // vises siden uten varsel. Loggen får bare ordre-id, bruker-id og feilnavnet, aldri adresse,
-  // matrikkel eller feilteksten.
+  // Varselet «Mulig dublett» (T3) skal aldri gjøre siden utilgjengelig: feiler oppslaget, vises
+  // siden uten varsel. Loggen får bare id-er og feilnavnet, aldri adresse, matrikkel eller tekst.
   let duplicates: Awaited<ReturnType<typeof findPossibleDuplicateOrders>> = {
     items: [],
     hasMore: false,
@@ -88,92 +114,63 @@ export default async function OrderPage({
     duplicates = await findPossibleDuplicateOrders(context.actor, context.organizationId, order.id);
   } catch (error) {
     logger.error("Kunne ikke sjekke mulig dublett", {
-      route: "/ordre/[id]",
+      route: "/tilbud/[id]",
       orderId: order.id,
       userId: context.actor.id,
       errorName: error instanceof Error ? error.name : "ukjent feil",
     });
   }
 
-  const canHandle = order.status === "received" && context.canEditOrders;
-  const choice = canHandle
-    ? officeChoice(await listOffices(context.actor, context.organizationId), context.officeId)
-    : null;
-
-  // «Gjør om» og «Avvis» skjules mens «Endre ordren» er åpent (bare én «Lagre» på siden).
-  const handling = choice && (
-    <div className="mt-6 space-y-6">
-      <ConvertOrderForm
+  let actions = null;
+  if (handleable && context.canEditOrders) {
+    const choice = officeChoice(
+      await listOffices(context.actor, context.organizationId),
+      context.officeId,
+    );
+    const offices = choice.offices.map((office) => ({ id: office.id, name: office.name }));
+    const own = offices.find((office) => office.id === choice.defaultOfficeId);
+    const office: ConvertOffice = choice.emptyMessage
+      ? { kind: "none", message: choice.emptyMessage }
+      : own
+        ? {
+            kind: "preselected",
+            officeId: own.id,
+            officeName: own.name,
+            others: offices.length > 1 ? offices : [],
+          }
+        : { kind: "choose", offices };
+    const reasons: ReasonOption[] = OFFER_REJECTION_REASON_KEYS.map((key) => ({
+      key,
+      label: offerRejectionReasonLabel(key),
+    }));
+    actions = (
+      <OfferActions
         orderId={order.id}
-        offices={choice.offices.map((office) => ({ id: office.id, name: office.name }))}
-        defaultOfficeId={choice.defaultOfficeId}
-        emptyMessage={choice.emptyMessage}
-        action={convertOrderAction}
+        rowVersion={order.rowVersion}
+        office={office}
+        canExtend={canExtendOffer(displayStatus, daysLeft, OFFER_EXPIRING_SOON_DAYS)}
+        hasDuplicates={duplicates.items.length > 0}
+        reasons={reasons}
+        convertAction={convertOfferAction}
+        extendAction={extendOfferAction}
+        rejectAction={rejectOfferAction}
       />
-      <RejectOrderForm orderId={order.id} action={rejectOrderAction} />
-    </div>
-  );
+    );
+  }
 
-  return (
-    <main className="max-w-2xl">
-      <Link
-        href="/ordre"
-        className="inline-flex min-h-11 items-center text-sm font-medium text-brand-700"
-      >
-        <span aria-hidden="true">‹&nbsp;</span>
-        Tilbake til ordre
-      </Link>
-      <div className="mt-2 mb-6 flex flex-wrap items-center gap-3">
-        <h1 className="min-w-0 text-2xl font-semibold text-slate-900 [overflow-wrap:anywhere]">
-          {order.addressText}
-        </h1>
-        <OrderStatusBadge status={order.status} />
-      </div>
+  const assignmentLink =
+    order.assignmentId && order.assignmentNumber && !order.assignmentCancelled
+      ? { id: order.assignmentId, number: order.assignmentNumber }
+      : null;
 
-      {endret === "1" && (
-        <div className="mb-6">
-          <Notice message="Endringene er lagret." />
-        </div>
-      )}
-
+  const details = (
+    <>
       <PossibleDuplicatesNotice items={duplicates.items} hasMore={duplicates.hasMore} />
-
-      {order.status === "converted" && order.assignmentNumber && (
-        <Card className="mb-6">
-          {order.assignmentCancelled ? (
-            // Kansellert oppdrag har ingen side lenger, så ingen lenke.
-            <p className="text-lg font-medium text-slate-900">
-              Gjort om til oppdrag <span className="tabular-nums">{order.assignmentNumber}</span>{" "}
-              (kansellert)
-            </p>
-          ) : order.assignmentId ? (
-            <Link
-              href={`/oppdrag/${order.assignmentId}`}
-              className="inline-flex min-h-11 items-center text-lg font-medium text-brand-700 underline"
-            >
-              Gjort om til oppdrag&nbsp;
-              <span className="tabular-nums">{order.assignmentNumber}</span>
-            </Link>
-          ) : (
-            <p className="text-lg font-medium text-slate-900">
-              Gjort om til oppdrag <span className="tabular-nums">{order.assignmentNumber}</span>
-            </p>
-          )}
-        </Card>
-      )}
-      {order.status === "rejected" && (
-        <Card className="mb-6">
-          <h2 className="text-sm text-slate-600">Grunn for avvisning</h2>
-          <p className="mt-0.5 break-words whitespace-pre-line text-slate-900">
-            {order.rejectedReason}
-          </p>
-        </Card>
-      )}
-
       <Card>
+        <h2 className="sr-only">Tilbudet</h2>
         <dl>
           <Detail label="Adresse">{order.addressText}</Detail>
-          <Detail label="Mottatt">{formatOsloDateTime(order.receivedAt)}</Detail>
+          <Detail label="Matrikkel">{cadastreText(order) ?? EMPTY}</Detail>
           <Detail label="Hvem bestilte">
             {order.orderedByText || EMPTY}
             {order.orderedByContactId && (
@@ -185,30 +182,96 @@ export default async function OrderPage({
               </Link>
             )}
           </Detail>
-          <Detail label="Ekstern referanse">{order.externalRef || EMPTY}</Detail>
-          <Detail label="Gårdsnummer">{order.gnr || EMPTY}</Detail>
-          <Detail label="Bruksnummer">{order.bnr || EMPTY}</Detail>
-          <Detail label="Seksjonsnummer">{order.snr || EMPTY}</Detail>
+          <Detail label="Meglerens ordrenummer">{order.externalRef || EMPTY}</Detail>
           <Detail label="Borettslag eller sameie">{order.housingAssociationName || EMPTY}</Detail>
+          <Detail label="Mottatt">{formatOsloDateTime(order.receivedAt)}</Detail>
+          <Detail label="Gyldig til">{formatIsoDate(order.validUntil)}</Detail>
           <Detail label="Egenerklæring mottatt">
             {order.sellerDeclarationReceived ? "Ja" : "Nei"}
           </Detail>
         </dl>
       </Card>
+    </>
+  );
+
+  return (
+    <main className="max-w-2xl">
+      <Link
+        href="/tilbud"
+        className="inline-flex min-h-11 items-center text-sm font-medium text-brand-700"
+      >
+        <span aria-hidden="true">‹&nbsp;</span>
+        Tilbud
+      </Link>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <h1 className="min-w-0 text-2xl font-semibold text-slate-900 [overflow-wrap:anywhere]">
+          {order.addressText}
+        </h1>
+        <OfferStatusBadge
+          displayStatus={displayStatus}
+          validUntil={order.validUntil}
+          expiryText={expiryText}
+        />
+      </div>
+      {displayStatus === "open" && (
+        <p className="mt-1 text-sm text-slate-600">Gyldig til {formatIsoDate(order.validUntil)}</p>
+      )}
+      <div className="mb-6" />
+
+      <CreatedNotice
+        show={ny === "1"}
+        message={`Tilbudet er laget. Gyldig til ${formatIsoDate(order.validUntil)}.`}
+      />
+
+      {order.status === "converted" && order.assignmentNumber && (
+        <Card className="mb-6">
+          {assignmentLink ? (
+            <Link
+              href={`/oppdrag/${assignmentLink.id}`}
+              className="inline-flex min-h-11 items-center text-lg font-medium text-brand-700 underline"
+            >
+              Gjort om til oppdrag&nbsp;
+              <span className="tabular-nums">{assignmentLink.number}</span>
+            </Link>
+          ) : (
+            // Kansellert oppdrag har ingen side lenger, så ingen lenke (T-0031).
+            <p className="text-lg font-medium text-slate-900">
+              Gjort om til oppdrag <span className="tabular-nums">{order.assignmentNumber}</span>
+              {order.assignmentCancelled && " (kansellert)"}
+            </p>
+          )}
+        </Card>
+      )}
+      {order.status === "rejected" && (
+        <RejectedCard orderId={order.id}>
+          <p className="text-lg font-medium text-slate-900">
+            Avslått: {offerRejectionReasonLabel(order.rejectedReasonKey ?? "other")}
+          </p>
+          {order.rejectedReason && (
+            <p className="mt-1 break-words whitespace-pre-line text-slate-700">
+              {order.rejectedReason}
+            </p>
+          )}
+        </RejectedCard>
+      )}
 
       {context.canEditOrders ? (
-        // Ny nøkkel etter lagring (versjonen øker), så skjemaet lukkes og viser den nye ordren.
-        <OrderEditSection
-          key={order.rowVersion}
+        <OfferEditSection
           orderId={order.id}
           rowVersion={order.rowVersion}
           converted={order.status === "converted"}
-          assignmentLink={
-            order.assignmentId && order.assignmentNumber && !order.assignmentCancelled
-              ? { id: order.assignmentId, number: order.assignmentNumber }
+          assignmentLink={assignmentLink}
+          validUntil={
+            handleable
+              ? {
+                  defaultValue: order.validUntil,
+                  min: today,
+                  max: addDays(today, OFFER_VALID_UNTIL_MAX_DAYS),
+                }
               : null
           }
-          action={updateOrderAction}
+          action={updateOfferAction}
+          actions={actions}
           defaults={{
             addressText: order.addressText,
             receivedAt: osloDateTimeLocal(new Date(order.receivedAt)),
@@ -224,13 +287,13 @@ export default async function OrderPage({
             sellerDeclarationReceived: order.sellerDeclarationReceived,
           }}
         >
-          {handling}
-        </OrderEditSection>
+          {details}
+        </OfferEditSection>
       ) : (
-        handling
+        details
       )}
 
-      <OrderHistory entries={history} />
+      <OfferHistory entries={history} />
     </main>
   );
 }

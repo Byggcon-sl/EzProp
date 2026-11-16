@@ -73,3 +73,9 @@ export function formatOsloDateTime(value: Date | string): string {
   const p = partsInOslo(new Date(value));
   return `${p.day}.${p.month}.${p.year} kl. ${p.hour}:${p.minute}`;
 }
+
+/** En ren dato «2026-11-14» (som `validUntil`) blir «14.11.2026». Annet format gis tilbake uendret. */
+export function formatIsoDate(isoDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : isoDate;
+}

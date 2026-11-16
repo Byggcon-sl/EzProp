@@ -5,14 +5,14 @@ import { Checkbox, Field, Input } from "@/shared/ui/form";
 import { ContactPicker, type ContactHit, type LinkedContact } from "../kontakter/contact-picker";
 import { textValue, type FormState } from "../form-state";
 
-/** Startverdiene i ordreskjemaet. Tomme felt er tom tekst. */
+/** Startverdiene i tilbudsskjemaet. Tomme felt er tom tekst. */
 export type OrderFieldDefaults = {
   addressText: string;
   /** Norsk tid, «ÅÅÅÅ-MM-DDTtt:mm». */
   receivedAt: string;
   externalRef: string;
   orderedByText: string;
-  /** Kontakten ordren er koblet til, med navnet fra «Hvem bestilte». */
+  /** Kontakten tilbudet er koblet til, med navnet fra «Hvem bestilte». */
   orderedByContact: LinkedContact | null;
   gnr: string;
   bnr: string;
@@ -36,7 +36,7 @@ function AddressField({
   hint,
   onBlur,
 }: PartProps & { hint?: string; onBlur?: () => void }) {
-  // Bare i oppdragsskjemaet (med hjelpetekst): ordreskjemaet er uendret.
+  // Bare i oppdragsskjemaet (med hjelpetekst): tilbudsskjemaet er uendret.
   return (
     <Field
       label="Adresse"
@@ -228,12 +228,12 @@ export function OrderMoreFields({ state, defaults }: PartProps) {
 }
 
 /**
- * Feltene i bestillingen, felles for «Ny ordre», «Endre ordren» og «Endre bestillingen» på
+ * Feltene i bestillingen, felles for «Nytt tilbud», «Endre tilbudet» og «Endre bestillingen» på
  * oppdraget: samme `name`, samme grenser, samme kontaktvelger og samme feilvisning. Én kolonne (PC
  * og iPad). Ingen felt for kilde eller rapporttype; kjernen setter dem. Etter et mislykket forsøk
  * vises det som ble sendt.
  *
- * - `layout="order"` (standard): rekkefølgen og etikettene i ordreskjemaet, med egenerklæringen.
+ * - `layout="order"` (standard): rekkefølgen og etikettene i tilbudsskjemaet, med egenerklæringen.
  * - `layout="assignment"`: eiendom, bestiller og «Mer om bestillingen» etter hverandre, uten
  *   egenerklæring. «Nytt oppdrag» bruker delene (`OrderPropertyFields`, `OrderedByFields`,
  *   `OrderMoreFields`) hver for seg i egne kort.
@@ -267,7 +267,11 @@ export function OrderFields({
       <AddressField state={state} defaults={defaults} />
       <ReceivedAtField state={state} defaults={defaults} />
       <OrderedByFields state={state} defaults={defaults} />
-      <ExternalRefField state={state} defaults={defaults} label="Ekstern referanse (valgfritt)" />
+      <ExternalRefField
+        state={state}
+        defaults={defaults}
+        label="Meglerens ordrenummer (valgfritt)"
+      />
       {CADASTRE_FIELDS.map((field) => (
         <CadastreField
           key={field.name}
@@ -287,5 +291,42 @@ export function OrderFields({
         defaultChecked={sellerDeclarationChecked}
       />
     </>
+  );
+}
+
+/**
+ * «Gyldig til» på tilbudet (ADR 0012). Bare på tilbudet, aldri på oppdraget. `min` og `max` er
+ * bare hjelp i nettleseren; kjernen avgjør grensene. Datovelgeren på iPad er den innebygde.
+ */
+export function ValidUntilField({
+  state,
+  defaultValue,
+  min,
+  max,
+  hint,
+}: {
+  state: FormState;
+  /** «ÅÅÅÅ-MM-DD». */
+  defaultValue: string;
+  min?: string;
+  max?: string;
+  hint: string;
+}) {
+  return (
+    <Field
+      label="Gyldig til"
+      htmlFor="validUntil"
+      hint={hint}
+      error={fieldError(state, "validUntil")}
+    >
+      <Input
+        id="validUntil"
+        name="validUntil"
+        type="date"
+        min={min}
+        max={max}
+        defaultValue={textValue(state, "validUntil", defaultValue)}
+      />
+    </Field>
   );
 }

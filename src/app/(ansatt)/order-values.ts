@@ -1,9 +1,9 @@
 /*
- * Det «Ny ordre» og «Endre ordren» har felles, uten «use client» eller «use server», så både
- * skjemaet og handlingene kan bruke det.
+ * Det bestillingsskjemaene har felles («Nytt tilbud», «Endre tilbudet» og «Endre bestillingen» på
+ * oppdraget), uten «use client» eller «use server», så både skjemaene og handlingene kan bruke det.
  */
 
-/** Tekstfeltene i ordreskjemaet (`name` på feltene). Avkrysningen står for seg. */
+/** Tekstfeltene i bestillingsskjemaet (`name` på feltene). Avkrysningen står for seg. */
 export const ORDER_FORM_TEXT_FIELDS = [
   "addressText",
   "receivedAt",
@@ -25,8 +25,16 @@ export function readOrderValues(formData: FormData): Record<string, string> {
   return values;
 }
 
-/** Meldingen når en annen har lagret ordren etter at skjemaet ble åpnet (A253). */
-export const ORDER_CHANGED_MESSAGE = "Ordren er endret av en annen. Last siden på nytt.";
+/**
+ * Verdiene i tilbudsskjemaet: bestillingsfeltene og «Gyldig til» (`validUntil`, bare på tilbudet,
+ * ADR 0012).
+ */
+export function readOfferValues(formData: FormData): Record<string, string> {
+  return { ...readOrderValues(formData), validUntil: String(formData.get("validUntil") ?? "") };
+}
+
+/** Meldingen når en annen har lagret tilbudet etter at skjemaet ble åpnet (A253). */
+export const ORDER_CHANGED_MESSAGE = "Tilbudet er endret av en annen. Last siden på nytt.";
 
 /** Meldingen når «Lagre» trykkes uten nett. Teksten i skjemaet står igjen. */
 export const ORDER_OFFLINE_MESSAGE = "Du er uten nett. Endringen er ikke lagret.";

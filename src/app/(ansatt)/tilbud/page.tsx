@@ -3,51 +3,109 @@ import Link from "next/link";
 import { buttonVariants } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { FormMessage } from "@/shared/ui/form";
-import { listOrders, orderListSummary } from "@/core/orders";
+import { todayInOslo } from "@/shared/lib/dates";
+import {
+  OFFER_EXPIRING_SOON_DAYS,
+  listOrders,
+  offerDaysLeft,
+  orderListSummary,
+} from "@/core/orders";
 import { getEmployeeContext } from "../employee-context";
 import { loadListOrError } from "../list-error";
 import { NoAccess } from "../no-access";
 import { SearchBox, searchQuery } from "../search-box";
-import { OrderStatusBadge } from "./order-status-badge";
-import { formatOsloDate } from "./received-at";
+import { extendOfferAction } from "./actions";
+import {
+  OFFER_LIST_PATH,
+  OfferFilterNav,
+  emptyOfferListText,
+  offerFilterFromParam,
+  offerListHref,
+  offerListParams,
+} from "./offer-filters";
+import { OfferList, type OfferRow } from "./offer-list";
+import { canExtendOffer, offerExpiryText } from "./offer-status-badge";
+import { formatIsoDate, formatOsloDate } from "./received-at";
 
-export const metadata: Metadata = { title: "Ordre" };
+export const metadata: Metadata = { title: "Tilbud" };
 
 /**
- * Ordrene i organisasjonen, nyeste først, høyst 50 (ADR 0010). Alle ansatte ser listen og kan
- * søke (`?q=`) på adresse, oppdragsnummer, ordrenummer, megler, parter og gnr/bnr; søket skjer
- * i kjernen. «Ny ordre» vises bare for dem som kan legge inn. Ingen autofokus i søkefeltet, så
- * tastaturet ikke spretter opp på iPaden.
+ * Tilbudene i organisasjonen (mulige jobber som ikke er oppdrag ennå), høyst 50 (ADR 0010, 0012).
+ * Filter (`?status=`) og søk (`?q=`) står i adressen og skjer i kjernen; tallene på knappene
+ * kommer fra samme spørring (F3). «Åpne» er sortert etter «Gyldig til». «Nytt tilbud» er en
+ * sekundærknapp (A371) og vises bare for dem som kan legge inn. Ingen autofokus i søkefeltet.
  */
-export default async function OrdersPage({
+export default async function OffersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[] }>;
+  searchParams: Promise<{ q?: string | string[]; status?: string | string[] }>;
 }) {
   const context = await getEmployeeContext();
   if (!context) return <NoAccess />;
-  const query = searchQuery((await searchParams).q);
-  const result = await loadListOrError("/ordre", context.actor.id, () =>
-    listOrders(context.actor, context.organizationId, { query: query || undefined }),
+  const params = await searchParams;
+  const query = searchQuery(params.q);
+  const requested = offerFilterFromParam(params.status);
+  const now = new Date();
+  const today = todayInOslo(now);
+  const result = await loadListOrError(OFFER_LIST_PATH, context.actor.id, () =>
+    listOrders(context.actor, context.organizationId, {
+      query: query || undefined,
+      status: requested,
+      now,
+    }),
   );
-  const { items: orders, total } = result.ok ? result.value : { items: [], total: 0 };
-  const summary = result.ok ? orderListSummary(orders.length, total) : null;
+  const filter = result.ok ? result.value.status : requested;
+  const items = result.ok ? result.value.items : [];
+  const summary = result.ok ? orderListSummary(items.length, result.value.total) : null;
+
+  const rows: OfferRow[] = items.map((item) => {
+    const daysLeft = item.displayStatus === "open" ? offerDaysLeft(item.validUntil, today) : null;
+    const showValidUntil = item.displayStatus === "open" || item.displayStatus === "expired";
+    return {
+      id: item.id,
+      addressText: item.addressText,
+      receivedText: formatOsloDate(item.receivedAt),
+      orderedByText: item.orderedByText,
+      externalRef: item.externalRef,
+      displayStatus: item.displayStatus,
+      validUntil: item.validUntil,
+      validUntilText: showValidUntil ? `Gyldig til ${formatIsoDate(item.validUntil)}` : null,
+      expiryText: offerExpiryText(daysLeft, OFFER_EXPIRING_SOON_DAYS),
+      assignmentNumber: item.assignmentNumber,
+      assignmentCancelled: item.assignmentCancelled,
+      canExtend:
+        context.canEditOrders &&
+        canExtendOffer(item.displayStatus, daysLeft, OFFER_EXPIRING_SOON_DAYS),
+    };
+  });
 
   return (
     <main className="max-w-4xl">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-slate-900">Ordre</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Tilbud</h1>
+          <p className="mt-1 text-sm text-slate-600">Mulige jobber som ikke er oppdrag ennå.</p>
+        </div>
         {context.canEditOrders && (
-          <Link href="/ordre/ny" className={buttonVariants({ variant: "primary", size: "md" })}>
-            Ny ordre
+          <Link href="/tilbud/ny" className={buttonVariants({ variant: "secondary", size: "md" })}>
+            Nytt tilbud
           </Link>
         )}
       </div>
-      <SearchBox label="Søk på adresse, nummer, megler eller gnr/bnr" query={query} />
+      <OfferFilterNav
+        current={filter}
+        query={query}
+        counts={result.ok ? result.value.counts : undefined}
+      />
+      <SearchBox
+        label="Søk på adresse, nummer, megler eller gnr/bnr"
+        query={query}
+        hidden={offerListParams(filter, "")}
+      />
       {query && (
         <p className="mt-2">
           <Link
-            href="/ordre"
+            href={offerListHref(filter, "")}
             className="inline-flex min-h-11 items-center text-sm font-medium text-brand-700 underline underline-offset-2"
           >
             Tøm søk
@@ -59,42 +117,12 @@ export default async function OrdersPage({
         <div className="mt-6">
           <FormMessage message={result.message} />
         </div>
-      ) : orders.length === 0 ? (
+      ) : rows.length === 0 ? (
         <Card className="mt-6">
-          <p className="text-slate-600">
-            {query ? "Ingen ordre passer søket." : "Ingen ordre er lagt inn ennå."}
-          </p>
+          <p className="text-slate-600">{emptyOfferListText(filter, query)}</p>
         </Card>
       ) : (
-        <Card className="mt-6 overflow-hidden p-0">
-          <ul>
-            {orders.map((order) => (
-              <li key={order.id} className="border-t border-slate-200 first:border-t-0">
-                <Link
-                  href={`/ordre/${order.id}`}
-                  className="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 hover:bg-brand-50 focus-visible:-outline-offset-2"
-                >
-                  <span className="min-w-0 flex-1 basis-48 break-words">
-                    <span className="block font-medium text-slate-900">{order.addressText}</span>
-                    <span className="block text-sm text-slate-600">
-                      Mottatt {formatOsloDate(order.receivedAt)}
-                      {order.orderedByText && <> · {order.orderedByText}</>}
-                      {order.externalRef && <> · Ordrenr. {order.externalRef}</>}
-                    </span>
-                  </span>
-                  <span className="flex shrink-0 flex-wrap items-center gap-2">
-                    {order.assignmentNumber && (
-                      <span className="text-sm font-medium text-slate-900 tabular-nums">
-                        {order.assignmentNumber}
-                      </span>
-                    )}
-                    <OrderStatusBadge status={order.status} />
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
+        <OfferList rows={rows} extendAction={extendOfferAction} />
       )}
     </main>
   );

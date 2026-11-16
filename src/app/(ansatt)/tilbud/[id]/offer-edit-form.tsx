@@ -4,50 +4,91 @@ import Link from "next/link";
 import { useActionState, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
+import { Notice } from "@/shared/ui/notice";
 import { FormErrors, SubmitButton } from "../../form-parts";
-import { initialFormState, type FormState } from "../../form-state";
-import { OrderFields, type OrderFieldDefaults } from "../order-fields";
-import { ORDER_CHANGED_MESSAGE, ORDER_OFFLINE_MESSAGE, readOrderValues } from "../order-values";
+import { initialFormState } from "../../form-state";
+import { ORDER_CHANGED_MESSAGE, readOfferValues } from "../../order-values";
+import type { OfferActionState } from "../actions";
+import { OrderFields, ValidUntilField, type OrderFieldDefaults } from "../offer-fields";
+import { withOfflineMessage } from "../offline-action";
 
-type Action = (state: FormState, formData: FormData) => Promise<FormState>;
+type Action = (state: OfferActionState, formData: FormData) => Promise<OfferActionState>;
 
-/** Skjemaets tilstand. `stale`: ordren er endret av andre siden siden ble lastet (settes aldri tilbake). */
-type EditState = FormState & { stale?: boolean };
+/** Skjemaets tilstand. `stale`: tilbudet er endret av andre siden siden ble lastet. */
+type EditState = OfferActionState & { stale?: boolean };
+
+/** Linjen over feltene når tilbudet er gjort om til oppdrag (T-0075, ADR 0011). */
+export const CONVERTED_COPY_TEXT =
+  "Tilbudet og oppdraget har hver sin kopi av opplysningene. Endringer her endrer ikke oppdraget. Rett adresse, matrikkel og bestiller på oppdraget, under Bestilling.";
+
+/** Står i stedet for datofeltet på avslåtte og gjort-om tilbud (A327). */
+export const VALID_UNTIL_LOCKED_TEXT = "Gyldig til kan bare endres på åpne og utløpte tilbud.";
+
+/** «Gyldig til» i skjemaet: datoen og grensene når den kan endres, ellers `null`. */
+export type ValidUntilEdit = { defaultValue: string; min: string; max: string } | null;
 
 /**
- * «Endre ordren» på ordresiden (T1). Knappen står rett under ordrekortet for alle statuser; kjernen
- * sjekker tilgangen. Skjemaet åpnes på samme side, og mens det er åpent skjules «Gjør om» og «Avvis»
- * (`children`), så det bare er én «Lagre» på siden. Siden gir komponenten ny nøkkel etter lagring,
- * så skjemaet lukkes når ordren har fått ny versjon.
+ * «Endre tilbudet» på tilbudssiden (T1). Knappen står under detaljkortet for alle statuser; kjernen
+ * sjekker tilgangen. Skjemaet åpnes på samme side med fokus på overskriften, og mens det er åpent
+ * skjules handlingsblokken (`actions`), så det bare er én «Lagre» på siden.
+ *
+ * Kvitteringen «Endringene er lagret.» kommer fra svaret på handlingen (T-0089), ikke fra
+ * adressen: den vises bare når noe ble endret, forsvinner ved neste forsøk og kommer ikke tilbake
+ * ved omlasting. Ingenting endret: skjemaet lukkes uten kvittering. Tilstanden ligger her, utenfor
+ * skjemaet, så kvitteringen står når skjemaet lukkes. Siden gir nye verdier etter lagring, og
+ * skjemaet får dem neste gang det åpnes.
  */
-export function OrderEditSection({
+export function OfferEditSection({
   orderId,
   rowVersion,
   defaults,
+  validUntil,
   converted,
   assignmentLink = null,
   action,
+  actions,
   children,
 }: {
   orderId: string;
   rowVersion: number;
   defaults: OrderFieldDefaults;
-  /** Ordren er gjort om til oppdrag: linjen om at rettelser gjøres på oppdraget, vises. */
+  validUntil: ValidUntilEdit;
+  /** Tilbudet er gjort om til oppdrag: linjen om at tilbud og oppdrag har hver sin kopi vises. */
   converted: boolean;
-  /** Oppdraget ordren ble gjort om til, når det ikke er kansellert. Gir lenken «Gå til oppdrag». */
+  /** Oppdraget tilbudet ble gjort om til, når det ikke er kansellert. Gir «Gå til oppdrag». */
   assignmentLink?: { id: string; number: string } | null;
   action: Action;
-  children?: ReactNode;
+  /** Handlingsblokken («Gjør om», «Forleng», «Avslå»). Skjules mens skjemaet er åpent. */
+  actions?: ReactNode;
+  /** Det som står mellom handlingsblokken og knappen (dublettvarselet og detaljkortet). */
+  children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const focusAfterChange = useRef<"heading" | "button" | null>(null);
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const focusAfterChange = useRef<"heading" | "button" | "notice" | null>(null);
 
-  // Fokus til skjemaets overskrift når det åpnes, og tilbake til knappen ved «Avbryt».
+  const [state, formAction] = useActionState(
+    async (previous: EditState, formData: FormData): Promise<EditState> => {
+      const result = await withOfflineMessage(action, readOfferValues)(previous, formData);
+      const stale = previous.stale === true || result.message === ORDER_CHANGED_MESSAGE;
+      if (result.done) {
+        // Lagret (eller ingenting å lagre): skjemaet lukkes, kvitteringen står under knappen.
+        focusAfterChange.current = result.notice ? "notice" : "button";
+        setOpen(false);
+      }
+      return { ...result, stale };
+    },
+    initialFormState as EditState,
+  );
+
+  // Fokus til skjemaets overskrift når det åpnes, tilbake til knappen ved «Avbryt», og til
+  // kvitteringen etter lagring.
   useEffect(() => {
     if (focusAfterChange.current === "heading") headingRef.current?.focus();
     if (focusAfterChange.current === "button") buttonRef.current?.focus();
+    if (focusAfterChange.current === "notice") noticeRef.current?.focus();
     focusAfterChange.current = null;
   }, [open]);
 
@@ -61,104 +102,76 @@ export function OrderEditSection({
     setOpen(false);
   }
 
-  if (open) {
-    return (
-      <div className="mt-6">
-        <OrderEditForm
-          orderId={orderId}
-          rowVersion={rowVersion}
-          defaults={defaults}
-          converted={converted}
-          assignmentLink={assignmentLink}
-          action={action}
-          headingRef={headingRef}
-          onCancel={hide}
-        />
-      </div>
-    );
-  }
-
   return (
     <>
-      <div className="mt-4">
-        <Button ref={buttonRef} variant="secondary" onClick={show}>
-          Endre ordren
-        </Button>
-      </div>
+      {!open && actions}
       {children}
+      {open ? (
+        <div className="mt-6">
+          <OfferEditForm
+            state={state}
+            formAction={formAction}
+            orderId={orderId}
+            rowVersion={rowVersion}
+            defaults={defaults}
+            validUntil={validUntil}
+            converted={converted}
+            assignmentLink={assignmentLink}
+            headingRef={headingRef}
+            onCancel={hide}
+          />
+        </div>
+      ) : (
+        <div className="mt-4 space-y-4">
+          <Button ref={buttonRef} variant="secondary" onClick={show}>
+            Endre tilbudet
+          </Button>
+          {state.done && state.notice && (
+            <div ref={noticeRef} tabIndex={-1} className="rounded-xl">
+              <Notice message={state.notice} />
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 }
 
-/** Nettleseren sier at den er uten nett. */
-function isOffline(): boolean {
-  return !navigator.onLine;
-}
-
-/** Et mislykket forsøk uten nett. Verdiene står igjen i feltene. */
-function offlineState(previous: EditState, formData: FormData): EditState {
-  return {
-    fieldErrors: {},
-    message: ORDER_OFFLINE_MESSAGE,
-    values: readOrderValues(formData),
-    attempt: previous.attempt + 1,
-    stale: previous.stale === true,
-  };
-}
-
-function OrderEditForm({
+function OfferEditForm({
+  state,
+  formAction,
   orderId,
   rowVersion,
   defaults,
+  validUntil,
   converted,
   assignmentLink,
-  action,
   headingRef,
   onCancel,
 }: {
+  state: EditState;
+  formAction: (formData: FormData) => void;
   orderId: string;
   rowVersion: number;
   defaults: OrderFieldDefaults;
+  validUntil: ValidUntilEdit;
   converted: boolean;
   assignmentLink: { id: string; number: string } | null;
-  action: Action;
   headingRef: RefObject<HTMLHeadingElement | null>;
   onCancel: () => void;
 }) {
-  const [state, formAction] = useActionState(
-    async (previous: EditState, formData: FormData): Promise<EditState> => {
-      // Endring krever nett. Uten nett sendes ingenting, og det som er skrevet står igjen.
-      if (isOffline()) return offlineState(previous, formData);
-      try {
-        const result = await action(previous, formData);
-        return {
-          ...result,
-          stale: previous.stale === true || result.message === ORDER_CHANGED_MESSAGE,
-        };
-      } catch (error) {
-        // Nettet falt under sending (fetch gir TypeError). Videresending etter lagring og andre
-        // feil kastes videre til Next.
-        if (isOffline() || error instanceof TypeError) {
-          return offlineState(previous, formData);
-        }
-        throw error;
-      }
-    },
-    initialFormState as EditState,
-  );
+  // Et skjema som åpnes etter en lagring, skal ikke vise feil eller verdier fra forrige gang.
+  const shown: EditState = state.done ? { ...state, ...initialFormState } : state;
 
   return (
     <Card>
       <form action={formAction} noValidate className="space-y-5">
         <h2 ref={headingRef} tabIndex={-1} className="text-lg font-medium text-slate-900">
-          Endre ordren
+          Endre tilbudet
         </h2>
         {converted && (
-          // Én kilde for opplysningene om oppdraget (ADR 0011): rettelser gjøres på oppdraget.
           <div>
-            <p className="text-slate-700">
-              Rettelser for oppdraget gjøres på oppdraget. Endringer her flytter ikke oppdraget.
-            </p>
+            <p className="text-slate-700">{CONVERTED_COPY_TEXT}</p>
             {assignmentLink && (
               <Link
                 href={`/oppdrag/${assignmentLink.id}`}
@@ -169,18 +182,29 @@ function OrderEditForm({
             )}
           </div>
         )}
-        <FormErrors state={state} />
-        {state.stale && (
-          // Knappen står så lenge skjemaet har en utdatert versjon, også etter et forsøk uten nett:
-          // nye lagreforsøk gir konflikt igjen. En iPad-app på hjemskjermen har ingen annen synlig
-          // knapp for å laste siden på nytt.
+        <FormErrors state={shown} />
+        {shown.stale && (
+          // Knappen står så lenge skjemaet har en utdatert versjon: nye lagreforsøk gir konflikt
+          // igjen. En iPad-app på hjemskjermen har ingen annen synlig knapp for å laste på nytt.
           <Button variant="secondary" onClick={() => window.location.reload()}>
             Last siden på nytt
           </Button>
         )}
         <input type="hidden" name="orderId" value={orderId} />
         <input type="hidden" name="rowVersion" value={rowVersion} />
-        <OrderFields state={state} defaults={defaults} />
+        {/* «Gyldig til» står først: det er det som oftest endres på et tilbud. */}
+        {validUntil ? (
+          <ValidUntilField
+            state={shown}
+            defaultValue={validUntil.defaultValue}
+            min={validUntil.min}
+            max={validUntil.max}
+            hint="Høyst ett år fram."
+          />
+        ) : (
+          <p className="text-sm text-slate-600">{VALID_UNTIL_LOCKED_TEXT}</p>
+        )}
+        <OrderFields state={shown} defaults={defaults} />
         <div className="flex flex-wrap items-center gap-3 pt-2">
           <SubmitButton>Lagre</SubmitButton>
           <Button variant="secondary" onClick={onCancel}>
