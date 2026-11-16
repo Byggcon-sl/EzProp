@@ -60,6 +60,8 @@ Med en falsk handling og `navigator.onLine` styrt i testen:
 - **Statisk test av kildefilene** i `src/shared/forms/`: ingen `localStorage`, `sessionStorage`, `indexedDB` eller `console.`. Ingen import fra `@/core` eller `@/app`, noe lint også sjekker.
 
 ### 1d. Serverhandlingene (utvid eksisterende `actions.test.ts`-filer)
+Filene er `src/app/(ansatt)/oppdrag/[id]/actions.test.ts` og `src/app/(ansatt)/oppdrag/[id]/bygninger/actions.test.ts` (integrasjon mot testdatabasen).
+
 Gjelder `savePropertyAction`, `addRoomsAction` og bygningshandlingene (`saveBuildingAction`, `saveFloorAction`, `saveRoomAction`, `saveFloorAreaAction`, og de andre som `buildings-editor.tsx` bruker). **Ikke** `updateOrderAction`, fordi ordrefilene ikke røres.
 
 - **Logget ut** (mock av `getEmployeeContextForAction` med `{ status: "signed_out" }`):
@@ -83,7 +85,7 @@ Gjelder `savePropertyAction`, `addRoomsAction` og bygningshandlingene (`saveBuil
   - Den videresender aldri (ingen `redirect`).
 - `getEmployeeContext` oppfører seg som før: videresending uten økt og `null` uten ansattrad. Ordrefilene bruker den.
 
-### 1e. `src/core/auth/session.test.ts` og `src/proxy.test.ts`
+### 1e. `src/core/auth/session.test.ts` (ny) og `src/proxy.test.ts` (ny)
 - **`requireActor` uten innlogging:**
   - med `x-request-path: /oppdrag/<uuid>` sender den til `/logg-inn?neste=%2Foppdrag%2F<uuid>`;
   - uten hode, eller med en sti `isSafeNextPath` avviser (`//evil.example`, `/logg-inn`, `/api/x`), sender den til `/logg-inn` uten `neste`.
@@ -108,11 +110,25 @@ Bruk `renderToStaticMarkup` som i `src/shared/ui/notice.test.ts`, og en egen ren
   - `global-error.tsx` importerer `globals.css` og har `<html lang="nb">`.
 - **Størrelse:** knapp og lenke har klassen som gir minst 44 px høyde (`min-h-11` eller tilsvarende).
 
-### 1g. `src/app/logg-inn/login-form.test.ts` (utvid) og `sign-in-dialog.test.ts`
+### 1g. `src/app/logg-inn/login-form.test.ts` (ny) og `sign-in-dialog.test.ts` (ny)
 - `LoginForm` med `initialEmail` viser e-posten utfylt.
 - Med `onSignedIn` kalles den etter vellykket kode, og `router.replace` og `router.refresh` kalles ikke.
 - Uten de nye egenskapene: oppførsel som før (eksisterende tester grønne).
 - Dialogen viser ikke «Logg inn med Microsoft».
+- Dialogen har en overskrift, og e-posten står ikke i noen adresse (`href`, `action`) i HTML.
+
+### 1h. `src/app/logg-inn/use-session-check.test.ts` (ny)
+Med falsk `authClient.getSession`, falsk klokke og `navigator.onLine` styrt i testen:
+- **Synlig igjen, økten er ute:** tilstanden blir «logget ut», og meldingen er «Du er logget ut. Logg inn før du lagrer.».
+- **Synlig igjen, økten gjelder:** ingen melding.
+- **Høyst ett kall per 60 sekunder:** to `visibilitychange` innen 60 s gir ett kall; etter 60 s gir neste ett nytt kall.
+- **Uten nett:** ingen kall og ingen melding.
+- **Kallet feiler** (avvist løfte, tidsavbrudd): ingen melding og ingen feil kastet.
+- **Skjult** (`hidden`): ingen kall.
+- Lytteren fjernes når komponenten tas bort.
+
+### 1i. Regeltester
+Ingen. Oppgaven endrer ingen fagregler, terskler eller TG-logikk, og ingen faste koder. Sakene for `safeNextPath` er likevel data i tabeller (1a).
 
 ## 2. E2e: `e2e/fase-2a-rett-t0070-t0071.spec.ts`
 
@@ -168,4 +184,4 @@ Sjekk at testen var rød: kjør E1, E3, E5 og E6 mot `main` før rettingen, og s
 `employee-context.ts` har bare den nye funksjonen og typen. `getEmployeeContext` er uendret, noe 1d-2 sjekker.
 
 ## 5. Tilgang og tenant
-Ingen nye tabeller. `getEmployeeContextForAction` bruker samme `findEmployeeGrant` som før, og organisasjonen kommer fortsatt fra `grant.organizationId`. 1d og 1d-2 viser dette. Eksisterende `expectTenantIsolation`-tester for handlingene skal være grønne, og nye spørringer får egne. Myk sletting berøres ikke.
+Ingen nye tabeller, og ingen ny `organization_id`-spørring utenom det handlingene gjør i dag. Kommer det en ny spørring, skal den ha `expectTenantIsolation` i sin testfil; uten det godkjennes ikke oppgaven. `getEmployeeContextForAction` bruker samme `findEmployeeGrant` som før, og organisasjonen kommer fortsatt fra `grant.organizationId`. 1d og 1d-2 viser dette. Eksisterende `expectTenantIsolation`-tester for handlingene skal være grønne, og nye spørringer får egne. Myk sletting berøres ikke.
