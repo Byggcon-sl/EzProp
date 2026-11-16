@@ -13,7 +13,9 @@ import { CONVERTED_COPY_TEXT, OfferEditSection, VALID_UNTIL_LOCKED_TEXT } from "
  * Støtter hovedmål: færre reklamasjoner (ingen tror at en rettelse her flytter oppdraget).
  */
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
+vi.mock("server-only", () => ({}));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }), redirect: vi.fn() }));
 
 const SOURCE = readFileSync(path.join(__dirname, "offer-edit-form.tsx"), "utf8");
 

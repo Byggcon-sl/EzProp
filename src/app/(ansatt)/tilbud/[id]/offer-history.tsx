@@ -1,4 +1,4 @@
-import type { listOrderHistory } from "@/core/orders";
+import { orderFieldLabel, orderHistoryActionLabel, type listOrderHistory } from "@/core/orders";
 import { Card } from "@/shared/ui/card";
 import { BookingHistoryList } from "../../booking-history";
 
@@ -20,7 +20,11 @@ export function OfferHistory({ entries }: { entries: readonly OfferHistoryEntry[
         <p className="text-slate-600">Ingen endringer ennå.</p>
       ) : (
         <Card>
-          <BookingHistoryList entries={entries} />
+          <BookingHistoryList
+            entries={entries}
+            fieldLabel={orderFieldLabel}
+            actionLabel={orderHistoryActionLabel}
+          />
         </Card>
       )}
     </section>

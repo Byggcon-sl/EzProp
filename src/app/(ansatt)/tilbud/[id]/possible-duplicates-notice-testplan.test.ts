@@ -36,7 +36,7 @@ function item(overrides: Partial<PossibleDuplicateOrder> = {}): PossibleDuplicat
     assignmentStatus: null,
     reasons: ["address"],
     ...overrides,
-  };
+  } as PossibleDuplicateOrder;
 }
 
 function render(items: PossibleDuplicateOrder[], hasMore = false): string {

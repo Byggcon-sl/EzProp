@@ -61,7 +61,7 @@ export function OfferEditSection({
   /** Handlingsblokken («Gjør om», «Forleng», «Avslå»). Skjules mens skjemaet er åpent. */
   actions?: ReactNode;
   /** Det som står mellom handlingsblokken og knappen (dublettvarselet og detaljkortet). */
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);

@@ -13,6 +13,7 @@ import {
   offerDisplayStatus,
   offerExpiresLabel,
   offerRejectionReasonLabel,
+  type OrderStatus,
 } from "@/core/orders";
 import { addDays, todayInOslo } from "@/shared/lib/dates";
 import { logger } from "@/shared/lib/logger";
@@ -84,8 +85,10 @@ export default async function OfferPage({
   }
 
   const today = todayInOslo();
-  const displayStatus = offerDisplayStatus(order.status, order.validUntil, today);
-  const expiryText = offerExpiresLabel(order.status, order.validUntil, today);
+  // Kolonnen er tekst; CHECK-regelen i databasen sikrer at det er en av de tre kodene.
+  const status = order.status as OrderStatus;
+  const displayStatus = offerDisplayStatus(status, order.validUntil, today);
+  const expiryText = offerExpiresLabel(status, order.validUntil, today);
   const handleable = order.status === "received";
 
   // Velgeren viser navnet fra kontaktregisteret, ikke friteksten om bestilleren.
@@ -147,7 +150,7 @@ export default async function OfferPage({
         orderId={order.id}
         rowVersion={order.rowVersion}
         office={office}
-        canExtend={canExtendOffer(order.status, order.validUntil, today)}
+        canExtend={canExtendOffer(status, order.validUntil, today)}
         hasDuplicates={duplicates.items.length > 0}
         reasons={reasons}
         convertAction={convertOfferAction}

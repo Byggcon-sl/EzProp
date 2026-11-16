@@ -1,5 +1,6 @@
 import { assignmentStatusLabel } from "@/core/assignments/codes";
 import { duplicateReasonLabel, orderStatusLabel, type PossibleDuplicateOrder } from "@/core/orders";
+import { offerDisplayStatusLabel } from "@/core/orders/codes";
 import {
   POSSIBLE_DUPLICATES_MORE_TEXT,
   PossibleDuplicateLink,
@@ -15,10 +16,16 @@ export { POSSIBLE_DUPLICATES_MORE_TEXT };
 
 /**
  * Én linje for et treff: «Tilbud – Storgata 1A, 8006 Bodø – mottatt 12.11.2026 – Gjort om til
- * oppdrag A-2026-0042 – samme adresse». Statusordet er det samme som i statusmerket. Et oppdrag
+ * oppdrag A-2026-0042 – samme adresse». Statusordet er det samme som i statusmerket («Utløpt» når
+ * kjernen gir visningsstatusen). Et oppdrag
  * laget direkte får «Oppdrag 2026-00042 – Bestilt» med statusordet fra køen.
  */
 export function possibleDuplicateLine(item: PossibleDuplicateOrder): string {
+  // Visningsstatusen («Utløpt») når kjernen gir den, ellers den lagrede statusen.
+  const display = (item as { displayStatus?: string | null }).displayStatus;
+  const offerStatus = display
+    ? offerDisplayStatusLabel(display)
+    : orderStatusLabel(item.status ?? "");
   const status =
     item.kind === "assignment"
       ? [
@@ -28,8 +35,8 @@ export function possibleDuplicateLine(item: PossibleDuplicateOrder): string {
           .filter(Boolean)
           .join(" – ")
       : item.status === "converted" && item.assignmentNumber
-        ? `${orderStatusLabel(item.status)} ${item.assignmentNumber}`
-        : orderStatusLabel(item.status ?? "");
+        ? `${offerStatus} ${item.assignmentNumber}`
+        : offerStatus;
   const reasons = item.reasons.map((reason) => duplicateReasonLabel(reason)).join(" og ");
   return [
     item.kind === "assignment" ? "" : "Tilbud",
