@@ -1645,3 +1645,43 @@ describe("testdata: forutsetninger for testene", () => {
     expect(planByRef.get("TD-0001")).toBeTruthy();
   });
 });
+
+/*
+ * Tilbud i testdataene (docs/funksjoner/fase2a-tilbud-testplan.md 6.2): minst ett åpent, ett
+ * utløpt, ett avslått og ett gjort-om tilbud, og det utløpte er utløpt uansett hvilken dag
+ * testdataene lages (datoene regnes fra dagens dato). Adressene er oppdiktet (testene over).
+ * Støtter hovedmål: de ansatte (testmiljøet viser hver status i tilbudslisten) og KI i bunnen
+ * (samme statuskoder som et senere tilbudsutkast bruker).
+ */
+describe("6.2 tilbud i testdataene", () => {
+  it.each([
+    ["TEST_NOW", TEST_NOW],
+    ["en sommerdag et halvt år senere", new Date("2027-06-15T08:30:00Z")],
+    ["en vinterdag rett etter midnatt i Oslo", new Date("2027-01-14T23:30:00Z")],
+  ])("6.2 laget %s: hver visningsstatus har minst ett tilbud den dagen", async (_name, now) => {
+    const orgId = await seedAll(now);
+    const actor = await adminActor();
+    const result = await listOrders(actor, orgId, { status: "all", now });
+    expect(result.counts.open, "åpne").toBeGreaterThanOrEqual(1);
+    expect(result.counts.expired, "utløpte").toBeGreaterThanOrEqual(1);
+    expect(result.counts.rejected, "avslåtte").toBeGreaterThanOrEqual(1);
+    expect(result.counts.converted, "gjort om").toBeGreaterThanOrEqual(1);
+    expect(result.counts.all).toBe(
+      result.counts.open + result.counts.expired + result.counts.rejected + result.counts.converted,
+    );
+  });
+
+  it("6.2 avslåtte tilbud i testdataene har fast grunn og ingen fritekst", async () => {
+    const orgId = await seedAll();
+    const rejected = await rows<{ key: string | null; text: string | null }>(
+      sql`select rejected_reason_key as key, rejected_reason as text from orders
+          where organization_id = ${orgId} and status = 'rejected' and deleted_at is null`,
+    );
+    expect(rejected.length).toBeGreaterThanOrEqual(1);
+    for (const row of rejected) {
+      expect(row.key).not.toBeNull();
+      expect(row.key).not.toBe("other");
+      expect(row.text ?? "").toBe("");
+    }
+  });
+});
