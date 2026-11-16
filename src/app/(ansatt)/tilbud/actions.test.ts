@@ -1,7 +1,11 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ZodError } from "zod";
 import { AccessDeniedError } from "@/core/access";
 import { ContactNotFoundError } from "@/core/contacts";
 import {
+  OfferValidUntilLockedError,
   OfficeNotFoundError,
   OrderAlreadyHandledError,
   OrderChangedError,
@@ -10,12 +14,13 @@ import { orderInputSchema } from "@/core/orders/schemas";
 import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../form-state";
 
 /*
- * Server actions i /ordre (docs/funksjoner/fase2a-manuell-ordre-testplan.md avsnitt 7, med
+ * Server actions i /tilbud (docs/funksjoner/fase2a-tilbud-testplan.md avsnitt 4.1 og 7.1, og
+ * docs/funksjoner/fase2a-manuell-ordre-testplan.md avsnitt 7, med
  * runde 1: ukjent feil logges uten skjemaverdier). Kjernen og konteksten er byttet ut her; de
  * testes i src/core/orders og employee-context.test.ts. Testene viser at hver handling henter
  * organisasjonen på serveren, sjekker id-er før kjernen kalles, og gir de faste meldingene.
  *
- * Feltnavn i skjemaet: addressText, gnr …, orderId, reason, officeId (som i kjernen).
+ * Feltnavn i skjemaet: addressText, gnr …, validUntil, orderId, reasonKey, reasonText, officeId.
  * Støtter hovedmål: tid (feil vises ved feltet) og reklamasjoner (aldri feil organisasjon,
  * aldri adresse eller grunn i loggen).
  */
@@ -57,8 +62,13 @@ vi.mock("@/core/orders", async (importOriginal) => ({
   ...mocks.core,
 }));
 
-const { createOrderAction, rejectOrderAction, convertOrderAction, updateOrderAction } =
-  await import("./actions");
+const {
+  createOfferAction: createOrderAction,
+  rejectOfferAction: rejectOrderAction,
+  convertOfferAction: convertOrderAction,
+  updateOfferAction: updateOrderAction,
+  extendOfferAction,
+} = await import("./actions");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
 const OTHER_ORG = "0190a000-0000-7000-8000-000000000002";
@@ -70,6 +80,8 @@ const actor = { id: "user-kontor", email: "kontor@eksempel.no", name: "Kontor Te
 const ADDRESS = "Testveien 12, 8000 Bodø";
 const ORDERED_BY = "Megler Testesen, Testmegleren AS";
 const REASON = "Feil registrering hos Testmegleren";
+
+type OfferState = FormState & { notice?: string | null; done?: boolean };
 
 function form(entries: Record<string, string>): FormData {
   const data = new FormData();
@@ -118,7 +130,11 @@ describe("7.1 uten kontekst", () => {
     ],
     [
       "rejectOrderAction",
-      () => rejectOrderAction(initialFormState, form({ orderId: ORDER, reason: REASON })),
+      () =>
+        rejectOrderAction(
+          initialFormState,
+          form({ orderId: ORDER, reasonKey: "other", reasonText: REASON }),
+        ),
     ],
     [
       "convertOrderAction",
@@ -159,14 +175,17 @@ describe("7.2 organisasjonen kommer fra konteksten", () => {
     });
     await rejectOrderAction(
       initialFormState,
-      form({ orderId: ORDER, reason: REASON, organizationId: OTHER_ORG }),
+      form({ orderId: ORDER, reasonKey: "other", reasonText: REASON, organizationId: OTHER_ORG }),
     ).catch(() => undefined);
     await convertOrderAction(
       initialFormState,
       form({ orderId: ORDER, officeId: OFFICE, organizationId: OTHER_ORG }),
     ).catch(() => undefined);
 
-    expect(mocks.core.rejectOrder).toHaveBeenCalledWith(actor, ORG, ORDER, REASON);
+    expect(mocks.core.rejectOrder).toHaveBeenCalledWith(actor, ORG, ORDER, {
+      reasonKey: "other",
+      reasonText: REASON,
+    });
     expect(mocks.core.convertOrderToAssignment).toHaveBeenCalledWith(
       actor,
       ORG,
@@ -214,7 +233,7 @@ describe("7.3 createOrderAction", () => {
     expect(state.fieldErrors.receivedAt).toBe("Mottatt kan ikke være frem i tid.");
   });
 
-  it("suksess sender videre til /ordre/<id>", async () => {
+  it("suksess sender videre til /tilbud/<id> med kvitteringen «Tilbudet er laget.» (A373)", async () => {
     mocks.core.createOrder.mockResolvedValue({ id: ORDER, organizationId: ORG });
     const url = await redirectOf(
       createOrderAction(
@@ -222,9 +241,11 @@ describe("7.3 createOrderAction", () => {
         form({ addressText: ADDRESS, gnr: "12", bnr: "34", sellerDeclarationReceived: "on" }),
       ),
     );
-    expect(url).toBe(`/ordre/${ORDER}`);
+    expect(url).toBe(`/tilbud/${ORDER}?ny=1`);
     const input = mocks.core.createOrder.mock.calls[0]?.[2] as Record<string, unknown>;
     expect(input).toMatchObject({ addressText: ADDRESS, gnr: "12", bnr: "34" });
+    // Tom «Gyldig til» gir null: kjernen bruker i dag + 30.
+    expect(input.validUntil).toBeNull();
   });
 
   it("AccessDeniedError gir «ingen tilgang»", async () => {
@@ -253,29 +274,70 @@ describe("7.3 createOrderAction", () => {
   });
 });
 
-describe("7.4 rejectOrderAction", () => {
-  it.each(["", "   "])(
-    "tom grunn «%s» gir «Skriv inn en grunn.» uten kall til kjernen",
-    async (reason) => {
-      const state = await rejectOrderAction(initialFormState, form({ orderId: ORDER, reason }));
-      expect(allMessages(state)).toContain("Skriv inn en grunn.");
+describe("7.4 rejectOfferAction (F4: faste grunner)", () => {
+  it("uten valg gir «Velg en grunn.» ved gruppen uten kall til kjernen, og teksten står igjen", async () => {
+    const state = await rejectOrderAction(
+      initialFormState,
+      form({ orderId: ORDER, reasonText: REASON }),
+    );
+    expect(state.fieldErrors.reasonKey).toBe("Velg en grunn.");
+    expect(state.values.reasonText).toBe(REASON);
+    expect(coreCalls()).toBe(0);
+  });
+
+  it.each(["pris", "expired'--", "PRICE"])(
+    "ukjent grunn «%s» gir «Velg en grunn.» uten kall",
+    async (reasonKey) => {
+      const state = await rejectOrderAction(initialFormState, form({ orderId: ORDER, reasonKey }));
+      expect(state.fieldErrors.reasonKey).toBe("Velg en grunn.");
       expect(coreCalls()).toBe(0);
     },
   );
 
-  it("OrderAlreadyHandledError gir «Ordren er allerede behandlet.»", async () => {
+  it.each(["", "   "])(
+    "«Annet» med tom tekst «%s» gir «Skriv grunnen.» ved feltet uten kall",
+    async (reasonText) => {
+      const state = await rejectOrderAction(
+        initialFormState,
+        form({ orderId: ORDER, reasonKey: "other", reasonText }),
+      );
+      expect(state.fieldErrors.reasonText).toBe("Skriv grunnen.");
+      expect(state.values.reasonKey).toBe("other");
+      expect(coreCalls()).toBe(0);
+    },
+  );
+
+  it("«Pris» uten tekst sendes med reasonText = null, uten videresending", async () => {
+    mocks.core.rejectOrder.mockResolvedValue({ id: ORDER, status: "rejected" });
+    const state = (await rejectOrderAction(
+      initialFormState,
+      form({ orderId: ORDER, reasonKey: "price", reasonText: "  " }),
+    )) as OfferState;
+    expect(mocks.core.rejectOrder).toHaveBeenCalledWith(actor, ORG, ORDER, {
+      reasonKey: "price",
+      reasonText: null,
+    });
+    expect(state.done).toBe(true);
+    expect(state.message).toBeNull();
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it("OrderAlreadyHandledError gir «Tilbudet er allerede gjort om eller avslått.»", async () => {
     mocks.core.rejectOrder.mockRejectedValue(new OrderAlreadyHandledError());
     const state = await rejectOrderAction(
       initialFormState,
-      form({ orderId: ORDER, reason: REASON }),
+      form({ orderId: ORDER, reasonKey: "timing" }),
     );
-    expect(allMessages(state)).toContain("Ordren er allerede behandlet.");
+    expect(allMessages(state)).toContain("Tilbudet er allerede gjort om eller avslått.");
   });
 
   it.each(["ikke-en-id", "1 or 1=1", "", "../x"])(
-    "ordre-id «%s» som ikke er uuid gir «ingen tilgang» uten kall",
+    "tilbud-id «%s» som ikke er uuid gir «ingen tilgang» uten kall",
     async (orderId) => {
-      const state = await rejectOrderAction(initialFormState, form({ orderId, reason: REASON }));
+      const state = await rejectOrderAction(
+        initialFormState,
+        form({ orderId, reasonKey: "price", reasonText: REASON }),
+      );
       expect(state.message).toBe(NO_ACCESS);
       expect(coreCalls()).toBe(0);
     },
@@ -285,7 +347,7 @@ describe("7.4 rejectOrderAction", () => {
     mocks.core.rejectOrder.mockRejectedValue(new AccessDeniedError());
     const state = await rejectOrderAction(
       initialFormState,
-      form({ orderId: ORDER, reason: REASON }),
+      form({ orderId: ORDER, reasonKey: "other", reasonText: REASON }),
     );
     expect(state.message).toBe(NO_ACCESS);
   });
@@ -294,7 +356,7 @@ describe("7.4 rejectOrderAction", () => {
     mocks.core.rejectOrder.mockRejectedValue(new Error(REASON));
     const state = await rejectOrderAction(
       initialFormState,
-      form({ orderId: ORDER, reason: REASON }),
+      form({ orderId: ORDER, reasonKey: "other", reasonText: REASON }),
     );
     expect(state.message).toBe(UNKNOWN_ERROR);
     expect(mocks.logError).toHaveBeenCalledTimes(1);
@@ -305,9 +367,9 @@ describe("7.4 rejectOrderAction", () => {
 });
 
 describe("7.5 convertOrderAction", () => {
-  it("mangler kontor gir melding ved feltet uten kall til kjernen", async () => {
+  it("mangler kontor gir «Velg kontor.» ved feltet uten kall til kjernen", async () => {
     const state = await convertOrderAction(initialFormState, form({ orderId: ORDER }));
-    expect(state.fieldErrors.officeId).toBeTruthy();
+    expect(state.fieldErrors.officeId).toBe("Velg kontor.");
     expect(coreCalls()).toBe(0);
   });
 
@@ -320,16 +382,16 @@ describe("7.5 convertOrderAction", () => {
     expect(allMessages(state)).toContain("Kontoret finnes ikke.");
   });
 
-  it("OrderAlreadyHandledError gir «Ordren er allerede behandlet.»", async () => {
+  it("OrderAlreadyHandledError gir «Tilbudet er allerede gjort om eller avslått.»", async () => {
     mocks.core.convertOrderToAssignment.mockRejectedValue(new OrderAlreadyHandledError());
     const state = await convertOrderAction(
       initialFormState,
       form({ orderId: ORDER, officeId: OFFICE }),
     );
-    expect(allMessages(state)).toContain("Ordren er allerede behandlet.");
+    expect(allMessages(state)).toContain("Tilbudet er allerede gjort om eller avslått.");
   });
 
-  it("ordre-id som ikke er uuid gir «ingen tilgang» uten kall", async () => {
+  it("tilbud-id som ikke er uuid gir «ingen tilgang» uten kall", async () => {
     const state = await convertOrderAction(
       initialFormState,
       form({ orderId: "ikke-en-id", officeId: OFFICE }),
@@ -338,7 +400,7 @@ describe("7.5 convertOrderAction", () => {
     expect(coreCalls()).toBe(0);
   });
 
-  it("suksess sender videre til /ordre/<id>", async () => {
+  it("suksess sender videre til det nye oppdraget med pekeren (F5, ?fra=tilbud)", async () => {
     mocks.core.convertOrderToAssignment.mockResolvedValue({
       assignment: {
         id: ASSIGNMENT,
@@ -352,7 +414,7 @@ describe("7.5 convertOrderAction", () => {
     const url = await redirectOf(
       convertOrderAction(initialFormState, form({ orderId: ORDER, officeId: OFFICE })),
     );
-    expect(url).toBe(`/ordre/${ORDER}`);
+    expect(url).toBe(`/oppdrag/${ASSIGNMENT}?fra=tilbud`);
   });
 
   it("ukjent feil gir UNKNOWN_ERROR og logger bare id-er og feilnavn", async () => {
@@ -410,12 +472,12 @@ describe("8 bestilleren fra kontaktregisteret", () => {
     expect(state.fieldErrors.orderedByContactId).toBe(CONTACT_NOT_FOUND);
   });
 
-  it("valgt kontakt sendes med id-en og friteksten, og man går til ordresiden", async () => {
+  it("valgt kontakt sendes med id-en og friteksten, og man går til tilbudssiden", async () => {
     mocks.core.createOrder.mockResolvedValue({ id: ORDER, organizationId: ORG });
     const url = await redirectOf(
       createOrderAction(initialFormState, orderForm({ orderedByContactId: CONTACT_ID })),
     );
-    expect(url).toBe(`/ordre/${ORDER}`);
+    expect(url).toBe(`/tilbud/${ORDER}?ny=1`);
     expect(mocks.core.createOrder.mock.calls[0]?.[2]).toMatchObject({
       orderedByContactId: CONTACT_ID,
       orderedByText: ORDERED_BY,
@@ -464,9 +526,9 @@ describe("8 bestilleren fra kontaktregisteret", () => {
 });
 
 /*
- * «Lagre» når ordren endres (docs/funksjoner/fase2a-rette-ordre-testplan.md avsnitt 3). Skjemaet
- * sender orderId, rowVersion og feltene fra «Ny ordre». Ved suksess går action-en enten videre
- * til /ordre/<id> eller gir et svar uten feil; begge godtas her (skjermen testes i e2e).
+ * «Lagre» når tilbudet endres (docs/funksjoner/fase2a-rette-ordre-testplan.md avsnitt 3). Skjemaet
+ * sender orderId, rowVersion og feltene fra «Nytt tilbud». Ved suksess gir action-en et svar uten
+ * feil med kvitteringen (T-0089: aldri fra adressen).
  * Støtter hovedmål: de ansatte (riktig norsk melding per feil, ingenting går tapt) og færre
  * reklamasjoner (aldri feil organisasjon, aldri verdier i loggen).
  */
@@ -475,7 +537,7 @@ describe("3 updateOrderAction", () => {
   const HOUSING = "Testtoppen borettslag";
   const EXTERNAL_REF = "TEST-ORD-0002";
   const CONTACT = "0190a000-0000-7000-8000-000000000060";
-  const CONFLICT = "Ordren er endret av en annen. Last siden på nytt.";
+  const CONFLICT = "Tilbudet er endret av en annen. Last siden på nytt.";
   const LEAK_VALUES = [
     NEW_ADDRESS,
     "Prøvegata",
@@ -547,19 +609,13 @@ describe("3 updateOrderAction", () => {
     expect(call[3]).not.toHaveProperty("organizationId");
   });
 
-  it("3.1 suksess gir «Endringene er lagret.» eller sender videre til ordresiden", async () => {
+  it("3.1 suksess gir kvitteringen «Endringene er lagret.» i svaret, uten videresending (T-0089)", async () => {
     mocks.core.updateOrder.mockResolvedValue({ id: ORDER, rowVersion: 4 });
-    let url: string | null = null;
-    let state: FormState | null = null;
-    try {
-      state = await updateOrderAction(initialFormState, editForm());
-    } catch (error) {
-      const match = /^REDIRECT (.+)$/.exec((error as Error).message);
-      if (!match) throw error;
-      url = match[1]!;
-    }
-    if (url !== null) expect(url.startsWith(`/ordre/${ORDER}`)).toBe(true);
-    else expect(state?.message).toBe("Endringene er lagret.");
+    const state = (await updateOrderAction(initialFormState, editForm())) as OfferState;
+    expect(state.notice).toBe("Endringene er lagret.");
+    expect(state.done).toBe(true);
+    expect(state.message).toBeNull();
+    expect(mocks.redirect).not.toHaveBeenCalled();
   });
 
   it("3.1 uten kontekst gir «ingen tilgang» uten kall til kjernen", async () => {
@@ -570,7 +626,7 @@ describe("3 updateOrderAction", () => {
   });
 
   it.each(["ikke-en-id", "", "../../admin"])(
-    "3.2 ordre-id «%s» gir NO_ACCESS uten kall til kjernen",
+    "3.2 tilbud-id «%s» gir NO_ACCESS uten kall til kjernen",
     async (orderId) => {
       const state = await run(editForm({ orderId }));
       expect(state?.message).toBe(NO_ACCESS);
@@ -585,7 +641,7 @@ describe("3 updateOrderAction", () => {
     expectNoValuesLogged();
   });
 
-  it("3.3 OrderChangedError gir «Ordren er endret av en annen. Last siden på nytt.», og det som er skrevet står", async () => {
+  it("3.3 OrderChangedError gir «Tilbudet er endret av en annen. Last siden på nytt.», og det som er skrevet står", async () => {
     mocks.core.updateOrder.mockRejectedValue(new OrderChangedError());
     const state = await run(editForm());
     expect(state?.message).toBe(CONFLICT);
@@ -636,5 +692,195 @@ describe("3 updateOrderAction", () => {
     expect(state?.message).toBe(UNKNOWN_ERROR);
     expect(allLogged()).toContain("OppdiktetFeil");
     expectNoValuesLogged();
+  });
+});
+
+/*
+ * «Gyldig til» og kvitteringen (T-0089) i «Endre tilbudet» (testplan 4.1.3 og 4.1.4).
+ */
+describe("4.1 «Gyldig til» og kvitteringen i «Endre tilbudet»", () => {
+  function editForm(overrides: Record<string, string> = {}): FormData {
+    return form({ orderId: ORDER, rowVersion: "3", addressText: ADDRESS, ...overrides });
+  }
+
+  it("datoen sendes til kjernen som «ÅÅÅÅ-MM-DD», tom dato som null (uendret)", async () => {
+    mocks.core.updateOrder.mockResolvedValue({ id: ORDER, rowVersion: 4 });
+    await updateOrderAction(initialFormState, editForm({ validUntil: "2026-12-24" }));
+    await updateOrderAction(initialFormState, editForm({ validUntil: "" }));
+    expect(mocks.core.updateOrder.mock.calls[0]?.[3]).toMatchObject({ validUntil: "2026-12-24" });
+    expect(mocks.core.updateOrder.mock.calls[1]?.[3]).toMatchObject({ validUntil: null });
+  });
+
+  it("OfferValidUntilLockedError står ved datofeltet, og ingen kvittering", async () => {
+    mocks.core.updateOrder.mockRejectedValue(new OfferValidUntilLockedError());
+    const state = (await updateOrderAction(
+      initialFormState,
+      editForm({ validUntil: "2026-12-24" }),
+    )) as OfferState;
+    expect(state.fieldErrors.validUntil).toBe(
+      "Gyldig til kan bare endres på åpne og utløpte tilbud.",
+    );
+    expect(state.notice ?? null).toBeNull();
+    expect(state.values.validUntil).toBe("2026-12-24");
+  });
+
+  it("feil i datoen fra kjernen (Zod) står ved feltet, og ingen kvittering", async () => {
+    const error = new ZodError([
+      { code: "custom", path: ["validUntil"], message: "Gyldig til kan ikke være før i dag." },
+    ]);
+    mocks.core.updateOrder.mockRejectedValue(error);
+    const state = (await updateOrderAction(
+      initialFormState,
+      editForm({ validUntil: "2020-01-01" }),
+    )) as OfferState;
+    expect(state.fieldErrors.validUntil).toBe("Gyldig til kan ikke være før i dag.");
+    expect(state.notice ?? null).toBeNull();
+  });
+
+  it("T-0089: lagring som lyktes og så en som feiler, gir bare feilmeldingen", async () => {
+    mocks.core.updateOrder.mockResolvedValueOnce({ id: ORDER, rowVersion: 4 });
+    const saved = (await updateOrderAction(initialFormState, editForm())) as OfferState;
+    expect(saved.notice).toBe("Endringene er lagret.");
+
+    mocks.core.updateOrder.mockRejectedValueOnce(new OrderChangedError());
+    const failed = (await updateOrderAction(saved, editForm())) as OfferState;
+    expect(failed.message).toBe("Tilbudet er endret av en annen. Last siden på nytt.");
+    expect(failed.notice ?? null).toBeNull();
+    expect(failed.done ?? false).toBe(false);
+  });
+
+  it("T-0089: ingenting endret (samme versjon tilbake) gir ingen kvittering, men skjemaet lukkes", async () => {
+    mocks.core.updateOrder.mockResolvedValue({ id: ORDER, rowVersion: 3 });
+    const state = (await updateOrderAction(initialFormState, editForm())) as OfferState;
+    expect(state.done).toBe(true);
+    expect(state.notice).toBeNull();
+  });
+
+  it("T-0089: handlingen sender aldri videre med ?endret=1", async () => {
+    mocks.core.updateOrder.mockResolvedValue({ id: ORDER, rowVersion: 4 });
+    await updateOrderAction(initialFormState, editForm());
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * «Forleng 30 dager» (F1, testplan 7.1). Går gjennom `updateOrder` med de lagrede feltene og
+ * `validUntil` = i dag + 30.
+ */
+describe("7.1 extendOfferAction (F1)", () => {
+  const STORED = {
+    id: ORDER,
+    addressText: ADDRESS,
+    externalRef: "TEST-1",
+    orderedByText: ORDERED_BY,
+    orderedByContactId: null,
+    gnr: "12",
+    bnr: "34",
+    snr: null,
+    housingAssociationName: null,
+    sellerDeclarationReceived: true,
+    validUntil: "2026-01-01",
+    rowVersion: 5,
+  };
+
+  function expectedDate(): string {
+    const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Oslo" }).format(new Date());
+    const [y, m, d] = today.split("-").map(Number);
+    const date = new Date(Date.UTC(y!, m! - 1, d!));
+    date.setUTCDate(date.getUTCDate() + 30);
+    return date.toISOString().slice(0, 10);
+  }
+
+  function norwegian(iso: string): string {
+    const [y, m, d] = iso.split("-");
+    return `${d}.${m}.${y}`;
+  }
+
+  it("setter i dag + 30 med de lagrede feltene og versjonen fra skjemaet", async () => {
+    mocks.core.getOrder.mockResolvedValue(STORED);
+    mocks.core.updateOrder.mockResolvedValue({ ...STORED, rowVersion: 6 });
+    const state = (await extendOfferAction(
+      initialFormState,
+      form({ orderId: ORDER, rowVersion: "5", organizationId: OTHER_ORG }),
+    )) as OfferState;
+
+    const call = mocks.core.updateOrder.mock.calls[0]!;
+    expect(call[1]).toBe(ORG);
+    expect(call[2]).toBe(ORDER);
+    expect(call[4]).toBe(5);
+    expect(call[3]).toMatchObject({
+      addressText: ADDRESS,
+      gnr: "12",
+      bnr: "34",
+      sellerDeclarationReceived: true,
+      validUntil: expectedDate(),
+    });
+    expect(JSON.stringify(mocks.core.updateOrder.mock.calls)).not.toContain(OTHER_ORG);
+    expect(state.notice).toBe(`Gyldig til ${norwegian(expectedDate())}.`);
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it("i listen (uten versjon) brukes den lagrede versjonen, og kvitteringen har adressen (A372)", async () => {
+    mocks.core.getOrder.mockResolvedValue(STORED);
+    mocks.core.updateOrder.mockResolvedValue({ ...STORED, rowVersion: 6 });
+    const state = (await extendOfferAction(
+      initialFormState,
+      form({ orderId: ORDER, withAddress: "1" }),
+    )) as OfferState;
+    expect(mocks.core.updateOrder.mock.calls[0]?.[4]).toBe(5);
+    expect(state.notice).toBe(`${ADDRESS} er gyldig til ${norwegian(expectedDate())}.`);
+  });
+
+  it("andre trykk (OrderChangedError) gir ingen feilmelding, og kvitteringen når datoen er ny", async () => {
+    mocks.core.getOrder
+      .mockResolvedValueOnce(STORED)
+      .mockResolvedValueOnce({ ...STORED, validUntil: expectedDate(), rowVersion: 6 });
+    mocks.core.updateOrder.mockRejectedValue(new OrderChangedError());
+    const state = (await extendOfferAction(
+      initialFormState,
+      form({ orderId: ORDER, rowVersion: "5" }),
+    )) as OfferState;
+    expect(state.message).toBeNull();
+    expect(state.fieldErrors).toEqual({});
+    expect(state.done).toBe(true);
+    expect(state.notice).toBe(`Gyldig til ${norwegian(expectedDate())}.`);
+  });
+
+  it("avslått eller gjort om (OfferValidUntilLockedError) gir meldingen over knappen", async () => {
+    mocks.core.getOrder.mockResolvedValue(STORED);
+    mocks.core.updateOrder.mockRejectedValue(new OfferValidUntilLockedError());
+    const state = await extendOfferAction(initialFormState, form({ orderId: ORDER }));
+    expect(state.message).toBe("Gyldig til kan bare endres på åpne og utløpte tilbud.");
+  });
+
+  it("fremmed eller ukjent tilbud (AccessDeniedError) gir «ingen tilgang»", async () => {
+    mocks.core.getOrder.mockRejectedValue(new AccessDeniedError());
+    const state = await extendOfferAction(initialFormState, form({ orderId: ORDER }));
+    expect(state.message).toBe(NO_ACCESS);
+    expect(mocks.core.updateOrder).not.toHaveBeenCalled();
+  });
+
+  it.each(["ikke-en-id", ""])("tilbud-id «%s» gir «ingen tilgang» uten kall", async (orderId) => {
+    const state = await extendOfferAction(initialFormState, form({ orderId }));
+    expect(state.message).toBe(NO_ACCESS);
+    expect(coreCalls()).toBe(0);
+  });
+
+  it("ukjent feil logges uten adressen", async () => {
+    mocks.core.getOrder.mockResolvedValue(STORED);
+    mocks.core.updateOrder.mockRejectedValue(new Error(ADDRESS));
+    const state = await extendOfferAction(initialFormState, form({ orderId: ORDER }));
+    expect(state.message).toBe(UNKNOWN_ERROR);
+    expect(JSON.stringify(mocks.logError.mock.calls)).not.toContain(ADDRESS);
+  });
+});
+
+/* Testplan 4.1.5: ingen tilgangslogikk i handlingene utover kall til kjernen. */
+describe("4.1.5 ingen tilgangslogikk i handlingene", () => {
+  it("actions.ts sjekker ikke roller og bruker aldri organizationId fra skjemaet", () => {
+    const source = readFileSync(path.join(__dirname, "actions.ts"), "utf8");
+    expect(source).not.toMatch(/roles\.includes/);
+    expect(source).not.toMatch(/formData\.get\(["']organizationId["']\)/);
+    expect(source).not.toMatch(/requireOrganizationAccess/);
   });
 });

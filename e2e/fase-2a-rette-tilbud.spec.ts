@@ -17,17 +17,18 @@ import {
 } from "./helpers";
 
 /*
- * Endre en ordre etter at den er lagret (T1, fase 2a). Testplan:
+ * Endre et tilbud etter at det er lagret (T1, fase 2a; «Ordre» heter nå «Tilbud», ADR 0012 og
+ * docs/funksjoner/fase2a-tilbud-testplan.md avsnitt 5). Opprinnelig testplan:
  * docs/funksjoner/fase2a-rette-ordre-testplan.md avsnitt 5. Kjører i prosjektene pc og ipad;
  * 5.10–5.12 bare i ipad.
  *
- * Admin fra seed; Byggcon har kontoret «Bodø» fra seed. Hver test lager sin egen ordre med en unik
+ * Admin fra seed; Byggcon har kontoret «Bodø» fra seed. Hver test lager sitt eget tilbud med en unik
  * ending i adressen, fordi e2e-databasen ikke tømmes. Data er oppdiktet («Testveien 12 …»,
  * «Prøvegata 7 …», «Megler Testesen»).
  *
- * Ordene fra kortet: knappen «Endre ordren», «Lagre» og «Avbryt» nederst i skjemaet, beskjeden
+ * Ordene fra kortet: knappen «Endre tilbudet», «Lagre» og «Avbryt» nederst i skjemaet, beskjeden
  * «Endringene er lagret.», delen «Endringer» med handlingen «Endret» og linjer som
- * «Adresse: <gammel> → <ny>». Ved konflikt: «Ordren er endret av en annen. Last siden på nytt.»
+ * «Adresse: <gammel> → <ny>». Ved konflikt: «Tilbudet er endret av en annen. Last siden på nytt.»
  * med knappen «Last siden på nytt». Uten nett: «Du er uten nett. Endringen er ikke lagret.»
  *
  * Støtter hovedmål: de ansatte (en feil rettes med tre trykk, på PC og iPad, og ingenting som er
@@ -36,20 +37,20 @@ import {
 
 const PORTRAIT = { width: 834, height: 1194 } as const;
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const ORDER_URL = new RegExp(`/ordre/(${UUID})(\\?.*)?$`);
+const ORDER_URL = new RegExp(`/tilbud/(${UUID})(\\?.*)?$`);
 const SAVED = "Endringene er lagret.";
-const CONFLICT = "Ordren er endret av en annen. Last siden på nytt.";
+const CONFLICT = "Tilbudet er endret av en annen. Last siden på nytt.";
 const OFFLINE = "Du er uten nett. Endringen er ikke lagret.";
-// Endret med «Nytt oppdrag» (ADR 0011): rettelser for oppdraget gjøres på oppdraget.
+// T-0075 (ADR 0011): tilbud og oppdrag har hver sin kopi; rettelser for oppdraget gjøres der.
 const CONVERTED_NOTE =
-  "Rettelser for oppdraget gjøres på oppdraget. Endringer her flytter ikke oppdraget.";
+  "Tilbudet og oppdraget har hver sin kopi av opplysningene. Endringer her endrer ikke oppdraget. Rett adresse, matrikkel og bestiller på oppdraget, under Bestilling.";
 
 function deniedHeading(page: Page): Locator {
   return page.getByRole("heading", { name: /^(Ingen tilgang|Fant ikke siden)$/, level: 1 });
 }
 
 function editButton(page: Page): Locator {
-  return page.getByRole("button", { name: "Endre ordren", exact: true });
+  return page.getByRole("button", { name: "Endre tilbudet", exact: true });
 }
 
 function saveButton(page: Page): Locator {
@@ -68,7 +69,7 @@ function addressField(page: Page): Locator {
   return page.getByLabel(/^Adresse/);
 }
 
-/** Delen «Endringer» under ordren (en `section` eller region med overskriften). */
+/** Delen «Endringer» under tilbudet (en `section` eller region med overskriften). */
 function changesSection(page: Page): Locator {
   return page
     .locator("section, [role=region]")
@@ -100,9 +101,9 @@ function newAddress(suffix: string) {
   };
 }
 
-/** «Ny ordre» med adresse og bestiller → «Lagre». Returnerer id-en til ordren. */
+/** «Nytt tilbud» med adresse og bestiller → «Lagre». Returnerer id-en til tilbudet. */
 async function createOrderViaUi(page: Page, address: string): Promise<string> {
-  await page.goto("/ordre/ny");
+  await page.goto("/tilbud/ny");
   await addressField(page).fill(address);
   await page.getByLabel(/^Hvem bestilte/).fill("Megler Testesen");
   await saveButton(page).click();
@@ -110,17 +111,23 @@ async function createOrderViaUi(page: Page, address: string): Promise<string> {
   return ORDER_URL.exec(page.url())![1]!;
 }
 
-/** «Endre ordren» og venter på skjemaet. */
+/** «Endre tilbudet» og venter på skjemaet. */
 async function openEditForm(page: Page) {
   await editButton(page).click();
   await expect(saveButton(page)).toBeVisible();
   await expect(addressField(page)).toBeVisible();
 }
 
-/** Gjør om ordren til oppdrag på kontoret «Bodø» og gir nummeret. */
-async function convert(page: Page): Promise<string> {
-  await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
+/**
+ * Gjør om tilbudet til oppdrag (kontoret forhåndsvalgt, ellers «Bodø»), går tilbake til tilbudet
+ * og gir nummeret.
+ */
+async function convert(page: Page, id: string): Promise<string> {
+  const radio = page.getByRole("radio", { name: "Bodø", exact: true });
+  if (await radio.isVisible()) await radio.check();
   await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
+  await expect(page).toHaveURL(/\/oppdrag\/[0-9a-f-]{36}/);
+  await page.goto(`/tilbud/${id}`);
   return await convertedAssignmentNumber(page);
 }
 
@@ -140,8 +147,8 @@ async function createUserWithoutEmployee(): Promise<string> {
   return email;
 }
 
-test.describe("endre ordren (pc og ipad)", () => {
-  test("5.1 «Endre ordren» → endre adressen → «Lagre»; «Endringer» viser hvem, når og gammel → ny", async ({
+test.describe("endre tilbudet (pc og ipad)", () => {
+  test("5.1 «Endre tilbudet» → endre adressen → «Lagre»; «Endringer» viser hvem, når og gammel → ny", async ({
     page,
   }) => {
     const { old, next } = newAddress(uniqueSuffix());
@@ -177,7 +184,7 @@ test.describe("endre ordren (pc og ipad)", () => {
     await expect(changesSection(page)).toContainText(`Adresse: ${old} → ${next}`);
   });
 
-  test("5.2 mens skjemaet er åpent, er «Gjør om» og «Avvis» skjult; bare én «Lagre»", async ({
+  test("5.2 mens skjemaet er åpent, er «Gjør om» og «Avslå tilbud» skjult; bare én «Lagre»", async ({
     page,
   }) => {
     const { old } = newAddress(uniqueSuffix());
@@ -192,7 +199,7 @@ test.describe("endre ordren (pc og ipad)", () => {
     await expect(
       page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }),
     ).toBeHidden();
-    await expect(page.getByRole("button", { name: "Avvis", exact: true })).toBeHidden();
+    await expect(page.getByRole("button", { name: "Avslå tilbud", exact: true })).toBeHidden();
   });
 
   test("5.3 «Avbryt» lukker skjemaet uten lagring", async ({ page }) => {
@@ -217,18 +224,21 @@ test.describe("endre ordren (pc og ipad)", () => {
     await expect(page.getByRole("main")).not.toContainText(next);
   });
 
-  test("5.4 gjort-om ordre kan endres; linjen om oppdraget vises, og nummeret står uendret", async ({
+  test("5.4 gjort-om tilbud kan endres; linjen om kopiene vises (T-0075), og nummeret står uendret", async ({
     page,
   }) => {
     const { old, next } = newAddress(uniqueSuffix());
     await logIn(page);
-    await createOrderViaUi(page, old);
-    const number = await convert(page);
+    const id = await createOrderViaUi(page, old);
+    const number = await convert(page, id);
     const link = page.getByRole("main").getByRole("link", { name: number });
     const href = await link.getAttribute("href");
 
     await openEditForm(page);
     await expect(page.getByText(CONVERTED_NOTE, { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Gyldig til kan bare endres på åpne og utløpte tilbud.", { exact: true }),
+    ).toBeVisible();
     await addressField(page).fill(next);
     await saveButton(page).click();
 
@@ -241,7 +251,7 @@ test.describe("endre ordren (pc og ipad)", () => {
     expect(await linkAfter.getAttribute("href")).toBe(href);
   });
 
-  test("5.5 bestilleren kobles til en kontakt etter lagring; navnet vises på ordren og i «Endringer»", async ({
+  test("5.5 bestilleren kobles til en kontakt etter lagring; navnet vises på tilbudet og i «Endringer»", async ({
     page,
   }) => {
     const suffix = uniqueSuffix();
@@ -279,7 +289,7 @@ test.describe("endre ordren (pc og ipad)", () => {
     const id = await createOrderViaUi(page, old);
 
     const second = await context.newPage();
-    await second.goto(`/ordre/${id}`);
+    await second.goto(`/tilbud/${id}`);
     await openEditForm(second);
     await openEditForm(page);
 
@@ -312,7 +322,7 @@ test.describe("endre ordren (pc og ipad)", () => {
     await second.close();
   });
 
-  test("5.7 tom adresse gir samme melding som «Ny ordre» ved feltet; ingenting lagres", async ({
+  test("5.7 tom adresse gir samme melding som «Nytt tilbud» ved feltet; ingenting lagres", async ({
     page,
   }) => {
     const { old } = newAddress(uniqueSuffix());
@@ -342,7 +352,7 @@ test.describe("endre ordren (pc og ipad)", () => {
     await expect(changesSection(page)).not.toContainText("Endret");
   });
 
-  test("5.8 kontoret ser «Endre ordren» og kan lagre", async ({ page }) => {
+  test("5.8 kontoret ser «Endre tilbudet» og kan lagre", async ({ page }) => {
     const { old, next } = newAddress(uniqueSuffix());
     await logInAsOffice(page);
     const office = await employeeByEmail(OFFICE_EMAIL);
@@ -374,7 +384,7 @@ test.describe("endre ordren (pc og ipad)", () => {
     await page.goto("/logg-inn");
     await signInWithCode(page, email);
     await page.waitForURL((url) => !url.pathname.startsWith("/logg-inn"));
-    const response = await page.goto(`/ordre/${id}`);
+    const response = await page.goto(`/tilbud/${id}`);
     expect(response?.status() ?? 0).toBeLessThan(500);
 
     await expect(deniedHeading(page)).toBeVisible();
@@ -386,7 +396,7 @@ test.describe("endre ordren (pc og ipad)", () => {
   });
 });
 
-test.describe("endre ordren på iPad (prosjektet ipad)", () => {
+test.describe("endre tilbudet på iPad (prosjektet ipad)", () => {
   test.beforeEach(async ({ page }) => {
     test.skip(test.info().project.name !== "ipad", "Bare i prosjektet ipad");
     await page.setViewportSize(PORTRAIT);
@@ -397,7 +407,7 @@ test.describe("endre ordren på iPad (prosjektet ipad)", () => {
     await logIn(page);
     const id = await createOrderViaUi(page, old);
 
-    await expectAtLeast(editButton(page), "Endre ordren", 44);
+    await expectAtLeast(editButton(page), "Endre tilbudet", 44);
     await openEditForm(page);
     await expectAtLeast(saveButton(page), "Lagre", 56);
     await expectAtLeast(cancelButton(page), "Avbryt", 44);
@@ -405,7 +415,7 @@ test.describe("endre ordren på iPad (prosjektet ipad)", () => {
     // «Last siden på nytt» kommer ved konflikt: lagre fra en annen fane først
     const second = await context.newPage();
     await second.setViewportSize(PORTRAIT);
-    await second.goto(`/ordre/${id}`);
+    await second.goto(`/tilbud/${id}`);
     await openEditForm(second);
     await addressField(second).fill(next);
     await saveButton(second).click();
@@ -466,7 +476,7 @@ test.describe("endre ordren på iPad (prosjektet ipad)", () => {
       if (await button.evaluate((el) => el === document.activeElement)) break;
       await page.keyboard.press("Tab");
     }
-    await expect(button, "«Endre ordren» nås med Tab").toBeFocused();
+    await expect(button, "«Endre tilbudet» nås med Tab").toBeFocused();
     await page.keyboard.press("Enter");
     await expect(saveButton(page)).toBeVisible();
 

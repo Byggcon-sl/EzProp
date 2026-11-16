@@ -16,7 +16,7 @@ import {
  * fra testdatabasen; bare innloggingen, loggen, serverhandlingene og oppslaget om dubletter er
  * byttet ut, slik at testen kan tvinge feilen. Oppdiktede data.
  *
- * Støtter hovedmål: de ansatte (ordresiden og knappene virker selv om varselet feiler) og færre
+ * Støtter hovedmål: de ansatte (tilbudssiden og knappene virker selv om varselet feiler) og færre
  * reklamasjoner (ingen adresse eller matrikkel i loggen).
  */
 
@@ -28,19 +28,25 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+  usePathname: () => "/tilbud",
+  redirect: vi.fn(),
+}));
 vi.mock("@/shared/lib/logger", () => ({ logger: mocks.log }));
 vi.mock("../../employee-context", () => ({ getEmployeeContext: mocks.getEmployeeContext }));
 vi.mock("../actions", () => ({
-  convertOrderAction: vi.fn(),
-  rejectOrderAction: vi.fn(),
-  updateOrderAction: vi.fn(),
+  convertOfferAction: vi.fn(),
+  extendOfferAction: vi.fn(),
+  rejectOfferAction: vi.fn(),
+  updateOfferAction: vi.fn(),
 }));
 vi.mock("@/core/orders", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/core/orders")>()),
   findPossibleDuplicateOrders: mocks.findPossibleDuplicateOrders,
 }));
 
-const { default: OrderPage } = await import("./page");
+const { default: OfferPage } = await import("./page");
 
 const ADDRESS = "Feilveien 31K, 8010 Prøvested";
 const SECRETS = [ADDRESS, "Feilveien", "feilveien31k", "Prøvested", "86421", "97531", "24680"];
@@ -72,7 +78,7 @@ async function setup() {
 }
 
 async function renderPage(orderId: string, searchParams: Record<string, string> = {}) {
-  const element = await OrderPage({
+  const element = await OfferPage({
     params: Promise.resolve({ id: orderId }),
     searchParams: Promise.resolve(searchParams),
   });
@@ -100,7 +106,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("6 ordresiden når oppslaget om mulig dublett feiler", () => {
+describe("6 tilbudssiden når oppslaget om mulig dublett feiler", () => {
   it.each([
     [
       "en vanlig feil med adressen i meldingen",
@@ -108,12 +114,12 @@ describe("6 ordresiden når oppslaget om mulig dublett feiler", () => {
     ],
     ["en feil som ikke er Error", () => ({ detail: ADDRESS })],
   ])(
-    "6.1 %s: siden vises med ordren og knappene, uten varsel, og loggen har ingen verdier",
+    "6.1 %s: siden vises med tilbudet og knappene, uten varsel, og loggen har ingen verdier",
     async (_name, makeError) => {
       const { organization, actor, order } = await setup();
       mocks.findPossibleDuplicateOrders.mockRejectedValue(makeError());
 
-      const html = await renderPage(order.id, { endret: "1" });
+      const html = await renderPage(order.id, { ny: "1" });
 
       // Oppslaget ble gjort med organisasjonen fra innloggingen
       expect(mocks.findPossibleDuplicateOrders).toHaveBeenCalledWith(
@@ -123,10 +129,10 @@ describe("6 ordresiden når oppslaget om mulig dublett feiler", () => {
       );
       // Ordren, kvitteringen og knappene står; varselet står ikke
       expect(html).toContain(ADDRESS);
-      expect(html).toContain("Endringene er lagret.");
+      expect(html).toContain("Tilbudet er laget.");
       expect(html).toContain("Gjør om til oppdrag");
-      expect(html).toContain("Avvis");
-      expect(html).toContain("Endre ordren");
+      expect(html).toContain("Avslå tilbud");
+      expect(html).toContain("Endre tilbudet");
       expect(html).not.toContain("Mulig dublett");
 
       // Feilen logges, uten adresse, matrikkel eller feilteksten
@@ -141,7 +147,7 @@ describe("6 ordresiden når oppslaget om mulig dublett feiler", () => {
     },
   );
 
-  it("6.1 kontroll: med treff står varselet over ordren", async () => {
+  it("6.1 kontroll: med treff står varselet under knappen", async () => {
     const { order } = await setup();
     mocks.findPossibleDuplicateOrders.mockResolvedValue({
       items: [
@@ -157,14 +163,17 @@ describe("6 ordresiden når oppslaget om mulig dublett feiler", () => {
       ],
       hasMore: false,
     });
-    const html = await renderPage(order.id, { endret: "1" });
+    const html = await renderPage(order.id, { ny: "1" });
     expect(html).toContain("Mulig dublett");
-    expect(html).toContain('href="/ordre/0190a000-0000-7000-8000-000000000201"');
-    // Rekkefølge: kvitteringen, så varselet, så knappene
-    const saved = html.indexOf("Endringene er lagret.");
-    const notice = html.indexOf("Mulig dublett");
+    expect(html).toContain('href="/tilbud/0190a000-0000-7000-8000-000000000201"');
+    // Rekkefølge (A369): kvitteringen, så knappen, så varselet
+    const saved = html.indexOf("Tilbudet er laget.");
+    const notice = html.search(/<h2[^>]*>Mulig dublett<\/h2>/);
     expect(saved).toBeGreaterThan(-1);
     expect(notice).toBeGreaterThan(saved);
-    expect(html.indexOf("Gjør om til oppdrag")).toBeGreaterThan(notice);
+    expect(html.indexOf("Gjør om til oppdrag")).toBeLessThan(notice);
+    expect(html.indexOf("Gjør om til oppdrag")).toBeGreaterThan(saved);
+    // A369: én linje over knappen peker ned til varselet.
+    expect(html.indexOf("Se varselet under")).toBeLessThan(html.indexOf("Gjør om til oppdrag"));
   });
 });

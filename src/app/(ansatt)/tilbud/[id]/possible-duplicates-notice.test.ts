@@ -16,7 +16,7 @@ import {
 
 /*
  * Varselet «Mulig dublett» (docs/funksjoner/fase2a-varsel-dublett-testplan.md avsnitt 5).
- * Oppdiktede adresser og ordre.
+ * Oppdiktede adresser og tilbud.
  * Støtter hovedmål: de ansatte (varselet er tydelig, leses opp og har lenke) og færre
  * reklamasjoner (samme bolig blir ikke bestilt eller tatt to ganger).
  */
@@ -34,7 +34,7 @@ function item(overrides: Partial<PossibleDuplicateOrder> = {}): PossibleDuplicat
     assignmentStatus: null,
     reasons: ["address"],
     ...overrides,
-  };
+  } as PossibleDuplicateOrder;
 }
 
 function render(items: PossibleDuplicateOrder[], hasMore = false): string {
@@ -61,7 +61,7 @@ describe("PossibleDuplicatesNotice", () => {
     expect(html).toMatch(/<h2[^>]*>Mulig dublett<\/h2>/);
     expect(text(html)).toContain(POSSIBLE_DUPLICATES_TEXT);
     expect(POSSIBLE_DUPLICATES_TEXT).toBe(
-      "Samme adresse eller matrikkel som en annen ordre. Sjekk at boligen ikke blir bestilt eller tatt to ganger.",
+      "Samme adresse eller matrikkel som et annet oppdrag eller et tilbud. Sjekk at boligen ikke blir tatt to ganger.",
     );
     expect(html).toMatch(/<svg[^>]*aria-hidden="true"/);
     // Varselfargen (watch) fra Byggcon-profilen.
@@ -115,7 +115,7 @@ describe("PossibleDuplicatesNotice", () => {
 
   it("lenker til den andre ordren, minst 44 px høyt og med tekstbryting", () => {
     const html = render([item()]);
-    expect(html).toContain(`href="/ordre/${OTHER_ID}"`);
+    expect(html).toContain(`href="/tilbud/${OTHER_ID}"`);
     expect(html).toMatch(/<a[^>]*class="[^"]*min-h-11[^"]*"/);
     expect(html).toMatch(/<a[^>]*><span class="[^"]*\[overflow-wrap:anywhere\][^"]*"/);
   });

@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 describe("loadListOrError", () => {
-  it.each(["/ordre", "/arbeidskoe"])(
+  it.each(["/tilbud", "/arbeidskoe"])(
     "listesiden logger ikke søketeksten ved databasefeil (%s)",
     async (route) => {
       const spy = vi.spyOn(logger, "error").mockImplementation(() => {});
@@ -31,7 +31,7 @@ describe("loadListOrError", () => {
     const spy = vi.spyOn(logger, "error").mockImplementation(() => {});
     const denied = new AccessDeniedError();
     await expect(
-      loadListOrError("/ordre", "user-1", async () => {
+      loadListOrError("/tilbud", "user-1", async () => {
         throw denied;
       }),
     ).rejects.toBe(denied);
@@ -39,7 +39,7 @@ describe("loadListOrError", () => {
   });
 
   it("gir verdien når listen hentes", async () => {
-    await expect(loadListOrError("/ordre", "user-1", async () => [1, 2])).resolves.toEqual({
+    await expect(loadListOrError("/tilbud", "user-1", async () => [1, 2])).resolves.toEqual({
       ok: true,
       value: [1, 2],
     });
