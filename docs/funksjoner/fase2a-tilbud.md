@@ -2,7 +2,7 @@
 
 - **Fase:** 2a (prioritert av Ståle 13.11.2026: «rett på oppdrag, tilbud ved behov»)
 - **Modul:** kjerne (`src/core/orders`, `src/core/assignments`), skjermene under `src/app/(ansatt)/`
-- **Status:** klar for bygging (rettet etter forhåndsvurdering runde 1: arkitekt, ux-ansvarlig, test-leder)
+- **Status:** i bygging (overtatt 16.11.2026; design, ADR 0012, migrering 0035 og grensesnitt er ferdig. Nye beslutninger får A360 og oppover)
 - **Branch:** `tilbud-i-stedet-for-ordre` (bygger på main, der «Nytt oppdrag», PR #209 og ADR 0011, er merget)
 - **Støtter hovedmål:**
   - **De ansatte:** menyen viser det kontoret gjør 98–99 av 100 ganger (Nytt oppdrag, Arbeidskø). Tilbud ligger lenger ned, og et tilbud blir oppdrag med ett trykk uten avskrift.
