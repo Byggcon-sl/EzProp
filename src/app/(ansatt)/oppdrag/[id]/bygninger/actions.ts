@@ -1,23 +1,27 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { AccessDeniedError } from "@/core/access";
 import {
   addRooms,
-  BuildingNotEmptyError,
-  FloorNotEmptyError,
   PropertyMissingError,
   removeBuilding,
   removeFloor,
   removeRoom,
+  restoreBuilding,
+  restoreFloor,
+  restoreRoom,
   saveBuilding,
   saveFloor,
   saveFloorArea,
   saveRoom,
+  type RemovedItem,
 } from "@/core/buildings";
+import { logger } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
 import { errorResult, failure, type KnownError } from "../../../action-result";
 import { getEmployeeContext } from "../../../employee-context";
-import { NO_ACCESS, type FormState } from "../../../form-state";
+import { NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../../../form-state";
 
 /*
  * Server actions på bygningssiden (bygninger, etasjer, areal og rom). Ingen tilgangslogikk her:
@@ -31,9 +35,26 @@ const ROUTE = "/oppdrag/[id]/bygninger";
 /** Feilene fra kjernen som siden viser med egen tekst. */
 const KNOWN_ERRORS: readonly KnownError[] = [
   { error: PropertyMissingError, message: new PropertyMissingError().message },
-  { error: BuildingNotEmptyError, message: new BuildingNotEmptyError().message },
-  { error: FloorNotEmptyError, message: new FloorNotEmptyError().message },
 ];
+
+/**
+ * Svaret fra «Fjern»: som `FormState`, og ved suksess det som ble fjernet (bygning, etasjer og
+ * rom i slettegruppen, A414), så angre-meldingen kan si «2. etasje og 4 rom er fjernet.».
+ */
+export type RemoveState = FormState & { removed: RemovedItem[] | null };
+
+/**
+ * Svaret fra «Angre» og «Gjenopprett». Ved feil bare en fast norsk tekst, aldri id eller stakk;
+ * skjermen viser sin egen tekst («Fikk ikke hentet tilbake …»).
+ */
+export type RestoreActionResult =
+  | {
+      ok: true;
+      restored: { type: "building" | "floor" | "room" | "party"; id: string }[];
+      changed: boolean;
+      notices: string[];
+    }
+  | { ok: false; message: string };
 
 /** Tekstverdiene fra skjemaet. Bare de kjente feltene leses (aldri `organizationId` e.l.). */
 function readFields<T extends string>(formData: FormData, fields: readonly T[]) {
@@ -66,6 +87,14 @@ function saved(previous: FormState): FormState {
 
 function refresh() {
   revalidatePath(ROUTE, "page");
+}
+
+function removed(previous: FormState, items: RemovedItem[]): RemoveState {
+  return { ...saved(previous), removed: items };
+}
+
+function notRemoved(state: FormState): RemoveState {
+  return { ...state, removed: null };
 }
 
 function handle(
@@ -109,22 +138,23 @@ export async function saveBuildingAction(
   return saved(previous);
 }
 
-/** «Fjern» på en bygning. Bare når den ikke har etasjer. */
+/** «Fjern» på en bygning, med etasjene, arealet og rommene som én slettegruppe (A414). */
 export async function removeBuildingAction(
   previous: FormState,
   formData: FormData,
-): Promise<FormState> {
+): Promise<RemoveState> {
   const buildingId = requiredId(formData, "buildingId");
   const context = await getEmployeeContext();
-  if (!context || buildingId === false) return failure(previous, {}, {}, NO_ACCESS);
+  if (!context || buildingId === false) return notRemoved(failure(previous, {}, {}, NO_ACCESS));
 
+  let result: Awaited<ReturnType<typeof removeBuilding>>;
   try {
-    await removeBuilding(context.actor, context.organizationId, buildingId);
+    result = await removeBuilding(context.actor, context.organizationId, buildingId);
   } catch (error) {
-    return handle(error, previous, {}, context.actor.id, { buildingId });
+    return notRemoved(handle(error, previous, {}, context.actor.id, { buildingId }));
   }
   refresh();
-  return saved(previous);
+  return removed(previous, result.removed);
 }
 
 /** «Lagre» for en ny eller endret etasje. Ny etasje når `floorId` er tom. */
@@ -152,22 +182,23 @@ export async function saveFloorAction(previous: FormState, formData: FormData): 
   return saved(previous);
 }
 
-/** «Fjern» på en etasje. Bare når den ikke har rom; arealet fjernes sammen med etasjen. */
+/** «Fjern» på en etasje, med rommene og arealet som én slettegruppe (A414). */
 export async function removeFloorAction(
   previous: FormState,
   formData: FormData,
-): Promise<FormState> {
+): Promise<RemoveState> {
   const floorId = requiredId(formData, "floorId");
   const context = await getEmployeeContext();
-  if (!context || floorId === false) return failure(previous, {}, {}, NO_ACCESS);
+  if (!context || floorId === false) return notRemoved(failure(previous, {}, {}, NO_ACCESS));
 
+  let result: Awaited<ReturnType<typeof removeFloor>>;
   try {
-    await removeFloor(context.actor, context.organizationId, floorId);
+    result = await removeFloor(context.actor, context.organizationId, floorId);
   } catch (error) {
-    return handle(error, previous, {}, context.actor.id, { floorId });
+    return notRemoved(handle(error, previous, {}, context.actor.id, { floorId }));
   }
   refresh();
-  return saved(previous);
+  return removed(previous, result.removed);
 }
 
 const AREA_FIELDS = ["braI", "braE", "braB", "alh", "measuredBy", "method", "comment"] as const;
@@ -265,16 +296,78 @@ export async function addRoomsAction(previous: FormState, formData: FormData): P
 export async function removeRoomAction(
   previous: FormState,
   formData: FormData,
-): Promise<FormState> {
+): Promise<RemoveState> {
   const roomId = requiredId(formData, "roomId");
   const context = await getEmployeeContext();
-  if (!context || roomId === false) return failure(previous, {}, {}, NO_ACCESS);
+  if (!context || roomId === false) return notRemoved(failure(previous, {}, {}, NO_ACCESS));
 
   try {
     await removeRoom(context.actor, context.organizationId, roomId);
   } catch (error) {
-    return handle(error, previous, {}, context.actor.id, { roomId });
+    return notRemoved(handle(error, previous, {}, context.actor.id, { roomId }));
   }
   refresh();
-  return saved(previous);
+  return removed(previous, [{ type: "room", id: roomId }]);
+}
+
+const RESTORE = {
+  building: restoreBuilding,
+  floor: restoreFloor,
+  room: restoreRoom,
+} as const;
+
+type StructureType = keyof typeof RESTORE;
+
+function isStructureType(value: unknown): value is StructureType {
+  return value === "building" || value === "floor" || value === "room";
+}
+
+function isHow(value: unknown): value is "undo" | "trash" {
+  return value === "undo" || value === "trash";
+}
+
+/**
+ * «Angre» i meldingen og «Gjenopprett» i papirkurven for bygning, etasje og rom. Bare `type`,
+ * `id` og `how` leses fra kalleren; organisasjonen kommer fra økten. Kjernen slår opp oppdraget
+ * fra raden og sjekker rettigheten. Avslag (også ukjent id, annen organisasjon og kansellert
+ * oppdrag) gir samme faste tekst. Ukjente feil logges bare med rute, bruker-id, id og feilnavn.
+ */
+export async function restoreStructureAction(input: {
+  type: string;
+  id: string;
+  how: string;
+}): Promise<RestoreActionResult> {
+  const type = input?.type;
+  const id = typeof input?.id === "string" ? input.id.trim() : "";
+  const how = input?.how;
+  const context = await getEmployeeContext();
+  if (!context || !isStructureType(type) || !isUuid(id) || !isHow(how)) {
+    return { ok: false, message: NO_ACCESS };
+  }
+
+  try {
+    const result = await RESTORE[type](context.actor, context.organizationId, id, how);
+    refreshAfterRestore();
+    return {
+      ok: true,
+      restored: result.restored.map((item) => ({ type: item.type, id: item.id })),
+      changed: result.changed,
+      notices: result.notices,
+    };
+  } catch (error) {
+    if (error instanceof AccessDeniedError) return { ok: false, message: NO_ACCESS };
+    logger.error("Gjenoppretting feilet", {
+      route: ROUTE,
+      userId: context.actor.id,
+      [`${type}Id`]: id,
+      errorName: error instanceof Error ? error.name : "ukjent feil",
+    });
+    return { ok: false, message: UNKNOWN_ERROR };
+  }
+}
+
+/** Bygningsskjermen og oppdragssiden viser det som kom tilbake. */
+function refreshAfterRestore() {
+  revalidatePath(ROUTE, "page");
+  revalidatePath("/oppdrag/[id]", "page");
 }

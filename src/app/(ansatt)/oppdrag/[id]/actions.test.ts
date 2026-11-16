@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 import { AccessDeniedError } from "@/core/access";
@@ -44,6 +45,7 @@ const mocks = vi.hoisted(() => ({
     addParty: vi.fn(),
     updateParty: vi.fn(),
     removeParty: vi.fn(),
+    restoreParty: vi.fn(),
     setAssignmentSchedule: vi.fn(),
   },
   properties: {
@@ -74,6 +76,7 @@ const {
   addPartyAction,
   updatePartyAction,
   removePartyAction,
+  restorePartyAction,
   savePropertyAction,
   saveCommonAreasAction,
   setScheduleAction,
@@ -871,5 +874,107 @@ describe("befaring og frist", () => {
     const logged = loggedWithoutIds();
     expect(logged).toContain("OppdiktetFeil");
     expect(logged).not.toContain("2026-11-06T09:00");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Papirkurv: «Fjern» på part gir det som ble fjernet, og «Angre»/«Gjenopprett» (restorePartyAction)
+// docs/funksjoner/fase2a-papirkurv-testplan.md avsnitt 8
+// ---------------------------------------------------------------------------------------------
+
+describe("8 papirkurv: parter", () => {
+  beforeEach(() => {
+    mocks.core.restoreParty.mockResolvedValue({
+      restored: [{ type: "party", id: PARTY_ID, organizationId: ORG }],
+      changed: true,
+      notices: [],
+    });
+  });
+
+  it("removePartyAction svarer med parten som ble fjernet; feil gir `removed: null`", async () => {
+    const ok = await removePartyAction(initialFormState, removeForm());
+    expect(ok.message).toBeNull();
+    expect(ok.removed).toEqual([{ type: "party", id: PARTY_ID }]);
+
+    mocks.core.removeParty.mockRejectedValue(new AccessDeniedError());
+    const denied = await removePartyAction(initialFormState, removeForm());
+    expect(denied.message).toBe(NO_ACCESS);
+    expect(denied.removed).toBeNull();
+  });
+
+  it.each(["undo", "trash"] as const)(
+    "8.1 how=%s: kjernen får aktøren, ORG fra økten, part-id og how; organizationId fra kalleren leses aldri",
+    async (how) => {
+      const result = await restorePartyAction({
+        id: PARTY_ID,
+        how,
+        organizationId: OTHER_ORG,
+      } as never);
+      expect(result).toEqual({
+        ok: true,
+        restored: [{ type: "party", id: PARTY_ID }],
+        changed: true,
+        notices: [],
+      });
+      expect(mocks.core.restoreParty.mock.calls[0]).toEqual([actor, ORG, PARTY_ID, how]);
+      expect(JSON.stringify(mocks.core.restoreParty.mock.calls)).not.toContain(OTHER_ORG);
+      expect(JSON.stringify(result)).not.toContain(ORG);
+    },
+  );
+
+  it("8.1 beskjeden om fjernet kontakt går videre uendret (A415)", async () => {
+    const notice = "Parten kom tilbake, men kontakten den var koblet til, er fjernet.";
+    mocks.core.restoreParty.mockResolvedValue({
+      restored: [{ type: "party", id: PARTY_ID, organizationId: ORG }],
+      changed: true,
+      notices: [notice],
+    });
+    const result = await restorePartyAction({ id: PARTY_ID, how: "trash" });
+    expect(result).toMatchObject({ ok: true, notices: [notice] });
+  });
+
+  it("8.2 AccessDeniedError gir fast norsk tekst, uten id, og ingen oppfrisking", async () => {
+    mocks.core.restoreParty.mockRejectedValue(new AccessDeniedError());
+    const result = await restorePartyAction({ id: PARTY_ID, how: "undo" });
+    expect(result).toEqual({ ok: false, message: NO_ACCESS });
+    expect(JSON.stringify(result)).not.toContain(PARTY_ID);
+    expect(vi.mocked(revalidatePath)).not.toHaveBeenCalled();
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it("8.2 ukjent feil: fast tekst, logg bare med rute, bruker-id, part-id og feilnavn", async () => {
+    const boom = new Error(`databasen sa nei til ${PERSONAL_VALUES.join(" ")}`);
+    boom.name = "OppdiktetFeil";
+    mocks.core.restoreParty.mockRejectedValue(boom);
+    const result = await restorePartyAction({ id: PARTY_ID, how: "trash" });
+    expect(result).toEqual({ ok: false, message: UNKNOWN_ERROR });
+    expect(mocks.logError).toHaveBeenCalledTimes(1);
+    const logged = loggedWithoutIds();
+    expect(logged).toContain("OppdiktetFeil");
+    for (const value of PERSONAL_VALUES) expect(logged, value).not.toContain(value);
+  });
+
+  it.each([
+    ["ugyldig id", { id: "ikke-en-id", how: "undo" }],
+    ["tom id", { id: "", how: "trash" }],
+    ["ukjent how", { id: PARTY_ID, how: "slett" }],
+  ] as const)("%s → fast tekst uten kall til kjernen", async (_name, input) => {
+    expect(await restorePartyAction(input)).toEqual({ ok: false, message: NO_ACCESS });
+    expect(coreCalls()).toBe(0);
+  });
+
+  it("uten ansattkontekst → fast tekst uten kall til kjernen", async () => {
+    mocks.getEmployeeContext.mockResolvedValue(null);
+    expect(await restorePartyAction({ id: PARTY_ID, how: "undo" })).toEqual({
+      ok: false,
+      message: NO_ACCESS,
+    });
+    expect(coreCalls()).toBe(0);
+  });
+
+  it("8.4 revaliderer oppdragssiden og bygningsskjermen", async () => {
+    await restorePartyAction({ id: PARTY_ID, how: "trash" });
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith("/oppdrag/[id]", "page");
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith("/oppdrag/[id]/bygninger", "page");
   });
 });
