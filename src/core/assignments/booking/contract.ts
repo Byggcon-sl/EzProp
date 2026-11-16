@@ -173,9 +173,10 @@ export type UpdateAssignmentBooking = (
 
 /**
  * Én endret verdi. `F` er feltkodene den som leser tillater (oppdraget: `BookingEditableField`;
- * tilbudet: også `validUntil`, se `readBookingHistory`).
+ * tilbudet: også `validUntil`, se `readBookingHistory`). Uten `F` er feltkoden tekst, slik at den
+ * felles visningen tar både oppdragets og tilbudets historikk.
  */
-export type BookingHistoryValue<F extends string = BookingEditableField> = {
+export type BookingHistoryValue<F extends string = string> = {
   field: F;
   /** Tekst, ja/nei eller tom. Bestiller og firma er navn (eller «(fjernet …)»), ikke id-er. */
   from: string | boolean | null;
@@ -183,7 +184,7 @@ export type BookingHistoryValue<F extends string = BookingEditableField> = {
 };
 
 /** Én rad under «Endringer». Samme form for ordre og oppdrag. */
-export type BookingHistoryEntry<F extends string = BookingEditableField> = {
+export type BookingHistoryEntry<F extends string = string> = {
   id: string;
   /** `create` eller `update` for oppdraget. */
   action: string;
@@ -208,7 +209,7 @@ export type ListAssignmentBookingHistory = (
   actor: Actor,
   organizationId: string,
   assignmentId: string,
-) => Promise<BookingHistoryEntry[]>;
+) => Promise<BookingHistoryEntry<BookingEditableField>[]>;
 
 /* ---------------------------------------------------------------- dublett */
 
