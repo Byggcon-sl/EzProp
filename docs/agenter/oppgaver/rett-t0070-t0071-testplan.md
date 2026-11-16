@@ -60,16 +60,17 @@ Med mock av `getEmployeeContextForAction` som gir «logget ut»:
 
 ## 2. E2e: `e2e/fase-2a-rett-t0070-t0071.spec.ts`
 
-Oppsett: logg inn som takstmann (`logInAsInspector`), lag eget oppdrag med `uniqueSuffix()` som i `e2e/fase-2a-rett-t0050-valg-etter-feil.spec.ts`. For ordren: lag en ordre som i `e2e/fase-2a-rette-ordre.spec.ts`. «Utløpt innlogging» lages med `page.context().clearCookies()` etter at skjemaet er fylt ut. «Uten nett» lages med `page.context().setOffline(true)`.
+Oppsett: logg inn som takstmann (`logInAsInspector`), lag eget oppdrag med `uniqueSuffix()` som i `e2e/fase-2a-rett-t0050-valg-etter-feil.spec.ts`. «Utløpt innlogging» lages med `page.context().clearCookies()` etter at skjemaet er fylt ut. «Uten nett» lages med `page.context().setOffline(true)`.
 
 Innlogging tilbake: lag en hjelper (for eksempel `logInFromCurrentPage(page, email)` i `e2e/helpers.ts`) som fyller ut kodeskjemaet på siden man står på, uten `goto("/logg-inn")` og uten å vente på `/arbeidskoe`.
 
 | Nr | Sak | Steg | Forventet |
 |---|---|---|---|
-| E1 | «Endre ordren», utløpt (funnet steg 1–4) | Åpne ordren, «Endre ordren», skriv i «Borettslag eller sameie», kryss av «Egenerklæring mottatt», slett informasjonskapslene, Lagre | Skjemaet står med teksten og avkrysningen. Meldingen «Du er logget ut. Logg inn igjen.» vises (`role="alert"`). Lenken «Logg inn» har `href` `/logg-inn?neste=%2Fordre%2F<id>`. Ordren er ikke endret |
-| E2 | Tilbake etter innlogging | Fortsettelse av E1: trykk «Logg inn», logg inn med kode | Man havner på `/ordre/<id>`, ikke arbeidskøen |
+| E1 | «Lagre eiendom», utløpt (funnet steg 1–4, på eiendom i stedet for ordre) | Fyll ut eiendomsskjemaet, slett informasjonskapslene, Lagre | Skjemaet står med verdiene. Meldingen «Du er logget ut. Logg inn igjen.» vises (`role="alert"`). Lenken «Logg inn» har `href` `/logg-inn?neste=%2Foppdrag%2F<id>`. Eiendommen er ikke endret |
+| E2 | Tilbake etter innlogging | Fortsettelse av E1: trykk «Logg inn», logg inn med kode | Man havner på `/oppdrag/<id>`, ikke arbeidskøen |
+
 | E3 | «Legg til flere rom», utløpt | Bygninger: legg til bygning og etasje, åpne «Legg til flere rom», sett tellere og valg, slett informasjonskapslene, Lagre | Dialogen er åpen, tellere og valg står, meldingen og lenken (`neste` = `/oppdrag/<id>/bygninger`) vises. Ingen rom er lagt til |
-| E4 | «Lagre eiendom», utløpt | Fyll ut eiendomsskjemaet, slett informasjonskapslene, Lagre | Verdiene står, meldingen og lenken (`neste` = `/oppdrag/<id>`) vises. Etter innlogging via lenken: tilbake på `/oppdrag/<id>` |
+| E4 | Bygninger, utløpt | Legg til bygning (eller etasje), slett informasjonskapslene, Lagre | Verdiene står, meldingen og lenken (`neste` = `/oppdrag/<id>/bygninger`) vises. Etter innlogging via lenken: tilbake på bygningssiden |
 | E5 | «Lagre eiendom», uten nett | Fyll ut, `setOffline(true)`, Lagre | «Du er uten nett. Endringen er ikke lagret.» vises, verdiene står, ingen engelsk feilside. Slå på nett, Lagre: lagres |
 | E6 | «Legg til flere rom», uten nett | Som E3 med `setOffline(true)` | Samme melding, dialog, tellere og valg står. Slå på nett, Lagre: rommene lagres |
 | E7 | Bygninger, uten nett | Legg til bygning (eller etasje), `setOffline(true)`, Lagre | Samme melding, skjemaet står |
@@ -77,6 +78,8 @@ Innlogging tilbake: lag en hjelper (for eksempel `logInFromCurrentPage(page, ema
 | E9 | Ingen persondata i `neste` | Slett informasjonskapslene, gå til `/arbeidskoe?q=Oppdiktet%20Navn` | Adressen til innloggingen inneholder ikke `q=` eller navnet |
 | E10 | Åpen videresending | Gå til `/logg-inn?neste=//evil.example` og `/logg-inn?neste=/%5Cevil.example`, logg inn | Havner i `/arbeidskoe` |
 | E11 | Tastatur og skjermleser | Etter E1: Tab til «Logg inn»-lenken | Lenken nås med tastatur, meldingen har `role="alert"` eller `aria-live`, fokus står i skjemaet |
+
+«Endre ordren» er tatt ut 16.11.2026: ordrefilene røres ikke mens «Tilbud i stedet for ordre» bygges. Testen for ordreskjemaet følger med tilbudet.
 
 Sjekk at testen var rød: kjør E1, E3, E5 og E6 mot `main` før rettingen og skriv resultatet i PR-en.
 
