@@ -1,7 +1,7 @@
 # Testplan: Tilbud i stedet for ordre
 
 - **Oppgavekort:** `docs/funksjoner/fase2a-tilbud.md`
-- **Dato:** 14.11.2026 (test-leder, før bygging)
+- **Dato:** 14.11.2026 (test-leder, før bygging). Rettet 16.11.2026 mot `src/core/orders/contract.ts` og utvidet med forbedrerens tillegg F1–F5 (avsnitt 7). Ved motstrid gjelder grensesnittet.
 - **Støtter hovedmål:** de ansatte (testene låser at «Gjør om til oppdrag» er ett trykk uten rulling på iPad, at menyen viser det kontoret bruker, og at åpne tilbud ikke drukner i gamle), KI i bunnen (statuskodene, `source`, `validUntil` og hendelsene låses, så et senere tilbudsutkast fra e-post bruker samme datamodell; vernet av fritekstfeltene står uendret), færre reklamasjoner (alle bestillingsfelt kopieres ved omgjøring, og dublettvarselet tar med åpne og nylig utløpte tilbud).
 
 Alle Vitest-tester mot databasen bruker `TEST_DATABASE_URL` og `resetDatabase` i `beforeEach`. Tiden styres med faste tidspunkt ut fra `TEST_NOW` (03.11.2026 10:00 UTC) og `todayInOslo(now)`; ingen test avhenger av klokka i dag. Testdata er oppdiktet (adresser som «Testveien 12, 8000 Bodø», matrikkel 9999/123). e2e kjøres i prosjektene `pc` og `ipad`.
@@ -12,8 +12,10 @@ Ingen TG-regler. «Regeltestene» er utløpsregelen og datogrensene for `validUn
 
 Fra kortet. Avvik føres i kortet.
 
-- `src/core/orders`: `OFFER_VALIDITY_DAYS = 30` (navn fritt, én konstant), `isOfferExpired(status, validUntil, today): boolean`, `offerDisplayStatus(status, validUntil, today): OfferDisplayStatus` (navn fritt), SQL-uttrykket for utløp i én fil, brukt av listen og tellingen.
-- `listOrders(actor, organizationId, { query?, status?: OfferDisplayStatus | "all", today })` (navn på valget fritt; standard `open`).
+- `src/core/orders`: `OFFER_VALID_DAYS = 30`, `OFFER_VALID_UNTIL_MAX_DAYS = 365`, `OFFER_EXPIRING_SOON_DAYS = 7` (F3), `isOfferExpired(status, validUntil, today): boolean`, `offerDisplayStatus(status, validUntil, today): OfferDisplayStatus`, `offerDaysLeft(validUntil, today)` (F3), SQL-uttrykket for utløp i én fil, brukt av listen og tellingen.
+- `listOrders(actor, organizationId, { query?, status?: OfferListFilter, now? })`; ukjent eller utelatt status gir `open`. Svaret er `{ items, total, status, counts }` (`counts` per filter, F3).
+- Låst dato på avslått eller gjort-om tilbud: `OfferValidUntilLockedError`, og ingen felt i samme lagring lagres.
+- `rejectOrder(actor, organizationId, orderId, { reasonKey, reasonText })` (F4).
 - `ORDER_EDITABLE_FIELDS = [...BOOKING_EDITABLE_FIELDS, "validUntil"]`.
 - `readBookingHistory(..., allowedFields)` tar listen som parameter.
 - `src/core/assignments/booking/duplicate-sql.ts` får `today` som parameter.
@@ -29,7 +31,7 @@ Fra kortet. Avvik føres i kortet.
 4. **`rejected` og `converted` med `validUntil` for ett år siden** → aldri utløpt; `rejected` / `converted`.
 5. **midnatt norsk tid, vinter:** `now = 2026-01-14T23:30Z` (00:30 15.01 i Oslo), `validUntil = 2026-01-14` → utløpt; `now = 2026-01-14T22:30Z` (23:30 14.01) → ikke utløpt.
 6. **midnatt norsk tid, sommer:** `now = 2026-06-14T22:30Z` (00:30 15.06) → utløpt med `validUntil = 2026-06-14`; `now = 2026-06-14T21:30Z` → ikke utløpt.
-7. **`OFFER_VALIDITY_DAYS` er 30** (låser konstanten).
+7. **`OFFER_VALID_DAYS` er 30 og `OFFER_VALID_UNTIL_MAX_DAYS` er 365** (låser konstantene).
 8. **`OfferDisplayStatus` har nøyaktig `open`, `expired`, `converted`, `rejected`**, og `expired` finnes ikke i `ORDER_STATUSES` (kan ikke skrives til `orders.status`).
 
 ### 1.2 Etiketter, `src/core/orders/codes.test.ts` (utvides) og `src/app/(ansatt)/tilbud/offer-status-badge.test.ts` (ny)
@@ -63,7 +65,7 @@ Fra kortet. Avvik føres i kortet.
 
 1. **ingen synlig «ordre» / «Ordre»** i strenger under `src/app/(ansatt)/tilbud/`, `src/app/(ansatt)/layout.tsx`, `possible-duplicates-notice.tsx` og `oppdrag/[id]/page.tsx`, unntatt «meglerens ordrenummer» (liste over tillatte unntak i testen).
 2. **ingen lenke eller `revalidatePath` til `/ordre`** i `src/` (unntak: `next.config.ts` sine videresendinger). Treffer i dag bl.a. `firma/actions.ts`, `kontakter/actions.ts`, `oppdrag/[id]/actions.ts`, `oppdrag/[id]/page.tsx`, `src/core/organization/employees.ts`.
-3. **mappen `src/app/(ansatt)/ordre/` finnes ikke lenger** (sidene er flyttet, ikke kopiert).
+3. **mappen `src/app/(ansatt)/ordre/` finnes ikke lenger** (sidene er flyttet, ikke kopiert). `order-values.ts` ligger i `src/app/(ansatt)/order-values.ts`, og `oppdrag/[id]/booking-card.tsx` og `booking-actions.ts` importerer derfra (typecheck fanger en glemt import, A362).
 
 ### 1.7 Videresending, `tests/next-redirects.test.ts` (ny, leser `next.config.ts`)
 
@@ -85,6 +87,9 @@ Oppsett: testdatabasen migreres til 0034, rader settes inn med rå SQL, så kjø
 9. **gammel åpen rad** (`received_at` 60 dager før `TEST_NOW`) er utløpt etter migreringen (låser ADR-setningen om at gamle åpne blir «Utløpt»).
 10. **`src/db/orders-schema.test.ts`** oppdateres: kolonnen, typen `date` og indeksen.
 11. **`tests/tenant-tables.ts` er uendret**, og `tests/tenant-isolation-all-tables.test.ts` er grønn.
+12. **avslagsgrunn (F4):** alle rader med status `rejected`, også mykt slettede, får `rejected_reason_key = 'other'` og uendret `rejected_reason`; åpne og gjort-om rader får `null`.
+13. **CHECK etter migreringen:** `rejected` uten nøkkel feiler; `other` uten tekst feiler; `price` uten tekst godtas; ukjent nøkkel (`'pris'`) feiler.
+14. **status, `row_version`, `updated_at` og `deleted_at`** er uendret også etter steget for avslagsgrunn (felt for felt, som 2.3).
 
 ## 3. Kjernen mot databasen
 
@@ -103,19 +108,20 @@ Seed: ett tilbud per visningsstatus (åpent, utløpt, avslått, gjort om), pluss
 2. **`expired`, `rejected`, `converted`:** nøyaktig det ene tilbudet i hver.
 3. **`all`:** de fire, ingen mykt slettede.
 4. **mykt slettet vises ikke i noe filter** (`it.each` over alle fem).
-5. **ukjent `status` (`"slettet"`, `"expired'--"`)** → standard `open` eller Zod-feil, aldri databasefeil.
+5. **ukjent `status` (`"slettet"`, `"expired'--"`)** → standard `open`, aldri databasefeil; svaret har `status = "open"`.
 6. **søket sammen med filter:** søk på adressen til det utløpte i `open` → ingen treff; i `expired` → ett treff; i `all` → ett treff.
 7. **`total` og `orderListSummary`** følger filteret.
 8. **grensedag:** `validUntil = today` er i `open`, ikke i `expired`.
 9. **«Gyldig til»** er med i hver rad (`OrderListItem.validUntil`).
-10. **T-0031:** tilbud gjort om til oppdrag som er kansellert → raden har oppdragets status «Kansellert» (feltet i `OrderListItem`), ikke bare «Gjort om til oppdrag». Funnet settes til «rettet».
+10. **T-0031:** tilbud gjort om til oppdrag som er kansellert → raden har `assignmentCancelled: true` og `assignmentNumber` satt, og listen viser «(kansellert)» etter nummeret. Funnet settes til «rettet».
 11. **ytelse:** `EXPLAIN` av standardlisten med `set local enable_seqscan = off` bruker den nye indeksen (ingen `Seq Scan on orders`).
 
 ### 3.3 Lage tilbud, `src/core/orders/orders.test.ts` (utvides)
 
 1. **`createOrder` med `validUntil`** lagrer datoen; `source = manual`; hendelsen `order.received` som før.
 2. **`validUntil` i går eller i dag + 366** → avvist, ingen rad, ingen hendelse.
-3. **uten `validUntil`** → Zod-feil (påkrevd i kjernen; skjemaet forhåndsutfyller).
+3. **uten `validUntil`** (utelatt, `null` eller `""`) → lagres med `todayInOslo(now) + OFFER_VALID_DAYS`.
+4. **tom dato ved endring** (utelatt, `null` eller `""`) betyr uendret, i alle statuser (også avslått og gjort om, uten `OfferValidUntilLockedError`).
 
 ### 3.4 Gjør om til oppdrag, `src/core/orders/convert-offer.test.ts` (ny) og `convert-copies-booking.test.ts` (utvides)
 
@@ -140,7 +146,7 @@ Seed: ett tilbud per visningsstatus (åpent, utløpt, avslått, gjort om), pluss
 1. **utløpt tilbud får ny dato** (i dag + 10) → visningsstatus `open`; raden er i `open`-listen igjen.
 2. **historikken:** endringen står i `readBookingHistory` for tilbudet med feltkode `validUntil`, gammel og ny dato, hvem og når.
 3. **`readBookingHistory` for et oppdrag** viser aldri `validUntil` (listen sendes inn).
-4. **avslått og gjort-om tilbud:** endring av `validUntil` → «Gyldig til kan bare endres på åpne og utløpte tilbud.»; ingen endring lagret, `row_version` uendret.
+4. **avslått og gjort-om tilbud:** endring av `validUntil` sammen med en ny adresse i samme lagring → `OfferValidUntilLockedError` («Gyldig til kan bare endres på åpne og utløpte tilbud.»); verken datoen eller adressen er lagret, `row_version` uendret, ingen historikkrad.
 5. **avslått og gjort-om tilbud:** endring av adressen (uten ny dato) → lagres (T1, A327).
 6. **utløpt tilbud, annet felt endres, `validUntil` uendret (i fortiden)** → lagres; grensene sjekkes bare ved ny dato.
 7. **ny dato i går / i dag + 366** → feilmeldingene fra 1.4, ingenting lagret.
@@ -162,6 +168,8 @@ Seed: ett tilbud per visningsstatus (åpent, utløpt, avslått, gjort om), pluss
 5. **avslått tilbud** → ingen treff (uendret).
 6. **`duplicate-sql.ts` importerer ikke fra `src/core/orders`** (kildetekst-sjekk; ADR 0011 punkt 9).
 7. **`today` kommer som parameter**, ikke `now()` (kildetekst-sjekk som 3.1.2).
+8. **gjennom `findPossibleDuplicateOrders`** (`src/core/orders/possible-duplicates.ts`, varselet på `/tilbud/[id]`): funksjonen tar `now`, regner `today` med `todayInOslo` og sender den videre. Et utløpt tilbud mottatt 91 dager før gir ikke treff; mottatt 89 dager før gir treff.
+9. **90 × 24 timer rundt sommertid:** vinduet er `received_at >= now - 90 × 24 timer`, ikke 90 kalenderdager. `it.each` med `now` like etter overgangen til sommertid (29.03.2026) og vintertid (25.10.2026): `received_at` ett sekund innenfor gir treff, ett sekund utenfor gir ikke treff.
 
 ### 3.9 Tilgang per rolle (`it.each`, alle tjenestene: liste med hvert filter, `getOrder`, `createOrder`, `updateOrder` med `validUntil`, `convertOrderToAssignment`, `rejectOrder`)
 
@@ -176,8 +184,8 @@ Seed: ett tilbud per visningsstatus (åpent, utløpt, avslått, gjort om), pluss
 2. **`expectTenantIsolation` for `getOrder`.**
 3. **`expectTenantIsolation` for `updateOrder` med `validUntil`.**
 4. **`expectTenantIsolation` for `convertOrderToAssignment`.**
-5. **`expectTenantIsolation` for `rejectOrder`.**
-6. **`expectTenantIsolation` for dublettspørringen** med utløpte tilbud (samme adresse i A og B).
+5. **`expectTenantIsolation` for `rejectOrder`** (med `reasonKey`).
+6. **`expectTenantIsolation` for dublettspørringen** med utløpte tilbud (samme adresse i A og B), både gjennom `findPossibleDuplicateOrders` og gjennom varselet på «Nytt oppdrag» (`findPossibleDuplicatesFor`, F2 b).
 7. **IDOR:** admin i A med `orgA.id` og et tilbud-id fra B → `AccessDeniedError` for lese, endre, gjøre om og avslå; Bs tilbud er uendret (`row_version`, status).
 8. **feil organisasjon i argumentet:** admin i A med `orgB.id` → `AccessDeniedError`.
 
@@ -190,8 +198,8 @@ Seed: ett tilbud per visningsstatus (åpent, utløpt, avslått, gjort om), pluss
 
 ### 4.1 `src/app/(ansatt)/tilbud/actions.test.ts` (flyttet fra `ordre/actions.test.ts`, utvidet)
 
-1. **«Gjør om til oppdrag»** sender til `/oppdrag/<id>` med kvitteringen «Oppdraget er laget.».
-2. **avslå uten grunn** → feltfeil, teksten står igjen.
+1. **«Gjør om til oppdrag»** sender til `/oppdrag/<id>` med kvitteringen «Oppdraget er laget. Velg takstmann og befaringsdato.» og lenken til `#takstmann` (F5).
+2. **avslå uten valg** → «Velg en grunn.»; **«Annet» uten tekst** → «Skriv grunnen.»; teksten står igjen (F4).
 3. **endring av `validUntil` med feil** → feilmelding ved feltet, og ingen «Lagret.».
 4. **T-0089 («Lagret.»-delen):** etter en lagring som lyktes og så en som feiler, vises bare feilmeldingen; kvitteringen kommer ikke tilbake ved omlasting (ingen `?endret=1` igjen i adressen etter visning, eller tilsvarende). Lagring der ingenting ble endret (tom «Mottatt») gir ikke «Endringene er lagret.». Funnet settes til «rettet» (den delen).
 5. **ingen tilgangslogikk i handlingene** utover kall til kjernen (kildetekst-sjekk: ingen `roles.includes`, ingen sammenligning med `organizationId` fra skjemaet).
@@ -231,8 +239,8 @@ Seed: ett tilbud per visningsstatus (åpent, utløpt, avslått, gjort om), pluss
 12. **5.12 arbeidskøen:** et åpent og et utløpt tilbud vises ikke i arbeidskøen, og tellingen i fanene er uendret.
 13. **5.13 takstmann og kontor** ser listen og kan gjøre om (logget inn som `INSPECTOR_EMAIL` og en kontorbruker).
 14. **5.14 bruker uten ansattrad** får «Ingen tilgang» på `/tilbud` og `/tilbud/<id>`, ingen adresse synlig.
-15. **5.15 uten nett:** `context.setOffline(true)` på «Nytt tilbud», «Avslå tilbud» og «Endre» → nettmeldingen vises, og det som er skrevet står igjen; med nett igjen kan det lagres.
-16. **5.16 tilgjengelighet:** `h1` «Tilbud», filterknappene er knapper/lenker med `aria-current` (eller `aria-pressed`) på valgt, kontrasten på statusmerkene er minst 4,5:1 (egen `contrastRatio`, som i `fase-1-testskjema.spec.ts`); se merknad om axe.
+15. **5.15 uten nett:** `context.setOffline(true)` på «Nytt tilbud», «Avslå tilbud» og «Endre» → nøyaktig «Du er uten nett. Endringen er ikke lagret.» (A360) i alle tre, og det som er skrevet står igjen; med nett igjen kan det lagres.
+16. **5.16 tilgjengelighet:** `h1` «Tilbud», filterknappene er knapper/lenker med `aria-current` (eller `aria-pressed`) på valgt, kontrasten på statusmerkene og merket «Går ut om N dager» er minst 4,5:1 (egen `contrastRatio`, som i `fase-1-testskjema.spec.ts`). Ingen axe (ingen ny avhengighet).
 17. **5.17 tastatur:** filter, «Gjør om til oppdrag» og «Avslå tilbud» kan nås med Tab og brukes med Enter, med synlig fokus.
 
 **Bare `ipad` (stående og liggende):**
@@ -247,6 +255,48 @@ Seed: ett tilbud per visningsstatus (åpent, utløpt, avslått, gjort om), pluss
 1. **`tests/factories.test.ts`:** `createOrder` gir `validUntil` = `todayInOslo(TEST_NOW) + 30` som standard og tar overstyring.
 2. **`pnpm db:seed:testdata`** (eksisterende test for testdata utvides): minst ett åpent, ett utløpt, ett avslått og ett gjort-om tilbud; det utløpte er utløpt uansett dag (datoen regnes fra dagens dato); alle adresser oppdiktet.
 
+## 7. Forbedrerens tillegg (F1–F5, kortet «Lagt til av forbedreren»)
+
+### 7.1 «Forleng 30 dager» (F1)
+
+1. **enhet, `it.each`:** knappen vises for utløpt, og for åpent med 0, 1 og 7 dager igjen; ikke med 8 dager igjen; aldri for avslått og gjort om.
+2. **kjerne:** handlingen setter `validUntil = todayInOslo(now) + 30`, en historikkrad med gammel og ny dato, og tilbudet er i `open` igjen.
+3. **avslått / gjort om** (direkte kall) → `OfferValidUntilLockedError`, ingenting lagret.
+4. **to trykk** (samme `row_version`) → én endring, én historikkrad, ingen feilmelding til brukeren.
+5. **e2e (pc og ipad):** utløpt tilbud → «Forleng 30 dager» → «Gyldig til [dato].» og tilbudet står i «Åpne»; knappen er minst 44 px.
+6. **tenant:** `expectTenantIsolation` for handlingen; tilbud-id fra B gir `AccessDeniedError`.
+
+### 7.2 Fra «Nytt oppdrag» til tilbud (F2)
+
+1. **«Lagre som tilbud i stedet»:** handlingen lager ett tilbud med alle bestillingsfeltene fra skjemaet og `validUntil` = i dag + 30, ingen oppdrag, og åpner `/tilbud/<id>` med «Tilbudet er laget. Gyldig til [dato].».
+2. **ingen persondata i adressen:** omdirigeringen har bare tilbud-id (e2e sjekker `page.url()` og at adressen, matrikkelen og bestilleren ikke står i den).
+3. **feil i skjemaet** (mangler adresse) → feilmeldingen vises på «Nytt oppdrag», og det som er skrevet står igjen; intet tilbud.
+4. **felt som bare gjelder oppdraget** (takstmann, befaringsdato) lagres ikke på tilbudet.
+5. **«Gjør om tilbudet» i dublettvarselet:** `it.each` over åpent, utløpt innenfor 90 dager, avslått og gjort om → knappen bare for de to første; lenken er `/tilbud/<id>#gjor-om`, og «Gjør om til oppdrag» har fokus når siden åpnes (e2e).
+6. **e2e hele flyten:** åpent tilbud på Testveien 12 → «Nytt oppdrag» med samme adresse → varsel → «Gjør om tilbudet» → ett trykk → ett oppdrag, og tilbudet er «Gjort om til oppdrag» (ingen dobbel registrering).
+7. **tenant:** samme adresse i B gir ikke treff og ingen knapp (3.10.6).
+
+### 7.3 Tilbudslisten viser hva som haster (F3)
+
+1. **tallene stemmer:** for hvert filter er `counts[filter]` lik `total` fra `listOrders` med samme filter og søk (`it.each` over de fem, med og uten søk); mykt slettede telles ikke.
+2. **samme uttrykk:** kildetekst-sjekk på at tellingen bruker `OfferListFilterSql`, ikke et eget vilkår.
+3. **sortering i «Åpne»:** tre åpne tilbud med `validUntil` om 20, 2 og 9 dager vises i rekkefølgen 2, 9, 20.
+4. **`offerDaysLeft`, `it.each`:** 0 → «Går ut i dag», 1 → «Går ut i morgen», 7 → «Går ut om 7 dager», 8 → ingen merke; sommertid og vintertid gir samme svar.
+5. **e2e:** knappene viser tallet («Åpne 3»), skjermleseren får «Åpne, 3 tilbud», merket har ikon og tekst.
+6. **tenant:** `expectTenantIsolation` for tellingen (tilbud i B telles ikke i A).
+
+### 7.4 Faste avslagsgrunner (F4)
+
+1. **kodene:** `OFFER_REJECTION_REASON_KEYS` er nøyaktig `price`, `timing`, `chose_other`, `customer_withdrew`, `other`, og hver har norsk etikett (låser regel 6).
+2. **Zod, `it.each`:** ingen nøkkel → «Velg en grunn.»; `other` uten tekst → «Skriv grunnen.»; `price` uten tekst godtas; tekst med elleve sifre avvises som før; ukjent nøkkel avvises.
+3. **kjerne:** `rejectOrder` lagrer nøkkel og tekst; `order.rejected` har `reasonKey` og aldri friteksten; loggen har ingen fritekst.
+4. **e2e:** valgknappene er minst 44 px og kan brukes med tastatur; «Avslått: Pris» vises etterpå.
+5. **vernet:** `rejected_reason` står fortsatt i `NEVER_FIELDS`; nøkkelen er ikke fritekst.
+
+### 7.5 Pekeren etter omgjøring (F5)
+
+1. **e2e:** etter «Gjør om til oppdrag» står «Oppdraget er laget. Velg takstmann og befaringsdato.», lenken flytter til kortet med takstmann og befaringsdato, og feltet er synlig uten rulling på iPad.
+
 ## Dekning av akseptkriteriene
 
 | Akseptkriterium | Tester |
@@ -258,7 +308,7 @@ Seed: ett tilbud per visningsstatus (åpent, utløpt, avslått, gjort om), pluss
 | Gjør om øverst, ett trykk, alt fylt inn | 3.4.1, 4.1.1, 4.2.1, 5.5, 5.18 |
 | Admin uten kontor | 3.4.7, 3.9.2, 5.7 |
 | To raske trykk | 3.4.5, 5.6 |
-| Avslå krever grunn | 3.5, 5.8 |
+| Avslå krever grunn | 3.5, 5.8, 7.4 |
 | Utløpt | 1.1, 3.2, 3.4.2, 3.5.2, 3.6.1, 5.9, 5.10 |
 | `validUntil` bare åpne/utløpte, grenser, historikk | 1.4, 3.6 |
 | Filter 44 pt i adressen | 5.11, 5.19 |
@@ -267,17 +317,23 @@ Seed: ett tilbud per visningsstatus (åpent, utløpt, avslått, gjort om), pluss
 | Myk sletting | 3.2.4, 3.4.6, 3.5.4, 3.6.10, 3.8.4, 3.11.2 |
 | Annen organisasjon | 3.10, 5.3 |
 | Nettfeil | 5.15 |
-| iPad og axe | 5.16–5.21 |
+| iPad, kontrast og roller | 5.16–5.21 |
+| F1 Forleng 30 dager | 7.1 |
+| F2 Lagre som tilbud, «Gjør om tilbudet» | 7.2, 3.10.6 |
+| F3 Tall, sortering, «Går ut om» | 7.3 |
+| F4 Faste avslagsgrunner | 7.4, 2.12–2.14 |
+| F5 Pekeren etter omgjøring | 4.1.1, 7.5 |
 | Vern for fritekst | 1.5 |
 | T-0031, T-0075, T-0089 | 3.2.10, 4.3.2, 4.1.4 |
 
 ## Merknader til utvikler og prosjektleder
 
-- **Nettmeldingen (lite):** kortet sier «Ingen nett. Prøv igjen.», men endre-skjemaet bruker i dag `ORDER_OFFLINE_MESSAGE` = «Du er uten nett. Endringen er ikke lagret.» (`src/app/(ansatt)/ordre/order-values.ts`), og «Ny ordre» og «Avvis» har ingen egen nettmelding. Velg én tekst for alle tre skjemaene og før den i kortet; 5.15 krever samme tekst i alle tre og at skrevet tekst står igjen.
-- **Axe (lite):** `@axe-core/playwright` er ikke avhengighet i repoet. 5.16 bruker den egne kontrastsjekken og rolle-/overskriftsjekker, så ingen ny avhengighet trengs (regel 9). Skal axe inn, må PR-en begrunne det.
+- **Nettmeldingen:** avgjort (A360): `ORDER_OFFLINE_MESSAGE` = «Du er uten nett. Endringen er ikke lagret.» i alle skjemaene.
+- **Axe:** ikke med. Akseptkriteriet er skrevet om til «kontrast og roller» med den egne sjekken (regel 9).
+- **Migreringsnummeret:** sjekk at 0035 er ledig mot main rett før merge.
 - **Lenker til `/ordre` utenfor sidene (lite):** `firma/actions.ts`, `kontakter/actions.ts`, `oppdrag/[id]/actions.ts`, `oppdrag/[id]/page.tsx`, `possible-duplicates-notice.tsx` og `src/core/organization/employees.ts` nevner `/ordre` i dag. 1.6.2 blir rød til alle er rettet.
-- **Versjon:** minor, 0.13.1 → 0.14.0 i `package.json` (regel 13).
+- **Versjon:** minor, 0.13.4 → 0.14.0 i `package.json` (regel 13).
 
 ## Godkjenning
 
-Test-leder godkjenner ikke uten 3.9 (tilgang per rolle, admin uten kontor), 3.10 (tenant-isolasjon for liste med hvert filter, side, endring, omgjøring, avslag og dublett), 2 (migrering mot ekte-lignende rader), 3.1 (paritet), 3.4.5 og 5.6 (ett oppdrag ved dobbelttrykk) og 5.18 (ingen rulling på iPad).
+Test-leder godkjenner ikke uten myk sletting i alle filtre og handlinger, 3.9 (tilgang per rolle, admin uten kontor), 3.10 (tenant-isolasjon for liste med hvert filter, side, endring, omgjøring, avslag og dublett), 2 (migrering mot ekte-lignende rader), 3.1 (paritet), 3.4.5 og 5.6 (ett oppdrag ved dobbelttrykk) og 5.18 (ingen rulling på iPad).
