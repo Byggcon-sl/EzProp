@@ -3,7 +3,13 @@ import type { Actor } from "@/core/access";
 import type { BookingEditableField } from "@/core/assignments/booking/codes";
 import type { BookingInput } from "@/core/assignments/booking/contract";
 import type { Assignment, Order } from "@/db/schema";
-import type { OfferDisplayStatus, OfferListFilter, OrderSource, OrderStatus } from "./codes";
+import type {
+  OfferDisplayStatus,
+  OfferListFilter,
+  OfferRejectionReasonKey,
+  OrderSource,
+  OrderStatus,
+} from "./codes";
 
 /*
  * Grensesnittet for «Tilbud i stedet for ordre» (ADR 0012, docs/funksjoner/fase2a-tilbud.md).
@@ -33,7 +39,21 @@ export const OFFER_VALID_DAYS = 30;
 export const OFFER_VALID_UNTIL_MAX_DAYS = 365;
 
 /**
- * Utløpsregelen, ren funksjon (`./expiry.ts`): sant når `status` er `received` og
+ * Et åpent tilbud med så mange dager eller færre igjen får merket «Går ut …» og knappen
+ * «Forleng 30 dager» (F1, F3, A365, A366). Står bare her.
+ */
+export const OFFER_EXPIRING_SOON_DAYS = 7;
+
+/**
+ * Dager igjen til tilbudet går ut, ren funksjon (`./offer-status.ts`, F3): `validUntil − today` i
+ * hele kalenderdager. 0 = går ut i dag, 1 = i morgen, negativt = utløpt. Begge er «ÅÅÅÅ-MM-DD»,
+ * så sommertid spiller ingen rolle. Merket vises når status er `open` og svaret er
+ * 0–`OFFER_EXPIRING_SOON_DAYS`.
+ */
+export type OfferDaysLeft = (validUntil: string, today: string) => number;
+
+/**
+ * Utløpsregelen, ren funksjon (`./offer-status.ts`): sant når `status` er `received` og
  * `validUntil < today`. Begge datoene er «ÅÅÅÅ-MM-DD» i norsk tid og sammenlignes som tekst.
  * Samme dag er ikke utløpt. `converted` og `rejected` er aldri utløpt.
  */
@@ -68,8 +88,8 @@ export const OFFER_LIST_INDEX = "orders_organization_id_status_valid_until_idx";
 
 /* ------------------------------------------------------------------- felt */
 
-/** Feltkoden for «Gyldig til». Fast fra merge (regel 6). Bare på tilbudet, aldri på oppdraget. */
-export const VALID_UNTIL_FIELD = "validUntil";
+/** Feltkoden for «Gyldig til» (`validUntil`). Fast fra merge (regel 6). Står i `./codes`. */
+export { VALID_UNTIL_FIELD } from "./codes";
 
 /**
  * Feltkodene som kan endres på et tilbud: bestillingsfeltene og `validUntil`, i den rekkefølgen.
@@ -77,7 +97,7 @@ export const VALID_UNTIL_FIELD = "validUntil";
  * `validUntil` legges aldri i `@/core/assignments/booking/codes`, så `updateAssignmentBooking`
  * godtar ikke feltet.
  */
-export type OfferEditableField = BookingEditableField | typeof VALID_UNTIL_FIELD;
+export type OfferEditableField = BookingEditableField | "validUntil";
 
 /**
  * Skjemaet for nytt og endret tilbud: bestillingsfeltene (`bookingInputSchema(now)`) og
@@ -130,6 +150,11 @@ export type OfferListResult = {
   total: number;
   /** Filteret som ble brukt (etter standardverdi). */
   status: OfferListFilter;
+  /**
+   * Antallet per filter med samme søk og samme `today` (F3, tallet på filterknappene).
+   * `counts[status]` er alltid lik `total`. Mykt slettede telles ikke.
+   */
+  counts: Record<OfferListFilter, number>;
 };
 
 /**
@@ -138,8 +163,11 @@ export type OfferListResult = {
  *   organisasjon gir `AccessDeniedError`, i alle filtre.
  * - Mykt slettede tilbud er aldri med, heller ikke i `expired` eller `all`.
  * - Filter og søk settes sammen med `and`. Søket er som før (ADR 0010).
- * - Sortering `received_at desc, id desc`, høyst `ORDER_LIST_LIMIT` rader. `total` telles med
- *   samme WHERE som listen.
+ * - Sortering: «Åpne» (`open`) etter `valid_until asc, received_at desc, id desc` (de som går ut
+ *   først øverst, F3). De andre filtrene etter `received_at desc, id desc`. Høyst
+ *   `ORDER_LIST_LIMIT` rader. `total` telles med samme WHERE som listen.
+ * - `counts` telles i én spørring med `count(*) filter (where …)` per filter, med samme
+ *   uttrykk (`OfferListFilterSql`), samme søk og samme `today` som listen.
  * - Bare lesing: ingen rader i `audit_log`, hendelsene eller `ai_usage_log`.
  */
 export type ListOffers = (
@@ -163,6 +191,25 @@ export type CreateOffer = (
 ) => Promise<Order>;
 
 /**
+ * Ett tilbud slik `getOrder` og `updateOrder` gir det: alle feltene uten sporingsfelt, pluss
+ * `rowVersion` (til skjemaet for endring), oppdragsnummeret og om oppdraget er kansellert.
+ * `getOrder` legger i tillegg til `displayStatus`, regnet med `todayInOslo(now)`.
+ */
+export type OfferDetail = Omit<
+  Order,
+  | "organizationId"
+  | "createdAt"
+  | "createdBy"
+  | "updatedAt"
+  | "updatedBy"
+  | "deletedAt"
+  | "deletedBy"
+> & {
+  assignmentNumber: string | null;
+  assignmentCancelled: boolean;
+};
+
+/**
  * Kontrakten for `updateOrder` (endre tilbud): som før (T1, alle statuser, `expectedRowVersion`,
  * `OrderChangedError`), pluss:
  * - `validUntil` kan bare endres når lagret status er `received` (åpent eller utløpt). Er den
@@ -181,7 +228,7 @@ export type UpdateOffer = (
   input: OfferInput,
   expectedRowVersion: number,
   now?: Date,
-) => Promise<Order>;
+) => Promise<OfferDetail>;
 
 /**
  * Kontrakten for `convertOrderToAssignment` («Gjør om til oppdrag»): uendret signatur og atferd.
@@ -202,16 +249,48 @@ export type ConvertOfferToAssignment = (
 ) => Promise<{ assignment: Assignment; order: Order }>;
 
 /**
- * Kontrakten for `rejectOrder` («Avslå tilbud»): uendret. Påkrevd grunn (`rejectReasonSchema`),
- * virker på åpent og utløpt tilbud, `OrderAlreadyHandledError` ellers. Koden `rejected` og
- * hendelsen `order.rejected` er de samme; bare teksten på skjermen er ny («Avslått»).
+ * De faste avslagsgrunnene med norske etiketter (F4): `price` «Pris», `timing` «Tidspunkt passet
+ * ikke», `chose_other` «Valgte en annen», `customer_withdrew` «Kunden trakk seg», `other`
+ * «Annet». Listen står i `./codes`.
+ */
+export {
+  OFFER_REJECTION_REASON_KEYS,
+  offerRejectionReasonLabel,
+  type OfferRejectionReasonKey,
+} from "./codes";
+
+/**
+ * Grunnen til avslaget (F4, A361): en fast kode fra `OFFER_REJECTION_REASON_KEYS` og valgfri
+ * fritekst. Teksten er påkrevd bare ved `other`. Uten kode: «Velg en grunn.». `other` uten
+ * tekst: «Skriv grunnen.». Teksten trimmes, er høyst 500 tegn og har aldri elleve sifre på rad.
+ * Tom tekst blir `null`.
+ */
+export type OfferRejectionInput = {
+  reasonKey: OfferRejectionReasonKey | string | null | undefined;
+  reasonText?: string | null;
+};
+
+/**
+ * Kontrakten for `rejectOrder` («Avslå tilbud»): påkrevd grunn (`rejectReasonSchema`, F4),
+ * virker på åpent og utløpt tilbud, `OrderAlreadyHandledError` ellers. Lagrer
+ * `rejected_reason_key` og `rejected_reason`. Hendelsen `order.rejected` får
+ * `{ orderId, reasonKey }`, aldri friteksten. Koden `rejected` er den samme; bare teksten på
+ * skjermen er ny («Avslått»).
  */
 export type RejectOffer = (
   actor: Actor,
   organizationId: string,
   orderId: string,
-  reason: string,
+  input: OfferRejectionInput,
 ) => Promise<Order>;
+
+/*
+ * Forbedrerens tillegg uten egne tjenester:
+ * - F1 «Forleng 30 dager»: `updateOrder` med `validUntil = addDays(todayInOslo(now),
+ *   OFFER_VALID_DAYS)`, de lagrede feltene og gjeldende `rowVersion`. Følger A327/A328.
+ * - F2 a «Lagre som tilbud i stedet»: `createOrder` med bestillingsfeltene fra «Nytt oppdrag»
+ *   uten `validUntil` (blir i dag + 30). Takstmann, befaringsdato og kontor tas bort av Zod.
+ */
 
 /* ---------------------------------------------------------------- historikk */
 
@@ -233,3 +312,12 @@ export type HistoryAllowedFields = readonly string[];
  * sammenligner `valid_until` selv og importerer ikke utløpsregelen fra `orders`.
  */
 export type DuplicateCriteriaToday = { today: string };
+
+/**
+ * Treffene i dublettvarselet (F2 b) har `kind` (`order` eller `assignment`) og `displayStatus`.
+ * For `kind: "order"` er `displayStatus` visningsstatusen regnet med samme `today` som
+ * spørringen: et treff fra `orders` er `open` eller `expired`; et oppdrag som kom fra et tilbud,
+ * vises på tilbudssiden som tilbudet med `converted`. Et oppdrag laget direkte har `null`.
+ * Bare `open` og `expired` får knappen «Gjør om tilbudet».
+ */
+export type DuplicateDisplayStatus = OfferDisplayStatus | null;

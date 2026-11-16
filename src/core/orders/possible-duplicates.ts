@@ -12,7 +12,7 @@ import {
 } from "@/core/assignments/booking/duplicates-service";
 import { db } from "@/db/client";
 import { isUuid } from "@/shared/lib/uuid";
-import type { DuplicateReason, OrderStatus } from "./codes";
+import type { DuplicateReason, OfferDisplayStatus, OrderStatus } from "./codes";
 import { selectOrder } from "./orders";
 
 export { PossibleDuplicatesLookupError } from "@/core/assignments/errors";
@@ -49,6 +49,12 @@ export type PossibleDuplicateOrder = {
   /** Oppdragsstatusen når ordren er gjort om eller treffet er et oppdrag, ellers `null`. */
   assignmentStatus: string | null;
   reasons: DuplicateReason[];
+  /**
+   * Tilbudets visningsstatus (ADR 0012, F2 b), regnet med samme `today` som spørringen: `open` eller
+   * `expired` for et tilbud som ikke er gjort om, `converted` for et tilbud som er blitt oppdrag.
+   * `null` for et oppdrag laget direkte.
+   */
+  displayStatus: OfferDisplayStatus | null;
 };
 
 export type PossibleDuplicateOrders = { items: PossibleDuplicateOrder[]; hasMore: boolean };
@@ -71,6 +77,7 @@ function toOrderForm(row: PossibleDuplicateRow): PossibleDuplicateOrder {
       assignmentNumber: null,
       assignmentStatus: null,
       reasons,
+      displayStatus: row.displayStatus ?? null,
     };
   }
   if (row.orderId === null) {
@@ -83,6 +90,7 @@ function toOrderForm(row: PossibleDuplicateRow): PossibleDuplicateOrder {
       assignmentNumber: row.number ?? null,
       assignmentStatus: row.status,
       reasons,
+      displayStatus: null,
     };
   }
   return {
@@ -94,14 +102,16 @@ function toOrderForm(row: PossibleDuplicateRow): PossibleDuplicateOrder {
     assignmentNumber: row.number ?? null,
     assignmentStatus: row.status,
     reasons,
+    displayStatus: "converted",
   };
 }
 
 async function lookupOrders(
   grant: EmployeeGrant,
   fields: PossibleDuplicateFields,
+  now?: Date,
 ): Promise<PossibleDuplicateOrders> {
-  const { rows, hasMore } = await lookupPossibleDuplicateRows(grant, fields);
+  const { rows, hasMore } = await lookupPossibleDuplicateRows(grant, fields, now);
   const items = rows.map(toOrderForm);
   return { items, hasMore };
 }
@@ -115,19 +125,22 @@ export async function findPossibleDuplicateOrdersFor(
   actor: Actor,
   organizationId: string,
   fields: PossibleDuplicateFields,
+  now?: Date,
 ): Promise<PossibleDuplicateOrders> {
   const grant = await requireOrganizationAccess(actor, organizationId, PERMISSION);
-  return lookupOrders(grant, fields);
+  return lookupOrders(grant, fields, now);
 }
 
 /**
- * Mulige dubletter for en lagret ordre. Ukjent, fremmed, myk-slettet eller ugyldig ordre-id gir
- * `AccessDeniedError`. En avvist ordre gir tom liste. Ordren selv er aldri med.
+ * Mulige dubletter for et lagret tilbud. Ukjent, fremmed, myk-slettet eller ugyldig id gir
+ * `AccessDeniedError`. Et avslått tilbud gir tom liste. Tilbudet selv er aldri med. `now` gir
+ * `today` for utløpsregelen (standard: nå).
  */
 export async function findPossibleDuplicateOrders(
   actor: Actor,
   organizationId: string,
   orderId: string,
+  now?: Date,
 ): Promise<PossibleDuplicateOrders> {
   const grant = await requireOrganizationAccess(actor, organizationId, PERMISSION);
   if (!isUuid(orderId)) throw new AccessDeniedError();
@@ -135,13 +148,17 @@ export async function findPossibleDuplicateOrders(
   if (!order) throw new AccessDeniedError();
   if (order.status === "rejected") return EMPTY;
 
-  return lookupOrders(grant, {
-    addressText: order.addressText,
-    gnr: order.gnr,
-    bnr: order.bnr,
-    snr: order.snr,
-    receivedAt: order.receivedAt,
-    excludeOrderId: order.id,
-    excludeAssignmentId: order.assignmentId,
-  });
+  return lookupOrders(
+    grant,
+    {
+      addressText: order.addressText,
+      gnr: order.gnr,
+      bnr: order.bnr,
+      snr: order.snr,
+      receivedAt: order.receivedAt,
+      excludeOrderId: order.id,
+      excludeAssignmentId: order.assignmentId,
+    },
+    now,
+  );
 }

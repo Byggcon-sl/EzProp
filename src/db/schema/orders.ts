@@ -57,6 +57,13 @@ export const orders = pgTable(
     sellerDeclarationReceived: boolean("seller_declaration_received").notNull().default(false),
     status: text("status").notNull().default("received"),
     rejectedReason: text("rejected_reason"),
+    /**
+     * Fast grunn for avslaget (F4, ADR 0012): `price`, `timing`, `chose_other`,
+     * `customer_withdrew` eller `other`. Kodene står i `OFFER_REJECTION_REASON_KEYS`
+     * (`@/core/orders/codes`) og i CHECK-regelen under. Fritekst (`rejected_reason`) er påkrevd
+     * bare ved `other`. Avslag fra før migrering 0035 har `other` og teksten sin.
+     */
+    rejectedReasonKey: text("rejected_reason_key"),
     assignmentId: uuid("assignment_id"),
   },
   // Returtypen står fordi tabellene peker på hverandre (ellers klarer ikke TypeScript typene).
@@ -108,10 +115,15 @@ export const orders = pgTable(
       sql`${table.requestedReportType} in ('condition_report')`,
     ),
     check("orders_status_check", sql`${table.status} in ('received', 'converted', 'rejected')`),
-    // Avvist krever grunn
+    // Avslått krever fast grunn, og «Annet» krever tekst (F4, migrering 0035)
     check(
       "orders_rejected_reason_check",
-      sql`${table.status} <> 'rejected' or length(trim(coalesce(${table.rejectedReason}, ''))) > 0`,
+      sql`${table.status} <> 'rejected' or (${table.rejectedReasonKey} is not null and (${table.rejectedReasonKey} <> 'other' or length(trim(coalesce(${table.rejectedReason}, ''))) > 0))`,
+    ),
+    // De faste avslagsgrunnene. En arkivert kode blir stående her (regel 6).
+    check(
+      "orders_rejected_reason_key_check",
+      sql`${table.rejectedReasonKey} is null or ${table.rejectedReasonKey} in ('price', 'timing', 'chose_other', 'customer_withdrew', 'other')`,
     ),
     // Gjort om krever oppdrag, og bare en ordre som er gjort om, peker på et oppdrag
     check(

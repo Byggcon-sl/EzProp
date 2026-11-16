@@ -1445,8 +1445,10 @@ describe("testdata: tilgang per rolle (4.8)", () => {
         expect(list.total, status).toBe(expected);
         expect(list.items.length).toBeGreaterThan(0);
       }
-      const orders = await listOrders(actor, orgId);
+      // «Alle»: standarden er «Åpne», og de fleste TD-tilbudene er gjort om (ADR 0012)
+      const orders = await listOrders(actor, orgId, { status: "all" });
       expect(orders.total).toBe(plan.orders.length);
+      expect(orders.counts.all).toBe(plan.orders.length);
       expect(
         orders.items.some((o) => o.externalRef === "TD-0001" || o.externalRef?.startsWith("TD-")),
       ).toBe(true);
@@ -1603,9 +1605,11 @@ describe("testdata: ytelse med full testdata (4.10, A306)", () => {
       ],
       ["listOrders uten filter", () => listOrders(actor, orgId)],
       ["listOrders med søketekst", () => listOrders(actor, orgId, { query: lastName })],
-      // listOrders har ikke statusfilter i tjenesten (ListOrdersOptions = { query }); søk på
-      // TD-prefikset dekker filtrert liste.
       ["listOrders med smal søketekst", () => listOrders(actor, orgId, { query: "TD-0001" })],
+      [
+        "listOrders «Alle» med søketekst",
+        () => listOrders(actor, orgId, { status: "all", query: lastName }),
+      ],
     ];
     for (const [name, fn] of cases) {
       expect(await timed(fn), name).toBeLessThan(LIMIT_MS);
@@ -1625,7 +1629,7 @@ describe("testdata: ytelse med full testdata (4.10, A306)", () => {
       query: contact.lastName,
     });
     expect(Object.values(counts).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
-    const orders = await listOrders(actor, orgId, { query: contact.lastName });
+    const orders = await listOrders(actor, orgId, { query: contact.lastName, status: "all" });
     expect(orders.total).toBeGreaterThan(0);
   });
 });

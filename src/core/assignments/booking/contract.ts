@@ -1,6 +1,12 @@
 import type { Actor } from "@/core/access";
 import type { AssignmentStatus } from "../codes";
-import type { BookingEditableField, BookingSource, DuplicateKind, DuplicateReason } from "./codes";
+import type {
+  BookingEditableField,
+  BookingSource,
+  DuplicateKind,
+  DuplicateOfferStatus,
+  DuplicateReason,
+} from "./codes";
 
 /*
  * Grensesnittet for «Nytt oppdrag» og bestillingen på oppdraget (ADR 0011,
@@ -165,22 +171,26 @@ export type UpdateAssignmentBooking = (
 
 /* -------------------------------------------------------------- historikk */
 
-export type BookingHistoryValue = {
-  field: BookingEditableField;
+/**
+ * Én endret verdi. `F` er feltkodene den som leser tillater (oppdraget: `BookingEditableField`;
+ * tilbudet: også `validUntil`, se `readBookingHistory`).
+ */
+export type BookingHistoryValue<F extends string = BookingEditableField> = {
+  field: F;
   /** Tekst, ja/nei eller tom. Bestiller og firma er navn (eller «(fjernet …)»), ikke id-er. */
   from: string | boolean | null;
   to: string | boolean | null;
 };
 
 /** Én rad under «Endringer». Samme form for ordre og oppdrag. */
-export type BookingHistoryEntry = {
+export type BookingHistoryEntry<F extends string = BookingEditableField> = {
   id: string;
   /** `create` eller `update` for oppdraget. */
   action: string;
   actorName: string | null;
   occurredAt: Date;
-  fields: BookingEditableField[];
-  values: BookingHistoryValue[];
+  fields: F[];
+  values: BookingHistoryValue<F>[];
 };
 
 /** Høyst så mange rader vises, de nyeste. */
@@ -230,6 +240,12 @@ export type PossibleDuplicate = {
   receivedAt: Date;
   addressText: string;
   reasons: DuplicateReason[];
+  /**
+   * Tilbudets visningsstatus for `kind: "order"` (ADR 0012, F2 b): `open` eller `expired`, regnet
+   * med samme `today` som spørringen. `null` for oppdrag. Bare `open` og `expired` får knappen
+   * «Gjør om tilbudet» i «Nytt oppdrag».
+   */
+  displayStatus: DuplicateOfferStatus | null;
 };
 
 export type PossibleDuplicates = { items: PossibleDuplicate[]; hasMore: boolean };
@@ -259,6 +275,8 @@ export type FindPossibleDuplicatesFor = (
   actor: Actor,
   organizationId: string,
   fields: PossibleDuplicateFields,
+  /** Tiden som gir `today` (`todayInOslo(now)`). Standard: nå. Sendes inn i tester. */
+  now?: Date,
 ) => Promise<PossibleDuplicates>;
 
 /**
@@ -270,6 +288,7 @@ export type FindPossibleDuplicatesForAssignment = (
   actor: Actor,
   organizationId: string,
   assignmentId: string,
+  now?: Date,
 ) => Promise<PossibleDuplicates>;
 
 /**

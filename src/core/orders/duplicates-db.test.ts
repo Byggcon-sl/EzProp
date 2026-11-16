@@ -476,6 +476,8 @@ describe("3.2 svaret", () => {
           "addressText",
           "assignmentNumber",
           "assignmentStatus",
+          // Tilbud (ADR 0012, F2 b): visningsstatusen med samme `today` som spørringen
+          "displayStatus",
           "id",
           "kind",
           "reasons",
@@ -493,9 +495,11 @@ describe("3.2 svaret", () => {
       assignmentNumber: null,
       assignmentStatus: null,
       reasons: ["address", "cadastre"],
+      displayStatus: "open",
     });
     expect(items[1]).toMatchObject({
       status: "converted",
+      displayStatus: "converted",
       assignmentNumber: converted.assignmentNumber,
       assignmentStatus: "in_progress",
     });
@@ -1174,6 +1178,7 @@ describe("3.8 ytelse", () => {
       addressKey: "testveien12",
       cadastre: null,
       receivedAt: TEST_NOW,
+      today: "2026-11-03",
       excludeOrderId: null,
     });
     expect(plan).not.toMatch(/Seq Scan on orders/);
@@ -1187,6 +1192,7 @@ describe("3.8 ytelse", () => {
       addressKey: null,
       cadastre: { gnr: "1011", bnr: "12", snr: "" },
       receivedAt: TEST_NOW,
+      today: "2026-11-03",
       excludeOrderId: null,
     });
     expect(plan).not.toMatch(/Seq Scan on orders/);

@@ -2062,6 +2062,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "rejected_reason_key": {
+          "name": "rejected_reason_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "assignment_id": {
           "name": "assignment_id",
           "type": "uuid",
@@ -2282,7 +2288,11 @@
         },
         "orders_rejected_reason_check": {
           "name": "orders_rejected_reason_check",
-          "value": "\"orders\".\"status\" <> 'rejected' or length(trim(coalesce(\"orders\".\"rejected_reason\", ''))) > 0"
+          "value": "\"orders\".\"status\" <> 'rejected' or (\"orders\".\"rejected_reason_key\" is not null and (\"orders\".\"rejected_reason_key\" <> 'other' or length(trim(coalesce(\"orders\".\"rejected_reason\", ''))) > 0))"
+        },
+        "orders_rejected_reason_key_check": {
+          "name": "orders_rejected_reason_key_check",
+          "value": "\"orders\".\"rejected_reason_key\" is null or \"orders\".\"rejected_reason_key\" in ('price', 'timing', 'chose_other', 'customer_withdrew', 'other')"
         },
         "orders_assignment_id_check": {
           "name": "orders_assignment_id_check",

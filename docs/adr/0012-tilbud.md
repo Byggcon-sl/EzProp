@@ -56,3 +56,19 @@ Støtter hovedmålene: **de ansatte** (kontoret møter ordet de selv bruker, og 
 - Direkte innsettinger i `orders` må sette `valid_until`: `createOrder` (`src/core/orders/orders.ts`), `src/core/orders/history.test.ts`, `src/core/orders/possible-duplicates.test.ts`, `tests/factories.ts`, seed og testdata.
 - Planpunktet «Tilbud med pris» (fase 3b) bruker `valid_until` og legger pris og sending oppå samme tabell.
 - **Dyrt å endre:** punkt 1, 2, 3 og feltkoden `validUntil` (datamodell og faste koder). **Lett å endre:** 30 og 365 dager, dublettvilkåret, filtrene og grensesnittet.
+
+## Tillegg 16.11.2026: fast avslagsgrunn, tall per filter og sortering (forbedrerens F3 og F4)
+
+Vedtatt av agentene i autonom modus (A361, A366; forbedrerens tillegg, Ståle 14.11.2026). Endrer punkt 7 og 15, og A323 (fritekst som eneste grunn).
+
+16. **Ny kolonne `orders.rejected_reason_key`** (`text`, valgfri) i samme migrering `0035_tilbud` (ikke merget før tillegget). Fem faste koder: `price`, `timing`, `chose_other`, `customer_withdrew`, `other`, med norske etiketter i `OFFER_REJECTION_REASON_KEYS` (`src/core/orders/codes.ts`). Navnet følger den eksisterende `rejected_reason`.
+17. **Migreringen** setter `other` på alle rader med status `rejected`, også mykt slettede; teksten beholdes. CHECK `orders_rejected_reason_check` byttes til «ikke `rejected`, eller koden finnes og (koden er ikke `other` eller teksten er ikke tom)». Ny CHECK `orders_rejected_reason_key_check`: koden er tom eller én av de fem. `row_version`, `updated_at` og `deleted_at` røres ikke. Arkiveres en kode senere, blir den stående i CHECK-regelen (regel 6).
+18. **`rejectOrder(actor, organizationId, orderId, { reasonKey, reasonText })`** erstatter fritekst-parameteren. Uten kode: «Velg en grunn.». `other` uten tekst: «Skriv grunnen.». Samme lengdegrense (500) og sperre mot elleve sifre som før.
+19. **Hendelsen `order.rejected` får `reasonKey`** i data (`{ orderId, reasonKey }`). Koden er ikke persondata. Friteksten går fortsatt aldri i hendelse eller applikasjonslogg, bare i revisjonsloggen (`order`/`reject` med `rejectedReasonKey` og `rejectedReason`). Ingen ny hendelseskode.
+20. **Tall per filter (F3):** `listOrders` gir også `counts: Record<OfferListFilter, number>`. Tellingen er én spørring med `count(*) filter (where …)` per filter, med **samme** uttrykk (`offerListFilterSql`), samme søk og samme `today` som listen, og uten mykt slettede. `counts[status]` er alltid lik `total`.
+21. **Sortering:** «Åpne» sorteres `valid_until asc, received_at desc, id desc` (det som går ut først, øverst). De andre filtrene sorteres som før, `received_at desc, id desc`. Indeksen fra punkt 7 dekker begge.
+22. **Dublettreffet** har `kind` og `displayStatus` (F2 b): `open` eller `expired` for et tilbud, regnet med samme `today` som spørringen; `null` for oppdrag. `booking` har egne koder for dette (`DuplicateOfferStatus`), så importretningen holdes.
+23. **Ingen nye tjenester for F1 og F2 a:** «Forleng 30 dager» er `updateOrder` med `validUntil = i dag + 30`, og «Lagre som tilbud i stedet» er `createOrder` uten `validUntil`.
+
+**Lett å endre:** etikettene og rekkefølgen på grunnene, sorteringen og tallene. **Dyrt å endre:** de fem kodene og kolonnen (faste koder fra merge).
+

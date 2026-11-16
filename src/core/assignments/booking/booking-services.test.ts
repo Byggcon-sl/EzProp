@@ -355,7 +355,16 @@ describe("dublett på tvers av ordre og oppdrag", () => {
     );
     for (const item of draft.items) {
       expect(Object.keys(item).sort()).toEqual(
-        ["addressText", "id", "kind", "number", "reasons", "receivedAt", "status"].sort(),
+        [
+          "addressText",
+          "displayStatus",
+          "id",
+          "kind",
+          "number",
+          "reasons",
+          "receivedAt",
+          "status",
+        ].sort(),
       );
     }
 

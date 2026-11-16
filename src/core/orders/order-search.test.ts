@@ -97,7 +97,10 @@ async function convertedOrder(
 }
 
 async function search(actor: Actor, organizationId: string, query?: string | null) {
-  return listOrders(actor, organizationId, query === undefined ? undefined : { query });
+  return listOrders(actor, organizationId, {
+    status: "all",
+    ...(query === undefined ? {} : { query }),
+  });
 }
 
 async function searchIds(actor: Actor, organizationId: string, query: string) {
@@ -730,7 +733,7 @@ describe("3.8 tenant-isolasjon", () => {
           b: [await seed(grantB.organizationId, value)],
         }),
         query: async (actor, organizationId) =>
-          (await listOrders(actor, organizationId, { query })).items,
+          (await listOrders(actor, organizationId, { query, status: "all" })).items,
         idOf: (row) => row.id,
       });
     },
@@ -843,7 +846,7 @@ describe("6 loggene", () => {
     const before = await logCounts();
 
     for (const query of ["Kari Hansevik", "12/34", "Fjordgata 7"]) {
-      await listOrders(admin, org.id, { query });
+      await listOrders(admin, org.id, { query, status: "all" });
       await listWorkQueue(admin, org.id, { status: "ordered", mineOnly: false, query });
       await countWorkQueueByStatus(admin, org.id, { mineOnly: false, query });
     }

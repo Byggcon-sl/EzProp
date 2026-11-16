@@ -59,11 +59,11 @@ function insertPartySql(organizationId: string, assignmentId: string, link: Link
 function insertOrderSql(organizationId: string, link: Link) {
   return db.execute(sql`
     insert into orders (
-      organization_id, received_at, source, address_text, requested_report_type,
+      organization_id, received_at, valid_until, source, address_text, requested_report_type,
       seller_declaration_received, status, ordered_by_contact_id, ordered_by_firm_id
     ) values (
-      ${organizationId}, now(), 'manual', 'Testveien 12, 8000 Bodø', 'condition_report', false,
-      'received', ${link.contactId ?? null}, ${link.firmId ?? null}
+      ${organizationId}, now(), '2026-12-03', 'manual', 'Testveien 12, 8000 Bodø',
+      'condition_report', false, 'received', ${link.contactId ?? null}, ${link.firmId ?? null}
     )
     returning id, ordered_by_contact_id, ordered_by_firm_id`);
 }
