@@ -96,6 +96,7 @@ Dette kan bare Ståle gjøre eller bestemme. Listen er sortert etter hvor mye so
 | S8 | **KI-leverandør: Anthropic, og Ståle har API-nøkkel (Ståle 10.11.2026: «vi har valgt anthopic - har api nøkler»).** **Anthropic-adapteren er bygget bak KI-porten, og beslutningsnotatet er skrevet (11.11.2026, `docs/beslutningsnotat-ki-leverandor.md`).** Gjenstår for Ståle: velge EU/EØS-vei, godta eller signere databehandleravtalen, svare på spørsmål 54–58 og 73, vurdere forslag 64 (tak på KI-bruk), legge nøkkelen inn som secret `ANTHROPIC_API_KEY` i GitHub (aldri i chat eller repo) og lage tilkoblingen i testmiljøet, og velge leverandør for norsk tale til tekst (anbefalt: Microsoft Azure tale i Norge). | Ekte KI i testmiljøet. Til da prøves alt mot den falske leverandøren. |
 | S9 | **Produksjonsmiljø i Azure** (Ståle 13.11.2026: løsningen skal være produksjonsklar). Agentene lager oppsettet i kode og oppskriften; Ståle sier ja til kostnaden, oppretter ressursgruppen og legger inn nøklene, slik som for testmiljøet. Anslått kostnad legges fram før oppretting. | «Klar for drift» og første ekte oppdrag |
 | S10 | ~~Rett til å bruke frasene fra IVIT-malene~~ **Gjort 14.11.2026** (Ståle: «bekrefter avtale med ivit»). Byggcon kan ta med seg både IVIT-malfrasene og egne fraser. | – |
+| S11 | **Drøfte kvalitetstallene per ansatt med de ansatte** før de vises per person (arbeidsmiljøloven kapittel 9, kontrolltiltak), slik som tidsmålingen i S5. Tallene for hele firmaet og per kontor kan vises uten dette. | Visning av kvalitetstallene per person (fase 3a) |
 
 ---
 
@@ -167,7 +168,7 @@ Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full 
   - **Testdata, del 2** (A300, fra «Testdata som ligner en ekte arbeidshverdag»): testdataene utvides med bilder laget av skriptet (uten personer), funn, TG og målinger per kontrollpunkt, og byggeår når kolonnen finnes. TG og funn kommer fra regelmotoren og malens testsaker, aldri skrevet fritt i seed; tekstene merkes «utkast, ikke godkjent av fagrådet». TG3 har kostnadsanslag, TG2 og TG3 årsak og konsekvens, og el, rekkverk og HMS får ingen TG. ki-ansvarlig vurderer oppgaven på nytt.
 - [ ] **KI i veien:** forslag fra frasebanken, språkvask av avviksteksten og utkast til sammendrag, gjennom KI-grunnmuren.
 - [ ] **Publisering av badet:** sperren for det som gjelder våtrom (TG2 eller TG3 uten årsak og konsekvens, TG3 uten kostnad, våtrom uten hulltaking eller begrunnelse), med aktiv overstyring og logg.
-- [ ] **ADR: valg av PDF-motor,** og PDF-en av badet i Byggcons profil, i ferdig kvalitet. Krav til motoren: stående og liggende, profiler, bilder med markering, innholdsfortegnelse, norsk orddeling og samme resultat hver gang. Testutskriften med 50 bilder kommer i bredden.
+- [ ] **ADR: valg av PDF-motor,** og PDF-en av badet i Byggcons profil, i ferdig kvalitet. Krav til motoren: stående og liggende, **flere PDF-profiler av samme rapport** (ulik layout, design og farger fra de samme dataene, Ståle 16.11.2026), bilder med markering, innholdsfortegnelse, norsk orddeling og samme resultat hver gang. Testutskriften med 50 bilder kommer i bredden.
 
 **Fra forbedreren**
 
@@ -224,8 +225,19 @@ Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full 
 - [ ] **Nye advarsler i sjekken før publisering** (leilighetsanalysen, svar 10.11.2026): samme ventilasjonsanlegg er beskrevet ulikt to steder, og ny versjon mangler kort kommentar om hva som er endret.
 - [ ] **KI-sjekk før publisering:** finner motstrid mellom tekst og TG (for eksempel «råte» i teksten og TG1), uklart språk og gjetteord. Den stiller spørsmål og foreslår aldri TG. Gir advarsel, ikke sperre.
 - [ ] Utgivelser med versjon: hver utgivelse låses med innhold, PDF og fingeravtrykk, og med hvem som signerte og hvilken sertifisering som gjaldt (innspill D8). Retting gir ny versjon med opprinnelig dato. **Gyldig til = ett år fra befaringsdato** (27.10.2026).
+- [ ] **Endelig rapport lagres som ferdig PDF, utkast lagres ikke** (Ståle 16.11.2026: «når vi lager en "endelig" rapport, må vi lagre den som ferdig pdf i systemet. Den skal ikke kunne sletttes (kun av admin) og genererer vi ny, skal tidligere versjoner ligge som en logg. Slik kan vi dokumentere hva som faktisk er sendt. Vi kan lage så mange rapportutkast vi vil (pdf filens innhold må stemples med utkast) uten at de lagres (mer som en løpende kladd)»).
+  - **Endelig PDF:** når rapporten gjøres endelig, lagres den ferdige PDF-filen i EzProp, låst, med fingeravtrykk, tidspunkt, hvem som laget den, profil og versjon. Filen endres aldri etterpå. Det er denne filen som sendes, og det logges hvem den ble sendt til og når.
+  - **Ny endelig PDF gir ny versjon:** tidligere versjoner blir liggende i en logg på rapporten (versjon, dato, hvem, mottakere), og alle kan åpnes. Slik kan det alltid dokumenteres hva som faktisk ble sendt.
+  - **Ingen kan slette en endelig PDF, unntatt admin.** Sletting fra admin krever begrunnelse og logges. Filen skjules da fra visningen, men tas vare på i hele oppbevaringstiden (myk sletting og 10 år, regel 3).
+  - **Utkast:** så mange som man vil, når som helst. Hver side i et utkast stemples tydelig «UTKAST» og har ikke fingeravtrykk eller signatur. Utkast lagres ikke; de lages på nytt hver gang, som en løpende kladd.
+  - Gjelder også flere PDF-utgaver: hver endelige PDF per profil lagres og logges på samme måte.
 - [ ] **PDF** med Byggcons profil: forside, om Byggcon (firmatekst fra selskapet), forklaring av TG, sammendrag med antall per TG, bygningene med avvik og bilder, arealer, dokumentasjon, forutsetninger, signatur og bunntekst med juridisk selskap. Ingen interne koder i teksten, og tomme deler gir ikke egne sider. Stående og liggende profil. Bildene i PDF-en har ikke GPS-posisjon (innspill D14).
 - [ ] **PDF-profilen** (leilighetsanalysen og svar 10.11.2026, nr. 45): tellere for TG3, TG2 og TGIU øverst, fast innledning om omfang og TG, HMS-delen som kort liste med henvisning, overskrift holdes sammen med teksten under, faste kolonnebredder, og lovlighet står ett sted.
+- [ ] **Flere PDF-utgaver av samme rapport** (Ståle 16.11.2026: «Lag pdf generatoren slik at vi kan lage flere utgaver en samme rapport. dvs vi kan tilpasse en pdf rapport til en kunde eller segment. dataene vil nok være de samme, men forskjellig layout og design/farger»). Rapportdataene er de samme; **PDF-profilen** bestemmer layout, farger, skrift, logo, forside, rekkefølge på delene og stående eller liggende. Byggcon-profilen er standard.
+  - **Profil per kunde eller segment:** en profil kan knyttes til en oppdragsgiver eller et segment (for eksempel en forsikringsavtale, et meglerforetak eller privatkunder), og foreslås da automatisk på oppdraget. Takstmannen kan velge en annen profil før «Send».
+  - **Flere PDF-er av samme utgave:** fra én låst utgave kan det lages én PDF per profil. Hver PDF lagres med profil, versjon av profilen og fingeravtrykk, slik at det alltid kan vises hva som ble sendt til hvem.
+  - **Innholdet kan ikke kuttes:** en profil endrer utseende og rekkefølge, men kan ikke skjule TG, avvik, TGIU eller andre deler forskriften krever. Kontrollen før publisering sjekker dette.
+  - **Profiler lages og endres i admin** av admin og de som har fått retten, med forhåndsvisning på et testoppdrag og endringslogg. Profilen er data, ikke kode, og bygger på den samme layouten som Byggcon-profilen. Egne maler (fase 5) bruker de samme profilene.
 - [ ] **PDF under 8 MB** (innspill P8): bildene i PDF-en skaleres ned og komprimeres. Blir PDF-en likevel større, sendes en lenke eller to e-poster. Testes med rapporten med 50 bilder.
 - [ ] **«Send»-knapp** (innspill P9): rapporten sendes som vedlegg til mottakerne først når noen trykker. Status «Ferdig» settes når rapporten er sendt (innspill D16). En rettet rapport sendes manuelt av den ansvarlige (27.10.2026).
 - [ ] **Rydding av innloggingsdata:** tellere for innloggingssperren og utløpte koder slettes etter 24 timer, utløpte økter etter 30 dager. (Svar 10.11.2026, nr. 15 og 18)
@@ -295,6 +307,15 @@ Flere takstmenn bruker EzProp på ekte oppdrag. Fasen har bare det piloten treng
 
 - [ ] Flere takstmenn og alle tre selskapene i bruk, også to i samme rapport med nett
 - [ ] **Sidemannskontroll** i EzProp: krav per ansatt satt av leder, «send til sidemann», kommentarer per sted i rapporten, sendt tilbake eller godkjent med navn og tid, logg og enkel statistikk over funnene. Manglende kontroll gir **bare advarsel**, og sidemannen **kommenterer og godkjenner, men retter ikke** (27.10.2026).
+- [ ] **Kvalitetstall som måles løpende** (Ståle 16.11.2026: «ja det var gode forslag»). EzProp måler selv, fra første rapport, og viser utviklingen over tid. Kjernesettet:
+  1. **Utfylt på befaringen:** andel bygningsdeler med vurdering, TG og bilde registrert mens befaringen pågår (tidsstempel per felt fra iPaden). Retning: opp, rundt 90 %. Vises alltid sammen med nr. 6, slik at tallet ikke kan pyntes med TG uten bilde.
+  2. **Leveringstid:** virkedager fra befaring til levert rapport, snitt og lengste. Retning: ned.
+  3. **Godkjent første gang:** andel rapporter sidemannen godkjenner uten å sende tilbake. Retning: opp.
+  4. **Funn per rapport, etter type:** sidemannens kommentarer i fire faste typer: TG og vurdering, mangler dokumentasjon, språk og uklarhet, formalia (Ståle 16.11.2026: «ja»). Retning: ned.
+  5. **Alvorlige funn per 100 rapporter:** funn sidemannen merker som alvorlige (for eksempel feil TG, manglende bygningsdel, manglende fuktmåling). Retning: ned.
+  6. **Dokumentasjon på avvik:** andel TG2 og TG3 med bilde, og måleverdi der det skal måles. Retning: opp, 100 %.
+  7. **Rettet etter levering og reklamasjoner:** nye versjoner etter levering, og reklamasjoner per 100 rapporter. Retning: ned, halvparten.
+  I tillegg: andel rapporter med sidemannskontroll, hvor lenge rapporten venter hos sidemannen, og hvor mange av KI-sidemannens funn sidemannen er enig i. **Hvem ser hva** (Ståle 16.11.2026: «Leder, admin og den ansatte»): alle ser tallene for hele firmaet og per kontor; tall per person ser bare den ansatte selv, leder og admin. Tilgangen sjekkes i `src/core/access`. Visning per person venter på S11.
 - [ ] **KI-sidemann før sidemannskontrollen:** en KI-gjennomgang mot Byggcons kunnskapsbase (samme kunnskap som skillen for sidemannskontroll) finner gjengangere, motstrid og uklart språk, slik at sidemannen får en renere rapport. Den stiller spørsmål og endrer ingenting selv.
 - [ ] **Læring fra sidemannskontrollen:** hver måned foreslår KI nye fraser og gjengangere, som går til fagrådet via innsamlingen i kunnskapsbasen.
 - [ ] Kopiere oppdrag og **kopiere data fra en tidligere rapport** på samme bolig, med liste over hva som ikke passer i ny malversjon
@@ -340,7 +361,7 @@ Rutiner, kalender og økonomi. Kan bygges mens piloten går.
 - [ ] **Prisliste per avtale som data** (funksjonskart H2): standardpriser og avtalepriser foreslås på fakturalinjene. En prismotor (pris etter areal, alder og avstand) kommer senere.
 - [ ] **Tilbud med pris:** pris fra prislisten på tilbudet, gyldig til-dato, og tilbudet som PDF i Byggcon-profilen som den ansatte sender selv. Når tilbudet godtas, gjøres det om til oppdrag med prisen på fakturagrunnlaget. (Ståle 13.11.2026)
 - [ ] **Tall om KI-bruk per ansatt, også for leder** (Ståle 12.11.2026, K8). Bygges først når det er drøftet med de ansatte (arbeidsmiljøloven kapittel 9).
-- [ ] **Lederdashbord** (funksjonskart H3): oppdrag per status, befaringer neste uke, levert siste 30 dager, leveringstid, ufakturert og forfalt, per kontor og selskap, og pilotmålene
+- [ ] **Lederdashbord** (funksjonskart H3): oppdrag per status, befaringer neste uke, levert siste 30 dager, leveringstid, ufakturert og forfalt, per kontor og selskap, og pilotmålene, med kvalitetstallene fra fase 3a over tid
 - [ ] Oppslag i Brønnøysundregistrene for firma (som i Optiplan)
 
 **Ferdig når:** De seks rutinene har gått uten feil som ikke ble oppdaget, og fakturagrunnlag har gått til eAccounting for alle tre selskapene.
@@ -479,6 +500,7 @@ EzProp er i mål når Byggcon kan gå over fra IVIT uten å miste noe takstmenne
 | Tap av data uten nett | Konfliktloggen, synkfeil og takstmannens melding | Null tap |
 | Sperrer og advarsler | Antall per rapport, og hvor mange som ble overstyrt | Følges, ingen fast grense |
 | Rettinger etter sidemannskontroll | Antall kommentarer per rapport og kategori | Synker over tid |
+| Kvalitetstallene (fase 3a) | De sju tallene i kjernesettet, målt løpende av EzProp | Riktig retning over tid |
 | TG-forslag fra reglene | Andel som godtas, endres eller avvises | Viser om reglene treffer |
 | Rapporter rettet etter levering | Antall nye versjoner | Ikke flere enn i IVIT |
 | PDF-størrelse | Størrelse på sendte PDF-er | Under 8 MB |
