@@ -1744,3 +1744,101 @@ export async function roomsOnAssignment(assignmentId: string): Promise<E2eRoomRo
     await sql.end();
   }
 }
+
+// --- Papirkurv og «Angre» (docs/funksjoner/fase2a-papirkurv-testplan.md avsnitt 10) ---------
+
+export type E2eStructure = {
+  assignmentId: string;
+  partyId: string;
+  partyName: string;
+  buildingId: string;
+  /** «1. etasje»: areal BRA-i 64,0 og rommene «Bad» og «Soverom». */
+  firstFloorId: string;
+  /** «2. etasje»: fire rom. */
+  secondFloorId: string;
+  /** Rommene i 1. etasje, i rekkefølgen på skjermen. */
+  firstFloorRoomIds: [string, string];
+  /** Rommet som allerede er fjernet (bare med `withRemovedRoom`). */
+  removedRoomId: string | null;
+};
+
+/**
+ * Et oppdrag med én part (som `createAssignmentWithParty`) og bygningen «Bolighus test» med
+ * «1. etasje» (BRA-i 64,0, rommene «Bad» og «Soverom») og «2. etasje» (fire rom), og «Garasje
+ * test» uten etasjer. Med `withRemovedRoom` ligger rommet «Vaskerom test» i papirkurven, fjernet
+ * av admin fra seed. Oppdiktede data, satt inn direkte uten tilgangssjekk. Bare lokal database
+ * eller testdatabasen.
+ */
+export async function createAssignmentWithBuildings(
+  suffix: string,
+  { withRemovedRoom = false }: { withRemovedRoom?: boolean } = {},
+): Promise<E2eStructure> {
+  const { assignmentId, partyId, partyName } = await createAssignmentWithParty(suffix);
+  const sql = e2eSql();
+  try {
+    const organizationId = await seedOrganizationId(sql);
+    const [admin] = await sql<{ id: string }[]>`
+      select e.id from employees e join users u on u.id = e.user_id
+      where u.email = ${ADMIN_EMAIL} and e.organization_id = ${organizationId}
+        and e.deleted_at is null limit 1`;
+    const buildingId = randomUUID();
+    const garageId = randomUUID();
+    const firstFloorId = randomUUID();
+    const secondFloorId = randomUUID();
+    const base = Date.now() - 60_000;
+    const at = (offset: number) => new Date(base + offset * 1000).toISOString();
+    await sql`
+      insert into report_buildings (id, organization_id, assignment_id, name, created_at)
+      values (${buildingId}, ${organizationId}, ${assignmentId}, 'Bolighus test', ${at(0)}),
+             (${garageId}, ${organizationId}, ${assignmentId}, 'Garasje test', ${at(1)})`;
+    await sql`
+      insert into floors (id, organization_id, report_building_id, name, level, below_ground,
+        created_at)
+      values (${firstFloorId}, ${organizationId}, ${buildingId}, '1. etasje', 1, false, ${at(2)}),
+             (${secondFloorId}, ${organizationId}, ${buildingId}, '2. etasje', 2, false, ${at(3)})`;
+    await sql`
+      insert into floor_areas (organization_id, floor_id, bra_i, measured_by, method)
+      values (${organizationId}, ${firstFloorId}, 64.0, ${admin?.id ?? null}, 'laser')`;
+    const bathId = randomUUID();
+    const bedroomId = randomUUID();
+    await sql`
+      insert into rooms (id, organization_id, floor_id, room_type, name, area_type, below_ground,
+        created_at)
+      values (${bathId}, ${organizationId}, ${firstFloorId}, 'bathroom', null, 'bra_i', false, ${at(4)}),
+             (${bedroomId}, ${organizationId}, ${firstFloorId}, 'bedroom', null, 'bra_i', false, ${at(5)})`;
+    const upper = [
+      ["bedroom", "Soverom 1"],
+      ["bedroom", "Soverom 2"],
+      ["living_room", "Stue oppe"],
+      ["bathroom", "Bad oppe"],
+    ] as const;
+    for (const [index, [roomType, name]] of upper.entries()) {
+      await sql`
+        insert into rooms (organization_id, floor_id, room_type, name, area_type, below_ground,
+          created_at)
+        values (${organizationId}, ${secondFloorId}, ${roomType}, ${name}, 'bra_i', false,
+          ${at(6 + index)})`;
+    }
+    let removedRoomId: string | null = null;
+    if (withRemovedRoom) {
+      removedRoomId = randomUUID();
+      await sql`
+        insert into rooms (id, organization_id, floor_id, room_type, name, area_type, below_ground,
+          created_at, deleted_at, deleted_by)
+        values (${removedRoomId}, ${organizationId}, ${firstFloorId}, 'laundry', 'Vaskerom test',
+          'bra_i', false, ${at(10)}, ${at(20)}, ${admin?.id ?? null})`;
+    }
+    return {
+      assignmentId,
+      partyId,
+      partyName,
+      buildingId,
+      firstFloorId,
+      secondFloorId,
+      firstFloorRoomIds: [bathId, bedroomId],
+      removedRoomId,
+    };
+  } finally {
+    await sql.end();
+  }
+}
