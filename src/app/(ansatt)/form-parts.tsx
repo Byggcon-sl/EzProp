@@ -7,22 +7,35 @@ import { Button, buttonVariants } from "@/shared/ui/button";
 import { FormMessage } from "@/shared/ui/form";
 import type { FormState } from "./form-state";
 
-/** Lagre-knappen. Viser «Lagrer …» og er låst mens skjemaet sendes. */
+/**
+ * Lagre-knappen. Viser «Lagrer …» (eller `pendingLabel`) og er låst mens skjemaet sendes.
+ * `ariaLabel` gir knappen et navn med mer enn teksten, for eksempel «Gjenopprett Bad».
+ */
 export function SubmitButton({
   children,
   variant = "primary",
   size = "lg",
   disabled = false,
+  pendingLabel = "Lagrer …",
+  ariaLabel,
 }: {
   children: ReactNode;
   variant?: "primary" | "secondary";
   size?: "md" | "lg";
   disabled?: boolean;
+  pendingLabel?: string;
+  ariaLabel?: string;
 }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" variant={variant} size={size} disabled={disabled || pending}>
-      {pending ? "Lagrer …" : children}
+    <Button
+      type="submit"
+      variant={variant}
+      size={size}
+      disabled={disabled || pending}
+      aria-label={pending ? undefined : ariaLabel}
+    >
+      {pending ? pendingLabel : children}
     </Button>
   );
 }
