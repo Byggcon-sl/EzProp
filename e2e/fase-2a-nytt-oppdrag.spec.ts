@@ -33,7 +33,7 @@ import {
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})(\\?.*)?$`);
-const ORDER_URL = new RegExp(`/ordre/(${UUID})(\\?.*)?$`);
+const OFFER_URL = new RegExp(`/tilbud/(${UUID})(\\?.*)?$`);
 const PORTRAIT = { width: 834, height: 1194 } as const;
 const INSPECTOR_NAME = "Oppdiktet takstmann";
 const OFFLINE = "Ikke lagret. Du er uten nett. Trykk Lagre når du har nett igjen.";
@@ -627,32 +627,52 @@ test.describe("nytt oppdrag (pc og ipad)", () => {
     await expect(page.getByText("Bodø")).toHaveCount(0);
   });
 
-  test("5.16 gjort-om ordre: «Endre ordren» viser at rettelser gjøres på oppdraget, med lenke dit", async ({
+  test("5.16 gjort-om tilbud: pekeren til takstmann og befaringsdato, «Laget fra tilbud», og «Endre tilbudet» sier at hver har sin kopi", async ({
     page,
   }) => {
     const address = `Testveien 12 go${uniqueSuffix()}, 8000 Bodø`;
     await logIn(page);
-    await page.goto("/ordre/ny");
+    await page.goto("/tilbud/ny");
     await page.getByLabel(/^Adresse/).fill(address);
     await page.getByLabel(/^Hvem bestilte/).fill("Megler Testesen");
     await page.getByRole("button", { name: "Lagre", exact: true }).click();
-    await expect(page).toHaveURL(ORDER_URL);
-    await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
+    await expect(page).toHaveURL(OFFER_URL);
+    const offerId = OFFER_URL.exec(page.url())![1]!;
+    const office = page.getByRole("radio", { name: "Bodø", exact: true });
+    if (await office.isVisible()) await office.check();
     await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-    await expect(page.getByRole("link", { name: /^Gjort om til oppdrag/ })).toBeVisible();
+    await expect(page).toHaveURL(ASSIGNMENT_URL);
 
-    await page.getByRole("button", { name: "Endre ordren", exact: true }).click();
+    // F5: kvitteringen med pekeren, og parameteren er borte fra adressen etterpå
+    const receipt = page.getByRole("status").filter({ hasText: "Oppdraget er laget." });
+    await expect(receipt).toBeVisible();
+    await expect(page).not.toHaveURL(/fra=tilbud/);
+    await receipt.getByRole("link", { name: "Velg takstmann og befaringsdato" }).click();
+    await expect(page.locator("#takstmann")).toBeFocused();
+    await expect(page.locator("#takstmann")).toBeInViewport();
+
+    // «Laget fra tilbud» og T-0075 på oppdraget
+    await expect(bookingSection(page)).toContainText("Laget fra tilbud");
+    await expect(bookingSection(page)).toContainText(
+      "Oppdraget har sin egen kopi av bestillingen. Endringer her endrer ikke tilbudet.",
+    );
+    // 5.17: bestillingen er kopiert til oppdraget
+    await expect(bookingSection(page)).toContainText(address);
+    await expect(bookingSection(page)).toContainText("Megler Testesen");
+    await bookingSection(page).getByRole("link", { name: "Åpne tilbudet", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/tilbud/${offerId}$`));
+
+    // T-0075 på tilbudet: hver sin kopi, med lenke til oppdraget
+    await page.getByRole("button", { name: "Endre tilbudet", exact: true }).click();
     await expect(
       page.getByText(
-        "Rettelser for oppdraget gjøres på oppdraget. Endringer her flytter ikke oppdraget.",
+        "Tilbudet og oppdraget har hver sin kopi av opplysningene. Endringer her endrer ikke oppdraget. Rett adresse, matrikkel og bestiller på oppdraget, under Bestilling.",
         { exact: true },
       ),
     ).toBeVisible();
     await page.getByRole("link", { name: /^Gå til oppdrag \d{4}-\d{5}$/ }).click();
     await expect(page).toHaveURL(ASSIGNMENT_URL);
-    // 5.17 gammel vei: bestillingen er kopiert til oppdraget
-    await expect(bookingSection(page)).toContainText(address);
-    await expect(bookingSection(page)).toContainText("Megler Testesen");
+    await expect(page.getByText("Oppdraget er laget.")).toHaveCount(0);
   });
 
   test("5.18 tastatur: adresse, piltaster i radiogruppene og Enter lagrer; alle felt har etikett", async ({
