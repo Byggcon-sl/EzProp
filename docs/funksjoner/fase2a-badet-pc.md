@@ -3,7 +3,7 @@
 - **Fase:** 2a-2 Hele veien først, punkt 3 («Badet på PC»)
 - **Modul:** kjerne (ny `src/core/reports`: rapporten, svar, kontrollpunkt, avvik, tiltak, TGIU og beslutninger om regelforslag; rene funksjoner i `src/core/reports/logic/`), malmotoren (`src/core/templates`, bare lesing), regelmotoren (`src/core/rules`, bare kall), badmalen (`src/db/seed/templates/wet-room.ts`, småfunn), skjerm under `src/app/(ansatt)/oppdrag/[id]/rom/[roomId]/`
 - **Branch:** `badet-pc` (bygger på `main`, 6e5d25f)
-- **Status:** godkjent etter forhåndsvurdering runde 1 (forenkler, arkitekt, ux, KI, fag, sikkerhet og personvern, test-leder). Rettet 14.11.2026, og igjen etter runde 2 (hull i det som fantes, A355–A360); avgjørelser ved uenighet står under «Avgjort ved forhåndsvurderingen».
+- **Status:** godkjent etter forhåndsvurdering runde 1 (forenkler, arkitekt, ux, KI, fag, sikkerhet og personvern, test-leder). Rettet 14.11.2026, og igjen etter runde 2 (hull i det som fantes, A355–A360); avgjørelser ved uenighet står under «Avgjort ved forhåndsvurderingen». Oppdatert 16.11.2026 ved overtakelsen: forbedrerens tillegg (A380–A384), fagansvarliges rettinger (A385–A387) og KI-ansvarliges liste over det som må rettes i koden før tjenestene bygges. Ingen ny forhåndsvurdering.
 - **Dato:** 14.11.2026
 - **Støtter hovedmål:**
   - **Færre reklamasjoner (hovedsaken):** våtrom gir flest reklamasjoner. Skjermen tvinger fram strukturen forskriften krever (TG, årsak, konsekvens, tiltak, kostnad per avvik, og TGIU med begrunnelse på punktet), reglene foreslår TG, TGIU og TG0 likt hver gang, og hver beslutning om et forslag logges slik at vi kan forklare TG-en ved en reklamasjon. Takstmannen ser motstrid (T-0059, hulltaking ikke utført uten TGIU) før rapporten går ut.
@@ -72,7 +72,7 @@ Trykk per avvik: med regelforslag 2 (Godta, Ferdig); 3 når TG må velges («TG2
    - **Bytte mellom direkte TG og avvik:** får et punkt med TG0 eller TG1 et avvik med TG, gjelder avviket og `tg_direct` tømmes. Har punktet TGIU og takstmannen legger til eller godtar et avvik med TG2/TG3, må han velge aktivt (fjerne TGIU eller la være); TGIU overskrives aldri stille. Fjernet TGIU slettes mykt.
 4. **Regelforslag:** `evaluateRules` kjøres **bare på serveren** når et felt som en regel leser, lagres; svaret sendes tilbake og vises på riktig kontrollpunkt med begrunnelsen i klarspråk (én oversettelsesfil). Alle tre forslagstypene håndteres: `outcome` (avvik), `tgiu` og `tg0`. «Ikke vurdert» vises med hva som mangler («Fyll ut årstall for sjiktet»).
    - **Godta:** `outcome` lager avviket med standardtekstene fra den låste malversjonen (`text_source = template`); `tgiu` gir `tg_direct = IU`; `tg0` gir `tg_direct = 0`. Alle gir beslutningsrad `accepted`.
-   - **Endre** (annen TG eller annet utfall) og **Avvis** krever begrunnelse og gir `changed` / `rejected`. Skjer på samme flate, ikke i nytt vindu.
+   - **Endre** (annen TG eller annet utfall) og **Avvis** krever begrunnelse og gir `changed` / `rejected`. Skjer på samme flate, ikke i nytt vindu. Begrunnelsen gis med ett trykk (forbedreren, A380): knappvalg med faste koder i `override_reason_code` (`documentation_present`, `visible_damage`, `measured_again`, `age_known_otherwise`, `other`). Fritekst kreves bare ved «Annet» (`other`), ellers er den valgfri. Ved `changed` og `rejected` kreves kode eller tekst. Knappetekstene er egne ord, merket utkast.
    - **Serveren stoler aldri på klientens forslag:** klienten sender bare regelkode, beslutning, valgt TG/utfall og begrunnelse. Serveren kjører reglene på lagrede svar og lagrer sitt eget regelsvar (`suggestion`, `reasons`, settkodene, befaringsåret). Har regelen ikke slått til på serveren, avvises beslutningen med «Forslaget gjelder ikke lenger». Forfalsket forslag eller ukjent `rule_key` avvises.
    - Et forslag som slutter å gjelde (feltet rettes), regnes ved visning (lagres ikke), merkes «gjelder ikke lenger», fjerner aldri et avvik takstmannen har godtatt, og vises som advarsel på punktet.
    - **Endre lager avviket** (ux 14.11.2026): «Lagre endringen» (også «Annet utfall») lager avviket med valgt TG/utfall og standardtekstene, setter `deviation_id` på beslutningsraden `changed`, flytter fokus til avvikskortet og viser «Gå til avvik 1». Avvis lager aldri avvik.
@@ -88,12 +88,13 @@ Trykk per avvik: med regelforslag 2 (Godta, Ferdig); 3 når TG må velges («TG2
    - Ledeteksten på `reason` spør om begge deler: hva som ikke er undersøkt, og hvorfor (forskriften § 2-23).
 7. **Fremdrift og advarsler:** status per punkt (ikke startet / i arbeid / ferdig / TGIU) og «x av 8 ferdig». Slettede rader telles ikke. «Ferdig med punktet» kan alltid trykkes; mangler vises som advarsel på punktet og i listen, uten bekreftelsesdialog, og neste punkt som ikke er ferdig åpnes. Advarslene (nå advarsel, sperre ved publisering der forskriften krever det):
    - Avvik med «velg TG2 eller TG3» uten valgt TG.
-   - TG2 eller TG3 uten årsak, uten konsekvens eller uten tiltak (forskriften § 2-22).
+   - **Punkt ferdig uten TG** (`checkpoint_done_without_tg`, ny kode sist i `CHECKPOINT_WARNING_CODES`, A385): «Ferdig med punktet» på et punkt uten `tg_direct` og uten avvik med TG (tomt punkt, eller bare HMS). Forskriften § 2-22 krever TG; sperre ved publisering. Gjelder alle åtte punktene til fagrådet har svart (spørsmål 88 d).
+   - TG2 eller TG3 uten årsak eller konsekvens (forskriften § 2-22, `tg2_tg3_missing_cause_or_consequence`, sperre ved publisering). TG2 eller TG3 uten tiltak (`tg2_tg3_missing_measure`): advarsel også ved publisering, aldri sperre (`docs/kartlegging/regelverk-krav.md` 5.2, A387).
    - TG3 uten kostnad («ingen» gir advarsel ved TG3).
    - HMS-avvik uten konsekvens eller tiltak.
    - TGIU-opplysning som mangler (punkt 6).
    - Hulltaking «ikke utført» og noe annet enn TGIU på `wet_room.adjacent` (den kjente IVIT-feilen; aldri sperre, begrunnelsen logges).
-   - «Utført uten funn» med måling lik eller over grensen (T-0059), med forslag om å endre til «Utført med funn».
+   - «Utført uten funn» med måling lik eller over grensen (T-0059), med forslag om å endre til «Utført med funn». Advarselen og `tgiu_suggested_not_set` bygger på serverens regelsvar (regelen `hole_moisture_over_limit` slår til og valget er «utført uten funn»; regelen `hole_drilling_not_done` slår til og punktet har ikke TGIU), aldri på en egen sammenligning mot 15. Grensen gjelder bare vekt-% i treverk (A386).
    - Forslag som ikke lenger gjelder.
    - **TG3 bare på grunn av alder** (`tg3_on_age_only`, ny kode sist i `CHECKPOINT_WARNING_CODES`, A358): avviket har `tg = 3`, `cause_criterion = age_uncertain_function`, og utfallet er ikke `membrane_before_2000`. Egen tekst uten NS-henvisning (`docs/kartlegging/regelverk-krav.md` 2 og 5.3 punkt 3).
    - **«Ferdig med punktet» mens et felt venter på lagring:** det som venter, lagres først, så markeres punktet ferdig. Feiler lagringen, markeres punktet ikke ferdig, og feltet viser «Ikke lagret – prøv igjen».
@@ -110,14 +111,14 @@ Trykk per avvik: med regelforslag 2 (Godta, Ferdig); 3 når TG må velges («TG2
     - Ingen nedtrekksmenyer (prinsipp 6): TG, årsakskriterium, kostnadsintervall og TGIU-valg er knapper eller radioknapper med tekst. Trykkflater minst 44 pt; Godta og Ferdig 56–72 pt. Avvis står minst 48 px fra Godta.
     - iPad stående: knapp «Punkter (3 av 8)» som åpner hele listen som panel, og «Forrige punkt» / «Neste punkt» nederst (minst 56 pt).
     - Godta flytter fokus til det nye avvikskortet; skjermleseren leser «Avvik lagt til, TG3». Forslag og advarsler har `role="status"`/`aria-live`.
-    - Endre: TG- og utfallsknapper og begrunnelsesfelt på samme flate; lagreknappen er sperret til begrunnelsen er fylt ut, og det står hvorfor.
+    - Endre: TG- og utfallsknapper og begrunnelsesknapper (A380) på samme flate; lagreknappen er sperret til en grunn er valgt (og tekst er skrevet ved «Annet»), og det står hvorfor.
     - TG alltid med tekst, ikke bare farge (A246: TG-komponenten bygges her). Tastatur hele veien, fokus synlig.
     - `source_ref` kan vises for takstmannen på skjermen, men flettes aldri inn i avvikstekst, årsak, konsekvens eller tiltak.
     - Lenke «Fyll ut badet» på hvert våtrom i «Bygninger og rom», ikke på andre rom.
     - Lang form på TG («Ingen avvik», «Mindre avvik» og så videre) har forskriften § 2-23 som kilde, ikke NS 3600.
     - Rekkefølgen på tiltak er en kolonne som endres med knappene «Flytt opp» / «Flytt ned». Ingen pakke for å dra med musa (regel 9). Oversettelsen av koder og intervalletikettene er en enkel oppslagstabell, ingen oversettelsesmotor.
 13. **Ytelse:** visningen av badet (`getRoomView`) med 8 punkter × 50 avvik × 20 tiltak bruker et fast antall spørringer (ingen N+1) og holder tidsgrensen i testplanen (B4.33).
-14. **Dokumentasjon:** ADR 0013 «Rapportens datamodell og logg for regelforslag» (A355–A357 skrives inn) med dyrt å endre: beslutningstabellen som eneste fasit, serveren regner forslaget, skriveformen per felt, ingen `field_clock` og ingen `report_id` nå (med unik indeks i stedet), unike nøkler med tomme kolonner, rene funksjoner i `logic/`; og det forkastede (felt på avviket som fasit, `report_id` nå, `field_clock` nå, `row_version` per rad som konfliktsjekk, lagret `tg_computed`). Domenemodellen 4.7 og 4.12, ordlisten, `package.json` 0.13.1 → 0.14.0 (den som merges sist, flytter), beslutningene i `docs/09-apne-sporsmal.md`.
+14. **Dokumentasjon:** ADR 0013 «Rapportens datamodell og logg for regelforslag» (A355–A357 skrives inn) med dyrt å endre: beslutningstabellen som eneste fasit, serveren regner forslaget, skriveformen per felt, ingen `field_clock` og ingen `report_id` nå (med unik indeks i stedet), unike nøkler med tomme kolonner, rene funksjoner i `logic/`; og det forkastede (felt på avviket som fasit, `report_id` nå, `field_clock` nå, `row_version` per rad som konfliktsjekk, lagret `tg_computed`). Domenemodellen 4.7 og 4.12, ordlisten, `package.json` 0.13.4 → 0.14.0 (den som merges sist, flytter), beslutningene i `docs/09-apne-sporsmal.md`.
 
 **Ikke med (bevisst utelatt):**
 - **KI-forslag** (frasebank, språkvask, sammendrag): neste punkt «KI i veien». Krokene står klare.
@@ -152,11 +153,11 @@ Andre organisasjoner: verken rader eller tilgang (`expectTenantIsolation` per sp
 
 ## Data
 - **Nye tabeller:** `reports`, `field_answers`, `checkpoint_results`, `deviations`, `deviation_measures`, `tgiu_details`, `rule_suggestion_decisions`.
-- **`rule_suggestion_decisions`** (forslag fra regler, ikke KI, bare tillegg): `report_id`, `checkpoint_result_id`, `rule_key`, `suggestion` (jsonb, bare koder: `{kind: "outcome", checkpoint, question, outcome}`, `{kind: "tgiu", checkpoint}` eller `{kind: "tg0", checkpoint}`), `reasons` (jsonb, serverens regelsvar: bare faste koder og tall, ukjente nøkler avvises, øvre størrelse, med befaringsåret), `lifespan_set_key`, `threshold_set_key`, `decision` (`accepted` / `changed` / `rejected`), `chosen_tg`, `chosen_outcome_key`, `override_reason` (fritekst, påkrevd ved `changed` og `rejected`, bare i raden), `deviation_id` (når et avvik ble laget), `decided_by`, `decided_at`. `deviations.suggested_by_rule_id` slås opp fra regelkoden i den låste malversjonen.
+- **`rule_suggestion_decisions`** (forslag fra regler, ikke KI, bare tillegg): `report_id`, `checkpoint_result_id`, `rule_key`, `suggestion` (jsonb, bare koder: `{kind: "outcome", checkpoint, question, outcome}`, `{kind: "tgiu", checkpoint}` eller `{kind: "tg0", checkpoint}`), `reasons` (jsonb, serverens regelsvar: bare faste koder og tall, ukjente nøkler avvises, øvre størrelse, med befaringsåret), `lifespan_set_key`, `threshold_set_key`, `decision` (`accepted` / `changed` / `rejected`), `chosen_tg`, `chosen_outcome_key`, `override_reason_code` (fast kode, CHECK i `documentation_present` / `visible_damage` / `measured_again` / `age_known_otherwise` / `other`, A380), `override_reason` (fritekst, bare i raden; påkrevd når koden er `other`; ved `changed` og `rejected` kreves kode eller tekst, Zod og CHECK), `deviation_id` (når et avvik ble laget), `decided_by`, `decided_at`. `deviations.suggested_by_rule_id` slås opp fra regelkoden i den låste malversjonen.
 - **Endret:** `ai_usage_log.report_id` får sammensatt fremmednøkkel. `standard_measures.applies_to_tg` i malformatet.
 - **Kodedata:** kostnadsintervallene (fem faste koder, utkast).
 - **Endret i malen:** navnet på `wet_room.build_year_source.unknown`, bør/må-tiltak for «velg TG2 eller TG3», tekstrettingene. Ingen faste koder endres (regel 6); seed lager ny publisert versjon.
-- **Faste koder som tas i bruk:** status- og beslutningskodene, `suggestion.kind`, `text_source`, `cost_type`, intervallkodene, `AiTargetRef.type`-kodene. Endres aldri etter merge.
+- **Faste koder som tas i bruk:** status- og beslutningskodene, begrunnelseskodene (`override_reason_code`), advarselskodene (med `checkpoint_done_without_tg` og `tg3_on_age_only`), `suggestion.kind`, `text_source`, `cost_type`, intervallkodene, `AiTargetRef.type`-kodene. Endres aldri etter merge.
 
 ## Regler
 Ingen nye regler. De fem reglene i malen brukes som de er: fire fra PR #167 og `wet_room.hole_no_elevated_moisture` (TG0-forslag på `wet_room.adjacent`, PR #174), med tekstrettingene over. Testsaker som data i malens `rule_test_cases` i `src/db/seed/templates/wet-room.ts` (som testplanen):
@@ -165,6 +166,12 @@ Ingen nye regler. De fem reglene i malen brukes som de er: fire fra PR #167 og `
 - Hull «ikke utført», grunn tom eller eier nektet → TGIU-forslag.
 - Hull «uten funn» 14,9 vekt-% → TG0-forslag. 15 → forhøyet fukt (velg TG2 eller TG3), og T-0059-advarselen.
 - `unknown` uten årstall → «ikke vurdert» med teksten «Ukjent» (T-0051).
+- Folie med dokumentasjon 2001, befaringsår 2026 (25 år) → TG2. 2002 → ikke forslag (fagansvarlig 16.11.2026).
+- Sjikt 1999 → TG3. 2000 → ikke TG3 (kanten for «før 2000»).
+- Ukjent materiale 2005 → ikke aldersforslag. Ukjent materiale 1990 → TG3.
+- Årstall for sjiktet mangler og byggeåret 1995 brukes → TG3, og meldingen sier at byggeåret er brukt.
+- Hulltaking ikke utført med grunn «eier nektet» → TGIU, og advarsel hvis «eier informert» mangler. Grunn tom → TGIU uten den advarselen.
+- 15 med annen enhet enn vekt-% → verken forslag eller advarsel (A386).
 - Samme svar med to måleverdier; `readYear` avviser urimelige årstall; egen-nøkkel-sjekk; `checkDocumentKeys` for de sju feltkodene.
 
 ## Akseptkriterier
@@ -175,14 +182,14 @@ Ingen nye regler. De fem reglene i malen brukes som de er: fire fra PR #167 og `
 - [ ] Sjikt fra 1990 gir TG3-forslag med begrunnelse; Godta lager avviket med standardtekstene (`text_source = template`) og logger `accepted`.
 - [ ] Hulltaking ikke utført gir TGIU-forslag; Godta gir `tg_direct = IU` og beslutningsrad.
 - [ ] Hull uten funn og 14,9 vekt-% gir TG0-forslag; Godta gir `tg_direct = 0` og beslutningsrad. 15 gir avviksforslaget forhøyet fukt.
-- [ ] Endre og Avvis uten begrunnelse avvises; med begrunnelse logges `changed` / `rejected`. Ny beslutning er ny rad.
+- [ ] Endre og Avvis uten begrunnelse avvises; med begrunnelseskode (eller tekst) logges `changed` / `rejected` med `override_reason_code`. «Annet» uten tekst avvises. Ny beslutning er ny rad.
 - [ ] Serveren regner forslaget selv: forfalsket forslag, ukjent `rule_key` eller forslag som ikke slår til på serveren avvises.
 - [ ] Regler setter aldri TG selv: lagring av felt alene gir ingen avvik, ingen `tg_direct` og `tg_computed` = tom (test).
 - [ ] Et forslag som ikke lenger gjelder, fjerner ikke et godtatt avvik og gir advarsel.
 - [ ] «Velg TG2 eller TG3» krever valgt TG; tiltaket blir «bør» ved TG2 og «må» ved TG3 (T-0060); endret TG uten bør/må-tekst gir advarsel om å se over teksten.
 - [ ] TGIU kan ikke stå sammen med TG2/TG3 uten aktivt valg; HMS kan. TG-avvik på punkt med TG0/TG1 tømmer `tg_direct`.
 - [ ] TGIU-opplysningene lagres; advarsel om manglende opplysning følger grunnen (punkt 6), uten falske advarsler.
-- [ ] Advarsler: TG2/TG3 uten årsak, konsekvens eller tiltak; TG3 uten kostnad; TG3 bare på alder (TG2-alder endret til TG3 gir advarsel, `membrane_before_2000` med TG3 gir ingen); HMS uten konsekvens eller tiltak; hulltaking ikke utført og annet enn TGIU på tilliggende konstruksjoner; T-0059. Ingen av dem sperrer.
+- [ ] Advarsler: punkt ferdig uten TG (ferdig uten TG og ferdig med bare HMS gir advarsel, ferdig med TG1 gir ingen); TG2/TG3 uten årsak, konsekvens eller tiltak; TG3 uten kostnad; TG3 bare på alder (TG2-alder endret til TG3 gir advarsel, `membrane_before_2000` med TG3 gir ingen); HMS uten konsekvens eller tiltak; hulltaking ikke utført og annet enn TGIU på tilliggende konstruksjoner; T-0059. Ingen av dem sperrer.
 - [ ] Eget beløp 37 500 og 15 000 gir advarsel, 40 000 ikke; eget beløp vises med «ca.»; 0, negativt og ikke-heltall avvises; de fem intervallene kan velges.
 - [ ] `tg_computed` er høyeste TG blant avvikene som ikke er slettet, ellers `tg_direct`.
 - [ ] Avvik og tiltak slettes mykt; slettede vises ikke og telles ikke. Angre virker med tastatur til punktet forlates.
@@ -199,14 +206,35 @@ Ingen nye regler. De fem reglene i malen brukes som de er: fire fra PR #167 og `
 - [ ] Revisjonslogg, beslutningslogg og applikasjonslogg har ingen fritekst og ingen persondata (fritekstmarkør-test); `reasons` med fritekst avvises; fødselsnummer i fritekst avvises.
 - [ ] Ingen tjeneste i `src/core/reports` kjører `delete`; `src/core/reports` importerer ikke `src/core/ai`; ingen KI-kall.
 - [ ] iPad-størrelse liggende og stående: hele flyten fra Godta til Ferdig, ingen vannrett rulling, knapper minst 44 px, ingen nedtrekksmenyer. Hele flyten med tastatur; axe uten feil; forslag og advarsler har `aria-live`.
+- [ ] Forbedrerens tillegg (A380–A383): begrunnelse med ett trykk; «Rett nå» på advarsler med én opplagt retting og «x å se over – gå til neste» i listehodet; avvikssøk i «+ Avvik» som åpner riktig punkt og lager avviket (pil og Enter); snarveiene Ctrl/Cmd+Enter, Alt+↑/↓, Ctrl/Cmd+K og «?», uten énkastsnarvei for Godta eller Avvis og uten å ta taster fra tekstfelt eller skjermleser (e2e og axe).
 - [ ] Gjetteord- og kopitesten dekker de nye tekstene (oversettelsesfilen, tiltakene, intervalletikettene).
 - [ ] Ingen ny avhengighet. `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` og `pnpm size` grønne. `/security-review` kjørt før PR.
+
+## Lagt til av forbedreren (16.11.2026)
+Bygges i denne oppgaven (Ståle 14.11.2026, «Forbedreren» i `CLAUDE.md`). Ført i `docs/plan/forbedrerens-tillegg.md`. Hvert tillegg kan tas ut uten å røre resten av badet.
+1. **Begrunnelse med ett trykk ved Endre og Avvis** (A380, dyrt å endre: faste koder). Se Omfang 4 og Data. Kolonnen `override_reason_code` legges i badets migrering (0035 eller neste ledige nummer) før merge. Gir statistikk over hvilke regler som overstyres og hvorfor. Hovedmål: de ansatte, KI i bunnen, færre reklamasjoner.
+2. **«Rett nå» og «Neste å se over»** (A381, lett). Advarsler med én opplagt retting får en knapp: T-0059 «Endre til Utført med funn»; TG3 uten kostnad, TG2/TG3 uten årsak, konsekvens eller tiltak, og TGIU-opplysning som mangler: fokus til feltet; forslag som ikke gjelder lenger: rull til forslaget; punkt ferdig uten TG: fokus til TG-valget. Listehodet viser «3 å se over – gå til neste», som hopper til neste punkt med advarsel og legger fokus på advarselen. Advarslene sperrer fortsatt ikke (regel 12). Hovedmål: færre reklamasjoner og de ansatte.
+3. **Søk etter avvik i «+ Avvik»** (A382, lett). Søkefelt øverst i `AddDeviationPanel` filtrerer alle utfallene i badet på tekst, i nettleseren over maldokumentet som alt er lastet. Treff på andre punkter vises med punktnavnet; valg åpner punktet og lager avviket med standardtekstene. Pil og Enter. Ingen KI, ingen ny avhengighet. Hovedmål: de ansatte.
+4. **Tastatursnarveier på PC** (A383, lett). Ctrl/Cmd+Enter: «Ferdig med punktet». Alt+↑/↓: forrige og neste punkt, bare når fokus ikke står i et tekstfelt (der flytter Alt+piltast markøren på Mac). Ctrl/Cmd+K: fokus i avvikssøket. «?» (utenfor tekstfelt): liste over snarveiene. Ingen énkastsnarvei for Godta eller Avvis. Testes med tastatur og axe. Hovedmål: de ansatte.
+5. **«Skriv det du ser»: KI finner utfallet** (A384, lett): nytt planpunkt under «Fra forbedreren» i 2a-2, bygges etter «KI i veien». Ikke med her; søket i punkt 3 er reserven det faller tilbake til.
+
+## Rettes i koden før tjenestene bygges (KI-ansvarlig 16.11.2026)
+Koden på branchen er fra før runde 2. Rettes først, i samme PR:
+1. Fjern `deviations.ai_usage_id` (kolonne og `deviations_ai_usage_fk`) fra `src/db/schema/reports.ts` og migreringen (A355). `field_answers.ai_usage_id` beholdes; den settes og tømmes bare av serveren, ett sted i lagringen per felt.
+2. `REPORT_AI_TARGET_FIELDS` i `src/core/reports/logic/codes.ts`: `deviation` = `deviation_text`, `cause_text`, `consequence_text`; ny `tgiu_detail` = `reason`, `risk_assessment`, `how_to_examine` (A356). Låses i test.
+3. Delvis indeks `ai_usage_log (organization_id, report_id) where report_id is not null` i `src/db/schema/ai-usage-log.ts` og migreringen; kommentaren «svar og avvik» blir «svar».
+4. `targetRef` type `"answer"` blir `"field_answer"` i `usage-log.test.ts` og `retention-transitions.test.ts` (A350); domenemodellen 4.7/4.12 og ordlisten rettes.
+5. Tester: statisk test for at `src/core/reports` ikke importerer `src/core/ai` (kommentar «gjelder til KI i veien»), Zod-test som avviser fritekst i `suggestion` og `reasons`, tenant-isolasjon på `ai_usage_log.report_id`.
+6. Tekstfeltene er én felles byggekloss med plass for `AiTextMark`, uten KI-knapp. `text_source` sier aldri noe om KI-opphav (A357).
+7. `checkpoint_done_without_tg` og `tg3_on_age_only` legges sist i `CHECKPOINT_WARNING_CODES` (A385, A358).
+8. Er 0035 tatt i main når main flettes inn rett før PR, får migreringen neste nummer, med punkt 1, 3 og `override_reason_code`, og alle henvisninger til `0035_badet-pc` rettes. Den håndrettede rekkefølgen beholdes: kjør `pnpm db:generate` for nytt nummer og øyeblikksbilde i journalen, og legg den håndrettede SQL-en inn i den nye filen (omfang 2). B3.6 kjøres på nytt.
 
 ## Testplan (test-leder 14.11.2026)
 - **Enhet** (`src/core/reports/logic/`): TG-logikk, kostnad, flettefelt, tiltak per TG, advarslene, T-0059, oversettelsesfilen dekker alle koder i `reasons`, skjema for regelsvaret.
 - **Regler:** testsakene under «Regler».
 - **Integrasjon:** `expectTenantIsolation` per spørring, tilgangsmatrisen, idempotent start, konflikt per felt, Godta/Endre/Avvis for alle tre forslagstyper, forfalsket forslag, «regler setter aldri TG», myk sletting, TGIU-detaljer, logg uten fritekst, ingen `delete`, ingen KI.
 - **Tillegg runde 2** (test-leder legger dem i testplanen): B4.31 dobbelt Godta og id-kollisjon, B4.32 Godta TGIU/TG0 når punktet har TG-avvik, B4.33 ytelse, B4.2 med to egne databaseforbindelser, B6.1 uten «Fyll ut badet» på rom som ikke er våtrom, tap av tekst ved punktbytte uten nett, «Ferdig» med ventende lagring, Angre med tastatur, `tg3_on_age_only`.
+- **Tillegg 16.11.2026** (testskriver legger dem i `docs/funksjoner/fase2a-badet-pc-testplan.md` før koden, med testnavn): B4.31, B4.32, B4.33, B4.2 med to forbindelser, B4.17 (`deviation_id` på `changed`, Avvis lager aldri avvik), B1.10/B4 `tg3_on_age_only`; e2e for B6.1, tekst uten nett ved punktbytte, `beforeunload`, «Ferdig» med ventende lagring og `route.abort`, Angre med tastatur; A355–A357 (B3.1 uten `deviations.ai_usage_id`, den delvise indeksen, låst `REPORT_AI_TARGET_FIELDS`, Angre tømmer `ai_usage_id`); B3.6 (eksisterende rader uendret bortsett fra `report_id`, som tømmes, vist med en rad som har `report_id`); B5.3 tenant-isolasjon for oppslaget av låst malversjon og `suggested_by_rule_id` og for kjeden rom → etasje → bygning → oppdrag; B7.1 versjon 0.14.0 og sjekk av migreringsnummer (grep etter `0035_badet-pc`); småfunnene med testnavn (melding på `membrane_before_2000` med byggeår, kilden på TGIU-regelen, nytt navn på trinnet `membrane.before_2000` uten ny kode, én testkilde for fuktgrensens kode, doble seed-tester ryddet); fagansvarliges testsaker under «Regler» og `checkpoint_done_without_tg`; forbedrerens tillegg 1–4 (enhet, integrasjon, e2e og axe).
 - **E2e** (`e2e/fase-2a-badet-pc.spec.ts`): PC hovedflyt; Endre og Avvis; bør/må; TGIU og advarsel; kostnad 37 500 og intervall; lagringsfeil (`route.abort`); to faner; kontor skrivebeskyttet; iPad liggende og stående; tastatur og axe.
 
 ## Avgjort ved forhåndsvurderingen (prosjektlederen 14.11.2026)
@@ -219,10 +247,11 @@ Ingen nye regler. De fem reglene i malen brukes som de er: fire fra PR #167 og `
 - **TG0 direkte uten kontroll av vilkårene nå** (fagansvarlig ga valget). A348, lett å endre.
 - **TGIU-opplysninger etter grunn, og advarsel (ikke sperre) ved hulltaking ikke utført** (fagansvarlig; spørsmål 88 til fagrådet). A349, lett å endre.
 - **KI-målkoden `field_answer`** i stedet for «answer» (KI-ansvarlig). A350, dyrt å endre (fast kode).
+- **Overtakelsen 16.11.2026:** forbedrerens fire tillegg i oppgaven tas inn uten uenighet (A380–A383), det femte blir nytt planpunkt (A384). Snarveien Alt+↑/↓ virker bare utenfor tekstfelt, fordi forbedreren selv krever at snarveier ikke tar taster fra tekstfeltene. Fagansvarlig: «punkt ferdig uten TG» som advarsel på alle åtte punktene (A385, lett), T-0059 og TGIU-advarselen fra serverens regelsvar (A386, lett), manglende tiltak aldri sperre (A387, lett, retter kortets kilde). Fagspørsmålene om TG på alle åtte punktene og TGIU utenfor tilliggende konstruksjoner føres i spørsmål 88 (d) og (e). Beslutningsnumrene starter på A380 fordi A374–A377 alt er brukt av «Tilbud i stedet for ordre».
 - **Runde 2 (bare hull):** KI-merket bare i `ai_usage_log`, `deviations.ai_usage_id` fjernes (A355, dyrt), KI-målkodene `deviation_text` og `tgiu_detail` (A356, dyrt), `text_source` bare forhold til malen (A357, dyrt), advarsel for TG3 bare på alder bygges nå i stedet for å utsettes (A358, lett: dataene finnes, og det hindrer en kjent reklamasjonsgrunn), testdata del 2 som egen PR etter denne (A359, lett: forenkler og test-leder framfor KI-ansvarlig sitt «ta den med», fordi TG i testdataene skal komme fra tjenestene som bygges her). Ux-hullene 1–5 og test-leders punkter er tatt inn uten uenighet; ingen nye funksjoner.
 
 ## Åpne spørsmål
 - Spørsmål 78 (a), (b) og (d) står; agentene bygger advarsel og bør/må som utkast.
-- Spørsmål 88 (fag): låste grader for dokumentasjon i våtrom, sperre eller advarsel ved hulltaking ikke utført (også når punktet har TG2/TG3 fra synlig skade, så advarselen om TGIU ikke kan løses), TGIU-opplysninger på andre punkter. Agentene bygger advarsel.
+- Spørsmål 88 (fag): låste grader for dokumentasjon i våtrom, sperre eller advarsel ved hulltaking ikke utført (også når punktet har TG2/TG3 fra synlig skade, så advarselen om TGIU ikke kan løses), TGIU-opplysninger på andre punkter, (d) TG på alle åtte punktene, også «Generelt» og «Dokumentasjon», (e) egen advarsel for TGIU utenfor tilliggende konstruksjoner. Agentene bygger advarsel (A385).
 - Spørsmål 89 (tilgang): teamregelen når `access.inspectors_edit_all` er av.
 - Spørsmål 90 (personvern, før ekte data): hvem-og-når på beslutninger (arbeidsmiljøloven kap. 9), og grunnlag for DPIA og sikkerhetsgjennomgang.
