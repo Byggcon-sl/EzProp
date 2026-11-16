@@ -11,6 +11,9 @@ De ansatte: … / KI i bunnen: … / Reklamasjoner: …
 ## Slik ser og tester du det
 (konkrete steg, f.eks. «åpne … på iPaden, trykk …»)
 
+## Lagt til av forbedreren
+(nye funksjoner og forbedringer som ikke stod i planen; tom hvis ingenting)
+
 ## Må bestemmes av Ståle
 (tom hvis ingenting)
 

@@ -45,7 +45,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 ## Åpne PR-er
 
-- #210 «Rett T-0050: arealtypen i «Legg til rom» står igjen etter feilmelding» (branch `rett-t0050-arealtype`), hos en annen kjøring.
+- #212 «Agentlaget: forbedreren erstatter forenkleren (Ståle 14.11.2026)», hos en annen kjøring.
 
 Ingen PR venter på Ståle.
 
@@ -72,8 +72,8 @@ Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4�
 
 Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 14.11.2026 på main a1ca41d9 (det som var nytt siden e013fde7).
 
-- **Åpne alvorlige feil: 1.** T-0050 (arealtypen i «Legg til rom» hopper tilbake etter feilmelding og lagres feil). Fortsatt feil etter retting, forsøk 2. De ti andre skjemaene er rettet. Tas før neste nye punkt i planen.
-- Åpne funn i alt: 81 (1 alvorlig, 23 middels, 57 små). Nye denne gangen: T-0069–T-0091. Middels og små tas med neste oppgave i samme område. Lukket denne gangen: T-0018, T-0029 og T-0052.
+- **Åpne alvorlige feil: 0 (venter på bekreftelse).** T-0050 (arealtypen i «Legg til rom» hopper tilbake etter feilmelding og lagres feil) er rettet i forsøk 2 på branchen `rett-t0050-arealtype` (versjon 0.12.3, 14.11.2026): «Arealtype» og «Under terreng» i `RoomForm` er ustyrte felt, så tilbakestillingen etter et forsøk ikke lenger setter listen til BRA-i. Gjelder «Legg til rom» og «Endre rom». Testlaget prøver igjen etter merge.
+- Åpne funn i alt: 80 (0 alvorlige, 23 middels, 57 små; T-0050 venter på bekreftelse). Nye denne gangen: T-0069–T-0091. Middels og små tas med neste oppgave i samme område. Lukket denne gangen: T-0018, T-0029 og T-0052.
 - **Før «klar for drift»:** T-0070 (utløpt innlogging sletter skjema) og T-0071 (engelsk feilside når nettet faller).
 - **Plan og beslutninger:** T-0072 (Ståles ja til varsel om like kontakter og firma falt ut av T3), T-0078 (DPIA-punktet skrevet om).
 - **Før «Badet på PC»:** T-0051, T-0059 og T-0060, og T-0014 (punkt 1 og 5) i 2a-3.
@@ -111,11 +111,12 @@ Ingen.
 
 ## Pågår
 
-- **Rett T-0050 (forsøk 2)**: PR #210, hos en annen kjøring.
 - **Badet på PC** (branch `badet-pc`, oppgavekort og testplan, mellomlagret 14.11.2026 kl. 02:32 uten PR). Står stille; neste kjøring kan overta den hvis ingen har gjort det.
 - Overflødige brancher etter PR #203: `testdata-arbeidshverdag`, `testdata-retting-hovedlop-2111`, `arkiv-testdata-arbeidshverdag-parallell`, `testdata-overtatt`. Etter PR #209: `worktree-wf_b4502702-3aa-19`.
 
 ## Siste kjøring
+14.11.2026 kl. 06:50–10:40 UTC (hovedløkken, sesjon 01JqwntzQZ64Vqmh6pCvtb8u): ingen åpne PR-er ved start. Bygde «Produksjonsvakt også på `pnpm db:seed:testoppdrag`» (lett, A308) og merget PR #208. Overtok T-0050 forsøk 2 (`rett-t0050-arealtype`, stoppet kl. 03:53 etter testplanen), arbeidsflyten gjorde den ferdig, og PR #210 ble merget etter en ny commit med versjon 0.13.2 (CI ventet på godkjenning etter automatisk fletting). T-0050 venter nå på at testlaget bekrefter rettingen. Neste: «Tilbud i stedet for ordre», eller overta «Badet på PC» (`badet-pc`, stille siden kl. 02:32, bruker A315–A329; A315–A317 er nå også brukt av PR #209, så badet må flytte numrene).
+
 14.11.2026 fra kl. 07:50 UTC (hovedløkken, sesjon 01Jqwnu1H9sPHLGbCiFfvpHT): ingen åpne PR-er ved start. T-0050 var hos en annen kjøring. Overtok «Nytt oppdrag» (stoppet kl. 02:30 uten PR), gjorde den ferdig og merget PR #209 (versjon 0.13.0). Læringsløkken for PR #203, #208 og #209 i denne PR-en (linjene flyttet til `docs/plan/levert.md`). Neste: «Tilbud i stedet for ordre», eller overta «Badet på PC».
 
 14.11.2026 (nattløkken): ingen alvorlige funn. better-auth 1.7.23 ryddet i PR «Rydding fra nattløkken 2026-11-14» (versjon 0.12.1). Resten står under «Oppgaver fra nattløkken».
