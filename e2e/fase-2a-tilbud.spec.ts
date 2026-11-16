@@ -4,6 +4,8 @@ import postgres from "postgres";
 import { assertLocalOrTestDatabase } from "./database-guard";
 import {
   ADMIN_EMAIL,
+  chooseOfficeIfNeeded,
+  convertOfferWithOneTap as convertWithOneTap,
   e2eDatabaseUrl,
   logIn,
   logInAsInspector,
@@ -310,22 +312,6 @@ function changesSection(page: Page): Locator {
     .locator("section, [role=region]")
     .filter({ has: page.getByRole("heading", { name: "Endringer", exact: true }) })
     .last();
-}
-
-/** Velger «Bodø» når kontoret må velges (admin uten kontor); ellers er det forhåndsvalgt. */
-async function chooseOfficeIfNeeded(page: Page) {
-  // Vent til handlingsblokken er tegnet, ellers kan kontorvalget komme etter sjekken
-  await expect(convertButton(page)).toBeVisible();
-  const radio = page.getByRole("radio", { name: "Bodø", exact: true });
-  if (await radio.isVisible()) await radio.check();
-}
-
-/** Ett trykk på «Gjør om til oppdrag» og venter på oppdraget. Gir id-en til oppdraget. */
-async function convertWithOneTap(page: Page): Promise<string> {
-  await chooseOfficeIfNeeded(page);
-  await convertButton(page).click();
-  await expect(page).toHaveURL(ASSIGNMENT_URL);
-  return ASSIGNMENT_URL.exec(page.url())![1]!;
 }
 
 async function expectAtLeast(target: Locator, name: string, min: number) {

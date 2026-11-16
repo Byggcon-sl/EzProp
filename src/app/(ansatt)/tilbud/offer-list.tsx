@@ -52,7 +52,16 @@ function ExtendButton() {
  * forsvinne fra «Utløpt» etter forleng, så kvitteringen («[adresse] er gyldig til [dato].», A372)
  * står over listen og får fokus. Kvitteringen kommer fra svaret på handlingen, ikke fra adressen.
  */
-export function OfferList({ rows, extendAction }: { rows: OfferRow[]; extendAction: Action }) {
+export function OfferList({
+  rows,
+  emptyText,
+  extendAction,
+}: {
+  rows: OfferRow[];
+  /** Teksten når listen er tom (filteret og søket). */
+  emptyText: string;
+  extendAction: Action;
+}) {
   const [state, formAction] = useActionState(
     withOfflineMessage(extendAction, () => ({})),
     initialFormState as OfferActionState,
@@ -73,53 +82,59 @@ export function OfferList({ rows, extendAction }: { rows: OfferRow[]; extendActi
           <FormMessage message={state.message} />
         ) : null}
       </div>
-      <Card className="mt-6 overflow-hidden p-0">
-        <ul>
-          {rows.map((row) => (
-            <li
-              key={row.id}
-              className="flex flex-wrap items-center border-t border-slate-200 first:border-t-0"
-            >
-              <Link
-                href={`/tilbud/${row.id}`}
-                className="flex min-h-14 min-w-0 flex-1 basis-72 flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 hover:bg-brand-50 focus-visible:-outline-offset-2"
+      {rows.length === 0 ? (
+        <Card className="mt-6">
+          <p className="text-slate-600">{emptyText}</p>
+        </Card>
+      ) : (
+        <Card className="mt-6 overflow-hidden p-0">
+          <ul>
+            {rows.map((row) => (
+              <li
+                key={row.id}
+                className="flex flex-wrap items-center border-t border-slate-200 first:border-t-0"
               >
-                <span className="min-w-0 flex-1 basis-48 break-words">
-                  <span className="block font-medium text-slate-900 [overflow-wrap:anywhere]">
-                    {row.addressText}
-                  </span>
-                  <span className="block text-sm text-slate-600">
-                    Mottatt {row.receivedText}
-                    {row.orderedByText && <> · {row.orderedByText}</>}
-                    {row.externalRef && <> · Meglerens ordrenr. {row.externalRef}</>}
-                    {row.validUntilText && <> · {row.validUntilText}</>}
-                  </span>
-                </span>
-                <span className="flex shrink-0 flex-wrap items-center gap-2">
-                  {row.assignmentNumber && (
-                    <span className="text-sm font-medium text-slate-900 tabular-nums">
-                      {row.assignmentNumber}
-                      {row.assignmentCancelled && " (kansellert)"}
+                <Link
+                  href={`/tilbud/${row.id}`}
+                  className="flex min-h-14 min-w-0 flex-1 basis-72 flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 hover:bg-brand-50 focus-visible:-outline-offset-2"
+                >
+                  <span className="min-w-0 flex-1 basis-48 break-words">
+                    <span className="block font-medium text-slate-900 [overflow-wrap:anywhere]">
+                      {row.addressText}
                     </span>
-                  )}
-                  <OfferStatusBadge
-                    displayStatus={row.displayStatus}
-                    validUntil={row.validUntil}
-                    expiryText={row.expiryText}
-                  />
-                </span>
-              </Link>
-              {row.canExtend && (
-                <form action={formAction} className="mb-3 ml-5 shrink-0 sm:mr-5 sm:mb-0 sm:ml-0">
-                  <input type="hidden" name="orderId" value={row.id} />
-                  <input type="hidden" name="withAddress" value="1" />
-                  <ExtendButton />
-                </form>
-              )}
-            </li>
-          ))}
-        </ul>
-      </Card>
+                    <span className="block text-sm text-slate-600">
+                      Mottatt {row.receivedText}
+                      {row.orderedByText && <> · {row.orderedByText}</>}
+                      {row.externalRef && <> · Meglerens ordrenr. {row.externalRef}</>}
+                      {row.validUntilText && <> · {row.validUntilText}</>}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 flex-wrap items-center gap-2">
+                    {row.assignmentNumber && (
+                      <span className="text-sm font-medium text-slate-900 tabular-nums">
+                        {row.assignmentNumber}
+                        {row.assignmentCancelled && " (kansellert)"}
+                      </span>
+                    )}
+                    <OfferStatusBadge
+                      displayStatus={row.displayStatus}
+                      validUntil={row.validUntil}
+                      expiryText={row.expiryText}
+                    />
+                  </span>
+                </Link>
+                {row.canExtend && (
+                  <form action={formAction} className="mb-3 ml-5 shrink-0 sm:mr-5 sm:mb-0 sm:ml-0">
+                    <input type="hidden" name="orderId" value={row.id} />
+                    <input type="hidden" name="withAddress" value="1" />
+                    <ExtendButton />
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
     </>
   );
 }

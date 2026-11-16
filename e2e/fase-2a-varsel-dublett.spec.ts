@@ -10,6 +10,7 @@ import {
   logInAsOffice,
   uniqueSuffix,
   convertedAssignmentLink,
+  convertOfferWithOneTap,
 } from "./helpers";
 
 /*
@@ -34,13 +35,13 @@ import {
  */
 
 const NOTICE_TEXT =
-  "Samme adresse eller matrikkel som en annen ordre. Sjekk at boligen ikke blir bestilt eller tatt to ganger.";
+  "Samme adresse eller matrikkel som et annet oppdrag eller et tilbud. Sjekk at boligen ikke blir tatt to ganger.";
 const MORE = "Viser de 10 nyeste.";
 const SAVED = "Endringene er lagret.";
 const PORTRAIT = { width: 834, height: 1194 } as const;
 const LANDSCAPE = { width: 1194, height: 834 } as const;
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const ORDER_URL = new RegExp(`/ordre/(${UUID})(\\?.*)?$`);
+const OFFER_URL = new RegExp(`/tilbud/(${UUID})(\\?.*)?$`);
 const ORG_B_NAME = "Oppdiktet takst B (e2e dublett)";
 
 type Sql = ReturnType<typeof postgres>;
@@ -99,11 +100,13 @@ async function insertOrder(seed: OrderSeed): Promise<{ id: string; number: strin
     const rejected = seed.status === "rejected";
     await sql`
       insert into orders (id, organization_id, address_text, gnr, bnr, snr, received_at, source,
-        status, requested_report_type, rejected_reason, ordered_by_text)
+        status, requested_report_type, rejected_reason_key, rejected_reason, ordered_by_text,
+        valid_until)
       values (${id}, ${organizationId}, ${seed.address}, ${seed.gnr ?? null}, ${seed.bnr ?? null},
         ${seed.snr ?? null}, now() - make_interval(mins => ${minutes}), 'manual',
-        ${rejected ? "rejected" : "received"}, 'condition_report',
-        ${rejected ? "Feil registrering (e2e)" : null}, 'Megler Testesen')`;
+        ${rejected ? "rejected" : "received"}, 'condition_report', ${rejected ? "other" : null},
+        ${rejected ? "Feil registrering (e2e)" : null}, 'Megler Testesen',
+        (now() at time zone 'Europe/Oslo')::date + 30)`;
     if (seed.status !== "converted" && !seed.assignmentStatus) return { id, number: null };
 
     if (seed.organizationId) throw new Error("Gjort om i en annen organisasjon brukes ikke her");
@@ -159,7 +162,7 @@ function noticeLinks(page: Page): Locator {
 }
 
 function editButton(page: Page): Locator {
-  return page.getByRole("button", { name: "Endre ordren", exact: true });
+  return page.getByRole("button", { name: "Endre tilbudet", exact: true });
 }
 
 function saveButton(page: Page): Locator {
@@ -247,25 +250,26 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
 
     // Annen skrivemåte: små bokstaver, mellomrom i husnummeret og uten postnummer
     const typed = `dublettveien ${suffix} 1 a`;
-    await page.goto("/ordre/ny");
+    await page.goto("/tilbud/ny");
     await addressField(page).fill(typed);
     await page.getByLabel(/^Hvem bestilte/).fill("Megler Testesen");
     await saveButton(page).click();
-    await expect(page).toHaveURL(ORDER_URL);
-    const newId = ORDER_URL.exec(page.url())![1]!;
+    await expect(page).toHaveURL(OFFER_URL);
+    const newId = OFFER_URL.exec(page.url())![1]!;
 
     await expect(notice(page)).toBeVisible();
     await expect(notice(page)).toContainText(NOTICE_TEXT);
     await expect(noticeLinks(page)).toHaveCount(1);
-    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/ordre/${open.id}`);
+    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/tilbud/${open.id}`);
     await expect(noticeLinks(page).first()).toContainText(addressFor(suffix));
     await expect(noticeLinks(page).first()).toContainText("samme adresse");
     await expect(noticeLinks(page).first()).toContainText(/mottatt \d{2}\.\d{2}\.\d{4}/);
-    await expect(noticeLinks(page).first()).toContainText("Mottatt");
+    await expect(noticeLinks(page).first()).toContainText(/^Tilbud – /);
+    await expect(noticeLinks(page).first()).toContainText("Åpent");
 
-    // Ordren er lagret og står i ordrelisten
-    await page.goto("/ordre");
-    await expect(page.locator(`a[href="/ordre/${newId}"]`).first()).toBeVisible();
+    // Tilbudet er lagret og står i tilbudslisten
+    await page.goto(`/tilbud?q=${encodeURIComponent(suffix)}`);
+    await expect(page.locator(`a[href="/tilbud/${newId}"]`).first()).toBeVisible();
   });
 
   test("7.2 lenken åpner den andre ordren, og der står varselet med lenke tilbake", async ({
@@ -276,17 +280,19 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     const second = await insertOrder({ address: `DUBLETTVEIEN ${suffix} 1-A.`, minutesAgo: 5 });
     await logIn(page);
 
-    await page.goto(`/ordre/${second.id}`);
+    await page.goto(`/tilbud/${second.id}`);
     await expect(noticeLinks(page)).toHaveCount(1);
     await noticeLinks(page).first().click();
-    await expect(page).toHaveURL(new RegExp(`/ordre/${first.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/tilbud/${first.id}$`));
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(addressFor(suffix));
     await expect(notice(page)).toBeVisible();
     await expect(noticeLinks(page)).toHaveCount(1);
-    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/ordre/${second.id}`);
+    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/tilbud/${second.id}`);
   });
 
-  test("7.3 rekkefølge: «Endringene er lagret.» over varselet, og varselet over «Gjort om til oppdrag»", async ({
+  // Rekkefølgen på tilbudssiden er låst (fase2a-tilbud-design.md 5.1, A369): kortet «Gjort om til
+  // oppdrag» står over varselet, og «Endringene er lagret.» står ved «Endre tilbudet» under det.
+  test("7.3 rekkefølge: «Gjort om til oppdrag» over varselet, og varselet over «Endringene er lagret.»", async ({
     page,
   }) => {
     const suffix = uniqueSuffix();
@@ -298,7 +304,7 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     });
     await logIn(page);
 
-    await page.goto(`/ordre/${converted.id}`);
+    await page.goto(`/tilbud/${converted.id}`);
     await editButton(page).click();
     await page.getByLabel(/^Ekstern referanse/).fill(`E2E-DUB-${suffix}`);
     await saveButton(page).click();
@@ -317,8 +323,8 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     const savedY = (await saved.boundingBox())!.y;
     const noticeY = (await notice(page).boundingBox())!.y;
     const cardY = (await card.first().boundingBox())!.y;
-    expect(savedY, "kvitteringen står over varselet").toBeLessThan(noticeY);
-    expect(noticeY, "varselet står over «Gjort om til oppdrag»").toBeLessThan(cardY);
+    expect(cardY, "«Gjort om til oppdrag» står over varselet").toBeLessThan(noticeY);
+    expect(noticeY, "varselet står over kvitteringen").toBeLessThan(savedY);
   });
 
   test("7.4 rette adressen til en annen ordres adresse viser varselet; rette tilbake fjerner det", async ({
@@ -333,7 +339,7 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     const order = await insertOrder({ address: mine, minutesAgo: 5 });
     await logIn(page);
 
-    await page.goto(`/ordre/${order.id}`);
+    await page.goto(`/tilbud/${order.id}`);
     await expect(notice(page)).toHaveCount(0);
 
     await editButton(page).click();
@@ -341,7 +347,7 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     await saveButton(page).click();
     await expect(page.getByText(SAVED, { exact: true })).toBeVisible();
     await expect(notice(page)).toBeVisible();
-    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/ordre/${other.id}`);
+    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/tilbud/${other.id}`);
 
     await editButton(page).click();
     await addressField(page).fill(mine);
@@ -350,7 +356,7 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     await expect(notice(page)).toHaveCount(0);
   });
 
-  test("7.5 varselet stopper ingenting: «Gjør om til oppdrag», «Avvis» og «Endre ordren» virker uten ekstra trykk", async ({
+  test("7.5 varselet stopper ingenting: «Gjør om til oppdrag», «Avslå tilbudet» og «Endre tilbudet» virker uten ekstra trykk", async ({
     page,
   }) => {
     const suffix = uniqueSuffix();
@@ -365,33 +371,33 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     await logIn(page);
 
     // Gjør om til oppdrag med varselet synlig
-    await page.goto(`/ordre/${toConvert.id}`);
+    await page.goto(`/tilbud/${toConvert.id}`);
     await expect(notice(page)).toBeVisible();
-    await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
-    await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
+    const assignmentId = await convertOfferWithOneTap(page);
+    // Tilbudet er gjort om: varsel og kort på samme side; bare kortlenken treffer, og den går til
+    // oppdraget.
+    await page.goto(`/tilbud/${toConvert.id}`);
     await expect(page.getByRole("main")).toContainText(/Gjort om til oppdrag\s*\d{4}-\d{5}/);
-    // Varsel og kort på samme side: bare kortlenken treffer, og den går til oppdraget.
     await expect(notice(page)).toBeVisible();
     await expect(convertedAssignmentLink(page)).toHaveCount(1);
-    await expect(convertedAssignmentLink(page)).toHaveAttribute(
-      "href",
-      /\/oppdrag\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-    );
+    await expect(convertedAssignmentLink(page)).toHaveAttribute("href", `/oppdrag/${assignmentId}`);
     await expect(
       page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }),
     ).toHaveCount(0);
 
-    // Avvis med varselet synlig
-    await page.goto(`/ordre/${toReject.id}`);
+    // Avslå med varselet synlig
+    await page.goto(`/tilbud/${toReject.id}`);
     await expect(notice(page)).toBeVisible();
-    await page.getByLabel(/^Grunn/).fill("Lagt inn to ganger (e2e)");
-    await page.getByRole("button", { name: "Avvis", exact: true }).click();
-    await expect(page.getByRole("main")).toContainText("Grunn for avvisning");
-    // 7.6: en avvist ordre viser aldri varsel
+    await page.getByRole("button", { name: "Avslå tilbud", exact: true }).click();
+    await page.getByRole("radio", { name: "Annet", exact: true }).check();
+    await page.getByLabel(/^Mer om grunnen/).fill("Lagt inn to ganger (e2e)");
+    await page.getByRole("button", { name: "Avslå tilbudet", exact: true }).click();
+    await expect(page.getByText("Avslått: Annet", { exact: true })).toBeVisible();
+    // 7.6: et avslått tilbud viser aldri varsel
     await expect(notice(page)).toHaveCount(0);
 
-    // Endre ordren med varselet synlig
-    await page.goto(`/ordre/${toConvert.id}`);
+    // Endre tilbudet med varselet synlig
+    await page.goto(`/tilbud/${toConvert.id}`);
     await expect(notice(page)).toBeVisible();
     await editButton(page).click();
     await expect(saveButton(page)).toBeVisible();
@@ -412,14 +418,14 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     const open = await insertOrder({ address: addressFor(suffix), minutesAgo: 5 });
     await logIn(page);
 
-    await page.goto(`/ordre/${rejected.id}`);
-    await expect(page.getByRole("main")).toContainText("Grunn for avvisning");
+    await page.goto(`/tilbud/${rejected.id}`);
+    await expect(page.getByRole("main")).toContainText("Avslått:");
     await expect(notice(page)).toHaveCount(0);
 
-    await page.goto(`/ordre/${open.id}`);
+    await page.goto(`/tilbud/${open.id}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(notice(page)).toHaveCount(0);
-    await expect(page.locator(`a[href="/ordre/${rejected.id}"]`)).toHaveCount(0);
+    await expect(page.locator(`a[href="/tilbud/${rejected.id}"]`)).toHaveCount(0);
   });
 
   test("7.7 ulik adresse, samme gnr/bnr: varselet sier «samme matrikkel»", async ({ page }) => {
@@ -441,9 +447,9 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     });
     await logIn(page);
 
-    await page.goto(`/ordre/${order.id}`);
+    await page.goto(`/tilbud/${order.id}`);
     await expect(noticeLinks(page)).toHaveCount(1);
-    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/ordre/${other.id}`);
+    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/tilbud/${other.id}`);
     await expect(noticeLinks(page).first()).toContainText("samme matrikkel");
     await expect(noticeLinks(page).first()).not.toContainText("samme adresse");
   });
@@ -457,12 +463,12 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     const order = await insertOrder({ address: addressFor(suffix), minutesAgo: 1 });
     await logIn(page);
 
-    await page.goto(`/ordre/${order.id}`);
+    await page.goto(`/tilbud/${order.id}`);
     await expect(noticeLinks(page)).toHaveCount(10);
     await expect(notice(page)).toContainText(MORE);
     // Den eldste vises ikke
-    await expect(notice(page).locator(`a[href="/ordre/${others[10]}"]`)).toHaveCount(0);
-    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/ordre/${others[0]}`);
+    await expect(notice(page).locator(`a[href="/tilbud/${others[10]}"]`)).toHaveCount(0);
+    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/tilbud/${others[0]}`);
   });
 
   test("7.9 kontoret og takstmannen ser varselet", async ({ page }) => {
@@ -471,13 +477,13 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     const order = await insertOrder({ address: addressFor(suffix), minutesAgo: 5 });
 
     await logInAsOffice(page);
-    await page.goto(`/ordre/${order.id}`);
-    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/ordre/${other.id}`);
+    await page.goto(`/tilbud/${order.id}`);
+    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/tilbud/${other.id}`);
 
     await page.context().clearCookies();
     await logInAsInspector(page);
-    await page.goto(`/ordre/${order.id}`);
-    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/ordre/${other.id}`);
+    await page.goto(`/tilbud/${order.id}`);
+    await expect(noticeLinks(page).first()).toHaveAttribute("href", `/tilbud/${other.id}`);
   });
 
   test("7.10 en ordre i en annen organisasjon med samme adresse vises aldri som treff", async ({
@@ -503,9 +509,9 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     });
     await logIn(page);
 
-    await page.goto(`/ordre/${order.id}`);
+    await page.goto(`/tilbud/${order.id}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.locator(`a[href="/ordre/${foreign.id}"]`)).toHaveCount(0);
+    await expect(page.locator(`a[href="/tilbud/${foreign.id}"]`)).toHaveCount(0);
     await expect(notice(page)).toHaveCount(0);
   });
 
@@ -517,7 +523,7 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     const order = await insertOrder({ address: addressFor(suffix), minutesAgo: 5 });
     await logIn(page);
 
-    await page.goto(`/ordre/${order.id}`);
+    await page.goto(`/tilbud/${order.id}`);
     const box = notice(page);
     await expect(box).toHaveCount(1);
     await expect(box.getByRole("heading", { level: 2, name: "Mulig dublett" })).toBeVisible();
@@ -550,7 +556,7 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     const order = await insertOrder({ address: addressFor(suffix), minutesAgo: 5 });
     await logIn(page);
 
-    await page.goto(`/ordre/${order.id}`);
+    await page.goto(`/tilbud/${order.id}`);
     const link = noticeLinks(page).first();
     await expect(link).toBeVisible();
 
@@ -558,7 +564,7 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     for (let step = 0; step < 40; step += 1) {
       await page.keyboard.press("Tab");
       const href = await page.evaluate(() => document.activeElement?.getAttribute("href") ?? null);
-      if (href === `/ordre/${other.id}`) {
+      if (href === `/tilbud/${other.id}`) {
         reached = true;
         break;
       }
@@ -579,7 +585,7 @@ test.describe("varsel om mulig dublett (pc og ipad)", () => {
     expect(visibleFocus, `synlig fokus (${JSON.stringify(focusStyle)})`).toBe(true);
 
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(new RegExp(`/ordre/${other.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/tilbud/${other.id}$`));
   });
 });
 
@@ -612,7 +618,7 @@ test.describe("varsel om mulig dublett (bare ipad)", () => {
       ["liggende", LANDSCAPE],
     ] as const) {
       await page.setViewportSize(viewport);
-      await page.goto(`/ordre/${orderId}`);
+      await page.goto(`/tilbud/${orderId}`);
       await expect(noticeLinks(page)).toHaveCount(10);
       await expectNoHorizontalScroll(page, name);
     }
@@ -625,7 +631,7 @@ test.describe("varsel om mulig dublett (bare ipad)", () => {
       ["liggende", LANDSCAPE],
     ] as const) {
       await page.setViewportSize(viewport);
-      await page.goto(`/ordre/${orderId}`);
+      await page.goto(`/tilbud/${orderId}`);
       const links = noticeLinks(page);
       await expect(links).toHaveCount(10);
       for (let index = 0; index < 10; index += 1) {

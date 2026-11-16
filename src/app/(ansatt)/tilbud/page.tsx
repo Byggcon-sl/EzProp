@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { buttonVariants } from "@/shared/ui/button";
-import { Card } from "@/shared/ui/card";
 import { FormMessage } from "@/shared/ui/form";
 import { todayInOslo } from "@/shared/lib/dates";
 import {
@@ -115,12 +114,14 @@ export default async function OffersPage({
         <div className="mt-6">
           <FormMessage message={result.message} />
         </div>
-      ) : rows.length === 0 ? (
-        <Card className="mt-6">
-          <p className="text-slate-600">{emptyOfferListText(filter, query)}</p>
-        </Card>
       ) : (
-        <OfferList rows={rows} extendAction={extendOfferAction} />
+        // Også en tom liste går gjennom OfferList, så kvitteringen etter «Forleng 30 dager» står
+        // når den siste raden forsvinner fra filteret (testplan 7.1.5).
+        <OfferList
+          rows={rows}
+          emptyText={emptyOfferListText(filter, query)}
+          extendAction={extendOfferAction}
+        />
       )}
     </main>
   );
