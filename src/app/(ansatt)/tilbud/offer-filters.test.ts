@@ -56,7 +56,7 @@ describe("knappene", () => {
   it("valgt filter har aria-current, de andre ikke", () => {
     const html = render({ current: "expired", query: "", counts: COUNTS });
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
-    expect(html).toMatch(/<a href="\/tilbud\?status=expired" aria-current="page"/);
+    expect(html).toMatch(/<a (?=[^>]*href="\/tilbud\?status=expired")(?=[^>]*aria-current="page")/);
   });
 
   it("knappene er minst 44 px høye", () => {

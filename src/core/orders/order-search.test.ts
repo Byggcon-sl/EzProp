@@ -835,7 +835,7 @@ const SEARCH_FILES = [
   "src/core/assignments/work-queue-params.ts",
   "src/core/orders/list.ts",
   "src/core/orders/orders.ts",
-  "src/app/(ansatt)/ordre/page.tsx",
+  "src/app/(ansatt)/tilbud/page.tsx",
   "src/app/(ansatt)/arbeidskoe/page.tsx",
   "src/app/(ansatt)/arbeidskoe/queue-href.ts",
 ];

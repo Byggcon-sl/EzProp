@@ -258,7 +258,7 @@ describe("4.2 rekkefølge, knapper og kontor", () => {
     expect(html).toContain("Velg et annet kontor");
     expect(html).toMatch(/<details/);
     expect(html.match(/<input[^>]*type="radio"[^>]*name="officeId"/g)).toHaveLength(2);
-    expect(html).toMatch(new RegExp(`<input[^>]*value="${office.id}"[^>]*checked`));
+    expect(html).toMatch(new RegExp(`<input(?=[^>]*value="${office.id}")(?=[^>]*checked)`));
   });
 
   it("4.2.3 uten kontor (admin): radioene står over knappen, uten noe valgt", async () => {

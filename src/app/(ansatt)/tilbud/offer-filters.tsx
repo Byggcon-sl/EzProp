@@ -1,9 +1,5 @@
 import Link from "next/link";
-import {
-  OFFER_LIST_FILTERS,
-  offerListFilterLabel,
-  type OfferListFilter,
-} from "@/core/orders/codes";
+import { offerListFilterLabel, type OfferListFilter } from "@/core/orders/codes";
 import { cn } from "@/shared/lib/cn";
 import { segmentClass, segmentCount, segmentCountCurrent, segmentList } from "../segments";
 
@@ -47,6 +43,9 @@ export function offerListHref(filter: OfferListFilter, query: string): string {
  * Knappene med antall. Uten `counts` (listen kunne ikke hentes) vises de uten tall, så ingen ser
  * «0» som ikke stemmer. Skjermleseren leser «Åpne, 3 tilbud».
  */
+/** Rekkefølgen på knappene (design 3.2): de lukkede statusene etter «Utløpt», «Alle» sist. */
+const NAV_ORDER: readonly OfferListFilter[] = ["open", "expired", "rejected", "converted", "all"];
+
 export function OfferFilterNav({
   current,
   query,
@@ -59,7 +58,7 @@ export function OfferFilterNav({
   return (
     <nav aria-label="Status" className="mt-6">
       <ul className={segmentList}>
-        {OFFER_LIST_FILTERS.map((filter) => {
+        {NAV_ORDER.map((filter) => {
           const selected = filter === current;
           return (
             <li key={filter}>
