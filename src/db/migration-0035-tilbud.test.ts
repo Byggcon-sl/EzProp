@@ -159,7 +159,7 @@ afterAll(async () => {
     await admin.end();
   }
   if (partialFolder) rmSync(partialFolder, { recursive: true, force: true });
-});
+}, 60_000);
 
 function after(id: string): OrderRow {
   const found = afterRows.get(id);

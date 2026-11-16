@@ -52,7 +52,7 @@ export type PossibleDuplicatesCriteria = {
   receivedAt: Date;
   /**
    * Dagens dato i Norge («ÅÅÅÅ-MM-DD» fra `todayInOslo`, ADR 0012). Avgjør om et tilbud er åpent
-   * (`valid_until >= today`) eller utløpt. Aldri `now()` i databasen.
+   * (`valid_until >= today`) eller utløpt. Aldri klokka i databasen.
    */
   today: string;
   excludeOrderId: string | null;

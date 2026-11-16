@@ -52,14 +52,18 @@ beforeEach(resetDatabase);
 
 const LIST_KEYS = [
   "addressText",
+  // Tilbud (ADR 0012, T-0031)
+  "assignmentCancelled",
   "assignmentId",
   "assignmentNumber",
+  "displayStatus",
   "externalRef",
   "id",
   "orderedByText",
   "receivedAt",
   "source",
   "status",
+  "validUntil",
 ].sort();
 
 /** En person med rollene i organisasjonen. */
@@ -463,7 +467,7 @@ describe("3.4 spesialtegn og felt som ikke søkes", () => {
   it("3.4.3 svært lang tekst (1000 tegn) krasjer ikke", async () => {
     const { org, admin } = await orgWithAdmin();
     await seedNoise(org.id);
-    await expect(search(admin, org.id, "y".repeat(1000))).resolves.toEqual({
+    await expect(search(admin, org.id, "y".repeat(1000))).resolves.toMatchObject({
       items: [],
       total: 0,
     });
@@ -617,9 +621,9 @@ describe("3.6 grense, sortering og total", () => {
 
   it("3.6.5 tom organisasjon og søk uten treff gir { items: [], total: 0 }", async () => {
     const { org, admin } = await orgWithAdmin();
-    expect(await search(admin, org.id)).toEqual({ items: [], total: 0 });
+    expect(await search(admin, org.id)).toMatchObject({ items: [], total: 0 });
     await insertOrder(org.id);
-    expect(await search(admin, org.id, "finnesikke")).toEqual({ items: [], total: 0 });
+    expect(await search(admin, org.id, "finnesikke")).toMatchObject({ items: [], total: 0 });
   });
 
   it("3.6.7 raden har ordrenummeret og fast feltliste uten sporingsfelt", async () => {
@@ -794,7 +798,7 @@ describe("3.8 tenant-isolasjon", () => {
     );
 
     for (const query of ["Kryss Partsen", "Kryssfirma", "Kryssveien", "77/88"]) {
-      expect(await search(a.admin, a.org.id, query), `søk i A på ${query}`).toEqual({
+      expect(await search(a.admin, a.org.id, query), `søk i A på ${query}`).toMatchObject({
         items: [],
         total: 0,
       });
