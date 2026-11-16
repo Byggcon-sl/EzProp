@@ -301,26 +301,26 @@ function RoomForm({
 }) {
   const [state, formAction] = useActionState(saveRoomAction, initialFormState);
   useOnSaved(state, onDone);
-  const [areaType, setAreaType] = useState(initial.areaType);
-  const [belowGround, setBelowGround] = useState(initial.belowGround);
-  const [lastAttempt, setLastAttempt] = useState(state.attempt);
+  const areaTypeRef = useRef<HTMLSelectElement>(null);
+  const belowGroundRef = useRef<HTMLInputElement>(null);
 
-  // React tilbakestiller skjemaet etter hvert forsøk. Ved feil settes arealtype og «Under terreng»
-  // til det som ble sendt, og listene og avkrysningen får ny nøkkel, slik at valgene står igjen.
-  if (state.attempt !== lastAttempt) {
-    setLastAttempt(state.attempt);
-    if (state.message !== null) {
-      setAreaType(textValue(state, "areaType", areaType));
-      setBelowGround(state.values.belowGround === "on");
-    }
-  }
+  // Arealtype og «Under terreng» er ustyrte felt (defaultValue/defaultChecked), som i FloorForm.
+  // React tilbakestiller skjemaet etter hvert forsøk, og tilbakestillingen setter feltene til
+  // startverdien. En styrt liste har ingen startverdi i DOM-en, så den hoppet til første valg
+  // (BRA-i). Nå er startverdien det som ble sendt (fra svaret ved feil), og nøkkelen per forsøk
+  // gjør at feltene vises på nytt med den. Forslaget for romtypen (A97) settes rett i feltene.
+  const failed = state.message !== null;
+  const areaType = failed ? textValue(state, "areaType", initial.areaType) : initial.areaType;
+  const belowGround = failed ? state.values.belowGround === "on" : initial.belowGround;
 
   function onRoomTypeChange(value: string) {
     for (const group of codes.roomTypeGroups) {
       const option = group.options.find((type) => type.value === value);
       if (option) {
-        setAreaType(option.areaType);
-        setBelowGround(floorBelowGround || option.belowGround);
+        if (areaTypeRef.current) areaTypeRef.current.value = option.areaType;
+        if (belowGroundRef.current) {
+          belowGroundRef.current.checked = floorBelowGround || option.belowGround;
+        }
         return;
       }
     }
@@ -370,8 +370,8 @@ function RoomForm({
           key={state.attempt}
           id={`${idPrefix}-areaType`}
           name="areaType"
-          value={areaType}
-          onChange={(event) => setAreaType(event.target.value)}
+          ref={areaTypeRef}
+          defaultValue={areaType}
         >
           {codes.areaTypes.map((option) => (
             <option key={option.value} value={option.value}>
@@ -384,8 +384,8 @@ function RoomForm({
         key={state.attempt}
         name="belowGround"
         label="Under terreng"
-        checked={belowGround}
-        onChange={(event) => setBelowGround(event.target.checked)}
+        ref={belowGroundRef}
+        defaultChecked={belowGround}
       />
       <FormButtons onCancel={onDone} />
     </form>
