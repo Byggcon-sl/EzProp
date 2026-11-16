@@ -56,3 +56,26 @@ describe("Notice og FormMessage", () => {
     );
   });
 });
+
+describe("Notice med lenke (tilbud, design avsnitt 6)", () => {
+  it("lenken står i samme status-avsnitt etter meldingen, i fjord-dark og minst 44 px", () => {
+    const html = renderToStaticMarkup(
+      createElement(Notice, {
+        message: "Oppdraget er laget.",
+        link: { href: "#takstmann", label: "Velg takstmann og befaringsdato" },
+      }),
+    );
+    expect(html.match(/role="status"/g)).toHaveLength(1);
+    expect(html).toContain('href="#takstmann"');
+    expect(html.indexOf("Oppdraget er laget.")).toBeLessThan(
+      html.indexOf("Velg takstmann og befaringsdato"),
+    );
+    expect(html).toMatch(/<a [^>]*class="[^"]*text-fjord-dark[^"]*"/);
+    expect(html).toMatch(/<a [^>]*class="[^"]*min-h-11[^"]*"/);
+  });
+
+  it("uten lenke er det ingen lenke", () => {
+    const html = renderToStaticMarkup(createElement(Notice, { message: "Lagret." }));
+    expect(html).not.toContain("<a ");
+  });
+});

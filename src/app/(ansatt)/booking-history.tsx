@@ -3,7 +3,7 @@ import {
   bookingHistoryActionLabel,
   type BookingHistoryEntry,
 } from "@/core/assignments";
-import { formatOsloDateTime } from "./ordre/received-at";
+import { formatOsloDateTime } from "./tilbud/received-at";
 
 /**
  * Én verdi i «Endringer» som tekst: tom blir «(tom)», ja/nei «Ja»/«Nei», mottatt som norsk dato og

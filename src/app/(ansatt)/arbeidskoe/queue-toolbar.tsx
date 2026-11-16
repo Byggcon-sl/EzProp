@@ -8,17 +8,14 @@ import { cn } from "@/shared/lib/cn";
 import { SEARCH_QUERY_MAX_LENGTH } from "@/shared/lib/like-pattern";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/form";
+import { segmentCount, segmentCountCurrent, segmentCurrent, segmentLink, segmentList } from "../segments";
 import { QUEUE_PATH, queueHref, type QueueState } from "./queue-href";
 
 export type WorkQueueCounts = Awaited<ReturnType<typeof countWorkQueueByStatus>>;
 
-/** Samme tekst som i ordrelisten. Ingen autofokus (tastaturet skal ikke sprette opp på iPad). */
+/** Samme tekst som i tilbudslisten. Ingen autofokus (tastaturet skal ikke sprette opp på iPad). */
 const SEARCH_LABEL = "Søk på adresse, nummer, megler eller gnr/bnr";
 
-const segmentList = "flex flex-wrap gap-1 rounded-xl bg-white/60 p-1 ring-1 ring-slate-200/60";
-const segmentLink =
-  "inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-base text-slate-700 hover:bg-white";
-const segmentCurrent = "bg-white font-medium text-slate-900 ring-1 ring-line";
 
 function SearchIcon() {
   return (
@@ -60,10 +57,7 @@ export function QueueToolbar({ queue, counts }: { queue: QueueState; counts?: Wo
                     <>
                       <span
                         data-testid={`work-queue-count-${status}`}
-                        className={cn(
-                          "rounded-full px-2 text-sm tabular-nums",
-                          current ? "bg-brand-50 text-brand-700" : "bg-slate-100 text-slate-700",
-                        )}
+                        className={cn(segmentCount, current && segmentCountCurrent)}
                       >
                         {counts[status]}
                       </span>
