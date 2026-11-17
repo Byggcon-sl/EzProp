@@ -224,6 +224,9 @@ test.describe("papirkurv og angre (pc og ipad)", () => {
     const floor = block(block(page, tree.buildingName), "1. etasje");
     await clickAndWaitForAction(page, removeButton(roomItem(floor, tree.firstFloorRooms[0]!.name)));
     await expect(toast(page)).toBeVisible();
+    // Musa står der «Fjern» ble trykket. Kommer meldingen under den, stopper Chrome tiden (hover)
+    // når den selv vil. Flytt musa bort, så bare testen bestemmer når tiden står.
+    await page.mouse.move(0, 0);
     await page.clock.runFor(9_999);
     await expect(toast(page)).toBeVisible();
     await page.clock.runFor(1);
@@ -232,6 +235,7 @@ test.describe("papirkurv og angre (pc og ipad)", () => {
     if (testInfo.project.name !== "pc") return;
     await clickAndWaitForAction(page, removeButton(roomItem(floor, tree.firstFloorRooms[1]!.name)));
     await expect(toast(page)).toBeVisible();
+    await page.mouse.move(0, 0);
     await page.clock.runFor(5_000);
     await toast(page).hover();
     await page.clock.runFor(30_000);
