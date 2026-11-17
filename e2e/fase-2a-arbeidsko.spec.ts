@@ -1,9 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
-  convertedAssignmentLink,
   ADMIN_EMAIL,
+  convertOfferWithOneTap,
   employeeByEmail,
   logIn,
+  saveNewOffer,
   uniqueSuffix,
 } from "./helpers";
 
@@ -21,9 +22,6 @@ import {
  * («Forfalt» og «Befaring ikke avtalt» synes på kortet).
  */
 
-const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
-const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
 const NUMBER = /\d{4}-\d{5}/;
 const PORTRAIT = { width: 834, height: 1194 } as const;
 const STATUSES = ["ordered", "in_progress", "completed", "invoiced"] as const;
@@ -31,20 +29,14 @@ const FAKE_NATIONAL_ID = "12345678901";
 
 type Created = { id: string; number: string; address: string; suffix: string };
 
-/** Ny ordre med unik adresse → «Gjør om til oppdrag» → åpner oppdraget. */
+/** Nytt tilbud med unik adresse → «Gjør om til oppdrag» → åpner oppdraget. */
 async function newAssignment(page: Page): Promise<Created> {
   const suffix = `ko${uniqueSuffix()}`;
   const address = `Køveien 12 ${suffix}, 8000 Bodø`;
-  await page.goto("/ordre/ny");
+  await page.goto("/tilbud/ny");
   await page.getByLabel(/^Adresse/).fill(address);
-  await page.getByRole("button", { name: "Lagre", exact: true }).click();
-  await expect(page).toHaveURL(ORDER_URL);
-  await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
-  await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(convertedAssignmentLink(page)).toBeVisible();
-  await convertedAssignmentLink(page).click();
-  await expect(page).toHaveURL(ASSIGNMENT_URL);
-  const id = ASSIGNMENT_URL.exec(page.url())![1]!;
+  await saveNewOffer(page);
+  const id = await convertOfferWithOneTap(page);
   const heading = await page.getByRole("heading", { level: 1 }).innerText();
   return { id, number: NUMBER.exec(heading)![0], address, suffix };
 }

@@ -87,8 +87,10 @@ describe("1.1.1 ordre og oppdrag godtar og avviser det samme", () => {
     }
   });
 
-  it("ordreskjemaet er den felles regelen (ingen kopi)", () => {
-    expect(orderInputSchema).toBe(bookingInputSchema);
+  it("tilbudsskjemaet er den felles regelen pluss bare validUntil (ADR 0012)", () => {
+    const orderKeys = Object.keys(orderInputSchema(NOW).shape).sort();
+    const bookingKeys = Object.keys(bookingInputSchema(NOW).shape).sort();
+    expect(orderKeys).toEqual([...bookingKeys, "validUntil"].sort());
   });
 });
 

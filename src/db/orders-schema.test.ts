@@ -27,6 +27,9 @@ beforeEach(resetDatabase);
 const CHECK = "23514";
 const FOREIGN_KEY = "23503";
 const UNIQUE = "23505";
+const NOT_NULL = "23502";
+/** Indeksen fra migrering 0035 (`OFFER_LIST_INDEX` i `@/core/orders/contract`). */
+const OFFER_LIST_INDEX = "orders_organization_id_status_valid_until_idx";
 
 /** Postgres-feilkoden, også når Drizzle har pakket feilen inn. */
 function pgCode(error: unknown): string | undefined {
@@ -53,17 +56,19 @@ function insertOrderSql(values: {
   status?: string;
   source?: string;
   rejectedReason?: string | null;
+  rejectedReasonKey?: string | null;
   assignmentId?: string | null;
   requestedReportType?: string;
 }) {
   return db.execute(sql`
     insert into orders (
-      organization_id, received_at, source, address_text, requested_report_type,
-      seller_declaration_received, status, rejected_reason, assignment_id
+      organization_id, received_at, valid_until, source, address_text, requested_report_type,
+      seller_declaration_received, status, rejected_reason, rejected_reason_key, assignment_id
     ) values (
-      ${values.organizationId}, now(), ${values.source ?? "manual"}, 'Testveien 12, 8000 Bodø',
-      ${values.requestedReportType ?? "condition_report"}, false, ${values.status ?? "received"},
-      ${values.rejectedReason ?? null}, ${values.assignmentId ?? null}
+      ${values.organizationId}, now(), '2026-12-03', ${values.source ?? "manual"},
+      'Testveien 12, 8000 Bodø', ${values.requestedReportType ?? "condition_report"}, false,
+      ${values.status ?? "received"}, ${values.rejectedReason ?? null},
+      ${values.rejectedReasonKey ?? null}, ${values.assignmentId ?? null}
     )`);
 }
 
@@ -112,9 +117,73 @@ describe("orders i databasen", () => {
     await insertOrderSql({ organizationId: orgA.id });
   });
 
-  it("6.1 avvist uten grunn avvises (CHECK)", async () => {
+  it("6.1 avslått uten grunn avvises (CHECK)", async () => {
     const { orgA } = await twoOrgs();
     await expectPgError(insertOrderSql({ organizationId: orgA.id, status: "rejected" }), CHECK);
+  });
+
+  it("F4: avslått med fast grunn uten tekst godtas, «Annet» uten tekst og ukjent kode avvises", async () => {
+    const { orgA } = await twoOrgs();
+    await insertOrderSql({
+      organizationId: orgA.id,
+      status: "rejected",
+      rejectedReasonKey: "price",
+    });
+    await insertOrderSql({
+      organizationId: orgA.id,
+      status: "rejected",
+      rejectedReasonKey: "other",
+      rejectedReason: "Feil registrering",
+    });
+    await expectPgError(
+      insertOrderSql({ organizationId: orgA.id, status: "rejected", rejectedReasonKey: "other" }),
+      CHECK,
+    );
+    await expectPgError(
+      insertOrderSql({
+        organizationId: orgA.id,
+        status: "rejected",
+        rejectedReasonKey: "other",
+        rejectedReason: "   ",
+      }),
+      CHECK,
+    );
+    await expectPgError(
+      insertOrderSql({ organizationId: orgA.id, status: "rejected", rejectedReasonKey: "pris" }),
+      CHECK,
+    );
+    // Avslått uten kode, også med tekst, avvises
+    await expectPgError(
+      insertOrderSql({ organizationId: orgA.id, status: "rejected", rejectedReason: "Tekst" }),
+      CHECK,
+    );
+  });
+
+  it("ADR 0012: valid_until er påkrevd og har ingen standardverdi", async () => {
+    const { orgA } = await twoOrgs();
+    const [column] = await db.execute<{
+      data_type: string;
+      is_nullable: string;
+      column_default: string | null;
+    }>(sql`
+      select data_type, is_nullable, column_default from information_schema.columns
+      where table_schema = 'public' and table_name = 'orders' and column_name = 'valid_until'`);
+    expect(column).toEqual({ data_type: "date", is_nullable: "NO", column_default: null });
+    await expectPgError(
+      db.execute(sql`
+        insert into orders (organization_id, address_text)
+        values (${orgA.id}, 'Testveien 12, 8000 Bodø')`),
+      NOT_NULL,
+    );
+  });
+
+  it("ADR 0012: indeksen for tilbudslisten er (organization_id, status, valid_until) uten slettede", async () => {
+    const [index] = await db.execute<{ indexdef: string }>(sql`
+      select indexdef from pg_indexes
+      where schemaname = 'public' and indexname = ${OFFER_LIST_INDEX}`);
+    expect(index?.indexdef.replace(/\s+/g, " ").toLowerCase()).toContain(
+      "(organization_id, status, valid_until) where (deleted_at is null)",
+    );
   });
 
   it("6.2 gjort om uten assignment_id avvises (CHECK)", async () => {

@@ -13,7 +13,7 @@ import {
 import { saveBuilding, saveFloor, saveFloorArea, saveRoom } from "@/core/buildings";
 import { createClaim, updateClaim } from "@/core/claims";
 import { createContact, createFirm } from "@/core/contacts";
-import { convertOrderToAssignment, createOrder } from "@/core/orders";
+import { convertOrderToAssignment, createOrder, rejectOrder } from "@/core/orders";
 import { saveAssignmentProperty, saveCommonAreas } from "@/core/properties";
 import type { Database } from "@/db/client";
 import {
@@ -862,8 +862,14 @@ const MEASUREMENT_EVENTS = [
   "assignment.room_saved",
 ];
 
-function isUnusable(row: TestdataOrderRow): boolean {
-  return row.deletedAt !== null || row.status === "rejected" || row.assignmentDeletedAt !== null;
+/** Slettet, kansellert eller avslått uten at planen sier det: røres ikke. */
+function isUnusable(row: TestdataOrderRow, order: TestdataOrder): boolean {
+  const plannedRejection = order.offer?.rejection != null;
+  return (
+    row.deletedAt !== null ||
+    (row.status === "rejected" && !plannedRejection) ||
+    row.assignmentDeletedAt !== null
+  );
 }
 
 async function ensureOrder(
@@ -873,7 +879,7 @@ async function ensureOrder(
   states: Map<string, AssignmentState>,
 ): Promise<boolean> {
   const { organizationId, summary } = context;
-  if (existing && isUnusable(existing)) return false;
+  if (existing && isUnusable(existing, order)) return false;
 
   let orderId: string;
   let assignmentId: string | null = existing?.assignmentId ?? null;
@@ -889,11 +895,18 @@ async function ensureOrder(
         externalRef: order.externalRef,
         receivedAt: order.receivedAt,
         orderedByContactId: contactIdOf(context, order.orderedByContactKey),
+        validUntil: order.offer?.validUntil ?? null,
       },
       order.receivedAt,
     );
     orderId = created.id;
     summary.created.orders += 1;
+  }
+
+  // Tilbud som planen avslår (ADR 0012, F4): bare når det fortsatt er åpent
+  const rejection = order.offer?.rejection ?? null;
+  if (rejection && (existing?.status ?? "received") === "received") {
+    await rejectOrder(actorOf(context, order.createdByKey), organizationId, orderId, rejection);
   }
 
   await alignOrderTime(context, orderId, order);
