@@ -161,8 +161,8 @@ describe("7. parter (A415)", () => {
     expect(result.notices).toEqual([CONTACT_GONE]);
   });
 
-  it("7.3 firmaet er fjernet: koblingene blir null, verdiene står, og beskjeden kommer", async () => {
-    const { org, admin, firm, party } = await setup();
+  it("7.3 firmaet er fjernet: firmaet blir null, kontakten står, verdiene står, og beskjeden kommer", async () => {
+    const { org, admin, firm, contact, party } = await setup();
     await removeParty(admin, org.id, party.id);
     await removeFirm(admin, org.id, firm.id);
 
@@ -170,7 +170,8 @@ describe("7. parter (A415)", () => {
 
     const after = await partyRow(party.id);
     expect(after.deleted_at).toBeNull();
-    expect(after.contact_id).toBeNull();
+    // Kontakter beholdes når firmaet fjernes (A415), så koblingen til kontakten står.
+    expect(after.contact_id).toBe(contact.id);
     expect(after.firm_id).toBeNull();
     expect(after.name).toBe(PARTY_NAME);
     expect(after.firm_name).toBe(FIRM_NAME);

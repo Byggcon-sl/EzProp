@@ -112,6 +112,8 @@ async function start(page: Page): Promise<E2eTrashTree> {
   await logIn(page);
   const tree = await createAssignmentWithTrashTree(uniqueSuffix());
   await openBuildings(page, tree);
+  // Klokken fryses etter oppsettet, slik at bare runFor flytter tiden (som i fase-2a-papirkurv.spec.ts).
+  await page.clock.pauseAt(new Date(Date.now() + 60_000));
   return tree;
 }
 

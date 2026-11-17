@@ -114,7 +114,7 @@ Ett `expectTenantIsolation`-kall per funksjon, i testfilen for funksjonen:
 
 1. **vanlig gjenoppretting:** part med aktiv kontakt og firma → samme id, rolle, navn og koblinger.
 2. **kontakt fjernet:** `contactId` og `firmId` blir `null`, navn og verdier står, `notices` har «Parten kom tilbake, men kontakten den var koblet til, er fjernet.».
-3. **firma fjernet:** samme som 2 for firmaet.
+3. **firma fjernet:** bare `firmId` blir `null`; `contactId` står, fordi kontakter beholdes når firmaet fjernes (A415). Navn og verdier står, og `notices` har beskjeden om at koblingen er borte.
 4. **sammenslått kontakt:** slå sammen kontakten (eksisterende kjernefunksjon) mens parten er fjernet → parten kommer tilbake med den flyttede koblingen.
 5. **kontakt i annen organisasjon** (rad lagt inn direkte) → kobling settes til `null`, aldri til B sin kontakt.
 6. **`listTrash` for parter** gir bare id, rolle, navn og firmanavn: test at objektet ikke har nøklene `email`, `phone`, `contactId`, `firmId`.

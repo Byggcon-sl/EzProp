@@ -676,7 +676,7 @@ describe("1.14–1.15 listTrash", () => {
     for (const line of result) expect(line.type).toBe("room");
   });
 
-  it("1.14 slettegruppe er én linje med groupCount 4, og rommene i gruppen finnes i svaret", async () => {
+  it("1.14 slettegruppe er én linje med groupCount 5 (etasjen og 4 rom), og rommene i gruppen finnes i svaret", async () => {
     const { org, admin, assignment } = await base();
     const building = await createBuilding(org.id, { assignmentId: assignment.id, name: BUILDING });
     const { floor, rooms } = await floorWithRooms(org.id, building.id, FLOOR_2, 4, 2);
@@ -686,7 +686,8 @@ describe("1.14–1.15 listTrash", () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.type).toBe("floor");
     expect(result[0]!.id).toBe(floor.id);
-    expect(result[0]!.groupCount).toBe(4);
+    expect(result[0]!.groupCount).toBe(5);
+    expect(result[0]!.contents).toEqual({ floors: 0, rooms: 4 });
     expect(String(result[0]!.label)).toContain(FLOOR_2);
     const text = JSON.stringify(result);
     for (const r of rooms) expect(text, "rommet kan hentes enkeltvis").toContain(r.id);
@@ -711,14 +712,25 @@ describe("1.14–1.15 listTrash", () => {
     const result = lines(await listTrash(inspector, org.id, assignment.id));
     const roomLine = findDeep(result, rooms[0]!.id);
     expect(roomLine, "rommet fjernet først står i papirkurven").toBeDefined();
-    expect(String(roomLine!.path)).toContain(BUILDING);
-    expect(String(roomLine!.path)).toContain(FLOOR_1);
+    expect(pathText(roomLine!)).toContain(BUILDING);
+    expect(pathText(roomLine!)).toContain(FLOOR_1);
+    expect(
+      pathParts(roomLine!).map((p) => [p.type, p.removed]),
+      "bygningen og etasjen er også fjernet",
+    ).toEqual([
+      ["building", true],
+      ["floor", true],
+    ]);
     expect(roomLine!.removedByName).toBe("Kari Testesen");
     expect(roomLine!.area ?? null).toBeNull();
 
     const floorLine = findDeep(result, otherFloor.floor.id);
     expect(floorLine, "etasjen fjernet alene står i papirkurven").toBeDefined();
-    expect(String(floorLine!.path)).toContain(BUILDING);
+    expect(pathText(floorLine!)).toContain(BUILDING);
+    expect(
+      pathParts(floorLine!).map((p) => [p.type, p.removed]),
+      "bygningen er også fjernet",
+    ).toEqual([["building", true]]);
     expect(floorLine!.area).not.toBeNull();
     // BRA = 50 + 10 + 4
     expect(JSON.stringify(floorLine!.area)).toMatch(/\b64\b/);
@@ -783,6 +795,19 @@ describe("1.14–1.15 listTrash", () => {
 });
 
 /** Linjen med id-en, også om den ligger inne i en slettegruppe. */
+type PathPart = { type: string; id: string; label: string; removed: boolean };
+
+/** Leddene i `path` (bygning › etasje), som skjermen viser med «(fjernet)». */
+function pathParts(line: AnyRecord): PathPart[] {
+  return line.path as PathPart[];
+}
+
+function pathText(line: AnyRecord): string {
+  return pathParts(line)
+    .map((p) => p.label)
+    .join(" › ");
+}
+
 function findDeep(value: unknown, id: string): AnyRecord | undefined {
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -837,7 +862,7 @@ describe("2. hendelser og revisjonslogg", () => {
     const removed = (await eventsFor(org.id)).filter((e) => e.type.endsWith("_removed"));
     expect(removed.map((e) => e.type)).toEqual(["assignment.floor_removed"]);
     expect(removed[0]!.data.floorId).toBe(floor.id);
-    expect(removed[0]!.data.groupCount).toBe(4);
+    expect(removed[0]!.data.groupCount).toBe(5);
   });
 
   it("2.2 gjenoppretting: én floor_restored med how, secondsSinceRemoval (42), groupCount og floorKey", async () => {
@@ -857,7 +882,7 @@ describe("2. hendelser og revisjonslogg", () => {
     expect(data.floorId).toBe(floor.id);
     expect(data.how).toBe("undo");
     expect(data.secondsSinceRemoval).toBe(42);
-    expect(data.groupCount).toBe(4);
+    expect(data.groupCount).toBe(5);
     expect(data).toHaveProperty("floorKey");
   });
 
