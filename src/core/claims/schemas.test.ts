@@ -313,7 +313,7 @@ describe("2.6 og 2.7 felt kjernen setter selv, brukes aldri", () => {
 
 describe("2.8 faste koder og norske etiketter (regel 6)", () => {
   it("CLAIM_TYPES er låst i fast rekkefølge", () => {
-    expect([...CLAIM_TYPES]).toEqual(["complaint", "insurance_claim", "other"]);
+    expect([...CLAIM_TYPES]).toEqual(["inquiry", "complaint", "insurance_claim", "other"]);
   });
 
   it("CLAIM_OUTCOMES er låst i fast rekkefølge", () => {

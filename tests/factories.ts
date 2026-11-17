@@ -8,6 +8,7 @@ import { insertTemplateWithoutAccessCheck } from "@/core/templates/templates";
 import { db } from "@/db/client";
 import {
   assignmentParties,
+  claimReinspections,
   assignments,
   assignmentTeamMembers,
   auditLog,
@@ -72,6 +73,7 @@ export const RESET_TABLES = [
   "report_buildings",
   "number_sequences",
   "orders",
+  "claim_reinspections",
   "claims",
   "common_areas",
   "cadastral_units",
@@ -1673,5 +1675,45 @@ export async function createAiUsageLog(
     ) returning *`);
   const [row] = result as unknown as TestAiUsageRow[];
   if (!row) throw new Error("kunne ikke opprette rad i ai_usage_log");
+  return row;
+}
+
+type ClaimReinspectionOverrides = {
+  /** Saken. Standard: en ny sak i organisasjonen (med eget opprinnelig oppdrag). */
+  claimId?: string;
+  /** Oppdraget for ny befaring. Standard: et nytt oppdrag i organisasjonen. */
+  assignmentId?: string;
+  /** Ansatt-id-en som laget koblingen. Standard: en tilfeldig uuid. */
+  createdBy?: string;
+  createdAt?: Date;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
+};
+
+/**
+ * En kobling mellom en sak og oppdraget for ny befaring (`claim_reinspections`, ADR 0013), satt
+ * inn uten tilgangssjekk og uten reglene i kjernen, slik at testene kan lage rader kjernen ville
+ * avvist (for eksempel det opprinnelige oppdraget som ny befaring, eller fjernede koblinger).
+ * Lager sak og oppdrag i samme organisasjon når de mangler. Oppdiktede data.
+ */
+export async function createClaimReinspection(
+  organizationId: string,
+  overrides: ClaimReinspectionOverrides = {},
+) {
+  const claimId = overrides.claimId ?? (await createClaim(organizationId)).id;
+  const assignmentId = overrides.assignmentId ?? (await createAssignment(organizationId)).id;
+  const [row] = await db
+    .insert(claimReinspections)
+    .values({
+      organizationId,
+      claimId,
+      assignmentId,
+      createdBy: overrides.createdBy ?? randomUUID(),
+      ...(overrides.createdAt ? { createdAt: overrides.createdAt } : {}),
+      deletedAt: overrides.deletedAt ?? null,
+      deletedBy: overrides.deletedBy ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("kunne ikke opprette kobling til ny befaring");
   return row;
 }

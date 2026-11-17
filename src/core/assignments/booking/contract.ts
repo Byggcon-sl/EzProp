@@ -1,4 +1,5 @@
 import type { Actor } from "@/core/access";
+import type { DbExecutor } from "@/db/client";
 import type { AssignmentStatus } from "../codes";
 import type {
   BookingEditableField,
@@ -97,9 +98,32 @@ export type CreateAssignmentInput = Omit<BookingInput, "sellerDeclarationReceive
    * oppdraget tilbake. Valgfri for kall som ikke kommer fra skjemaet.
    */
   creationKey?: string | null;
+  /**
+   * Internt notat til takstmannen (ADR 0013). Samme regel som `updateAssignmentNote`
+   * (`assignmentNoteSchema`): høyst 200 tegn, elleve sifre på rad avvises. Tom tekst blir `null`.
+   * Innholdet står aldri i hendelsen, revisjonsloggen eller applikasjonsloggen.
+   */
+  internalNote?: string | null;
 };
 
-export type CreateAssignmentOptions = { now?: Date };
+export type CreateAssignmentOptions = {
+  now?: Date;
+  /**
+   * Kallerens transaksjon (ADR 0013). Med `executor` kjører alle stegene i den, og
+   * `createAssignment` åpner ingen egen transaksjon og fanger ikke brudd på den unike indeksen
+   * for engangsnøkkelen (kallerens transaksjon er da avbrutt; kalleren fanger 23505 utenfor
+   * transaksjonen og leser på nytt). Tilgangssjekken `assignment.edit` gjøres uansett inne i
+   * `createAssignment`. Bare kode i `src/core` sender `executor`, aldri en side eller en action.
+   */
+  executor?: DbExecutor;
+  /**
+   * Eiendommen oppdraget knyttes til (`assignments.property_id`). Slås opp med
+   * `grant.organizationId` og må ikke være fjernet, ellers `AccessDeniedError`. Kommer fra en
+   * rad kalleren selv har lest i organisasjonen, aldri fra skjemaet. Utelatt eller `null`: ingen
+   * eiendom, som før.
+   */
+  propertyId?: string | null;
+};
 
 export type CreateAssignmentResult = {
   id: string;
@@ -128,6 +152,10 @@ export type CreateAssignmentResult = {
  *   oppdraget tilbake (`created: false`).
  * - Feil: `OfficeNotFoundError`, `EmployeeNotFoundError`, `ResponsibleNotInspectorError`,
  *   `ContactNotFoundError`. Fremmed og ukjent id gir samme feil.
+ * - Fra ADR 0013: `options.executor` og `options.propertyId` (se `CreateAssignmentOptions`) og
+ *   `input.internalNote`. Hendelsen `assignment.created` og revisjonsraden er like med og uten
+ *   `executor` og `propertyId`: ingen ny `source`, ingen sak-id og ikke notatets innhold. Uten
+ *   `options` virker «Nytt oppdrag» som før.
  */
 export type CreateAssignment = (
   actor: Actor,

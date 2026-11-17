@@ -23,6 +23,7 @@ export * from "./integration-connections";
 export * from "./contacts";
 export * from "./client-agreements";
 export * from "./claims";
+export * from "./claim-reinspections";
 export * from "./work-sessions";
 export * from "./templates";
 export * from "./ai-usage-log";

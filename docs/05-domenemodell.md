@@ -1456,6 +1456,8 @@ Gyldig verdi er et heltall fra 1 til og med 100 (år). Mangler nøkkelen, brukes
 | `certification.expiring` | En sertifisering går snart ut (H5) |
 | `device.blocked` | En enhet er sperret (D10) |
 | `claim.registered` | Reklamasjon eller krav registrert (krok S1) |
+| `claim_reinspection.linked` | Et oppdrag er knyttet til en sak som ny befaring (ADR 0013). Festes til sakens **opprinnelige** oppdrag; bare id-er i `data` |
+| `claim_reinspection.unlinked` | Koblingen til ny befaring er fjernet (ADR 0013) |
 | `survey.answered` | Spørreundersøkelse besvart (27.10.2026) |
 
 Tidsstyrte rutiner («dagen før befaring») bruker en hendelse som anker og en forskyvning i tid (se `automation_rules.timing`).
@@ -1814,7 +1816,7 @@ Registreres med et enkelt skjema **fra første ekte rapport** (beslutning 27.10.
 | Felt | Nå |
 |---|---|
 | `assignment_id` | Påkrevd. Saken knyttes til **oppdraget** i stedet for rapporten, fordi rapporter og utgivelser ikke finnes ennå (A125) |
-| `claim_type` | `complaint`, `insurance_claim` eller `other`. `internal` kommer i fase 4 (A128) |
+| `claim_type` | `inquiry` (henvendelse, fra 17.11.2026, A419), `complaint`, `insurance_claim` eller `other`. `internal` kommer i fase 4 (A128) |
 | `received_at` | Dato, påkrevd. Ikke fram i tid (måles mot dagens dato i Europe/Oslo) |
 | `claimant_party_id` | Valgfri. En part på samme oppdrag og i samme organisasjon, ikke fjernet |
 | `claimant_text` | Valgfri fritekst (høyst 200 tegn) om hvem som klaget, når det ikke er en part. Enten part eller fritekst må fylles |
@@ -1829,6 +1831,24 @@ Registreres med et enkelt skjema **fra første ekte rapport** (beslutning 27.10.
 Tilgang: se med `claims.read`, registrere, endre, lukke og fjerne med `claims.manage` (avsnitt 5). Revisjonsloggen får bare handling og feltnavn, aldri innholdet i `claimant_text`, `description` eller `building_part_text`. Hendelsen `claim.registered` har bare `claimId`, `assignmentId`, `claimType` og `receivedAt`.
 
 **Venter:** `report_id` og `release_id` (når rapporter og utgivelser finnes), `checkpoint_key` og `deviation_id` (når malmotoren og avvikene finnes), typen `internal`, `handled_by`, vedlegg og reklamasjonsmappen med egen liste over alle saker (fase 4, H6). Tallet «reklamasjoner per 100 leverte rapporter» regnes ut fra tabellen når utgivelsene finnes.
+
+**Reklamasjonskoblingen (17.11.2026, ADR 0013, Ståles svar 10.11.2026 nr. 38):** kjeden opprinnelig oppdrag → henvendelse eller reklamasjon → ny befaring er data. Oppgavekort: `docs/funksjoner/fase2a-reklamasjonskobling.md`; beslutningene A419–A430. Migrering `0036_reklamasjonskobling`.
+
+- **Ny sakstype `inquiry` («Henvendelse»)** i `claims.claim_type`: kunden har tatt kontakt, men har ikke fremmet krav. Leder kan endre typen til `complaint` eller `insurance_claim` når det blir et krav. Overgangen står i revisjonsloggen som `claimTypeFrom` og `claimTypeTo`. **Henvendelser telles ikke som reklamasjoner** i tallet «reklamasjoner per 100 leverte rapporter».
+- **Kjeden leses slik:** opprinnelig oppdrag = `claims.assignment_id` → sak (`claims`) → ny befaring = `claim_reinspections.assignment_id`.
+
+**`claim_reinspections`** – kobler en sak til oppdraget for **ny befaring**. Felles kolonner (avsnitt 3), pluss:
+
+| Felt | Forklaring |
+|---|---|
+| `claim_id` | Saken. Sammensatt fremmednøkkel (`organization_id`, `claim_id`) mot `claims` |
+| `assignment_id` | Oppdraget for ny befaring. Sammensatt fremmednøkkel (`organization_id`, `assignment_id`) mot `assignments`. Aldri sakens opprinnelige oppdrag (sjekkes i `src/core/claims`) |
+| `created_by` | Påkrevd. Den ansatte som laget koblingen, aldri en verdi fra skjemaet |
+| `deleted_at` | Myk sletting. «Fjern koblingen» lar oppdraget stå. Fjernes saken, fjernes koblingene med samme tidspunkt |
+
+Regler: en sak kan ha flere nye befaringer. Et oppdrag hører til høyst én aktiv kobling (unik delindeks på `organization_id`, `assignment_id` der `deleted_at is null`). Ligger det nye oppdraget i papirkurven, vises ikke koblingen, men den sperrer fortsatt; gjenopprettes oppdraget, vises den igjen. Ingen `ON DELETE CASCADE`.
+
+Tilgang og personvern: lesing med `claims.read`, endring med `claims.manage`; å lage oppdraget for ny befaring krever også `assignment.edit`. Takstmann og kontor ser verken saken eller koblingen, og det nye oppdraget er for dem et vanlig oppdrag (ingen egen type, status eller kilde, og ingenting om saken i oppdragets hendelser eller revisjonslogg). Tabellen har ingen fritekst, oppbevares i 10 år, sendes ikke til KI, og **`claims` og `claim_reinspections` er aldri med i synk til iPad** (A430).
 
 **`followup_responses`** – **forkastet 27.10.2026.** Ståle svarte nei til ettårs-oppfølging av kjøper og selger (spørsmål 21). Tabellen og hendelsen `followup.received` er tatt ut.
 
@@ -2430,7 +2450,11 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Reklamasjon / krav | `claims` | Bare leder og admin (`claims.read`) |
 | Reklamasjonssak | `claim` | Én rad i `claims`, knyttet til oppdraget (fase 2a) |
 | Klager | `claimant` (`claimant_party_id` / `claimant_text`) | En part på oppdraget eller fritekst |
-| Type krav | `claim_type` | `complaint` (reklamasjon), `insurance_claim` (forsikringskrav), `other` (annet); `internal` i fase 4 |
+| Type krav | `claim_type` | `inquiry` (henvendelse), `complaint` (reklamasjon), `insurance_claim` (forsikringskrav), `other` (annet); `internal` i fase 4 |
+| Henvendelse | `inquiry` | Sakstype: kunden har tatt kontakt, men har ikke fremmet krav. Telles ikke som reklamasjon |
+| Ny befaring (etter sak) | `reinspection` (`claim_reinspections`) | Kobling mellom en sak og oppdraget for ny befaring (ADR 0013) |
+| Opprinnelig oppdrag | original assignment (`claims.assignment_id`) | Oppdraget saken gjelder |
+| Foreslått oppdrag å knytte til | reinspection candidate | Nyere oppdrag på samme eiendom eller adresse uten aktiv kobling |
 | Utfall (reklamasjon) | `claims.outcome` | `open` (åpen), `rejected` (avvist), `upheld` (medhold), `settled` (forlik), `withdrawn` (trukket). Alt annet enn `open` er lukket |
 | Behandle reklamasjoner | `claims.manage` | Rettighet: registrere, endre, lukke og fjerne. Bare leder og admin, kan ikke gis som enkeltrettighet |
 | Ettårs-oppfølging | ~~`followup_responses`~~ | Forkastet 27.10.2026 |
@@ -2558,3 +2582,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 13.11.2026 | Oppbevaringstid for avviste KI-forslag (fase 2a, Ståle 12.11.2026 K7): ny innstilling `ai.rejected_retention_years` i `organizations.settings` (1–10 år, standard 10); `ai_usage_log.retain_until` regnes ut på nytt ved hver statusendring. Ingen ny tabell og ingen migrering. | A272–A275, `docs/agenter/oppgaver/ki-oppbevaring-avviste.md` |
 | 16.11.2026 | Papirkurv og gjenoppretting (fase 2a, 2a-3): «Fjern» på etasje og bygning tar med innholdet som én slettegruppe (A414, erstatter A98); `listTrash` og `restoreBuilding`/`restoreFloor`/`restoreRoom` i `src/core/buildings/trash.ts`; fire nye hendelser `assignment.*_restored`; `*_removed` får `groupCount` og `roomTypeKey`/`floorKey`. Ingen ny tabell og ingen migrering. Ordlisten: papirkurv, gjenopprette, slettegruppe. | A410, A411, A414, A416–A418, `docs/funksjoner/fase2a-papirkurv.md` |
 | 16.11.2026 | Tilbud i stedet for ordre, kjernen (fase 2a, ADR 0012 med tillegg): migrering `0035_tilbud` med `orders.valid_until` og `orders.rejected_reason_key` (fem faste koder, gamle avslag får `other`); utløp, visningsstatus, filter med antall og sortering, «Gyldig til» bare på åpne og utløpte tilbud, avslag med fast grunn (`reasonKey` i hendelsen) og dublettvilkåret for utløpte tilbud. Se «Tilbud i stedet for ordre» i 4.3. | A318–A328, A360–A367, `docs/funksjoner/fase2a-tilbud.md` |
+| 17.11.2026 | Reklamasjonskoblingen (fase 2a, Ståles svar 10.11.2026 nr. 38): ny tabell `claim_reinspections` (sak → oppdrag for ny befaring, myk sletting, høyst én aktiv kobling per oppdrag), ny sakstype `inquiry` (henvendelse), typeovergangen i revisjonsloggen, nye hendelser `claim_reinspection.linked` og `.unlinked`, og `createAssignment` med valgfri `executor`, `propertyId` og `internalNote`. Migrering `0036_reklamasjonskobling`. `claims` og `claim_reinspections` er aldri med i synk til iPad. Se 4.13. Ordlisten: henvendelse, ny befaring, opprinnelig oppdrag. | A419–A430, ADR 0013, `docs/funksjoner/fase2a-reklamasjonskobling.md` |

@@ -18,6 +18,7 @@ import {
   createCertification,
   createCheckpointRow,
   createClaim,
+  createClaimReinspection,
   createClientAgreement,
   createCommonAreas,
   createCompany,
@@ -144,6 +145,11 @@ export const tenantTables: TenantTableEntry[] = [
     table: "checkpoints",
     testFile: TEMPLATES_TEST_FILE,
     insertRow: async (organizationId) => (await createCheckpointRow(organizationId)).id,
+  },
+  {
+    table: "claim_reinspections",
+    testFile: "src/core/claims/reinspections.test.ts",
+    insertRow: async (organizationId) => (await createClaimReinspection(organizationId)).id,
   },
   {
     table: "claims",

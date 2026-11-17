@@ -27,6 +27,10 @@ import { baseColumns } from "./common";
  * `claimant_party_id` har en enkel fremmednøkkel fordi `assignment_parties` ikke har unik
  * (organization_id, id). At parten hører til samme organisasjon og oppdrag, sjekkes i
  * `@/core/claims`. Faste koder står i `@/core/claims/codes`; CHECK-reglene må ha de samme.
+ *
+ * Typen `inquiry` («Henvendelse», A419, migrering 0036) er første trinn i kjeden opprinnelig
+ * oppdrag → sak → ny befaring (`claim_reinspections`, ADR 0013). Sakene er aldri med i synk til
+ * iPad (A430).
  */
 export const claims = pgTable(
   "claims",
@@ -64,7 +68,7 @@ export const claims = pgTable(
     }),
     check(
       "claims_claim_type_check",
-      sql`${table.claimType} in ('complaint', 'insurance_claim', 'other')`,
+      sql`${table.claimType} in ('inquiry', 'complaint', 'insurance_claim', 'other')`,
     ),
     check(
       "claims_outcome_check",

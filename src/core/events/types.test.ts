@@ -66,12 +66,14 @@ const EXPECTED_EVENT_TYPES = [
   "certification.expiring",
   "device.blocked",
   "claim.registered",
+  "claim_reinspection.linked",
+  "claim_reinspection.unlinked",
   "survey.answered",
 ];
 
 describe("hendelseskodene", () => {
-  it("1. har nøyaktig de 56 kodene fra domenemodellen 4.9", () => {
-    expect(EXPECTED_EVENT_TYPES).toHaveLength(56);
+  it("1. har nøyaktig de 58 kodene fra domenemodellen 4.9", () => {
+    expect(EXPECTED_EVENT_TYPES).toHaveLength(58);
     expect([...EVENT_TYPES].sort()).toEqual([...EXPECTED_EVENT_TYPES].sort());
   });
 

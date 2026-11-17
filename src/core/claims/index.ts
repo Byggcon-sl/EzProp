@@ -18,7 +18,33 @@ export {
   type ClaimOutcome,
   type ClaimType,
 } from "./codes";
-export { ClaimantPartyNotFoundError } from "./errors";
+export {
+  CLAIM_REINSPECTION_ENTITY_TYPE,
+  REINSPECTION_ACTIVE_ASSIGNMENT_INDEX,
+  REINSPECTION_CANDIDATES_LIMIT,
+  REINSPECTION_RULES,
+  type ClaimReinspection,
+  type ClaimTypeTransition,
+  type CreateReinspectionAssignment,
+  type CreateReinspectionAssignmentInput,
+  type CreateReinspectionAssignmentResult,
+  type GetClaimForReinspectionAssignment,
+  type LinkReinspectionAssignment,
+  type LinkReinspectionResult,
+  type LinkReinspectionTarget,
+  type ListReinspectionCandidates,
+  type ListReinspectionsForClaim,
+  type ReinspectionCandidate,
+  type ReinspectionOrigin,
+  type ReinspectionRule,
+  type RemoveClaimReinspections,
+  type UnlinkReinspectionAssignment,
+} from "./contract";
+export {
+  ClaimantPartyNotFoundError,
+  ReinspectionAlreadyLinkedError,
+  ReinspectionIsOriginalAssignmentError,
+} from "./errors";
 export {
   BUILDING_PART_TEXT_MAX,
   CLAIMANT_TEXT_MAX,

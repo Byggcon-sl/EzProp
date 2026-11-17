@@ -3,8 +3,13 @@
  * `src/db/schema/claims.ts` har de samme kodene. Etikettene er norske og vises i grensesnittet.
  */
 
-/** Typen krav. `internal` (intern avviksregistrering) kommer i fase 4 (A128). */
-export const CLAIM_TYPES = ["complaint", "insurance_claim", "other"] as const;
+/**
+ * Typen sak. `inquiry` («Henvendelse», A419) er første trinn: kunden har tatt kontakt, men har
+ * ikke fremmet krav. Den står først fordi den står først i typevalget, og den telles ikke som
+ * reklamasjon i tallet for hovedmålet. `internal` (intern avviksregistrering) kommer i fase 4
+ * (A128).
+ */
+export const CLAIM_TYPES = ["inquiry", "complaint", "insurance_claim", "other"] as const;
 export type ClaimType = (typeof CLAIM_TYPES)[number];
 
 /** Utfallet. `open` er åpen sak; alle andre betyr lukket (A127). */
@@ -18,6 +23,7 @@ export const CLAIM_OUTCOMES_WITH_AMOUNT = [
 ] as const satisfies readonly ClaimOutcome[];
 
 const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
+  inquiry: "Henvendelse",
   complaint: "Reklamasjon",
   insurance_claim: "Forsikringskrav",
   other: "Annet",

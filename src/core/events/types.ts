@@ -63,7 +63,19 @@ export const EVENT_TYPES = [
   "report.validity_expiring",
   "certification.expiring",
   "device.blocked",
+  /*
+   * `claim.*` og `claim_reinspection.*` krever `claims.read` ved lesing (A426). Den som viser
+   * hendelser på et oppdrag, filtrerer dem bort for alle uten rettigheten.
+   */
   "claim.registered",
+  /**
+   * Et oppdrag er knyttet til en sak som ny befaring (ADR 0013). `assignmentId` på hendelsen er
+   * sakens opprinnelige oppdrag, aldri det nye. `data: { claimId, reinspectionId,
+   * reinspectionAssignmentId }`, aldri fritekst.
+   */
+  "claim_reinspection.linked",
+  /** Koblingen er fjernet (myk sletting). Samme `assignmentId` og `data` som `linked`. */
+  "claim_reinspection.unlinked",
   "survey.answered",
 ] as const;
 
