@@ -44,7 +44,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 ## Åpne PR-er
 
-- #222 Rydding av innloggingsdata (branch `rydd-innloggingsdata`, 17.11.2026): klar, merges med skriptet når CI er grønn.
+- #222 Rydding av innloggingsdata (branch `rydd-innloggingsdata`, 17.11.2026): klar, merges med skriptet når CI er grønn. Ende-til-ende er rød tre ganger på én ustabil test fra papirkurven (`e2e/fase-2a-papirkurv-testplan.spec.ts` 10.6, hover stopper tiden på PC), som også feiler første gang på main etter #223. Testen må gjøres stabil (hovedløkken).
 
 Ingen PR venter på Ståle.
 
