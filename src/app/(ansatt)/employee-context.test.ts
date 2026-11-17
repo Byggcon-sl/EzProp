@@ -56,6 +56,8 @@ describe("getEmployeeContext", () => {
     expect(context).toMatchObject({
       organizationId: org.id,
       canEditOrders: true,
+      // Kontoret ser badet skrivebeskyttet (docs/funksjoner/fase2a-badet-pc.md, Tilgang).
+      canEditReports: false,
       canManageContacts: false,
       officeId: office.id,
     });
