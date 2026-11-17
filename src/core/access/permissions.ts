@@ -171,3 +171,23 @@ export function canCreateAssignments(grant: EmployeeGrant): boolean {
 export function isAdmin(grant: EmployeeGrant) {
   return grant.roles.includes("admin");
 }
+
+/**
+ * Om den ansatte får se begrunnelsesteksten når en sperre er krysset bort (A450,
+ * docs/funksjoner/fase2a-publisering-badet.md «Tilgang»): sann for takstmann, leder og admin,
+ * usann for kontor. Admin ser alltid (regel 11). Grunnkoden ser alle med `organization.read`;
+ * teksten fjernes i tjenesten, ikke i skjermen.
+ */
+export function canSeeOverrideReasons(grant: EmployeeGrant): boolean {
+  return isAdmin(grant) || grant.roles.includes("inspector") || grant.roles.includes("manager");
+}
+
+/**
+ * Om rollene alene gir `report.publish` før kravet om sertifisering (A29). Brukes bare til å si
+ * «sertifiseringen mangler» i stedet for «ingen rett» når publisering ikke er lov. Gir aldri
+ * tilgang: selve sjekken er `report.publish` fra `requireOrganizationAccess`.
+ */
+export function rolesGivePublish(grant: EmployeeGrant): boolean {
+  const settings: AccessSettings = { inspectorsEditAll: false };
+  return grant.roles.some((role) => permissionsForRole(role, settings).includes("report.publish"));
+}

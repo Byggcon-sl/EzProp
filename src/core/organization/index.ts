@@ -19,6 +19,8 @@ export {
 export { grantEmployeePermission, revokeEmployeePermission } from "./employee-permissions";
 export {
   addCertification,
+  findLatestExpiredCertificationDate,
+  findValidCertification,
   listCertificationsForEmployee,
   listExpiringCertifications,
   removeCertification,
