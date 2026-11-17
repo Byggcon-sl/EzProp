@@ -11,12 +11,24 @@ export { getSuggestionStatus, type AiSuggestionStatusResult } from "./suggestion
 export { AI_APPROVAL_CHECK_MAX, checkAiTextApproved, type AiApprovalItem } from "./approval-check";
 export {
   AI_DECISION_ERROR_MESSAGE,
+  AI_INPUT_TOO_LARGE_MESSAGES,
+  AI_INPUT_TOO_LARGE_REASONS,
   AI_REQUEST_REJECTED_MESSAGE,
   AI_RETENTION_YEARS_ERROR,
   AiDecisionError,
+  AiInputTooLargeError,
   AiRequestRejectedError,
   AiRetentionValidationError,
+  type AiInputTooLargeReason,
 } from "./errors";
+export {
+  AI_BATCH_MAX_REQUESTS,
+  AI_CANDIDATES_MAX,
+  AI_CANDIDATE_TEXT_MAX_LENGTH,
+  AI_SUGGESTED_CANDIDATES_MAX,
+  AI_SUMMARY_FINDINGS_MAX,
+  AI_SUMMARY_INPUT_MAX_LENGTH,
+} from "./limits";
 export {
   AI_REJECTED_RETENTION_KEY,
   AI_REJECTED_RETENTION_MAX,
@@ -49,10 +61,18 @@ export type { AiProvider, AiProviderRequest, AiProviderResult } from "./provider
 export { AI_FIELD_MAX_LENGTH } from "./request";
 export {
   AI_DECISIONS,
+  type AiCandidate,
+  type AiCandidateRef,
+  type AiCandidateSource,
   type AiDecision,
+  type AiDecisionOptions,
   type AiErrorCode,
   type AiFeatureCode,
+  type AiGuardCode,
   type AiOutcome,
+  type AiServerInput,
+  type AiSummaryFinding,
+  type AiSummaryGroup,
   type AiSuggestionRequest,
   type AiSuggestionResult,
   type AiSuggestionStatus,

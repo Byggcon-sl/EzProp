@@ -36,8 +36,12 @@ import { reports } from "./reports";
 /**
  * `blocked`: forespørselen ble sperret av modulen (ad-1), leverandøren ble ikke kalt. Skilt fra
  * «KI er av», som ikke gir noen rad.
+ *
+ * `stopped`: leverandøren svarte, men en vakt i kjernen stoppet svaret før det ble vist (A431).
+ * Kallet har kostet, så mengde og kostnad beholdes. `status` er tom, `error_code` sier hvilken
+ * vakt (`AI_GUARD_CODES`), og det stoppede svaret kan stå i `output_text`.
  */
-export const AI_OUTCOMES = ["ok", "no_match", "error", "blocked"] as const;
+export const AI_OUTCOMES = ["ok", "no_match", "error", "blocked", "stopped"] as const;
 export type AiOutcome = (typeof AI_OUTCOMES)[number];
 
 export const AI_SUGGESTION_STATUSES = ["suggested", "accepted", "edited", "rejected"] as const;
@@ -51,6 +55,28 @@ export const AI_ERROR_CODES = [
   "unknown",
 ] as const;
 export type AiErrorCode = (typeof AI_ERROR_CODES)[number];
+
+/**
+ * Vaktene som kan stoppe et svar (utfallet `stopped`, A431 og A440). Står i `error_code`, men er
+ * egne koder: en leverandør kan aldri svare med dem.
+ * `tg_guard` = svaret la til eller endret TG. `number_guard` = svaret hadde tall som ikke ble sendt.
+ */
+export const AI_GUARD_CODES = ["tg_guard", "number_guard"] as const;
+export type AiGuardCode = (typeof AI_GUARD_CODES)[number];
+
+/**
+ * Hvor en kandidat kommer fra (A432). `template_outcome` = tekst på et utfall i rapportens låste
+ * malversjon (`outcomes.id`), `template_measure` = standardtiltak i malversjonen
+ * (`standard_measures.id`), `phrase` = frase i frasebanken (reservert til 2a-3, brukes ikke før).
+ */
+export const AI_CANDIDATE_SOURCES = ["template_outcome", "template_measure", "phrase"] as const;
+export type AiCandidateSource = (typeof AI_CANDIDATE_SOURCES)[number];
+
+/** Én kandidat slik den lagres i loggen: bare kilde og id, aldri tekst. */
+export type AiCandidateRef = { source: AiCandidateSource; id: string };
+
+/** Høyeste antall kandidater som vises og lagres i `candidate_refs`. Samme grense i CHECK-regelen. */
+export const AI_CANDIDATE_REFS_MAX = 5;
 
 /** Målet for forslaget: hva slags rad, hvilken rad og hvilket felt. */
 export type AiTargetRef = { type: string; id: string; fieldKey: string };
@@ -80,8 +106,17 @@ export const aiUsageLog = pgTable(
     /** Feltnavn og antall tegn, aldri tekst. */
     inputSummary: jsonb("input_summary").$type<Record<string, number>>().notNull(),
     outcome: text("outcome").$type<AiOutcome>().notNull(),
-    errorCode: text("error_code").$type<AiErrorCode>(),
+    /** Feilkode ved `error`, vaktkode ved `stopped`. */
+    errorCode: text("error_code").$type<AiErrorCode | AiGuardCode>(),
+    /** Forslaget ved `ok`. Det stoppede svaret ved `stopped`: vises aldri og logges aldri. */
     outputText: text("output_text"),
+    /**
+     * Kandidatene som ble vist, i rangert rekkefølge (A432). Bare for funksjoner som velger blant
+     * kandidater, og bare når utfallet er `ok`. Aldri tekst.
+     */
+    candidateRefs: jsonb("candidate_refs").$type<AiCandidateRef[]>(),
+    /** Kandidaten den ansatte valgte. Må stå i `candidate_refs`; satt bare mens status er `accepted`. */
+    chosenCandidate: jsonb("chosen_candidate").$type<AiCandidateRef>(),
     status: text("status").$type<AiSuggestionStatus>(),
     decidedBy: uuid("decided_by"),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
@@ -106,6 +141,10 @@ export const aiUsageLog = pgTable(
     index("ai_usage_log_open_target_idx")
       .on(table.organizationId, table.feature, table.targetRef)
       .where(sql`${table.status} = 'suggested' and ${table.deletedAt} is null`),
+    // Alle rader på ett mål, også avgjorte (KI-merket per felt og gjennomgang av tekstene)
+    index("ai_usage_log_target_idx")
+      .on(table.organizationId, table.feature, table.targetRef)
+      .where(sql`${table.deletedAt} is null`),
     // Ansatte og oppdrag må høre til samme organisasjon som raden
     foreignKey({
       name: "ai_usage_log_employee_fk",
@@ -134,12 +173,27 @@ export const aiUsageLog = pgTable(
     ),
     check(
       "ai_usage_log_error_code_check",
-      sql`${table.errorCode} is null or (${table.outcome} = 'error' and ${table.errorCode} in (${sqlList(AI_ERROR_CODES)}))`,
+      sql`${table.errorCode} is null or (${table.outcome} = 'error' and ${table.errorCode} in (${sqlList(AI_ERROR_CODES)})) or (${table.outcome} = 'stopped' and ${table.errorCode} in (${sqlList(AI_GUARD_CODES)}))`,
     ),
-    // Forslag og status bare når utfallet er ok
+    // Status bare når utfallet er ok. Tekst bare ved ok, og ved stopped (svaret som ble stoppet).
     check(
       "ai_usage_log_outcome_status_check",
-      sql`(${table.outcome} = 'ok' and ${table.status} is not null) or (${table.outcome} <> 'ok' and ${table.status} is null and ${table.outputText} is null)`,
+      sql`(${table.outcome} = 'ok' and ${table.status} is not null) or (${table.outcome} = 'stopped' and ${table.status} is null) or (${table.outcome} not in ('ok', 'stopped') and ${table.status} is null and ${table.outputText} is null)`,
+    ),
+    // Et stoppet svar har alltid koden til vakten som stoppet det
+    check(
+      "ai_usage_log_stopped_check",
+      sql`${table.outcome} <> 'stopped' or ${table.errorCode} is not null`,
+    ),
+    // Viste kandidater: en liste med 1 til 5, bare når utfallet er ok
+    check(
+      "ai_usage_log_candidate_refs_check",
+      sql`${table.candidateRefs} is null or (${table.outcome} = 'ok' and jsonb_typeof(${table.candidateRefs}) = 'array' and jsonb_array_length(${table.candidateRefs}) between 1 and ${sql.raw(String(AI_CANDIDATE_REFS_MAX))})`,
+    ),
+    // Valgt kandidat: bare blant de viste, og bare mens forslaget er godtatt
+    check(
+      "ai_usage_log_chosen_candidate_check",
+      sql`${table.chosenCandidate} is null or (${table.status} = 'accepted' and ${table.candidateRefs} is not null and ${table.candidateRefs} @> jsonb_build_array(${table.chosenCandidate}))`,
     ),
     check(
       "ai_usage_log_tokens_check",

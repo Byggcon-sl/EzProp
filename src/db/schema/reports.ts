@@ -132,6 +132,36 @@ export type StoredRuleSuggestion =
   | { kind: "tgiu"; checkpoint_key: string }
   | { kind: "tg0"; checkpoint_key: string };
 
+/**
+ * Gruppene i sammendraget, i fast rekkefølge (A434): TG3, TG2, TGIU og til slutt HMS uten TG.
+ * Koden lager gruppene og overskriftene; KI skriver aldri TG.
+ */
+export const SUMMARY_GROUPS = ["tg3", "tg2", "tgiu", "hms"] as const;
+export type SummaryGroup = (typeof SUMMARY_GROUPS)[number];
+
+/** Hva slags rad et funn i sammendraget er: avvik (TG2, TG3, HMS) eller kontrollpunkt med TGIU. */
+export const SUMMARY_FINDING_SOURCES = ["deviation", "checkpoint_result"] as const;
+export type SummaryFindingSource = (typeof SUMMARY_FINDING_SOURCES)[number];
+
+/**
+ * Ett funn sammendraget bygde på (A435). Bare id-er, faste koder og `row_version`, aldri tekst.
+ * `parts` er radene under funnet som også gikk inn i utkastet: tiltakene til et avvik
+ * (`deviation_measures`) og opplysningene ved TGIU (`tgiu_details`). Slik gir også et endret
+ * tiltak advarselen «Funnene er endret etter sammendraget».
+ */
+export type SummaryBasisEntry = {
+  source: SummaryFindingSource;
+  id: string;
+  group: SummaryGroup;
+  rowVersion: number;
+  parts: { id: string; rowVersion: number }[];
+};
+
+/** Øvre lengde på `reports.summary_text` (tegn). Samme grense i Zod-skjemaet og CHECK-regelen. */
+export const REPORT_SUMMARY_MAX_LENGTH = 10000;
+/** Øvre antall funn i `reports.summary_basis`. Samme grense i CHECK-regelen. */
+export const REPORT_SUMMARY_BASIS_MAX = 200;
+
 /** Øvre størrelse på `reasons` (tegn som JSON). Samme grense i Zod-skjemaet. */
 export const RULE_REASONS_MAX_CHARS = 16000;
 
@@ -174,6 +204,16 @@ export const reports = pgTable(
     templateVersionId: uuid("template_version_id").notNull(),
     reportType: text("report_type").notNull(),
     status: text("status").$type<ReportStatus>().notNull().default("draft"),
+    /**
+     * Sammendraget for hele rapporten (A424). Fritekst fra takstmannen, eventuelt etter et
+     * KI-utkast han har godtatt. KI-opphav står bare i `ai_usage_log` (mål `report` / `summary_text`).
+     */
+    summaryText: text("summary_text"),
+    /**
+     * Funnene sammendraget bygde på da et utkast sist ble brukt (A435). Tom når sammendraget er
+     * skrevet for hånd uten utkast. Settes bare av serveren.
+     */
+    summaryBasis: jsonb("summary_basis").$type<SummaryBasisEntry[]>(),
   },
   (table): PgTableExtraConfigValue[] => [
     uniqueIndex("reports_organization_id_id_idx").on(table.organizationId, table.id),
@@ -193,6 +233,14 @@ export const reports = pgTable(
     }),
     check("reports_report_type_check", inList(table.reportType, TEMPLATE_REPORT_TYPES)),
     check("reports_status_check", inList(table.status, REPORT_STATUSES)),
+    check(
+      "reports_summary_text_check",
+      sql`${table.summaryText} is null or char_length(${table.summaryText}) <= ${sql.raw(String(REPORT_SUMMARY_MAX_LENGTH))}`,
+    ),
+    check(
+      "reports_summary_basis_check",
+      sql`${table.summaryBasis} is null or (jsonb_typeof(${table.summaryBasis}) = 'array' and jsonb_array_length(${table.summaryBasis}) <= ${sql.raw(String(REPORT_SUMMARY_BASIS_MAX))})`,
+    ),
   ],
 );
 export type Report = typeof reports.$inferSelect;

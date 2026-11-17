@@ -16,6 +16,29 @@ export class AiRequestRejectedError extends Error {
   }
 }
 
+/**
+ * For mye til ett kall: for mange kandidater, eller for mange eller for lange funn til
+ * sammendraget (`limits.ts`). Ingen rad og intet kall. Kjernen kutter aldri stille: kalleren får
+ * beskjed og viser meldingen. `reason` er fast kode, meldingen har ingen tekst fra inndata.
+ */
+export const AI_INPUT_TOO_LARGE_REASONS = ["too_many_candidates", "too_many_findings"] as const;
+export type AiInputTooLargeReason = (typeof AI_INPUT_TOO_LARGE_REASONS)[number];
+
+export const AI_INPUT_TOO_LARGE_MESSAGES: Readonly<Record<AiInputTooLargeReason, string>> = {
+  too_many_candidates: "Det er for mange tekster å velge blant til at KI kan sortere dem.",
+  too_many_findings:
+    "Det er for mange eller for lange funn til ett utkast. Skriv sammendraget selv, eller kort ned tekstene.",
+};
+
+export class AiInputTooLargeError extends Error {
+  readonly reason: AiInputTooLargeReason;
+  constructor(reason: AiInputTooLargeReason) {
+    super(AI_INPUT_TOO_LARGE_MESSAGES[reason]);
+    this.name = "AiInputTooLargeError";
+    this.reason = reason;
+  }
+}
+
 /** Ugyldig endring av status på et KI-forslag (tabellen over lovlige endringer, A162). */
 export const AI_DECISION_ERROR_MESSAGE = "Denne endringen av KI-forslaget er ikke lov.";
 

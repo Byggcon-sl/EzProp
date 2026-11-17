@@ -1,14 +1,17 @@
 import type { RuleResult } from "@/core/rules";
-import type { StandardMeasureDoc } from "@/core/templates";
+import type { StandardMeasureDoc, TemplateDocument } from "@/core/templates";
 import type {
+  AiCandidateRef,
   ConstructionVulnerable,
   CostType,
   DeviationKind,
   DeviationTg,
   MeasureAppliesToTg,
+  OutcomeKind,
   OverrideReasonCode,
   RuleSuggestionDecision,
   StoredRuleSuggestion,
+  TextStatus,
   TgDirect,
 } from "@/db/schema";
 import type {
@@ -18,6 +21,7 @@ import type {
   COST_AMOUNT_CHECKS,
   MERGE_FIELD_KEYS,
   OVERRIDE_REASON_CHECKS,
+  PHRASE_FIELDS,
   WARNING_FIX_KINDS,
   WARNING_MISSING_PARTS,
 } from "./codes";
@@ -252,3 +256,80 @@ export type SuggestionStillApplies = (
   decision: DecisionState,
   ruleResults: readonly RuleResult[],
 ) => boolean;
+
+// --- Forslag fra frasebanken («KI i veien», A426 og A433) ------------------------------------
+
+export type PhraseField = (typeof PHRASE_FIELDS)[number];
+
+/** Det kandidatene bygges fra: rommets del av rapportens låste malversjon. */
+export type PhraseCandidateDocument = Pick<
+  TemplateDocument,
+  "checkpoints" | "deviation_questions" | "outcomes" | "standard_measures"
+>;
+
+/** Avviket og feltet forslagene gjelder. Bare faste koder, TG og teksten som står i feltet. */
+export type PhraseCandidateContext = {
+  field: PhraseField;
+  checkpointKey: string;
+  /** Tomme for avvik skrevet fritt. */
+  questionKey: string | null;
+  outcomeKey: string | null;
+  /** Avvikets TG. `null` for HMS og når TG ikke er valgt. */
+  tg: DeviationTg | null;
+  /**
+   * Teksten som står i feltet (for `new_measure`: tekstene i tiltakene som alt finnes). Kandidater
+   * med samme tekst tas ut.
+   */
+  currentTexts: readonly string[];
+};
+
+/**
+ * Én kandidat: en tekst fra malen for samme felttype. `text` er malens tekst med flettefeltene
+ * urørt; skjermen setter inn verdiene med `fillMergeFields`. `ref` er satt når kandidaten kommer
+ * fra serveren (id-en i databasen), og `null` i tekstsøket uten KI, som bare har maldokumentet.
+ */
+export type PhraseCandidate = {
+  ref: AiCandidateRef | null;
+  checkpointKey: string;
+  checkpointName: string;
+  questionKey: string;
+  outcomeKey: string;
+  outcomeKind: OutcomeKind;
+  /** Bare for standardtiltak: TG-en tiltaket gjelder for, og plassen blant utfallets tiltak. */
+  appliesToTg: MeasureAppliesToTg | null;
+  measureSortOrder: number | null;
+  text: string;
+  /** Alle er `draft` til fagrådet har godkjent (A423). Vises som «utkast». */
+  textStatus: TextStatus;
+};
+
+/**
+ * Kandidatene for et felt (A433): alle tekster for samme felttype i dokumentet, uten tomme
+ * tekster, uten like tekster (første beholdes) og uten `currentTexts`. Rekkefølge: avvikets eget
+ * utfall, så samme punkt og samme TG, så resten av punktet, så resten av rommet i malens
+ * rekkefølge. `ref` er alltid `null`. Ren funksjon: samme liste i nettleseren og på serveren.
+ */
+export type ListPhraseCandidates = (
+  document: PhraseCandidateDocument,
+  context: PhraseCandidateContext,
+) => PhraseCandidate[];
+
+/**
+ * Tekstsøket uten KI (A426): kandidatene der alle ordene i `query` står i teksten, punktnavnet
+ * eller spørsmålet, i rekkefølgen de kom inn. Tom `query` gir de første. Høyst `limit` treff.
+ * Samme normalisering som `searchOutcomes` (A382).
+ */
+export type SearchPhraseCandidates = (
+  candidates: readonly PhraseCandidate[],
+  query: string,
+  limit: number,
+) => PhraseCandidate[];
+
+/**
+ * Om kandidaten hører til en annen TG enn avviket (A437): gir TG-en teksten hører til, ellers
+ * `null`. Brukes til advarselen «Se over konsekvens og tiltak, teksten hører til TG3».
+ */
+export type PhraseCandidateOtherTg = (
+  candidate: PhraseCandidate,
+  deviationTg: DeviationTg | null,
+) => DeviationTg | null;

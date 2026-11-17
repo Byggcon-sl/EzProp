@@ -137,6 +137,10 @@ export async function requestTrialSuggestion(input: unknown): Promise<TrialSugge
     if (result.kind === "suggestion") {
       return { kind: "suggestion", usageId: result.usageId, text: result.text, logged };
     }
+    // Prøvesiden bruker bare språkvask og fjernes i «KI i veien». Nye svartyper vises som feil.
+    if (result.kind === "candidates" || result.kind === "stopped") {
+      return { kind: "error", usageId: result.usageId, logged };
+    }
     return { kind: result.kind, usageId: result.usageId, logged };
   } catch (error) {
     // Når man ber om et nytt forslag, finnes det ikke noe forslag ennå: avslag gir «Noe gikk galt».

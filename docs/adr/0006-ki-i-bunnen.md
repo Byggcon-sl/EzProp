@@ -1,6 +1,6 @@
 # ADR 0006 – KI i bunnen
 
-Dato: 10.11.2026. Status: vedtatt av agentene i autonom modus, oppdatert 11.11.2026. Ståle har valgt Anthropic som KI-leverandør (10.11.2026, S8). Anthropic er første ekte adapter (`anthropic`, se del 2). Ingen ekte KI kjører før Ståle har lagt inn nøkkelen og forutsetningene i del 2 er oppfylt. Oppgavekort: `docs/agenter/oppgaver/fase2a-adr-ki-i-bunnen.md`. Bygger på «KI i bunnen» i `docs/07-utviklingsplan.md`, `docs/05-domenemodell.md` 4.12, arkitekturregel 8 og 11 i `docs/06-arkitektur.md`, tilkoblingslaget (`src/core/integrations`), ADR 0004 («KI-forslag») og ADR 0005 (`readSecret`).
+Dato: 10.11.2026. Status: vedtatt av agentene i autonom modus, oppdatert 11.11.2026 og 17.11.2026 (tillegget «KI i veien» sist i filen). Ståle har valgt Anthropic som KI-leverandør (10.11.2026, S8). Anthropic er første ekte adapter (`anthropic`, se del 2). Ingen ekte KI kjører før Ståle har lagt inn nøkkelen og forutsetningene i del 2 er oppfylt. Oppgavekort: `docs/agenter/oppgaver/fase2a-adr-ki-i-bunnen.md`. Bygger på «KI i bunnen» i `docs/07-utviklingsplan.md`, `docs/05-domenemodell.md` 4.12, arkitekturregel 8 og 11 i `docs/06-arkitektur.md`, tilkoblingslaget (`src/core/integrations`), ADR 0004 («KI-forslag») og ADR 0005 (`readSecret`).
 
 Støtter hovedmålene:
 
@@ -359,3 +359,73 @@ Ingen ny rettighet. Rettighetene finnes i `src/core/access/permissions.ts`.
 - `docs/05-domenemodell.md` (4.7, 4.10, 4.12 og ordlisten), regel 11 og personvernlinjen i `docs/06-arkitektur.md` og «KI-forslag» i ADR 0004 er rettet slik at statusene og feltene er like.
 - Beslutningene står som A148–A157 i `docs/09-apne-sporsmal.md`. Fem spørsmål om personvern står til Ståle der (nr. 54–58): restrisiko i fritekst, tale og bilde til ekte leverandør, om avviste forslag skal ligge i 10 år, tall per person, og e-post til ordreforslag.
 - Ekte leverandør, pris og databehandleravtale avgjøres av Ståle (S8) etter beslutningsnotatet sist i 2a-1.
+
+## Tillegg 17.11.2026 – KI i veien (fraseforslag, språkvask og utkast til sammendrag)
+
+Status: vedtatt av agentene i autonom modus. Oppgavekort: `docs/funksjoner/fase2a-ki-i-veien.md` (A423–A442). Migrering `0037_ki-i-veien`. Grensesnittene står i `src/core/ai/types.ts` og nederst i `src/core/reports/types.ts`. Tillegget endrer del 1, 4, 5, 8 og 10 slik det står her; resten av ADR-en gjelder som før.
+
+Støtter hovedmålene: **KI i bunnen** (de tre første KI-funksjonene i rapporten går samme vei inn, med samme vask, logg og beslutning), **de ansatte** (ett trykk gir tekst å kontrollere, ikke skrive) og **færre reklamasjoner** (KI-svar som endrer TG eller legger til tall, vises aldri).
+
+### Del 1: kontrakten
+
+- **Nye funksjoner:** `phrase_suggest` og `summary_draft`. `AiFeatureCode` utvides i samme endring som definisjonene i `features.ts`.
+- **`core/reports` → `core/ai`, aldri motsatt.** Serverinngangene for fraseforslag og sammendrag ligger i `src/core/reports`. De henter kandidater og funn fra databasen med `grant.organizationId` og kaller `requestSuggestion`. Den statiske testen som forbød importen, erstattes av en test som viser at rapportkjernen aldri skriver TG fra et KI-svar.
+- **Tredje argument, `AiServerInput`.** `requestSuggestion(grant, request, serverInput?)`. Kandidater (`candidates`) og funn (`summaryGroups`) kan bare gis her. Skjemaet for `request` avviser fortsatt `candidates`, så en server-handling som sender nettleserens innhold rett videre, kan aldri smugle inn kandidater eller funn.
+- **Kjernen slår opp målet.** For måltypene `deviation`, `deviation_measure`, `checkpoint_result` og `report` (`RESOLVED_AI_TARGET_TYPES` i `src/shared/config/ai-targets.ts`) følger `src/core/ai` kjeden fra målraden til rapport og oppdrag via `@/db/schema`, med `grant.organizationId`, `deleted_at is null` i alle ledd og rapporten i `draft`. `assignment_id`, `report_id` og de kjente verdiene til vasken kommer derfra. Forespørselen har `assignmentId = null` og `reportId = null` for disse måltypene. Finnes ikke målet, er svaret det samme nøytrale avslaget som ellers (`AiRequestRejectedError`), uten rad og uten kall. `field_answer` kontrolleres ikke ennå og blir stående som «bare falsk leverandør».
+- **Felles liste over KI-mål** ligger i `src/shared/config/ai-targets.ts` (`REPORT_AI_TARGET_FIELDS`, nå også `report` / `summary_text`, A427). Både `core/ai` og `core/reports` leser den. Ny feltkode `new_measure` på måltypen `deviation`: forslag til nytt tiltak, der tiltaksraden ikke finnes før takstmannen har valgt.
+- **Flere felt fra ett trykk:** `requestSuggestionBatch(grant, requests)` for «Språkvask avviket». Ett kall til leverandøren og én rad per felt. Se «Én rad per kall» under.
+- **Nye svar:** `{ kind: "candidates", usageId, status, candidates }` (rangert liste med `{ source, id }`, aldri tekst) og `{ kind: "stopped", usageId }`.
+- **`recordDecision(grant, usageId, decision, { candidate? })`.** På en rad med `candidate_refs` krever `accepted` en kandidat fra den lagrede listen; `edited` er ikke lov. Lukket liste er `rejected`. `undo` og `rejected` tømmer `chosen_candidate`.
+- **For mye inndata** (flere kandidater eller funn enn grensene i `limits.ts`) gir `AiInputTooLargeError` med fast kode. Kjernen kutter aldri stille.
+- **Måltypen `ai_trial` arkiveres** sammen med prøvesiden `/prove/ki`. Koden gjenbrukes aldri. Gamle rader kan leses.
+
+### Del 4: én rad per kall står fast
+
+«Språkvask avviket» vasker opptil 23 felt (avvik, årsak, konsekvens og tiltakene) fra ett trykk. Hvert felt skal ha sin egen `target_ref` og sin egen beslutning. Det løses med **ett kall til leverandøren per felt**, sendt samlet fra ett kall til serveren. Slik gjelder alt i del 4 og 5 uendret: én rad per kall, `requestId` er radens id, mengde og kostnad er nøyaktige per rad, låsen per mål virker, og en vakt som stopper ett felt, stopper ikke de andre. Oppgavekortets «ett kall» betyr ett trykk og ett kall til serveren.
+
+### Del 5: nye kolonner og nytt utfall
+
+| Felt | Forklaring |
+|---|---|
+| `outcome` | Nytt utfall `stopped`: leverandøren svarte, men en vakt i kjernen stoppet svaret før det ble vist (A431) |
+| `error_code` | Ved `stopped`: vaktkoden `tg_guard` eller `number_guard`. En leverandør kan aldri svare med disse kodene |
+| `output_text` | Ved `stopped`: svaret som ble stoppet. Går aldri til klienten, `logger` eller `audit_log`. Tom for `phrase_suggest` |
+| `candidate_refs` | Kandidatene som ble vist, rangert (jsonb-liste med `{ source, id }`, 1–5). Bare når utfallet er `ok`. Aldri tekst (A432) |
+| `chosen_candidate` | Kandidaten den ansatte valgte (`{ source, id }`). Må stå i `candidate_refs`, og er bare satt mens status er `accepted` |
+
+- **`stopped`** beholder mengde og kostnad (kallet har kostet). `status` er tom, så raden kan aldri godtas og regnes aldri som godkjent KI-tekst. Et stoppet svar avviser ikke forrige åpne forslag på målet.
+- **Kandidatkildene** (`source`) er faste koder: `template_outcome` (`outcomes.id` i rapportens låste malversjon; feltkoden i `target_ref` sier hvilken av utfallets tre tekster), `template_measure` (`standard_measures.id`) og `phrase` (reservert for frasebanken i 2a-3).
+- **`input_summary`** for `phrase_suggest` har bare antall: tegn per felt, antall kandidater, og antall ukjente og doble merker i svaret.
+- **CHECK-reglene** håndhever det over: vaktkode bare ved `stopped` og alltid ved `stopped`, `candidate_refs` bare ved `ok` og som liste med 1–5, `chosen_candidate` bare blant de viste og bare ved `accepted`.
+- **Ny indeks** `(organization_id, feature, target_ref)` for ikke-slettede rader, til KI-merket per felt og gjennomgang av tekstene.
+- **`phrase_suggest`-rader er ikke KI-tekst.** Teksten er kildens egen, så publiseringssperren ser bort fra dem, og raden som får teksten, får ingen `ai_usage_id`.
+- **Sammendraget** lagres i `reports.summary_text`, og funnene utkastet bygde på i `reports.summary_basis` (bare id-er, gruppe og `row_version`, også for tiltakene og TGIU-opplysningene under funnet). Se `docs/05-domenemodell.md` 4.7.
+
+### Del 7: vaktene på svaret
+
+KI setter aldri TG. Fra nå kontrolleres det også på svaret, i kjernen, før noe vises (T-0046):
+
+- **TG-vakt** (`tg_guard`): `language_polish` stoppes når TG-omtalene i svaret ikke er de samme som i det som ble sendt. `summary_draft` stoppes ved enhver TG-omtale, fordi overskriftene med TG er kodens.
+- **Tallvakt** (`number_guard`, A440): `language_polish` og `summary_draft` stoppes når svaret har et tall som ikke sto i det som ble sendt.
+- Vaktene er en ren funksjon (`src/core/ai/guards.ts`) som også evalueringen bruker. `phrase_suggest` har ingen tekst i svaret og trenger dem ikke.
+
+### Del 8: flere kandidater og merker
+
+- Kandidatene sendes vasket, hver med et kort merke (K1…Kn). Id-ene sendes aldri til leverandøren. Svaret er en rangert liste med merker.
+- Kjernen tolker svaret strengt: merker som ikke ble sendt, og doble merker, tas bort; høyst 5 beholdes. Ingen gyldige merker gir `no_match`.
+- KI skriver aldri tekst i `phrase_suggest`. Det som vises og settes inn, er kildens egen tekst.
+- For sammendraget sendes funnene under nøytrale gruppemerker (G1…Gn, F1…Fn). Kjernen setter kodens overskrift for hver gruppe etterpå.
+
+### Del 10: køen
+
+KI-køen i `src/core/ai/client` beholdes til 2b, men kobles ikke til badskjermen (A441): fritekst ligger ukryptert i køen, og krav 2 til fase 2b er ikke løst. Etter at prøvesiden er fjernet, er utloggingsknappen eneste lovlige importør. Uten nett gir «Forslag» treff fra tekstsøket i nettleseren, uten kall og uten rad; språkvask og utkast svarer «Trenger nett».
+
+### Forkastet i tillegget
+
+- **Ett leverandørkall for alle feltene i avviket, med flere rader eller ett samlet forslag.** Krever enten en kolonne som binder radene sammen og en regel for å dele kostnaden, eller en forslagstabell ved siden av loggen (forkastet over). Svaret måtte i tillegg deles opp per felt, og en vakt som slo til, ville stoppet alle feltene. Gevinsten er noen få tokens for instruksen.
+- **Kandidat-id-er i `output_text` eller `input_summary`** (A432). Feltene har annen betydning, og databasen kunne ikke kontrollert at valgt kandidat var blant de viste.
+- **`blocked` eller `error` for stoppede svar** (A431). `blocked` betyr at leverandøren ikke ble kalt, og `error` nuller mengde og kostnad.
+- **Kandidater og funn i `request`.** Da måtte skjemaet godta dem, og skillet mellom det nettleseren kan sende og det serveren bygger, ville bare stå i kallerens kode.
+- **Mål-id og oppdrag fra klienten, kontrollert av kalleren.** Hver ny kaller måtte gjenta kontrollen. Nå skjer den ett sted, i kjernen.
+- **`summary_basis` regnet på nytt ved «Bruk».** Funnene kan være endret mellom utkast og «Bruk», og da ville advarselen aldri kommet.
+- **Et tomt tiltak laget før «Forslag» på tiltak**, slik at målet kunne være `deviation_measure`. Lukker takstmannen listen, står et tomt tiltak igjen.

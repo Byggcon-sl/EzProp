@@ -1,7 +1,8 @@
-import type { Actor } from "@/core/access";
+import type { Actor, EmployeeGrant } from "@/core/access";
 import type { RuleReason, RuleReasonCode, RuleSuggestion } from "@/core/rules";
 import type { TemplateDocument } from "@/core/templates";
 import type {
+  AiCandidateRef,
   CAUSE_CRITERIA,
   ChosenTg,
   ConstructionVulnerable,
@@ -13,11 +14,20 @@ import type {
   RuleResultState,
   RuleSuggestionDecision,
   StoredRuleSuggestion,
+  SummaryBasisEntry,
+  SummaryFindingSource,
+  SummaryGroup,
   TextSource,
   TgDirect,
 } from "@/db/schema";
 import type { INSPECTION_YEAR_SOURCES } from "./logic/codes";
-import type { CheckpointStatus, CheckpointTg, CheckpointWarning } from "./logic/types";
+import type {
+  CheckpointStatus,
+  CheckpointTg,
+  CheckpointWarning,
+  PhraseCandidate,
+  PhraseField,
+} from "./logic/types";
 
 /**
  * Grensesnittet til rapportkjernen (`@/core/reports`, ADR 0013,
@@ -37,7 +47,9 @@ import type { CheckpointStatus, CheckpointTg, CheckpointWarning } from "./logic/
  * - Låst malversjon: fremmednøklene sikrer bare organisasjonen. Hver skriving sjekker derfor at
  *   felt, kontrollpunkt, spørsmål, utfall og regel hører til rapportens `template_version_id`;
  *   ellers `ReportValidationError`.
- * - `src/core/reports` importerer aldri `src/core/ai` (gjelder til «KI i veien»).
+ * - Fra «KI i veien»: `src/core/reports` kan kalle `src/core/ai` (fraseforslag og sammendrag),
+ *   aldri motsatt. Rapportkjernen skriver aldri TG fra et KI-svar; TG-forslag kommer bare fra
+ *   regelmotoren.
  * - Revisjonsloggen får bare id-er, faste koder, feltkoder, TG og tall. Aldri tekstverdier.
  */
 
@@ -568,3 +580,224 @@ export type SetCheckpointDone = (
   room: RoomRef,
   input: { checkpointKey: string; done: boolean },
 ) => Promise<ActionResult>;
+
+// --- KI i veien: fraseforslag og sammendrag (docs/funksjoner/fase2a-ki-i-veien.md) ------------
+
+/**
+ * Felles for funksjonene under:
+ * - Klienten sender bare `requestId`, målet og egen tekst. Kandidater og funn hentes av serveren
+ *   fra databasen i `grant.organizationId`, aldri fra klienten.
+ * - KI kalles bare gjennom `requestSuggestion` i `@/core/ai`. Rapportkjernen bygger aldri
+ *   ledetekst og kaller aldri en leverandør.
+ * - Ingen av funksjonene setter TG, velger utfall eller endrer `status` på rapporten.
+ * - Språkvask går ikke gjennom rapportkjernen: server-handlingen kaller `requestSuggestion`
+ *   eller `requestSuggestionBatch` direkte, og teksten lagres med `SaveReportField` når
+ *   takstmannen trykker «Bruk».
+ */
+
+/** En kandidat fra serveren har alltid `ref`. */
+export type RankedPhraseCandidate = PhraseCandidate & { ref: AiCandidateRef };
+
+/**
+ * Kandidatkilden (A433): den ene funksjonen som vet hvor kandidatene kommer fra. I dag tekstene
+ * i rapportens låste malversjon (`template_outcome`, `template_measure`); frasebanken (`phrase`)
+ * kobles til her i 2a-3 uten at KI-delen endres. Intern i `src/core/reports`.
+ *
+ * Samme utvalg og rekkefølge som `ListPhraseCandidates`, med id-ene fra databasen. Bare rader i
+ * `grant.organizationId`, i rapportens `template_version_id`, uten `deleted_at`.
+ * For `template_outcome` sier feltet hvilken av utfallets tre tekster kandidaten er.
+ */
+export type LoadPhraseCandidates = (
+  grant: EmployeeGrant,
+  input: { reportId: string; roomId: string; deviationId: string; field: PhraseField },
+) => Promise<RankedPhraseCandidate[]>;
+
+export type SuggestPhrasesInput = {
+  /** UUID laget i nettleseren. Blir id-en i `ai_usage_log`. */
+  requestId: string;
+  deviationId: string;
+  field: PhraseField;
+  /** Det takstmannen har skrevet i feltet. Kan være tom: da brukes avvikets faste koder. */
+  text: string;
+};
+
+export type SuggestPhrasesResult =
+  /** KI har rangert: 1–5 kandidater, de beste først. Skjermen merker listen «Sortert av KI». */
+  | { status: "ranked"; usageId: string; candidates: RankedPhraseCandidate[] }
+  /** Ingen passer. `usageId` er `null` når det ikke fantes kandidater (intet kall, ingen rad). */
+  | { status: "no_match"; usageId: string | null }
+  /** KI er av, sperret eller ikke slått på for funksjonen. Skjermen beholder tekstsøket. */
+  | { status: "ai_off" }
+  /** Kallet feilet. Skjermen beholder tekstsøket. */
+  | { status: "ai_error" }
+  /** Flere kandidater enn `AI_CANDIDATES_MAX`. Skjermen beholder tekstsøket og viser meldingen. */
+  | { status: "too_many_candidates" };
+
+/**
+ * Forslag fra frasebanken for ett felt (`report.edit`). Henter kandidatene (`LoadPhraseCandidates`),
+ * og kaller `requestSuggestion` med funksjonen `phrase_suggest`, målet `deviation` / feltkoden,
+ * feltene på tillatt-listen (teksten, utfallets faste kode og TG-gruppen) og kandidatene.
+ * Avviket må høre til rommet og rapporten være `draft`; ellers `AccessDeniedError` (404).
+ */
+export type SuggestPhrases = (
+  actor: Actor,
+  organizationId: string,
+  room: RoomRef,
+  input: SuggestPhrasesInput,
+) => Promise<SuggestPhrasesResult>;
+
+export type ApplyPhraseInput = {
+  usageId: string;
+  candidate: AiCandidateRef;
+  /** Feltets tekst slik klienten så den. Brukes ikke for `new_measure`. */
+  base: string | null;
+  /** Id for det nye tiltaket (UUID v7 fra nettleseren). Påkrevd for `new_measure`, ellers ikke lov. */
+  measureId?: string;
+};
+
+export type ApplyPhraseResult =
+  | {
+      status: "saved";
+      /** Avviket, eller det nye tiltaket. */
+      id: string;
+      rowVersion: number;
+      /** Teksten som ble satt inn, med flettefeltene fylt ut. */
+      text: string;
+      refresh: RoomRefresh;
+    }
+  /** «Endret av andre». Ingenting er lagret, og forslaget står fortsatt åpent. */
+  | { status: "conflict"; id: string; rowVersion: number; current: string | null };
+
+/**
+ * Setter inn valgt kandidat (`report.edit`, A437). Målet og feltet leses fra loggraden, aldri fra
+ * klienten. Kandidaten slås opp på nytt i kandidatkilden (samme organisasjon og malversjon), og
+ * teksten er kildens egen med flettefeltene fylt ut som ved Godta i `DecideSuggestion`.
+ *
+ * Avvik, årsak og konsekvens: teksten erstatter feltet (med `base` som i `SaveReportField`).
+ * `new_measure`: et nytt tiltak sist på avviket (tak `MAX_MEASURES_PER_DEVIATION`). Raden regnes
+ * ikke som KI-tekst: `text_source` følger malen, og ingen `ai_usage_id` settes.
+ *
+ * Lagringen og `recordDecision(grant, usageId, "accepted", { candidate })` skjer sammen: avviser
+ * `recordDecision` kandidaten, lagres ingenting. Angre gjøres av skjermen med `SaveReportField`
+ * (eller `RemoveMeasure`) og `recordDecision(..., "undo")`.
+ */
+export type ApplyPhrase = (
+  actor: Actor,
+  organizationId: string,
+  room: RoomRef,
+  input: ApplyPhraseInput,
+) => Promise<ApplyPhraseResult>;
+
+/** Ett godkjent funn slik skjermen viser det i advarslene. Ingen tekst. */
+export type SummaryFindingView = {
+  source: SummaryFindingSource;
+  id: string;
+  group: SummaryGroup;
+  checkpointKey: string;
+  checkpointName: string;
+  /** Rommet funnet står i, så skjermen kan lenke dit. */
+  roomId: string | null;
+};
+
+/** Sammendraget for hele rapporten, med advarslene (A435). Advarsler, aldri sperre. */
+export type ReportSummaryView = {
+  reportId: string;
+  reportStatus: ReportStatus;
+  /** Den ansatte har `report.edit`, og rapporten er `draft`. */
+  canEdit: boolean;
+  text: string | null;
+  /** `reports.row_version`. Sendes tilbake i `SaveSummaryInput.baseRowVersion`. */
+  rowVersion: number;
+  /** Antall godkjente funn nå. 0 gir «Ingen avvik med TG ennå» ved «Lag utkast». */
+  findingCount: number;
+  /**
+   * Forskjellen mellom `summary_basis` og dagens funn: nye, endrede (annen `row_version`, gruppe
+   * eller del) og fjernede. `null` når `summary_basis` er tom eller ingenting er endret.
+   */
+  changedSinceDraft: {
+    added: SummaryFindingView[];
+    changed: SummaryFindingView[];
+    /** Fjernede funn finnes ikke lenger som rad å vise: bare antallet. */
+    removedCount: number;
+  } | null;
+  /** TG3-funn der punktets navn ikke står i teksten. Gjelder også tekst skrevet for hånd. */
+  uncoveredTg3: SummaryFindingView[];
+};
+
+/**
+ * Leser sammendraget (`organization.read`). `null` når oppdraget ikke har en startet rapport.
+ * Godkjente funn (A425, A434): avvik med TG2 eller TG3, kontrollpunkt med TGIU og HMS-avvik, i
+ * hele rapporten, uten slettede rader. Rekkefølge: `SUMMARY_GROUPS`, og malens rekkefølge innen
+ * gruppen. Avvik uten valgt TG, TG0, TG1, avviste regelforslag og tomme punkter tas ikke med.
+ */
+export type GetReportSummary = (
+  actor: Actor,
+  organizationId: string,
+  assignmentId: string,
+) => Promise<ReportSummaryView | null>;
+
+export type DraftSummaryResult =
+  | {
+      status: "suggestion";
+      usageId: string;
+      /** Utkastet med kodens overskrifter. Vises i forslagskortet, lagres ikke før «Bruk». */
+      text: string;
+      /** Funnene utkastet bygde på. Sendes urørt tilbake i `SaveSummaryInput.draft`. */
+      basis: SummaryBasisEntry[];
+    }
+  /** Ingen godkjente funn: intet kall og ingen rad. */
+  | { status: "no_findings" }
+  | { status: "ai_off" }
+  | { status: "ai_error" }
+  /** En vakt stoppet svaret (TG eller nye tall). Teksten vises aldri. */
+  | { status: "stopped" }
+  /** For mange eller for lange funn (`limits.ts`). Aldri stille kutt. */
+  | { status: "too_many_findings" };
+
+/**
+ * Lager et utkast til sammendrag (`report.edit`, rapporten i `draft`). Serveren henter funnene
+ * (som i `GetReportSummary`), bygger gruppene med overskrifter og kaller `requestSuggestion` med
+ * funksjonen `summary_draft` og målet `report` / `summary_text`. Bare feltene på tillatt-listen
+ * sendes: punktets navn, avvik, årsak, konsekvens, tiltak og grunnen ved TGIU. Aldri romnavn,
+ * etasje, bygning, «eier informert», bildetekster, notater eller kostnad. Lagrer ingenting.
+ */
+export type DraftSummary = (
+  actor: Actor,
+  organizationId: string,
+  assignmentId: string,
+  input: { requestId: string },
+) => Promise<DraftSummaryResult>;
+
+export type SaveSummaryInput = {
+  /** Ny tekst. `null` eller tom tekst tømmer sammendraget og `summary_basis`. */
+  text: string | null;
+  baseRowVersion: number;
+  /**
+   * Satt når teksten er et utkast takstmannen trykket «Bruk» på. `edited` sier om han endret
+   * teksten først. `basis` kontrolleres: riktig form, og hver id må være et funn i denne rapporten.
+   */
+  draft?: { usageId: string; basis: SummaryBasisEntry[]; edited: boolean };
+};
+
+export type SaveSummaryResult =
+  | { status: "saved"; summary: ReportSummaryView }
+  /** «Endret av andre» (`baseRowVersion` stemte ikke). Ingenting er lagret. */
+  | { status: "conflict"; summary: ReportSummaryView };
+
+/**
+ * Lagrer sammendraget (`report.edit`). Bare når rapporten er `draft`; ellers
+ * `ReportValidationError`. Samme inndatakontroll som andre lange tekstfelt
+ * (`REPORT_SUMMARY_MAX_LENGTH`, sperre mot elleve sifre). `row_version` øker.
+ *
+ * Med `draft`: `summary_basis` settes fra `draft.basis`, og beslutningen registreres med
+ * `recordDecision` (`accepted`, eller `edited` når `draft.edited`). Lagring og beslutning skjer
+ * sammen. Uten `draft` (skrevet eller rettet for hånd) står `summary_basis` urørt.
+ *
+ * Revisjonsloggen får bare feltkoden `summary_text`, aldri teksten.
+ */
+export type SaveSummary = (
+  actor: Actor,
+  organizationId: string,
+  assignmentId: string,
+  input: SaveSummaryInput,
+) => Promise<SaveSummaryResult>;

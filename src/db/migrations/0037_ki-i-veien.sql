@@ -1,0 +1,16 @@
+ALTER TABLE "ai_usage_log" DROP CONSTRAINT "ai_usage_log_outcome_check";--> statement-breakpoint
+ALTER TABLE "ai_usage_log" DROP CONSTRAINT "ai_usage_log_error_code_check";--> statement-breakpoint
+ALTER TABLE "ai_usage_log" DROP CONSTRAINT "ai_usage_log_outcome_status_check";--> statement-breakpoint
+ALTER TABLE "ai_usage_log" ADD COLUMN "candidate_refs" jsonb;--> statement-breakpoint
+ALTER TABLE "ai_usage_log" ADD COLUMN "chosen_candidate" jsonb;--> statement-breakpoint
+ALTER TABLE "reports" ADD COLUMN "summary_text" text;--> statement-breakpoint
+ALTER TABLE "reports" ADD COLUMN "summary_basis" jsonb;--> statement-breakpoint
+CREATE INDEX "ai_usage_log_target_idx" ON "ai_usage_log" USING btree ("organization_id","feature","target_ref") WHERE "ai_usage_log"."deleted_at" is null;--> statement-breakpoint
+ALTER TABLE "ai_usage_log" ADD CONSTRAINT "ai_usage_log_stopped_check" CHECK ("ai_usage_log"."outcome" <> 'stopped' or "ai_usage_log"."error_code" is not null);--> statement-breakpoint
+ALTER TABLE "ai_usage_log" ADD CONSTRAINT "ai_usage_log_candidate_refs_check" CHECK ("ai_usage_log"."candidate_refs" is null or ("ai_usage_log"."outcome" = 'ok' and jsonb_typeof("ai_usage_log"."candidate_refs") = 'array' and jsonb_array_length("ai_usage_log"."candidate_refs") between 1 and 5));--> statement-breakpoint
+ALTER TABLE "ai_usage_log" ADD CONSTRAINT "ai_usage_log_chosen_candidate_check" CHECK ("ai_usage_log"."chosen_candidate" is null or ("ai_usage_log"."status" = 'accepted' and "ai_usage_log"."candidate_refs" is not null and "ai_usage_log"."candidate_refs" @> jsonb_build_array("ai_usage_log"."chosen_candidate")));--> statement-breakpoint
+ALTER TABLE "ai_usage_log" ADD CONSTRAINT "ai_usage_log_outcome_check" CHECK ("ai_usage_log"."outcome" in ('ok', 'no_match', 'error', 'blocked', 'stopped'));--> statement-breakpoint
+ALTER TABLE "ai_usage_log" ADD CONSTRAINT "ai_usage_log_error_code_check" CHECK ("ai_usage_log"."error_code" is null or ("ai_usage_log"."outcome" = 'error' and "ai_usage_log"."error_code" in ('timeout', 'rate_limited', 'unavailable', 'rejected', 'unknown')) or ("ai_usage_log"."outcome" = 'stopped' and "ai_usage_log"."error_code" in ('tg_guard', 'number_guard')));--> statement-breakpoint
+ALTER TABLE "ai_usage_log" ADD CONSTRAINT "ai_usage_log_outcome_status_check" CHECK (("ai_usage_log"."outcome" = 'ok' and "ai_usage_log"."status" is not null) or ("ai_usage_log"."outcome" = 'stopped' and "ai_usage_log"."status" is null) or ("ai_usage_log"."outcome" not in ('ok', 'stopped') and "ai_usage_log"."status" is null and "ai_usage_log"."output_text" is null));--> statement-breakpoint
+ALTER TABLE "reports" ADD CONSTRAINT "reports_summary_text_check" CHECK ("reports"."summary_text" is null or char_length("reports"."summary_text") <= 10000);--> statement-breakpoint
+ALTER TABLE "reports" ADD CONSTRAINT "reports_summary_basis_check" CHECK ("reports"."summary_basis" is null or (jsonb_typeof("reports"."summary_basis") = 'array' and jsonb_array_length("reports"."summary_basis") <= 200));
