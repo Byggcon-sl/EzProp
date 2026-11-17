@@ -43,7 +43,7 @@ Oppdateres av prosjektlederen etter hvert steg. Leses først i hver kjøring. Al
 
 ## Åpne PR-er
 
-Ingen (17.11.2026 kl. 00:30 UTC).
+- #222 Rydding av innloggingsdata (branch `rydd-innloggingsdata`, 17.11.2026): klar, merges med skriptet når CI er grønn.
 
 Ingen PR venter på Ståle.
 
@@ -51,7 +51,7 @@ Ingen PR venter på Ståle.
 
 Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4–S8). I tillegg:
 
-- **Rydding av innloggingsdata (branch `rydd-innloggingsdata`, ADR 0014):**
+- **Rydding av innloggingsdata (PR #222, ADR 0014):**
   - **Legg inn hemmeligheten (testmiljøet, koster ingenting):** 1) GitHub → repoet → Settings → Secrets and variables → Actions → New repository secret. Navn `AUTH_CLEANUP_SECRET`, verdi: en tilfeldig tekst på minst 32 tegn. Aldri i chat, e-post eller repo. 2) Kjør utrullingen til testmiljøet på nytt (Actions → «Utrulling til Azure» → Run workflow), slik at appen får hemmeligheten. 3) Kjør «Rydding av innloggingsdata» én gang for hånd (Actions → Run workflow) og se at den blir grønn. Hele oppskriften står i `docs/drift/testmiljo-azure.md`. Uten hemmeligheten er endepunktet av og den planlagte kjøringen hopper over uten feil. Produksjon trenger egen adresse og egen hemmelighet når du ruller ut dit.
   - **Bekreft unntaket fra myk sletting før ekte data (A419):** tellere for innloggingssperren, utløpte koder og utløpte økter slettes for godt (24 timer / 24 timer etter utløp / 30 dager etter utløp). Det bygger på svar 10.11.2026 nr. 15 og 18, som er til gjennomgang. Brukere, kontoer og alle fagdata slettes aldri. Se også spørsmål 88 (innloggingshistorikk).
 - **KI-leverandør (S8): Anthropic-adapteren er klar** (når PR-en for `fase2a-ki-leverandor` er merget). Les `docs/beslutningsnotat-ki-leverandor.md` (rundt to sider).
@@ -115,7 +115,7 @@ Ingen.
 
 ## Pågår
 
-- Brancher med «Pågår» eller arbeid uten PR (16.11.2026): `papirkurv` (Papirkurv og angre for sletting, A410–A418), `rydd-innloggingsdata` (Pågår 17.11.2026: bygges av hovedløkken etter oppgavekortet `docs/agenter/oppgaver/rydd-innloggingsdata.md`, ADR 0014, A419–A422, spørsmål 88; dokumentene, beslutningene og versjonen er gjort, PR ikke åpnet ennå), `rett-t0070-t0071` (A390–A394, siste commit kl. 16:59) og `badet-pc` (A340–A359 og A380–A387, siste commit kl. 16:01; må flette inn main etter #217). Neste ledige A-nummer etter disse: A423 (A388–A389 og A395–A409 er også ledige).
+- Brancher med «Pågår» eller arbeid uten PR (16.11.2026): `papirkurv` (Papirkurv og angre for sletting, A410–A418), `rydd-innloggingsdata` (PR #222 åpnet 17.11.2026, A419–A422, spørsmål 88), `rett-t0070-t0071` (A390–A394, siste commit kl. 16:59) og `badet-pc` (A340–A359 og A380–A387, siste commit kl. 16:01; må flette inn main etter #217). Neste ledige A-nummer etter disse: A423 (A388–A389 og A395–A409 er også ledige).
 - Overflødige brancher etter PR #203: `testdata-arbeidshverdag`, `testdata-retting-hovedlop-2111`, `arkiv-testdata-arbeidshverdag-parallell`, `testdata-overtatt`. Etter PR #209: `worktree-wf_b4502702-3aa-19`.
 
 ## Siste kjøring
