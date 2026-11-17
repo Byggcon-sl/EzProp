@@ -52,11 +52,13 @@ type CaseJson = {
   fields: Record<string, string>;
   known?: KnownJson;
   mustPass?: boolean;
+  simulatedAnswer?: string;
   expect: {
     outcome: "ok" | "no_match";
     mustContain?: string[];
     mustNotContain?: string[];
     sameTg?: boolean;
+    verdict?: "pass" | "fail";
   };
 };
 
@@ -153,13 +155,13 @@ function allText(item: CaseJson): string {
 }
 
 describe("evalueringssett: settet for language_polish (E4)", () => {
-  it("E4.1 filen er gyldig etter skjemaet, har 30–50 eksempler (nå 30), unike id-er og er merket utkast", () => {
+  it("E4.1 filen er gyldig etter skjemaet, har 30–50 eksempler (nå 45), unike id-er og er merket utkast", () => {
     expect(existsSync(casesPath), FILE_NAME).toBe(true);
     const parsed = parseCasesFile(JSON.parse(raw) as unknown, FILE_NAME);
     expect(parsed.ok ? [] : parsed.errors).toEqual([]);
     expect(file.feature).toBe("language_polish");
     expect(file.status).toBe("utkast, ikke godkjent av fagrådet");
-    expect(cases.length).toBe(30);
+    expect(cases.length).toBe(45);
     expect(new Set(cases.map((item) => item.id)).size).toBe(cases.length);
   });
 
@@ -355,7 +357,10 @@ describe("evalueringssett: settet for language_polish (E4)", () => {
     const provider = capturing(fakeAiProvider);
     const result = await runEvals({ provider, casesDir: __dirname, feature: "language_polish" });
     expect(result.errors).toEqual([]);
-    expect(provider.prompts).toHaveLength(cases.length);
+    // Sakene med oppdiktet svar kaller ikke leverandøren
+    expect(provider.prompts).toHaveLength(
+      cases.filter((item) => item.simulatedAnswer === undefined).length,
+    );
     expect(result.features[0]!.leaks).toEqual([]);
     const allKnown: KnownJson[] = cases.flatMap((item) => (item.known ? [item.known] : []));
     for (const prompt of provider.prompts) {
@@ -418,11 +423,100 @@ describe("evalueringssett: settet for language_polish (E4)", () => {
 
 /** Låst resultat mot `fakeAiProvider` (E4.12). */
 const LOCKED_RESULT = {
-  total: 30,
-  passed: 30,
-  mustPassTotal: 14,
-  mustPassPassed: 14,
-  misses: [] as string[],
+  total: 45,
+  passed: 42,
+  mustPassTotal: 23,
+  mustPassPassed: 23,
+  // Skrivefeil: den falske leverandøren retter ikke språket (T-0047)
+  misses: ["lp-031", "lp-032", "lp-033"] as string[],
   leaks: [] as unknown[],
   crashes: [] as string[],
 };
+
+// --- K2.4 og K2.3a (docs/funksjoner/fase2a-ki-i-veien-testplan.md del 2) ------------------------
+
+/*
+ * Støtter hovedmål: færre reklamasjoner (tall, «ikke», sted og «bør»/«må»/«snarest» står, og et
+ * svar som legger til «antas» eller mister en nektelse består ikke) og KI i bunnen (settet måler
+ * dette før en ekte leverandør slås på).
+ */
+
+const NEGATIONS = ["ikke", "ingen", "uten"];
+
+describe("evalueringssett: language_polish utvidet (K2.4, K2.3a)", () => {
+  const real = cases.filter((item) => item.simulatedAnswer === undefined);
+  const simulated = cases.filter((item) => item.simulatedAnswer !== undefined);
+
+  it("K2.4 skrivefeil som må rettes: feilstavet ord i mustNotContain og riktig i mustContain", () => {
+    const typo = real.filter(
+      (item) =>
+        /skrivefeil/iu.test(item.description ?? "") &&
+        mustNotContain(item).some((word) => hasWholeWord(inputOf(item), word)) &&
+        mustContain(item).some((word) => !hasWholeWord(inputOf(item), word)),
+    );
+    expect(typo.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each([
+    [
+      "tall og enhet",
+      (item: CaseJson) => mustContain(item).some((w) => /\d\s?(vekt-%|mm|%)/u.test(w)),
+    ],
+    ["«ikke»", (item: CaseJson) => mustContain(item).some((w) => hasWholeWord(w, "ikke"))],
+    ["sted", (item: CaseJson) => /stedet/iu.test(item.description ?? "")],
+    ["«snarest»", (item: CaseJson) => mustContain(item).includes("snarest")],
+    ["«bør»", (item: CaseJson) => mustContain(item).includes("bør")],
+    ["«må»", (item: CaseJson) => mustContain(item).includes("må")],
+  ])("K2.4 eksempel der %s beholdes, uten oppdiktet svar", (_name, test) => {
+    expect(real.filter(test).length).toBeGreaterThan(0);
+  });
+
+  it("K2.3a «trolig» i inndata står urørt (mustContain), og ingen sak krever at det fjernes", () => {
+    const trolig = real.filter((item) => hasWholeWord(inputOf(item), "trolig"));
+    expect(trolig.length).toBeGreaterThanOrEqual(2);
+    for (const item of trolig) expect(mustContain(item), item.id).toContain("trolig");
+  });
+
+  it("K2.3a oppdiktet svar som legger til «antas» har verdict fail, og inndata har ikke «antas»", () => {
+    const added = simulated.filter(
+      (item) =>
+        hasWholeWord(item.simulatedAnswer!, "antas") && !hasWholeWord(inputOf(item), "antas"),
+    );
+    expect(added.length).toBeGreaterThan(0);
+    for (const item of added) expect(item.expect.verdict, item.id).toBe("fail");
+  });
+
+  it("K2.3a oppdiktet svar der en nektelse faller bort har verdict fail (K1.6c, spørsmål 103)", () => {
+    const dropped = simulated.filter((item) =>
+      NEGATIONS.some(
+        (word) => hasWholeWord(inputOf(item), word) && !hasWholeWord(item.simulatedAnswer!, word),
+      ),
+    );
+    expect(dropped.length).toBeGreaterThanOrEqual(2);
+    for (const item of dropped) expect(item.expect.verdict, item.id).toBe("fail");
+  });
+
+  it("K2.4 forbehold som tas bort, og «bør» byttet med «må», består ikke", () => {
+    const removed = simulated.filter(
+      (item) =>
+        hasWholeWord(inputOf(item), "trolig") && !hasWholeWord(item.simulatedAnswer!, "trolig"),
+    );
+    const swapped = simulated.filter(
+      (item) => hasWholeWord(inputOf(item), "bør") && hasWholeWord(item.simulatedAnswer!, "må"),
+    );
+    for (const list of [removed, swapped]) {
+      expect(list.length).toBeGreaterThan(0);
+      for (const item of list) expect(item.expect.verdict, item.id).toBe("fail");
+    }
+  });
+
+  it("K2.4 de oppdiktede svarene gir det fasiten sier mot den falske leverandøren", async () => {
+    const result = await runEvals({
+      provider: fakeAiProvider,
+      casesDir: __dirname,
+      feature: "language_polish",
+    });
+    const missed = result.features[0]!.misses.map((miss) => miss.id);
+    expect(simulated.map((item) => item.id).filter((id) => missed.includes(id))).toEqual([]);
+  });
+});

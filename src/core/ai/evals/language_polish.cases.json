@@ -296,6 +296,130 @@
         "text": "utvendig kledning   har  avflasset maling på sørveggen,ingen råte funnet ved stikktaking"
       },
       "expect": { "outcome": "ok", "mustContain": ["ingen råte", "stikktaking"] }
+    },
+    {
+      "id": "lp-031",
+      "description": "Skrivefeil som må rettes («manlger»). «ikke» står.",
+      "fields": { "text": "membranen er ikke klemt fast i sluket, klemringen manlger" },
+      "expect": {
+        "outcome": "ok",
+        "mustContain": ["mangler", "ikke"],
+        "mustNotContain": ["manlger"]
+      }
+    },
+    {
+      "id": "lp-032",
+      "description": "Skrivefeil som må rettes («vinduett»).",
+      "fields": { "text": "det er registrert fuktskjolder i himlingen over dusjen ved vinduett" },
+      "expect": {
+        "outcome": "ok",
+        "mustContain": ["vinduet", "himlingen"],
+        "mustNotContain": ["vinduett"]
+      }
+    },
+    {
+      "id": "lp-033",
+      "description": "Skrivefeil som må rettes («baderkaret»).",
+      "fields": { "text": "silikonfugen rundt baderkaret har sluppet på langsiden" },
+      "expect": { "outcome": "ok", "mustContain": ["badekaret"], "mustNotContain": ["baderkaret"] }
+    },
+    {
+      "id": "lp-034",
+      "description": "Måleverdi med enhet står som den er.",
+      "fields": { "text": "fuktmåling bak flisene i dusjsonen viste 19 vekt-% i bunnsvillen" },
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": ["19 vekt-%", "bunnsvillen"],
+        "mustNotContain": ["15 vekt-%"]
+      }
+    },
+    {
+      "id": "lp-035",
+      "description": "«ikke påvist» står. Nektelsen faller ikke bort.",
+      "fields": { "text": "det er ikke påvist fukt ved hulltaking i veggen mot gangen" },
+      "mustPass": true,
+      "expect": { "outcome": "ok", "mustContain": ["ikke påvist", "gangen"] }
+    },
+    {
+      "id": "lp-036",
+      "description": "Stedet står som det er.",
+      "fields": { "text": "løse fliser på veggen bak toalettet i badet i 2. etasje" },
+      "mustPass": true,
+      "expect": { "outcome": "ok", "mustContain": ["bak toalettet", "2. etasje"] }
+    },
+    {
+      "id": "lp-037",
+      "description": "«må» og «snarest» står.",
+      "fields": { "text": "lekkasjen ved blandebatteriet i dusjen må utbedres snarest" },
+      "mustPass": true,
+      "expect": { "outcome": "ok", "mustContain": ["må", "snarest"], "mustNotContain": ["bør"] }
+    },
+    {
+      "id": "lp-038",
+      "description": "«bør» står, og «snarest» legges ikke til.",
+      "fields": { "text": "fugene i dusjsonen bør fornyes innen kort tid" },
+      "mustPass": true,
+      "expect": { "outcome": "ok", "mustContain": ["bør"], "mustNotContain": ["må", "snarest"] }
+    },
+    {
+      "id": "lp-039",
+      "description": "«trolig» i inndata står urørt. Forbeholdet tas ikke bort.",
+      "fields": {
+        "text": "fuktskjolden under vasken kommer trolig fra en tidligere lekkasje i vannlåsen"
+      },
+      "expect": { "outcome": "ok", "mustContain": ["trolig", "vannlåsen"] }
+    },
+    {
+      "id": "lp-040",
+      "description": "Oppdiktet svar der KI legger til «antas». Består ikke.",
+      "fields": { "text": "berederen står i vaskerommet og har ikke lekkasjesikring" },
+      "mustPass": true,
+      "simulatedAnswer": "Berederen står i vaskerommet og har ikke lekkasjesikring, og den antas å være original.",
+      "expect": { "outcome": "ok", "mustContain": ["lekkasjesikring"], "verdict": "fail" }
+    },
+    {
+      "id": "lp-041",
+      "description": "Oppdiktet svar der «ikke påvist fukt» blir «påvist fukt». Består ikke (spørsmål 103, ingen vakt ennå).",
+      "fields": { "text": "Det er ikke påvist fukt i bunnsvillen bak dusjen." },
+      "mustPass": true,
+      "simulatedAnswer": "Det er påvist fukt i bunnsvillen bak dusjen.",
+      "expect": { "outcome": "ok", "mustContain": ["bunnsvillen"], "verdict": "fail" }
+    },
+    {
+      "id": "lp-042",
+      "description": "Oppdiktet svar der «ingen» faller bort. Består ikke.",
+      "fields": { "text": "ingen tegn til lekkasje rundt sluket" },
+      "mustPass": true,
+      "simulatedAnswer": "Tegn til lekkasje rundt sluket.",
+      "expect": { "outcome": "ok", "mustContain": ["sluket"], "verdict": "fail" }
+    },
+    {
+      "id": "lp-043",
+      "description": "Oppdiktet svar der forbeholdet «trolig» er tatt bort. Består ikke.",
+      "fields": { "text": "skjolden i taket kommer trolig fra kondens" },
+      "simulatedAnswer": "Skjolden i taket kommer fra kondens.",
+      "expect": { "outcome": "ok", "mustContain": ["trolig"], "verdict": "fail" }
+    },
+    {
+      "id": "lp-044",
+      "description": "Oppdiktet svar der «bør» er byttet med «må». Består ikke.",
+      "fields": { "text": "avtrekksviften bør rengjøres" },
+      "mustPass": true,
+      "simulatedAnswer": "Avtrekksviften må rengjøres.",
+      "expect": {
+        "outcome": "ok",
+        "mustContain": ["bør"],
+        "mustNotContain": ["må"],
+        "verdict": "fail"
+      }
+    },
+    {
+      "id": "lp-045",
+      "description": "Oppdiktet svar som bare retter språket. Består.",
+      "fields": { "text": "dusjhjørnet har sprekk i fugen , vann kan trenge inn" },
+      "simulatedAnswer": "Dusjhjørnet har sprekk i fugen, og vann kan trenge inn.",
+      "expect": { "outcome": "ok", "mustContain": ["sprekk", "fugen"], "verdict": "pass" }
     }
   ]
 }
