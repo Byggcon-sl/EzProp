@@ -2,7 +2,7 @@
 
 - **Fase:** 2a (punktet «Rydding av innloggingsdata» under «Publisering, PDF og sending»)
 - **Modul:** kjerne (`src/core/auth`, hemmelighetssjekken i `src/core/access`)
-- **Status:** klar for bygging (runde 1 med forenkler, arkitekt og sikkerhet-personvern innarbeidet 14.11.2026)
+- **Status:** klar for bygging (runde 1 med forenkler, arkitekt og sikkerhet-personvern innarbeidet 14.11.2026; arkitektens runde 17.11.2026 innarbeidet)
 - **Branch:** `rydd-innloggingsdata` (bygger på `main`)
 - **Støtter hovedmål:** De ansatte: innloggingen holder seg rask og trygg, og det ligger ikke gamle koder og økter igjen som kan misbrukes. Vi lagrer bare det vi trenger. Færre reklamasjoner: ikke direkte. KI i bunnen: ikke berørt (se under).
 - **Grunnlag:** svar 10.11.2026, nr. 15 og 18 (`docs/kartlegging/svar-claude-pa-vegne-av-stale-2026-11-10.md`). Svarene er skrevet av prosjektlederen på oppdrag fra Ståle, har status «til gjennomgang», og er ført inn i planen 10.11.2026. De sier: tellere for innloggingssperren slettes etter 24 timer, økter og koder kan slettes helt, utløpte koder etter 24 timer og utløpte økter etter 30 dager.
@@ -33,11 +33,14 @@ KI har ingen oppgave her. Dette er ren drift og rydding av tekniske innloggingsd
    - Logging: én infolinje med antall per tabell, tidsbruk og utfall. Ved feil: feillinje med referansekode, uten parametre fra databasefeilen (ingen e-post, hash, token, IP, user agent eller bruker-id).
 
 2. **Hemmelighetssjekken** i `src/core/access` (regel 2: tilgang sjekkes bare der):
+   - Egen fil `src/core/access/operations-secret.ts` uten databaseimport, eksportert fra `src/core/access/index.ts`.
    - `verifyOperationsSecret(authorizationHeader: string | null): boolean`.
-   - Leser `Authorization: Bearer <hemmelighet>`. Hasher begge sider (SHA-256) og sammenligner med `timingSafeEqual`, slik at lengde og innhold ikke lekker. Usann når hemmeligheten ikke er satt.
+   - Leser hemmeligheten via `getEnv().AUTH_CLEANUP_SECRET`, aldri via `readSecret` (så `src/core/access` ikke blir avhengig av `src/core/integrations`).
+   - Leser `Authorization: Bearer <hemmelighet>`. Hasher begge sider (SHA-256) og sammenligner med `timingSafeEqual`, slik at lengde og innhold ikke lekker.
+   - Usann når hemmeligheten mangler, er kortere enn 32 tegn eller er en uløst nøkkelboks-referanse (`isUnresolvedSecretReference` fra `@/shared/config/secret-reference`). Ved feil oppsett: én advarsel i loggen med bare navnet `AUTH_CLEANUP_SECRET`, aldri verdien.
 
 3. **Endepunktet** `POST /api/intern/rydd-innloggingsdata` i `src/app`:
-   - Kaller bare `verifyOperationsSecret` og `purgeExpiredAuthData`. Ingen databasekode i ruten.
+   - Kaller bare `verifyOperationsSecret` og `purgeExpiredAuthData`. Importerer bare `@/core/access` og `@/core/auth/auth-cleanup`. Ingen databasekode i ruten.
    - Bare POST. Andre metoder avvises (405 fra Next, også med riktig hemmelighet).
    - **404** når hemmeligheten ikke er satt, mangler i kallet eller er feil. Samme svar, så endepunktet ikke røpes (se «Avgjort ved uenighet»).
    - Tar ingen inndata. Body og adresseparametre leses ikke; grenser og tid kan aldri styres utenfra.
@@ -45,7 +48,8 @@ KI har ingen oppgave her. Dette er ren drift og rydding av tekniske innloggingsd
    - Avvist kall logges som advarsel uten headere og uten IP.
 
 4. **Hemmelighetens vei** til appen (ellers når den aldri fram):
-   - `AUTH_CLEANUP_SECRET` i `src/shared/config/env.ts`: valgfri, minst 32 tegn, med samme `notUnresolvedReference`-vakt som de andre, slik at en uløst nøkkelboks-referanse stenger endepunktet. Egen hemmelighet, aldri `BETTER_AUTH_SECRET`.
+   - `AUTH_CLEANUP_SECRET: optionalSecret` i `src/shared/config/env.ts`, uten streng validering (samme mønster som `MS_LOGIN_*`, ADR 0008): feil oppsett slår av endepunktet, aldri appen. Lengde og uløst referanse sjekkes i `verifyOperationsSecret`. Egen hemmelighet, aldri `BETTER_AUTH_SECRET`.
+   - `AUTH_CLEANUP_SECRET` føres i `DENIED_SECRET_REFS` i `src/core/integrations/secrets.ts`, slik at ingen tilkobling kan peke på driftshemmeligheten og sende den til en leverandør.
    - `.env.example`: tom linje med forklaring (uten verdi er endepunktet av).
    - `infra/azure/main.bicep` og `.github/workflows/deploy-azure.yml`: samme mønster som `ANTHROPIC_API_KEY` (parameter, betinget hemmelighet i nøkkelboksen, appinnstilling).
 
@@ -68,21 +72,22 @@ KI har ingen oppgave her. Dette er ren drift og rydding av tekniske innloggingsd
 7. **Driftsdokumentasjon** i `docs/drift/testmiljo-azure.md` (eget avsnitt): hva jobben gjør, hvilken GitHub-secret Ståle legger inn (bare som GitHub-secret, aldri i chat, e-post eller repo), at utrullingen må kjøres på nytt etterpå, hvordan den kjøres manuelt (`workflow_dispatch`), hvordan man ser at den gikk (Actions-loggen og appens logg), hva man gjør ved feil, hvordan hemmeligheten byttes, og at produksjon trenger egen adresse og egen hemmelighet som Ståle setter opp ved utrulling.
 
 8. **Dokumenter som i dag sier det motsatte**, rettes i samme PR:
-   - `docs/05-domenemodell.md`: raden for `login_attempts` («Radene endres aldri», rundt linje 1982) får «slettes etter 24 timer»; avsnittet om felles kolonner får unntaket med henvisning til ADR 0014; ordlisten får `auth_cleanup` / «rydding av innloggingsdata» og `operations secret` / «driftshemmelighet».
+   - `docs/05-domenemodell.md`: raden for `login_attempts` («Radene endres aldri», rundt linje 2004) får «slettes etter 24 timer»; avsnittet om felles kolonner får unntaket med henvisning til ADR 0014; ordlisten får `auth_cleanup` / «rydding av innloggingsdata» og `operations secret` / «driftshemmelighet».
    - `docs/06-arkitektur.md` (myk sletting, 10 år, rundt linje 85): henvisning til ADR 0014.
    - Oppbevaringstidene (24 t, 24 t, 30 dager etter utløp) føres der behandlingene av innloggingsdata beskrives, så de kan inn i behandlingsprotokollen.
    - Kommentarene i `src/core/auth/login-throttle.ts` og `src/db/schema/auth.ts` («ingenting slettes»).
 
-9. **Tester** (Vitest mot testdatabasen). Bruk oppdiktede e-poster på `example.com`. Jobben sletter globalt i den delte testdatabasen, så testene lager egne rader med tider langt fra «nå» og sjekker bare egne rader:
+9. **Tester** (Vitest mot testdatabasen). Bruk oppdiktede e-poster på `example.com`. Jobben sletter globalt i den delte testdatabasen. Derfor kalles `purgeExpiredAuthData(now)` med en fast `now` langt tilbake i tid (for eksempel 1. januar 2000), og testene lager egne rader rundt den tiden. Alle andre testfilers rader ligger da etter grensen og står urørt. Testene sjekker bare egne rader:
    - Grensene: rad like før og like etter 24 t / 30 d; rad nøyaktig på grensen står.
    - Gyldige koder, gyldig Microsoft-runde (state-rad i `verifications`), gyldige økter, økt som er fornyet (`expires_at` flyttet fram) og økter utløpt mindre enn 30 dager står.
-   - Tellere yngre enn 24 timer står, og en aktiv sperre virker fortsatt etter rydding (én test).
+   - Tellere yngre enn 24 timer står, og en aktiv sperre virker fortsatt etter rydding (én test, med samme faste `now` inn i `checkAndRecordAttempt`).
    - Idempotens: andre kjøring sletter 0.
    - To organisasjoner, lett form: `users`, `accounts` (med tokens) og `employees` er urørt for brukere i begge, og øktene deres ryddes bare etter utløpstid. Ingen fagdata bygges opp.
    - Loggen har bare antall og tid, også i feilgrenen (databasefeil med parametre): ingen e-post, hash, token, IP, user agent eller bruker-id.
-   - `verifyOperationsSecret`: usann uten satt hemmelighet, uten header, med feil header, med feil lengde; sann med riktig.
+   - `verifyOperationsSecret`: usann uten satt hemmelighet, med hemmelighet kortere enn 32 tegn, med uløst nøkkelboks-referanse, uten header, med feil header, med feil lengde; sann med riktig. Advarselen i loggen har navnet, ikke verdien.
    - Endepunktet: 404 uten satt hemmelighet, uten header og med feil hemmelighet; GET med riktig hemmelighet avvises; ekstra felt i body endrer ikke grensene; svaret har bare antall og `no-store`.
-   - `env`: hemmelighet kortere enn 32 tegn og uløst nøkkelboks-referanse avvises.
+   - `env`: med hemmelighet kortere enn 32 tegn og med uløst nøkkelboks-referanse kaster `getEnv()` ikke (appen starter), og endepunktet svarer 404.
+   - `secrets`: `readSecret("AUTH_CLEANUP_SECRET")` avvises (står i `DENIED_SECRET_REFS`).
 
 10. Versjonsnummer økes (patch).
 
@@ -123,8 +128,8 @@ Ingen TG-regler. Grensene (24 timer, 30 dager) er konstanter med testsaker.
 - [ ] Idempotent: andre kjøring sletter 0 (test).
 - [ ] Loggen har bare antall og tid, også ved feil (test).
 - [ ] Endepunktet svarer 404 uten satt hemmelighet, uten header og med feil hemmelighet; bare POST; tar ingen inndata; `no-store` (test).
-- [ ] Hemmelighetssjekken ligger i `src/core/access` og bruker hash + `timingSafeEqual` (test).
-- [ ] `AUTH_CLEANUP_SECRET` valideres (minst 32 tegn, ingen uløst referanse) og føres gjennom Bicep og utrullingen.
+- [ ] Hemmelighetssjekken ligger i `src/core/access/operations-secret.ts` uten databaseimport, leser via `getEnv()` og bruker hash + `timingSafeEqual` (test).
+- [ ] Feil oppsett av `AUTH_CLEANUP_SECRET` (for kort, uløst referanse) slår av endepunktet, aldri appen (test). Hemmeligheten står i `DENIED_SECRET_REFS` (test) og føres gjennom Bicep og utrullingen.
 - [ ] Planlagt arbeidsflyt med `workflow_dispatch`, `permissions: {}`, hopper over uten feil når hemmelighet eller adresse mangler.
 - [ ] ADR 0014 med innholdet over.
 - [ ] Driftsdokumentasjon i `docs/drift/testmiljo-azure.md`; domenemodell, arkitektur og kodekommentarer rettet.
@@ -138,6 +143,9 @@ Ingen TG-regler. Grensene (24 timer, 30 dager) er konstanter med testsaker.
 - **Indeks:** forenkler og arkitekt ville kutte, sikkerhet-personvern ville ha indeks. Kuttet. Jobben går én gang i døgnet, tabellene holdes små av ryddingen, og ingen behov er målt. En migrering uten målt nytte er unødvendig risiko. Vurderes på nytt i ADR-en hvis ryddingen måles treg.
 - **Statuskode:** forenkler ville ha 404 når av og 401 ved feil hemmelighet; arkitekt og sikkerhet-personvern ville ha 404 i alle tilfeller. Valgt 404 i alle tilfeller: endepunktet røpes ikke, og det er fortsatt én fast oppførsel å teste.
 - **Kommando `pnpm auth:cleanup`:** kuttet etter forenkleren. Endepunktet når databasen fra innsiden av Azure, og `workflow_dispatch` dekker manuell kjøring. Én vei å teste og dokumentere. Lokal kjøring dekkes av testene. Arkitektens krav om egen fil uten import av `./auth` beholdes, så en kommando kan legges til senere som tynn innpakning.
+
+- **Validering av hemmeligheten (arkitekt 17.11.2026):** kortet sa at `env.ts` skulle avvise for kort hemmelighet og uløst referanse. Det ville stoppe hele appen, også admins innlogging (regel 11). Endret etter arkitekten: valgfri verdi i `env.ts`, sjekken i `verifyOperationsSecret`. Påkrevde verdier (ADR 0005) valideres fortsatt strengt; valgfrie følger ADR 0008.
+- **Sperre i tilkoblingslaget (arkitekt 17.11.2026):** tatt inn. Uten den kunne en tilkobling sende driftshemmeligheten til en leverandør.
 
 ## Beslutninger i autonom modus (føres i `docs/09-apne-sporsmal.md`, «Avgjort av agentene mens Ståle var borte»)
 - A419: Unntak fra myk sletting for `login_attempts`, `verifications` og `sessions`, bygd på svar 10.11.2026 nr. 15 og 18 (gitt på Ståles oppdrag, til gjennomgang). Kan endres ved å slå av arbeidsflyten eller fjerne hemmeligheten. **Dyrt å endre** (slettede rader kommer ikke tilbake).
