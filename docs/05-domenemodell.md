@@ -126,6 +126,8 @@ Disse feltene finnes i **alle** tabeller (med få unntak, som er nevnt). De stå
 | `deleted_at`, `deleted_by` | **Myk sletting.** Ingenting slettes for godt. «Slett» betyr «flytt til papirkurven», og det kan angres. |
 | `row_version` | Teller som øker ved hver endring. Brukes til synkronisering og til å oppdage at to har endret samme rad. |
 
+**Unntak fra myk sletting (ADR 0014, A419):** tre tekniske innloggingstabeller uten `organization_id` slettes for godt av den nattlige ryddingen (`purgeExpiredAuthData` i `src/core/auth/auth-cleanup.ts`): `login_attempts` 24 timer etter at forsøket ble registrert, `verifications` 24 timer etter utløp og `sessions` 30 dager etter utløp. Grunnlag: svar 10.11.2026, nr. 15 og 18. `users`, `accounts` og alle tabeller med `organization_id` slettes aldri for godt.
+
 **Oppbevaring:** Rapporter, bilder og måledata i en utgitt rapport beholdes i **minst 10 år**, i låst versjon per utgave (beslutning 25.10.2026). Feltet `retain_until` på utgivelser og filer sier hvor lenge. Ingenting med `retain_until` i fremtiden kan slettes, heller ikke av admin.
 
 **Navn:** Tabeller og felt er på engelsk, som i Optiplan. Ordlisten i avsnitt 8 oversetter.

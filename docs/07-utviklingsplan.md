@@ -235,7 +235,7 @@ Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full 
   - **Profiler lages og endres i admin** av admin og de som har fått retten, med forhåndsvisning på et testoppdrag og endringslogg. Profilen er data, ikke kode, og bygger på den samme layouten som Byggcon-profilen. Egne maler (fase 5) bruker de samme profilene.
 - [ ] **PDF under 8 MB** (innspill P8): bildene i PDF-en skaleres ned og komprimeres. Blir PDF-en likevel større, sendes en lenke eller to e-poster. Testes med rapporten med 50 bilder.
 - [ ] **«Send»-knapp** (innspill P9): rapporten sendes som vedlegg til mottakerne først når noen trykker. Status «Ferdig» settes når rapporten er sendt (innspill D16). En rettet rapport sendes manuelt av den ansvarlige (27.10.2026).
-- [ ] **Rydding av innloggingsdata:** tellere for innloggingssperren og utløpte koder slettes etter 24 timer, utløpte økter etter 30 dager. (Svar 10.11.2026, nr. 15 og 18)
+- [x] **Rydding av innloggingsdata:** tellere for innloggingssperren og utløpte koder slettes etter 24 timer, utløpte økter etter 30 dager. (Svar 10.11.2026, nr. 15 og 18) Bygd 17.11.2026 (branch `rydd-innloggingsdata`, ADR 0014, A419–A422).
 
 **Ferdig når:** Fagrådet har gått gjennom malen og reglene i et ekte skjermbilde og godkjent tekstene der, og Ståle godtar en PDF (også testutskriften med 50 bilder, under 8 MB).
 
