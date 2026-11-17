@@ -68,16 +68,17 @@ Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4�
 
 ## Oppgaver fra testlaget
 
-Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 14.11.2026 på main a1ca41d9 (det som var nytt siden e013fde7).
+Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 17.11.2026 på main 2dc573c0 (det som var nytt siden a1ca41d9).
 
-- **Åpne alvorlige feil: 0 (venter på bekreftelse).** T-0050 (arealtypen i «Legg til rom» hopper tilbake etter feilmelding og lagres feil) er rettet i forsøk 2 på branchen `rett-t0050-arealtype` (versjon 0.12.3, 14.11.2026): «Arealtype» og «Under terreng» i `RoomForm` er ustyrte felt, så tilbakestillingen etter et forsøk ikke lenger setter listen til BRA-i. Gjelder «Legg til rom» og «Endre rom». Testlaget prøver igjen etter merge.
-- Åpne funn i alt: 80 (0 alvorlige, 23 middels, 57 små; T-0050 venter på bekreftelse). Nye denne gangen: T-0069–T-0091. Middels og små tas med neste oppgave i samme område. Lukket denne gangen: T-0018, T-0029 og T-0052.
+- **Åpne alvorlige feil: 0.** T-0050 er rettet bekreftet (tredje prøve) og lukket.
+- Åpne funn i alt: 101 (0 alvorlige, 28 middels, 73 små). Nye denne gangen: T-0092–T-0112 (5 middels, 16 små). Middels og små tas med neste oppgave i samme område. Lukket denne gangen: T-0050.
+- **Middels, nye:** T-0092 (bytte av romtype overskriver arealtypen), T-0093 (to like tilbud ved tapt svar), T-0094 (matrikkel med null foran vaskes ikke før KI), T-0105 (postnummer og sted må skrives på nytt), T-0106 (bestilling og eiendom med ulik adresse uten varsel).
 - **Før «klar for drift»:** T-0070 (utløpt innlogging sletter skjema) og T-0071 (engelsk feilside når nettet faller).
-- **Plan og beslutninger:** T-0072 (Ståles ja til varsel om like kontakter og firma falt ut av T3), T-0078 (DPIA-punktet skrevet om).
+- **Plan og beslutninger:** T-0072, T-0078 og T-0098 (DPIA-punktet), T-0096 og T-0101 (beslutninger ikke merket endret eller dyre), T-0103 (spørsmål 82 brukt to ganger).
 - **Før «Badet på PC»:** T-0051, T-0059 og T-0060, og T-0014 (punkt 1 og 5) i 2a-3.
-- **Må tas før ekte KI slås på:** T-0044, T-0046, T-0047, T-0034 og T-0038 (uendret).
-- Fortsatt feil etter retting: T-0050 (forsøk 2), T-0021 (forsøk 2) og T-0003 (forsøk 1).
-- Til testlagets oppsett: testlaget trenger en admin i prøveorganisasjonen (admin fra seed havner i «Byggcon», så avtaler kan ikke prøves sammen med kontorbrukeren). Kontrollpunkter, avvik, bilder, fraser og PDF har ingen skjerm ennå og er ikke prøvd.
+- **Må tas før ekte KI slås på:** T-0044, T-0046, T-0047, T-0034, T-0038, og nå T-0094, T-0110 og T-0111.
+- Fortsatt feil etter retting: T-0021 (forsøk 2) og T-0003 (forsøk 1). Ser rettet ut, men er ikke meldt rettet: T-0031 og T-0075 (sett status «rettet», så prøver testlaget dem).
+- Til testlagets oppsett: testbrukerne trenger kontor og en admin, klargjøringen bør kjøre `pnpm db:seed:testdata` i Byggcon lokalt, og vurder å slå på den falske KI-tjenesten i Byggcon lokalt. Uten dette ble forhåndsvalgt kontor, admin-skjermene og KI-kortet i nettleseren ikke prøvd 17.11. Kontrollpunkter, avvik, bilder, fraser og PDF har ingen skjerm ennå.
 
 ## Oppgaver fra nattløkken
 
