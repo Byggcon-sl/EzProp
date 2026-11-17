@@ -8,7 +8,7 @@ import { isUuid } from "@/shared/lib/uuid";
 import { errorResult, failure, type KnownError } from "../../action-result";
 import { getEmployeeContext } from "../../employee-context";
 import { NO_ACCESS, type FormState } from "../../form-state";
-import { readOrderValues } from "../../ordre/order-values";
+import { readOrderValues } from "../../order-values";
 import { ASSIGNMENT_CHANGED_MESSAGE } from "./booking-values";
 
 /*

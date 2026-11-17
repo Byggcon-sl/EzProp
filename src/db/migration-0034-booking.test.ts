@@ -273,7 +273,7 @@ afterAll(async () => {
     await admin.end();
   }
   if (partialFolder) rmSync(partialFolder, { recursive: true, force: true });
-});
+}, 60_000);
 
 function errorText(error: unknown): string {
   const parts: string[] = [];
@@ -395,7 +395,13 @@ describe("3.2 migreringen 0034", () => {
 
   it("3.2.8 kjører to ganger uten feil, og journalen har 0034 én gang", () => {
     expect(thirdRunError).toBeNull();
-    expect(journalAfterThird).toHaveLength(35);
-    expect(new Set(journalAfterThird).size).toBe(35);
+    // Alle migreringene i mappen (også de som kom etter 0034), hver én gang
+    const all = (
+      JSON.parse(readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8")) as {
+        entries: unknown[];
+      }
+    ).entries.length;
+    expect(journalAfterThird).toHaveLength(all);
+    expect(new Set(journalAfterThird).size).toBe(all);
   });
 });

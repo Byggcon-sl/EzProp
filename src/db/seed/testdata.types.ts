@@ -2,7 +2,7 @@ import type { AssignmentStatus, PartyInput, PartyRole } from "@/core/assignments
 import type { AreaType, MeasuringMethod, RoomType } from "@/core/buildings";
 import type { ClaimOutcome, ClaimType } from "@/core/claims";
 import type { FirmType } from "@/core/contacts";
-import type { OrderInput } from "@/core/orders";
+import type { OfferRejectionReasonKey, OrderInput } from "@/core/orders";
 import type { CertificationArea } from "@/core/organization/certification-rules";
 import type {
   CommonAreasInput,
@@ -227,6 +227,17 @@ export type TestdataOrder = {
   orderedByContactKey: string | null;
   fields: TestdataOrderFields;
   converted: false | { assignment: TestdataAssignment };
+  /**
+   * Tilbudet før det er gjort om (ADR 0012). `validUntil` er «Gyldig til» (`YYYY-MM-DD`, regnet
+   * fra ankeret), `null` gir i dag + 30 fra mottatt. `rejection` avslår tilbudet med fast grunn.
+   * `null` for ordre som blir gjort om.
+   */
+  offer: TestdataOffer | null;
+};
+
+export type TestdataOffer = {
+  validUntil: string | null;
+  rejection: { reasonKey: OfferRejectionReasonKey; reasonText: string | null } | null;
 };
 
 export type TestdataPlan = {

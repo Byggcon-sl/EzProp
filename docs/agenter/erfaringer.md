@@ -286,3 +286,10 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Når kjernen får en ny form (her `kind` for ordre eller oppdrag), sjekk alle gamle lesesteder som filtrerer bort det nye tilfellet (`orderId === null` på ordresiden). Testskriverens testsaker på tvers av tabeller fant det.
 - En retter skal ikke endre vedtatte skjermkrav. Gi den et konkret valg (her: behold dato og tekst, ta bare med de manglende treffene).
 
+**PR #217 («Tilbud i stedet for ordre», 17.11.2026):**
+- Når en side flyttes (her `/ordre` → `/tilbud`), søk gjennom alle e2e-filer etter den gamle adressen og de gamle hjelperne før PR. Tolv eldre specer laget oppdrag via `/ordre/ny` og ga 193 røde e2e-tester; én felles hjelper i `e2e/helpers.ts` rettet dem.
+- Ny påkrevd kolonne: søk etter rå `insert into <tabell>` i `e2e/` og `tests/`, ikke bare i fabrikkene.
+- E2e som ser etter et nytt element i en liste, bør søke eller filtrere på det, ikke regne med at det står på første side (testdatabasen i CI har hundrevis av rader).
+- Fullt `pnpm test` lokalt tar mer enn 25 minutter; kjør de berørte filene lokalt og la CI kjøre alt.
+- Personverntesten `booking-ai-no-leak.test.ts` kan feile tilfeldig når tallmerket (for eksempel «7772») står inni en id i loggradene. Den skal ikke svekkes av en retter; se funnet i tilstand.
+

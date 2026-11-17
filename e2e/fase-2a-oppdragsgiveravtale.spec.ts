@@ -4,15 +4,16 @@ import {
   assignmentAgreementId,
   assignmentEventCount,
   clientAgreementsByName,
+  convertOfferWithOneTap,
   createClientAgreementRow,
   createFirmWithContact,
   logIn,
   logInAsInspector,
   restoreInspectorsEditAll,
+  saveNewOffer,
   setInspectorsEditAll,
   softDeleteFirms,
   uniqueSuffix,
-  convertedAssignmentLink,
 } from "./helpers";
 
 /*
@@ -38,9 +39,6 @@ import {
  */
 
 const PORTRAIT = { width: 834, height: 1194 } as const;
-const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
-const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
 const EVENT = "assignment.agreement_changed";
 const PREMISE = "Premiss for test. Ikke ekte tekst.";
 const PROFILE = "test-profil";
@@ -111,9 +109,9 @@ function saveAgreementButton(page: Page): Locator {
   return page.getByRole("button", { name: "Lagre avtalen", exact: true });
 }
 
-/** Ny ordre med unik adresse, valgfritt med bestiller fra registeret → gjør om → oppdraget. */
+/** Nytt tilbud med unik adresse, valgfritt med bestiller fra registeret → gjør om → oppdraget. */
 async function newAssignment(page: Page, ordererLastName?: string): Promise<string> {
-  await page.goto("/ordre/ny");
+  await page.goto("/tilbud/ny");
   await page.getByLabel(/^Adresse/).fill(`Avtaleveien 3 ${uniqueSuffix()}, 8000 Bodø`);
   if (ordererLastName) {
     await page.getByLabel(/^Søk i kontakter/).fill(ordererLastName);
@@ -122,14 +120,8 @@ async function newAssignment(page: Page, ordererLastName?: string): Promise<stri
     await hit.click();
     await expect(page.getByText(new RegExp(`Koblet til .*${ordererLastName}`))).toBeVisible();
   }
-  await page.getByRole("button", { name: "Lagre", exact: true }).click();
-  await expect(page).toHaveURL(ORDER_URL);
-  await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
-  await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(convertedAssignmentLink(page)).toBeVisible();
-  await convertedAssignmentLink(page).click();
-  await expect(page).toHaveURL(ASSIGNMENT_URL);
-  return ASSIGNMENT_URL.exec(page.url())![1]!;
+  await saveNewOffer(page);
+  return convertOfferWithOneTap(page);
 }
 
 /** Fyller skjemaet for ny avtale. */

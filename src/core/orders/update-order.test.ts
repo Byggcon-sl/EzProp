@@ -33,7 +33,7 @@ import {
 } from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { ORDER_EDITABLE_FIELDS } from "./codes";
-import { OrderChangedError } from "./errors";
+import { OfferValidUntilLockedError, OrderChangedError } from "./errors";
 import {
   convertOrderToAssignment,
   createOrder,
@@ -78,7 +78,7 @@ const RECEIVED_AT = "2026-11-02T08:00:00.000Z";
 const NEW_RECEIVED_AT = "2026-11-01T07:30:00.000Z";
 const LEAK_GNR = "98761";
 const LEAK_BNR = "43219";
-const CONFLICT_MESSAGE = "Ordren er endret av en annen. Last siden på nytt.";
+const CONFLICT_MESSAGE = "Tilbudet er endret av en annen. Last siden på nytt.";
 
 /** Verdier som aldri skal stå i applikasjonslogg, hendelse eller feilmelding. */
 const SECRET_VALUES = [
@@ -784,7 +784,10 @@ describe("2.4 endring", () => {
   it("2.4.3 avvist ordre kan endres; status og avvisningsgrunnen står", async () => {
     const { org, admin } = await orgWithAdmin();
     const order = await savedOrder(admin, org.id);
-    await rejectOrder(admin, org.id, order.id, "Feil registrering");
+    await rejectOrder(admin, org.id, order.id, {
+      reasonKey: "other",
+      reasonText: "Feil registrering",
+    });
     const rejected = await orderRow(order.id);
 
     await updateOrder(
@@ -1125,7 +1128,10 @@ describe("2.5 låsen med row_version", () => {
   it("2.5.3 versjonen fra før avvisning gir OrderChangedError; ordren er uendret", async () => {
     const { org, admin } = await orgWithAdmin();
     const order = await savedOrder(admin, org.id);
-    await rejectOrder(admin, org.id, order.id, "Feil registrering");
+    await rejectOrder(admin, org.id, order.id, {
+      reasonKey: "other",
+      reasonText: "Feil registrering",
+    });
     const before = await snapshot(org.id, order.id);
     expect(before.order.rowVersion).toBeGreaterThan(order.rowVersion);
 
@@ -1610,7 +1616,10 @@ describe("2.7 endringene på ordren", () => {
   it("2.7.1 avvist ordre har raden reject", async () => {
     const { org, admin } = await orgWithAdmin();
     const order = await savedOrder(admin, org.id);
-    await rejectOrder(admin, org.id, order.id, "Feil registrering");
+    await rejectOrder(admin, org.id, order.id, {
+      reasonKey: "other",
+      reasonText: "Feil registrering",
+    });
     const history = await listOrderHistory(admin, org.id, order.id);
     expect(history.map((row) => row.action)).toEqual(["reject", "create"]);
   });
@@ -1781,5 +1790,281 @@ describe("2.7 endringene på ordren", () => {
     expect(detail.rowVersion).toBe(order.rowVersion);
     await changeAddress(admin, org.id, order.id, NEW_ADDRESS);
     expect((await getOrder(admin, org.id, order.id)).rowVersion).toBe(order.rowVersion + 1);
+  });
+});
+
+/*
+ * «Gyldig til» på tilbudet (ADR 0012, A327, A328; testplan 3.3.4, 3.6 og 7.1.2–7.1.4). Fast tid:
+ * TEST_NOW, så «i dag» er 2026-11-03.
+ * Støtter hovedmål: de ansatte (et utløpt tilbud blir åpent igjen med ny dato, uten ny
+ * statusovergang) og færre reklamasjoner (datoen kan ikke endres på et avslått eller gjort-om
+ * tilbud, og endringen står i historikken).
+ */
+describe("3.6 «Gyldig til» på tilbudet", () => {
+  const LOCKED = "Gyldig til kan bare endres på åpne og utløpte tilbud.";
+
+  async function setupOffer(overrides: Record<string, unknown> = {}) {
+    const org = await createOrganization("Oppdiktet Takst");
+    const office = await createOffice(org.id);
+    const admin = await createUser({ name: "Test Admin" });
+    await createEmployee(admin, org.id, ["admin"]);
+    const offer = await insertOrder(org.id, {
+      addressText: OLD_ADDRESS,
+      validUntil: "2026-10-20",
+      ...overrides,
+    });
+    return { org, office, admin, offer };
+  }
+
+  async function row(id: string) {
+    const [found] = await db.select().from(orders).where(eq(orders.id, id));
+    if (!found) throw new Error("fant ikke tilbudet");
+    return found;
+  }
+
+  it("3.6.1 og 3.6.2 utløpt tilbud får ny dato, er åpent igjen, og endringen står i historikken", async () => {
+    const { org, admin, offer } = await setupOffer();
+    expect((await getOrder(admin, org.id, offer.id, NOW)).displayStatus).toBe("expired");
+    const updated = await updateOrder(
+      admin,
+      org.id,
+      offer.id,
+      { addressText: OLD_ADDRESS, validUntil: "2026-11-13" },
+      offer.rowVersion,
+      NOW,
+    );
+    expect(updated.validUntil).toBe("2026-11-13");
+    expect(updated.rowVersion).toBe(offer.rowVersion + 1);
+    expect((await getOrder(admin, org.id, offer.id, NOW)).displayStatus).toBe("open");
+
+    const [entry] = await listOrderHistory(admin, org.id, offer.id);
+    expect(entry).toMatchObject({
+      action: "update",
+      actorName: "Test Admin",
+      fields: ["validUntil"],
+      values: [{ field: "validUntil", from: "2026-10-20", to: "2026-11-13" }],
+    });
+    const [event] = await db.select().from(events).where(eq(events.type, "order.updated"));
+    expect(event?.data).toEqual({ orderId: offer.id, fields: ["validUntil"] });
+  });
+
+  it("3.6.3 historikken på oppdraget viser aldri validUntil (listen sendes inn)", async () => {
+    const { org, office, admin, offer } = await setupOffer();
+    await updateOrder(
+      admin,
+      org.id,
+      offer.id,
+      { addressText: NEW_ADDRESS, validUntil: "2026-11-13" },
+      offer.rowVersion,
+      NOW,
+    );
+    const { assignment } = await convertOrderToAssignment(admin, org.id, offer.id, {
+      officeId: office.id,
+      now: NOW,
+    });
+    // En loggrad på oppdraget med validUntil (skrevet for hånd) vises ikke
+    await db.insert(auditLog).values({
+      organizationId: org.id,
+      entityType: "assignment",
+      entityId: assignment.id,
+      action: "update",
+      changes: {
+        fields: ["validUntil", "addressText"],
+        values: {
+          validUntil: { from: "2026-10-20", to: "2026-11-13" },
+          addressText: { from: OLD_ADDRESS, to: NEW_ADDRESS },
+        },
+      },
+    } as typeof auditLog.$inferInsert);
+    const { listAssignmentBookingHistory } = await import("@/core/assignments");
+    const history = await listAssignmentBookingHistory(admin, org.id, assignment.id);
+    expect(history.length).toBeGreaterThan(0);
+    for (const entry of history) {
+      expect(entry.fields as string[]).not.toContain("validUntil");
+      expect(entry.values.map((value) => value.field as string)).not.toContain("validUntil");
+    }
+  });
+
+  it.each([
+    ["avslått", { status: "rejected", rejectedReasonKey: "price" }],
+    ["gjort om", "converted"],
+  ] as const)(
+    "3.6.4 %s: ny dato sammen med ny adresse avvises, og ingenting lagres",
+    async (_name, state) => {
+      const { org, admin, offer } = await setupOffer(typeof state === "object" ? state : {});
+      if (state === "converted") {
+        const assignment = await createAssignment(org.id, { orderId: offer.id });
+        await db
+          .update(orders)
+          .set({ status: "converted", assignmentId: assignment.id })
+          .where(eq(orders.id, offer.id));
+      }
+      const before = await row(offer.id);
+      const auditBefore = (await db.select().from(auditLog)).length;
+      await expect(
+        updateOrder(
+          admin,
+          org.id,
+          offer.id,
+          { addressText: NEW_ADDRESS, validUntil: "2026-11-30" },
+          before.rowVersion,
+          NOW,
+        ),
+      ).rejects.toThrow(LOCKED);
+      const after = await row(offer.id);
+      expect(after).toMatchObject({
+        addressText: OLD_ADDRESS,
+        validUntil: "2026-10-20",
+        rowVersion: before.rowVersion,
+      });
+      expect((await db.select().from(auditLog)).length).toBe(auditBefore);
+    },
+  );
+
+  it.each([
+    ["avslått", { status: "rejected", rejectedReasonKey: "price" }],
+    ["utløpt", {}],
+  ] as const)(
+    "3.6.5 og 3.6.6 %s: andre felt kan endres når datoen er uendret eller tom",
+    async (_name, state) => {
+      const { org, admin, offer } = await setupOffer(state);
+      for (const [index, validUntil] of ["2026-10-20", "", null, undefined].entries()) {
+        const current = await row(offer.id);
+        await updateOrder(
+          admin,
+          org.id,
+          offer.id,
+          { addressText: `Prøvegata ${index + 10}, 8006 Bodø`, validUntil },
+          current.rowVersion,
+          NOW,
+        );
+        const after = await row(offer.id);
+        expect(after.validUntil).toBe("2026-10-20");
+        expect(after.addressText).toBe(`Prøvegata ${index + 10}, 8006 Bodø`);
+      }
+    },
+  );
+
+  it.each([
+    ["i går", "2026-11-02", "Gyldig til kan ikke være før i dag."],
+    ["i dag + 366", "2027-11-04", "Gyldig til kan være høyst ett år fram."],
+  ])(
+    "3.6.7 ny dato %s avvises med norsk melding, og ingenting lagres",
+    async (_name, date, msg) => {
+      const { org, admin, offer } = await setupOffer();
+      const error = await updateOrder(
+        admin,
+        org.id,
+        offer.id,
+        { addressText: NEW_ADDRESS, validUntil: date },
+        offer.rowVersion,
+        NOW,
+      ).then(
+        () => null,
+        (caught: unknown) => caught,
+      );
+      expect(error).toBeInstanceOf(ZodError);
+      expect((error as ZodError).issues.map((issue) => [issue.path, issue.message])).toEqual([
+        [["validUntil"], msg],
+      ]);
+      expect(await row(offer.id)).toMatchObject({
+        addressText: OLD_ADDRESS,
+        rowVersion: offer.rowVersion,
+      });
+    },
+  );
+
+  it("3.6.8 updateAssignmentBooking godtar ikke validUntil (feltet finnes bare på tilbudet)", async () => {
+    const { org, office, admin, offer } = await setupOffer({ validUntil: "2026-11-20" });
+    const { assignment } = await convertOrderToAssignment(admin, org.id, offer.id, {
+      officeId: office.id,
+      now: NOW,
+    });
+    const { updateAssignmentBooking } = await import("@/core/assignments");
+    const [current] = await db.select().from(assignments).where(eq(assignments.id, assignment.id));
+    const result = await updateAssignmentBooking(
+      admin,
+      org.id,
+      assignment.id,
+      { addressText: OLD_ADDRESS, validUntil: "2026-12-24" } as never,
+      current!.rowVersion,
+      NOW,
+    );
+    expect(result.fields).toEqual([]);
+    expect((await row(offer.id)).validUntil).toBe("2026-11-20");
+  });
+
+  it("3.6.9 utdatert row_version gir OrderChangedError også for datoen", async () => {
+    const { org, admin, offer } = await setupOffer();
+    await expect(
+      updateOrder(
+        admin,
+        org.id,
+        offer.id,
+        { addressText: OLD_ADDRESS, validUntil: "2026-11-13" },
+        offer.rowVersion + 5,
+        NOW,
+      ),
+    ).rejects.toThrow(OrderChangedError);
+  });
+
+  it("7.1.2 og 7.1.4 «Forleng 30 dager» to ganger med samme row_version gir én endring", async () => {
+    const { org, admin, offer } = await setupOffer();
+    const extended = "2026-12-03";
+    const input = { addressText: OLD_ADDRESS, validUntil: extended };
+    await updateOrder(admin, org.id, offer.id, input, offer.rowVersion, NOW);
+    await expect(
+      updateOrder(admin, org.id, offer.id, input, offer.rowVersion, NOW),
+    ).rejects.toThrow(OrderChangedError);
+    const history = await listOrderHistory(admin, org.id, offer.id);
+    expect(history.filter((entry) => entry.fields.includes("validUntil"))).toHaveLength(1);
+    expect((await row(offer.id)).validUntil).toBe(extended);
+  });
+
+  it("7.1.3 forleng på avslått tilbud gir OfferValidUntilLockedError", async () => {
+    const { org, admin, offer } = await setupOffer({
+      status: "rejected",
+      rejectedReasonKey: "price",
+    });
+    await expect(
+      updateOrder(
+        admin,
+        org.id,
+        offer.id,
+        { addressText: OLD_ADDRESS, validUntil: "2026-12-03" },
+        offer.rowVersion,
+        NOW,
+      ),
+    ).rejects.toThrow(OfferValidUntilLockedError);
+  });
+
+  it("3.3 createOrder lagrer «Gyldig til», og uten dato blir den i dag + 30", async () => {
+    const { org, admin } = await setupOffer();
+    const given = await createOrder(
+      admin,
+      org.id,
+      { addressText: NEW_ADDRESS, validUntil: "2026-11-10" },
+      NOW,
+    );
+    expect(given.validUntil).toBe("2026-11-10");
+    for (const validUntil of [undefined, null, ""]) {
+      const created = await createOrder(
+        admin,
+        org.id,
+        { addressText: NEW_ADDRESS, validUntil },
+        NOW,
+      );
+      expect(created.validUntil).toBe("2026-12-03");
+    }
+    const before = (await db.select().from(orders)).length;
+    const eventsBefore = (await db.select().from(events)).length;
+    await expect(
+      createOrder(admin, org.id, { addressText: NEW_ADDRESS, validUntil: "2026-11-02" }, NOW),
+    ).rejects.toThrow(ZodError);
+    await expect(
+      createOrder(admin, org.id, { addressText: NEW_ADDRESS, validUntil: "2027-11-04" }, NOW),
+    ).rejects.toThrow(ZodError);
+    expect((await db.select().from(orders)).length).toBe(before);
+    expect((await db.select().from(events)).length).toBe(eventsBefore);
   });
 });

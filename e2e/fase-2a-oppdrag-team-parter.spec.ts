@@ -9,8 +9,8 @@ import {
   logIn,
   logInAsInspector,
   ensureInspector,
-  uniqueSuffix,
   convertedAssignmentLink,
+  newAssignmentFromOffer,
 } from "./helpers";
 
 /*
@@ -35,7 +35,6 @@ import {
 
 const PORTRAIT = { width: 834, height: 1194 } as const;
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
 const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
 const NUMBER = /\d{4}-\d{5}/;
 
@@ -139,32 +138,17 @@ async function setInspectorResponsible(page: Page, inspector: { id: string; name
   await expect(teamCurrent(page, responsible)).toHaveText(inspector.name);
 }
 
-/** Ny ordre med en unik adresse → «Gjør om til oppdrag» (Bodø). Returnerer ordre-id. */
-async function createConvertedOrder(page: Page): Promise<string> {
-  await page.goto("/ordre/ny");
-  await page.getByLabel(/^Adresse/).fill(`Testveien 12 ${uniqueSuffix()}, 8000 Bodø`);
-  await page.getByRole("button", { name: "Lagre", exact: true }).click();
-  await expect(page).toHaveURL(ORDER_URL);
-  const orderId = ORDER_URL.exec(page.url())![1]!;
-
-  await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
-  await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(convertedAssignmentLink(page)).toBeVisible();
-  return orderId;
-}
-
-/** Fra ordresiden: lenken til oppdraget. Returnerer oppdrags-id. */
+/** Fra tilbudssiden: lenken til oppdraget. Returnerer oppdrags-id. */
 async function openAssignmentFromOrder(page: Page): Promise<string> {
   await convertedAssignmentLink(page).click();
   await expect(page).toHaveURL(ASSIGNMENT_URL);
   return ASSIGNMENT_URL.exec(page.url())![1]!;
 }
 
-/** Ny ordre → gjør om → åpne oppdraget. */
+/** Nytt tilbud med en unik adresse → «Gjør om til oppdrag» (Bodø) → oppdraget er åpent. */
 async function newAssignment(page: Page): Promise<{ orderId: string; assignmentId: string }> {
-  const orderId = await createConvertedOrder(page);
-  const assignmentId = await openAssignmentFromOrder(page);
-  return { orderId, assignmentId };
+  const { offerId, assignmentId } = await newAssignmentFromOffer(page);
+  return { orderId: offerId, assignmentId };
 }
 
 /** Skjemaet «Legg til part». Åpner det først hvis «Legg til part» er en knapp. */
@@ -207,8 +191,8 @@ test.describe("team og parter på oppdraget (pc og ipad)", () => {
     await expect(main).toContainText("Bodø");
     await expect(main.getByText("Bestilt", { exact: true }).first()).toBeVisible();
 
-    await main.getByRole("link", { name: "Ordren", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/ordre/${orderId}$`));
+    await main.getByRole("link", { name: "Tilbudet", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/tilbud/${orderId}$`));
 
     await openAssignmentFromOrder(page);
     expect(page.url()).toContain(`/oppdrag/${assignmentId}`);
@@ -653,8 +637,8 @@ test.describe("statusflyten på oppdraget (pc og ipad)", () => {
     await cancelWithReason(page, CANCEL_REASON);
     await expect(page).toHaveURL(WORK_QUEUE_URL);
 
-    // 5.4 ordresiden
-    const orderUrl = `/ordre/${orderId}`;
+    // 5.4 tilbudssiden
+    const orderUrl = `/tilbud/${orderId}`;
     expectNoServerError(await page.goto(orderUrl), orderUrl);
     await expect(page.getByRole("main")).toContainText(
       `Gjort om til oppdrag ${number} (kansellert)`,

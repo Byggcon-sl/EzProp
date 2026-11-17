@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  date,
   foreignKey,
   index,
   pgTable,
@@ -17,7 +18,9 @@ import { baseColumns } from "./common";
 import { contacts, firms } from "./contacts";
 
 /**
- * Ordren: bestillingen slik den kom inn (docs/05-domenemodell.md 4.3). Lagt inn for hånd fra
+ * Ordren, som heter «Tilbud» i grensesnittet (ADR 0012): en mulig jobb som kan gjøres om til
+ * oppdrag, avslås med grunn eller gå ut på dato. Tabellen, kolonnene og de faste kodene beholder
+ * navnene sine. Bestillingen slik den kom inn (docs/05-domenemodell.md 4.3). Lagt inn for hånd fra
  * e-posten nå (`source = manual`); `email` er kroken for e-post-til-ordre senere (KI først).
  * Adresse, matrikkel, borettslag og bestiller er tekst til eiendom og kontakter får egne
  * tabeller (A51). En avvist ordre blir stående med grunn (A55); den slettes ikke.
@@ -29,6 +32,12 @@ export const orders = pgTable(
   {
     ...baseColumns,
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * «Gyldig til» (ADR 0012): siste dag tilbudet er åpent, som ren norsk dato. Uten standardverdi
+     * i databasen; forslaget (i dag + `OFFER_VALID_DAYS`) settes i kjernen. «Utløpt» lagres ikke
+     * som status, det regnes ut fra denne datoen og dagens dato (`isOfferExpired`).
+     */
+    validUntil: date("valid_until", { mode: "string" }).notNull(),
     source: text("source").notNull().default("manual"),
     /** Ordrenummer eller referanse fra megleren. */
     externalRef: text("external_ref"),
@@ -48,6 +57,13 @@ export const orders = pgTable(
     sellerDeclarationReceived: boolean("seller_declaration_received").notNull().default(false),
     status: text("status").notNull().default("received"),
     rejectedReason: text("rejected_reason"),
+    /**
+     * Fast grunn for avslaget (F4, ADR 0012): `price`, `timing`, `chose_other`,
+     * `customer_withdrew` eller `other`. Kodene står i `OFFER_REJECTION_REASON_KEYS`
+     * (`@/core/orders/codes`) og i CHECK-regelen under. Fritekst (`rejected_reason`) er påkrevd
+     * bare ved `other`. Avslag fra før migrering 0035 har `other` og teksten sin.
+     */
+    rejectedReasonKey: text("rejected_reason_key"),
     assignmentId: uuid("assignment_id"),
   },
   // Returtypen står fordi tabellene peker på hverandre (ellers klarer ikke TypeScript typene).
@@ -55,6 +71,11 @@ export const orders = pgTable(
     // Mål for sammensatte fremmednøkler fra andre tabeller (samme organisasjon)
     uniqueIndex("orders_organization_id_id_idx").on(table.organizationId, table.id),
     index("orders_organization_id_received_at_idx").on(table.organizationId, table.receivedAt),
+    // Tilbudslisten «Åpne» og «Utløpt» og tellingen (ADR 0012): status og «gyldig til» for
+    // tilbud som ikke er slettet.
+    index("orders_organization_id_status_valid_until_idx")
+      .on(table.organizationId, table.status, table.validUntil)
+      .where(sql`${table.deletedAt} is null`),
     // Oppslag fra oppdraget til ordren (arbeidskøen, oppdraget, eiendommen). Nattløkken 12.11.2026.
     index("orders_organization_id_assignment_id_idx").on(table.organizationId, table.assignmentId),
     // Oppdraget må høre til samme organisasjon som ordren. `AnyPgColumn` fordi tabellene peker
@@ -94,10 +115,15 @@ export const orders = pgTable(
       sql`${table.requestedReportType} in ('condition_report')`,
     ),
     check("orders_status_check", sql`${table.status} in ('received', 'converted', 'rejected')`),
-    // Avvist krever grunn
+    // Avslått krever fast grunn, og «Annet» krever tekst (F4, migrering 0035)
     check(
       "orders_rejected_reason_check",
-      sql`${table.status} <> 'rejected' or length(trim(coalesce(${table.rejectedReason}, ''))) > 0`,
+      sql`${table.status} <> 'rejected' or (${table.rejectedReasonKey} is not null and (${table.rejectedReasonKey} <> 'other' or length(trim(coalesce(${table.rejectedReason}, ''))) > 0))`,
+    ),
+    // De faste avslagsgrunnene. En arkivert kode blir stående her (regel 6).
+    check(
+      "orders_rejected_reason_key_check",
+      sql`${table.rejectedReasonKey} is null or ${table.rejectedReasonKey} in ('price', 'timing', 'chose_other', 'customer_withdrew', 'other')`,
     ),
     // Gjort om krever oppdrag, og bare en ordre som er gjort om, peker på et oppdrag
     check(

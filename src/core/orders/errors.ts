@@ -1,7 +1,7 @@
 /** Ordren er alt avvist eller gjort om til oppdrag. Ingenting er endret. */
 export class OrderAlreadyHandledError extends Error {
   constructor() {
-    super("Ordren er allerede behandlet.");
+    super("Tilbudet er allerede behandlet.");
     this.name = "OrderAlreadyHandledError";
   }
 }
@@ -12,8 +12,19 @@ export class OrderAlreadyHandledError extends Error {
  */
 export class OrderChangedError extends Error {
   constructor() {
-    super("Ordren er endret av en annen. Last siden på nytt.");
+    super("Tilbudet er endret av en annen. Last siden på nytt.");
     this.name = "OrderChangedError";
+  }
+}
+
+/**
+ * «Gyldig til» ble forsøkt endret på et tilbud som er gjort om til oppdrag eller avslått
+ * (ADR 0012). Ingenting er lagret. Meldingen har aldri verdier fra tilbudet.
+ */
+export class OfferValidUntilLockedError extends Error {
+  constructor() {
+    super("Gyldig til kan bare endres på åpne og utløpte tilbud.");
+    this.name = "OfferValidUntilLockedError";
   }
 }
 

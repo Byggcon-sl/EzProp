@@ -62,9 +62,9 @@ async function insertAssignments(
     const number = `E2E-${suffix}-${String(index + 1).padStart(3, "0")}`;
     await sql`
       insert into orders (id, organization_id, address_text, received_at, source, status,
-        requested_report_type)
+        requested_report_type, valid_until)
       values (${orderId}, ${organizationId}, ${address}, now(), 'manual', 'received',
-        'condition_report')`;
+        'condition_report', (now() at time zone 'Europe/Oslo')::date + 30)`;
     await sql`
       insert into assignments (id, organization_id, number, office_id, assignment_type, status,
         order_id, due_date, inspection_at, address_text, received_at, source)

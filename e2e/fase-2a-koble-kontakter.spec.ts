@@ -1,5 +1,12 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { convertedAssignmentLink, fakeValidOrgNumber, logIn, uniqueSuffix } from "./helpers";
+import {
+  convertOfferWithOneTap,
+  fakeValidOrgNumber,
+  logIn,
+  OFFER_URL,
+  saveNewOffer,
+  uniqueSuffix,
+} from "./helpers";
 
 /*
  * Koble partene og bestilleren til kontakter og firma (fase 2a).
@@ -24,8 +31,6 @@ const PORTRAIT = { width: 834, height: 1194 } as const;
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const FIRM_URL = new RegExp(`/firma/(${UUID})$`);
 const CONTACT_URL = new RegExp(`/kontakter/(${UUID})$`);
-const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
-const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
 const NO_HITS = "Ingen kontakter passer.";
 
 function mainNav(page: Page): Locator {
@@ -81,18 +86,12 @@ async function createContactViaUi(page: Page, contact: Contact): Promise<string>
   return CONTACT_URL.exec(page.url())![1]!;
 }
 
-/** Ny ordre med unik adresse → «Gjør om til oppdrag» (Bodø) → åpne oppdraget. */
+/** Nytt tilbud med unik adresse → «Gjør om til oppdrag» (Bodø) → åpne oppdraget. */
 async function newAssignment(page: Page): Promise<string> {
-  await page.goto("/ordre/ny");
+  await page.goto("/tilbud/ny");
   await page.getByLabel(/^Adresse/).fill(`Testveien 12 ${uniqueSuffix()}, 8000 Bodø`);
-  await saveButton(page).click();
-  await expect(page).toHaveURL(ORDER_URL);
-  await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
-  await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(convertedAssignmentLink(page)).toBeVisible();
-  await convertedAssignmentLink(page).click();
-  await expect(page).toHaveURL(ASSIGNMENT_URL);
-  return ASSIGNMENT_URL.exec(page.url())![1]!;
+  await saveNewOffer(page);
+  return convertOfferWithOneTap(page);
 }
 
 function partiesSection(page: Page): Locator {
@@ -226,25 +225,25 @@ test.describe("koble partene og bestilleren til kontakter (pc og ipad)", () => {
     }
     if (isIpad) await expectNoHorizontalScroll(page, "oppdragssiden etter lagring (stående)");
 
-    // 8. Ny ordre med bestiller fra registeret: «Bestilt av» blir «Navn, Firma»
+    // 8. Nytt tilbud med bestiller fra registeret: «Bestilt av» blir «Navn, Firma»
     if (isIpad) await page.setViewportSize({ width: 1194, height: 834 });
-    await page.goto("/ordre/ny");
+    await page.goto("/tilbud/ny");
     await page.getByLabel(/^Adresse/).fill(`Testveien 14 ${suffix}, 8000 Bodø`);
     await searchBox(page).fill(contact.lastName);
     await expect(hit(page, contact.lastName)).toHaveCount(1);
     if (isIpad) {
-      await expectAtLeast44(hit(page, contact.lastName), "treffet på ny ordre");
-      await expectNoHorizontalScroll(page, "/ordre/ny med trefflisten (liggende)");
+      await expectAtLeast44(hit(page, contact.lastName), "treffet på nytt tilbud");
+      await expectNoHorizontalScroll(page, "/tilbud/ny med trefflisten (liggende)");
       await page.setViewportSize(PORTRAIT);
-      await expectNoHorizontalScroll(page, "/ordre/ny med trefflisten (stående)");
+      await expectNoHorizontalScroll(page, "/tilbud/ny med trefflisten (stående)");
     }
     await hit(page, contact.lastName).click();
     await expect(page.locator('[name="orderedByText"]')).toHaveValue(`${fullName}, ${firmName}`);
     await expect(page.getByText(`Koblet til ${fullName}`)).toBeVisible();
     await saveButton(page).click();
-    await expect(page).toHaveURL(ORDER_URL);
+    await expect(page).toHaveURL(OFFER_URL);
 
-    // 9. Ordresiden lenker til kontakten
+    // 9. Tilbudssiden lenker til kontakten
     const contactLink = page.getByRole("main").locator(`a[href="/kontakter/${contactId}"]`);
     await expect(contactLink).toBeVisible();
     await contactLink.click();

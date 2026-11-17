@@ -1,11 +1,12 @@
 import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 import {
-  convertedAssignmentLink,
+  convertOfferWithOneTap,
   ensureInspector,
   logIn,
   logInAsInspector,
   restoreInspectorsEditAll,
   roomsOnAssignment,
+  saveNewOffer,
   setInspectorsEditAll,
   uniqueSuffix,
 } from "./helpers";
@@ -30,9 +31,6 @@ import {
  * (valget må ikke gjøres på nytt etter en feil).
  */
 
-const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
-const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
 const BUILDING = "Bolighus";
 const FLOOR = "1. etasje";
 const BAD_NAME = "12345678901";
@@ -69,21 +67,15 @@ async function clickAndWaitForSave(page: Page, target: Locator) {
   expect(response.status(), "lagringen gir ikke 500").toBeLessThan(500);
 }
 
-/** Admin: ordre → oppdrag (Bodø) → eiendom → bygning «Bolighus» → «1. etasje» (nummer 1). */
+/** Admin: tilbud → oppdrag (Bodø) → eiendom → bygning «Bolighus» → «1. etasje» (nummer 1). */
 async function prepareAssignment(page: Page): Promise<string> {
   await logIn(page);
-  await page.goto("/ordre/ny");
+  await page.goto("/tilbud/ny");
   await page.getByLabel(/^Adresse/).fill(`Testveien 1 ${uniqueSuffix()}`);
   await page.getByLabel(/^Gårdsnummer/).fill("999");
   await page.getByLabel(/^Bruksnummer/).fill("999");
-  await button(page, "Lagre").click();
-  await expect(page).toHaveURL(ORDER_URL);
-  await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
-  await button(page, "Gjør om til oppdrag").click();
-  await expect(convertedAssignmentLink(page)).toBeVisible();
-  await convertedAssignmentLink(page).click();
-  await expect(page).toHaveURL(ASSIGNMENT_URL);
-  const assignmentId = ASSIGNMENT_URL.exec(page.url())![1]!;
+  await saveNewOffer(page);
+  const assignmentId = await convertOfferWithOneTap(page);
 
   const property = region(page, "Eiendom");
   await property.getByLabel(/^Boligtype/).selectOption({ label: "Enebolig" });

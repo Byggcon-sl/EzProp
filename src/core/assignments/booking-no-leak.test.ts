@@ -378,7 +378,16 @@ describe("4.12.4 dublettsvaret", () => {
     expect(result.items.map((item) => item.kind).sort()).toEqual(["assignment", "order"]);
     for (const item of result.items) {
       expect(Object.keys(item).sort()).toEqual(
-        ["addressText", "id", "kind", "number", "reasons", "receivedAt", "status"].sort(),
+        [
+          "addressText",
+          "displayStatus",
+          "id",
+          "kind",
+          "number",
+          "reasons",
+          "receivedAt",
+          "status",
+        ].sort(),
       );
     }
     // Adressen vises på skjermen i samme organisasjon (A290); ingen andre merker

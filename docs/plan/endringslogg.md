@@ -97,3 +97,5 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 14.11.2026 | S10 gjort: Ståle bekrefter at avtalen med IVIT tillater at Byggcon tar med seg frasene fra IVIT-malene. | Ståle i chat 14.11.2026 |
 | 14.11.2026 | Raskere utvikling: tre oppgaver samtidig i hovedløkken, og lett prosess for små oppgaver i arbeidsflyten `oppgave`. | Ståle i chat 14.11.2026 |
 | 16.11.2026 | Kvalitetstall som måles løpende lagt til i fase 3a (sju i kjernesettet og tre til), med hvem som ser hva, og S11 (drøfting med de ansatte før tall per person vises). Lederdashbordet viser tallene over tid. | Ståle i chat 16.11.2026 |
+| 16.11.2026 | Flere PDF-utgaver av samme rapport: PDF-profiler med ulik layout, design og farger fra de samme dataene, knyttet til kunde eller segment (2a-3). Kravet til PDF-motoren (2a-2) utvidet. | Ståle i chat 16.11.2026 |
+| 16.11.2026 | Endelig rapport lagres som låst PDF med versjonslogg; bare admin kan slette (myk sletting med begrunnelse, 10 år). Utkast stemples «UTKAST» og lagres ikke (2a-3). | Ståle i chat 16.11.2026 |
