@@ -97,6 +97,7 @@ jobs:
           MS_LOGIN_CLIENT_ID: ${{ secrets.MS_LOGIN_CLIENT_ID }}
           MS_LOGIN_CLIENT_SECRET: ${{ secrets.MS_LOGIN_CLIENT_SECRET }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AUTH_CLEANUP_SECRET: ${{ secrets.AUTH_CLEANUP_SECRET }}
           ENABLE_KEY_VAULT: ${{ vars.ENABLE_KEY_VAULT == 'true' }}
           POSTGRES_SKU: ${{ vars.POSTGRES_SKU }}
           POSTGRES_LOCATION: ${{ vars.POSTGRES_LOCATION }}
@@ -119,6 +120,7 @@ jobs:
           # De fire e-postverdiene sendes alltid (tomme når de ikke er satt); Bicep bruker dem bare når alle er gitt.
           # Nøkkelen til KI-leverandøren sendes også alltid; tom betyr KI av.
           # De tre for Microsoft-innloggingen sendes alltid; uten alle tre virker bare engangskoden.
+          # Driftshemmeligheten for rydding av innloggingsdata sendes alltid; tom betyr ryddingen av (ADR 0014).
           PARAMETERE=(
             "location=$LOCATION"
             "postgresSkuName=${POSTGRES_SKU:-Standard_B1ms}"
@@ -137,6 +139,7 @@ jobs:
             "msLoginClientId=$MS_LOGIN_CLIENT_ID"
             "msLoginClientSecret=$MS_LOGIN_CLIENT_SECRET"
             "anthropicApiKey=$ANTHROPIC_API_KEY"
+            "authCleanupSecret=$AUTH_CLEANUP_SECRET"
             "enableKeyVault=$NOKKELBOKS"
           )
           az deployment group validate \

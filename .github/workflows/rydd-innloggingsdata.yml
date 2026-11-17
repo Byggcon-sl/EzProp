@@ -1,0 +1,61 @@
+# Rydding av innloggingsdata i testmiljøet (ADR 0014, docs/drift/testmiljo-azure.md).
+# Én gang i døgnet om natten kaller jobben appens interne endepunkt, som sletter tellere for
+# innloggingssperren og utløpte koder eldre enn 24 timer, og utløpte økter eldre enn 30 dager.
+# Uten driftshemmeligheten i GitHub hopper jobben over, uten feil. Ståle legger den inn selv.
+# Adressen er testmiljøets. Produksjon får egen adresse og egen hemmelighet når Ståle ruller ut dit.
+name: Rydding av innloggingsdata
+
+on:
+  schedule:
+    # Kl. 02:17 UTC hver natt. Ikke på hel time, da GitHub har mest kø.
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: rydd-innloggingsdata
+  cancel-in-progress: false
+
+jobs:
+  rydd:
+    name: Rydd innloggingsdata i testmiljøet
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Kall ryddingen
+        env:
+          # Samme GitHub-secret som «Utrulling til Azure» fører til appen.
+          AUTH_CLEANUP_SECRET: ${{ secrets.AUTH_CLEANUP_SECRET }}
+          # Testmiljøets adresse: samme kilde som utrullingen (egen adresse i APP_HOSTNAME,
+          # ellers appens standardadresse i Azure, app-ezprop-test).
+          APP_HOSTNAME: ${{ vars.APP_HOSTNAME || '' }}
+          DEFAULT_TEST_URL: https://app-ezprop-test.azurewebsites.net
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$AUTH_CLEANUP_SECRET" ]; then
+            echo "::notice::Ingen driftshemmelighet (AUTH_CLEANUP_SECRET) i GitHub, hopper over ryddingen. Se docs/drift/testmiljo-azure.md."
+            exit 0
+          fi
+          if [ -n "$APP_HOSTNAME" ]; then
+            URL="https://$APP_HOSTNAME"
+          else
+            URL="$DEFAULT_TEST_URL"
+          fi
+          # Hemmeligheten kommer bare fra env og skrives aldri ut. Headeren leses fra stdin
+          # (printf er innebygd i bash), så den står aldri på kommandolinjen til curl.
+          if ! SVAR=$(printf 'Authorization: Bearer %s\n' "$AUTH_CLEANUP_SECRET" | curl --fail --silent --show-error --max-time 120 -X POST \
+            -H @- \
+            "$URL/api/intern/rydd-innloggingsdata"); then
+            echo "::error::Ryddingen feilet. 404: hemmeligheten mangler eller er ulik i appen og GitHub (kjør utrullingen på nytt). 500: se appens logg. Det er ufarlig å kjøre jobben igjen."
+            exit 1
+          fi
+          # Bare antall og tidsbruk skrives til loggen.
+          # Svarer noe annet enn appen (ikke JSON), sier vi det tydelig i stedet for en jq-feil.
+          if TALL=$(echo "$SVAR" | jq -ce '{loginAttempts, verifications, sessions, durationMs}' 2>/dev/null); then
+            echo "Ryddet: $TALL"
+          else
+            echo "::error::Kallet gikk gjennom, men svaret var ikke fra appen (ikke JSON). Sjekk adressen (APP_HOSTNAME). Det er ufarlig å kjøre jobben igjen."
+            exit 1
+          fi

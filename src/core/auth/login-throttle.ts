@@ -10,7 +10,9 @@ import { logger } from "@/shared/lib/logger";
  * - 5 feil koder der eldste og nyeste er høyst 15 minutter fra hverandre gir sperre til den
  *   nyeste feilen + 15 minutter, både for innlogging og ny kode.
  * - Høyst 5 kodebestillinger per 15 minutter (glidende vindu).
- * - Riktig kode nullstiller (rad `login_succeeded`, ingenting slettes).
+ * - Riktig kode nullstiller (rad `login_succeeded`; sperren selv sletter ingenting).
+ * Radene slettes av ryddingen (`auth-cleanup.ts`) 24 timer etter `created_at`, lenge etter at de
+ * er utenfor vinduet over (ADR 0014, svar 10.11.2026 nr. 15).
  * Sperren går alltid ut av seg selv. Den leser aldri roller, så admin stenges aldri ute for godt.
  * Det finnes ingen bryter som slår den av.
  */

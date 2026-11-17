@@ -1,6 +1,6 @@
 # Lagt til av forbedreren
 
-Sist oppdatert: 16.11.2026
+Sist oppdatert: 17.11.2026
 
 Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.2026, se «Forbedreren» i `CLAUDE.md`). Listen er til for Ståle: mot slutten av utviklingen går han gjennom den og beholder, justerer eller fjerner.
 
@@ -8,6 +8,7 @@ Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.
 
 | Dato | Tillegg (det den ansatte merker) | Hvorfor | Type | Hvor (PR, oppgavekort, kode) | Slik fjernes det | Ståle |
 |---|---|---|---|---|---|---|
+| 17.11.2026 | «Mine innlogginger»: den ansatte ser enhetene hen er logget inn på og logger ut av en med ett trykk; admin kan logge en ansatt ut av alle enheter | Trygghet ved mistet iPad eller kjent misbruk uten å ringe kontoret; `sessions` holdes nå ryddig og viser bare reelle økter | nytt planpunkt | Fase 2a «Fra forbedreren» i `docs/07-utviklingsplan.md`; foreslått i PR #222 (`rydd-innloggingsdata`); ikke bygd ennå | Fjern punktet fra planen før det bygges | |
 | 16.11.2026 | Logg inn igjen i en dialog over skjemaet når innloggingen har gått ut. E-posten er fylt ut, og det som er skrevet står igjen | En lenke til innloggingssiden forlater siden og sletter verdiene; ny fane virker ikke i appen på iPad | i oppgaven | Oppgavekort `docs/agenter/oppgaver/rett-t0070-t0071.md` punkt 5; `src/app/logg-inn/sign-in-dialog.tsx`, `LoginForm` (`initialEmail`, `onSignedIn`); PR fylles inn | Fjern dialogen og bruk lenken `loginHref` i meldingen i stedet; ta bort de to egenskapene i `LoginForm` | |
 | 16.11.2026 | Melding «Du er logget ut. Logg inn før du lagrer.» når siden får fokus igjen, og «Nettet er tilbake. Trykk Lagre.» når nettet kommer tilbake | Den ansatte oppdager utlogging før han skriver, og slipper å gjette når det er trygt å lagre i kjelleren | i oppgaven | Oppgavekort punkt 4, 6 og 10; `src/app/logg-inn/use-session-check.ts`, `src/shared/forms/guarded-form-action.ts`; PR fylles inn | Fjern `use-session-check.ts` og bruken i skjemaene; fjern lytteren på `online` i hjelperen | |
 | 16.11.2026 | Feilsidene henter siden på nytt ved «Prøv igjen», sier fra når nettet er borte, har Byggcon-profilen også ved feil i rotoppsettet og store nok knapper for iPad | Uten dette kommer feilen straks tilbake, og siden ser ødelagt ut | i oppgaven | Oppgavekort punkt 9; `src/app/error.tsx`, `src/app/global-error.tsx`; PR fylles inn | Fjern `router.refresh()` og teksten uten nett fra feilsidene | |
