@@ -25,9 +25,8 @@ function RoomLine({ room }: { room: PublishPreviewRoom }) {
         {counts.map((tg) => (
           <span key={tg} className="inline-flex items-center gap-1">
             <TgBadge tg={tg} />
-            <span aria-label={PUBLISH_TEXTS.countLabel(room.tgCounts[tg])}>
-              <span aria-hidden="true">×{room.tgCounts[tg]}</span>
-            </span>
+            <span aria-hidden="true">×{room.tgCounts[tg]}</span>
+            <span className="sr-only">{PUBLISH_TEXTS.countLabel(room.tgCounts[tg])}</span>
             {tg === "3" && costs.length > 0 && (
               <span>({PUBLISH_TEXTS.tg3Cost(costs.join(", "))})</span>
             )}

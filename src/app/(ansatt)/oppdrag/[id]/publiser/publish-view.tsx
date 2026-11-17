@@ -87,15 +87,17 @@ function formatWhen(time: Date): string {
   return `${part("day")}.${part("month")}.${part("year")} kl. ${part("hour")}.${part("minute")}`;
 }
 
-/** Fokus på et element når det finnes, også når det kommer med neste tegning. */
-function focusSoon(id: string): void {
-  const tryFocus = () => {
-    const element = document.getElementById(id);
-    if (!element) return false;
+/**
+ * Fokus på et element når det finnes. Elementet kan komme med en av de neste tegningene (for
+ * eksempel «Versjon 1 er publisert» etter svaret fra serveren), så det prøves i noen bilder.
+ */
+function focusSoon(id: string, attempts = 10): void {
+  const element = document.getElementById(id);
+  if (element) {
     element.focus();
-    return true;
-  };
-  if (!tryFocus()) requestAnimationFrame(() => void tryFocus());
+    return;
+  }
+  if (attempts > 0) requestAnimationFrame(() => focusSoon(id, attempts - 1));
 }
 
 type Published = {

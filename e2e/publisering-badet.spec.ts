@@ -215,7 +215,7 @@ async function removeTg(bath: Bathroom, checkpointKey: string) {
   const db = sql();
   try {
     await db`
-      update checkpoint_results cr set tg_direct = null, row_version = row_version + 1
+      update checkpoint_results cr set tg_direct = null, row_version = cr.row_version + 1
       from checkpoints c
       where cr.checkpoint_id = c.id and cr.report_id = ${bath.reportId}
         and c.key = ${checkpointKey}`;
@@ -310,13 +310,21 @@ async function choose(scope: Locator, group: string | RegExp, option: string | R
     .click();
 }
 
-/** Teller trykk i siden (E3). */
+/**
+ * Teller trykk i siden (E3). `pointerdown`, ikke `click`: et trykk på en pille gir også et klikk
+ * på radioknappen bak etiketten.
+ */
 async function countTaps(page: Page) {
   await page.evaluate(() => {
     const w = window as unknown as { __taps?: number };
     w.__taps = 0;
-    document.addEventListener("click", () => (w.__taps = (w.__taps ?? 0) + 1), true);
+    document.addEventListener("pointerdown", () => (w.__taps = (w.__taps ?? 0) + 1), true);
   });
+}
+
+/** Trykk på hovedknappen også når den er sperret (`aria-disabled`): trykket skal forklare. */
+async function pressPublish(page: Page) {
+  await publishButton(page).click({ force: true });
 }
 
 async function taps(page: Page): Promise<number> {
@@ -461,7 +469,8 @@ test("E3 uten mangler: publisert med 2 trykk", async ({ page }) => {
   await page.getByRole("link", { name: /^Se over og publiser\./ }).click();
   await expect(publishButton(page)).toHaveText("Publiser versjon 1");
   await publishButton(page).click();
-  await expect(page.getByRole("heading", { name: "Versjon 1 er publisert" })).toBeFocused();
+  await expect(page.locator("#publish-published")).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Versjon 1 er publisert" })).toBeVisible();
   expect(await taps(page)).toBe(2);
   expect(await releaseCount(bath)).toBe(1);
 });
@@ -513,7 +522,7 @@ test("E4 sperret knapp sier hvorfor, flytter fokus, og «Annet» krever tekst", 
   await expect(button).toHaveAttribute("aria-disabled", "true");
   expect(await height(button)).toBeGreaterThanOrEqual(56);
   expect(await height(button)).toBeLessThanOrEqual(72);
-  await button.click();
+  await pressPublish(page);
   await expect(blockerCards(page).first()).toBeFocused();
 
   const card = blockerCards(page).first();
@@ -524,7 +533,7 @@ test("E4 sperret knapp sier hvorfor, flytter fokus, og «Annet» krever tekst", 
 
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
-  await choose(card, "Hvorfor publiserer du likevel?", "Annet");
+  await choose(card, "Hvorfor publiserer du likevel?", /^Annet$/);
   await expect(card.getByLabel("Skriv grunnen")).toBeFocused();
   // Den andre sperren er fortsatt åpen.
   await expect(button).toHaveText("Publiser (1 må rettes eller krysses bort)");
@@ -532,7 +541,7 @@ test("E4 sperret knapp sier hvorfor, flytter fokus, og «Annet» krever tekst", 
   await other.getByRole("switch", { name: /Publiser likevel/ }).click();
   await choose(other, "Hvorfor publiserer du likevel?", "Gjelder ikke dette rommet");
   await expect(button).toHaveText("Publiser (1 mangler grunn)");
-  await button.click();
+  await pressPublish(page);
   await expect(card.getByLabel("Skriv grunnen")).toBeFocused();
   await expect(card.getByText("Skriv minst 10 tegn.")).toBeVisible();
   await card.getByLabel("Skriv grunnen").fill(REASON_MARKER);
@@ -588,7 +597,7 @@ test("E6 «Utgivelser»: leder ser begrunnelsen, kontor ser grunnen men ikke tek
   await page.goto(publishUrl(bath));
   const card = blockerCards(page).first();
   await card.getByRole("switch", { name: /Publiser likevel/ }).click();
-  await choose(card, "Hvorfor publiserer du likevel?", "Annet");
+  await choose(card, "Hvorfor publiserer du likevel?", /^Annet$/);
   await card.getByLabel("Skriv grunnen").fill(REASON_MARKER);
   await publishButton(page).click();
   await expect(page.getByRole("heading", { name: "Versjon 1 er publisert" })).toBeVisible();
@@ -633,7 +642,7 @@ test("E7 «Venter på synk» mens en retting lagres, og uten nett en tydelig mel
   await choose(card, "TG for punktet", /TG1/);
   await expect(page.locator("#publish-bar-status")).toHaveText("Venter på synk (1 endring)");
   await expect(publishButton(page)).toHaveAttribute("aria-disabled", "true");
-  await publishButton(page).click();
+  await pressPublish(page);
   await expect(page.locator("#publish-bar-status")).toBeFocused();
   control.release();
   await expect(page.getByText(/^Rettet: /)).toBeVisible();
@@ -699,8 +708,11 @@ test("E9 ventende KI-forslag kan godtas og avvises på siden", async ({ page }) 
   await logInAsInspector(page);
   await page.goto(publishUrl(bath));
   await expect(page.getByRole("heading", { name: "Bør sees over (2)" })).toBeVisible();
-  const cards = page.locator("section").filter({ hasText: "Forslag fra KI" });
-  await cards.filter({ hasText: "som brukes" }).getByRole("button", { name: "Bruk" }).click();
+  const cards = page.getByRole("listitem").filter({ hasText: "Forslag fra KI" });
+  await cards
+    .filter({ hasText: "som brukes" })
+    .getByRole("button", { name: "Bruk", exact: true })
+    .click();
   await expect(page.getByRole("heading", { name: "Bør sees over (1)" })).toBeVisible();
   await cards
     .filter({ hasText: "som avvises" })
@@ -719,7 +731,7 @@ test("E9 endret liste: «Listen er oppdatert», grunnen står, og ny sperre merk
   await page.goto(publishUrl(bath));
   const card = blockerCards(page).first();
   await card.getByRole("switch", { name: /Publiser likevel/ }).click();
-  await choose(card, "Hvorfor publiserer du likevel?", "Annet");
+  await choose(card, "Hvorfor publiserer du likevel?", /^Annet$/);
   await card.getByLabel("Skriv grunnen").fill(REASON_MARKER);
 
   await removeTg(bath, "wet_room.fixtures");
