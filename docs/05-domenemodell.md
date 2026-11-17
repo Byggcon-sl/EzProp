@@ -2011,6 +2011,8 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Kode bestilt | `code_requested` | Noen ba om en engangskode til adressen |
 | Feil kode | `code_failed` | Et forsøk på innlogging med kode som ikke ga innlogging (feil, utløpt, ukjent adresse) |
 | Riktig kode | `login_succeeded` | Innloggingen lyktes. Bare forsøk etter denne raden telles i sperren |
+| Logget ut-svar | `signed_out` (`signedOut: true` i skjemasvaret) | Svaret fra en lagring når innloggingen er gått ut: «Du er logget ut. Logg inn igjen.» og bare de feltene skjemaet selv sendte. Gis før validering og oppslag, så en uinnlogget aldri får vite noe om data. Skjemaet står med verdiene (T-0070) |
+| Innloggingsdialog | `SignInDialog` (`src/app/logg-inn/sign-in-dialog.tsx`) | Innlogging med kode i en dialog over skjemaet, med den ansattes egen e-post fylt ut. Uten «Logg inn med Microsoft», fordi den forlater siden. Etter innlogging står skjemaet urørt, og den ansatte trykker Lagre selv (T-0070) |
 | Ramme | `app shell` (`src/app/(ansatt)/layout.tsx`) | Topplinjen og menyen rundt alle sidene for innloggede ansatte. Lik på PC og iPad; menyen står til venstre fra bredde `lg` og som rad under topplinjen på smalere skjermer |
 | Sertifisering | `certifications` | Personlig sertifisering |
 | Område (sertifisering) | `certifications.area` | Fast kode for hva sertifiseringen gjelder. Nå bare `condition_report` («Tilstandsrapport bolig») |

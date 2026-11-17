@@ -146,10 +146,13 @@ function PropertySection({
   assignmentId,
   data,
   canEdit,
+  email,
 }: {
   assignmentId: string;
   data: AssignmentProperty;
   canEdit: boolean;
+  /** Den ansattes egen e-post, til innloggingsdialogen. Aldri i en adresse. */
+  email: string;
 }) {
   const { property } = data;
   const values = propertyFormValues(data);
@@ -178,6 +181,7 @@ function PropertySection({
                 label: ownershipFormLabel(code),
               }))}
               action={savePropertyAction}
+              email={email}
             />
           ) : property ? (
             <PropertyDetails
@@ -494,7 +498,12 @@ export default async function AssignmentPage({
         action={setAgreementAction}
       />
 
-      <PropertySection assignmentId={assignment.id} data={propertyData} canEdit={canEdit} />
+      <PropertySection
+        assignmentId={assignment.id}
+        data={propertyData}
+        canEdit={canEdit}
+        email={context.actor.email}
+      />
 
       <p className="-mt-4 mb-8">
         <Link

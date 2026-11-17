@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useUndoToast, type UndoOutcome } from "@/shared/ui/undo-toast";
 import type {
   AreaSum,
@@ -16,6 +16,13 @@ import { restoreKey } from "@/shared/lib/use-restored-focus";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { Checkbox, Field, Input, Select, Textarea } from "@/shared/ui/form";
+import { SessionCheckNotice } from "../../../../logg-inn/session-check-notice";
+import {
+  GuardedForm,
+  GuardedFormMessage,
+  SignInEmailContext,
+  useGuardedForm,
+} from "../../../../logg-inn/use-guarded-form";
 import { FormErrors, SubmitButton } from "../../../form-parts";
 import { initialFormState, textValue, type FormState } from "../../../form-state";
 import {
@@ -38,6 +45,7 @@ import {
   type RemoveState,
 } from "./actions";
 
+type Action = (state: FormState, formData: FormData) => Promise<FormState>;
 type RemoveAction = (state: FormState, formData: FormData) => Promise<RemoveState>;
 type StructureType = "building" | "floor" | "room";
 
@@ -70,6 +78,15 @@ function areaInputValue(value: number | null | undefined): string {
 function labelOf(options: readonly CodeOption[], code: string | null): string {
   if (code === null) return "";
   return options.find((option) => option.value === code)?.label ?? code;
+}
+
+/**
+ * Skjemahjelperen for skjemaene på siden: uten nett eller med utløpt innlogging står verdiene,
+ * og den ansatte kan logge inn i en dialog og trykke Lagre igjen (T-0070, T-0071). Sjekken av
+ * økten når siden får fokus igjen er felles for siden (`SessionCheckNotice`).
+ */
+function useBuildingsForm(action: Action) {
+  return useGuardedForm(action, initialFormState, { sessionCheck: false });
 }
 
 /** Kaller `onSaved` når siste forsøk ble lagret uten feil. */
@@ -224,11 +241,12 @@ function BuildingForm({
   initialName: string;
   onDone: () => void;
 }) {
-  const [state, formAction] = useActionState(saveBuildingAction, initialFormState);
+  const form = useBuildingsForm(saveBuildingAction);
+  const { state } = form;
   useOnSaved(state, onDone);
   return (
-    <form action={formAction} noValidate className="space-y-4">
-      <FormErrors state={state} />
+    <GuardedForm form={form} noValidate className="space-y-4">
+      <GuardedFormMessage />
       <input type="hidden" name="assignmentId" value={assignmentId} />
       <input type="hidden" name="buildingId" value={buildingId ?? ""} />
       <Field label="Navn på bygningen" htmlFor={`${idPrefix}-name`} error={state.fieldErrors.name}>
@@ -241,7 +259,7 @@ function BuildingForm({
         />
       </Field>
       <FormButtons onCancel={onDone} />
-    </form>
+    </GuardedForm>
   );
 }
 
@@ -268,7 +286,8 @@ function FloorForm({
   existingLevels: readonly number[];
   onDone: () => void;
 }) {
-  const [state, formAction] = useActionState(saveFloorAction, initialFormState);
+  const form = useBuildingsForm(saveFloorAction);
+  const { state } = form;
   useOnSaved(state, onDone);
   const levelRef = useRef<HTMLInputElement>(null);
   const belowGroundRef = useRef<HTMLInputElement>(null);
@@ -283,8 +302,8 @@ function FloorForm({
   const belowGround =
     state.message !== null ? state.values.belowGround === "on" : initial.belowGround;
   return (
-    <form action={formAction} noValidate className="space-y-4">
-      <FormErrors state={state} />
+    <GuardedForm form={form} noValidate className="space-y-4">
+      <GuardedFormMessage />
       <input type="hidden" name="buildingId" value={buildingId} />
       <input type="hidden" name="floorId" value={floorId ?? ""} />
       <Field
@@ -330,7 +349,7 @@ function FloorForm({
         defaultChecked={belowGround}
       />
       <FormButtons onCancel={onDone} />
-    </form>
+    </GuardedForm>
   );
 }
 
@@ -357,7 +376,8 @@ function RoomForm({
   codes: Codes;
   onDone: () => void;
 }) {
-  const [state, formAction] = useActionState(saveRoomAction, initialFormState);
+  const form = useBuildingsForm(saveRoomAction);
+  const { state } = form;
   useOnSaved(state, onDone);
   const areaTypeRef = useRef<HTMLSelectElement>(null);
   const belowGroundRef = useRef<HTMLInputElement>(null);
@@ -385,8 +405,8 @@ function RoomForm({
   }
 
   return (
-    <form action={formAction} noValidate className="space-y-4">
-      <FormErrors state={state} />
+    <GuardedForm form={form} noValidate className="space-y-4">
+      <GuardedFormMessage />
       <input type="hidden" name="floorId" value={floorId} />
       <input type="hidden" name="roomId" value={roomId ?? ""} />
       <Field label="Romtype" htmlFor={`${idPrefix}-roomType`} error={state.fieldErrors.roomType}>
@@ -446,7 +466,7 @@ function RoomForm({
         defaultChecked={belowGround}
       />
       <FormButtons onCancel={onDone} />
-    </form>
+    </GuardedForm>
   );
 }
 
@@ -471,7 +491,8 @@ function FloorAreaForm({
   currentEmployeeId: string;
   codes: Codes;
 }) {
-  const [state, formAction] = useActionState(saveFloorAreaAction, initialFormState);
+  const form = useBuildingsForm(saveFloorAreaAction);
+  const { state } = form;
   const idPrefix = `area-${floorId}`;
   // En tidligere måler som har sluttet, står fortsatt som valg.
   const measurers =
@@ -483,8 +504,8 @@ function FloorAreaForm({
       : employees;
 
   return (
-    <form action={formAction} noValidate className="space-y-4">
-      <FormErrors state={state} />
+    <GuardedForm form={form} noValidate className="space-y-4">
+      <GuardedFormMessage />
       <input type="hidden" name="floorId" value={floorId} />
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
         {AREA_FIELDS.map((field) => (
@@ -559,7 +580,7 @@ function FloorAreaForm({
         />
       </Field>
       <SubmitButton size="md">Lagre areal</SubmitButton>
-    </form>
+    </GuardedForm>
   );
 }
 
@@ -926,11 +947,14 @@ export function BuildingsEditor({
   data,
   canEdit,
   codes,
+  email,
 }: {
   assignmentId: string;
   data: AssignmentBuildings;
   canEdit: boolean;
   codes: Codes;
+  /** Den ansattes egen e-post, til innloggingsdialogen. Aldri i en adresse. */
+  email?: string;
 }) {
   // Én dialog for hele siden (T-0058): id-en til etasjen som er åpen, og en teller per åpning.
   const [addRooms, setAddRooms] = useState<{ floorId: string; session: number } | null>(null);
@@ -943,65 +967,69 @@ export function BuildingsEditor({
   const addRoomsFloor = findFloor(data, addRooms?.floorId ?? null);
 
   return (
-    <div className="space-y-6">
-      <datalist id={FLOOR_NAMES_LIST}>
-        {FLOOR_NAME_SUGGESTIONS.map((name) => (
-          <option key={name} value={name} />
-        ))}
-      </datalist>
+    <SignInEmailContext value={email}>
+      <div className="space-y-6">
+        {canEdit && <SessionCheckNotice />}
 
-      {!data.hasProperty && (
-        <p className="rounded-xl bg-watch-fill px-4 py-3 text-watch-text">
-          Legg inn eiendommen først.
-        </p>
-      )}
+        <datalist id={FLOOR_NAMES_LIST}>
+          {FLOOR_NAME_SUGGESTIONS.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
 
-      {data.buildings.length === 0 ? (
-        <p className="text-slate-600">Ingen bygninger er lagt inn ennå.</p>
-      ) : (
-        data.buildings.map((building) => (
-          <BuildingCard
-            key={building.id}
-            building={building}
-            assignmentId={assignmentId}
-            data={data}
-            canEdit={canEdit}
-            codes={codes}
-            onAddRooms={openAddRooms}
-          />
-        ))
-      )}
+        {!data.hasProperty && (
+          <p className="rounded-xl bg-watch-fill px-4 py-3 text-watch-text">
+            Legg inn eiendommen først.
+          </p>
+        )}
 
-      {canEdit && (
-        <AddRoomsDialog
-          floor={addRoomsFloor}
-          session={addRooms?.session ?? 0}
-          housingType={data.housingType}
-          presets={codes.roomPresets}
-          commonRoomTypes={codes.commonRoomTypes}
-          onClose={closeAddRooms}
-        />
-      )}
-
-      {canEdit && data.hasProperty && (
-        <AddSection label="Legg til bygning">
-          {(close) => (
-            <BuildingForm
-              idPrefix="new-building"
+        {data.buildings.length === 0 ? (
+          <p className="text-slate-600">Ingen bygninger er lagt inn ennå.</p>
+        ) : (
+          data.buildings.map((building) => (
+            <BuildingCard
+              key={building.id}
+              building={building}
               assignmentId={assignmentId}
-              buildingId={null}
-              initialName=""
-              onDone={close}
+              data={data}
+              canEdit={canEdit}
+              codes={codes}
+              onAddRooms={openAddRooms}
             />
-          )}
-        </AddSection>
-      )}
+          ))
+        )}
 
-      {data.buildings.length > 0 && (
-        <Card>
-          <SumLine label="Sum BRA totalt" sum={data.sum} />
-        </Card>
-      )}
-    </div>
+        {canEdit && (
+          <AddRoomsDialog
+            floor={addRoomsFloor}
+            session={addRooms?.session ?? 0}
+            housingType={data.housingType}
+            presets={codes.roomPresets}
+            commonRoomTypes={codes.commonRoomTypes}
+            onClose={closeAddRooms}
+          />
+        )}
+
+        {canEdit && data.hasProperty && (
+          <AddSection label="Legg til bygning">
+            {(close) => (
+              <BuildingForm
+                idPrefix="new-building"
+                assignmentId={assignmentId}
+                buildingId={null}
+                initialName=""
+                onDone={close}
+              />
+            )}
+          </AddSection>
+        )}
+
+        {data.buildings.length > 0 && (
+          <Card>
+            <SumLine label="Sum BRA totalt" sum={data.sum} />
+          </Card>
+        )}
+      </div>
+    </SignInEmailContext>
   );
 }

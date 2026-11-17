@@ -213,7 +213,7 @@ test.describe("rammen og arbeidskøen (pc og iPad liggende)", () => {
     await banner(page).getByRole("button", { name: "Logg ut" }).click();
     await expect(page).toHaveURL(/\/logg-inn$/);
     await page.goto("/arbeidskoe");
-    await expect(page).toHaveURL(/\/logg-inn$/);
+    await expect(page).toHaveURL(/\/logg-inn\?neste=%2Farbeidskoe$/);
     await expect(page.getByRole("heading", { name: "Logg inn" })).toBeVisible();
   });
 

@@ -1,6 +1,6 @@
 import "server-only";
 import { canCreateAssignments, grantHasPermission, type Actor } from "@/core/access";
-import { requireActor } from "@/core/auth/session";
+import { getActorForAction, requireActor } from "@/core/auth/session";
 import { defaultMineOnly } from "@/core/assignments";
 import { findEmployeeGrant } from "@/core/organization";
 
@@ -42,6 +42,32 @@ export async function getEmployeeContext(): Promise<EmployeeContext | null> {
   const actor = await requireActor();
   const found = await findEmployeeGrant(actor);
   if (!found) return null;
+  return buildContext(actor, found);
+}
+
+/**
+ * Svaret til serverhandlinger som skal tåle utløpt innlogging (rett T-0070). Typen tvinger hver
+ * handling til å skille de tre tilfellene.
+ */
+export type EmployeeContextForAction =
+  { status: "signed_out" } | { status: "no_access" } | { status: "ok"; context: EmployeeContext };
+
+/**
+ * Som `getEmployeeContext`, men videresender aldri. Uten økt: `signed_out`, slik at skjemaet
+ * beholder det som er skrevet. Innlogget uten aktiv ansattrad: `no_access`. Organisasjonen kommer
+ * bare fra `grant.organizationId`.
+ */
+export async function getEmployeeContextForAction(): Promise<EmployeeContextForAction> {
+  const actor = await getActorForAction();
+  if (!actor) return { status: "signed_out" };
+  const found = await findEmployeeGrant(actor);
+  if (!found) return { status: "no_access" };
+  return { status: "ok", context: buildContext(actor, found) };
+}
+
+type FoundEmployee = NonNullable<Awaited<ReturnType<typeof findEmployeeGrant>>>;
+
+function buildContext(actor: Actor, found: FoundEmployee): EmployeeContext {
   return {
     actor,
     organizationId: found.grant.organizationId,

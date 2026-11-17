@@ -745,6 +745,65 @@ export async function signInWithCode(page: Page, email: string) {
   await page.getByRole("button", { name: "Logg inn", exact: true }).click();
 }
 
+// --- Rett T-0070: innlogging i dialog over skjemaet (docs/agenter/oppgaver/rett-t0070-t0071-testplan.md avsnitt 2) ---
+
+/**
+ * Fyller ut kodeskjemaet på innloggingssiden man står på (for eksempel `/logg-inn?neste=…` etter
+ * en sidevisning uten innlogging). Går ikke til `/logg-inn` og venter ikke på arbeidskøen; testen
+ * sjekker selv hvor siden sender etterpå.
+ */
+export async function logInFromCurrentPage(page: Page, email: string) {
+  await signInWithCode(page, email);
+}
+
+/** Den åpne innloggingsdialogen over skjemaet (den innerste når dialoger ligger i hverandre). */
+export function signInDialog(page: Page): Locator {
+  return page
+    .getByRole("dialog")
+    .filter({ has: page.getByLabel(/^(E-postadresse|Kode fra e-posten)$/) })
+    .last();
+}
+
+/** Henter siste innloggingskode fra utviklings-postkassen i en egen side. */
+async function latestLoginCode(page: Page): Promise<string> {
+  const mailbox = await page.context().newPage();
+  await mailbox.goto("/dev/epost");
+  const subject = await mailbox.getByTestId("dev-email-subject").first().textContent();
+  await mailbox.close();
+  const code = /: (\d{6})$/.exec(subject ?? "")?.[1];
+  if (!code) throw new Error(`Fant ingen innloggingskode i «${subject}»`);
+  return code;
+}
+
+/**
+ * Logger inn i dialogen over skjemaet: e-posten er fylt ut fra siden, så bare «Send meg en kode»
+ * og koden trengs. Henter koden fra `/dev/epost` i en egen side, så skjemaet under står urørt.
+ * Venter til dialogen er lukket.
+ */
+export async function logInInDialog(page: Page) {
+  const dialog = signInDialog(page);
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Send meg en kode" }).click();
+  const codeField = dialog.getByLabel("Kode fra e-posten");
+  await expect(codeField).toBeVisible();
+  await codeField.fill(await latestLoginCode(page));
+  await dialog.getByRole("button", { name: "Logg inn", exact: true }).click();
+  await expect(page.getByLabel("Kode fra e-posten")).toHaveCount(0);
+}
+
+/** Som `logInInDialog`, men bare med tastaturet (fokus starter i dialogen). */
+export async function logInInDialogWithKeyboard(page: Page) {
+  const dialog = signInDialog(page);
+  await expect(dialog).toBeVisible();
+  // Fokus står i dialogen (e-postfeltet eller «Send meg en kode»); Enter sender koden
+  await page.keyboard.press("Enter");
+  const codeField = dialog.getByLabel("Kode fra e-posten");
+  await expect(codeField).toBeFocused();
+  await page.keyboard.type(await latestLoginCode(page));
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Kode fra e-posten")).toHaveCount(0);
+}
+
 /** Better Auth kaller kapselen `better-auth.session_token` (med `__Secure-` foran over https). */
 function isSessionCookie(name: string): boolean {
   return name.endsWith("session_token");
