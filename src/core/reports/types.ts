@@ -20,6 +20,7 @@ import type {
   SummaryFindingSource,
   SummaryGroup,
   TextSource,
+  TextStatus,
   TgDirect,
 } from "@/db/schema";
 import type { INSPECTION_YEAR_SOURCES } from "./logic/codes";
@@ -110,6 +111,11 @@ export type MeasureView = {
   id: string;
   text: string;
   textSource: TextSource;
+  /**
+   * Malens `text_status` når teksten er et av malens standardtiltak i rommet (med flettefeltene
+   * fylt inn), ellers `null`. Skjermen viser «Utkast» ved `draft` (designvalg D4).
+   */
+  textStatus: TextStatus | null;
   sortOrder: number;
   rowVersion: number;
 };
@@ -137,6 +143,16 @@ export type DeviationView = {
   measurementValue: number | null;
   measurementUnit: string | null;
   textSource: TextSource;
+  /**
+   * Status per tekstfelt (designvalg D4): malens `text_status` når feltet har en av malens tekster
+   * for samme felttype i rommet (med flettefeltene fylt inn), ellers `null` (egen eller endret
+   * tekst). Skjermen viser «Utkast» ved `draft`.
+   */
+  textStatus: {
+    deviationText: TextStatus | null;
+    causeText: TextStatus | null;
+    consequenceText: TextStatus | null;
+  };
   /** Regelen som foreslo avviket (fast kode). */
   suggestedByRuleKey: string | null;
   sortOrder: number;

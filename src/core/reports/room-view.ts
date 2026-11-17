@@ -23,6 +23,7 @@ import {
   type DeviationMeasure,
   type FieldAnswer,
   type RuleSuggestionDecisionRow,
+  type TextStatus,
   type TgiuDetails,
 } from "@/db/schema";
 import {
@@ -32,6 +33,7 @@ import {
   countDoneCheckpoints,
   hasMeasuresForTg,
   suggestionStillApplies,
+  templateTextStatusMatcher,
   tgiuRequirementsFor,
   type CheckpointState,
   type DecisionState,
@@ -49,6 +51,7 @@ import {
   type RoomContext,
 } from "./context";
 import { guardReportErrors } from "./errors";
+import { phraseUsageForDocument } from "./phrase-source";
 import { NO_FINDINGS_OVER_LIMIT_SIGNAL, OWNER_REFUSED_SIGNAL } from "./signals";
 import type {
   AnswerValue,
@@ -372,6 +375,24 @@ export function buildRoomState(input: {
         m.outcome_key === outcomeKey,
     );
 
+  // «Utkast»-merket per felt (D4): teksten er en av malens tekster for samme felttype i rommet
+  const statusOf = (texts: { text: string | null; textStatus: TextStatus }[]) =>
+    templateTextStatusMatcher(
+      texts.filter((t): t is { text: string; textStatus: TextStatus } => t.text !== null),
+    );
+  const deviationTextStatus = statusOf(
+    roomDoc.outcomes.map((o) => ({ text: o.deviation_text, textStatus: o.text_status })),
+  );
+  const causeTextStatus = statusOf(
+    roomDoc.outcomes.map((o) => ({ text: o.default_cause_text, textStatus: o.text_status })),
+  );
+  const consequenceTextStatus = statusOf(
+    roomDoc.outcomes.map((o) => ({ text: o.default_consequence_text, textStatus: o.text_status })),
+  );
+  const measureTextStatus = statusOf(
+    roomDoc.standard_measures.map((m) => ({ text: m.text, textStatus: m.text_status })),
+  );
+
   const measuresByDeviation = new Map<string, DeviationMeasure[]>();
   for (const measure of data.measures) {
     const list = measuresByDeviation.get(measure.deviationId) ?? [];
@@ -455,6 +476,11 @@ export function buildRoomState(input: {
         measurementValue: row.measurementValue,
         measurementUnit: row.measurementUnit,
         textSource: row.textSource,
+        textStatus: {
+          deviationText: deviationTextStatus(row.deviationText),
+          causeText: causeTextStatus(row.causeText),
+          consequenceText: consequenceTextStatus(row.consequenceText),
+        },
         suggestedByRuleKey: row.suggestedByRuleId
           ? (template.ruleKeyById.get(row.suggestedByRuleId) ?? null)
           : null,
@@ -464,6 +490,7 @@ export function buildRoomState(input: {
           id: m.id,
           text: m.text,
           textSource: m.textSource,
+          textStatus: measureTextStatus(m.text),
           sortOrder: m.sortOrder,
           rowVersion: m.rowVersion,
         })),
@@ -630,7 +657,10 @@ async function readRoom(
   const template = await loadLockedTemplate(db, actor, grant, context.report.templateVersionId);
   const roomDoc = roomDocumentOf(template.document, context.room.group);
   const inspectionYear: InspectionYear = inspectionYearOf(context.inspectionAt);
-  const data = await loadRoomData(db, grant.organizationId, context.report.id, context.room.id);
+  const [data, phraseUsage] = await Promise.all([
+    loadRoomData(db, grant.organizationId, context.report.id, context.room.id),
+    phraseUsageForDocument(db, grant.organizationId, roomDoc),
+  ]);
   const state = buildRoomState({ template, roomDoc, data, inspectionYear: inspectionYear.year });
 
   return {
@@ -645,7 +675,7 @@ async function readRoom(
     checkpoints: state.checkpoints,
     suggestions: state.suggestions,
     progress: state.progress,
-    // Kobles til `LoadPhraseUsage` (types.ts) når kandidatkilden bygges i «KI i veien» (A468).
-    phraseUsage: [],
+    // «Mest brukt» (A468): samme telling som `LoadPhraseUsage`, for rommets del av malen
+    phraseUsage,
   };
 }

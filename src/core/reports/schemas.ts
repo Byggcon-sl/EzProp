@@ -24,15 +24,21 @@ import {
 } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { containsNationalId, NATIONAL_ID_MESSAGE } from "@/shared/validation/free-text";
-import { checkOverrideReason, formatWholeNumber, OVERRIDE_REASON_CHECK_MESSAGES } from "./logic";
-import { ReportValidationError } from "./errors";
+import {
+  checkOverrideReason,
+  containsPiiPlaceholder,
+  formatWholeNumber,
+  OVERRIDE_REASON_CHECK_MESSAGES,
+} from "./logic";
+import { ReportValidationError, reportValidationMessage } from "./errors";
 
 /*
  * Zod-skjemaene for rapportkjernen (docs/funksjoner/fase2a-badet-pc.md Omfang 4, 8 og 10). Ligger
  * utenfor `logic/`, som ikke har pakker (ADR 0013), og bruker de rene funksjonene der regelen står
  * ett sted (`checkOverrideReason`).
  *
- * - Alle fritekstfelt har lengdegrense og sperre mot fødselsnummer.
+ * - Alle fritekstfelt har lengdegrense, sperre mot fødselsnummer og sperre mot plassholderne fra
+ *   vasken før KI («[adresse]» osv., A466).
  * - Regelsvaret som lagres (`ruleResultSchema`), er strengt: bare kjente nøkler, faste koder og
  *   tall, og en øvre størrelse. Fritekst avvises.
  * - Id-er sjekkes med `requireUuid` i tjenesten før skjemaene kjøres; her sjekkes formen igjen.
@@ -60,6 +66,9 @@ export const REPORT_OPTION_KEYS_MAX = 100;
 const KEY_MAX = 100;
 const REASONS_MAX = 200;
 
+/** Meldingen når teksten har en plassholder fra vasken (A466). Gir koden `text_has_placeholder`. */
+const PLACEHOLDER_MESSAGE = reportValidationMessage("text_has_placeholder");
+
 function tooLongMessage(max: number): string {
   return `Teksten kan ha høyst ${formatWholeNumber(max)} tegn.`;
 }
@@ -79,7 +88,8 @@ export function freeTextSchema(max: number) {
     .nullable()
     .transform((value) => (value === null || value === "" ? null : value))
     .refine((value) => value === null || value.length <= max, { error: tooLongMessage(max) })
-    .refine((value) => !containsNationalId(value), { error: NATIONAL_ID_MESSAGE });
+    .refine((value) => !containsNationalId(value), { error: NATIONAL_ID_MESSAGE })
+    .refine((value) => !containsPiiPlaceholder(value), { error: PLACEHOLDER_MESSAGE });
 }
 
 /** Fritekst som alltid er en tekst (tiltak). Tom tekst er lov. */
@@ -87,7 +97,8 @@ export function requiredFreeTextSchema(max: number) {
   return z
     .string()
     .refine((value) => value.length <= max, { error: tooLongMessage(max) })
-    .refine((value) => !containsNationalId(value), { error: NATIONAL_ID_MESSAGE });
+    .refine((value) => !containsNationalId(value), { error: NATIONAL_ID_MESSAGE })
+    .refine((value) => !containsPiiPlaceholder(value), { error: PLACEHOLDER_MESSAGE });
 }
 
 const nullableKey = keySchema.nullable();
@@ -415,6 +426,9 @@ export function parseOrThrow<T extends z.ZodType>(
   const parsed = schema.safeParse(input);
   if (parsed.success) return parsed.data;
   const custom = parsed.error.issues.find((issue) => issue.code === "custom" && issue.message);
+  if (custom?.message === PLACEHOLDER_MESSAGE) {
+    throw new ReportValidationError("text_has_placeholder");
+  }
   const known =
     custom &&
     (custom.message === NATIONAL_ID_MESSAGE ||
