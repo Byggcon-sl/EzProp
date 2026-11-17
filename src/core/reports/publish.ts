@@ -38,7 +38,6 @@ import {
 } from "./logic/publish-check";
 import type {
   GetPublishCheck,
-  IsReportPublishedForAssignment,
   ListPendingAiSuggestions,
   ListReleases,
   PendingAiSuggestionView,
@@ -136,19 +135,8 @@ async function findCurrentReport(
   return row ?? null;
 }
 
-/**
- * Om oppdragets gjeldende rapport er publisert. Kjernefunksjon uten egen tilgangssjekk: kalles bak
- * en handling som alt er tilgangssjekket, med `grant.organizationId`. Oppdrag uten rapport gir
- * `false`.
- */
-export const isReportPublishedForAssignment: IsReportPublishedForAssignment = async (
-  executor,
-  organizationId,
-  assignmentId,
-) => {
-  const report = await findCurrentReport(executor, organizationId, assignmentId, false);
-  return report?.status === "published";
-};
+/** Låsen bor i `published-lock.ts` (med `FOR SHARE`); eksporteres videre her. */
+export { isReportPublishedForAssignment } from "./published-lock";
 
 // --- Sjekken -----------------------------------------------------------------------------------
 

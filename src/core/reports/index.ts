@@ -25,7 +25,6 @@ export { decideSuggestion } from "./suggestions";
 export { setCheckpointDone, setTgDirect } from "./tgiu";
 export {
   getPublishCheck,
-  isReportPublishedForAssignment,
   listPendingAiSuggestions,
   listReleases,
   publishReport,
