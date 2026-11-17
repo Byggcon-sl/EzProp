@@ -276,7 +276,12 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
       await expect(page).toHaveURL(/\/admin\/ansatte\/[0-9a-f-]{36}$/);
       const employeeUrl = new URL(page.url()).pathname;
       await expect(page.getByRole("heading", { name: employeeName, level: 1 })).toBeVisible();
+      // Bekreftelsen viser at personen også logges ut av enheten sin (Mine innlogginger, Omfang 7)
       await page.getByRole("button", { name: "Har sluttet", exact: true }).click();
+      await expect(
+        page.getByText("Hen blir også logget ut av alle enheter (1).", { exact: true }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "Ja, har sluttet", exact: true }).click();
       await expect(page).toHaveURL(/\/admin\/ansatte\?lagret=sluttet$/);
       await expect(
         page.getByRole("status").filter({ hasText: "Markert som sluttet." }),
@@ -288,8 +293,11 @@ test.describe("adminområdet (pc og iPad liggende)", () => {
       );
       await expect(row(page, employeeName)).toHaveCount(1);
 
-      // Den åpne økten laster neste side: ingen arbeidskø-data og ingen organisasjon
+      // Den åpne økten er logget ut og havner på innloggingssiden. Etter ny innlogging: ingen
+      // arbeidskø-data og ingen organisasjon
       await employee.goto("/arbeidskoe");
+      await expect(employee).toHaveURL(/\/logg-inn/);
+      await signInWithCode(employee, email);
       await expect(
         employee.getByRole("heading", {
           name: /^(Ingen tilgang|Du er ikke registrert som ansatt)$/,
