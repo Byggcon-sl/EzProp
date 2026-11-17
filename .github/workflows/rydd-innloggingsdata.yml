@@ -29,7 +29,7 @@ jobs:
           AUTH_CLEANUP_SECRET: ${{ secrets.AUTH_CLEANUP_SECRET }}
           # Testmiljøets adresse: samme kilde som utrullingen (egen adresse i APP_HOSTNAME,
           # ellers appens standardadresse i Azure, app-ezprop-test).
-          APP_HOSTNAME: ${{ vars.APP_HOSTNAME }}
+          APP_HOSTNAME: ${{ vars.APP_HOSTNAME || '' }}
           DEFAULT_TEST_URL: https://app-ezprop-test.azurewebsites.net
         shell: bash
         run: |
