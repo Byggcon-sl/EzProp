@@ -1,6 +1,6 @@
 # Lagt til av forbedreren
 
-Sist oppdatert: 16.11.2026
+Sist oppdatert: 17.11.2026
 
 Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.2026, se «Forbedreren» i `CLAUDE.md`). Listen er til for Ståle: mot slutten av utviklingen går han gjennom den og beholder, justerer eller fjerner.
 
@@ -8,6 +8,11 @@ Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.
 
 | Dato | Tillegg (det den ansatte merker) | Hvorfor | Type | Hvor (PR, oppgavekort, kode) | Slik fjernes det | Ståle |
 |---|---|---|---|---|---|---|
+| 17.11.2026 | Foreslåtte oppdrag på samme bolig når leder knytter en ny befaring til en reklamasjon; ett trykk, søk på nummer som reserve (A427). | Leder slipper å slå opp oppdragsnummeret i et annet vindu. | i oppgaven | `docs/funksjoner/fase2a-reklamasjonskobling.md` F1, `listReinspectionCandidates` i `src/core/claims`; PR fylles inn | Fjern tjenesten og listen; søk på nummer virker alene. | |
+| 17.11.2026 | Befaringsdato og internt notat til takstmannen rett i skjemaet for ny befaring. | Én skjerm i stedet for tre. | i oppgaven | `docs/funksjoner/fase2a-reklamasjonskobling.md` F2, `internalNote` på `CreateAssignmentInput`; PR fylles inn | Ta de to feltene ut av skjemaet. | |
+| 17.11.2026 | Valglisten for takstmann på ny befaring: opprinnelig takstmann først og merket, så leders kontor; ingenting forhåndsvalgt (A428). | Raskere valg uten å avgjøre fag. | i oppgaven | `docs/funksjoner/fase2a-reklamasjonskobling.md` F3; PR fylles inn | Sorter listen som på «Nytt oppdrag». | |
+| 17.11.2026 | Overgangen fra henvendelse til krav lagres i revisjonsloggen som koder (A429). | Færre reklamasjoner og KI i bunnen: kan telle hvor mange henvendelser som ble krav og hvor fort. | i oppgaven | `docs/funksjoner/fase2a-reklamasjonskobling.md` F4, `updateClaim` i `src/core/claims`; PR fylles inn | Ta feltene ut av revisjonsraden. | |
+| 17.11.2026 | Én unik indeks mindre på koblingstabellen. | Enklere migrering, samme vern. | i oppgaven | `docs/funksjoner/fase2a-reklamasjonskobling.md` F5; PR fylles inn | Ingenting å fjerne. | |
 | 16.11.2026 | Historikk på oppdraget: tidslinje over hvem som la til, endret, fjernet og hentet tilbake hva, med filter, «Gjenopprett» og KI-utkast til «hva er endret». | Sporbarhet ved reklamasjoner, KI i bunnen, best for lederne. | nytt planpunkt | `docs/07-utviklingsplan.md` 2a-3 «Fra forbedreren»; kort fra `docs/funksjoner/fase2a-papirkurv.md` | Stryk punktet i planen før det bygges. | |
 | 16.11.2026 | «Fjern» på etasje og bygning tar med rommene og arealene som én slettegruppe; «Angre» henter hele gruppen (A414, erstatter A98). | 1 trykk i stedet for 7; feil etasjer blir ikke stående. | i oppgaven | `docs/funksjoner/fase2a-papirkurv.md`, `src/core/buildings/service.ts` (PR fylles inn) | Sett sperren `BuildingNotEmptyError`/`FloorNotEmptyError` tilbake i `removeBuilding` og `removeFloor`. | |
 | 16.11.2026 | «Angre»-meldingen: Cmd/Ctrl+Z, én melding om gangen med «Mer i papirkurven», overlever omlasting, uthevet rad etter gjenoppretting. | Raskere og tryggere angring. | i oppgaven | `docs/funksjoner/fase2a-papirkurv.md`, felles melding i `src/shared/ui` (PR fylles inn) | Ta ut hurtigtasten og uthevingen i meldingskomponenten. | |
