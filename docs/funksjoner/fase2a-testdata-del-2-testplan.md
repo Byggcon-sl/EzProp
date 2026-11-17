@@ -95,7 +95,7 @@ Forslag. Avvik føres i kortet, og testskriver følger kortet.
 24. **TGIU har alle fem opplysningene** og en rad i `tgiu_details` med `reason`, `risk_assessment` og `how_to_examine`.
 25. **for KI:** minst ett `changed` og ett `rejected` med begrunnelseskode i `rule_suggestion_decisions`.
 
-### 2.4 Ny kjøring og myk sletting (akseptkriterium 9, A434)
+### 2.4 Ny kjøring og myk sletting (akseptkriterium 9, A480)
 26. **andre kjøring skriver ingenting:** `countRows()` er lik, samme TG per bad, `updated_at` uendret på alle rapportrader, og oppsummeringen viser antall bad hoppet over.
 27. **svar endret for hånd** (via `saveField` som e2e-takstmannen) står uendret etter ny kjøring.
 28. **myk-slettet avvik** gjenopprettes ikke og lages ikke på nytt; `deleted_at` er uendret.
@@ -151,8 +151,8 @@ Skrives av `testskriver` parallelt, bare mot det offentlige grensesnittet (`seed
 ## 6. Øvrig
 
 1. `package.json`: versjonen er økt (patch).
-2. A427–A435 står i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte» (enkel test eller sjekk i gjennomgangen).
-3. **Bilder** (A427) og **byggeår som kolonne** (A428) er utenfor; dekkes bare av test 1.2 og 1.27 (planlagte bilder som beskrivelser) og 2.1.7 (byggeår som svar i badet). Når «Bilder på PC» bygges, får den test for at bildene lages ut fra `plannedPhotos`, uten personer.
+2. A473–A481 står i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte» (enkel test eller sjekk i gjennomgangen).
+3. **Bilder** (A473) og **byggeår som kolonne** (A474) er utenfor; dekkes bare av test 1.2 og 1.27 (planlagte bilder som beskrivelser) og 2.1.7 (byggeår som svar i badet). Når «Bilder på PC» bygges, får den test for at bildene lages ut fra `plannedPhotos`, uten personer.
 
 ## Godkjenning
 

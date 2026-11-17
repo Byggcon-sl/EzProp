@@ -27,7 +27,7 @@ Del 1 (PR #203) la inn oppdrag, eiendommer, bygninger og rom, men ingen rapports
 **Med:**
 - **Rapport for badene i testoppdragene** med status «under arbeid», «ferdig» og «fakturert» som har minst ett våtrom (del 1). Oppdrag med status «bestilt» får ingen rapport. Rapporten startes med `startReport`, låst til publisert systemmal.
 - **Scenarioer som data** (ny ren fil `src/db/seed/testdata-bath.data.ts`): faste bad-scenarioer bygd på inndataene i malens `rule_test_cases` (`src/db/seed/templates/wet-room.ts`), ikke på egne TG-er. Hvert scenario har svar per kontrollpunkt (feltkoder og verdier), hvilke forslag som godtas, endres eller avvises (med begrunnelseskode), valget ved «velg TG2 eller TG3», og **forventet resultat** (se «Scenariofilen er fasit» under).
-- **Pliktige scenarioer, fast fordelt** (forbedrer 1, test-leder 2, A430). De pliktige scenarioene legges i fast rekkefølge på de første badene som passer (oppdrag sortert på oppdragsnummer, status og byggeår må passe scenarioet). Den seedede tilfeldigheten brukes bare for resten av badene, og bare blant scenarioer som passer badets år. Pliktige:
+- **Pliktige scenarioer, fast fordelt** (forbedrer 1, test-leder 2, A476). De pliktige scenarioene legges i fast rekkefølge på de første badene som passer (oppdrag sortert på oppdragsnummer, status og byggeår må passe scenarioet). Den seedede tilfeldigheten brukes bare for resten av badene, og bare blant scenarioer som passer badets år. Pliktige:
   1. **Visningsbad** (forbedrer 2), status «under arbeid», se under.
   2. **TG2 for alder:** folie, ingen dokumentasjon, badets år = befaringsår − 18 eller eldre, men 2000 eller senere → TG2-forslaget `membrane_past_lifespan` godtatt, kostnad «none». Status ferdig eller fakturert.
   3. **TG3 før 2000:** badets år før 2000, sjiktår tomt → TG3-forslaget `membrane_before_2000` godtatt, med kostnadsintervall. Ingen TG2 for alder i tillegg. Status ferdig eller fakturert.
@@ -35,10 +35,10 @@ Del 1 (PR #203) la inn oppdrag, eiendommer, bygninger og rom, men ingen rapports
   5. **TG0:** hull utført uten funn, under 15 vekt-% (for eksempel 11) → TG0-forslaget godtatt, bare på `wet_room.adjacent`.
   6. **Forhøyet fukt med TG2** og 7. **med TG3:** hull «utført med funn», enhet vekt-%, verdi 15 eller høyere → `elevated_moisture` med valget i scenarioet. Tiltaket følger valgt TG (`applies_to_tg`). TG3 får kostnad. Ingen egen tallgrense mellom TG2 og TG3.
   8. **Endret forslag:** TG0-forslaget på tilliggende endret til TG1 (eneste lovlige endring i testdataene, fagansvarlig 5).
-  9. **Avvist forslag:** status «under arbeid», punktet står ikke ferdig, slik at ingen ferdig rapport har en TG som strider mot et regelforslag. Valgt: TG0-forslaget på tilliggende avvist med koden `measured_again` (A432).
+  9. **Avvist forslag:** status «under arbeid», punktet står ikke ferdig, slik at ingen ferdig rapport har en TG som strider mot et regelforslag. Valgt: TG0-forslaget på tilliggende avvist med koden `measured_again` (A478).
   10. **Bad uten avvik:** et bad der ingen regel slår til (for eksempel det som er to år gammelt i del 1), alle punkt ferdige med TG1.
   11. **«Ukjent» byggeår** (T-0051): `build_year` tomt, kilde `unknown`, `membrane_year` tomt (testsak B2.5). Bare på «under arbeid». Punktet «Vanntett sjikt, membran og sluk» står ikke ferdig og får verken TG1 eller TGIU. «Ikke vurdert» betyr her: ingen regelforslag for alder på badet og punktet ikke ferdig.
-  12. **HMS:** `wet_room.fixtures` / `signs_of_overheating` (kind `hms`) med konsekvens og tiltak og `tg` tom. Punktet får TG1 direkte (A431).
+  12. **HMS:** `wet_room.fixtures` / `signs_of_overheating` (kind `hms`) med konsekvens og tiltak og `tg` tom. Punktet får TG1 direkte (A477).
   Pliktige scenarioer kan dele bad når de ikke strider mot hverandre (HMS kan for eksempel ligge i badet med TG2 for alder).
 - **Visningsbadet** (forbedrer 2): ett oppdrag «under arbeid» der badet viser det meste på én skjerm: TG3 før 2000 med kostnad, et TG2-utfall med fast TG i malen (for eksempel `weak_extract` på ventilasjon) med endret tekst (`edited`), TGIU med alle opplysningene, HMS uten TG, og noen punkt som står igjen. Avvist forslag ligger i scenario 9 på et annet bad, fordi TG0-forslaget ikke kan komme på samme tilliggende punkt som TGIU (avgjort av prosjektlederen, se under). E2e og testlaget finner badet med en oppslagsfunksjon (`findShowcaseBathReport`) som søker på innholdet (under arbeid, TG3 og TGIU i samme bad, organisasjonen Byggcon), ikke på rekkefølge eller antall.
 - **Byggeår og befaringsår** (fagansvarlig 2–3, forbedrer 3):
@@ -46,7 +46,7 @@ Del 1 (PR #203) la inn oppdrag, eiendommer, bygninger og rom, men ingen rapports
   - Befaringsåret leses fra oppdragets befaringsdato (`inspectionYearOf`, kilde «assignment»), aldri fast 2026 og aldri «i dag». Alle oppdrag med rapport må ha befaringsdato; ellers stopper seed med feil.
   - Del 1 får en garanti som `ensureBathroomAges`: badene med årsprofilene de pliktige scenarioene trenger, finnes i oppdrag med riktig status. En test viser at det finnes minst like mange passende bad som pliktige scenarioer.
   - Seed sjekker hvert forslag før det godtas: mangler forslaget, eller svarer `decideSuggestion` `no_longer_applies`, stopper seed med en tydelig feil. Ingen stille hopp.
-- **Alle ferdige punkt har TG** (fagansvarlig 1, forskriften § 2-22, sperrekrav 1, A431): punkt uten avvik med TG får TG1 med `setTgDirect`. TG0 bare på `wet_room.adjacent` og bare ved godtatt TG0-forslag. TG1 direkte settes aldri på et punkt der en regel har et åpent forslag.
+- **Alle ferdige punkt har TG** (fagansvarlig 1, forskriften § 2-22, sperrekrav 1, A477): punkt uten avvik med TG får TG1 med `setTgDirect`. TG0 bare på `wet_room.adjacent` og bare ved godtatt TG0-forslag. TG1 direkte settes aldri på et punkt der en regel har et åpent forslag.
 - **Hulltaking i alle ferdige bad** (forskriften § 2-2, sperrekrav 4): hvert bad i «ferdig» og «fakturert» har enten hull tatt med måling, eller «ikke utført» med grunn og TGIU.
 - **Målinger:** fuktmåling med enhet, fall og terskelhøyde, lagret med `saveField`. Fall og terskelhøyde har ingen regel og ingen avgjort grense (regelverk-krav.md avsnitt 4): verdier uten avvik er tydelig uproblematiske, `insufficient_fall` bare ved motfall (negativ verdi), og `low_threshold_height` lages ikke. Måling i RF % gir ingen forslag (ikke vurdert).
 - **Avvikene:** TG fra regelforslaget eller fra utfallet i malen. Ved «velg TG2 eller TG3» står valget (2 eller 3) i scenarioet. TG2 og TG3 har årsak og konsekvens fra malen (`text_source = template`, noen `edited`). TG3 har fast kostnadsintervall per utfall i datafilen, merket utkast; TG2 får ikke kostnad. Bruker et scenario eget beløp, er det rundet til nærmeste 10 000. HMS får ingen TG.
@@ -55,15 +55,15 @@ Del 1 (PR #203) la inn oppdrag, eiendommer, bygninger og rom, men ingen rapports
 - **Scenariofilen er fasit** (forbedrer 5): hvert scenario har forventede avviksnøkler, TG eller «ingen TG», `text_source` (`template` eller `edited`) og **planlagte bilder per avvik** som korte beskrivelser (for eksempel «nærbilde av sluk», «fuktmåler mot vegg»). Ingen filer, ingen persondata, ingen KI-kall. «Bilder på PC» lager bildene ut fra beskrivelsene, og evalueringene og ki-ansvarlig kan bruke scenarioene som fasit.
 - **«Under arbeid» ser ut som en avbrutt befaring** (forbedrer 4): punktene fylles i malens rekkefølge, resten står helt urørt, uten halve svar. Tidsstemplene spres ikke (se «Avgjort ved uenighet»).
 - **Statusen på rapporten følger oppdraget:** «ferdig» og «fakturert» har 8 av 8 punkt ferdige; «under arbeid» har færre.
-- **Ny kjøring** (test-leder 5, A434): finnes rapporten for våtrommet alt, hopper seed over hele badet og skriver antallet i oppsummeringen. Svar som er lagt inn for hånd, overskrives aldri. Et avvik med `deleted_at` gjenopprettes ikke og lages ikke på nytt. Ingenting slettes permanent.
+- **Ny kjøring** (test-leder 5, A480): finnes rapporten for våtrommet alt, hopper seed over hele badet og skriver antallet i oppsummeringen. Svar som er lagt inn for hånd, overskrives aldri. Et avvik med `deleted_at` gjenopprettes ikke og lages ikke på nytt. Ingenting slettes permanent.
 - **Bare når `APP_ENVIRONMENT` er development eller test** (samme vakt som del 1, `testdata-guard.ts`), før noe skrives.
 - **Planen:** linjen for del 2 og delpunktet under «Bilder på PC» er rettet (endringsloggen 17.11.2026). Punktet «Badet på PC» krysses av i PR-en.
 
 **Ikke med (bevisst utelatt):**
-- **Bilder** (A427). Datamodellen har ingen kobling fra fil til rom, kontrollpunkt eller avvik. Bildene lages i samme seed-steg når «Bilder på PC» lager bildemodellen, ut fra de planlagte bildene i scenariofilen. Delpunktet under «Bilder på PC» er utvidet.
-- **Byggeår på eiendommen som kolonne** (A428). Kolonnen finnes ikke. Byggeåret for våtrommet står som svar i badet.
+- **Bilder** (A473). Datamodellen har ingen kobling fra fil til rom, kontrollpunkt eller avvik. Bildene lages i samme seed-steg når «Bilder på PC» lager bildemodellen, ut fra de planlagte bildene i scenariofilen. Delpunktet under «Bilder på PC» er utvidet.
+- **Byggeår på eiendommen som kolonne** (A474). Kolonnen finnes ikke. Byggeåret for våtrommet står som svar i badet.
 - **El, rekkverk og andre romtyper.** Bare badmalen finnes. Dekkes her av testen «ingen avvik utenfor badmalen» og «HMS uten TG». Resten kommer med malene i 2a-3.
-- **KI-forslag i testdataene** (ingen rader i `ai_usage_log`, A429).
+- **KI-forslag i testdataene** (ingen rader i `ai_usage_log`, A475).
 - **Nye regler, nye avvikstekster eller endringer i malen og kjernetjenestene.** Hull i tjenestene føres som funn.
 - **Ny migrering.**
 - **Tidsstempler spredt over befaringsdagen.** Krever at kjernetjenestene tar imot et eget tidspunkt (de bruker `new Date()`), eller skriving forbi tjenestene. Begge er utenfor oppgaven.
@@ -103,18 +103,18 @@ Ingen nye regler. Scenarioene bruker inndataene fra malens testsaker, og en test
 - [ ] Bruker i annen organisasjon ser ingen av rapportene (`expectTenantIsolation` på oppslaget), og en annen organisasjon har samme radtall før og etter seed. Takstmann, kontor, leder og admin åpner en seedet rapport slik badskjermen tillater.
 - [ ] `TESTDATA_TABLES` og oppsummeringen viser de nye tabellene og antall bad som er hoppet over.
 - [ ] E2e (PC og iPad-størrelse): visningsbadet, funnet med `findShowcaseBathReport`, viser TG3 med kostnad, TGIU og fremdrift «x av 8» med x < 8 og totalen 8. Badet uten avvik vises riktig.
-- [ ] Versjonen i `package.json` er økt (patch). A427–A435 er ført i `docs/09-apne-sporsmal.md`.
+- [ ] Versjonen i `package.json` er økt (patch). A473–A481 er ført i `docs/09-apne-sporsmal.md`.
 
 ## Beslutninger i autonom modus (føres i `docs/09-apne-sporsmal.md` av utvikleren)
-- **A427 (lett å endre):** Bilder i testdataene kommer med «Bilder på PC», ikke nå, fordi bildemodellen ikke finnes. Scenariofilen har planlagte bilder som beskrivelser.
-- **A428 (lett å endre):** Byggeår som kolonne på eiendommen kommer ikke her. Byggeåret for våtrommet legges som svar i badet.
-- **A429 (lett å endre):** Seed skriver ingen KI-rader i `ai_usage_log`. Falsk historikk ville forstyrret tallene for godtatt og avvist.
-- **A430 (lett å endre):** De tolv pliktige scenarioene fordeles fast på de første badene som passer (sortert på oppdragsnummer); tilfeldigheten brukes bare for resten. «Velg TG2 eller TG3» bestemmes i scenarioet.
-- **A431 (lett å endre):** Seed setter TG1 med `setTgDirect` på ferdige punkt uten avvik med TG (også punkt med bare HMS-avvik). Dette er den eneste TG-en seed setter uten regel eller utfall. Kilde: forskriften § 2-22 (alle punkt skal ha TG), sperrekrav 1.
-- **A432 (lett å endre):** Endret forslag i testdataene er TG0 → TG1 på tilliggende; avvist forslag er TG0-forslaget på tilliggende med `measured_again`, på et bad under arbeid der punktet ikke er ferdig. Begge går i den forsiktige retningen og gir ingen ferdig rapport med TG mot et regelforslag.
-- **A433 (lett å endre):** `yearRenovated` i del 1 betyr nytt vanntett sjikt, kilde `owner_stated`; ellers eiendommens byggeår med kilde `documented`. `membrane_year` står tomt.
-- **A434 (lett å endre):** Ny kjøring hopper over bad som alt har rapport, uten å overskrive, og myk-slettede avvik lages ikke på nytt.
-- **A435 (lett å endre):** Kostnadsintervallet for TG3 er fast per utfall i datafilen og merket utkast, til fagrådet har svart (spørsmål nr. 92).
+- **A473 (lett å endre):** Bilder i testdataene kommer med «Bilder på PC», ikke nå, fordi bildemodellen ikke finnes. Scenariofilen har planlagte bilder som beskrivelser.
+- **A474 (lett å endre):** Byggeår som kolonne på eiendommen kommer ikke her. Byggeåret for våtrommet legges som svar i badet.
+- **A475 (lett å endre):** Seed skriver ingen KI-rader i `ai_usage_log`. Falsk historikk ville forstyrret tallene for godtatt og avvist.
+- **A476 (lett å endre):** De tolv pliktige scenarioene fordeles fast på de første badene som passer (sortert på oppdragsnummer); tilfeldigheten brukes bare for resten. «Velg TG2 eller TG3» bestemmes i scenarioet.
+- **A477 (lett å endre):** Seed setter TG1 med `setTgDirect` på ferdige punkt uten avvik med TG (også punkt med bare HMS-avvik). Dette er den eneste TG-en seed setter uten regel eller utfall. Kilde: forskriften § 2-22 (alle punkt skal ha TG), sperrekrav 1.
+- **A478 (lett å endre):** Endret forslag i testdataene er TG0 → TG1 på tilliggende; avvist forslag er TG0-forslaget på tilliggende med `measured_again`, på et bad under arbeid der punktet ikke er ferdig. Begge går i den forsiktige retningen og gir ingen ferdig rapport med TG mot et regelforslag.
+- **A479 (lett å endre):** `yearRenovated` i del 1 betyr nytt vanntett sjikt, kilde `owner_stated`; ellers eiendommens byggeår med kilde `documented`. `membrane_year` står tomt.
+- **A480 (lett å endre):** Ny kjøring hopper over bad som alt har rapport, uten å overskrive, og myk-slettede avvik lages ikke på nytt.
+- **A481 (lett å endre):** Kostnadsintervallet for TG3 er fast per utfall i datafilen og merket utkast, til fagrådet har svart (spørsmål nr. 92).
 
 ## Avgjort ved uenighet (prosjektlederen)
 - **Avvist forslag ligger ikke i visningsbadet** (forbedrer 2 mot fagansvarlig 5). Det eneste forslaget som kan avvises trygt, er TG0 på tilliggende, og det kommer bare når hullet er tatt. Visningsbadet har TGIU på samme punkt fordi hull ikke er tatt. TGIU er viktigere å vise; det avviste forslaget ligger i et annet bad under arbeid.

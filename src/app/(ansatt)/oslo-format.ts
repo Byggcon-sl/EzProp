@@ -61,3 +61,39 @@ export function formatInspectionAt(at: Date, now: Date): string {
 export function toDateTimeLocal(at: Date): string {
   return isoLocal.format(at).replace(" ", "T");
 }
+
+/** Kalenderdagen i norsk tid som «ÅÅÅÅ-MM-DD». */
+const osloDay = new Intl.DateTimeFormat("sv-SE", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  timeZone: TIME_ZONE,
+});
+
+/** Dagen før en kalenderdag «ÅÅÅÅ-MM-DD». Regnes på datoen, så sommertid ikke flytter den. */
+function previousDay(isoDay: string): string {
+  const date = middayOf(isoDay);
+  if (!date) return isoDay;
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * «Sist brukt» for en innlogging (docs/funksjoner/fase2a-mine-innlogginger.md Omfang 4): «Aktiv
+ * nå» på denne enheten, ellers «Aktiv i dag», «Aktiv i går» eller «Aktiv 12. nov.» (med årstall
+ * når året er et annet). Dagen regnes i norsk tid. Aldri klokkeslett: `updated_at` fornyes høyst
+ * én gang i døgnet, så et klokkeslett ville lovet mer enn dataene holder (A427).
+ */
+export function sessionLastUsedLabel(lastUsed: Date, now: Date, isCurrent: boolean): string {
+  if (isCurrent) return "Aktiv nå";
+  const day = osloDay.format(lastUsed);
+  const today = osloDay.format(now);
+  if (day === today) return "Aktiv i dag";
+  if (day === previousDay(today)) return "Aktiv i går";
+  return `Aktiv ${shortDate(lastUsed, now)}`;
+}
+
+/** «logget inn 3. nov.» (med årstall når året er et annet), uten klokkeslett. */
+export function sessionCreatedLabel(createdAt: Date, now: Date): string {
+  return `logget inn ${shortDate(createdAt, now)}`;
+}
