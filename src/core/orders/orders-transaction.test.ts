@@ -110,7 +110,9 @@ describe("4.6.5 feiler hendelsen eller loggen, finnes ingenting", () => {
     const order = await insertOrder(org.id);
     fail();
 
-    await expect(rejectOrder(admin, org.id, order.id, "Feil registrering")).rejects.toThrow();
+    await expect(
+      rejectOrder(admin, org.id, order.id, { reasonKey: "other", reasonText: "Feil registrering" }),
+    ).rejects.toThrow();
 
     expect(await orderStatus(order.id)).toBe("received");
     const [row] = await db.select().from(orders).where(eq(orders.id, order.id));

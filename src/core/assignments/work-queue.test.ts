@@ -1579,3 +1579,39 @@ describe("2.9 tenant-isolasjon", () => {
     expect((await list(a.admin, a.org.id, input)).map((r) => r.id)).toEqual([rowA.id]);
   });
 });
+
+/*
+ * Tilbud teller ikke i arbeidskøen (ADR 0012 punkt 13, testplan 3.7). Arbeidskøen leser bare
+ * `assignments`. Støtter hovedmål: de ansatte (takstmannen ser bare arbeid, ikke mulige jobber).
+ */
+describe("3.7 tilbud i arbeidskøen", () => {
+  it("3.7.1 åpent og utløpt tilbud gir verken rad eller telling", async () => {
+    const setup = await orgWithAdmin();
+    await createOrder(setup.org.id, { addressText: "Tilbudsveien 1", validUntil: "2026-12-01" });
+    await createOrder(setup.org.id, { addressText: "Tilbudsveien 2", validUntil: "2026-10-01" });
+    for (const status of ASSIGNMENT_STATUSES) {
+      expect(await listAll(setup.admin, setup.org.id, status), status).toEqual([]);
+    }
+    const counts = await count(setup.admin, setup.org.id, ALL);
+    for (const status of ASSIGNMENT_STATUSES) {
+      expect(counts[status as keyof typeof counts], status).toBe(0);
+    }
+    const searched = await count(setup.admin, setup.org.id, { mineOnly: false, query: "Tilbud" });
+    for (const status of ASSIGNMENT_STATUSES) {
+      expect(searched[status as keyof typeof searched], status).toBe(0);
+    }
+  });
+
+  it("3.7.2 tilbud gjort om til oppdrag teller bare som oppdraget, én gang", async () => {
+    const setup = await orgWithAdmin();
+    const offer = await createOrder(setup.org.id, { addressText: "Tilbudsveien 3" });
+    const assignment = await newAssignment(setup, { orderId: offer.id });
+    await db.execute(
+      sql`update orders set status = 'converted', assignment_id = ${assignment.id} where id = ${offer.id}`,
+    );
+    await createOrder(setup.org.id, { addressText: "Tilbudsveien 4", validUntil: "2026-10-01" });
+    const rows = await listAll(setup.admin, setup.org.id, "ordered");
+    expect(rows.map((row) => row.id)).toEqual([assignment.id]);
+    expect((await count(setup.admin, setup.org.id, ALL)).ordered).toBe(1);
+  });
+});

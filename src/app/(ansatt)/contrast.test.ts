@@ -115,6 +115,9 @@ const textPairs: [text: string, background: string, usage: string][] = [
   ["slate-900", "sand", "kvittering etter lagring"],
   ["slate-600", "brand-50", "linje 2 i rad med hover"],
   ["slate-900", "brand-50", "tittel i rad med hover"],
+  // Tilbud (docs/funksjoner/fase2a-tilbud-design.md avsnitt 10)
+  ["watch-text", "white", "dublettlinjen over «Gjør om til oppdrag»"],
+  ["fjord-dark", "sand", "lenken i kvitteringen (Notice med lenke)"],
 ];
 
 /** Kanter og fokusramme: minst 3:1 (WCAG 1.4.11). */

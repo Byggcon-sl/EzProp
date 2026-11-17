@@ -214,6 +214,7 @@ describe("oppslaget mot databasen", () => {
         "addressText",
         "assignmentNumber",
         "assignmentStatus",
+        "displayStatus",
         "id",
         "kind",
         "reasons",
@@ -488,12 +489,15 @@ describe("logg og ytelse", () => {
         gnr: String(1000 + i),
         bnr: String(i),
         receivedAt: new Date(TEST_NOW.getTime() - i * 3600 * 1000),
+        // Påkrevd fra migrering 0035 (ADR 0012)
+        validUntil: "2026-12-03",
       })),
     );
     await db.execute(sql`analyze orders`);
     const query = possibleDuplicatesQuery(org.id, {
       ...keys,
       receivedAt: TEST_NOW,
+      today: "2026-11-03",
       excludeOrderId: null,
     });
     const plan = await db.transaction(async (tx) => {

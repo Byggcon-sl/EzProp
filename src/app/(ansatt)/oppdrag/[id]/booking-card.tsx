@@ -5,8 +5,8 @@ import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { FormErrors, SubmitButton } from "../../form-parts";
 import { initialFormState, type FormState } from "../../form-state";
-import { OrderFields, type BookingFieldDefaults } from "../../ordre/order-fields";
-import { ORDER_OFFLINE_MESSAGE, readOrderValues } from "../../ordre/order-values";
+import { OrderFields, type BookingFieldDefaults } from "../../tilbud/offer-fields";
+import { ORDER_OFFLINE_MESSAGE, readOrderValues } from "../../order-values";
 import { ASSIGNMENT_CHANGED_MESSAGE } from "./booking-values";
 
 type Action = (state: FormState, formData: FormData) => Promise<FormState>;

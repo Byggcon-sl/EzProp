@@ -6,9 +6,9 @@ import { Card } from "@/shared/ui/card";
 import { BackLink } from "../../detail";
 import { getEmployeeContext } from "../../employee-context";
 import { NoAccess } from "../../no-access";
-import { NO_OFFICES_MESSAGE } from "../../ordre/office-choice";
-import { osloDateTimeLocal } from "../../ordre/received-at";
-import { createAssignmentAction, findDraftDuplicatesAction } from "./actions";
+import { NO_OFFICES_MESSAGE } from "../../tilbud/office-choice";
+import { osloDateTimeLocal } from "../../tilbud/received-at";
+import { createAssignmentAction, findDraftDuplicatesAction, saveAsOfferAction } from "./actions";
 import { AssignmentForm } from "./assignment-form";
 
 export const metadata: Metadata = { title: "Nytt oppdrag" };
@@ -31,7 +31,8 @@ function CannotCreate() {
 
 /**
  * «Nytt oppdrag» (docs/funksjoner/fase2a-nytt-oppdrag.md, Omfang 6–8): ett skjema og ett trykk
- * på «Lagre» gir et oppdrag med status «Bestilt», uten ordre. Valglistene og forhåndsvalgene
+ * på «Lagre» gir et oppdrag med status «Bestilt», uten tilbud. «Lagre som tilbud i stedet» lager et
+ * tilbud av de samme feltene (F2 a). Valglistene og forhåndsvalgene
  * kommer fra kjernen (`getNewAssignmentFormOptions`, som krever `assignment.edit`). Uten ansattrad:
  * samme svar som andre sider uten tilgang.
  */
@@ -58,6 +59,7 @@ export default async function NewAssignmentPage() {
       <p className="mt-1 mb-6 text-slate-600">Rapporttype: Tilstandsrapport</p>
       <AssignmentForm
         action={createAssignmentAction}
+        offerAction={saveAsOfferAction}
         duplicatesAction={findDraftDuplicatesAction}
         creationKey={randomUUID()}
         receivedAtDefault={osloDateTimeLocal(new Date())}

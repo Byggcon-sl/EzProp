@@ -107,7 +107,7 @@ test.describe("testdata i appen (pc og ipad)", () => {
     // Ordrelisten: en TD-ordre som ikke er gjort om, står som «Mottatt»
     const [open] = await testdataOpenOrderRefs();
     expect(open, "minst én TD-ordre er ikke gjort om").toBeTruthy();
-    await page.goto(`/ordre?q=${encodeURIComponent(open!)}`);
+    await page.goto(`/tilbud?status=all&q=${encodeURIComponent(open!)}`);
     const row = page
       .getByRole("main")
       .getByRole("link")
@@ -116,7 +116,7 @@ test.describe("testdata i appen (pc og ipad)", () => {
     await expect(row).toContainText("Mottatt");
     // En TD-ordre som er gjort om, viser oppdragsnummeret
     const converted = all[0]!;
-    await page.goto(`/ordre?q=${encodeURIComponent(converted.externalRef)}`);
+    await page.goto(`/tilbud?status=converted&q=${encodeURIComponent(converted.externalRef)}`);
     await expect(
       page.getByRole("main").getByRole("link").filter({ hasText: converted.number }),
     ).toHaveCount(1);
@@ -146,10 +146,10 @@ test.describe("testdata i appen (pc og ipad)", () => {
     await page.getByRole("button", { name: "Søk", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`q=${encodeURIComponent(target!.brokerLastName!)}`));
     await expect(cards(page).first()).toBeVisible();
-    // Ordrelisten finner det samme
-    await page.goto(`/ordre?q=${encodeURIComponent(target!.brokerLastName!)}`);
+    // Tilbudslisten finner det samme
+    await page.goto(`/tilbud?status=all&q=${encodeURIComponent(target!.brokerLastName!)}`);
     await expect(page.getByRole("main").getByRole("link").first()).toBeVisible();
-    await expect(page.getByRole("main")).not.toContainText("Ingen ordre passer søket.");
+    await expect(page.getByRole("main")).not.toContainText("Ingen tilbud passer søket.");
   });
 
   test("7.4 leder ser reklamasjonene på oppdraget og kan åpne saken", async ({ page }) => {
@@ -251,7 +251,7 @@ test.describe("testdata i appen (pc og ipad)", () => {
 
   for (const [name, path, login] of [
     ["arbeidskøen", "/arbeidskoe?status=in_progress&mine=0", logInAsOffice],
-    ["ordrelisten", "/ordre", logInAsOffice],
+    ["tilbudslisten", "/tilbud", logInAsOffice],
   ] as const) {
     test(`7.10 tilgjengelighet: ${name} med full testdata har ingen alvorlige brudd`, async ({
       page,

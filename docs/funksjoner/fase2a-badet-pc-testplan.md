@@ -174,7 +174,7 @@ Data: testen lager sitt eget oppdrag med våtrom i en egen prøveorganisasjon me
 
 ## 7. Øvrig
 
-1. **B7.1** `package.json` 0.14.0 (minor over main; høyere om en annen branch med minor er merget først), og `/api/helse` viser den. Migreringsnummeret: finnes en annen `0035_*` i main når main flettes inn, har badet fått neste nummer, og `grep -rn "0035_badet-pc"` i repoet gir ingen treff utenom endringsloggen; journalen i `drizzle/meta` har bare ett innslag per nummer.
+1. **B7.1** `package.json` 0.14.0 (minor over main; høyere om en annen branch med minor er merget først), og `/api/helse` viser den. Migreringsnummeret: finnes en annen `0035_*` i main når main flettes inn, har badet fått neste nummer, og `grep -rn "0036_badet-pc"` i repoet gir ingen treff utenom endringsloggen; journalen i `drizzle/meta` har bare ett innslag per nummer.
 2. **B7.2** `pnpm size` er kjørt og ruten er innenfor grensen.
 3. **B7.3** Ingen ny avhengighet i `package.json`.
 

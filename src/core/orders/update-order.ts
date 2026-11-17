@@ -10,15 +10,21 @@ import {
   isEmptyReceivedAt,
   nextBooking,
 } from "@/core/assignments/booking/update";
+import { todayInOslo } from "@/shared/lib/dates";
 import { isUuid } from "@/shared/lib/uuid";
-import { OrderChangedError } from "./errors";
+import { z } from "zod";
+import { VALID_UNTIL_FIELD } from "./codes";
+import type { OfferEditableField, OfferInput, UpdateOffer } from "./contract";
+import { OfferValidUntilLockedError, OrderChangedError } from "./errors";
 import { selectOrder } from "./orders";
-import { orderInputSchema, type OrderInput } from "./schemas";
+import { orderUpdateInputSchema, validUntilBoundsSchema } from "./schemas";
 
 /*
- * Endre en lagret ordre (T1, Ståle 12.11.2026: «full redigeringstilgang. alltid»; endrer A55 og
- * A87). Virker i alle statuser (A250). Status, avvisningsgrunn, oppdrag, kilde og ønsket rapport
- * endres aldri her, og oppdraget endres ikke (A251).
+ * Endre et lagret tilbud (ordre i koden; T1, Ståle 12.11.2026: «full redigeringstilgang.
+ * alltid»; endrer A55 og A87). Bestillingsfeltene kan endres i alle statuser (A250). «Gyldig til»
+ * (`validUntil`, ADR 0012) kan bare endres på åpne og utløpte tilbud (A327). Status,
+ * avslagsgrunn, oppdrag, kilde og ønsket rapport endres aldri her, og oppdraget endres ikke
+ * (A251).
  *
  * Sammenligningen av gammel og ny verdi er felles med oppdraget (`diffBooking` i
  * `@/core/assignments/booking/update`, ADR 0011), slik at formen i revisjonsloggen er lik.
@@ -41,18 +47,23 @@ import { orderInputSchema, type OrderInput } from "./schemas";
  * - Tom «Mottatt» betyr uendret (ved oppretting betyr den «nå»). Samme minutt som lagret betyr
  *   også uendret, fordi skjemaet viser hele minutter.
  * - Ingen endring: ingen oppdatering, ingen loggrad, ingen hendelse, `row_version` uendret.
+ * - «Gyldig til»: tom eller lik lagret betyr uendret, i alle statuser. Ny dato på et gjort-om
+ *   eller avslått tilbud gir `OfferValidUntilLockedError`, og ingenting lagres. Grensene (i dag
+ *   til ett år fram) sjekkes bare når datoen endres, så et utløpt tilbud kan få andre felt rettet.
+ *   Ny dato står i `fields` og `values` som `validUntil`. Et utløpt tilbud med ny dato er åpent
+ *   igjen, fordi utløpet regnes ut ved lesing.
  */
-export async function updateOrder(
+export const updateOrder = (async (
   actor: Actor,
   organizationId: string,
   orderId: string,
-  input: OrderInput,
+  input: OfferInput,
   expectedRowVersion: number,
   now: Date = new Date(),
-) {
+) => {
   const grant = await requireOrganizationAccess(actor, organizationId, "assignment.edit");
   if (!isUuid(orderId)) throw new AccessDeniedError();
-  const parsed = orderInputSchema(now).parse(input);
+  const parsed = orderUpdateInputSchema(now).parse(input);
   const keepReceivedAt = isEmptyReceivedAt(input);
 
   return db.transaction(async (tx) => {
@@ -75,6 +86,8 @@ export async function updateOrder(
         snr: orders.snr,
         housingAssociationName: orders.housingAssociationName,
         sellerDeclarationReceived: orders.sellerDeclarationReceived,
+        status: orders.status,
+        validUntil: orders.validUntil,
       })
       .from(orders)
       .where(where)
@@ -82,18 +95,39 @@ export async function updateOrder(
     if (!before) throw new AccessDeniedError();
     if (before.rowVersion !== expectedRowVersion) throw new OrderChangedError();
 
+    // «Gyldig til»: tom eller lik lagret er uendret. Ny dato bare på åpne og utløpte tilbud, og
+    // bare innenfor grensene (A327, A328).
+    const validUntilChanged = parsed.validUntil !== null && parsed.validUntil !== before.validUntil;
+    if (validUntilChanged) {
+      if (before.status !== "received") throw new OfferValidUntilLockedError();
+      z.object({ [VALID_UNTIL_FIELD]: validUntilBoundsSchema(todayInOslo(now)) }).parse({
+        [VALID_UNTIL_FIELD]: parsed.validUntil,
+      });
+    }
+    const nextValidUntil = validUntilChanged ? parsed.validUntil! : before.validUntil;
+
     const orderedByFirmId = await firmForContact(
       tx,
       grant.organizationId,
       parsed.orderedByContactId,
     );
     const next = nextBooking(before, parsed, { keepReceivedAt, orderedByFirmId });
-    const { fields, values } = diffBooking(before, next);
+    const booking = diffBooking(before, next);
+    const fields: OfferEditableField[] = [...booking.fields];
+    const values: Partial<
+      Record<OfferEditableField, { from: string | boolean | null; to: string | boolean | null }>
+    > = {
+      ...booking.values,
+    };
+    if (validUntilChanged) {
+      fields.push(VALID_UNTIL_FIELD);
+      values[VALID_UNTIL_FIELD] = { from: before.validUntil, to: nextValidUntil };
+    }
 
     if (fields.length > 0) {
       const [row] = await tx
         .update(orders)
-        .set({ ...next, updatedBy: grant.employeeId })
+        .set({ ...next, validUntil: nextValidUntil, updatedBy: grant.employeeId })
         .where(where)
         .returning({ id: orders.id });
       if (!row) throw new AccessDeniedError();
@@ -112,4 +146,4 @@ export async function updateOrder(
     if (!order) throw new AccessDeniedError();
     return order;
   });
-}
+}) satisfies UpdateOffer;

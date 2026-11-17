@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AccessDeniedError, requireOrganizationAccess, type EmployeeGrant } from "@/core/access";
 import { db } from "@/db/client";
 import { assignments } from "@/db/schema";
+import { todayInOslo } from "@/shared/lib/dates";
 import { logger } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
 import { PossibleDuplicatesLookupError } from "../errors";
@@ -68,6 +69,7 @@ const PERMISSION = "organization.read";
 export async function lookupPossibleDuplicateRows(
   grant: EmployeeGrant,
   fields: PossibleDuplicateFields,
+  now: Date = new Date(),
 ): Promise<{ rows: PossibleDuplicateRow[]; hasMore: boolean }> {
   const values = fieldsSchema.parse(fields);
 
@@ -79,6 +81,7 @@ export async function lookupPossibleDuplicateRows(
       snr: values.snr ?? null,
     }),
     receivedAt: values.receivedAt,
+    today: todayInOslo(now),
     excludeOrderId: values.excludeOrderId ?? null,
     excludeAssignmentId: values.excludeAssignmentId ?? null,
   };
@@ -128,14 +131,16 @@ function toPossibleDuplicate(row: PossibleDuplicateRow): PossibleDuplicate {
     receivedAt: row.receivedAt,
     addressText: row.addressText,
     reasons: rowReasons(row),
+    displayStatus: row.kind === "order" ? (row.displayStatus ?? null) : null,
   };
 }
 
 async function lookup(
   grant: EmployeeGrant,
   fields: PossibleDuplicateFields,
+  now?: Date,
 ): Promise<PossibleDuplicates> {
-  const { rows, hasMore } = await lookupPossibleDuplicateRows(grant, fields);
+  const { rows, hasMore } = await lookupPossibleDuplicateRows(grant, fields, now);
   return { items: rows.map(toPossibleDuplicate), hasMore };
 }
 
@@ -147,9 +152,10 @@ export const findPossibleDuplicatesFor: FindPossibleDuplicatesFor = async (
   actor,
   organizationId,
   fields,
+  now,
 ) => {
   const grant = await requireOrganizationAccess(actor, organizationId, PERMISSION);
-  return lookup(grant, fields);
+  return lookup(grant, fields, now);
 };
 
 /**
@@ -160,6 +166,7 @@ export const findPossibleDuplicatesForAssignment: FindPossibleDuplicatesForAssig
   actor,
   organizationId,
   assignmentId,
+  now,
 ) => {
   const grant = await requireOrganizationAccess(actor, organizationId, PERMISSION);
   if (!isUuid(assignmentId)) throw new AccessDeniedError();
@@ -183,15 +190,19 @@ export const findPossibleDuplicatesForAssignment: FindPossibleDuplicatesForAssig
     );
   if (!assignment) throw new AccessDeniedError();
 
-  return lookup(grant, {
-    addressText: assignment.addressText,
-    gnr: assignment.gnr,
-    bnr: assignment.bnr,
-    snr: assignment.snr,
-    receivedAt: assignment.receivedAt,
-    excludeAssignmentId: assignment.id,
-    excludeOrderId: assignment.orderId,
-  });
+  return lookup(
+    grant,
+    {
+      addressText: assignment.addressText,
+      gnr: assignment.gnr,
+      bnr: assignment.bnr,
+      snr: assignment.snr,
+      receivedAt: assignment.receivedAt,
+      excludeAssignmentId: assignment.id,
+      excludeOrderId: assignment.orderId,
+    },
+    now,
+  );
 };
 
 /** PostgreSQL-koden (f.eks. `57014`) fra feilen eller årsaken, uten tekst. */

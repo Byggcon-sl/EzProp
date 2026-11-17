@@ -1,14 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
+  convertOfferWithOneTap,
   fakeValidOrgNumber,
   logInAsInspector,
   logInAsManager,
   logInAsOffice,
   restoreInspectorsEditAll,
+  saveNewOffer,
   setInspectorsEditAll,
   uniqueSuffix,
-  convertedAssignmentLink,
 } from "./helpers";
 
 /*
@@ -32,8 +33,6 @@ const PORTRAIT = { width: 834, height: 1194 } as const;
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const FIRM_URL = new RegExp(`/firma/(${UUID})$`);
 const CONTACT_URL = new RegExp(`/kontakter/(${UUID})$`);
-const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
-const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
 const CONTACT_REMOVE_TEXT =
   "Kontakten vises ikke lenger i listen og søket. Oppdrag og ordrer beholder navnet som står på dem.";
 
@@ -124,18 +123,12 @@ async function createContactViaUi(page: Page, contact: Contact): Promise<string>
   return CONTACT_URL.exec(page.url())![1]!;
 }
 
-/** Ny ordre med unik adresse → «Gjør om til oppdrag» (Bodø) → åpne oppdraget. */
+/** Nytt tilbud med unik adresse → «Gjør om til oppdrag» (Bodø) → åpne oppdraget. */
 async function newAssignment(page: Page): Promise<string> {
-  await page.goto("/ordre/ny");
+  await page.goto("/tilbud/ny");
   await page.getByLabel(/^Adresse/).fill(`Testveien 12 ${uniqueSuffix()}, 8000 Bodø`);
-  await saveButton(page).click();
-  await expect(page).toHaveURL(ORDER_URL);
-  await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
-  await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(convertedAssignmentLink(page)).toBeVisible();
-  await convertedAssignmentLink(page).click();
-  await expect(page).toHaveURL(ASSIGNMENT_URL);
-  return ASSIGNMENT_URL.exec(page.url())![1]!;
+  await saveNewOffer(page);
+  return convertOfferWithOneTap(page);
 }
 
 function partiesSection(page: Page): Locator {

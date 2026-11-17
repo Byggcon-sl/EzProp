@@ -152,7 +152,6 @@ Tas **nå, før punktene under**. Ståle i chat 13.11.2026: «vi kjører på tes
 
 Tas **etter testdataene og før punktene under**. Ståle i chat 13.11.2026: «Det er svært sjelden vi oppretter ordre, men stort sett går vi rett på oppdrag. Jeg ønsker at vi i utgangspunktet skal gå rett på oppdrag, men ha mulighet for å opprette ett tilbud. Tilbud vil fungere som ett tilbud/lead, som deretter kan konverteres til oppdrag. Men det trenger ikke være "fremst" i løsningen, det vil være kanskje ett eller to av hundre oppdrag.»
 
-- [ ] **Tilbud i stedet for ordre:** «Ordre» heter nå **«Tilbud»** og ligger lenger ned i menyen. Et tilbud er en mulig jobb (lead) med de samme feltene, og kan **gjøres om til oppdrag med ett trykk** (alt fylles inn), avslås med grunn, eller gå ut på dato. Tilbud teller ikke i arbeidskøen. Ordrene som finnes, blir tilbud uten at data går tapt. Datamodell og navn avgjøres i en ADR (faste koder endres ikke, de arkiveres).
 
 ### Fra Ståles svar 12.11.2026
 
