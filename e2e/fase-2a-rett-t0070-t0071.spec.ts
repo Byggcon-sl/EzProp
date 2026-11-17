@@ -169,12 +169,16 @@ async function fillProperty(page: Page) {
   await property.getByLabel(/^Poststed/).fill(CITY);
   await property.getByLabel(/^Boligtype/).selectOption({ label: "Enebolig" });
   await property.getByLabel(/^Eierform/).selectOption({ label: "Selveier" });
+  await property.getByLabel(/^Gårdsnummer/).fill("999");
+  await property.getByLabel(/^Bruksnummer/).fill("999");
 }
 
 async function expectPropertyValues(page: Page) {
   const property = region(page, "Eiendom");
   await expect(property.getByLabel(/^Postnummer/)).toHaveValue("8000");
   await expect(property.getByLabel(/^Poststed/)).toHaveValue(CITY);
+  await expect(property.getByLabel(/^Gårdsnummer/)).toHaveValue("999");
+  await expect(property.getByLabel(/^Bruksnummer/)).toHaveValue("999");
   await expect(property.getByLabel(/^Boligtype/).locator("option:checked")).toHaveText("Enebolig");
   await expect(property.getByLabel(/^Eierform/).locator("option:checked")).toHaveText("Selveier");
 }
@@ -339,23 +343,17 @@ test.describe("rett T-0070: utløpt innlogging (pc og ipad)", () => {
     await clickAndWaitForSave(page, saveProperty(page));
     await expect(alertWith(page, SIGNED_OUT)).toBeVisible();
 
-    // Tab fra Lagre (fram eller tilbake) til «Logg inn»
+    // Tab fra Lagre (tilbake, eller fram om lenken står etter knappen) til «Logg inn»
     const link = signInLink(region(page, "Eiendom"));
-    await saveProperty(page).focus();
+    const isFocused = () => link.evaluate((element) => element === document.activeElement);
     let reached = false;
-    for (const key of ["Shift+Tab", "Shift+Tab", "Shift+Tab", "Shift+Tab"]) {
-      await page.keyboard.press(key);
-      if (await link.evaluate((element) => element === document.activeElement)) {
-        reached = true;
-        break;
-      }
-    }
-    if (!reached) {
+    for (const key of ["Shift+Tab", "Tab"]) {
       await saveProperty(page).focus();
-      for (let i = 0; i < 6 && !reached; i++) {
-        await page.keyboard.press("Tab");
-        reached = await link.evaluate((element) => element === document.activeElement);
+      for (let i = 0; i < 40 && !reached; i++) {
+        await page.keyboard.press(key);
+        reached = await isFocused();
       }
+      if (reached) break;
     }
     expect(reached, "«Logg inn» nås med tastaturet").toBe(true);
 
