@@ -1248,11 +1248,11 @@ describe("requestSuggestion: utfallet blocked (vask før KI V5.1–V5.7, V10.1)"
   }
 
   it.each([
-    { name: "V5.1 answer med oppdrag", target: "answer" as const, withAssignment: true },
+    { name: "V5.1 answer med oppdrag", target: "field_answer" as const, withAssignment: true },
     { name: "V5.2 ai_trial uten oppdrag", target: "ai_trial" as const, withAssignment: false },
     {
       name: "V5.2 fritekst uten oppdrag (answer, assignmentId null)",
-      target: "answer" as const,
+      target: "field_answer" as const,
       withAssignment: false,
     },
   ])(

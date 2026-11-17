@@ -178,7 +178,7 @@ afterEach(() => {
 
 const realTarget = () => ({ type: TEST_TARGET_TYPE, id: uuidv7(), fieldKey: "text" });
 const trialTarget = () => ({ type: "ai_trial", id: uuidv7(), fieldKey: "text" });
-const answerTarget = () => ({ type: "answer", id: uuidv7(), fieldKey: "text" });
+const answerTarget = () => ({ type: "field_answer", id: uuidv7(), fieldKey: "text" });
 
 /** Organisasjon med gyldig `anthropic`-tilkobling, en ansatt og et oppdrag med kjente verdier. */
 async function anthropicOrganization(

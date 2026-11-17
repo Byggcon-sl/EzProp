@@ -37,7 +37,7 @@ function blockedInput(overrides: { requestId?: string; targetId?: string } = {})
     model: "oppdiktet-modell",
     promptVersion: "language_polish.v1",
     assignmentId: null,
-    target: { type: "answer", id: overrides.targetId ?? uuidv7(), fieldKey: "text" },
+    target: { type: "field_answer", id: overrides.targetId ?? uuidv7(), fieldKey: "text" },
     sourceFields: ["text"],
   };
 }
@@ -92,7 +92,7 @@ describe("insertBlockedRow (V5.1, V5.4, V5.5, V10.1)", () => {
     const targetId = uuidv7();
     const previous = await createAiUsageLog(organization.id, {
       employeeId: grant.employeeId,
-      targetRef: { type: "answer", id: targetId, fieldKey: "text" },
+      targetRef: { type: "field_answer", id: targetId, fieldKey: "text" },
     });
     await insertBlockedRow(grant, blockedInput({ targetId }));
     expect((await aiRow(previous.id))!.status).toBe("suggested");

@@ -1671,7 +1671,7 @@ export async function createAiUsageLog(
       ${overrides.feature ?? "language_polish"}, ${overrides.provider ?? "fake"},
       ${overrides.model ?? "fake-v1"}, ${overrides.promptVersion ?? "language_polish.v1"},
       ${pick<string | null>("assignmentId", null)}, ${pick<string | null>("reportId", null)},
-      ${JSON.stringify(overrides.targetRef ?? { type: "answer", id: uuidv7(), fieldKey: "text" })}::jsonb,
+      ${JSON.stringify(overrides.targetRef ?? { type: "field_answer", id: uuidv7(), fieldKey: "text" })}::jsonb,
       ${JSON.stringify(overrides.sourceFields ?? ["text"])}::jsonb,
       ${JSON.stringify(overrides.inputSummary ?? { text: 37 })}::jsonb,
       ${outcome}, ${pick<string | null>("errorCode", null)},
