@@ -4,6 +4,7 @@ import postgres from "postgres";
 import { assertLocalOrTestDatabase } from "./database-guard";
 import {
   ADMIN_EMAIL,
+  archiveLeftoverE2eOffices,
   chooseOfficeIfNeeded,
   convertOfferWithOneTap as convertWithOneTap,
   e2eDatabaseUrl,
@@ -1150,6 +1151,7 @@ test.describe("tilbud (bare ipad)", () => {
   test("5.18 «Gjør om til oppdrag» er helt synlig uten rulling og minst 56 px, også med dublettvarsel og lang adresse", async ({
     page,
   }) => {
+    await archiveLeftoverE2eOffices();
     const suffix = uniqueSuffix();
     const longAddress = `Den svært lange oppdiktede Testveigata med mange ord i navnet 128 B ${suffix}, 8000 Bodø`;
     // To tilbud med samme adresse gir dublettvarselet

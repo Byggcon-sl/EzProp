@@ -1044,6 +1044,32 @@ export async function softDeleteFirms(firmIds: readonly string[]): Promise<void>
 }
 
 /**
+ * Myk sletting av kontorene som e2e-testene har laget («Testkontor …» og «Loggkontor …»).
+ * Kontorene lages av fase-0b-admin.spec.ts og fase-0b-logg.spec.ts og blir liggende mellom
+ * kjøringer i den lokale databasen, som ikke tømmes. Da vokser kontorlistene, og layout-tester blir
+ * røde uten grunn. Kontorene fra seed (Bodø, Mo i Rana, Mosjøen, Narvik, Tromsø) røres ikke, og
+ * ingenting slettes for godt (regel 3). Bare lokal database eller testdatabasen.
+ */
+export async function archiveLeftoverE2eOffices(): Promise<void> {
+  const sql = e2eSql();
+  try {
+    const organizationId = await seedOrganizationId(sql);
+    const [admin] = await sql<{ id: string }[]>`
+      select e.id from employees e join users u on u.id = e.user_id
+      where u.email = ${ADMIN_EMAIL} and e.organization_id = ${organizationId}
+        and e.deleted_at is null limit 1`;
+    if (!admin) throw new Error("Fant ikke admin fra seed (kjør pnpm db:seed)");
+    await sql`
+      update offices set deleted_at = now(), deleted_by = ${admin.id}, updated_at = now(),
+        row_version = row_version + 1
+      where organization_id = ${organizationId} and deleted_at is null
+        and (name like 'Testkontor %' or name like 'Loggkontor %')`;
+  } finally {
+    await sql.end();
+  }
+}
+
+/**
  * Oppdiktet avtale for firmaet, lagt rett i databasen (uten premissetekst). Datoene er
  * `YYYY-MM-DD`. Returnerer id-en. Bare lokal database eller testdatabasen.
  */
