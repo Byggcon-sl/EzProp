@@ -163,7 +163,7 @@ Første punkt tas **før Byggcon-profilen**, fordi det retter reglene som alt er
 
 Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full produksjonskvalitet (ikke en prototype som bygges om senere). Da kan Ståle se og godkjenne fag og utseende tidlig, og feil i grunnstrukturen oppdages før de blir dyre.
 
-- [ ] **Badet på PC:** kontrollpunktene, avvikskort (TG, årsak, konsekvens, tiltak, kostnad) og TGIU på punktet. TG-forslag fra reglene kan godtas, endres eller avvises.
+- [ ] **Badet på PC:** kontrollpunktene, avvikskort (TG, årsak, konsekvens, tiltak, kostnad) og TGIU på punktet. TG-forslag fra reglene kan godtas, endres eller avvises. *Skjermen levert i PR #224 (17.11.2026); punktet krysses av når testdata del 2 under er levert (A359).*
   - **Testdata, del 2** (A300, fra «Testdata som ligner en ekte arbeidshverdag»): testdataene utvides med bilder laget av skriptet (uten personer), funn, TG og målinger per kontrollpunkt, og byggeår når kolonnen finnes. TG og funn kommer fra regelmotoren og malens testsaker, aldri skrevet fritt i seed; tekstene merkes «utkast, ikke godkjent av fagrådet». TG3 har kostnadsanslag, TG2 og TG3 årsak og konsekvens, og el, rekkverk og HMS får ingen TG. ki-ansvarlig vurderer oppgaven på nytt.
 - [ ] **KI i veien:** forslag fra frasebanken, språkvask av avviksteksten og utkast til sammendrag, gjennom KI-grunnmuren.
 - [ ] **Publisering av badet:** sperren for det som gjelder våtrom (TG2 eller TG3 uten årsak og konsekvens, TG3 uten kostnad, våtrom uten hulltaking eller begrunnelse), med aktiv overstyring og logg.
