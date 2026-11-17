@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shortcutFor, type ShortcutKeyEvent } from "./shortcuts";
+import { opensPhraseList, SHORTCUT_LIST, shortcutFor, type ShortcutKeyEvent } from "./shortcuts";
 
 /*
  * Snarveiene på PC (A383, design avsnitt 21a, testplanen B6.13a). Ingen snarvei godtar eller
@@ -55,5 +55,42 @@ describe("shortcutFor", () => {
       [false, true].map((inTextField) => shortcutFor(key({ key: k, inTextField }))),
     );
     expect(all.every((result) => result === null)).toBe(true);
+  });
+});
+
+describe("opensPhraseList (A438, KI i veien K7.12)", () => {
+  const event = (key: string, value: string, extra: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; isComposing: boolean }> = {}) => ({
+    key,
+    value,
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    ...extra,
+  });
+
+  it.each([
+    ["«/» først i tomt felt", event("/", "")],
+    ["Ctrl+. i tomt felt", event(".", "", { ctrlKey: true })],
+    ["Ctrl+. midt i tekst", event(".", "Fallet er for lite", { ctrlKey: true })],
+    ["Cmd+. på Mac", event(".", "Tekst", { metaKey: true })],
+  ])("%s åpner «Forslag»", (_name, e) => {
+    expect(opensPhraseList(e)).toBe(true);
+  });
+
+  it.each([
+    ["«/» midt i tekst skrives som vanlig", event("/", "1")],
+    ["punktum alene", event(".", "")],
+    ["Alt+.", event(".", "", { ctrlKey: true, altKey: true })],
+    ["sammensetting (IME)", event("/", "", { isComposing: true })],
+    ["Ctrl+/", event("/", "", { ctrlKey: true })],
+  ])("%s åpner ikke", (_name, e) => {
+    expect(opensPhraseList(e)).toBe(false);
+  });
+
+  it("snarveien står i «?»-listen", () => {
+    expect(SHORTCUT_LIST).toContainEqual({
+      keys: "/ først i tomt felt, eller Ctrl + .",
+      text: "Forslag til feltet",
+    });
   });
 });

@@ -3,7 +3,14 @@ import { notFound } from "next/navigation";
 import { AccessDeniedError } from "@/core/access";
 import { getAssignment } from "@/core/assignments";
 import { getAssignmentBuildings, roomTypeLabel } from "@/core/buildings";
-import { getRoomView, type RoomReportView } from "@/core/reports";
+import {
+  getReportSummary,
+  getRoomView,
+  type ReportSummaryView,
+  type RoomReportView,
+} from "@/core/reports";
+import type { MergeFieldSources } from "@/core/reports/logic";
+import { mergeSourcesFor } from "@/core/reports/merge-sources";
 import { isUuid } from "@/shared/lib/uuid";
 import { getEmployeeContext } from "../../../../employee-context";
 import { NoAccess } from "../../../../no-access";
@@ -68,6 +75,19 @@ export default async function RoomPage({
     return <StartReport assignmentId={id} canStart={view.canStart} roomTitle={roomTitle} />;
   }
 
+  // Sammendraget for hele rapporten («KI i veien», A434). Kjernen sjekker tilgangen.
+  let summary: ReportSummaryView | null = null;
+  try {
+    summary = await getReportSummary(context.actor, context.organizationId, id);
+  } catch (error) {
+    if (!(error instanceof AccessDeniedError)) throw error;
+  }
+  // Hvor flettefeltene i standardtekstene henter verdien, så forslagslisten viser teksten slik den
+  // havner i feltet. Bare feltkoder, ingen verdier.
+  const mergeSources: Record<string, MergeFieldSources> = Object.fromEntries(
+    view.document.checkpoints.map((c) => [c.key, mergeSourcesFor(c.key)]),
+  );
+
   const punkt = typeof query.punkt === "string" ? query.punkt : null;
   return (
     <RoomView
@@ -77,6 +97,8 @@ export default async function RoomPage({
       assignmentNumber={assignmentNumber}
       roomTitle={titleOf(view.room)}
       requestedCheckpoint={punkt}
+      summary={summary}
+      mergeSources={mergeSources}
     />
   );
 }
