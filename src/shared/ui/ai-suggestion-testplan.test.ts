@@ -26,7 +26,7 @@ const TEXTS = {
   noMatch: "KI hadde ikke noe forslag. Teksten din er uendret.",
   error: "KI svarte ikke. Prøv igjen.",
   aiOff: "KI er av.",
-  offline: "Krever nett. Teksten din er lagret og kan skrives videre.",
+  offline: "Trenger nett. Teksten din er lagret.",
   queued: "Venter på KI. Forslaget kommer når nettet er tilbake.",
 };
 
@@ -212,7 +212,7 @@ describe("forslagskortet: knapper og tekst per tilstand (10.1–10.9)", () => {
       const html = render(overrides);
       const buttons = buttonsIn(html);
       expect(buttons.every((button) => button.disabled)).toBe(true);
-      // I kø: «Venter på KI …» i stedet for «Krever nett …»
+      // I kø: «Venter på KI …» i stedet for «Trenger nett …»
       if ("queued" in overrides) {
         expect(visibleText(html)).toContain(TEXTS.queued);
         expect(visibleText(html)).not.toContain(TEXTS.offline);
