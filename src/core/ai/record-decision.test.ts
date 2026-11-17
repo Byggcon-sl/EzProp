@@ -650,6 +650,7 @@ describe("K7 oppbevaringstid ved manuelle overganger (D1–D12)", () => {
     expect(snapshot(await aiRow(inA.id))).toBe(before);
   });
 
+  // Kjører resetDatabase() for hvert scenario; tømmingen av alle tabeller tar lengre tid etter hvert som skjemaet vokser.
   it("D12 ingen rad slettes", async () => {
     for (const [name, run] of Object.entries(scenarios)) {
       await resetDatabase();
@@ -668,5 +669,5 @@ describe("K7 oppbevaringstid ved manuelle overganger (D1–D12)", () => {
       await recordDecision(grant, row.id, decision);
       expect(await rowCounts()).toEqual(before);
     }
-  });
+  }, 30_000);
 });

@@ -10,6 +10,7 @@ import {
   e2eDatabaseUrl,
   logIn,
   logInAsInspector,
+  logInAsInspectorWithOffice,
   logInAsOffice,
   signInWithCode,
   uniqueSuffix,
@@ -1148,6 +1149,8 @@ test.describe("tilbud (bare ipad)", () => {
     test.skip(test.info().project.name !== "ipad", "Bare i prosjektet ipad");
   });
 
+  // Radiogruppen med kontorer for admin uten kontor dekkes av 5.7. 5.18 bruker en ansatt med fast
+  // kontor, fordi e2e-databasen aldri tømmes og samler opp testkontorer fra andre specer.
   test("5.18 «Gjør om til oppdrag» er helt synlig uten rulling og minst 56 px, også med dublettvarsel og lang adresse", async ({
     page,
   }) => {
@@ -1157,7 +1160,7 @@ test.describe("tilbud (bare ipad)", () => {
     // To tilbud med samme adresse gir dublettvarselet
     const id = await insertOffer({ address: longAddress, gnr: "12", bnr: "34" });
     await insertOffer({ address: longAddress, gnr: "12", bnr: "34" });
-    await logIn(page);
+    await logInAsInspectorWithOffice(page);
 
     for (const viewport of [PORTRAIT, LANDSCAPE]) {
       await page.setViewportSize(viewport);
