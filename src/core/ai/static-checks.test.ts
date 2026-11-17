@@ -517,3 +517,97 @@ describe("KI-køen på klienten, statiske kontroller (K4.4–K4.8)", () => {
     expect(address).toEqual([]);
   });
 });
+
+/*
+ * «KI i veien», statiske kontroller (docs/funksjoner/fase2a-ki-i-veien-testplan.md K2.8, K5.16 og
+ * K5.18, arkitekt runde 2, punkt 7). Støtter hovedmål: KI i bunnen (kjernen står alene, og
+ * rapportkjernen bruker den, aldri motsatt) og færre reklamasjoner (ingen tilgang på tvers, og
+ * ingenting slettes).
+ */
+describe("KI i veien, statiske kontroller (K2.8, K5.16, K5.18)", () => {
+  const importsOf = (source: string) =>
+    [...source.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)].map((match) => match[1]);
+
+  it("K2.8 src/core/ai importerer aldri @/core/reports eller @/core/templates", () => {
+    const offenders = productFiles(aiDir)
+      .flatMap((file) =>
+        importsOf(read(file))
+          .filter((spec) => /^@\/core\/(reports|templates)(\/|$)/.test(spec ?? ""))
+          .map((spec) => `${rel(file)}: ${spec}`),
+      )
+      .sort();
+    expect(offenders).toEqual([]);
+    // Ikke hul: mønsteret fanger en oppdiktet import
+    expect(
+      importsOf('import { x } from "@/core/reports";').filter((spec) =>
+        /^@\/core\/(reports|templates)(\/|$)/.test(spec ?? ""),
+      ),
+    ).toHaveLength(1);
+  });
+
+  const NEW_FILES = [
+    "resolve-target.ts",
+    "request-suggestion.ts",
+    "record-decision.ts",
+    "candidates.ts",
+    "guards.ts",
+    "placeholders.ts",
+    "prompt.ts",
+  ];
+
+  it("K5.16 de nye spørringene filtrerer på grant.organizationId, aldri på en id fra forespørselen", () => {
+    for (const name of NEW_FILES) {
+      const source = read(join(aiDir, name));
+      expect(source, name).not.toMatch(
+        /\b(request|input|target|validated|serverInput|options|parsed)\??\.organizationId\b/u,
+      );
+      // Alle tildelinger av organizationId kommer fra grant
+      for (const match of source.matchAll(/\borganizationId\s*=(?!=)\s*([^;\n]+)/gu)) {
+        expect(match[1], name).toMatch(/^grant\.organizationId/u);
+      }
+    }
+    // Oppslaget av målet bruker grant.organizationId i hvert ledd
+    const resolve = read(join(aiDir, "resolve-target.ts"));
+    expect(resolve).toMatch(/const organizationId = grant\.organizationId;/u);
+    for (const table of [
+      "reports",
+      "assignments",
+      "checkpointResults",
+      "deviations",
+      "deviationMeasures",
+    ]) {
+      expect(resolve, table).toMatch(
+        new RegExp(`eq\\(${table}\\.organizationId, organizationId\\)`, "u"),
+      );
+      expect(resolve, table).toMatch(new RegExp(`isNull\\(${table}\\.deletedAt\\)`, "u"));
+    }
+    // Og låser aldri rader (låserekkefølgen, A469)
+    expect(resolve).not.toMatch(/\.for\(\s*["']update["']|pg_advisory|lockTarget/u);
+  });
+
+  it("K5.18 ingenting slettes permanent: ingen delete( i KI-modulen (utenom køen i nettleseren)", () => {
+    const offenders = productFiles(aiDir)
+      .filter((file) => !rel(file).startsWith("src/core/ai/client/"))
+      .filter((file) => /\.delete\s*\(|\bdelete\s+from\b/iu.test(read(file)))
+      .map(rel);
+    expect(offenders).toEqual([]);
+  });
+
+  it("vaktene, plassholderne, kandidatene og ledeteksten er rene (ingen database, ingen leverandør)", () => {
+    for (const name of ["guards.ts", "guard-cases.ts", "placeholders.ts", "candidates.ts"]) {
+      const imports = importsOf(read(join(aiDir, name)));
+      for (const spec of imports) {
+        expect(spec, `${name}: ${spec}`).not.toMatch(/^@\/db\/client|drizzle-orm|\.\/providers/u);
+      }
+    }
+  });
+
+  it("et stoppet svar skrives aldri til logger eller revisjonsloggen med tekst", () => {
+    const source = read(join(aiDir, "request-suggestion.ts"));
+    const logCalls = [...source.matchAll(/logger\.\w+\(([\s\S]*?)\);/gu)].map((match) => match[1]);
+    expect(logCalls.length).toBeGreaterThan(0);
+    for (const call of logCalls) {
+      expect(call).not.toMatch(/text|answer|outputText|prompt/iu);
+    }
+  });
+});

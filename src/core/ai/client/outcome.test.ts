@@ -109,3 +109,21 @@ describe("K2.4 statisk", () => {
     expect(source).not.toMatch(/navigator/);
   });
 });
+
+describe("KI i veien: et stoppet svar (K4.11, A431)", () => {
+  it("stopped er ferdig, også uten tekst i svaret, og gir aldri nytt forsøk", () => {
+    const result: AiQueueSendResult = {
+      kind: "stopped",
+      usageId: "0190a0b0-0000-7000-8000-000000000001",
+    };
+    const attempt: AiQueueSendAttempt<AiQueueSendResult> = { kind: "answered", result };
+    expect(classifyQueueOutcome(attempt, true)).toBe("done" satisfies AiQueueOutcome);
+    // Uten nett avgjøres ingenting før det er nett igjen, som for de andre svarene
+    expect(classifyQueueOutcome(attempt, false)).toBe("retry_later");
+  });
+
+  it("outcome.ts leser aldri tekst fra svaret", () => {
+    const source = readFileSync(path.join(here, "outcome.ts"), "utf8");
+    expect(source).not.toMatch(/\.text\b|outputText|output_text/u);
+  });
+});

@@ -84,7 +84,7 @@ function isApproved(item: AiApprovalItem, row: StoredRow | undefined): boolean {
   const definition = getFeatureDefinition(row.feature);
   if (!definition) return false;
   const stored = row.targetRef;
-  // Gamle rader på en arkivert måltype (`ai_trial`) leses fortsatt som før (regel 6)
+  // Gamle rader på en arkivert måltype (prøvesiden) leses fortsatt som før (regel 6)
   const allowed =
     ARCHIVED_AI_TARGET_TYPES.includes(stored.type) ||
     definition.allowedTargets.some(

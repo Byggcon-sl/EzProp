@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AccessDeniedError, requireOrganizationAccess } from "@/core/access";
+import { AccessDeniedError, requireOrganizationAccess, type EmployeeGrant } from "@/core/access";
 import { db } from "@/db/client";
 import { logger } from "@/shared/lib/logger";
 import { uuidv7 } from "@/shared/lib/uuid";
@@ -11,6 +11,7 @@ import {
   auditCount,
   captureError,
   employeeWithGrant,
+  enableAi,
   expectSameRejection,
   mergeOrganizationSettings,
   neutralDecisionRejection,
@@ -18,9 +19,20 @@ import {
   snapshot,
   validTarget,
 } from "../../../tests/ai";
-import { createAiUsageLog, resetDatabase, TEST_NOW } from "../../../tests/factories";
+import { candidate, createAiReportChain, type AiReportChain } from "../../../tests/ai-report";
+import {
+  createAiUsageLog,
+  createOrganization,
+  createOutcomeRow,
+  resetDatabase,
+  TEST_NOW,
+} from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
+import { AiDecisionError, AiRequestRejectedError } from "./errors";
 import * as aiModule from "./index";
+import { recordDecision as recordDecisionTyped, recordDecisionIn } from "./record-decision";
+import { requestSuggestion as requestWithServerInput } from "./request-suggestion";
+import type { AiCandidate, AiCandidateRef } from "./types";
 import { addYears } from "./usage-log";
 
 /*
@@ -671,4 +683,260 @@ describe("K7 oppbevaringstid ved manuelle overganger (D1–D12)", () => {
       expect(await rowCounts()).toEqual(before);
     }
   }, 30_000);
+});
+
+/*
+ * «KI i veien»: valgt kandidat og beslutning i kallerens transaksjon
+ * (docs/funksjoner/fase2a-ki-i-veien-testplan.md K4.19, K5.13 og K5.14, A432 og A469). Mot
+ * testdatabasen med den falske leverandøren. Alle verdier er oppdiktet.
+ */
+
+async function phraseRow(grant: EmployeeGrant, chain: AiReportChain, candidates: AiCandidate[]) {
+  const result = await requestWithServerInput(
+    grant,
+    {
+      requestId: uuidv7(),
+      feature: "phrase_suggest",
+      assignmentId: null,
+      reportId: null,
+      target: { type: "deviation", id: chain.deviationId, fieldKey: "cause_text" },
+      fields: { text: "", outcome_key: "membrane_crack", group: "tg2" },
+    },
+    { candidates },
+  );
+  if (result.kind !== "candidates") throw new Error(`ventet kandidater, fikk ${result.kind}`);
+  return result;
+}
+
+const TWO = () => [
+  candidate("Membranen er gammel"),
+  candidate("Fallet er for lite", "template_measure"),
+];
+
+describe("KI i veien: recordDecision med kandidat (K4.19)", () => {
+  it("kandidat fra listen gir accepted og chosen_candidate; undo tømmer den", async () => {
+    const { organization, grant } = await aiOrganization();
+    const chain = await createAiReportChain(organization.id);
+    const list = TWO();
+    const result = await phraseRow(grant, chain, list);
+    const chosen = { source: list[1]!.source, id: list[1]!.id };
+
+    await recordDecisionTyped(grant, result.usageId, "accepted", { candidate: chosen });
+
+    let row = (await aiRow(result.usageId))!;
+    expect(row.status).toBe("accepted");
+    expect(row.chosen_candidate).toEqual(chosen);
+    expect(row.decided_by).toBe(grant.employeeId);
+    // Samme valg på nytt gir samme svar (ingen endring)
+    await recordDecisionTyped(grant, result.usageId, "accepted", { candidate: chosen });
+    // Et annet valg på en godtatt rad er ikke lov
+    await expect(
+      recordDecisionTyped(grant, result.usageId, "accepted", {
+        candidate: { source: list[0]!.source, id: list[0]!.id },
+      }),
+    ).rejects.toBeInstanceOf(AiDecisionError);
+
+    await recordDecisionTyped(grant, result.usageId, "undo");
+    row = (await aiRow(result.usageId))!;
+    expect(row.status).toBe("suggested");
+    expect(row.chosen_candidate).toBeNull();
+  });
+
+  it("lukket liste gir rejected uten chosen_candidate; ingen rad blir stående suggested", async () => {
+    const { organization, grant } = await aiOrganization();
+    const chain = await createAiReportChain(organization.id);
+    const result = await phraseRow(grant, chain, TWO());
+    await recordDecisionTyped(grant, result.usageId, "rejected");
+    const row = (await aiRow(result.usageId))!;
+    expect(row.status).toBe("rejected");
+    expect(row.chosen_candidate).toBeNull();
+    const open = (await db.execute(
+      sql`select count(*)::int as n from ai_usage_log where feature = 'phrase_suggest' and status = 'suggested'`,
+    )) as unknown as { n: number }[];
+    expect(open[0]!.n).toBe(0);
+  });
+
+  it.each([
+    { name: "uten kandidat", option: "none" as const },
+    { name: "kandidat som ikke står i listen", option: "unknown" as const },
+    { name: "riktig id, feil kilde", option: "wrong_source" as const },
+  ])("accepted $name avvises, raden er uendret", async ({ option }) => {
+    const { organization, grant } = await aiOrganization();
+    const chain = await createAiReportChain(organization.id);
+    const list = TWO();
+    const result = await phraseRow(grant, chain, list);
+    const before = snapshot(await aiRow(result.usageId));
+    const auditBefore = await auditCount();
+    const options =
+      option === "unknown"
+        ? { candidate: { source: "template_outcome" as const, id: uuidv7() } }
+        : option === "wrong_source"
+          ? { candidate: { source: "template_measure" as const, id: list[0]!.id } }
+          : undefined;
+    await expect(
+      recordDecisionTyped(grant, result.usageId, "accepted", options),
+    ).rejects.toBeInstanceOf(AiDecisionError);
+    expect(snapshot(await aiRow(result.usageId))).toBe(before);
+    expect(await auditCount()).toBe(auditBefore);
+  });
+
+  it("edited er ikke lov på en rad med kandidater", async () => {
+    const { organization, grant } = await aiOrganization();
+    const chain = await createAiReportChain(organization.id);
+    const result = await phraseRow(grant, chain, TWO());
+    await expect(recordDecisionTyped(grant, result.usageId, "edited")).rejects.toBeInstanceOf(
+      AiDecisionError,
+    );
+  });
+
+  it("kandidat på en language_polish-rad avvises", async () => {
+    const { organization, grant } = await aiOrganization();
+    const row = await createAiUsageLog(organization.id, { employeeId: grant.employeeId });
+    await expect(
+      recordDecisionTyped(grant, row.id, "accepted", {
+        candidate: { source: "template_outcome", id: uuidv7() },
+      }),
+    ).rejects.toBeInstanceOf(AiDecisionError);
+    expect((await aiRow(row.id))!.status).toBe("suggested");
+  });
+
+  it.each([
+    { name: "ukjent kilde", bad: { source: "free", id: uuidv7() } },
+    { name: "id som ikke er uuid", bad: { source: "template_outcome", id: "K1" } },
+    { name: "ekstra nøkkel", bad: { source: "template_outcome", id: uuidv7(), text: "x" } },
+  ])("kandidat i feil form ($name) gir nøytralt avslag", async ({ bad }) => {
+    const { organization, grant } = await aiOrganization();
+    const chain = await createAiReportChain(organization.id);
+    const result = await phraseRow(grant, chain, TWO());
+    await expect(
+      recordDecisionTyped(grant, result.usageId, "accepted", { candidate: bad as never }),
+    ).rejects.toBeInstanceOf(AiRequestRejectedError);
+  });
+});
+
+describe("KI i veien: recordDecisionIn i kallerens transaksjon (A469)", () => {
+  it("ruller kalleren tilbake, står raden fortsatt suggested", async () => {
+    const { organization, grant } = await aiOrganization();
+    const chain = await createAiReportChain(organization.id);
+    const list = TWO();
+    const result = await phraseRow(grant, chain, list);
+    const auditBefore = await auditCount();
+    await expect(
+      db.transaction(async (tx) => {
+        await recordDecisionIn(tx, grant, result.usageId, "accepted", {
+          candidate: { source: list[0]!.source, id: list[0]!.id },
+        });
+        throw new Error("oppdiktet feil i lagringen etter beslutningen");
+      }),
+    ).rejects.toThrow("oppdiktet feil");
+    const row = (await aiRow(result.usageId))!;
+    expect(row.status).toBe("suggested");
+    expect(row.chosen_candidate).toBeNull();
+    expect(await auditCount()).toBe(auditBefore);
+  });
+
+  it("kaster beslutningen, ruller hele transaksjonen tilbake (også det kalleren skrev)", async () => {
+    const { organization, grant } = await aiOrganization();
+    const chain = await createAiReportChain(organization.id);
+    const result = await phraseRow(grant, chain, TWO());
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.execute(
+          sql`update deviations set cause_text = 'Lagret tekst' where id = ${chain.deviationId}`,
+        );
+        await recordDecisionIn(tx, grant, result.usageId, "accepted", {
+          candidate: { source: "template_outcome", id: uuidv7() },
+        });
+      }),
+    ).rejects.toBeInstanceOf(AiDecisionError);
+    const [deviation] = (await db.execute(
+      sql`select cause_text from deviations where id = ${chain.deviationId}`,
+    )) as unknown as { cause_text: string }[];
+    expect(deviation!.cause_text).not.toBe("Lagret tekst");
+    expect((await aiRow(result.usageId))!.status).toBe("suggested");
+  });
+
+  it("vellykket i kallerens transaksjon: begge deler lagres", async () => {
+    const { organization, grant } = await aiOrganization();
+    const chain = await createAiReportChain(organization.id);
+    const list = TWO();
+    const result = await phraseRow(grant, chain, list);
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`update deviations set cause_text = 'Lagret tekst' where id = ${chain.deviationId}`,
+      );
+      await recordDecisionIn(tx, grant, result.usageId, "accepted", {
+        candidate: { source: list[0]!.source, id: list[0]!.id },
+      });
+    });
+    expect((await aiRow(result.usageId))!.status).toBe("accepted");
+    const [deviation] = (await db.execute(
+      sql`select cause_text from deviations where id = ${chain.deviationId}`,
+    )) as unknown as { cause_text: string }[];
+    expect(deviation!.cause_text).toBe("Lagret tekst");
+  });
+});
+
+describe("KI i veien: tenant-isolasjon for beslutningen (K5.13, K5.14)", () => {
+  it("K5.13 expectTenantIsolation: B kan ikke avgjøre A sin fraseforslag-rad", async () => {
+    const usage: { usageId: string; candidate: AiCandidateRef }[] = [];
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        const ids: string[] = [];
+        for (const grant of [grantA, grantB]) {
+          await enableAi(grant.organizationId);
+          const chain = await createAiReportChain(grant.organizationId);
+          const list = TWO();
+          const result = await phraseRow(grant, chain, list);
+          usage.push({
+            usageId: result.usageId,
+            candidate: { source: list[0]!.source, id: list[0]!.id },
+          });
+          ids.push(result.usageId);
+        }
+        return { a: [ids[0]!], b: [ids[1]!] };
+      },
+      query: async (actor, organizationId) => {
+        const grant = await requireOrganizationAccess(actor, organizationId, "report.edit");
+        const decided: string[] = [];
+        for (const entry of usage) {
+          try {
+            await recordDecisionTyped(grant, entry.usageId, "accepted", {
+              candidate: entry.candidate,
+            });
+            decided.push(entry.usageId);
+          } catch (error) {
+            if (!(error instanceof AiRequestRejectedError)) throw error;
+          }
+        }
+        return decided;
+      },
+      idOf: (id) => id,
+    });
+  });
+
+  it("K5.14 kandidat-id fra B sin malversjon i A sitt valg avvises, og A sin rad er uendret", async () => {
+    const { organization, grant } = await aiOrganization();
+    const chain = await createAiReportChain(organization.id);
+    const result = await phraseRow(grant, chain, TWO());
+    const other = await createOrganization("Oppdiktet Takst B");
+    const outcomeB = await createOutcomeRow(other.id);
+    const before = snapshot(await aiRow(result.usageId));
+    await expect(
+      recordDecisionTyped(grant, result.usageId, "accepted", {
+        candidate: { source: "template_outcome", id: outcomeB.id },
+      }),
+    ).rejects.toBeInstanceOf(AiDecisionError);
+    expect(snapshot(await aiRow(result.usageId))).toBe(before);
+    // B kan heller ikke bruke A sin rad med A sin kandidat
+    const b = await employeeWithGrant(other.id, ["admin"]);
+    const baseline = await neutralDecisionRejection(b.grant);
+    const error = await captureError(() =>
+      recordDecisionTyped(b.grant, result.usageId, "accepted", {
+        candidate: result.candidates[0]!,
+      }),
+    );
+    expectSameRejection(error, baseline);
+    expect(snapshot(await aiRow(result.usageId))).toBe(before);
+  });
 });

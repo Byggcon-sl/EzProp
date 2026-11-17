@@ -11,9 +11,16 @@ import {
   requestSuggestion,
   validRequest,
 } from "../../../tests/ai";
+import { candidate, createAiReportChain } from "../../../tests/ai-report";
 import { createAiUsageLog, resetDatabase } from "../../../tests/factories";
 import { seedKnownValues } from "../../../tests/known-values";
-import { PROMPT_INPUT_SEPARATOR } from "./features";
+import { uuidv7 } from "@/shared/lib/uuid";
+import { AI_FEATURES, findFieldSourceViolations, PROMPT_INPUT_SEPARATOR } from "./features";
+import { NEVER_FIELDS } from "./never-fields";
+import { extractPlaceholders } from "./guards";
+import { findPromptLeaks } from "./prompt-leaks";
+import { loadKnownValues } from "./redaction";
+import { requestSuggestion as requestWithServerInput } from "./request-suggestion";
 
 /*
  * Ingen innhold på avveie (docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 11, ADR 0006
@@ -233,5 +240,166 @@ describe("vask før KI: ingen lekkasje av persondata (V4.4)", () => {
     expect(row.input_summary).toEqual({ text: sent.length });
     expect(sent.length).not.toBe(text.length);
     expect(row.source_fields).toEqual(["text"]);
+  });
+});
+
+/*
+ * «KI i veien» (docs/funksjoner/fase2a-ki-i-veien-testplan.md 4e, K4.22–K4.24): kandidater og funn
+ * vaskes hver for seg, felt som aldri skal til KI kan ikke gis inn, og loggen har bare antall og
+ * `{ source, id }`. Kjernedelen; serverinngangene i rapportkjernen prøves der. Alle verdier er
+ * oppdiktet (gnr 999, «Åse Testesen», 12345678, ase.testesen@eksempel.no, «Testveien 1»).
+ */
+describe("KI i veien: vask av kandidater og funn (K4.22–K4.24)", () => {
+  const PII = ["Åse", "Testesen", "12345678", "ase.testesen@eksempel.no", "Testveien", "999/34"];
+
+  async function setup() {
+    const { organization, grant } = await aiOrganization();
+    const assignmentId = await seedKnownValues(organization.id, {
+      parties: [{ name: "Åse Testesen", phone: "12345678", email: "ase.testesen@eksempel.no" }],
+      property: { address: "Testveien 1", gnr: "999", bnr: "34" },
+    });
+    const chain = await createAiReportChain(organization.id, { assignmentId });
+    const known = await loadKnownValues(grant, assignmentId);
+    return { grant, chain, known };
+  }
+
+  function promptOf(spy: { mock: { calls: unknown[][] } }): string {
+    return (spy.mock.calls[0]![0] as { prompt: string }).prompt;
+  }
+
+  it("K4.22 phrase_suggest: kandidattekst og felt med persondata når aldri leverandøren", async () => {
+    const { grant, chain, known } = await setup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const request = {
+      requestId: uuidv7(),
+      feature: "phrase_suggest" as const,
+      assignmentId: null,
+      reportId: null,
+      target: { type: "deviation", id: chain.deviationId, fieldKey: "cause_text" },
+      fields: { text: "Åse Testesen ringte", outcome_key: "membrane_crack", group: "tg2" },
+    };
+    await requestWithServerInput(grant, request, {
+      candidates: [
+        candidate("Ring Åse Testesen på 12345678 om sluket"),
+        candidate("Skriv til ase.testesen@eksempel.no om Testveien 1, gnr 999 bnr 34"),
+      ],
+    });
+    const prompt = promptOf(spy);
+    for (const value of PII) expect(prompt, value).not.toContain(value);
+    expect(findPromptLeaks(prompt, known)).toEqual([]);
+    const row = (await aiRow(request.requestId))!;
+    // Antall vasket = antall plassholdere i det leverandøren fikk
+    expect(row.redacted_count).toBe(extractPlaceholders(prompt).length);
+    expect(row.redacted_count).toBeGreaterThanOrEqual(6);
+    // K4.24 bare tall i input_summary, bare { source, id } i candidate_refs
+    for (const value of Object.values(row.input_summary as Record<string, unknown>)) {
+      expect(typeof value).toBe("number");
+    }
+    for (const ref of (row.candidate_refs ?? []) as Record<string, unknown>[]) {
+      expect(Object.keys(ref).sort()).toEqual(["id", "source"]);
+    }
+    expect(JSON.stringify(row)).not.toContain("sluket");
+  });
+
+  it("K4.22 summary_draft: funn, tiltak og TGIU-linjer med persondata når aldri leverandøren", async () => {
+    const { grant, chain, known } = await setup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const request = {
+      requestId: uuidv7(),
+      feature: "summary_draft" as const,
+      assignmentId: null,
+      reportId: null,
+      target: { type: "report", id: chain.reportId, fieldKey: "summary_text" },
+      fields: {},
+    };
+    await requestWithServerInput(grant, request, {
+      summaryGroups: [
+        {
+          group: "tg2",
+          heading: "TG2 Vesentlige avvik",
+          findings: [
+            {
+              checkpointName: "Sluk",
+              deviationText: "Åse Testesen opplyste om lekkasje",
+              causeText: "Ring 12345678",
+              consequenceText: "Skriv til ase.testesen@eksempel.no",
+              measures: ["Kontakt eier i Testveien 1, gnr 999 bnr 34"],
+            },
+          ],
+          fixedLines: [],
+        },
+        {
+          group: "tgiu",
+          heading: "TGIU Ikke undersøkt",
+          findings: [],
+          fixedLines: [{ checkpointName: "Hulltaking", text: "Åse Testesen sa nei" }],
+        },
+      ],
+    });
+    const prompt = promptOf(spy);
+    for (const value of PII) expect(prompt, value).not.toContain(value);
+    expect(prompt).not.toContain("Hulltaking");
+    expect(findPromptLeaks(prompt, known)).toEqual([]);
+    const row = (await aiRow(request.requestId))!;
+    // Antall vasket = antall plassholdere i det leverandøren fikk (TGIU-linjen sendes ikke)
+    expect(row.redacted_count).toBe(extractPlaceholders(prompt).length);
+    expect(row.redacted_count).toBeGreaterThanOrEqual(5);
+    for (const value of PII) expect(row.output_text ?? "", value).not.toContain(value);
+    for (const value of Object.values(row.input_summary as Record<string, unknown>)) {
+      expect(typeof value).toBe("number");
+    }
+  });
+
+  it.each([
+    { name: "romnavn", key: "roomName" },
+    { name: "etasje", key: "floorName" },
+    { name: "bygning", key: "buildingName" },
+    { name: "eier informert", key: "ownerInformed" },
+    { name: "bildetekst", key: "imageCaption" },
+    { name: "interne notater", key: "internalNote" },
+    { name: "kostnad", key: "costAmount" },
+  ])("K4.23 et funn med $name kan ikke gis inn (strengt skjema), intet kall", async ({ key }) => {
+    const { grant, chain } = await setup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const finding = {
+      checkpointName: "Sluk",
+      deviationText: "Klemringen mangler",
+      causeText: null,
+      consequenceText: null,
+      measures: [],
+      [key]: "Mxq-merke-ÆØ",
+    };
+    await expect(
+      requestWithServerInput(
+        grant,
+        {
+          requestId: uuidv7(),
+          feature: "summary_draft",
+          assignmentId: null,
+          reportId: null,
+          target: { type: "report", id: chain.reportId, fieldKey: "summary_text" },
+          fields: {},
+        },
+        {
+          summaryGroups: [{ group: "tg2", heading: "TG2", findings: [finding], fixedLines: [] }],
+        },
+      ),
+    ).rejects.toThrow();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("K4.23 tillatt-listene er grønne og de nye «aldri»-kolonnene står på listen", () => {
+    expect(findFieldSourceViolations(Object.values(AI_FEATURES))).toEqual([]);
+    for (const column of [
+      "rooms.name",
+      "floors.name",
+      "report_buildings.name",
+      "tgiu_details.owner_informed",
+      "deviations.cost_amount",
+      "deviations.cost_text",
+      "assignments.internal_note",
+    ]) {
+      expect(NEVER_FIELDS, column).toContain(column);
+    }
   });
 });
