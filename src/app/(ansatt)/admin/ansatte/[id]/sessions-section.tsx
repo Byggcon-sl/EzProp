@@ -100,6 +100,8 @@ export function SessionsSection({
   const textId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const openerRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmSelfRef = useRef<HTMLInputElement>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
   const [pending, startTransition] = useTransition();
@@ -111,9 +113,14 @@ export function SessionsSection({
     setMessage({ kind, text, signedOut, attempt: attempt.current });
   }
 
+  /**
+   * Åpner dialogen (`showModal`: resten av siden er utilgjengelig, og fokus holdes i dialogen).
+   * Fokus starter på det minst farlige valget: avkryssingsfeltet for admin selv, ellers «Avbryt».
+   */
   function openDialog() {
     setConfirmed(false);
     dialogRef.current?.showModal();
+    (isSelf ? confirmSelfRef.current : cancelRef.current)?.focus();
   }
 
   /** Lukker uten å gjøre noe (Avbryt eller Esc). Fokus tilbake til knappen som åpnet. */
@@ -231,7 +238,7 @@ export function SessionsSection({
                 label="Jeg forstår at jeg også blir logget ut her"
                 checked={confirmed}
                 onChange={(event) => setConfirmed(event.currentTarget.checked)}
-                autoFocus
+                ref={confirmSelfRef}
               />
             </div>
           )}
@@ -239,7 +246,7 @@ export function SessionsSection({
             <Button type="submit" variant="primary" disabled={pending || (isSelf && !confirmed)}>
               {pending ? "Logger ut …" : "Logg ut av alle enheter"}
             </Button>
-            <Button variant="secondary" disabled={pending} onClick={cancel} autoFocus={!isSelf}>
+            <Button ref={cancelRef} variant="secondary" disabled={pending} onClick={cancel}>
               Avbryt
             </Button>
           </div>
