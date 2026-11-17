@@ -418,4 +418,48 @@ describe("4d avvik, tiltak, TGIU og ferdig", () => {
     expect(error).toBeInstanceOf(ReportValidationError);
     expect(error.code).toBe("unknown_key");
   });
+
+  it("B1.8/B6.15 flettefeltene fylles fra svarene når avviket lages; uten svar står «[måleverdi mangler]», aldri {…}", async () => {
+    const f = await startedBathroom();
+    const fall = {
+      checkpointKey: CP.floor,
+      questionKey: "wet_room.floor.insufficient_fall",
+      outcomeKey: "choose",
+    };
+    const textOf = async (id: string) => {
+      const [row] = await db.select().from(deviations).where(eq(deviations.id, id));
+      const measures = await measuresOf(id);
+      return [
+        row?.deviationText,
+        row?.causeText,
+        row?.consequenceText,
+        ...measures.map((m) => m.text),
+      ]
+        .filter((t): t is string => typeof t === "string")
+        .join(" ");
+    };
+
+    const missingId = uuidv7();
+    await addDeviation(f.actor, f.organizationId, f.room, { id: missingId, ...fall, tg: 2 });
+    const missing = await textOf(missingId);
+    expect(missing).not.toMatch(/[{}]/u);
+    expect(missing).toContain("Målt fall mot sluk er [måleverdi mangler] mm per meter.");
+
+    await answer(f, "wet_room.fall_direction_1", { number: 5 });
+    await answer(f, "wet_room.fall_direction_2", { number: 7.5 });
+    const filledId = uuidv7();
+    await addDeviation(f.actor, f.organizationId, f.room, { id: filledId, ...fall, tg: 3 });
+    expect(await textOf(filledId)).toContain("Målt fall mot sluk er 5 og 7,5 mm per meter.");
+
+    await answer(f, "wet_room.membrane_year", { number: 1990 });
+    const yearId = uuidv7();
+    await addDeviation(f.actor, f.organizationId, f.room, {
+      id: yearId,
+      checkpointKey: CP.membrane,
+      questionKey: "wet_room.membrane_drain.membrane_before_2000",
+      outcomeKey: "tg3",
+      tg: null,
+    });
+    expect(await textOf(yearId)).toContain("registrert som fra 1990.");
+  });
 });

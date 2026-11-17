@@ -107,6 +107,11 @@ export function RoomView({
   const [sticky, setSticky] = useState<Map<string, StickyAccept>>(() => new Map());
   const [focusTick, setFocusTick] = useState(0);
   const pendingFocus = useRef<string | null>(null);
+  // Punktet som vises nå, satt med en gang ved bytte (state kommer først ved neste tegning).
+  const shownKey = useRef(currentKey);
+  // Sann rett etter at en handling som startet på et annet punkt, er ferdig: da flyttes ikke
+  // fokus, og ingen angre-linje legges på punktet takstmannen har gått videre til.
+  const staleRun = useRef(false);
   const listDialog = useRef<HTMLDialogElement>(null);
   const helpButton = useRef<HTMLElement | null>(null);
   const online = useOnline();
@@ -137,10 +142,19 @@ export function RoomView({
 
   // --- Fokus og opplesning -------------------------------------------------------------------
 
-  const focus = useCallback((id: string) => {
+  const requestFocus = useCallback((id: string) => {
     pendingFocus.current = id;
     setFocusTick((tick) => tick + 1);
   }, []);
+
+  /** Fokus fra en handling. Ignoreres når punktet er byttet mens handlingen pågikk. */
+  const focus = useCallback(
+    (id: string) => {
+      if (staleRun.current) return;
+      requestFocus(id);
+    },
+    [requestFocus],
+  );
 
   useEffect(() => {
     const id = pendingFocus.current;
@@ -165,12 +179,20 @@ export function RoomView({
 
   const run = useCallback(
     async <T extends { status: string }>(call: () => Promise<T | ActionError>) => {
+      const startKey = shownKey.current;
       await store.flush();
       let result: T | ActionError;
       try {
         result = await call();
       } catch {
         return { status: "error", message: ROOM_ACTION_MESSAGES.network } as ActionError;
+      }
+      if (shownKey.current !== startKey) {
+        // Fortsettelsen hos den som kalte, kjører før neste oppgave i nettleseren.
+        staleRun.current = true;
+        setTimeout(() => {
+          staleRun.current = false;
+        }, 0);
       }
       if (!isActionError(result) && "refresh" in result && result.refresh) {
         applyRefresh(result.refresh as RoomRefresh);
@@ -184,6 +206,7 @@ export function RoomView({
     (key: string, options: { focusId?: string; announce?: string } = {}) => {
       if (!order.includes(key)) return;
       if (key !== currentKey) {
+        shownKey.current = key;
         setCurrentKey(key);
         setUndoLines([]);
         setSticky(new Map());
@@ -193,10 +216,10 @@ export function RoomView({
         window.history.pushState(null, "", `?punkt=${encodeURIComponent(key)}`);
       }
       listDialog.current?.close();
-      focus(options.focusId ?? CHECKPOINT_HEADING_ID);
+      requestFocus(options.focusId ?? CHECKPOINT_HEADING_ID);
       if (options.announce) announce(options.announce);
     },
-    [order, currentKey, focus, announce],
+    [order, currentKey, requestFocus, announce],
   );
 
   const removeDeviation = useCallback(
@@ -208,6 +231,8 @@ export function RoomView({
       if (isActionError(result)) return result.message;
       const undoId = `deviation-${deviationId}`;
       store.drop(deviationPrefix(deviationId));
+      // Punktet er forlatt: Angre gjelder bare til punktet forlates.
+      if (staleRun.current) return null;
       setUndoLines((lines) => [
         ...lines.filter((l) => l.id !== undoId),
         { kind: "deviation", id: undoId, deviationId, number: Math.max(1, number) },
@@ -230,7 +255,10 @@ export function RoomView({
       openCheckpoint,
       removeDeviation,
       undoLines,
-      addUndo: (line) => setUndoLines((lines) => [...lines.filter((l) => l.id !== line.id), line]),
+      addUndo: (line) => {
+        if (staleRun.current) return;
+        setUndoLines((lines) => [...lines.filter((l) => l.id !== line.id), line]);
+      },
       removeUndo: (id) => setUndoLines((lines) => lines.filter((l) => l.id !== id)),
     }),
     [room, canEdit, store, doc, run, announce, focus, openCheckpoint, removeDeviation, undoLines],
@@ -266,7 +294,8 @@ export function RoomView({
       setDoneError(result.message);
       return;
     }
-    if (result.status !== "saved") return;
+    // Takstmannen har gått til et annet punkt mens det ble lagret: bli der.
+    if (result.status !== "saved" || staleRun.current) return;
     const refreshed = result.refresh;
     const after = refreshed.checkpoints.find((c) => c.checkpointKey === current.checkpointKey);
     const warnings = after?.warnings.length ?? 0;
@@ -303,13 +332,14 @@ export function RoomView({
   useEffect(() => {
     const onPop = () => {
       const key = initialCheckpointKey(order, checkpointFromLocation());
+      shownKey.current = key;
       setCurrentKey(key);
       setUndoLines([]);
-      focus(CHECKPOINT_HEADING_ID);
+      requestFocus(CHECKPOINT_HEADING_ID);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [order, focus]);
+  }, [order, requestFocus]);
 
   useEffect(() => {
     if (currentName) document.title = `${currentName} – ${ROOM_TEXTS.listHeading}`;

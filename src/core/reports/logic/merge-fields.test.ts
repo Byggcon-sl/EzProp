@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MERGE_FIELD_KEYS } from "./codes";
 import { mergeFieldWarningText } from "./labels";
-import { fillMergeFields, mergeFieldsText } from "./merge-fields";
+import { fillMergeFields, mergeFieldsText, mergeFieldValues } from "./merge-fields";
 
 /*
  * Flettefeltene i standardtekstene (testplanen B1.8). Ren test.
@@ -69,5 +69,48 @@ describe("B1.8 flettefelt", () => {
 
   it("advarselen sier hvilket felt som mangler", () => {
     expect(mergeFieldWarningText("årstall")).toBe("Fyll inn årstall i teksten.");
+  });
+});
+
+describe("B1.8 verdiene til flettefeltene fra svarene", () => {
+  const labels = (elementKey: string, optionKey: string) =>
+    elementKey === "unit" && optionKey === "weight_percent" ? "Vekt-%" : null;
+
+  it("«all» gir begge svarene: «5 og 7,5»; ett svar gir ett tall", () => {
+    const sources = { måleverdi: { keys: ["a", "b"], pick: "all" } } as const;
+    expect(mergeFieldValues(sources, { a: 5, b: 7.5 }, labels).måleverdi).toBe("5 og 7,5");
+    expect(mergeFieldValues(sources, { b: 3 }, labels).måleverdi).toBe("3");
+  });
+
+  it("«first» tar første svar som finnes; årstall uten tusenskille", () => {
+    const sources = { årstall: { keys: ["own", "fallback"], pick: "first" } } as const;
+    expect(mergeFieldValues(sources, { own: 1990, fallback: 1985 }, labels).årstall).toBe("1990");
+    expect(mergeFieldValues(sources, { fallback: 1985 }, labels).årstall).toBe("1985");
+  });
+
+  it("valg vises med etiketten, aldri koden; tekst trimmes", () => {
+    const sources = {
+      måleverdi: { keys: ["reading"], pick: "first" },
+      enhet: { keys: ["unit"], pick: "first" },
+      sted: { keys: ["place"], pick: "first" },
+    } as const;
+    expect(
+      mergeFieldValues(
+        sources,
+        { reading: 18.4, unit: ["weight_percent"], place: "  Vegg mot gang  " },
+        labels,
+      ),
+    ).toEqual({ måleverdi: "18,4", enhet: "Vekt-%", sted: "Vegg mot gang" });
+    expect(mergeFieldValues(sources, { unit: ["unknown"] }, labels)).toEqual({});
+  });
+
+  it("uten svar mangler verdien, og teksten får markøren; arvede nøkler leses ikke", () => {
+    const sources = { måleverdi: { keys: ["a"], pick: "all" } } as const;
+    const answers = Object.create({ a: 9 }) as Record<string, unknown>;
+    const values = mergeFieldValues(sources, answers, labels);
+    expect(values).toEqual({});
+    expect(mergeFieldsText("Målt fall {måleverdi} mm.", values).text).toBe(
+      "Målt fall [måleverdi mangler] mm.",
+    );
   });
 });

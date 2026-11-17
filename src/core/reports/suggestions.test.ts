@@ -135,7 +135,8 @@ describe("4c regelforslag", () => {
       id: deviationId,
       kind: "tg",
       tg: 3,
-      deviationText: outcome.deviation_text,
+      // Flettefeltet {årstall} er fylt fra svaret (1990)
+      deviationText: outcome.deviation_text!.replace("{årstall}", "1990"),
       causeText: outcome.default_cause_text,
       causeCriterion: outcome.default_cause_criterion,
       consequenceText: outcome.default_consequence_text,

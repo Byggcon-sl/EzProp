@@ -16,8 +16,14 @@ import {
   MAX_DEVIATIONS_PER_CHECKPOINT,
   MAX_MEASURES_PER_DEVIATION,
   measureForTg,
+  mergeFieldsText,
+  mergeFieldValues,
+  mergeNumberText,
+  type MergeValues,
   type OutcomeTg,
 } from "./logic";
+import { mergeSourcesFor } from "./merge-sources";
+import { loadRoomData, ruleAnswersOf } from "./room-view";
 import {
   addDeviationInputSchema,
   addMeasureInputSchema,
@@ -134,6 +140,38 @@ async function findReportDeviation(scope: WriteScope, deviationId: string) {
   return row ?? null;
 }
 
+/**
+ * Flettefeltene i standardtekstene fylt fra lagrede svar i rommet (Omfang 5). Uten verdi står
+ * feltet som «[måleverdi mangler]», aldri som `{…}`. Målingen regelen slo til på, brukes når
+ * svaret mangler.
+ */
+async function mergeValuesFor(
+  scope: WriteScope,
+  checkpointKey: string,
+  measurement: CreateDeviationParams["measurement"],
+): Promise<MergeValues> {
+  const data = await loadRoomData(scope.tx, scope.orgId, scope.reportId, scope.context.room.id);
+  const answers = ruleAnswersOf(scope.template, data.answers);
+  const options = scope.roomDoc.element_options;
+  const values = mergeFieldValues(
+    mergeSourcesFor(checkpointKey),
+    answers,
+    (elementKey, optionKey) => {
+      const option = options.find((o) => o.element_key === elementKey && o.key === optionKey);
+      return option?.label ?? null;
+    },
+  );
+  if (!values.måleverdi && measurement?.value != null) {
+    values.måleverdi = mergeNumberText(measurement.value);
+  }
+  return values;
+}
+
+/** Teksten med flettefeltene fylt inn. `null` forblir `null`. */
+function merged(text: string | null, values: MergeValues): string | null {
+  return text === null ? null : mergeFieldsText(text, values).text;
+}
+
 /** Avviket og punktet det står på, når punktet er i rommet. Ellers 404. */
 async function requireRoomDeviation(scope: WriteScope, deviationId: string) {
   const [row] = await scope.tx
@@ -214,6 +252,7 @@ export async function createDeviationFromOutcome(
   }
 
   const sortOrder = live.reduce((highest, d) => Math.max(highest, d.sortOrder + 1), 0);
+  const mergeValues = await mergeValuesFor(scope, params.checkpointKey, params.measurement);
   const [inserted] = await scope.tx
     .insert(deviations)
     .values({
@@ -225,10 +264,10 @@ export async function createDeviationFromOutcome(
       outcomeId,
       kind,
       tg,
-      deviationText: outcome.deviation_text,
+      deviationText: merged(outcome.deviation_text, mergeValues),
       causeCriterion: outcome.default_cause_criterion,
-      causeText: outcome.default_cause_text,
-      consequenceText: outcome.default_consequence_text,
+      causeText: merged(outcome.default_cause_text, mergeValues),
+      consequenceText: merged(outcome.default_consequence_text, mergeValues),
       costType: "none",
       measurementValue: params.measurement?.value ?? null,
       measurementUnit: params.measurement?.unit ?? null,
@@ -254,7 +293,7 @@ export async function createDeviationFromOutcome(
         organizationId: scope.orgId,
         reportId: scope.reportId,
         deviationId: inserted.id,
-        text: measure.text,
+        text: mergeFieldsText(measure.text, mergeValues).text,
         textSource: "template" as const,
         sortOrder: index,
         createdBy: scope.grant.employeeId,
