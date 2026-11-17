@@ -318,9 +318,10 @@ export function reasonLines(result: RuleResult, labels: ReasonLabelLookup): Reas
     } else if (reason.type === "number_vs_limit" && label && reason.value !== null) {
       const limit = reason.limit !== null ? ` Grensen er ${formatDecimal(reason.limit)}.` : "";
       text = `${label}: ${formatDecimal(reason.value)}.${limit}`;
-    } else if (reason.type === "age_vs_lifespan" && reason.year !== null && reason.age !== null) {
+    } else if (reason.type === "age_vs_lifespan" && reason.year !== null) {
+      // Uten befaringsår er alderen ukjent, men «før 2000» avgjøres av årstallet alene.
       const from = label ? `${label}: ${reason.year}` : `Årstallet er ${reason.year}`;
-      text = `${from}, ${reason.age} år ved befaringen.`;
+      text = reason.age !== null ? `${from}, ${reason.age} år ved befaringen.` : `${from}.`;
     }
     if (text) lines.push({ text, elementKey });
     if (reason.code !== null && reason.truth !== "unknown") {

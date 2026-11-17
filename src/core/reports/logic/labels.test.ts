@@ -410,4 +410,20 @@ describe("B1.13 oversettelsen av regelsvarene", () => {
     expect(text).toContain("1990");
     expect(text).toContain("36 år");
   });
+
+  it("sjikt fra 1990 uten befaringsår gir linjen med årstallet, uten alder", () => {
+    const before2000 = evaluateRules({
+      template: SYSTEM,
+      document: TEMPLATE,
+      answers: { "wet_room.membrane_year": 1990, "wet_room.membrane_type": "foil" },
+      inspectionYear: null,
+      lifespans: WET_ROOM_LIFESPANS,
+      thresholds: WET_ROOM_THRESHOLDS,
+    }).find((r) => r.rule_key === "wet_room.membrane_before_2000");
+    expect(before2000?.state).toBe("triggered");
+    const lines = reasonLines(before2000!, LOOKUP);
+    expect(lines[0]?.text).toContain("1990");
+    expect(lines[0]?.text).not.toContain(" år ");
+    expect(lines[0]?.elementKey).not.toBeNull();
+  });
 });
