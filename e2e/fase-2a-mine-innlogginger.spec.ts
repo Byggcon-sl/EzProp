@@ -374,7 +374,8 @@ test("E5 admin logger ut alle enheter for en takstmann etter bekreftelse", async
     await expect(section).toContainText("1");
     // Ingen «sist brukt» og ingen dato i admin-visningen (A428, spørsmål 89)
     await expect(section).not.toContainText("Aktiv");
-    await expect(section).not.toContainText("logget inn ");
+    // «logget inn på» i innledningen er lov; «logget inn 3. nov.» er det ikke
+    expect(await section.innerText()).not.toMatch(/logget inn \d/);
     expect(await section.innerText()).not.toMatch(/\d{1,2}\. [a-zæøå]{3,}/);
 
     // Avbryt endrer ingenting
@@ -471,8 +472,7 @@ test("E8 deaktivering logger ut alle enheter", async ({ page, browser }, testInf
     await page.goto(`/admin/ansatte/${w.employeeId}`);
     await page.getByRole("button", { name: "Har sluttet", exact: true }).click();
     await expect(page.getByText("Hen blir også logget ut av alle enheter (1).")).toBeVisible();
-    const dialog = confirmDialog(page);
-    if (await dialog.isVisible()) await confirmButton(dialog).click();
+    await page.getByRole("button", { name: "Ja, har sluttet", exact: true }).click();
     await expect(page).toHaveURL(/\/admin\/ansatte\?lagret=sluttet$/);
     expect(await sessionCountForUser(w.userId)).toBe(0);
     await expectSignedOut(wDevice.page);
@@ -547,12 +547,18 @@ test("E10 uten nett-køen tømmes ikke når iPaden logges ut fra en annen enhet 
       )
       .toBe(true);
 
-    // Endring uten nett
+    // Endring uten nett (vent til siden vet at nettet er borte, ellers kan endringen gå rett ut)
     await ipad.context.setOffline(true);
+    await expect(syncStatus(ipad.page)).toHaveAttribute("data-sync-state", "offline");
     await ipad.page.getByLabel(TEXT_LABEL, { exact: true }).fill(TEXT_VALUE);
     await ipad.page.getByLabel(TEXT_LABEL, { exact: true }).blur();
     await expect(fieldSaved(ipad.page, TEXT_LABEL)).toHaveAttribute("data-field-saved", "yes");
-    expect((await pendingQueue(ipad.page)).changes).toBeGreaterThan(0);
+    await expect
+      .poll(async () => (await pendingQueue(ipad.page)).changes, {
+        timeout: 15_000,
+        message: "endringen ligger i køen",
+      })
+      .toBeGreaterThan(0);
 
     // PC-en logger ut iPaden
     await openProfileViaHeader(pc.page);

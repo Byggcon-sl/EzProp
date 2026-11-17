@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { GrantablePermission } from "@/core/access";
 import type { EmployeeRole } from "@/db/schema";
 import { Button } from "@/shared/ui/button";
@@ -204,12 +204,18 @@ export function EmployeeDetailsForm({
 }
 
 /** Kort med h2 på siden til den ansatte. */
+/** Kortet er en region med overskriften som navn, så skjermlesere kan hoppe mellom delene. */
 export function EmployeeCard({ title, children }: { title: string; children: ReactNode }) {
+  const headingId = useId();
   return (
-    <Card className="space-y-5">
-      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-      {children}
-    </Card>
+    <section aria-labelledby={headingId}>
+      <Card className="space-y-5">
+        <h2 id={headingId} className="text-lg font-semibold text-slate-900">
+          {title}
+        </h2>
+        {children}
+      </Card>
+    </section>
   );
 }
 

@@ -465,6 +465,15 @@ test.describe("iPad liggende (prosjektet ipad)", () => {
       page.getByRole("button", { name: "Lagre", exact: true }),
       "Lagre (opplysninger)",
     );
+    // Admin kan ikke sette seg selv til «Har sluttet» (regel 11, A430): forklaring i stedet
+    await expect(
+      page.getByText("Du kan ikke sette deg selv til «Har sluttet». Be en annen admin."),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Har sluttet", exact: true })).toHaveCount(0);
+
+    // Knappen måles på en annen ansatt (bare målt, aldri trykket)
+    const inspector = await employeeByEmail(INSPECTOR_EMAIL);
+    await page.goto(`/admin/ansatte/${inspector.id}`);
     await expectAtLeast44(
       page.getByRole("button", { name: "Har sluttet", exact: true }),
       "Har sluttet",
