@@ -21,7 +21,9 @@ import { initialFormState, NO_ACCESS } from "../../../form-state";
  */
 
 const mocks = vi.hoisted(() => ({
-  getAdminContext: vi.fn(),
+  getActorForAction: vi.fn(),
+  findAdminOrganizationId: vi.fn(),
+  isOwnEmployee: vi.fn(),
   revokeAllEmployeeSessions: vi.fn(),
   listEmployeeSessions: vi.fn(),
   logError: vi.fn(),
@@ -37,7 +39,11 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/shared/lib/logger", () => ({
   logger: { error: mocks.logError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
-vi.mock("../../admin-context", () => ({ getAdminContext: mocks.getAdminContext }));
+vi.mock("@/core/auth/session", () => ({ getActorForAction: mocks.getActorForAction }));
+vi.mock("@/core/organization", () => ({
+  findAdminOrganizationId: mocks.findAdminOrganizationId,
+}));
+vi.mock("../../admin-context", () => ({ isOwnEmployee: mocks.isOwnEmployee }));
 vi.mock("@/core/auth/sessions-list", () => ({
   listOwnSessions: vi.fn(),
   revokeOwnSession: vi.fn(),
@@ -80,15 +86,19 @@ async function run(employeeId: string, data: FormData): Promise<string> {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getAdminContext.mockResolvedValue({ actor, organizationId: ORG });
+  mocks.getActorForAction.mockResolvedValue(actor);
+  mocks.findAdminOrganizationId.mockResolvedValue(ORG);
+  mocks.isOwnEmployee.mockResolvedValue(false);
   mocks.revokeAllEmployeeSessions.mockResolvedValue({ ok: true, count: 3 });
 });
 
 describe("7.1 «Logg ut av alle enheter»", () => {
   it("1. ikke admin eller ikke innlogget: ingen kjernekall", async () => {
-    mocks.getAdminContext.mockResolvedValue(null);
-    const result = await run(EMPLOYEE, form({}));
-    expect(result).not.toContain('"ok":true');
+    mocks.getActorForAction.mockResolvedValue(null);
+    expect(await run(EMPLOYEE, form({}))).not.toContain('"status":"done"');
+    mocks.getActorForAction.mockResolvedValue(actor);
+    mocks.findAdminOrganizationId.mockResolvedValue(null);
+    expect(await run(EMPLOYEE, form({}))).toContain(NO_ACCESS);
     expect(mocks.revokeAllEmployeeSessions).not.toHaveBeenCalled();
   });
 
@@ -110,7 +120,7 @@ describe("7.1 «Logg ut av alle enheter»", () => {
     "3. ansatt-id «%s» avvises uten kjernekall",
     async (employeeId) => {
       const result = await run(employeeId, form({}));
-      expect(result).not.toContain('"ok":true');
+      expect(result).not.toContain('"status":"done"');
       expect(mocks.revokeAllEmployeeSessions).not.toHaveBeenCalled();
     },
   );
@@ -120,7 +130,7 @@ describe("7.1 «Logg ut av alle enheter»", () => {
     const without = mocks.revokeAllEmployeeSessions.mock.calls[0]![3] as { confirmSelf?: unknown };
     expect(without.confirmSelf === true).toBe(false);
 
-    await run(EMPLOYEE, form({ confirmSelf: "on" }));
+    await run(EMPLOYEE, form({ confirmSelf: "yes" }));
     const withIt = mocks.revokeAllEmployeeSessions.mock.calls[1]![3] as { confirmSelf?: unknown };
     expect(withIt.confirmSelf).toBe(true);
   });

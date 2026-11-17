@@ -3,7 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
 import { listAuditEvents } from "@/core/audit";
 import { db } from "@/db/client";
-import { auditLog, employees } from "@/db/schema";
+import { auditLog, employees, sessions } from "@/db/schema";
 import { getEnv } from "@/shared/config/env";
 import {
   auditRows,
@@ -598,9 +598,13 @@ describe("4.4.2 revokeAllEmployeeSessions virker med en gang gjennom Better Auth
     const { orgA, ad, te, t } = await setup();
     const first = await signInThroughAuth(t.email, FAKE_UA.iPadSafari);
     const second = await signInThroughAuth(t.email, FAKE_UA.windowsEdge);
+    // Første innlogging gjennom Better Auth bekrefter e-posten og sletter øktene brukeren hadde fra
+    // før (de oppdiktede fra `setup`), så antallet telles her i stedet for å antas.
+    const before = (await db.select().from(sessions).where(eq(sessions.userId, t.id))).length;
+    expect(before).toBeGreaterThanOrEqual(2);
     expect(await revokeAllEmployeeSessions(ad, orgA.id, te.id, { reason: "manual" })).toEqual({
       ok: true,
-      count: 4,
+      count: before,
     });
     expect(await sessionForCookie(first.cookie)).toBeNull();
     expect(await sessionForCookie(second.cookie)).toBeNull();

@@ -2,10 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
+import { AccessDeniedError } from "@/core/access";
 import { revokeOtherOwnSessions, revokeOwnSession } from "@/core/auth/sessions-list";
 import { getActorForAction } from "@/core/auth/session";
 import { SIGNED_OUT_MESSAGE } from "@/shared/forms/messages";
 import { logger } from "@/shared/lib/logger";
+import { NO_ACCESS } from "../form-state";
 
 /*
  * Serverhandlinger for «Mine innlogginger» på /profil (docs/funksjoner/fase2a-mine-innlogginger.md
@@ -47,8 +49,12 @@ function countMessage(count: number): string {
   return count === 1 ? "1 enhet er logget ut." : `${count} enheter er logget ut.`;
 }
 
-/** Ukjent feil logges bare med feilnavn og rute, aldri bruker-id, økt-id eller user-agent. */
+/**
+ * Manglende tilgang gir «ingen tilgang». Ukjent feil logges bare med feilnavn og rute, aldri
+ * bruker-id, økt-id eller user-agent.
+ */
 function unknownError(previous: SessionActionState | undefined, error: unknown) {
+  if (error instanceof AccessDeniedError) return answer(previous, "failed", NO_ACCESS);
   logger.error("Utlogging av enhet feilet", {
     route: ROUTE,
     errorName: error instanceof Error ? error.name : "ukjent feil",

@@ -129,18 +129,14 @@ export async function revokeOwnSession(
 
 /**
  * Logger ut alle den innloggedes aktive økter unntatt den nåværende. Utløpte står til ryddingen
- * (`auth-cleanup.ts`). Uten `actor.sessionId` står ingen økt igjen.
+ * (`auth-cleanup.ts`). Uten `actor.sessionId` kan den nåværende ikke avgjøres, og da slettes
+ * ingenting (feiler lukket, så brukeren aldri logger ut seg selv ved et uhell).
  */
 export async function revokeOtherOwnSessions(actor: Actor): Promise<{ ok: true; count: number }> {
+  if (actor.sessionId === undefined) return { ok: true, count: 0 };
   const deleted = await db
     .delete(sessions)
-    .where(
-      and(
-        eq(sessions.userId, actor.id),
-        isActive(),
-        actor.sessionId === undefined ? undefined : ne(sessions.id, actor.sessionId),
-      ),
-    )
+    .where(and(eq(sessions.userId, actor.id), isActive(), ne(sessions.id, actor.sessionId)))
     .returning({ id: sessions.id });
   logOwnRevoke("revoke_other_own_sessions", deleted.length);
   return { ok: true, count: deleted.length };
