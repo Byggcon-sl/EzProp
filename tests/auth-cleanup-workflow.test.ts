@@ -140,7 +140,9 @@ describe("planlagt arbeidsflyt for rydding av innloggingsdata (C4–C6)", () => 
     }
     // Headeren kommer fra stdin (printf er innebygd), så hemmeligheten står aldri på
     // kommandolinjen til curl og vises ikke i prosesslisten.
-    expect(command).toMatch(/printf 'Authorization:\s*Bearer %s\\n' "\$AUTH_CLEANUP_SECRET"\s*\|\s*curl\b/);
+    expect(command).toMatch(
+      /printf 'Authorization:\s*Bearer %s\\n' "\$AUTH_CLEANUP_SECRET"\s*\|\s*curl\b/,
+    );
     expect(command).toMatch(/\s-H @-\s/);
     expect(command.slice(command.indexOf("curl"))).not.toMatch(/AUTH_CLEANUP_SECRET/);
     expect(command).toContain("/api/intern/rydd-innloggingsdata");
