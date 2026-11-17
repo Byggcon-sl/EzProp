@@ -29,7 +29,10 @@ const TIER_REST_OF_CHECKPOINT = 2;
 const TIER_REST_OF_ROOM = 3;
 
 /** TG teksten er skrevet for. `null` = gjelder begge (velg TG2 eller TG3) eller HMS. */
-function candidateTgOf(outcomeKind: OutcomeKind, appliesToTg: DeviationTg | null): DeviationTg | null {
+function candidateTgOf(
+  outcomeKind: OutcomeKind,
+  appliesToTg: DeviationTg | null,
+): DeviationTg | null {
   if (appliesToTg !== null) return appliesToTg;
   if (outcomeKind === "tg2") return 2;
   if (outcomeKind === "tg3") return 3;
@@ -100,7 +103,8 @@ export const listPhraseCandidates: ListPhraseCandidates = (document, context) =>
   );
   const counts = new Map<string, number>();
   for (const usage of context.usage) {
-    if (usage.field !== context.field || !Number.isInteger(usage.count) || usage.count < 1) continue;
+    if (usage.field !== context.field || !Number.isInteger(usage.count) || usage.count < 1)
+      continue;
     const key = phraseUsageKey(
       usage.field,
       usage.checkpointKey,

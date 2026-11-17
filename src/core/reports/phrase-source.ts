@@ -187,7 +187,11 @@ export async function loadVersionPhraseRows(
 
   return {
     document: {
-      checkpoints: roomCheckpoints.map((c) => ({ key: c.key, name: c.name, sort_order: c.sortOrder })),
+      checkpoints: roomCheckpoints.map((c) => ({
+        key: c.key,
+        name: c.name,
+        sort_order: c.sortOrder,
+      })),
       deviation_questions: questionRows
         .filter((q) => keys.has(q.checkpointKey))
         .map((q) => ({
@@ -295,9 +299,7 @@ export async function phraseUsageForDocument(
       )
       .innerJoin(deviationQuestions, questionJoin)
       .innerJoin(checkpoints, checkpointJoin)
-      .where(
-        and(chosen, sql`${aiUsageLog.chosenCandidate} ->> 'source' = 'template_outcome'`),
-      )
+      .where(and(chosen, sql`${aiUsageLog.chosenCandidate} ->> 'source' = 'template_outcome'`))
       .groupBy(fieldKey, checkpoints.key, deviationQuestions.key, outcomes.key),
     ex
       .select({
@@ -322,9 +324,7 @@ export async function phraseUsageForDocument(
       )
       .innerJoin(deviationQuestions, questionJoin)
       .innerJoin(checkpoints, checkpointJoin)
-      .where(
-        and(chosen, sql`${aiUsageLog.chosenCandidate} ->> 'source' = 'template_measure'`),
-      )
+      .where(and(chosen, sql`${aiUsageLog.chosenCandidate} ->> 'source' = 'template_measure'`))
       .groupBy(
         fieldKey,
         checkpoints.key,

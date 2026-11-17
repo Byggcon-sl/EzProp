@@ -269,7 +269,10 @@ export type PhraseField = (typeof PHRASE_FIELDS)[number];
  * fra databasen passer.
  */
 export type PhraseCandidateDocument = {
-  checkpoints: readonly Pick<TemplateDocument["checkpoints"][number], "key" | "name" | "sort_order">[];
+  checkpoints: readonly Pick<
+    TemplateDocument["checkpoints"][number],
+    "key" | "name" | "sort_order"
+  >[];
   deviation_questions: readonly Pick<
     TemplateDocument["deviation_questions"][number],
     "checkpoint_key" | "key" | "text" | "sort_order"

@@ -18,6 +18,10 @@ import {
   RULE_REASONS_MAX_CHARS,
   RULE_RESULT_STATES,
   RULE_SUGGESTION_DECISIONS,
+  AI_CANDIDATE_SOURCES,
+  REPORT_SUMMARY_BASIS_MAX,
+  SUMMARY_FINDING_SOURCES,
+  SUMMARY_GROUPS,
   TEMPLATE_KEY_PATTERN,
   TEXT_STATUSES,
   TG_DIRECT_VALUES,
@@ -28,7 +32,10 @@ import {
   checkOverrideReason,
   containsPiiPlaceholder,
   formatWholeNumber,
+  MAX_MEASURES_PER_DEVIATION,
   OVERRIDE_REASON_CHECK_MESSAGES,
+  PHRASE_FIELDS,
+  SUMMARY_TEXT_MAX_LENGTH,
 } from "./logic";
 import { ReportValidationError, reportValidationMessage } from "./errors";
 
@@ -410,6 +417,117 @@ export const reportFieldChangeSchema = z.union([
     z.enum(CONSTRUCTION_VULNERABLE_VALUES).nullable(),
   ),
 ]);
+
+// --- KI i veien: fraseforslag, språkvask og sammendrag (docs/funksjoner/fase2a-ki-i-veien.md) --
+
+/**
+ * Teksten nettleseren sender med en forespørsel til KI. Lagres ikke her, men har samme grense som
+ * feltene i rapporten, så en for lang tekst gir en tydelig melding før noe sendes.
+ */
+const aiInputText = z.string().max(REPORT_LONG_TEXT_MAX);
+
+/** «Forslag» ved et felt i avvikskortet. Bare `requestId`, avviket, feltet og egen tekst. */
+export const suggestPhrasesInputSchema = z
+  .object({
+    requestId: uuidSchema,
+    deviationId: uuidSchema,
+    field: z.enum(PHRASE_FIELDS),
+    text: aiInputText,
+  })
+  .strict();
+
+const aiCandidateRefSchema = z
+  .object({ source: z.enum(AI_CANDIDATE_SOURCES), id: uuidSchema })
+  .strict();
+
+/** Valgt kandidat. Målet og feltet leses fra loggraden, aldri herfra. */
+export const applyPhraseInputSchema = z
+  .object({
+    usageId: uuidSchema,
+    candidate: aiCandidateRefSchema,
+    base: z.string().nullable(),
+    measureId: uuidSchema.optional(),
+  })
+  .strict();
+
+/** Feltene i avvikskortet som kan språkvaskes (A350, A356). */
+export const POLISH_DEVIATION_FIELDS = [
+  "deviation_text",
+  "cause_text",
+  "consequence_text",
+] as const;
+
+const polishTarget = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("deviation"),
+      id: uuidSchema,
+      fieldKey: z.enum(POLISH_DEVIATION_FIELDS),
+    })
+    .strict(),
+  z
+    .object({ type: z.literal("deviation_measure"), id: uuidSchema, fieldKey: z.literal("text") })
+    .strict(),
+]);
+
+/** «Språkvask avviket»: ett trykk, ett kall til serveren, én forespørsel per felt. */
+export const polishDeviationInputSchema = z
+  .object({
+    deviationId: uuidSchema,
+    items: z
+      .array(z.object({ requestId: uuidSchema, target: polishTarget, text: aiInputText }).strict())
+      .min(1)
+      .max(POLISH_DEVIATION_FIELDS.length + MAX_MEASURES_PER_DEVIATION),
+  })
+  .strict();
+
+/** «Språkvask» på beskrivelsen ved punktet. */
+export const polishDescriptionInputSchema = z
+  .object({ requestId: uuidSchema, checkpointKey: keySchema, text: aiInputText })
+  .strict();
+
+/** Beslutningen som følger med «Bruk» på et språkvasket felt (lagres med `saveField`). */
+export const saveFieldAiDecisionSchema = z
+  .object({ usageId: uuidSchema, decision: z.enum(["accepted", "edited"]) })
+  .strict();
+
+const rowVersionSchema = z.number().int().min(0);
+
+/**
+ * Ett funn i `summary_basis` slik det kommer tilbake fra nettleseren (A470): bare UUID, faste
+ * koder og heltall, ingen ekstra nøkler, og høyst `MAX_MEASURES_PER_DEVIATION` deler per funn.
+ * `group` brukes ikke: serveren setter den fra dagens funn.
+ */
+export const summaryBasisEntrySchema = z
+  .object({
+    source: z.enum(SUMMARY_FINDING_SOURCES),
+    id: uuidSchema,
+    group: z.enum(SUMMARY_GROUPS),
+    rowVersion: rowVersionSchema,
+    parts: z
+      .array(z.object({ id: uuidSchema, rowVersion: rowVersionSchema }).strict())
+      .max(MAX_MEASURES_PER_DEVIATION),
+  })
+  .strict();
+
+export const summaryBasisSchema = z.array(summaryBasisEntrySchema).max(REPORT_SUMMARY_BASIS_MAX);
+
+/**
+ * Lagring av sammendraget. Teksten har samme kontroll som andre lange tekstfelt: øvre lengde,
+ * sperre mot fødselsnummer og mot plassholderne fra vasken (A466). Tom tekst er lov.
+ */
+export const saveSummaryInputSchema = z
+  .object({
+    text: freeTextSchema(SUMMARY_TEXT_MAX_LENGTH),
+    baseRowVersion: rowVersionSchema,
+    draft: z
+      .object({ usageId: uuidSchema.nullable(), basis: summaryBasisSchema, edited: z.boolean() })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+export const draftSummaryInputSchema = z.object({ requestId: uuidSchema }).strict();
 
 // --- Felles kjøring ----------------------------------------------------------------------------
 

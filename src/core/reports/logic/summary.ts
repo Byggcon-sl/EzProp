@@ -26,7 +26,12 @@ import type {
  * Gruppene i fast rekkefølge. Samme liste som `SUMMARY_GROUPS` i `@/db/schema` (verdien kan ikke
  * hentes derfra i nettleseren); typesjekken under stopper hvis de kommer i utakt.
  */
-export const SUMMARY_GROUP_ORDER = ["tg3", "tg2", "tgiu", "hms"] as const satisfies readonly SummaryGroup[];
+export const SUMMARY_GROUP_ORDER = [
+  "tg3",
+  "tg2",
+  "tgiu",
+  "hms",
+] as const satisfies readonly SummaryGroup[];
 
 type SameCodes<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 type Assert<T extends true> = T;
