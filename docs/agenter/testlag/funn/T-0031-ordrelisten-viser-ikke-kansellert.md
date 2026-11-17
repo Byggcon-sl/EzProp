@@ -35,3 +35,4 @@ Ikke etterprøvd (forbedring).
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-17: test-kontor så på main 2dc573c0 at et kansellert oppdrag nå vises som «2026-00012 (kansellert)» både i tilbudslisten og på tilbudssiden. Ser rettet ut, men funnfilen er ikke satt til «rettet», så kontrolløren har ikke prøvd det på nytt. Settes til «rettet» av den som rettet det, så prøver testlaget det.
