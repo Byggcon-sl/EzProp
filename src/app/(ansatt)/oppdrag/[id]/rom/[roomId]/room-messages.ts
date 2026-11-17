@@ -6,7 +6,15 @@
  */
 
 /** Svaret fra en server action når noe ikke ble gjort. Meldingen er klar til visning. */
-export type ActionError = { status: "error"; message: string };
+export type ActionError = {
+  status: "error";
+  message: string;
+  /**
+   * `report_published`: rapporten er publisert, og serveren tar aldri imot endringen. Køen legger
+   * den til side og prøver den ikke igjen, så resten sendes som før (ADR 0015 punkt 15, T-0001).
+   */
+  code?: "report_published";
+};
 
 export function isActionError(value: unknown): value is ActionError {
   return (

@@ -24,7 +24,7 @@ export {
   type RoomTypeGroup,
   type SuggestFloor,
 } from "./codes";
-export { PropertyMissingError } from "./errors";
+export { PropertyMissingError, ReportPublishedError } from "./errors";
 export {
   COMMON_ROOM_TYPES,
   ROOM_DRAFT_SOURCES,

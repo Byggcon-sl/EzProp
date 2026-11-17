@@ -1,6 +1,7 @@
 import { AccessDeniedError } from "@/core/access";
 import { TemplateNotFoundError } from "@/core/templates";
 import { logger } from "@/shared/lib/logger";
+import { REPORT_PUBLISHED_MESSAGE } from "./published-lock";
 
 /*
  * Feilene fra rapportkjernen (docs/funksjoner/fase2a-badet-pc.md). Meldingene er norske og
@@ -57,7 +58,7 @@ const MESSAGES: Record<ReportValidationCode, string> = {
   override_reason: "Velg en grunn for å lagre.",
   invalid_choice: "Valget passer ikke forslaget.",
   not_applicable: "Dette kan ikke endres her.",
-  report_published: "Rapporten er publisert. Lag ny versjon for å rette.",
+  report_published: REPORT_PUBLISHED_MESSAGE,
   no_wet_room: "Rapporten har ikke noe våtrom å publisere.",
   certification_missing:
     "Du har ingen gyldig sertifisering. En kollega med gyldig sertifisering kan publisere.",

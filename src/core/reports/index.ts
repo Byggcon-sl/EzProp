@@ -10,6 +10,7 @@ import "server-only";
  */
 export type * from "./publish-types";
 export type * from "./types";
+export { isReportPublishedForAssignment, REPORT_PUBLISHED_MESSAGE } from "./published-lock";
 export { startReport } from "./reports";
 export { getRoomView } from "./room-view";
 export { saveField } from "./save-field";
