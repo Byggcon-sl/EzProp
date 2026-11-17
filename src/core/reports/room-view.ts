@@ -319,7 +319,12 @@ function toTgiuView(row: TgiuDetails): TgiuDetailsView {
   };
 }
 
-export type RoomState = RoomRefresh & { answers: AnswerView[]; ruleResults: RuleResult[] };
+export type RoomState = RoomRefresh & {
+  answers: AnswerView[];
+  ruleResults: RuleResult[];
+  /** Tilstanden per punkt i malens rekkefølge. Sjekken før publisering bygger på den (ADR 0015). */
+  checkpointStates: { checkpointKey: string; state: CheckpointState }[];
+};
 
 /**
  * Regner hele rommet: punktene med TG, status og advarsler, forslagene og fremdriften. Ren
@@ -390,6 +395,7 @@ export function buildRoomState(input: {
     }));
 
   const checkpointViews: CheckpointView[] = [];
+  const checkpointStates: RoomState["checkpointStates"] = [];
   const latestDecisionByRule = new Map<string, DecisionView>();
 
   for (const checkpoint of roomDoc.checkpoints) {
@@ -523,6 +529,7 @@ export function buildRoomState(input: {
         ),
     };
 
+    checkpointStates.push({ checkpointKey: checkpoint.key, state });
     checkpointViews.push({
       checkpointKey: checkpoint.key,
       resultId: result?.id ?? null,
@@ -575,6 +582,7 @@ export function buildRoomState(input: {
     },
     answers: answersView,
     ruleResults,
+    checkpointStates,
   };
 }
 

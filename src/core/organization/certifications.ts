@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lt, lte, or } from "drizzle-orm";
 import {
   AccessDeniedError,
   requireOrganizationAccess,
@@ -149,6 +149,63 @@ export async function removeCertification(
     });
     return row;
   });
+}
+
+/**
+ * Sertifiseringen som er gyldig for den ansatte på dagen `today` (ÅÅÅÅ-MM-DD i norsk tid), til
+ * publisering (A29, ADR 0015): ikke slettet, `valid_from` tom eller senest `today`, og `valid_to`
+ * `today` eller senere (utløpsdagen er siste gyldige dag). Flere gyldige: lengst `valid_to`, så
+ * `id`. Kjernefunksjon uten egen tilgangssjekk: kalles bak en handling som alt er sjekket, med
+ * `grant.organizationId` og `grant.employeeId`. Uten gyldig: `null`.
+ */
+export async function findValidCertification(
+  executor: DbExecutor,
+  organizationId: string,
+  employeeId: string,
+  today: string,
+): Promise<{ id: string; validTo: string } | null> {
+  const [row] = await executor
+    .select({ id: certifications.id, validTo: certifications.validTo })
+    .from(certifications)
+    .where(
+      and(
+        eq(certifications.organizationId, organizationId),
+        eq(certifications.employeeId, employeeId),
+        isNull(certifications.deletedAt),
+        or(isNull(certifications.validFrom), lte(certifications.validFrom, today)),
+        gte(certifications.validTo, today),
+      ),
+    )
+    .orderBy(desc(certifications.validTo), asc(certifications.id))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Siste gyldige dag for den nyeste sertifiseringen som har gått ut før `today`, til meldingen
+ * «sertifiseringen din gikk ut 01.11.». `null` når den ansatte ingen har. Samme kjøring som
+ * `findValidCertification`: uten egen tilgangssjekk.
+ */
+export async function findLatestExpiredCertificationDate(
+  executor: DbExecutor,
+  organizationId: string,
+  employeeId: string,
+  today: string,
+): Promise<string | null> {
+  const [row] = await executor
+    .select({ validTo: certifications.validTo })
+    .from(certifications)
+    .where(
+      and(
+        eq(certifications.organizationId, organizationId),
+        eq(certifications.employeeId, employeeId),
+        isNull(certifications.deletedAt),
+        lt(certifications.validTo, today),
+      ),
+    )
+    .orderBy(desc(certifications.validTo))
+    .limit(1);
+  return row?.validTo ?? null;
 }
 
 /**
