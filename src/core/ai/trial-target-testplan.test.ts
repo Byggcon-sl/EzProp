@@ -83,7 +83,7 @@ async function inspectorIn(options: Parameters<typeof enableAi>[1] | "none") {
 describe("funksjonsdefinisjonen language_polish (1)", () => {
   it("1.1 har nøyaktig to lovlige mål: answer/text og ai_trial/text", () => {
     const targets = languagePolish().allowedTargets.map((t) => `${t.type}/${t.fieldKey}`);
-    expect([...targets].sort()).toEqual(["ai_trial/text", "answer/text"]);
+    expect([...targets].sort()).toEqual(["ai_trial/text", "field_answer/text"]);
   });
 
   it("1.1 rettighet, ledetekstversjon og én feltkode er uendret", () => {
@@ -99,7 +99,7 @@ describe("vakten for ai_trial: leverandør × mål (2)", () => {
   type Case = {
     name: string;
     setup: Parameters<typeof enableAi>[1] | "none";
-    target: "ai_trial" | "answer";
+    target: "ai_trial" | "field_answer";
     expected: "ok" | "disabled";
   };
   const CASES: Case[] = [
@@ -125,7 +125,7 @@ describe("vakten for ai_trial: leverandør × mål (2)", () => {
     {
       name: "2.6 fake + answer/text (ingen regresjon)",
       setup: {},
-      target: "answer",
+      target: "field_answer",
       expected: "ok",
     },
   ];

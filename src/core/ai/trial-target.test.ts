@@ -123,7 +123,7 @@ describe("vakten for ai_trial: leverandør × mål (2)", () => {
     const result = await requestSuggestion(grant, validRequest());
     expect(result.kind).toBe("suggestion");
     const [row] = await allAiRows();
-    expect((row!.target_ref as { type: string }).type).toBe("answer");
+    expect((row!.target_ref as { type: string }).type).toBe("field_answer");
   });
 
   it("2.7 vakten ligger i kjernen: en annen adapter enn fake får aldri ai_trial", async () => {

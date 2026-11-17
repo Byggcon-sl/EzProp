@@ -253,6 +253,13 @@
       "when": 1794650356974,
       "tag": "0035_tilbud",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794877190982,
+      "tag": "0036_badet-pc",
+      "breakpoints": true
     }
   ]
 }

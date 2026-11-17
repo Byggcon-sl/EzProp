@@ -53,7 +53,7 @@ export function trialTarget(id: string = uuidv7(), fieldKey = "text"): AiTarget 
 
 /** Målet for et svar i rapporten (finnes ikke ennå, men står i `allowedTargets`). */
 export function answerTarget(id: string = uuidv7(), fieldKey = "text"): AiTarget {
-  return { type: "answer", id, fieldKey };
+  return { type: "field_answer", id, fieldKey };
 }
 
 /**

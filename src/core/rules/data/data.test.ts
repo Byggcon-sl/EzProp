@@ -4,7 +4,11 @@ import { describe, expect, it } from "vitest";
 import { TEMPLATE_KEY_PATTERN } from "@/db/schema";
 import { wetRoomTemplate } from "@/db/seed/templates/wet-room";
 import { SOURCE_RULE_AGE, WET_ROOM_LIFESPANS } from "./lifespans";
-import { SOURCE_RULE_MOISTURE, WET_ROOM_THRESHOLDS } from "./thresholds";
+import {
+  SOURCE_RULE_MOISTURE,
+  WET_ROOM_HOLE_MOISTURE_THRESHOLD_KEY,
+  WET_ROOM_THRESHOLDS,
+} from "./thresholds";
 
 /*
  * Levetidene og terskelen som kodedata (docs/funksjoner/fase2a-regler-bad-testplan.md avsnitt 2
@@ -22,7 +26,8 @@ import { SOURCE_RULE_MOISTURE, WET_ROOM_THRESHOLDS } from "./thresholds";
 
 const MEMBRANE_ELEMENT = "wet_room.membrane_type";
 const UNIT_ELEMENT = "wet_room.hole_moisture_unit";
-const THRESHOLD_KEY = "wet_room_hole_moisture_weight_percent";
+/** Fuktgrensens kode fra én kilde (småfunn fra PR #167). Kodens tekst låses i nøkkellisten i `wet-room.test.ts`. */
+const THRESHOLD_KEY = WET_ROOM_HOLE_MOISTURE_THRESHOLD_KEY;
 
 const entries = WET_ROOM_LIFESPANS.entries;
 

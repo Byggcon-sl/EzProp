@@ -169,6 +169,10 @@ Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full 
 - [ ] **Publisering av badet:** sperren for det som gjelder våtrom (TG2 eller TG3 uten årsak og konsekvens, TG3 uten kostnad, våtrom uten hulltaking eller begrunnelse), med aktiv overstyring og logg.
 - [ ] **ADR: valg av PDF-motor,** og PDF-en av badet i Byggcons profil, i ferdig kvalitet. Krav til motoren: stående og liggende, **flere PDF-profiler av samme rapport** (ulik layout, design og farger fra de samme dataene, Ståle 16.11.2026), bilder med markering, innholdsfortegnelse, norsk orddeling og samme resultat hver gang. Testutskriften med 50 bilder kommer i bredden.
 
+**Fra forbedreren**
+
+- [ ] **«Skriv det du ser»: KI finner utfallet** (bygges etter «KI i veien», A384): takstmannen skriver eller dikterer fritt i avvikssøket («sprekk i flis ved sluket, litt løs»), og KI viser opptil tre utfall fra den låste malversjonen med punktnavn og standardtekst, ingen forhåndsvalgt. Valgt utfall lager avviket som ved manuelt valg, og notatet tilbys som forslag til avviksteksten (bruk / behold / angre). KI rangerer bare likhet, setter aldri TG og velger aldri utfall. Gjennom `src/core/ai` med persondatafilter, logg i `ai_usage_log`, falsk leverandør og eget evalueringssett (`pnpm ai:eval outcome_match`). Uten KI eller nett: tekstsøket fra «Badet på PC». Ingen nye tabeller.
+
 **Ferdig når:** På ett testoppdrag kan badet fylles ut, få TG-forslag fra reglene og tekstforslag fra KI, publiseres og bli til en PDF. Testlaget har prøvd veien, og Ståle har sett den.
 
 ### 2a-3 Bredden

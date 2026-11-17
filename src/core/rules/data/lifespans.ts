@@ -61,10 +61,14 @@ const MATERIAL_ENTRIES: LifespanEntry[] = ROWS.flatMap(([material, component, wi
       ],
 );
 
+/**
+ * Trinnet for sjikt fra før 2000 gjelder alle typer, også kabin, panel og vinyl som ikke er skjult.
+ * Navnet er rettet (småfunn fra PR #167); koden står (regel 6).
+ */
 const BEFORE_2000: LifespanEntry = {
   key: "membrane.before_2000",
   material_code: null,
-  component: "Skjult vanntett sjikt fra før 2000, alle typer",
+  component: "Vanntett sjikt fra før 2000, alle typer og ukjent type",
   from_year: null,
   to_year: 1999,
   min_age: null,

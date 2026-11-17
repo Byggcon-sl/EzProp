@@ -2,6 +2,12 @@
 
 Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte tid. Nyeste øverst. Får Ståle stadig de samme kommentarene, legges de inn som regel i den aktuelle agentbeskrivelsen.
 
+## 17.11.2026 – PR #224 (Badet på PC, overtatt)
+
+- E2E-filer som legger egne oppdrag i prøveorganisasjonen, kan skyve testoppdragene ut av arbeidskøen (høyst 50 kort). Tester som leter etter ett bestemt oppdrag i køen, søker det opp på adressen.
+- En fast kode som rettes før lansering (A350, `answer` → `field_answer`), må rettes overalt i samme PR: funksjonsdefinisjonen, vaktene og testhjelperne i `tests/`. Ellers feiler testene som sjekker at den gamle koden er borte.
+- En oppgave som står stille i flere timer etter at byggingen er ferdig, kan tas over ved å flette inn main, kjøre sjekkene og åpne PR. Det meste av tiden går til CI.
+
 ## 12.11.2026 – PR #159 merget (malen for ett bad)
 
 - Arbeidsflyten for én mal tok rundt tre timer. En annen kjøring av hovedløkken startet i mellomtiden, så branchen uten PR og lot den være. Det virket: regelen «branch med commit siste 2 timer er i arbeid» hindret dobbelt arbeid.

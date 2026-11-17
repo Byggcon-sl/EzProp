@@ -225,7 +225,7 @@ describe("avvist fordi nytt forslag erstatter (S1–S7)", () => {
     return createAiUsageLog(organizationId, {
       employeeId,
       createdAt: CREATED,
-      targetRef: { type: "answer", id: targetId, fieldKey: "text" },
+      targetRef: { type: "field_answer", id: targetId, fieldKey: "text" },
     });
   }
 
@@ -247,7 +247,7 @@ describe("avvist fordi nytt forslag erstatter (S1–S7)", () => {
     const { organization, grant } = await aiOrganization();
     await setRetention(organization.id, 2);
     const targetId = uuidv7();
-    const target = { type: "answer", id: targetId, fieldKey: "text" };
+    const target = { type: "field_answer", id: targetId, fieldKey: "text" };
     const first = new Date("2026-11-01T09:00:00Z");
     const second = new Date("2026-11-05T09:00:00Z");
     const r1 = await createAiUsageLog(organization.id, {

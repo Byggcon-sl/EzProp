@@ -72,7 +72,7 @@ export const AI_FEATURES: Readonly<Record<AiFeatureCode, AiFeatureDefinition>> =
     allowedFields: ["text"],
     fieldSources: { text: FREE_TEXT_SOURCE },
     allowedTargets: [
-      { type: "answer", fieldKey: "text" },
+      { type: "field_answer", fieldKey: "text" },
       { type: AI_TRIAL_TARGET_TYPE, fieldKey: "text" },
     ],
     promptVersion: "language_polish.v2",

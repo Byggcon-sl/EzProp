@@ -570,6 +570,7 @@ function toDocument(content: Content): TemplateDocument {
       question_key: m.questionKey,
       outcome_key: m.outcomeKey,
       text: m.row.text,
+      applies_to_tg: m.row.appliesToTg,
       text_status: m.row.textStatus,
       sort_order: m.row.sortOrder,
     })),
@@ -1011,13 +1012,19 @@ async function applyDocument(
     tx,
     ctx,
     standardMeasures,
-    ["outcomeId", "text", "textStatus", "sortOrder"],
+    ["outcomeId", "text", "appliesToTg", "textStatus", "sortOrder"],
     existing.measures.map((m) => ({ parentId: m.row.outcomeId, row: m.row })),
     doc.standard_measures.map((m) => {
       const id = required(out.idOf, outcomeScope(m.checkpoint_key, m.question_key, m.outcome_key));
       return {
         parentId: id,
-        values: { outcomeId: id, text: m.text, textStatus: m.text_status, sortOrder: m.sort_order },
+        values: {
+          outcomeId: id,
+          text: m.text,
+          appliesToTg: m.applies_to_tg,
+          textStatus: m.text_status,
+          sortOrder: m.sort_order,
+        },
       };
     }),
     counts,

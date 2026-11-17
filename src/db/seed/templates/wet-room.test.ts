@@ -2,10 +2,14 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { WET_ROOM_LIFESPANS } from "@/core/rules/data/lifespans";
-import { WET_ROOM_THRESHOLDS } from "@/core/rules/data/thresholds";
+import {
+  WET_ROOM_HOLE_MOISTURE_THRESHOLD_KEY,
+  WET_ROOM_THRESHOLDS,
+} from "@/core/rules/data/thresholds";
 import {
   checkDocumentKeys,
   checkDocumentRules,
+  checkMeasureAppliesToTg,
   checkRuleCheckpointGivesTg,
   checkRuleConditionShape,
   checkRuleOutcomeSameCheckpoint,
@@ -16,7 +20,9 @@ import {
 } from "@/core/templates";
 import { TEMPLATE_KEY_PATTERN } from "@/db/schema";
 import { buildTemplateDocument } from "../../../../tests/template-document";
-import { WET_ROOM_MERGE_FIELDS, wetRoomTemplate } from "./wet-room";
+import { MERGE_FIELD_KEYS } from "@/core/reports/logic/codes";
+import * as reportLabels from "@/core/reports/logic/labels";
+import { SOURCE_RULE_HOLE, WET_ROOM_MERGE_FIELDS, wetRoomTemplate } from "./wet-room";
 
 /*
  * Datatest av malfilen for badet (docs/funksjoner/fase2a-mal-bad-testplan.md avsnitt 1, og
@@ -216,17 +222,24 @@ const checkTextLength: Check = (doc) =>
 const BOR = wordPattern("bør", false);
 const MA = wordPattern("må", false);
 
-/** «Bør» (og ikke «må») i tiltak ved TG2; «må» i tiltak ved TG3 og valg mellom TG2 og TG3. */
+/**
+ * «Bør» (og ikke «må») i tiltak ved TG2; «må» i tiltak ved TG3 og valg mellom TG2 og TG3. Et tiltak
+ * som bare gjelder TG2 (`applies_to_tg = 2`, T-0060), regnes som TG2.
+ */
 const checkMeasureModal: Check = (doc) => {
   const errors: string[] = [];
   for (const o of doc.outcomes) {
     for (const m of measuresOf(doc, o)) {
       const where = `${o.question_key}/${o.key}: «${m.text}»`;
-      if (o.kind === "tg2") {
+      if (o.kind === "tg2" || m.applies_to_tg === 2) {
         if (!BOR.test(m.text)) errors.push(`${where} mangler «bør»`);
         if (MA.test(m.text)) errors.push(`${where} har «må» ved TG2`);
       }
-      if ((TG3_LIKE as readonly string[]).includes(o.kind) && !MA.test(m.text)) {
+      if (
+        (TG3_LIKE as readonly string[]).includes(o.kind) &&
+        m.applies_to_tg !== 2 &&
+        !MA.test(m.text)
+      ) {
         errors.push(`${where} mangler «må»`);
       }
     }
@@ -1383,16 +1396,21 @@ describe("3 reglene i badmalen (datatest)", () => {
   it("R3.11 messages: fast tekst før 2000, alder uten «levetid», TGIU med begrunnelse", () => {
     const doc = parsedTemplate();
     const byKey = (key: string) => doc.rules.find((r) => r.key === key)!;
-    expect(byKey(BEFORE_2000).message).toBe("Sjiktet er fra før 2000. Forslaget er TG3.");
+    // B2.12: meldingen sier at byggeåret brukes når sjiktets årstall mangler
+    expect(byKey(BEFORE_2000).message).toMatch(/^Årstallet for sjiktet er før 2000/);
+    expect(byKey(BEFORE_2000).message).toMatch(/byggeåret for våtrommet/);
+    expect(byKey(BEFORE_2000).message).toMatch(/Forslaget er TG3\.$/);
     expect(byKey(PAST_LIFESPAN).message).toContain("funksjonen er usikker på grunn av alder");
     expect(byKey(PAST_LIFESPAN).source_ref).toBe(WET_ROOM_LIFESPANS.entries[0]!.source_ref);
     const pastOutcome = doc.outcomes.find((o) => o.question_key === PAST_LIFESPAN_QUESTION)!;
     expect(pastOutcome.default_cause_text).toMatch(/usikker på grunn av alder/);
     expect(pastOutcome.source_ref).toBe(WET_ROOM_LIFESPANS.entries[0]!.source_ref);
     expect(byKey(NOT_DRILLED).message).toMatch(/begrunnelse og risikovurdering/);
-    expect(byKey(NOT_DRILLED).source_ref).toBe(
-      "NS 3600:2025 og forskriften § 2-2; Ståle 25.10.2026 og 12.11.2026 (F2)",
-    );
+    // B2.12: punktet A.2.1.8 og Ståles beslutning 25.10.2026, ikke svar 59a
+    expect(byKey(NOT_DRILLED).source_ref).toBe(SOURCE_RULE_HOLE);
+    expect(SOURCE_RULE_HOLE).toContain("A.2.1.8");
+    expect(SOURCE_RULE_HOLE).toContain("Ståle 25.10.2026");
+    expect(SOURCE_RULE_HOLE).not.toMatch(/59a/);
     for (const r of doc.rules) expect(r.message ?? "", r.key).not.toMatch(/levetid/i);
   });
 
@@ -1412,6 +1430,7 @@ const ruleChecks: [string, RuleCheck][] = [
   ["checkRuleOutcomeSameCheckpoint", checkRuleOutcomeSameCheckpoint],
   ["checkRuleCheckpointGivesTg", checkRuleCheckpointGivesTg],
   ["checkRuleConditionShape", checkRuleConditionShape],
+  ["checkMeasureAppliesToTg", checkMeasureAppliesToTg],
 ];
 
 /** Badmalen med én feil i reglene, laget for å feile. */
@@ -1458,6 +1477,14 @@ const brokenTemplates: {
       c.material_element_key = null;
     },
   },
+  {
+    name: "tiltak for bare TG3 på et TG2-utfall",
+    check: checkMeasureAppliesToTg,
+    change: (doc) => {
+      doc.standard_measures.find((m) => m.question_key === PAST_LIFESPAN_QUESTION)!.applies_to_tg =
+        3;
+    },
+  },
 ];
 
 describe("3.11 kontrollene i malmotoren på badmalen", () => {
@@ -1474,6 +1501,110 @@ describe("3.11 kontrollene i malmotoren på badmalen", () => {
     change(doc);
     expect(check(doc).length).toBeGreaterThan(0);
     expect(checkDocumentRules(doc).length).toBeGreaterThan(0);
+  });
+});
+
+// --- Badet på PC (docs/funksjoner/fase2a-badet-pc.md, Omfang 11; testplanen B2.5, B2.10, B2.12) ---
+
+const CHOOSE_QUESTIONS = [
+  "wet_room.floor.insufficient_fall",
+  "wet_room.floor.vinyl_damage",
+  "wet_room.membrane_drain.drain_not_accessible",
+  "wet_room.membrane_drain.low_threshold_height",
+  "wet_room.fixtures.cracked_sanitary_ware",
+  "wet_room.adjacent.elevated_moisture",
+];
+
+describe("badet på PC: malen", () => {
+  it("B2.5 T-0051: valget unknown i kilden for byggeåret heter bare «Ukjent», koden står", () => {
+    const options = parsedTemplate().element_options.filter(
+      (o) => o.element_key === "wet_room.build_year_source",
+    );
+    expect(options.map((o) => [o.key, o.label])).toEqual([
+      ["documented", "Dokumentert"],
+      ["owner_stated", "Opplyst av eier"],
+      ["estimated", "Anslått"],
+      ["unknown", "Ukjent"],
+    ]);
+    // Ingen valg lover at byggeåret for bygningen brukes (det finnes ikke i datamodellen)
+    for (const o of parsedTemplate().element_options) {
+      expect(o.label, `${o.element_key}/${o.key}`).not.toMatch(/bygningen brukes/i);
+    }
+  });
+
+  it("B2.10 T-0060: hvert utfall «velg TG2 eller TG3» har ett tiltak for TG2 med «bør» og ett for TG3 med «må»", () => {
+    const doc = parsedTemplate();
+    const choose = doc.outcomes.filter((o) => o.kind === "choose_tg2_tg3");
+    expect(sorted(choose.map((o) => o.question_key))).toEqual(sorted(CHOOSE_QUESTIONS));
+    for (const o of choose) {
+      const measures = measuresOf(doc, o);
+      const where = o.question_key;
+      expect(measures.map((m) => m.applies_to_tg).sort(), where).toEqual([2, 3]);
+      const tg2 = measures.find((m) => m.applies_to_tg === 2)!;
+      const tg3 = measures.find((m) => m.applies_to_tg === 3)!;
+      expect(BOR.test(tg2.text), `${where}: TG2 har «bør»`).toBe(true);
+      expect(MA.test(tg2.text), `${where}: TG2 har ikke «må»`).toBe(false);
+      expect(MA.test(tg3.text), `${where}: TG3 har «må»`).toBe(true);
+      expect(tg2.text).not.toBe(tg3.text);
+      for (const m of measures) expect(m.text_status, where).toBe("draft");
+    }
+  });
+
+  it("B2.10 T-0060: applies_to_tg står bare på utfall av typen «velg TG2 eller TG3»", () => {
+    const doc = parsedTemplate();
+    const kindOf = (m: TemplateDocument["standard_measures"][number]) =>
+      doc.outcomes.find(
+        (o) =>
+          o.checkpoint_key === m.checkpoint_key &&
+          o.question_key === m.question_key &&
+          o.key === m.outcome_key,
+      )?.kind;
+    for (const m of doc.standard_measures) {
+      if (kindOf(m) !== "choose_tg2_tg3") expect(m.applies_to_tg, m.question_key).toBeNull();
+    }
+    expect(checkMeasureAppliesToTg(doc)).toEqual([]);
+  });
+
+  it("B2.12 flettefeltene er de samme som i rapporten, og {sted} står i fuktteksten", () => {
+    expect(sorted(WET_ROOM_MERGE_FIELDS)).toEqual(sorted(MERGE_FIELD_KEYS));
+    const moisture = parsedTemplate().outcomes.find(
+      (o) => o.question_key === "wet_room.adjacent.elevated_moisture",
+    )!;
+    for (const field of ["{måleverdi}", "{enhet}", "{sted}"]) {
+      expect(moisture.deviation_text).toContain(field);
+    }
+    const fall = parsedTemplate().outcomes.find(
+      (o) => o.question_key === "wet_room.floor.insufficient_fall",
+    )!;
+    // Én `{måleverdi}` som fylles med begge retningene; teksten tåler én eller to verdier
+    expect(fall.deviation_text).toBe("Målt fall mot sluk er {måleverdi} mm per meter.");
+  });
+
+  it("B2.12 årsaken på membrane_past_lifespan sier at funksjonen er usikker på grunn av alder", () => {
+    const outcome = parsedTemplate().outcomes.find(
+      (o) => o.question_key === PAST_LIFESPAN_QUESTION,
+    )!;
+    expect(outcome.default_cause_text).toMatch(/^Funksjonen er usikker på grunn av alder/);
+    expect(outcome.source_ref).toBe(
+      WET_ROOM_LIFESPANS.entries.find((e) => e.key === "membrane.foil.without")!.source_ref,
+    );
+  });
+
+  it("B2.12 trinnet membrane.before_2000 har et navn som gjelder alle typer, og koden står", () => {
+    const step = WET_ROOM_LIFESPANS.entries.find((e) => e.key === "membrane.before_2000");
+    expect(step).toMatchObject({ material_code: null, to_year: 1999, outcome_kind: "tg3" });
+    expect(step!.component).toMatch(/alle typer/);
+    expect(step!.component).not.toMatch(/skjult/i);
+  });
+
+  it("B2.12 fuktgrensens kode kommer fra thresholds.ts (én kilde)", () => {
+    const codes = parsedTemplate()
+      .rule_conditions.map((c) => c.threshold_key)
+      .filter((key): key is string => key !== null);
+    expect(codes.length).toBeGreaterThan(0);
+    for (const code of codes) expect(code).toBe(WET_ROOM_HOLE_MOISTURE_THRESHOLD_KEY);
+    const source = readFileSync(join(__dirname, "wet-room.ts"), "utf8");
+    expect(source).not.toContain(`"${WET_ROOM_HOLE_MOISTURE_THRESHOLD_KEY}"`);
   });
 });
 
@@ -1504,5 +1635,52 @@ describe("1.28 kontrollene kan feile", () => {
   it("alle kontrollene i signaturavtalen har et dokument som skal feile", () => {
     const covered = new Set(badDocuments.map((b) => b.checkName));
     expect(sorted([...covered])).toEqual(sorted(checks.map(([name]) => name)));
+  });
+});
+
+// --- B4.29 gjetteord og kopitest på tekstene i rapportkjernen (fase2a-badet-pc-testplan.md) ------
+
+/** Alle tekster i en verdi (tekst, liste eller objekt), med stien dit. */
+function stringsIn(value: unknown, path: string): { where: string; text: string }[] {
+  if (typeof value === "string") return [{ where: path, text: value }];
+  if (Array.isArray(value)) return value.flatMap((item, i) => stringsIn(item, `${path}[${i}]`));
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, item]) => stringsIn(item, `${path}.${key}`));
+  }
+  return [];
+}
+
+const LABEL_TEXTS = Object.entries(reportLabels).flatMap(([name, value]) => stringsIn(value, name));
+
+describe("B4.29 gjetteord og kopi i oversettelsen, tiltakene og intervalletikettene", () => {
+  it("B4.29 tekstene finnes (testen prøver noe)", () => {
+    expect(LABEL_TEXTS.some((t) => t.where.startsWith("RULE_REASON_TEXTS."))).toBe(true);
+    expect(LABEL_TEXTS.some((t) => t.where.startsWith("COST_BAND_LABELS."))).toBe(true);
+    expect(LABEL_TEXTS.some((t) => t.where.startsWith("WARNING_TEXTS."))).toBe(true);
+  });
+
+  it("B4.29 ingen gjetteord eller henvisning til TEK, NS, Byggforsk, IVIT eller SmartTakst", () => {
+    const hits = LABEL_TEXTS.flatMap(({ where, text }) =>
+      guessWordsAndReferencesIn(text).map((word) => `${where}: «${word}»`),
+    );
+    expect(hits).toEqual([]);
+  });
+
+  it("B4.29 ingen tekst er kopiert fra researchen", () => {
+    const copied = LABEL_TEXTS.map(({ where, text }) => ({ where, run: copiedRun(text) })).filter(
+      (hit) => hit.run !== null,
+    );
+    expect(copied).toEqual([]);
+  });
+
+  it("B4.29 tiltakene som gjelder én TG (T-0060) har ingen gjetteord og er ikke kopiert", () => {
+    const doc = parsedTemplate();
+    const perTg = doc.standard_measures.filter((m) => m.applies_to_tg !== null);
+    expect(perTg.length).toBeGreaterThan(0);
+    for (const m of perTg) {
+      const where = `${m.question_key}/${m.outcome_key}`;
+      expect(guessWordsAndReferencesIn(m.text), where).toEqual([]);
+      expect(copiedRun(m.text), where).toBeNull();
+    }
   });
 });
