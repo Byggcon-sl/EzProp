@@ -210,7 +210,7 @@ Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full 
   - [ ] Bilder uten personer til de fire testoppdragene, i samme seed-steg (`pnpm db:seed:testoppdrag`), når bildemodellen finnes (A134)
 - [ ] Sammendrag (skrives av takstmannen), **oppsummering per bygningsdel** som lagres og kan redigeres (innspill D12), og oversikt over TG
 - [ ] **KI: utkast til oppsummering per bygningsdel og til sammendraget,** laget fra godkjente funn og sortert etter alvor. Takstmannen godkjenner.
-- [ ] Papirkurv og angre for sletting
+- [x] Papirkurv og angre for sletting (PR for branch `papirkurv`, 17.11.2026)
 - [ ] **Fart:** krav til hvor rask rapporten skal være på PC, og en prøve med en stor rapport (mange bygninger og bilder): ett rullefelt, og innhold som ikke hopper mens det lastes. (Svar 10.11.2026, nr. 50)
 - [ ] **KI: e-post blir oppdragsforslag.** En bestilling på e-post limes inn og blir et utkast til oppdrag (eller til tilbud, når det er en forespørsel) som kontoret kontrollerer og lagrer.
 - [ ] **Reklamasjonskoblingen:** oppdrag → henvendelse eller reklamasjon → ny befaring, som kobling i datamodellen. (Svar 10.11.2026, nr. 38)
