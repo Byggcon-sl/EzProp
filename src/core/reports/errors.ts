@@ -32,6 +32,8 @@ export const REPORT_VALIDATION_CODES = [
   "invalid_choice",
   /** Feltet kan ikke endres her (for eksempel TGIU-opplysninger uten TGIU). */
   "not_applicable",
+  /** Teksten har en plassholder fra vasken før KI, for eksempel «[adresse]» (A466). */
+  "text_has_placeholder",
 ] as const;
 export type ReportValidationCode = (typeof REPORT_VALIDATION_CODES)[number];
 
@@ -47,6 +49,8 @@ const MESSAGES: Record<ReportValidationCode, string> = {
   override_reason: "Velg en grunn for å lagre.",
   invalid_choice: "Valget passer ikke forslaget.",
   not_applicable: "Dette kan ikke endres her.",
+  text_has_placeholder:
+    "Teksten har en plassholder fra KI, for eksempel [adresse]. Skriv inn riktig verdi.",
 };
 
 /** Inndata som ikke kan lagres. Ingenting er endret. */

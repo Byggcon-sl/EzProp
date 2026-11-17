@@ -267,6 +267,22 @@ export type PhraseCandidateDocument = Pick<
   "checkpoints" | "deviation_questions" | "outcomes" | "standard_measures"
 >;
 
+/**
+ * Hvor mange ganger én kandidat er valgt i organisasjonen for ett felt («Mest brukt», A468).
+ * Samlet for hele organisasjonen, aldri per ansatt: typen har ingen ansatt, og ingen dato.
+ * Kandidaten pekes ut med de faste kodene i rapportens låste maldokument, slik at nettleseren
+ * finner den uten id fra databasen. `measureSortOrder` er satt for standardtiltak, ellers `null`.
+ */
+export type PhraseUsageCount = {
+  field: PhraseField;
+  checkpointKey: string;
+  questionKey: string;
+  outcomeKey: string;
+  measureSortOrder: number | null;
+  /** Heltall, minst 1. Kandidater som aldri er valgt, står ikke i listen. */
+  count: number;
+};
+
 /** Avviket og feltet forslagene gjelder. Bare faste koder, TG og teksten som står i feltet. */
 export type PhraseCandidateContext = {
   field: PhraseField;
@@ -274,8 +290,15 @@ export type PhraseCandidateContext = {
   /** Tomme for avvik skrevet fritt. */
   questionKey: string | null;
   outcomeKey: string | null;
+  /**
+   * Avvikets slag (A463). `hms` får bare kandidater fra HMS-utfall, `tg` får aldri kandidater
+   * fra HMS-utfall.
+   */
+  kind: DeviationKind;
   /** Avvikets TG. `null` for HMS og når TG ikke er valgt. */
   tg: DeviationTg | null;
+  /** Tellingen for rommet (`RoomReportView.phraseUsage`). Tom liste når ingen er valgt ennå. */
+  usage: readonly PhraseUsageCount[];
   /**
    * Teksten som står i feltet (for `new_measure`: tekstene i tiltakene som alt finnes). Kandidater
    * med samme tekst tas ut.
@@ -298,6 +321,8 @@ export type PhraseCandidate = {
   /** Bare for standardtiltak: TG-en tiltaket gjelder for, og plassen blant utfallets tiltak. */
   appliesToTg: MeasureAppliesToTg | null;
   measureSortOrder: number | null;
+  /** Antall ganger kandidaten er valgt i organisasjonen for feltet (A468). 0 når aldri valgt. */
+  chosenCount: number;
   text: string;
   /** Alle er `draft` til fagrådet har godkjent (A423). Vises som «utkast». */
   textStatus: TextStatus;
@@ -305,9 +330,14 @@ export type PhraseCandidate = {
 
 /**
  * Kandidatene for et felt (A433): alle tekster for samme felttype i dokumentet, uten tomme
- * tekster, uten like tekster (første beholdes) og uten `currentTexts`. Rekkefølge: avvikets eget
- * utfall, så samme punkt og samme TG, så resten av punktet, så resten av rommet i malens
- * rekkefølge. `ref` er alltid `null`. Ren funksjon: samme liste i nettleseren og på serveren.
+ * tekster, uten like tekster (første beholdes) og uten `currentTexts`. HMS og TG blandes aldri
+ * (A463): et HMS-avvik får bare tekster fra utfall med `kind = hms`, og et TG-avvik aldri dem.
+ *
+ * Rekkefølge, i fire ledd: avvikets eget utfall, så samme punkt og samme TG, så resten av
+ * punktet, så resten av rommet. Innen et ledd kommer kandidaten med høyest `chosenCount` først
+ * (A468), og ved likt tall malens rekkefølge. Listen kuttes ikke her.
+ *
+ * `ref` er alltid `null`. Ren funksjon: samme liste i nettleseren og på serveren.
  */
 export type ListPhraseCandidates = (
   document: PhraseCandidateDocument,
@@ -324,6 +354,15 @@ export type SearchPhraseCandidates = (
   query: string,
   limit: number,
 ) => PhraseCandidate[];
+
+/**
+ * Kandidaten som får merket «Mest brukt» (A468): den med høyest `chosenCount`, når tallet er
+ * minst `PHRASE_MOST_USED_MIN_COUNT` (2). Ved likt tall den første i listen. `null` når ingen
+ * er valgt ofte nok. Ren funksjon, brukt på listen som vises (tekstsøket og KI-rangeringen).
+ */
+export type MostUsedPhraseCandidate = <T extends PhraseCandidate>(
+  candidates: readonly T[],
+) => T | null;
 
 /**
  * Om kandidaten hører til en annen TG enn avviket (A437): gir TG-en teksten hører til, ellers

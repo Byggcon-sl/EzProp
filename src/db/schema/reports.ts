@@ -211,7 +211,9 @@ export const reports = pgTable(
     summaryText: text("summary_text"),
     /**
      * Funnene sammendraget bygde på da et utkast sist ble brukt (A435). Tom når sammendraget er
-     * skrevet for hånd uten utkast. Settes bare av serveren.
+     * skrevet for hånd uten utkast. Kommer tilbake fra nettleseren ved «Bruk» og kontrolleres av
+     * serveren før den lagres (A470): strengt skjema, hver id må være et funn i rapporten, `group`
+     * settes av serveren, og `rowVersion` kan ikke være høyere enn dagens.
      */
     summaryBasis: jsonb("summary_basis").$type<SummaryBasisEntry[]>(),
   },

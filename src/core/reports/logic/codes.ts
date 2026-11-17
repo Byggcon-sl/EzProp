@@ -146,3 +146,6 @@ export const PHRASE_FIELDS = [
   "consequence_text",
   "new_measure",
 ] as const;
+
+/** Så mange ganger må en kandidat være valgt i organisasjonen for å få merket «Mest brukt» (A468). */
+export const PHRASE_MOST_USED_MIN_COUNT = 2;

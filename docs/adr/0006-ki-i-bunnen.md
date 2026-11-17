@@ -362,7 +362,7 @@ Ingen ny rettighet. Rettighetene finnes i `src/core/access/permissions.ts`.
 
 ## Tillegg 17.11.2026 – KI i veien (fraseforslag, språkvask og utkast til sammendrag)
 
-Status: vedtatt av agentene i autonom modus. Oppgavekort: `docs/funksjoner/fase2a-ki-i-veien.md` (A423–A442). Migrering `0037_ki-i-veien`. Grensesnittene står i `src/core/ai/types.ts` og nederst i `src/core/reports/types.ts`. Tillegget endrer del 1, 4, 5, 8 og 10 slik det står her; resten av ADR-en gjelder som før.
+Status: vedtatt av agentene i autonom modus. Oppgavekort: `docs/funksjoner/fase2a-ki-i-veien.md` (A423–A442, og A460–A472 etter runde 2). Migrering `0037_ki-i-veien`. Grensesnittene står i `src/core/ai/types.ts` og nederst i `src/core/reports/types.ts`. Tillegget endrer del 1, 4, 5, 7, 8 og 10 slik det står her; resten av ADR-en gjelder som før. Del 2 (leverandørporten) er uendret.
 
 Støtter hovedmålene: **KI i bunnen** (de tre første KI-funksjonene i rapporten går samme vei inn, med samme vask, logg og beslutning), **de ansatte** (ett trykk gir tekst å kontrollere, ikke skrive) og **færre reklamasjoner** (KI-svar som endrer TG eller legger til tall, vises aldri).
 
@@ -373,10 +373,14 @@ Støtter hovedmålene: **KI i bunnen** (de tre første KI-funksjonene i rapporte
 - **Tredje argument, `AiServerInput`.** `requestSuggestion(grant, request, serverInput?)`. Kandidater (`candidates`) og funn (`summaryGroups`) kan bare gis her. Skjemaet for `request` avviser fortsatt `candidates`, så en server-handling som sender nettleserens innhold rett videre, kan aldri smugle inn kandidater eller funn.
 - **Kjernen slår opp målet.** For måltypene `deviation`, `deviation_measure`, `checkpoint_result` og `report` (`RESOLVED_AI_TARGET_TYPES` i `src/shared/config/ai-targets.ts`) følger `src/core/ai` kjeden fra målraden til rapport og oppdrag via `@/db/schema`, med `grant.organizationId`, `deleted_at is null` i alle ledd og rapporten i `draft`. `assignment_id`, `report_id` og de kjente verdiene til vasken kommer derfra. Forespørselen har `assignmentId = null` og `reportId = null` for disse måltypene. Finnes ikke målet, er svaret det samme nøytrale avslaget som ellers (`AiRequestRejectedError`), uten rad og uten kall. `field_answer` kontrolleres ikke ennå og blir stående som «bare falsk leverandør».
 - **Felles liste over KI-mål** ligger i `src/shared/config/ai-targets.ts` (`REPORT_AI_TARGET_FIELDS`, nå også `report` / `summary_text`, A427). Både `core/ai` og `core/reports` leser den. Ny feltkode `new_measure` på måltypen `deviation`: forslag til nytt tiltak, der tiltaksraden ikke finnes før takstmannen har valgt.
-- **Flere felt fra ett trykk:** `requestSuggestionBatch(grant, requests)` for «Språkvask avviket». Ett kall til leverandøren og én rad per felt. Se «Én rad per kall» under.
-- **Nye svar:** `{ kind: "candidates", usageId, status, candidates }` (rangert liste med `{ source, id }`, aldri tekst) og `{ kind: "stopped", usageId }`.
+- **Flere felt fra ett trykk:** `requestSuggestionBatch(grant, requests)` for «Språkvask avviket». Ett kall til serveren, og for hvert felt ett leverandørkall og én rad (A460). Se «Én rad per kall» under.
+- **Nye svar:** `{ kind: "candidates", usageId, status, candidates }` (rangert liste med `{ source, id }`, aldri tekst) og `{ kind: "stopped", usageId, guard }`. `guard` er den faste vaktkoden, slik at skjermen kan velge melding. Det stoppede svaret går aldri ut.
 - **`recordDecision(grant, usageId, decision, { candidate? })`.** På en rad med `candidate_refs` krever `accepted` en kandidat fra den lagrede listen; `edited` er ikke lov. Lukket liste er `rejected`. `undo` og `rejected` tømmer `chosen_candidate`.
-- **For mye inndata** (flere kandidater eller funn enn grensene i `limits.ts`) gir `AiInputTooLargeError` med fast kode. Kjernen kutter aldri stille.
+- **`recordDecisionIn(tx, grant, usageId, decision, options)`** (A469) gjør det samme i kallerens transaksjon. `recordDecision` pakker den inn. `ApplyPhrase` og `SaveSummary` i `@/core/reports` bruker den, slik at teksten og beslutningen lagres sammen eller ikke i det hele tatt. `SaveSummary` får skriverammen `withReportWrite`, som låser rapportraden slik `withRoomWrite` gjør.
+- **Fast låserekkefølge:** rapportraden først (`withRoomWrite` eller `withReportWrite`), deretter KI-låsen på målet (`lockTarget`). Ingen kode tar dem i motsatt rekkefølge. `requestSuggestion` og oppslaget av målet låser aldri rapportraden eller målraden, så de to veiene kan ikke vente på hverandre.
+- **Rapportkjernen kontrollerer loggraden før beslutning** (A470): riktig funksjon, og `target_ref` peker på akkurat dette avviket i dette rommet, eller akkurat denne rapporten. Avvik gir «ikke funnet».
+- **For mye inndata** (flere kandidater eller funn enn grensene i `limits.ts`) gir `AiInputTooLargeError` med fast kode. Kjernen kutter aldri selv. Kandidatkilden i `@/core/reports` kutter etter prioritet ned til `AI_CANDIDATES_MAX` og gir antallet i `AiServerInput.candidatesCut` (A467), så feilen for kandidater er bare en sikring.
+- **Ett tall for antall viste kandidater:** `AI_CANDIDATE_REFS_MAX` står i `src/shared/config/ai-targets.ts`. Skjemaet (CHECK-regelen), kjernen (`AI_SUGGESTED_CANDIDATES_MAX`) og nettleseren leser det derfra. `limits.ts` er fortsatt uten importer.
 - **Måltypen `ai_trial` arkiveres** sammen med prøvesiden `/prove/ki`. Koden gjenbrukes aldri. Gamle rader kan leses.
 
 ### Del 4: én rad per kall står fast
@@ -388,16 +392,17 @@ Støtter hovedmålene: **KI i bunnen** (de tre første KI-funksjonene i rapporte
 | Felt | Forklaring |
 |---|---|
 | `outcome` | Nytt utfall `stopped`: leverandøren svarte, men en vakt i kjernen stoppet svaret før det ble vist (A431) |
-| `error_code` | Ved `stopped`: vaktkoden `tg_guard` eller `number_guard`. En leverandør kan aldri svare med disse kodene |
+| `error_code` | Ved `stopped`: vaktkoden `tg_guard`, `coverage_guard`, `number_guard` eller `placeholder_guard`. En leverandør kan aldri svare med disse kodene |
 | `output_text` | Ved `stopped`: svaret som ble stoppet. Går aldri til klienten, `logger` eller `audit_log`. Tom for `phrase_suggest` |
 | `candidate_refs` | Kandidatene som ble vist, rangert (jsonb-liste med `{ source, id }`, 1–5). Bare når utfallet er `ok`. Aldri tekst (A432) |
-| `chosen_candidate` | Kandidaten den ansatte valgte (`{ source, id }`). Må stå i `candidate_refs`, og er bare satt mens status er `accepted` |
+| `chosen_candidate` | Kandidaten den ansatte valgte: et objekt med akkurat `source` (en av kandidatkildene) og `id` (tekst). Må stå i `candidate_refs`, og er bare satt mens status er `accepted` |
 
 - **`stopped`** beholder mengde og kostnad (kallet har kostet). `status` er tom, så raden kan aldri godtas og regnes aldri som godkjent KI-tekst. Et stoppet svar avviser ikke forrige åpne forslag på målet.
 - **Kandidatkildene** (`source`) er faste koder: `template_outcome` (`outcomes.id` i rapportens låste malversjon; feltkoden i `target_ref` sier hvilken av utfallets tre tekster), `template_measure` (`standard_measures.id`) og `phrase` (reservert for frasebanken i 2a-3).
-- **`input_summary`** for `phrase_suggest` har bare antall: tegn per felt, antall kandidater, og antall ukjente og doble merker i svaret.
-- **CHECK-reglene** håndhever det over: vaktkode bare ved `stopped` og alltid ved `stopped`, `candidate_refs` bare ved `ok` og som liste med 1–5, `chosen_candidate` bare blant de viste og bare ved `accepted`.
-- **Ny indeks** `(organization_id, feature, target_ref)` for ikke-slettede rader, til KI-merket per felt og gjennomgang av tekstene.
+- **`input_summary`** for `phrase_suggest` har bare antall: tegn per felt, antall kandidater (`candidates`), antall kandidatkilden kuttet (`candidates_cut`), og antall ukjente og doble merker i svaret.
+- **CHECK-reglene** håndhever det over: vaktkode bare ved `stopped` og alltid ved `stopped`, `candidate_refs` bare ved `ok` og som liste med 1–5, `chosen_candidate` bare ved `accepted`, bare som objekt med nøklene `source` og `id` og kjent kilde, og bare blant de viste. Formkravet trengs fordi `{}` ellers står «i» enhver liste (`@>`).
+- **Nye indekser:** `(organization_id, feature, target_ref)` for ikke-slettede rader, til KI-merket per felt og gjennomgang av tekstene; og `(organization_id, feature)` for ikke-slettede rader med `chosen_candidate`, til tellingen «Mest brukt».
+- **«Mest brukt» (A468)** teller rader med `chosen_candidate` for funksjonen `phrase_suggest`, per feltkode og kandidat, samlet for organisasjonen. Tellingen leser aldri `employee_id` eller `decided_by` og har ingen dato, så den kan ikke brukes til å se hva én ansatt gjør (spørsmål 57 berøres ikke). Tellingen følger malens faste koder, ikke id-en: et valg i en eldre malversjon teller for kandidaten med samme punkt-, spørsmåls- og utfallskode i rapportens låste versjon (standardtiltak, som ikke har kode: samme utfall og lik tekst). Ellers ville tallet blitt nullstilt hver gang en mal publiseres. Tallene lastes med rommet (`RoomReportView.phraseUsage`), så tekstsøket uten nett har dem.
 - **`phrase_suggest`-rader er ikke KI-tekst.** Teksten er kildens egen, så publiseringssperren ser bort fra dem, og raden som får teksten, får ingen `ai_usage_id`.
 - **Sammendraget** lagres i `reports.summary_text`, og funnene utkastet bygde på i `reports.summary_basis` (bare id-er, gruppe og `row_version`, også for tiltakene og TGIU-opplysningene under funnet). Se `docs/05-domenemodell.md` 4.7.
 
@@ -405,22 +410,35 @@ Støtter hovedmålene: **KI i bunnen** (de tre første KI-funksjonene i rapporte
 
 KI setter aldri TG. Fra nå kontrolleres det også på svaret, i kjernen, før noe vises (T-0046):
 
-- **TG-vakt** (`tg_guard`): `language_polish` stoppes når TG-omtalene i svaret ikke er de samme som i det som ble sendt. `summary_draft` stoppes ved enhver TG-omtale, fordi overskriftene med TG er kodens.
-- **Tallvakt** (`number_guard`, A440): `language_polish` og `summary_draft` stoppes når svaret har et tall som ikke sto i det som ble sendt.
+- **TG-vakt** (`tg_guard`): `language_polish` stoppes når TG-omtalene i svaret ikke er de samme som i det som ble sendt. `summary_draft` stoppes ved enhver TG-omtale i KI-teksten, fordi overskriftene med TG og TGIU-linjene er kodens (A462).
+- **Dekningsvakt** (`coverage_guard`, A461): svaret for `summary_draft` har tekst per F-merke. Mangler et merke som ble sendt, er teksten tom, står et merke to ganger, eller står det et merke som ikke ble sendt, stoppes utkastet. Ingen funn kan falle ut uten at det vises.
+- **Tallvakt** (`number_guard`, A440): `language_polish` og `summary_draft` stoppes når svaret har et tall som ikke sto i det som ble sendt. For sammendraget sjekkes hvert funn for seg, så et tall som flyttes fra ett funn til et annet, stoppes. Tall sammenlignes som sifferrekker etter at mellomrom som tusenskille er tatt bort: «40 000» er lik «40000», mens «15,0» mot «15» stoppes. Vakten feiler lukket (A471).
+- **Plassholdervakt** (`placeholder_guard`, A466, avgjør A178): koblingen plassholder → opprinnelig verdi holdes bare i minnet under kallet. Kjernen bytter plassholderne tilbake i teksten som går til klienten; `output_text` beholder plassholderne, så loggen får ingen nye personopplysninger. Tilbakebyttingen er entydig bare når svaret har nøyaktig de samme plassholderne, like mange av hver type, som det som ble sendt (per felt, og per F-merke i sammendraget). Ellers stoppes svaret. Plassholder nummer k av en type får opprinnelig verdi nummer k av samme type. Lagring av fritekst i rapporten avviser tekst som inneholder en av de åtte plassholderne.
+- **Rekkefølge:** `tg_guard`, `coverage_guard`, `number_guard`, `placeholder_guard`. Den første som slår til, står på raden (A471).
+- **Per felt for språkvask, hele utkastet for sammendraget** (A460): hvert felt i språkvasken er eget leverandørkall med egen rad, så ett stoppet felt tar ikke med seg de andre. Et sammendrag med hull er verre enn intet utkast, så der stoppes alt.
 - Vaktene er en ren funksjon (`src/core/ai/guards.ts`) som også evalueringen bruker. `phrase_suggest` har ingen tekst i svaret og trenger dem ikke.
 
 ### Del 8: flere kandidater og merker
 
+- **Leverandørporten er uendret** (del 2, `src/core/ai/providers/types.ts`): adapteren får en ledetekst og gir rå tekst tilbake. Bare kjernen kjenner merkene og tolker dem. Den falske leverandøren leser merkene fra ledeteksten.
 - Kandidatene sendes vasket, hver med et kort merke (K1…Kn). Id-ene sendes aldri til leverandøren. Svaret er en rangert liste med merker.
 - Kjernen tolker svaret strengt: merker som ikke ble sendt, og doble merker, tas bort; høyst 5 beholdes. Ingen gyldige merker gir `no_match`.
 - KI skriver aldri tekst i `phrase_suggest`. Det som vises og settes inn, er kildens egen tekst.
-- For sammendraget sendes funnene under nøytrale gruppemerker (G1…Gn, F1…Fn). Kjernen setter kodens overskrift for hver gruppe etterpå.
+- For sammendraget sendes funnene under nøytrale gruppemerker (G1…Gn, F1…Fn). Svaret har tekst per F-merke (A461). Kjernen setter teksten sammen: kodens overskrift for hver gruppe, og ett avsnitt per funn som starter med punktets navn fra malen (A462).
+- TGIU-funnene sendes ikke til leverandøren. Koden skriver linjene selv (punktets navn og `tgiu_details.reason`), og de går inn som `fixedLines` i `AiSummaryGroup`. Slik kan KI ikke svekke opplysningen om det som ikke er undersøkt, og TG-vakten stopper ikke hvert utkast med TGIU. Har rapporten bare TGIU-funn, kalles ikke KI: rapportkjernen setter utkastet sammen selv, uten rad i loggen.
 
 ### Del 10: køen
 
 KI-køen i `src/core/ai/client` beholdes til 2b, men kobles ikke til badskjermen (A441): fritekst ligger ukryptert i køen, og krav 2 til fase 2b er ikke løst. Etter at prøvesiden er fjernet, er utloggingsknappen eneste lovlige importør. Uten nett gir «Forslag» treff fra tekstsøket i nettleseren, uten kall og uten rad; språkvask og utkast svarer «Trenger nett».
 
 ### Forkastet i tillegget
+
+- **`limits.ts` importerer `AI_CANDIDATE_REFS_MAX` fra `@/db/schema`.** Filen lastes i nettleseren og skal ikke dra med seg databasen. Tallet står i stedet i en importfri fil i `src/shared/config`.
+- **Skjule vaktkoden for kalleren.** Skjermen skal gi ulik melding for TG eller tall, manglende funn og skjulte opplysninger. Koden er fast og røper ikke innhold.
+- **Telle «Mest brukt» på kandidatens id.** Id-ene er nye i hver malversjon, så tallet ville blitt nullstilt ved hver publisering.
+- **Egen tabell med tellere for «Mest brukt».** Ny tabell som må holdes lik loggen ved angre og sletting. Tellingen går mot en delindeks med bare radene der en kandidat er valgt. Blir den for treg med mange års data, er en tellertabell neste steg.
+- **La KI skrive TGIU-linjene, med unntak i TG-vakten.** Vakten måtte da tillate «ikke undersøkt» noen steder, og kunne ikke lenger stoppe enhver TG-omtale.
+- **Lagre koblingen plassholder → verdi på raden**, for å kunne bytte tilbake senere. Da ville loggen fått personopplysningene vasken tok bort.
 
 - **Ett leverandørkall for alle feltene i avviket, med flere rader eller ett samlet forslag.** Krever enten en kolonne som binder radene sammen og en regel for å dele kostnaden, eller en forslagstabell ved siden av loggen (forkastet over). Svaret måtte i tillegg deles opp per felt, og en vakt som slo til, ville stoppet alle feltene. Gevinsten er noen få tokens for instruksen.
 - **Kandidat-id-er i `output_text` eller `input_summary`** (A432). Feltene har annen betydning, og databasen kunne ikke kontrollert at valgt kandidat var blant de viste.

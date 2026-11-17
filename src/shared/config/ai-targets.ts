@@ -42,3 +42,10 @@ export const RESOLVED_AI_TARGET_TYPES = [
   "report",
 ] as const satisfies readonly ReportAiTargetType[];
 export type ResolvedAiTargetType = (typeof RESOLVED_AI_TARGET_TYPES)[number];
+
+/**
+ * Høyeste antall kandidater i ett svar fra `phrase_suggest`: så mange vises i forslagslisten og
+ * lagres i `ai_usage_log.candidate_refs` (CHECK-regelen bruker samme tall). Tallet står bare her.
+ * `@/db/schema` og `@/core/ai` (`AI_SUGGESTED_CANDIDATES_MAX`) leser det herfra.
+ */
+export const AI_CANDIDATE_REFS_MAX = 5;

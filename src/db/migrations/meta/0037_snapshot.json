@@ -1,5 +1,5 @@
 {
-  "id": "bb1d6f4d-2e08-49f1-96af-e6cb954ca0a3",
+  "id": "062b54f5-ebbd-42f1-8d9f-d545256543ad",
   "prevId": "9c18c93a-035c-4208-a0c6-89c91e91a794",
   "version": "7",
   "dialect": "postgresql",
@@ -9494,6 +9494,28 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "ai_usage_log_chosen_candidate_idx": {
+          "name": "ai_usage_log_chosen_candidate_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "feature",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"ai_usage_log\".\"chosen_candidate\" is not null and \"ai_usage_log\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -9585,7 +9607,7 @@
         },
         "ai_usage_log_error_code_check": {
           "name": "ai_usage_log_error_code_check",
-          "value": "\"ai_usage_log\".\"error_code\" is null or (\"ai_usage_log\".\"outcome\" = 'error' and \"ai_usage_log\".\"error_code\" in ('timeout', 'rate_limited', 'unavailable', 'rejected', 'unknown')) or (\"ai_usage_log\".\"outcome\" = 'stopped' and \"ai_usage_log\".\"error_code\" in ('tg_guard', 'number_guard'))"
+          "value": "\"ai_usage_log\".\"error_code\" is null or (\"ai_usage_log\".\"outcome\" = 'error' and \"ai_usage_log\".\"error_code\" in ('timeout', 'rate_limited', 'unavailable', 'rejected', 'unknown')) or (\"ai_usage_log\".\"outcome\" = 'stopped' and \"ai_usage_log\".\"error_code\" in ('tg_guard', 'coverage_guard', 'number_guard', 'placeholder_guard'))"
         },
         "ai_usage_log_outcome_status_check": {
           "name": "ai_usage_log_outcome_status_check",
@@ -9601,7 +9623,7 @@
         },
         "ai_usage_log_chosen_candidate_check": {
           "name": "ai_usage_log_chosen_candidate_check",
-          "value": "\"ai_usage_log\".\"chosen_candidate\" is null or (\"ai_usage_log\".\"status\" = 'accepted' and \"ai_usage_log\".\"candidate_refs\" is not null and \"ai_usage_log\".\"candidate_refs\" @> jsonb_build_array(\"ai_usage_log\".\"chosen_candidate\"))"
+          "value": "\"ai_usage_log\".\"chosen_candidate\" is null or (\"ai_usage_log\".\"status\" = 'accepted' and jsonb_typeof(\"ai_usage_log\".\"chosen_candidate\") = 'object' and \"ai_usage_log\".\"chosen_candidate\" - 'source' - 'id' = '{}'::jsonb and coalesce(\"ai_usage_log\".\"chosen_candidate\" ->> 'source', '') in ('template_outcome', 'template_measure', 'phrase') and coalesce(jsonb_typeof(\"ai_usage_log\".\"chosen_candidate\" -> 'id'), '') = 'string' and \"ai_usage_log\".\"candidate_refs\" is not null and \"ai_usage_log\".\"candidate_refs\" @> jsonb_build_array(\"ai_usage_log\".\"chosen_candidate\"))"
         },
         "ai_usage_log_tokens_check": {
           "name": "ai_usage_log_tokens_check",

@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { AI_CANDIDATE_REFS_MAX } from "@/shared/config/ai-targets";
 import { assignments } from "./assignments";
 import { baseColumns } from "./common";
 import { employees } from "./employees";
@@ -57,11 +58,22 @@ export const AI_ERROR_CODES = [
 export type AiErrorCode = (typeof AI_ERROR_CODES)[number];
 
 /**
- * Vaktene som kan stoppe et svar (utfallet `stopped`, A431 og A440). Står i `error_code`, men er
- * egne koder: en leverandør kan aldri svare med dem.
- * `tg_guard` = svaret la til eller endret TG. `number_guard` = svaret hadde tall som ikke ble sendt.
+ * Vaktene som kan stoppe et svar (utfallet `stopped`, A431, A440, A461 og A466). Står i
+ * `error_code`, men er egne koder: en leverandør kan aldri svare med dem. Rekkefølgen her er
+ * rekkefølgen vaktene kjøres i, og den første som slår til, står på raden (A471).
+ *
+ * - `tg_guard`: svaret la til eller endret TG.
+ * - `coverage_guard`: utkastet til sammendrag manglet et funn, hadde et tomt funn eller et funn
+ *   som ikke ble sendt.
+ * - `number_guard`: svaret hadde tall som ikke ble sendt.
+ * - `placeholder_guard`: plassholderne fra vasken kunne ikke byttes entydig tilbake.
  */
-export const AI_GUARD_CODES = ["tg_guard", "number_guard"] as const;
+export const AI_GUARD_CODES = [
+  "tg_guard",
+  "coverage_guard",
+  "number_guard",
+  "placeholder_guard",
+] as const;
 export type AiGuardCode = (typeof AI_GUARD_CODES)[number];
 
 /**
@@ -75,8 +87,11 @@ export type AiCandidateSource = (typeof AI_CANDIDATE_SOURCES)[number];
 /** Én kandidat slik den lagres i loggen: bare kilde og id, aldri tekst. */
 export type AiCandidateRef = { source: AiCandidateSource; id: string };
 
-/** Høyeste antall kandidater som vises og lagres i `candidate_refs`. Samme grense i CHECK-regelen. */
-export const AI_CANDIDATE_REFS_MAX = 5;
+/**
+ * Høyeste antall kandidater som vises og lagres i `candidate_refs`. Samme grense i CHECK-regelen.
+ * Tallet står i `@/shared/config/ai-targets`, slik at nettleseren kan lese det uten databasen.
+ */
+export { AI_CANDIDATE_REFS_MAX };
 
 /** Målet for forslaget: hva slags rad, hvilken rad og hvilket felt. */
 export type AiTargetRef = { type: string; id: string; fieldKey: string };
@@ -145,6 +160,10 @@ export const aiUsageLog = pgTable(
     index("ai_usage_log_target_idx")
       .on(table.organizationId, table.feature, table.targetRef)
       .where(sql`${table.deletedAt} is null`),
+    // Radene med valgt kandidat: tellingen «Mest brukt» for hele organisasjonen (A468)
+    index("ai_usage_log_chosen_candidate_idx")
+      .on(table.organizationId, table.feature)
+      .where(sql`${table.chosenCandidate} is not null and ${table.deletedAt} is null`),
     // Ansatte og oppdrag må høre til samme organisasjon som raden
     foreignKey({
       name: "ai_usage_log_employee_fk",
@@ -190,10 +209,12 @@ export const aiUsageLog = pgTable(
       "ai_usage_log_candidate_refs_check",
       sql`${table.candidateRefs} is null or (${table.outcome} = 'ok' and jsonb_typeof(${table.candidateRefs}) = 'array' and jsonb_array_length(${table.candidateRefs}) between 1 and ${sql.raw(String(AI_CANDIDATE_REFS_MAX))})`,
     ),
-    // Valgt kandidat: bare blant de viste, og bare mens forslaget er godtatt
+    // Valgt kandidat: et objekt med akkurat `source` (fast kode) og `id` (tekst), blant de viste,
+    // og bare mens forslaget er godtatt. Uten formkravet ville `{}` stått «i» enhver liste (`@>`).
+    // `coalesce` fordi en CHECK slipper gjennom NULL: en manglende nøkkel skal gi usann, ikke NULL.
     check(
       "ai_usage_log_chosen_candidate_check",
-      sql`${table.chosenCandidate} is null or (${table.status} = 'accepted' and ${table.candidateRefs} is not null and ${table.candidateRefs} @> jsonb_build_array(${table.chosenCandidate}))`,
+      sql`${table.chosenCandidate} is null or (${table.status} = 'accepted' and jsonb_typeof(${table.chosenCandidate}) = 'object' and ${table.chosenCandidate} - 'source' - 'id' = '{}'::jsonb and coalesce(${table.chosenCandidate} ->> 'source', '') in (${sqlList(AI_CANDIDATE_SOURCES)}) and coalesce(jsonb_typeof(${table.chosenCandidate} -> 'id'), '') = 'string' and ${table.candidateRefs} is not null and ${table.candidateRefs} @> jsonb_build_array(${table.chosenCandidate}))`,
     ),
     check(
       "ai_usage_log_tokens_check",

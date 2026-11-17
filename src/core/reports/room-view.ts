@@ -645,5 +645,7 @@ async function readRoom(
     checkpoints: state.checkpoints,
     suggestions: state.suggestions,
     progress: state.progress,
+    // Kobles til `LoadPhraseUsage` (types.ts) når kandidatkilden bygges i «KI i veien» (A468).
+    phraseUsage: [],
   };
 }

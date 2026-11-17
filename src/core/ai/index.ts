@@ -25,10 +25,11 @@ export {
   AI_BATCH_MAX_REQUESTS,
   AI_CANDIDATES_MAX,
   AI_CANDIDATE_TEXT_MAX_LENGTH,
-  AI_SUGGESTED_CANDIDATES_MAX,
   AI_SUMMARY_FINDINGS_MAX,
   AI_SUMMARY_INPUT_MAX_LENGTH,
 } from "./limits";
+/** Høyeste antall kandidater i svaret. Samme tall som `candidate_refs` tåler (CHECK-regelen). */
+export { AI_CANDIDATE_REFS_MAX as AI_SUGGESTED_CANDIDATES_MAX } from "@/shared/config/ai-targets";
 export {
   AI_REJECTED_RETENTION_KEY,
   AI_REJECTED_RETENTION_MAX,
@@ -72,6 +73,7 @@ export {
   type AiOutcome,
   type AiServerInput,
   type AiSummaryFinding,
+  type AiSummaryFixedLine,
   type AiSummaryGroup,
   type AiSuggestionRequest,
   type AiSuggestionResult,

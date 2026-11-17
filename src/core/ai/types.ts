@@ -1,4 +1,6 @@
 import type { EmployeeGrant } from "@/core/access";
+import type { DbExecutor } from "@/db/client";
+import type { PiiPlaceholder } from "@/shared/lib/pii-patterns";
 import type {
   AiCandidateRef,
   AiCandidateSource,
@@ -59,30 +61,43 @@ export type AiSuggestionRequest = {
 export type AiCandidate = AiCandidateRef & { text: string };
 
 /**
- * Ett funn til sammendraget. Bare feltene på tillatt-listen for `summary_draft`. TG sendes ikke:
- * gruppen sier alvoret, og KI skriver aldri TG (A434).
+ * Ett funn KI skriver om i sammendraget (gruppene `tg3`, `tg2` og `hms`). Bare feltene på
+ * tillatt-listen for `summary_draft`. TG sendes ikke: gruppen sier alvoret, og KI skriver aldri
+ * TG (A434). Hvert funn får et merke F1…Fn, og svaret har tekst per merke (A461).
  */
 export type AiSummaryFinding = {
-  /** Kontrollpunktets navn fra malen (`checkpoints.name`). */
+  /** Kontrollpunktets navn fra malen (`checkpoints.name`). Kjernen setter det først i avsnittet. */
   checkpointName: string;
   deviationText: string | null;
   causeText: string | null;
   consequenceText: string | null;
   /** Tiltakene i rekkefølge (`deviation_measures.text`). */
   measures: string[];
-  /** Hva som ikke er undersøkt, og hvorfor (`tgiu_details.reason`). Bare i gruppen `tgiu`. */
-  tgiuReason: string | null;
 };
+
+/**
+ * Én linje koden skriver selv (gruppen `tgiu`, A462): punktets navn og `tgiu_details.reason`.
+ * Sendes aldri til leverandøren, får ikke F-merke og går ikke gjennom vaktene. `text` er
+ * takstmannens fritekst: den vaskes før den settes inn i `output_text`, men går uvasket til
+ * klienten, som resten av teksten han selv har skrevet.
+ */
+export type AiSummaryFixedLine = { checkpointName: string; text: string };
 
 /**
  * Én gruppe i sammendraget, i fast rekkefølge (`SUMMARY_GROUPS`). `heading` er kodens overskrift
  * og sendes aldri til leverandøren: KI ser bare merket G1…Gn, og kjernen setter overskriften på
  * teksten etterpå. Tomme grupper sendes ikke inn.
+ *
+ * `tg3`, `tg2` og `hms` har `findings` (KI skriver avsnittet) og tom `fixedLines`. `tgiu` har
+ * `fixedLines` (koden skriver linjen) og tom `findings`. Alt annet gir `AiRequestRejectedError`.
+ * Et utkast uten ett eneste funn i `findings` trenger ikke KI: da kalles ikke leverandøren, og
+ * rapportkjernen setter selv sammen TGIU-linjene (ingen rad, ikke KI-tekst).
  */
 export type AiSummaryGroup = {
   group: SummaryGroup;
   heading: string;
   findings: AiSummaryFinding[];
+  fixedLines: AiSummaryFixedLine[];
 };
 
 /**
@@ -91,12 +106,18 @@ export type AiSummaryGroup = {
  * `@/core/reports` bygger dem fra databasen med `grant.organizationId`.
  *
  * `phrase_suggest` krever `candidates` (minst én, høyst `AI_CANDIDATES_MAX`) og ikke
- * `summaryGroups`. `summary_draft` krever `summaryGroups` (minst ett funn, høyst
- * `AI_SUMMARY_FINDINGS_MAX`) og ikke `candidates`. `language_polish` tar ingen av dem. Alt annet
- * gir `AiRequestRejectedError`. Over grensen gir `AiInputTooLargeError`, aldri stille kutt.
+ * `summaryGroups`. `summary_draft` krever `summaryGroups` (minst ett funn i `findings`, høyst
+ * `AI_SUMMARY_FINDINGS_MAX` funn og faste linjer til sammen) og ikke `candidates`.
+ * `language_polish` tar ingen av dem. Alt annet gir `AiRequestRejectedError`. Over grensen gir
+ * `AiInputTooLargeError`; kjernen kutter aldri selv.
  */
 export type AiServerInput = {
   candidates?: readonly AiCandidate[];
+  /**
+   * Hvor mange kandidater kandidatkilden kuttet for å komme under `AI_CANDIDATES_MAX` (A467).
+   * Bare sammen med `candidates`. Heltall fra 0; føres som `candidates_cut` i `input_summary`.
+   */
+  candidatesCut?: number;
   summaryGroups?: readonly AiSummaryGroup[];
 };
 
@@ -116,10 +137,11 @@ export type AiSuggestionResult =
   | { kind: "no_match"; usageId: string }
   | { kind: "error"; usageId: string }
   /**
-   * En vakt stoppet svaret (utfallet `stopped`, A431). Teksten og hvilken vakt det var, går aldri
-   * til kalleren. Kan ikke avgjøres med `recordDecision`.
+   * En vakt stoppet svaret (utfallet `stopped`, A431). Teksten går aldri til kalleren. `guard` er
+   * den faste vaktkoden, slik at skjermen kan vise riktig melding (TG eller tall, manglende funn,
+   * skjulte opplysninger). Kan ikke avgjøres med `recordDecision`.
    */
-  | { kind: "stopped"; usageId: string }
+  | { kind: "stopped"; usageId: string; guard: AiGuardCode }
   | { kind: "disabled" }
   /** Sperret av modulen (ad-1): raden står i loggen med utfallet `blocked`, intet kall. */
   | { kind: "blocked" };
@@ -149,15 +171,23 @@ export type AiDecisionOptions = { candidate?: AiCandidateRef };
  * - **Tom tekst** (T-0111): `language_polish` med tekst som er tom etter `trim()` gir
  *   `AiRequestRejectedError` uten rad og uten kall. `phrase_suggest` tillater tomt `text`.
  * - **Kandidater**: hver kandidattekst og hvert funn vaskes for seg med de samme kjente verdiene,
- *   og lekkasjesjekken dekker hele ledeteksten. Svaret tolkes strengt: bare merker som ble sendt,
- *   doble tas bort, høyst `AI_SUGGESTED_CANDIDATES_MAX`. Ingen gyldige gir `no_match`.
- *   `input_summary` har bare antall (tegn per felt, `candidates`, `unknown_labels`,
- *   `duplicate_labels`). `output_text` er tom, `candidate_refs` har listen.
+ *   og lekkasjesjekken dekker hele ledeteksten. Leverandørporten (`providers/types.ts`) er
+ *   uendret: adapteren gir rå tekst, og bare kjernen tolker merkene. Svaret tolkes strengt: bare
+ *   merker som ble sendt, doble tas bort, høyst `AI_SUGGESTED_CANDIDATES_MAX`. Ingen gyldige gir
+ *   `no_match`. `input_summary` har bare antall (tegn per felt, `candidates`, `candidates_cut`,
+ *   `unknown_labels`, `duplicate_labels`). `output_text` er tom, `candidate_refs` har listen.
  * - **Vaktene** (`CheckAnswerGuards`) kjøres på svaret til `language_polish` og `summary_draft`
  *   før noe returneres. Treff gir raden `stopped` med vaktkoden, mengde og kostnad beholdt, og
  *   svaret `{ kind: "stopped" }`. Et stoppet svar avviser ikke forrige åpne forslag på målet.
- * - **Sammendraget**: `output_text` og `text` i svaret er den sammensatte teksten, med kodens
- *   overskrift over KI-teksten for hver gruppe, i rekkefølgen gruppene kom inn.
+ * - **Plassholderne** (A466): koblingen plassholder → opprinnelig verdi holdes bare i minnet
+ *   under kallet. `text` i svaret har de opprinnelige verdiene satt tilbake; `output_text` på
+ *   raden beholder plassholderne. Kan de ikke byttes entydig tilbake, stoppes svaret
+ *   (`placeholder_guard`).
+ * - **Sammendraget**: svaret fra leverandøren har tekst per F-merke. Kjernen setter teksten
+ *   sammen i rekkefølgen gruppene kom inn: kodens overskrift, så ett avsnitt per funn som starter
+ *   med punktets navn (A462), og for `tgiu` de faste linjene (`AiSummaryFixedLine`). `text` i
+ *   svaret er dette med opprinnelige verdier; `output_text` er det samme bygget av de vaskede
+ *   delene.
  * - **Ekte leverandør**: en funksjon som ikke står i `settings.features`, gir `disabled` som før.
  */
 export type RequestSuggestion = (
@@ -167,9 +197,10 @@ export type RequestSuggestion = (
 ) => Promise<AiSuggestionResult>;
 
 /**
- * Flere forslag fra ett trykk («Språkvask avviket»): ett kall til leverandøren og én rad i
- * loggen per forespørsel, slik at hvert felt får sin egen `target_ref`, sin egen vakt og sin egen
- * beslutning (ADR 0006, tillegg 17.11.2026). Svarene kommer i samme rekkefølge som forespørslene.
+ * Flere forslag fra ett trykk («Språkvask avviket», A460): ett kall til serveren, og for hvert
+ * felt ett leverandørkall og én rad i loggen, slik at hvert felt får sin egen `target_ref`, sin
+ * egen vakt og sin egen beslutning (ADR 0006, tillegg 17.11.2026). Svarene kommer i samme
+ * rekkefølge som forespørslene.
  *
  * Hele listen valideres før noe kalles: 1 til `AI_BATCH_MAX_REQUESTS` forespørsler, samme
  * funksjon (bare `language_polish`), ulike `requestId`, ulike mål, og alle målene i samme
@@ -181,8 +212,33 @@ export type RequestSuggestionBatch = (
   requests: readonly AiSuggestionRequest[],
 ) => Promise<AiSuggestionResult[]>;
 
-/** Registrerer beslutningen. Uendret, bortsett fra `options` (se `AiDecisionOptions`). */
+/**
+ * Registrerer beslutningen i egen transaksjon. Uendret, bortsett fra `options` (se
+ * `AiDecisionOptions`). Pakker inn `RecordDecisionIn`.
+ */
 export type RecordDecision = (
+  grant: EmployeeGrant,
+  usageId: string,
+  decision: AiDecision,
+  options?: AiDecisionOptions,
+) => Promise<void>;
+
+/**
+ * Samme som `RecordDecision`, men i kallerens transaksjon (A469), slik at teksten og beslutningen
+ * lagres sammen eller ikke i det hele tatt. Brukes av `ApplyPhrase` og `SaveSummary` i
+ * `@/core/reports`. Samme kontroller og samme feil (`AiDecisionError`, `AiRequestRejectedError`);
+ * kaster den, ruller kalleren tilbake.
+ *
+ * **Fast låserekkefølge:** kalleren har alltid låst rapportraden først (`withRoomWrite` eller
+ * `withReportWrite`), og `recordDecisionIn` tar deretter KI-låsen på målet (`lockTarget`). Ingen
+ * kode tar KI-låsen først og rapportraden etterpå. `requestSuggestion` og `ResolveAiTarget` låser
+ * aldri rapportraden eller målraden, så de to veiene kan ikke vente på hverandre.
+ *
+ * `tx` må være en transaksjon, ikke `db`: funksjonen tar radlås og forutsetter at kalleren
+ * fullfører eller ruller tilbake.
+ */
+export type RecordDecisionIn = (
+  tx: DbExecutor,
   grant: EmployeeGrant,
   usageId: string,
   decision: AiDecision,
@@ -197,7 +253,7 @@ export type ResolvedAiTarget = { reportId: string; assignmentId: string };
  * målrad → (avvik → kontrollpunktresultat →) rapport → oppdrag via `@/db/schema`, med
  * `grant.organizationId` og `deleted_at is null` i alle ledd, og rapporten i `draft`. For
  * `deviation` / `new_measure` er målraden avviket. `null` når noe i kjeden mangler.
- * Leser aldri tekstkolonner.
+ * Leser aldri tekstkolonner og låser aldri rader (se låserekkefølgen i `RecordDecisionIn`).
  */
 export type ResolveAiTarget = (
   grant: EmployeeGrant,
@@ -205,20 +261,52 @@ export type ResolveAiTarget = (
 ) => Promise<ResolvedAiTarget | null>;
 
 /**
- * Vaktene på svaret (ren funksjon i `src/core/ai/guards.ts`, T-0046, A431 og A440). `sent` er de
- * vaskede tekstene som gikk til leverandøren, `answer` er KI-teksten før kodens overskrifter.
+ * Én del av det som ble sendt, og svaret på den. `language_polish` har én del med `label = null`.
+ * `summary_draft` har én del per funn, med F-merket som `label`.
+ */
+export type AiGuardSentPart = {
+  label: string | null;
+  /** De vaskede tekstene som gikk til leverandøren for denne delen. */
+  texts: readonly string[];
+};
+
+/** Svaret slik kjernen tolket det: tekst per merke, også merker som ikke ble sendt. */
+export type AiGuardAnswerPart = { label: string | null; text: string };
+
+/**
+ * Vaktene på svaret (ren funksjon i `src/core/ai/guards.ts`, T-0046, A431, A440, A461, A466 og
+ * A471). Brukes av kjernen og av evalueringen. Vaktene kjøres i rekkefølgen under, og den første
+ * som slår til, er svaret. `null` betyr at svaret kan vises.
  *
- * - `tg_guard`: for `language_polish` når TG-omtalene i svaret (`extractTgMentions`: «TG» med
- *   grad, «tilstandsgrad», «ikke undersøkt» regnet som TGIU) ikke er de samme som i `sent`. For
- *   `summary_draft` ved enhver TG-omtale i svaret.
- * - `number_guard`: et tall i svaret som ikke finnes i `sent`. Tall sammenlignes som sifferrekker
- *   med desimaltegn, uten hensyn til mellomrom og enhet.
+ * 1. `tg_guard`: for `language_polish` når TG-omtalene i svaret (`extractTgMentions`: «TG» med
+ *    grad, «tilstandsgrad», «ikke undersøkt» regnet som TGIU) ikke er de samme som i det som ble
+ *    sendt. For `summary_draft` ved enhver TG-omtale i en del av svaret.
+ * 2. `coverage_guard` (bare `summary_draft`): et merke som ble sendt, mangler i svaret eller har
+ *    tom tekst, et merke står to ganger, eller svaret har et merke som ikke ble sendt.
+ * 3. `number_guard`: et tall i en del av svaret som ikke finnes i den samme delens `texts`. Tall
+ *    sammenlignes som sifferrekker med desimaltegn etter at mellomrom som tusenskille er tatt
+ *    bort: «40 000» er lik «40000», «15,0» er ikke lik «15» (vakten feiler lukket). Tall i
+ *    merkene (F1, G2) regnes ikke.
+ * 4. `placeholder_guard`: en del av svaret har ikke nøyaktig de samme plassholderne
+ *    (`PII_PLACEHOLDERS`), like mange av hver type, som den samme delens `texts`. Da kan de ikke
+ *    byttes entydig tilbake.
  *
- * `tg_guard` vinner når begge slår til. `null` betyr at svaret kan vises. `phrase_suggest` har
- * ingen tekst i svaret og kjører ikke vaktene.
+ * `phrase_suggest` har ingen tekst i svaret og kjører ikke vaktene.
  */
 export type CheckAnswerGuards = (input: {
   feature: AiFeatureCode;
-  sent: readonly string[];
-  answer: string;
+  sent: readonly AiGuardSentPart[];
+  answer: readonly AiGuardAnswerPart[];
 }) => AiGuardCode | null;
+
+/**
+ * Bytter plassholderne i én del av svaret tilbake til de opprinnelige verdiene (ren funksjon,
+ * A466). `originals` er verdiene vasken tok ut av den samme delen, i den rekkefølgen de sto.
+ * Plassholder nummer k av en type i svaret får opprinnelig verdi nummer k av samme type. Kalles
+ * bare etter at `CheckAnswerGuards` har sluppet svaret gjennom; stemmer ikke antallet likevel,
+ * kaster den. `originals` holdes bare i minnet under kallet og lagres eller logges aldri.
+ */
+export type RestorePlaceholders = (
+  answer: string,
+  originals: readonly { placeholder: PiiPlaceholder; value: string }[],
+) => string;
