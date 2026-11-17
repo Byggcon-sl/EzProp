@@ -1,3 +1,7 @@
+import { SIGNED_OUT_MESSAGE } from "@/shared/forms/messages";
+
+export { SIGNED_OUT_MESSAGE };
+
 /** Svaret fra en server action (/admin, /tilbud) når noe ikke ble lagret. Ved suksess sendes man videre. */
 export type FormState = {
   /** Feil per felt (første melding per felt). */
@@ -10,6 +14,11 @@ export type FormState = {
   attempt: number;
   /** Lenke som hører til meldingen, for eksempel til firmaet som allerede har nummeret. */
   link?: { href: string; text: string };
+  /**
+   * «Logget ut»-svaret: innloggingen er utløpt. Skjemaet beholder verdiene og viser «Logg inn»
+   * (lenken lages i klienten). Rett T-0070.
+   */
+  signedOut?: true;
 };
 
 export const initialFormState: FormState = {

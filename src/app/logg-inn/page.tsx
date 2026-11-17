@@ -5,7 +5,7 @@ import { getCurrentActor } from "@/core/auth/session";
 import { brand } from "@/shared/config/brand";
 import { Card } from "@/shared/ui/card";
 import { LoginForm, type LoginFailure } from "./login-form";
-import { safeNextPath } from "./safe-next-path";
+import { safeNextPath } from "@/shared/navigation/safe-next-path";
 
 /**
  * Feilkoder fra Better Auth som betyr at noe teknisk gikk galt i runden (utløpt eller avbrutt

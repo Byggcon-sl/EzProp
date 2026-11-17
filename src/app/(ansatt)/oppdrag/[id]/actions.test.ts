@@ -13,6 +13,7 @@ import {
   FIX_FIELDS,
   initialFormState,
   NO_ACCESS,
+  SIGNED_OUT_MESSAGE,
   UNKNOWN_ERROR,
   type FormState,
 } from "../../form-state";
@@ -34,6 +35,8 @@ import {
 
 const mocks = vi.hoisted(() => ({
   getEmployeeContext: vi.fn(),
+  /** Sann: getEmployeeContextForAction svarer «logget ut» (rett T-0070). */
+  signedOut: { value: false },
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT ${url}`);
   }),
@@ -59,7 +62,17 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/shared/lib/logger", () => ({
   logger: { error: mocks.logError, warn: vi.fn(), info: vi.fn() },
 }));
-vi.mock("../../employee-context", () => ({ getEmployeeContext: mocks.getEmployeeContext }));
+// Handlingene som tåler utløpt innlogging (rett T-0070) bruker getEmployeeContextForAction. Her
+// bygges svaret fra den samme falske konteksten: null gir «ingen tilgang», og `signedOut` gir
+// «logget ut».
+vi.mock("../../employee-context", () => ({
+  getEmployeeContext: mocks.getEmployeeContext,
+  getEmployeeContextForAction: async () => {
+    if (mocks.signedOut.value) return { status: "signed_out" };
+    const context = await mocks.getEmployeeContext();
+    return context ? { status: "ok", context } : { status: "no_access" };
+  },
+}));
 vi.mock("@/core/assignments", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/core/assignments")>()),
   ...mocks.core,
@@ -191,6 +204,7 @@ const CORE_FOR_ACTION = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.signedOut.value = false;
   mocks.getEmployeeContext.mockResolvedValue({
     actor,
     organizationId: ORG,
@@ -559,6 +573,48 @@ describe("eiendom og fellesdeler: handlingene", () => {
         expect(coreCalls()).toBe(0);
       },
     );
+  });
+
+  // Rett T-0070 (testplan 1d): utløpt innlogging gir «logget ut»-svaret før alt annet.
+  describe("savePropertyAction logget ut (rett T-0070)", () => {
+    beforeEach(() => {
+      mocks.signedOut.value = true;
+    });
+
+    it("signedOut med meldingen og bare de kjente feltene, uten kjerne og uten logg", async () => {
+      const state = await failed(
+        savePropertyAction(
+          initialFormState,
+          propertyForm({ organizationId: OTHER_ORG, propertyId: FOREIGN_PROPERTY }),
+        ),
+      );
+      expect(state.signedOut).toBe(true);
+      expect(state.message).toBe(SIGNED_OUT_MESSAGE);
+      expect(state.fieldErrors).toEqual({});
+      expect(state.attempt).toBe(1);
+      expect(state.link).toBeUndefined();
+      expect(state.values).toMatchObject({
+        address: P_ADDRESS,
+        city: P_CITY,
+        shareNumber: P_SHARE,
+      });
+      expect(Object.keys(state.values)).not.toContain("organizationId");
+      expect(Object.keys(state.values)).not.toContain("propertyId");
+      expect(Object.keys(state.values)).not.toContain("assignmentId");
+      expect(coreCalls()).toBe(0);
+      expect(mocks.getEmployeeContext).not.toHaveBeenCalled();
+      expect(mocks.redirect).not.toHaveBeenCalled();
+      expect(mocks.logError).not.toHaveBeenCalled();
+    });
+
+    it("samme svar for en oppdrags-id som ikke er uuid", async () => {
+      const valid = await failed(savePropertyAction(initialFormState, propertyForm()));
+      const invalid = await failed(
+        savePropertyAction(initialFormState, propertyForm({ assignmentId: "ikke-en-id" })),
+      );
+      expect(invalid).toEqual(valid);
+      expect(coreCalls()).toBe(0);
+    });
   });
 
   describe("6.2 id som ikke er uuid", () => {

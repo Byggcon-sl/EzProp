@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isUuid } from "@/shared/lib/uuid";
-import { errorResult, failure, type KnownError } from "../../action-result";
-import { getEmployeeContext } from "../../employee-context";
+import { errorResult, failure, signedOutState, type KnownError } from "../../action-result";
+import { getEmployeeContext, getEmployeeContextForAction } from "../../employee-context";
 import { NO_ACCESS, type FormState } from "../../form-state";
 import {
   addParty,
@@ -383,15 +383,22 @@ export async function removePartyAction(
   return saved(previous);
 }
 
-/** «Lagre eiendom». Kjernen lager eiendommen første gang og oppdaterer den ellers. */
+/**
+ * «Lagre eiendom». Kjernen lager eiendommen første gang og oppdaterer den ellers. Er innloggingen
+ * utløpt, svares det med «logget ut»-svaret og verdiene, ikke videresending (rett T-0070).
+ */
 export async function savePropertyAction(
   previous: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const assignmentId = String(formData.get("assignmentId") ?? "");
   const values = readFields(formData, PROPERTY_FIELDS);
-  const context = await getEmployeeContext();
-  if (!context || !isUuid(assignmentId)) return failure(previous, values, {}, NO_ACCESS);
+  // Innloggingen sjekkes først (rett T-0070): uinnlogget får verdiene tilbake og ingenting annet.
+  const access = await getEmployeeContextForAction();
+  if (access.status === "signed_out") return signedOutState(previous, values);
+  if (access.status === "no_access") return failure(previous, values, {}, NO_ACCESS);
+  const { context } = access;
+  const assignmentId = String(formData.get("assignmentId") ?? "");
+  if (!isUuid(assignmentId)) return failure(previous, values, {}, NO_ACCESS);
 
   try {
     await saveAssignmentProperty(context.actor, context.organizationId, assignmentId, values);

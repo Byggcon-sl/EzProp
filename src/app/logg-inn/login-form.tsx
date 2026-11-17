@@ -5,7 +5,7 @@ import { useState, useSyncExternalStore, type FormEvent } from "react";
 import { authClient } from "@/core/auth/auth-client";
 import { Button } from "@/shared/ui/button";
 import { Field, FormMessage, Input } from "@/shared/ui/form";
-import { DEFAULT_NEXT_PATH, safeNextPath } from "./safe-next-path";
+import { DEFAULT_NEXT_PATH, safeNextPath } from "@/shared/navigation/safe-next-path";
 
 /** Brukes bare hvis serveren svarer 429 uten egen melding. */
 const TOO_MANY_REQUESTS_FALLBACK = "For mange forsøk. Prøv igjen senere.";

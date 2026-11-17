@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isSafeNextPath } from "@/shared/navigation/safe-next-path";
 import {
   nextSavedAt,
   savedAtText,
@@ -354,9 +355,9 @@ describe("lenken «Logg inn» (signInHref)", () => {
     expect(url.hash).toBe("");
     expect([...url.searchParams.keys()]).toEqual(["neste"]);
     expect(url.searchParams.get("neste")).toBe(next);
+    // Innloggingssiden godtar stien uendret (også testet i src/shared/navigation/safe-next-path.test.ts).
+    expect(isSafeNextPath(next)).toBe(true);
   });
-  // At lenken og safeNextPath passer sammen, testes i src/app/logg-inn/safe-next-path.test.ts
-  // (moduler importerer ikke fra app).
 });
 
 // Rett T-0001 (A181): «Kunne ikke sendes: <feltnavn>». Testplan 1e (36–40).
