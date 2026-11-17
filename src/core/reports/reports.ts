@@ -5,7 +5,7 @@ import { db, type DbExecutor } from "@/db/client";
 import { assignments, reports, templateFamilies, templateVersions } from "@/db/schema";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { requireUuid } from "./context";
-import { guardReportErrors, ReportTemplateMissingError } from "./errors";
+import { guardReportErrors, ReportTemplateMissingError, ReportValidationError } from "./errors";
 import type { StartReport } from "./types";
 
 /*
@@ -74,7 +74,12 @@ export const startReport: StartReport = async (actor, organizationId, assignment
         isNull(reports.deletedAt),
         ne(reports.status, "superseded"),
       );
-      const [existing] = await tx.select({ id: reports.id }).from(reports).where(currentWhere);
+      const [existing] = await tx
+        .select({ id: reports.id, status: reports.status })
+        .from(reports)
+        .where(currentWhere);
+      // Låst etter publisering (ADR 0015 punkt 15): «Lag ny versjon» åpner rapporten igjen
+      if (existing?.status === "published") throw new ReportValidationError("report_published");
       if (existing) return { reportId: existing.id, created: false };
 
       const template = await findPublishedSystemTemplate(tx, orgId);

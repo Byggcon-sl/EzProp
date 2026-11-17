@@ -20,6 +20,7 @@ import {
 } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { roomTypeLabel, sumFloorArea, type AreaSum } from "./codes";
+import { assertReportNotPublished } from "./errors";
 
 /*
  * Papirkurv og gjenoppretting for bygninger, etasjer og rom på oppdraget
@@ -811,6 +812,7 @@ export async function restoreBuilding(
     if (!isRemoved(building)) {
       return { restored: item(orgId, "building", [building]), changed: false, notices: [] };
     }
+    await assertReportNotPublished(tx, orgId, resolved.assignmentId);
     const ctx: Context = {
       tx,
       grant,
@@ -883,6 +885,7 @@ export async function restoreFloor(
     if (!isRemoved(floor)) {
       return { restored: item(orgId, "floor", [floor]), changed: false, notices: [] };
     }
+    await assertReportNotPublished(tx, orgId, resolved.assignmentId);
     const ctx: Context = {
       tx,
       grant,
@@ -936,6 +939,7 @@ export async function restoreRoom(
     if (!isRemoved(room)) {
       return { restored: item(orgId, "room", [room]), changed: false, notices: [] };
     }
+    await assertReportNotPublished(tx, orgId, resolved.assignmentId);
     const ctx: Context = {
       tx,
       grant,

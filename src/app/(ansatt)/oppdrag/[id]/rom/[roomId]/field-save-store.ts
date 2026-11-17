@@ -367,7 +367,10 @@ export class FieldSaveStore {
       }
       if (this.fields.get(key) !== field) return;
       if (isActionError(result)) {
-        this.update(field, { status: "failed", error: result.message });
+        // Publisert rapport: endringen tas ut av køen (`invalid` prøves ikke igjen), resten går
+        // videre (ADR 0015 punkt 15, T-0001). Verdien står igjen i feltet med meldingen.
+        const rejected = result.code === "report_published";
+        this.update(field, { status: rejected ? "invalid" : "failed", error: result.message });
         return;
       }
       if (result.status === "conflict") {

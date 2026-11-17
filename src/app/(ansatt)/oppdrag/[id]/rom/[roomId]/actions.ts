@@ -67,7 +67,13 @@ function toActionError(
   log: { action: string; userId: string; assignmentId: string; roomId?: string },
 ): ActionError {
   if (error instanceof AccessDeniedError) return errorOf(NO_ACCESS);
-  if (error instanceof ReportValidationError) return errorOf(error.message);
+  if (error instanceof ReportValidationError) {
+    // Publisert rapport: et endelig nei, som køen fjerner i stedet for å prøve igjen (T-0001)
+    if (error.code === "report_published") {
+      return { status: "error", message: error.message, code: "report_published" };
+    }
+    return errorOf(error.message);
+  }
   if (error instanceof ReportTemplateMissingError) {
     return errorOf(ROOM_ACTION_MESSAGES.templateMissing);
   }
