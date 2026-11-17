@@ -428,7 +428,10 @@ describe("M5.5, M7 og M8.2 kildesjekker", () => {
   });
 
   it("M8.2 ingen sletting i src/core/auth (myk sletting, regel 3)", () => {
-    for (const file of productAuthFiles) {
+    // Eneste unntak: ryddingen av de tekniske innloggingstabellene (ADR 0014).
+    const cleanupFile = join(AUTH_DIR, "auth-cleanup.ts");
+    expect(productAuthFiles).toContain(cleanupFile);
+    for (const file of productAuthFiles.filter((f) => f !== cleanupFile)) {
       expect(read(file), rel(file)).not.toMatch(/\.delete\s*\(/);
       expect(read(file), rel(file)).not.toMatch(/\bdelete\s+from\b/i);
     }
