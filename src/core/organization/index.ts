@@ -7,6 +7,7 @@ export {
   type EmployeeGrantWithOffice,
 } from "./employees";
 export {
+  countEmployeeActiveSessions,
   createEmployee,
   deactivateEmployee,
   getEmployeeForAdmin,

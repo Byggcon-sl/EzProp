@@ -7,6 +7,7 @@ import {
   type EmployeeGrant,
 } from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
+import { listEmployeeSessions, revokeAllEmployeeSessions } from "@/core/auth/sessions-list";
 import { db, type DbExecutor } from "@/db/client";
 import {
   companies,
@@ -488,6 +489,10 @@ export async function setEmployeeRoles(
  * Markerer at den ansatte har sluttet (`deactivated_at`). Personen avvises i neste tilgangssjekk,
  * men står fortsatt på gamle rapporter. Den siste aktive admin kan ikke markeres som sluttet
  * (`LastAdminError`). Har personen alt sluttet, skjer ingenting.
+ *
+ * Personen logges også ut av alle enheter (A430, revisjonsrad med `reason: "deactivated"`) i
+ * samme transaksjon. Feiler utloggingen, rulles alt tilbake: personen er da ikke markert som
+ * sluttet, og øktene står.
  */
 export async function deactivateEmployee(actor: Actor, organizationId: string, employeeId: string) {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.manage");
@@ -518,8 +523,36 @@ export async function deactivateEmployee(actor: Actor, organizationId: string, e
       action: "deactivate",
       changes: { employeeId: row.id },
     });
+
+    // Admin som (med en annen aktiv admin igjen) markerer seg selv som sluttet, mister tilgangen
+    // uansett; bekreftelsen gjelder da hele handlingen, så `confirmSelf` settes her.
+    const revoked = await revokeAllEmployeeSessions(
+      actor,
+      organizationId,
+      row.id,
+      row.userId === actor.id
+        ? { reason: "deactivated", confirmSelf: true }
+        : { reason: "deactivated" },
+      tx,
+    );
+    if (!revoked.ok) throw new AccessDeniedError();
     return row;
   });
+}
+
+/**
+ * Antall aktive innlogginger (økter) for en ansatt i egen organisasjon, til bekreftelsen ved
+ * «Har sluttet» («Hen blir også logget ut av alle enheter (N).»). Bare admin. Fremmed, ukjent og
+ * slettet id gir `AccessDeniedError`, som `getEmployeeForAdmin`.
+ */
+export async function countEmployeeActiveSessions(
+  actor: Actor,
+  organizationId: string,
+  employeeId: string,
+): Promise<number> {
+  const result = await listEmployeeSessions(actor, organizationId, employeeId);
+  if (!result.ok) throw new AccessDeniedError();
+  return result.count;
 }
 
 /**
