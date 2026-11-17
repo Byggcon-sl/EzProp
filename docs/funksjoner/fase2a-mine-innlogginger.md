@@ -185,6 +185,15 @@ Ført i `docs/plan/forbedrerens-tillegg.md` 17.11.2026.
 - A430 Deaktivering logger ut alle enheter automatisk, med revisjonsrad `reason: "deactivated"`. Lett å endre.
 - Ny profilside `/profil` med lenke fra initialene (del av A423). Lett å endre.
 
+## Avklart før bygging (prosjektlederen 17.11.2026, fra testplanen)
+1. **`revokeOwnSession` med den nåværende økten** avvises med `{ ok: false, reason: "current_session" }` og sletter ingenting. «Logg ut her» bruker vanlig utlogging (`logOutAndClear`). Testplan 4.2.7.
+2. **`revokeOtherOwnSessions`** sletter og teller bare aktive egne økter (`expires_at` > nå). Utløpte står til ryddingen (`auth-cleanup`). Testplan 4.3.4.
+3. **Datoformat:** «Aktiv 12. nov.» og «logget inn 3. nov.» uten årstall i samme år (Oslo-tid); er året et annet enn i dag, med årstall: «Aktiv 28. des. 2025». Testplan 2.5 og 2.9.
+4. **Deaktivering i én transaksjon:** `deactivateEmployee` setter `deactivated_at`, skriver deaktiveringsraden, og kaller så `revokeAllEmployeeSessions(..., { reason: "deactivated" }, tx)` i samme transaksjon. Feiler noe, rulles alt tilbake: den ansatte er da ikke deaktivert og øktene står. Testplan 6.2.
+5. **Bøyning:** «1 enhet er logget ut.» og «2 enheter er logget ut.» (samme i admin-kvitteringen og i deaktiveringsbekreftelsen: «(1)» er uendret). Ved 0: «Ingen enheter var logget inn.» Testplan E3 og E5 følger dette, ikke «1 enheter».
+6. **Feiltyper:** «finnes ikke» er `{ ok: false, reason: "not_found" }` (samme for annens, ukjent, utløpt økt og ansatt i annen organisasjon); manglende rettighet er `AccessDeniedError`; manglende `confirmSelf` når admin velger seg selv er `{ ok: false, reason: "confirm_self_required" }`. Vellykket: `{ ok: true, count }` (for én økt `count: 1`).
+7. **`Actor.sessionId`** legges til som valgfritt felt (`sessionId?: string`) i `Actor` og fylles i `getCurrentActor` fra `session.session.id`. Mangler den, får ingen rad `isCurrent`.
+
 ## Roller
 utvikler (kjerne og sider), testskriver (enhet, integrasjon, e2e, parallelt), sikkerhet-personvern (tilbakekalling av økter, lukkede endepunkter, persondata i svarene, tenant-isolasjon, personvernerklæringen), ki-ansvarlig (kort kontroll av at ingen øktdata kan nå KI-porten). Ikke arkitekt, ux eller ui-designer: ingen ny tabell, og skjermene følger eksisterende mønstre.
 
