@@ -1,7 +1,7 @@
 # Testplan: Badet på PC
 
 - **Oppgavekort:** `docs/funksjoner/fase2a-badet-pc.md` (design: `fase2a-badet-pc-design.md`)
-- **Dato:** 14.11.2026 (test-leder, før bygging). Oppdatert 16.11.2026 ved overtakelsen: kortets «Tillegg runde 2» og «Tillegg 16.11.2026» (forbedrerens tillegg A380–A383, fagrettingene A385–A387, KI-rettingene A355–A357, småfunnene fra PR #167 og #174) og T-0051, T-0059 og T-0060.
+- **Dato:** 14.11.2026 (test-leder, før bygging). Oppdatert 16.11.2026 ved overtakelsen: kortets «Tillegg runde 2» og «Tillegg 16.11.2026» (forbedrerens tillegg A380–A383, fagrettingene A385–A387, KI-rettingene A355–A357, småfunnene fra PR #167 og #174) og T-0051, T-0059 og T-0060. Oppdatert 17.11.2026 etter designets gjennomgang ved overtakelsen (avsnitt 10, 11 og 17): B1.20 (visning av kostnad med «ca.»), B6.8a og B6.8d (punktbytte uten ny innlasting), B6.8c utvidet («Lagrer …» på Ferdig, fokus og statustekst ved feil) og B6.10 (beløpet vist skrivebeskyttet).
 - **Støtter hovedmål:**
   - **Færre reklamasjoner (hovedsaken):** testene låser forskriftens struktur (TG, årsak, konsekvens, tiltak, kostnad; TGIU med begrunnelse), at reglene foreslår likt hver gang, at regler aldri setter TG selv, og at hver beslutning om et regelforslag logges.
   - **De ansatte:** e2e viser to trykk fra forslag til ferdig avvik, lagring per felt uten tapt tekst, og at skjermen virker på PC og iPad (liggende og stående), med tastatur og skjermleser.
@@ -13,7 +13,7 @@ All testdata er oppdiktet (oppdrag med gnr 999, «Åse Testesen», telefon `1234
 
 Navn kan endres av utvikleren; avvik føres i kortet.
 
-- `src/core/reports/logic/`: `computeCheckpointTg(directTg, deviations) → "0" | "1" | "2" | "3" | "IU" | null`, `costWarning(amount) → "not_rounded" | null`, `parseCostAmount(input) → ok | error`, `COST_BANDS` (fem koder), `fillMergeFields(text, values) → { text, missing[] }`, `measureForTg(measures, tg)`, `checkpointWarnings(state) → Warning[]` (faste koder), `checkpointStatus(state)`, `RULE_REASON_TEXTS` (oversettelsen), `ruleResultSchema` (Zod, strengt), `OVERRIDE_REASON_CODES` (fem koder), `overrideReasonSchema`, `searchOutcomes(templateDoc, query)` (A382), `warningFix(warning) → fix | null` (A381), `nextCheckpointToReview(state)` (A381).
+- `src/core/reports/logic/`: `computeCheckpointTg(directTg, deviations) → "0" | "1" | "2" | "3" | "IU" | null`, `costWarning(amount) → "not_rounded" | null`, `parseCostAmount(input) → ok | error`, `COST_BANDS` (fem koder), `fillMergeFields(text, values) → { text, missing[] }`, `measureForTg(measures, tg)`, `costDisplayText(costType, { amount?, bandCode? }) → string` (oversettelsen av `cost_type`, brukes av skjermen og senere PDF-en), `checkpointWarnings(state) → Warning[]` (faste koder), `checkpointStatus(state)`, `RULE_REASON_TEXTS` (oversettelsen), `ruleResultSchema` (Zod, strengt), `OVERRIDE_REASON_CODES` (fem koder), `overrideReasonSchema`, `searchOutcomes(templateDoc, query)` (A382), `warningFix(warning) → fix | null` (A381), `nextCheckpointToReview(state)` (A381).
 - `src/core/reports/`: `startReport(actor, assignmentId)`, `getRoomView(actor, assignmentId, roomId)`, `saveField(actor, change)` med `change = { table, rowId, field, value, seenValue }`, `addDeviation`, `removeDeviation`, `addMeasure`, `removeMeasure`, `decideRuleSuggestion(actor, { reportId, checkpointResultId, ruleKey, decision, chosenTg?, chosenOutcomeKey?, overrideReasonCode?, overrideReason? })`, `setTgDirect`, `saveTgiuDetails`, `markCheckpointDone`.
 - Svar ved konflikt: `{ kind: "conflict", currentValue }`. Svar ved gammelt forslag: feil med koden `suggestion_no_longer_applies`.
 
@@ -43,7 +43,8 @@ Navn kan endres av utvikleren; avvik føres i kortet.
 16. **B1.17 avvikssøk** (A382): «fukt» finner utfallene med fukt på alle punktene, med punktnavnet; tomt søk gir alle utfall; stor/liten bokstav og æøå likt; arkiverte utfall og utfall fra andre malversjoner kommer ikke med; ingen treff gir tom liste (skjermen viser «Ingen avvik passer»).
 17. **B1.18 «Rett nå» og neste å se over** (A381): `warningFix` gir handling for T-0059 (bytt til «Utført med funn»), `tg3_missing_cost`, `tg2_tg3_missing_cause_or_consequence`, `tg2_tg3_missing_measure`, `tgiu_details_missing` (fokus til riktig felt), `suggestion_no_longer_applies` (rull til forslaget; når et godtatt avvik henger på forslaget, i tillegg handlingene `remove_deviation` og `keep_deviation`, A388) og `checkpoint_done_without_tg` (fokus til TG-valget), og `null` for resten; `nextCheckpointToReview` hopper til neste punkt med advarsel etter det åpne, går rundt, og gir `null` når ingen har advarsel; telleren («3 å se over») teller punkter, ikke advarsler.
 18. **B1.19 KI-målene** (A356): `REPORT_AI_TARGET_FIELDS` låst: `deviation` = `deviation_text`, `cause_text`, `consequence_text`; `tgiu_detail` = `reason`, `risk_assessment`, `how_to_examine`; `deviation_measure`, `checkpoint_result`, `field_answer` som før. Hvert feltnavn finnes som kolonne i skjemaet (sjekk mot Drizzle-tabellen). `TEXT_SOURCES` har ingen KI-kode (A357).
-19. **B1.15 rent blad:** filene i `logic/` importerer bare egen mappe, `@/shared`, `@/core/rules` og `import type` (lint-regelen finnes og fanger en oppdiktet ulovlig import i en fixture).
+19. **B1.20 kostnad som tekst** (design avsnitt 11): `costDisplayText("approx", { amount: 40000 })` gir «ca. 40 000 kr» (mellomrom som tusenskille, aldri avrundet: 37 500 gir «ca. 37 500 kr»); hvert av de fem intervallene gir etiketten med kr («20 000–100 000 kr» osv., `it.each` over `COST_BANDS`); `none` gir tom tekst eller fast «Ingen kostnad» etter kortet, aldri «ca.»; ukjent `cost_type` er typefeil. Funksjonen ligger i `logic/` (statisk sjekk), så PDF-en kan bruke den.
+20. **B1.15 rent blad:** filene i `logic/` importerer bare egen mappe, `@/shared`, `@/core/rules` og `import type` (lint-regelen finnes og fanger en oppdiktet ulovlig import i en fixture).
 
 ## 2. Regeltester (testsaker som data)
 
@@ -153,11 +154,12 @@ Data: testen lager sitt eget oppdrag med våtrom i en egen prøveorganisasjon me
 6. **B6.6 kostnad:** eget beløp 37 500 gir advarsel under feltet mens man skriver, 40 000 ikke; 0 gir feilmelding; alle fem intervallene kan velges.
 7. **B6.7 lagringsfeil:** `page.route` med `abort` på lagringskallet → «Ikke lagret – prøv igjen» i feltet og toppen, teksten står; fjern ruten → lagres, «Lagret».
 8. **B6.8 uten nett:** `context.setOffline(true)` → «Uten nett – endringene dine er ikke lagret ennå», teksten står; tilbake på nett → lagres. Ingen rapportdata i localStorage eller IndexedDB (sjekk med `page.evaluate`).
-   - **B6.8a punktbytte uten nett:** skriv årsak, gå til neste punkt (uten nett), tilbake: teksten står og lagres når nettet er tilbake.
+   - **B6.8a punktbytte uten nett:** skriv årsak, gå til neste punkt (uten nett), tilbake: teksten står og lagres når nettet er tilbake. Siden lastes ikke på nytt: en markør satt med `page.evaluate(() => (window.__marker = 1))` står etter byttet, og bare `?punkt=` i adressen er endret.
+   - **B6.8d alle punktbytter uten innlasting** (design avsnitt 10, `it.each`): listen, «Neste punkt»/«Forrige punkt», Ferdig, søketreff på annet punkt og Alt+↓/↑ (prosjektet `pc`) beholder markøren fra B6.8a og en ulagret tekst (lagringen holdt igjen med `page.route`); tekst lagres når ruten slippes.
    - **B6.8b `beforeunload`:** lukking eller omlasting med felt som venter på lagring utløser `beforeunload` (dialoghendelse i Playwright); uten ventende felt ingen dialog.
-   - **B6.8c «Ferdig» med ventende lagring:** skriv i et felt og trykk Ferdig straks: feltet lagres først, så markeres punktet ferdig (sjekk i databasen). Med `page.route(..., r => r.abort())` på lagringen: punktet markeres **ikke** ferdig, feltet viser «Ikke lagret – prøv igjen».
+   - **B6.8c «Ferdig» med ventende lagring:** skriv i et felt og trykk Ferdig straks: feltet lagres først, så markeres punktet ferdig (sjekk i databasen). Med `page.route(..., r => r.abort())` på lagringen: punktet markeres **ikke** ferdig, feltet viser «Ikke lagret – prøv igjen». Mens lagringen pågår viser knappen «Lagrer …» og er låst (`disabled` eller `aria-disabled`, et ekstra trykk lager ingen ekstra rad); ved feil blir knappen «Ferdig med punktet» igjen, fokus står i feltet som ikke ble lagret, og statusområdet (`aria-live`) sier «Punktet er ikke ferdig. Ett felt er ikke lagret.».
 9. **B6.9 to faner:** samme felt endret i to sider gir «Endret av andre» med nyeste verdi i den andre; ulike felt på samme avvik gir ingen konflikt.
-10. **B6.10 kontor:** ser «Rapporten er ikke startet» uten knapper; etter start ser kontoret skjermen skrivebeskyttet (ingen redigerbare felt, ingen Godta).
+10. **B6.10 kontor:** ser «Rapporten er ikke startet» uten knapper; etter start ser kontoret skjermen skrivebeskyttet (ingen redigerbare felt, ingen Godta); et avvik med eget beløp 40 000 vises som «ca. 40 000 kr», et med intervall som etiketten med kr.
 11. **B6.11 admin:** admin kommer inn og kan godta et forslag når `access.inspectors_edit_all` er av.
 12. **B6.12 iPad liggende og stående:** hele flyten fra Godta til Ferdig; stående har «Punkter (3 av 8)»-panelet og «Forrige punkt»/«Neste punkt» (minst 56 px); ingen vannrett rulling (`scrollWidth <= clientWidth`) på begge; alle knapper minst 44 px, Godta og Ferdig minst 56 px; ingen `select` på siden.
 13. **B6.13 tastatur:** hele hovedflyten bare med Tab, mellomrom og Enter; fokus synlig. **Angre** etter «Fjern avviket» og «Fjern TGIU» nås og virker med tastatur til punktet forlates; etter punktbytte er Angre borte.
@@ -181,6 +183,7 @@ Data: testen lager sitt eget oppdrag med våtrom i en egen prøveorganisasjon me
 - **T-0051:** B2.5, B6.17 (valget heter «Ukjent», koden `unknown` uendret; datamodellen har ikke byggeår for bygningen, så funnets forslag om å bruke bygningens byggeår er ikke med her, se kortet).
 - **T-0059:** B1.10c, B2.4, B4.36, B6.5, B6.13c.
 - **T-0060:** B1.9, B4.21, B6.3.
+- **Punkt 8 i kortet (ulagret tekst går aldri tapt):** B6.8a–B6.8d.
 
 ## Godkjenning
 
