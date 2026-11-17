@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { AccessDeniedError } from "@/core/access";
 import { getAssignment } from "@/core/assignments";
 import { getAssignmentBuildings, roomTypeLabel } from "@/core/buildings";
-import { getRoomReport, type RoomReportView } from "@/core/reports";
+import { getRoomView, type RoomReportView } from "@/core/reports";
 import { isUuid } from "@/shared/lib/uuid";
 import { getEmployeeContext } from "../../../../employee-context";
 import { NoAccess } from "../../../../no-access";
@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Badet" };
 
 /*
  * Badet på PC (docs/funksjoner/fase2a-badet-pc.md, fase 2a-2). Leser rommet med kjernen
- * (`getRoomReport`), som sjekker tilgangen og kjeden rom → etasje → bygning → oppdrag → rapport.
+ * (`getRoomView`), som sjekker tilgangen og kjeden rom → etasje → bygning → oppdrag → rapport.
  * Siden skriver aldri: rapporten startes bare med «Start rapporten». Ugyldig id, rom fra et annet
  * oppdrag eller en annen organisasjon, og rom som ikke er våtrom, gir «Fant ikke siden».
  * Nettleseren får bare maldokumentet og svarene for rommet, aldri parter eller adresse.
@@ -42,7 +42,7 @@ export default async function RoomPage({
   let assignmentNumber: string | null;
   try {
     const [roomView, assignment] = await Promise.all([
-      getRoomReport(context.actor, context.organizationId, room),
+      getRoomView(context.actor, context.organizationId, room),
       getAssignment(context.actor, context.organizationId, id),
     ]);
     view = roomView;

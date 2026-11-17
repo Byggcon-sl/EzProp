@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => ({
   logError: vi.fn(),
   core: {
     startReport: vi.fn(),
-    saveReportField: vi.fn(),
+    saveField: vi.fn(),
     addDeviation: vi.fn(),
     removeDeviation: vi.fn(),
     restoreDeviation: vi.fn(),
@@ -85,7 +85,7 @@ beforeEach(() => {
 
 describe("handlingene på badet", () => {
   it.each([
-    ["saveFieldAction", () => actions.saveFieldAction(ref, change), "saveReportField", change],
+    ["saveFieldAction", () => actions.saveFieldAction(ref, change), "saveField", change],
     [
       "addDeviationAction",
       () =>
@@ -129,7 +129,7 @@ describe("handlingene på badet", () => {
   it("organisasjon i innholdet leses aldri", async () => {
     const forged = { ...ref, organizationId: OTHER_ORG } as typeof ref;
     await actions.saveFieldAction(forged, change);
-    expect(mocks.core.saveReportField).toHaveBeenCalledWith(
+    expect(mocks.core.saveField).toHaveBeenCalledWith(
       actor,
       ORG,
       { assignmentId: ASSIGNMENT, roomId: ROOM },
@@ -144,7 +144,7 @@ describe("handlingene på badet", () => {
   ])("%s stoppes før kjernen", async (_name, badRef) => {
     const result = await actions.saveFieldAction(badRef as typeof ref, change);
     expect(result).toEqual({ status: "error", message: NO_ACCESS });
-    expect(mocks.core.saveReportField).not.toHaveBeenCalled();
+    expect(mocks.core.saveField).not.toHaveBeenCalled();
   });
 
   it("uten ansatt i organisasjonen: ingen tilgang, kjernen kalles ikke", async () => {
@@ -176,13 +176,13 @@ describe("handlingene på badet", () => {
     ],
     ["ZodError", new ZodError([]), ROOM_ACTION_MESSAGES.invalid],
   ])("%s gir norsk melding uten logg", async (_name, error, message) => {
-    mocks.core.saveReportField.mockRejectedValue(error);
+    mocks.core.saveField.mockRejectedValue(error);
     expect(await actions.saveFieldAction(ref, change)).toEqual({ status: "error", message });
     expect(mocks.logError).not.toHaveBeenCalled();
   });
 
   it("ukjent feil logges med id-er og feilnavn, aldri med feltverdien", async () => {
-    mocks.core.saveReportField.mockRejectedValue(new Error(`databasen sa nei: ${SECRET_TEXT}`));
+    mocks.core.saveField.mockRejectedValue(new Error(`databasen sa nei: ${SECRET_TEXT}`));
     expect(await actions.saveFieldAction(ref, change)).toEqual({
       status: "error",
       message: UNKNOWN_ERROR,

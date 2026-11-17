@@ -11,7 +11,7 @@ import {
   ReportTemplateMissingError,
   ReportValidationError,
   restoreDeviation,
-  saveReportField,
+  saveField,
   setCheckpointDone,
   setTgDirect,
   startReport,
@@ -118,7 +118,7 @@ export async function saveFieldAction(
   change: ReportFieldChange,
 ): Promise<SaveFieldResult | ActionError> {
   return onRoom("save_field", ref, (context, room) =>
-    saveReportField(context.actor, context.organizationId, room, change),
+    saveField(context.actor, context.organizationId, room, change),
   );
 }
 
