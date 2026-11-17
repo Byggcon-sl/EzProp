@@ -34,6 +34,12 @@ type Condition = TemplateDocument["rule_conditions"][number];
 type Context = Omit<EvaluateRulesInput, "template">;
 
 const COMPARATORS: readonly ThresholdComparator[] = ["gt", "gte", "lt", "lte"];
+/**
+ * Rimelige årstall for et sjikt eller et byggeår (småfunn fra PR #167). Utenfor gir «ugyldig
+ * årstall», aldri en stille alder på flere hundre år. Årstall etter befaringsåret sjekkes for seg.
+ */
+const YEAR_MIN = 1800;
+const YEAR_MAX = 2099;
 /** Gyldig tall som tekst: punktum som desimaltegn, ikke komma. */
 const NUMERIC_TEXT = /^-?(\d+(\.\d*)?|\.\d+)$/;
 
@@ -60,6 +66,14 @@ function toNumber(value: JsonValue | undefined): number | null {
   return null;
 }
 
+/**
+ * Svaret på et felt. Bare egne nøkler i svarene leses, så en feltkode som `constructor` eller
+ * `__proto__` aldri gir en arvet verdi (småfunn fra PR #167).
+ */
+function answerOf(context: Context, elementKey: string): JsonValue | undefined {
+  return Object.hasOwn(context.answers, elementKey) ? context.answers[elementKey] : undefined;
+}
+
 function optionKeysFor(context: Context, elementKey: string): Set<string> {
   return new Set(
     context.document.element_options.filter((o) => o.element_key === elementKey).map((o) => o.key),
@@ -68,7 +82,7 @@ function optionKeysFor(context: Context, elementKey: string): Set<string> {
 
 /** Valgkodene i svaret som finnes som valg på feltet. Fritekst tas aldri med. */
 function selectedOptions(context: Context, elementKey: string): string[] {
-  const answer = context.answers[elementKey];
+  const answer = answerOf(context, elementKey);
   const raw = Array.isArray(answer) ? answer : [answer];
   const options = optionKeysFor(context, elementKey);
   const selected: string[] = [];
@@ -214,7 +228,7 @@ function numberVsLimit(condition: Condition, context: Context): NumberVsLimitRea
     base.unit = unit ?? null;
   }
 
-  const answer = context.answers[elementKey];
+  const answer = answerOf(context, elementKey);
   if (isEmpty(answer)) return unknown("field_empty");
   const value = toNumber(answer);
   if (value === null) return unknown("value_not_number");
@@ -222,7 +236,7 @@ function numberVsLimit(condition: Condition, context: Context): NumberVsLimitRea
   if (value < 0) return unknown("value_negative");
 
   if (threshold && condition.unit_element_key) {
-    if (isEmpty(context.answers[condition.unit_element_key])) return unknown("unit_missing");
+    if (isEmpty(answerOf(context, condition.unit_element_key))) return unknown("unit_missing");
     if (base.unit !== threshold.unit) return unknown("unit_not_supported");
   }
 
@@ -230,13 +244,18 @@ function numberVsLimit(condition: Condition, context: Context): NumberVsLimitRea
   return { ...base, truth };
 }
 
-/** Årstallet fra et felt: `undefined` = tomt, `null` = ugyldig. */
+/**
+ * Årstallet fra et felt: `undefined` = tomt, `null` = ugyldig (ikke et heltall, eller utenfor
+ * `YEAR_MIN`–`YEAR_MAX`).
+ */
 function readYear(context: Context, elementKey: string | null): number | null | undefined {
   if (!elementKey) return undefined;
-  const answer = context.answers[elementKey];
+  const answer = answerOf(context, elementKey);
   if (isEmpty(answer)) return undefined;
   const year = toNumber(answer);
-  return year !== null && Number.isInteger(year) && year > 0 ? year : null;
+  return year !== null && Number.isInteger(year) && year >= YEAR_MIN && year <= YEAR_MAX
+    ? year
+    : null;
 }
 
 function ageVsLifespan(rule: Rule, condition: Condition, context: Context): AgeVsLifespanReason {
@@ -304,9 +323,11 @@ function ageVsLifespan(rule: Rule, condition: Condition, context: Context): AgeV
   base.year_element_key = yearKey;
   if (year === null) return unknown("year_invalid");
   base.year = year;
-  if (context.inspectionYear === null) return unknown("inspection_year_missing");
-  if (year > context.inspectionYear) return unknown("year_after_inspection");
-  const age = context.inspectionYear - year;
+  const inspectionYear = context.inspectionYear;
+  if (inspectionYear !== null && year > inspectionYear) return unknown("year_after_inspection");
+  // Uten befaringsår er alderen ukjent. Trinn som bare ser på årstallet (som «før 2000»), kan
+  // likevel avgjøres; trinn med alder (`min_age`) avgjøres bare når de ikke kan endre svaret.
+  const age = inspectionYear === null ? null : inspectionYear - year;
   base.age = age;
 
   // Utfallet regelen foreslår avgjør hvilket trinn som gir «sann».
@@ -323,13 +344,15 @@ function ageVsLifespan(rule: Rule, condition: Condition, context: Context): AgeV
 
   const documentation = base.documentation;
   const entries = context.lifespans.entries;
-  const candidates = entries.filter(
+  const matching = entries.filter(
     (e) =>
       (e.material_code === null || e.material_code === material) &&
       (e.from_year === null || year >= e.from_year) &&
       (e.to_year === null || year <= e.to_year) &&
-      (e.min_age === null || age >= e.min_age) &&
       (e.documentation === "any" || e.documentation === documentation),
+  );
+  const candidates = matching.filter(
+    (e) => e.min_age === null || (age !== null && age >= e.min_age),
   );
   const winner = candidates.reduce<LifespanEntry | null>((best, entry) => {
     if (!best) return entry;
@@ -337,6 +360,19 @@ function ageVsLifespan(rule: Rule, condition: Condition, context: Context): AgeV
     if (diff !== 0) return diff > 0 ? entry : best;
     return entry.sort_order < best.sort_order ? entry : best;
   }, null);
+
+  if (age === null) {
+    // Trinn med alder som kunne ha vunnet, men ikke kan prøves uten befaringsår. Kan ett av dem
+    // gi et annet svar enn trinnet som vant, er regelen ikke vurdert.
+    const floor = winner ? strictness(winner.outcome_kind) : -1;
+    const truthNow = winner?.outcome_kind === targetKind;
+    const undecided = matching.filter(
+      (e) => e.min_age !== null && strictness(e.outcome_kind) > floor,
+    );
+    if (undecided.some((e) => (e.outcome_kind === targetKind) !== truthNow)) {
+      return unknown("inspection_year_missing");
+    }
+  }
 
   const notStated: ConditionReasonCode | null = documentationNotStated
     ? "documentation_not_stated"

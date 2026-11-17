@@ -3,6 +3,7 @@ import { buildTemplateDocument } from "../../../tests/template-document";
 import {
   checkDocumentKeys,
   checkDocumentRules,
+  checkMeasureAppliesToTg,
   checkRuleCheckpointGivesTg,
   checkRuleConditionShape,
   checkRuleOutcomeSameCheckpoint,
@@ -160,6 +161,7 @@ const checks: [string, Check][] = [
   ["checkRuleOutcomeSameCheckpoint", checkRuleOutcomeSameCheckpoint],
   ["checkRuleCheckpointGivesTg", checkRuleCheckpointGivesTg],
   ["checkRuleConditionShape", checkRuleConditionShape],
+  ["checkMeasureAppliesToTg", checkMeasureAppliesToTg],
 ];
 
 /** Dokumentene som skal feile: testplanen 5.1–5.5. `ruleKey` skal stå i meldingen. */
@@ -386,7 +388,9 @@ describe("5 kontrollene i malmotoren", () => {
 });
 
 describe("R4.6 checkDocumentKeys: feltkodene på betingelsene", () => {
+  // De sju feltkodene på en betingelse (B2.8)
   const fields = [
+    { rule: LIMIT, field: "element_key" },
     { rule: AGE, field: "age_year_element_key" },
     { rule: AGE, field: "age_fallback_year_element_key" },
     { rule: AGE, field: "age_source_element_key" },
@@ -405,6 +409,91 @@ describe("R4.6 checkDocumentKeys: feltkodene på betingelsene", () => {
     (doc.rule_conditions[index] as Record<string, unknown>)[field] = "el.finnes_ikke";
     expect(checkDocumentKeys(parsed(doc))).toEqual([
       expect.objectContaining({ path: `rule_conditions.${index}.${field}`, rule: "key_unknown" }),
+    ]);
+  });
+});
+
+describe("B2.10 T-0060 checkMeasureAppliesToTg: tiltak for én TG bare ved «velg TG2 eller TG3»", () => {
+  /** Det gode dokumentet med et utfall «velg TG2 eller TG3» og ett tiltak per TG. */
+  function withChoose(): Doc {
+    const doc = goodDocument();
+    doc.outcomes.push({
+      checkpoint_key: "cp.two",
+      question_key: "dq.other",
+      key: "out.velg",
+      kind: "choose_tg2_tg3",
+      deviation_text: "Utfallstekst velg",
+      sort_order: 1,
+    });
+    doc.standard_measures.push(
+      {
+        checkpoint_key: "cp.two",
+        question_key: "dq.other",
+        outcome_key: "out.velg",
+        text: "Tiltak ved TG2",
+        applies_to_tg: 2,
+        sort_order: 0,
+      },
+      {
+        checkpoint_key: "cp.two",
+        question_key: "dq.other",
+        outcome_key: "out.velg",
+        text: "Tiltak ved TG3",
+        applies_to_tg: 3,
+        sort_order: 1,
+      },
+      {
+        checkpoint_key: "cp.two",
+        question_key: "dq.other",
+        outcome_key: "out.velg",
+        text: "Tiltak uansett TG",
+        sort_order: 2,
+      },
+    );
+    return doc;
+  }
+
+  it("2, 3 og tom på et utfall «velg TG2 eller TG3» godtas", () => {
+    const document = parsed(withChoose());
+    expect(document.standard_measures.map((m) => m.applies_to_tg)).toEqual([
+      null,
+      null,
+      2,
+      3,
+      null,
+    ]);
+    expect(checkMeasureAppliesToTg(document)).toEqual([]);
+    expect(checkDocumentRules(document)).toEqual([]);
+  });
+
+  it.each([2, 3] as const)("%s på et utfall med fast TG avvises med norsk melding", (tg) => {
+    const doc = withChoose();
+    doc.standard_measures[0]!.applies_to_tg = tg;
+    const document = parsed(doc);
+    const issues = checkMeasureAppliesToTg(document);
+    expect(issues).toEqual([
+      expect.objectContaining({ path: "standard_measures.0.applies_to_tg", rule: "schema" }),
+    ]);
+    expect(issues[0]!.message).toMatch(/tilstandsgrad/);
+    expect(issues[0]!.message).toMatch(/TG2 eller TG3/);
+    // Samlet kontroll fanger det samme
+    expect(checkDocumentRules(document)).toEqual(issues);
+  });
+
+  it.each([1, 4, 0, "2"])("verdien %s avvises av skjemaet", (value) => {
+    const doc = withChoose();
+    (doc.standard_measures[3] as Record<string, unknown>).applies_to_tg = value;
+    const result = parseTemplateDocument(doc);
+    expect(result.success).toBe(false);
+  });
+
+  it("et tiltak på et utfall som ikke finnes, meldes bare av checkDocumentKeys", () => {
+    const doc = withChoose();
+    doc.standard_measures[3]!.outcome_key = "out.finnes_ikke";
+    const document = parsed(doc);
+    expect(checkMeasureAppliesToTg(document)).toEqual([]);
+    expect(checkDocumentKeys(document)).toEqual([
+      expect.objectContaining({ path: "standard_measures.3.outcome_key", rule: "key_unknown" }),
     ]);
   });
 });

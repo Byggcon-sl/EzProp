@@ -2100,7 +2100,12 @@ describe("mal for bad: text_status og default_cause_text i malmotoren", () => {
     expect(document.rule_test_cases.length).toBeGreaterThan(0);
     expect(document.rule_conditions.some((c) => c.threshold_key !== null)).toBe(true);
     expect(document.rule_conditions.some((c) => c.type === "age_vs_lifespan")).toBe(true);
-    for (const t of document.rule_test_cases) expect(t.inspection_year).not.toBeNull();
+    // Befaringsåret lagres og leses tilbake; tomt bare i sakene uten befaringsår (B2.12)
+    for (const t of document.rule_test_cases) {
+      if (t.name.includes("uten befaringsår")) expect(t.inspection_year, t.name).toBeNull();
+      else expect(t.inspection_year, t.name).not.toBeNull();
+    }
+    expect(document.rule_test_cases.some((t) => t.inspection_year === null)).toBe(true);
   });
 
   // --- Tilgang per rolle (utvider 4.1 med de nye feltene) ---

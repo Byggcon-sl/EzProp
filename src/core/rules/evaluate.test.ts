@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TemplateDocument } from "@/core/templates";
 import { RULE_CONDITION_TYPES, TG_RULE_PURPOSES } from "@/db/schema";
@@ -983,15 +985,87 @@ describe("1.6 age_vs_lifespan", () => {
     );
   });
 
-  it("1.6.28 future_year: befaringsåret mangler gir not_evaluated", () => {
+  it("1.6.28 befaringsåret mangler: trinn med alder gir not_evaluated", () => {
     const { tg2, tg3 } = ageResults(
-      { "x.material": "plate", "x.doc": "none", "x.year": 1990 },
+      { "x.material": "plate", "x.doc": "none", "x.year": CUT_YEAR + 6 },
       { inspectionYear: null },
+    );
+    expect(tg2.state).toBe("not_evaluated");
+    expect(reasonOf(tg2)).toMatchObject({ code: "inspection_year_missing", age: null });
+    // Trinnet før grensen leser bare årstallet: det slår ikke til, og aldersstrinnet kan ikke
+    // gjøre tg3-regelen sann
+    expect(tg3.state).toBe("not_triggered");
+  });
+
+  it("B2.12 befaringsåret mangler: trinnet før grensen trenger det ikke", () => {
+    const { tg2, tg3 } = ageResults(
+      { "x.material": "plate", "x.doc": "none", "x.year": CUT_YEAR - 9 },
+      { inspectionYear: null },
+    );
+    expect(tg3.state).toBe("triggered");
+    expect(tg3.suggestion).toEqual({ kind: "outcome", ...OLD });
+    expect(reasonOf(tg3)).toMatchObject({
+      lifespan_entry_key: "before_cut",
+      inspection_year: null,
+      age: null,
+    });
+    // tg2-regelen vet at et strengere trinn gjelder, uansett alder
+    expect(tg2.state).toBe("not_triggered");
+    expect(reasonOf(tg2).code).toBe("stricter_step_applies");
+  });
+
+  it("B2.12 befaringsåret mangler: ukjent materiale før grensen gir tg3, etter grensen ingenting", () => {
+    const early = ageResults(
+      { "x.material": "unknown", "x.doc": "none", "x.year": CUT_YEAR },
+      { inspectionYear: null },
+    );
+    expect(early.tg3.state).toBe("triggered");
+    const late = ageResults(
+      { "x.material": "unknown", "x.doc": "none", "x.year": CUT_YEAR + 1 },
+      { inspectionYear: null },
+    );
+    expect(late.tg3.state).toBe("not_triggered");
+    expect(late.tg2.state).toBe("not_evaluated");
+    expect(late.tg2.suggestion).toBeNull();
+  });
+
+  it.each<{ name: string; year: JsonValue }>([
+    { name: "1799", year: 1799 },
+    { name: "2100", year: 2100 },
+    { name: "0", year: 0 },
+    { name: "abc", year: "abc" },
+    { name: "1799 som tekst", year: "1799" },
+  ])("B2.7 readYear: urimelig årstall ($name) gir year_invalid", ({ year }) => {
+    const { tg2, tg3 } = ageResults(
+      { "x.material": "plate", "x.doc": "none", "x.year": year },
+      { inspectionYear: 2200 },
     );
     for (const result of [tg2, tg3]) {
       expect(result.state).toBe("not_evaluated");
-      expect(reasonOf(result).code).toBe("inspection_year_missing");
+      expect(reasonOf(result).code).toBe("year_invalid");
     }
+  });
+
+  it("B2.7 readYear: urimelig årstall faller ikke tilbake på reservefeltet", () => {
+    const { tg3 } = ageResults({
+      "x.material": "plate",
+      "x.doc": "none",
+      "x.year": 1799,
+      "x.year_fallback": 1990,
+    });
+    expect(tg3.state).toBe("not_evaluated");
+    expect(reasonOf(tg3)).toMatchObject({ code: "year_invalid", year_element_key: "x.year" });
+  });
+
+  it("B2.7 readYear: 1900 og befaringsåret godtas", () => {
+    const old = ageResults({ "x.material": "plate", "x.doc": "none", "x.year": 1900 });
+    expect(old.tg3.state).toBe("triggered");
+    expect(reasonOf(old.tg3)).toMatchObject({ year: 1900, age: YEAR - 1900 });
+    const fresh = ageResults({ "x.material": "plate", "x.doc": "none", "x.year": YEAR });
+    expect(fresh.tg2.state).toBe("not_triggered");
+    expect(reasonOf(fresh.tg2)).toMatchObject({ year: YEAR, age: 0 });
+    const asText = ageResults({ "x.material": "plate", "x.doc": "none", "x.year": "1900" });
+    expect(asText.tg3.state).toBe("triggered");
   });
 
   it("1.6.29 engine_knows_no_codes: andre feltkoder, valgkoder og materialkoder virker", () => {
@@ -1048,6 +1122,44 @@ describe("1.6 age_vs_lifespan", () => {
       lifespan_set_key: null,
       threshold_set_key: null,
     });
+  });
+});
+
+describe("B2.8 egen-nøkkel-sjekk i svarene", () => {
+  const INHERITED = ["constructor", "__proto__", "toString", "hasOwnProperty"] as const;
+
+  it.each(INHERITED)("feltkoden %s leser aldri en arvet verdi (måling)", (key) => {
+    const document = doc(
+      [rule("x.limit_rule", { suggested_outcome: OLD })],
+      [thresholdLimit("x.limit_rule", { element_key: key })],
+    );
+    const result = one(evaluate(document, { "x.unit": "wp" }), "x.limit_rule");
+    expect(result.state).toBe("not_evaluated");
+    expect(result.reasons[0]).toMatchObject({ code: "field_empty", value: null });
+  });
+
+  it.each(INHERITED)("feltkoden %s leser aldri en arvet verdi (årstall)", (key) => {
+    const document = doc(
+      [rule("x.tg3", { suggested_outcome: OLD })],
+      [ageCondition("x.tg3", { age_year_element_key: key })],
+    );
+    // Arvet verdi ville gitt «ugyldig årstall»; tomt felt gir reservefeltet
+    const result = one(
+      evaluate(document, { "x.material": "plate", "x.doc": "none", "x.year_fallback": 1990 }),
+      "x.tg3",
+    );
+    expect(result.state).toBe("triggered");
+    expect(result.reasons[0]).toMatchObject({ year_element_key: "x.year_fallback", year: 1990 });
+  });
+
+  it("en egen nøkkel som heter __proto__ leses som et vanlig svar", () => {
+    const document = doc(
+      [rule("x.limit_rule", { suggested_outcome: OLD })],
+      [thresholdLimit("x.limit_rule", { element_key: "__proto__" })],
+    );
+    const answers = JSON.parse(`{"__proto__": ${LIMIT}, "x.unit": "wp"}`) as Answers;
+    expect(Object.hasOwn(answers, "__proto__")).toBe(true);
+    expect(one(evaluate(document, answers), "x.limit_rule").state).toBe("triggered");
   });
 });
 
@@ -1296,5 +1408,27 @@ describe("runRuleTestCases (motoren)", () => {
       failure: "rule_missing",
       result: null,
     });
+  });
+
+  it("B2.12 filtrerer ikke på active selv: en arkivert regel gir samme svar som fra motoren", () => {
+    const input = { "x.material": "plate", "x.doc": "none", "x.year": YEAR - PLATE_WITHOUT };
+    const document = caseDocument([testCase({ name: "Arkivert regel", input })]);
+    document.rules = document.rules.map((r) =>
+      r.key === "x.age_rule" ? { ...r, active: false } : r,
+    );
+    // Motoren selv gir ikke svar for regelen som er slått av
+    expect(evaluate(document, input).some((r) => r.rule_key === "x.age_rule")).toBe(false);
+    const [result] = runRuleTestCases({
+      template: SYSTEM,
+      document,
+      lifespans: LIFESPANS,
+      thresholds: THRESHOLDS,
+    });
+    expect(result).toMatchObject({ passed: false, failure: "rule_missing", result: null });
+  });
+
+  it("B2.12 kildeteksten: runRuleTestCases leser ikke active", () => {
+    const source = readFileSync(join(__dirname, "test-cases.ts"), "utf8");
+    expect(source).not.toMatch(/\.active\b/);
   });
 });
