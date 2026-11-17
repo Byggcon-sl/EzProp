@@ -61,6 +61,8 @@ describe("getEmployeeContext", () => {
       canEditOrders: true,
       // Kontoret ser badet skrivebeskyttet (docs/funksjoner/fase2a-badet-pc.md, Tilgang).
       canEditReports: false,
+      // Kontor ser grunnkoden, ikke begrunnelsesteksten (A450).
+      canSeeOverrideReasons: false,
       canManageContacts: false,
       officeId: office.id,
     });
@@ -76,6 +78,8 @@ describe("getEmployeeContext", () => {
     const context = await getEmployeeContext();
     expect(context?.officeId).toBeNull();
     expect(context?.canEditOrders).toBe(true);
+    // Admin ser alltid begrunnelsesteksten (regel 11).
+    expect(context?.canSeeOverrideReasons).toBe(true);
   });
 
   it("takstmann med innstillingen av (uten assignment.edit) gir canEditOrders = false", async () => {

@@ -250,7 +250,7 @@ export async function loadPublishSource(
       floor: { id: row.floorId, name: row.floorName },
       roomDoc,
       data,
-      state: buildRoomState({ template, roomDoc, data, inspectionYear }),
+      state: buildRoomState({ template, roomDoc, roomId: row.roomId, data, inspectionYear }),
     });
   }
 
@@ -335,20 +335,31 @@ export function holeDrillingOf(
   return { holeDrilling: "ok", holeReadingMissing: false };
 }
 
-/** Ett våtrom til sjekken. `requiresTg` er `gives_tg` på punktet i malen (A423). */
-function toCheckRoom(source: PublishSource, room: PublishRoomSource): PublishCheckRoom {
-  const { template } = source;
+/**
+ * Ett våtrom til sjekken, fra radene og tilstanden regnet av de samme funksjonene som rommet.
+ * `requiresTg` er `gives_tg` på punktet i malen (A423). Brukes både for hele rapporten og for
+ * tellemerket på rommet (`RoomRefresh.publishRoom`), så tallene alltid er like.
+ */
+export function publishCheckRoomOf(input: {
+  template: LockedTemplate;
+  roomDoc: RoomTemplateDocument;
+  roomId: string;
+  position: number;
+  answers: readonly FieldAnswer[];
+  checkpointStates: RoomState["checkpointStates"];
+}): PublishCheckRoom {
+  const { template } = input;
   const holeCheckpoint = holeCheckpointOf(template);
-  const stateByKey = new Map(room.state.checkpointStates.map((c) => [c.checkpointKey, c.state]));
+  const stateByKey = new Map(input.checkpointStates.map((c) => [c.checkpointKey, c.state]));
   const holeState = holeCheckpoint ? stateByKey.get(holeCheckpoint.checkpointKey) : undefined;
   return {
-    roomId: room.roomId,
-    position: room.position,
+    roomId: input.roomId,
+    position: input.position,
     isWetRoom: true,
-    ...holeDrillingOf(template, room.data.answers),
+    ...holeDrillingOf(template, input.answers),
     adjacentTgiuWithReason: holeState?.tgDirect === "IU" && !isBlank(holeState.tgiu?.reason),
     holeCheckpoint,
-    checkpoints: room.roomDoc.checkpoints.flatMap((checkpoint, position) => {
+    checkpoints: input.roomDoc.checkpoints.flatMap((checkpoint, position) => {
       const checkpointId = template.checkpointIdByKey.get(checkpoint.key);
       const state = stateByKey.get(checkpoint.key);
       if (!checkpointId || !state) return [];
@@ -363,6 +374,18 @@ function toCheckRoom(source: PublishSource, room: PublishRoomSource): PublishChe
       ];
     }),
   };
+}
+
+/** Ett våtrom i rapporten til sjekken. */
+function toCheckRoom(source: PublishSource, room: PublishRoomSource): PublishCheckRoom {
+  return publishCheckRoomOf({
+    template: source.template,
+    roomDoc: room.roomDoc,
+    roomId: room.roomId,
+    position: room.position,
+    answers: room.data.answers,
+    checkpointStates: room.state.checkpointStates,
+  });
 }
 
 /** Hvor et KI-mål står i rapporten: rom, punkt og avvik. */
@@ -434,7 +457,7 @@ export function aiTargetKey(target: AiTargetRef): string {
  */
 export function pendingAiSuggestionsOf(
   source: PublishSource,
-): (PublishCheckPendingAiSuggestion & { outputText: string })[] {
+): (PublishCheckPendingAiSuggestion & { outputText: string; field: AiTargetRef })[] {
   const places = aiPlaces(source);
   const after = source.latestRelease?.releasedAt ?? null;
   return source.aiRows.flatMap((row) => {
@@ -443,7 +466,7 @@ export function pendingAiSuggestionsOf(
     const place = places.get(aiTargetKey(row.targetRef));
     if (!place) return [];
     const { id: aiUsageId, outputText } = row;
-    return [{ aiUsageId, ...place, outputText: outputText ?? "" }];
+    return [{ aiUsageId, ...place, outputText: outputText ?? "", field: row.targetRef }];
   });
 }
 

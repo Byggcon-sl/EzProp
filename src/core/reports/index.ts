@@ -30,6 +30,7 @@ export {
   publishReport,
   startNewVersion,
 } from "./publish";
+export { HOLE_DRILLING_SIGNAL } from "./signals";
 export {
   REPORT_VALIDATION_CODES,
   ReportStorageError,

@@ -49,7 +49,7 @@ import {
   type RoomContext,
 } from "./context";
 import { guardReportErrors } from "./errors";
-import { NO_FINDINGS_OVER_LIMIT_SIGNAL, OWNER_REFUSED_SIGNAL } from "./signals";
+import { NO_FINDINGS_OVER_LIMIT_SIGNAL, OWNER_REFUSED_SIGNAL, publishCheckRoomOf } from "./signals";
 import type {
   AnswerValue,
   AnswerView,
@@ -334,6 +334,7 @@ export type RoomState = RoomRefresh & {
 export function buildRoomState(input: {
   template: LockedTemplate;
   roomDoc: RoomTemplateDocument;
+  roomId: string;
   data: RoomData;
   inspectionYear: number;
 }): RoomState {
@@ -580,6 +581,14 @@ export function buildRoomState(input: {
       done: countDoneCheckpoints(checkpointViews),
       total: checkpointViews.length,
     },
+    publishRoom: publishCheckRoomOf({
+      template,
+      roomDoc,
+      roomId: input.roomId,
+      position: 0,
+      answers: data.answers,
+      checkpointStates,
+    }),
     answers: answersView,
     ruleResults,
     checkpointStates,
@@ -599,6 +608,7 @@ export async function computeRoomRefresh(
   return buildRoomState({
     template,
     roomDoc,
+    roomId: context.room.id,
     data,
     inspectionYear: inspectionYearOf(context.inspectionAt, now).year,
   });
@@ -610,6 +620,7 @@ export function toRefresh(state: RoomState): RoomRefresh {
     checkpoints: state.checkpoints,
     suggestions: state.suggestions,
     progress: state.progress,
+    publishRoom: state.publishRoom,
   };
 }
 
@@ -639,7 +650,13 @@ async function readRoom(
   const roomDoc = roomDocumentOf(template.document, context.room.group);
   const inspectionYear: InspectionYear = inspectionYearOf(context.inspectionAt);
   const data = await loadRoomData(db, grant.organizationId, context.report.id, context.room.id);
-  const state = buildRoomState({ template, roomDoc, data, inspectionYear: inspectionYear.year });
+  const state = buildRoomState({
+    template,
+    roomDoc,
+    roomId: context.room.id,
+    data,
+    inspectionYear: inspectionYear.year,
+  });
 
   return {
     state: "started",
@@ -653,5 +670,6 @@ async function readRoom(
     checkpoints: state.checkpoints,
     suggestions: state.suggestions,
     progress: state.progress,
+    publishRoom: state.publishRoom,
   };
 }

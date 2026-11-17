@@ -1,6 +1,7 @@
 import type { Actor, EmployeeGrant } from "@/core/access";
 import type { DbExecutor } from "@/db/client";
 import type {
+  AiTargetRef,
   ChosenTg,
   ConstructionVulnerable,
   CostType,
@@ -187,6 +188,12 @@ export type PublishFindingView = PublishCheckFinding & {
   /** Til visning, lagres aldri sammen med funnet. */
   roomName: string | null;
   checkpointLabel: string | null;
+  /**
+   * Avviksnummeret på punktet (1, 2, … etter rekkefølgen på rommet) og avvikets TG, så teksten
+   * kan si «Avvik 1 (TG3)». Til visning, lagres aldri. `null` for funn uten avvik.
+   */
+  deviationNumber: number | null;
+  deviationTg: 2 | 3 | null;
   /** Bare for sperrer, og bare når rapporten har en tidligere utgivelse. Følger aldri med av seg selv. */
   previousOverride: PreviousOverride | null;
 };
@@ -195,6 +202,8 @@ export type PublishFindingView = PublishCheckFinding & {
 export type PendingAiSuggestionView = {
   aiUsageId: string;
   target: PublishCheckTarget;
+  /** Feltet forslaget gjelder (`ai_usage_log.target_ref`), så «Bruk» kan skrive i riktig felt. */
+  field: AiTargetRef;
   outputText: string;
 };
 
@@ -227,6 +236,13 @@ export type PublishCheckView =
       reportId: string;
       /** Versjonen neste publisering gir. */
       nextVersionNumber: number;
+      /**
+       * «Gyldig til» slik utgivelsen får den (ÅÅÅÅ-MM-DD): befaringsdato + ett år for versjon 1,
+       * arvet fra versjon 1 for senere versjoner. `null` uten befaringsdato.
+       */
+      validUntil: string | null;
+      /** Sann når `validUntil` er arvet fra versjon 1. */
+      validUntilInherited: boolean;
       findings: PublishFindingView[];
       summary: PublishCheckSummary;
       /** SHA-256 (hex) av `canonicalPublishCheck(findings)`. Sendes tilbake ved publisering. */

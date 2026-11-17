@@ -16,7 +16,21 @@ import { ROOM_ACTION_MESSAGES } from "./room-messages";
  */
 
 const DEVIATION = "0190a000-0000-7000-8000-0000000000d1";
-const REFRESH: RoomRefresh = { checkpoints: [], suggestions: [], progress: { done: 0, total: 8 } };
+const REFRESH: RoomRefresh = {
+  checkpoints: [],
+  suggestions: [],
+  progress: { done: 0, total: 8 },
+  publishRoom: {
+    roomId: "0190a000-0000-7000-8000-0000000000a1",
+    position: 0,
+    isWetRoom: true,
+    holeDrilling: "ok",
+    holeReadingMissing: false,
+    adjacentTgiuWithReason: false,
+    holeCheckpoint: null,
+    checkpoints: [],
+  },
+};
 
 const build: ChangeBuilder = (value, base) => ({
   table: "deviations",
