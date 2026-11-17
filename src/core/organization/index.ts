@@ -7,6 +7,7 @@ export {
   type EmployeeGrantWithOffice,
 } from "./employees";
 export {
+  countEmployeeActiveSessions,
   createEmployee,
   deactivateEmployee,
   getEmployeeForAdmin,
@@ -28,6 +29,7 @@ export {
   DuplicateOfficeNameError,
   DuplicateOrgNumberError,
   LastAdminError,
+  SelfDeactivationError,
 } from "./errors";
 export {
   addCertificationSchema,

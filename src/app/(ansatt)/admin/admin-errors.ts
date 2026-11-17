@@ -4,6 +4,7 @@ import {
   DuplicateOfficeNameError,
   DuplicateOrgNumberError,
   LastAdminError,
+  SelfDeactivationError,
 } from "@/core/organization";
 
 /** Feilene fra kjernen som adminområdet viser med egen tekst (sendes til `errorResult`). */
@@ -24,4 +25,8 @@ export const ADMIN_ERRORS: readonly KnownError[] = [
     message: "Det finnes alt en ansatt med denne e-posten.",
   },
   { error: LastAdminError, message: "Organisasjonen må ha minst én admin." },
+  {
+    error: SelfDeactivationError,
+    message: "Du kan ikke sette deg selv til «Har sluttet». Be en annen admin.",
+  },
 ];

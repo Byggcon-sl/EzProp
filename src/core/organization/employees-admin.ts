@@ -7,6 +7,7 @@ import {
   type EmployeeGrant,
 } from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
+import { listEmployeeSessions, revokeAllEmployeeSessions } from "@/core/auth/sessions-list";
 import { db, type DbExecutor } from "@/db/client";
 import {
   companies,
@@ -19,7 +20,12 @@ import {
   type EmployeeRole,
 } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
-import { DuplicateEmployeeEmailError, LastAdminError, isUniqueViolation } from "./errors";
+import {
+  DuplicateEmployeeEmailError,
+  LastAdminError,
+  SelfDeactivationError,
+  isUniqueViolation,
+} from "./errors";
 import {
   employeeCreateSchema,
   employeeRolesSchema,
@@ -487,7 +493,12 @@ export async function setEmployeeRoles(
 /**
  * Markerer at den ansatte har sluttet (`deactivated_at`). Personen avvises i neste tilgangssjekk,
  * men står fortsatt på gamle rapporter. Den siste aktive admin kan ikke markeres som sluttet
- * (`LastAdminError`). Har personen alt sluttet, skjer ingenting.
+ * (`LastAdminError`), og admin kan ikke markere seg selv (`SelfDeactivationError`, regel 11).
+ * Har personen alt sluttet, skjer ingenting.
+ *
+ * Personen logges også ut av alle enheter (A430, revisjonsrad med `reason: "deactivated"`) i
+ * samme transaksjon. Feiler utloggingen, rulles alt tilbake: personen er da ikke markert som
+ * sluttet, og øktene står.
  */
 export async function deactivateEmployee(actor: Actor, organizationId: string, employeeId: string) {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.manage");
@@ -511,6 +522,10 @@ export async function deactivateEmployee(actor: Actor, organizationId: string, e
     if (!row) throw new AccessDeniedError();
 
     if ((await countActiveAdmins(tx, grant)) === 0) throw new LastAdminError();
+    // Regel 11 og A430: admin setter aldri seg selv til «Har sluttet», heller ikke med en annen
+    // admin igjen. Sjekkes etter siste-admin-sjekken, så eneste admin fortsatt får
+    // `LastAdminError`. Kastet ruller tilbake oppdateringen over.
+    if (row.id === grant.employeeId) throw new SelfDeactivationError();
 
     await recordAuditEvent(tx, grant, {
       entityType: "employee",
@@ -518,8 +533,32 @@ export async function deactivateEmployee(actor: Actor, organizationId: string, e
       action: "deactivate",
       changes: { employeeId: row.id },
     });
+
+    const revoked = await revokeAllEmployeeSessions(
+      actor,
+      organizationId,
+      row.id,
+      { reason: "deactivated" },
+      tx,
+    );
+    if (!revoked.ok) throw new AccessDeniedError();
     return row;
   });
+}
+
+/**
+ * Antall aktive innlogginger (økter) for en ansatt i egen organisasjon, til bekreftelsen ved
+ * «Har sluttet» («Hen blir også logget ut av alle enheter (N).»). Bare admin. Fremmed, ukjent og
+ * slettet id gir `AccessDeniedError`, som `getEmployeeForAdmin`.
+ */
+export async function countEmployeeActiveSessions(
+  actor: Actor,
+  organizationId: string,
+  employeeId: string,
+): Promise<number> {
+  const result = await listEmployeeSessions(actor, organizationId, employeeId);
+  if (!result.ok) throw new AccessDeniedError();
+  return result.count;
 }
 
 /**

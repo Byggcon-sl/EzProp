@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { createRequire } from "node:module";
 import {
   expect,
   test,
@@ -14,6 +13,7 @@ import { assertLocalOrTestDatabase } from "./database-guard";
 import {
   e2eDatabaseUrl,
   ensureSampleOrgEmployee,
+  expectNoAxeViolations,
   logIn,
   SAMPLE_ADMIN_ONLY_EMAIL,
   uniqueSuffix,
@@ -320,36 +320,6 @@ async function gap(a: Locator, b: Locator): Promise<number> {
   const horizontal = Math.max(bb!.x - (ba!.x + ba!.width), ba!.x - (bb!.x + bb!.width));
   const vertical = Math.max(bb!.y - (ba!.y + ba!.height), ba!.y - (bb!.y + bb!.height));
   return Math.max(horizontal, vertical);
-}
-
-/** axe-core fra pakken lint-oppsettet alt har (ingen ny avhengighet). */
-function axeSource(): string {
-  const fromRoot = createRequire(`${process.cwd()}/package.json`);
-  const nextConfig = createRequire(fromRoot.resolve("eslint-config-next"));
-  const jsxA11y = createRequire(nextConfig.resolve("eslint-plugin-jsx-a11y"));
-  return jsxA11y.resolve("axe-core/axe.min.js");
-}
-
-async function expectNoAxeViolations(page: Page, where: string) {
-  await page.addScriptTag({ path: axeSource() });
-  const violations = await page.evaluate(async () => {
-    const axe = (
-      window as unknown as {
-        axe: {
-          run: (
-            o: unknown,
-          ) => Promise<{ violations: { id: string; nodes: { target: string[] }[] }[] }>;
-        };
-      }
-    ).axe;
-    const result = await axe.run({
-      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
-    });
-    return result.violations.map(
-      (v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`,
-    );
-  });
-  expect(violations, `axe uten feil (${where})`).toEqual([]);
 }
 
 /** Holder igjen eller stopper lagringskallene (server actions er POST til siden). */
