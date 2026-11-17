@@ -331,3 +331,201 @@ describe("ai_usage_log: redacted_count og blocked (V6)", () => {
     }
   });
 });
+
+/*
+ * «KI i veien» (docs/funksjoner/fase2a-ki-i-veien-testplan.md avsnitt 3, K3.1–K3.3, K3.6).
+ * Migrering `0037_ki-i-veien`: nye kolonner, utfallet `stopped` med vaktkodene, CHECK på
+ * kandidatene og sammendraget, og indeksene. Alle verdier er oppdiktet.
+ */
+describe("KI i veien: kolonner, CHECK og indekser (K3.1–K3.3)", () => {
+  async function columnsOf(table: string) {
+    const rows = (await db.execute(sql`
+      select column_name, data_type, is_nullable from information_schema.columns
+      where table_schema = 'public' and table_name = ${table}`)) as unknown as ColumnInfo[];
+    return new Map(rows.map((row) => [row.column_name, row]));
+  }
+
+  async function okRow() {
+    const { orgA, employeeA } = await twoOrganizations();
+    const row = await createAiUsageLog(orgA.id, {
+      employeeId: employeeA.id,
+      feature: "phrase_suggest",
+      outputText: null,
+    });
+    return { orgA, employeeA, row };
+  }
+
+  const ref = (id = randomUUID()) => ({ source: "template_outcome", id });
+
+  async function setColumns(id: string, values: Record<string, unknown>) {
+    const set = Object.entries(values).map(([column, value]) =>
+      value === null
+        ? sql`${sql.identifier(column)} = null`
+        : typeof value === "object"
+          ? sql`${sql.identifier(column)} = ${JSON.stringify(value)}::jsonb`
+          : sql`${sql.identifier(column)} = ${value}`,
+    );
+    await db.execute(sql`update ai_usage_log set ${sql.join(set, sql`, `)} where id = ${id}`);
+  }
+
+  it("K3.1 de nye kolonnene finnes og tåler tom verdi", async () => {
+    const log = await columnsOf("ai_usage_log");
+    for (const column of ["candidate_refs", "chosen_candidate"]) {
+      expect(log.get(column)?.data_type, column).toBe("jsonb");
+      expect(log.get(column)?.is_nullable, column).toBe("YES");
+    }
+    const report = await columnsOf("reports");
+    expect(report.get("summary_text")?.data_type).toBe("text");
+    expect(report.get("summary_text")?.is_nullable).toBe("YES");
+    expect(report.get("summary_basis")?.data_type).toBe("jsonb");
+    expect(report.get("summary_basis")?.is_nullable).toBe("YES");
+  });
+
+  it("K3.1 jsonb_typeof: candidate_refs er en liste, chosen_candidate et objekt", async () => {
+    const { row } = await okRow();
+    const first = ref();
+    await setColumns(row.id, { candidate_refs: [first, ref()] });
+    await setColumns(row.id, { status: "accepted", chosen_candidate: first });
+    const [types] = (await db.execute(sql`
+      select jsonb_typeof(candidate_refs) as refs, jsonb_typeof(chosen_candidate) as chosen
+      from ai_usage_log where id = ${row.id}`)) as unknown as { refs: string; chosen: string }[];
+    expect(types).toEqual({ refs: "array", chosen: "object" });
+  });
+
+  it.each(["tg_guard", "number_guard", "coverage_guard", "placeholder_guard"])(
+    "K3.2 stopped godtas med %s, mengde og kostnad og uten status",
+    async (code) => {
+      const { orgA, employeeA } = await twoOrganizations();
+      const row = await createAiUsageLog(orgA.id, {
+        employeeId: employeeA.id,
+        outcome: "stopped",
+        errorCode: code,
+        status: null,
+        outputText: "Stoppet svar.",
+        tokensIn: 12,
+        tokensOut: 4,
+        cost: "0.0100",
+      });
+      expect(row.outcome).toBe("stopped");
+    },
+  );
+
+  it.each([
+    { name: "uten error_code", values: { errorCode: null, status: null } },
+    { name: "med en feilkode fra leverandøren", values: { errorCode: "timeout", status: null } },
+    { name: "med ukjent vaktkode", values: { errorCode: "word_guard", status: null } },
+    { name: "med status satt", values: { errorCode: "tg_guard", status: "suggested" } },
+  ])("K3.2 stopped $name avvises", async ({ values }) => {
+    const { orgA, employeeA } = await twoOrganizations();
+    await expectRejected(() =>
+      createAiUsageLog(orgA.id, {
+        employeeId: employeeA.id,
+        outcome: "stopped",
+        outputText: "Stoppet svar.",
+        ...(values as AiUsageLogOverrides),
+      }),
+    );
+  });
+
+  it("K3.2 en vaktkode ved error avvises", async () => {
+    const { orgA, employeeA } = await twoOrganizations();
+    await expectRejected(() =>
+      createAiUsageLog(orgA.id, {
+        employeeId: employeeA.id,
+        outcome: "error",
+        errorCode: "tg_guard",
+      }),
+    );
+  });
+
+  it("K3.2a candidate_refs: liste med 1–5 ved ok", async () => {
+    const { row } = await okRow();
+    await setColumns(row.id, { candidate_refs: [ref(), ref(), ref(), ref(), ref()] });
+    await expectRejected(() => setColumns(row.id, { candidate_refs: [] }));
+    await expectRejected(() =>
+      setColumns(row.id, { candidate_refs: Array.from({ length: 6 }, () => ref()) }),
+    );
+    await expectRejected(() => setColumns(row.id, { candidate_refs: ref() }));
+  });
+
+  it("K3.2a candidate_refs er tom på en no_match-rad", async () => {
+    const { orgA, employeeA } = await twoOrganizations();
+    const row = await createAiUsageLog(orgA.id, { employeeId: employeeA.id, outcome: "no_match" });
+    await expectRejected(() => setColumns(row.id, { candidate_refs: [ref()] }));
+  });
+
+  it("K3.2a chosen_candidate krever accepted og må stå i candidate_refs", async () => {
+    const { row } = await okRow();
+    const first = ref();
+    await setColumns(row.id, { candidate_refs: [first] });
+    // Status suggested: ikke lov
+    await expectRejected(() => setColumns(row.id, { chosen_candidate: first }));
+    // Ikke blant de viste: ikke lov
+    await expectRejected(() => setColumns(row.id, { status: "accepted", chosen_candidate: ref() }));
+    await setColumns(row.id, { status: "accepted", chosen_candidate: first });
+  });
+
+  it.each([
+    { name: "{}", value: {} },
+    { name: '{"id":"x"} uten source', value: { id: "x" } },
+    { name: "ukjent source", value: { source: "free_text", id: "x" } },
+    { name: "en liste", value: [{ source: "template_outcome", id: "x" }] },
+    { name: "id som tall", value: { source: "template_outcome", id: 7 } },
+    { name: "ekstra nøkkel", value: { source: "template_outcome", id: "x", text: "Tekst" } },
+  ])("K3.2a chosen_candidate = $name avvises", async ({ value }) => {
+    const { row } = await okRow();
+    await setColumns(row.id, { candidate_refs: [{ source: "template_outcome", id: "x" }] });
+    await expectRejected(() => setColumns(row.id, { status: "accepted", chosen_candidate: value }));
+  });
+
+  it("K3.2a summary_text over 10 000 tegn og summary_basis over 200 funn avvises", async () => {
+    const { orgA } = await twoOrganizations();
+    const report = await createReportRow(orgA.id);
+    await db.execute(
+      sql`update reports set summary_text = ${"a".repeat(10000)} where id = ${report.id}`,
+    );
+    await expectRejected(() =>
+      db.execute(
+        sql`update reports set summary_text = ${"a".repeat(10001)} where id = ${report.id}`,
+      ),
+    );
+    const entry = { source: "deviation", id: randomUUID(), group: "tg2", rowVersion: 1 };
+    await db.execute(
+      sql`update reports set summary_basis = ${JSON.stringify(Array.from({ length: 200 }, () => entry))}::jsonb where id = ${report.id}`,
+    );
+    await expectRejected(() =>
+      db.execute(
+        sql`update reports set summary_basis = ${JSON.stringify(Array.from({ length: 201 }, () => entry))}::jsonb where id = ${report.id}`,
+      ),
+    );
+    await expectRejected(() =>
+      db.execute(sql`update reports set summary_basis = '{}'::jsonb where id = ${report.id}`),
+    );
+  });
+
+  it("K3.3 indeksene for målet og «Mest brukt» finnes med predikatet", async () => {
+    const rows = (await db.execute(sql`
+      select indexname, indexdef from pg_indexes
+      where schemaname = 'public' and tablename = 'ai_usage_log'`)) as unknown as {
+      indexname: string;
+      indexdef: string;
+    }[];
+    const byName = new Map(rows.map((row) => [row.indexname, row.indexdef]));
+    const target = byName.get("ai_usage_log_target_idx") ?? "";
+    expect(target).toMatch(/\(organization_id, feature, target_ref\)/u);
+    expect(target).toMatch(/WHERE \(deleted_at IS NULL\)/u);
+    const chosen = byName.get("ai_usage_log_chosen_candidate_idx") ?? "";
+    expect(chosen).toMatch(/\(organization_id, feature\)/u);
+    expect(chosen).toMatch(/chosen_candidate IS NOT NULL/u);
+    expect(chosen).toMatch(/deleted_at IS NULL/u);
+  });
+
+  it("K3.6 ingen ny tabell: tenant-tabellene har ingen KI-tabell utover ai_usage_log", () => {
+    const source = readFileSync(
+      join(__dirname, "..", "..", "..", "tests", "tenant-tables.ts"),
+      "utf8",
+    );
+    const aiTables = [...source.matchAll(/table:\s*"(ai_[a-z_]+)"/gu)].map((match) => match[1]);
+    expect(aiTables).toEqual(["ai_usage_log"]);
+  });
+});
