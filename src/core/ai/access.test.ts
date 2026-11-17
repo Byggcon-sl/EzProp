@@ -464,7 +464,9 @@ describe("tilgang per rolle: vask før KI (V7.4)", () => {
     const request = validRequest({ assignmentId, fields: { text: TEXT } });
     const result = await requestSuggestion(person.grant, request);
     expect(result.kind).toBe("suggestion");
-    if (result.kind === "suggestion") expect(result.text).not.toContain("Testesen");
-    expect((await aiRow(request.requestId))!.outcome).toBe("ok");
+    // A466: raden beholder plassholderne; teksten til klienten har verdiene tilbake
+    const row = (await aiRow(request.requestId))!;
+    expect(row.output_text).not.toContain("Testesen");
+    expect(row.outcome).toBe("ok");
   });
 });

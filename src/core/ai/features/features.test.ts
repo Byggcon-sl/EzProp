@@ -532,7 +532,7 @@ describe("KI i veien: funksjonsdefinisjonene (K1.27–K1.31)", () => {
       expect(prompt, version).toMatch(/«bør» og «må»/u);
       expect(prompt, version).toMatch(/badet er i god stand/u);
       expect(prompt, version).not.toMatch(/\b(antas|trolig)\b/iu);
-      expect(prompt, version).not.toMatch(/claude|gpt|sonnet|opus|haiku|gemini|llama/iu);
+      // Modellnavn prøves for hele repoet i tests/no-model-names.test.ts
     }
     const summary = AI_PROMPTS["summary_draft.v1"] ?? "";
     expect(summary).toMatch(/«mindre», «alvorlig» eller «vesentlig»/u);
