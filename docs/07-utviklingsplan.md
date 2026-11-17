@@ -1,6 +1,6 @@
 # EzProp – utviklingsplan
 
-Sist oppdatert: 13.11.2026
+Sist oppdatert: 16.11.2026
 Eier: Ståle Limstrand (produkteier). Prosjektlederen i agentlaget holder planen ved like.
 
 **Dette er det ene levende plandokumentet.** Det viser bare det som gjelder nå og det som kommer.
@@ -210,7 +210,7 @@ Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full 
   - [ ] Bilder uten personer til de fire testoppdragene, i samme seed-steg (`pnpm db:seed:testoppdrag`), når bildemodellen finnes (A134)
 - [ ] Sammendrag (skrives av takstmannen), **oppsummering per bygningsdel** som lagres og kan redigeres (innspill D12), og oversikt over TG
 - [ ] **KI: utkast til oppsummering per bygningsdel og til sammendraget,** laget fra godkjente funn og sortert etter alvor. Takstmannen godkjenner.
-- [ ] Papirkurv og angre for sletting
+- [x] Papirkurv og angre for sletting (PR for branch `papirkurv`, 17.11.2026)
 - [ ] **Fart:** krav til hvor rask rapporten skal være på PC, og en prøve med en stor rapport (mange bygninger og bilder): ett rullefelt, og innhold som ikke hopper mens det lastes. (Svar 10.11.2026, nr. 50)
 - [ ] **KI: e-post blir oppdragsforslag.** En bestilling på e-post limes inn og blir et utkast til oppdrag (eller til tilbud, når det er en forespørsel) som kontoret kontrollerer og lagrer.
 - [ ] **Reklamasjonskoblingen:** oppdrag → henvendelse eller reklamasjon → ny befaring, som kobling i datamodellen. (Svar 10.11.2026, nr. 38)
@@ -240,6 +240,9 @@ Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full 
 ### Fra forbedreren
 
 - [ ] **Mine innlogginger** (forbedreren 17.11.2026, fra «Rydding av innloggingsdata»): under profilen ser den ansatte enhetene hen er logget inn på (for eksempel «iPad, Safari, sist brukt i dag 08:12», med «denne enheten» merket), og logger ut av en enhet hen ikke kjenner igjen med ett trykk. Admin ser samme liste per ansatt og har «Logg ut av alle enheter» når noen slutter eller mister iPaden. Bygger på tabellen `sessions` (som nå ryddes) og Better Auths tilbakekalling av økter; ingen ny tabell, ingen KI (IP og nettleser er persondata). Å tømme data på iPaden hører til «Sperring av iPader» under «Klar for drift».
+
+**Fra forbedreren**
+- [ ] **Historikk på oppdraget, med KI-sammendrag av endringer** (forbedreren 16.11.2026, fra papirkurven): en fane «Historikk» på oppdraget viser en tidslinje over hvem som la til, endret, fjernet og hentet tilbake hva, fra revisjonsloggen og hendelsene som finnes. Den kan filtreres på bygning, etasje, rom og person, og fjernede ting har «Gjenopprett» (samme kjernefunksjon som papirkurven). Leder og admin bruker den ved reklamasjoner. KI lager et utkast til «hva er endret siden forrige versjon» eller «siden i går» ut fra strukturerte hendelser, uten navn (ansatte vises som rolle eller «du»); takstmannen godtar, endrer eller avviser, og det logges i `ai_usage_log`. Utkastet blir grunnlaget for kommentaren om ny versjon i sjekken før publisering. Ingen nye tabeller; indeks på (`organization_id`, `assignment_id`, `created_at`). Tilgang `organization.read`; reklamasjonssaker bare for leder og admin (regel 12); tenant-isolasjon testet.
 
 **Ferdig når:** Fagrådet har gått gjennom malen og reglene i et ekte skjermbilde og godkjent tekstene der, og Ståle godtar en PDF (også testutskriften med 50 bilder, under 8 MB).
 

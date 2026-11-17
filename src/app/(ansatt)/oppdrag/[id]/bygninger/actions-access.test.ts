@@ -54,6 +54,7 @@ const {
   saveRoomAction,
   removeRoomAction,
   addRoomsAction,
+  restoreStructureAction,
 } = await import("./actions");
 
 const TABLES = ["report_buildings", "floors", "floor_areas", "rooms"] as const;
@@ -132,6 +133,26 @@ async function setup() {
     name: "Garasje test",
   });
   const emptyFloor = await createFloor(org.id, { buildingId: building.id, name: "Kjeller" });
+  // Papirkurven: en fjernet bygning, en fjernet etasje og et fjernet rom (fjernet av admin)
+  const removedAt = new Date("2026-11-16T10:00:00Z");
+  const removedBuilding = await createBuilding(org.id, {
+    assignmentId: assignment.id,
+    name: "Anneks fjernet test",
+    deletedAt: removedAt,
+    deletedBy: adminEmployee.id,
+  });
+  const removedFloor = await createFloor(org.id, {
+    buildingId: building.id,
+    name: "Loft fjernet test",
+    deletedAt: removedAt,
+    deletedBy: adminEmployee.id,
+  });
+  const removedRoom = await createRoom(org.id, {
+    floorId: floor.id,
+    name: "Bad fjernet test",
+    deletedAt: removedAt,
+    deletedBy: adminEmployee.id,
+  });
 
   mocks.getEmployeeContext.mockResolvedValue({
     actor: inspector,
@@ -143,7 +164,19 @@ async function setup() {
     officeId: null,
   });
 
-  return { org, adminEmployee, assignment, building, floor, room, emptyBuilding, emptyFloor };
+  return {
+    org,
+    adminEmployee,
+    assignment,
+    building,
+    floor,
+    room,
+    emptyBuilding,
+    emptyFloor,
+    removedBuilding,
+    removedFloor,
+    removedRoom,
+  };
 }
 
 describe("6.4 takstmann uten skriverett får NO_ACCESS fra kjernen", () => {
@@ -295,5 +328,81 @@ describe("6.4 takstmann uten skriverett får NO_ACCESS fra kjernen", () => {
       .from(reportBuildings)
       .where(eq(reportBuildings.name, NEW_BUILDING));
     expect(row!.n).toBe(1);
+  });
+});
+
+describe("8 papirkurv: «Angre» og «Gjenopprett» med ekte kjerne", () => {
+  it("8.1 takstmann uten skriverett: alle tre gir fast tekst, og ingenting hentes tilbake eller logges", async () => {
+    const { org, removedBuilding, removedFloor, removedRoom } = await setup();
+    const before = await snapshot(org.id);
+    const countsBefore = await eventAndAuditCounts();
+
+    for (const [type, id] of [
+      ["building", removedBuilding.id],
+      ["floor", removedFloor.id],
+      ["room", removedRoom.id],
+    ] as const) {
+      for (const how of ["undo", "trash"] as const) {
+        const result = await restoreStructureAction({ type, id, how });
+        expect(result, `${type} ${how}`).toEqual({ ok: false, message: NO_ACCESS });
+      }
+    }
+
+    expect(await snapshot(org.id)).toBe(before);
+    expect(await eventAndAuditCounts()).toEqual(countsBefore);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+    expect(mocks.log.error).not.toHaveBeenCalled();
+  });
+
+  it("8.1 organisasjonen fra økten: rom i en annen organisasjon gir avslag, selv om kalleren sender organisasjonen", async () => {
+    const { org, removedRoom } = await setup();
+    await db
+      .update(organizations)
+      .set({ settings: { "access.inspectors_edit_all": true } })
+      .where(eq(organizations.id, org.id));
+    // Den andre organisasjonen har sin egen innlogging; takstmannen i org prøver rommet der.
+    const other = await createOrganization("Annet testfirma");
+    const otherAssignment = await createAssignment(other.id);
+    const otherBuilding = await createBuilding(other.id, { assignmentId: otherAssignment.id });
+    const otherFloor = await createFloor(other.id, { buildingId: otherBuilding.id });
+    const otherRoom = await createRoom(other.id, {
+      floorId: otherFloor.id,
+      deletedAt: new Date("2026-11-16T10:00:00Z"),
+    });
+
+    const denied = await restoreStructureAction({
+      type: "room",
+      id: otherRoom.id,
+      how: "trash",
+      organizationId: other.id,
+    } as never);
+    expect(denied).toEqual({ ok: false, message: NO_ACCESS });
+    const [stillRemoved] = (await db.execute(
+      sql`select deleted_at from rooms where id = ${otherRoom.id}`,
+    )) as unknown as { deleted_at: Date | null }[];
+    expect(stillRemoved!.deleted_at).not.toBeNull();
+
+    // Kontrollen: eget rom kommer tilbake, og begge sidene friskes opp
+    const ok = await restoreStructureAction({ type: "room", id: removedRoom.id, how: "trash" });
+    expect(ok).toMatchObject({ ok: true, changed: true });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/oppdrag/[id]/bygninger", "page");
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/oppdrag/[id]", "page");
+  });
+
+  it("«Fjern» på etasje med rom er ett trykk og svarer med slettegruppen (A414)", async () => {
+    const { org, floor, room } = await setup();
+    await db
+      .update(organizations)
+      .set({ settings: { "access.inspectors_edit_all": true } })
+      .where(eq(organizations.id, org.id));
+
+    const state = await removeFloorAction(initialFormState, form({ floorId: floor.id }));
+    expect(state.message).toBeNull();
+    expect(state.removed).toEqual(
+      expect.arrayContaining([
+        { type: "floor", id: floor.id },
+        { type: "room", id: room.id },
+      ]),
+    );
   });
 });
