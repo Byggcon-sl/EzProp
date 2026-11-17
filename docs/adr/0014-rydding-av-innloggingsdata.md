@@ -66,7 +66,8 @@ Derfor er unntaket ført som agentbeslutning (A419) med «hvordan det kan endres
 ## Drift
 
 - **Planlagte kjøringer i GitHub kan bli forsinket eller falle ut.** Det er ufarlig: jobben er idempotent, og neste kjøring tar det som ble stående.
-- **GitHub kan slå av planlagte kjøringer** etter lang tid uten aktivitet i repoet (ifølge GitHubs dokumentasjon 60 dager, for offentlige repoer). Det vises som et varsel på arbeidsflyten under Actions, og siste kjøring er gammel. Den slås på igjen med «Enable workflow» samme sted.
+- **Arbeidsflyten** er `.github/workflows/rydd-innloggingsdata.yml` («Rydding av innloggingsdata»), hver natt kl. 02:17 UTC og manuelt med «Run workflow».
+- **GitHub kan slå av planlagte kjøringer** etter lang tid uten aktivitet i repoet: ifølge GitHubs dokumentasjon i offentlige repoer når det ikke har vært aktivitet på 60 dager. Det vises som et varsel på arbeidsflyten under Actions, og siste kjøring er gammel. Den slås på igjen med «Enable workflow» samme sted.
 - **Slik ser man at den gikk:** kjøringen i Actions er grønn, og appens logg har infolinjen med antall per tabell.
 - **Kostnad:** noen sekunder av de inkluderte Actions-minuttene per døgn. Ingenting i Azure.
 - **Hemmeligheten** legges inn av Ståle som GitHub-secret, og utrullingen fører den til nøkkelboksen og appen (samme vei som `ANTHROPIC_API_KEY`). Uten hemmelighet er endepunktet av, og arbeidsflyten hopper over uten feil.

@@ -87,6 +87,12 @@ param msLoginClientSecret string
 @secure()
 param anthropicApiKey string
 
+// Rydding av innloggingsdata (ADR 0014). Driftshemmeligheten som den planlagte arbeidsflyten sender til
+// POST /api/intern/rydd-innloggingsdata. Tom betyr at endepunktet er av (svarer 404).
+@description('Driftshemmelighet for rydding av innloggingsdata. Tom betyr ryddingen av.')
+@secure()
+param authCleanupSecret string
+
 @description('Nøkkelboks (Key Vault) for hemmeligheter, ADR 0005. Av som standard; Ståle slår på med GitHub-variabelen ENABLE_KEY_VAULT.')
 param enableKeyVault bool = false
 
@@ -102,6 +108,7 @@ var defaultAppUrl = 'https://${appName}.azurewebsites.net'
 var betterAuthUrl = empty(appHostname) ? defaultAppUrl : 'https://${appHostname}'
 var emailConfigured = !empty(msGraphTenantId) && !empty(msGraphClientId) && !empty(msGraphClientSecret) && !empty(mailFrom)
 var aiConfigured = !empty(anthropicApiKey)
+var authCleanupConfigured = !empty(authCleanupSecret)
 var loginConfigured = !empty(msLoginTenantId) && !empty(msLoginClientId) && !empty(msLoginClientSecret)
 
 // Appen snakker med databasen over TLS og sjekker sertifikatet (verify-full, ikke require).
@@ -146,6 +153,13 @@ var loginAppSettings = loginConfigured
 var aiAppSettings = aiConfigured
   ? [
       { name: 'ANTHROPIC_API_KEY', value: enableKeyVault ? '@Microsoft.KeyVault(SecretUri=${kvAnthropicApiKey!.properties.secretUri})' : anthropicApiKey }
+    ]
+  : []
+
+// Uten hemmelighet settes innstillingen ikke i det hele tatt (ryddingen av).
+var authCleanupAppSettings = authCleanupConfigured
+  ? [
+      { name: 'AUTH_CLEANUP_SECRET', value: enableKeyVault ? '@Microsoft.KeyVault(SecretUri=${kvAuthCleanupSecret!.properties.secretUri})' : authCleanupSecret }
     ]
   : []
 
@@ -250,7 +264,7 @@ resource app 'Microsoft.Web/sites@2024-04-01' = {
       ftpsState: 'Disabled'
       http20Enabled: true
       healthCheckPath: '/api/helse'
-      appSettings: concat(baseAppSettings, emailAppSettings, loginAppSettings, aiAppSettings)
+      appSettings: concat(baseAppSettings, emailAppSettings, loginAppSettings, aiAppSettings, authCleanupAppSettings)
     }
   }
 }
@@ -340,6 +354,14 @@ resource kvAnthropicApiKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (
   name: 'anthropic-api-key'
   properties: {
     value: anthropicApiKey
+  }
+}
+
+resource kvAuthCleanupSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (enableKeyVault && authCleanupConfigured) {
+  parent: vault
+  name: 'auth-cleanup-secret'
+  properties: {
+    value: authCleanupSecret
   }
 }
 
