@@ -118,6 +118,16 @@ const textPairs: [text: string, background: string, usage: string][] = [
   // Tilbud (docs/funksjoner/fase2a-tilbud-design.md avsnitt 10)
   ["watch-text", "white", "dublettlinjen over «Gjør om til oppdrag»"],
   ["fjord-dark", "sand", "lenken i kvitteringen (Notice med lenke)"],
+  // Badet på PC (docs/funksjoner/fase2a-badet-pc-design.md avsnitt 20)
+  ["night", "sand", "advarsel (Warning) og forslag fra reglene"],
+  ["stone", "sand", "«Forslag fra reglene» og kilde i forslagskortet"],
+  ["stone", "white", "linjen over overskriften og befaringsåret i toppfeltet"],
+  ["white", "night", "valgt pille (ChoiceButtons)"],
+  ...SYNC_STATES.map((state): [string, string, string] => [
+    `sync-${state}-text`,
+    "white",
+    "lagrestatus per felt uten flate",
+  ]),
 ];
 
 /** Kanter og fokusramme: minst 3:1 (WCAG 1.4.11). */

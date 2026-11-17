@@ -1,6 +1,16 @@
 "use client";
 
-import { useActionState, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
+import {
+  createContext,
+  useActionState,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type {
   AreaSum,
   AssignmentBuildings,
@@ -11,7 +21,7 @@ import type {
   RoomDetail,
 } from "@/core/buildings";
 import { FLOOR_NAME_SUGGESTIONS, suggestFloor, type RoomType } from "@/core/buildings/codes";
-import { Button } from "@/shared/ui/button";
+import { Button, buttonVariants } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { Checkbox, Field, Input, Select, Textarea } from "@/shared/ui/form";
 import { FormErrors, SubmitButton } from "../../../form-parts";
@@ -42,7 +52,31 @@ export type Codes = {
   commonRoomTypes: RoomType[];
   areaTypes: CodeOption[];
   methods: CodeOption[];
+  /** Romtypene i gruppen våtrom. Bare de får «Fyll ut badet» (2a-2). */
+  wetRoomTypes: string[];
 };
+
+/**
+ * Det lenken «Fyll ut badet» trenger (docs/funksjoner/fase2a-badet-pc.md Omfang 12). `canEditReports`
+ * styrer bare teksten; kjernen sjekker tilgangen på badet.
+ */
+const ReportLinkContext = createContext<{ assignmentId: string; canEditReports: boolean } | null>(
+  null,
+);
+
+/** «Fyll ut badet» (eller «Se badet» uten `report.edit`) på et våtrom. Andre rom får ingen lenke. */
+function WetRoomLink({ room, codes }: { room: RoomDetail; codes: Codes }) {
+  const context = useContext(ReportLinkContext);
+  if (!context || !codes.wetRoomTypes.includes(room.roomType)) return null;
+  return (
+    <Link
+      href={`/oppdrag/${context.assignmentId}/rom/${room.id}`}
+      className={buttonVariants({ variant: "secondary", size: "md" })}
+    >
+      {context.canEditReports ? "Fyll ut badet" : "Se badet"}
+    </Link>
+  );
+}
 
 const FLOOR_NAMES_LIST = "floor-name-suggestions";
 
@@ -580,14 +614,17 @@ function RoomItem({
                 .join(" · ")}
             </p>
           </div>
-          {canEdit && (
-            <div className="flex flex-wrap items-start gap-3">
-              <Button variant="secondary" onClick={() => setEditing(true)}>
-                Endre
-              </Button>
-              <RemoveForm name="roomId" id={room.id} action={removeRoomAction} />
-            </div>
-          )}
+          <div className="flex flex-wrap items-start gap-3">
+            <WetRoomLink room={room} codes={codes} />
+            {canEdit && (
+              <>
+                <Button variant="secondary" onClick={() => setEditing(true)}>
+                  Endre
+                </Button>
+                <RemoveForm name="roomId" id={room.id} action={removeRoomAction} />
+              </>
+            )}
+          </div>
         </div>
       )}
     </li>
@@ -845,11 +882,14 @@ export function BuildingsEditor({
   assignmentId,
   data,
   canEdit,
+  canEditReports = false,
   codes,
 }: {
   assignmentId: string;
   data: AssignmentBuildings;
   canEdit: boolean;
+  /** Teksten på lenken til badet. Selve sjekken skjer i kjernen. */
+  canEditReports?: boolean;
   codes: Codes;
 }) {
   // Én dialog for hele siden (T-0058): id-en til etasjen som er åpen, og en teller per åpning.
@@ -863,65 +903,67 @@ export function BuildingsEditor({
   const addRoomsFloor = findFloor(data, addRooms?.floorId ?? null);
 
   return (
-    <div className="space-y-6">
-      <datalist id={FLOOR_NAMES_LIST}>
-        {FLOOR_NAME_SUGGESTIONS.map((name) => (
-          <option key={name} value={name} />
-        ))}
-      </datalist>
+    <ReportLinkContext.Provider value={{ assignmentId, canEditReports }}>
+      <div className="space-y-6">
+        <datalist id={FLOOR_NAMES_LIST}>
+          {FLOOR_NAME_SUGGESTIONS.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
 
-      {!data.hasProperty && (
-        <p className="rounded-xl bg-watch-fill px-4 py-3 text-watch-text">
-          Legg inn eiendommen først.
-        </p>
-      )}
+        {!data.hasProperty && (
+          <p className="rounded-xl bg-watch-fill px-4 py-3 text-watch-text">
+            Legg inn eiendommen først.
+          </p>
+        )}
 
-      {data.buildings.length === 0 ? (
-        <p className="text-slate-600">Ingen bygninger er lagt inn ennå.</p>
-      ) : (
-        data.buildings.map((building) => (
-          <BuildingCard
-            key={building.id}
-            building={building}
-            assignmentId={assignmentId}
-            data={data}
-            canEdit={canEdit}
-            codes={codes}
-            onAddRooms={openAddRooms}
-          />
-        ))
-      )}
-
-      {canEdit && (
-        <AddRoomsDialog
-          floor={addRoomsFloor}
-          session={addRooms?.session ?? 0}
-          housingType={data.housingType}
-          presets={codes.roomPresets}
-          commonRoomTypes={codes.commonRoomTypes}
-          onClose={closeAddRooms}
-        />
-      )}
-
-      {canEdit && data.hasProperty && (
-        <AddSection label="Legg til bygning">
-          {(close) => (
-            <BuildingForm
-              idPrefix="new-building"
+        {data.buildings.length === 0 ? (
+          <p className="text-slate-600">Ingen bygninger er lagt inn ennå.</p>
+        ) : (
+          data.buildings.map((building) => (
+            <BuildingCard
+              key={building.id}
+              building={building}
               assignmentId={assignmentId}
-              buildingId={null}
-              initialName=""
-              onDone={close}
+              data={data}
+              canEdit={canEdit}
+              codes={codes}
+              onAddRooms={openAddRooms}
             />
-          )}
-        </AddSection>
-      )}
+          ))
+        )}
 
-      {data.buildings.length > 0 && (
-        <Card>
-          <SumLine label="Sum BRA totalt" sum={data.sum} />
-        </Card>
-      )}
-    </div>
+        {canEdit && (
+          <AddRoomsDialog
+            floor={addRoomsFloor}
+            session={addRooms?.session ?? 0}
+            housingType={data.housingType}
+            presets={codes.roomPresets}
+            commonRoomTypes={codes.commonRoomTypes}
+            onClose={closeAddRooms}
+          />
+        )}
+
+        {canEdit && data.hasProperty && (
+          <AddSection label="Legg til bygning">
+            {(close) => (
+              <BuildingForm
+                idPrefix="new-building"
+                assignmentId={assignmentId}
+                buildingId={null}
+                initialName=""
+                onDone={close}
+              />
+            )}
+          </AddSection>
+        )}
+
+        {data.buildings.length > 0 && (
+          <Card>
+            <SumLine label="Sum BRA totalt" sum={data.sum} />
+          </Card>
+        )}
+      </div>
+    </ReportLinkContext.Provider>
   );
 }

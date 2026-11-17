@@ -20,6 +20,11 @@ export type EmployeeContext = {
   canReadClaims: boolean;
   /** Bare til å vise «Registrer reklamasjon» og skjemaet. Selve sjekken skjer i kjernen. */
   canManageClaims: boolean;
+  /**
+   * Bare til å vise «Fyll ut badet» eller «Se badet» på rommene (`report.edit`). Selve sjekken
+   * skjer i `@/core/reports` for hver handling.
+   */
+  canEditReports: boolean;
   /** Bare til å vise skjemaet for nullpunkt og bryter i /statistikk/tid. Sjekken skjer i kjernen. */
   canManageOrganization: boolean;
   /** Bare til å vise menylenken «Statistikk». Sjekken skjer i kjernen. */
@@ -46,6 +51,7 @@ export async function getEmployeeContext(): Promise<EmployeeContext | null> {
     actor,
     organizationId: found.grant.organizationId,
     canEditOrders: grantHasPermission(found.grant, "assignment.edit"),
+    canEditReports: grantHasPermission(found.grant, "report.edit"),
     canCreateAssignments: canCreateAssignments(found.grant),
     canManageContacts: grantHasPermission(found.grant, "contacts.manage"),
     canReadClaims: grantHasPermission(found.grant, "claims.read"),

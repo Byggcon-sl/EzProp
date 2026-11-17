@@ -42,6 +42,7 @@ const CODES: Codes = {
   commonRoomTypes: [...COMMON_ROOM_TYPES],
   areaTypes: AREA_TYPES.map((code) => ({ value: code, label: areaTypeLabel(code) })),
   methods: MEASURING_METHODS.map((code) => ({ value: code, label: measuringMethodLabel(code) })),
+  wetRoomTypes: ROOM_TYPES.filter((type) => type.group === "wet_room").map((type) => type.key),
 };
 
 /**
@@ -78,6 +79,7 @@ export default async function BuildingsPage({ params }: { params: Promise<{ id: 
         assignmentId={id}
         data={data}
         canEdit={context.canEditOrders}
+        canEditReports={context.canEditReports}
         codes={CODES}
       />
     </main>
