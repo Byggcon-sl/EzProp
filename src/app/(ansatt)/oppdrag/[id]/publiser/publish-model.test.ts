@@ -341,9 +341,6 @@ describe("visningen", () => {
     expect(PUBLISH_LINK_TEXTS.badge(2, 3)).toBe("2 må rettes, 3 bør sees over");
     expect(PUBLISH_LINK_TEXTS.badge(0, 0)).toBe("Ingen mangler");
     expect(PUBLISH_LINK_TEXTS.badge(0, 3)).toBe("3 bør sees over");
-    expect(PUBLISH_LINK_TEXTS.ariaLabel(2, 3)).toBe(
-      "Se over og publiser. 2 må rettes, 3 bør sees over.",
-    );
     expect(PUBLISH_LINK_TEXTS.back(2)).toBe("Tilbake til publisering (2 igjen)");
     expect(PUBLISH_LINK_TEXTS.back(0)).toBe("Tilbake til publisering (alt rettet)");
   });

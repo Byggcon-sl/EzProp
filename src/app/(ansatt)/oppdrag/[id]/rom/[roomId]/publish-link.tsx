@@ -11,7 +11,8 @@ import { PUBLISH_LINK_TEXTS } from "../../publiser/publish-texts";
 /*
  * «Se over og publiser» med tellemerke (docs/funksjoner/fase2a-publisering-badet-design.md
  * avsnitt 14). Tallene regnes lokalt med `computePublishCheck` (ren kode) av rommet og oppdateres
- * når et felt er lagret. Endringer i tallet leses ikke opp; de står i lenketeksten. Før
+ * når et felt er lagret. Endringer i tallet leses ikke opp; de står i lenketeksten (navnet er
+ * den synlige teksten, så tale-styring finner den). Før
  * navigering lagres det som venter (`beforeNavigate`), så ingenting går tapt.
  * Støtter hovedmål: de ansatte (mangler synes før man går til publisering) og færre reklamasjoner.
  */
@@ -46,13 +47,13 @@ export function PublishLink({
     <Link
       href={href}
       onClick={navigate(href)}
-      aria-label={PUBLISH_LINK_TEXTS.ariaLabel(blockers, warnings)}
       className={cn(
         buttonVariants({ variant: "secondary", size: "md" }),
         "flex-wrap gap-2 py-1",
         className,
       )}
     >
+      {/* Navnet er den synlige teksten: «Se over og publiser 2 må rettes, 3 bør sees over». */}
       {PUBLISH_LINK_TEXTS.link}
       <Badge>{PUBLISH_LINK_TEXTS.badge(blockers, warnings)}</Badge>
     </Link>

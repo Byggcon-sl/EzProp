@@ -163,14 +163,6 @@ export const PUBLISH_LINK_TEXTS = {
     if (warnings === 0) return `${blockers} må rettes`;
     return `${blockers} må rettes, ${warnings} bør sees over`;
   },
-  ariaLabel: (blockers: number, warnings: number) => {
-    if (blockers === 0 && warnings === 0) return "Se over og publiser. Ingen mangler.";
-    const parts = [
-      blockers > 0 ? `${blockers} må rettes` : null,
-      warnings > 0 ? `${warnings} bør sees over` : null,
-    ].filter(Boolean);
-    return `Se over og publiser. ${parts.join(", ")}.`;
-  },
   back: (remaining: number) =>
     remaining === 0
       ? "Tilbake til publisering (alt rettet)"

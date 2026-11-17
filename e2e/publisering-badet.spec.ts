@@ -407,9 +407,9 @@ test("E1 tellemerket på rommet viser «2 må rettes» og oppdateres etter retti
   const bath = await createBathroom({ missingTg: ["wet_room.floor"], hole: false });
   await logInAsInspector(page);
   await page.goto(roomUrl(bath));
-  const link = page.getByRole("link", { name: /^Se over og publiser\./ });
+  const link = page.getByRole("link", { name: /^Se over og publiser\b/ });
   await expect(link).toContainText("2 må rettes");
-  await expect(link).toHaveAttribute("aria-label", /^Se over og publiser\. 2 må rettes/);
+  await expect(link).toHaveAccessibleName(/^Se over og publiser\s+2 må rettes/);
 
   await page.setViewportSize(PORTRAIT);
   await expect(link).toBeVisible();
@@ -423,7 +423,7 @@ test("E1 tellemerket på rommet viser «2 må rettes» og oppdateres etter retti
   await choose(card, "TG for punktet", /TG1/);
   await expect(page.getByText(/^Rettet: /)).toBeVisible();
   await page.goto(roomUrl(bath));
-  await expect(page.getByRole("link", { name: /^Se over og publiser\./ })).toContainText(
+  await expect(page.getByRole("link", { name: /^Se over og publiser\b/ })).toContainText(
     "1 må rettes",
   );
 });
@@ -466,7 +466,7 @@ test("E3 uten mangler: publisert med 2 trykk", async ({ page }) => {
   await logInAsInspector(page);
   await page.goto(roomUrl(bath));
   await countTaps(page);
-  await page.getByRole("link", { name: /^Se over og publiser\./ }).click();
+  await page.getByRole("link", { name: /^Se over og publiser\b/ }).click();
   await expect(publishButton(page)).toHaveText("Publiser versjon 1");
   await publishButton(page).click();
   await expect(page.locator("#publish-published")).toBeFocused();
