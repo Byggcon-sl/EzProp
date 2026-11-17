@@ -304,3 +304,11 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - E2e-tester som lager rader som vises i lister for hele organisasjonen (for eksempel kontorer), må rydde opp med myk sletting. Ellers vokser den lokale e2e-databasen mellom kjøringer, og layout-tester blir røde uten grunn (5.18 fikk over 50 «Testkontor …» over knappen). Bruk `archiveLeftoverE2eOffices()` i `e2e/helpers.ts` der kontorlisten påvirker testen.
 - E2e som leser arbeidskøen uten søk blir røde når andre spec-filer legger inn oppdrag (køen viser høyst 50 kort). Bruk alltid `queueUrl` med adresse.
 - 17.11.2026: e2e-databasen tømmes aldri; tester som måler høyde eller plass må ikke avhenge av lister som vokser med testdata fra andre specer (her kontorer fra fase-0b-admin).
+
+**Mine innlogginger (17.11.2026), PR #228, overtatt av hovedløkken:**
+- Testskriverens to testsett (`X` og `X-cases`) ble aldri kjørt før kjøringen stoppet; fire enhetstester og tolv e2e-tester var røde. En overtakelse må kjøre de berørte testfilene og e2e-specen lokalt før PR, ikke bare lint og typesjekk.
+- Testsett skrevet uten å se koden gjetter grensesnittet (her `getAdminContext` i stedet for `getActorForAction`). Når en testfil feiler på mocker, rett mockene etter koden; ikke endre koden etter testen.
+- Første innlogging gjennom Better Auth bekrefter e-posten og sletter øktene brukeren hadde fra før. Tester som lager oppdiktede økter og så logger inn, må telle øktene etterpå.
+- I e2e uten nett: vent på `data-sync-state="offline"` før utfylling, og bruk `expect.poll` for køen (den oppdateres litt etter at feltet er lagret lokalt).
+- Kort på adminsider er nå `section` med overskriften som navn (`EmployeeCard`); e2e kan finne dem med rollen `region`.
+
