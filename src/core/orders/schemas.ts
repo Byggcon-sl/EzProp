@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { bookingInputSchema } from "@/core/assignments/booking/schemas";
 import { addDays, todayInOslo } from "@/shared/lib/dates";
+import { ELEVEN_DIGITS, NATIONAL_ID_MESSAGE } from "@/shared/validation/free-text";
 import {
   OFFER_REJECTION_OTHER,
   isOfferRejectionReasonKey,
@@ -17,16 +18,12 @@ import { OFFER_VALID_DAYS, OFFER_VALID_UNTIL_MAX_DAYS } from "./contract";
  * `condition_report`. Ukjente felt (også `organizationId`) tas bort av Zod.
  */
 
-const NATIONAL_ID = "Fødselsnummer skal ikke lagres her.";
 const REASON_KEY = "Velg en grunn.";
 const REASON_TEXT = "Skriv grunnen.";
 const REASON_TOO_LONG = "Grunnen kan ha høyst 500 tegn.";
 const VALID_UNTIL_INVALID = "Gyldig til må være en dato.";
 const VALID_UNTIL_PAST = "Gyldig til kan ikke være før i dag.";
 const VALID_UNTIL_TOO_LATE = "Gyldig til kan være høyst ett år fram.";
-
-/** Elleve sifre på rad ligner et fødselsnummer. Ti godtas (for eksempel telefonnummer med 0). */
-const ELEVEN_DIGITS = /\d{11}/;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -100,7 +97,7 @@ const reasonTextSchema = z
     return trimmed ? trimmed : null;
   })
   .refine((value) => value === null || value.length <= 500, { error: REASON_TOO_LONG })
-  .refine((value) => value === null || !ELEVEN_DIGITS.test(value), { error: NATIONAL_ID });
+  .refine((value) => value === null || !ELEVEN_DIGITS.test(value), { error: NATIONAL_ID_MESSAGE });
 
 /**
  * Grunnen for å avslå et tilbud (F4, A361): en av de faste kodene, og fritekst som er påkrevd
