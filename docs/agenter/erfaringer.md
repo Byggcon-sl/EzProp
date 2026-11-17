@@ -302,3 +302,5 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 
 **Papirkurv (16.11.2026), retting av e2e 5.18:**
 - E2e-tester som lager rader som vises i lister for hele organisasjonen (for eksempel kontorer), må rydde opp med myk sletting. Ellers vokser den lokale e2e-databasen mellom kjøringer, og layout-tester blir røde uten grunn (5.18 fikk over 50 «Testkontor …» over knappen). Bruk `archiveLeftoverE2eOffices()` i `e2e/helpers.ts` der kontorlisten påvirker testen.
+- E2e som leser arbeidskøen uten søk blir røde når andre spec-filer legger inn oppdrag (køen viser høyst 50 kort). Bruk alltid `queueUrl` med adresse.
+- 16.11.2026: e2e-databasen tømmes aldri; tester som måler høyde eller plass må ikke avhenge av lister som vokser med testdata fra andre specer (her kontorer fra fase-0b-admin).
