@@ -2116,3 +2116,76 @@ export async function trashCountsFor(assignmentId: string): Promise<{
     await sql.end();
   }
 }
+
+// --- Mine innlogginger (docs/funksjoner/fase2a-mine-innlogginger-testplan.md avsnitt 0) ---
+
+/** En egen, oppdiktet ansatt for tester som logger ut (aldri de delte e2e-brukerne). */
+export type DedicatedEmployee = { email: string; name: string; employeeId: string; userId: string };
+
+/**
+ * Lager en ny oppdiktet ansatt med én rolle i Byggcon (organisasjonen til admin fra seed), med
+ * unik e-post `<prefix>-<uniqueSuffix()>@example.com`. Brukes av alle tester som logger ut av
+ * alle enheter eller deaktiverer, så de delte brukerne (ADMIN_EMAIL, INSPECTOR_EMAIL …) aldri
+ * logges ut midt i en annen test. Bare lokal database eller testdatabasen. Sletter og deaktiverer
+ * ingenting; radene blir liggende som oppdiktede rader i e2e-databasen.
+ */
+export async function ensureDedicatedEmployee(input: {
+  role: "inspector" | "manager" | "office" | "admin";
+  prefix?: string;
+  name?: string;
+}): Promise<DedicatedEmployee> {
+  const suffix = uniqueSuffix();
+  const email = `${input.prefix ?? "innlogging"}-${suffix}@example.com`;
+  const name = input.name ?? `Oppdiktet ansatt ${suffix}`;
+  const sql = e2eSql();
+  try {
+    const [admin] = await sql<{ organization_id: string }[]>`
+      select e.organization_id from employees e
+      join users u on u.id = e.user_id
+      where u.email = ${ADMIN_EMAIL} and e.organization_id not in (select id from organizations where settings ->> 'sampleData' = 'true') and e.deleted_at is null and e.deactivated_at is null
+      limit 1`;
+    if (!admin) throw new Error("Fant ikke admin fra seed (kjør pnpm db:seed)");
+    const organizationId = admin.organization_id;
+    const userId = randomUUID();
+    await sql`
+      insert into users (id, name, email, email_verified)
+      values (${userId}, ${name}, ${email}, true)`;
+    const [employee] = await sql<{ id: string }[]>`
+      insert into employees (organization_id, user_id, name)
+      values (${organizationId}, ${userId}, ${name})
+      returning id`;
+    if (!employee) throw new Error("Kunne ikke lage den egne ansatte for e2e");
+    await sql`
+      update employees set company_id = (
+        select c.id from companies c
+        where c.organization_id = ${organizationId} and c.legal_name = ${INSPECTOR_COMPANY}
+          and c.deleted_at is null
+        order by c.created_at limit 1)
+      where id = ${employee.id} and organization_id = ${organizationId}`;
+    await sql`
+      insert into employee_roles (organization_id, employee_id, role)
+      values (${organizationId}, ${employee.id}, ${input.role}::employee_role)`;
+    return { email, name, employeeId: employee.id, userId };
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Antall økter som står for brukeren i e2e-databasen (også utløpte). Bare lesing. */
+export async function sessionCountForUser(userId: string): Promise<number> {
+  const sql = e2eSql();
+  try {
+    const [row] = await sql<{ count: number }[]>`
+      select count(*)::int as count from sessions where user_id = ${userId}`;
+    return row?.count ?? 0;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Tokenet i innloggingskapselen til konteksten (delen før første punktum), eller `null`. */
+export async function sessionTokenOf(context: BrowserContext): Promise<string | null> {
+  const cookie = (await context.cookies()).find((entry) => isSessionCookie(entry.name));
+  if (!cookie) return null;
+  return decodeURIComponent(cookie.value).split(".")[0] ?? null;
+}
