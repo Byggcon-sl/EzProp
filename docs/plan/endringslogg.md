@@ -2,6 +2,7 @@
 
 Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og 09.11.2026).
 
+- **17.11.2026 (Branch `ki-i-veien`, forbedreren):** 2a-2: nytt punkt «Gå gjennom tekstene i badet» under «Fra forbedreren», bygges etter «KI i veien» (A441).
 - **17.11.2026 (Hovedløkken, PR om tilstand etter #224):** 2a-2: «Badet på PC» merket med at skjermen er levert i PR #224; punktet krysses av når testdata del 2 er levert (A359).
 - **16.11.2026 (Branch `badet-pc`, forbedreren):** 2a-2: nytt punkt «Skriv det du ser: KI finner utfallet» under «Fra forbedreren», bygges etter «KI i veien» (A384).
 - **16.11.2026 (Forbedreren, branch `papirkurv`):** 2a-3: nytt punkt «Historikk på oppdraget, med KI-sammendrag av endringer» under ny overskrift «Fra forbedreren».
