@@ -137,28 +137,44 @@ describe("uløste referanser til nøkkelboksen", () => {
 });
 
 /*
- * Rydding av innloggingsdata: testplan docs/agenter/oppgaver/rydd-innloggingsdata-testplan.md
- * C1–C2. Feil oppsett av driftshemmeligheten slår bare av endepunktet, aldri appen (regel 11).
+ * Driftshemmeligheten for ryddejobben (docs/agenter/oppgaver/rydd-innloggingsdata-testplan.md,
+ * avsnitt 5, C1–C2). Valgfri og uten streng validering: feil oppsett slår av endepunktet, aldri
+ * appen, så admin kan alltid logge inn (regel 11). Verdiene er oppdiktet.
  */
 describe("AUTH_CLEANUP_SECRET", () => {
-  it("C1. AUTH_CLEANUP_SECRET is optional", () => {
+  const CLEANUP_SECRET = "oppdiktet-driftshemmelighet-for-tester-0123456789";
+
+  function cleanupSecret(): unknown {
+    return (getEnv() as Record<string, unknown>).AUTH_CLEANUP_SECRET;
+  }
+
+  it("C1 AUTH_CLEANUP_SECRET is optional (missing)", () => {
     vi.stubEnv("AUTH_CLEANUP_SECRET", undefined);
     resetEnvCache();
     expect(() => getEnv()).not.toThrow();
-    expect(getEnv().AUTH_CLEANUP_SECRET).toBeUndefined();
+    expect(cleanupSecret()).toBeUndefined();
+  });
 
+  it("C1 AUTH_CLEANUP_SECRET is optional (empty counts as not set)", () => {
     vi.stubEnv("AUTH_CLEANUP_SECRET", "   ");
     resetEnvCache();
     expect(() => getEnv()).not.toThrow();
-    expect(getEnv().AUTH_CLEANUP_SECRET).toBeUndefined();
+    expect(cleanupSecret()).toBeUndefined();
   });
 
-  it.each([["for-kort"], [REFERENCE_URI], [REFERENCE_NAME]])(
-    "C2. short or unresolved AUTH_CLEANUP_SECRET does not stop the app (%j)",
-    (value) => {
-      vi.stubEnv("AUTH_CLEANUP_SECRET", value);
-      resetEnvCache();
-      expect(envError()).toBe("");
-    },
-  );
+  it.each([
+    ["too short", "kort-verdi"],
+    ["unresolved reference (uri)", REFERENCE_URI],
+    ["unresolved reference (name)", REFERENCE_NAME],
+  ])("C2 short or unresolved AUTH_CLEANUP_SECRET does not stop the app (%s)", (_label, value) => {
+    vi.stubEnv("AUTH_CLEANUP_SECRET", value);
+    resetEnvCache();
+    expect(envError()).toBe("");
+  });
+
+  it("valid AUTH_CLEANUP_SECRET reaches the app through getEnv()", () => {
+    vi.stubEnv("AUTH_CLEANUP_SECRET", CLEANUP_SECRET);
+    resetEnvCache();
+    expect(cleanupSecret()).toBe(CLEANUP_SECRET);
+  });
 });

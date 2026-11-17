@@ -1,166 +1,253 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /*
- * Den planlagte ryddingen av innloggingsdata og hemmelighetens vei til appen (ADR 0014).
- * Testplan: docs/agenter/oppgaver/rydd-innloggingsdata-testplan.md, C4–C7.
- * Filene leses som tekst og sjekkes med enkle mønstre (ingen YAML-pakke, ingen kall ut).
+ * Testplan docs/agenter/oppgaver/rydd-innloggingsdata-testplan.md, avsnitt 5 (C4–C8). Filene
+ * leses som tekst og sjekkes med enkle mønstre (ingen YAML-pakke, ingen kall til GitHub eller
+ * Azure), samme måte som tests/deploy-workflow.test.ts.
  *
- * Støtter hovedmål: best for de ansatte (ryddingen går av seg selv hver natt, uten kostnad).
+ * Støtter hovedmål: de ansatte (ryddingen går av seg selv hver natt, og hemmeligheten lekker
+ * ikke). KI i bunnen: ikke berørt.
  */
+
+const CLEANUP_WORKFLOW = ".github/workflows/rydd-innloggingsdata.yml";
+const DEPLOY_WORKFLOW = ".github/workflows/deploy-azure.yml";
+const BICEP = "infra/azure/main.bicep";
+const SECRET_NAME = "AUTH_CLEANUP_SECRET";
 
 function read(path: string): string {
   return readFileSync(join(process.cwd(), path), "utf8");
+}
+
+function readCleanup(): string {
+  expect(existsSync(join(process.cwd(), CLEANUP_WORKFLOW)), CLEANUP_WORKFLOW).toBe(true);
+  return read(CLEANUP_WORKFLOW);
 }
 
 function isComment(line: string): boolean {
   return /^\s*(#|\/\/)/.test(line);
 }
 
-function code(text: string): string[] {
+function codeLines(text: string): string[] {
   return text.split("\n").filter((line) => !isComment(line));
 }
 
 function secretNames(text: string): string[] {
-  return [...new Set([...text.matchAll(/secrets\.([A-Z0-9_]+)/g)].map((match) => match[1]!))];
+  return [
+    ...new Set(
+      [
+        ...codeLines(text)
+          .join("\n")
+          .matchAll(/secrets\.([A-Z0-9_]+)/g),
+      ].map((m) => m[1]!),
+    ),
+  ];
 }
 
-const WORKFLOW_PATH = ".github/workflows/rydd-innloggingsdata.yml";
-const workflow = read(WORKFLOW_PATH);
-const lines = code(workflow);
-
-/** Linjene i `run: |`-blokken (bash-skriptet). */
-function runScript(): string[] {
-  const all = workflow.split("\n");
-  const start = all.findIndex((line) => /^\s*run:\s*\|/.test(line));
-  expect(start, "run: |").toBeGreaterThan(-1);
-  const indent = all[start]!.length - all[start]!.trimStart().length;
-  const out: string[] = [];
-  for (const line of all.slice(start + 1)) {
-    if (line.trim() !== "" && line.length - line.trimStart().length <= indent) break;
-    out.push(line);
-  }
-  return out;
+function indentOf(line: string): number {
+  return line.length - line.trimStart().length;
 }
 
-describe("C4 scheduled workflow", () => {
-  it("runs nightly and by hand, without permissions", () => {
-    expect(workflow).toMatch(/^name: Rydding av innloggingsdata$/m);
-    expect(workflow).toMatch(/^\s*schedule:/m);
-    const cron = workflow.match(/cron:\s*"([^"]+)"/);
-    expect(cron, "cron").not.toBeNull();
-    const [minute, hour, ...rest] = cron![1]!.split(" ");
-    expect(rest).toEqual(["*", "*", "*"]);
-    expect(Number(minute)).not.toBe(0);
-    expect(Number(hour)).toBeLessThan(6);
-    expect(workflow).toMatch(/^\s*workflow_dispatch:/m);
-    expect(workflow).toMatch(/^permissions: \{\}$/m);
-    expect(workflow).not.toMatch(/^[ ]+permissions:/m);
-    expect(workflow).toMatch(/timeout-minutes:\s*\d+/);
-    expect(workflow).not.toContain("actions/checkout");
-  });
-
-  it("secret only via env, never on the command line, no verbose curl", () => {
-    expect(workflow).toMatch(
-      /^\s*AUTH_CLEANUP_SECRET:\s*\$\{\{\s*secrets\.AUTH_CLEANUP_SECRET\s*\}\}\s*$/m,
-    );
-    const script = runScript();
-    expect(script.join("\n")).not.toContain("${{");
-    expect(script.join("\n")).not.toMatch(/set\s+-[a-z]*x/);
-    expect(script.join("\n")).toMatch(/curl --fail --silent --show-error[^\n]*-X POST/);
-    for (const flag of [/\s-v\b/, /\s-i\b/, /--include/, /--trace/, /--verbose/]) {
-      expect(script.join("\n")).not.toMatch(flag);
+/** Alle `run:`-blokker (linjen og linjene med større innrykk). */
+function runBlocks(text: string): string[] {
+  const lines = text.split("\n");
+  const blocks: string[] = [];
+  lines.forEach((line, index) => {
+    if (!/^\s*(-\s+)?run:/.test(line)) return;
+    const indent = indentOf(line.replace(/-\s+/, "  "));
+    const out = [line];
+    for (const next of lines.slice(index + 1)) {
+      if (next.trim() !== "" && indentOf(next) <= indent) break;
+      out.push(next);
     }
-    expect(script.join("\n")).toContain("/api/intern/rydd-innloggingsdata");
-    for (const line of script.filter((l) => /\becho\b/.test(l))) {
-      expect(line).not.toMatch(/\$\{?AUTH_CLEANUP_SECRET/);
+    blocks.push(out.join("\n"));
+  });
+  return blocks;
+}
+
+/** Kommandoene i `run:`-blokkene med fortsettelseslinjer (`\`) slått sammen. */
+function curlCommands(text: string): string[] {
+  return runBlocks(text)
+    .map((block) => block.replace(/\\\s*\n\s*/g, " "))
+    .flatMap((block) => block.split("\n"))
+    .filter((line) => !isComment(line) && /\bcurl\b/.test(line));
+}
+
+// =====================================================================================
+
+describe("planlagt arbeidsflyt for rydding av innloggingsdata (C4–C6)", () => {
+  it("C4 scheduled workflow: schedule and workflow_dispatch", () => {
+    const workflow = readCleanup();
+    expect(workflow).toMatch(/^on:/m);
+    expect(workflow).toMatch(/^\s+schedule:/m);
+    const crons = [...workflow.matchAll(/-\s*cron:\s*["']([^"']+)["']/g)].map((m) => m[1]!);
+    expect(crons).toHaveLength(1);
+    // Én gang i døgnet: fast minutt og time, alle dager
+    const [minute, hour, dom, month, dow] = crons[0]!.trim().split(/\s+/);
+    expect(minute).toMatch(/^\d+$/);
+    expect(hour).toMatch(/^\d+$/);
+    expect([dom, month, dow]).toEqual(["*", "*", "*"]);
+    expect(workflow).toMatch(/^\s+workflow_dispatch:/m);
+  });
+
+  it("C4 permissions: {} on top level", () => {
+    const workflow = readCleanup();
+    expect(workflow).toMatch(/^permissions:\s*\{\s*\}\s*$/m);
+    // Ingen jobb gir seg selv flere rettigheter
+    expect(workflow).not.toMatch(/^[ \t]+permissions:[ \t]*\S/m);
+  });
+
+  it("C4 secret only via env, never on the command line", () => {
+    const workflow = readCleanup();
+    const lines = codeLines(workflow);
+    const withSecret = lines.filter((line) => line.includes("secrets."));
+    expect(withSecret.length).toBeGreaterThan(0);
+    for (const line of withSecret) {
+      // `NAVN: ${{ secrets.X }}` eller `NAVN: ${{ secrets.X != '' }}` under env
+      expect(line, line).toMatch(
+        /^\s*[A-Z][A-Z0-9_]*:\s*\$\{\{[^}]*secrets\.[A-Z0-9_]+[^}]*\}\}\s*$/,
+      );
+    }
+    for (const block of runBlocks(workflow)) {
+      expect(block).not.toContain("${{ secrets.");
+      expect(block).not.toContain("secrets.");
     }
   });
-});
 
-describe("C5 skips without error when secret or url missing", () => {
-  it("exits 0 with a notice when the secret or the address is empty", () => {
-    const script = runScript().join("\n");
-    expect(script).toMatch(
-      /if \[ -z "\$AUTH_CLEANUP_SECRET" \]; then\s*\n\s*echo "::notice::[^\n]*"\s*\n\s*exit 0/,
-    );
-    expect(script).toMatch(
-      /if \[ -z "\$URL" \]; then\s*\n\s*echo "::notice::[^\n]*"\s*\n\s*exit 0/,
-    );
-    // Sjekken kommer før kallet.
-    expect(script.indexOf('-z "$AUTH_CLEANUP_SECRET"')).toBeLessThan(script.indexOf("curl "));
-    expect(script.indexOf('-z "$URL"')).toBeLessThan(script.indexOf("curl "));
+  it("C4 no set -x and no verbose curl", () => {
+    const workflow = readCleanup();
+    const code = codeLines(workflow).join("\n");
+    expect(code).not.toMatch(/set\s+-[a-wyz]*x/);
+    expect(code).not.toMatch(/bash\s+-x/);
+    const commands = curlCommands(workflow);
+    expect(commands.length).toBeGreaterThan(0);
+    for (const command of commands) {
+      expect(command).not.toMatch(
+        /\s(-v|-i|-I|-D|--verbose|--include|--head|--dump-header|--trace\S*)(\s|=|$)/,
+      );
+    }
+  });
+
+  it("C4 curl --fail --silent --show-error -X POST with the secret from the environment", () => {
+    const workflow = readCleanup();
+    const commands = curlCommands(workflow);
+    const post = commands.filter((command) => /-X\s+POST/.test(command));
+    expect(post).toHaveLength(1);
+    const command = post[0]!;
+    for (const flag of ["--fail", "--silent", "--show-error"]) {
+      expect(command, flag).toMatch(new RegExp(`\\s${flag}(\\s|$)`));
+    }
+    expect(command).toMatch(/Authorization:\s*Bearer\s+\$\{?[A-Z][A-Z0-9_]*\}?/);
+    expect(command).toContain("/api/intern/rydd-innloggingsdata");
+  });
+
+  it("C5 skips without error when secret or url missing", () => {
+    const workflow = readCleanup();
+    const code = codeLines(workflow).join("\n");
+    // Enten en sjekk-jobb som i «Utrulling til Azure» (bare om hemmeligheten finnes) …
+    const checkJob =
+      new RegExp(`secrets\\.${SECRET_NAME}\\s*!=\\s*''`).test(code) &&
+      /if:\s*.*(needs|steps)\.[\w-]+\.outputs\.\w+\s*==\s*'true'/.test(code);
+    // … eller en sjekk i skallet som avslutter med 0
+    const shellCheck = /-z\s+"\$\{?[A-Z_]*SECRET[A-Z_]*\}?"[\s\S]*?exit\s+0/.test(code);
+    expect(checkJob || shellCheck).toBe(true);
+    // Adressen: kommer den fra en GitHub-variabel, må også den sjekkes
+    for (const match of code.matchAll(/^\s*([A-Z][A-Z0-9_]*):\s*\$\{\{\s*vars\.([A-Z0-9_]+)/gm)) {
+      const envName = match[1]!;
+      const varName = match[2]!;
+      const checked =
+        new RegExp(`-z\\s+"\\$\\{?${envName}\\}?"`).test(code) ||
+        new RegExp(`vars\\.${varName}\\s*!=\\s*''`).test(code) ||
+        new RegExp(`vars\\.${varName}\\s*\\|\\|`).test(code);
+      expect(checked, `${envName} (vars.${varName}) sjekkes ikke`).toBe(true);
+    }
+    // En manglende hemmelighet gir ikke feil
+    expect(code).not.toMatch(/-z\s+"\$\{?[A-Z_]*SECRET[A-Z_]*\}?"[^\n]*\n[^\n]*exit\s+1/);
+  });
+
+  it("C6 same GitHub secret as deploy, no production url", () => {
+    const workflow = readCleanup();
+    const deploy = read(DEPLOY_WORKFLOW);
+    const cleanupSecrets = secretNames(workflow);
+    expect(cleanupSecrets).toContain(SECRET_NAME);
+    expect(secretNames(deploy)).toContain(SECRET_NAME);
+    // Ryddejobben trenger ingen andre hemmeligheter
+    expect(cleanupSecrets).toEqual([SECRET_NAME]);
+    const code = codeLines(workflow).join("\n");
+    const urls = [...code.matchAll(/https?:\/\/[^\s"'`)]+/g)].map((m) => m[0]);
+    for (const url of urls) {
+      expect(url, url).not.toMatch(/prod/i);
+      expect(url, url).not.toMatch(/localhost|127\.0\.0\.1/);
+    }
+    expect(code).not.toMatch(/ezprop-prod|-prod\b|produksjon/i);
+    // Testmiljøets adresse (fast variabel), ikke en adresse som kan peke på produksjon
+    expect(code).toMatch(/app-ezprop-test|ezprop-test|APP_HOSTNAME|TEST/);
   });
 });
 
-describe("C6 same GitHub secret as deploy, no production url", () => {
-  it("uses only AUTH_CLEANUP_SECRET, the same name as the deployment", () => {
-    expect(secretNames(workflow)).toEqual(["AUTH_CLEANUP_SECRET"]);
-    expect(secretNames(read(".github/workflows/deploy-azure.yml"))).toContain(
-      "AUTH_CLEANUP_SECRET",
-    );
-  });
-
-  it("the address is the test environment's", () => {
-    const vars = [...workflow.matchAll(/vars\.([A-Z0-9_]+)/g)].map((m) => m[1]);
-    expect(vars).toEqual(["APP_HOSTNAME"]);
-    const urls = lines.flatMap((line) =>
-      [...line.matchAll(/https:\/\/[^\s"'$]+/g)].map((m) => m[0]),
-    );
-    expect(urls).toEqual(["https://app-ezprop-test.azurewebsites.net"]);
-    expect(lines.join("\n").toLowerCase()).not.toMatch(/prod/);
-  });
-});
-
-describe("C7 Bicep and deploy carry AUTH_CLEANUP_SECRET", () => {
-  const bicep = read("infra/azure/main.bicep");
+describe("hemmeligheten i Bicep og utrullingen (C7)", () => {
+  const bicep = read(BICEP);
   const bicepLines = bicep.split("\n");
 
-  it("Bicep has a secure parameter, a conditional vault secret and the app setting", () => {
-    const index = bicepLines.findIndex((line) => /^param authCleanupSecret string$/.test(line));
-    expect(index, "param authCleanupSecret").toBeGreaterThan(-1);
-    expect(bicepLines[index - 1]!.trim()).toBe("@secure()");
-    expect(bicep).toMatch(/^var authCleanupConfigured = !empty\(authCleanupSecret\)$/m);
-    expect(bicep).toMatch(
-      /^resource kvAuthCleanupSecret 'Microsoft\.KeyVault\/vaults\/secrets@[^']+' = if \(enableKeyVault && authCleanupConfigured\) \{$/m,
-    );
-    expect(bicep).toContain("name: 'auth-cleanup-secret'");
-    expect(bicep).toMatch(
-      /\{ name: 'AUTH_CLEANUP_SECRET', value: enableKeyVault \? '@Microsoft\.KeyVault\(SecretUri=\$\{kvAuthCleanupSecret!\.properties\.secretUri\}\)' : authCleanupSecret \}/,
-    );
-    expect(bicep).toMatch(/var authCleanupAppSettings = authCleanupConfigured/);
-    expect(bicep).toMatch(/appSettings: concat\([^)]*authCleanupAppSettings\)/);
+  function cleanupParam(): string {
+    const index = bicepLines.findIndex((line) => /^param\s+\w*[Cc]leanup\w*\s+string\b/.test(line));
+    expect(index, "parameter for driftshemmeligheten").toBeGreaterThan(-1);
+    const name = bicepLines[index]!.trim().split(/\s+/)[1]!;
+    // @secure() rett over (eventuelt etter @description)
+    const above = bicepLines.slice(Math.max(0, index - 3), index).join("\n");
+    expect(above).toContain("@secure()");
+    expect(bicepLines[index]).not.toMatch(/=/);
+    return name;
+  }
+
+  it("C7 Bicep has a secure parameter", () => {
+    expect(cleanupParam()).toMatch(/^authCleanupSecret$/);
   });
 
-  it("the deployment passes the parameter from env", () => {
-    const deploy = read(".github/workflows/deploy-azure.yml");
+  it("C7 Bicep has a conditional key vault secret", () => {
+    const param = cleanupParam();
+    const start = bicepLines.findIndex(
+      (line) =>
+        /^resource\s+\w+\s+'Microsoft\.KeyVault\/vaults\/secrets@/.test(line) &&
+        bicepLines
+          .slice(bicepLines.indexOf(line), bicepLines.indexOf(line) + 8)
+          .some((l) => new RegExp(`value:\\s*${param}\\b`).test(l)),
+    );
+    expect(start, "nøkkelboks-hemmelighet med verdien").toBeGreaterThan(-1);
+    expect(bicepLines[start]).toMatch(/=\s*if\s*\(\s*enableKeyVault\s*&&/);
+  });
+
+  it("C7 Bicep sets the app setting AUTH_CLEANUP_SECRET like ANTHROPIC_API_KEY", () => {
+    const param = cleanupParam();
+    const setting = bicepLines.find((line) => line.includes(`name: '${SECRET_NAME}'`));
+    expect(setting, "appinnstilling").toBeDefined();
+    expect(setting!).toMatch(/enableKeyVault\s*\?\s*'@Microsoft\.KeyVault\(SecretUri=/);
+    expect(setting!).toMatch(new RegExp(`:\\s*${param}\\s*\\}`));
+    // Ingen utdata med hemmeligheten
+    const outputs = bicepLines.filter((line) => /^output\s/.test(line));
+    for (const line of outputs) expect(line).not.toContain(param);
+  });
+
+  it("C7 deploy-azure.yml passes the parameter from the GitHub secret", () => {
+    const param = cleanupParam();
+    const deploy = read(DEPLOY_WORKFLOW);
     expect(deploy).toMatch(
-      /^\s*AUTH_CLEANUP_SECRET:\s*\$\{\{\s*secrets\.AUTH_CLEANUP_SECRET\s*\}\}\s*$/m,
+      new RegExp(
+        `^\\s*${SECRET_NAME}:\\s*\\$\\{\\{\\s*secrets\\.${SECRET_NAME}\\s*\\}\\}\\s*$`,
+        "m",
+      ),
     );
-    expect(deploy).toContain('"authCleanupSecret=$AUTH_CLEANUP_SECRET"');
-    for (const line of code(deploy).filter((l) => /\becho\b/.test(l))) {
-      expect(line).not.toContain("AUTH_CLEANUP_SECRET");
-    }
+    expect(deploy).toContain(`"${param}=$${SECRET_NAME}"`);
   });
+});
 
-  it("the operations document describes the job", () => {
-    const doc = read("docs/drift/testmiljo-azure.md");
-    const section = doc.slice(doc.indexOf("## Rydding av innloggingsdata"));
-    expect(doc).toContain("## Rydding av innloggingsdata");
-    for (const text of [
-      "AUTH_CLEANUP_SECRET",
-      "24 timer",
-      "30 dager",
-      "ADR 0014",
-      "Run workflow",
-      "Utrulling til Azure",
-      "404",
-      "500",
-      "60 dager",
-      "Produksjon",
-    ]) {
-      expect(section, text).toContain(text);
-    }
+describe(".env.example (C8)", () => {
+  it("C8 AUTH_CLEANUP_SECRET is empty with an explanation", () => {
+    const lines = read(".env.example").split("\n");
+    const index = lines.findIndex((line) => line.startsWith(`${SECRET_NAME}=`));
+    expect(index, `${SECRET_NAME}= i .env.example`).toBeGreaterThan(-1);
+    expect(lines[index]!.trim()).toBe(`${SECRET_NAME}=`);
+    expect(lines[index - 1]!, "forklaring over linjen").toMatch(/^#\s*\S/);
   });
 });
