@@ -1,18 +1,23 @@
+import { readFileSync } from "node:fs";
 import { revalidatePath } from "next/cache";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 import { AccessDeniedError } from "@/core/access";
 import {
   addRoomsInputSchema,
-  BuildingNotEmptyError,
   buildingInputSchema,
-  FloorNotEmptyError,
   floorAreaInputSchema,
   floorInputSchema,
   PropertyMissingError,
   roomInputSchema,
 } from "@/core/buildings";
-import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../../../form-state";
+import {
+  initialFormState,
+  NO_ACCESS,
+  SIGNED_OUT_MESSAGE,
+  UNKNOWN_ERROR,
+  type FormState,
+} from "../../../form-state";
 
 /*
  * Server actions på bygningssiden /oppdrag/[id]/bygninger
@@ -33,6 +38,8 @@ import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../.
 
 const mocks = vi.hoisted(() => ({
   getEmployeeContext: vi.fn(),
+  /** Sann: getEmployeeContextForAction svarer «logget ut» (rett T-0070). */
+  signedOut: { value: false },
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT ${url}`);
   }),
@@ -47,6 +54,9 @@ const mocks = vi.hoisted(() => ({
     saveRoom: vi.fn(),
     removeRoom: vi.fn(),
     addRooms: vi.fn(),
+    restoreBuilding: vi.fn(),
+    restoreFloor: vi.fn(),
+    restoreRoom: vi.fn(),
   },
 }));
 
@@ -56,7 +66,17 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/shared/lib/logger", () => ({
   logger: { error: mocks.logError, warn: vi.fn(), info: vi.fn() },
 }));
-vi.mock("../../../employee-context", () => ({ getEmployeeContext: mocks.getEmployeeContext }));
+// Handlingene som tåler utløpt innlogging (rett T-0070) bruker getEmployeeContextForAction. Her
+// bygges svaret fra den samme falske konteksten: null gir «ingen tilgang», og `signedOut` gir
+// «logget ut».
+vi.mock("../../../employee-context", () => ({
+  getEmployeeContext: mocks.getEmployeeContext,
+  getEmployeeContextForAction: async () => {
+    if (mocks.signedOut.value) return { status: "signed_out" };
+    const context = await mocks.getEmployeeContext();
+    return context ? { status: "ok", context } : { status: "no_access" };
+  },
+}));
 vi.mock("@/core/buildings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/core/buildings")>()),
   ...mocks.core,
@@ -71,6 +91,7 @@ const {
   saveRoomAction,
   removeRoomAction,
   addRoomsAction,
+  restoreStructureAction,
 } = await import("./actions");
 
 const ORG = "0190a000-0000-7000-8000-000000000001";
@@ -90,8 +111,6 @@ const AREAS = ["123,4", "56,7", "8,9", "210,3"];
 const PERSONAL = [BUILDING_NAME, FLOOR_NAME, ROOM_NAME, "Målt langs innvendig vegg"];
 
 const PROPERTY_MISSING = "Legg inn eiendommen før du legger til bygninger.";
-const BUILDING_NOT_EMPTY = "Fjern etasjene først.";
-const FLOOR_NOT_EMPTY = "Fjern rommene først.";
 
 function form(entries: Record<string, string>): FormData {
   const data = new FormData();
@@ -196,6 +215,8 @@ function coreCalls() {
   return Object.values(mocks.core).reduce((sum, fn) => sum + fn.mock.calls.length, 0);
 }
 
+const ROOM_2 = "0190a000-0000-7000-8000-000000000054";
+
 /** Alt loggeren fikk, som tekst, med uuid-er byttet ut med «<id>». */
 function loggedWithoutIds(): string {
   return JSON.stringify(mocks.logError.mock.calls).replace(
@@ -228,6 +249,7 @@ async function failed(promise: Promise<FormState>): Promise<FormState> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.signedOut.value = false;
   mocks.getEmployeeContext.mockResolvedValue({
     actor,
     organizationId: ORG,
@@ -238,6 +260,90 @@ beforeEach(() => {
     officeId: null,
   });
   for (const fn of Object.values(mocks.core)) fn.mockResolvedValue(undefined);
+  // «Fjern» gir det som ble fjernet (slettegruppen, A414)
+  mocks.core.removeBuilding.mockResolvedValue({ removed: [{ type: "building", id: BUILDING }] });
+  mocks.core.removeFloor.mockResolvedValue({
+    removed: [
+      { type: "floor", id: FLOOR },
+      { type: "room", id: ROOM },
+      { type: "room", id: ROOM_2 },
+    ],
+  });
+  mocks.core.removeRoom.mockResolvedValue({ id: ROOM });
+});
+
+/*
+ * Rett T-0070 (docs/agenter/oppgaver/rett-t0070-t0071.md punkt 3, testplan 1d): utløpt innlogging
+ * gir «logget ut»-svaret med bare de kjente feltene skjemaet sendte, før id-er sjekkes og før
+ * kjernen kalles. Ingen videresending, ingen logg.
+ */
+describe("logget ut (rett T-0070)", () => {
+  /** De kjente feltene hver handling gir tilbake (aldri id-er eller ukjente felt). */
+  const SIGNED_OUT_VALUES: Record<ActionName, Record<string, string>> = {
+    saveBuildingAction: { name: BUILDING_NAME },
+    removeBuildingAction: {},
+    saveFloorAction: { name: FLOOR_NAME, level: "-1", belowGround: "on" },
+    removeFloorAction: {},
+    saveFloorAreaAction: {
+      braI: AREAS[0]!,
+      braE: AREAS[1]!,
+      braB: AREAS[2]!,
+      alh: AREAS[3]!,
+      measuredBy: MEASURER,
+      method: "laser",
+      comment: COMMENT,
+    },
+    saveRoomAction: { roomType: "bathroom", name: ROOM_NAME, areaType: "bra_i", belowGround: "" },
+    removeRoomAction: {},
+    addRoomsAction: {
+      source: "preset",
+      presetKey: "apartment",
+      drafts: FORMS.addRoomsAction.drafts,
+    },
+  };
+
+  beforeEach(() => {
+    mocks.signedOut.value = true;
+  });
+
+  it.each(ACTION_NAMES)(
+    "%s: signedOut med meldingen og verdiene, uten kjerne og uten logg",
+    async (name) => {
+      const state = await failed(call(name, { organizationId: OTHER_ORG }));
+      expect(state).toEqual({
+        fieldErrors: {},
+        message: SIGNED_OUT_MESSAGE,
+        values: SIGNED_OUT_VALUES[name],
+        attempt: 1,
+        signedOut: true,
+        // «Fjern» svarer med `removed: null` når ingenting ble fjernet (papirkurven, A414).
+        ...(name.startsWith("remove") ? { removed: null } : {}),
+      });
+      expect(coreCalls()).toBe(0);
+      expect(mocks.getEmployeeContext).not.toHaveBeenCalled();
+      expect(mocks.redirect).not.toHaveBeenCalled();
+      expect(mocks.logError).not.toHaveBeenCalled();
+      expect(revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(ACTION_NAMES)(
+    "%s: samme svar for ugyldig id og gyldig id (ingen sjekk før innloggingen)",
+    async (name) => {
+      const invalid = Object.fromEntries(ID_FIELDS[name].map((field) => [field, "ikke-en-id"]));
+      const withValid = await failed(call(name));
+      const withInvalid = await failed(call(name, invalid));
+      expect(withInvalid).toEqual(withValid);
+      expect(coreCalls()).toBe(0);
+    },
+  );
+
+  it("addRoomsAction: ugyldig romliste gir også bare «logget ut»", async () => {
+    const state = await failed(call("addRoomsAction", { drafts: "ikke json" }));
+    expect(state.signedOut).toBe(true);
+    expect(state.message).toBe(SIGNED_OUT_MESSAGE);
+    expect(coreCalls()).toBe(0);
+  });
 });
 
 describe("6.1 uten ansattkontekst", () => {
@@ -377,17 +483,16 @@ describe("6.4 feil fra kjernen", () => {
     expect(state.message).toBe(NO_ACCESS);
   });
 
-  it.each([
-    ["saveBuildingAction", () => new PropertyMissingError(), PROPERTY_MISSING],
-    ["removeBuildingAction", () => new BuildingNotEmptyError(), BUILDING_NOT_EMPTY],
-    ["removeFloorAction", () => new FloorNotEmptyError(), FLOOR_NOT_EMPTY],
-  ] as const)("%s: kjent feil → «%s»", async (name, make, message) => {
-    CORE_FOR_ACTION[name].mockRejectedValue(make());
-    const state = await failed(call(name));
-    expect(allMessages(state)).toContain(message);
-    expect(state.message).not.toBe(UNKNOWN_ERROR);
-    expect(mocks.logError).not.toHaveBeenCalled();
-  });
+  it.each([["saveBuildingAction", () => new PropertyMissingError(), PROPERTY_MISSING]] as const)(
+    "%s: kjent feil → «%s»",
+    async (name, make, message) => {
+      CORE_FOR_ACTION[name].mockRejectedValue(make());
+      const state = await failed(call(name));
+      expect(allMessages(state)).toContain(message);
+      expect(state.message).not.toBe(UNKNOWN_ERROR);
+      expect(mocks.logError).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     [
@@ -425,17 +530,16 @@ describe("6.4 feil fra kjernen", () => {
     expect(state.values[field]).toBe((bad as Record<string, string>)[field]);
   });
 
-  it.each([
-    ["PropertyMissingError", () => new PropertyMissingError()],
-    ["BuildingNotEmptyError", () => new BuildingNotEmptyError()],
-    ["FloorNotEmptyError", () => new FloorNotEmptyError()],
-  ] as const)("%s → aldri UNKNOWN_ERROR i noen handling", async (_name, make) => {
-    for (const name of ACTION_NAMES) {
-      CORE_FOR_ACTION[name].mockRejectedValue(make());
-      const state = await failed(call(name));
-      expect(state.message, name).not.toBe(UNKNOWN_ERROR);
-    }
-  });
+  it.each([["PropertyMissingError", () => new PropertyMissingError()]] as const)(
+    "%s → aldri UNKNOWN_ERROR i noen handling",
+    async (_name, make) => {
+      for (const name of ACTION_NAMES) {
+        CORE_FOR_ACTION[name].mockRejectedValue(make());
+        const state = await failed(call(name));
+        expect(state.message, name).not.toBe(UNKNOWN_ERROR);
+      }
+    },
+  );
 
   it.each(ACTION_NAMES)("%s: ukjent feil → UNKNOWN_ERROR", async (name) => {
     CORE_FOR_ACTION[name].mockRejectedValue(new Error("oppdiktet feil"));
@@ -466,8 +570,7 @@ describe("6.5 loggkontrakt", () => {
 
   it("ingen kall til loggeren gir skjemaverdier, heller ikke ved kjente feil", async () => {
     mocks.core.saveBuilding.mockRejectedValue(new PropertyMissingError());
-    mocks.core.removeBuilding.mockRejectedValue(new BuildingNotEmptyError());
-    mocks.core.removeFloor.mockRejectedValue(new FloorNotEmptyError());
+    mocks.core.removeFloor.mockRejectedValue(new AccessDeniedError());
     mocks.core.saveFloorArea.mockRejectedValue(new AccessDeniedError());
     for (const name of ACTION_NAMES) await run(call(name));
     const logged = loggedWithoutIds();
@@ -585,5 +688,146 @@ describe("F11 addRoomsAction (feilformer og ok)", () => {
     expect(floorId).toBe(FLOOR);
     expect(input).toMatchObject({ source: "preset" });
     expect(vi.mocked(revalidatePath)).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Papirkurv: «Fjern» gir slettegruppen, og «Angre»/«Gjenopprett» (restoreStructureAction)
+// docs/funksjoner/fase2a-papirkurv-testplan.md avsnitt 8
+// ---------------------------------------------------------------------------------------------
+
+describe("8 papirkurv: «Fjern» svarer med det som ble fjernet", () => {
+  it("removeFloorAction: etasjen og rommene i slettegruppen står i svaret (A414)", async () => {
+    const state = await removeFloorAction(initialFormState, form(FORMS.removeFloorAction));
+    expect(state.message).toBeNull();
+    expect(state.removed).toEqual([
+      { type: "floor", id: FLOOR },
+      { type: "room", id: ROOM },
+      { type: "room", id: ROOM_2 },
+    ]);
+  });
+
+  it("removeBuildingAction og removeRoomAction gir det som ble fjernet", async () => {
+    const building = await removeBuildingAction(initialFormState, form(FORMS.removeBuildingAction));
+    expect(building.removed).toEqual([{ type: "building", id: BUILDING }]);
+    const room = await removeRoomAction(initialFormState, form(FORMS.removeRoomAction));
+    expect(room.removed).toEqual([{ type: "room", id: ROOM }]);
+  });
+
+  it("feil gir `removed: null` og ingen oppfrisking", async () => {
+    mocks.core.removeFloor.mockRejectedValue(new AccessDeniedError());
+    const state = await removeFloorAction(initialFormState, form(FORMS.removeFloorAction));
+    expect(state.message).toBe(NO_ACCESS);
+    expect(state.removed).toBeNull();
+    expect(vi.mocked(revalidatePath)).not.toHaveBeenCalled();
+  });
+
+  it("8.3 «Fjern etasjene først.» og «Fjern rommene først.» finnes ikke lenger i handlingene", () => {
+    const source = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
+    expect(source).not.toMatch(/NotEmptyError/);
+    expect(source).not.toContain("Fjern etasjene først.");
+    expect(source).not.toContain("Fjern rommene først.");
+  });
+});
+
+const RESTORE_CASES = [
+  ["building", BUILDING, mocks.core.restoreBuilding],
+  ["floor", FLOOR, mocks.core.restoreFloor],
+  ["room", ROOM, mocks.core.restoreRoom],
+] as const;
+
+describe("8 restoreStructureAction («Angre» og «Gjenopprett»)", () => {
+  beforeEach(() => {
+    for (const [type, id, fn] of RESTORE_CASES) {
+      fn.mockResolvedValue({
+        restored: [{ type, id, organizationId: ORG }],
+        changed: true,
+        notices: [],
+      });
+    }
+  });
+
+  it.each(RESTORE_CASES)(
+    "8.1 %s: kjernen får aktøren, ORG fra økten, id-en og how; organizationId fra kalleren leses aldri",
+    async (type, id, fn) => {
+      const result = await restoreStructureAction({
+        type,
+        id,
+        how: "undo",
+        organizationId: OTHER_ORG,
+      } as never);
+      expect(result).toEqual({ ok: true, restored: [{ type, id }], changed: true, notices: [] });
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn.mock.calls[0]).toEqual([actor, ORG, id, "undo"]);
+      expect(JSON.stringify(fn.mock.calls)).not.toContain(OTHER_ORG);
+      expect(coreCalls()).toBe(1);
+    },
+  );
+
+  it("8.1 svaret har ingen organisasjons-id, bare type og id", async () => {
+    mocks.core.restoreRoom.mockResolvedValue({
+      restored: [
+        { type: "floor", id: FLOOR, organizationId: ORG },
+        { type: "room", id: ROOM, organizationId: ORG },
+      ],
+      changed: true,
+      notices: ["Rommet kom tilbake, sammen med etasjen «1. etasje»."],
+    });
+    const result = await restoreStructureAction({ type: "room", id: ROOM, how: "trash" });
+    expect(JSON.stringify(result)).not.toContain(ORG);
+    expect(result).toMatchObject({
+      ok: true,
+      notices: ["Rommet kom tilbake, sammen med etasjen «1. etasje»."],
+    });
+  });
+
+  it.each(RESTORE_CASES)(
+    "8.2 %s: AccessDeniedError gir fast norsk tekst, uten stakk eller id, og ingen oppfrisking",
+    async (type, id, fn) => {
+      fn.mockRejectedValue(new AccessDeniedError());
+      const result = await restoreStructureAction({ type, id, how: "trash" });
+      expect(result).toEqual({ ok: false, message: NO_ACCESS });
+      expect(JSON.stringify(result)).not.toContain(id);
+      expect(vi.mocked(revalidatePath)).not.toHaveBeenCalled();
+      expect(mocks.logError).not.toHaveBeenCalled();
+    },
+  );
+
+  it("8.2 ukjent feil: fast tekst, logges bare med rute, bruker-id, id og feilnavn", async () => {
+    const boom = new Error(`databasen sa nei til ${PERSONAL.join(" ")}`);
+    boom.name = "OppdiktetFeil";
+    mocks.core.restoreFloor.mockRejectedValue(boom);
+    const result = await restoreStructureAction({ type: "floor", id: FLOOR, how: "undo" });
+    expect(result).toEqual({ ok: false, message: UNKNOWN_ERROR });
+    expect(JSON.stringify(result)).not.toContain("OppdiktetFeil");
+    expect(mocks.logError).toHaveBeenCalledTimes(1);
+    const logged = loggedWithoutIds();
+    expect(logged).toContain("OppdiktetFeil");
+    expect(logged).toContain(actor.id);
+    for (const value of PERSONAL) expect(logged, value).not.toContain(value);
+  });
+
+  it.each([
+    ["ugyldig id", { type: "room", id: "ikke-en-id", how: "undo" }],
+    ["tom id", { type: "room", id: "", how: "undo" }],
+    ["ukjent type", { type: "party", id: ROOM, how: "undo" }],
+    ["ukjent how", { type: "room", id: ROOM, how: "slett" }],
+  ] as const)("%s → fast tekst uten kall til kjernen", async (_name, input) => {
+    const result = await restoreStructureAction(input);
+    expect(result).toEqual({ ok: false, message: NO_ACCESS });
+    expect(coreCalls()).toBe(0);
+  });
+
+  it("uten ansattkontekst → fast tekst uten kall til kjernen", async () => {
+    mocks.getEmployeeContext.mockResolvedValue(null);
+    const result = await restoreStructureAction({ type: "room", id: ROOM, how: "undo" });
+    expect(result).toEqual({ ok: false, message: NO_ACCESS });
+    expect(coreCalls()).toBe(0);
+  });
+
+  it("8.4 revaliderer bygningsskjermen og oppdragssiden", async () => {
+    await restoreStructureAction({ type: "building", id: BUILDING, how: "trash" });
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith("/oppdrag/[id]/bygninger", "page");
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith("/oppdrag/[id]", "page");
   });
 });

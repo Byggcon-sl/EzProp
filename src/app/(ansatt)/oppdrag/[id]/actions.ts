@@ -2,10 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { AccessDeniedError } from "@/core/access";
+import { logger } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
-import { errorResult, failure, type KnownError } from "../../action-result";
-import { getEmployeeContext } from "../../employee-context";
-import { NO_ACCESS, type FormState } from "../../form-state";
+import { errorResult, failure, signedOutState, type KnownError } from "../../action-result";
+import { getEmployeeContext, getEmployeeContextForAction } from "../../employee-context";
+import { NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../../form-state";
 import {
   addParty,
   ASSIGNMENT_STATUSES,
@@ -17,6 +19,7 @@ import {
   EmployeeNotFoundError,
   PARTY_ROLES,
   removeParty,
+  restoreParty,
   setAssignmentSchedule,
   setTeamMember,
   TEAM_ROLES,
@@ -356,19 +359,27 @@ export async function updatePartyAction(
   return saved(previous);
 }
 
-/** «Fjern» på en part. Myk sletting i kjernen; parten kan legges inn igjen. Ingen dialog. */
+/** Svaret fra «Fjern» på en part: som `FormState`, og ved suksess parten som ble fjernet. */
+export type RemovePartyState = FormState & { removed: { type: "party"; id: string }[] | null };
+
+/**
+ * «Fjern» på en part. Myk sletting i kjernen; angre-meldingen og papirkurven kan hente den
+ * tilbake. Ingen dialog.
+ */
 export async function removePartyAction(
   previous: FormState,
   formData: FormData,
-): Promise<FormState> {
+): Promise<RemovePartyState> {
   const partyId = String(formData.get("partyId") ?? "");
   const context = await getEmployeeContext();
-  if (!context || !isUuid(partyId)) return failure(previous, {}, {}, NO_ACCESS);
+  if (!context || !isUuid(partyId)) {
+    return { ...failure(previous, {}, {}, NO_ACCESS), removed: null };
+  }
 
   try {
     await removeParty(context.actor, context.organizationId, partyId);
   } catch (error) {
-    return errorResult(
+    const state = errorResult(
       error,
       previous,
       {},
@@ -378,20 +389,71 @@ export async function removePartyAction(
         partyId,
       },
     );
+    return { ...state, removed: null };
   }
   refresh();
-  return saved(previous);
+  return { ...saved(previous), removed: [{ type: "party", id: partyId }] };
 }
 
-/** «Lagre eiendom». Kjernen lager eiendommen første gang og oppdaterer den ellers. */
+/** Svaret fra «Angre» og «Gjenopprett» på en part. Ved feil bare en fast norsk tekst. */
+export type RestorePartyActionResult =
+  | { ok: true; restored: { type: "party"; id: string }[]; changed: boolean; notices: string[] }
+  | { ok: false; message: string };
+
+/**
+ * «Angre» og «Gjenopprett» på en part. Bare `id` og `how` leses fra kalleren; organisasjonen
+ * kommer fra økten, og kjernen slår opp oppdraget fra parten. Avslag (også ukjent id, annen
+ * organisasjon og kansellert oppdrag) gir samme faste tekst. Navn, e-post og telefon logges aldri.
+ */
+export async function restorePartyAction(input: {
+  id: string;
+  how: string;
+}): Promise<RestorePartyActionResult> {
+  const partyId = typeof input?.id === "string" ? input.id.trim() : "";
+  const how = input?.how;
+  const context = await getEmployeeContext();
+  if (!context || !isUuid(partyId) || (how !== "undo" && how !== "trash")) {
+    return { ok: false, message: NO_ACCESS };
+  }
+
+  try {
+    const result = await restoreParty(context.actor, context.organizationId, partyId, how);
+    refresh();
+    revalidatePath("/oppdrag/[id]/bygninger", "page");
+    return {
+      ok: true,
+      restored: result.restored.map((item) => ({ type: "party" as const, id: item.id })),
+      changed: result.changed,
+      notices: result.notices,
+    };
+  } catch (error) {
+    if (error instanceof AccessDeniedError) return { ok: false, message: NO_ACCESS };
+    logger.error("Gjenoppretting feilet", {
+      route: `${ROUTE}/[id]`,
+      userId: context.actor.id,
+      partyId,
+      errorName: error instanceof Error ? error.name : "ukjent feil",
+    });
+    return { ok: false, message: UNKNOWN_ERROR };
+  }
+}
+
+/**
+ * «Lagre eiendom». Kjernen lager eiendommen første gang og oppdaterer den ellers. Er innloggingen
+ * utløpt, svares det med «logget ut»-svaret og verdiene, ikke videresending (rett T-0070).
+ */
 export async function savePropertyAction(
   previous: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const assignmentId = String(formData.get("assignmentId") ?? "");
   const values = readFields(formData, PROPERTY_FIELDS);
-  const context = await getEmployeeContext();
-  if (!context || !isUuid(assignmentId)) return failure(previous, values, {}, NO_ACCESS);
+  // Innloggingen sjekkes først (rett T-0070): uinnlogget får verdiene tilbake og ingenting annet.
+  const access = await getEmployeeContextForAction();
+  if (access.status === "signed_out") return signedOutState(previous, values);
+  if (access.status === "no_access") return failure(previous, values, {}, NO_ACCESS);
+  const { context } = access;
+  const assignmentId = String(formData.get("assignmentId") ?? "");
+  if (!isUuid(assignmentId)) return failure(previous, values, {}, NO_ACCESS);
 
   try {
     await saveAssignmentProperty(context.actor, context.organizationId, assignmentId, values);

@@ -3,7 +3,7 @@ id: T-0071
 tittel: Faller nettet midt i lagring, kommer en engelsk feilside, og det som er skrevet går tapt
 type: feil
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-14
 rolle: test-robusthet
 omrade: feilhåndtering (eiendom, rom)

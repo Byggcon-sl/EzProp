@@ -27,14 +27,17 @@ vi.mock("@/core/auth/session", () => ({
     return session.actor;
   }),
   getCurrentActor: vi.fn(async () => session.actor),
+  getActorForAction: vi.fn(async () => session.actor),
   LOGIN_PATH: "/logg-inn",
 }));
 
-const { getEmployeeContext } = await import("./employee-context");
+const { getEmployeeContext, getEmployeeContextForAction } = await import("./employee-context");
+const { requireActor } = await import("@/core/auth/session");
 
 beforeEach(async () => {
   await resetDatabase();
   session.actor = null;
+  vi.clearAllMocks();
 });
 
 async function setInspectorsEditAll(organizationId: string, value: boolean) {
@@ -188,4 +191,69 @@ describe("4.5 canManageContacts_per_role", () => {
       expect(context?.canManageContacts).toBe(expected);
     },
   );
+});
+
+/*
+ * Rett T-0070 (docs/agenter/oppgaver/rett-t0070-t0071.md punkt 3, testplan 1d-2): konteksten for
+ * serverhandlinger som tåler utløpt innlogging. Skiller «logget ut», «ingen tilgang» og «ok», og
+ * videresender aldri. Organisasjonen kommer bare fra tilgangssjekken.
+ */
+describe("getEmployeeContextForAction", () => {
+  it("uten økt: signed_out, uten videresending", async () => {
+    await createOrganization();
+    expect(await getEmployeeContextForAction()).toEqual({ status: "signed_out" });
+    expect(requireActor).not.toHaveBeenCalled();
+  });
+
+  it("innlogget uten ansattrad: no_access", async () => {
+    await createOrganization();
+    session.actor = await createUser();
+    expect(await getEmployeeContextForAction()).toEqual({ status: "no_access" });
+  });
+
+  it("myk slettet ansattrad: no_access", async () => {
+    const org = await createOrganization();
+    const actor = await createUser();
+    const employee = await createEmployee(actor, org.id, ["admin"]);
+    await db.update(employees).set({ deletedAt: new Date() }).where(eq(employees.id, employee.id));
+    session.actor = actor;
+    expect(await getEmployeeContextForAction()).toEqual({ status: "no_access" });
+  });
+
+  it("deaktivert ansatt: no_access", async () => {
+    const org = await createOrganization();
+    const actor = await createUser();
+    const employee = await createEmployee(actor, org.id, ["inspector"]);
+    await db
+      .update(employees)
+      .set({ deactivatedAt: new Date() })
+      .where(eq(employees.id, employee.id));
+    session.actor = actor;
+    expect(await getEmployeeContextForAction()).toEqual({ status: "no_access" });
+  });
+
+  it.each(["admin", "manager", "office", "inspector"] as const)(
+    "%s: ok med samme kontekst som getEmployeeContext og organisasjonen fra tilgangssjekken",
+    async (role) => {
+      await createOrganization();
+      const org = await createOrganization();
+      const office = await createOffice(org.id);
+      const actor = await createUser();
+      await createEmployee(actor, org.id, [role], { officeId: office.id });
+      session.actor = actor;
+
+      const result = await getEmployeeContextForAction();
+      expect(result.status).toBe("ok");
+      if (result.status !== "ok") return;
+      expect(result.context.organizationId).toBe(org.id);
+      expect(result.context).toEqual(await getEmployeeContext());
+    },
+  );
+});
+
+describe("getEmployeeContext oppfører seg som før", () => {
+  it("videresender (requireActor) uten økt", async () => {
+    await expect(getEmployeeContext()).rejects.toThrow("ikke innlogget (test)");
+    expect(requireActor).toHaveBeenCalled();
+  });
 });

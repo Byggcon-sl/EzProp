@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AccessDeniedError } from "@/core/access";
 import { listAgreements, suggestAgreementForAssignment } from "@/core/agreements";
+import { listTrash } from "@/core/buildings";
 import { claimOutcomeLabel, claimTypeLabel, listClaimsForAssignment } from "@/core/claims";
 import {
   allowedTransitions,
@@ -78,6 +79,9 @@ import { ScheduleCard } from "./schedule-card";
 import { StatusCard, type StatusOption } from "./status-card";
 import { TeamMemberForm } from "./team-form";
 import { WorkSessionTracker } from "./work-session-tracker";
+import { TrashList } from "./trash-list";
+import { TRASH_ID } from "./trash-texts";
+import { isTrashTruncated, toTrashEntries } from "./trash-view";
 
 export const metadata: Metadata = { title: "Oppdrag" };
 
@@ -142,10 +146,13 @@ function PropertySection({
   assignmentId,
   data,
   canEdit,
+  email,
 }: {
   assignmentId: string;
   data: AssignmentProperty;
   canEdit: boolean;
+  /** Den ansattes egen e-post, til innloggingsdialogen. Aldri i en adresse. */
+  email: string;
 }) {
   const { property } = data;
   const values = propertyFormValues(data);
@@ -174,6 +181,7 @@ function PropertySection({
                 label: ownershipFormLabel(code),
               }))}
               action={savePropertyAction}
+              email={email}
             />
           ) : property ? (
             <PropertyDetails
@@ -322,13 +330,19 @@ export default async function AssignmentPage({
 
   const canEdit = context.canEditOrders;
   const now = new Date();
-  const [schedule, agreements, suggestion, claims, duplicates] = await Promise.all([
+  const [schedule, agreements, suggestion, claims, duplicates, trash] = await Promise.all([
     loadSchedule(context, assignment),
     listAgreements(context.actor, context.organizationId),
     suggestAgreementForAssignment(context.actor, context.organizationId, assignment.id, now),
     loadClaims(context, assignment.id),
     loadDuplicates(context, assignment.id),
+    listTrash(context.actor, context.organizationId, assignment.id),
   ]);
+  const partyTrash = toTrashEntries(
+    trash.filter((line) => line.type === "party"),
+    now,
+    partyRoleLabel,
+  );
   const booking = bookingView.booking;
   const cadastre = cadastreText(booking);
   // Statusen er alltid en av de fire kodene (CHECK i databasen); ukjent kode gir ingen knapper.
@@ -484,7 +498,12 @@ export default async function AssignmentPage({
         action={setAgreementAction}
       />
 
-      <PropertySection assignmentId={assignment.id} data={propertyData} canEdit={canEdit} />
+      <PropertySection
+        assignmentId={assignment.id}
+        data={propertyData}
+        canEdit={canEdit}
+        email={context.actor.email}
+      />
 
       <p className="-mt-4 mb-8">
         <Link
@@ -583,6 +602,13 @@ export default async function AssignmentPage({
         {canEdit && (
           <AddPartySection assignmentId={assignment.id} roles={roles} action={addPartyAction} />
         )}
+        <TrashList
+          id={TRASH_ID.parties}
+          entries={partyTrash}
+          canRestore={canEdit}
+          truncated={isTrashTruncated(trash)}
+          className="mt-4"
+        />
       </section>
 
       {claims && (

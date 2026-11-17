@@ -14,7 +14,7 @@ test("helsesjekken svarer med versjonen fra package.json uten innlogging", async
 
 test("uinnlogget sendes til innlogging", async ({ page }) => {
   await page.goto("/arbeidskoe");
-  await expect(page).toHaveURL(/\/logg-inn$/);
+  await expect(page).toHaveURL(/\/logg-inn\?neste=%2Farbeidskoe$/);
   await expect(page.getByRole("heading", { name: "Logg inn" })).toBeVisible();
 });
 

@@ -1,12 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useCallback, useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
+import { restoreKey } from "@/shared/lib/use-restored-focus";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
+import { useUndoToast, type UndoOutcome } from "@/shared/ui/undo-toast";
 import { FormErrors, SubmitButton } from "../../form-parts";
-import { initialFormState } from "../../form-state";
+import { initialFormState, type FormState } from "../../form-state";
+import { restorePartyAction, type RemovePartyState } from "./actions";
 import { PartyForm, type Action, type PartyRoleOption, type PartyValues } from "./party-form";
+import {
+  removedMessage,
+  restoreFailedMessage,
+  restoreResultMessage,
+  TRASH_ID,
+} from "./trash-texts";
 
 export type PartyView = PartyValues & { id: string; roleLabel: string };
 
@@ -30,14 +39,55 @@ function receivesText(party: PartyValues) {
   return items.length > 0 ? items.join(", ") : <span className="text-slate-500">Ingenting</span>;
 }
 
-/** «Fjern»: myk sletting uten egen dialog. Parten kan legges inn igjen. */
-function RemovePartyForm({ partyId, action }: { partyId: string; action: Action }) {
-  const [state, formAction] = useActionState(action, initialFormState);
+export type RemovePartyAction = (state: FormState, formData: FormData) => Promise<RemovePartyState>;
+
+/** «Angre» i meldingen: samme kjernefunksjon som papirkurven, med `how: "undo"`. */
+async function undoRemoveParty(partyId: string, name: string): Promise<UndoOutcome> {
+  const result = await restorePartyAction({ id: partyId, how: "undo" });
+  if (!result.ok) return { ok: false };
+  return {
+    ok: true,
+    message: restoreResultMessage("party", name, result),
+    focus: restoreKey("party", partyId),
+  };
+}
+
+/**
+ * «Fjern»: myk sletting uten egen dialog. Lykkes det, kommer angre-meldingen; kortet forsvinner
+ * med oppfriskingen. Svaret leses i skjemaets egen handling, fordi skjemaet forsvinner med kortet.
+ */
+function RemovePartyForm({
+  partyId,
+  name,
+  action,
+}: {
+  partyId: string;
+  name: string;
+  action: RemovePartyAction;
+}) {
+  const toast = useUndoToast();
+  const [state, setState] = useState<FormState>(initialFormState);
+
+  async function submit(formData: FormData) {
+    const result = await action(state, formData);
+    if (result.message !== null || result.removed === null) {
+      setState(result);
+      return;
+    }
+    toast.show({
+      target: { type: "party", id: partyId, label: name },
+      message: removedMessage("party", name),
+      failureMessage: restoreFailedMessage("party"),
+      trashId: TRASH_ID.parties,
+      undo: () => undoRemoveParty(partyId, name),
+    });
+  }
+
   return (
-    <form action={formAction} className="space-y-3">
+    <form action={submit} className="space-y-3">
       <FormErrors state={state} />
       <input type="hidden" name="partyId" value={partyId} />
-      <SubmitButton variant="secondary" size="md">
+      <SubmitButton variant="secondary" size="md" pendingLabel="Fjerner …">
         Fjern
       </SubmitButton>
     </form>
@@ -60,7 +110,7 @@ export function PartyCard({
   canEdit: boolean;
   roles: PartyRoleOption[];
   updateAction: Action;
-  removeAction: Action;
+  removeAction: RemovePartyAction;
 }) {
   const [editing, setEditing] = useState(false);
   const close = useCallback(() => setEditing(false), []);
@@ -87,7 +137,12 @@ export function PartyCard({
   return (
     <Card>
       <p className="text-sm font-medium text-brand-700">{party.roleLabel}</p>
-      <h3 className="mt-0.5 text-lg font-medium break-words text-slate-900">{party.name}</h3>
+      <h3
+        data-restore-id={restoreKey("party", party.id)}
+        className="-mx-1 mt-0.5 rounded-lg px-1 text-lg font-medium break-words text-slate-900"
+      >
+        {party.name}
+      </h3>
       <dl className="mt-3">
         <Detail label="Firma">{party.firmName || EMPTY}</Detail>
         <Detail label="E-post">{party.email || EMPTY}</Detail>
@@ -107,7 +162,7 @@ export function PartyCard({
           <Button variant="secondary" onClick={() => setEditing(true)}>
             Endre
           </Button>
-          <RemovePartyForm partyId={party.id} action={removeAction} />
+          <RemovePartyForm partyId={party.id} name={party.name} action={removeAction} />
         </div>
       )}
     </Card>

@@ -8,8 +8,6 @@ import { ZodError } from "zod";
 import { AccessDeniedError, type Actor } from "@/core/access";
 import {
   addRooms,
-  BuildingNotEmptyError,
-  FloorNotEmptyError,
   getAssignmentBuildings,
   numberRoomDrafts,
   PropertyMissingError,
@@ -1349,28 +1347,69 @@ describe("4.5 oppførsel", () => {
     expect(await tableCounts()).toEqual(counts);
   });
 
-  it("4.5.3 bygning med aktiv etasje → BuildingNotEmptyError; etasje med aktivt rom → FloorNotEmptyError", async () => {
-    const { org, admin, assignment } = await orgWithAdmin();
-    const { building, floor } = await tree(org.id, assignment.id);
-    const counts = await tableCounts();
-    const rows = await snapshot(org.id);
+  it("4.5.3 (A414, erstatter A98) «Fjern» på etasje og bygning med innhold tar alt med i én slettegruppe", async () => {
+    const { org, admin, adminEmployee, assignment } = await orgWithAdmin();
+    const { building, floor, area, room } = await tree(org.id, assignment.id);
+    const second = await createFloor(org.id, {
+      buildingId: building.id,
+      name: BASEMENT,
+      level: -1,
+    });
+    const secondRoom = await createRoom(org.id, { floorId: second.id });
 
-    await expect(removeBuilding(admin, org.id, building.id)).rejects.toThrow(BuildingNotEmptyError);
-    await expect(removeFloor(admin, org.id, floor.id)).rejects.toThrow(FloorNotEmptyError);
-    expect(await tableCounts()).toEqual(counts);
-    expect(await snapshot(org.id)).toBe(rows);
+    const floorResult = await removeFloor(admin, org.id, floor.id);
+    expect(floorResult).toEqual({
+      removed: [
+        { type: "floor", id: floor.id },
+        { type: "room", id: room.id },
+      ],
+    });
+    const floorAt = timeOf((await rowById("floors", floor.id)).deleted_at);
+    for (const [table, id] of [
+      ["rooms", room.id],
+      ["floor_areas", area.id],
+    ] as const) {
+      const row = await rowById(table, id);
+      expect(timeOf(row.deleted_at), table).toBe(floorAt);
+      expect(row.deleted_by, table).toBe(adminEmployee.id);
+    }
+
+    const buildingResult = await removeBuilding(admin, org.id, building.id);
+    expect(buildingResult.removed).toEqual([
+      { type: "building", id: building.id },
+      { type: "floor", id: second.id },
+      { type: "room", id: secondRoom.id },
+    ]);
+    const buildingAt = timeOf((await rowById("report_buildings", building.id)).deleted_at);
+    expect(timeOf((await rowById("floors", second.id)).deleted_at)).toBe(buildingAt);
+    expect(timeOf((await rowById("rooms", secondRoom.id)).deleted_at)).toBe(buildingAt);
+    // Det som var fjernet før, beholder sitt eget tidspunkt.
+    expect(timeOf((await rowById("floors", floor.id)).deleted_at)).toBe(floorAt);
   });
 
-  it("4.5.3 med bare myk-slettede barn går fjerningen gjennom", async () => {
+  it("4.5.3 BuildingNotEmptyError og FloorNotEmptyError er fjernet fra kjernen", async () => {
+    const core = (await import("@/core/buildings")) as Record<string, unknown>;
+    expect(core).not.toHaveProperty("BuildingNotEmptyError");
+    expect(core).not.toHaveProperty("FloorNotEmptyError");
+    const source = readFileSync(
+      join(fileURLToPath(new URL(".", import.meta.url)), "service.ts"),
+      "utf8",
+    );
+    expect(source).not.toContain("NotEmptyError");
+  });
+
+  it("4.5.3 med bare myk-slettede barn går fjerningen gjennom, og de gamle radene røres ikke", async () => {
     const { org, admin, assignment } = await orgWithAdmin();
     const building = await createBuilding(org.id, { assignmentId: assignment.id });
     const floor = await createFloor(org.id, { buildingId: building.id });
-    await createRoom(org.id, { floorId: floor.id, deletedAt: DELETED_AT });
-    await createFloor(org.id, { buildingId: building.id, deletedAt: DELETED_AT });
+    const oldRoom = await createRoom(org.id, { floorId: floor.id, deletedAt: DELETED_AT });
+    const oldFloor = await createFloor(org.id, { buildingId: building.id, deletedAt: DELETED_AT });
 
     await removeFloor(admin, org.id, floor.id);
     await removeBuilding(admin, org.id, building.id);
     expect((await rowById("report_buildings", building.id)).deleted_at).not.toBeNull();
+    expect(timeOf((await rowById("rooms", oldRoom.id)).deleted_at)).toBe(DELETED_AT.getTime());
+    expect(timeOf((await rowById("floors", oldFloor.id)).deleted_at)).toBe(DELETED_AT.getTime());
   });
 
   it("4.5.4 sortering: bygninger og rom på created_at, så id; etasjer på level, så created_at, så id", async () => {
@@ -1851,13 +1890,19 @@ describe("4.6 hendelser og revisjonslogg", () => {
     for (const event of allEvents) {
       const keys = Object.keys(event.data).sort();
       expect(keys.includes("created") || keys.length === 1, JSON.stringify(keys)).toBe(true);
-      for (const value of Object.values(event.data)) {
-        expect(typeof value === "boolean" || /^[0-9a-f-]{36}$/.test(String(value))).toBe(true);
+      for (const [key, value] of Object.entries(event.data)) {
+        // Fjerning har også faste koder og tall (A418): romtype, etasjenummer og antall i gruppen.
+        if (key === "roomTypeKey") expect(typeof value).toBe("string");
+        else if (key === "floorKey" || key === "groupCount") expect(typeof value).toBe("number");
+        else expect(typeof value === "boolean" || /^[0-9a-f-]{36}$/.test(String(value))).toBe(true);
       }
     }
   });
 
-  it("4.6.4 ingen hendelse ved avvist tilgang, valideringsfeil eller de tre kjente feilene", async () => {
+  it("4.6.4 ingen hendelse ved avvist tilgang, valideringsfeil eller manglende eiendom", async () => {
+    // «Fjern» på etasje med rom og bygning med etasjer er ikke lenger en feil (A414,
+    // docs/funksjoner/fase2a-papirkurv-testplan.md), så de to kallene er tatt ut her og
+    // testet i 4.5.3 og src/core/buildings/trash.test.ts.
     const { org, admin, assignment } = await orgWithAdmin();
     await setInspectorsEditAll(org.id, false);
     const { actor: inspector } = await person(org.id, ["inspector"]);
@@ -1867,8 +1912,8 @@ describe("4.6 hendelser og revisjonslogg", () => {
     await caught(saveBuilding(inspector, org.id, assignment.id, null, buildingInput()));
     await caught(saveBuilding(admin, org.id, assignment.id, null, buildingInput({ name: "" })));
     await caught(saveBuilding(admin, org.id, noProperty.id, null, buildingInput()));
-    await caught(removeBuilding(admin, org.id, building.id));
-    await caught(removeFloor(admin, org.id, floor.id));
+    await caught(removeBuilding(inspector, org.id, building.id));
+    await caught(removeFloor(inspector, org.id, floor.id));
     expect(await rowCount("events")).toBe(0);
     expect(await rowCount("audit_log")).toBe(0);
   });

@@ -745,6 +745,65 @@ export async function signInWithCode(page: Page, email: string) {
   await page.getByRole("button", { name: "Logg inn", exact: true }).click();
 }
 
+// --- Rett T-0070: innlogging i dialog over skjemaet (docs/agenter/oppgaver/rett-t0070-t0071-testplan.md avsnitt 2) ---
+
+/**
+ * Fyller ut kodeskjemaet på innloggingssiden man står på (for eksempel `/logg-inn?neste=…` etter
+ * en sidevisning uten innlogging). Går ikke til `/logg-inn` og venter ikke på arbeidskøen; testen
+ * sjekker selv hvor siden sender etterpå.
+ */
+export async function logInFromCurrentPage(page: Page, email: string) {
+  await signInWithCode(page, email);
+}
+
+/** Den åpne innloggingsdialogen over skjemaet (den innerste når dialoger ligger i hverandre). */
+export function signInDialog(page: Page): Locator {
+  return page
+    .getByRole("dialog")
+    .filter({ has: page.getByLabel(/^(E-postadresse|Kode fra e-posten)$/) })
+    .last();
+}
+
+/** Henter siste innloggingskode fra utviklings-postkassen i en egen side. */
+async function latestLoginCode(page: Page): Promise<string> {
+  const mailbox = await page.context().newPage();
+  await mailbox.goto("/dev/epost");
+  const subject = await mailbox.getByTestId("dev-email-subject").first().textContent();
+  await mailbox.close();
+  const code = /: (\d{6})$/.exec(subject ?? "")?.[1];
+  if (!code) throw new Error(`Fant ingen innloggingskode i «${subject}»`);
+  return code;
+}
+
+/**
+ * Logger inn i dialogen over skjemaet: e-posten er fylt ut fra siden, så bare «Send meg en kode»
+ * og koden trengs. Henter koden fra `/dev/epost` i en egen side, så skjemaet under står urørt.
+ * Venter til dialogen er lukket.
+ */
+export async function logInInDialog(page: Page) {
+  const dialog = signInDialog(page);
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Send meg en kode" }).click();
+  const codeField = dialog.getByLabel("Kode fra e-posten");
+  await expect(codeField).toBeVisible();
+  await codeField.fill(await latestLoginCode(page));
+  await dialog.getByRole("button", { name: "Logg inn", exact: true }).click();
+  await expect(page.getByLabel("Kode fra e-posten")).toHaveCount(0);
+}
+
+/** Som `logInInDialog`, men bare med tastaturet (fokus starter i dialogen). */
+export async function logInInDialogWithKeyboard(page: Page) {
+  const dialog = signInDialog(page);
+  await expect(dialog).toBeVisible();
+  // Fokus står i dialogen (e-postfeltet eller «Send meg en kode»); Enter sender koden
+  await page.keyboard.press("Enter");
+  const codeField = dialog.getByLabel("Kode fra e-posten");
+  await expect(codeField).toBeFocused();
+  await page.keyboard.type(await latestLoginCode(page));
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Kode fra e-posten")).toHaveCount(0);
+}
+
 /** Better Auth kaller kapselen `better-auth.session_token` (med `__Secure-` foran over https). */
 function isSessionCookie(name: string): boolean {
   return name.endsWith("session_token");
@@ -1038,6 +1097,32 @@ export async function softDeleteFirms(firmIds: readonly string[]): Promise<void>
     await sql`
       update firms set deleted_at = now()
       where organization_id = ${organizationId} and id in ${sql(firmIds)} and deleted_at is null`;
+  } finally {
+    await sql.end();
+  }
+}
+
+/**
+ * Myk sletting av kontorene som e2e-testene har laget («Testkontor …» og «Loggkontor …»).
+ * Kontorene lages av fase-0b-admin.spec.ts og fase-0b-logg.spec.ts og blir liggende mellom
+ * kjøringer i den lokale databasen, som ikke tømmes. Da vokser kontorlistene, og layout-tester blir
+ * røde uten grunn. Kontorene fra seed (Bodø, Mo i Rana, Mosjøen, Narvik, Tromsø) røres ikke, og
+ * ingenting slettes for godt (regel 3). Bare lokal database eller testdatabasen.
+ */
+export async function archiveLeftoverE2eOffices(): Promise<void> {
+  const sql = e2eSql();
+  try {
+    const organizationId = await seedOrganizationId(sql);
+    const [admin] = await sql<{ id: string }[]>`
+      select e.id from employees e join users u on u.id = e.user_id
+      where u.email = ${ADMIN_EMAIL} and e.organization_id = ${organizationId}
+        and e.deleted_at is null limit 1`;
+    if (!admin) throw new Error("Fant ikke admin fra seed (kjør pnpm db:seed)");
+    await sql`
+      update offices set deleted_at = now(), deleted_by = ${admin.id}, updated_at = now(),
+        row_version = row_version + 1
+      where organization_id = ${organizationId} and deleted_at is null
+        and (name like 'Testkontor %' or name like 'Loggkontor %')`;
   } finally {
     await sql.end();
   }
@@ -1793,6 +1878,240 @@ export async function roomsOnAssignment(assignmentId: string): Promise<E2eRoomRo
       where b.assignment_id = ${assignmentId}
         and r.deleted_at is null
       order by r.created_at`;
+  } finally {
+    await sql.end();
+  }
+}
+
+// --- Papirkurv og «Angre» (docs/funksjoner/fase2a-papirkurv-testplan.md avsnitt 10) ---------
+
+export type E2eStructure = {
+  assignmentId: string;
+  partyId: string;
+  partyName: string;
+  buildingId: string;
+  /** «1. etasje»: areal BRA-i 64,0 og rommene «Bad» og «Soverom». */
+  firstFloorId: string;
+  /** «2. etasje»: fire rom. */
+  secondFloorId: string;
+  /** Rommene i 1. etasje, i rekkefølgen på skjermen. */
+  firstFloorRoomIds: [string, string];
+  /** Rommet som allerede er fjernet (bare med `withRemovedRoom`). */
+  removedRoomId: string | null;
+};
+
+/**
+ * Et oppdrag med én part (som `createAssignmentWithParty`) og bygningen «Bolighus test» med
+ * «1. etasje» (BRA-i 64,0, rommene «Bad» og «Soverom») og «2. etasje» (fire rom), og «Garasje
+ * test» uten etasjer. Med `withRemovedRoom` ligger rommet «Vaskerom test» i papirkurven, fjernet
+ * av admin fra seed. Oppdiktede data, satt inn direkte uten tilgangssjekk. Bare lokal database
+ * eller testdatabasen.
+ */
+export async function createAssignmentWithBuildings(
+  suffix: string,
+  { withRemovedRoom = false }: { withRemovedRoom?: boolean } = {},
+): Promise<E2eStructure> {
+  const { assignmentId, partyId, partyName } = await createAssignmentWithParty(suffix);
+  const sql = e2eSql();
+  try {
+    const organizationId = await seedOrganizationId(sql);
+    const [admin] = await sql<{ id: string }[]>`
+      select e.id from employees e join users u on u.id = e.user_id
+      where u.email = ${ADMIN_EMAIL} and e.organization_id = ${organizationId}
+        and e.deleted_at is null limit 1`;
+    const buildingId = randomUUID();
+    const garageId = randomUUID();
+    const firstFloorId = randomUUID();
+    const secondFloorId = randomUUID();
+    const base = Date.now() - 60_000;
+    const at = (offset: number) => new Date(base + offset * 1000).toISOString();
+    await sql`
+      insert into report_buildings (id, organization_id, assignment_id, name, created_at)
+      values (${buildingId}, ${organizationId}, ${assignmentId}, 'Bolighus test', ${at(0)}),
+             (${garageId}, ${organizationId}, ${assignmentId}, 'Garasje test', ${at(1)})`;
+    await sql`
+      insert into floors (id, organization_id, report_building_id, name, level, below_ground,
+        created_at)
+      values (${firstFloorId}, ${organizationId}, ${buildingId}, '1. etasje', 1, false, ${at(2)}),
+             (${secondFloorId}, ${organizationId}, ${buildingId}, '2. etasje', 2, false, ${at(3)})`;
+    await sql`
+      insert into floor_areas (organization_id, floor_id, bra_i, measured_by, method)
+      values (${organizationId}, ${firstFloorId}, 64.0, ${admin?.id ?? null}, 'laser')`;
+    const bathId = randomUUID();
+    const bedroomId = randomUUID();
+    await sql`
+      insert into rooms (id, organization_id, floor_id, room_type, name, area_type, below_ground,
+        created_at)
+      values (${bathId}, ${organizationId}, ${firstFloorId}, 'bathroom', null, 'bra_i', false, ${at(4)}),
+             (${bedroomId}, ${organizationId}, ${firstFloorId}, 'bedroom', null, 'bra_i', false, ${at(5)})`;
+    const upper = [
+      ["bedroom", "Soverom 1"],
+      ["bedroom", "Soverom 2"],
+      ["living_room", "Stue oppe"],
+      ["bathroom", "Bad oppe"],
+    ] as const;
+    for (const [index, [roomType, name]] of upper.entries()) {
+      await sql`
+        insert into rooms (organization_id, floor_id, room_type, name, area_type, below_ground,
+          created_at)
+        values (${organizationId}, ${secondFloorId}, ${roomType}, ${name}, 'bra_i', false,
+          ${at(6 + index)})`;
+    }
+    let removedRoomId: string | null = null;
+    if (withRemovedRoom) {
+      removedRoomId = randomUUID();
+      await sql`
+        insert into rooms (id, organization_id, floor_id, room_type, name, area_type, below_ground,
+          created_at, deleted_at, deleted_by)
+        values (${removedRoomId}, ${organizationId}, ${firstFloorId}, 'laundry', 'Vaskerom test',
+          'bra_i', false, ${at(10)}, ${at(20)}, ${admin?.id ?? null})`;
+    }
+    return {
+      assignmentId,
+      partyId,
+      partyName,
+      buildingId,
+      firstFloorId,
+      secondFloorId,
+      firstFloorRoomIds: [bathId, bedroomId],
+      removedRoomId,
+    };
+  } finally {
+    await sql.end();
+  }
+}
+
+// --- Papirkurv og angre (docs/funksjoner/fase2a-papirkurv-testplan.md avsnitt 10) -------------
+
+export type E2eTrashTree = {
+  assignmentId: string;
+  buildingId: string;
+  buildingName: string;
+  firstFloorId: string;
+  secondFloorId: string;
+  /** Rommene i 1. etasje i rekkefølge: «Bad <suffix>», «Soverom 1 <suffix>», «Stue <suffix>». */
+  firstFloorRooms: { id: string; name: string }[];
+  /** Fire rom i 2. etasje. */
+  secondFloorRooms: { id: string; name: string }[];
+  partyId: string;
+  partyName: string;
+};
+
+/**
+ * Et oppdrag (med ordre og eiendom) i organisasjonen til admin fra seed, med bygningen
+ * «Bolighus test <suffix>», «1. etasje» (BRA-i 50, BRA-e 10, BRA-b 4) med tre rom, «2. etasje»
+ * med fire rom, og kjøperen «Ola Testmann <suffix>». Rommene får `created_at` med ett sekunds
+ * mellomrom, så rekkefølgen er fast. Oppdiktede data. Bare lokal database eller testdatabasen.
+ */
+export async function createAssignmentWithTrashTree(suffix: string): Promise<E2eTrashTree> {
+  const sql = e2eSql();
+  try {
+    const organizationId = await seedOrganizationId(sql);
+    const [office] = await sql<{ id: string }[]>`
+      select id from offices where organization_id = ${organizationId} and deleted_at is null
+      order by created_at limit 1`;
+    if (!office) throw new Error("Fant ikke et kontor fra seed (kjør pnpm db:seed)");
+    const assignmentId = randomUUID();
+    const buildingId = randomUUID();
+    const firstFloorId = randomUUID();
+    const secondFloorId = randomUUID();
+    const partyId = randomUUID();
+    const address = `Papirkurvveien 1 ${suffix}, 8000 Bodø`;
+    const buildingName = `Bolighus test ${suffix}`;
+    const partyName = `Ola Testmann ${suffix}`;
+    await sql`
+      insert into assignments (id, organization_id, number, office_id, assignment_type, status,
+        address_text, received_at, source)
+      values (${assignmentId}, ${organizationId}, ${`E2E-PK-${suffix}`}, ${office.id},
+        'condition_report', 'in_progress', ${address}, now(), 'manual')`;
+    await sql`
+      insert into report_buildings (id, organization_id, assignment_id, name)
+      values (${buildingId}, ${organizationId}, ${assignmentId}, ${buildingName})`;
+    await sql`
+      insert into floors (id, organization_id, report_building_id, name, level, below_ground)
+      values (${firstFloorId}, ${organizationId}, ${buildingId}, '1. etasje', 1, false),
+             (${secondFloorId}, ${organizationId}, ${buildingId}, '2. etasje', 2, false)`;
+    await sql`
+      insert into floor_areas (organization_id, floor_id, bra_i, bra_e, bra_b, method)
+      values (${organizationId}, ${firstFloorId}, 50, 10, 4, 'laser'),
+             (${organizationId}, ${secondFloorId}, 40, 0, 0, 'laser')`;
+    const rooms = async (floorId: string, names: [string, string][]) => {
+      const out: { id: string; name: string }[] = [];
+      for (const [index, [roomType, name]] of names.entries()) {
+        const id = randomUUID();
+        await sql`
+          insert into rooms (id, organization_id, floor_id, room_type, name, area_type,
+            below_ground, created_at)
+          values (${id}, ${organizationId}, ${floorId}, ${roomType}, ${name}, 'bra_i', false,
+            now() + (${index} || ' seconds')::interval)`;
+        out.push({ id, name });
+      }
+      return out;
+    };
+    const firstFloorRooms = await rooms(firstFloorId, [
+      ["bathroom", `Bad ${suffix}`],
+      ["bedroom", `Soverom 1 ${suffix}`],
+      ["living_room", `Stue ${suffix}`],
+    ]);
+    const secondFloorRooms = await rooms(secondFloorId, [
+      ["bedroom", `Soverom 2 ${suffix}`],
+      ["bedroom", `Soverom 3 ${suffix}`],
+      ["bathroom", `Bad 2 ${suffix}`],
+      ["storage", `Bod ${suffix}`],
+    ]);
+    await sql`
+      insert into assignment_parties (id, organization_id, assignment_id, role, name, email, phone)
+      values (${partyId}, ${organizationId}, ${assignmentId}, 'buyer', ${partyName},
+        'ola.testmann@example.invalid', '90000000')`;
+    return {
+      assignmentId,
+      buildingId,
+      buildingName,
+      firstFloorId,
+      secondFloorId,
+      firstFloorRooms,
+      secondFloorRooms,
+      partyId,
+      partyName,
+    };
+  } finally {
+    await sql.end();
+  }
+}
+
+/**
+ * Hvor mange rader som er fjernet (myk sletting) på oppdraget, per tabell, telt direkte i
+ * databasen. Bare lesing, bare lokal database eller testdatabasen.
+ */
+export async function trashCountsFor(assignmentId: string): Promise<{
+  buildings: number;
+  floors: number;
+  floorAreas: number;
+  rooms: number;
+  parties: number;
+}> {
+  const sql = e2eSql();
+  try {
+    const [row] = await sql<
+      { buildings: number; floors: number; floorAreas: number; rooms: number; parties: number }[]
+    >`
+      select
+        (select count(*)::int from report_buildings b
+          where b.assignment_id = ${assignmentId} and b.deleted_at is not null) as buildings,
+        (select count(*)::int from floors f
+          join report_buildings b on b.id = f.report_building_id
+          where b.assignment_id = ${assignmentId} and f.deleted_at is not null) as floors,
+        (select count(*)::int from floor_areas a
+          join floors f on f.id = a.floor_id
+          join report_buildings b on b.id = f.report_building_id
+          where b.assignment_id = ${assignmentId} and a.deleted_at is not null) as "floorAreas",
+        (select count(*)::int from rooms r
+          join floors f on f.id = r.floor_id
+          join report_buildings b on b.id = f.report_building_id
+          where b.assignment_id = ${assignmentId} and r.deleted_at is not null) as rooms,
+        (select count(*)::int from assignment_parties p
+          where p.assignment_id = ${assignmentId} and p.deleted_at is not null) as parties`;
+    return row!;
   } finally {
     await sql.end();
   }

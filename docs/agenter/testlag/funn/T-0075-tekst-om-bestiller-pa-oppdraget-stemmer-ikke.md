@@ -37,3 +37,4 @@ Ikke etterprøvd (lite).
 
 ## Logg
 - 2026-11-14: funnet
+- 2026-11-17: test-kontor så på main 2dc573c0 at et tilbud som er gjort om, nå sier tydelig at endringer ikke endrer oppdraget (bestillingen ligger på oppdraget etter ADR 0011). Ser rettet ut, men funnfilen er ikke satt til «rettet», så kontrolløren har ikke prøvd det på nytt.

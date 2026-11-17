@@ -1219,3 +1219,41 @@ describe("fabrikken for ai_usage_log", () => {
     expect(n).toBe(0);
   });
 });
+
+// Papirkurv (docs/funksjoner/fase2a-papirkurv-testplan.md, «Avtale om signaturer»): fabrikkene
+// for bygning, etasje, areal, rom og part tar `deletedAt` og `deletedBy`.
+describe("deletedAt og deletedBy på bygning, etasje, areal, rom og part", () => {
+  beforeEach(resetDatabase);
+
+  it("står på radene, med samme tidspunkt som er gitt inn", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const employee = await createEmployee(await createUser({ name: "Oppdiktet Ansatt" }), org.id, [
+      "inspector",
+    ]);
+    const deletedAt = new Date("2026-11-16T10:05:00.000Z");
+    const removed = { deletedAt, deletedBy: employee.id };
+
+    const building = await createBuilding(org.id, removed);
+    const floor = await createFloor(org.id, { buildingId: building.id, ...removed });
+    const area = await createFloorArea(org.id, { floorId: floor.id, braI: 10, ...removed });
+    const room = await createRoom(org.id, { floorId: floor.id, ...removed });
+    const party = await createAssignmentParty(org.id, {
+      assignmentId: building.assignmentId,
+      ...removed,
+    });
+
+    for (const row of [building, floor, area, room, party]) {
+      expect(row.deletedBy).toBe(employee.id);
+      expect(row.deletedAt?.toISOString()).toBe(deletedAt.toISOString());
+    }
+  });
+
+  it("er tomme når de ikke er gitt", async () => {
+    const org = await createOrganization("Oppdiktet takst A");
+    const floor = await createFloor(org.id);
+    for (const row of [floor, await createRoom(org.id, { floorId: floor.id })]) {
+      expect(row.deletedAt).toBeNull();
+      expect(row.deletedBy).toBeNull();
+    }
+  });
+});

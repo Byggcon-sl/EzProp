@@ -117,7 +117,7 @@ export function showSyncNow(kind: SyncStatusKind | null): boolean {
 
 /**
  * Lenken «Logg inn»: `/logg-inn?neste=<sti>`. Bare stien sendes med; spørrestreng og `#` fjernes.
- * Innloggingssiden godtar bare trygge stier (`safeNextPath`).
+ * Innloggingssiden godtar bare trygge stier (`safeNextPath` i `src/shared/navigation/safe-next-path.ts`).
  */
 export function signInHref(pathname: string): string {
   const path = pathname.split(/[?#]/, 1)[0] ?? "";

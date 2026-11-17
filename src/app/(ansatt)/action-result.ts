@@ -2,7 +2,13 @@ import "server-only";
 import { ZodError } from "zod";
 import { AccessDeniedError } from "@/core/access";
 import { logger } from "@/shared/lib/logger";
-import { FIX_FIELDS, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "./form-state";
+import {
+  FIX_FIELDS,
+  NO_ACCESS,
+  SIGNED_OUT_MESSAGE,
+  UNKNOWN_ERROR,
+  type FormState,
+} from "./form-state";
 
 /** Et mislykket forsøk med feil ved feltene og/eller en melding øverst. */
 export function failure(
@@ -12,6 +18,20 @@ export function failure(
   message: string | null = Object.keys(fieldErrors).length > 0 ? FIX_FIELDS : null,
 ): FormState {
   return { fieldErrors, message, values, attempt: previous.attempt + 1 };
+}
+
+/**
+ * «Logget ut»-svaret (rett T-0070): innloggingen er utløpt. Bare verdiene klienten selv sendte
+ * (de kjente feltene), aldri noe fra databasen. Ingen lenke settes her; klienten lager den.
+ */
+export function signedOutState(previous: FormState, values: FormState["values"]): FormState {
+  return {
+    fieldErrors: {},
+    message: SIGNED_OUT_MESSAGE,
+    values,
+    attempt: previous.attempt + 1,
+    signedOut: true,
+  };
 }
 
 /** Feilmeldingene ved feltet fra skissen, per felt. */
