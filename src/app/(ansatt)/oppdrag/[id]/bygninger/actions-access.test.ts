@@ -36,6 +36,8 @@ import { initialFormState, NO_ACCESS, type FormState } from "../../../form-state
 
 const mocks = vi.hoisted(() => ({
   getEmployeeContext: vi.fn(),
+  /** Sann: getEmployeeContextForAction svarer «logget ut» (rett T-0070). */
+  signedOut: { value: false },
   revalidatePath: vi.fn(),
   log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
@@ -43,7 +45,17 @@ const mocks = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/shared/lib/logger", () => ({ logger: mocks.log }));
-vi.mock("../../../employee-context", () => ({ getEmployeeContext: mocks.getEmployeeContext }));
+// Handlingene som tåler utløpt innlogging (rett T-0070) bruker getEmployeeContextForAction. Her
+// bygges svaret fra den samme falske konteksten: null gir «ingen tilgang», og `signedOut` gir
+// «logget ut».
+vi.mock("../../../employee-context", () => ({
+  getEmployeeContext: mocks.getEmployeeContext,
+  getEmployeeContextForAction: async () => {
+    if (mocks.signedOut.value) return { status: "signed_out" };
+    const context = await mocks.getEmployeeContext();
+    return context ? { status: "ok", context } : { status: "no_access" };
+  },
+}));
 
 const {
   saveBuildingAction,
@@ -70,6 +82,7 @@ const FORM_VALUES = [NEW_BUILDING, NEW_FLOOR, NEW_ROOM, NEW_COMMENT, ...NEW_AREA
 beforeEach(async () => {
   await resetDatabase();
   vi.clearAllMocks();
+  mocks.signedOut.value = false;
 });
 
 function form(entries: Record<string, string>): FormData {

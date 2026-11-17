@@ -50,7 +50,7 @@ async function openTrialForm(page: Page) {
 
 test("uinnlogget sendes til innlogging fra /prove/testskjema", async ({ page }) => {
   await page.goto("/prove/testskjema");
-  await expect(page).toHaveURL(/\/logg-inn$/);
+  await expect(page).toHaveURL(/\/logg-inn\?neste=%2Fprove%2Ftestskjema$/);
   await expect(page.getByRole("heading", { name: "Logg inn" })).toBeVisible();
 });
 

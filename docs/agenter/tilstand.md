@@ -117,6 +117,9 @@ Ingen.
 ## Pågår
 
 - Brancher med «Pågår» eller arbeid uten PR (16.11.2026): `papirkurv` (Papirkurv og angre for sletting, A410–A418), `rydd-innloggingsdata` (PR #222 åpnet 17.11.2026, A419–A422, spørsmål 88), `rett-t0070-t0071` (A390–A394, siste commit kl. 16:59) og `badet-pc` (A340–A359 og A380–A387, siste commit kl. 16:01; må flette inn main etter #217). Neste ledige A-nummer etter disse: A423 (A388–A389 og A395–A409 er også ledige).
+- **Rett T-0070 og T-0071** (branch `rett-t0070-t0071`, overtatt 16.11.2026). Oppgavekort og testplan er oppdatert etter forhåndsvurderingen fra forbedrer, sikkerhet-personvern og test-leder. Tre tillegg fra forbedreren: innloggingsdialog, sjekk av økten ved fokus og melding når nettet er tilbake, og bedre feilsider. Beslutninger A390–A394. Neste steg: bygging (bit A, B og C). Ordrefilene og badmalen røres ikke.
+- **Badet på PC** (branch `badet-pc`, oppgavekort og testplan, mellomlagret 14.11.2026 kl. 02:32 uten PR). Står stille; neste kjøring kan overta den hvis ingen har gjort det.
+- Brancher med «Pågår» eller arbeid uten PR (16.11.2026): `papirkurv` (Papirkurv og angre for sletting, A410–A418), `rydd-innloggingsdata` (overtatt av hovedløkken kl. 19 UTC), `rett-t0070-t0071` (A390–A394, siste commit kl. 16:59) og `badet-pc` (A340–A359 og A380–A387, siste commit kl. 16:01; må flette inn main etter #217). Neste ledige A-nummer etter disse: A419 (A388–A389 og A395–A409 er også ledige).
 - Overflødige brancher etter PR #203: `testdata-arbeidshverdag`, `testdata-retting-hovedlop-2111`, `arkiv-testdata-arbeidshverdag-parallell`, `testdata-overtatt`. Etter PR #209: `worktree-wf_b4502702-3aa-19`.
 
 ## Siste kjøring

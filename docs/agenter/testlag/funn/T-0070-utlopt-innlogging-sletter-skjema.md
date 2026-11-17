@@ -3,7 +3,7 @@ id: T-0070
 tittel: Utløpt innlogging midt i et skjema sletter det som er skrevet
 type: feil
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-14
 rolle: test-robusthet
 omrade: innlogging, alle skjemaer

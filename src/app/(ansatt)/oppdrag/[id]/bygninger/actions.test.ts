@@ -11,7 +11,13 @@ import {
   PropertyMissingError,
   roomInputSchema,
 } from "@/core/buildings";
-import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../../../form-state";
+import {
+  initialFormState,
+  NO_ACCESS,
+  SIGNED_OUT_MESSAGE,
+  UNKNOWN_ERROR,
+  type FormState,
+} from "../../../form-state";
 
 /*
  * Server actions på bygningssiden /oppdrag/[id]/bygninger
@@ -32,6 +38,8 @@ import { initialFormState, NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../.
 
 const mocks = vi.hoisted(() => ({
   getEmployeeContext: vi.fn(),
+  /** Sann: getEmployeeContextForAction svarer «logget ut» (rett T-0070). */
+  signedOut: { value: false },
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT ${url}`);
   }),
@@ -58,7 +66,17 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/shared/lib/logger", () => ({
   logger: { error: mocks.logError, warn: vi.fn(), info: vi.fn() },
 }));
-vi.mock("../../../employee-context", () => ({ getEmployeeContext: mocks.getEmployeeContext }));
+// Handlingene som tåler utløpt innlogging (rett T-0070) bruker getEmployeeContextForAction. Her
+// bygges svaret fra den samme falske konteksten: null gir «ingen tilgang», og `signedOut` gir
+// «logget ut».
+vi.mock("../../../employee-context", () => ({
+  getEmployeeContext: mocks.getEmployeeContext,
+  getEmployeeContextForAction: async () => {
+    if (mocks.signedOut.value) return { status: "signed_out" };
+    const context = await mocks.getEmployeeContext();
+    return context ? { status: "ok", context } : { status: "no_access" };
+  },
+}));
 vi.mock("@/core/buildings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/core/buildings")>()),
   ...mocks.core,
@@ -231,6 +249,7 @@ async function failed(promise: Promise<FormState>): Promise<FormState> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.signedOut.value = false;
   mocks.getEmployeeContext.mockResolvedValue({
     actor,
     organizationId: ORG,
@@ -251,6 +270,80 @@ beforeEach(() => {
     ],
   });
   mocks.core.removeRoom.mockResolvedValue({ id: ROOM });
+});
+
+/*
+ * Rett T-0070 (docs/agenter/oppgaver/rett-t0070-t0071.md punkt 3, testplan 1d): utløpt innlogging
+ * gir «logget ut»-svaret med bare de kjente feltene skjemaet sendte, før id-er sjekkes og før
+ * kjernen kalles. Ingen videresending, ingen logg.
+ */
+describe("logget ut (rett T-0070)", () => {
+  /** De kjente feltene hver handling gir tilbake (aldri id-er eller ukjente felt). */
+  const SIGNED_OUT_VALUES: Record<ActionName, Record<string, string>> = {
+    saveBuildingAction: { name: BUILDING_NAME },
+    removeBuildingAction: {},
+    saveFloorAction: { name: FLOOR_NAME, level: "-1", belowGround: "on" },
+    removeFloorAction: {},
+    saveFloorAreaAction: {
+      braI: AREAS[0]!,
+      braE: AREAS[1]!,
+      braB: AREAS[2]!,
+      alh: AREAS[3]!,
+      measuredBy: MEASURER,
+      method: "laser",
+      comment: COMMENT,
+    },
+    saveRoomAction: { roomType: "bathroom", name: ROOM_NAME, areaType: "bra_i", belowGround: "" },
+    removeRoomAction: {},
+    addRoomsAction: {
+      source: "preset",
+      presetKey: "apartment",
+      drafts: FORMS.addRoomsAction.drafts,
+    },
+  };
+
+  beforeEach(() => {
+    mocks.signedOut.value = true;
+  });
+
+  it.each(ACTION_NAMES)(
+    "%s: signedOut med meldingen og verdiene, uten kjerne og uten logg",
+    async (name) => {
+      const state = await failed(call(name, { organizationId: OTHER_ORG }));
+      expect(state).toEqual({
+        fieldErrors: {},
+        message: SIGNED_OUT_MESSAGE,
+        values: SIGNED_OUT_VALUES[name],
+        attempt: 1,
+        signedOut: true,
+        // «Fjern» svarer med `removed: null` når ingenting ble fjernet (papirkurven, A414).
+        ...(name.startsWith("remove") ? { removed: null } : {}),
+      });
+      expect(coreCalls()).toBe(0);
+      expect(mocks.getEmployeeContext).not.toHaveBeenCalled();
+      expect(mocks.redirect).not.toHaveBeenCalled();
+      expect(mocks.logError).not.toHaveBeenCalled();
+      expect(revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(ACTION_NAMES)(
+    "%s: samme svar for ugyldig id og gyldig id (ingen sjekk før innloggingen)",
+    async (name) => {
+      const invalid = Object.fromEntries(ID_FIELDS[name].map((field) => [field, "ikke-en-id"]));
+      const withValid = await failed(call(name));
+      const withInvalid = await failed(call(name, invalid));
+      expect(withInvalid).toEqual(withValid);
+      expect(coreCalls()).toBe(0);
+    },
+  );
+
+  it("addRoomsAction: ugyldig romliste gir også bare «logget ut»", async () => {
+    const state = await failed(call("addRoomsAction", { drafts: "ikke json" }));
+    expect(state.signedOut).toBe(true);
+    expect(state.message).toBe(SIGNED_OUT_MESSAGE);
+    expect(coreCalls()).toBe(0);
+  });
 });
 
 describe("6.1 uten ansattkontekst", () => {

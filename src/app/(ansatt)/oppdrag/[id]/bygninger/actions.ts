@@ -19,15 +19,21 @@ import {
 } from "@/core/buildings";
 import { logger } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
-import { errorResult, failure, type KnownError } from "../../../action-result";
-import { getEmployeeContext } from "../../../employee-context";
+import { errorResult, failure, signedOutState, type KnownError } from "../../../action-result";
+import {
+  getEmployeeContext,
+  getEmployeeContextForAction,
+  type EmployeeContext,
+} from "../../../employee-context";
 import { NO_ACCESS, UNKNOWN_ERROR, type FormState } from "../../../form-state";
 
 /*
  * Server actions på bygningssiden (bygninger, etasjer, areal og rom). Ingen tilgangslogikk her:
- * organisasjonen kommer fra `getEmployeeContext()`, og kjernen sjekker rettigheten. Et felt
- * `organizationId` i skjemaet leses aldri. Id-er som ikke er uuid stoppes før kjernen kalles.
- * Loggen får bare rute, bruker-id, id-er og feilnavn, aldri navn, kommentar eller arealtall.
+ * organisasjonen kommer fra `getEmployeeContextForAction()`, og kjernen sjekker rettigheten. Et
+ * felt `organizationId` i skjemaet leses aldri. Innloggingen sjekkes først (rett T-0070): er den
+ * utløpt, får skjemaet «logget ut»-svaret med verdiene det selv sendte, før id-er sjekkes og før
+ * kjernen kalles. Id-er som ikke er uuid stoppes før kjernen kalles. Loggen får bare rute,
+ * bruker-id, id-er og feilnavn, aldri navn, kommentar eller arealtall.
  */
 
 const ROUTE = "/oppdrag/[id]/bygninger";
@@ -89,6 +95,21 @@ function refresh() {
   revalidatePath(ROUTE, "page");
 }
 
+type Access = { ok: true; context: EmployeeContext } | { ok: false; state: FormState };
+
+/**
+ * Innloggingen og ansattraden, sjekket før alt annet. Uinnlogget: «logget ut»-svaret med
+ * `values` (bare de kjente feltene klienten sendte). Uten aktiv ansattrad: «ingen tilgang».
+ */
+async function employeeAccess(previous: FormState, values: FormState["values"]): Promise<Access> {
+  const access = await getEmployeeContextForAction();
+  if (access.status === "signed_out") return { ok: false, state: signedOutState(previous, values) };
+  if (access.status === "no_access") {
+    return { ok: false, state: failure(previous, values, {}, NO_ACCESS) };
+  }
+  return { ok: true, context: access.context };
+}
+
 function removed(previous: FormState, items: RemovedItem[]): RemoveState {
   return { ...saved(previous), removed: items };
 }
@@ -118,11 +139,13 @@ export async function saveBuildingAction(
   previous: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const values = readFields(formData, ["name"] as const);
+  const access = await employeeAccess(previous, values);
+  if (!access.ok) return access.state;
+  const { context } = access;
   const assignmentId = requiredId(formData, "assignmentId");
   const buildingId = optionalId(formData, "buildingId");
-  const values = readFields(formData, ["name"] as const);
-  const context = await getEmployeeContext();
-  if (!context || assignmentId === false || buildingId === false) {
+  if (assignmentId === false || buildingId === false) {
     return failure(previous, values, {}, NO_ACCESS);
   }
 
@@ -143,9 +166,11 @@ export async function removeBuildingAction(
   previous: FormState,
   formData: FormData,
 ): Promise<RemoveState> {
+  const access = await employeeAccess(previous, {});
+  if (!access.ok) return notRemoved(access.state);
+  const { context } = access;
   const buildingId = requiredId(formData, "buildingId");
-  const context = await getEmployeeContext();
-  if (!context || buildingId === false) return notRemoved(failure(previous, {}, {}, NO_ACCESS));
+  if (buildingId === false) return notRemoved(failure(previous, {}, {}, NO_ACCESS));
 
   let result: Awaited<ReturnType<typeof removeBuilding>>;
   try {
@@ -159,14 +184,16 @@ export async function removeBuildingAction(
 
 /** «Lagre» for en ny eller endret etasje. Ny etasje når `floorId` er tom. */
 export async function saveFloorAction(previous: FormState, formData: FormData): Promise<FormState> {
-  const buildingId = requiredId(formData, "buildingId");
-  const floorId = optionalId(formData, "floorId");
   const values = {
     ...readFields(formData, ["name", "level"] as const),
     belowGround: checked(formData, "belowGround"),
   };
-  const context = await getEmployeeContext();
-  if (!context || buildingId === false || floorId === false) {
+  const access = await employeeAccess(previous, values);
+  if (!access.ok) return access.state;
+  const { context } = access;
+  const buildingId = requiredId(formData, "buildingId");
+  const floorId = optionalId(formData, "floorId");
+  if (buildingId === false || floorId === false) {
     return failure(previous, values, {}, NO_ACCESS);
   }
 
@@ -187,9 +214,11 @@ export async function removeFloorAction(
   previous: FormState,
   formData: FormData,
 ): Promise<RemoveState> {
+  const access = await employeeAccess(previous, {});
+  if (!access.ok) return notRemoved(access.state);
+  const { context } = access;
   const floorId = requiredId(formData, "floorId");
-  const context = await getEmployeeContext();
-  if (!context || floorId === false) return notRemoved(failure(previous, {}, {}, NO_ACCESS));
+  if (floorId === false) return notRemoved(failure(previous, {}, {}, NO_ACCESS));
 
   let result: Awaited<ReturnType<typeof removeFloor>>;
   try {
@@ -208,10 +237,12 @@ export async function saveFloorAreaAction(
   previous: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const floorId = requiredId(formData, "floorId");
   const values = readFields(formData, AREA_FIELDS);
-  const context = await getEmployeeContext();
-  if (!context || floorId === false) return failure(previous, values, {}, NO_ACCESS);
+  const access = await employeeAccess(previous, values);
+  if (!access.ok) return access.state;
+  const { context } = access;
+  const floorId = requiredId(formData, "floorId");
+  if (floorId === false) return failure(previous, values, {}, NO_ACCESS);
 
   try {
     await saveFloorArea(context.actor, context.organizationId, floorId, values);
@@ -227,14 +258,16 @@ export async function saveFloorAreaAction(
  * (forslaget er satt i skjemaet og kan endres), så takstmannens valg vinner.
  */
 export async function saveRoomAction(previous: FormState, formData: FormData): Promise<FormState> {
-  const floorId = requiredId(formData, "floorId");
-  const roomId = optionalId(formData, "roomId");
   const values = {
     ...readFields(formData, ["roomType", "name", "areaType"] as const),
     belowGround: checked(formData, "belowGround"),
   };
-  const context = await getEmployeeContext();
-  if (!context || floorId === false || roomId === false) {
+  const access = await employeeAccess(previous, values);
+  if (!access.ok) return access.state;
+  const { context } = access;
+  const floorId = requiredId(formData, "floorId");
+  const roomId = optionalId(formData, "roomId");
+  if (floorId === false || roomId === false) {
     return failure(previous, values, {}, NO_ACCESS);
   }
 
@@ -264,10 +297,12 @@ type AddRoomsInput = Parameters<typeof addRooms>[3];
  * klienten sender aldri navn. Romnavn logges aldri (bare id-er og feilnavn).
  */
 export async function addRoomsAction(previous: FormState, formData: FormData): Promise<FormState> {
-  const floorId = requiredId(formData, "floorId");
   const values = readFields(formData, ["source", "presetKey", "drafts"] as const);
-  const context = await getEmployeeContext();
-  if (!context || floorId === false) return failure(previous, values, {}, NO_ACCESS);
+  const access = await employeeAccess(previous, values);
+  if (!access.ok) return access.state;
+  const { context } = access;
+  const floorId = requiredId(formData, "floorId");
+  if (floorId === false) return failure(previous, values, {}, NO_ACCESS);
 
   let drafts: unknown;
   try {
@@ -297,9 +332,11 @@ export async function removeRoomAction(
   previous: FormState,
   formData: FormData,
 ): Promise<RemoveState> {
+  const access = await employeeAccess(previous, {});
+  if (!access.ok) return notRemoved(access.state);
+  const { context } = access;
   const roomId = requiredId(formData, "roomId");
-  const context = await getEmployeeContext();
-  if (!context || roomId === false) return notRemoved(failure(previous, {}, {}, NO_ACCESS));
+  if (roomId === false) return notRemoved(failure(previous, {}, {}, NO_ACCESS));
 
   try {
     await removeRoom(context.actor, context.organizationId, roomId);
