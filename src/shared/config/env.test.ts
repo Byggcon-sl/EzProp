@@ -135,3 +135,30 @@ describe("uløste referanser til nøkkelboksen", () => {
     expect(() => getEnv()).not.toThrow();
   });
 });
+
+/*
+ * Rydding av innloggingsdata: testplan docs/agenter/oppgaver/rydd-innloggingsdata-testplan.md
+ * C1–C2. Feil oppsett av driftshemmeligheten slår bare av endepunktet, aldri appen (regel 11).
+ */
+describe("AUTH_CLEANUP_SECRET", () => {
+  it("C1. AUTH_CLEANUP_SECRET is optional", () => {
+    vi.stubEnv("AUTH_CLEANUP_SECRET", undefined);
+    resetEnvCache();
+    expect(() => getEnv()).not.toThrow();
+    expect(getEnv().AUTH_CLEANUP_SECRET).toBeUndefined();
+
+    vi.stubEnv("AUTH_CLEANUP_SECRET", "   ");
+    resetEnvCache();
+    expect(() => getEnv()).not.toThrow();
+    expect(getEnv().AUTH_CLEANUP_SECRET).toBeUndefined();
+  });
+
+  it.each([["for-kort"], [REFERENCE_URI], [REFERENCE_NAME]])(
+    "C2. short or unresolved AUTH_CLEANUP_SECRET does not stop the app (%j)",
+    (value) => {
+      vi.stubEnv("AUTH_CLEANUP_SECRET", value);
+      resetEnvCache();
+      expect(envError()).toBe("");
+    },
+  );
+});

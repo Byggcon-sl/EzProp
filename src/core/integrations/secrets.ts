@@ -18,6 +18,7 @@ export const DENIED_SECRET_REFS: readonly string[] = [
   "DATABASE_URL",
   "TEST_DATABASE_URL",
   "FILE_STORAGE_AZURE_CONNECTION_STRING",
+  "AUTH_CLEANUP_SECRET",
 ];
 
 /**
