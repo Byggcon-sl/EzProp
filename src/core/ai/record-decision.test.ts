@@ -277,7 +277,8 @@ describe("recordDecision: hvem som avgjør (7.6–7.7)", () => {
     const fn = (aiModule as unknown as Record<string, unknown>).recordDecision as (
       ...args: unknown[]
     ) => Promise<void>;
-    expect(fn.length).toBeLessThanOrEqual(3);
+    // Fjerde argument er bare `{ candidate }` («KI i veien», A432), aldri en ansatt
+    expect(fn.length).toBeLessThanOrEqual(4);
     const { organization, grant } = await aiOrganization();
     const other = await employeeWithGrant(organization.id, ["inspector"], "Test Takstmann To");
     const row = await rowWithStatus(organization.id, grant.employeeId, "suggested");

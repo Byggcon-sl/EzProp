@@ -1,19 +1,59 @@
 import { and, eq, isNull, ne } from "drizzle-orm";
+import { z } from "zod";
 import { AccessDeniedError, grantHasPermission, type EmployeeGrant } from "@/core/access";
 import { db } from "@/db/client";
-import { aiUsageLog, assignments, type AiErrorCode } from "@/db/schema";
+import {
+  AI_CANDIDATE_SOURCES,
+  SUMMARY_GROUPS,
+  aiUsageLog,
+  assignments,
+  type AiCandidateRef,
+  type AiErrorCode,
+  type AiGuardCode,
+  type AiOutcome,
+} from "@/db/schema";
 import { stripUnstorableChars } from "@/shared/lib/clean-text";
 import { logger } from "@/shared/lib/logger";
-import { AiRequestRejectedError } from "./errors";
-import { AI_TRIAL_TARGET_TYPE, getFeatureDefinition } from "./features";
-import { preparePrompt } from "./prompt";
+import { isUuid } from "@/shared/lib/uuid";
+import { parseCandidateAnswer } from "./candidates";
+import { AiInputTooLargeError, AiRequestRejectedError } from "./errors";
+import { getFeatureDefinition, type AiFeatureDefinition } from "./features";
+import { checkAnswerGuards, isBlankText } from "./guards";
+import {
+  AI_BATCH_MAX_REQUESTS,
+  AI_CANDIDATES_MAX,
+  AI_CANDIDATE_TEXT_MAX_LENGTH,
+  AI_SUMMARY_FINDINGS_MAX,
+  AI_SUMMARY_INPUT_MAX_LENGTH,
+} from "./limits";
+import { PlaceholderRestoreError, restorePlaceholders } from "./placeholders";
+import {
+  assembleSummary,
+  parseSummaryAnswer,
+  prepareCandidatePrompt,
+  preparePrompt,
+  prepareSummaryPrompt,
+  type PreparedCandidatePrompt,
+  type PreparedPrompt,
+  type PreparedSummaryPrompt,
+} from "./prompt";
 import { findPromptLeaks } from "./prompt-leaks";
 import { resolveAiProvider } from "./provider-resolution";
-import { loadRejectedRetentionYears, retainUntilFor } from "./retention";
 import type { AiProvider, AiProviderResult } from "./providers/types";
 import { loadKnownValues } from "./redaction";
-import { aiSuggestionRequestShapeSchema, hasOnlyAllowedFields } from "./request";
-import type { AiSuggestionRequest, AiSuggestionResult } from "./types";
+import { aiSuggestionRequestShapeSchema, hasOnlyAllowedFields, isResolvedTargetType } from "./request";
+import { resolveAiTarget } from "./resolve-target";
+import { loadRejectedRetentionYears, retainUntilFor } from "./retention";
+import type {
+  AiCandidate,
+  AiServerInput,
+  AiSuggestionRequest,
+  AiSuggestionResult,
+  AiSummaryGroup,
+  AiTargetRef,
+  RequestSuggestion,
+  RequestSuggestionBatch,
+} from "./types";
 import {
   insertBlockedRow,
   lockTarget,
@@ -26,33 +66,48 @@ import {
 } from "./usage-log";
 
 /*
- * Be om et KI-forslag (docs/funksjoner/fase2a-ki-modul-logg.md Omfang 3, ADR 0006 del 1 og 4).
- * Rekkefølgen er fast (docs/funksjoner/fase2a-vask-for-ki.md Omfang 4 og 5): valider →
- * rettighet → tillatt-liste → oppdrag → samme `requestId` → «KI er av» (ingen rad) → sperret
- * (`blocked`-rad, intet kall) → funksjonen er ikke slått på for leverandøren (`settings.features`,
- * ingen rad) → vask → lekkasjesjekk for ekte leverandør (`blocked`-rad, intet kall) → kall
- * leverandøren → én transaksjon med ny rad, avvisning av forrige forslag og revisjonslogg. Alle
- * avslag før kallet gir ingen rad, intet kall og ingen linje i `audit_log`. Organisasjon og ansatt kommer bare fra `grant`.
+ * Be om et KI-forslag (docs/funksjoner/fase2a-ki-modul-logg.md Omfang 3, ADR 0006 del 1, 4, 7 og
+ * 8, og «KI i veien»: docs/funksjoner/fase2a-ki-i-veien.md). Rekkefølgen er fast:
  *
- * Leverandøren får bare vasket tekst, også den falske. Kaster vasken, kalles leverandøren aldri
- * (A176). `provider.complete` kalles bare her, og etter vasken i `preparePrompt` (./prompt.ts).
+ *  1. valider forespørselen (strengt; kandidater, funn, `reportId` og `assignmentId` for mål som
+ *     slås opp, kommer aldri fra nettleseren) og tom tekst (T-0111)
+ *  2. rettighet → tillatt-liste → rensing av tegn → det bare serveren gir inn (`AiServerInput`),
+ *     med grensene i `limits.ts` (for mye gir `AiInputTooLargeError`; kjernen kutter aldri)
+ *  3. målet: for måltypene kjernen kontrollerer, slås målraden opp (`resolveAiTarget`) og
+ *     rapport og oppdrag utledes; ellers kontrolleres oppdraget fra forespørselen
+ *  4. samme `requestId` → «KI er av» (ingen rad) → sperret (`blocked`-rad, intet kall) →
+ *     funksjonen er ikke slått på for leverandøren (`settings.features`, ingen rad)
+ *  5. vask (hvert felt, hver kandidat og hvert funn for seg) → ledetekst → lekkasjesjekk for
+ *     ekte leverandør (`blocked`-rad, intet kall) → kall leverandøren
+ *  6. tolk svaret: kandidatmerkene strengt (`phrase_suggest`), vaktene (`language_polish` og
+ *     `summary_draft`, A431), plassholderne tilbake i teksten til klienten (A466)
+ *  7. én transaksjon med ny rad, avvisning av forrige forslag (bare når det nye kan vises) og
+ *     revisjonslogg
+ *
+ * Alle avslag før kallet gir ingen rad, intet kall og ingen linje i `audit_log`. Organisasjon og
+ * ansatt kommer bare fra `grant`. Leverandøren får bare vasket tekst, også den falske. Kaster
+ * vasken, kalles leverandøren aldri (A176).
+ *
+ * Et stoppet svar (`stopped`) går aldri til klienten, `logger` eller `audit_log`: svaret har bare
+ * vaktkoden, og teksten står bare i `output_text`. De opprinnelige verdiene bak plassholderne
+ * holdes bare i minnet under kallet; `output_text` beholder plassholderne.
  *
  * Tegn databasen ikke tar (nulltegn, ensomme surrogater) fjernes fra verdiene rett etter
- * tillatt-listen, før alt annet og før personvernvasken (rett-t0001-synkko.md Omfang 3, A180):
- * et telefonnummer med nulltegn mellom sifrene kjennes ellers ikke igjen av mønstrene. Svaret
- * fra leverandøren vaskes likt, så loggen og klienten får samme tekst.
+ * tillatt-listen, før alt annet og før personvernvasken (A180). Svaret fra leverandøren renses
+ * likt.
+ *
+ * Låser aldri rapportraden eller målraden, bare KI-låsen på målet (`lockTarget`), så denne veien
+ * og `recordDecisionIn` (rapporten først, så KI-låsen) ikke kan vente på hverandre.
  */
 
-/** Om en verdi i `fields` er tom. Samme kriterium før og etter vasken. */
-function hasEmptyValue(fields: Readonly<Record<string, string>>): boolean {
-  return Object.values(fields).some((value) => value.length === 0);
-}
-
-/** Måltyper som ikke kan kontrolleres mot organisasjonen ennå (A166, A173). */
-const FAKE_ONLY_TARGET_TYPES: ReadonlySet<string> = new Set([AI_TRIAL_TARGET_TYPE, "field_answer"]);
+/** Måltyper som ikke kan kontrolleres mot organisasjonen ennå (A166, A173, A472). */
+export const FAKE_ONLY_TARGET_TYPES: ReadonlySet<string> = new Set(["field_answer", "tgiu_detail"]);
 
 /** Koden til den falske leverandøren. Alt annet regnes som ekte. */
 const FAKE_PROVIDER_CODE = "fake";
+
+/** Hvor mange felt fra «Språkvask avviket» som går til leverandøren samtidig. */
+const BATCH_CONCURRENCY = 4;
 
 /**
  * Om leverandøren er ekte. Sammenligner på fast kode, ikke på objektet: alt som ikke har koden
@@ -63,13 +118,13 @@ function isRealProvider(provider: AiProvider): boolean {
 }
 
 /**
- * Om forespørselen sperres (ad-1): bare den falske leverandøren får prøvemålet og
- * `answer`, og fritekst uten oppdrag går ikke til en ekte leverandør (spørsmål 58).
+ * Om forespørselen sperres (ad-1): bare den falske leverandøren får mål som ikke kontrolleres, og
+ * ingen tekst går til en ekte leverandør uten oppdrag (spørsmål 58).
  */
 function isBlocked(provider: AiProvider, targetType: string, assignmentId: string | null): boolean {
   if (!isRealProvider(provider)) return false;
   if (FAKE_ONLY_TARGET_TYPES.has(targetType)) return true;
-  return assignmentId === null && targetType !== AI_TRIAL_TARGET_TYPE;
+  return assignmentId === null;
 }
 
 const resultColumns = {
@@ -80,6 +135,8 @@ const resultColumns = {
   targetRef: aiUsageLog.targetRef,
   outcome: aiUsageLog.outcome,
   outputText: aiUsageLog.outputText,
+  errorCode: aiUsageLog.errorCode,
+  candidateRefs: aiUsageLog.candidateRefs,
   deletedAt: aiUsageLog.deletedAt,
 };
 
@@ -87,7 +144,7 @@ type StoredRow = {
   organizationId: string;
   employeeId: string;
   feature: string;
-  targetRef: { type: string; id: string; fieldKey: string };
+  targetRef: AiTargetRef;
   deletedAt: Date | null;
 };
 
@@ -96,7 +153,7 @@ function isOwnRequest(
   row: StoredRow,
   grant: EmployeeGrant,
   feature: string,
-  target: { type: string; id: string; fieldKey: string },
+  target: AiTargetRef,
 ): boolean {
   return (
     row.deletedAt === null &&
@@ -116,54 +173,365 @@ async function callProvider(call: () => Promise<AiProviderResult>): Promise<AiPr
   }
 }
 
-export async function requestSuggestion(
+// --- Validering av det serveren gir inn ----------------------------------------------------------
+
+const candidateSchema = z
+  .object({
+    source: z.enum(AI_CANDIDATE_SOURCES),
+    id: z.string().refine(isUuid),
+    text: z.string(),
+  })
+  .strict();
+
+const findingSchema = z
+  .object({
+    checkpointName: z.string().min(1),
+    deviationText: z.string().nullable(),
+    causeText: z.string().nullable(),
+    consequenceText: z.string().nullable(),
+    measures: z.array(z.string()),
+  })
+  .strict();
+
+const fixedLineSchema = z.object({ checkpointName: z.string().min(1), text: z.string() }).strict();
+
+const summaryGroupSchema = z
+  .object({
+    group: z.enum(SUMMARY_GROUPS),
+    heading: z.string().min(1),
+    findings: z.array(findingSchema),
+    fixedLines: z.array(fixedLineSchema),
+  })
+  .strict();
+
+const serverInputSchema = z
+  .object({
+    candidates: z.array(candidateSchema).optional(),
+    candidatesCut: z.number().int().min(0).optional(),
+    summaryGroups: z.array(summaryGroupSchema).optional(),
+  })
+  .strict();
+
+type CheckedServerInput =
+  | { kind: "none" }
+  | { kind: "candidates"; candidates: AiCandidate[]; cut: number }
+  | { kind: "summary"; groups: AiSummaryGroup[]; findingCount: number; fixedLineCount: number };
+
+/** Kontrollerer `AiServerInput` mot funksjonen. Kaster ved feil; kutter aldri. */
+function checkServerInput(
+  definition: AiFeatureDefinition,
+  serverInput: AiServerInput | undefined,
+): CheckedServerInput {
+  const parsed = serverInputSchema.safeParse(serverInput ?? {});
+  if (!parsed.success) throw new AiRequestRejectedError();
+  const { candidates, candidatesCut, summaryGroups } = parsed.data;
+
+  if (definition.code === "phrase_suggest") {
+    if (summaryGroups !== undefined || candidates === undefined) throw new AiRequestRejectedError();
+    // 0 kandidater: kalleren viser «Ingen treff» uten å kalle (intet kall, ingen rad)
+    if (candidates.length === 0) throw new AiRequestRejectedError();
+    if (candidates.length > AI_CANDIDATES_MAX) {
+      throw new AiInputTooLargeError("too_many_candidates");
+    }
+    if (candidates.some((candidate) => candidate.text.length > AI_CANDIDATE_TEXT_MAX_LENGTH)) {
+      throw new AiInputTooLargeError("too_many_candidates");
+    }
+    const keys = new Set(candidates.map((c) => `${c.source}:${c.id.toLowerCase()}`));
+    if (keys.size !== candidates.length) throw new AiRequestRejectedError();
+    if (candidates.some((candidate) => isBlankText(candidate.text))) {
+      throw new AiRequestRejectedError();
+    }
+    return {
+      kind: "candidates",
+      candidates: candidates.map((c) => ({ source: c.source, id: c.id.toLowerCase(), text: c.text })),
+      cut: candidatesCut ?? 0,
+    };
+  }
+
+  if (definition.code === "summary_draft") {
+    if (candidates !== undefined || candidatesCut !== undefined || summaryGroups === undefined) {
+      throw new AiRequestRejectedError();
+    }
+    let findingCount = 0;
+    let fixedLineCount = 0;
+    let lastOrder = -1;
+    for (const group of summaryGroups) {
+      const order = SUMMARY_GROUPS.indexOf(group.group);
+      // Fast rekkefølge, hver gruppe én gang
+      if (order <= lastOrder) throw new AiRequestRejectedError();
+      lastOrder = order;
+      const textGroup = group.group !== "tgiu";
+      if (textGroup && (group.fixedLines.length > 0 || group.findings.length === 0)) {
+        throw new AiRequestRejectedError();
+      }
+      if (!textGroup && (group.findings.length > 0 || group.fixedLines.length === 0)) {
+        throw new AiRequestRejectedError();
+      }
+      findingCount += group.findings.length;
+      fixedLineCount += group.fixedLines.length;
+    }
+    // Uten funn som KI skal skrive, trenger utkastet ikke KI (rapportkjernen setter det sammen)
+    if (findingCount === 0) throw new AiRequestRejectedError();
+    if (findingCount + fixedLineCount > AI_SUMMARY_FINDINGS_MAX) {
+      throw new AiInputTooLargeError("too_many_findings");
+    }
+    return { kind: "summary", groups: summaryGroups, findingCount, fixedLineCount };
+  }
+
+  if (candidates !== undefined || candidatesCut !== undefined || summaryGroups !== undefined) {
+    throw new AiRequestRejectedError();
+  }
+  return { kind: "none" };
+}
+
+/** Tom tekst (T-0111): språkvask krever tekst; fraseforslag tillater tomt `text`. */
+function hasBlankValue(feature: string, fields: Readonly<Record<string, string>>): boolean {
+  if (feature === "language_polish") {
+    if (!Object.prototype.hasOwnProperty.call(fields, "text")) return true;
+    return Object.values(fields).some(isBlankText);
+  }
+  if (feature === "phrase_suggest") {
+    return Object.entries(fields).some(([key, value]) => key !== "text" && isBlankText(value));
+  }
+  return Object.values(fields).some((value) => value.length === 0);
+}
+
+type Validated = {
+  definition: AiFeatureDefinition;
+  requestId: string;
+  requestAssignmentId: string | null;
+  target: AiTargetRef;
+  fields: Record<string, string>;
+  server: CheckedServerInput;
+};
+
+/** Trinn 1–2: alt som kan avgjøres uten databasen. Kaster ved avslag. */
+function validateRequest(
   grant: EmployeeGrant,
   request: AiSuggestionRequest,
-): Promise<AiSuggestionResult> {
-  // 1. Forespørselen valideres strengt
+  serverInput: AiServerInput | undefined,
+): Validated {
   const parsed = aiSuggestionRequestShapeSchema.safeParse(request);
   if (!parsed.success) throw new AiRequestRejectedError();
   const input = parsed.data;
   const definition = getFeatureDefinition(input.feature);
   if (!definition) throw new AiRequestRejectedError();
-  if (hasEmptyValue(input.fields)) throw new AiRequestRejectedError();
+  if (hasBlankValue(definition.code, input.fields)) throw new AiRequestRejectedError();
 
-  // 2. Rettigheten fra funksjonen (admin har alle)
+  // Rettigheten fra funksjonen (admin har alle)
   if (!grantHasPermission(grant, definition.permission)) throw new AccessDeniedError();
 
-  // 3. Bare feltkoder fra tillatt-listen
+  // Bare feltkoder fra tillatt-listen
   if (!hasOnlyAllowedFields(definition, input.fields)) throw new AiRequestRejectedError();
 
-  // Tegn databasen ikke tar fjernes fra verdiene (ikke fra feltkodene). Tom etter vask gir samme
-  // avslag som tom tekst i trinn 1, før oppslag, sperret rad, personvernvask og leverandør.
+  // Tegn databasen ikke tar fjernes fra verdiene (ikke fra feltkodene). Tom etter rensing gir
+  // samme avslag som tom tekst, før oppslag, sperret rad, personvernvask og leverandør.
   const fields: Record<string, string> = Object.fromEntries(
     Object.entries(input.fields).map(([key, value]) => [key, stripUnstorableChars(value)]),
   );
-  if (hasEmptyValue(fields)) throw new AiRequestRejectedError();
+  if (hasBlankValue(definition.code, fields)) throw new AiRequestRejectedError();
 
-  // 4. Oppdraget hører til organisasjonen og er ikke slettet
-  if (input.assignmentId !== null) {
-    const [assignment] = await db
-      .select({ id: assignments.id })
-      .from(assignments)
-      .where(
-        and(
-          eq(assignments.id, input.assignmentId),
-          eq(assignments.organizationId, grant.organizationId),
-          isNull(assignments.deletedAt),
-        ),
-      );
-    if (!assignment) throw new AiRequestRejectedError();
+  const server = checkServerInput(definition, serverInput);
+  return {
+    definition,
+    requestId: input.requestId.toLowerCase(),
+    requestAssignmentId: input.assignmentId,
+    target: normalizeTarget(input.target),
+    fields,
+    server,
+  };
+}
+
+/** Trinn 3: rapport og oppdrag fra målet, eller oppdraget fra forespørselen. `null` = avslag. */
+async function resolveScope(
+  grant: EmployeeGrant,
+  validated: Validated,
+): Promise<{ reportId: string | null; assignmentId: string | null } | null> {
+  if (isResolvedTargetType(validated.target.type)) {
+    const resolved = await resolveAiTarget(grant, validated.target);
+    return resolved ? { reportId: resolved.reportId, assignmentId: resolved.assignmentId } : null;
+  }
+  const assignmentId = validated.requestAssignmentId;
+  if (assignmentId === null) return { reportId: null, assignmentId: null };
+  const [assignment] = await db
+    .select({ id: assignments.id })
+    .from(assignments)
+    .where(
+      and(
+        eq(assignments.id, assignmentId),
+        eq(assignments.organizationId, grant.organizationId),
+        isNull(assignments.deletedAt),
+      ),
+    );
+  return assignment ? { reportId: null, assignmentId } : null;
+}
+
+// --- Tolking av svaret -----------------------------------------------------------------------
+
+type Interpreted = {
+  outcome: AiOutcome;
+  errorCode: AiErrorCode | AiGuardCode | null;
+  /** Det som lagres: med plassholderne, aldri de opprinnelige verdiene. */
+  outputText: string | null;
+  /** Det klienten får: plassholderne byttet tilbake. Bare når utfallet er `ok` med tekst. */
+  clientText: string | null;
+  candidateRefs: AiCandidateRef[] | null;
+  summaryExtra: Record<string, number>;
+};
+
+type Prepared =
+  | { kind: "fields"; prepared: PreparedPrompt }
+  | { kind: "candidates"; prepared: PreparedCandidatePrompt; cut: number }
+  | { kind: "summary"; prepared: PreparedSummaryPrompt };
+
+function stopped(guard: AiGuardCode, answer: string): Interpreted {
+  return {
+    outcome: "stopped",
+    errorCode: guard,
+    outputText: answer,
+    clientText: null,
+    candidateRefs: null,
+    summaryExtra: {},
+  };
+}
+
+function noMatch(extra: Record<string, number> = {}): Interpreted {
+  return {
+    outcome: "no_match",
+    errorCode: null,
+    outputText: null,
+    clientText: null,
+    candidateRefs: null,
+    summaryExtra: extra,
+  };
+}
+
+/** Tolker et svar med utfallet `ok` for funksjonen. Vaktene kjøres her. */
+function interpretAnswer(prepared: Prepared, answer: string): Interpreted {
+  if (prepared.kind === "candidates") {
+    const parsed = parseCandidateAnswer(answer, prepared.prepared.labeled);
+    const extra = {
+      unknown_labels: parsed.unknownLabels,
+      duplicate_labels: parsed.duplicateLabels,
+    };
+    if (parsed.refs.length === 0) return noMatch(extra);
+    return {
+      outcome: "ok",
+      errorCode: null,
+      outputText: null,
+      clientText: null,
+      candidateRefs: parsed.refs,
+      summaryExtra: extra,
+    };
   }
 
-  // 5. Samme requestId på nytt: svaret fra første gang, uten nytt kall
-  const target = normalizeTarget(input.target);
+  if (prepared.kind === "summary") {
+    const summary = prepared.prepared;
+    const parts = parseSummaryAnswer(answer);
+    const guard = checkAnswerGuards({
+      feature: "summary_draft",
+      sent: summary.parts.map((part) => ({ label: part.label, texts: part.texts })),
+      answer: parts,
+    });
+    if (guard !== null) return stopped(guard, answer);
+    const byLabel = new Map(parts.map((part) => [part.label, part.text]));
+    const originalsByLabel = new Map(summary.parts.map((part) => [part.label, part.originals]));
+    let restored: Map<string, string>;
+    try {
+      restored = new Map(
+        summary.parts.map((part) => [
+          part.label,
+          restorePlaceholders(byLabel.get(part.label) ?? "", originalsByLabel.get(part.label) ?? []),
+        ]),
+      );
+    } catch (error) {
+      if (error instanceof PlaceholderRestoreError) return stopped("placeholder_guard", answer);
+      throw error;
+    }
+    return {
+      outcome: "ok",
+      errorCode: null,
+      outputText: assembleSummary(summary, (label) => byLabel.get(label) ?? "", true),
+      clientText: assembleSummary(summary, (label) => restored.get(label) ?? "", false),
+      candidateRefs: null,
+      summaryExtra: {},
+    };
+  }
+
+  // language_polish: én del, vaktene på hele svaret
+  if (isBlankText(answer)) return noMatch();
+  const sentTexts = Object.values(prepared.prepared.redactedFields);
+  const guard = checkAnswerGuards({
+    feature: "language_polish",
+    sent: [{ label: null, texts: sentTexts }],
+    answer: [{ label: null, text: answer }],
+  });
+  if (guard !== null) return stopped(guard, answer);
+  const originals = Object.values(prepared.prepared.originals).flat();
+  let clientText: string;
+  try {
+    clientText = restorePlaceholders(answer, originals);
+  } catch (error) {
+    if (error instanceof PlaceholderRestoreError) return stopped("placeholder_guard", answer);
+    throw error;
+  }
+  return {
+    outcome: "ok",
+    errorCode: null,
+    outputText: answer,
+    clientText,
+    candidateRefs: null,
+    summaryExtra: {},
+  };
+}
+
+/** `input_summary`: bare feltnavn og antall, aldri tekst. */
+function inputSummaryFor(
+  prepared: Prepared,
+  fieldKeys: readonly string[],
+  extra: Record<string, number>,
+): Record<string, number> {
+  if (prepared.kind === "summary") {
+    const summary = prepared.prepared;
+    return {
+      findings: summary.parts.length,
+      fixed_lines: summary.groups.reduce((sum, group) => sum + group.fixedLines.length, 0),
+      input_chars: summary.inputLength,
+      ...extra,
+    };
+  }
+  const fieldLengths = Object.fromEntries(
+    fieldKeys.map((key) => [key, (prepared.prepared.redactedFields[key] ?? "").length]),
+  );
+  if (prepared.kind === "candidates") {
+    return {
+      ...fieldLengths,
+      candidates: prepared.prepared.labeled.length,
+      candidates_cut: prepared.cut,
+      unknown_labels: 0,
+      duplicate_labels: 0,
+      ...extra,
+    };
+  }
+  return { ...fieldLengths, ...extra };
+}
+
+// --- Inngangen -------------------------------------------------------------------------------
+
+export const requestSuggestion: RequestSuggestion = async (grant, request, serverInput) => {
+  // 1–2. Validering, rettighet, tillatt-liste, rensing og det serveren gir inn
+  const validated = validateRequest(grant, request, serverInput);
+  const { definition, target, fields, requestId } = validated;
+
+  // 3. Målet (eller oppdraget) i organisasjonen
+  const scope = await resolveScope(grant, validated);
+  if (scope === null) throw new AiRequestRejectedError();
+
+  // 4. Samme requestId på nytt: svaret fra første gang, uten nytt kall
   const [existing] = await db
     .select(resultColumns)
     .from(aiUsageLog)
-    .where(
-      and(eq(aiUsageLog.id, input.requestId), eq(aiUsageLog.organizationId, grant.organizationId)),
-    );
+    .where(and(eq(aiUsageLog.id, requestId), eq(aiUsageLog.organizationId, grant.organizationId)));
   if (existing) {
     if (!isOwnRequest(existing, grant, definition.code, target)) {
       throw new AiRequestRejectedError();
@@ -174,10 +542,10 @@ export async function requestSuggestion(
   const [taken] = await db
     .select({ id: aiUsageLog.id })
     .from(aiUsageLog)
-    .where(eq(aiUsageLog.id, input.requestId));
+    .where(eq(aiUsageLog.id, requestId));
   if (taken) throw new AiRequestRejectedError();
 
-  // 6. KI av: ingen rad, intet kall
+  // KI av: ingen rad, intet kall
   const resolved = await resolveAiProvider(grant);
   if (resolved.kind === "disabled") return { kind: "disabled" };
   const { provider, model } = resolved;
@@ -185,36 +553,53 @@ export async function requestSuggestion(
 
   const blockedRow = () =>
     insertBlockedRow(grant, {
-      requestId: input.requestId,
+      requestId,
       feature: definition.code,
       provider: provider.code,
       model,
       promptVersion: definition.promptVersion,
-      assignmentId: input.assignmentId,
+      assignmentId: scope.assignmentId,
+      reportId: scope.reportId,
       target,
       sourceFields: fieldKeys,
     });
 
-  // 7. Sperret: rad med utfallet `blocked`, intet oppslag, ingen vask, intet kall
-  if (isBlocked(provider, target.type, input.assignmentId)) return blockedRow();
+  // Sperret: rad med utfallet `blocked`, ingen vask, intet kall
+  if (isBlocked(provider, target.type, scope.assignmentId)) return blockedRow();
 
-  // 7b. Funksjonen er ikke slått på for leverandøren (`settings.features`, A194): som «KI er av»,
+  // Funksjonen er ikke slått på for leverandøren (`settings.features`, A194): som «KI er av»,
   // ingen rad, ingen vask, intet kall. `null` betyr alle (bare `fake`); tom liste betyr ingen.
   if (resolved.features !== null && !resolved.features.includes(definition.code)) {
     return { kind: "disabled" };
   }
 
-  // 8. Kjente verdier for oppdraget (bare med oppdrag). Kaster oppslaget, kalles leverandøren aldri.
+  // 5. Kjente verdier for oppdraget. Kaster oppslaget eller vasken, kalles leverandøren aldri.
   const known =
-    input.assignmentId === null ? null : await loadKnownValues(grant, input.assignmentId);
+    scope.assignmentId === null ? null : await loadKnownValues(grant, scope.assignmentId);
 
-  // 9. Felles ledetekst: rensing, vask og ledetekst av de vaskede feltene på tillatt-listen.
-  // Kaster vasken, kalles leverandøren aldri. Så kalles leverandøren.
-  const prepared = preparePrompt(definition, fields, known);
+  let prepared: Prepared;
+  if (validated.server.kind === "candidates") {
+    prepared = {
+      kind: "candidates",
+      prepared: prepareCandidatePrompt(definition, fields, validated.server.candidates, known),
+      cut: validated.server.cut,
+    };
+  } else if (validated.server.kind === "summary") {
+    const summary = prepareSummaryPrompt(definition, validated.server.groups, known);
+    // For mye tekst til ett utkast: tydelig melding, aldri stille kutt av funn
+    if (summary.inputLength > AI_SUMMARY_INPUT_MAX_LENGTH) {
+      throw new AiInputTooLargeError("too_many_findings");
+    }
+    prepared = { kind: "summary", prepared: summary };
+  } else {
+    prepared = { kind: "fields", prepared: preparePrompt(definition, fields, known) };
+  }
+  const prompt = prepared.prepared.prompt;
+  const redactedCount = prepared.prepared.redactedCount;
 
-  // 9b. Lekkasjesjekken på den ferdige ledeteksten (A195): siste vern før tekst forlater oss.
-  // Treff gir `blocked`-rad uten kall. Typen eller verdien logges ikke.
-  if (isRealProvider(provider) && findPromptLeaks(prepared.prompt, known).length > 0) {
+  // Lekkasjesjekken på den ferdige ledeteksten (A195), også kandidater og funn: siste vern før
+  // tekst forlater oss. Treff gir `blocked`-rad uten kall. Typen eller verdien logges ikke.
+  if (isRealProvider(provider) && findPromptLeaks(prompt, known).length > 0) {
     return blockedRow();
   }
 
@@ -222,58 +607,76 @@ export async function requestSuggestion(
     provider.complete({
       feature: definition.code,
       promptVersion: definition.promptVersion,
-      prompt: prepared.prompt,
+      prompt,
       model,
     }),
   );
-  // Samme vaskede tekst i `ai_usage_log` og tilbake til klienten
-  const result: AiProviderResult =
-    providerResult.outcome === "ok"
-      ? { ...providerResult, text: stripUnstorableChars(providerResult.text) }
-      : providerResult;
-  if (result.outcome === "error") {
+
+  // 6. Tolk svaret. Samme rensede tekst i `ai_usage_log` som det vaktene så.
+  let interpreted: Interpreted;
+  if (providerResult.outcome === "ok") {
+    interpreted = interpretAnswer(prepared, stripUnstorableChars(providerResult.text));
+  } else if (providerResult.outcome === "no_match") {
+    interpreted = noMatch();
+  } else {
+    interpreted = {
+      outcome: "error",
+      errorCode: providerResult.errorCode,
+      outputText: null,
+      clientText: null,
+      candidateRefs: null,
+      summaryExtra: {},
+    };
     logger.warn("KI-kallet ga feil", {
       feature: definition.code,
       provider: provider.code,
-      errorCode: result.errorCode,
-      usageId: input.requestId,
+      errorCode: providerResult.errorCode,
+      usageId: requestId,
+    });
+  }
+  if (interpreted.outcome === "stopped") {
+    // Bare koden, aldri teksten
+    logger.info("KI-svaret ble stoppet av en vakt", {
+      feature: definition.code,
+      guard: interpreted.errorCode,
+      usageId: requestId,
     });
   }
 
-  // 10. Én transaksjon: ny rad, forrige forslag på samme mål avvist, revisjonslogg.
+  // 7. Én transaksjon: ny rad, forrige forslag på samme mål avvist, revisjonslogg.
   // `input_summary` regnes av den vaskede teksten, det som faktisk ble sendt (A172).
   const now = new Date();
-  const inputSummary = Object.fromEntries(
-    fieldKeys.map((key) => [key, (prepared.redactedFields[key] ?? "").length]),
-  );
-  const errorCode: AiErrorCode | null = result.outcome === "error" ? result.errorCode : null;
+  const inputSummary = inputSummaryFor(prepared, fieldKeys, interpreted.summaryExtra);
+  const paid = providerResult.outcome !== "error";
+  const status = interpreted.outcome === "ok" ? ("suggested" as const) : null;
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     await lockTarget(tx, grant.organizationId, definition.code, target);
     const [inserted] = await tx
       .insert(aiUsageLog)
       .values({
-        id: input.requestId,
+        id: requestId,
         organizationId: grant.organizationId,
         employeeId: grant.employeeId,
         feature: definition.code,
         provider: provider.code,
         model,
         promptVersion: definition.promptVersion,
-        assignmentId: input.assignmentId,
-        reportId: null,
+        assignmentId: scope.assignmentId,
+        reportId: scope.reportId,
         targetRef: target,
         sourceFields: fieldKeys,
         inputSummary,
-        outcome: result.outcome,
-        errorCode,
-        outputText: result.outcome === "ok" ? result.text : null,
-        status: result.outcome === "ok" ? "suggested" : null,
-        tokensIn: result.outcome === "error" ? 0 : result.tokensIn,
-        tokensOut: result.outcome === "error" ? 0 : result.tokensOut,
-        cost: result.outcome === "error" ? "0" : String(result.cost),
-        currency: result.outcome === "error" ? "NOK" : result.currency,
-        redactedCount: prepared.redactedCount,
+        outcome: interpreted.outcome,
+        errorCode: interpreted.errorCode,
+        outputText: interpreted.outputText,
+        candidateRefs: interpreted.candidateRefs,
+        status,
+        tokensIn: paid ? providerResult.tokensIn : 0,
+        tokensOut: paid ? providerResult.tokensOut : 0,
+        cost: paid ? String(providerResult.cost) : "0",
+        currency: paid ? providerResult.currency : "NOK",
+        redactedCount,
         retainUntil: retainUntilFrom(now),
         createdAt: now,
         updatedAt: now,
@@ -289,18 +692,15 @@ export async function requestSuggestion(
         .select(resultColumns)
         .from(aiUsageLog)
         .where(
-          and(
-            eq(aiUsageLog.id, input.requestId),
-            eq(aiUsageLog.organizationId, grant.organizationId),
-          ),
+          and(eq(aiUsageLog.id, requestId), eq(aiUsageLog.organizationId, grant.organizationId)),
         );
       if (!winner || !isOwnRequest(winner, grant, definition.code, target)) {
         throw new AiRequestRejectedError();
       }
-      return toSuggestionResult(winner);
+      return { row: winner, own: false };
     }
 
-    // Avklaring A: forrige forslag avvises bare når det nye er brukbart
+    // Avklaring A: forrige forslag avvises bare når det nye kan vises (ikke ved `stopped`)
     if (inserted.outcome === "ok") {
       const toReject = await tx
         .select({ id: aiUsageLog.id, createdAt: aiUsageLog.createdAt })
@@ -320,6 +720,7 @@ export async function requestSuggestion(
             .update(aiUsageLog)
             .set({
               status: "rejected",
+              chosenCandidate: null,
               retainUntil: retainUntilFor("rejected", candidate.createdAt, rejectedYears),
               decidedBy: grant.employeeId,
               decidedAt: now,
@@ -340,6 +741,64 @@ export async function requestSuggestion(
         }
       }
     }
-    return toSuggestionResult(inserted);
+    return { row: inserted, own: true };
   });
+
+  const answer = toSuggestionResult(result.row);
+  // Teksten til klienten har de opprinnelige verdiene tilbake (A466); raden har plassholderne
+  if (result.own && answer.kind === "suggestion" && interpreted.clientText !== null) {
+    return { ...answer, text: interpreted.clientText };
+  }
+  return answer;
+};
+
+// --- Flere felt fra ett trykk («Språkvask avviket», A460) --------------------------------------
+
+function targetKey(target: AiTargetRef): string {
+  const normalized = normalizeTarget(target);
+  return `${normalized.type}:${normalized.id}:${normalized.fieldKey}`;
 }
+
+export const requestSuggestionBatch: RequestSuggestionBatch = async (grant, requests) => {
+  if (!Array.isArray(requests) || requests.length === 0) throw new AiRequestRejectedError();
+  if (requests.length > AI_BATCH_MAX_REQUESTS) throw new AiRequestRejectedError();
+
+  // Hele listen valideres før noe kalles
+  const validated = requests.map((request) => validateRequest(grant, request, undefined));
+  if (validated.some((entry) => entry.definition.code !== "language_polish")) {
+    throw new AiRequestRejectedError();
+  }
+  if (new Set(validated.map((entry) => entry.requestId)).size !== validated.length) {
+    throw new AiRequestRejectedError();
+  }
+  if (new Set(validated.map((entry) => targetKey(entry.target))).size !== validated.length) {
+    throw new AiRequestRejectedError();
+  }
+  // Alle målene må slås opp av kjernen og høre til samme rapport
+  if (validated.some((entry) => !isResolvedTargetType(entry.target.type))) {
+    throw new AiRequestRejectedError();
+  }
+  const reportIds = new Set<string>();
+  for (const entry of validated) {
+    const resolved = await resolveAiTarget(grant, entry.target);
+    if (!resolved) throw new AiRequestRejectedError();
+    reportIds.add(resolved.reportId);
+  }
+  if (reportIds.size !== 1) throw new AiRequestRejectedError();
+
+  // Ett leverandørkall og én rad per felt, noen om gangen. Feil eller stopp på ett felt er et
+  // eget svar og stopper ikke de andre.
+  const results: AiSuggestionResult[] = new Array(requests.length);
+  let next = 0;
+  async function worker() {
+    while (next < requests.length) {
+      const index = next;
+      next += 1;
+      results[index] = await requestSuggestion(grant, requests[index] as AiSuggestionRequest);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(BATCH_CONCURRENCY, requests.length) }, () => worker()),
+  );
+  return results;
+};

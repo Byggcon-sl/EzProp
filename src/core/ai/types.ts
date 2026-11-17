@@ -28,13 +28,11 @@ export type {
 };
 
 /**
- * Faste funksjonskoder (regel 6), én per KI-funksjon.
- *
- * «KI i veien» (docs/funksjoner/fase2a-ki-i-veien.md): utvides til
- * `"language_polish" | "phrase_suggest" | "summary_draft"` i samme endring som definisjonene i
- * `features.ts` (tillatt-liste, mål, ledetekst og evalueringssett må følge koden).
+ * Faste funksjonskoder (regel 6), én per KI-funksjon. Definisjonene (tillatt-liste, mål og
+ * ledetekst) står i `features.ts`. `phrase_suggest` og `summary_draft` kom med «KI i veien»
+ * (docs/funksjoner/fase2a-ki-i-veien.md).
  */
-export type AiFeatureCode = "language_polish";
+export type AiFeatureCode = "language_polish" | "phrase_suggest" | "summary_draft";
 
 export type AiSuggestionRequest = {
   /** UUID laget på enheten. Blir id-en i `ai_usage_log`. */

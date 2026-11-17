@@ -1,12 +1,13 @@
 /*
  * KI-modulen: den ene veien inn til all KI (docs/adr/0006-ki-i-bunnen.md, arkitekturregel 11).
- * Modulene kaller bare `requestSuggestion`, `recordDecision`, statusoppslaget `getSuggestionStatus`
- * og sperren `checkAiTextApproved`. Ingenting her lister eller teller rader per ansatt
- * (spørsmål 57).
+ * Modulene kaller bare `requestSuggestion` (og `requestSuggestionBatch` for flere felt fra ett
+ * trykk), `recordDecision` (og `recordDecisionIn` i kallerens transaksjon), statusoppslaget
+ * `getSuggestionStatus` og sperren `checkAiTextApproved`. Ingenting her lister eller teller rader
+ * per ansatt (spørsmål 57).
  */
 
-export { requestSuggestion } from "./request-suggestion";
-export { recordDecision } from "./record-decision";
+export { requestSuggestion, requestSuggestionBatch } from "./request-suggestion";
+export { recordDecision, recordDecisionIn } from "./record-decision";
 export { getSuggestionStatus, type AiSuggestionStatusResult } from "./suggestion-status";
 export { AI_APPROVAL_CHECK_MAX, checkAiTextApproved, type AiApprovalItem } from "./approval-check";
 export {
@@ -42,6 +43,7 @@ export {
 export {
   AI_FEATURES,
   AI_TRIAL_TARGET_TYPE,
+  ARCHIVED_AI_TARGET_TYPES,
   FREE_TEXT_SOURCE,
   findFieldSourceViolations,
   getFeatureDefinition,
@@ -53,6 +55,13 @@ export {
 export { NEVER_FIELDS } from "./never-fields";
 export { AI_ENABLED_SETTING_KEY } from "./provider-resolution";
 export {
+  FAKE_ADD_NUMBER_INPUT,
+  FAKE_ADD_TG_INPUT,
+  FAKE_ADDED_NUMBER,
+  FAKE_ADDED_TG,
+  FAKE_BAD_LABELS_INPUT,
+  FAKE_DROP_FINDING_INPUT,
+  FAKE_DROP_PLACEHOLDER_INPUT,
   FAKE_ERROR_CODE,
   FAKE_ERROR_INPUT,
   FAKE_MODEL,
@@ -79,4 +88,6 @@ export {
   type AiSuggestionResult,
   type AiSuggestionStatus,
   type AiTargetRef,
+  type RecordDecisionIn,
+  type RequestSuggestionBatch,
 } from "./types";

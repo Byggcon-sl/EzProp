@@ -213,13 +213,17 @@ describe("vask før KI: ingen lekkasje av persondata (V4.4)", () => {
       JSON.stringify(row),
       JSON.stringify(await allAuditRows()),
       loggedText(spies),
-      JSON.stringify(result),
       JSON.stringify(complete.mock.calls),
     ]
       .join("\n")
       // Tilfeldige id-er (UUID) kan inneholde for eksempel «8099»; de er ikke persondata.
       .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "[id]");
     for (const value of VALUES) expect(seen, value).not.toContain(value);
+    // A466: bare teksten til klienten får verdiene tilbake, i minnet under kallet
+    if (result.kind === "suggestion") {
+      expect(result.text).toContain("Åse Testesen");
+      expect(result.text).toContain("12345678");
+    }
 
     // input_summary er antall tegn i den vaskede teksten, ikke i originalen
     const prompt = complete.mock.calls[0]![0].prompt;

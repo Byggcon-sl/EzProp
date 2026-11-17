@@ -483,11 +483,11 @@ describe("KI-køen på klienten, statiske kontroller (K4.4–K4.8)", () => {
   it("K4.6 tillatt-listen på klienten er lik AI_FEATURES[*].allowedFields", async () => {
     const { AI_FEATURES } = await import("./features");
     const { AI_QUEUE_ALLOWED_FIELDS } = await import("./client");
-    expect(Object.keys(AI_QUEUE_ALLOWED_FIELDS).sort()).toEqual(Object.keys(AI_FEATURES).sort());
-    for (const [code, definition] of Object.entries(AI_FEATURES)) {
-      expect(AI_QUEUE_ALLOWED_FIELDS[code as keyof typeof AI_QUEUE_ALLOWED_FIELDS]).toEqual(
-        definition.allowedFields,
-      );
+    // «KI i veien» (A441): bare språkvasken kan stå i køen. Fraseforslag og sammendrag trenger
+    // kandidater og funn fra serveren, og nett.
+    expect(Object.keys(AI_QUEUE_ALLOWED_FIELDS).sort()).toEqual(["language_polish"]);
+    for (const [code, fields] of Object.entries(AI_QUEUE_ALLOWED_FIELDS)) {
+      expect(fields).toEqual(AI_FEATURES[code as keyof typeof AI_FEATURES].allowedFields);
     }
   });
 

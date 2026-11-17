@@ -48,8 +48,8 @@ import { fakeAiProvider } from "./providers/fake";
  * `fetch` er stubbet globalt, og adapteren slår den opp ved kallet. Nøkkel, modell, navn og
  * adresser er oppdiktet.
  *
- * Målet `answer` og prøvemålet `ai_trial` er sperret mot en ekte leverandør til `answers` finnes
- * (A166, A173). For å prøve hele den ekte veien (3.4–3.6) får `language_polish` her et ekstra,
+ * Målet `answer` er sperret mot en ekte leverandør til `answers` finnes (A166, A173). Prøvemålet
+ * `ai_trial` er arkivert («KI i veien», A428) og avvises før leverandøren velges. For å prøve hele den ekte veien (3.4–3.6) får `language_polish` her et ekstra,
  * oppdiktet mål bare i testen (`TEST_TARGET_TYPE`), med oppdrag. Det står for målene som kommer i
  * 2a-2. Sperren for `ai_trial`, `answer` og fritekst uten oppdrag prøves med de ekte målene (3.2).
  *
@@ -127,7 +127,17 @@ const TEXT_WITH_PII =
   "Møtte Åse Testesen på Lundetunet 3. Ring 41234567 eller qxz.partsen@example.no. " +
   "Matrikkel 63/74. taket er gammelt og har noen sprekker";
 const PII_VALUES = ["Åse", "Testesen", "Lundetunet", "41234567", "qxz.partsen@example.no", "63/74"];
-const REPLY_TEXT = "Taket er gammelt og har noen sprekker.";
+/**
+ * Svaret fra den falske HTTP-en har de samme plassholderne, i samme rekkefølge, som den vaskede
+ * teksten. Ellers stopper plassholdervakten svaret (A466). Klienten får verdiene tilbake
+ * (`RESTORED_TEXT`); raden beholder plassholderne.
+ */
+const REPLY_TEXT =
+  "Møtte [navn] på [adresse]. Ring [telefon] eller [e-post]. [matrikkel]. " +
+  "Taket er gammelt og har noen sprekker.";
+const RESTORED_TEXT =
+  "Møtte Åse Testesen på Lundetunet 3. Ring 41234567 eller qxz.partsen@example.no. " +
+  "Matrikkel 63/74. Taket er gammelt og har noen sprekker.";
 
 let http: ReturnType<typeof fakeAnthropic>;
 let spies: ReturnType<typeof spyOnOutput>;
@@ -210,10 +220,6 @@ async function tableText(table: "ai_usage_log" | "integration_connections" | "au
 describe("sperren for ekte leverandør (3.2, R2)", () => {
   it.each([
     {
-      name: "ai_trial",
-      request: (_assignmentId: string) => validRequest({ target: trialTarget() }),
-    },
-    {
       name: "answer med oppdrag",
       request: (assignmentId: string) => validRequest({ assignmentId, target: answerTarget() }),
     },
@@ -238,8 +244,18 @@ describe("sperren for ekte leverandør (3.2, R2)", () => {
     expect(vi.mocked(preparePrompt)).not.toHaveBeenCalled();
   });
 
+  it("R2 3.2 og K1.31 ai_trial er arkivert: avslag uten rad og uten kall, også mot anthropic", async () => {
+    const { grant } = await anthropicOrganization();
+    const error = await captureError(() =>
+      requestSuggestion(grant, validRequest({ target: trialTarget() })),
+    );
+    expect(error.name).toBe("AiRequestRejectedError");
+    expect(await aiRowCount()).toBe(0);
+    expect(http.calls).toHaveLength(0);
+  });
+
   it.each([
-    { name: "ai_trial", target: trialTarget, withAssignment: false },
+    { name: "answer uten oppdrag", target: answerTarget, withAssignment: false },
     { name: "answer", target: answerTarget, withAssignment: true },
   ])(
     "R2 3.2 kontroll: $name mot fake gir forslag som før (ikke blocked)",
@@ -274,18 +290,18 @@ describe("isBlocked bruker fast kode (3.2.1)", () => {
     };
     expect(copy).not.toBe(fakeAiProvider);
     swap.provider = copy as typeof swap.provider;
-    const result = await requestSuggestion(grant, validRequest({ target: trialTarget() }));
+    const result = await requestSuggestion(grant, validRequest({ target: answerTarget() }));
     expect(result.kind).toBe("suggestion");
     expect(copy.complete).toHaveBeenCalledTimes(1);
   });
 
   it.each(["anthropic", "FAKE", "fake ", "unknown_vendor"])(
-    "R2 3.2.1 alt annet enn code «fake» sperres for ai_trial, også med fake sin complete: %s",
+    "R2 3.2.1 alt annet enn code «fake» sperres for answer uten oppdrag, også med fake sin complete: %s",
     async (code) => {
       const grant = await fakeOrganization();
       const impostor = { code, model: "fake-v1", complete: vi.fn(fakeAiProvider.complete) };
       swap.provider = impostor as typeof swap.provider;
-      const request = validRequest({ target: trialTarget() });
+      const request = validRequest({ target: answerTarget() });
       const result = await requestSuggestion(grant, request);
       expect(result).toEqual({ kind: "blocked" });
       expect(impostor.complete).not.toHaveBeenCalled();
@@ -345,7 +361,8 @@ describe("hele flyten med falsk HTTP (3.4, R4)", () => {
 
     expect(result.kind).toBe("suggestion");
     if (result.kind !== "suggestion") return;
-    expect(result.text).toBe(REPLY_TEXT);
+    expect(result.text).toBe(RESTORED_TEXT);
+    expect((await aiRow(result.usageId))!.output_text).toBe(REPLY_TEXT);
     expect(http.calls).toHaveLength(1);
     const call = http.calls[0]!;
     const prompt = sentPromptText(call);

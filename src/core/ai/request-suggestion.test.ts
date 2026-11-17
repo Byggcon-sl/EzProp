@@ -1099,7 +1099,9 @@ describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.8)", () 
     const row = (await aiRow(request.requestId))!;
     expect(row.redacted_count).toBe(1);
     expect(JSON.stringify(row)).not.toContain(SECRET_MARKER);
-    expect(JSON.stringify(result)).not.toContain(SECRET_MARKER);
+    expect(row.output_text).toContain("[navn]");
+    // A466: plassholderen byttes tilbake i teksten til klienten; raden beholder den
+    expect(result.kind === "suggestion" ? result.text : "").toContain(SECRET_MARKER);
     expect(Object.keys(result)).not.toContain("redactedCount");
   });
 
@@ -1175,22 +1177,27 @@ describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.8)", () 
     expect(loadKnownValues).not.toHaveBeenCalled();
   });
 
-  it("V4.7 den falske leverandøren vaskes også: ai_trial uten oppdrag gir [telefon] i forslaget", async () => {
+  it("V4.7 den falske leverandøren vaskes også: uten oppdrag gir [telefon] i raden (A466: verdien tilbake til klienten)", async () => {
     const { grant } = await aiOrganization();
     const spy = vi.spyOn(fakeAiProvider, "complete");
     const text = "ring 12345678 og skriv til ola.prove@example.no";
-    const request = validRequest({ target: trialTarget(), fields: { text } });
+    const request = validRequest({ fields: { text } });
     const result = await requestSuggestion(grant, request);
     expect(result.kind).toBe("suggestion");
     // Uten oppdrag: ingen oppslag, men mønstrene vasker likevel
     expect(loadKnownValues).not.toHaveBeenCalled();
     if (result.kind !== "suggestion") return;
-    expect(result.text).toContain("[telefon]");
-    expect(result.text).toContain("[e-post]");
-    expect(result.text).not.toContain("12345678");
-    expect(result.text).not.toContain("ola.prove@example.no");
+    const row = (await aiRow(request.requestId))!;
+    expect(row.output_text).toContain("[telefon]");
+    expect(row.output_text).toContain("[e-post]");
+    expect(row.output_text).not.toContain("12345678");
+    expect(row.output_text).not.toContain("ola.prove@example.no");
+    // Teksten til klienten har verdiene tilbake (A466)
+    expect(result.text).toContain("12345678");
+    expect(result.text).toContain("ola.prove@example.no");
+    expect(result.text).not.toContain("[telefon]");
     expect(sentInput(spy.mock.calls[0]![0].prompt)).not.toContain("12345678");
-    expect((await aiRow(request.requestId))!.redacted_count).toBe(2);
+    expect(row.redacted_count).toBe(2);
   });
 
   it("V4.8 assignmentId null: bare mønstrene, ingen oppslag av kjente verdier", async () => {
@@ -1249,7 +1256,6 @@ describe("requestSuggestion: utfallet blocked (vask før KI V5.1–V5.7, V10.1)"
 
   it.each([
     { name: "V5.1 answer med oppdrag", target: "field_answer" as const, withAssignment: true },
-    { name: "V5.2 ai_trial uten oppdrag", target: "ai_trial" as const, withAssignment: false },
     {
       name: "V5.2 fritekst uten oppdrag (answer, assignmentId null)",
       target: "field_answer" as const,
@@ -1291,10 +1297,16 @@ describe("requestSuggestion: utfallet blocked (vask før KI V5.1–V5.7, V10.1)"
     expect(result.kind).toBe("suggestion");
   });
 
-  it("V5.3 ai_trial med falsk leverandør virker som før", async () => {
+  it("V5.3 og K1.31 ai_trial er arkivert: avvises uten rad og uten kall, også med falsk leverandør", async () => {
     const { grant } = await aiOrganization();
-    const result = await requestSuggestion(grant, validRequest({ target: trialTarget() }));
-    expect(result.kind).toBe("suggestion");
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const baseline = await neutralRequestRejection(grant);
+    const error = await captureError(() =>
+      requestSuggestion(grant, validRequest({ target: trialTarget() })),
+    );
+    expectSameRejection(error, baseline);
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
   });
 
   it("V5.4 en blocked-forespørsel avviser ikke forrige åpne forslag på samme mål", async () => {
@@ -1416,14 +1428,16 @@ describe("requestSuggestion: roller og organisasjon (vask før KI V7.3–V7.4)",
 describe("vask før KI: hver kjent verdi vaskes (V4.1)", () => {
   it.each(COLUMN_CASES)("V4.1 $column", async ({ seed, text, gone }) => {
     const { grant, assignmentId } = await organizationWithKnownValues(seed);
-    const { input, result } = await sendAndCapture(grant, assignmentId, text);
+    const { input, result, request } = await sendAndCapture(grant, assignmentId, text);
     for (const value of gone) {
       expect(stillThere(input, value), `«${value}» i ledeteksten: ${input}`).toBe(false);
     }
     expect(input, "plassholder mangler").toMatch(/\[[a-zæøå-]+\]/u);
     expect(result.kind).toBe("suggestion");
-    if (result.kind === "suggestion") {
-      for (const value of gone) expect(stillThere(result.text, value), value).toBe(false);
+    // A466: raden beholder plassholderne; teksten til klienten har verdiene tilbake
+    const row = (await aiRow(request.requestId))!;
+    for (const value of gone) {
+      expect(stillThere(row.output_text ?? "", value), value).toBe(false);
     }
   });
 });
@@ -1832,7 +1846,9 @@ describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
     const stored = JSON.stringify(row);
     expect(stored).not.toContain("91234567");
     expect(stored).not.toContain("1234567");
-    expect(JSON.stringify(result)).not.toContain("1234567");
+    // A466: klienten får nummeret tilbake, renset for nulltegnet
+    expect(JSON.stringify(result)).toContain("91234567");
+    expect(JSON.stringify(result)).not.toContain("\\u0000");
   });
 });
 
@@ -2001,7 +2017,6 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
     const { grant } = await aiOrganization();
     const spy = vi.spyOn(fakeAiProvider, "complete");
     const request = validRequest({
-      target: trialTarget(),
       fields: { text: "Ring 9\u00001234567" },
     });
 
@@ -2017,7 +2032,9 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
     expect(JSON.stringify(row)).not.toContain("1234567");
     expect(JSON.stringify(row.input_summary)).not.toContain("1234567");
     expect(row.redacted_count).toBe(1);
-    expect(JSON.stringify(result)).not.toContain("1234567");
+    // A466: klienten får nummeret tilbake, renset for nulltegnet
+    expect(result.kind === "suggestion" ? result.text : "").toContain("91234567");
+    expect(JSON.stringify(result)).not.toContain("\\u0000");
   });
 });
 
