@@ -11,6 +11,8 @@ export * from "./labels";
 export * from "./measures";
 export * from "./merge-fields";
 export * from "./override-reason";
+export * from "./publish-check";
+export * from "./publish-check-texts";
 export * from "./status";
 export * from "./tg";
 export * from "./warning-fix";

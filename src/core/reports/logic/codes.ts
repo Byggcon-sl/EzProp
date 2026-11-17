@@ -5,6 +5,7 @@ import type {
   PublishCheckSource,
   PublishOverrideReasonCode,
   PublishWarningCode,
+  PUBLISH_OVERRIDE_REASON_MAX_CHARS as SCHEMA_PUBLISH_OVERRIDE_REASON_MAX_CHARS,
 } from "@/db/schema";
 
 /**
@@ -229,6 +230,14 @@ export type PublishCodesMatchSchema = Assert<
 /** Lengden på begrunnelsen. Samme øvre grense som CHECK-regelen (1000). */
 export const PUBLISH_OVERRIDE_REASON_MIN_CHARS_OTHER = 10;
 export const PUBLISH_OVERRIDE_REASON_MAX_CHARS = 1000;
+
+/** Stopper hvis grensen her og i skjemaet (Zod og CHECK) kommer i utakt. */
+export type PublishOverrideReasonMaxCharsMatchSchema = Assert<
+  SameCodes<
+    typeof PUBLISH_OVERRIDE_REASON_MAX_CHARS,
+    typeof SCHEMA_PUBLISH_OVERRIDE_REASON_MAX_CHARS
+  >
+>;
 
 /**
  * Det som kan mangle i et funn (`PublishCheckTarget.missing`): delene fra `WARNING_MISSING_PARTS`
