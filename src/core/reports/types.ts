@@ -20,6 +20,7 @@ import type {
   SummaryFindingSource,
   SummaryGroup,
   TextSource,
+  TextStatus,
   TgDirect,
 } from "@/db/schema";
 import type { INSPECTION_YEAR_SOURCES } from "./logic/codes";
@@ -110,6 +111,11 @@ export type MeasureView = {
   id: string;
   text: string;
   textSource: TextSource;
+  /**
+   * Malens `text_status` når teksten er et av malens standardtiltak i rommet (med flettefeltene
+   * fylt inn), ellers `null`. Skjermen viser «Utkast» ved `draft` (designvalg D4).
+   */
+  textStatus: TextStatus | null;
   sortOrder: number;
   rowVersion: number;
 };
@@ -137,6 +143,16 @@ export type DeviationView = {
   measurementValue: number | null;
   measurementUnit: string | null;
   textSource: TextSource;
+  /**
+   * Status per tekstfelt (designvalg D4): malens `text_status` når feltet har en av malens tekster
+   * for samme felttype i rommet (med flettefeltene fylt inn), ellers `null` (egen eller endret
+   * tekst). Skjermen viser «Utkast» ved `draft`.
+   */
+  textStatus: {
+    deviationText: TextStatus | null;
+    causeText: TextStatus | null;
+    consequenceText: TextStatus | null;
+  };
   /** Regelen som foreslo avviket (fast kode). */
   suggestedByRuleKey: string | null;
   sortOrder: number;
@@ -476,7 +492,20 @@ export type SaveReportField = (
   organizationId: string,
   room: RoomRef,
   change: ReportFieldChange,
+  options?: SaveFieldOptions,
 ) => Promise<SaveFieldResult>;
+
+/**
+ * «Bruk» på et språkvasket felt (A460): teksten lagres som vanlig, og beslutningen registreres med
+ * `recordDecisionIn` i samme transaksjon (A469). Loggraden må være `language_polish` i denne
+ * rapporten, og `target_ref` må være akkurat feltet som lagres (avvikets tekstfelt, tiltakets
+ * tekst eller beskrivelsen på punktet); ellers `AccessDeniedError` (404) og ingenting lagres. Ved
+ * «Endret av andre» lagres ingenting, og forslaget står åpent. Andre felt gir
+ * `ReportValidationError`.
+ */
+export type SaveFieldOptions = {
+  aiDecision?: { usageId: string; decision: "accepted" | "edited" };
+};
 
 /**
  * Legger til et avvik fra et utfall i malen (`report.edit`), med standardtekstene og
@@ -903,3 +932,66 @@ export type SaveSummary = (
   assignmentId: string,
   input: SaveSummaryInput,
 ) => Promise<SaveSummaryResult>;
+
+// --- Språkvask (A436, A460) ---------------------------------------------------------------------
+
+/** Ett felt i «Språkvask avviket». Bare måltypene og feltene i avvikskortet. */
+export type PolishDeviationTarget =
+  | {
+      type: "deviation";
+      id: string;
+      fieldKey: "deviation_text" | "cause_text" | "consequence_text";
+    }
+  | { type: "deviation_measure"; id: string; fieldKey: "text" };
+
+/** Målet i svaret: et felt i avvikskortet, eller beskrivelsen ved punktet (resultatradens id). */
+export type PolishTarget =
+  PolishDeviationTarget | { type: "checkpoint_result"; id: string; fieldKey: "description_text" };
+
+export type PolishDeviationInput = {
+  deviationId: string;
+  /** Ett felt per forespørsel, med `requestId` fra nettleseren og teksten som står i feltet. */
+  items: { requestId: string; target: PolishDeviationTarget; text: string }[];
+};
+
+/** Svaret for ett felt. Teksten fra KI har de opprinnelige verdiene satt tilbake (A466). */
+export type PolishFieldResult =
+  | { status: "suggestion"; usageId: string; text: string }
+  /** En vakt stoppet feltet (A460). De andre feltene kan brukes. Teksten vises aldri. */
+  | { status: "stopped"; usageId: string; guard: AiGuardCode }
+  | { status: "no_match"; usageId: string }
+  | { status: "ai_error" }
+  | { status: "ai_off" };
+
+export type PolishResult =
+  /** Ett svar per felt med tekst, i samme rekkefølge som de ble sendt. */
+  | {
+      status: "done";
+      fields: { requestId: string; target: PolishTarget; result: PolishFieldResult }[];
+    }
+  /** Ingen felt med tekst: intet kall og ingen rad (T-0111). */
+  | { status: "nothing_to_polish" }
+  /** Teksten er for lang for KI. Intet kall. */
+  | { status: "too_long" };
+
+/**
+ * «Språkvask avviket» (`report.edit`, A436, A460): ett kall til serveren, og gjennom
+ * `requestSuggestionBatch` ett leverandørkall, én loggrad og vaktene per felt. Felt der teksten er
+ * tom etter at mellomrom er tatt bort, tas ikke med; er alle tomme, kalles ikke KI. Målene må være
+ * avviket og dets tiltak i dette rommet, og rapporten må være `draft`; ellers `AccessDeniedError`
+ * (404). Lagrer ingenting: «Bruk» lagres med `SaveReportField` og `SaveFieldOptions.aiDecision`.
+ */
+export type PolishDeviation = (
+  actor: Actor,
+  organizationId: string,
+  room: RoomRef,
+  input: PolishDeviationInput,
+) => Promise<PolishResult>;
+
+/** «Språkvask» på beskrivelsen ved punktet (`checkpoint_result` / `description_text`). Eget kall. */
+export type PolishDescription = (
+  actor: Actor,
+  organizationId: string,
+  room: RoomRef,
+  input: { requestId: string; checkpointKey: string; text: string },
+) => Promise<PolishResult>;

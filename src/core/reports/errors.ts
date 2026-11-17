@@ -1,4 +1,5 @@
 import { AccessDeniedError } from "@/core/access";
+import { AiDecisionError, AiInputTooLargeError, AiRequestRejectedError } from "@/core/ai";
 import { TemplateNotFoundError } from "@/core/templates";
 import { logger } from "@/shared/lib/logger";
 
@@ -53,6 +54,11 @@ const MESSAGES: Record<ReportValidationCode, string> = {
     "Teksten har en plassholder fra KI, for eksempel [adresse]. Skriv inn riktig verdi.",
 };
 
+/** Den faste norske meldingen for koden. */
+export function reportValidationMessage(code: ReportValidationCode): string {
+  return MESSAGES[code];
+}
+
 /** Inndata som ikke kan lagres. Ingenting er endret. */
 export class ReportValidationError extends Error {
   readonly code: ReportValidationCode;
@@ -84,10 +90,16 @@ export class ReportStorageError extends Error {
   }
 }
 
-/** Feil tjenestene gir med vilje. De sendes videre som de er. */
+/**
+ * Feil tjenestene gir med vilje. De sendes videre som de er. Feilene fra `@/core/ai` har egne,
+ * nøytrale meldinger uten id-er eller tekst (avslag, for mye inndata, beslutning som ikke passer).
+ */
 function isExpectedError(error: unknown): boolean {
   return (
     error instanceof AccessDeniedError ||
+    error instanceof AiRequestRejectedError ||
+    error instanceof AiDecisionError ||
+    error instanceof AiInputTooLargeError ||
     error instanceof ReportValidationError ||
     error instanceof ReportTemplateMissingError ||
     error instanceof TemplateNotFoundError
