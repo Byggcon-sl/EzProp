@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
@@ -30,6 +32,7 @@ import {
   createUser,
   resetDatabase,
 } from "../../tests/factories";
+import { tenantTables } from "../../tests/tenant-tables";
 
 /*
  * Databasen selv holder rapportdataene riktige (migrering `0036_badet-pc`, ADR 0013,
@@ -558,4 +561,119 @@ describe("standard_measures.applies_to_tg (T-0060)", () => {
       CHECK,
     );
   });
+});
+
+// --- Testplanen avsnitt 3 og B4.34 (docs/funksjoner/fase2a-badet-pc-testplan.md) ---------------
+
+const REPORT_TABLES = [
+  "reports",
+  "field_answers",
+  "checkpoint_results",
+  "deviations",
+  "deviation_measures",
+  "tgiu_details",
+  "rule_suggestion_decisions",
+] as const;
+
+const MIGRATION_FILE = join(process.cwd(), "src", "db", "migrations", "0036_badet-pc.sql");
+
+describe("B3.5 myk sletting: ingen fremmednøkkel sletter rader", () => {
+  it("B3.5 migreringen har ingen ON DELETE CASCADE, SET NULL eller SET DEFAULT", () => {
+    const source = readFileSync(MIGRATION_FILE, "utf8");
+    expect(source).not.toMatch(/on\s+delete\s+(cascade|set\s+null|set\s+default)/i);
+    expect(source).not.toMatch(/\bdelete\s+from\b/i);
+    expect(source).not.toMatch(/\btruncate\b/i);
+  });
+
+  it.each(REPORT_TABLES)(
+    "B3.5 %s: hver fremmednøkkel er «no action» eller «restrict»",
+    async (table) => {
+      const rules = (await db.execute(sql`
+      select confdeltype::text as on_delete, conname from pg_constraint
+      where conrelid = ${`public.${table}`}::regclass and contype = 'f'`)) as unknown as {
+        on_delete: string;
+        conname: string;
+      }[];
+      expect(rules.length).toBeGreaterThan(0);
+      for (const rule of rules) expect(["a", "r"], rule.conname).toContain(rule.on_delete);
+    },
+  );
+
+  it("B3.5 en rapport med avvik kan ikke slettes hardt i databasen (fremmednøkkelen stopper det)", async () => {
+    const { orgA } = await twoOrganizations();
+    const deviation = await createDeviationRow(orgA.id);
+    await expectPgError(
+      () => db.delete(reports).where(eq(reports.id, deviation.reportId)),
+      FOREIGN_KEY,
+    );
+    const [still] = await db.select().from(deviations).where(eq(deviations.id, deviation.id));
+    expect(still?.id).toBe(deviation.id);
+  });
+});
+
+describe("B3.7 tenant-tabellene", () => {
+  it.each(REPORT_TABLES)("B3.7 %s er ført med radbygger og en testfil som finnes", (table) => {
+    const entry = tenantTables.find((t) => t.table === table);
+    expect(entry, table).toBeDefined();
+    expect(typeof entry?.insertRow).toBe("function");
+    const testFile = entry?.testFile ?? "";
+    expect(testFile, table).not.toBe("");
+    expect(existsSync(join(process.cwd(), testFile)), testFile).toBe(true);
+  });
+
+  it.each(REPORT_TABLES)(
+    "B3.7 radbyggeren for %s lager en rad i riktig organisasjon",
+    async (table) => {
+      const { orgA } = await twoOrganizations();
+      const entry = tenantTables.find((t) => t.table === table)!;
+      const id = await entry.insertRow(orgA.id);
+      const rows = (await db.execute(
+        sql`select organization_id from ${sql.identifier(table)} where id = ${id}`,
+      )) as unknown as { organization_id: string }[];
+      expect(rows).toEqual([{ organization_id: orgA.id }]);
+    },
+  );
+});
+
+describe("B3.8 delvis indeks på ai_usage_log.report_id", () => {
+  it("B3.8 (organization_id, report_id) where report_id is not null finnes", async () => {
+    const rows = (await db.execute(sql`
+      select indexname, indexdef from pg_indexes
+      where schemaname = 'public' and tablename = 'ai_usage_log'`)) as unknown as {
+      indexname: string;
+      indexdef: string;
+    }[];
+    const match = rows.filter((row) => {
+      const def = row.indexdef.replace(/\s+/g, " ").toLowerCase();
+      return (
+        def.includes("(organization_id, report_id)") &&
+        def.includes("where (report_id is not null)")
+      );
+    });
+    expect(match.map((row) => row.indexname)).toEqual([
+      "ai_usage_log_organization_id_report_id_idx",
+    ]);
+  });
+});
+
+describe("B4.34 lagret mål i ai_usage_log", () => {
+  it("B4.34 rad med target_ref type field_answer og report_id leses tilbake uendret", async () => {
+    const { orgA } = await twoOrganizations();
+    const answer = await createFieldAnswerRow(orgA.id);
+    const target = { type: "field_answer", id: answer.id, fieldKey: "wet_room.membrane_year" };
+    const row = await createAiUsageLog(orgA.id, { reportId: answer.reportId, targetRef: target });
+    const [read] = (await db.execute(
+      sql`select report_id, target_ref from ai_usage_log where id = ${row.id}`,
+    )) as unknown as { report_id: string; target_ref: unknown }[];
+    expect(read).toEqual({ report_id: answer.reportId, target_ref: target });
+  });
+
+  it.each(["src/core/ai/usage-log.test.ts", "src/core/ai/retention-transitions.test.ts"])(
+    "B4.34 %s bruker målkoden field_answer, ikke answer (A350)",
+    (file) => {
+      const source = readFileSync(join(process.cwd(), file), "utf8");
+      expect(source).toMatch(/type:\s*"field_answer"/);
+      expect(source).not.toMatch(/type:\s*"answer"/);
+    },
+  );
 });
