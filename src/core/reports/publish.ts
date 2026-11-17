@@ -283,11 +283,66 @@ async function previousOverridesOf(
 }
 
 function pendingViewsOf(source: PublishSource): PendingAiSuggestionView[] {
-  return pendingAiSuggestionsOf(source).map(({ aiUsageId, outputText, ...place }) => ({
+  return pendingAiSuggestionsOf(source).map(({ aiUsageId, outputText, field, ...place }) => ({
     aiUsageId,
     target: toTarget({ ...place, aiUsageId, ruleKey: null }),
+    field: { type: field.type, id: field.id, fieldKey: field.fieldKey },
     outputText,
   }));
+}
+
+/**
+ * Avviksnummeret (1, 2, … i rekkefølgen på punktet, som rommet viser) og TG for hvert avvik, så
+ * funnteksten kan si «Avvik 1 (TG3)». Bare til visning.
+ */
+function deviationNumbersOf(
+  source: PublishSource,
+): Map<string, { number: number; tg: 2 | 3 | null }> {
+  const result = new Map<string, { number: number; tg: 2 | 3 | null }>();
+  for (const room of source.rooms) {
+    for (const checkpoint of room.state.checkpoints) {
+      const sorted = [...checkpoint.deviations].sort((a, b) => a.sortOrder - b.sortOrder);
+      sorted.forEach((deviation, index) => {
+        const tg = deviation.tg === 2 || deviation.tg === 3 ? deviation.tg : null;
+        result.set(deviation.id, { number: index + 1, tg });
+      });
+    }
+  }
+  return result;
+}
+
+/**
+ * Datoene utgivelsen får (4.7, regel 12): versjon 1 får dagens dato og befaringsdato + ett år (tom
+ * uten befaringsdato); versjon 2 og senere arver begge fra versjon 1. Samme funksjon gir «Gyldig
+ * til» i «Dette publiseres», så det den ansatte ser, er det som lagres.
+ */
+async function releaseDatesOf(
+  ex: DbExecutor,
+  source: PublishSource,
+  versionNumber: number,
+  today: string,
+): Promise<{ originalReleaseDate: string; validUntil: string | null; inherited: boolean }> {
+  const own = source.inspectionDate ? oneYearAfter(source.inspectionDate) : null;
+  if (versionNumber <= 1) return { originalReleaseDate: today, validUntil: own, inherited: false };
+  const [first] = await ex
+    .select({
+      originalReleaseDate: reportReleases.originalReleaseDate,
+      validUntil: reportReleases.validUntil,
+    })
+    .from(reportReleases)
+    .where(
+      and(
+        eq(reportReleases.organizationId, source.orgId),
+        eq(reportReleases.reportId, source.report.id),
+        eq(reportReleases.versionNumber, 1),
+      ),
+    );
+  if (!first) return { originalReleaseDate: today, validUntil: own, inherited: false };
+  return {
+    originalReleaseDate: first.originalReleaseDate,
+    validUntil: first.validUntil,
+    inherited: true,
+  };
 }
 
 /** Sjekken regnet på lagrede data: funnene og fingeravtrykket. */
@@ -304,14 +359,17 @@ async function buildDraftView(
   check: ReturnType<typeof runCheck>,
   now: Date,
 ): Promise<CheckDraftView> {
-  const [previous, ability] = await Promise.all([
+  const nextVersionNumber = (source.latestRelease?.versionNumber ?? 0) + 1;
+  const [previous, ability, dates] = await Promise.all([
     previousOverridesOf(ex, grant, source),
     publishAbilityOf(ex, grant, todayInOslo(now)),
+    releaseDatesOf(ex, source, nextVersionNumber, todayInOslo(now)),
   ]);
   const roomNames = new Map(source.rooms.map((room) => [room.roomId, room.name]));
   const checkpointLabels = new Map(
     source.template.document.checkpoints.map((c) => [c.key, c.name] as const),
   );
+  const deviations = deviationNumbersOf(source);
   const findings: PublishFindingView[] = check.findings.map((item) => {
     const key = publishFindingKey(item);
     return {
@@ -322,13 +380,21 @@ async function buildDraftView(
       checkpointLabel: item.target.checkpointKey
         ? (checkpointLabels.get(item.target.checkpointKey) ?? null)
         : null,
+      deviationNumber: item.target.deviationId
+        ? (deviations.get(item.target.deviationId)?.number ?? null)
+        : null,
+      deviationTg: item.target.deviationId
+        ? (deviations.get(item.target.deviationId)?.tg ?? null)
+        : null,
       previousOverride: item.severity === "blocker" ? (previous.get(key) ?? null) : null,
     };
   });
   return {
     state: "draft",
     reportId: source.report.id,
-    nextVersionNumber: (source.latestRelease?.versionNumber ?? 0) + 1,
+    nextVersionNumber,
+    validUntil: dates.validUntil,
+    validUntilInherited: dates.inherited,
     findings,
     summary: summarizePublishCheck(check.findings),
     fingerprint: check.fingerprint,
@@ -499,27 +565,8 @@ export const publishReport: PublishReport = async (actor, organizationId, rawInp
 
       // 6. Utgivelsen. Versjon 2 og senere arver datoene fra versjon 1.
       const versionNumber = (source.latestRelease?.versionNumber ?? 0) + 1;
-      let originalReleaseDate = today;
-      let validUntil = source.inspectionDate ? oneYearAfter(source.inspectionDate) : null;
-      if (versionNumber > 1) {
-        const [first] = await tx
-          .select({
-            originalReleaseDate: reportReleases.originalReleaseDate,
-            validUntil: reportReleases.validUntil,
-          })
-          .from(reportReleases)
-          .where(
-            and(
-              eq(reportReleases.organizationId, orgId),
-              eq(reportReleases.reportId, report.id),
-              eq(reportReleases.versionNumber, 1),
-            ),
-          );
-        if (first) {
-          originalReleaseDate = first.originalReleaseDate;
-          validUntil = first.validUntil;
-        }
-      }
+      const dates = await releaseDatesOf(tx, source, versionNumber, today);
+      const { originalReleaseDate, validUntil } = dates;
       const snapshot = buildReportSnapshot(source);
       const releaseId = uuidv7();
       await tx.insert(reportReleases).values({

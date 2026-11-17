@@ -18,6 +18,7 @@ import type {
 } from "@/db/schema";
 import type { INSPECTION_YEAR_SOURCES } from "./logic/codes";
 import type { CheckpointStatus, CheckpointTg, CheckpointWarning } from "./logic/types";
+import type { PublishCheckRoom } from "./logic/publish-check-types";
 
 /**
  * Grensesnittet til rapportkjernen (`@/core/reports`, ADR 0013,
@@ -213,6 +214,8 @@ export type RoomReportView =
       checkpoints: CheckpointView[];
       suggestions: SuggestionView[];
       progress: { done: number; total: number };
+      /** Som `RoomRefresh.publishRoom`. */
+      publishRoom: PublishCheckRoom;
     };
 
 // --- Lagring per felt ----------------------------------------------------------------------
@@ -302,6 +305,12 @@ export type RoomRefresh = {
   checkpoints: CheckpointView[];
   suggestions: SuggestionView[];
   progress: { done: number; total: number };
+  /**
+   * Rommet slik sjekken før publisering leser det (ADR 0015). Skjermen regner tellemerket
+   * «2 må rettes, 3 bør sees over» lokalt med `computePublishCheck`, uten nytt kall. Bare koder,
+   * id-er og tilstand; ingen tekst utover det rommet alt har.
+   */
+  publishRoom: PublishCheckRoom;
 };
 
 export type SaveFieldResult =
