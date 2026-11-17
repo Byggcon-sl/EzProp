@@ -2,7 +2,7 @@
 
 - **Hører til:** `docs/funksjoner/fase2a-badet-pc.md` (2a-2, punkt 3)
 - **Fasit:** oppsett og luft fra A «Fjord» (`docs/design/bilder/A-konstr-pc.png`, `A-ipad-liggende.png`, `A-ipad-staende.png`), uttrykket fra Byggcon-profilen (`docs/08-designprinsipper.md`, `docs/design/byggcon-profil/bilder/`, `docs/funksjoner/fase2a-byggcon-profil-design.md`)
-- **Laget av:** ui-designer, 14.11.2026. Rettet av prosjektlederen 16.11.2026 etter forbedrerens tillegg A380–A383, A388 og A389 og vurderingen fra forbedrer, ux og arkitekt (begrunnelse med knapper, «Rett nå», søk, snarveier, motsatt TGIU-konflikt). Ved motstrid gjelder oppgavekortet.
+- **Laget av:** ui-designer, 14.11.2026. Rettet av prosjektlederen 16.11.2026 etter forbedrerens tillegg A380–A383, A388 og A389 og vurderingen fra forbedrer, ux og arkitekt (begrunnelse med knapper, «Rett nå», søk, snarveier, motsatt TGIU-konflikt). Gått gjennom mot oppgavekortet av ui-designer 17.11.2026 ved overtakelsen: tre hull tettet (visning av eget beløp med «ca.», punktbytte uten ny innlasting og varsel ved lukking, «Ferdig» med ventende lagring), se avsnitt 10, 11 og 17. Ved motstrid gjelder oppgavekortet.
 - **Støtter hovedmål:**
   - **Færre reklamasjoner:** skjermen viser forskriftens struktur (TG, årsak, konsekvens, tiltak, kostnad; TGIU med begrunnelse) som faste felt, og mangler står som advarsel på punktet og i listen før rapporten går ut.
   - **De ansatte:** ett skjermbilde for hele badet, to trykk fra regelforslag til ferdig avvik, ingen «Lagre»-knapp, lagrestatus alltid synlig.
@@ -245,6 +245,7 @@ Bruker bare `sync-*`-tokenene. Ikon og tekst står alltid sammen; aldri TG-farge
 - **`failed`:** «Prøv igjen» (`secondary md`) ved feltet og i toppfeltet. Feltet beholder teksten. Lagringen prøves igjen av seg selv når nettet kommer tilbake.
 - **Konflikt («Endret av andre»):** under feltet, flate `sand`, 12 px hjørner, p-4:
   «Noen andre har endret dette feltet. Nyeste verdi:» og verdien (tekst, maks 6 linjer med «Vis alt»). Knappene «Bruk nyeste» (`primary md`) og «Behold min og lagre» (`secondary md`). Ingenting overskrives før et valg er tatt. Fokus går til meldingen (`tabIndex={-1}`), og statusområdet sier «Endret av andre».
+- **Ulagret tekst går aldri tapt** (oppgavekortet punkt 8): bytte av punkt (listen, Forrige/Neste, Ferdig, søketreff på annet punkt, Alt+↑/↓) skjer uten ny innlasting; bare `?punkt=` i adressen endres, og lagringskøen og teksten i feltene beholdes. Står ett felt som «Lagrer …», «Ikke lagret» eller «Uten nett» når fanen lukkes eller lastes på nytt, varsler nettleseren med sin egen dialog (`beforeunload`; nettleseren bestemmer teksten). Ingen egen dialog fra oss.
 
 ## 11. `CostField`
 
@@ -252,6 +253,7 @@ Bruker bare `sync-*`-tokenene. Ikon og tekst står alltid sammen; aldri TG-farge
 - **Eget beløp:** `Input inputMode="numeric"` med «kr» etter, bredde 200 px, autofokus når valget gjøres. Tusenskille med mellomrom vises når feltet forlates; rundes aldri av automatisk.
   - Ikke rundet til nærmeste 10 000: `Warning` rett under mens det skrives (forsinket 300 ms): «Beløpet er ikke rundet til nærmeste 10 000. Nærmeste er 40 000.» Med knappen «Bruk 40 000» (`secondary md`). Aldri dialog, aldri sperre.
   - 0, negativt eller desimaltall: feilen i `Field` (`aria-invalid`): «Skriv et helt beløp over 0.» Lagres ikke.
+  - **Visning:** der beløpet står som tekst (skrivebeskyttet visning for kontor, `changed`-linjen og senere PDF-en), vises eget beløp som «ca. 40 000 kr» og intervall med etiketten («20 000–100 000 kr»). Teksten lages av oversettelsen av `cost_type` i `src/core/reports/logic/`, så PDF-en arver den. I selve feltet står bare tallet.
 - **Ingen** ved TG3: `Warning` «TG3 skal ha kostnad.» (advarsel nå).
 - Under valget: `Input` «Kostnad, forklaring (valgfri)».
 
@@ -374,6 +376,7 @@ Felles for avvik, årsak, konsekvens, tiltak, beskrivelse av punktet og TGIU-fel
 
 - `Button size="lg"` (56 pt), minst 240 px bred på PC. Kan alltid trykkes (også med advarsler).
 - Ferdig punkt: knappen blir «Åpne punktet igjen» (`secondary lg`), og listen viser «Ferdig».
+- **Med felt som venter på lagring:** knappen viser «Lagrer …» og er låst mens det som venter lagres først. Lykkes det, markeres punktet ferdig som under. Feiler det, markeres punktet ikke ferdig, knappen blir «Ferdig med punktet» igjen, feltet viser «Ikke lagret – prøv igjen», fokus går til feltet, og statusområdet sier «Punktet er ikke ferdig. Ett felt er ikke lagret.» Ctrl/Cmd+Enter gjør det samme.
 - Etter trykk: neste punkt som ikke er ferdig åpnes, adressen får `?punkt=<key>`, fokus på `h2`. Statusområdet: «Punktet er ferdig. 4 av 8 ferdig. Åpnet: Ventilasjon.»
 - Alle ferdig: punktet blir stående, og et `Notice` øverst i punktkolonnen sier «Alle 8 punktene er ferdige.» Fokus på det.
 
@@ -437,5 +440,8 @@ Bilder, frasebank, KI-knapper, «Gjelder ikke», fritt avvik uten spørsmål, pu
 - [ ] Søketreffene er en synlig liste med knapper, ikke combobox.
 - [ ] Fokusflyt etter Godta, Ferdig, Fjern og bytte av punkt som i avsnitt 8, 9 og 17.
 - [ ] Flettefelt vises aldri som `{…}`.
+- [ ] Bytte av punkt laster ikke siden på nytt; `beforeunload` varsler bare når et felt ikke er lagret.
+- [ ] «Ferdig med punktet» lagrer det som venter først, og markerer ikke ferdig når lagringen feiler.
+- [ ] Eget beløp vises som «ca. 40 000 kr» der det står som tekst.
 - [ ] Komponentene i `src/shared/ui` importerer ikke `src/core`, `src/db` eller moduler; klientkomponentene i rutemappen importerer bare `src/core/reports/logic/`, ikke indeksen.
 - [ ] axe uten feil på PC, iPad liggende og iPad stående.
