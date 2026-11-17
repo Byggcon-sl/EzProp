@@ -83,6 +83,7 @@ Alle filer (bilder, PDF-er, dokumenter, senere logo og signatur) lagres og hente
 - Data i EU/EØS. Byggcon er behandlingsansvarlig. Databehandleravtaler med alle leverandører, også KI (EU/EØS, ingen trening på våre data).
 - Ingen kundeopplysninger i logg, repo eller testdata. Loggeren vasker e-post, telefon og nøkler.
 - Revisjonslogg på alle endringer. Myk sletting. Oppbevaring 10 år.
+- Eneste unntak fra myk sletting: de tekniske innloggingstabellene `login_attempts`, `verifications` og `sessions` (uten `organization_id`) slettes for godt av en nattlig rydding etter 24 timer, 24 timer etter utløp og 30 dager etter utløp. `users`, `accounts` og alt med `organization_id` slettes aldri (ADR 0014).
 - Adresse, gårds- og bruksnummer, seksjonsnummer, andels- eller aksjenummer og forretningsfører på eiendommen peker på én bestemt bolig og er personopplysninger. De sendes **aldri** til KI, og heller ikke navn, e-post, telefon, festenummer, borettslag eller sameie, organisasjonsnummer og fødselsnummer (regel 14 i `CLAUDE.md`, ADR 0006 del 6). Fritekst vaskes før den sendes, men har restrisiko; databehandleravtale kreves derfor uansett.
 - Tidsmåling bare samlet til de ansatte har sagt ja (arbeidsmiljøloven kap. 9). Ståle drøfter med de ansatte.
 - Sikkerhetshoder på alle svar (`src/shared/config/security-headers.ts`).

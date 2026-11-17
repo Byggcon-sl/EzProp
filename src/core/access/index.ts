@@ -5,6 +5,8 @@ export {
   requireOrganizationAccess,
   requireTemplateEditAccess,
 } from "./guards";
+export { logRejectedOperationsCall } from "./operations-log";
+export { OPERATIONS_SECRET_MIN_LENGTH, verifyOperationsSecret } from "./operations-secret";
 export {
   canCreateAssignments,
   effectivePermissions,

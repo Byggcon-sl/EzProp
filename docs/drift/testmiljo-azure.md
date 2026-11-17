@@ -72,6 +72,12 @@ Valgfrie secrets for «Logg inn med Microsoft» (ADR 0008). Legg inn **alle tre 
 | `MS_LOGIN_CLIENT_ID` | Application (client) ID fra app-registreringen for innlogging (ikke den for e-post) |
 | `MS_LOGIN_CLIENT_SECRET` | Klienthemmeligheten (Value) fra samme app-registrering |
 
+Valgfri secret for rydding av innloggingsdata (ADR 0014). Tom eller mangler betyr at ryddingen er av. Se avsnittet «Rydding av innloggingsdata».
+
+| Navn | Hva du legger inn |
+|---|---|
+| `AUTH_CLEANUP_SECRET` | Lag med `openssl rand -base64 48` i Terminal. Minst 32 tegn. Brukes bare her, ikke samme verdi som `BETTER_AUTH_SECRET`. |
+
 **Variabler** (fanen Variables):
 
 | Navn | Hva du legger inn |
@@ -165,6 +171,60 @@ Meldingen viser aldri adressen, verten eller passordet.
 
 **Kjøre for hånd:** `pnpm db:seed:testdata` lokalt (`.env` har `APP_ENVIRONMENT=development`) eller via «Run workflow» i Actions.
 
+## Rydding av innloggingsdata
+
+**Hva jobben gjør:** én gang i døgnet, om natten (02:17 UTC), sletter appen gamle innloggingsdata som ikke trengs lenger (ADR 0014):
+
+- tellere for innloggingssperren som er eldre enn 24 timer,
+- innloggingskoder som gikk ut for mer enn 24 timer siden,
+- økter som gikk ut for mer enn 30 dager siden.
+
+Ingenting annet slettes. Brukere, ansatte og alt fagstoff står urørt. Ingen som er logget inn, blir logget ut. Jobben er arbeidsflyten «Rydding av innloggingsdata» i GitHub. Den kaller en intern adresse i appen og sender med en hemmelig nøkkel. Det koster ingenting i Azure.
+
+### Slå på (Ståle gjør dette)
+
+1. **Lag en tilfeldig nøkkel** i Terminal: `openssl rand -base64 48`. Den må være minst 32 tegn.
+2. **Legg den inn som GitHub-secret** med navnet `AUTH_CLEANUP_SECRET` (GitHub → Settings → Secrets and variables → Actions → fanen Secrets). Nøkkelen skal bare ligge der: aldri i chat, e-post, dokumenter eller i repoet.
+3. **Kjør utrullingen på nytt:** Actions → «Utrulling til Azure» → «Run workflow». Først da får appen nøkkelen (med nøkkelboksen på legges den i boksen). Før det svarer appen «finnes ikke» (404) og jobben feiler.
+
+Uten nøkkelen i GitHub hopper jobben over hver natt, uten feil, med en kort merknad i loggen.
+
+### Kjøre for hånd
+
+Actions → «Rydding av innloggingsdata» → «Run workflow». Det er ufarlig å kjøre den så ofte du vil: andre kjøring samme dag sletter ingenting.
+
+### Se at den gikk
+
+- **I GitHub:** Actions → «Rydding av innloggingsdata». Grønn kjøring betyr at den gikk. Åpne kjøringen og steget «Kall ryddingen»: der står hvor mange rader som ble slettet i hver tabell og hvor lang tid det tok, for eksempel `Ryddet: {"loginAttempts":12,"verifications":4,"sessions":1,"durationMs":35}`.
+- **I appens logg** (App Service → Log stream): én linje per kjøring med de samme tallene. Loggen har aldri e-post, nøkler eller IP-adresser.
+
+### Hvis den feiler
+
+- **404 (finnes ikke):** appen og GitHub har ikke samme nøkkel. Enten mangler nøkkelen i appen (kjør utrullingen på nytt etter at den er lagt inn), eller den er for kort, eller verdien i GitHub er byttet uten ny utrulling.
+- **500 (feil i appen):** se appens logg (Log stream) rundt tidspunktet. Feillinjen har en referansekode, men ingen persondata. Ofte er det databasen som ikke svarte; da holder det å kjøre jobben igjen.
+- **Tidsavbrudd eller ingen kontakt:** appen var nede eller startet på nytt. Kjør jobben igjen senere.
+
+Det er alltid ufarlig å kjøre jobben igjen. En dag som faller ut, tas igjen neste natt.
+
+### Bytte nøkkelen
+
+1. Lag en ny nøkkel (`openssl rand -base64 48`) og legg den inn som ny verdi i GitHub-secret `AUTH_CLEANUP_SECRET`.
+2. Kjør «Utrulling til Azure» på nytt. Til utrullingen er ferdig, kan en kjøring av ryddingen feile med 404. Det er ufarlig.
+
+### Slå av
+
+Slett GitHub-secret `AUTH_CLEANUP_SECRET` og kjør utrullingen på nytt. Da er den interne adressen av i appen, og jobben hopper over. Vil du bare stoppe jobben en stund: Actions → «Rydding av innloggingsdata» → «…» → «Disable workflow».
+
+### Når GitHub ikke kjører den
+
+GitHub starter planlagte jobber når det er ledig kapasitet. En kjøring kan komme senere enn 02:17, og av og til faller den helt ut. Det er ufarlig: neste natt tar det som ble stående.
+
+For offentlige repoer slår GitHub av planlagte jobber når det ikke har vært aktivitet i repoet på 60 dager (ifølge GitHubs dokumentasjon). Da vises et varsel på arbeidsflyten under Actions, og siste kjøring er gammel. Slå den på igjen med «Enable workflow» samme sted.
+
+### Produksjon
+
+Jobben kaller bare testmiljøet: `https://<APP_HOSTNAME>` når `APP_HOSTNAME` er satt, ellers `https://app-ezprop-test.azurewebsites.net`. Produksjon trenger egen adresse og egen nøkkel, som Ståle setter opp når han ruller ut til produksjon. Bruk aldri samme nøkkel i test og produksjon.
+
 ## Hvis Azure mangler kapasitet («No available instances»)
 
 Utrullingen kan stoppe med `Conflict` og «No available instances to satisfy this request» på `plan-ezprop-test`. Det betyr at Microsoft er tom for ledige maskiner for appen i den delen av datasenteret ressursgruppen ligger i. Det er ikke en feil i oppsettet. Prøv først igjen senere. Hjelper ikke det, flytt til en ny ressursgruppe:
@@ -202,7 +262,7 @@ PowerSync og ElectricSQL er fjernet 10.11.2026 (ADR 0004, egenbygd synk er valgt
 
 ## Nøkkelboks for hemmeligheter
 
-**Hva dette er:** en nøkkelboks (Azure Key Vault) i ressursgruppen. I testmiljøet heter den `kv-ezprop-test` (navnet er alltid `kv-ezprop-<miljø>`). Når den er på, ligger databasepassordet (`DATABASE_URL`), innloggingsnøkkelen (`BETTER_AUTH_SECRET`), klienthemmeligheten for e-post (`MS_GRAPH_CLIENT_SECRET`), klienthemmeligheten for Microsoft-innloggingen (`MS_LOGIN_CLIENT_SECRET`, når den er lagt inn) og nøkkelen til KI-leverandøren (`ANTHROPIC_API_KEY`, når den er lagt inn) i boksen, ikke i klartekst i appinnstillingene. Appinnstillingene viser da bare en henvisning til boksen. Appen får en egen identitet som bare kan lese fra boksen. Se ADR 0005.
+**Hva dette er:** en nøkkelboks (Azure Key Vault) i ressursgruppen. I testmiljøet heter den `kv-ezprop-test` (navnet er alltid `kv-ezprop-<miljø>`). Når den er på, ligger databasepassordet (`DATABASE_URL`), innloggingsnøkkelen (`BETTER_AUTH_SECRET`), klienthemmeligheten for e-post (`MS_GRAPH_CLIENT_SECRET`), klienthemmeligheten for Microsoft-innloggingen (`MS_LOGIN_CLIENT_SECRET`, når den er lagt inn), nøkkelen til KI-leverandøren (`ANTHROPIC_API_KEY`, når den er lagt inn) og driftsnøkkelen for rydding av innloggingsdata (`AUTH_CLEANUP_SECRET`, når den er lagt inn) i boksen, ikke i klartekst i appinnstillingene. Appinnstillingene viser da bare en henvisning til boksen. Appen får en egen identitet som bare kan lese fra boksen. Se ADR 0005.
 
 Du legger fortsatt verdiene inn i GitHub-secrets, som før. Utrullingen legger dem i boksen. Du trenger ikke legge dem inn noe annet sted.
 
@@ -217,7 +277,7 @@ Boksen står **av** til du slår den på. En merge til `main` lager ingenting ny
 
 ### Sjekke
 
-1. **Se etter grønt hakemerke:** i Azure-portalen, åpne App Service (`app-ezprop-test`) → Configuration (Environment variables). `DATABASE_URL`, `BETTER_AUTH_SECRET`, `MS_GRAPH_CLIENT_SECRET`, `MS_LOGIN_CLIENT_SECRET` og `ANTHROPIC_API_KEY` (de tre siste når de er lagt inn) skal ha et grønt hakemerke og teksten «Key vault reference».
+1. **Se etter grønt hakemerke:** i Azure-portalen, åpne App Service (`app-ezprop-test`) → Configuration (Environment variables). `DATABASE_URL`, `BETTER_AUTH_SECRET`, `MS_GRAPH_CLIENT_SECRET`, `MS_LOGIN_CLIENT_SECRET`, `ANTHROPIC_API_KEY` og `AUTH_CLEANUP_SECRET` (de fire siste når de er lagt inn) skal ha et grønt hakemerke og teksten «Key vault reference».
 2. **Er de røde rett etter første utrulling:** start appen på nytt (knappen «Restart» på App Service). Tilgangen til boksen lages etter appen, og App Service henter verdiene når appen starter. Etter omstart skal hakemerket være grønt.
 3. **Logg inn** i testmiljøet og se at det virker.
 

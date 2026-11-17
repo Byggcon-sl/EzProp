@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLogger, REDACTED } from "@/shared/lib/logger";
 import { InvalidSecretRefError, readSecret, SecretNotFoundError } from "./index";
+import { DENIED_SECRET_REFS, isValidSecretRef } from "./secrets";
 
 /*
  * Testplan docs/funksjoner/fase0b-tilkoblingslag-testplan.md avsnitt 2. Støtter hovedmål:
@@ -101,6 +102,7 @@ describe("readSecret", () => {
     ["DATABASE_URL"],
     ["TEST_DATABASE_URL"],
     ["FILE_STORAGE_AZURE_CONNECTION_STRING"],
+    ["AUTH_CLEANUP_SECRET"],
   ])("8. nektlisten: %s gir InvalidSecretRefError selv når verdien finnes", async (name) => {
     vi.stubEnv(name, SECRET);
     let value: unknown;
@@ -163,4 +165,20 @@ describe("readSecret", () => {
       expect(await readSecret(NAME)).toBe(value);
     },
   );
+});
+
+/*
+ * Driftshemmeligheten for ryddejobben (docs/agenter/oppgaver/rydd-innloggingsdata-testplan.md,
+ * C3). Ingen tilkobling kan peke på den og sende den til en leverandør. Verdien er oppdiktet.
+ */
+describe("AUTH_CLEANUP_SECRET in the connection layer", () => {
+  it("C3 AUTH_CLEANUP_SECRET is denied", async () => {
+    expect(DENIED_SECRET_REFS).toContain("AUTH_CLEANUP_SECRET");
+    // Samme sjekk som tilkoblingene valideres med (connections.ts bruker isValidSecretRef)
+    expect(isValidSecretRef("AUTH_CLEANUP_SECRET")).toBe(false);
+    vi.stubEnv("AUTH_CLEANUP_SECRET", "oppdiktet-driftshemmelighet-for-tester-0123456789");
+    const error = await caught(() => readSecret("AUTH_CLEANUP_SECRET"));
+    expect(error).toBeInstanceOf(InvalidSecretRefError);
+    expect(String(error)).not.toContain("oppdiktet-driftshemmelighet");
+  });
 });

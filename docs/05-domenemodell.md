@@ -126,6 +126,8 @@ Disse feltene finnes i **alle** tabeller (med få unntak, som er nevnt). De stå
 | `deleted_at`, `deleted_by` | **Myk sletting.** Ingenting slettes for godt. «Slett» betyr «flytt til papirkurven», og det kan angres. |
 | `row_version` | Teller som øker ved hver endring. Brukes til synkronisering og til å oppdage at to har endret samme rad. |
 
+**Unntak fra myk sletting (ADR 0014, A419):** tre tekniske innloggingstabeller uten `organization_id` slettes for godt av den nattlige ryddingen (`purgeExpiredAuthData` i `src/core/auth/auth-cleanup.ts`): `login_attempts` 24 timer etter at forsøket ble registrert, `verifications` 24 timer etter utløp og `sessions` 30 dager etter utløp. Grunnlag: svar 10.11.2026, nr. 15 og 18. `users`, `accounts` og alle tabeller med `organization_id` slettes aldri for godt.
+
 **Oppbevaring:** Rapporter, bilder og måledata i en utgitt rapport beholdes i **minst 10 år**, i låst versjon per utgave (beslutning 25.10.2026). Feltet `retain_until` på utgivelser og filer sier hvor lenge. Ingenting med `retain_until` i fremtiden kan slettes, heller ikke av admin.
 
 **Navn:** Tabeller og felt er på engelsk, som i Optiplan. Ordlisten i avsnitt 8 oversetter.
@@ -2036,7 +2038,9 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Aktivt ansattforhold | `hasActiveEmployment` (`src/core/access`) | Ansatt-rad som ikke er deaktivert eller slettet, i en organisasjon som ikke er slettet. Sjekkes ved hver Microsoft-innlogging |
 | Reservert hemmelighetsnavn | `RESERVED_SECRET_REFS` | Navn appen leser selv, men som aldri kan stå som `secret_ref` på en tilkobling (`MS_LOGIN_CLIENT_SECRET`) |
 | Innloggingssperre | `login throttle` (`src/core/auth/login-throttle.ts`) | Midlertidig sperre per e-postadresse etter 5 feil koder eller 5 kodebestillinger på 15 minutter. Går ut av seg selv etter 15 minutter, gjelder alle (også admin) |
-| Innloggingsforsøk | `login_attempts` | Ett forsøk per rad (bestilling, feil kode eller riktig kode). Ingen organisasjons-ID, ingen adresse i klartekst. Radene endres aldri |
+| Innloggingsforsøk | `login_attempts` | Ett forsøk per rad (bestilling, feil kode eller riktig kode). Ingen organisasjons-ID, ingen adresse i klartekst. Radene endres aldri, og slettes etter 24 timer (ADR 0014) |
+| Rydding av innloggingsdata | `auth_cleanup` (`src/core/auth/auth-cleanup.ts`, `purgeExpiredAuthData`) | Daglig jobb som sletter for godt: innloggingsforsøk eldre enn 24 timer, koder utløpt for mer enn 24 timer siden og økter utløpt for mer enn 30 dager siden. Eneste unntak fra myk sletting (ADR 0014) |
+| Driftshemmelighet | `operations secret` (`AUTH_CLEANUP_SECRET`, `verifyOperationsSecret` i `src/core/access`) | Hemmelighet som lar en planlagt driftsjobb uten innlogget bruker kalle et internt endepunkt. Gir ikke tilgang til organisasjonsdata |
 | Adresse-HMAC | `email_hash` | HMAC-SHA256 av e-postadressen (trim og små bokstaver), med nøkkel avledet fra innloggingshemmeligheten. Adressen lagres aldri i klartekst |
 | Kode bestilt | `code_requested` | Noen ba om en engangskode til adressen |
 | Feil kode | `code_failed` | Et forsøk på innlogging med kode som ikke ga innlogging (feil, utløpt, ukjent adresse) |

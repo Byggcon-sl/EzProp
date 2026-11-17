@@ -55,6 +55,14 @@ const envSchema = z.object({
    */
   MS_LOGIN_TENANT_ID: optionalSecret,
   MS_LOGIN_CLIENT_ID: optionalSecret,
+  /*
+   * Driftshemmeligheten for rydding av innloggingsdata (ADR 0014). Valgfri, og valideres ikke
+   * strengt her (samme mønster som `MS_LOGIN_*`, ADR 0008): feil oppsett slår bare av endepunktet
+   * `/api/intern/rydd-innloggingsdata`, aldri appen (regel 11). Lengde og uløst nøkkelboks-
+   * referanse sjekkes i `verifyOperationsSecret` (`src/core/access`). Egen hemmelighet, aldri
+   * `BETTER_AUTH_SECRET`.
+   */
+  AUTH_CLEANUP_SECRET: optionalSecret,
   /** Første admin (lages av seed). */
   SEED_ADMIN_EMAIL: z.preprocess(emptyToUndefined, z.string().trim().toLowerCase().optional()),
   SEED_ADMIN_NAME: z.preprocess(emptyToUndefined, z.string().trim().optional()),

@@ -20,10 +20,10 @@ Dokumentet er ikke juridisk rådgivning. Det dekker ikke rettslig grunnlag, beha
 | Tabell | Hva | Formål | Hvor | Hvor lenge | Hvem ser det |
 |---|---|---|---|---|---|
 | `users` | Navn, e-postadresse, om e-posten er bekreftet, bilde (tomt i dag), siste innlogging | Innlogging | Database | Nå i koden: slettes aldri, ingen rydding. Foreslått, bygges senere: beholdes så lenge den ansatte står på rapporter (minst 10 år) | Brukeren selv; admin via ansattlisten |
-| `sessions` | IP-adresse, nettleser og enhet (user agent), bruker, utløpstid | Holde den ansatte innlogget | Database | Nå i koden: økten gjelder 30 dager og forlenges når den brukes (høyst én gang per døgn). Tabellen har ikke myk sletting. Better Auth sletter raden helt ved utlogging, ved «logg ut andre økter» og når en utløpt økt slås opp. Utløpte økter som aldri slås opp igjen, blir liggende; ingen rydding er bygd. Se spørsmål nr. 18 | Ingen skjerm; bare drift med databasetilgang |
+| `sessions` | IP-adresse, nettleser og enhet (user agent), bruker, utløpstid | Holde den ansatte innlogget | Database | Nå i koden: økten gjelder 30 dager og forlenges når den brukes (høyst én gang per døgn). Tabellen har ikke myk sletting. Better Auth sletter raden helt ved utlogging, ved «logg ut andre økter» og når en utløpt økt slås opp. Utløpte økter som blir liggende, slettes 30 dager etter utløp av den nattlige ryddingen (ADR 0014, svar 10.11.2026 nr. 18) | Ingen skjerm; bare drift med databasetilgang |
 | `accounts` | Kobling mellom bruker og innloggingsmåte. Feltene for passord og nøkler fra andre tjenester er tomme, siden vi bare bruker engangskode på e-post | Innlogging | Database | Nå i koden: slettes aldri, ingen rydding. Foreslått, bygges senere: som `users` | Ingen skjerm |
-| `verifications` | E-postadresse og innloggingskoden (lagret som hash, ikke i klartekst), utløpstid | Sende og sjekke innloggingskoden | Database | Nå i koden: koden gjelder i 10 minutter. Tabellen har ikke myk sletting. Better Auth sletter koden helt når den er brukt, når den har gått ut og blir prøvd, etter 3 feil forsøk og når en ny kode bestilles. Koder som aldri prøves, blir liggende; ingen rydding er bygd. Se spørsmål nr. 18 | Ingen skjerm |
-| `login_attempts` | E-postadressen som HMAC (ikke i klartekst), type forsøk, tidspunkt. Gjelder også fremmede som prøver å logge inn | Sperre innlogging etter mange feil koder | Database | Nå i koden: sperrevinduet er 15 minutter. Radene ligger til de ryddes, rydding er ikke bygd. Foreslått, bygges senere: slettes etter 24 timer (spørsmål nr. 15) | Ingen skjerm |
+| `verifications` | E-postadresse og innloggingskoden (lagret som hash, ikke i klartekst), utløpstid | Sende og sjekke innloggingskoden | Database | Nå i koden: koden gjelder i 10 minutter. Tabellen har ikke myk sletting. Better Auth sletter koden helt når den er brukt, når den har gått ut og blir prøvd, etter 3 feil forsøk og når en ny kode bestilles. Koder som blir liggende, slettes 24 timer etter utløp av den nattlige ryddingen (ADR 0014, svar 10.11.2026 nr. 18) | Ingen skjerm |
+| `login_attempts` | E-postadressen som HMAC (ikke i klartekst), type forsøk, tidspunkt. Gjelder også fremmede som prøver å logge inn | Sperre innlogging etter mange feil koder | Database | Nå i koden: sperrevinduet er 15 minutter. Radene slettes 24 timer etter at forsøket ble registrert, av den nattlige ryddingen (ADR 0014, svar 10.11.2026 nr. 15) | Ingen skjerm |
 | `organizations` | Ingen personopplysninger (navn på organisasjonen, innstillinger) | Skille data mellom organisasjoner | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte i organisasjonen; admin endrer |
 | `companies` | Normalt ingen personopplysninger; navnet på et enkeltpersonforetak kan være et personnavn, og det vises på oppdraget (selskapsnavn, organisasjonsnummer, adresse, forsikring) | Utsteder rapporten | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte ser; admin endrer |
 | `offices` | Ingen personopplysninger (kontornavn og adresse) | Plassere ansatte | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte ser; admin endrer |
@@ -106,18 +106,18 @@ Bygget i fase 2a (06.11.2026), oppgavekort `docs/funksjoner/fase2a-tidsmaling.md
 - Økt: 30 dager (`src/core/auth/auth.ts`).
 - Innloggingskode: 10 minutter (`src/core/auth/otp-email.ts`).
 - Sperrevindu for innlogging: 15 minutter (`src/core/auth/login-throttle.ts`).
-- `login_attempts`: radene blir liggende, rydding er ikke bygd (spørsmål nr. 15).
-- `sessions` og `verifications`: Better Auth sletter rader helt (se tabellen). Det som blir liggende, er utløpte økter som aldri slås opp igjen og koder som aldri prøves (spørsmål nr. 18).
+- `login_attempts`: slettes 24 timer etter at forsøket ble registrert (svar 10.11.2026 nr. 15, ADR 0014).
+- `verifications`: Better Auth sletter rader helt (se tabellen); koder som blir liggende, slettes 24 timer etter utløp (svar 10.11.2026 nr. 18, ADR 0014).
+- `sessions`: Better Auth sletter rader helt (se tabellen); utløpte økter som blir liggende, slettes 30 dager etter utløp (svar 10.11.2026 nr. 18, ADR 0014).
+- Slettingen gjøres av den nattlige ryddingen av innloggingsdata (`src/core/auth/auth-cleanup.ts`), startet av en planlagt GitHub-arbeidsflyt. Etter ryddingen finnes ingen historikk over innlogginger utover `users.last_login_at` og driftsloggen (åpent spørsmål i `docs/09-apne-sporsmal.md`).
 - `audit_log` og `events` ryddes aldri (A58).
 - Myk sletting (`deleted_at`) gjelder alle tabeller med `baseColumns` (`src/db/schema/common.ts`). Innloggingstabellene `users`, `sessions`, `accounts`, `verifications` og `login_attempts` har ikke `deleted_at`.
-- **Kjent unntak fra regel 3 (ingenting slettes permanent):** Better Auth sletter rader helt i `sessions` og `verifications`. Det er innloggingsdata, ikke rapportdata. Om unntaket skal godtas, er en del av spørsmål nr. 18. Appens egen kode sletter ikke rader permanent.
+- **Unntak fra regel 3 (ingenting slettes permanent):** `login_attempts`, `verifications` og `sessions` slettes helt, av Better Auth og av den nattlige ryddingen. Det er tekniske innloggingsdata uten organisasjons-ID, ikke rapportdata. Unntaket bygger på svar 10.11.2026 nr. 15 og 18 og står i ADR 0014 (A419, venter på Ståles bekreftelse før ekte data). `users`, `accounts` og alt med organisasjons-ID slettes aldri for godt.
 - Oppbevaringstidene for filer står som innstillinger (`src/core/files/retention.ts`): avviksbilder i original 10 år, andre originaler 2 år, komprimerte kopier 10 år. Fristen (`retain_until`) regnes ikke ut ennå, så i dag ryddes ingen filer.
 
 **Foreslått, bygges senere:**
 
 - Rapporter, bilder og måledata: minst 10 år (Ståle 25.10 og 27.10.2026), med filtidene over.
-- Innloggingsforsøk: 24 timer (spørsmål nr. 15).
-- Utløpte økter og koder: avgjøres i spørsmål nr. 18.
 
 ## Prøvedata
 
