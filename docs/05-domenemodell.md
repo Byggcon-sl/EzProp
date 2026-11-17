@@ -2001,7 +2001,9 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Aktivt ansattforhold | `hasActiveEmployment` (`src/core/access`) | Ansatt-rad som ikke er deaktivert eller slettet, i en organisasjon som ikke er slettet. Sjekkes ved hver Microsoft-innlogging |
 | Reservert hemmelighetsnavn | `RESERVED_SECRET_REFS` | Navn appen leser selv, men som aldri kan stå som `secret_ref` på en tilkobling (`MS_LOGIN_CLIENT_SECRET`) |
 | Innloggingssperre | `login throttle` (`src/core/auth/login-throttle.ts`) | Midlertidig sperre per e-postadresse etter 5 feil koder eller 5 kodebestillinger på 15 minutter. Går ut av seg selv etter 15 minutter, gjelder alle (også admin) |
-| Innloggingsforsøk | `login_attempts` | Ett forsøk per rad (bestilling, feil kode eller riktig kode). Ingen organisasjons-ID, ingen adresse i klartekst. Radene endres aldri |
+| Innloggingsforsøk | `login_attempts` | Ett forsøk per rad (bestilling, feil kode eller riktig kode). Ingen organisasjons-ID, ingen adresse i klartekst. Radene endres aldri, og slettes etter 24 timer (ADR 0014) |
+| Rydding av innloggingsdata | `auth_cleanup` (`src/core/auth/auth-cleanup.ts`, `purgeExpiredAuthData`) | Daglig jobb som sletter for godt: innloggingsforsøk eldre enn 24 timer, koder utløpt for mer enn 24 timer siden og økter utløpt for mer enn 30 dager siden. Eneste unntak fra myk sletting (ADR 0014) |
+| Driftshemmelighet | `operations secret` (`AUTH_CLEANUP_SECRET`, `verifyOperationsSecret` i `src/core/access`) | Hemmelighet som lar en planlagt driftsjobb uten innlogget bruker kalle et internt endepunkt. Gir ikke tilgang til organisasjonsdata |
 | Adresse-HMAC | `email_hash` | HMAC-SHA256 av e-postadressen (trim og små bokstaver), med nøkkel avledet fra innloggingshemmeligheten. Adressen lagres aldri i klartekst |
 | Kode bestilt | `code_requested` | Noen ba om en engangskode til adressen |
 | Feil kode | `code_failed` | Et forsøk på innlogging med kode som ikke ga innlogging (feil, utløpt, ukjent adresse) |

@@ -5,6 +5,7 @@ export {
   requireOrganizationAccess,
   requireTemplateEditAccess,
 } from "./guards";
+export { OPERATIONS_SECRET_MIN_LENGTH, verifyOperationsSecret } from "./operations-secret";
 export {
   canCreateAssignments,
   effectivePermissions,
