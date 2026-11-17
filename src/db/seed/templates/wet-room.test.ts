@@ -21,6 +21,7 @@ import {
 import { TEMPLATE_KEY_PATTERN } from "@/db/schema";
 import { buildTemplateDocument } from "../../../../tests/template-document";
 import { MERGE_FIELD_KEYS } from "@/core/reports/logic/codes";
+import * as reportLabels from "@/core/reports/logic/labels";
 import { SOURCE_RULE_HOLE, WET_ROOM_MERGE_FIELDS, wetRoomTemplate } from "./wet-room";
 
 /*
@@ -1634,5 +1635,52 @@ describe("1.28 kontrollene kan feile", () => {
   it("alle kontrollene i signaturavtalen har et dokument som skal feile", () => {
     const covered = new Set(badDocuments.map((b) => b.checkName));
     expect(sorted([...covered])).toEqual(sorted(checks.map(([name]) => name)));
+  });
+});
+
+// --- B4.29 gjetteord og kopitest på tekstene i rapportkjernen (fase2a-badet-pc-testplan.md) ------
+
+/** Alle tekster i en verdi (tekst, liste eller objekt), med stien dit. */
+function stringsIn(value: unknown, path: string): { where: string; text: string }[] {
+  if (typeof value === "string") return [{ where: path, text: value }];
+  if (Array.isArray(value)) return value.flatMap((item, i) => stringsIn(item, `${path}[${i}]`));
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, item]) => stringsIn(item, `${path}.${key}`));
+  }
+  return [];
+}
+
+const LABEL_TEXTS = Object.entries(reportLabels).flatMap(([name, value]) => stringsIn(value, name));
+
+describe("B4.29 gjetteord og kopi i oversettelsen, tiltakene og intervalletikettene", () => {
+  it("B4.29 tekstene finnes (testen prøver noe)", () => {
+    expect(LABEL_TEXTS.some((t) => t.where.startsWith("RULE_REASON_TEXTS."))).toBe(true);
+    expect(LABEL_TEXTS.some((t) => t.where.startsWith("COST_BAND_LABELS."))).toBe(true);
+    expect(LABEL_TEXTS.some((t) => t.where.startsWith("WARNING_TEXTS."))).toBe(true);
+  });
+
+  it("B4.29 ingen gjetteord eller henvisning til TEK, NS, Byggforsk, IVIT eller SmartTakst", () => {
+    const hits = LABEL_TEXTS.flatMap(({ where, text }) =>
+      guessWordsAndReferencesIn(text).map((word) => `${where}: «${word}»`),
+    );
+    expect(hits).toEqual([]);
+  });
+
+  it("B4.29 ingen tekst er kopiert fra researchen", () => {
+    const copied = LABEL_TEXTS.map(({ where, text }) => ({ where, run: copiedRun(text) })).filter(
+      (hit) => hit.run !== null,
+    );
+    expect(copied).toEqual([]);
+  });
+
+  it("B4.29 tiltakene som gjelder én TG (T-0060) har ingen gjetteord og er ikke kopiert", () => {
+    const doc = parsedTemplate();
+    const perTg = doc.standard_measures.filter((m) => m.applies_to_tg !== null);
+    expect(perTg.length).toBeGreaterThan(0);
+    for (const m of perTg) {
+      const where = `${m.question_key}/${m.outcome_key}`;
+      expect(guessWordsAndReferencesIn(m.text), where).toEqual([]);
+      expect(copiedRun(m.text), where).toBeNull();
+    }
   });
 });
