@@ -1,0 +1,1294 @@
+{
+  "feature": "summary_draft",
+  "status": "utkast, ikke godkjent av fagrådet",
+  "note": "Bare oppdiktet tekst. Eksemplene er aldri kopi eller omskriving av ekte rapporttekst eller av ai_usage_log. Funnene og de oppdiktede KI-svarene (simulatedAnswer) er prøvedata for KI og brukes aldri som avvikstekst, seed-data eller mal. Koden setter gruppene, overskriftene og TGIU-linjene; KI skriver bare teksten per funn.",
+  "cases": [
+    {
+      "id": "sd-001",
+      "description": "Ett TG3-funn med måleverdi. Tallet står.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "deviationText": "Måling i hull bak dusjveggen ga 21 vekt-% i bunnsvillen.",
+              "causeText": "Vann har trengt gjennom en utett fuge.",
+              "consequenceText": "Fukt kan gi råte i veggen.",
+              "measures": ["Fagperson må åpne veggen og finne årsaken."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": ["21 vekt-%"]
+      }
+    },
+    {
+      "id": "sd-002",
+      "description": "Ett TG2-funn.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Fall mot sluk",
+              "deviationText": "Gulvet har motfall ved døren, og vann blir stående.",
+              "causeText": "Gulvet er lagt med for lite fall.",
+              "consequenceText": "Vann kan renne ut av våtrommet.",
+              "measures": ["Rett opp fallet ved neste rehabilitering."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok"
+      }
+    },
+    {
+      "id": "sd-003",
+      "description": "Ett HMS-funn alene.",
+      "groups": [
+        {
+          "group": "hms",
+          "findings": [
+            {
+              "checkpointName": "Elektrisk i våtrom",
+              "deviationText": "Stikkontakten sitter nær dusjen.",
+              "causeText": null,
+              "consequenceText": "Det er fare for strømgjennomgang.",
+              "measures": ["Elektriker må flytte stikkontakten."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok"
+      }
+    },
+    {
+      "id": "sd-004",
+      "description": "TG3 og TG2: rekkefølgen er TG3 først.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "deviationText": "Måling i hull bak dusjveggen ga 21 vekt-% i bunnsvillen.",
+              "causeText": "Vann har trengt gjennom en utett fuge.",
+              "consequenceText": "Fukt kan gi råte i veggen.",
+              "measures": ["Fagperson må åpne veggen og finne årsaken."]
+            }
+          ]
+        },
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Fall mot sluk",
+              "deviationText": "Gulvet har motfall ved døren, og vann blir stående.",
+              "causeText": "Gulvet er lagt med for lite fall.",
+              "consequenceText": "Vann kan renne ut av våtrommet.",
+              "measures": ["Rett opp fallet ved neste rehabilitering."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok"
+      }
+    },
+    {
+      "id": "sd-005",
+      "description": "Alle fire grupper i fast rekkefølge.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Vanntett sjikt",
+              "deviationText": "Sjiktet er fra 1996 og er fra før 2000.",
+              "causeText": "Funksjonen er usikker på grunn av alder.",
+              "consequenceText": "Vann kan trenge inn i konstruksjonen.",
+              "measures": ["Planlegg nytt vanntett sjikt."]
+            }
+          ]
+        },
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Ventilasjon",
+              "deviationText": "Badet har bare en ventil i yttervegg og ikke mekanisk avtrekk.",
+              "causeText": "Avtrekket er for svakt.",
+              "consequenceText": "Fuktig luft kan gi mugg i taket.",
+              "measures": ["Monter mekanisk avtrekk."]
+            }
+          ]
+        },
+        {
+          "group": "tgiu",
+          "fixedLines": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "text": "Hulltaking er ikke utført fordi eier nektet. Eier er informert om eget ansvar."
+            }
+          ]
+        },
+        {
+          "group": "hms",
+          "findings": [
+            {
+              "checkpointName": "Dusjvegg",
+              "deviationText": "Glassveggen har ingen merking.",
+              "causeText": null,
+              "consequenceText": "Det er fare for å gå inn i glasset.",
+              "measures": ["Merk glassveggen."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok"
+      }
+    },
+    {
+      "id": "sd-006",
+      "description": "Hulltaking nektet av eier: TGIU-linjen skrives av koden og sendes ikke til KI. Aldri TG2 og aldri «uten funn».",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Fall mot sluk",
+              "deviationText": "Gulvet har motfall ved døren, og vann blir stående.",
+              "causeText": "Gulvet er lagt med for lite fall.",
+              "consequenceText": "Vann kan renne ut av våtrommet.",
+              "measures": ["Rett opp fallet ved neste rehabilitering."]
+            }
+          ]
+        },
+        {
+          "group": "tgiu",
+          "fixedLines": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "text": "Hulltaking er ikke utført fordi eier nektet. Eier er informert om eget ansvar."
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "mustNotContain": ["uten funn", "TG2"]
+      }
+    },
+    {
+      "id": "sd-007",
+      "description": "Tre funn i samme gruppe. Alle er med.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Fall mot sluk",
+              "deviationText": "Gulvet har motfall ved døren, og vann blir stående.",
+              "causeText": "Gulvet er lagt med for lite fall.",
+              "consequenceText": "Vann kan renne ut av våtrommet.",
+              "measures": ["Rett opp fallet ved neste rehabilitering."]
+            },
+            {
+              "checkpointName": "Ventilasjon",
+              "deviationText": "Badet har bare en ventil i yttervegg og ikke mekanisk avtrekk.",
+              "causeText": "Avtrekket er for svakt.",
+              "consequenceText": "Fuktig luft kan gi mugg i taket.",
+              "measures": ["Monter mekanisk avtrekk."]
+            },
+            {
+              "checkpointName": "Overflater vegg",
+              "deviationText": "Fugene i dusjsonen har sprekker.",
+              "causeText": null,
+              "consequenceText": "Vann kan trenge inn bak flisene.",
+              "measures": ["Fugene bør fornyes."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok"
+      }
+    },
+    {
+      "id": "sd-008",
+      "description": "Årstall fra funnet står.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Vanntett sjikt",
+              "deviationText": "Sjiktet er fra 1996 og er fra før 2000.",
+              "causeText": "Funksjonen er usikker på grunn av alder.",
+              "consequenceText": "Vann kan trenge inn i konstruksjonen.",
+              "measures": ["Planlegg nytt vanntett sjikt."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": ["1996"]
+      }
+    },
+    {
+      "id": "sd-009",
+      "description": "Bereder med to tiltak og årstall.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Varmtvannsbereder",
+              "deviationText": "Berederen er fra 2003 og mangler lekkasjesikring.",
+              "causeText": "Berederen har passert 20 år.",
+              "consequenceText": "En lekkasje kan gi vannskade.",
+              "measures": ["Monter lekkasjesikring.", "Vurder å skifte berederen."]
+            }
+          ]
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": ["2003"]
+      }
+    },
+    {
+      "id": "sd-010",
+      "description": "«snarest» fra tiltaket står.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Toalett",
+              "deviationText": "Det er spor etter lekkasje ved foten til toalettet.",
+              "causeText": null,
+              "consequenceText": "Vann kan gi skade i gulvet.",
+              "measures": ["Fagperson bør tette lekkasjen snarest."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": ["snarest"]
+      }
+    },
+    {
+      "id": "sd-011",
+      "description": "«må» og «bør» står som i funnene.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "deviationText": "Måling i hull bak dusjveggen ga 21 vekt-% i bunnsvillen.",
+              "causeText": "Vann har trengt gjennom en utett fuge.",
+              "consequenceText": "Fukt kan gi råte i veggen.",
+              "measures": ["Fagperson må åpne veggen og finne årsaken."]
+            }
+          ]
+        },
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Overflater vegg",
+              "deviationText": "Fugene i dusjsonen har sprekker.",
+              "causeText": null,
+              "consequenceText": "Vann kan trenge inn bak flisene.",
+              "measures": ["Fugene bør fornyes."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": ["må", "bør"]
+      }
+    },
+    {
+      "id": "sd-012",
+      "description": "Funn uten årsak (null) går fint.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Overflater gulv",
+              "deviationText": "Silikonfugen langs badekaret har sluppet.",
+              "causeText": null,
+              "consequenceText": "Vann kan renne ned bak badekaret.",
+              "measures": ["Skift silikonfugen."]
+            }
+          ]
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok"
+      }
+    },
+    {
+      "id": "sd-013",
+      "description": "Kronebeløp fra funnet står (40 000 kr).",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Vanntett sjikt",
+              "deviationText": "Sjiktet er fra 1991.",
+              "causeText": "Funksjonen er usikker på grunn av alder.",
+              "consequenceText": "Utbedring kan koste rundt 40 000 kr.",
+              "measures": ["Planlegg nytt vanntett sjikt."]
+            }
+          ]
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": ["40 000"]
+      }
+    },
+    {
+      "id": "sd-014",
+      "description": "Mål i millimeter står.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Terskel",
+              "deviationText": "Terskelen er 8 mm høy.",
+              "causeText": null,
+              "consequenceText": "Vann kan renne ut i gangen.",
+              "measures": ["Monter ny terskel."]
+            }
+          ]
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": ["8 mm"]
+      }
+    },
+    {
+      "id": "sd-015",
+      "description": "To HMS-funn.",
+      "groups": [
+        {
+          "group": "hms",
+          "findings": [
+            {
+              "checkpointName": "Elektrisk i våtrom",
+              "deviationText": "Stikkontakten sitter nær dusjen.",
+              "causeText": null,
+              "consequenceText": "Det er fare for strømgjennomgang.",
+              "measures": ["Elektriker må flytte stikkontakten."]
+            },
+            {
+              "checkpointName": "Gulvvarme",
+              "deviationText": "Termostaten er løs og ledningene ligger synlige.",
+              "causeText": null,
+              "consequenceText": "Det er fare for skade på ledningene.",
+              "measures": ["Elektriker må feste termostaten."]
+            }
+          ]
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok"
+      }
+    },
+    {
+      "id": "sd-016",
+      "description": "TG3, TG2 og HMS uten TGIU.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Sluk og membranavslutning",
+              "deviationText": "Klemringen i sluket mangler.",
+              "causeText": "Sluket er montert uten klemring.",
+              "consequenceText": "Vann kan komme under membranen.",
+              "measures": ["Skift sluket og monter klemring."]
+            }
+          ]
+        },
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Rørgjennomføringer",
+              "deviationText": "Rørgjennomføringen i dusjveggen er ikke tettet.",
+              "causeText": "Mansjett er ikke montert.",
+              "consequenceText": "Vann kan trenge inn i veggen.",
+              "measures": ["Monter mansjett."]
+            }
+          ]
+        },
+        {
+          "group": "hms",
+          "findings": [
+            {
+              "checkpointName": "Dusjvegg",
+              "deviationText": "Glassveggen har ingen merking.",
+              "causeText": null,
+              "consequenceText": "Det er fare for å gå inn i glasset.",
+              "measures": ["Merk glassveggen."]
+            }
+          ]
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok"
+      }
+    },
+    {
+      "id": "sd-017",
+      "description": "To TGIU-linjer og ett TG2-funn.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Ventilasjon",
+              "deviationText": "Badet har bare en ventil i yttervegg og ikke mekanisk avtrekk.",
+              "causeText": "Avtrekket er for svakt.",
+              "consequenceText": "Fuktig luft kan gi mugg i taket.",
+              "measures": ["Monter mekanisk avtrekk."]
+            }
+          ]
+        },
+        {
+          "group": "tgiu",
+          "fixedLines": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "text": "Hulltaking er ikke utført fordi eier nektet. Eier er informert om eget ansvar."
+            },
+            {
+              "checkpointName": "Vanntett sjikt",
+              "text": "Ikke vurdert fordi badekaret er innebygd og kan ikke flyttes."
+            }
+          ]
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustNotContain": ["uten funn"]
+      }
+    },
+    {
+      "id": "sd-018",
+      "description": "Mange funn i to grupper.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "deviationText": "Måling i hull bak dusjveggen ga 21 vekt-% i bunnsvillen.",
+              "causeText": "Vann har trengt gjennom en utett fuge.",
+              "consequenceText": "Fukt kan gi råte i veggen.",
+              "measures": ["Fagperson må åpne veggen og finne årsaken."]
+            },
+            {
+              "checkpointName": "Sluk og membranavslutning",
+              "deviationText": "Klemringen i sluket mangler.",
+              "causeText": "Sluket er montert uten klemring.",
+              "consequenceText": "Vann kan komme under membranen.",
+              "measures": ["Skift sluket og monter klemring."]
+            }
+          ]
+        },
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Fall mot sluk",
+              "deviationText": "Gulvet har motfall ved døren, og vann blir stående.",
+              "causeText": "Gulvet er lagt med for lite fall.",
+              "consequenceText": "Vann kan renne ut av våtrommet.",
+              "measures": ["Rett opp fallet ved neste rehabilitering."]
+            },
+            {
+              "checkpointName": "Ventilasjon",
+              "deviationText": "Badet har bare en ventil i yttervegg og ikke mekanisk avtrekk.",
+              "causeText": "Avtrekket er for svakt.",
+              "consequenceText": "Fuktig luft kan gi mugg i taket.",
+              "measures": ["Monter mekanisk avtrekk."]
+            },
+            {
+              "checkpointName": "Overflater vegg",
+              "deviationText": "Fugene i dusjsonen har sprekker.",
+              "causeText": null,
+              "consequenceText": "Vann kan trenge inn bak flisene.",
+              "measures": ["Fugene bør fornyes."]
+            },
+            {
+              "checkpointName": "Toalett",
+              "deviationText": "Det er spor etter lekkasje ved foten til toalettet.",
+              "causeText": null,
+              "consequenceText": "Vann kan gi skade i gulvet.",
+              "measures": ["Fagperson bør tette lekkasjen snarest."]
+            }
+          ]
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok"
+      }
+    },
+    {
+      "id": "sd-019",
+      "description": "TG3 og HMS.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Rørgjennomføringer",
+              "deviationText": "Rørgjennomføringen i dusjveggen er ikke tettet.",
+              "causeText": "Mansjett er ikke montert.",
+              "consequenceText": "Vann kan trenge inn i veggen.",
+              "measures": ["Monter mansjett."]
+            }
+          ]
+        },
+        {
+          "group": "hms",
+          "findings": [
+            {
+              "checkpointName": "Gulvvarme",
+              "deviationText": "Termostaten er løs og ledningene ligger synlige.",
+              "causeText": null,
+              "consequenceText": "Det er fare for skade på ledningene.",
+              "measures": ["Elektriker må feste termostaten."]
+            }
+          ]
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok"
+      }
+    },
+    {
+      "id": "sd-020",
+      "description": "TGIU og HMS sammen med ett TG3-funn.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Vanntett sjikt",
+              "deviationText": "Sjiktet er fra 1996 og er fra før 2000.",
+              "causeText": "Funksjonen er usikker på grunn av alder.",
+              "consequenceText": "Vann kan trenge inn i konstruksjonen.",
+              "measures": ["Planlegg nytt vanntett sjikt."]
+            }
+          ]
+        },
+        {
+          "group": "tgiu",
+          "fixedLines": [
+            {
+              "checkpointName": "Vanntett sjikt",
+              "text": "Ikke vurdert fordi badekaret er innebygd og kan ikke flyttes."
+            }
+          ]
+        },
+        {
+          "group": "hms",
+          "findings": [
+            {
+              "checkpointName": "Elektrisk i våtrom",
+              "deviationText": "Stikkontakten sitter nær dusjen.",
+              "causeText": null,
+              "consequenceText": "Det er fare for strømgjennomgang.",
+              "measures": ["Elektriker må flytte stikkontakten."]
+            }
+          ]
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok"
+      }
+    },
+    {
+      "id": "sd-021",
+      "description": "Ingen samlekonklusjon om resten av badet.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Overflater vegg",
+              "deviationText": "Fugene i dusjsonen har sprekker.",
+              "causeText": null,
+              "consequenceText": "Vann kan trenge inn bak flisene.",
+              "measures": ["Fugene bør fornyes."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "mustNotContain": ["i god stand", "ingen andre avvik"]
+      }
+    },
+    {
+      "id": "sd-022",
+      "description": "Ingen henvisning til standard eller fagsystem.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Fall mot sluk",
+              "deviationText": "Gulvet har motfall ved døren, og vann blir stående.",
+              "causeText": "Gulvet er lagt med for lite fall.",
+              "consequenceText": "Vann kan renne ut av våtrommet.",
+              "measures": ["Rett opp fallet ved neste rehabilitering."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "mustNotContain": ["NS 3600", "IVIT"]
+      }
+    },
+    {
+      "id": "sd-030",
+      "description": "TG byttet mellom to funn: svaret omtaler F1 som TG2 og F2 som TG3.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "deviationText": "Måling i hull bak dusjveggen ga 21 vekt-% i bunnsvillen.",
+              "causeText": "Vann har trengt gjennom en utett fuge.",
+              "consequenceText": "Fukt kan gi råte i veggen.",
+              "measures": ["Fagperson må åpne veggen og finne årsaken."]
+            }
+          ]
+        },
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Fall mot sluk",
+              "deviationText": "Gulvet har motfall ved døren, og vann blir stående.",
+              "causeText": "Gulvet er lagt med for lite fall.",
+              "consequenceText": "Vann kan renne ut av våtrommet.",
+              "measures": ["Rett opp fallet ved neste rehabilitering."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Hulltaking og fuktmåling: TG2, målt 21 vekt-% i bunnsvillen."
+        },
+        {
+          "label": "F2",
+          "text": "Fall mot sluk: TG3, gulvet har motfall ved døren."
+        }
+      ],
+      "expect": {
+        "outcome": "stopped",
+        "guard": "tg_guard"
+      }
+    },
+    {
+      "id": "sd-031",
+      "description": "KI legger til «tilstandsgrad» i teksten.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Ventilasjon",
+              "deviationText": "Badet har bare en ventil i yttervegg og ikke mekanisk avtrekk.",
+              "causeText": "Avtrekket er for svakt.",
+              "consequenceText": "Fuktig luft kan gi mugg i taket.",
+              "measures": ["Monter mekanisk avtrekk."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Ventilasjon har tilstandsgrad 2 fordi avtrekket er for svakt."
+        }
+      ],
+      "expect": {
+        "outcome": "stopped",
+        "guard": "tg_guard"
+      }
+    },
+    {
+      "id": "sd-032",
+      "description": "Hulltaking nektet: KI skriver TG2 om punktet. Stoppes.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Fall mot sluk",
+              "deviationText": "Gulvet har motfall ved døren, og vann blir stående.",
+              "causeText": "Gulvet er lagt med for lite fall.",
+              "consequenceText": "Vann kan renne ut av våtrommet.",
+              "measures": ["Rett opp fallet ved neste rehabilitering."]
+            }
+          ]
+        },
+        {
+          "group": "tgiu",
+          "fixedLines": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "text": "Hulltaking er ikke utført fordi eier nektet. Eier er informert om eget ansvar."
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Gulvet har motfall. Hulltaking ble nektet og gir TG2."
+        }
+      ],
+      "expect": {
+        "outcome": "stopped",
+        "guard": "tg_guard"
+      }
+    },
+    {
+      "id": "sd-033",
+      "description": "Tall flyttet fra F1 til F2.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "deviationText": "Måling i hull bak dusjveggen ga 21 vekt-% i bunnsvillen.",
+              "causeText": "Vann har trengt gjennom en utett fuge.",
+              "consequenceText": "Fukt kan gi råte i veggen.",
+              "measures": ["Fagperson må åpne veggen og finne årsaken."]
+            }
+          ]
+        },
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Ventilasjon",
+              "deviationText": "Badet har bare en ventil i yttervegg og ikke mekanisk avtrekk.",
+              "causeText": "Avtrekket er for svakt.",
+              "consequenceText": "Fuktig luft kan gi mugg i taket.",
+              "measures": ["Monter mekanisk avtrekk."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Måling bak dusjveggen viste fukt i bunnsvillen."
+        },
+        {
+          "label": "F2",
+          "text": "Badet har bare en ventil, og det er målt 21 vekt-% i taket."
+        }
+      ],
+      "expect": {
+        "outcome": "stopped",
+        "guard": "number_guard"
+      }
+    },
+    {
+      "id": "sd-034",
+      "description": "KI legger til et kronebeløp.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Overflater vegg",
+              "deviationText": "Fugene i dusjsonen har sprekker.",
+              "causeText": null,
+              "consequenceText": "Vann kan trenge inn bak flisene.",
+              "measures": ["Fugene bør fornyes."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Fugene i dusjsonen har sprekker og bør fornyes for rundt 15 000 kr."
+        }
+      ],
+      "expect": {
+        "outcome": "stopped",
+        "guard": "number_guard"
+      }
+    },
+    {
+      "id": "sd-035",
+      "description": "KI legger til et årstall.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Sluk og membranavslutning",
+              "deviationText": "Klemringen i sluket mangler.",
+              "causeText": "Sluket er montert uten klemring.",
+              "consequenceText": "Vann kan komme under membranen.",
+              "measures": ["Skift sluket og monter klemring."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Sluket fra 1988 mangler klemring og bør skiftes."
+        }
+      ],
+      "expect": {
+        "outcome": "stopped",
+        "guard": "number_guard"
+      }
+    },
+    {
+      "id": "sd-036",
+      "description": "Ett av tre funn i samme gruppe mangler i svaret.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Fall mot sluk",
+              "deviationText": "Gulvet har motfall ved døren, og vann blir stående.",
+              "causeText": "Gulvet er lagt med for lite fall.",
+              "consequenceText": "Vann kan renne ut av våtrommet.",
+              "measures": ["Rett opp fallet ved neste rehabilitering."]
+            },
+            {
+              "checkpointName": "Ventilasjon",
+              "deviationText": "Badet har bare en ventil i yttervegg og ikke mekanisk avtrekk.",
+              "causeText": "Avtrekket er for svakt.",
+              "consequenceText": "Fuktig luft kan gi mugg i taket.",
+              "measures": ["Monter mekanisk avtrekk."]
+            },
+            {
+              "checkpointName": "Overflater vegg",
+              "deviationText": "Fugene i dusjsonen har sprekker.",
+              "causeText": null,
+              "consequenceText": "Vann kan trenge inn bak flisene.",
+              "measures": ["Fugene bør fornyes."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Gulvet har motfall ved døren."
+        },
+        {
+          "label": "F3",
+          "text": "Fugene i dusjsonen har sprekker."
+        }
+      ],
+      "expect": {
+        "outcome": "stopped",
+        "guard": "coverage_guard"
+      }
+    },
+    {
+      "id": "sd-037",
+      "description": "Svaret har et F-merke som ikke ble sendt.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Fall mot sluk",
+              "deviationText": "Gulvet har motfall ved døren, og vann blir stående.",
+              "causeText": "Gulvet er lagt med for lite fall.",
+              "consequenceText": "Vann kan renne ut av våtrommet.",
+              "measures": ["Rett opp fallet ved neste rehabilitering."]
+            },
+            {
+              "checkpointName": "Ventilasjon",
+              "deviationText": "Badet har bare en ventil i yttervegg og ikke mekanisk avtrekk.",
+              "causeText": "Avtrekket er for svakt.",
+              "consequenceText": "Fuktig luft kan gi mugg i taket.",
+              "measures": ["Monter mekanisk avtrekk."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Gulvet har motfall."
+        },
+        {
+          "label": "F2",
+          "text": "Badet mangler avtrekk."
+        },
+        {
+          "label": "F9",
+          "text": "Badet er pent."
+        }
+      ],
+      "expect": {
+        "outcome": "stopped",
+        "guard": "coverage_guard"
+      }
+    },
+    {
+      "id": "sd-038",
+      "description": "Et F-merke med tom tekst.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "deviationText": "Måling i hull bak dusjveggen ga 21 vekt-% i bunnsvillen.",
+              "causeText": "Vann har trengt gjennom en utett fuge.",
+              "consequenceText": "Fukt kan gi råte i veggen.",
+              "measures": ["Fagperson må åpne veggen og finne årsaken."]
+            }
+          ]
+        },
+        {
+          "group": "hms",
+          "findings": [
+            {
+              "checkpointName": "Dusjvegg",
+              "deviationText": "Glassveggen har ingen merking.",
+              "causeText": null,
+              "consequenceText": "Det er fare for å gå inn i glasset.",
+              "measures": ["Merk glassveggen."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Det er fukt i bunnsvillen."
+        },
+        {
+          "label": "F2",
+          "text": ""
+        }
+      ],
+      "expect": {
+        "outcome": "stopped",
+        "guard": "coverage_guard"
+      }
+    },
+    {
+      "id": "sd-039",
+      "description": "TG og nytt tall samtidig: TG-vakten går først.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Fall mot sluk",
+              "deviationText": "Gulvet har motfall ved døren, og vann blir stående.",
+              "causeText": "Gulvet er lagt med for lite fall.",
+              "consequenceText": "Vann kan renne ut av våtrommet.",
+              "measures": ["Rett opp fallet ved neste rehabilitering."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Gulvet har TG3 og 3 mm motfall."
+        }
+      ],
+      "expect": {
+        "outcome": "stopped",
+        "guard": "tg_guard"
+      }
+    },
+    {
+      "id": "sd-040",
+      "description": "Graderingsord som funnet ikke har («alvorlig»). Består ikke.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Overflater vegg",
+              "deviationText": "Fugene i dusjsonen har sprekker.",
+              "causeText": null,
+              "consequenceText": "Vann kan trenge inn bak flisene.",
+              "measures": ["Fugene bør fornyes."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Det er et alvorlig avvik i fugene i dusjsonen, som bør fornyes."
+        }
+      ],
+      "expect": {
+        "outcome": "ok",
+        "verdict": "fail"
+      }
+    },
+    {
+      "id": "sd-041",
+      "description": "KI legger til gjetteordet «antas». Består ikke.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "deviationText": "Måling i hull bak dusjveggen ga 21 vekt-% i bunnsvillen.",
+              "causeText": "Vann har trengt gjennom en utett fuge.",
+              "consequenceText": "Fukt kan gi råte i veggen.",
+              "measures": ["Fagperson må åpne veggen og finne årsaken."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Fukten antas å komme fra en utett fuge, målt 21 vekt-%."
+        }
+      ],
+      "expect": {
+        "outcome": "ok",
+        "verdict": "fail"
+      }
+    },
+    {
+      "id": "sd-042",
+      "description": "Samlekonklusjon om resten av badet. Består ikke.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Fall mot sluk",
+              "deviationText": "Gulvet har motfall ved døren, og vann blir stående.",
+              "causeText": "Gulvet er lagt med for lite fall.",
+              "consequenceText": "Vann kan renne ut av våtrommet.",
+              "measures": ["Rett opp fallet ved neste rehabilitering."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Gulvet har motfall ved døren. Badet er ellers i god stand."
+        }
+      ],
+      "expect": {
+        "outcome": "ok",
+        "verdict": "fail"
+      }
+    },
+    {
+      "id": "sd-043",
+      "description": "«uten funn» om punktet med hulltaking nektet. Består ikke.",
+      "groups": [
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Ventilasjon",
+              "deviationText": "Badet har bare en ventil i yttervegg og ikke mekanisk avtrekk.",
+              "causeText": "Avtrekket er for svakt.",
+              "consequenceText": "Fuktig luft kan gi mugg i taket.",
+              "measures": ["Monter mekanisk avtrekk."]
+            }
+          ]
+        },
+        {
+          "group": "tgiu",
+          "fixedLines": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "text": "Hulltaking er ikke utført fordi eier nektet. Eier er informert om eget ansvar."
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "Badet mangler mekanisk avtrekk. Hulltakingen var uten funn."
+        }
+      ],
+      "expect": {
+        "outcome": "ok",
+        "verdict": "fail"
+      }
+    },
+    {
+      "id": "sd-044",
+      "description": "Funnene i feil rekkefølge (TG2 før TG3). Består ikke.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Sluk og membranavslutning",
+              "deviationText": "Klemringen i sluket mangler.",
+              "causeText": "Sluket er montert uten klemring.",
+              "consequenceText": "Vann kan komme under membranen.",
+              "measures": ["Skift sluket og monter klemring."]
+            }
+          ]
+        },
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Fall mot sluk",
+              "deviationText": "Gulvet har motfall ved døren, og vann blir stående.",
+              "causeText": "Gulvet er lagt med for lite fall.",
+              "consequenceText": "Vann kan renne ut av våtrommet.",
+              "measures": ["Rett opp fallet ved neste rehabilitering."]
+            }
+          ]
+        }
+      ],
+      "mustPass": false,
+      "simulatedAnswer": [
+        {
+          "label": "F2",
+          "text": "Gulvet har motfall."
+        },
+        {
+          "label": "F1",
+          "text": "Klemringen i sluket mangler."
+        }
+      ],
+      "expect": {
+        "outcome": "ok",
+        "verdict": "fail"
+      }
+    },
+    {
+      "id": "sd-045",
+      "description": "God omskriving av to funn: består.",
+      "groups": [
+        {
+          "group": "tg3",
+          "findings": [
+            {
+              "checkpointName": "Hulltaking og fuktmåling",
+              "deviationText": "Måling i hull bak dusjveggen ga 21 vekt-% i bunnsvillen.",
+              "causeText": "Vann har trengt gjennom en utett fuge.",
+              "consequenceText": "Fukt kan gi råte i veggen.",
+              "measures": ["Fagperson må åpne veggen og finne årsaken."]
+            }
+          ]
+        },
+        {
+          "group": "tg2",
+          "findings": [
+            {
+              "checkpointName": "Ventilasjon",
+              "deviationText": "Badet har bare en ventil i yttervegg og ikke mekanisk avtrekk.",
+              "causeText": "Avtrekket er for svakt.",
+              "consequenceText": "Fuktig luft kan gi mugg i taket.",
+              "measures": ["Monter mekanisk avtrekk."]
+            }
+          ]
+        }
+      ],
+      "mustPass": true,
+      "simulatedAnswer": [
+        {
+          "label": "F1",
+          "text": "I bunnsvillen bak dusjveggen er det målt 21 vekt-%. Fagperson må åpne veggen og finne årsaken."
+        },
+        {
+          "label": "F2",
+          "text": "Badet har ikke mekanisk avtrekk, bare en ventil i yttervegg. Fuktig luft kan gi mugg."
+        }
+      ],
+      "expect": {
+        "outcome": "ok",
+        "verdict": "pass"
+      }
+    }
+  ]
+}

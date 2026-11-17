@@ -11,6 +11,8 @@ import {
   testProvider,
   type EvalCaseJson,
 } from "../../../../tests/evals";
+import { GUARD_CASES } from "../guard-cases";
+import * as guards from "../guards";
 import { findLeakedKnownValues, findPatternLeaks, findPromptLeaks } from "../prompt-leaks";
 import { createAnthropicProvider } from "../providers/anthropic";
 import { fakeAiProvider } from "../providers/fake";
@@ -567,5 +569,111 @@ describe("evalueringssett: bare den falske leverandøren (KI-leverandør 4.4)", 
     expect(findPromptLeaks("Qxzolav kom.", null)).toEqual([]);
     expect(findPromptLeaks("Qxzolav kom.", known)).toEqual(["navn"]);
     expect(findPromptLeaks("Taket er gammelt. [navn] ringte.", known)).toEqual([]);
+  });
+});
+
+// --- KI i veien (docs/funksjoner/fase2a-ki-i-veien-testplan.md K1.1, K2.1, K2.3a, K2.7) ----------
+
+/*
+ * Støtter hovedmål: KI i bunnen (evalueringen bruker kjernens TG-omtale og vaktsaker, ingen egen
+ * kopi, så settet måler det kjernen faktisk gjør) og færre reklamasjoner (et svar som legger til
+ * gjetteord eller mister en nektelse, gir bom).
+ */
+describe("evalueringssett: kjernens vakter og nye vurderinger (KI i veien)", () => {
+  const source = readFileSync(join(__dirname, "run.ts"), "utf8");
+
+  it("K1.1 run.ts importerer extractTgMentions fra kjernen og har ingen egen kopi", () => {
+    expect(source).toMatch(
+      /import\s*\{[^}]*\bextractTgMentions\b[^}]*\}\s*from\s+["']\.\.\/guards["']/u,
+    );
+    expect(source).not.toMatch(/function\s+extractTgMentions\b/u);
+    expect(source).not.toMatch(/tilstandsgrad\\\\p\{L\}|TG_MENTION/u);
+    expect(run.extractTgMentions).toBe(guards.extractTgMentions);
+  });
+
+  it("K2.1 run.ts bruker vaktene og vaktsakene fra kjernen", () => {
+    expect(source).toMatch(
+      /import\s*\{[^}]*\bcheckAnswerGuards\b[^}]*\}\s*from\s+["']\.\.\/guards["']/u,
+    );
+    expect(source).toMatch(
+      /import\s*\{[^}]*\bGUARD_CASES\b[^}]*\}\s*from\s+["']\.\.\/guard-cases["']/u,
+    );
+    const result = run.runGuardCases();
+    expect(result.total).toBe(GUARD_CASES.length);
+    expect(result.mismatches).toEqual([]);
+  });
+
+  it("K2.1 en vaktsak som ikke gir forventet vakt, gir kode 1", async () => {
+    const original = GUARD_CASES[0]!;
+    const flipped = original.expected === null ? "tg_guard" : null;
+    const spy = vi.spyOn(guards, "checkAnswerGuards").mockImplementation(() => flipped);
+    try {
+      const { exitCode, lines } = await runEvalCommand([], dirWith(evalCases()), fakeAiProvider);
+      expect(exitCode).toBe(1);
+      expect(lines.join("\n")).toMatch(/vaktsak/iu);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("K2.3a et svar som legger til et gjetteord, gir bom med grunn", async () => {
+    const { hit, reasons } = await judge(
+      { outcome: "ok" },
+      NEUTRAL_INPUT,
+      "Taket antas å være gammelt.",
+    );
+    expect(hit).toBe(false);
+    expect(reasons.join(" ")).toMatch(/gjetteordet «antas»/u);
+  });
+
+  it("K2.3a gjetteord som står i inndata, gir ikke bom", async () => {
+    const input = "Taket er trolig fra byggeåret.";
+    const { hit } = await judge({ outcome: "ok" }, input, "Taket er trolig fra byggeåret.");
+    expect(hit).toBe(true);
+  });
+
+  it.each([
+    ["ikke", "Det er ikke påvist fukt.", "Det er påvist fukt."],
+    ["ingen", "Ingen tegn til råte.", "Tegn til råte."],
+    ["uten", "Sluket er uten klemring.", "Sluket har klemring."],
+  ])("K2.3a nektelsen «%s» som faller bort, gir bom (K1.6c)", async (word, input, answer) => {
+    const { hit, reasons } = await judge({ outcome: "ok" }, input, answer);
+    expect(hit).toBe(false);
+    expect(reasons.join(" ")).toContain(`nektelsen «${word}»`);
+  });
+
+  it("K2.3a wordsAdded og negationsDropped er rene og bruker hele ord", () => {
+    expect(run.wordsAdded("Taket.", "Taket antas gammelt.", run.EVAL_GUESS_WORDS)).toEqual([
+      "antas",
+    ]);
+    expect(run.wordsAdded("Taket antas gammelt.", "Taket antas gammelt.", ["antas"])).toEqual([]);
+    expect(run.negationsDropped("ikke ikke", "ikke")).toEqual(["ikke"]);
+    expect(run.negationsDropped("Ikke fukt.", "Ikke fukt.")).toEqual([]);
+    expect(run.negationsDropped("ikke fukt", "ikkefukt")).toEqual(["ikke"]);
+  });
+
+  it("K2.7 utskriften starter med at resultat mot den falske leverandøren ikke viser kvalitet (T-0047)", async () => {
+    const { lines } = await runEvalCommand(
+      ["language_polish"],
+      dirWith(evalCases()),
+      fakeAiProvider,
+    );
+    expect(lines[0]).toBe(run.FAKE_PROVIDER_NOTICE);
+    expect(lines[0]).toMatch(/falske leverandøren/u);
+    expect(lines[0]).toMatch(/ikke kvaliteten/u);
+  });
+
+  it("K2.7 EvalProviderNotAllowedError mot ekte leverandør, for hver funksjon", async () => {
+    const complete = vi.fn(fakeAiProvider.complete);
+    const provider: AiProvider = { code: "anthropic", model: "test-v1", complete };
+    for (const feature of ["language_polish", "phrase_suggest", "summary_draft"]) {
+      await expect(runEvals({ provider, casesDir: __dirname, feature })).rejects.toBeInstanceOf(
+        run.EvalProviderNotAllowedError,
+      );
+    }
+    await expect(runEvalCommand([], __dirname, provider)).rejects.toBeInstanceOf(
+      run.EvalProviderNotAllowedError,
+    );
+    expect(complete).not.toHaveBeenCalled();
   });
 });
