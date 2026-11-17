@@ -1,4 +1,11 @@
-import type { OverrideReasonCode } from "@/db/schema";
+import type {
+  OverrideReasonCode,
+  PublishBlockerCode,
+  PublishCheckSeverity,
+  PublishCheckSource,
+  PublishOverrideReasonCode,
+  PublishWarningCode,
+} from "@/db/schema";
 
 /**
  * Faste koder for rapporten som både nettleseren og serveren bruker (ADR 0013,
@@ -142,3 +149,122 @@ export const REPORT_AI_TARGET_FIELDS = {
   tgiu_detail: ["reason", "risk_assessment", "how_to_examine"],
   field_answer: null,
 } as const;
+
+// --- Sjekken før publisering (ADR 0015, docs/funksjoner/fase2a-publisering-badet.md) -----------
+
+/**
+ * Sperrene i sjekken før publisering (domenemodellen 4.7). Samme liste som `PUBLISH_BLOCKER_CODES`
+ * i `@/db/schema/reports` (CHECK-regelen); typesjekken under stopper hvis de kommer i utakt.
+ * `bra_missing` og `electrical_missing` regnes ikke ut før 2a-3.
+ */
+export const PUBLISH_BLOCKER_CODES = [
+  /** Punkt som krever TG uten TG, TGIU uten grunn, eller avvik uten valgt TG (A423, A443, A444). */
+  "mandatory_without_tg",
+  /** TG2 eller TG3 uten kriterium, årsakstekst eller konsekvens. `missing` sier hva. */
+  "tg2_tg3_missing_cause_or_consequence",
+  /** TG3 med `cost_type = none`. */
+  "tg3_missing_cost",
+  /** Våtrom uten hulltaking og uten begrunnelse (A445). `missing` sier hva. */
+  "wet_or_below_ground_missing_hole",
+  "bra_missing",
+  "electrical_missing",
+  /** Oppdraget mangler befaringsdato (A426). */
+  "inspection_date_missing",
+] as const satisfies readonly PublishBlockerCode[];
+
+/**
+ * Advarslene i sjekken før publisering: punktadvarslene fra `CHECKPOINT_WARNING_CODES`, uten
+ * `deviation_tg_not_chosen` og `checkpoint_done_without_tg` (sperren `mandatory_without_tg`
+ * erstatter dem), og uten de to som er sperrer her. Pluss to nye koder.
+ */
+export const PUBLISH_WARNING_CODES = [
+  "tg2_tg3_missing_measure",
+  "cost_amount_not_rounded",
+  "hms_missing_consequence_or_measure",
+  "tgiu_details_missing",
+  "tgiu_suggested_not_set",
+  "no_findings_with_reading_over_limit",
+  "suggestion_no_longer_applies",
+  "texts_written_for_other_tg",
+  "tg3_on_age_only",
+  /** Et KI-forslag på rapporten er verken brukt, endret eller avvist (A454). */
+  "ai_suggestion_pending",
+  /** Hull er tatt, men måleverdi eller enhet mangler (A446). */
+  "hole_reading_missing",
+] as const satisfies readonly PublishWarningCode[];
+
+/** Alle kodene, sperrene først. Rekkefølgen her er den faste sorteringen av funn på samme mål. */
+export const PUBLISH_CHECK_CODES = [...PUBLISH_BLOCKER_CODES, ...PUBLISH_WARNING_CODES] as const;
+
+export const PUBLISH_CHECK_SEVERITIES = [
+  "blocker",
+  "warning",
+] as const satisfies readonly PublishCheckSeverity[];
+
+/** `ai` brukes ikke før KI-sjekken i 2a-3, og kan bare gi advarsel. */
+export const PUBLISH_CHECK_SOURCES = [
+  "rule",
+  "ai",
+] as const satisfies readonly PublishCheckSource[];
+
+/**
+ * Grunnene når en sperre krysses bort, i rekkefølgen knappene vises (A424, A449). Samme liste som
+ * `PUBLISH_OVERRIDE_REASON_CODES` i `@/db/schema/reports`. Bare `other` krever tekst.
+ */
+export const PUBLISH_OVERRIDE_REASON_CODES = [
+  "no_access_or_refused",
+  "not_applicable_to_room",
+  "described_elsewhere",
+  "other",
+] as const satisfies readonly PublishOverrideReasonCode[];
+
+export type PublishCodesMatchSchema = Assert<
+  SameCodes<(typeof PUBLISH_BLOCKER_CODES)[number], PublishBlockerCode> &
+    SameCodes<(typeof PUBLISH_WARNING_CODES)[number], PublishWarningCode> &
+    SameCodes<(typeof PUBLISH_CHECK_SEVERITIES)[number], PublishCheckSeverity> &
+    SameCodes<(typeof PUBLISH_CHECK_SOURCES)[number], PublishCheckSource> &
+    SameCodes<(typeof PUBLISH_OVERRIDE_REASON_CODES)[number], PublishOverrideReasonCode>
+>;
+
+/** Lengden på begrunnelsen. Samme øvre grense som CHECK-regelen (1000). */
+export const PUBLISH_OVERRIDE_REASON_MIN_CHARS_OTHER = 10;
+export const PUBLISH_OVERRIDE_REASON_MAX_CHARS = 1000;
+
+/**
+ * Det som kan mangle i et funn (`PublishCheckTarget.missing`): delene fra `WARNING_MISSING_PARTS`
+ * og fire nye. `reason` brukes også for TGIU uten grunn (A443).
+ */
+export const PUBLISH_CHECK_MISSING_PARTS = [
+  ...WARNING_MISSING_PARTS,
+  /** Punktet eller avviket har ingen TG. */
+  "tg",
+  /** Spørsmålet om hulltaking er ikke besvart. */
+  "hole_drilling",
+  /** «Ikke utført» uten grunn. */
+  "hole_drilling_reason",
+  /** Grunnen er «annet» uten tekst. */
+  "hole_drilling_reason_note",
+] as const;
+
+/** Tilstanden til hulltakingen i et rom, ferdig tolket av den som kaller (`signals.ts`). */
+export const HOLE_DRILLING_STATES = [
+  "unanswered",
+  "not_done_no_reason",
+  "other_without_note",
+  "ok",
+] as const;
+
+/** Resultatet av kontrollen av begrunnelsen når en sperre krysses bort. */
+export const PUBLISH_OVERRIDE_REASON_CHECKS = [
+  "ok",
+  /** Ingen grunn er valgt. */
+  "reason_required",
+  /** `other` uten tekst, eller med bare mellomrom. */
+  "text_required",
+  /** `other` med færre enn 10 tegn. */
+  "text_too_short",
+  /** Over 1000 tegn. */
+  "text_too_long",
+  /** Teksten inneholder et fødselsnummer. */
+  "national_id",
+] as const;

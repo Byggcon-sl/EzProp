@@ -8,6 +8,7 @@ import "server-only";
  * Tilgang sjekkes bare via `@/core/access`; spørringene filtrerer på `grant.organizationId`.
  * Ingen tjeneste her kaller KI (gjelder til «KI i veien»), og reglene setter aldri TG.
  */
+export type * from "./publish-types";
 export type * from "./types";
 export { startReport } from "./reports";
 export { getRoomView } from "./room-view";

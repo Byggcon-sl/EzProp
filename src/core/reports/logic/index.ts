@@ -15,4 +15,5 @@ export * from "./status";
 export * from "./tg";
 export * from "./warning-fix";
 export * from "./warnings";
+export type * from "./publish-check-types";
 export type * from "./types";
