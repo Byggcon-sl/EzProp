@@ -354,15 +354,13 @@ describe("4b lagring per felt", () => {
           "risk_assessment",
           "how_to_examine",
         ] as const
-      ).map(
-        (field): ReportFieldChange => ({
-          table: "tgiu_details",
-          checkpointKey: CP.adjacent,
-          field,
-          value,
-          base: null,
-        }),
-      ),
+      ).map((field): ReportFieldChange => ({
+        table: "tgiu_details",
+        checkpointKey: CP.adjacent,
+        field,
+        value,
+        base: null,
+      })),
       {
         table: "field_answers",
         id: uuidv7(),
