@@ -114,15 +114,13 @@ describe("4e logg og personvern", () => {
           "risk_assessment",
           "how_to_examine",
         ] as const
-      ).map(
-        (field): ReportFieldChange => ({
-          table: "tgiu_details",
-          checkpointKey: CP.adjacent,
-          field,
-          value: MARKER,
-          base: null,
-        }),
-      ),
+      ).map((field): ReportFieldChange => ({
+        table: "tgiu_details",
+        checkpointKey: CP.adjacent,
+        field,
+        value: MARKER,
+        base: null,
+      })),
     ];
     for (const change of changes) {
       expect((await saveField(f.actor, f.organizationId, f.room, change)).status).toBe("saved");

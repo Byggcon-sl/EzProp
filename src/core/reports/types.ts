@@ -946,8 +946,7 @@ export type PolishDeviationTarget =
 
 /** Målet i svaret: et felt i avvikskortet, eller beskrivelsen ved punktet (resultatradens id). */
 export type PolishTarget =
-  | PolishDeviationTarget
-  | { type: "checkpoint_result"; id: string; fieldKey: "description_text" };
+  PolishDeviationTarget | { type: "checkpoint_result"; id: string; fieldKey: "description_text" };
 
 export type PolishDeviationInput = {
   deviationId: string;
