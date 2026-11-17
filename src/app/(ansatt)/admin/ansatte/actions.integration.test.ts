@@ -25,7 +25,10 @@ import { initialFormState } from "../../form-state";
  */
 
 const mocks = vi.hoisted(() => ({
-  context: null as null | { actor: { id: string; email: string; name: string }; organizationId: string },
+  context: null as null | {
+    actor: { id: string; email: string; name: string };
+    organizationId: string;
+  },
   failSessionAudit: false,
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT ${url}`);

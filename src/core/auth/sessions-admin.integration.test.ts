@@ -566,24 +566,26 @@ describe("5.5 revisjonsloggen", () => {
     }
   });
 
-  it.each([["annen tekst", "oppdiktet"], ["tom", ""], ["store bokstaver", "MANUAL"]])(
-    "5. reason %s avvises før spørringen",
-    async (_name, reason) => {
-      const { orgA, ad, te, t } = await setup();
-      const result = await rejection(
-        revokeAllEmployeeSessions(ad, orgA.id, te.id, { reason: reason as never }),
-      );
-      expect((result as { ok?: boolean } | undefined)?.ok).not.toBe(true);
-      expect(await sessionIdsOf(t.id)).toHaveLength(2);
-      expect(await sessionAudit(orgA.id)).toEqual([]);
-    },
-  );
+  it.each([
+    ["annen tekst", "oppdiktet"],
+    ["tom", ""],
+    ["store bokstaver", "MANUAL"],
+  ])("5. reason %s avvises før spørringen", async (_name, reason) => {
+    const { orgA, ad, te, t } = await setup();
+    const result = await rejection(
+      revokeAllEmployeeSessions(ad, orgA.id, te.id, { reason: reason as never }),
+    );
+    expect((result as { ok?: boolean } | undefined)?.ok).not.toBe(true);
+    expect(await sessionIdsOf(t.id)).toHaveLength(2);
+    expect(await sessionAudit(orgA.id)).toEqual([]);
+  });
 
   it("5. deactivated er en gyldig kode", async () => {
     const { orgA, ad, te } = await setup();
-    expect(
-      await revokeAllEmployeeSessions(ad, orgA.id, te.id, { reason: "deactivated" }),
-    ).toEqual({ ok: true, count: 2 });
+    expect(await revokeAllEmployeeSessions(ad, orgA.id, te.id, { reason: "deactivated" })).toEqual({
+      ok: true,
+      count: 2,
+    });
     expect((await sessionAudit(orgA.id))[0]!.changes).toEqual({
       sessionCount: 2,
       reason: "deactivated",

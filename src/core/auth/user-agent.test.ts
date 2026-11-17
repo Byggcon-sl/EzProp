@@ -49,7 +49,11 @@ const CASES: [string, string, { device: string; browser: string }][] = [
   ["iPad + FxiOS", UA.iPadFirefox, { device: "iPad", browser: "Firefox" }],
   ["iPad + EdgiOS", UA.iPadEdge, { device: "iPad", browser: "Edge" }],
   ["iPhone + Safari", UA.iPhoneSafari, { device: "iPhone", browser: "Safari" }],
-  ["Windows + Edg/ (har også Chrome/ og Safari/)", UA.windowsEdge, { device: "Windows-PC", browser: "Edge" }],
+  [
+    "Windows + Edg/ (har også Chrome/ og Safari/)",
+    UA.windowsEdge,
+    { device: "Windows-PC", browser: "Edge" },
+  ],
   ["Windows + Chrome", UA.windowsChrome, { device: "Windows-PC", browser: "Chrome" }],
   ["Windows + Firefox", UA.windowsFirefox, { device: "Windows-PC", browser: "Firefox" }],
   ["Android + Chrome", UA.androidChrome, { device: "Android", browser: "Chrome" }],
@@ -116,7 +120,15 @@ describe("1.2 rekkefølge og sikkerhet", () => {
   it("2. svaret er alltid en fast verdi, også for tilfeldige tekster (fast frø)", () => {
     const devices = new Set<string>(Object.values(DEVICE_LABELS));
     const browsers = new Set<string>(Object.values(BROWSER_LABELS));
-    for (const label of ["iPad eller Mac", "Mac", "iPad", "iPhone", "Windows-PC", "Android", "Ukjent enhet"]) {
+    for (const label of [
+      "iPad eller Mac",
+      "Mac",
+      "iPad",
+      "iPhone",
+      "Windows-PC",
+      "Android",
+      "Ukjent enhet",
+    ]) {
       expect(devices.has(label), `DEVICE_LABELS har «${label}»`).toBe(true);
     }
     for (const label of ["Safari", "Chrome", "Firefox", "Edge", "Ukjent nettleser"]) {
@@ -185,8 +197,9 @@ describe("1.2 rekkefølge og sikkerhet", () => {
       "ua-parser",
       "next-useragent",
     ];
-    expect(names.filter((name) => known.includes(name) || /user-?agent|ua-?parser/i.test(name)))
-      .toEqual([]);
+    expect(
+      names.filter((name) => known.includes(name) || /user-?agent|ua-?parser/i.test(name)),
+    ).toEqual([]);
   });
 
   it("5. user-agent.ts importerer bare fra egen kode", () => {

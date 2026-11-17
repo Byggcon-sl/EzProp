@@ -92,7 +92,9 @@ function loggerSpies() {
 
 async function auditCount(): Promise<number> {
   // Hele tabellen: egen utlogging skal ikke skrive i revisjonsloggen
-  const rows = await db.execute<{ count: number }>(sql`select count(*)::int as count from audit_log`);
+  const rows = await db.execute<{ count: number }>(
+    sql`select count(*)::int as count from audit_log`,
+  );
   return Array.from(rows)[0]?.count ?? 0;
 }
 
@@ -364,7 +366,16 @@ describe("4.5 driftsloggen for egen utlogging", () => {
     const calls = spies.reduce((sum, spy) => sum + spy.mock.calls.length, 0);
     expect(calls).toBe(1);
     const text = logged(spies);
-    for (const secret of [t.id, t.email, t.name, s1.id, s2.id, s2.token, SESSION_IP, SESSION_UA_MARK]) {
+    for (const secret of [
+      t.id,
+      t.email,
+      t.name,
+      s1.id,
+      s2.id,
+      s2.token,
+      SESSION_IP,
+      SESSION_UA_MARK,
+    ]) {
       expect(text).not.toContain(secret);
     }
   });
@@ -377,7 +388,16 @@ describe("4.5 driftsloggen for egen utlogging", () => {
     expect(calls).toBe(1);
     const text = logged(spies);
     expect(text).toMatch(/1/);
-    for (const secret of [t.id, t.email, t.name, s1.id, s2.id, s2.token, SESSION_IP, SESSION_UA_MARK]) {
+    for (const secret of [
+      t.id,
+      t.email,
+      t.name,
+      s1.id,
+      s2.id,
+      s2.token,
+      SESSION_IP,
+      SESSION_UA_MARK,
+    ]) {
       expect(text).not.toContain(secret);
     }
   });
