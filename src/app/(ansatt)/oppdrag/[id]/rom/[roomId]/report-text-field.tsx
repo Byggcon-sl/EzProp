@@ -6,7 +6,7 @@ import { Input, Textarea } from "@/shared/ui/form";
 import { Warning } from "@/shared/ui/warning";
 import { FieldStatus } from "./field-status";
 import { useField, useRoom } from "./room-context";
-import { characterCountText, checkReportText, domId } from "./room-model";
+import { characterCountText, domId, REPORT_TEXT_LIMITS, reportTextValidator } from "./room-model";
 
 /*
  * Felles tekstfelt i rapporten (design avsnitt 15, kortet «KI i bunnen» og «Rettes i koden» 6):
@@ -29,6 +29,8 @@ export type ReportTextFieldProps = {
   hint?: ReactNode;
   /** Advarsler under feltet (sperrer ikke). */
   warnings?: readonly { id: string; text: ReactNode; action?: ReactNode }[];
+  /** Lengdegrensen (samme som serveren). Standard: lang fritekst. */
+  maxLength?: number;
   /** Én linje i stedet for flere (for eksempel kostnadsforklaring). */
   singleLine?: boolean;
   /** Plass for KI-merket over feltet. Tom nå («KI i veien» kobler seg på her). */
@@ -59,6 +61,7 @@ export function ReportTextField({
   hint,
   warnings = [],
   singleLine = false,
+  maxLength = REPORT_TEXT_LIMITS.long,
   aiMark,
   aiSuggestion,
 }: ReportTextFieldProps) {
@@ -67,7 +70,7 @@ export function ReportTextField({
     fieldKey,
     serverValue ?? "",
     (value, base) => build(String(value ?? ""), String(base ?? "")),
-    { validate: checkReportText },
+    { validate: reportTextValidator(maxLength) },
   );
   const value = String(field.entry.value ?? "");
   const id = domId(fieldKey);
@@ -84,7 +87,7 @@ export function ReportTextField({
   }
 
   const error = field.entry.status === "invalid" ? (field.entry.error ?? undefined) : undefined;
-  const count = characterCountText(value.length);
+  const count = characterCountText(value.length, maxLength);
   const describedBy = [
     hint ? `${id}-hint` : null,
     error ? `${id}-error` : null,

@@ -5,7 +5,6 @@ import type { SuggestionView, TgiuDetailsView } from "@/core/reports/types";
 import { wetRoomTemplate } from "@/db/seed/templates/wet-room";
 import {
   characterCountText,
-  checkReportText,
   decisionStates,
   deviationCauseChoiceId,
   deviationCostChoiceId,
@@ -18,7 +17,8 @@ import {
   outcomeName,
   outcomeTgOf,
   parseNumberInput,
-  REPORT_TEXT_MAX,
+  REPORT_TEXT_LIMITS,
+  reportTextValidator,
   suggestionId,
   T0059_FIX,
   TEXT_MESSAGES,
@@ -211,19 +211,23 @@ describe("TGIU-feltene etter grunn", () => {
 });
 
 describe("fritekst", () => {
-  it("elleve sifre gir feil, ti godtas", () => {
-    expect(checkReportText("Eier 01019912345 sa")).toBe(TEXT_MESSAGES.nationalId);
-    expect(checkReportText("Ring 4012345678")).toBeNull();
+  const check = reportTextValidator(REPORT_TEXT_LIMITS.long);
+
+  it("elleve sifre gir feil, også med mellomrom; ti godtas", () => {
+    expect(check("Eier 01019912345 sa")).toBe(TEXT_MESSAGES.nationalId);
+    expect(check("Eier 010199 12345 sa")).toBe(TEXT_MESSAGES.nationalId);
+    expect(check("Ring 4012345678")).toBeNull();
   });
 
-  it("for lang tekst gir feil", () => {
-    expect(checkReportText("a".repeat(REPORT_TEXT_MAX + 1))).toBe(TEXT_MESSAGES.tooLong);
-    expect(checkReportText("a".repeat(REPORT_TEXT_MAX))).toBeNull();
+  it.each(Object.values(REPORT_TEXT_LIMITS))("for lang tekst gir feil (grense %i)", (max) => {
+    const validate = reportTextValidator(max);
+    expect(validate("a".repeat(max + 1))).toBe(TEXT_MESSAGES.tooLong(max));
+    expect(validate("a".repeat(max))).toBeNull();
   });
 
   it("teller tegn fra 80 % av grensen", () => {
-    expect(characterCountText(1599)).toBeNull();
-    expect(characterCountText(1640)?.replace(/\s/g, " ")).toBe("1 640 av 2 000 tegn");
+    expect(characterCountText(1599, 2000)).toBeNull();
+    expect(characterCountText(1640, 2000)?.replace(/\s/g, " ")).toBe("1 640 av 2 000 tegn");
   });
 });
 

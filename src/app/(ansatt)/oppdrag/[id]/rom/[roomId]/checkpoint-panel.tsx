@@ -514,10 +514,11 @@ function ReviewList({
     <Card>
       <section aria-labelledby={WARNINGS_HEADING_ID} className="space-y-3">
         <h3 id={WARNINGS_HEADING_ID} tabIndex={-1} className="text-lg font-semibold text-slate-900">
-          <span role="status" aria-live="polite">
-            {ROOM_TEXTS.toReview(items.length)}
-          </span>
+          {ROOM_TEXTS.toReview(items.length)}
         </h3>
+        <p role="status" aria-live="polite" className="sr-only">
+          {ROOM_TEXTS.toReview(items.length)}
+        </p>
         <ul className="space-y-2">
           {items.map(({ warning, fix }, index) => {
             const n = numberOf(warning.deviationId);

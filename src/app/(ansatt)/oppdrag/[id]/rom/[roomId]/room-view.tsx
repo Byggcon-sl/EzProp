@@ -488,7 +488,7 @@ export function RoomView({
           </aside>
           <div className="min-w-0 flex-1">
             <main className="mx-auto max-w-190 space-y-4 px-5 pt-5 pb-8 md:px-6 xl:space-y-6">
-              <div role="status" aria-live="polite" className="sr-only">
+              <div id="room-announcer" role="status" aria-live="polite" className="sr-only">
                 {announcement}
               </div>
               {helpOpen && (

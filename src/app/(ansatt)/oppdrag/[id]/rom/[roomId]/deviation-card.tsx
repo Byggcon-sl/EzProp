@@ -37,6 +37,7 @@ import {
   measureFieldKey,
   outcomeName,
   outcomeTgOf,
+  REPORT_TEXT_LIMITS,
 } from "./room-model";
 import { ReportTextField } from "./report-text-field";
 
@@ -296,6 +297,7 @@ export function DeviationCard({
             label={DEVIATION_TEXTS.costText}
             serverValue={deviation.costText}
             build={textChange(deviation.id, "cost_text")}
+            maxLength={REPORT_TEXT_LIMITS.costText}
             singleLine
           />
         </div>

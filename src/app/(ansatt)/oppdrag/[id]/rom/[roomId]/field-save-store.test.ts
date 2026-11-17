@@ -244,6 +244,18 @@ describe("FieldSaveStore", () => {
     expect(store.get("k")?.value).toBe("Egen tekst");
   });
 
+  it("samme gamle serververdi fra første visning overskriver aldri det som er lagret siden", async () => {
+    const { store, pending, settle } = setup();
+    store.ensure("k", null, build);
+    store.edit("k", "Lagret tekst", 0);
+    pending[0]!.resolve(saved());
+    await settle();
+    // Feltet vises igjen (bytte av punkt) med verdien fra første visning.
+    store.ensure("k", null, build);
+    store.syncServer("k", null);
+    expect(store.get("k")).toMatchObject({ value: "Lagret tekst", base: "Lagret tekst" });
+  });
+
   it("verdien står i køen når feltet registreres på nytt (bytte av punkt)", () => {
     const { store } = setup();
     store.ensure("k", "", build);

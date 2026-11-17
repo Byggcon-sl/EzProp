@@ -334,30 +334,43 @@ export function visibleTgiuFields(
 
 /** Elleve sifre på rad ligner et fødselsnummer (samme mønster som serveren). */
 const ELEVEN_DIGITS = /\d{11}/u;
+/** Mellomrom, punktum og bindestrek mellom sifre («010190 12345» stoppes også). */
+const DIGIT_SEPARATORS = /(?<=\d)[\s.-]+(?=\d)/gu;
 
-/** Grensen for fritekst i rapporten (design avsnitt 15). Serveren har siste ord. */
-export const REPORT_TEXT_MAX = 2000;
+/**
+ * Grensene for fritekst i rapporten, de samme som serveren bruker (`src/core/reports`). Serveren
+ * har siste ord; skjermen sier fra før lagring, så teksten aldri går tapt.
+ */
+export const REPORT_TEXT_LIMITS = {
+  /** Avvik, årsak, konsekvens, tiltak, beskrivelse og TGIU-feltene. */
+  long: 10_000,
+  /** Tekstsvar i registreringen. */
+  answer: 2_000,
+  /** Kostnad, forklaring. */
+  costText: 500,
+} as const;
+
+const formatCount = (n: number) => n.toLocaleString("nb-NO");
 
 export const TEXT_MESSAGES = {
-  tooLong: `Teksten er for lang. Grensen er ${REPORT_TEXT_MAX.toLocaleString("nb-NO")} tegn.`,
+  tooLong: (max: number) => `Teksten er for lang. Grensen er ${formatCount(max)} tegn.`,
   nationalId: "Teksten ser ut til å inneholde et fødselsnummer. Fjern det.",
 } as const;
 
 /** Kontroll av fritekst før lagring. Teksten beholdes i feltet. */
-export function checkReportText(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  if (value.length > REPORT_TEXT_MAX) return TEXT_MESSAGES.tooLong;
-  if (ELEVEN_DIGITS.test(value)) {
-    return TEXT_MESSAGES.nationalId;
-  }
-  return null;
+export function reportTextValidator(max: number): (value: unknown) => string | null {
+  return (value) => {
+    if (typeof value !== "string") return null;
+    if (value.length > max) return TEXT_MESSAGES.tooLong(max);
+    if (ELEVEN_DIGITS.test(value.replace(DIGIT_SEPARATORS, ""))) return TEXT_MESSAGES.nationalId;
+    return null;
+  };
 }
 
 /** «1 640 av 2 000 tegn» når 80 % av grensen er brukt, ellers `null`. */
-export function characterCountText(length: number, max = REPORT_TEXT_MAX): string | null {
+export function characterCountText(length: number, max: number): string | null {
   if (length < max * 0.8) return null;
-  const format = (n: number) => n.toLocaleString("nb-NO");
-  return `${format(length)} av ${format(max)} tegn`;
+  return `${formatCount(length)} av ${formatCount(max)} tegn`;
 }
 
 // --- Tall ---------------------------------------------------------------------------------

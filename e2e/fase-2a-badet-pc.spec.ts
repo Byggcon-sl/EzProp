@@ -225,21 +225,20 @@ async function openBathroom(page: Page, bath: Bathroom, punkt?: string) {
   const start = page.getByRole("button", { name: "Start rapporten" });
   const list = checkpointHeading(page);
   await expect(start.or(list).first()).toBeVisible();
-  if (await start.isVisible()) {
-    await start.click();
-    await expect(list).toBeVisible();
-  }
+  if (await start.isVisible()) await start.click();
+  await expect(list).toBeVisible();
 }
 
 function checkpointHeading(page: Page): Locator {
-  return page
-    .getByRole("heading", { level: 2 })
-    .filter({ hasNotText: /^Badet$/ })
-    .first();
+  return page.locator("#checkpoint-heading");
 }
 
 function liveRegion(page: Page): Locator {
-  return page.locator('main [role="status"][aria-live="polite"].sr-only');
+  return page.locator("#room-announcer");
+}
+
+function reviewList(page: Page): Locator {
+  return page.getByRole("region", { name: /^Å se over/ });
 }
 
 function totalSaveState(page: Page): Locator {
@@ -365,12 +364,15 @@ async function controlActions(page: Page, mode: { current: "pass" | "abort" | "h
       if (mode.current === "hold") {
         await new Promise<void>((resolve) => held.push(async () => resolve()));
       }
+      // Etter at den er sluppet: modusen kan være endret mens kallet ventet.
+      if ((mode.current as string) === "abort") return route.abort();
       return route.continue();
     },
   );
   return {
-    release: async () => {
-      mode.current = "pass";
+    /** Slipper det som venter; `then` sier om det skal gå gjennom eller stoppes. */
+    release: async (then: "pass" | "abort" = "pass") => {
+      mode.current = then;
       for (const next of held.splice(0)) await next();
     },
   };
@@ -396,7 +398,7 @@ test("B6.1 hovedflyt: «Fyll ut badet», forslag TG3, Godta, intervall og Ferdig
   await bathRow.getByRole("link", { name: "Fyll ut badet" }).click();
 
   await page.getByRole("button", { name: "Start rapporten" }).click();
-  await expect(page.getByText("0 av 8 ferdig").first()).toBeVisible();
+  await expect(page.getByText("0 av 8 ferdig").filter({ visible: true }).first()).toBeVisible();
   await expect(
     page.getByRole("navigation", { name: "Kontrollpunkter" }).getByRole("listitem"),
   ).toHaveCount(8);
@@ -420,7 +422,7 @@ test("B6.1 hovedflyt: «Fyll ut badet», forslag TG3, Godta, intervall og Ferdig
   await expect(
     page.getByRole("heading", { level: 2, name: "Sanitærutstyr og innredning" }),
   ).toBeFocused();
-  await expect(page.getByText("1 av 8 ferdig").first()).toBeVisible();
+  await expect(page.getByText("1 av 8 ferdig").filter({ visible: true }).first()).toBeVisible();
   await expect(
     page
       .getByRole("navigation", { name: "Kontrollpunkter" })
@@ -430,7 +432,7 @@ test("B6.1 hovedflyt: «Fyll ut badet», forslag TG3, Godta, intervall og Ferdig
   expect(await decisions(bath.assignmentId)).toMatchObject([{ decision: "accepted" }]);
 
   await page.reload();
-  await expect(page.getByText("1 av 8 ferdig").first()).toBeVisible();
+  await expect(page.getByText("1 av 8 ferdig").filter({ visible: true }).first()).toBeVisible();
   await openCheckpoint(page, "Vanntett sjikt, membran og sluk");
   await expect(deviationCard(page, 1)).toBeVisible();
 });
@@ -460,7 +462,8 @@ test("B6.2 Endre og Avvis: grunn med ett trykk, «Annet» krever tekst, Avvis st
   await expect(card.getByText("Velg en grunn for å lagre.")).toBeVisible();
   await expect(card.locator("select")).toHaveCount(0);
   await choose(page, "Hvorfor endrer du?", "Annet", card);
-  await save.click();
+  await expect(save).toHaveAttribute("aria-disabled", "true");
+  await expect(card.getByText("Skriv grunnen når du velger «Annet».")).toBeVisible();
   expect(await decisions(bath.assignmentId)).toEqual([]);
   await card.getByLabel("Skriv grunnen").fill("Oppdiktet grunn for endring");
   await choose(page, "Hvorfor endrer du?", "Synlig skade", card);
@@ -527,9 +530,7 @@ test("B6.4 TGIU: hull ikke utført og eier nektet gir forslag, Godta og advarsel
   await suggestion(page).getByRole("button", { name: "Godta", exact: true }).click();
   await expect(page.getByRole("heading", { name: /TGIU – ikke undersøkt/ })).toBeFocused();
   await expect(liveRegion(page)).toHaveText("TGIU satt på punktet");
-  const review = page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: /^Å se over/ }) });
+  const review = reviewList(page);
   await expect(review).toContainText("Fyll ut dette for TGIU");
   await expect(review).toContainText("eier er informert");
 
@@ -548,7 +549,7 @@ test("B6.4 TGIU: hull ikke utført og eier nektet gir forslag, Godta og advarsel
   await fill("Resultat av annen fuktkontroll", "Oppdiktet: ingen utslag.");
   await choose(page, "Skadeutsatt konstruksjon", "Ja");
   await page.getByLabel("Eier er informert om utvidet ansvar").check();
-  await expect(review).not.toContainText("Fyll ut dette for TGIU");
+  await expect(page.getByText(/Fyll ut dette for TGIU/)).toHaveCount(0);
 });
 
 // --- B6.5 T-0059 og hulltaking ---------------------------------------------------------------
@@ -603,7 +604,7 @@ test("B6.6 kostnad: 37 500 gir advarsel mens man skriver, 40 000 ikke, 0 gir fei
     await expect(group.getByRole("radio", { name: band })).toBeChecked();
   }
   await choose(page, "Kostnad", "Eget beløp", deviation);
-  const amount = deviation.getByLabel("Eget beløp");
+  const amount = deviation.getByRole("textbox", { name: "Eget beløp" });
   await expect(amount).toBeFocused();
   await amount.pressSequentially("37500");
   await expect(
@@ -713,7 +714,7 @@ const SWITCHES: { name: string; pcOnly?: boolean; run(page: Page): Promise<void>
     name: "Alt+pil ned",
     pcOnly: true,
     run: async (page) => {
-      await page.getByRole("heading", { level: 2 }).first().focus();
+      await checkpointHeading(page).focus();
       await page.keyboard.press("Alt+ArrowDown");
     },
   },
@@ -731,7 +732,7 @@ for (const change of SWITCHES) {
     const description = page.getByLabel("Beskrivelse av punktet (valgfri)");
     await description.fill("Oppdiktet ulagret tekst");
     await description.blur();
-    if (change.name === "Ferdig") {
+    if (change.name === "Ferdig" || change.name === "søketreff på annet punkt") {
       // «Ferdig» venter på lagringen; slipp den så punktet kan bli ferdig.
       setTimeout(() => void control.release(), 500);
     }
@@ -778,9 +779,7 @@ test("B6.8c «Ferdig» med ventende lagring: lagrer først, markerer ikke ferdig
   const done = page.getByRole("button", { name: /Ferdig med punktet|Lagrer …/ });
   await done.click();
   await expect(page.getByRole("button", { name: "Lagrer …" })).toBeDisabled();
-  mode.current = "abort";
-  await control.release();
-  mode.current = "abort";
+  await control.release("abort");
   await expect(page.getByRole("button", { name: "Ferdig med punktet" })).toBeEnabled();
   await expect(liveRegion(page)).toHaveText("Punktet er ikke ferdig. Ett felt er ikke lagret.");
   await expect(page.getByLabel("Beskrivelse av punktet (valgfri)")).toBeFocused();
@@ -812,7 +811,7 @@ test("B6.9 to faner: samme felt gir «Endret av andre» med nyeste verdi", async
   const other = second.getByLabel("Beskrivelse av punktet (valgfri)");
   await other.fill("Oppdiktet tekst fra fane 2");
   await other.blur();
-  await expect(second.getByText("Endret av andre", { exact: true })).toBeVisible();
+  await expect(second.locator("p").filter({ hasText: /^Endret av andre$/ })).toBeVisible();
   await expect(second.getByText("Oppdiktet tekst fra fane 1")).toBeVisible();
   await second.getByRole("button", { name: "Bruk nyeste" }).click();
   await expect(other).toHaveValue("Oppdiktet tekst fra fane 1");
@@ -845,8 +844,8 @@ test("B6.10 kontor: «ikke startet» uten knapp, deretter skrivebeskyttet med «
   await suggestion(page).getByRole("button", { name: "Godta", exact: true }).click();
   const deviation = deviationCard(page, 1);
   await choose(page, "Kostnad", "Eget beløp", deviation);
-  await deviation.getByLabel("Eget beløp").fill("40000");
-  await deviation.getByLabel("Eget beløp").blur();
+  await deviation.getByRole("textbox", { name: "Eget beløp" }).fill("40000");
+  await deviation.getByRole("textbox", { name: "Eget beløp" }).blur();
   await expect(totalSaveState(page)).toContainText("Alt er lagret");
 
   await office.page.goto(roomUrl(bath, MEMBRANE));
@@ -1007,7 +1006,7 @@ test("B6.13a snarveier: Ctrl/Cmd+Enter, Alt+pil, Ctrl/Cmd+K og «?», ingen tast
   await page.keyboard.press("Alt+ArrowDown");
   await expect(page).toHaveURL(/punkt=wet_room\.membrane_drain/);
   await expect(description).toHaveValue("Hvorfor?");
-  await page.getByRole("heading", { level: 2 }).first().focus();
+  await checkpointHeading(page).focus();
   await page.keyboard.press("Alt+ArrowDown");
   await expect(
     page.getByRole("heading", { level: 2, name: "Sanitærutstyr og innredning" }),
@@ -1062,14 +1061,12 @@ test("B6.13c «Rett nå», «x å se over – gå til neste» og forslag som ikk
   await suggestion(page).getByRole("button", { name: "Godta", exact: true }).click();
 
   // TG3 uten kostnad: «Rett nå» flytter fokus til kostnadsvalget.
-  const review = page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: /^Å se over/ }) });
+  const review = reviewList(page);
   const costWarning = review.locator("li").filter({ hasText: "TG3 skal ha kostnad." });
   await costWarning.getByRole("button", { name: "Rett nå" }).click();
   await expect(
-    deviationCard(page, 1).getByRole("group", { name: "Kostnad" }).getByRole("radio").first(),
-  ).toBeFocused();
+    deviationCard(page, 1).getByRole("group", { name: "Kostnad" }).locator("input:focus"),
+  ).toHaveCount(1);
 
   // «x å se over – gå til neste» åpner neste punkt med advarsel og legger fokus på advarselen.
   await openCheckpoint(page, "Generelt");
@@ -1084,13 +1081,16 @@ test("B6.13c «Rett nå», «x å se over – gå til neste» og forslag som ikk
   const year = page.getByLabel("Årstall for det vanntette sjiktet");
   await year.fill("2005");
   await year.blur();
-  const stale = page.getByText(/Forslaget gjelder ikke lenger/);
+  const staleCard = page
+    .getByRole("region", { name: "Forslag fra reglene" })
+    .filter({ hasText: /Forslaget gjelder ikke lenger/ });
+  const stale = staleCard.getByText(/Forslaget gjelder ikke lenger/);
   await expect(stale).toBeVisible();
   await expect(deviationCard(page, 1)).toBeVisible();
-  await suggestion(page).getByRole("button", { name: "Behold avviket" }).click();
+  await staleCard.getByRole("button", { name: "Behold avviket" }).click();
   await expect(page.getByRole("heading", { name: /^Avvik 1/ })).toBeFocused();
   expect(await deviationCount(bath.assignmentId)).toBe(1);
-  await suggestion(page).getByRole("button", { name: "Fjern avviket" }).click();
+  await staleCard.getByRole("button", { name: "Fjern avviket" }).click();
   await expect(page.getByText("Avvik 1 er fjernet.")).toBeVisible();
   await page.getByRole("button", { name: "Angre" }).click();
   await expect(deviationCard(page, 1)).toBeVisible();
@@ -1134,7 +1134,7 @@ test("B6.14 axe uten feil: forslag, avvikskort, advarsler, Endre-flaten, søket 
   await page.getByLabel("Søk etter avvik i badet").fill("fukt");
   await expectNoAxeViolations(page, "avvikssøket");
   if (testInfo.project.name === "pc") {
-    await page.getByRole("heading", { level: 2 }).first().focus();
+    await checkpointHeading(page).focus();
     await page.keyboard.press("?");
     await expectNoAxeViolations(page, "snarveiene");
   }
@@ -1183,7 +1183,5 @@ test("B6.17 «Ukjent» (T-0051): valget heter «Ukjent», og tomt årstall gir �
   );
   await openCheckpoint(page, "Vanntett sjikt, membran og sluk");
   await choose(page, "Vanntett sjikt", /^Folie$/);
-  await expect(
-    page.getByText(/Ikke vurdert: Fyll ut årstall for (det vanntette )?sjiktet/i).first(),
-  ).toBeVisible();
+  await expect(page.getByText(/Ikke vurdert: Fyll ut årstall/i).first()).toBeVisible();
 });

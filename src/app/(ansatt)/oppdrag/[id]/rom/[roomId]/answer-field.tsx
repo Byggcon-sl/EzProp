@@ -8,7 +8,14 @@ import { ChoiceButtons } from "@/shared/ui/choice-buttons";
 import { Checkbox, ChoiceGroup, Input } from "@/shared/ui/form";
 import { FieldStatus } from "./field-status";
 import { useField, useRoom, type FieldHandle } from "./room-context";
-import { answerKey, domId, EMPTY_ANSWER, NUMBER_MESSAGE, parseNumberInput } from "./room-model";
+import {
+  answerKey,
+  domId,
+  EMPTY_ANSWER,
+  NUMBER_MESSAGE,
+  parseNumberInput,
+  REPORT_TEXT_LIMITS,
+} from "./room-model";
 import { ReportTextField } from "./report-text-field";
 
 /*
@@ -70,6 +77,7 @@ export function AnswerField({
         fieldKey={key}
         label={element.label}
         hint={element.help_text ?? undefined}
+        maxLength={REPORT_TEXT_LIMITS.answer}
         serverValue={serverValue?.text ?? null}
         build={(value, base) => ({
           table: "field_answers",

@@ -65,6 +65,12 @@ type Internal = {
   validate: FieldValidator | null;
   timer: Timer | null;
   inFlight: Promise<void> | null;
+  /**
+   * Siste verdi serveren sendte for feltet (fra visningen eller det som er regnet på nytt). Bare
+   * en ny serververdi tas inn; samme gamle verdi fra første visning overskriver aldri det som er
+   * lagret siden.
+   */
+  serverSeen: unknown;
 };
 
 /** Statusene som betyr at noe ikke er lagret ennå. */
@@ -164,6 +170,7 @@ export class FieldSaveStore {
       validate: options.validate ?? null,
       timer: null,
       inFlight: null,
+      serverSeen: serverValue,
     });
     return entry;
   }
@@ -176,6 +183,9 @@ export class FieldSaveStore {
     const field = this.fields.get(key);
     if (!field) return;
     const { entry } = field;
+    const sameRow = rowId === undefined || rowId === entry.rowId;
+    if (sameValue(field.serverSeen, serverValue) && sameRow) return;
+    field.serverSeen = serverValue;
     if (entry.status !== "idle" && entry.status !== "saved") return;
     if (!sameValue(entry.value, entry.base)) return;
     if (sameValue(entry.base, serverValue) && (rowId === undefined || rowId === entry.rowId)) {
