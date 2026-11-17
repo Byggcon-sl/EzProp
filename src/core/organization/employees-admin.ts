@@ -20,7 +20,12 @@ import {
   type EmployeeRole,
 } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
-import { DuplicateEmployeeEmailError, LastAdminError, isUniqueViolation } from "./errors";
+import {
+  DuplicateEmployeeEmailError,
+  LastAdminError,
+  SelfDeactivationError,
+  isUniqueViolation,
+} from "./errors";
 import {
   employeeCreateSchema,
   employeeRolesSchema,
@@ -488,7 +493,8 @@ export async function setEmployeeRoles(
 /**
  * Markerer at den ansatte har sluttet (`deactivated_at`). Personen avvises i neste tilgangssjekk,
  * men står fortsatt på gamle rapporter. Den siste aktive admin kan ikke markeres som sluttet
- * (`LastAdminError`). Har personen alt sluttet, skjer ingenting.
+ * (`LastAdminError`), og admin kan ikke markere seg selv (`SelfDeactivationError`, regel 11).
+ * Har personen alt sluttet, skjer ingenting.
  *
  * Personen logges også ut av alle enheter (A430, revisjonsrad med `reason: "deactivated"`) i
  * samme transaksjon. Feiler utloggingen, rulles alt tilbake: personen er da ikke markert som
@@ -516,6 +522,10 @@ export async function deactivateEmployee(actor: Actor, organizationId: string, e
     if (!row) throw new AccessDeniedError();
 
     if ((await countActiveAdmins(tx, grant)) === 0) throw new LastAdminError();
+    // Regel 11 og A430: admin setter aldri seg selv til «Har sluttet», heller ikke med en annen
+    // admin igjen. Sjekkes etter siste-admin-sjekken, så eneste admin fortsatt får
+    // `LastAdminError`. Kastet ruller tilbake oppdateringen over.
+    if (row.id === grant.employeeId) throw new SelfDeactivationError();
 
     await recordAuditEvent(tx, grant, {
       entityType: "employee",
@@ -524,15 +534,11 @@ export async function deactivateEmployee(actor: Actor, organizationId: string, e
       changes: { employeeId: row.id },
     });
 
-    // Admin som (med en annen aktiv admin igjen) markerer seg selv som sluttet, mister tilgangen
-    // uansett; bekreftelsen gjelder da hele handlingen, så `confirmSelf` settes her.
     const revoked = await revokeAllEmployeeSessions(
       actor,
       organizationId,
       row.id,
-      row.userId === actor.id
-        ? { reason: "deactivated", confirmSelf: true }
-        : { reason: "deactivated" },
+      { reason: "deactivated" },
       tx,
     );
     if (!revoked.ok) throw new AccessDeniedError();

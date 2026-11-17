@@ -14,6 +14,7 @@ import {
   createTrialForm,
   employeeByEmail,
   ensureDedicatedEmployee,
+  expectNoAxeViolations,
   fieldSaved,
   logIn,
   logInAsInspector,
@@ -37,8 +38,9 @@ import {
  * testbruker. «Annen enhet» er en egen nettleserkontekst med oppdiktet user-agent (merket
  * «Oppdiktet/9.9»), slik at radene kan skilles og rå user-agent kan søkes etter i svarene.
  *
- * Ingen axe i prosjektet (ingen ny avhengighet, regel 9): UU prøves med roller, tilgjengelige
- * navn, fokus, tastatur og knappestørrelse (minst 44 × 44 px), som i de andre e2e-filene.
+ * UU prøves med axe (WCAG 2.1 A og AA, axe-core fra pakken lint-oppsettet alt har, ingen ny
+ * avhengighet) og med roller, tilgjengelige navn, fokus, tastatur og knappestørrelse (minst
+ * 44 × 44 px), som i de andre e2e-filene.
  *
  * Støtter hovedmål: de ansatte (ser egne enheter og stenger en ukjent med ett trykk; admin
  * stenger alle enheter for en som slutter, uten å stenge seg selv ute) og færre reklamasjoner
@@ -657,7 +659,7 @@ test("E11 ingen token, IP eller rå user-agent i HTML eller RSC", async ({
   }
 });
 
-test("E12 UU: knapper minst 44 px, tilgjengelige navn, tastatur og fokus", async ({
+test("E12 UU: axe uten feil, knapper minst 44 px, tilgjengelige navn, tastatur og fokus", async ({
   page,
   browser,
 }, testInfo) => {
@@ -666,6 +668,7 @@ test("E12 UU: knapper minst 44 px, tilgjengelige navn, tastatur og fokus", async
   const two = await loggedInDevice(browser, testInfo, x.email, UA_EDGE_WINDOWS);
   try {
     await openProfileViaHeader(one.page);
+    await expectNoAxeViolations(one.page, "/profil");
     await expectAllButtonsAtLeast44(mySessions(one.page), "/profil");
     await expectAtLeast44(profileLink(one.page), "lenken til profilen");
     // «Denne enheten» står som tekst, ikke bare som farge
@@ -686,10 +689,13 @@ test("E12 UU: knapper minst 44 px, tilgjengelige navn, tastatur og fokus", async
     try {
       await logIn(page, ADMIN_EMAIL);
       await page.goto(`/admin/ansatte/${y.employeeId}`);
+      await expect(employeeSessions(page)).toBeVisible();
+      await expectNoAxeViolations(page, "ansattsiden med «Innlogginger»");
       await expectAllButtonsAtLeast44(employeeSessions(page), "Innlogginger");
       await logOutAllDevices(page).click();
       const dialog = confirmDialog(page);
       await expect(dialog).toBeVisible();
+      await expectNoAxeViolations(page, "dialogen «Logg ut av alle enheter»");
       // Dialogen har navn og fokus inni seg
       expect(
         (await dialog.getAttribute("aria-labelledby")) ?? (await dialog.getAttribute("aria-label")),

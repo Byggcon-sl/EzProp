@@ -29,6 +29,7 @@ export {
   DuplicateOfficeNameError,
   DuplicateOrgNumberError,
   LastAdminError,
+  SelfDeactivationError,
 } from "./errors";
 export {
   addCertificationSchema,

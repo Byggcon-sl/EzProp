@@ -356,6 +356,7 @@ export function StatusForm({
   deactivatedOn,
   canReactivate,
   sessionCount,
+  isSelf = false,
   action,
 }: {
   /** Dato personen sluttet («31.10.2026»), eller `null` hvis hen jobber her. */
@@ -363,8 +364,19 @@ export function StatusForm({
   canReactivate: boolean;
   /** Aktive innlogginger som logges ut ved «Har sluttet». */
   sessionCount: number;
+  /** Admin ser sin egen side: «Har sluttet» vises ikke (regel 11, A430). Kjernen sperrer også. */
+  isSelf?: boolean;
   action: Action;
 }) {
+  if (deactivatedOn === null && isSelf) {
+    return (
+      <EmployeeCard title="Har sluttet">
+        <p className="text-slate-600">
+          Du kan ikke sette deg selv til «Har sluttet». Be en annen admin.
+        </p>
+      </EmployeeCard>
+    );
+  }
   if (deactivatedOn === null) {
     return <DeactivateForm sessionCount={sessionCount} action={action} />;
   }

@@ -194,6 +194,11 @@ Ført i `docs/plan/forbedrerens-tillegg.md` 17.11.2026.
 6. **Feiltyper:** «finnes ikke» er `{ ok: false, reason: "not_found" }` (samme for annens, ukjent, utløpt økt og ansatt i annen organisasjon); manglende rettighet er `AccessDeniedError`; manglende `confirmSelf` når admin velger seg selv er `{ ok: false, reason: "confirm_self_required" }`. Vellykket: `{ ok: true, count }` (for én økt `count: 1`).
 7. **`Actor.sessionId`** legges til som valgfritt felt (`sessionId?: string`) i `Actor` og fylles i `getCurrentActor` fra `session.session.id`. Mangler den, får ingen rad `isCurrent`.
 
+## Avklart i gjennomgangen (hovedløkken 17.11.2026)
+8. **Admin kan ikke sette seg selv til «Har sluttet»**, heller ikke med en annen admin igjen (regel 11, A430). Kjernen kaster `SelfDeactivationError` («Du kan ikke sette deg selv til «Har sluttet». Be en annen admin.») etter siste-admin-sjekken, så eneste admin fortsatt får `LastAdminError`. På egen side vises forklaringen i stedet for knappen. Funnet av sikkerhet-personvern: byggingen satte `confirmSelf` automatisk og lot admin deaktivere seg selv.
+9. **Testplan 6.6 er endret:** databasesperren `employees_user_or_deactivated_check` gjør at en ansatt uten `user_id` alltid har sluttet. Testen låser derfor «ingen ny revisjonsrad», ikke en rad med `sessionCount: 0`.
+10. **axe** kjøres i E12 med hjelperen `expectNoAxeViolations` i `e2e/helpers.ts` (flyttet fra badet-testen, ingen ny avhengighet).
+
 ## Roller
 utvikler (kjerne og sider), testskriver (enhet, integrasjon, e2e, parallelt), sikkerhet-personvern (tilbakekalling av økter, lukkede endepunkter, persondata i svarene, tenant-isolasjon, personvernerklæringen), ki-ansvarlig (kort kontroll av at ingen øktdata kan nå KI-porten). Ikke arkitekt, ux eller ui-designer: ingen ny tabell, og skjermene følger eksisterende mønstre.
 

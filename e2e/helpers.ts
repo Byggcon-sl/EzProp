@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import postgres from "postgres";
 import { assertLocalOrTestDatabase } from "./database-guard";
@@ -2227,4 +2228,35 @@ export async function sessionTokenOf(context: BrowserContext): Promise<string | 
   const cookie = (await context.cookies()).find((entry) => isSessionCookie(entry.name));
   if (!cookie) return null;
   return decodeURIComponent(cookie.value).split(".")[0] ?? null;
+}
+
+/** axe-core fra pakken lint-oppsettet alt har (ingen ny avhengighet). */
+function axeSource(): string {
+  const fromRoot = createRequire(`${process.cwd()}/package.json`);
+  const nextConfig = createRequire(fromRoot.resolve("eslint-config-next"));
+  const jsxA11y = createRequire(nextConfig.resolve("eslint-plugin-jsx-a11y"));
+  return jsxA11y.resolve("axe-core/axe.min.js");
+}
+
+/** Kjører axe (WCAG 2.1 A og AA) i siden og krever null brudd. */
+export async function expectNoAxeViolations(page: Page, where: string) {
+  await page.addScriptTag({ path: axeSource() });
+  const violations = await page.evaluate(async () => {
+    const axe = (
+      window as unknown as {
+        axe: {
+          run: (
+            o: unknown,
+          ) => Promise<{ violations: { id: string; nodes: { target: string[] }[] }[] }>;
+        };
+      }
+    ).axe;
+    const result = await axe.run({
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+    });
+    return result.violations.map(
+      (v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`,
+    );
+  });
+  expect(violations, `axe uten feil (${where})`).toEqual([]);
 }

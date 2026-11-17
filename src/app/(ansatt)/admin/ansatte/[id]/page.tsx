@@ -181,6 +181,7 @@ export default async function EmployeePage({
           deactivatedOn={employee.deactivatedAt ? formatDate(employee.deactivatedAt) : null}
           canReactivate={canReactivate}
           sessionCount={sessions.length}
+          isSelf={isSelf}
           action={
             locked
               ? reactivateEmployeeAction.bind(null, employee.id)

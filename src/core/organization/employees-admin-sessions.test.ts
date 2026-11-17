@@ -12,8 +12,9 @@ import {
   createUser,
   resetDatabase,
 } from "../../../tests/factories";
+import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { countEmployeeActiveSessions, deactivateEmployee } from "./employees-admin";
-import { LastAdminError } from "./errors";
+import { LastAdminError, SelfDeactivationError } from "./errors";
 
 /*
  * «Har sluttet» logger ut alle enheter (docs/funksjoner/fase2a-mine-innlogginger-testplan.md
@@ -92,14 +93,18 @@ describe("6 deaktivering logger ut alle enheter", () => {
     ).resolves.toBeTruthy();
   });
 
-  it("admin som markerer seg selv som sluttet (med en annen admin igjen), logges også ut", async () => {
+  it("admin kan ikke markere seg selv som sluttet, heller ikke med en annen admin igjen (regel 11, A430)", async () => {
     const { org, admin, adminEmployee } = await setup();
     const other = await createUser({ name: "Bente Admin" });
     await createEmployee(other, org.id, ["admin"]);
-    await deactivateEmployee(admin, org.id, adminEmployee.id);
-    expect(await countSessions(admin.id)).toBe(0);
+    const before = await auditRows(org.id);
+    await expect(deactivateEmployee(admin, org.id, adminEmployee.id)).rejects.toThrow(
+      SelfDeactivationError,
+    );
+    expect(await countSessions(admin.id)).toBe(1);
+    expect(await auditRows(org.id)).toHaveLength(before.length);
     await expect(
-      requireOrganizationAccess(other, org.id, "organization.manage"),
+      requireOrganizationAccess(admin, org.id, "organization.manage"),
     ).resolves.toBeTruthy();
   });
 
@@ -140,5 +145,30 @@ describe("countEmployeeActiveSessions (N i bekreftelsen)", () => {
     await expect(countEmployeeActiveSessions(admin, org.id, "x")).rejects.toThrow(
       AccessDeniedError,
     );
+  });
+});
+
+describe("countEmployeeActiveSessions, tenant-isolasjon (regel 2)", () => {
+  it("expectTenantIsolation: admin i en annen organisasjon får verken tall eller tilgang", async () => {
+    const byOrg = new Map<string, string>();
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        for (const grant of [grantA, grantB]) {
+          const user = await createUser({ name: "Tina Takst" });
+          const employee = await createEmployee(user, grant.organizationId, ["inspector"]);
+          await insertSession(user.id);
+          byOrg.set(grant.organizationId, employee.id);
+        }
+        return { a: [byOrg.get(grantA.organizationId)!], b: [byOrg.get(grantB.organizationId)!] };
+      },
+      query: async (actor, organizationId) => {
+        // Fremmed organisasjon: bruk en ansatt-id derfra, så tilgangssjekken er det som stopper
+        const employeeId = byOrg.get(organizationId) ?? randomUUID();
+        const count = await countEmployeeActiveSessions(actor, organizationId, employeeId);
+        expect(count).toBe(1);
+        return [{ id: employeeId }];
+      },
+      idOf: (row) => row.id,
+    });
   });
 });
