@@ -23,6 +23,10 @@ export const users = pgTable("users", {
     .$onUpdate(() => new Date()),
 });
 
+/**
+ * Unntak fra myk sletting: ryddingen (`src/core/auth/auth-cleanup.ts`) sletter økter 30 dager
+ * etter `expires_at` (ADR 0014, svar 10.11.2026 nr. 18).
+ */
 export const sessions = pgTable(
   "sessions",
   {
@@ -68,6 +72,11 @@ export const accounts = pgTable(
   (table) => [index("accounts_user_id_idx").on(table.userId)],
 );
 
+/**
+ * Engangskoder og innloggingsrunder (også Microsoft-innlogging). Unntak fra myk sletting:
+ * ryddingen (`src/core/auth/auth-cleanup.ts`) sletter radene 24 timer etter `expires_at`
+ * (ADR 0014, svar 10.11.2026 nr. 18).
+ */
 export const verifications = pgTable(
   "verifications",
   {
@@ -89,6 +98,8 @@ export const verifications = pgTable(
  * Adressen lagres bare som HMAC (`email_hash`), aldri i klartekst. Ingen `organization_id`: før
  * innlogging vet vi ikke hvilken organisasjon personen hører til (samme unntak som Better Auths
  * egne tabeller). Radene endres aldri. Riktig kode nullstiller med en `login_succeeded`-rad.
+ * Unntak fra myk sletting: ryddingen (`src/core/auth/auth-cleanup.ts`) sletter radene 24 timer
+ * etter `created_at` (ADR 0014, svar 10.11.2026 nr. 15).
  */
 export const loginAttempts = pgTable(
   "login_attempts",
