@@ -41,7 +41,8 @@ export const runRuleTestCases: RunRuleTestCases = ({
       expected_state: testCase.expected_state,
       expected_outcome: testCase.expected_outcome,
     };
-    const rules = document.rules.filter((r) => r.key === testCase.rule_key && r.active);
+    // Bare testsakens egen regel. Om regelen er slått av, avgjør motoren (samme svar som ellers).
+    const rules = document.rules.filter((r) => r.key === testCase.rule_key);
     const result = evaluateRules({
       template,
       document: { ...document, rules },

@@ -1,5 +1,8 @@
 import { SOURCE_RULE_AGE, WET_ROOM_LIFESPANS } from "@/core/rules/data/lifespans";
-import { SOURCE_RULE_MOISTURE } from "@/core/rules/data/thresholds";
+import {
+  SOURCE_RULE_MOISTURE,
+  WET_ROOM_HOLE_MOISTURE_THRESHOLD_KEY,
+} from "@/core/rules/data/thresholds";
 import type {
   CheckpointDoc,
   DeviationQuestionDoc,
@@ -28,10 +31,16 @@ import type {
  *   godkjent av fagrådet, og ligger i regelmotorens data (`src/core/rules/data`), ikke i malen.
  * - Hulltakingsmålingene er enkeltfelt nå (A202).
  * - Flettefelt i tekstene: se `WET_ROOM_MERGE_FIELDS`.
+ * - Utfall av typen «velg TG2 eller TG3» har to tiltak (T-0060): ett med «bør» for TG2 og ett med
+ *   «må» for TG3 (`applies_to_tg`). TG-en takstmannen velger, avgjør hvilket som legges inn.
  */
 
-/** Flettefeltene tekstene bruker, skrevet som `{navn}` i teksten. */
-export const WET_ROOM_MERGE_FIELDS = ["årstall", "måleverdi", "enhet"] as const;
+/**
+ * Flettefeltene tekstene bruker, skrevet som `{navn}` i teksten. Samme liste som `MERGE_FIELD_KEYS`
+ * i rapporten. `{sted}` er målestedet ved hulltaking. `{måleverdi}` i fallteksten fylles med begge
+ * retningene når begge er målt.
+ */
+export const WET_ROOM_MERGE_FIELDS = ["årstall", "måleverdi", "enhet", "sted"] as const;
 
 const SECTION = "wet_room";
 const SOURCE_WET_ROOM = "Forskrift til avhendingslova § 2-2; NS 3600:2025 tillegg A, våtrom";
@@ -105,6 +114,9 @@ function checkpoint(
   };
 }
 
+/** Tiltakene for «velg TG2 eller TG3»: ett for TG2 («bør») og ett for TG3 («må»), T-0060. */
+type MeasuresByTg = { tg2: string; tg3: string };
+
 /** Ett avviksspørsmål med ett utfall og tekstene til utfallet. */
 type QuestionSpec = {
   checkpoint: string;
@@ -116,7 +128,8 @@ type QuestionSpec = {
   cause: string | null;
   criterion: OutcomeDoc["default_cause_criterion"];
   consequence: string;
-  measures: string[];
+  /** Tiltakene. For `choose_tg2_tg3` ett per TG (`MeasuresByTg`), ellers en liste. */
+  measures: string[] | MeasuresByTg;
   source: string;
 };
 
@@ -233,7 +246,8 @@ const elementOptions: TemplateElementOptionDoc[] = [
     ["documented", "Dokumentert"],
     ["owner_stated", "Opplyst av eier"],
     ["estimated", "Anslått"],
-    ["unknown", "Ukjent (byggeåret for bygningen brukes)"],
+    // T-0051: bare navnet. Byggeår for bygningen finnes ikke i datamodellen; koden står (regel 6).
+    ["unknown", "Ukjent"],
   ]),
   ...options("wet_room.building_code", [
     ["before_1997", "Før 1997"],
@@ -433,14 +447,15 @@ const questionSpecs: QuestionSpec[] = [
     key: "insufficient_fall",
     question: "Er fallet mot sluk for lite, eller er det motfall?",
     kind: "choose_tg2_tg3",
-    deviation: "Fallet mot sluk er målt til {måleverdi} mm per meter.",
+    // `{måleverdi}` fylles med begge retningene når begge er målt (småfunn fra PR #159)
+    deviation: "Målt fall mot sluk er {måleverdi} mm per meter.",
     cause: "Fallet er mindre enn det som trengs for at vann på gulvet renner sikkert til sluket.",
     criterion: "significant_deviation",
     consequence: "Vann kan bli stående på gulvet eller renne mot terskel og vegger.",
-    measures: [
-      "Ved motfall eller stående vann må gulvet rettes, og det vanntette sjiktet må fornyes samtidig.",
-      "Ved svakt fall må vannet holdes borte fra terskel og vegger, og fallet må rettes ved neste oppussing.",
-    ],
+    measures: {
+      tg2: "Fallet bør rettes ved neste oppussing, og vann bør holdes borte fra terskel og vegger fram til da.",
+      tg3: "Gulvet må rettes slik at vannet renner til sluket, og det vanntette sjiktet må fornyes samtidig.",
+    },
     source: SOURCE_FALL,
   },
   {
@@ -464,7 +479,10 @@ const questionSpecs: QuestionSpec[] = [
     cause: "Belegget er selve det vanntette sjiktet, og skaden svekker tettheten.",
     criterion: "significant_deviation",
     consequence: "Vann kan komme gjennom belegget og ned i gulvkonstruksjonen.",
-    measures: ["Skadet belegg må repareres av fagperson eller skiftes."],
+    measures: {
+      tg2: "Skaden i belegget bør repareres av fagperson før den blir større.",
+      tg3: "Belegget må repareres eller skiftes av fagperson, og gulvet under må undersøkes for fukt.",
+    },
     source: SOURCE_WET_ROOM,
   },
   {
@@ -502,7 +520,7 @@ const questionSpecs: QuestionSpec[] = [
     question: "Er det vanntette sjiktet så gammelt at funksjonen er usikker?",
     kind: "tg2",
     deviation: "Det vanntette sjiktet i våtrommet er registrert som fra {årstall}.",
-    cause: "Funksjonen til sjiktet er usikker på grunn av alder, selv uten synlige skader.",
+    cause: "Funksjonen er usikker på grunn av alder, selv uten synlige skader på sjiktet.",
     criterion: "age_uncertain_function",
     consequence:
       "Svakheter i et eldre sjikt synes ofte ikke fra rommet, og vann kan over tid nå konstruksjonen bak.",
@@ -558,7 +576,10 @@ const questionSpecs: QuestionSpec[] = [
     cause: "Tettingen i sluket kan ikke kontrolleres, og sluket kan ikke holdes rent.",
     criterion: "significant_deviation",
     consequence: "Et tett eller utett sluk kan gi vann på gulvet og lekkasje uten at det oppdages.",
-    measures: ["Sluket må gjøres tilgjengelig for ettersyn og rengjøring."],
+    measures: {
+      tg2: "Sluket bør gjøres tilgjengelig for ettersyn og rengjøring.",
+      tg3: "Sluket må gjøres tilgjengelig, og tettingen mellom sluk og sjikt må kontrolleres.",
+    },
     source: SOURCE_WET_ROOM,
   },
   {
@@ -570,7 +591,10 @@ const questionSpecs: QuestionSpec[] = [
     cause: "Høyden er for lav til å holde vannet inne i rommet hvis sluket går tett.",
     criterion: "significant_deviation",
     consequence: "Vann kan renne over terskelen og inn i rommet utenfor.",
-    measures: ["Gulvet eller terskelen må endres slik at vannet holdes inne i våtrommet."],
+    measures: {
+      tg2: "Sluket bør holdes rent, og høyden ved terskelen bør økes ved neste oppussing.",
+      tg3: "Gulvet eller terskelen må endres slik at vannet holdes inne i våtrommet.",
+    },
     source: SOURCE_FALL,
   },
   // Sanitærutstyr og innredning
@@ -596,7 +620,10 @@ const questionSpecs: QuestionSpec[] = [
     cause: "Sprekker svekker utstyret og kan utvikle seg til lekkasje.",
     criterion: "significant_deviation",
     consequence: "Utstyret kan begynne å lekke eller knekke ved belastning.",
-    measures: ["Utstyr med sprekker må skiftes. Riss og avskalling må holdes under oppsyn."],
+    measures: {
+      tg2: "Riss og avskalling bør holdes under oppsyn, og utstyret bør skiftes hvis skaden øker.",
+      tg3: "Utstyr med sprekker må skiftes.",
+    },
     source: SOURCE_WET_ROOM,
   },
   {
@@ -669,13 +696,14 @@ const questionSpecs: QuestionSpec[] = [
     question: "Er det målt forhøyet fukt ved hulltaking?",
     kind: "choose_tg2_tg3",
     deviation:
-      "Ved hulltaking i konstruksjonen ved siden av våtrommet er fukten målt til {måleverdi} {enhet}.",
+      "Ved hulltaking i konstruksjonen ved siden av våtrommet er fukten målt til {måleverdi} {enhet}. Målested: {sted}.",
     cause: "Fuktverdien er høyere enn det som er normalt for konstruksjonen.",
     criterion: "symptom_of_damage",
     consequence: "Fukt i konstruksjonen kan gi råte og muggsopp som ikke vises fra rommet.",
-    measures: [
-      "Fuktkilden må finnes, og flere målinger må vise om fukten har gitt skade og hvor langt den går.",
-    ],
+    measures: {
+      tg2: "Fuktkilden bør finnes, og nye målinger bør vise om fukten øker eller har gitt skade.",
+      tg3: "Fuktkilden må finnes, og flere målinger må vise om fukten har gitt skade og hvor langt den går.",
+    },
     source: SOURCE_HOLE,
   },
 ];
@@ -701,13 +729,25 @@ const outcomes: OutcomeDoc[] = questionSpecs.map((q) => ({
   sort_order: 0,
 }));
 
+/** Tiltakene med TG de gjelder for: `null` = uansett TG, 2 eller 3 bare ved «velg TG2 eller TG3». */
+function measureTexts(q: QuestionSpec): { text: string; tg: 2 | 3 | null }[] {
+  if (Array.isArray(q.measures)) return q.measures.map((text) => ({ text, tg: null }));
+  if (q.kind !== "choose_tg2_tg3") {
+    throw new Error(`${q.checkpoint}.${q.key}: tiltak per TG er bare lov ved «velg TG2 eller TG3»`);
+  }
+  return [
+    { text: q.measures.tg2, tg: 2 },
+    { text: q.measures.tg3, tg: 3 },
+  ];
+}
+
 const standardMeasures: StandardMeasureDoc[] = questionSpecs.flatMap((q) =>
-  q.measures.map((text, index) => ({
+  measureTexts(q).map(({ text, tg }, index) => ({
     checkpoint_key: q.checkpoint,
     question_key: `${q.checkpoint}.${q.key}`,
     outcome_key: outcomeKey(q.kind),
     text,
-    applies_to_tg: null,
+    applies_to_tg: tg,
     text_status: "draft" as const,
     sort_order: index,
   })),
@@ -735,8 +775,8 @@ const RULE_HOLE_MOISTURE = "wet_room.hole_moisture_over_limit";
 const RULE_HOLE_NOT_DONE = "wet_room.hole_drilling_not_done";
 const RULE_HOLE_NO_MOISTURE = "wet_room.hole_no_elevated_moisture";
 
-/** Fast kode for fuktgrensen i `src/core/rules/data/thresholds.ts`. */
-const THRESHOLD_HOLE_MOISTURE = "wet_room_hole_moisture_weight_percent";
+/** Fast kode for fuktgrensen, hentet fra `src/core/rules/data/thresholds.ts` (ett sted). */
+const THRESHOLD_HOLE_MOISTURE = WET_ROOM_HOLE_MOISTURE_THRESHOLD_KEY;
 
 /** Dokumentasjonsvalgene som gir trinnene «uten dokumentasjon» (A227). Tomt felt gir også «uten». */
 const WITHOUT_DOCUMENTATION = ["none", "other_written"];
@@ -758,7 +798,12 @@ const OUTCOME_ELEVATED_MOISTURE = {
 };
 
 // Kildene for alderstabellen og fuktgrensen står i regeldataene (F3), så tallene og kilden følges.
-const SOURCE_RULE_HOLE = "NS 3600:2025 og forskriften § 2-2; Ståle 25.10.2026 og 12.11.2026 (F2)";
+/**
+ * Kilden for TGIU når hulltaking ikke er utført: kilden fra F2 (Ståle 12.11.2026) med punktet
+ * A.2.1.8 lagt til (småfunn fra PR #167). Ståles beslutning 25.10.2026 er grunnlaget, ikke svar 59a.
+ */
+export const SOURCE_RULE_HOLE =
+  "NS 3600:2025 tillegg A.2.1.8 og forskriften § 2-2; Ståle 25.10.2026 og 12.11.2026 (F2)";
 const SOURCE_RULE_NO_MOISTURE =
   "Ståles beslutning 12.11.2026 (F1); utkast, ikke godkjent av fagrådet";
 
@@ -808,7 +853,7 @@ const rules: RuleDoc[] = [
     "suggest_outcome",
     MEMBRANE_DRAIN,
     OUTCOME_BEFORE_2000,
-    "Sjiktet er fra før 2000. Forslaget er TG3.",
+    "Årstallet for sjiktet er før 2000, eller byggeåret for våtrommet er før 2000 når sjiktets årstall mangler. Forslaget er TG3.",
     SOURCE_RULE_AGE,
     1,
   ),
@@ -936,6 +981,7 @@ function testCase(
   input: Answers,
   expectedState: RuleTestCaseDoc["expected_state"],
   expectedOutcome: RuleTestCaseDoc["expected_outcome"] = null,
+  inspectionYear: number | null = INSPECTION_YEAR,
 ): RuleTestCaseDoc {
   const sortOrder = testCaseCount.get(ruleKey) ?? 0;
   testCaseCount.set(ruleKey, sortOrder + 1);
@@ -944,7 +990,7 @@ function testCase(
     name,
     input,
     expected_state: expectedState,
-    inspection_year: INSPECTION_YEAR,
+    inspection_year: inspectionYear,
     expected_outcome: expectedOutcome,
     sort_order: sortOrder,
   };
@@ -1311,6 +1357,125 @@ const ruleTestCases: RuleTestCaseDoc[] = [
       OUTCOME_BEFORE_2000,
     ),
   ]),
+  // Badet på PC (docs/funksjoner/fase2a-badet-pc.md, «Regler», testplanen B2.5–B2.12). Sakene som
+  // alt står over (B1–B6, F1–F4, H1, T1–T2), telles med og står ikke to ganger.
+  ...(
+    [
+      [RULE_PAST_LIFESPAN, "not_evaluated"],
+      [RULE_BEFORE_2000, "not_evaluated"],
+    ] as const
+  ).map(([ruleKey, state]) =>
+    testCase(
+      ruleKey,
+      "B2.5 kilde ukjent uten årstall er ikke vurdert (T-0051)",
+      {
+        ...membrane("foil", "none", null),
+        "wet_room.build_year": null,
+        "wet_room.build_year_source": "unknown",
+      },
+      state,
+    ),
+  ),
+  testCase(
+    RULE_HOLE_MOISTURE,
+    "B2.6 to fallmålinger i samme svar endrer ikke forslaget",
+    {
+      ...hole("done_with_findings", 15, "weight_percent"),
+      "wet_room.fall_direction_1": -2,
+      "wet_room.fall_direction_2": 5,
+    },
+    "triggered",
+    OUTCOME_ELEVATED_MOISTURE,
+  ),
+  testCase(
+    RULE_HOLE_NO_MOISTURE,
+    "B2.6 to fallmålinger i samme svar endrer ikke TG0-forslaget",
+    {
+      ...hole("done_no_findings", 14.9, "weight_percent"),
+      "wet_room.fall_direction_1": -2,
+      "wet_room.fall_direction_2": 5,
+    },
+    "triggered",
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "B2.7 årstall 1799 er ikke vurdert",
+    membrane("foil", "none", 1799),
+    "not_evaluated",
+  ),
+  testCase(
+    RULE_BEFORE_2000,
+    "B2.7 årstall 1799 er ikke vurdert",
+    membrane("foil", "none", 1799),
+    "not_evaluated",
+  ),
+  testCase(
+    RULE_BEFORE_2000,
+    "B2.7 årstall 1900 gir TG3",
+    membrane("foil", "none", 1900),
+    "triggered",
+    OUTCOME_BEFORE_2000,
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "B2.11 folie med samsvarserklæring 25 år gir TG2 (kant)",
+    membrane("foil", "declaration_of_conformity", 2001),
+    "triggered",
+    OUTCOME_PAST_LIFESPAN,
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "B2.11 folie med samsvarserklæring 24 år gir ikke TG2 (kant)",
+    membrane("foil", "declaration_of_conformity", 2002),
+    "not_triggered",
+  ),
+  testCase(
+    RULE_BEFORE_2000,
+    "B2.11 ukjent type fra 2005 gir ikke TG3",
+    membrane("unknown", "none", 2005),
+    "not_triggered",
+  ),
+  testCase(
+    RULE_BEFORE_2000,
+    "B2.11 byggeår 1995 uten sjiktets årstall og uten kilde gir TG3",
+    { ...membrane("foil", "none", null), "wet_room.build_year": 1995 },
+    "triggered",
+    OUTCOME_BEFORE_2000,
+  ),
+  testCase(
+    RULE_HOLE_MOISTURE,
+    "B2.11 utført med funn 15 i RF % er ikke vurdert",
+    hole("done_with_findings", 15, "relative_humidity"),
+    "not_evaluated",
+  ),
+  testCase(
+    RULE_HOLE_MOISTURE,
+    "B2.11 utført uten funn 15 i RF % er ikke vurdert",
+    hole("done_no_findings", 15, "relative_humidity"),
+    "not_evaluated",
+  ),
+  testCase(
+    RULE_HOLE_NO_MOISTURE,
+    "B2.11 utført uten funn 15 i RF % er ikke vurdert",
+    hole("done_no_findings", 15, "relative_humidity"),
+    "not_evaluated",
+  ),
+  testCase(
+    RULE_BEFORE_2000,
+    "B2.12 folie fra 1990 uten befaringsår gir TG3",
+    membrane("foil", "none", 1990),
+    "triggered",
+    OUTCOME_BEFORE_2000,
+    null,
+  ),
+  testCase(
+    RULE_PAST_LIFESPAN,
+    "B2.12 folie fra 2008 uten befaringsår er ikke vurdert",
+    membrane("foil", "none", 2008),
+    "not_evaluated",
+    null,
+    null,
+  ),
   // Kant per materiale (F4, F5): alder lik tabellverdien gir TG2, ett år yngre gir ikke. Med
   // dokumentasjon prøves med samsvarserklæring, uten med «ingen». Sjikt som da blir fra før 2000,
   // prøves ikke her: der gjelder trinnet før 2000 (B1–B4).

@@ -365,12 +365,36 @@ export function checkRuleConditionShape(document: TemplateDocument): TemplateIss
   return issues;
 }
 
-/** De fire kontrollene av reglene over. Tom liste = reglene henger sammen. */
+/**
+ * Et standardtiltak kan gjelde bare TG2 eller bare TG3 (`applies_to_tg`, T-0060), men bare på utfall
+ * av typen «velg TG2 eller TG3». På andre utfall er TG-en gitt av utfallet, og verdien skal være tom.
+ * Finnes ikke utfallet, meldes det av `checkDocumentKeys`.
+ */
+export function checkMeasureAppliesToTg(document: TemplateDocument): TemplateIssue[] {
+  const issues: TemplateIssue[] = [];
+  const kinds = new Map(
+    document.outcomes.map((o) => [outcomeScope(o.checkpoint_key, o.question_key, o.key), o.kind]),
+  );
+  document.standard_measures.forEach((m, i) => {
+    if (m.applies_to_tg === null) return;
+    const kind = kinds.get(outcomeScope(m.checkpoint_key, m.question_key, m.outcome_key));
+    if (kind === undefined || kind === "choose_tg2_tg3") return;
+    issues.push({
+      path: `standard_measures.${i}.applies_to_tg`,
+      rule: "schema",
+      message: `Et tiltak under «${m.question_key}» er satt til å gjelde bare én tilstandsgrad. Det er bare lov når utfallet lar takstmannen velge TG2 eller TG3.`,
+    });
+  });
+  return issues;
+}
+
+/** Kontrollene av reglene og tiltakene over. Tom liste = dokumentet henger sammen. */
 export function checkDocumentRules(document: TemplateDocument): TemplateIssue[] {
   return [
     ...checkRuleSuggestsOutcome(document),
     ...checkRuleOutcomeSameCheckpoint(document),
     ...checkRuleCheckpointGivesTg(document),
     ...checkRuleConditionShape(document),
+    ...checkMeasureAppliesToTg(document),
   ];
 }
