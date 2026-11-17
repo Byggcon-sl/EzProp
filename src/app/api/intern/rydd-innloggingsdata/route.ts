@@ -7,7 +7,7 @@ import { purgeExpiredAuthData } from "@/core/auth/auth-cleanup";
  *
  * Bare POST. Ruten leser verken body eller adresseparametre: grenser og tid kan aldri styres
  * utenfra. Uten, med feil eller med feil oppsatt hemmelighet svarer den 404 uten innhold, slik at
- * endepunktet ikke røpes. Ingen svar mellomlagres.
+ * svaret ikke sier hva som mangler. Beskyttelsen er hemmeligheten. Ingen svar mellomlagres.
  */
 export const dynamic = "force-dynamic";
 

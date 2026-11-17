@@ -237,6 +237,10 @@ Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full 
 - [ ] **«Send»-knapp** (innspill P9): rapporten sendes som vedlegg til mottakerne først når noen trykker. Status «Ferdig» settes når rapporten er sendt (innspill D16). En rettet rapport sendes manuelt av den ansvarlige (27.10.2026).
 - [x] **Rydding av innloggingsdata:** tellere for innloggingssperren og utløpte koder slettes etter 24 timer, utløpte økter etter 30 dager. (Svar 10.11.2026, nr. 15 og 18) Bygd 17.11.2026 (branch `rydd-innloggingsdata`, ADR 0014, A419–A422).
 
+### Fra forbedreren
+
+- [ ] **Mine innlogginger** (forbedreren 17.11.2026, fra «Rydding av innloggingsdata»): under profilen ser den ansatte enhetene hen er logget inn på (for eksempel «iPad, Safari, sist brukt i dag 08:12», med «denne enheten» merket), og logger ut av en enhet hen ikke kjenner igjen med ett trykk. Admin ser samme liste per ansatt og har «Logg ut av alle enheter» når noen slutter eller mister iPaden. Bygger på tabellen `sessions` (som nå ryddes) og Better Auths tilbakekalling av økter; ingen ny tabell, ingen KI (IP og nettleser er persondata). Å tømme data på iPaden hører til «Sperring av iPader» under «Klar for drift».
+
 **Ferdig når:** Fagrådet har gått gjennom malen og reglene i et ekte skjermbilde og godkjent tekstene der, og Ståle godtar en PDF (også testutskriften med 50 bilder, under 8 MB).
 
 ### Rest fra fase 0b (venter på S6)

@@ -85,12 +85,10 @@ describe("C5 skips without error when secret or url missing", () => {
     expect(script).toMatch(
       /if \[ -z "\$AUTH_CLEANUP_SECRET" \]; then\s*\n\s*echo "::notice::[^\n]*"\s*\n\s*exit 0/,
     );
-    expect(script).toMatch(
-      /if \[ -z "\$URL" \]; then\s*\n\s*echo "::notice::[^\n]*"\s*\n\s*exit 0/,
-    );
+    // Adressen mangler aldri: uten APP_HOSTNAME brukes testmiljøets standardadresse.
+    expect(script).toMatch(/URL="\$DEFAULT_TEST_URL"/);
     // Sjekken kommer før kallet.
     expect(script.indexOf('-z "$AUTH_CLEANUP_SECRET"')).toBeLessThan(script.indexOf("curl "));
-    expect(script.indexOf('-z "$URL"')).toBeLessThan(script.indexOf("curl "));
   });
 });
 

@@ -262,7 +262,7 @@ PowerSync og ElectricSQL er fjernet 10.11.2026 (ADR 0004, egenbygd synk er valgt
 
 ## Nøkkelboks for hemmeligheter
 
-**Hva dette er:** en nøkkelboks (Azure Key Vault) i ressursgruppen. I testmiljøet heter den `kv-ezprop-test` (navnet er alltid `kv-ezprop-<miljø>`). Når den er på, ligger databasepassordet (`DATABASE_URL`), innloggingsnøkkelen (`BETTER_AUTH_SECRET`), klienthemmeligheten for e-post (`MS_GRAPH_CLIENT_SECRET`), klienthemmeligheten for Microsoft-innloggingen (`MS_LOGIN_CLIENT_SECRET`, når den er lagt inn) nøkkelen til KI-leverandøren (`ANTHROPIC_API_KEY`, når den er lagt inn) og driftsnøkkelen for rydding av innloggingsdata (`AUTH_CLEANUP_SECRET`, når den er lagt inn) i boksen, ikke i klartekst i appinnstillingene. Appinnstillingene viser da bare en henvisning til boksen. Appen får en egen identitet som bare kan lese fra boksen. Se ADR 0005.
+**Hva dette er:** en nøkkelboks (Azure Key Vault) i ressursgruppen. I testmiljøet heter den `kv-ezprop-test` (navnet er alltid `kv-ezprop-<miljø>`). Når den er på, ligger databasepassordet (`DATABASE_URL`), innloggingsnøkkelen (`BETTER_AUTH_SECRET`), klienthemmeligheten for e-post (`MS_GRAPH_CLIENT_SECRET`), klienthemmeligheten for Microsoft-innloggingen (`MS_LOGIN_CLIENT_SECRET`, når den er lagt inn), nøkkelen til KI-leverandøren (`ANTHROPIC_API_KEY`, når den er lagt inn) og driftsnøkkelen for rydding av innloggingsdata (`AUTH_CLEANUP_SECRET`, når den er lagt inn) i boksen, ikke i klartekst i appinnstillingene. Appinnstillingene viser da bare en henvisning til boksen. Appen får en egen identitet som bare kan lese fra boksen. Se ADR 0005.
 
 Du legger fortsatt verdiene inn i GitHub-secrets, som før. Utrullingen legger dem i boksen. Du trenger ikke legge dem inn noe annet sted.
 
