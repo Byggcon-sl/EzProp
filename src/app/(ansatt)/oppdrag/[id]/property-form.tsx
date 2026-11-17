@@ -1,8 +1,13 @@
 "use client";
 
-import { useActionState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Field, Input, Select } from "@/shared/ui/form";
-import { FormErrors, SubmitButton } from "../../form-parts";
+import {
+  GuardedForm,
+  GuardedFormMessage,
+  useGuardedForm,
+} from "../../../logg-inn/use-guarded-form";
+import { SubmitButton } from "../../form-parts";
 import { initialFormState, textValue, type FormState } from "../../form-state";
 
 type Action = (state: FormState, formData: FormData) => Promise<FormState>;
@@ -58,6 +63,8 @@ const CADASTRAL_FIELDS: { name: TextField; label: string; maxLength: number; num
  * Eiendomsskjemaet (én kolonne, også i iPad-størrelse). Uten lagret eiendom er feltene fylt ut
  * fra bestillingen og `fromOrder` viser linjen om at de må kontrolleres. Boligtype og eierform har
  * ikke noe forhåndsvalg. Siden gir skjemaet ny `key` når de lagrede verdiene endres.
+ * Uten nett eller med utløpt innlogging står verdiene, og den ansatte kan logge inn i en dialog
+ * over skjemaet (`email` er hens egen, fra siden) og trykke Lagre igjen (T-0070, T-0071).
  */
 export function PropertyForm({
   assignmentId,
@@ -66,6 +73,7 @@ export function PropertyForm({
   housingTypes,
   ownershipForms,
   action,
+  email,
 }: {
   assignmentId: string;
   initial: PropertyFormValues;
@@ -73,8 +81,10 @@ export function PropertyForm({
   housingTypes: CodeOption[];
   ownershipForms: CodeOption[];
   action: Action;
+  email?: string;
 }) {
-  const [state, formAction] = useActionState(action, initialFormState);
+  const form = useGuardedForm(action, initialFormState, { email });
+  const { state } = form;
 
   function textInput(field: {
     name: TextField;
@@ -131,18 +141,18 @@ export function PropertyForm({
   }
 
   return (
-    <form action={formAction} noValidate className="space-y-5">
+    <GuardedForm form={form} noValidate className="space-y-5">
       {fromOrder && (
         <p className="text-slate-700">Fylt ut fra bestillingen. Kontroller før du lagrer.</p>
       )}
-      <FormErrors state={state} />
+      <GuardedFormMessage />
       <input type="hidden" name="assignmentId" value={assignmentId} />
       {ADDRESS_FIELDS.map(textInput)}
       {codeSelect("housingType", "Boligtype", "Velg boligtype", housingTypes)}
       {codeSelect("ownershipForm", "Eierform", "Velg eierform", ownershipForms)}
       {CADASTRAL_FIELDS.map(textInput)}
       <SubmitButton>Lagre eiendom</SubmitButton>
-    </form>
+    </GuardedForm>
   );
 }
 

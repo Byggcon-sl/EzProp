@@ -53,26 +53,56 @@ function useOnline(): boolean {
 }
 
 /**
+ * Etter riktig kode. I dialogen over et skjema (`onSignedIn`) blir siden stående, uten
+ * `router.replace` og `router.refresh`, så det som er skrevet i skjemaet står. Ellers sendes
+ * brukeren til `next` (sjekket på nytt).
+ */
+export function finishSignIn({
+  next,
+  onSignedIn,
+  router,
+}: {
+  next: string;
+  onSignedIn?: () => void;
+  router: Pick<ReturnType<typeof useRouter>, "replace" | "refresh">;
+}) {
+  if (onSignedIn) {
+    onSignedIn();
+    return;
+  }
+  router.replace(safeNextPath(next));
+  router.refresh();
+}
+
+/**
  * Innlogging. Med Microsoft satt opp er «Logg inn med Microsoft» hovedvalget, og koden er
  * reserven (ADR 0008). Koden går i to steg: e-postadresse, så koden fra e-posten.
  * `next` er siden brukeren sendes til etter innlogging (sjekkes på nytt her og på serveren).
  * `failure`: forrige Microsoft-innlogging gikk ikke; meldingen vises og kodeskjemaet er åpent.
+ *
+ * I innloggingsdialogen over et skjema (`SignInDialog`): `initialEmail` fyller ut e-posten, og
+ * `onSignedIn` kalles etter riktig kode i stedet for å bytte side, så skjemaet under står urørt.
+ * Uten `microsoft` vises ikke «Logg inn med Microsoft».
  */
 export function LoginForm({
   next = DEFAULT_NEXT_PATH,
   microsoft = false,
   failure = null,
+  initialEmail,
+  onSignedIn,
 }: {
   next?: string;
   microsoft?: boolean;
   failure?: LoginFailure;
+  initialEmail?: string;
+  onSignedIn?: () => void;
 }) {
   const router = useRouter();
   const online = useOnline();
   const [showCode, setShowCode] = useState(!microsoft || failure !== null);
   const [redirecting, setRedirecting] = useState(false);
   const [step, setStep] = useState<"email" | "code">("email");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -130,8 +160,8 @@ export function LoginForm({
       );
       return;
     }
-    router.replace(safeNextPath(next));
-    router.refresh();
+    if (onSignedIn) setPending(false);
+    finishSignIn({ next, onSignedIn, router });
   }
 
   let codeForm;
