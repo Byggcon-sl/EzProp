@@ -255,6 +255,15 @@ export function warningsWithFix(
   }));
 }
 
+/**
+ * «Rett nå» for T-0059 (A381): valget for hulltaking endres til «Utført med funn». Badets egne
+ * koder står her i skjermen for badet, ikke i de generelle funksjonene i `logic/`.
+ */
+export const T0059_FIX = {
+  elementKey: "wet_room.hole_drilling",
+  optionKey: "done_with_findings",
+} as const;
+
 // --- Punktene -------------------------------------------------------------------------------
 
 /**
@@ -349,4 +358,19 @@ export function characterCountText(length: number, max = REPORT_TEXT_MAX): strin
   if (length < max * 0.8) return null;
   const format = (n: number) => n.toLocaleString("nb-NO");
   return `${format(length)} av ${format(max)} tegn`;
+}
+
+// --- Tall ---------------------------------------------------------------------------------
+
+export const NUMBER_MESSAGE = "Skriv et tall, for eksempel 14,9.";
+
+/** «14,9» og «14.9» godtas. Tomt felt er tomt svar. */
+export function parseNumberInput(raw: string): { ok: true; value: number | null } | { ok: false } {
+  const compact = raw
+    .trim()
+    .replace(/[\s  ]/g, "")
+    .replace(",", ".");
+  if (compact === "") return { ok: true, value: null };
+  if (!/^[-−]?\d+(\.\d+)?$/u.test(compact)) return { ok: false };
+  return { ok: true, value: Number(compact.replace("−", "-")) };
 }

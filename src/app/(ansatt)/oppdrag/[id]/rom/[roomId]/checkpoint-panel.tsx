@@ -31,6 +31,7 @@ import { useRoom, type UndoLine } from "./room-context";
 import { isActionError, ROOM_TEXTS } from "./room-messages";
 import {
   ADD_DEVIATION_BUTTON_ID,
+  T0059_FIX,
   answerKey,
   CHECKPOINT_HEADING_ID,
   descriptionKey,
@@ -61,12 +62,6 @@ import { TgiuSection } from "./tgiu-section";
  * med én handling; ingen «Lagre»-knapp. Advarslene sperrer aldri.
  * Støtter hovedmål: de ansatte (ett skjermbilde for punktet), færre reklamasjoner (mangler synes).
  */
-
-/** «Rett nå» for T-0059: valget hulltaking endres til «Utført med funn» (badets egne koder). */
-export const T0059_FIX = {
-  elementKey: "wet_room.hole_drilling",
-  optionKey: "done_with_findings",
-} as const;
 
 export function CheckpointPanel({
   checkpoint,
