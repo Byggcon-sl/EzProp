@@ -27,7 +27,7 @@ CREATE TABLE "report_releases" (
 	"content_hash" text NOT NULL,
 	"retain_until" timestamp with time zone NOT NULL,
 	CONSTRAINT "report_releases_version_number_check" CHECK ("report_releases"."version_number" >= 1),
-	CONSTRAINT "report_releases_snapshot_check" CHECK (jsonb_typeof("report_releases"."snapshot") = 'object' and jsonb_typeof("report_releases"."snapshot"->'schema_version') = 'number'),
+	CONSTRAINT "report_releases_snapshot_check" CHECK (jsonb_typeof("report_releases"."snapshot") = 'object' and coalesce(jsonb_typeof("report_releases"."snapshot"->'schema_version'), 'missing') = 'number'),
 	CONSTRAINT "report_releases_content_hash_check" CHECK ("report_releases"."content_hash" ~ '^[0-9a-f]{64}$'),
 	CONSTRAINT "report_releases_retain_until_check" CHECK ("report_releases"."retain_until" > "report_releases"."released_at")
 );

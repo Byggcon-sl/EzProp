@@ -11382,7 +11382,7 @@
         },
         "report_releases_snapshot_check": {
           "name": "report_releases_snapshot_check",
-          "value": "jsonb_typeof(\"report_releases\".\"snapshot\") = 'object' and jsonb_typeof(\"report_releases\".\"snapshot\"->'schema_version') = 'number'"
+          "value": "jsonb_typeof(\"report_releases\".\"snapshot\") = 'object' and coalesce(jsonb_typeof(\"report_releases\".\"snapshot\"->'schema_version'), 'missing') = 'number'"
         },
         "report_releases_content_hash_check": {
           "name": "report_releases_content_hash_check",

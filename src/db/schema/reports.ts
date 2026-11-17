@@ -850,7 +850,7 @@ export const reportReleases = pgTable(
     check("report_releases_version_number_check", sql`${table.versionNumber} >= 1`),
     check(
       "report_releases_snapshot_check",
-      sql`jsonb_typeof(${table.snapshot}) = 'object' and jsonb_typeof(${table.snapshot}->'schema_version') = 'number'`,
+      sql`jsonb_typeof(${table.snapshot}) = 'object' and coalesce(jsonb_typeof(${table.snapshot}->'schema_version'), 'missing') = 'number'`,
     ),
     check(
       "report_releases_content_hash_check",
