@@ -428,10 +428,16 @@ describe("M5.5, M7 og M8.2 kildesjekker", () => {
   });
 
   it("M8.2 ingen sletting i src/core/auth (myk sletting, regel 3)", () => {
-    // Eneste unntak: ryddingen av de tekniske innloggingstabellene (ADR 0014).
+    // Unntak: ryddingen av de tekniske innloggingstabellene (ADR 0014), og utlogging av økter i
+    // «Mine innlogginger», som bare sletter i `sessions` (A429).
     const cleanupFile = join(AUTH_DIR, "auth-cleanup.ts");
+    const sessionsFile = join(AUTH_DIR, "sessions-list.ts");
     expect(productAuthFiles).toContain(cleanupFile);
-    for (const file of productAuthFiles.filter((f) => f !== cleanupFile)) {
+    expect(productAuthFiles).toContain(sessionsFile);
+    const sessionDeletes = read(sessionsFile).match(/\.delete\s*\(([^)]*)\)/g) ?? [];
+    expect(sessionDeletes.length).toBeGreaterThan(0);
+    for (const call of sessionDeletes) expect(call).toMatch(/\.delete\(sessions\)/);
+    for (const file of productAuthFiles.filter((f) => f !== cleanupFile && f !== sessionsFile)) {
       expect(read(file), rel(file)).not.toMatch(/\.delete\s*\(/);
       expect(read(file), rel(file)).not.toMatch(/\bdelete\s+from\b/i);
     }
