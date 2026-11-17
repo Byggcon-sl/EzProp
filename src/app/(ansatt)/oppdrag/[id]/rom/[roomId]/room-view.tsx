@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import type { MergeFieldSources } from "@/core/reports/logic";
 import type {
   AnswerView,
   CheckpointView,
+  ReportSummaryView,
   RoomRef,
   RoomRefresh,
   RoomReportView,
@@ -20,11 +22,14 @@ import { removeDeviationAction, saveFieldAction, setCheckpointDoneAction } from 
 import { CheckpointList } from "./checkpoint-list";
 import { CheckpointPanel } from "./checkpoint-panel";
 import { FieldSaveStore } from "./field-save-store";
+import { ReportSummarySection } from "./report-summary-section";
 import { RoomContext, type RoomContextValue, type UndoLine } from "./room-context";
 import { isActionError, ROOM_ACTION_MESSAGES, ROOM_TEXTS, type ActionError } from "./room-messages";
 import {
   ALL_DONE_NOTICE_ID,
+  answerKey,
   CHECKPOINT_HEADING_ID,
+  clientMergeValues,
   deviationPrefix,
   domId,
   DONE_BUTTON_ID,
@@ -79,12 +84,18 @@ export function RoomView({
   assignmentNumber,
   roomTitle,
   requestedCheckpoint,
+  summary: initialSummary,
+  mergeSources,
 }: {
   view: StartedView;
   room: RoomRef;
   assignmentNumber: string | null;
   roomTitle: string;
   requestedCheckpoint: string | null;
+  /** Sammendraget for hele rapporten («KI i veien», A434). `null` når det ikke kunne leses. */
+  summary: ReportSummaryView | null;
+  /** Hvor flettefeltene henter verdien, per punkt (fra serveren, A396). */
+  mergeSources: Readonly<Record<string, MergeFieldSources>>;
 }) {
   const doc = useMemo(() => indexDocument(view.document), [view.document]);
   const order = useMemo(() => doc.checkpoints.map((c) => c.key), [doc]);
@@ -243,6 +254,20 @@ export function RoomView({
     [checkpoints, run, room, store, focus],
   );
 
+  const mergeValuesFor = useCallback(
+    (checkpointKey: string, measurementValue: number | null) =>
+      clientMergeValues({
+        sources: mergeSources[checkpointKey] ?? {},
+        answerOf: (elementKey) => {
+          const entry = store.get(answerKey(elementKey));
+          return entry ? entry.value : (answers.get(elementKey)?.value ?? null);
+        },
+        optionLabel: doc.labels.optionLabel,
+        measurementValue,
+      }),
+    [mergeSources, store, answers, doc],
+  );
+
   const contextValue: RoomContextValue = useMemo(
     () => ({
       room,
@@ -260,8 +285,27 @@ export function RoomView({
         setUndoLines((lines) => [...lines.filter((l) => l.id !== line.id), line]);
       },
       removeUndo: (id) => setUndoLines((lines) => lines.filter((l) => l.id !== id)),
+      online,
+      document: view.document,
+      phraseUsage: view.phraseUsage,
+      mergeValuesFor,
     }),
-    [room, canEdit, store, doc, run, announce, focus, openCheckpoint, removeDeviation, undoLines],
+    [
+      room,
+      canEdit,
+      store,
+      doc,
+      run,
+      announce,
+      focus,
+      openCheckpoint,
+      removeDeviation,
+      undoLines,
+      online,
+      view.document,
+      view.phraseUsage,
+      mergeValuesFor,
+    ],
   );
 
   const checkpointMap = useMemo(
@@ -566,6 +610,9 @@ export function RoomView({
                   searchOpenRequest={searchRequest}
                   onStickyAccept={onStickyAccept}
                 />
+              )}
+              {initialSummary && (
+                <ReportSummarySection initial={initialSummary} checkpoints={checkpoints} />
               )}
             </main>
             <div className="sticky bottom-0 z-10 border-t border-line bg-white px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:px-6">

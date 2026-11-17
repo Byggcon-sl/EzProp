@@ -1,7 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useSyncExternalStore } from "react";
-import type { RoomRef } from "@/core/reports/types";
+import type { MergeValues, PhraseUsageCount } from "@/core/reports/logic";
+import type { RoomRef, RoomTemplateDocument } from "@/core/reports/types";
 import type { ChangeBuilder, FieldEntry, FieldSaveStore, FieldValidator } from "./field-save-store";
 import type { ActionError } from "./room-messages";
 import type { RoomDocumentIndex } from "./room-model";
@@ -38,6 +39,14 @@ export type RoomContextValue = {
   undoLines: UndoLine[];
   addUndo(line: UndoLine): void;
   removeUndo(id: string): void;
+  /** Nettleseren har nett. Uten nett gir «Forslag» tekstsøket, og KI-knappene sier fra (A439). */
+  online: boolean;
+  /** Rommets del av den låste malen, for tekstsøket uten KI (A426). */
+  document: RoomTemplateDocument;
+  /** «Mest brukt» (A468): antall valg per kandidat i organisasjonen, lastet med badet. */
+  phraseUsage: readonly PhraseUsageCount[];
+  /** Flettefeltene for et avvik på punktet, fra svarene slik de står nå. */
+  mergeValuesFor(checkpointKey: string, measurementValue: number | null): MergeValues;
 };
 
 export const RoomContext = createContext<RoomContextValue | null>(null);
