@@ -79,6 +79,7 @@ export default async function BuildingsPage({ params }: { params: Promise<{ id: 
         data={data}
         canEdit={context.canEditOrders}
         codes={CODES}
+        email={context.actor.email}
       />
     </main>
   );

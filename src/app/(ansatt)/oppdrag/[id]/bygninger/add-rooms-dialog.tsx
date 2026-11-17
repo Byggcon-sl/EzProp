@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useActionState,
   useCallback,
   useEffect,
   useId,
@@ -24,6 +23,11 @@ import { cn } from "@/shared/lib/cn";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { FormMessage } from "@/shared/ui/form";
+import {
+  GuardedForm,
+  GuardedFormMessage,
+  useGuardedForm,
+} from "../../../../logg-inn/use-guarded-form";
 import { FIX_FIELDS, initialFormState } from "../../../form-state";
 import { addRoomsAction } from "./actions";
 
@@ -58,9 +62,9 @@ function setCount(drafts: readonly RoomDraft[], roomType: RoomType, count: numbe
     .filter((draft) => draft.count > 0);
 }
 
-/** Meldingene fra serveren: meldingen øverst og feilene per felt (uten «Rett feltene …»). */
-function errorMessages(message: string | null, fieldErrors: Record<string, string>): string[] {
-  const all = [message === FIX_FIELDS ? null : message, ...Object.values(fieldErrors)];
+/** Feilene per felt fra serveren, uten meldingen øverst (den vises av skjemahjelperen). */
+function fieldErrorMessages(message: string | null, fieldErrors: Record<string, string>): string[] {
+  const all = Object.values(fieldErrors).filter((text) => text !== message);
   return [...new Set(all.filter((text): text is string => Boolean(text)))];
 }
 
@@ -136,7 +140,10 @@ function AddRoomsForm({
   onClose: () => void;
   registerCancel: (handler: () => void) => void;
 }) {
-  const [state, formAction, pending] = useActionState(addRoomsAction, initialFormState);
+  // Uten nett eller med utløpt innlogging står tellere og valg (ingen ny nøkkel), og den ansatte
+  // kan logge inn i en dialog over denne og trykke Lagre igjen (T-0070, T-0071).
+  const form = useGuardedForm(addRoomsAction, initialFormState);
+  const { state, pending } = form;
   const [drafts, setDrafts] = useState<RoomDraft[]>([]);
   const [source, setSource] = useState<Source>("manual");
   const [presetKey, setPresetKey] = useState<RoomPresetKey | null>(null);
@@ -179,7 +186,10 @@ function AddRoomsForm({
   useEffect(() => {
     if (savedAttempt > 0) onClose();
   }, [savedAttempt, onClose]);
-  const errors = errorMessages(state.message, state.fieldErrors);
+  const errors = fieldErrorMessages(state.message, state.fieldErrors);
+  // Uten meldinger er boksen tom og står utenfor flyten (meldingsfeltet for skjermleser er der).
+  const hasMessages =
+    errors.length > 0 || (form.notice !== null && form.notice.message !== FIX_FIELDS);
   useEffect(() => {
     if (state.attempt > 0 && state.message !== null) errorRef.current?.focus();
   }, [state.attempt, state.message]);
@@ -221,8 +231,8 @@ function AddRoomsForm({
   }
 
   return (
-    <form
-      action={formAction}
+    <GuardedForm
+      form={form}
       onSubmit={onSubmit}
       noValidate
       className="flex max-h-[calc(100dvh-2rem)] min-h-0 flex-col"
@@ -260,13 +270,16 @@ function AddRoomsForm({
       </header>
 
       <div className="min-h-0 flex-1 space-y-6 overflow-x-hidden overflow-y-auto px-5 py-4">
-        {errors.length > 0 && (
-          <div ref={errorRef} tabIndex={-1} className="space-y-2">
-            {errors.map((text) => (
-              <FormMessage key={text} message={text} />
-            ))}
-          </div>
-        )}
+        <div
+          ref={errorRef}
+          tabIndex={-1}
+          className={cn("space-y-2 rounded-xl", !hasMessages && "sr-only")}
+        >
+          <GuardedFormMessage hide={[FIX_FIELDS]} focusOnAttempt={false} />
+          {errors.map((text) => (
+            <FormMessage key={text} message={text} />
+          ))}
+        </div>
 
         <div>
           <h3 id="add-rooms-presets" className="mb-2 font-semibold text-slate-900">
@@ -394,7 +407,7 @@ function AddRoomsForm({
           </div>
         )}
       </footer>
-    </form>
+    </GuardedForm>
   );
 }
 
