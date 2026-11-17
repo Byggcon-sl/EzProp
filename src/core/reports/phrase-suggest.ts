@@ -372,7 +372,7 @@ export const applyPhrase: ApplyPhrase = (actor, organizationId, room, input) =>
       }
       await auditReport(scope, "deviation_measure", measure.id, "create", {
         deviationId: deviation.id,
-        aiUsageId: values.usageId,
+        usageId: values.usageId,
       });
       saved = measure;
     } else {
@@ -397,7 +397,7 @@ export const applyPhrase: ApplyPhrase = (actor, organizationId, room, input) =>
       if (!updated) throw new AccessDeniedError();
       await auditReport(scope, "deviation", deviation.id, "update", {
         field,
-        aiUsageId: values.usageId,
+        usageId: values.usageId,
       });
       saved = updated;
     }
