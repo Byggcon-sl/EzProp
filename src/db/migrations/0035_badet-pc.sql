@@ -1,6 +1,7 @@
 -- Badet på PC (docs/funksjoner/fase2a-badet-pc.md, docs/adr/0013-rapportens-datamodell.md).
--- Sju nye tabeller for rapporten, `standard_measures.applies_to_tg` (T-0060) og fremmednøkkel på
--- `ai_usage_log.report_id` (A158).
+-- Sju nye tabeller for rapporten, `standard_measures.applies_to_tg` (T-0060), og fremmednøkkel og
+-- delvis indeks på `ai_usage_log.report_id` (A158, A355).
+-- Endrer ingen eksisterende rader (A397).
 -- Rekkefølgen er rettet for hånd: de unike indeksene lages før fremmednøklene som peker på dem.
 CREATE TABLE "checkpoint_results" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -70,7 +71,6 @@ CREATE TABLE "deviations" (
 	"measurement_unit" text,
 	"text_source" text NOT NULL,
 	"suggested_by_rule_id" uuid,
-	"ai_usage_id" uuid,
 	"sort_order" integer DEFAULT 0 NOT NULL,
 	CONSTRAINT "deviations_kind_check" CHECK ("deviations"."kind" in ('tg', 'hms')),
 	CONSTRAINT "deviations_tg_check" CHECK (("deviations"."kind" = 'hms' and "deviations"."tg" is null) or ("deviations"."kind" = 'tg' and ("deviations"."tg" is null or "deviations"."tg" in (2, 3)))),
@@ -142,6 +142,7 @@ CREATE TABLE "rule_suggestion_decisions" (
 	"decision" text NOT NULL,
 	"chosen_tg" text,
 	"chosen_outcome_key" text,
+	"override_reason_code" text,
 	"override_reason" text,
 	"deviation_id" uuid,
 	"decided_by" uuid NOT NULL,
@@ -155,7 +156,8 @@ CREATE TABLE "rule_suggestion_decisions" (
 	CONSTRAINT "rule_suggestion_decisions_chosen_outcome_key_check" CHECK ("rule_suggestion_decisions"."chosen_outcome_key" is null or "rule_suggestion_decisions"."chosen_outcome_key" ~ '^[a-z0-9_]+(\.[a-z0-9_]+)*$'),
 	CONSTRAINT "rule_suggestion_decisions_lifespan_set_key_check" CHECK ("rule_suggestion_decisions"."lifespan_set_key" is null or "rule_suggestion_decisions"."lifespan_set_key" ~ '^[a-z0-9_]+(\.[a-z0-9_]+)*$'),
 	CONSTRAINT "rule_suggestion_decisions_threshold_set_key_check" CHECK ("rule_suggestion_decisions"."threshold_set_key" is null or "rule_suggestion_decisions"."threshold_set_key" ~ '^[a-z0-9_]+(\.[a-z0-9_]+)*$'),
-	CONSTRAINT "rule_suggestion_decisions_override_reason_check" CHECK ("rule_suggestion_decisions"."decision" = 'accepted' or length(btrim(coalesce("rule_suggestion_decisions"."override_reason", ''))) > 0),
+	CONSTRAINT "rule_suggestion_decisions_override_reason_code_check" CHECK ("rule_suggestion_decisions"."override_reason_code" is null or "rule_suggestion_decisions"."override_reason_code" in ('documentation_present', 'visible_damage', 'measured_again', 'age_known_otherwise', 'other')),
+	CONSTRAINT "rule_suggestion_decisions_override_reason_check" CHECK (("rule_suggestion_decisions"."decision" = 'accepted' and "rule_suggestion_decisions"."override_reason_code" is null and "rule_suggestion_decisions"."override_reason" is null) or ("rule_suggestion_decisions"."decision" <> 'accepted' and ("rule_suggestion_decisions"."override_reason_code" is not null or length(btrim(coalesce("rule_suggestion_decisions"."override_reason", ''))) > 0) and ("rule_suggestion_decisions"."override_reason_code" is distinct from 'other' or length(btrim(coalesce("rule_suggestion_decisions"."override_reason", ''))) > 0))),
 	CONSTRAINT "rule_suggestion_decisions_rejected_check" CHECK ("rule_suggestion_decisions"."decision" <> 'rejected' or ("rule_suggestion_decisions"."chosen_tg" is null and "rule_suggestion_decisions"."chosen_outcome_key" is null and "rule_suggestion_decisions"."deviation_id" is null))
 );--> statement-breakpoint
 CREATE TABLE "tgiu_details" (
@@ -199,10 +201,20 @@ CREATE INDEX "rule_suggestion_decisions_checkpoint_result_rule_idx" ON "rule_sug
 CREATE UNIQUE INDEX "tgiu_details_organization_id_report_id_id_idx" ON "tgiu_details" USING btree ("organization_id","report_id","id");--> statement-breakpoint
 CREATE UNIQUE INDEX "tgiu_details_one_per_checkpoint_result_idx" ON "tgiu_details" USING btree ("organization_id","checkpoint_result_id") WHERE "tgiu_details"."deleted_at" is null;--> statement-breakpoint
 CREATE UNIQUE INDEX "ai_usage_log_organization_id_id_idx" ON "ai_usage_log" USING btree ("organization_id","id");--> statement-breakpoint
+CREATE INDEX "ai_usage_log_organization_id_report_id_idx" ON "ai_usage_log" USING btree ("organization_id","report_id") WHERE "ai_usage_log"."report_id" is not null;--> statement-breakpoint
 -- `ai_usage_log.report_id` har stått uten fremmednøkkel (A158), og KI-modulen har avvist alle
--- forespørsler med rapport-id. En verdi som likevel står der, kan ikke peke på en rapport
--- (tabellen er ny), og tømmes før nøkkelen legges på.
-UPDATE "ai_usage_log" SET "report_id" = NULL WHERE "report_id" IS NOT NULL;--> statement-breakpoint
+-- forespørsler med rapport-id. KI-loggen endres aldri i det stille (A397): står det likevel en
+-- verdi der, kan den ikke peke på en rapport (tabellen er ny), og migreringen stopper slik at
+-- radene blir vurdert av et menneske.
+DO $$
+DECLARE
+	found_rows bigint;
+BEGIN
+	SELECT count(*) INTO found_rows FROM "ai_usage_log" WHERE "report_id" IS NOT NULL;
+	IF found_rows > 0 THEN
+		RAISE EXCEPTION 'Migrering 0035_badet-pc stoppet: % rad(er) i ai_usage_log har report_id, men ingen rapporter finnes ennå. Radene må vurderes for hånd før migreringen kjøres på nytt. Ingenting er endret.', found_rows;
+	END IF;
+END $$;--> statement-breakpoint
 ALTER TABLE "checkpoint_results" ADD CONSTRAINT "checkpoint_results_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "checkpoint_results" ADD CONSTRAINT "checkpoint_results_report_fk" FOREIGN KEY ("organization_id","report_id") REFERENCES "public"."reports"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "checkpoint_results" ADD CONSTRAINT "checkpoint_results_checkpoint_fk" FOREIGN KEY ("organization_id","checkpoint_id") REFERENCES "public"."checkpoints"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -218,7 +230,6 @@ ALTER TABLE "deviations" ADD CONSTRAINT "deviations_checkpoint_result_fk" FOREIG
 ALTER TABLE "deviations" ADD CONSTRAINT "deviations_deviation_question_fk" FOREIGN KEY ("organization_id","deviation_question_id") REFERENCES "public"."deviation_questions"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deviations" ADD CONSTRAINT "deviations_outcome_fk" FOREIGN KEY ("organization_id","outcome_id") REFERENCES "public"."outcomes"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deviations" ADD CONSTRAINT "deviations_suggested_by_rule_fk" FOREIGN KEY ("organization_id","suggested_by_rule_id") REFERENCES "public"."rules"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "deviations" ADD CONSTRAINT "deviations_ai_usage_fk" FOREIGN KEY ("organization_id","ai_usage_id") REFERENCES "public"."ai_usage_log"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "field_answers" ADD CONSTRAINT "field_answers_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "field_answers" ADD CONSTRAINT "field_answers_report_fk" FOREIGN KEY ("organization_id","report_id") REFERENCES "public"."reports"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "field_answers" ADD CONSTRAINT "field_answers_element_fk" FOREIGN KEY ("organization_id","element_id") REFERENCES "public"."template_elements"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

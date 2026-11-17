@@ -6,6 +6,7 @@ import type {
   DeviationKind,
   DeviationTg,
   MeasureAppliesToTg,
+  OverrideReasonCode,
   RuleSuggestionDecision,
   StoredRuleSuggestion,
   TgDirect,
@@ -16,6 +17,8 @@ import type {
   CHECKPOINT_WARNING_CODES,
   COST_AMOUNT_CHECKS,
   MERGE_FIELD_KEYS,
+  OVERRIDE_REASON_CHECKS,
+  WARNING_FIX_KINDS,
   WARNING_MISSING_PARTS,
 } from "./codes";
 
@@ -35,6 +38,14 @@ export type CheckpointWarningCode = (typeof CHECKPOINT_WARNING_CODES)[number];
 export type WarningMissingPart = (typeof WARNING_MISSING_PARTS)[number];
 export type CostAmountCheck = (typeof COST_AMOUNT_CHECKS)[number];
 export type MergeFieldKey = (typeof MERGE_FIELD_KEYS)[number];
+export type OverrideReasonCheck = (typeof OVERRIDE_REASON_CHECKS)[number];
+export type WarningFixKind = (typeof WARNING_FIX_KINDS)[number];
+
+/**
+ * TG utfallet i malen er skrevet for: 2, 3 eller `choose` («velg TG2 eller TG3»). `null` for HMS
+ * og fritt avvik.
+ */
+export type OutcomeTg = DeviationTg | "choose";
 
 // --- Inndata (det funksjonene trenger av radene, uten id-er de ikke bruker) --------------------
 
@@ -50,8 +61,11 @@ export type DeviationState = {
   costAmount: number | null;
   /** Antall tiltak som ikke er slettet og har tekst. */
   measureCount: number;
-  /** TG utfallet i malen er skrevet for. `null` for «velg TG2 eller TG3», HMS og fritt avvik. */
-  outcomeTg: DeviationTg | null;
+  /**
+   * Malens TG for utfallet. Brukes av `tg3_on_age_only` (`outcomeTg !== 3`, A396) og
+   * `texts_written_for_other_tg`, slik at ingen våtromskode står i de generelle funksjonene.
+   */
+  outcomeTg: OutcomeTg | null;
   /** Om malen har egne tiltak for avvikets TG (`applies_to_tg`). */
   hasMeasuresForTg: boolean;
 };
@@ -83,6 +97,8 @@ export type DecisionState = {
   ruleKey: string;
   decision: RuleSuggestionDecision;
   suggestion: StoredRuleSuggestion;
+  /** Avviket beslutningen laget, når det ikke er slettet. Gir «Fjern avviket» / «Behold» (A388). */
+  deviationId: string | null;
 };
 
 export type CheckpointState = {
@@ -97,7 +113,11 @@ export type CheckpointState = {
   ruleResults: readonly RuleResult[];
   /** Siste beslutning per regel på punktet. */
   decisions: readonly DecisionState[];
-  /** T-0059: «utført uten funn» med måling lik eller over grensen. Regnes av den som kaller. */
+  /**
+   * T-0059: valget er «utført uten funn», og regelen for forhøyet fukt slår til i serverens
+   * regelsvar. Den som kaller, setter verdien fra regelsvaret (A386), aldri fra en egen
+   * sammenligning mot grensen: grensen og enheten (vekt-%) står bare i regelen.
+   */
   noFindingsWithReadingOverLimit: boolean;
 };
 
@@ -112,6 +132,24 @@ export type CheckpointWarning = {
   ruleKey: string | null;
   missing: WarningMissingPart[];
 };
+
+/**
+ * Handlingen bak «Rett nå» (A381). `null` fra `WarningFix` betyr at advarselen ikke har én
+ * opplagt retting. Ingenting skjer uten trykk, og advarselen sperrer aldri.
+ */
+export type WarningFixAction =
+  | { kind: "change_answer" }
+  | { kind: "focus_field"; deviationId: string | null; field: WarningMissingPart | "cost" }
+  | { kind: "focus_tg_choice" }
+  | {
+      kind: "scroll_to_suggestion";
+      ruleKey: string;
+      /**
+       * Satt når et godtatt avvik henger på forslaget (A388): skjermen viser «Fjern avviket»
+       * (samme tjeneste som i avvikskortet) og «Behold avviket» (lagrer ingenting).
+       */
+      deviationId: string | null;
+    };
 
 /** En bit av en tekst med flettefelt. `missing` vises tydelig som manglende, aldri som `{…}`. */
 export type MergeSegment =
@@ -154,6 +192,42 @@ export type CheckDirectTgConflict = (
   tgDirect: TgDirect | null,
   kind: DeviationKind,
 ) => DirectTgConflict;
+
+/**
+ * Samme som `CheckDirectTgConflict` motsatt vei: om `tg_direct` kan settes når punktet har avvik.
+ * `IU` og `0` sammen med avvik med TG2 eller TG3 gir `true` (takstmannen må velge aktivt,
+ * serverstatus `tgiu_conflicts_with_deviation`). HMS-avvik gir aldri konflikt.
+ */
+export type DirectTgConflictsWithDeviations = (
+  tgDirect: TgDirect,
+  deviations: readonly Pick<DeviationState, "kind" | "tg">[],
+) => boolean;
+
+/**
+ * Kontrollen av begrunnelsen (A380, A398), én regel for skjermen, Zod-skjemaet på serveren og
+ * CHECK-regelen: `accepted` har verken kode eller tekst; `changed` og `rejected` krever kode
+ * eller tekst; koden `other` krever tekst. Tekst med bare mellomrom regnes som tom.
+ */
+export type CheckOverrideReason = (input: {
+  decision: RuleSuggestionDecision;
+  code: OverrideReasonCode | null;
+  text: string | null;
+}) => OverrideReasonCheck;
+
+/** «Rett nå» for en advarsel, eller `null` (A381, A388). */
+export type WarningFix = (
+  warning: CheckpointWarning,
+  context: { decisions: readonly DecisionState[] },
+) => WarningFixAction | null;
+
+/**
+ * Neste punkt med advarsel etter det åpne, i malens rekkefølge. Går rundt til starten, og gir
+ * `null` når ingen punkt har advarsel. `count` teller punkter, ikke advarsler.
+ */
+export type NextCheckpointToReview = (
+  checkpoints: readonly { checkpointKey: string; warningCount: number }[],
+  openCheckpointKey: string | null,
+) => { next: string | null; count: number };
 
 /** `invalid` for 0, negative tall og ikke-heltall; `not_rounded` når beløpet ikke går opp i 10 000. */
 export type CheckCostAmount = (amount: number) => CostAmountCheck;

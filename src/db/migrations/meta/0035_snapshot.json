@@ -1,5 +1,5 @@
 {
-  "id": "c10abb19-84e7-48fe-8148-f43757ade5e2",
+  "id": "18f19204-1906-4b27-92e6-390c11e73f2f",
   "prevId": "88b71563-b04e-4374-8479-dc8dd7aefc13",
   "version": "7",
   "dialect": "postgresql",
@@ -9361,6 +9361,28 @@
           "method": "btree",
           "with": {}
         },
+        "ai_usage_log_organization_id_report_id_idx": {
+          "name": "ai_usage_log_organization_id_report_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "report_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"ai_usage_log\".\"report_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "ai_usage_log_open_target_idx": {
           "name": "ai_usage_log_open_target_idx",
           "columns": [
@@ -10191,12 +10213,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "ai_usage_id": {
-          "name": "ai_usage_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "sort_order": {
           "name": "sort_order",
           "type": "integer",
@@ -10338,21 +10354,6 @@
           "columnsFrom": [
             "organization_id",
             "suggested_by_rule_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "deviations_ai_usage_fk": {
-          "name": "deviations_ai_usage_fk",
-          "tableFrom": "deviations",
-          "tableTo": "ai_usage_log",
-          "columnsFrom": [
-            "organization_id",
-            "ai_usage_id"
           ],
           "columnsTo": [
             "organization_id",
@@ -11070,6 +11071,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "override_reason_code": {
+          "name": "override_reason_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "override_reason": {
           "name": "override_reason",
           "type": "text",
@@ -11277,9 +11284,13 @@
           "name": "rule_suggestion_decisions_threshold_set_key_check",
           "value": "\"rule_suggestion_decisions\".\"threshold_set_key\" is null or \"rule_suggestion_decisions\".\"threshold_set_key\" ~ '^[a-z0-9_]+(\\.[a-z0-9_]+)*$'"
         },
+        "rule_suggestion_decisions_override_reason_code_check": {
+          "name": "rule_suggestion_decisions_override_reason_code_check",
+          "value": "\"rule_suggestion_decisions\".\"override_reason_code\" is null or \"rule_suggestion_decisions\".\"override_reason_code\" in ('documentation_present', 'visible_damage', 'measured_again', 'age_known_otherwise', 'other')"
+        },
         "rule_suggestion_decisions_override_reason_check": {
           "name": "rule_suggestion_decisions_override_reason_check",
-          "value": "\"rule_suggestion_decisions\".\"decision\" = 'accepted' or length(btrim(coalesce(\"rule_suggestion_decisions\".\"override_reason\", ''))) > 0"
+          "value": "(\"rule_suggestion_decisions\".\"decision\" = 'accepted' and \"rule_suggestion_decisions\".\"override_reason_code\" is null and \"rule_suggestion_decisions\".\"override_reason\" is null) or (\"rule_suggestion_decisions\".\"decision\" <> 'accepted' and (\"rule_suggestion_decisions\".\"override_reason_code\" is not null or length(btrim(coalesce(\"rule_suggestion_decisions\".\"override_reason\", ''))) > 0) and (\"rule_suggestion_decisions\".\"override_reason_code\" is distinct from 'other' or length(btrim(coalesce(\"rule_suggestion_decisions\".\"override_reason\", ''))) > 0))"
         },
         "rule_suggestion_decisions_rejected_check": {
           "name": "rule_suggestion_decisions_rejected_check",

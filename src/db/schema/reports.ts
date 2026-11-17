@@ -84,6 +84,9 @@ export type CostType = (typeof COST_TYPES)[number];
 /**
  * Hvor teksten kom fra: `template` = standardteksten fra malen, urørt; `edited` = standardteksten
  * endret av takstmannen; `free` = skrevet fritt. Gjelder tekstene på raden samlet.
+ *
+ * Sier bare forholdet til malen, aldri om teksten kom fra KI eller frasebanken (A357): KI-opphav
+ * står bare i `ai_usage_log`. Listen får aldri en kode for KI eller frase.
  */
 export const TEXT_SOURCES = ["template", "edited", "free"] as const;
 export type TextSource = (typeof TEXT_SOURCES)[number];
@@ -98,6 +101,19 @@ export type ConstructionVulnerable = (typeof CONSTRUCTION_VULNERABLE_VALUES)[num
  */
 export const RULE_SUGGESTION_DECISIONS = ["accepted", "changed", "rejected"] as const;
 export type RuleSuggestionDecision = (typeof RULE_SUGGESTION_DECISIONS)[number];
+
+/**
+ * Grunnen når takstmannen endrer eller avviser et regelforslag (A380): ett trykk i stedet for
+ * fritekst. `other` krever tekst i `override_reason`. Etikettene står i oversettelsesfilen.
+ */
+export const OVERRIDE_REASON_CODES = [
+  "documentation_present",
+  "visible_damage",
+  "measured_again",
+  "age_known_otherwise",
+  "other",
+] as const;
+export type OverrideReasonCode = (typeof OVERRIDE_REASON_CODES)[number];
 
 /** Forslagstypene som kan lagres. Samme koder som `RuleSuggestion["kind"]` i regelmotoren. */
 export const RULE_SUGGESTION_KINDS = ["outcome", "tgiu", "tg0"] as const;
@@ -371,8 +387,8 @@ export const deviations = pgTable(
     textSource: text("text_source").$type<TextSource>().notNull(),
     /** Regelen som foreslo avviket. Slås opp fra regelkoden i den låste malversjonen. */
     suggestedByRuleId: uuid("suggested_by_rule_id"),
-    /** Som på `field_answers`: settes og tømmes bare av serveren. */
-    aiUsageId: uuid("ai_usage_id"),
+    // Ingen `ai_usage_id` her (A355): avviket har tre KI-tekster, og `ai_usage_log`
+    // (`report_id` + `target_ref`) er eneste fasit for hvilken tekst som kom fra KI.
     sortOrder: sortOrder(),
   },
   (table) => [
@@ -414,11 +430,6 @@ export const deviations = pgTable(
       name: "deviations_suggested_by_rule_fk",
       columns: [table.organizationId, table.suggestedByRuleId],
       foreignColumns: [rules.organizationId, rules.id],
-    }),
-    foreignKey({
-      name: "deviations_ai_usage_fk",
-      columns: [table.organizationId, table.aiUsageId],
-      foreignColumns: [aiUsageLog.organizationId, aiUsageLog.id],
     }),
     check("deviations_kind_check", inList(table.kind, DEVIATION_KINDS)),
     // HMS har aldri TG. Avvik med TG har 2, 3 eller tom (ikke valgt ennå).
@@ -543,6 +554,7 @@ export type TgiuDetails = typeof tgiuDetails.$inferSelect;
  * Hva takstmannen gjorde med et forslag fra reglene (ikke KI). Bare tillegg. `suggestion`,
  * `reasons`, settkodene og befaringsåret er serverens eget regelsvar da beslutningen ble tatt,
  * aldri noe klienten har sendt. Bare faste koder og tall; fritekst står bare i `override_reason`.
+ * Begrunnelsen er en fast kode (`override_reason_code`), en tekst eller begge (A380, A398).
  */
 export const ruleSuggestionDecisions = pgTable(
   "rule_suggestion_decisions",
@@ -564,7 +576,9 @@ export const ruleSuggestionDecisions = pgTable(
     chosenTg: text("chosen_tg").$type<ChosenTg>(),
     /** Utfallet takstmannen endte på (fast kode). Tom når det ikke ble et avvik. */
     chosenOutcomeKey: text("chosen_outcome_key"),
-    /** Fritekst. Påkrevd ved `changed` og `rejected`. Står bare her, aldri i logger. */
+    /** Grunnen som fast kode. Tom ved `accepted`. */
+    overrideReasonCode: text("override_reason_code").$type<OverrideReasonCode>(),
+    /** Fritekst. Påkrevd når koden er `other`, ellers valgfri. Står bare her, aldri i logger. */
     overrideReason: text("override_reason"),
     /** Avviket som ble laget, når beslutningen ga et avvik. */
     deviationId: uuid("deviation_id"),
@@ -645,10 +659,15 @@ export const ruleSuggestionDecisions = pgTable(
       "rule_suggestion_decisions_threshold_set_key_check",
       nullOrKeyFormat(table.thresholdSetKey),
     ),
-    // Å gå bort fra forslaget krever begrunnelse
+    check(
+      "rule_suggestion_decisions_override_reason_code_check",
+      nullOrInList(table.overrideReasonCode, OVERRIDE_REASON_CODES),
+    ),
+    // Godtatt har verken kode eller tekst. Å gå bort fra forslaget krever kode eller tekst, og
+    // koden `other` krever tekst (A398).
     check(
       "rule_suggestion_decisions_override_reason_check",
-      sql`${table.decision} = 'accepted' or length(btrim(coalesce(${table.overrideReason}, ''))) > 0`,
+      sql`(${table.decision} = 'accepted' and ${table.overrideReasonCode} is null and ${table.overrideReason} is null) or (${table.decision} <> 'accepted' and (${table.overrideReasonCode} is not null or length(btrim(coalesce(${table.overrideReason}, ''))) > 0) and (${table.overrideReasonCode} is distinct from 'other' or length(btrim(coalesce(${table.overrideReason}, ''))) > 0))`,
     ),
     // Avvist forslag gir verken TG, utfall eller avvik
     check(

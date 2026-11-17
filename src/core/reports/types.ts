@@ -8,6 +8,7 @@ import type {
   CostType,
   DeviationKind,
   DeviationTg,
+  OverrideReasonCode,
   ReportStatus,
   RuleResultState,
   RuleSuggestionDecision,
@@ -33,6 +34,10 @@ import type { CheckpointStatus, CheckpointTg, CheckpointWarning } from "./logic/
  *   Godta), får UUID v7 på serveren.
  * - Ingenting slettes: fjerning er `deleted_at`. Ingen tjeneste kjører `delete`.
  * - Regler og KI setter aldri TG. `evaluateRules` kjøres bare på serveren, på lagrede svar.
+ * - Låst malversjon: fremmednøklene sikrer bare organisasjonen. Hver skriving sjekker derfor at
+ *   felt, kontrollpunkt, spørsmål, utfall og regel hører til rapportens `template_version_id`;
+ *   ellers `ReportValidationError`.
+ * - `src/core/reports` importerer aldri `src/core/ai` (gjelder til «KI i veien»).
  * - Revisjonsloggen får bare id-er, faste koder, feltkoder, TG og tall. Aldri tekstverdier.
  */
 
@@ -119,7 +124,6 @@ export type DeviationView = {
   textSource: TextSource;
   /** Regelen som foreslo avviket (fast kode). */
   suggestedByRuleKey: string | null;
-  aiUsageId: string | null;
   sortOrder: number;
   rowVersion: number;
   measures: MeasureView[];
@@ -138,12 +142,16 @@ export type TgiuDetailsView = {
   rowVersion: number;
 };
 
-/** Siste beslutning om et regelforslag. Begrunnelsen (`override_reason`) vises bare på skjermen. */
+/**
+ * Siste beslutning om et regelforslag. Grunnen vises som knappeteksten for koden; teksten
+ * (`override_reason`) vises bare på skjermen og står aldri i logger.
+ */
 export type DecisionView = {
   id: string;
   decision: RuleSuggestionDecision;
   chosenTg: ChosenTg | null;
   chosenOutcomeKey: string | null;
+  overrideReasonCode: OverrideReasonCode | null;
   overrideReason: string | null;
   deviationId: string | null;
   decidedAt: string;
@@ -218,8 +226,9 @@ export type RoomReportView =
  * rad, gir ingen konflikt. `row_version` øker fortsatt ved hver lagring.
  *
  * Feltene som ikke står her, endres bare av egne handlinger: `tg_direct`, `done`, `kind`,
- * `text_source` (settes av serveren: `template` → `edited` når en tekst endres), `ai_usage_id`
- * (bare serveren), `deleted_at`.
+ * `text_source` (settes av serveren: `template` → `edited` når en tekst endres),
+ * `field_answers.ai_usage_id` (settes og tømmes bare av serveren, ett sted i lagringen per felt;
+ * kommer aldri fra klienten), `deleted_at`.
  */
 export type ReportFieldChange =
   | {
@@ -319,6 +328,17 @@ export type SaveFieldResult =
  */
 export type TgiuChoice = "remove_tgiu";
 
+/**
+ * Motsatt vei (A395): punktet har avvik med TG2 eller TG3 og skal få TGIU eller TG0. Uten valg er
+ * svaret `tgiu_conflicts_with_deviation`, og ingenting er lagret. Med `remove_tg_deviations`
+ * slettes avvikene med TG (og tiltakene deres) mykt, `tg_direct` settes og en eventuell
+ * beslutningsrad lagres, alt i samme transaksjon. HMS-avvik står.
+ *
+ * «Behold avvikene» finnes ikke som valg: den sendes aldri til serveren og lagrer ingenting, slik
+ * at loggen aldri sier `accepted` om en TG som ikke ble satt.
+ */
+export type TgDeviationChoice = "remove_tg_deviations";
+
 export type AddDeviationInput = {
   /** UUID v7 fra nettleseren. Samme id to ganger gir samme avvik (tåler dobbelt trykk). */
   id: string;
@@ -336,6 +356,14 @@ export type SetTgDirectInput = {
   /** `null` fjerner TG direkte. Fjernet TGIU sletter `tgiu_details` mykt. */
   tgDirect: TgDirect | null;
   base: TgDirect | null;
+  /** Bare for `IU` og `0` når punktet har avvik med TG. */
+  tgDeviationChoice?: TgDeviationChoice;
+};
+
+export type RestoreDeviationInput = {
+  deviationId: string;
+  /** Som for `AddDeviationInput`: punktet har fått TGIU etter at avviket ble fjernet. */
+  tgiuChoice?: TgiuChoice;
 };
 
 export type DecideSuggestionInput = {
@@ -343,6 +371,8 @@ export type DecideSuggestionInput = {
   id: string;
   ruleKey: string;
   tgiuChoice?: TgiuChoice;
+  /** Bare ved Godta eller Endre til TGIU eller TG0 når punktet har avvik med TG. */
+  tgDeviationChoice?: TgDeviationChoice;
 } & (
   | {
       decision: "accepted";
@@ -351,23 +381,33 @@ export type DecideSuggestionInput = {
       /** Valgt TG når utfallet er «velg TG2 eller TG3». */
       chosenTg?: DeviationTg;
     }
-  | {
+  | ({
       decision: "changed";
       /** TG takstmannen velger i stedet. 2 og 3 gir et avvik; 0, 1 og IU settes på punktet. */
       chosenTg: ChosenTg;
       /** Annet utfall enn det foreslåtte, i samme kontrollpunkt. Tomt = forslagets utfall. */
       chosenOutcome?: { questionKey: string; outcomeKey: string };
       deviationId?: string;
-      /** Påkrevd. Lagres bare i beslutningsraden, aldri i logger. */
-      overrideReason: string;
-    }
-  | { decision: "rejected"; overrideReason: string }
+    } & OverrideReasonInput)
+  | ({ decision: "rejected" } & OverrideReasonInput)
 );
+
+/**
+ * Begrunnelsen ved Endre og Avvis (A380, A398): fast kode, tekst eller begge. Minst én av dem
+ * kreves, og koden `other` krever tekst (`CheckOverrideReason` i `logic/`). Godta har ingen av
+ * delene; sendes de likevel, avvises beslutningen. Teksten lagres bare i beslutningsraden.
+ */
+export type OverrideReasonInput = {
+  overrideReasonCode?: OverrideReasonCode;
+  overrideReason?: string;
+};
 
 export type ActionResult =
   | { status: "saved"; refresh: RoomRefresh }
   /** Punktet har TGIU, og handlingen gir TG2 eller TG3. Takstmannen må velge (`tgiuChoice`). */
   | { status: "tgiu_conflict" }
+  /** Punktet har avvik med TG, og handlingen gir TGIU eller TG0 (`tgDeviationChoice`). */
+  | { status: "tgiu_conflicts_with_deviation" }
   /** «Endret av andre» (`SetTgDirectInput.base` stemte ikke). */
   | { status: "conflict"; refresh: RoomRefresh };
 
@@ -380,6 +420,8 @@ export type DecideSuggestionResult =
       refresh: RoomRefresh;
     }
   | { status: "tgiu_conflict" }
+  /** Ingenting er lagret: ingen beslutningsrad, ingen `tg_direct`, avvikene står (A395). */
+  | { status: "tgiu_conflicts_with_deviation" }
   /** Regelen slår ikke til på serveren med lagrede svar: «Forslaget gjelder ikke lenger». */
   | { status: "no_longer_applies"; refresh: RoomRefresh };
 
@@ -420,6 +462,11 @@ export type SaveReportField = (
  * Legger til et avvik fra et utfall i malen (`report.edit`), med standardtekstene og
  * standardtiltakene for valgt TG (`text_source = template`). Har punktet TG0 eller TG1, tømmes
  * `tg_direct`. Tak: `MAX_DEVIATIONS_PER_CHECKPOINT`.
+ *
+ * Tåler dobbelt trykk og id-kollisjon: `insert … on conflict (id) do nothing`, og raden leses
+ * deretter med `grant.organizationId` og rapporten. Finnes ingen rad der (id-en er brukt i en
+ * annen organisasjon eller rapport), er svaret `AccessDeniedError` (404), og den andre raden er
+ * urørt. Aldri oppslag på id uten organisasjon.
  */
 export type AddDeviation = (
   actor: Actor,
@@ -428,12 +475,30 @@ export type AddDeviation = (
   input: AddDeviationInput,
 ) => Promise<ActionResult>;
 
-/** Fjerner avviket og tiltakene mykt (`report.edit`). Beslutningsraden står urørt. */
+/**
+ * Fjerner avviket og tiltakene mykt (`report.edit`). Beslutningsraden står urørt. Avviket og
+ * tiltakene som fjernes sammen med det, får samme `deleted_at`, slik at `RestoreDeviation` vet
+ * hvilke tiltak som hører til. Brukes også av «Fjern avviket» på et forslag som ikke lenger
+ * gjelder (A388).
+ */
 export type RemoveDeviation = (
   actor: Actor,
   organizationId: string,
   room: RoomRef,
   deviationId: string,
+) => Promise<ActionResult>;
+
+/**
+ * Angre etter «Fjern avviket» (`report.edit`): samme rad tilbake. Tømmer `deleted_at` på avviket
+ * og på tiltakene som har samme `deleted_at` som avviket; tiltak som var fjernet før, står
+ * fjernet. Reglene for `tg_direct` er de samme som i `AddDeviation`. Et avvik som ikke er
+ * slettet, gir `saved` uten endring. Skjermen tilbyr Angre til punktet forlates.
+ */
+export type RestoreDeviation = (
+  actor: Actor,
+  organizationId: string,
+  room: RoomRef,
+  input: RestoreDeviationInput,
 ) => Promise<ActionResult>;
 
 /** Legger til et tomt tiltak sist på avviket (`report.edit`). Tak: `MAX_MEASURES_PER_DEVIATION`. */
@@ -453,9 +518,16 @@ export type RemoveMeasure = (
 ) => Promise<ActionResult>;
 
 /**
- * Setter eller fjerner TG direkte (`report.edit`). TG0 og TG1 avvises når punktet har avvik med
- * TG; TGIU sammen med TG2 eller TG3 avvises (`ReportValidationError`). TGIU lager `tgiu_details`
- * når settet mangler. TG0 settes uten kontroll av vilkårene nå (A348).
+ * Setter eller fjerner TG direkte (`report.edit`). TG0 settes uten kontroll av vilkårene nå
+ * (A348).
+ *
+ * Har punktet avvik med TG2 eller TG3: `IU` og `0` gir `tgiu_conflicts_with_deviation` til
+ * `tgDeviationChoice` er sendt (A395); `1` avvises (`ReportValidationError`), fordi skjermen
+ * aldri tilbyr det.
+ *
+ * `IU`: finnes et mykt slettet `tgiu_details`-sett på punktet, gjenopprettes det siste i stedet
+ * for at det lages et tomt, slik at teksten ikke går tapt. Det er også slik «Fjern TGIU» angres.
+ * Ellers lages et tomt sett.
  */
 export type SetTgDirect = (
   actor: Actor,
@@ -471,7 +543,13 @@ export type SetTgDirect = (
  * `ReportValidationError`. Slår regelen ikke til, er svaret `no_longer_applies`.
  *
  * Godta: `outcome` lager avviket med standardtekstene, `tgiu` gir `tg_direct = IU`, `tg0` gir
- * `tg_direct = 0`. Endre og avvis krever begrunnelse.
+ * `tg_direct = 0`. Endre lager avviket med valgt TG og utfall og setter `deviation_id` på
+ * beslutningsraden. Avvis lager aldri avvik. Endre og Avvis krever begrunnelse
+ * (`OverrideReasonInput`); Godta med begrunnelse avvises (A398).
+ *
+ * Gir beslutningen TGIU eller TG0 på et punkt med avvik med TG, er svaret
+ * `tgiu_conflicts_with_deviation` til `tgDeviationChoice` er sendt (A395). Avviket lages som i
+ * `AddDeviation` (`on conflict (id) do nothing`, lest tilbake med organisasjonen).
  */
 export type DecideSuggestion = (
   actor: Actor,

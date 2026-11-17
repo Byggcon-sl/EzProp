@@ -96,8 +96,12 @@ export const aiUsageLog = pgTable(
   },
   (table): PgTableExtraConfigValue[] => [
     index("ai_usage_log_organization_id_idx").on(table.organizationId),
-    // Mål for `ai_usage_id` på svar og avvik (samme organisasjon)
+    // Mål for `ai_usage_id` på svar (samme organisasjon)
     uniqueIndex("ai_usage_log_organization_id_id_idx").on(table.organizationId, table.id),
+    // Alle KI-forslag i en rapport (publiseringssperren og KI-merket per tekstfelt, A355)
+    index("ai_usage_log_organization_id_report_id_idx")
+      .on(table.organizationId, table.reportId)
+      .where(sql`${table.reportId} is not null`),
     // Forrige forslag på samme mål som fortsatt venter på avgjørelse
     index("ai_usage_log_open_target_idx")
       .on(table.organizationId, table.feature, table.targetRef)

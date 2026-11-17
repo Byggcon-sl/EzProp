@@ -1,9 +1,10 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import {
   checkpointResults,
   deviations,
+  OVERRIDE_REASON_CODES,
   fieldAnswers,
   reports,
   ruleSuggestionDecisions,
@@ -328,13 +329,13 @@ describe("deviations og deviation_measures", () => {
     expect(measure.sortOrder).toBe(0);
   });
 
-  it("KI-logg fra en annen organisasjon avvises på avviket", async () => {
-    const { orgA, orgB } = await twoOrganizations();
-    const foreignAi = await createAiUsageLog(orgB.id);
-    await expectPgError(
-      () => createDeviationRow(orgA.id, { aiUsageId: foreignAi.id }),
-      FOREIGN_KEY,
+  it("avviket har ingen ai_usage_id: KI-merket står bare i ai_usage_log (A355)", async () => {
+    const columns = await db.execute<{ column_name: string }>(
+      sql`select column_name from information_schema.columns where table_schema = 'public' and table_name = 'deviations'`,
     );
+    const names = [...columns].map((row) => row.column_name);
+    expect(names).toContain("suggested_by_rule_id");
+    expect(names).not.toContain("ai_usage_id");
   });
 
   it("myk sletting: raden står igjen med deleted_at", async () => {
@@ -378,6 +379,70 @@ describe("tgiu_details", () => {
 });
 
 describe("rule_suggestion_decisions", () => {
+  it("godtatt med kode eller tekst avvises (A398)", async () => {
+    const { orgA } = await twoOrganizations();
+    await expectPgError(
+      () =>
+        createRuleSuggestionDecisionRow(orgA.id, {
+          decision: "accepted",
+          overrideReasonCode: "visible_damage",
+        }),
+      CHECK,
+    );
+    await expectPgError(
+      () =>
+        createRuleSuggestionDecisionRow(orgA.id, {
+          decision: "accepted",
+          overrideReason: "Oppdiktet begrunnelse",
+        }),
+      CHECK,
+    );
+  });
+
+  it("begrunnelse som fast kode: kode alene holder, «other» krever tekst, ukjent kode avvises (A380)", async () => {
+    const { orgA } = await twoOrganizations();
+    const rejected = { decision: "rejected" as const, chosenTg: null };
+    for (const overrideReasonCode of OVERRIDE_REASON_CODES) {
+      if (overrideReasonCode === "other") continue;
+      const row = await createRuleSuggestionDecisionRow(orgA.id, {
+        ...rejected,
+        overrideReasonCode,
+      });
+      expect(row.overrideReasonCode).toBe(overrideReasonCode);
+      expect(row.overrideReason).toBeNull();
+    }
+    for (const overrideReason of [null, "", "   "]) {
+      await expectPgError(
+        () =>
+          createRuleSuggestionDecisionRow(orgA.id, {
+            ...rejected,
+            overrideReasonCode: "other",
+            overrideReason,
+          }),
+        CHECK,
+      );
+    }
+    await createRuleSuggestionDecisionRow(orgA.id, {
+      ...rejected,
+      overrideReasonCode: "other",
+      overrideReason: "Oppdiktet begrunnelse",
+    });
+    await createRuleSuggestionDecisionRow(orgA.id, {
+      decision: "changed",
+      chosenTg: "1",
+      overrideReasonCode: "measured_again",
+      overrideReason: "Oppdiktet forklaring",
+    });
+    await expectPgError(
+      () =>
+        createRuleSuggestionDecisionRow(orgA.id, {
+          ...rejected,
+          overrideReasonCode: "made_up" as never,
+        }),
+      CHECK,
+    );
+  });
+
   it("endret og avvist krever begrunnelse; godtatt gjør det ikke", async () => {
     const { orgA } = await twoOrganizations();
     await createRuleSuggestionDecisionRow(orgA.id, { decision: "accepted" });

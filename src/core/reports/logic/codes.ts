@@ -1,3 +1,5 @@
+import type { OverrideReasonCode } from "@/db/schema";
+
 /**
  * Faste koder for rapporten som både nettleseren og serveren bruker (ADR 0013,
  * docs/funksjoner/fase2a-badet-pc.md). Rent blad: ingen database, ingen pakker.
@@ -40,6 +42,16 @@ export const CHECKPOINT_WARNING_CODES = [
   "suggestion_no_longer_applies",
   /** TG er endret, og malen har ikke egen tiltakstekst for den nye TG-en. */
   "texts_written_for_other_tg",
+  /**
+   * Punktet er merket ferdig uten TG: verken `tg_direct` eller avvik med TG (tomt punkt, eller
+   * bare HMS). Forskriften § 2-22 krever TG; sperre ved publisering (A385).
+   */
+  "checkpoint_done_without_tg",
+  /**
+   * TG3 der årsaken bare er alder (`cause_criterion = age_uncertain_function`), og utfallet i
+   * malen ikke er skrevet for TG3 (`outcomeTg !== 3`, A358 og A396).
+   */
+  "tg3_on_age_only",
 ] as const;
 
 /** Det som kan mangle på et avvik eller i TGIU-opplysningene (`CheckpointWarning.missing`). */
@@ -55,6 +67,49 @@ export const WARNING_MISSING_PARTS = [
   "alternative_check_result",
   "construction_vulnerable",
   "owner_informed",
+] as const;
+
+/**
+ * Grunnene ved Endre og Avvis, i rekkefølgen knappene vises (A380). Samme liste som
+ * `OVERRIDE_REASON_CODES` i `@/db/schema/reports` (CHECK-regelen); typesjekken under stopper hvis
+ * de to kommer i utakt. Står her også som verdi, fordi nettleseren bare kan hente typer fra
+ * skjemaet.
+ */
+export const OVERRIDE_REASON_CODES = [
+  "documentation_present",
+  "visible_damage",
+  "measured_again",
+  "age_known_otherwise",
+  "other",
+] as const satisfies readonly OverrideReasonCode[];
+
+type SameCodes<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+type Assert<T extends true> = T;
+export type OverrideReasonCodesMatchSchema = Assert<
+  SameCodes<(typeof OVERRIDE_REASON_CODES)[number], OverrideReasonCode>
+>;
+
+/** Resultatet av kontrollen av begrunnelsen for en beslutning (`CheckOverrideReason`, A398). */
+export const OVERRIDE_REASON_CHECKS = [
+  "ok",
+  /** Endre og Avvis uten kode og uten tekst. */
+  "reason_required",
+  /** Koden `other` uten tekst. */
+  "text_required",
+  /** Godta med kode eller tekst. */
+  "not_allowed_when_accepted",
+] as const;
+
+/** Handlingene bak «Rett nå» på en advarsel (`WarningFix`, A381 og A388). */
+export const WARNING_FIX_KINDS = [
+  /** T-0059: endre valget til «utført med funn». */
+  "change_answer",
+  /** Flytt fokus til feltet som mangler. */
+  "focus_field",
+  /** Flytt fokus til TG-valget på punktet. */
+  "focus_tg_choice",
+  /** Rull til forslaget som ikke gjelder lenger. */
+  "scroll_to_suggestion",
 ] as const;
 
 /** Resultatet av kontrollen av et eget kostnadsbeløp. `invalid` = 0, negativt eller ikke heltall. */
@@ -74,12 +129,16 @@ export const MAX_MEASURES_PER_DEVIATION = 20;
 export const INSPECTION_YEAR_SOURCES = ["assignment", "today"] as const;
 
 /**
- * KI-målene i rapporten (`AiTargetRef.type` og `fieldKey`, ADR 0006 og A350). Tomme kroker nå:
- * ingen KI-kall bygges i «Badet på PC». For `field_answer` er `fieldKey` feltets faste kode.
+ * KI-målene i rapporten (`AiTargetRef.type` og `fieldKey`, ADR 0006, A350 og A356). Tomme kroker
+ * nå: ingen KI-kall bygges i «Badet på PC». `fieldKey` er lik kolonnenavnet i tabellen. For
+ * `field_answer` er `fieldKey` feltets faste kode.
+ *
+ * `ai_usage_log` (`report_id` + `target_ref`) er eneste fasit for om en tekst kom fra KI (A355).
  */
 export const REPORT_AI_TARGET_FIELDS = {
-  deviation: ["description", "cause_text", "consequence_text"],
+  deviation: ["deviation_text", "cause_text", "consequence_text"],
   deviation_measure: ["text"],
   checkpoint_result: ["description_text"],
+  tgiu_detail: ["reason", "risk_assessment", "how_to_examine"],
   field_answer: null,
 } as const;

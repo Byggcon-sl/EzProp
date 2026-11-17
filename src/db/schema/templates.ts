@@ -508,7 +508,7 @@ export type MeasureAppliesToTg = (typeof MEASURE_APPLIES_TO_TG)[number];
 
 /**
  * Standardtiltak. Uten fast kode: erstattes samlet per utfall når listen endres (A142).
- * `applies_to_tg` (T-0060, migrering `0034`): tom = tiltaket gjelder uansett TG; 2 eller 3 = bare
+ * `applies_to_tg` (T-0060, migrering `0035_badet-pc`): tom = tiltaket gjelder uansett TG; 2 eller 3 = bare
  * for den TG-en. Brukes på utfall av typen `choose_tg2_tg3` (bør ved TG2, må ved TG3); at verdien
  * bare står der, kontrolleres i `@/core/templates`.
  */
