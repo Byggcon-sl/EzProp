@@ -1,8 +1,8 @@
 # Beslutninger som er dyre å endre
 
-Sist oppdatert: 14.11.2026 (testlaget, dokumentvakten og kvalitetslederen)
+Sist oppdatert: 17.11.2026 (testlaget, dokumentvakten og kvalitetslederen)
 
-Mens Ståle var borte, har agentene tatt 278 beslutninger (A1–A291; A22, A264–A271 og A276–A279 er ikke brukt). Listen her er gått gjennom til og med A291. De står i `docs/09-apne-sporsmal.md`, tabellen «Avgjort av agentene mens Ståle var borte». **De fleste er lette å endre.** Her er bare de som blir dyre å endre senere, fordi data må flyttes, fordi de står på rapportene, eller fordi de gjelder personvern og sikkerhet. Det er disse Ståle bør lese først.
+Mens Ståle var borte, har agentene tatt mange beslutninger (A1 og oppover; noen nummer er ikke brukt). Listen her er gått gjennom til og med A379 (17.11.2026: A292–A308, A315–A328 og A360–A379). De står i `docs/09-apne-sporsmal.md`, tabellen «Avgjort av agentene mens Ståle var borte». **De fleste er lette å endre.** Her er bare de som blir dyre å endre senere, fordi data må flyttes, fordi de står på rapportene, eller fordi de gjelder personvern og sikkerhet. Det er disse Ståle bør lese først.
 
 Alle beslutninger som ikke står her, er lette å endre.
 
@@ -18,6 +18,8 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A252 | Når en ordre endres, får revisjonsloggen gammel og ny verdi per felt (blant annet adresse, matrikkel og bestiller). | Gjelder personvern. Revisjonsloggen ryddes aldri, så en feil adresse eller et feil navn står i 10 år, og innsyn, retting og sletting må dekke loggen. Se spørsmål 79. |
 | A272, A273 | Avviste KI-forslag får en dato for hvor lenge de minst oppbevares, regnet ut fra innstillingen da de ble avvist. En endring av innstillingen virker bare fremover. | Gjelder personvern. Datoen står per rad, så en annen regel senere krever at alle radene regnes om. Står som «Lett å endre» i spørsmålsfilen (funn T-0082). Se spørsmål 81. |
 | A171 | Nytt utfall «sperret» i loggen over KI-bruk, for forespørsler som ikke kan sendes til leverandøren. | Fast kode som lagres i data i 10 år. |
+| A299 | Sperren mot elleve sifre (mulig fødselsnummer) gjelder alle fritekstfelt i bestillingen, både for tilbud og oppdrag. | Gjelder personvern. Gammel og ny verdi står i revisjonsloggen i 10 år, så det som slipper forbi sperren, blir stående. Står som «Lett å endre» i spørsmålsfilen (funn T-0101). |
+| A292, A293 (logg) | Når bestillingen på oppdraget endres, lagres gammel og ny verdi (adresse, matrikkel, bestiller) i revisjonsloggen, på samme måte som for tilbud (A252). | Gjelder personvern, og nå hovedveien, ikke bare tilbud. Revisjonsloggen ryddes aldri. DPIA-punktet i planen nevner bare ordre (funn T-0098). |
 
 ## Sikkerhet og tilgang
 
@@ -37,6 +39,8 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A216 | Microsoft-kontoen kobles til den ansatte på e-post første gang, deretter på Microsofts egen id. | Gjelder sikkerhet. Står lett i listen, men å endre koblingen etter at kontoene er i bruk krever opprydding. |
 | A217 | Engangskoden sjekker ikke selv at den ansatte er aktiv. Tilgangen stopper likevel i tilgangssjekken. | Gjelder sikkerhet. Kontrollert av testlaget 13.11.2026: en deaktivert ansatt kommer ikke inn. |
 | A223 | Signaturen på ID-tokenet fra Microsoft sjekkes ikke (tokenet hentes rett fra Microsoft over kryptert forbindelse). | Gjelder sikkerhet. Bør vurderes på nytt før ekte data. |
+| A302 | Før testdata skrives, må miljøet være utvikling eller test, og databasen må være lokal eller nøyaktig testdatabasen. | Er sperren mot oppdiktede data i produksjon. |
+| A303 | Testdataene ligger i Byggcon-organisasjonen i testmiljøet, ved siden av det de ansatte prøver. Testdatabasen kan derfor aldri løftes til produksjon. | Produksjon må starte med tom database. Ståle må bekrefte før ekte data (spørsmål 82). |
 
 ## Datamodell og faste koder
 
@@ -71,6 +75,13 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A235 | Arealtypen «Ikke del av BRA» er en egen kode. | Fast kode i data. Påvirker areal, en vanlig grunn til reklamasjon. |
 | A237 | «Under grensen» er samme terskel snudd, ikke en egen terskel. | Mønster for alle terskelregler. |
 | A280, A283 | Fire ferdige romsett med faste koder, og kilden til nye rom (`manual` eller `preset` med settkoden) lagres i revisjonsloggen. | Kodene står i revisjonsloggen i 10 år og kan ikke endres, bare arkiveres (regel 6). Står som «Lett å endre» i spørsmålsfilen (funn T-0082). |
+| A292, A293 | Oppdraget eier bestillingsopplysningene (adresse, matrikkel, bestiller, meglerens ordrenummer, borettslag, mottatt, kilde). De ble kopiert fra ordren, og ordren beholder sin kopi. | Datamodell og ni steder som leser den. Flyttingen har kjørt mot data. |
+| A296 | Adresse og mottatt-tid er påkrevd på oppdraget. | Regel i databasen. |
+| A298 | Engangsnøkkel mot dobbel lagring, unik per organisasjon. | Kolonne og unik indeks. Står som «Lett å endre» i spørsmålsfilen (funn T-0101). |
+| A318 | «Ordre» heter «Tilbud» bare på skjermen. Tabellen, modulen og kodene i hendelser og logg heter fortsatt «order». | Kodene står i hendelser og revisjonslogg i 10 år. |
+| A319 | Tilbudet har påkrevd «Gyldig til». Gamle ordre fikk mottatt-dato pluss 30 dager. | Regel i databasen og utfylte data. |
+| A320 | «Utløpt» lagres ikke som status, men regnes ut fra datoen. | Datamodell. All statistikk på utløpte tilbud må regnes med dato. |
+| A361 | Fem faste grunner for avslag på tilbud (pris, tidspunkt, valgte en annen, kunden trakk seg, annet). Gamle avslag fikk «annet». Endrer A323. | Faste koder i data (regel 6), og de står i hendelsen for avslag. |
 
 ## Fag
 
