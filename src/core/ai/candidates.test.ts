@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AI_CANDIDATE_REFS_MAX } from "@/shared/config/ai-targets";
 import { AI_CANDIDATE_SOURCES } from "@/db/schema";
-import {
-  containsCandidate,
-  labelCandidates,
-  parseCandidateAnswer,
-} from "./candidates";
+import { containsCandidate, labelCandidates, parseCandidateAnswer } from "./candidates";
 import { AI_SUGGESTED_CANDIDATES_MAX } from "./index";
 import type { AiCandidate } from "./types";
 

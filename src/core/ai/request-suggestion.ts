@@ -41,7 +41,11 @@ import { findPromptLeaks } from "./prompt-leaks";
 import { resolveAiProvider } from "./provider-resolution";
 import type { AiProvider, AiProviderResult } from "./providers/types";
 import { loadKnownValues } from "./redaction";
-import { aiSuggestionRequestShapeSchema, hasOnlyAllowedFields, isResolvedTargetType } from "./request";
+import {
+  aiSuggestionRequestShapeSchema,
+  hasOnlyAllowedFields,
+  isResolvedTargetType,
+} from "./request";
 import { resolveAiTarget } from "./resolve-target";
 import { loadRejectedRetentionYears, retainUntilFor } from "./retention";
 import type {
@@ -243,7 +247,11 @@ function checkServerInput(
     }
     return {
       kind: "candidates",
-      candidates: candidates.map((c) => ({ source: c.source, id: c.id.toLowerCase(), text: c.text })),
+      candidates: candidates.map((c) => ({
+        source: c.source,
+        id: c.id.toLowerCase(),
+        text: c.text,
+      })),
       cut: candidatesCut ?? 0,
     };
   }
@@ -441,7 +449,10 @@ function interpretAnswer(prepared: Prepared, answer: string): Interpreted {
       restored = new Map(
         summary.parts.map((part) => [
           part.label,
-          restorePlaceholders(byLabel.get(part.label) ?? "", originalsByLabel.get(part.label) ?? []),
+          restorePlaceholders(
+            byLabel.get(part.label) ?? "",
+            originalsByLabel.get(part.label) ?? [],
+          ),
         ]),
       );
     } catch (error) {

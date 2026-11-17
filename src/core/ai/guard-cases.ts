@@ -99,7 +99,12 @@ export const GUARD_CASES: readonly GuardCase[] = [
     "Fuktmåling ved sluket viste 18 vekt-%.",
     "number_guard",
   ),
-  polish("K1.4 ny lengde", "Fallet mot sluket er for lite", "Fallet mot sluket er 3 mm.", "number_guard"),
+  polish(
+    "K1.4 ny lengde",
+    "Fallet mot sluket er for lite",
+    "Fallet mot sluket er 3 mm.",
+    "number_guard",
+  ),
   polish(
     "K1.4 nytt kronebeløp",
     "Utbedring av membranen",

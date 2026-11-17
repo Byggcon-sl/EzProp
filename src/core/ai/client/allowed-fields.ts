@@ -10,6 +10,7 @@ import type { AiFeatureCode } from "../types";
  *
  * GJENNOMGANG KREVES: endring her krever gjennomgang av sikkerhet-personvern i PR-en (A175).
  */
-export const AI_QUEUE_ALLOWED_FIELDS: Readonly<Partial<Record<AiFeatureCode, readonly string[]>>> = {
-  language_polish: ["text"],
-};
+export const AI_QUEUE_ALLOWED_FIELDS: Readonly<Partial<Record<AiFeatureCode, readonly string[]>>> =
+  {
+    language_polish: ["text"],
+  };

@@ -440,7 +440,12 @@ function trackedReplace(
     }
     if (cursor < pieceEnd) value += state.text.slice(cursor, pieceEnd);
     const start = piece.offset + delta;
-    spans.push({ start, end: start + piece.placeholder.length, placeholder: piece.placeholder, value });
+    spans.push({
+      start,
+      end: start + piece.placeholder.length,
+      placeholder: piece.placeholder,
+      value,
+    });
     delta += piece.placeholder.length - piece.length;
   }
   while (index < old.length) {

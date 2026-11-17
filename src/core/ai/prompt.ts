@@ -1,7 +1,12 @@
 import type { SummaryGroup } from "@/db/schema";
 import { normalizeForRedaction } from "@/shared/lib/pii-patterns";
 import { labelCandidates, type LabeledCandidate } from "./candidates";
-import { buildPrompt, getPrompt, PROMPT_INPUT_SEPARATOR, type AiFeatureDefinition } from "./features";
+import {
+  buildPrompt,
+  getPrompt,
+  PROMPT_INPUT_SEPARATOR,
+  type AiFeatureDefinition,
+} from "./features";
 import {
   compileKnownValues,
   redactFieldValues,
@@ -276,7 +281,10 @@ export function parseSummaryAnswer(answer: string): AiGuardAnswerPart[] {
   }
   return parts.map((part) => ({
     label: part.label,
-    text: part.lines.map((line) => line.trim()).filter((line) => line !== "").join(" "),
+    text: part.lines
+      .map((line) => line.trim())
+      .filter((line) => line !== "")
+      .join(" "),
   }));
 }
 

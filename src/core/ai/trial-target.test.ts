@@ -43,9 +43,9 @@ describe("K1.31 ai_trial er arkivert", () => {
 
   it("Zod-skjemaet avviser målet", () => {
     expect(aiSuggestionRequestSchema.safeParse(validRequest()).success).toBe(true);
-    expect(aiSuggestionRequestSchema.safeParse(validRequest({ target: trialTarget() })).success).toBe(
-      false,
-    );
+    expect(
+      aiSuggestionRequestSchema.safeParse(validRequest({ target: trialTarget() })).success,
+    ).toBe(false);
   });
 
   it("med falsk leverandør: nøytralt avslag, ingen rad, intet kall, ingen revisjonslogg", async () => {

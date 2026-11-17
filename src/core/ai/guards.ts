@@ -1,11 +1,6 @@
 import { PII_PLACEHOLDERS } from "@/shared/lib/pii-patterns";
 import { normalizeSpaces, WORD_END, WORD_START } from "./prompt-leaks";
-import type {
-  AiGuardAnswerPart,
-  AiGuardCode,
-  AiGuardSentPart,
-  CheckAnswerGuards,
-} from "./types";
+import type { AiGuardAnswerPart, AiGuardCode, AiGuardSentPart, CheckAnswerGuards } from "./types";
 
 /*
  * Vaktene på svaret fra leverandøren (docs/funksjoner/fase2a-ki-i-veien.md «Vaktene på svaret»,
@@ -73,9 +68,7 @@ const NUMBER = new RegExp(`(?<!\\p{N})(?:${THOUSANDS}|\\d+)(?:[.,]\\d+)?(?!\\p{N
  */
 export function extractNumbers(text: string): string[] {
   const withoutLabels = text.normalize("NFC").replace(LABEL, " ");
-  return Array.from(withoutLabels.matchAll(NUMBER), (match) =>
-    match[0].replace(/[    ]/gu, ""),
-  );
+  return Array.from(withoutLabels.matchAll(NUMBER), (match) => match[0].replace(/[    ]/gu, ""));
 }
 
 function escapeRegExp(value: string): string {
