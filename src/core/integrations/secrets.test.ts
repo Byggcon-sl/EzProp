@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLogger, REDACTED } from "@/shared/lib/logger";
 import { InvalidSecretRefError, readSecret, SecretNotFoundError } from "./index";
+import { DENIED_SECRET_REFS, isValidSecretRef } from "./secrets";
 
 /*
  * Testplan docs/funksjoner/fase0b-tilkoblingslag-testplan.md avsnitt 2. Støtter hovedmål:
@@ -163,4 +164,16 @@ describe("readSecret", () => {
       expect(await readSecret(NAME)).toBe(value);
     },
   );
+});
+
+/* Rydding av innloggingsdata: testplan docs/agenter/oppgaver/rydd-innloggingsdata-testplan.md C3. */
+describe("AUTH_CLEANUP_SECRET", () => {
+  it("C3. AUTH_CLEANUP_SECRET is denied", async () => {
+    expect(DENIED_SECRET_REFS).toContain("AUTH_CLEANUP_SECRET");
+    expect(isValidSecretRef("AUTH_CLEANUP_SECRET")).toBe(false);
+    vi.stubEnv("AUTH_CLEANUP_SECRET", "oppdiktet-driftshemmelighet-som-er-lang-nok-0123");
+    expect(await caught(() => readSecret("AUTH_CLEANUP_SECRET"))).toBeInstanceOf(
+      InvalidSecretRefError,
+    );
+  });
 });
