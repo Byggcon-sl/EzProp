@@ -173,6 +173,7 @@ const ALLOWED_SECRETS = [
   "MS_LOGIN_TENANT_ID",
   "MS_LOGIN_CLIENT_ID",
   "MS_LOGIN_CLIENT_SECRET",
+  "AUTH_CLEANUP_SECRET",
 ];
 const REQUIRED_SECRETS = ALLOWED_SECRETS.slice(0, 5);
 const ALLOWED_VARS = [
@@ -712,6 +713,7 @@ const KEY_VAULT_SETTINGS: Record<string, string> = {
   MS_GRAPH_CLIENT_SECRET: "msGraphClientSecret",
   MS_LOGIN_CLIENT_SECRET: "msLoginClientSecret",
   ANTHROPIC_API_KEY: "anthropicApiKey",
+  AUTH_CLEANUP_SECRET: "authCleanupSecret",
 };
 
 const KEY_VAULT_SECRETS: Record<string, string> = {
@@ -720,6 +722,7 @@ const KEY_VAULT_SECRETS: Record<string, string> = {
   "ms-graph-client-secret": "msGraphClientSecret",
   "ms-login-client-secret": "msLoginClientSecret",
   "anthropic-api-key": "anthropicApiKey",
+  "auth-cleanup-secret": "authCleanupSecret",
 };
 
 const NOT_THROUGH_KEY_VAULT = [
@@ -752,10 +755,10 @@ describe("nøkkelboksen i infrastrukturen (main.bicep)", () => {
   });
 
   it("2. alle Key Vault-ressurser har betingelsen enableKeyVault", () => {
-    expect(kv).toHaveLength(7);
+    expect(kv).toHaveLength(8);
     expect(kv.filter((r) => r.type === "Microsoft.KeyVault/vaults")).toHaveLength(1);
     expect(kv.filter((r) => r.type === "Microsoft.KeyVault/vaults/accessPolicies")).toHaveLength(1);
-    expect(secrets).toHaveLength(5);
+    expect(secrets).toHaveLength(6);
     for (const resource of kv) {
       expect(resource.lines[0], resource.symbol).toMatch(/=\s*if\s*\(\s*enableKeyVault\b/);
     }
