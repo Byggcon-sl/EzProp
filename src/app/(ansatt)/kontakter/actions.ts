@@ -139,7 +139,7 @@ function revalidateContactPaths() {
   revalidatePath("/kontakter/[id]", "page");
   revalidatePath("/firma/[id]", "page");
   revalidatePath("/oppdrag/[id]", "page");
-  revalidatePath("/ordre/[id]", "page");
+  revalidatePath("/tilbud/[id]", "page");
 }
 
 /**

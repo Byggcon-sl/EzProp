@@ -43,7 +43,7 @@ import {
   workSessions,
   type EmployeeRole,
 } from "@/db/schema";
-import { todayInOslo } from "@/shared/lib/dates";
+import { addDays, todayInOslo } from "@/shared/lib/dates";
 import { uuidv7 } from "@/shared/lib/uuid";
 
 /**
@@ -383,10 +383,24 @@ export const TEST_NOW = new Date("2026-11-03T10:00:00Z");
 type OrderInsert = typeof orders.$inferInsert;
 type OrderOverrides = Partial<Omit<OrderInsert, "organizationId">>;
 
+/** «Gyldig til» for et tilbud mottatt `TEST_NOW`: dagen i Oslo + 30 (ADR 0012). */
+export const TEST_VALID_UNTIL = "2026-12-03";
+
 /**
- * En ordre satt inn direkte uten tilgangssjekk og uten Zod, slik at testene kan lage rader
- * tjenesten ville avvist. Standard: mottatt, lagt inn for hånd, oppdiktet adresse,
- * `receivedAt = TEST_NOW`. For `converted` må testen sende med `assignmentId` (CHECK i databasen).
+ * Standard «Gyldig til» i fabrikken: den seneste av `TEST_VALID_UNTIL` og dagens dato + 30. Da er
+ * et tilbud fra fabrikken åpent både for tester med `TEST_NOW` og for tester som bruker klokka
+ * (for eksempel dublettoppslag uten `now`). Tester om utløp setter `validUntil` selv.
+ */
+function defaultValidUntil(): string {
+  const fromClock = addDays(todayInOslo(), 30);
+  return fromClock > TEST_VALID_UNTIL ? fromClock : TEST_VALID_UNTIL;
+}
+
+/**
+ * En ordre (tilbud i grensesnittet) satt inn direkte uten tilgangssjekk og uten Zod, slik at
+ * testene kan lage rader tjenesten ville avvist. Standard: mottatt (åpent), lagt inn for hånd,
+ * oppdiktet adresse, `receivedAt = TEST_NOW`, `validUntil = TEST_VALID_UNTIL`. For `converted`
+ * må testen sende med `assignmentId`, og for `rejected` `rejectedReasonKey` (CHECK i databasen).
  */
 export async function createOrder(organizationId: string, overrides: OrderOverrides = {}) {
   const [row] = await db
@@ -394,9 +408,14 @@ export async function createOrder(organizationId: string, overrides: OrderOverri
     .values({
       addressText: "Testveien 12, 8000 Bodø",
       receivedAt: TEST_NOW,
+      validUntil: defaultValidUntil(),
       source: "manual",
       status: "received",
       requestedReportType: "condition_report",
+      // Avslått krever fast grunn (F4): «Annet» når testen har tekst, ellers «Pris»
+      ...(overrides.status === "rejected"
+        ? { rejectedReasonKey: overrides.rejectedReason ? "other" : "price" }
+        : {}),
       ...overrides,
       organizationId,
     } as OrderInsert)

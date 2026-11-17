@@ -1,6 +1,12 @@
 import type { Actor } from "@/core/access";
 import type { AssignmentStatus } from "../codes";
-import type { BookingEditableField, BookingSource, DuplicateKind, DuplicateReason } from "./codes";
+import type {
+  BookingEditableField,
+  BookingSource,
+  DuplicateKind,
+  DuplicateOfferStatus,
+  DuplicateReason,
+} from "./codes";
 
 /*
  * Grensesnittet for «Nytt oppdrag» og bestillingen på oppdraget (ADR 0011,
@@ -165,22 +171,27 @@ export type UpdateAssignmentBooking = (
 
 /* -------------------------------------------------------------- historikk */
 
-export type BookingHistoryValue = {
-  field: BookingEditableField;
+/**
+ * Én endret verdi. `F` er feltkodene den som leser tillater (oppdraget: `BookingEditableField`;
+ * tilbudet: også `validUntil`, se `readBookingHistory`). Uten `F` er feltkoden tekst, slik at den
+ * felles visningen tar både oppdragets og tilbudets historikk.
+ */
+export type BookingHistoryValue<F extends string = string> = {
+  field: F;
   /** Tekst, ja/nei eller tom. Bestiller og firma er navn (eller «(fjernet …)»), ikke id-er. */
   from: string | boolean | null;
   to: string | boolean | null;
 };
 
 /** Én rad under «Endringer». Samme form for ordre og oppdrag. */
-export type BookingHistoryEntry = {
+export type BookingHistoryEntry<F extends string = string> = {
   id: string;
   /** `create` eller `update` for oppdraget. */
   action: string;
   actorName: string | null;
   occurredAt: Date;
-  fields: BookingEditableField[];
-  values: BookingHistoryValue[];
+  fields: F[];
+  values: BookingHistoryValue<F>[];
 };
 
 /** Høyst så mange rader vises, de nyeste. */
@@ -198,7 +209,7 @@ export type ListAssignmentBookingHistory = (
   actor: Actor,
   organizationId: string,
   assignmentId: string,
-) => Promise<BookingHistoryEntry[]>;
+) => Promise<BookingHistoryEntry<BookingEditableField>[]>;
 
 /* ---------------------------------------------------------------- dublett */
 
@@ -230,6 +241,12 @@ export type PossibleDuplicate = {
   receivedAt: Date;
   addressText: string;
   reasons: DuplicateReason[];
+  /**
+   * Tilbudets visningsstatus for `kind: "order"` (ADR 0012, F2 b): `open` eller `expired`, regnet
+   * med samme `today` som spørringen. `null` for oppdrag. Bare `open` og `expired` får knappen
+   * «Gjør om tilbudet» i «Nytt oppdrag».
+   */
+  displayStatus: DuplicateOfferStatus | null;
 };
 
 export type PossibleDuplicates = { items: PossibleDuplicate[]; hasMore: boolean };
@@ -247,6 +264,9 @@ export const POSSIBLE_DUPLICATES_LIMIT = 10;
  * - Samme adressenøkkel eller samme gnr/bnr/snr, og overlappende tid: ordren er `received`,
  *   oppdraget er `ordered` eller `in_progress`, eller høyst 90 × 24 timer mellom mottakstidene
  *   (grensen teller med, A291).
+ * - Fra ADR 0012 (tilbud): en ordre med `received` gir treff uansett alder bare når
+ *   `valid_until >= today`. Er den utløpt, gjelder 90-dagersvinduet (A325). `today` kommer fra
+ *   `todayInOslo` og sendes inn i `PossibleDuplicatesCriteria`.
  * - Høyst `POSSIBLE_DUPLICATES_LIMIT`, nyeste mottatt først og så `id`; `hasMore` når det finnes
  *   flere. Uten adressenøkkel og matrikkel: tom liste uten spørring.
  * - Ugyldige felt gir `ZodError`. Feiler databasen, kastes `PossibleDuplicatesLookupError` uten
@@ -256,6 +276,8 @@ export type FindPossibleDuplicatesFor = (
   actor: Actor,
   organizationId: string,
   fields: PossibleDuplicateFields,
+  /** Tiden som gir `today` (`todayInOslo(now)`). Standard: nå. Sendes inn i tester. */
+  now?: Date,
 ) => Promise<PossibleDuplicates>;
 
 /**
@@ -267,6 +289,7 @@ export type FindPossibleDuplicatesForAssignment = (
   actor: Actor,
   organizationId: string,
   assignmentId: string,
+  now?: Date,
 ) => Promise<PossibleDuplicates>;
 
 /**

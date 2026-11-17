@@ -80,3 +80,11 @@ export function duplicateReasonLabel(code: string): string {
 /** Hva et dubletttreff er: en ordre som ikke er gjort om, eller et oppdrag. */
 export const DUPLICATE_KINDS = ["order", "assignment"] as const;
 export type DuplicateKind = (typeof DUPLICATE_KINDS)[number];
+
+/**
+ * Visningsstatusen til et tilbud som er treff i dublettvarselet (ADR 0012, F2 b): `open` når
+ * `valid_until >= today`, ellers `expired`. Samme koder som `OfferDisplayStatus` i
+ * `@/core/orders/codes`; står også her fordi `booking` aldri importerer fra `orders`.
+ */
+export const DUPLICATE_OFFER_STATUSES = ["open", "expired"] as const;
+export type DuplicateOfferStatus = (typeof DUPLICATE_OFFER_STATUSES)[number];

@@ -56,7 +56,7 @@ const CADASTRAL_FIELDS: { name: TextField; label: string; maxLength: number; num
 
 /**
  * Eiendomsskjemaet (én kolonne, også i iPad-størrelse). Uten lagret eiendom er feltene fylt ut
- * fra ordren og `fromOrder` viser linjen om at de må kontrolleres. Boligtype og eierform har
+ * fra bestillingen og `fromOrder` viser linjen om at de må kontrolleres. Boligtype og eierform har
  * ikke noe forhåndsvalg. Siden gir skjemaet ny `key` når de lagrede verdiene endres.
  */
 export function PropertyForm({
@@ -132,7 +132,9 @@ export function PropertyForm({
 
   return (
     <form action={formAction} noValidate className="space-y-5">
-      {fromOrder && <p className="text-slate-700">Fylt ut fra ordren. Kontroller før du lagrer.</p>}
+      {fromOrder && (
+        <p className="text-slate-700">Fylt ut fra bestillingen. Kontroller før du lagrer.</p>
+      )}
       <FormErrors state={state} />
       <input type="hidden" name="assignmentId" value={assignmentId} />
       {ADDRESS_FIELDS.map(textInput)}

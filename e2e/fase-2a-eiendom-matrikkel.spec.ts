@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
-import { convertedAssignmentLink, logIn, logInAsInspector, uniqueSuffix } from "./helpers";
+import {
+  convertOfferWithOneTap,
+  logIn,
+  logInAsInspector,
+  saveNewOffer,
+  uniqueSuffix,
+} from "./helpers";
 
 /*
  * Eiendom og matrikkel på oppdraget, med fellesdeler for leilighet (fase 2a).
@@ -23,11 +29,8 @@ import { convertedAssignmentLink, logIn, logInAsInspector, uniqueSuffix } from "
  */
 
 const PORTRAIT = { width: 834, height: 1194 } as const;
-const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
-const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
 
-const PREFILL_LINE = "Fylt ut fra ordren. Kontroller før du lagrer.";
+const PREFILL_LINE = "Fylt ut fra bestillingen. Kontroller før du lagrer.";
 const ASSOCIATION = "Borettslaget Test";
 const AGENT = "Forvalter Test";
 const NOTES = "Sett trapperom og kjeller";
@@ -129,27 +132,19 @@ async function expectYesNo(region: Locator, question: RegExp, label: "Ja" | "Nei
   ).toBeChecked();
 }
 
-/** Ny ordre med adresse og matrikkel → «Gjør om til oppdrag» (Bodø) → åpne oppdraget. */
+/** Nytt tilbud med adresse og matrikkel → «Gjør om til oppdrag» (Bodø) → åpne oppdraget. */
 async function newAssignmentFromOrder(
   page: Page,
   values: { address: string; gnr?: string; bnr?: string; snr?: string; association?: string },
 ): Promise<string> {
-  await page.goto("/ordre/ny");
+  await page.goto("/tilbud/ny");
   await page.getByLabel(/^Adresse/).fill(values.address);
   if (values.gnr) await page.getByLabel(/^Gårdsnummer/).fill(values.gnr);
   if (values.bnr) await page.getByLabel(/^Bruksnummer/).fill(values.bnr);
   if (values.snr) await page.getByLabel(/^Seksjonsnummer/).fill(values.snr);
   if (values.association) await page.getByLabel(/^Borettslag/).fill(values.association);
-  await page.getByRole("button", { name: "Lagre", exact: true }).click();
-  await expect(page).toHaveURL(ORDER_URL);
-
-  await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
-  await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(convertedAssignmentLink(page)).toBeVisible();
-
-  await convertedAssignmentLink(page).click();
-  await expect(page).toHaveURL(ASSIGNMENT_URL);
-  return ASSIGNMENT_URL.exec(page.url())![1]!;
+  await saveNewOffer(page);
+  return convertOfferWithOneTap(page);
 }
 
 /** Oppdrag fra en ordre med gnr, bnr, seksjonsnummer og borettslag. */

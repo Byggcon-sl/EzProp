@@ -716,10 +716,10 @@ describe("4.10 tenant-isolasjon", () => {
     // Ordre i B som peker på oppdraget i A
     await expectRejected(
       db.execute(sql`
-        insert into orders (organization_id, address_text, received_at, source, status,
-          requested_report_type, assignment_id, external_ref)
-        values (${b.org.id}, 'Kryssveien 5', now(), 'manual', 'converted', 'condition_report',
-          ${assignmentA.id}, 'KRYSS-REF')`),
+        insert into orders (organization_id, address_text, received_at, valid_until, source,
+          status, requested_report_type, assignment_id, external_ref)
+        values (${b.org.id}, 'Kryssveien 5', now(), '2026-12-03', 'manual', 'converted',
+          'condition_report', ${assignmentA.id}, 'KRYSS-REF')`),
       FOREIGN_KEY,
     );
 

@@ -33,6 +33,7 @@ import type {
   TestdataFirm,
   TestdataFloor,
   TestdataFloorArea,
+  TestdataOffer,
   TestdataOrder,
   TestdataParty,
   TestdataPlan,
@@ -129,6 +130,7 @@ export function buildTestdataPlan({ seed, anchor }: { seed: number; anchor: Date
 
   const orders: TestdataOrder[] = [];
   let kindIndex = 0;
+  let offerIndex = 0;
   for (const slot of slots) {
     const receivedAt = at(slot.received);
     const officeHandlers = (office: string) => {
@@ -158,6 +160,7 @@ export function buildTestdataPlan({ seed, anchor }: { seed: number; anchor: Date
           sellerDeclarationReceived: rng.next() < 0.5,
         },
         converted: false,
+        offer: offerFor(offerIndex++, isoDate),
       });
       continue;
     }
@@ -237,6 +240,7 @@ export function buildTestdataPlan({ seed, anchor }: { seed: number; anchor: Date
         sellerDeclarationReceived: done || rng.next() < 0.6,
       },
       converted: { assignment },
+      offer: null,
     });
   }
 
@@ -480,6 +484,27 @@ function buildSlots(rng: SeededRandom): Slot[] {
     });
   }
   return slots;
+}
+
+/**
+ * Tilbudene som ikke er gjort om (ADR 0012), i fast rekkefølge, så listen har hver status: ett
+ * åpent (gyldig 30 dager fra ankeret), ett som går ut innen sju dager, ett utløpt (gyldig til
+ * dagen før ankeret, etter mottatt) og ett avslått med fast grunn. Flere får i dag + 30 fra
+ * mottatt. Ingen grunn har fritekst, så ingenting her ligner persondata.
+ */
+function offerFor(index: number, isoDate: (days: number) => string): TestdataOffer {
+  switch (index) {
+    case 0:
+      return { validUntil: isoDate(30), rejection: null };
+    case 1:
+      return { validUntil: isoDate(4), rejection: null };
+    case 2:
+      return { validUntil: isoDate(-1), rejection: null };
+    case 3:
+      return { validUntil: null, rejection: { reasonKey: "price", reasonText: null } };
+    default:
+      return { validUntil: null, rejection: null };
+  }
 }
 
 function dueDate(rng: SeededRandom, slot: Slot, isoDate: (days: number) => string): string {

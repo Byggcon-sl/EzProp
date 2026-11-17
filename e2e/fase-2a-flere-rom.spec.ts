@@ -1,11 +1,12 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
+  convertOfferWithOneTap,
   logIn,
   logInAsInspector,
   restoreInspectorsEditAll,
+  saveNewOffer,
   setInspectorsEditAll,
   uniqueSuffix,
-  convertedAssignmentLink,
 } from "./helpers";
 
 /*
@@ -28,8 +29,6 @@ import {
 
 const PORTRAIT = { width: 834, height: 1194 } as const;
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const ORDER_URL = new RegExp(`/ordre/(${UUID})$`);
-const ASSIGNMENT_URL = new RegExp(`/oppdrag/(${UUID})$`);
 const BUILDINGS_URL = new RegExp(`/oppdrag/(${UUID})/bygninger$`);
 
 const LINK = "Bygninger, areal og rom";
@@ -63,22 +62,14 @@ async function clickAndWaitForSave(page: Page, target: Locator) {
   expect(response.status(), "lagringen gir ikke 500").toBeLessThan(500);
 }
 
-/** Ny ordre → oppdrag (Bodø) → åpne oppdraget. Gir oppdragets id. */
+/** Nytt tilbud → oppdrag (Bodø) → åpne oppdraget. Gir oppdragets id. */
 async function newAssignment(page: Page): Promise<string> {
-  await page.goto("/ordre/ny");
+  await page.goto("/tilbud/ny");
   await page.getByLabel(/^Adresse/).fill(`Testveien 1 ${uniqueSuffix()}`);
   await page.getByLabel(/^Gårdsnummer/).fill("999");
   await page.getByLabel(/^Bruksnummer/).fill("999");
-  await page.getByRole("button", { name: "Lagre", exact: true }).click();
-  await expect(page).toHaveURL(ORDER_URL);
-
-  await page.getByLabel(/^Kontor/).selectOption({ label: "Bodø" });
-  await page.getByRole("button", { name: "Gjør om til oppdrag", exact: true }).click();
-  await expect(convertedAssignmentLink(page)).toBeVisible();
-
-  await convertedAssignmentLink(page).click();
-  await expect(page).toHaveURL(ASSIGNMENT_URL);
-  return ASSIGNMENT_URL.exec(page.url())![1]!;
+  await saveNewOffer(page);
+  return convertOfferWithOneTap(page);
 }
 
 /** Oppdrag med eiendom av en gitt boligtype, lagret på oppdragssiden. */

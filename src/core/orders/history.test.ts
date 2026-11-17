@@ -193,6 +193,8 @@ describe("updateOrder og listOrderHistory", () => {
               organizationId: grant.organizationId,
               addressText: OLD_ADDRESS,
               receivedAt: NOW,
+              // Påkrevd fra migrering 0035 (ADR 0012)
+              validUntil: "2026-12-03",
               source: "manual",
               requestedReportType: "condition_report",
               status: "received",
