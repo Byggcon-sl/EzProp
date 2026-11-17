@@ -91,8 +91,7 @@ export async function createBathroomFixture(
     withTemplate?: boolean;
   } = {},
 ): Promise<BathroomFixture> {
-  const organizationId =
-    options.organizationId ?? (await createOrganization("Testfirma bad")).id;
+  const organizationId = options.organizationId ?? (await createOrganization("Testfirma bad")).id;
   let templateVersionId = "";
   if (options.withTemplate !== false) {
     templateVersionId = (
@@ -141,10 +140,19 @@ export const EMPTY = { text: null, number: null, optionKeys: null } as const;
 // --- Hjelpere for tjenestene (testfilen må ha `vi.mock("server-only", () => ({}))`) ------------
 
 type Who = Pick<BathroomFixture, "actor" | "organizationId" | "room">;
-type AnswerInput = Partial<{ text: string | null; number: number | null; optionKeys: string[] | null }>;
+type AnswerInput = Partial<{
+  text: string | null;
+  number: number | null;
+  optionKeys: string[] | null;
+}>;
 
 /** Lagrer et svar på et felt i badet med tomt svar som `base` (eller `base` som sendes). */
-export async function answer(f: Who, elementKey: string, value: AnswerInput, base: AnswerInput = {}) {
+export async function answer(
+  f: Who,
+  elementKey: string,
+  value: AnswerInput,
+  base: AnswerInput = {},
+) {
   return saveField(f.actor, f.organizationId, f.room, {
     table: "field_answers",
     id: uuidv7(),

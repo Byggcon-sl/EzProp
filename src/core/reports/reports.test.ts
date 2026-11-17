@@ -209,7 +209,8 @@ describe("B5.3 expectTenantIsolation per spørring", () => {
         return { a: [a.templateVersionId], b: [b.templateVersionId] };
       },
       query: async (actor, organizationId) => {
-        const assignmentId = assignmentsByOrg.get(organizationId) ?? [...assignmentsByOrg.values()][0]!;
+        const assignmentId =
+          assignmentsByOrg.get(organizationId) ?? [...assignmentsByOrg.values()][0]!;
         const { reportId } = await startReport(actor, organizationId, assignmentId);
         const rows = await db
           .select({ templateVersionId: reports.templateVersionId })
@@ -244,7 +245,8 @@ describe("B5.3 expectTenantIsolation per spørring", () => {
 
   it("B5.3 deviation_measures", async () => {
     await expectViewIsolation(
-      (view) => view.checkpoints.flatMap((c) => c.deviations.flatMap((d) => d.measures.map((m) => m.id))),
+      (view) =>
+        view.checkpoints.flatMap((c) => c.deviations.flatMap((d) => d.measures.map((m) => m.id))),
       (s) => s.measureIds,
     );
   });
@@ -292,7 +294,12 @@ describe("B5.3 expectTenantIsolation per spørring", () => {
           await db
             .select({ id: aiUsageLog.id })
             .from(aiUsageLog)
-            .where(and(eq(aiUsageLog.organizationId, grant.organizationId), eq(aiUsageLog.reportId, reportId)))
+            .where(
+              and(
+                eq(aiUsageLog.organizationId, grant.organizationId),
+                eq(aiUsageLog.reportId, reportId),
+              ),
+            )
         ).map((r) => r.id);
       },
       idOf: (id) => id,
@@ -324,12 +331,19 @@ describe("B5.4 404 i kjeden", () => {
     const a = await startedBathroom();
     const other = await createRoomOnNewAssignment(a.organizationId);
     await expect(
-      getRoomView(a.actor, a.organizationId, { assignmentId: a.assignmentId, roomId: other.roomId }),
+      getRoomView(a.actor, a.organizationId, {
+        assignmentId: a.assignmentId,
+        roomId: other.roomId,
+      }),
     ).rejects.toBeInstanceOf(AccessDeniedError);
     await expect(
-      answer({ ...a, room: { assignmentId: a.assignmentId, roomId: other.roomId } }, "wet_room.build_year", {
-        number: 1990,
-      }),
+      answer(
+        { ...a, room: { assignmentId: a.assignmentId, roomId: other.roomId } },
+        "wet_room.build_year",
+        {
+          number: 1990,
+        },
+      ),
     ).rejects.toBeInstanceOf(AccessDeniedError);
   });
 
@@ -399,14 +413,19 @@ describe("B5.5 id fra skjemaet styrer aldri organisasjonen", () => {
           value: "Endret",
           base: "",
         }),
-      () => addMeasure(b.actor, b.organizationId, b.room, { id: uuidv7(), deviationId: a.deviationIds[0]! }),
-      () => saveField(b.actor, b.organizationId, a.room, {
-        table: "checkpoint_results",
-        checkpointKey: CP.membrane,
-        field: "description_text",
-        value: "Endret",
-        base: null,
-      }),
+      () =>
+        addMeasure(b.actor, b.organizationId, b.room, {
+          id: uuidv7(),
+          deviationId: a.deviationIds[0]!,
+        }),
+      () =>
+        saveField(b.actor, b.organizationId, a.room, {
+          table: "checkpoint_results",
+          checkpointKey: CP.membrane,
+          field: "description_text",
+          value: "Endret",
+          base: null,
+        }),
     ];
     for (const attempt of attempts) {
       await expect(attempt()).rejects.toBeInstanceOf(AccessDeniedError);
@@ -498,7 +517,10 @@ describe("4a start og lesing", () => {
     const f = await createBathroomFixture();
     const result = await startReport(f.actor, f.organizationId, f.assignmentId);
     expect(result.created).toBe(true);
-    const rows = await db.select().from(reports).where(eq(reports.organizationId, f.organizationId));
+    const rows = await db
+      .select()
+      .from(reports)
+      .where(eq(reports.organizationId, f.organizationId));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       id: result.reportId,
@@ -630,7 +652,9 @@ describe("4a start og lesing", () => {
         "standard_measures",
       ].sort(),
     );
-    expect(view.document.checkpoints.every((c) => c.room_type_groups.includes("wet_room"))).toBe(true);
+    expect(view.document.checkpoints.every((c) => c.room_type_groups.includes("wet_room"))).toBe(
+      true,
+    );
     expect(view.document.checkpoints).toHaveLength(8);
   });
 
@@ -712,7 +736,9 @@ async function fillRoom(f: Awaited<ReturnType<typeof startedBathroom>>, perCheck
 
 /** Antall spørringer `getRoomView` kjører. */
 async function countQueries(f: Awaited<ReturnType<typeof startedBathroom>>) {
-  const client = db.$client as unknown as { unsafe: (...args: unknown[]) => unknown };
+  // Drizzle kjører hver spørring som `unsafe` på postgres-klienten
+  const client = (db as unknown as { $client: { unsafe: (...args: unknown[]) => unknown } })
+    .$client;
   const spy = vi.spyOn(client, "unsafe");
   await getRoomView(f.actor, f.organizationId, f.room);
   const n = spy.mock.calls.length;

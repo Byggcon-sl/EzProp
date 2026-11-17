@@ -1,3 +1,7 @@
+import { AccessDeniedError } from "@/core/access";
+import { TemplateNotFoundError } from "@/core/templates";
+import { logger } from "@/shared/lib/logger";
+
 /*
  * Feilene fra rapportkjernen (docs/funksjoner/fase2a-badet-pc.md). Meldingene er norske og
  * inneholder aldri id-er, feltverdier eller tekst fra rapporten. Fremmed, ukjent eller slettet id
@@ -62,5 +66,57 @@ export class ReportTemplateMissingError extends Error {
       "Rapporten kan ikke startes fordi det ikke finnes en publisert systemmal for tilstandsrapport. Be en med maltilgang publisere malen.",
     );
     this.name = "ReportTemplateMissingError";
+  }
+}
+
+/**
+ * Uventet feil ved lesing eller lagring (for eksempel databasen). Meldingen er fast og har aldri
+ * feltverdier eller databaseparametre; årsaken logges vasket (bare navn, kode og skranke).
+ */
+export class ReportStorageError extends Error {
+  constructor() {
+    super("Det som står i rapporten, kunne ikke lagres eller leses nå. Prøv igjen om litt.");
+    this.name = "ReportStorageError";
+  }
+}
+
+/** Feil tjenestene gir med vilje. De sendes videre som de er. */
+function isExpectedError(error: unknown): boolean {
+  return (
+    error instanceof AccessDeniedError ||
+    error instanceof ReportValidationError ||
+    error instanceof ReportTemplateMissingError ||
+    error instanceof TemplateNotFoundError
+  );
+}
+
+/** Koden og skranken fra Postgres, aldri meldingen eller parametrene. */
+function databaseDetails(error: unknown): { code: string | null; constraint: string | null } {
+  let current: unknown = error;
+  for (let depth = 0; current && depth < 5; depth += 1) {
+    const candidate = current as { code?: unknown; constraint_name?: unknown; cause?: unknown };
+    if (typeof candidate.code === "string") {
+      return {
+        code: candidate.code,
+        constraint:
+          typeof candidate.constraint_name === "string" ? candidate.constraint_name : null,
+      };
+    }
+    current = candidate.cause;
+  }
+  return { code: null, constraint: null };
+}
+
+/**
+ * Kjører tjenesten og gjør uventede feil om til `ReportStorageError`. Loggen får bare
+ * handlingen og feilkoden, aldri feltverdier eller parametre (B4.27).
+ */
+export async function guardReportErrors<T>(operation: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (isExpectedError(error)) throw error;
+    logger.error("Rapporten: uventet feil", { operation, ...databaseDetails(error) });
+    throw new ReportStorageError();
   }
 }

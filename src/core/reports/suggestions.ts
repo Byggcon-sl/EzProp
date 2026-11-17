@@ -204,8 +204,9 @@ export const decideSuggestion: DecideSuggestion = (actor, organizationId, room, 
           suggestion.kind === "outcome" &&
           suggestion.question_key === target.questionKey &&
           suggestion.outcome_key === target.outcomeKey;
-        // Endre må gå bort fra forslaget: annet utfall, eller annen TG enn utfallets faste
-        if (sameOutcome && (outcomeTg === "choose" || outcomeTg === tg)) {
+        // Endre må gå bort fra forslaget: annet utfall, eller annen TG enn utfallets faste.
+        // Ved «velg TG2 eller TG3» er valget av TG selve endringen (T-0060, B4.21).
+        if (sameOutcome && outcomeTg === tg) {
           throw new ReportValidationError("invalid_choice");
         }
         const created = await createDeviationFromOutcome(scope, {

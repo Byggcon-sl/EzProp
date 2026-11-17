@@ -1,5 +1,10 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import { grantHasPermission, requireOrganizationAccess, type Actor } from "@/core/access";
+import {
+  grantHasPermission,
+  requireOrganizationAccess,
+  type Actor,
+  type EmployeeGrant,
+} from "@/core/access";
 import { evaluateRules, type JsonValue, type RuleAnswers, type RuleResult } from "@/core/rules";
 import { WET_ROOM_LIFESPANS } from "@/core/rules/data/lifespans";
 import { WET_ROOM_THRESHOLDS } from "@/core/rules/data/thresholds";
@@ -43,6 +48,7 @@ import {
   type LockedTemplate,
   type RoomContext,
 } from "./context";
+import { guardReportErrors } from "./errors";
 import { NO_FINDINGS_OVER_LIMIT_SIGNAL, OWNER_REFUSED_SIGNAL } from "./signals";
 import type {
   AnswerValue,
@@ -52,7 +58,9 @@ import type {
   DeviationView,
   GetRoomReport,
   InspectionYear,
+  RoomRef,
   RoomRefresh,
+  RoomReportView,
   RoomTemplateDocument,
   SuggestionView,
   TgiuDetailsView,
@@ -607,6 +615,14 @@ export function toRefresh(state: RoomState): RoomRefresh {
 export const getRoomView: GetRoomReport = async (actor: Actor, organizationId, room) => {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
   requireUuid(room?.assignmentId, room?.roomId);
+  return guardReportErrors("read", () => readRoom(actor, grant, room));
+};
+
+async function readRoom(
+  actor: Actor,
+  grant: EmployeeGrant,
+  room: RoomRef,
+): Promise<RoomReportView> {
   const context = await loadRoomContext(db, grant, room, { lock: false });
   const canEdit = grantHasPermission(grant, "report.edit");
   if (!context.report) return { state: "not_started", canStart: canEdit };
@@ -630,4 +646,4 @@ export const getRoomView: GetRoomReport = async (actor: Actor, organizationId, r
     suggestions: state.suggestions,
     progress: state.progress,
   };
-};
+}

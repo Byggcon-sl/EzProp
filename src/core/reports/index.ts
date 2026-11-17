@@ -23,6 +23,7 @@ export { decideSuggestion } from "./suggestions";
 export { setCheckpointDone, setTgDirect } from "./tgiu";
 export {
   REPORT_VALIDATION_CODES,
+  ReportStorageError,
   ReportTemplateMissingError,
   ReportValidationError,
   type ReportValidationCode,

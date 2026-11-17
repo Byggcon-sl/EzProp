@@ -5,7 +5,7 @@ import { db, type DbExecutor } from "@/db/client";
 import { assignments, reports, templateFamilies, templateVersions } from "@/db/schema";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { requireUuid } from "./context";
-import { ReportTemplateMissingError } from "./errors";
+import { guardReportErrors, ReportTemplateMissingError } from "./errors";
 import type { StartReport } from "./types";
 
 /*
@@ -54,57 +54,59 @@ export const startReport: StartReport = async (actor, organizationId, assignment
   requireUuid(assignmentId);
   const orgId = grant.organizationId;
 
-  return db.transaction(async (tx) => {
-    const [assignment] = await tx
-      .select({ id: assignments.id })
-      .from(assignments)
-      .where(
-        and(
-          eq(assignments.id, assignmentId),
-          eq(assignments.organizationId, orgId),
-          isNull(assignments.deletedAt),
-        ),
+  return guardReportErrors("start", () =>
+    db.transaction(async (tx) => {
+      const [assignment] = await tx
+        .select({ id: assignments.id })
+        .from(assignments)
+        .where(
+          and(
+            eq(assignments.id, assignmentId),
+            eq(assignments.organizationId, orgId),
+            isNull(assignments.deletedAt),
+          ),
+        );
+      if (!assignment) throw new AccessDeniedError();
+
+      const currentWhere = and(
+        eq(reports.organizationId, orgId),
+        eq(reports.assignmentId, assignment.id),
+        isNull(reports.deletedAt),
+        ne(reports.status, "superseded"),
       );
-    if (!assignment) throw new AccessDeniedError();
+      const [existing] = await tx.select({ id: reports.id }).from(reports).where(currentWhere);
+      if (existing) return { reportId: existing.id, created: false };
 
-    const currentWhere = and(
-      eq(reports.organizationId, orgId),
-      eq(reports.assignmentId, assignment.id),
-      isNull(reports.deletedAt),
-      ne(reports.status, "superseded"),
-    );
-    const [existing] = await tx.select({ id: reports.id }).from(reports).where(currentWhere);
-    if (existing) return { reportId: existing.id, created: false };
+      const template = await findPublishedSystemTemplate(tx, orgId);
+      if (!template) throw new ReportTemplateMissingError();
 
-    const template = await findPublishedSystemTemplate(tx, orgId);
-    if (!template) throw new ReportTemplateMissingError();
-
-    const [inserted] = await tx
-      .insert(reports)
-      .values({
-        id: uuidv7(),
-        organizationId: orgId,
-        assignmentId: assignment.id,
-        templateVersionId: template.id,
-        reportType: REPORT_TYPE,
-        status: "draft",
-        createdBy: grant.employeeId,
-      })
-      .onConflictDoNothing()
-      .returning({ id: reports.id });
-    if (!inserted) {
-      // Et samtidig kall startet rapporten først: samme rapport tilbake
-      const [winner] = await tx.select({ id: reports.id }).from(reports).where(currentWhere);
-      if (!winner) throw new Error("rapporten ble verken laget eller funnet");
-      return { reportId: winner.id, created: false };
-    }
-    // Bare id-er. Ingen adresse, parter eller andre opplysninger fra oppdraget.
-    await recordAuditEvent(tx, grant, {
-      entityType: "report",
-      entityId: inserted.id,
-      action: "create",
-      changes: { assignmentId: assignment.id, templateVersionId: template.id },
-    });
-    return { reportId: inserted.id, created: true };
-  });
+      const [inserted] = await tx
+        .insert(reports)
+        .values({
+          id: uuidv7(),
+          organizationId: orgId,
+          assignmentId: assignment.id,
+          templateVersionId: template.id,
+          reportType: REPORT_TYPE,
+          status: "draft",
+          createdBy: grant.employeeId,
+        })
+        .onConflictDoNothing()
+        .returning({ id: reports.id });
+      if (!inserted) {
+        // Et samtidig kall startet rapporten først: samme rapport tilbake
+        const [winner] = await tx.select({ id: reports.id }).from(reports).where(currentWhere);
+        if (!winner) throw new Error("rapporten ble verken laget eller funnet");
+        return { reportId: winner.id, created: false };
+      }
+      // Bare id-er. Ingen adresse, parter eller andre opplysninger fra oppdraget.
+      await recordAuditEvent(tx, grant, {
+        entityType: "report",
+        entityId: inserted.id,
+        action: "create",
+        changes: { assignmentId: assignment.id, templateVersionId: template.id },
+      });
+      return { reportId: inserted.id, created: true };
+    }),
+  );
 };

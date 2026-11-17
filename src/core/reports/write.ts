@@ -19,7 +19,7 @@ import {
   type LockedTemplate,
   type RoomContext,
 } from "./context";
-import { ReportValidationError } from "./errors";
+import { guardReportErrors, ReportValidationError } from "./errors";
 import { computeRoomRefresh, toRefresh } from "./room-view";
 import type { RoomRef, RoomRefresh, RoomTemplateDocument } from "./types";
 
@@ -54,27 +54,29 @@ export async function withRoomWrite<T>(
 ): Promise<T> {
   const grant = await requireOrganizationAccess(actor, organizationId, "report.edit");
   requireUuid(room?.assignmentId, room?.roomId);
-  return db.transaction(async (tx) => {
-    const context = await loadRoomContext(tx, grant, room, { lock: true });
-    const report = context.report;
-    if (!report) throw new ReportValidationError("report_not_started");
-    if (report.status !== "draft") throw new ReportValidationError("report_not_editable");
-    const template = await loadLockedTemplate(tx, actor, grant, report.templateVersionId);
-    if (template.kind !== "system" || template.reportType !== "condition_report") {
-      throw new ReportValidationError("not_applicable");
-    }
-    return fn({
-      tx,
-      actor,
-      grant,
-      orgId: grant.organizationId,
-      context: { ...context, report },
-      reportId: report.id,
-      template,
-      roomDoc: roomDocumentOf(template.document, context.room.group),
-      now: new Date(),
-    });
-  });
+  return guardReportErrors("write", () =>
+    db.transaction(async (tx) => {
+      const context = await loadRoomContext(tx, grant, room, { lock: true });
+      const report = context.report;
+      if (!report) throw new ReportValidationError("report_not_started");
+      if (report.status !== "draft") throw new ReportValidationError("report_not_editable");
+      const template = await loadLockedTemplate(tx, actor, grant, report.templateVersionId);
+      if (template.kind !== "system" || template.reportType !== "condition_report") {
+        throw new ReportValidationError("not_applicable");
+      }
+      return fn({
+        tx,
+        actor,
+        grant,
+        orgId: grant.organizationId,
+        context: { ...context, report },
+        reportId: report.id,
+        template,
+        roomDoc: roomDocumentOf(template.document, context.room.group),
+        now: new Date(),
+      });
+    }),
+  );
 }
 
 /** Rommet regnet på nytt i samme transaksjon. */
