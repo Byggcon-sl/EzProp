@@ -1,6 +1,7 @@
 export {
   checkDocumentKeys,
   checkDocumentRules,
+  checkMeasureAppliesToTg,
   checkRuleCheckpointGivesTg,
   checkRuleConditionShape,
   checkRuleOutcomeSameCheckpoint,

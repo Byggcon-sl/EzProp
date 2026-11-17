@@ -45,7 +45,7 @@ async function setup() {
 type Ctx = Awaited<ReturnType<typeof setup>>;
 
 const answerTarget = (id: string = uuidv7()): AiTargetRef => ({
-  type: "answer",
+  type: "field_answer",
   id,
   fieldKey: "text",
 });

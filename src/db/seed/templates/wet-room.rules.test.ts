@@ -150,7 +150,8 @@ type ListedCase = {
   id: string;
   rule: (typeof RULE_KEYS)[number];
   spec: Spec;
-  inspectionYear?: number;
+  /** Befaringsåret. Mangler = 2026; `null` = uten befaringsår (B2.12). */
+  inspectionYear?: number | null;
   expected: RuleResult["state"];
   /** Ekstra sjekk av svaret fra `evaluateRules`. */
   check?: (results: RuleResult[]) => void;
@@ -524,6 +525,199 @@ const LISTED: ListedCase[] = [
     spec: { [HOLE]: EMPTY, [READING]: 14.9, [UNIT]: "weight_percent" },
     expected: "not_evaluated",
   },
+  // --- Badet på PC (docs/funksjoner/fase2a-badet-pc.md «Regler», testplanen B2.1–B2.12) ---
+  {
+    id: "B2.1",
+    rule: BEFORE_2000,
+    spec: { [TYPE]: "foil", [DOCS]: "none", [MEMBRANE_YEAR]: 1990 },
+    expected: "triggered",
+    check: (results) => {
+      // Ett forslag på sjiktet, TG3, og ikke TG2 i tillegg
+      const suggestions = results.filter(
+        (r) => r.suggestion?.checkpoint_key === MEMBRANE_DRAIN && r.state === "triggered",
+      );
+      expect(suggestions.map((r) => r.rule_key)).toEqual([BEFORE_2000]);
+    },
+  },
+  {
+    id: "B2.2 2008",
+    rule: PAST_LIFESPAN,
+    spec: { [TYPE]: "foil", [DOCS]: "none", [MEMBRANE_YEAR]: 2008 },
+    expected: "triggered",
+  },
+  {
+    id: "B2.2 2009",
+    rule: PAST_LIFESPAN,
+    spec: { [TYPE]: "foil", [DOCS]: "none", [MEMBRANE_YEAR]: 2009 },
+    expected: "not_triggered",
+  },
+  {
+    id: "B2.4 14,9",
+    rule: NO_MOISTURE,
+    spec: { [HOLE]: "done_no_findings", [READING]: 14.9, [UNIT]: "weight_percent" },
+    expected: "triggered",
+  },
+  {
+    id: "B2.4 15",
+    rule: MOISTURE,
+    spec: { [HOLE]: "done_no_findings", [READING]: 15, [UNIT]: "weight_percent" },
+    expected: "triggered",
+    check: (results) => {
+      expect(resultOf(results, MOISTURE).suggestion).toEqual(MOISTURE_OUTCOME);
+      expect(resultOf(results, NO_MOISTURE).state).toBe("not_triggered");
+    },
+  },
+  ...([PAST_LIFESPAN, BEFORE_2000] as const).map((rule): ListedCase => ({
+    id: "B2.5 T-0051",
+    rule,
+    spec: {
+      [TYPE]: "foil",
+      [DOCS]: "none",
+      [MEMBRANE_YEAR]: EMPTY,
+      [BUILD_YEAR]: EMPTY,
+      [SOURCE]: "unknown",
+    },
+    expected: "not_evaluated",
+    check: (results) => {
+      expect(ageReason(results, rule)).toMatchObject({
+        code: "year_missing",
+        year_source: "unknown",
+      });
+    },
+  })),
+  {
+    id: "B2.6",
+    rule: MOISTURE,
+    spec: {
+      [HOLE]: "done_with_findings",
+      [READING]: 15,
+      [UNIT]: "weight_percent",
+      "wet_room.fall_direction_1": -2,
+      "wet_room.fall_direction_2": 5,
+    },
+    expected: "triggered",
+    check: (results) => {
+      // Samme forslag som med bare fuktmålingen
+      const alone = evaluate(
+        answersOf({ [HOLE]: "done_with_findings", [READING]: 15, [UNIT]: "weight_percent" }),
+      );
+      expect(resultOf(results, MOISTURE).suggestion).toEqual(resultOf(alone, MOISTURE).suggestion);
+    },
+  },
+  // Flere urimelige årstall prøves mot motoren i `evaluate.test.ts` (B2.7)
+  {
+    id: "B2.7 årstall 1799",
+    rule: BEFORE_2000,
+    spec: { [TYPE]: "foil", [DOCS]: "none", [MEMBRANE_YEAR]: 1799 },
+    expected: "not_evaluated",
+    check: (results) => {
+      expect(ageReason(results, BEFORE_2000).code).toBe("year_invalid");
+      expect(ageReason(results, PAST_LIFESPAN).code).toBe("year_invalid");
+    },
+  },
+  {
+    id: "B2.7 årstall 1900",
+    rule: BEFORE_2000,
+    spec: { [TYPE]: "foil", [DOCS]: "none", [MEMBRANE_YEAR]: 1900 },
+    expected: "triggered",
+  },
+  {
+    id: "B2.11 med dokumentasjon 2001",
+    rule: PAST_LIFESPAN,
+    spec: { [TYPE]: "foil", [DOCS]: "declaration_of_conformity", [MEMBRANE_YEAR]: 2001 },
+    expected: "triggered",
+    check: (results) => {
+      expect(ageReason(results, PAST_LIFESPAN)).toMatchObject({ documentation: "with", age: 25 });
+    },
+  },
+  {
+    id: "B2.11 med dokumentasjon 2002",
+    rule: PAST_LIFESPAN,
+    spec: { [TYPE]: "foil", [DOCS]: "declaration_of_conformity", [MEMBRANE_YEAR]: 2002 },
+    expected: "not_triggered",
+  },
+  {
+    id: "B2.11 sjikt 1999",
+    rule: BEFORE_2000,
+    spec: { [TYPE]: "foil", [DOCS]: "none", [MEMBRANE_YEAR]: 1999 },
+    expected: "triggered",
+  },
+  {
+    id: "B2.11 sjikt 2000",
+    rule: BEFORE_2000,
+    spec: { [TYPE]: "foil", [DOCS]: "none", [MEMBRANE_YEAR]: 2000 },
+    expected: "not_triggered",
+  },
+  {
+    id: "B2.11 ukjent materiale 2005",
+    rule: BEFORE_2000,
+    spec: { [TYPE]: "unknown", [DOCS]: "none", [MEMBRANE_YEAR]: 2005 },
+    expected: "not_triggered",
+    check: (results) => {
+      // Ingen aldersforslag fra noen av reglene
+      expect(resultOf(results, PAST_LIFESPAN).suggestion).toBeNull();
+      expect(resultOf(results, BEFORE_2000).suggestion).toBeNull();
+    },
+  },
+  {
+    id: "B2.11 ukjent materiale 1990",
+    rule: BEFORE_2000,
+    spec: { [TYPE]: "unknown", [DOCS]: "none", [MEMBRANE_YEAR]: 1990 },
+    expected: "triggered",
+  },
+  {
+    id: "B2.11 byggeår 1995",
+    rule: BEFORE_2000,
+    spec: { [TYPE]: "foil", [DOCS]: "none", [MEMBRANE_YEAR]: EMPTY, [BUILD_YEAR]: 1995 },
+    expected: "triggered",
+    check: (results) => {
+      expect(ageReason(results, BEFORE_2000)).toMatchObject({
+        year: 1995,
+        year_element_key: BUILD_YEAR,
+      });
+      // Meldingen sier at byggeåret brukes når sjiktets årstall mangler
+      const message = TEMPLATE.rules.find((r) => r.key === BEFORE_2000)!.message ?? "";
+      expect(message).toMatch(/byggeåret for våtrommet/);
+      expect(message).toMatch(/årstall mangler/);
+    },
+  },
+  ...(
+    [
+      [MOISTURE, "done_with_findings"],
+      [MOISTURE, "done_no_findings"],
+      [NO_MOISTURE, "done_no_findings"],
+    ] as const
+  ).map(([rule, drilling]): ListedCase => ({
+    id: `B2.11 15 i RF % ${drilling}`,
+    rule,
+    spec: { [HOLE]: drilling, [READING]: 15, [UNIT]: "relative_humidity" },
+    expected: "not_evaluated",
+    check: (results) => {
+      // Verken forslag om forhøyet fukt eller TG0 (A386)
+      expect(resultOf(results, MOISTURE).suggestion).toBeNull();
+      expect(resultOf(results, NO_MOISTURE).suggestion).toBeNull();
+    },
+  })),
+  {
+    id: "B2.12 uten befaringsår, sjikt 1990",
+    rule: BEFORE_2000,
+    spec: { [TYPE]: "foil", [DOCS]: "none", [MEMBRANE_YEAR]: 1990 },
+    inspectionYear: null,
+    expected: "triggered",
+    check: (results) => {
+      expect(resultOf(results, BEFORE_2000).suggestion).toEqual(BEFORE_2000_OUTCOME);
+    },
+  },
+  {
+    id: "B2.12 uten befaringsår, sjikt 2008",
+    rule: PAST_LIFESPAN,
+    spec: { [TYPE]: "foil", [DOCS]: "none", [MEMBRANE_YEAR]: 2008 },
+    inspectionYear: null,
+    expected: "not_evaluated",
+    check: (results) => {
+      expect(ageReason(results, PAST_LIFESPAN).code).toBe("inspection_year_missing");
+    },
+  },
 ];
 
 // =================================================================================================
@@ -596,7 +790,13 @@ describe("4 regeltestene for badet", () => {
 
   it("4.4 inspection_year_set: hver testsak har befaringsår, og input har det ikke", () => {
     for (const tc of TEMPLATE.rule_test_cases) {
-      expect(tc.inspection_year, `${tc.rule_key}: ${tc.name}`).not.toBeNull();
+      // Unntaket er B2.12: sakene som viser hva aldersreglene gjør uten befaringsår
+      if (tc.name.includes("uten befaringsår")) {
+        expect(tc.inspection_year, `${tc.rule_key}: ${tc.name}`).toBeNull();
+        expect([BEFORE_2000, PAST_LIFESPAN], tc.name).toContain(tc.rule_key);
+      } else {
+        expect(tc.inspection_year, `${tc.rule_key}: ${tc.name}`).not.toBeNull();
+      }
       for (const key of Object.keys(tc.input)) {
         expect(key, `${tc.rule_key}: ${tc.name}`).not.toMatch(/inspection|befaring/i);
         expect(key, `${tc.rule_key}: ${tc.name}`).toMatch(/^wet_room\./);
@@ -607,7 +807,7 @@ describe("4 regeltestene for badet", () => {
   it.each(LISTED.map((c) => ({ ...c, title: `${c.id} ${c.rule} gir ${c.expected}` })))(
     "4.5 each_listed_case_exists: $title",
     ({ rule, spec, expected, inspectionYear, check }) => {
-      const year = inspectionYear ?? YEAR;
+      const year = inspectionYear === undefined ? YEAR : inspectionYear;
       // Direkte med motoren
       const results = evaluate(answersOf(spec), year);
       const result = resultOf(results, rule);

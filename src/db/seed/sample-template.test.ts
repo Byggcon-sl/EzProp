@@ -1,11 +1,8 @@
 import { sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AccessDeniedError } from "@/core/access";
 import {
-  createDraftVersion,
   getTemplateVersion,
   isSameTemplateContent,
-  listTemplateFamilies,
   parseTemplateDocument,
   type TemplateDocument,
 } from "@/core/templates";
@@ -94,14 +91,6 @@ function parsed(document: unknown): TemplateDocument {
   return result.document;
 }
 
-/** Malfilen med én avvikstekst endret. */
-function changedDocument(): TemplateDocument {
-  const document = structuredClone(parsed(wetRoomTemplate));
-  const first = document.outcomes[0]!;
-  document.outcomes[0] = { ...first, deviation_text: `${first.deviation_text ?? ""} Endret.` };
-  return document;
-}
-
 describe("isSampleOrganization", () => {
   it("sann bare med sampleData = true (boolsk), og bare for organisasjonen selv", async () => {
     const sample = await contextFor({ sampleData: true }, "Prøve A");
@@ -118,148 +107,14 @@ describe("isSampleOrganization", () => {
   });
 });
 
+// Opprettelse, gjentatt kjøring, ny versjon, utkast som finnes, bare prøveorganisasjonen,
+// tenant-isolasjon og at tjenestene brukes, prøves én gang: i `sample-assignments.test.ts`
+// (3.1–3.8). Her står bare det som ikke prøves der (småfunn fra PR #159: doble seed-tester).
 describe("ensureSampleTemplate", () => {
-  it("seed_creates_published_v1: én familie, én publisert v1, åtte kontrollpunkter, tekstene er utkast", async () => {
-    const context = await contextFor({ sampleData: true });
-    expect(await ensureSampleTemplate(context)).toBe("created");
-
-    const families = await listTemplateFamilies(context.actor, context.organizationId);
-    expect(families).toHaveLength(1);
-    const family = families[0]!;
-    expect(family).toMatchObject({
-      name: "Tilstandsrapport bolig",
-      kind: "system",
-      reportType: "condition_report",
-    });
-    expect(family.versions).toHaveLength(1);
-    expect(family.versions[0]).toMatchObject({ versionNumber: 1, status: "published" });
-
-    const version = await getTemplateVersion(
-      context.actor,
-      context.organizationId,
-      family.versions[0]!.id,
-    );
-    expect(version.document.checkpoints).toHaveLength(8);
-    expect(isSameTemplateContent(version.document, parsed(wetRoomTemplate))).toBe(true);
-    const statuses = await rows<{ text_status: string }>(
-      sql`select text_status from outcomes where organization_id = ${context.organizationId}
-          union all
-          select text_status from standard_measures where organization_id = ${context.organizationId}`,
-    );
-    expect(statuses.length).toBeGreaterThan(0);
-    expect(new Set(statuses.map((row) => row.text_status))).toEqual(new Set(["draft"]));
-  });
-
-  it("seed_twice_no_new_version: andre kjøring gir existing, ingen ny versjon, intet utkast og ingen nye logg-rader", async () => {
-    const context = await contextFor({ sampleData: true });
-    await ensureSampleTemplate(context);
-    const before = {
-      versions: await versions(context.organizationId),
-      audit: await countFor("audit_log", context.organizationId),
-      events: await countFor("events", context.organizationId),
-    };
-
-    expect(await ensureSampleTemplate(context)).toBe("existing");
-    expect(await versions(context.organizationId)).toEqual(before.versions);
-    expect(await countFor("audit_log", context.organizationId)).toBe(before.audit);
-    expect(await countFor("events", context.organizationId)).toBe(before.events);
-  });
-
-  it("seed_changed_document_new_version: v2 published, v1 retired og urørt", async () => {
-    const context = await contextFor({ sampleData: true });
-    await ensureSampleTemplate(context);
-    const [v1] = await versions(context.organizationId);
-    const v1Document = (await getTemplateVersion(context.actor, context.organizationId, v1!.id))
-      .document;
-
-    expect(await ensureSampleTemplate(context, changedDocument())).toBe("created");
-    const after = await versions(context.organizationId);
-    expect(after.map((v) => [v.version_number, v.status])).toEqual([
-      [1, "retired"],
-      [2, "published"],
-    ]);
-    const v1After = await getTemplateVersion(context.actor, context.organizationId, v1!.id);
-    expect(v1After.document).toEqual(v1Document);
-  });
-
-  it("seed_existing_draft: et utkast som finnes, brukes når innholdet er endret", async () => {
-    const context = await contextFor({ sampleData: true });
-    await ensureSampleTemplate(context);
-    const [family] = await listTemplateFamilies(context.actor, context.organizationId);
-    const { versionId } = await createDraftVersion(
-      context.actor,
-      context.organizationId,
-      family!.id,
-      TEST_NOW,
-    );
-
-    expect(await ensureSampleTemplate(context, changedDocument())).toBe("created");
-    const after = await versions(context.organizationId);
-    expect(after).toHaveLength(2);
-    expect(after.find((v) => v.id === versionId)?.status).toBe("published");
-  });
-
-  it("seed_existing_draft: et utkast som finnes, står når innholdet er likt", async () => {
-    const context = await contextFor({ sampleData: true });
-    await ensureSampleTemplate(context);
-    const [family] = await listTemplateFamilies(context.actor, context.organizationId);
-    await createDraftVersion(context.actor, context.organizationId, family!.id, TEST_NOW);
-    const before = await versions(context.organizationId);
-
-    expect(await ensureSampleTemplate(context)).toBe("existing");
-    expect(await versions(context.organizationId)).toEqual(before);
-    expect(before.map((v) => v.status)).toEqual(["published", "draft"]);
-  });
-
   it("ugyldig dokument: kaster, og ingenting skrives", async () => {
     const context = await contextFor({ sampleData: true });
     await expect(ensureSampleTemplate(context, { sections: "feil" })).rejects.toThrow();
     expect(await countFor("template_families", context.organizationId)).toBe(0);
-  });
-
-  it.each<{ name: string; settings: Settings }>([
-    { name: "nøkkelen sampleData mangler", settings: "none" },
-    { name: "sampleData = false", settings: { sampleData: false } },
-    { name: 'sampleData = "true" (tekst)', settings: { sampleData: "true" } },
-    { name: "sampleData = 1", settings: { sampleData: 1 } },
-  ])("seed_only_sample_org: $name gir skipped og ingen malrader", async ({ settings }) => {
-    const context = await contextFor(settings);
-    expect(await ensureSampleTemplate(context)).toBe("skipped");
-    expect(await countFor("template_families", context.organizationId)).toBe(0);
-    expect(await countFor("template_versions", context.organizationId)).toBe(0);
-  });
-
-  it("seed_family_not_visible_in_other_org: annen organisasjon ser ingen familie og får nei på versjonen", async () => {
-    const sample = await contextFor({ sampleData: true }, "Prøve A");
-    const other = await contextFor({ sampleData: true }, "Annen B");
-    await ensureSampleTemplate(sample);
-    const [family] = await listTemplateFamilies(sample.actor, sample.organizationId);
-    const versionId = family!.versions[0]!.id;
-
-    expect(await listTemplateFamilies(other.actor, other.organizationId)).toEqual([]);
-    await expect(
-      getTemplateVersion(other.actor, sample.organizationId, versionId),
-    ).rejects.toBeInstanceOf(AccessDeniedError);
-    await expect(
-      getTemplateVersion(other.actor, other.organizationId, versionId),
-    ).rejects.toThrow();
-  });
-
-  it("seed_uses_services: created_by og published_by er admin i prøveorganisasjonen", async () => {
-    const context = await contextFor({ sampleData: true });
-    await ensureSampleTemplate(context);
-    const [admin] = await rows<{ id: string }>(
-      sql`select id from employees where organization_id = ${context.organizationId}
-          and user_id = ${context.actor.id}`,
-    );
-    const [family] = await rows<{ created_by: string }>(
-      sql`select created_by from template_families where organization_id = ${context.organizationId}`,
-    );
-    const [version] = await rows<{ created_by: string; published_by: string }>(
-      sql`select created_by, published_by from template_versions where organization_id = ${context.organizationId}`,
-    );
-    expect(family!.created_by).toBe(admin!.id);
-    expect(version!.published_by).toBe(admin!.id);
   });
 });
 
@@ -397,5 +252,90 @@ describe("regler bad: seed av malen med reglene", () => {
       "tek17",
       "unknown",
     ]);
+  });
+});
+
+// --- Badet på PC (docs/funksjoner/fase2a-badet-pc-testplan.md B2.10) ---------------------------
+
+const CHOOSE_TG2_TG3 = "choose_tg2_tg3";
+
+/** Malinnholdet før badet på PC: «Ukjent» med gammelt navn, ett tiltak uten TG per «velg»-utfall. */
+function beforeBathroomPc(): TemplateDocument {
+  const document = structuredClone(parsed(wetRoomTemplate));
+  document.element_options = document.element_options.map((o) =>
+    o.element_key === "wet_room.build_year_source" && o.key === "unknown"
+      ? { ...o, label: "Ukjent (byggeåret for bygningen brukes)" }
+      : o,
+  );
+  document.standard_measures = document.standard_measures
+    .filter((m) => m.applies_to_tg !== 2)
+    .map((m) => ({ ...m, applies_to_tg: null, sort_order: 0 }));
+  return document;
+}
+
+/** Alle faste koder i et maldokument (seksjon, felt, valg, punkt, spørsmål, utfall, regel). */
+function fixedKeys(document: TemplateDocument): string[] {
+  return [
+    ...document.sections.map((x) => `section ${x.key}`),
+    ...document.elements.map((x) => `element ${x.key}`),
+    ...document.element_options.map((x) => `option ${x.element_key} ${x.key}`),
+    ...document.checkpoints.map((x) => `checkpoint ${x.key}`),
+    ...document.deviation_questions.map((x) => `question ${x.key}`),
+    ...document.outcomes.map((x) => `outcome ${x.question_key} ${x.key}`),
+    ...document.rules.map((x) => `rule ${x.key}`),
+  ].sort();
+}
+
+describe("badet på PC: seed av malen", () => {
+  it("B2.10 ny publisert versjon fra seed, og ingen faste koder er endret eller fjernet", async () => {
+    const context = await contextFor({ sampleData: true });
+    expect(await ensureSampleTemplate(context, beforeBathroomPc())).toBe("created");
+    expect(await ensureSampleTemplate(context)).toBe("created");
+
+    const [v1, v2] = await versions(context.organizationId);
+    expect([v1!.status, v2!.status]).toEqual(["retired", "published"]);
+    const before = (await getTemplateVersion(context.actor, context.organizationId, v1!.id))
+      .document;
+    const after = (await getTemplateVersion(context.actor, context.organizationId, v2!.id))
+      .document;
+    expect(isSameTemplateContent(after, parsed(wetRoomTemplate))).toBe(true);
+    expect(fixedKeys(after)).toEqual(fixedKeys(before));
+
+    // T-0051: bare navnet er endret
+    const unknown = after.element_options.find(
+      (o) => o.element_key === "wet_room.build_year_source" && o.key === "unknown",
+    );
+    expect(unknown?.label).toBe("Ukjent");
+
+    // T-0060: tiltak per TG bare på «velg TG2 eller TG3», lagret i databasen
+    const chooseOutcomes = new Set(
+      after.outcomes
+        .filter((o) => o.kind === CHOOSE_TG2_TG3)
+        .map((o) => `${o.question_key}/${o.key}`),
+    );
+    expect(chooseOutcomes.size).toBeGreaterThan(0);
+    for (const m of after.standard_measures) {
+      const choose = chooseOutcomes.has(`${m.question_key}/${m.outcome_key}`);
+      if (!choose) expect(m.applies_to_tg, m.question_key).toBeNull();
+    }
+    for (const outcome of chooseOutcomes) {
+      const tgs = after.standard_measures
+        .filter((m) => `${m.question_key}/${m.outcome_key}` === outcome)
+        .map((m) => m.applies_to_tg)
+        .sort();
+      expect(tgs, outcome).toEqual([2, 3]);
+    }
+    const stored = await rows<{ applies_to_tg: number | null; text_status: string }>(
+      sql`select applies_to_tg, text_status from standard_measures
+          where organization_id = ${context.organizationId} and deleted_at is null`,
+    );
+    expect(stored.some((r) => r.applies_to_tg === 2)).toBe(true);
+    expect(stored.some((r) => r.applies_to_tg === 3)).toBe(true);
+    expect(new Set(stored.map((r) => r.text_status))).toEqual(new Set(["draft"]));
+
+    // v1 er urørt
+    expect(
+      (await getTemplateVersion(context.actor, context.organizationId, v1!.id)).document,
+    ).toEqual(before);
   });
 });

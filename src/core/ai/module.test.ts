@@ -57,7 +57,7 @@ function request(overrides: Partial<AiSuggestionRequest> = {}): AiSuggestionRequ
     feature: "language_polish",
     assignmentId: null,
     reportId: null,
-    target: { type: "answer", id: randomUUID(), fieldKey: "text" },
+    target: { type: "field_answer", id: randomUUID(), fieldKey: "text" },
     fields: { text: TEXT },
     ...overrides,
   };
@@ -126,7 +126,7 @@ describe("requestSuggestion", () => {
 
   it.each([
     ["ukjent felt", request({ fields: { text: TEXT, email: "x" } })],
-    ["TG som mål", request({ target: { type: "answer", id: randomUUID(), fieldKey: "tg" } })],
+    ["TG som mål", request({ target: { type: "field_answer", id: randomUUID(), fieldKey: "tg" } })],
     ["reportId satt", request({ reportId: randomUUID() })],
     ["for lang verdi", request({ fields: { text: "a".repeat(5001) } })],
     ["ukjent oppdrag", request({ assignmentId: randomUUID() })],
@@ -207,7 +207,7 @@ describe("requestSuggestion", () => {
     await enableAi(org.id);
     const first = await inspectorGrant(org.id);
     const second = await inspectorGrant(org.id);
-    const target = { type: "answer", id: randomUUID(), fieldKey: "text" };
+    const target = { type: "field_answer", id: randomUUID(), fieldKey: "text" };
     const a = request({ target });
     const b = request({ target, fields: { text: "vinduet lekker" } });
 
@@ -299,7 +299,7 @@ describe("recordDecision", () => {
     const org = await createOrganization();
     await enableAi(org.id);
     const grant = await inspectorGrant(org.id);
-    const target = { type: "answer", id: randomUUID(), fieldKey: "text" };
+    const target = { type: "field_answer", id: randomUUID(), fieldKey: "text" };
     const a = request({ target });
     await requestSuggestion(grant, a);
     await requestSuggestion(grant, request({ target, fields: { text: "nytt forslag" } }));

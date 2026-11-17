@@ -299,7 +299,7 @@ async function patternSetup(variant: PatternVariant) {
   const organization = await createOrganization("Oppdiktet Takst A");
   await enableAi(organization.id);
   const requester = await employeeWithGrant(organization.id, ["manager"], "Test Leder Forslag");
-  const target = { type: "answer", id: crypto.randomUUID(), fieldKey: "text" };
+  const target = { type: "field_answer", id: crypto.randomUUID(), fieldKey: "text" };
   const accepted = await createAiUsageLog(organization.id, {
     employeeId: requester.grant.employeeId,
     targetRef: target,
@@ -396,7 +396,7 @@ describe("tilgang per rolle: forslagsmønsteret (6)", () => {
     )) as unknown as unknown[];
     expect(permissions).toHaveLength(0);
 
-    const target = { type: "answer", id: crypto.randomUUID(), fieldKey: "text" };
+    const target = { type: "field_answer", id: crypto.randomUUID(), fieldKey: "text" };
     const result = await requestSuggestion(person.grant, validRequest({ target }));
     if (result.kind !== "suggestion") throw new Error("forventet forslag");
     expect(await getSuggestionStatus(person.grant, result.usageId)).toEqual({

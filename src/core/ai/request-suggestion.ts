@@ -49,7 +49,7 @@ function hasEmptyValue(fields: Readonly<Record<string, string>>): boolean {
 }
 
 /** Måltyper som ikke kan kontrolleres mot organisasjonen ennå (A166, A173). */
-const FAKE_ONLY_TARGET_TYPES: ReadonlySet<string> = new Set([AI_TRIAL_TARGET_TYPE, "answer"]);
+const FAKE_ONLY_TARGET_TYPES: ReadonlySet<string> = new Set([AI_TRIAL_TARGET_TYPE, "field_answer"]);
 
 /** Koden til den falske leverandøren. Alt annet regnes som ekte. */
 const FAKE_PROVIDER_CODE = "fake";

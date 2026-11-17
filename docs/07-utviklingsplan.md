@@ -163,11 +163,15 @@ Første punkt tas **før Byggcon-profilen**, fordi det retter reglene som alt er
 
 Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full produksjonskvalitet (ikke en prototype som bygges om senere). Da kan Ståle se og godkjenne fag og utseende tidlig, og feil i grunnstrukturen oppdages før de blir dyre.
 
-- [ ] **Badet på PC:** kontrollpunktene, avvikskort (TG, årsak, konsekvens, tiltak, kostnad) og TGIU på punktet. TG-forslag fra reglene kan godtas, endres eller avvises.
+- [ ] **Badet på PC:** kontrollpunktene, avvikskort (TG, årsak, konsekvens, tiltak, kostnad) og TGIU på punktet. TG-forslag fra reglene kan godtas, endres eller avvises. *Skjermen levert i PR #224 (17.11.2026); punktet krysses av når testdata del 2 under er levert (A359).*
   - **Testdata, del 2** (A300, fra «Testdata som ligner en ekte arbeidshverdag»): testdataene utvides med bilder laget av skriptet (uten personer), funn, TG og målinger per kontrollpunkt, og byggeår når kolonnen finnes. TG og funn kommer fra regelmotoren og malens testsaker, aldri skrevet fritt i seed; tekstene merkes «utkast, ikke godkjent av fagrådet». TG3 har kostnadsanslag, TG2 og TG3 årsak og konsekvens, og el, rekkverk og HMS får ingen TG. ki-ansvarlig vurderer oppgaven på nytt.
 - [ ] **KI i veien:** forslag fra frasebanken, språkvask av avviksteksten og utkast til sammendrag, gjennom KI-grunnmuren.
 - [ ] **Publisering av badet:** sperren for det som gjelder våtrom (TG2 eller TG3 uten årsak og konsekvens, TG3 uten kostnad, våtrom uten hulltaking eller begrunnelse), med aktiv overstyring og logg.
 - [ ] **ADR: valg av PDF-motor,** og PDF-en av badet i Byggcons profil, i ferdig kvalitet. Krav til motoren: stående og liggende, **flere PDF-profiler av samme rapport** (ulik layout, design og farger fra de samme dataene, Ståle 16.11.2026), bilder med markering, innholdsfortegnelse, norsk orddeling og samme resultat hver gang. Testutskriften med 50 bilder kommer i bredden.
+
+**Fra forbedreren**
+
+- [ ] **«Skriv det du ser»: KI finner utfallet** (bygges etter «KI i veien», A384): takstmannen skriver eller dikterer fritt i avvikssøket («sprekk i flis ved sluket, litt løs»), og KI viser opptil tre utfall fra den låste malversjonen med punktnavn og standardtekst, ingen forhåndsvalgt. Valgt utfall lager avviket som ved manuelt valg, og notatet tilbys som forslag til avviksteksten (bruk / behold / angre). KI rangerer bare likhet, setter aldri TG og velger aldri utfall. Gjennom `src/core/ai` med persondatafilter, logg i `ai_usage_log`, falsk leverandør og eget evalueringssett (`pnpm ai:eval outcome_match`). Uten KI eller nett: tekstsøket fra «Badet på PC». Ingen nye tabeller.
 
 **Ferdig når:** På ett testoppdrag kan badet fylles ut, få TG-forslag fra reglene og tekstforslag fra KI, publiseres og bli til en PDF. Testlaget har prøvd veien, og Ståle har sett den.
 

@@ -111,12 +111,16 @@ test.describe("testoppdragene (pc og ipad)", () => {
       "aria-current",
       "page",
     );
+    // Andre e2e-filer legger egne oppdrag under «Under arbeid» i prøveorganisasjonen, og køen
+    // viser høyst 50 kort. Derfor søkes hvert testoppdrag opp på adressen.
     for (const sample of inProgress) {
+      await page.goto(queueUrl("in_progress", sample.property.address));
       await expect(
         cards(page).filter({ hasText: sample.property.address }),
         `${sample.externalRef} i «Under arbeid»`,
       ).toHaveCount(1);
     }
+    await page.goto(queueUrl("in_progress", detached.property.address));
     await expect(cards(page).filter({ hasText: detached.property.address })).toHaveCount(0);
   });
 

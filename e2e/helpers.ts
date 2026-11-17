@@ -527,6 +527,8 @@ type E2eEmployee = {
   roleLabel: string;
   /** Navnet på konstanten i feilmeldingene, slik at det er lett å finne ut hva som må gjøres. */
   label: string;
+  /** Kontoret fra seed den ansatte skal høre til (for eksempel «Bodø»). Settes bare hvis kontor mangler. */
+  officeName?: string;
 };
 
 /**
@@ -539,7 +541,14 @@ type E2eEmployee = {
  *   eller rollen bare som slettet/deaktivert, kastes en feil som sier hva som må gjøres.
  * - Gjenoppretter, sletter eller endrer ingenting.
  */
-async function ensureEmployee({ email, name, role, roleLabel, label }: E2eEmployee): Promise<void> {
+async function ensureEmployee({
+  email,
+  name,
+  role,
+  roleLabel,
+  label,
+  officeName,
+}: E2eEmployee): Promise<void> {
   const databaseUrl = e2eDatabaseUrl();
   assertLocalOrTestDatabase(databaseUrl, process.env.TEST_DATABASE_URL);
   const sql = postgres(databaseUrl, { max: 1, onnotice: () => {} });
@@ -584,6 +593,17 @@ async function ensureEmployee({ email, name, role, roleLabel, label }: E2eEmploy
           and c.deleted_at is null
         order by c.created_at limit 1)
       where id = ${employee.id} and organization_id = ${organizationId} and company_id is null`;
+    if (officeName) {
+      const [office] = await sql<{ id: string }[]>`
+        select id from offices
+        where organization_id = ${organizationId} and name = ${officeName} and deleted_at is null
+        order by created_at limit 1`;
+      if (!office) throw new Error(`Fant ikke kontoret ${officeName} fra seed (kjør pnpm db:seed)`);
+      // Fast kontor: settes bare hvis den ansatte ikke har kontor fra før.
+      await sql`
+        update employees set office_id = ${office.id}
+        where id = ${employee.id} and organization_id = ${organizationId} and office_id is null`;
+    }
     const roles = await sql<{ deleted_at: Date | null }[]>`
       select deleted_at from employee_roles
       where employee_id = ${employee.id} and role = ${role}::employee_role`;
@@ -618,6 +638,25 @@ export async function ensureInspector(): Promise<void> {
 export async function logInAsInspector(page: Page) {
   await ensureInspector();
   await logIn(page, INSPECTOR_EMAIL);
+}
+
+/** Oppdiktet takstmann med fast kontor (Bodø fra seed) for e2e. Ingen ekte navn eller adresser. */
+export const INSPECTOR_WITH_OFFICE_EMAIL = "takstmann-kontor@example.com";
+
+/**
+ * Logger inn som den oppdiktede takstmannen med fast kontor (rolle `inspector`, kontoret «Bodø»).
+ * Brukes der siden skal vise det forhåndsvalgte kontoret, ikke hele kontorlisten.
+ */
+export async function logInAsInspectorWithOffice(page: Page) {
+  await ensureEmployee({
+    email: INSPECTOR_WITH_OFFICE_EMAIL,
+    name: "Oppdiktet takstmann med kontor",
+    role: "inspector",
+    roleLabel: "takstmann",
+    label: "INSPECTOR_WITH_OFFICE_EMAIL",
+    officeName: "Bodø",
+  });
+  await logIn(page, INSPECTOR_WITH_OFFICE_EMAIL);
 }
 
 /**

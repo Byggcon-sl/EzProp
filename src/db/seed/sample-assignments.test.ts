@@ -1490,7 +1490,7 @@ describe("seed-steget for testoppdragene: KI med falsk leverandør, utviklerens 
       feature: "language_polish",
       assignmentId: null,
       reportId: null,
-      target: { type: "answer", id: crypto.randomUUID(), fieldKey: "text" },
+      target: { type: "field_answer", id: crypto.randomUUID(), fieldKey: "text" },
       fields: { text: "taket har noen sprekker i takstein ved mønet" },
     });
     expect(result.kind).toBe("suggestion");

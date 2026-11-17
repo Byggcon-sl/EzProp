@@ -104,7 +104,7 @@ describe("funksjonsdefinisjonene (2)", () => {
     // Skrevet om bevisst (docs/funksjoner/fase2a-forslagsmonster.md «Data», A166): prøvesiden
     // /prove/ki har fått sitt eget mål `ai_trial`. Svaret i teksten (`answer`) står først.
     expect(definition.allowedTargets.map((target) => ({ ...target }))).toEqual([
-      { type: "answer", fieldKey: "text" },
+      { type: "field_answer", fieldKey: "text" },
       { type: "ai_trial", fieldKey: "text" },
     ]);
   });
@@ -139,14 +139,14 @@ describe("funksjonsdefinisjonene (2)", () => {
       code: "invented_feature",
       permission: "report.edit",
       allowedFields: ["text", "email", "contacts.phone", "tg_value"],
-      allowedTargets: [{ type: "answer", fieldKey: "tg" }],
+      allowedTargets: [{ type: "field_answer", fieldKey: "tg" }],
       promptVersion: "invented_feature.v1",
     };
     const found = violations(invented);
     expect(found).toContain("tillatt-liste: email (sperrelisten)");
     expect(found).toContain("tillatt-liste: contacts.phone (sperrelisten)");
     expect(found).toContain("tillatt-liste: tg_value (TG)");
-    expect(found).toContain("mål: answer.tg (TG)");
+    expect(found).toContain("mål: field_answer.tg (TG)");
   });
 
   it("2.5 ledeteksten language_polish.v1 finnes, er ikke tom og har ingen gjetteord", () => {
