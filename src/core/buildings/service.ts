@@ -28,7 +28,7 @@ import {
   type AreaSum,
 } from "./codes";
 import { numberRoomDrafts } from "./room-presets";
-import { BuildingNotEmptyError, FloorNotEmptyError, PropertyMissingError } from "./errors";
+import { PropertyMissingError } from "./errors";
 import {
   addRoomsInputSchema,
   buildingInputSchema,
@@ -110,6 +110,10 @@ export type AssignmentBuildings = {
 };
 
 export type SaveResult = { id: string; created: boolean; changed: boolean };
+
+/** Det som ble fjernet i én slettegruppe (A414). Arealradene følger etasjen og står ikke her. */
+export type RemovedItem = { type: "building" | "floor" | "room"; id: string };
+export type RemoveResult = { removed: RemovedItem[] };
 
 const FLOOR_FIELDS = ["name", "level", "belowGround"] as const;
 const AREA_FIELDS = ["braI", "braE", "braB", "alh", "measuredBy", "method", "comment"] as const;
@@ -336,8 +340,124 @@ async function employeeIsActive(tx: DbExecutor, orgId: string, employeeId: strin
   return row !== undefined;
 }
 
-function softDelete(grant: EmployeeGrant) {
-  return { deletedAt: new Date(), deletedBy: grant.employeeId, updatedBy: grant.employeeId };
+/**
+ * Feltene for myk sletting. `deletedAt` beregnes én gang per fjerning og gis inn, slik at alle
+ * radene i slettegruppen får nøyaktig samme tidspunkt (A411, A414).
+ */
+function softDelete(grant: EmployeeGrant, deletedAt: Date) {
+  return { deletedAt, deletedBy: grant.employeeId, updatedBy: grant.employeeId };
+}
+
+/** De aktive etasjene i bygningene, låst. */
+async function lockActiveFloors(tx: DbExecutor, orgId: string, buildingIds: string[]) {
+  if (buildingIds.length === 0) return [];
+  return tx
+    .select({ id: floors.id, reportBuildingId: floors.reportBuildingId })
+    .from(floors)
+    .where(
+      and(
+        eq(floors.organizationId, orgId),
+        inArray(floors.reportBuildingId, buildingIds),
+        isNull(floors.deletedAt),
+      ),
+    )
+    .orderBy(asc(floors.id))
+    .for("update");
+}
+
+/** De aktive rommene i etasjene, låst. */
+async function lockActiveRooms(tx: DbExecutor, orgId: string, floorIds: string[]) {
+  if (floorIds.length === 0) return [];
+  return tx
+    .select({ id: rooms.id, floorId: rooms.floorId })
+    .from(rooms)
+    .where(
+      and(
+        eq(rooms.organizationId, orgId),
+        inArray(rooms.floorId, floorIds),
+        isNull(rooms.deletedAt),
+      ),
+    )
+    .orderBy(asc(rooms.id))
+    .for("update");
+}
+
+/** De aktive arealradene i etasjene, låst. */
+async function lockActiveAreas(tx: DbExecutor, orgId: string, floorIds: string[]) {
+  if (floorIds.length === 0) return [];
+  return tx
+    .select({ id: floorAreas.id, floorId: floorAreas.floorId })
+    .from(floorAreas)
+    .where(
+      and(
+        eq(floorAreas.organizationId, orgId),
+        inArray(floorAreas.floorId, floorIds),
+        isNull(floorAreas.deletedAt),
+      ),
+    )
+    .orderBy(asc(floorAreas.id))
+    .for("update");
+}
+
+/**
+ * Myk-sletter rommene og arealradene i etasjene med samme tidspunkt, med én linje i
+ * revisjonsloggen per rad. Brukes av «Fjern» på etasje og bygning (A414).
+ */
+async function removeFloorContents(
+  tx: DbExecutor,
+  grant: EmployeeGrant,
+  assignmentId: string,
+  floorIds: string[],
+  deletedAt: Date,
+) {
+  const orgId = grant.organizationId;
+  const roomRows = await lockActiveRooms(tx, orgId, floorIds);
+  const areaRows = await lockActiveAreas(tx, orgId, floorIds);
+  if (roomRows.length > 0) {
+    await tx
+      .update(rooms)
+      .set(softDelete(grant, deletedAt))
+      .where(
+        and(
+          eq(rooms.organizationId, orgId),
+          inArray(
+            rooms.id,
+            roomRows.map((row) => row.id),
+          ),
+        ),
+      );
+  }
+  for (const room of roomRows) {
+    await recordAuditEvent(tx, grant, {
+      entityType: "room",
+      entityId: room.id,
+      action: "delete",
+      changes: { assignmentId, floorId: room.floorId },
+    });
+  }
+  if (areaRows.length > 0) {
+    await tx
+      .update(floorAreas)
+      .set(softDelete(grant, deletedAt))
+      .where(
+        and(
+          eq(floorAreas.organizationId, orgId),
+          inArray(
+            floorAreas.id,
+            areaRows.map((row) => row.id),
+          ),
+        ),
+      );
+  }
+  for (const area of areaRows) {
+    await recordAuditEvent(tx, grant, {
+      entityType: "floor_area",
+      entityId: area.id,
+      action: "delete",
+      changes: { assignmentId, floorId: area.floorId },
+    });
+  }
+  return roomRows;
 }
 
 /**
@@ -587,34 +707,44 @@ export async function saveBuilding(
   });
 }
 
-/** Fjerner (myk sletting) en bygning uten aktive etasjer, ellers `BuildingNotEmptyError` (A98). */
+/**
+ * Fjerner (myk sletting) en bygning med de aktive etasjene, rommene og arealradene, som én
+ * slettegruppe med ett felles tidspunkt og samme `deleted_by` (A414, erstatter A98). Én linje i
+ * revisjonsloggen per rad og én hendelse for bygningen, med antallet i gruppen.
+ */
 export async function removeBuilding(
   actor: Actor,
   organizationId: string,
   buildingId: string,
-): Promise<{ id: string }> {
+): Promise<RemoveResult> {
   const grant = await requireOrganizationAccess(actor, organizationId, "assignment.edit");
   requireUuid(buildingId);
   const orgId = grant.organizationId;
 
   return db.transaction(async (tx) => {
     const building = await lockBuilding(tx, orgId, buildingId);
-    const [floor] = await tx
-      .select({ id: floors.id })
-      .from(floors)
-      .where(
-        and(
-          eq(floors.organizationId, orgId),
-          eq(floors.reportBuildingId, building.id),
-          isNull(floors.deletedAt),
-        ),
-      )
-      .limit(1);
-    if (floor) throw new BuildingNotEmptyError();
+    const now = new Date();
+    const floorRows = await lockActiveFloors(tx, orgId, [building.id]);
+    const floorIds = floorRows.map((row) => row.id);
+    const roomRows = await removeFloorContents(tx, grant, building.assignmentId, floorIds, now);
 
+    if (floorIds.length > 0) {
+      await tx
+        .update(floors)
+        .set(softDelete(grant, now))
+        .where(and(eq(floors.organizationId, orgId), inArray(floors.id, floorIds)));
+    }
+    for (const floor of floorRows) {
+      await recordAuditEvent(tx, grant, {
+        entityType: "floor",
+        entityId: floor.id,
+        action: "delete",
+        changes: { assignmentId: building.assignmentId, reportBuildingId: building.id },
+      });
+    }
     await tx
       .update(reportBuildings)
-      .set(softDelete(grant))
+      .set(softDelete(grant, now))
       .where(and(eq(reportBuildings.id, building.id), eq(reportBuildings.organizationId, orgId)));
     await recordAuditEvent(tx, grant, {
       entityType: "report_building",
@@ -622,12 +752,18 @@ export async function removeBuilding(
       action: "delete",
       changes: { assignmentId: building.assignmentId },
     });
+
+    const removed: RemovedItem[] = [
+      { type: "building", id: building.id },
+      ...floorRows.map((row) => ({ type: "floor" as const, id: row.id })),
+      ...roomRows.map((row) => ({ type: "room" as const, id: row.id })),
+    ];
     await recordEvent(tx, grant, {
       type: "assignment.building_removed",
       assignmentId: building.assignmentId,
-      data: { buildingId: building.id, created: false },
+      data: { buildingId: building.id, created: false, groupCount: removed.length },
     });
-    return { id: building.id };
+    return { removed };
   });
 }
 
@@ -708,45 +844,26 @@ export async function saveFloor(
 }
 
 /**
- * Fjerner (myk sletting) en etasje uten aktive rom, ellers `FloorNotEmptyError` (A98).
- * Arealraden myk-slettes sammen med etasjen.
+ * Fjerner (myk sletting) en etasje med de aktive rommene og arealraden, som én slettegruppe med
+ * ett felles tidspunkt og samme `deleted_by` (A411, A414, erstatter A98). Én linje i
+ * revisjonsloggen per rad og én hendelse for etasjen, med antallet i gruppen.
  */
 export async function removeFloor(
   actor: Actor,
   organizationId: string,
   floorId: string,
-): Promise<{ id: string }> {
+): Promise<RemoveResult> {
   const grant = await requireOrganizationAccess(actor, organizationId, "assignment.edit");
   requireUuid(floorId);
   const orgId = grant.organizationId;
 
   return db.transaction(async (tx) => {
     const floor = await lockFloor(tx, orgId, floorId);
-    const [room] = await tx
-      .select({ id: rooms.id })
-      .from(rooms)
-      .where(
-        and(eq(rooms.organizationId, orgId), eq(rooms.floorId, floor.id), isNull(rooms.deletedAt)),
-      )
-      .limit(1);
-    if (room) throw new FloorNotEmptyError();
-
-    const area = await findFloorArea(tx, orgId, floor.id);
-    if (area) {
-      await tx
-        .update(floorAreas)
-        .set(softDelete(grant))
-        .where(and(eq(floorAreas.id, area.id), eq(floorAreas.organizationId, orgId)));
-      await recordAuditEvent(tx, grant, {
-        entityType: "floor_area",
-        entityId: area.id,
-        action: "delete",
-        changes: { assignmentId: floor.assignmentId, floorId: floor.id },
-      });
-    }
+    const now = new Date();
+    const roomRows = await removeFloorContents(tx, grant, floor.assignmentId, [floor.id], now);
     await tx
       .update(floors)
-      .set(softDelete(grant))
+      .set(softDelete(grant, now))
       .where(and(eq(floors.id, floor.id), eq(floors.organizationId, orgId)));
     await recordAuditEvent(tx, grant, {
       entityType: "floor",
@@ -754,12 +871,22 @@ export async function removeFloor(
       action: "delete",
       changes: { assignmentId: floor.assignmentId, reportBuildingId: floor.reportBuildingId },
     });
+
+    const removed: RemovedItem[] = [
+      { type: "floor", id: floor.id },
+      ...roomRows.map((row) => ({ type: "room" as const, id: row.id })),
+    ];
     await recordEvent(tx, grant, {
       type: "assignment.floor_removed",
       assignmentId: floor.assignmentId,
-      data: { floorId: floor.id, created: false },
+      data: {
+        floorId: floor.id,
+        created: false,
+        floorKey: floor.level,
+        groupCount: removed.length,
+      },
     });
-    return { id: floor.id };
+    return { removed };
   });
 }
 
@@ -1026,7 +1153,7 @@ export async function removeRoom(
     const room = await lockRoom(tx, orgId, roomId);
     await tx
       .update(rooms)
-      .set(softDelete(grant))
+      .set(softDelete(grant, new Date()))
       .where(and(eq(rooms.id, room.id), eq(rooms.organizationId, orgId)));
     await recordAuditEvent(tx, grant, {
       entityType: "room",
@@ -1037,7 +1164,7 @@ export async function removeRoom(
     await recordEvent(tx, grant, {
       type: "assignment.room_removed",
       assignmentId: room.assignmentId,
-      data: { roomId: room.id, created: false },
+      data: { roomId: room.id, created: false, roomTypeKey: room.roomType, groupCount: 1 },
     });
     return { id: room.id };
   });

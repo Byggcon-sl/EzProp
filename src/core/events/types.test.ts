@@ -30,15 +30,19 @@ const EXPECTED_EVENT_TYPES = [
   "assignment.party_added",
   "assignment.party_updated",
   "assignment.party_removed",
+  "assignment.party_restored",
   "assignment.property_saved",
   "assignment.common_areas_saved",
   "assignment.building_saved",
   "assignment.building_removed",
+  "assignment.building_restored",
   "assignment.floor_saved",
   "assignment.floor_removed",
+  "assignment.floor_restored",
   "assignment.floor_area_saved",
   "assignment.room_saved",
   "assignment.room_removed",
+  "assignment.room_restored",
   "inspection.scheduled",
   "inspection.rescheduled",
   "inspection.cancelled",
@@ -66,8 +70,8 @@ const EXPECTED_EVENT_TYPES = [
 ];
 
 describe("hendelseskodene", () => {
-  it("1. har nøyaktig de 52 kodene fra domenemodellen 4.9", () => {
-    expect(EXPECTED_EVENT_TYPES).toHaveLength(52);
+  it("1. har nøyaktig de 56 kodene fra domenemodellen 4.9", () => {
+    expect(EXPECTED_EVENT_TYPES).toHaveLength(56);
     expect([...EVENT_TYPES].sort()).toEqual([...EXPECTED_EVENT_TYPES].sort());
   });
 
@@ -85,6 +89,15 @@ describe("hendelseskodene", () => {
 
   it("7. order.updated finnes (endre en ordre etter at den er lagret, T1)", () => {
     expect(EVENT_TYPES as readonly string[]).toContain("order.updated");
+  });
+
+  it.each([
+    "assignment.building_restored",
+    "assignment.floor_restored",
+    "assignment.room_restored",
+    "assignment.party_restored",
+  ])("8. %s finnes (papirkurv, docs/funksjoner/fase2a-papirkurv-testplan.md 2.3)", (code) => {
+    expect(EVENT_TYPES as readonly string[]).toContain(code);
   });
 
   it("4. followup.received finnes ikke (forkastet 27.10.2026)", () => {

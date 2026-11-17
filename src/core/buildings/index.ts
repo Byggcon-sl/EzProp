@@ -24,7 +24,7 @@ export {
   type RoomTypeGroup,
   type SuggestFloor,
 } from "./codes";
-export { BuildingNotEmptyError, FloorNotEmptyError, PropertyMissingError } from "./errors";
+export { PropertyMissingError } from "./errors";
 export {
   COMMON_ROOM_TYPES,
   ROOM_DRAFT_SOURCES,
@@ -69,6 +69,23 @@ export {
   type EmployeeOption,
   type FloorAreaDetail,
   type FloorDetail,
+  type RemovedItem,
+  type RemoveResult,
   type RoomDetail,
   type SaveResult,
 } from "./service";
+export {
+  RESTORE_HOWS,
+  listTrash,
+  restoreBuilding,
+  restoreFloor,
+  restoreRoom,
+  type PartyTrashLine,
+  type RestoredItem,
+  type RestoreHow,
+  type RestoreResult,
+  type StructureTrashLine,
+  type TrashChild,
+  type TrashLine,
+  type TrashPathPart,
+} from "./trash";
