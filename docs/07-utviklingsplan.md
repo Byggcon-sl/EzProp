@@ -239,6 +239,12 @@ Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full 
 
 **Ferdig når:** Fagrådet har gått gjennom malen og reglene i et ekte skjermbilde og godkjent tekstene der, og Ståle godtar en PDF (også testutskriften med 50 bilder, under 8 MB).
 
+### Fra forbedreren
+
+Punkter forbedreren har lagt til (Ståle 14.11.2026). Bygges i tur, etter punktene over i 2a-2. Alt står også i `docs/plan/forbedrerens-tillegg.md`.
+
+- [ ] **«Se hva KI fikk»** (fra oppgaven `rett-vask-for-ki`, 17.11.2026): under hvert KI-forslag viser en liten knapp den vaskede teksten slik leverandøren fikk den, med merkene uthevet. Har noe sluppet gjennom, trykker takstmannen på ordet og velger «Skulle vært vasket»; ordet blir ekstra vaskeord på oppdraget og tas med i neste forespørsel. Hendelsen logges i `ai_usage_log` bare med type, aldri med verdien. Kjører i kjernen bak KI-porten; KI gjør ikke noe nytt. **Før bygging:** sikkerhet-personvern vurderer lagringen av ekstra vaskeord (persondata på oppdraget, organisasjons-ID, myk sletting); er den i tvil, blir det spørsmål til Ståle i `docs/09-apne-sporsmal.md`.
+
 ### Rest fra fase 0b (venter på S6)
 
 - [ ] **Innlogging som Optiplan** (engangskode på e-post), med **felles innlogging og felles profil for admin og ansatte** mellom EzProp og Optiplan (Ståle 28.10.2026): samme bruker, samme navn, telefon, stilling og kontor i begge. **Kundene holdes adskilt**: Optiplans styrer og EzProps kunder og meglere er aldri samme brukere. Løsningen beskrives i en ADR som tar hensyn til ADR-en fra fase 1.
