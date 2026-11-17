@@ -23,6 +23,14 @@ export {
 export { decideSuggestion } from "./suggestions";
 export { setCheckpointDone, setTgDirect } from "./tgiu";
 export {
+  getPublishCheck,
+  isReportPublishedForAssignment,
+  listPendingAiSuggestions,
+  listReleases,
+  publishReport,
+  startNewVersion,
+} from "./publish";
+export {
   REPORT_VALIDATION_CODES,
   ReportStorageError,
   ReportTemplateMissingError,
