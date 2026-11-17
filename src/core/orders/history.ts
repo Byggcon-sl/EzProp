@@ -9,11 +9,13 @@ import { bookingHistoryActionLabel, readBookingHistory } from "@/core/assignment
 import { db } from "@/db/client";
 import { orders } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
+import { ORDER_EDITABLE_FIELDS, type OrderEditableField } from "./codes";
 
 /*
- * Endringene på én ordre («Endringer» på ordresiden, T1). Lesingen av revisjonsloggen er felles
- * for ordre og oppdrag og står i `@/core/assignments/booking/history` (ADR 0011). Ordren viser
- * alle handlingene (`create`, `update`, `reject`, `convert`).
+ * Endringene på ett tilbud («Endringer» på tilbudssiden, T1). Lesingen av revisjonsloggen er
+ * felles for ordre og oppdrag og står i `@/core/assignments/booking/history` (ADR 0011). Tilbudet
+ * viser alle handlingene (`create`, `update`, `reject`, `convert`) og feltkodene i
+ * `ORDER_EDITABLE_FIELDS`, også `validUntil` (ADR 0012).
  */
 
 export { REMOVED_CONTACT_LABEL, REMOVED_FIRM_LABEL } from "@/core/assignments/booking/history";
@@ -21,11 +23,16 @@ export { REMOVED_CONTACT_LABEL, REMOVED_FIRM_LABEL } from "@/core/assignments/bo
 /** Høyst så mange rader vises, de nyeste. */
 export const ORDER_HISTORY_LIMIT = BOOKING_HISTORY_LIMIT;
 
-/** Norsk etikett for en handling på ordren. Ukjent kode gir koden tilbake. */
-export const orderHistoryActionLabel = bookingHistoryActionLabel;
+/**
+ * Norsk etikett for en handling på tilbudet. `reject` heter «Avslått» på tilbudet (ADR 0012);
+ * ellers som for bestillingen. Ukjent kode gir koden tilbake.
+ */
+export function orderHistoryActionLabel(action: string): string {
+  return action === "reject" ? "Avslått" : bookingHistoryActionLabel(action);
+}
 
-export type OrderHistoryValue = BookingHistoryValue;
-export type OrderHistoryEntry = BookingHistoryEntry;
+export type OrderHistoryValue = BookingHistoryValue<OrderEditableField>;
+export type OrderHistoryEntry = BookingHistoryEntry<OrderEditableField>;
 
 /**
  * Endringene på én ordre, nyeste først, høyst `ORDER_HISTORY_LIMIT` rader. Krever
@@ -52,5 +59,9 @@ export async function listOrderHistory(
     );
   if (!order) throw new AccessDeniedError();
 
-  return readBookingHistory(grant, { entityType: "order", entityId: order.id });
+  return readBookingHistory(
+    grant,
+    { entityType: "order", entityId: order.id },
+    ORDER_EDITABLE_FIELDS,
+  );
 }

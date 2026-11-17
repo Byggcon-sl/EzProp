@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { orderInputSchema, rejectReasonSchema } from "./schemas";
+import {
+  orderInputSchema,
+  orderUpdateInputSchema,
+  rejectReasonSchema,
+  validUntilBoundsSchema,
+} from "./schemas";
 
 /*
  * Zod for ordre og avvisning (docs/funksjoner/fase2a-manuell-ordre-testplan.md 1.3–1.10, med
@@ -182,28 +187,128 @@ describe("fødselsnummer i fritekst (1.10)", () => {
   });
 });
 
-describe("avvisningsgrunn (1.9 og 1.10)", () => {
-  function reasonMessages(value: string): string[] {
+/*
+ * Avslagsgrunn med faste valg (F4, A361, testplan 7.4.2). Fritekst er påkrevd bare ved «Annet».
+ * Lengdegrensen og sperren mot elleve sifre er som før (1.9 og 1.10).
+ */
+describe("avslagsgrunn (F4, 7.4.2)", () => {
+  function reasonMessages(value: unknown): string[] {
     const result = rejectReasonSchema.safeParse(value);
     return result.success ? [] : result.error.issues.map((issue) => issue.message);
   }
 
-  it.each(["", "   "])("«%s» gir «Skriv inn en grunn.»", (reason) => {
-    expect(reasonMessages(reason)).toContain("Skriv inn en grunn.");
+  it.each([
+    ["uten kode", {}],
+    ["tom kode", { reasonKey: "" }],
+    ["ukjent kode", { reasonKey: "pris" }],
+    ["kode som ikke er tekst", { reasonKey: 1 }],
+  ])("%s gir «Velg en grunn.»", (_name, value) => {
+    expect(reasonMessages(value)).toEqual(["Velg en grunn."]);
   });
+
+  it.each(["", "   ", null, undefined])("«Annet» med tekst «%s» gir «Skriv grunnen.»", (text) => {
+    expect(reasonMessages({ reasonKey: "other", reasonText: text })).toEqual(["Skriv grunnen."]);
+  });
+
+  it.each(["price", "timing", "chose_other", "customer_withdrew"])(
+    "%s uten tekst godtas, og tom tekst blir null",
+    (reasonKey) => {
+      expect(rejectReasonSchema.parse({ reasonKey, reasonText: "  " })).toEqual({
+        reasonKey,
+        reasonText: null,
+      });
+    },
+  );
 
   it("500 tegn godtas, 501 avvises", () => {
-    expect(rejectReasonSchema.safeParse("c".repeat(500)).success).toBe(true);
-    expect(rejectReasonSchema.safeParse("c".repeat(501)).success).toBe(false);
+    const ok = rejectReasonSchema.safeParse({ reasonKey: "other", reasonText: "c".repeat(500) });
+    expect(ok.success).toBe(true);
+    expect(reasonMessages({ reasonKey: "other", reasonText: "c".repeat(501) })).toEqual([
+      "Grunnen kan ha høyst 500 tegn.",
+    ]);
   });
 
-  it("trimmes", () => {
-    expect(rejectReasonSchema.parse("  Feil registrering  ")).toBe("Feil registrering");
+  it("teksten trimmes", () => {
+    expect(
+      rejectReasonSchema.parse({ reasonKey: "other", reasonText: "  Feil registrering  " }),
+    ).toEqual({ reasonKey: "other", reasonText: "Feil registrering" });
   });
 
   it("11 sifre på rad gir «Fødselsnummer skal ikke lagres her.», 10 sifre godtas", () => {
-    expect(reasonMessages("Ola 12345678901")).toContain(PNR);
-    expect(rejectReasonSchema.safeParse("Ola 1234567890").success).toBe(true);
+    expect(reasonMessages({ reasonKey: "price", reasonText: "Ola 12345678901" })).toContain(PNR);
+    expect(
+      rejectReasonSchema.safeParse({ reasonKey: "price", reasonText: "Ola 1234567890" }).success,
+    ).toBe(true);
+  });
+
+  it("ukjente felt tas bort", () => {
+    expect(
+      rejectReasonSchema.parse({ reasonKey: "price", organizationId: "fremmed", status: "x" }),
+    ).toEqual({ reasonKey: "price", reasonText: null });
+  });
+});
+
+/*
+ * «Gyldig til» (ADR 0012, A328, testplan 1.4). `today` = 03.11.2026. Ved oppretting: tom gir
+ * i dag + 30, ellers fra i dag til i dag + 365. Ved endring sjekkes bare formen her; grensene
+ * sjekkes av `updateOrder` når datoen endres.
+ */
+describe("1.4 validUntil", () => {
+  const PAST = "Gyldig til kan ikke være før i dag.";
+  const TOO_LATE = "Gyldig til kan være høyst ett år fram.";
+  const INVALID = "Gyldig til må være en dato.";
+
+  it.each([
+    ["i går", "2026-11-02", [PAST]],
+    ["i dag", "2026-11-03", []],
+    ["i dag + 365", "2027-11-03", []],
+    ["i dag + 366", "2027-11-04", [TOO_LATE]],
+    ["dato som ikke finnes", "2026-02-30", [INVALID]],
+    ["måned 13", "2026-13-01", [INVALID]],
+    ["norsk form", "03.11.2026", [INVALID]],
+    ["tekst", "abc", [INVALID]],
+    ["tall", 20261203, [INVALID]],
+  ] as const)("%s (%s)", (_name, validUntil, messages) => {
+    expect(messagesFor(parse({ validUntil }), "validUntil")).toEqual([...messages]);
+  });
+
+  it.each([undefined, null, "", "   "])("tom (%s) gir i dag + 30 (2026-12-03)", (validUntil) => {
+    const result = parse({ validUntil });
+    expect(result.success && (result.data as { validUntil: string }).validUntil).toBe("2026-12-03");
+  });
+
+  it("skuddår: 29.02.2028 finnes", () => {
+    const later = orderInputSchema(new Date("2027-12-01T10:00:00Z"));
+    expect(later.parse({ addressText: ADDRESS, validUntil: "2028-02-29" }).validUntil).toBe(
+      "2028-02-29",
+    );
+    expect(later.safeParse({ addressText: ADDRESS, validUntil: "2027-02-29" }).success).toBe(false);
+  });
+
+  it("dagen regnes i norsk tid: 23:30 UTC 03.11 er 04.11 i Oslo", () => {
+    const late = orderInputSchema(new Date("2026-11-03T23:30:00Z"));
+    expect(late.safeParse({ addressText: ADDRESS, validUntil: "2026-11-03" }).success).toBe(false);
+    expect(late.parse({ addressText: ADDRESS }).validUntil).toBe("2026-12-04");
+  });
+
+  it("ved endring: tom blir null (uendret), og gamle datoer godtas av formen", () => {
+    const update = orderUpdateInputSchema(NOW);
+    expect(update.parse({ addressText: ADDRESS }).validUntil).toBeNull();
+    expect(update.parse({ addressText: ADDRESS, validUntil: "" }).validUntil).toBeNull();
+    expect(update.parse({ addressText: ADDRESS, validUntil: "2020-01-01" }).validUntil).toBe(
+      "2020-01-01",
+    );
+    expect(update.safeParse({ addressText: ADDRESS, validUntil: "2026-02-30" }).success).toBe(
+      false,
+    );
+  });
+
+  it("grensene står ett sted (validUntilBoundsSchema)", () => {
+    const bounds = validUntilBoundsSchema("2026-11-03");
+    expect(bounds.safeParse("2026-11-03").success).toBe(true);
+    expect(bounds.safeParse("2027-11-03").success).toBe(true);
+    expect(bounds.safeParse("2026-11-02").success).toBe(false);
+    expect(bounds.safeParse("2027-11-04").success).toBe(false);
   });
 });
 

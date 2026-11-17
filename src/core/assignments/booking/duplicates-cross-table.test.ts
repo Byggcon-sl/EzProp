@@ -266,6 +266,7 @@ describe("2.10 EXPLAIN: uttrykksindeksene på begge tabellene brukes", () => {
       addressKey: "testveien12",
       cadastre: null,
       receivedAt: TEST_NOW,
+      today: "2026-11-03",
       excludeOrderId: null,
       excludeAssignmentId: null,
     });
@@ -281,6 +282,7 @@ describe("2.10 EXPLAIN: uttrykksindeksene på begge tabellene brukes", () => {
       addressKey: null,
       cadastre: { gnr: "1011", bnr: "12", snr: "" },
       receivedAt: TEST_NOW,
+      today: "2026-11-03",
       excludeOrderId: null,
       excludeAssignmentId: null,
     });
@@ -367,5 +369,147 @@ describe("2 oppslaget filtrerer på organisasjonen fra tilgangen", () => {
       .from(assignments)
       .where(eq(assignments.organizationId, b.org.id));
     expect(check?.n).toBe(1);
+  });
+});
+
+/*
+ * Utløpte tilbud i dublettvarselet (ADR 0012 punkt 11, A325; testplan 3.8 og 7.2.5). Et åpent
+ * tilbud (`valid_until >= today`) gir treff uansett alder; et utløpt bare innenfor 90 × 24 timer;
+ * et mykt slettet aldri. `today` kommer fra `now`, aldri fra klokka i databasen.
+ * Støtter hovedmål: færre reklamasjoner (samme bolig blir ikke tatt to ganger, også når et
+ * tilbud nylig gikk ut) og de ansatte (gamle utløpte tilbud gir ikke varsler som alltid kommer).
+ */
+describe("3.8 tilbud i dublettvarselet (A325)", () => {
+  const ADDRESS = "Tilbudsgata 5, 8000 Bodø";
+  const TODAY = "2026-11-03";
+
+  async function lookupDraft(admin: Awaited<ReturnType<typeof adminIn>>["admin"], orgId: string) {
+    return findPossibleDuplicatesFor(
+      admin,
+      orgId,
+      { addressText: ADDRESS, gnr: null, bnr: null, snr: null, receivedAt: TEST_NOW },
+      TEST_NOW,
+    );
+  }
+
+  it.each([
+    ["3.8.1 åpent tilbud mottatt 200 dager før", 200, "2026-12-01", {}, "open"],
+    ["3.8.2 utløpt tilbud mottatt 89 dager før", 89, "2026-10-01", {}, "expired"],
+    ["3.8.2 utløpt tilbud mottatt 91 dager før", 91, "2026-10-01", {}, null],
+    ["3.8.3 grensedag: gyldig til i dag, mottatt 200 dager før", 200, TODAY, {}, "open"],
+    ["3.8.3 gyldig til i går, mottatt 200 dager før", 200, "2026-11-02", {}, null],
+    ["3.8.4 mykt slettet åpent tilbud", 1, "2026-12-01", { deletedAt: TEST_NOW }, null],
+    [
+      "3.8.5 avslått tilbud",
+      1,
+      "2026-12-01",
+      { status: "rejected", rejectedReasonKey: "price" },
+      null,
+    ],
+  ] as const)("%s", async (_name, daysAgo, validUntil, overrides, expected) => {
+    const { org, admin } = await adminIn();
+    const offer = await createOrder(org.id, {
+      addressText: ADDRESS,
+      receivedAt: receivedAt(daysAgo),
+      validUntil,
+      ...overrides,
+    });
+    const { items } = await lookupDraft(admin, org.id);
+    if (expected === null) {
+      expect(items.map((item) => item.id)).not.toContain(offer.id);
+    } else {
+      expect(items).toEqual([
+        expect.objectContaining({ id: offer.id, kind: "order", displayStatus: expected }),
+      ]);
+    }
+  });
+
+  it("7.2.5 treffet har kind og displayStatus fra samme today; oppdrag har null", async () => {
+    const { org, admin, office } = await adminIn();
+    const open = await createOrder(org.id, {
+      addressText: ADDRESS,
+      receivedAt: receivedAt(3),
+      validUntil: "2026-11-20",
+    });
+    const expired = await createOrder(org.id, {
+      addressText: ADDRESS,
+      receivedAt: receivedAt(40),
+      validUntil: "2026-10-20",
+    });
+    const direct = await createAssignmentRow(org.id, {
+      addressText: ADDRESS,
+      officeId: office.id,
+      receivedAt: receivedAt(5),
+    });
+    const { items } = await lookupDraft(admin, org.id);
+    const byId = new Map(items.map((item) => [item.id, item]));
+    expect(byId.get(open.id)).toMatchObject({ kind: "order", displayStatus: "open" });
+    expect(byId.get(expired.id)).toMatchObject({ kind: "order", displayStatus: "expired" });
+    expect(byId.get(direct.id)).toMatchObject({ kind: "assignment", displayStatus: null });
+
+    // Samme tilbud sett en annen dag: den 21.11 er det åpne også utløpt
+    const later = await findPossibleDuplicatesFor(
+      admin,
+      org.id,
+      { addressText: ADDRESS, gnr: null, bnr: null, snr: null, receivedAt: TEST_NOW },
+      new Date("2026-11-21T10:00:00Z"),
+    );
+    expect(later.items.find((item) => item.id === open.id)?.displayStatus).toBe("expired");
+  });
+
+  it("3.8.6 og 3.8.7 duplicate-sql.ts importerer ikke fra orders og har ingen egen klokke", () => {
+    const source = readFileSync(join(__dirname, "duplicate-sql.ts"), "utf8");
+    expect(source).not.toMatch(/from "@\/core\/orders/);
+    expect(source).not.toMatch(/from "\.\.\/\.\.\/orders/);
+    const lower = source.toLowerCase();
+    for (const clock of ["now()", "current_date", "localtimestamp", "current_timestamp"]) {
+      expect(lower).not.toContain(clock);
+    }
+  });
+
+  it.each([
+    [89, true],
+    [91, false],
+  ])(
+    "3.8.8 gjennom findPossibleDuplicateOrders: utløpt tilbud mottatt %i dager før gir treff: %s",
+    async (daysAgo, hit) => {
+      const { org, admin } = await adminIn();
+      const self = await createOrder(org.id, { addressText: ADDRESS, receivedAt: TEST_NOW });
+      const expired = await createOrder(org.id, {
+        addressText: ADDRESS,
+        receivedAt: receivedAt(daysAgo),
+        validUntil: "2026-10-01",
+      });
+      const { items } = await findPossibleDuplicateOrders(admin, org.id, self.id, TEST_NOW);
+      expect(items.some((item) => item.id === expired.id)).toBe(hit);
+      if (hit) expect(items[0]?.displayStatus).toBe("expired");
+    },
+  );
+
+  it.each([
+    ["sommertid", new Date("2026-03-29T12:00:00Z")],
+    ["vintertid", new Date("2026-10-25T12:00:00Z")],
+  ])("3.8.9 vinduet er 90 × 24 timer rundt %s, ikke kalenderdager", async (_name, now) => {
+    const { org, admin } = await adminIn();
+    const window = 90 * DAY;
+    const inside = await createOrder(org.id, {
+      addressText: ADDRESS,
+      receivedAt: new Date(now.getTime() - window + 1000),
+      validUntil: "2025-01-01",
+    });
+    const outside = await createOrder(org.id, {
+      addressText: ADDRESS,
+      receivedAt: new Date(now.getTime() - window - 1000),
+      validUntil: "2025-01-01",
+    });
+    const { items } = await findPossibleDuplicatesFor(
+      admin,
+      org.id,
+      { addressText: ADDRESS, gnr: null, bnr: null, snr: null, receivedAt: now },
+      now,
+    );
+    const hitIds = items.map((item) => item.id);
+    expect(hitIds).toContain(inside.id);
+    expect(hitIds).not.toContain(outside.id);
   });
 });

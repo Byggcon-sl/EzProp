@@ -57,13 +57,20 @@ import {
   CommonAreasForm,
   type CommonAreasFormValues,
 } from "./common-areas-form";
-import { formatOsloDateTime, osloDateTimeLocal } from "../../ordre/received-at";
+import { formatOsloDateTime, osloDateTimeLocal } from "../../tilbud/received-at";
 import { BookingDuplicatesNotice } from "../../possible-duplicates-notice";
 import { AgreementCard } from "./agreement-card";
 import { updateAssignmentBookingAction } from "./booking-actions";
 import { BookingCard } from "./booking-card";
 import { AssignmentBookingHistory } from "./booking-history";
 import { ClaimsSection, type ClaimListItem } from "./claims-section";
+import {
+  FROM_OFFER_PARAM,
+  FROM_OFFER_VALUE,
+  OWN_BOOKING_COPY_TEXT,
+  TEAM_ANCHOR,
+} from "./created-from-offer";
+import { CreatedFromOfferNotice } from "./created-from-offer-notice";
 import { PartyCard } from "./party-card";
 import { AddPartySection, type PartyRoleOption } from "./party-form";
 import { PropertyDetails, PropertyForm, type PropertyFormValues } from "./property-form";
@@ -78,7 +85,7 @@ import { isTrashTruncated, toTrashEntries } from "./trash-view";
 
 export const metadata: Metadata = { title: "Oppdrag" };
 
-/** Skjemaverdiene fra den lagrede eiendommen, eller fra ordren når eiendom mangler. */
+/** Skjemaverdiene fra den lagrede eiendommen, eller fra bestillingen når eiendom mangler. */
 function propertyFormValues(data: AssignmentProperty): PropertyFormValues {
   const { property, prefill } = data;
   const unit = property?.cadastralUnit ?? null;
@@ -294,7 +301,9 @@ export default async function AssignmentPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params;
-  const { ny, endret } = await searchParams;
+  const query = await searchParams;
+  const { ny, endret } = query;
+  const fromOffer = query[FROM_OFFER_PARAM] === FROM_OFFER_VALUE;
   const context = await getEmployeeContext();
   if (!context) return <NoAccess />;
   if (!isUuid(id)) notFound();
@@ -348,11 +357,11 @@ export default async function AssignmentPage({
       <WorkSessionTracker assignmentId={assignment.id} />
       {assignment.orderId && (
         <Link
-          href={`/ordre/${assignment.orderId}`}
+          href={`/tilbud/${assignment.orderId}`}
           className="inline-flex min-h-11 items-center text-sm font-medium text-brand-700"
         >
           <span aria-hidden="true">‹&nbsp;</span>
-          Ordren
+          Tilbudet
         </Link>
       )}
       <div className="mt-2 mb-2 flex flex-wrap items-center gap-3">
@@ -366,6 +375,8 @@ export default async function AssignmentPage({
           <Notice message={`Oppdrag ${assignment.number} er lagret.`} />
         </div>
       )}
+      {/* Etter «Gjør om til oppdrag» (F5): pekeren til takstmann og befaringsdato. */}
+      <CreatedFromOfferNotice show={fromOffer} />
       {endret === "1" && (
         <div className="mb-4">
           <Notice message="Endringene er lagret." />
@@ -458,13 +469,14 @@ export default async function AssignmentPage({
           <Detail label="Borettslag eller sameie">{booking.housingAssociationName || EMPTY}</Detail>
           <Detail label="Mottatt">{formatOsloDateTime(booking.receivedAt)}</Detail>
           {assignment.orderId && (
-            <Detail label="Fra ordre">
+            <Detail label="Laget fra tilbud">
               <Link
-                href={`/ordre/${assignment.orderId}`}
+                href={`/tilbud/${assignment.orderId}`}
                 className="flex min-h-11 w-fit items-center font-medium text-brand-700 underline"
               >
-                Åpne ordren
+                Åpne tilbudet
               </Link>
+              <span className="mt-1 block text-sm text-slate-600">{OWN_BOOKING_COPY_TEXT}</span>
             </Detail>
           )}
         </dl>
@@ -494,7 +506,13 @@ export default async function AssignmentPage({
         </Link>
       </p>
 
-      <section aria-labelledby="team-heading" className="mb-8">
+      {/* Ankeret for pekeren etter omgjøring (A368). tabIndex=-1: lenken flytter fokus hit. */}
+      <section
+        id={TEAM_ANCHOR}
+        tabIndex={-1}
+        aria-labelledby="team-heading"
+        className="mb-8 scroll-mt-4 rounded-xl"
+      >
         <h2 id="team-heading" className="mb-3 text-xl font-semibold text-slate-900">
           Team
         </h2>

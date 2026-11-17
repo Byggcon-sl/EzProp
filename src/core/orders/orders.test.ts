@@ -50,7 +50,7 @@ import { selectOrder } from "./orders";
 
 /** Radene i ordrelisten, for testene som bare ser på radene. */
 async function listOrderItems(actor: Actor, organizationId: string, query?: string) {
-  return (await listOrders(actor, organizationId, { query })).items;
+  return (await listOrders(actor, organizationId, { query, status: "all" })).items;
 }
 
 /*
@@ -169,14 +169,18 @@ async function auditFor(organizationId: string) {
 
 const LIST_KEYS = [
   "addressText",
+  // Tilbud (ADR 0012, T-0031): kansellert oppdrag, visningsstatus og «Gyldig til»
+  "assignmentCancelled",
   "assignmentId",
   "assignmentNumber",
+  "displayStatus",
   "externalRef",
   "id",
   "orderedByText",
   "receivedAt",
   "source",
   "status",
+  "validUntil",
 ].sort();
 
 const DETAIL_KEYS = [
@@ -196,6 +200,10 @@ const DETAIL_KEYS = [
   "orderedByText",
   "receivedAt",
   "rejectedReason",
+  // Tilbud (ADR 0012, F4): fast avslagsgrunn, «Gyldig til» og visningsstatus
+  "rejectedReasonKey",
+  "validUntil",
+  "displayStatus",
   "requestedReportType",
   // Endre ordren (docs/funksjoner/fase2a-rette-ordre-testplan.md 2.7.8): låsen med row_version
   "rowVersion",
@@ -256,9 +264,9 @@ describe("4.1 tilgang per rolle", () => {
     const orderBefore = await orderRow(order.id);
 
     await expect(createOrder(actor, org.id, orderInput(), NOW)).rejects.toThrow(AccessDeniedError);
-    await expect(rejectOrder(actor, org.id, order.id, "Feil registrering")).rejects.toThrow(
-      AccessDeniedError,
-    );
+    await expect(
+      rejectOrder(actor, org.id, order.id, { reasonKey: "other", reasonText: "Feil registrering" }),
+    ).rejects.toThrow(AccessDeniedError);
     await expect(
       convertOrderToAssignment(actor, org.id, order.id, { officeId: office.id, now: NOW }),
     ).rejects.toThrow(AccessDeniedError);
@@ -278,7 +286,10 @@ describe("4.1 tilgang per rolle", () => {
     await grantPermission(employee, "assignment.edit");
 
     const created = await createOrder(actor, org.id, orderInput(), NOW);
-    const rejected = await rejectOrder(actor, org.id, created.id, "Feil registrering");
+    const rejected = await rejectOrder(actor, org.id, created.id, {
+      reasonKey: "other",
+      reasonText: "Feil registrering",
+    });
     expect(rejected.status).toBe("rejected");
 
     const second = await createOrder(actor, org.id, orderInput(), NOW);
@@ -333,9 +344,14 @@ describe("4.1 tilgang per rolle", () => {
       [first.id, second.id].sort(),
     );
     expect((await getOrder(admin, org.id, first.id)).id).toBe(first.id);
-    expect((await rejectOrder(admin, org.id, first.id, "Feil registrering")).status).toBe(
-      "rejected",
-    );
+    expect(
+      (
+        await rejectOrder(admin, org.id, first.id, {
+          reasonKey: "other",
+          reasonText: "Feil registrering",
+        })
+      ).status,
+    ).toBe("rejected");
     const result = await convertOrderToAssignment(admin, org.id, second.id, {
       officeId: office.id,
       now: NOW,
@@ -445,12 +461,10 @@ describe("4.2 tenant-isolasjon", () => {
         return { a: [a.id], b: [b.id] };
       },
       query: async (actor, organizationId) => [
-        await rejectOrder(
-          actor,
-          organizationId,
-          orderFor.get(organizationId) ?? randomUUID(),
-          "Feil registrering",
-        ),
+        await rejectOrder(actor, organizationId, orderFor.get(organizationId) ?? randomUUID(), {
+          reasonKey: "other",
+          reasonText: "Feil registrering",
+        }),
       ],
       idOf: (row) => row.id,
     });
@@ -526,9 +540,12 @@ describe("4.3 fremmed, ukjent og slettet id", () => {
     const before = await tableCounts();
 
     await expect(getOrder(a.admin, a.org.id, orderB.id)).rejects.toThrow(AccessDeniedError);
-    await expect(rejectOrder(a.admin, a.org.id, orderB.id, "Feil registrering")).rejects.toThrow(
-      AccessDeniedError,
-    );
+    await expect(
+      rejectOrder(a.admin, a.org.id, orderB.id, {
+        reasonKey: "other",
+        reasonText: "Feil registrering",
+      }),
+    ).rejects.toThrow(AccessDeniedError);
     await expect(
       convertOrderToAssignment(a.admin, a.org.id, orderB.id, { officeId: a.office.id, now: NOW }),
     ).rejects.toThrow(AccessDeniedError);
@@ -566,7 +583,7 @@ describe("4.3 fremmed, ukjent og slettet id", () => {
 
   it("4.3.2 OfficeNotFoundError har meldingen «Kontoret finnes ikke.»", () => {
     expect(new OfficeNotFoundError().message).toBe("Kontoret finnes ikke.");
-    expect(new OrderAlreadyHandledError().message).toBe("Ordren er allerede behandlet.");
+    expect(new OrderAlreadyHandledError().message).toBe("Tilbudet er allerede behandlet.");
   });
 
   it("4.3.3 slettet kontor i egen organisasjon gir OfficeNotFoundError", async () => {
@@ -588,9 +605,9 @@ describe("4.3 fremmed, ukjent og slettet id", () => {
   ])("4.3.4 %s som ordre-id gir AccessDeniedError, aldri databasefeil", async (_name, id) => {
     const { org, admin, office } = await orgWithAdmin();
     await expect(getOrder(admin, org.id, id)).rejects.toThrow(AccessDeniedError);
-    await expect(rejectOrder(admin, org.id, id, "Feil registrering")).rejects.toThrow(
-      AccessDeniedError,
-    );
+    await expect(
+      rejectOrder(admin, org.id, id, { reasonKey: "other", reasonText: "Feil registrering" }),
+    ).rejects.toThrow(AccessDeniedError);
     await expect(
       convertOrderToAssignment(admin, org.id, id, { officeId: office.id, now: NOW }),
     ).rejects.toThrow(AccessDeniedError);
@@ -625,9 +642,12 @@ describe("4.3 fremmed, ukjent og slettet id", () => {
     const deleted = await insertOrder(org.id, { deletedAt: new Date() });
 
     await expect(getOrder(admin, org.id, deleted.id)).rejects.toThrow(AccessDeniedError);
-    await expect(rejectOrder(admin, org.id, deleted.id, "Feil registrering")).rejects.toThrow(
-      AccessDeniedError,
-    );
+    await expect(
+      rejectOrder(admin, org.id, deleted.id, {
+        reasonKey: "other",
+        reasonText: "Feil registrering",
+      }),
+    ).rejects.toThrow(AccessDeniedError);
     await expect(
       convertOrderToAssignment(admin, org.id, deleted.id, { officeId: office.id, now: NOW }),
     ).rejects.toThrow(AccessDeniedError);
@@ -788,7 +808,10 @@ describe("4.5 avvise og gjøre om", () => {
     const { org, admin } = await orgWithAdmin();
     const order = await insertOrder(org.id);
 
-    const result = await rejectOrder(admin, org.id, order.id, "  Feil registrering  ");
+    const result = await rejectOrder(admin, org.id, order.id, {
+      reasonKey: "other",
+      reasonText: "  Feil registrering  ",
+    });
     expect(result.status).toBe("rejected");
 
     const row = await orderRow(order.id);
@@ -807,7 +830,9 @@ describe("4.5 avvise og gjøre om", () => {
     const { org, admin } = await orgWithAdmin();
     const order = await insertOrder(org.id);
     const before = await tableCounts();
-    await expect(rejectOrder(admin, org.id, order.id, "   ")).rejects.toThrow(ZodError);
+    await expect(
+      rejectOrder(admin, org.id, order.id, { reasonKey: "other", reasonText: "   " }),
+    ).rejects.toThrow(ZodError);
     expect(await tableCounts()).toEqual(before);
     expect((await orderRow(order.id)).status).toBe("received");
   });
@@ -869,7 +894,7 @@ describe("4.5 avvise og gjøre om", () => {
 
       const run =
         handling === "reject"
-          ? rejectOrder(admin, org.id, order.id, "Ny grunn")
+          ? rejectOrder(admin, org.id, order.id, { reasonKey: "other", reasonText: "Ny grunn" })
           : convertOrderToAssignment(admin, org.id, order.id, { officeId: office.id, now: NOW });
       await expect(run).rejects.toThrow(OrderAlreadyHandledError);
 
@@ -1023,11 +1048,15 @@ describe("4.6 hendelser og revisjonslogg", () => {
     const { org, admin } = await orgWithAdmin();
     const order = await insertOrder(org.id);
 
-    await rejectOrder(admin, org.id, order.id, "Feil registrering");
+    await rejectOrder(admin, org.id, order.id, {
+      reasonKey: "other",
+      reasonText: "Feil registrering",
+    });
 
     const rows = await eventsFor(org.id);
     expect(rows.map((row) => row.type)).toEqual(["order.rejected"]);
-    expect(rows[0]?.data).toEqual({ orderId: order.id });
+    // F4: koden for grunnen står i hendelsen, aldri friteksten
+    expect(rows[0]?.data).toEqual({ orderId: order.id, reasonKey: "other" });
     expect(rows[0]?.assignmentId).toBeNull();
 
     const audit = await auditFor(org.id);
@@ -1035,6 +1064,7 @@ describe("4.6 hendelser og revisjonslogg", () => {
     expect(audit[0]).toMatchObject({ entityType: "order", entityId: order.id, action: "reject" });
     expect(audit[0]?.changes).toEqual({
       status: { from: "received", to: "rejected" },
+      rejectedReasonKey: "other",
       rejectedReason: "Feil registrering",
     });
     await expectNoPersonalData(org.id);
@@ -1090,10 +1120,12 @@ describe("4.6 hendelser og revisjonslogg", () => {
     await expect(createOrder(admin, org.id, orderInput({ gnr: "12a" }), NOW)).rejects.toThrow(
       ZodError,
     );
-    await expect(rejectOrder(admin, org.id, order.id, "")).rejects.toThrow(ZodError);
-    await expect(rejectOrder(admin, org.id, handled.id, "Ny grunn")).rejects.toThrow(
-      OrderAlreadyHandledError,
-    );
+    await expect(
+      rejectOrder(admin, org.id, order.id, { reasonKey: "other", reasonText: "" }),
+    ).rejects.toThrow(ZodError);
+    await expect(
+      rejectOrder(admin, org.id, handled.id, { reasonKey: "other", reasonText: "Ny grunn" }),
+    ).rejects.toThrow(OrderAlreadyHandledError);
     await expect(
       convertOrderToAssignment(admin, org.id, handled.id, { officeId: office.id, now: NOW }),
     ).rejects.toThrow(OrderAlreadyHandledError);
@@ -1414,14 +1446,14 @@ describe("søk og grense i ordrelisten", () => {
       "77 / 88", // matrikkel fra cadastral_units
       "77/88/0/2", // med festenummer 0 og seksjonsnummer
     ]) {
-      const result = await listOrders(admin, org.id, { query });
+      const result = await listOrders(admin, org.id, { query, status: "all" });
       expect(
         result.items.map((row) => row.id),
         query,
       ).toEqual([order.id]);
       expect(result.total, query).toBe(1);
     }
-    expect((await listOrders(admin, org.id, { query: "  " })).total).toBe(2);
+    expect((await listOrders(admin, org.id, { query: "  ", status: "all" })).total).toBe(2);
     expect((await listOrderItems(admin, org.id, "Annenveien")).map((row) => row.id)).toEqual([
       other.id,
     ]);
@@ -1452,7 +1484,7 @@ describe("søk og grense i ordrelisten", () => {
     });
 
     for (const query of ["parti@example.com", "99999999", "%", "_", "\\", "Slettaveien"]) {
-      expect((await listOrders(admin, org.id, { query })).total, query).toBe(0);
+      expect((await listOrders(admin, org.id, { query, status: "all" })).total, query).toBe(0);
     }
     expect(await listOrderItems(admin, org.id, "Slettet Person")).toEqual([]);
   });
@@ -1466,18 +1498,18 @@ describe("søk og grense i ordrelisten", () => {
       gnr: "61",
       bnr: "62",
     });
-    expect((await listOrders(admin, org.id, { query: "61/62" })).total).toBe(1);
-    expect((await listOrders(admin, org.id, { query: "Borteveien" })).total).toBe(1);
+    expect((await listOrders(admin, org.id, { query: "61/62", status: "all" })).total).toBe(1);
+    expect((await listOrders(admin, org.id, { query: "Borteveien", status: "all" })).total).toBe(1);
     await db
       .update(cadastralUnits)
       .set({ deletedAt: new Date() })
       .where(eq(cadastralUnits.id, cadastralUnit.id));
-    expect((await listOrders(admin, org.id, { query: "61/62" })).total).toBe(0);
+    expect((await listOrders(admin, org.id, { query: "61/62", status: "all" })).total).toBe(0);
     await db
       .update(properties)
       .set({ deletedAt: new Date() })
       .where(eq(properties.id, property.id));
-    expect((await listOrders(admin, org.id, { query: "Borteveien" })).total).toBe(0);
+    expect((await listOrders(admin, org.id, { query: "Borteveien", status: "all" })).total).toBe(0);
   });
 
   it("ordre med kansellert oppdrag finnes ved søk på oppdragsnummer, parter og eiendom", async () => {
@@ -1505,14 +1537,14 @@ describe("søk og grense i ordrelisten", () => {
       });
     }
 
-    const all = await listOrders(admin, org.id);
+    const all = await listOrders(admin, org.id, { status: "all" });
     expect(all.items).toHaveLength(ORDER_LIST_LIMIT);
     expect(all.total).toBe(ORDER_LIST_LIMIT + 3);
     expect(all.items[0]?.addressText).toBe(`Partallsveien ${ORDER_LIST_LIMIT + 2}`);
     const times = all.items.map((row) => row.receivedAt.getTime());
     expect(times).toEqual([...times].sort((a, b) => b - a));
 
-    const even = await listOrders(admin, org.id, { query: "partallsveien" });
+    const even = await listOrders(admin, org.id, { query: "partallsveien", status: "all" });
     expect(even.total).toBe(27);
     expect(even.items).toHaveLength(27);
   });
@@ -1531,8 +1563,8 @@ describe("søk og grense i ordrelisten", () => {
       return [await rowCount(auditLog), await rowCount(events), ai?.n ?? 0];
     };
     const before = await counts();
-    await listOrders(admin, org.id, { query: "Partisen" });
-    await listOrders(admin, org.id, { query: "12/34" });
+    await listOrders(admin, org.id, { query: "Partisen", status: "all" });
+    await listOrders(admin, org.id, { query: "12/34", status: "all" });
     expect(await counts()).toEqual(before);
   });
 
@@ -1571,9 +1603,9 @@ describe("søk og grense i ordrelisten", () => {
     await createProperty(orgB.id, { address: "Fremmedveien 5", gnr: "91", bnr: "92" });
 
     for (const query of ["Fremmed Navn", "Fremmedveien", "91/92"]) {
-      expect((await listOrders(adminA, orgA.id, { query })).total, query).toBe(0);
+      expect((await listOrders(adminA, orgA.id, { query, status: "all" })).total, query).toBe(0);
     }
-    await expect(listOrders(adminB, orgA.id, { query: "Aveien" })).rejects.toThrow(
+    await expect(listOrders(adminB, orgA.id, { query: "Aveien", status: "all" })).rejects.toThrow(
       AccessDeniedError,
     );
   });

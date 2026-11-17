@@ -243,14 +243,6 @@ export default async function EmployeeLayout({ children }: { children: ReactNode
             </li>
             {organizations.length > 0 && (
               <li>
-                <NavLink href="/ordre" matchChildren>
-                  <InboxIcon />
-                  Ordre
-                </NavLink>
-              </li>
-            )}
-            {organizations.length > 0 && (
-              <li>
                 <NavLink href="/kontakter" matchChildren>
                   <ContactIcon />
                   Kontakter
@@ -262,6 +254,16 @@ export default async function EmployeeLayout({ children }: { children: ReactNode
                 <NavLink href="/firma" matchChildren>
                   <BuildingIcon />
                   Firma
+                </NavLink>
+              </li>
+            )}
+            {/* Tilbud er sjeldent arbeid (Ståle 13.11.2026), derfor under Kontakter og Firma. «Nytt
+                tilbud» er en knapp på listen, ikke et menypunkt. */}
+            {organizations.length > 0 && (
+              <li>
+                <NavLink href="/tilbud" matchChildren>
+                  <InboxIcon />
+                  Tilbud
                 </NavLink>
               </li>
             )}

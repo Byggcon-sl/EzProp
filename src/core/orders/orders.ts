@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, or, type SQL } from "drizzle-orm";
 import {
   AccessDeniedError,
   requireOrganizationAccess,
@@ -13,13 +13,25 @@ import { db, type DbExecutor } from "@/db/client";
 import { assignments, offices, orders } from "@/db/schema";
 import { todayInOslo } from "@/shared/lib/dates";
 import { isUuid } from "@/shared/lib/uuid";
-import type { OrderSource, OrderStatus } from "./codes";
+import {
+  OFFER_LIST_FILTERS,
+  type OfferListFilter,
+  type OrderSource,
+  type OrderStatus,
+} from "./codes";
+import type { OfferRejectionInput } from "./contract";
 import { OfficeNotFoundError, OrderAlreadyHandledError } from "./errors";
 import { ORDER_LIST_LIMIT, type ListOrders, type OrderListItem } from "./list";
+import {
+  offerCountSql,
+  offerDisplayStatus,
+  offerListFilterSql,
+  parseOfferListFilter,
+} from "./offer-status";
 import { orderInputSchema, rejectReasonSchema, type OrderInput } from "./schemas";
 
 /*
- * Ordre (docs/05-domenemodell.md 4.3). Se med `organization.read`, legge inn, avvise og gjøre om
+ * Ordre, som heter «Tilbud» i grensesnittet (ADR 0012, docs/05-domenemodell.md 4.3). Se med `organization.read`, legge inn, avvise og gjøre om
  * med `assignment.edit` (A53). All filtrering bruker `grant.organizationId` fra tilgangssjekken,
  * aldri parameteren. Fremmed, ukjent, slettet eller ugyldig ordre-id gir `AccessDeniedError`.
  *
@@ -49,20 +61,34 @@ function assignmentJoin(organizationId: string) {
 }
 
 /**
- * Ordrene i organisasjonen som ikke er slettet, nyeste mottatt først, høyst `ORDER_LIST_LIMIT`.
- * Kontrakten står i `./list.ts`. Søket (`options.query`) bruker det samme vilkåret som
- * arbeidskøen (`orderFieldsMatch` og `assignmentFieldsMatch`). Oppdraget er en left join på én
- * rad per ordre, og undertabellene hentes med `EXISTS`, så det blir aldri doble rader. Ordre med
- * kansellert oppdrag er med, også i søket. Søketeksten logges ikke.
+ * Tilbudene i organisasjonen som ikke er slettet, med filter (ADR 0012), søk og antall per filter
+ * (F3). Kontrakten står i `./contract.ts` (`ListOffers`). Søket (`options.query`) bruker det samme
+ * vilkåret som arbeidskøen (`orderFieldsMatch` og `assignmentFieldsMatch`). Oppdraget er en left
+ * join på én rad per tilbud, og undertabellene hentes med `EXISTS`, så det blir aldri doble rader.
+ * Tilbud med kansellert oppdrag er med, også i søket. Søketeksten logges ikke.
+ *
+ * Filteret og tellingen bruker samme uttrykk (`offerListFilterSql`) og samme `today`
+ * (`todayInOslo(now)`), så tallet på knappen alltid er antallet i listen.
  */
 export const listOrders: ListOrders = async (actor, organizationId, options = {}) => {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
   const query = options.query ?? "";
-  const where = and(
+  const status = parseOfferListFilter(options.status);
+  const today = todayInOslo(options.now ?? new Date());
+  const base = and(
     eq(orders.organizationId, grant.organizationId),
     isNull(orders.deletedAt),
     or(orderFieldsMatch(query), assignmentFieldsMatch(grant.organizationId, query)),
   );
+  const where = and(base, offerListFilterSql(status, today));
+  const ordering =
+    status === "open"
+      ? [asc(orders.validUntil), desc(orders.receivedAt), desc(orders.id)]
+      : [desc(orders.receivedAt), desc(orders.id)];
+
+  const countColumns = Object.fromEntries(
+    OFFER_LIST_FILTERS.map((filter) => [filter, offerCountSql(filter, today)]),
+  ) as Record<OfferListFilter, SQL<number>>;
 
   const [rows, [counted]] = await Promise.all([
     db
@@ -74,27 +100,38 @@ export const listOrders: ListOrders = async (actor, organizationId, options = {}
         orderedByText: orders.orderedByText,
         addressText: orders.addressText,
         status: orders.status,
+        validUntil: orders.validUntil,
         assignmentId: orders.assignmentId,
         assignmentNumber: assignments.number,
+        assignmentDeletedAt: assignments.deletedAt,
       })
       .from(orders)
       .leftJoin(assignments, assignmentJoin(grant.organizationId))
       .where(where)
-      .orderBy(desc(orders.receivedAt), desc(orders.id))
+      .orderBy(...ordering)
       .limit(ORDER_LIST_LIMIT),
     db
-      .select({ count: sql<number>`count(*)::int` })
+      .select(countColumns)
       .from(orders)
       .leftJoin(assignments, assignmentJoin(grant.organizationId))
-      .where(where),
+      .where(base),
   ]);
 
-  const items: OrderListItem[] = rows.map((row) => ({
-    ...row,
-    source: row.source as OrderSource,
-    status: row.status as OrderStatus,
-  }));
-  return { items, total: Number(counted?.count ?? 0) };
+  const counts = Object.fromEntries(
+    OFFER_LIST_FILTERS.map((filter) => [filter, Number(counted?.[filter] ?? 0)]),
+  ) as Record<OfferListFilter, number>;
+
+  const items: OrderListItem[] = rows.map(({ assignmentDeletedAt, ...row }) => {
+    const orderStatus = row.status as OrderStatus;
+    return {
+      ...row,
+      source: row.source as OrderSource,
+      status: orderStatus,
+      displayStatus: offerDisplayStatus(orderStatus, row.validUntil, today),
+      assignmentCancelled: row.assignmentId !== null && assignmentDeletedAt !== null,
+    };
+  });
+  return { items, total: counts[status], status, counts };
 };
 
 /**
@@ -123,7 +160,9 @@ export async function selectOrder(executor: DbExecutor, grant: EmployeeGrant, or
       housingAssociationName: orders.housingAssociationName,
       sellerDeclarationReceived: orders.sellerDeclarationReceived,
       status: orders.status,
+      validUntil: orders.validUntil,
       rejectedReason: orders.rejectedReason,
+      rejectedReasonKey: orders.rejectedReasonKey,
       assignmentId: orders.assignmentId,
       assignmentNumber: assignments.number,
       assignmentDeletedAt: assignments.deletedAt,
@@ -145,20 +184,31 @@ export async function selectOrder(executor: DbExecutor, grant: EmployeeGrant, or
 }
 
 /**
- * Én ordre med alle feltene, oppdragsnummeret og `rowVersion` (til skjemaet for endring). Ingen
- * andre sporingsfelt.
+ * Ett tilbud med alle feltene, oppdragsnummeret og `rowVersion` (til skjemaet for endring), og
+ * visningsstatusen regnet med `todayInOslo(now)` (ADR 0012). Ingen andre sporingsfelt.
  */
-export async function getOrder(actor: Actor, organizationId: string, orderId: string) {
+export async function getOrder(
+  actor: Actor,
+  organizationId: string,
+  orderId: string,
+  now: Date = new Date(),
+) {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
   if (!isUuid(orderId)) throw new AccessDeniedError();
   const order = await selectOrder(db, grant, orderId);
   if (!order) throw new AccessDeniedError();
-  return order;
+  const today = todayInOslo(now);
+  return {
+    ...order,
+    displayStatus: offerDisplayStatus(order.status as OrderStatus, order.validUntil, today),
+  };
 }
 
 /**
- * Legger inn en ordre fra e-posten (`source = manual`, `status = received`). `now` kan sendes
- * inn i tester; mottatt kan ikke være etter `now`. Bestilleren kan kobles til en kontakt i
+ * Lager et tilbud (`source = manual`, `status = received`). Kontrakten står i `./contract.ts`
+ * (`CreateOffer`). `now` kan sendes inn i tester; mottatt kan ikke være etter `now`. Mangler
+ * «Gyldig til», blir den i dag + `OFFER_VALID_DAYS`; ellers må den ligge mellom i dag og ett år
+ * fram (A328). Bestilleren kan kobles til en kontakt i
  * registeret (`orderedByContactId`); firmaet følger kontakten. Fremmed, ukjent eller slettet
  * kontakt gir `ContactNotFoundError`, og ingenting lagres.
  */
@@ -191,7 +241,7 @@ export async function createOrder(
         createdBy: grant.employeeId,
       })
       .returning();
-    if (!row) throw new Error("Fant ikke ordren etter at den ble lagret. Prøv igjen.");
+    if (!row) throw new Error("Fant ikke tilbudet etter at det ble lagret. Prøv igjen.");
 
     await recordEvent(tx, grant, {
       type: "order.received",
@@ -216,17 +266,19 @@ export async function createOrder(
 }
 
 /**
- * Avviser en mottatt ordre med grunn (A55). Ordren blir stående i listen, og feltene kan fortsatt
- * endres (T1). `row_version` øker, så et åpent endringsskjema får `OrderChangedError`.
+ * Avslår et åpent eller utløpt tilbud med fast grunn og eventuell tekst (A55, F4). Kontrakten
+ * står i `./contract.ts` (`RejectOffer`). Tilbudet blir stående i listen, og feltene kan fortsatt
+ * endres (T1). `row_version` øker, så et åpent endringsskjema får `OrderChangedError`. Hendelsen
+ * får koden for grunnen, aldri teksten.
  */
 export async function rejectOrder(
   actor: Actor,
   organizationId: string,
   orderId: string,
-  reason: string,
+  input: OfferRejectionInput,
 ) {
   const grant = await requireOrganizationAccess(actor, organizationId, "assignment.edit");
-  const rejectedReason = rejectReasonSchema.parse(reason);
+  const { reasonKey, reasonText: rejectedReason } = rejectReasonSchema.parse(input);
   if (!isUuid(orderId)) throw new AccessDeniedError();
 
   return db.transaction(async (tx) => {
@@ -245,17 +297,30 @@ export async function rejectOrder(
 
     const [row] = await tx
       .update(orders)
-      .set({ status: "rejected", rejectedReason, updatedBy: grant.employeeId })
+      .set({
+        status: "rejected",
+        rejectedReasonKey: reasonKey,
+        rejectedReason,
+        updatedBy: grant.employeeId,
+      })
       .where(where)
       .returning();
     if (!row) throw new AccessDeniedError();
 
-    await recordEvent(tx, grant, { type: "order.rejected", data: { orderId: row.id } });
+    // Hendelsen får bare id og koden for grunnen, aldri friteksten.
+    await recordEvent(tx, grant, {
+      type: "order.rejected",
+      data: { orderId: row.id, reasonKey },
+    });
     await recordAuditEvent(tx, grant, {
       entityType: "order",
       entityId: row.id,
       action: "reject",
-      changes: { status: { from: before.status, to: row.status }, rejectedReason },
+      changes: {
+        status: { from: before.status, to: row.status },
+        rejectedReasonKey: reasonKey,
+        rejectedReason,
+      },
     });
     return row;
   });
@@ -268,7 +333,8 @@ type ConvertOptions = {
 };
 
 /**
- * Gjør en mottatt ordre om til et oppdrag med nytt nummer (`2026-00001`). Rekkefølgen er fast:
+ * Gjør et åpent eller utløpt tilbud om til et oppdrag med nytt nummer (`2026-00001`). Kontrakten
+ * står i `./contract.ts` (`ConvertOfferToAssignment`). «Gyldig til» kopieres ikke. Rekkefølgen er fast:
  * ordreraden låses først (`FOR UPDATE`), så sjekkes status og kontor, og først da hentes
  * nummeret. Slik får to samtidige forsøk på samme ordre ett oppdrag, og taperen bruker ikke opp
  * et nummer. `row_version` på ordren øker, så et åpent endringsskjema får `OrderChangedError`.

@@ -694,7 +694,7 @@ describe("seedTestdata: full kjøring", { timeout: FULL_RUN }, () => {
       expect(queue.total).toBe(
         converted(plan).filter((c) => c.assignment.status === "in_progress").length,
       );
-      const list = await listOrders(actor, organizationId, {});
+      const list = await listOrders(actor, organizationId, { status: "all" });
       expect(list.total).toBeGreaterThanOrEqual(plan.orders.length);
     });
 

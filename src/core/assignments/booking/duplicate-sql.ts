@@ -2,7 +2,7 @@ import { and, desc, eq, gte, inArray, isNull, lte, ne, or, sql, type SQL } from 
 import { unionAll } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
 import { assignments, orders } from "@/db/schema";
-import type { DuplicateKind } from "./codes";
+import type { DuplicateKind, DuplicateOfferStatus } from "./codes";
 import { POSSIBLE_DUPLICATES_LIMIT } from "./contract";
 import { MAX_DUPLICATE_WINDOW_MS } from "./duplicates";
 
@@ -50,6 +50,11 @@ export type PossibleDuplicatesCriteria = {
   addressKey: string | null;
   cadastre: { gnr: string; bnr: string; snr: string } | null;
   receivedAt: Date;
+  /**
+   * Dagens dato i Norge («ÅÅÅÅ-MM-DD» fra `todayInOslo`, ADR 0012). Avgjør om et tilbud er åpent
+   * (`valid_until >= today`) eller utløpt. Aldri klokka i databasen.
+   */
+  today: string;
   excludeOrderId: string | null;
   excludeAssignmentId?: string | null;
 };
@@ -76,8 +81,11 @@ function cadastreMatch(criteria: PossibleDuplicatesCriteria): SQL {
  * satt (tjenesten spør ikke ellers).
  *
  * To delspørringer med `UNION ALL`:
- * - ordre med status `received` (ikke gjort om, ikke avvist) som ikke er slettet. En mottatt
- *   ordre er åpen, så den gir treff uansett alder;
+ * - tilbud (ordre) med status `received` (ikke gjort om, ikke avslått) som ikke er slettet. Et
+ *   åpent tilbud (`valid_until >= today`) gir treff uansett alder. Et utløpt tilbud gir bare
+ *   treff innenfor 90 × 24 timer, som et lukket oppdrag (A325). Utløpsregelen sammenlignes her
+ *   og importeres ikke fra `@/core/orders` (ADR 0011 punkt 9). Treffet får `displayStatus`
+ *   `open` eller `expired`, regnet med samme `today`;
  * - oppdrag som ikke er slettet (kansellert teller ikke), med åpen status eller høyst 90 × 24
  *   timer mellom mottakstidene (grensen teller med, A291).
  * Et oppdrag fra en ordre gir dermed ett treff, oppdraget. Gir høyst `POSSIBLE_DUPLICATES_LIMIT
@@ -88,6 +96,9 @@ export function possibleDuplicatesQuery(
   criteria: PossibleDuplicatesCriteria,
 ) {
   const time = criteria.receivedAt.getTime();
+  const windowStart = new Date(time - MAX_DUPLICATE_WINDOW_MS);
+  const windowEnd = new Date(time + MAX_DUPLICATE_WINDOW_MS);
+  const today = criteria.today;
   const excludeOrderId = criteria.excludeOrderId ?? null;
   const excludeAssignmentId = criteria.excludeAssignmentId ?? null;
   const limit = POSSIBLE_DUPLICATES_LIMIT + 1;
@@ -103,6 +114,10 @@ export function possibleDuplicatesQuery(
       orderId: sql<string | null>`null::uuid`.as("order_id"),
       addressMatch: sql<boolean>`(${addressMatch(criteria)})`.as("address_match"),
       cadastreMatch: sql<boolean>`(${cadastreMatch(criteria)})`.as("cadastre_match"),
+      displayStatus:
+        sql<DuplicateOfferStatus | null>`(case when ${orders.validUntil} >= ${today} then 'open' else 'expired' end)`.as(
+          "display_status",
+        ),
     })
     .from(orders)
     .where(
@@ -115,6 +130,11 @@ export function possibleDuplicatesQuery(
           ? undefined
           : or(isNull(orders.assignmentId), ne(orders.assignmentId, excludeAssignmentId)),
         or(addressMatch(criteria), cadastreMatch(criteria)),
+        // Åpent tilbud uansett alder, utløpt bare innenfor 90 × 24 timer (A325)
+        or(
+          gte(orders.validUntil, today),
+          and(gte(orders.receivedAt, windowStart), lte(orders.receivedAt, windowEnd)),
+        ),
       ),
     )
     .orderBy(desc(orders.receivedAt), desc(orders.id))
@@ -131,6 +151,7 @@ export function possibleDuplicatesQuery(
       orderId: assignments.orderId,
       addressMatch: sql<boolean>`(${addressMatch(criteria)})`.as("address_match"),
       cadastreMatch: sql<boolean>`(${cadastreMatch(criteria)})`.as("cadastre_match"),
+      displayStatus: sql<DuplicateOfferStatus | null>`null::text`.as("display_status"),
     })
     .from(assignments)
     .where(
@@ -145,10 +166,7 @@ export function possibleDuplicatesQuery(
         // Overlappende tid: fortsatt åpent, eller høyst 90 × 24 timer mellom `received_at`
         or(
           inArray(assignments.status, [...OPEN_ASSIGNMENT_STATUSES]),
-          and(
-            gte(assignments.receivedAt, new Date(time - MAX_DUPLICATE_WINDOW_MS)),
-            lte(assignments.receivedAt, new Date(time + MAX_DUPLICATE_WINDOW_MS)),
-          ),
+          and(gte(assignments.receivedAt, windowStart), lte(assignments.receivedAt, windowEnd)),
         ),
       ),
     )

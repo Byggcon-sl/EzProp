@@ -296,7 +296,7 @@ export async function cancelAssignmentAction(
       { zodField: "reason" },
     );
   }
-  revalidatePath("/ordre/[id]", "page");
+  revalidatePath("/tilbud/[id]", "page");
   redirect(cancelledNotice(cancelled.number));
 }
 

@@ -1121,9 +1121,9 @@ export async function createAssignmentWithParty(
     const address = `Reklamasjonsveien 1 ${suffix}, 8000 Bodø`;
     await sql`
       insert into orders (id, organization_id, address_text, received_at, source, status,
-        requested_report_type)
+        requested_report_type, valid_until)
       values (${orderId}, ${organizationId}, ${address}, now(),
-        'manual', 'received', 'condition_report')`;
+        'manual', 'received', 'condition_report', (now() at time zone 'Europe/Oslo')::date + 30)`;
     // Bestillingsfeltene står også på oppdraget (ADR 0011, påkrevd fra migrering 0034).
     await sql`
       insert into assignments (id, organization_id, number, office_id, assignment_type, status,
@@ -1721,6 +1721,59 @@ export async function convertedAssignmentNumber(page: Page): Promise<string> {
     .replace(/\s+/g, " ")
     .trim();
   return ASSIGNMENT_LINK_NAME.exec(text)![1]!;
+}
+
+// --- Tilbud → oppdrag (docs/funksjoner/fase2a-tilbud.md)
+
+const UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+
+/** Siden til ett lagret tilbud. «Lagre» på /tilbud/ny går via `?ny=1` hit. */
+export const OFFER_URL = new RegExp(`/tilbud/(${UUID_PATTERN})$`);
+
+/** Siden til ett oppdrag (med eller uten spørring og anker). */
+export const ASSIGNMENT_PAGE_URL = new RegExp(`/oppdrag/(${UUID_PATTERN})(\\?.*)?(#.*)?$`);
+
+/** «Gjør om til oppdrag» på tilbudssiden (teksten skifter mens oppdraget lages). */
+export function convertOfferButton(page: Page): Locator {
+  return page.getByRole("button", { name: /^(Gjør om til oppdrag|Lager oppdraget …)$/ });
+}
+
+/** Velger «Bodø» når kontoret må velges (admin uten kontor); ellers er det forhåndsvalgt. */
+export async function chooseOfficeIfNeeded(page: Page) {
+  // Vent til handlingsblokken er tegnet, ellers kan kontorvalget komme etter sjekken
+  await expect(convertOfferButton(page)).toBeVisible();
+  const radio = page.getByRole("radio", { name: "Bodø", exact: true });
+  if (await radio.isVisible()) await radio.check();
+}
+
+/** Ett trykk på «Gjør om til oppdrag» og venter på oppdraget. Gir id-en til oppdraget. */
+export async function convertOfferWithOneTap(page: Page): Promise<string> {
+  await chooseOfficeIfNeeded(page);
+  await convertOfferButton(page).click();
+  await expect(page).toHaveURL(ASSIGNMENT_PAGE_URL);
+  return ASSIGNMENT_PAGE_URL.exec(page.url())![1]!;
+}
+
+/** «Lagre» på /tilbud/ny (feltene er fylt ut) og venter på tilbudssiden. Gir id-en til tilbudet. */
+export async function saveNewOffer(page: Page): Promise<string> {
+  await page.getByRole("button", { name: "Lagre", exact: true }).click();
+  await expect(page).toHaveURL(OFFER_URL);
+  return OFFER_URL.exec(page.url())![1]!;
+}
+
+/**
+ * Nytt tilbud med en unik adresse → «Gjør om til oppdrag» (Bodø) → oppdraget er åpent.
+ * Gir id-ene til tilbudet og oppdraget.
+ */
+export async function newAssignmentFromOffer(
+  page: Page,
+  address = `Testveien 12 ${uniqueSuffix()}, 8000 Bodø`,
+): Promise<{ offerId: string; assignmentId: string }> {
+  await page.goto("/tilbud/ny");
+  await page.getByLabel(/^Adresse/).fill(address);
+  const offerId = await saveNewOffer(page);
+  const assignmentId = await convertOfferWithOneTap(page);
+  return { offerId, assignmentId };
 }
 
 // --- Rom på oppdraget (rett T-0050 forsøk 2, docs/agenter/oppgaver/rett-t0050-arealtype-testplan.md)

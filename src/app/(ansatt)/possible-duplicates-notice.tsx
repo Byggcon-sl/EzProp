@@ -7,18 +7,28 @@ import {
   type DuplicateReason,
 } from "@/core/assignments/booking/codes";
 import { assignmentStatusLabel } from "@/core/assignments/codes";
-import { orderStatusLabel } from "@/core/orders/codes";
+import {
+  offerDisplayStatusLabel,
+  orderStatusLabel,
+  type OfferDisplayStatus,
+} from "@/core/orders/codes";
+import { buttonVariants } from "@/shared/ui/button";
 
 /*
- * Varselet «Mulig dublett» (T3), felles for skjemaet «Nytt oppdrag», oppdragssiden og ordresiden
- * (docs/funksjoner/fase2a-nytt-oppdrag-design.md avsnitt 5). Bare visning: treffene kommer fra
- * kjernen. Varselet er en advarsel, aldri en sperre, og har ingen «Lagre likevel».
+ * Varselet «Mulig dublett» (T3), felles for skjemaet «Nytt oppdrag», oppdragssiden og tilbudssiden
+ * (docs/funksjoner/fase2a-nytt-oppdrag-design.md avsnitt 5, docs/funksjoner/fase2a-tilbud-design.md
+ * avsnitt 7.2). Bare visning: treffene kommer fra kjernen. Varselet er en advarsel, aldri en
+ * sperre, og har ingen «Lagre likevel». I «Nytt oppdrag» får åpne og utløpte tilbud knappen
+ * «Gjør om tilbudet» (F2 b), så samme jobb ikke blir registrert to ganger.
  * Ingen «use client»: brukes både fra serversider og fra skjemaet.
  */
 
-/** Teksten under overskriften når treffene kan være både ordre og oppdrag. */
+/** Teksten under overskriften når treffene kan være både tilbud og oppdrag. */
 export const BOOKING_DUPLICATES_TEXT =
-  "Samme adresse eller matrikkel som et annet oppdrag eller en ordre. Sjekk at boligen ikke blir tatt to ganger.";
+  "Samme adresse eller matrikkel som et annet oppdrag eller et tilbud. Sjekk at boligen ikke blir tatt to ganger.";
+
+/** Knappen ved et åpent eller utløpt tilbud i «Nytt oppdrag» (F2 b, A364). */
+export const CONVERT_OFFER_LABEL = "Gjør om tilbudet";
 
 /** Står under listen når kjernen har flere treff enn den gir tilbake. */
 export const POSSIBLE_DUPLICATES_MORE_TEXT = "Viser de 10 nyeste.";
@@ -31,25 +41,51 @@ export type BookingDuplicateItem = {
   status: string;
   addressText: string;
   reasons: readonly DuplicateReason[];
+  /**
+   * Visningsstatusen for et tilbud (`kind: "order"`), regnet i kjernen med samme dag som
+   * spørringen: `open` eller `expired`. `null` eller utelatt for oppdrag.
+   */
+  displayStatus?: OfferDisplayStatus | null;
 };
 
 /**
  * Én linje for et treff: «Oppdrag 2026-00042 – Storgata 1A, 8006 Bodø – Under arbeid – samme
- * adresse» eller «Ordre – Storgata 1A, 8006 Bodø – Mottatt – samme matrikkel». Statusordet er det
- * samme som i køen og i ordrelisten.
+ * adresse» eller «Tilbud – Storgata 1A, 8006 Bodø – Utløpt – samme matrikkel». Statusordet er det
+ * samme som i køen og i tilbudslisten («Åpent», «Utløpt»).
  */
 export function bookingDuplicateLine(item: BookingDuplicateItem): string {
   const what =
-    item.kind === "assignment" ? `Oppdrag${item.number ? ` ${item.number}` : ""}` : "Ordre";
+    item.kind === "assignment" ? `Oppdrag${item.number ? ` ${item.number}` : ""}` : "Tilbud";
   const status =
-    item.kind === "assignment" ? assignmentStatusLabel(item.status) : orderStatusLabel(item.status);
+    item.kind === "assignment"
+      ? assignmentStatusLabel(item.status)
+      : item.displayStatus
+        ? offerDisplayStatusLabel(item.displayStatus)
+        : orderStatusLabel(item.status);
   const reasons = item.reasons.map((reason) => duplicateReasonLabel(reason)).join(" og ");
   return [what, item.addressText, status, reasons].filter(Boolean).join(" – ");
 }
 
 /** Lenken til treffet etter typen. */
 export function bookingDuplicateHref(item: Pick<BookingDuplicateItem, "kind" | "id">): string {
-  return item.kind === "assignment" ? `/oppdrag/${item.id}` : `/ordre/${item.id}`;
+  return item.kind === "assignment" ? `/oppdrag/${item.id}` : `/tilbud/${item.id}`;
+}
+
+/**
+ * Får treffet «Gjør om tilbudet»? Bare et tilbud som fortsatt kan gjøres om: åpent eller utløpt
+ * (lagret status `received`). Avslåtte og gjort-om tilbud gir aldri knappen.
+ */
+export function canConvertDuplicate(item: BookingDuplicateItem): boolean {
+  return (
+    item.kind === "order" &&
+    item.status === "received" &&
+    (item.displayStatus === "open" || item.displayStatus === "expired")
+  );
+}
+
+/** Lenken «Gjør om tilbudet»: tilbudssiden med «Gjør om til oppdrag» i fokus (`#gjor-om`). */
+export function convertOfferHref(item: Pick<BookingDuplicateItem, "id">): string {
+  return `/tilbud/${item.id}#gjor-om`;
 }
 
 /**
@@ -108,32 +144,52 @@ export function PossibleDuplicatesFrame({
   );
 }
 
-/** Lenken i varselet. */
-export function PossibleDuplicateLink({ href, children }: { href: string; children: string }) {
+/**
+ * Lenken i varselet. `textId` gir teksten en id, så en knapp under kan vise til den
+ * (`aria-describedby`). `action` står under lenken i samme punkt.
+ */
+export function PossibleDuplicateLink({
+  href,
+  children,
+  textId,
+  action,
+}: {
+  href: string;
+  children: string;
+  textId?: string;
+  action?: ReactNode;
+}) {
   return (
     <li>
       <Link href={href} className="flex min-h-11 items-center py-1 text-sm font-medium underline">
         {/* Eget element: teksten i en flex-boks brytes ellers ikke, og lange ord gir vannrett rulling. */}
-        <span className="min-w-0 [overflow-wrap:anywhere]">{children}</span>
+        <span id={textId} className="min-w-0 [overflow-wrap:anywhere]">
+          {children}
+        </span>
       </Link>
+      {action && <div className="mt-1 mb-2">{action}</div>}
     </li>
   );
 }
 
 /**
- * Varselet med treff fra både ordre og oppdrag (`findPossibleDuplicatesFor` og
- * `findPossibleDuplicatesForAssignment`). Ingen treff gir ingenting.
+ * Varselet med treff fra både tilbud og oppdrag (`findPossibleDuplicatesFor` og
+ * `findPossibleDuplicatesForAssignment`). Ingen treff gir ingenting. `offerAction` settes bare i
+ * skjemaet «Nytt oppdrag»: da får åpne og utløpte tilbud lenken «Gjør om tilbudet» (F2 b). På
+ * oppdragssiden er varselet bare lenker.
  */
 export function BookingDuplicatesNotice({
   items,
   hasMore,
   headingId = "mulig-dublett-tittel",
   className,
+  offerAction = false,
 }: {
   items: readonly BookingDuplicateItem[];
   hasMore: boolean;
   headingId?: string;
   className?: string;
+  offerAction?: boolean;
 }) {
   if (items.length === 0) return null;
   return (
@@ -143,11 +199,30 @@ export function BookingDuplicatesNotice({
       hasMore={hasMore}
       className={className}
     >
-      {items.map((item) => (
-        <PossibleDuplicateLink key={`${item.kind}-${item.id}`} href={bookingDuplicateHref(item)}>
-          {bookingDuplicateLine(item)}
-        </PossibleDuplicateLink>
-      ))}
+      {items.map((item) => {
+        const textId = `${headingId}-${item.kind}-${item.id}`;
+        const convert = offerAction && canConvertDuplicate(item);
+        return (
+          <PossibleDuplicateLink
+            key={`${item.kind}-${item.id}`}
+            href={bookingDuplicateHref(item)}
+            textId={convert ? textId : undefined}
+            action={
+              convert ? (
+                <Link
+                  href={convertOfferHref(item)}
+                  aria-describedby={textId}
+                  className={buttonVariants({ variant: "secondary", size: "md" })}
+                >
+                  {CONVERT_OFFER_LABEL}
+                </Link>
+              ) : undefined
+            }
+          >
+            {bookingDuplicateLine(item)}
+          </PossibleDuplicateLink>
+        );
+      })}
     </PossibleDuplicatesFrame>
   );
 }

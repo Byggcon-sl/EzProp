@@ -5,10 +5,20 @@ import {
   NUMBER_SEQUENCE_SCOPES,
   assignmentStatusLabel,
 } from "@/core/assignments/codes";
+import { BOOKING_EDITABLE_FIELDS } from "@/core/assignments/booking/codes";
+import { EVENT_TYPES } from "@/core/events/types";
 import {
+  OFFER_DISPLAY_STATUSES,
+  OFFER_LIST_FILTERS,
+  OFFER_REJECTION_REASON_KEYS,
   ORDER_EDITABLE_FIELDS,
   ORDER_SOURCES,
   ORDER_STATUSES,
+  isOfferRejectionReasonKey,
+  isOrderEditableField,
+  offerDisplayStatusLabel,
+  offerListFilterLabel,
+  offerRejectionReasonLabel,
   orderFieldLabel,
   orderStatusLabel,
 } from "./codes";
@@ -44,12 +54,39 @@ describe("faste koder", () => {
 });
 
 describe("etiketter", () => {
+  // Tilbud (ADR 0012, testplan 1.2.1): kodene er de samme, tekstene er nye
   it.each([
-    ["received", "Mottatt"],
+    ["received", "Åpent"],
     ["converted", "Gjort om til oppdrag"],
-    ["rejected", "Avvist"],
+    ["rejected", "Avslått"],
   ] as const)("1.2 ordrestatus %s heter «%s»", (code, label) => {
     expect(orderStatusLabel(code)).toBe(label);
+  });
+
+  it.each([
+    ["open", "Åpent"],
+    ["expired", "Utløpt"],
+    ["converted", "Gjort om til oppdrag"],
+    ["rejected", "Avslått"],
+  ] as const)("1.2.1 visningsstatus %s heter «%s»", (code, label) => {
+    expect(offerDisplayStatusLabel(code)).toBe(label);
+  });
+
+  it("1.2.1 hver visningsstatus og hvert filter har tekst", () => {
+    for (const code of OFFER_DISPLAY_STATUSES) {
+      expect(offerDisplayStatusLabel(code), code).not.toBe(code);
+    }
+    for (const code of OFFER_LIST_FILTERS) expect(offerListFilterLabel(code), code).not.toBe(code);
+    expect(offerListFilterLabel("open")).toBe("Åpne");
+    expect(offerListFilterLabel("all")).toBe("Alle");
+  });
+
+  it("1.2.4 hendelseskodene for tilbud er uendret, og order.converted finnes ikke (A326)", () => {
+    const types = EVENT_TYPES as readonly string[];
+    for (const type of ["order.received", "order.rejected", "order.updated"]) {
+      expect(types, type).toContain(type);
+    }
+    expect(types).not.toContain("order.converted");
   });
 
   it.each([
@@ -74,7 +111,7 @@ describe("etiketter", () => {
  * e-post-til-ordre kommer) og færre reklamasjoner (status og oppdrag kan aldri bli et ordrefelt).
  */
 describe("felt som kan endres på en ordre", () => {
-  it("1.1 ORDER_EDITABLE_FIELDS er nøyaktig de elleve feltene, i fast rekkefølge", () => {
+  it("1.1 ORDER_EDITABLE_FIELDS er nøyaktig de elleve bestillingsfeltene og validUntil, i fast rekkefølge", () => {
     expect([...ORDER_EDITABLE_FIELDS]).toEqual([
       "receivedAt",
       "externalRef",
@@ -87,7 +124,24 @@ describe("felt som kan endres på en ordre", () => {
       "snr",
       "housingAssociationName",
       "sellerDeclarationReceived",
+      "validUntil",
     ]);
+  });
+
+  it("1.3.1 validUntil er bare på tilbudet, aldri i bestillingslisten til oppdraget", () => {
+    expect(ORDER_EDITABLE_FIELDS as readonly string[]).toContain("validUntil");
+    expect(BOOKING_EDITABLE_FIELDS as readonly string[]).not.toContain("validUntil");
+    expect(isOrderEditableField("validUntil")).toBe(true);
+    expect(isOrderEditableField("status")).toBe(false);
+  });
+
+  it("1.3.2 tilbudslisten er bestillingslisten i samme rekkefølge, med validUntil sist", () => {
+    expect(ORDER_EDITABLE_FIELDS.slice(0, -1)).toEqual([...BOOKING_EDITABLE_FIELDS]);
+    expect(ORDER_EDITABLE_FIELDS.at(-1)).toBe("validUntil");
+  });
+
+  it("1.3.3 validUntil heter «Gyldig til»", () => {
+    expect(orderFieldLabel("validUntil")).toBe("Gyldig til");
   });
 
   it.each([
@@ -122,5 +176,38 @@ describe("felt som kan endres på en ordre", () => {
     expect(orderFieldLabel("__proto__")).toBe("__proto__");
     expect(orderFieldLabel("toString")).toBe("toString");
     expect(orderFieldLabel("constructor")).toBe("constructor");
+  });
+});
+
+/*
+ * Faste avslagsgrunner (F4, A361, testplan 7.4.1). Kodene er faste (regel 6) og står også i
+ * CHECK-regelen `orders_rejected_reason_key_check`.
+ */
+describe("7.4.1 avslagsgrunnene", () => {
+  it("kodene er nøyaktig de fem, i fast rekkefølge", () => {
+    expect([...OFFER_REJECTION_REASON_KEYS]).toEqual([
+      "price",
+      "timing",
+      "chose_other",
+      "customer_withdrew",
+      "other",
+    ]);
+  });
+
+  it.each([
+    ["price", "Pris"],
+    ["timing", "Tidspunkt passet ikke"],
+    ["chose_other", "Valgte en annen"],
+    ["customer_withdrew", "Kunden trakk seg"],
+    ["other", "Annet"],
+  ] as const)("%s heter «%s»", (code, label) => {
+    expect(offerRejectionReasonLabel(code)).toBe(label);
+    expect(isOfferRejectionReasonKey(code)).toBe(true);
+  });
+
+  it("ukjent kode er ikke en grunn og gir koden tilbake", () => {
+    expect(isOfferRejectionReasonKey("pris")).toBe(false);
+    expect(isOfferRejectionReasonKey(undefined)).toBe(false);
+    expect(offerRejectionReasonLabel("__proto__")).toBe("__proto__");
   });
 });
