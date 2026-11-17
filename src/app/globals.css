@@ -128,6 +128,32 @@ html {
   scroll-padding-top: calc(var(--sticky-bar-height, 9rem) + 0.5rem);
 }
 
+/*
+ * Papirkurv og «Angre» (docs/funksjoner/fase2a-papirkurv-design.md). Utenfor @theme, fordi
+ * kontrasttesten krever #rrggbb der: uthevingen gjenbruker sand, ingen ny farge.
+ * --fixed-bottom-bar-height settes av sider med faste hovedknapper nederst, så angre-meldingen
+ * aldri dekker dem.
+ */
+:root {
+  --color-restored: var(--color-sand);
+  --fixed-bottom-bar-height: 0px;
+}
+
+/* Raden som nettopp kom tilbake (use-restored-focus.ts): sand i 2 s, så bort med en overgang. */
+[data-restore-id] {
+  transition: background-color 600ms ease-out;
+}
+[data-restore-id][data-restored] {
+  background-color: var(--color-restored);
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-restore-id],
+  [data-restore-id][data-restored] {
+    transition: none;
+  }
+}
+
 body {
   @apply bg-canvas text-slate-900 antialiased;
 }

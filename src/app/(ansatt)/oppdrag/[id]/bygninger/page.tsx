@@ -7,6 +7,7 @@ import {
   areaTypeLabel,
   COMMON_ROOM_TYPES,
   getAssignmentBuildings,
+  listTrash,
   MEASURING_METHODS,
   measuringMethodLabel,
   ROOM_PRESETS,
@@ -14,10 +15,14 @@ import {
   ROOM_TYPES,
   roomTypeGroupLabel,
   type AssignmentBuildings,
+  type TrashLine,
 } from "@/core/buildings";
 import { isUuid } from "@/shared/lib/uuid";
 import { getEmployeeContext } from "../../../employee-context";
 import { NoAccess } from "../../../no-access";
+import { TrashList } from "../trash-list";
+import { TRASH_ID } from "../trash-texts";
+import { isTrashTruncated, toTrashEntries } from "../trash-view";
 import { WorkSessionTracker } from "../work-session-tracker";
 import { BuildingsEditor, type Codes } from "./buildings-editor";
 
@@ -45,8 +50,9 @@ const CODES: Codes = {
 };
 
 /**
- * Bygninger, etasjer, areal per etasje og rom på oppdraget. Skjemaene vises bare med
- * `canEditOrders`; selve sjekken skjer i kjernen. Ugyldig, ukjent, slettet og fremmed id gir
+ * Bygninger, etasjer, areal per etasje og rom på oppdraget, og papirkurven nederst (det som er
+ * fjernet). Skjemaene og «Gjenopprett» vises bare med `canEditOrders`; selve sjekken skjer i
+ * kjernen. Ugyldig, ukjent, slettet og fremmed id gir
  * «Fant ikke siden».
  */
 export default async function BuildingsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -56,8 +62,12 @@ export default async function BuildingsPage({ params }: { params: Promise<{ id: 
   if (!isUuid(id)) notFound();
 
   let data: AssignmentBuildings;
+  let trash: TrashLine[];
   try {
-    data = await getAssignmentBuildings(context.actor, context.organizationId, id);
+    [data, trash] = await Promise.all([
+      getAssignmentBuildings(context.actor, context.organizationId, id),
+      listTrash(context.actor, context.organizationId, id),
+    ]);
   } catch (error) {
     if (error instanceof AccessDeniedError) notFound();
     throw error;
@@ -80,6 +90,17 @@ export default async function BuildingsPage({ params }: { params: Promise<{ id: 
         canEdit={context.canEditOrders}
         codes={CODES}
         email={context.actor.email}
+      />
+      <TrashList
+        id={TRASH_ID.structure}
+        entries={toTrashEntries(
+          trash.filter((line) => line.type !== "party"),
+          new Date(),
+          (role) => role,
+        )}
+        canRestore={context.canEditOrders}
+        truncated={isTrashTruncated(trash)}
+        className="mt-6"
       />
     </main>
   );

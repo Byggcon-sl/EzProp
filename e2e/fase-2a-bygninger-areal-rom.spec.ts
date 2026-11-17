@@ -32,8 +32,8 @@ import {
  * - summene vises som tekst med komma («180,1»).
  *
  * Støtter hovedmål: tid (forslag til arealtype og «under terreng», «Målt av» forhåndsvalgt, sum
- * regnes ut, virker på iPad) og reklamasjoner (ikke-tomme rader kan ikke fjernes, feil vises ved
- * feltet, takstmann uten skriverett kan ikke endre).
+ * regnes ut, virker på iPad) og reklamasjoner (etasje med rom fjernes som én gruppe som kan angres,
+ * feil vises ved feltet, takstmann uten skriverett kan ikke endre).
  */
 
 const PORTRAIT = { width: 834, height: 1194 } as const;
@@ -43,7 +43,6 @@ const BUILDINGS_URL = new RegExp(`/oppdrag/(${UUID})/bygninger$`);
 const LINK = "Bygninger, areal og rom";
 const NO_PROPERTY = "Legg inn eiendommen først.";
 const AREA_ERROR = "Arealet må være et tall mellom 0 og 9999,9 med høyst én desimal.";
-const ROOMS_FIRST = "Fjern rommene først.";
 const BUILDING = "Bolighus";
 const BASEMENT = "Kjeller";
 const FIRST_FLOOR = "1. etasje";
@@ -279,9 +278,10 @@ test.describe("bygninger, areal og rom (pc og ipad)", () => {
     await expect(room).not.toContainText("BRA-e");
   });
 
-  test("7.4 fjerning: etasje med rom gir «Fjern rommene først.»; fjern rommet, så etasjen → borte", async ({
+  test("7.4 fjerning: etasje med rom fjernes med ett trykk (A414), og er borte etter ny lasting", async ({
     page,
   }) => {
+    // Skrevet om fra «Fjern rommene først.» (A98) etter docs/funksjoner/fase2a-papirkurv-testplan.md 10.2.
     await logIn(page);
     await newAssignmentWithProperty(page);
     await openBuildings(page);
@@ -296,12 +296,13 @@ test.describe("bygninger, areal og rom (pc og ipad)", () => {
     const removeButtons = upper.getByRole("button", { name: /^Fjern/ });
     await expect(removeButtons).toHaveCount(2);
     await clickAndWaitForSave(page, removeButtons.first());
-    await expect(upper.getByText(ROOMS_FIRST)).toBeVisible();
-
-    await clickAndWaitForSave(page, removeButtons.last());
-    await expect(upper.getByRole("button", { name: /^Fjern/ })).toHaveCount(1);
-    await clickAndWaitForSave(page, upper.getByRole("button", { name: /^Fjern/ }));
     await expect(block(building, FIRST_FLOOR)).toHaveCount(0);
+    await expect(page.getByText("1. etasje og 1 rom er fjernet.")).toBeVisible();
+    await expect(
+      page.getByRole("status").filter({ hasText: "1. etasje og 1 rom er fjernet." }),
+    ).toBeVisible();
+    await expect(block(building, FIRST_FLOOR)).toHaveCount(0);
+    await expect(page.getByText("Fjern rommene først.")).toHaveCount(0);
 
     await page.reload();
     await expect(block(block(page, BUILDING), FIRST_FLOOR)).toHaveCount(0);

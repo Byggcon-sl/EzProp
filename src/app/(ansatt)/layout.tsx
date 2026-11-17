@@ -4,6 +4,7 @@ import { listOrganizationsForActor } from "@/core/access";
 import { requireActor } from "@/core/auth/session";
 import { findAdminOrganizationId } from "@/core/organization";
 import { brand } from "@/shared/config/brand";
+import { UndoToastProvider } from "@/shared/ui/undo-toast";
 import { getEmployeeContext } from "./employee-context";
 import { LogOutButton } from "./log-out-button";
 import { NavLink } from "./nav-link";
@@ -324,7 +325,10 @@ export default async function EmployeeLayout({ children }: { children: ReactNode
         </nav>
         {/* Reserven for hopplenken uten JS. Med JS får sidens egen `<main>` fokus (skip-link.tsx). */}
         <div id="hovedinnhold" tabIndex={-1} className="min-w-0 flex-1">
-          <div className="mx-auto w-full max-w-6xl px-5 py-6 lg:px-8 lg:py-8">{children}</div>
+          <div className="mx-auto w-full max-w-6xl px-5 py-6 lg:px-8 lg:py-8">
+            {/* Angre-meldingen etter «Fjern» står over sidebytte i samme side (revalidering). */}
+            <UndoToastProvider>{children}</UndoToastProvider>
+          </div>
         </div>
       </div>
     </>
