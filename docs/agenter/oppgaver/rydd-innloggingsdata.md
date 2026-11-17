@@ -140,10 +140,10 @@ Ingen TG-regler. Grensene (24 timer, 30 dager) er konstanter med testsaker.
 - **Kommando `pnpm auth:cleanup`:** kuttet etter forenkleren. Endepunktet når databasen fra innsiden av Azure, og `workflow_dispatch` dekker manuell kjøring. Én vei å teste og dokumentere. Lokal kjøring dekkes av testene. Arkitektens krav om egen fil uten import av `./auth` beholdes, så en kommando kan legges til senere som tynn innpakning.
 
 ## Beslutninger i autonom modus (føres i `docs/09-apne-sporsmal.md`, «Avgjort av agentene mens Ståle var borte»)
-- A400: Unntak fra myk sletting for `login_attempts`, `verifications` og `sessions`, bygd på svar 10.11.2026 nr. 15 og 18 (gitt på Ståles oppdrag, til gjennomgang). Kan endres ved å slå av arbeidsflyten eller fjerne hemmeligheten. **Dyrt å endre** (slettede rader kommer ikke tilbake).
-- A401: Kjøremåte: planlagt GitHub Actions som kaller et beskyttet internt endepunkt, i stedet for en Azure-tjeneste som koster. **Lett å endre.**
-- A402: Grensen for koder og økter måles fra `expires_at`, for tellere fra `created_at`. **Lett å endre.**
-- A403: Ingen indeks; endepunktet svarer 404 på alt som ikke er godkjent. **Lett å endre.**
+- A419: Unntak fra myk sletting for `login_attempts`, `verifications` og `sessions`, bygd på svar 10.11.2026 nr. 15 og 18 (gitt på Ståles oppdrag, til gjennomgang). Kan endres ved å slå av arbeidsflyten eller fjerne hemmeligheten. **Dyrt å endre** (slettede rader kommer ikke tilbake).
+- A420: Kjøremåte: planlagt GitHub Actions som kaller et beskyttet internt endepunkt, i stedet for en Azure-tjeneste som koster. **Lett å endre.**
+- A421: Grensen for koder og økter måles fra `expires_at`, for tellere fra `created_at`. **Lett å endre.**
+- A422: Ingen indeks; endepunktet svarer 404 på alt som ikke er godkjent. **Lett å endre.**
 
 ## Spørsmål til Ståle (stopper ikke bygging)
 - Føres i `docs/09-apne-sporsmal.md` (personvern): trengs innloggingshistorikk for å undersøke sikkerhetshendelser? Etter rydding finnes bare `users.last_login_at` og driftsloggen. Jobben bygges som planlagt.
