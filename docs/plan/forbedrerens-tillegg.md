@@ -1,6 +1,6 @@
 # Lagt til av forbedreren
 
-Sist oppdatert: 17.11.2026
+Sist oppdatert: 18.11.2026
 
 Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.2026, se «Forbedreren» i `CLAUDE.md`). Listen er til for Ståle: mot slutten av utviklingen går han gjennom den og beholder, justerer eller fjerner.
 
@@ -8,6 +8,11 @@ Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.
 
 | Dato | Tillegg (det den ansatte merker) | Hvorfor | Type | Hvor (PR, oppgavekort, kode) | Slik fjernes det | Ståle |
 |---|---|---|---|---|---|---|
+| 18.11.2026 | Levende forhåndsvisning: rute ved siden av badet som viser PDF-sidene slik leseren får dem, oppdatert etter hver lagring, med klikk til feltet | Takstmannen ser resultatet mens hun skriver; færre feil i rapporten | nytt planpunkt | `docs/07-utviklingsplan.md` 2a-2 «Fra forbedreren»; ikke bygget | Stryk punktet i planen før det bygges (senere: ta ut ruten) | |
+| 18.11.2026 | Lenker i PDF-utkastet fra hvert kontrollpunkt og avvik tilbake til feltet i skjemaet (bare id-er, aldri i endelig PDF) | PDF-en blir et sted man retter fra; ett klikk til feilen | i oppgaven | `docs/funksjoner/fase2a-pdf-badet.md` F4; `src/core/pdf` (`appBaseUrl`); PR fylles inn | Sett `appBaseUrl` til tom, så lages ingen lenker | |
+| 18.11.2026 | Siden «Ikke med i PDF-en» sist i utkastet: kontrollpunkter uten innhold, med etiketter | Takstmannen ser det hun har glemt, selv om tomme punkter tas bort | i oppgaven | `docs/funksjoner/fase2a-pdf-badet.md` F3 (A486); delen `missing` i `src/core/pdf`; PR fylles inn | Ta delen `missing` ut av profilens rekkefølge | |
+| 18.11.2026 | Sideskift som ser ordentlige ut: avvikskort holdes samlet, bilder rett under avviket, overskrift aldri alene nederst, beløp og «TG 3» deles ikke | Ryddig rapport gir færre misforståelser (funn 8 i IVIT-analysen) | i oppgaven | `docs/funksjoner/fase2a-pdf-badet.md` F2; oppsettet i `src/core/pdf`; PR fylles inn | Ta ut reglene for sideskift i oppsettet | |
+| 18.11.2026 | To ekstra krav til PDF-motoren: kan kjøre i nettleseren på iPad uten nett (og lage forhåndsvisning), tagget PDF med norsk språk; målt i Azure-bildet | Samme motor på PC og iPad; universell utforming | i oppgaven | `docs/funksjoner/fase2a-pdf-badet.md` F1; `docs/adr/0016-pdf-motor.md`; PR fylles inn | Ta kravene ut av ADR-tabellen | |
 | 17.11.2026 | «Ny innlogging, var det deg?»: rolig melding i appen når kontoen er logget inn på en ny enhet, med «Ja» og «Nei, logg ut den» | Ukjente innlogginger oppdages uten at noen må lete i profilen | nytt planpunkt | `docs/07-utviklingsplan.md` fase 2a-3 «Fra forbedreren»; ikke bygget | Fjern punktet fra planen (eller meldingen og den lokale «sist sett»-verdien når den er bygget) | |
 | 17.11.2026 | Uten nett-endringer blir liggende og sendes når iPaden er logget ut fra en annen enhet og takstmannen logger inn igjen (med test) | Ingen tapte befaringsdata; færre reklamasjoner | i oppgaven | `docs/funksjoner/fase2a-mine-innlogginger.md` F5 (Omfang 9); PR fylles inn | Ta ut testen; oppførselen er uansett slik i dag | |
 | 17.11.2026 | Deaktivering av en ansatt logger også ut alle enhetene hens | Ett steg mindre for admin når noen slutter | i oppgaven | `docs/funksjoner/fase2a-mine-innlogginger.md` F4 (Omfang 7, A430), `deactivateEmployeeAction`; PR fylles inn | Fjern kallet i `deactivateEmployeeAction` og linjen i bekreftelsen | |
