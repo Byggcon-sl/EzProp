@@ -2,7 +2,7 @@
 id: T-0061
 tittel: Feilskrevet årstall (for eksempel 208 eller 5) gir forslag om TG3
 type: forbedring
-alvor: lite
+alvor: middels
 status: ny
 funnet: 2026-11-13
 rolle: test-fag
@@ -34,3 +34,4 @@ Ikke etterprøvd (forbedring).
 
 ## Logg
 - 2026-11-13: funnet
+- 2026-11-18: hevet fra lite til middels (funn-kontrolløren, main 50fad3e4). Byggeår 19901990, 199 og 2090 lagres uten advarsel, og da kommer ikke TG3-forslaget. «Å se over» fanger ikke et urimelig årstall, så et TG3-forslag kan gå tapt uten at noen ser det. Teksten «må være et helt år» er misvisende for 199 og 2090. Robusthetstesteren så også at −5 lagres som byggeår. Meldt av test-takstmann som nytt funn; dømt som duplikat av dette.
