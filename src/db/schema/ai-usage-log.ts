@@ -97,6 +97,16 @@ export { AI_CANDIDATE_REFS_MAX };
 export type AiTargetRef = { type: string; id: string; fieldKey: string };
 
 /** `'a', 'b'` til CHECK-reglene. Kodene er faste og inneholder bare a–z og _. */
+/*
+ * Formkravet til hvert element i `candidate_refs`, som jsonpath (en CHECK kan ikke ha underspørring).
+ * Et treff betyr at et element er feil: ikke et objekt, en annen nøkkel enn `source` og `id`, en
+ * nøkkel mangler, ukjent kilde eller `id` som ikke er tekst.
+ */
+const CANDIDATE_REFS_NOT_OBJECT = `'strict $[*] ? (@.type() != "object")'`;
+const CANDIDATE_REFS_OTHER_KEY = `'strict $[*].keyvalue() ? (@.key != "source" && @.key != "id")'`;
+const CANDIDATE_REFS_MISSING_KEY = `'lax $[*] ? (!(exists(@.source)) || !(exists(@.id)))'`;
+const CANDIDATE_REFS_BAD_VALUE = `'lax $[*] ? (!(${AI_CANDIDATE_SOURCES.map((source) => `@.source == "${source}"`).join(" || ")}) || @.id.type() != "string")'`;
+
 function sqlList(values: readonly string[]) {
   return sql.raw(values.map((value) => `'${value}'`).join(", "));
 }
@@ -204,10 +214,11 @@ export const aiUsageLog = pgTable(
       "ai_usage_log_stopped_check",
       sql`${table.outcome} <> 'stopped' or ${table.errorCode} is not null`,
     ),
-    // Viste kandidater: en liste med 1 til 5, bare når utfallet er ok
+    // Viste kandidater: en liste med 1 til 5, bare når utfallet er ok. Hvert element er et objekt
+    // med akkurat `source` (fast kode) og `id` (tekst), aldri noe annet (ingen tekst i loggen).
     check(
       "ai_usage_log_candidate_refs_check",
-      sql`${table.candidateRefs} is null or (${table.outcome} = 'ok' and jsonb_typeof(${table.candidateRefs}) = 'array' and jsonb_array_length(${table.candidateRefs}) between 1 and ${sql.raw(String(AI_CANDIDATE_REFS_MAX))})`,
+      sql`${table.candidateRefs} is null or (${table.outcome} = 'ok' and jsonb_typeof(${table.candidateRefs}) = 'array' and jsonb_array_length(${table.candidateRefs}) between 1 and ${sql.raw(String(AI_CANDIDATE_REFS_MAX))} and not jsonb_path_exists(${table.candidateRefs}, ${sql.raw(CANDIDATE_REFS_NOT_OBJECT)}) and not jsonb_path_exists(${table.candidateRefs}, ${sql.raw(CANDIDATE_REFS_OTHER_KEY)}) and not jsonb_path_exists(${table.candidateRefs}, ${sql.raw(CANDIDATE_REFS_MISSING_KEY)}) and not jsonb_path_exists(${table.candidateRefs}, ${sql.raw(CANDIDATE_REFS_BAD_VALUE)}))`,
     ),
     // Valgt kandidat: et objekt med akkurat `source` (fast kode) og `id` (tekst), blant de viste,
     // og bare mens forslaget er godtatt. Uten formkravet ville `{}` stått «i» enhver liste (`@>`).

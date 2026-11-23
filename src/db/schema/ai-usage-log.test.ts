@@ -448,6 +448,32 @@ describe("KI i veien: kolonner, CHECK og indekser (K3.1–K3.3)", () => {
     await expectRejected(() => setColumns(row.id, { candidate_refs: ref() }));
   });
 
+  it.each([
+    { name: "{}", value: {} },
+    { name: "uten id", value: { source: "template_outcome" } },
+    { name: "uten source", value: { id: "x" } },
+    { name: "ukjent source", value: { source: "free_text", id: "x" } },
+    { name: "id som tall", value: { source: "template_outcome", id: 7 } },
+    { name: "id som null", value: { source: "template_outcome", id: null } },
+    {
+      name: "ekstra nøkkel (tekst)",
+      value: { source: "template_outcome", id: "x", text: "Tekst" },
+    },
+    { name: "en tekst", value: "K1" },
+    { name: "en liste i listen", value: [{ source: "template_outcome", id: "x" }] },
+  ])("candidate_refs med elementet $name avvises (bare source og id)", async ({ value }) => {
+    const { row } = await okRow();
+    await expectRejected(() => setColumns(row.id, { candidate_refs: [ref(), value] }));
+    // Riktig form godtas, også med alle kildene
+    await setColumns(row.id, {
+      candidate_refs: [
+        { source: "template_outcome", id: "a" },
+        { source: "template_measure", id: "b" },
+        { source: "phrase", id: "c" },
+      ],
+    });
+  });
+
   it("K3.2a candidate_refs er tom på en no_match-rad", async () => {
     const { orgA, employeeA } = await twoOrganizations();
     const row = await createAiUsageLog(orgA.id, { employeeId: employeeA.id, outcome: "no_match" });

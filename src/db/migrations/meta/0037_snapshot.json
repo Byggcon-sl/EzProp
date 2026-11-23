@@ -9619,7 +9619,7 @@
         },
         "ai_usage_log_candidate_refs_check": {
           "name": "ai_usage_log_candidate_refs_check",
-          "value": "\"ai_usage_log\".\"candidate_refs\" is null or (\"ai_usage_log\".\"outcome\" = 'ok' and jsonb_typeof(\"ai_usage_log\".\"candidate_refs\") = 'array' and jsonb_array_length(\"ai_usage_log\".\"candidate_refs\") between 1 and 5)"
+          "value": "\"ai_usage_log\".\"candidate_refs\" is null or (\"ai_usage_log\".\"outcome\" = 'ok' and jsonb_typeof(\"ai_usage_log\".\"candidate_refs\") = 'array' and jsonb_array_length(\"ai_usage_log\".\"candidate_refs\") between 1 and 5 and not jsonb_path_exists(\"ai_usage_log\".\"candidate_refs\", 'strict $[*] ? (@.type() != \"object\")') and not jsonb_path_exists(\"ai_usage_log\".\"candidate_refs\", 'strict $[*].keyvalue() ? (@.key != \"source\" && @.key != \"id\")') and not jsonb_path_exists(\"ai_usage_log\".\"candidate_refs\", 'lax $[*] ? (!(exists(@.source)) || !(exists(@.id)))') and not jsonb_path_exists(\"ai_usage_log\".\"candidate_refs\", 'lax $[*] ? (!(@.source == \"template_outcome\" || @.source == \"template_measure\" || @.source == \"phrase\") || @.id.type() != \"string\")'))"
         },
         "ai_usage_log_chosen_candidate_check": {
           "name": "ai_usage_log_chosen_candidate_check",
