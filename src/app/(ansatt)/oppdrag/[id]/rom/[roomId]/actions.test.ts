@@ -304,3 +304,83 @@ describe("changeSuggestedDeviationTgAction (T-0113, A490, FA-I37)", () => {
     expect(logged).toContain("change_suggested_deviation_tg");
   });
 });
+
+// --- Rett forslag og avvik (rett-forslag-og-avvik-testplan.md 2e, FA-I32 og FA-I37) -----------
+
+describe("already_decided og newer_decision", () => {
+  const REFRESH = SAVED.refresh;
+  const decideInput = {
+    id: DEVIATION,
+    ruleKey: "wet_room.membrane_before_2000",
+    decision: "changed" as const,
+    chosenTg: "2" as const,
+    overrideReasonCode: "measured_again" as const,
+  };
+
+  it("decideSuggestionAction gir already_decided videre uendret, med organisasjonen fra konteksten", async () => {
+    const answer = {
+      status: "already_decided",
+      decision: "accepted",
+      chosenTg: "3",
+      decidedAt: "2026-11-23T09:42:00.000Z",
+      refresh: REFRESH,
+    };
+    mocks.core.decideSuggestion.mockResolvedValue(answer);
+    const forged = { ...ref, organizationId: OTHER_ORG } as typeof ref;
+    expect(await actions.decideSuggestionAction(forged, decideInput)).toEqual(answer);
+    expect(mocks.core.decideSuggestion).toHaveBeenCalledWith(
+      actor,
+      ORG,
+      { assignmentId: ASSIGNMENT, roomId: ROOM },
+      decideInput,
+    );
+  });
+
+  it("restoreDeviationAction gir newer_decision videre uendret, med organisasjonen fra konteksten", async () => {
+    const answer = {
+      status: "newer_decision",
+      ruleKey: "wet_room.membrane_before_2000",
+      checkpointKey: "wet_room.membrane_drain",
+      refresh: REFRESH,
+    };
+    mocks.core.restoreDeviation.mockResolvedValue(answer);
+    const forged = { ...ref, organizationId: OTHER_ORG } as typeof ref;
+    expect(await actions.restoreDeviationAction(forged, { deviationId: DEVIATION })).toEqual(
+      answer,
+    );
+    expect(mocks.core.restoreDeviation).toHaveBeenCalledWith(
+      actor,
+      ORG,
+      { assignmentId: ASSIGNMENT, roomId: ROOM },
+      { deviationId: DEVIATION },
+    );
+  });
+
+  it("FA-I37 logget ut: ingen tilgang, og kjernen kalles ikke (Godta, Fjern og Angre)", async () => {
+    mocks.getEmployeeContext.mockResolvedValue(null);
+    for (const call of [
+      () => actions.decideSuggestionAction(ref, decideInput),
+      () => actions.removeDeviationAction(ref, DEVIATION),
+      () => actions.restoreDeviationAction(ref, { deviationId: DEVIATION }),
+    ]) {
+      expect(await call()).toEqual({ status: "error", message: NO_ACCESS });
+    }
+    expect(mocks.core.decideSuggestion).not.toHaveBeenCalled();
+    expect(mocks.core.removeDeviation).not.toHaveBeenCalled();
+    expect(mocks.core.restoreDeviation).not.toHaveBeenCalled();
+  });
+
+  it("FA-I32 kjernen nekter (annen organisasjon, kontor, sperret takstmann): samme melding som ellers", async () => {
+    mocks.core.decideSuggestion.mockRejectedValue(new AccessDeniedError());
+    mocks.core.restoreDeviation.mockRejectedValue(new AccessDeniedError());
+    expect(await actions.decideSuggestionAction(ref, decideInput)).toEqual({
+      status: "error",
+      message: NO_ACCESS,
+    });
+    expect(await actions.restoreDeviationAction(ref, { deviationId: DEVIATION })).toEqual({
+      status: "error",
+      message: NO_ACCESS,
+    });
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+});

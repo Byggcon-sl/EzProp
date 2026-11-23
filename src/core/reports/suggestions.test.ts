@@ -1,10 +1,22 @@
-import { and, count, eq, isNull } from "drizzle-orm";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
+import postgres from "postgres";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
 import { AccessDeniedError } from "@/core/access";
-import { addDeviation, decideSuggestion, ReportValidationError, setTgDirect } from "@/core/reports";
+import {
+  addDeviation,
+  decideSuggestion,
+  removeDeviation,
+  ReportValidationError,
+  saveField,
+  setCheckpointDone,
+  setTgDirect,
+} from "@/core/reports";
+import { CHECKPOINT_WARNING_CODES } from "@/core/reports/logic";
 import { db } from "@/db/client";
 import {
   checkpointResults,
@@ -15,6 +27,7 @@ import {
   tgiuDetails,
 } from "@/db/schema";
 import { wetRoomTemplate } from "@/db/seed/templates/wet-room";
+import { getEnv } from "@/shared/config/env";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { resetDatabase } from "../../../tests/factories";
 import {
@@ -237,10 +250,35 @@ describe("4c regelforslag", () => {
     });
     expect(rejected).toMatchObject({ status: "saved", deviationId: null });
     expect(await liveDeviations(f)).toEqual([]);
-    const [first] = await decisionsOf(f);
+
+    // Avvist er gjeldende: Endre etterpå lagrer ingenting (A493)
+    expect(
+      await decide(f, {
+        id: uuidv7(),
+        ruleKey: RULE.before2000,
+        decision: "changed",
+        chosenTg: "2",
+        overrideReasonCode: "other",
+        overrideReason: "Sjiktet er skiftet senere",
+      }),
+    ).toMatchObject({ status: "already_decided", decision: "rejected" });
+    expect(await decisionsOf(f)).toHaveLength(1);
+
+    // Ny beslutning etter at den gamle har sluttet å gjelde (avviket fjernet) er ny rad
+    const h = await startedBathroom();
+    await answerMembrane1990(h);
+    const firstDeviation = uuidv7();
+    await decide(h, {
+      id: uuidv7(),
+      ruleKey: RULE.before2000,
+      decision: "accepted",
+      deviationId: firstDeviation,
+    });
+    await removeDeviation(h.actor, h.organizationId, h.room, firstDeviation);
+    const [first] = await decisionsOf(h);
 
     const deviationId = uuidv7();
-    const changed = await decide(f, {
+    const changed = await decide(h, {
       id: uuidv7(),
       ruleKey: RULE.before2000,
       decision: "changed",
@@ -250,7 +288,7 @@ describe("4c regelforslag", () => {
       deviationId,
     });
     expect(changed).toMatchObject({ status: "saved", deviationId });
-    const rows = await decisionsOf(f);
+    const rows = await decisionsOf(h);
     expect(rows).toHaveLength(2);
     expect(rows[0]).toEqual(first);
     expect(rows[1]).toMatchObject({
@@ -261,7 +299,7 @@ describe("4c regelforslag", () => {
       overrideReason: "Sjiktet er skiftet senere",
       deviationId,
     });
-    const [deviation] = await liveDeviations(f);
+    const [deviation] = await liveDeviations(h);
     expect(deviation).toMatchObject({ id: deviationId, tg: 2, textSource: "template" });
 
     // Endre til TG uten avvik: ingen avvik, TG direkte
@@ -472,8 +510,9 @@ describe("4f tillegg", () => {
         deviationId: uuidv7(),
       }),
     ]);
-    expect(results.every((r) => r.status === "saved")).toBe(true);
+    expect(results.map((r) => r.status).sort()).toEqual(["already_decided", "saved"]);
     expect(await liveDeviations(f)).toHaveLength(1);
+    expect(await decisionsOf(f)).toHaveLength(1);
 
     const g = await startedBathroom();
     await answerMembrane1990(g);
@@ -653,5 +692,398 @@ describe("4f tillegg", () => {
       .from(checkpointResults)
       .where(and(eq(checkpointResults.reportId, g.reportId), eq(checkpointResults.tgDirect, "IU")));
     expect(counted?.n).toBe(1);
+  });
+});
+
+// --- Rett T-0116 og A493: ett avvik per forslag (rett-forslag-og-avvik-testplan.md 2b) ----------
+
+type Decide = Parameters<typeof decideSuggestion>[3];
+type DecideInput = Omit<Extract<Decide, { decision: string }>, "id" | "ruleKey">;
+
+const ACCEPT = { decision: "accepted" } as DecideInput;
+const CHANGE_TG2 = {
+  decision: "changed",
+  chosenTg: "2",
+  overrideReasonCode: "measured_again",
+} as DecideInput;
+const REJECT = { decision: "rejected", overrideReasonCode: "documentation_present" } as DecideInput;
+
+/** Koden for åpent forslag på ferdig punkt (A492) finnes når logikken for den er på plass. */
+const OPEN_SUGGESTION_CODE = "open_suggestion_on_done_checkpoint";
+function hasOpenSuggestionCode(): boolean {
+  return (CHECKPOINT_WARNING_CODES as readonly string[]).includes(OPEN_SUGGESTION_CODE);
+}
+
+describe("rett-forslag-og-avvik 2b: ett avvik per forslag", () => {
+  it.each([
+    ["Godta → Endre", ACCEPT, CHANGE_TG2, "accepted", "3"],
+    ["Godta → Avvis", ACCEPT, REJECT, "accepted", "3"],
+    ["Avvis → Godta", REJECT, ACCEPT, "rejected", null],
+    ["Endre → Godta", CHANGE_TG2, ACCEPT, "changed", "2"],
+  ] as const)(
+    "FA-I9 %s: andre kall gir already_decided med valg og tidspunkt, ingen ny rad og høyst ett avvik",
+    async (_name, first, second, decision, chosenTg) => {
+      const f = await startedBathroom();
+      await answerMembrane1990(f);
+      const saved = await decide(f, { id: uuidv7(), ruleKey: RULE.before2000, ...first } as Decide);
+      expect(saved.status).toBe("saved");
+      const rowsBefore = await decisionsOf(f);
+      const liveBefore = await liveDeviations(f);
+
+      const result = await decide(f, {
+        id: uuidv7(),
+        ruleKey: RULE.before2000,
+        ...second,
+        ...(second.decision === "rejected" ? {} : { deviationId: uuidv7() }),
+      } as Decide);
+      expect(result).toMatchObject({
+        status: "already_decided",
+        decision,
+        chosenTg,
+        decidedAt: rowsBefore[0]!.decidedAt.toISOString(),
+      });
+      if (result.status !== "already_decided") throw new Error("ventet already_decided");
+      expect(new Date(result.decidedAt).toISOString()).toBe(result.decidedAt);
+      expect(result.refresh.suggestions.find((s) => s.ruleKey === RULE.before2000)).toMatchObject({
+        latestDecision: { id: rowsBefore[0]!.id, decision },
+      });
+      expect(await decisionsOf(f)).toEqual(rowsBefore);
+      expect(await liveDeviations(f)).toEqual(liveBefore);
+      expect(liveBefore.length).toBeLessThanOrEqual(1);
+    },
+  );
+
+  it("FA-I10 TG0 og TGIU: andre kall gir already_decided, og TG på punktet endres ikke", async () => {
+    const f = await startedBathroom();
+    await answerHole(f, "done_no_findings", 14.9);
+    await decide(f, { id: uuidv7(), ruleKey: RULE.noMoisture, decision: "accepted" });
+    const tg0 = await decide(f, {
+      id: uuidv7(),
+      ruleKey: RULE.noMoisture,
+      decision: "changed",
+      chosenTg: "1",
+      overrideReasonCode: "measured_again",
+    });
+    expect(tg0).toMatchObject({ status: "already_decided", decision: "accepted", chosenTg: "0" });
+    expect(checkpointOf(await startedView(f), CP.adjacent).tgDirect).toBe("0");
+    expect(await decisionsOf(f)).toHaveLength(1);
+
+    const g = await startedBathroom();
+    await answerHole(g, "not_done");
+    await decide(g, { id: uuidv7(), ruleKey: RULE.notDone, decision: "accepted" });
+    const tgiu = await decide(g, {
+      id: uuidv7(),
+      ruleKey: RULE.notDone,
+      decision: "rejected",
+      overrideReasonCode: "documentation_present",
+    });
+    expect(tgiu).toMatchObject({ status: "already_decided", decision: "accepted", chosenTg: "IU" });
+    expect(checkpointOf(await startedView(g), CP.adjacent).tgDirect).toBe("IU");
+    expect(await decisionsOf(g)).toHaveLength(1);
+  });
+
+  it("FA-I11 samme beslutnings-id etter en gjeldende beslutning gir samme saved-svar, ikke already_decided", async () => {
+    const f = await startedBathroom();
+    await answerMembrane1990(f);
+    const input = {
+      id: uuidv7(),
+      ruleKey: RULE.before2000,
+      decision: "accepted" as const,
+      deviationId: uuidv7(),
+    };
+    const first = await decide(f, input);
+    const again = await decide(f, input);
+    expect(again).toMatchObject({
+      status: "saved",
+      decisionId: input.id,
+      deviationId: input.deviationId,
+    });
+    expect(first.status).toBe("saved");
+    expect(await decisionsOf(f)).toHaveLength(1);
+  });
+
+  it("FA-I12 regelen slår ikke til: no_longer_applies kommer før already_decided", async () => {
+    const f = await startedBathroom();
+    await answerMembrane1990(f);
+    await decide(f, { id: uuidv7(), ruleKey: RULE.before2000, decision: "accepted" });
+    await answer(f, "wet_room.membrane_year", { number: 2015 }, { number: 1990 });
+    const result = await decide(f, {
+      id: uuidv7(),
+      ruleKey: RULE.before2000,
+      decision: "rejected",
+      overrideReasonCode: "documentation_present",
+    });
+    expect(result.status).toBe("no_longer_applies");
+    expect(await decisionsOf(f)).toHaveLength(1);
+  });
+
+  it("FA-I13 to ekte samtidige transaksjoner (Godta og Endre) gir ett avvik og én beslutning, 10 runder", async () => {
+    // Egen pool for sperren: den holder rapportraden låst til begge kallene venter på låsen, så
+    // de to transaksjonene (hver sin forbindelse fra appens pool) går i gang samtidig.
+    const blocker = postgres(getEnv().DATABASE_URL, { max: 1, onnotice: () => {} });
+    try {
+      for (let round = 0; round < 10; round++) {
+        const f = await startedBathroom();
+        await answerMembrane1990(f);
+        let release!: () => void;
+        const released = new Promise<void>((resolve) => (release = resolve));
+        let locked!: () => void;
+        const isLocked = new Promise<void>((resolve) => (locked = resolve));
+        const holding = blocker.begin(async (tx) => {
+          await tx`select id from reports where id = ${f.reportId} for update`;
+          locked();
+          await released;
+        });
+        await isLocked;
+
+        const calls = Promise.all([
+          decide(f, {
+            id: uuidv7(),
+            ruleKey: RULE.before2000,
+            decision: "accepted",
+            deviationId: uuidv7(),
+          }),
+          decide(f, {
+            id: uuidv7(),
+            ruleKey: RULE.before2000,
+            decision: "changed",
+            chosenTg: "2",
+            overrideReasonCode: "measured_again",
+            deviationId: uuidv7(),
+          }),
+        ]);
+        // Vent til begge transaksjonene står i kø på låsen
+        const deadline = Date.now() + 10_000;
+        for (;;) {
+          // Fra appens pool: sperrens eneste forbindelse står i transaksjonen
+          const rows = await db.execute<{ n: number }>(sql`
+            select count(*)::int as n from pg_locks
+            where not granted and locktype in ('transactionid', 'tuple')`);
+          if ((rows[0]?.n ?? 0) >= 2) break;
+          if (Date.now() > deadline) throw new Error("kallene kom ikke til låsen");
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        release();
+        await holding;
+        const results = await calls;
+
+        expect(results.map((r) => r.status).sort()).toEqual(["already_decided", "saved"]);
+        expect(await liveDeviations(f)).toHaveLength(1);
+        expect(await decisionsOf(f)).toHaveLength(1);
+      }
+    } finally {
+      await blocker.end();
+    }
+  }, 60_000);
+
+  it("FA-I14 alreadyAccepted finnes ikke lenger i src/core/reports", () => {
+    const root = path.resolve(process.cwd(), "src/core/reports");
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((name) => {
+        const full = path.join(dir, name);
+        if (statSync(full).isDirectory()) return walk(full);
+        return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [full] : [];
+      });
+    for (const file of walk(root)) {
+      expect(readFileSync(file, "utf8"), file).not.toContain("alreadyAccepted");
+    }
+  });
+
+  it("FA-I15 A493: «Behold» på et gammelt avvik holder et nytt forslag fra samme regel lukket til avviket fjernes", async () => {
+    const f = await startedBathroom();
+    await answerMembrane1990(f);
+    const oldDeviation = uuidv7();
+    await decide(f, {
+      id: uuidv7(),
+      ruleKey: RULE.before2000,
+      decision: "accepted",
+      deviationId: oldDeviation,
+    });
+    // Regelsvaret var et annet da beslutningen ble tatt (for eksempel en eldre malversjon)
+    const [row] = await decisionsOf(f);
+    await db
+      .update(ruleSuggestionDecisions)
+      .set({ suggestion: { ...row!.suggestion, outcome_key: "older_outcome" } as never })
+      .where(eq(ruleSuggestionDecisions.id, row!.id));
+    const view = await startedView(f);
+    expect(view.suggestions.find((s) => s.ruleKey === RULE.before2000)?.stale).toBe(true);
+
+    const blocked = await decide(f, {
+      id: uuidv7(),
+      ruleKey: RULE.before2000,
+      decision: "accepted",
+    });
+    expect(blocked.status).toBe("already_decided");
+    expect((await liveDeviations(f)).map((d) => d.id)).toEqual([oldDeviation]);
+
+    await removeDeviation(f.actor, f.organizationId, f.room, oldDeviation);
+    const newDeviation = uuidv7();
+    const accepted = await decide(f, {
+      id: uuidv7(),
+      ruleKey: RULE.before2000,
+      decision: "accepted",
+      deviationId: newDeviation,
+    });
+    expect(accepted).toMatchObject({ status: "saved", deviationId: newDeviation });
+    expect((await liveDeviations(f)).map((d) => d.id)).toEqual([newDeviation]);
+  });
+});
+
+// --- A495 og A492: TG direkte og åpne forslag (rett-forslag-og-avvik-testplan.md 2d) -----------
+
+describe("rett-forslag-og-avvik 2d: TG direkte og åpne forslag", () => {
+  it("FA-I28 godtatt TGIU, så TG2-avvik på punktet: TGIU-forslaget er åpent, ingen «gjelder ikke lenger», ingen ny rad", async () => {
+    const f = await startedBathroom();
+    await answerHole(f, "not_done");
+    await decide(f, { id: uuidv7(), ruleKey: RULE.notDone, decision: "accepted" });
+    const added = await addDeviation(f.actor, f.organizationId, f.room, {
+      id: uuidv7(),
+      checkpointKey: CP.adjacent,
+      questionKey: ELEVATED.question,
+      outcomeKey: ELEVATED.outcome,
+      tg: 2,
+      tgiuChoice: "remove_tgiu",
+    });
+    expect(added.status).toBe("saved");
+    await setCheckpointDone(f.actor, f.organizationId, f.room, {
+      checkpointKey: CP.adjacent,
+      done: true,
+    });
+
+    const view = await startedView(f);
+    expect(view.suggestions.find((s) => s.ruleKey === RULE.notDone)?.latestDecision).toBeNull();
+    const adjacent = checkpointOf(view, CP.adjacent);
+    expect(adjacent.tgDirect).toBeNull();
+    const codes = adjacent.warnings.map((w) => w.code);
+    expect(codes).toContain("tgiu_suggested_not_set");
+    expect(codes).not.toContain("suggestion_no_longer_applies");
+    expect(codes).not.toContain(OPEN_SUGGESTION_CODE);
+    expect(await decisionsOf(f)).toHaveLength(1);
+  });
+
+  it("FA-I29 godtatt TG0, TG på punktet endret: forslaget er åpent og varsles på ferdig punkt, ingen ny rad", async () => {
+    const f = await startedBathroom();
+    await answerHole(f, "done_no_findings", 14.9);
+    await decide(f, { id: uuidv7(), ruleKey: RULE.noMoisture, decision: "accepted" });
+    const changed = await setTgDirect(f.actor, f.organizationId, f.room, {
+      checkpointKey: CP.adjacent,
+      tgDirect: "1",
+      base: "0",
+    });
+    expect(changed.status).toBe("saved");
+    const done = await setCheckpointDone(f.actor, f.organizationId, f.room, {
+      checkpointKey: CP.adjacent,
+      done: true,
+    });
+    expect(done.status).toBe("saved");
+
+    const view = await startedView(f);
+    expect(view.suggestions.find((s) => s.ruleKey === RULE.noMoisture)?.latestDecision).toBeNull();
+    const codes = checkpointOf(view, CP.adjacent).warnings.map((w) => w.code);
+    expect(codes).not.toContain("suggestion_no_longer_applies");
+    if (hasOpenSuggestionCode()) expect(codes).toContain(OPEN_SUGGESTION_CODE);
+    expect(await decisionsOf(f)).toHaveLength(1);
+
+    // TG tilbake til den godtatte: beslutningen gjelder igjen, uten ny rad
+    await setTgDirect(f.actor, f.organizationId, f.room, {
+      checkpointKey: CP.adjacent,
+      tgDirect: "0",
+      base: "1",
+    });
+    const back = await startedView(f);
+    expect(
+      back.suggestions.find((s) => s.ruleKey === RULE.noMoisture)?.latestDecision,
+    ).toMatchObject({ decision: "accepted", chosenTg: "0", suggestionTg: "0" });
+    expect(await decisionsOf(f)).toHaveLength(1);
+  });
+
+  it("FA-I30 godtatt TG3 og et annet TG2-avvik, TG3-avviket fjernet: forslaget er åpent, og «Ferdig» sperres ikke", async () => {
+    const f = await startedBathroom();
+    await answerMembrane1990(f);
+    const tg3 = uuidv7();
+    await decide(f, {
+      id: uuidv7(),
+      ruleKey: RULE.before2000,
+      decision: "accepted",
+      deviationId: tg3,
+    });
+    const document = (await startedView(f)).document;
+    const tg2Outcome = document.outcomes.find(
+      (o) => o.checkpoint_key === CP.membrane && o.kind === "tg2",
+    )!;
+    await addDeviation(f.actor, f.organizationId, f.room, {
+      id: uuidv7(),
+      checkpointKey: CP.membrane,
+      questionKey: tg2Outcome.question_key,
+      outcomeKey: tg2Outcome.key,
+      tg: null,
+    });
+    await removeDeviation(f.actor, f.organizationId, f.room, tg3);
+    const done = await setCheckpointDone(f.actor, f.organizationId, f.room, {
+      checkpointKey: CP.membrane,
+      done: true,
+    });
+    expect(done.status).toBe("saved");
+
+    const view = await startedView(f);
+    expect(view.suggestions.find((s) => s.ruleKey === RULE.before2000)?.latestDecision).toBeNull();
+    const membrane = checkpointOf(view, CP.membrane);
+    expect(membrane).toMatchObject({ done: true, tg: "2" });
+    const codes = membrane.warnings.map((w) => w.code);
+    expect(codes).not.toContain("suggestion_no_longer_applies");
+    if (hasOpenSuggestionCode()) expect(codes).toContain(OPEN_SUGGESTION_CODE);
+  });
+
+  it("FA-I31 T-0115: TG3 godtatt, så «Ikke utført» og TGIU med «Fjern avvikene med TG»: ingen «gjelder ikke lenger», og listen blir tom", async () => {
+    const f = await startedBathroom();
+    await answerHole(f, "done_with_findings", 18);
+    await decide(f, { id: uuidv7(), ruleKey: RULE.moisture, decision: "accepted", chosenTg: 3 });
+    await answer(
+      f,
+      "wet_room.hole_drilling",
+      { optionKeys: ["not_done"] },
+      { optionKeys: ["done_with_findings"] },
+    );
+    const tgiu = await decide(f, {
+      id: uuidv7(),
+      ruleKey: RULE.notDone,
+      decision: "accepted",
+      tgDeviationChoice: "remove_tg_deviations",
+    });
+    expect(tgiu.status).toBe("saved");
+    expect(await liveDeviations(f)).toEqual([]);
+
+    let adjacent = checkpointOf(await startedView(f), CP.adjacent);
+    expect(adjacent.warnings.map((w) => w.code)).not.toContain("suggestion_no_longer_applies");
+
+    const texts = {
+      reason: "Oppdiktet grunn",
+      risk_assessment: "Oppdiktet risiko",
+      how_to_examine: "Oppdiktet undersøkelse",
+      alternative_check_method: "Overflatemåling",
+      alternative_check_result: "Ingen utslag",
+    } as const;
+    for (const [field, value] of Object.entries(texts)) {
+      await saveField(f.actor, f.organizationId, f.room, {
+        table: "tgiu_details",
+        checkpointKey: CP.adjacent,
+        field: field as keyof typeof texts,
+        value,
+        base: null,
+      });
+    }
+    await saveField(f.actor, f.organizationId, f.room, {
+      table: "tgiu_details",
+      checkpointKey: CP.adjacent,
+      field: "construction_vulnerable",
+      value: "yes",
+      base: null,
+    });
+    await setCheckpointDone(f.actor, f.organizationId, f.room, {
+      checkpointKey: CP.adjacent,
+      done: true,
+    });
+    adjacent = checkpointOf(await startedView(f), CP.adjacent);
+    expect(adjacent.warnings).toEqual([]);
   });
 });

@@ -1,9 +1,10 @@
-import { and, eq, isNull, max, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, max, sql } from "drizzle-orm";
 import { AccessDeniedError } from "@/core/access";
 import {
   checkpointResults,
   deviationMeasures,
   deviations,
+  ruleSuggestionDecisions,
   type CheckpointResult,
   type Deviation,
   type DeviationTg,
@@ -37,6 +38,7 @@ import type {
   RemoveDeviation,
   RemoveMeasure,
   RestoreDeviation,
+  RestoreDeviationResult,
   TgiuChoice,
 } from "./types";
 import {
@@ -330,7 +332,10 @@ export const addDeviation: AddDeviation = (actor, organizationId, room, input) =
     return { status: "saved", refresh: await refreshOf(scope) };
   });
 
-/** Fjerner avviket og tiltakene mykt (`report.edit`). Beslutningsradene står urørt. */
+/**
+ * Fjerner avviket og tiltakene mykt (`report.edit`). Beslutningsradene står urørt, og ingen ny rad
+ * lages: beslutningen slutter å gjelde, og `refresh` viser forslaget åpent igjen (A491).
+ */
 export const removeDeviation: RemoveDeviation = (actor, organizationId, room, deviationId) =>
   withRoomWrite(actor, organizationId, room, async (scope): Promise<ActionResult> => {
     requireUuid(deviationId);
@@ -340,15 +345,59 @@ export const removeDeviation: RemoveDeviation = (actor, organizationId, room, de
   });
 
 /**
+ * Regelen og punktet når avviket kom fra et regelforslag og det finnes en nyere beslutningsrad for
+ * samme regel og punkt enn den siste som peker på avviket (accepted, changed eller rejected). Ellers
+ * `null`. Radene leses med organisasjonen og rapporten; sorteringen er den samme som i visningen.
+ */
+async function newerDecisionFor(
+  scope: WriteScope,
+  deviation: Deviation,
+  result: CheckpointResult,
+): Promise<{ ruleKey: string; checkpointKey: string } | null> {
+  if (deviation.suggestedByRuleId === null) return null;
+  const ruleKey = scope.template.ruleKeyById.get(deviation.suggestedByRuleId);
+  const checkpointKey = scope.template.checkpointKeyById.get(result.checkpointId);
+  if (!ruleKey || !checkpointKey) return null;
+  const rows = await scope.tx
+    .select({ id: ruleSuggestionDecisions.id, deviationId: ruleSuggestionDecisions.deviationId })
+    .from(ruleSuggestionDecisions)
+    .where(
+      and(
+        eq(ruleSuggestionDecisions.organizationId, scope.orgId),
+        eq(ruleSuggestionDecisions.reportId, scope.reportId),
+        eq(ruleSuggestionDecisions.checkpointResultId, result.id),
+        eq(ruleSuggestionDecisions.ruleKey, ruleKey),
+      ),
+    )
+    .orderBy(asc(ruleSuggestionDecisions.decidedAt), asc(ruleSuggestionDecisions.id));
+  const last = rows.findLastIndex((r) => r.deviationId === deviation.id);
+  // Ingen rad peker på avviket: gjenopprett som før
+  if (last === -1) return null;
+  return last < rows.length - 1 ? { ruleKey, checkpointKey } : null;
+}
+
+/**
  * Angre etter «Fjern avviket» (`report.edit`): samme rad tilbake, med tiltakene som ble fjernet
  * sammen med det (samme `deleted_at`). Tiltak som var fjernet før, står fjernet.
  */
 export const restoreDeviation: RestoreDeviation = (actor, organizationId, room, input) =>
-  withRoomWrite(actor, organizationId, room, async (scope): Promise<ActionResult> => {
+  withRoomWrite(actor, organizationId, room, async (scope): Promise<RestoreDeviationResult> => {
     requireUuid(input?.deviationId);
     const values = parseOrThrow(restoreDeviationInputSchema, input);
     const { deviation, result } = await requireRoomDeviation(scope, values.deviationId);
     if (deviation.deletedAt === null) return { status: "saved", refresh: await refreshOf(scope) };
+
+    // Forslaget er avgjort på nytt etter at avviket ble fjernet (A494): ingenting endres, slik at
+    // det aldri står to avvik for samme forslag
+    const newer = await newerDecisionFor(scope, deviation, result);
+    if (newer) {
+      return {
+        status: "newer_decision",
+        ruleKey: newer.ruleKey,
+        checkpointKey: newer.checkpointKey,
+        refresh: await refreshOf(scope),
+      };
+    }
 
     const live = await liveDeviationsOf(scope, result.id);
     if (live.length >= MAX_DEVIATIONS_PER_CHECKPOINT) {

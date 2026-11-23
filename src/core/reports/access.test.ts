@@ -157,7 +157,53 @@ const ACTIONS: [string, (actor: Actor, p: Prepared) => Promise<unknown>][] = [
     "Angre",
     (actor, p) => restoreDeviation(actor, p.organizationId, p.room, { deviationId: p.deviationId }),
   ],
+  // FA-I32: de nye svarene følger samme tilgang (rett-forslag-og-avvik-testplan.md 2e)
+  ["Godta på avgjort forslag (already_decided)", (actor, p) => decidedAgain(actor, p)],
+  ["Angre etter ny beslutning (newer_decision)", (actor, p) => restoreAfterNewDecision(actor, p)],
 ];
+
+/** Forslaget er godtatt av admin; så prøver `actor` Endre. Svaret skal være `already_decided`. */
+async function decidedAgain(actor: Actor, p: Prepared) {
+  await decideSuggestion(p.actor, p.organizationId, p.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "accepted",
+  });
+  const result = await decideSuggestion(actor, p.organizationId, p.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "changed",
+    chosenTg: "2",
+    overrideReasonCode: "measured_again",
+  });
+  if (result.status !== "already_decided") throw new Error(`ventet already_decided`);
+  return result;
+}
+
+/**
+ * Admin godtar, fjerner avviket og godtar på nytt; så prøver `actor` Angre på det gamle avviket.
+ * Svaret skal være `newer_decision`.
+ */
+async function restoreAfterNewDecision(actor: Actor, p: Prepared) {
+  const oldDeviationId = uuidv7();
+  await decideSuggestion(p.actor, p.organizationId, p.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "accepted",
+    deviationId: oldDeviationId,
+  });
+  await removeDeviation(p.actor, p.organizationId, p.room, oldDeviationId);
+  await decideSuggestion(p.actor, p.organizationId, p.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "accepted",
+  });
+  const result = await restoreDeviation(actor, p.organizationId, p.room, {
+    deviationId: oldDeviationId,
+  });
+  if (result.status !== "newer_decision") throw new Error(`ventet newer_decision`);
+  return result;
+}
 
 type Case = { role: EmployeeRole; editAll: boolean; single: boolean; allowed: boolean };
 
@@ -229,13 +275,25 @@ describe("B5.2 admin stenges aldri ute", () => {
       },
       { decision: "accepted" as const },
     ]) {
-      const result = await decideSuggestion(admin.actor, f.organizationId, f.room, {
+      // Hvert forslag avgjøres én gang (A493), så hver beslutning får sitt eget bad
+      const g = await startedBathroom({ organizationId: f.organizationId, roles: ["admin"] });
+      await answerMembrane1990(g);
+      const result = await decideSuggestion(admin.actor, f.organizationId, g.room, {
         id: uuidv7(),
         ruleKey: RULE.before2000,
         ...input,
       });
       expect(result.status).toBe("saved");
     }
+    expect(
+      (
+        await decideSuggestion(admin.actor, f.organizationId, f.room, {
+          id: uuidv7(),
+          ruleKey: RULE.before2000,
+          decision: "accepted",
+        })
+      ).status,
+    ).toBe("saved");
     const done = await setCheckpointDone(admin.actor, f.organizationId, f.room, {
       checkpointKey: CP.membrane,
       done: true,
@@ -243,6 +301,28 @@ describe("B5.2 admin stenges aldri ute", () => {
     expect(done.status).toBe("saved");
     const view = await getRoomView(admin.actor, f.organizationId, f.room);
     expect(view.state === "started" && view.canEdit).toBe(true);
+  });
+});
+
+describe("rett-forslag-og-avvik 2e: tilgang", () => {
+  it("FA-I32 ansatt uten rolle får nei på already_decided og newer_decision", async () => {
+    for (const run of [decidedAgain, restoreAfterNewDecision]) {
+      const p = await prepare();
+      const { actor } = await createStaff(p.organizationId, []);
+      await expect(run(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+    }
+  });
+
+  it("FA-I35 mykt slettet ansatt får nei på already_decided og newer_decision", async () => {
+    for (const run of [decidedAgain, restoreAfterNewDecision]) {
+      const p = await prepare();
+      const { actor, employee } = await createStaff(p.organizationId, ["inspector"]);
+      await db
+        .update(employees)
+        .set({ deletedAt: new Date() })
+        .where(eq(employees.id, employee.id));
+      await expect(run(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+    }
   });
 });
 
