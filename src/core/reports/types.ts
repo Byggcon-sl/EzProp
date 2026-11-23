@@ -17,7 +17,12 @@ import type {
   TgDirect,
 } from "@/db/schema";
 import type { INSPECTION_YEAR_SOURCES } from "./logic/codes";
-import type { CheckpointStatus, CheckpointTg, CheckpointWarning } from "./logic/types";
+import type {
+  CheckpointStatus,
+  CheckpointTg,
+  CheckpointWarning,
+  SuggestionTg,
+} from "./logic/types";
 
 /**
  * Grensesnittet til rapportkjernen (`@/core/reports`, ADR 0013,
@@ -124,9 +129,32 @@ export type DeviationView = {
   textSource: TextSource;
   /** Regelen som foreslo avviket (fast kode). */
   suggestedByRuleKey: string | null;
+  /**
+   * Satt når avviket henger på en gjeldende beslutning om et regelforslag. Da byttes TG bare med
+   * `ChangeSuggestedDeviationTg`, aldri med lagring per felt (A490). `null` for avvik som ikke kom
+   * fra et forslag.
+   */
+  suggestion: DeviationSuggestionLink | null;
   sortOrder: number;
   rowVersion: number;
   measures: MeasureView[];
+};
+
+/**
+ * Koblingen fra et avvik til den gjeldende beslutningen som laget det (A490, ADR 0013 punkt 9b).
+ * Regnes av serveren ved visning, lagres ikke.
+ */
+export type DeviationSuggestionLink = {
+  ruleKey: string;
+  /** Den gjeldende beslutningsraden. */
+  decisionId: string;
+  /** TG-en regelen foreslo. Vises sammen med valgt TG. `null` når forslaget er et HMS-utfall. */
+  suggestionTg: SuggestionTg | null;
+  /**
+   * TG-valgene som ikke krever grunn (raden blir `accepted`), regnet med
+   * `SuggestedTgChangeDecision`. Alle andre valg krever grunn før noe sendes.
+   */
+  tgWithoutReason: (DeviationTg | null)[];
 };
 
 export type TgiuDetailsView = {
@@ -155,12 +183,22 @@ export type DecisionView = {
   overrideReason: string | null;
   deviationId: string | null;
   decidedAt: string;
+  /**
+   * TG-en regelen foreslo da beslutningen ble tatt («Forslag TG3, endret til TG2: …»). `null` når
+   * forslaget er et HMS-utfall.
+   */
+  suggestionTg: SuggestionTg | null;
 };
 
 /**
  * Et regelsvar for rommet, regnet av serveren på lagrede svar. `not_evaluated` vises med hva som
  * mangler. `stale`: forslaget er godtatt eller endret, men regelen slår ikke lenger til
  * («gjelder ikke lenger»); regnes ved visning, lagres ikke, og fjerner aldri et avvik.
+ *
+ * `latestDecision` er den **gjeldende** beslutningen (`IsEffectiveDecision`), ellers `null`. Er
+ * den `null`, er forslaget åpent og vises med Godta, Endre og Avvis, også når det finnes eldre
+ * rader (avviket er fjernet, eller TG på punktet er endret bort fra godtatt TG0 eller TGIU).
+ * `stale` er bare `true` for en gjeldende beslutning.
  */
 export type SuggestionView = {
   ruleKey: string;
@@ -224,6 +262,10 @@ export type RoomReportView =
  * Serveren sammenligner `base` med feltets nåverdi (`is not distinct from`). Er de ulike, lagres
  * ingenting, og svaret er `conflict` med nyeste verdi. To faner som endrer ulike felt på samme
  * rad, gir ingen konflikt. `row_version` øker fortsatt ved hver lagring.
+ *
+ * `deviations.tg` på et avvik med gjeldende beslutning om et regelforslag
+ * (`DeviationView.suggestion`) lagres ikke her: det avvises med `ReportValidationError`
+ * (`override_reason`), og ingenting lagres. Bruk `ChangeSuggestedDeviationTg` (A490).
  *
  * Feltene som ikke står her, endres bare av egne handlinger: `tg_direct`, `done`, `kind`,
  * `text_source` (settes av serveren: `template` → `edited` når en tekst endres),
@@ -366,6 +408,33 @@ export type RestoreDeviationInput = {
   tgiuChoice?: TgiuChoice;
 };
 
+/**
+ * Svaret fra `RestoreDeviation`. `newer_decision` (A494): avviket kom fra et regelforslag, og det
+ * finnes en nyere beslutningsrad for samme regel og punkt enn den som laget avviket. Ingenting er
+ * endret. `ruleKey` og `checkpointKey` gir lenken til forslaget.
+ */
+export type RestoreDeviationResult =
+  | ActionResult
+  | { status: "newer_decision"; ruleKey: string; checkpointKey: string; refresh: RoomRefresh };
+
+/**
+ * TG-bytte på et avvik fra et regelforslag (A490). TG og grunn sendes som ett kall, etter at
+ * grunnen er valgt på skjermen.
+ */
+export type ChangeSuggestedDeviationTgInput = {
+  /** UUID v7 fra nettleseren for den nye beslutningsraden. Samme id to ganger gir samme svar. */
+  id: string;
+  deviationId: string;
+  tg: DeviationTg | null;
+  /** TG-en klienten så. Stemmer den ikke med nåverdien, er svaret `conflict`. */
+  base: DeviationTg | null;
+} & OverrideReasonInput;
+
+export type ChangeSuggestedDeviationTgResult =
+  | { status: "saved"; decisionId: string; refresh: RoomRefresh }
+  /** «Endret av andre». Ingenting er lagret, heller ingen beslutningsrad. */
+  | { status: "conflict"; current: DeviationTg | null; refresh: RoomRefresh };
+
 export type DecideSuggestionInput = {
   /** UUID v7 fra nettleseren for beslutningsraden. Samme id to ganger gir samme beslutning. */
   id: string;
@@ -423,7 +492,19 @@ export type DecideSuggestionResult =
   /** Ingenting er lagret: ingen beslutningsrad, ingen `tg_direct`, avvikene står (A395). */
   | { status: "tgiu_conflicts_with_deviation" }
   /** Regelen slår ikke til på serveren med lagrede svar: «Forslaget gjelder ikke lenger». */
-  | { status: "no_longer_applies"; refresh: RoomRefresh };
+  | { status: "no_longer_applies"; refresh: RoomRefresh }
+  /**
+   * Forslaget har alt en gjeldende beslutning (annen fane, annen enhet eller en kollega, A493).
+   * Ingenting er lagret: ingen ny rad, intet avvik, ingen TG. Feltene sier hva som ble bestemt og
+   * når (ISO-tid), aldri hvem. Skjermen viser tidspunktet i norsk tid.
+   */
+  | {
+      status: "already_decided";
+      decision: RuleSuggestionDecision;
+      chosenTg: ChosenTg | null;
+      decidedAt: string;
+      refresh: RoomRefresh;
+    };
 
 // --- Funksjonene (bygges av utvikleren i `src/core/reports`) -----------------------------------
 
@@ -476,7 +557,9 @@ export type AddDeviation = (
 ) => Promise<ActionResult>;
 
 /**
- * Fjerner avviket og tiltakene mykt (`report.edit`). Beslutningsraden står urørt. Avviket og
+ * Fjerner avviket og tiltakene mykt (`report.edit`). Beslutningsraden står urørt, og ingen ny rad
+ * lages: beslutningen slutter å gjelde fordi avviket er borte (A491), og `refresh` viser forslaget
+ * åpent igjen med en gang (`latestDecision = null`). Avviket og
  * tiltakene som fjernes sammen med det, får samme `deleted_at`, slik at `RestoreDeviation` vet
  * hvilke tiltak som hører til. Brukes også av «Fjern avviket» på et forslag som ikke lenger
  * gjelder (A388).
@@ -493,13 +576,17 @@ export type RemoveDeviation = (
  * og på tiltakene som har samme `deleted_at` som avviket; tiltak som var fjernet før, står
  * fjernet. Reglene for `tg_direct` er de samme som i `AddDeviation`. Et avvik som ikke er
  * slettet, gir `saved` uten endring. Skjermen tilbyr Angre til punktet forlates.
+ *
+ * Avvik fra et regelforslag (A494): finnes det en nyere beslutningsrad for samme regel og punkt
+ * enn den som peker på avviket, er svaret `newer_decision`, og ingenting endres. Ellers blir
+ * beslutningen gjeldende igjen av seg selv. Gjelder også gjenoppretting fra papirkurven.
  */
 export type RestoreDeviation = (
   actor: Actor,
   organizationId: string,
   room: RoomRef,
   input: RestoreDeviationInput,
-) => Promise<ActionResult>;
+) => Promise<RestoreDeviationResult>;
 
 /** Legger til et tomt tiltak sist på avviket (`report.edit`). Tak: `MAX_MEASURES_PER_DEVIATION`. */
 export type AddMeasure = (
@@ -540,7 +627,17 @@ export type SetTgDirect = (
  * Godtar, endrer eller avviser et regelforslag (`report.edit`). Serveren kjører reglene på lagrede
  * svar og lagrer sitt eget regelsvar i `rule_suggestion_decisions` (ny rad hver gang); klienten
  * sender bare regelkode, beslutning, valg og begrunnelse. Ukjent `ruleKey` gir
- * `ReportValidationError`. Slår regelen ikke til, er svaret `no_longer_applies`.
+ * `ReportValidationError`.
+ *
+ * Rekkefølgen er fast (A493), og gir høyst ett avvik per regel og punkt:
+ * 1. Samme beslutnings-id som en lagret rad: `saved` med samme svar, ingen ny rad.
+ * 2. Regelen slår ikke til: `no_longer_applies`.
+ * 3. Siste rad for regelen og punktet er gjeldende (`IsEffectiveDecision`): `already_decided`,
+ *    uansett om kallet er Godta, Endre eller Avvis, og for alle forslagstyper.
+ * 4. Ellers lagres beslutningen som beskrevet under.
+ *
+ * Ingen egen lås: `withRoomWrite` låser rapportraden, så to kall i samme rapport går etter
+ * hverandre, og det andre ser det førstes rad.
  *
  * Godta: `outcome` lager avviket med standardtekstene, `tgiu` gir `tg_direct = IU`, `tg0` gir
  * `tg_direct = 0`. Endre lager avviket med valgt TG og utfall og setter `deviation_id` på
@@ -568,3 +665,33 @@ export type SetCheckpointDone = (
   room: RoomRef,
   input: { checkpointKey: string; done: boolean },
 ) => Promise<ActionResult>;
+
+/**
+ * Bytter TG på et avvik som har en gjeldende beslutning om et regelforslag (`report.edit`, A490).
+ * Egen handling, ikke lagring per felt: TG-en og en ny beslutningsrad lagres i samme transaksjon
+ * (ADR 0013 punkt 12).
+ *
+ * - Samme `id` som en lagret rad: `saved` med samme svar, ingen ny rad.
+ * - Avviket har ingen gjeldende beslutning (kom ikke fra et forslag, eller er fjernet):
+ *   `ReportValidationError` (`not_applicable`). Slike avvik bytter TG med `SaveReportField`.
+ * - `base` stemmer ikke med nåverdien: `conflict`, ingenting lagret.
+ * - `tg` er lik nåverdien: `saved` med den gjeldende radens id, ingen ny rad.
+ * - Ellers avgjør `SuggestedTgChangeDecision` om raden blir `accepted` eller `changed`. `changed`
+ *   krever grunn etter `CheckOverrideReason`; mangler den, eller sendes grunn ved `accepted`, er
+ *   svaret `ReportValidationError` (`override_reason`), og verken TG eller rad lagres.
+ *
+ * Den nye raden: `suggestion`, `reasons`, `lifespan_set_key`, `threshold_set_key` og
+ * `inspection_year` kopieres fra den gjeldende raden som erstattes; reglene kjøres ikke på nytt
+ * (ADR 0013 punkt 10). `chosen_tg` er ny TG, `chosen_outcome_key` avvikets utfall, `deviation_id`
+ * det samme avviket. Tiltakene endres ikke; advarslene (`texts_written_for_other_tg`,
+ * `tg3_missing_cost`) følger TG-en i `refresh`.
+ *
+ * Revisjonsloggen får regelkode, avvik, gammel og ny TG og grunnkoden, aldri begrunnelsesteksten.
+ * Regler og KI setter aldri TG; det gjør bare takstmannen her.
+ */
+export type ChangeSuggestedDeviationTg = (
+  actor: Actor,
+  organizationId: string,
+  room: RoomRef,
+  input: ChangeSuggestedDeviationTgInput,
+) => Promise<ChangeSuggestedDeviationTgResult>;

@@ -267,6 +267,7 @@ describe("beslutninger til «Rett nå»", () => {
         overrideReason: null,
         deviationId: "d1",
         decidedAt: "2026-11-16T10:00:00Z",
+        suggestionTg: 2,
       },
     } satisfies SuggestionView;
     expect(decisionStates([suggestion])).toMatchObject([

@@ -27,6 +27,8 @@ const ACCEPTED: DecisionState = {
   ruleKey: "rule.age",
   decision: "accepted",
   suggestion: { kind: "outcome", checkpoint_key: "cp", question_key: "cp.q", outcome_key: "tg2" },
+  chosenTg: "2",
+  madeDeviation: true,
   deviationId: "dev-9",
 };
 

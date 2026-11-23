@@ -114,6 +114,8 @@ function decision(overrides: Partial<DecisionState> = {}): DecisionState {
     ruleKey: AGE_RULE,
     decision: "accepted",
     suggestion: AGE_SUGGESTION,
+    chosenTg: "2",
+    madeDeviation: true,
     deviationId: "dev-1",
     ...overrides,
   };

@@ -235,6 +235,8 @@ export function decisionStates(suggestions: readonly SuggestionView[]): Decision
             ruleKey: s.ruleKey,
             decision: s.latestDecision.decision,
             suggestion: s.suggestion ?? { kind: "tg0", checkpoint_key: s.checkpointKey },
+            chosenTg: s.latestDecision.chosenTg,
+            madeDeviation: s.latestDecision.deviationId !== null,
             deviationId: s.latestDecision.deviationId,
           },
         ]

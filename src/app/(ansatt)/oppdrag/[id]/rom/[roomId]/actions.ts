@@ -23,6 +23,7 @@ import type {
   DecideSuggestionResult,
   ReportFieldChange,
   RestoreDeviationInput,
+  RestoreDeviationResult,
   RoomRef,
   SaveFieldResult,
   SetTgDirectInput,
@@ -143,7 +144,7 @@ export async function removeDeviationAction(
 export async function restoreDeviationAction(
   ref: RoomRef,
   input: RestoreDeviationInput,
-): Promise<ActionResult | ActionError> {
+): Promise<RestoreDeviationResult | ActionError> {
   return onRoom("restore_deviation", ref, (context, room) =>
     restoreDeviation(context.actor, context.organizationId, room, input),
   );

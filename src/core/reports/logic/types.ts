@@ -1,6 +1,7 @@
 import type { RuleResult } from "@/core/rules";
 import type { StandardMeasureDoc } from "@/core/templates";
 import type {
+  ChosenTg,
   ConstructionVulnerable,
   CostType,
   DeviationKind,
@@ -47,6 +48,16 @@ export type WarningFixKind = (typeof WARNING_FIX_KINDS)[number];
  */
 export type OutcomeTg = DeviationTg | "choose";
 
+/**
+ * TG-en et regelforslag gjelder, slik skjermen viser den («Forslag TG3, endret til TG2»): malens TG
+ * for utfallet (`outcome`), `"IU"` for `tgiu` og `"0"` for `tg0`. Regnes fra det lagrede forslaget
+ * og den låste malversjonen, aldri fra klienten.
+ */
+export type SuggestionTg = OutcomeTg | "0" | "IU";
+
+/** Beslutningen en beslutningsrad kan få når TG byttes på et avvik fra et forslag (A490). */
+export type SuggestedTgChangeOutcome = Extract<RuleSuggestionDecision, "accepted" | "changed">;
+
 // --- Inndata (det funksjonene trenger av radene, uten id-er de ikke bruker) --------------------
 
 /** Et avvik slik de rene funksjonene ser det. Mykt slettede avvik sendes aldri inn. */
@@ -92,11 +103,21 @@ export type TgiuRequirements = {
   ownerInformed: boolean;
 };
 
-/** Siste beslutning om et regelforslag, slik advarslene trenger den. */
+/**
+ * Siste beslutningsrad for en regel på et punkt (siste rad vinner), slik de rene funksjonene
+ * trenger den. Om raden er gjeldende, avgjøres bare av `IsEffectiveDecision` (ADR 0013 punkt 9b).
+ */
 export type DecisionState = {
   ruleKey: string;
   decision: RuleSuggestionDecision;
   suggestion: StoredRuleSuggestion;
+  /** TG takstmannen endte på (`chosen_tg`). `null` ved `rejected` og ved «velg» uten valgt TG. */
+  chosenTg: ChosenTg | null;
+  /**
+   * Raden har `deviation_id`: beslutningen laget et avvik, enten det står eller er fjernet.
+   * Skiller «avviket er fjernet» fra «beslutningen ga aldri avvik» (TG0, TG1, TGIU).
+   */
+  madeDeviation: boolean;
   /** Avviket beslutningen laget, når det ikke er slettet. Gir «Fjern avviket» / «Behold» (A388). */
   deviationId: string | null;
 };
@@ -111,7 +132,10 @@ export type CheckpointState = {
   tgiuRequirements: TgiuRequirements;
   /** Regelsvarene for dette kontrollpunktet, regnet på lagrede svar. */
   ruleResults: readonly RuleResult[];
-  /** Siste beslutning per regel på punktet. */
+  /**
+   * Siste beslutning per regel på punktet, **bare de gjeldende** (`IsEffectiveDecision`). Den som
+   * kaller, siler før advarslene regnes. En regel uten rad her har et åpent forslag.
+   */
   decisions: readonly DecisionState[];
   /**
    * T-0059: valget er «utført uten funn», og regelen for forhøyet fukt slår til i serverens
@@ -128,7 +152,10 @@ export type CheckpointWarning = {
   code: CheckpointWarningCode;
   /** Avviket advarselen gjelder. `null` = hele punktet. */
   deviationId: string | null;
-  /** Regelen advarselen gjelder (`suggestion_no_longer_applies`, `tgiu_suggested_not_set`). */
+  /**
+   * Regelen advarselen gjelder (`suggestion_no_longer_applies`, `tgiu_suggested_not_set`,
+   * `open_suggestion_on_done_checkpoint`).
+   */
   ruleKey: string | null;
   missing: WarningMissingPart[];
 };
@@ -252,3 +279,42 @@ export type SuggestionStillApplies = (
   decision: DecisionState,
   ruleResults: readonly RuleResult[],
 ) => boolean;
+
+/**
+ * Gjeldende beslutning (A491, A495, ADR 0013 punkt 9b): om siste beslutningsrad for en regel på et
+ * punkt fortsatt står ved lag. Én regel for serveren og skjermen; ingen andre steder vurderer det.
+ * - `rejected` er alltid gjeldende.
+ * - Rad som laget avvik (`madeDeviation`): gjeldende bare når avviket står (`deviationId !== null`).
+ * - Rad uten avvik med valgt TG `0`, `1` eller `IU`: gjeldende bare når punktets `tgDirect` er lik
+ *   den valgte.
+ * - Alt annet er ikke gjeldende.
+ *
+ * Ikke gjeldende betyr at forslaget er åpent igjen (Godta, Endre, Avvis). Ingenting lagres når en
+ * beslutning slutter å gjelde; raden står urørt og kan bli gjeldende igjen (Angre).
+ */
+export type IsEffectiveDecision = (
+  decision: DecisionState,
+  checkpoint: Pick<CheckpointState, "tgDirect">,
+) => boolean;
+
+/**
+ * Hva beslutningsraden blir når TG byttes på et avvik som kom fra et regelforslag (A490):
+ * - `accepted` (ingen grunn): forslaget er av typen `outcome`, avviket har forslagets spørsmål og
+ *   utfall, og ny TG er utfallets faste TG, eller utfallet er «velg TG2 eller TG3» (da er TG-valget
+ *   en del av å godta, også tom TG).
+ * - `changed` (krever grunn etter `CheckOverrideReason`): alt annet.
+ *
+ * Funksjonen setter aldri TG. Skjermen bruker den til å vise grunnvalget før noe sendes, og
+ * serveren bruker den i `ChangeSuggestedDeviationTg`.
+ */
+export type SuggestedTgChangeDecision = (input: {
+  /** Forslaget slik det står i den gjeldende beslutningsraden. */
+  suggestion: StoredRuleSuggestion;
+  /** Avvikets spørsmål og utfall. */
+  questionKey: string | null;
+  outcomeKey: string | null;
+  /** Malens TG for avvikets utfall. */
+  outcomeTg: OutcomeTg | null;
+  /** TG-en takstmannen velger nå. */
+  tg: DeviationTg | null;
+}) => SuggestedTgChangeOutcome;

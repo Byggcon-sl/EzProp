@@ -23,6 +23,7 @@ import {
   type DeviationMeasure,
   type FieldAnswer,
   type RuleSuggestionDecisionRow,
+  type StoredRuleSuggestion,
   type TgiuDetails,
 } from "@/db/schema";
 import {
@@ -37,6 +38,7 @@ import {
   type DecisionState,
   type DeviationState,
   type OutcomeTg,
+  type SuggestionTg,
 } from "./logic";
 import {
   inspectionYearOf,
@@ -291,8 +293,10 @@ function optionSelected(
 function toDecisionView(
   row: RuleSuggestionDecisionRow,
   liveDeviationIds: Set<string>,
+  suggestionTg: SuggestionTg | null,
 ): DecisionView {
   return {
+    suggestionTg,
     id: row.id,
     decision: row.decision,
     chosenTg: row.chosenTg,
@@ -364,6 +368,16 @@ export function buildRoomState(input: {
   const outcomeDocs = new Map(
     template.document.outcomes.map((o) => [`${o.checkpoint_key}|${o.question_key}|${o.key}`, o]),
   );
+  /** TG-en det lagrede forslaget gjelder: malens TG for utfallet, `IU` eller `0`. */
+  const suggestionTgOf = (suggestion: StoredRuleSuggestion): SuggestionTg | null => {
+    if (suggestion.kind === "tgiu") return "IU";
+    if (suggestion.kind === "tg0") return "0";
+    return outcomeTgOf(
+      outcomeDocs.get(
+        `${suggestion.checkpoint_key}|${suggestion.question_key}|${suggestion.outcome_key}`,
+      )?.kind,
+    );
+  };
   const measureDocsFor = (checkpointKey: string, questionKey: string, outcomeKey: string) =>
     template.document.standard_measures.filter(
       (m) =>
@@ -417,11 +431,16 @@ export function buildRoomState(input: {
       ruleKey: row.ruleKey,
       decision: row.decision,
       suggestion: row.suggestion,
+      chosenTg: row.chosenTg,
+      madeDeviation: row.deviationId !== null,
       deviationId:
         row.deviationId && liveDeviationIds.has(row.deviationId) ? row.deviationId : null,
     }));
     for (const row of latestRows.values()) {
-      latestDecisionByRule.set(row.ruleKey, toDecisionView(row, liveDeviationIds));
+      latestDecisionByRule.set(
+        row.ruleKey,
+        toDecisionView(row, liveDeviationIds, suggestionTgOf(row.suggestion)),
+      );
     }
 
     const deviationViews: DeviationView[] = [];
@@ -458,6 +477,8 @@ export function buildRoomState(input: {
         suggestedByRuleKey: row.suggestedByRuleId
           ? (template.ruleKeyById.get(row.suggestedByRuleId) ?? null)
           : null,
+        // Fylles av utvikleren (oppgavekortet Omfang 7): koblingen til gjeldende beslutning.
+        suggestion: null,
         sortOrder: row.sortOrder,
         rowVersion: row.rowVersion,
         measures: measures.map((m) => ({
@@ -549,6 +570,8 @@ export function buildRoomState(input: {
           ruleKey: latestRow.ruleKey,
           decision: latestRow.decision,
           suggestion: latestRow.suggestion,
+          chosenTg: latestRow.chosenTg,
+          madeDeviation: latestRow.deviationId !== null,
           deviationId: latest?.deviationId ?? null,
         },
         ruleResults,

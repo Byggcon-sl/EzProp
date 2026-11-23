@@ -306,6 +306,8 @@ function alreadyAccepted(
       ruleKey: latest.ruleKey,
       decision: latest.decision,
       suggestion: latest.suggestion,
+      chosenTg: latest.chosenTg,
+      madeDeviation: true,
       deviationId: latest.deviationId,
     },
     results,
