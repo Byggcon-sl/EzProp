@@ -450,6 +450,17 @@ export const applyPhraseInputSchema = z
   })
   .strict();
 
+/**
+ * «Behold min», «Lukk» og «Angre» på et KI-forslag i rommet. «Bruk» går alltid med teksten.
+ * `undo_and_reject` er «Angre» etter «Bruk» på et fraseforslag: forslaget blir avvist.
+ */
+export const decideAiTextInputSchema = z
+  .object({
+    usageId: uuidSchema,
+    decision: z.enum(["rejected", "undo", "undo_and_reject"]),
+  })
+  .strict();
+
 /** Feltene i avvikskortet som kan språkvaskes (A350, A356). */
 export const POLISH_DEVIATION_FIELDS = [
   "deviation_text",

@@ -763,6 +763,26 @@ export type ApplyPhrase = (
   input: ApplyPhraseInput,
 ) => Promise<ApplyPhraseResult>;
 
+/** «Behold min», «Lukk» (lukket liste) og «Angre» på et KI-forslag. */
+export type DecideAiTextInput = {
+  usageId: string;
+  /** `undo_and_reject`: «Angre» etter «Bruk», og forslaget avvises i samme transaksjon. */
+  decision: "rejected" | "undo" | "undo_and_reject";
+};
+
+/**
+ * Lagrer `rejected` eller `undo` på et KI-forslag (`report.edit`). Raden må høre til rapporten
+ * under arbeid og til et mål i rommet: fraseforslag og språkvask på et avvik, et tiltak eller et
+ * punkt i rommet, eller sammendraget for rapporten. Ellers 404 og raden er uendret. Beslutningen
+ * lagres i samme transaksjon (`recordDecisionIn`).
+ */
+export type DecideAiText = (
+  actor: Actor,
+  organizationId: string,
+  room: RoomRef,
+  input: DecideAiTextInput,
+) => Promise<{ status: "saved" }>;
+
 /**
  * Skriverammen på rapportnivå (A469), for det som ikke hører til ett rom (sammendraget). Intern i
  * `src/core/reports`, ved siden av `withRoomWrite`. Samme rekkefølge og samme feil: `report.edit`

@@ -1,19 +1,19 @@
 "use server";
 
 import { ZodError } from "zod";
-import { AccessDeniedError, requireOrganizationAccess } from "@/core/access";
+import { AccessDeniedError } from "@/core/access";
 import {
   AI_FIELD_MAX_LENGTH,
   AI_SUMMARY_FINDINGS_MAX,
   AiDecisionError,
   AiInputTooLargeError,
   AiRequestRejectedError,
-  recordDecision,
 } from "@/core/ai";
 import {
   addDeviation,
   addMeasure,
   applyPhrase,
+  decideAiText,
   decideSuggestion,
   draftSummary,
   getReportSummary,
@@ -36,6 +36,7 @@ import type {
   AddDeviationInput,
   ApplyPhraseInput,
   ApplyPhraseResult,
+  DecideAiTextInput,
   DecideSuggestionInput,
   DecideSuggestionResult,
   DraftSummaryResult,
@@ -267,30 +268,15 @@ export async function applyPhraseAction(
 /**
  * «Behold min», «Lukk» (lukket liste) og «Angre» på et KI-forslag. Bare `rejected` og `undo`:
  * «Bruk» går alltid sammen med teksten (`applyPhraseAction`, `saveFieldAction`,
- * `saveSummaryAction`). Tilgangen gir `@/core/access`; `recordDecision` kontrollerer at raden er
- * i organisasjonen og at endringen er lov.
+ * `saveSummaryAction`). Tilgangen, raden og målet i rommet kontrollerer `decideAiText`.
  */
 export async function decideAiSuggestionAction(
   ref: RoomRef,
-  input: { usageId: string; decision: "rejected" | "undo" },
+  input: DecideAiTextInput,
 ): Promise<{ status: "saved" } | ActionError> {
-  const decision = input?.decision;
-  if (
-    typeof input?.usageId !== "string" ||
-    !isUuid(input.usageId) ||
-    (decision !== "rejected" && decision !== "undo")
-  ) {
-    return errorOf(ROOM_ACTION_MESSAGES.invalid);
-  }
-  return onRoom("ai_decision", ref, async (context) => {
-    const grant = await requireOrganizationAccess(
-      context.actor,
-      context.organizationId,
-      "report.edit",
-    );
-    await recordDecision(grant, input.usageId, decision);
-    return { status: "saved" as const };
-  });
+  return onRoom("ai_decision", ref, (context, room) =>
+    decideAiText(context.actor, context.organizationId, room, input),
+  );
 }
 
 /** Svaret på språkvask, med grensen når teksten er for lang (A436). */

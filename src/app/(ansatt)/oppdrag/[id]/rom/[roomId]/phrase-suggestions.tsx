@@ -167,7 +167,8 @@ export function usePhraseSuggestions(input: PhraseSuggestionsInput) {
   useEffect(
     () => () => {
       const open = openRef.current;
-      if (open && (open.phase === "ranked" || open.phase === "no_match")) {
+      // Bare en rangert liste er et forslag; «Ingen treff» (no_match) kan ikke avvises
+      if (open && open.phase === "ranked") {
         rejectQuietly(open.usageId);
       }
     },
@@ -191,7 +192,7 @@ export function usePhraseSuggestions(input: PhraseSuggestionsInput) {
       request.current += 1;
       setList(null);
       if (!open) return;
-      if (open.phase === "ranked" || open.phase === "no_match") rejectQuietly(open.usageId);
+      if (open.phase === "ranked") rejectQuietly(open.usageId);
       if (returnFocus) focusSoon(open.returnFocusId, true);
     },
     [rejectQuietly, setList],
@@ -235,12 +236,7 @@ export function usePhraseSuggestions(input: PhraseSuggestionsInput) {
       );
       // Listen er lukket eller åpnet på nytt mens KI jobbet: svaret gjelder ikke lenger.
       if (ticket !== request.current) {
-        if (
-          !isActionError(result) &&
-          (result.status === "ranked" || result.status === "no_match")
-        ) {
-          rejectQuietly(result.usageId);
-        }
+        if (!isActionError(result) && result.status === "ranked") rejectQuietly(result.usageId);
         return;
       }
       if (isActionError(result) || result.status === "ai_off" || result.status === "ai_error") {
@@ -351,9 +347,11 @@ export function usePhraseSuggestions(input: PhraseSuggestionsInput) {
       if (isActionError(result)) return result.message;
       if (result.status === "conflict") return ROOM_ACTION_MESSAGES.conflict;
       const undoDecision = async () => {
-        const undone = await decideAiSuggestionAction(room, { usageId, decision: "undo" }).catch(
-          () => ({ status: "error" as const, message: ROOM_ACTION_MESSAGES.network }),
-        );
+        // «Angre» etter «Bruk»: forslaget er avvist, ikke åpent igjen (listen er lukket)
+        const undone = await decideAiSuggestionAction(room, {
+          usageId,
+          decision: "undo_and_reject",
+        }).catch(() => ({ status: "error" as const, message: ROOM_ACTION_MESSAGES.network }));
         return isActionError(undone) ? undone.message : null;
       };
       if (measureId) {
@@ -395,9 +393,7 @@ export function usePhraseSuggestions(input: PhraseSuggestionsInput) {
       request.current += 1;
       setList(null);
       const fromAi = open.phase === "ranked" && open.usageId !== null && item.ref !== null;
-      if (!fromAi && (open.phase === "ranked" || open.phase === "no_match")) {
-        rejectQuietly(open.usageId);
-      }
+      if (!fromAi && open.phase === "ranked") rejectQuietly(open.usageId);
       const outcome = fromAi
         ? await insertRanked(item, open.usageId as string)
         : await insertLocal(item);
