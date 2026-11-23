@@ -23,6 +23,7 @@ import { PII_PLACEHOLDERS } from "@/shared/lib/pii-patterns";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { aiRow, aiRowCount, captureError } from "../../../tests/ai";
 import { resetDatabase } from "../../../tests/factories";
+import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import {
   addPlaceDeviation,
   kiBathroom,
@@ -212,6 +213,139 @@ describe("4b språkvask avviket", () => {
       }),
     );
     expect(foreign).toBeInstanceOf(AccessDeniedError);
+    expect(await aiRowCount()).toBe(0);
+  });
+});
+
+/*
+ * Tenant-isolasjon for språkvasken (gjennomgangen av KI i veien): egen organisasjon får forslag på
+ * egne mål; en annen organisasjon gir 404, og ingen rad havner i ai_usage_log.
+ */
+describe("5b tenant-isolasjon for språkvask", () => {
+  type Seeded = { f: KiBathroom; deviationId: string; resultId: string };
+
+  /** Et avvik og en lagret beskrivelse på punktet i hver organisasjon. */
+  async function seedOrg(organizationId: string): Promise<Seeded> {
+    const f = await kiBathroom({ organizationId });
+    const deviationId = await addPlaceDeviation(f, PLACE.membraneTg2);
+    const saved = await saveField(f.actor, f.organizationId, f.room, {
+      table: "checkpoint_results",
+      checkpointKey: CP.membrane,
+      field: "description_text",
+      value: "mxq beskrivelse",
+      base: null,
+    });
+    if (saved.status !== "saved") throw new Error("lagring feilet");
+    return { f, deviationId, resultId: saved.id };
+  }
+
+  function deviationInput(deviationId: string) {
+    return {
+      deviationId,
+      items: [item({ type: "deviation", id: deviationId, fieldKey: "cause_text" }, "mxq årsak")],
+    };
+  }
+
+  function descriptionInput() {
+    return { requestId: uuidv7(), checkpointKey: CP.membrane, text: "mxq beskrivelse" };
+  }
+
+  /** Kallene fra A mot B: B sin organisasjon, og B sitt rom med A sin organisasjon. */
+  async function expectForeignDenied(a: Seeded, b: Seeded) {
+    const before = await aiRowCount();
+    for (const call of [
+      () => polishDeviation(a.f.actor, b.f.organizationId, b.f.room, deviationInput(b.deviationId)),
+      () => polishDeviation(a.f.actor, a.f.organizationId, b.f.room, deviationInput(b.deviationId)),
+      () => polishDeviation(a.f.actor, a.f.organizationId, a.f.room, deviationInput(b.deviationId)),
+      () => polishDescription(a.f.actor, b.f.organizationId, b.f.room, descriptionInput()),
+      () => polishDescription(a.f.actor, a.f.organizationId, b.f.room, descriptionInput()),
+    ]) {
+      expect(await captureError(call)).toBeInstanceOf(AccessDeniedError);
+    }
+    expect(await aiRowCount()).toBe(before);
+  }
+
+  it("polishDeviation: en annen organisasjon får verken forslag, tilgang eller rad", async () => {
+    const byOrg = new Map<string, Seeded>();
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        const a = await seedOrg(grantA.organizationId);
+        const b = await seedOrg(grantB.organizationId);
+        byOrg.set(grantA.organizationId, a);
+        byOrg.set(grantB.organizationId, b);
+        return { a: [a.deviationId], b: [b.deviationId] };
+      },
+      query: async (actor, organizationId) => {
+        const own = byOrg.get(organizationId);
+        const room = own?.f.room ?? { assignmentId: uuidv7(), roomId: uuidv7() };
+        const result = await polishDeviation(
+          actor,
+          organizationId,
+          room,
+          deviationInput(own?.deviationId ?? uuidv7()),
+        );
+        if (result.status !== "done") throw new Error(`fikk ${result.status}`);
+        return result.fields.map((field) => field.target);
+      },
+      idOf: (target) => target.id,
+    });
+    const [a, b] = [...byOrg.values()];
+    if (!a || !b) throw new Error("mangler oppsett");
+    await expectForeignDenied(a, b);
+    await expectForeignDenied(b, a);
+  });
+
+  it("polishDescription: en annen organisasjon får verken forslag, tilgang eller rad", async () => {
+    const byOrg = new Map<string, Seeded>();
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        const a = await seedOrg(grantA.organizationId);
+        const b = await seedOrg(grantB.organizationId);
+        byOrg.set(grantA.organizationId, a);
+        byOrg.set(grantB.organizationId, b);
+        return { a: [a.resultId], b: [b.resultId] };
+      },
+      query: async (actor, organizationId) => {
+        const room = byOrg.get(organizationId)?.f.room ?? {
+          assignmentId: uuidv7(),
+          roomId: uuidv7(),
+        };
+        const result = await polishDescription(actor, organizationId, room, descriptionInput());
+        if (result.status !== "done") throw new Error(`fikk ${result.status}`);
+        return result.fields.map((field) => field.target);
+      },
+      idOf: (target) => target.id,
+    });
+    const [a, b] = [...byOrg.values()];
+    if (!a || !b) throw new Error("mangler oppsett");
+    await expectForeignDenied(a, b);
+  });
+});
+
+/*
+ * Tomme felt (T-0111 og gjennomgangen av KI i veien): samme regel som kjernen, så også
+ * nullbreddetegn er tomt. Intet kall og ingen rad.
+ */
+describe("4b tomme felt med nullbreddetegn", () => {
+  it("felt med bare nullbredde- og ikke-brytende mellomrom språkvaskes ikke", async () => {
+    const f = await kiBathroom();
+    const { deviationId } = await deviationWithMeasures(f);
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const blank = "\u200B\u00A0\uFEFF \u200B";
+    expect(
+      await polishDeviation(f.actor, f.organizationId, f.room, {
+        deviationId,
+        items: [item({ type: "deviation", id: deviationId, fieldKey: "cause_text" }, blank)],
+      }),
+    ).toEqual({ status: "nothing_to_polish" });
+    expect(
+      await polishDescription(f.actor, f.organizationId, f.room, {
+        requestId: uuidv7(),
+        checkpointKey: CP.membrane,
+        text: blank,
+      }),
+    ).toEqual({ status: "nothing_to_polish" });
+    expect(spy).not.toHaveBeenCalled();
     expect(await aiRowCount()).toBe(0);
   });
 });

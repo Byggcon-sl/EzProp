@@ -3,6 +3,7 @@ import { AccessDeniedError, requireOrganizationAccess, type EmployeeGrant } from
 import {
   AI_FIELD_MAX_LENGTH,
   AiInputTooLargeError,
+  isBlankText,
   requestSuggestion,
   requestSuggestionBatch,
   type AiSuggestionRequest,
@@ -29,11 +30,6 @@ import type {
  * én loggrad og vaktene per felt. Ingenting lagres her; «Bruk» går gjennom `saveField` med
  * beslutningen i samme transaksjon. Ingenting her leser eller skriver TG.
  */
-
-/** Tom etter at mellomrom (også ikke-brytende) er tatt bort (T-0111). */
-function isBlank(text: string): boolean {
-  return text.replace(/[\s ]+/gu, "") === "";
-}
 
 function fieldResult(result: AiSuggestionResult): PolishFieldResult {
   switch (result.kind) {
@@ -133,8 +129,9 @@ export const polishDeviation: PolishDeviation = async (actor, organizationId, ro
       if (!ok) throw new AccessDeniedError();
     }
 
-    // Felt uten tekst tas ikke med; alle tomme gir intet kall og ingen rad (T-0111)
-    const items = values.items.filter((item) => !isBlank(item.text));
+    // Felt uten tekst tas ikke med; alle tomme gir intet kall og ingen rad (T-0111). Samme regel
+    // som kjernen (`isBlankText`): også nullbreddetegn er tomt
+    const items = values.items.filter((item) => !isBlankText(item.text));
     if (items.length === 0) return { status: "nothing_to_polish" };
     if (items.some((item) => item.text.length > AI_FIELD_MAX_LENGTH)) return { status: "too_long" };
 
@@ -169,7 +166,7 @@ export const polishDescription: PolishDescription = async (actor, organizationId
   const values = parseOrThrow(polishDescriptionInputSchema, input);
   return guardReportErrors("language_polish", async (): Promise<PolishResult> => {
     const context = await requireDraftRoom(grant, room);
-    if (isBlank(values.text)) return { status: "nothing_to_polish" };
+    if (isBlankText(values.text)) return { status: "nothing_to_polish" };
     if (values.text.length > AI_FIELD_MAX_LENGTH) return { status: "too_long" };
 
     const orgId = grant.organizationId;

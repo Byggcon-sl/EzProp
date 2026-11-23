@@ -508,6 +508,48 @@ describe("5b tenant-isolasjon og ytelse", () => {
     expect((await reportRow(a)).summaryText).toBe("Mxq A");
   });
 
+  it("draftSummary: en annen organisasjon får verken utkast, tilgang eller rad i ai_usage_log", async () => {
+    const byOrg = new Map<string, KiBathroom>();
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        const ids = { a: [] as string[], b: [] as string[] };
+        for (const [side, grant] of [
+          ["a", grantA],
+          ["b", grantB],
+        ] as const) {
+          const f = await kiBathroom({ organizationId: grant.organizationId });
+          await addPlaceDeviation(f, PLACE.membraneTg3);
+          byOrg.set(grant.organizationId, f);
+          ids[side].push(f.reportId);
+        }
+        return ids;
+      },
+      query: async (actor, organizationId) => {
+        const assignmentId = byOrg.get(organizationId)?.assignmentId ?? uuidv7();
+        const result = await draftSummary(actor, organizationId, assignmentId, {
+          requestId: uuidv7(),
+        });
+        if (result.status !== "suggestion" || !result.usageId) {
+          throw new Error(`fikk ${result.status}`);
+        }
+        const row = await aiRow(result.usageId);
+        return [{ reportId: String(row?.report_id) }];
+      },
+      idOf: (row) => row.reportId,
+    });
+    const [a, b] = [...byOrg.values()];
+    if (!a || !b) throw new Error("mangler oppsett");
+    const before = await aiRowCount();
+    for (const call of [
+      () => draftSummary(a.actor, b.organizationId, b.assignmentId, { requestId: uuidv7() }),
+      () => draftSummary(a.actor, a.organizationId, b.assignmentId, { requestId: uuidv7() }),
+      () => draftSummary(b.actor, b.organizationId, a.assignmentId, { requestId: uuidv7() }),
+    ]) {
+      expect(await captureError(call)).toBeInstanceOf(AccessDeniedError);
+    }
+    expect(await aiRowCount()).toBe(before);
+  });
+
   it("K4.21b funnene til sammendraget har fast antall spørringer", async () => {
     const small = await kiBathroom();
     await addPlaceDeviation(small, PLACE.membraneTg3);

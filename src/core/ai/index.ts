@@ -52,6 +52,8 @@ export {
   type AiFieldSourceCheckInput,
   type AiTargetSpec,
 } from "./features";
+/** Tom tekst: bare mellomrom, også ikke-brytende og nullbredde. Samme regel som vaktene. */
+export { isBlankText } from "./guards";
 export { NEVER_FIELDS } from "./never-fields";
 export { AI_ENABLED_SETTING_KEY } from "./provider-resolution";
 export {
