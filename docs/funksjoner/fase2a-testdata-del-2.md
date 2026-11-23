@@ -3,8 +3,8 @@
 - **Fase:** 2a-2 Hele veien først, under punktet «Badet på PC» (A300, A359)
 - **Modul:** seed (`src/db/seed/testdata*.ts`), bruker kjernetjenestene i `src/core/reports` og regelmotoren i `src/core/rules` uten å endre dem
 - **Branch:** `testdata-del-2` (bygger på `main` etter PR #224 og PR #203)
-- **Status:** klar for bygging (rettet etter forhåndsvurdering runde 1: forbedrer, fagansvarlig, test-leder)
-- **Dato:** 17.11.2026
+- **Status:** klar for bygging (rettet etter forhåndsvurdering runde 1: forbedrer, fagansvarlig, test-leder). Kontrollert mot main 23.11.2026 (main flettet inn, ingen endringer som gjør kortet feil); bygges nå.
+- **Dato:** 17.11.2026, kontrollert 23.11.2026
 - **Støtter hovedmål:**
   - **De ansatte:** testmiljøet får bad som ser ut som ekte befaringer (svar, målinger, avvik med TG, årsak, konsekvens, tiltak og kostnad). Da kan de ansatte og testlaget prøve badskjermen, og senere PDF-en, på realistiske rapporter i stedet for tomme skjemaer.
   - **KI i bunnen:** testdataene gir strukturerte avvik med faste koder og regelbeslutninger i samme form som ekte data. Det er grunnlaget «KI i veien» og evalueringene prøves mot.
@@ -31,7 +31,7 @@ Del 1 (PR #203) la inn oppdrag, eiendommer, bygninger og rom, men ingen rapports
   1. **Visningsbad** (forbedrer 2), status «under arbeid», se under.
   2. **TG2 for alder:** folie, ingen dokumentasjon, badets år = befaringsår − 18 eller eldre, men 2000 eller senere → TG2-forslaget `membrane_past_lifespan` godtatt, kostnad «none». Status ferdig eller fakturert.
   3. **TG3 før 2000:** badets år før 2000, sjiktår tomt → TG3-forslaget `membrane_before_2000` godtatt, med kostnadsintervall. Ingen TG2 for alder i tillegg. Status ferdig eller fakturert.
-  4. **TGIU, komplett:** hulltaking ikke utført, grunnen «eier ga ikke samtykke» → TGIU på tilliggende med alle fem opplysningene (begrunnelse, eier informert om utvidet ansvar avkrysset, annen fuktundersøkelse med metode og resultat, risiko, om konstruksjonen er skadeutsatt) og rad i `tgiu_details` (`reason`, `risk_assessment`, `how_to_examine`). Status ferdig eller fakturert.
+  4. **TGIU, komplett** (testlagets funn T-0114, middels, gjelder skjermen og rettes ikke her: opplysningene spørres både i registreringen og i TGIU-delen; seed fyller begge steder med samme tekst, slik at testdataene ikke viser to ulike svar): hulltaking ikke utført, grunnen «eier ga ikke samtykke» → TGIU på tilliggende med alle fem opplysningene (begrunnelse, eier informert om utvidet ansvar avkrysset, annen fuktundersøkelse med metode og resultat, risiko, om konstruksjonen er skadeutsatt) og rad i `tgiu_details` (`reason`, `risk_assessment`, `how_to_examine`). Status ferdig eller fakturert.
   5. **TG0:** hull utført uten funn, under 15 vekt-% (for eksempel 11) → TG0-forslaget godtatt, bare på `wet_room.adjacent`.
   6. **Forhøyet fukt med TG2** og 7. **med TG3:** hull «utført med funn», enhet vekt-%, verdi 15 eller høyere → `elevated_moisture` med valget i scenarioet. Tiltaket følger valgt TG (`applies_to_tg`). TG3 får kostnad. Ingen egen tallgrense mellom TG2 og TG3.
   8. **Endret forslag:** TG0-forslaget på tilliggende endret til TG1 (eneste lovlige endring i testdataene, fagansvarlig 5).
