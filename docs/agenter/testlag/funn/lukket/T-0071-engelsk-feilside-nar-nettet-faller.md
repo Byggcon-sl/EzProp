@@ -3,14 +3,14 @@ id: T-0071
 tittel: Faller nettet midt i lagring, kommer en engelsk feilside, og det som er skrevet går tapt
 type: feil
 alvor: middels
-status: rettet
+status: lukket
 funnet: 2026-11-14
 rolle: test-robusthet
 omrade: feilhåndtering (eiendom, rom)
 maal: de ansatte
 commit: a1ca41d9
 forsok: 0
-pr:
+pr: 223
 ---
 
 ## Hva
@@ -36,3 +36,4 @@ Lag norske `error.tsx` og `global-error.tsx`, og bruk samme håndtering av mangl
 
 ## Logg
 - 2026-11-14: funnet
+- 2026-11-18: rettet bekreftet av funn-kontrolløren (main 50fad3e4, PR #223). Uten nett ved «Legg til 1 rom» og «Lagre eiendom» kom «Du er uten nett. Endringen er ikke lagret.», verdiene sto, og ingen engelsk feilside. Liten ting som står: meldingen sier «Trykk Lagre», men knappen i rom-dialogen heter «Legg til … rom». Lukket og flyttet til `funn/lukket/`.

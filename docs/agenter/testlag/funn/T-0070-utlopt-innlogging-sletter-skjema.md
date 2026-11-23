@@ -3,14 +3,14 @@ id: T-0070
 tittel: Utløpt innlogging midt i et skjema sletter det som er skrevet
 type: feil
 alvor: middels
-status: rettet
+status: ny
 funnet: 2026-11-14
 rolle: test-robusthet
 omrade: innlogging, alle skjemaer
 maal: de ansatte
 commit: a1ca41d9
-forsok: 0
-pr:
+forsok: 1
+pr: 223
 ---
 
 ## Hva
@@ -37,3 +37,4 @@ Når lagringen mangler innlogging: gi tilbake skjemaet med verdiene og en meldin
 
 ## Logg
 - 2026-11-14: funnet
+- 2026-11-18: fortsatt feil (forsøk 1, main 50fad3e4, PR #223). Kontrolløren så: (a) Når informasjonskapselen er slettet (også «Logg ut» i en annen fane), virker rettingen: verdiene står, «Du er logget ut. Logg inn igjen.», og dialog. (b) Når økten er slettet på serveren mens informasjonskapselen er igjen, går «Lagre eiendom» og «Legg til flere rom» til `/logg-inn`, og verdiene er borte. Det er det som skjer ved «Logg ut» på en annen enhet, admin «Logg ut av alle enheter» og «Har sluttet» (#228). Serveren svarer med `set-cookie` `Max-Age=0`; sannsynlig årsak (ikke bekreftet i koden): Next.js henter siden på nytt, og `requireActor` sender videre. (c) Stegene 1–4 i dette funnet, «Endre bestillingen», går fortsatt til `/logg-inn` med tapt tekst; oppgavekortet `rett-t0070-t0071.md` punkt 8 holdt det bevisst utenfor. Samme mønster på badet og i papirkurven: T-0120. Bevis: funn-kontrollor-2/bevis.txt.

@@ -1,8 +1,8 @@
 # Beslutninger som er dyre å endre
 
-Sist oppdatert: 17.11.2026 (testlaget, dokumentvakten og kvalitetslederen)
+Sist oppdatert: 18.11.2026 (testlaget, dokumentvakten og kvalitetslederen)
 
-Mens Ståle var borte, har agentene tatt mange beslutninger (A1 og oppover; noen nummer er ikke brukt). Listen her er gått gjennom til og med A379 (17.11.2026: A292–A308, A315–A328 og A360–A379). De står i `docs/09-apne-sporsmal.md`, tabellen «Avgjort av agentene mens Ståle var borte». **De fleste er lette å endre.** Her er bare de som blir dyre å endre senere, fordi data må flyttes, fordi de står på rapportene, eller fordi de gjelder personvern og sikkerhet. Det er disse Ståle bør lese først.
+Mens Ståle var borte, har agentene tatt mange beslutninger (A1 og oppover; noen nummer er ikke brukt). Listen her er gått gjennom til og med A430 (17.11.2026: A292–A308, A315–A328 og A360–A379; 18.11.2026: de som er merket dyre i A345–A357 og A380–A430). De står i `docs/09-apne-sporsmal.md`, tabellen «Avgjort av agentene mens Ståle var borte». **De fleste er lette å endre.** Her er bare de som blir dyre å endre senere, fordi data må flyttes, fordi de står på rapportene, eller fordi de gjelder personvern og sikkerhet. Det er disse Ståle bør lese først.
 
 Alle beslutninger som ikke står her, er lette å endre.
 
@@ -37,10 +37,13 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A121 | Tidsmåling er på som standard. I betaen er tallene i praksis per person. | Arbeidsmiljøloven kapittel 9. Bør drøftes med de ansatte (se også funn T-0012). |
 | A193 | Koblingen til KI-leverandøren kan bare bruke én felles nøkkel, lik for alle organisasjoner. | Gjelder sikkerhet. Før selskap nummer to får KI, trengs egen nøkkel per organisasjon. |
 | A216 | Microsoft-kontoen kobles til den ansatte på e-post første gang, deretter på Microsofts egen id. | Gjelder sikkerhet. Står lett i listen, men å endre koblingen etter at kontoene er i bruk krever opprydding. |
-| A217 | Engangskoden sjekker ikke selv at den ansatte er aktiv. Tilgangen stopper likevel i tilgangssjekken. | Gjelder sikkerhet. Kontrollert av testlaget 13.11.2026: en deaktivert ansatt kommer ikke inn. |
+| A217 | Engangskoden sjekker ikke selv at den ansatte er aktiv. Tilgangen stopper likevel i tilgangssjekken. | Gjelder sikkerhet. Kontrollert av testlaget 13.11.2026: en deaktivert ansatt kommer ikke inn. Testlaget 18.11.2026: en som har sluttet, får likevel en innlogging, og etter «Angre sluttet» gir den full tilgang uten ny innlogging. Strider mot domenemodellen («Personen kan ikke logge inn»), se funn T-0118. |
 | A223 | Signaturen på ID-tokenet fra Microsoft sjekkes ikke (tokenet hentes rett fra Microsoft over kryptert forbindelse). | Gjelder sikkerhet. Bør vurderes på nytt før ekte data. |
 | A302 | Før testdata skrives, må miljøet være utvikling eller test, og databasen må være lokal eller nøyaktig testdatabasen. | Er sperren mot oppdiktede data i produksjon. |
 | A303 | Testdataene ligger i Byggcon-organisasjonen i testmiljøet, ved siden av det de ansatte prøver. Testdatabasen kan derfor aldri løftes til produksjon. | Produksjon må starte med tom database. Ståle må bekrefte før ekte data (spørsmål 82). |
+| A346 | Serveren regner ut regelforslaget selv. Klienten sender bare hvilken regel og hvilken beslutning. | Gjelder sikkerhet. Loggen som skal forklare TG ved en reklamasjon, kan ellers forfalskes. Alle beslutninger på badet bygger på dette. |
+| A419 | Unntak fra myk sletting: tellere for innloggingssperren, engangskoder og gamle økter slettes for godt hver natt. | Gjelder personvern og regel 3 i CLAUDE.md. Det som er slettet, kan ikke hentes tilbake, og CLAUDE.md nevner ikke unntaket. Se spørsmål 88 (17.11.2026) om innloggingshistorikk. |
+| A426 | Økter hører til brukeren, ikke organisasjonen. «Logg ut av alle enheter» fra admin i én organisasjon logger ut personen også i en annen. | Gjelder sikkerhet. Krever organisasjon på økten for å endres. Står som «ufarlig i dag: én organisasjon», men testmiljøet har alt to organisasjoner, og første admin er i begge. Må avgjøres før organisasjon nummer to. |
 
 ## Datamodell og faste koder
 
@@ -82,6 +85,14 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A319 | Tilbudet har påkrevd «Gyldig til». Gamle ordre fikk mottatt-dato pluss 30 dager. | Regel i databasen og utfylte data. |
 | A320 | «Utløpt» lagres ikke som status, men regnes ut fra datoen. | Datamodell. All statistikk på utløpte tilbud må regnes med dato. |
 | A361 | Fem faste grunner for avslag på tilbud (pris, tidspunkt, valgte en annen, kunden trakk seg, annet). Gamle avslag fikk «annet». Endrer A323. | Faste koder i data (regel 6), og de står i hendelsen for avslag. |
+| A345 | Beslutninger om regelforslag (godta, endre, avvis) lagres bare som nye rader i en egen tabell. Avviket peker bare på regelen. | Er grunnlaget for å forklare TG ved reklamasjon i 10 år. Testlaget 18.11.2026: TG kan endres på avviket uten ny rad (funn T-0113). |
+| A347 | Lagring per felt med «verdien klienten så», slik at to som skriver samtidig får beskjed per felt. | Er grunnlaget for synken uten nett i fase 2b. Endres det, må synken bygges om. |
+| A350, A356 | Faste koder for hva KI kan skrive i (avviksteksten heter `deviation_text`, feltsvar `field_answer`, TGIU-teksten `tgiu_detail`). | Faste koder i data og i loggen over KI-bruk (regel 6). Dokumentene bruker fortsatt den gamle koden noen steder (funn T-0124). |
+| A351 | Alt under rapporten peker på forelderen med tre kolonner (organisasjon, rapport og forelder). | Datamodell. Endres med migrering av alle tabellene i badet. |
+| A352 | Unike nøkler med tomme kolonner løses med en egen indeks. | Datamodell. Endres med ny indeks på tabeller med data. |
+| A353 | Et avvik er enten TG-avvik eller HMS-avvik, og TG står i eget felt. | Fast kode i data. |
+| A355 | Merket om at KI har skrevet en tekst, står bare i loggen over KI-bruk, ikke på avviket. | Avgjør hvordan publiseringssperren og «KI i veien» finner KI-tekst. Krever migrering å endre. |
+| A357 | Hvor teksten kommer fra (fra malen, endret eller fri), sier aldri om KI eller frase ble brukt. | Fast kode i data. KI-opphav står bare i loggen over KI-bruk (A355). |
 
 ## Fag
 
@@ -98,6 +109,7 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A227, A228 | Hva «med dokumentasjon» betyr i levetidstrinnene, og hva ukjent membrantype gir. | Avgjør TG-forslag på alder. |
 | A238 | TG0-forslag bare ved «utført uten funn», og 0 vekt-% regnes som en måling. | Avgjør TG0 i rapporten. Se spørsmål 77 (a) og (e). |
 | A289 | Varsel om like kontakter og firma ble ikke bygget sammen med varselet om like ordre, fordi agentene mente Ståle ikke hadde sagt ja. | Ståle sa ja 12.11.2026 (forslag 62, T3). Beslutningen utelater noe han har bestemt (funn T-0072). Doble kontakter kan gi rapport til feil person. |
+| A380 | Fem faste grunner når takstmannen endrer eller avviser et regelforslag (dokumentasjon finnes, synlig skade, målt på nytt, alderen kjent på annen måte, annet). | Faste koder i data i 10 år. Testlaget 18.11.2026: grunnene er like for alle regler og passer dårlig for TGIU-regelen om hulltaking (spørsmål 104 f). |
 
 ## Til vurdering
 
