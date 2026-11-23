@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 import {
   CHANGES_PATH,
-  aiUsageRowsWithMarker,
+  addRuleTg3Deviation,
+  createSampleBathroom,
   createTrialForm,
   indicator,
   logIn,
   logInAsSampleInspector,
+  openSampleBathroom,
   pendingChanges,
   readRowsViaHook,
   serverTrialData,
@@ -287,24 +289,29 @@ test.describe("T-0001: én avvist endring stopper ikke køen (pc og ipad)", () =
   });
 });
 
+// Flyttet fra /prove/ki til badskjermen (KI i veien K6.3, A487): språkvask av et avvik med
+// nulltegn i teksten gir forslag, og nulltegnet kommer ikke tilbake i forslaget.
 test.describe("T-0001: KI med nulltegn (pc og ipad)", () => {
-  test("(e) /prove/ki med nulltegn gir forslag", async ({ page }) => {
+  test("(e) «Språkvask avviket» med nulltegn i teksten gir forslag", async ({ page }) => {
     await logInAsSampleInspector(page);
-    await page.goto("/prove/ki");
-    await expect(page.getByRole("heading", { name: "Prøv KI: språkvask", level: 1 })).toBeVisible();
+    const bath = await createSampleBathroom();
+    await openSampleBathroom(page, bath, "wet_room.membrane_drain");
+    const deviation = await addRuleTg3Deviation(page);
 
     const tag = `m${randomUUID().slice(0, 8)}`;
-    await pasteText(page.getByLabel("Setning"), `taket er${NUL} gammelt og har sprekker ${tag}`);
-    await page.getByRole("button", { name: "Foreslå bedre språk" }).click();
+    await pasteText(
+      deviation.getByLabel("Konsekvens", { exact: true }),
+      `vann kan komme${NUL} inn i gulvet ${tag}`,
+    );
+    await deviation.getByRole("button", { name: "Språkvask avviket", exact: true }).click();
 
-    const card = page.getByRole("region", { name: "Forslag fra KI" });
-    await expect(card.getByTestId("ai-suggestion-text")).toContainText(tag);
+    const row = deviation
+      .getByRole("region", { name: "Forslag fra KI · språkvask av avvik 1" })
+      .getByTestId("ai-suggestion-group-row")
+      .filter({ has: page.getByRole("heading", { name: "Konsekvens", exact: true }) });
+    const suggestion = row.getByTestId("ai-suggestion-text");
+    await expect(suggestion).toContainText(tag);
     await expect(page.getByText(UNKNOWN_AI_ERROR)).toHaveCount(0);
-    await expect(page.getByTestId("ai-trial-logged")).toHaveText("Logget: forslag");
-
-    // Forslaget er logget vasket, og klienten viser det samme som står i loggen
-    const rows = await aiUsageRowsWithMarker(tag);
-    expect(rows).toHaveLength(1);
-    expect(await card.getByTestId("ai-suggestion-text").innerText()).not.toContain(NUL);
+    expect(await suggestion.innerText()).not.toContain(NUL);
   });
 });

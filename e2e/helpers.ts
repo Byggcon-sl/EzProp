@@ -1325,184 +1325,13 @@ export async function claimRowsFor(assignmentId: string): Promise<
   }
 }
 
-// --- Forslagsmønsteret, /prove/ki (docs/funksjoner/fase2a-forslagsmonster-testplan.md avsnitt 12) ---
-
-/** Oppdiktet organisasjon uten KI slått på (verken `ai.enabled` eller tilkobling). */
-export const NO_AI_ORGANIZATION_NAME = "Oppdiktet takst uten KI (e2e)";
-
-/** Oppdiktet takstmann i organisasjonen uten KI. */
-export const NO_AI_INSPECTOR_EMAIL = "uten.ki.e2e@example.invalid";
-
-const NO_AI_INSPECTOR_NAME = "Oppdiktet takstmann uten KI";
-
-/**
- * Sørger for at organisasjonen uten KI finnes med én takstmann. Idempotent. Bare lokal database
- * eller testdatabasen. Rører ikke andre organisasjoner, og slår aldri KI på.
- */
-export async function ensureNoAiInspector(): Promise<void> {
-  const sql = e2eSql();
-  try {
-    let [organization] = await sql<{ id: string }[]>`
-      select id from organizations where name = ${NO_AI_ORGANIZATION_NAME} and deleted_at is null
-      order by created_at limit 1`;
-    if (!organization) {
-      [organization] = await sql<{ id: string }[]>`
-        insert into organizations (name, brand_name)
-        values (${NO_AI_ORGANIZATION_NAME}, ${NO_AI_ORGANIZATION_NAME})
-        returning id`;
-    }
-    if (!organization) throw new Error("Kunne ikke lage organisasjonen uten KI for e2e");
-    await sql`
-      insert into users (id, name, email, email_verified)
-      values (${randomUUID()}, ${NO_AI_INSPECTOR_NAME}, ${NO_AI_INSPECTOR_EMAIL}, true)
-      on conflict (email) do nothing`;
-    const [user] = await sql<{ id: string }[]>`
-      select id from users where email = ${NO_AI_INSPECTOR_EMAIL}`;
-    if (!user) throw new Error("Kunne ikke lage brukeren uten KI for e2e");
-    let [employee] = await sql<{ id: string }[]>`
-      select id from employees
-      where user_id = ${user.id} and organization_id = ${organization.id}
-        and deleted_at is null and deactivated_at is null`;
-    if (!employee) {
-      [employee] = await sql<{ id: string }[]>`
-        insert into employees (organization_id, user_id, name)
-        values (${organization.id}, ${user.id}, ${NO_AI_INSPECTOR_NAME})
-        returning id`;
-    }
-    if (!employee) throw new Error("Kunne ikke lage den ansatte uten KI for e2e");
-    const roles = await sql<{ id: string }[]>`
-      select id from employee_roles
-      where employee_id = ${employee.id} and role = 'inspector'::employee_role
-        and deleted_at is null`;
-    if (roles.length === 0) {
-      await sql`
-        insert into employee_roles (organization_id, employee_id, role)
-        values (${organization.id}, ${employee.id}, 'inspector'::employee_role)
-        on conflict do nothing`;
-    }
-  } finally {
-    await sql.end();
-  }
-}
-
-/** Logger inn som takstmannen i organisasjonen uten KI. */
-export async function logInAsNoAiInspector(page: Page) {
-  await ensureNoAiInspector();
-  await logIn(page, NO_AI_INSPECTOR_EMAIL);
-}
+// --- Prøveorganisasjonen og badskjermen («KI i veien», docs/funksjoner/fase2a-ki-i-veien-testplan.md avsnitt 7) ---
 
 /** Logger inn som prøvetakstmannen (prøveorganisasjonen, KI på med `fake`, `db:seed:testoppdrag`). */
 export async function logInAsSampleInspector(page: Page) {
   await logIn(page, SAMPLE_INSPECTOR.email);
 }
 
-export type E2eAiUsageRow = {
-  id: string;
-  status: string | null;
-  outcome: string;
-  decidedBy: string | null;
-  targetRef: { type: string; id: string; fieldKey: string };
-};
-
-/** Radene i KI-loggen der forslaget inneholder markøren, eldste først. Bare lesing. */
-export async function aiUsageRowsWithMarker(marker: string): Promise<E2eAiUsageRow[]> {
-  const sql = e2eSql();
-  try {
-    return await sql<E2eAiUsageRow[]>`
-      select id, status, outcome, decided_by as "decidedBy", target_ref as "targetRef"
-      from ai_usage_log where output_text like ${`%${marker}%`}
-      order by created_at, id`;
-  } finally {
-    await sql.end();
-  }
-}
-
-/**
- * Antall vaskede treff (`redacted_count`) og utfallet for radene der forslaget inneholder
- * markøren (vask før KI, V9.1). Bare lesing; aldri verdiene.
- */
-export async function aiRedactedCountsWithMarker(
-  marker: string,
-): Promise<{ outcome: string; redactedCount: number }[]> {
-  const sql = e2eSql();
-  try {
-    return await sql<{ outcome: string; redactedCount: number }[]>`
-      select outcome, redacted_count as "redactedCount"
-      from ai_usage_log where output_text like ${`%${marker}%`}
-      order by created_at, id`;
-  } finally {
-    await sql.end();
-  }
-}
-
-/** Radene i KI-loggen for målet (`target_ref.id`), eldste først. Bare lesing. */
-export async function aiUsageRowsForTarget(targetId: string): Promise<E2eAiUsageRow[]> {
-  const sql = e2eSql();
-  try {
-    return await sql<E2eAiUsageRow[]>`
-      select id, status, outcome, decided_by as "decidedBy", target_ref as "targetRef"
-      from ai_usage_log where target_ref ->> 'id' = ${targetId}
-      order by created_at, id`;
-  } finally {
-    await sql.end();
-  }
-}
-
-/** Linjene i `audit_log` for en rad i KI-loggen. Bare lesing. */
-export async function auditLinesFor(entityId: string): Promise<{ changes: unknown }[]> {
-  const sql = e2eSql();
-  try {
-    return await sql<{ changes: unknown }[]>`
-      select changes from audit_log where entity_id = ${entityId} order by occurred_at, id`;
-  } finally {
-    await sql.end();
-  }
-}
-
-// --- KI-kø uten nett (docs/funksjoner/fase2a-ki-ko-testplan.md avsnitt 8) ---
-
-/** Databasen og lageret for KI-køen. Skrevet her, ikke importert, fordi e2e ikke laster modulen. */
-export const AI_QUEUE_DB = "local-ai-queue";
-export const AI_QUEUE_STORE = "ai_queue";
-
-/**
- * Alle poster i KI-køen på enheten, rått fra IndexedDB. Åpner ikke en database som ikke finnes
- * (det ville laget den tom og forstyrret appen), og lukker tilkoblingen med en gang.
- */
-export async function aiQueueEntries(page: Page): Promise<Record<string, unknown>[]> {
-  return page.evaluate(
-    async ([dbName, storeName]) => {
-      const databases = await indexedDB.databases();
-      if (!databases.some((info) => info.name === dbName)) return [];
-      return new Promise<Record<string, unknown>[]>((resolve, reject) => {
-        const request = indexedDB.open(dbName!);
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-          const database = request.result;
-          if (!database.objectStoreNames.contains(storeName!)) {
-            database.close();
-            resolve([]);
-            return;
-          }
-          const tx = database.transaction([storeName!], "readonly");
-          const reading = tx.objectStore(storeName!).getAll();
-          tx.oncomplete = () => {
-            database.close();
-            resolve(reading.result as Record<string, unknown>[]);
-          };
-          tx.onerror = () => {
-            database.close();
-            reject(tx.error);
-          };
-        };
-      });
-    },
-    [AI_QUEUE_DB, AI_QUEUE_STORE] as const,
-  );
-}
-
-/** Oppdiktet takstmann nr. 2 i prøveorganisasjonen (KI på), for delt iPad. */
-export const SAMPLE_SECOND_INSPECTOR_EMAIL = "ki-ko-takstmann.e2e@example.com";
 /** Oppdiktet admin i prøveorganisasjonen med bare rollen admin. */
 export const SAMPLE_ADMIN_ONLY_EMAIL = "ki-ko-admin.e2e@example.com";
 
@@ -1517,13 +1346,13 @@ async function sampleOrganizationId(sql: postgres.Sql): Promise<string> {
 }
 
 /**
- * Sørger for at en oppdiktet ansatt finnes i prøveorganisasjonen med nøyaktig én aktiv rolle.
- * Idempotent. Bare lokal database eller testdatabasen. Sletter og gjenoppretter ingenting.
+ * Sørger for at en oppdiktet ansatt finnes i prøveorganisasjonen med rollen. Idempotent. Bare
+ * lokal database eller testdatabasen. Sletter og gjenoppretter ingenting.
  */
 export async function ensureSampleOrgEmployee(input: {
   email: string;
   name: string;
-  role: "inspector" | "admin";
+  role: "inspector" | "admin" | "office";
 }): Promise<void> {
   const sql = e2eSql();
   try {
@@ -1533,7 +1362,7 @@ export async function ensureSampleOrgEmployee(input: {
       values (${randomUUID()}, ${input.name}, ${input.email}, true)
       on conflict (email) do nothing`;
     const [user] = await sql<{ id: string }[]>`select id from users where email = ${input.email}`;
-    if (!user) throw new Error("Kunne ikke lage brukeren for e2e (KI-kø)");
+    if (!user) throw new Error("Kunne ikke lage brukeren for e2e (prøveorganisasjonen)");
     let [employee] = await sql<{ id: string }[]>`
       select id from employees
       where user_id = ${user.id} and organization_id = ${organizationId}
@@ -1544,7 +1373,7 @@ export async function ensureSampleOrgEmployee(input: {
         values (${organizationId}, ${user.id}, ${input.name})
         returning id`;
     }
-    if (!employee) throw new Error("Kunne ikke lage den ansatte for e2e (KI-kø)");
+    if (!employee) throw new Error("Kunne ikke lage den ansatte for e2e (prøveorganisasjonen)");
     const roles = await sql<{ id: string }[]>`
       select id from employee_roles
       where employee_id = ${employee.id} and role = ${input.role}::employee_role
@@ -1560,41 +1389,107 @@ export async function ensureSampleOrgEmployee(input: {
   }
 }
 
-/** Logger inn som takstmann nr. 2 i prøveorganisasjonen. */
-export async function logInAsSecondSampleInspector(page: Page) {
-  await ensureSampleOrgEmployee({
-    email: SAMPLE_SECOND_INSPECTOR_EMAIL,
-    name: "Oppdiktet takstmann to",
-    role: "inspector",
-  });
-  await logIn(page, SAMPLE_SECOND_INSPECTOR_EMAIL);
-}
+/** Et oppdrag i prøveorganisasjonen med ett bad, som tester på badskjermen bruker. Oppdiktet. */
+export type SampleBathroom = { assignmentId: string; roomId: string; suffix: string };
 
-/** Logger inn som admin (bare rollen admin) i prøveorganisasjonen. */
-export async function logInAsSampleAdminOnly(page: Page) {
-  await ensureSampleOrgEmployee({
-    email: SAMPLE_ADMIN_ONLY_EMAIL,
-    name: "Oppdiktet admin",
-    role: "admin",
-  });
-  await logIn(page, SAMPLE_ADMIN_ONLY_EMAIL);
-}
-
-/** Ansatt-id-en til e-posten i prøveorganisasjonen. Bare lesing. */
-export async function sampleEmployeeId(email: string): Promise<string> {
+/**
+ * Lager et oppdrag i prøveorganisasjonen (som har den publiserte badmalen) med én bygning, én
+ * etasje og ett bad («Bad KI E2E …»), direkte mot databasen. Hver test får sitt eget, så testene
+ * ikke avhenger av hverandre. Alt er oppdiktet.
+ */
+export async function createSampleBathroom(): Promise<SampleBathroom> {
   const sql = e2eSql();
+  const suffix = uniqueSuffix();
   try {
     const organizationId = await sampleOrganizationId(sql);
-    const [row] = await sql<{ id: string }[]>`
-      select e.id from employees e join users u on u.id = e.user_id
-      where u.email = ${email.toLowerCase()} and e.organization_id = ${organizationId}
-        and e.deleted_at is null
-      limit 1`;
-    if (!row) throw new Error("Fant ikke den ansatte i prøveorganisasjonen");
-    return row.id;
+    const [office] = await sql<{ id: string }[]>`
+      select id from offices where organization_id = ${organizationId} and deleted_at is null
+      order by created_at limit 1`;
+    if (!office) throw new Error("Fant ikke kontoret i prøveorganisasjonen (pnpm db:seed:testoppdrag)");
+    const orderId = randomUUID();
+    const assignmentId = randomUUID();
+    const buildingId = randomUUID();
+    const floorId = randomUUID();
+    const roomId = randomUUID();
+    const address = `Forslagsveien 1 ${suffix}, 8000 Bodø`;
+    await sql`
+      insert into orders (id, organization_id, address_text, received_at, source, status,
+        requested_report_type, valid_until)
+      values (${orderId}, ${organizationId}, ${address}, now(), 'manual', 'received',
+        'condition_report', (now() at time zone 'Europe/Oslo')::date + 30)`;
+    await sql`
+      insert into assignments (id, organization_id, number, office_id, assignment_type, status,
+        order_id, address_text, received_at, source)
+      values (${assignmentId}, ${organizationId}, ${`E2E-KI-${suffix}`}, ${office.id},
+        'condition_report', 'in_progress', ${orderId}, ${address}, now(), 'manual')`;
+    await sql`
+      insert into report_buildings (id, organization_id, assignment_id, name)
+      values (${buildingId}, ${organizationId}, ${assignmentId}, 'Bolighus')`;
+    await sql`
+      insert into floors (id, organization_id, report_building_id, name, level, below_ground)
+      values (${floorId}, ${organizationId}, ${buildingId}, '1. etasje', 1, false)`;
+    await sql`
+      insert into rooms (id, organization_id, floor_id, room_type, name, area_type, below_ground)
+      values (${roomId}, ${organizationId}, ${floorId}, 'bathroom', ${`Bad KI E2E ${suffix}`},
+        'bra_i', false)`;
+    return { assignmentId, roomId, suffix };
   } finally {
     await sql.end();
   }
+}
+
+/** Adressen til badskjermen, eventuelt med et punkt åpent. */
+export function sampleBathroomUrl(bath: SampleBathroom, punkt?: string): string {
+  const base = `/oppdrag/${bath.assignmentId}/rom/${bath.roomId}`;
+  return punkt ? `${base}?punkt=${encodeURIComponent(punkt)}` : base;
+}
+
+/** Åpner badet og starter rapporten når den ikke er startet. */
+export async function openSampleBathroom(page: Page, bath: SampleBathroom, punkt?: string) {
+  await page.goto(sampleBathroomUrl(bath, punkt));
+  const start = page.getByRole("button", { name: "Start rapporten" });
+  const heading = page.locator("#checkpoint-heading");
+  await expect(start.or(heading).first()).toBeVisible();
+  if (await start.isVisible()) await start.click();
+  await expect(heading).toBeVisible();
+}
+
+/** Avvikskort nummer `n` i punktet som er åpent. */
+export function deviationCardOn(page: Page, n: number): Locator {
+  return page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: new RegExp(`^Avvik ${n}\\b`) }) })
+    .first();
+}
+
+/**
+ * Lager et TG3-avvik på «Vanntett sjikt, membran og sluk» slik takstmannen gjør: folie fra 1990
+ * gir forslaget fra reglene, og «Godta» lager avviket med malens tekster. Badet må være åpent på
+ * punktet (`openSampleBathroom(page, bath, "wet_room.membrane_drain")`).
+ */
+export async function addRuleTg3Deviation(page: Page): Promise<Locator> {
+  await page
+    .getByRole("group", { name: "Vanntett sjikt", exact: true })
+    .locator("label")
+    .filter({ hasText: /^Folie$/ })
+    .first()
+    .click();
+  const year = page.getByLabel("Årstall for det vanntette sjiktet");
+  await year.fill("1990");
+  await year.blur();
+  const suggestion = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Forslag fra reglene" }) })
+    .first();
+  await expect(suggestion).toContainText("TG3");
+  await suggestion.getByRole("button", { name: "Godta", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /^Avvik 1/ })).toBeFocused();
+  return deviationCardOn(page, 1);
+}
+
+/** Lagrestatusen for hele badet i topplinjen. */
+export function bathroomSaveState(page: Page): Locator {
+  return page.locator("header [role='status'][data-save-state]");
 }
 
 /**
@@ -1628,33 +1523,6 @@ export async function restoreSampleAiEnabled(previous: boolean | undefined): Pro
     const organizationId = await sampleOrganizationId(sql);
     await sql`
       update organizations set settings = settings - 'ai.enabled' where id = ${organizationId}`;
-  } finally {
-    await sql.end();
-  }
-}
-
-/** Radene i KI-loggen med id-en, med eier. Bare lesing. */
-export async function aiUsageRowsById(
-  id: string,
-): Promise<{ id: string; outcome: string; employeeId: string; organizationId: string }[]> {
-  const sql = e2eSql();
-  try {
-    return await sql<{ id: string; outcome: string; employeeId: string; organizationId: string }[]>`
-      select id, outcome, employee_id as "employeeId", organization_id as "organizationId"
-      from ai_usage_log where id = ${id}`;
-  } finally {
-    await sql.end();
-  }
-}
-
-/** Radene i KI-loggen der den ansatte er eier og målet er `targetId`. Bare lesing. */
-export async function aiUsageRowCountForEmployee(employeeId: string, targetId: string) {
-  const sql = e2eSql();
-  try {
-    const [row] = await sql<{ n: number }[]>`
-      select count(*)::int as n from ai_usage_log
-      where employee_id = ${employeeId} and target_ref ->> 'id' = ${targetId}`;
-    return row?.n ?? 0;
   } finally {
     await sql.end();
   }
