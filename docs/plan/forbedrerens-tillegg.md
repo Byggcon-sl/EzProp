@@ -1,6 +1,6 @@
 # Lagt til av forbedreren
 
-Sist oppdatert: 17.11.2026
+Sist oppdatert: 23.11.2026
 
 Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.2026, se «Forbedreren» i `CLAUDE.md`). Listen er til for Ståle: mot slutten av utviklingen går han gjennom den og beholder, justerer eller fjerner.
 
@@ -8,6 +8,11 @@ Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.
 
 | Dato | Tillegg (det den ansatte merker) | Hvorfor | Type | Hvor (PR, oppgavekort, kode) | Slik fjernes det | Ståle |
 |---|---|---|---|---|---|---|
+| 23.11.2026 | «Hvorfor har dette punktet denne TG-en?»: spor over forslag, beslutninger og endringer på avvik og punkt, og KI-utkast til forklaring av graden ved reklamasjon | Graden kan forklares med ett trykk når en kunde klager; KI i bunnen | nytt planpunkt | `docs/07-utviklingsplan.md` 2a-2 «Fra forbedreren»; ikke bygget | Fjern punktet fra planen (eller sporet og KI-utkastet når det er bygget) | |
+| 23.11.2026 | «Alt avgjort i et annet vindu» sier hva og når, for eksempel «Godtatt i et annet vindu kl. 10.42: TG3» (uten navn) | Takstmannen ser straks hva som gjelder og slipper å lete | i oppgaven | `docs/agenter/oppgaver/rett-forslag-og-avvik.md` Omfang 5 (A493); PR fylles inn | Vis bare «Forslaget er alt avgjort i et annet vindu» | |
+| 23.11.2026 | Åpne forslag på ferdige punkter står i «Å se over» med Godta, Endre og Avvis rett i listen, TG3 øverst | Alle åpne forslag ryddes fra én liste på PC; TG3 faller ikke ut | i oppgaven | `docs/agenter/oppgaver/rett-forslag-og-avvik.md` Omfang 3 (A492); PR fylles inn | Vis bare advarselen med «Gå til punktet» | |
+| 23.11.2026 | Etter «Fjern avviket» står forslaget åpent igjen med en gang, med meldingen «Forslaget om TG3 er åpent igjen» og «Angre» | TG3 kan ikke forsvinne uten at takstmannen ser det | i oppgaven | `docs/agenter/oppgaver/rett-forslag-og-avvik.md` Omfang 2; PR fylles inn | Ta ny visning ut av svaret fra `deleteDeviation` og bruk vanlig melding | |
+| 23.11.2026 | Grunnen for å endre TG fra et forslag velges med store knapper rett under TG-raden, før noe sendes; TG og grunn lagres sammen, «Avbryt» setter TG tilbake | Ett trykk mer bare der det trengs, ingen feilmelding, ingenting henger i køen | i oppgaven | `docs/agenter/oppgaver/rett-forslag-og-avvik.md` Omfang 7 (A490); PR fylles inn | Vis grunnvalget som dialog i stedet | |
 | 17.11.2026 | «Ny innlogging, var det deg?»: rolig melding i appen når kontoen er logget inn på en ny enhet, med «Ja» og «Nei, logg ut den» | Ukjente innlogginger oppdages uten at noen må lete i profilen | nytt planpunkt | `docs/07-utviklingsplan.md` fase 2a-3 «Fra forbedreren»; ikke bygget | Fjern punktet fra planen (eller meldingen og den lokale «sist sett»-verdien når den er bygget) | |
 | 17.11.2026 | Uten nett-endringer blir liggende og sendes når iPaden er logget ut fra en annen enhet og takstmannen logger inn igjen (med test) | Ingen tapte befaringsdata; færre reklamasjoner | i oppgaven | `docs/funksjoner/fase2a-mine-innlogginger.md` F5 (Omfang 9); PR fylles inn | Ta ut testen; oppførselen er uansett slik i dag | |
 | 17.11.2026 | Deaktivering av en ansatt logger også ut alle enhetene hens | Ett steg mindre for admin når noen slutter | i oppgaven | `docs/funksjoner/fase2a-mine-innlogginger.md` F4 (Omfang 7, A430), `deactivateEmployeeAction`; PR fylles inn | Fjern kallet i `deactivateEmployeeAction` og linjen i bekreftelsen | |
