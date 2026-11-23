@@ -294,6 +294,23 @@ function paragraph(checkpointName: string, text: string): string {
 }
 
 /**
+ * KI-teksten uten punktets navn og «:» først, når KI har gjentatt navnet. Koden setter navnet selv
+ * (A462), så det ellers står to ganger («Sluk: Sluk: …»). Store og små bokstaver telles likt.
+ */
+export function withoutRepeatedName(checkpointName: string, text: string): string {
+  const name = checkpointName.normalize("NFC").trim();
+  const value = text.normalize("NFC");
+  if (
+    name === "" ||
+    value.slice(0, name.length).toLocaleLowerCase("nb") !== name.toLocaleLowerCase("nb")
+  ) {
+    return text;
+  }
+  const rest = /^\s*:\s*/u.exec(value.slice(name.length));
+  return rest ? value.slice(name.length + rest[0].length) : text;
+}
+
+/**
  * Setter sammen utkastet: kodens overskrift for hver gruppe, så ett avsnitt per funn (eller én
  * linje per TGIU-funn). `textFor` gir teksten per F-merke. `redacted` velger de vaskede navnene
  * og TGIU-tekstene (til `output_text`) eller de opprinnelige (til klienten).
@@ -311,7 +328,7 @@ export function assembleSummary(
         const part = byLabel.get(label);
         if (!part) continue;
         const name = redacted ? part.redactedCheckpointName : part.checkpointName;
-        lines.push(paragraph(name, textFor(label).trim()));
+        lines.push(paragraph(name, withoutRepeatedName(name, textFor(label).trim())));
       }
       for (const line of group.fixedLines) {
         lines.push(

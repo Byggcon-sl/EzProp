@@ -2834,6 +2834,42 @@ describe("KI i veien: summary_draft (K1.21, K1.23, K4.11b, K4.17 i kjernen)", ()
     expect(row.prompt_version).toBe("summary_draft.v1");
   });
 
+  it("KI som gjentar punktets navn og «:» får det tatt bort, så navnet står én gang", async () => {
+    const { grant, chain } = await kiSetup();
+    const answer = [
+      "G1",
+      "F1: Membran: Fuktmåling viste 15 vekt-% ved sluket.",
+      "G2",
+      "F2: sluk : Klemringen mangler.",
+      "F3: Ventilasjonen er svak, avtrekket må sjekkes.",
+    ].join("\n");
+    swap.provider = {
+      code: "fake",
+      model: "fake-v1",
+      complete: async () => ({
+        outcome: "ok",
+        text: answer,
+        tokensIn: 1,
+        tokensOut: 1,
+        cost: 0,
+        currency: "NOK",
+      }),
+    };
+    const request = summaryRequest(chain);
+
+    const result = await requestWithServerInput(grant, request, {
+      summaryGroups: SUMMARY_GROUPS(),
+    });
+
+    if (result.kind !== "suggestion") throw new Error(`fikk ${result.kind}`);
+    const lines = result.text.split("\n");
+    expect(lines).toContain("Membran: Fuktmåling viste 15 vekt-% ved sluket.");
+    expect(lines).toContain("Sluk: Klemringen mangler.");
+    // Et ord som bare begynner som navnet, røres ikke
+    expect(lines).toContain("Ventilasjon: Ventilasjonen er svak, avtrekket må sjekkes.");
+    expect((await aiRow(request.requestId))!.output_text).toBe(result.text);
+  });
+
   it.each([
     { name: "funn mangler", marker: FAKE_DROP_FINDING_INPUT, guard: "coverage_guard" },
     { name: "TG lagt til", marker: FAKE_ADD_TG_INPUT, guard: "tg_guard" },
