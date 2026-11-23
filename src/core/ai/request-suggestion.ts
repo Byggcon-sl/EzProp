@@ -141,8 +141,29 @@ const resultColumns = {
   outputText: aiUsageLog.outputText,
   errorCode: aiUsageLog.errorCode,
   candidateRefs: aiUsageLog.candidateRefs,
+  redactedCount: aiUsageLog.redactedCount,
   deletedAt: aiUsageLog.deletedAt,
 };
+
+/**
+ * Svaret fra en rad som ble lagret i et tidligere kall (samme `requestId`). Har raden en tekst med
+ * plassholdere (`redacted_count > 0`), er de opprinnelige verdiene borte (de holdes bare i minnet
+ * under kallet, A466). Da gir kjernen `error` (prøv igjen), aldri teksten med plassholderne.
+ */
+function replayedResult(row: {
+  id: string;
+  outcome: string;
+  outputText: string | null;
+  errorCode: string | null;
+  candidateRefs: AiCandidateRef[] | null;
+  redactedCount: number;
+}): AiSuggestionResult {
+  const answer = toSuggestionResult(row);
+  if (answer.kind === "suggestion" && row.redactedCount > 0) {
+    return { kind: "error", usageId: row.id };
+  }
+  return answer;
+}
 
 type StoredRow = {
   organizationId: string;
@@ -547,7 +568,7 @@ export const requestSuggestion: RequestSuggestion = async (grant, request, serve
     if (!isOwnRequest(existing, grant, definition.code, target)) {
       throw new AiRequestRejectedError();
     }
-    return toSuggestionResult(existing);
+    return replayedResult(existing);
   }
   // Id-en finnes hos en annen organisasjon eller er mykt slettet: avslag før leverandøren kalles
   const [taken] = await db
@@ -755,9 +776,10 @@ export const requestSuggestion: RequestSuggestion = async (grant, request, serve
     return { row: inserted, own: true };
   });
 
+  if (!result.own) return replayedResult(result.row);
   const answer = toSuggestionResult(result.row);
   // Teksten til klienten har de opprinnelige verdiene tilbake (A466); raden har plassholderne
-  if (result.own && answer.kind === "suggestion" && interpreted.clientText !== null) {
+  if (answer.kind === "suggestion" && interpreted.clientText !== null) {
     return { ...answer, text: interpreted.clientText };
   }
   return answer;

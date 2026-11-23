@@ -3048,3 +3048,79 @@ describe("KI i veien: tenant-isolasjon for oppslaget gjennom requestSuggestion (
     });
   });
 });
+
+/*
+ * Samme requestId på nytt når teksten hadde kjente navn (gjennomgangen av KI i veien): de
+ * opprinnelige verdiene bak plassholderne holdes bare i minnet under første kall (A466). Andre
+ * gang gir kjernen `error` (prøv igjen), aldri teksten med plassholderne.
+ *
+ * Støtter hovedmål: færre reklamasjoner (et forslag med «[navn]» kommer aldri inn i rapporten)
+ * og best for de ansatte (de ser en tydelig «prøv igjen», ikke en ødelagt tekst).
+ */
+describe("KI i veien: samme requestId med kjent navn gir error, ikke plassholdere", () => {
+  const NAME = "Åse Testesen";
+  const knownName = async (): Promise<KnownValues> => ({
+    ...emptyKnownValues(),
+    personNames: [NAME],
+  });
+
+  it("språkvask: første svar har navnet, andre gir error, raden er uendret", async () => {
+    const { grant, chain } = await kiSetup();
+    swap.load = knownName;
+    const request = polishRequest(
+      { type: "deviation", id: chain.deviationId, fieldKey: "cause_text" },
+      `${NAME} sa at sluket lekker.`,
+    );
+    const first = await requestWithServerInput(grant, request);
+    if (first.kind !== "suggestion") throw new Error("forventet forslag");
+    expect(first.text).toContain(NAME);
+    const row = (await aiRow(request.requestId))!;
+    expect(Number(row.redacted_count)).toBeGreaterThan(0);
+    expect(String(row.output_text)).not.toContain(NAME);
+    const before = snapshot(row);
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+
+    const second = await requestWithServerInput(grant, request);
+
+    expect(second).toEqual({ kind: "error", usageId: request.requestId });
+    expect(spy).not.toHaveBeenCalled();
+    expect(snapshot(await aiRow(request.requestId))).toBe(before);
+  });
+
+  it("sammendrag: første svar har navnet, andre gir error, raden er uendret", async () => {
+    const { grant, chain } = await kiSetup();
+    swap.load = knownName;
+    const groups: AiSummaryGroup[] = [
+      {
+        group: "tg2",
+        heading: "TG2 Vesentlige avvik",
+        findings: [finding("Sluk", `${NAME} har meldt at sluket lekker`)],
+        fixedLines: [],
+      },
+    ];
+    const request = summaryRequest(chain);
+    const first = await requestWithServerInput(grant, request, { summaryGroups: groups });
+    if (first.kind !== "suggestion") throw new Error("forventet forslag");
+    expect(first.text).toContain(NAME);
+    const row = (await aiRow(request.requestId))!;
+    expect(Number(row.redacted_count)).toBeGreaterThan(0);
+    const before = snapshot(row);
+
+    const second = await requestWithServerInput(grant, request, { summaryGroups: groups });
+
+    expect(second).toEqual({ kind: "error", usageId: request.requestId });
+    expect(snapshot(await aiRow(request.requestId))).toBe(before);
+  });
+
+  it("uten plassholdere gir samme requestId fortsatt samme forslag", async () => {
+    const { grant, chain } = await kiSetup();
+    swap.load = knownName;
+    const request = polishRequest(
+      { type: "deviation", id: chain.deviationId, fieldKey: "cause_text" },
+      "sluket lekker.",
+    );
+    const first = await requestWithServerInput(grant, request);
+    expect(first.kind).toBe("suggestion");
+    expect(await requestWithServerInput(grant, request)).toEqual(first);
+  });
+});
