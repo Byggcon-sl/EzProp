@@ -1405,7 +1405,8 @@ export async function createSampleBathroom(): Promise<SampleBathroom> {
     const [office] = await sql<{ id: string }[]>`
       select id from offices where organization_id = ${organizationId} and deleted_at is null
       order by created_at limit 1`;
-    if (!office) throw new Error("Fant ikke kontoret i prøveorganisasjonen (pnpm db:seed:testoppdrag)");
+    if (!office)
+      throw new Error("Fant ikke kontoret i prøveorganisasjonen (pnpm db:seed:testoppdrag)");
     const orderId = randomUUID();
     const assignmentId = randomUUID();
     const buildingId = randomUUID();

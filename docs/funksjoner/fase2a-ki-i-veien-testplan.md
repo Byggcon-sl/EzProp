@@ -193,3 +193,35 @@ Kjøres på PC (1280×800) og iPad Pro-størrelse (1024×1366 stående og 1366×
 - Hvert akseptkriterium i kortet har minst ett testnummer over (tabell i rapporten).
 - Avslag uten tester for tilgang (5a) eller tenant-isolasjon (5b) gir avvisning.
 - T-0046, T-0047 og T-0111 satt til «rettet» med PR-nummeret; T-0035 lukket som foreldet.
+
+## Flyttet fra /prove/ki (23.11.2026)
+
+Testskriveren, etter K6.3 og A487. Prøvesiden og KI-køen på prøvesiden er borte (køen kobles ikke til badskjermen, A441). Det som fortsatt gjelder for forslagskortet, KI-merket, profilen og universell utforming, prøves nå på badskjermen. Hjelperne i `e2e/helpers.ts` som bare disse brukte, er fjernet; nye felles hjelpere: `createSampleBathroom`, `openSampleBathroom`, `addRuleTg3Deviation`, `deviationCardOn`, `bathroomSaveState`.
+
+**Flyttet (hvor nå):**
+
+| Før (`/prove/ki`) | Nå (badskjermen) |
+|---|---|
+| Forslagsmønsteret 12.1–12.4 (forslaget vises, «Bruk», «Angre», «Behold min tekst», status i loggen) | `e2e/fase-2a-ki-i-veien.spec.ts` K7.6 (per felt, med `Bruk alle` og loggrad per felt) |
+| 12.5 «Nytt forslag» avviser det gamle; 12.6 feil fra KI; «ingen forslag» | samme spec, «flyttet fra /prove/ki» 12.5/12.6 (feil og «Ingen endring.» per felt) |
+| 12.7 og K8.7 KI av i organisasjonen | K7.11 |
+| 12.8 og 12.13 uten nett (var kø) | K7.10 («Trenger nett. Teksten din er lagret.», ingen kall) |
+| 12.9 nettet faller midt i et forslag | «flyttet» 12.9 (språkvask holdes igjen, så uten nett) |
+| 12.10 dobbelttrykk gir én rad og én linje i `audit_log` | «flyttet» 12.10 |
+| 12.11, K8.13 og profilen 5.3 punkt 3 trykkflater | K7.17 (stående iPad) og `fase-2a-byggcon-profil.spec.ts` 5.3 punkt 3 (forslagskortet for sammendraget) |
+| 12.12 side om side / over hverandre | «flyttet» 12.12 |
+| 12.14 forslaget som tekst, ikke HTML | «flyttet» 12.14 |
+| 12.15 kontor uten `report.edit` | K7.15 |
+| 12.15, V9.3 og K8.12 admin kommer inn | «flyttet» admin (bare rollen admin, `access.inspectors_edit_all` av) |
+| V9.1 telefon og e-post vaskes | «flyttet» V9.1, nå etter A466: loggen har plassholderne, skjermen får verdiene tilbake |
+| K8.8 T-0004 (skriver videre etter forslaget) | «flyttet» T-0004 |
+| Profilen 4 og 5 (ingen fargeovergang) og 5.5 KI-merket | `fase-2a-byggcon-profil.spec.ts`, forslagskortet for sammendraget på badskjermen |
+| Skjermbilde 5 «ki» | `byggcon-profil-skjermbilder.spec.ts`, badskjermen med utkast til sammendrag |
+| T-0001 (e) nulltegn til KI | `fase-2a-rett-t0001-synkko.spec.ts` (e), «Språkvask avviket» |
+
+**Fjernet (og hvorfor):**
+
+- `e2e/fase-2a-forslagsmonster-testplan.spec.ts`: samme saker som `fase-2a-forslagsmonster.spec.ts`; det som gjelder, er flyttet over. Den faste linjen («Bruk oppdiktet tekst …») og «Logget: …» fantes bare på prøvesiden.
+- `e2e/fase-2a-ki-ko.spec.ts` (K8.1–K8.6, K8.9–K8.11): gjaldt bare KI-køen på prøvesiden (kø uten nett, levering når nettet kommer, IndexedDB, utlogging, delt iPad, to faner). Køen kobles ikke til badskjermen (A441); den er dekket av enhetstestene i `src/core/ai/client` (K6.3).
+- 12.1 «den faste linjen» og «Logget: …»-linjen: tekster bare prøvesiden hadde.
+- Hjelperne `ensureNoAiInspector`, `logInAsNoAiInspector`, `NO_AI_*`, `aiUsageRowsWithMarker`, `aiRedactedCountsWithMarker`, `aiUsageRowsForTarget`, `auditLinesFor`, `aiQueueEntries`, `AI_QUEUE_*`, `logInAsSecondSampleInspector`, `SAMPLE_SECOND_INSPECTOR_EMAIL`, `logInAsSampleAdminOnly`, `sampleEmployeeId`, `aiUsageRowsById` og `aiUsageRowCountForEmployee`: ingen brukere igjen.

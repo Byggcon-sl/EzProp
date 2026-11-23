@@ -58,7 +58,8 @@ const PORTRAITS = [
 ] as const;
 const OFFICE_EMAIL = "kontor.ki-i-veien.e2e@example.invalid";
 const OFFLINE = "Trenger nett. Teksten din er lagret.";
-const STOPPED = "KI-svaret ble stoppet fordi det endret TG eller la til tall. Teksten din er uendret.";
+const STOPPED =
+  "KI-svaret ble stoppet fordi det endret TG eller la til tall. Teksten din er uendret.";
 const OTHER_TG3 = "Se over konsekvens og tiltak. Teksten hører til TG3.";
 
 // --- Database (bare lokal database eller testdatabasen) -------------------------------------
@@ -540,7 +541,10 @@ test("K7.1 fraseforslag: listen under feltet, tekstsøk og så KI, 3–5 linjer,
   const again = deviationCardOn(page, 1);
   await expect(field(again, "Årsak")).toHaveValue(chosen);
   await expect(
-    again.locator("label", { hasText: /^Årsak$/ }).locator("xpath=..").getByText("Utkast"),
+    again
+      .locator("label", { hasText: /^Årsak$/ })
+      .locator("xpath=..")
+      .getByText("Utkast"),
   ).toBeVisible();
 });
 
@@ -581,7 +585,9 @@ test("K7.2 «Bytt ut teksten» når feltet har egen tekst; «Angre» setter tilb
   await expect(field(deviation, "Årsak")).toHaveValue(second);
 });
 
-test("K7.3 tiltak: valget legger til et nytt tiltak, det som finnes er uendret", async ({ page }) => {
+test("K7.3 tiltak: valget legger til et nytt tiltak, det som finnes er uendret", async ({
+  page,
+}) => {
   const { bath, deviation } = await bathWithTg3(page);
   const before = await field(deviation, "Tiltak 1").inputValue();
   await openRankedList(deviation, "tiltak");
@@ -789,8 +795,9 @@ test("K7.7 stoppet svar: bare konsekvensen stoppes, meldingen står ved feltet, 
   await expect(field(deviation, "Konsekvens")).toHaveValue(own.consequence);
 
   await expect
-    .poll(async () =>
-      (await aiRows(bath, "language_polish")).filter((row) => row.status === "accepted").length,
+    .poll(
+      async () =>
+        (await aiRows(bath, "language_polish")).filter((row) => row.status === "accepted").length,
     )
     .toBe(3);
   const row = (await aiRows(bath, "language_polish")).find(
@@ -826,7 +833,10 @@ test("K7.8 og K7.9 sammendrag: «Ingen avvik med TG ennå», utkast med TG3, TG2
   await expect(deviationCardOn(page, 1)).toBeVisible();
   await openCheckpoint(page, "Overflater vegger og himling");
   await choose(page, "TG uten avvik", /^TGIU$/);
-  await write(page.getByLabel("Hva er ikke undersøkt, og hvorfor?"), "Oppdiktet: veggen var tildekket av et skap.");
+  await write(
+    page.getByLabel("Hva er ikke undersøkt, og hvorfor?"),
+    "Oppdiktet: veggen var tildekket av et skap.",
+  );
   await openCheckpoint(page, "Sanitærutstyr og innredning");
   await addDeviation(page, /^Det er merker etter varmgang/);
   await expect(deviationCardOn(page, 1)).toBeVisible();
@@ -849,7 +859,10 @@ test("K7.8 og K7.9 sammendrag: «Ingen avvik med TG ennå», utkast med TG3, TG2
   const text = (await draft.textContent()) ?? "";
   const at = (pattern: RegExp) => text.search(pattern);
   const order = [at(/^TG3\b/m), at(/^TG2\b/m), at(/^TGIU\b/m), at(/^HMS\b/m)];
-  expect(order.every((index) => index >= 0), `alle fire overskriftene i «${text}»`).toBe(true);
+  expect(
+    order.every((index) => index >= 0),
+    `alle fire overskriftene i «${text}»`,
+  ).toBe(true);
   expect([...order].sort((a, b) => a - b)).toEqual(order);
   expect(text).toContain(MEMBRANE_NAME);
   expect(text).toContain("Oppdiktet: veggen var tildekket av et skap.");
@@ -873,9 +886,9 @@ test("K7.8 og K7.9 sammendrag: «Ingen avvik med TG ennå», utkast med TG3, TG2
 
   // Tekst skrevet for hånd uten TG3-punktet gir advarsel; ingen sperre
   await write(summaryField, "Oppdiktet sammendrag skrevet for hånd.");
-  await expect.poll(async () => (await summaryOf(bath)).text).toBe(
-    "Oppdiktet sammendrag skrevet for hånd.",
-  );
+  await expect
+    .poll(async () => (await summaryOf(bath)).text)
+    .toBe("Oppdiktet sammendrag skrevet for hånd.");
   await expect(
     section.getByText(`${MEMBRANE_NAME} har TG3 og er ikke nevnt i sammendraget.`),
   ).toBeVisible();
@@ -897,9 +910,7 @@ test("K7.10 uten nett: «Forslag» gir tekstsøk uten kall og uten loggrad; spr�
     await phraseButton(deviation, "årsak").click();
     const list = phraseList(deviation);
     await expect(list).toHaveAttribute("data-phase", "fallback");
-    await expect(list.getByTestId("phrase-list-heading")).toHaveText(
-      "Uten KI: treff fra tekstsøk",
-    );
+    await expect(list.getByTestId("phrase-list-heading")).toHaveText("Uten KI: treff fra tekstsøk");
     expect(await candidates(deviation).count()).toBeGreaterThanOrEqual(1);
     await list.getByRole("button", { name: "Lukk", exact: true }).click();
 
@@ -925,9 +936,7 @@ test("K7.11 KI av for organisasjonen: tekstsøket uten loggrad; språkvask og ut
     await phraseButton(deviation, "årsak").click();
     const list = phraseList(deviation);
     await expect(list).toHaveAttribute("data-phase", "fallback");
-    await expect(list.getByTestId("phrase-list-heading")).toHaveText(
-      "Uten KI: treff fra tekstsøk",
-    );
+    await expect(list.getByTestId("phrase-list-heading")).toHaveText("Uten KI: treff fra tekstsøk");
     expect(await candidates(deviation).count()).toBeGreaterThanOrEqual(1);
     await list.getByRole("button", { name: "Lukk", exact: true }).click();
 
@@ -988,8 +997,9 @@ test("K7.11a «Mest brukt» står på kandidaten som er valgt flest ganger i org
     await expectSaved(bath, { consequenceText: chosen });
   }
   await expect
-    .poll(async () =>
-      (await aiRows(bath, "phrase_suggest")).filter((row) => row.status === "accepted").length,
+    .poll(
+      async () =>
+        (await aiRows(bath, "phrase_suggest")).filter((row) => row.status === "accepted").length,
     )
     .toBe(2);
 
@@ -1071,9 +1081,7 @@ test("K7.13 skjermleser og universell utforming: navn, liste, aria-live og axe u
   const count = await candidates(deviation).count();
   await expect(list.getByRole("listitem")).toHaveCount(count);
   await expect(list.getByRole("listitem").getByRole("button")).toHaveCount(count);
-  await expect(list.locator("[aria-live='polite']")).toHaveText(
-    `Sortert av KI. ${count} forslag.`,
-  );
+  await expect(list.locator("[aria-live='polite']")).toHaveText(`Sortert av KI. ${count} forslag.`);
   await expectNoAxeViolations(page, "åpen forslagsliste");
   await list.getByRole("button", { name: "Lukk", exact: true }).click();
   await expect(phraseButton(deviation, "årsak")).toBeFocused();
@@ -1182,7 +1190,11 @@ for (const viewport of PORTRAITS) {
     await expect(summary.getByTestId("ai-suggestion-text")).toBeVisible();
     await expectNoHorizontalScroll(page, "utkastet til sammendrag");
     await expectButtonsAtLeast44(summary, "utkastet til sammendrag");
-    await expectTouchTarget(summary.getByRole("button", { name: "Bruk", exact: true }), 56, "«Bruk»");
+    await expectTouchTarget(
+      summary.getByRole("button", { name: "Bruk", exact: true }),
+      56,
+      "«Bruk»",
+    );
   });
 }
 
@@ -1229,10 +1241,9 @@ test.describe("flyttet fra /prove/ki: forslagskortet på badskjermen", () => {
       (await aiRows(bath, "language_polish")).filter(
         (row) => row.targetRef.fieldKey === "consequence_text",
       );
-    await expect.poll(async () => (await consequenceRows()).map((row) => row.status)).toEqual([
-      "rejected",
-      "suggested",
-    ]);
+    await expect
+      .poll(async () => (await consequenceRows()).map((row) => row.status))
+      .toEqual(["rejected", "suggested"]);
   });
 
   test("T-0004: skriver takstmannen videre etter forslaget, forsvinner «Bruk», og egen tekst står", async ({
