@@ -180,6 +180,8 @@ Disse feltene finnes i **alle** tabeller (med få unntak, som er nevnt). De stå
 | `email`, `name` | E-post (innlogging) og navn |
 | `last_login_at` | Siste innlogging |
 
+**`sessions`** – innloggingene (øktene), én rad per enhet og nettleser der brukeren er logget inn (Better Auth sin tabell, ingen `organization_id`, ingen myk sletting, se avsnitt 3). **Mine innlogginger (fase 2a-3, 17.11.2026):** den ansatte ser sine egne aktive økter på `/profil` (enhet og nettleser lest fra user agent på serveren, sist brukt som dag, når hen logget inn, og «denne enheten») og kan logge ut én økt eller alle andre. Admin ser enhet, nettleser og antall per ansatt på `/admin/ansatte/[id]` og kan logge ut alle enheter. Å tilbakekalle (revoke) en økt betyr at raden slettes; det skjer i kjernen (`src/core/auth`) med tilgang fra `src/core/access`. IP-adressen vises aldri. Ingen nye felt. «Logg ut av alle enheter» og «Har sluttet» skriver revisjonshandlingen `employee.sessions_revoked_all` (se `audit_log` i 4.12).
+
 **`employees`** – den ansatte i EzProp. Én rad per person.
 
 | Felt | Forklaring |
@@ -1730,7 +1732,7 @@ Oppdraget fjernes fra iPaden et antall dager etter levering (bekreftet 27.10.202
 |---|---|
 | `actor_employee_id` | Hvem |
 | `entity_type`, `entity_id` | Hva som ble endret |
-| `action` | `create`, `update`, `delete`, `restore`, `permission_change` og så videre |
+| `action` | `create`, `update`, `delete`, `restore`, `permission_change` og så videre. `employee.sessions_revoked_all` (entitet `employee`, id den ansatte): alle innloggingene til den ansatte er logget ut; `changes` er bare `{ sessionCount, reason }`, der `reason` er `manual` (admin trykket «Logg ut av alle enheter») eller `deactivated` (den ansatte ble satt til «Har sluttet»). Skrives også når antallet er 0. Aldri IP, user agent, økt-id eller e-post |
 | `changes` | Hva som ble endret (jsonb). Vanlig form: `fields` er en liste med feltkoder. For `order`/`update`: `fields` med feltkodene som ble endret, i fast rekkefølge (`ORDER_EDITABLE_FIELDS`), og `values` med `{ from, to }` per endret felt (bestilleren som id-er, datoer som ISO-tekst). Verdiene ligger samlet under `values`, slik at de kan tømmes med én endring hvis Ståle sier nei (spørsmål 79, A252); `fields` står da igjen |
 | `device_id` | Hvilken enhet (iPad eller PC, se `devices`) |
 | `occurred_at` | Når endringen ble gjort (på enheten) |
@@ -2061,6 +2063,9 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Ansvarsforsikring | `companies.liability_*` | Hører til selskapet |
 | Firmatekst | `companies.company_text` | Teksten om selskapet på rapportens side 2 |
 | Sluttet | `employees.deactivated_at` | Kan ikke logge inn, står fortsatt på gamle rapporter |
+| Innlogging (økt) | `session` (`sessions`) | Innloggingen på én enhet og nettleser. Vises for den ansatte under «Mine innlogginger» på `/profil` |
+| Logge ut en økt | `revoke` (`revokeOwnSession`, `revokeOtherOwnSessions`, `revokeAllEmployeeSessions`) | Avslutte en innlogging på en enhet. Raden i `sessions` slettes; data som ligger på enheten, blir liggende |
+| Logget ut av alle enheter | `employee.sessions_revoked_all` | Revisjonshandling når alle innloggingene til en ansatt logges ut, med `{ sessionCount, reason }`, der `reason` er `manual` eller `deactivated` |
 | Rolle | `employee_roles.role` | `inspector`, `office`, `manager`, `admin` |
 | Rettighet | `employee_permissions.permission` | Enkeltrettighet, for eksempel `template.edit_structure` |
 | Enkeltrettigheter | `employee_permissions` | Rettigheter admin har gitt én ansatt, i tillegg til rollen |
@@ -2639,3 +2644,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 16.11.2026 | Tilbud i stedet for ordre, kjernen (fase 2a, ADR 0012 med tillegg): migrering `0035_tilbud` med `orders.valid_until` og `orders.rejected_reason_key` (fem faste koder, gamle avslag får `other`); utløp, visningsstatus, filter med antall og sortering, «Gyldig til» bare på åpne og utløpte tilbud, avslag med fast grunn (`reasonKey` i hendelsen) og dublettvilkåret for utløpte tilbud. Se «Tilbud i stedet for ordre» i 4.3. | A318–A328, A360–A367, `docs/funksjoner/fase2a-tilbud.md` |
 | 17.11.2026 | KI i veien (fase 2a-2, ADR 0006 med tillegg): migrering `0037_ki-i-veien` med `reports.summary_text` og `reports.summary_basis`, `ai_usage_log.candidate_refs` og `chosen_candidate`, utfallet `stopped` med vaktkodene `tg_guard` og `number_guard`, og indeksen `ai_usage_log (organization_id, feature, target_ref)` for ikke-slettede rader. KI-målene flyttet til `src/shared/config/ai-targets.ts` med `report` / `summary_text` og `deviation` / `new_measure`. Ingen ny tabell. Ordlisten: fraseforslag, utkast til sammendrag, kandidat, vakter, grunnlaget for sammendraget. | A423–A442, `docs/funksjoner/fase2a-ki-i-veien.md` |
 | 17.11.2026 | KI i veien, runde 2 (A460–A472): migrering `0037_ki-i-veien` rettet før merge med vaktkodene `coverage_guard` og `placeholder_guard`, strengere CHECK på `chosen_candidate` (objekt med `source` og `id`, kjent kilde) og indeksen `ai_usage_log_chosen_candidate_idx` for «Mest brukt». `AI_CANDIDATE_REFS_MAX` flyttet til `src/shared/config/ai-targets.ts`. Grensesnitt: `recordDecisionIn`, `withReportWrite`, `PhraseUsageCount`, `AiSummaryFixedLine`, valideringskoden `text_has_placeholder`. Ordlisten: dekningsvakt, plassholdervakt, plassholder, mest brukt, fast linje, skriveramme for rapporten. | A460–A472, `docs/funksjoner/fase2a-ki-i-veien.md` |
+| 17.11.2026 | Mine innlogginger (fase 2a-3, fra forbedreren): `sessions` beskrevet; øktene vises for den ansatte og kan tilbakekalles, admin kan logge ut alle enheter. Ingen nye felt og ingen migrering. Ny revisjonshandling `employee.sessions_revoked_all` med `{ sessionCount, reason }`. Ordlisten: innlogging (økt), logge ut en økt, logget ut av alle enheter. | `docs/funksjoner/fase2a-mine-innlogginger.md` |

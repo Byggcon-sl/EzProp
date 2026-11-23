@@ -36,3 +36,4 @@ Ikke etterprøvd (lite).
 
 ## Logg
 - 2026-11-14: funnet
+- 2026-11-18: samme slags feil igjen, ført i T-0102 (main 50fad3e4): planen linje 217 «[x] Papirkurv og angre … (PR for branch papirkurv)» uten #221, ikke i `levert.md` og ingen linje i endringsloggen; linje 242 «[x] Rydding av innloggingsdata» (#222) er ikke flyttet; endringsloggen mangler linje om Mine innlogginger (#228); nye linjer fra 17.11 står i den «eldre» tabellen (linje 105–107); to overskrifter «Fra forbedreren» i 2a-3 (linje 244 og 248); planen sier «Sist oppdatert: 16.11.2026»; regel 3 i planen sier «S1–S8», men listen har S9–S11. Se også T-0121.

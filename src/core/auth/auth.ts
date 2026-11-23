@@ -34,18 +34,34 @@ const SIGN_IN_PATH = "/sign-in/email-otp";
  * Endepunkter i Better Auth vi ikke bruker, er stengt: andre kode-endepunkter (så koden bare kan
  * prøves der sperren gjelder), og kobling, frakobling og tokens for Microsoft (ADR 0008 punkt 14).
  * Ingen kobler til eller fra selv, så ingenting slettes i `accounts` (regel 3).
+ *
+ * Better Auths egne økt-endepunkter er også stengt (Mine innlogginger, A429): de gir klienten
+ * token, IP og rå user-agent, og utlogging der går utenom kjernen (`sessions-list.ts`) og loggen.
+ *
+ * Sperren står i `hooks.before`, som Better Auth kjører både for HTTP (`auth.handler`) og for
+ * serverkall (`auth.api.*`, se `toAuthEndpoints` i better-auth). `auth.api.listSessions` og
+ * de andre gir derfor også `NOT_FOUND`. Kjernen bruker dem uansett ikke.
  */
-const CLOSED_PATHS = [
+export const CLOSED_PATHS: readonly string[] = [
   "/link-social",
   "/unlink-account",
   "/refresh-token",
   "/get-access-token",
   "/account-info",
+  "/list-sessions",
+  "/revoke-session",
+  "/revoke-sessions",
+  "/revoke-other-sessions",
 ];
+
+/** Om stien står i `CLOSED_PATHS` (for vakttestene). */
+export function isClosedAuthPath(path: string): boolean {
+  return CLOSED_PATHS.includes(path);
+}
 const SOCIAL_SIGN_IN_PATH = "/sign-in/social";
 
 function isClosedPath(path: string, body: unknown): boolean {
-  if (CLOSED_PATHS.includes(path)) return true;
+  if (isClosedAuthPath(path)) return true;
   if (path === SOCIAL_SIGN_IN_PATH) {
     // Bare omdirigeringsflyten til Microsoft er åpen; ikke ID-token fra klienten, ikke andre
     const { idToken, provider } = (body ?? {}) as { idToken?: unknown; provider?: unknown };
@@ -258,6 +274,9 @@ export const auth = betterAuth({
       if (email) await recordLoginSucceeded(email);
     }),
   },
+  // Ingen `cookieCache` og ingen `secondaryStorage`: økten slås opp i `sessions` ved hver
+  // forespørsel, slik at en økt som logges ut i «Mine innlogginger», er ugyldig med en gang.
+  // `updateAge` (24 timer) gjør at `updated_at` («sist brukt») bare er nøyaktig til dagen (A427).
   session: {
     expiresIn: THIRTY_DAYS_IN_SECONDS,
     updateAge: 60 * 60 * 24,

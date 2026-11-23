@@ -212,13 +212,19 @@ export default async function EmployeeLayout({ children }: { children: ReactNode
           {brand.productName}
         </Link>
         <div className="flex-1" />
-        <span
-          aria-hidden="true"
-          className="flex size-8 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white"
+        {/* Initialene er lenken til profilen med «Mine innlogginger» (fase2a-mine-innlogginger). */}
+        <Link
+          href="/profil"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full"
         >
-          {initials(actor.name, actor.email)}
-        </span>
-        <span className="sr-only">Innlogget som {displayName}</span>
+          <span
+            aria-hidden="true"
+            className="flex size-8 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white"
+          >
+            {initials(actor.name, actor.email)}
+          </span>
+          <span className="sr-only">Min profil, innlogget som {displayName}</span>
+        </Link>
         <LogOutButton />
       </header>
       <div className="lg:flex">

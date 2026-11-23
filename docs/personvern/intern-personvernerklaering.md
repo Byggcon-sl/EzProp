@@ -1,6 +1,6 @@
 # Intern personvernerklæring for EzProp
 
-**Utkast, ikke godkjent av Ståle.** Dato: 04.11.2026, sist endret 05.11.2026 (kontakter og firma; partene og bestilleren koblet til kontakter; fjerne og slå sammen kontakter og firma).
+**Utkast, ikke godkjent av Ståle.** Dato: 04.11.2026, sist endret 17.11.2026 (Mine innlogginger: hvem ser øktene, og utlogging av enheter).
 
 - **Fase:** Minimum før ekte data
 - **Støtter hovedmål:** Reklamasjoner (rapporter, bilder og logg finnes i 10 år når en sak kommer) og KI først (agentene har laget utkastet ut fra koden, daglig leder leser og godkjenner).
@@ -20,14 +20,14 @@ Dokumentet er ikke juridisk rådgivning. Det dekker ikke rettslig grunnlag, beha
 | Tabell | Hva | Formål | Hvor | Hvor lenge | Hvem ser det |
 |---|---|---|---|---|---|
 | `users` | Navn, e-postadresse, om e-posten er bekreftet, bilde (tomt i dag), siste innlogging | Innlogging | Database | Nå i koden: slettes aldri, ingen rydding. Foreslått, bygges senere: beholdes så lenge den ansatte står på rapporter (minst 10 år) | Brukeren selv; admin via ansattlisten |
-| `sessions` | IP-adresse, nettleser og enhet (user agent), bruker, utløpstid | Holde den ansatte innlogget | Database | Nå i koden: økten gjelder 30 dager og forlenges når den brukes (høyst én gang per døgn). Tabellen har ikke myk sletting. Better Auth sletter raden helt ved utlogging, ved «logg ut andre økter» og når en utløpt økt slås opp. Utløpte økter som blir liggende, slettes 30 dager etter utløp av den nattlige ryddingen (ADR 0014, svar 10.11.2026 nr. 18) | Ingen skjerm; bare drift med databasetilgang |
+| `sessions` | IP-adresse, nettleser og enhet (user agent), bruker, utløpstid | Holde den ansatte innlogget | Database | Nå i koden: økten gjelder 30 dager og forlenges når den brukes (høyst én gang per døgn). Tabellen har ikke myk sletting. Raden slettes helt ved utlogging, når den ansatte trykker «Logg ut» på en enhet under «Mine innlogginger», når admin trykker «Logg ut av alle enheter», når den ansatte settes til «Har sluttet», og når en utløpt økt slås opp. Utløpte økter som blir liggende, slettes 30 dager etter utløp av den nattlige ryddingen (ADR 0014, svar 10.11.2026 nr. 18) | Den ansatte selv på profilsiden (`/profil`, «Mine innlogginger»): enhet og nettleser (lest fra user agent på serveren, bare faste verdier som «iPad» og «Safari»), sist brukt (bare dag, aldri klokkeslett) og når hen logget inn. Admin på siden for den ansatte (`/admin/ansatte/[id]`): bare enhet, nettleser og antall innlogginger. IP-adressen vises aldri på noen skjerm |
 | `accounts` | Kobling mellom bruker og innloggingsmåte. Feltene for passord og nøkler fra andre tjenester er tomme, siden vi bare bruker engangskode på e-post | Innlogging | Database | Nå i koden: slettes aldri, ingen rydding. Foreslått, bygges senere: som `users` | Ingen skjerm |
 | `verifications` | E-postadresse og innloggingskoden (lagret som hash, ikke i klartekst), utløpstid | Sende og sjekke innloggingskoden | Database | Nå i koden: koden gjelder i 10 minutter. Tabellen har ikke myk sletting. Better Auth sletter koden helt når den er brukt, når den har gått ut og blir prøvd, etter 3 feil forsøk og når en ny kode bestilles. Koder som blir liggende, slettes 24 timer etter utløp av den nattlige ryddingen (ADR 0014, svar 10.11.2026 nr. 18) | Ingen skjerm |
 | `login_attempts` | E-postadressen som HMAC (ikke i klartekst), type forsøk, tidspunkt. Gjelder også fremmede som prøver å logge inn | Sperre innlogging etter mange feil koder | Database | Nå i koden: sperrevinduet er 15 minutter. Radene slettes 24 timer etter at forsøket ble registrert, av den nattlige ryddingen (ADR 0014, svar 10.11.2026 nr. 15) | Ingen skjerm |
 | `organizations` | Ingen personopplysninger (navn på organisasjonen, innstillinger) | Skille data mellom organisasjoner | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte i organisasjonen; admin endrer |
 | `companies` | Normalt ingen personopplysninger; navnet på et enkeltpersonforetak kan være et personnavn, og det vises på oppdraget (selskapsnavn, organisasjonsnummer, adresse, forsikring) | Utsteder rapporten | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte ser; admin endrer |
 | `offices` | Ingen personopplysninger (kontornavn og adresse) | Plassere ansatte | Database | Nå i koden: myk sletting, ingen rydding | Alle ansatte ser; admin endrer |
-| `employees` | Navn, stillingstittel, selskap, kontor, kobling til bruker, når den ansatte sluttet | Vite hvem som jobber og står på rapporten | Database | Nå i koden: myk sletting. «Har sluttet» (`deactivatedAt`) gjør at tilgangssjekken sier nei (`src/core/access/guards.ts`), og raden blir stående. Innloggingen og økten virker fortsatt, men uten tilgang til noe; se «iPaden». Foreslått, bygges senere: minst 10 år etter siste rapport | Alle ansatte i organisasjonen ser navn, stillingstittel, selskap og kontor (`listEmployees`, `organization.read`). Bare admin ser e-postadressen og endrer (`organization.manage`) |
+| `employees` | Navn, stillingstittel, selskap, kontor, kobling til bruker, når den ansatte sluttet | Vite hvem som jobber og står på rapporten | Database | Nå i koden: myk sletting. «Har sluttet» (`deactivatedAt`) gjør at tilgangssjekken sier nei (`src/core/access/guards.ts`), og raden blir stående. Den ansatte logges samtidig ut av alle enheter; se «iPaden». Foreslått, bygges senere: minst 10 år etter siste rapport | Alle ansatte i organisasjonen ser navn, stillingstittel, selskap og kontor (`listEmployees`, `organization.read`). Bare admin ser e-postadressen og endrer (`organization.manage`) |
 | `employee_roles` | Hvilke roller den ansatte har | Styre tilgang | Database | Nå i koden: myk sletting, ingen rydding | Admin |
 | `employee_permissions` | Enkeltrettigheter gitt til den ansatte | Styre tilgang | Database | Nå i koden: myk sletting, ingen rydding | Admin |
 | `certifications` | Sertifiseringsområde, utsteder, sertifikatnummer, gyldig fra og til | Bare sertifiserte kan publisere rapport | Database | Nå i koden: myk sletting; fornyelse er ny rad, den gamle blir stående som historikk | Admin |
@@ -74,11 +74,14 @@ Når et oppdrag flyttes ett steg tilbake i status, eller kanselleres, må den an
 
 Lokal lagring tømmes **ikke** ved utlogging i dag. Utloggingsknappen avslutter bare økten. Funksjonene som tømmer iPaden (bilder, synklagringen og «Lagret kl.», se `clearIfOtherOrganization`) kalles bare når en person fra en annen organisasjon logger inn på samme iPad (`select-store.ts`).
 
-Ved tapt iPad finnes ingen fjernsletting og ingen knapp for å stoppe økten. Det som virker i dag:
+Ved tapt iPad kan innloggingen stoppes, men iPaden kan ikke tømmes ennå. Det som virker i dag:
 
-- Admin markerer den ansatte som «Har sluttet» (`deactivatedAt`). Da sier tilgangssjekken nei (`src/core/access/guards.ts`). Innloggingen og økten virker fortsatt, men uten tilgang. En synknøkkel som allerede er utstedt, virker i opptil 1 time (`SYNC_TOKEN_TTL_SECONDS`). Dataene på iPaden blir liggende.
-- Noen med databasetilgang sletter øktraden i `sessions`.
+- Den ansatte trykker «Logg ut» på enheten under «Mine innlogginger» på profilsiden. Da er den enheten logget ut med en gang.
+- Admin trykker «Logg ut av alle enheter» på siden for den ansatte. Admin må bekrefte først, og handlingen står i revisjonsloggen (`employee.sessions_revoked_all`, bare antall og grunn).
+- Admin markerer den ansatte som «Har sluttet» (`deactivatedAt`). Da sier tilgangssjekken nei (`src/core/access/guards.ts`), og den ansatte logges samtidig ut av alle enheter.
 - Ellers går økten ut etter 30 dager uten bruk.
+
+Data som ligger lagret på iPaden (utkast, bilder og kø som ikke er sendt), blir liggende etter utlogging. De tømmes ikke før «Sperring av iPader» er bygget.
 
 Sperring av en mistet iPad er allerede et punkt i planen under «Minimum før ekte data» (`docs/07-utviklingsplan.md`), og skal være på plass før første ekte befaring på iPad i fase 2b. Det som er åpent, er bare om iPaden skal tømmes ved utlogging (spørsmål nr. 17).
 
@@ -108,7 +111,7 @@ Bygget i fase 2a (06.11.2026), oppgavekort `docs/funksjoner/fase2a-tidsmaling.md
 - Sperrevindu for innlogging: 15 minutter (`src/core/auth/login-throttle.ts`).
 - `login_attempts`: slettes 24 timer etter at forsøket ble registrert (svar 10.11.2026 nr. 15, ADR 0014).
 - `verifications`: Better Auth sletter rader helt (se tabellen); koder som blir liggende, slettes 24 timer etter utløp (svar 10.11.2026 nr. 18, ADR 0014).
-- `sessions`: Better Auth sletter rader helt (se tabellen); utløpte økter som blir liggende, slettes 30 dager etter utløp (svar 10.11.2026 nr. 18, ADR 0014).
+- `sessions`: rader slettes helt ved utlogging (se tabellen); utløpte økter som blir liggende, slettes 30 dager etter utløp (svar 10.11.2026 nr. 18, ADR 0014).
 - Slettingen gjøres av den nattlige ryddingen av innloggingsdata (`src/core/auth/auth-cleanup.ts`), startet av en planlagt GitHub-arbeidsflyt. Etter ryddingen finnes ingen historikk over innlogginger utover `users.last_login_at` og driftsloggen (åpent spørsmål i `docs/09-apne-sporsmal.md`).
 - `audit_log` og `events` ryddes aldri (A58).
 - Myk sletting (`deleted_at`) gjelder alle tabeller med `baseColumns` (`src/db/schema/common.ts`). Innloggingstabellene `users`, `sessions`, `accounts`, `verifications` og `login_attempts` har ikke `deleted_at`.

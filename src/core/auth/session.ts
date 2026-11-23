@@ -17,7 +17,11 @@ export const getCurrentActor = cache(async (): Promise<Actor | null> => {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
   const { user } = session;
-  return { id: user.id, email: user.email, name: user.name };
+  const actor: Actor = { id: user.id, email: user.email, name: user.name };
+  // Nåværende økt kommer bare herfra (Better Auth på serveren), aldri fra skjema eller adresse.
+  const sessionId = session.session?.id;
+  if (sessionId) actor.sessionId = sessionId;
+  return actor;
 });
 
 /**

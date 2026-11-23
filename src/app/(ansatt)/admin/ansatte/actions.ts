@@ -203,7 +203,11 @@ export async function setPermissionsAction(
   redirect(`${ROUTE}/${employeeId}?lagret=rettigheter`);
 }
 
-/** «Har sluttet». Uten ekstra bekreftelse, fordi det kan angres. */
+/**
+ * «Har sluttet», etter bekreftelsen på siden (som viser hvor mange enheter som logges ut). Kjernen
+ * logger personen ut av alle enheter i samme transaksjon (Mine innlogginger, Omfang 7, A430), med
+ * revisjonsrad `reason: "deactivated"`. Kan angres, men innloggingene kommer ikke tilbake.
+ */
 export async function deactivateEmployeeAction(
   employeeId: string,
   previous: FormState,

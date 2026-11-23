@@ -142,6 +142,11 @@ export type Actor = {
   id: string;
   email: string;
   name: string;
+  /**
+   * Økten forespørselen kom med (`sessions.id`), fra `getCurrentActor`. Tas aldri fra skjema eller
+   * adresse. Brukes bare til å merke «denne enheten» og til å hindre at den slettes ved et uhell.
+   */
+  sessionId?: string;
 };
 
 /** Den ansatte med roller og rettigheter i én organisasjon (resultatet av tilgangssjekken). */

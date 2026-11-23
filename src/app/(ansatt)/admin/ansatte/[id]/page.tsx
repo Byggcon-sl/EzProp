@@ -4,7 +4,8 @@ import { AccessDeniedError, grantablePermissions } from "@/core/access";
 import { isUuid } from "@/shared/lib/uuid";
 import { Badge } from "@/shared/ui/badge";
 import { Notice } from "@/shared/ui/notice";
-import { getAdminContext } from "../../admin-context";
+import { listEmployeeSessions } from "@/core/auth/sessions-list";
+import { getAdminContext, isOwnEmployee } from "../../admin-context";
 import { formatDate, formatIsoDate, noticeText, roleBadgeOrder, roleLabels } from "../../labels";
 import { NoAccess } from "../../../no-access";
 import {
@@ -24,6 +25,8 @@ import {
 import { EmployeeDetailsForm, PermissionsForm, RolesForm, StatusForm } from "../employee-forms";
 import { addCertificationAction, removeCertificationAction } from "./certification-actions";
 import { CertificationSection, type CertificationRow } from "./certification-section";
+import { revokeAllEmployeeSessionsAction } from "./session-actions";
+import { SessionsSection, type EmployeeSessionView } from "./sessions-section";
 
 export const metadata: Metadata = { title: "Endre ansatt" };
 
@@ -76,11 +79,17 @@ export default async function EmployeePage({
   const employee = await findEmployee(context.actor, context.organizationId, id);
   if (!employee) return <NoAccess />;
 
-  const [companies, offices, certifications] = await Promise.all([
+  const [companies, offices, certifications, sessionList, isSelf] = await Promise.all([
     listCompanies(context.actor, context.organizationId),
     listOffices(context.actor, context.organizationId),
     listCertificationsForEmployee(context.actor, context.organizationId, employee.id),
+    // Bare enhet og nettleser: ingen «sist brukt», dato eller økt-id (spørsmål 89, A428)
+    listEmployeeSessions(context.actor, context.organizationId, employee.id),
+    isOwnEmployee(context, employee.id),
   ]);
+  const sessions: EmployeeSessionView[] = sessionList.ok
+    ? sessionList.sessions.map(({ device, browser }) => ({ device, browser }))
+    : [];
   const notice = pageNotice((await searchParams).lagret);
   const certificationRows: CertificationRow[] = certifications.map((row) => ({
     id: row.id,
@@ -162,9 +171,17 @@ export default async function EmployeePage({
             ]),
           )}
         />
+        <SessionsSection
+          employeeName={employee.name}
+          sessions={sessions}
+          isSelf={isSelf}
+          revokeAll={revokeAllEmployeeSessionsAction.bind(null, employee.id)}
+        />
         <StatusForm
           deactivatedOn={employee.deactivatedAt ? formatDate(employee.deactivatedAt) : null}
           canReactivate={canReactivate}
+          sessionCount={sessions.length}
+          isSelf={isSelf}
           action={
             locked
               ? reactivateEmployeeAction.bind(null, employee.id)
