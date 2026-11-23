@@ -11,7 +11,7 @@ import { uuidv7 } from "@/shared/lib/uuid";
 import { AiSparkIcon } from "@/shared/ui/ai-text-mark";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
-import { TgBadge, tgBadgeFullText } from "@/shared/ui/tg-badge";
+import { TgBadge } from "@/shared/ui/tg-badge";
 import { Warning } from "@/shared/ui/warning";
 import {
   addMeasureAction,
@@ -751,23 +751,13 @@ function PhraseCandidateButton({
 }) {
   const word = ACTION_WORD[action];
   const tg = tgText(item);
-  const label = [
-    `${word}: ${item.text}`,
-    item.checkpointName,
-    item.outcomeName,
-    item.hms ? AI_ROOM_TEXTS.hms : null,
-    item.tg !== null && !item.hms ? tgBadgeFullText(String(item.tg) as "2" | "3") : null,
-    item.draft ? "utkast" : null,
-    item.mostUsed ? "mest brukt" : null,
-  ]
-    .filter(Boolean)
-    .join(", ");
+  // Navnet er den synlige teksten i samme rekkefølge (WCAG 2.5.3): kandidaten først, så punkt,
+  // utfall, merkene og handlingen. Derfor ingen egen aria-label.
   return (
     <button
       ref={buttonRef}
       type="button"
       tabIndex={active ? 0 : -1}
-      aria-label={label}
       onFocus={onFocus}
       onClick={onChoose}
       className="min-h-11 w-full rounded-xl border border-line bg-white p-4 text-left hover:bg-snow"

@@ -173,6 +173,16 @@ describe("AiSuggestionGroup: bunnlinjen", () => {
     );
   });
 
+  it("K7.7 stoppet felt: meldingen står i aria-live ved feltet, bare for den stoppede raden", () => {
+    const html = render([deviationRow, consequenceRow]);
+    const live = html.match(/<div[^>]*aria-live="polite"[^>]*>(.*?)<\/div><\/div>/su);
+    expect(html).toMatch(/data-stopped="true"[^>]*role="status"[^>]*aria-live="polite"/u);
+    expect(live?.[1] ?? html).toContain(STOPPED);
+    // Kortets statusområde og den stoppede raden; aldri assertive
+    expect(html.match(/aria-live="polite"/g)?.length).toBe(2);
+    expect(html).not.toContain("assertive");
+  });
+
   it("ett statusområde (polite) for kortet, aldri assertive", () => {
     const html = render([deviationRow]);
     expect(html.match(/aria-live="polite"/g)?.length).toBe(1);

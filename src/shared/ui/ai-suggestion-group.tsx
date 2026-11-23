@@ -256,7 +256,12 @@ export function AiSuggestionGroup(props: AiSuggestionGroupProps) {
                     </div>
                   ) : null}
                   {rowView.box ? (
-                    <div data-stopped={stopped || undefined}>
+                    // Et stoppet svar leses opp ved feltet (K7.7): meldingen står i aria-live
+                    <div
+                      data-stopped={stopped || undefined}
+                      role={stopped ? "status" : undefined}
+                      aria-live={stopped ? "polite" : undefined}
+                    >
                       <SuggestionBox box={rowView.box} />
                     </div>
                   ) : null}

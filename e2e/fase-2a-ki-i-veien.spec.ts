@@ -783,10 +783,11 @@ test("K7.7 stoppet svar: bare konsekvensen stoppes, meldingen står ved feltet, 
   await polishButton(deviation).click();
   const card = polishCard(deviation);
   const stopped = polishRow(card, "Konsekvens");
-  await expect(stopped).toContainText(STOPPED);
+  // Meldingen står i aria-live ved feltet (testplanen K7.7), ikke bare i kortraden
+  await expect(stopped.locator("[aria-live]")).toContainText(STOPPED);
   await expect(stopped.getByRole("button", { name: /^Bruk/ })).toHaveCount(0);
   await expect(card).not.toContainText("Satt til TG3");
-  await expect(card.locator("[aria-live]")).toContainText("1 stoppet");
+  await expect(card.locator("[aria-live]").filter({ hasText: "1 stoppet" })).toHaveCount(1);
 
   await card.getByRole("button", { name: "Bruk alle", exact: true }).click();
   await expect(field(deviation, "Avvik")).toHaveValue(polished(own.deviation));
