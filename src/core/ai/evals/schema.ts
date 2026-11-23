@@ -102,7 +102,9 @@ export type EvalVerdict = z.infer<typeof verdictSchema>;
 // --- language_polish ---------------------------------------------------------------------------
 
 const expectSchema = z.strictObject({
-  outcome: z.enum(["ok", "no_match"]),
+  /** `stopped`: en vakt skal stoppe svaret, som i kjernen. `guard` sier hvilken. */
+  outcome: z.enum(["ok", "no_match", "stopped"]),
+  guard: z.enum(EVAL_GUARD_CODES).optional(),
   mustContain: z.array(z.string().min(1)).optional(),
   mustNotContain: z.array(z.string().min(1)).optional(),
   sameTg: z.boolean().optional(),
@@ -130,6 +132,17 @@ export type EvalCase = z.infer<typeof caseSchema>;
 export const PHRASE_DEVIATION_KINDS = ["tg", "hms"] as const;
 export type PhraseDeviationKind = (typeof PHRASE_DEVIATION_KINDS)[number];
 
+/**
+ * Feltet saken gjelder. Kjernen sender ikke feltet til KI (det står i målet, `target.fieldKey`),
+ * derfor står det utenfor `fields`. Brukes bare til å sjekke at alle felttypene er med.
+ */
+export const PHRASE_EVAL_FIELDS = [
+  "deviation_text",
+  "cause_text",
+  "consequence_text",
+  "measure_text",
+] as const;
+
 const candidateSchema = z.strictObject({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/u),
   source: z.enum(EVAL_CANDIDATE_SOURCES),
@@ -148,6 +161,7 @@ const phraseCaseSchema = z.strictObject({
   id: caseId,
   description: z.string().optional(),
   deviationKind: z.enum(PHRASE_DEVIATION_KINDS),
+  field: z.enum(PHRASE_EVAL_FIELDS),
   fields: z.record(z.string(), z.string()),
   candidates: z.array(candidateSchema).min(1).max(AI_CANDIDATES_MAX),
   mustPass: z.boolean().default(false),

@@ -1,10 +1,19 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { AI_CANDIDATE_REFS_MAX } from "@/shared/config/ai-targets";
+import { parseCandidateAnswer } from "../candidates";
 import { getFeatureDefinition, type AiFeatureDefinition } from "../features";
 import { GUARD_CASES } from "../guard-cases";
-import { checkAnswerGuards, extractTgMentions } from "../guards";
-import { prepareCandidatePrompt, preparePrompt, prepareSummaryPrompt } from "../prompt";
+import { checkAnswerGuards, extractTgMentions, isBlankText } from "../guards";
+import { PlaceholderRestoreError, restorePlaceholders } from "../placeholders";
+import {
+  parseSummaryAnswer,
+  prepareCandidatePrompt,
+  preparePrompt,
+  prepareSummaryPrompt,
+  type PreparedCandidatePrompt,
+  type PreparedPrompt,
+  type PreparedSummaryPrompt,
+} from "../prompt";
 import { findPromptLeaks, normalizeSpaces, wholeWordPattern, type LeakType } from "../prompt-leaks";
 import type { AiProvider, AiProviderRequest, AiProviderResult } from "../providers/types";
 import type {
@@ -18,7 +27,6 @@ import type {
 import {
   EVAL_CASES_FILE_SUFFIX,
   PHRASE_TOP_N,
-  SUMMARY_LABEL,
   parseCasesFile,
   toKnownValues,
   type EvalCase,
@@ -263,23 +271,6 @@ function applyVerdict(
 
 // --- phrase_suggest ------------------------------------------------------------------------------
 
-const CANDIDATE_LABEL = /(?<![\p{L}\p{N}])K([1-9]\d*)(?![\p{L}\p{N}])/gu;
-
-/**
- * Merkene K1…Kn i svaret, som posisjoner (0-basert) i kandidatlisten, i rekkefølge. Ukjente og
- * doble merker tas bort, og høyst `AI_CANDIDATE_REFS_MAX` beholdes, som i kjernen.
- */
-export function rankedCandidatePositions(text: string, candidateCount: number): number[] {
-  const out: number[] = [];
-  for (const match of text.matchAll(CANDIDATE_LABEL)) {
-    const position = Number(match[1]) - 1;
-    if (position >= candidateCount || out.includes(position)) continue;
-    out.push(position);
-    if (out.length === AI_CANDIDATE_REFS_MAX) break;
-  }
-  return out;
-}
-
 /** Vurderer en rangert liste med kandidat-id-er mot fasiten for `phrase_suggest`. */
 export function evaluatePhrase(
   expectation: PhraseEvalCase["expect"],
@@ -343,54 +334,6 @@ export function summaryInputOf(evalCase: SummaryEvalCase): {
     return { group: group.group, heading, findings: group.findings, fixedLines: [] };
   });
   return { groups, sent, fixedTexts };
-}
-
-const SUMMARY_LINE_LABEL = /(?:^|\n)[ \t]*(F[1-9]\d*)[ \t]*[:.)][ \t]*/gu;
-
-/**
- * Leser svaret fra leverandøren som tekst per F-merke. Godtar et JSON-objekt (`{"F1": "…"}`), en
- * JSON-liste med `{ label, text }`, eller linjer som starter med «F1:». Tekst før første merke
- * får merket `null`, som dekningsvakten stopper.
- */
-export function summaryAnswerParts(text: string): AiGuardAnswerPart[] {
-  const fromJson = summaryPartsFromJson(text);
-  if (fromJson !== null) return fromJson;
-  const matches = Array.from(text.matchAll(SUMMARY_LINE_LABEL));
-  const parts: AiGuardAnswerPart[] = [];
-  const before = text.slice(0, matches[0]?.index ?? text.length).trim();
-  if (before !== "") parts.push({ label: null, text: before });
-  matches.forEach((match, index) => {
-    const start = match.index + match[0].length;
-    const end = matches[index + 1]?.index ?? text.length;
-    parts.push({ label: match[1]!, text: text.slice(start, end).trim() });
-  });
-  return parts;
-}
-
-function summaryPartsFromJson(text: string): AiGuardAnswerPart[] | null {
-  let json: unknown;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (Array.isArray(json)) {
-    const parts: AiGuardAnswerPart[] = [];
-    for (const item of json) {
-      if (typeof item !== "object" || item === null) return null;
-      const { label, text: partText } = item as { label?: unknown; text?: unknown };
-      if (typeof partText !== "string") return null;
-      parts.push({ label: typeof label === "string" ? label : null, text: partText });
-    }
-    return parts;
-  }
-  if (typeof json === "object" && json !== null) {
-    return Object.entries(json).map(([label, value]) => ({
-      label: SUMMARY_LABEL.test(label) ? label : null,
-      text: typeof value === "string" ? value : "",
-    }));
-  }
-  return null;
 }
 
 /**
@@ -479,6 +422,12 @@ type Runner = {
   definition: AiFeatureDefinition;
 };
 
+/** Ledeteksten slik kjernen bygde den, med det kjernen trenger for å tolke svaret. */
+type Sent =
+  | { kind: "fields"; prepared: PreparedPrompt }
+  | { kind: "candidates"; prepared: PreparedCandidatePrompt }
+  | { kind: "summary"; prepared: PreparedSummaryPrompt };
+
 /** Bygger ledeteksten som kjernen, sjekker den for persondata og kaller leverandøren hvis `call`. */
 async function promptAndCall(
   runner: Runner,
@@ -486,18 +435,25 @@ async function promptAndCall(
   known: ReturnType<typeof toKnownValues> | null,
   serverInput: AiServerInput | undefined,
   call: boolean,
-): Promise<{ leak: LeakType[] } | { prompt: string; answer: AiProviderResult | null }> {
+): Promise<{ leak: LeakType[] } | { sent: Sent; answer: AiProviderResult | null }> {
   const { provider, definition } = runner;
   // Samme ledetekst som kjernen bygger for hver slags inndata (request-suggestion.ts)
-  const { prompt } = serverInput?.candidates
-    ? prepareCandidatePrompt(definition, fields, serverInput.candidates, known)
+  const sent: Sent = serverInput?.candidates
+    ? {
+        kind: "candidates",
+        prepared: prepareCandidatePrompt(definition, fields, serverInput.candidates, known),
+      }
     : serverInput?.summaryGroups
-      ? prepareSummaryPrompt(definition, serverInput.summaryGroups, known)
-      : preparePrompt(definition, fields, known);
+      ? {
+          kind: "summary",
+          prepared: prepareSummaryPrompt(definition, serverInput.summaryGroups, known),
+        }
+      : { kind: "fields", prepared: preparePrompt(definition, fields, known) };
+  const { prompt } = sent.prepared;
   // Lekkasjesjekken før kallet: en ledetekst med persondata sendes aldri til leverandøren
   const leaked = findPromptLeaks(prompt, known);
   if (leaked.length > 0) return { leak: leaked };
-  if (!call) return { prompt, answer: null };
+  if (!call) return { sent, answer: null };
   const captured: string[] = [];
   const answer = await completeCaptured(provider, captured, {
     feature: definition.code,
@@ -509,55 +465,109 @@ async function promptAndCall(
   for (const text of captured)
     for (const type of findPromptLeaks(text, known)) leakedAfter.add(type);
   if (leakedAfter.size > 0) return { leak: Array.from(leakedAfter) };
-  return { prompt, answer };
+  return { sent, answer };
+}
+
+/**
+ * Vaktene på et `language_polish`-svar, som i kjernen (`interpretAnswer` i
+ * `request-suggestion.ts`): TG, tall og gjetteord mot de vaskede feltene, så plassholderne.
+ */
+export function polishAnswerGuard(prepared: PreparedPrompt, answer: string): AiGuardCode | null {
+  const guard = checkAnswerGuards({
+    feature: "language_polish",
+    sent: [{ label: null, texts: Object.values(prepared.redactedFields) }],
+    answer: [{ label: null, text: answer }],
+  });
+  if (guard !== null) return guard;
+  try {
+    restorePlaceholders(answer, Object.values(prepared.originals).flat());
+  } catch (error) {
+    if (error instanceof PlaceholderRestoreError) return "placeholder_guard";
+    throw error;
+  }
+  return null;
 }
 
 async function runPolishCase(runner: Runner, evalCase: EvalCase): Promise<CaseOutcome> {
   const known = evalCase.known === undefined ? null : toKnownValues(evalCase.known);
   const simulated = evalCase.simulatedAnswer;
-  const sent = await promptAndCall(
+  const call = await promptAndCall(
     runner,
     evalCase.fields,
     known,
     undefined,
     simulated === undefined,
   );
-  if ("leak" in sent) return { kind: "leak", types: sent.leak };
-  const answer: AiProviderResult = sent.answer ??
+  if ("leak" in call) return { kind: "leak", types: call.leak };
+  let answer: AiProviderResult = call.answer ??
     // Oppdiktet svar: står i stedet for leverandørens, uten kall
     { outcome: "ok", text: simulated ?? "", tokensIn: 0, tokensOut: 0, cost: 0, currency: "NOK" };
-  const evaluation = evaluateCase(
-    evalCase.expect,
-    inputTextOf(runner.definition, evalCase.fields),
-    answer,
-  );
-  return { kind: "evaluated", evaluation: applyVerdict(evalCase.expect.verdict, evaluation) };
+  const expect = evalCase.expect;
+  if (answer.outcome === "ok") {
+    // Som i kjernen: et tomt svar er ingen endring
+    if (isBlankText(answer.text)) {
+      const { tokensIn, tokensOut, cost, currency } = answer;
+      answer = { outcome: "no_match", tokensIn, tokensOut, cost, currency };
+    } else if (call.sent.kind === "fields") {
+      const guard = polishAnswerGuard(call.sent.prepared, answer.text);
+      if (expect.outcome === "stopped") {
+        return { kind: "evaluated", evaluation: stoppedEvaluation(expect.guard, guard) };
+      }
+      if (guard !== null) {
+        const evaluation = { passed: false, reasons: [`stoppet av ${guard}`] };
+        return { kind: "evaluated", evaluation: applyVerdict(expect.verdict, evaluation) };
+      }
+    }
+  }
+  const evaluation = evaluateCase(expect, inputTextOf(runner.definition, evalCase.fields), answer);
+  return { kind: "evaluated", evaluation: applyVerdict(expect.verdict, evaluation) };
+}
+
+/** Fasiten venter at en vakt stopper svaret. Uten `expected` holder det at en vakt stoppet det. */
+function stoppedEvaluation(
+  expected: AiGuardCode | undefined,
+  got: AiGuardCode | null,
+): EvalCaseEvaluation {
+  const label = expected ?? "en vakt";
+  return got !== null && (expected === undefined || got === expected)
+    ? { passed: true, reasons: [] }
+    : {
+        passed: false,
+        reasons: [`fasiten venter stoppet av ${label}, fikk ${got ?? "ikke stoppet"}`],
+      };
 }
 
 async function runPhraseCase(runner: Runner, evalCase: PhraseEvalCase): Promise<CaseOutcome> {
   const serverInput: AiServerInput = {
     candidates: evalCase.candidates.map(({ source, id, text }) => ({ source, id, text })),
   };
-  const sent = await promptAndCall(runner, evalCase.fields, null, serverInput, true);
-  if ("leak" in sent) return { kind: "leak", types: sent.leak };
-  const answer = sent.answer!;
+  const call = await promptAndCall(runner, evalCase.fields, null, serverInput, true);
+  if ("leak" in call) return { kind: "leak", types: call.leak };
+  const answer = call.answer!;
   if (answer.outcome === "error") {
     return {
       kind: "evaluated",
       evaluation: { passed: false, reasons: ["leverandøren svarte med feil"] },
     };
   }
+  // Samme tolking som kjernen: merkene K1…Kn slås opp i kandidatene for dette kallet
+  const labeled = call.sent.kind === "candidates" ? call.sent.prepared.labeled : [];
   const ranked =
     answer.outcome === "ok"
-      ? rankedCandidatePositions(answer.text, evalCase.candidates.length).map(
-          (position) => evalCase.candidates[position]!.id,
-        )
+      ? parseCandidateAnswer(answer.text, labeled).refs.map((ref) => ref.id)
       : [];
-  return { kind: "evaluated", evaluation: evaluatePhrase(evalCase.expect, ranked) };
+  const ids = new Map(evalCase.candidates.map((c) => [c.id.toLowerCase(), c.id]));
+  return {
+    kind: "evaluated",
+    evaluation: evaluatePhrase(
+      evalCase.expect,
+      ranked.map((id) => ids.get(id) ?? id),
+    ),
+  };
 }
 
 async function runSummaryCase(runner: Runner, evalCase: SummaryEvalCase): Promise<CaseOutcome> {
-  const { groups, sent, fixedTexts } = summaryInputOf(evalCase);
+  const { groups, fixedTexts } = summaryInputOf(evalCase);
   const simulated = evalCase.simulatedAnswer;
   const call = await promptAndCall(
     runner,
@@ -567,16 +577,23 @@ async function runSummaryCase(runner: Runner, evalCase: SummaryEvalCase): Promis
     simulated === undefined,
   );
   if ("leak" in call) return { kind: "leak", types: call.leak };
+  const prompt = call.sent.prepared.prompt;
 
   const reasons: string[] = [];
   // Overskriftene og TGIU-linjene er kodens og sendes aldri til KI (A462)
-  if (groups.some((group) => call.prompt.includes(group.heading))) {
+  if (groups.some((group) => prompt.includes(group.heading))) {
     reasons.push("overskriften ble sendt til leverandøren");
   }
-  if (fixedTexts.some((text) => call.prompt.includes(text))) {
+  if (fixedTexts.some((text) => prompt.includes(text))) {
     reasons.push("TGIU-linjen ble sendt til leverandøren");
   }
   if (reasons.length > 0) return { kind: "evaluated", evaluation: { passed: false, reasons } };
+
+  // Det kjernen sendte, per F-merke (punktets navn og de vaskede tekstene)
+  const sent: AiGuardSentPart[] =
+    call.sent.kind === "summary"
+      ? call.sent.prepared.parts.map((part) => ({ label: part.label, texts: part.texts }))
+      : [];
 
   let answer: AiGuardAnswerPart[];
   if (simulated !== undefined) {
@@ -596,24 +613,14 @@ async function runSummaryCase(runner: Runner, evalCase: SummaryEvalCase): Promis
         },
       };
     }
-    answer = summaryAnswerParts(result.text);
+    // Samme tolking som kjernen
+    answer = parseSummaryAnswer(result.text);
   }
 
   const guard = checkAnswerGuards({ feature: "summary_draft", sent, answer });
   const expect = evalCase.expect;
   if (expect.outcome === "stopped") {
-    return {
-      kind: "evaluated",
-      evaluation:
-        guard === expect.guard
-          ? { passed: true, reasons: [] }
-          : {
-              passed: false,
-              reasons: [
-                `fasiten venter stoppet av ${expect.guard}, fikk ${guard ?? "ikke stoppet"}`,
-              ],
-            },
-    };
+    return { kind: "evaluated", evaluation: stoppedEvaluation(expect.guard, guard) };
   }
   if (guard !== null) {
     const evaluation = { passed: false, reasons: [`stoppet av ${guard}`] };

@@ -2,10 +2,16 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { redactPii } from "@/shared/lib/pii-patterns";
-import { capturing, hasWholeWord, inputOfPrompt } from "../../../../tests/evals";
+import {
+  capturing,
+  hasWholeWord,
+  inputOfPrompt,
+  okResult,
+  testProvider,
+} from "../../../../tests/evals";
 import { extractTgMentions } from "../guards";
 import { fakeAiProvider } from "../providers/fake";
-import { EVAL_GUESS_WORDS, evaluatePhrase, rankedCandidatePositions, runEvals } from "./run";
+import { EVAL_GUESS_WORDS, evaluatePhrase, runEvals } from "./run";
 import { parseCasesFile, PHRASE_TOP_N, type PhraseEvalCase } from "./schema";
 
 /*
@@ -60,7 +66,7 @@ describe("evalueringssett: settet for phrase_suggest (K2.2)", () => {
   });
 
   it("K2.2 alle felttyper er med: avvik, årsak, konsekvens og tiltak", () => {
-    const fieldKeys = new Set(cases.map((item) => item.fields.field_key));
+    const fieldKeys = new Set(cases.map((item) => item.field));
     for (const key of ["deviation_text", "cause_text", "consequence_text", "measure_text"]) {
       expect([...fieldKeys]).toContain(key);
     }
@@ -172,11 +178,26 @@ describe("evalueringssett: vurderingen av fraseforslag (K2.2)", () => {
     expect(miss.reasons.join(" ")).not.toContain("k-svar");
   });
 
-  it("K2.2 merkene i svaret tolkes strengt: ukjente og doble tas bort, høyst 5", () => {
-    expect(rankedCandidatePositions('["K2","K1"]', 4)).toEqual([1, 0]);
-    expect(rankedCandidatePositions("K9, K2, K2, K1", 4)).toEqual([1, 0]);
-    expect(rankedCandidatePositions("K1 K2 K3 K4 K5 K6 K7", 8)).toEqual([0, 1, 2, 3, 4]);
-    expect(rankedCandidatePositions("SK1 K1x K0", 4)).toEqual([]);
-    expect(rankedCandidatePositions("", 4)).toEqual([]);
+  it("K2.2 svaret tolkes med kjernens parseCandidateAnswer (små bokstaver, «ingen», ukjente merker)", async () => {
+    const run = async (answer: string) => {
+      const result = await runEvals({
+        provider: testProvider(() => okResult(answer)),
+        casesDir: __dirname,
+        feature: "phrase_suggest",
+      });
+      expect(result.errors).toEqual([]);
+      return result.features[0]!;
+    };
+    const firstIsCorrect = cases.filter(
+      (item) =>
+        item.expect.outcome === "ok" && item.expect.correct.includes(item.candidates[0]!.id),
+    ).length;
+    const noMatch = cases.filter((item) => item.expect.outcome === "no_match").length;
+    expect(firstIsCorrect).toBeGreaterThan(0);
+    // Kjernen godtar «k1.» som K1; et eget mønster gjorde det ikke
+    expect((await run("k1.")).passed).toBe(firstIsCorrect);
+    // «ingen», ukjente merker og doble gir no_match, som i kjernen
+    expect((await run("ingen")).passed).toBe(noMatch);
+    expect((await run("K99, SK1, K0")).passed).toBe(noMatch);
   });
 });

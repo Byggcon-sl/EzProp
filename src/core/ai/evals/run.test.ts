@@ -149,9 +149,8 @@ describe("evalueringssett: vurderingen (E2)", () => {
     { word: "12,5", answer: "Målt 112,5 mm.", hit: false },
     { word: "12,5", answer: "Målt 12,5 mm.", hit: true },
   ])("E2.5 mustContain «$word» mot «$answer» gir treff: $hit", async ({ word, answer, hit }) => {
-    expect((await judge({ outcome: "ok", mustContain: [word] }, NEUTRAL_INPUT, answer)).hit).toBe(
-      hit,
-    );
+    // Inndata er svaret selv, så tallvakten (som i kjernen) ikke stopper svar med tall
+    expect((await judge({ outcome: "ok", mustContain: [word] }, answer, answer)).hit).toBe(hit);
   });
 
   it.each([
@@ -675,5 +674,45 @@ describe("evalueringssett: kjernens vakter og nye vurderinger (KI i veien)", () 
       run.EvalProviderNotAllowedError,
     );
     expect(complete).not.toHaveBeenCalled();
+  });
+
+  it("K2.1 språkvasken kjører kjernens vakter: et stoppet svar er bom", async () => {
+    const { hit, reasons } = await judge(
+      { outcome: "ok" },
+      "Taket er gammelt.",
+      "Taket er 40 år gammelt.",
+    );
+    expect(hit).toBe(false);
+    expect(reasons.join(" ")).toMatch(/stoppet av number_guard/u);
+  });
+
+  it("K2.1 språkvasken: et stoppet svar er treff når fasiten venter stopp", async () => {
+    const input = "Taket er gammelt.";
+    const answer = "Taket er 40 år gammelt.";
+    expect((await judge({ outcome: "stopped", guard: "number_guard" }, input, answer)).hit).toBe(
+      true,
+    );
+    expect((await judge({ outcome: "stopped", guard: "tg_guard" }, input, answer)).hit).toBe(false);
+    expect((await judge({ outcome: "stopped" }, input, "Taket er gammelt.")).hit).toBe(false);
+  });
+
+  it("K2.1 språkvasken: ukjent plassholder i svaret stoppes av placeholder_guard", async () => {
+    const { hit, reasons } = await judge(
+      { outcome: "ok" },
+      "Taket er gammelt.",
+      "Taket er gammelt, sier [navn].",
+    );
+    expect(hit).toBe(false);
+    expect(reasons.join(" ")).toMatch(/stoppet av placeholder_guard/u);
+  });
+
+  it("K2.1 run.ts tolker svarene med kjernens parseSummaryAnswer og parseCandidateAnswer", () => {
+    expect(source).toMatch(
+      /import\s*\{[^}]*\bparseCandidateAnswer\b[^}]*\}\s*from\s+["']\.\.\/candidates["']/u,
+    );
+    expect(source).toMatch(
+      /import\s*\{[^}]*\bparseSummaryAnswer\b[^}]*\}\s*from\s+["']\.\.\/prompt["']/u,
+    );
+    expect(source).not.toMatch(/JSON\.parse\(text\)/u);
   });
 });

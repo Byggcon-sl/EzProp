@@ -2,7 +2,15 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { redactPii } from "@/shared/lib/pii-patterns";
-import { capturing, hasWholeWord, inputOfPrompt } from "../../../../tests/evals";
+import {
+  capturing,
+  hasWholeWord,
+  inputOfPrompt,
+  makeCasesDir,
+  okResult,
+  removeDir,
+  testProvider,
+} from "../../../../tests/evals";
 import { extractTgMentions } from "../guards";
 import { fakeAiProvider } from "../providers/fake";
 import {
@@ -11,7 +19,6 @@ import {
   EVAL_GUESS_WORDS,
   evaluateSummaryAnswer,
   runEvals,
-  summaryAnswerParts,
   summaryInputOf,
 } from "./run";
 import { parseCasesFile, type SummaryEvalCase } from "./schema";
@@ -310,25 +317,40 @@ describe("evalueringssett: vurderingen av sammendraget (K2.3)", () => {
     expect(evaluateSummaryAnswer(ok, graded, answer).passed).toBe(true);
   });
 
-  it("K2.3 svaret leses som JSON-objekt, JSON-liste eller linjer med F-merker", () => {
-    const expected = [
-      { label: "F1", text: "Første." },
-      { label: "F2", text: "Andre." },
-    ];
-    expect(summaryAnswerParts('{"F1":"Første.","F2":"Andre."}')).toEqual(expected);
-    expect(
-      summaryAnswerParts('[{"label":"F1","text":"Første."},{"label":"F2","text":"Andre."}]'),
-    ).toEqual(expected);
-    expect(summaryAnswerParts("F1: Første.\nF2: Andre.")).toEqual(expected);
-  });
-
-  it("K2.3 tekst uten F-merke får merket null, så dekningsvakten stopper den", () => {
-    expect(summaryAnswerParts("Innledning.\nF1: Første.")).toEqual([
-      { label: null, text: "Innledning." },
-      { label: "F1", text: "Første." },
-    ]);
-    expect(summaryAnswerParts('{"Innledning":"Tekst."}')).toEqual([
-      { label: null, text: "Tekst." },
-    ]);
+  it("K2.3 svaret tolkes med kjernens parseSummaryAnswer, og JSON blir stoppet", async () => {
+    const item = cases.find(
+      (c) =>
+        c.expect.outcome === "ok" && c.simulatedAnswer === undefined && findingsOf(c).length === 1,
+    );
+    expect(item, "en sak med ett funn og uten oppdiktet svar").toBeDefined();
+    const single = { ...item!, mustPass: false, expect: { outcome: "ok" } };
+    const dir = makeCasesDir({
+      "summary_draft.cases.json": {
+        feature: "summary_draft",
+        status: json.status,
+        note: json.note,
+        cases: Array.from({ length: 30 }, (_, i) => ({ ...single, id: `sd-t${i}` })),
+      },
+    });
+    try {
+      const run = async (answer: string) => {
+        const result = await runEvals({
+          provider: testProvider(() => okResult(answer)),
+          casesDir: dir,
+          feature: "summary_draft",
+        });
+        expect(result.errors).toEqual([]);
+        return result.features[0]!;
+      };
+      // Linjeformen som kjernen leser: treff
+      const lines = await run("G1\nF1: Teksten står her.");
+      expect(lines.misses).toEqual([]);
+      // JSON leser ikke kjernen: teksten får ikke merke, og dekningsvakten stopper den
+      const fromJson = await run('{"F1":"Teksten står her."}');
+      expect(fromJson.passed).toBe(0);
+      expect(fromJson.misses[0]!.reason).toMatch(/coverage_guard/u);
+    } finally {
+      removeDir(dir);
+    }
   });
 });

@@ -247,7 +247,8 @@ function phraseCase(index: number, overrides: Json = {}): Json {
   return {
     id: `ps-${String(index).padStart(3, "0")}`,
     deviationKind: "tg",
-    fields: { text: "Oppdiktet notat om fall mot sluket." },
+    field: "deviation_text",
+    fields: { text: "Oppdiktet notat om fall mot sluket.", group: "tg" },
     candidates: [
       { id: "k-a", source: "template_outcome", kind: "tg", text: "Oppdiktet tekst om fall." },
       { id: "k-b", source: "template_outcome", kind: "tg", text: "Oppdiktet tekst om fuger." },
