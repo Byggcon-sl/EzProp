@@ -2,7 +2,8 @@
 
 - **Fase:** 2a-2 Hele veien først (retting av funn fra testlaget)
 - **Modul:** kjerne / `src/core/reports` (regelforslag, avvik, advarsler) og badet på PC/iPad
-- **Status:** klar til bygging (forhåndsvurdert runde 1 av forbedrer, arkitekt, fagansvarlig og test-leder 23.11.2026)
+- **Status:** under bygging (forhåndsvurdert runde 1 av forbedrer, arkitekt, fagansvarlig og test-leder 23.11.2026)
+- **Gjenstår (23.11.2026, overtatt av hovedløkken):** bit 1–3 er levert på branchen (ren logikk, `already_decided`/`newer_decision`, TG-bytte med grunn og grunnvalget i avvikskortet). Igjen er bit 4: forslagskortet med «Fjern avviket»-meldingen og «Angre» (ny visning fra `deleteDeviation`), meldingene for `already_decided` og `newer_decision`, «Å se over» med Godta/Endre/Avvis og TG3 øverst, e2e på PC og iPad (med axe), resten av testplanen, funnfilene, PR-nummer i A490–A495 og versjon.
 - **Branch:** `rett-forslag-og-avvik` (bygger på main)
 - **Støtter hovedmål:**
   - **Reklamasjoner:** et TG3-forhold kan ikke lenger falle stille ut av rapporten, og hver endring av TG fra et regelforslag har grunn i loggen. Det er det vi trenger for å forklare graden ved en reklamasjon.
