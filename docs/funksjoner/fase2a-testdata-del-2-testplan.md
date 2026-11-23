@@ -60,6 +60,16 @@ Forslag. Avvik føres i kortet, og testskriver følger kortet.
 25. **ingen tekst fra standarden:** ingen «NS 3600», «NS 3424», «TEK» med paragraf, eller setninger over 8 ord som står i de låste referansetekstene (samme sjekk som eksisterende kopitest).
 26. **ingen persondata:** ingen streng har `@`, telefonmønster, gnr/bnr, gatenavn eller navn fra `testdata.data.ts`, eller ord fra `tests/known-values.ts`.
 27. **planlagte bilder er korte beskrivelser** uten personer («person», «eier», «ansikt» stopper) og uten filnavn.
+28. **hvert avvik i `expected` har ett kort `fieldNote`**, og notatene er med i testene 24–26 (gjetteord, standarden, persondata).
+
+### 1.5 Rettinger fra fagansvarlig, runde 2 (23.11.2026)
+29. **badet uten avvik:** sju punkt TG1, tilliggende TG0 fra godtatt forslag (hull uten funn, 11 vekt-%), dokumentasjon samsvarserklæring eller våtromssertifikat. TG1 direkte på tilliggende der avvises av seed.
+30. **dokumentasjon «Ingen» eller tom i ferdig bad** gir `missing_membrane_documentation` med TG2 og kostnad «none» (A510).
+31. **hull ikke utført, grunn `concrete_or_masonry`:** TGIU, `owner_informed` tom, ingen `tgiu_details_missing`. `owner_informed` er sann bare ved `owner_refused` (`it.each` over alle scenarioer).
+32. **vekt-% betyr treverk:** målested og oppbygging i scenarioer med vekt-% nevner ikke betong eller mur; en påtvunget tekst med «betong» får testen til å feile.
+33. **RF %:** ingen ferdig tilliggende med RF % og TG1; et påtvunget scenario med RF 85 % og TG1 får testen til å feile (A511).
+34. **«utført uten funn» med 15 vekt-% eller mer** finnes ikke.
+35. **`TG3_COST_BANDS`:** `membrane_before_2000` er `from_200000_to_500000`, `elevated_moisture` er `from_100000_to_200000` (A509).
 
 ## 2. Seed-steget mot databasen, `src/db/seed/testdata-bath.test.ts` (ny, integrasjon)
 
@@ -67,7 +77,7 @@ Forslag. Avvik føres i kortet, og testskriver følger kortet.
 1. **rapport i hvert våtrom** i «under arbeid», «ferdig» og «fakturert»; ingen rapport i «bestilt».
 2. **rapporten er låst til publisert systemmal** (samme mal-id og versjon som `loadLockedTemplate` gir).
 3. **«ferdig» og «fakturert» har 8 av 8 punkt ferdige**; «under arbeid» har færre.
-4. **«under arbeid» er en avbrutt befaring:** punktene som er fylt, kommer først i malens rekkefølge; punktene etter har ingen `field_answers`, ingen `checkpoint_results` med svar og ingen avvik.
+4. **«under arbeid» er en avbrutt befaring:** punktene som er ferdige, kommer først i malens rekkefølge; punktene etter har ingen `field_answers`, ingen `checkpoint_results` med svar og ingen avvik. Eneste unntak er `wet_room.adjacent` (punkt 8), som kan ha hulltaking, regelforslag, beslutning og TGIU uten å stå ferdig (A512).
 5. **hulltaking i alle ferdige bad:** måling med enhet, eller «ikke utført» med grunn og TGIU.
 6. **ingen advarsel** `tg3_on_age_only`, `tgiu_suggested_not_set`, `tgiu_details_missing` eller `checkpoint_done_without_tg` på ferdige og fakturerte (beregnet med `src/core/reports/logic/warnings.ts`).
 7. **byggeåret:** `build_year` og `build_year_source` stemmer med `yearRenovated` (`owner_stated`) eller eiendommens `buildYear` (`documented`); scenario 11 har tomt år og `unknown`; `membrane_year` er tomt overalt.
@@ -80,6 +90,9 @@ Forslag. Avvik føres i kortet, og testskriver følger kortet.
 12. **TG0 bare ved godtatt TG0-forslag** og bare på `wet_room.adjacent`.
 13. **statisk sjekk:** kildeteksten i `src/db/seed/testdata*.ts` har ingen `insert(` eller `update(` mot `deviations`, `checkpointResults`, `ruleSuggestionDecisions`, `deviationMeasures`, `tgiuDetails`, `fieldAnswers` eller `reports`, og ingen rå SQL mot dem.
 14. **forslag som mangler eller `no_longer_applies`:** med en påtvunget endring i svarene stopper seed med tydelig norsk feil, og transaksjonen for badet rulles tilbake (ingen halv rapport).
+14b. **uventet forslag:** smøremembran uten dokumentasjon, 15 år, lagt inn i scenarioet uten avvik, gir et forslag som ikke står i `expected`; seed stopper med tydelig norsk feil, ingen TG1 settes, og badet rulles tilbake.
+14c. **én transaksjon per bad:** spion på `db.transaction` viser ett kall per bad som fylles ut.
+14d. **tidsgrense:** hele `seedTestdata` tar under 60 sekunder (måles i testen, gjelder i CI).
 
 ### 2.3 Hele datasettet (akseptkriterium 5)
 `it.each` over alle avvik i Byggcon etter kjøringen:
@@ -95,7 +108,7 @@ Forslag. Avvik føres i kortet, og testskriver følger kortet.
 24. **TGIU har alle fem opplysningene** og en rad i `tgiu_details` med `reason`, `risk_assessment` og `how_to_examine`.
 25. **for KI:** minst ett `changed` og ett `rejected` med begrunnelseskode i `rule_suggestion_decisions`.
 
-### 2.4 Ny kjøring og myk sletting (akseptkriterium 9, A480)
+### 2.4 Ny kjøring og myk sletting (akseptkriterium 9, A508)
 26. **andre kjøring skriver ingenting:** `countRows()` er lik, samme TG per bad, `updated_at` uendret på alle rapportrader, og oppsummeringen viser antall bad hoppet over.
 27. **svar endret for hånd** (via `saveField` som e2e-takstmannen) står uendret etter ny kjøring.
 28. **myk-slettet avvik** gjenopprettes ikke og lages ikke på nytt; `deleted_at` er uendret.
@@ -130,14 +143,15 @@ Skrives av `testskriver` parallelt, bare mot det offentlige grensesnittet (`seed
 ## 4. Oppsummering og `TESTDATA_TABLES`, utvidelse av `src/db/seed/testdata-index.test.ts`
 
 1. **`TESTDATA_TABLES` har de sju nye tabellene** (akseptkriterium 14).
-2. **oppsummeringen viser antall per ny tabell og bad hoppet over**, uten `@`, navn eller adresse.
+2. **oppsummeringen viser antall per ny tabell, bad fylt ut og bad hoppet over**, uten `@`, navn eller adresse.
+3. **scenariokartet:** én linje per pliktig scenario med norsk navn, oppdragsnummer og rom, lik fordelingen fra `assignBathScenarios`; ingen linje har `@`, navn fra `testdata.data.ts`, gatenavn eller gnr/bnr.
 
 ## 5. E2e, `e2e/fase-2a-testdata-del-2.spec.ts` (ny, pc og ipad)
 
 `beforeAll` som i `e2e/fase-2a-testdata.spec.ts`: `assertLocalOrTestDatabase`, `seedTestdataForE2e()`. Visningsbadet finnes med `findShowcaseBathReport` (eksporteres via `e2e/helpers.ts`), aldri med rekkefølge eller antall.
 
 1. **visningsbadet (takstmann):** viser TG3 med kostnadsintervall, TGIU med opplysningene, HMS uten TG-merke, TG2 med endret tekst, og fremdrift «x av 8» med x < 8 og totalen 8.
-2. **badet uten avvik:** alle punkt ferdige med TG1, ingen avvikskort, ingen advarsler.
+2. **badet uten avvik:** alle åtte punkt ferdige, sju med TG1 og tilliggende med TG0, ingen avvikskort, ingen advarsler.
 3. **ferdig bad:** 8 av 8, ingen av de fire advarslene vises.
 4. **«Ukjent» byggeår:** punktet for sjikt står ikke ferdig og viser «ikke vurdert».
 5. **avvist forslag:** badet med `measured_again` viser forslaget som avvist med grunnen, og punktet står ikke ferdig.
@@ -151,8 +165,8 @@ Skrives av `testskriver` parallelt, bare mot det offentlige grensesnittet (`seed
 ## 6. Øvrig
 
 1. `package.json`: versjonen er økt (patch).
-2. A473–A481 står i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte» (enkel test eller sjekk i gjennomgangen).
-3. **Bilder** (A473) og **byggeår som kolonne** (A474) er utenfor; dekkes bare av test 1.2 og 1.27 (planlagte bilder som beskrivelser) og 2.1.7 (byggeår som svar i badet). Når «Bilder på PC» bygges, får den test for at bildene lages ut fra `plannedPhotos`, uten personer.
+2. A501–A512 står i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte» (enkel test eller sjekk i gjennomgangen).
+3. **Bilder** (A501) og **byggeår som kolonne** (A502) er utenfor; dekkes bare av test 1.2 og 1.27 (planlagte bilder som beskrivelser) og 2.1.7 (byggeår som svar i badet). Når «Bilder på PC» bygges, får den test for at bildene lages ut fra `plannedPhotos`, uten personer.
 
 ## Godkjenning
 
