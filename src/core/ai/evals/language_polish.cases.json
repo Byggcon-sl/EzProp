@@ -229,9 +229,16 @@
     },
     {
       "id": "lp-023",
-      "description": "Prøveverdien for ingen treff gir utfallet no_match.",
-      "fields": { "text": "[fake: ingen treff]" },
-      "expect": { "outcome": "no_match" }
+      "description": "Teksten er allerede ryddig. Innholdet, nektelsen og stedet står; ingenting legges til.",
+      "fields": {
+        "text": "Det er ikke påvist fukt i bunnsvillen ved hulltaking bak dusjveggen."
+      },
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": ["ikke påvist fukt", "bunnsvillen", "bak dusjveggen"],
+        "sameTg": true
+      }
     },
     {
       "id": "lp-024",

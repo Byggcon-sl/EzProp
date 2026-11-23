@@ -344,13 +344,12 @@ describe("evalueringssett: settet for language_polish (E4)", () => {
     expect(wrong).toEqual([]);
   });
 
-  it("E4.10 ett eksempel med [fake: ingen treff] og fasit no_match", () => {
-    const noMatch = cases.filter((item) => inputOf(item).includes("[fake: ingen treff]"));
-    expect(noMatch).toHaveLength(1);
-    expect(noMatch[0]!.expect.outcome).toBe("no_match");
-    expect(
-      cases.filter((item) => item.expect.outcome === "no_match").map((item) => item.id),
-    ).toEqual(noMatch.map((item) => item.id));
+  // Endret med vilje (T-0047, A488): settet skal måle det en ekte leverandør gjør, så ingen sak
+  // bruker prøveverdier som bare den falske leverandøren forstår. «Ingen treff» prøves i run.test.ts.
+  it("E4.10 ingen sak bruker prøveverdiene til den falske leverandøren (T-0047)", () => {
+    expect(cases.filter((item) => inputOf(item).includes("[fake:")).map((item) => item.id)).toEqual(
+      [],
+    );
   });
 
   it("E4.11 ingen kjent verdi når leverandøren, og redactPii gir 0 treff på teksten den fikk", async () => {
@@ -425,8 +424,8 @@ describe("evalueringssett: settet for language_polish (E4)", () => {
 const LOCKED_RESULT = {
   total: 45,
   passed: 42,
-  mustPassTotal: 23,
-  mustPassPassed: 23,
+  mustPassTotal: 24,
+  mustPassPassed: 24,
   // Skrivefeil: den falske leverandøren retter ikke språket (T-0047)
   misses: ["lp-031", "lp-032", "lp-033"] as string[],
   leaks: [] as unknown[],
