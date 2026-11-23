@@ -4,7 +4,7 @@ import { AI_CANDIDATE_REFS_MAX } from "@/shared/config/ai-targets";
 import { getFeatureDefinition, type AiFeatureDefinition } from "../features";
 import { GUARD_CASES } from "../guard-cases";
 import { checkAnswerGuards, extractTgMentions } from "../guards";
-import { preparePrompt } from "../prompt";
+import { prepareCandidatePrompt, preparePrompt, prepareSummaryPrompt } from "../prompt";
 import { findPromptLeaks, normalizeSpaces, wholeWordPattern, type LeakType } from "../prompt-leaks";
 import type { AiProvider, AiProviderRequest, AiProviderResult } from "../providers/types";
 import type {
@@ -488,7 +488,12 @@ async function promptAndCall(
   call: boolean,
 ): Promise<{ leak: LeakType[] } | { prompt: string; answer: AiProviderResult | null }> {
   const { provider, definition } = runner;
-  const { prompt } = preparePrompt(definition, fields, known, serverInput);
+  // Samme ledetekst som kjernen bygger for hver slags inndata (request-suggestion.ts)
+  const { prompt } = serverInput?.candidates
+    ? prepareCandidatePrompt(definition, fields, serverInput.candidates, known)
+    : serverInput?.summaryGroups
+      ? prepareSummaryPrompt(definition, serverInput.summaryGroups, known)
+      : preparePrompt(definition, fields, known);
   // Lekkasjesjekken før kallet: en ledetekst med persondata sendes aldri til leverandøren
   const leaked = findPromptLeaks(prompt, known);
   if (leaked.length > 0) return { leak: leaked };
@@ -704,7 +709,7 @@ export function runGuardCases(feature?: string): EvalGuardCasesResult {
     } catch {
       got = "krasj";
     }
-    if (got !== item.expected) mismatches.push(item.id);
+    if (got !== item.expected) mismatches.push(item.name);
   }
   return { total: cases.length, mismatches };
 }

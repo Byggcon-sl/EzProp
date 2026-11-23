@@ -40,7 +40,7 @@ import type {
 import { auditReport, refreshOf, withRoomWrite, type WriteScope } from "./write";
 
 /*
- * Forslag fra frasebanken (docs/funksjoner/fase2a-ki-i-veien.md, A423, A433, A437, A469 og A470).
+ * Forslag fra frasebanken (docs/funksjoner/fase2a-ki-i-veien.md, A482, A433, A437, A469 og A470).
  * Serveren bygger kandidatene selv fra den låste malversjonen; nettleseren sender bare
  * `requestId`, avviket, feltet og egen tekst. KI rangerer bare: teksten som settes inn, er alltid
  * malens egen. Ingenting her endrer TG eller velger utfall.

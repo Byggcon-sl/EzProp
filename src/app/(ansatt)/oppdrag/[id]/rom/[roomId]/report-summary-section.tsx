@@ -41,7 +41,7 @@ import {
 
 /*
  * «Sammendrag for hele rapporten» nederst på badskjermen (docs/funksjoner/fase2a-ki-i-veien-design.md
- * avsnitt 8, A424, A434, A435, A461, A462 og A465). Tekstfeltet lagres når det forlates og 800 ms
+ * avsnitt 8, A483, A434, A435, A461, A462 og A465). Tekstfeltet lagres når det forlates og 800 ms
  * etter siste tastetrykk. «Lag utkast» overskriver aldri: utkastet vises i forslagskortet, og bare
  * «Bruk» bytter teksten (med «Angre»). Koden setter overskriftene med TG; KI skriver bare teksten
  * per funn. Advarslene sier fra når sammendraget ikke stemmer med funnene, men sperrer aldri.
@@ -273,7 +273,11 @@ export function ReportSummarySection({
     if (!draft || draft.outcome !== "ok") return;
     setPending("decision");
     const before = text;
-    const ok = await save(draft.text, { usageId: draft.usageId, basis: draft.basis, edited: false });
+    const ok = await save(draft.text, {
+      usageId: draft.usageId,
+      basis: draft.basis,
+      edited: false,
+    });
     setPending(null);
     if (!ok) return;
     setText(draft.text);
@@ -314,9 +318,10 @@ export function ReportSummarySection({
 
   const goTo = (item: SummaryWarningItem) => {
     if (!item.checkpointKey) return;
-    const focusId = item.id.startsWith("changed-") || item.id.startsWith("added-")
-      ? deviationHeadingId(item.id.replace(/^(changed|added)-/, ""))
-      : CHECKPOINT_HEADING_ID;
+    const focusId =
+      item.id.startsWith("changed-") || item.id.startsWith("added-")
+        ? deviationHeadingId(item.id.replace(/^(changed|added)-/, ""))
+        : CHECKPOINT_HEADING_ID;
     openCheckpoint(item.checkpointKey, { focusId });
   };
 
@@ -385,7 +390,10 @@ export function ReportSummarySection({
 
   if (!summary.canEdit) {
     return (
-      <section aria-labelledby={SUMMARY_HEADING_ID} className="mt-12 space-y-4 border-t border-line pt-8">
+      <section
+        aria-labelledby={SUMMARY_HEADING_ID}
+        className="mt-12 space-y-4 border-t border-line pt-8"
+      >
         <h2 id={SUMMARY_HEADING_ID} className="font-heading text-xl font-semibold text-slate-900">
           {AI_ROOM_TEXTS.summaryHeading}
         </h2>
@@ -408,7 +416,10 @@ export function ReportSummarySection({
         : "";
 
   return (
-    <section aria-labelledby={SUMMARY_HEADING_ID} className="mt-12 space-y-4 border-t border-line pt-8">
+    <section
+      aria-labelledby={SUMMARY_HEADING_ID}
+      className="mt-12 space-y-4 border-t border-line pt-8"
+    >
       <h2
         id={SUMMARY_HEADING_ID}
         tabIndex={-1}
@@ -436,7 +447,9 @@ export function ReportSummarySection({
               data-ai-control="summary"
             >
               <AiSparkIcon className="text-ai-700" />
-              {pending === "suggestion" ? AI_ROOM_TEXTS.summaryDrafting : AI_ROOM_TEXTS.summaryDraft}
+              {pending === "suggestion"
+                ? AI_ROOM_TEXTS.summaryDrafting
+                : AI_ROOM_TEXTS.summaryDraft}
             </Button>
           </div>
           <Textarea
@@ -445,9 +458,11 @@ export function ReportSummarySection({
             rows={6}
             className="min-h-40"
             aria-invalid={error ? true : undefined}
-            aria-describedby={[error ? `${hintId}-error` : null, count ? `${hintId}-count` : null]
-              .filter(Boolean)
-              .join(" ") || undefined}
+            aria-describedby={
+              [error ? `${hintId}-error` : null, count ? `${hintId}-count` : null]
+                .filter(Boolean)
+                .join(" ") || undefined
+            }
             onChange={(event) => onChange(event.target.value)}
             onBlur={() => void save(text)}
           />

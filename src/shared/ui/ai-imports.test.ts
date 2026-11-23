@@ -21,8 +21,6 @@ const COMPONENTS = [
   "src/shared/ui/ai-text-mark.tsx",
 ];
 const TRIAL_DIR = join(srcDir, "app", "(ansatt)", "prove", "ki");
-/** Klientdelen av KI-modulen (KI-køen), som prøvesiden kan importere (fase2a-ki-ko). */
-const AI_CLIENT = "core/ai/client";
 
 /** Mappene kortet og merket aldri skal nå (relativt til `src/`). */
 const FORBIDDEN = ["core/access", "db", "core/ai"];
@@ -126,7 +124,7 @@ describe("8.1 forslagskortet og KI-merket", () => {
   });
 });
 
-describe("8.2 prøvesiden /prove/ki er fjernet (KI i veien K6.1, A428)", () => {
+describe("8.2 prøvesiden /prove/ki er fjernet (KI i veien K6.1, A487)", () => {
   it("mappen finnes ikke lenger, så siden gir «Fant ikke siden»", () => {
     expect(existsSync(TRIAL_DIR)).toBe(false);
   });

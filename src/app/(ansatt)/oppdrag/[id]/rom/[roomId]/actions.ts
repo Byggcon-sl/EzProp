@@ -295,8 +295,7 @@ export async function decideAiSuggestionAction(
 
 /** Svaret på språkvask, med grensen når teksten er for lang (A436). */
 export type PolishActionResult =
-  | Exclude<PolishResult, { status: "too_long" }>
-  | { status: "too_long"; limit: number };
+  Exclude<PolishResult, { status: "too_long" }> | { status: "too_long"; limit: number };
 
 function withPolishLimit(result: PolishResult): PolishActionResult {
   return result.status === "too_long" ? { status: "too_long", limit: AI_FIELD_MAX_LENGTH } : result;

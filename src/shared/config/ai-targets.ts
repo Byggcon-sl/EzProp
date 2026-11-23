@@ -1,5 +1,5 @@
 /*
- * KI-målene i rapporten (`AiTargetRef.type` og `fieldKey`, ADR 0006 del 1, A350, A356 og A427).
+ * KI-målene i rapporten (`AiTargetRef.type` og `fieldKey`, ADR 0006 del 1, A350, A356 og A486).
  * Én liste som både `@/core/ai` (lovlige mål per funksjon) og `@/core/reports` (hvilke felt som
  * kan få et forslag) leser, slik at de to aldri importerer hverandre for å finne den.
  *
@@ -17,7 +17,7 @@ export const REPORT_AI_TARGET_FIELDS = {
   checkpoint_result: ["description_text"],
   tgiu_detail: ["reason", "risk_assessment", "how_to_examine"],
   field_answer: null,
-  /** Sammendraget for hele rapporten (`reports.summary_text`, A427). */
+  /** Sammendraget for hele rapporten (`reports.summary_text`, A486). */
   report: ["summary_text"],
 } as const;
 

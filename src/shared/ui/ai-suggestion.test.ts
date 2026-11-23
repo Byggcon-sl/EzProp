@@ -539,9 +539,7 @@ describe("K5.4 «Trenger nett …» og køen", () => {
   });
 
   it("teksten offline beholdes for andre bruk av kortet (10.9 gjelder fortsatt uten kø)", () => {
-    expect(AI_SUGGESTION_TEXTS.offline).toBe(
-      "Trenger nett. Teksten din er lagret.",
-    );
+    expect(AI_SUGGESTION_TEXTS.offline).toBe("Trenger nett. Teksten din er lagret.");
     const html = render({ online: false, outcome: "error", suggestionText: null, status: null });
     expect(html).toContain(AI_SUGGESTION_TEXTS.offline);
   });
@@ -587,7 +585,12 @@ describe("KI i veien: utfallet «stopped» (A460, designvalg D5)", () => {
   });
 
   it("uten egen melding brukes standardteksten", () => {
-    const view = suggestionView({ ...base, outcome: "stopped", suggestionText: null, status: null });
+    const view = suggestionView({
+      ...base,
+      outcome: "stopped",
+      suggestionText: null,
+      status: null,
+    });
     expect(view.box).toMatchObject({ text: AI_SUGGESTION_TEXTS.stopped });
   });
 

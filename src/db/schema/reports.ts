@@ -205,7 +205,7 @@ export const reports = pgTable(
     reportType: text("report_type").notNull(),
     status: text("status").$type<ReportStatus>().notNull().default("draft"),
     /**
-     * Sammendraget for hele rapporten (A424). Fritekst fra takstmannen, eventuelt etter et
+     * Sammendraget for hele rapporten (A483). Fritekst fra takstmannen, eventuelt etter et
      * KI-utkast han har godtatt. KI-opphav står bare i `ai_usage_log` (mål `report` / `summary_text`).
      */
     summaryText: text("summary_text"),

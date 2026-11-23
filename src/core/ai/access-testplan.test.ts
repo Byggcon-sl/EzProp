@@ -119,7 +119,7 @@ describe("tilgang per rolle: requestSuggestion (6.1)", () => {
   it.each(VARIANTS)("$name: be om = $allowed", async (variant) => {
     const { grant } = await setup(variant);
     const rowsBefore = await aiRowCount();
-    // `ai_trial` er arkivert («KI i veien», A428): forespørselen bruker målet `field_answer`
+    // `ai_trial` er arkivert («KI i veien», A487): forespørselen bruker målet `field_answer`
     const request = validRequest({ target: answerTarget() });
 
     if (variant.allowed) {

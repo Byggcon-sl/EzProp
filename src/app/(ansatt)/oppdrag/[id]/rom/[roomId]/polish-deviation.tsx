@@ -305,8 +305,7 @@ export function usePolish(input: {
   const shownRows: AiSuggestionGroupRow[] | null =
     rows?.map((row) => ({
       ...row,
-      ownText:
-        row.status === "accepted" ? row.ownText : currentText(row.key, row.ownText ?? ""),
+      ownText: row.status === "accepted" ? row.ownText : currentText(row.key, row.ownText ?? ""),
     })) ?? null;
 
   const button: ReactNode = (
@@ -378,10 +377,7 @@ export function usePolishDeviation(input: {
 }
 
 /** «Språkvask» på beskrivelsen ved punktet: eget kall, én rad. */
-export function usePolishDescription(input: {
-  checkpointKey: string;
-  fields(): PolishField[];
-}) {
+export function usePolishDescription(input: { checkpointKey: string; fields(): PolishField[] }) {
   const { room } = useRoom();
   return usePolish({
     source: AI_ROOM_TEXTS.polishDescriptionSource,

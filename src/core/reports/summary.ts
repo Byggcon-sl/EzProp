@@ -59,7 +59,7 @@ import type {
 import { withReportWrite } from "./write";
 
 /*
- * Sammendraget for hele rapporten (docs/funksjoner/fase2a-ki-i-veien.md, A424, A425, A434, A435,
+ * Sammendraget for hele rapporten (docs/funksjoner/fase2a-ki-i-veien.md, A483, A484, A434, A435,
  * A461, A462, A465, A469 og A470). Koden velger funnene, gruppene, overskriftene og rekkefølgen;
  * KI skriver bare teksten per funn under TG3, TG2 og HMS, gjennom `requestSuggestion`. Utkastet
  * lagres aldri før takstmannen trykker «Bruk». Advarslene sperrer aldri. Ingenting her setter TG.
@@ -116,7 +116,7 @@ async function findReport(
 }
 
 /**
- * De godkjente funnene i rapporten (A425, A434), i fem spørringer uansett antall punkter, avvik og
+ * De godkjente funnene i rapporten (A484, A434), i fem spørringer uansett antall punkter, avvik og
  * tiltak (K4.21b): punktene, avvikene, tiltakene, TGIU-opplysningene og kontrollpunktene i den
  * låste malversjonen. Bare rader som ikke er slettet; punkter i et slettet rom er ikke med.
  */

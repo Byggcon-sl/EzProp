@@ -59,7 +59,16 @@ describe("shortcutFor", () => {
 });
 
 describe("opensPhraseList (A438, KI i veien K7.12)", () => {
-  const event = (key: string, value: string, extra: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; isComposing: boolean }> = {}) => ({
+  const event = (
+    key: string,
+    value: string,
+    extra: Partial<{
+      ctrlKey: boolean;
+      metaKey: boolean;
+      altKey: boolean;
+      isComposing: boolean;
+    }> = {},
+  ) => ({
     key,
     value,
     ctrlKey: false,

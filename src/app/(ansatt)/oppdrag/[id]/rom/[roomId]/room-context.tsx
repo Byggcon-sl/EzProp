@@ -41,7 +41,7 @@ export type RoomContextValue = {
   removeUndo(id: string): void;
   /** Nettleseren har nett. Uten nett gir «Forslag» tekstsøket, og KI-knappene sier fra (A439). */
   online: boolean;
-  /** Rommets del av den låste malen, for tekstsøket uten KI (A426). */
+  /** Rommets del av den låste malen, for tekstsøket uten KI (A485). */
   document: RoomTemplateDocument;
   /** «Mest brukt» (A468): antall valg per kandidat i organisasjonen, lastet med badet. */
   phraseUsage: readonly PhraseUsageCount[];

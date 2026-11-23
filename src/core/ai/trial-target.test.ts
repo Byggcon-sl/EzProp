@@ -21,7 +21,7 @@ import { aiSuggestionRequestSchema } from "./request";
 
 /*
  * Prøvemålet `ai_trial` er arkivert («KI i veien», docs/funksjoner/fase2a-ki-i-veien-testplan.md
- * K1.31 og K3.5, A428). Prøvesiden `/prove/ki` er fjernet, og ingen funksjon godtar målet lenger.
+ * K1.31 og K3.5, A487). Prøvesiden `/prove/ki` er fjernet, og ingen funksjon godtar målet lenger.
  * Gamle rader i `ai_usage_log` kan fortsatt leses. Mot testdatabasen. Alle verdier er oppdiktet.
  *
  * Støtter hovedmål: KI i bunnen (all KI går til mål kjernen kan kontrollere) og færre

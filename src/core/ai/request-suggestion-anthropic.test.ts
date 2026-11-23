@@ -49,7 +49,7 @@ import { fakeAiProvider } from "./providers/fake";
  * adresser er oppdiktet.
  *
  * Målet `answer` er sperret mot en ekte leverandør til `answers` finnes (A166, A173). Prøvemålet
- * `ai_trial` er arkivert («KI i veien», A428) og avvises før leverandøren velges. For å prøve hele den ekte veien (3.4–3.6) får `language_polish` her et ekstra,
+ * `ai_trial` er arkivert («KI i veien», A487) og avvises før leverandøren velges. For å prøve hele den ekte veien (3.4–3.6) får `language_polish` her et ekstra,
  * oppdiktet mål bare i testen (`TEST_TARGET_TYPE`), med oppdrag. Det står for målene som kommer i
  * 2a-2. Sperren for `ai_trial`, `answer` og fritekst uten oppdrag prøves med de ekte målene (3.2).
  *

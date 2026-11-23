@@ -16,7 +16,7 @@ import type {
 } from "./types";
 
 /*
- * Sammendraget for hele rapporten (docs/funksjoner/fase2a-ki-i-veien.md, A425, A434, A435, A461,
+ * Sammendraget for hele rapporten (docs/funksjoner/fase2a-ki-i-veien.md, A484, A434, A435, A461,
  * A462 og A465). Rent blad: samme regler i nettleseren og på serveren. Koden avgjør hvilke funn
  * som er med, gruppene og rekkefølgen; KI skriver bare teksten per funn under TG3, TG2 og HMS.
  * Ingenting her setter TG.

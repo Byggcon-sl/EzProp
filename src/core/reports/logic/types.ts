@@ -259,7 +259,7 @@ export type SuggestionStillApplies = (
   ruleResults: readonly RuleResult[],
 ) => boolean;
 
-// --- Forslag fra frasebanken («KI i veien», A426 og A433) ------------------------------------
+// --- Forslag fra frasebanken («KI i veien», A485 og A433) ------------------------------------
 
 export type PhraseField = (typeof PHRASE_FIELDS)[number];
 
@@ -360,7 +360,7 @@ export type PhraseCandidate = {
   /** Antall ganger kandidaten er valgt i organisasjonen for feltet (A468). 0 når aldri valgt. */
   chosenCount: number;
   text: string;
-  /** Alle er `draft` til fagrådet har godkjent (A423). Vises som «utkast». */
+  /** Alle er `draft` til fagrådet har godkjent (A482). Vises som «utkast». */
   textStatus: TextStatus;
 };
 
@@ -381,7 +381,7 @@ export type ListPhraseCandidates = (
 ) => PhraseCandidate[];
 
 /**
- * Tekstsøket uten KI (A426): kandidatene der alle ordene i `query` står i teksten, punktnavnet
+ * Tekstsøket uten KI (A485): kandidatene der alle ordene i `query` står i teksten, punktnavnet
  * eller spørsmålet, i rekkefølgen de kom inn. Tom `query` gir de første. Høyst `limit` treff.
  * Samme normalisering som `searchOutcomes` (A382).
  */
@@ -409,7 +409,7 @@ export type PhraseCandidateOtherTg = (
   deviationTg: DeviationTg | null,
 ) => DeviationTg | null;
 
-// --- Sammendraget («KI i veien», A425, A434, A435, A461, A462 og A465) ------------------------
+// --- Sammendraget («KI i veien», A484, A434, A435, A461, A462 og A465) ------------------------
 
 /** Et tiltak slik sammendraget ser det. Mykt slettede tiltak sendes aldri inn. */
 export type SummaryMeasureInput = {
@@ -450,7 +450,7 @@ export type SummaryCheckpointInput = {
 };
 
 /**
- * Ett godkjent funn (A425, A434): avvik med TG2 eller TG3, kontrollpunkt med TGIU eller HMS-avvik.
+ * Ett godkjent funn (A484, A434): avvik med TG2 eller TG3, kontrollpunkt med TGIU eller HMS-avvik.
  * Tekstene er bare med for å bygge utkastet; de står aldri i `summary_basis` eller i loggen.
  */
 export type SummaryFinding = {

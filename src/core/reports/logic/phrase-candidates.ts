@@ -17,7 +17,7 @@ import type {
 } from "./types";
 
 /*
- * Forslag fra frasebanken (docs/funksjoner/fase2a-ki-i-veien.md, A426, A433, A437, A463, A467 og
+ * Forslag fra frasebanken (docs/funksjoner/fase2a-ki-i-veien.md, A485, A433, A437, A463, A467 og
  * A468). Rent blad: samme kode i nettleseren (tekstsøket uten nett) og på serveren (kandidatkilden
  * før KI). Ingen database, ingen KI, ingen ansatt-id.
  */

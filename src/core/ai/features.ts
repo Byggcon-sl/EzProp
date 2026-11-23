@@ -21,7 +21,7 @@ import type { AiFeatureCode } from "./types";
 export type AiTargetSpec = { type: string; fieldKey: string };
 
 /**
- * Måltypen for den fjernede prøvesiden `/prove/ki` (A166). **Arkivert** med «KI i veien» (A428):
+ * Måltypen for den fjernede prøvesiden `/prove/ki` (A166). **Arkivert** med «KI i veien» (A487):
  * ingen funksjon godtar den lenger, og skjemaet i `request.ts` avviser den. Konstanten står igjen
  * fordi gamle rader i `ai_usage_log` har den, og koden gjenbrukes aldri (regel 6).
  */

@@ -101,7 +101,7 @@ describe("funksjonsdefinisjonene (2)", () => {
     // Endret med vilje fra v1 til v2 (docs/funksjoner/fase2a-evalueringssett.md Omfang 5, E5.7)
     expect(definition.promptVersion).toBe("language_polish.v2");
     expect([...definition.allowedFields]).toEqual(["text"]);
-    // Skrevet om bevisst («KI i veien», A350, A356, A428): `ai_trial` er arkivert, og
+    // Skrevet om bevisst («KI i veien», A350, A356, A487): `ai_trial` er arkivert, og
     // språkvasken har fått målene i rapporten. `field_answer` står fortsatt først.
     expect(definition.allowedTargets.map((target) => ({ ...target }))).toEqual([
       { type: "field_answer", fieldKey: "text" },

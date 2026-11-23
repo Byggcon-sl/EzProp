@@ -38,7 +38,7 @@ import { isTextField } from "./shortcuts";
 
 /*
  * Forslag fra frasebanken i avvikskortet (docs/funksjoner/fase2a-ki-i-veien-design.md avsnitt 4,
- * A426, A433, A437, A438 og A468). «Forslag» åpner en liste i flyten rett under feltet: først
+ * A485, A433, A437, A438 og A468). «Forslag» åpner en liste i flyten rett under feltet: først
  * tekstsøket over kandidatene som er lastet med badet, så byttet én gang til KI-rekkefølgen når
  * svaret er kommet. Uten nett, med KI av eller når KI ikke svarer, blir tekstsøket stående: ingen
  * kall og ingen logg. Ingen ny tekst lagres lokalt i nettleseren.
@@ -235,7 +235,10 @@ export function usePhraseSuggestions(input: PhraseSuggestionsInput) {
       );
       // Listen er lukket eller åpnet på nytt mens KI jobbet: svaret gjelder ikke lenger.
       if (ticket !== request.current) {
-        if (!isActionError(result) && (result.status === "ranked" || result.status === "no_match")) {
+        if (
+          !isActionError(result) &&
+          (result.status === "ranked" || result.status === "no_match")
+        ) {
           rejectQuietly(result.usageId);
         }
         return;
@@ -670,7 +673,9 @@ export function PhraseList({
       {state.items.length > 0 && (
         <ul
           aria-busy={swapping || undefined}
-          className={swapping ? "pointer-events-none space-y-2 md:space-y-3" : "space-y-2 md:space-y-3"}
+          className={
+            swapping ? "pointer-events-none space-y-2 md:space-y-3" : "space-y-2 md:space-y-3"
+          }
         >
           {state.items.map((item) => (
             <li key={item.key}>
@@ -692,7 +697,13 @@ export function PhraseList({
         </ul>
       )}
       <div className="flex justify-end">
-        <Button variant="secondary" size="md" className="min-w-11" onClick={onClose} data-phrase-close>
+        <Button
+          variant="secondary"
+          size="md"
+          className="min-w-11"
+          onClick={onClose}
+          data-phrase-close
+        >
           {AI_ROOM_TEXTS.close}
         </Button>
       </div>

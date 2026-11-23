@@ -39,7 +39,7 @@ import {
 import type { LoadPhraseCandidates, LoadPhraseUsage, RankedPhraseCandidate } from "./types";
 
 /*
- * Kandidatkilden for forslag fra frasebanken (docs/funksjoner/fase2a-ki-i-veien.md, A423, A433,
+ * Kandidatkilden for forslag fra frasebanken (docs/funksjoner/fase2a-ki-i-veien.md, A482, A433,
  * A463, A467 og A468). Den ene stedet som vet hvor kandidatene kommer fra: i dag tekstene i
  * rapportens låste malversjon (`template_outcome`, `template_measure`). Frasebanken (`phrase`)
  * kobles til her i 2a-3 uten at KI-delen endres.

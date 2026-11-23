@@ -834,7 +834,7 @@ export type ReportSummaryView = {
 
 /**
  * Leser sammendraget (`organization.read`). `null` når oppdraget ikke har en startet rapport.
- * Godkjente funn (A425, A434): avvik med TG2 eller TG3, kontrollpunkt med TGIU og HMS-avvik, i
+ * Godkjente funn (A484, A434): avvik med TG2 eller TG3, kontrollpunkt med TGIU og HMS-avvik, i
  * hele rapporten, uten slettede rader. Rekkefølge: `SUMMARY_GROUPS`, og malens rekkefølge innen
  * gruppen. Avvik uten valgt TG, TG0, TG1, avviste regelforslag og tomme punkter tas ikke med.
  */

@@ -409,7 +409,7 @@ export function parseNumberInput(raw: string): { ok: true; value: number | null 
   return { ok: true, value: Number(compact.replace("−", "-")) };
 }
 
-// --- KI i veien: forslag fra frasebanken (A426, A433, A437, A468) ------------------------------
+// --- KI i veien: forslag fra frasebanken (A485, A433, A437, A468) ------------------------------
 
 /** Høyst så mange kandidater i listen, samme tall som serveren bruker (A433). */
 export const PHRASE_LIST_MAX = AI_CANDIDATE_REFS_MAX;
@@ -553,7 +553,7 @@ export function phraseCurrentTexts(
 }
 
 /**
- * Tekstsøket uten KI (A426): kandidatene som er lastet med badet, søkt med teksten som står i
+ * Tekstsøket uten KI (A485): kandidatene som er lastet med badet, søkt med teksten som står i
  * feltet. Malens egen tekst i feltet gir de første kandidatene, ikke null treff. Ingen kall og
  * ingen logg.
  */

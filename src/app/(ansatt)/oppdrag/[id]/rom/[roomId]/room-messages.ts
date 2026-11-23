@@ -158,8 +158,7 @@ export const AI_ROOM_TEXTS = {
   summaryAdded: (checkpoint: string) => `${checkpoint}: nytt funn`,
   summaryChangedItem: (checkpoint: string, tg: string | null) =>
     tg ? `${checkpoint}: endret, nå ${tg}` : `${checkpoint}: funnet er endret`,
-  summaryRemoved: (n: number) =>
-    n === 1 ? "1 funn er fjernet." : `${n} funn er fjernet.`,
+  summaryRemoved: (n: number) => (n === 1 ? "1 funn er fjernet." : `${n} funn er fjernet.`),
   summaryUncovered: (checkpoint: string, tg: "TG3" | "TGIU") =>
     `${checkpoint} har ${tg} og er ikke nevnt i sammendraget.`,
   summaryTooMany: (limit: number) =>
