@@ -559,7 +559,8 @@ test("K7.2 «Bytt ut teksten» når feltet har egen tekst; «Angre» setter tilb
   await openRankedList(deviation, "årsak");
   const first = candidates(deviation).first();
   await expect(first).toContainText("Bytt ut teksten");
-  await expect(first).toHaveAccessibleName(/^Bytt ut teksten: /);
+  // Navnet er den synlige teksten i samme rekkefølge (WCAG 2.5.3): kandidaten først, handlingen sist
+  await expect(first).toHaveAccessibleName(/Bytt ut teksten$/);
   const chosen = await candidateText(first);
   await first.click();
   await expect(field(deviation, "Årsak")).toHaveValue(chosen);
@@ -1011,7 +1012,7 @@ test("K7.11a «Mest brukt» står på kandidaten som er valgt flest ganger i org
   const marked = candidates(reloaded).filter({ hasText: "Mest brukt" });
   await expect(marked).toHaveCount(1);
   await expect(marked.locator("span").first()).toHaveText(chosen);
-  await expect(marked).toHaveAccessibleName(/mest brukt/);
+  await expect(marked).toHaveAccessibleName(/mest brukt/i);
   await expect(phraseList(reloaded)).toHaveAttribute("data-phase", "ranked");
   await expect(candidates(reloaded).filter({ hasText: "Mest brukt" })).toHaveCount(1);
 });
