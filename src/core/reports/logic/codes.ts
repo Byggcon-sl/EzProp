@@ -38,7 +38,10 @@ export const CHECKPOINT_WARNING_CODES = [
   "tgiu_suggested_not_set",
   /** «Utført uten funn» med måling lik eller over grensen (T-0059). */
   "no_findings_with_reading_over_limit",
-  /** Et godtatt eller endret forslag der regelen ikke lenger slår til. */
+  /**
+   * Et gjeldende godtatt eller endret forslag der regelen ikke lenger slår til. Beslutninger som
+   * ikke er gjeldende (avviket er fjernet, eller TG på punktet er endret), gir ingen advarsel.
+   */
   "suggestion_no_longer_applies",
   /** TG er endret, og malen har ikke egen tiltakstekst for den nye TG-en. */
   "texts_written_for_other_tg",
@@ -52,6 +55,12 @@ export const CHECKPOINT_WARNING_CODES = [
    * malen ikke er skrevet for TG3 (`outcomeTg !== 3`, A358 og A396).
    */
   "tg3_on_age_only",
+  /**
+   * Punktet er merket ferdig, og et utløst forslag av typen `outcome` eller `tg0` står uten
+   * gjeldende beslutning (A492), også når punktet har TG fra før. TGIU-forslag dekkes av
+   * `tgiu_suggested_not_set`. Advarsel, aldri sperre (spørsmål 105 til Ståle).
+   */
+  "open_suggestion_on_done_checkpoint",
 ] as const;
 
 /** Det som kan mangle på et avvik eller i TGIU-opplysningene (`CheckpointWarning.missing`). */
@@ -108,7 +117,7 @@ export const WARNING_FIX_KINDS = [
   "focus_field",
   /** Flytt fokus til TG-valget på punktet. */
   "focus_tg_choice",
-  /** Rull til forslaget som ikke gjelder lenger. */
+  /** Rull til forslaget som ikke gjelder lenger, eller som står åpent på et ferdig punkt. */
   "scroll_to_suggestion",
 ] as const;
 
