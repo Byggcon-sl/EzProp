@@ -504,9 +504,9 @@ describe("KI-køen på klienten, statiske kontroller (K4.4–K4.8)", () => {
     expect(valueImport.test('import type { AiFeatureDefinition } from "../features";')).toBe(false);
   });
 
-  it("K4.8 ingen tekst utenfor IndexedDB: client/ og prøvesiden bruker ikke localStorage, sessionStorage eller adressen", () => {
-    expect(existsSync(trialClient)).toBe(true);
-    const files = [...clientFiles(), trialClient];
+  it("K4.8 ingen tekst utenfor IndexedDB: client/ bruker ikke localStorage, sessionStorage eller adressen (prøvesiden er fjernet, A487)", () => {
+    expect(existsSync(trialClient)).toBe(false);
+    const files = clientFiles();
     const storage = files
       .filter((file) => /\b(localStorage|sessionStorage)\b/.test(read(file)))
       .map(rel);

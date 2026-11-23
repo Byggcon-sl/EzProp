@@ -160,8 +160,11 @@ describe("funksjonsdefinisjonene (2)", () => {
       readFileSync(file, "utf8").includes("language_polish.v1"),
     );
     expect(withVersion.length, "en kildefil har ledetekstversjonen").toBeGreaterThan(0);
-    // Regel 7: ingen gjetteord i KI-modulens tekster (ledeteksten ligger her)
-    for (const file of files) {
+    // Regel 7: ingen gjetteord i KI-modulens tekster (ledeteksten ligger her). Unntak:
+    // evalueringskjøreren, som har listen over gjetteord den sjekker svarene mot.
+    const checkerFile = join(aiDir, "evals", "run.ts");
+    expect(readFileSync(checkerFile, "utf8"), "kjøreren har gjetteordlisten").toMatch(/"antas"/);
+    for (const file of files.filter((item) => item !== checkerFile)) {
       expect(readFileSync(file, "utf8"), file).not.toMatch(/\b(antas|trolig)\b/i);
     }
     // Selve ledeteksten prøves også i request-suggestion.test.ts (det leverandøren får).
