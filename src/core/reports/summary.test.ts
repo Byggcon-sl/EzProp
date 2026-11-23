@@ -289,6 +289,48 @@ describe("4c lagring og advarsler", () => {
     expect((await reportRow(f)).summaryText).toBeNull();
   });
 
+  it("uten plassholdere avgjør serveren godtatt eller endret, ikke klienten", async () => {
+    const f = await kiBathroom();
+    await fullReport(f);
+    // Klienten sier «endret», men teksten er lik utkastet: godtatt
+    const same = await draftOf(f);
+    expect((await aiRow(same.usageId ?? ""))?.redacted_count).toBe(0);
+    const saved = await saveSummary(f.actor, f.organizationId, f.assignmentId, {
+      text: `${same.text}\n`,
+      baseRowVersion: (await summaryOf(f)).rowVersion,
+      draft: { usageId: same.usageId, basis: same.basis, edited: true },
+    });
+    if (saved.status !== "saved") throw new Error(`fikk ${saved.status}`);
+    expect((await aiRow(same.usageId ?? ""))?.status).toBe("accepted");
+
+    // Klienten sier «ikke endret», men teksten er endret: endret
+    const changed = await draftOf(f);
+    const again = await saveSummary(f.actor, f.organizationId, f.assignmentId, {
+      text: `${changed.text}\nMxq tillegg`,
+      baseRowVersion: saved.summary.rowVersion,
+      draft: { usageId: changed.usageId, basis: changed.basis, edited: false },
+    });
+    expect(again.status).toBe("saved");
+    expect((await aiRow(changed.usageId ?? ""))?.status).toBe("edited");
+  });
+
+  it("tom tekst med usageId fra et utkast avvises, og raden og sammendraget er uendret", async () => {
+    const f = await kiBathroom();
+    await fullReport(f);
+    const draft = await draftOf(f);
+    const before = await reportRow(f);
+    const error = await captureError(() =>
+      saveSummary(f.actor, f.organizationId, f.assignmentId, {
+        text: null,
+        baseRowVersion: before.rowVersion,
+        draft: { usageId: draft.usageId, basis: draft.basis, edited: false },
+      }),
+    );
+    expect(error).toBeInstanceOf(ReportValidationError);
+    expect((await aiRow(draft.usageId ?? ""))?.status).toBe("suggested");
+    expect((await reportRow(f)).rowVersion).toBe(before.rowVersion);
+  });
+
   it("K4.16 endret TG, nytt funn og fjernet funn gir advarsel; ingen sperre", async () => {
     const f = await kiBathroom();
     const { tg2, hms } = await fullReport(f);

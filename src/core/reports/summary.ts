@@ -34,6 +34,7 @@ import {
   assembleCodeOnlySummary,
   collectSummaryFindings,
   compareSummaryBasis,
+  containsPiiPlaceholder,
   groupSummaryFindings,
   summaryBasisOf,
   summaryNeedsAi,
@@ -477,19 +478,22 @@ function checkedBasis(
 
 /**
  * Loggraden for utkastet (A470): samme organisasjon, ikke slettet, funksjonen `summary_draft` og
- * målet `report` / `summary_text` med id-en til akkurat denne rapporten. Ellers 404.
+ * målet `report` / `summary_text` med id-en til akkurat denne rapporten. Ellers 404. Gir teksten
+ * som ble lagret og antall plassholdere, så serveren kan avgjøre «godtatt» eller «endret».
  */
 async function requireSummaryUsageRow(
   ex: DbExecutor,
   orgId: string,
   reportId: string,
   usageId: string,
-) {
+): Promise<{ outputText: string | null; redactedCount: number }> {
   const [row] = await ex
     .select({
       feature: aiUsageLog.feature,
       reportId: aiUsageLog.reportId,
       targetRef: aiUsageLog.targetRef,
+      outputText: aiUsageLog.outputText,
+      redactedCount: aiUsageLog.redactedCount,
     })
     .from(aiUsageLog)
     .where(
@@ -509,6 +513,29 @@ async function requireSummaryUsageRow(
   ) {
     throw new AccessDeniedError();
   }
+  return { outputText: row.outputText, redactedCount: row.redactedCount };
+}
+
+/** Lik tekst uten hensyn til linjeskiftform, Unicode-form og mellomrom i start og slutt. */
+function sameSummaryText(a: string, b: string): boolean {
+  const normalize = (text: string) => text.normalize("NFC").replace(/\r\n?/gu, "\n").trim();
+  return normalize(a) === normalize(b);
+}
+
+/**
+ * «Godtatt» eller «endret». Uten plassholdere avgjør serveren selv ved å sammenligne med teksten
+ * KI ga (`output_text`). Med plassholdere er de opprinnelige verdiene borte (A466), og da gjelder
+ * det klienten sier.
+ */
+function summaryDecision(
+  row: { outputText: string | null; redactedCount: number },
+  text: string,
+  clientEdited: boolean,
+): "accepted" | "edited" {
+  if (row.redactedCount > 0 || row.outputText === null || containsPiiPlaceholder(row.outputText)) {
+    return clientEdited ? "edited" : "accepted";
+  }
+  return sameSummaryText(text, row.outputText) ? "accepted" : "edited";
 }
 
 /** Se `SaveSummary` i `./types`. */
@@ -527,6 +554,10 @@ export const saveSummary: SaveSummary = (actor, organizationId, assignmentId, in
       }
 
       const text = values.text;
+      // Et utkast fra KI kan ikke «brukes» som tomt sammendrag
+      if (text === null && values.draft?.usageId) {
+        throw new ReportValidationError("invalid_input");
+      }
       let basis: SummaryBasisEntry[] | null | undefined;
       if (text === null) {
         // Tom tekst tømmer sammendraget og grunnlaget
@@ -540,9 +571,9 @@ export const saveSummary: SaveSummary = (actor, organizationId, assignmentId, in
         );
         basis = checkedBasis(values.draft.basis, findings);
       }
-      if (values.draft?.usageId) {
-        await requireSummaryUsageRow(scope.tx, scope.orgId, scope.reportId, values.draft.usageId);
-      }
+      const usageRow = values.draft?.usageId
+        ? await requireSummaryUsageRow(scope.tx, scope.orgId, scope.reportId, values.draft.usageId)
+        : null;
 
       const [updated] = await scope.tx
         .update(reports)
@@ -566,12 +597,12 @@ export const saveSummary: SaveSummary = (actor, organizationId, assignmentId, in
         },
       });
       // Beslutningen i samme transaksjon (A469): rapportraden er låst først, så KI-låsen
-      if (values.draft?.usageId) {
+      if (values.draft?.usageId && usageRow && text !== null) {
         await recordDecisionIn(
           scope.tx,
           scope.grant,
           values.draft.usageId,
-          values.draft.edited ? "edited" : "accepted",
+          summaryDecision(usageRow, text, values.draft.edited),
         );
       }
       const fresh = await findReport(scope.tx, scope.orgId, assignmentId);
