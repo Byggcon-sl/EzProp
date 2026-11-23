@@ -35,3 +35,4 @@ Merk de fire radene. Fast del av læringsløkken: når en ny rad sier «Endrer A
 
 ## Logg
 - 2026-11-17: funnet
+- 2026-11-18: også A350 (main 50fad3e4): A350 sier at KI-målkoden for avviksteksten er `description`, men er ikke merket «Endret av A356». Se også T-0124.

@@ -78,17 +78,17 @@ Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4�
 
 ## Oppgaver fra testlaget
 
-Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 17.11.2026 på main 2dc573c0 (det som var nytt siden a1ca41d9).
+Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 18.11.2026 på main 50fad3e4 (det som var nytt siden 2dc573c0: papirkurv, retting av T-0070/T-0071, rydding av innloggingsdata, badet på PC, Mine innlogginger).
 
-- **Åpne alvorlige feil: 0.** T-0050 er rettet bekreftet (tredje prøve) og lukket.
-- Åpne funn i alt: 101 (0 alvorlige, 28 middels, 73 små). Nye denne gangen: T-0092–T-0112 (5 middels, 16 små). Middels og små tas med neste oppgave i samme område. Lukket denne gangen: T-0050.
-- **Middels, nye:** T-0092 (bytte av romtype overskriver arealtypen), T-0093 (to like tilbud ved tapt svar), T-0094 (matrikkel med null foran vaskes ikke før KI), T-0105 (postnummer og sted må skrives på nytt), T-0106 (bestilling og eiendom med ulik adresse uten varsel).
-- **Før «klar for drift»:** T-0070 (utløpt innlogging sletter skjema) og T-0071 (engelsk feilside når nettet faller).
-- **Plan og beslutninger:** T-0072, T-0078 og T-0098 (DPIA-punktet), T-0096 og T-0101 (beslutninger ikke merket endret eller dyre), T-0103 (spørsmål 82 brukt to ganger).
-- **Før «Badet på PC»:** T-0051, T-0059 og T-0060, og T-0014 (punkt 1 og 5) i 2a-3.
-- **Må tas før ekte KI slås på:** T-0044, T-0046, T-0047, T-0034, T-0038, og nå T-0094, T-0110 og T-0111.
-- Fortsatt feil etter retting: T-0021 (forsøk 2) og T-0003 (forsøk 1). Ser rettet ut, men er ikke meldt rettet: T-0031 og T-0075 (sett status «rettet», så prøver testlaget dem).
-- Til testlagets oppsett: testbrukerne trenger kontor og en admin, klargjøringen bør kjøre `pnpm db:seed:testdata` i Byggcon lokalt, og vurder å slå på den falske KI-tjenesten i Byggcon lokalt. Uten dette ble forhåndsvalgt kontor, admin-skjermene og KI-kortet i nettleseren ikke prøvd 17.11. Kontrollpunkter, avvik, bilder, fraser og PDF har ingen skjerm ennå.
+- **Åpne alvorlige feil: 0.**
+- Åpne funn i alt: 118 (0 alvorlige, 39 middels, 79 små). Nye denne gangen: T-0113–T-0130 (10 middels, 8 små). Hevet til middels: T-0061 og T-0024. Lukket denne gangen: T-0071 (rettet bekreftet).
+- **Middels, nye, på badet (regelforslag og TGIU):** T-0113 (TG endres etter Godta uten grunn), T-0114 (TGIU fylles ut to ganger), T-0115 og T-0117 (godtatt forslag og fjernet avvik gir feil eller manglende advarsel; T-0117 er nær alvorlig), T-0116 (to faner gir to avvik), T-0126 og T-0127 (forbedringer i «Å se over»), og T-0061 (urimelig årstall). Tas med neste oppgave på badet, før publiseringssperren og PDF-en.
+- **Fra før, på badet (ikke meldt rettet selv om badet på PC er levert):** T-0051, T-0059, T-0060 og T-0014 (punkt 1 og 5). Fagtesteren så 18.11 at alle TG2-tiltak bruker «bør» og alle TG3-tiltak «må», så T-0060 kan være rettet: sett status «rettet», så prøver testlaget den. Det samme gjelder T-0031 og T-0075.
+- **Middels, nye, innlogging og fritekst:** T-0118 (ansatt som har sluttet, kan logge inn med kode; strider mot A217), T-0119 (sperren mot fødselsnummer stopper dato, beløp og målinger), T-0120 (utløpt innlogging på badet og ved Angre).
+- **Fortsatt feil etter retting:** T-0070 (forsøk 1): virker når informasjonskapselen er borte, men ikke når økten er slettet på serveren (utlogging fra annen enhet, «Har sluttet»), og ikke i «Endre bestillingen». Rettes sammen med T-0120. Fra før: T-0021 (forsøk 2) og T-0003 (forsøk 1).
+- **Plan og beslutninger:** T-0024 (nå middels: A-numre og spørsmålsnumre kolliderer mellom brancher), T-0103 (spørsmål 82, 85, 88 og 89 brukt to ganger), T-0102/T-0077/T-0079/T-0121 (plan, levert og forbedrerens liste ikke ryddet), T-0096, T-0124, T-0125, og fra før T-0072, T-0078, T-0098 og T-0101. Spørsmål til fagrådet fra testlaget: nr. 104.
+- **Må tas før ekte KI slås på:** T-0044, T-0046, T-0047, T-0034, T-0038, T-0094, T-0110 og T-0111.
+- Til testlagets oppsett: nattløkken 18.11.2026 kl. 02:17 stoppet på bruksgrensen etter 13 sekunder; begge rutinene er slått på.
 
 ## Oppgaver fra nattløkken
 
