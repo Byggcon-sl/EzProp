@@ -20,6 +20,7 @@ export {
   restoreDeviation,
 } from "./deviations";
 export { decideSuggestion } from "./suggestions";
+export { changeSuggestedDeviationTg } from "./suggested-tg";
 export { setCheckpointDone, setTgDirect } from "./tgiu";
 export {
   REPORT_VALIDATION_CODES,

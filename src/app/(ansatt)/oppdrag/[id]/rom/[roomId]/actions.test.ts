@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 import { AccessDeniedError } from "@/core/access";
 import type { ReportFieldChange } from "@/core/reports/types";
-import { NO_ACCESS, UNKNOWN_ERROR } from "../../../../form-state";
+import { NO_ACCESS, SIGNED_OUT_MESSAGE, UNKNOWN_ERROR } from "../../../../form-state";
 import { ROOM_ACTION_MESSAGES } from "./room-messages";
 
 /*
@@ -29,6 +29,7 @@ class FakeReportTemplateMissingError extends Error {
 
 const mocks = vi.hoisted(() => ({
   getEmployeeContext: vi.fn(),
+  getEmployeeContextForAction: vi.fn(),
   logError: vi.fn(),
   core: {
     startReport: vi.fn(),
@@ -41,6 +42,7 @@ const mocks = vi.hoisted(() => ({
     setTgDirect: vi.fn(),
     decideSuggestion: vi.fn(),
     setCheckpointDone: vi.fn(),
+    changeSuggestedDeviationTg: vi.fn(),
   },
 }));
 
@@ -48,7 +50,10 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/shared/lib/logger", () => ({
   logger: { error: mocks.logError, warn: vi.fn(), info: vi.fn() },
 }));
-vi.mock("../../../../employee-context", () => ({ getEmployeeContext: mocks.getEmployeeContext }));
+vi.mock("../../../../employee-context", () => ({
+  getEmployeeContext: mocks.getEmployeeContext,
+  getEmployeeContextForAction: mocks.getEmployeeContextForAction,
+}));
 vi.mock("@/core/reports", () => ({
   ...mocks.core,
   ReportValidationError: FakeReportValidationError,
@@ -212,5 +217,90 @@ describe("startReportAction", () => {
       status: "error",
       message: ROOM_ACTION_MESSAGES.templateMissing,
     });
+  });
+});
+
+describe("changeSuggestedDeviationTgAction (T-0113, A490, FA-I37)", () => {
+  const input = {
+    id: "0190a000-0000-7000-8000-000000000080",
+    deviationId: DEVIATION,
+    tg: 2 as const,
+    base: 3 as const,
+    overrideReasonCode: "other" as const,
+    overrideReason: SECRET_TEXT,
+  };
+
+  beforeEach(() => {
+    mocks.getEmployeeContextForAction.mockResolvedValue({
+      status: "ok",
+      context: { actor, organizationId: ORG },
+    });
+  });
+
+  it("bruker organisasjonen fra tilgangssjekken og bare rom-id-ene", async () => {
+    const forged = { ...ref, organizationId: OTHER_ORG } as typeof ref;
+    expect(await actions.changeSuggestedDeviationTgAction(forged, input)).toEqual(SAVED);
+    expect(mocks.core.changeSuggestedDeviationTg).toHaveBeenCalledWith(
+      actor,
+      ORG,
+      { assignmentId: ASSIGNMENT, roomId: ROOM },
+      input,
+    );
+  });
+
+  it("logget ut gir signedOut, og kjernen kalles ikke", async () => {
+    mocks.getEmployeeContextForAction.mockResolvedValue({ status: "signed_out" });
+    expect(await actions.changeSuggestedDeviationTgAction(ref, input)).toEqual({
+      status: "error",
+      message: SIGNED_OUT_MESSAGE,
+      signedOut: true,
+    });
+    expect(mocks.core.changeSuggestedDeviationTg).not.toHaveBeenCalled();
+  });
+
+  it("uten ansatt eller med ugyldig rom: ingen tilgang, kjernen kalles ikke", async () => {
+    mocks.getEmployeeContextForAction.mockResolvedValue({ status: "no_access" });
+    expect(await actions.changeSuggestedDeviationTgAction(ref, input)).toEqual({
+      status: "error",
+      message: NO_ACCESS,
+    });
+    mocks.getEmployeeContextForAction.mockResolvedValue({
+      status: "ok",
+      context: { actor, organizationId: ORG },
+    });
+    expect(
+      await actions.changeSuggestedDeviationTgAction(
+        { assignmentId: "x", roomId: ROOM } as typeof ref,
+        input,
+      ),
+    ).toEqual({ status: "error", message: NO_ACCESS });
+    expect(mocks.core.changeSuggestedDeviationTg).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["AccessDeniedError", new AccessDeniedError(), NO_ACCESS],
+    [
+      "ReportValidationError (grunn mangler)",
+      new FakeReportValidationError("Velg en grunn for å endre TG fra forslaget."),
+      "Velg en grunn for å endre TG fra forslaget.",
+    ],
+  ])("%s gir norsk melding uten logg", async (_name, error, message) => {
+    mocks.core.changeSuggestedDeviationTg.mockRejectedValue(error);
+    expect(await actions.changeSuggestedDeviationTgAction(ref, input)).toEqual({
+      status: "error",
+      message,
+    });
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it("ukjent feil logges med id-er og handlingen, aldri med begrunnelsesteksten", async () => {
+    mocks.core.changeSuggestedDeviationTg.mockRejectedValue(new Error(`feil: ${SECRET_TEXT}`));
+    expect(await actions.changeSuggestedDeviationTgAction(ref, input)).toEqual({
+      status: "error",
+      message: UNKNOWN_ERROR,
+    });
+    const logged = JSON.stringify(mocks.logError.mock.calls);
+    expect(logged).not.toContain(SECRET_TEXT);
+    expect(logged).toContain("change_suggested_deviation_tg");
   });
 });

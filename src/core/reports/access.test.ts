@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -6,6 +7,7 @@ import { AccessDeniedError, permissions, type Actor } from "@/core/access";
 import {
   addDeviation,
   addMeasure,
+  changeSuggestedDeviationTg,
   decideSuggestion,
   getRoomView,
   removeDeviation,
@@ -16,7 +18,8 @@ import {
   setTgDirect,
   startReport,
 } from "@/core/reports";
-import type { EmployeeRole } from "@/db/schema";
+import { db } from "@/db/client";
+import { deviations, employees, type EmployeeRole } from "@/db/schema";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { grantPermission, resetDatabase } from "../../../tests/factories";
 import {
@@ -260,5 +263,88 @@ describe("B5.7 ingen nye rettigheter", () => {
       "statistics.read",
     ]);
     expect(permissions as readonly string[]).not.toContain("report.read");
+  });
+});
+
+// --- T-0113, A490: TG-bytte på avvik fra forslag (testplan 2e, FA-I32–FA-I35) -------------------
+
+/** Et startet bad med godtatt TG3-forslag, laget av admin. */
+async function prepareSuggested() {
+  const f = await startedBathroom({ roles: ["admin"] });
+  await answerMembrane1990(f);
+  const deviationId = uuidv7();
+  const accepted = await decideSuggestion(f.actor, f.organizationId, f.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "accepted",
+    deviationId,
+  });
+  if (accepted.status !== "saved") throw new Error("godta feilet");
+  return { ...f, deviationId };
+}
+
+function changeTgWithReason(actor: Actor, p: Awaited<ReturnType<typeof prepareSuggested>>) {
+  return changeSuggestedDeviationTg(actor, p.organizationId, p.room, {
+    id: uuidv7(),
+    deviationId: p.deviationId,
+    tg: 2,
+    base: 3,
+    overrideReasonCode: "visible_damage",
+  });
+}
+
+async function tgOf(deviationId: string) {
+  const [row] = await db
+    .select({ tg: deviations.tg })
+    .from(deviations)
+    .where(eq(deviations.id, deviationId));
+  return row?.tg;
+}
+
+describe("FA-I32 tilgangsmatrisen for TG-bytte med grunn", () => {
+  it.each(CASES)(
+    "FA-I32 $role, inspectors_edit_all $editAll, enkeltrettighet $single (lov: $allowed)",
+    async ({ role, editAll, single, allowed }) => {
+      const p = await prepareSuggested();
+      await setInspectorsEditAll(p.organizationId, editAll);
+      const { actor, employee } = await createStaff(p.organizationId, [role]);
+      if (single) await grantPermission(employee, "report.edit");
+      if (allowed) {
+        expect((await changeTgWithReason(actor, p)).status).toBe("saved");
+        expect(await tgOf(p.deviationId)).toBe(2);
+      } else {
+        await expect(changeTgWithReason(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+        expect(await tgOf(p.deviationId)).toBe(3);
+      }
+    },
+  );
+
+  it("FA-I32 ansatt uten rolle får nei", async () => {
+    const p = await prepareSuggested();
+    const { actor } = await createStaff(p.organizationId, []);
+    await expect(changeTgWithReason(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+    expect(await tgOf(p.deviationId)).toBe(3);
+  });
+});
+
+describe("FA-I33 admin stenges aldri ute fra TG-bytte", () => {
+  it("FA-I33 admin uten andre roller bytter TG med grunn når takstmenn er sperret", async () => {
+    const p = await prepareSuggested();
+    await setInspectorsEditAll(p.organizationId, false);
+    const inspector = await createStaff(p.organizationId, ["inspector"]);
+    const admin = await createStaff(p.organizationId, ["admin"]);
+    await expect(changeTgWithReason(inspector.actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+    expect((await changeTgWithReason(admin.actor, p)).status).toBe("saved");
+    expect(await tgOf(p.deviationId)).toBe(2);
+  });
+});
+
+describe("FA-I35 myk slettet ansatt", () => {
+  it("FA-I35 myk slettet ansatt får nei, og ingenting lagres", async () => {
+    const p = await prepareSuggested();
+    const { actor, employee } = await createStaff(p.organizationId, ["manager"]);
+    await db.update(employees).set({ deletedAt: new Date() }).where(eq(employees.id, employee.id));
+    await expect(changeTgWithReason(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+    expect(await tgOf(p.deviationId)).toBe(3);
   });
 });

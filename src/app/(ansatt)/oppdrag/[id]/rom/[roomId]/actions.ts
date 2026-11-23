@@ -5,6 +5,7 @@ import { AccessDeniedError } from "@/core/access";
 import {
   addDeviation,
   addMeasure,
+  changeSuggestedDeviationTg,
   decideSuggestion,
   removeDeviation,
   removeMeasure,
@@ -19,6 +20,8 @@ import {
 import type {
   ActionResult,
   AddDeviationInput,
+  ChangeSuggestedDeviationTgInput,
+  ChangeSuggestedDeviationTgResult,
   DecideSuggestionInput,
   DecideSuggestionResult,
   ReportFieldChange,
@@ -30,8 +33,12 @@ import type {
 } from "@/core/reports/types";
 import { logger } from "@/shared/lib/logger";
 import { isUuid } from "@/shared/lib/uuid";
-import { getEmployeeContext, type EmployeeContext } from "../../../../employee-context";
-import { NO_ACCESS, UNKNOWN_ERROR } from "../../../../form-state";
+import {
+  getEmployeeContext,
+  getEmployeeContextForAction,
+  type EmployeeContext,
+} from "../../../../employee-context";
+import { NO_ACCESS, SIGNED_OUT_MESSAGE, UNKNOWN_ERROR } from "../../../../form-state";
 import { ROOM_ACTION_MESSAGES, type ActionError } from "./room-messages";
 
 /*
@@ -194,4 +201,33 @@ export async function setCheckpointDoneAction(
   return onRoom("set_checkpoint_done", ref, (context, room) =>
     setCheckpointDone(context.actor, context.organizationId, room, input),
   );
+}
+
+/** «Logget ut» (T-0070): skjermen beholder valget og viser meldingen. Ingenting er lagret. */
+export type SignedOutError = ActionError & { signedOut: true };
+
+/**
+ * TG-bytte på et avvik fra et regelforslag, med grunn i samme kall (A490). Organisasjonen kommer
+ * fra tilgangssjekken; uten økt er svaret «logget ut», og kjernen kalles ikke.
+ */
+export async function changeSuggestedDeviationTgAction(
+  ref: RoomRef,
+  input: ChangeSuggestedDeviationTgInput,
+): Promise<ChangeSuggestedDeviationTgResult | ActionError | SignedOutError> {
+  const access = await getEmployeeContextForAction();
+  if (access.status === "signed_out") {
+    return { status: "error", message: SIGNED_OUT_MESSAGE, signedOut: true };
+  }
+  if (access.status !== "ok" || !isRoomRef(ref)) return errorOf(NO_ACCESS);
+  const { context } = access;
+  const room: RoomRef = { assignmentId: ref.assignmentId, roomId: ref.roomId };
+  try {
+    return await changeSuggestedDeviationTg(context.actor, context.organizationId, room, input);
+  } catch (error) {
+    return toActionError(error, {
+      action: "change_suggested_deviation_tg",
+      userId: context.actor.id,
+      ...room,
+    });
+  }
 }
