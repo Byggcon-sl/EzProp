@@ -1,7 +1,7 @@
 # Testplan: Testdata, del 2 (badet fylt ut i testoppdragene)
 
 - **Oppgavekort:** `docs/funksjoner/fase2a-testdata-del-2.md`
-- **Dato:** 17.11.2026 (test-leder, før bygging)
+- **Dato:** 17.11.2026 (test-leder, før bygging), kontrollert mot main og runde 2 i kortet 23.11.2026
 - **Branch:** `testdata-del-2`
 - **Støtter hovedmål:**
   - **De ansatte:** testene låser at testmiljøet alltid har bad som ligner ekte befaringer (TG2, TG3 med kostnad, TGIU, TG0, HMS, «ikke vurdert»), slik at skjermen kan prøves uten utfylling for hånd, og at skriptet aldri rører ekte arbeid eller admin.
@@ -58,7 +58,7 @@ Forslag. Avvik føres i kortet, og testskriver følger kortet.
 23. **frie tekster er merket utkast**, har én eller to varianter per felt og er korte.
 24. **ingen gjetteord** («antas», «trolig», «sannsynligvis») i noen streng i datafilen.
 25. **ingen tekst fra standarden:** ingen «NS 3600», «NS 3424», «TEK» med paragraf, eller setninger over 8 ord som står i de låste referansetekstene (samme sjekk som eksisterende kopitest).
-26. **ingen persondata:** ingen streng har `@`, telefonmønster, gnr/bnr, gatenavn eller navn fra `testdata.data.ts`, eller ord fra `tests/known-values.ts`.
+26. **ingen persondata:** ingen streng har `@`, telefonmønster, gnr/bnr, gatenavn eller navn fra `testdata.data.ts`, eller ord fra `tests/known-values.ts` (sjekken bruker `tests/redaction.ts`).
 27. **planlagte bilder er korte beskrivelser** uten personer («person», «eier», «ansikt» stopper) og uten filnavn.
 28. **hvert avvik i `expected` har ett kort `fieldNote`**, og notatene er med i testene 24–26 (gjetteord, standarden, persondata).
 
@@ -120,7 +120,7 @@ Forslag. Avvik føres i kortet, og testskriver følger kortet.
 ### 2.6 KI og revisjonslogg (akseptkriterium 11)
 31. **ingen rader i `ai_usage_log`** fra seed; den falske leverandøren har null kall.
 32. **aktøren i `audit_log`** for rapportradene er takstmannen på oppdraget, aldri seed-admin og aldri en annen ansatt.
-33. **ingen persondata i loggen:** fanget stdout og `audit_log`-detaljer har ingen `@`, navn, gatenavn eller gnr/bnr fra testdataene.
+33. **ingen persondata i loggen eller rapportdataene:** fanget stdout, `audit_log`-detaljer og alle tekstfelt i `deviations`, `deviation_measures`, `tgiu_details` og `field_answers` har ingen `@`, navn, gatenavn eller gnr/bnr fra testdataene (`tests/redaction.ts`, `tests/known-values.ts`).
 
 ### 2.7 Tenant-isolasjon (akseptkriterium 13)
 34. **`expectTenantIsolation` på `findTestdataBathReports`** og **på `findShowcaseBathReport`** (én `it` per spørring).
