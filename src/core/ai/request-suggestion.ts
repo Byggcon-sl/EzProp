@@ -163,7 +163,8 @@ function replayedResult(row: {
 }): AiSuggestionResult {
   const answer = toSuggestionResult(row);
   const hasPlaceholder =
-    row.outputText !== null && PII_PLACEHOLDERS.some((placeholder) => row.outputText!.includes(placeholder));
+    row.outputText !== null &&
+    PII_PLACEHOLDERS.some((placeholder) => row.outputText!.includes(placeholder));
   if (answer.kind === "suggestion" && (row.redactedCount > 0 || hasPlaceholder)) {
     return { kind: "error", usageId: row.id };
   }
