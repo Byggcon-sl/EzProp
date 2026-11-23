@@ -3148,6 +3148,35 @@ describe("KI i veien: samme requestId med kjent navn gir error, ikke plassholder
     expect(snapshot(await aiRow(request.requestId))).toBe(before);
   });
 
+  it("sammendrag: navn bare i TGIU-linjen gir også error andre gang", async () => {
+    const { grant, chain } = await kiSetup();
+    swap.load = knownName;
+    const groups: AiSummaryGroup[] = [
+      {
+        group: "tg2",
+        heading: "TG2 Vesentlige avvik",
+        findings: [finding("Sluk", "Klemringen mangler")],
+        fixedLines: [],
+      },
+      {
+        group: "tgiu",
+        heading: "TGIU Ikke undersøkt",
+        findings: [],
+        fixedLines: [{ checkpointName: "Hulltaking", text: `${NAME} tillot ikke hulltaking` }],
+      },
+    ];
+    const request = summaryRequest(chain);
+    const first = await requestWithServerInput(grant, request, { summaryGroups: groups });
+    if (first.kind !== "suggestion") throw new Error("forventet forslag");
+    expect(first.text).toContain(NAME);
+    const row = (await aiRow(request.requestId))!;
+    expect(String(row.output_text)).not.toContain(NAME);
+
+    const second = await requestWithServerInput(grant, request, { summaryGroups: groups });
+
+    expect(second).toEqual({ kind: "error", usageId: request.requestId });
+  });
+
   it("uten plassholdere gir samme requestId fortsatt samme forslag", async () => {
     const { grant, chain } = await kiSetup();
     swap.load = knownName;

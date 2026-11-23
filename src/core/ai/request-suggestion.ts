@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 import { stripUnstorableChars } from "@/shared/lib/clean-text";
 import { logger } from "@/shared/lib/logger";
+import { PII_PLACEHOLDERS } from "@/shared/lib/pii-patterns";
 import { isUuid } from "@/shared/lib/uuid";
 import { parseCandidateAnswer } from "./candidates";
 import { AiInputTooLargeError, AiRequestRejectedError } from "./errors";
@@ -149,6 +150,8 @@ const resultColumns = {
  * Svaret fra en rad som ble lagret i et tidligere kall (samme `requestId`). Har raden en tekst med
  * plassholdere (`redacted_count > 0`), er de opprinnelige verdiene borte (de holdes bare i minnet
  * under kallet, A466). Da gir kjernen `error` (prøv igjen), aldri teksten med plassholderne.
+ * Teksten sjekkes også direkte, fordi linjer som koden lager selv (TGIU-linjene i sammendraget),
+ * kan ha plassholdere uten at de telles i `redacted_count`.
  */
 function replayedResult(row: {
   id: string;
@@ -159,7 +162,9 @@ function replayedResult(row: {
   redactedCount: number;
 }): AiSuggestionResult {
   const answer = toSuggestionResult(row);
-  if (answer.kind === "suggestion" && row.redactedCount > 0) {
+  const hasPlaceholder =
+    row.outputText !== null && PII_PLACEHOLDERS.some((placeholder) => row.outputText!.includes(placeholder));
+  if (answer.kind === "suggestion" && (row.redactedCount > 0 || hasPlaceholder)) {
     return { kind: "error", usageId: row.id };
   }
   return answer;
