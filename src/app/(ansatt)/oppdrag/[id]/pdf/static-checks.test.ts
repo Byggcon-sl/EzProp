@@ -42,7 +42,11 @@ function loadServiceWorker() {
   };
   const context = vm.createContext({
     self,
-    caches: { open: async () => ({}), keys: async () => [], delete: async () => true },
+    caches: {
+      open: async () => ({ match: async () => undefined, put: async () => undefined }),
+      keys: async () => [],
+      delete: async () => true,
+    },
     fetch: async () => new Response(""),
     URL,
     Response,
