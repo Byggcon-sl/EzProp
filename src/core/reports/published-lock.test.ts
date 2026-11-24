@@ -279,11 +279,91 @@ const BUILDING_WRITES: [string, Write][] = [
 ];
 
 /**
+ * KI-tjenestene fra «KI i veien» som skriver i rapporten eller lager nye KI-forslag på den
+ * (A524-oppfølging, hovedløkken 24.11.2026). På en publisert rapport avvises de med
+ * `report_published` før noe kall til KI og før noen rad lagres. Utkast-tilfellet med KI på er
+ * prøvd i testene for hver tjeneste (`polish.test.ts`, `phrase-suggest*.test.ts`, `summary*.test.ts`,
+ * `decide-ai.test.ts`).
+ */
+const AI_REPORT_WRITES: [string, Write][] = [
+  [
+    "polishDeviation",
+    (l) =>
+      reportsCore.polishDeviation(l.actor, l.organizationId, l.room, {
+        deviationId: l.deviationId,
+        items: [
+          {
+            requestId: uuidv7(),
+            target: { type: "deviation", id: l.deviationId, fieldKey: "cause_text" },
+            text: "Oppdiktet årsak",
+          },
+        ],
+      }),
+  ],
+  [
+    "polishDescription",
+    (l) =>
+      reportsCore.polishDescription(l.actor, l.organizationId, l.room, {
+        requestId: uuidv7(),
+        checkpointKey: CP.floor,
+        text: "Oppdiktet beskrivelse",
+      }),
+  ],
+  [
+    "suggestPhrases",
+    (l) =>
+      reportsCore.suggestPhrases(l.actor, l.organizationId, l.room, {
+        requestId: uuidv7(),
+        deviationId: l.deviationId,
+        field: "cause_text",
+        text: "",
+      }),
+  ],
+  [
+    "applyPhrase",
+    (l) =>
+      reportsCore.applyPhrase(l.actor, l.organizationId, l.room, {
+        usageId: uuidv7(),
+        candidate: { source: "template_outcome", id: uuidv7() },
+        base: null,
+      }),
+  ],
+  [
+    "decideAiText",
+    (l) =>
+      reportsCore.decideAiText(l.actor, l.organizationId, l.room, {
+        usageId: uuidv7(),
+        decision: "rejected",
+      }),
+  ],
+  [
+    "draftSummary",
+    (l) =>
+      reportsCore.draftSummary(l.actor, l.organizationId, l.assignmentId, { requestId: uuidv7() }),
+  ],
+  [
+    "saveSummary",
+    (l) =>
+      reportsCore.saveSummary(l.actor, l.organizationId, l.assignmentId, {
+        text: "Oppdiktet sammendrag",
+        baseRowVersion: 1,
+      }),
+  ],
+];
+
+const AI_REPORT_WRITES_NAMES = AI_REPORT_WRITES.map(([name]) => name);
+
+/**
  * Eksporterte funksjoner i rapportkjernen som ikke skriver i rapporten, eller som skal virke på en
  * publisert rapport (publisering og «Lag ny versjon» har egne tester).
  */
 const NOT_REPORT_WRITES = new Set([
   "getRoomView",
+  "getReportSummary",
+  "loadPhraseCandidates",
+  "loadPhraseUsage",
+  // KI i veien: låsen prøves i `AI_REPORT_WRITES` under (utkast-tilfellet har egne tester)
+  ...AI_REPORT_WRITES_NAMES,
   "isReportPublishedForAssignment",
   "getPublishCheck",
   "publishReport",
@@ -314,6 +394,21 @@ describe("låsen etter publisering i rapportkjernen", () => {
       expect(error).toBeInstanceOf(ReportValidationError);
       expect((error as ReportValidationError).code).toBe("report_published");
       expect((error as Error).message).toBe("Rapporten er publisert. Lag ny versjon for å rette.");
+
+      expect(await snapshotDatabase()).toEqual(before);
+    },
+  );
+
+  it.each(AI_REPORT_WRITES)(
+    "%s (KI i veien) avvises med report_published, og ingenting endres",
+    async (_name, write) => {
+      const l = await lockFixture();
+      await setStatus(l.reportId, "published");
+      const before = await snapshotDatabase();
+
+      const error = await write(l).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ReportValidationError);
+      expect((error as ReportValidationError).code).toBe("report_published");
 
       expect(await snapshotDatabase()).toEqual(before);
     },

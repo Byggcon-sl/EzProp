@@ -235,6 +235,18 @@ const NOT_ROOM_WRITES = new Set([
   "isReportPublishedForAssignment",
   "publishReport",
   "startNewVersion",
+  // Leser bare (KI i veien)
+  "getReportSummary",
+  "loadPhraseCandidates",
+  "loadPhraseUsage",
+  // KI i veien: låsen prøves i `published-lock.test.ts` (`AI_REPORT_WRITES`)
+  "polishDeviation",
+  "polishDescription",
+  "suggestPhrases",
+  "applyPhrase",
+  "decideAiText",
+  "draftSummary",
+  "saveSummary",
 ]);
 
 async function expectLocked(action: () => Promise<unknown>) {

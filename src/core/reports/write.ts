@@ -136,6 +136,8 @@ export const withReportWrite: WithReportWrite = async (actor, organizationId, as
         )
         .for("update");
       if (!report) throw new ReportValidationError("report_not_started");
+      // Låst etter publisering (ADR 0015 punkt 15), samme feil som `withRoomWrite`
+      if (report.status === "published") throw new ReportValidationError("report_published");
       if (report.status !== "draft") throw new ReportValidationError("report_not_editable");
       const scope: ReportWriteScope = {
         tx,

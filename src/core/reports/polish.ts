@@ -12,7 +12,7 @@ import {
 import { db } from "@/db/client";
 import { checkpointResults, checkpoints, deviationMeasures, deviations } from "@/db/schema";
 import { loadRoomContext, requireUuid, type RoomContext } from "./context";
-import { guardReportErrors } from "./errors";
+import { guardReportErrors, ReportValidationError } from "./errors";
 import { parseOrThrow, polishDescriptionInputSchema, polishDeviationInputSchema } from "./schemas";
 import type {
   PolishDescription,
@@ -53,6 +53,10 @@ async function requireDraftRoom(
   room: RoomRef,
 ): Promise<RoomContext & { report: NonNullable<RoomContext["report"]> }> {
   const context = await loadRoomContext(db, grant, room, { lock: false });
+  // Publisert rapport: ingen nye KI-forslag før «Lag ny versjon» (ADR 0015 punkt 15)
+  if (context.report?.status === "published") {
+    throw new ReportValidationError("report_published");
+  }
   if (!context.report || context.report.status !== "draft") throw new AccessDeniedError();
   return { ...context, report: context.report };
 }

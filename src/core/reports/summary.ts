@@ -370,6 +370,7 @@ export const draftSummary: DraftSummary = async (actor, organizationId, assignme
   return guardReportErrors("summary_draft", async (): Promise<DraftSummaryResult> => {
     const report = await findReport(db, grant.organizationId, assignmentId);
     if (!report) throw new ReportValidationError("report_not_started");
+    if (report.status === "published") throw new ReportValidationError("report_published");
     if (report.status !== "draft") throw new ReportValidationError("report_not_editable");
     const { findings, missingTgCount } = await loadSummaryFindings(
       db,
