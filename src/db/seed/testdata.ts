@@ -48,6 +48,7 @@ import {
   seedTestdataBaths,
   type TestdataBathScenarioLine,
 } from "./testdata-bath";
+import type { BathScenario } from "./testdata-bath.data";
 import { assertTestdataAllowed } from "./testdata-guard";
 import { buildTestdataPlan } from "./testdata-plan";
 import type {
@@ -1398,10 +1399,13 @@ export async function seedTestdata({
   db,
   now,
   seed,
+  bathScenarios,
 }: {
   db: Db;
   now: Date;
   seed: number;
+  /** Scenarioene for badene (del 2). Standard er datafilen; testene kan gi en variant. */
+  bathScenarios?: readonly BathScenario[];
 }): Promise<TestdataSummary> {
   // (a) Vakten før noe databasekall eller transaksjon
   assertTestdataAllowed();
@@ -1514,7 +1518,7 @@ export async function seedTestdata({
 
   // (g) Del 2: badene i testoppdragene. Feil i et scenario gir norsk melding (TestdataBathError).
   try {
-    const baths = await seedTestdataBaths({ db, now, seed });
+    const baths = await seedTestdataBaths({ db, now, seed, scenarios: bathScenarios });
     for (const table of TESTDATA_BATH_TABLES) {
       summary.created[table] = baths.created[table];
       summary.existing[table] = baths.existing[table];

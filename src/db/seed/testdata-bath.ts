@@ -474,7 +474,18 @@ export function bathScenarioProblems(
 }
 
 /** Scenarioene den tilfeldige delen kan velge: alle unntatt visningsbadet (det skal være ett). */
-const RANDOM_POOL = TESTDATA_BATH_SCENARIOS.filter((s) => s.key !== SHOWCASE_BATH_SCENARIO_KEY);
+function randomPool(scenarios: readonly BathScenario[]): BathScenario[] {
+  return scenarios.filter((s) => s.key !== SHOWCASE_BATH_SCENARIO_KEY);
+}
+
+/** Scenarioet med koden i listen (standard: datafilen). Kaster hvis det mangler. */
+function scenarioIn(scenarios: readonly BathScenario[], key: string): BathScenario {
+  if (scenarios === TESTDATA_BATH_SCENARIOS) return bathScenarioByKey(key);
+  const scenario = scenarios.find((s) => s.key === key);
+  if (!scenario)
+    throw new TestdataBathError(`Scenarioet «${key}» finnes ikke i testdataene for badene.`);
+  return scenario;
+}
 
 /**
  * Den faste fordelingen (A504): de tolv pliktige scenarioene i fast rekkefølge på de første badene
@@ -486,12 +497,15 @@ export function assignBathScenarios({
   baths,
   seed,
   document = wetRoomTemplate,
+  scenarios = TESTDATA_BATH_SCENARIOS,
 }: {
   baths: readonly TestdataBathCandidate[];
   seed: number;
   document?: TemplateDocument;
+  /** Scenarioene som fordeles. Standard er datafilen; testene kan gi en variant. */
+  scenarios?: readonly BathScenario[];
 }): TestdataBathAssignment[] {
-  for (const scenario of TESTDATA_BATH_SCENARIOS) {
+  for (const scenario of scenarios) {
     const problems = bathScenarioProblems(scenario, document);
     if (problems.length > 0) {
       throw new TestdataBathError(
@@ -508,7 +522,7 @@ export function assignBathScenarios({
   }
   const chosen = new Map<TestdataBathCandidate, string>();
   for (const key of MANDATORY_BATH_SCENARIO_KEYS) {
-    const scenario = bathScenarioByKey(key);
+    const scenario = scenarioIn(scenarios, key);
     const bath = eligible.find(
       (candidate) => !chosen.has(candidate) && scenarioFitsBath(scenario, candidate, document),
     );
@@ -522,7 +536,9 @@ export function assignBathScenarios({
   const rng = createSeededRandom(seed);
   for (const bath of eligible) {
     if (chosen.has(bath)) continue;
-    const pool = RANDOM_POOL.filter((scenario) => scenarioFitsBath(scenario, bath, document));
+    const pool = randomPool(scenarios).filter((scenario) =>
+      scenarioFitsBath(scenario, bath, document),
+    );
     if (pool.length === 0) {
       throw new TestdataBathError(
         `Fant ikke et scenario som passer ${bath.roomName} i oppdrag ${bath.assignmentLabel}. Ingen bad er fylt ut.`,
@@ -1454,11 +1470,13 @@ export async function planTestdataBaths({
   organizationId,
   seed,
   now,
+  scenarios = TESTDATA_BATH_SCENARIOS,
 }: {
   db: Db;
   organizationId: string;
   seed: number;
   now: Date;
+  scenarios?: readonly BathScenario[];
 }): Promise<TestdataBathPlacement[]> {
   const plan = await resolveTestdataPlan(db, organizationId, seed, now);
   const planIndex = planRoomIndex(plan);
@@ -1482,7 +1500,7 @@ export async function planTestdataBaths({
     candidates.push(candidate);
     byCandidate.set(candidate, row);
   }
-  return assignBathScenarios({ baths: candidates, seed }).map((assignment) => {
+  return assignBathScenarios({ baths: candidates, seed, scenarios }).map((assignment) => {
     const row = byCandidate.get(assignment.bath) as DbBath;
     return { ...assignment, assignmentId: row.assignmentId, roomId: row.roomId };
   });
@@ -1496,10 +1514,13 @@ export async function seedTestdataBaths({
   db,
   now,
   seed,
+  scenarios = TESTDATA_BATH_SCENARIOS,
 }: {
   db: Db;
   now: Date;
   seed: number;
+  /** Scenarioene som fordeles. Standard er datafilen; testene kan gi en variant. */
+  scenarios?: readonly BathScenario[];
 }): Promise<TestdataBathSummary> {
   assertTestdataAllowed();
 
@@ -1520,13 +1541,13 @@ export async function seedTestdataBaths({
   if (publishedId === null) return summary;
   summary.templatePublished = true;
 
-  const assignmentsOfBaths = await planTestdataBaths({ db, organizationId, seed, now });
+  const assignmentsOfBaths = await planTestdataBaths({ db, organizationId, seed, now, scenarios });
   for (const key of MANDATORY_BATH_SCENARIO_KEYS) {
     const found = assignmentsOfBaths.find((a) => a.scenarioKey === key);
     if (found) {
       summary.scenarioMap.push({
         scenarioKey: key,
-        scenarioName: bathScenarioByKey(key).name,
+        scenarioName: scenarioIn(scenarios, key).name,
         assignmentNumber: found.bath.assignmentLabel,
         roomName: found.bath.roomName,
       });
@@ -1566,7 +1587,7 @@ export async function seedTestdataBaths({
       summary.bathsWithoutAccess += 1;
       continue;
     }
-    const scenario = bathScenarioByKey(assignment.scenarioKey);
+    const scenario = scenarioIn(scenarios, assignment.scenarioKey);
     const document = await documentFor(report?.templateVersionId ?? publishedId, actor);
     const item: BathWork = {
       bath: assignment.bath,

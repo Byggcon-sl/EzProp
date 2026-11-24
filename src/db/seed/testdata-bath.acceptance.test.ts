@@ -866,37 +866,20 @@ describe("testdata del 2: akseptkriteriene (testplanen seksjon 3)", () => {
     }
   });
 
-  it("Et forslag scenarioet ikke venter, stopper seed med tydelig feil og ruller tilbake badet (test med smøremembran uten dokumentasjon, 15 år, i scenarioet uten avvik).", async () => {
+  it("Et forslag scenarioet ikke venter, stopper seed med tydelig feil og ruller tilbake badet (test: scenarioet «Bad uten avvik» uten den godtatte TG0-beslutningen, så TG0-forslaget på tilliggende kommer uventet).", async () => {
     const data = await loadBathData();
     const { orgId } = await setupByggcon();
     const noDeviationKey = data.MANDATORY_BATH_SCENARIO_KEYS[9];
     const target = data.TESTDATA_BATH_SCENARIOS.find((s) => s.key === noDeviationKey);
     expect(target, "scenarioet «Bad uten avvik» er nummer 10").toBeDefined();
-    expect(target!.answers, "svarene er en flat liste per feltkode (kortet)").toBeTypeOf("object");
+    expect(
+      (target as unknown as { decisions: unknown[] }).decisions.length,
+      "scenarioet godtar TG0-forslaget",
+    ).toBeGreaterThan(0);
 
-    // Alle testoppdragene har befaring i året for TEST_NOW (planen i del 1)
-    const year = TEST_NOW.getUTCFullYear() - lifespanWithout("liquid_membrane");
+    // Varianten venter ingen forslag, men reglene gir TG0-forslaget på tilliggende (hull uten funn)
     const forced = data.TESTDATA_BATH_SCENARIOS.map((scenario) =>
-      scenario.key === noDeviationKey
-        ? {
-            ...scenario,
-            answers: {
-              ...scenario.answers,
-              [EL.membraneType]: "liquid_membrane",
-              [EL.documentation]: "none",
-              [EL.membraneYear]: year,
-            },
-          }
-        : scenario,
-    );
-    // Regelmotoren gir forslaget som scenarioet ikke venter
-    const answers = {
-      [EL.membraneType]: "liquid_membrane",
-      [EL.documentation]: "none",
-      [EL.membraneYear]: year,
-    };
-    expect(resultOf(evaluate(answers, TEST_NOW.getUTCFullYear()), RULE_PAST_LIFESPAN).state).toBe(
-      "triggered",
+      scenario.key === noDeviationKey ? { ...scenario, decisions: [] } : scenario,
     );
 
     const error = await errorFrom(
@@ -912,14 +895,11 @@ describe("testdata del 2: akseptkriteriene (testplanen seksjon 3)", () => {
     expect(message).not.toContain("@");
     expect(planSecretsIn(message)).toEqual([]);
 
-    // Badet er rullet tilbake: sjiktåret fra varianten står ingen steder, og ingen TG1 er satt der
+    // Ingen bad er fylt ut: seed kontrollerer alle badene før noe skrives (A518)
     expect(
       await count(sql`
-        select count(*)::int as n from field_answers fa
-        join template_elements te on te.id = fa.element_id
-        where fa.organization_id = ${orgId} and te.key = ${EL.membraneYear}
-          and fa.value_number = ${year}`),
-      "ingen halv rapport for badet",
+        select count(*)::int as n from field_answers fa where fa.organization_id = ${orgId}`),
+      "ingen halv rapport",
     ).toBe(0);
     expect(
       await count(sql`
