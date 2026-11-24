@@ -1,7 +1,7 @@
 # Testplan: Testdata, del 2 (badet fylt ut i testoppdragene)
 
 - **Oppgavekort:** `docs/funksjoner/fase2a-testdata-del-2.md`
-- **Dato:** 17.11.2026 (test-leder, før bygging), kontrollert mot main og runde 2 i kortet 23.11.2026, justert 24.11.2026 (admin-test uten åpent forslag, e2e gjenoppretter visningsbadet, seksjon 3 dekker alle kriteriene)
+- **Dato:** 17.11.2026 (test-leder, før bygging), kontrollert mot main og runde 2 i kortet 23.11.2026, justert 24.11.2026 (admin-test uten åpent forslag, e2e gjenoppretter visningsbadet, seksjon 3 dekker alle kriteriene; fagansvarlig runde 3: TGIU-opplysninger per grunn, `other_written`, aldersprofil)
 - **Branch:** `testdata-del-2`
 - **Støtter hovedmål:**
   - **De ansatte:** testene låser at testmiljøet alltid har bad som ligner ekte befaringer (TG2, TG3 med kostnad, TGIU, TG0, HMS, «ikke vurdert»), slik at skjermen kan prøves uten utfylling for hånd, og at skriptet aldri rører ekte arbeid eller admin.
@@ -65,7 +65,9 @@ Forslag. Avvik føres i kortet, og testskriver følger kortet.
 ### 1.5 Rettinger fra fagansvarlig, runde 2 (23.11.2026)
 29. **badet uten avvik:** sju punkt TG1, tilliggende TG0 fra godtatt forslag (hull uten funn, 11 vekt-%), dokumentasjon samsvarserklæring eller våtromssertifikat. TG1 direkte på tilliggende der avvises av seed.
 30. **dokumentasjon «Ingen» eller tom i ferdig bad** gir `missing_membrane_documentation` med TG2 og kostnad «none» (A510).
-31. **hull ikke utført, grunn `concrete_or_masonry`:** TGIU, `owner_informed` tom, ingen `tgiu_details_missing`. `owner_informed` er sann bare ved `owner_refused` (`it.each` over alle scenarioer).
+31. **hull ikke utført, grunn `concrete_or_masonry`:** TGIU med begrunnelse, annen fuktkontroll (metode og resultat), risiko, skadeutsatt og «hva må til»; `owner_informed` tom; ingen `tgiu_details_missing`. Alle fem opplysningene ved `owner_refused`, de fire andre (uten `owner_informed`) ved øvrige grunner. `owner_informed` er sann bare ved `owner_refused` (`it.each` over alle scenarioer).
+36. **ingen `other_written`:** ingen scenario og intet bad i fordelingen har `wet_room.documentation_type = other_written`; et påtvunget ferdig bad med `other_written` får testen til å feile (A513).
+37. **aldersprofil på hele fordelingen** (`it.each` over pliktige og tilfeldige bad i del 1-planen): regelmotoren med badets år, sjikttype og dokumentasjon gir nøyaktig forslagene i `expected`; før 2000 gir `membrane_before_2000` uansett sjikttype (B4); folie uten dokumentasjon fra 18 år og smøremembran eller membranplater fra 15 år gir `membrane_past_lifespan`; `open` bare på punkt som ikke står ferdig (A514).
 32. **vekt-% betyr treverk:** målested og oppbygging i scenarioer med vekt-% nevner ikke betong eller mur; en påtvunget tekst med «betong» får testen til å feile.
 33. **RF %:** ingen ferdig tilliggende med RF % og TG1; et påtvunget scenario med RF 85 % og TG1 får testen til å feile (A511).
 34. **«utført uten funn» med 15 vekt-% eller mer** finnes ikke.
@@ -105,7 +107,7 @@ Forslag. Avvik føres i kortet, og testskriver følger kortet.
 21. ingen avvik med kode utenfor badmalen.
 22. ingen ferdig punkt uten TG.
 23. **`text_source`:** bare `template` eller `edited`, og minst ett av hver.
-24. **TGIU har alle fem opplysningene** og en rad i `tgiu_details` med `reason`, `risk_assessment` og `how_to_examine`.
+24. **TGIU har opplysningene grunnen krever:** alle fem ved `owner_refused`; begrunnelse, annen fuktkontroll (metode og resultat), risiko, skadeutsatt og «hva må til» ved øvrige grunner (uten `owner_informed`). Alltid en rad i `tgiu_details` med `reason`, `risk_assessment` og `how_to_examine`, og ingen `tgiu_details_missing` fra `missingTgiuDetails`.
 25. **for KI:** minst ett `changed` og ett `rejected` med begrunnelseskode i `rule_suggestion_decisions`.
 
 ### 2.4 Ny kjøring og myk sletting (akseptkriterium 9, A508)
@@ -138,7 +140,7 @@ Forslag. Avvik føres i kortet, og testskriver følger kortet.
 
 ## 3. Akseptkriteriene uavhengig av seed-koden, `src/db/seed/testdata-bath.acceptance.test.ts` (ny, testskriver)
 
-Skrives av `testskriver` parallelt, bare mot det offentlige grensesnittet (`seedTestdata`, oppsummeringen og databasen). Én `it` per akseptkriterium i kortet (alle 23, i kortets rekkefølge), med samme navn som i kortet. Kriteriet om versjon og A501–A512 dekkes av seksjon 6. Numrene «akseptkriterium N» i seksjon 1–4 er fra første utgave av kortet; ved tvil gjelder teksten i kortet. Overlapp med seksjon 2 er bevisst.
+Skrives av `testskriver` parallelt, bare mot det offentlige grensesnittet (`seedTestdata`, oppsummeringen og databasen). Én `it` per akseptkriterium i kortet (alle 25, i kortets rekkefølge), med samme navn som i kortet. Kriteriet om versjon og A501–A514 dekkes av seksjon 6. Numrene «akseptkriterium N» i seksjon 1–4 er fra første utgave av kortet; ved tvil gjelder teksten i kortet. Overlapp med seksjon 2 er bevisst.
 
 ## 4. Oppsummering og `TESTDATA_TABLES`, utvidelse av `src/db/seed/testdata-index.test.ts`
 
@@ -165,7 +167,7 @@ Skrives av `testskriver` parallelt, bare mot det offentlige grensesnittet (`seed
 ## 6. Øvrig
 
 1. `package.json`: versjonen er økt (patch).
-2. A501–A512 står i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte» (enkel test eller sjekk i gjennomgangen).
+2. A501–A514 står i `docs/09-apne-sporsmal.md` i tabellen «Avgjort av agentene mens Ståle var borte» (enkel test eller sjekk i gjennomgangen).
 3. **Bilder** (A501) og **byggeår som kolonne** (A502) er utenfor; dekkes bare av test 1.2 og 1.27 (planlagte bilder som beskrivelser) og 2.1.7 (byggeår som svar i badet). Når «Bilder på PC» bygges, får den test for at bildene lages ut fra `plannedPhotos`, uten personer.
 
 ## Godkjenning
