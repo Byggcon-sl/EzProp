@@ -1,7 +1,7 @@
 # Testplan: PDF-motor (ADR 0016) og PDF-utkast av badet i Byggcons profil
 
 - **Oppgavekort:** `docs/funksjoner/fase2a-pdf-badet.md`
-- **Dato:** 18.11.2026 (test-leder, før bygging), oppdatert 24.11.2026 etter innflettingen av main (se avsnitt 10)
+- **Dato:** 18.11.2026 (test-leder, før bygging), oppdatert 24.11.2026 etter innflettingen av main og forhåndsvurderingen samme dag (avsnitt 10, A530–A542, spørsmål 92)
 - **Branch:** `pdf-motor-badet`
 - **Støtter hovedmål:**
   - **Færre reklamasjoner:** testene låser at PDF-en viser hvert avvik med TG, årsak, konsekvens, tiltak og kostnad likt hver gang, at TGIU har alle opplysningene, at ingen interne koder, tomme sider eller overskrifter alene nederst slipper gjennom, og at utkastet viser det som mangler.
@@ -49,11 +49,11 @@ Test-leder sjekker ved godkjenning at ADR-en har: tabell med minst tre motorer m
 2. **Ingen KI:** ingen fil i `src/core/pdf` nevner `core/ai`, `ai_usage_log` eller KI-porten.
 3. **Ingen klokke eller tilfeldighet:** ingen `Date.now(`, `new Date()` uten argument, `Math.random`, `crypto.randomUUID`, `performance.now` i `src/core/pdf` (unntatt måling av millisekunder i ruten, som ligger utenfor).
 4. **Ingen nett eller filer utenfor fast mappe:** ingen `fetch(`, `http`, `https`, `net` i `src/core/pdf`; `node:fs` bare i `assets.node.ts`, som leser fra `public/fonts` og `public/brand`; `renderReportPdf` får byte.
-8. **Ingen KI i rapportdataene:** `pdf-data.ts`, `pdf-data-build.ts`, `release-pdf.ts` og `tg-explanation.ts` i `src/core/reports` importerer ikke `@/core/ai`.
-9. **Ingen egne mangel-regler:** `pdf-data-build.ts` nevner ikke `cause_text`/`consequence_text`/`cost_type` i en betingelse for «Mangler» (gjennomgang); «Mangler» kommer bare fra `findings`.
 5. **Ikke en leverandør:** motoren står ikke i `INTEGRATION_PORTS` (`src/core/integrations`).
 6. **Skrifter og logo fra repoet:** profilen peker på filer som finnes i `public/fonts` og `public/brand/byggcon-logo.png`; ingen `http`-adresse i profilene; skriftlisensen (OFL) ligger ved skriftene.
 7. **Ingen modellnavn** (dekkes av `tests/no-model-names.test.ts`).
+8. **Ingen KI i rapportdataene:** `pdf-data.ts`, `pdf-data-build.ts`, `release-pdf.ts` og `tg-explanation.ts` i `src/core/reports` importerer ikke `@/core/ai`.
+9. **Ingen egne mangel-regler:** `pdf-data-build.ts` nevner ikke `cause_text`/`consequence_text`/`cost_type` i en betingelse for «Mangler» (gjennomgang); «Mangler» kommer bare fra `findings`.
 
 ## 3. Rene funksjoner og testsaker (Vitest, uten database)
 
@@ -251,7 +251,7 @@ Test-leder godkjenner ikke uten:
 - 5.1 (tenant-isolasjon med `expectTenantIsolation`, filtrering på `grant.organizationId`, `Promise.all`), 5.2 (rollematrise med admin, `access.inspectors_edit_all` av og reklamasjon), 5.3 (myk sletting) og 6.1.3–6.1.5 (ruten uten innlogging og fra annen organisasjon).
 - 4.2 (samme resultat), 4.3.2 (ingen interne koder), 4.6 (injeksjon og lukket motor), 6.2 (ingen lagring) og 6.4 (logging).
 - Grønn `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` (begge prosjektene), og ADR 0016 med målingene fra `.next/standalone`.
-- 10.1–10.6 (tilleggene 24.11.2026).
+- 10.1–10.7 (tilleggene 24.11.2026).
 - `package.json` har versjon 0.19.3 (én patch over main 0.19.2).
 - Røyktest etter utrulling i testmiljøet føres i testrapporten (etter merge).
 
@@ -287,3 +287,12 @@ Test-leder godkjenner ikke uten:
 ### 10.6 KI
 1. T14 med alle tre slag ventende forslag (fraseforslag, språkvask, utkast til sammendrag) og `reports.summary_text` med merketekst → ingen spor.
 2. De åtte KI-plassholderne fra «KI i veien» står aldri i PDF-teksten (gamle data lagt inn direkte); «[årstall mangler]» er lov.
+
+### 10.7 Presisering etter forhåndsvurderingen 24.11.2026 (A540–A542, T17–T23, utgivelsesruten)
+1. **A540 som tabelltest** i `pdf-data-build.test.ts`: for hver felttype i badet-malen (valg, tall med enhet, ja/nei, tekst) med `show_in_report = true` står etiketten fra den låste malversjonen, valgteksten (aldri valgkoden) og enheten («12,4 vekt-%», desimalkomma); `show_in_report = false` med merketekst finnes ikke i `JSON.stringify(data)` eller i PDF-teksten (T17, T18). Et nytt felt i malen uten rad i tabellen gjør testen rød.
+2. **T17–T23 hver for seg** som rader i `it.each` (3.1) og igjen gjennom motoren (4.3.1): T19 med og uten grunn, T20 med `owner_informed` sann og usann, T21 uten «Ikke satt», T22 der avviket uten TG ikke endrer punktets TG, T23 der «§» og hjelpeteksten ikke står i PDF-en.
+3. **A542:** nøkkelsøk som 10.3.2, og i tillegg: et avvik med `text_source = "ai"` og et godtatt KI-forslag gir samme PDF-tekst som samme avvik skrevet for hånd (ingen merking).
+4. **Utgivelsesruten, svar:** 200 med `Content-Disposition: inline; filename="tilstandsrapport-<oppdragsnummer>-v<n>.pdf"` og samme sikkerhetshoder som 6.1.1; tittel «Tilstandsrapport <oppdragsnummer> versjon <n>»; datoene i PDF-en er publiseringstidspunktet (`generatedAt` = `released_at`), også når testen kjøres med annen klokke.
+5. **Utgivelsesruten, tilgang:** `expectTenantIsolation` for `getReleasePdfData` (5.1.1) og i rutetesten: ikke innlogget → 401/innlogging; org B → 404-siden; `releaseId` fra et annet oppdrag i samme organisasjon → 404; myk slettet oppdrag → 404. Rollematrisen fra 5.2 med admin og `access.inspectors_edit_all` av, med og uten reklamasjon.
+6. **Utgivelsesruten, hendelse og vern:** nøyaktig én `report.release_pdf_created` med `versionNumber` i tillegg til feltene i 6.3.1; ingen hendelse ved 404/429/500; samme tak per ansatt som utkastet (et utkast og en utgivelse samtidig for samme ansatt → én 429). Ingen rader i `files` og ingen endring i `report_releases` (6.2).
+7. **E2e i iPad-størrelse (prosjektet `ipad`)** for alle punktene i 7 og 10.2.5: «Åpne PDF» per utgivelse er minst 44 pt, har tilgjengelig navn «Åpne PDF av versjon <n>», og kan nås uten vannrett rulling; uten nett er både utkastknappen og «Åpne PDF» sperret eller viser «Krever nett …», og synkstatusen synes.
