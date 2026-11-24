@@ -13,6 +13,10 @@ const CACHE_NAME = "offline-trial-v1";
 // (a) Always straight to the network, never cached
 const NETWORK_ONLY_PREFIXES = ["/api/", "/logg-inn", "/dev/", "/_next/image"];
 
+// (a) The report PDFs (draft and release): always the network, never cached, never respondWith.
+// They hold an address and are made fresh on each request (Cache-Control: no-store, private).
+const PDF_PATHS = [/^\/oppdrag\/[^/]+\/pdf\/?$/, /^\/oppdrag\/[^/]+\/utgivelser\/[^/]+\/pdf\/?$/];
+
 // (b) Static files: cache first, then network
 const STATIC_PREFIXES = ["/_next/static/", "/fonts/", "/brand/"];
 const STATIC_EXACT = ["/manifest.webmanifest"];
@@ -70,6 +74,7 @@ self.addEventListener("fetch", (event) => {
   const path = url.pathname;
 
   if (startsWithAny(path, NETWORK_ONLY_PREFIXES)) return; // (a)
+  if (PDF_PATHS.some((pattern) => pattern.test(path))) return; // (a) report PDFs
   if (startsWithAny(path, STATIC_PREFIXES) || STATIC_EXACT.includes(path)) {
     event.respondWith(cacheFirst(request)); // (b)
     return;

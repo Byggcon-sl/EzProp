@@ -3,7 +3,13 @@ import type { DbExecutor } from "@/db/client";
 import { events } from "@/db/schema";
 import type { EventType } from "./types";
 
-export { EVENT_TYPES, type EventType } from "./types";
+export {
+  EVENT_TYPES,
+  PDF_EVENT_DATA_FIELDS,
+  type DraftPdfEventData,
+  type EventType,
+  type ReleasePdfEventData,
+} from "./types";
 
 export type EventInput = {
   type: EventType;

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { requireOrganizationAccess, type Actor } from "@/core/access";
@@ -269,5 +271,65 @@ describe("events i databasen", () => {
     await resetDatabase();
 
     expect(await eventRows()).toHaveLength(0);
+  });
+});
+
+/*
+ * PDF-hendelsene vises og telles aldri per ansatt (arbeidsmiljøloven kap. 9), bare samlet bak
+ * `statistics.read` (docs/funksjoner/fase2a-pdf-badet-testplan.md 10.5.5 og 11.8.2). Statisk søk
+ * i all kildekode: ingen spørring grupperer hendelser på `actor_id`, heller ikke statistikken
+ * som finnes i dag.
+ */
+describe("hendelsene grupperes aldri per ansatt (statisk)", () => {
+  const SRC = path.join(process.cwd(), "src");
+
+  function sourceFiles(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) return sourceFiles(full);
+      if (!/\.(ts|tsx)$/.test(entry.name) || /\.test\.tsx?$/.test(entry.name)) return [];
+      return [full];
+    });
+  }
+
+  const files = sourceFiles(SRC).map((file) => ({
+    file: path.relative(process.cwd(), file),
+    text: readFileSync(file, "utf8"),
+  }));
+  // Gruppering i Drizzle (`groupBy(... actorId ...)`) og i rå SQL (`group by ... actor_id`)
+  const GROUP_BY_ACTOR = [/groupBy\([^)]*actorId/s, /group\s+by[^;`]*actor_id/is];
+
+  it("finner kildefilene og statistikkspørringene", () => {
+    expect(files.length).toBeGreaterThan(100);
+    expect(files.some(({ file }) => file.endsWith("statistics-db.ts"))).toBe(true);
+  });
+
+  it("ingen fil som leser hendelser eller nevner PDF-hendelsene, grupperer på actor_id", () => {
+    const offenders = files
+      .filter(
+        ({ text }) =>
+          /\bevents\b/.test(text) ||
+          text.includes("draft_pdf_created") ||
+          text.includes("release_pdf_created"),
+      )
+      .filter(({ text }) => GROUP_BY_ACTOR.some((pattern) => pattern.test(text)))
+      .map(({ file }) => file);
+    expect(offenders).toEqual([]);
+  });
+
+  it("statistikkspørringene bruker ikke actor_id fra hendelsene", () => {
+    const statistics = files.filter(({ file }) => /statisti(c|kk)/i.test(file));
+    expect(statistics.length).toBeGreaterThan(0);
+    for (const { file, text } of statistics) {
+      expect(text.includes("events.actorId") || /\bactor_id\b/.test(text), file).toBe(false);
+    }
+  });
+
+  it("søket fanger gruppering på actor_id (selvtest)", () => {
+    const drizzle = "db.select().from(events).groupBy(events.type, events.actorId)";
+    const raw = "select count(*) from events group by type, actor_id";
+    expect(GROUP_BY_ACTOR.some((pattern) => pattern.test(drizzle))).toBe(true);
+    expect(GROUP_BY_ACTOR.some((pattern) => pattern.test(raw))).toBe(true);
+    expect(GROUP_BY_ACTOR.some((pattern) => pattern.test(".groupBy(events.type)"))).toBe(false);
   });
 });
