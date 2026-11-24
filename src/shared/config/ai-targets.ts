@@ -44,6 +44,26 @@ export const RESOLVED_AI_TARGET_TYPES = [
 export type ResolvedAiTargetType = (typeof RESOLVED_AI_TARGET_TYPES)[number];
 
 /**
+ * KI-mål som hører til organisasjonen, ikke til en rapport eller et oppdrag (ADR 0006, tillegg
+ * 24.11.2026, A568). `override_summary` er månedsoppsummeringen av overstyrte sperrer: målraden er
+ * `override_summaries`, og `fieldKey` er kolonnen `text`. Kodene er faste (regel 6).
+ *
+ * `@/core/ai` slår opp også disse målene selv (på `grant.organizationId` og `deleted_at is null`),
+ * men de gir verken rapport eller oppdrag: `report_id` og `assignment_id` i loggen er tomme. Et
+ * slikt mål kan bare brukes av en funksjon som ikke sender tekst fra nettleseren (tom
+ * `allowedFields`), se `isBlocked` i `@/core/ai`.
+ */
+export const ORGANIZATION_AI_TARGET_FIELDS = {
+  override_summary: ["text"],
+} as const;
+
+export type OrganizationAiTargetType = keyof typeof ORGANIZATION_AI_TARGET_FIELDS;
+
+export const ORGANIZATION_AI_TARGET_TYPES = Object.keys(
+  ORGANIZATION_AI_TARGET_FIELDS,
+) as OrganizationAiTargetType[];
+
+/**
  * Høyeste antall kandidater i ett svar fra `phrase_suggest`: så mange vises i forslagslisten og
  * lagres i `ai_usage_log.candidate_refs` (CHECK-regelen bruker samme tall). Tallet står bare her.
  * `@/db/schema` og `@/core/ai` (`AI_SUGGESTED_CANDIDATES_MAX`) leser det herfra.

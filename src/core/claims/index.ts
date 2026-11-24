@@ -1,3 +1,4 @@
+export type * from "./checkpoint-types";
 export {
   createClaim,
   getClaim,

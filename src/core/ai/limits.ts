@@ -31,3 +31,19 @@ export const AI_BATCH_MAX_REQUESTS = 23;
 export const AI_SUMMARY_FINDINGS_MAX = 60;
 /** Høyeste antall tegn i alle funnene til ett utkast, samlet og etter vask. */
 export const AI_SUMMARY_INPUT_MAX_LENGTH = 40000;
+
+/*
+ * Grensene under gjelder `override_summary` (docs/funksjoner/fase2a-overstyringer-leder.md, A570
+ * og A575).
+ */
+
+/** Høyeste antall linjer i tallgrunnlaget til én oppsummering. Flere kuttes av kalleren, med antall. */
+export const AI_OVERRIDE_STATS_MAX_ROWS = 60;
+/** Færre rapporter enn dette i en måned: bare antall, ingen prosent (A570). */
+export const AI_OVERRIDE_SHARE_MIN_REPORTS = 5;
+/** Høyeste antall tegn i navnet på et kontrollpunkt i tallgrunnlaget. Lengre navn kortes av kalleren. */
+export const AI_OVERRIDE_CHECKPOINT_NAME_MAX_LENGTH = 120;
+/** Høyeste antall forespørsler om oppsummering per ansatt per time (A575). */
+export const AI_OVERRIDE_SUMMARY_MAX_PER_EMPLOYEE_PER_HOUR = 5;
+/** Høyeste antall forespørsler om oppsummering per organisasjon per døgn (A575). */
+export const AI_OVERRIDE_SUMMARY_MAX_PER_ORGANIZATION_PER_DAY = 20;

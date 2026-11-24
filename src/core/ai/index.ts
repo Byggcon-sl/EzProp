@@ -82,6 +82,8 @@ export {
   type AiFeatureCode,
   type AiGuardCode,
   type AiOutcome,
+  type AiOverrideStats,
+  type AiOverrideStatsRow,
   type AiServerInput,
   type AiSummaryFinding,
   type AiSummaryFixedLine,

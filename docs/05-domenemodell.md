@@ -1295,6 +1295,19 @@ Feltene for signering, sertifisering og selskap er et **øyeblikksbilde** i till
 
 **«Lag ny versjon» (A522):** rapporten settes tilbake til `draft`, eldre utgivelser røres ikke, og neste publisering får neste versjonsnummer. En publisert rapport kan ikke endres før ny versjon er laget; det gjelder også rom, etasjer og bygninger på oppdraget (A447).
 
+**`override_summaries`** – **lederens månedsoppsummering av overstyrte sperrer** (24.11.2026, migrering `0039_overstyringer-leder`, A567, ADR 0015 punkt 18 og ADR 0006 tillegg 24.11.2026). Én rad per organisasjon og måned. Raden er målet for KI-funksjonen `override_summary` og stedet teksten som gjelder, ligger. KI-forslaget står i `ai_usage_log.output_text` og skrives aldri over.
+
+| Felt | Forklaring |
+|---|---|
+| `month` | Kalendermåneden i norsk tid, `ÅÅÅÅ-MM`. Unik per organisasjon blant rader som ikke er slettet |
+| `text` | Teksten som gjelder, høyst 2 000 tegn. Tom når ingen tekst er godtatt, endret eller skrevet. Uten navn og personopplysninger (kontrolleres før lagring, A574). Logges aldri |
+| `status` | `empty` (raden er laget, ingen beslutning), `accepted` (KI-forslaget godtatt uendret), `edited` (KI-forslag endret av leder), `manual` (skrevet av leder uten KI), `rejected` (forslaget avvist, ingen tekst) |
+| `source` | `ai` eller `manual`. Tom bare når status er `empty` |
+| `ai_usage_log_id` | Forslaget teksten bygger på, eller forslaget som ble avvist. Samme organisasjon (sammensatt fremmednøkkel). Tom ved `empty` og `manual` |
+| `decided_by`, `decided_at` | Den ansatte som tok siste beslutning, og når. Tomme bare ved `empty` |
+
+Felles kolonner, myk sletting og 10 års oppbevaring. Lese med `claims.read`, beslutte og skrive med `claims.manage`. Tallene oppsummeringen bygger på, leses fra `publish_check_results`, `report_releases` og `claims`; de lagres ikke her.
+
 **`publish_check_results`** – **sperre, overstyring og logg**. Funnene fra sjekken før publisering slik de var da utgivelsen ble laget. Skrives bare ved publisering, for alle funn, og får bare nye rader (A448, ADR 0015). Å åpne publiser-siden lagrer ingenting.
 
 | Felt | Forklaring |
@@ -1869,7 +1882,9 @@ Registreres med et enkelt skjema **fra første ekte rapport** (beslutning 27.10.
 
 Tilgang: se med `claims.read`, registrere, endre, lukke og fjerne med `claims.manage` (avsnitt 5). Revisjonsloggen får bare handling og feltnavn, aldri innholdet i `claimant_text`, `description` eller `building_part_text`. Hendelsen `claim.registered` har bare `claimId`, `assignmentId`, `claimType` og `receivedAt`.
 
-**Venter:** `report_id` og `release_id` (når rapporter og utgivelser finnes), `checkpoint_key` og `deviation_id` (når malmotoren og avvikene finnes), typen `internal`, `handled_by`, vedlegg og reklamasjonsmappen med egen liste over alle saker (fase 4, H6). Tallet «reklamasjoner per 100 leverte rapporter» regnes ut fra tabellen når utgivelsene finnes.
+**Kontrollpunkt på saken (24.11.2026, migrering `0039_overstyringer-leder`, A564):** `claims.checkpoint_key` er den faste koden til kontrollpunktet saken gjelder. Valgfri; eldre saker har tom verdi, og ingenting er fylt inn i ettertid. Koden må følge nøkkelformatet (CHECK), og `src/core/claims` sjekker ved lagring at den er et kontrollpunkt i malversjonen til en rapport på oppdraget. Lagres som kode, ikke id (regel 6), og er den samme koden som `publish_check_results.target_ref.checkpointKey`. Slik finner «Overstyringer for leder» overstyringer som senere fikk reklamasjon på samme punkt. Fast kode uten personopplysninger, så den kan stå i revisjonsloggen. `building_part_text` beholdes som fritekst.
+
+**Venter:** `report_id` og `release_id` (når rapporter og utgivelser finnes), `deviation_id` (når saken skal kobles til avviket), typen `internal`, `handled_by`, vedlegg og reklamasjonsmappen med egen liste over alle saker (fase 4, H6). Tallet «reklamasjoner per 100 leverte rapporter» regnes ut fra tabellen når utgivelsene finnes.
 
 **`followup_responses`** – **forkastet 27.10.2026.** Ståle svarte nei til ettårs-oppfølging av kjøper og selger (spørsmål 21). Tabellen og hendelsen `followup.received` er tatt ut.
 
@@ -2448,6 +2463,12 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Kandidatkilde | `AiCandidateSource`: `template_outcome`, `template_measure`, `phrase` | Hvor en kandidat kommer fra: tekst på et utfall i malen, standardtiltak i malen, eller frasebanken (reservert til 2a-3) |
 | Viste kandidater / valgt kandidat | `ai_usage_log.candidate_refs` / `chosen_candidate` | Hva takstmannen fikk se, i rangert rekkefølge, og hva han valgte |
 | Sammendrag | `reports.summary_text` | Sammendraget for hele rapporten |
+| Overstyringer for leder | `listPublishOverrides` (`src/core/reports/overrides.ts`) | Oversikten over sperrer som er krysset bort siste 90 dager, gruppert på sperre, kontrollpunkt og grunn. Bare leder og admin (`claims.read`). Aldri navn eller begrunnelsestekst |
+| Månedsoppsummering (overstyringer) | `override_summaries` | Lederens tekst for én måned: godtatt eller endret KI-forslag, eller skrevet selv |
+| Oppsummering av overstyringer | `override_summary` | KI-funksjon og måltype: KI formulerer 2–5 setninger fra faste koder og tall. Serveren regner alle tall |
+| Tallgrunnlag for oppsummeringen | `AiOverrideStats` (`AiServerInput.overrideStats`) | Faste koder, etiketter, punktnavn fra malen og heltall. Aldri fritekst, navn eller id-er |
+| Organisasjonsmål (KI) | `ORGANIZATION_AI_TARGET_TYPES` | KI-mål som hører til organisasjonen, uten rapport og oppdrag. `report_id` og `assignment_id` i loggen er tomme |
+| Markering ved reklamasjon | `OverrideClaimMarker` | `same_checkpoint` (rød: reklamasjon på samme punkt), `checkpoint_not_selected` (nøytral: reklamasjon uten valgt punkt), `none` |
 | Grunnlaget for sammendraget | `reports.summary_basis` (`SummaryBasisEntry`) | Funnene utkastet bygde på. Brukes til advarselen når funnene er endret etterpå |
 | Gruppe i sammendraget | `SummaryGroup`: `tg3`, `tg2`, `tgiu`, `hms` | Den faste rekkefølgen i sammendraget. Koden lager gruppene og overskriftene |
 | Godkjent funn | finding (`SummaryFindingSource`: `deviation`, `checkpoint_result`) | Avvik med TG2 eller TG3, kontrollpunkt med TGIU, og HMS-avvik. Det sammendraget bygges av |
@@ -2526,6 +2547,7 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Forfatter av kommentar | `peer_review_comments.author_type` | `employee` eller `ai` |
 | Reklamasjon / krav | `claims` | Bare leder og admin (`claims.read`) |
 | Reklamasjonssak | `claim` | Én rad i `claims`, knyttet til oppdraget (fase 2a) |
+| Kontrollpunkt (reklamasjon) | `claims.checkpoint_key` | Den faste koden til punktet saken gjelder. Valgfri |
 | Klager | `claimant` (`claimant_party_id` / `claimant_text`) | En part på oppdraget eller fritekst |
 | Type krav | `claim_type` | `complaint` (reklamasjon), `insurance_claim` (forsikringskrav), `other` (annet); `internal` i fase 4 |
 | Utfall (reklamasjon) | `claims.outcome` | `open` (åpen), `rejected` (avvist), `upheld` (medhold), `settled` (forlik), `withdrawn` (trukket). Alt annet enn `open` er lukket |
@@ -2664,3 +2686,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 17.11.2026 | KI i veien (fase 2a-2, ADR 0006 med tillegg): migrering `0037_ki-i-veien` med `reports.summary_text` og `reports.summary_basis`, `ai_usage_log.candidate_refs` og `chosen_candidate`, utfallet `stopped` med vaktkodene `tg_guard` og `number_guard`, og indeksen `ai_usage_log (organization_id, feature, target_ref)` for ikke-slettede rader. KI-målene flyttet til `src/shared/config/ai-targets.ts` med `report` / `summary_text` og `deviation` / `new_measure`. Ingen ny tabell. Ordlisten: fraseforslag, utkast til sammendrag, kandidat, vakter, grunnlaget for sammendraget. | A482–A442, `docs/funksjoner/fase2a-ki-i-veien.md` |
 | 17.11.2026 | KI i veien, runde 2 (A460–A472): migrering `0037_ki-i-veien` rettet før merge med vaktkodene `coverage_guard` og `placeholder_guard`, strengere CHECK på `chosen_candidate` (objekt med `source` og `id`, kjent kilde) og indeksen `ai_usage_log_chosen_candidate_idx` for «Mest brukt». `AI_CANDIDATE_REFS_MAX` flyttet til `src/shared/config/ai-targets.ts`. Grensesnitt: `recordDecisionIn`, `withReportWrite`, `PhraseUsageCount`, `AiSummaryFixedLine`, valideringskoden `text_has_placeholder`. Ordlisten: dekningsvakt, plassholdervakt, plassholder, mest brukt, fast linje, skriveramme for rapporten. | A460–A472, `docs/funksjoner/fase2a-ki-i-veien.md` |
 | 17.11.2026 | Mine innlogginger (fase 2a-3, fra forbedreren): `sessions` beskrevet; øktene vises for den ansatte og kan tilbakekalles, admin kan logge ut alle enheter. Ingen nye felt og ingen migrering. Ny revisjonshandling `employee.sessions_revoked_all` med `{ sessionCount, reason }`. Ordlisten: innlogging (økt), logge ut en økt, logget ut av alle enheter. | `docs/funksjoner/fase2a-mine-innlogginger.md` |
+| 24.11.2026 | Overstyringer for leder (fase 2a-2, fra forbedreren; ADR 0015 punkt 18 og ADR 0006 tillegg 24.11.2026): migrering `0039_overstyringer-leder` med ny tabell `override_summaries` (4.7) og ny valgfri kolonne `claims.checkpoint_key` med CHECK for nøkkelformat (4.13). Ingen eksisterende rader endres. Ny KI-funksjon og måltype `override_summary` (organisasjonsmål uten rapport og oppdrag). Ordlisten: overstyringer for leder, månedsoppsummering, tallgrunnlag, organisasjonsmål, markering ved reklamasjon, kontrollpunkt på reklamasjon. | Oppgavekort `docs/funksjoner/fase2a-overstyringer-leder.md`, A564–A577 |

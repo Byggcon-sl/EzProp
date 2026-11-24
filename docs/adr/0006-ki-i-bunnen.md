@@ -447,3 +447,33 @@ KI-køen i `src/core/ai/client` beholdes til 2b, men kobles ikke til badskjermen
 - **Mål-id og oppdrag fra klienten, kontrollert av kalleren.** Hver ny kaller måtte gjenta kontrollen. Nå skjer den ett sted, i kjernen.
 - **`summary_basis` regnet på nytt ved «Bruk».** Funnene kan være endret mellom utkast og «Bruk», og da ville advarselen aldri kommet.
 - **Et tomt tiltak laget før «Forslag» på tiltak**, slik at målet kunne være `deviation_measure`. Lukker takstmannen listen, står et tomt tiltak igjen.
+
+## Tillegg 24.11.2026 – Organisasjonsmål uten oppdrag (oppsummering av overstyringer)
+
+Status: vedtatt av agentene i autonom modus (A567, A568, A573, A575); Ståle kan endre. Endringen i `isBlocked` og tillatt-listen gjennomgås av sikkerhet-personvern i PR-en (A175). Oppgavekort: `docs/funksjoner/fase2a-overstyringer-leder.md`. Migrering `0039_overstyringer-leder`. Grensesnittene står i `src/core/ai/types.ts` (`AiOverrideStats`, `ResolvedAiTarget`) og `src/core/reports/override-types.ts`. Tillegget endrer del 1, 5 og 6 slik det står her; resten gjelder som før.
+
+Støtter hovedmålene: **KI i bunnen** (lederens månedsoppsummering går samme vei inn som all annen KI, med samme logg, vakter og beslutning), **de ansatte** (leder kontrollerer en ferdig tekst i stedet for å telle selv) og **færre reklamasjoner** (mønstre i bortkryssede sperrer blir synlige).
+
+### Beslutninger
+
+1. **Ny funksjon og ny måltype `override_summary`.** `AiFeatureCode` utvides i samme endring som definisjonen i `features.ts`. Målet er `{ type: "override_summary", id: <override_summaries.id>, fieldKey: "text" }`. Måltypen står i `ORGANIZATION_AI_TARGET_FIELDS` i `src/shared/config/ai-targets.ts`, skilt fra rapportmålene, og regnes som slått opp av kjernen (`isResolvedTargetType`).
+2. **Målet er en ekte rad.** `override_summaries` har én rad per organisasjon og måned (A567). `ResolveAiTarget` slår den opp på `grant.organizationId` og `deleted_at is null` og gir `{ reportId: null, assignmentId: null }`. `ResolvedAiTarget` er derfor enten begge satt eller begge tomme. Et organisasjonsmål kan ikke stå i `requestSuggestionBatch`.
+3. **Organisasjonsmål mot ekte leverandør** (endrer del 6, «Fritekst uten oppdrag»). `isBlocked` sperret alle mål uten oppdrag, fordi fritekst uten oppdrag ikke har kjente verdier å vaske med. Unntaket: et mål i `ORGANIZATION_AI_TARGET_TYPES` slipper gjennom når funksjonen har tom `allowedFields` og tom `fieldSources`, altså når nettleseren ikke kan sende én eneste verdi. Alt annet uten oppdrag er fortsatt `blocked`. Bare den falske leverandøren brukes til Ståle slår på den ekte.
+4. **Grunnlaget er tall og faste koder, bygget av serveren.** `AiServerInput.overrideStats` (`AiOverrideStats`) bygges av `BuildOverrideStats` i `src/core/reports`; `src/core/ai` importerer aldri rapportkjernen eller reklamasjonskjernen. Kjernen validerer grunnlaget strengt rett før kallet: ingen ukjente nøkler, koder i nøkkelformat, heltall fra 0, høyst `AI_OVERRIDE_STATS_MAX_ROWS` linjer. Feil gir `AiRequestRejectedError`. `serverSources.override_stats` har bare kolonnene i oppgavekortet, og ingen av dem kan stå i `NEVER_FIELDS`.
+5. **Punktnavnet er eneste tekst som ikke er en fast etikett.** `checkpointName` kommer fra malversjonen (`checkpoints.name`). Det går gjennom mønstervasken som annen tekst og er høyst `AI_OVERRIDE_CHECKPOINT_NAME_MAX_LENGTH` tegn, slik at en egen mal senere ikke kan bære fritekst eller personopplysninger inn i ledeteksten.
+6. **Aldri til KI:** `publish_check_results.override_reason` og `overridden_by`, `claims.created_by`, alle tekstkolonner i `claims`, navn, ansatt-id, oppdrags-id, oppdragsnummer, rapport-id, adresse og matrikkel. De føres i `never-fields.ts` og dekkes av lekkasjetesten.
+7. **Loggen (del 5):** raden har `feature = 'override_summary'`, `assignment_id` og `report_id` tomme, `source_fields` tom og `input_summary` med bare antall (`rows`, `rows_cut`). `ai_usage_log` har ingen CHECK på funksjonskode eller måltype, så migreringen endrer ikke tabellen. Oppbevaringen følger de vanlige reglene.
+8. **Ett åpent forslag per mål for hele organisasjonen.** For organisasjonsmål gjenbrukes et åpent forslag uansett hvem som ba om det, og en annen med `claims.manage` kan avgjøre det. For rapportmål gjelder dagens regel.
+9. **Teksten og beslutningen lagres sammen.** `DecideOverrideSummary` og `SaveOverrideSummary` låser raden i `override_summaries` først og kaller deretter `recordDecisionIn` i samme transaksjon. Rekkefølgen er den samme som for rapporten: målets egen rad først, KI-låsen etterpå.
+10. **Vaktene:** `tg_guard` (enhver TG-omtale), `number_guard` (hvert tall i svaret må stå i grunnlaget) og `placeholder_guard` gjelder funksjonen. Navnevakten og gjetteordvakten i oppgavekortet er nye vakter; får de egne koder i `AI_GUARD_CODES`, utvides CHECK-regelen `ai_usage_log_error_code_check` med en migrering i samme PR.
+11. **Grensene** står i `limits.ts`: 5 forespørsler per ansatt per time og 20 per organisasjon per døgn (A575), telt i `ai_usage_log` på funksjon og tid.
+
+### Forkastet i tillegget
+
+- **Ingen ny tabell, med teksten i `ai_usage_log`.** Loggen ville blitt lager for innhold, og en endret tekst måtte enten skrive over forslaget eller ligge i en kolonne som ikke finnes.
+- **Et mål uten rad** (`id` = måneden, eller et nytt `period`-felt i `AiTargetRef`). `target_ref.id` er en UUID overalt ellers, og oppslaget kunne ikke bindes til organisasjonen med en rad.
+- **Teksten i `organizations.settings`.** Ingen radversjon, ingen fremmednøkkel til forslaget, og innstillingene logges i revisjonsloggen.
+- **Et eget flagg på funksjonen («kan gå uten oppdrag»).** Et flagg kan settes feil. Regelen utledes i stedet av det som faktisk kan sendes: tom tillatt-liste for nettleseren og en måltype som hører til organisasjonen.
+- **Å åpne for alle mål uten oppdrag.** Sperren for fritekst uten oppdrag (spørsmål 58) står.
+- **Prosent og endring regnet av KI.** Tallene skal være like på siden og i teksten, og tallvakten kan bare kontrollere tall serveren har regnet.
+- **`override_summaries` uten `rejected` og `empty`.** Da kunne ikke raden lages før forslaget, og målet hadde ikke hatt en id.

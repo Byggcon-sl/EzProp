@@ -9,6 +9,7 @@ import "server-only";
  * Fra «KI i veien» kaller fraseforslag, språkvask og sammendrag KI gjennom `@/core/ai`, aldri
  * motsatt. Verken reglene eller KI setter TG.
  */
+export type * from "./override-types";
 export type * from "./publish-types";
 export type * from "./types";
 export { isReportPublishedForAssignment, REPORT_PUBLISHED_MESSAGE } from "./published-lock";

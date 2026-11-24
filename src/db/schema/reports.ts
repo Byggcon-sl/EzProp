@@ -19,7 +19,7 @@ import {
 import { aiUsageLog } from "./ai-usage-log";
 import { assignments } from "./assignments";
 import { certifications } from "./certifications";
-import { baseColumns } from "./common";
+import { baseColumns, KEY_PATTERN_SQL } from "./common";
 import { employees } from "./employees";
 import { companies } from "./organization-structure";
 import { reportBuildings } from "./report-buildings";
@@ -259,8 +259,6 @@ export const REPORT_INSPECTION_YEAR_MAX = 2200;
 
 /** Tom plass i unike indekser med kolonner som kan være tomme. Er aldri en ekte id. */
 export const NIL_UUID = "00000000-0000-0000-0000-000000000000";
-
-const KEY_PATTERN_SQL = "^[a-z0-9_]+(\\.[a-z0-9_]+)*$";
 
 function inList(column: AnyPgColumn, values: readonly (string | number)[]): SQL {
   const list = values.map((value) => (typeof value === "number" ? String(value) : `'${value}'`));

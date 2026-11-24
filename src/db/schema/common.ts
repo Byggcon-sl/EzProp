@@ -3,6 +3,13 @@ import { integer, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 
 /**
+ * Formatet på en fast kode (`key`, regel 6) som regulært uttrykk i PostgreSQL: små bokstaver, tall
+ * og `_`, delt med punktum. Samme mønster som `TEMPLATE_KEY_PATTERN` i `templates.ts`. Står ett
+ * sted, slik at CHECK-reglene i alle tabeller som lagrer en fast kode, er like.
+ */
+export const KEY_PATTERN_SQL = "^[a-z0-9_]+(\\.[a-z0-9_]+)*$";
+
+/**
  * Felles kolonner på alle tabeller (docs/05-domenemodell.md avsnitt 3):
  * - `id` lages på enheten (UUID v7, `@/shared/lib/uuid`). Databasen setter en tilfeldig id bare
  *   når enheten ikke har sendt en.

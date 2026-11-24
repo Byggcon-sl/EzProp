@@ -16,7 +16,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { baseColumns } from "./common";
+import { baseColumns, KEY_PATTERN_SQL } from "./common";
 
 /**
  * Malmotoren (docs/05-domenemodell.md 4.5, docs/funksjoner/fase2a-malmotor.md).
@@ -49,7 +49,6 @@ import { baseColumns } from "./common";
 
 /** Formatet på en fast kode: små bokstaver, tall og `_`, delt med punktum. For eksempel `wet_room.membrane`. */
 export const TEMPLATE_KEY_PATTERN = /^[a-z0-9_]+(\.[a-z0-9_]+)*$/;
-const KEY_PATTERN_SQL = "^[a-z0-9_]+(\\.[a-z0-9_]+)*$";
 
 export const TEMPLATE_KINDS = ["system", "custom"] as const;
 export const TEMPLATE_REPORT_TYPES = ["condition_report"] as const;

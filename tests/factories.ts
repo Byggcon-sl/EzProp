@@ -34,6 +34,7 @@ import {
   organizations,
   outcomes,
   properties,
+  overrideSummaries,
   publishCheckResults,
   reportReleases,
   reports,
@@ -60,6 +61,8 @@ import { uuidv7 } from "@/shared/lib/uuid";
  * sjekker at alle tabellene i databasen står i listen.
  */
 export const RESET_TABLES = [
+  // Lederens månedsoppsummering (ADR 0006 tillegg 24.11.2026). Før KI-loggen og de ansatte.
+  "override_summaries",
   // Utgivelser og sjekken før publisering (ADR 0015). Før rapporten de peker på.
   "publish_check_results",
   "report_releases",
@@ -1207,6 +1210,7 @@ export type TestClaim = {
   claimantText: string | null;
   description: string;
   buildingPartText: string | null;
+  checkpointKey: string | null;
   outcome: string;
   amount: number | null;
   closedAt: Date | null;
@@ -1228,6 +1232,8 @@ type ClaimOverrides = {
   claimantText?: string | null;
   description?: string;
   buildingPartText?: string | null;
+  /** Kontrollpunktets faste kode. Standard: ikke valgt. */
+  checkpointKey?: string | null;
   outcome?: string;
   amount?: number | null;
   closedAt?: Date | null;
@@ -1255,12 +1261,13 @@ export async function createClaim(
   const row = firstRowOf(
     await db.execute(sql`
       insert into claims (organization_id, assignment_id, claim_type, received_at,
-        claimant_party_id, claimant_text, description, building_part_text, outcome, amount,
-        closed_at, created_at, created_by, deleted_at, deleted_by)
+        claimant_party_id, claimant_text, description, building_part_text, checkpoint_key,
+        outcome, amount, closed_at, created_at, created_by, deleted_at, deleted_by)
       values (${organizationId}, ${assignmentId}, ${overrides.claimType ?? "complaint"},
         ${overrides.receivedAt ?? "2026-11-02"}::date, ${pick(overrides.claimantPartyId, null)},
         ${pick(overrides.claimantText, "Kjøper Test")}, ${overrides.description ?? "Fukt i kjeller ikke nevnt"},
-        ${pick(overrides.buildingPartText, "Kjeller, yttervegg")}, ${overrides.outcome ?? "open"},
+        ${pick(overrides.buildingPartText, "Kjeller, yttervegg")},
+        ${pick(overrides.checkpointKey, null)}, ${overrides.outcome ?? "open"},
         ${pick(overrides.amount, null)}::integer, ${isoOrNull(overrides.closedAt)}::timestamptz,
         ${(overrides.createdAt ?? new Date()).toISOString()}::timestamptz,
         ${overrides.createdBy ?? randomUUID()}, ${isoOrNull(overrides.deletedAt)}::timestamptz,
@@ -1278,6 +1285,7 @@ export async function createClaim(
     claimantText: (row.claimant_text as string | null) ?? null,
     description: row.description as string,
     buildingPartText: (row.building_part_text as string | null) ?? null,
+    checkpointKey: (row.checkpoint_key as string | null) ?? null,
     outcome: row.outcome as string,
     amount: numberOrNull(row.amount),
     closedAt: row.closed_at ? new Date(row.closed_at as string | Date) : null,
@@ -1962,5 +1970,22 @@ export async function createPublishCheckResultRow(
       })
       .returning(),
     "publish_check_results",
+  );
+}
+
+/**
+ * Lederens månedsoppsummering (`override_summaries`), satt rett inn uten tilgangssjekk og uten
+ * tekstkontroll. Standard: tom rad (`empty`) for oktober 2026. Oppdiktet.
+ */
+export async function createOverrideSummaryRow(
+  organizationId: string,
+  overrides: ReportOverrides<typeof overrideSummaries.$inferInsert> = {},
+) {
+  return insertedRow(
+    await db
+      .insert(overrideSummaries)
+      .values({ id: uuidv7(), month: "2026-10", ...overrides, organizationId })
+      .returning(),
+    "override_summaries",
   );
 }

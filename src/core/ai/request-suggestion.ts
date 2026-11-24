@@ -820,7 +820,8 @@ export const requestSuggestionBatch: RequestSuggestionBatch = async (grant, requ
   const reportIds = new Set<string>();
   for (const entry of validated) {
     const resolved = await resolveAiTarget(grant, entry.target);
-    if (!resolved) throw new AiRequestRejectedError();
+    // Mål uten rapport (organisasjonsmål) kan ikke stå i et trykk med flere felt
+    if (!resolved || resolved.reportId === null) throw new AiRequestRejectedError();
     reportIds.add(resolved.reportId);
   }
   if (reportIds.size !== 1) throw new AiRequestRejectedError();

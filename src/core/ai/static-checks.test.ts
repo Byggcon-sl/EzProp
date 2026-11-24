@@ -54,6 +54,8 @@ const PORT_ALLOWED = new Set([
   // `PUBLISH_CHECK_SOURCES = ["rule", "ai"]` er kilden til et funn (ADR 0015), ikke porten
   "src/db/schema/reports.ts",
   "src/core/reports/logic/codes.ts",
+  // `OVERRIDE_SUMMARY_SOURCES = ["ai", "manual"]` er kilden til lederens tekst, ikke porten
+  "src/db/schema/override-summaries.ts",
 ]);
 
 describe("KI-modulen, statiske kontroller (12)", () => {

@@ -13,7 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { assignmentParties } from "./assignment-parties";
 import { assignments } from "./assignments";
-import { baseColumns } from "./common";
+import { baseColumns, KEY_PATTERN_SQL } from "./common";
 
 /**
  * Reklamasjonssak (docs/05-domenemodell.md 4.13), enkel utgave i fase 2a
@@ -27,6 +27,14 @@ import { baseColumns } from "./common";
  * `claimant_party_id` har en enkel fremmednøkkel fordi `assignment_parties` ikke har unik
  * (organization_id, id). At parten hører til samme organisasjon og oppdrag, sjekkes i
  * `@/core/claims`. Faste koder står i `@/core/claims/codes`; CHECK-reglene må ha de samme.
+ *
+ * `checkpoint_key` (migrering `0039_overstyringer-leder`, A564) er den faste koden til
+ * kontrollpunktet saken gjelder. Valgfri: eldre saker og saker der punktet ikke er valgt, har
+ * `null`. Lagres som kode, ikke id (regel 6), fordi id-ene er nye i hver malversjon og koden er den
+ * samme som i `publish_check_results.target_ref.checkpointKey`. Databasen kan ikke sjekke at koden
+ * finnes i malversjonen til en rapport på oppdraget; det gjør `@/core/claims` ved lagring.
+ * Fast kode uten personopplysninger, så den kan stå i revisjonsloggen. Ingen egen indeks:
+ * oversikten over overstyringer slår opp på (organisasjon, oppdrag).
  */
 export const claims = pgTable(
   "claims",
@@ -41,6 +49,8 @@ export const claims = pgTable(
     claimantText: text("claimant_text"),
     description: text("description").notNull(),
     buildingPartText: text("building_part_text"),
+    /** Kontrollpunktets faste kode (`checkpoints.key`). Tom når punktet ikke er valgt. */
+    checkpointKey: text("checkpoint_key"),
     outcome: text("outcome").notNull().default("open"),
     /** Hele kroner. Bare ved medhold eller forlik (sjekkes i skjemaet). */
     amount: integer("amount"),
@@ -69,6 +79,10 @@ export const claims = pgTable(
     check(
       "claims_outcome_check",
       sql`${table.outcome} in ('open', 'rejected', 'upheld', 'settled', 'withdrawn')`,
+    ),
+    check(
+      "claims_checkpoint_key_check",
+      sql`${table.checkpointKey} is null or ${table.checkpointKey} ~ ${sql.raw(`'${KEY_PATTERN_SQL}'`)}`,
     ),
     check("claims_amount_check", sql`${table.amount} is null or ${table.amount} >= 0`),
   ],

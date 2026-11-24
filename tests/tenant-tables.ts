@@ -37,6 +37,7 @@ import {
   createOffice,
   createOrder,
   createOutcomeRow,
+  createOverrideSummaryRow,
   createProperty,
   createPublishCheckResultRow,
   createReportReleaseRow,
@@ -309,6 +310,11 @@ export const tenantTables: TenantTableEntry[] = [
     table: "outcomes",
     testFile: TEMPLATES_TEST_FILE,
     insertRow: async (organizationId) => (await createOutcomeRow(organizationId)).id,
+  },
+  {
+    table: "override_summaries",
+    testFile: "src/core/reports/overrides.test.ts",
+    insertRow: async (organizationId) => (await createOverrideSummaryRow(organizationId)).id,
   },
   {
     table: "properties",

@@ -99,6 +99,61 @@ export type AiSummaryGroup = {
 };
 
 /**
+ * Én linje i tallgrunnlaget til `override_summary`: én kombinasjon av sperre, kontrollpunkt og
+ * grunn i måneden. Bare faste koder, faste etiketter og heltall (A573).
+ *
+ * - `checkCode` og `reasonCode` er de faste kodene fra `publish_check_results`. `checkLabel` og
+ *   `reasonLabel` er etikettene fra kodelistene i `@/shared/config`, aldri tekst fra en rad.
+ * - `checkpointKey` og `checkpointName` er `null` når sperren gjelder hele rapporten.
+ *   `checkpointName` er navnet på punktet i malversjonen (`checkpoints.name`). Det er eneste tekst
+ *   som ikke er en fast etikett, og går derfor gjennom mønstervasken og er høyst
+ *   `AI_OVERRIDE_CHECKPOINT_NAME_MAX_LENGTH` tegn.
+ * - `count` er antall unike rapporter med overstyringen i måneden, `claimCount` hvor mange av dem
+ *   som har rød markering (reklamasjon på samme punkt).
+ * - `sharePercent`, `previousSharePercent` og `deltaPoints` er `null` når måneden de gjelder, har
+ *   færre enn `AI_OVERRIDE_SHARE_MIN_REPORTS` rapporter (A570). `previousCount` er 0 når
+ *   kombinasjonen ikke fantes måneden før.
+ */
+export type AiOverrideStatsRow = {
+  checkCode: string;
+  checkLabel: string;
+  checkpointKey: string | null;
+  checkpointName: string | null;
+  reasonCode: string;
+  reasonLabel: string;
+  count: number;
+  sharePercent: number | null;
+  claimCount: number;
+  previousCount: number;
+  previousSharePercent: number | null;
+  deltaCount: number;
+  deltaPoints: number | null;
+};
+
+/**
+ * Tallgrunnlaget til `override_summary` (docs/funksjoner/fase2a-overstyringer-leder.md, ADR 0006
+ * tillegg 24.11.2026). Bygges av `BuildOverrideStats` i `@/core/reports` fra databasen med
+ * `grant.organizationId`; `@/core/ai` importerer aldri rapportkjernen. Alle tall er regnet av
+ * serveren. KI formulerer bare, og `number_guard` stopper et svar med et tall som ikke står her.
+ *
+ * Kjernen validerer grunnlaget strengt rett før kallet (ukjente nøkler avvises, kodene må følge
+ * nøkkelformatet, tallene må være heltall fra 0, og `rows` har høyst `AI_OVERRIDE_STATS_MAX_ROWS`
+ * linjer). Feil gir `AiRequestRejectedError`; kjernen kutter aldri selv. `reportCount = 0` gir
+ * også avslag: da skal kalleren ikke ha kalt KI.
+ *
+ * Aldri her: begrunnelsesteksten, hvem som krysset bort, reklamasjonstekster, navn, ansatt-id,
+ * oppdrags-id, oppdragsnummer, rapport-id, adresse og matrikkel (`never-fields.ts`).
+ */
+export type AiOverrideStats = {
+  /** Kalendermåneden i norsk tid, `YYYY-MM`. */
+  month: string;
+  /** Unike rapporter publisert i måneden (nevneren i prosentene). */
+  reportCount: number;
+  previousMonth: { reportCount: number };
+  rows: readonly AiOverrideStatsRow[];
+};
+
+/**
  * Det bare serveren kan gi inn (tredje argument til `requestSuggestion`). Kommer aldri fra
  * nettleseren: skjemaet for forespørselen har ikke disse nøklene, og serverinngangene i
  * `@/core/reports` bygger dem fra databasen med `grant.organizationId`.
@@ -110,6 +165,17 @@ export type AiSummaryGroup = {
  * `AiInputTooLargeError`; kjernen kutter aldri selv.
  */
 export type AiServerInput = {
+  /**
+   * Tallgrunnlaget for `override_summary` (se `AiOverrideStats`). Påkrevd for den funksjonen og
+   * ikke lov for de andre; `override_summary` tar verken `candidates` eller `summaryGroups`.
+   */
+  overrideStats?: AiOverrideStats;
+  /**
+   * Hvor mange linjer `BuildOverrideStats` kuttet for å komme under `AI_OVERRIDE_STATS_MAX_ROWS`
+   * (linjene med lavest antall kuttes først). Bare sammen med `overrideStats`. Heltall fra 0;
+   * føres som `rows_cut` i `input_summary`, ved siden av `rows`.
+   */
+  overrideStatsCut?: number;
   candidates?: readonly AiCandidate[];
   /**
    * Hvor mange kandidater kandidatkilden kuttet for å komme under `AI_CANDIDATES_MAX` (A467).
@@ -243,8 +309,13 @@ export type RecordDecisionIn = (
   options?: AiDecisionOptions,
 ) => Promise<void>;
 
-/** Det kjernen utleder av målet. Brukes til loggen og til vasken, aldri sendt til leverandøren. */
-export type ResolvedAiTarget = { reportId: string; assignmentId: string };
+/**
+ * Det kjernen utleder av målet. Brukes til loggen og til vasken, aldri sendt til leverandøren.
+ * Begge er `null` for mål som hører til organisasjonen (`ORGANIZATION_AI_TARGET_TYPES`), ellers
+ * er begge satt.
+ */
+export type ResolvedAiTarget =
+  { reportId: string; assignmentId: string } | { reportId: null; assignmentId: null };
 
 /**
  * Slår opp målraden (intern i `src/core/ai`, eksporteres ikke fra `index.ts`). Følger kjeden
@@ -252,6 +323,9 @@ export type ResolvedAiTarget = { reportId: string; assignmentId: string };
  * `grant.organizationId` og `deleted_at is null` i alle ledd, og rapporten i `draft`. For
  * `deviation` / `new_measure` er målraden avviket. `null` når noe i kjeden mangler.
  * Leser aldri tekstkolonner og låser aldri rader (se låserekkefølgen i `RecordDecisionIn`).
+ *
+ * For `override_summary` er målraden `override_summaries`: slått opp på `grant.organizationId` og
+ * `deleted_at is null`, uten kjede videre. Svaret er `{ reportId: null, assignmentId: null }`.
  */
 export type ResolveAiTarget = (
   grant: EmployeeGrant,
