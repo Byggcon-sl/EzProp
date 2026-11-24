@@ -60,3 +60,18 @@ export type ResolvedAiTargetType = (typeof RESOLVED_AI_TARGET_TYPES)[number];
  * `@/db/schema` og `@/core/ai` (`AI_SUGGESTED_CANDIDATES_MAX`) leser det herfra.
  */
 export const AI_CANDIDATE_REFS_MAX = 5;
+
+/**
+ * Høyeste antall treff i svaret fra `outcome_match` («Skriv det du ser», A553). Innenfor
+ * `AI_CANDIDATE_REFS_MAX`, så CHECK-regelen på `candidate_refs` er uendret. Står her fordi
+ * skjermen (klientkomponent) viser like mange treff i «Nærmeste treff (uten KI)», og fordi
+ * `src/core/reports/logic` får tallet som parameter (rent blad, ADR 0013).
+ */
+export const OUTCOME_MATCH_MAX = 3;
+
+/**
+ * Høyeste antall tegn i notatet til `outcome_match` (A560), regnet etter `trim()`. Over grensen
+ * gjøres ikke noe kall og ingen rad logges. Skjermen viser meldingen før kallet, og serveren
+ * kontrollerer det samme tallet.
+ */
+export const OUTCOME_MATCH_NOTE_MAX = 500;

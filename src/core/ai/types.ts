@@ -365,12 +365,17 @@ export type RestorePlaceholders = (
  * funksjon og samme grense som «Nærmeste treff (uten KI)» (A561). `src/core/ai` importerer aldri
  * fra `src/core/reports`.
  *
- * **Ekte leverandør:** `outcome_match` føres ikke i `settings.features` og gir derfor `disabled`.
+ * **Ekte leverandør (A565):** `outcome_match` står i `FAKE_ONLY_FEATURES` (`features.ts`). Mot en
+ * ekte leverandør er svaret `disabled` uten vask, rad eller kall, også når koden står i
+ * `settings.features`, og tilkoblingsskjemaet avviser koden.
  *
  * **Beslutningen:** `accepted` med valgt kandidat lagres bare med `RecordDecisionIn`, i samme
  * transaksjon som avviket (`ChooseOutcomeMatch` i `@/core/reports`). `edited` og `undo` brukes
  * aldri. Et nytt søk på samme rapport avviser forrige åpne rad; `accepted` på en avvist rad gir
  * `AiDecisionError`, som rapportkjernen gjør om til svaret `suggestion_outdated`.
+ *
+ * `RecordDecisionIn` er uendret og tåler fortsatt `accepted` to ganger med samme kandidat. At et
+ * brukt søk aldri gir to avvik, er derfor rapportkjernens ansvar (A564, `ChooseOutcomeMatch`).
  */
 export type OutcomeMatchRequest = Pick<AiSuggestionRequest, "requestId"> & {
   feature: "outcome_match";

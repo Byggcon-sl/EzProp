@@ -209,6 +209,28 @@ export const AI_FEATURES: Readonly<Record<AiFeatureCode, AiFeatureDefinition>> =
  */
 export const AI_FEATURES_WITHOUT_AI_TEXT: readonly string[] = ["phrase_suggest", "outcome_match"];
 
+/**
+ * Funksjonene som bare kan kjøres mot den falske leverandøren (A565, ADR 0006 tillegg 24.11.2026
+ * punkt 10). Samme mønster som `FAKE_ONLY_TARGET_TYPES` i `request-suggestion.ts`, men for
+ * funksjonskoden. Sperren står i koden, ikke i innstillingene, så en admin ikke kan slå funksjonen
+ * på ved å føre koden i `settings.features`.
+ *
+ * Brukes nøyaktig to steder:
+ * 1. `requestSuggestion`: er leverandøren ekte og funksjonen står her, er svaret `disabled`, før
+ *    vask, rad og kall, også når koden står i `settings.features`. Kontrollen står ved siden av
+ *    kontrollen av `FAKE_ONLY_TARGET_TYPES` og bruker samme avgjørelse av «ekte leverandør».
+ * 2. `anthropicSettingsSchema` i `src/core/integrations/connections.ts`: `features` med en kode
+ *    herfra avvises ved lagring av tilkoblingen.
+ *
+ * `outcome_match` står her til hullene i vasken er lukket og spørsmål 120 og 121 er besvart. Et
+ * fritt notat har oftere navn og opplysninger om eier enn en avvikstekst. Koden tas ut i en egen
+ * PR med gjennomgang av sikkerhet-personvern, aldri som del av en annen endring.
+ *
+ * Kodene er tekst av samme grunn som i `AI_FEATURES_WITHOUT_AI_TEXT`; hver kode må være en
+ * `AiFeatureCode` (statisk test).
+ */
+export const FAKE_ONLY_FEATURES: ReadonlySet<string> = new Set(["outcome_match"]);
+
 /** Det kontrollen trenger av en definisjon. Ren form, så testen kan prøve oppdiktede definisjoner. */
 export type AiFieldSourceCheckInput = {
   code: string;

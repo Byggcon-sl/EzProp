@@ -29,11 +29,14 @@ export {
   AI_SUMMARY_FINDINGS_MAX,
   AI_SUMMARY_INPUT_MAX_LENGTH,
   OUTCOME_MATCH_CANDIDATES_MAX,
-  OUTCOME_MATCH_MAX,
-  OUTCOME_MATCH_NOTE_MAX,
 } from "./limits";
 /** Høyeste antall kandidater i svaret. Samme tall som `candidate_refs` tåler (CHECK-regelen). */
 export { AI_CANDIDATE_REFS_MAX as AI_SUGGESTED_CANDIDATES_MAX } from "@/shared/config/ai-targets";
+/**
+ * Grensene for `outcome_match` som skjermen også bruker. Klientkode leser dem fra
+ * `@/shared/config/ai-targets`, aldri herfra (denne filen drar med seg serverkoden).
+ */
+export { OUTCOME_MATCH_MAX, OUTCOME_MATCH_NOTE_MAX } from "@/shared/config/ai-targets";
 export {
   AI_REJECTED_RETENTION_KEY,
   AI_REJECTED_RETENTION_MAX,
@@ -46,6 +49,7 @@ export {
 export {
   AI_FEATURES,
   AI_FEATURES_WITHOUT_AI_TEXT,
+  FAKE_ONLY_FEATURES,
   AI_TRIAL_TARGET_TYPE,
   ARCHIVED_AI_TARGET_TYPES,
   FREE_TEXT_SOURCE,

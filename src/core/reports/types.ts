@@ -944,7 +944,10 @@ export type OutcomeMatchHit = OutcomeSearchHit & {
 export type FindOutcomesInput = {
   /** UUID laget i nettleseren. Blir id-en i `ai_usage_log`; nytt forsøk bruker samme id. */
   requestId: string;
-  /** Det takstmannen skrev. Trimmes; høyst `OUTCOME_MATCH_NOTE_MAX` tegn. */
+  /**
+   * Det takstmannen skrev. Trimmes; høyst `OUTCOME_MATCH_NOTE_MAX` tegn. Skjemaet avviser et notat
+   * med fødselsnummer (`containsNationalId`, A567), før noe kall og uten rad.
+   */
   note: string;
   /**
    * Kontrollpunktet som er åpent på skjermen, eller `null`. Brukes bare til rekkefølgen på
@@ -983,6 +986,13 @@ export type FindOutcomesResult =
  * Rekkefølgen: tilgang, id-er (`requireUuid`), skjema, rom og rapport, tomt notat
  * (`ReportValidationError` `invalid_input`), `note_too_long`, `too_many_candidates`, så kallet.
  * Grensene sjekkes altså før `requestSuggestion`, slik at ingen rad lages.
+ *
+ * **Fødselsnummer (A567):** skjemaet for inndataene avviser `note` med `containsNationalId` fra
+ * `@/shared/validation/free-text`, samme sjekk og samme melding (`NATIONAL_ID_MESSAGE`) som
+ * avviksteksten i `schemas.ts`. Det gir `ReportValidationError` (`invalid_input`) i skjemasteget,
+ * altså før rommet leses, uten kall og uten rad. Lengden er med vilje ikke en skjemafeil: den gir
+ * svaret `note_too_long`, så skjermen kan vise sin egen melding. Feilen gjengir aldri notatet
+ * eller sifrene, heller ikke Zod-feilen bak.
  *
  * `requestSuggestion` avviser forrige åpne søk på rapporten (A555). Svaret `candidates` gjøres om
  * til `hits` i rekkefølgen KI ga; en kandidat som ikke lenger finnes i listen, tas bort.
@@ -1024,12 +1034,14 @@ export type ChooseOutcomeMatchResult =
 /**
  * Lager avviket fra valgt treff (`report.edit`), i `withRoomWrite`.
  *
- * **Bindingen av loggraden** gjøres på serveren før noe skrives. Raden må ha
- * `grant.organizationId`, ikke være slettet, ha `feature = outcome_match`, `report_id` lik
- * rapporten i skrivelåsen, `target_ref` lik `{ type: "report", id: <rapporten>, fieldKey:
- * "new_deviation" }`, utfallet `ok`, og `candidate` må stå i `candidate_refs` med kilden
- * `template_outcome`. Ellers `AccessDeniedError` (404), og verken logg eller avvik endres. En
- * `usageId` fra en annen rapport, en annen organisasjon eller en annen funksjon stopper her.
+ * **Bindingen av loggraden** gjøres på serveren, inne i `withRoomWrite` og før noe skrives
+ * (A564). Raden leses i skrivetransaksjonen, etter at rapportraden er låst, og svaret er radens
+ * `status` sammen med kontrollen. Raden må ha `grant.organizationId`, ikke være slettet, ha
+ * `feature = outcome_match`, `report_id` lik rapporten i skrivelåsen, `target_ref` lik
+ * `{ type: "report", id: <rapporten>, fieldKey: "new_deviation" }`, utfallet `ok`, og `candidate`
+ * må stå i `candidate_refs` med kilden `template_outcome`. Ellers `AccessDeniedError` (404), og
+ * verken logg eller avvik endres. En `usageId` fra en annen rapport, en annen organisasjon eller
+ * en annen funksjon stopper her.
  *
  * **Utfallet utledes av `candidate.id`** med `scope.template.outcomeRefById` og må finnes i
  * `scope.roomDoc.outcomes` (rapportens låste malversjon og rommets romtype). Ellers 404.
@@ -1040,13 +1052,26 @@ export type ChooseOutcomeMatchResult =
  *    `allowOtherTg`: nøyaktig samme avvik som `AddDeviation` gir for utfallet.
  * 2. `tgiu_conflict`: svar med den. Ingen beslutning lagres.
  * 3. `exists` (samme `deviationId` på nytt): avviket må ha samme `outcome_id` som kandidaten,
- *    ellers 404. Svar `saved` uten ny beslutning.
- * 4. `created`: `recordDecisionIn(tx, grant, usageId, "accepted", { candidate })`.
+ *    ellers 404. Svar `saved` uten ny beslutning. Dette er et gjentatt kall (A563), også når
+ *    raden alt er `accepted`.
+ * 4. `created` og radens status fra bindingen er `accepted`: søket er brukt (A564). Kast en
+ *    intern feil ut av `withRoomWrite`, slik at det nye avviket rulles tilbake, og svar
+ *    `suggestion_outdated`. `recordDecisionIn` kalles ikke: den tåler `accepted` to ganger med
+ *    samme kandidat og ville sluppet et avvik nummer to gjennom.
+ * 5. `created` og status `suggested`: `recordDecisionIn(tx, grant, usageId, "accepted",
+ *    { candidate })`.
  *
- * **Utdatert søk:** `AiDecisionError` fra `recordDecisionIn` skal ut av `withRoomWrite`, slik at
- * transaksjonen rulles tilbake og avviket ikke blir stående. Den fanges utenfor og blir svaret
- * `suggestion_outdated`. Den fanges aldri inne i transaksjonen. Statusen på raden leses ikke på
- * forhånd som avgjørelse: `recordDecisionIn` avgjør under KI-låsen.
+ * **Ett søk gir høyst ett avvik (A564).** Statusen fra bindingen er til å stole på for
+ * `accepted`: `accepted` settes bare av denne inngangen, i en transaksjon som holder samme
+ * rapportlås, så to valg på samme rapport går etter hverandre. Den er ikke til å stole på for
+ * `suggested` → `rejected`: `requestSuggestion` tar ikke rapportlåsen, så et nytt søk kan avvise
+ * raden etter at den er lest. Det avgjør fortsatt `recordDecisionIn` under KI-låsen (punkt 5).
+ * En annen status enn `suggested` og `accepted` (`rejected`) går også til `recordDecisionIn`, som
+ * kaster.
+ *
+ * **Utdatert søk:** `AiDecisionError` fra `recordDecisionIn` og feilen i punkt 4 skal ut av
+ * `withRoomWrite`, slik at transaksjonen rulles tilbake og avviket ikke blir stående. De fanges
+ * utenfor og blir svaret `suggestion_outdated`. De fanges aldri inne i transaksjonen.
  *
  * Revisjonsloggen får det samme som `AddDeviation`, pluss `usageId`. Aldri notatet.
  */
