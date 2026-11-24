@@ -916,7 +916,10 @@ test("B6.13 tastatur: Angre etter «Fjern avviket» og «Fjern TGIU» virker til
 
   await deviationCard(page, 1).getByRole("button", { name: "Fjern avviket" }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByText("Avvik 1 er fjernet.")).toBeVisible();
+  // Avvik fra et godtatt forslag: forslaget er åpent igjen (T-0117, A491).
+  await expect(
+    page.getByText("Avviket er fjernet. Forslaget om TG3 er åpent igjen."),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Angre" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: /^Avvik 1/ })).toBeFocused();
