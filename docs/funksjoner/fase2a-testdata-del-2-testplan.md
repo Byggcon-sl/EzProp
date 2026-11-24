@@ -1,7 +1,7 @@
 # Testplan: Testdata, del 2 (badet fylt ut i testoppdragene)
 
 - **Oppgavekort:** `docs/funksjoner/fase2a-testdata-del-2.md`
-- **Dato:** 17.11.2026 (test-leder, før bygging), kontrollert mot main og runde 2 i kortet 23.11.2026
+- **Dato:** 17.11.2026 (test-leder, før bygging), kontrollert mot main og runde 2 i kortet 23.11.2026, justert 24.11.2026 (admin-test uten åpent forslag, e2e gjenoppretter visningsbadet, seksjon 3 dekker alle kriteriene)
 - **Branch:** `testdata-del-2`
 - **Støtter hovedmål:**
   - **De ansatte:** testene låser at testmiljøet alltid har bad som ligner ekte befaringer (TG2, TG3 med kostnad, TGIU, TG0, HMS, «ikke vurdert»), slik at skjermen kan prøves uten utfylling for hånd, og at skriptet aldri rører ekte arbeid eller admin.
@@ -133,12 +133,12 @@ Forslag. Avvik føres i kortet, og testskriver følger kortet.
 `it.each` over takstmann, kontor, leder og admin i Byggcon.
 39. **alle fire åpner en seedet rapport** med `getRoomView` slik badskjermen tillater (kontor skrivebeskyttet).
 40. **takstmann kan endre** når `access.inspectors_edit_all` er på; **kontor kan ikke** godta eller avvise forslag.
-41. **admin stenges ikke ute:** admin kan godta et forslag i visningsbadet også når `access.inspectors_edit_all` er av, og `requireOrganizationAccess(admin, byggcon, p)` gir tilgang for hver rettighet i `PERMISSIONS` etter kjøringen.
+41. **admin stenges ikke ute:** admin kan lagre et svar (`saveField`) på et urørt punkt i visningsbadet også når `access.inspectors_edit_all` er av (visningsbadet har ingen åpne forslag å godta, fordi alle forslag der er avgjort), og `requireOrganizationAccess(admin, byggcon, p)` gir tilgang for hver rettighet i `PERMISSIONS` etter kjøringen.
 42. **seed-admin er urørt:** roller, aktiv og `activeAdminCount` er like før og etter.
 
 ## 3. Akseptkriteriene uavhengig av seed-koden, `src/db/seed/testdata-bath.acceptance.test.ts` (ny, testskriver)
 
-Skrives av `testskriver` parallelt, bare mot det offentlige grensesnittet (`seedTestdata`, oppsummeringen og databasen). Én `it` per akseptkriterium 1–14, med samme navn som i kortet. Overlapp med seksjon 2 er bevisst.
+Skrives av `testskriver` parallelt, bare mot det offentlige grensesnittet (`seedTestdata`, oppsummeringen og databasen). Én `it` per akseptkriterium i kortet (alle 23, i kortets rekkefølge), med samme navn som i kortet. Kriteriet om versjon og A501–A512 dekkes av seksjon 6. Numrene «akseptkriterium N» i seksjon 1–4 er fra første utgave av kortet; ved tvil gjelder teksten i kortet. Overlapp med seksjon 2 er bevisst.
 
 ## 4. Oppsummering og `TESTDATA_TABLES`, utvidelse av `src/db/seed/testdata-index.test.ts`
 
@@ -156,7 +156,7 @@ Skrives av `testskriver` parallelt, bare mot det offentlige grensesnittet (`seed
 4. **«Ukjent» byggeår:** punktet for sjikt står ikke ferdig og viser «ikke vurdert».
 5. **avvist forslag:** badet med `measured_again` viser forslaget som avvist med grunnen, og punktet står ikke ferdig.
 6. **kontor:** åpner visningsbadet skrivebeskyttet med kostnaden; ingen Godta/Avvis.
-7. **leder og admin:** åpner visningsbadet; admin kan godta med `access.inspectors_edit_all` av (gjenopprettes etterpå).
+7. **leder og admin:** åpner visningsbadet; admin kan lagre et svar på et urørt punkt med `access.inspectors_edit_all` av. Innstillingen og svaret gjenopprettes etterpå (svaret med `saveField` til tomt, ikke sletting), slik at visningsbadet er likt for de andre testene og for neste kjøring.
 8. **iPad liggende og stående** (bare i prosjektet `ipad`): visningsbadet uten vannrett rulling, knapper minst 44 × 44 px, TG3-kortet og TGIU synlige uten overlapp.
 9. **uten nett:** visningsbadet lastet, nettet av: innholdet står, og ingen rapportdata lagres lokalt (samme sjekk som B6.8).
 10. **axe uten feil** på visningsbadet (PC og iPad stående).
