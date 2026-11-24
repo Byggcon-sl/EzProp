@@ -21,9 +21,11 @@
 
 import {
   normalizeForRedaction,
+  PII_EMAIL_RULE,
   PII_PLACEHOLDER,
-  redactEmails,
-  redactPii,
+  PII_PLACEHOLDERS,
+  PII_REDACTION_RULES,
+  type PiiPlaceholder,
 } from "@/shared/lib/pii-patterns";
 
 /**
@@ -382,23 +384,115 @@ export function compileKnownValues(known: KnownValues): KnownValueMatcher {
   return { pattern, placeholders: alternatives.map((a) => a.placeholder) };
 }
 
-function applyRedaction(text: string, matcher: KnownValueMatcher): RedactionResult {
+/**
+ * Én plassholder i den vaskede teksten og verdien den erstattet (A466). Holdes bare i minnet under
+ * kallet: lagres aldri, logges aldri og sendes aldri til leverandøren.
+ */
+export type RedactedOriginal = { placeholder: PiiPlaceholder; value: string };
+
+/** Vasket tekst, antall treff og de opprinnelige verdiene i den rekkefølgen plassholderne står. */
+export type TrackedRedactionResult = RedactionResult & { originals: RedactedOriginal[] };
+
+type Span = { start: number; end: number; placeholder: string; value: string };
+type TrackedState = { text: string; spans: Span[]; count: number };
+
+/**
+ * `String.replace` med samme mønster og samme plassholder som før, men som også husker hvor hver
+ * plassholder står og hvilken tekst den erstattet. Står en tidligere plassholder inne i et nytt
+ * treff, blir den nye verdien den opprinnelige teksten (den gamle verdien satt inn). Teksten blir
+ * nøyaktig den samme som uten sporingen.
+ */
+function trackedReplace(
+  state: TrackedState,
+  pattern: RegExp,
+  pick: (args: unknown[]) => string,
+): TrackedState {
+  const pieces: { offset: number; length: number; placeholder: string }[] = [];
+  const text = state.text.replace(pattern, (...args: unknown[]) => {
+    const match = args[0] as string;
+    const offset = args.find((arg, index) => index > 0 && typeof arg === "number") as number;
+    const placeholder = pick(args);
+    pieces.push({ offset, length: match.length, placeholder });
+    return placeholder;
+  });
+  if (pieces.length === 0) return state;
+
+  const old = state.spans;
+  const spans: Span[] = [];
+  let delta = 0;
+  let index = 0;
+  for (const piece of pieces) {
+    const pieceEnd = piece.offset + piece.length;
+    while (index < old.length && (old[index] as Span).end <= piece.offset) {
+      const span = old[index] as Span;
+      spans.push({ ...span, start: span.start + delta, end: span.end + delta });
+      index += 1;
+    }
+    let value = "";
+    let cursor = piece.offset;
+    while (index < old.length && (old[index] as Span).start < pieceEnd) {
+      const span = old[index] as Span;
+      if (span.start >= cursor) {
+        value += state.text.slice(cursor, span.start) + span.value;
+        cursor = span.end;
+      }
+      index += 1;
+    }
+    if (cursor < pieceEnd) value += state.text.slice(cursor, pieceEnd);
+    const start = piece.offset + delta;
+    spans.push({
+      start,
+      end: start + piece.placeholder.length,
+      placeholder: piece.placeholder,
+      value,
+    });
+    delta += piece.placeholder.length - piece.length;
+  }
+  while (index < old.length) {
+    const span = old[index] as Span;
+    spans.push({ ...span, start: span.start + delta, end: span.end + delta });
+    index += 1;
+  }
+  return { text, spans, count: state.count + pieces.length };
+}
+
+/** Alle plassholderne, også dem som sto i teksten fra før. */
+const PLACEHOLDER_PATTERN = new RegExp(PII_PLACEHOLDERS.map(escapeRegExp).join("|"), "gu");
+
+/**
+ * Plassholderne i rekkefølge med verdien de erstattet. En plassholder som sto i teksten fra før
+ * (den ansatte skrev «[navn]»), får seg selv som verdi.
+ */
+function originalsOf(state: TrackedState): RedactedOriginal[] {
+  const byStart = new Map(state.spans.map((span) => [span.start, span]));
+  return Array.from(state.text.matchAll(PLACEHOLDER_PATTERN), (match) => {
+    const placeholder = match[0] as PiiPlaceholder;
+    const span = byStart.get(match.index);
+    return {
+      placeholder,
+      value: span && span.placeholder === placeholder ? span.value : placeholder,
+    };
+  });
+}
+
+function applyRedaction(text: string, matcher: KnownValueMatcher): TrackedRedactionResult {
   // E-post først, så «åse.testesen@eksempel.no» ikke blir «[navn].[navn]@eksempel.no».
-  const emails = redactEmails(normalizeForRedaction(text));
-  let result = emails.text;
-  let count = emails.count;
+  let state: TrackedState = { text: normalizeForRedaction(text), spans: [], count: 0 };
+  state = trackedReplace(state, PII_EMAIL_RULE.pattern, () => PII_PLACEHOLDER.email);
   if (matcher) {
     const { pattern, placeholders } = matcher;
-    result = result.replace(pattern, (...args: unknown[]) => {
-      count += 1;
+    state = trackedReplace(state, pattern, (args) => {
       for (let index = 0; index < placeholders.length; index += 1) {
         if (args[index + 1] !== undefined) return placeholders[index] as string;
       }
       return PII_PLACEHOLDER.name;
     });
   }
-  const patterns = redactPii(result);
-  return { text: patterns.text, count: count + patterns.count };
+  // Mønstrene, i samme rekkefølge som `redactPii` (teksten er allerede normalisert)
+  for (const rule of PII_REDACTION_RULES) {
+    state = trackedReplace(state, rule.pattern, () => rule.placeholder);
+  }
+  return { text: state.text, count: state.count, originals: originalsOf(state) };
 }
 
 /**
@@ -406,7 +500,19 @@ function applyRedaction(text: string, matcher: KnownValueMatcher): RedactionResu
  * `count` er antall byttede treff.
  */
 export function redactText(text: string, known: KnownValues): RedactionResult {
-  return applyRedaction(text, compileKnownValues(known));
+  const { text: redacted, count } = applyRedaction(text, compileKnownValues(known));
+  return { text: redacted, count };
+}
+
+/**
+ * Som `redactText`, men gir også de opprinnelige verdiene bak plassholderne (A466), slik at
+ * kjernen kan bytte dem tilbake i svaret. Med `matcher = null` vaskes bare med mønstrene.
+ */
+export function redactTextTracked(
+  text: string,
+  matcher: KnownValueMatcher,
+): TrackedRedactionResult {
+  return applyRedaction(text, matcher);
 }
 
 /**
@@ -416,14 +522,21 @@ export function redactText(text: string, known: KnownValues): RedactionResult {
 export function redactFieldValues(
   fields: Readonly<Record<string, string>>,
   known: KnownValues | null,
-): { fields: Record<string, string>; count: number } {
+): {
+  fields: Record<string, string>;
+  count: number;
+  /** De opprinnelige verdiene per felt (A466). Bare i minnet. */
+  originals: Record<string, RedactedOriginal[]>;
+} {
   const matcher = known === null ? null : compileKnownValues(known);
   const redacted: Record<string, string> = {};
+  const originals: Record<string, RedactedOriginal[]> = {};
   let count = 0;
   for (const [key, value] of Object.entries(fields)) {
     const result = applyRedaction(value, matcher);
     redacted[key] = result.text;
+    originals[key] = result.originals;
     count += result.count;
   }
-  return { fields: redacted, count };
+  return { fields: redacted, count, originals };
 }

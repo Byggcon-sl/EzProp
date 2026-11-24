@@ -2,8 +2,14 @@ import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import type { EmployeeGrant } from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
 import { db, type DbExecutor } from "@/db/client";
-import { aiUsageLog, type AiSuggestionStatus, type AiTargetRef } from "@/db/schema";
+import {
+  aiUsageLog,
+  type AiCandidateRef,
+  type AiSuggestionStatus,
+  type AiTargetRef,
+} from "@/db/schema";
 import { AiRequestRejectedError } from "./errors";
+import { isGuardCode } from "./guards";
 import type { AiSuggestionResult } from "./types";
 
 /*
@@ -91,11 +97,24 @@ type ResultRow = {
   id: string;
   outcome: string;
   outputText: string | null;
+  errorCode?: string | null;
+  candidateRefs?: AiCandidateRef[] | null;
 };
 
-/** Svaret til kalleren fra en lagret rad. */
+/**
+ * Svaret til kalleren fra en lagret rad. Et stoppet svar gir bare vaktkoden, aldri teksten. En
+ * rad med rangerte kandidater gir listen, aldri `output_text`.
+ */
 export function toSuggestionResult(row: ResultRow): AiSuggestionResult {
   if (row.outcome === "ok") {
+    if (row.candidateRefs) {
+      return {
+        kind: "candidates",
+        usageId: row.id,
+        status: "suggested",
+        candidates: row.candidateRefs.map((ref) => ({ source: ref.source, id: ref.id })),
+      };
+    }
     return {
       kind: "suggestion",
       usageId: row.id,
@@ -103,6 +122,9 @@ export function toSuggestionResult(row: ResultRow): AiSuggestionResult {
       text: row.outputText ?? "",
       candidateId: null,
     };
+  }
+  if (row.outcome === "stopped" && isGuardCode(row.errorCode)) {
+    return { kind: "stopped", usageId: row.id, guard: row.errorCode };
   }
   if (row.outcome === "no_match") return { kind: "no_match", usageId: row.id };
   if (row.outcome === "blocked") return { kind: "blocked" };
@@ -116,6 +138,8 @@ export type BlockedRowInput = {
   model: string;
   promptVersion: string;
   assignmentId: string | null;
+  /** Rapporten kjernen utledet av målet, eller `null`. */
+  reportId?: string | null;
   target: AiTargetRef;
   /** Bare feltkoder, aldri verdier. */
   sourceFields: string[];
@@ -146,7 +170,7 @@ export async function insertBlockedRow(
       model: input.model,
       promptVersion: input.promptVersion,
       assignmentId: input.assignmentId,
-      reportId: null,
+      reportId: input.reportId ?? null,
       targetRef: target,
       sourceFields: [...input.sourceFields].sort(),
       inputSummary: {},

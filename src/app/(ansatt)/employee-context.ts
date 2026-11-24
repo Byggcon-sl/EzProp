@@ -1,5 +1,10 @@
 import "server-only";
-import { canCreateAssignments, grantHasPermission, type Actor } from "@/core/access";
+import {
+  canCreateAssignments,
+  canSeeOverrideReasons,
+  grantHasPermission,
+  type Actor,
+} from "@/core/access";
 import { getActorForAction, requireActor } from "@/core/auth/session";
 import { defaultMineOnly } from "@/core/assignments";
 import { findEmployeeGrant } from "@/core/organization";
@@ -25,6 +30,11 @@ export type EmployeeContext = {
    * skjer i `@/core/reports` for hver handling.
    */
   canEditReports: boolean;
+  /**
+   * Bare til å si «Begrunnelsen vises for takstmann, leder og admin» i «Utgivelser». Teksten
+   * fjernes i kjernen (`listReleases`), aldri i skjermen.
+   */
+  canSeeOverrideReasons: boolean;
   /** Bare til å vise skjemaet for nullpunkt og bryter i /statistikk/tid. Sjekken skjer i kjernen. */
   canManageOrganization: boolean;
   /** Bare til å vise menylenken «Statistikk». Sjekken skjer i kjernen. */
@@ -78,6 +88,7 @@ function buildContext(actor: Actor, found: FoundEmployee): EmployeeContext {
     organizationId: found.grant.organizationId,
     canEditOrders: grantHasPermission(found.grant, "assignment.edit"),
     canEditReports: grantHasPermission(found.grant, "report.edit"),
+    canSeeOverrideReasons: canSeeOverrideReasons(found.grant),
     canCreateAssignments: canCreateAssignments(found.grant),
     canManageContacts: grantHasPermission(found.grant, "contacts.manage"),
     canReadClaims: grantHasPermission(found.grant, "claims.read"),

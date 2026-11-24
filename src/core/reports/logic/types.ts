@@ -1,15 +1,20 @@
 import type { RuleResult } from "@/core/rules";
-import type { StandardMeasureDoc } from "@/core/templates";
+import type { StandardMeasureDoc, TemplateDocument } from "@/core/templates";
 import type {
   ChosenTg,
+  AiCandidateRef,
   ConstructionVulnerable,
   CostType,
   DeviationKind,
   DeviationTg,
   MeasureAppliesToTg,
+  OutcomeKind,
   OverrideReasonCode,
   RuleSuggestionDecision,
   StoredRuleSuggestion,
+  SummaryFindingSource,
+  SummaryGroup,
+  TextStatus,
   TgDirect,
 } from "@/db/schema";
 import type {
@@ -19,6 +24,7 @@ import type {
   COST_AMOUNT_CHECKS,
   MERGE_FIELD_KEYS,
   OVERRIDE_REASON_CHECKS,
+  PHRASE_FIELDS,
   WARNING_FIX_KINDS,
   WARNING_MISSING_PARTS,
 } from "./codes";
@@ -318,3 +324,229 @@ export type SuggestedTgChangeDecision = (input: {
   /** TG-en takstmannen velger nå. */
   tg: DeviationTg | null;
 }) => SuggestedTgChangeOutcome;
+// --- Forslag fra frasebanken («KI i veien», A485 og A433) ------------------------------------
+
+export type PhraseField = (typeof PHRASE_FIELDS)[number];
+
+/**
+ * Det kandidatene bygges fra: rommets del av rapportens låste malversjon. Bare feltene som brukes,
+ * slik at både maldokumentet i nettleseren (`RoomTemplateDocument`) og radene kandidatkilden leser
+ * fra databasen passer.
+ */
+export type PhraseCandidateDocument = {
+  checkpoints: readonly Pick<
+    TemplateDocument["checkpoints"][number],
+    "key" | "name" | "sort_order"
+  >[];
+  deviation_questions: readonly Pick<
+    TemplateDocument["deviation_questions"][number],
+    "checkpoint_key" | "key" | "text" | "sort_order"
+  >[];
+  outcomes: readonly Pick<
+    TemplateDocument["outcomes"][number],
+    | "checkpoint_key"
+    | "question_key"
+    | "key"
+    | "kind"
+    | "deviation_text"
+    | "default_cause_text"
+    | "default_consequence_text"
+    | "text_status"
+    | "sort_order"
+  >[];
+  standard_measures: readonly Pick<
+    StandardMeasureDoc,
+    | "checkpoint_key"
+    | "question_key"
+    | "outcome_key"
+    | "text"
+    | "applies_to_tg"
+    | "text_status"
+    | "sort_order"
+  >[];
+};
+
+/**
+ * Hvor mange ganger én kandidat er valgt i organisasjonen for ett felt («Mest brukt», A468).
+ * Samlet for hele organisasjonen, aldri per ansatt: typen har ingen ansatt, og ingen dato.
+ * Kandidaten pekes ut med de faste kodene i rapportens låste maldokument, slik at nettleseren
+ * finner den uten id fra databasen. `measureSortOrder` er satt for standardtiltak, ellers `null`.
+ */
+export type PhraseUsageCount = {
+  field: PhraseField;
+  checkpointKey: string;
+  questionKey: string;
+  outcomeKey: string;
+  measureSortOrder: number | null;
+  /** Heltall, minst 1. Kandidater som aldri er valgt, står ikke i listen. */
+  count: number;
+};
+
+/** Avviket og feltet forslagene gjelder. Bare faste koder, TG og teksten som står i feltet. */
+export type PhraseCandidateContext = {
+  field: PhraseField;
+  checkpointKey: string;
+  /** Tomme for avvik skrevet fritt. */
+  questionKey: string | null;
+  outcomeKey: string | null;
+  /**
+   * Avvikets slag (A463). `hms` får bare kandidater fra HMS-utfall, `tg` får aldri kandidater
+   * fra HMS-utfall.
+   */
+  kind: DeviationKind;
+  /** Avvikets TG. `null` for HMS og når TG ikke er valgt. */
+  tg: DeviationTg | null;
+  /** Tellingen for rommet (`RoomReportView.phraseUsage`). Tom liste når ingen er valgt ennå. */
+  usage: readonly PhraseUsageCount[];
+  /**
+   * Teksten som står i feltet (for `new_measure`: tekstene i tiltakene som alt finnes). Kandidater
+   * med samme tekst tas ut.
+   */
+  currentTexts: readonly string[];
+};
+
+/**
+ * Én kandidat: en tekst fra malen for samme felttype. `text` er malens tekst med flettefeltene
+ * urørt; skjermen setter inn verdiene med `fillMergeFields`. `ref` er satt når kandidaten kommer
+ * fra serveren (id-en i databasen), og `null` i tekstsøket uten KI, som bare har maldokumentet.
+ */
+export type PhraseCandidate = {
+  ref: AiCandidateRef | null;
+  checkpointKey: string;
+  checkpointName: string;
+  questionKey: string;
+  /** Avviksspørsmålet i malen. Brukes av tekstsøket, sendes aldri til KI. */
+  questionText: string;
+  outcomeKey: string;
+  outcomeKind: OutcomeKind;
+  /** Bare for standardtiltak: TG-en tiltaket gjelder for, og plassen blant utfallets tiltak. */
+  appliesToTg: MeasureAppliesToTg | null;
+  measureSortOrder: number | null;
+  /** Antall ganger kandidaten er valgt i organisasjonen for feltet (A468). 0 når aldri valgt. */
+  chosenCount: number;
+  text: string;
+  /** Alle er `draft` til fagrådet har godkjent (A482). Vises som «utkast». */
+  textStatus: TextStatus;
+};
+
+/**
+ * Kandidatene for et felt (A433): alle tekster for samme felttype i dokumentet, uten tomme
+ * tekster, uten like tekster (første beholdes) og uten `currentTexts`. HMS og TG blandes aldri
+ * (A463): et HMS-avvik får bare tekster fra utfall med `kind = hms`, og et TG-avvik aldri dem.
+ *
+ * Rekkefølge, i fire ledd: avvikets eget utfall, så samme punkt og samme TG, så resten av
+ * punktet, så resten av rommet. Innen et ledd kommer kandidaten med høyest `chosenCount` først
+ * (A468), og ved likt tall malens rekkefølge. Listen kuttes ikke her.
+ *
+ * `ref` er alltid `null`. Ren funksjon: samme liste i nettleseren og på serveren.
+ */
+export type ListPhraseCandidates = (
+  document: PhraseCandidateDocument,
+  context: PhraseCandidateContext,
+) => PhraseCandidate[];
+
+/**
+ * Tekstsøket uten KI (A485): kandidatene der alle ordene i `query` står i teksten, punktnavnet
+ * eller spørsmålet, i rekkefølgen de kom inn. Tom `query` gir de første. Høyst `limit` treff.
+ * Samme normalisering som `searchOutcomes` (A382).
+ */
+export type SearchPhraseCandidates = (
+  candidates: readonly PhraseCandidate[],
+  query: string,
+  limit: number,
+) => PhraseCandidate[];
+
+/**
+ * Kandidaten som får merket «Mest brukt» (A468): den med høyest `chosenCount`, når tallet er
+ * minst `PHRASE_MOST_USED_MIN_COUNT` (2). Ved likt tall den første i listen. `null` når ingen
+ * er valgt ofte nok. Ren funksjon, brukt på listen som vises (tekstsøket og KI-rangeringen).
+ */
+export type MostUsedPhraseCandidate = <T extends PhraseCandidate>(
+  candidates: readonly T[],
+) => T | null;
+
+/**
+ * Om kandidaten hører til en annen TG enn avviket (A437): gir TG-en teksten hører til, ellers
+ * `null`. Brukes til advarselen «Se over konsekvens og tiltak, teksten hører til TG3».
+ */
+export type PhraseCandidateOtherTg = (
+  candidate: PhraseCandidate,
+  deviationTg: DeviationTg | null,
+) => DeviationTg | null;
+
+// --- Sammendraget («KI i veien», A484, A434, A435, A461, A462 og A465) ------------------------
+
+/** Et tiltak slik sammendraget ser det. Mykt slettede tiltak sendes aldri inn. */
+export type SummaryMeasureInput = {
+  id: string;
+  rowVersion: number;
+  text: string;
+  sortOrder: number;
+};
+
+/** Et avvik slik sammendraget ser det. Mykt slettede avvik sendes aldri inn. */
+export type SummaryDeviationInput = {
+  id: string;
+  rowVersion: number;
+  kind: DeviationKind;
+  tg: DeviationTg | null;
+  sortOrder: number;
+  deviationText: string | null;
+  causeText: string | null;
+  consequenceText: string | null;
+  measures: readonly SummaryMeasureInput[];
+};
+
+/**
+ * Ett kontrollpunkt i rapporten med det sammendraget trenger. `order` er plassen i malen og
+ * rapporten (punktets rekkefølge først), slik at funnene kommer i malens rekkefølge.
+ */
+export type SummaryCheckpointInput = {
+  resultId: string;
+  resultRowVersion: number;
+  checkpointKey: string;
+  checkpointName: string;
+  order: readonly number[];
+  roomId: string | null;
+  tgDirect: TgDirect | null;
+  /** Opplysningene ved TGIU, når punktet har dem. */
+  tgiu: { id: string; rowVersion: number; reason: string | null } | null;
+  deviations: readonly SummaryDeviationInput[];
+};
+
+/**
+ * Ett godkjent funn (A484, A434): avvik med TG2 eller TG3, kontrollpunkt med TGIU eller HMS-avvik.
+ * Tekstene er bare med for å bygge utkastet; de står aldri i `summary_basis` eller i loggen.
+ */
+export type SummaryFinding = {
+  source: SummaryFindingSource;
+  id: string;
+  group: SummaryGroup;
+  checkpointKey: string;
+  checkpointName: string;
+  roomId: string | null;
+  rowVersion: number;
+  /** Tiltakene (avvik) eller opplysningene ved TGIU, med `row_version`. */
+  parts: { id: string; rowVersion: number }[];
+  deviationText: string | null;
+  causeText: string | null;
+  consequenceText: string | null;
+  /** Tiltakene med tekst, i rekkefølge. */
+  measures: string[];
+  /** `tgiu_details.reason` for TGIU-funn, ellers `null`. */
+  tgiuReason: string | null;
+};
+
+/**
+ * Funnene i rapporten i fast rekkefølge: `SUMMARY_GROUPS` (TG3, TG2, TGIU, HMS), og innen gruppen
+ * punktets plass i malen og avvikets plass på punktet. Avvik uten valgt TG telles i
+ * `missingTgCount` og er ikke med (A465). TG0, TG1, tomme punkter og avviste eller ubesvarte
+ * regelforslag gir ingen funn.
+ */
+export type CollectSummaryFindings = (checkpoints: readonly SummaryCheckpointInput[]) => {
+  findings: SummaryFinding[];
+  missingTgCount: number;
+};
+
+/** Resultatet av inndatakontrollen for `summary_text` (K1.26). */
+export type SummaryTextCheck = "ok" | "too_long" | "national_id" | "placeholder";

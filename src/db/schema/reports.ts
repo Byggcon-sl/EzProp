@@ -3,6 +3,7 @@ import {
   type AnyPgColumn,
   boolean,
   check,
+  date,
   foreignKey,
   index,
   integer,
@@ -17,8 +18,10 @@ import {
 } from "drizzle-orm/pg-core";
 import { aiUsageLog } from "./ai-usage-log";
 import { assignments } from "./assignments";
+import { certifications } from "./certifications";
 import { baseColumns } from "./common";
 import { employees } from "./employees";
+import { companies } from "./organization-structure";
 import { reportBuildings } from "./report-buildings";
 import { rooms } from "./rooms";
 import {
@@ -132,6 +135,121 @@ export type StoredRuleSuggestion =
   | { kind: "tgiu"; checkpoint_key: string }
   | { kind: "tg0"; checkpoint_key: string };
 
+// --- Sjekken før publisering (ADR 0015, docs/funksjoner/fase2a-publisering-badet.md) -----------
+
+/** `blocker` = sperre som må rettes eller krysses bort, `warning` = advarsel. */
+export const PUBLISH_CHECK_SEVERITIES = ["blocker", "warning"] as const;
+export type PublishCheckSeverity = (typeof PUBLISH_CHECK_SEVERITIES)[number];
+
+/** Hvem som fant mangelen. `ai` kommer i 2a-3 og kan bare gi advarsel (CHECK). */
+export const PUBLISH_CHECK_SOURCES = ["rule", "ai"] as const;
+export type PublishCheckSource = (typeof PUBLISH_CHECK_SOURCES)[number];
+
+/**
+ * De sju sperrene (domenemodellen 4.7, beslutning 25.10.2026). `bra_missing` og
+ * `electrical_missing` regnes ikke ut før 2a-3, men står her så 2a-3 slipper ny migrering.
+ * En kode er sperre for alltid: skal noe bli advarsel, lages en ny kode (regel 6).
+ */
+export const PUBLISH_BLOCKER_CODES = [
+  "mandatory_without_tg",
+  "tg2_tg3_missing_cause_or_consequence",
+  "tg3_missing_cost",
+  "wet_or_below_ground_missing_hole",
+  "bra_missing",
+  "electrical_missing",
+  "inspection_date_missing",
+] as const;
+export type PublishBlockerCode = (typeof PUBLISH_BLOCKER_CODES)[number];
+
+/**
+ * Advarslene i sjekken: punktadvarslene fra «Badet på PC» (samme koder som
+ * `CHECKPOINT_WARNING_CODES`, uten de to som sperren `mandatory_without_tg` erstatter), og de to
+ * nye `ai_suggestion_pending` (A454) og `hole_reading_missing` (A446).
+ */
+export const PUBLISH_WARNING_CODES = [
+  "tg2_tg3_missing_measure",
+  "cost_amount_not_rounded",
+  "hms_missing_consequence_or_measure",
+  "tgiu_details_missing",
+  "tgiu_suggested_not_set",
+  "no_findings_with_reading_over_limit",
+  "suggestion_no_longer_applies",
+  "texts_written_for_other_tg",
+  "tg3_on_age_only",
+  "ai_suggestion_pending",
+  "hole_reading_missing",
+] as const;
+export type PublishWarningCode = (typeof PUBLISH_WARNING_CODES)[number];
+
+/** Alle kodene i `publish_check_results.check_code`, sperrene først. Rekkefølgen er sorteringen. */
+export const PUBLISH_CHECK_CODES = [...PUBLISH_BLOCKER_CODES, ...PUBLISH_WARNING_CODES] as const;
+export type PublishCheckCode = (typeof PUBLISH_CHECK_CODES)[number];
+
+/**
+ * Grunnen når en sperre krysses bort (A521, A449): ett trykk. `other` krever tekst. Egen liste,
+ * skilt fra `OVERRIDE_REASON_CODES` (regelforslag). Etikettene står i oversettelsesfilen.
+ */
+export const PUBLISH_OVERRIDE_REASON_CODES = [
+  "no_access_or_refused",
+  "not_applicable_to_room",
+  "described_elsewhere",
+  "other",
+] as const;
+export type PublishOverrideReasonCode = (typeof PUBLISH_OVERRIDE_REASON_CODES)[number];
+
+/** Øvre lengde på begrunnelsen ved overstyring. Samme grense i Zod-skjemaet og i CHECK. */
+export const PUBLISH_OVERRIDE_REASON_MAX_CHARS = 1000;
+
+/**
+ * Hvor mangelen er (`publish_check_results.target_ref`). Bare id-er og faste koder, aldri tekst
+ * eller romnavn. Punktet kan mangle rad i `checkpoint_results`, så målet er malens
+ * kontrollpunkt (`checkpointId` + `checkpointKey`) og rommet, aldri resultatradens id.
+ * `missing` er faste koder (`PUBLISH_CHECK_MISSING_PARTS` i `@/core/reports/logic`).
+ */
+export type StoredPublishCheckTarget = {
+  /** `null` = hele rapporten (`inspection_date_missing`). */
+  roomId: string | null;
+  checkpointId: string | null;
+  checkpointKey: string | null;
+  deviationId: string | null;
+  ruleKey: string | null;
+  /** KI-forslaget som venter (`ai_suggestion_pending`). Aldri forslagsteksten. */
+  aiUsageId: string | null;
+  missing: string[];
+};
+
+/** Gjeldende `schema_version` i `report_releases.snapshot`. */
+export const REPORT_SNAPSHOT_SCHEMA_VERSION = 1;
+/**
+ * Gruppene i sammendraget, i fast rekkefølge (A434): TG3, TG2, TGIU og til slutt HMS uten TG.
+ * Koden lager gruppene og overskriftene; KI skriver aldri TG.
+ */
+export const SUMMARY_GROUPS = ["tg3", "tg2", "tgiu", "hms"] as const;
+export type SummaryGroup = (typeof SUMMARY_GROUPS)[number];
+
+/** Hva slags rad et funn i sammendraget er: avvik (TG2, TG3, HMS) eller kontrollpunkt med TGIU. */
+export const SUMMARY_FINDING_SOURCES = ["deviation", "checkpoint_result"] as const;
+export type SummaryFindingSource = (typeof SUMMARY_FINDING_SOURCES)[number];
+
+/**
+ * Ett funn sammendraget bygde på (A435). Bare id-er, faste koder og `row_version`, aldri tekst.
+ * `parts` er radene under funnet som også gikk inn i utkastet: tiltakene til et avvik
+ * (`deviation_measures`) og opplysningene ved TGIU (`tgiu_details`). Slik gir også et endret
+ * tiltak advarselen «Funnene er endret etter sammendraget».
+ */
+export type SummaryBasisEntry = {
+  source: SummaryFindingSource;
+  id: string;
+  group: SummaryGroup;
+  rowVersion: number;
+  parts: { id: string; rowVersion: number }[];
+};
+
+/** Øvre lengde på `reports.summary_text` (tegn). Samme grense i Zod-skjemaet og CHECK-regelen. */
+export const REPORT_SUMMARY_MAX_LENGTH = 10000;
+/** Øvre antall funn i `reports.summary_basis`. Samme grense i CHECK-regelen. */
+export const REPORT_SUMMARY_BASIS_MAX = 200;
+
 /** Øvre størrelse på `reasons` (tegn som JSON). Samme grense i Zod-skjemaet. */
 export const RULE_REASONS_MAX_CHARS = 16000;
 
@@ -174,6 +292,18 @@ export const reports = pgTable(
     templateVersionId: uuid("template_version_id").notNull(),
     reportType: text("report_type").notNull(),
     status: text("status").$type<ReportStatus>().notNull().default("draft"),
+    /**
+     * Sammendraget for hele rapporten (A483). Fritekst fra takstmannen, eventuelt etter et
+     * KI-utkast han har godtatt. KI-opphav står bare i `ai_usage_log` (mål `report` / `summary_text`).
+     */
+    summaryText: text("summary_text"),
+    /**
+     * Funnene sammendraget bygde på da et utkast sist ble brukt (A435). Tom når sammendraget er
+     * skrevet for hånd uten utkast. Kommer tilbake fra nettleseren ved «Bruk» og kontrolleres av
+     * serveren før den lagres (A470): strengt skjema, hver id må være et funn i rapporten, `group`
+     * settes av serveren, og `rowVersion` kan ikke være høyere enn dagens.
+     */
+    summaryBasis: jsonb("summary_basis").$type<SummaryBasisEntry[]>(),
   },
   (table): PgTableExtraConfigValue[] => [
     uniqueIndex("reports_organization_id_id_idx").on(table.organizationId, table.id),
@@ -193,6 +323,14 @@ export const reports = pgTable(
     }),
     check("reports_report_type_check", inList(table.reportType, TEMPLATE_REPORT_TYPES)),
     check("reports_status_check", inList(table.status, REPORT_STATUSES)),
+    check(
+      "reports_summary_text_check",
+      sql`${table.summaryText} is null or char_length(${table.summaryText}) <= ${sql.raw(String(REPORT_SUMMARY_MAX_LENGTH))}`,
+    ),
+    check(
+      "reports_summary_basis_check",
+      sql`${table.summaryBasis} is null or (jsonb_typeof(${table.summaryBasis}) = 'array' and jsonb_array_length(${table.summaryBasis}) <= ${sql.raw(String(REPORT_SUMMARY_BASIS_MAX))})`,
+    ),
   ],
 );
 export type Report = typeof reports.$inferSelect;
@@ -677,3 +815,189 @@ export const ruleSuggestionDecisions = pgTable(
   ],
 );
 export type RuleSuggestionDecisionRow = typeof ruleSuggestionDecisions.$inferSelect;
+
+// --- Utgivelser og sjekken før publisering ---------------------------------------------------
+
+/**
+ * En utgivelse (versjon) av rapporten (ADR 0015, domenemodellen 4.7). Låst for alltid: ingen
+ * tjeneste oppdaterer raden eller setter `deleted_at`, og papirkurven tar den ikke. Skrives bare
+ * av `publishReport`, i samme transaksjon som sjekkradene og `reports.status = published`.
+ *
+ * - `released_by` og `signed_by_employee_id` er ansatt-id (`grant.employeeId`), aldri fra skjemaet.
+ * - `certification_id` er sertifiseringen som var gyldig for den som signerte, den dagen i norsk
+ *   tid. `company_id` er oppdragets selskap den dagen. Begge er øyeblikksbilder.
+ * - `original_release_date` og `valid_until` er rene datoer i norsk tid. `valid_until` er
+ *   befaringsdato + ett år (regel 12), og tom når befaringsdatoen manglet og sperren ble krysset
+ *   bort (A523); den regnes aldri fra publiseringsdagen. Versjon 2 og senere kopierer begge fra
+ *   versjon 1.
+ * - `snapshot` er en selvstendig kopi (`ReportSnapshot` i `@/core/reports`, A452): ingen parter,
+ *   navn, e-post, telefon, adresse, matrikkel eller reklamasjonsdata. Logges aldri.
+ * - `content_hash` er SHA-256 (hex) av kanonisk snapshot, regnet på serveren.
+ * - `retain_until` er utgivelsen + 10 år, satt på serveren (regel 3).
+ *
+ * Kommer senere som nye kolonner som kan være tomme (A455): `pdf_file_id`,
+ * `report_profile_version`, `co_signed_by_employee_id`, `revision_note`.
+ */
+export const reportReleases = pgTable(
+  "report_releases",
+  {
+    ...baseColumns,
+    reportId: uuid("report_id").notNull(),
+    /** 1, 2, 3 … per rapport. */
+    versionNumber: integer("version_number").notNull(),
+    /** Serverens tid. */
+    releasedAt: timestamp("released_at", { withTimezone: true }).notNull(),
+    releasedBy: uuid("released_by").notNull(),
+    signedByEmployeeId: uuid("signed_by_employee_id").notNull(),
+    certificationId: uuid("certification_id").notNull(),
+    companyId: uuid("company_id").notNull(),
+    originalReleaseDate: date("original_release_date", { mode: "string" }).notNull(),
+    validUntil: date("valid_until", { mode: "string" }),
+    snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+    contentHash: text("content_hash").notNull(),
+    retainUntil: timestamp("retain_until", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    // Mål for fremmednøkkelen fra sjekkradene (samme rapport). Ikke delvis: utgivelser slettes aldri.
+    uniqueIndex("report_releases_organization_id_report_id_id_idx").on(
+      table.organizationId,
+      table.reportId,
+      table.id,
+    ),
+    // Ett versjonsnummer per rapport, også ved to samtidige publiseringer. Er også indeksen for
+    // oppslag per rapport og for «siste utgivelse» (høyeste versjon).
+    uniqueIndex("report_releases_organization_id_report_id_version_number_idx").on(
+      table.organizationId,
+      table.reportId,
+      table.versionNumber,
+    ),
+    foreignKey({
+      name: "report_releases_report_fk",
+      columns: [table.organizationId, table.reportId],
+      foreignColumns: [reports.organizationId, reports.id],
+    }),
+    foreignKey({
+      name: "report_releases_released_by_fk",
+      columns: [table.organizationId, table.releasedBy],
+      foreignColumns: [employees.organizationId, employees.id],
+    }),
+    foreignKey({
+      name: "report_releases_signed_by_employee_fk",
+      columns: [table.organizationId, table.signedByEmployeeId],
+      foreignColumns: [employees.organizationId, employees.id],
+    }),
+    foreignKey({
+      name: "report_releases_certification_fk",
+      columns: [table.organizationId, table.certificationId],
+      foreignColumns: [certifications.organizationId, certifications.id],
+    }),
+    foreignKey({
+      name: "report_releases_company_fk",
+      columns: [table.organizationId, table.companyId],
+      foreignColumns: [companies.organizationId, companies.id],
+    }),
+    check("report_releases_version_number_check", sql`${table.versionNumber} >= 1`),
+    check(
+      "report_releases_snapshot_check",
+      sql`jsonb_typeof(${table.snapshot}) = 'object' and coalesce(jsonb_typeof(${table.snapshot}->'schema_version'), 'missing') = 'number'`,
+    ),
+    check(
+      "report_releases_content_hash_check",
+      sql`${table.contentHash} ~ ${sql.raw("'^[0-9a-f]{64}$'")}`,
+    ),
+    check("report_releases_retain_until_check", sql`${table.retainUntil} > ${table.releasedAt}`),
+  ],
+);
+export type ReportRelease = typeof reportReleases.$inferSelect;
+
+/**
+ * Funnene fra sjekken før publisering, slik de var da utgivelsen ble laget (ADR 0015, A448).
+ * Bare nye rader, aldri endret eller slettet. Skrives bare av `publishReport`, aldri ved visning:
+ * alle funn lagres (også advarsler), og hver sperre i en utgivelse er krysset bort (CHECK).
+ *
+ * - Teksten som vises, lages fra `check_code` og `target_ref` ved visning. `message` lagres ikke,
+ *   så romnavn og fritekst står ikke to steder.
+ * - `overridden_by` er `grant.employeeId`, `overridden_at` er serverens tid.
+ * - `override_reason` er fritekst fra den ansatte. Den står bare her: aldri i revisjonsloggen,
+ *   hendelser, applikasjonsloggen eller feilmeldinger, og sendes aldri til KI uten vasken i
+ *   `src/core/ai` og en egen vurdering. Oversikter og KI bruker `check_code`,
+ *   `override_reason_code` og `target_ref`. Kontor får ikke teksten (`canSeeOverrideReasons`).
+ * - Rapporten sikres av fremmednøkkelen mot utgivelsen (tre kolonner): raden kan ikke peke på en
+ *   utgivelse i en annen rapport eller organisasjon.
+ */
+export const publishCheckResults = pgTable(
+  "publish_check_results",
+  {
+    ...baseColumns,
+    reportId: uuid("report_id").notNull(),
+    releaseId: uuid("release_id").notNull(),
+    checkCode: text("check_code").$type<PublishCheckCode>().notNull(),
+    severity: text("severity").$type<PublishCheckSeverity>().notNull(),
+    source: text("source").$type<PublishCheckSource>().notNull().default("rule"),
+    targetRef: jsonb("target_ref").$type<StoredPublishCheckTarget>().notNull(),
+    overridden: boolean("overridden").notNull().default(false),
+    overriddenBy: uuid("overridden_by"),
+    overriddenAt: timestamp("overridden_at", { withTimezone: true }),
+    overrideReasonCode: text("override_reason_code").$type<PublishOverrideReasonCode>(),
+    overrideReason: text("override_reason"),
+  },
+  (table) => [
+    // Funnene per rapport og per utgivelse
+    index("publish_check_results_organization_id_report_id_release_id_idx").on(
+      table.organizationId,
+      table.reportId,
+      table.releaseId,
+    ),
+    // Lederoversikten over overstyringer (eget planpunkt)
+    index("publish_check_results_overridden_idx")
+      .on(table.organizationId, table.createdAt)
+      .where(sql`${table.overridden}`),
+    foreignKey({
+      name: "publish_check_results_release_fk",
+      columns: [table.organizationId, table.reportId, table.releaseId],
+      foreignColumns: [reportReleases.organizationId, reportReleases.reportId, reportReleases.id],
+    }),
+    foreignKey({
+      name: "publish_check_results_overridden_by_fk",
+      columns: [table.organizationId, table.overriddenBy],
+      foreignColumns: [employees.organizationId, employees.id],
+    }),
+    check("publish_check_results_check_code_check", inList(table.checkCode, PUBLISH_CHECK_CODES)),
+    check("publish_check_results_severity_check", inList(table.severity, PUBLISH_CHECK_SEVERITIES)),
+    check("publish_check_results_source_check", inList(table.source, PUBLISH_CHECK_SOURCES)),
+    // En kode er enten sperre eller advarsel, for alltid (regel 6)
+    check(
+      "publish_check_results_severity_code_check",
+      sql`(${table.severity} = 'blocker') = (${inList(table.checkCode, PUBLISH_BLOCKER_CODES)})`,
+    ),
+    // KI kan aldri lage en sperre
+    check(
+      "publish_check_results_ai_warning_only_check",
+      sql`${table.source} <> 'ai' or ${table.severity} = 'warning'`,
+    ),
+    check(
+      "publish_check_results_target_ref_check",
+      sql`jsonb_typeof(${table.targetRef}) = 'object'`,
+    ),
+    // En sperre i en utgivelse er alltid krysset bort; en advarsel kan ikke krysses bort
+    check(
+      "publish_check_results_overridden_check",
+      sql`${table.overridden} = (${table.severity} = 'blocker')`,
+    ),
+    // Krysset bort har hvem, når og grunn; ellers er alle fire tomme
+    check(
+      "publish_check_results_override_fields_check",
+      sql`(${table.overridden} and ${table.overriddenBy} is not null and ${table.overriddenAt} is not null and ${table.overrideReasonCode} is not null) or (not ${table.overridden} and ${table.overriddenBy} is null and ${table.overriddenAt} is null and ${table.overrideReasonCode} is null and ${table.overrideReason} is null)`,
+    ),
+    check(
+      "publish_check_results_override_reason_code_check",
+      nullOrInList(table.overrideReasonCode, PUBLISH_OVERRIDE_REASON_CODES),
+    ),
+    // `other` krever tekst. Teksten er aldri blank og høyst 1000 tegn.
+    check(
+      "publish_check_results_override_reason_check",
+      sql`(${table.overrideReasonCode} is distinct from 'other' or ${table.overrideReason} is not null) and (${table.overrideReason} is null or (length(btrim(${table.overrideReason})) > 0 and length(${table.overrideReason}) <= ${sql.raw(String(PUBLISH_OVERRIDE_REASON_MAX_CHARS))}))`,
+    ),
+  ],
+);
+export type PublishCheckResultRow = typeof publishCheckResults.$inferSelect;

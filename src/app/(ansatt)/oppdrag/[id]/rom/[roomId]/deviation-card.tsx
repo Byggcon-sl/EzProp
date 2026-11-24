@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import {
   CAUSE_CRITERION_LABELS,
   checkOverrideReason,
@@ -15,6 +15,7 @@ import {
   pickStandardMeasures,
   textsWrittenForOtherTg,
   textsWrittenForTgText,
+  type PhraseField,
 } from "@/core/reports/logic";
 import type { DeviationView, MeasureView, ReportFieldChange } from "@/core/reports/types";
 import type { OverrideReasonCode } from "@/db/schema";
@@ -48,7 +49,9 @@ import {
   outcomeTgOf,
   REPORT_TEXT_LIMITS,
 } from "./room-model";
-import { ReportTextField } from "./report-text-field";
+import { usePhraseSuggestions } from "./phrase-suggestions";
+import { usePolishDeviation, type PolishField } from "./polish-deviation";
+import { ReportTextField, type ReportTextFieldProps } from "./report-text-field";
 
 /*
  * Avvikskortet (design avsnitt 9, kortet Omfang 5): TG, avvik, årsak (kriterium som knapper og
@@ -130,7 +133,7 @@ export function DeviationCard({
   number: number;
   checkpointKey: string;
 }) {
-  const { canEdit, doc, announce, removeDeviation } = useRoom();
+  const { canEdit, doc, announce, removeDeviation, store } = useRoom();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const headingId = deviationHeadingId(deviation.id);
@@ -175,6 +178,55 @@ export function DeviationCard({
     outcomeTg !== "choose" &&
     textsWrittenForOtherTg(outcomeTg, tg, hasMeasuresForTg(templateMeasures, tg));
 
+  // «Språkvask avviket» (A436): feltene med tekst slik de står nå, i kortets rekkefølge
+  const polishFields = useCallback((): PolishField[] => {
+    const textOf = (key: string, fallback: string | null) => {
+      const value = store.get(key)?.value;
+      return typeof value === "string" ? value : (fallback ?? "");
+    };
+    const deviationField = (
+      field: "deviation_text" | "cause_text" | "consequence_text",
+      label: string,
+      fallback: string | null,
+    ): PolishField => {
+      const key = deviationFieldKey(deviation.id, field);
+      return {
+        key,
+        label,
+        text: textOf(key, fallback),
+        target: { type: "deviation", id: deviation.id, fieldKey: field },
+        change: textChange(deviation.id, field),
+      };
+    };
+    const measures = [...deviation.measures].sort((a, b) => a.sortOrder - b.sortOrder);
+    return [
+      deviationField("deviation_text", DEVIATION_TEXTS.deviation, deviation.deviationText),
+      deviationField("cause_text", DEVIATION_TEXTS.cause, deviation.causeText),
+      deviationField("consequence_text", DEVIATION_TEXTS.consequence, deviation.consequenceText),
+      ...measures.map((measure, index): PolishField => {
+        const key = measureFieldKey(measure.id, "text");
+        return {
+          key,
+          label: DEVIATION_TEXTS.measureLabel(index + 1),
+          text: textOf(key, measure.text),
+          target: { type: "deviation_measure", id: measure.id, fieldKey: "text" },
+          change: (value, base) => ({
+            table: "deviation_measures",
+            id: measure.id,
+            field: "text",
+            value,
+            base,
+          }),
+        };
+      }),
+    ];
+  }, [store, deviation]);
+  const polish = usePolishDeviation({
+    deviationId: deviation.id,
+    number,
+    fields: polishFields,
+  });
+
   const remove = async () => {
     setBusy(true);
     setError(null);
@@ -201,18 +253,22 @@ export function DeviationCard({
     <Card>
       <section aria-labelledby={headingId} className="space-y-5">
         <div className="space-y-1">
-          <h3
-            id={headingId}
-            tabIndex={-1}
-            className="flex flex-wrap items-center justify-between gap-2 text-lg font-semibold text-slate-900"
-          >
-            <span>{ROOM_TEXTS.deviationNumber(number)}</span>
-            {isHms ? (
-              <Badge>{DEVIATION_TEXTS.hms}</Badge>
-            ) : tg !== null ? (
-              <TgBadge tg={String(tg) as "2" | "3"} long />
-            ) : null}
-          </h3>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h3
+              id={headingId}
+              tabIndex={-1}
+              className="flex flex-wrap items-center gap-2 text-lg font-semibold text-slate-900"
+            >
+              <span>{ROOM_TEXTS.deviationNumber(number)}</span>
+              {isHms ? (
+                <Badge>{DEVIATION_TEXTS.hms}</Badge>
+              ) : tg !== null ? (
+                <TgBadge tg={String(tg) as "2" | "3"} long />
+              ) : null}
+            </h3>
+            <div className="max-md:flex max-md:basis-full max-md:justify-end">{polish.button}</div>
+          </div>
+          {polish.message}
           {outcome && (
             <p className="text-sm text-slate-700">
               {DEVIATION_TEXTS.outcome} {outcomeName(outcome)}
@@ -220,6 +276,8 @@ export function DeviationCard({
             </p>
           )}
         </div>
+
+        {polish.card}
 
         {!isHms && deviation.suggestion && (
           <SuggestedTgChoice
@@ -262,15 +320,13 @@ export function DeviationCard({
           </div>
         )}
 
-        <ReportTextField
-          fieldKey={deviationFieldKey(deviation.id, "deviation_text")}
+        <PhraseTextField
+          deviation={deviation}
+          checkpointKey={checkpointKey}
+          field="deviation_text"
           label={DEVIATION_TEXTS.deviation}
           serverValue={deviation.deviationText}
-          build={textChange(deviation.id, "deviation_text")}
-          warnings={mergeWarnings(
-            deviationFieldKey(deviation.id, "deviation_text"),
-            deviation.deviationText,
-          )}
+          draft={deviation.textStatus.deviationText}
         />
 
         <div className="space-y-3">
@@ -289,31 +345,28 @@ export function DeviationCard({
               }
             />
           </div>
-          <ReportTextField
-            fieldKey={deviationFieldKey(deviation.id, "cause_text")}
+          <PhraseTextField
+            deviation={deviation}
+            checkpointKey={checkpointKey}
+            field="cause_text"
             label={DEVIATION_TEXTS.cause}
             serverValue={deviation.causeText}
-            build={textChange(deviation.id, "cause_text")}
-            warnings={mergeWarnings(
-              deviationFieldKey(deviation.id, "cause_text"),
-              deviation.causeText,
-            )}
+            draft={deviation.textStatus.causeText}
           />
         </div>
 
-        <ReportTextField
-          fieldKey={deviationFieldKey(deviation.id, "consequence_text")}
+        <PhraseTextField
+          deviation={deviation}
+          checkpointKey={checkpointKey}
+          field="consequence_text"
           label={DEVIATION_TEXTS.consequence}
           serverValue={deviation.consequenceText}
-          build={textChange(deviation.id, "consequence_text")}
-          warnings={mergeWarnings(
-            deviationFieldKey(deviation.id, "consequence_text"),
-            deviation.consequenceText,
-          )}
+          draft={deviation.textStatus.consequenceText}
         />
 
         <Measures
           deviation={deviation}
+          checkpointKey={checkpointKey}
           standardMeasures={pickStandardMeasures(templateMeasures, isHms ? null : tg)}
         />
 
@@ -618,14 +671,86 @@ function SuggestedTgChoice({
   );
 }
 
+/** Feltverdien i lagringskøen, eller serverens når feltet ikke er registrert ennå. */
+function useStoreText(key: string, fallback: string | null): string {
+  const { store } = useRoom();
+  const value = useSyncExternalStore(
+    store.subscribe,
+    () => store.get(key)?.value,
+    () => store.get(key)?.value,
+  );
+  return typeof value === "string" ? value : (fallback ?? "");
+}
+
+/**
+ * Avvik, årsak eller konsekvens med «Forslag» i etikettlinjen, listen rett under feltet og «Angre»
+ * etter valg (KI i veien, designet avsnitt 3 og 4). «Utkast» står når teksten er malens
+ * standardtekst som ikke er godkjent (D4).
+ */
+function PhraseTextField({
+  deviation,
+  checkpointKey,
+  field,
+  label,
+  serverValue,
+  draft,
+}: {
+  deviation: DeviationView;
+  checkpointKey: string;
+  field: Exclude<PhraseField, "new_measure">;
+  label: string;
+  serverValue: string | null;
+  draft: DeviationView["textStatus"]["deviationText"];
+}) {
+  const fieldKey = deviationFieldKey(deviation.id, field);
+  const current = useStoreText(fieldKey, serverValue);
+  const phrases = usePhraseSuggestions({
+    deviation,
+    checkpointKey,
+    field,
+    current,
+    currentIsTemplateText: draft !== null && current === (serverValue ?? ""),
+    fieldKey,
+  });
+  const props: ReportTextFieldProps = {
+    fieldKey,
+    label,
+    serverValue,
+    build: textChange(deviation.id, field),
+    warnings: mergeWarnings(fieldKey, current),
+    labelAction: phrases.button,
+    draftMark: draft === "draft",
+    undo:
+      phrases.undo || phrases.error ? (
+        <>
+          {phrases.undo}
+          {phrases.error}
+        </>
+      ) : undefined,
+    aiSuggestion: phrases.list ?? undefined,
+    onSuggestShortcut: phrases.openFromField,
+  };
+  return <ReportTextField {...props} />;
+}
+
 function Measures({
   deviation,
+  checkpointKey,
   standardMeasures,
 }: {
   deviation: DeviationView;
+  checkpointKey: string;
   standardMeasures: { text: string }[];
 }) {
   const { run, focus, store, room } = useRoom();
+  const phrases = usePhraseSuggestions({
+    deviation,
+    checkpointKey,
+    field: "new_measure",
+    current: "",
+    currentIsTemplateText: false,
+    fieldKey: null,
+  });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -697,9 +822,14 @@ function Measures({
 
   return (
     <div className="space-y-3">
-      <h4 id={listId} className="text-sm font-medium text-slate-700">
-        {DEVIATION_TEXTS.measures}
-      </h4>
+      <div className="flex items-end justify-between gap-3">
+        <h4 id={listId} className="text-sm font-medium text-slate-700">
+          {DEVIATION_TEXTS.measures}
+        </h4>
+        <div className="shrink-0">{phrases.button}</div>
+      </div>
+      {phrases.list}
+      {phrases.error}
       {measures.length > 0 && (
         <ol aria-labelledby={listId} className="space-y-4">
           {measures.map((measure, index) => {
@@ -719,6 +849,8 @@ function Measures({
                     base: baseText,
                   })}
                   warnings={mergeWarnings(key, measure.text)}
+                  draftMark={measure.textStatus === "draft"}
+                  undo={phrases.undoMeasureId === measure.id ? phrases.undo : undefined}
                 />
                 <div className="flex flex-wrap gap-2">
                   <Button

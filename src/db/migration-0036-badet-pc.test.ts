@@ -232,8 +232,15 @@ describe("B3.6 migreringen for badet på en database med data", () => {
   });
 
   it.each(SNAPSHOT_TABLES)("B3.6 %s: ingen rad er slettet eller endret (A397)", (table) => {
-    const extra = table === "standard_measures" ? ["applies_to_tg"] : [];
-    expect(withoutNewColumns(ordinaryAfter[table], extra)).toEqual(ordinaryBefore[table]);
+    // Testen kjører til siste migrering. Kolonnene under er lagt til etter at dataene ble satt
+    // inn: `applies_to_tg` av badets migrering, de to på KI-loggen av `0037_ki-i-veien`.
+    const added: Record<string, string[]> = {
+      standard_measures: ["applies_to_tg"],
+      ai_usage_log: ["candidate_refs", "chosen_candidate"],
+    };
+    expect(withoutNewColumns(ordinaryAfter[table], added[table] ?? [])).toEqual(
+      ordinaryBefore[table],
+    );
   });
 
   it("B3.6 de sju rapporttabellene finnes etter migreringen, og er tomme", async () => {

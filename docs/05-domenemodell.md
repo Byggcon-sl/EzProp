@@ -1086,8 +1086,11 @@ Koblingen går til **faste koder**, ikke til en bestemt malversjon. Da følger f
 | `report_profile_id` | Rapportprofilen |
 | `responsible_employee_id` | Ansvarlig takstmann (signerer) |
 | `status` | `draft` (under arbeid), `published` (utgitt), `superseded` (erstattet av ny rapport) |
-| `current_release_id` | Siste utgivelse |
+| `current_release_id` | Siste utgivelse. **Lages ikke** (ADR 0015): siste utgivelse er høyeste versjon i `report_releases` |
 | `summary_text` | Sammendrag |
+| `current_release_id` | Siste utgivelse |
+| `summary_text` | Sammendraget for hele rapporten (A483). Fritekst fra takstmannen, eventuelt etter et KI-utkast han har godtatt (`summary_draft`, mål `report` / `summary_text`). Høyst 10 000 tegn (CHECK). Lagres bare mens rapporten er `draft`. Bygget i migrering `0037_ki-i-veien` |
+| `summary_basis` | Funnene sammendraget bygde på da et utkast sist ble brukt (jsonb-liste, tom tillatt, A435). Per funn: `source` (`deviation` eller `checkpoint_result`), `id`, `group` (`tg3`, `tg2`, `tgiu`, `hms`), `rowVersion` og `parts` (id og `rowVersion` for tiltakene eller TGIU-opplysningene under funnet). Aldri tekst. Kommer tilbake fra nettleseren ved «Bruk» og kontrolleres av serveren (A470): strengt skjema, hver id må være et funn i rapporten, `group` settes av serveren, og `rowVersion` kan ikke være høyere enn dagens. Avviker den fra dagens funn, vises advarselen «Funnene er endret etter sammendraget». Bare advarsel, aldri sperre |
 | `copied_from_report_id` | Rapporten data ble kopiert fra |
 | `training` | **Øvingsrapport** (ja/nei). Krok for skyggemodus (`moonshots` B6): en ny takstmann gjør samme befaring på egen iPad, og rapportene sammenlignes punkt for punkt. En øvingsrapport kan aldri publiseres eller sendes. |
 
@@ -1270,41 +1273,43 @@ Manglende egenerklæring gir advarsel, ikke sperre (del 1 M1).
 
 En ny generering endrer bare `generated_text`. Er `edited_text` fylt ut, beholdes den, og takstmannen får et lite merke om at grunnlaget er endret.
 
-**`report_releases`** – **versjoner og utgivelser**. En utgivelse er låst for alltid.
+**`report_releases`** – **versjoner og utgivelser**. En utgivelse er låst for alltid: ingen tjeneste oppdaterer eller sletter den, og papirkurven tar den ikke (ADR 0015, bygget i `0038_publisering-badet`).
 
 | Felt | Forklaring |
 |---|---|
-| `report_id` | Rapporten |
+| `report_id` | Rapporten. Unik `(organization_id, report_id, version_number)` |
 | `version_number` | 1, 2, 3 … |
-| `released_at`, `released_by` | Når og av hvem |
-| `signed_by_employee_id` | Ansvarlig takstmann som signerte (innspill D8) |
-| `co_signed_by_employee_id` | Medansvarlig, hvis noen |
-| `certification_id` | Sertifiseringen som gjaldt for den ansvarlige på utgivelsesdagen |
-| `company_id` | Utstedende selskap på utgivelsesdagen |
-| `report_profile_version` | Versjonen av rapportprofilen som ble brukt |
-| `original_release_date` | **Opprinnelig dato.** Ved retting beholdes datoen fra versjon 1 (NS 3600 pkt. 14.5). En ny full gjennomgang er en ny rapport. |
-| `revision_note` | Hva som er rettet (tomt for versjon 1) |
-| `valid_until` | Gyldig til: **ett år fra befaringsdato**, slik IVIT gjør (beslutning 27.10.2026, spørsmål 1). Ved retting endres ikke datoen. |
-| `snapshot` | **Hele rapportinnholdet** slik det var, som låst data |
-| `pdf_file_id` | PDF-en slik den ble sendt |
-| `content_hash` | Fingeravtrykk av innholdet (viser at ingenting er endret) |
-| `retain_until` | Oppbevares til (minst 10 år) |
+| `released_at`, `released_by` | Når (serverens tid) og av hvem (ansatt-id) |
+| `signed_by_employee_id` | Ansvarlig takstmann som signerte (innspill D8). Nå den som publiserer |
+| `certification_id` | Sertifiseringen som var gyldig for den som signerte, den dagen i norsk tid |
+| `company_id` | Utstedende selskap på utgivelsesdagen (fra oppdraget). Påkrevd: uten selskap avvises publiseringen (A458) |
+| `original_release_date` | **Opprinnelig dato** i norsk tid. Ved retting kopieres datoen fra versjon 1 (NS 3600 pkt. 14.5). En ny full gjennomgang er en ny rapport. |
+| `valid_until` | Gyldig til: **ett år fra befaringsdato** (beslutning 27.10.2026, spørsmål 1). Tom når befaringsdatoen manglet og sperren ble krysset bort; regnes aldri fra publiseringsdagen (A523). Ved retting kopieres datoen fra versjon 1. |
+| `snapshot` | **Hele rapportinnholdet** slik det var, som selvstendig kopi med `schema_version` (A452): bygning, etasje, rom, punkter, TG, svar, avvik, tiltak, kostnad, TGIU, regelbeslutninger og merke på tekst fra godkjent KI-forslag. Ingen parter, navn, kontaktopplysninger, adresse, matrikkel eller reklamasjonsdata |
+| `content_hash` | Fingeravtrykk (SHA-256) av kanonisk snapshot (viser at ingenting er endret) |
+| `retain_until` | Oppbevares til (utgivelsen + 10 år) |
 
-Feltene for signering, sertifisering, selskap og profil er et **øyeblikksbilde** i tillegg til `snapshot`. Ved en reklamasjon om fem år kan det da vises hvem som signerte, og at personen var sertifisert den dagen.
+**Kommer senere som nye kolonner (A455):** `co_signed_by_employee_id` (medansvarlig), `report_profile_version`, `revision_note` (hva som er rettet) og `pdf_file_id` (PDF-en slik den ble sendt). `reports.current_release_id` lages ikke: siste utgivelse er høyeste versjon.
 
-**`publish_check_results`** – **sperre, overstyring og logg**. Lages hver gang noen prøver å publisere.
+Feltene for signering, sertifisering og selskap er et **øyeblikksbilde** i tillegg til `snapshot`. Ved en reklamasjon om fem år kan det da vises hvem som signerte, og at personen var sertifisert den dagen.
+
+**«Lag ny versjon» (A522):** rapporten settes tilbake til `draft`, eldre utgivelser røres ikke, og neste publisering får neste versjonsnummer. En publisert rapport kan ikke endres før ny versjon er laget; det gjelder også rom, etasjer og bygninger på oppdraget (A447).
+
+**`publish_check_results`** – **sperre, overstyring og logg**. Funnene fra sjekken før publisering slik de var da utgivelsen ble laget. Skrives bare ved publisering, for alle funn, og får bare nye rader (A448, ADR 0015). Å åpne publiser-siden lagrer ingenting.
 
 | Felt | Forklaring |
 |---|---|
-| `report_id` | Rapporten |
-| `release_id` | Utgivelsen kontrollen hørte til (tomt hvis publiseringen ble avbrutt) |
-| `check_code` | Hvilken kontroll (se listen under) |
+| `report_id`, `release_id` | Rapporten og utgivelsen. Begge påkrevd, fremmednøkkel `(organization_id, report_id, release_id)` |
+| `check_code` | Hvilken kontroll (fast kode, se listen under). En kode er enten sperre eller advarsel, for alltid (A456) |
 | `severity` | `blocker` (sperre) eller `warning` (advarsel) |
-| `target_ref` | Hvor mangelen er (kontrollpunkt, rom, avvik) |
-| `message` | Teksten som ble vist |
-| `overridden` | **Overstyrt**: den ansatte krysset aktivt bort sperren |
-| `overridden_by`, `overridden_at` | Hvem og når |
-| `override_reason` | Valgfri begrunnelse |
+| `source` | `rule` (fast regel) eller `ai` (KI-sjekken i 2a-3). `ai` kan bare gi advarsel: KI lager aldri en sperre |
+| `target_ref` | Hvor mangelen er: rom, kontrollpunkt (id og fast kode), avvik, regel, KI-forslag og hva som mangler (`missing`). Bare id-er og faste koder |
+| `overridden` | **Krysset bort**: den ansatte krysset aktivt bort sperren. En sperre i en utgivelse er alltid krysset bort; en advarsel kan ikke krysses bort |
+| `overridden_by`, `overridden_at` | Hvem (ansatt-id) og når (serverens tid) |
+| `override_reason_code` | **Grunnen** som fast kode, påkrevd (A521, A449): `no_access_or_refused`, `not_applicable_to_room`, `described_elsewhere`, `other` |
+| `override_reason` | Begrunnelse i fritekst, høyst 1000 tegn. Påkrevd for `other`, ellers valgfri. Står bare her: aldri i logger eller hendelser, og kontor får den ikke (A450) |
+
+Teksten som vises for et funn, lagres ikke (`message` er tatt ut): den lages fra koden ved visning.
 
 **Overstyringen gjelder bare den ene versjonen.** Ved neste utgivelse kjøres alle kontroller på nytt, og en mangel som ikke er rettet, kommer tilbake som sperre.
 
@@ -1312,7 +1317,7 @@ Feltene for signering, sertifisering, selskap og profil er et **øyeblikksbilde*
 
 | `check_code` | Sperre |
 |---|---|
-| `mandatory_without_tg` | Obligatorisk del uten TG. **Slår bare til** når punktet er obligatorisk, gir TG (`gives_tg`), ikke er merket «gjelder ikke», og verken har `tg_direct` eller avvik med TG. For leilighet gjelder den ikke fellesdelspunkter (`applies_to_unit = common`) når fellesdelene ikke er vurdert. «Gjelder ikke» på et obligatorisk punkt krever begrunnelse. (Innspill D6) |
+| `mandatory_without_tg` | Obligatorisk del uten TG. **I badet (A520, A443, A444, til fagrådet har svart på spørsmål 99):** punkt som krever TG (`requiresTg`, data) uten TG, TGIU uten grunn, og avvik uten valgt TG. **Opprinnelig beslutning:** slår bare til når punktet er obligatorisk, gir TG (`gives_tg`), ikke er merket «gjelder ikke», og verken har `tg_direct` eller avvik med TG. For leilighet gjelder den ikke fellesdelspunkter (`applies_to_unit = common`) når fellesdelene ikke er vurdert. «Gjelder ikke» på et obligatorisk punkt krever begrunnelse. (Innspill D6) |
 | `tg2_tg3_missing_cause_or_consequence` | TG2/TG3 uten årsak og konsekvens |
 | `tg3_missing_cost` | TG3 uten kostnad |
 | `wet_or_below_ground_missing_hole` | Våtrom eller rom under terreng uten hulltaking eller begrunnelse |
@@ -1750,10 +1755,12 @@ Tekst logges ikke per tastetrykk, men slik den var når endringen kom fram til s
 | `prompt_version` | Versjonen av ledeteksten, for eksempel `language_polish.v1` |
 | `assignment_id` | Oppdraget. Kan være tom (ordreforslag fra e-post) |
 | `report_id` | Rapporten. Kan være tom. Sammensatt fremmednøkkel (`organization_id`, `report_id`) mot `reports` fra migrering `0036_badet-pc` (A158) |
-| `target_ref` | Hvor forslaget gjelder (jsonb): `type`, `id` og `fieldKey`. Faste koder for rapporten (A350, `REPORT_AI_TARGET_FIELDS`): `deviation` (`deviation_text`, `cause_text`, `consequence_text`), `deviation_measure` (`text`), `checkpoint_result` (`description_text`), `tgiu_detail` (`reason`, `risk_assessment`, `how_to_examine`) og `field_answer` (feltkoden); `fieldKey` er lik kolonnenavnet (A356). Loggen er eneste fasit for om en tekst i rapporten kom fra KI (A355). Prøvefunksjonen `language_polish` bruker fortsatt `answer` og `text` mot den falske leverandøren |
+| `target_ref` | Hvor forslaget gjelder (jsonb): `type`, `id` og `fieldKey`. Faste koder for rapporten (A350, `REPORT_AI_TARGET_FIELDS`): `deviation` (`deviation_text`, `cause_text`, `consequence_text`), `deviation_measure` (`text`), `checkpoint_result` (`description_text`), `tgiu_detail` (`reason`, `risk_assessment`, `how_to_examine`) og `field_answer` (feltkoden); `report` (`summary_text`, A486); `fieldKey` er lik kolonnenavnet (A356), unntatt `deviation` / `new_measure` (forslag til nytt tiltak, der raden ikke finnes ennå). Listen står i `src/shared/config/ai-targets.ts`. Loggen er eneste fasit for om en tekst i rapporten kom fra KI (A355). Prøvefunksjonen `language_polish` bruker fortsatt `answer` og `text` mot den falske leverandøren |
 | `source_fields` | Hvilke felt som var grunnlaget (jsonb-liste). Bare feltkoder, aldri verdier |
-| `input_summary` | Feltkode og antall tegn (jsonb), regnet av den vaskede teksten som faktisk ble sendt. Aldri tekst |
-| `outcome` | **Utfallet av kallet:** `ok`, `no_match` (ingen treff), `error` (feil), `blocked` (sperret: forespørselen kunne ikke sendes til denne leverandøren, for eksempel fritekst uten oppdrag eller prøvemålet mot en ekte leverandør; leverandøren kalles ikke). «KI er av» gir ingen rad og er ikke `blocked` |
+| `input_summary` | Feltkode og antall tegn (jsonb), regnet av den vaskede teksten som faktisk ble sendt. For `phrase_suggest` også `candidates`, `candidates_cut` (kuttet av kandidatkilden, A467), `unknown_labels` og `duplicate_labels`. Aldri tekst |
+| `candidate_refs` | Kandidatene som ble vist, rangert (jsonb-liste med `{ source, id }`, 1–5, tom tillatt). Bare for funksjoner som velger blant kandidater (`phrase_suggest`), og bare når utfallet er `ok`. Aldri tekst (A432). `source` er `template_outcome`, `template_measure` eller `phrase` (reservert til 2a-3) |
+| `chosen_candidate` | Kandidaten den ansatte valgte: et objekt med akkurat `source` (en av kandidatkildene) og `id` (tekst). Må stå i `candidate_refs`; satt bare mens status er `accepted` (CHECK). Radene telles samlet for organisasjonen, aldri per ansatt, til «Mest brukt» (A468, indeksen `ai_usage_log_chosen_candidate_idx`) |
+| `outcome` | **Utfallet av kallet:** `ok`, `no_match` (ingen treff), `error` (feil), `stopped` (en vakt i kjernen stoppet svaret før det ble vist: `error_code` er `tg_guard`, `coverage_guard`, `number_guard` eller `placeholder_guard`, mengde og kostnad beholdes, `status` er tom, A431), `blocked` (sperret: forespørselen kunne ikke sendes til denne leverandøren, for eksempel fritekst uten oppdrag eller prøvemålet mot en ekte leverandør; leverandøren kalles ikke). «KI er av» gir ingen rad og er ikke `blocked` |
 | `redacted_count` | **Antall vaskede treff** i teksten som ble sendt (heltall, ikke tom, standard 0, aldri negativ). Bare summen, aldri verdiene eller hvilke ord. 0 ved `blocked`. Vises eller telles aldri per ansatt (spørsmål 57) |
 | `error_code` | Fast kode ved feil: `timeout`, `rate_limited`, `unavailable`, `rejected`, `unknown`. Bare når utfallet er `error`. Aldri leverandørens melding |
 | `output_text` | Forslaget KI laget. Tom når utfallet ikke er `ok` |
@@ -2380,11 +2387,16 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | HMS | `hms` | Avvik uten TG |
 | Dokumentasjonstabell | `documentation_items` | |
 | Egenerklæring | `seller_declarations` | |
-| Utgivelse / versjon | `report_releases` | |
+| Utgivelse / versjon | `release` (`report_releases`) | Låst for alltid. «Lag ny versjon» setter rapporten tilbake til `draft` |
+| Sjekk før publisering | `publish check` (`computePublishCheck`, `publish_check_results`) | Ren kode, lik på iPad og server. Funn lagres bare ved publisering |
+| Funn | `PublishCheckFinding` | Kode, sperre eller advarsel, kilde og mål |
+| Krysse bort | `override` (`overridden`) | Aktivt valg på en sperre, med grunn. Gjelder én versjon |
+| Grunn (ved overstyring) | `override reason code` (`PUBLISH_OVERRIDE_REASON_CODES`) | Fast kode; `other` krever tekst |
+| Fingeravtrykk av funnlisten | `fingerprint` (`canonicalPublishCheck`) | Viser at listen er den samme som den ansatte så |
+| Snapshot | `ReportSnapshot` (`report_releases.snapshot`) | Selvstendig kopi av rapportinnholdet i utgivelsen |
 | Opprinnelig dato | `original_release_date` | |
 | Gyldig til | `valid_until` | |
 | Sperre / advarsel | `blocker` / `warning` | |
-| Overstyring | `overridden` | |
 | Kontroll før publisering | `publish_check_results` | |
 | Sidemannskontroll | `peer_reviews`, `peer_review_comments` | |
 | Bilde | `photos` | |
@@ -2420,7 +2432,28 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Logg over KI-bruk | `ai_usage_log` | Én rad per kall til KI, med forslaget og hva den ansatte gjorde (ADR 0006) |
 | Forslag (KI) | `ai_usage_log.output_text`, `AiSuggestionStatus` | Tekst KI har laget, som den ansatte godtar, endrer eller avviser. Ligger aldri i feltet før det er godtatt |
 | Foreslått / godtatt / endret / avvist | `suggested` / `accepted` / `edited` / `rejected` | Status på et forslag (`ai_usage_log.status`) |
-| Utfall (KI-kall) | `ai_usage_log.outcome` | `ok`, `no_match` (ingen treff), `error` (feil), `blocked` (sperret). Ikke en status |
+| Utfall (KI-kall) | `ai_usage_log.outcome` | `ok`, `no_match` (ingen treff), `error` (feil), `blocked` (sperret), `stopped` (stoppet av en vakt). Ikke en status |
+| Stoppet (KI-svar) | `stopped` | Leverandøren svarte, men en vakt i kjernen stoppet svaret før det ble vist. Kallet har kostet, så mengde og kostnad står på raden |
+| TG-vakt | `tg_guard` | Stopper et KI-svar som legger til eller endrer TG (i sammendraget: som nevner TG i det hele tatt) |
+| Tallvakt | `number_guard` | Stopper et KI-svar med tall som ikke sto i det som ble sendt. I sammendraget sjekkes hvert funn for seg |
+| Dekningsvakt | `coverage_guard` | Stopper et utkast til sammendrag der et funn mangler, er tomt eller er lagt til |
+| Plassholdervakt | `placeholder_guard` | Stopper et KI-svar der plassholderne fra vasken (for eksempel `[navn]`) ikke kan byttes entydig tilbake |
+| Plassholder | `PII_PLACEHOLDERS` | Teksten vasken setter inn i stedet for en personopplysning før KI. Byttes tilbake i minnet før teksten vises; fritekst med en plassholder kan ikke lagres i rapporten (`text_has_placeholder`) |
+| Mest brukt | `PhraseUsageCount`, `PhraseCandidate.chosenCount` | Hvor mange ganger en kandidat er valgt i organisasjonen for et felt. Samlet, aldri per ansatt. Flest valg (minst to) gir merket «Mest brukt» |
+| Fast linje i sammendraget | `AiSummaryFixedLine` | Linje koden skriver selv (TGIU: punktets navn og hvorfor det ikke er undersøkt). Sendes aldri til KI |
+| Skriveramme for rapporten | `withReportWrite` | Transaksjon som låser rapportraden for skriving som ikke hører til ett rom (sammendraget). Søster til `withRoomWrite` |
+| Forslag fra frasebanken | `phrase_suggest` | KI-funksjon: rangerer godkjente tekster for et felt i avvikskortet og gir de 3–5 beste. KI skriver aldri tekst her |
+| Utkast til sammendrag | `summary_draft` | KI-funksjon: ett avsnitt per funn under kodens overskrifter (TG3, TG2, HMS) fra rapportens godkjente funn. TGIU-linjene skriver koden selv |
+| Kandidat | `AiCandidate`, `AiCandidateRef` | En tekst KI kan velge blant. Lagres i loggen bare som kilde og id |
+| Kandidatkilde | `AiCandidateSource`: `template_outcome`, `template_measure`, `phrase` | Hvor en kandidat kommer fra: tekst på et utfall i malen, standardtiltak i malen, eller frasebanken (reservert til 2a-3) |
+| Viste kandidater / valgt kandidat | `ai_usage_log.candidate_refs` / `chosen_candidate` | Hva takstmannen fikk se, i rangert rekkefølge, og hva han valgte |
+| Sammendrag | `reports.summary_text` | Sammendraget for hele rapporten |
+| Grunnlaget for sammendraget | `reports.summary_basis` (`SummaryBasisEntry`) | Funnene utkastet bygde på. Brukes til advarselen når funnene er endret etterpå |
+| Gruppe i sammendraget | `SummaryGroup`: `tg3`, `tg2`, `tgiu`, `hms` | Den faste rekkefølgen i sammendraget. Koden lager gruppene og overskriftene |
+| Godkjent funn | finding (`SummaryFindingSource`: `deviation`, `checkpoint_result`) | Avvik med TG2 eller TG3, kontrollpunkt med TGIU, og HMS-avvik. Det sammendraget bygges av |
+| Felt med fraseforslag | `PhraseField`: `deviation_text`, `cause_text`, `consequence_text`, `new_measure` | Feltene i avvikskortet som har «Forslag» |
+| Nytt tiltak (KI-mål) | `new_measure` | Feltkode på måltypen `deviation` for forslag til et tiltak som ikke finnes ennå |
+| Språkvask avviket | `requestSuggestionBatch` (`@/core/ai`) | Flere felt fra ett trykk: ett KI-kall og én loggrad per felt |
 | Sperret (KI-kall) | `blocked` | Utfall når forespørselen ikke kan sendes til leverandøren (for eksempel fritekst uten oppdrag mot ekte leverandør). Gir rad uten kall. Ikke det samme som «KI er av», som ikke gir rad |
 | Vask (før KI) | redaction | Navn, e-post, telefon, adresse, matrikkel, fødselsnummer, organisasjonsnummer og kontonummer byttes med faste merker (`[navn]` o.l.) før tekst sendes til KI. Skjer bare på serveren i `src/core/ai` |
 | Antall vaskede treff | `ai_usage_log.redacted_count` | Summen av treff vasken byttet ut i ett kall. Aldri verdiene |
@@ -2625,4 +2658,6 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 16.11.2026 | Papirkurv og gjenoppretting (fase 2a, 2a-3): «Fjern» på etasje og bygning tar med innholdet som én slettegruppe (A414, erstatter A98); `listTrash` og `restoreBuilding`/`restoreFloor`/`restoreRoom` i `src/core/buildings/trash.ts`; fire nye hendelser `assignment.*_restored`; `*_removed` får `groupCount` og `roomTypeKey`/`floorKey`. Ingen ny tabell og ingen migrering. Ordlisten: papirkurv, gjenopprette, slettegruppe. | A410, A411, A414, A416–A418, `docs/funksjoner/fase2a-papirkurv.md` |
 | 16.11.2026 | Tilbud i stedet for ordre, kjernen (fase 2a, ADR 0012 med tillegg): migrering `0035_tilbud` med `orders.valid_until` og `orders.rejected_reason_key` (fem faste koder, gamle avslag får `other`); utløp, visningsstatus, filter med antall og sortering, «Gyldig til» bare på åpne og utløpte tilbud, avslag med fast grunn (`reasonKey` i hendelsen) og dublettvilkåret for utløpte tilbud. Se «Tilbud i stedet for ordre» i 4.3. | A318–A328, A360–A367, `docs/funksjoner/fase2a-tilbud.md` |
 | 23.11.2026 | Godtatt forslag og avvik henger sammen (fase 2a-2, retting av T-0113, T-0115, T-0116 og T-0117, ADR 0013 punkt 9b, 10, 12, 12c og 12e, A490–A495): «gjeldende beslutning» er avledet fra siste rad, avviket og `tg_direct`; ny handling `ChangeSuggestedDeviationTg`; svarene `already_decided` og `newer_decision`; advarselskoden `open_suggestion_on_done_checkpoint`. Ingen ny tabell, kolonne, CHECK eller migrering. |
+| 17.11.2026 | KI i veien (fase 2a-2, ADR 0006 med tillegg): migrering `0037_ki-i-veien` med `reports.summary_text` og `reports.summary_basis`, `ai_usage_log.candidate_refs` og `chosen_candidate`, utfallet `stopped` med vaktkodene `tg_guard` og `number_guard`, og indeksen `ai_usage_log (organization_id, feature, target_ref)` for ikke-slettede rader. KI-målene flyttet til `src/shared/config/ai-targets.ts` med `report` / `summary_text` og `deviation` / `new_measure`. Ingen ny tabell. Ordlisten: fraseforslag, utkast til sammendrag, kandidat, vakter, grunnlaget for sammendraget. | A482–A442, `docs/funksjoner/fase2a-ki-i-veien.md` |
+| 17.11.2026 | KI i veien, runde 2 (A460–A472): migrering `0037_ki-i-veien` rettet før merge med vaktkodene `coverage_guard` og `placeholder_guard`, strengere CHECK på `chosen_candidate` (objekt med `source` og `id`, kjent kilde) og indeksen `ai_usage_log_chosen_candidate_idx` for «Mest brukt». `AI_CANDIDATE_REFS_MAX` flyttet til `src/shared/config/ai-targets.ts`. Grensesnitt: `recordDecisionIn`, `withReportWrite`, `PhraseUsageCount`, `AiSummaryFixedLine`, valideringskoden `text_has_placeholder`. Ordlisten: dekningsvakt, plassholdervakt, plassholder, mest brukt, fast linje, skriveramme for rapporten. | A460–A472, `docs/funksjoner/fase2a-ki-i-veien.md` |
 | 17.11.2026 | Mine innlogginger (fase 2a-3, fra forbedreren): `sessions` beskrevet; øktene vises for den ansatte og kan tilbakekalles, admin kan logge ut alle enheter. Ingen nye felt og ingen migrering. Ny revisjonshandling `employee.sessions_revoked_all` med `{ sessionCount, reason }`. Ordlisten: innlogging (økt), logge ut en økt, logget ut av alle enheter. | `docs/funksjoner/fase2a-mine-innlogginger.md` |

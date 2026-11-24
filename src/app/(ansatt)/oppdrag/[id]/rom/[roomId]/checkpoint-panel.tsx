@@ -47,6 +47,7 @@ import {
   warningId,
   warningsWithFix,
 } from "./room-model";
+import { usePolishDescription } from "./polish-deviation";
 import { ReportTextField } from "./report-text-field";
 import {
   focusElementById,
@@ -270,18 +271,7 @@ export function CheckpointPanel({
           </div>
         ))}
 
-      <ReportTextField
-        fieldKey={descriptionKey(checkpoint.checkpointKey)}
-        label={ROOM_TEXTS.description}
-        serverValue={checkpoint.descriptionText}
-        build={(value, base): ReportFieldChange => ({
-          table: "checkpoint_results",
-          checkpointKey: checkpoint.checkpointKey,
-          field: "description_text",
-          value: value === "" ? null : value,
-          base: base === "" ? null : base,
-        })}
-      />
+      <DescriptionField checkpoint={checkpoint} />
 
       <ReviewList
         checkpoint={checkpoint}
@@ -291,6 +281,56 @@ export function CheckpointPanel({
         onNotice={setNotice}
       />
     </div>
+  );
+}
+
+/** Bygger endringen av beskrivelsen ved punktet. */
+function descriptionChange(checkpointKey: string) {
+  return (value: string, base: string): ReportFieldChange => ({
+    table: "checkpoint_results",
+    checkpointKey,
+    field: "description_text",
+    value: value === "" ? null : value,
+    base: base === "" ? null : base,
+  });
+}
+
+/**
+ * Beskrivelsen ved punktet med «Språkvask» i etikettlinjen og forslagskortet rett under feltet
+ * (KI i veien, designet avsnitt 5).
+ */
+function DescriptionField({ checkpoint }: { checkpoint: CheckpointView }) {
+  const { store } = useRoom();
+  const key = descriptionKey(checkpoint.checkpointKey);
+  const polish = usePolishDescription({
+    checkpointKey: checkpoint.checkpointKey,
+    fields: () => {
+      const value = store.get(key)?.value;
+      return [
+        {
+          key,
+          label: ROOM_TEXTS.description,
+          text: typeof value === "string" ? value : (checkpoint.descriptionText ?? ""),
+          target: {
+            type: "checkpoint_result",
+            id: checkpoint.resultId ?? "",
+            fieldKey: "description_text",
+          },
+          change: descriptionChange(checkpoint.checkpointKey),
+        },
+      ];
+    },
+  });
+  return (
+    <ReportTextField
+      fieldKey={key}
+      label={ROOM_TEXTS.description}
+      serverValue={checkpoint.descriptionText}
+      build={descriptionChange(checkpoint.checkpointKey)}
+      labelAction={polish.button}
+      undo={polish.message ?? undefined}
+      aiSuggestion={polish.card ?? undefined}
+    />
   );
 }
 

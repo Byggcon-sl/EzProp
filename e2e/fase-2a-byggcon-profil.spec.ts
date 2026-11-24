@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +11,9 @@ import {
 } from "@playwright/test";
 import {
   ADMIN_EMAIL,
+  addRuleTg3Deviation,
   chooseCodeLogin,
+  createSampleBathroom,
   createTrialForm,
   expireOwnSession,
   logIn,
@@ -20,6 +21,7 @@ import {
   logInAsManager,
   logInAsOffice,
   logInAsSampleInspector,
+  openSampleBathroom,
   syncNowButton,
   syncStatus,
 } from "./helpers";
@@ -170,19 +172,24 @@ async function background(locator: Locator): Promise<string> {
   return locator.evaluate((element) => getComputedStyle(element).backgroundColor);
 }
 
-// --- KI-kortet på /prove/ki ---
+// --- KI-kortet på badskjermen (flyttet fra /prove/ki med «KI i veien», K6.3) ---
 
-const kiField = (page: Page) => page.getByLabel("Setning");
-const kiCard = (page: Page) => page.getByRole("region", { name: "Forslag fra KI" });
+const summarySection = (page: Page) =>
+  page.getByRole("region", { name: "Sammendrag for hele rapporten" });
+const kiCard = (page: Page) => summarySection(page).getByRole("region", { name: "Forslag fra KI" });
 
-/** Åpner /prove/ki som prøvetakstmannen og ber om et forslag. Teksten er oppdiktet. */
+/**
+ * Åpner et nytt, oppdiktet bad som prøvetakstmannen, lager et TG3-avvik fra reglene og ber om
+ * utkast til sammendrag, så forslagskortet vises (den falske leverandøren).
+ */
 async function showSuggestion(page: Page, { signIn = true }: { signIn?: boolean } = {}) {
   if (signIn) await logInAsSampleInspector(page);
-  await page.goto("/prove/ki");
-  await expect(page.getByRole("heading", { name: "Prøv KI: språkvask", level: 1 })).toBeVisible();
-  const tag = `profil${randomUUID().slice(0, 8)}`;
-  await kiField(page).fill(`taket er gammelt og har noen sprekker ${tag}`);
-  await page.getByRole("button", { name: "Foreslå bedre språk" }).click();
+  const bath = await createSampleBathroom();
+  await openSampleBathroom(page, bath, "wet_room.membrane_drain");
+  await addRuleTg3Deviation(page);
+  const draft = summarySection(page).getByRole("button", { name: "Lag utkast" });
+  await expect(draft).toBeEnabled();
+  await draft.click();
   await expect(kiCard(page).getByTestId("ai-suggestion-text")).toBeVisible();
 }
 
@@ -423,7 +430,7 @@ test.describe("5.2 former (pc og iPad liggende)", () => {
     await expect(page.locator(".aurora-bar")).toHaveCount(0);
 
     await showSuggestion(page, { signIn: false });
-    expect(await elementsWithGradient(page), "/prove/ki med forslag").toEqual([]);
+    expect(await elementsWithGradient(page), "badskjermen med forslagskort").toEqual([]);
     await expect(page.locator(".aurora-bar")).toHaveCount(0);
 
     await page.context().clearCookies();

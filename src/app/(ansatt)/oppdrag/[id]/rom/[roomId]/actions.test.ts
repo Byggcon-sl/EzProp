@@ -186,6 +186,20 @@ describe("handlingene på badet", () => {
     expect(mocks.logError).not.toHaveBeenCalled();
   });
 
+  it("publisert rapport gir koden `report_published`, som køen fjerner i stedet for å stoppe (T-0001)", async () => {
+    const published = Object.assign(
+      new FakeReportValidationError("Rapporten er publisert. Lag ny versjon for å rette."),
+      { code: "report_published" },
+    );
+    mocks.core.saveField.mockRejectedValue(published);
+    expect(await actions.saveFieldAction(ref, change)).toEqual({
+      status: "error",
+      message: "Rapporten er publisert. Lag ny versjon for å rette.",
+      code: "report_published",
+    });
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
   it("ukjent feil logges med id-er og feilnavn, aldri med feltverdien", async () => {
     mocks.core.saveField.mockRejectedValue(new Error(`databasen sa nei: ${SECRET_TEXT}`));
     expect(await actions.saveFieldAction(ref, change)).toEqual({

@@ -18,21 +18,34 @@ import {
   RULE_REASONS_MAX_CHARS,
   RULE_RESULT_STATES,
   RULE_SUGGESTION_DECISIONS,
+  AI_CANDIDATE_SOURCES,
+  REPORT_SUMMARY_BASIS_MAX,
+  SUMMARY_FINDING_SOURCES,
+  SUMMARY_GROUPS,
   TEMPLATE_KEY_PATTERN,
   TEXT_STATUSES,
   TG_DIRECT_VALUES,
 } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { containsNationalId, NATIONAL_ID_MESSAGE } from "@/shared/validation/free-text";
-import { checkOverrideReason, formatWholeNumber, OVERRIDE_REASON_CHECK_MESSAGES } from "./logic";
-import { ReportValidationError } from "./errors";
+import {
+  checkOverrideReason,
+  containsPiiPlaceholder,
+  formatWholeNumber,
+  MAX_MEASURES_PER_DEVIATION,
+  OVERRIDE_REASON_CHECK_MESSAGES,
+  PHRASE_FIELDS,
+  SUMMARY_TEXT_MAX_LENGTH,
+} from "./logic";
+import { ReportValidationError, reportValidationMessage } from "./errors";
 
 /*
  * Zod-skjemaene for rapportkjernen (docs/funksjoner/fase2a-badet-pc.md Omfang 4, 8 og 10). Ligger
  * utenfor `logic/`, som ikke har pakker (ADR 0013), og bruker de rene funksjonene der regelen står
  * ett sted (`checkOverrideReason`).
  *
- * - Alle fritekstfelt har lengdegrense og sperre mot fødselsnummer.
+ * - Alle fritekstfelt har lengdegrense, sperre mot fødselsnummer og sperre mot plassholderne fra
+ *   vasken før KI («[adresse]» osv., A466).
  * - Regelsvaret som lagres (`ruleResultSchema`), er strengt: bare kjente nøkler, faste koder og
  *   tall, og en øvre størrelse. Fritekst avvises.
  * - Id-er sjekkes med `requireUuid` i tjenesten før skjemaene kjøres; her sjekkes formen igjen.
@@ -60,6 +73,9 @@ export const REPORT_OPTION_KEYS_MAX = 100;
 const KEY_MAX = 100;
 const REASONS_MAX = 200;
 
+/** Meldingen når teksten har en plassholder fra vasken (A466). Gir koden `text_has_placeholder`. */
+const PLACEHOLDER_MESSAGE = reportValidationMessage("text_has_placeholder");
+
 function tooLongMessage(max: number): string {
   return `Teksten kan ha høyst ${formatWholeNumber(max)} tegn.`;
 }
@@ -79,7 +95,8 @@ export function freeTextSchema(max: number) {
     .nullable()
     .transform((value) => (value === null || value === "" ? null : value))
     .refine((value) => value === null || value.length <= max, { error: tooLongMessage(max) })
-    .refine((value) => !containsNationalId(value), { error: NATIONAL_ID_MESSAGE });
+    .refine((value) => !containsNationalId(value), { error: NATIONAL_ID_MESSAGE })
+    .refine((value) => !containsPiiPlaceholder(value), { error: PLACEHOLDER_MESSAGE });
 }
 
 /** Fritekst som alltid er en tekst (tiltak). Tom tekst er lov. */
@@ -87,7 +104,8 @@ export function requiredFreeTextSchema(max: number) {
   return z
     .string()
     .refine((value) => value.length <= max, { error: tooLongMessage(max) })
-    .refine((value) => !containsNationalId(value), { error: NATIONAL_ID_MESSAGE });
+    .refine((value) => !containsNationalId(value), { error: NATIONAL_ID_MESSAGE })
+    .refine((value) => !containsPiiPlaceholder(value), { error: PLACEHOLDER_MESSAGE });
 }
 
 const nullableKey = keySchema.nullable();
@@ -414,6 +432,128 @@ export const reportFieldChangeSchema = z.union([
   ),
 ]);
 
+// --- KI i veien: fraseforslag, språkvask og sammendrag (docs/funksjoner/fase2a-ki-i-veien.md) --
+
+/**
+ * Teksten nettleseren sender med en forespørsel til KI. Lagres ikke her, men har samme grense som
+ * feltene i rapporten, så en for lang tekst gir en tydelig melding før noe sendes.
+ */
+const aiInputText = z.string().max(REPORT_LONG_TEXT_MAX);
+
+/** «Forslag» ved et felt i avvikskortet. Bare `requestId`, avviket, feltet og egen tekst. */
+export const suggestPhrasesInputSchema = z
+  .object({
+    requestId: uuidSchema,
+    deviationId: uuidSchema,
+    field: z.enum(PHRASE_FIELDS),
+    text: aiInputText,
+  })
+  .strict();
+
+const aiCandidateRefSchema = z
+  .object({ source: z.enum(AI_CANDIDATE_SOURCES), id: uuidSchema })
+  .strict();
+
+/** Valgt kandidat. Målet og feltet leses fra loggraden, aldri herfra. */
+export const applyPhraseInputSchema = z
+  .object({
+    usageId: uuidSchema,
+    candidate: aiCandidateRefSchema,
+    base: z.string().nullable(),
+    measureId: uuidSchema.optional(),
+  })
+  .strict();
+
+/**
+ * «Behold min», «Lukk» og «Angre» på et KI-forslag i rommet. «Bruk» går alltid med teksten.
+ * `undo_and_reject` er «Angre» etter «Bruk» på et fraseforslag: forslaget blir avvist.
+ */
+export const decideAiTextInputSchema = z
+  .object({
+    usageId: uuidSchema,
+    decision: z.enum(["rejected", "undo", "undo_and_reject"]),
+  })
+  .strict();
+
+/** Feltene i avvikskortet som kan språkvaskes (A350, A356). */
+export const POLISH_DEVIATION_FIELDS = [
+  "deviation_text",
+  "cause_text",
+  "consequence_text",
+] as const;
+
+const polishTarget = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("deviation"),
+      id: uuidSchema,
+      fieldKey: z.enum(POLISH_DEVIATION_FIELDS),
+    })
+    .strict(),
+  z
+    .object({ type: z.literal("deviation_measure"), id: uuidSchema, fieldKey: z.literal("text") })
+    .strict(),
+]);
+
+/** «Språkvask avviket»: ett trykk, ett kall til serveren, én forespørsel per felt. */
+export const polishDeviationInputSchema = z
+  .object({
+    deviationId: uuidSchema,
+    items: z
+      .array(z.object({ requestId: uuidSchema, target: polishTarget, text: aiInputText }).strict())
+      .min(1)
+      .max(POLISH_DEVIATION_FIELDS.length + MAX_MEASURES_PER_DEVIATION),
+  })
+  .strict();
+
+/** «Språkvask» på beskrivelsen ved punktet. */
+export const polishDescriptionInputSchema = z
+  .object({ requestId: uuidSchema, checkpointKey: keySchema, text: aiInputText })
+  .strict();
+
+/** Beslutningen som følger med «Bruk» på et språkvasket felt (lagres med `saveField`). */
+export const saveFieldAiDecisionSchema = z
+  .object({ usageId: uuidSchema, decision: z.enum(["accepted", "edited"]) })
+  .strict();
+
+const rowVersionSchema = z.number().int().min(0);
+
+/**
+ * Ett funn i `summary_basis` slik det kommer tilbake fra nettleseren (A470): bare UUID, faste
+ * koder og heltall, ingen ekstra nøkler, og høyst `MAX_MEASURES_PER_DEVIATION` deler per funn.
+ * `group` brukes ikke: serveren setter den fra dagens funn.
+ */
+export const summaryBasisEntrySchema = z
+  .object({
+    source: z.enum(SUMMARY_FINDING_SOURCES),
+    id: uuidSchema,
+    group: z.enum(SUMMARY_GROUPS),
+    rowVersion: rowVersionSchema,
+    parts: z
+      .array(z.object({ id: uuidSchema, rowVersion: rowVersionSchema }).strict())
+      .max(MAX_MEASURES_PER_DEVIATION),
+  })
+  .strict();
+
+export const summaryBasisSchema = z.array(summaryBasisEntrySchema).max(REPORT_SUMMARY_BASIS_MAX);
+
+/**
+ * Lagring av sammendraget. Teksten har samme kontroll som andre lange tekstfelt: øvre lengde,
+ * sperre mot fødselsnummer og mot plassholderne fra vasken (A466). Tom tekst er lov.
+ */
+export const saveSummaryInputSchema = z
+  .object({
+    text: freeTextSchema(SUMMARY_TEXT_MAX_LENGTH),
+    baseRowVersion: rowVersionSchema,
+    draft: z
+      .object({ usageId: uuidSchema.nullable(), basis: summaryBasisSchema, edited: z.boolean() })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+export const draftSummaryInputSchema = z.object({ requestId: uuidSchema }).strict();
+
 // --- Felles kjøring ----------------------------------------------------------------------------
 
 /**
@@ -429,6 +569,9 @@ export function parseOrThrow<T extends z.ZodType>(
   const parsed = schema.safeParse(input);
   if (parsed.success) return parsed.data;
   const custom = parsed.error.issues.find((issue) => issue.code === "custom" && issue.message);
+  if (custom?.message === PLACEHOLDER_MESSAGE) {
+    throw new ReportValidationError("text_has_placeholder");
+  }
   const known =
     custom &&
     (custom.message === NATIONAL_ID_MESSAGE ||

@@ -3,9 +3,18 @@ import type { AiQueueOutcome, ClassifyQueueOutcome } from "./types";
 /*
  * Avgjør hva køen gjør med en post etter ett kall til `send`. Ren funksjon: om enheten har nett,
  * gis inn av den som kaller. Leser bare `kind` og `reason` i svaret, aldri tekst.
+ *
+ * `stopped` (en vakt stoppet svaret, A431) er ferdig: samme `requestId` gir samme svar, så et
+ * nytt forsøk hjelper ikke. Svaret har aldri tekst.
  */
 
-const DONE_KINDS: ReadonlySet<string> = new Set(["suggestion", "no_match", "error", "disabled"]);
+const DONE_KINDS: ReadonlySet<string> = new Set([
+  "suggestion",
+  "no_match",
+  "error",
+  "disabled",
+  "stopped",
+]);
 const DONE_FAILURE_REASONS: ReadonlySet<string> = new Set(["invalid", "no_access"]);
 
 function classifyAnswer(result: unknown): AiQueueOutcome {

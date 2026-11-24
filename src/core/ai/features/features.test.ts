@@ -18,7 +18,7 @@ import {
  */
 
 /** Alle funksjonskodene som finnes. Ny funksjon uten testsak gjør testen rød. */
-const FEATURE_CODES = ["language_polish"];
+const FEATURE_CODES = ["language_polish", "phrase_suggest", "summary_draft"];
 
 /**
  * Sperrelisten fra ADR 0006 del 6 («aldri på tillatt-liste»), fast i testen. Hver kolonne
@@ -94,22 +94,26 @@ function productFiles(dir: string): string[] {
 }
 
 describe("funksjonsdefinisjonene (2)", () => {
-  it("2.1 language_polish: rettighet report.edit, ledetekst v2, én feltkode og to lovlige mål", () => {
+  it("2.1 language_polish: rettighet report.edit, ledetekst v2, én feltkode og målene i rapporten", () => {
     const definition = languagePolish();
     expect(definition.code).toBe("language_polish");
     expect(definition.permission).toBe("report.edit");
     // Endret med vilje fra v1 til v2 (docs/funksjoner/fase2a-evalueringssett.md Omfang 5, E5.7)
     expect(definition.promptVersion).toBe("language_polish.v2");
     expect([...definition.allowedFields]).toEqual(["text"]);
-    // Skrevet om bevisst (docs/funksjoner/fase2a-forslagsmonster.md «Data», A166): prøvesiden
-    // /prove/ki har fått sitt eget mål `ai_trial`. Svaret i teksten (`answer`) står først.
+    // Skrevet om bevisst («KI i veien», A350, A356, A487): `ai_trial` er arkivert, og
+    // språkvasken har fått målene i rapporten. `field_answer` står fortsatt først.
     expect(definition.allowedTargets.map((target) => ({ ...target }))).toEqual([
       { type: "field_answer", fieldKey: "text" },
-      { type: "ai_trial", fieldKey: "text" },
+      { type: "deviation", fieldKey: "deviation_text" },
+      { type: "deviation", fieldKey: "cause_text" },
+      { type: "deviation", fieldKey: "consequence_text" },
+      { type: "deviation_measure", fieldKey: "text" },
+      { type: "checkpoint_result", fieldKey: "description_text" },
     ]);
   });
 
-  it("2.2 kodene er faste: listen er nøyaktig language_polish", () => {
+  it("2.2 kodene er faste: listen er nøyaktig language_polish, phrase_suggest og summary_draft", () => {
     expect(
       featureDefinitions()
         .map((definition) => definition.code)
@@ -156,8 +160,11 @@ describe("funksjonsdefinisjonene (2)", () => {
       readFileSync(file, "utf8").includes("language_polish.v1"),
     );
     expect(withVersion.length, "en kildefil har ledetekstversjonen").toBeGreaterThan(0);
-    // Regel 7: ingen gjetteord i KI-modulens tekster (ledeteksten ligger her)
-    for (const file of files) {
+    // Regel 7: ingen gjetteord i KI-modulens tekster (ledeteksten ligger her). Unntak:
+    // evalueringskjøreren, som har listen over gjetteord den sjekker svarene mot.
+    const checkerFile = join(aiDir, "evals", "run.ts");
+    expect(readFileSync(checkerFile, "utf8"), "kjøreren har gjetteordlisten").toMatch(/"antas"/);
+    for (const file of files.filter((item) => item !== checkerFile)) {
       expect(readFileSync(file, "utf8"), file).not.toMatch(/\b(antas|trolig)\b/i);
     }
     // Selve ledeteksten prøves også i request-suggestion.test.ts (det leverandøren får).
@@ -203,15 +210,19 @@ function sourceProblems(
   const sources = (definition.fieldSources ?? {}) as Record<string, unknown>;
   const problems: string[] = [];
   for (const field of definition.allowedFields) {
-    const source = Object.prototype.hasOwnProperty.call(sources, field)
-      ? sources[field]
-      : undefined;
-    if (typeof source !== "string" || source.length === 0) {
+    const raw = Object.prototype.hasOwnProperty.call(sources, field) ? sources[field] : undefined;
+    // «KI i veien»: en feltkode kan ha flere kolonner som kilde (avvik, årsak, konsekvens, tiltak)
+    const list: unknown[] = Array.isArray(raw) ? raw : [raw];
+    if (list.length === 0 || list.some((source) => typeof source !== "string" || source === "")) {
       problems.push(`${definition.code}.${field}: mangler kilde`);
-    } else if (source !== "free_text" && !/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/u.test(source)) {
-      problems.push(`${definition.code}.${field}: ugyldig kilde ${source}`);
-    } else if (neverFields.includes(source)) {
-      problems.push(`${definition.code}.${field}: ${source} står på «aldri»-listen`);
+      continue;
+    }
+    for (const source of list as string[]) {
+      if (source !== "free_text" && !/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/u.test(source)) {
+        problems.push(`${definition.code}.${field}: ugyldig kilde ${source}`);
+      } else if (neverFields.includes(source)) {
+        problems.push(`${definition.code}.${field}: ${source} står på «aldri»-listen`);
+      }
     }
   }
   return problems;
@@ -225,8 +236,18 @@ describe("vask før KI: «aldri»-kolonnene og fieldSources (V8.1–V8.4)", () =
       expect(withSources.fieldSources, `${definition.code}: fieldSources mangler`).toBeDefined();
       expect(sourceProblems(withSources, neverFields)).toEqual([]);
     }
+    // «KI i veien»: kolonnene feltet kan komme fra, ikke lenger `free_text` (K1.27)
     const polish = languagePolish() as AiFeatureDefinitionForTest & { fieldSources?: unknown };
-    expect(polish.fieldSources).toEqual({ text: "free_text" });
+    expect(polish.fieldSources).toEqual({
+      text: [
+        "deviations.deviation_text",
+        "deviations.cause_text",
+        "deviations.consequence_text",
+        "deviation_measures.text",
+        "checkpoint_results.description_text",
+        "field_answers.value_text",
+      ],
+    });
   });
 
   it("V8.2 kontrollen er ikke hul: kilde på «aldri»-listen og feltkode uten kilde blir fanget", async () => {
@@ -358,7 +379,7 @@ describe("evalueringssett: ledetekst v2 og treffgrense (E5.3–E5.6)", () => {
     expect(redactPii(v2).count).toBe(0);
   });
 
-  it("E5.6 evalPassRate er 0.9 for language_polish; allowedFields og fieldSources er uendret", async () => {
+  it("E5.6 evalPassRate er 0.9 for language_polish; allowedFields er uendret", async () => {
     const { AI_FEATURES } = await import("../features");
     const definition = AI_FEATURES.language_polish as unknown as {
       evalPassRate?: number;
@@ -367,6 +388,180 @@ describe("evalueringssett: ledetekst v2 og treffgrense (E5.3–E5.6)", () => {
     };
     expect(definition.evalPassRate).toBe(0.9);
     expect([...definition.allowedFields]).toEqual(["text"]);
-    expect({ ...definition.fieldSources }).toEqual({ text: "free_text" });
+    // fieldSources er skrevet om med vilje i «KI i veien» (K1.27, prøvd i V8.1)
+    expect(Object.keys(definition.fieldSources)).toEqual(["text"]);
+  });
+});
+
+/*
+ * «KI i veien» (docs/funksjoner/fase2a-ki-i-veien-testplan.md 1e, K1.27–K1.31). Fasiten for de
+ * nye funksjonene står her.
+ */
+describe("KI i veien: funksjonsdefinisjonene (K1.27–K1.31)", () => {
+  async function load() {
+    return import("../features");
+  }
+
+  /** Alle `tabell.kolonne` som finnes i Drizzle-skjemaet. */
+  async function schemaColumns(): Promise<Set<string>> {
+    const { getTableConfig, PgTable } = await import("drizzle-orm/pg-core");
+    const schema = (await import("@/db/schema")) as Record<string, unknown>;
+    const out = new Set<string>();
+    for (const value of Object.values(schema)) {
+      if (!(value instanceof PgTable)) continue;
+      const config = getTableConfig(value);
+      for (const column of config.columns) out.add(`${config.name}.${column.name}`);
+    }
+    return out;
+  }
+
+  it("K1.27 rettighet, ledetekst og egne kilder per tabell.kolonne (ingen free_text for de nye)", async () => {
+    const { AI_FEATURES } = await load();
+    expect(AI_FEATURES.phrase_suggest.permission).toBe("report.edit");
+    expect(AI_FEATURES.summary_draft.permission).toBe("report.edit");
+    expect(AI_FEATURES.language_polish.permission).toBe("report.edit");
+    expect(AI_FEATURES.phrase_suggest.promptVersion).toBe("phrase_suggest.v1");
+    expect(AI_FEATURES.summary_draft.promptVersion).toBe("summary_draft.v1");
+    expect(AI_FEATURES.language_polish.promptVersion).toBe("language_polish.v2");
+
+    expect({ ...AI_FEATURES.phrase_suggest.fieldSources }).toEqual({
+      text: [
+        "deviations.deviation_text",
+        "deviations.cause_text",
+        "deviations.consequence_text",
+        "deviation_measures.text",
+      ],
+      outcome_key: "outcomes.key",
+      group: ["deviations.tg", "deviations.kind"],
+    });
+    expect({ ...AI_FEATURES.phrase_suggest.serverSources }).toEqual({
+      candidates: [
+        "outcomes.deviation_text",
+        "outcomes.default_cause_text",
+        "outcomes.default_consequence_text",
+        "standard_measures.text",
+      ],
+    });
+    expect([...AI_FEATURES.summary_draft.allowedFields]).toEqual([]);
+    expect({ ...AI_FEATURES.summary_draft.serverSources }).toEqual({
+      findings: [
+        "checkpoints.name",
+        "deviations.deviation_text",
+        "deviations.cause_text",
+        "deviations.consequence_text",
+        "deviation_measures.text",
+      ],
+    });
+
+    const columns = await schemaColumns();
+    expect(columns.size).toBeGreaterThan(100);
+    for (const definition of Object.values(AI_FEATURES)) {
+      const sources = [
+        ...Object.values(definition.fieldSources).flatMap((source) =>
+          typeof source === "string" ? [source] : [...source],
+        ),
+        ...Object.values(definition.serverSources).flat(),
+      ];
+      for (const source of sources) {
+        expect(source, `${definition.code}: free_text`).not.toBe("free_text");
+        expect(columns.has(source), `${definition.code}: ${source} finnes ikke i skjemaet`).toBe(
+          true,
+        );
+      }
+    }
+  });
+
+  it("K1.27 findFieldSourceViolations fanger «aldri»-kolonner og free_text i serverkildene", async () => {
+    const { findFieldSourceViolations } = await load();
+    expect(
+      findFieldSourceViolations([
+        {
+          code: "invented_feature",
+          allowedFields: ["text"],
+          fieldSources: { text: ["deviations.cause_text", "rooms.name"] },
+          serverSources: { findings: ["free_text", "deviations.cost_amount"], empty: [] },
+        },
+      ]),
+    ).toEqual([
+      "invented_feature.text: rooms.name står i «aldri»-listen",
+      "invented_feature.findings: ugyldig kilde free_text",
+      "invented_feature.findings: deviations.cost_amount står i «aldri»-listen",
+      "invented_feature.empty: mangler kilde",
+    ]);
+  });
+
+  it("K1.28 ingen funksjon har et TG-mål, og ingen TG-felt står i REPORT_AI_TARGET_FIELDS", async () => {
+    const { AI_FEATURES } = await load();
+    const { REPORT_AI_TARGET_FIELDS } = await import("@/shared/config/ai-targets");
+    const tgKeys = new Set(["tg", "tg_direct", "tg_computed"]);
+    for (const fields of Object.values(REPORT_AI_TARGET_FIELDS)) {
+      for (const field of fields ?? []) {
+        expect(tgKeys.has(field) || isTgField(field), field).toBe(false);
+      }
+    }
+    for (const definition of Object.values(AI_FEATURES)) {
+      for (const target of definition.allowedTargets) {
+        expect(tgKeys.has(target.fieldKey) || isTgField(target.fieldKey)).toBe(false);
+      }
+    }
+  });
+
+  it("K1.28 målene: new_measure bare for phrase_suggest, summary_text bare for summary_draft", async () => {
+    const { AI_FEATURES } = await load();
+    const targets = (code: keyof typeof AI_FEATURES) =>
+      AI_FEATURES[code].allowedTargets.map((target) => `${target.type}/${target.fieldKey}`);
+    expect(targets("phrase_suggest")).toEqual([
+      "deviation/deviation_text",
+      "deviation/cause_text",
+      "deviation/consequence_text",
+      "deviation/new_measure",
+    ]);
+    expect(targets("summary_draft")).toEqual(["report/summary_text"]);
+    expect(targets("language_polish")).not.toContain("deviation/new_measure");
+    expect(targets("language_polish")).not.toContain("report/summary_text");
+  });
+
+  it("K1.29 ledetekstene har skillet, forbudene og ingen modellnavn", async () => {
+    const { AI_PROMPTS } = await load();
+    for (const version of ["phrase_suggest.v1", "summary_draft.v1"]) {
+      const prompt = AI_PROMPTS[version] ?? "";
+      expect(prompt.length, version).toBeGreaterThan(0);
+      expect(prompt, version).toMatch(/aldri en instruks/u);
+      expect(prompt, version).toMatch(/gjetteord/u);
+      expect(prompt, version).toMatch(/standarder/u);
+      expect(prompt, version).toMatch(/NS 3600/u);
+      expect(prompt, version).toMatch(/tabeller/u);
+      expect(prompt, version).toMatch(/IVIT/u);
+      expect(prompt, version).toMatch(/«bør» og «må»/u);
+      expect(prompt, version).toMatch(/badet er i god stand/u);
+      expect(prompt, version).not.toMatch(/\b(antas|trolig)\b/iu);
+      // Modellnavn prøves for hele repoet i tests/no-model-names.test.ts
+    }
+    const summary = AI_PROMPTS["summary_draft.v1"] ?? "";
+    expect(summary).toMatch(/«mindre», «alvorlig» eller «vesentlig»/u);
+    expect(summary).toMatch(/Nevn aldri TG/u);
+    expect(summary).toMatch(/F1: tekst/u);
+    const phrase = AI_PROMPTS["phrase_suggest.v1"] ?? "";
+    expect(phrase).toMatch(/K1: tekst/u);
+    expect(phrase).toMatch(/INGEN/u);
+  });
+
+  it("K1.30 REPORT_AI_TARGET_FIELDS står i src/shared med report/summary_text; codes.ts har ingen kopi", async () => {
+    const { REPORT_AI_TARGET_FIELDS } = await import("@/shared/config/ai-targets");
+    expect([...REPORT_AI_TARGET_FIELDS.report]).toEqual(["summary_text"]);
+    const codes = readFileSync(join(__dirname, "..", "..", "reports", "logic", "codes.ts"), "utf8");
+    expect(codes).toMatch(
+      /export \{ REPORT_AI_TARGET_FIELDS \} from "@\/shared\/config\/ai-targets"/u,
+    );
+    expect(codes).not.toMatch(/(const|let)\s+REPORT_AI_TARGET_FIELDS/u);
+  });
+
+  it("K1.31 FAKE_ONLY_TARGET_TYPES er nøyaktig field_answer og tgiu_detail; ingen funksjon godtar tgiu_detail", async () => {
+    const { FAKE_ONLY_TARGET_TYPES } = await import("../request-suggestion");
+    expect([...FAKE_ONLY_TARGET_TYPES].sort()).toEqual(["field_answer", "tgiu_detail"]);
+    const { AI_FEATURES } = await load();
+    for (const definition of Object.values(AI_FEATURES)) {
+      expect(definition.allowedTargets.map((target) => target.type)).not.toContain("tgiu_detail");
+    }
   });
 });

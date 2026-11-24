@@ -8,11 +8,28 @@ import type {
   TemplateElementOptionDoc,
 } from "@/core/templates";
 import {
+  computePublishCheck,
+  containsPiiPlaceholder,
   fillMergeFields,
   sortReviewWarnings,
+  listPhraseCandidates,
+  mergeFieldValues,
+  mergeNumberText,
+  mostUsedPhraseCandidate,
+  phraseCandidateOtherTg,
+  phraseCandidateText,
+  searchPhraseCandidates,
+  summarizePublishCheck,
   warningFix,
   type CheckpointWarning,
+  type PublishCheckRoom,
   type DecisionState,
+  type MergeFieldKey,
+  type MergeFieldSources,
+  type MergeValues,
+  type PhraseCandidate,
+  type PhraseField,
+  type PhraseUsageCount,
   type OutcomeTg,
   type ReasonLabelLookup,
   type SuggestionTg,
@@ -22,10 +39,14 @@ import {
 import type {
   AnswerValue,
   CheckpointView,
+  DeviationView,
+  ReportSummaryView,
   RoomTemplateDocument,
   SuggestionView,
   TgiuDetailsView,
 } from "@/core/reports/types";
+import type { AiCandidateRef, DeviationTg } from "@/db/schema";
+import { AI_CANDIDATE_REFS_MAX } from "@/shared/config/ai-targets";
 
 /*
  * Rene hjelpere for skjermen for badet: rekkefølge, oppslag i maldokumentet, nøkler i
@@ -432,6 +453,8 @@ const formatCount = (n: number) => n.toLocaleString("nb-NO");
 export const TEXT_MESSAGES = {
   tooLong: (max: number) => `Teksten er for lang. Grensen er ${formatCount(max)} tegn.`,
   nationalId: "Teksten ser ut til å inneholde et fødselsnummer. Fjern det.",
+  /** A466: samme melding som serveren gir (`text_has_placeholder`). */
+  placeholder: "Teksten har en plassholder fra KI, for eksempel [adresse]. Skriv inn riktig verdi.",
 } as const;
 
 /** Kontroll av fritekst før lagring. Teksten beholdes i feltet. */
@@ -440,6 +463,7 @@ export function reportTextValidator(max: number): (value: unknown) => string | n
     if (typeof value !== "string") return null;
     if (value.length > max) return TEXT_MESSAGES.tooLong(max);
     if (ELEVEN_DIGITS.test(value.replace(DIGIT_SEPARATORS, ""))) return TEXT_MESSAGES.nationalId;
+    if (containsPiiPlaceholder(value)) return TEXT_MESSAGES.placeholder;
     return null;
   };
 }
@@ -463,4 +487,275 @@ export function parseNumberInput(raw: string): { ok: true; value: number | null 
   if (compact === "") return { ok: true, value: null };
   if (!/^[-−]?\d+(\.\d+)?$/u.test(compact)) return { ok: false };
   return { ok: true, value: Number(compact.replace("−", "-")) };
+}
+
+// --- Tellemerket «Se over og publiser» (docs/funksjoner/fase2a-publisering-badet-design.md 14) --
+
+/** Tellemerket for hele rapporten: rommet regnet lokalt pluss resten fra serveren. */
+export function publishCounts(
+  publishRoom: PublishCheckRoom,
+  outside: { blockers: number; warnings: number },
+): { blockers: number; warnings: number } {
+  // Befaringsdatoen og KI-forslagene står i `outside`; her bare rommet.
+  const own = summarizePublishCheck(
+    computePublishCheck({
+      hasInspectionDate: true,
+      rooms: [publishRoom],
+      pendingAiSuggestions: [],
+    }),
+  );
+  return {
+    blockers: own.blockers + outside.blockers,
+    warnings: own.warnings + outside.warnings,
+  };
+}
+
+// --- KI i veien: forslag fra frasebanken (A485, A433, A437, A468) ------------------------------
+
+/** Høyst så mange kandidater i listen, samme tall som serveren bruker (A433). */
+export const PHRASE_LIST_MAX = AI_CANDIDATE_REFS_MAX;
+
+/** Svaret i rommet som verdi for flettefeltene (samme form som reglene leser). */
+function mergeAnswerValue(value: unknown): unknown {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === "string") return value.trim() === "" ? undefined : value;
+  if (typeof value === "number") return value;
+  if (Array.isArray(value)) return value.length > 0 ? value : undefined;
+  if (typeof value === "object") {
+    const answer = value as Partial<AnswerValue>;
+    if (answer.optionKeys && answer.optionKeys.length > 0) return answer.optionKeys;
+    if (typeof answer.number === "number") return answer.number;
+    if (typeof answer.text === "string" && answer.text.trim() !== "") return answer.text;
+  }
+  return undefined;
+}
+
+/**
+ * Verdiene til flettefeltene i nettleseren, fra svarene slik de står nå (lagringskøen først, så
+ * serveren). Samme regler som serveren (`mergeFieldValues`); kildene per punkt kommer fra siden.
+ * Målingen på avviket brukes når svaret mangler, som ved Godta.
+ */
+export function clientMergeValues(input: {
+  sources: MergeFieldSources;
+  answerOf(elementKey: string): unknown;
+  optionLabel(elementKey: string, optionKey: string): string | null;
+  measurementValue: number | null;
+}): MergeValues {
+  const keys = new Set<string>();
+  for (const source of Object.values(input.sources)) {
+    for (const key of source?.keys ?? []) keys.add(key);
+  }
+  const answers: Record<string, unknown> = Object.create(null);
+  for (const key of keys) {
+    const value = mergeAnswerValue(input.answerOf(key));
+    if (value !== undefined) answers[key] = value;
+  }
+  const values = mergeFieldValues(input.sources, answers, input.optionLabel);
+  if (!values.måleverdi && input.measurementValue !== null) {
+    values.måleverdi = mergeNumberText(input.measurementValue);
+  }
+  return values;
+}
+
+/** Hvordan en kandidat havner i feltet: «Sett inn», «Bytt ut teksten» eller «Legg til som tiltak». */
+export type PhraseAction = "insert" | "replace" | "add_measure";
+
+/**
+ * Handlingsordet (avsnitt 4): tiltak legges alltid til; et tomt felt eller malens egen tekst får
+ * «Sett inn», og egen tekst fra takstmannen får «Bytt ut teksten».
+ */
+export function phraseActionFor(
+  field: PhraseField,
+  current: string,
+  currentIsTemplateText: boolean,
+): PhraseAction {
+  if (field === "new_measure") return "add_measure";
+  if (current.trim() === "" || currentIsTemplateText) return "insert";
+  return "replace";
+}
+
+/** En kandidat slik listen viser den: teksten som havner i feltet og det som står i metalinjen. */
+export type PhraseItem = {
+  /** Fast nøkkel i listen, samme for tekstsøket og KI-rekkefølgen (fokus beholdes ved bytte). */
+  key: string;
+  ref: AiCandidateRef | null;
+  text: string;
+  missing: MergeFieldKey[];
+  checkpointName: string;
+  outcomeName: string;
+  /** TG teksten hører til, eller `null` for «velg TG2 eller TG3» og HMS. */
+  tg: DeviationTg | null;
+  hms: boolean;
+  draft: boolean;
+  mostUsed: boolean;
+  /** TG teksten hører til når den er en annen enn avvikets (advarsel etter valg). */
+  otherTg: DeviationTg | null;
+};
+
+/** Nøkkelen for en kandidat: malens faste koder, så tekstsøket og KI-svaret peker på samme rad. */
+export function phraseItemKey(candidate: PhraseCandidate): string {
+  return [
+    candidate.checkpointKey,
+    candidate.questionKey,
+    candidate.outcomeKey,
+    candidate.measureSortOrder ?? "",
+    candidate.text,
+  ].join("|");
+}
+
+function candidateTg(candidate: PhraseCandidate): DeviationTg | null {
+  if (candidate.appliesToTg !== null) return candidate.appliesToTg;
+  if (candidate.outcomeKind === "tg2") return 2;
+  if (candidate.outcomeKind === "tg3") return 3;
+  return null;
+}
+
+/** Kandidatene som listeelementer, med flettefeltene satt inn og merket «Mest brukt» (A468). */
+export function phraseItems(
+  candidates: readonly PhraseCandidate[],
+  context: {
+    doc: Pick<RoomDocumentIndex, "outcome">;
+    mergeValues: MergeValues;
+    deviationTg: DeviationTg | null;
+  },
+): PhraseItem[] {
+  const mostUsed = mostUsedPhraseCandidate(candidates);
+  return candidates.map((candidate) => {
+    const filled = phraseCandidateText(candidate, context.mergeValues);
+    const outcome = context.doc.outcome(
+      candidate.checkpointKey,
+      candidate.questionKey,
+      candidate.outcomeKey,
+    );
+    return {
+      key: phraseItemKey(candidate),
+      ref: candidate.ref,
+      text: filled.text,
+      missing: filled.missing,
+      checkpointName: candidate.checkpointName,
+      outcomeName: outcome ? outcomeName(outcome) : "",
+      tg: candidateTg(candidate),
+      hms: candidate.outcomeKind === "hms",
+      draft: candidate.textStatus === "draft",
+      mostUsed: mostUsed === candidate,
+      otherTg: phraseCandidateOtherTg(candidate, context.deviationTg),
+    };
+  });
+}
+
+/** Tekstene som står i feltet nå, så kandidatene med samme tekst tas ut (A433). */
+export function phraseCurrentTexts(
+  field: PhraseField,
+  deviation: Pick<DeviationView, "measures">,
+  current: string,
+): string[] {
+  if (field === "new_measure") return deviation.measures.map((m) => m.text);
+  return current.trim() === "" ? [] : [current];
+}
+
+/**
+ * Tekstsøket uten KI (A485): kandidatene som er lastet med badet, søkt med teksten som står i
+ * feltet. Malens egen tekst i feltet gir de første kandidatene, ikke null treff. Ingen kall og
+ * ingen logg.
+ */
+export function phraseTextSearch(input: {
+  document: RoomTemplateDocument;
+  field: PhraseField;
+  deviation: Pick<DeviationView, "kind" | "tg" | "measures" | "questionKey" | "outcomeKey">;
+  checkpointKey: string;
+  current: string;
+  currentIsTemplateText: boolean;
+  usage: readonly PhraseUsageCount[];
+}): PhraseCandidate[] {
+  const candidates = listPhraseCandidates(input.document, {
+    field: input.field,
+    checkpointKey: input.checkpointKey,
+    questionKey: input.deviation.questionKey,
+    outcomeKey: input.deviation.outcomeKey,
+    kind: input.deviation.kind,
+    tg: input.deviation.tg,
+    usage: input.usage,
+    currentTexts: phraseCurrentTexts(input.field, input.deviation, input.current),
+  });
+  const query = input.field === "new_measure" || input.currentIsTemplateText ? "" : input.current;
+  return searchPhraseCandidates(candidates, query, PHRASE_LIST_MAX);
+}
+
+/** Hvor en kandidat står etter et bytte av listen; første når den ikke finnes lenger (avsnitt 4). */
+export function focusIndexAfterSwap(
+  previousKey: string | null,
+  next: readonly Pick<PhraseItem, "key">[],
+): number {
+  if (previousKey === null) return 0;
+  const index = next.findIndex((item) => item.key === previousKey);
+  return index === -1 ? 0 : index;
+}
+
+/** Ny plass for flyttbar `tabindex` etter en tast (piltaster, Home, End). `null` = ikke vår tast. */
+export function listKeyTarget(key: string, index: number, length: number): number | null {
+  if (length === 0) return null;
+  switch (key) {
+    case "ArrowDown":
+      return Math.min(length - 1, index + 1);
+    case "ArrowUp":
+      return Math.max(0, index - 1);
+    case "Home":
+      return 0;
+    case "End":
+      return length - 1;
+    default:
+      return null;
+  }
+}
+
+// --- KI i veien: sammendraget (A434, A435, A462, A465) ------------------------------------------
+
+export type SummaryWarningItem = {
+  id: string;
+  text: string;
+  roomId: string | null;
+  checkpointKey: string | null;
+};
+
+const SUMMARY_GROUP_TG: Readonly<Record<string, string | null>> = {
+  tg3: "TG3",
+  tg2: "TG2",
+  tgiu: "TGIU",
+  hms: null,
+};
+
+/** Linjene under «Funnene er endret etter sammendraget.» Fjernede funn har bare antallet. */
+export function summaryChangeItems(
+  view: Pick<ReportSummaryView, "changedSinceDraft">,
+  texts: {
+    added(checkpoint: string): string;
+    changed(checkpoint: string, tg: string | null): string;
+    removed(n: number): string;
+  },
+): SummaryWarningItem[] {
+  const changes = view.changedSinceDraft;
+  if (!changes) return [];
+  const items: SummaryWarningItem[] = [
+    ...changes.changed.map((f) => ({
+      id: `changed-${f.id}`,
+      text: texts.changed(f.checkpointName, SUMMARY_GROUP_TG[f.group] ?? null),
+      roomId: f.roomId,
+      checkpointKey: f.checkpointKey,
+    })),
+    ...changes.added.map((f) => ({
+      id: `added-${f.id}`,
+      text: texts.added(f.checkpointName),
+      roomId: f.roomId,
+      checkpointKey: f.checkpointKey,
+    })),
+  ];
+  if (changes.removedCount > 0) {
+    items.push({
+      id: "removed",
+      text: texts.removed(changes.removedCount),
+      roomId: null,
+      checkpointKey: null,
+    });
+  }
+  return items;
 }

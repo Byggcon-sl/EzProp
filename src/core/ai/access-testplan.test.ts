@@ -21,6 +21,7 @@ import {
   checkAiTextApproved,
   getSuggestionStatus,
   outcomeOf,
+  answerTarget,
   trialTarget,
 } from "../../../tests/ai-pattern";
 import {
@@ -114,11 +115,12 @@ async function setup(variant: Omit<Variant, "name" | "allowed">) {
   return { organization, requester, person, grant, suggested, accepted, target };
 }
 
-describe("tilgang per rolle: requestSuggestion med ai_trial (6.1)", () => {
+describe("tilgang per rolle: requestSuggestion (6.1)", () => {
   it.each(VARIANTS)("$name: be om = $allowed", async (variant) => {
     const { grant } = await setup(variant);
     const rowsBefore = await aiRowCount();
-    const request = validRequest({ target: trialTarget() });
+    // `ai_trial` er arkivert («KI i veien», A487): forespørselen bruker målet `field_answer`
+    const request = validRequest({ target: answerTarget() });
 
     if (variant.allowed) {
       const result = await requestSuggestion(grant, request);
@@ -255,7 +257,7 @@ describe("tilgang: ansatt i annen organisasjon får nøytralt avslag (6.1)", () 
     const requestError = await captureError(() =>
       requestSuggestion(
         outsider.grant,
-        validRequest({ requestId: suggested.id, target: trialTarget() }),
+        validRequest({ requestId: suggested.id, target: answerTarget() }),
       ),
     );
     expect(requestError).not.toBeInstanceOf(AccessDeniedError);
@@ -278,7 +280,7 @@ describe("admin stenges aldri ute (6.2)", () => {
     )) as unknown as unknown[];
     expect(permissions).toHaveLength(0);
 
-    const target = trialTarget();
+    const target = answerTarget();
     const result = await requestSuggestion(admin.grant, validRequest({ target }));
     expect(result.kind).toBe("suggestion");
     if (result.kind !== "suggestion") return;

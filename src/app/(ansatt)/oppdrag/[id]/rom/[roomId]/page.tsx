@@ -3,11 +3,20 @@ import { notFound } from "next/navigation";
 import { AccessDeniedError } from "@/core/access";
 import { getAssignment } from "@/core/assignments";
 import { getAssignmentBuildings, roomTypeLabel } from "@/core/buildings";
-import { getRoomView, type RoomReportView } from "@/core/reports";
+import {
+  getPublishCheck,
+  getReportSummary,
+  getRoomView,
+  ReportValidationError,
+  type ReportSummaryView,
+  type RoomReportView,
+} from "@/core/reports";
+import type { MergeFieldSources } from "@/core/reports/logic";
+import { mergeSourcesFor } from "@/core/reports/merge-sources";
 import { isUuid } from "@/shared/lib/uuid";
 import { getEmployeeContext } from "../../../../employee-context";
 import { NoAccess } from "../../../../no-access";
-import { RoomView } from "./room-view";
+import { RoomView, type RoomPublishState } from "./room-view";
 import { StartReport } from "./start-report";
 
 export const metadata: Metadata = { title: "Badet" };
@@ -25,12 +34,49 @@ function titleOf(room: { name: string | null; roomType: string }): string {
   return room.name ?? roomTypeLabel(room.roomType);
 }
 
+/**
+ * Det rommet trenger fra sjekken før publisering: tellingen for resten av rapporten (andre rom,
+ * befaringsdatoen og KI-forslag; rommet selv regnes lokalt), eller at rapporten er publisert.
+ * Ren lesing med samme tilgang som rommet. Rapport som ikke kan publiseres, gir `null`.
+ */
+async function loadPublishState(
+  context: NonNullable<Awaited<ReturnType<typeof getEmployeeContext>>>,
+  assignmentId: string,
+  roomId: string,
+): Promise<RoomPublishState | null> {
+  try {
+    const check = await getPublishCheck(context.actor, context.organizationId, assignmentId);
+    if (check.state === "published") {
+      return {
+        state: "published",
+        versionNumber: check.versionNumber,
+        canStartNewVersion: check.canStartNewVersion,
+      };
+    }
+    if (check.state !== "draft") return null;
+    const outside = check.findings.filter(
+      (item) => item.target.roomId !== roomId || item.checkCode === "ai_suggestion_pending",
+    );
+    return {
+      state: "draft",
+      nextVersionNumber: check.nextVersionNumber,
+      outside: {
+        blockers: outside.filter((item) => item.severity === "blocker").length,
+        warnings: outside.filter((item) => item.severity === "warning").length,
+      },
+    };
+  } catch (error) {
+    if (error instanceof ReportValidationError) return null;
+    throw error;
+  }
+}
+
 export default async function RoomPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string; roomId: string }>;
-  searchParams: Promise<{ punkt?: string | string[] }>;
+  searchParams: Promise<{ punkt?: string | string[]; fra?: string | string[] }>;
 }) {
   const [{ id, roomId }, query] = await Promise.all([params, searchParams]);
   const context = await getEmployeeContext();
@@ -68,15 +114,33 @@ export default async function RoomPage({
     return <StartReport assignmentId={id} canStart={view.canStart} roomTitle={roomTitle} />;
   }
 
+  // Sammendraget for hele rapporten («KI i veien», A434). Kjernen sjekker tilgangen.
+  let summary: ReportSummaryView | null = null;
+  try {
+    summary = await getReportSummary(context.actor, context.organizationId, id);
+  } catch (error) {
+    if (!(error instanceof AccessDeniedError)) throw error;
+  }
+  // Hvor flettefeltene i standardtekstene henter verdien, så forslagslisten viser teksten slik den
+  // havner i feltet. Bare feltkoder, ingen verdier.
+  const mergeSources: Record<string, MergeFieldSources> = Object.fromEntries(
+    view.document.checkpoints.map((c) => [c.key, mergeSourcesFor(c.key)]),
+  );
+
   const punkt = typeof query.punkt === "string" ? query.punkt : null;
+  const publish = await loadPublishState(context, id, roomId);
   return (
     <RoomView
-      key={view.reportId}
+      key={`${view.reportId}-${view.reportStatus}`}
       view={view}
+      publish={publish}
+      fromPublish={query.fra === "publiser"}
       room={room}
       assignmentNumber={assignmentNumber}
       roomTitle={titleOf(view.room)}
       requestedCheckpoint={punkt}
+      summary={summary}
+      mergeSources={mergeSources}
     />
   );
 }

@@ -4,7 +4,7 @@ import { db } from "@/db/client";
 import { aiUsageLog } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { AiRequestRejectedError } from "./errors";
-import { getFeatureDefinition } from "./features";
+import { ARCHIVED_AI_TARGET_TYPES, getFeatureDefinition } from "./features";
 import type { AiTargetRef } from "./types";
 import { sameTarget } from "./usage-log";
 
@@ -22,6 +22,9 @@ import { sameTarget } from "./usage-log";
  * - Ett oppslag for hele listen, filtrert på `grant.organizationId` og `deleted_at is null`.
  * - `aiUsageId` og målets id sammenlignes med små bokstaver. Ugyldig uuid er «ikke godkjent».
  * - Svaret har ingen grunn, så det aldri røper om en id finnes hos en annen organisasjon.
+ * - «KI i veien»: `phrase_suggest`-rader er ikke KI-tekst (teksten er malens egen), og et stoppet
+ *   svar (`stopped`) er ikke tekst i rapporten. Ingen av dem trenger godkjenning. Et forslag fra
+ *   `language_polish` eller `summary_draft` som står `suggested`, er ikke godkjent.
  */
 
 /** Høyeste antall elementer per kall. */
@@ -52,8 +55,27 @@ function usageIdOf(item: unknown): string | null {
   return typeof id === "string" && isUuid(id) ? id.toLowerCase() : null;
 }
 
+/**
+ * Funksjoner der teksten i rapporten aldri er KI-tekst: `phrase_suggest` setter inn kildens egen
+ * tekst (malen, senere frasebanken), så raden er bare et spor av valget (ADR 0006, tillegg
+ * 17.11.2026, del 5).
+ */
+const NOT_AI_TEXT_FEATURES: ReadonlySet<string> = new Set(["phrase_suggest"]);
+
+/**
+ * Om raden aldri ga tekst i rapporten, så elementet ikke trenger godkjenning: fraseforslag, og et
+ * svar en vakt stoppet (`stopped`, teksten ble aldri vist). Bare for en rad i organisasjonen som
+ * gjelder akkurat dette målet.
+ */
+function isNotReportText(item: AiApprovalItem, row: StoredRow | undefined): boolean {
+  if (!row || !isTargetRef(item.target) || !isTargetRef(row.targetRef)) return false;
+  if (!sameTarget(row.targetRef, item.target)) return false;
+  return NOT_AI_TEXT_FEATURES.has(row.feature) || row.outcome === "stopped";
+}
+
 /** Om elementet er godkjent KI-tekst for akkurat dette målet. */
 function isApproved(item: AiApprovalItem, row: StoredRow | undefined): boolean {
+  if (isNotReportText(item, row)) return true;
   if (!row || !isTargetRef(item.target) || !isTargetRef(row.targetRef)) return false;
   // Sperret forespørsel (ad-1), ingen treff og feil er aldri godkjent KI-tekst
   if (row.outcome === "blocked") return false;
@@ -62,9 +84,12 @@ function isApproved(item: AiApprovalItem, row: StoredRow | undefined): boolean {
   const definition = getFeatureDefinition(row.feature);
   if (!definition) return false;
   const stored = row.targetRef;
-  const allowed = definition.allowedTargets.some(
-    (spec) => spec.type === stored.type && spec.fieldKey === stored.fieldKey,
-  );
+  // Gamle rader på en arkivert måltype (prøvesiden) leses fortsatt som før (regel 6)
+  const allowed =
+    ARCHIVED_AI_TARGET_TYPES.includes(stored.type) ||
+    definition.allowedTargets.some(
+      (spec) => spec.type === stored.type && spec.fieldKey === stored.fieldKey,
+    );
   // ad-6: raden må gjelde samme type, id og felt som elementet
   return allowed && sameTarget(stored, item.target);
 }

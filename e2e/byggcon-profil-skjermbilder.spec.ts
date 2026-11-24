@@ -2,7 +2,15 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { SAMPLE_INSPECTOR } from "../src/db/seed/sample-assignments.data";
-import { createTrialForm, indicator, logIn, waitForTrialHook } from "./helpers";
+import {
+  addRuleTg3Deviation,
+  createSampleBathroom,
+  createTrialForm,
+  indicator,
+  logIn,
+  openSampleBathroom,
+  waitForTrialHook,
+} from "./helpers";
 
 /*
  * Skjermbilder før og etter Byggcon-profilen (docs/funksjoner/fase2a-byggcon-profil.md, «Omfang»).
@@ -20,7 +28,8 @@ import { createTrialForm, indicator, logIn, waitForTrialHook } from "./helpers";
  *     pnpm test:e2e e2e/byggcon-profil-skjermbilder.spec.ts --project=pc
  *
  * Bare oppdiktede data fra prøveorganisasjonen (`pnpm db:seed:testoppdrag`): innlogging som
- * prøvetakstmannen, ett av testoppdragene og en oppdiktet setning til KI (den falske leverandøren).
+ * prøvetakstmannen, ett av testoppdragene og et oppdiktet bad med utkast til sammendrag fra den
+ * falske leverandøren.
  *
  * Støtter hovedmål: de ansatte (uttrykket kan sammenlignes før og etter, og luften og
  * trykkflatene på iPad kan sjekkes med øyet).
@@ -33,8 +42,6 @@ const SIZES = [
   { name: "pc", viewport: { width: 1440, height: 900 }, hasTouch: false },
   { name: "ipad", viewport: { width: 1024, height: 1366 }, hasTouch: true },
 ] as const;
-
-const KI_SENTENCE = "taket er gammelt og har noen sprekker ved pipa";
 
 function file(screen: string, size: string): string {
   return path.join(OUT_DIR, `ezprop-${VARIANT}-${screen}-${size}.png`);
@@ -101,15 +108,17 @@ test.describe("skjermbilder Byggcon-profilen", () => {
         await expect(indicator(page)).toHaveText("Alt er lagret", { timeout: 20_000 });
         await snap(page, "skjema", size.name);
 
-        // 5 /prove/ki med et forslag vist
-        await page.goto("/prove/ki");
-        await expect(
-          page.getByRole("heading", { name: "Prøv KI: språkvask", level: 1 }),
-        ).toBeVisible();
-        await page.getByLabel("Setning").fill(KI_SENTENCE);
-        await page.getByRole("button", { name: "Foreslå bedre språk" }).click();
-        const card = page.getByRole("region", { name: "Forslag fra KI" });
+        // 5 Badskjermen med forslagskortet (utkast til sammendrag). Før «KI i veien» var dette
+        // prøvesiden /prove/ki, som er fjernet (A487).
+        const bath = await createSampleBathroom();
+        await openSampleBathroom(page, bath, "wet_room.membrane_drain");
+        await addRuleTg3Deviation(page);
+        const summary = page.getByRole("region", { name: "Sammendrag for hele rapporten" });
+        await expect(summary.getByRole("button", { name: "Lag utkast" })).toBeEnabled();
+        await summary.getByRole("button", { name: "Lag utkast" }).click();
+        const card = summary.getByRole("region", { name: "Forslag fra KI" });
         await expect(card.getByTestId("ai-suggestion-text")).toBeVisible();
+        await card.scrollIntoViewIfNeeded();
         await snap(page, "ki", size.name);
       } finally {
         await context.close();

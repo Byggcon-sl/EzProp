@@ -213,6 +213,10 @@ describe("evalueringssett: kommandoen (E3)", () => {
     expect(result.error).toBeUndefined();
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(result.stdout).toContain("language_polish");
+    // KI i veien (K2.7): alle tre settene kjøres, og linjen om den falske leverandøren står først
+    expect(result.stdout).toContain("phrase_suggest");
+    expect(result.stdout).toContain("summary_draft");
+    expect(result.stdout.split("\n")[0]).toMatch(/falske leverandøren.*ikke kvaliteten/u);
   }, 60_000);
 
   it("E3.11 scripts/ai-eval.ts bruker fakeAiProvider fast: ingen process.env, ingen resolveAiProvider, intet valg av leverandør", () => {
@@ -230,5 +234,43 @@ describe("evalueringssett: kommandoen (E3)", () => {
       scripts: Record<string, string>;
     };
     expect(pkg.scripts["ai:eval"]).toMatch(/scripts\/ai-eval\.ts/u);
+  });
+});
+
+/*
+ * KI i veien (docs/funksjoner/fase2a-ki-i-veien-testplan.md K2.7): `pnpm ai:eval phrase_suggest`,
+ * `summary_draft` og uten argument mot de ekte settene i mappen. Støtter hovedmål: KI i bunnen
+ * (de tre funksjonene kan måles før ekte KI slås på).
+ */
+describe("evalueringssett: kommandoen med de tre settene (K2.7)", () => {
+  const evalsDir = __dirname;
+
+  it.each(["phrase_suggest", "summary_draft", "language_polish"])(
+    "K2.7 pnpm ai:eval %s gir kode 0 mot den falske leverandøren, uten krasj og persondata",
+    async (feature) => {
+      const { exitCode, lines } = await runEvalCommand([feature], evalsDir, fakeAiProvider);
+      const text = lines.join("\n");
+      expect(exitCode, text).toBe(0);
+      expect(lines[0]).toMatch(/falske leverandøren.*ikke kvaliteten/u);
+      expect(text).toMatch(new RegExp(`^${feature}: \\d+ eksempler`, "mu"));
+      expect(text).not.toMatch(/^Feil:|Krasj|Persondata/mu);
+    },
+  );
+
+  it("K2.7 uten argument kjøres alle tre settene og vaktsakene fra kjernen", async () => {
+    const { exitCode, lines } = await runEvalCommand([], evalsDir, fakeAiProvider);
+    const text = lines.join("\n");
+    expect(exitCode, text).toBe(0);
+    for (const feature of ["language_polish", "phrase_suggest", "summary_draft"]) {
+      expect(text).toMatch(new RegExp(`^${feature}: \\d+ eksempler`, "mu"));
+    }
+    expect(text).toMatch(/^Vaktsakene fra kjernen: (\d+) av \1 ga forventet vakt\.$/mu);
+    expect(lines.filter((line) => line.includes("falske leverandøren"))).toHaveLength(1);
+  });
+
+  it("K2.7 linjen om den falske leverandøren står også når kjøringen feiler", async () => {
+    const { exitCode, lines } = await runEvalCommand(["finnes_ikke"], evalsDir, fakeAiProvider);
+    expect(exitCode).toBe(1);
+    expect(lines[0]).toMatch(/falske leverandøren/u);
   });
 });
