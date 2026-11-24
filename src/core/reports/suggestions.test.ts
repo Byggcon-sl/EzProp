@@ -9,9 +9,11 @@ vi.mock("server-only", () => ({}));
 import { AccessDeniedError } from "@/core/access";
 import {
   addDeviation,
+  changeSuggestedDeviationTg,
   decideSuggestion,
   removeDeviation,
   ReportValidationError,
+  restoreDeviation,
   saveField,
   setCheckpointDone,
   setTgDirect,
@@ -1085,5 +1087,142 @@ describe("rett-forslag-og-avvik 2d: TG direkte og åpne forslag", () => {
     });
     adjacent = checkpointOf(await startedView(f), CP.adjacent);
     expect(adjacent.warnings).toEqual([]);
+  });
+});
+
+// --- Rett forslag og avvik 2g: TG og sletting (rett-forslag-og-avvik-testplan.md FA-I40, FA-I41) --
+
+/** TG på avvikene (også fjernede) og `tg_direct` som er satt, i rapporten. */
+async function tgSnapshot(f: F) {
+  const deviationRows = await db
+    .select({ id: deviations.id, tg: deviations.tg, deletedAt: deviations.deletedAt })
+    .from(deviations)
+    .where(eq(deviations.reportId, f.reportId))
+    .orderBy(deviations.id);
+  const direct = await db
+    .select({ id: checkpointResults.id, tgDirect: checkpointResults.tgDirect })
+    .from(checkpointResults)
+    .where(eq(checkpointResults.reportId, f.reportId))
+    .orderBy(checkpointResults.id);
+  return { deviations: deviationRows, tgDirect: direct.filter((r) => r.tgDirect !== null) };
+}
+
+function acceptBefore2000(f: F, deviationId: string) {
+  return decide(f, { id: uuidv7(), ruleKey: RULE.before2000, decision: "accepted", deviationId });
+}
+
+describe("rett-forslag-og-avvik 2g: regler setter aldri TG, og ingenting slettes", () => {
+  it("FA-I40 (B4.14) lagring av svar og already_decided endrer verken TG på avviket eller tg_direct; bare den ansattes handling gjør det", async () => {
+    const f = await startedBathroom();
+    await answerMembrane1990(f);
+    const deviationId = uuidv7();
+    expect((await acceptBefore2000(f, deviationId)).status).toBe("saved");
+    let snapshot = await tgSnapshot(f);
+    expect(snapshot.deviations).toEqual([{ id: deviationId, tg: 3, deletedAt: null }]);
+
+    // Svar som gjør at forslaget ikke lenger gjelder, og som utløser en annen regel
+    await answer(f, "wet_room.membrane_year", { number: 2008 }, { number: 1990 });
+    expect(await tgSnapshot(f)).toEqual(snapshot);
+    await answer(f, "wet_room.membrane_year", { number: 1990 }, { number: 2008 });
+    expect(await tgSnapshot(f)).toEqual(snapshot);
+
+    // already_decided: Endre og Avvis etter Godta lagrer ingenting
+    const rows = (await decisionsOf(f)).length;
+    const again = [
+      {
+        decision: "changed" as const,
+        chosenTg: "2" as const,
+        overrideReasonCode: "other" as const,
+        overrideReason: "Oppdiktet grunn",
+      },
+      { decision: "rejected" as const, overrideReasonCode: "documentation_present" as const },
+    ];
+    for (const input of again) {
+      const result = await decide(f, { id: uuidv7(), ruleKey: RULE.before2000, ...input });
+      expect(result.status).toBe("already_decided");
+      expect(await tgSnapshot(f)).toEqual(snapshot);
+    }
+    expect((await decisionsOf(f)).length).toBe(rows);
+
+    // Den ansattes handling: TG-bytte med grunn er det som endrer TG på avviket
+    const changed = await changeSuggestedDeviationTg(f.actor, f.organizationId, f.room, {
+      id: uuidv7(),
+      deviationId,
+      tg: 2,
+      base: 3,
+      overrideReasonCode: "visible_damage",
+    });
+    expect(changed.status).toBe("saved");
+    snapshot = await tgSnapshot(f);
+    expect(snapshot.deviations).toEqual([{ id: deviationId, tg: 2, deletedAt: null }]);
+    await answer(f, "wet_room.membrane_year", { number: 2008 }, { number: 1990 });
+    expect(await tgSnapshot(f)).toEqual(snapshot);
+
+    // TGIU: Godta setter tg_direct; already_decided og nye svar endrer den ikke
+    await answerHole(f, "not_done");
+    expect(
+      (await decide(f, { id: uuidv7(), ruleKey: RULE.notDone, decision: "accepted" })).status,
+    ).toBe("saved");
+    snapshot = await tgSnapshot(f);
+    expect(snapshot.tgDirect.map((r) => r.tgDirect)).toEqual(["IU"]);
+    expect(
+      (
+        await decide(f, {
+          id: uuidv7(),
+          ruleKey: RULE.notDone,
+          decision: "rejected",
+          overrideReasonCode: "documentation_present",
+        })
+      ).status,
+    ).toBe("already_decided");
+    expect(await tgSnapshot(f)).toEqual(snapshot);
+    // Måling under grensen utløser TG0-forslaget; tg_direct står som IU til den ansatte velger
+    await answer(
+      f,
+      "wet_room.hole_drilling",
+      { optionKeys: ["done_no_findings"] },
+      { optionKeys: ["not_done"] },
+    );
+    await answer(f, "wet_room.hole_moisture_unit", { optionKeys: ["weight_percent"] });
+    await answer(f, "wet_room.hole_moisture_reading", { number: 14.9 });
+    expect((await suggestionOf(f, RULE.noMoisture)).state).toBe("triggered");
+    expect(await tgSnapshot(f)).toEqual(snapshot);
+  });
+
+  it("FA-I41 (B4.28) fjernet avvik fra forslag er mykt slettet: raden står med deleted_at, og beslutningen står", async () => {
+    const f = await startedBathroom();
+    await answerMembrane1990(f);
+    const deviationId = uuidv7();
+    expect((await acceptBefore2000(f, deviationId)).status).toBe("saved");
+    const decisionsBefore = await decisionsOf(f);
+
+    await removeDeviation(f.actor, f.organizationId, f.room, deviationId);
+    const [removed] = await db.select().from(deviations).where(eq(deviations.id, deviationId));
+    expect(removed).toBeDefined();
+    expect(removed?.deletedAt).not.toBeNull();
+    expect(removed?.tg).toBe(3);
+    expect(await liveDeviations(f)).toEqual([]);
+    expect(await decisionsOf(f)).toEqual(decisionsBefore);
+
+    // Angre henter den samme raden tilbake
+    expect(
+      (await restoreDeviation(f.actor, f.organizationId, f.room, { deviationId })).status,
+    ).toBe("saved");
+    expect((await liveDeviations(f)).map((d) => d.id)).toEqual([deviationId]);
+  });
+
+  it("FA-I41 (B4.28) ingen tjeneste i src/core/reports kjører delete eller truncate", () => {
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((name) => {
+        const full = path.join(dir, name);
+        if (statSync(full).isDirectory()) return walk(full);
+        return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [full] : [];
+      });
+    const files = walk(path.resolve(process.cwd(), "src/core/reports"));
+    expect(files.length).toBeGreaterThan(0);
+    const offenders = files.filter((file) =>
+      /\.delete\(|\bdelete\s+from\b|\btruncate\b/i.test(readFileSync(file, "utf8")),
+    );
+    expect(offenders).toEqual([]);
   });
 });

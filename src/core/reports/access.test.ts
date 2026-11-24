@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { AccessDeniedError, permissions, type Actor } from "@/core/access";
+import {
+  AccessDeniedError,
+  permissions,
+  requireOrganizationAccess,
+  type Actor,
+} from "@/core/access";
 import {
   addDeviation,
   addMeasure,
@@ -19,9 +24,9 @@ import {
   startReport,
 } from "@/core/reports";
 import { db } from "@/db/client";
-import { deviations, employees, type EmployeeRole } from "@/db/schema";
+import { claims, deviations, employees, type EmployeeRole } from "@/db/schema";
 import { uuidv7 } from "@/shared/lib/uuid";
-import { grantPermission, resetDatabase } from "../../../tests/factories";
+import { createClaim, grantPermission, resetDatabase } from "../../../tests/factories";
 import {
   answerMembrane1990,
   CP,
@@ -326,8 +331,8 @@ describe("rett-forslag-og-avvik 2e: tilgang", () => {
   });
 });
 
-describe("B5.7 ingen nye rettigheter", () => {
-  it("B5.7 listen i src/core/access er uendret, og report.read finnes ikke", () => {
+describe("B5.7 og FA-I36 ingen nye rettigheter", () => {
+  it("B5.7 og FA-I36 listen i src/core/access er uendret, og report.read finnes ikke", () => {
     expect([...permissions]).toEqual([
       "organization.read",
       "organization.manage",
@@ -427,4 +432,94 @@ describe("FA-I35 myk slettet ansatt", () => {
     await expect(changeTgWithReason(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
     expect(await tgOf(p.deviationId)).toBe(3);
   });
+});
+
+// --- FA-I34: reklamasjonssak (testplan 2e, regel 12) ------------------------------------------
+//
+// En reklamasjonssak er en rad i `claims`, knyttet til oppdraget (domenemodellen, ordlisten, A125).
+// Regel 12 (Ståle 27.10.2026): bare leder og admin ser og fører sakene (`claims.read`,
+// `claims.manage`). Rapporten på et oppdrag med en åpen sak følger `report.edit` som før («som i
+// dag», kortet avsnitt Tilgang): leder og admin bytter TG, avgjør forslag og angrer; takstmannen får
+// nei på saken selv, også når innstillingen gir ham rett til å endre rapporten. Handlingene i
+// rapporten rører aldri saken. Oppdiktede data.
+
+async function claimRow(id: string) {
+  const [row] = await db.select().from(claims).where(eq(claims.id, id));
+  if (!row) throw new Error("fant ikke saken");
+  return row;
+}
+
+function rejectAgain(actor: Actor, p: Awaited<ReturnType<typeof prepareSuggested>>) {
+  return decideSuggestion(actor, p.organizationId, p.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "rejected",
+    overrideReasonCode: "visible_damage",
+  });
+}
+
+describe("FA-I34 reklamasjonssak", () => {
+  it.each(["manager", "admin"] as const)(
+    "FA-I34 %s bytter TG med grunn, avgjør og angrer på et oppdrag med åpen reklamasjonssak, og saken står urørt",
+    async (role) => {
+      const p = await prepareSuggested();
+      await setInspectorsEditAll(p.organizationId, false);
+      const claim = await createClaim(p.organizationId, { assignmentId: p.room.assignmentId });
+      const before = await claimRow(claim.id);
+      const { actor } = await createStaff(p.organizationId, [role]);
+
+      await expect(
+        requireOrganizationAccess(actor, p.organizationId, "claims.manage"),
+      ).resolves.toBeDefined();
+      expect((await changeTgWithReason(actor, p)).status).toBe("saved");
+      expect(await tgOf(p.deviationId)).toBe(2);
+      expect((await rejectAgain(actor, p)).status).toBe("already_decided");
+
+      await removeDeviation(actor, p.organizationId, p.room, p.deviationId);
+      expect((await rejectAgain(actor, p)).status).toBe("saved");
+      expect(
+        (await restoreDeviation(actor, p.organizationId, p.room, { deviationId: p.deviationId }))
+          .status,
+      ).toBe("newer_decision");
+
+      expect(await claimRow(claim.id)).toEqual(before);
+    },
+  );
+
+  it.each([true, false])(
+    "FA-I34 takstmann (inspectors_edit_all %s) får nei på reklamasjonssaken, og TG-bytte i rapporten gir ham ikke saken",
+    async (editAll) => {
+      const p = await prepareSuggested();
+      await setInspectorsEditAll(p.organizationId, editAll);
+      const claim = await createClaim(p.organizationId, { assignmentId: p.room.assignmentId });
+      const before = await claimRow(claim.id);
+      const { actor, employee } = await createStaff(p.organizationId, ["inspector"]);
+      // Enkeltrettighetene kan ikke gis (A21, A126); raden i databasen gir ingen rett
+      await grantPermission(employee, "claims.manage");
+      await grantPermission(employee, "claims.read");
+
+      for (const permission of ["claims.read", "claims.manage"] as const) {
+        await expect(
+          requireOrganizationAccess(actor, p.organizationId, permission),
+        ).rejects.toBeInstanceOf(AccessDeniedError);
+      }
+
+      if (editAll) {
+        // Rapporten følger report.edit som før (regel 12: takstmenn endrer alt unntatt sakene)
+        expect((await changeTgWithReason(actor, p)).status).toBe("saved");
+        expect(await tgOf(p.deviationId)).toBe(2);
+      } else {
+        await expect(changeTgWithReason(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+        await expect(rejectAgain(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+        await expect(
+          restoreDeviation(actor, p.organizationId, p.room, { deviationId: p.deviationId }),
+        ).rejects.toBeInstanceOf(AccessDeniedError);
+        expect(await tgOf(p.deviationId)).toBe(3);
+      }
+      await expect(
+        requireOrganizationAccess(actor, p.organizationId, "claims.manage"),
+      ).rejects.toBeInstanceOf(AccessDeniedError);
+      expect(await claimRow(claim.id)).toEqual(before);
+    },
+  );
 });
