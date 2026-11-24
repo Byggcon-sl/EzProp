@@ -1497,9 +1497,11 @@ describe("testdata del 2: akseptkriteriene (ett datasett)", () => {
     const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
       version: string;
     };
-    const [major, minor, patch] = pkg.version.split(".").map(Number);
-    expect([major, minor].join("."), "samme minor som main (0.18)").toBe("0.18");
-    expect(patch, "patch over main (0.18.1)").toBeGreaterThan(1);
+    const [major = 0, minor = 0, patch = 0] = pkg.version.split(".").map(Number);
+    // Versjonen da oppgaven ble startet var 0.18.1; main går videre, så bare «høyere enn» testes.
+    expect(major * 1_000_000 + minor * 1_000 + patch, "versjonen er over 0.18.1").toBeGreaterThan(
+      18_001,
+    );
     const doc = readFileSync(join(process.cwd(), "docs/09-apne-sporsmal.md"), "utf8");
     for (let n = 501; n <= 514; n += 1) {
       expect(doc, `A${n} i tabellen`).toMatch(new RegExp(`^\\| A${n} \\|`, "m"));
