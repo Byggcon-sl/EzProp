@@ -39,6 +39,6 @@ Støtter hovedmålene: **færre reklamasjoner** (rapporten går ikke ut med mang
 
 ## Følger
 
-- `tests/tenant-tables.ts` har begge tabellene med radbyggere (`createReportReleaseRow`, `createPublishCheckResultRow`). Testfilen `src/core/reports/publish.test.ts` skrives sammen med tjenesten; til da er `tests/tenant-isolation-all-tables.test.ts` rød med vilje (samme mønster som ADR 0013).
+- `tests/tenant-tables.ts` har begge tabellene med radbyggere (`createReportReleaseRow`, `createPublishCheckResultRow`). Tenant-testene står i `src/core/reports/publish.test.ts`.
 - Migreringen fikk nummer `0038`, fordi `0037_ki-i-veien` ble merget først (hovedløkken 24.11.2026).
 - 2a-3 legger til nye koder (KI-sjekk, sidemannskontroll, `not_applicable`) med en migrering som utvider CHECK-listene. Kodene som finnes, endres ikke.

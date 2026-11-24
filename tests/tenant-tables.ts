@@ -72,8 +72,6 @@ const REPORTS_TEST_FILE = "src/core/reports/reports.test.ts";
 /**
  * Utgivelsene og sjekkradene (migrering `0038_publisering-badet`, ADR 0015) har tenant-testene sine
  * i testfilen til publiseringstjenesten (docs/funksjoner/fase2a-publisering-badet.md, I8 og I9).
- * Filen skrives sammen med tjenesten; til den finnes, er
- * `tests/tenant-isolation-all-tables.test.ts` rød med vilje.
  */
 const PUBLISH_TEST_FILE = "src/core/reports/publish.test.ts";
 
