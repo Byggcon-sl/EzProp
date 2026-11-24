@@ -45,7 +45,7 @@ const LANDSCAPE = { width: 1194, height: 834 } as const;
 const MEMBRANE = "wet_room.membrane_drain";
 const ADJACENT = "wet_room.adjacent";
 const FIXTURES = "wet_room.fixtures";
-const VENTILATION = "wet_room.ventilation";
+const WALLS_CEILING = "wet_room.walls_ceiling";
 const ADMIN_NOTE = "Lagt inn av admin i e2e (oppdiktet)";
 
 /** Etikettene på kostnadsintervallene (`COST_BAND_LABELS`), med vilkårlig mellomrom i tallene. */
@@ -167,9 +167,10 @@ test("5.1 visningsbadet (takstmann): TG3 med kostnad, TGIU med opplysningene, HM
   await expect(hms).toBeVisible();
   await expect(hms.getByText(/^TG[0-3]/)).toHaveCount(0);
 
-  await openBath(page, showcase, VENTILATION);
+  // TG2 med endret tekst ligger på vegger og himling i visningsbadet (DEV_WALL_JOINTS_EDITED)
+  await openBath(page, showcase, WALLS_CEILING);
   await expect(
-    navLink(page, "Ventilasjon").getByRole("img", { name: "TG2 Vesentlige avvik" }),
+    navLink(page, "Overflater vegger").getByRole("img", { name: "TG2 Vesentlige avvik" }),
   ).toBeVisible();
   expect(showcase.editedTg2Text, "TG2 med endret tekst").not.toBeNull();
   await expect.poll(() => hasTextboxValue(page, showcase.editedTg2Text!)).toBe(true);
@@ -258,6 +259,7 @@ test("5.7 leder og admin åpner visningsbadet; admin lagrer et svar med innstill
   const before = (await checkpointState(showcase, punkt!))?.description ?? null;
   const previous = await setByggconSetting("access.inspectors_edit_all", false);
   try {
+    await page.context().clearCookies(); // ny innlogging som admin
     await logIn(page);
     await openBath(page, showcase, punkt);
     const description = page.getByLabel("Beskrivelse av punktet (valgfri)");
@@ -355,7 +357,7 @@ test("5.10 axe uten feil på visningsbadet (PC og iPad stående)", async ({ page
 
 test("5.11 ingen persondata i avvikskortene (ingen @ eller telefonnummer)", async ({ page }) => {
   await logInAsInspector(page);
-  for (const punkt of [MEMBRANE, FIXTURES, VENTILATION]) {
+  for (const punkt of [MEMBRANE, FIXTURES, WALLS_CEILING]) {
     await openBath(page, showcase, punkt);
     const cards = deviationCards(page);
     expect(await cards.count(), `avvikskort på ${punkt}`).toBeGreaterThan(0);
