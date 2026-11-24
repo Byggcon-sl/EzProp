@@ -231,10 +231,16 @@ export type PdfProfile = {
   colors: {
     text: PdfColor;
     muted: PdfColor;
+    /** Bare streker, aldri tekst. */
     accent: PdfColor;
+    /** Kanter og skillestreker (line-strong; `line` er for svak på papir). */
     rule: PdfColor;
-    /** TG vises alltid med både tekst og farge. */
-    tg: Record<PdfTg, { background: PdfColor; text: PdfColor }>;
+    /** Lenkene «Rett i skjemaet ›» i utkast. */
+    link: PdfColor;
+    /** Flaten bak faktaboksen på forsiden, TGIU og HMS-merket. */
+    panel: PdfColor;
+    /** TG vises alltid med både tekst og farge. `stroke` er venstrekanten på avvikskortet. */
+    tg: Record<PdfTg, { background: PdfColor; text: PdfColor; stroke: PdfColor }>;
     marking: PdfColor;
     watermark: PdfColor;
   };
