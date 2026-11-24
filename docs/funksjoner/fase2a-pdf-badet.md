@@ -2,9 +2,9 @@
 
 - **Fase:** 2a-2 Hele veien først, punkt 4 («ADR: valg av PDF-motor, og PDF-en av badet i Byggcons profil, i ferdig kvalitet»)
 - **Modul:** kjerne. Ny `src/core/pdf` er et rent blad (motoren bak eget grensesnitt, profilene, oppsettet). Rapportdataene lages i `src/core/reports` i egne filer (`pdf-data.ts`, `pdf-data-build.ts`, `tg-explanation.ts`). Knapp og rute under `src/app/(ansatt)/oppdrag/[id]/`.
-- **Branch:** `pdf-motor-badet` (bygger på `main`, 50fad3e)
-- **Status:** godkjent for bygging etter forhåndsvurdering runde 1 (prosjektleder 18.11.2026)
-- **Dato:** 18.11.2026
+- **Branch:** `pdf-motor-badet` (bygger på `main`; main flettet inn 24.11.2026 med publisering av badet, utgivelser og ADR 0015)
+- **Status:** godkjent for bygging etter forhåndsvurdering runde 1 (prosjektleder 18.11.2026). Overtatt og bekreftet 24.11.2026: beslutningene er A530–A539, spørsmål 92. Versjon: én patch over main.
+- **Dato:** 18.11.2026 (oppdatert 24.11.2026)
 - **Støtter hovedmål:**
   - **Færre reklamasjoner:** PDF-en er det kunden og megleren leser. Den viser hvert avvik med TG, årsak, konsekvens, tiltak og kostnad på samme måte hver gang, TGIU med alle opplysningene, og forklaringen av TG. Ingen interne koder, ingen tomme sider, ingen overskrift alene nederst på en side. I utkastet ser takstmannen det som mangler, før rapporten går ut.
   - **De ansatte:** ett trykk på «Lag PDF (utkast)» gir rapporten slik den blir (IVIT: tre trykk og leting i nedlastingene). Fra utkastet kommer takstmannen med ett klikk tilbake til feltet som skal rettes. Utkast fyller ikke opp arkivet.
