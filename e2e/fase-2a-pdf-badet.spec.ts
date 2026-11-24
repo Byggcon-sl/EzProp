@@ -285,11 +285,18 @@ async function logInAsInspector(page: Page) {
   await logIn(page, SAMPLE_INSPECTOR.email);
 }
 
-/** Bytene fra svaret, når svaret er ferdig. */
-async function pdfBytes(response: Response): Promise<Uint8Array> {
+/**
+ * Bytene fra PDF-ruten. Svaret i fanen gir status og hoder, men Chromiums innebygde PDF-viser
+ * bytter ut innholdet i fanen (`response.body()` gir viserens HTML). Bytene hentes derfor fra
+ * samme adresse med samme økt (11.9.1).
+ */
+async function pdfBytes(page: Page, response: Response): Promise<Uint8Array> {
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"]).toContain("application/pdf");
-  return new Uint8Array(await response.body());
+  const again = await page.request.get(response.url());
+  expect(again.status()).toBe(200);
+  expect(again.headers()["content-type"]).toContain("application/pdf");
+  return new Uint8Array(await again.body());
 }
 
 /** Publiserer badet fra publiser-siden (ingen sperrer) og står på kvitteringen. */
@@ -359,10 +366,12 @@ test("7.3, 7.10 ett trykk: PDF i ny fane, under 5 sekunder, badet står igjen", 
   await draftLink(page).click();
   await popup;
   const answer = await response;
-  const bytes = await pdfBytes(answer);
+  await answer.finished();
+  // Tiden måles på svaret i fanen, før bytene hentes på nytt
   expect(Date.now() - started, "utkastet svarer på under 5 sekunder").toBeLessThan(
     PDF_TIME_LIMIT_MS,
   );
+  const bytes = await pdfBytes(page, answer);
   expect(answer.headers()["content-disposition"]).toMatch(/inline; filename="utkast-[0-9-]+\.pdf"/);
   expect(inspectPdf(bytes).text).toContain("UTKAST");
   await expect(page).toHaveURL(new RegExp(`${roomUrl(bath)}`));
@@ -410,7 +419,7 @@ test("7.5 skriv i et felt og trykk straks: teksten står i PDF-en", async ({ pag
   await popup;
   const answer = await response;
   await answer.finished();
-  const bytes = await pdfBytes(answer);
+  const bytes = await pdfBytes(page, answer);
   expect(inspectPdf(bytes).text.replace(/\s+/g, " ")).toContain(marker);
 });
 
@@ -434,7 +443,7 @@ test("10.2.5 «Åpne PDF» etter publisering og på utgivelsen: uten UTKAST, fil
   await popup;
   let answer = await response;
   await answer.finished();
-  let bytes = await pdfBytes(answer);
+  let bytes = await pdfBytes(page, answer);
   expect(answer.headers()["content-disposition"]).toMatch(
     /filename="tilstandsrapport-[0-9-]+-v1\.pdf"/,
   );
@@ -454,7 +463,7 @@ test("10.2.5 «Åpne PDF» etter publisering og på utgivelsen: uten UTKAST, fil
   await popup;
   answer = await response;
   await answer.finished();
-  bytes = await pdfBytes(answer);
+  bytes = await pdfBytes(page, answer);
   expect(answer.headers()["content-disposition"]).toMatch(/-v1\.pdf"/);
   expect(inspectPdf(bytes).text).not.toContain("UTKAST");
 });

@@ -5,7 +5,7 @@ import postgres from "postgres";
 import { SAMPLE_INSPECTOR } from "../src/db/seed/sample-assignments.data";
 import { inspectPdf } from "../tests/pdf-inspect";
 import { assertLocalOrTestDatabase } from "./database-guard";
-import { e2eDatabaseUrl, fakeOrgNumber, indicator, logIn, uniqueSuffix } from "./helpers";
+import { e2eDatabaseUrl, fakeOrgNumber, logIn, uniqueSuffix } from "./helpers";
 
 /*
  * PDF-utkast av badet og «Åpne PDF» på utgivelsene (fase 2a-2). Testplan:
@@ -331,12 +331,16 @@ test("7.4 «Lager PDF …» vises og knappen er sperret mens PDF-en lages", asyn
     await held;
     await route.continue();
   });
-  const [popup] = await Promise.all([context.waitForEvent("page"), draftButton(page).click()]);
+  // Den nye fanen meldes først når ruten svarer, så den ventes på etter at ruten slippes
+  const opened = context.waitForEvent("page");
+  await draftButton(page).click();
   const status = page.getByRole("status").filter({ hasText: "Lager PDF" });
   await expect(
     status.or(page.locator("[aria-live]").filter({ hasText: "Lager PDF" })).first(),
   ).toBeVisible();
+  await expectDisabled(page.getByRole("button", { name: /^Lager PDF …/ }));
   release();
+  const popup = await opened;
   await popup.waitForURL(/\/pdf$/, { waitUntil: "commit" }).catch(() => undefined);
   await expect(page.getByText("Lager PDF")).toHaveCount(0, { timeout: 15_000 });
   await context.unroute(/\/oppdrag\/[^/]+\/pdf$/);
@@ -373,7 +377,8 @@ test("7.5 skriv og trykk straks: «Lagrer endringer …», og PDF-en har det som
   const mark = `Oppdiktet nyskrevet ${b.suffix}`;
   await page.getByLabel("Beskrivelse av punktet (valgfri)").fill(mark);
   const [popup] = await Promise.all([context.waitForEvent("page"), draftButton(page).click()]);
-  await expect(page.getByText("Lagrer endringer …")).toBeVisible();
+  // Knappen viser teksten; samme tekst står også i statusen for skjermleser
+  await expectDisabled(page.getByRole("button", { name: "Lagrer endringer …" }));
   await popup.waitForURL(/\/pdf$/, { timeout: 15_000 });
   const { text } = await pdfFrom(page, draftPdfUrl(b));
   expect(text).toContain(mark);
@@ -392,7 +397,8 @@ test("7.6 og 10.7.7 uten nett er knappen sperret med fast tekst, og synkstatusen
   try {
     await expectDisabled(draftButton(page));
     await expect(page.getByText(OFFLINE_TEXT).first()).toBeVisible();
-    await expect(indicator(page)).toBeVisible();
+    // Synkstatusen på badet (SaveState), ikke den i prøveskjemaet
+    await expect(page.locator("[data-save-state=offline]").first()).toBeVisible();
   } finally {
     await context.setOffline(false);
   }
