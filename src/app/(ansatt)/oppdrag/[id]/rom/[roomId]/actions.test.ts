@@ -293,6 +293,19 @@ describe("changeSuggestedDeviationTgAction (T-0113, A490, FA-I37)", () => {
     expect(mocks.logError).not.toHaveBeenCalled();
   });
 
+  it("FA-L29 grunnen mangler: svaret har koden `override_reason`, så skjermen ikke prøver igjen", async () => {
+    const error = Object.assign(
+      new FakeReportValidationError("Velg en grunn for å endre TG fra forslaget."),
+      { code: "override_reason" },
+    );
+    mocks.core.changeSuggestedDeviationTg.mockRejectedValue(error);
+    expect(await actions.changeSuggestedDeviationTgAction(ref, input)).toEqual({
+      status: "error",
+      message: "Velg en grunn for å endre TG fra forslaget.",
+      code: "override_reason",
+    });
+  });
+
   it("ukjent feil logges med id-er og handlingen, aldri med begrunnelsesteksten", async () => {
     mocks.core.changeSuggestedDeviationTg.mockRejectedValue(new Error(`feil: ${SECRET_TEXT}`));
     expect(await actions.changeSuggestedDeviationTgAction(ref, input)).toEqual({

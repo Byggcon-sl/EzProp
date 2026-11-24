@@ -9,12 +9,15 @@ import type {
 } from "@/core/templates";
 import {
   fillMergeFields,
+  sortReviewWarnings,
   warningFix,
   type CheckpointWarning,
   type DecisionState,
   type OutcomeTg,
   type ReasonLabelLookup,
+  type SuggestionTg,
   type WarningFixAction,
+  type WarningTextContext,
 } from "@/core/reports/logic";
 import type {
   AnswerValue,
@@ -244,17 +247,89 @@ export function decisionStates(suggestions: readonly SuggestionView[]): Decision
   );
 }
 
-export type WarningWithFix = { warning: CheckpointWarning; fix: WarningFixAction | null };
+/**
+ * Forslagets TG slik «Å se over» og meldingene viser den: 2, 3, `choose`, `0` eller `IU`. `null`
+ * for HMS-utfall og når utfallet ikke finnes i malen. Utfallets TG står i malen, ikke i regelsvaret.
+ */
+export function suggestionTgOf(
+  suggestion: Pick<SuggestionView, "suggestion">,
+  doc: Pick<RoomDocumentIndex, "outcome">,
+): SuggestionTg | null {
+  const s = suggestion.suggestion;
+  if (!s) return null;
+  if (s.kind === "tgiu") return "IU";
+  if (s.kind === "tg0") return "0";
+  const outcome = doc.outcome(s.checkpoint_key, s.question_key, s.outcome_key);
+  return outcome ? outcomeTgOf(outcome.kind) : null;
+}
 
+/** Forslaget står åpent med Godta, Endre og Avvis (utløst, ikke foreldet, uten gjeldende beslutning). */
+export function isOpenSuggestion(
+  suggestions: readonly SuggestionView[],
+  ruleKey: string,
+  checkpointKey: string | undefined,
+): boolean {
+  return suggestions.some(
+    (s) =>
+      s.ruleKey === ruleKey &&
+      (checkpointKey === undefined || s.checkpointKey === checkpointKey) &&
+      s.state === "triggered" &&
+      !s.stale &&
+      s.latestDecision === null,
+  );
+}
+
+export type WarningWithFix = {
+  warning: CheckpointWarning;
+  fix: WarningFixAction | null;
+  /** Det `warningText` trenger: forslagets TG eller valgt TG i beslutningen. */
+  context: WarningTextContext;
+  /**
+   * Det åpne forslaget advarselen gjelder (`open_suggestion_on_done_checkpoint`), slik at «Å se
+   * over» kan vise Godta, Endre og Avvis. Ellers `null`.
+   */
+  openSuggestion: SuggestionView | null;
+};
+
+/**
+ * «Å se over» for punktet: advarslene med «Rett nå», teksten sin og det åpne forslaget. Åpne
+ * forslag på ferdig punkt står øverst, TG3 først (forbedreren, FA-L23).
+ */
 export function warningsWithFix(
   checkpoint: CheckpointView,
   suggestions: readonly SuggestionView[],
+  doc: Pick<RoomDocumentIndex, "outcome">,
 ): WarningWithFix[] {
   const decisions = decisionStates(suggestions);
-  return checkpoint.warnings.map((warning) => ({
-    warning,
-    fix: warningFix(warning, { decisions }),
-  }));
+  const byRule = new Map(
+    suggestions
+      .filter((s) => s.checkpointKey === checkpoint.checkpointKey)
+      .map((s) => [s.ruleKey, s] as const),
+  );
+  const suggestionOf = (warning: CheckpointWarning) =>
+    warning.ruleKey === null ? undefined : byRule.get(warning.ruleKey);
+  const tgOf = (warning: CheckpointWarning) => {
+    const suggestion = suggestionOf(warning);
+    return suggestion ? suggestionTgOf(suggestion, doc) : null;
+  };
+  return sortReviewWarnings(checkpoint.warnings, tgOf).map((warning) => {
+    const suggestion = suggestionOf(warning);
+    const context: WarningTextContext = {};
+    let openSuggestion: SuggestionView | null = null;
+    if (warning.code === "open_suggestion_on_done_checkpoint" && suggestion) {
+      context.suggestionTg = suggestionTgOf(suggestion, doc);
+      if (isOpenSuggestion([suggestion], suggestion.ruleKey, undefined))
+        openSuggestion = suggestion;
+    }
+    if (
+      warning.code === "suggestion_no_longer_applies" &&
+      warning.deviationId === null &&
+      suggestion?.latestDecision
+    ) {
+      context.chosenTg = suggestion.latestDecision.chosenTg;
+    }
+    return { warning, fix: warningFix(warning, { decisions }), context, openSuggestion };
+  });
 }
 
 /**

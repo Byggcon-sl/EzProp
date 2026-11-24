@@ -1,4 +1,9 @@
-import type { ReportFieldChange, RoomRefresh, SaveFieldResult } from "@/core/reports/types";
+import type {
+  DecideSuggestionResult,
+  ReportFieldChange,
+  RoomRefresh,
+  SaveFieldResult,
+} from "@/core/reports/types";
 import { isActionError, ROOM_ACTION_MESSAGES, type ActionError } from "./room-messages";
 
 /*
@@ -45,7 +50,13 @@ export type FieldEntry = {
   rowId: string | null;
 };
 
-export type SendResult = SaveFieldResult | ActionError;
+/**
+ * Forslaget som feltet hører til, er alt avgjort i et annet vindu (A493). Ingenting er lagret, og
+ * ny runde hjelper ikke: køen regner svaret som ferdig (FA-L28).
+ */
+export type AlreadyDecidedResult = Extract<DecideSuggestionResult, { status: "already_decided" }>;
+
+export type SendResult = SaveFieldResult | AlreadyDecidedResult | ActionError;
 
 type Timer = ReturnType<typeof setTimeout>;
 
@@ -367,7 +378,19 @@ export class FieldSaveStore {
       }
       if (this.fields.get(key) !== field) return;
       if (isActionError(result)) {
+        if (result.code === "override_reason") {
+          // TG på avvik fra et forslag krever grunn og går gjennom avvikskortet (A490). Samme
+          // verdi på nytt hjelper aldri: verdien settes tilbake til det som er lagret (FA-L29).
+          this.settleUnchanged(field, value);
+          return;
+        }
         this.update(field, { status: "failed", error: result.message });
+        return;
+      }
+      if (result.status === "already_decided") {
+        // Avgjort i et annet vindu: serverens visning gjelder, ingen ny runde (FA-L28).
+        this.settleUnchanged(field, value);
+        this.options.onRefresh(result.refresh);
         return;
       }
       if (result.status === "conflict") {
@@ -392,6 +415,19 @@ export class FieldSaveStore {
       field.inFlight = null;
     });
     return field.inFlight.then(() => this.saveAgainIfPending(key));
+  }
+
+  /**
+   * Svaret sier at verdien ikke ble lagret, og at den ikke skal prøves igjen. Feltet går tilbake
+   * til lagret verdi. Har takstmannen skrevet noe nytt mens svaret kom, lagres det som vanlig.
+   */
+  private settleUnchanged(field: Internal, sent: unknown): void {
+    const changedMeanwhile = !sameValue(field.entry.value, sent);
+    this.update(field, {
+      value: changedMeanwhile ? field.entry.value : field.entry.base,
+      status: changedMeanwhile ? "pending" : field.entry.savedAt === null ? "idle" : "saved",
+      error: null,
+    });
   }
 
   private saveAgainIfPending(key: string): Promise<void> {

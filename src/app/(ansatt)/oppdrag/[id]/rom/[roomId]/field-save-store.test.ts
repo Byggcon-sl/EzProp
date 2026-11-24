@@ -292,3 +292,73 @@ describe("FieldSaveStore", () => {
     expect(store.get("k")?.status).toBe("offline");
   });
 });
+
+describe("FieldSaveStore og forslag som henger sammen med avvik", () => {
+  const tgBuild: ChangeBuilder = (value, base) => ({
+    table: "deviations",
+    id: DEVIATION,
+    field: "tg",
+    value: value as 2 | 3 | null,
+    base: base as 2 | 3 | null,
+  });
+
+  it("FA-L28 `already_decided` regnes som ferdig: ingen ny runde, ingen «Ikke lagret», ny visning tas inn", async () => {
+    const { store, sent, pending, onRefresh, settle } = setup();
+    store.ensure("k", 3, tgBuild);
+    store.edit("k", 2, 0);
+    expect(sent).toHaveLength(1);
+    pending[0]!.resolve({
+      status: "already_decided",
+      decision: "accepted",
+      chosenTg: "3",
+      decidedAt: "2026-11-23T09:42:00Z",
+      refresh: REFRESH,
+    });
+    await settle();
+    expect(store.get("k")).toMatchObject({ value: 3, base: 3, status: "idle", error: null });
+    expect(onRefresh).toHaveBeenCalledWith(REFRESH);
+    expect(store.getSummary()).toMatchObject({ status: "saved", failedCount: 0 });
+    expect(store.hasUnsaved()).toBe(false);
+    await store.retryAll();
+    expect(await store.flush()).toEqual({ ok: true });
+    expect(sent).toHaveLength(1);
+  });
+
+  it("FA-L29 `override_reason` for TG gir ingen løkke med «Ikke lagret – prøv igjen»; TG settes tilbake", async () => {
+    const { store, sent, pending, settle } = setup();
+    store.ensure("k", 3, tgBuild);
+    store.edit("k", 2, 0);
+    pending[0]!.resolve({
+      status: "error",
+      message: "Velg en grunn for å endre TG fra forslaget.",
+      code: "override_reason",
+    });
+    await settle();
+    expect(store.get("k")).toMatchObject({ value: 3, base: 3, status: "idle", error: null });
+    expect(store.getSummary()).toMatchObject({ status: "saved", failedCount: 0 });
+    await store.retryAll();
+    expect(await store.flush()).toEqual({ ok: true });
+    expect(sent).toHaveLength(1);
+  });
+
+  it("FA-L29 etter en lagret verdi går feltet tilbake til den og står som lagret", async () => {
+    const { store, pending, settle } = setup();
+    store.ensure("k", 3, tgBuild);
+    store.edit("k", 2, 0);
+    pending[0]!.resolve(saved());
+    await settle();
+    store.edit("k", 3, 0);
+    pending[1]!.resolve({ status: "error", message: "Velg en grunn.", code: "override_reason" });
+    await settle();
+    expect(store.get("k")).toMatchObject({ value: 2, base: 2, status: "saved" });
+  });
+
+  it("FA-L29 annen feil enn `override_reason` gir fortsatt «Ikke lagret – prøv igjen»", async () => {
+    const { store, pending, settle } = setup();
+    store.ensure("k", 3, tgBuild);
+    store.edit("k", 2, 0);
+    pending[0]!.resolve({ status: "error", message: "Verdien passer ikke feltet." });
+    await settle();
+    expect(store.get("k")).toMatchObject({ value: 2, status: "failed" });
+  });
+});

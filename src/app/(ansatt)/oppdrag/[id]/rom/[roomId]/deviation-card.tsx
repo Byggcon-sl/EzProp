@@ -35,7 +35,7 @@ import {
 import { CostField } from "./cost-field";
 import { FieldStatus } from "./field-status";
 import { useField, useRoom } from "./room-context";
-import { isActionError, ROOM_TEXTS } from "./room-messages";
+import { isActionError, ROOM_TEXTS, SUGGESTION_MESSAGES } from "./room-messages";
 import {
   addMeasureButtonId,
   deviationCauseChoiceId,
@@ -84,7 +84,7 @@ export const DEVIATION_TEXTS = {
   hms: "HMS",
   measureSwapped: (tg: number) => `Tiltaket er byttet til teksten for TG${tg}.`,
   reasonLegend: "Hvorfor endrer du TG fra forslaget?",
-  reasonRequired: "Velg en grunn for å endre TG fra forslaget.",
+  reasonRequired: SUGGESTION_MESSAGES.reasonMissing,
   reasonText: "Skriv grunnen",
   reasonTextOptional: "Forklaring (valgfri)",
   addExplanation: "Legg til forklaring",

@@ -30,6 +30,7 @@ import {
   DONE_BUTTON_ID,
   indexDocument,
   initialCheckpointKey,
+  isOpenSuggestion,
   neighbours,
   nextUndoneCheckpoint,
   SEARCH_INPUT_ID,
@@ -227,15 +228,28 @@ export function RoomView({
       const checkpoint = checkpoints.find((c) => c.deviations.some((d) => d.id === deviationId));
       const sorted = [...(checkpoint?.deviations ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
       const number = sorted.findIndex((d) => d.id === deviationId) + 1;
+      // Avvik fra et forslag: forslaget står åpent igjen med en gang (`refresh`), og linjen sier
+      // det i stedet for «Avvik n er fjernet.» (T-0117).
+      const link = sorted.find((d) => d.id === deviationId)?.suggestion ?? null;
       const result = await run(() => removeDeviationAction(room, deviationId));
       if (isActionError(result)) return result.message;
+      const reopened =
+        link !== null &&
+        result.status === "saved" &&
+        isOpenSuggestion(result.refresh.suggestions, link.ruleKey, checkpoint?.checkpointKey);
       const undoId = `deviation-${deviationId}`;
       store.drop(deviationPrefix(deviationId));
       // Punktet er forlatt: Angre gjelder bare til punktet forlates.
       if (staleRun.current) return null;
       setUndoLines((lines) => [
         ...lines.filter((l) => l.id !== undoId),
-        { kind: "deviation", id: undoId, deviationId, number: Math.max(1, number) },
+        {
+          kind: "deviation",
+          id: undoId,
+          deviationId,
+          number: Math.max(1, number),
+          suggestion: link && reopened ? { ruleKey: link.ruleKey, tg: link.suggestionTg } : null,
+        },
       ]);
       focus(undoButtonId(undoId));
       return null;
