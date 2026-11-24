@@ -5,7 +5,7 @@
 - **Branch:** `skriv-det-du-ser` (bygger på `main`, etter PR #232 «KI i veien» og PR #239)
 - **Status:** klar til bygging etter forhåndsvurdering runde 1 (prosjektlederen 24.11.2026)
 - **Dato:** 24.11.2026
-- **Versjon:** 0.19.4 → 0.20.0
+- **Versjon:** 0.19.7 → 0.19.8 (én patch over main)
 - **Støtter hovedmål:**
   - **KI i bunnen (hovedsaken):** takstmannen beskriver det han ser med egne ord, og KI finner de malutfallene som passer. KI forbereder valget, takstmannen velger. Samme grunnmur som «KI i veien»: vask, forslag, beslutning og logg.
   - **De ansatte:** ingen leting i punktlisten eller gjetting på søkeord. Ett notat inn, tre treff ut, ett trykk lager avviket med Byggcons standardtekst. Uten nett får han nesten samme hjelp fra det lokale likhetssøket.
