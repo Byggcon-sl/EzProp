@@ -25,7 +25,11 @@ import {
   withSession,
 } from "../../../tests/sessions";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
-import { listEmployeeSessions, revokeAllEmployeeSessions } from "./sessions-list";
+import {
+  listEmployeeSessions,
+  revokeAllEmployeeSessions,
+  revokeAllEmployeeSessionsIn,
+} from "./sessions-list";
 
 /*
  * Admin-delen av «Mine innlogginger» (docs/funksjoner/fase2a-mine-innlogginger.md Omfang 1, 6 og
@@ -530,19 +534,28 @@ describe("5.5 revisjonsloggen", () => {
     const { orgA, ad, te, ts1, ts2 } = await setup();
     await expect(
       db.transaction(async (tx) => {
-        const result = await revokeAllEmployeeSessions(
-          ad,
-          orgA.id,
-          te.id,
-          { reason: "deactivated" },
-          tx,
-        );
+        const grant = await requireOrganizationAccess(ad, orgA.id, "organization.manage");
+        const result = await revokeAllEmployeeSessionsIn(tx, ad, grant, te.id, {
+          reason: "deactivated",
+        });
         expect(result).toEqual({ ok: true, count: 2 });
         throw new Error("Oppdiktet feil etter utloggingen");
       }),
     ).rejects.toThrow("Oppdiktet feil etter utloggingen");
     expect(await sessionIdsOf(te.userId!)).toEqual([ts1.id, ts2.id].sort());
     expect(await sessionAudit(orgA.id)).toEqual([]);
+  });
+
+  it("3. i transaksjon utenfra kreves organization.manage i tilgangen som sendes inn", async () => {
+    const { orgA, ad, te, ts1, ts2 } = await setup();
+    const grant = await requireOrganizationAccess(ad, orgA.id, "organization.manage");
+    const weaker = { ...grant, roles: ["inspector"], permissions: [] } as unknown as typeof grant;
+    await expect(
+      db.transaction((tx) =>
+        revokeAllEmployeeSessionsIn(tx, ad, weaker, te.id, { reason: "deactivated" }),
+      ),
+    ).rejects.toBeInstanceOf(AccessDeniedError);
+    expect(await sessionIdsOf(te.userId!)).toEqual([ts1.id, ts2.id].sort());
   });
 
   it("4. raden har verken IP, user-agent, token, økt-id eller e-post", async () => {
