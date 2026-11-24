@@ -36,3 +36,4 @@ Avgjøres sammen med A178 før 2a-2: enten byttes merkene tilbake når forslaget
 
 ## Logg
 - 2026-11-12: funnet
+- 2026-11-24: fortsatt åpent på badet (main 01fc9e4c). Fuktmålingene «12 14 16 18» blir `[telefon]` i det KI får. Skjermen får dem tilbake, men KI mister målingene og kan ikke vaske teksten riktig (test-ki).

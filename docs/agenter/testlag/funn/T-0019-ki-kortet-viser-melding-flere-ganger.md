@@ -34,3 +34,4 @@ Ikke etterprøvd (lite).
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-24: prøvesiden `/prove/ki` er fjernet (A487). Stegene gjelder nå «Språkvask avviket» på badsiden. Fortsatt åpent (main 01fc9e4c): uten nett står «Trenger nett. Teksten din er lagret.» flere ganger, og meldingen blir stående når nettet er tilbake (`polish-deviation.tsx`, `report-summary-section.tsx`). Meldt av test-takstmann.

@@ -35,3 +35,4 @@ Bekreftet av kontrolløren, senket fra middels til lite.
 
 ## Logg
 - 2026-11-18: funnet
+- 2026-11-24: `docs/plan/forbedrerens-tillegg.md` linje 11 og 13–16 sier «PR fylles inn», men PR-en er #232 (main 01fc9e4c). Meldt av dokumentvakten.

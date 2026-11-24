@@ -34,3 +34,4 @@ Ikke etterprøvd (lite).
 
 ## Logg
 - 2026-11-18: funnet
+- 2026-11-24: `docs/05-domenemodell.md` linje 1754 bruker fortsatt `answer` (main 01fc9e4c).
