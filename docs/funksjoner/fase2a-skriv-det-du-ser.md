@@ -176,6 +176,8 @@ Test-leder godkjenner ikke sluttleveransen uten tester for tilgang per rolle og 
 - **A562:** `text_source` går tilbake til `template` bare når avvik, årsak og konsekvens alle er lik malens tekster (presiserer A557). Lett å endre.
 - **A563:** Utdatert søk rulles tilbake før svaret `suggestion_outdated`; samme avviks-id på nytt krever samme utfall; avvisning av et godtatt søk svarer `already_decided`. Lett å endre.
 
+**Rettelser i testplanen etter test-leder 24.11.2026 (prosjektlederen):** versjon 0.19.8 (ikke 0.20.0); S1.21 og S4.18 tester A562 med årsak og konsekvens; S4.12, S4.8 og S4.14 tester A563 (tilbakerulling, annet utfall på samme avviks-id, `already_decided`); noten om tilgangskriteriet sier at det er rettet. **S5.11 strykes:** sjekken for «Registrert fra før» gjøres bare i nettleseren (A559), så det finnes ingen ny serverspørring å isolere. Begrunnelse: rommets avvik ligger alt i nettleseren, og et nytt kall gir ingen ekstra sikkerhet, fordi valget på serveren uansett går gjennom tilgangssjekken og S4.8 hindrer dobbel registrering med samme id. Flyttes sjekken til serveren, kreves `expectTenantIsolation`. S5.12 er alltid påkrevd.
+
 **Uenighet avgjort:** forbedreren ville ha «Angre» i fem sekunder; UX ville ha det uten tidsgrense. UX vinner (WCAG 2.2.1, hansker og blikket på gulvet), og det koster ingenting. Forbedreren ville kutte kandidatlisten etter sortering; arkitekt og sikkerhet sier aldri stille kutt. Sorteringen beholdes, kuttet tas ikke. UX ville at Enter uten KI ikke gjør noe; det står, og «Nærmeste treff» vises uten Enter. Spørsmålsnummer: fagansvarlig og sikkerhet ba begge om nr. 120; fag fikk 120, personvern 121.
 
 ## Åpne spørsmål (stopper ikke bygging)

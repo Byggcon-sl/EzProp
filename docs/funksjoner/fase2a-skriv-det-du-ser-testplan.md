@@ -11,7 +11,7 @@ All testdata er oppdiktet (oppdrag med gnr 999, «Åse Testesen», telefon `1234
 
 **Merket i notatet:** tester som viser at notatet ikke lagres, bruker merket «Mxq-notat-ÆØ» og tallet «77 7 2» (kan ikke stå i en uuid eller et tidsstempel, lærdom fra `booking-ai-no-leak.test.ts` 4.10.3).
 
-**Om tilgangskriteriet i kortet:** akseptkriteriet «Takstmann, kontor, leder og admin slipper inn (også med `inspectors_edit_all` av)» stemmer ikke med tilgangstabellen i kortet («Som badet») eller med `ki-access.test.ts`. Kontor har ikke `report.edit`, og takstmann uten enkeltrettighet mister `report.edit` når innstillingen er av. Testplanen følger tabellen: samme svar som `saveField` og de andre KI-inngangene (S5.1–S5.5). Prosjektlederen retter ordlyden i kriteriet.
+**Om tilgangskriteriet i kortet:** rettet av prosjektlederen 24.11.2026. Kriteriet stemmer nå med tilgangstabellen i kortet («Som badet») og med `ki-access.test.ts`: samme svar som `saveField` og de andre KI-inngangene (S5.1–S5.5). Funnet er lukket.
 
 ## 1. Enhet, rene funksjoner (uten database)
 
@@ -40,7 +40,7 @@ All testdata er oppdiktet (oppdrag med gnr 999, «Åse Testesen», telefon `1234
 ### 1c Notatet som avvikstekst (`src/core/reports/logic/deviation-note.test.ts`, A556, A557)
 1. **S1.19 «Legg notatet til»:** malens tekst, mellomrom, notatet med stor forbokstav og punktum ved behov; notat som allerede slutter på «.», «!» eller «?» får ikke ekstra punktum.
 2. **S1.20 «Bruk bare notatet»:** gir notatet (samme formatering); funksjonen nekter når malens tekst har flettefelt.
-3. **S1.21 `text_source`:** lik malens tekst gir `template`, ellers `edited`.
+3. **S1.21 `text_source` (A562):** `template` bare når avvikstekst, årsak og konsekvens alle er lik malens; er én av de tre endret (også bare årsak eller bare konsekvens), gir det `edited`. `it.each` over de tre feltene.
 4. **S1.22 lengde:** resultatet over grensen for avviksteksten gir norsk melding, aldri kuttet tekst.
 
 ### 1d Kjernen (`src/core/ai/outcome-match.test.ts` og eksisterende filer)
@@ -87,21 +87,21 @@ Ingen nye fagregler. Testsakene er data:
 ### 4b Valg (lager avviket)
 1. **S4.6 samme som manuelt valg:** to like rom; i det ene velges utfallet manuelt, i det andre via KI-treff. Avvikene er like i punkt, spørsmål, utfall, TG, tekster, `text_source`, `text_status` og standardtiltak; regelresultatet er likt; `suggestedByRuleId` er tom.
 2. **S4.7 beslutning i samme transaksjon:** etter valg er raden `accepted` med `chosen_candidate` lik valgt kandidat, og avviket finnes. Tving feil i `createDeviationFromOutcome` (TGIU-konflikt): ingen avvik, raden står `suggested`.
-3. **S4.8 gjentatt valg:** samme avviks-id to ganger gir `exists`, ingen ny beslutning, ingen feil, ett avvik.
+3. **S4.8 gjentatt valg (A563):** samme avviks-id to ganger med samme utfall gir `exists`, ingen ny beslutning, ingen feil, ett avvik. Samme avviks-id med et annet utfall avvises: avviket, loggraden og beslutningen er uendret.
 4. **S4.9 «Velg TG2 eller TG3»:** valg uten `tg` gir avvik uten valgt TG (som manuelt valg i dag); notat «dette er TG3» endrer ikke det. Med `tg` fra takstmannen settes den. HMS-treff gir avvik uten TG.
 5. **S4.10 punkt utledes på serveren:** kandidatens `outcomes.id` gir punkt, spørsmål og utfall; en id som ikke står i radens `candidate_refs`, en id fra en annen malversjon og en id fra en annen romtype avvises uten endring.
 6. **S4.11 binding av loggraden (som PR #234):** `usageId` fra en annen rapport i samme organisasjon, fra en annen organisasjon, og fra en `phrase_suggest`-rad gir 404; logg og avvik uendret (tell rader før og etter).
-7. **S4.12 overlappende søk (A555):** søk 1 i rom A, så søk 2 i rom B på samme rapport (og fra en annen takstmann, og med ny `requestId` som «annen fane»). Valg på søk 1 gir `suggestion_outdated` med meldingen «Forslagene er utdatert. Trykk «Finn med KI» på nytt.», ingen avvik og ingen beslutning; rad 1 er `rejected`. Valg på søk 2 virker.
+7. **S4.12 overlappende søk (A555):** søk 1 i rom A, så søk 2 i rom B på samme rapport (og fra en annen takstmann, og med ny `requestId` som «annen fane»). Valg på søk 1 gir `suggestion_outdated` med meldingen «Forslagene er utdatert. Trykk «Finn med KI» på nytt.», ingen avvik og ingen beslutning; rad 1 er `rejected`. Valg på søk 2 virker. **Tilbakerulling (A563):** transaksjonen rulles tilbake før svaret; testen leser i en egen forbindelse mens transaksjonen pågår (eller gjennom en krok rett før sjekken) og viser at det verken finnes avviksrad eller beslutning, heller ikke halvveis.
 8. **S4.13 rom mot rapport:** rom fra en annen rapport, mykt slettet rom, mykt slettet rapport og rapport som ikke er kladd (publisert gir `report_published`) gir avslag på søk, valg og avvisning, uten loggrad og uten avvik.
 
 ### 4c Avvisning
-1. **S4.14 `rejected`:** lukket liste, «Avbryt», valg fra tekstsøket og valg av «Registrert fra før» gir `rejected` med samme binding som S4.11; `accepted` og `undo` avvises; `decideAiText` er uendret (eksisterende `decide-ai.test.ts` grønn).
+1. **S4.14 `rejected`:** lukket liste, «Avbryt», valg fra tekstsøket og valg av «Registrert fra før» gir `rejected` med samme binding som S4.11; `accepted` og `undo` avvises; `decideAiText` er uendret (eksisterende `decide-ai.test.ts` grønn). **Alt avgjort (A563):** avvisning av en rad som alt er `accepted`, gir `already_decided`; raden og avviket er uendret.
 2. **S4.15 rader som blir stående:** en `suggested`-rad avvises ved neste søk på samme mål; den stopper ikke publiseringen (`checkAiTextApproved`) og vises ikke som ventende KI-forslag (signalene).
 
 ### 4d Notatet i avviket
 1. **S4.16 «Legg notatet til»** gjennom `saveField`: teksten er malens + notatet, `text_source = edited`, `row_version` økt, én linje i revisjonsloggen.
 2. **S4.17 «Bruk bare notatet»:** notatet erstatter teksten; på et utfall med flettefelt avviser serveren (ikke bare skjermen).
-3. **S4.18 «Angre»:** ny lagring med malens tekst laget på nytt på serveren; `text_source` tilbake til `template`; revisjonsloggen har begge linjene (ingen sletting); utdatert `row_version` gir konflikt.
+3. **S4.18 «Angre» (A562):** ny lagring med malens tekst laget på nytt på serveren; `text_source` tilbake til `template` bare når avvikstekst, årsak og konsekvens alle er lik malens; er årsak eller konsekvens endret av takstmannen, blir den `edited` etter «Angre»; revisjonsloggen har begge linjene (ingen sletting); utdatert `row_version` gir konflikt.
 4. **S4.19 uten trykk:** avviket har malens tekst og `text_source = template`.
 5. **S4.20 notatet lagres ingen andre steder:** merket «Mxq-notat-ÆØ» finnes ikke i `ai_usage_log` (alle kolonner som tekst), `audit_log` for KI-kallet, loggerspion, feilmeldinger eller KI-køen; `AI_QUEUE_ALLOWED_FIELDS` uendret (diff). Det finnes bare i `deviations` etter «Legg notatet til».
 
@@ -125,8 +125,8 @@ Organisasjon B får verken rader eller tilgang, og svaret er «ikke funnet»:
 2. **S5.8** kandidatoppslaget fra malversjonen og romtypen.
 3. **S5.9** valget: B sin grant med A sin `usageId`; og A sin grant med en `usageId` og en kandidat-id fra B (A sin rad og avvik uendret).
 4. **S5.10** avvisningen: B kan ikke avvise A sin rad.
-5. **S5.11** oppslaget av eksisterende avvik for «Registrert fra før» (hvis det gjøres på serveren).
-6. **S5.12** oppslaget av målet `report` / `new_deviation` i `src/core/ai`.
+5. **S5.11 strøket:** sjekken for «Registrert fra før» gjøres bare i nettleseren mot dataene rommet allerede har (kortet, A559). Det finnes ingen ny spørring på serveren å teste. Strykningen skal stå i testrapporten. Flyttes sjekken til serveren, kreves `expectTenantIsolation` for den.
+6. **S5.12** oppslaget av målet `report` / `new_deviation` i `src/core/ai` (alltid påkrevd).
 7. **S5.13 statisk:** de nye filene filtrerer på `grant.organizationId`, aldri på `organizationId` fra skjemaet (grep).
 
 ### 5c Myk sletting
@@ -167,5 +167,5 @@ PC (1280×800) og iPad Pro-størrelse (1024×1366 stående og 1366×1024 liggend
 - Hvert akseptkriterium i kortet har minst ett testnummer over (tabell i rapporten).
 - Avvisning hvis 5a (alle tre inngangene i matrisen), 5b (`expectTenantIsolation` for søk, valg og avvisning) eller S4.12 (overlappende søk) mangler.
 - T-0146 satt til «rettet» med PR-nummeret.
-- Versjon 0.20.0 i `package.json` og i `/api/helse`.
+- Versjon 0.19.8 i `package.json` og i `/api/helse` (én patch over main).
 - `sikkerhet-personvern` har gjennomgått tillatt-listen i PR-en (A175).
