@@ -128,6 +128,17 @@ Ingen nye regler. Scenarioene bruker inndataene fra malens testsaker, og en test
 - [ ] E2e (PC og iPad-størrelse): visningsbadet, funnet med `findShowcaseBathReport`, viser TG3 med kostnad, TGIU og fremdrift «x av 8» med x < 8 og totalen 8. Badet uten avvik vises riktig.
 - [ ] Versjonen i `package.json` er økt (patch). A501–A514 er ført i `docs/09-apne-sporsmal.md`.
 
+## Avtale med testskriver (akseptansetesten, 24.11.2026)
+Akseptansetesten (`src/db/seed/testdata-bath.acceptance.test.ts`) leser bare dette, i tillegg til avtalen om signaturer i testplanen. Den laster de to nye modulene dynamisk, slik at den typesjekker før seed-koden finnes.
+- **Påtvunget scenario:** `seedTestdata({ db, now, seed, bathScenarios })`. `bathScenarios` er valgfri og er `TESTDATA_BATH_SCENARIOS` når den mangler. Den brukes bare av testene, til å legge inn en endret kopi av scenariofilen (kriteriet om uventet forslag).
+- **Svarene i et scenario:** `answers` er en flat liste med feltkoden som nøkkel, i samme form som regelmotorens svar: en valgkode som tekst, et tall eller en tekst. Testen lager varianten ved å sette `wet_room.membrane_type = "liquid_membrane"`, `wet_room.documentation_type = "none"` og `wet_room.membrane_year` (befaringsåret minus levetiden for smøremembran uten dokumentasjon) i scenarioet «Bad uten avvik», som er nummer 10 i `MANDATORY_BATH_SCENARIO_KEYS`.
+- **Oppslagene:** `findTestdataBathReports(db, organizationId)` gir `{ reportId, assignmentId, roomId }[]`, én rad per bad med rapport. `findShowcaseBathReport(db, organizationId)` gir samme form, eller `null`.
+- **Oppsummeringen:** `TestdataSummary.bathsSkipped` er et tall. `summaryLines` har én linje per pliktig scenario på formen «<scenarionavn>: oppdrag <nummer>, <rom>», og en linje med «fylt ut» og antallet.
+- **`TESTDATA_TABLES`:** navnene på de nye tabellene står som i del 1 (for eksempel `fieldAnswers`). Testen godtar også `field_answers`.
+- **`TG3_COST_BANDS`:** nøkkelen er siste del av spørsmålskoden (`membrane_before_2000`, `elevated_moisture`) eller hele koden, og verdien er koden for kostnadsintervallet.
+- **Forventede avvik:** hvert objekt i `expected` som har `plannedPhotos`, har også `fieldNote`.
+- **TG ved «velg TG2 eller TG3»:** valget har en rad i revisjonsloggen for avviket (laget med TG, eller endret med feltet `tg`), eller en beslutning på regelforslaget med samme `deviation_id`.
+
 ## Beslutninger i autonom modus (føres i `docs/09-apne-sporsmal.md` av utvikleren)
 - **A501 (lett å endre):** Bilder i testdataene kommer med «Bilder på PC», ikke nå, fordi bildemodellen ikke finnes. Scenariofilen har planlagte bilder som beskrivelser.
 - **A502 (lett å endre):** Byggeår som kolonne på eiendommen kommer ikke her. Byggeåret for våtrommet legges som svar i badet.
