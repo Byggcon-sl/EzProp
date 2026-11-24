@@ -1411,9 +1411,23 @@ export async function getTemplateVersion(
   versionId: string,
 ): Promise<TemplateVersionDetail> {
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.read");
+  return readTemplateVersionIn(db, grant, versionId);
+}
+
+/**
+ * Som `getTemplateVersion`, men for den som alt har sjekket tilgangen og står i en transaksjon
+ * (rapportens skriveramme). Leser med `ex` på samme kobling og gjør ingen ny tilgangssjekk, så en
+ * transaksjon aldri venter på en kobling til fra puljen (funn fra nattløkken 24.11.2026).
+ * Spørringene filtrerer på `grant.organizationId`.
+ */
+export async function readTemplateVersionIn(
+  ex: DbExecutor,
+  grant: EmployeeGrant,
+  versionId: string,
+): Promise<TemplateVersionDetail> {
   if (!isUuid(versionId)) throw new TemplateNotFoundError();
   const orgId = grant.organizationId;
-  const [row] = await db
+  const [row] = await ex
     .select({
       id: templateVersions.id,
       familyId: templateVersions.familyId,
@@ -1449,7 +1463,7 @@ export async function getTemplateVersion(
       ),
     );
   if (!row) throw new TemplateNotFoundError();
-  const content = await loadContent(db, orgId, [row.id]);
+  const content = await loadContent(ex, orgId, [row.id]);
   return {
     ...row,
     kind: row.kind as TemplateKind,
