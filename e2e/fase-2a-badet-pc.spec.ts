@@ -439,7 +439,11 @@ test("B6.2 Endre og Avvis: grunn med ett trykk, «Annet» krever tekst, Avvis st
   await choose(page, "Hvorfor endrer du?", "Synlig skade", card);
   await save.click();
   await expect(page.getByRole("heading", { name: /^Avvik 1/ })).toBeFocused();
-  await expect(suggestion(page)).toContainText("Endret: forslag TG3, du valgte TG2.");
+  // Ny tekst etter oppgavekortet for T-0113 (A490, «Skjermer»): forslagets TG, valgt TG og
+  // grunnkodens norske tekst på én linje, aldri friteksten på den linjen (FA-I26).
+  await expect(
+    suggestion(page).getByText("Forslag TG3, endret til TG2: Synlig skade", { exact: true }),
+  ).toBeVisible();
   await expect(suggestion(page).getByRole("link", { name: "Gå til avvik 1" })).toBeVisible();
   expect(await decisions(bath.assignmentId)).toMatchObject([
     { decision: "changed", override_reason_code: "visible_damage" },
