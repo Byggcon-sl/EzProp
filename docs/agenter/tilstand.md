@@ -135,7 +135,7 @@ Ingen.
 - Overflødige brancher etter PR #203: `testdata-arbeidshverdag`, `testdata-retting-hovedlop-2111`, `arkiv-testdata-arbeidshverdag-parallell`, `testdata-overtatt`. Etter PR #209: `worktree-wf_b4502702-3aa-19`.
 
 ## Siste kjøring
-24.11.2026 (nattløkken): ett alvorlig funn (lagring i rommet kan låse koblingspuljen, punkt 1 under «Oppgaver fra nattløkken»), rettes før neste planpunkt. Fem pakker ryddet i PR «Rydding fra nattløkken 2026-11-24» (versjon 0.18.2).
+24.11.2026 (nattløkken): ett alvorlig funn (lagring i rommet kan låse koblingspuljen, punkt 1 under «Oppgaver fra nattløkken»), rettes før neste planpunkt. Fem pakker ryddet i PR #235 «Rydding fra nattløkken 2026-11-24» (versjon 0.18.2).
 
 23.11.2026 kl. 21:49 – 24.11.2026 (hovedløkken, sesjon 01JqwntzcjprtgEgRcPdZuiJ): ingen åpne PR-er og ingen reservasjoner yngre enn seks timer ved start, men tre brancher fra dagen stod stille uten PR. Overtok «KI i veien» (stille siden 18:24), flettet inn main uten konflikt, lint og typesjekk grønne, sikkerhet-personvern gikk gjennom (ingen alvorlige funn, ett lite rettet), testene for `src/core/ai` og `src/core/reports` grønne lokalt (hele pakken ble stoppet av tidsgrensen etter 30 minutter), én CI-runde rød på formatering, rettet, og PR #232 merget. Containeren startet på nytt én gang uten tap. Neste: overta `rett-forslag-og-avvik` (middels funn fra testlaget, først) eller `testdata-del-2`.
 
