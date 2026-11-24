@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
-import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import postgres from "postgres";
 import { SAMPLE_INSPECTOR } from "../src/db/seed/sample-assignments.data";
 import { inspectPdf } from "../tests/pdf-inspect";
 import { assertLocalOrTestDatabase } from "./database-guard";
 import { e2eDatabaseUrl, fakeOrgNumber, logIn, uniqueSuffix } from "./helpers";
+import { clickToPdfTab, waitForPdfTab, type PdfTab } from "./pdf-tab";
 
 /*
  * PDF-utkast av badet og «Åpne PDF» på utgivelsene (fase 2a-2). Testplan:
@@ -207,11 +208,10 @@ async function pdfFrom(page: Page, url: string) {
   return { pdf, text: pdf.pages.map((p) => p.text).join("\n"), headers: response.headers() };
 }
 
-/** Trykker og venter på den nye fanen. Gir fanen og adressen den lander på. */
-async function clickToNewTab(context: BrowserContext, target: Locator, urlPattern: RegExp) {
-  const [popup] = await Promise.all([context.waitForEvent("page"), target.click()]);
-  await popup.waitForURL(urlPattern, { waitUntil: "commit" }).catch(() => undefined);
-  return popup;
+/** Svaret fanen fikk: 200 og PDF (bytene leses med `pdfFrom`, e2e/pdf-tab.ts). */
+function expectPdfAnswer(tab: PdfTab) {
+  expect(tab.response.status()).toBe(200);
+  expect(tab.response.headers()["content-type"]).toMatch(/^application\/pdf/);
 }
 
 async function expectMinHeight(target: Locator, min = 44) {
@@ -304,13 +304,14 @@ test("7.2 knappen på oppdraget finnes når rapporten finnes, og ikke ellers", a
 
 test("7.3 ett trykk gir PDF i ny fane, og badet står fortsatt i originalfanen", async ({
   page,
-  context,
 }) => {
   const b = await createBathroom();
   await logInAsInspector(page);
   await page.goto(roomUrl(b));
-  const popup = await clickToNewTab(context, draftButton(page), /\/pdf$/);
-  expect(popup.url()).toMatch(new RegExp(`${draftPdfUrl(b)}$`));
+  const tab = await clickToPdfTab(page, draftButton(page), /\/pdf$/);
+  expect(tab.path).toBe(draftPdfUrl(b));
+  expectPdfAnswer(tab);
+  expect(tab.response.headers()["content-disposition"]).toMatch(/^inline; filename="utkast-/);
   await expect(page).toHaveURL(new RegExp(`${roomUrl(b)}`));
   const { text, headers } = await pdfFrom(page, draftPdfUrl(b));
   expect(headers["content-disposition"]).toMatch(/^inline; filename="utkast-/);
@@ -331,8 +332,8 @@ test("7.4 «Lager PDF …» vises og knappen er sperret mens PDF-en lages", asyn
     await held;
     await route.continue();
   });
-  // Den nye fanen meldes først når ruten svarer, så den ventes på etter at ruten slippes
-  const opened = context.waitForEvent("page");
+  // Fanens svar kommer først når ruten slippes
+  const opened = waitForPdfTab(page, /\/oppdrag\/[^/]+\/pdf$/);
   await draftButton(page).click();
   const status = page.getByRole("status").filter({ hasText: "Lager PDF" });
   await expect(
@@ -340,15 +341,15 @@ test("7.4 «Lager PDF …» vises og knappen er sperret mens PDF-en lages", asyn
   ).toBeVisible();
   await expectDisabled(page.getByRole("button", { name: /^Lager PDF …/ }));
   release();
-  const popup = await opened;
-  await popup.waitForURL(/\/pdf$/, { waitUntil: "commit" }).catch(() => undefined);
+  const tab = await opened();
+  expect(tab.path).toBe(draftPdfUrl(b));
+  expectPdfAnswer(tab);
   await expect(page.getByText("Lager PDF")).toHaveCount(0, { timeout: 15_000 });
   await context.unroute(/\/oppdrag\/[^/]+\/pdf$/);
 });
 
 test("7.5 skriv og trykk straks: «Lagrer endringer …», og PDF-en har det som ble skrevet", async ({
   page,
-  context,
 }) => {
   const b = await createBathroom();
   await logInAsInspector(page);
@@ -376,11 +377,14 @@ test("7.5 skriv og trykk straks: «Lagrer endringer …», og PDF-en har det som
   });
   const mark = `Oppdiktet nyskrevet ${b.suffix}`;
   await page.getByLabel("Beskrivelse av punktet (valgfri)").fill(mark);
-  const [popup] = await Promise.all([context.waitForEvent("page"), draftButton(page).click()]);
+  const opened = waitForPdfTab(page, /\/oppdrag\/[^/]+\/pdf$/, { timeout: 15_000 });
+  await draftButton(page).click();
   // Knappen viser teksten; samme tekst står også i statusen for skjermleser
   await expectDisabled(page.getByRole("button", { name: "Lagrer endringer …" }));
-  await popup.waitForURL(/\/pdf$/, { timeout: 15_000 });
-  const { text } = await pdfFrom(page, draftPdfUrl(b));
+  const tab = await opened();
+  expect(tab.path).toBe(draftPdfUrl(b));
+  expectPdfAnswer(tab);
+  const { text } = await pdfFrom(page, tab.path);
   expect(text).toContain(mark);
   await page.unroute("**/*");
 });
@@ -403,8 +407,9 @@ test("7.6 og 10.7.7 uten nett er knappen sperret med fast tekst, og synkstatusen
     await context.setOffline(false);
   }
   await expect(page.getByText(OFFLINE_TEXT)).toHaveCount(0);
-  const popup = await clickToNewTab(context, draftButton(page), /\/pdf$/);
-  expect(popup.url()).toMatch(/\/pdf$/);
+  const tab = await clickToPdfTab(page, draftButton(page), /\/pdf$/);
+  expect(tab.path).toBe(draftPdfUrl(b));
+  expectPdfAnswer(tab);
 });
 
 test("7.7 svar 500 gir feilsiden med «Prøv igjen», som laster ruten på nytt", async ({ page }) => {
@@ -549,8 +554,9 @@ test("10.2.5 og 10.7.7 publiser badet: «Åpne PDF» etter publisering og i utgi
   const afterPublish = page.getByRole("link", { name: "Åpne PDF av versjon 1" });
   await expectMinHeight(afterPublish);
   await expect(afterPublish).toHaveAttribute("target", "_blank");
-  const popup = await clickToNewTab(context, afterPublish, /\/utgivelser\/[^/]+\/pdf$/);
-  const releaseUrl = new URL(popup.url()).pathname;
+  const tab = await clickToPdfTab(page, afterPublish, /\/utgivelser\/[^/]+\/pdf$/);
+  expectPdfAnswer(tab);
+  const releaseUrl = tab.path;
   expect(releaseUrl).toMatch(
     new RegExp(`^/oppdrag/${b.assignmentId}/utgivelser/[0-9a-f-]{36}/pdf$`),
   );

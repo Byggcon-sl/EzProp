@@ -1,18 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
-import {
-  expect,
-  test,
-  type BrowserContext,
-  type Locator,
-  type Page,
-  type Response,
-} from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import postgres from "postgres";
 import { SAMPLE_INSPECTOR } from "../src/db/seed/sample-assignments.data";
 import { inspectPdf } from "../tests/pdf-inspect";
 import { assertLocalOrTestDatabase } from "./database-guard";
 import { e2eDatabaseUrl, logIn, uniqueSuffix } from "./helpers";
+import { pdfTabBytes, waitForPdfTab } from "./pdf-tab";
 
 /*
  * PDF-utkast av badet og «Åpne PDF» på utgivelsene (fase 2a-2). Kort:
@@ -20,8 +14,9 @@ import { e2eDatabaseUrl, logIn, uniqueSuffix } from "./helpers";
  * docs/funksjoner/fase2a-pdf-badet-testplan.md avsnitt 7, 10.2.5, 10.7.7 og 11.9. Kjører i
  * prosjektene `pc` og `ipad` (liggende 1194 × 834).
  *
- * PDF-en leses alltid fra svaret (`waitForEvent("response")` eller `request.get` med samme økt),
- * aldri fra fanens innhold. Erstattet rapport prøves ikke her (runde 2: knappen kan ikke peke på
+ * Adressen, status og hoder leses fra forespørselen den nye fanen gjør, og bytene med `request.get`
+ * mot samme adresse og samme økt, aldri fra fanens innhold (e2e/pdf-tab.ts: full Chromium viser
+ * PDF-en i fanen, headless shell i CI laster den ned). Erstattet rapport prøves ikke her (runde 2: knappen kan ikke peke på
  * en erstattet rapport); 404 for den står i rutetesten.
  *
  * Data: prøveorganisasjonen fra `pnpm db:seed:testoppdrag` (har den publiserte badmalen). Hver test
@@ -226,14 +221,6 @@ function releaseControl(page: Page, version: number, role: "link" | "button" = "
   return page.getByRole(role, { name: new RegExp(`^Åpne PDF av versjon ${version}\\b`) });
 }
 
-/** Svaret fra en PDF-rute, uansett hvilken fane som spør. */
-function pdfResponse(context: BrowserContext, path: RegExp): Promise<Response> {
-  return context.waitForEvent("response", {
-    predicate: (response) =>
-      response.request().method() === "GET" && path.test(new URL(response.url()).pathname),
-  });
-}
-
 async function height(target: Locator): Promise<number> {
   await expect(target).toBeVisible();
   const box = await target.boundingBox();
@@ -283,20 +270,6 @@ async function expectNoAxeViolations(page: Page, where: string) {
 
 async function logInAsInspector(page: Page) {
   await logIn(page, SAMPLE_INSPECTOR.email);
-}
-
-/**
- * Bytene fra PDF-ruten. Svaret i fanen gir status og hoder, men Chromiums innebygde PDF-viser
- * bytter ut innholdet i fanen (`response.body()` gir viserens HTML). Bytene hentes derfor fra
- * samme adresse med samme økt (11.9.1).
- */
-async function pdfBytes(page: Page, response: Response): Promise<Uint8Array> {
-  expect(response.status()).toBe(200);
-  expect(response.headers()["content-type"]).toContain("application/pdf");
-  const again = await page.request.get(response.url());
-  expect(again.status()).toBe(200);
-  expect(again.headers()["content-type"]).toContain("application/pdf");
-  return new Uint8Array(await again.body());
 }
 
 /** Publiserer badet fra publiser-siden (ingen sperrer) og står på kvitteringen. */
@@ -353,26 +326,23 @@ test("7.2 knappen på oppdraget når rapporten finnes, ikke uten rapport", async
 
 // --- Ett trykk gir PDF i ny fane ------------------------------------------------------------
 
-test("7.3, 7.10 ett trykk: PDF i ny fane, under 5 sekunder, badet står igjen", async ({
-  page,
-  context,
-}) => {
+test("7.3, 7.10 ett trykk: PDF i ny fane, under 5 sekunder, badet står igjen", async ({ page }) => {
   const bath = await createBathroom();
   await logInAsInspector(page);
   await page.goto(roomUrl(bath));
-  const popup = context.waitForEvent("page");
-  const response = pdfResponse(context, /\/oppdrag\/[^/]+\/pdf$/);
+  const opened = waitForPdfTab(page, /\/oppdrag\/[^/]+\/pdf$/);
   const started = Date.now();
   await draftLink(page).click();
-  await popup;
-  const answer = await response;
-  await answer.finished();
+  const tab = await opened();
   // Tiden måles på svaret i fanen, før bytene hentes på nytt
   expect(Date.now() - started, "utkastet svarer på under 5 sekunder").toBeLessThan(
     PDF_TIME_LIMIT_MS,
   );
-  const bytes = await pdfBytes(page, answer);
-  expect(answer.headers()["content-disposition"]).toMatch(/inline; filename="utkast-[0-9-]+\.pdf"/);
+  expect(tab.path).toBe(draftUrl(bath));
+  const bytes = await pdfTabBytes(page, tab);
+  expect(tab.response.headers()["content-disposition"]).toMatch(
+    /inline; filename="utkast-[0-9-]+\.pdf"/,
+  );
   expect(inspectPdf(bytes).text).toContain("UTKAST");
   await expect(page).toHaveURL(new RegExp(`${roomUrl(bath)}`));
 });
@@ -405,21 +375,19 @@ test("7.4 «Lager PDF …» er sperret med status for skjermleser, og borte ette
   await context.unroute(`**${draftUrl(bath)}`);
 });
 
-test("7.5 skriv i et felt og trykk straks: teksten står i PDF-en", async ({ page, context }) => {
+test("7.5 skriv i et felt og trykk straks: teksten står i PDF-en", async ({ page }) => {
   const bath = await createBathroom();
   const marker = `Merke ${bath.suffix.slice(-6).toUpperCase()}`;
   await logInAsInspector(page);
   await page.goto(roomUrl(bath));
   const description = page.getByLabel("Beskrivelse av punktet (valgfri)");
   await description.fill(marker);
-  const popup = context.waitForEvent("page");
-  const response = pdfResponse(context, /\/oppdrag\/[^/]+\/pdf$/);
+  const opened = waitForPdfTab(page, /\/oppdrag\/[^/]+\/pdf$/);
   // Før autolagringen (800 ms): knappen venter på lagringen og åpner fanen i samme trykk
   await draftLink(page).click();
-  await popup;
-  const answer = await response;
-  await answer.finished();
-  const bytes = await pdfBytes(page, answer);
+  const tab = await opened();
+  expect(tab.path).toBe(draftUrl(bath));
+  const bytes = await pdfTabBytes(page, tab);
   expect(inspectPdf(bytes).text.replace(/\s+/g, " ")).toContain(marker);
 });
 
@@ -427,7 +395,6 @@ test("7.5 skriv i et felt og trykk straks: teksten står i PDF-en", async ({ pag
 
 test("10.2.5 «Åpne PDF» etter publisering og på utgivelsen: uten UTKAST, filnavn med versjon", async ({
   page,
-  context,
 }) => {
   const bath = await createBathroom();
   await logInAsInspector(page);
@@ -437,14 +404,12 @@ test("10.2.5 «Åpne PDF» etter publisering og på utgivelsen: uten UTKAST, fil
   await expect(onReceipt).toBeVisible();
   await expect(onReceipt).toHaveAttribute("target", "_blank");
   expect(await height(onReceipt)).toBeGreaterThanOrEqual(44);
-  let popup = context.waitForEvent("page");
-  let response = pdfResponse(context, /\/utgivelser\/[^/]+\/pdf$/);
+  let opened = waitForPdfTab(page, /\/utgivelser\/[^/]+\/pdf$/);
   await onReceipt.click();
-  await popup;
-  let answer = await response;
-  await answer.finished();
-  let bytes = await pdfBytes(page, answer);
-  expect(answer.headers()["content-disposition"]).toMatch(
+  let tab = await opened();
+  expect(tab.path).toMatch(new RegExp(`^${assignmentUrl(bath)}/utgivelser/[0-9a-f-]{36}/pdf$`));
+  let bytes = await pdfTabBytes(page, tab);
+  expect(tab.response.headers()["content-disposition"]).toMatch(
     /filename="tilstandsrapport-[0-9-]+-v1\.pdf"/,
   );
   expect(inspectPdf(bytes).text).not.toContain("UTKAST");
@@ -457,14 +422,13 @@ test("10.2.5 «Åpne PDF» etter publisering og på utgivelsen: uten UTKAST, fil
   await expect(page.getByText("PDF-en viser teksten og TG slik de ble publisert.")).toBeVisible();
   await expectNoHorizontalScroll(page, "utgivelseskortet");
   await expectNoAxeViolations(page, "utgivelseskortet med «Åpne PDF»");
-  popup = context.waitForEvent("page");
-  response = pdfResponse(context, /\/utgivelser\/[^/]+\/pdf$/);
+  const firstPath = tab.path;
+  opened = waitForPdfTab(page, /\/utgivelser\/[^/]+\/pdf$/);
   await inCard.click();
-  await popup;
-  answer = await response;
-  await answer.finished();
-  bytes = await pdfBytes(page, answer);
-  expect(answer.headers()["content-disposition"]).toMatch(/-v1\.pdf"/);
+  tab = await opened();
+  expect(tab.path).toBe(firstPath);
+  bytes = await pdfTabBytes(page, tab);
+  expect(tab.response.headers()["content-disposition"]).toMatch(/-v1\.pdf"/);
   expect(inspectPdf(bytes).text).not.toContain("UTKAST");
 });
 
