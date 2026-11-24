@@ -52,7 +52,7 @@ All testdata er oppdiktet (oppdrag med gnr 999, «Åse Testesen», telefon `1234
 6. **S1.28 falsk leverandør:** samme svar hver gang; bruker `rankBySimilarity` importert fra `@/shared/lib/text-similarity` (A561, ikke parameter); «dette er TG3» i notatet endrer ikke rekkefølgen (samme liste med og uten); under grensen gir «ingen». Statisk: `src/core/ai` importerer ikke `@/core/reports`.
 7. **S1.29 statiske tester (`guards.test.ts`, `features.test.ts`, `static-checks.test.ts`):** `outcome_match` har ikke TG-felt som mål; `new_deviation` er lovlig bare for `outcome_match` (de andre funksjonene avviser målet); `new_deviation` står ikke i `REPORT_AI_TARGET_FIELDS.report`; konstanten ligger i `src/shared/config/ai-targets.ts`; `output_text` er alltid tom; rettighet `report.edit`.
 8. **S1.30 én felles liste (`approval-check`, `signals`):** listen over funksjoner uten KI-tekst eksporteres én gang fra `@/core/ai` og inneholder `phrase_suggest` og `outcome_match`; grep viser at `approval-check.ts` og `signals.ts` bruker den, og at `PHRASE_SUGGEST_FEATURE` ikke lenger brukes i `signals.ts`.
-9. **S1.31 ekte leverandør:** med `enableAnthropic` gir `outcome_match` «KI er av» uten kall (ikke i `settings.features`).
+9. **S1.31 ekte leverandør (A565):** med `enableAnthropic` gir `outcome_match` «KI er av» uten rad, vask eller kall, både når koden mangler i `settings.features` og når den står der (`FAKE_ONLY_FEATURES`). `anthropicSettingsSchema` avviser `outcome_match` i `features`.
 10. **S1.32 skjemaet til valg-inngangen:** avviser `checkpointKey`, `outcomeKey`, `organizationId`, `reportId` fra klienten, og ukjente nøkler (`it.each`); avvisnings-inngangen avviser `accepted` og `undo`.
 
 ## 2. Regeltester og evalueringssett (testsaker som data)
@@ -62,11 +62,13 @@ Ingen nye fagregler. Testsakene er data:
 1. **S2.1 `src/core/ai/evals/outcome_match.cases.json`:** 30–50 saker, hver merket «utkast, ikke godkjent av fagrådet»; fasit er et sett av utfall (eller «ingen passer»); bestått = minst én riktig blant de tre første.
 2. **S2.2 skjema (`evals/schema.test.ts`):** filen valideres; sak uten utkast-merke, uten fasit, med ukjent utfallskode eller med fasit på en annen romtype avvises.
 3. **S2.3 «ingen passer» hver for seg:** minst 3 hulltaking-saker og minst 3 slitasje-saker; hver sak er en egen test (`it.each`) både mot falsk leverandør og mot likhetsfunksjonen; en samlet treffprosent erstatter dem ikke.
-4. **S2.4 par som bare skiller seg i alvor:** saker for alle fire parene i kortet; kravet er at begge vises i de tre første når begge er kandidater (egen test per par, mot falsk leverandør og lokalt).
+   **S2.3a motsaker:** minst 2 saker der hull er tatt og fukten er forhøyet («tatt hull bak dusj, 22 vekt-%») med fasit `adjacent.elevated_moisture`, og «riss i fuge på gulvet» som treffer, mens «litt slitt fuge» gir «ingen passer». Hver sak er en egen test.
+4. **S2.4 par som bare skiller seg i alvor:** saker for de tre parene i kortet, og for aldersparet (`membrane_before_2000` / `membrane_past_lifespan`) med årstall i notatet («membran fra 1994», «smøremembran fra 2006»); kravet er at begge vises i de tre første når begge er kandidater (egen test per par, mot falsk leverandør og lokalt).
+4a. **S2.4a samme utfall på to punkter:** «sprekk i flis» gir begge `cracked_tiles_or_joints` (vegg og gulv); «ved sluket» / «på gulvet» gir gulv først; «over badekaret» / «på veggen» gir vegg først.
 5. **S2.5 TG i notatet:** saker med «dette er TG3» / «TG2» gir samme rangering som uten.
 6. **S2.6 kopisjekken** leser den nye filen: ingen tekst fra `docs/kartlegging/`, ingen «NS 3600», «IVIT», gjetteord, navn, adresser eller telefonnumre (oppdiktet fixture gjør den rød).
 7. **S2.7 `pnpm ai:eval outcome_match`:** kjører settet og når kravet mot falsk leverandør; utskriften sier at resultatet mot falsk leverandør ikke viser kvalitet (T-0047); `EvalProviderNotAllowedError` mot ekte leverandør; `pnpm ai:eval` uten argument tar med den nye funksjonen.
-8. **S2.8 regelmotoren uendret:** avviket fra et KI-treff gir samme regelresultat som manuelt valg (dekkes av S4.6); TGIU for hulltaking kommer fortsatt fra feltet og regelen (`answerHole`), aldri fra et treff.
+8. **S2.8 regelmotoren uendret:** avviket fra et KI-treff gir samme regelresultat som manuelt valg (dekkes av S4.6), også for aldersutfallene: etter valg av `membrane_past_lifespan` med årstall før 2000 (og omvendt) foreslår regelmotoren utfallet som følger årstallet, likt som ved manuelt valg; TGIU for hulltaking kommer fortsatt fra feltet og regelen (`answerHole`), aldri fra et treff.
 
 ## 3. Database
 
@@ -82,12 +84,13 @@ Ingen nye fagregler. Testsakene er data:
 3. **S4.3 «Ingen utfall passer»:** falsk leverandør gir «ingen»; svaret er `no_match`, raden har `no_match` og tom `candidate_refs`.
 4. **S4.4 for mange kandidater:** oppdiktet mal over `OUTCOME_MATCH_CANDIDATES_MAX` gir meldingen «For mange utfall i dette rommet for KI. Bruk søket.», ingen kall (spion) og ingen loggrad.
 5. **S4.5 for langt notat:** 501 tegn gir «Notatet er for langt for KI (høyst 500 tegn).», ingen kall og ingen loggrad.
+5a. **S4.5b fødselsnummer (A567):** notat med elleve sifre som er et gyldig fødselsnummer gir valideringsfeil, ingen kall og ingen loggrad; feilsvaret gjengir ikke sifrene.
 6. **S4.5a drift:** feil og tidsavbrudd hos leverandøren gir norsk melding og `error`-rad; samme `requestId` to ganger gir ikke nytt kall og ikke ny rad.
 
 ### 4b Valg (lager avviket)
 1. **S4.6 samme som manuelt valg:** to like rom; i det ene velges utfallet manuelt, i det andre via KI-treff. Avvikene er like i punkt, spørsmål, utfall, TG, tekster, `text_source`, `text_status` og standardtiltak; regelresultatet er likt; `suggestedByRuleId` er tom.
 2. **S4.7 beslutning i samme transaksjon:** etter valg er raden `accepted` med `chosen_candidate` lik valgt kandidat, og avviket finnes. Tving feil i `createDeviationFromOutcome` (TGIU-konflikt): ingen avvik, raden står `suggested`.
-3. **S4.8 gjentatt valg (A563):** samme avviks-id to ganger med samme utfall gir `exists`, ingen ny beslutning, ingen feil, ett avvik. Samme avviks-id med et annet utfall avvises: avviket, loggraden og beslutningen er uendret.
+3. **S4.8 gjentatt valg (A563):** samme avviks-id to ganger med samme utfall gir `exists`, ingen ny beslutning, ingen feil, ett avvik. Samme avviks-id med et annet utfall avvises: avviket, loggraden og beslutningen er uendret. **Brukt søk (A564):** etter et godtatt valg gir samme `usageId` og samme kandidat med en **ny** avviks-id `suggestion_outdated`; transaksjonen rulles tilbake, og det finnes fortsatt ett avvik og én beslutning.
 4. **S4.9 «Velg TG2 eller TG3»:** valg uten `tg` gir avvik uten valgt TG (som manuelt valg i dag); notat «dette er TG3» endrer ikke det. Med `tg` fra takstmannen settes den. HMS-treff gir avvik uten TG.
 5. **S4.10 punkt utledes på serveren:** kandidatens `outcomes.id` gir punkt, spørsmål og utfall; en id som ikke står i radens `candidate_refs`, en id fra en annen malversjon og en id fra en annen romtype avvises uten endring.
 6. **S4.11 binding av loggraden (som PR #234):** `usageId` fra en annen rapport i samme organisasjon, fra en annen organisasjon, og fra en `phrase_suggest`-rad gir 404; logg og avvik uendret (tell rader før og etter).
@@ -103,7 +106,7 @@ Ingen nye fagregler. Testsakene er data:
 2. **S4.17 «Bruk bare notatet»:** notatet erstatter teksten; på et utfall med flettefelt avviser serveren (ikke bare skjermen).
 3. **S4.18 «Angre» (A562):** ny lagring med malens tekst laget på nytt på serveren; `text_source` tilbake til `template` bare når avvikstekst, årsak og konsekvens alle er lik malens; er årsak eller konsekvens endret av takstmannen, blir den `edited` etter «Angre»; revisjonsloggen har begge linjene (ingen sletting); utdatert `row_version` gir konflikt.
 4. **S4.19 uten trykk:** avviket har malens tekst og `text_source = template`.
-5. **S4.20 notatet lagres ingen andre steder:** merket «Mxq-notat-ÆØ» finnes ikke i `ai_usage_log` (alle kolonner som tekst), `audit_log` for KI-kallet, loggerspion, feilmeldinger eller KI-køen; `AI_QUEUE_ALLOWED_FIELDS` uendret (diff). Det finnes bare i `deviations` etter «Legg notatet til».
+5. **S4.20 notatet lagres ingen andre steder:** merket «Mxq-notat-ÆØ» finnes ikke i `ai_usage_log` (alle kolonner som tekst), `audit_log` for KI-kallet, loggerspion, feilmeldinger eller KI-køen; `AI_QUEUE_ALLOWED_FIELDS` uendret (diff). Det finnes bare i `deviations` etter «Legg notatet til». Merket finnes heller ikke i feilsvaret til klienten (`ReportValidationError` med `unknown_key` / `invalid_input`, Zod-feil) eller i `audit_log` for avviket (bare `usageId`).
 
 ### 4e Ytelse
 1. **S4.21** søket har et fast antall spørringer i et oppdiktet bad med ca. 60 utfall (ingen N+1).
@@ -138,14 +141,14 @@ Organisasjon B får verken rader eller tilgang, og svaret er «ikke funnet»:
 2. **S6.2** Enter med null tekstsøk-treff kjører KI bare med nett og KI på; ellers ingenting ekstra.
 3. **S6.3** endret tekst etter svaret merker KI-treffene som utdatert.
 4. **S6.4** «Nærmeste treff (uten KI)» vises bare når KI ikke er tilgjengelig og tekstsøket gir null treff.
-5. **S6.5** notatet tømmes når panelet lukkes og ved utlogging; ingenting skrives til `localStorage` eller IndexedDB (spion).
+5. **S6.5 (A566)** notatet står igjen når panelet lukkes, ved «Avbryt» og Escape, så lenge rommet er åpent; det tømmes når rommet forlates og ved utlogging (begge testes); ingenting skrives til `localStorage` eller IndexedDB (spion).
 
 ## 7. E2e (`e2e/fase-2a-skriv-det-du-ser.spec.ts`)
 
 PC (1280×800) og iPad Pro-størrelse (1024×1366 stående og 1366×1024 liggende), som prosjektene i `playwright.config.ts`. Takstmann fra `logInAsSampleInspector`, falsk leverandør, `createSampleBathroom`.
 
 1. **S7.1 hovedflyten:** «+ Avvik», fokus i «Skriv hva du ser, eller søk», skriv «sprekk i flis ved sluket, litt løs», «Finn med KI» → gruppen «Forslag fra KI (velg ett)» med 1–3 treff, punktnavn først, malens tekst, TG; ingen markert (`aria-selected`/`aria-checked` falsk). Velg → avvikskortet på riktig punkt med malens tekst. **3 trykk** (telles med `countServerActions` og klikk).
-2. **S7.2 notatet:** «Legg notatet til» → teksten er malens + notatet; «Angre» setter malens tekst tilbake. Les tilbake etter ny innlasting. «Språkvask avviket» står ved siden av rett etterpå.
+2. **S7.2 notatet:** notatene i e2e har ingen gjetteord («trolig», «antas»). «Legg notatet til» → teksten er malens + notatet; «Angre» setter malens tekst tilbake. Les tilbake etter ny innlasting. «Språkvask avviket» står ved siden av rett etterpå.
 3. **S7.3 «Bruk bare notatet»** finnes for et treff uten flettefelt og mangler for `insufficient_fall`.
 4. **S7.4 uten trykk** beholdes malens tekst (ny innlasting).
 5. **S7.5 Enter med null tekstsøk-treff** kjører «Finn med KI».
