@@ -2277,10 +2277,34 @@ export async function expectNoHorizontalScroll(page: Page, where: string) {
  * Teller kall til serverhandlingene (server actions er POST med `next-action`) fra siden.
  * `count()` gir antallet siden telleren ble startet eller nullstilt.
  */
+/**
+ * Rene lesekall med bare rommet som argument (`[{ assignmentId, roomId }]`), for eksempel at
+ * sammendraget leses på nytt 400 ms etter en endring i rommet. De lagrer ingenting.
+ */
+function isRoomReadAction(body: string | null): boolean {
+  if (!body) return false;
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (!Array.isArray(parsed) || parsed.length !== 1) return false;
+    const [arg] = parsed as unknown[];
+    if (typeof arg !== "object" || arg === null) return false;
+    const keys = Object.keys(arg).sort();
+    return keys.length === 2 && keys[0] === "assignmentId" && keys[1] === "roomId";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Teller serverhandlinger som kan lagre noe. Rene lesekall for rommet telles ikke, fordi de
+ * kommer på tid (etter en pause) og ellers gjør tellingen tilfeldig.
+ */
 export function countServerActions(page: Page): { count(): number; reset(): void } {
   let calls = 0;
   page.on("request", (request) => {
-    if (request.method() === "POST" && request.headers()["next-action"]) calls += 1;
+    if (request.method() !== "POST" || !request.headers()["next-action"]) return;
+    if (isRoomReadAction(request.postData())) return;
+    calls += 1;
   });
   return {
     count: () => calls,
