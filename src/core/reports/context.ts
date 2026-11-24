@@ -152,6 +152,8 @@ export function refKey(...parts: string[]): string {
 
 export type LockedTemplate = {
   versionId: string;
+  familyId: string;
+  versionNumber: number;
   kind: TemplateKind;
   reportType: string;
   document: TemplateDocument;
@@ -280,6 +282,8 @@ export async function loadLockedTemplate(
   );
   return {
     versionId,
+    familyId: detail.familyId,
+    versionNumber: detail.versionNumber,
     kind: detail.kind,
     reportType: detail.reportType,
     document: detail.document,

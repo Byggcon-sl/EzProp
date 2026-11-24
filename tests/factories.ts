@@ -34,6 +34,8 @@ import {
   organizations,
   outcomes,
   properties,
+  publishCheckResults,
+  reportReleases,
   reports,
   ruleConditions,
   rules,
@@ -58,6 +60,9 @@ import { uuidv7 } from "@/shared/lib/uuid";
  * sjekker at alle tabellene i databasen står i listen.
  */
 export const RESET_TABLES = [
+  // Utgivelser og sjekken før publisering (ADR 0015). Før rapporten de peker på.
+  "publish_check_results",
+  "report_releases",
   // Rapporten (Badet på PC, ADR 0013). Før KI-loggen, malene, rommene og oppdragene de peker på.
   "rule_suggestion_decisions",
   "tgiu_details",
@@ -1877,5 +1882,85 @@ export async function createRuleSuggestionDecisionRow(
       })
       .returning(),
     "rule_suggestion_decisions",
+  );
+}
+
+/**
+ * En utgivelse (versjon 1) med tomt snapshot. Lager rapport, ansatt, sertifisering og selskap når
+ * de mangler. Setter ikke `reports.status`; det gjør testen selv når den trenger det.
+ */
+export async function createReportReleaseRow(
+  organizationId: string,
+  overrides: ReportOverrides<typeof reportReleases.$inferInsert> = {},
+) {
+  const reportId = overrides.reportId ?? (await createReportRow(organizationId)).id;
+  const employeeId =
+    overrides.signedByEmployeeId ??
+    overrides.releasedBy ??
+    (await createEmployee(await createUser(), organizationId, ["inspector"])).id;
+  const certificationId =
+    overrides.certificationId ?? (await createCertification({ id: employeeId, organizationId })).id;
+  const companyId = overrides.companyId ?? (await createCompany(organizationId)).id;
+  const releasedAt = overrides.releasedAt ?? new Date();
+  const retainUntil = new Date(releasedAt);
+  retainUntil.setUTCFullYear(retainUntil.getUTCFullYear() + 10);
+  const today = todayInOslo(releasedAt);
+  return insertedRow(
+    await db
+      .insert(reportReleases)
+      .values({
+        id: uuidv7(),
+        versionNumber: 1,
+        originalReleaseDate: today,
+        validUntil: null,
+        snapshot: { schema_version: 1 },
+        contentHash: createHash("sha256").update("{}").digest("hex"),
+        retainUntil,
+        ...overrides,
+        releasedAt,
+        releasedBy: overrides.releasedBy ?? employeeId,
+        signedByEmployeeId: employeeId,
+        certificationId,
+        companyId,
+        reportId,
+        organizationId,
+      })
+      .returning(),
+    "report_releases",
+  );
+}
+
+/** En advarsel fra sjekken før publisering. Lager utgivelsen når den mangler. */
+export async function createPublishCheckResultRow(
+  organizationId: string,
+  overrides: ReportOverrides<typeof publishCheckResults.$inferInsert> = {},
+) {
+  const release =
+    overrides.releaseId && overrides.reportId
+      ? { id: overrides.releaseId, reportId: overrides.reportId }
+      : await createReportReleaseRow(organizationId, { reportId: overrides.reportId });
+  return insertedRow(
+    await db
+      .insert(publishCheckResults)
+      .values({
+        id: uuidv7(),
+        checkCode: "tg2_tg3_missing_measure",
+        severity: "warning",
+        targetRef: {
+          roomId: null,
+          checkpointId: null,
+          checkpointKey: null,
+          deviationId: null,
+          ruleKey: null,
+          aiUsageId: null,
+          missing: [],
+        },
+        ...overrides,
+        reportId: release.reportId,
+        releaseId: release.id,
+        organizationId,
+      })
+      .returning(),
+    "publish_check_results",
   );
 }

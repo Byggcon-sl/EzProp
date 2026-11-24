@@ -123,6 +123,13 @@ const textPairs: [text: string, background: string, usage: string][] = [
   ["stone", "sand", "«Forslag fra reglene» og kilde i forslagskortet"],
   ["stone", "white", "linjen over overskriften og befaringsåret i toppfeltet"],
   ["white", "night", "valgt pille (ChoiceButtons)"],
+  // Publisering av badet (designet avsnitt 6, 12 og 17)
+  ["slate-900", "white", "«Må rettes» og funnteksten på hvitt sperrekort"],
+  ["slate-700", "white", "punktnavnet på sperrekortet"],
+  ["slate-900", "sand", "«Dette publiseres» og linjen «Tilbake til publisering»"],
+  ["sync-pending-text", "white", "«Venter på synk (N endringer)» i nedre linje"],
+  ["sync-offline-text", "white", "«Publisering krever nett» i nedre linje"],
+  ["white", "slate-500", "sperret hovedknapp «Publiser (2 må rettes …)» (stone)"],
   ...SYNC_STATES.map((state): [string, string, string] => [
     `sync-${state}-text`,
     "white",
@@ -141,6 +148,11 @@ const nonTextPairs: [ring: string, background: string, usage: string][] = [
   // 2.10 kanten på KI-merket og forslagsboksen
   ...[...BACKGROUNDS, "ai-50"].map((bg): [string, string, string] => ["ai-line", bg, "KI-kant"]),
   ["urgent-line", "white", "kant på felt med feil"],
+  // Publisering av badet (docs/funksjoner/fase2a-publisering-badet-design.md avsnitt 17). Den
+  // tykke venstrekanten på en sperre er pynt: «Må rettes» og «Krysset bort» står som tekst.
+  ["white", "night", "hvit knott mot night (bryteren «Publiser likevel» på)"],
+  ["field", "white", "kant og knott på bryteren (av)"],
+  ["night", "white", "hakeikonet i knotten mot hvit (bryteren på)"],
 ];
 
 describe("kontrasthjelperen", () => {

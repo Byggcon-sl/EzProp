@@ -77,6 +77,10 @@ export const suggestPhrases: SuggestPhrases = async (actor, organizationId, room
   const values = parseOrThrow(suggestPhrasesInputSchema, input);
   return guardReportErrors("phrase_suggest", async (): Promise<SuggestPhrasesResult> => {
     const context = await loadRoomContext(db, grant, room, { lock: false });
+    // Publisert rapport: ingen nye KI-forslag før «Lag ny versjon» (ADR 0015 punkt 15)
+    if (context.report?.status === "published") {
+      throw new ReportValidationError("report_published");
+    }
     if (!context.report || context.report.status !== "draft") throw new AccessDeniedError();
     const { candidates, cut } = await loadPhraseCandidatesWith(db, grant, {
       reportId: context.report.id,
