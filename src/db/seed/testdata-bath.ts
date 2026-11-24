@@ -685,25 +685,9 @@ export async function findShowcaseBathReport(
   db: Db,
   organizationId: string,
 ): Promise<ShowcaseBathReport | null> {
-  const hasTg3 = sql`exists (
-    select 1 from ${deviations}
-    join ${checkpointResults} on ${checkpointResults.id} = ${deviations.checkpointResultId}
-      and ${checkpointResults.organizationId} = ${organizationId}
-      and ${checkpointResults.deletedAt} is null
-    where ${deviations.organizationId} = ${organizationId}
-      and ${deviations.reportId} = ${reports.id}
-      and ${deviations.deletedAt} is null
-      and ${deviations.kind} = 'tg'
-      and ${deviations.tg} = 3
-      and ${checkpointResults.roomId} = ${rooms.id})`;
-  const hasTgiu = sql`exists (
-    select 1 from ${checkpointResults}
-    where ${checkpointResults.organizationId} = ${organizationId}
-      and ${checkpointResults.reportId} = ${reports.id}
-      and ${checkpointResults.roomId} = ${rooms.id}
-      and ${checkpointResults.deletedAt} is null
-      and ${checkpointResults.tgDirect} = 'IU')`;
-  const [row] = await db
+  // Tre enkle spørringer i stedet for én med korrelerte `exists`: med to delspørringer per rad
+  // kunne planleggeren i CI velge en plan som gikk ut på tid (60 s) på et lite datasett.
+  const candidates = await db
     .select({
       reportId: reports.id,
       assignmentId: assignments.id,
@@ -758,13 +742,50 @@ export async function findShowcaseBathReport(
         eq(reports.organizationId, organizationId),
         isNull(reports.deletedAt),
         eq(reports.status, "draft"),
-        hasTg3,
-        hasTgiu,
       ),
     )
-    .orderBy(asc(assignments.number), asc(rooms.createdAt), asc(rooms.id))
-    .limit(1);
-  return row ?? null;
+    .orderBy(asc(assignments.number), asc(rooms.createdAt), asc(rooms.id));
+  if (candidates.length === 0) return null;
+  const reportIds = [...new Set(candidates.map((c) => c.reportId))];
+
+  const tg3Rows = await db
+    .selectDistinct({ reportId: deviations.reportId, roomId: checkpointResults.roomId })
+    .from(deviations)
+    .innerJoin(
+      checkpointResults,
+      and(
+        eq(checkpointResults.id, deviations.checkpointResultId),
+        eq(checkpointResults.organizationId, organizationId),
+        isNull(checkpointResults.deletedAt),
+      ),
+    )
+    .where(
+      and(
+        eq(deviations.organizationId, organizationId),
+        inArray(deviations.reportId, reportIds),
+        isNull(deviations.deletedAt),
+        eq(deviations.kind, "tg"),
+        eq(deviations.tg, 3),
+      ),
+    );
+  const tgiuRows = await db
+    .selectDistinct({ reportId: checkpointResults.reportId, roomId: checkpointResults.roomId })
+    .from(checkpointResults)
+    .where(
+      and(
+        eq(checkpointResults.organizationId, organizationId),
+        inArray(checkpointResults.reportId, reportIds),
+        isNull(checkpointResults.deletedAt),
+        eq(checkpointResults.tgDirect, "IU"),
+      ),
+    );
+  const keyOf = (reportId: string, roomId: string | null) => `${reportId}:${roomId ?? ""}`;
+  const withTg3 = new Set(tg3Rows.map((r) => keyOf(r.reportId, r.roomId)));
+  const withTgiu = new Set(tgiuRows.map((r) => keyOf(r.reportId, r.roomId)));
+  const found = candidates.find(
+    (c) => withTg3.has(keyOf(c.reportId, c.roomId)) && withTgiu.has(keyOf(c.reportId, c.roomId)),
+  );
+  return found ?? null;
 }
 
 /** Våtrommene i testoppdragene i databasen, med det seed trenger. Bare Byggcon og TD-ordre. */
