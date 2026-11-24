@@ -28,7 +28,7 @@ import {
   type AreaSum,
 } from "./codes";
 import { numberRoomDrafts } from "./room-presets";
-import { PropertyMissingError } from "./errors";
+import { assertReportNotPublished, PropertyMissingError } from "./errors";
 import {
   addRoomsInputSchema,
   buildingInputSchema,
@@ -655,6 +655,7 @@ export async function saveBuilding(
 
   return db.transaction(async (tx) => {
     const assignment = await lockAssignment(tx, orgId, assignmentId);
+    await assertReportNotPublished(tx, orgId, assignment.id);
 
     if (buildingId === null) {
       if (!(await propertyIsActive(tx, orgId, assignment.propertyId))) {
@@ -723,6 +724,7 @@ export async function removeBuilding(
 
   return db.transaction(async (tx) => {
     const building = await lockBuilding(tx, orgId, buildingId);
+    await assertReportNotPublished(tx, orgId, building.assignmentId);
     const now = new Date();
     const floorRows = await lockActiveFloors(tx, orgId, [building.id]);
     const floorIds = floorRows.map((row) => row.id);
@@ -782,6 +784,7 @@ export async function saveFloor(
 
   return db.transaction(async (tx) => {
     const building = await lockBuilding(tx, orgId, buildingId);
+    await assertReportNotPublished(tx, orgId, building.assignmentId);
 
     if (floorId === null) {
       const [row] = await tx
@@ -859,6 +862,7 @@ export async function removeFloor(
 
   return db.transaction(async (tx) => {
     const floor = await lockFloor(tx, orgId, floorId);
+    await assertReportNotPublished(tx, orgId, floor.assignmentId);
     const now = new Date();
     const roomRows = await removeFloorContents(tx, grant, floor.assignmentId, [floor.id], now);
     await tx
@@ -910,6 +914,7 @@ export async function saveFloorArea(
 
   return db.transaction(async (tx) => {
     const floor = await lockFloor(tx, orgId, floorId);
+    await assertReportNotPublished(tx, orgId, floor.assignmentId);
     const existing = await findFloorArea(tx, orgId, floor.id);
 
     const hasArea = [parsed.braI, parsed.braE, parsed.braB, parsed.alh].some(
@@ -998,6 +1003,7 @@ export async function saveRoom(
 
   return db.transaction(async (tx) => {
     const floor = await lockFloor(tx, orgId, floorId);
+    await assertReportNotPublished(tx, orgId, floor.assignmentId);
     const values = {
       roomType: parsed.roomType,
       name: parsed.name,
@@ -1086,6 +1092,7 @@ export async function addRooms(
 
   return db.transaction(async (tx) => {
     const floor = await lockFloor(tx, orgId, floorId);
+    await assertReportNotPublished(tx, orgId, floor.assignmentId);
     const existing = await tx
       .select({ roomType: rooms.roomType, name: rooms.name })
       .from(rooms)
@@ -1151,6 +1158,7 @@ export async function removeRoom(
 
   return db.transaction(async (tx) => {
     const room = await lockRoom(tx, orgId, roomId);
+    await assertReportNotPublished(tx, orgId, room.assignmentId);
     await tx
       .update(rooms)
       .set(softDelete(grant, new Date()))

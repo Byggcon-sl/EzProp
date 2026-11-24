@@ -195,6 +195,7 @@ Hver oppgave kan gis til en egen Claude-tråd. Rekkefølgen følger planen: **0a
 - [x] **Malen for ett bad** lagt inn i malmotoren: kontrollpunktene for våtrom, med Byggcons egne utkast til avvikstekster (merket «ikke godkjent av fagrådet»). (12.11.2026, PR #159, oppgavekort `docs/funksjoner/fase2a-mal-bad.md`, migreringen `0028_mal-tekststatus`, beslutningene A200–A213, versjon 0.6.5)
 - [x] **Reglene badet trenger,** i regelmotoren som én felles kodepakke for iPad og server: alder mot levetid (med trinn), én målegrense for fukt, våtrom fra før 2000, og hulltaking nektet gir TGIU. Testsaker per regel. Er det tatt hull og målt uten forhøyet fukt, gir alderen alene ikke TG2 på tilliggende konstruksjoner (Ståle 10.11.2026, spørsmål 59a, tolket i A224; hulltaking ikke utført gir TGIU). (12.11.2026, PR #167, regelmotoren i `src/core/rules`, migrering 0030, ADR 0009, beslutningene A224–A232, versjon 0.8.0)
 - [x] **KI i veien:** forslag fra frasebanken, språkvask av avviksteksten og utkast til sammendrag, gjennom KI-grunnmuren. (PR #232, merget 24.11.2026, oppgavekort `docs/funksjoner/fase2a-ki-i-veien.md`, migrering 0037, A431–A442, A460–A472 og A482–A491, versjon 0.18.0)
+- [x] **Publisering av badet:** sperren for det som gjelder våtrom (TG2 eller TG3 uten årsak og konsekvens, TG3 uten kostnad, våtrom uten hulltaking eller begrunnelse), med aktiv overstyring og logg. (PR #234, merget 24.11.2026, oppgavekort `docs/funksjoner/fase2a-publisering-badet.md`, ADR 0015, migrering `0038_publisering-badet`.)
 
 ## Fase 2a – Fra Ståles svar 12.11.2026
 

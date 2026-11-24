@@ -38,6 +38,8 @@ import {
   createOrder,
   createOutcomeRow,
   createProperty,
+  createPublishCheckResultRow,
+  createReportReleaseRow,
   createReportRow,
   createRoom,
   createRuleConditionRow,
@@ -66,6 +68,12 @@ const TEMPLATES_TEST_FILE = "src/core/templates/templates.test.ts";
  * tjenesten; til den finnes, er `tests/tenant-isolation-all-tables.test.ts` rød med vilje.
  */
 const REPORTS_TEST_FILE = "src/core/reports/reports.test.ts";
+
+/**
+ * Utgivelsene og sjekkradene (migrering `0038_publisering-badet`, ADR 0015) har tenant-testene sine
+ * i testfilen til publiseringstjenesten (docs/funksjoner/fase2a-publisering-badet.md, I8 og I9).
+ */
+const PUBLISH_TEST_FILE = "src/core/reports/publish.test.ts";
 
 /**
  * Én tabell med `organization_id`, slik den samlede tenant-testen
@@ -308,9 +316,19 @@ export const tenantTables: TenantTableEntry[] = [
     insertRow: async (organizationId) => (await createProperty(organizationId)).property.id,
   },
   {
+    table: "publish_check_results",
+    testFile: PUBLISH_TEST_FILE,
+    insertRow: async (organizationId) => (await createPublishCheckResultRow(organizationId)).id,
+  },
+  {
     table: "report_buildings",
     testFile: "src/core/buildings/buildings.test.ts",
     insertRow: async (organizationId) => (await createBuilding(organizationId)).id,
+  },
+  {
+    table: "report_releases",
+    testFile: PUBLISH_TEST_FILE,
+    insertRow: async (organizationId) => (await createReportReleaseRow(organizationId)).id,
   },
   {
     table: "reports",

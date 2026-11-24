@@ -72,6 +72,8 @@ export async function withRoomWrite<T>(
       const context = await loadRoomContext(tx, grant, room, { lock: true });
       const report = context.report;
       if (!report) throw new ReportValidationError("report_not_started");
+      // Låst etter publisering (ADR 0015 punkt 15): sjekket på den låste raden i transaksjonen
+      if (report.status === "published") throw new ReportValidationError("report_published");
       if (report.status !== "draft") throw new ReportValidationError("report_not_editable");
       const template = await loadLockedTemplate(tx, actor, grant, report.templateVersionId);
       if (template.kind !== "system" || template.reportType !== "condition_report") {
@@ -134,6 +136,8 @@ export const withReportWrite: WithReportWrite = async (actor, organizationId, as
         )
         .for("update");
       if (!report) throw new ReportValidationError("report_not_started");
+      // Låst etter publisering (ADR 0015 punkt 15), samme feil som `withRoomWrite`
+      if (report.status === "published") throw new ReportValidationError("report_published");
       if (report.status !== "draft") throw new ReportValidationError("report_not_editable");
       const scope: ReportWriteScope = {
         tx,
