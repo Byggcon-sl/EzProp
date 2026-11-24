@@ -3,7 +3,7 @@
 - **Fase:** 2a-2 Hele veien først, punkt 4 («ADR: valg av PDF-motor, og PDF-en av badet i Byggcons profil, i ferdig kvalitet»)
 - **Modul:** kjerne. Ny `src/core/pdf` er et rent blad (motoren bak eget grensesnitt, profilene, oppsettet). Rapportdataene lages i `src/core/reports` i egne filer (`pdf-data.ts`, `pdf-data-build.ts`, `tg-explanation.ts`). Knapp og rute under `src/app/(ansatt)/oppdrag/[id]/`.
 - **Branch:** `pdf-motor-badet` (bygger på `main`; main flettet inn 24.11.2026 med publisering av badet, utgivelser og ADR 0015)
-- **Status:** godkjent for bygging. Forhåndsvurdering runde 1 tatt inn 18.11.2026. Overtatt 24.11.2026 med main flettet inn (publisering, utgivelser, ADR 0015, «KI i veien»); ny forhåndsvurdering samme dag (forbedrer, arkitekt, ki-ansvarlig, fagansvarlig, sikkerhet-personvern, test-leder) er tatt inn, se «Avgjørelser 24.11.2026». Main (`6f4ce32e`, versjon 0.19.4) flettet inn på nytt 24.11.2026 kl. 11 UTC; forhåndsvurdering runde 2 (forbedrer, sikkerhet-personvern, test-leder) er tatt inn, se «Avgjørelser 24.11.2026, runde 2». Beslutningene er A530–A542, spørsmål 122 (flyttet fra 92, som `testdata-del-2` bruker). Versjon 0.19.5 (én patch over main 0.19.4).
+- **Status:** godkjent for bygging. Forhåndsvurdering runde 1 tatt inn 18.11.2026. Overtatt 24.11.2026 med main flettet inn (publisering, utgivelser, ADR 0015, «KI i veien»); ny forhåndsvurdering samme dag (forbedrer, arkitekt, ki-ansvarlig, fagansvarlig, sikkerhet-personvern, test-leder) er tatt inn, se «Avgjørelser 24.11.2026». Main (`6f4ce32e`, versjon 0.19.4) flettet inn på nytt 24.11.2026 kl. 11 UTC; forhåndsvurdering runde 2 (forbedrer, sikkerhet-personvern, test-leder) er tatt inn, se «Avgjørelser 24.11.2026, runde 2». Beslutningene er A530–A542 og A600–A602, spørsmål 122 (flyttet fra 92, som `testdata-del-2` bruker). Versjon 0.20.0 (minor over main 0.19.7, større leveranse).
 - **Dato:** 18.11.2026 (oppdatert 24.11.2026)
 - **Støtter hovedmål:**
   - **Færre reklamasjoner:** PDF-en er det kunden og megleren leser. Den viser hvert avvik med TG, årsak, konsekvens, tiltak og kostnad på samme måte hver gang, TGIU med alle opplysningene, og forklaringen av TG. Ingen interne koder, ingen tomme sider, ingen overskrift alene nederst på en side. I utkastet ser takstmannen det som mangler, før rapporten går ut.
@@ -327,6 +327,9 @@ Ingen nye fagregler. Rene funksjoner med tabelltester:
 - **A540 (ny 24.11.2026)** Alle svar på felt med `show_in_report = true` står i PDF-en med etikett, valgtekst og enhet; `show_in_report = false` aldri. Lett å endre (spørsmål 122d).
 - **A541 (ny 24.11.2026)** Utkast kan lages også av en publisert rapport (med «UTKAST», fra de låste radene); `superseded` gir 404. Hver utgivelse kan åpnes som PDF fra snapshotet, uten UTKAST, med `generatedAt` = publiseringstidspunktet, uten lagring (F7). Lett å endre.
 - **A542 (ny 24.11.2026)** PDF-en viser ingen KI-merking i 2a-2, og `ReportPdfData` tar ikke med `ai_usage_id` eller `text_source`. Lett å endre (spørsmål 122e).
+- **A600 (ny 24.11.2026, overtakelsen kl. 21 UTC)** KI-plassholdere i gamle tekster tas ut av PDF-en, også av en utgivelse; «[årstall mangler]» står. Lett å endre.
+- **A601 (ny 24.11.2026)** Arbeidstråden får minnegrense 256 MB; måles med 60 bilder i 2a-3. Lett å endre.
+- **A602 (ny 24.11.2026)** Mangler malversjonen til en utgivelse, lages PDF-en uten svar på felt i stedet for feilside. Lett å endre.
 
 ## Roller
 - **arkitekt:** ADR 0016 med prøven fra `.next/standalone`, grensesnittet, lint-regelen og utrullingen i Azure.

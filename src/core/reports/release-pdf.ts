@@ -1,6 +1,6 @@
 import { and, eq, isNull, ne } from "drizzle-orm";
 import { AccessDeniedError, requireOrganizationAccess } from "@/core/access";
-import { readTemplateVersionIn } from "@/core/templates";
+import { readTemplateVersionIn, TemplateNotFoundError } from "@/core/templates";
 import { db } from "@/db/client";
 import { assignments, companies, reportReleases, reports } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
@@ -94,7 +94,7 @@ export const getReleasePdfData: GetReleasePdfData = async (
     const templateVersionId = snapshot.report?.template_version_id;
     const template =
       typeof templateVersionId === "string" && isUuid(templateVersionId)
-        ? pdfTemplateLabelsOf((await readTemplateVersionIn(db, grant, templateVersionId)).document)
+        ? await labelsOrNone(grant, templateVersionId)
         : NO_LABELS;
     const data = buildReportPdfData({
       snapshot: {
@@ -117,3 +117,21 @@ export const getReleasePdfData: GetReleasePdfData = async (
     };
   });
 };
+
+/**
+ * Etikettene fra malversjonen i snapshotet. Finnes ikke malversjonen lenger, lages PDF-en likevel,
+ * uten svar på felt (ingen etikett å vise), i stedet for en feilside som aldri går over.
+ */
+async function labelsOrNone(
+  grant: Parameters<typeof readTemplateVersionIn>[1],
+  templateVersionId: string,
+): Promise<PdfTemplateLabels> {
+  try {
+    return pdfTemplateLabelsOf(
+      (await readTemplateVersionIn(db, grant, templateVersionId)).document,
+    );
+  } catch (error) {
+    if (error instanceof TemplateNotFoundError) return NO_LABELS;
+    throw error;
+  }
+}

@@ -268,6 +268,24 @@ describe("én rapportform (F6) og eldre utgivelser (F7)", () => {
     expect(JSON.stringify(data)).not.toContain("Ny ");
   });
 
+  it("malversjonen i snapshotet finnes ikke lenger: PDF-en lages likevel, uten svar på felt", async () => {
+    const f = await publishedBathroom();
+    const [release] = await db
+      .select({ snapshot: reportReleases.snapshot })
+      .from(reportReleases)
+      .where(eq(reportReleases.id, f.releaseId));
+    const snapshot = release!.snapshot as { report: Record<string, unknown> };
+    await db
+      .update(reportReleases)
+      .set({
+        snapshot: { ...snapshot, report: { ...snapshot.report, template_version_id: uuidv7() } },
+      })
+      .where(eq(reportReleases.id, f.releaseId));
+    const { data } = await releaseOf(f.actor, f);
+    expect(checkpointIn(data, CP.floor)).not.toBeNull();
+    expect(data.rooms.flatMap((r) => r.checkpoints).flatMap((c) => c.answers)).toEqual([]);
+  });
+
   it("11.5.2 selskap uten org.nr. gir company null, aldri brand_name", async () => {
     const f = await publishedBathroom();
     await db.update(companies).set({ orgNumber: null }).where(eq(companies.id, f.companyId));
