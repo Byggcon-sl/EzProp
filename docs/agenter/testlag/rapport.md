@@ -1,6 +1,6 @@
 # Rapport fra testlaget
 
-**Kjøring 24.11.2026.** Det som er nytt siden 18.11 ble prøvd: «KI i veien» på badet, det vil si forslag til tekst i avviket, språkvask og utkast til sammendrag. Seks testere: takstmann, kontor, robusthet, fag, KI og dokumentvakt. Begge rutinene, hovedløkken og nattløkken, er slått på.
+**Kjøring 24.11.2026.** «Publisering av badet» (PR #234) ble merget etter at kjøringen startet, og prøves i neste kjøring. Det som er nytt siden 18.11 ble prøvd: «KI i veien» på badet, det vil si forslag til tekst i avviket, språkvask og utkast til sammendrag. Seks testere: takstmann, kontor, robusthet, fag, KI og dokumentvakt. Begge rutinene, hovedløkken og nattløkken, er slått på.
 
 ## Hva er prøvd
 Badet på iPad og PC med forslag til avvik, årsak, konsekvens og tiltak, språkvask, utkast til sammendrag, og uten nett. Kontor og leder: nytt oppdrag fra bestilling, status, søk, endringer, sammenslåing av kontakter, reklamasjon og tilbud. Dobbelttrykk, to faner, tapt svar, utløpt innlogging, annen organisasjon og 72 avvik på ett bad. Sammendraget mot forskriften, og om dokumentene stemmer.
