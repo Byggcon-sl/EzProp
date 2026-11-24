@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import postgres from "postgres";
 import { assertLocalOrTestDatabase } from "./database-guard";
 import {
@@ -2128,4 +2129,448 @@ export async function expectNoAxeViolations(page: Page, where: string) {
     );
   });
   expect(violations, `axe uten feil (${where})`).toEqual([]);
+}
+
+// --- Testdata, del 2: badene i testoppdragene (docs/funksjoner/fase2a-testdata-del-2-testplan.md avsnitt 5) ---
+
+/*
+ * Oppslagene bruker funksjonene i `src/db/seed/testdata-bath.ts` (`findShowcaseBathReport` og
+ * `findTestdataBathReports`), slik testplanen sier. De laster databaseklienten til appen, som
+ * krever miljøvariablene til appen, så de kjøres i en egen `tsx`-prosess mot e2e-databasen
+ * (samme mønster som `seedTestdataForE2e`). Playwright-prosessen laster dem aldri. Badene finnes
+ * alltid på innholdet, aldri på rekkefølge eller antall rader.
+ */
+
+/** Et bad i et testoppdrag i Byggcon, med det e2e trenger for å åpne det. */
+export type E2eTestdataBath = {
+  reportId: string;
+  assignmentId: string;
+  assignmentNumber: string;
+  roomId: string;
+  roomName: string | null;
+};
+
+type NodeTaskInput = Record<string, unknown>;
+
+/** Aktøren for brukeren med e-posten i organisasjonen (bare i oppgavene under). */
+async function actorByEmail(
+  email: string,
+  organizationId: string,
+): Promise<{ id: string; email: string; name: string }> {
+  const sql = e2eSql();
+  try {
+    const [row] = await sql<{ id: string; email: string; name: string }[]>`
+      select u.id, u.email, u.name from users u
+      join employees e on e.user_id = u.id and e.organization_id = ${organizationId}
+        and e.deleted_at is null and e.deactivated_at is null
+      where u.email = ${email} limit 1`;
+    if (!row) throw new Error("Fant ikke den ansatte for e2e i Byggcon");
+    return row;
+  } finally {
+    await sql.end();
+  }
+}
+
+/**
+ * Oppgavene som kjøres i egen prosess (`runNodeTask`). Bare for e2e. Hver oppgave laster
+ * modulene i `src/` selv, med dynamisk import, så Playwright-prosessen ikke laster dem.
+ */
+export const E2E_NODE_TASKS = {
+  /**
+   * Sørger for at Byggcon har en publisert systemmal for tilstandsrapport med badet, slik
+   * organisasjonen har i drift; uten den fyller `pnpm db:seed:testdata` ikke ut badene. Bruker
+   * maltjenestene med admin fra seed som aktør. Finnes en publisert systemmal alt, endres
+   * ingenting. Sletter ingenting.
+   */
+  async ensureByggconTemplate(input: NodeTaskInput): Promise<"created" | "existing"> {
+    const { db } = await import("../src/db/client");
+    const { findTestdataOrganization } = await import("../src/db/seed/testdata-anchor");
+    const { wetRoomTemplate } = await import("../src/db/seed/templates/wet-room");
+    const templates = await import("../src/core/templates");
+    const organization = await findTestdataOrganization(db);
+    if (!organization) throw new Error("Fant ikke Byggcon (kjør pnpm db:seed)");
+    const actor = await actorByEmail(String(input.adminEmail), organization.id);
+    const isSystemReport = (family: { kind: string; reportType: string }) =>
+      family.kind === "system" && family.reportType === "condition_report";
+    let families = (await templates.listTemplateFamilies(actor, organization.id)).filter(
+      isSystemReport,
+    );
+    if (families.some((family) => family.versions.some((v) => v.status === "published"))) {
+      return "existing";
+    }
+    const parsed = templates.parseTemplateDocument(wetRoomTemplate);
+    if (!parsed.success) throw new Error("Malen for badet er ugyldig");
+    const now = new Date();
+    if (families.length === 0) {
+      await templates.createTemplateFamily(actor, organization.id, {
+        name: "Tilstandsrapport bolig",
+        kind: "system",
+        report_type: "condition_report",
+      });
+      families = (await templates.listTemplateFamilies(actor, organization.id)).filter(
+        isSystemReport,
+      );
+    }
+    const family = families[0];
+    if (!family) throw new Error("Fant ikke malfamilien etter at den ble laget");
+    // Et utkast som finnes (også fra en avbrutt kjøring), brukes; ellers lages et nytt
+    const draft = family.versions.find((version) => version.status === "draft");
+    const versionId =
+      draft?.id ??
+      (await templates.createDraftVersion(actor, organization.id, family.id, now)).versionId;
+    await templates.saveDraftContent(actor, organization.id, versionId, parsed.document, now);
+    await templates.publishVersion(
+      actor,
+      organization.id,
+      versionId,
+      "Lagt inn av e2e i testdatabasen. Tekstene er utkast, ikke godkjent av fagrådet.",
+      now,
+    );
+    return "created";
+  },
+
+  /** Visningsbadet og badene i testoppdragene i Byggcon, fra oppslagene i seed-modulen. */
+  async testdataBaths(): Promise<{
+    showcase: E2eTestdataBath | null;
+    reports: (E2eTestdataBath & { assignmentStatus: string })[];
+  }> {
+    const { db } = await import("../src/db/client");
+    const { findTestdataOrganization } = await import("../src/db/seed/testdata-anchor");
+    const { findShowcaseBathReport, findTestdataBathReports } =
+      await import("../src/db/seed/testdata-bath");
+    const organization = await findTestdataOrganization(db);
+    if (!organization) throw new Error("Fant ikke Byggcon (kjør pnpm db:seed)");
+    const showcase = await findShowcaseBathReport(db, organization.id);
+    const reports = await findTestdataBathReports(db, organization.id);
+    return {
+      showcase: showcase && {
+        reportId: showcase.reportId,
+        assignmentId: showcase.assignmentId,
+        assignmentNumber: showcase.assignmentNumber,
+        roomId: showcase.roomId,
+        roomName: showcase.roomName,
+      },
+      reports: reports.map((row) => ({
+        reportId: row.reportId,
+        assignmentId: row.assignmentId,
+        assignmentNumber: row.assignmentNumber,
+        assignmentStatus: row.assignmentStatus,
+        roomId: row.roomId,
+        roomName: row.roomName,
+      })),
+    };
+  },
+
+  /**
+   * Setter svaret på feltet tilbake til tomt med `saveField` (aldri sletting), som den ansatte
+   * med e-posten. Brukes for å gjenopprette visningsbadet etter at en test har lagret et svar.
+   * Har feltet ikke noe svar, gjøres ingenting.
+   */
+  async clearFieldAnswer(input: NodeTaskInput): Promise<"saved" | "nothing"> {
+    const { db } = await import("../src/db/client");
+    const { findTestdataOrganization } = await import("../src/db/seed/testdata-anchor");
+    const { getRoomView } = await import("../src/core/reports/room-view");
+    const { saveField } = await import("../src/core/reports/save-field");
+    const organization = await findTestdataOrganization(db);
+    if (!organization) throw new Error("Fant ikke Byggcon (kjør pnpm db:seed)");
+    const actor = await actorByEmail(String(input.email), organization.id);
+    const room = { assignmentId: String(input.assignmentId), roomId: String(input.roomId) };
+    const view = await getRoomView(actor, organization.id, room);
+    if (view.state !== "started") throw new Error("Rapporten i badet er ikke startet");
+    const answer = view.answers.find((a) => a.elementKey === input.elementKey);
+    if (!answer) return "nothing";
+    const result = await saveField(actor, organization.id, room, {
+      table: "field_answers",
+      id: answer.id,
+      elementKey: answer.elementKey,
+      field: "value",
+      value: { text: null, number: null, optionKeys: null },
+      base: answer.value,
+    });
+    if (result.status !== "saved") {
+      throw new Error("Svaret ble ikke satt tilbake (endret av andre)");
+    }
+    return "saved";
+  },
+} as const;
+
+type NodeTaskName = keyof typeof E2E_NODE_TASKS;
+
+/**
+ * Kjører en oppgave fra `E2E_NODE_TASKS` i en egen `tsx`-prosess mot e2e-databasen og gir svaret
+ * tilbake. Bare lokal database eller testdatabasen (`assertLocalOrTestDatabase`), og
+ * `APP_ENVIRONMENT=test`. Feilmeldingen har bare utskriften fra prosessen, og oppgavene skriver
+ * bare id-er og koder.
+ */
+function runNodeTask<T>(name: NodeTaskName, input: NodeTaskInput = {}): T {
+  const databaseUrl = e2eDatabaseUrl();
+  assertLocalOrTestDatabase(databaseUrl, process.env.TEST_DATABASE_URL);
+  const helpersUrl = pathToFileURL(path.join(process.cwd(), "e2e/helpers.ts")).href;
+  const marker = "E2E_NODE_TASK_RESULT:";
+  const script = `
+    (async () => {
+      await import("dotenv/config");
+      const { E2E_NODE_TASKS } = await import(${JSON.stringify(helpersUrl)});
+      const input = JSON.parse(process.env.E2E_NODE_TASK_INPUT ?? "{}");
+      const result = await E2E_NODE_TASKS[${JSON.stringify(name)}](input);
+      process.stdout.write("\\n${marker}" + JSON.stringify(result ?? null) + "\\n");
+      process.exit(0);
+    })().catch((error) => {
+      console.error(error instanceof Error ? error.name + ": " + error.message : String(error));
+      process.exit(1);
+    });`;
+  const result = spawnSync(path.join(process.cwd(), "node_modules/.bin/tsx"), ["--eval", script], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      DATABASE_URL: databaseUrl,
+      APP_ENVIRONMENT: "test",
+      E2E_NODE_TASK_INPUT: JSON.stringify(input),
+    },
+    encoding: "utf8",
+    timeout: 120_000,
+  });
+  const line = (result.stdout ?? "").split("\n").find((entry) => entry.startsWith(marker));
+  if (result.status !== 0 || line === undefined) {
+    const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.slice(-2000);
+    throw new Error(`E2e-oppgaven ${name} feilet (kode ${result.status}): ${output}`);
+  }
+  return JSON.parse(line.slice(marker.length)) as T;
+}
+
+/**
+ * Gjør testmiljøet klart for testdata del 2: publisert systemmal i Byggcon (som i drift) og
+ * `pnpm db:seed:testdata`. Andre kjøring skriver ingenting (A508).
+ */
+export function seedTestdataBathsForE2e(): void {
+  runNodeTask("ensureByggconTemplate", { adminEmail: ADMIN_EMAIL });
+  seedTestdataForE2e();
+}
+
+/** Visningsbadet, funnet med `findShowcaseBathReport` (under arbeid, TG3 og TGIU i samme bad). */
+export function findE2eShowcaseBath(): E2eTestdataBath {
+  const { showcase } = runNodeTask<{ showcase: E2eTestdataBath | null }>("testdataBaths");
+  if (!showcase) {
+    throw new Error("Fant ikke visningsbadet etter pnpm db:seed:testdata (findShowcaseBathReport)");
+  }
+  return showcase;
+}
+
+/**
+ * Badene testene trenger, funnet på innholdet med `findTestdataBathReports`:
+ * - `no_deviations`: ferdig eller fakturert, 8 punkt ferdige, sju med TG1, tilliggende med TG0,
+ *   ingen avvik og ingen TGIU.
+ * - `done_with_tgiu` og `done_with_tg3`: ferdig eller fakturert, 8 punkt ferdige, med TGIU eller
+ *   med et avvik med TG3.
+ * - `rejected_measured_again`: under arbeid, med et regelforslag avvist med `measured_again`.
+ * - `unknown_build_year`: under arbeid, med «Ukjent» som kilde for byggeåret.
+ */
+export type E2eTestdataBathKind =
+  | "no_deviations"
+  | "done_with_tgiu"
+  | "done_with_tg3"
+  | "rejected_measured_again"
+  | "unknown_build_year";
+
+type BathFacts = {
+  report_id: string;
+  room_id: string;
+  done_count: number;
+  tg1_count: number;
+  adjacent_tg0: boolean;
+  has_tgiu: boolean;
+  deviation_count: number;
+  has_tg3: boolean;
+  rejected_measured_again: boolean;
+  unknown_build_year: boolean;
+};
+
+const DONE_ASSIGNMENT_STATUSES = new Set(["completed", "invoiced"]);
+
+function matchesBathKind(kind: E2eTestdataBathKind, status: string, facts: BathFacts): boolean {
+  const done = DONE_ASSIGNMENT_STATUSES.has(status) && facts.done_count === 8;
+  switch (kind) {
+    case "no_deviations":
+      return (
+        done &&
+        facts.tg1_count === 7 &&
+        facts.adjacent_tg0 &&
+        facts.deviation_count === 0 &&
+        !facts.has_tgiu
+      );
+    case "done_with_tgiu":
+      return done && facts.has_tgiu;
+    case "done_with_tg3":
+      return done && facts.has_tg3;
+    case "rejected_measured_again":
+      return status === "in_progress" && facts.rejected_measured_again;
+    case "unknown_build_year":
+      return status === "in_progress" && facts.unknown_build_year;
+  }
+}
+
+/** Det første badet (etter oppdragsnummer) som passer innholdet. Kaster når ingen passer. */
+export async function findE2eTestdataBath(kind: E2eTestdataBathKind): Promise<E2eTestdataBath> {
+  const { reports } = runNodeTask<{
+    reports: (E2eTestdataBath & { assignmentStatus: string })[];
+  }>("testdataBaths");
+  if (reports.length === 0) throw new Error("Ingen bad i testoppdragene (pnpm db:seed:testdata)");
+  const sql = e2eSql();
+  try {
+    const facts = await sql<BathFacts[]>`
+      select x.report_id, x.room_id,
+        (select count(*) from checkpoint_results c where c.report_id = x.report_id
+          and c.room_id = x.room_id and c.deleted_at is null and c.done)::int as done_count,
+        (select count(*) from checkpoint_results c where c.report_id = x.report_id
+          and c.room_id = x.room_id and c.deleted_at is null and c.done
+          and c.tg_direct = '1')::int as tg1_count,
+        exists (select 1 from checkpoint_results c join checkpoints k on k.id = c.checkpoint_id
+          where c.report_id = x.report_id and c.room_id = x.room_id and c.deleted_at is null
+            and c.done and k.key = 'wet_room.adjacent' and c.tg_direct = '0') as adjacent_tg0,
+        exists (select 1 from checkpoint_results c where c.report_id = x.report_id
+          and c.room_id = x.room_id and c.deleted_at is null and c.tg_direct = 'IU') as has_tgiu,
+        (select count(*) from deviations d
+          join checkpoint_results c on c.id = d.checkpoint_result_id
+          where d.report_id = x.report_id and c.room_id = x.room_id
+            and d.deleted_at is null)::int as deviation_count,
+        exists (select 1 from deviations d
+          join checkpoint_results c on c.id = d.checkpoint_result_id
+          where d.report_id = x.report_id and c.room_id = x.room_id and d.deleted_at is null
+            and d.kind = 'tg' and d.tg = 3) as has_tg3,
+        exists (select 1 from rule_suggestion_decisions r
+          join checkpoint_results c on c.id = r.checkpoint_result_id
+          where r.report_id = x.report_id and c.room_id = x.room_id and r.deleted_at is null
+            and r.decision = 'rejected'
+            and r.override_reason_code = 'measured_again') as rejected_measured_again,
+        exists (select 1 from field_answers f join template_elements e on e.id = f.element_id
+          where f.report_id = x.report_id and f.room_id = x.room_id and f.deleted_at is null
+            and e.key = 'wet_room.build_year_source'
+            and ('unknown' = any(f.value_option_keys) or f.value_text = 'unknown'))
+          as unknown_build_year
+      from unnest(string_to_array(${reports.map((r) => r.reportId).join(",")}, ',')::uuid[],
+        string_to_array(${reports.map((r) => r.roomId).join(",")}, ',')::uuid[])
+        as x(report_id, room_id)`;
+    const byKey = new Map(facts.map((row) => [`${row.report_id}|${row.room_id}`, row]));
+    const found = reports.find((report) => {
+      const row = byKey.get(`${report.reportId}|${report.roomId}`);
+      return row !== undefined && matchesBathKind(kind, report.assignmentStatus, row);
+    });
+    if (!found) throw new Error(`Fant ikke et bad av typen ${kind} i testoppdragene`);
+    return {
+      reportId: found.reportId,
+      assignmentId: found.assignmentId,
+      assignmentNumber: found.assignmentNumber,
+      roomId: found.roomId,
+      roomName: found.roomName,
+    };
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Adressen til badskjermen for et bad i testoppdragene, eventuelt med et punkt åpent. */
+export function testdataBathUrl(bath: E2eTestdataBath, punkt?: string): string {
+  const base = `/oppdrag/${bath.assignmentId}/rom/${bath.roomId}`;
+  return punkt ? `${base}?punkt=${encodeURIComponent(punkt)}` : base;
+}
+
+/** Et avvik i badet slik det står i databasen: koder og teksten fra testdataene. */
+export type E2eBathDeviation = {
+  checkpointKey: string;
+  kind: "tg" | "hms";
+  tg: number | null;
+  textSource: string;
+  deviationText: string | null;
+  costType: string;
+  costBandKey: string | null;
+};
+
+/** Avvikene i badet (uten myk-slettede). Bare lesing. */
+export async function testdataBathDeviations(bath: E2eTestdataBath): Promise<E2eBathDeviation[]> {
+  const sql = e2eSql();
+  try {
+    const rows = await sql<
+      {
+        checkpoint_key: string;
+        kind: "tg" | "hms";
+        tg: number | null;
+        text_source: string;
+        deviation_text: string | null;
+        cost_type: string;
+        cost_band_key: string | null;
+      }[]
+    >`
+      select k.key as checkpoint_key, d.kind, d.tg, d.text_source, d.deviation_text, d.cost_type,
+        d.cost_band_key
+      from deviations d
+      join checkpoint_results c on c.id = d.checkpoint_result_id
+      join checkpoints k on k.id = c.checkpoint_id
+      where d.report_id = ${bath.reportId} and c.room_id = ${bath.roomId}
+        and d.deleted_at is null
+      order by k.key, d.sort_order`;
+    return rows.map((row) => ({
+      checkpointKey: row.checkpoint_key,
+      kind: row.kind,
+      tg: row.tg,
+      textSource: row.text_source,
+      deviationText: row.deviation_text,
+      costType: row.cost_type,
+      costBandKey: row.cost_band_key,
+    }));
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Valgene i svaret på feltet i badet, eller `null` når svaret mangler eller er tomt. Bare lesing. */
+export async function testdataBathAnswer(
+  bath: E2eTestdataBath,
+  elementKey: string,
+): Promise<string[] | null> {
+  const sql = e2eSql();
+  try {
+    const [row] = await sql<{ value_option_keys: string[] | null; value_text: string | null }[]>`
+      select f.value_option_keys, f.value_text
+      from field_answers f join template_elements e on e.id = f.element_id
+      where f.report_id = ${bath.reportId} and f.room_id = ${bath.roomId}
+        and f.deleted_at is null and e.key = ${elementKey}
+      limit 1`;
+    if (!row) return null;
+    if (row.value_option_keys && row.value_option_keys.length > 0) return row.value_option_keys;
+    return row.value_text ? [row.value_text] : null;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Om punktet i badet står ferdig. Bare lesing. */
+export async function testdataBathCheckpointDone(
+  bath: E2eTestdataBath,
+  checkpointKey: string,
+): Promise<boolean> {
+  const sql = e2eSql();
+  try {
+    const [row] = await sql<{ done: boolean }[]>`
+      select c.done from checkpoint_results c join checkpoints k on k.id = c.checkpoint_id
+      where c.report_id = ${bath.reportId} and c.room_id = ${bath.roomId}
+        and c.deleted_at is null and k.key = ${checkpointKey}
+      limit 1`;
+    return row?.done ?? false;
+  } finally {
+    await sql.end();
+  }
+}
+
+/** Setter svaret på feltet tilbake til tomt med `saveField` som den ansatte (aldri sletting). */
+export function clearTestdataBathAnswer(
+  bath: E2eTestdataBath,
+  elementKey: string,
+  email: string,
+): void {
+  runNodeTask("clearFieldAnswer", {
+    assignmentId: bath.assignmentId,
+    roomId: bath.roomId,
+    elementKey,
+    email,
+  });
 }
