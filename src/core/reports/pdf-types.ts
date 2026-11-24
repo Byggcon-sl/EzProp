@@ -29,8 +29,14 @@ export type PdfTgMatchesCheckpointTg = Assert<MutuallyAssignable<PdfTg, Checkpoi
  * ikke står i snapshotet. Etiketter og valgtekster står alt i snapshotet.
  */
 export type PdfTemplateLabels = {
-  /** Per `element_key`. Felt som ikke står her, regnes som `showInReport: false`. */
-  elements: Readonly<Record<string, { showInReport: boolean; unit: string | null }>>;
+  /**
+   * Per `element_key`. Felt som ikke står her, regnes som `showInReport: false`. `fieldType` er
+   * `field_type` i malen: avkrysning lagres som tallet 1 eller 0 og vises som «Ja» eller «Nei»,
+   * og dato vises som «24.11.2026» (A540).
+   */
+  elements: Readonly<
+    Record<string, { showInReport: boolean; unit: string | null; fieldType: string }>
+  >;
 };
 
 /**

@@ -39,6 +39,10 @@ export {
   startNewVersion,
 } from "./publish";
 export { HOLE_DRILLING_SIGNAL } from "./signals";
+export { buildReportPdfData } from "./pdf-data-build";
+export { getReportDraftPdfData } from "./pdf-data";
+export { getReleasePdfData } from "./release-pdf";
+export { TG_EXPLANATION } from "./tg-explanation";
 export {
   REPORT_VALIDATION_CODES,
   ReportStorageError,

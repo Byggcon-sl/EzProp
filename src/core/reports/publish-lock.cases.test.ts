@@ -259,6 +259,10 @@ const NOT_ROOM_WRITES = new Set([
   "decideAiText",
   "draftSummary",
   "saveSummary",
+  // Leser bare: rapportdataene til PDF-en (utkast og utgivelse, også av publisert rapport)
+  "buildReportPdfData",
+  "getReportDraftPdfData",
+  "getReleasePdfData",
 ]);
 
 async function expectLocked(action: () => Promise<unknown>) {
