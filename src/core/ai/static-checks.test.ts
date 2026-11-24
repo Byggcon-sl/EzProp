@@ -51,6 +51,9 @@ const PORT_LITERAL = /(["'`])(ai|speech_to_text)\1/;
 const PORT_ALLOWED = new Set([
   "src/core/integrations/ports.ts",
   "src/db/seed/sample-assignments.ts",
+  // `PUBLISH_CHECK_SOURCES = ["rule", "ai"]` er kilden til et funn (ADR 0015), ikke porten
+  "src/db/schema/reports.ts",
+  "src/core/reports/logic/codes.ts",
 ]);
 
 describe("KI-modulen, statiske kontroller (12)", () => {

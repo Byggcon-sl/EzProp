@@ -177,7 +177,7 @@ describe("decideAiText", () => {
     );
 
     expect(error).toBeInstanceOf(ReportValidationError);
-    expect((error as ReportValidationError).code).toBe("report_not_editable");
+    expect((error as ReportValidationError).code).toBe("report_published");
     expect(await snapshot(row.id)).toBe(before);
   });
 

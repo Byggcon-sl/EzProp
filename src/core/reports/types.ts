@@ -24,6 +24,7 @@ import type {
   TgDirect,
 } from "@/db/schema";
 import type { INSPECTION_YEAR_SOURCES } from "./logic/codes";
+import type { PublishCheckRoom } from "./logic/publish-check-types";
 import type {
   CheckpointStatus,
   CheckpointTg,
@@ -244,6 +245,8 @@ export type RoomReportView =
       checkpoints: CheckpointView[];
       suggestions: SuggestionView[];
       progress: { done: number; total: number };
+      /** Som `RoomRefresh.publishRoom`. */
+      publishRoom: PublishCheckRoom;
       /**
        * «Mest brukt» (A468): antall valg per kandidat i organisasjonen, for kandidatene i `document`.
        * Lastes med rommet (`LoadPhraseUsage`), så tekstsøket uten nett har tallene. Aldri per ansatt.
@@ -338,6 +341,12 @@ export type RoomRefresh = {
   checkpoints: CheckpointView[];
   suggestions: SuggestionView[];
   progress: { done: number; total: number };
+  /**
+   * Rommet slik sjekken før publisering leser det (ADR 0015). Skjermen regner tellemerket
+   * «2 må rettes, 3 bør sees over» lokalt med `computePublishCheck`, uten nytt kall. Bare koder,
+   * id-er og tilstand; ingen tekst utover det rommet alt har.
+   */
+  publishRoom: PublishCheckRoom;
 };
 
 export type SaveFieldResult =

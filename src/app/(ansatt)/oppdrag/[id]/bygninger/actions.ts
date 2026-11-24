@@ -6,6 +6,7 @@ import {
   addRooms,
   PropertyMissingError,
   removeBuilding,
+  ReportPublishedError,
   removeFloor,
   removeRoom,
   restoreBuilding,
@@ -41,6 +42,7 @@ const ROUTE = "/oppdrag/[id]/bygninger";
 /** Feilene fra kjernen som siden viser med egen tekst. */
 const KNOWN_ERRORS: readonly KnownError[] = [
   { error: PropertyMissingError, message: new PropertyMissingError().message },
+  { error: ReportPublishedError, message: new ReportPublishedError().message },
 ];
 
 /**
@@ -393,6 +395,7 @@ export async function restoreStructureAction(input: {
     };
   } catch (error) {
     if (error instanceof AccessDeniedError) return { ok: false, message: NO_ACCESS };
+    if (error instanceof ReportPublishedError) return { ok: false, message: error.message };
     logger.error("Gjenoppretting feilet", {
       route: ROUTE,
       userId: context.actor.id,

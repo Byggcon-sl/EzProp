@@ -661,6 +661,7 @@ async function recordPolishDecision(
       feature: aiUsageLog.feature,
       reportId: aiUsageLog.reportId,
       targetRef: aiUsageLog.targetRef,
+      outputText: aiUsageLog.outputText,
     })
     .from(aiUsageLog)
     .where(
@@ -681,7 +682,15 @@ async function recordPolishDecision(
   ) {
     throw new AccessDeniedError();
   }
-  await recordDecisionIn(scope.tx, scope.grant, decision.usageId, decision.decision);
+  // Serveren avgjør «godtatt» eller «endret» ut fra teksten som ble lagret, ikke nettleseren (A525)
+  const saved = typeof change.value === "string" ? change.value.trim() : "";
+  const suggested = (row.outputText ?? "").trim();
+  await recordDecisionIn(
+    scope.tx,
+    scope.grant,
+    decision.usageId,
+    saved === suggested ? "accepted" : "edited",
+  );
 }
 
 async function saveChange(scope: WriteScope, values: Change): Promise<SaveFieldResult> {

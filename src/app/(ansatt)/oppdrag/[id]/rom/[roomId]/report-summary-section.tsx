@@ -24,6 +24,7 @@ import {
 import { useRoom } from "./room-context";
 import {
   AI_ROOM_TEXTS,
+  type ActionError,
   isActionError,
   ROOM_ACTION_MESSAGES,
   ROOM_TEXTS,
@@ -153,7 +154,7 @@ export function ReportSummarySection({
         text: value === "" ? null : value,
         baseRowVersion: rowVersion.current,
         ...(draftInput ? { draft: draftInput } : {}),
-      }).catch(() => ({ status: "error" as const, message: ROOM_ACTION_MESSAGES.network }));
+      }).catch((): ActionError => ({ status: "error", message: ROOM_ACTION_MESSAGES.network }));
       if (isActionError(result)) {
         setError(result.message);
         setSaveState("failed");

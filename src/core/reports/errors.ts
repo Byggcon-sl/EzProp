@@ -2,6 +2,7 @@ import { AccessDeniedError } from "@/core/access";
 import { AiDecisionError, AiInputTooLargeError, AiRequestRejectedError } from "@/core/ai";
 import { TemplateNotFoundError } from "@/core/templates";
 import { logger } from "@/shared/lib/logger";
+import { REPORT_PUBLISHED_MESSAGE } from "./published-lock";
 
 /*
  * Feilene fra rapportkjernen (docs/funksjoner/fase2a-badet-pc.md). Meldingene er norske og
@@ -33,6 +34,16 @@ export const REPORT_VALIDATION_CODES = [
   "invalid_choice",
   /** Feltet kan ikke endres her (for eksempel TGIU-opplysninger uten TGIU). */
   "not_applicable",
+  /** Rapporten er publisert. Skriving krever «Lag ny versjon» (ADR 0015). */
+  "report_published",
+  /** Rapporten har ikke noe våtrom. Kan ikke krysses bort (A447). */
+  "no_wet_room",
+  /** Den ansatte har ingen gyldig sertifisering i dag (A29). */
+  "certification_missing",
+  /** Oppdraget har ikke selskap, og utgivelsen krever utstedende selskap. */
+  "company_missing",
+  /** Overstyringen gjelder ikke en sperre serveren har regnet ut, eller begrunnelsen er ugyldig. */
+  "publish_override",
   /** Teksten har en plassholder fra vasken før KI, for eksempel «[adresse]» (A466). */
   "text_has_placeholder",
 ] as const;
@@ -50,6 +61,12 @@ const MESSAGES: Record<ReportValidationCode, string> = {
   override_reason: "Velg en grunn for å lagre.",
   invalid_choice: "Valget passer ikke forslaget.",
   not_applicable: "Dette kan ikke endres her.",
+  report_published: REPORT_PUBLISHED_MESSAGE,
+  no_wet_room: "Rapporten har ikke noe våtrom å publisere.",
+  certification_missing:
+    "Du har ingen gyldig sertifisering. En kollega med gyldig sertifisering kan publisere.",
+  company_missing: "Oppdraget mangler selskap. Velg selskap på oppdraget før du publiserer.",
+  publish_override: "Velg en grunn for hver sperre du krysser bort.",
   text_has_placeholder:
     "Teksten har en plassholder fra KI, for eksempel [adresse]. Skriv inn riktig verdi.",
 };
