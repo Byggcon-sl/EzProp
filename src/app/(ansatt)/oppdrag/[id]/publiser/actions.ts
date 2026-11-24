@@ -2,14 +2,10 @@
 
 import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
-import { AccessDeniedError, requireOrganizationAccess } from "@/core/access";
+import { AccessDeniedError } from "@/core/access";
+import { AI_FIELD_MAX_LENGTH, AiDecisionError, AiRequestRejectedError } from "@/core/ai";
 import {
-  AI_FIELD_MAX_LENGTH,
-  AiDecisionError,
-  AiRequestRejectedError,
-  recordDecision,
-} from "@/core/ai";
-import {
+  decideAiText,
   getPublishCheck,
   getRoomView,
   HOLE_DRILLING_SIGNAL,
@@ -252,6 +248,8 @@ export async function holeFixContextAction(
 const aiDecisionSchema = z.object({
   assignmentId: z.string(),
   aiUsageId: z.string().refine(isUuid),
+  /** Rommet forslaget står i. Kontrolleres av kjernen mot loggraden (`decideAiText`). */
+  roomId: z.string().refine(isUuid),
   decision: z.enum(["accepted", "rejected", "undo"]),
   /** Bare ved «Angre» etter «Bruk»: den ansattes egen tekst før «Bruk». */
   restoreText: z.string().max(AI_FIELD_MAX_LENGTH).nullable().optional(),
@@ -261,9 +259,11 @@ export type AiDecisionResponse =
   { status: "decided"; aiStatus: "suggested" | "accepted" | "rejected" } | PublishActionError;
 
 /**
- * «Bruk», «Behold min tekst» eller «Angre» på et KI-forslag som venter. Serveren finner forslaget
- * blant de ventende på oppdragets rapport (aldri fra en id alene), og «Bruk» skriver
- * forslagsteksten fra loggen med `saveField`, aldri en tekst fra skjemaet.
+ * «Bruk», «Behold min tekst» eller «Angre» på et KI-forslag. Alt går gjennom rommets
+ * skrivetjenester i rapportkjernen, som låser rapporten, avviser en publisert rapport og krever at
+ * loggraden hører til denne rapporten og et mål i rommet (aldri en id alene). «Bruk» skriver
+ * forslagsteksten fra loggen og beslutningen i én transaksjon (`saveField` med `aiDecision`).
+ * «Behold» krever at forslaget venter på denne rapporten.
  */
 export async function decideAiSuggestionAction(input: unknown): Promise<AiDecisionResponse> {
   const parsed = aiDecisionSchema.safeParse(input);
@@ -273,35 +273,47 @@ export async function decideAiSuggestionAction(input: unknown): Promise<AiDecisi
     assignmentId,
     async (context, id): Promise<AiDecisionResponse> => {
       if (!parsed.success) return errorOf(NO_ACCESS);
-      const { aiUsageId, decision, restoreText } = parsed.data;
-      const grant = await requireOrganizationAccess(
-        context.actor,
-        context.organizationId,
-        "organization.read",
-      );
+      const { aiUsageId, roomId, decision, restoreText } = parsed.data;
       const check = await getPublishCheck(context.actor, context.organizationId, id);
       if (check.state !== "draft") return errorOf(PUBLISH_LINK_TEXTS.publishedLine);
-
-      if (decision === "accepted") {
-        const pending = check.pendingAiSuggestions.find((s) => s.aiUsageId === aiUsageId);
-        if (!pending || !pending.target.roomId) return errorOf(PUBLISH_TEXTS.aiNotAllowed);
-        const room: RoomRef = { assignmentId: id, roomId: pending.target.roomId };
-        const view = await getRoomView(context.actor, context.organizationId, room);
-        const target = view.state === "started" ? aiFieldTarget(view, pending.field) : null;
-        if (!target) return errorOf(PUBLISH_TEXTS.aiNotAllowed);
-        const saved = await saveField(
-          context.actor,
-          context.organizationId,
-          room,
-          target.change(pending.outputText),
-        );
-        if (saved.status !== "saved") return errorOf(PUBLISH_TEXTS.aiNotAllowed);
-      }
+      const room: RoomRef = { assignmentId: id, roomId };
+      const pending = check.pendingAiSuggestions.find(
+        (s) => s.aiUsageId === aiUsageId && s.target.roomId === roomId,
+      );
 
       try {
-        await recordDecision(grant, aiUsageId, decision);
+        if (decision === "accepted") {
+          if (!pending) return errorOf(PUBLISH_TEXTS.aiNotAllowed);
+          const view = await getRoomView(context.actor, context.organizationId, room);
+          const target = view.state === "started" ? aiFieldTarget(view, pending.field) : null;
+          if (!target) return errorOf(PUBLISH_TEXTS.aiNotAllowed);
+          const saved = await saveField(
+            context.actor,
+            context.organizationId,
+            room,
+            target.change(pending.outputText),
+            { aiDecision: { usageId: aiUsageId, decision: "accepted" } },
+          );
+          if (saved.status !== "saved") return errorOf(PUBLISH_TEXTS.aiNotAllowed);
+        } else if (decision === "rejected") {
+          if (!pending) return errorOf(PUBLISH_TEXTS.aiNotAllowed);
+          await decideAiText(context.actor, context.organizationId, room, {
+            usageId: aiUsageId,
+            decision: "rejected",
+          });
+        } else {
+          await decideAiText(context.actor, context.organizationId, room, {
+            usageId: aiUsageId,
+            decision: "undo",
+          });
+        }
       } catch (error) {
-        if (error instanceof AiDecisionError || error instanceof AiRequestRejectedError) {
+        if (
+          error instanceof AccessDeniedError ||
+          error instanceof AiDecisionError ||
+          error instanceof AiRequestRejectedError ||
+          (error instanceof ReportValidationError && error.code !== "report_published")
+        ) {
           return errorOf(PUBLISH_TEXTS.aiNotAllowed);
         }
         throw error;
@@ -310,15 +322,16 @@ export async function decideAiSuggestionAction(input: unknown): Promise<AiDecisi
       // «Angre» etter «Bruk»: den ansattes egen tekst settes tilbake med samme skrivetjeneste.
       if (decision === "undo" && restoreText !== undefined) {
         const after = await getPublishCheck(context.actor, context.organizationId, id);
-        const pending =
+        const again =
           after.state === "draft"
-            ? after.pendingAiSuggestions.find((s) => s.aiUsageId === aiUsageId)
+            ? after.pendingAiSuggestions.find(
+                (s) => s.aiUsageId === aiUsageId && s.target.roomId === roomId,
+              )
             : undefined;
-        if (pending?.target.roomId) {
-          const room: RoomRef = { assignmentId: id, roomId: pending.target.roomId };
+        if (again) {
           const view = await getRoomView(context.actor, context.organizationId, room);
-          const target = view.state === "started" ? aiFieldTarget(view, pending.field) : null;
-          if (target && target.currentText === pending.outputText) {
+          const target = view.state === "started" ? aiFieldTarget(view, again.field) : null;
+          if (target && target.currentText === again.outputText) {
             await saveField(
               context.actor,
               context.organizationId,

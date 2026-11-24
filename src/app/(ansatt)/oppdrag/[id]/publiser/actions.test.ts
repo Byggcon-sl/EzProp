@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   requireOrganizationAccess: vi.fn(),
   recordDecision: vi.fn(),
   core: {
+    decideAiText: vi.fn(),
     getPublishCheck: vi.fn(),
     getRoomView: vi.fn(),
     publishReport: vi.fn(),
@@ -134,6 +135,7 @@ beforeEach(() => {
   mocks.core.getRoomView.mockResolvedValue(ROOM_VIEW);
   mocks.core.saveField.mockResolvedValue({ status: "saved" });
   mocks.recordDecision.mockResolvedValue(undefined);
+  mocks.core.decideAiText.mockResolvedValue({ status: "decided" });
 });
 
 describe("publiseringen", () => {
@@ -252,10 +254,11 @@ describe("«Rett nå» for hulltaking", () => {
 });
 
 describe("KI-forslag (F4)", () => {
-  it("«Bruk» skriver forslagsteksten fra loggen, ikke fra skjemaet, og registrerer avgjørelsen", async () => {
+  it("«Bruk» skriver forslagsteksten fra loggen og avgjørelsen i samme lagring", async () => {
     const result = await actions.decideAiSuggestionAction({
       assignmentId: ASSIGNMENT,
       aiUsageId: AI,
+      roomId: ROOM,
       decision: "accepted",
       text: "Tekst fra skjemaet som ikke skal brukes",
     });
@@ -271,40 +274,78 @@ describe("KI-forslag (F4)", () => {
         value: "Forslagstekst fra loggen.",
         base: "Egen tekst",
       },
+      { aiDecision: { usageId: AI, decision: "accepted" } },
     );
-    expect(mocks.recordDecision).toHaveBeenCalledWith(grant, AI, "accepted");
-    expect(mocks.requireOrganizationAccess).toHaveBeenCalledWith(actor, ORG, "organization.read");
-  });
-
-  it("forslag som ikke venter på oppdragets rapport, avvises uten skriving", async () => {
-    const result = await actions.decideAiSuggestionAction({
-      assignmentId: ASSIGNMENT,
-      aiUsageId: "0190a000-0000-7000-8000-0000000000aa",
-      decision: "accepted",
-    });
-    expect(result).toEqual({ status: "error", message: PUBLISH_TEXTS.aiNotAllowed });
-    expect(mocks.core.saveField).not.toHaveBeenCalled();
+    // Aldri en egen avgjørelse utenom rapportkjernen
     expect(mocks.recordDecision).not.toHaveBeenCalled();
   });
 
-  it("«Behold min tekst» skriver ingenting i rapporten", async () => {
+  it("forslag som ikke venter på oppdragets rapport, avvises uten skriving", async () => {
+    for (const decision of ["accepted", "rejected"] as const) {
+      const result = await actions.decideAiSuggestionAction({
+        assignmentId: ASSIGNMENT,
+        aiUsageId: "0190a000-0000-7000-8000-0000000000aa",
+        roomId: ROOM,
+        decision,
+      });
+      expect(result).toEqual({ status: "error", message: PUBLISH_TEXTS.aiNotAllowed });
+    }
+    expect(mocks.core.saveField).not.toHaveBeenCalled();
+    expect(mocks.core.decideAiText).not.toHaveBeenCalled();
+    expect(mocks.recordDecision).not.toHaveBeenCalled();
+  });
+
+  it("forslag i et annet rom enn det som er oppgitt, avvises uten skriving", async () => {
+    const result = await actions.decideAiSuggestionAction({
+      assignmentId: ASSIGNMENT,
+      aiUsageId: AI,
+      roomId: "0190a000-0000-7000-8000-0000000000bb",
+      decision: "rejected",
+    });
+    expect(result).toEqual({ status: "error", message: PUBLISH_TEXTS.aiNotAllowed });
+    expect(mocks.core.decideAiText).not.toHaveBeenCalled();
+  });
+
+  it("«Behold min tekst» går gjennom rommets tjeneste og skriver ingenting i rapporten", async () => {
     expect(
       await actions.decideAiSuggestionAction({
         assignmentId: ASSIGNMENT,
         aiUsageId: AI,
+        roomId: ROOM,
         decision: "rejected",
       }),
     ).toEqual({ status: "decided", aiStatus: "rejected" });
     expect(mocks.core.saveField).not.toHaveBeenCalled();
-    expect(mocks.recordDecision).toHaveBeenCalledWith(grant, AI, "rejected");
+    expect(mocks.core.decideAiText).toHaveBeenCalledWith(
+      actor,
+      ORG,
+      { assignmentId: ASSIGNMENT, roomId: ROOM },
+      { usageId: AI, decision: "rejected" },
+    );
+  });
+
+  it("«Angre» går gjennom rommets tjeneste, som avviser en rad fra en annen rapport", async () => {
+    // Kjernen avviser loggrader som ikke hører til rapporten under arbeid (også en publisert)
+    mocks.core.decideAiText.mockRejectedValue(new AccessDeniedError());
+    expect(
+      await actions.decideAiSuggestionAction({
+        assignmentId: ASSIGNMENT,
+        aiUsageId: "0190a000-0000-7000-8000-0000000000cc",
+        roomId: ROOM,
+        decision: "undo",
+      }),
+    ).toEqual({ status: "error", message: PUBLISH_TEXTS.aiNotAllowed });
+    expect(mocks.recordDecision).not.toHaveBeenCalled();
+    expect(mocks.core.saveField).not.toHaveBeenCalled();
   });
 
   it("avgjørelse som ikke er lov, gir fast melding", async () => {
-    mocks.recordDecision.mockRejectedValue(new FakeAiDecisionError());
+    mocks.core.decideAiText.mockRejectedValue(new FakeAiDecisionError());
     expect(
       await actions.decideAiSuggestionAction({
         assignmentId: ASSIGNMENT,
         aiUsageId: AI,
+        roomId: ROOM,
         decision: "rejected",
       }),
     ).toEqual({ status: "error", message: PUBLISH_TEXTS.aiNotAllowed });

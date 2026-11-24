@@ -382,7 +382,12 @@ export function PublishView({
   // --- KI-forslag (F4) --------------------------------------------------------------------------
 
   const decideAi = useCallback(
-    async (aiUsageId: string, decision: "accepted" | "rejected" | "undo", ownText: string) => {
+    async (
+      aiUsageId: string,
+      roomId: string,
+      decision: "accepted" | "rejected" | "undo",
+      ownText: string,
+    ) => {
       setAiBusy(aiUsageId);
       const before = aiLocal.get(aiUsageId);
       try {
@@ -390,6 +395,7 @@ export function PublishView({
           decideAiSuggestionAction({
             assignmentId,
             aiUsageId,
+            roomId,
             decision,
             restoreText:
               decision === "undo" && before?.status === "accepted"
@@ -427,6 +433,8 @@ export function PublishView({
     const aiUsageId = item.target.aiUsageId;
     const suggestion = check.pendingAiSuggestions.find((s) => s.aiUsageId === aiUsageId);
     if (!aiUsageId || !suggestion) return null;
+    const roomId = suggestion.target.roomId;
+    if (!roomId) return null;
     const info = aiFields[aiUsageId];
     const local = aiLocal.get(aiUsageId);
     const ownText = info?.currentText ?? "";
@@ -448,9 +456,9 @@ export function PublishView({
           aiEnabled
           hasNewerSuggestion={false}
           aiUsageId={aiUsageId}
-          onUse={() => void decideAi(aiUsageId, "accepted", ownText)}
-          onKeep={() => void decideAi(aiUsageId, "rejected", ownText)}
-          onUndo={() => void decideAi(aiUsageId, "undo", ownText)}
+          onUse={() => void decideAi(aiUsageId, roomId, "accepted", ownText)}
+          onKeep={() => void decideAi(aiUsageId, roomId, "rejected", ownText)}
+          onUndo={() => void decideAi(aiUsageId, roomId, "undo", ownText)}
           onNewSuggestion={() => {
             // «Endre»: feltet åpnes på rommet. Ingen nye KI-kall herfra.
             if (item.href) {
