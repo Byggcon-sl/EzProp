@@ -92,12 +92,20 @@ describe("11.4.2 «Lag PDF (utkast)» og «Åpne PDF» er vanlige <a>, ikke next
   const components = walk(ASSIGNMENT_DIR).filter(
     (file) => file.endsWith(".tsx") && !file.endsWith(".test.tsx"),
   );
-  const pdfLinkFiles = components.filter((file) => /\/pdf[`"'?]/.test(readFileSync(file, "utf8")));
+  // Tekstene og adressene står samlet i `pdf-texts.ts` (designet avsnitt 5 og 6); komponentene
+  // bruker `draftPdfHref` og `releasePdfHref` derfra
+  const textsFile = path.join(ASSIGNMENT_DIR, "pdf-texts.ts");
+  const texts = readFileSync(textsFile, "utf8");
+  const pdfLinkFiles = components.filter((file) =>
+    /\/pdf[`"'?]|\b(draftPdfHref|releasePdfHref)\(/.test(readFileSync(file, "utf8")),
+  );
 
   it("knappene finnes i komponentene", () => {
-    const all = components.map((file) => readFileSync(file, "utf8")).join("\n");
+    const all = [...components.map((file) => readFileSync(file, "utf8")), texts].join("\n");
     expect(all).toContain("Lag PDF (utkast)");
     expect(all).toContain("Åpne PDF");
+    expect(texts).toMatch(/\/oppdrag\/\$\{assignmentId\}\/pdf`/);
+    expect(texts).toMatch(/\/oppdrag\/\$\{assignmentId\}\/utgivelser\/\$\{releaseId\}\/pdf`/);
     expect(pdfLinkFiles.length).toBeGreaterThan(0);
   });
 
@@ -119,7 +127,12 @@ describe("11.4.2 «Lag PDF (utkast)» og «Åpne PDF» er vanlige <a>, ikke next
       .filter((file) => !/\.test\.tsx?$/.test(file))
       .map((file) => readFileSync(file, "utf8"))
       .join("\n");
-    expect(`${publish}\n${card}`).toMatch(/utgivelser\//);
+    // Begge bruker lenken til utgivelsen, som bygger adressen `…/utgivelser/<id>/pdf`
+    expect(card).toMatch(/<ReleasePdfLink\b/);
+    expect(publish).toMatch(/<ReleasePdfLink\b/);
+    const link = readFileSync(path.join(ASSIGNMENT_DIR, "release-pdf-link.tsx"), "utf8");
+    expect(link).toMatch(/href=\{releasePdfHref\(/);
+    expect(texts).toMatch(/utgivelser\//);
   });
 });
 

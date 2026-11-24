@@ -15,6 +15,14 @@ import type { PdfEngine, PdfEngineResult } from "./types";
  */
 export const PDF_WORKER_PATH = path.join(process.cwd(), "src/core/pdf/typst-worker.mjs");
 
+/**
+ * Minnegrensen for JavaScript-delen av tråden (kortet, «Arbeidstråden», testplanen 11.3.1).
+ * WASM-minnet til motoren telles ikke her, men en feil i JS-delen tar aldri hele serveren: tråden
+ * stoppes med `ERR_WORKER_OUT_OF_MEMORY`, og ruten gir 500-siden. Badet bruker langt mindre
+ * (ADR 0016, målingene); grensen gir rom for 25 MB bilder med kopier.
+ */
+export const PDF_WORKER_MAX_OLD_GENERATION_MB = 256;
+
 type WorkerReply = { ok: true; bytes: Uint8Array; pageCount: number } | { ok: false };
 
 function isReply(value: unknown): value is WorkerReply {
@@ -47,6 +55,7 @@ export function createNodeWorkerEngine(workerPath: string = PDF_WORKER_PATH): Pd
           workerData: { wasmModule, job },
           // Tråden får ikke prosessens miljøvariabler (hemmeligheter, database-URL).
           env: {},
+          resourceLimits: { maxOldGenerationSizeMb: PDF_WORKER_MAX_OLD_GENERATION_MB },
           stdout: true,
           stderr: true,
         });

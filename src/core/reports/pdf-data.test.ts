@@ -424,8 +424,8 @@ describe("utkastet fra lagrede data", () => {
     });
     expect(checkpointIn(data, CP.adjacent)!.answers.map((a) => a.valueText)).toEqual([
       "Utført uten funn",
-      "12,4",
-      "Vekt-%",
+      // Enheten står sammen med målingen (A540, «12,4 vekt-%»)
+      "12,4\u00a0Vekt-%",
     ]);
     const ventilation = checkpointIn(data, "wet_room.ventilation")!;
     expect(ventilation.tg).toBe("3");

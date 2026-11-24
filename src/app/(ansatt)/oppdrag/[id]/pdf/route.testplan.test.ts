@@ -228,8 +228,10 @@ describe("6.1 svaret", () => {
     expect(res.status).toBe(500);
     expect(res.headers.get("content-type")).toMatch(/^text\/html/);
     expect(res.text).toContain(DRAFT_ERROR_TEXT);
-    expect(res.text).toMatch(/<a\s[^>]*href="[^"]*\/oppdrag\/[0-9a-f-]+\/pdf"/);
-    expect(res.text).toContain("Prøv igjen");
+    // «Prøv igjen» laster samme adresse på nytt (`href=""`): kortet Omfang 6 sier at ingen verdi
+    // fra adressen skrives ut på feilsidene, så id-en står ikke i lenken
+    expect(res.text).toMatch(/<a\s[^>]*href=""[^>]*>Prøv igjen<\/a>/);
+    expect(res.text).not.toContain(f.assignmentId);
     expect(res.text).not.toContain("MERKE-MOTOR");
     expect(res.text).not.toContain("MOTORFEIL");
     expect(res.text).not.toContain("Prøvevegen");

@@ -69,10 +69,15 @@ export const getReleasePdfData: GetReleasePdfData = async (
         ),
       )
       // Selskapet som utstedte utgivelsen (`report_releases.company_id`), også om det senere er
-      // byttet på oppdraget eller tatt ut av bruk: utgivelsen viser hvem som utstedte den
+      // byttet på oppdraget. Er selskapet slettet, finnes det ikke: da sier bunnteksten at
+      // selskap mangler (testplanen 11.5.2, A538)
       .leftJoin(
         companies,
-        and(eq(companies.id, reportReleases.companyId), eq(companies.organizationId, orgId)),
+        and(
+          eq(companies.id, reportReleases.companyId),
+          eq(companies.organizationId, orgId),
+          isNull(companies.deletedAt),
+        ),
       )
       .where(
         and(

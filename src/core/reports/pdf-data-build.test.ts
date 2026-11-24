@@ -582,15 +582,11 @@ describe("buildReportPdfData: testsakene fra fagansvarlig (3.1)", () => {
     )!;
     expect(result.answers).toEqual([
       { elementKey: "wet_room.hole_drilling", label: "Hulltaking", valueText: "Utført uten funn" },
+      // Enheten står sammen med målingen (A540, «12,4 vekt-%»), ikke som egen linje
       {
         elementKey: "wet_room.hole_moisture_reading",
         label: "Fuktmåling i hullet",
-        valueText: "12,4",
-      },
-      {
-        elementKey: "wet_room.hole_moisture_unit",
-        label: "Enhet for fuktmålingen",
-        valueText: "Vekt-%",
+        valueText: `12,4${NBSP}Vekt-%`,
       },
     ]);
   });
@@ -852,7 +848,7 @@ describe("årsak og kostnad (3.1.17 og 3.1.18)", () => {
       bandKey: null,
       amount: null,
       displayText: null,
-      text: null,
+      text: "Tekst",
     });
     expect(result.deviations[1]!.cost).toMatchObject({
       displayText: `ca. 10${NBSP}000 kr`,

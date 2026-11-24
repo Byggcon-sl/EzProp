@@ -12,6 +12,7 @@ import type {
   PdfTgiuDetail,
 } from "@/core/pdf";
 import type { TemplateDocument } from "@/core/templates";
+import { PII_PLACEHOLDERS } from "@/shared/lib/pii-patterns";
 import { isUuid } from "@/shared/lib/uuid";
 import {
   CAUSE_CRITERION_LABELS,
@@ -26,7 +27,7 @@ import {
   type MergeValues,
 } from "./logic";
 import type { PublishCheckFinding } from "./logic/publish-check-types";
-import { mergeSourcesFor } from "./merge-sources";
+import { mergeSourcesFor, UNIT_ELEMENT_OF } from "./merge-sources";
 import type { BuildReportPdfData, BuildReportPdfDataInput, PdfTemplateLabels } from "./pdf-types";
 import type {
   SnapshotAnswer,
@@ -57,9 +58,20 @@ const NBSP = " ";
 const own = (record: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(record, key);
 
+/**
+ * Tar bort KI-plassholderne (`[navn]`, `[e-post]` osv.) fra gamle data. Lagringen avviser dem
+ * (A466), men de skal aldri stå i PDF-en. «[årstall mangler]» er ikke en av dem og står.
+ */
+function withoutPlaceholders(text: string): string {
+  if (!PII_PLACEHOLDERS.some((placeholder) => text.includes(placeholder))) return text;
+  let result = text;
+  for (const placeholder of PII_PLACEHOLDERS) result = result.split(placeholder).join("");
+  return result.replace(/[ \t]{2,}/gu, " ").replace(/ ([.,;:])/gu, "$1");
+}
+
 function present(text: string | null | undefined): string | null {
   if (text === null || text === undefined) return null;
-  const trimmed = text.trim();
+  const trimmed = withoutPlaceholders(text).trim();
   return trimmed === "" ? null : trimmed;
 }
 
@@ -121,14 +133,38 @@ function answerValueText(
   return text;
 }
 
+/** Valgteksten i enhetsfeltet til et tallfelt (A540), eller `null`. */
+function unitLabelOf(answers: readonly SnapshotAnswer[], elementKey: string): string | null {
+  if (!own(UNIT_ELEMENT_OF, elementKey)) return null;
+  const unitKey = UNIT_ELEMENT_OF[elementKey];
+  const unit = answers.find((answer) => answer.element_key === unitKey);
+  const label = (unit?.value_option_labels ?? [])
+    .map((text) => present(text))
+    .find((text): text is string => text !== null);
+  return label ?? null;
+}
+
 function pdfAnswers(answers: readonly SnapshotAnswer[], template: PdfTemplateLabels): PdfAnswer[] {
   const result: PdfAnswer[] = [];
+  // Enheter som står sammen med tallet sitt, får ikke egen linje
+  const joinedUnits = new Set<string>();
   for (const answer of answers) {
+    const unitLabel = unitLabelOf(answers, answer.element_key);
+    const shown =
+      own(template.elements, answer.element_key) &&
+      template.elements[answer.element_key]?.showInReport === true;
+    if (shown && unitLabel !== null && Number.isFinite(answer.value_number)) {
+      joinedUnits.add(UNIT_ELEMENT_OF[answer.element_key]!);
+    }
+  }
+  for (const answer of answers) {
+    if (joinedUnits.has(answer.element_key)) continue;
     if (!own(template.elements, answer.element_key)) continue;
     const meta = template.elements[answer.element_key];
     if (!meta || meta.showInReport !== true) continue;
     const label = present(answer.label);
-    const valueText = answerValueText(answer, meta);
+    const unitLabel = meta.unit === null ? unitLabelOf(answers, answer.element_key) : null;
+    const valueText = answerValueText(answer, unitLabel ? { ...meta, unit: unitLabel } : meta);
     if (label === null || valueText === null) continue;
     result.push({ elementKey: answer.element_key, label, valueText });
   }
@@ -262,7 +298,14 @@ function editPathOf(
 
 function pdfCost(cost: SnapshotDeviation["cost"]): PdfCost {
   if (cost.type === "none") {
-    return { type: cost.type, bandKey: null, amount: null, displayText: null, text: null };
+    // Ingen kostnadslinje, men forklaringen står med når den finnes (testplanen 3.1.18)
+    return {
+      type: cost.type,
+      bandKey: null,
+      amount: null,
+      displayText: null,
+      text: present(cost.text),
+    };
   }
   return {
     type: cost.type,
@@ -327,8 +370,8 @@ function pdfDeviation(
     deviationId: deviation.id,
     kind: isTg ? "tg" : "hms",
     tg,
-    tgNotSet:
-      context.draft && isTg && tg === null && context.placed.deviationNotSet.has(deviation.id),
+    // Fra sjekken alene (F8): utkastet lager ingen egne regler for hva som mangler
+    tgNotSet: context.draft && isTg && context.placed.deviationNotSet.has(deviation.id),
     text: merged(deviation.deviation_text, deviationValues),
     causeLabel: causeLabelOf(deviation.cause_criterion),
     causeText: merged(deviation.cause_text, deviationValues),
@@ -383,7 +426,7 @@ function pdfCheckpoint(
     checkpointKey: checkpoint.checkpoint_key,
     label: checkpoint.label,
     tg,
-    tgNotSet: context.draft && tg === null && context.placed.checkpointNotSet.has(ref),
+    tgNotSet: context.draft && context.placed.checkpointNotSet.has(ref),
     descriptionText,
     answers,
     deviations,
