@@ -323,3 +323,7 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - Hele `pnpm test` tar nå over 30 minutter i skycontaineren og ble stoppet av tidsgrensen. Kjør testene for de berørte mappene lokalt (for eksempel `pnpm vitest run src/core/ai src/core/reports`, 2 038 tester) og la CI kjøre hele pakken.
 - CI kjører `pnpm format:check` før testene. Kjør den (eller `pnpm prettier --write` på endrede filer) før push; en uformatert linje kostet én CI-runde.
 - Tre kjøringer tok A-numre samtidig (A490–A491 er brukt av både `ki-i-veien` og `rett-forslag-og-avvik`). Sjekk de åpne branchene med `git diff origin/main...origin/<branch> -- docs/09-apne-sporsmal.md` før nye numre tas.
+
+**Rett forslag og avvik (23.–24.11.2026), PR #239, overtatt av hovedløkken:**
+- Arbeidsflyten la bitene i tre worktree-brancher som ikke var flettet inn i oppgavebranchen da kjøringen stoppet. Ved overtakelse: flett alle `worktree-wf_*`-branchene med samme «Pågår» inn først; to bitbrancher som legger til hver sin `describe` i samme testfil gir konflikt, og begge sider skal med.
+- Nye handlinger som endrer rapporten må også inn i låsen etter publisering (#234). Sjekk låstestene når en ny handling kommer inn samtidig med publiseringen.
