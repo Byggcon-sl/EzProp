@@ -8,7 +8,7 @@ import {
   logInAsManager,
   logInAsOffice,
   restoreByggconSetting,
-  seedTestdataForE2e,
+  seedTestdataBathsForE2e,
   setByggconSetting,
 } from "./helpers";
 import {
@@ -70,7 +70,7 @@ let showcase: ShowcaseFacts;
 test.beforeAll(async () => {
   test.setTimeout(300_000);
   assertLocalOrTestDatabase(e2eDatabaseUrl(), process.env.TEST_DATABASE_URL);
-  seedTestdataForE2e();
+  seedTestdataBathsForE2e(); // publisert systemmal først, ellers hoppes badene over (A516)
   showcase = await findShowcaseBath();
 });
 
