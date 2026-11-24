@@ -585,6 +585,8 @@ Egne kontrollpunkter per avtale kommer senere. Da får avtalen en kobling til en
 | `footer_text` | Bunntekst (med juridisk selskap) |
 | `version` | Øker ved hver endring, slik at utgivelsen kan vise hvilken profil som ble brukt (innspill D8) |
 
+**Nå (2a-2, A530, ADR 0016):** tabellen finnes ikke ennå. Profilene er kodedata i `src/core/pdf` (`PdfProfile`): `code` (fast kode, `byggcon_standard` er standard og kobles mot `client_agreements.report_profile_code`), `version`, `name`, `orientation`, `colors` (tekst, dempet, aksent, linje, TG-farger med bakgrunn og tekst per TG, markering, vannmerke), `fonts` (overskrift og brødtekst), `logo` (fast fil i `public/brand`), `coverLayout`, `sections` (rekkefølgen på delene `cover`, `toc`, `summary`, `tg_explanation`, `room`, `missing`; `summary` er reservert til 2a-3) og `footer` (faste deler: `legal_company`, `assignment_number`, `page_of_pages`). Profilen har aldri selskapsnavn eller fagtekst. Tabellen og valg av profil kommer med «Flere PDF-utgaver» i 2a-3, med de samme kodene.
+
 ---
 
 ### 4.4 Eiendom og bygg
@@ -2388,6 +2390,14 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | Grunn (ved overstyring) | `override reason code` (`PUBLISH_OVERRIDE_REASON_CODES`) | Fast kode; `other` krever tekst |
 | Fingeravtrykk av funnlisten | `fingerprint` (`canonicalPublishCheck`) | Viser at listen er den samme som den ansatte så |
 | Snapshot | `ReportSnapshot` (`report_releases.snapshot`) | Selvstendig kopi av rapportinnholdet i utgivelsen |
+| PDF-motor | `PdfEngine` (`src/core/pdf`) | Typst som WASM i en arbeidstråd (ADR 0016). Et bibliotek, ikke en leverandør |
+| PDF-profil | `PdfProfile` (`src/core/pdf`) | Utseendet på PDF-en: farger, skrifter, logo, retning, rekkefølge på delene og bunntekst. Kodedata til `report_profiles` kommer (A530) |
+| Rapportdata for PDF | `ReportPdfData` | Alt gjengivelsen trenger, ferdig til visning. Bygges av `buildReportPdfData` fra `ReportSnapshot`, likt for utkast og utgivelse |
+| PDF-utkast | `draft` (`kind: "draft"`) | PDF av dagens data med «UTKAST» på hver side, merknader og siden «Ikke med i PDF-en». Lagres aldri |
+| PDF av utgivelse | `release PDF` (`kind: "release"`) | PDF bygget fra utgivelsens snapshot, uten «UTKAST». Lages på nytt hver gang til endelig PDF lagres i 2a-3 |
+| TG-forklaring | `TgExplanation` (`PdfTgExplanation`) | Forklaringen av TG0–TG3 og TGIU i PDF-en. Innhold med tekststatus, ikke en del av profilen (A533) |
+| Merknad i utkast | `PdfDraftNote` | «Mangler: …» eller «Sjekk: …» i PDF-utkastet, med teksten fra publiseringssjekken (A536) |
+| Teller per nøkkel | `KeyedLimiter` (`src/shared/lib/keyed-limiter.ts`) | Høyst én pågående PDF per ansatt og et felles tak per prosess (A539) |
 | Opprinnelig dato | `original_release_date` | |
 | Gyldig til | `valid_until` | |
 | Sperre / advarsel | `blocker` / `warning` | |

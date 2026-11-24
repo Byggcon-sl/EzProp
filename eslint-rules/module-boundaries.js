@@ -15,6 +15,10 @@ import path from "node:path";
  *   nettleseren og på serveren: bare egen mappe, shared og regelmotoren, og bare `import type` fra
  *   resten av src/core/reports, malmotoren og databaseskjemaet. Ingen pakker
  *   (docs/adr/0013-rapportens-datamodell.md).
+ * - PDF-gjengivelsen (src/core/pdf) er et rent blad: bare egen mappe og shared. Pakker bare i
+ *   `*.node.ts` (innebygde `node:`-moduler og `server-only`); motorpakken lastes bare i
+ *   arbeidstråden `typst-worker.mjs`. Rapportkjernen (src/core/reports) importerer bare typer
+ *   fra PDF-bladet (docs/adr/0016-pdf-motor.md).
  */
 
 const RULES = "core/rules";
@@ -25,6 +29,9 @@ const TEMPLATES = "core/templates";
 const REPORTS_LOGIC = "core/reports/logic";
 /** Bare `import type` herfra: resten av rapportkjernen, malmotoren og skjemaet drar med databasen. */
 const REPORTS_LOGIC_TYPE_ONLY_TARGETS = ["core/reports", "core/templates", "db/schema"];
+
+const PDF = "core/pdf";
+const REPORTS = "core/reports";
 
 /** @param {string} target @param {string} dir */
 function isInDir(target, dir) {
@@ -96,6 +103,10 @@ const rule = {
         "Regelmotoren kan ikke importere «{{to}}». Lov: egen mappe og @/shared, og bare «import type» fra @/core/templates og @/db/schema. Ingen pakker (ADR 0009).",
       reportsLogicLeaf:
         "De rene funksjonene for rapporten kan ikke importere «{{to}}». Lov: egen mappe, @/shared og @/core/rules, og bare «import type» fra @/core/reports, @/core/templates og @/db/schema. Ingen pakker (ADR 0013).",
+      pdfLeaf:
+        "PDF-gjengivelsen kan ikke importere «{{to}}». Lov: egen mappe og @/shared. Innebygde node:-moduler og server-only bare i filer som heter *.node.ts. Motorpakken lastes bare i typst-worker.mjs (ADR 0016).",
+      reportsToPdfTypeOnly:
+        "Rapportkjernen (@/core/reports) kan bare bruke «import type» fra PDF-gjengivelsen (@/core/pdf). Ruten kaller gjengivelsen (ADR 0016).",
       templatesToRules:
         "Malmotoren (@/core/templates) kan ikke importere regelmotoren (@/core/rules) (ADR 0009).",
       aiClientImporter:
@@ -113,6 +124,9 @@ const rule = {
     const fromRules = isInDir(fromFile, RULES) && !isTestFile;
     const fromTemplates = isInDir(fromFile, TEMPLATES) && !isTestFile;
     const fromReportsLogic = isInDir(fromFile, REPORTS_LOGIC) && !isTestFile;
+    const fromPdf = isInDir(fromFile, PDF) && !isTestFile;
+    const fromPdfNodeFile = fromPdf && /\.node\.ts$/.test(fromFile);
+    const fromReports = isInDir(fromFile, REPORTS) && !isTestFile;
 
     /** @type {Record<string, string[]>} */
     const forbidden = {
@@ -167,6 +181,21 @@ const rule = {
           context.report({ node, messageId: "reportsLogicLeaf", data: { to: value } });
           return;
         }
+      }
+
+      if (fromPdf) {
+        const allowed = target
+          ? isInDir(target, PDF) || target.startsWith("shared/")
+          : fromPdfNodeFile && (value.startsWith("node:") || value === "server-only");
+        if (!allowed) {
+          context.report({ node, messageId: "pdfLeaf", data: { to: value } });
+          return;
+        }
+      }
+
+      if (fromReports && target && isInDir(target, PDF) && !typeOnly) {
+        context.report({ node, messageId: "reportsToPdfTypeOnly" });
+        return;
       }
 
       if (!target) return;

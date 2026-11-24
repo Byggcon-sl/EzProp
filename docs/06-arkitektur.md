@@ -17,6 +17,7 @@ Sist oppdatert: 10.11.2026. Begrunnelse for teknologivalg: [ADR 0001](adr/0001-t
 | Uten nett | PWA på iPad Pro, lokal lagring og synk per felt. Valgt: egenbygd lokal lagring og endringskø, uten synktjeneste (ADR 0004, godkjent av Ståle 10.11.2026). PowerSync og ElectricSQL er fjernet fra koden |
 | Test | Vitest (enhet og integrasjon), Playwright (PC og iPad-størrelse) |
 | CI | GitHub Actions: format, lint, typesjekk, migrering i takt med skjema, test, bygg, e2e |
+| PDF | Typst som WASM i en egen arbeidstråd, bak `renderReportPdf` i `src/core/pdf` ([ADR 0016](adr/0016-pdf-motor.md)). Samme data og profil gir like byte. Ingen nettleser på serveren og ingen ekstern tjeneste |
 | Hosting | Azure App Service + PostgreSQL Flexible Server, Sweden Central (ADR 0002). Testmiljø fra fase 1, rulles ut fra GitHub Actions ved merge til `main` (`infra/azure/main.bicep`, `.github/workflows/deploy-azure.yml`). Bare oppdiktede data til «Minimum før ekte data» er på plass |
 
 ## Nettleser (Ståle 04.11.2026)
@@ -36,6 +37,7 @@ src/
     access/               # Rettigheter og tilgangssjekk (eneste sted)
     auth/                 # Better Auth, sesjon
     ai/                   # All KI: forslag, vask, leverandører, evalueringssett (ADR 0006, bygges i fase 2a-1)
+    pdf/                  # PDF-gjengivelsen: profiler, mal og motoren bak eget grensesnitt. Rent blad (ADR 0016)
     audit/                # Revisjonslogg
     email/
     files/                # Filtjenesten: porten FileStorage, adaptere, tabellen files
