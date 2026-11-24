@@ -31,3 +31,23 @@ export const AI_BATCH_MAX_REQUESTS = 23;
 export const AI_SUMMARY_FINDINGS_MAX = 60;
 /** Høyeste antall tegn i alle funnene til ett utkast, samlet og etter vask. */
 export const AI_SUMMARY_INPUT_MAX_LENGTH = 40000;
+
+/*
+ * Grensene under gjelder «Skriv det du ser» (`outcome_match`,
+ * docs/funksjoner/fase2a-skriv-det-du-ser.md, ADR 0006 tillegg 24.11.2026). Skjermen, rapportkjernen
+ * og KI-kjernen leser de samme tallene herfra.
+ */
+
+/** Høyeste antall treff i svaret fra `outcome_match` (A553). Innenfor `AI_CANDIDATE_REFS_MAX`. */
+export const OUTCOME_MATCH_MAX = 3;
+/**
+ * Høyeste antall utfall som sendes som kandidater i ett `outcome_match`-kall (A554). Innenfor
+ * `AI_CANDIDATES_MAX`. Har rommets romtype flere utfall, gjøres det ikke noe kall, og ingenting
+ * kuttes: rapportkjernen svarer `too_many_candidates`, og tekstsøket står.
+ */
+export const OUTCOME_MATCH_CANDIDATES_MAX = 60;
+/**
+ * Høyeste antall tegn i notatet til `outcome_match` (A560), regnet etter `trim()`. Over grensen
+ * gjøres ikke noe kall og ingen rad logges.
+ */
+export const OUTCOME_MATCH_NOTE_MAX = 500;

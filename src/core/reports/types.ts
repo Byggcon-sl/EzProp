@@ -24,6 +24,7 @@ import type {
   TgDirect,
 } from "@/db/schema";
 import type { INSPECTION_YEAR_SOURCES } from "./logic/codes";
+import type { OutcomeSearchHit } from "./logic/deviation-search";
 import type { PublishCheckRoom } from "./logic/publish-check-types";
 import type {
   CheckpointStatus,
@@ -302,8 +303,14 @@ export type RoomReportView =
  * (`DeviationView.suggestion`) lagres ikke her: det avvises med `ReportValidationError`
  * (`override_reason`), og ingenting lagres. Bruk `ChangeSuggestedDeviationTg` (A490).
  *
+ * `text_source` på avviket er én verdi for avvik, årsak og konsekvens. Serveren setter den etter
+ * hver lagring av en av de tre tekstene: `template` → `edited` når en tekst endres, og `edited` →
+ * `template` når alle tre igjen er lik malens tekster for utfallet, laget på nytt for avviket med
+ * gjeldende TG og flettefelt (A557, A562; «Angre» på notatet i «Skriv det du ser»). `free` endres
+ * aldri. Klienten sender aldri `text_source`.
+ *
  * Feltene som ikke står her, endres bare av egne handlinger: `tg_direct`, `done`, `kind`,
- * `text_source` (settes av serveren: `template` → `edited` når en tekst endres),
+ * `text_source` (settes av serveren, se over),
  * `field_answers.ai_usage_id` (settes og tømmes bare av serveren, ett sted i lagringen per felt;
  * kommer aldri fra klienten), `deleted_at`.
  */
@@ -913,6 +920,160 @@ export type DecideAiText = (
   room: RoomRef,
   input: DecideAiTextInput,
 ) => Promise<{ status: "saved" }>;
+
+// --- «Skriv det du ser»: KI finner utfallet (docs/funksjoner/fase2a-skriv-det-du-ser.md) --------
+
+/**
+ * Felles for de tre inngangene under (ADR 0006, tillegg 24.11.2026):
+ * - Tilgang først: `requireOrganizationAccess(actor, organizationId, "report.edit")`. Rommet følges
+ *   som ellers (`RoomRef`), rapporten må være `draft` (publisert gir `report_published`), og slettet
+ *   rom eller rapport gir `AccessDeniedError` (404).
+ * - KI-målet er rapporten med feltkoden `new_deviation` (A550) og deles av hele rapporten (A555).
+ *   Rommet er aldri en del av målet; det kontrolleres her, mot rapporten i skrivelåsen.
+ * - Notatet er takstmannens egen tekst. Det går bare til `requestSuggestion` (vasket der) og står
+ *   aldri i `ai_usage_log`, `audit_log`, logger eller feil. Ingen av inngangene lagrer det.
+ * - Ingen av inngangene setter eller foreslår TG. Ingen ny tabell, kolonne eller migrering.
+ */
+
+/** Et treff fra KI: utfallet slik tekstsøket viser det, og kandidaten som sendes tilbake ved valg. */
+export type OutcomeMatchHit = OutcomeSearchHit & {
+  /** Alltid `{ source: "template_outcome", id: <outcomes.id> }` (A554). */
+  ref: AiCandidateRef;
+};
+
+export type FindOutcomesInput = {
+  /** UUID laget i nettleseren. Blir id-en i `ai_usage_log`; nytt forsøk bruker samme id. */
+  requestId: string;
+  /** Det takstmannen skrev. Trimmes; høyst `OUTCOME_MATCH_NOTE_MAX` tegn. */
+  note: string;
+  /**
+   * Kontrollpunktet som er åpent på skjermen, eller `null`. Brukes bare til rekkefølgen på
+   * kandidatene (A554). Må være et punkt i rommets del av malen, ellers `ReportValidationError`
+   * (`unknown_key`).
+   */
+  openCheckpointKey: string | null;
+};
+
+export type FindOutcomesResult =
+  /** 1 til `OUTCOME_MATCH_MAX` treff, de beste først. Ingen er forhåndsvalgt. */
+  | { status: "ranked"; usageId: string; hits: OutcomeMatchHit[] }
+  /**
+   * «Ingen utfall passer». `usageId` er `null` når rommets romtype ikke har utfall (intet kall,
+   * ingen rad). En rad med utfallet `no_match` kan ikke avgjøres og trenger ingen avvisning.
+   */
+  | { status: "no_match"; usageId: string | null }
+  /** KI er av, sperret eller ikke slått på for funksjonen. Skjermen beholder tekstsøket. */
+  | { status: "ai_off" }
+  /** Kallet feilet. «KI svarte ikke. Bruk søket.» */
+  | { status: "ai_error" }
+  /** Notatet er over `OUTCOME_MATCH_NOTE_MAX` (A560). Intet kall og ingen rad. */
+  | { status: "note_too_long" }
+  /**
+   * Rommets romtype har flere utfall enn `OUTCOME_MATCH_CANDIDATES_MAX`, eller en kandidattekst er
+   * over `AI_CANDIDATE_TEXT_MAX_LENGTH`. Intet kall, ingen rad og aldri stille kutt (A554).
+   */
+  | { status: "too_many_candidates" };
+
+/**
+ * «Finn med KI» (`report.edit`). Leser rommet uten lås (`loadRoomContext` med `lock: false`, som
+ * `SuggestPhrases`), bygger kandidatene med `ListOutcomeMatchCandidates` og
+ * `OutcomeMatchCandidateText` fra rommets del av den låste malversjonen, henter `outcomes.id` fra
+ * `outcomeIdByRef`, og kaller `requestSuggestion` med funksjonen `outcome_match`.
+ *
+ * Rekkefølgen: tilgang, id-er (`requireUuid`), skjema, rom og rapport, tomt notat
+ * (`ReportValidationError` `invalid_input`), `note_too_long`, `too_many_candidates`, så kallet.
+ * Grensene sjekkes altså før `requestSuggestion`, slik at ingen rad lages.
+ *
+ * `requestSuggestion` avviser forrige åpne søk på rapporten (A555). Svaret `candidates` gjøres om
+ * til `hits` i rekkefølgen KI ga; en kandidat som ikke lenger finnes i listen, tas bort.
+ */
+export type FindOutcomes = (
+  actor: Actor,
+  organizationId: string,
+  room: RoomRef,
+  input: FindOutcomesInput,
+) => Promise<FindOutcomesResult>;
+
+export type ChooseOutcomeMatchInput = {
+  usageId: string;
+  /** Treffet takstmannen valgte (`OutcomeMatchHit.ref`). */
+  candidate: AiCandidateRef;
+  /** UUID v7 fra nettleseren for det nye avviket. Samme id to ganger gir samme avvik. */
+  deviationId: string;
+  /** Som i `AddDeviationInput`: bare for «velg TG2 eller TG3», og alltid takstmannens eget valg. */
+  tg: DeviationTg | null;
+  tgiuChoice?: TgiuChoice;
+};
+
+export type ChooseOutcomeMatchResult =
+  | {
+      status: "saved";
+      /** Punktet avviket ble laget på, utledet av serveren. Skjermen åpner dette punktet. */
+      checkpointKey: string;
+      deviationId: string;
+      refresh: RoomRefresh;
+    }
+  /** Som i `ActionResult`: punktet har TGIU. Ingenting er lagret, og søket står åpent. */
+  | { status: "tgiu_conflict" }
+  /**
+   * Et nyere søk på rapporten har avvist dette (A555). Verken avvik eller beslutning er lagret.
+   * Skjermen: «Forslagene er utdatert. Trykk «Finn med KI» på nytt.»
+   */
+  | { status: "suggestion_outdated" };
+
+/**
+ * Lager avviket fra valgt treff (`report.edit`), i `withRoomWrite`.
+ *
+ * **Bindingen av loggraden** gjøres på serveren før noe skrives. Raden må ha
+ * `grant.organizationId`, ikke være slettet, ha `feature = outcome_match`, `report_id` lik
+ * rapporten i skrivelåsen, `target_ref` lik `{ type: "report", id: <rapporten>, fieldKey:
+ * "new_deviation" }`, utfallet `ok`, og `candidate` må stå i `candidate_refs` med kilden
+ * `template_outcome`. Ellers `AccessDeniedError` (404), og verken logg eller avvik endres. En
+ * `usageId` fra en annen rapport, en annen organisasjon eller en annen funksjon stopper her.
+ *
+ * **Utfallet utledes av `candidate.id`** med `scope.template.outcomeRefById` og må finnes i
+ * `scope.roomDoc.outcomes` (rapportens låste malversjon og rommets romtype). Ellers 404.
+ * Klienten sender aldri `checkpointKey`, `questionKey` eller `outcomeKey`.
+ *
+ * **Rekkefølgen i transaksjonen** (A469-mønsteret, låserekkefølgen i `RecordDecisionIn`):
+ * 1. `createDeviationFromOutcome` med de utledede kodene, uten `suggestedByRuleId` og uten
+ *    `allowOtherTg`: nøyaktig samme avvik som `AddDeviation` gir for utfallet.
+ * 2. `tgiu_conflict`: svar med den. Ingen beslutning lagres.
+ * 3. `exists` (samme `deviationId` på nytt): avviket må ha samme `outcome_id` som kandidaten,
+ *    ellers 404. Svar `saved` uten ny beslutning.
+ * 4. `created`: `recordDecisionIn(tx, grant, usageId, "accepted", { candidate })`.
+ *
+ * **Utdatert søk:** `AiDecisionError` fra `recordDecisionIn` skal ut av `withRoomWrite`, slik at
+ * transaksjonen rulles tilbake og avviket ikke blir stående. Den fanges utenfor og blir svaret
+ * `suggestion_outdated`. Den fanges aldri inne i transaksjonen. Statusen på raden leses ikke på
+ * forhånd som avgjørelse: `recordDecisionIn` avgjør under KI-låsen.
+ *
+ * Revisjonsloggen får det samme som `AddDeviation`, pluss `usageId`. Aldri notatet.
+ */
+export type ChooseOutcomeMatch = (
+  actor: Actor,
+  organizationId: string,
+  room: RoomRef,
+  input: ChooseOutcomeMatchInput,
+) => Promise<ChooseOutcomeMatchResult>;
+
+export type RejectOutcomeMatchInput = { usageId: string };
+
+/**
+ * Avviser et åpent søk (`report.edit`): lukket liste, «Avbryt», Escape, valg fra tekstsøket i
+ * stedet, og trykk på et treff som er «Registrert fra før». Samme binding av loggraden som
+ * `ChooseOutcomeMatch` (uten kandidat), ellers 404 uten endring. Lagrer bare `rejected`, med
+ * `recordDecisionIn` i `withRoomWrite`; `undo` finnes ikke her, og `DecideAiText` er uendret.
+ *
+ * Tåler gjentak og kappløp: er raden alt avvist (for eksempel av et nyere søk), er svaret `saved`
+ * uten endring. Er den alt godtatt, endres ingenting, og svaret er `already_decided`.
+ */
+export type RejectOutcomeMatch = (
+  actor: Actor,
+  organizationId: string,
+  room: RoomRef,
+  input: RejectOutcomeMatchInput,
+) => Promise<{ status: "saved" | "already_decided" }>;
 
 /**
  * Skriverammen på rapportnivå (A469), for det som ikke hører til ett rom (sammendraget). Intern i

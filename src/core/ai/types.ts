@@ -31,6 +31,12 @@ export type {
  * Faste funksjonskoder (regel 6), én per KI-funksjon. Definisjonene (tillatt-liste, mål og
  * ledetekst) står i `features.ts`. `phrase_suggest` og `summary_draft` kom med «KI i veien»
  * (docs/funksjoner/fase2a-ki-i-veien.md).
+ *
+ * «Skriv det du ser» legger til `outcome_match` (se «Kontrakten for `outcome_match`» nederst).
+ * Utvikleren utvider typen i samme endring som definisjonen i `AI_FEATURES`, ledeteksten
+ * `outcome_match.v1` og evalueringssettet, slik at koden aldri finnes uten sin egen gren i
+ * `checkServerInput` (uten den ville notatet gått samme vei som språkvask og blitt lagret i
+ * `output_text`).
  */
 export type AiFeatureCode = "language_polish" | "phrase_suggest" | "summary_draft";
 
@@ -108,6 +114,10 @@ export type AiSummaryGroup = {
  * `AI_SUMMARY_FINDINGS_MAX` funn og faste linjer til sammen) og ikke `candidates`.
  * `language_polish` tar ingen av dem. Alt annet gir `AiRequestRejectedError`. Over grensen gir
  * `AiInputTooLargeError`; kjernen kutter aldri selv.
+ *
+ * `outcome_match` krever `candidates` (minst én, høyst `OUTCOME_MATCH_CANDIDATES_MAX`, alle med
+ * kilden `template_outcome`), og verken `candidatesCut` eller `summaryGroups`: kandidatlisten til
+ * `outcome_match` kuttes aldri, heller ikke av kalleren (A554).
  */
 export type AiServerInput = {
   candidates?: readonly AiCandidate[];
@@ -130,6 +140,7 @@ export type AiSuggestionResult =
   /**
    * Rangerte kandidater (`phrase_suggest`): 1–5, alle fra `AiServerInput.candidates`, de beste
    * først. Ingen tekst: kalleren viser sin egen kandidattekst. Samme liste står i `candidate_refs`.
+   * For `outcome_match`: 1 til `OUTCOME_MATCH_MAX` (3).
    */
   | { kind: "candidates"; usageId: string; status: "suggested"; candidates: AiCandidateRef[] }
   | { kind: "no_match"; usageId: string }
@@ -308,3 +319,63 @@ export type RestorePlaceholders = (
   answer: string,
   originals: readonly { placeholder: PiiPlaceholder; value: string }[],
 ) => string;
+
+// --- Kontrakten for `outcome_match` («Skriv det du ser») -----------------------------------------
+
+/**
+ * Det `requestSuggestion` gjør for `outcome_match` (docs/funksjoner/fase2a-skriv-det-du-ser.md,
+ * ADR 0006 tillegg 24.11.2026). Typen under er bare til for å beskrive kontrakten; inngangen er
+ * fortsatt `RequestSuggestion`.
+ *
+ * **Definisjonen i `AI_FEATURES` (tillatt-listen krever gjennomgang av sikkerhet-personvern, A175):**
+ * - `permission`: `report.edit`.
+ * - `allowedFields`: bare `text` (notatet), med kilden `free_text`.
+ * - `serverSources.candidates`: nøyaktig `checkpoints.name`, `deviation_questions.text` og
+ *   `outcomes.deviation_text`. Ingen andre kolonner: ikke `outcomes.key`, `outcomes.kind`,
+ *   `outcomes.source_ref`, hjelpetekst, romnavn, etasje eller bygning (A552).
+ * - `allowedTargets`: nøyaktig `{ type: "report", fieldKey: REPORT_NEW_DEVIATION_FIELD_KEY }`.
+ *   Ingen annen funksjon har dette målet.
+ * - `promptVersion`: `outcome_match.v1`.
+ *
+ * **Forespørselen:** `target` er rapporten med feltkoden over, `assignmentId` og `reportId` er
+ * `null` (målet slås opp av `ResolveAiTarget` som for `summary_draft`), og `fields` er
+ * `{ text: <notatet> }`. Rommet er ikke en del av målet (A555).
+ *
+ * **Kontrollene, i tillegg til de felles:**
+ * - `text` som er tom etter `trim()`, eller lengre enn `OUTCOME_MATCH_NOTE_MAX`, gir
+ *   `AiRequestRejectedError` uten rad og uten kall. Rapportkjernen har stoppet begge før kallet;
+ *   dette er sikringen.
+ * - Flere kandidater enn `OUTCOME_MATCH_CANDIDATES_MAX`, eller en kandidattekst over
+ *   `AI_CANDIDATE_TEXT_MAX_LENGTH`, gir `AiInputTooLargeError("too_many_candidates")`.
+ *
+ * **Ledeteksten** bygges som for `phrase_suggest` (`prepareCandidatePrompt`): `text: <notat>`,
+ * `Kandidater:` og én linje per kandidat (`K1: tekst`). Notatet og hver kandidat vaskes for seg.
+ * Ingenting annet står etter skillet.
+ *
+ * **Svaret** tolkes med `parseCandidateAnswer` og kuttes til `OUTCOME_MATCH_MAX`. Funksjonen får
+ * grensen som parameter (`max`, standard `AI_CANDIDATE_REFS_MAX`), så `phrase_suggest` er uendret.
+ * Merker ut over grensen telles ikke som ukjente. Vaktene kjøres ikke: svaret har ingen tekst.
+ *
+ * **Raden:** `candidate_refs` har de viste utfallene (`template_outcome`, `outcomes.id`),
+ * `output_text` er tom, og `input_summary` har bare tall: tegn i notatet (`text`), `candidates`,
+ * `unknown_labels` og `duplicate_labels`. Ingen gyldige merker gir utfallet `no_match`.
+ *
+ * **Leverandørporten er uendret.** Den falske leverandøren leser notatet og K-linjene fra
+ * ledeteksten og rangerer med `rankBySimilarity` fra `@/shared/lib/text-similarity`, samme
+ * funksjon og samme grense som «Nærmeste treff (uten KI)» (A561). `src/core/ai` importerer aldri
+ * fra `src/core/reports`.
+ *
+ * **Ekte leverandør:** `outcome_match` føres ikke i `settings.features` og gir derfor `disabled`.
+ *
+ * **Beslutningen:** `accepted` med valgt kandidat lagres bare med `RecordDecisionIn`, i samme
+ * transaksjon som avviket (`ChooseOutcomeMatch` i `@/core/reports`). `edited` og `undo` brukes
+ * aldri. Et nytt søk på samme rapport avviser forrige åpne rad; `accepted` på en avvist rad gir
+ * `AiDecisionError`, som rapportkjernen gjør om til svaret `suggestion_outdated`.
+ */
+export type OutcomeMatchRequest = Pick<AiSuggestionRequest, "requestId"> & {
+  feature: "outcome_match";
+  assignmentId: null;
+  reportId: null;
+  target: { type: "report"; id: string; fieldKey: "new_deviation" };
+  fields: { text: string };
+};

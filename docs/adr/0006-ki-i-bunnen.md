@@ -447,3 +447,34 @@ KI-køen i `src/core/ai/client` beholdes til 2b, men kobles ikke til badskjermen
 - **Mål-id og oppdrag fra klienten, kontrollert av kalleren.** Hver ny kaller måtte gjenta kontrollen. Nå skjer den ett sted, i kjernen.
 - **`summary_basis` regnet på nytt ved «Bruk».** Funnene kan være endret mellom utkast og «Bruk», og da ville advarselen aldri kommet.
 - **Et tomt tiltak laget før «Forslag» på tiltak**, slik at målet kunne være `deviation_measure`. Lukker takstmannen listen, står et tomt tiltak igjen.
+
+## Tillegg 24.11.2026 – «Skriv det du ser» (`outcome_match`)
+
+Status: vedtatt av agentene i autonom modus. Oppgavekort: `docs/funksjoner/fase2a-skriv-det-du-ser.md` (A550–A563). Ingen migrering og ingen nye tabeller eller kolonner. Grensesnittene står i `src/core/ai/types.ts` («Kontrakten for `outcome_match`»), `src/core/reports/types.ts` (`FindOutcomes`, `ChooseOutcomeMatch`, `RejectOutcomeMatch`), `src/core/reports/logic/types.ts` og `src/shared/lib/text-similarity.ts`. Tillegget bygger på tillegget 17.11.2026; del 2 (leverandørporten) er fortsatt uendret.
+
+Støtter hovedmålene: **KI i bunnen** (KI gjør om takstmannens egne ord til et valg blant malens utfall, gjennom samme vask, logg og beslutning som de andre funksjonene), **de ansatte** (ett notat inn, tre treff ut, og nesten samme hjelp uten nett) og **færre reklamasjoner** (avviket lages alltid fra malens utfall med faste koder, standardtekst og tiltak).
+
+### Beslutningene
+
+1. **Ny funksjon `outcome_match`, samme kandidatkontrakt som `phrase_suggest`.** Serveren bygger kandidatene, KI svarer bare med K-merker, og kjernen tolker dem strengt. Høyst 3 beholdes (`OUTCOME_MATCH_MAX`); `parseCandidateAnswer` får grensen som parameter. `output_text` er tom. Vaktene kjøres ikke, fordi svaret ikke har tekst.
+2. **Målet er rapporten med den faste feltkoden `new_deviation` (A550).** Avviket finnes ikke før takstmannen har valgt, så forslaget kan ikke peke på et avvik. Koden står som egen konstant (`REPORT_NEW_DEVIATION_FIELD_KEY`) og føres bare i `allowedTargets` for `outcome_match`. Den står ikke i `REPORT_AI_TARGET_FIELDS.report`, som betyr «kolonner som kan få et forslag».
+3. **Målet deles av hele rapporten (A555).** Ett åpent søk per rapport: et nytt søk fra et annet rom, en annen fane eller en annen ansatt avviser det forrige. Valg på et avvist søk gir `suggestion_outdated` og skriver verken avvik eller beslutning. Rommet er ikke en del av målet; rapportkjernen kontrollerer det mot rapporten i skrivelåsen.
+4. **KI ser aldri TG (A552).** Kandidatteksten er punktnavn, spørsmål og malens avvikstekst med flettefeltene uutfylt, og ingenting annet. Utfallskode, utfallstype, gruppe, kildehenvisning, hjelpetekst og romnavn sendes aldri. Kodene røper TG. Tillatt-listen for kandidatene er `checkpoints.name`, `deviation_questions.text` og `outcomes.deviation_text`.
+5. **Kandidatene kuttes aldri (A554).** De kommer fra rommets romtype i rapportens låste malversjon, det åpne punktet først. Er de flere enn `OUTCOME_MATCH_CANDIDATES_MAX` (60), gjøres ikke noe kall og ingen rad lages. `candidatesCut` er ikke lov for `outcome_match`. Kandidat-id er `outcomes.id`, med kilden `template_outcome`.
+6. **Avviket og beslutningen lagres sammen eller ikke i det hele tatt.** `ChooseOutcomeMatch` lager avviket med `createDeviationFromOutcome` og kaller `recordDecisionIn` i samme `withRoomWrite`-transaksjon, i den rekkefølgen. `AiDecisionError` fanges utenfor transaksjonen, så den rulles tilbake før svaret `suggestion_outdated` gis. Låserekkefølgen er som før: rapportraden først, så KI-låsen. Loggraden bindes på serveren (organisasjon, funksjon, rapport, mål og kandidat blant de viste); klienten sender aldri punkt-, spørsmåls- eller utfallskode.
+7. **Notatet er takstmannens egen tekst, ikke KI-tekst (A551).** Det går vasket til leverandøren og lagres ingen steder av KI-kjernen eller de tre inngangene. Legger takstmannen det til avviksteksten, er det en vanlig lagring per felt. `text_source` på avviket er én verdi for avvik, årsak og konsekvens, og går tilbake til `template` bare når alle tre igjen er lik malens tekster (A557, A562).
+8. **Én liste over funksjoner uten KI-tekst:** `AI_FEATURES_WITHOUT_AI_TEXT` i `src/core/ai/features.ts` (`phrase_suggest` og `outcome_match`). Publiseringssperren og signalene i rapportkjernen leser den samme listen.
+9. **Likhetsfunksjonen ligger i `src/shared/lib/text-similarity.ts` (A561).** Den brukes av «Nærmeste treff (uten KI)» og tekstsøket i «Forslag» uten nett (`src/core/reports/logic`), av den falske leverandøren og av evalueringssettet (`src/core/ai`). Slik gir den falske leverandøren og søket uten nett samme svar, uten at `src/core/ai` importerer fra `src/core/reports` og uten at leverandørporten endres.
+10. **Ekte leverandør holdes av.** `outcome_match` føres ikke i `settings.features` før hullene i vasken er lukket. Et fritt notat har oftere navn og opplysninger om eier enn en avvikstekst.
+
+### Forkastet
+
+- **Egen måltype per rom, eller rommet i `target_ref`.** Krever nytt oppslag i `ResolveAiTarget` (rom → etasje → bygning → oppdrag → rapport) og en ny fast måltype. Gevinsten er at to takstmenn kan ha hvert sitt åpne søk i samme rapport. Det skjer sjelden, og svaret `suggestion_outdated` koster ett trykk. Kan tas senere uten å endre gamle rader.
+- **Avviket som mål, laget tomt før søket.** Lukker takstmannen listen, står et tomt avvik igjen (samme grunn som for tiltak i tillegget 17.11.2026).
+- **Likhetsfunksjonen sendt inn som parameter til den falske leverandøren.** Leverandøren velges inne i `src/core/ai` og får bare ledeteksten. En funksjon som parameter måtte gått gjennom `AiServerInput` og leverandørporten, og en ekte adapter ville fått et felt den aldri skal bruke. Et felles register ville vært global tilstand. Evalueringssettet kjører dessuten i `src/core/ai` og trenger samme funksjon.
+- **Likhetsfunksjonen i `src/core/reports/logic`, med en kopi i den falske leverandøren.** To kopier glir fra hverandre, og da sier testene mot falsk leverandør ingenting om søket uten nett.
+- **Sende utfallskoden eller TG til KI for bedre treff.** Da ville rangeringen i praksis vært et TG-forslag (spørsmål 120).
+- **Kutte kandidatlisten etter sortering.** Et utfall som faller ut uten at det vises, kan være det riktige. Heller ingen KI og en tydelig melding.
+- **Lagre notatet på loggraden.** Loggen skal ikke ha fritekst fra befaringen, og notatet er ikke et KI-svar.
+- **Egen inngang for å lagre notatet i avviksteksten.** Lagring per felt har alt `row_version`, revisjonslogg og sperrene.
+- **`accepted` i egen transaksjon etter at avviket er laget.** Faller kallet mellom de to, står avviket uten spor av valget, eller valget uten avvik (funnene T-0113 til T-0117 kom av samme type glipp).

@@ -28,6 +28,9 @@ export {
   AI_CANDIDATE_TEXT_MAX_LENGTH,
   AI_SUMMARY_FINDINGS_MAX,
   AI_SUMMARY_INPUT_MAX_LENGTH,
+  OUTCOME_MATCH_CANDIDATES_MAX,
+  OUTCOME_MATCH_MAX,
+  OUTCOME_MATCH_NOTE_MAX,
 } from "./limits";
 /** Høyeste antall kandidater i svaret. Samme tall som `candidate_refs` tåler (CHECK-regelen). */
 export { AI_CANDIDATE_REFS_MAX as AI_SUGGESTED_CANDIDATES_MAX } from "@/shared/config/ai-targets";
@@ -42,6 +45,7 @@ export {
 } from "./retention";
 export {
   AI_FEATURES,
+  AI_FEATURES_WITHOUT_AI_TEXT,
   AI_TRIAL_TARGET_TYPE,
   ARCHIVED_AI_TARGET_TYPES,
   FREE_TEXT_SOURCE,

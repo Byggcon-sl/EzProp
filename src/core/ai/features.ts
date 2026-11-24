@@ -196,6 +196,19 @@ export const AI_FEATURES: Readonly<Record<AiFeatureCode, AiFeatureDefinition>> =
   },
 };
 
+/**
+ * Funksjonene der teksten i rapporten aldri er KI-tekst (ADR 0006, tillegg 17.11.2026 og
+ * 24.11.2026): `phrase_suggest` setter inn kildens egen tekst, og `outcome_match` lager et avvik
+ * med malens tekst. Radene er bare spor av valget. De trenger aldri godkjenning, stopper aldri
+ * publiseringen og vises aldri som ventende KI-forslag.
+ *
+ * **Den ene listen.** Publiseringssperren (`approval-check.ts`) og signalene i `@/core/reports`
+ * (`signals.ts`) leser denne, så en ny funksjon ikke glemmes ett av stedene. Ingen av dem har egen
+ * kopi. Kodene er tekst fordi `ai_usage_log.feature` er fri tekst og gamle rader kan ha arkiverte
+ * koder; hver kode her må likevel være en `AiFeatureCode` (statisk test).
+ */
+export const AI_FEATURES_WITHOUT_AI_TEXT: readonly string[] = ["phrase_suggest", "outcome_match"];
+
 /** Det kontrollen trenger av en definisjon. Ren form, så testen kan prøve oppdiktede definisjoner. */
 export type AiFieldSourceCheckInput = {
   code: string;

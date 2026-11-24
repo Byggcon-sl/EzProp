@@ -17,6 +17,7 @@ import type {
   TextStatus,
   TgDirect,
 } from "@/db/schema";
+import type { OutcomeSearchDocument, OutcomeSearchHit } from "./deviation-search";
 import type {
   CHECKPOINT_STATUSES,
   CHECKPOINT_TG_VALUES,
@@ -449,6 +450,11 @@ export type ListPhraseCandidates = (
  * Tekstsøket uten KI (A485): kandidatene der alle ordene i `query` står i teksten, punktnavnet
  * eller spørsmålet, i rekkefølgen de kom inn. Tom `query` gir de første. Høyst `limit` treff.
  * Samme normalisering som `searchOutcomes` (A382).
+ *
+ * Fra «Skriv det du ser» (A558, retter T-0146): gir det strenge søket ingen treff og `query` ikke
+ * er tom, er svaret de nærmeste kandidatene fra `rankBySimilarity`
+ * (`@/shared/lib/text-similarity`), høyst `limit`, med samme tekst som det strenge søket leter i.
+ * Ingen over grensen gir fortsatt tom liste.
  */
 export type SearchPhraseCandidates = (
   candidates: readonly PhraseCandidate[],
@@ -550,3 +556,71 @@ export type CollectSummaryFindings = (checkpoints: readonly SummaryCheckpointInp
 
 /** Resultatet av inndatakontrollen for `summary_text` (K1.26). */
 export type SummaryTextCheck = "ok" | "too_long" | "national_id" | "placeholder";
+
+// --- «Skriv det du ser» (docs/funksjoner/fase2a-skriv-det-du-ser.md) ------------------------------
+
+/**
+ * Kandidatene for «Skriv det du ser» (A554): alle utfallene i dokumentet, med utfallene i det åpne
+ * kontrollpunktet først og resten i malens rekkefølge (punkt, spørsmål, utfall). Dokumentet er
+ * rommets del av rapportens låste malversjon, så andre romtyper og versjoner kommer aldri med.
+ * `openCheckpointKey` som er `null` eller ukjent i dokumentet, gir malens rekkefølge.
+ *
+ * Kutter aldri. Samme funksjon på serveren (kandidatene til KI) og i nettleseren («Nærmeste treff
+ * (uten KI)»), så de to listene har samme innhold og rekkefølge.
+ */
+export type ListOutcomeMatchCandidates = (
+  document: OutcomeSearchDocument,
+  openCheckpointKey: string | null,
+) => OutcomeSearchHit[];
+
+/**
+ * Teksten ett utfall sammenlignes på: punktnavnet, spørsmålet og malens avvikstekst med
+ * flettefeltene uutfylt (`{måleverdi}`), i den rekkefølgen. Det er hele teksten KI får for
+ * kandidaten (A552), og den samme teksten det lokale søket rangerer på.
+ *
+ * Tar aldri med utfallets kode, type (`kind`), TG, gruppe, kildehenvisning eller hjelpetekst.
+ * Parametertypen har derfor bare de tre tekstene.
+ */
+export type OutcomeMatchCandidateText = (
+  hit: Pick<OutcomeSearchHit, "checkpointName" | "questionText" | "deviationText">,
+) => string;
+
+/**
+ * «Nærmeste treff (uten KI)» (A558): `ListOutcomeMatchCandidates` rangert med `rankBySimilarity`
+ * (`@/shared/lib/text-similarity`) på `OutcomeMatchCandidateText`, høyst `limit` treff (skjermen
+ * gir `OUTCOME_MATCH_MAX`). Tom liste betyr «ingen passer». Ingen KI, intet serverkall og ingen
+ * logg. Rangerer bare likhet: TG og utfallstype påvirker aldri rekkefølgen.
+ */
+export type RankOutcomesBySimilarity = (
+  document: OutcomeSearchDocument,
+  note: string,
+  options: { openCheckpointKey: string | null; limit: number },
+) => OutcomeSearchHit[];
+
+/**
+ * Om rommet alt har et avvik på utfallet («Registrert fra før», A559). Regnes i nettleseren av
+ * dataene rommet alt har; slettede avvik står ikke i visningen og teller ikke. Gir avvikets id,
+ * så trykket kan åpne det eksisterende kortet, ellers `null`.
+ */
+export type FindRegisteredDeviation = (
+  hit: Pick<OutcomeSearchHit, "checkpointKey" | "questionKey" | "outcomeKey">,
+  checkpoints: readonly {
+    checkpointKey: string;
+    deviations: readonly { id: string; questionKey: string | null; outcomeKey: string | null }[];
+  }[],
+) => string | null;
+
+/**
+ * «Legg notatet til» (A556): malens tekst, så notatet som egen setning. Notatet trimmes, får stor
+ * forbokstav og punktum når det mangler; malens tekst endres ikke. Er avviksteksten tom, er svaret
+ * bare notatet. Resultatet lagres som en vanlig endring av `deviations.deviation_text`
+ * (`SaveReportField`), aldri gjennom en egen inngang.
+ */
+export type AppendNoteToDeviationText = (deviationText: string | null, note: string) => string;
+
+/**
+ * Om «Bruk bare notatet» kan tilbys (A556): `false` når malens avvikstekst for utfallet har minst
+ * ett flettefelt, fordi målingen eller årstallet da ville falt ut av rapporten. Avgjøres av
+ * teksten i malen (`outcomes.deviation_text`), aldri av en liste med utfallskoder.
+ */
+export type CanReplaceDeviationTextWithNote = (templateDeviationText: string | null) => boolean;

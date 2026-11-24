@@ -31,6 +31,17 @@ export type ReportAiTargetType = keyof typeof REPORT_AI_TARGET_FIELDS;
 export const DEVIATION_NEW_MEASURE_FIELD_KEY = "new_measure";
 
 /**
+ * Feltkoden for «nytt avvik i rapporten» (måltype `report`, A550). Ikke en kolonne: avviket finnes
+ * ikke før takstmannen har valgt et treff, så forslaget kan ikke peke på et avvik. Brukes bare av
+ * `outcome_match` («Skriv det du ser») og føres direkte i funksjonens `allowedTargets`.
+ *
+ * Står med vilje **ikke** i `REPORT_AI_TARGET_FIELDS.report`: den listen betyr «kolonner som kan få
+ * et forslag», og `new_deviation` får aldri tekst. Målet deles av hele rapporten (A555): ett åpent
+ * søk om gangen per rapport, uansett rom, fane og ansatt.
+ */
+export const REPORT_NEW_DEVIATION_FIELD_KEY = "new_deviation";
+
+/**
  * Måltypene der `@/core/ai` selv slår opp målraden og utleder rapport og oppdrag (ADR 0006,
  * tillegg 17.11.2026). `field_answer` og `tgiu_detail` kontrolleres ikke ennå og kan derfor ikke
  * gå til en ekte leverandør.
