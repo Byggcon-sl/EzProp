@@ -431,7 +431,7 @@ test("E3/E9 én sperre rettet med «Rett nå» (TG for punktet, ingen forhåndsv
   await expect(
     group.locator("input:checked, [aria-checked='true'], [aria-pressed='true']"),
   ).toHaveCount(0);
-  await counter.click(group.getByText(/^TG ?1$/));
+  await counter.click(group.getByText(/^TG ?1\b/));
   await expect(page.getByRole("button", { name: "Publiser versjon 1" })).toBeVisible();
   await counter.click(page.getByRole("button", { name: "Publiser versjon 1" }));
   await expect(page.getByRole("heading", { name: "Versjon 1 er publisert" })).toBeVisible();
@@ -448,7 +448,8 @@ test("E4 sperret knapp sier hvorfor, flytter fokus, bryter (ikke avkrysningsboks
   const button = page.getByRole("button", { name: "Publiser (2 må rettes eller krysses bort)" });
   await expect(button).toBeVisible();
   await expect(button).toHaveAttribute("aria-disabled", "true");
-  await button.click();
+  // Playwright venter på aria-disabled; knappen tar likevel imot trykket og flytter fokus
+  await button.click({ force: true });
   const first = blockers(page).first();
   await expect.poll(() => first.evaluate((el) => el.contains(document.activeElement))).toBe(true);
   expect(await releaseCount(bath.reportId)).toBe(0);
@@ -465,7 +466,7 @@ test("E4 sperret knapp sier hvorfor, flytter fokus, bryter (ikke avkrysningsboks
   await expect(page.locator("select")).toHaveCount(0);
   await first
     .getByRole("group", { name: "Hvorfor publiserer du likevel?" })
-    .getByText("Annet")
+    .getByText("Annet", { exact: true })
     .click();
   const text = first.getByRole("textbox", { name: /Skriv grunnen/ });
   await expect(text).toBeFocused();
@@ -525,7 +526,7 @@ test("E6 «Utgivelser»: leder ser begrunnelsen, kontor ser grunnen men ikke tek
   await overrideSwitch(blocker).click();
   await blocker
     .getByRole("group", { name: "Hvorfor publiserer du likevel?" })
-    .getByText("Annet")
+    .getByText("Annet", { exact: true })
     .click();
   await blocker.getByRole("textbox", { name: /Skriv grunnen/ }).fill(reasonText);
   await page.getByRole("button", { name: "Publiser versjon 1" }).click();
@@ -610,7 +611,7 @@ test("E10 utløpt sertifisering: meldingen står øverst før klikk, og listen o
   await logIn(page, EXPIRED.email);
   await page.goto(publishUrl(bath));
   await expect(
-    page.getByText(/^Du kan ikke publisere: sertifiseringen din gikk ut 01\.11\./),
+    page.getByText(/^Du kan ikke publisere: sertifiseringen din gikk ut 01\.11\./).first(),
   ).toBeVisible();
   await expect(blockers(page).first()).toContainText("Hulltaking er ikke besvart.");
   await expect(overrideSwitch(blockers(page).first())).toHaveCount(0);
