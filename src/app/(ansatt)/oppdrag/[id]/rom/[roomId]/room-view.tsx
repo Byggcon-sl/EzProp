@@ -751,7 +751,10 @@ export function RoomView({
                 </Button>
                 {canEdit &&
                   (current?.done ? (
+                    // Egen `key` for hver knapp: ellers glir fargene over fra den mørke knappen,
+                    // og teksten har for svak kontrast et øyeblikk når punktet byttes
                     <Button
+                      key="reopen"
                       id={DONE_BUTTON_ID}
                       variant="secondary"
                       size="lg"
@@ -763,6 +766,7 @@ export function RoomView({
                     </Button>
                   ) : (
                     <Button
+                      key="done"
                       id={DONE_BUTTON_ID}
                       size="lg"
                       className="lg:min-w-60"

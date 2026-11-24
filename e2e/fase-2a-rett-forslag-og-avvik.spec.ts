@@ -482,6 +482,7 @@ test("FA-E8 axe uten feil: grunnvalget, kortet etter «Fjern avviket» og «Å s
 
   await markMembraneDone(page);
   await expect(roomReviewList(page)).toContainText(OPEN_ON_DONE);
+  await expect(page.getByRole("button", { name: "Åpne punktet igjen" })).toBeVisible();
   await expectNoAxeViolations(page, "«Å se over» med åpent forslag");
 });
 
