@@ -312,3 +312,7 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - I e2e uten nett: vent på `data-sync-state="offline"` før utfylling, og bruk `expect.poll` for køen (den oppdateres litt etter at feltet er lagret lokalt).
 - Kort på adminsider er nå `section` med overskriften som navn (`EmployeeCard`); e2e kan finne dem med rollen `region`.
 
+**KI i veien (23.–24.11.2026), PR #232, overtatt av hovedløkken:**
+- Hele `pnpm test` tar nå over 30 minutter i skycontaineren og ble stoppet av tidsgrensen. Kjør testene for de berørte mappene lokalt (for eksempel `pnpm vitest run src/core/ai src/core/reports`, 2 038 tester) og la CI kjøre hele pakken.
+- CI kjører `pnpm format:check` før testene. Kjør den (eller `pnpm prettier --write` på endrede filer) før push; en uformatert linje kostet én CI-runde.
+- Tre kjøringer tok A-numre samtidig (A490–A491 er brukt av både `ki-i-veien` og `rett-forslag-og-avvik`). Sjekk de åpne branchene med `git diff origin/main...origin/<branch> -- docs/09-apne-sporsmal.md` før nye numre tas.
