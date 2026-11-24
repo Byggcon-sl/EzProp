@@ -610,6 +610,8 @@ test("K7.3 tiltak: valget legger til et nytt tiltak, det som finnes er uendret",
 test("K7.4 annen TG: tekst fra et TG3-utfall på et TG2-avvik gir advarselen", async ({ page }) => {
   const { bath, deviation } = await bathWithTg3(page);
   await choose(deviation, "TG", /^TG2$/);
+  // Avviket kom fra et TG3-forslag: TG2 krever grunn (A490), og TG og grunn lagres sammen
+  await choose(deviation, "Hvorfor endrer du TG fra forslaget?", "Synlig skade");
   await expect.poll(async () => (await deviations(bath))[0]?.tg).toBe(2);
   await clearSaved(bath, deviation, "Avvik");
 

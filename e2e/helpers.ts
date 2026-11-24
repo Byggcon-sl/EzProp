@@ -1390,72 +1390,6 @@ export async function ensureSampleOrgEmployee(input: {
   }
 }
 
-/** Et oppdrag i prøveorganisasjonen med ett bad, som tester på badskjermen bruker. Oppdiktet. */
-export type SampleBathroom = { assignmentId: string; roomId: string; suffix: string };
-
-/**
- * Lager et oppdrag i prøveorganisasjonen (som har den publiserte badmalen) med én bygning, én
- * etasje og ett bad («Bad KI E2E …»), direkte mot databasen. Hver test får sitt eget, så testene
- * ikke avhenger av hverandre. Alt er oppdiktet.
- */
-export async function createSampleBathroom(): Promise<SampleBathroom> {
-  const sql = e2eSql();
-  const suffix = uniqueSuffix();
-  try {
-    const organizationId = await sampleOrganizationId(sql);
-    const [office] = await sql<{ id: string }[]>`
-      select id from offices where organization_id = ${organizationId} and deleted_at is null
-      order by created_at limit 1`;
-    if (!office)
-      throw new Error("Fant ikke kontoret i prøveorganisasjonen (pnpm db:seed:testoppdrag)");
-    const orderId = randomUUID();
-    const assignmentId = randomUUID();
-    const buildingId = randomUUID();
-    const floorId = randomUUID();
-    const roomId = randomUUID();
-    const address = `Forslagsveien 1 ${suffix}, 8000 Bodø`;
-    await sql`
-      insert into orders (id, organization_id, address_text, received_at, source, status,
-        requested_report_type, valid_until)
-      values (${orderId}, ${organizationId}, ${address}, now(), 'manual', 'received',
-        'condition_report', (now() at time zone 'Europe/Oslo')::date + 30)`;
-    await sql`
-      insert into assignments (id, organization_id, number, office_id, assignment_type, status,
-        order_id, address_text, received_at, source)
-      values (${assignmentId}, ${organizationId}, ${`E2E-KI-${suffix}`}, ${office.id},
-        'condition_report', 'in_progress', ${orderId}, ${address}, now(), 'manual')`;
-    await sql`
-      insert into report_buildings (id, organization_id, assignment_id, name)
-      values (${buildingId}, ${organizationId}, ${assignmentId}, 'Bolighus')`;
-    await sql`
-      insert into floors (id, organization_id, report_building_id, name, level, below_ground)
-      values (${floorId}, ${organizationId}, ${buildingId}, '1. etasje', 1, false)`;
-    await sql`
-      insert into rooms (id, organization_id, floor_id, room_type, name, area_type, below_ground)
-      values (${roomId}, ${organizationId}, ${floorId}, 'bathroom', ${`Bad KI E2E ${suffix}`},
-        'bra_i', false)`;
-    return { assignmentId, roomId, suffix };
-  } finally {
-    await sql.end();
-  }
-}
-
-/** Adressen til badskjermen, eventuelt med et punkt åpent. */
-export function sampleBathroomUrl(bath: SampleBathroom, punkt?: string): string {
-  const base = `/oppdrag/${bath.assignmentId}/rom/${bath.roomId}`;
-  return punkt ? `${base}?punkt=${encodeURIComponent(punkt)}` : base;
-}
-
-/** Åpner badet og starter rapporten når den ikke er startet. */
-export async function openSampleBathroom(page: Page, bath: SampleBathroom, punkt?: string) {
-  await page.goto(sampleBathroomUrl(bath, punkt));
-  const start = page.getByRole("button", { name: "Start rapporten" });
-  const heading = page.locator("#checkpoint-heading");
-  await expect(start.or(heading).first()).toBeVisible();
-  if (await start.isVisible()) await start.click();
-  await expect(heading).toBeVisible();
-}
-
 /** Avvikskort nummer `n` i punktet som er åpent. */
 export function deviationCardOn(page: Page, n: number): Locator {
   return page
@@ -2129,6 +2063,231 @@ export async function expectNoAxeViolations(page: Page, where: string) {
     );
   });
   expect(violations, `axe uten feil (${where})`).toEqual([]);
+}
+
+// --- Badet i prøveorganisasjonen (samme oppsett som e2e/fase-2a-badet-pc.spec.ts) ------------
+
+const MISSING_SAMPLE_BATHROOM =
+  "Kjør pnpm db:seed:testoppdrag først (prøveorganisasjonen med badmalen)";
+
+/** Kontrollpunktet «Vanntett sjikt, membran og sluk» i badmalen. */
+export const BATHROOM_MEMBRANE = "wet_room.membrane_drain";
+export const BATHROOM_MEMBRANE_NAME = "Vanntett sjikt, membran og sluk";
+/** Kontrollpunktet «Tilliggende konstruksjoner» (hulltaking) i badmalen. */
+export const BATHROOM_ADJACENT = "wet_room.adjacent";
+
+export type SampleBathroom = {
+  assignmentId: string;
+  roomId: string;
+  bedroomId: string;
+  suffix: string;
+};
+
+function bathroomSql() {
+  const url = e2eDatabaseUrl();
+  assertLocalOrTestDatabase(url, process.env.TEST_DATABASE_URL);
+  return postgres(url, { max: 1, onnotice: () => {} });
+}
+
+async function sampleOrganizationIdFor(db: postgres.Sql): Promise<string> {
+  const [row] = await db<{ id: string }[]>`
+    select id from organizations
+    where settings ->> 'sampleData' = 'true' and deleted_at is null
+    order by created_at limit 1`;
+  if (!row) throw new Error(MISSING_SAMPLE_BATHROOM);
+  return row.id;
+}
+
+/** Et oppdrag i prøveorganisasjonen med ett bad og ett soverom. Oppdiktet. */
+export async function createSampleBathroom(): Promise<SampleBathroom> {
+  const db = bathroomSql();
+  const suffix = uniqueSuffix();
+  try {
+    const organizationId = await sampleOrganizationIdFor(db);
+    const [office] = await db<{ id: string }[]>`
+      select id from offices where organization_id = ${organizationId} and deleted_at is null
+      order by created_at limit 1`;
+    if (!office) throw new Error(MISSING_SAMPLE_BATHROOM);
+    const orderId = randomUUID();
+    const assignmentId = randomUUID();
+    const buildingId = randomUUID();
+    const floorId = randomUUID();
+    const roomId = randomUUID();
+    const bedroomId = randomUUID();
+    const address = `Badeveien 2 ${suffix}, 8000 Bodø`;
+    await db`
+      insert into orders (id, organization_id, address_text, received_at, source, status,
+        requested_report_type, valid_until)
+      values (${orderId}, ${organizationId}, ${address}, now(), 'manual', 'received',
+        'condition_report', (now() at time zone 'Europe/Oslo')::date + 30)`;
+    await db`
+      insert into assignments (id, organization_id, number, office_id, assignment_type, status,
+        order_id, address_text, received_at, source)
+      values (${assignmentId}, ${organizationId}, ${`E2E-FA-${suffix}`}, ${office.id},
+        'condition_report', 'in_progress', ${orderId}, ${address}, now(), 'manual')`;
+    await db`
+      insert into report_buildings (id, organization_id, assignment_id, name)
+      values (${buildingId}, ${organizationId}, ${assignmentId}, 'Bolighus')`;
+    await db`
+      insert into floors (id, organization_id, report_building_id, name, level, below_ground)
+      values (${floorId}, ${organizationId}, ${buildingId}, '1. etasje', 1, false)`;
+    await db`
+      insert into rooms (id, organization_id, floor_id, room_type, name, area_type, below_ground)
+      values (${roomId}, ${organizationId}, ${floorId}, 'bathroom', ${`Bad E2E ${suffix}`},
+        'bra_i', false),
+        (${bedroomId}, ${organizationId}, ${floorId}, 'bedroom', ${`Soverom E2E ${suffix}`},
+        'bra_i', false)`;
+    return { assignmentId, roomId, bedroomId, suffix };
+  } finally {
+    await db.end();
+  }
+}
+
+export type SampleDecisionRow = {
+  decision: string;
+  override_reason_code: string | null;
+  deviation_id: string | null;
+  chosen_tg: string | null;
+};
+
+/** Beslutningene på regelforslag i oppdraget, eldste først. */
+export async function sampleDecisions(assignmentId: string): Promise<SampleDecisionRow[]> {
+  const db = bathroomSql();
+  try {
+    return await db<SampleDecisionRow[]>`
+      select d.decision, d.override_reason_code, d.deviation_id, d.chosen_tg
+      from rule_suggestion_decisions d join reports r on r.id = d.report_id
+      where r.assignment_id = ${assignmentId} and d.deleted_at is null
+      order by d.decided_at, d.id`;
+  } finally {
+    await db.end();
+  }
+}
+
+/** TG på avvikene som står (ikke mykt slettet) i oppdraget, eldste først. */
+export async function sampleDeviationTgs(assignmentId: string): Promise<(number | null)[]> {
+  const db = bathroomSql();
+  try {
+    const rows = await db<{ tg: number | null }[]>`
+      select d.tg from deviations d join reports r on r.id = d.report_id
+      where r.assignment_id = ${assignmentId} and d.deleted_at is null
+      order by d.created_at`;
+    return rows.map((row) => row.tg);
+  } finally {
+    await db.end();
+  }
+}
+
+/** Adressen til badet, eventuelt med et kontrollpunkt åpent. */
+export function sampleBathroomUrl(bath: SampleBathroom, checkpoint?: string): string {
+  const base = `/oppdrag/${bath.assignmentId}/rom/${bath.roomId}`;
+  return checkpoint ? `${base}?punkt=${encodeURIComponent(checkpoint)}` : base;
+}
+
+/** Overskriften til kontrollpunktet som er åpent. */
+export function roomCheckpointHeading(page: Page): Locator {
+  return page.locator("#checkpoint-heading");
+}
+
+/** Åpner badet og starter rapporten når den ikke finnes. */
+export async function openSampleBathroom(page: Page, bath: SampleBathroom, checkpoint?: string) {
+  await page.goto(sampleBathroomUrl(bath, checkpoint));
+  const start = page.getByRole("button", { name: "Start rapporten" });
+  const heading = roomCheckpointHeading(page);
+  await expect(start.or(heading).first()).toBeVisible();
+  if (await start.isVisible()) await start.click();
+  await expect(heading).toBeVisible();
+}
+
+/** «Å se over (n)» på punktet som er åpent. Finnes ikke når listen er tom. */
+export function roomReviewList(page: Page): Locator {
+  return page.getByRole("region", { name: /^Å se over/ });
+}
+
+/** Det første forslagskortet («Forslag fra reglene») på punktet. */
+export function ruleSuggestionCard(page: Page): Locator {
+  return page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Forslag fra reglene" }) })
+    .first();
+}
+
+/** Avvikskortet med overskriften «Avvik n». */
+export function roomDeviationCard(page: Page, n: number): Locator {
+  return page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: new RegExp(`^Avvik ${n}\\b`) }) })
+    .first();
+}
+
+/** Velger et valg i en gruppe med pilleknapper (trykk på pillen). */
+export async function chooseRoomOption(
+  page: Page,
+  group: string,
+  option: string | RegExp,
+  scope?: Locator,
+) {
+  await (scope ?? page)
+    .getByRole("group", { name: group, exact: true })
+    .locator("label")
+    .filter({ hasText: option })
+    .first()
+    .click();
+}
+
+/** Åpner et kontrollpunkt fra listen (i skuffen når skjermen er smal). */
+export async function openRoomCheckpoint(page: Page, name: string) {
+  const portrait = (page.viewportSize()?.width ?? 1200) < 1024;
+  if (portrait) {
+    await page.getByRole("button", { name: /^Punkter \(\d+ av \d+\)$/ }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("link", { name: new RegExp(`^${name}`) })
+      .click();
+  } else {
+    await page
+      .getByRole("navigation", { name: "Kontrollpunkter" })
+      .getByRole("link", { name: new RegExp(`^${name}`) })
+      .click();
+  }
+  await expect(page.getByRole("heading", { level: 2, name })).toBeFocused();
+}
+
+/** Sjikt «Folie» med årstall 1990: gir TG3-forslaget for sjikt før 2000. Oppdiktet. */
+export async function fillMembraneForTg3(page: Page) {
+  await chooseRoomOption(page, "Vanntett sjikt", /^Folie$/);
+  const year = page.getByLabel("Årstall for det vanntette sjiktet");
+  await year.fill("1990");
+  await year.blur();
+  await expect(ruleSuggestionCard(page)).toContainText("TG3");
+}
+
+/** Krever at siden ikke kan rulles vannrett. */
+export async function expectNoHorizontalScroll(page: Page, where: string) {
+  const overflow = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  expect(overflow.scrollWidth, `ingen vannrett rulling (${where})`).toBeLessThanOrEqual(
+    overflow.clientWidth,
+  );
+}
+
+/**
+ * Teller kall til serverhandlingene (server actions er POST med `next-action`) fra siden.
+ * `count()` gir antallet siden telleren ble startet eller nullstilt.
+ */
+export function countServerActions(page: Page): { count(): number; reset(): void } {
+  let calls = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.headers()["next-action"]) calls += 1;
+  });
+  return {
+    count: () => calls,
+    reset: () => {
+      calls = 0;
+    },
+  };
 }
 
 // --- Testdata, del 2: badene i testoppdragene (docs/funksjoner/fase2a-testdata-del-2-testplan.md avsnitt 5) ---

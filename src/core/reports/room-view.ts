@@ -23,9 +23,13 @@ import {
   type DeviationMeasure,
   type FieldAnswer,
   type RuleSuggestionDecisionRow,
+  type DeviationTg,
+  type StoredRuleSuggestion,
+  type TgDirect,
   type TextStatus,
   type TgiuDetails,
 } from "@/db/schema";
+import { isEffectiveDecision, latestDecisionPerRule } from "./logic/effective-decision";
 import {
   computeCheckpointStatus,
   computeCheckpointTg,
@@ -39,6 +43,7 @@ import {
   type DecisionState,
   type DeviationState,
   type OutcomeTg,
+  type SuggestionTg,
 } from "./logic";
 import {
   inspectionYearOf,
@@ -58,6 +63,7 @@ import type {
   AnswerView,
   CheckpointView,
   DecisionView,
+  DeviationSuggestionLink,
   DeviationView,
   GetRoomReport,
   InspectionYear,
@@ -84,8 +90,14 @@ export type RoomData = {
   deviations: Deviation[];
   measures: DeviationMeasure[];
   tgiu: TgiuDetails[];
-  decisions: RuleSuggestionDecisionRow[];
+  decisions: DecisionRow[];
 };
+
+/**
+ * En beslutningsrad med om avviket den laget, står (A491). `deviationLive` er `false` når raden
+ * ikke har avvik, eller avviket er mykt slettet.
+ */
+export type DecisionRow = RuleSuggestionDecisionRow & { deviationLive: boolean };
 
 /**
  * Alle radene for rommet i rapporten, i seks spørringer (tiltakene etter avvikene). Svar, punkter, avvik, tiltak og TGIU som
@@ -155,10 +167,24 @@ export async function loadRoomData(
           isNull(tgiuDetails.deletedAt),
         ),
       ),
+    // Med avvikets `deleted_at`, slik at gjeldende beslutning regnes på samme oppslag (ADR 0013
+    // punkt 9b). Avviket slås opp med organisasjonen.
     ex
-      .select({ row: ruleSuggestionDecisions })
+      .select({
+        row: ruleSuggestionDecisions,
+        joinedDeviationId: deviations.id,
+        deviationDeletedAt: deviations.deletedAt,
+      })
       .from(ruleSuggestionDecisions)
       .innerJoin(checkpointResults, resultJoin(ruleSuggestionDecisions.checkpointResultId))
+      .leftJoin(
+        deviations,
+        and(
+          eq(deviations.id, ruleSuggestionDecisions.deviationId),
+          eq(deviations.organizationId, orgId),
+          eq(deviations.reportId, reportId),
+        ),
+      )
       .where(
         and(
           eq(ruleSuggestionDecisions.organizationId, orgId),
@@ -190,7 +216,10 @@ export async function loadRoomData(
     deviations: deviationRows.map((r) => r.row),
     measures: measureRows,
     tgiu: tgiuRows.map((r) => r.row),
-    decisions: decisionRows.map((r) => r.row),
+    decisions: decisionRows.map((r) => ({
+      ...r.row,
+      deviationLive: r.joinedDeviationId !== null && r.deviationDeletedAt === null,
+    })),
   };
 }
 
@@ -291,18 +320,49 @@ function optionSelected(
   return answer?.valueOptionKeys?.includes(optionKey) ?? false;
 }
 
-function toDecisionView(
-  row: RuleSuggestionDecisionRow,
-  liveDeviationIds: Set<string>,
-): DecisionView {
+/** Beslutningsraden slik de rene funksjonene ser den. `deviationId` er `null` når avviket er borte. */
+export function toDecisionState(row: DecisionRow): DecisionState {
   return {
+    ruleKey: row.ruleKey,
+    decision: row.decision,
+    suggestion: row.suggestion,
+    chosenTg: row.chosenTg,
+    madeDeviation: row.deviationId !== null,
+    deviationId: row.deviationLive ? row.deviationId : null,
+  };
+}
+
+/**
+ * Den gjeldende beslutningen per regel på punktet (ADR 0013 punkt 9b): siste rad per regel, og
+ * bare når den står ved lag. En regel uten oppføring har et åpent forslag.
+ */
+export function effectiveDecisionsOf(
+  rows: readonly DecisionRow[],
+  checkpointResultId: string,
+  tgDirect: TgDirect | null,
+): Map<string, { row: DecisionRow; state: DecisionState }> {
+  // Radene er sortert eldst først; siste rad per regel vinner
+  const latest = latestDecisionPerRule(
+    rows.filter((row) => row.checkpointResultId === checkpointResultId),
+  );
+  const effective = new Map<string, { row: DecisionRow; state: DecisionState }>();
+  for (const row of latest) {
+    const state = toDecisionState(row);
+    if (isEffectiveDecision(state, { tgDirect })) effective.set(row.ruleKey, { row, state });
+  }
+  return effective;
+}
+
+function toDecisionView(row: DecisionRow, suggestionTg: SuggestionTg | null): DecisionView {
+  return {
+    suggestionTg,
     id: row.id,
     decision: row.decision,
     chosenTg: row.chosenTg,
     chosenOutcomeKey: row.chosenOutcomeKey,
     overrideReasonCode: row.overrideReasonCode,
     overrideReason: row.overrideReason,
-    deviationId: row.deviationId && liveDeviationIds.has(row.deviationId) ? row.deviationId : null,
+    deviationId: row.deviationLive ? row.deviationId : null,
     decidedAt: row.decidedAt.toISOString(),
   };
 }
@@ -349,7 +409,6 @@ export function buildRoomState(input: {
     input.inspectionYear,
   );
   const rulesByKey = new Map(template.document.rules.map((r) => [r.key, r]));
-  const liveDeviationIds = new Set(data.deviations.map((d) => d.id));
 
   // Punktene med en regel som foreslår TGIU, krever annen fuktkontroll ved TGIU (A349). Hentes fra
   // malen, så ingen punktkode står her.
@@ -373,6 +432,41 @@ export function buildRoomState(input: {
   const outcomeDocs = new Map(
     template.document.outcomes.map((o) => [`${o.checkpoint_key}|${o.question_key}|${o.key}`, o]),
   );
+  /** TG-en det lagrede forslaget gjelder: malens TG for utfallet, `IU` eller `0`. */
+  const suggestionTgOf = (suggestion: StoredRuleSuggestion): SuggestionTg | null => {
+    if (suggestion.kind === "tgiu") return "IU";
+    if (suggestion.kind === "tg0") return "0";
+    return outcomeTgOf(
+      outcomeDocs.get(
+        `${suggestion.checkpoint_key}|${suggestion.question_key}|${suggestion.outcome_key}`,
+      )?.kind,
+    );
+  };
+  /**
+   * Koblingen fra et avvik til den gjeldende beslutningen som laget det (A490). TG-valgene uten
+   * grunn er utfallets faste TG, eller alle valg ved «velg TG2 eller TG3», bare når avviket har
+   * forslagets utfall. Alt annet krever grunn.
+   */
+  const suggestionLinkOf = (
+    decision: DecisionRow | undefined,
+    outcomeRef: { checkpointKey: string; questionKey: string; outcomeKey: string } | undefined,
+  ): DeviationSuggestionLink | null => {
+    if (!decision) return null;
+    const suggestion = decision.suggestion;
+    const suggestionTg = suggestionTgOf(suggestion);
+    const sameOutcome =
+      suggestion.kind === "outcome" &&
+      outcomeRef !== undefined &&
+      outcomeRef.checkpointKey === suggestion.checkpoint_key &&
+      outcomeRef.questionKey === suggestion.question_key &&
+      outcomeRef.outcomeKey === suggestion.outcome_key;
+    let tgWithoutReason: (DeviationTg | null)[] = [];
+    if (sameOutcome && suggestionTg === "choose") tgWithoutReason = [2, 3, null];
+    else if (sameOutcome && (suggestionTg === 2 || suggestionTg === 3)) {
+      tgWithoutReason = [suggestionTg];
+    }
+    return { ruleKey: decision.ruleKey, decisionId: decision.id, suggestionTg, tgWithoutReason };
+  };
   const measureDocsFor = (checkpointKey: string, questionKey: string, outcomeKey: string) =>
     template.document.standard_measures.filter(
       (m) =>
@@ -418,7 +512,7 @@ export function buildRoomState(input: {
 
   const checkpointViews: CheckpointView[] = [];
   const checkpointStates: RoomState["checkpointStates"] = [];
-  const latestDecisionByRule = new Map<string, DecisionView>();
+  const latestDecisionByRule = new Map<string, { view: DecisionView; state: DecisionState }>();
 
   for (const checkpoint of roomDoc.checkpoints) {
     const checkpointId = template.checkpointIdByKey.get(checkpoint.key);
@@ -434,22 +528,18 @@ export function buildRoomState(input: {
       return rule !== undefined && ruleCheckpointKey(rule) === checkpoint.key;
     });
 
-    // Siste beslutning per regel på punktet (radene er sortert eldst først)
-    const latestRows = new Map<string, RuleSuggestionDecisionRow>();
-    if (result) {
-      for (const row of data.decisions) {
-        if (row.checkpointResultId === result.id) latestRows.set(row.ruleKey, row);
-      }
-    }
-    const decisions: DecisionState[] = [...latestRows.values()].map((row) => ({
-      ruleKey: row.ruleKey,
-      decision: row.decision,
-      suggestion: row.suggestion,
-      deviationId:
-        row.deviationId && liveDeviationIds.has(row.deviationId) ? row.deviationId : null,
-    }));
-    for (const row of latestRows.values()) {
-      latestDecisionByRule.set(row.ruleKey, toDecisionView(row, liveDeviationIds));
+    // Bare gjeldende beslutninger (A491, A495). Ikke gjeldende = forslaget er åpent igjen.
+    const effective = result
+      ? effectiveDecisionsOf(data.decisions, result.id, result.tgDirect)
+      : new Map<string, { row: DecisionRow; state: DecisionState }>();
+    const decisions: DecisionState[] = [...effective.values()].map((e) => e.state);
+    const effectiveByDeviation = new Map<string, DecisionRow>();
+    for (const { row, state: decisionState } of effective.values()) {
+      latestDecisionByRule.set(row.ruleKey, {
+        view: toDecisionView(row, suggestionTgOf(row.suggestion)),
+        state: decisionState,
+      });
+      if (row.deviationLive && row.deviationId) effectiveByDeviation.set(row.deviationId, row);
     }
 
     const deviationViews: DeviationView[] = [];
@@ -491,6 +581,7 @@ export function buildRoomState(input: {
         suggestedByRuleKey: row.suggestedByRuleId
           ? (template.ruleKeyById.get(row.suggestedByRuleId) ?? null)
           : null,
+        suggestion: suggestionLinkOf(effectiveByDeviation.get(row.id), outcomeRef),
         sortOrder: row.sortOrder,
         rowVersion: row.rowVersion,
         measures: measures.map((m) => ({
@@ -575,19 +666,9 @@ export function buildRoomState(input: {
 
   const suggestions: SuggestionView[] = ruleResults.map((result) => {
     const rule = rulesByKey.get(result.rule_key);
+    // Bare den gjeldende beslutningen; ellers er forslaget åpent (`latestDecision = null`)
     const latest = latestDecisionByRule.get(result.rule_key) ?? null;
-    const latestRow = latest ? data.decisions.find((d) => d.id === latest.id) : undefined;
-    const stale =
-      latestRow !== undefined &&
-      !suggestionStillApplies(
-        {
-          ruleKey: latestRow.ruleKey,
-          decision: latestRow.decision,
-          suggestion: latestRow.suggestion,
-          deviationId: latest?.deviationId ?? null,
-        },
-        ruleResults,
-      );
+    const stale = latest !== null && !suggestionStillApplies(latest.state, ruleResults);
     return {
       ruleKey: result.rule_key,
       checkpointKey: (rule && ruleCheckpointKey(rule)) ?? "",
@@ -596,7 +677,7 @@ export function buildRoomState(input: {
       code: result.code,
       reasons: result.reasons,
       sourceRef: rule?.source_ref ?? null,
-      latestDecision: latest,
+      latestDecision: latest?.view ?? null,
       stale,
     };
   });

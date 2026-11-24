@@ -23,6 +23,7 @@ export {
   restoreDeviation,
 } from "./deviations";
 export { decideSuggestion } from "./suggestions";
+export { changeSuggestedDeviationTg } from "./suggested-tg";
 export { applyPhrase, suggestPhrases } from "./phrase-suggest";
 export { decideAiText } from "./decide-ai";
 export { loadPhraseCandidates, loadPhraseUsage } from "./phrase-source";

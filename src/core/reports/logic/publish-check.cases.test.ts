@@ -241,6 +241,8 @@ function decision(overrides: Partial<DecisionState> = {}): DecisionState {
       question_key: "cp.membrane.age",
       outcome_key: "tg2",
     },
+    chosenTg: "2",
+    madeDeviation: true,
     deviationId: "dev-1",
     ...overrides,
   };

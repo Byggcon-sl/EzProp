@@ -3,14 +3,14 @@ id: T-0113
 tittel: TG kan endres på et godtatt regelforslag uten grunn, og loggen sier fortsatt «godtatt»
 type: feil
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-18
 rolle: test-fag
 omrade: badet, regelforslag
 maal: reklamasjoner
 commit: 50fad3e4
 forsok: 0
-pr:
+pr: 239
 ---
 
 ## Hva
@@ -35,3 +35,5 @@ Når TG byttes på et avvik med `suggested_by_rule_id`, åpnes samme valg av beg
 
 ## Logg
 - 2026-11-18: funnet
+
+- 2026-11-24: rettet i PR #239 (branch `rett-forslag-og-avvik`, oppgavekort `docs/agenter/oppgaver/rett-forslag-og-avvik.md`). Testlaget prøver på nytt i neste kjøring.

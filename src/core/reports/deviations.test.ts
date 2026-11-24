@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
 import { and, eq, isNull } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,13 +19,21 @@ import {
 } from "@/core/reports";
 import { MAX_DEVIATIONS_PER_CHECKPOINT, MAX_MEASURES_PER_DEVIATION } from "@/core/reports/logic";
 import { db } from "@/db/client";
-import { checkpointResults, deviationMeasures, deviations, tgiuDetails } from "@/db/schema";
+import type { RoomRefresh } from "@/core/reports/types";
+import {
+  checkpointResults,
+  deviationMeasures,
+  deviations,
+  ruleSuggestionDecisions,
+  tgiuDetails,
+} from "@/db/schema";
 import { wetRoomTemplate } from "@/db/seed/templates/wet-room";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { resetDatabase } from "../../../tests/factories";
 import {
   answer,
   answerHole,
+  answerMembrane1990,
   checkpointOf,
   CP,
   RULE,
@@ -461,5 +471,197 @@ describe("4d avvik, tiltak, TGIU og ferdig", () => {
       tg: null,
     });
     expect(await textOf(yearId)).toContain("registrert som fra 1990.");
+  });
+});
+
+// --- Rett T-0117 og A494: fjernet avvik og «Angre» (rett-forslag-og-avvik-testplan.md 2a) ------
+
+async function decisionRows(f: F) {
+  return db
+    .select()
+    .from(ruleSuggestionDecisions)
+    .where(eq(ruleSuggestionDecisions.reportId, f.reportId))
+    .orderBy(ruleSuggestionDecisions.decidedAt);
+}
+
+async function liveDeviationIds(f: F) {
+  return (
+    await db
+      .select({ id: deviations.id })
+      .from(deviations)
+      .where(and(eq(deviations.reportId, f.reportId), isNull(deviations.deletedAt)))
+  ).map((r) => r.id);
+}
+
+/** Bad med TG3-forslaget (sjikt 1990) godtatt. */
+async function acceptedTg3() {
+  const f = await startedBathroom();
+  await answerMembrane1990(f);
+  const deviationId = uuidv7();
+  const decisionId = uuidv7();
+  const accepted = await decideSuggestion(f.actor, f.organizationId, f.room, {
+    id: decisionId,
+    ruleKey: RULE.before2000,
+    decision: "accepted",
+    deviationId,
+  });
+  expect(accepted.status).toBe("saved");
+  return { f, deviationId, decisionId };
+}
+
+function suggestionIn(refresh: RoomRefresh, ruleKey: string) {
+  const found = refresh.suggestions.find((s) => s.ruleKey === ruleKey);
+  if (!found) throw new Error(`fant ikke regelen ${ruleKey}`);
+  return found;
+}
+
+describe("rett-forslag-og-avvik 2a: fjernet avvik og Angre", () => {
+  it("FA-I1 godtatt TG3, «Fjern avviket»: svaret viser forslaget åpent, og ingen ny beslutningsrad", async () => {
+    const { f, deviationId } = await acceptedTg3();
+    const before = await decisionRows(f);
+
+    const removed = await removeDeviation(f.actor, f.organizationId, f.room, deviationId);
+    if (removed.status !== "saved") throw new Error("fjerning feilet");
+    const suggestion = suggestionIn(removed.refresh, RULE.before2000);
+    expect(suggestion).toMatchObject({ state: "triggered", latestDecision: null, stale: false });
+    const membrane = checkpointOf(removed.refresh, CP.membrane);
+    expect(membrane.deviations).toEqual([]);
+    expect(membrane.tg).toBeNull();
+    // Beslutningen er ikke lenger gjeldende, så den gir ingen «gjelder ikke lenger»
+    expect(membrane.warnings.map((w) => w.code)).not.toContain("suggestion_no_longer_applies");
+    expect(await decisionRows(f)).toEqual(before);
+
+    // Det samme etter ny lesing
+    const view = await startedView(f);
+    expect(view.suggestions.find((s) => s.ruleKey === RULE.before2000)?.latestDecision).toBeNull();
+  });
+
+  it("FA-I2 «Angre» gjør forslaget godtatt igjen med samme avvik og samme beslutningsrad", async () => {
+    const { f, deviationId, decisionId } = await acceptedTg3();
+    await removeDeviation(f.actor, f.organizationId, f.room, deviationId);
+    const restored = await restoreDeviation(f.actor, f.organizationId, f.room, { deviationId });
+    if (restored.status !== "saved") throw new Error(`gjenoppretting ga ${restored.status}`);
+    expect(suggestionIn(restored.refresh, RULE.before2000).latestDecision).toMatchObject({
+      id: decisionId,
+      decision: "accepted",
+      deviationId,
+      chosenTg: "3",
+      suggestionTg: 3,
+    });
+    const membrane = checkpointOf(restored.refresh, CP.membrane);
+    expect(membrane.tg).toBe("3");
+    expect(membrane.deviations[0]?.suggestion).toEqual({
+      ruleKey: RULE.before2000,
+      decisionId,
+      suggestionTg: 3,
+      tgWithoutReason: [3],
+    });
+    expect(await liveDeviationIds(f)).toEqual([deviationId]);
+    expect(await decisionRows(f)).toHaveLength(1);
+  });
+
+  it.each([
+    ["godtatt på nytt", { decision: "accepted" as const }, 1],
+    [
+      "avvist",
+      { decision: "rejected" as const, overrideReasonCode: "documentation_present" as const },
+      0,
+    ],
+    [
+      "endret til TG2",
+      {
+        decision: "changed" as const,
+        chosenTg: "2" as const,
+        overrideReasonCode: "measured_again" as const,
+      },
+      1,
+    ],
+  ])(
+    "FA-I3–I5 forslaget %s etter fjerningen: «Angre» på det gamle gir newer_decision og endrer ingenting",
+    async (_name, input, liveAfter) => {
+      const { f, deviationId } = await acceptedTg3();
+      await removeDeviation(f.actor, f.organizationId, f.room, deviationId);
+      const again = await decideSuggestion(f.actor, f.organizationId, f.room, {
+        id: uuidv7(),
+        ruleKey: RULE.before2000,
+        ...input,
+      });
+      expect(again.status).toBe("saved");
+      const rowsBefore = await decisionRows(f);
+      const liveBefore = await liveDeviationIds(f);
+      expect(liveBefore).toHaveLength(liveAfter);
+      const [oldBefore] = await db.select().from(deviations).where(eq(deviations.id, deviationId));
+
+      const restored = await restoreDeviation(f.actor, f.organizationId, f.room, { deviationId });
+      expect(restored).toMatchObject({
+        status: "newer_decision",
+        ruleKey: RULE.before2000,
+        checkpointKey: CP.membrane,
+      });
+      if (restored.status !== "newer_decision") throw new Error("ventet newer_decision");
+      expect(checkpointOf(restored.refresh, CP.membrane).deviations.map((d) => d.id)).toEqual(
+        liveBefore,
+      );
+      expect(await liveDeviationIds(f)).toEqual(liveBefore);
+      expect(await decisionRows(f)).toEqual(rowsBefore);
+      const [oldAfter] = await db.select().from(deviations).where(eq(deviations.id, deviationId));
+      expect(oldAfter).toEqual(oldBefore);
+      expect(oldAfter?.deletedAt).not.toBeNull();
+    },
+  );
+
+  it("FA-I6 avvik som ikke kom fra et forslag, gjenopprettes som før, også med beslutninger på punktet", async () => {
+    const { f } = await acceptedTg3();
+    const own = await add(f, {
+      checkpointKey: CP.membrane,
+      questionKey: "wet_room.membrane_drain.membrane_before_2000",
+      outcomeKey: "tg3",
+    });
+    await removeDeviation(f.actor, f.organizationId, f.room, own);
+    const restored = await restoreDeviation(f.actor, f.organizationId, f.room, {
+      deviationId: own,
+    });
+    expect(restored.status).toBe("saved");
+    expect(await liveDeviationIds(f)).toContain(own);
+    // Avvik som ikke kom fra et forslag, har ingen kobling til en beslutning
+    if (restored.status !== "saved") return;
+    const ownView = checkpointOf(restored.refresh, CP.membrane).deviations.find(
+      (d) => d.id === own,
+    );
+    expect(ownView?.suggestion).toBeNull();
+  });
+
+  it("FA-I7 gjenopprettet avvik der regelen ikke lenger slår til, gir «gjelder ikke lenger» for avviket", async () => {
+    const { f, deviationId } = await acceptedTg3();
+    await removeDeviation(f.actor, f.organizationId, f.room, deviationId);
+    await answer(f, "wet_room.membrane_year", { number: 2015 }, { number: 1990 });
+    const restored = await restoreDeviation(f.actor, f.organizationId, f.room, { deviationId });
+    if (restored.status !== "saved") throw new Error(`gjenoppretting ga ${restored.status}`);
+    expect(checkpointOf(restored.refresh, CP.membrane).warnings).toContainEqual(
+      expect.objectContaining({
+        code: "suggestion_no_longer_applies",
+        ruleKey: RULE.before2000,
+        deviationId,
+      }),
+    );
+    expect(suggestionIn(restored.refresh, RULE.before2000).stale).toBe(true);
+  });
+
+  it("FA-I8 bare restoreDeviation setter deleted_at tilbake på avvik (ingen annen vei gjenoppretter)", () => {
+    const root = path.resolve(process.cwd(), "src");
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((name) => {
+        const full = path.join(dir, name);
+        if (statSync(full).isDirectory()) return walk(full);
+        return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [full] : [];
+      });
+    const restoring = walk(root).filter((file) =>
+      /\.update\(\s*deviations\s*\)\s*\.set\(\s*\{\s*deletedAt:\s*null/.test(
+        readFileSync(file, "utf8"),
+      ),
+    );
+    expect(restoring.map((file) => path.relative(root, file))).toEqual([
+      path.join("core", "reports", "deviations.ts"),
+    ]);
   });
 });

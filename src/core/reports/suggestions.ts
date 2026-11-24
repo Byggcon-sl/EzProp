@@ -1,18 +1,18 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { AccessDeniedError } from "@/core/access";
 import type { RuleResult } from "@/core/rules";
-import {
-  ruleSuggestionDecisions,
-  type ChosenTg,
-  type DeviationTg,
-  type RuleSuggestionDecisionRow,
-} from "@/db/schema";
+import { ruleSuggestionDecisions, type ChosenTg, type DeviationTg } from "@/db/schema";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { inspectionYearOf, requireUuid } from "./context";
 import { createDeviationFromOutcome, requireOutcome } from "./deviations";
 import { ReportValidationError } from "./errors";
-import { suggestionStillApplies } from "./logic";
-import { evaluateRoomRules, loadRoomData, roomRules, ruleAnswersOf } from "./room-view";
+import {
+  effectiveDecisionsOf,
+  evaluateRoomRules,
+  loadRoomData,
+  roomRules,
+  ruleAnswersOf,
+} from "./room-view";
 import {
   decideSuggestionInputSchema,
   overrideReasonSchema,
@@ -25,6 +25,7 @@ import {
   auditReport,
   ensureCheckpointResult,
   refreshOf,
+  requireRoomCheckpoint,
   withRoomWrite,
   type WriteScope,
 } from "./write";
@@ -58,23 +59,6 @@ async function findDecision(scope: WriteScope, id: string) {
         eq(ruleSuggestionDecisions.id, id),
       ),
     );
-  return row ?? null;
-}
-
-async function latestDecisionFor(scope: WriteScope, checkpointResultId: string, ruleKey: string) {
-  const [row] = await scope.tx
-    .select()
-    .from(ruleSuggestionDecisions)
-    .where(
-      and(
-        eq(ruleSuggestionDecisions.organizationId, scope.orgId),
-        eq(ruleSuggestionDecisions.reportId, scope.reportId),
-        eq(ruleSuggestionDecisions.checkpointResultId, checkpointResultId),
-        eq(ruleSuggestionDecisions.ruleKey, ruleKey),
-      ),
-    )
-    .orderBy(desc(ruleSuggestionDecisions.decidedAt), desc(ruleSuggestionDecisions.id))
-    .limit(1);
   return row ?? null;
 }
 
@@ -138,6 +122,29 @@ export const decideSuggestion: DecideSuggestion = (actor, organizationId, room, 
     if (suggestion === null)
       return { status: "no_longer_applies", refresh: await refreshOf(scope) };
     const checkpointKey = suggestion.checkpoint_key;
+
+    // Forslaget har alt en gjeldende beslutning (annen fane, annen enhet, A493): ingenting lagres.
+    // Gjelder Godta, Endre og Avvis og alle forslagstyper. Rapportraden er låst i `withRoomWrite`,
+    // så et samtidig kall ser raden fra det første.
+    const { checkpointId } = requireRoomCheckpoint(scope, checkpointKey);
+    const existingResult = data.results.find((r) => r.checkpointId === checkpointId);
+    if (existingResult) {
+      const current = effectiveDecisionsOf(
+        data.decisions,
+        existingResult.id,
+        existingResult.tgDirect,
+      ).get(values.ruleKey);
+      if (current) {
+        return {
+          status: "already_decided",
+          decision: current.row.decision,
+          chosenTg: current.row.chosenTg,
+          decidedAt: current.row.decidedAt.toISOString(),
+          refresh: await refreshOf(scope),
+        };
+      }
+    }
+
     const checkpointResult = await ensureCheckpointResult(scope, checkpointKey);
 
     let deviationId: string | null = null;
@@ -146,16 +153,6 @@ export const decideSuggestion: DecideSuggestion = (actor, organizationId, room, 
 
     if (values.decision === "accepted") {
       if (suggestion.kind === "outcome") {
-        // Godta to ganger på samme forslag gir ett avvik: forslaget er alt godtatt, og avviket står
-        const latest = await latestDecisionFor(scope, checkpointResult.id, values.ruleKey);
-        if (latest && alreadyAccepted(latest, data.deviations, results)) {
-          return {
-            status: "saved",
-            decisionId: latest.id,
-            deviationId: latest.deviationId,
-            refresh: await refreshOf(scope),
-          };
-        }
         const created = await createDeviationFromOutcome(scope, {
           id: values.deviationId ?? uuidv7(),
           checkpointKey,
@@ -289,25 +286,3 @@ export const decideSuggestion: DecideSuggestion = (actor, organizationId, room, 
       refresh: await refreshOf(scope),
     };
   });
-
-/**
- * Om forslaget alt er godtatt og avviket står: siste beslutning er `accepted`, avviket er ikke
- * fjernet, og regelen gir samme forslag nå.
- */
-function alreadyAccepted(
-  latest: RuleSuggestionDecisionRow,
-  liveDeviations: readonly { id: string }[],
-  results: readonly RuleResult[],
-): boolean {
-  if (latest.decision !== "accepted" || latest.deviationId === null) return false;
-  if (!liveDeviations.some((d) => d.id === latest.deviationId)) return false;
-  return suggestionStillApplies(
-    {
-      ruleKey: latest.ruleKey,
-      decision: latest.decision,
-      suggestion: latest.suggestion,
-      deviationId: latest.deviationId,
-    },
-    results,
-  );
-}

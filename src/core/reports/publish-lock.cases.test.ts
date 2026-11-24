@@ -22,6 +22,7 @@ import {
 import {
   addDeviation,
   addMeasure,
+  changeSuggestedDeviationTg,
   decideSuggestion,
   getPublishCheck,
   publishReport,
@@ -207,6 +208,17 @@ const REPORT_ACTIONS: Action[] = [
         id: uuidv7(),
         ruleKey: RULE.before2000,
         decision: "rejected",
+        overrideReasonCode: "documentation_present",
+      }),
+  ],
+  [
+    "changeSuggestedDeviationTg",
+    (actor, p) =>
+      changeSuggestedDeviationTg(actor, p.organizationId, p.room, {
+        id: uuidv7(),
+        deviationId: p.deviationId,
+        tg: 2,
+        base: 3,
         overrideReasonCode: "documentation_present",
       }),
   ],

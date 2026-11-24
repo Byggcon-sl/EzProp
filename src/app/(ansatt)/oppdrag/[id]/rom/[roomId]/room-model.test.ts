@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { TG_LONG_LABELS, TG_SHORT_LABELS, type CheckpointWarning } from "@/core/reports/logic";
+import {
+  TG_LONG_LABELS,
+  TG_SHORT_LABELS,
+  warningText,
+  type CheckpointWarning,
+} from "@/core/reports/logic";
 import { TG_BADGE_LONG, TG_BADGE_SHORT } from "@/shared/ui/tg-badge";
-import type { SuggestionView, TgiuDetailsView } from "@/core/reports/types";
+import type { CheckpointView, SuggestionView, TgiuDetailsView } from "@/core/reports/types";
+import type { OutcomeDoc } from "@/core/templates";
 import { wetRoomTemplate } from "@/db/seed/templates/wet-room";
 import {
   characterCountText,
@@ -12,6 +18,7 @@ import {
   fixTargetId,
   indexDocument,
   initialCheckpointKey,
+  isOpenSuggestion,
   neighbours,
   nextUndoneCheckpoint,
   outcomeName,
@@ -20,11 +27,13 @@ import {
   REPORT_TEXT_LIMITS,
   reportTextValidator,
   suggestionId,
+  suggestionTgOf,
   T0059_FIX,
   TEXT_MESSAGES,
   TG_DIRECT_CHOICE_ID,
   tgiuFieldKey,
   visibleTgiuFields,
+  warningsWithFix,
 } from "./room-model";
 
 /*
@@ -267,6 +276,7 @@ describe("beslutninger til «Rett nå»", () => {
         overrideReason: null,
         deviationId: "d1",
         decidedAt: "2026-11-16T10:00:00Z",
+        suggestionTg: 2,
       },
     } satisfies SuggestionView;
     expect(decisionStates([suggestion])).toMatchObject([
@@ -283,5 +293,198 @@ describe("TG-merket", () => {
   it("har de samme tekstene som oversettelsen av koder i rapporten", () => {
     expect(TG_BADGE_SHORT).toEqual(TG_SHORT_LABELS);
     expect(TG_BADGE_LONG).toEqual(TG_LONG_LABELS);
+  });
+});
+
+// --- «Å se over» med åpne forslag (A492, T-0115, FA-L23) ---------------------------------------
+
+const CP = "cp.membrane";
+const OUTCOME_KINDS: Record<string, OutcomeDoc["kind"]> = {
+  "out.tg3": "tg3",
+  "out.tg2": "tg2",
+  "out.choose": "choose_tg2_tg3",
+  "out.hms": "hms",
+};
+const fakeDoc = {
+  outcome: (_checkpointKey: string, _questionKey: string, outcomeKey: string) =>
+    OUTCOME_KINDS[outcomeKey] ? ({ kind: OUTCOME_KINDS[outcomeKey] } as OutcomeDoc) : undefined,
+};
+
+function openOutcome(ruleKey: string, outcomeKey: string): SuggestionView {
+  return {
+    ruleKey,
+    checkpointKey: CP,
+    state: "triggered",
+    suggestion: {
+      kind: "outcome",
+      checkpoint_key: CP,
+      question_key: "dq.membrane",
+      outcome_key: outcomeKey,
+    },
+    code: null,
+    reasons: [],
+    sourceRef: null,
+    latestDecision: null,
+    stale: false,
+  };
+}
+
+function checkpointWith(warnings: CheckpointWarning[]): CheckpointView {
+  return {
+    checkpointKey: CP,
+    resultId: "r1",
+    tgDirect: null,
+    tg: null,
+    status: "done",
+    descriptionText: null,
+    done: true,
+    rowVersion: 1,
+    deviations: [],
+    tgiuDetails: null,
+    warnings,
+  } as unknown as CheckpointView;
+}
+
+describe("forslagets TG", () => {
+  it("utfallets TG fra malen, TG0, TGIU, og null for HMS og ukjent utfall", () => {
+    expect(suggestionTgOf(openOutcome("r", "out.tg3"), fakeDoc)).toBe(3);
+    expect(suggestionTgOf(openOutcome("r", "out.tg2"), fakeDoc)).toBe(2);
+    expect(suggestionTgOf(openOutcome("r", "out.choose"), fakeDoc)).toBe("choose");
+    expect(suggestionTgOf(openOutcome("r", "out.hms"), fakeDoc)).toBeNull();
+    expect(suggestionTgOf(openOutcome("r", "out.finnes.ikke"), fakeDoc)).toBeNull();
+    expect(suggestionTgOf({ suggestion: { kind: "tg0", checkpoint_key: CP } }, fakeDoc)).toBe("0");
+    expect(suggestionTgOf({ suggestion: { kind: "tgiu", checkpoint_key: CP } }, fakeDoc)).toBe(
+      "IU",
+    );
+  });
+});
+
+describe("åpent forslag", () => {
+  it("T-0117 utløst forslag uten gjeldende beslutning er åpent; avgjort, foreldet eller ikke utløst er ikke", () => {
+    const open = openOutcome("r.open", "out.tg3");
+    expect(isOpenSuggestion([open], "r.open", CP)).toBe(true);
+    expect(isOpenSuggestion([open], "r.open", "cp.annet")).toBe(false);
+    expect(isOpenSuggestion([{ ...open, stale: true }], "r.open", CP)).toBe(false);
+    expect(isOpenSuggestion([{ ...open, state: "not_triggered" }], "r.open", CP)).toBe(false);
+    expect(
+      isOpenSuggestion(
+        [
+          {
+            ...open,
+            latestDecision: {
+              id: "b1",
+              decision: "accepted",
+              chosenTg: "3",
+              chosenOutcomeKey: "out.tg3",
+              overrideReasonCode: null,
+              overrideReason: null,
+              deviationId: "d1",
+              decidedAt: "2026-11-23T09:42:00Z",
+              suggestionTg: 3,
+            },
+          },
+        ],
+        "r.open",
+        CP,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("«Å se over» med åpne forslag", () => {
+  const open = (ruleKey: string): CheckpointWarning =>
+    warning({ code: "open_suggestion_on_done_checkpoint", ruleKey });
+
+  it("FA-L23 TG3-forslag står øverst, så «velg TG2 eller TG3» og TG2; andre advarsler etter", () => {
+    const suggestions = [
+      openOutcome("r.tg2", "out.tg2"),
+      openOutcome("r.tg3", "out.tg3"),
+      openOutcome("r.choose", "out.choose"),
+    ];
+    const items = warningsWithFix(
+      checkpointWith([
+        warning({ code: "tg3_missing_cost", deviationId: "d9" }),
+        open("r.tg2"),
+        open("r.choose"),
+        open("r.tg3"),
+      ]),
+      suggestions,
+      fakeDoc,
+    );
+    expect(items.map((i) => i.warning.ruleKey ?? i.warning.code)).toEqual([
+      "r.tg3",
+      "r.choose",
+      "r.tg2",
+      "tg3_missing_cost",
+    ]);
+  });
+
+  it("A492 åpent forslag får forslagets TG i teksten, forslaget til knappene og «Gå til forslaget»", () => {
+    const suggestion = openOutcome("r.tg3", "out.tg3");
+    const [item] = warningsWithFix(checkpointWith([open("r.tg3")]), [suggestion], fakeDoc);
+    expect(item!.context).toEqual({ suggestionTg: 3 });
+    expect(warningText(item!.warning, item!.context)).toBe(
+      "Punktet er ferdig, men forslaget om TG3 er ikke avgjort.",
+    );
+    expect(item!.openSuggestion).toBe(suggestion);
+    expect(item!.fix).toEqual({
+      kind: "scroll_to_suggestion",
+      ruleKey: "r.tg3",
+      deviationId: null,
+    });
+  });
+
+  it("T-0115 foreldet forslag uten avvik får valgt TG i teksten fra beslutningen", () => {
+    const suggestion: SuggestionView = {
+      ruleKey: "r.tg0",
+      checkpointKey: CP,
+      state: "not_triggered",
+      suggestion: null,
+      code: null,
+      reasons: [],
+      sourceRef: null,
+      stale: true,
+      latestDecision: {
+        id: "b2",
+        decision: "accepted",
+        chosenTg: "0",
+        chosenOutcomeKey: null,
+        overrideReasonCode: null,
+        overrideReason: null,
+        deviationId: null,
+        decidedAt: "2026-11-23T09:42:00Z",
+        suggestionTg: "0",
+      },
+    };
+    const [item] = warningsWithFix(
+      checkpointWith([warning({ code: "suggestion_no_longer_applies", ruleKey: "r.tg0" })]),
+      [suggestion],
+      fakeDoc,
+    );
+    expect(item!.context).toEqual({ chosenTg: "0" });
+    expect(item!.openSuggestion).toBeNull();
+    expect(warningText(item!.warning, item!.context)).toBe(
+      "Forslaget gjelder ikke lenger. Punktet har fortsatt TG0 fra forslaget. Sjekk at graden stemmer.",
+    );
+  });
+
+  it("foreldet forslag med avvik beholder teksten som før", () => {
+    const [item] = warningsWithFix(
+      checkpointWith([
+        warning({ code: "suggestion_no_longer_applies", ruleKey: "r.x", deviationId: "d1" }),
+      ]),
+      [],
+      fakeDoc,
+    );
+    expect(item!.context).toEqual({});
+    expect(warningText(item!.warning, item!.context)).toBe(
+      "Et forslag fra reglene gjelder ikke lenger.",
+    );
+  });
+
+  it("«Å se over» blir tom når alt er avgjort", () => {
+    expect(warningsWithFix(checkpointWith([]), [openOutcome("r.tg3", "out.tg3")], fakeDoc)).toEqual(
+      [],
+    );
   });
 });

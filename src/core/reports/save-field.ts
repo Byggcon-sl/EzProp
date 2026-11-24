@@ -1,4 +1,4 @@
-import { and, eq, isNull, max } from "drizzle-orm";
+import { and, desc, eq, isNull, max } from "drizzle-orm";
 import { AccessDeniedError } from "@/core/access";
 import { recordDecisionIn } from "@/core/ai";
 import type { TemplateElementDoc } from "@/core/templates";
@@ -8,14 +8,17 @@ import {
   deviationMeasures,
   deviations,
   fieldAnswers,
+  ruleSuggestionDecisions,
   tgiuDetails,
+  type CheckpointResult,
   type Deviation,
   type DeviationTg,
+  type RuleSuggestionDecisionRow,
 } from "@/db/schema";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { requireUuid } from "./context";
 import { ReportValidationError } from "./errors";
-import { checkCostAmount, COST_BANDS } from "./logic";
+import { checkCostAmount, COST_BANDS, isEffectiveDecision } from "./logic";
 import { answerValueOf } from "./room-view";
 import {
   freeTextSchema,
@@ -388,6 +391,88 @@ async function swapMeasuresForTg(scope: WriteScope, deviation: Deviation, tg: De
   );
 }
 
+/**
+ * Den gjeldende beslutningen som laget dette avviket (A490, ADR 0013 punkt 9b), eller `null`.
+ * Bare avvik fra et regelforslag (`suggested_by_rule_id`) kan ha en. Siste rad for regelen på
+ * punktet vinner; den er gjeldende for avviket bare når den peker på det, og avviket står
+ * (`isEffectiveDecision`). Oppslaget filtrerer på organisasjonen og rapporten fra tilgangssjekken.
+ */
+export async function effectiveDecisionForDeviation(
+  scope: WriteScope,
+  deviation: Deviation,
+  result: CheckpointResult,
+): Promise<RuleSuggestionDecisionRow | null> {
+  if (deviation.suggestedByRuleId === null || deviation.deletedAt !== null) return null;
+  const ruleKey = scope.template.ruleKeyById.get(deviation.suggestedByRuleId);
+  if (!ruleKey) return null;
+  const [latest] = await scope.tx
+    .select()
+    .from(ruleSuggestionDecisions)
+    .where(
+      and(
+        eq(ruleSuggestionDecisions.organizationId, scope.orgId),
+        eq(ruleSuggestionDecisions.reportId, scope.reportId),
+        eq(ruleSuggestionDecisions.checkpointResultId, deviation.checkpointResultId),
+        eq(ruleSuggestionDecisions.ruleKey, ruleKey),
+      ),
+    )
+    .orderBy(desc(ruleSuggestionDecisions.decidedAt), desc(ruleSuggestionDecisions.id))
+    .limit(1);
+  if (!latest || latest.deviationId !== deviation.id) return null;
+  const effective = isEffectiveDecision(
+    {
+      ruleKey: latest.ruleKey,
+      decision: latest.decision,
+      suggestion: latest.suggestion,
+      chosenTg: latest.chosenTg,
+      madeDeviation: true,
+      deviationId: deviation.id,
+    },
+    { tgDirect: result.tgDirect },
+  );
+  return effective ? latest : null;
+}
+
+/** Meldingen når TG byttes på et avvik fra et forslag uten grunn (A490). */
+export const SUGGESTED_TG_REASON_MESSAGE = "Velg en grunn for å endre TG fra forslaget.";
+
+/**
+ * Skriver ny TG på avviket med følgene: TGIU på punktet stopper TG (A395), TG0/TG1 tømmes, og
+ * standardtiltakene byttes (T-0060). Revisjonsloggen får gammel og ny TG. Brukes av lagring per
+ * felt og av `changeSuggestedDeviationTg`. Gir ny `row_version`.
+ */
+export async function writeDeviationTg(
+  scope: WriteScope,
+  deviation: Deviation,
+  result: CheckpointResult,
+  tg: DeviationTg | null,
+): Promise<number> {
+  if (deviation.kind !== "tg") throw new ReportValidationError("invalid_choice");
+  if (tg !== null) {
+    // Avvik med TG kan ikke stå sammen med TGIU uten aktivt valg (A395); TG0/TG1 tømmes
+    if (result.tgDirect === "IU") throw new ReportValidationError("tgiu_on_checkpoint");
+    if (result.tgDirect !== null) await writeTgDirect(scope, result, null);
+  }
+  await swapMeasuresForTg(scope, deviation, tg);
+  const [updated] = await scope.tx
+    .update(deviations)
+    .set({ tg, updatedBy: scope.grant.employeeId })
+    .where(
+      and(
+        eq(deviations.organizationId, scope.orgId),
+        eq(deviations.reportId, scope.reportId),
+        eq(deviations.id, deviation.id),
+      ),
+    )
+    .returning({ rowVersion: deviations.rowVersion });
+  await auditReport(scope, "deviation", deviation.id, "update", {
+    field: "tg",
+    from: deviation.tg,
+    to: tg,
+  });
+  return updated?.rowVersion ?? deviation.rowVersion + 1;
+}
+
 const DEVIATION_TEXT_COLUMNS = {
   deviation_text: "deviationText",
   cause_text: "causeText",
@@ -423,17 +508,16 @@ async function saveDeviationField(
 
   switch (change.field) {
     case "tg": {
+      // Avvik fra et forslag med gjeldende beslutning bytter TG bare med grunn, gjennom
+      // `changeSuggestedDeviationTg` (A490). Avvises alltid her, og ingenting lagres.
+      if (await effectiveDecisionForDeviation(scope, deviation, result)) {
+        throw new ReportValidationError("override_reason", SUGGESTED_TG_REASON_MESSAGE);
+      }
       if (deviation.tg !== change.base)
         return conflict(deviation.id, deviation.rowVersion, deviation.tg);
       if (deviation.tg === change.value) return saved(scope, deviation.id, deviation.rowVersion);
-      if (deviation.kind !== "tg") throw new ReportValidationError("invalid_choice");
-      if (change.value !== null) {
-        // Avvik med TG kan ikke stå sammen med TGIU uten aktivt valg (A395); TG0/TG1 tømmes
-        if (result.tgDirect === "IU") throw new ReportValidationError("tgiu_on_checkpoint");
-        if (result.tgDirect !== null) await writeTgDirect(scope, result, null);
-      }
-      await swapMeasuresForTg(scope, deviation, change.value);
-      return write({ tg: change.value }, { from: deviation.tg, to: change.value });
+      const rowVersion = await writeDeviationTg(scope, deviation, result, change.value);
+      return saved(scope, deviation.id, rowVersion);
     }
     case "deviation_text":
     case "cause_text":
