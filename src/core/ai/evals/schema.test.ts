@@ -1,5 +1,14 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseCasesFile } from "./schema";
+import { AI_CANDIDATE_SOURCES, AI_GUARD_CODES, SUMMARY_GROUPS } from "@/db/schema";
+import {
+  EVAL_CANDIDATE_SOURCES,
+  EVAL_CASES_STATUS,
+  EVAL_GUARD_CODES,
+  EVAL_SUMMARY_GROUPS,
+  parseCasesFile,
+} from "./schema";
 
 /*
  * Formatet for evalueringssettet (docs/funksjoner/fase2a-evalueringssett-testplan.md avsnitt 1,
@@ -150,6 +159,7 @@ describe("evalueringssett: skjemaet (E1)", () => {
       expect: { outcome: "ok", sameTg: true },
     });
     const result = expectAccepted(file);
+    if (result.file.feature !== "language_polish") throw new Error("ventet language_polish");
     expect(result.file.cases[0]!.mustPass).toBe(false);
     expect(result.file.cases[0]!.expect.sameTg).toBeUndefined();
     expect(result.file.cases[1]!.mustPass).toBe(true);
@@ -219,5 +229,230 @@ describe("evalueringssett: skjemaet (E1)", () => {
       expect(text.toLowerCase()).not.toContain(secret.toLowerCase());
     }
     expect(text).not.toContain("Hemmeligsen");
+  });
+});
+
+// --- K2.5 nye sakstyper (docs/funksjoner/fase2a-ki-i-veien-testplan.md del 2) -------------------
+
+/*
+ * Støtter hovedmål: KI i bunnen (settene for fraseforslag og sammendrag kan ikke ha en fasit som
+ * peker på noe som ikke finnes) og færre reklamasjoner (HMS- og TG-tekster blandes aldri, og
+ * gruppene står alltid i rekkefølgen TG3, TG2, TGIU, HMS).
+ */
+
+const PHRASE_FILE = "phrase_suggest.cases.json";
+const SUMMARY_FILE = "summary_draft.cases.json";
+
+function phraseCase(index: number, overrides: Json = {}): Json {
+  return {
+    id: `ps-${String(index).padStart(3, "0")}`,
+    deviationKind: "tg",
+    field: "deviation_text",
+    fields: { text: "Oppdiktet notat om fall mot sluket.", group: "tg" },
+    candidates: [
+      { id: "k-a", source: "template_outcome", kind: "tg", text: "Oppdiktet tekst om fall." },
+      { id: "k-b", source: "template_outcome", kind: "tg", text: "Oppdiktet tekst om fuger." },
+    ],
+    expect: { outcome: "ok", correct: ["k-a"] },
+    ...overrides,
+  };
+}
+
+function summaryCase(index: number, overrides: Json = {}): Json {
+  return {
+    id: `sd-${String(index).padStart(3, "0")}`,
+    groups: [
+      {
+        group: "tg2",
+        findings: [
+          {
+            checkpointName: "Oppdiktet punkt",
+            deviationText: "Oppdiktet avvik.",
+            causeText: null,
+            consequenceText: "Oppdiktet konsekvens.",
+            measures: ["Oppdiktet tiltak."],
+          },
+        ],
+      },
+    ],
+    expect: { outcome: "ok" },
+    ...overrides,
+  };
+}
+
+function fileOf(feature: string, make: (index: number) => Json, count = 30): Json {
+  return {
+    feature,
+    status: STATUS,
+    note: NOTE,
+    cases: Array.from({ length: count }, (_, index) => make(index + 1)),
+  };
+}
+
+function withFirst(file: Json, replacement: Json): Json {
+  (file.cases as Json[])[0] = replacement;
+  return file;
+}
+
+function rejected(json: Json, fileName: string): string {
+  const result = parseCasesFile(json, fileName);
+  expect(result.ok).toBe(false);
+  const errors = errorsOf(result);
+  expect(errors.length).toBeGreaterThan(0);
+  return errors.join("\n");
+}
+
+describe("evalueringssett: skjemaet for phrase_suggest og summary_draft (K2.5)", () => {
+  it.each([
+    ["phrase_suggest", PHRASE_FILE],
+    ["language_polish", "language_polish.cases.json"],
+    ["summary_draft", SUMMARY_FILE],
+  ])("K2.5 den ekte filen for %s er gyldig og merket utkast", (feature, fileName) => {
+    const json = JSON.parse(readFileSync(join(__dirname, fileName), "utf8")) as Json;
+    expect(errorsOf(parseCasesFile(json, fileName))).toEqual([]);
+    expect(json.feature).toBe(feature);
+    expect(json.status).toBe(EVAL_CASES_STATUS);
+  });
+
+  it("K2.5 en gyldig phrase_suggest-fil godtas, også med fasit no_match", () => {
+    const file = fileOf("phrase_suggest", (i) =>
+      i === 1 ? phraseCase(i, { expect: { outcome: "no_match" } }) : phraseCase(i),
+    );
+    expect(errorsOf(parseCasesFile(file, PHRASE_FILE))).toEqual([]);
+  });
+
+  it("K2.5 en gyldig summary_draft-fil godtas", () => {
+    const file = fileOf("summary_draft", summaryCase);
+    expect(errorsOf(parseCasesFile(file, SUMMARY_FILE))).toEqual([]);
+  });
+
+  it.each([
+    ["phrase_suggest", PHRASE_FILE, phraseCase],
+    ["summary_draft", SUMMARY_FILE, summaryCase],
+  ] as const)("K2.5 %s uten utkast-merket avvises", (feature, fileName, make) => {
+    const file = fileOf(feature, make);
+    file.status = "godkjent";
+    rejected(file, fileName);
+    delete file.status;
+    rejected(file, fileName);
+  });
+
+  it.each([
+    ["uten expect", (c: Json): Json => ({ ...c, expect: undefined })],
+    ["uten correct", (c: Json): Json => ({ ...c, expect: { outcome: "ok" } })],
+    ["med tom correct", (c: Json): Json => ({ ...c, expect: { outcome: "ok", correct: [] } })],
+  ])("K2.5 phrase_suggest-sak %s (uten fasit) avvises", (_name, change) => {
+    rejected(withFirst(fileOf("phrase_suggest", phraseCase), change(phraseCase(1))), PHRASE_FILE);
+  });
+
+  it("K2.5 summary_draft-sak uten fasit avvises", () => {
+    const item = summaryCase(1);
+    delete item.expect;
+    rejected(withFirst(fileOf("summary_draft", summaryCase), item), SUMMARY_FILE);
+  });
+
+  it("K2.5 ukjent kandidat-id i fasiten avvises, og meldingen nevner id-en", () => {
+    const text = rejected(
+      withFirst(
+        fileOf("phrase_suggest", phraseCase),
+        phraseCase(1, { expect: { outcome: "ok", correct: ["k-a", "k-finnes-ikke"] } }),
+      ),
+      PHRASE_FILE,
+    );
+    expect(text).toContain("k-finnes-ikke");
+  });
+
+  it("K2.5 samme kandidat-id to ganger i listen avvises", () => {
+    const item = phraseCase(1);
+    const candidates = item.candidates as Json[];
+    item.candidates = [candidates[0], { ...candidates[1], id: "k-a" }];
+    rejected(withFirst(fileOf("phrase_suggest", phraseCase), item), PHRASE_FILE);
+  });
+
+  it.each([
+    ["HMS-kandidat for et TG-avvik", "tg", "hms"],
+    ["TG-kandidat for et HMS-avvik", "hms", "tg"],
+  ])("K2.5 %s avvises (A463)", (_name, deviationKind, candidateKind) => {
+    const item = phraseCase(1, { deviationKind });
+    item.candidates = (item.candidates as Json[]).map((c, i) => ({
+      ...c,
+      kind: i === 0 ? candidateKind : deviationKind,
+    }));
+    const text = rejected(withFirst(fileOf("phrase_suggest", phraseCase), item), PHRASE_FILE);
+    expect(text).toMatch(/HMS og TG blandes aldri/u);
+  });
+
+  it("K2.5 ukjent kandidatkilde avvises", () => {
+    const item = phraseCase(1);
+    const candidates = item.candidates as Json[];
+    item.candidates = [{ ...candidates[0], source: "free_text" }, candidates[1]];
+    rejected(withFirst(fileOf("phrase_suggest", phraseCase), item), PHRASE_FILE);
+  });
+
+  it("K2.5 gruppene i feil rekkefølge avvises (TG2 før TG3)", () => {
+    const base = summaryCase(1);
+    const tg2 = (base.groups as Json[])[0]!;
+    const item = { ...base, groups: [tg2, { ...tg2, group: "tg3" }] };
+    const text = rejected(withFirst(fileOf("summary_draft", summaryCase), item), SUMMARY_FILE);
+    expect(text).toMatch(/TG3, TG2, TGIU, HMS/u);
+  });
+
+  it("K2.5 bare TGIU-linjer (ingen funn til KI) avvises", () => {
+    const item = summaryCase(1, {
+      groups: [{ group: "tgiu", fixedLines: [{ checkpointName: "Punkt", text: "Grunn." }] }],
+    });
+    rejected(withFirst(fileOf("summary_draft", summaryCase), item), SUMMARY_FILE);
+  });
+
+  it("K2.5 TGIU-gruppe med funn i stedet for faste linjer avvises", () => {
+    const base = summaryCase(1);
+    const item = { ...base, groups: [{ ...(base.groups as Json[])[0], group: "tgiu" }] };
+    rejected(withFirst(fileOf("summary_draft", summaryCase), item), SUMMARY_FILE);
+  });
+
+  it("K2.5 utfallet stopped krever en kjent vaktkode og et oppdiktet svar", () => {
+    const answer = [{ label: "F1", text: "Oppdiktet svar." }];
+    const make = (expectation: Json, simulatedAnswer?: Json[]) =>
+      withFirst(
+        fileOf("summary_draft", summaryCase),
+        summaryCase(
+          1,
+          simulatedAnswer ? { expect: expectation, simulatedAnswer } : { expect: expectation },
+        ),
+      );
+    rejected(make({ outcome: "stopped", guard: "tg_guard" }), SUMMARY_FILE);
+    rejected(make({ outcome: "stopped", guard: "ukjent_vakt" }, answer), SUMMARY_FILE);
+    const ok = parseCasesFile(
+      make({ outcome: "stopped", guard: "tg_guard" }, answer),
+      SUMMARY_FILE,
+    );
+    expect(errorsOf(ok)).toEqual([]);
+  });
+
+  it("K2.5 verdict fail uten oppdiktet svar avvises (language_polish og summary_draft)", () => {
+    rejected(withCase(0, validCase(1, { expect: { outcome: "ok", verdict: "fail" } })), FILE_NAME);
+    rejected(
+      withFirst(
+        fileOf("summary_draft", summaryCase),
+        summaryCase(1, { expect: { outcome: "ok", verdict: "fail" } }),
+      ),
+      SUMMARY_FILE,
+    );
+  });
+
+  it("K2.5 F-merket i et oppdiktet svar må ha formen F1, F2 …", () => {
+    rejected(
+      withFirst(
+        fileOf("summary_draft", summaryCase),
+        summaryCase(1, { simulatedAnswer: [{ label: "K1", text: "Oppdiktet." }] }),
+      ),
+      SUMMARY_FILE,
+    );
+  });
+
+  it("K2.5 de faste kodene i skjemaet er de samme som i databaseskjemaet", () => {
+    expect([...EVAL_CANDIDATE_SOURCES]).toEqual([...AI_CANDIDATE_SOURCES]);
+    expect([...EVAL_GUARD_CODES]).toEqual([...AI_GUARD_CODES]);
+    expect([...EVAL_SUMMARY_GROUPS]).toEqual([...SUMMARY_GROUPS]);
   });
 });

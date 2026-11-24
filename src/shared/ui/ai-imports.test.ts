@@ -15,10 +15,12 @@ const srcDir = join(repoRoot, "src");
 const rel = (file: string) => relative(repoRoot, file).split(sep).join("/");
 const read = (file: string) => readFileSync(file, "utf8");
 
-const COMPONENTS = ["src/shared/ui/ai-suggestion.tsx", "src/shared/ui/ai-text-mark.tsx"];
+const COMPONENTS = [
+  "src/shared/ui/ai-suggestion.tsx",
+  "src/shared/ui/ai-suggestion-group.tsx",
+  "src/shared/ui/ai-text-mark.tsx",
+];
 const TRIAL_DIR = join(srcDir, "app", "(ansatt)", "prove", "ki");
-/** Klientdelen av KI-modulen (KI-køen), som prøvesiden kan importere (fase2a-ki-ko). */
-const AI_CLIENT = "core/ai/client";
 
 /** Mappene kortet og merket aldri skal nå (relativt til `src/`). */
 const FORBIDDEN = ["core/access", "db", "core/ai"];
@@ -122,46 +124,18 @@ describe("8.1 forslagskortet og KI-merket", () => {
   });
 });
 
-describe("8.2 prøvesiden /prove/ki", () => {
-  const files = sourceFiles(TRIAL_DIR);
-
-  it("har kildefiler (ellers sier testene under ingenting)", () => {
-    expect(files.map(rel).sort()).toEqual(
-      expect.arrayContaining([
-        "src/app/(ansatt)/prove/ki/actions.ts",
-        "src/app/(ansatt)/prove/ki/page.tsx",
-      ]),
-    );
+describe("8.2 prøvesiden /prove/ki er fjernet (KI i veien K6.1, A487)", () => {
+  it("mappen finnes ikke lenger, så siden gir «Fant ikke siden»", () => {
+    expect(existsSync(TRIAL_DIR)).toBe(false);
   });
 
-  it("importerer aldri leverandørene direkte, bare @/core/ai", () => {
+  it("ingen lenke til /prove/ki i src/app eller src/shared", () => {
+    const files = [
+      ...sourceFiles(join(srcDir, "app")),
+      ...sourceFiles(join(srcDir, "shared")),
+    ].filter((file) => !/\.test\.tsx?$/.test(file));
     for (const file of files) {
-      for (const specifier of importSpecifiers(read(file))) {
-        const target = resolveInSrc(file, specifier);
-        if (target === null) continue;
-        expect(target, rel(file)).not.toMatch(/^core\/ai\/providers(\/|$)/);
-        expect(target, rel(file)).not.toMatch(/^core\/integrations(\/|$)/);
-        // KI-køen (`@/core/ai/client`) er lov her (docs/funksjoner/fase2a-ki-ko.md, ADR 0006 del 10)
-        if (target.startsWith("core/ai"))
-          expect(["core/ai", AI_CLIENT], rel(file)).toContain(target);
-      }
-    }
-  });
-
-  it("nevner ikke portene som strengliteral", () => {
-    for (const file of files) {
-      expect(read(file), rel(file)).not.toMatch(/(["'`])(ai|speech_to_text)\1/);
-    }
-  });
-
-  // Unntak: klientdelen av KI-modulen (KI-køen). Den er et rent blad uten tilgang, database og
-  // servermoduler; det håndheves av lint-regelen for modulgrenser og src/core/ai/static-checks.
-  it("klientdelen importerer ikke tilgang, database eller KI-modulen (bare KI-køen)", () => {
-    for (const file of files.filter((entry) => read(entry).startsWith('"use client"'))) {
-      const offenders = transitiveImports(file).filter(
-        (entry) => isForbidden(entry.to) && entry.to !== AI_CLIENT,
-      );
-      expect(offenders, rel(file)).toEqual([]);
+      expect(read(file), rel(file)).not.toMatch(/["'`]\/prove\/ki\b/);
     }
   });
 });

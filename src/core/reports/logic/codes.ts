@@ -129,16 +129,23 @@ export const MAX_MEASURES_PER_DEVIATION = 20;
 export const INSPECTION_YEAR_SOURCES = ["assignment", "today"] as const;
 
 /**
- * KI-målene i rapporten (`AiTargetRef.type` og `fieldKey`, ADR 0006, A350 og A356). Tomme kroker
- * nå: ingen KI-kall bygges i «Badet på PC». `fieldKey` er lik kolonnenavnet i tabellen. For
- * `field_answer` er `fieldKey` feltets faste kode.
- *
- * `ai_usage_log` (`report_id` + `target_ref`) er eneste fasit for om en tekst kom fra KI (A355).
+ * KI-målene i rapporten. Listen står i `@/shared/config/ai-targets`, slik at `@/core/ai` leser den
+ * samme uten å importere rapportkjernen. Eksporteres videre herfra for dem som alt bruker den.
  */
-export const REPORT_AI_TARGET_FIELDS = {
-  deviation: ["deviation_text", "cause_text", "consequence_text"],
-  deviation_measure: ["text"],
-  checkpoint_result: ["description_text"],
-  tgiu_detail: ["reason", "risk_assessment", "how_to_examine"],
-  field_answer: null,
-} as const;
+export { REPORT_AI_TARGET_FIELDS } from "@/shared/config/ai-targets";
+
+/**
+ * Feltene i avvikskortet som kan få forslag fra frasebanken (A433, A437). De tre første er
+ * kolonner på avviket, og valgt tekst erstatter feltet. `new_measure` legger til et nytt tiltak
+ * (`DEVIATION_NEW_MEASURE_FIELD_KEY` i `@/shared/config/ai-targets`). Faste koder: brukes som
+ * `fieldKey` i `target_ref` med måltypen `deviation`.
+ */
+export const PHRASE_FIELDS = [
+  "deviation_text",
+  "cause_text",
+  "consequence_text",
+  "new_measure",
+] as const;
+
+/** Så mange ganger må en kandidat være valgt i organisasjonen for å få merket «Mest brukt» (A468). */
+export const PHRASE_MOST_USED_MIN_COUNT = 2;

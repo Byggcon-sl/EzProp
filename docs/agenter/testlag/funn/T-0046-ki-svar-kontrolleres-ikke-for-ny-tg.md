@@ -3,14 +3,14 @@ id: T-0046
 tittel: Svaret fra KI kontrolleres ikke for ny eller endret TG før det vises og kan brukes
 type: forbedring
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-12
 rolle: test-ki
 omrade: KI (kjernen)
 maal: reklamasjoner
 commit: 11672aa
 forsok: 0
-pr:
+pr: PR KI i veien, 23.11.2026
 ---
 
 ## Hva
@@ -34,3 +34,4 @@ Ikke etterprøvd (forbedring).
 
 ## Logg
 - 2026-11-12: funnet
+- 2026-11-23: rettet i PR KI i veien (branch `ki-i-veien`). Kjernen kjører TG-vakten (`tg_guard`) og tallvakten (`number_guard`) på hvert svar før det vises; et stoppet svar lagres med utfallet `stopped` og vises aldri. Evalueringen kjører de samme vaktene også for språkvasken.

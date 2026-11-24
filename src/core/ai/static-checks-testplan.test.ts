@@ -95,21 +95,8 @@ describe("forslagsmønsteret, statiske kontroller (8)", () => {
     expect(targetInSrc(file, "./card")).toBe("shared/ui/card");
   });
 
-  it('8.2 ingen fil i prove/ki importerer src/core/ai/providers eller nevner portene "ai"/"speech_to_text"', () => {
-    const files = productFiles(trialDir);
-    expect(files.length).toBeGreaterThan(0);
-    for (const file of files) {
-      const source = read(file);
-      const aiImports = importsOf(source)
-        .map((specifier) => targetInSrc(file, specifier))
-        .filter((target): target is string => target !== null && target.startsWith("core/ai"));
-      // KI-køen (`@/core/ai/client`) er lov på prøvesiden (docs/funksjoner/fase2a-ki-ko.md)
-      expect(
-        aiImports.filter((target) => target !== "core/ai" && target !== "core/ai/client"),
-        rel(file),
-      ).toEqual([]);
-      expect(source, rel(file)).not.toMatch(/(["'`])(ai|speech_to_text)\1/);
-    }
+  it("8.2 prøvesiden prove/ki er fjernet (KI i veien, A487), så ingen fil der kan nå leverandørene", () => {
+    expect(existsSync(trialDir)).toBe(false);
   });
 
   it.each(["getSuggestionStatus", "checkAiTextApproved"])(

@@ -71,4 +71,16 @@ export const NEVER_FIELDS: readonly string[] = [
   // Utvidet i fase 2a-1 (vask før KI)
   "assignment_team_members.handed_over_reason",
   "certifications.certificate_number",
+  // Utvidet i 2a-2 «KI i veien» (sikkerhet 6): sendes aldri med fraseforslag, språkvask eller
+  // sammendrag. Romnavn, etasje og bygning kan ha navn på personer («Kari sitt rom»), og
+  // kostnaden hører ikke hjemme i KI-teksten (A434).
+  "rooms.name",
+  "floors.name",
+  "report_buildings.name",
+  "tgiu_details.owner_informed",
+  "tgiu_details.owner_informed_at",
+  "deviations.cost_amount",
+  "deviations.cost_text",
+  "deviations.cost_band_key",
+  // Bildetekster har ingen kolonne ennå (`files` har ingen tekst). Kommer de, føres de her.
 ];

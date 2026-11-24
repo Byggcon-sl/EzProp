@@ -1,0 +1,1591 @@
+{
+  "feature": "phrase_suggest",
+  "status": "utkast, ikke godkjent av fagrådet",
+  "note": "Bare oppdiktet tekst. Eksemplene er aldri kopi eller omskriving av ekte rapporttekst, av frasebanken eller av ai_usage_log. Kandidattekstene er egne, oppdiktede formuleringer og brukes aldri som avvikstekst, seed-data eller mal. Fasiten er settet av riktige kandidat-id-er; bestått er minst én riktig blant de 3 beste, eller no_match.",
+  "cases": [
+    {
+      "id": "ps-001",
+      "description": "Notat om lite fall mot sluket finner avviksteksten om fall.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "lite fall mot sluket, vann blir stående på gulvet",
+        "outcome_key": "wet_room.slope_too_small",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-slope",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fallet mot sluket er for lite, og vann blir stående på gulvet utenfor dusjsonen."
+        },
+        {
+          "id": "dev-drain-clamp",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Klemringen i sluket mangler, så membranen er ikke klemt fast."
+        },
+        {
+          "id": "dev-grout",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fugene mellom flisene i dusjsonen har sprekker og mangler flere steder."
+        },
+        {
+          "id": "dev-vent",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Badet har ikke mekanisk avtrekk, bare en ventil i yttervegg."
+        },
+        {
+          "id": "dev-moist",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fuktmåling i hull bak dusjveggen viste forhøyet fukt i bunnsvillen."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-slope"]
+      }
+    },
+    {
+      "id": "ps-002",
+      "description": "Motfall ved døren: to tekster om fall er riktige.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "motfall ved døren, vann renner ikke mot sluket",
+        "outcome_key": "wet_room.slope_too_small",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-grout",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fugene mellom flisene i dusjsonen har sprekker og mangler flere steder."
+        },
+        {
+          "id": "dev-slope",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fallet mot sluket er for lite, og vann blir stående på gulvet utenfor dusjsonen."
+        },
+        {
+          "id": "dev-slope-b",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Vann renner ikke mot sluket, gulvet har motfall ved døren."
+        },
+        {
+          "id": "dev-silicone",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Silikonfugen langs badekaret har sluppet og har mørke flekker."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-slope", "dev-slope-b"]
+      }
+    },
+    {
+      "id": "ps-003",
+      "description": "Manglende klemring i sluket.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "klemring mangler i sluket, membranen ikke klemt",
+        "outcome_key": "wet_room.drain_clamp_missing",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-slope",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fallet mot sluket er for lite, og vann blir stående på gulvet utenfor dusjsonen."
+        },
+        {
+          "id": "dev-drain-clamp",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Klemringen i sluket mangler, så membranen er ikke klemt fast."
+        },
+        {
+          "id": "dev-drain-old",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Sluket er av eldre type i støpejern med korrosjon på kanten."
+        },
+        {
+          "id": "dev-pipe-pass",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Rørgjennomføringen i dusjveggen er ikke tettet mot membranen."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-drain-clamp"]
+      }
+    },
+    {
+      "id": "ps-004",
+      "description": "Gammelt sluk i støpejern.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "sluket er gammelt, støpejern med korrosjon",
+        "outcome_key": "wet_room.drain_old",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-drain-clamp",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Klemringen i sluket mangler, så membranen er ikke klemt fast."
+        },
+        {
+          "id": "dev-drain-old",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Sluket er av eldre type i støpejern med korrosjon på kanten."
+        },
+        {
+          "id": "dev-tiles-loose",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Flere fliser på veggen i dusjsonen er løse og gir hult lydbilde ved banking."
+        },
+        {
+          "id": "dev-vent",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Badet har ikke mekanisk avtrekk, bare en ventil i yttervegg."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-drain-old"]
+      }
+    },
+    {
+      "id": "ps-005",
+      "description": "Forhøyet fukt ved hulltaking.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "fuktmåling i hull bak dusjveggen ga forhøyet fukt i bunnsvill",
+        "outcome_key": "wet_room.hole_elevated_moisture",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-moist",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fuktmåling i hull bak dusjveggen viste forhøyet fukt i bunnsvillen."
+        },
+        {
+          "id": "dev-membrane-age",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Det skjulte vanntette sjiktet har passert halvparten av forventet brukstid."
+        },
+        {
+          "id": "dev-wc-leak",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Det er spor etter lekkasje rundt foten til toalettet."
+        },
+        {
+          "id": "dev-grout",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fugene mellom flisene i dusjsonen har sprekker og mangler flere steder."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-moist"]
+      }
+    },
+    {
+      "id": "ps-006",
+      "description": "Sjikt som har passert halv brukstid.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "vanntett sjikt har passert halvparten av brukstid",
+        "outcome_key": "wet_room.membrane_past_lifespan",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-moist",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fuktmåling i hull bak dusjveggen viste forhøyet fukt i bunnsvillen."
+        },
+        {
+          "id": "dev-membrane-age",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Det skjulte vanntette sjiktet har passert halvparten av forventet brukstid."
+        },
+        {
+          "id": "dev-slope",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fallet mot sluket er for lite, og vann blir stående på gulvet utenfor dusjsonen."
+        },
+        {
+          "id": "dev-heater-age",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Varmtvannsberederen er over 20 år gammel og har ikke lekkasjesikring."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-membrane-age"]
+      }
+    },
+    {
+      "id": "ps-007",
+      "description": "Ventil i yttervegg uten mekanisk avtrekk.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "ikke mekanisk avtrekk på badet, bare ventil i yttervegg",
+        "outcome_key": "wet_room.no_mechanical_exhaust",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-vent",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Badet har ikke mekanisk avtrekk, bare en ventil i yttervegg."
+        },
+        {
+          "id": "dev-grout",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fugene mellom flisene i dusjsonen har sprekker og mangler flere steder."
+        },
+        {
+          "id": "dev-door-sill",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Terskelen ved døren er for lav til å holde vann inne i rommet."
+        },
+        {
+          "id": "dev-silicone",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Silikonfugen langs badekaret har sluppet og har mørke flekker."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-vent"]
+      }
+    },
+    {
+      "id": "ps-008",
+      "description": "Sprukne fuger i dusjsonen.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "fugene i dusjsonen har sprekker, mangler flere steder",
+        "outcome_key": "wet_room.grout_damaged",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-silicone",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Silikonfugen langs badekaret har sluppet og har mørke flekker."
+        },
+        {
+          "id": "dev-grout",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fugene mellom flisene i dusjsonen har sprekker og mangler flere steder."
+        },
+        {
+          "id": "dev-tiles-loose",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Flere fliser på veggen i dusjsonen er løse og gir hult lydbilde ved banking."
+        },
+        {
+          "id": "dev-slope",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fallet mot sluket er for lite, og vann blir stående på gulvet utenfor dusjsonen."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-grout"]
+      }
+    },
+    {
+      "id": "ps-009",
+      "description": "Silikonfuge langs badekar.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "silikonfugen langs badekaret har sluppet, mørke flekker",
+        "outcome_key": "wet_room.silicone_loose",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-grout",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fugene mellom flisene i dusjsonen har sprekker og mangler flere steder."
+        },
+        {
+          "id": "dev-silicone",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Silikonfugen langs badekaret har sluppet og har mørke flekker."
+        },
+        {
+          "id": "dev-wc-leak",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Det er spor etter lekkasje rundt foten til toalettet."
+        },
+        {
+          "id": "dev-vent",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Badet har ikke mekanisk avtrekk, bare en ventil i yttervegg."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-silicone"]
+      }
+    },
+    {
+      "id": "ps-010",
+      "description": "Løse fliser i dusjsonen.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "fliser på veggen i dusjsonen er løse, hult ved banking",
+        "outcome_key": "wet_room.tiles_loose",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-grout",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fugene mellom flisene i dusjsonen har sprekker og mangler flere steder."
+        },
+        {
+          "id": "dev-tiles-loose",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Flere fliser på veggen i dusjsonen er løse og gir hult lydbilde ved banking."
+        },
+        {
+          "id": "dev-pipe-pass",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Rørgjennomføringen i dusjveggen er ikke tettet mot membranen."
+        },
+        {
+          "id": "dev-moist",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fuktmåling i hull bak dusjveggen viste forhøyet fukt i bunnsvillen."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-tiles-loose"]
+      }
+    },
+    {
+      "id": "ps-011",
+      "description": "Gammel bereder uten lekkasjesikring.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "berederen er over 20 år gammel og mangler lekkasjesikring",
+        "outcome_key": "water_heater.age",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-heater-age",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Varmtvannsberederen er over 20 år gammel og har ikke lekkasjesikring."
+        },
+        {
+          "id": "dev-membrane-age",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Det skjulte vanntette sjiktet har passert halvparten av forventet brukstid."
+        },
+        {
+          "id": "dev-vent",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Badet har ikke mekanisk avtrekk, bare en ventil i yttervegg."
+        },
+        {
+          "id": "dev-wc-leak",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Det er spor etter lekkasje rundt foten til toalettet."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-heater-age"]
+      }
+    },
+    {
+      "id": "ps-012",
+      "description": "Utett rørgjennomføring.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "rørgjennomføringen i dusjveggen er ikke tettet mot membranen",
+        "outcome_key": "wet_room.pipe_penetration",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-drain-clamp",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Klemringen i sluket mangler, så membranen er ikke klemt fast."
+        },
+        {
+          "id": "dev-pipe-pass",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Rørgjennomføringen i dusjveggen er ikke tettet mot membranen."
+        },
+        {
+          "id": "dev-grout",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fugene mellom flisene i dusjsonen har sprekker og mangler flere steder."
+        },
+        {
+          "id": "dev-tiles-loose",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Flere fliser på veggen i dusjsonen er løse og gir hult lydbilde ved banking."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-pipe-pass"]
+      }
+    },
+    {
+      "id": "ps-013",
+      "description": "Lekkasjespor ved toalettet.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "spor etter lekkasje rundt foten til toalettet",
+        "outcome_key": "wet_room.wc_leak_marks",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-wc-leak",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Det er spor etter lekkasje rundt foten til toalettet."
+        },
+        {
+          "id": "dev-slope",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fallet mot sluket er for lite, og vann blir stående på gulvet utenfor dusjsonen."
+        },
+        {
+          "id": "dev-moist",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fuktmåling i hull bak dusjveggen viste forhøyet fukt i bunnsvillen."
+        },
+        {
+          "id": "dev-door-sill",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Terskelen ved døren er for lav til å holde vann inne i rommet."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-wc-leak"]
+      }
+    },
+    {
+      "id": "ps-014",
+      "description": "Lav terskel.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "terskelen ved døren er lav og holder ikke vann inne",
+        "outcome_key": "wet_room.sill_low",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-door-sill",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Terskelen ved døren er for lav til å holde vann inne i rommet."
+        },
+        {
+          "id": "dev-slope-b",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Vann renner ikke mot sluket, gulvet har motfall ved døren."
+        },
+        {
+          "id": "dev-vent",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Badet har ikke mekanisk avtrekk, bare en ventil i yttervegg."
+        },
+        {
+          "id": "dev-grout",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fugene mellom flisene i dusjsonen har sprekker og mangler flere steder."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["dev-door-sill"]
+      }
+    },
+    {
+      "id": "ps-015",
+      "description": "Årsak: for lite fall fra byggingen.",
+      "deviationKind": "tg",
+      "field": "cause_text",
+      "fields": {
+        "text": "gulvet lagt med for lite fall da badet ble bygget",
+        "outcome_key": "wet_room.slope_too_small",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "cau-slope",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Gulvet er lagt med for lite fall da badet ble bygget."
+        },
+        {
+          "id": "cau-age",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Sjiktet er gammelt, og funksjonen er usikker på grunn av alder."
+        },
+        {
+          "id": "cau-leak",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Vann har trengt gjennom en utett fuge eller rørgjennomføring."
+        },
+        {
+          "id": "cau-vent",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Avtrekket er for svakt til å ta bort fuktig luft etter dusjing."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["cau-slope"]
+      }
+    },
+    {
+      "id": "ps-016",
+      "description": "Årsak: alder på sjiktet.",
+      "deviationKind": "tg",
+      "field": "cause_text",
+      "fields": {
+        "text": "sjiktet er gammelt, funksjonen usikker på grunn av alder",
+        "outcome_key": "wet_room.membrane_past_lifespan",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "cau-slope",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Gulvet er lagt med for lite fall da badet ble bygget."
+        },
+        {
+          "id": "cau-age",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Sjiktet er gammelt, og funksjonen er usikker på grunn av alder."
+        },
+        {
+          "id": "cau-workman",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Arbeidet er utført uten å følge monteringsanvisningen for sluket."
+        },
+        {
+          "id": "cau-leak",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Vann har trengt gjennom en utett fuge eller rørgjennomføring."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["cau-age"]
+      }
+    },
+    {
+      "id": "ps-017",
+      "description": "Årsak: vann gjennom utett fuge.",
+      "deviationKind": "tg",
+      "field": "cause_text",
+      "fields": {
+        "text": "vann trengt gjennom utett fuge eller rørgjennomføring",
+        "outcome_key": "wet_room.hole_elevated_moisture",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "cau-leak",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Vann har trengt gjennom en utett fuge eller rørgjennomføring."
+        },
+        {
+          "id": "cau-vent",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Avtrekket er for svakt til å ta bort fuktig luft etter dusjing."
+        },
+        {
+          "id": "cau-age",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Sjiktet er gammelt, og funksjonen er usikker på grunn av alder."
+        },
+        {
+          "id": "cau-workman",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Arbeidet er utført uten å følge monteringsanvisningen for sluket."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["cau-leak"]
+      }
+    },
+    {
+      "id": "ps-018",
+      "description": "Årsak: svakt avtrekk.",
+      "deviationKind": "tg",
+      "field": "cause_text",
+      "fields": {
+        "text": "avtrekket er svakt, fuktig luft blir ikke tatt bort etter dusjing",
+        "outcome_key": "wet_room.no_mechanical_exhaust",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "cau-vent",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Avtrekket er for svakt til å ta bort fuktig luft etter dusjing."
+        },
+        {
+          "id": "cau-slope",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Gulvet er lagt med for lite fall da badet ble bygget."
+        },
+        {
+          "id": "cau-leak",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Vann har trengt gjennom en utett fuge eller rørgjennomføring."
+        },
+        {
+          "id": "cau-age",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Sjiktet er gammelt, og funksjonen er usikker på grunn av alder."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["cau-vent"]
+      }
+    },
+    {
+      "id": "ps-019",
+      "description": "Årsak: sluket montert uten anvisning.",
+      "deviationKind": "tg",
+      "field": "cause_text",
+      "fields": {
+        "text": "sluket montert uten å følge monteringsanvisningen",
+        "outcome_key": "wet_room.drain_clamp_missing",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "cau-age",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Sjiktet er gammelt, og funksjonen er usikker på grunn av alder."
+        },
+        {
+          "id": "cau-workman",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Arbeidet er utført uten å følge monteringsanvisningen for sluket."
+        },
+        {
+          "id": "cau-slope",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Gulvet er lagt med for lite fall da badet ble bygget."
+        },
+        {
+          "id": "cau-leak",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Vann har trengt gjennom en utett fuge eller rørgjennomføring."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["cau-workman"]
+      }
+    },
+    {
+      "id": "ps-020",
+      "description": "Konsekvens: fuktskader og råte.",
+      "deviationKind": "tg",
+      "field": "consequence_text",
+      "fields": {
+        "text": "vann kan trenge inn i konstruksjonen, fuktskader og råte",
+        "outcome_key": "wet_room.hole_elevated_moisture",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "con-water",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Vann kan trenge inn i konstruksjonen og gi fuktskader og råte."
+        },
+        {
+          "id": "con-mould",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fuktig luft blir stående og kan gi muggvekst på vegger og tak."
+        },
+        {
+          "id": "con-cost",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Skjulte skader kan gi kostbar utbedring av hele våtrommet."
+        },
+        {
+          "id": "con-heater",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "En lekkasje fra berederen kan gi vannskade i rommet under."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["con-water"]
+      }
+    },
+    {
+      "id": "ps-021",
+      "description": "Konsekvens: muggvekst.",
+      "deviationKind": "tg",
+      "field": "consequence_text",
+      "fields": {
+        "text": "fuktig luft blir stående, muggvekst på vegger og tak",
+        "outcome_key": "wet_room.no_mechanical_exhaust",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "con-water",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Vann kan trenge inn i konstruksjonen og gi fuktskader og råte."
+        },
+        {
+          "id": "con-mould",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fuktig luft blir stående og kan gi muggvekst på vegger og tak."
+        },
+        {
+          "id": "con-heater",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "En lekkasje fra berederen kan gi vannskade i rommet under."
+        },
+        {
+          "id": "con-cost",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Skjulte skader kan gi kostbar utbedring av hele våtrommet."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["con-mould"]
+      }
+    },
+    {
+      "id": "ps-022",
+      "description": "Konsekvens: vannskade fra bereder.",
+      "deviationKind": "tg",
+      "field": "consequence_text",
+      "fields": {
+        "text": "lekkasje fra berederen kan gi vannskade i rommet under",
+        "outcome_key": "water_heater.age",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "con-cost",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Skjulte skader kan gi kostbar utbedring av hele våtrommet."
+        },
+        {
+          "id": "con-heater",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "En lekkasje fra berederen kan gi vannskade i rommet under."
+        },
+        {
+          "id": "con-water",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Vann kan trenge inn i konstruksjonen og gi fuktskader og råte."
+        },
+        {
+          "id": "con-mould",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fuktig luft blir stående og kan gi muggvekst på vegger og tak."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["con-heater"]
+      }
+    },
+    {
+      "id": "ps-023",
+      "description": "Tiltak: rett opp fallet.",
+      "deviationKind": "tg",
+      "field": "measure_text",
+      "fields": {
+        "text": "rette opp fallet mot sluket ved rehabilitering",
+        "outcome_key": "wet_room.slope_too_small",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "mea-slope",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Rett opp fallet mot sluket ved neste rehabilitering av badet."
+        },
+        {
+          "id": "mea-drain",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Skift sluket og klem membranen fast med ny klemring."
+        },
+        {
+          "id": "mea-grout",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Fugene i dusjsonen bør fornyes for å hindre at vann trenger inn."
+        },
+        {
+          "id": "mea-membrane",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Planlegg utskifting av vanntett sjikt, og følg med på tegn til fukt."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["mea-slope"]
+      }
+    },
+    {
+      "id": "ps-024",
+      "description": "Tiltak: åpne veggen og finne årsaken til fukten.",
+      "deviationKind": "tg",
+      "field": "measure_text",
+      "fields": {
+        "text": "fagperson åpner veggen, finner årsaken til fukten og utbedrer skadene",
+        "outcome_key": "wet_room.hole_elevated_moisture",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "mea-moist",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Fagperson må åpne veggen, finne årsaken til fukten og utbedre skadene."
+        },
+        {
+          "id": "mea-membrane",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Planlegg utskifting av vanntett sjikt, og følg med på tegn til fukt."
+        },
+        {
+          "id": "mea-vent",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Monter mekanisk avtrekk med tilstrekkelig kapasitet."
+        },
+        {
+          "id": "mea-wc",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Fagperson bør finne lekkasjen ved toalettet og tette den snarest."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["mea-moist"]
+      }
+    },
+    {
+      "id": "ps-025",
+      "description": "Tiltak: skifte sluk og klemring.",
+      "deviationKind": "tg",
+      "field": "measure_text",
+      "fields": {
+        "text": "skifte sluket, klem membranen fast med ny klemring",
+        "outcome_key": "wet_room.drain_clamp_missing",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "mea-slope",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Rett opp fallet mot sluket ved neste rehabilitering av badet."
+        },
+        {
+          "id": "mea-drain",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Skift sluket og klem membranen fast med ny klemring."
+        },
+        {
+          "id": "mea-silicone",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Skift silikonfugen langs badekaret."
+        },
+        {
+          "id": "mea-grout",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Fugene i dusjsonen bør fornyes for å hindre at vann trenger inn."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["mea-drain"]
+      }
+    },
+    {
+      "id": "ps-026",
+      "description": "Tiltak: lekkasjesikring på bereder.",
+      "deviationKind": "tg",
+      "field": "measure_text",
+      "fields": {
+        "text": "montere lekkasjesikring og vurdere å skifte berederen",
+        "outcome_key": "water_heater.age",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "mea-heater",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Monter lekkasjesikring, og vurder å skifte berederen."
+        },
+        {
+          "id": "mea-vent",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Monter mekanisk avtrekk med tilstrekkelig kapasitet."
+        },
+        {
+          "id": "mea-membrane",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Planlegg utskifting av vanntett sjikt, og følg med på tegn til fukt."
+        },
+        {
+          "id": "mea-wc",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Fagperson bør finne lekkasjen ved toalettet og tette den snarest."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["mea-heater"]
+      }
+    },
+    {
+      "id": "ps-027",
+      "description": "Tiltak: lekkasje ved toalettet, «snarest» i kandidaten.",
+      "deviationKind": "tg",
+      "field": "measure_text",
+      "fields": {
+        "text": "finne lekkasjen ved toalettet og tette den",
+        "outcome_key": "wet_room.wc_leak_marks",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "mea-wc",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Fagperson bør finne lekkasjen ved toalettet og tette den snarest."
+        },
+        {
+          "id": "mea-drain",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Skift sluket og klem membranen fast med ny klemring."
+        },
+        {
+          "id": "mea-moist",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Fagperson må åpne veggen, finne årsaken til fukten og utbedre skadene."
+        },
+        {
+          "id": "mea-silicone",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Skift silikonfugen langs badekaret."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["mea-wc"]
+      }
+    },
+    {
+      "id": "ps-028",
+      "description": "HMS: glassvegg uten merking. Bare HMS-kandidater.",
+      "deviationKind": "hms",
+      "field": "deviation_text",
+      "fields": {
+        "text": "dusjveggen av glass mangler merking, fare for å gå inn i den",
+        "outcome_key": "hms.glass_unmarked",
+        "group": "hms"
+      },
+      "candidates": [
+        {
+          "id": "hms-glass",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Dusjveggen er av glass uten merking, og det er fare for å gå inn i den."
+        },
+        {
+          "id": "hms-socket",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Stikkontakten sitter så nær dusjen at den kan bli våt."
+        },
+        {
+          "id": "hms-slippery",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Flisene på gulvet er glatte når de er våte, og det er fare for fall."
+        },
+        {
+          "id": "hms-floor-heat",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Termostaten til gulvvarmen er løs og ledningene ligger synlige."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["hms-glass"]
+      }
+    },
+    {
+      "id": "ps-029",
+      "description": "HMS: stikkontakt nær dusjen.",
+      "deviationKind": "hms",
+      "field": "deviation_text",
+      "fields": {
+        "text": "stikkontakten sitter nær dusjen og kan bli våt",
+        "outcome_key": "hms.socket_wet_zone",
+        "group": "hms"
+      },
+      "candidates": [
+        {
+          "id": "hms-floor-heat",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Termostaten til gulvvarmen er løs og ledningene ligger synlige."
+        },
+        {
+          "id": "hms-socket",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Stikkontakten sitter så nær dusjen at den kan bli våt."
+        },
+        {
+          "id": "hms-glass",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Dusjveggen er av glass uten merking, og det er fare for å gå inn i den."
+        },
+        {
+          "id": "hms-rail",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Rekkverket på trappen ned til kjelleren er løst og gir dårlig støtte."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["hms-socket"]
+      }
+    },
+    {
+      "id": "ps-030",
+      "description": "HMS: glatte fliser.",
+      "deviationKind": "hms",
+      "field": "deviation_text",
+      "fields": {
+        "text": "flisene på gulvet er glatte når de er våte",
+        "outcome_key": "hms.slippery_floor",
+        "group": "hms"
+      },
+      "candidates": [
+        {
+          "id": "hms-slippery",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Flisene på gulvet er glatte når de er våte, og det er fare for fall."
+        },
+        {
+          "id": "hms-rail",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Rekkverket på trappen ned til kjelleren er løst og gir dårlig støtte."
+        },
+        {
+          "id": "hms-glass",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Dusjveggen er av glass uten merking, og det er fare for å gå inn i den."
+        },
+        {
+          "id": "hms-socket",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Stikkontakten sitter så nær dusjen at den kan bli våt."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["hms-slippery"]
+      }
+    },
+    {
+      "id": "ps-031",
+      "description": "HMS-tiltak: elektriker flytter stikkontakten.",
+      "deviationKind": "hms",
+      "field": "measure_text",
+      "fields": {
+        "text": "elektriker flytter stikkontakten ut av sonen der den kan bli våt",
+        "outcome_key": "hms.socket_wet_zone",
+        "group": "hms"
+      },
+      "candidates": [
+        {
+          "id": "hms-socket-m",
+          "source": "template_measure",
+          "kind": "hms",
+          "text": "Elektriker må flytte stikkontakten ut av sonen der den kan bli våt."
+        },
+        {
+          "id": "hms-glass-m",
+          "source": "template_measure",
+          "kind": "hms",
+          "text": "Merk glassveggen med godt synlige markeringer i øyehøyde."
+        },
+        {
+          "id": "hms-floor-heat-m",
+          "source": "template_measure",
+          "kind": "hms",
+          "text": "Elektriker må feste termostaten og dekke til ledningene."
+        },
+        {
+          "id": "hms-slippery-m",
+          "source": "template_measure",
+          "kind": "hms",
+          "text": "Legg sklisikre matter eller behandle flisene mot glatt gulv."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["hms-socket-m"]
+      }
+    },
+    {
+      "id": "ps-032",
+      "description": "HMS-tiltak: feste termostaten.",
+      "deviationKind": "hms",
+      "field": "measure_text",
+      "fields": {
+        "text": "feste termostaten til gulvvarmen og dekke til ledningene",
+        "outcome_key": "hms.floor_heating_loose",
+        "group": "hms"
+      },
+      "candidates": [
+        {
+          "id": "hms-rail-m",
+          "source": "template_measure",
+          "kind": "hms",
+          "text": "Fest rekkverket slik at det tåler belastning."
+        },
+        {
+          "id": "hms-floor-heat-m",
+          "source": "template_measure",
+          "kind": "hms",
+          "text": "Elektriker må feste termostaten og dekke til ledningene."
+        },
+        {
+          "id": "hms-socket-m",
+          "source": "template_measure",
+          "kind": "hms",
+          "text": "Elektriker må flytte stikkontakten ut av sonen der den kan bli våt."
+        },
+        {
+          "id": "hms-glass-m",
+          "source": "template_measure",
+          "kind": "hms",
+          "text": "Merk glassveggen med godt synlige markeringer i øyehøyde."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "correct": ["hms-floor-heat-m"]
+      }
+    },
+    {
+      "id": "ps-033",
+      "description": "Ingen kandidat passer: teksten handler om noe annet.",
+      "deviationKind": "tg",
+      "field": "deviation_text",
+      "fields": {
+        "text": "kjøkkenvifta brummer høyt",
+        "outcome_key": "wet_room.slope_too_small",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "dev-slope",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fallet mot sluket er for lite, og vann blir stående på gulvet utenfor dusjsonen."
+        },
+        {
+          "id": "dev-grout",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fugene mellom flisene i dusjsonen har sprekker og mangler flere steder."
+        },
+        {
+          "id": "dev-silicone",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Silikonfugen langs badekaret har sluppet og har mørke flekker."
+        },
+        {
+          "id": "dev-vent",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Badet har ikke mekanisk avtrekk, bare en ventil i yttervegg."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "no_match"
+      }
+    },
+    {
+      "id": "ps-034",
+      "description": "Ingen kandidat passer: notat om takrenne.",
+      "deviationKind": "tg",
+      "field": "cause_text",
+      "fields": {
+        "text": "takrenna lekker over inngangspartiet",
+        "outcome_key": "wet_room.membrane_past_lifespan",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "cau-slope",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Gulvet er lagt med for lite fall da badet ble bygget."
+        },
+        {
+          "id": "cau-age",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Sjiktet er gammelt, og funksjonen er usikker på grunn av alder."
+        },
+        {
+          "id": "cau-leak",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Vann har trengt gjennom en utett fuge eller rørgjennomføring."
+        },
+        {
+          "id": "cau-vent",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Avtrekket er for svakt til å ta bort fuktig luft etter dusjing."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "no_match"
+      }
+    },
+    {
+      "id": "ps-035",
+      "description": "Ingen kandidat passer: HMS-notat om noe uten kandidat.",
+      "deviationKind": "hms",
+      "field": "deviation_text",
+      "fields": {
+        "text": "røykvarsler mangler batteri",
+        "outcome_key": "hms.glass_unmarked",
+        "group": "hms"
+      },
+      "candidates": [
+        {
+          "id": "hms-glass",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Dusjveggen er av glass uten merking, og det er fare for å gå inn i den."
+        },
+        {
+          "id": "hms-socket",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Stikkontakten sitter så nær dusjen at den kan bli våt."
+        },
+        {
+          "id": "hms-slippery",
+          "source": "template_outcome",
+          "kind": "hms",
+          "text": "Flisene på gulvet er glatte når de er våte, og det er fare for fall."
+        }
+      ],
+      "mustPass": true,
+      "expect": {
+        "outcome": "no_match"
+      }
+    },
+    {
+      "id": "ps-036",
+      "description": "Ingen kandidat passer: tiltak om maling.",
+      "deviationKind": "tg",
+      "field": "measure_text",
+      "fields": {
+        "text": "male vinduskarmene utvendig",
+        "outcome_key": "wet_room.grout_damaged",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "mea-slope",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Rett opp fallet mot sluket ved neste rehabilitering av badet."
+        },
+        {
+          "id": "mea-drain",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Skift sluket og klem membranen fast med ny klemring."
+        },
+        {
+          "id": "mea-grout",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Fugene i dusjsonen bør fornyes for å hindre at vann trenger inn."
+        },
+        {
+          "id": "mea-heater",
+          "source": "template_measure",
+          "kind": "tg",
+          "text": "Monter lekkasjesikring, og vurder å skifte berederen."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "no_match"
+      }
+    },
+    {
+      "id": "ps-037",
+      "description": "Ingen kandidat passer: konsekvens om støy.",
+      "deviationKind": "tg",
+      "field": "consequence_text",
+      "fields": {
+        "text": "naboen hører trinnlyd gjennom bjelkelaget",
+        "outcome_key": "wet_room.no_mechanical_exhaust",
+        "group": "tg"
+      },
+      "candidates": [
+        {
+          "id": "con-water",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Vann kan trenge inn i konstruksjonen og gi fuktskader og råte."
+        },
+        {
+          "id": "con-mould",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Fuktig luft blir stående og kan gi muggvekst på vegger og tak."
+        },
+        {
+          "id": "con-cost",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "Skjulte skader kan gi kostbar utbedring av hele våtrommet."
+        },
+        {
+          "id": "con-heater",
+          "source": "template_outcome",
+          "kind": "tg",
+          "text": "En lekkasje fra berederen kan gi vannskade i rommet under."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "no_match"
+      }
+    },
+    {
+      "id": "ps-038",
+      "description": "Ingen kandidat passer: HMS-tiltak om noe annet.",
+      "deviationKind": "hms",
+      "field": "measure_text",
+      "fields": {
+        "text": "bytt batteri i brannalarmen",
+        "outcome_key": "hms.rail_loose",
+        "group": "hms"
+      },
+      "candidates": [
+        {
+          "id": "hms-rail-m",
+          "source": "template_measure",
+          "kind": "hms",
+          "text": "Fest rekkverket slik at det tåler belastning."
+        },
+        {
+          "id": "hms-glass-m",
+          "source": "template_measure",
+          "kind": "hms",
+          "text": "Merk glassveggen med godt synlige markeringer i øyehøyde."
+        },
+        {
+          "id": "hms-socket-m",
+          "source": "template_measure",
+          "kind": "hms",
+          "text": "Elektriker må flytte stikkontakten ut av sonen der den kan bli våt."
+        }
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "no_match"
+      }
+    }
+  ]
+}

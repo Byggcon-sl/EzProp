@@ -6,6 +6,7 @@ import {
   checkpointResults,
   deviationMeasures,
   deviations,
+  reports,
   TEXT_SOURCES,
   tgiuDetails,
 } from "@/db/schema";
@@ -30,6 +31,7 @@ describe("B1.19 KI-målene", () => {
       checkpoint_result: ["description_text"],
       tgiu_detail: ["reason", "risk_assessment", "how_to_examine"],
       field_answer: null,
+      report: ["summary_text"],
     });
   });
 
@@ -38,6 +40,7 @@ describe("B1.19 KI-målene", () => {
     ["deviation_measure", deviationMeasures],
     ["checkpoint_result", checkpointResults],
     ["tgiu_detail", tgiuDetails],
+    ["report", reports],
   ] as const)("hvert feltnavn i %s finnes som kolonne", (target, table) => {
     const columns = columnNames(table);
     for (const field of REPORT_AI_TARGET_FIELDS[target]) expect(columns, field).toContain(field);

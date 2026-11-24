@@ -2,6 +2,7 @@
 
 Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og 09.11.2026).
 
+- **17.11.2026 (Branch `ki-i-veien`, forbedreren):** 2a-2: nytt punkt «Gå gjennom tekstene i badet» under «Fra forbedreren», bygges etter «KI i veien» (A441).
 - **17.11.2026 (Hovedløkken, PR om tilstand etter #224):** 2a-2: «Badet på PC» merket med at skjermen er levert i PR #224; punktet krysses av når testdata del 2 er levert (A359).
 - **16.11.2026 (Branch `badet-pc`, forbedreren):** 2a-2: nytt punkt «Skriv det du ser: KI finner utfallet» under «Fra forbedreren», bygges etter «KI i veien» (A384).
 - **16.11.2026 (Forbedreren, branch `papirkurv`):** 2a-3: nytt punkt «Historikk på oppdraget, med KI-sammendrag av endringer» under ny overskrift «Fra forbedreren».
@@ -108,3 +109,4 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 17.11.2026 | «Testdata, del 2» rettet: bilder flyttet til «Bilder på PC» (delpunktet utvidet til testdataene, A501), byggeår på eiendommen venter på kolonnen (A502). | Oppgavekortet `docs/funksjoner/fase2a-testdata-del-2.md` etter forhåndsvurdering (test-leder, fagansvarlig) |
 | 17.11.2026 | Nytt punkt under «Fra forbedreren» i 2a-2: «Øvingsbad for nye takstmenn». | Forbedreren 17.11.2026 (Ståle 14.11.2026, «Forbedreren» i `CLAUDE.md`), fra testdata del 2 |
 | 23.11.2026 | «Testdata, del 2»: beslutningene omnummerert fra A473–A481 til A501–A509 (A480 og A481 var brukt på en annen branch), og A510–A512 lagt til etter forhåndsvurdering runde 2. Ingen endring i hva som bygges. | Prosjektlederen, `docs/funksjoner/fase2a-testdata-del-2.md` |
+| 23.11.2026 | «KI i veien» (2a-2) krysset av: fraseforslag, «Språkvask avviket» og utkast til sammendrag på badskjermen gjennom KI-grunnmuren; prøvesiden `/prove/ki` fjernet (A431–A442, A460–A472, A482–A491). | Planen 2a-2, overtatt av hovedløkken 23.11.2026. |

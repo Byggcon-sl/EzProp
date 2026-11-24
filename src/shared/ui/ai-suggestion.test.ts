@@ -144,10 +144,10 @@ describe("forslagskortet: tilstander (10.5–10.10)", () => {
   });
 
   // 10.9 endret med KI-køen (fase2a-ki-ko K5.4): på /prove/ki legges forespørselen i kø uten nett,
-  // og kortet viser «Venter på KI …». «Krever nett …» står igjen for kort uten kø.
-  it("10.9 uten nett, uten kø: «Krever nett …» og knappen for nytt forslag låst", () => {
+  // og kortet viser «Venter på KI …». «Trenger nett …» står igjen for kort uten kø.
+  it("10.9 uten nett, uten kø: «Trenger nett …» og knappen for nytt forslag låst", () => {
     const html = render({ online: false, outcome: "error", suggestionText: null, status: null });
-    expect(html).toContain("Krever nett. Teksten din er lagret og kan skrives videre.");
+    expect(html).toContain("Trenger nett. Teksten din er lagret.");
     const found = buttons(html);
     expect(found.map((button) => button.label)).toEqual([newSuggestion]);
     expect(found.every((button) => button.disabled)).toBe(true);
@@ -156,12 +156,12 @@ describe("forslagskortet: tilstander (10.5–10.10)", () => {
   it("10.9 uten nett med forslag: forslaget står, meldingen under, alle knapper låst", () => {
     const html = render({ online: false });
     expect(html).toContain(SUGGESTION);
-    expect(html).toContain("Krever nett. Teksten din er lagret og kan skrives videre.");
+    expect(html).toContain("Trenger nett. Teksten din er lagret.");
     expect(buttons(html).every((button) => button.disabled)).toBe(true);
   });
 
   it.each([true, false])(
-    "10.9 uten nett, lagt i kø (på nett: %s): «Venter på KI …», ingen «Krever nett …» og ingen «Bruk»",
+    "10.9 uten nett, lagt i kø (på nett: %s): «Venter på KI …», ingen «Trenger nett …» og ingen «Bruk»",
     (isOnline) => {
       const html = render({
         online: isOnline,
@@ -171,7 +171,7 @@ describe("forslagskortet: tilstander (10.5–10.10)", () => {
         status: null,
       });
       expect(html).toContain("Venter på KI. Forslaget kommer når nettet er tilbake.");
-      expect(html).not.toContain("Krever nett");
+      expect(html).not.toContain("Trenger nett");
       expect(labels(html)).not.toContain(use);
     },
   );
@@ -526,8 +526,8 @@ describe("K5.3 T-0005 «Angre» etter at teksten er endret", () => {
   });
 });
 
-describe("K5.4 «Krever nett …» og køen", () => {
-  it("i kø uten nett vises køteksten, ikke «Krever nett …»", () => {
+describe("K5.4 «Trenger nett …» og køen", () => {
+  it("i kø uten nett vises køteksten, ikke «Trenger nett …»", () => {
     const view = suggestionView({ ...base, ...queuedState });
     const shownTexts = [
       view.box?.kind === "message" ? view.box.text : "",
@@ -539,10 +539,62 @@ describe("K5.4 «Krever nett …» og køen", () => {
   });
 
   it("teksten offline beholdes for andre bruk av kortet (10.9 gjelder fortsatt uten kø)", () => {
-    expect(AI_SUGGESTION_TEXTS.offline).toBe(
-      "Krever nett. Teksten din er lagret og kan skrives videre.",
-    );
+    expect(AI_SUGGESTION_TEXTS.offline).toBe("Trenger nett. Teksten din er lagret.");
     const html = render({ online: false, outcome: "error", suggestionText: null, status: null });
     expect(html).toContain(AI_SUGGESTION_TEXTS.offline);
+  });
+});
+
+describe("KI i veien: utfallet «stopped» (A460, designvalg D5)", () => {
+  const STOPPED =
+    "KI-svaret ble stoppet fordi det endret TG eller la til tall. Teksten din er uendret.";
+
+  it("viser skjermens melding i nøytral flate, aldri teksten fra KI, og bare «Nytt forslag»", () => {
+    const view = suggestionView({
+      ...base,
+      outcome: "stopped",
+      suggestionText: null,
+      status: null,
+      stoppedText: STOPPED,
+    });
+    expect(view.box).toEqual({ kind: "message", tone: "neutral", text: STOPPED });
+    expect(view.buttons).toEqual({ use: false, keep: false, newSuggestion: true, undo: false });
+    expect(view.announcement).toBe(STOPPED);
+    const html = render({
+      outcome: "stopped",
+      suggestionText: null,
+      status: null,
+      stoppedText: STOPPED,
+    });
+    expect(html).toContain(STOPPED);
+    expect(html).toContain("bg-snow");
+    expect(html).not.toContain("bg-watch-fill");
+  });
+
+  it("et forrige forslag som står igjen, vises med meldingen som linje under (som A164)", () => {
+    const view = suggestionView({
+      ...base,
+      outcome: "stopped",
+      suggestionText: null,
+      status: null,
+      stoppedText: STOPPED,
+      staleSuggestion: { text: SUGGESTION, status: "suggested" },
+    });
+    expect(view.box).toMatchObject({ kind: "suggestion", text: SUGGESTION });
+    expect(view.notes).toContain(STOPPED);
+  });
+
+  it("uten egen melding brukes standardteksten", () => {
+    const view = suggestionView({
+      ...base,
+      outcome: "stopped",
+      suggestionText: null,
+      status: null,
+    });
+    expect(view.box).toMatchObject({ text: AI_SUGGESTION_TEXTS.stopped });
+  });
+
+  it("D1: uten nett står «Trenger nett. Teksten din er lagret.»", () => {
+    expect(AI_SUGGESTION_TEXTS.offline).toBe("Trenger nett. Teksten din er lagret.");
   });
 });
