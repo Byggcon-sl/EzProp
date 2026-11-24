@@ -46,7 +46,7 @@ export function wetRoomTemplateLabels(): PdfTemplateLabels {
     elements: Object.fromEntries(
       wetRoomTemplate.elements.map((e) => [
         e.key,
-        { showInReport: e.show_in_report, unit: e.unit },
+        { showInReport: e.show_in_report, unit: e.unit, fieldType: e.field_type },
       ]),
     ),
   };
