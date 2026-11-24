@@ -55,6 +55,13 @@ export const EVENT_TYPES = [
   "report.revised",
   "report.publish_override",
   "report.sent",
+  /**
+   * PDF-utkast laget (ADR 0016). `data` har bare feltene i `PDF_EVENT_DATA_FIELDS`. Vises og telles
+   * aldri per ansatt, bare samlet bak `statistics.read`.
+   */
+  "report.draft_pdf_created",
+  /** PDF av en utgivelse laget (ADR 0016, F7). Som over, pluss `versionNumber`. */
+  "report.release_pdf_created",
   "invoice.draft_created",
   "invoice.sent",
   "invoice.paid",
@@ -68,3 +75,30 @@ export const EVENT_TYPES = [
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];
+
+/**
+ * De eneste feltene i `data` på PDF-hendelsene (docs/funksjoner/fase2a-pdf-badet.md, «KI i
+ * bunnen»). Aldri adresse, oppdragsnummer, filnavn, selskapsnavn eller tekst fra rapporten.
+ * `durationMs` er maskintid, ikke arbeidstid.
+ */
+export const PDF_EVENT_DATA_FIELDS = {
+  "report.draft_pdf_created": ["reportId", "profileCode", "pageCount", "imageCount", "durationMs"],
+  "report.release_pdf_created": [
+    "reportId",
+    "profileCode",
+    "pageCount",
+    "imageCount",
+    "durationMs",
+    "versionNumber",
+  ],
+} as const;
+
+export type DraftPdfEventData = {
+  reportId: string;
+  profileCode: string;
+  pageCount: number;
+  imageCount: number;
+  durationMs: number;
+};
+
+export type ReleasePdfEventData = DraftPdfEventData & { versionNumber: number };

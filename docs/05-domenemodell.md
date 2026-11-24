@@ -1488,6 +1488,8 @@ Gyldig verdi er et heltall fra 1 til og med 100 (år). Mangler nøkkelen, brukes
 | `report.revised` | Rapport rettet (ny versjon) |
 | `report.publish_override` | Sperre overstyrt ved publisering |
 | `report.sent` | Rapport sendt (per mottaker). **Setter status «Ferdig»** (innspill D16, statuslisten fra 27.10.2026). |
+| `report.draft_pdf_created` | PDF-utkast laget (ADR 0016). `data`: bare `reportId`, `profileCode`, `pageCount`, `imageCount`, `durationMs`. Telles aldri per ansatt, bare samlet. |
+| `report.release_pdf_created` | PDF av en utgivelse laget (ADR 0016, F7). Som over, pluss `versionNumber`. |
 | `invoice.draft_created` | Fakturagrunnlag laget |
 | `invoice.sent` | **Faktura sendt** (fra eAccounting) |
 | `invoice.paid` | **Faktura betalt** (fra eAccounting) |
