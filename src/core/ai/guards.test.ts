@@ -42,13 +42,18 @@ describe("K1.1 extractTgMentions", () => {
 });
 
 describe("K1.2–K1.6b og K2.1 vaktene som data", () => {
-  it("testsakene finnes for alle vaktene og for alle tre funksjonene", () => {
+  it("testsakene finnes for alle vaktene og for alle funksjonene", () => {
     const expected = new Set(GUARD_CASES.map((guardCase) => guardCase.expected));
     for (const code of ["tg_guard", "coverage_guard", "number_guard", "placeholder_guard", null]) {
       expect(expected.has(code as never), String(code)).toBe(true);
     }
     const features = new Set(GUARD_CASES.map((guardCase) => guardCase.feature));
-    expect([...features].sort()).toEqual(["language_polish", "phrase_suggest", "summary_draft"]);
+    expect([...features].sort()).toEqual([
+      "language_polish",
+      "outcome_match",
+      "phrase_suggest",
+      "summary_draft",
+    ]);
   });
 
   it.each(GUARD_CASES.map((guardCase) => [guardCase.name, guardCase] as const))(

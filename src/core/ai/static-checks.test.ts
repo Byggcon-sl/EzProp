@@ -614,3 +614,66 @@ describe("KI i veien, statiske kontroller (K2.8, K5.16, K5.18)", () => {
     }
   });
 });
+
+/*
+ * «Skriv det du ser» (`outcome_match`), statiske kontroller (docs/funksjoner/fase2a-skriv-det-du-
+ * ser-testplan.md S1.29–S1.31). Støtter hovedmål: KI i bunnen (én felles liste, én sperre mot
+ * ekte leverandør) og færre reklamasjoner (ingen funksjon glemmes i publiseringssperren).
+ */
+describe("Skriv det du ser, statiske kontroller (S1.29–S1.31)", () => {
+  const coreDir = join(srcDir, "core");
+  /** Kildeteksten uten kommentarer, så omtaler i dokumentasjonen ikke teller som bruk. */
+  const code = (file: string) =>
+    read(file)
+      .replace(/\/\*[\s\S]*?\*\//gu, "")
+      .replace(/^\s*\/\/.*$/gmu, "");
+
+  it("S1.29 feltkoden new_deviation står bare i src/shared/config/ai-targets.ts (ingen kopi i src/core/ai)", () => {
+    // `types.ts` har koden som type i kontrakten (`OutcomeMatchRequest`), ikke som verdi
+    const offenders = productFiles(aiDir)
+      .filter((file) => /["'`]new_deviation["'`]/u.test(code(file)))
+      .map(rel);
+    expect(offenders).toEqual(["src/core/ai/types.ts"]);
+    expect(code(join(aiDir, "types.ts"))).toMatch(/fieldKey: "new_deviation" \}/u);
+    expect(read(join(srcDir, "shared", "config", "ai-targets.ts"))).toMatch(
+      /export const REPORT_NEW_DEVIATION_FIELD_KEY = "new_deviation";/u,
+    );
+  });
+
+  it("S1.29 outcome_match lagrer aldri tekst: kandidatgrenen i requestSuggestion har outputText null", () => {
+    const source = read(join(aiDir, "request-suggestion.ts"));
+    const branch = /if \(prepared\.kind === "candidates"\) \{([\s\S]*?)\n {2}\}/u.exec(source)?.[1];
+    expect(branch).toBeDefined();
+    expect(branch).toMatch(/outputText: null/u);
+    expect(branch).not.toMatch(/outputText: (?!null)/u);
+  });
+
+  it("S1.30 approval-check.ts og signals.ts bruker den felles listen, ingen egen kopi", () => {
+    const approval = read(join(aiDir, "approval-check.ts"));
+    expect(approval).toMatch(/new Set\(AI_FEATURES_WITHOUT_AI_TEXT\)/u);
+    expect(approval).not.toMatch(/new Set\(\[\s*["']phrase_suggest["']/u);
+    const signals = read(join(coreDir, "reports", "signals.ts"));
+    expect(signals).toMatch(/import \{ AI_FEATURES_WITHOUT_AI_TEXT \} from "@\/core\/ai";/u);
+    expect(signals).toMatch(
+      /notInArray\(aiUsageLog\.feature, \[\.\.\.AI_FEATURES_WITHOUT_AI_TEXT\]\)/u,
+    );
+    expect(signals).not.toMatch(/PHRASE_SUGGEST_FEATURE/u);
+    expect(signals).not.toMatch(/["']phrase_suggest["']/u);
+  });
+
+  it("S1.31 FAKE_ONLY_FEATURES brukes nøyaktig i requestSuggestion og tilkoblingsskjemaet", () => {
+    const users = [...productFiles(aiDir), ...productFiles(join(coreDir, "integrations"))]
+      .filter((file) => /\bFAKE_ONLY_FEATURES\b/u.test(code(file)))
+      .map(rel)
+      .sort();
+    expect(users).toEqual([
+      "src/core/ai/features.ts",
+      "src/core/ai/index.ts",
+      "src/core/ai/request-suggestion.ts",
+      "src/core/integrations/connections.ts",
+    ]);
+    expect(read(join(aiDir, "request-suggestion.ts"))).toMatch(
+      /isRealProvider\(provider\) && FAKE_ONLY_FEATURES\.has\(definition\.code\)/u,
+    );
+  });
+});

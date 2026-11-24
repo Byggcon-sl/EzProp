@@ -14,11 +14,16 @@ import {
 } from "@/db/schema";
 import { stripUnstorableChars } from "@/shared/lib/clean-text";
 import { logger } from "@/shared/lib/logger";
+import {
+  AI_CANDIDATE_REFS_MAX,
+  OUTCOME_MATCH_MAX,
+  OUTCOME_MATCH_NOTE_MAX,
+} from "@/shared/config/ai-targets";
 import { PII_PLACEHOLDERS } from "@/shared/lib/pii-patterns";
 import { isUuid } from "@/shared/lib/uuid";
 import { parseCandidateAnswer } from "./candidates";
 import { AiInputTooLargeError, AiRequestRejectedError } from "./errors";
-import { getFeatureDefinition, type AiFeatureDefinition } from "./features";
+import { FAKE_ONLY_FEATURES, getFeatureDefinition, type AiFeatureDefinition } from "./features";
 import { checkAnswerGuards, isBlankText } from "./guards";
 import {
   AI_BATCH_MAX_REQUESTS,
@@ -26,6 +31,7 @@ import {
   AI_CANDIDATE_TEXT_MAX_LENGTH,
   AI_SUMMARY_FINDINGS_MAX,
   AI_SUMMARY_INPUT_MAX_LENGTH,
+  OUTCOME_MATCH_CANDIDATES_MAX,
 } from "./limits";
 import { PlaceholderRestoreError, restorePlaceholders } from "./placeholders";
 import {
@@ -80,12 +86,14 @@ import {
  *     med grensene i `limits.ts` (for mye gir `AiInputTooLargeError`; kjernen kutter aldri)
  *  3. målet: for måltypene kjernen kontrollerer, slås målraden opp (`resolveAiTarget`) og
  *     rapport og oppdrag utledes; ellers kontrolleres oppdraget fra forespørselen
- *  4. samme `requestId` → «KI er av» (ingen rad) → sperret (`blocked`-rad, intet kall) →
+ *  4. samme `requestId` → «KI er av» (ingen rad) → funksjon bare for den falske leverandøren
+ *     (`FAKE_ONLY_FEATURES`, A565: «KI er av», ingen rad) → sperret (`blocked`-rad, intet kall) →
  *     funksjonen er ikke slått på for leverandøren (`settings.features`, ingen rad)
  *  5. vask (hvert felt, hver kandidat og hvert funn for seg) → ledetekst → lekkasjesjekk for
  *     ekte leverandør (`blocked`-rad, intet kall) → kall leverandøren
- *  6. tolk svaret: kandidatmerkene strengt (`phrase_suggest`), vaktene (`language_polish` og
- *     `summary_draft`, A431), plassholderne tilbake i teksten til klienten (A466)
+ *  6. tolk svaret: kandidatmerkene strengt (`phrase_suggest`, og høyst tre for `outcome_match`),
+ *     vaktene (`language_polish` og `summary_draft`, A431), plassholderne tilbake i teksten til
+ *     klienten (A466)
  *  7. én transaksjon med ny rad, avvisning av forrige forslag (bare når det nye kan vises) og
  *     revisjonslogg
  *
@@ -245,7 +253,7 @@ const serverInputSchema = z
 
 type CheckedServerInput =
   | { kind: "none" }
-  | { kind: "candidates"; candidates: AiCandidate[]; cut: number }
+  | { kind: "candidates"; candidates: AiCandidate[]; cut: number | null; max: number }
   | { kind: "summary"; groups: AiSummaryGroup[]; findingCount: number; fixedLineCount: number };
 
 /** Kontrollerer `AiServerInput` mot funksjonen. Kaster ved feil; kutter aldri. */
@@ -280,6 +288,43 @@ function checkServerInput(
         text: c.text,
       })),
       cut: candidatesCut ?? 0,
+      max: AI_CANDIDATE_REFS_MAX,
+    };
+  }
+
+  if (definition.code === "outcome_match") {
+    // Kandidatlisten kuttes aldri (A554): verken `candidatesCut` eller sammendrag er lov
+    if (
+      summaryGroups !== undefined ||
+      candidatesCut !== undefined ||
+      candidates === undefined ||
+      candidates.length === 0
+    ) {
+      throw new AiRequestRejectedError();
+    }
+    if (candidates.some((candidate) => candidate.source !== "template_outcome")) {
+      throw new AiRequestRejectedError();
+    }
+    if (candidates.length > OUTCOME_MATCH_CANDIDATES_MAX) {
+      throw new AiInputTooLargeError("too_many_candidates");
+    }
+    if (candidates.some((candidate) => candidate.text.length > AI_CANDIDATE_TEXT_MAX_LENGTH)) {
+      throw new AiInputTooLargeError("too_many_candidates");
+    }
+    const keys = new Set(candidates.map((c) => c.id.toLowerCase()));
+    if (keys.size !== candidates.length) throw new AiRequestRejectedError();
+    if (candidates.some((candidate) => isBlankText(candidate.text))) {
+      throw new AiRequestRejectedError();
+    }
+    return {
+      kind: "candidates",
+      candidates: candidates.map((c) => ({
+        source: c.source,
+        id: c.id.toLowerCase(),
+        text: c.text,
+      })),
+      cut: null,
+      max: OUTCOME_MATCH_MAX,
     };
   }
 
@@ -319,8 +364,18 @@ function checkServerInput(
   return { kind: "none" };
 }
 
-/** Tom tekst (T-0111): språkvask krever tekst; fraseforslag tillater tomt `text`. */
+/**
+ * Tom tekst (T-0111): språkvask krever tekst; fraseforslag tillater tomt `text`. Notatet til
+ * `outcome_match` kreves, kan ikke være tomt (heller ikke bare mellomrom som U+00A0) og er høyst
+ * `OUTCOME_MATCH_NOTE_MAX` tegn etter `trim()` (A560). Rapportkjernen stopper begge før kallet;
+ * dette er sikringen.
+ */
 function hasBlankValue(feature: string, fields: Readonly<Record<string, string>>): boolean {
+  if (feature === "outcome_match") {
+    const note = Object.prototype.hasOwnProperty.call(fields, "text") ? fields.text : undefined;
+    if (note === undefined || isBlankText(note)) return true;
+    return note.trim().length > OUTCOME_MATCH_NOTE_MAX;
+  }
   if (feature === "language_polish") {
     if (!Object.prototype.hasOwnProperty.call(fields, "text")) return true;
     return Object.values(fields).some(isBlankText);
@@ -416,7 +471,7 @@ type Interpreted = {
 
 type Prepared =
   | { kind: "fields"; prepared: PreparedPrompt }
-  | { kind: "candidates"; prepared: PreparedCandidatePrompt; cut: number }
+  | { kind: "candidates"; prepared: PreparedCandidatePrompt; cut: number | null; max: number }
   | { kind: "summary"; prepared: PreparedSummaryPrompt };
 
 function stopped(guard: AiGuardCode, answer: string): Interpreted {
@@ -444,7 +499,7 @@ function noMatch(extra: Record<string, number> = {}): Interpreted {
 /** Tolker et svar med utfallet `ok` for funksjonen. Vaktene kjøres her. */
 function interpretAnswer(prepared: Prepared, answer: string): Interpreted {
   if (prepared.kind === "candidates") {
-    const parsed = parseCandidateAnswer(answer, prepared.prepared.labeled);
+    const parsed = parseCandidateAnswer(answer, prepared.prepared.labeled, prepared.max);
     const extra = {
       unknown_labels: parsed.unknownLabels,
       duplicate_labels: parsed.duplicateLabels,
@@ -545,7 +600,8 @@ function inputSummaryFor(
     return {
       ...fieldLengths,
       candidates: prepared.prepared.labeled.length,
-      candidates_cut: prepared.cut,
+      // `outcome_match` kutter aldri (A554), så tallet føres ikke
+      ...(prepared.cut === null ? {} : { candidates_cut: prepared.cut }),
       unknown_labels: 0,
       duplicate_labels: 0,
       ...extra,
@@ -587,6 +643,12 @@ export const requestSuggestion: RequestSuggestion = async (grant, request, serve
   const resolved = await resolveAiProvider(grant);
   if (resolved.kind === "disabled") return { kind: "disabled" };
   const { provider, model } = resolved;
+
+  // Funksjonen går bare til den falske leverandøren (A565): «KI er av» mot en ekte, uten vask,
+  // rad og kall, også når koden står i `settings.features`
+  if (isRealProvider(provider) && FAKE_ONLY_FEATURES.has(definition.code)) {
+    return { kind: "disabled" };
+  }
   const fieldKeys = Object.keys(fields).sort();
 
   const blockedRow = () =>
@@ -621,6 +683,7 @@ export const requestSuggestion: RequestSuggestion = async (grant, request, serve
       kind: "candidates",
       prepared: prepareCandidatePrompt(definition, fields, validated.server.candidates, known),
       cut: validated.server.cut,
+      max: validated.server.max,
     };
   } else if (validated.server.kind === "summary") {
     const summary = prepareSummaryPrompt(definition, validated.server.groups, known);

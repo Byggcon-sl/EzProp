@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { OUTCOME_MATCH_MAX } from "@/shared/config/ai-targets";
 import { parseCandidateAnswer } from "../candidates";
 import { getFeatureDefinition, type AiFeatureDefinition } from "../features";
 import { GUARD_CASES } from "../guard-cases";
@@ -33,6 +34,7 @@ import {
   type EvalCasesFile,
   type EvalExpectation,
   type EvalVerdict,
+  type OutcomeMatchEvalCase,
   type PhraseEvalCase,
   type SummaryEvalCase,
 } from "./schema";
@@ -51,9 +53,10 @@ import {
  * kjøres også her. Kjøreren bruker ikke databasen og logger ikke (A182), og eksporteres ikke fra
  * `src/core/ai/index.ts`. Svaret fra leverandøren og verdiene fra eksemplene skrives aldri ut.
  *
- * Mot den falske leverandøren gir bare oppsett, krasj, persondata og vaktsaker som ikke gir
- * forventet vakt avslutningskode 1, ikke treffprosent eller mustPass (A183). Resultatet mot den
- * falske leverandøren viser ikke kvaliteten på KI (T-0047).
+ * Mot den falske leverandøren gir bare oppsett, krasj, persondata, vaktsaker som ikke gir
+ * forventet vakt og `outcome_match`-saker med fasit «ingen passer» som ga treff avslutningskode 1,
+ * ikke treffprosent eller mustPass (A183). Resultatet mot den falske leverandøren viser ikke
+ * kvaliteten på KI (T-0047).
  */
 
 /** Lekkasjesjekken bor i `../prompt-leaks.ts`; eksportert herfra også for testene. */
@@ -101,6 +104,12 @@ export type EvalFeatureResult = {
   leaks: EvalLeak[];
   /** Id-ene der kjøringen kastet (leverandøren, vasken eller vaktene). */
   crashes: string[];
+  /**
+   * Saker som må bestå hver for seg, og ikke gjorde det (`outcome_match` med fasit `none`:
+   * hulltaking og normal slitasje). De kan ikke gå tapt i en samlet treffprosent, og gir
+   * avslutningskode 1 også mot den falske leverandøren.
+   */
+  requiredMisses: string[];
 };
 
 /** Vaktsakene fra kjernen kjørt her. `mismatches` er id-ene som ikke ga forventet vakt. */
@@ -293,6 +302,50 @@ export function evaluatePhrase(
           `ingen riktig kandidat blant de ${PHRASE_TOP_N} beste (${expectation.correct.join(", ")})`,
         ],
       };
+}
+
+// --- outcome_match -------------------------------------------------------------------------------
+
+/**
+ * Vurderer de rangerte utfallene (kandidat-id-er, de beste først) mot fasiten for `outcome_match`.
+ * Bare de `OUTCOME_MATCH_MAX` første teller, som på skjermen.
+ */
+export function evaluateOutcomeMatch(
+  expectation: OutcomeMatchEvalCase["expect"],
+  ranked: readonly string[],
+): EvalCaseEvaluation {
+  const top = ranked.slice(0, OUTCOME_MATCH_MAX);
+  const ids = expectation.ids;
+  switch (expectation.require) {
+    case "none":
+      return top.length === 0
+        ? { passed: true, reasons: [] }
+        : { passed: false, reasons: [`fasiten venter ingen treff, fikk ${top.length}`] };
+    case "any":
+      return top.some((id) => ids.includes(id))
+        ? { passed: true, reasons: [] }
+        : {
+            passed: false,
+            reasons: [
+              top.length === 0
+                ? "fasiten venter treff, fikk ingen"
+                : `ingen riktig blant de ${OUTCOME_MATCH_MAX} første (${ids.join(", ")})`,
+            ],
+          };
+    case "all": {
+      const missing = ids.filter((id) => !top.includes(id));
+      return missing.length === 0
+        ? { passed: true, reasons: [] }
+        : {
+            passed: false,
+            reasons: [`mangler blant de ${OUTCOME_MATCH_MAX} første: ${missing.join(", ")}`],
+          };
+    }
+    case "first":
+      return top[0] !== undefined && ids.includes(top[0])
+        ? { passed: true, reasons: [] }
+        : { passed: false, reasons: [`det første treffet er ikke ${ids.join(" eller ")}`] };
+  }
 }
 
 // --- summary_draft -------------------------------------------------------------------------------
@@ -566,6 +619,38 @@ async function runPhraseCase(runner: Runner, evalCase: PhraseEvalCase): Promise<
   };
 }
 
+async function runOutcomeCase(
+  runner: Runner,
+  evalCase: OutcomeMatchEvalCase,
+): Promise<CaseOutcome> {
+  const serverInput: AiServerInput = {
+    candidates: evalCase.candidates.map(({ source, id, text }) => ({ source, id, text })),
+  };
+  const call = await promptAndCall(runner, evalCase.fields, null, serverInput, true);
+  if ("leak" in call) return { kind: "leak", types: call.leak };
+  const answer = call.answer!;
+  if (answer.outcome === "error") {
+    return {
+      kind: "evaluated",
+      evaluation: { passed: false, reasons: ["leverandøren svarte med feil"] },
+    };
+  }
+  // Samme tolking som kjernen: merkene slås opp i kandidatene, høyst `OUTCOME_MATCH_MAX`
+  const labeled = call.sent.kind === "candidates" ? call.sent.prepared.labeled : [];
+  const ranked =
+    answer.outcome === "ok"
+      ? parseCandidateAnswer(answer.text, labeled, OUTCOME_MATCH_MAX).refs.map((ref) => ref.id)
+      : [];
+  const ids = new Map(evalCase.candidates.map((c) => [c.id.toLowerCase(), c.id]));
+  return {
+    kind: "evaluated",
+    evaluation: evaluateOutcomeMatch(
+      evalCase.expect,
+      ranked.map((id) => ids.get(id) ?? id),
+    ),
+  };
+}
+
 async function runSummaryCase(runner: Runner, evalCase: SummaryEvalCase): Promise<CaseOutcome> {
   const { groups, fixedTexts } = summaryInputOf(evalCase);
   const simulated = evalCase.simulatedAnswer;
@@ -630,7 +715,7 @@ async function runSummaryCase(runner: Runner, evalCase: SummaryEvalCase): Promis
   return { kind: "evaluated", evaluation: applyVerdict(expect.verdict, evaluation) };
 }
 
-type AnyCase = EvalCase | PhraseEvalCase | SummaryEvalCase;
+type AnyCase = EvalCase | PhraseEvalCase | SummaryEvalCase | OutcomeMatchEvalCase;
 
 function runCaseFor(
   file: EvalCasesFile,
@@ -640,6 +725,8 @@ function runCaseFor(
       return (runner, evalCase) => runPhraseCase(runner, evalCase as PhraseEvalCase);
     case "summary_draft":
       return (runner, evalCase) => runSummaryCase(runner, evalCase as SummaryEvalCase);
+    case "outcome_match":
+      return (runner, evalCase) => runOutcomeCase(runner, evalCase as OutcomeMatchEvalCase);
     default:
       return (runner, evalCase) => runPolishCase(runner, evalCase as EvalCase);
   }
@@ -664,6 +751,7 @@ async function runFeature(
     misses: [],
     leaks: [],
     crashes: [],
+    requiredMisses: [],
   };
   const runCase = runCaseFor(file);
   const runner: Runner = { provider, definition };
@@ -685,11 +773,25 @@ async function runFeature(
       if (evalCase.mustPass) result.mustPassPassed += 1;
     } else {
       result.misses.push({ id: evalCase.id, reason: outcome.evaluation.reasons.join("; ") });
+      if (mustPassAlone(evalCase)) result.requiredMisses.push(evalCase.id);
     }
   }
 
   result.passRate = passRate(result.passed, result.total);
   return result;
+}
+
+/**
+ * Om saken må bestå for seg: `outcome_match` med fasit `none` (hulltaking ikke utført, normal
+ * slitasje). En samlet treffprosent kan ikke skjule at én av dem gir et utfall.
+ */
+function mustPassAlone(evalCase: AnyCase): boolean {
+  return (
+    "expect" in evalCase &&
+    typeof evalCase.expect === "object" &&
+    "require" in evalCase.expect &&
+    evalCase.expect.require === "none"
+  );
 }
 
 /** Kaller leverandøren og tar vare på teksten den faktisk fikk. */
@@ -796,6 +898,9 @@ function featureLines(feature: EvalFeatureResult): string[] {
   for (const crash of feature.crashes) {
     lines.push(`  Krasj ${crash}: kjøringen stoppet med en feil.`);
   }
+  for (const id of feature.requiredMisses) {
+    lines.push(`  Må bestå for seg ${id}: fasiten er «ingen passer», men det kom treff.`);
+  }
   for (const leak of feature.leaks) {
     lines.push(
       `  Persondata ${leak.id}: ${leak.types.join(", ")} i teksten til leverandøren (verdien vises ikke).`,
@@ -814,8 +919,8 @@ function guardCaseLines(guardCases: EvalGuardCasesResult): string[] {
 
 /**
  * Kjører kommandoen og gir avslutningskode og linjene som skal skrives. Kode 1 for ukjent
- * funksjon, ugyldig fil, skjemafeil, duplisert id, krasj, persondata og vaktsaker som ikke gir
- * forventet vakt. Lav treffprosent og bom på mustPass gir kode 0 (A183). Første linje sier at
+ * funksjon, ugyldig fil, skjemafeil, duplisert id, krasj, persondata, vaktsaker som ikke gir
+ * forventet vakt og `outcome_match`-saker med fasit «ingen passer» som ga treff. Lav treffprosent og bom på mustPass gir kode 0 (A183). Første linje sier at
  * resultatet mot den falske leverandøren ikke viser kvaliteten (T-0047).
  */
 export async function runEvalCommand(
@@ -837,10 +942,16 @@ export async function runEvalCommand(
   const crashed = result.features.some((f) => f.crashes.length > 0);
   const leaked = result.features.some((f) => f.leaks.length > 0);
   const guardsWrong = result.guardCases.mismatches.length > 0;
+  const requiredMissed = result.features.some((f) => f.requiredMisses.length > 0);
   if (crashed) lines.push("Kjøringen krasjet i minst ett eksempel.");
   if (leaked) lines.push("Persondata nådde leverandøren i minst ett eksempel.");
   if (guardsWrong) lines.push("Minst én vaktsak ga ikke forventet vakt.");
+  if (requiredMissed) {
+    lines.push(
+      "Minst én sak med fasit «ingen passer» ga treff. Slike saker må bestå hver for seg.",
+    );
+  }
 
-  const failed = result.errors.length > 0 || crashed || leaked || guardsWrong;
+  const failed = result.errors.length > 0 || crashed || leaked || guardsWrong || requiredMissed;
   return { exitCode: failed ? 1 : 0, lines };
 }

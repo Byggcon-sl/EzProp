@@ -32,13 +32,13 @@ export type {
  * ledetekst) står i `features.ts`. `phrase_suggest` og `summary_draft` kom med «KI i veien»
  * (docs/funksjoner/fase2a-ki-i-veien.md).
  *
- * «Skriv det du ser» legger til `outcome_match` (se «Kontrakten for `outcome_match`» nederst).
- * Utvikleren utvider typen i samme endring som definisjonen i `AI_FEATURES`, ledeteksten
- * `outcome_match.v1` og evalueringssettet, slik at koden aldri finnes uten sin egen gren i
- * `checkServerInput` (uten den ville notatet gått samme vei som språkvask og blitt lagret i
- * `output_text`).
+ * «Skriv det du ser» la til `outcome_match` (se «Kontrakten for `outcome_match`» nederst), i samme
+ * endring som definisjonen i `AI_FEATURES`, ledeteksten `outcome_match.v1` og grenen i
+ * `checkServerInput`. Uten grenen ville notatet gått samme vei som språkvask og blitt lagret i
+ * `output_text`.
  */
-export type AiFeatureCode = "language_polish" | "phrase_suggest" | "summary_draft";
+export type AiFeatureCode =
+  "language_polish" | "phrase_suggest" | "summary_draft" | "outcome_match";
 
 export type AiSuggestionRequest = {
   /** UUID laget på enheten. Blir id-en i `ai_usage_log`. */

@@ -4,7 +4,11 @@ import { db } from "@/db/client";
 import { aiUsageLog } from "@/db/schema";
 import { isUuid } from "@/shared/lib/uuid";
 import { AiRequestRejectedError } from "./errors";
-import { ARCHIVED_AI_TARGET_TYPES, getFeatureDefinition } from "./features";
+import {
+  AI_FEATURES_WITHOUT_AI_TEXT,
+  ARCHIVED_AI_TARGET_TYPES,
+  getFeatureDefinition,
+} from "./features";
 import type { AiTargetRef } from "./types";
 import { sameTarget } from "./usage-log";
 
@@ -56,11 +60,11 @@ function usageIdOf(item: unknown): string | null {
 }
 
 /**
- * Funksjoner der teksten i rapporten aldri er KI-tekst: `phrase_suggest` setter inn kildens egen
- * tekst (malen, senere frasebanken), så raden er bare et spor av valget (ADR 0006, tillegg
- * 17.11.2026, del 5).
+ * Funksjoner der teksten i rapporten aldri er KI-tekst (`AI_FEATURES_WITHOUT_AI_TEXT`, den ene
+ * listen): `phrase_suggest` setter inn kildens egen tekst, og `outcome_match` lager et avvik med
+ * malens tekst. Radene er bare spor av valget (ADR 0006, tillegg 17.11.2026 del 5 og 24.11.2026).
  */
-const NOT_AI_TEXT_FEATURES: ReadonlySet<string> = new Set(["phrase_suggest"]);
+const NOT_AI_TEXT_FEATURES: ReadonlySet<string> = new Set(AI_FEATURES_WITHOUT_AI_TEXT);
 
 /**
  * Om raden aldri ga tekst i rapporten, så elementet ikke trenger godkjenning: fraseforslag, og et
