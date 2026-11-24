@@ -54,6 +54,8 @@ All testdata er oppdiktet (oppdrag med gnr 999, «Åse Testesen», telefon `1234
 8. **S1.30 én felles liste (`approval-check`, `signals`):** listen over funksjoner uten KI-tekst eksporteres én gang fra `@/core/ai` og inneholder `phrase_suggest` og `outcome_match`; grep viser at `approval-check.ts` og `signals.ts` bruker den, og at `PHRASE_SUGGEST_FEATURE` ikke lenger brukes i `signals.ts`.
 9. **S1.31 ekte leverandør (A565):** med `enableAnthropic` gir `outcome_match` «KI er av» uten rad, vask eller kall, både når koden mangler i `settings.features` og når den står der (`FAKE_ONLY_FEATURES`). `anthropicSettingsSchema` avviser `outcome_match` i `features`.
 10. **S1.32 skjemaet til valg-inngangen:** avviser `checkpointKey`, `outcomeKey`, `organizationId`, `reportId` fra klienten, og ukjente nøkler (`it.each`); avvisnings-inngangen avviser `accepted` og `undo`.
+11. **S1.33 grensene i `@/shared` (arkitekten 24.11.2026):** `OUTCOME_MATCH_MAX` og `OUTCOME_MATCH_NOTE_MAX` står i `src/shared/config/ai-targets.ts` og er de samme verdiene som `@/core/ai` eksporterer (likhet); `add-deviation-panel.tsx` og `room-model.ts` importerer dem fra `@/shared`, ikke fra `@/core/ai`; filene i `src/core/reports/logic` får grensen som parameter og importerer verken `@/core/ai` eller `@/shared/config/ai-targets` (statisk, ADR 0013). `OUTCOME_MATCH_CANDIDATES_MAX` finnes bare i `src/core/ai/limits.ts`.
+12. **S1.34 avvisning fra et annet søk (sikkerhet 24.11.2026):** når søk 2 avviser rad 1, er raden `rejected` uten `chosen_candidate`; testen dokumenterer at `decidedBy` er den som søkte sist, og at ingen ny kode i oppgaven teller beslutninger per ansatt (grep etter `decided_by` i nye filer gir ingen opptelling).
 
 ## 2. Regeltester og evalueringssett (testsaker som data)
 
@@ -142,6 +144,7 @@ Organisasjon B får verken rader eller tilgang, og svaret er «ikke funnet»:
 3. **S6.3** endret tekst etter svaret merker KI-treffene som utdatert.
 4. **S6.4** «Nærmeste treff (uten KI)» vises bare når KI ikke er tilgjengelig og tekstsøket gir null treff.
 5. **S6.5 (A566)** notatet står igjen når panelet lukkes, ved «Avbryt» og Escape, så lenge rommet er åpent; det tømmes når rommet forlates og ved utlogging (begge testes); ingenting skrives til `localStorage` eller IndexedDB (spion).
+6. **S6.6 fødselsnummer (A567):** et notat med et gyldig fødselsnummer gir meldingen i panelet før noe sendes; «Finn med KI», «Legg notatet til» og «Bruk bare notatet» er sperret; meldingen gjengir ikke sifrene. Elleve sifre som ikke er et gyldig fødselsnummer, sperrer ikke (samme `containsNationalId` som serveren).
 
 ## 7. E2e (`e2e/fase-2a-skriv-det-du-ser.spec.ts`)
 
@@ -164,6 +167,8 @@ PC (1280×800) og iPad Pro-størrelse (1024×1366 stående og 1366×1024 liggend
 15. **S7.15 iPad:** «Finn med KI» og hvert treff minst 56 punkter høye; ingen vannrett rulling i stående; tekstsøkets treff flytter seg ikke under fingeren når KI-treffene kommer (posisjon før og etter).
 16. **S7.16 kontor:** ser ikke «Finn med KI» og kan ikke lage avvik.
 17. **S7.17 ingen diktering:** ingen mikrofonknapp og ingen tekst med «dikter» i panelet (spørsmål 121).
+18. **S7.18 notatet i rommet (A566), iPad stående:** skriv notat, lukk panelet, åpne igjen: notatet står. «Avbryt» og Escape: notatet står. Gå til et annet rom og tilbake: feltet er tomt. Logg ut og inn: feltet er tomt.
+19. **S7.19 fødselsnummer (A567):** notat med oppdiktet, gyldig fødselsnummer gir meldingen i panelet, ingen nettverkskall til søket (`countServerActions` = 0) og ingen ny rad i `ai_usage_log`.
 
 ## 8. Det rapporten sjekker til slutt
 - `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` og `pnpm ai:eval outcome_match` grønne.
