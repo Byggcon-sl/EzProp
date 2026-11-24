@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import type { Actor, EmployeeGrant } from "@/core/access";
 import { ROOM_TYPES } from "@/core/buildings";
 import type { DbExecutor } from "@/db/client";
@@ -182,10 +182,16 @@ export async function findLatestRelease(ex: DbExecutor, orgId: string, reportId:
   return row ?? null;
 }
 
+/** Funksjonskoden for fraseforslag i `ai_usage_log.feature` (fast kode, regel 6). */
+const PHRASE_SUGGEST_FEATURE = "phrase_suggest";
+
 /**
  * KI-forslagene på rapporten som gikk gjennom (`outcome = 'ok'`) og ikke er slettet. Bruker den
  * delvise indeksen `(organization_id, report_id)`. Forslagsteksten følger med bare til visningen
  * av ventende forslag; den kommer aldri i snapshot eller funnene.
+ *
+ * Fraseforslag (`phrase_suggest`, KI i veien) er bare en rekkefølge på frasebankens tekster, ikke
+ * KI-tekst som kan brukes eller avvises her, og telles aldri som ventende forslag (A524).
  */
 async function loadReportAiRows(
   ex: DbExecutor,
@@ -208,6 +214,7 @@ async function loadReportAiRows(
         eq(aiUsageLog.reportId, reportId),
         eq(aiUsageLog.outcome, "ok"),
         isNull(aiUsageLog.deletedAt),
+        ne(aiUsageLog.feature, PHRASE_SUGGEST_FEATURE),
         inArray(aiUsageLog.status, ["suggested", "accepted", "edited", "rejected"]),
       ),
     )

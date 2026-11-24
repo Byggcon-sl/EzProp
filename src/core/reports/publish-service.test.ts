@@ -809,6 +809,8 @@ describe("4.4 KI", () => {
     await aiRow(f, { outcome: "no_match", outputText: null, status: null });
     await aiRow(f, { deletedAt: new Date() });
     await aiRow(f, { status: "accepted", decidedBy: f.employeeId, decidedAt: new Date() });
+    // Fraseforslag er en rekkefølge på frasebanken, ikke KI-tekst som venter (A524)
+    await aiRow(f, { feature: "phrase_suggest", outputText: null });
     const other = await createPublishableBathroom({ organizationId: f.organizationId });
     await aiRow(other);
 
