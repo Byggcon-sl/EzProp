@@ -1382,7 +1382,10 @@ describe("testdata del 2: akseptkriteriene (ett datasett)", () => {
     // Datafilen: alle strenger, både i kildeteksten og i de eksporterte verdiene
     const path = join(process.cwd(), "src/db/seed/testdata-bath.data.ts");
     expect(existsSync(path), "src/db/seed/testdata-bath.data.ts finnes").toBe(true);
-    const literals = stringLiterals(readFileSync(path, "utf8"));
+    // Modulstier i import-linjer er ikke tekst («@/db/schema» er ingen e-post)
+    const literals = stringLiterals(readFileSync(path, "utf8")).filter(
+      (value) => !/^(@\/|\.{1,2}\/)/.test(value),
+    );
     const exported = collectStrings(await loadModule("./testdata-bath.data"), "").all;
     for (const value of new Set([...literals, ...exported])) {
       expect(textProblems(value), `datafilen: «${value}»`).toEqual([]);
@@ -1615,7 +1618,7 @@ describe("testdata del 2: samme frø, ny kjøring og myk sletting", () => {
     const withDeviation = filledBaths.find((b) => deviationsOf(started(b)).length > 0)!;
     const deviation = deviationsOf(started(withDeviation))[0]!;
     await db.execute(sql`
-      update deviations set deleted_at = ${new Date("2026-11-04T08:00:00Z")}
+      update deviations set deleted_at = ${"2026-11-04T08:00:00Z"}::timestamptz
       where id = ${deviation.id} and organization_id = ${organizationId}`);
 
     const before = await countRows();

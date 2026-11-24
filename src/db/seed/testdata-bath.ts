@@ -514,7 +514,7 @@ export function assignBathScenarios({
     );
     if (!bath) {
       throw new TestdataBathError(
-        `Fant ikke et bad som passer scenarioet «${scenario.name}». Ingen bad er fylt ut.`,
+        `Fant ikke et bad som passer scenarioet «${scenario.name}»: reglene gir ikke de forslagene scenarioet venter på noe bad (byggeår, sjikt og dokumentasjon). Ingen bad er fylt ut.`,
       );
     }
     chosen.set(bath, key);
