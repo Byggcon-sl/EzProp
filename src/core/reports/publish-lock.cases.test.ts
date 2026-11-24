@@ -259,6 +259,9 @@ const NOT_ROOM_WRITES = new Set([
   "decideAiText",
   "draftSummary",
   "saveSummary",
+  // Leser bare (PDF-knappene på skjermen, fase2a-pdf-badet)
+  "hasReportForPdf",
+  "listCheckpointAnchors",
 ]);
 
 async function expectLocked(action: () => Promise<unknown>) {
