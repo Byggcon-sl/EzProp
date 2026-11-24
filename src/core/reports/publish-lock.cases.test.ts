@@ -263,6 +263,9 @@ const NOT_ROOM_WRITES = new Set([
   "buildReportPdfData",
   "getReportDraftPdfData",
   "getReleasePdfData",
+  // Leser bare (PDF-knappene på skjermen, fase2a-pdf-badet)
+  "hasReportForPdf",
+  "listCheckpointAnchors",
 ]);
 
 async function expectLocked(action: () => Promise<unknown>) {

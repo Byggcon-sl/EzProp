@@ -399,6 +399,9 @@ const NOT_REPORT_WRITES = new Set([
   "buildReportPdfData",
   "getReportDraftPdfData",
   "getReleasePdfData",
+  // PDF-knappene på skjermen (fase2a-pdf-badet): bare lesing
+  "hasReportForPdf",
+  "listCheckpointAnchors",
 ]);
 
 describe("låsen etter publisering i rapportkjernen", () => {

@@ -39,10 +39,14 @@ export {
   startNewVersion,
 } from "./publish";
 export { HOLE_DRILLING_SIGNAL } from "./signals";
+<<<<<<< HEAD
 export { buildReportPdfData } from "./pdf-data-build";
 export { getReportDraftPdfData } from "./pdf-data";
 export { getReleasePdfData } from "./release-pdf";
 export { TG_EXPLANATION } from "./tg-explanation";
+=======
+export { hasReportForPdf, listCheckpointAnchors, type CheckpointAnchor } from "./pdf-screen";
+>>>>>>> worktree-wf_90b62038-ddb-17
 export {
   REPORT_VALIDATION_CODES,
   ReportStorageError,

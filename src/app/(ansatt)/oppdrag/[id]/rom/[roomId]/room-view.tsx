@@ -12,13 +12,16 @@ import type {
   RoomReportView,
   SuggestionView,
 } from "@/core/reports/types";
+import type { CheckpointAnchor } from "@/core/reports/pdf-screen";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { FormMessage } from "@/shared/ui/form";
 import { Notice } from "@/shared/ui/notice";
 import { SaveState } from "@/shared/ui/save-state";
+import { useOnline } from "@/shared/lib/use-online";
 import { uuidv7 } from "@/shared/lib/uuid";
+import { DraftPdfButton } from "../../pdf-draft-button";
 import { NewVersionButton } from "../../publiser/new-version-button";
 import { PUBLISH_LINK_TEXTS } from "../../publiser/publish-texts";
 import { removeDeviationAction, saveFieldAction, setCheckpointDoneAction } from "./actions";
@@ -34,6 +37,7 @@ import {
   answerKey,
   CHECKPOINT_HEADING_ID,
   clientMergeValues,
+  deviationHeadingId,
   deviationPrefix,
   domId,
   DONE_BUTTON_ID,
@@ -47,6 +51,7 @@ import {
   undoButtonId,
   warningId,
 } from "./room-model";
+import { anchorTarget } from "./pdf-anchors";
 import { PublishLink } from "./publish-link";
 import { focusElementById, type StickyAccept } from "./rule-suggestion-card";
 import { isTextField, SHORTCUT_LIST, shortcutFor } from "./shortcuts";
@@ -74,21 +79,6 @@ export type RoomPublishState =
   | { state: "draft"; nextVersionNumber: number; outside: { blockers: number; warnings: number } }
   | { state: "published"; versionNumber: number; canStartNewVersion: boolean };
 
-function useOnline(): boolean {
-  return useSyncExternalStore(
-    (notify) => {
-      window.addEventListener("online", notify);
-      window.addEventListener("offline", notify);
-      return () => {
-        window.removeEventListener("online", notify);
-        window.removeEventListener("offline", notify);
-      };
-    },
-    () => navigator.onLine,
-    () => true,
-  );
-}
-
 /** Punktet i adressen (`?punkt=`). */
 function checkpointFromLocation(): string | null {
   return new URLSearchParams(window.location.search).get("punkt");
@@ -104,6 +94,7 @@ export function RoomView({
   requestedCheckpoint,
   summary: initialSummary,
   mergeSources,
+  checkpointAnchors,
 }: {
   view: StartedView;
   /** `null` når rapporten ikke kan publiseres herfra. */
@@ -118,11 +109,17 @@ export function RoomView({
   summary: ReportSummaryView | null;
   /** Hvor flettefeltene henter verdien, per punkt (fra serveren, A396). */
   mergeSources: Readonly<Record<string, MergeFieldSources>>;
+  /** Id-ene til punktene i den låste malversjonen, for ankrene fra PDF-utkastet (F4). */
+  checkpointAnchors: readonly CheckpointAnchor[];
 }) {
   const doc = useMemo(() => indexDocument(view.document), [view.document]);
   const order = useMemo(() => doc.checkpoints.map((c) => c.key), [doc]);
   const names = useMemo(() => new Map(doc.checkpoints.map((c) => [c.key, c.name])), [doc]);
   const canEdit = view.canEdit;
+  const anchorIds = useMemo(
+    () => new Map(checkpointAnchors.map((a) => [a.checkpointKey, a.checkpointId])),
+    [checkpointAnchors],
+  );
 
   const [checkpoints, setCheckpoints] = useState<CheckpointView[]>(view.checkpoints);
   const [suggestions, setSuggestions] = useState<SuggestionView[]>(view.suggestions);
@@ -422,6 +419,41 @@ export function RoomView({
     return () => window.removeEventListener("popstate", onPop);
   }, [order, requestFocus]);
 
+  // Lenken fra PDF-utkastet (F4): `#punkt-<id>` eller `#avvik-<id>` åpner punktet og gir fokus
+  // til punktet eller avviket. Adressen beholder ankeret; ingen ny historikk.
+  const latestCheckpoints = useRef(checkpoints);
+  useEffect(() => {
+    latestCheckpoints.current = checkpoints;
+  });
+  useEffect(() => {
+    const keyById = new Map(checkpointAnchors.map((a) => [a.checkpointId, a.checkpointKey]));
+    const openFromHash = () => {
+      const target = anchorTarget(window.location.hash, keyById, latestCheckpoints.current);
+      if (!target || !order.includes(target.checkpointKey)) return;
+      if (target.checkpointKey !== shownKey.current) {
+        shownKey.current = target.checkpointKey;
+        setCurrentKey(target.checkpointKey);
+        setUndoLines([]);
+        setSticky(new Map());
+        setHelpOpen(false);
+        setAllDone(false);
+        setDoneError(null);
+        window.history.replaceState(
+          null,
+          "",
+          `?punkt=${encodeURIComponent(target.checkpointKey)}${window.location.hash}`,
+        );
+      }
+      listDialog.current?.close();
+      requestFocus(
+        target.deviationId ? deviationHeadingId(target.deviationId) : CHECKPOINT_HEADING_ID,
+      );
+    };
+    openFromHash();
+    window.addEventListener("hashchange", openFromHash);
+    return () => window.removeEventListener("hashchange", openFromHash);
+  }, [checkpointAnchors, order, requestFocus]);
+
   // «Gå til» fra publiser-siden: fokus på punktet som ble åpnet (design avsnitt 14).
   useEffect(() => {
     if (!fromPublish) return;
@@ -570,6 +602,11 @@ export function RoomView({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 md:gap-3">
+              <DraftPdfButton
+                assignmentId={room.assignmentId}
+                saves={store}
+                showSyncStatus={!canEdit}
+              />
               {counts && (
                 <PublishLink
                   assignmentId={room.assignmentId}
@@ -689,6 +726,7 @@ export function RoomView({
               {current && (
                 <CheckpointPanel
                   key={current.checkpointKey}
+                  anchorId={anchorIds.get(current.checkpointKey) ?? null}
                   checkpoint={current}
                   suggestions={suggestions}
                   answers={answers}
