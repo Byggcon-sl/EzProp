@@ -3,7 +3,7 @@
 - **Fase:** 2a-2 Hele veien først, punkt 4 («ADR: valg av PDF-motor, og PDF-en av badet i Byggcons profil, i ferdig kvalitet»)
 - **Modul:** kjerne. Ny `src/core/pdf` er et rent blad (motoren bak eget grensesnitt, profilene, oppsettet). Rapportdataene lages i `src/core/reports` i egne filer (`pdf-data.ts`, `pdf-data-build.ts`, `tg-explanation.ts`). Knapp og rute under `src/app/(ansatt)/oppdrag/[id]/`.
 - **Branch:** `pdf-motor-badet` (bygger på `main`; main flettet inn 24.11.2026 med publisering av badet, utgivelser og ADR 0015)
-- **Status:** godkjent for bygging. Forhåndsvurdering runde 1 tatt inn 18.11.2026. Overtatt 24.11.2026 med main flettet inn (publisering, utgivelser, ADR 0015, «KI i veien»); ny forhåndsvurdering samme dag (forbedrer, arkitekt, ki-ansvarlig, fagansvarlig, sikkerhet-personvern, test-leder) er tatt inn, se «Avgjørelser 24.11.2026». Beslutningene er A530–A542, spørsmål 92. Versjon 0.19.3 (én patch over main 0.19.2).
+- **Status:** godkjent for bygging. Forhåndsvurdering runde 1 tatt inn 18.11.2026. Overtatt 24.11.2026 med main flettet inn (publisering, utgivelser, ADR 0015, «KI i veien»); ny forhåndsvurdering samme dag (forbedrer, arkitekt, ki-ansvarlig, fagansvarlig, sikkerhet-personvern, test-leder) er tatt inn, se «Avgjørelser 24.11.2026». Main (`6f4ce32e`, versjon 0.19.4) flettet inn på nytt 24.11.2026 kl. 11 UTC; forhåndsvurdering runde 2 (forbedrer, sikkerhet-personvern, test-leder) er tatt inn, se «Avgjørelser 24.11.2026, runde 2». Beslutningene er A530–A542, spørsmål 122 (flyttet fra 92, som `testdata-del-2` bruker). Versjon 0.19.5 (én patch over main 0.19.4).
 - **Dato:** 18.11.2026 (oppdatert 24.11.2026)
 - **Støtter hovedmål:**
   - **Færre reklamasjoner:** PDF-en er det kunden og megleren leser. Den viser hvert avvik med TG, årsak, konsekvens, tiltak og kostnad på samme måte hver gang, TGIU med alle opplysningene, og forklaringen av TG. Ingen interne koder, ingen tomme sider, ingen overskrift alene nederst på en side. I utkastet ser takstmannen det som mangler, før rapporten går ut.
@@ -18,7 +18,7 @@ Badet kan fylles ut på PC (PR #224), men det finnes ingen PDF. Uten PDF kan ikk
 - **Én form for «hele rapporten» (F6):** `ReportPdfData` bygges alltid fra `ReportSnapshot` (ADR 0015, `src/core/reports/publish-types.ts`). Utkastet lager snapshotet fra dagens data med `buildReportSnapshot(loadPublishSource(...))`; en utgivelse bruker det lagrede snapshotet. Det finnes derfor bare én strukturert form som KI senere kan lese, og ingen ny. Om KI i 2a-3 bruker snapshotet, avgjøres der; denne oppgaven lover ingenting om det.
 - **Strukturerte data:** `ReportPdfData` har faste koder (punkt, utfall, TG, kostnadstype, TGIU-grunn) ved siden av teksten som vises. Persondata (adresse, matrikkel) ligger bare i `cover`, som aldri går til KI.
 - **Bare besluttet tekst:** snapshotet har bare lagret tekst. Ventende KI-forslag (fraseforslag, språkvask, utkast til sammendrag), avviste forslag, regelforslag som ikke er godtatt, regelbegrunnelser og kilder kommer aldri med (T14). Godtatt KI-tekst vises som vanlig lagret tekst.
-- **KI-merking (avgjort på main, A355 og `SnapshotAiMark`):** PDF-en viser ingen KI-merking i 2a-2. `ReportPdfData` tar ikke med `ai_usage_id`, `ai`-merkene fra snapshotet eller `text_source`. Om kundens PDF skal merke tekst fra KI, er fag og personvern og avgjøres med endelig PDF i 2a-3 (spørsmål 92e). Merkingen ligger allerede i snapshotet, så det krever ingen ombygging.
+- **KI-merking (avgjort på main, A355 og `SnapshotAiMark`):** PDF-en viser ingen KI-merking i 2a-2. `ReportPdfData` tar ikke med `ai_usage_id`, `ai`-merkene fra snapshotet eller `text_source`. Om kundens PDF skal merke tekst fra KI, er fag og personvern og avgjøres med endelig PDF i 2a-3 (spørsmål 122e). Merkingen ligger allerede i snapshotet, så det krever ingen ombygging.
 - **Ingen KI i gjengivelsen:** ingen KI-kall, ingen rad i `ai_usage_log`, ingen evalueringssett, 0 kr. Statisk test: verken `src/core/pdf` eller `pdf-data.ts`, `pdf-data-build.ts`, `release-pdf.ts` og `tg-explanation.ts` i `src/core/reports` importerer `@/core/ai`.
 - **Måling:** hvert utkast gir én hendelse `report.draft_pdf_created`, og hver PDF av en utgivelse `report.release_pdf_created`, med bare rapport-id, profilkode, antall sider, antall bilder og millisekunder (utgivelsen også versjonsnummer). Raden har `actor_id` fordi `recordEvent` alltid lagrer den: den er spor av hvem som hentet ut en PDF med adresse. Den vises og telles aldri per ansatt (arbeidsmiljøloven kap. 9), bare samlet bak `statistics.read`. Test: ingen spørring grupperer disse hendelsene på `actor_id`. `durationMs` er maskintid, ikke arbeidstid.
 
@@ -72,7 +72,7 @@ Badet kan fylles ut på PC (PR #224), men det finnes ingen PDF. Uten PDF kan ikk
 3. **Profilene som kodedata:** `PdfProfile` har `code`, `version` (fra første dag, D8 `report_profile_version`), `name`, `orientation` (`portrait` eller `landscape`), farger, skrifter, logo som fast fil (`public/brand/byggcon-logo.png`), forsideoppsett, rekkefølge på delene og bunntekst-mal. Profilen har aldri selskapsnavn eller fagtekst. `byggcon_standard` (stående) er standard og koblingen mot `client_agreements.report_profile_code` (A115). En andre profil finnes bare i testene (liggende, andre farger). Tabellen `report_profiles` og valg av profil kommer med «Flere PDF-utgaver» i 2a-3. Farger, skrifter og rekkefølge på delene føres i tabellen for `report_profiles` i `docs/05-domenemodell.md` 4.3.
 
 4. **Rapportdataene** i `src/core/reports`, i egne filer (`pdf-data.ts`, `pdf-data-build.ts`, `release-pdf.ts`, `tg-explanation.ts`) og med én eksportlinje i `index.ts`. `signals.ts`, `snapshot.ts` og publiseringen endres ikke, bare importeres.
-   - **Én leser (arkitekt punkt 1):** `getReportDraftPdfData(actor, organizationId, assignmentId)` kaller selv `requireOrganizationAccess(..., "organization.read")` og `requireUuid`, finner oppdragets gjeldende rapport (ikke `superseded`, ikke slettet) med `grant.organizationId`, og kaller `loadPublishSource` (som alt leser hele rapporten med `grant.organizationId`, myk sletting og låst malversjon). Den har bare én egen spørring: forsiden (oppdragsnummer, adresse, matrikkel, befaringsdato) og selskapet via `assignments.company_id`, begge filtrert på `grant.organizationId` og `deleted_at is null`. Oppslaget fra oppdrag til rapport gjøres her, aldri i ruten (sikkerhet punkt 2). `organizationId` kommer fra økten. Fremmed, slettet, erstattet og ugyldig id gir samme 404. Svaret er `{ data: ReportPdfData; reportId; employeeId }` (`grant.employeeId` er nøkkelen til telleren).
+   - **Én leser (arkitekt punkt 1):** `getReportDraftPdfData(actor, organizationId, assignmentId)` kaller selv `requireOrganizationAccess(..., "organization.read")` og `requireUuid`, finner oppdragets gjeldende rapport (ikke `superseded`, ikke slettet) med `grant.organizationId`, og kaller `loadPublishSource` (som alt leser hele rapporten med `grant.organizationId`, myk sletting og låst malversjon). Den har bare én egen spørring: forsiden (oppdragsnummer, adresse, matrikkel, befaringsdato) og selskapet via `assignments.company_id`, filtrert på `grant.organizationId` og `deleted_at is null` på oppdrag, rapport og selskap. Oppslaget fra oppdrag til rapport gjøres her, aldri i ruten (sikkerhet punkt 2). `organizationId` kommer fra økten. Fremmed, slettet, erstattet og ugyldig id gir samme 404. Svaret er `{ data: ReportPdfData; reportId; employeeId }` (`grant.employeeId` er nøkkelen til telleren).
    - **Én byggefunksjon fra snapshotet (F6):** `buildReportPdfData(input: { snapshot: ReportSnapshot; template: PdfTemplateLabels; cover: PdfCoverRow; company: PdfCompanyRow | null; findings: readonly PublishCheckFinding[] | null; options: { draft: boolean } }): ReportPdfData` er ren. Utkastet gir `snapshot = buildReportSnapshot(source)` og `findings = computePublishCheck(buildPublishCheckInput(source)).findings`; utgivelsen gir det lagrede snapshotet og `findings = null`. Med `draft: false` tas `findings`, `missing` og lenkene aldri med. `PdfTemplateLabels` er etiketter, valgtekster, enheter og `show_in_report` fra den låste malversjonen (`snapshot.report.template_version_id`).
    - Etiketter fra den låste malversjonen og oversettelsesfilen, aldri koder.
    - **Svar på felt (fagansvarlig punkt 1, A540):** svar på felt med `show_in_report = true` står under punktet, med etikett og valgtekst fra den låste malversjonen, tall med komma og enhet (for eksempel «12,4 vekt-%»). Felt med `show_in_report = false` (for eksempel `wet_room.building_code`, A212) kommer aldri med. Tomme svar gir ingen linje. Slik viser PDF-en om hull er tatt, måleverdien og grunnen når hull ikke er tatt (forskriften § 2-2).
@@ -114,29 +114,29 @@ Badet kan fylles ut på PC (PR #224), men det finnes ingen PDF. Uten PDF kan ikk
    - **`appBaseUrl` (F4)** kommer bare fra serveroppsettet (`BETTER_AUTH_URL` i `src/shared/config/env.ts`), aldri fra `Host` eller `X-Forwarded-Host`.
 
 6b. **«Åpne PDF» på hver utgivelse (F7, A541):** `releases-card.tsx` og skjermen etter publisering (`publiser/`) får lenken «Åpne PDF» per utgivelse. Ruten `src/app/(ansatt)/oppdrag/[id]/utgivelser/[releaseId]/pdf/route.ts`:
-   - `getReleasePdfData(actor, organizationId, assignmentId, releaseId)` i `src/core/reports/release-pdf.ts`: `organization.read`, `requireUuid` på begge id-er, utgivelsen hentes med `grant.organizationId` og må høre til oppdragets rapport. Fremmed, ukjent og ugyldig id gir 404.
-   - PDF-en bygges fra utgivelsens lagrede snapshot med `draft: false`: uten UTKAST, uten siden «Ikke med i PDF-en», uten «Ikke satt»/«Mangler»/«Sjekk» og uten interne lenker. Etiketter fra snapshotets låste malversjon, bunnteksten fra utgivelsens `company_id`, og `generatedAt` = `released_at`, så filen blir lik hver gang. Ved en reklamasjon kan leder vise nøyaktig hva kunden fikk.
+   - `getReleasePdfData(actor, organizationId, assignmentId, releaseId)` i `src/core/reports/release-pdf.ts`: `organization.read`, `requireUuid` på begge id-er, utgivelsen hentes med `grant.organizationId` og må høre til oppdragets rapport. Spørringen krever `deleted_at is null` på oppdrag, rapport og utgivelse (`report_releases` har ingen CHECK, så filteret står i spørringen), og selskapet hentes fra `report_releases.company_id` med `grant.organizationId`. Finnes ikke selskapet, vises teksten om at selskap mangler, aldri `brand_name`. Fremmed, ukjent, slettet og ugyldig id gir 404.
+   - PDF-en bygges fra utgivelsens lagrede snapshot med `draft: false`: uten UTKAST, uten siden «Ikke med i PDF-en», uten «Ikke satt»/«Mangler»/«Sjekk» og uten interne lenker. Etiketter fra snapshotets låste malversjon, bunnteksten fra utgivelsens `company_id`, og `generatedAt` = `released_at`. Ved en reklamasjon kan leder vise **teksten og TG slik de ble publisert**. Forsiden (adresse, matrikkel, oppdragsnummer) og selskapets navn og org.nr. følger dagens opplysninger til endelig PDF lagres i 2a-3; lenketeksten lover ikke mer enn det (sikkerhet runde 2 punkt 1).
    - Ingenting lagres (lagring av endelig PDF kommer i 2a-3). Filnavnet er `tilstandsrapport-<oppdragsnummer>-v<versjon>.pdf`. Tittel i PDF-en: «Tilstandsrapport <oppdragsnummer>, versjon <n>».
    - Samme svarhoder, innlogging, tak, feilsider og 429 som utkastet. Hendelsen `report.release_pdf_created`.
    - TG-forklaringen er fortsatt utkast til fagrådet har godkjent den (A533). PDF-en sendes ikke noe sted; utsending er manuell og kommer senere.
 
 7. **Tilgang** via `src/core/access`: samme som å se badet på skjermen (`organization.read`, samme sjekk som `getRoomView`). PDF-en inneholder aldri reklamasjonsdata og gir samme svar med og uten reklamasjon på oppdraget (A531, endret, se Avgjørelser).
 
-8. **Logging uten persondata:** feil i motoren logges bare med rapport-id, profilkode og egen feilkode eller feilnavn, aldri `error.message` eller stack fra motoren (de kan sitere rapporttekst).
+8. **Logging uten persondata:** feil logges bare med rapport-id, profilkode og feilnavn eller `PdfRenderError.code`, aldri `error.message` eller stack. Det gjelder også feil utenfor motoren (`getReportDraftPdfData`, `getReleasePdfData`, `buildReportPdfData`, databasefeil med parametre), fordi de kan sitere adresse eller rapporttekst. Feilsidene går gjennom de vanlige sikkerhetshodene (CSP med `frame-ancestors 'none'`) og har `Cache-Control: no-store, private`.
 
 9. Ordlisten (`docs/05-domenemodell.md` avsnitt 8): PDF-profil (`PdfProfile`), rapportdata for PDF (`ReportPdfData`), PDF-utkast (`draft`), PDF av utgivelse (`release PDF`), TG-forklaring (`TgExplanation`). Domenemodellen 4.3: profilene er kodedata til 2a-3, med farger, skrifter, rekkefølge, `version` og `orientation`.
 
-10. `package.json` versjon 0.19.3 (én patch over main 0.19.2).
+10. `package.json` versjon 0.19.5 (én patch over main 0.19.4).
 
 **Ikke med (bevisst utelatt):**
 - Lagring av endelig PDF, versjonslogg og sletting bare av admin (2a-3, «Endelig rapport lagres som ferdig PDF»). `report_pdf` i filmodulen brukes ikke. PDF av en utgivelse lages på nytt hver gang (F7).
 - Tabellen `report_profiles`, admin-skjerm for profiler og valg av profil (2a-3, «Flere PDF-utgaver»).
 - Hele rapporten (om Byggcon, arealer, dokumentasjon, forutsetninger, signatur) (2a-3). Utgaven av standarden og oversikten over dokumentasjon hører til der («med fra start» i regelverk-krav.md avsnitt 4).
 - **Sammendraget** (`reports.summary_text`, laget med «KI i veien») kommer ikke i PDF-en før 2a-3. Delkoden `summary` er reservert i listen nå, så rekkefølgen i profilen ikke må endres senere (regel 6).
-- KI-merking i PDF-en (spørsmål 92e).
+- KI-merking i PDF-en (spørsmål 122e).
 - Testutskriften med 50 bilder og kravet om under 8 MB (2a-3).
 - Bildetabellen `photos`, opplasting og markering på skjermen (2a-3, «Bilder på PC»).
-- Samlet TG for rommet (A537, spørsmål 92a).
+- Samlet TG for rommet (A537, spørsmål 122a).
 - Den levende forhåndsvisningen (eget planpunkt under «Fra forbedreren»).
 - Endringer i publiseringen og «KI i veien» (begge merget i main). Unngå unødige endringer i `types.ts`, `room-view.ts`, `reports.ts`, `write.ts`, `signals.ts` og `snapshot.ts`; nye filer i `src/core/reports` i stedet. De eksisterende publiserings- og KI-i-veien-testene (også `publish-model` og e2e for publisering) er grønne uten endring.
 - PDF på iPad uten nett (2b).
@@ -151,9 +151,9 @@ Ståle 14.11.2026, «Forbedreren» i `CLAUDE.md`. Ført i `docs/plan/forbedreren
 - **F4 Lenker fra utkastet til skjemaet** (i oppgaven): i utkastet lenker hvert kontrollpunkt og hvert avvik til `/oppdrag/[id]/rom/[roomId]#punkt-<checkpointId>` (avvik: `#avvik-<deviationId>`), med adressen fra `appBaseUrl`. Badet-skjermen får ankrene om de mangler. Lenkene har bare id-er. Endelig PDF har ingen interne lenker (test). Fjernes ved å sette `appBaseUrl` til tom.
 - **F5 Levende forhåndsvisning** (nytt planpunkt i 2a-2 «Fra forbedreren»): bygges ikke i denne oppgaven.
 - **F6 Én rapportform: `ReportPdfData` bygges fra `ReportSnapshot`** (i oppgaven, 24.11.2026; KI i bunnen og færre reklamasjoner): utkastet lager snapshotet fra dagens data, utgivelsen bruker det lagrede. Én form for «hele rapporten»; snapshotet har aldri ventende KI-forslag, regelbegrunnelser eller reklamasjonsdata, så T14 og «aldri `claims`» holder av formen. Står i Omfang 4. Fjernes ved å la `buildReportPdfData` lese radene fra `PublishSource` direkte.
-- **F7 «Åpne PDF» på hver utgivelse** (i oppgaven, 24.11.2026; de ansatte og færre reklamasjoner): ferdig-kriteriet i 2a-2 er at badet publiseres og blir til en PDF. PDF-en lages fra utgivelsens snapshot uten UTKAST, med fast `generatedAt` = publiseringstidspunktet, så leder kan vise nøyaktig hva kunden fikk. Ingenting lagres. Står i Omfang 6b. Fjernes ved å ta ut lenken i `releases-card.tsx` og `publiser/` og ruten `utgivelser/[releaseId]/pdf`.
+- **F7 «Åpne PDF» på hver utgivelse** (i oppgaven, 24.11.2026; de ansatte og færre reklamasjoner): ferdig-kriteriet i 2a-2 er at badet publiseres og blir til en PDF. PDF-en lages fra utgivelsens snapshot uten UTKAST, med fast `generatedAt` = publiseringstidspunktet, så leder kan vise teksten og TG slik de ble publisert (forside og selskapsnavn følger dagens opplysninger til 2a-3). Ingenting lagres. Står i Omfang 6b. Fjernes ved å ta ut lenken i `releases-card.tsx` og `publiser/` og ruten `utgivelser/[releaseId]/pdf`.
 - **F8 «Mangler» i utkastet hentes fra publiseringssjekken** (i oppgaven, 24.11.2026; færre reklamasjoner og de ansatte): utkastet viser funnene fra `computePublishCheck` med samme tekst som publiseringsskjermen, i stedet for egne regler. Takstmannen ser i PDF-en nøyaktig det som stopper publiseringen. Ingen ny fagregel; A536 står, bare kilden er endret. Står i Omfang 5. Fjernes ved å sende `findings: null` til `buildReportPdfData`.
-- Versjonen rettet til 0.19.3 (forbedrer punkt 4).
+- Versjonen rettet til 0.19.5 etter ny innfletting av main 0.19.4 (forbedrer punkt 4, rettet igjen 24.11.2026 runde 2).
 
 ## Tilgang
 | Rolle | Lage utkast | Endre |
@@ -178,11 +178,11 @@ Rapportens status: `draft` og `published` gir utkast med «UTKAST» (published l
 Flyt: [badet] → trykk «Lag PDF (utkast)» → knappen viser «Lager PDF …» → PDF-en åpnes i ny fane → lukk fanen, og du er tilbake på badet. Ett trykk (IVIT: tre).
 - **PC, badet** (`/oppdrag/[id]/rom/[roomId]`): knappen i toppen ved siden av fremdriften. Sekundær knapp (ikke hovedknappen), minst 44 pt høy, tekst og ikon. I iPad-størrelse dekker den ikke hovedknappene nederst.
 - **PC, oppdraget** (`/oppdrag/[id]`): samme knapp der rapporten vises, når rapporten finnes.
-- **Utgivelser (F7):** hver rad i utgivelseskortet på oppdraget og skjermen etter publisering har lenken «Åpne PDF» (vanlig lenke, ny fane, minst 44 pt, tilgjengelig navn «Åpne PDF av versjon <n>»).
+- **Utgivelser (F7):** hver rad i utgivelseskortet på oppdraget og skjermen etter publisering har lenken «Åpne PDF» (vanlig `<a>`, aldri `next/link`, så ingenting hentes på forhånd; ny fane, minst 44 pt, tilgjengelig navn «Åpne PDF av versjon <n>»).
 - **Ulagrede endringer:** finnes felt som ikke er lagret ennå (lagres automatisk eller venter i køen), viser knappen først «Lagrer endringer …» og venter til de er lagret, før PDF-en lages.
 - **Ny fane som ikke blokkeres:** uten ventende lagring er knappen en vanlig lenke (`a href` til ruten, `target="_blank"`, `rel="noopener"`). Med ventende lagring åpnes fanen i samme trykk, og adressen settes når lagringen er ferdig (Safari på iPad blokkerer `window.open` etter `fetch`).
 - Mens PDF-en lages: «Lager PDF …», sperret, med status for skjermleser; fjernes når fanen er åpnet.
-- **Uten nett:** knappen vises, men er sperret med «Krever nett. PDF-en kan lages når du er på nett igjen.» Synkstatusen synes ved siden av.
+- **Uten nett:** både «Lag PDF (utkast)» og «Åpne PDF» vises, men er sperret med «Krever nett. PDF-en kan lages når du er på nett igjen.» Synkstatusen synes ved siden av. Samme oppførsel i e2e.
 - **PDF-en:** universell utforming så langt motoren gir det (tagget, `nb`, tittel, lesbar kontrast, TG med både tekst og farge).
 
 ## Regler
@@ -219,7 +219,7 @@ Ingen nye fagregler. Rene funksjoner med tabelltester:
 - **T23** punktets `regulation_ref` (for eksempel «§ 2-2») og `help_text` med merketekst → står ikke i PDF-en.
 - **T24** (F8, tabelltest) hvert funn fra `computePublishCheck` på et kontrollpunkt eller avvik står i utkastet på samme mål med samme tekst som publiseringsskjermen, og ingen andre steder; et utkast uten funn har verken «Ikke satt», «Mangler» eller «Sjekk». Hvert punkt med `mandatory_without_tg` står enten som «Ikke satt» eller på siden «Ikke med i PDF-en».
 - **T25** (F6) samme rapport gir lik PDF-tekst fra dagens data (`draft: false`) og fra snapshotet som ble lagret rett etter publisering.
-- **T26** (F7) en eldre utgivelse viser sin gamle tekst og sitt gamle selskap etter at rapporten er endret og publisert på nytt; to kall gir like byte (eller lik struktur, se Akseptkriterier).
+- **T26** (F7) en eldre utgivelse viser sin gamle tekst, sin gamle TG og sitt selskap (fra `report_releases.company_id`) etter at rapporten er endret og publisert på nytt; to kall uten endring i adresse eller selskap gir like byte (eller lik struktur, se Akseptkriterier). Like byte kreves ikke etter endret adresse eller selskapsnavn.
 
 ## Akseptkriterier
 **ADR og grensesnitt**
@@ -256,24 +256,32 @@ Ingen nye fagregler. Rene funksjoner med tabelltester:
 - [ ] Malinjeksjon: rapporttekst med `<script>`, `<img src=http://…>`, `img onerror`, `</style>`, CSS `url()` og `@import`, `{{ }}`, Typst `#import`/`#read(...)` og `file:///etc/passwd` står som vanlig tekst; ingen nettverkskall og ingen fillesing under gjengivelsen (forespørsler blokkeres og telles).
 - [ ] «UTKAST» på hver side. Ingen nye rader i `files`, ingen nye filer i lagringsmappen eller temp-mappen (også ved feil og tidsavbrudd), og hendelsen nøyaktig én gang med bare de tillatte feltene.
 - [ ] Feil fremkalt i motoren: loggen har rapport-id og feilkode; merketekster i adresse, avvikstekst og bildetekst står verken i loggen eller i svaret.
-- [ ] To samtidige utkast for samme ansatt gir 429 med teksten i Omfang 6. Ikke innlogget og 404 tar ikke plass i taket. Tidsavbrudd stopper motoren (test med injisert klokke).
+- [ ] To samtidige utkast for samme ansatt gir 429 med teksten i Omfang 6, og et utkast og en utgivelse samtidig for samme ansatt gir også én 429. Det felles taket (2 per prosess, ADR 0016) gir 429 for en tredje ansatt. Ikke innlogget, 401 og 404 tar aldri plass i taket. Tidsavbrudd stopper motoren (test med injisert klokke).
+- [ ] `createKeyedLimiter` er bygd: `release()` i `finally` i begge rutene, også ved feil, tidsavbrudd, krasj i tråden og når klienten bryter forbindelsen; `staleAfterMs` over 20 sekunder.
+- [ ] Arbeidstråden har `resourceLimits` (minst `maxOldGenerationSizeMb`). Krasjer tråden eller går den tom for minne, avsluttes den, ruten gir 500-siden uten motorens melding, og plassen i taket frigjøres (vist i rutetesten, ikke bare i `keyed-limiter.test.ts`).
+- [ ] Fillesing vist på trådens side: filoppslaget i Typst svarer bare fra det faste kartet over skrifter, logo og bilder; `#read` eller `#import` av en sti utenfor gir feil eller tom tekst, aldri filinnhold.
+- [ ] `HEAD` på begge rutene svarer 405 uten gjengivelse, uten hendelse og uten plass i taket (egen `HEAD`-eksport, enhetstest).
+- [ ] Statisk test: service workeren sender aldri `/oppdrag/<id>/pdf` eller `/oppdrag/<id>/utgivelser/<id>/pdf` til `respondWith`.
 - [ ] Svarhodet `Cross-Origin-Resource-Policy: same-origin`; feilsidene skriver ingen verdi fra adressen eller feilen; et forfalsket `Host`-hode endrer ikke lenkene i PDF-en.
-- [ ] Ingen spørring grupperer `report.draft_pdf_created` eller `report.release_pdf_created` på `actor_id`.
+- [ ] Ingen spørring grupperer `report.draft_pdf_created` eller `report.release_pdf_created` på `actor_id`, heller ikke statistikkspørringene som finnes i dag.
+- [ ] Testen for forbudte felt dekker begge hendelsestypene: bare rapport-id, profilkode, sider, bilder, millisekunder og versjonsnummer; ingen adresse, oppdragsnummer, filnavn eller selskapsnavn.
+- [ ] Feil fra `getReportDraftPdfData`, `getReleasePdfData` og `buildReportPdfData` (også databasefeil) logges uten `error.message` og stack. Feilsidene har CSP med `frame-ancestors 'none'` og `Cache-Control: no-store, private`.
 
 **Tilgang og tenant**
 - [ ] `expectTenantIsolation` for `getReportDraftPdfData` og `getReleasePdfData`; rutetester der en ansatt i organisasjon B bruker oppdrags- og utgivelses-id-en til A og får 404; en utgivelse på et annet oppdrag i samme organisasjon gir 404; testene viser at spørringene filtrerer på `grant.organizationId`.
-- [ ] Rapport med status `published` gir utkast med «UTKAST» fra de låste radene; `superseded` gir 404 (også i e2e for knappen).
+- [ ] Rapport med status `published` gir utkast med «UTKAST» fra de låste radene; `superseded` gir 404 i `pdf-data.test.ts` og rutetesten (ikke i e2e, se runde 2).
 - [ ] To PDF-er for to organisasjoner samtidig (`Promise.all`): hver har bare sitt eget merke.
 - [ ] Rollematrise for `getReportDraftPdfData`, `getReleasePdfData` og rutene: takstmann, kontor, leder og admin (også bare admin-rollen, og med `access.inspectors_edit_all` av), med og uten reklamasjon på oppdraget gir samme svar; ikke innlogget gir 401 eller videresending; sluttet og uten `organization.read` avvises.
 - [ ] `ReportPdfData` inneholder aldri noe fra `claims` (test).
-- [ ] Myk sletting: slettet rapport gir 404; slettet rom, kontrollpunkt, avvik, tiltak og TGIU kommer ikke med. Erstattet og ugyldig id gir 404.
+- [ ] Myk sletting: slettet rapport, slettet oppdrag og slettet utgivelse gir 404 i begge rutene; slettet rom, kontrollpunkt, avvik, tiltak og TGIU kommer ikke med. Erstattet og ugyldig id gir 404.
 
 **Ruten og skjermen**
-- [ ] Ruten: bare `GET`, `application/pdf`, svarhodene i Omfang 6, filnavn uten adresse, ugyldig id gir 404; service workeren mellomlagrer ikke ruten.
+- [ ] Ruten: bare `GET` (statisk sjekk: ingen `POST`, `PUT`, `PATCH` eller `DELETE` eksportert; 405 for `POST` prøves i e2e), `application/pdf`, svarhodene i Omfang 6, filnavn uten adresse, ugyldig id gir 404; service workeren mellomlagrer ikke ruten.
 - [ ] E2e på PC og i iPad-størrelse: knappen på badet og på oppdraget, «Lager PDF …» med status for skjermleser, PDF i ny fane (sjekk content-type), axe uten funn, knappen dekker ikke hovedknappene.
 - [ ] E2e: skriv i et felt, trykk straks; teksten står i PDF-en.
 - [ ] E2e (F7): publiser badet, trykk «Åpne PDF» på utgivelsen og på skjermen etter publisering; PDF i ny fane uten «UTKAST», filnavn med versjon.
-- [ ] E2e uten nett (`context.setOffline`): knappen er sperret med forklaringen.
+- [ ] E2e uten nett (`context.setOffline`): både «Lag PDF (utkast)» og «Åpne PDF» er sperret med «Krever nett. PDF-en kan lages når du er på nett igjen.»
+- [ ] E2e leser PDF-en fra svaret (`page.waitForResponse` eller `request.get` med samme økt), ikke fra fanens innhold.
 - [ ] E2e med svar 500 fra ruten: siden «PDF-en kunne ikke lages. Prøv igjen.» med «Prøv igjen».
 - [ ] Utkast av badet tar under 5 sekunder i CI; millisekundene står i hendelsen.
 
@@ -293,7 +301,17 @@ Ingen nye fagregler. Rene funksjoner med tabelltester:
 - **Bildesjekken:** arkitekten foreslo `src/shared/images/`, sikkerhet `src/shared/lib`. **Valgt: `src/shared/images/`**, egen mappe fordi det blir flere bildefunksjoner i 2a-3.
 - **Telleren:** ut av `src/core/pdf`, generisk i `src/shared/lib/keyed-limiter.ts` med `grant.employeeId` som nøkkel (arkitekt punkt 9, sikkerhet punkt 6).
 - **Ruten:** tar oppdragets id, ikke rapportens; oppslaget til rapporten gjøres i `core/reports` (sikkerhet punkt 2). Én rute for utkast (`/oppdrag/[id]/pdf`), siden badet er hele rapporten nå.
-- **Nummer i spørsmål 92:** fagansvarlig og ki-ansvarlig ville begge bruke «d». **Valgt:** 92d er svar med `show_in_report` (fag), 92e er KI-merke i kundens PDF (fag og personvern), 92f er ordlyden «Vet ikke» i kundens PDF.
+- **Nummer i spørsmål 122:** fagansvarlig og ki-ansvarlig ville begge bruke «d». **Valgt:** 122d er svar med `show_in_report` (fag), 122e er KI-merke i kundens PDF (fag og personvern), 122f er ordlyden «Vet ikke» i kundens PDF.
+
+## Avgjørelser 24.11.2026, runde 2 (prosjektleder, etter ny innfletting av main)
+- **Nummeret på fagspørsmålet:** forbedreren foreslo 122, test-leder 114 «eller første ledige». **Valgt: 122.** 114–119 kan være tatt av brancher som ikke er sjekket; 122 er ledig på main (til 110), `testdata-del-2` (111–113) og `skriv-det-du-ser` (120–121). Ett trygt nummer er bedre enn å flytte en gang til.
+- **«Nøyaktig hva kunden fikk» (sikkerhet punkt 1):** riktig. Forsiden og selskapets navn leses fra dagens rader. **Valgt:** ordlyden er rettet til «teksten og TG slik de ble publisert»; forsiden og selskapsnavnet følger dagens opplysninger til endelig PDF lagres i 2a-3. T26 krever ikke like byte etter endret adresse eller selskap. Ført som lite funn inn mot 2a-3 («Endelig rapport lagres som ferdig PDF»).
+- **Uten nett (test-leder punkt 6):** én oppførsel: begge knappene er sperret med samme tekst. Lenken «Åpne PDF» som virket uten nett ville gi en feilside i ny fane, og det er verre for den ansatte enn en sperret knapp med forklaring.
+- **`superseded` i e2e (test-leder punkt 7):** strøket i e2e. Ruten tar oppdragets id og finner den gjeldende rapporten, så knappen kan ikke peke på en erstattet rapport. 404 for `superseded` står i `pdf-data.test.ts` og rutetesten.
+- **405 (test-leder punkt 9, sikkerhet punkt 4):** statisk sjekk for `POST`/`PUT`/`PATCH`/`DELETE`, egen `HEAD` som svarer 405 uten gjengivelse (enhetstest), og 405 for `POST` i e2e. Uten egen `HEAD` ville Next svare HEAD med GET-behandleren, lage en PDF og ta plass i taket.
+- **Arbeidstråden:** får `resourceLimits` (`maxOldGenerationSizeMb`). WASM-minnet stoppes ikke av det, men en feil i JS-delen tar ikke hele serveren. Krasj og minnestopp gir 500-siden og frigjør plassen. Det felles taket på 2 deles av alle organisasjoner; det står i ADR 0016 og vurderes før selskap nummer to.
+- **Hva som må avklares før produksjon (sikkerhet, merknad):** PDF-en av en utgivelse er uten «UTKAST», men TG-forklaringen er ikke godkjent av fagrådet, og spørsmål 122a og 122e er åpne. Det er greit i testmiljøet med oppdiktede data. Ført under «Trenger Ståle når han er tilbake».
+- Ingen nye forbedrertillegg i runde 2: forbedrerens to punkter er rettinger av versjon og spørsmålsnummer, ikke nye funksjoner.
 
 ## Beslutninger (autonom modus, ført i `docs/09-apne-sporsmal.md`)
 - **A530** Profilene er kodedata i `src/core/pdf` til «Flere PDF-utgaver» i 2a-3; med `version` og `orientation` fra første dag. Lett å endre.
@@ -303,12 +321,12 @@ Ingen nye fagregler. Rene funksjoner med tabelltester:
 - **A534** Valg av PDF-motor (ADR 0016). Dyrt å endre.
 - **A535** Filnavnet har bare oppdragsnummeret. Lett å endre.
 - **A536 (endret 24.11.2026)** Utkastet viser det som mangler («Ikke satt», «Mangler», «Sjekk») og siden «Ikke med i PDF-en»; kilden er funnene fra publiseringssjekken, ikke egne regler (F8). Endelig PDF viser bare det kunden skal ha. Lett å endre.
-- **A537** PDF-en viser TG per kontrollpunkt, ingen samlet TG for badet. Lett å endre (spørsmål 92a).
+- **A537** PDF-en viser TG per kontrollpunkt, ingen samlet TG for badet. Lett å endre (spørsmål 122a).
 - **A538** Mangler oppdraget juridisk selskap, lages utkastet med teksten «Juridisk selskap mangler på oppdraget»; `brand_name` brukes aldri som juridisk selskap. Lett å endre.
 - **A539** Vern mot overbelastning: én pågående PDF per ansatt, lite felles tak og tidsavbrudd (tallene i ADR 0016), 429 med forklaring. Taket er per prosess. Lett å endre.
-- **A540 (ny 24.11.2026)** Alle svar på felt med `show_in_report = true` står i PDF-en med etikett, valgtekst og enhet; `show_in_report = false` aldri. Lett å endre (spørsmål 92d).
+- **A540 (ny 24.11.2026)** Alle svar på felt med `show_in_report = true` står i PDF-en med etikett, valgtekst og enhet; `show_in_report = false` aldri. Lett å endre (spørsmål 122d).
 - **A541 (ny 24.11.2026)** Utkast kan lages også av en publisert rapport (med «UTKAST», fra de låste radene); `superseded` gir 404. Hver utgivelse kan åpnes som PDF fra snapshotet, uten UTKAST, med `generatedAt` = publiseringstidspunktet, uten lagring (F7). Lett å endre.
-- **A542 (ny 24.11.2026)** PDF-en viser ingen KI-merking i 2a-2, og `ReportPdfData` tar ikke med `ai_usage_id` eller `text_source`. Lett å endre (spørsmål 92e).
+- **A542 (ny 24.11.2026)** PDF-en viser ingen KI-merking i 2a-2, og `ReportPdfData` tar ikke med `ai_usage_id` eller `text_source`. Lett å endre (spørsmål 122e).
 
 ## Roller
 - **arkitekt:** ADR 0016 med prøven fra `.next/standalone`, grensesnittet, lint-regelen og utrullingen i Azure.
@@ -319,5 +337,5 @@ Ingen nye fagregler. Rene funksjoner med tabelltester:
 - **sikkerhet-personvern:** lukket motor, GPS og EXIF, svarhoder, logging, tilgang; `/security-review` i gjennomgangen.
 
 ## Åpne spørsmål
-- Spørsmål 92 i `docs/09-apne-sporsmal.md` (fag, stopper ikke bygging): (a) samlet TG for badet, (b) ordlyden for TG0 når F1 gir TG0 på eldre bad, (c) om utkastet skal vise «Ikke satt»/«Mangler», (d) alle svar med `show_in_report` eller bare hulltaking og fuktmåling, (e) om kundens PDF skal merke tekst fra KI, (f) ordlyden «Vet ikke» for skadeutsatt konstruksjon i kundens PDF. Agentene har valgt A537, A533, A536, A540 og A542 til Ståle svarer. (a) og (e) må være besvart før endelig PDF til kunde i 2a-3.
+- Spørsmål 122 i `docs/09-apne-sporsmal.md` (fag, stopper ikke bygging): (a) samlet TG for badet, (b) ordlyden for TG0 når F1 gir TG0 på eldre bad, (c) om utkastet skal vise «Ikke satt»/«Mangler», (d) alle svar med `show_in_report` eller bare hulltaking og fuktmåling, (e) om kundens PDF skal merke tekst fra KI, (f) ordlyden «Vet ikke» for skadeutsatt konstruksjon i kundens PDF. Agentene har valgt A537, A533, A536, A540 og A542 til Ståle svarer. (a) og (e) må være besvart før endelig PDF til kunde i 2a-3.
 - Utseendet ser Ståle når 2a-2 er ferdig («Ståle har sett den»).

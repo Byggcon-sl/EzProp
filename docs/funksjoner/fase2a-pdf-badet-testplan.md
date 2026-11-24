@@ -1,7 +1,7 @@
 # Testplan: PDF-motor (ADR 0016) og PDF-utkast av badet i Byggcons profil
 
 - **Oppgavekort:** `docs/funksjoner/fase2a-pdf-badet.md`
-- **Dato:** 18.11.2026 (test-leder, før bygging), oppdatert 24.11.2026 etter innflettingen av main og forhåndsvurderingen samme dag (avsnitt 10, A530–A542, spørsmål 92)
+- **Dato:** 18.11.2026 (test-leder, før bygging), oppdatert 24.11.2026 etter innflettingen av main og forhåndsvurderingen samme dag (avsnitt 10, A530–A542, spørsmål 122), og etter runde 2 samme dag (avsnitt 11)
 - **Branch:** `pdf-motor-badet`
 - **Støtter hovedmål:**
   - **Færre reklamasjoner:** testene låser at PDF-en viser hvert avvik med TG, årsak, konsekvens, tiltak og kostnad likt hver gang, at TGIU har alle opplysningene, at ingen interne koder, tomme sider eller overskrifter alene nederst slipper gjennom, og at utkastet viser det som mangler.
@@ -201,7 +201,7 @@ Tabell: 0, 10 000, 1 234 567, alle intervallkoder og manglende verdi. Tusenskill
 
 ### 6.1 Svar
 1. `GET` som takstmann → 200, `application/pdf`, `Content-Disposition: inline; filename="utkast-<oppdragsnummer>.pdf"`, `Cache-Control: no-store, private`, `X-Content-Type-Options: nosniff`, `Cross-Origin-Resource-Policy: same-origin`; filnavnet har bare sifre og bindestrek (oppdragsnummer med merketegn i fixturen renses).
-2. Bare `GET`: ruten eksporterer ikke `POST`, `PUT`, `PATCH`, `DELETE` (statisk), og Next gir 405.
+2. Bare `GET`: ruten eksporterer ikke `POST`, `PUT`, `PATCH`, `DELETE` (statisk). `HEAD` er egen eksport som svarer 405 (11.4). 405 for `POST` prøves i e2e (7.12), ikke ved å importere `GET`.
 3. **Ikke innlogget** → 401 eller videresending til innlogging, ingen PDF.
 4. **Organisasjon B** med rapport-id-en til A → 404 med siden «Fant ikke rapporten» (HTML, norsk).
 5. Ugyldig og slettet id → samme 404-side.
@@ -233,13 +233,14 @@ Tabell: 0, 10 000, 1 234 567, alle intervallkoder og manglende verdi. Tusenskill
 2. **Knappen på oppdraget** der rapporten vises; finnes ikke når rapporten ikke finnes.
 3. **Ett trykk → ny fane:** `context.waitForEvent("page")`; svaret har `content-type: application/pdf`; originalfanen står fortsatt på badet.
 4. **«Lager PDF …»** vises og er sperret mens PDF-en lages (ruten holdt igjen med `page.route`), med `role="status"`/`aria-live` for skjermleser; borte når fanen er åpnet.
-5. **Skriv og trykk straks:** skriv en merketekst i et beskrivelsesfelt og trykk knappen før autolagringen; knappen viser «Lagrer endringer …», og PDF-en i den nye fanen inneholder merketeksten (hent byte fra fanen og les teksten med `inspectPdf`). Viser også at fanen ikke blokkeres (åpnet i samme trykk).
+5. **Skriv og trykk straks:** skriv en merketekst i et beskrivelsesfelt og trykk knappen før autolagringen; knappen viser «Lagrer endringer …», og PDF-en i den nye fanen inneholder merketeksten (les bytene fra svaret med `page.waitForResponse` eller `request.get` med samme økt, ikke fra fanens innhold, og les teksten med `inspectPdf`). Viser også at fanen ikke blokkeres (åpnet i samme trykk).
 6. **Uten nett** (`context.setOffline(true)`): knappen er sperret med «Krever nett. PDF-en kan lages når du er på nett igjen.»; synkstatusen synes. På nett igjen → knappen virker.
 7. **Svar 500** (`page.route` gir 500 fra ruten): fanen viser «PDF-en kunne ikke lages. Prøv igjen.» og knappen «Prøv igjen», som laster ruten på nytt.
 8. **iPad-størrelse:** knappen dekker ikke hovedknappene nederst (boksene overlapper ikke), og alt kan nås uten vannrett rulling.
 9. **Axe** uten funn på badet og oppdraget med knappen synlig, og på feilsiden.
 10. **Tid:** utkastet av badet svarer på under 5 sekunder i CI (måles i testen; `durationMs` i hendelsen er satt).
-11. **Lenke fra utkastet (F4):** lenken til et punkt i PDF-en (lest med `inspectPdf`) åpnet i nettleseren lander på badet med ankeret `#punkt-<id>` synlig.
+12. **405:** `request.post` mot begge rutene med innlogget økt → 405, ingen PDF.
+11. **Lenke fra utkastet (F4):** lenken til et punkt i PDF-en (bytene lest fra svaret som i 7.5, så `inspectPdf`) åpnet i nettleseren lander på badet med ankeret `#punkt-<id>` synlig.
 
 ## 8. Tester som ikke skal røres
 
@@ -252,19 +253,20 @@ Test-leder godkjenner ikke uten:
 - 4.2 (samme resultat), 4.3.2 (ingen interne koder), 4.6 (injeksjon og lukket motor), 6.2 (ingen lagring) og 6.4 (logging).
 - Grønn `pnpm lint`, `pnpm typecheck`, `pnpm test` og `pnpm test:e2e` (begge prosjektene), og ADR 0016 med målingene fra `.next/standalone`.
 - 10.1–10.7 (tilleggene 24.11.2026).
-- `package.json` har versjon 0.19.3 (én patch over main 0.19.2).
+- `package.json` har versjon 0.19.5 (én patch over main 0.19.4).
+- 11.1–11.9 (runde 2).
 - Røyktest etter utrulling i testmiljøet føres i testrapporten (etter merge).
 
 ## 10. Tillegg 24.11.2026 (main flettet inn, forhåndsvurdering runde 1 med publiseringen)
 
 ### 10.1 Publisert og erstattet rapport (A541)
 1. Rapport med status `published` → utkast med «UTKAST» på hver side, fra de låste radene (`pdf-data.test.ts` og rutetest).
-2. `superseded` → 404 (5.3.1 står). E2e: knappen på et publisert oppdrag gir PDF i ny fane.
+2. `superseded` → 404 (5.3.1 står, og i rutetesten). Ikke i e2e: ruten finner den gjeldende rapporten selv. E2e: knappen på et publisert oppdrag gir PDF i ny fane.
 
 ### 10.2 PDF av utgivelse (F7)
 1. `GET` på utgivelsen → 200, filnavn `tilstandsrapport-<oppdragsnummer>-v<versjon>.pdf`, ingen «UTKAST», ingen side «Ikke med i PDF-en», ingen «Ikke satt»/«Mangler»/«Sjekk», ingen interne lenker.
 2. Utgivelse i org A, ansatt i org B → 404. Utgivelse på et annet oppdrag i samme organisasjon → 404. Ugyldig `releaseId` → 404.
-3. T26: endre rapporten og publiser versjon 2 → versjon 1 viser fortsatt sin gamle tekst, sitt selskap og sine etiketter; to kall gir like byte (eller lik struktur etter 4.2).
+3. T26: endre rapporten og publiser versjon 2 → versjon 1 viser fortsatt sin gamle tekst, sin gamle TG, sitt selskap (fra `report_releases.company_id`) og sine etiketter; to kall uten endring i adresse eller selskap gir like byte (eller lik struktur etter 4.2). Like byte kreves ikke etter endret adresse eller selskapsnavn (11.1).
 4. Rollematrisen fra 5.2 gjelder også her (`it.each`).
 5. E2e: publiser badet, «Åpne PDF» på skjermen etter publisering og i utgivelseskortet → PDF i ny fane; axe uten funn.
 
@@ -295,4 +297,46 @@ Test-leder godkjenner ikke uten:
 4. **Utgivelsesruten, svar:** 200 med `Content-Disposition: inline; filename="tilstandsrapport-<oppdragsnummer>-v<n>.pdf"` og samme sikkerhetshoder som 6.1.1; tittel «Tilstandsrapport <oppdragsnummer> versjon <n>»; datoene i PDF-en er publiseringstidspunktet (`generatedAt` = `released_at`), også når testen kjøres med annen klokke.
 5. **Utgivelsesruten, tilgang:** `expectTenantIsolation` for `getReleasePdfData` (5.1.1) og i rutetesten: ikke innlogget → 401/innlogging; org B → 404-siden; `releaseId` fra et annet oppdrag i samme organisasjon → 404; myk slettet oppdrag → 404. Rollematrisen fra 5.2 med admin og `access.inspectors_edit_all` av, med og uten reklamasjon.
 6. **Utgivelsesruten, hendelse og vern:** nøyaktig én `report.release_pdf_created` med `versionNumber` i tillegg til feltene i 6.3.1; ingen hendelse ved 404/429/500; samme tak per ansatt som utkastet (et utkast og en utgivelse samtidig for samme ansatt → én 429). Ingen rader i `files` og ingen endring i `report_releases` (6.2).
-7. **E2e i iPad-størrelse (prosjektet `ipad`)** for alle punktene i 7 og 10.2.5: «Åpne PDF» per utgivelse er minst 44 pt, har tilgjengelig navn «Åpne PDF av versjon <n>», og kan nås uten vannrett rulling; uten nett er både utkastknappen og «Åpne PDF» sperret eller viser «Krever nett …», og synkstatusen synes.
+7. **E2e i iPad-størrelse (prosjektet `ipad`)** for alle punktene i 7 og 10.2.5: «Åpne PDF» per utgivelse er minst 44 pt, har tilgjengelig navn «Åpne PDF av versjon <n>», og kan nås uten vannrett rulling; uten nett er både utkastknappen og «Åpne PDF» sperret med «Krever nett. PDF-en kan lages når du er på nett igjen.», og synkstatusen synes (én oppførsel, runde 2).
+
+## 11. Runde 2, 24.11.2026 (main 0.19.4 flettet inn; sikkerhet-personvern og test-leder)
+
+### 11.1 Utgivelsen viser publisert tekst og TG
+1. Endre adressen på oppdraget etter publisering → PDF-en av versjon 1 har samme avvikstekst og TG som før; forsiden viser dagens adresse. Testen krever ikke like byte her.
+2. Lenketeksten og PR-teksten lover ikke «nøyaktig hva kunden fikk».
+
+### 11.2 Telleren (`src/shared/lib/keyed-limiter.ts`)
+1. `createKeyedLimiter` med injiserbar klokke; `staleAfterMs` over 20 000.
+2. Rutetest: `release()` skjer ved 200, 500, tidsavbrudd, krasj i tråden og når forespørselen avbrytes (`AbortSignal`); neste kall for samme ansatt slipper til.
+3. 401 og 404 tar aldri plass (kall i rekkefølge).
+4. Utkast og utgivelse samtidig for samme ansatt → én 429. Tre ansatte samtidig med felles tak 2 → én 429.
+
+### 11.3 Arbeidstråden
+1. `new Worker` har `resourceLimits` med `maxOldGenerationSizeMb` (statisk eller enhetstest).
+2. Tråd som krasjer eller går tom for minne (fremkalt i test) → tråden avsluttes, ruten gir 500-siden uten motorens melding, plassen i taket frigjøres (rutetest 6.1.8).
+3. Fillesing på trådens side: filoppslaget svarer bare fra det faste kartet (skrifter, logo, bilder etter løpenummer); `#read("/etc/passwd")` og `#import` av sti utenfor gir feil eller tom tekst, aldri filinnhold. Erstatter spionen i 4.6.3, som ikke ser arbeidstråden.
+
+### 11.4 HEAD og forhåndshenting
+1. `HEAD` på begge rutene → 405, ingen gjengivelse (motor-spion kalles ikke), ingen hendelse, ingen plass i taket.
+2. Statisk: knappen og «Åpne PDF» er vanlig `<a>`, ingen import av `next/link` i komponentene.
+
+### 11.5 Spørringene
+1. `getReportDraftPdfData` og `getReleasePdfData`: slettet oppdrag → 404 i begge rutene. Slettet utgivelse → 404.
+2. Selskapet til utgivelsen hentes fra `report_releases.company_id` med `grant.organizationId`; finnes ikke selskapet → teksten om at selskap mangler, aldri `brand_name`.
+
+### 11.6 Logging og feilsider
+1. `getReportDraftPdfData`, `getReleasePdfData` og `buildReportPdfData` mocket til å kaste med merketekst (også en databasefeil med parametre) → loggen har bare rapport-id, profilkode og feilnavn eller kode; ingen `error.message`, ingen stack.
+2. Feilsidene (404, 429, 500, 405) har CSP med `frame-ancestors 'none'` og `Cache-Control: no-store, private`.
+
+### 11.7 Service worker
+1. Statisk test på `public/sw.js`: `/oppdrag/<id>/pdf` og `/oppdrag/<id>/utgivelser/<id>/pdf` går aldri til `respondWith` (erstatter 6.5.1 med begge rutene).
+
+### 11.8 Hendelsene
+1. Testen for forbudte felt dekker `report.draft_pdf_created` og `report.release_pdf_created`: bare `reportId`, `profileCode`, `pageCount`, `imageCount`, `durationMs` og (utgivelsen) `versionNumber`; ingen adresse, oppdragsnummer, filnavn eller selskapsnavn.
+2. Testen «ingen gruppering på `actor_id`» dekker også statistikkspørringene som finnes i dag.
+
+### 11.9 E2e
+1. Bytene leses fra svaret, ikke fra fanen (7.5, 7.11).
+2. Uten nett: begge knappene sperret med samme tekst (7.6, 10.7.7).
+3. Ingen e2e for `superseded` (10.1.2).
+4. 405 for `POST` (7.12).

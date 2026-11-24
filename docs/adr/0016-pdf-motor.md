@@ -2,7 +2,7 @@
 
 Dato: 24.11.2026. Status: vedtatt av agentene i autonom modus (A534, A530, A539 i `docs/09-apne-sporsmal.md`); Ståle kan endre. **Dyrt å endre:** alle PDF-oppsett i 2a-3 bygges på motoren. Oppgavekort: `docs/funksjoner/fase2a-pdf-badet.md`. Bygger på ADR 0015 (utgivelser og snapshot), ADR 0006 (KI i bunnen) og ADR 0004 (drift uten nett).
 
-Støtter hovedmålene: **færre reklamasjoner** (samme data gir samme PDF, byte for byte, så leder kan vise nøyaktig hva kunden fikk; norsk orddeling, hele avvikskort og riktig bunntekst gir en rapport uten slurv), **de ansatte** (utkastet er klart på under ett sekund, og motoren kan senere vise rapporten ved siden av skjemaet og på iPad uten nett) og **KI i bunnen** (motoren er lukket og ren: ingen KI, ingen nett, ingen ny databehandler; rapporten har én strukturert form, snapshotet, som både PDF-en og KI senere kan lese).
+Støtter hovedmålene: **færre reklamasjoner** (samme data gir samme PDF, byte for byte, så leder kan vise teksten og TG slik de ble publisert; forside og selskapsnavn følger dagens opplysninger til endelig PDF lagres i 2a-3; norsk orddeling, hele avvikskort og riktig bunntekst gir en rapport uten slurv), **de ansatte** (utkastet er klart på under ett sekund, og motoren kan senere vise rapporten ved siden av skjemaet og på iPad uten nett) og **KI i bunnen** (motoren er lukket og ren: ingen KI, ingen nett, ingen ny databehandler; rapporten har én strukturert form, snapshotet, som både PDF-en og KI senere kan lese).
 
 ## Beslutninger
 
