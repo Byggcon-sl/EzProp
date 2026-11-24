@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MAX_DEVIATIONS_PER_CHECKPOINT,
   TG_NOT_SET_LABEL,
@@ -28,7 +28,7 @@ import { AddDeviationPanel } from "./add-deviation-panel";
 import { AnswerField } from "./answer-field";
 import { DeviationCard } from "./deviation-card";
 import { useRoom, type UndoLine } from "./room-context";
-import { isActionError, ROOM_TEXTS } from "./room-messages";
+import { isActionError, ROOM_TEXTS, SUGGESTION_MESSAGES } from "./room-messages";
 import {
   ADD_DEVIATION_BUTTON_ID,
   T0059_FIX,
@@ -39,6 +39,7 @@ import {
   EMPTY_ANSWER,
   fixTargetId,
   outcomeName,
+  suggestionId,
   TG_DIRECT_CHOICE_ID,
   TGIU_HEADING_ID,
   undoButtonId,
@@ -88,6 +89,18 @@ export function CheckpointPanel({
   const { canEdit, doc, announce, openCheckpoint, focus, undoLines } = useRoom();
   const cp = doc.checkpoint(checkpoint.checkpointKey);
   const [addOpen, setAddOpen] = useState(false);
+  // Meldingen per forslag etter `already_decided` (A493). Punktet har egen nøkkel, så meldingene
+  // forsvinner når punktet byttes.
+  const [notices, setNotices] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const setNotice = useCallback((ruleKey: string, text: string | null) => {
+    setNotices((map) => {
+      if (text === null && !map.has(ruleKey)) return map;
+      const copy = new Map(map);
+      if (text === null) copy.delete(ruleKey);
+      else copy.set(ruleKey, text);
+      return copy;
+    });
+  }, []);
   const [handledSearchRequest, setHandledSearchRequest] = useState(searchOpenRequest);
   if (handledSearchRequest !== searchOpenRequest) {
     setHandledSearchRequest(searchOpenRequest);
@@ -181,6 +194,8 @@ export function CheckpointPanel({
           deviations={deviations}
           inspectionYear={inspectionYear}
           onStickyAccept={onStickyAccept}
+          notice={notices.get(suggestion.ruleKey) ?? null}
+          onNotice={setNotice}
         />
       ))}
 
@@ -258,7 +273,13 @@ export function CheckpointPanel({
 
       <DescriptionField checkpoint={checkpoint} />
 
-      <ReviewList checkpoint={checkpoint} suggestions={ownSuggestions} answers={answers} />
+      <ReviewList
+        checkpoint={checkpoint}
+        suggestions={ownSuggestions}
+        answers={answers}
+        inspectionYear={inspectionYear}
+        onNotice={setNotice}
+      />
     </div>
   );
 }
@@ -424,9 +445,49 @@ function TgDirectCard({ checkpoint }: { checkpoint: CheckpointView }) {
   );
 }
 
-/** «Avvik 1 er fjernet.» / «TGIU er fjernet.» med «Angre» til punktet forlates. */
+/** Id-en til «Gå til forslaget» etter `newer_decision`. */
+const newerDecisionButtonId = (lineId: string) => `${lineId}-go`;
+
+/**
+ * «Avvik 1 er fjernet.» / «TGIU er fjernet.» med «Angre» til punktet forlates. For avvik fra et
+ * forslag: «Avviket er fjernet. Forslaget om TG3 er åpent igjen.» (T-0117). Avvises «Angre» fordi
+ * forslaget er avgjort på nytt, står meldingen om det med «Gå til forslaget» (A494).
+ */
 function UndoRow({ line, checkpoint }: { line: UndoLine; checkpoint: CheckpointView }) {
-  const { run, room, focus, removeUndo, announce } = useRoom();
+  if (line.kind === "newer_decision") return <NewerDecisionRow line={line} />;
+  return <UndoActionRow line={line} checkpoint={checkpoint} />;
+}
+
+function NewerDecisionRow({ line }: { line: Extract<UndoLine, { kind: "newer_decision" }> }) {
+  const { removeUndo } = useRoom();
+  const messageId = `${line.id}-message`;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-white px-4 py-3">
+      <p id={messageId} role="status" className="min-w-0 flex-1 basis-60 text-slate-900">
+        {SUGGESTION_MESSAGES.newerDecision}
+      </p>
+      <Button
+        id={newerDecisionButtonId(line.id)}
+        variant="secondary"
+        aria-describedby={messageId}
+        onClick={() => {
+          if (focusElementById(suggestionId(line.ruleKey))) removeUndo(line.id);
+        }}
+      >
+        {SUGGESTION_MESSAGES.goToSuggestion}
+      </Button>
+    </div>
+  );
+}
+
+function UndoActionRow({
+  line,
+  checkpoint,
+}: {
+  line: Exclude<UndoLine, { kind: "newer_decision" }>;
+  checkpoint: CheckpointView;
+}) {
+  const { run, room, focus, removeUndo, addUndo, announce } = useRoom();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tgiuChoice, setTgiuChoice] = useState(false);
@@ -445,6 +506,14 @@ function UndoRow({ line, checkpoint }: { line: UndoLine; checkpoint: CheckpointV
       if (isActionError(result)) return setError(result.message);
       if (result.status === "tgiu_conflict") {
         setTgiuChoice(true);
+        return;
+      }
+      if (result.status === "newer_decision") {
+        // Forslaget er avgjort på nytt etter at avviket ble fjernet: ingenting er endret (A494).
+        const id = `newer-${line.deviationId}`;
+        removeUndo(line.id);
+        addUndo({ kind: "newer_decision", id, ruleKey: result.ruleKey });
+        focus(newerDecisionButtonId(id));
         return;
       }
       removeUndo(line.id);
@@ -469,18 +538,27 @@ function UndoRow({ line, checkpoint }: { line: UndoLine; checkpoint: CheckpointV
     focus(TGIU_HEADING_ID);
   };
 
+  const messageId = `${line.id}-message`;
+  const reopened = line.kind === "deviation" && line.suggestion !== null;
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-white px-4 py-3">
-        <p className="text-slate-900">
-          {line.kind === "deviation"
-            ? ROOM_TEXTS.deviationRemoved(line.number)
-            : ROOM_TEXTS.tgiuRemoved}
+        <p
+          id={messageId}
+          role={reopened ? "status" : undefined}
+          className="min-w-0 flex-1 basis-60 text-slate-900"
+        >
+          {line.kind === "tgiu"
+            ? ROOM_TEXTS.tgiuRemoved
+            : line.suggestion
+              ? SUGGESTION_MESSAGES.suggestionReopened(line.suggestion.tg)
+              : ROOM_TEXTS.deviationRemoved(line.number)}
         </p>
         <Button
           id={undoButtonId(line.id)}
           variant="secondary"
           disabled={busy}
+          aria-describedby={messageId}
           onClick={() => void undo()}
         >
           {busy ? ROOM_TEXTS.saving : ROOM_TEXTS.undo}
@@ -504,20 +582,37 @@ function UndoRow({ line, checkpoint }: { line: UndoLine; checkpoint: CheckpointV
   );
 }
 
-/** «Å se over» (design avsnitt 13): advarslene på punktet med «Rett nå». Sperrer aldri. */
+/**
+ * «Å se over» (design avsnitt 13): advarslene på punktet med «Rett nå». Sperrer aldri. Åpne
+ * forslag på ferdig punkt står øverst (TG3 først) med Godta, Endre og Avvis (A492). Når alt er
+ * løst, forsvinner listen, og «Å se over (0)» leses opp.
+ */
 function ReviewList({
   checkpoint,
   suggestions,
   answers,
+  inspectionYear,
+  onNotice,
 }: {
   checkpoint: CheckpointView;
   suggestions: readonly SuggestionView[];
   answers: ReadonlyMap<string, AnswerView>;
+  inspectionYear: InspectionYear;
+  onNotice(ruleKey: string, text: string | null): void;
 }) {
-  const { store, removeDeviation } = useRoom();
+  const { store, removeDeviation, doc } = useRoom();
   const [error, setError] = useState<string | null>(null);
-  const items = warningsWithFix(checkpoint, suggestions);
-  if (items.length === 0) return null;
+  const items = warningsWithFix(checkpoint, suggestions, doc);
+  // Har listen hatt noe på dette punktet, leses «Å se over (0)» opp når den blir tom.
+  const [hadItems, setHadItems] = useState(items.length > 0);
+  if (items.length > 0 && !hadItems) setHadItems(true);
+  // Statusområdet står fast, også når listen er tom, så endringen til 0 leses opp.
+  const status = (
+    <p role="status" aria-live="polite" className="sr-only">
+      {hadItems ? ROOM_TEXTS.toReview(items.length) : ""}
+    </p>
+  );
+  if (items.length === 0) return status;
   const deviations = [...checkpoint.deviations].sort((a, b) => a.sortOrder - b.sortOrder);
   const numberOf = (id: string | null) => {
     if (!id) return null;
@@ -551,78 +646,91 @@ function ReviewList({
   };
 
   return (
-    <Card>
-      <section aria-labelledby={WARNINGS_HEADING_ID} className="space-y-3">
-        <h3 id={WARNINGS_HEADING_ID} tabIndex={-1} className="text-lg font-semibold text-slate-900">
-          {ROOM_TEXTS.toReview(items.length)}
-        </h3>
-        <p role="status" aria-live="polite" className="sr-only">
-          {ROOM_TEXTS.toReview(items.length)}
-        </p>
-        <ul className="space-y-2">
-          {items.map(({ warning, fix }, index) => {
-            const n = numberOf(warning.deviationId);
-            const text = `${n !== null ? `${ROOM_TEXTS.deviationNumber(n)}: ` : ""}${warningText(warning)}`;
-            const target = fix
-              ? fixTargetId(fix, { checkpointKey: checkpoint.checkpointKey, firstMeasureId })
-              : warning.deviationId
-                ? deviationHeadingId(warning.deviationId)
-                : null;
-            const linked =
-              fix?.kind === "scroll_to_suggestion" && fix.deviationId ? fix.deviationId : null;
-            return (
-              <li
-                key={`${warning.code}-${warning.deviationId ?? ""}-${warning.ruleKey ?? ""}-${index}`}
-              >
-                <Warning
-                  id={warningId(index)}
-                  focusable
-                  action={
-                    <>
-                      {fix?.kind === "change_answer" && (
-                        <Button variant="secondary" onClick={changeAnswer}>
-                          {WARNING_FIX_LABELS.change_answer}
-                        </Button>
-                      )}
-                      {fix && fix.kind !== "change_answer" && target && (
-                        <Button variant="secondary" onClick={() => focusElementById(target)}>
-                          {WARNING_FIX_LABELS[fix.kind]}
-                        </Button>
-                      )}
-                      {linked && numberOf(linked) !== null && (
-                        <>
-                          <Button
-                            variant="secondary"
-                            onClick={async () => {
-                              setError(await removeDeviation(linked));
-                            }}
-                          >
-                            {STALE_DEVIATION_ACTION_LABELS.remove_deviation}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            onClick={() => focusElementById(deviationHeadingId(linked))}
-                          >
-                            {STALE_DEVIATION_ACTION_LABELS.keep_deviation}
-                          </Button>
-                        </>
-                      )}
-                      {!fix && target && (
-                        <Button variant="ghost" onClick={() => focusElementById(target)}>
-                          {ROOM_TEXTS.goToFieldLink}
-                        </Button>
-                      )}
-                    </>
-                  }
+    <>
+      {status}
+      <Card>
+        <section aria-labelledby={WARNINGS_HEADING_ID} className="space-y-3">
+          <h3
+            id={WARNINGS_HEADING_ID}
+            tabIndex={-1}
+            className="text-lg font-semibold text-slate-900"
+          >
+            {ROOM_TEXTS.toReview(items.length)}
+          </h3>
+          <ul className="space-y-2">
+            {items.map(({ warning, fix, context, openSuggestion }, index) => {
+              const n = numberOf(warning.deviationId);
+              const text = `${n !== null ? `${ROOM_TEXTS.deviationNumber(n)}: ` : ""}${warningText(warning, context)}`;
+              const target = fix
+                ? fixTargetId(fix, { checkpointKey: checkpoint.checkpointKey, firstMeasureId })
+                : warning.deviationId
+                  ? deviationHeadingId(warning.deviationId)
+                  : null;
+              const linked =
+                fix?.kind === "scroll_to_suggestion" && fix.deviationId ? fix.deviationId : null;
+              return (
+                <li
+                  key={`${warning.code}-${warning.deviationId ?? ""}-${warning.ruleKey ?? ""}-${index}`}
                 >
-                  {text}
-                </Warning>
-              </li>
-            );
-          })}
-        </ul>
-        {error && <FormMessage message={error} />}
-      </section>
-    </Card>
+                  <Warning
+                    id={warningId(index)}
+                    focusable
+                    action={
+                      <>
+                        {fix?.kind === "change_answer" && (
+                          <Button variant="secondary" onClick={changeAnswer}>
+                            {WARNING_FIX_LABELS.change_answer}
+                          </Button>
+                        )}
+                        {fix && fix.kind !== "change_answer" && target && (
+                          <Button variant="secondary" onClick={() => focusElementById(target)}>
+                            {WARNING_FIX_LABELS[fix.kind]}
+                          </Button>
+                        )}
+                        {linked && numberOf(linked) !== null && (
+                          <>
+                            <Button
+                              variant="secondary"
+                              onClick={async () => {
+                                setError(await removeDeviation(linked));
+                              }}
+                            >
+                              {STALE_DEVIATION_ACTION_LABELS.remove_deviation}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              onClick={() => focusElementById(deviationHeadingId(linked))}
+                            >
+                              {STALE_DEVIATION_ACTION_LABELS.keep_deviation}
+                            </Button>
+                          </>
+                        )}
+                        {!fix && target && (
+                          <Button variant="ghost" onClick={() => focusElementById(target)}>
+                            {ROOM_TEXTS.goToFieldLink}
+                          </Button>
+                        )}
+                      </>
+                    }
+                  >
+                    {text}
+                  </Warning>
+                  {openSuggestion && (
+                    <RuleSuggestionCard
+                      variant="review"
+                      suggestion={openSuggestion}
+                      deviations={deviations}
+                      inspectionYear={inspectionYear}
+                      onNotice={onNotice}
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {error && <FormMessage message={error} />}
+        </section>
+      </Card>
+    </>
   );
 }

@@ -3,14 +3,14 @@ id: T-0115
 tittel: Advarselen «Forslaget gjelder ikke lenger» blir stående når avviket er fjernet, så «Å se over» blir aldri tom
 type: feil
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-18
 rolle: test-takstmann, test-fag
 omrade: badet, regelforslag, advarsler
 maal: de ansatte
 commit: 50fad3e4
 forsok: 0
-pr:
+pr: 239
 ---
 
 ## Hva
@@ -35,3 +35,5 @@ Ta bort beslutninger der avviket er slettet. Egen tekst når forslaget ikke ga a
 
 ## Logg
 - 2026-11-18: funnet
+
+- 2026-11-24: rettet i PR #239 (branch `rett-forslag-og-avvik`, oppgavekort `docs/agenter/oppgaver/rett-forslag-og-avvik.md`). Testlaget prøver på nytt i neste kjøring.

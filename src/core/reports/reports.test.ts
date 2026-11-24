@@ -9,7 +9,9 @@ import {
   addMeasure,
   decideSuggestion,
   getRoomView,
+  removeDeviation,
   ReportTemplateMissingError,
+  restoreDeviation,
   saveField,
   setTgDirect,
   startReport,
@@ -310,6 +312,173 @@ describe("B5.3 expectTenantIsolation per spørring", () => {
     const a = await startedBathroom();
     const orgB = await createOrganization("Organisasjon B");
     await expect(createAiUsageLog(orgB.id, { reportId: a.reportId })).rejects.toThrow();
+  });
+});
+
+// --- Rett forslag og avvik: tenant-isolasjon (rett-forslag-og-avvik-testplan.md 2f) -------------
+
+/** Bad med godtatt TG3, avviket fjernet og forslaget godtatt på nytt (gir `newer_decision`). */
+async function seedDecidedAgain(organizationId: string) {
+  const f = await startedBathroom({ organizationId });
+  await answerMembrane1990(f);
+  const oldDeviationId = uuidv7();
+  const firstDecisionId = uuidv7();
+  await decideSuggestion(f.actor, f.organizationId, f.room, {
+    id: firstDecisionId,
+    ruleKey: RULE.before2000,
+    decision: "accepted",
+    deviationId: oldDeviationId,
+  });
+  await removeDeviation(f.actor, f.organizationId, f.room, oldDeviationId);
+  const newDeviationId = uuidv7();
+  const secondDecisionId = uuidv7();
+  await decideSuggestion(f.actor, f.organizationId, f.room, {
+    id: secondDecisionId,
+    ruleKey: RULE.before2000,
+    decision: "accepted",
+    deviationId: newDeviationId,
+  });
+  return { f, oldDeviationId, newDeviationId, firstDecisionId, secondDecisionId };
+}
+
+type DecidedAgain = Awaited<ReturnType<typeof seedDecidedAgain>>;
+
+/** Tenant-test over et bad fra `seedDecidedAgain`; mot en fremmed organisasjon brukes den andres rom. */
+async function expectDecidedAgainIsolation(
+  query: (actor: Actor, organizationId: string, own: DecidedAgain) => Promise<string[]>,
+  expected: (seeded: DecidedAgain) => string[],
+) {
+  const seeded = new Map<string, DecidedAgain>();
+  await expectTenantIsolation({
+    seed: async (grantA, grantB) => {
+      const a = await seedDecidedAgain(grantA.organizationId);
+      const b = await seedDecidedAgain(grantB.organizationId);
+      seeded.set(grantA.organizationId, a);
+      seeded.set(grantB.organizationId, b);
+      return { a: expected(a), b: expected(b) };
+    },
+    query: async (actor, organizationId) => {
+      const own = seeded.get(organizationId) ?? [...seeded.values()][0];
+      if (!own) throw new Error("mangler data");
+      return query(actor, organizationId, own);
+    },
+    idOf: (id: string) => id,
+  });
+}
+
+describe("rett-forslag-og-avvik 2f: tenant-isolasjon", () => {
+  it("FA-T1 gjeldende beslutning: beslutningene hentes med avvikets deleted_at, bare i egen organisasjon", async () => {
+    await expectDecidedAgainIsolation(
+      async (actor, organizationId, own) => {
+        const view = started(await getRoomView(actor, organizationId, own.f.room));
+        return [
+          ...view.suggestions.flatMap((s) => (s.latestDecision ? [s.latestDecision.id] : [])),
+          ...view.checkpoints.flatMap((c) =>
+            c.deviations.flatMap((d) => (d.suggestion ? [d.suggestion.decisionId] : [])),
+          ),
+        ];
+      },
+      // Bare den gjeldende raden; den første (avviket fjernet) vises aldri
+      (s) => [s.secondDecisionId],
+    );
+  });
+
+  it("FA-T2 decideSuggestion med oppslaget av gjeldende beslutning (already_decided)", async () => {
+    await expectDecidedAgainIsolation(
+      async (actor, organizationId, own) => {
+        const result = await decideSuggestion(actor, organizationId, own.f.room, {
+          id: uuidv7(),
+          ruleKey: RULE.before2000,
+          decision: "rejected",
+          overrideReasonCode: "documentation_present",
+        });
+        if (result.status !== "already_decided") throw new Error(`ventet already_decided`);
+        return result.refresh.checkpoints.flatMap((c) => c.deviations.map((d) => d.id));
+      },
+      (s) => [s.newDeviationId],
+    );
+  });
+
+  it("FA-T5 restoreDeviation med oppslaget etter nyere beslutning (newer_decision)", async () => {
+    await expectDecidedAgainIsolation(
+      async (actor, organizationId, own) => {
+        const result = await restoreDeviation(actor, organizationId, own.f.room, {
+          deviationId: own.oldDeviationId,
+        });
+        if (result.status !== "newer_decision") throw new Error(`ventet newer_decision`);
+        return result.refresh.checkpoints.flatMap((c) => c.deviations.map((d) => d.id));
+      },
+      (s) => [s.newDeviationId],
+    );
+  });
+
+  it("FA-T6 id-er fra en annen organisasjon gir samme svar som id-er som ikke finnes, og radene står urørt", async () => {
+    const a = await seedDecidedAgain((await createOrganization("A")).id);
+    const b = await startedBathroom();
+    await answerMembrane1990(b);
+    const rowsOf = async () => ({
+      deviations: await db.select().from(deviations).where(eq(deviations.reportId, a.f.reportId)),
+      decisions: await db
+        .select()
+        .from(ruleSuggestionDecisions)
+        .where(eq(ruleSuggestionDecisions.reportId, a.f.reportId)),
+      results: await db
+        .select()
+        .from(checkpointResults)
+        .where(eq(checkpointResults.reportId, a.f.reportId)),
+    });
+    const before = await rowsOf();
+
+    const errorOf = (run: () => Promise<unknown>) =>
+      run().then(
+        (value) => ({ resolved: value }),
+        (error: unknown) => ({ rejected: error instanceof Error ? error.name : String(error) }),
+      );
+    // Gjenoppretting: As fjernede avvik fra Bs rom, og et avvik som ikke finnes
+    const foreignRestore = await errorOf(() =>
+      restoreDeviation(b.actor, b.organizationId, b.room, { deviationId: a.oldDeviationId }),
+    );
+    const unknownRestore = await errorOf(() =>
+      restoreDeviation(b.actor, b.organizationId, b.room, { deviationId: uuidv7() }),
+    );
+    expect(foreignRestore).toEqual(unknownRestore);
+    expect(foreignRestore).toEqual({ rejected: AccessDeniedError.name });
+
+    // Bs bruker mot As rom: ingen tilgang, verken already_decided eller newer_decision
+    await expect(
+      decideSuggestion(b.actor, b.organizationId, a.f.room, {
+        id: uuidv7(),
+        ruleKey: RULE.before2000,
+        decision: "accepted",
+      }),
+    ).rejects.toBeInstanceOf(AccessDeniedError);
+    await expect(
+      decideSuggestion(b.actor, a.f.organizationId, a.f.room, {
+        id: uuidv7(),
+        ruleKey: RULE.before2000,
+        decision: "accepted",
+      }),
+    ).rejects.toBeInstanceOf(AccessDeniedError);
+    await expect(
+      restoreDeviation(b.actor, a.f.organizationId, a.f.room, { deviationId: a.oldDeviationId }),
+    ).rejects.toBeInstanceOf(AccessDeniedError);
+
+    // Beslutnings-id fra A i Bs rom gir samme svar som en id som ikke finnes i noen organisasjon
+    // gjør når den kolliderer: 404, og ingenting lagres i B
+    await expect(
+      decideSuggestion(b.actor, b.organizationId, b.room, {
+        id: a.secondDecisionId,
+        ruleKey: RULE.before2000,
+        decision: "accepted",
+      }),
+    ).rejects.toBeInstanceOf(AccessDeniedError);
+    const bDecisions = await db
+      .select()
+      .from(ruleSuggestionDecisions)
+      .where(eq(ruleSuggestionDecisions.reportId, b.reportId));
+    expect(bDecisions).toEqual([]);
+
+    expect(await rowsOf()).toEqual(before);
   });
 });
 

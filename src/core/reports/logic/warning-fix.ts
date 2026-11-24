@@ -35,6 +35,10 @@ export const warningFix: WarningFix = (warning, { decisions }): WarningFixAction
         deviationId: warning.deviationId ?? deviationFromDecision(warning.ruleKey, decisions),
       };
     }
+    case "open_suggestion_on_done_checkpoint":
+      // Forslaget er åpent: ingen gjeldende beslutning, så ikke noe avvik å fjerne eller beholde.
+      if (warning.ruleKey === null) return null;
+      return { kind: "scroll_to_suggestion", ruleKey: warning.ruleKey, deviationId: null };
     case "checkpoint_done_without_tg":
       return { kind: "focus_tg_choice" };
     default:

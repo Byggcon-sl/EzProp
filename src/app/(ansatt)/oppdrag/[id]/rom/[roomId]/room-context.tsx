@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useSyncExternalStore } from "react";
-import type { MergeValues, PhraseUsageCount } from "@/core/reports/logic";
+import type { MergeValues, PhraseUsageCount, SuggestionTg } from "@/core/reports/logic";
 import type { RoomRef, RoomTemplateDocument } from "@/core/reports/types";
 import type { ChangeBuilder, FieldEntry, FieldSaveStore, FieldValidator } from "./field-save-store";
 import type { ActionError } from "./room-messages";
@@ -13,10 +13,24 @@ import type { RoomDocumentIndex } from "./room-model";
  * kommer fra serveren og styrer bare hva som vises; serveren sjekker hver handling.
  */
 
-/** En linje med «Angre» til punktet forlates (design avsnitt 9 og 12). */
+/** Forslaget et fjernet avvik kom fra: regelen og TG-en i meldingen (T-0117). */
+export type UndoSuggestion = { ruleKey: string; tg: SuggestionTg | null };
+
+/**
+ * En linje med «Angre» til punktet forlates (design avsnitt 9 og 12). `newer_decision` er linjen
+ * som står igjen når «Angre» ble avvist fordi forslaget er avgjort på nytt (A494).
+ */
 export type UndoLine =
-  | { kind: "deviation"; id: string; deviationId: string; number: number }
-  | { kind: "tgiu"; id: string };
+  | {
+      kind: "deviation";
+      id: string;
+      deviationId: string;
+      number: number;
+      /** Satt når avviket kom fra et regelforslag med gjeldende beslutning. */
+      suggestion: UndoSuggestion | null;
+    }
+  | { kind: "tgiu"; id: string }
+  | { kind: "newer_decision"; id: string; ruleKey: string };
 
 export type RoomContextValue = {
   room: RoomRef;

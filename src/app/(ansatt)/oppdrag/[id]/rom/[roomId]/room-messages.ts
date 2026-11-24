@@ -1,4 +1,5 @@
-import type { AiGuardCode } from "@/db/schema";
+import type { SuggestionTg } from "@/core/reports/logic";
+import type { AiGuardCode, ChosenTg, RuleSuggestionDecision } from "@/db/schema";
 
 /*
  * Tekstene på skjermen for badet som ikke er oversettelse av koder (de står i
@@ -12,10 +13,13 @@ export type ActionError = {
   status: "error";
   message: string;
   /**
+   * Bare satt der skjermen må skille svaret fra andre feil.
    * `report_published`: rapporten er publisert, og serveren tar aldri imot endringen. Køen legger
    * den til side og prøver den ikke igjen, så resten sendes som før (ADR 0015 punkt 15, T-0001).
+   * `override_reason`: verdien krever en grunn (TG på avvik fra et forslag, A490), og ny lagring
+   * av samme verdi uten grunn hjelper aldri.
    */
-  code?: "report_published";
+  code?: "report_published" | "override_reason";
 };
 
 export function isActionError(value: unknown): value is ActionError {
@@ -35,6 +39,56 @@ export const ROOM_ACTION_MESSAGES = {
   startFailed: "Rapporten ble ikke startet. Prøv igjen.",
   noLongerApplies: "Forslaget gjelder ikke lenger. Feltet det bygde på er endret.",
   conflict: "Endret av andre",
+} as const;
+
+/** «TG3», «TG0», «TGIU». */
+function tgLabel(tg: ChosenTg | SuggestionTg): string {
+  return tg === "IU" ? "TGIU" : `TG${tg}`;
+}
+
+/** Klokkeslett i norsk tid med punktum: «10.42». Samme svar på iPad og PC uansett tidssone. */
+const OSLO_TIME = new Intl.DateTimeFormat("nb-NO", {
+  timeZone: "Europe/Oslo",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+export function osloClock(iso: string): string {
+  const parts = OSLO_TIME.formatToParts(new Date(iso));
+  const hour = parts.find((p) => p.type === "hour")?.value ?? "00";
+  const minute = parts.find((p) => p.type === "minute")?.value ?? "00";
+  return `${hour.padStart(2, "0")}.${minute.padStart(2, "0")}`;
+}
+
+/**
+ * Meldingene når et regelforslag og avviket det laget, henger sammen (T-0113, T-0116, T-0117,
+ * A493, A494). Faste tekster fra oppgavekortet; testene sjekker dem eksakt (FA-L27).
+ */
+export const SUGGESTION_MESSAGES = {
+  /** Etter «Fjern avviket» på et avvik fra et forslag. «Velg TG2 eller TG3» og HMS har ingen TG. */
+  suggestionReopened: (tg: SuggestionTg | null) =>
+    tg === null || tg === "choose"
+      ? "Avviket er fjernet. Forslaget er åpent igjen."
+      : `Avviket er fjernet. Forslaget om ${tgLabel(tg)} er åpent igjen.`,
+  /** Forslaget er avgjort i et annet vindu (svaret `already_decided`). Aldri hvem. */
+  alreadyDecided: (
+    decision: RuleSuggestionDecision,
+    chosenTg: ChosenTg | null,
+    decidedAt: string,
+  ) => {
+    const clock = osloClock(decidedAt);
+    if (decision === "rejected") return `Avvist i et annet vindu kl. ${clock}`;
+    const verb = decision === "accepted" ? "Godtatt" : "Endret";
+    return chosenTg === null
+      ? `${verb} i et annet vindu kl. ${clock}`
+      : `${verb} i et annet vindu kl. ${clock}: ${tgLabel(chosenTg)}`;
+  },
+  newerDecision:
+    "Forslaget er avgjort på nytt etter at avviket ble fjernet. Avviket hentes ikke tilbake.",
+  goToSuggestion: "Gå til forslaget",
+  /** Grunnen mangler ved TG-bytte på avvik fra et forslag. */
+  reasonMissing: "Velg en grunn for å endre TG fra forslaget.",
 } as const;
 
 export const ROOM_TEXTS = {

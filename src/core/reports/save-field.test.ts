@@ -1,14 +1,16 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+import { AccessDeniedError } from "@/core/access";
 import {
   addDeviation,
   addMeasure,
   decideSuggestion,
+  removeDeviation,
   ReportValidationError,
   saveField,
   setTgDirect,
@@ -16,12 +18,21 @@ import {
 } from "@/core/reports";
 import { warningFix } from "@/core/reports/logic";
 import { db } from "@/db/client";
-import { auditLog, deviationMeasures, deviations, fieldAnswers } from "@/db/schema";
+import {
+  auditLog,
+  checkpointResults,
+  deviationMeasures,
+  deviations,
+  fieldAnswers,
+  ruleSuggestionDecisions,
+} from "@/db/schema";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { createAiUsageLog, resetDatabase } from "../../../tests/factories";
+import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import {
   answer,
   answerHole,
+  answerMembrane1990,
   checkpointOf,
   CP,
   EMPTY,
@@ -461,5 +472,172 @@ describe("4b lagring per felt", () => {
     expect(adjacent.warnings).toContainEqual(
       expect.objectContaining({ code: "tgiu_suggested_not_set", ruleKey: RULE.notDone }),
     );
+  });
+});
+
+// --- T-0113, A490: TG på avvik fra et forslag går ikke gjennom lagring per felt -------------------
+
+/** Bad med godtatt TG3-forslag «før 2000» (avvik fra forslag med gjeldende beslutning). */
+async function suggestedDeviation(options: Parameters<typeof startedBathroom>[0] = {}) {
+  const f = await startedBathroom(options);
+  await answerMembrane1990(f);
+  const deviationId = uuidv7();
+  const accepted = await decideSuggestion(f.actor, f.organizationId, f.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "accepted",
+    deviationId,
+  });
+  if (accepted.status !== "saved") throw new Error("godta feilet");
+  return { ...f, deviationId };
+}
+
+/** Alt som kan endres av et TG-bytte: avviket, punktet, beslutningene og revisjonsloggen. */
+async function snapshot(f: Pick<F, "reportId">, deviationId: string) {
+  const [deviation] = await db.select().from(deviations).where(eq(deviations.id, deviationId));
+  const results = await db
+    .select()
+    .from(checkpointResults)
+    .where(eq(checkpointResults.reportId, f.reportId));
+  const decisions = await db
+    .select()
+    .from(ruleSuggestionDecisions)
+    .where(eq(ruleSuggestionDecisions.reportId, f.reportId));
+  const [audit] = await db.select({ n: count() }).from(auditLog);
+  return { deviation, results, decisions, audit: audit?.n };
+}
+
+function tgChange(deviationId: string, value: 2 | 3 | null, base: 2 | 3 | null): ReportFieldChange {
+  return { table: "deviations", id: deviationId, field: "tg", value, base };
+}
+
+describe("2c TG på avvik fra forslag i lagring per felt (T-0113)", () => {
+  it("FA-I16 saveField med tg på avvik fra godtatt forslag avvises med override_reason, og ingenting lagres", async () => {
+    const f = await suggestedDeviation();
+    const before = await snapshot(f, f.deviationId);
+    for (const [value, base] of [
+      [2, 3],
+      [null, 3],
+      // Også med feil base: avvises før konfliktsjekken, aldri «endret av andre»
+      [2, 2],
+    ] as const) {
+      const error = await save(f, tgChange(f.deviationId, value, base)).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(error).toBeInstanceOf(ReportValidationError);
+      expect((error as ReportValidationError).code).toBe("override_reason");
+      expect((error as ReportValidationError).message).toBe(
+        "Velg en grunn for å endre TG fra forslaget.",
+      );
+    }
+    expect(await snapshot(f, f.deviationId)).toEqual(before);
+  });
+
+  it("FA-I17 saveField med tg på avvik uten forslag lagres uten grunn, som før", async () => {
+    const f = await startedBathroom();
+    const row = await deviationOn(f);
+    const next = row.tg === 2 ? 3 : 2;
+    const result = await save(f, tgChange(row.id, next, row.tg));
+    expect(result.status).toBe("saved");
+    const [after] = await db.select().from(deviations).where(eq(deviations.id, row.id));
+    expect(after?.tg).toBe(next);
+    const [decisions] = await db.select({ n: count() }).from(ruleSuggestionDecisions);
+    expect(decisions?.n).toBe(0);
+  });
+
+  it("fjernet avvik fra forslag: saveField gir 404 som før", async () => {
+    // Avviket er fjernet: saveField gir 404 som før, og beslutningen er ikke gjeldende
+    const f = await suggestedDeviation();
+    await removeDeviation(f.actor, f.organizationId, f.room, f.deviationId);
+    await expect(save(f, tgChange(f.deviationId, 2, 3))).rejects.toBeInstanceOf(AccessDeniedError);
+  });
+
+  it("FA-I18 andre felt på avvik fra forslag lagres som før, uten grunn og uten ny beslutningsrad", async () => {
+    const f = await suggestedDeviation();
+    const [row] = await db.select().from(deviations).where(eq(deviations.id, f.deviationId));
+    const changes: ReportFieldChange[] = [
+      {
+        table: "deviations",
+        id: f.deviationId,
+        field: "cause_text",
+        value: "Oppdiktet årsak",
+        base: row!.causeText,
+      },
+      {
+        table: "deviations",
+        id: f.deviationId,
+        field: "cost",
+        value: { type: "approx", bandKey: null, amount: 30_000 },
+        base: { type: row!.costType, bandKey: row!.costBandKey, amount: row!.costAmount },
+      },
+    ];
+    for (const c of changes) expect((await save(f, c)).status).toBe("saved");
+    const decisions = await db
+      .select()
+      .from(ruleSuggestionDecisions)
+      .where(eq(ruleSuggestionDecisions.reportId, f.reportId));
+    expect(decisions).toHaveLength(1);
+    const [after] = await db.select().from(deviations).where(eq(deviations.id, f.deviationId));
+    expect(after).toMatchObject({ causeText: "Oppdiktet årsak", costAmount: 30_000, tg: 3 });
+  });
+});
+
+describe("2f tenant-isolasjon (saveField for tg med forslagssjekken)", () => {
+  it("FA-T4 forslagssjekken i saveField filtrerer på organisasjonen", async () => {
+    const byOrg = new Map<string, Awaited<ReturnType<typeof suggestedDeviation>>>();
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        const a = await suggestedDeviation({ organizationId: grantA.organizationId });
+        const b = await suggestedDeviation({ organizationId: grantB.organizationId });
+        byOrg.set(grantA.organizationId, a);
+        byOrg.set(grantB.organizationId, b);
+        return { a: [a.deviationId], b: [b.deviationId] };
+      },
+      query: async (actor, organizationId) => {
+        // Mot en fremmed organisasjon brukes et avvik fra den andre; tilgangen stopper før oppslaget
+        const own = byOrg.get(organizationId) ?? [...byOrg.values()][0]!;
+        try {
+          await saveField(actor, organizationId, own.room, tgChange(own.deviationId, 2, 3));
+        } catch (error) {
+          // Egen organisasjon: forslaget ble funnet, og TG-bytte uten grunn er avvist
+          if (error instanceof ReportValidationError && error.code === "override_reason") {
+            const [row] = await db
+              .select({ id: deviations.id })
+              .from(deviations)
+              .where(
+                and(
+                  eq(deviations.id, own.deviationId),
+                  eq(deviations.organizationId, organizationId),
+                ),
+              );
+            return row ? [row.id] : [];
+          }
+          throw error;
+        }
+        return [];
+      },
+      idOf: (id) => id,
+    });
+  });
+
+  it("FA-T6 avvik fra en annen organisasjon gir 404, aldri override_reason eller conflict, og B er urørt", async () => {
+    const a = await suggestedDeviation();
+    const b = await suggestedDeviation();
+    const bBefore = await snapshot(b, b.deviationId);
+    for (const [value, base] of [
+      [2, 3],
+      [2, 2],
+    ] as const) {
+      await expect(save(a, tgChange(b.deviationId, value, base))).rejects.toBeInstanceOf(
+        AccessDeniedError,
+      );
+      await expect(save(a, tgChange(uuidv7(), value, base))).rejects.toBeInstanceOf(
+        AccessDeniedError,
+      );
+    }
+    const after = await snapshot(b, b.deviationId);
+    expect(after.deviation).toEqual(bBefore.deviation);
+    expect(after.decisions).toEqual(bBefore.decisions);
   });
 });

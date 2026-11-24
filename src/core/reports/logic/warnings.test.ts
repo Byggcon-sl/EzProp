@@ -4,18 +4,22 @@ import { describe, expect, it } from "vitest";
 import type { RuleResult } from "@/core/rules";
 import { CHECKPOINT_WARNING_CODES } from "./codes";
 import { warningText } from "./labels";
+import { computeCheckpointStatus } from "./status";
 import type {
   CheckpointState,
   CheckpointWarning,
   CheckpointWarningCode,
   DecisionState,
   DeviationState,
+  SuggestionTg,
   TgiuState,
 } from "./types";
 import {
   computeCheckpointWarnings,
   missingTgiuDetails,
+  sortReviewWarnings,
   suggestionStillApplies,
+  suggestionTgRank,
   tgiuRequirementsFor,
   WARNING_CODES_WITH_CHECK,
 } from "./warnings";
@@ -114,6 +118,8 @@ function decision(overrides: Partial<DecisionState> = {}): DecisionState {
     ruleKey: AGE_RULE,
     decision: "accepted",
     suggestion: AGE_SUGGESTION,
+    chosenTg: "2",
+    madeDeviation: true,
     deviationId: "dev-1",
     ...overrides,
   };
@@ -214,6 +220,10 @@ const WARNING_CASES: Record<
       ],
     }),
     expected: { deviationId: "dev-1" },
+  },
+  open_suggestion_on_done_checkpoint: {
+    state: checkpoint({ ruleResults: [triggered(AGE_RULE, AGE_SUGGESTION)] }),
+    expected: { ruleKey: AGE_RULE, deviationId: null, missing: [] },
   },
 };
 
@@ -430,7 +440,7 @@ describe("B1.10c T-0059 og TGIU bygger på regelsvaret (A386)", () => {
 });
 
 describe("B1.10d rekkefølgen er låst (regel 6)", () => {
-  it("CHECKPOINT_WARNING_CODES er uendret, med de to nye sist", () => {
+  it("CHECKPOINT_WARNING_CODES er uendret, med de nye sist", () => {
     expect(CHECKPOINT_WARNING_CODES).toEqual([
       "deviation_tg_not_chosen",
       "tg2_tg3_missing_cause_or_consequence",
@@ -445,7 +455,396 @@ describe("B1.10d rekkefølgen er låst (regel 6)", () => {
       "texts_written_for_other_tg",
       "checkpoint_done_without_tg",
       "tg3_on_age_only",
+      "open_suggestion_on_done_checkpoint",
     ]);
+  });
+});
+
+// --- rett-forslag-og-avvik (T-0115, T-0117, A492, A495) ------------------------------------------
+
+const TG3_RULE = "rule.membrane_before_2000";
+const TG3_SUGGESTION = {
+  kind: "outcome",
+  checkpoint_key: "cp.membrane",
+  question_key: "cp.membrane.age",
+  outcome_key: "tg3",
+} as const;
+const TG0_RULE = "rule.adjacent_ok";
+const TG0_SUGGESTION = { kind: "tg0", checkpoint_key: ADJACENT } as const;
+const TGIU_SUGGESTION = { kind: "tgiu", checkpoint_key: ADJACENT } as const;
+
+describe("FA-L12–L15 suggestion_no_longer_applies gjelder bare gjeldende beslutninger (T-0115)", () => {
+  it("FA-L12 avviket fra beslutningen er slettet: ingen advarsel", () => {
+    const state = checkpoint({
+      ruleResults: [notTriggered(AGE_RULE)],
+      decisions: [decision({ deviationId: null, madeDeviation: true })],
+    });
+    expect(codes(computeCheckpointWarnings(state))).not.toContain("suggestion_no_longer_applies");
+  });
+
+  it("FA-L12 det samme for endret beslutning med slettet avvik", () => {
+    const state = checkpoint({
+      ruleResults: [notTriggered(AGE_RULE)],
+      decisions: [decision({ decision: "changed", deviationId: null, madeDeviation: true })],
+    });
+    expect(computeCheckpointWarnings(state)).toEqual([]);
+  });
+
+  it.each<["0" | "IU", RuleResult["suggestion"]]>([
+    ["0", TG0_SUGGESTION],
+    ["IU", TGIU_SUGGESTION],
+  ])(
+    "FA-L13 godtatt TG%s uten avvik, regelen slår ikke til, TG står: advarsel uten avvik",
+    (tg, suggestion) => {
+      const d = decision({
+        ruleKey: TG0_RULE,
+        suggestion: suggestion!,
+        chosenTg: tg,
+        madeDeviation: false,
+        deviationId: null,
+      });
+      const state = checkpoint({
+        tgDirect: tg,
+        tgiu: tg === "IU" ? fullTgiu() : null,
+        ruleResults: [notTriggered(TG0_RULE)],
+        decisions: [d],
+      });
+      const warnings = computeCheckpointWarnings(state);
+      expect(warnings).toEqual([
+        { code: "suggestion_no_longer_applies", deviationId: null, ruleKey: TG0_RULE, missing: [] },
+      ]);
+      const label = tg === "IU" ? "TGIU" : "TG0";
+      expect(warningText(warnings[0]!, { chosenTg: d.chosenTg })).toBe(
+        `Forslaget gjelder ikke lenger. Punktet har fortsatt ${label} fra forslaget. Sjekk at graden stemmer.`,
+      );
+    },
+  );
+
+  it("FA-L13 TG på punktet er endret bort fra godtatt TG0: ingen «gjelder ikke lenger»", () => {
+    const state = checkpoint({
+      tgDirect: "1",
+      done: false,
+      ruleResults: [notTriggered(TG0_RULE)],
+      decisions: [
+        decision({
+          ruleKey: TG0_RULE,
+          suggestion: TG0_SUGGESTION,
+          chosenTg: "0",
+          madeDeviation: false,
+          deviationId: null,
+        }),
+      ],
+    });
+    expect(computeCheckpointWarnings(state)).toEqual([]);
+  });
+
+  it("FA-L14 utfallsforslag med levende avvik og regelen slår ikke til: som før", () => {
+    const state = checkpoint({
+      deviations: [deviation()],
+      ruleResults: [notTriggered(AGE_RULE)],
+      decisions: [decision()],
+    });
+    const warnings = computeCheckpointWarnings(state);
+    expect(warnings).toEqual([
+      {
+        code: "suggestion_no_longer_applies",
+        deviationId: "dev-1",
+        ruleKey: AGE_RULE,
+        missing: [],
+      },
+    ]);
+    expect(warningText(warnings[0]!, { chosenTg: "2" })).toBe(
+      "Et forslag fra reglene gjelder ikke lenger.",
+    );
+  });
+
+  it("FA-L15 alt er løst: «Å se over» er tom", () => {
+    // Godtatt TG3 med avviket fylt ut, et avvist forslag og et godtatt TG0 som fortsatt står.
+    const state = checkpoint({
+      tgDirect: null,
+      deviations: [
+        deviation({ id: "dev-3", tg: 3, outcomeTg: 3, costType: "approx", costAmount: 40000 }),
+      ],
+      ruleResults: [
+        triggered(TG3_RULE, TG3_SUGGESTION),
+        triggered(AGE_RULE, AGE_SUGGESTION),
+        notTriggered(NOT_DONE_RULE),
+      ],
+      decisions: [
+        decision({
+          ruleKey: TG3_RULE,
+          suggestion: TG3_SUGGESTION,
+          chosenTg: "3",
+          deviationId: "dev-3",
+        }),
+        decision({ decision: "rejected", chosenTg: null, madeDeviation: false, deviationId: null }),
+      ],
+    });
+    expect(computeCheckpointWarnings(state)).toEqual([]);
+  });
+
+  it("FA-L15 T-0115: avvikene er fjernet og TGIU satt med alt fylt ut gir tom liste", () => {
+    const state = checkpoint({
+      tgDirect: "IU",
+      tgiu: fullTgiu(),
+      ruleResults: [
+        notTriggered(TG3_RULE),
+        triggered(NOT_DONE_RULE, TGIU_SUGGESTION, "suggest_tgiu"),
+      ],
+      decisions: [
+        decision({
+          ruleKey: TG3_RULE,
+          suggestion: TG3_SUGGESTION,
+          chosenTg: "3",
+          deviationId: null,
+        }),
+        decision({
+          ruleKey: NOT_DONE_RULE,
+          suggestion: TGIU_SUGGESTION,
+          chosenTg: "IU",
+          madeDeviation: false,
+          deviationId: null,
+        }),
+      ],
+    });
+    expect(computeCheckpointWarnings(state)).toEqual([]);
+  });
+});
+
+describe("FA-L16–L23 open_suggestion_on_done_checkpoint (A492)", () => {
+  const openCodes = (overrides: Partial<CheckpointState>) =>
+    computeCheckpointWarnings(checkpoint(overrides)).filter(
+      (w) => w.code === "open_suggestion_on_done_checkpoint",
+    );
+
+  it("FA-L16 ferdig punkt med åpent TG3-forslag gir advarsel med regelen og teksten", () => {
+    const warnings = openCodes({
+      tgDirect: null,
+      ruleResults: [triggered(TG3_RULE, TG3_SUGGESTION)],
+    });
+    expect(warnings).toEqual([
+      {
+        code: "open_suggestion_on_done_checkpoint",
+        deviationId: null,
+        ruleKey: TG3_RULE,
+        missing: [],
+      },
+    ]);
+    expect(warningText(warnings[0]!, { suggestionTg: 3 })).toBe(
+      "Punktet er ferdig, men forslaget om TG3 er ikke avgjort.",
+    );
+  });
+
+  it("FA-L16 T-0117: godtatt TG3 der avviket er fjernet, gir advarsel", () => {
+    const warnings = openCodes({
+      tgDirect: null,
+      ruleResults: [triggered(TG3_RULE, TG3_SUGGESTION)],
+      decisions: [
+        decision({
+          ruleKey: TG3_RULE,
+          suggestion: TG3_SUGGESTION,
+          chosenTg: "3",
+          deviationId: null,
+        }),
+      ],
+    });
+    expect(warnings.map((w) => w.ruleKey)).toEqual([TG3_RULE]);
+  });
+
+  it.each<[string, Partial<CheckpointState>]>([
+    ["annet avvik med TG2", { tgDirect: null, deviations: [deviation({ tg: 2 })] }],
+    ["TG1 satt direkte", { tgDirect: "1" }],
+  ])("FA-L17 TG fra før stopper ikke advarselen: %s", (_name, overrides) => {
+    const warnings = openCodes({
+      ...overrides,
+      ruleResults: [triggered(TG3_RULE, TG3_SUGGESTION)],
+    });
+    expect(warnings.map((w) => w.ruleKey)).toEqual([TG3_RULE]);
+  });
+
+  it("FA-L18 punktet er ikke ferdig: ingen advarsel", () => {
+    expect(
+      openCodes({
+        done: false,
+        tgDirect: null,
+        ruleResults: [triggered(TG3_RULE, TG3_SUGGESTION)],
+      }),
+    ).toEqual([]);
+  });
+
+  it("FA-L19 åpent TGIU-forslag gir bare tgiu_suggested_not_set", () => {
+    const state = checkpoint({
+      tgDirect: "1",
+      ruleResults: [triggered(NOT_DONE_RULE, TGIU_SUGGESTION, "suggest_tgiu")],
+    });
+    expect(codes(computeCheckpointWarnings(state))).toEqual(["tgiu_suggested_not_set"]);
+  });
+
+  it("FA-L20 åpent TG0-forslag på ferdig punkt gir advarsel med TG0", () => {
+    const warnings = openCodes({
+      tgDirect: "1",
+      ruleResults: [triggered(TG0_RULE, TG0_SUGGESTION, "suggest_tg0")],
+    });
+    expect(warnings.map((w) => w.ruleKey)).toEqual([TG0_RULE]);
+    expect(warningText(warnings[0]!, { suggestionTg: "0" })).toBe(
+      "Punktet er ferdig, men forslaget om TG0 er ikke avgjort.",
+    );
+  });
+
+  it("FA-L20 A495: godtatt TG0, TG på punktet endret: forslaget er åpent igjen", () => {
+    const warnings = openCodes({
+      tgDirect: "1",
+      ruleResults: [triggered(TG0_RULE, TG0_SUGGESTION, "suggest_tg0")],
+      decisions: [
+        decision({
+          ruleKey: TG0_RULE,
+          suggestion: TG0_SUGGESTION,
+          chosenTg: "0",
+          madeDeviation: false,
+          deviationId: null,
+        }),
+      ],
+    });
+    expect(warnings.map((w) => w.ruleKey)).toEqual([TG0_RULE]);
+  });
+
+  it.each<[string, DecisionState, Partial<CheckpointState>]>([
+    [
+      "godtatt med levende avvik",
+      decision({
+        ruleKey: TG3_RULE,
+        suggestion: TG3_SUGGESTION,
+        chosenTg: "3",
+        deviationId: "dev-3",
+      }),
+      { deviations: [deviation({ id: "dev-3", tg: 3, outcomeTg: 3 })] },
+    ],
+    [
+      "endret til TG2 med levende avvik",
+      decision({
+        ruleKey: TG3_RULE,
+        suggestion: TG3_SUGGESTION,
+        decision: "changed",
+        chosenTg: "2",
+        deviationId: "dev-3",
+      }),
+      { deviations: [deviation({ id: "dev-3", tg: 2, outcomeTg: 3 })] },
+    ],
+    [
+      "endret til TG1 uten avvik, TG1 står",
+      decision({
+        ruleKey: TG3_RULE,
+        suggestion: TG3_SUGGESTION,
+        decision: "changed",
+        chosenTg: "1",
+        madeDeviation: false,
+        deviationId: null,
+      }),
+      { tgDirect: "1" },
+    ],
+    [
+      "avvist",
+      decision({
+        ruleKey: TG3_RULE,
+        suggestion: TG3_SUGGESTION,
+        decision: "rejected",
+        chosenTg: null,
+        madeDeviation: false,
+        deviationId: null,
+      }),
+      { tgDirect: "1" },
+    ],
+  ])("FA-L21 gjeldende beslutning (%s): ingen advarsel", (_name, d, overrides) => {
+    expect(
+      openCodes({
+        tgDirect: null,
+        ...overrides,
+        ruleResults: [triggered(TG3_RULE, TG3_SUGGESTION)],
+        decisions: [d],
+      }),
+    ).toEqual([]);
+  });
+
+  it("regel som ikke slår til eller ikke er vurdert, gir ingen advarsel", () => {
+    expect(
+      openCodes({
+        ruleResults: [
+          notTriggered(TG3_RULE),
+          { ...triggered(AGE_RULE, null), state: "not_evaluated" },
+        ],
+      }),
+    ).toEqual([]);
+  });
+
+  it("FA-L22 advarselen er aldri sperre: bare kode og id-er, og punktet står som ferdig", () => {
+    const state = checkpoint({
+      tgDirect: null,
+      ruleResults: [triggered(TG3_RULE, TG3_SUGGESTION)],
+    });
+    for (const w of computeCheckpointWarnings(state)) {
+      expect(Object.keys(w).sort()).toEqual(["code", "deviationId", "missing", "ruleKey"]);
+    }
+    expect(computeCheckpointStatus(state)).toBe("done");
+  });
+
+  it("FA-L23 på punktet: utfall (TG2/TG3) står foran TG0, ellers regelsvarenes rekkefølge", () => {
+    const warnings = openCodes({
+      tgDirect: "1",
+      ruleResults: [
+        triggered(TG0_RULE, TG0_SUGGESTION, "suggest_tg0"),
+        triggered(AGE_RULE, AGE_SUGGESTION),
+        triggered(TG3_RULE, TG3_SUGGESTION),
+      ],
+    });
+    expect(warnings.map((w) => w.ruleKey)).toEqual([AGE_RULE, TG3_RULE, TG0_RULE]);
+  });
+
+  it("FA-L23 i «Å se over»: åpne forslag øverst, TG3 foran TG2 og TG0", () => {
+    const tgByRule: Record<string, SuggestionTg> = {
+      [AGE_RULE]: 2,
+      [TG3_RULE]: 3,
+      [TG0_RULE]: "0",
+      "rule.choose": "choose",
+    };
+    const open = (ruleKey: string): CheckpointWarning => ({
+      code: "open_suggestion_on_done_checkpoint",
+      deviationId: null,
+      ruleKey,
+      missing: [],
+    });
+    const other: CheckpointWarning = {
+      code: "tg3_missing_cost",
+      deviationId: "dev-1",
+      ruleKey: null,
+      missing: [],
+    };
+    const sorted = sortReviewWarnings(
+      [
+        other,
+        open(TG0_RULE),
+        open(AGE_RULE),
+        open("rule.unknown"),
+        open("rule.choose"),
+        open(TG3_RULE),
+      ],
+      (w) => (w.ruleKey ? (tgByRule[w.ruleKey] ?? null) : null),
+    );
+    expect(sorted.map((w) => w.ruleKey ?? w.code)).toEqual([
+      TG3_RULE,
+      "rule.choose",
+      AGE_RULE,
+      TG0_RULE,
+      "rule.unknown",
+      "tg3_missing_cost",
+    ]);
+  });
+
+  it("FA-L23 rangen: TG3 < velg < TG2 < TG0 < TGIU < ukjent", () => {
+    const ranks = ([3, "choose", 2, "0", "IU", null] as (SuggestionTg | null)[]).map(
+      suggestionTgRank,
+    );
+    expect([...ranks].sort((a, b) => a - b)).toEqual(ranks);
+    expect(new Set(ranks).size).toBe(ranks.length);
   });
 });
 

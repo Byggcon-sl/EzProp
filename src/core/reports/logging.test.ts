@@ -4,18 +4,30 @@ import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+// FA-I39: spion på inngangene til KI-modulen. Rapportkjernen skal aldri kalle dem.
+const aiSpies = vi.hoisted(() => ({
+  requestSuggestion: vi.fn(),
+  recordDecision: vi.fn(),
+  checkAiTextApproved: vi.fn(),
+}));
+vi.mock("@/core/ai", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ...aiSpies,
+}));
 
 import {
   addDeviation,
   addMeasure,
   decideSuggestion,
+  removeDeviation,
   ReportStorageError,
+  restoreDeviation,
   saveField,
   setTgDirect,
   type ReportFieldChange,
 } from "@/core/reports";
 import { db } from "@/db/client";
-import { auditLog, deviations, ruleSuggestionDecisions } from "@/db/schema";
+import { aiUsageLog, auditLog, deviations, ruleSuggestionDecisions } from "@/db/schema";
 import { logger } from "@/shared/lib/logger";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { resetDatabase } from "../../../tests/factories";
@@ -185,6 +197,80 @@ describe("4e logg og personvern", () => {
     expect((error as Error).message).not.toContain(MARKER);
     expect(logged(spies)).not.toContain(MARKER);
     expect(spies[3]?.mock.calls.length).toBe(1);
+  });
+});
+
+// --- Rett forslag og avvik: KI og sletting (rett-forslag-og-avvik-testplan.md 2g) ---------------
+
+describe("rett-forslag-og-avvik 2g: ingen KI og ingen sletting", () => {
+  it("FA-I39–I41 Godta, Endre, Avvis, already_decided, fjern og Angre: ingen KI-kall, ingen ai_usage_log, ingenting slettet", async () => {
+    const f = await startedBathroom();
+    await answerMembrane1990(f);
+    const first = uuidv7();
+    const decideOnce = (input: Record<string, unknown>) =>
+      decideSuggestion(f.actor, f.organizationId, f.room, {
+        id: uuidv7(),
+        ruleKey: RULE.before2000,
+        ...input,
+      } as Parameters<typeof decideSuggestion>[3]);
+
+    expect((await decideOnce({ decision: "accepted", deviationId: first })).status).toBe("saved");
+    // already_decided (Endre og Avvis etter Godta)
+    expect(
+      (
+        await decideOnce({
+          decision: "changed",
+          chosenTg: "2",
+          overrideReasonCode: "other",
+          overrideReason: MARKER,
+        })
+      ).status,
+    ).toBe("already_decided");
+    expect(
+      (await decideOnce({ decision: "rejected", overrideReasonCode: "documentation_present" }))
+        .status,
+    ).toBe("already_decided");
+    await removeDeviation(f.actor, f.organizationId, f.room, first);
+    const second = uuidv7();
+    expect(
+      (
+        await decideOnce({
+          decision: "changed",
+          chosenTg: "2",
+          overrideReasonCode: "other",
+          overrideReason: MARKER,
+          deviationId: second,
+        })
+      ).status,
+    ).toBe("saved");
+    expect(
+      (await restoreDeviation(f.actor, f.organizationId, f.room, { deviationId: first })).status,
+    ).toBe("newer_decision");
+    await removeDeviation(f.actor, f.organizationId, f.room, second);
+    expect(
+      (await decideOnce({ decision: "rejected", overrideReasonCode: "documentation_present" }))
+        .status,
+    ).toBe("saved");
+
+    for (const spy of Object.values(aiSpies)) expect(spy).not.toHaveBeenCalled();
+    expect(
+      await db.select().from(aiUsageLog).where(eq(aiUsageLog.organizationId, f.organizationId)),
+    ).toEqual([]);
+    // Fjernede avvik står mykt slettet; beslutningsradene står alle
+    const rows = await db.select().from(deviations).where(eq(deviations.reportId, f.reportId));
+    expect(rows.map((r) => r.id).sort()).toEqual([first, second].sort());
+    expect(rows.every((r) => r.deletedAt !== null)).toBe(true);
+    const decisions = await db
+      .select()
+      .from(ruleSuggestionDecisions)
+      .where(eq(ruleSuggestionDecisions.reportId, f.reportId));
+    expect(decisions.map((d) => d.decision)).toEqual(["accepted", "changed", "rejected"]);
+    // Begrunnelsesteksten står i raden, aldri i revisjonsloggen
+    const audit = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.organizationId, f.organizationId));
+    expect(JSON.stringify(audit)).not.toContain(MARKER);
   });
 });
 

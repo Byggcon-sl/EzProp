@@ -54,6 +54,8 @@ describe("B1.12 status per punkt", () => {
             ruleKey: "r",
             decision: "rejected",
             suggestion: { kind: "tg0", checkpoint_key: "cp" },
+            chosenTg: null,
+            madeDeviation: false,
             deviationId: null,
           },
         ],

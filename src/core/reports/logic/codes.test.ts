@@ -10,7 +10,7 @@ import {
   TEXT_SOURCES,
   tgiuDetails,
 } from "@/db/schema";
-import { REPORT_AI_TARGET_FIELDS } from "./codes";
+import { CHECKPOINT_WARNING_CODES, REPORT_AI_TARGET_FIELDS, WARNING_FIX_KINDS } from "./codes";
 
 /*
  * Låste lister og rent blad (testplanen B1.15 og B1.19). Ren test uten database.
@@ -53,6 +53,36 @@ describe("B1.19 KI-målene", () => {
   it("TEXT_SOURCES har ingen KI- eller frasekode (A357)", () => {
     expect(TEXT_SOURCES).toEqual(["template", "edited", "free"]);
     for (const source of TEXT_SOURCES) expect(source).not.toMatch(/ai|ki|phrase|frase/iu);
+  });
+});
+
+describe("FA-L24 open_suggestion_on_done_checkpoint er fast kode (regel 6)", () => {
+  it("står sist, og de gamle kodene har samme rekkefølge", () => {
+    expect(CHECKPOINT_WARNING_CODES.at(-1)).toBe("open_suggestion_on_done_checkpoint");
+    expect(CHECKPOINT_WARNING_CODES.slice(0, -1)).toEqual([
+      "deviation_tg_not_chosen",
+      "tg2_tg3_missing_cause_or_consequence",
+      "tg2_tg3_missing_measure",
+      "tg3_missing_cost",
+      "cost_amount_not_rounded",
+      "hms_missing_consequence_or_measure",
+      "tgiu_details_missing",
+      "tgiu_suggested_not_set",
+      "no_findings_with_reading_over_limit",
+      "suggestion_no_longer_applies",
+      "texts_written_for_other_tg",
+      "checkpoint_done_without_tg",
+      "tg3_on_age_only",
+    ]);
+  });
+
+  it("handlingen bak «Rett nå» gjenbrukes (ingen ny kode)", () => {
+    expect(WARNING_FIX_KINDS).toEqual([
+      "change_answer",
+      "focus_field",
+      "focus_tg_choice",
+      "scroll_to_suggestion",
+    ]);
   });
 });
 

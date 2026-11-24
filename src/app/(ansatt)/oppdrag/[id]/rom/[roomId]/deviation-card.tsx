@@ -1,33 +1,42 @@
 "use client";
 
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import {
   CAUSE_CRITERION_LABELS,
+  checkOverrideReason,
   formatDecimal,
   hasMeasuresForTg,
   MAX_MEASURES_PER_DEVIATION,
   MERGE_FIELD_KEYS,
   mergeFieldMissingText,
   mergeFieldWarningText,
+  OVERRIDE_REASON_CHECK_MESSAGES,
+  OVERRIDE_REASON_LABELS,
   pickStandardMeasures,
   textsWrittenForOtherTg,
   textsWrittenForTgText,
   type PhraseField,
 } from "@/core/reports/logic";
 import type { DeviationView, MeasureView, ReportFieldChange } from "@/core/reports/types";
+import type { OverrideReasonCode } from "@/db/schema";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
-import { ChoiceButtons } from "@/shared/ui/choice-buttons";
-import { FormMessage, Radio } from "@/shared/ui/form";
+import { ChoiceButtons, choiceButtonId } from "@/shared/ui/choice-buttons";
+import { FormMessage, Radio, Textarea } from "@/shared/ui/form";
 import { TgBadge } from "@/shared/ui/tg-badge";
 import { Warning } from "@/shared/ui/warning";
 import { uuidv7 } from "@/shared/lib/uuid";
-import { addMeasureAction, removeMeasureAction, saveFieldAction } from "./actions";
+import {
+  addMeasureAction,
+  changeSuggestedDeviationTgAction,
+  removeMeasureAction,
+  saveFieldAction,
+} from "./actions";
 import { CostField } from "./cost-field";
 import { FieldStatus } from "./field-status";
 import { useField, useRoom } from "./room-context";
-import { isActionError, ROOM_TEXTS } from "./room-messages";
+import { isActionError, ROOM_TEXTS, SUGGESTION_MESSAGES } from "./room-messages";
 import {
   addMeasureButtonId,
   deviationCauseChoiceId,
@@ -77,6 +86,17 @@ export const DEVIATION_TEXTS = {
   fromRules: "Fra forslag fra reglene",
   hms: "HMS",
   measureSwapped: (tg: number) => `Tiltaket er byttet til teksten for TG${tg}.`,
+  reasonLegend: "Hvorfor endrer du TG fra forslaget?",
+  reasonRequired: SUGGESTION_MESSAGES.reasonMissing,
+  reasonText: "Skriv grunnen",
+  reasonTextOptional: "Forklaring (valgfri)",
+  addExplanation: "Legg til forklaring",
+  saveTg: (tg: string) => `Lagre ${tg}`,
+  tgNotSaved: (tg: string) => `${tg} er ikke lagret.`,
+  tgSaved: (tg: string) => `${tg} er lagret.`,
+  tgCancelled: "TG er ikke endret.",
+  tgConflict: "TG er endret av andre. Ingenting er lagret. Se TG og velg på nytt.",
+  offline: "Du er uten nett. TG er ikke endret. Prøv igjen når nettet er tilbake.",
 } as const;
 
 const CAUSE_OPTIONS = (
@@ -149,7 +169,8 @@ export function DeviationCard({
       base: base as DeviationView["causeCriterion"],
     }),
   );
-  const tg = (tgField.entry.value as 2 | 3 | null) ?? null;
+  // Avvik fra et forslag bytter TG med egen handling (A490): TG-en er serverens til den er lagret
+  const tg = deviation.suggestion ? deviation.tg : ((tgField.entry.value as 2 | 3 | null) ?? null);
   const isHms = deviation.kind === "hms";
   const otherTgWarning =
     !isHms &&
@@ -258,7 +279,17 @@ export function DeviationCard({
 
         {polish.card}
 
-        {!isHms && (
+        {!isHms && deviation.suggestion && (
+          <SuggestedTgChoice
+            deviation={deviation}
+            tgChoiceId={tgChoiceId}
+            chooseWarningId={chooseWarningId}
+            otherTgWarningId={otherTgWarningId}
+            otherTgWarning={otherTgWarning ? textsWrittenForTgText(outcomeTg) : null}
+          />
+        )}
+
+        {!isHms && !deviation.suggestion && (
           <div className="space-y-1.5">
             <ChoiceButtons
               id={tgChoiceId}
@@ -373,6 +404,270 @@ export function DeviationCard({
         </div>
       </section>
     </Card>
+  );
+}
+
+const TG_OPTIONS = [
+  { value: "2", label: "TG2" },
+  { value: "3", label: "TG3" },
+];
+
+const REASON_OPTIONS = (
+  Object.keys(OVERRIDE_REASON_LABELS) as (keyof typeof OVERRIDE_REASON_LABELS)[]
+).map((code) => ({ value: code, label: OVERRIDE_REASON_LABELS[code] }));
+
+/** Samme grense som på serveren (`REPORT_OVERRIDE_REASON_MAX`). */
+const OVERRIDE_REASON_MAX = 500;
+
+function tgLabel(tg: 2 | 3 | null): string {
+  return tg === null ? "Tom TG" : `TG${tg}`;
+}
+
+/**
+ * TG-valget på et avvik fra et regelforslag (T-0113, A490). Valg som ikke krever grunn
+ * (`tgWithoutReason`), sendes med en gang. Andre valg viser grunnene som store knapper rett under
+ * TG-raden, uten dialog: valgt TG står ikke som lagret før grunnen er valgt, og TG og grunn
+ * sendes i ett kall. «Avbryt» og Escape setter TG tilbake og fokus tilbake til TG-valget. Uten
+ * nett sendes ingenting, og meldingen sier det. Regler og KI setter aldri TG her.
+ */
+function SuggestedTgChoice({
+  deviation,
+  tgChoiceId,
+  chooseWarningId,
+  otherTgWarningId,
+  otherTgWarning,
+}: {
+  deviation: DeviationView;
+  tgChoiceId: string;
+  chooseWarningId: string;
+  otherTgWarningId: string;
+  otherTgWarning: string | null;
+}) {
+  const { run, room, focus, announce } = useRoom();
+  const suggestion = deviation.suggestion;
+  const [pending, setPending] = useState<{ tg: 2 | 3 } | null>(null);
+  const [reasonCode, setReasonCode] = useState<OverrideReasonCode | null>(null);
+  const [reasonText, setReasonText] = useState("");
+  const [showText, setShowText] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  // Samme id ved nytt forsøk etter nettfeil, så serveren gir samme svar og ingen ny rad
+  const attemptId = useRef<string | null>(null);
+  const reasonGroupId = `${tgChoiceId}-reason`;
+  const reasonTextId = `${tgChoiceId}-reason-text`;
+  const statusId = `${tgChoiceId}-reason-status`;
+  const savedTg = deviation.tg;
+  const shownTg = pending ? pending.tg : savedTg;
+
+  const savedTgFocusId = () => choiceButtonId(tgChoiceId, savedTg === 3 ? 1 : 0);
+
+  const resetReason = () => {
+    setReasonCode(null);
+    setReasonText("");
+    setShowText(false);
+  };
+
+  const cancel = () => {
+    setPending(null);
+    resetReason();
+    setMessage(null);
+    attemptId.current = null;
+    announce(DEVIATION_TEXTS.tgCancelled);
+    focus(savedTgFocusId());
+  };
+
+  const send = async (
+    tg: 2 | 3 | null,
+    reason: { code: OverrideReasonCode | null; text: string } | null,
+  ) => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setMessage(DEVIATION_TEXTS.offline);
+      return;
+    }
+    const id = attemptId.current ?? uuidv7();
+    attemptId.current = id;
+    setBusy(true);
+    setMessage(null);
+    const text = reason ? reason.text.trim() : "";
+    const result = await run(() =>
+      changeSuggestedDeviationTgAction(room, {
+        id,
+        deviationId: deviation.id,
+        tg,
+        base: savedTg,
+        ...(reason?.code ? { overrideReasonCode: reason.code } : {}),
+        ...(text ? { overrideReason: text } : {}),
+      }),
+    );
+    setBusy(false);
+    if (isActionError(result)) {
+      // Valget står, så takstmannen kan prøve igjen; ingenting er lagret
+      setMessage(result.message);
+      return;
+    }
+    attemptId.current = null;
+    setPending(null);
+    resetReason();
+    if (result.status === "conflict") {
+      setMessage(DEVIATION_TEXTS.tgConflict);
+      focus(savedTgFocusId());
+      return;
+    }
+    announce(DEVIATION_TEXTS.tgSaved(tgLabel(tg)));
+    focus(choiceButtonId(tgChoiceId, tg === 3 ? 1 : 0));
+  };
+
+  if (!suggestion) return null;
+
+  const choose = (next: string) => {
+    const nextTg = Number(next) as 2 | 3;
+    setMessage(null);
+    if (nextTg === savedTg) {
+      // Tilbake til lagret TG: ingenting å sende
+      if (pending) cancel();
+      return;
+    }
+    attemptId.current = null;
+    if (suggestion.tgWithoutReason.includes(nextTg)) {
+      // Forslagets TG (eller TG-valget ved «velg TG2 eller TG3») trenger ingen grunn
+      setPending(null);
+      resetReason();
+      void send(nextTg, null);
+      return;
+    }
+    setPending({ tg: nextTg });
+    resetReason();
+    focus(choiceButtonId(reasonGroupId, 0));
+  };
+
+  const reasonCheck = checkOverrideReason({
+    decision: "changed",
+    code: reasonCode,
+    text: reasonText.trim() === "" ? null : reasonText,
+  });
+
+  const chooseReason = (code: string) => {
+    const chosen = code as OverrideReasonCode;
+    setReasonCode(chosen);
+    setMessage(null);
+    if (chosen === "other" || showText) {
+      setShowText(true);
+      if (chosen === "other") focus(reasonTextId);
+      return;
+    }
+    // Ett trykk: grunnen er valgt, og TG og grunn sendes sammen
+    if (pending) void send(pending.tg, { code: chosen, text: "" });
+  };
+
+  const submitWithText = () => {
+    if (!pending || busy) return;
+    if (reasonCheck !== "ok") {
+      focus(choiceButtonId(reasonGroupId, 0));
+      return;
+    }
+    void send(pending.tg, { code: reasonCode, text: reasonText });
+  };
+
+  const missingReason =
+    reasonCheck === "reason_required"
+      ? DEVIATION_TEXTS.reasonRequired
+      : reasonCheck === "text_required"
+        ? OVERRIDE_REASON_CHECK_MESSAGES.text_required
+        : null;
+
+  return (
+    <div className="space-y-1.5">
+      <ChoiceButtons
+        id={tgChoiceId}
+        legend={DEVIATION_TEXTS.tg}
+        options={TG_OPTIONS}
+        value={shownTg === null ? null : String(shownTg)}
+        disabled={busy}
+        describedBy={
+          [
+            pending ? statusId : null,
+            shownTg === null ? chooseWarningId : null,
+            otherTgWarning ? otherTgWarningId : null,
+          ]
+            .filter(Boolean)
+            .join(" ") || undefined
+        }
+        onChange={choose}
+      />
+      {busy && <p className="text-sm text-slate-700">{ROOM_TEXTS.saving}</p>}
+      {pending && (
+        <div
+          className="space-y-3 rounded-card bg-sand p-4"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              cancel();
+            }
+          }}
+        >
+          <p id={statusId} role="status" className="font-medium text-slate-900">
+            {DEVIATION_TEXTS.tgNotSaved(tgLabel(pending.tg))}
+            {missingReason ? ` ${missingReason}` : ""}
+          </p>
+          <ChoiceButtons
+            id={reasonGroupId}
+            legend={DEVIATION_TEXTS.reasonLegend}
+            options={REASON_OPTIONS}
+            value={reasonCode}
+            disabled={busy}
+            describedBy={statusId}
+            onChange={chooseReason}
+          />
+          {showText ? (
+            <div className="space-y-1.5">
+              <label htmlFor={reasonTextId} className="block text-sm font-medium text-slate-700">
+                {reasonCode === "other"
+                  ? DEVIATION_TEXTS.reasonText
+                  : DEVIATION_TEXTS.reasonTextOptional}
+              </label>
+              <Textarea
+                id={reasonTextId}
+                className="min-h-24"
+                value={reasonText}
+                maxLength={OVERRIDE_REASON_MAX}
+                onChange={(event) => setReasonText(event.target.value)}
+              />
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setShowText(true);
+                focus(reasonTextId);
+              }}
+            >
+              {DEVIATION_TEXTS.addExplanation}
+            </Button>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {showText && (
+              <Button
+                aria-disabled={reasonCheck !== "ok" || busy}
+                aria-describedby={statusId}
+                onClick={submitWithText}
+              >
+                {busy ? ROOM_TEXTS.saving : DEVIATION_TEXTS.saveTg(tgLabel(pending.tg))}
+              </Button>
+            )}
+            <Button variant="ghost" onClick={cancel} disabled={busy}>
+              {DEVIATION_TEXTS.cancel}
+            </Button>
+          </div>
+        </div>
+      )}
+      {message && (
+        <p role="status" className="rounded-xl bg-urgent-fill px-3 py-2 text-sm text-urgent-text">
+          {message}
+        </p>
+      )}
+      {shownTg === null && <Warning id={chooseWarningId}>{DEVIATION_TEXTS.chooseTg}</Warning>}
+      {otherTgWarning && <Warning id={otherTgWarningId}>{otherTgWarning}</Warning>}
+    </div>
   );
 }
 

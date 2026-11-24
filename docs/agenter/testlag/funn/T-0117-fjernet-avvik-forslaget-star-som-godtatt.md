@@ -3,14 +3,14 @@ id: T-0117
 tittel: Etter «Fjern avviket» sier forslaget fortsatt «Godtatt», punktet har ingen TG, og ingen advarsel
 type: feil
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-18
 rolle: test-robusthet
 omrade: badet, regelforslag
 maal: reklamasjoner
 commit: 50fad3e4
 forsok: 0
-pr:
+pr: 239
 ---
 
 ## Hva
@@ -35,3 +35,5 @@ Når avviket fra et godtatt forslag er fjernet, vises forslaget igjen med knappe
 
 ## Logg
 - 2026-11-18: funnet
+
+- 2026-11-24: rettet i PR #239 (branch `rett-forslag-og-avvik`, oppgavekort `docs/agenter/oppgaver/rett-forslag-og-avvik.md`). Testlaget prøver på nytt i neste kjøring.

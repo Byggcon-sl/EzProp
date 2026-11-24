@@ -27,6 +27,8 @@ const ACCEPTED: DecisionState = {
   ruleKey: "rule.age",
   decision: "accepted",
   suggestion: { kind: "outcome", checkpoint_key: "cp", question_key: "cp.q", outcome_key: "tg2" },
+  chosenTg: "2",
+  madeDeviation: true,
   deviationId: "dev-9",
 };
 
@@ -89,6 +91,11 @@ const EXPECTED: Record<
     fix: { kind: "focus_tg_choice" },
   },
   tg3_on_age_only: { warning: warning("tg3_on_age_only", { deviationId: "d" }), fix: null },
+  open_suggestion_on_done_checkpoint: {
+    warning: warning("open_suggestion_on_done_checkpoint", { ruleKey: "rule.age" }),
+    // FA-L26: forslaget er åpent, så det er ikke noe avvik å fjerne eller beholde.
+    fix: { kind: "scroll_to_suggestion", ruleKey: "rule.age", deviationId: null },
+  },
 };
 
 describe("B1.18 «Rett nå»", () => {
@@ -119,6 +126,14 @@ describe("B1.18 «Rett nå»", () => {
     const w = warning("suggestion_no_longer_applies", { ruleKey: "rule.age" });
     const rejected: DecisionState = { ...ACCEPTED, decision: "rejected", deviationId: null };
     expect(warningFix(w, { decisions: [rejected] })).toMatchObject({ deviationId: null });
+  });
+
+  it("FA-L26 åpent forslag på ferdig punkt gir rulling til forslaget, og knappen har tekst", () => {
+    const w = warning("open_suggestion_on_done_checkpoint", { ruleKey: "rule.tg0" });
+    const fix = warningFix(w, { decisions: [] });
+    expect(fix).toEqual({ kind: "scroll_to_suggestion", ruleKey: "rule.tg0", deviationId: null });
+    expect(WARNING_FIX_LABELS[fix!.kind]).toBe("Gå til forslaget");
+    expect(warningFix(warning("open_suggestion_on_done_checkpoint"), { decisions: [] })).toBeNull();
   });
 
   it("advarsel uten det som mangler gir ingen fokus-handling", () => {
