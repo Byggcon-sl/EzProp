@@ -391,6 +391,29 @@ describe("«Bruk» på et språkvasket felt (A466, A469, A470)", () => {
     expect((await aiRow(usageId))?.status).toBe("accepted");
   });
 
+  it("A525 serveren avgjør «endret» når lagret tekst ikke er lik forslaget", async () => {
+    const f = await kiBathroom();
+    const deviationId = await addPlaceDeviation(f, PLACE.membraneTg2);
+    const [before] = await db.select().from(deviations).where(eq(deviations.id, deviationId));
+    const { usageId, text } = await polished(f, deviationId);
+    const result = await saveField(
+      f.actor,
+      f.organizationId,
+      f.room,
+      {
+        table: "deviations",
+        id: deviationId,
+        field: "cause_text",
+        value: `${text} Endret av takstmannen.`,
+        base: before?.causeText ?? null,
+      },
+      // Nettleseren sier «godtatt», men teksten er endret
+      { aiDecision: { usageId, decision: "accepted" } },
+    );
+    expect(result.status).toBe("saved");
+    expect((await aiRow(usageId))?.status).toBe("edited");
+  });
+
   it("K4.17b «Endret av andre» gir ingen beslutning", async () => {
     const f = await kiBathroom();
     const deviationId = await addPlaceDeviation(f, PLACE.membraneTg2);

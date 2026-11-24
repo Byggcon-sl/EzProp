@@ -1086,6 +1086,8 @@ Koblingen går til **faste koder**, ikke til en bestemt malversjon. Da følger f
 | `report_profile_id` | Rapportprofilen |
 | `responsible_employee_id` | Ansvarlig takstmann (signerer) |
 | `status` | `draft` (under arbeid), `published` (utgitt), `superseded` (erstattet av ny rapport) |
+| `current_release_id` | Siste utgivelse. **Lages ikke** (ADR 0015): siste utgivelse er høyeste versjon i `report_releases` |
+| `summary_text` | Sammendrag |
 | `current_release_id` | Siste utgivelse |
 | `summary_text` | Sammendraget for hele rapporten (A483). Fritekst fra takstmannen, eventuelt etter et KI-utkast han har godtatt (`summary_draft`, mål `report` / `summary_text`). Høyst 10 000 tegn (CHECK). Lagres bare mens rapporten er `draft`. Bygget i migrering `0037_ki-i-veien` |
 | `summary_basis` | Funnene sammendraget bygde på da et utkast sist ble brukt (jsonb-liste, tom tillatt, A435). Per funn: `source` (`deviation` eller `checkpoint_result`), `id`, `group` (`tg3`, `tg2`, `tgiu`, `hms`), `rowVersion` og `parts` (id og `rowVersion` for tiltakene eller TGIU-opplysningene under funnet). Aldri tekst. Kommer tilbake fra nettleseren ved «Bruk» og kontrolleres av serveren (A470): strengt skjema, hver id må være et funn i rapporten, `group` settes av serveren, og `rowVersion` kan ikke være høyere enn dagens. Avviker den fra dagens funn, vises advarselen «Funnene er endret etter sammendraget». Bare advarsel, aldri sperre |
@@ -1271,41 +1273,43 @@ Manglende egenerklæring gir advarsel, ikke sperre (del 1 M1).
 
 En ny generering endrer bare `generated_text`. Er `edited_text` fylt ut, beholdes den, og takstmannen får et lite merke om at grunnlaget er endret.
 
-**`report_releases`** – **versjoner og utgivelser**. En utgivelse er låst for alltid.
+**`report_releases`** – **versjoner og utgivelser**. En utgivelse er låst for alltid: ingen tjeneste oppdaterer eller sletter den, og papirkurven tar den ikke (ADR 0015, bygget i `0038_publisering-badet`).
 
 | Felt | Forklaring |
 |---|---|
-| `report_id` | Rapporten |
+| `report_id` | Rapporten. Unik `(organization_id, report_id, version_number)` |
 | `version_number` | 1, 2, 3 … |
-| `released_at`, `released_by` | Når og av hvem |
-| `signed_by_employee_id` | Ansvarlig takstmann som signerte (innspill D8) |
-| `co_signed_by_employee_id` | Medansvarlig, hvis noen |
-| `certification_id` | Sertifiseringen som gjaldt for den ansvarlige på utgivelsesdagen |
-| `company_id` | Utstedende selskap på utgivelsesdagen |
-| `report_profile_version` | Versjonen av rapportprofilen som ble brukt |
-| `original_release_date` | **Opprinnelig dato.** Ved retting beholdes datoen fra versjon 1 (NS 3600 pkt. 14.5). En ny full gjennomgang er en ny rapport. |
-| `revision_note` | Hva som er rettet (tomt for versjon 1) |
-| `valid_until` | Gyldig til: **ett år fra befaringsdato**, slik IVIT gjør (beslutning 27.10.2026, spørsmål 1). Ved retting endres ikke datoen. |
-| `snapshot` | **Hele rapportinnholdet** slik det var, som låst data |
-| `pdf_file_id` | PDF-en slik den ble sendt |
-| `content_hash` | Fingeravtrykk av innholdet (viser at ingenting er endret) |
-| `retain_until` | Oppbevares til (minst 10 år) |
+| `released_at`, `released_by` | Når (serverens tid) og av hvem (ansatt-id) |
+| `signed_by_employee_id` | Ansvarlig takstmann som signerte (innspill D8). Nå den som publiserer |
+| `certification_id` | Sertifiseringen som var gyldig for den som signerte, den dagen i norsk tid |
+| `company_id` | Utstedende selskap på utgivelsesdagen (fra oppdraget). Påkrevd: uten selskap avvises publiseringen (A458) |
+| `original_release_date` | **Opprinnelig dato** i norsk tid. Ved retting kopieres datoen fra versjon 1 (NS 3600 pkt. 14.5). En ny full gjennomgang er en ny rapport. |
+| `valid_until` | Gyldig til: **ett år fra befaringsdato** (beslutning 27.10.2026, spørsmål 1). Tom når befaringsdatoen manglet og sperren ble krysset bort; regnes aldri fra publiseringsdagen (A523). Ved retting kopieres datoen fra versjon 1. |
+| `snapshot` | **Hele rapportinnholdet** slik det var, som selvstendig kopi med `schema_version` (A452): bygning, etasje, rom, punkter, TG, svar, avvik, tiltak, kostnad, TGIU, regelbeslutninger og merke på tekst fra godkjent KI-forslag. Ingen parter, navn, kontaktopplysninger, adresse, matrikkel eller reklamasjonsdata |
+| `content_hash` | Fingeravtrykk (SHA-256) av kanonisk snapshot (viser at ingenting er endret) |
+| `retain_until` | Oppbevares til (utgivelsen + 10 år) |
 
-Feltene for signering, sertifisering, selskap og profil er et **øyeblikksbilde** i tillegg til `snapshot`. Ved en reklamasjon om fem år kan det da vises hvem som signerte, og at personen var sertifisert den dagen.
+**Kommer senere som nye kolonner (A455):** `co_signed_by_employee_id` (medansvarlig), `report_profile_version`, `revision_note` (hva som er rettet) og `pdf_file_id` (PDF-en slik den ble sendt). `reports.current_release_id` lages ikke: siste utgivelse er høyeste versjon.
 
-**`publish_check_results`** – **sperre, overstyring og logg**. Lages hver gang noen prøver å publisere.
+Feltene for signering, sertifisering og selskap er et **øyeblikksbilde** i tillegg til `snapshot`. Ved en reklamasjon om fem år kan det da vises hvem som signerte, og at personen var sertifisert den dagen.
+
+**«Lag ny versjon» (A522):** rapporten settes tilbake til `draft`, eldre utgivelser røres ikke, og neste publisering får neste versjonsnummer. En publisert rapport kan ikke endres før ny versjon er laget; det gjelder også rom, etasjer og bygninger på oppdraget (A447).
+
+**`publish_check_results`** – **sperre, overstyring og logg**. Funnene fra sjekken før publisering slik de var da utgivelsen ble laget. Skrives bare ved publisering, for alle funn, og får bare nye rader (A448, ADR 0015). Å åpne publiser-siden lagrer ingenting.
 
 | Felt | Forklaring |
 |---|---|
-| `report_id` | Rapporten |
-| `release_id` | Utgivelsen kontrollen hørte til (tomt hvis publiseringen ble avbrutt) |
-| `check_code` | Hvilken kontroll (se listen under) |
+| `report_id`, `release_id` | Rapporten og utgivelsen. Begge påkrevd, fremmednøkkel `(organization_id, report_id, release_id)` |
+| `check_code` | Hvilken kontroll (fast kode, se listen under). En kode er enten sperre eller advarsel, for alltid (A456) |
 | `severity` | `blocker` (sperre) eller `warning` (advarsel) |
-| `target_ref` | Hvor mangelen er (kontrollpunkt, rom, avvik) |
-| `message` | Teksten som ble vist |
-| `overridden` | **Overstyrt**: den ansatte krysset aktivt bort sperren |
-| `overridden_by`, `overridden_at` | Hvem og når |
-| `override_reason` | Valgfri begrunnelse |
+| `source` | `rule` (fast regel) eller `ai` (KI-sjekken i 2a-3). `ai` kan bare gi advarsel: KI lager aldri en sperre |
+| `target_ref` | Hvor mangelen er: rom, kontrollpunkt (id og fast kode), avvik, regel, KI-forslag og hva som mangler (`missing`). Bare id-er og faste koder |
+| `overridden` | **Krysset bort**: den ansatte krysset aktivt bort sperren. En sperre i en utgivelse er alltid krysset bort; en advarsel kan ikke krysses bort |
+| `overridden_by`, `overridden_at` | Hvem (ansatt-id) og når (serverens tid) |
+| `override_reason_code` | **Grunnen** som fast kode, påkrevd (A521, A449): `no_access_or_refused`, `not_applicable_to_room`, `described_elsewhere`, `other` |
+| `override_reason` | Begrunnelse i fritekst, høyst 1000 tegn. Påkrevd for `other`, ellers valgfri. Står bare her: aldri i logger eller hendelser, og kontor får den ikke (A450) |
+
+Teksten som vises for et funn, lagres ikke (`message` er tatt ut): den lages fra koden ved visning.
 
 **Overstyringen gjelder bare den ene versjonen.** Ved neste utgivelse kjøres alle kontroller på nytt, og en mangel som ikke er rettet, kommer tilbake som sperre.
 
@@ -1313,7 +1317,7 @@ Feltene for signering, sertifisering, selskap og profil er et **øyeblikksbilde*
 
 | `check_code` | Sperre |
 |---|---|
-| `mandatory_without_tg` | Obligatorisk del uten TG. **Slår bare til** når punktet er obligatorisk, gir TG (`gives_tg`), ikke er merket «gjelder ikke», og verken har `tg_direct` eller avvik med TG. For leilighet gjelder den ikke fellesdelspunkter (`applies_to_unit = common`) når fellesdelene ikke er vurdert. «Gjelder ikke» på et obligatorisk punkt krever begrunnelse. (Innspill D6) |
+| `mandatory_without_tg` | Obligatorisk del uten TG. **I badet (A520, A443, A444, til fagrådet har svart på spørsmål 99):** punkt som krever TG (`requiresTg`, data) uten TG, TGIU uten grunn, og avvik uten valgt TG. **Opprinnelig beslutning:** slår bare til når punktet er obligatorisk, gir TG (`gives_tg`), ikke er merket «gjelder ikke», og verken har `tg_direct` eller avvik med TG. For leilighet gjelder den ikke fellesdelspunkter (`applies_to_unit = common`) når fellesdelene ikke er vurdert. «Gjelder ikke» på et obligatorisk punkt krever begrunnelse. (Innspill D6) |
 | `tg2_tg3_missing_cause_or_consequence` | TG2/TG3 uten årsak og konsekvens |
 | `tg3_missing_cost` | TG3 uten kostnad |
 | `wet_or_below_ground_missing_hole` | Våtrom eller rom under terreng uten hulltaking eller begrunnelse |
@@ -2377,11 +2381,16 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | HMS | `hms` | Avvik uten TG |
 | Dokumentasjonstabell | `documentation_items` | |
 | Egenerklæring | `seller_declarations` | |
-| Utgivelse / versjon | `report_releases` | |
+| Utgivelse / versjon | `release` (`report_releases`) | Låst for alltid. «Lag ny versjon» setter rapporten tilbake til `draft` |
+| Sjekk før publisering | `publish check` (`computePublishCheck`, `publish_check_results`) | Ren kode, lik på iPad og server. Funn lagres bare ved publisering |
+| Funn | `PublishCheckFinding` | Kode, sperre eller advarsel, kilde og mål |
+| Krysse bort | `override` (`overridden`) | Aktivt valg på en sperre, med grunn. Gjelder én versjon |
+| Grunn (ved overstyring) | `override reason code` (`PUBLISH_OVERRIDE_REASON_CODES`) | Fast kode; `other` krever tekst |
+| Fingeravtrykk av funnlisten | `fingerprint` (`canonicalPublishCheck`) | Viser at listen er den samme som den ansatte så |
+| Snapshot | `ReportSnapshot` (`report_releases.snapshot`) | Selvstendig kopi av rapportinnholdet i utgivelsen |
 | Opprinnelig dato | `original_release_date` | |
 | Gyldig til | `valid_until` | |
 | Sperre / advarsel | `blocker` / `warning` | |
-| Overstyring | `overridden` | |
 | Kontroll før publisering | `publish_check_results` | |
 | Sidemannskontroll | `peer_reviews`, `peer_review_comments` | |
 | Bilde | `photos` | |

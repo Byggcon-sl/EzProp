@@ -35,3 +35,4 @@ Ikke etterprøvd (lite).
 ## Logg
 - 2026-11-14: funnet
 - 2026-11-18: statuslinjen i planen (linje 79) nevner ikke #221, #222, #224 og #228 (main 50fad3e4).
+- 2026-11-24: statuslinjen i planen (linje 79) nevner ikke #224, #228 eller #232 (main 01fc9e4c).

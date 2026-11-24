@@ -9,7 +9,9 @@ import "server-only";
  * Fra «KI i veien» kaller fraseforslag, språkvask og sammendrag KI gjennom `@/core/ai`, aldri
  * motsatt. Verken reglene eller KI setter TG.
  */
+export type * from "./publish-types";
 export type * from "./types";
+export { isReportPublishedForAssignment, REPORT_PUBLISHED_MESSAGE } from "./published-lock";
 export { startReport } from "./reports";
 export { getRoomView } from "./room-view";
 export { saveField } from "./save-field";
@@ -27,6 +29,14 @@ export { loadPhraseCandidates, loadPhraseUsage } from "./phrase-source";
 export { polishDescription, polishDeviation } from "./polish";
 export { draftSummary, getReportSummary, saveSummary } from "./summary";
 export { setCheckpointDone, setTgDirect } from "./tgiu";
+export {
+  getPublishCheck,
+  listPendingAiSuggestions,
+  listReleases,
+  publishReport,
+  startNewVersion,
+} from "./publish";
+export { HOLE_DRILLING_SIGNAL } from "./signals";
 export {
   REPORT_VALIDATION_CODES,
   ReportStorageError,

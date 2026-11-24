@@ -1,8 +1,8 @@
 # Beslutninger som er dyre å endre
 
-Sist oppdatert: 18.11.2026 (testlaget, dokumentvakten og kvalitetslederen)
+Sist oppdatert: 24.11.2026 (testlaget, dokumentvakten og kvalitetslederen)
 
-Mens Ståle var borte, har agentene tatt mange beslutninger (A1 og oppover; noen nummer er ikke brukt). Listen her er gått gjennom til og med A430 (17.11.2026: A292–A308, A315–A328 og A360–A379; 18.11.2026: de som er merket dyre i A345–A357 og A380–A430). De står i `docs/09-apne-sporsmal.md`, tabellen «Avgjort av agentene mens Ståle var borte». **De fleste er lette å endre.** Her er bare de som blir dyre å endre senere, fordi data må flyttes, fordi de står på rapportene, eller fordi de gjelder personvern og sikkerhet. Det er disse Ståle bør lese først.
+Mens Ståle var borte, har agentene tatt mange beslutninger (A1 og oppover; noen nummer er ikke brukt). Listen her er gått gjennom til og med A491 (17.11.2026: A292–A308, A315–A328 og A360–A379; 18.11.2026: de som er merket dyre i A345–A357 og A380–A430; 24.11.2026: «KI i veien», A431–A442, A460–A472 og A482–A491). A443–A459 og A473–A481 er ikke i bruk på main. De står i `docs/09-apne-sporsmal.md`, tabellen «Avgjort av agentene mens Ståle var borte». **De fleste er lette å endre.** Her er bare de som blir dyre å endre senere, fordi data må flyttes, fordi de står på rapportene, eller fordi de gjelder personvern og sikkerhet. Det er disse Ståle bør lese først.
 
 Alle beslutninger som ikke står her, er lette å endre.
 
@@ -20,6 +20,7 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A171 | Nytt utfall «sperret» i loggen over KI-bruk, for forespørsler som ikke kan sendes til leverandøren. | Fast kode som lagres i data i 10 år. |
 | A299 | Sperren mot elleve sifre (mulig fødselsnummer) gjelder alle fritekstfelt i bestillingen, både for tilbud og oppdrag. | Gjelder personvern. Gammel og ny verdi står i revisjonsloggen i 10 år, så det som slipper forbi sperren, blir stående. Står som «Lett å endre» i spørsmålsfilen (funn T-0101). |
 | A292, A293 (logg) | Når bestillingen på oppdraget endres, lagres gammel og ny verdi (adresse, matrikkel, bestiller) i revisjonsloggen, på samme måte som for tilbud (A252). | Gjelder personvern, og nå hovedveien, ikke bare tilbud. Revisjonsloggen ryddes aldri. DPIA-punktet i planen nevner bare ordre (funn T-0098). |
+| A466 | Navn, telefon og andre persondata byttes med plassholdere før KI og byttes tilbake bare i teksten takstmannen ser. Loggen beholder plassholderne. Kan de ikke byttes tilbake entydig, stoppes svaret med ny fast kode `placeholder_guard`. | Gjelder personvern og er en fast kode i loggen i 10 år. Testlaget 24.11.2026: plassholderne byttes tilbake etter rekkefølge, så hvis ekte KI bytter om to setninger med hver sin plassholder av samme slag, kan verdiene bytte plass. Bør prøves når ekte KI slås på. |
 
 ## Sikkerhet og tilgang
 
@@ -44,6 +45,7 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A346 | Serveren regner ut regelforslaget selv. Klienten sender bare hvilken regel og hvilken beslutning. | Gjelder sikkerhet. Loggen som skal forklare TG ved en reklamasjon, kan ellers forfalskes. Alle beslutninger på badet bygger på dette. |
 | A419 | Unntak fra myk sletting: tellere for innloggingssperren, engangskoder og gamle økter slettes for godt hver natt. | Gjelder personvern og regel 3 i CLAUDE.md. Det som er slettet, kan ikke hentes tilbake, og CLAUDE.md nevner ikke unntaket. Se spørsmål 88 (17.11.2026) om innloggingshistorikk. |
 | A426 | Økter hører til brukeren, ikke organisasjonen. «Logg ut av alle enheter» fra admin i én organisasjon logger ut personen også i en annen. | Gjelder sikkerhet. Krever organisasjon på økten for å endres. Står som «ufarlig i dag: én organisasjon», men testmiljøet har alt to organisasjoner, og første admin er i begge. Må avgjøres før organisasjon nummer to. |
+| A470 | Serveren kontrollerer loggraden og grunnlaget for sammendraget som kommer tilbake fra nettleseren. | Gjelder sikkerhet, som A346. Ellers kan en id fra en annen rapport merkes godtatt, eller advarselen «Funnene er endret» slås av. Står som «Lett å endre» i spørsmålsfilen (funn T-0142). |
 
 ## Datamodell og faste koder
 
@@ -93,6 +95,12 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A353 | Et avvik er enten TG-avvik eller HMS-avvik, og TG står i eget felt. | Fast kode i data. |
 | A355 | Merket om at KI har skrevet en tekst, står bare i loggen over KI-bruk, ikke på avviket. | Avgjør hvordan publiseringssperren og «KI i veien» finner KI-tekst. Krever migrering å endre. |
 | A357 | Hvor teksten kommer fra (fra malen, endret eller fri), sier aldri om KI eller frase ble brukt. | Fast kode i data. KI-opphav står bare i loggen over KI-bruk (A355). |
+| A431 | Nytt utfall «stoppet» i loggen over KI-bruk når en vakt stopper et KI-svar. Tokens og kostnad beholdes, teksten vises aldri. Utvidet med vaktkodene i A461 og A466. | Fast kode i data i 10 år. Publiseringssperren bygger på det (domenemodellen beskriver det feil, funn T-0136). |
+| A432 | Loggen over KI-bruk lagrer hvilke kandidater som ble vist og hvilken som ble valgt, bare som kilde og id (malens utfall, malens tiltak, eller frase), aldri tekst. | Faste kildekoder i data i 10 år. Frasebanken skal bruke samme kode når den kommer. |
+| A435 | Rapporten får en ny kolonne med grunnlaget for sammendraget (hvilke funn, TG og versjon, aldri tekst). Den gir advarselen «Funnene er endret etter sammendraget». | Ny kolonne i databasen. Står som «Lett å endre» i spørsmålsfilen (funn T-0142). |
+| A461 | KI skriver sammendraget per funn, og kjernen setter det sammen. Mangler et funn i svaret, stoppes utkastet med ny fast kode `coverage_guard`. | Fast kode i loggen i 10 år. |
+| A483 | Sammendraget lagres på rapporten, ikke per rom. | Datamodell. Oppsummering per bygningsdel kommer i 2a-3; endres det, må data flyttes. |
+| A486 | Ny fast kode for hvor KI skriver sammendraget (`report` / `summary_text`). | Fast kode i loggen i 10 år (regel 6), som A350. |
 
 ## Fag
 
@@ -110,7 +118,9 @@ Alle beslutninger som ikke står her, er lette å endre.
 | A238 | TG0-forslag bare ved «utført uten funn», og 0 vekt-% regnes som en måling. | Avgjør TG0 i rapporten. Se spørsmål 77 (a) og (e). |
 | A289 | Varsel om like kontakter og firma ble ikke bygget sammen med varselet om like ordre, fordi agentene mente Ståle ikke hadde sagt ja. | Ståle sa ja 12.11.2026 (forslag 62, T3). Beslutningen utelater noe han har bestemt (funn T-0072). Doble kontakter kan gi rapport til feil person. |
 | A380 | Fem faste grunner når takstmannen endrer eller avviser et regelforslag (dokumentasjon finnes, synlig skade, målt på nytt, alderen kjent på annen måte, annet). | Faste koder i data i 10 år. Testlaget 18.11.2026: grunnene er like for alle regler og passer dårlig for TGIU-regelen om hulltaking (spørsmål 104 f). |
+| A434, A462 | Hva sammendraget tar med: TG3, TG2, TGIU og HMS-avvik sist, ikke TG1, ikke avvik uten TG og ingen kostnad. Koden lager overskriftene og skriver TGIU-linjene (punktets navn og grunnen), og KI skriver bare under TG3, TG2 og HMS. | Står i publiserte rapporter og avgjør hva kjøperen leser først. Står som «Lett å endre» i spørsmålsfilen (funn T-0142). Spørsmål 93–96, 102 og 105 til fagrådet er åpne. |
 
 ## Til vurdering
 
+- A437 (på grensen): et valgt fraseforslag regnes ikke som KI-tekst, selv om KI har sortert listen. Det avgjør hva publiseringssperren og tallene for KI-bruk regner som KI-tekst. Merket lett; testlaget har ikke ført det som dyrt, men Ståle bør vite om det.
 - Navn på KI-modeller står i noen dokumenter i `docs/`. Regelen i CLAUDE.md gjelder bare commits, PR-er og kode, så det er ikke meldt som feil. Ståle kan vurdere om regelen skal gjelde dokumentene også.

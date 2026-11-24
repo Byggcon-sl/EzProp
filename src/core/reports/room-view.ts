@@ -52,7 +52,7 @@ import {
 } from "./context";
 import { guardReportErrors } from "./errors";
 import { phraseUsageForDocument } from "./phrase-source";
-import { NO_FINDINGS_OVER_LIMIT_SIGNAL, OWNER_REFUSED_SIGNAL } from "./signals";
+import { NO_FINDINGS_OVER_LIMIT_SIGNAL, OWNER_REFUSED_SIGNAL, publishCheckRoomOf } from "./signals";
 import type {
   AnswerValue,
   AnswerView,
@@ -322,7 +322,12 @@ function toTgiuView(row: TgiuDetails): TgiuDetailsView {
   };
 }
 
-export type RoomState = RoomRefresh & { answers: AnswerView[]; ruleResults: RuleResult[] };
+export type RoomState = RoomRefresh & {
+  answers: AnswerView[];
+  ruleResults: RuleResult[];
+  /** Tilstanden per punkt i malens rekkefølge. Sjekken før publisering bygger på den (ADR 0015). */
+  checkpointStates: { checkpointKey: string; state: CheckpointState }[];
+};
 
 /**
  * Regner hele rommet: punktene med TG, status og advarsler, forslagene og fremdriften. Ren
@@ -332,6 +337,7 @@ export type RoomState = RoomRefresh & { answers: AnswerView[]; ruleResults: Rule
 export function buildRoomState(input: {
   template: LockedTemplate;
   roomDoc: RoomTemplateDocument;
+  roomId: string;
   data: RoomData;
   inspectionYear: number;
 }): RoomState {
@@ -411,6 +417,7 @@ export function buildRoomState(input: {
     }));
 
   const checkpointViews: CheckpointView[] = [];
+  const checkpointStates: RoomState["checkpointStates"] = [];
   const latestDecisionByRule = new Map<string, DecisionView>();
 
   for (const checkpoint of roomDoc.checkpoints) {
@@ -550,6 +557,7 @@ export function buildRoomState(input: {
         ),
     };
 
+    checkpointStates.push({ checkpointKey: checkpoint.key, state });
     checkpointViews.push({
       checkpointKey: checkpoint.key,
       resultId: result?.id ?? null,
@@ -600,8 +608,17 @@ export function buildRoomState(input: {
       done: countDoneCheckpoints(checkpointViews),
       total: checkpointViews.length,
     },
+    publishRoom: publishCheckRoomOf({
+      template,
+      roomDoc,
+      roomId: input.roomId,
+      position: 0,
+      answers: data.answers,
+      checkpointStates,
+    }),
     answers: answersView,
     ruleResults,
+    checkpointStates,
   };
 }
 
@@ -618,6 +635,7 @@ export async function computeRoomRefresh(
   return buildRoomState({
     template,
     roomDoc,
+    roomId: context.room.id,
     data,
     inspectionYear: inspectionYearOf(context.inspectionAt, now).year,
   });
@@ -629,6 +647,7 @@ export function toRefresh(state: RoomState): RoomRefresh {
     checkpoints: state.checkpoints,
     suggestions: state.suggestions,
     progress: state.progress,
+    publishRoom: state.publishRoom,
   };
 }
 
@@ -661,7 +680,13 @@ async function readRoom(
     loadRoomData(db, grant.organizationId, context.report.id, context.room.id),
     phraseUsageForDocument(db, grant.organizationId, roomDoc),
   ]);
-  const state = buildRoomState({ template, roomDoc, data, inspectionYear: inspectionYear.year });
+  const state = buildRoomState({
+    template,
+    roomDoc,
+    roomId: context.room.id,
+    data,
+    inspectionYear: inspectionYear.year,
+  });
 
   return {
     state: "started",
@@ -675,6 +700,7 @@ async function readRoom(
     checkpoints: state.checkpoints,
     suggestions: state.suggestions,
     progress: state.progress,
+    publishRoom: state.publishRoom,
     // «Mest brukt» (A468): samme telling som `LoadPhraseUsage`, for rommets del av malen
     phraseUsage,
   };
