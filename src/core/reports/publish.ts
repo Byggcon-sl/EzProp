@@ -649,7 +649,7 @@ export const publishReport: PublishReport = async (actor, organizationId, rawInp
 // --- Ny versjon --------------------------------------------------------------------------------
 
 /**
- * «Lag ny versjon» (`report.edit`, A425): rapporten går tilbake til `draft` i samme rapport.
+ * «Lag ny versjon» (`report.edit`, A522): rapporten går tilbake til `draft` i samme rapport.
  * Eldre utgivelser og sjekkrader røres ikke, og ingen overstyring følger med. Er rapporten alt
  * under arbeid, er svaret det samme uten endring.
  */

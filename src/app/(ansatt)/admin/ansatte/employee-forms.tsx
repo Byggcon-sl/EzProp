@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, type ReactNode } from "react";
+import { useActionState, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { GrantablePermission } from "@/core/access";
 import type { EmployeeRole } from "@/db/schema";
+import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { Checkbox, ChoiceGroup, Field, Input, Radio } from "@/shared/ui/form";
 import { FormActions, FormErrors, SubmitButton } from "../../form-parts";
@@ -203,12 +204,18 @@ export function EmployeeDetailsForm({
 }
 
 /** Kort med h2 på siden til den ansatte. */
+/** Kortet er en region med overskriften som navn, så skjermlesere kan hoppe mellom delene. */
 export function EmployeeCard({ title, children }: { title: string; children: ReactNode }) {
+  const headingId = useId();
   return (
-    <Card className="space-y-5">
-      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-      {children}
-    </Card>
+    <section aria-labelledby={headingId}>
+      <Card className="space-y-5">
+        <h2 id={headingId} className="text-lg font-semibold text-slate-900">
+          {title}
+        </h2>
+        {children}
+      </Card>
+    </section>
   );
 }
 
@@ -290,33 +297,110 @@ export function PermissionsForm({
   );
 }
 
-/** «Har sluttet» eller «Angre sluttet». */
+/** Linjen i bekreftelsen for «Har sluttet» (Mine innlogginger, Omfang 7). */
+export function deactivateSessionsLine(sessionCount: number): string {
+  return `Hen blir også logget ut av alle enheter (${sessionCount}).`;
+}
+
+/**
+ * «Har sluttet» → bekreftelse (med antall enheter som logges ut) → «Ja, har sluttet». Fokus
+ * flyttes slik at det går med tastatur alene. Et mislykket forsøk lukker bekreftelsen.
+ */
+function DeactivateForm({ sessionCount, action }: { sessionCount: number; action: Action }) {
+  const [state, formAction] = useActionState(action, initialFormState);
+  const [confirmingAttempt, setConfirmingAttempt] = useState<number | null>(null);
+  const confirming = confirmingAttempt === state.attempt;
+  const openRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const wasConfirming = useRef(false);
+
+  useEffect(() => {
+    if (confirming) cancelRef.current?.focus();
+    else if (wasConfirming.current) openRef.current?.focus();
+    wasConfirming.current = confirming;
+  }, [confirming]);
+
+  return (
+    <form action={formAction}>
+      <EmployeeCard title="Har sluttet">
+        <FormErrors state={state} />
+        <p className="text-slate-600">
+          Personen kan ikke bruke systemet, men står fortsatt på rapportene sine. Kan angres.
+        </p>
+        {confirming ? (
+          <div className="space-y-3" data-testid="deactivate-confirm">
+            <p className="font-medium text-slate-900">{deactivateSessionsLine(sessionCount)}</p>
+            <div className="flex flex-wrap gap-3">
+              <SubmitButton variant="primary" size="md">
+                Ja, har sluttet
+              </SubmitButton>
+              <Button
+                ref={cancelRef}
+                variant="secondary"
+                onClick={() => setConfirmingAttempt(null)}
+              >
+                Avbryt
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            ref={openRef}
+            variant="secondary"
+            onClick={() => setConfirmingAttempt(state.attempt)}
+          >
+            Har sluttet
+          </Button>
+        )}
+      </EmployeeCard>
+    </form>
+  );
+}
+
+/** «Har sluttet» (med bekreftelse) eller «Angre sluttet». */
 export function StatusForm({
   deactivatedOn,
   canReactivate,
+  sessionCount,
+  isSelf = false,
   action,
 }: {
   /** Dato personen sluttet («31.10.2026»), eller `null` hvis hen jobber her. */
   deactivatedOn: string | null;
   canReactivate: boolean;
+  /** Aktive innlogginger som logges ut ved «Har sluttet». */
+  sessionCount: number;
+  /** Admin ser sin egen side: «Har sluttet» vises ikke (regel 11, A430). Kjernen sperrer også. */
+  isSelf?: boolean;
+  action: Action;
+}) {
+  if (deactivatedOn === null && isSelf) {
+    return (
+      <EmployeeCard title="Har sluttet">
+        <p className="text-slate-600">
+          Du kan ikke sette deg selv til «Har sluttet». Be en annen admin.
+        </p>
+      </EmployeeCard>
+    );
+  }
+  if (deactivatedOn === null) {
+    return <DeactivateForm sessionCount={sessionCount} action={action} />;
+  }
+  return (
+    <ReactivateForm deactivatedOn={deactivatedOn} canReactivate={canReactivate} action={action} />
+  );
+}
+
+function ReactivateForm({
+  deactivatedOn,
+  canReactivate,
+  action,
+}: {
+  deactivatedOn: string;
+  canReactivate: boolean;
   action: Action;
 }) {
   const [state, formAction] = useActionState(action, initialFormState);
-  if (deactivatedOn === null) {
-    return (
-      <form action={formAction}>
-        <EmployeeCard title="Har sluttet">
-          <FormErrors state={state} />
-          <p className="text-slate-600">
-            Personen kan ikke bruke systemet, men står fortsatt på rapportene sine. Kan angres.
-          </p>
-          <SubmitButton variant="secondary" size="md">
-            Har sluttet
-          </SubmitButton>
-        </EmployeeCard>
-      </form>
-    );
-  }
   return (
     <form action={formAction}>
       <EmployeeCard title="Sluttet">

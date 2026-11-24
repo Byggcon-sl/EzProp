@@ -3,14 +3,14 @@ id: T-0111
 tittel: Tekst med bare mellomrom sendes til KI-tjenesten og gir en rad i loggen
 type: forbedring
 alvor: lite
-status: ny
+status: rettet
 funnet: 2026-11-17
 rolle: test-ki
 omrade: KI (kjernen)
 maal: KI i bunnen
 commit: 2dc573c0
 forsok: 0
-pr:
+pr: PR KI i veien, 23.11.2026
 ---
 
 ## Hva
@@ -33,3 +33,4 @@ Ikke etterprøvd (forbedring).
 
 ## Logg
 - 2026-11-17: funnet
+- 2026-11-23: rettet i PR KI i veien (branch `ki-i-veien`). Felt med bare mellomrom, også ikke-brytende og nullbredde, sendes ikke: intet kall og ingen rad. Rapportkjernen bruker samme regel som KI-kjernen (`isBlankText`).

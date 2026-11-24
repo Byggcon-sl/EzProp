@@ -6,6 +6,17 @@ export class LastAdminError extends Error {
   }
 }
 
+/**
+ * Admin kan ikke sette seg selv til «Har sluttet», heller ikke når en annen admin finnes
+ * (regel 11, Mine innlogginger Omfang 7 og A430). En annen admin må gjøre det.
+ */
+export class SelfDeactivationError extends Error {
+  constructor() {
+    super("Du kan ikke sette deg selv til «Har sluttet». Be en annen admin.");
+    this.name = "SelfDeactivationError";
+  }
+}
+
 /** Det finnes alt en ansatt i samme organisasjon med denne innloggingen (også om hen har sluttet). */
 export class DuplicateEmployeeEmailError extends Error {
   constructor() {

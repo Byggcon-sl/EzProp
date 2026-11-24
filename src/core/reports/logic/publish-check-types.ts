@@ -39,7 +39,7 @@ export type PublishCheckCheckpoint = {
   checkpointKey: string;
   /** Plassen i malen. Bare til sortering. */
   position: number;
-  /** Om punktet må ha TG før publisering (A423). Data fra den som kaller. */
+  /** Om punktet må ha TG før publisering (A520). Data fra den som kaller. */
   requiresTg: boolean;
   state: CheckpointState;
 };
@@ -162,7 +162,7 @@ export type CanonicalPublishCheck = (findings: readonly PublishCheckFinding[]) =
 export type CanonicalJson = (value: unknown) => string;
 
 /**
- * Kontrollen av begrunnelsen når en sperre krysses bort (A424, A449), én regel for skjermen og
+ * Kontrollen av begrunnelsen når en sperre krysses bort (A521, A449), én regel for skjermen og
  * Zod-skjemaet på serveren: en grunn er påkrevd; `other` krever tekst på minst 10 tegn etter
  * trimming; teksten er høyst 1000 tegn og uten fødselsnummer (`containsNationalId` fra
  * `@/shared/validation/free-text`). Tekst med bare mellomrom regnes som tom.

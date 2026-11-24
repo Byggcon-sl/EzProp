@@ -17,7 +17,7 @@ import {
 import { tenantTables } from "../../../tests/tenant-tables";
 
 /*
- * Databasen selv holder utgivelsene og sjekkradene riktige (migrering `0037_publisering-badet`,
+ * Databasen selv holder utgivelsene og sjekkradene riktige (migrering `0038_publisering-badet`,
  * ADR 0015, docs/funksjoner/fase2a-publisering-badet-testplan.md avsnitt 3, I9). Rå innsetting med
  * radbyggerne, utenom kjernen og Zod. Feilkoden sjekkes, så en skrivefeil gir ikke falsk grønn test.
  *

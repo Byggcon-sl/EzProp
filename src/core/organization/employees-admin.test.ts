@@ -1043,7 +1043,8 @@ describe("3.6 roller og enkeltrettigheter", () => {
 // ---------------------------------------------------------------------------------------------
 
 describe("3.7 sluttet og angre", () => {
-  it("1. deactivateEmployee setter deactivated_at; raden, rollene og innloggingen står, tilgangen er borte", async () => {
+  // Endret 17.11.2026 (Mine innlogginger, A430): øktene slettes nå ved deaktivering.
+  it("1. deactivateEmployee setter deactivated_at; raden, rollene og brukeren står, øktene og tilgangen er borte", async () => {
     const { org, admin } = await orgWithAdmin();
     const { actor, employee } = await seedPerson(org.id, ["inspector"], { name: "Siri Slutter" });
     await db.insert(sessions).values({
@@ -1053,7 +1054,6 @@ describe("3.7 sluttet og angre", () => {
       expiresAt: new Date(Date.now() + 86_400_000),
     });
     const [userBefore] = await db.select().from(users).where(eq(users.id, actor.id));
-    const sessionsBefore = await db.select().from(sessions).where(eq(sessions.userId, actor.id));
 
     await deactivateEmployee(admin, org.id, employee.id);
 
@@ -1066,9 +1066,7 @@ describe("3.7 sluttet og angre", () => {
     await expect(requireOrganizationAccess(actor, org.id)).rejects.toThrow(AccessDeniedError);
     const [userAfter] = await db.select().from(users).where(eq(users.id, actor.id));
     expect(userAfter).toEqual(userBefore);
-    expect(await db.select().from(sessions).where(eq(sessions.userId, actor.id))).toEqual(
-      sessionsBefore,
-    );
+    expect(await db.select().from(sessions).where(eq(sessions.userId, actor.id))).toEqual([]);
   });
 
   it("2. reactivateEmployee nullstiller deactivated_at, og tilgangen virker igjen", async () => {

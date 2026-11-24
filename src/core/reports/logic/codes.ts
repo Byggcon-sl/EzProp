@@ -137,19 +137,10 @@ export const MAX_MEASURES_PER_DEVIATION = 20;
 export const INSPECTION_YEAR_SOURCES = ["assignment", "today"] as const;
 
 /**
- * KI-målene i rapporten (`AiTargetRef.type` og `fieldKey`, ADR 0006, A350 og A356). Tomme kroker
- * nå: ingen KI-kall bygges i «Badet på PC». `fieldKey` er lik kolonnenavnet i tabellen. For
- * `field_answer` er `fieldKey` feltets faste kode.
- *
- * `ai_usage_log` (`report_id` + `target_ref`) er eneste fasit for om en tekst kom fra KI (A355).
+ * KI-målene i rapporten. Listen står i `@/shared/config/ai-targets`, slik at `@/core/ai` leser den
+ * samme uten å importere rapportkjernen. Eksporteres videre herfra for dem som alt bruker den.
  */
-export const REPORT_AI_TARGET_FIELDS = {
-  deviation: ["deviation_text", "cause_text", "consequence_text"],
-  deviation_measure: ["text"],
-  checkpoint_result: ["description_text"],
-  tgiu_detail: ["reason", "risk_assessment", "how_to_examine"],
-  field_answer: null,
-} as const;
+export { REPORT_AI_TARGET_FIELDS } from "@/shared/config/ai-targets";
 
 // --- Sjekken før publisering (ADR 0015, docs/funksjoner/fase2a-publisering-badet.md) -----------
 
@@ -159,7 +150,7 @@ export const REPORT_AI_TARGET_FIELDS = {
  * `bra_missing` og `electrical_missing` regnes ikke ut før 2a-3.
  */
 export const PUBLISH_BLOCKER_CODES = [
-  /** Punkt som krever TG uten TG, TGIU uten grunn, eller avvik uten valgt TG (A423, A443, A444). */
+  /** Punkt som krever TG uten TG, TGIU uten grunn, eller avvik uten valgt TG (A520, A443, A444). */
   "mandatory_without_tg",
   /** TG2 eller TG3 uten kriterium, årsakstekst eller konsekvens. `missing` sier hva. */
   "tg2_tg3_missing_cause_or_consequence",
@@ -169,7 +160,7 @@ export const PUBLISH_BLOCKER_CODES = [
   "wet_or_below_ground_missing_hole",
   "bra_missing",
   "electrical_missing",
-  /** Oppdraget mangler befaringsdato (A426). */
+  /** Oppdraget mangler befaringsdato (A523). */
   "inspection_date_missing",
 ] as const satisfies readonly PublishBlockerCode[];
 
@@ -209,7 +200,7 @@ export const PUBLISH_CHECK_SOURCES = [
 ] as const satisfies readonly PublishCheckSource[];
 
 /**
- * Grunnene når en sperre krysses bort, i rekkefølgen knappene vises (A424, A449). Samme liste som
+ * Grunnene når en sperre krysses bort, i rekkefølgen knappene vises (A521, A449). Samme liste som
  * `PUBLISH_OVERRIDE_REASON_CODES` i `@/db/schema/reports`. Bare `other` krever tekst.
  */
 export const PUBLISH_OVERRIDE_REASON_CODES = [
@@ -277,3 +268,19 @@ export const PUBLISH_OVERRIDE_REASON_CHECKS = [
   /** Teksten inneholder et fødselsnummer. */
   "national_id",
 ] as const;
+
+/**
+ * Feltene i avvikskortet som kan få forslag fra frasebanken (A433, A437). De tre første er
+ * kolonner på avviket, og valgt tekst erstatter feltet. `new_measure` legger til et nytt tiltak
+ * (`DEVIATION_NEW_MEASURE_FIELD_KEY` i `@/shared/config/ai-targets`). Faste koder: brukes som
+ * `fieldKey` i `target_ref` med måltypen `deviation`.
+ */
+export const PHRASE_FIELDS = [
+  "deviation_text",
+  "cause_text",
+  "consequence_text",
+  "new_measure",
+] as const;
+
+/** Så mange ganger må en kandidat være valgt i organisasjonen for å få merket «Mest brukt» (A468). */
+export const PHRASE_MOST_USED_MIN_COUNT = 2;

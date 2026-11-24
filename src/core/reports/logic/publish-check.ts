@@ -161,7 +161,7 @@ function warningToFinding(
 }
 
 /**
- * `mandatory_without_tg` med tre mål (A423, A443, A444): avvik med `kind = tg` uten valgt TG
+ * `mandatory_without_tg` med tre mål (A520, A443, A444): avvik med `kind = tg` uten valgt TG
  * (uansett `requiresTg`), TGIU med tom eller blank grunn, og punkt som krever TG uten TG. Det
  * siste gis ikke når punktet alt har funn for et avvik uten TG.
  */
@@ -375,7 +375,7 @@ function characterCount(text: string): number {
 }
 
 /**
- * Kontrollen av begrunnelsen når en sperre krysses bort (A424, A449). Rekkefølgen på svarene:
+ * Kontrollen av begrunnelsen når en sperre krysses bort (A521, A449). Rekkefølgen på svarene:
  * grunn mangler, «Annet» uten tekst, for lang tekst, fødselsnummer, «Annet» med for kort tekst.
  * Teksten trimmes før den telles; bare mellomrom regnes som tom.
  */

@@ -24,6 +24,7 @@ export const SHORTCUT_LIST: readonly { keys: string; text: string }[] = [
   { keys: "Ctrl/Cmd + Enter", text: "Ferdig med punktet (lagrer det som venter først)" },
   { keys: "Alt + pil opp / pil ned", text: "Forrige eller neste punkt (ikke i tekstfelt)" },
   { keys: "Ctrl/Cmd + K", text: "Søk etter avvik" },
+  { keys: "/ først i tomt felt, eller Ctrl + .", text: "Forslag til feltet" },
   { keys: "?", text: "Vis snarveiene (ikke i tekstfelt)" },
 ];
 
@@ -55,4 +56,22 @@ export function isTextField(element: Element | null): boolean {
     );
   }
   return (element as HTMLElement).isContentEditable === true;
+}
+
+/**
+ * «Forslag» fra tekstfeltet (A438, designet avsnitt 4): «/» først i et tomt felt (tegnet skrives
+ * ikke) eller Ctrl/Cmd + . i feltet. «/» i tekst skrives som vanlig.
+ */
+export function opensPhraseList(event: {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  /** Teksten i feltet før tasten. */
+  value: string;
+  isComposing?: boolean;
+}): boolean {
+  if (event.isComposing || event.altKey) return false;
+  if (event.key === "." && (event.ctrlKey || event.metaKey)) return true;
+  return event.key === "/" && !event.ctrlKey && !event.metaKey && event.value === "";
 }

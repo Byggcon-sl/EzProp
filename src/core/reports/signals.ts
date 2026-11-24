@@ -337,7 +337,7 @@ export function holeDrillingOf(
 
 /**
  * Ett våtrom til sjekken, fra radene og tilstanden regnet av de samme funksjonene som rommet.
- * `requiresTg` er `gives_tg` på punktet i malen (A423). Brukes både for hele rapporten og for
+ * `requiresTg` er `gives_tg` på punktet i malen (A520). Brukes både for hele rapporten og for
  * tellemerket på rommet (`RoomRefresh.publishRoom`), så tallene alltid er like.
  */
 export function publishCheckRoomOf(input: {

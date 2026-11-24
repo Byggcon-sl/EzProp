@@ -1,5 +1,5 @@
 {
-  "id": "f353bf0c-1d54-42dc-b626-7f3e2cea7e12",
+  "id": "062b54f5-ebbd-42f1-8d9f-d545256543ad",
   "prevId": "9c18c93a-035c-4208-a0c6-89c91e91a794",
   "version": "7",
   "dialect": "postgresql",
@@ -1458,27 +1458,6 @@
         }
       },
       "indexes": {
-        "certifications_organization_id_id_idx": {
-          "name": "certifications_organization_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "certifications_organization_id_employee_id_idx": {
           "name": "certifications_organization_id_employee_id_idx",
           "columns": [
@@ -9329,6 +9308,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "candidate_refs": {
+          "name": "candidate_refs",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "chosen_candidate": {
+          "name": "chosen_candidate",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -9475,6 +9466,56 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "ai_usage_log_target_idx": {
+          "name": "ai_usage_log_target_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "feature",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "target_ref",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"ai_usage_log\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ai_usage_log_chosen_candidate_idx": {
+          "name": "ai_usage_log_chosen_candidate_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "feature",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"ai_usage_log\".\"chosen_candidate\" is not null and \"ai_usage_log\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -9558,7 +9599,7 @@
       "checkConstraints": {
         "ai_usage_log_outcome_check": {
           "name": "ai_usage_log_outcome_check",
-          "value": "\"ai_usage_log\".\"outcome\" in ('ok', 'no_match', 'error', 'blocked')"
+          "value": "\"ai_usage_log\".\"outcome\" in ('ok', 'no_match', 'error', 'blocked', 'stopped')"
         },
         "ai_usage_log_status_check": {
           "name": "ai_usage_log_status_check",
@@ -9566,11 +9607,23 @@
         },
         "ai_usage_log_error_code_check": {
           "name": "ai_usage_log_error_code_check",
-          "value": "\"ai_usage_log\".\"error_code\" is null or (\"ai_usage_log\".\"outcome\" = 'error' and \"ai_usage_log\".\"error_code\" in ('timeout', 'rate_limited', 'unavailable', 'rejected', 'unknown'))"
+          "value": "\"ai_usage_log\".\"error_code\" is null or (\"ai_usage_log\".\"outcome\" = 'error' and \"ai_usage_log\".\"error_code\" in ('timeout', 'rate_limited', 'unavailable', 'rejected', 'unknown')) or (\"ai_usage_log\".\"outcome\" = 'stopped' and \"ai_usage_log\".\"error_code\" in ('tg_guard', 'coverage_guard', 'number_guard', 'placeholder_guard'))"
         },
         "ai_usage_log_outcome_status_check": {
           "name": "ai_usage_log_outcome_status_check",
-          "value": "(\"ai_usage_log\".\"outcome\" = 'ok' and \"ai_usage_log\".\"status\" is not null) or (\"ai_usage_log\".\"outcome\" <> 'ok' and \"ai_usage_log\".\"status\" is null and \"ai_usage_log\".\"output_text\" is null)"
+          "value": "(\"ai_usage_log\".\"outcome\" = 'ok' and \"ai_usage_log\".\"status\" is not null) or (\"ai_usage_log\".\"outcome\" = 'stopped' and \"ai_usage_log\".\"status\" is null) or (\"ai_usage_log\".\"outcome\" not in ('ok', 'stopped') and \"ai_usage_log\".\"status\" is null and \"ai_usage_log\".\"output_text\" is null)"
+        },
+        "ai_usage_log_stopped_check": {
+          "name": "ai_usage_log_stopped_check",
+          "value": "\"ai_usage_log\".\"outcome\" <> 'stopped' or \"ai_usage_log\".\"error_code\" is not null"
+        },
+        "ai_usage_log_candidate_refs_check": {
+          "name": "ai_usage_log_candidate_refs_check",
+          "value": "\"ai_usage_log\".\"candidate_refs\" is null or (\"ai_usage_log\".\"outcome\" = 'ok' and jsonb_typeof(\"ai_usage_log\".\"candidate_refs\") = 'array' and jsonb_array_length(\"ai_usage_log\".\"candidate_refs\") between 1 and 5 and not jsonb_path_exists(\"ai_usage_log\".\"candidate_refs\", 'strict $[*] ? (@.type() != \"object\")') and not jsonb_path_exists(\"ai_usage_log\".\"candidate_refs\", 'strict $[*].keyvalue() ? (@.key != \"source\" && @.key != \"id\")') and not jsonb_path_exists(\"ai_usage_log\".\"candidate_refs\", 'lax $[*] ? (!(exists(@.source)) || !(exists(@.id)))') and not jsonb_path_exists(\"ai_usage_log\".\"candidate_refs\", 'lax $[*] ? (!(@.source == \"template_outcome\" || @.source == \"template_measure\" || @.source == \"phrase\") || @.id.type() != \"string\")'))"
+        },
+        "ai_usage_log_chosen_candidate_check": {
+          "name": "ai_usage_log_chosen_candidate_check",
+          "value": "\"ai_usage_log\".\"chosen_candidate\" is null or (\"ai_usage_log\".\"status\" = 'accepted' and jsonb_typeof(\"ai_usage_log\".\"chosen_candidate\") = 'object' and \"ai_usage_log\".\"chosen_candidate\" - 'source' - 'id' = '{}'::jsonb and coalesce(\"ai_usage_log\".\"chosen_candidate\" ->> 'source', '') in ('template_outcome', 'template_measure', 'phrase') and coalesce(jsonb_typeof(\"ai_usage_log\".\"chosen_candidate\" -> 'id'), '') = 'string' and \"ai_usage_log\".\"candidate_refs\" is not null and \"ai_usage_log\".\"candidate_refs\" @> jsonb_build_array(\"ai_usage_log\".\"chosen_candidate\"))"
         },
         "ai_usage_log_tokens_check": {
           "name": "ai_usage_log_tokens_check",
@@ -10815,586 +10868,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.publish_check_results": {
-      "name": "publish_check_results",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "report_id": {
-          "name": "report_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "release_id": {
-          "name": "release_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "check_code": {
-          "name": "check_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "severity": {
-          "name": "severity",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'rule'"
-        },
-        "target_ref": {
-          "name": "target_ref",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "overridden": {
-          "name": "overridden",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "overridden_by": {
-          "name": "overridden_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "overridden_at": {
-          "name": "overridden_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "override_reason_code": {
-          "name": "override_reason_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "override_reason": {
-          "name": "override_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "publish_check_results_organization_id_report_id_release_id_idx": {
-          "name": "publish_check_results_organization_id_report_id_release_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "release_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "publish_check_results_overridden_idx": {
-          "name": "publish_check_results_overridden_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"publish_check_results\".\"overridden\"",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "publish_check_results_organization_id_organizations_id_fk": {
-          "name": "publish_check_results_organization_id_organizations_id_fk",
-          "tableFrom": "publish_check_results",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "publish_check_results_release_fk": {
-          "name": "publish_check_results_release_fk",
-          "tableFrom": "publish_check_results",
-          "tableTo": "report_releases",
-          "columnsFrom": [
-            "organization_id",
-            "report_id",
-            "release_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "report_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "publish_check_results_overridden_by_fk": {
-          "name": "publish_check_results_overridden_by_fk",
-          "tableFrom": "publish_check_results",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "organization_id",
-            "overridden_by"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "publish_check_results_check_code_check": {
-          "name": "publish_check_results_check_code_check",
-          "value": "\"publish_check_results\".\"check_code\" in ('mandatory_without_tg', 'tg2_tg3_missing_cause_or_consequence', 'tg3_missing_cost', 'wet_or_below_ground_missing_hole', 'bra_missing', 'electrical_missing', 'inspection_date_missing', 'tg2_tg3_missing_measure', 'cost_amount_not_rounded', 'hms_missing_consequence_or_measure', 'tgiu_details_missing', 'tgiu_suggested_not_set', 'no_findings_with_reading_over_limit', 'suggestion_no_longer_applies', 'texts_written_for_other_tg', 'tg3_on_age_only', 'ai_suggestion_pending', 'hole_reading_missing')"
-        },
-        "publish_check_results_severity_check": {
-          "name": "publish_check_results_severity_check",
-          "value": "\"publish_check_results\".\"severity\" in ('blocker', 'warning')"
-        },
-        "publish_check_results_source_check": {
-          "name": "publish_check_results_source_check",
-          "value": "\"publish_check_results\".\"source\" in ('rule', 'ai')"
-        },
-        "publish_check_results_severity_code_check": {
-          "name": "publish_check_results_severity_code_check",
-          "value": "(\"publish_check_results\".\"severity\" = 'blocker') = (\"publish_check_results\".\"check_code\" in ('mandatory_without_tg', 'tg2_tg3_missing_cause_or_consequence', 'tg3_missing_cost', 'wet_or_below_ground_missing_hole', 'bra_missing', 'electrical_missing', 'inspection_date_missing'))"
-        },
-        "publish_check_results_ai_warning_only_check": {
-          "name": "publish_check_results_ai_warning_only_check",
-          "value": "\"publish_check_results\".\"source\" <> 'ai' or \"publish_check_results\".\"severity\" = 'warning'"
-        },
-        "publish_check_results_target_ref_check": {
-          "name": "publish_check_results_target_ref_check",
-          "value": "jsonb_typeof(\"publish_check_results\".\"target_ref\") = 'object'"
-        },
-        "publish_check_results_overridden_check": {
-          "name": "publish_check_results_overridden_check",
-          "value": "\"publish_check_results\".\"overridden\" = (\"publish_check_results\".\"severity\" = 'blocker')"
-        },
-        "publish_check_results_override_fields_check": {
-          "name": "publish_check_results_override_fields_check",
-          "value": "(\"publish_check_results\".\"overridden\" and \"publish_check_results\".\"overridden_by\" is not null and \"publish_check_results\".\"overridden_at\" is not null and \"publish_check_results\".\"override_reason_code\" is not null) or (not \"publish_check_results\".\"overridden\" and \"publish_check_results\".\"overridden_by\" is null and \"publish_check_results\".\"overridden_at\" is null and \"publish_check_results\".\"override_reason_code\" is null and \"publish_check_results\".\"override_reason\" is null)"
-        },
-        "publish_check_results_override_reason_code_check": {
-          "name": "publish_check_results_override_reason_code_check",
-          "value": "\"publish_check_results\".\"override_reason_code\" is null or \"publish_check_results\".\"override_reason_code\" in ('no_access_or_refused', 'not_applicable_to_room', 'described_elsewhere', 'other')"
-        },
-        "publish_check_results_override_reason_check": {
-          "name": "publish_check_results_override_reason_check",
-          "value": "(\"publish_check_results\".\"override_reason_code\" is distinct from 'other' or \"publish_check_results\".\"override_reason\" is not null) and (\"publish_check_results\".\"override_reason\" is null or (length(btrim(\"publish_check_results\".\"override_reason\")) > 0 and length(\"publish_check_results\".\"override_reason\") <= 1000))"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.report_releases": {
-      "name": "report_releases",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_by": {
-          "name": "deleted_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "row_version": {
-          "name": "row_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "report_id": {
-          "name": "report_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "version_number": {
-          "name": "version_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "released_at": {
-          "name": "released_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "released_by": {
-          "name": "released_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "signed_by_employee_id": {
-          "name": "signed_by_employee_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "certification_id": {
-          "name": "certification_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "company_id": {
-          "name": "company_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "original_release_date": {
-          "name": "original_release_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "valid_until": {
-          "name": "valid_until",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "snapshot": {
-          "name": "snapshot",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content_hash": {
-          "name": "content_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "retain_until": {
-          "name": "retain_until",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "report_releases_organization_id_report_id_id_idx": {
-          "name": "report_releases_organization_id_report_id_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "report_releases_organization_id_report_id_version_number_idx": {
-          "name": "report_releases_organization_id_report_id_version_number_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "version_number",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "report_releases_organization_id_organizations_id_fk": {
-          "name": "report_releases_organization_id_organizations_id_fk",
-          "tableFrom": "report_releases",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "report_releases_report_fk": {
-          "name": "report_releases_report_fk",
-          "tableFrom": "report_releases",
-          "tableTo": "reports",
-          "columnsFrom": [
-            "organization_id",
-            "report_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "report_releases_released_by_fk": {
-          "name": "report_releases_released_by_fk",
-          "tableFrom": "report_releases",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "organization_id",
-            "released_by"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "report_releases_signed_by_employee_fk": {
-          "name": "report_releases_signed_by_employee_fk",
-          "tableFrom": "report_releases",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "organization_id",
-            "signed_by_employee_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "report_releases_certification_fk": {
-          "name": "report_releases_certification_fk",
-          "tableFrom": "report_releases",
-          "tableTo": "certifications",
-          "columnsFrom": [
-            "organization_id",
-            "certification_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "report_releases_company_fk": {
-          "name": "report_releases_company_fk",
-          "tableFrom": "report_releases",
-          "tableTo": "companies",
-          "columnsFrom": [
-            "organization_id",
-            "company_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "report_releases_version_number_check": {
-          "name": "report_releases_version_number_check",
-          "value": "\"report_releases\".\"version_number\" >= 1"
-        },
-        "report_releases_snapshot_check": {
-          "name": "report_releases_snapshot_check",
-          "value": "jsonb_typeof(\"report_releases\".\"snapshot\") = 'object' and coalesce(jsonb_typeof(\"report_releases\".\"snapshot\"->'schema_version'), 'missing') = 'number'"
-        },
-        "report_releases_content_hash_check": {
-          "name": "report_releases_content_hash_check",
-          "value": "\"report_releases\".\"content_hash\" ~ '^[0-9a-f]{64}$'"
-        },
-        "report_releases_retain_until_check": {
-          "name": "report_releases_retain_until_check",
-          "value": "\"report_releases\".\"retain_until\" > \"report_releases\".\"released_at\""
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.reports": {
       "name": "reports",
       "schema": "",
@@ -11481,6 +10954,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'draft'"
+        },
+        "summary_text": {
+          "name": "summary_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "summary_basis": {
+          "name": "summary_basis",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -11584,6 +11069,14 @@
         "reports_status_check": {
           "name": "reports_status_check",
           "value": "\"reports\".\"status\" in ('draft', 'published', 'superseded')"
+        },
+        "reports_summary_text_check": {
+          "name": "reports_summary_text_check",
+          "value": "\"reports\".\"summary_text\" is null or char_length(\"reports\".\"summary_text\") <= 10000"
+        },
+        "reports_summary_basis_check": {
+          "name": "reports_summary_basis_check",
+          "value": "\"reports\".\"summary_basis\" is null or (jsonb_typeof(\"reports\".\"summary_basis\") = 'array' and jsonb_array_length(\"reports\".\"summary_basis\") <= 200)"
         }
       },
       "isRLSEnabled": false

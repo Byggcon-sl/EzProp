@@ -23,7 +23,7 @@ import { answerHole, answerMembrane1990, RULE, startedBathroom } from "./report-
  * Testfilen må ha `vi.mock("server-only", () => ({}))`. Alle verdier er oppdiktede.
  */
 
-/** De åtte kontrollpunktene i badmalen som gir TG (A423). */
+/** De åtte kontrollpunktene i badmalen som gir TG (A520). */
 export const WET_ROOM_CHECKPOINT_KEYS = [
   "wet_room.general",
   "wet_room.documentation",

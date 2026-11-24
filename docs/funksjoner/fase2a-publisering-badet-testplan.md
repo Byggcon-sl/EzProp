@@ -104,7 +104,7 @@ Hver sak er en rad `{ name, input, expected: Array<{ checkCode, severity, target
 2. `report_releases`: `version_number = 0` avvist; to rader med samme `(organization_id, report_id, version_number)` avvist; NOT NULL på `released_by`, `signed_by_employee_id`, `certification_id`, `company_id`, `content_hash`, `retain_until`.
 3. Sammensatt fremmednøkkel: sjekkrad i organisasjon A som peker på utgivelse i B → avvist; sjekkrad med riktig organisasjon men annen `report_id` enn utgivelsen → avvist; `overridden_by` / `released_by` / `certification_id` fra annen organisasjon → avvist.
 4. Begge tabellene står i `tests/tenant-tables.ts` med radbygger og testfil; `tenant-isolation-all-tables.test.ts` er grønn.
-5. (I14) Migreringstest (`src/db/migration-0037-publisering.test.ts`, mønster fra `migration-0035-tilbud.test.ts`): database migrert til forrige nummer med rapporter i `draft` og `published` (rå SQL), så kjøres migreringen uten feil, og eksisterende rader er uendret. Nummeret sjekkes ved merge (kollisjon med `0037_ki-i-veien`): journalen har ett innslag per nummer.
+5. (I14) Migreringstest (`src/db/migration-0038-publisering.test.ts`, mønster fra `migration-0035-tilbud.test.ts`): database migrert til forrige nummer med rapporter i `draft` og `published` (rå SQL), så kjøres migreringen uten feil, og eksisterende rader er uendret. Nummeret sjekkes ved merge (kollisjon med `0037_ki-i-veien`): journalen har ett innslag per nummer.
 
 ## 4. Integrasjon (`src/core/reports/publish.test.ts` m.fl., testdatabasen)
 

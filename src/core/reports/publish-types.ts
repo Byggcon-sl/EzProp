@@ -367,7 +367,7 @@ export type PublishReport = (
 ) => Promise<PublishReportResult>;
 
 /**
- * «Lag ny versjon» (`report.edit`, A425): låser rapportraden, setter `status = draft` og skriver
+ * «Lag ny versjon» (`report.edit`, A522): låser rapportraden, setter `status = draft` og skriver
  * revisjonslogg. Eldre utgivelser og sjekkrader røres ikke, og ingen overstyring følger med.
  * Rapporten må være `published`; er den alt `draft`, er svaret det samme uten endring.
  */

@@ -37,19 +37,19 @@
 
 1. **Ren sjekk** `computePublishCheck(input: PublishCheckInput): PublishCheckFinding[]` i `logic/publish-check.ts`. Ingen database, ingen pakker, ingen `node:crypto`, ingen våtromskoder (ADR 0013 punkt 14, A396). Inndata er ferdig tolket tilstand per rom og punkt, laget i `signals.ts` av den som kaller:
    - per rom: `isWetRoom`, `holeDrilling: "unanswered" | "not_done_no_reason" | "other_without_note" | "ok"`, `holeReadingMissing: boolean`, og om tilliggende konstruksjoner har TGIU med grunn;
-   - per punkt: `requiresTg` (data, A423), `tgDirect`, TGIU-grunn, avvikene (kind, TG, kriterium, årsak, konsekvens, kostnad, tiltak), og de eksisterende advarslene fra «Badet på PC»;
+   - per punkt: `requiresTg` (data, A520), `tgDirect`, TGIU-grunn, avvikene (kind, TG, kriterium, årsak, konsekvens, kostnad, tiltak), og de eksisterende advarslene fra «Badet på PC»;
    - per rapport: om befaringsdato finnes, og antall ventende KI-forslag med mål.
    Utdata: funn sortert etter rom, punktets rekkefølge og fast kode, hver med `checkCode`, `severity`, `source` og `target` (`PublishCheckTarget`: `roomId`, `checkpointId`, `checkpointKey`, `deviationId`, `ruleKey`, `missing` – hva som mangler, som fast kode). Punktet kan mangle rad i `checkpoint_results`, så målet er aldri den id-en.
 2. **Sperrer** (`severity = blocker`), kodene fra domenemodellen 4.7:
    - `tg2_tg3_missing_cause_or_consequence`: avvik med `kind = tg` og valgt TG 2 eller 3, der kriterium mangler, årsakstekst er tom eller bare mellomrom, eller konsekvens er tom eller bare mellomrom. Hver for seg (`missing`). HMS-avvik gir aldri denne.
    - `tg3_missing_cost`: avvik med TG3 og `cost_type = none` (databasen tillater bare `band` med intervall, `approx` med beløp eller `none`).
    - `wet_or_below_ground_missing_hole`: våtrom der hulltaking er ubesvart, «ikke utført» uten grunn, eller grunnen er «annet» uten tekst (tom eller blank). TGIU på tilliggende konstruksjoner **med utfylt grunn** teller som begrunnelse (A445); de andre TGIU-opplysningene er advarsel. «Under terreng» kommer med rom under terreng i 2a-3.
-   - `mandatory_without_tg` (A423, A443, A444), med tre mål:
+   - `mandatory_without_tg` (A520, A443, A444), med tre mål:
      - punkt med `requiresTg = true` uten `tg_direct` og uten avvik med valgt TG (også punkt med bare HMS-avvik);
      - punkt med `tg_direct = IU` og tom eller blank TGIU-grunn (§ 2-23, A443);
      - avvik med `kind = tg` og `tg = null`, med avviket som mål, også når punktet har TG fra et annet avvik (A444).
      Den erstatter advarslene `checkpoint_done_without_tg` og `deviation_tg_not_chosen` på samme mål i sjekken: samme mangel vises aldri to ganger. Punkt med `requiresTg = false` (el, rekkverk, HMS-punkter uten TG) gir aldri sperre.
-   - `inspection_date_missing`: oppdraget mangler befaringsdato (flyttet fram fra 2a-3, A426). Krysses den bort, står «gyldig til» tom i utgivelsen; den regnes aldri fra publiseringsdagen.
+   - `inspection_date_missing`: oppdraget mangler befaringsdato (flyttet fram fra 2a-3, A523). Krysses den bort, står «gyldig til» tom i utgivelsen; den regnes aldri fra publiseringsdagen.
    - Publisering uten et eneste våtrom i rapporten avvises med «Rapporten har ikke noe våtrom å publisere.» (ikke en sperre som kan krysses bort; et slettet bad skal ikke gi fri publisering).
 3. **Advarsler** (`severity = warning`, aldri sperre): de øvrige punktadvarslene fra «Badet på PC» (`tg2_tg3_missing_measure`, `cost_amount_not_rounded`, `hms_missing_consequence_or_measure`, `tgiu_details_missing`, `tgiu_suggested_not_set`, `no_findings_with_reading_over_limit`, `suggestion_no_longer_applies`, `texts_written_for_other_tg`, `tg3_on_age_only`), og to nye koder: `ai_suggestion_pending` og `hole_reading_missing` (hull tatt, «utført uten funn» eller «utført med funn», uten måleverdi eller uten enhet; § 2-2, A446).
 4. **Fingeravtrykk:** regnes på serveren (SHA-256, utenfor `logic/`) av kanonisk form av funnlisten: `checkCode`, `severity` og `target`, sortert, uten overstyringer. Sorteringen til kanonisk form er en ren funksjon i `logic/`.
@@ -87,11 +87,11 @@
     - alle skrivinger i `src/core/reports`, også synkruten for feltene, avvises når status er `published` med «Rapporten er publisert. Lag ny versjon for å rette.». Avvisningen fra synkruten stopper ikke køen (jf. T-0001);
     - `src/core/buildings` avviser lagring, fjerning og gjenoppretting av rom, etasjer og bygninger når oppdragets rapport er publisert, med samme melding (A447). Sjekken gjøres med én kjernefunksjon i `src/core/reports` (`isReportPublishedForAssignment`), med test;
     - skjermen viser badet bare lesbart.
-11. **Ny versjon:** «Lag ny versjon» (sekundærknapp, ikke ved siden av hovedhandlingen; krever `report.edit`) låser rapportraden, setter rapporten tilbake til `draft` og skriver revisjonslogg (A425). Eldre utgivelser røres aldri. Neste publisering blir versjon 2. Sjekken kjøres helt på nytt, og ingen overstyring følger med: en mangel som ikke er rettet, kommer tilbake som sperre. Ved en slik sperre vises «I versjon 1 krysset du bort dette: <grunn>» med knappen «Bruk samme begrunnelse», som må trykkes aktivt (F3).
+11. **Ny versjon:** «Lag ny versjon» (sekundærknapp, ikke ved siden av hovedhandlingen; krever `report.edit`) låser rapportraden, setter rapporten tilbake til `draft` og skriver revisjonslogg (A522). Eldre utgivelser røres aldri. Neste publisering blir versjon 2. Sjekken kjøres helt på nytt, og ingen overstyring følger med: en mangel som ikke er rettet, kommer tilbake som sperre. Ved en slik sperre vises «I versjon 1 krysset du bort dette: <grunn>» med knappen «Bruk samme begrunnelse», som må trykkes aktivt (F3).
 12. **Hendelser:** `report.published` bare for versjon 1 (utløser for sending til kunde senere, 4.9), `report.revised` for versjon 2 og senere (en rettet rapport sendes manuelt, regel 12), og `report.publish_override` per sperre som krysses bort. Alle finnes i `EVENT_TYPES`. Bare id-er, versjonsnummer og faste koder; aldri begrunnelsen.
 13. **Utgivelser på oppdraget:** hver versjon med hvem som publiserte, når, og hvilke sperrer som ble krysset bort med grunn. Ansattnavn slås opp med samme organisasjon i join (som `listAuditEvents`), også ansatte som har sluttet. `listReleases` returnerer `overrideReason: null` for den som ikke har `canSeeOverrideReasons(grant)` (kontor). Listen slår aldri opp i `claims`.
-14. **Migrering** `0037_publisering-badet`: tabellene over, CHECK-reglene, indekser på `(organization_id, report_id)` og en delvis indeks på `(organization_id, created_at) where overridden` for lederoversikten senere. Begge tabellene føres i `tests/tenant-tables.ts`. `PUBLISH_CHECK_CODES` og `PUBLISH_OVERRIDE_REASON_CODES` står i `logic/codes.ts` og i `src/db/schema/reports.ts` med samme typesjekk som `OVERRIDE_REASON_CODES`. **Nummeret kolliderer med `0037_ki-i-veien`:** den som merges sist, bytter nummer (står i tilstandsfilen). Versjon 0.17.0.
-15. **ADR 0015** (sjekk nummeret ved merge): de to tabellene, låsing og versjoner (A425), snapshot-formatet, fingeravtrykket, hvorfor `message` og `revision_note` ikke lagres, og det som er forkastet (`current_release_id`, PDF-kolonner nå, rader ved hver visning).
+14. **Migrering** `0038_publisering-badet`: tabellene over, CHECK-reglene, indekser på `(organization_id, report_id)` og en delvis indeks på `(organization_id, created_at) where overridden` for lederoversikten senere. Begge tabellene føres i `tests/tenant-tables.ts`. `PUBLISH_CHECK_CODES` og `PUBLISH_OVERRIDE_REASON_CODES` står i `logic/codes.ts` og i `src/db/schema/reports.ts` med samme typesjekk som `OVERRIDE_REASON_CODES`. **Nummeret kolliderer med `0037_ki-i-veien`:** den som merges sist, bytter nummer (står i tilstandsfilen). Versjon 0.17.0.
+15. **ADR 0015** (sjekk nummeret ved merge): de to tabellene, låsing og versjoner (A522), snapshot-formatet, fingeravtrykket, hvorfor `message` og `revision_note` ikke lagres, og det som er forkastet (`current_release_id`, PDF-kolonner nå, rader ved hver visning).
 
 **Ikke med (bevisst utelatt):**
 
@@ -135,7 +135,7 @@ Ført i `docs/plan/forbedrerens-tillegg.md`.
 - `override_reason`: trimmes, høyst 1000 tegn i Zod og CHECK, avvises med `containsNationalId` fra `src/shared/validation/free-text.ts` (ingen ny kopi). Hjelpetekst: «Ikke skriv navn eller kontaktopplysninger.» Står aldri i `audit_log.changes`, hendelser, logg eller feilmeldinger.
 - Nye faste koder (regel 6): `ai_suggestion_pending`, `hole_reading_missing`, og grunnene i `PUBLISH_OVERRIDE_REASON_CODES`.
 - `reports.status` bruker `published`, som alt finnes.
-- Domenemodellen 4.7 rettes i samme PR: begrunnelse som kode og tekst, rader bare ved publisering, `message` lagres ikke, `source`, snapshot-innhold, `requiresTg` som data (A423). Ordlisten: `publish check` / «sjekk før publisering», `override` / «krysse bort», `release` / «utgivelse», `override reason code` / «grunn».
+- Domenemodellen 4.7 rettes i samme PR: begrunnelse som kode og tekst, rader bare ved publisering, `message` lagres ikke, `source`, snapshot-innhold, `requiresTg` som data (A520). Ordlisten: `publish check` / «sjekk før publisering», `override` / «krysse bort», `release` / «utgivelse», `override reason code` / «grunn».
 
 ## Skjermer
 
@@ -191,10 +191,10 @@ Sjekken er regler i kode med testsaker som data i `publish-check.test.ts`, én p
 
 ## Avgjort i autonom modus (føres i `docs/09-apne-sporsmal.md`)
 
-- **A423** `mandatory_without_tg` for alle åtte punktene som gir TG, som data (`requiresTg` i `signals.ts`). Avviker fra `mandatory` i malen og fra 4.7, som rettes. Spørsmål 99. Lett å endre.
-- **A424** Overstyring krever en fast grunn; tekst bare ved «Annet». Lett å endre.
-- **A425** «Ny versjon» åpner samme rapport igjen. Dyrt å endre.
-- **A426** (endret) Uten befaringsdato: sperre `inspection_date_missing` nå, og «gyldig til» regnes aldri fra publiseringsdagen. Lett å endre.
+- **A520** `mandatory_without_tg` for alle åtte punktene som gir TG, som data (`requiresTg` i `signals.ts`). Avviker fra `mandatory` i malen og fra 4.7, som rettes. Spørsmål 99. Lett å endre.
+- **A521** Overstyring krever en fast grunn; tekst bare ved «Annet». Lett å endre.
+- **A522** «Ny versjon» åpner samme rapport igjen. Dyrt å endre.
+- **A523** (endret) Uten befaringsdato: sperre `inspection_date_missing` nå, og «gyldig til» regnes aldri fra publiseringsdagen. Lett å endre.
 - **A443** TGIU uten grunn gir sperre `mandatory_without_tg`. Lett å endre.
 - **A444** Avvik uten valgt TG gir alltid sperre. Lett å endre.
 - **A445** TGIU med grunn på tilliggende konstruksjoner teller som begrunnelse for hulltaking. Lett å endre.
@@ -212,7 +212,7 @@ Sjekken er regler i kode med testsaker som data i `publish-check.test.ts`, én p
 ## Avgjort ved uenighet (prosjektlederen)
 
 - **Grunn som fast kode eller bare forhåndsutfylt tekst:** ux-ansvarlig ville ha ferdige grunner som bare fyller fritekstfeltet, uten nye faste koder. Forbedreren ville ha faste koder. Forbedrerens forslag bygges (Ståle 14.11.2026), og faste koder gir tall for leder og KI uten å lese fritekst (sikkerhet-personvern). Fra ux beholdes: minst 10 tegn når tekst kreves, valgene rett under funnet, ingen dialog.
-- **Begrunnelse 1–1000 tegn påkrevd (arkitekt) mot kode med valgfri tekst (forbedreren):** CHECK krever kode, og tekst bare ved «Annet». A424 gjelder fortsatt: en grunn er alltid påkrevd.
+- **Begrunnelse 1–1000 tegn påkrevd (arkitekt) mot kode med valgfri tekst (forbedreren):** CHECK krever kode, og tekst bare ved «Annet». A521 gjelder fortsatt: en grunn er alltid påkrevd.
 - **`message` (arkitekt: behold eller begrunn) mot sikkerhet-personvern (ikke lagre tekst med romnavn):** lagres ikke; teksten lages fra koden. Begrunnes i ADR 0015.
 - **Låsing av rom (arkitekt: egen A-beslutning; sikkerhet-personvern: bygg nå):** bygges nå (A447), fordi en publisert rapport ellers kan miste badet uten ny versjon.
 - **«Gyldig til» uten befaringsdato:** fagansvarlig ga to valg. Sperren tas med nå, fordi koden alt står i 4.7 og det er det enkleste som aldri gir feil dato i en låst utgivelse. Kolonnen `valid_until_basis` (arkitekt) trengs da ikke.
@@ -224,6 +224,6 @@ utvikler og testskriver i parallell; arkitekt (ADR 0015, skjema og låsing); ux-
 
 ## Åpne spørsmål
 
-- Spørsmål 99 (fagrådet): hvilke punkter krever TG, TGIU uten grunn og avvik uten TG som sperre, nektet hulltaking med annet enn TGIU, hull uten fuktmåling. Påvirker A423, A443–A446.
+- Spørsmål 99 (fagrådet): hvilke punkter krever TG, TGIU uten grunn og avvik uten TG som sperre, nektet hulltaking med annet enn TGIU, hull uten fuktmåling. Påvirker A520, A443–A446.
 - Spørsmål 100 (personvern): lederoversikten per takstmann.
 - Skal «under terreng» få samme sperre for hulltaking? Tas med rom under terreng i 2a-3.

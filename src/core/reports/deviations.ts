@@ -145,7 +145,7 @@ async function findReportDeviation(scope: WriteScope, deviationId: string) {
  * feltet som «[måleverdi mangler]», aldri som `{…}`. Målingen regelen slo til på, brukes når
  * svaret mangler.
  */
-async function mergeValuesFor(
+export async function mergeValuesFor(
   scope: WriteScope,
   checkpointKey: string,
   measurement: CreateDeviationParams["measurement"],
