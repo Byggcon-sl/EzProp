@@ -327,3 +327,8 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 **Rett forslag og avvik (23.–24.11.2026), PR #239, overtatt av hovedløkken:**
 - Arbeidsflyten la bitene i tre worktree-brancher som ikke var flettet inn i oppgavebranchen da kjøringen stoppet. Ved overtakelse: flett alle `worktree-wf_*`-branchene med samme «Pågår» inn først; to bitbrancher som legger til hver sin `describe` i samme testfil gir konflikt, og begge sider skal med.
 - Nye handlinger som endrer rapporten må også inn i låsen etter publisering (#234). Sjekk låstestene når en ny handling kommer inn samtidig med publiseringen.
+
+**Testdata del 2 (24.11.2026), PR #240, overtatt av hovedløkken:**
+- En spørring med to korrelerte `exists` per rad gikk ut på tid (60 s) i CI, men tok 32 ms lokalt på samme lille datasett. Planleggeren i CI har annen statistikk etter tusenvis av tester. Del heller opp i enkle spørringer med `inArray` og sett sammen i koden når datamengden er liten.
+- E2e som teller serverkall (`countServerActions`) må ikke telle lesekall som kommer på tid (sammendraget leses på nytt 400 ms etter en endring i rommet). Hjelperen hopper nå over rene lesekall for rommet.
+- Kjør aldri lange testkjøringer i samme mappe som en arbeidsflyt som bytter branch; bruk en egen `git worktree`.

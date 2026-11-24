@@ -27,6 +27,13 @@ klar() {
   sha=$(echo "$info" | jq -r .head.sha)
   local runs total ok pending
   runs=$(gh api "repos/$REPO/commits/$sha/check-runs" --jq '.check_runs')
+  # Feiler kallet (for eksempel 502), er svaret tomt. Da vet vi ingenting om CI, og
+  # ingenting merges (24.11.2026: #242 ble merget mens CI kjørte, fordi tomme tall gjorde
+  # sammenligningene under usanne i stedet for å stoppe).
+  if ! echo "$runs" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    echo "#$nr: fikk ikke svar om CI"
+    return 3
+  fi
   total=$(echo "$runs" | jq 'length')
   ok=$(echo "$runs" | jq '[.[] | select(.conclusion == "success" or .conclusion == "skipped")] | length')
   # Minst én jobb må faktisk ha kjørt grønt (på rene dokument-PR-er hoppes de tunge jobbene over).
