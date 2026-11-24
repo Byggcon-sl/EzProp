@@ -2,6 +2,7 @@ import { defaultReceives } from "@/core/assignments/codes";
 import { suggestAreaType, suggestBelowGround, type RoomType } from "@/core/buildings/codes";
 import type { MeasuringMethod } from "@/core/buildings/codes";
 import type { CommonAreasInput, HousingType, OwnershipForm } from "@/core/properties";
+import { todayInOslo } from "@/shared/lib/dates";
 import { createSeededRandom, type SeededRandom } from "./seeded-random";
 import {
   TESTDATA_ASSIGNMENT_NOTES,
@@ -850,41 +851,141 @@ function houseBuildings(rng: SeededRandom, kind: Kind): TestdataBuilding[] {
   return buildings;
 }
 
+/** Romtypene i romgruppen våtrom (badmalen gjelder dem). */
+const WET_ROOM_TYPES: ReadonlySet<string> = new Set([
+  "bathroom",
+  "laundry",
+  "bathroom_laundry",
+  "room_with_drain",
+  "other_wet_room",
+]);
+
+/** Et våtrom i planen med året det ble bygget eller fikk nytt sjikt, og befaringsåret. */
+type PlannedBath = {
+  assignment: TestdataAssignment;
+  room: TestdataRoom;
+  year: number;
+  inspectionYear: number;
+};
+
+function plannedBaths(orders: readonly TestdataOrder[], anchorYear: number): PlannedBath[] {
+  return orders.flatMap((order) => {
+    if (!order.converted) return [];
+    const assignment = order.converted.assignment;
+    // Befaringsåret i norsk tid, som `inspectionYearOf` i rapportkjernen
+    const inspectionYear =
+      assignment.inspectionAt === null
+        ? anchorYear
+        : Number(todayInOslo(assignment.inspectionAt).slice(0, 4));
+    return assignment.buildings.flatMap((b) =>
+      b.floors.flatMap((f) =>
+        f.rooms
+          .filter((room) => WET_ROOM_TYPES.has(room.roomType))
+          .map((room) => ({
+            assignment,
+            room,
+            year: room.yearRenovated ?? assignment.property.buildYear,
+            inspectionYear,
+          })),
+      ),
+    );
+  });
+}
+
+/** Ett krav til badene: hvor mange som må finnes i statusene, og hvordan et bad gjøres passende. */
+type BathNeed = {
+  statuses: readonly string[] | null;
+  count: number;
+  test: (year: number, inspectionYear: number) => boolean;
+  apply: (bath: PlannedBath) => void;
+};
+
+/** Gir badet et nytt år (fornyet) og sørger for at boligen ikke er yngre enn badet. */
+function renovate(bath: PlannedBath, year: number): void {
+  bath.room.yearRenovated = year;
+  bath.assignment.property.buildYear = Math.min(bath.assignment.property.buildYear, year);
+}
+
+/** Gjør badet eldre enn 2000: ikke fornyet, og boligen fra før 2000. */
+function makeOld(bath: PlannedBath): void {
+  bath.room.yearRenovated = null;
+  bath.assignment.property.buildYear = Math.min(bath.assignment.property.buildYear, 1985);
+}
+
+const DONE_STATUSES = ["completed", "invoiced"] as const;
+
 /**
- * Aldersreglene for bad (A300): minst ett bad fra før 2000, ett på 0–5 år og ett nær en
- * levetidsterskel (rundt 20 år). Settes på de første befarte boligene hvis tilfeldighetene ikke
- * ga dem.
+ * Aldersreglene for bad (A300) og badene testdata del 2 trenger (A504, A514). Settes på de første
+ * befarte boligene hvis tilfeldighetene ikke ga dem:
+ * - del 1: minst ett bad fra før 2000, ett på 0–5 år og ett nær en levetidsterskel (rundt 20 år);
+ * - del 2, under arbeid: ett bad fra før 2000 (visningsbadet) og to fra 2000 eller senere (avvist
+ *   forslag og «Ukjent» byggeår);
+ * - del 2, ferdig og fakturert: ett bad fra før 2000 (TG3 før 2000), ett fra 2000 eller senere
+ *   som er 18 år eller eldre (TG2 for alder) og sju som er høyst 14 år (scenarioene uten
+ *   aldersforslag).
+ * Bare bad som ikke trengs for et annet krav, endres.
  */
 function ensureBathroomAges(orders: readonly TestdataOrder[], anchorYear: number): void {
-  const inspected = orders
-    .map((order) => (order.converted ? order.converted.assignment : null))
-    .filter((a): a is TestdataAssignment => a !== null && a.buildings.length > 0);
-  const firstBath = (a: TestdataAssignment) =>
-    a.buildings
-      .flatMap((b) => b.floors.flatMap((f) => f.rooms))
-      .find((r) => r.roomType === "bathroom");
-  const bathYear = (a: TestdataAssignment) => firstBath(a)?.yearRenovated ?? a.property.buildYear;
-  const ages = () => inspected.map((a) => anchorYear - bathYear(a));
+  const needs: BathNeed[] = [
+    { statuses: null, count: 1, test: (y) => y < 2000, apply: makeOld },
+    {
+      statuses: null,
+      count: 1,
+      test: (y, iy) => iy - y >= 0 && iy - y <= 5,
+      apply: (b) => renovate(b, b.inspectionYear - 2),
+    },
+    {
+      statuses: null,
+      count: 1,
+      test: (y, iy) => iy - y >= 18 && iy - y <= 22,
+      apply: (b) => renovate(b, b.inspectionYear - 19),
+    },
+    { statuses: ["in_progress"], count: 1, test: (y) => y < 2000, apply: makeOld },
+    {
+      statuses: ["in_progress"],
+      count: 2,
+      test: (y) => y >= 2000,
+      apply: (b) => renovate(b, b.inspectionYear - 6),
+    },
+    { statuses: DONE_STATUSES, count: 1, test: (y) => y < 2000, apply: makeOld },
+    {
+      statuses: DONE_STATUSES,
+      count: 1,
+      test: (y, iy) => y >= 2000 && iy - y >= 18,
+      apply: (b) => renovate(b, b.inspectionYear - 19),
+    },
+    {
+      statuses: DONE_STATUSES,
+      count: 7,
+      test: (y, iy) => y >= 2000 && iy - y <= 14,
+      apply: (b) => renovate(b, b.inspectionYear - 3),
+    },
+  ];
+  const inGroup = (need: BathNeed, bath: PlannedBath) =>
+    need.statuses === null || need.statuses.includes(bath.assignment.status);
+  const meets = (need: BathNeed, bath: PlannedBath) =>
+    inGroup(need, bath) && need.test(bath.year, bath.inspectionYear);
 
-  const [old, fresh, threshold] = inspected;
-  if (old && !inspected.some((a) => bathYear(a) < 2000)) {
-    old.property.buildYear = Math.min(old.property.buildYear, 1984);
-    const bath = firstBath(old);
-    if (bath) bath.yearRenovated = null;
-  }
-  if (fresh && !ages().some((age) => age >= 0 && age <= 5)) {
-    const bath = firstBath(fresh);
-    if (bath) {
-      fresh.property.buildYear = Math.min(fresh.property.buildYear, anchorYear - 2);
-      bath.yearRenovated = anchorYear - 2;
-    }
-  }
-  if (threshold && !ages().some((age) => age >= 18 && age <= 22)) {
-    const bath = firstBath(threshold);
-    if (bath) {
-      threshold.property.buildYear = Math.min(threshold.property.buildYear, anchorYear - 19);
-      bath.yearRenovated = anchorYear - 19;
-    }
+  // Hvert endret bad endrer bare tall i planen; antall runder er begrenset av antall bad
+  const limit = plannedBaths(orders, anchorYear).length * needs.length;
+  for (let round = 0; round < limit; round += 1) {
+    const baths = plannedBaths(orders, anchorYear);
+    const counts = needs.map((need) => baths.filter((bath) => meets(need, bath)).length);
+    const missing = needs.findIndex((need, index) => (counts[index] as number) < need.count);
+    if (missing === -1) return;
+    const need = needs[missing] as BathNeed;
+    // Et bad er ledig når ingen andre krav trenger det (kravene det oppfyller har overskudd)
+    const free = baths.find(
+      (bath) =>
+        bath.room.roomType === "bathroom" &&
+        inGroup(need, bath) &&
+        !meets(need, bath) &&
+        needs.every(
+          (other, index) => !meets(other, bath) || (counts[index] as number) > other.count,
+        ),
+    );
+    if (!free) return;
+    need.apply(free);
   }
 }
 
