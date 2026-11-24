@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { pathToFileURL } from "node:url";
 import { db } from "@/db/client";
+import { TestdataBathError } from "./testdata-bath";
 import { TestdataNotAllowedError } from "./testdata-guard";
 import { TESTDATA_SEED } from "./testdata.data";
 import {
@@ -51,9 +52,19 @@ const TABLE_LABELS: Record<(typeof TESTDATA_TABLES)[number], string> = {
   statusChanges: "Statusbytter",
   workSessions: "Arbeidsøkter",
   claims: "Reklamasjoner",
+  reports: "Rapporter",
+  fieldAnswers: "Svar i rapportene",
+  checkpointResults: "Kontrollpunkt i rapportene",
+  deviations: "Avvik",
+  deviationMeasures: "Tiltak",
+  tgiuDetails: "TGIU-opplysninger",
+  ruleSuggestionDecisions: "Beslutninger på regelforslag",
 };
 
-/** Linjene i loggen: bare tall og `TD-`-nøkler. */
+/**
+ * Linjene i loggen: bare tall, `TD-`-nøkler, oppdragsnummer, romnavn og scenarionavn. Aldri navn,
+ * adresse eller e-post.
+ */
 export function summaryLines(summary: TestdataSummary): string[] {
   const lines = TESTDATA_TABLES.map(
     (table) =>
@@ -63,6 +74,22 @@ export function summaryLines(summary: TestdataSummary): string[] {
     lines.push(
       `Hoppet over (slettet, avvist eller kansellert): ${summary.skippedOrders.join(", ")}`,
     );
+  }
+  if (!summary.bathTemplatePublished) {
+    lines.push(
+      "Badene er ikke fylt ut: organisasjonen har ingen publisert systemmal for tilstandsrapport.",
+    );
+    return lines;
+  }
+  lines.push(`Bad fylt ut: ${summary.bathsFilled}`);
+  lines.push(`Bad hoppet over (hadde svar fra før): ${summary.bathsSkipped}`);
+  if (summary.bathsWithoutAccess > 0) {
+    lines.push(
+      `Bad ikke fylt ut fordi takstmannen ikke kan endre rapporter: ${summary.bathsWithoutAccess}`,
+    );
+  }
+  for (const line of summary.bathScenarioMap) {
+    lines.push(`${line.scenarioName}: oppdrag ${line.assignmentNumber}, ${line.roomName}`);
   }
   return lines;
 }
@@ -91,6 +118,10 @@ function typeName(error: unknown): string {
 export function errorLine(error: unknown): string {
   if (error instanceof TestdataNotAllowedError || error instanceof TestdataSetupError) {
     return `Testdata ble ikke lagt inn: ${error.message}`;
+  }
+  // Meldingen har bare oppdragsnummer, romnavn fra planen og scenarionavn
+  if (error instanceof TestdataBathError) {
+    return `Testdata stoppet ved badene: ${error.message}`;
   }
   if (error instanceof TestdataStepError) {
     const cause = error.cause;
