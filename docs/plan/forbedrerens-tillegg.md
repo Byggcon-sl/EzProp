@@ -1,6 +1,5 @@
 # Lagt til av forbedreren
 
-Sist oppdatert: 23.11.2026
 Sist oppdatert: 24.11.2026
 
 Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.2026, se «Forbedreren» i `CLAUDE.md`). Listen er til for Ståle: mot slutten av utviklingen går han gjennom den og beholder, justerer eller fjerner.
@@ -9,6 +8,11 @@ Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.
 
 | Dato | Tillegg (det den ansatte merker) | Hvorfor | Type | Hvor (PR, oppgavekort, kode) | Slik fjernes det | Ståle |
 |---|---|---|---|---|---|---|
+| 24.11.2026 | Erfaringen ved kryssboksen: ved bortkryssing av en sperre står hvor ofte den er krysset bort siste 90 dager og hvor mange som endte i reklamasjon på samme punkt, og lederens godkjente setning for koden. | Takstmannen får lederens lærdom i det øyeblikket han velger; færre reklamasjoner. | nytt planpunkt | Plan 2a-2 «Fra forbedreren»; ikke bygd ennå | Stryk punktet i planen før det bygges. | |
+| 24.11.2026 | Overstyringer telles som unike rapporter (ikke dobbelt ved ny versjon), linjene viser «v2», og rød markering regnes mot siste utgivelse før reklamasjonen. | Riktige prosenter og riktig rødt; færre reklamasjoner. | i oppgaven | `docs/funksjoner/fase2a-overstyringer-leder.md`, A570, A571 (PR fylles inn) | Tell utgivelser i stedet for rapporter i `src/core/reports/overrides.ts`. | |
+| 24.11.2026 | Kontrollpunktet i reklamasjonsskjemaet: bortkryssede punkter øverst, forhåndsvalg ved tydelig tekstreff (uten KI), og «Denne sperren ble krysset bort ved publisering» på saken. | Null ekstra trykk i de fleste saker, så den røde markeringen faktisk virker. | i oppgaven | `docs/funksjoner/fase2a-overstyringer-leder.md`, A576 (PR fylles inn) | Fjern sorteringen og forhåndsvalget i `listClaimCheckpointOptions`; feltet står igjen. | |
+| 24.11.2026 | Månedsoppsummeringen får endring fra måneden før («økt fra 2 til 7»), siste hele måned forhåndsvalgt, «Lag oppsummering» som tydelig kort og «Tall for hele måneden». | Bedre KI-tekst og færre trykk for leder. | i oppgaven | `docs/funksjoner/fase2a-overstyringer-leder.md`, A577 (PR fylles inn) | Fjern forrige-måned-feltene fra grunnlaget og ledeteksten. | |
+| 24.11.2026 | Overstyringslisten filtrerer på `created_at`, som indeksen dekker, med EXPLAIN-sjekk i ytelsestesten. | Rask side med ekte datamengder. | i oppgaven | `docs/funksjoner/fase2a-overstyringer-leder.md` (PR fylles inn) | Ingenting å fjerne. | |
 | 23.11.2026 | Testdataene skrives med én transaksjon per bad, og testen feiler hvis hele kjøringen tar over 60 sekunder. | Testmiljøet tåler at testdataene vokser, og en treg tjeneste blir synlig tidlig. | i oppgaven | `docs/funksjoner/fase2a-testdata-del-2.md`, `src/db/seed/testdata-bath.ts` (PR fylles inn) | Fjern tidsgrensen i testen; transaksjon per bad kan stå. | |
 | 23.11.2026 | Hvert forventet avvik i testscenarioene har et kort feltnotat med egne ord, slik takstmannen ville skrevet på stedet. | KI i bunnen: ferdig evalueringssett (notat gir utfallskode) for «Skriv det du ser» og «KI i veien». | i oppgaven | `docs/funksjoner/fase2a-testdata-del-2.md`, `src/db/seed/testdata-bath.data.ts` (PR fylles inn) | Fjern `fieldNote` fra datafilen og testene. | |
 | 23.11.2026 | Oppsummeringen fra testdataene viser hvilket oppdrag og rom hvert pliktig scenario ligger i (for eksempel «Visningsbad: oppdrag …, Bad 1»), og hvor mange bad som ble fylt ut. | Testlaget og Ståle går rett til badet med TG3, TGIU eller «ukjent år». | i oppgaven | `docs/funksjoner/fase2a-testdata-del-2.md`, `src/db/seed/testdata-index.ts` (PR fylles inn) | Fjern linjene fra oppsummeringen. | |
