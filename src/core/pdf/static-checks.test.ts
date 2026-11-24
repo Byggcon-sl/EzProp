@@ -104,9 +104,13 @@ describe("2.2 PDF-gjengivelsen er et lukket, rent blad", () => {
     expect(readFileSync(join(repoRoot, "next.config.ts"), "utf8")).toContain(
       "./src/core/pdf/typst-worker.mjs",
     );
-    expect(code(join(pdfDir, "engine.node.ts"))).toContain(
-      'path.join(process.cwd(), "src/core/pdf/typst-worker.mjs")',
+    expect(code(join(pdfDir, "engine.node.ts")).replace(/\s+/g, "")).toMatch(
+      /path\.join\(process\.cwd\(\),"src\/core\/pdf\/typst-worker\.mjs",?\)/,
     );
+    // Uten merket sporer Turbopack hele prosjektmappen inn i PDF-ruten, og `pnpm build` feiler.
+    const raw = readFileSync(join(pdfDir, "engine.node.ts"), "utf8");
+    expect(raw).toContain("/* turbopackIgnore: true */ process.cwd()");
+    expect(raw).toContain("new Worker(/* turbopackIgnore: true */ workerPath");
   });
 
   it("2.2.8 rapportdataene i core/reports importerer ikke KI (når filene finnes)", () => {

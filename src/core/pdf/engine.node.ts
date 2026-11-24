@@ -13,7 +13,12 @@ import type { PdfEngine, PdfEngineResult } from "./types";
  * Stien er fast og regnes fra mappen appen kjører fra. `next.config.ts` tar filen med i
  * `.next/standalone`, og `deploy-azure.yml` sjekker at den finnes.
  */
-export const PDF_WORKER_PATH = path.join(process.cwd(), "src/core/pdf/typst-worker.mjs");
+// `turbopackIgnore`: stien skal ikke følges av Turbopack. Uten merket sporer bygget hele
+// prosjektmappen (også tester og dokumenter) inn i ruten, og bygget feiler.
+export const PDF_WORKER_PATH = path.join(
+  /* turbopackIgnore: true */ process.cwd(),
+  "src/core/pdf/typst-worker.mjs",
+);
 
 /**
  * Minnegrensen for JavaScript-delen av tråden (kortet, «Arbeidstråden», testplanen 11.3.1).
@@ -51,7 +56,7 @@ export function createNodeWorkerEngine(workerPath: string = PDF_WORKER_PATH): Pd
       let settled = false;
       let worker: Worker;
       try {
-        worker = new Worker(workerPath, {
+        worker = new Worker(/* turbopackIgnore: true */ workerPath, {
           workerData: { wasmModule, job },
           // Tråden får ikke prosessens miljøvariabler (hemmeligheter, database-URL).
           env: {},

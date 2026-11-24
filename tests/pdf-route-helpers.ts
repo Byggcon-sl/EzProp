@@ -44,9 +44,7 @@ export function releaseRequest(
 }
 
 /** Svaret, eller videresendingen Next kaster (`redirect`), som et felles svar. */
-export async function settle(
-  run: () => Promise<Response>,
-): Promise<{
+export async function settle(run: () => Promise<Response>): Promise<{
   status: number;
   headers: Headers;
   body: Uint8Array;
