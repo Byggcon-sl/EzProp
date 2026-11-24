@@ -56,6 +56,9 @@ const EXPECTED_EVENT_TYPES = [
   "report.published",
   "report.revised",
   "report.publish_override",
+  // PDF-utkast og PDF av utgivelse (docs/funksjoner/fase2a-pdf-badet-testplan.md 6.3.3 og 11.8)
+  "report.draft_pdf_created",
+  "report.release_pdf_created",
   "report.sent",
   // PDF-utkast og PDF av utgivelse (docs/funksjoner/fase2a-pdf-badet-testplan.md 6.3 og 11.8)
   "report.draft_pdf_created",

@@ -710,6 +710,9 @@ export const INTERNAL_CODE_PATTERNS: readonly RegExp[] = [
   /\bcost_type\b/,
   /\b(?:approx|under_20000|over_500000|from_\d+_to_\d+)\b/,
   /\bmandatory_without_tg\b/,
+  // Alle andre koder med understrek (funnkoder, regelkoder, årsakskriterier, intervaller).
+  // Norsk tekst i PDF-en har aldri understrek.
+  /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/,
   /\[object Object\]/,
   /\bundefined\b/,
   /\bnull\b/,
