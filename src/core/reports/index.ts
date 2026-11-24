@@ -39,6 +39,7 @@ export {
   startNewVersion,
 } from "./publish";
 export { HOLE_DRILLING_SIGNAL } from "./signals";
+export { hasReportForPdf, listCheckpointAnchors, type CheckpointAnchor } from "./pdf-screen";
 export {
   REPORT_VALIDATION_CODES,
   ReportStorageError,
