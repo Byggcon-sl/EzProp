@@ -2,11 +2,16 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db/client";
 import { resetEnvCache } from "@/shared/config/env";
-import { TEST_NOW, resetDatabase } from "../../../tests/factories";
+import { TEST_NOW, createTemplate, resetDatabase } from "../../../tests/factories";
 import { runSeed } from "./run";
 import { buildTestdataPlan } from "./testdata";
 import { TESTDATA_HOST_MESSAGE } from "./testdata-guard";
-import { runTestdataCli, type TestdataCliDeps } from "./testdata-index";
+import { TESTDATA_TABLES } from "./testdata";
+import { findTestdataOrganization } from "./testdata-anchor";
+import { planTestdataBaths } from "./testdata-bath";
+import { MANDATORY_BATH_SCENARIO_KEYS, bathScenarioByKey } from "./testdata-bath.data";
+import { runTestdataCli, summaryLines, type TestdataCliDeps } from "./testdata-index";
+import { wetRoomTemplate } from "./templates/wet-room";
 import {
   TESTDATA_FIRST_NAMES,
   TESTDATA_LAST_NAMES,
@@ -123,5 +128,101 @@ describe("runTestdataCli", { timeout: FULL_RUN }, () => {
     expect(source).toMatch(/now: \(\) => new Date\(\)/);
     expect(source).toMatch(/seed: TESTDATA_SEED/);
     expect(source).toMatch(/process\.exit\(await runTestdataCli\(\)\)/);
+  });
+});
+
+// --- Testdata del 2: badene i oppsummeringen (docs/funksjoner/fase2a-testdata-del-2-testplan.md seksjon 4)
+
+describe("oppsummeringen med badene", { timeout: 300_000 }, () => {
+  it("4.1 TESTDATA_TABLES har de sju nye tabellene", () => {
+    for (const table of [
+      "reports",
+      "fieldAnswers",
+      "checkpointResults",
+      "deviations",
+      "deviationMeasures",
+      "tgiuDetails",
+      "ruleSuggestionDecisions",
+    ]) {
+      expect(TESTDATA_TABLES).toContain(table);
+    }
+  });
+
+  it("4.1 uten publisert systemmal sier oppsummeringen at badene ikke er fylt ut", async () => {
+    const { deps, output } = capture();
+    expect(await runTestdataCli(deps)).toBe(0);
+    expect(output()).toMatch(
+      /Badene er ikke fylt ut: organisasjonen har ingen publisert systemmal/,
+    );
+    expectClean(output());
+  });
+
+  it("4.2–4.3 antall per ny tabell, bad fylt ut og hoppet over, og scenariokartet uten persondata", async () => {
+    const organization = await findTestdataOrganization(db);
+    await createTemplate(organization!.id, {
+      status: "published",
+      document: wetRoomTemplate,
+      name: "Tilstandsrapport",
+    });
+    const first = capture();
+    expect(await runTestdataCli(first.deps)).toBe(0);
+    const out = first.output();
+    for (const label of [
+      "Rapporter",
+      "Svar i rapportene",
+      "Kontrollpunkt i rapportene",
+      "Avvik",
+      "Tiltak",
+      "TGIU-opplysninger",
+      "Beslutninger på regelforslag",
+    ]) {
+      expect(out).toMatch(new RegExp(`log: ${label}: [1-9]\\d* nye, 0 fantes fra før`));
+    }
+    expect(out).toMatch(/log: Bad fylt ut: [1-9]\d*/);
+    expect(out).toMatch(/log: Bad hoppet over \(hadde svar fra før\): 0/);
+
+    // Én linje per pliktig scenario, lik fordelingen
+    const placements = await planTestdataBaths({
+      db,
+      organizationId: organization!.id,
+      seed: TESTDATA_SEED,
+      now: TEST_NOW,
+    });
+    for (const key of MANDATORY_BATH_SCENARIO_KEYS) {
+      const placed = placements.find((p) => p.scenarioKey === key)!;
+      expect(out).toContain(
+        `log: ${bathScenarioByKey(key).name}: oppdrag ${placed.bath.assignmentLabel}, ${placed.bath.roomName}`,
+      );
+    }
+    expect(out).toMatch(/log: Visningsbad: oppdrag \d{4}-\d+, /);
+    expectClean(out);
+
+    const second = capture();
+    expect(await runTestdataCli(second.deps)).toBe(0);
+    expect(second.output()).toMatch(/log: Bad fylt ut: 0/);
+    expect(second.output()).toMatch(/log: Bad hoppet over \(hadde svar fra før\): [1-9]\d*/);
+    expectClean(second.output());
+  });
+
+  it("4.3 linjene fra summaryLines har ingen @, navn eller adresse", () => {
+    const lines = summaryLines({
+      created: Object.fromEntries(TESTDATA_TABLES.map((t) => [t, 1])) as never,
+      existing: Object.fromEntries(TESTDATA_TABLES.map((t) => [t, 0])) as never,
+      skippedOrders: [],
+      bathsFilled: 2,
+      bathsSkipped: 1,
+      bathsWithoutAccess: 0,
+      bathTemplatePublished: true,
+      bathScenarioMap: [
+        {
+          scenarioKey: "showcase",
+          scenarioName: "Visningsbad",
+          assignmentNumber: "2026-0012",
+          roomName: "Bad 1",
+        },
+      ],
+    });
+    expect(lines).toContain("Visningsbad: oppdrag 2026-0012, Bad 1");
+    expectClean(lines.join("\n"));
   });
 });

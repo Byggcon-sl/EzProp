@@ -1438,6 +1438,56 @@ function planRoomIndex(plan: TestdataPlan) {
   return index;
 }
 
+/** Et bad i fordelingen med id-ene i databasen. */
+export type TestdataBathPlacement = TestdataBathAssignment & {
+  assignmentId: string;
+  roomId: string;
+};
+
+/**
+ * Fordelingen for badene i databasen: våtrommene i testoppdragene (bare `organizationId`, bare
+ * TD-ordre), koblet til planen fra del 1 for badets år (A502), og fordelt med
+ * `assignBathScenarios`. Skriver ingenting.
+ */
+export async function planTestdataBaths({
+  db,
+  organizationId,
+  seed,
+  now,
+}: {
+  db: Db;
+  organizationId: string;
+  seed: number;
+  now: Date;
+}): Promise<TestdataBathPlacement[]> {
+  const plan = await resolveTestdataPlan(db, organizationId, seed, now);
+  const planIndex = planRoomIndex(plan);
+  const byCandidate = new Map<TestdataBathCandidate, DbBath>();
+  const candidates: TestdataBathCandidate[] = [];
+  for (const row of await findDbBaths(db, organizationId)) {
+    const planned = planIndex.get(
+      roomPlanKey(row.externalRef, row.buildingName, row.floorName, row.roomName),
+    );
+    if (!planned) continue;
+    const candidate: TestdataBathCandidate = {
+      assignmentKey: row.assignmentNumber,
+      assignmentLabel: row.assignmentNumber,
+      status: row.assignmentStatus,
+      inspectionYear: row.inspectionAt === null ? null : inspectionYearOf(row.inspectionAt).year,
+      roomOrder: planned.roomOrder,
+      roomName: row.roomName ?? "",
+      bathYear: planned.bathYear,
+      bathYearSource: planned.bathYearSource,
+    };
+    candidates.push(candidate);
+    byCandidate.set(candidate, row);
+  }
+  return assignBathScenarios({ baths: candidates, seed }).map((assignment) => {
+    const row = byCandidate.get(assignment.bath) as DbBath;
+    return { ...assignment, assignmentId: row.assignmentId, roomId: row.roomId };
+  });
+}
+
 /**
  * Fyller ut badene i testoppdragene i Byggcon (del 2). Kalles fra `seedTestdata` etter del 1.
  * Kaster `TestdataNotAllowedError` (vakten) eller `TestdataBathError` (norsk melding).
@@ -1470,32 +1520,7 @@ export async function seedTestdataBaths({
   if (publishedId === null) return summary;
   summary.templatePublished = true;
 
-  // Badene i databasen, koblet til planen fra del 1 (byggeåret står bare i planen, A502)
-  const plan = await resolveTestdataPlan(db, organizationId, seed, now);
-  const planIndex = planRoomIndex(plan);
-  const dbBaths = await findDbBaths(db, organizationId);
-  const byCandidate = new Map<TestdataBathCandidate, DbBath>();
-  const candidates: TestdataBathCandidate[] = [];
-  for (const row of dbBaths) {
-    const planned = planIndex.get(
-      roomPlanKey(row.externalRef, row.buildingName, row.floorName, row.roomName),
-    );
-    if (!planned) continue;
-    const candidate: TestdataBathCandidate = {
-      assignmentKey: row.assignmentNumber,
-      assignmentLabel: row.assignmentNumber,
-      status: row.assignmentStatus,
-      inspectionYear: row.inspectionAt === null ? null : inspectionYearOf(row.inspectionAt).year,
-      roomOrder: planned.roomOrder,
-      roomName: row.roomName ?? "",
-      bathYear: planned.bathYear,
-      bathYearSource: planned.bathYearSource,
-    };
-    candidates.push(candidate);
-    byCandidate.set(candidate, row);
-  }
-
-  const assignmentsOfBaths = assignBathScenarios({ baths: candidates, seed });
+  const assignmentsOfBaths = await planTestdataBaths({ db, organizationId, seed, now });
   for (const key of MANDATORY_BATH_SCENARIO_KEYS) {
     const found = assignmentsOfBaths.find((a) => a.scenarioKey === key);
     if (found) {
@@ -1508,9 +1533,7 @@ export async function seedTestdataBaths({
     }
   }
 
-  const assignmentIds = [
-    ...new Set(assignmentsOfBaths.map((a) => byCandidate.get(a.bath)!.assignmentId)),
-  ];
+  const assignmentIds = [...new Set(assignmentsOfBaths.map((a) => a.assignmentId))];
   const currentReports = await findCurrentReports(db, organizationId, assignmentIds);
   const touchedRooms = await findTouchedRooms(
     db,
@@ -1532,7 +1555,7 @@ export async function seedTestdataBaths({
   // Planlegg og kontroller alle badene før noe skrives
   const work: BathWork[] = [];
   for (const assignment of assignmentsOfBaths) {
-    const row = byCandidate.get(assignment.bath)!;
+    const row = assignment;
     const report = currentReports.get(row.assignmentId);
     if (touchedRooms.has(row.roomId) || (report && report.status !== "draft")) {
       summary.bathsSkipped += 1;

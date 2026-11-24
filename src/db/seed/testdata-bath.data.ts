@@ -911,7 +911,7 @@ export const TESTDATA_BATH_SCENARIOS: readonly BathScenario[] = [
     },
     tgiu: null,
     decisions: [ACCEPT_BEFORE_2000],
-    expected: { deviations: [DEV_MISSING_DOCUMENTATION, DEV_BEFORE_2000] },
+    expected: { deviations: [DEV_MISSING_DOCUMENTATION, DEV_FLOOR_JOINTS, DEV_BEFORE_2000] },
   },
   // Nyere bad, avbrutt etter sjiktet, fukt målt i RF % på tilliggende (ikke vurdert, A511)
   {
