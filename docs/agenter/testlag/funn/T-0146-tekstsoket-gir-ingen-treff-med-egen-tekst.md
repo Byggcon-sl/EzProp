@@ -3,7 +3,7 @@ id: T-0146
 tittel: «Forslag» uten nett gir «Ingen treff» så snart feltet har egen tekst
 type: forbedring
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-24
 rolle: test-ki
 omrade: KI, badet, uten nett
@@ -36,3 +36,4 @@ Ikke etterprøvd (forbedring). Bevis: test-ki/40-uten-nett-konsekvens-ingen-tref
 
 ## Logg
 - 2026-11-24: funnet
+- 2026-11-24: rettet på branch `skriv-det-du-ser` (oppgavekort `docs/funksjoner/fase2a-skriv-det-du-ser.md`, A558): gir tekstsøket i `searchPhraseCandidates` ingen treff, vises de nærmeste etter likhet (`rankBySimilarity` i `src/shared/lib/text-similarity.ts`). PR-nummeret fylles inn av prosjektlederen. «Ingen treff» som blinker før KI-listen kommer, er skjermen og tas med skjermbiten. Testlaget prøver på nytt i neste kjøring.

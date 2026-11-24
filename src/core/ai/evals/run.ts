@@ -33,6 +33,7 @@ import {
   type EvalCasesFile,
   type EvalExpectation,
   type EvalVerdict,
+  type OutcomeMatchEvalCase,
   type PhraseEvalCase,
   type SummaryEvalCase,
 } from "./schema";
@@ -630,7 +631,7 @@ async function runSummaryCase(runner: Runner, evalCase: SummaryEvalCase): Promis
   return { kind: "evaluated", evaluation: applyVerdict(expect.verdict, evaluation) };
 }
 
-type AnyCase = EvalCase | PhraseEvalCase | SummaryEvalCase;
+type AnyCase = EvalCase | PhraseEvalCase | SummaryEvalCase | OutcomeMatchEvalCase;
 
 function runCaseFor(
   file: EvalCasesFile,

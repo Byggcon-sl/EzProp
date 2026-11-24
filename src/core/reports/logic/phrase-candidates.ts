@@ -1,4 +1,5 @@
 import type { DeviationTg, OutcomeKind, TextStatus } from "@/db/schema";
+import { rankBySimilarity } from "@/shared/lib/text-similarity";
 import { PHRASE_MOST_USED_MIN_COUNT } from "./codes";
 import { normalizeSearchText } from "./deviation-search";
 import { mergeFieldsText } from "./merge-fields";
@@ -228,7 +229,15 @@ export function cutPhraseCandidates<T>(
   };
 }
 
-/** Se `SearchPhraseCandidates` i `./types`. Samme normalisering som `searchOutcomes` (A382). */
+/** Teksten tekstsøket og likheten leter i for en kandidat. */
+function phraseSearchText(candidate: PhraseCandidate): string {
+  return [candidate.text, candidate.checkpointName, candidate.questionText].join(" ");
+}
+
+/**
+ * Se `SearchPhraseCandidates` i `./types`. Samme normalisering som `searchOutcomes` (A382). Gir det
+ * strenge søket ingen treff, gis de nærmeste etter likhet (A558, retter T-0146).
+ */
 export const searchPhraseCandidates: SearchPhraseCandidates = (candidates, query, limit) => {
   const max = Math.max(0, Math.floor(limit));
   const terms = normalizeSearchText(query)
@@ -237,12 +246,13 @@ export const searchPhraseCandidates: SearchPhraseCandidates = (candidates, query
   const hits: PhraseCandidate[] = [];
   for (const candidate of candidates) {
     if (hits.length >= max) break;
-    const haystack = normalizeSearchText(
-      [candidate.text, candidate.checkpointName, candidate.questionText].join(" "),
-    );
+    const haystack = normalizeSearchText(phraseSearchText(candidate));
     if (terms.every((term) => haystack.includes(term))) hits.push(candidate);
   }
-  return hits;
+  if (hits.length > 0 || terms.length === 0 || max < 1) return hits;
+  return rankBySimilarity(query, candidates, phraseSearchText, { limit: max }).map(
+    (match) => match.item,
+  );
 };
 
 /** Se `MostUsedPhraseCandidate` i `./types`. */
