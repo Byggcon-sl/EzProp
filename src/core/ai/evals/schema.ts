@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getFeatureDefinition } from "../features";
-import { AI_CANDIDATES_MAX } from "../limits";
+import { AI_CANDIDATES_MAX, OUTCOME_MATCH_CANDIDATES_MAX } from "../limits";
 import { emptyKnownValues, type KnownValues } from "../redact-text";
 import type { AiCandidateSource, AiGuardCode } from "../types";
 
@@ -170,6 +170,42 @@ const phraseCaseSchema = z.strictObject({
 
 export type PhraseEvalCase = z.infer<typeof phraseCaseSchema>;
 
+// --- outcome_match -----------------------------------------------------------------------------
+
+/**
+ * Hva fasiten krever av de tre første treffene (`OUTCOME_MATCH_MAX`):
+ * - `any`: minst én av `ids` blant dem;
+ * - `all`: alle `ids` blant dem (parene som bare skiller seg i alvor, og aldersparet);
+ * - `first`: det første treffet er en av `ids` (riktig punkt når notatet sier hvor);
+ * - `none`: ingen treff («ingen passer»). `ids` er tom. Hver slik sak må bestå for seg.
+ */
+export const OUTCOME_MATCH_REQUIREMENTS = ["any", "all", "first", "none"] as const;
+export type OutcomeMatchRequirement = (typeof OUTCOME_MATCH_REQUIREMENTS)[number];
+
+const outcomeCandidateSchema = z.strictObject({
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/u),
+  source: z.literal("template_outcome"),
+  checkpointKey: nonEmpty,
+  outcomeKey: nonEmpty,
+  text: nonEmpty,
+});
+
+export type OutcomeEvalCandidate = z.infer<typeof outcomeCandidateSchema>;
+
+const outcomeCaseSchema = z.strictObject({
+  id: caseId,
+  description: z.string().optional(),
+  fields: z.record(z.string(), z.string()),
+  candidates: z.array(outcomeCandidateSchema).min(1).max(OUTCOME_MATCH_CANDIDATES_MAX),
+  mustPass: z.boolean().default(false),
+  expect: z.strictObject({
+    require: z.enum(OUTCOME_MATCH_REQUIREMENTS),
+    ids: z.array(z.string().min(1)),
+  }),
+});
+
+export type OutcomeMatchEvalCase = z.infer<typeof outcomeCaseSchema>;
+
 // --- summary_draft -----------------------------------------------------------------------------
 
 const findingSchema = z.strictObject({
@@ -236,6 +272,7 @@ const FILE_SCHEMAS = {
   language_polish: fileSchema(caseSchema),
   phrase_suggest: fileSchema(phraseCaseSchema),
   summary_draft: fileSchema(summaryCaseSchema),
+  outcome_match: fileSchema(outcomeCaseSchema),
 } as const;
 
 type EvalFeatureKind = keyof typeof FILE_SCHEMAS;
@@ -244,7 +281,8 @@ type FileHeader = { status: typeof EVAL_CASES_STATUS; note: string };
 export type EvalCasesFile =
   | (FileHeader & { feature: "language_polish"; cases: EvalCase[] })
   | (FileHeader & { feature: "phrase_suggest"; cases: PhraseEvalCase[] })
-  | (FileHeader & { feature: "summary_draft"; cases: SummaryEvalCase[] });
+  | (FileHeader & { feature: "summary_draft"; cases: SummaryEvalCase[] })
+  | (FileHeader & { feature: "outcome_match"; cases: OutcomeMatchEvalCase[] });
 
 export type ParseCasesResult = { ok: true; file: EvalCasesFile } | { ok: false; errors: string[] };
 
@@ -341,6 +379,9 @@ export function parseCasesFile(json: unknown, fileName: string): ParseCasesResul
     case "summary_draft":
       file.cases.forEach((c, i) => errors.push(...checkSummaryCase(c, `${fileName}: cases[${i}]`)));
       break;
+    case "outcome_match":
+      file.cases.forEach((c, i) => errors.push(...checkOutcomeCase(c, `${fileName}: cases[${i}]`)));
+      break;
   }
   return errors.length > 0 ? { ok: false, errors } : { ok: true, file };
 }
@@ -381,6 +422,30 @@ function checkPhraseCase(evalCase: PhraseEvalCase, where: string): string[] {
     for (const id of correct) {
       if (!ids.has(id)) errors.push(`${where}.expect.correct: ukjent kandidat-id ${id}.`);
     }
+  }
+  return errors;
+}
+
+function checkOutcomeCase(evalCase: OutcomeMatchEvalCase, where: string): string[] {
+  const errors: string[] = [];
+  const ids = new Set<string>();
+  evalCase.candidates.forEach((candidate, index) => {
+    if (ids.has(candidate.id)) {
+      errors.push(`${where}.candidates[${index}]: kandidat-id-en ${candidate.id} er brukt før.`);
+    }
+    ids.add(candidate.id);
+  });
+  const expected = evalCase.expect.ids;
+  if (evalCase.expect.require === "none") {
+    if (expected.length > 0) errors.push(`${where}.expect.ids: skal være tom for none.`);
+    return errors;
+  }
+  if (expected.length === 0) errors.push(`${where}.expect.ids: mangler fasit.`);
+  if (new Set(expected).size !== expected.length) {
+    errors.push(`${where}.expect.ids: samme kandidat-id står to ganger.`);
+  }
+  for (const id of expected) {
+    if (!ids.has(id)) errors.push(`${where}.expect.ids: ukjent kandidat-id ${id}.`);
   }
   return errors;
 }
