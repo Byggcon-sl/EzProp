@@ -1,4 +1,5 @@
 import { AccessDeniedError } from "@/core/access";
+import { AiDecisionError, AiInputTooLargeError, AiRequestRejectedError } from "@/core/ai";
 import { TemplateNotFoundError } from "@/core/templates";
 import { logger } from "@/shared/lib/logger";
 
@@ -32,6 +33,8 @@ export const REPORT_VALIDATION_CODES = [
   "invalid_choice",
   /** Feltet kan ikke endres her (for eksempel TGIU-opplysninger uten TGIU). */
   "not_applicable",
+  /** Teksten har en plassholder fra vasken før KI, for eksempel «[adresse]» (A466). */
+  "text_has_placeholder",
 ] as const;
 export type ReportValidationCode = (typeof REPORT_VALIDATION_CODES)[number];
 
@@ -47,7 +50,14 @@ const MESSAGES: Record<ReportValidationCode, string> = {
   override_reason: "Velg en grunn for å lagre.",
   invalid_choice: "Valget passer ikke forslaget.",
   not_applicable: "Dette kan ikke endres her.",
+  text_has_placeholder:
+    "Teksten har en plassholder fra KI, for eksempel [adresse]. Skriv inn riktig verdi.",
 };
+
+/** Den faste norske meldingen for koden. */
+export function reportValidationMessage(code: ReportValidationCode): string {
+  return MESSAGES[code];
+}
 
 /** Inndata som ikke kan lagres. Ingenting er endret. */
 export class ReportValidationError extends Error {
@@ -80,10 +90,16 @@ export class ReportStorageError extends Error {
   }
 }
 
-/** Feil tjenestene gir med vilje. De sendes videre som de er. */
+/**
+ * Feil tjenestene gir med vilje. De sendes videre som de er. Feilene fra `@/core/ai` har egne,
+ * nøytrale meldinger uten id-er eller tekst (avslag, for mye inndata, beslutning som ikke passer).
+ */
 function isExpectedError(error: unknown): boolean {
   return (
     error instanceof AccessDeniedError ||
+    error instanceof AiRequestRejectedError ||
+    error instanceof AiDecisionError ||
+    error instanceof AiInputTooLargeError ||
     error instanceof ReportValidationError ||
     error instanceof ReportTemplateMissingError ||
     error instanceof TemplateNotFoundError

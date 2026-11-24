@@ -3,14 +3,14 @@ id: T-0047
 tittel: Evalueringssettet måler bare at ingenting ødelegges, ikke om forslagene er til nytte
 type: forbedring
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-12
 rolle: test-ki
 omrade: KI (evalueringssett)
 maal: KI i bunnen
 commit: 11672aa
 forsok: 0
-pr:
+pr: PR KI i veien, 23.11.2026
 ---
 
 ## Hva
@@ -34,3 +34,4 @@ Ikke etterprøvd (forbedring).
 
 ## Logg
 - 2026-11-12: funnet
+- 2026-11-23: rettet i PR KI i veien (branch `ki-i-veien`). Settet har skrivefeil som må rettes og nytteeksempler, utskriften sier at resultat mot falsk leverandør ikke viser kvalitet, og lp-023 er byttet ut med en ekte tekst (nektelse og sted står, ingenting legges til). Ingen sak bruker lenger prøveverdier for den falske leverandøren.

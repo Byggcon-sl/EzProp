@@ -2,6 +2,7 @@
 
 Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og 09.11.2026).
 
+- **17.11.2026 (Branch `ki-i-veien`, forbedreren):** 2a-2: nytt punkt «Gå gjennom tekstene i badet» under «Fra forbedreren», bygges etter «KI i veien» (A441).
 - **17.11.2026 (Hovedløkken, PR om tilstand etter #224):** 2a-2: «Badet på PC» merket med at skjermen er levert i PR #224; punktet krysses av når testdata del 2 er levert (A359).
 - **16.11.2026 (Branch `badet-pc`, forbedreren):** 2a-2: nytt punkt «Skriv det du ser: KI finner utfallet» under «Fra forbedreren», bygges etter «KI i veien» (A384).
 - **16.11.2026 (Forbedreren, branch `papirkurv`):** 2a-3: nytt punkt «Historikk på oppdraget, med KI-sammendrag av endringer» under ny overskrift «Fra forbedreren».
@@ -105,3 +106,4 @@ Nyeste øverst i listen. Tabellen under er den eldre loggen (25.–28.10.2026 og
 | 17.11.2026 | «Rydding av innloggingsdata» (2a) krysset av: nattlig rydding av `login_attempts`, `verifications` og `sessions` som eneste unntak fra myk sletting (ADR 0014, A419–A422). | Svar 10.11.2026 nr. 15 og 18; oppgavekortet `docs/agenter/oppgaver/rydd-innloggingsdata.md` |
 | 17.11.2026 | Nytt punkt under «Fra forbedreren» i fase 2a: «Mine innlogginger» (se og logg ut av egne økter; admin logger ut av alle enheter). | Forbedreren 17.11.2026 (Ståle 14.11.2026, «Forbedreren» i `CLAUDE.md`) |
 | 17.11.2026 | Nytt punkt under «Fra forbedreren» i fase 2a-3: «Ny innlogging, var det deg?» (melding i appen om ny innlogging på en annen enhet, med «Nei, logg ut den»). | Forbedreren 17.11.2026, forhåndsvurdering av «Mine innlogginger» (Ståle 14.11.2026, «Forbedreren» i `CLAUDE.md`) |
+| 23.11.2026 | «KI i veien» (2a-2) krysset av: fraseforslag, «Språkvask avviket» og utkast til sammendrag på badskjermen gjennom KI-grunnmuren; prøvesiden `/prove/ki` fjernet (A431–A442, A460–A472, A482–A491). | Planen 2a-2, overtatt av hovedløkken 23.11.2026. |

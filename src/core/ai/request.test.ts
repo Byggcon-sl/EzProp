@@ -122,6 +122,81 @@ describe("validering av forespørselen (4)", () => {
   );
 });
 
+/*
+ * «KI i veien» (docs/funksjoner/fase2a-ki-i-veien-testplan.md K1.17b, K1.31 og K1.32). Klienten
+ * sender bare `requestId`, mål og egen tekst. Kandidater, funn, `reportId` og oppdraget for mål
+ * kjernen slår opp selv, kommer aldri fra nettleseren.
+ */
+describe("KI i veien: det klienten ikke kan sende (K1.32)", () => {
+  const deviationId = "0190a0b0-0000-7000-8000-0000000000d1";
+  const phrase = (overrides: Record<string, unknown> = {}) => ({
+    ...BASE(),
+    feature: "phrase_suggest",
+    target: { type: "deviation", id: deviationId, fieldKey: "cause_text" },
+    fields: { text: "", outcome_key: "membrane_crack", group: "tg2" },
+    ...overrides,
+  });
+
+  it("gyldig fraseforslag og sammendrag godtas", () => {
+    expect(accepted(phrase())).toBe(true);
+    expect(
+      accepted({
+        ...BASE(),
+        feature: "summary_draft",
+        target: { type: "report", id: deviationId, fieldKey: "summary_text" },
+        fields: {},
+      }),
+    ).toBe(true);
+  });
+
+  it.each([
+    {
+      name: "candidates",
+      extra: { candidates: [{ source: "template_outcome", id: deviationId, text: "Tekst" }] },
+    },
+    { name: "findings", extra: { findings: [{ checkpointName: "Membran" }] } },
+    { name: "summaryGroups", extra: { summaryGroups: [] } },
+    { name: "candidatesCut", extra: { candidatesCut: 0 } },
+    { name: "assignmentId for et mål kjernen slår opp", extra: { assignmentId: deviationId } },
+    { name: "reportId", extra: { reportId: deviationId } },
+  ])("$name fra klienten avvises", ({ extra }) => {
+    expect(accepted(phrase(extra))).toBe(false);
+  });
+
+  it("assignmentId er fortsatt lov for field_answer, som ikke slås opp ennå", () => {
+    expect(accepted({ ...BASE(), assignmentId: deviationId })).toBe(true);
+  });
+
+  it("K1.17b new_measure godtas bare av phrase_suggest", () => {
+    const target = { type: "deviation", id: deviationId, fieldKey: "new_measure" };
+    expect(accepted(phrase({ target }))).toBe(true);
+    expect(accepted({ ...BASE(), target })).toBe(false);
+    expect(accepted({ ...BASE(), feature: "summary_draft", target, fields: {} })).toBe(false);
+  });
+
+  it.each(["tgiu_detail", "ai_trial"])("K1.31 måltypen %s godtas ikke av noen funksjon", (type) => {
+    for (const feature of ["language_polish", "phrase_suggest", "summary_draft"]) {
+      for (const fieldKey of ["text", "reason", "summary_text", "cause_text"]) {
+        expect(
+          accepted({ ...BASE(), feature, target: { type, id: deviationId, fieldKey }, fields: {} }),
+        ).toBe(false);
+      }
+    }
+  });
+
+  it("fraseforslag tar bare text, outcome_key og group", () => {
+    expect(accepted(phrase({ fields: { text: "x", room_name: "Bad" } }))).toBe(false);
+    expect(
+      accepted({
+        ...BASE(),
+        feature: "summary_draft",
+        target: { type: "report", id: deviationId, fieldKey: "summary_text" },
+        fields: { text: "Fritekst" },
+      }),
+    ).toBe(false);
+  });
+});
+
 describe("K4.9 AI_FIELD_MAX_LENGTH står ett sted (docs/funksjoner/fase2a-ki-ko-testplan.md)", () => {
   it("request.ts gir samme verdi som limits.ts, og limits.ts har ingen import", () => {
     expect(requestModule.AI_FIELD_MAX_LENGTH).toBe(limitsModule.AI_FIELD_MAX_LENGTH);

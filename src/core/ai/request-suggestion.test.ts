@@ -15,6 +15,7 @@ import {
   captureError,
   employeeWithGrant,
   enableAi,
+  enableAnthropic,
   expectSameRejection,
   fakeAiProvider,
   fakeErrorInputs,
@@ -46,11 +47,35 @@ import {
 import { capturing, evalCases, evalFile, makeCasesDir, removeDir } from "../../../tests/evals";
 import { stubFailingRegExp } from "../../../tests/failing-regexp";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
-import { AiRequestRejectedError } from "./errors";
+import {
+  candidate,
+  createAiReportChain,
+  setReportStatus,
+  softDelete,
+  type AiReportChain,
+} from "../../../tests/ai-report";
+import { TEST_ANTHROPIC_KEY } from "../../../tests/fake-anthropic";
+import { classifyQueueOutcome } from "./client/outcome";
+import { AiInputTooLargeError, AiRequestRejectedError } from "./errors";
 import { PROMPT_INPUT_SEPARATOR } from "./features";
+import { AI_BATCH_MAX_REQUESTS, AI_CANDIDATES_MAX, AI_SUMMARY_FINDINGS_MAX } from "./limits";
+import {
+  FAKE_ADD_NUMBER_INPUT,
+  FAKE_ADD_TG_INPUT,
+  FAKE_BAD_LABELS_INPUT,
+  FAKE_DROP_FINDING_INPUT,
+  FAKE_DROP_PLACEHOLDER_INPUT,
+  FAKE_ERROR_INPUT,
+} from "./providers/fake";
 import type { AiProvider } from "./providers/types";
 import { preparePrompt } from "./prompt";
 import { emptyKnownValues, loadKnownValues, type KnownValues } from "./redaction";
+import {
+  requestSuggestion as requestWithServerInput,
+  requestSuggestionBatch,
+} from "./request-suggestion";
+import { getSuggestionStatus } from "./suggestion-status";
+import type { AiServerInput, AiSummaryGroup } from "./types";
 import { addYears } from "./usage-log";
 
 /*
@@ -1099,7 +1124,9 @@ describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.8)", () 
     const row = (await aiRow(request.requestId))!;
     expect(row.redacted_count).toBe(1);
     expect(JSON.stringify(row)).not.toContain(SECRET_MARKER);
-    expect(JSON.stringify(result)).not.toContain(SECRET_MARKER);
+    expect(row.output_text).toContain("[navn]");
+    // A466: plassholderen byttes tilbake i teksten til klienten; raden beholder den
+    expect(result.kind === "suggestion" ? result.text : "").toContain(SECRET_MARKER);
     expect(Object.keys(result)).not.toContain("redactedCount");
   });
 
@@ -1175,22 +1202,27 @@ describe("requestSuggestion: vasken før kallet (vask før KI V4.3–V4.8)", () 
     expect(loadKnownValues).not.toHaveBeenCalled();
   });
 
-  it("V4.7 den falske leverandøren vaskes også: ai_trial uten oppdrag gir [telefon] i forslaget", async () => {
+  it("V4.7 den falske leverandøren vaskes også: uten oppdrag gir [telefon] i raden (A466: verdien tilbake til klienten)", async () => {
     const { grant } = await aiOrganization();
     const spy = vi.spyOn(fakeAiProvider, "complete");
     const text = "ring 12345678 og skriv til ola.prove@example.no";
-    const request = validRequest({ target: trialTarget(), fields: { text } });
+    const request = validRequest({ fields: { text } });
     const result = await requestSuggestion(grant, request);
     expect(result.kind).toBe("suggestion");
     // Uten oppdrag: ingen oppslag, men mønstrene vasker likevel
     expect(loadKnownValues).not.toHaveBeenCalled();
     if (result.kind !== "suggestion") return;
-    expect(result.text).toContain("[telefon]");
-    expect(result.text).toContain("[e-post]");
-    expect(result.text).not.toContain("12345678");
-    expect(result.text).not.toContain("ola.prove@example.no");
+    const row = (await aiRow(request.requestId))!;
+    expect(row.output_text).toContain("[telefon]");
+    expect(row.output_text).toContain("[e-post]");
+    expect(row.output_text).not.toContain("12345678");
+    expect(row.output_text).not.toContain("ola.prove@example.no");
+    // Teksten til klienten har verdiene tilbake (A466)
+    expect(result.text).toContain("12345678");
+    expect(result.text).toContain("ola.prove@example.no");
+    expect(result.text).not.toContain("[telefon]");
     expect(sentInput(spy.mock.calls[0]![0].prompt)).not.toContain("12345678");
-    expect((await aiRow(request.requestId))!.redacted_count).toBe(2);
+    expect(row.redacted_count).toBe(2);
   });
 
   it("V4.8 assignmentId null: bare mønstrene, ingen oppslag av kjente verdier", async () => {
@@ -1249,7 +1281,6 @@ describe("requestSuggestion: utfallet blocked (vask før KI V5.1–V5.7, V10.1)"
 
   it.each([
     { name: "V5.1 answer med oppdrag", target: "field_answer" as const, withAssignment: true },
-    { name: "V5.2 ai_trial uten oppdrag", target: "ai_trial" as const, withAssignment: false },
     {
       name: "V5.2 fritekst uten oppdrag (answer, assignmentId null)",
       target: "field_answer" as const,
@@ -1291,10 +1322,16 @@ describe("requestSuggestion: utfallet blocked (vask før KI V5.1–V5.7, V10.1)"
     expect(result.kind).toBe("suggestion");
   });
 
-  it("V5.3 ai_trial med falsk leverandør virker som før", async () => {
+  it("V5.3 og K1.31 ai_trial er arkivert: avvises uten rad og uten kall, også med falsk leverandør", async () => {
     const { grant } = await aiOrganization();
-    const result = await requestSuggestion(grant, validRequest({ target: trialTarget() }));
-    expect(result.kind).toBe("suggestion");
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const baseline = await neutralRequestRejection(grant);
+    const error = await captureError(() =>
+      requestSuggestion(grant, validRequest({ target: trialTarget() })),
+    );
+    expectSameRejection(error, baseline);
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
   });
 
   it("V5.4 en blocked-forespørsel avviser ikke forrige åpne forslag på samme mål", async () => {
@@ -1416,14 +1453,16 @@ describe("requestSuggestion: roller og organisasjon (vask før KI V7.3–V7.4)",
 describe("vask før KI: hver kjent verdi vaskes (V4.1)", () => {
   it.each(COLUMN_CASES)("V4.1 $column", async ({ seed, text, gone }) => {
     const { grant, assignmentId } = await organizationWithKnownValues(seed);
-    const { input, result } = await sendAndCapture(grant, assignmentId, text);
+    const { input, result, request } = await sendAndCapture(grant, assignmentId, text);
     for (const value of gone) {
       expect(stillThere(input, value), `«${value}» i ledeteksten: ${input}`).toBe(false);
     }
     expect(input, "plassholder mangler").toMatch(/\[[a-zæøå-]+\]/u);
     expect(result.kind).toBe("suggestion");
-    if (result.kind === "suggestion") {
-      for (const value of gone) expect(stillThere(result.text, value), value).toBe(false);
+    // A466: raden beholder plassholderne; teksten til klienten har verdiene tilbake
+    const row = (await aiRow(request.requestId))!;
+    for (const value of gone) {
+      expect(stillThere(row.output_text ?? "", value), value).toBe(false);
     }
   });
 });
@@ -1832,7 +1871,9 @@ describe("requestSuggestion: tegn databasen ikke tar (T-0001)", () => {
     const stored = JSON.stringify(row);
     expect(stored).not.toContain("91234567");
     expect(stored).not.toContain("1234567");
-    expect(JSON.stringify(result)).not.toContain("1234567");
+    // A466: klienten får nummeret tilbake, renset for nulltegnet
+    expect(JSON.stringify(result)).toContain("91234567");
+    expect(JSON.stringify(result)).not.toContain("\\u0000");
   });
 });
 
@@ -2001,7 +2042,6 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
     const { grant } = await aiOrganization();
     const spy = vi.spyOn(fakeAiProvider, "complete");
     const request = validRequest({
-      target: trialTarget(),
       fields: { text: "Ring 9\u00001234567" },
     });
 
@@ -2017,7 +2057,9 @@ describe("requestSuggestion: nulltegn og ensomme surrogater (T-0001)", () => {
     expect(JSON.stringify(row)).not.toContain("1234567");
     expect(JSON.stringify(row.input_summary)).not.toContain("1234567");
     expect(row.redacted_count).toBe(1);
-    expect(JSON.stringify(result)).not.toContain("1234567");
+    // A466: klienten får nummeret tilbake, renset for nulltegnet
+    expect(result.kind === "suggestion" ? result.text : "").toContain("91234567");
+    expect(JSON.stringify(result)).not.toContain("\\u0000");
   });
 });
 
@@ -2179,5 +2221,971 @@ describe("K7 avvist fordi nytt forslag erstatter (S1–S7)", () => {
       sql`select count(*)::int as n from ai_usage_log where deleted_at is not null`,
     )) as unknown as { n: number }[];
     expect(deleted!.n).toBe(0);
+  });
+});
+
+/*
+ * «KI i veien» i kjernen (docs/funksjoner/fase2a-ki-i-veien-testplan.md 4d og 4e: K1.14, K4.7,
+ * K4.11, K4.11a, K4.11b, K4.18, K4.21a og K5.12). Mot testdatabasen med den falske leverandøren.
+ * Rapporten, avviket og tiltaket er rå rader (`tests/ai-report.ts`). Alle verdier er oppdiktet.
+ *
+ * Støtter hovedmål: KI i bunnen (fraseforslag, språkvask og utkast går samme vei med vask,
+ * vakter og logg) og færre reklamasjoner (svar som endrer TG, legger til tall, mister funn eller
+ * endrer skjulte opplysninger, vises aldri).
+ */
+
+type KiSetup = Awaited<ReturnType<typeof aiOrganization>> & { chain: AiReportChain };
+
+async function kiSetup(): Promise<KiSetup> {
+  const ai = await aiOrganization();
+  const chain = await createAiReportChain(ai.organization.id);
+  return { ...ai, chain };
+}
+
+function phraseRequest(chain: AiReportChain, text: string, fieldKey = "cause_text") {
+  return {
+    requestId: uuidv7(),
+    feature: "phrase_suggest" as const,
+    assignmentId: null,
+    reportId: null,
+    target: { type: "deviation", id: chain.deviationId, fieldKey },
+    fields: { text, outcome_key: "membrane_crack", group: "tg2" },
+  };
+}
+
+function polishRequest(target: { type: string; id: string; fieldKey: string }, text: string) {
+  return {
+    requestId: uuidv7(),
+    feature: "language_polish" as const,
+    assignmentId: null,
+    reportId: null,
+    target,
+    fields: { text },
+  };
+}
+
+function summaryRequest(chain: AiReportChain) {
+  return {
+    requestId: uuidv7(),
+    feature: "summary_draft" as const,
+    assignmentId: null,
+    reportId: null,
+    target: { type: "report", id: chain.reportId, fieldKey: "summary_text" },
+    fields: {},
+  };
+}
+
+const PHRASE_CANDIDATES = () => [
+  candidate("Membranen er gammel og har sprekker ved sluket"),
+  candidate("Klemringen på sluket mangler"),
+  candidate("Fallet mot sluket er for lite", "template_measure"),
+  candidate("Ventilasjonen i rommet er svak"),
+];
+
+const DOUBLE = candidate("Samme kandidat to ganger");
+
+function finding(name: string, deviationText: string, measures: string[] = []) {
+  return { checkpointName: name, deviationText, causeText: null, consequenceText: null, measures };
+}
+
+const SUMMARY_GROUPS = (): AiSummaryGroup[] => [
+  {
+    group: "tg3",
+    heading: "TG3 Store eller alvorlige avvik",
+    findings: [finding("Membran", "Fuktmåling viste 15 vekt-% ved sluket", ["Skift membranen"])],
+    fixedLines: [],
+  },
+  {
+    group: "tg2",
+    heading: "TG2 Vesentlige avvik",
+    findings: [finding("Sluk", "Klemringen mangler"), finding("Ventilasjon", "Avtrekket er svakt")],
+    fixedLines: [],
+  },
+  {
+    group: "tgiu",
+    heading: "TGIU Ikke undersøkt",
+    findings: [],
+    fixedLines: [{ checkpointName: "Hulltaking", text: "Eier tillot ikke hulltaking" }],
+  },
+];
+
+describe("KI i veien: oppslaget av målet gjennom requestSuggestion (K4.18)", () => {
+  it("riktig id gir kall, og report_id og assignment_id i loggen kommer fra oppslaget", async () => {
+    const { grant, chain } = await kiSetup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const requests = [
+      polishRequest({ type: "deviation", id: chain.deviationId, fieldKey: "cause_text" }, "tekst"),
+      polishRequest({ type: "deviation_measure", id: chain.measureId, fieldKey: "text" }, "tekst"),
+      polishRequest(
+        { type: "checkpoint_result", id: chain.checkpointResultId, fieldKey: "description_text" },
+        "tekst",
+      ),
+    ];
+    for (const request of requests) {
+      const result = await requestWithServerInput(grant, request);
+      expect(result.kind).toBe("suggestion");
+      const row = (await aiRow(request.requestId))!;
+      expect(row.report_id).toBe(chain.reportId);
+      expect(row.assignment_id).toBe(chain.assignmentId);
+    }
+    const phrase = phraseRequest(chain, "sprekker i membranen");
+    await requestWithServerInput(grant, phrase, { candidates: PHRASE_CANDIDATES() });
+    const summary = summaryRequest(chain);
+    await requestWithServerInput(grant, summary, { summaryGroups: SUMMARY_GROUPS() });
+    for (const request of [phrase, summary]) {
+      const row = (await aiRow(request.requestId))!;
+      expect(row.report_id).toBe(chain.reportId);
+      expect(row.assignment_id).toBe(chain.assignmentId);
+    }
+    expect(spy).toHaveBeenCalledTimes(5);
+  });
+
+  it("id fra en annen organisasjon, slettet rad, rapport som ikke er draft: samme avslag, ingen rad, intet kall", async () => {
+    const { grant, chain } = await kiSetup();
+    const other = await createOrganization("Oppdiktet Takst B");
+    const foreign = await createAiReportChain(other.id);
+    const baseline = await neutralRequestRejection(grant);
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+
+    const cases: (() => Promise<unknown>)[] = [
+      () =>
+        requestWithServerInput(
+          grant,
+          polishRequest(
+            { type: "deviation", id: foreign.deviationId, fieldKey: "cause_text" },
+            "x",
+          ),
+        ),
+      () =>
+        requestWithServerInput(grant, phraseRequest(foreign, "x"), {
+          candidates: PHRASE_CANDIDATES(),
+        }),
+      () =>
+        requestWithServerInput(grant, summaryRequest(foreign), { summaryGroups: SUMMARY_GROUPS() }),
+    ];
+    for (const call of cases) expectSameRejection(await captureError(call), baseline);
+
+    await softDelete("deviation_measures", chain.measureId);
+    expectSameRejection(
+      await captureError(() =>
+        requestWithServerInput(
+          grant,
+          polishRequest({ type: "deviation_measure", id: chain.measureId, fieldKey: "text" }, "x"),
+        ),
+      ),
+      baseline,
+    );
+    await setReportStatus(chain.reportId, "superseded");
+    expectSameRejection(
+      await captureError(() =>
+        requestWithServerInput(grant, summaryRequest(chain), { summaryGroups: SUMMARY_GROUPS() }),
+      ),
+      baseline,
+    );
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it("feltkode som ikke hører til måltypen, og assignmentId fra klienten, gir samme avslag", async () => {
+    const { grant, chain } = await kiSetup();
+    const baseline = await neutralRequestRejection(grant);
+    const wrongField = polishRequest(
+      { type: "deviation", id: chain.deviationId, fieldKey: "description_text" },
+      "x",
+    );
+    expectSameRejection(
+      await captureError(() => requestWithServerInput(grant, wrongField)),
+      baseline,
+    );
+    const withAssignment = {
+      ...polishRequest({ type: "deviation", id: chain.deviationId, fieldKey: "cause_text" }, "x"),
+      assignmentId: chain.assignmentId,
+    };
+    expectSameRejection(
+      await captureError(() => requestWithServerInput(grant, withAssignment)),
+      baseline,
+    );
+    const withReport = { ...summaryRequest(chain), reportId: chain.reportId };
+    expectSameRejection(
+      await captureError(() =>
+        requestWithServerInput(grant, withReport as never, { summaryGroups: SUMMARY_GROUPS() }),
+      ),
+      baseline,
+    );
+    expect(await aiRowCount()).toBe(0);
+  });
+});
+
+describe("KI i veien: phrase_suggest (K1.7, K1.14, K4.24)", () => {
+  it("rangerte kandidater: candidate_refs, tom output_text og bare tall i input_summary", async () => {
+    const { grant, chain } = await kiSetup();
+    const list = PHRASE_CANDIDATES();
+    const request = phraseRequest(chain, "membranen har sprekker ved sluket");
+
+    const result = await requestWithServerInput(grant, request, {
+      candidates: list,
+      candidatesCut: 3,
+    });
+
+    expect(result.kind).toBe("candidates");
+    if (result.kind !== "candidates") return;
+    expect(result.candidates[0]).toEqual({ source: list[0]!.source, id: list[0]!.id });
+    for (const ref of result.candidates) expect(Object.keys(ref).sort()).toEqual(["id", "source"]);
+    const row = (await aiRow(request.requestId))!;
+    expect(row.feature).toBe("phrase_suggest");
+    expect(row.outcome).toBe("ok");
+    expect(row.status).toBe("suggested");
+    expect(row.output_text).toBeNull();
+    expect(row.candidate_refs).toEqual(result.candidates);
+    expect(row.chosen_candidate).toBeNull();
+    expect(row.prompt_version).toBe("phrase_suggest.v1");
+    expect(row.input_summary).toMatchObject({
+      candidates: 4,
+      candidates_cut: 3,
+      unknown_labels: 0,
+      duplicate_labels: 0,
+    });
+    for (const value of Object.values(row.input_summary as Record<string, unknown>)) {
+      expect(typeof value).toBe("number");
+    }
+    const stored = JSON.stringify(row);
+    for (const entry of list) expect(stored).not.toContain(entry.text);
+  });
+
+  it("kandidat-id-ene sendes aldri til leverandøren, bare merkene K1…Kn", async () => {
+    const { grant, chain } = await kiSetup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const list = PHRASE_CANDIDATES();
+    await requestWithServerInput(grant, phraseRequest(chain, "sluk"), { candidates: list });
+    const prompt = spy.mock.calls[0]![0].prompt;
+    for (const entry of list) expect(prompt).not.toContain(entry.id);
+    expect(sentInput(prompt)).toContain("K1: Membranen er gammel og har sprekker ved sluket");
+    expect(sentInput(prompt)).toContain("K4: Ventilasjonen i rommet er svak");
+    expect(prompt).not.toContain(chain.deviationId);
+  });
+
+  it("ingen passer: no_match logget med mengde, ingen candidate_refs", async () => {
+    const { grant, chain } = await kiSetup();
+    const request = phraseRequest(chain, "takrenne nedløp beslag");
+    const result = await requestWithServerInput(grant, request, {
+      candidates: PHRASE_CANDIDATES(),
+    });
+    expect(result).toEqual({ kind: "no_match", usageId: request.requestId });
+    const row = (await aiRow(request.requestId))!;
+    expect(row.outcome).toBe("no_match");
+    expect(row.candidate_refs).toBeNull();
+    expect(row.status).toBeNull();
+    expect(row.tokens_in).toBeGreaterThan(0);
+  });
+
+  it("ukjente og doble merker i svaret tas bort og telles i input_summary", async () => {
+    const { grant, chain } = await kiSetup();
+    const request = phraseRequest(chain, `sluket ${FAKE_BAD_LABELS_INPUT}`);
+    const result = await requestWithServerInput(grant, request, {
+      candidates: PHRASE_CANDIDATES(),
+    });
+    expect(result.kind).toBe("candidates");
+    const row = (await aiRow(request.requestId))!;
+    expect((row.input_summary as Record<string, number>).unknown_labels).toBe(2);
+    expect((row.input_summary as Record<string, number>).duplicate_labels).toBe(1);
+    const refs = row.candidate_refs as { id: string }[];
+    expect(new Set(refs.map((ref) => ref.id)).size).toBe(refs.length);
+  });
+
+  it("K4.5 tomt felt er lov: kall og loggrad, kandidatene i kildens rekkefølge", async () => {
+    const { grant, chain } = await kiSetup();
+    const list = PHRASE_CANDIDATES();
+    const request = phraseRequest(chain, "");
+    const result = await requestWithServerInput(grant, request, { candidates: list });
+    expect(result.kind).toBe("candidates");
+    if (result.kind !== "candidates") return;
+    expect(result.candidates.map((ref) => ref.id)).toEqual(list.map((entry) => entry.id));
+  });
+
+  it("new_measure: forslag til nytt tiltak på avviket", async () => {
+    const { grant, chain } = await kiSetup();
+    const request = phraseRequest(chain, "skift membranen", "new_measure");
+    const result = await requestWithServerInput(grant, request, {
+      candidates: [candidate("Skift membranen i hele rommet", "template_measure")],
+    });
+    expect(result.kind).toBe("candidates");
+    expect((await aiRow(request.requestId))!.target_ref).toEqual(request.target);
+  });
+
+  it("K1.14 sikringen: flere enn AI_CANDIDATES_MAX gir too_many_candidates uten kall og uten rad", async () => {
+    const { grant, chain } = await kiSetup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const list = Array.from({ length: AI_CANDIDATES_MAX + 1 }, (_, index) =>
+      candidate(`Oppdiktet kandidat ${index}`),
+    );
+    const error = await captureError(() =>
+      requestWithServerInput(grant, phraseRequest(chain, "x"), { candidates: list }),
+    );
+    expect(error).toBeInstanceOf(AiInputTooLargeError);
+    expect((error as AiInputTooLargeError).reason).toBe("too_many_candidates");
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it.each([
+    { name: "uten kandidater", input: {} },
+    { name: "0 kandidater", input: { candidates: [] } },
+    { name: "dobbel kandidat", input: { candidates: [DOUBLE, { ...DOUBLE }] } },
+    { name: "ukjent kilde", input: { candidates: [{ source: "free", id: uuidv7(), text: "x" }] } },
+    { name: "funn i stedet", input: { summaryGroups: SUMMARY_GROUPS() } },
+  ])("$name gir avslag uten rad og uten kall", async ({ input }) => {
+    const { grant, chain } = await kiSetup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    await expect(
+      requestWithServerInput(grant, phraseRequest(chain, "x"), input as AiServerInput),
+    ).rejects.toBeInstanceOf(AiRequestRejectedError);
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it("K1.5 vaktene gjelder ikke phrase_suggest: et svar med TG og tall gir likevel kandidater", async () => {
+    const { grant, chain } = await kiSetup();
+    swap.provider = {
+      code: "fake",
+      model: "fake-v1",
+      complete: async () => ({
+        outcome: "ok",
+        text: "K2, K1 TG3 4711",
+        tokensIn: 1,
+        tokensOut: 1,
+        cost: 0,
+        currency: "NOK",
+      }),
+    };
+    const request = phraseRequest(chain, "sluk");
+    const result = await requestWithServerInput(grant, request, {
+      candidates: PHRASE_CANDIDATES(),
+    });
+    expect(result.kind).toBe("candidates");
+    expect((await aiRow(request.requestId))!.output_text).toBeNull();
+  });
+});
+
+describe("KI i veien: language_polish med vaktene (K4.11, K1.6)", () => {
+  it.each([
+    { name: "TG lagt til", marker: FAKE_ADD_TG_INPUT, guard: "tg_guard" },
+    { name: "tall lagt til", marker: FAKE_ADD_NUMBER_INPUT, guard: "number_guard" },
+  ])("$name: stopped med vaktkode, mengde beholdt, ingen tekst ut", async ({ marker, guard }) => {
+    const { grant, chain } = await kiSetup();
+    const target = { type: "deviation", id: chain.deviationId, fieldKey: "consequence_text" };
+    const first = polishRequest(target, "fukt kan trenge inn");
+    await requestWithServerInput(grant, first);
+    const logSpies = spyOnLogger();
+    const auditBefore = await auditCount();
+    const text = `fukt Mxq-merke-ÆØ kan trenge inn ${marker}`;
+    const request = polishRequest(target, text);
+
+    const result = await requestWithServerInput(grant, request);
+
+    expect(result).toEqual({ kind: "stopped", usageId: request.requestId, guard });
+    const row = (await aiRow(request.requestId))!;
+    expect(row.outcome).toBe("stopped");
+    expect(row.error_code).toBe(guard);
+    expect(row.status).toBeNull();
+    expect(row.tokens_in).toBeGreaterThan(0);
+    expect(row.tokens_out).toBeGreaterThan(0);
+    expect(row.output_text).toContain("Mxq-merke-ÆØ");
+    // Teksten går aldri til klienten, loggen, revisjonsloggen eller statusoppslaget
+    expect(JSON.stringify(result)).not.toContain("Mxq-merke-ÆØ");
+    expect(loggedText(logSpies)).not.toContain("Mxq-merke-ÆØ");
+    expect(JSON.stringify(await allAuditRows())).not.toContain("Mxq-merke-ÆØ");
+    expect(await auditCount()).toBe(auditBefore);
+    const status = await getSuggestionStatus(grant, request.requestId);
+    expect(status).toEqual({ status: null, outcome: "stopped" });
+    // Et stoppet svar avviser ikke forrige åpne forslag på samme mål
+    expect((await aiRow(first.requestId))!.status).toBe("suggested");
+    // Samme requestId på nytt gir samme svar uten nytt kall
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    expect(await requestWithServerInput(grant, request)).toEqual(result);
+    expect(spy).not.toHaveBeenCalled();
+    // Køen regner et stoppet svar som ferdig
+    expect(
+      classifyQueueOutcome(
+        { kind: "answered", result: { kind: "stopped", usageId: request.requestId } },
+        true,
+      ),
+    ).toBe("done");
+  });
+
+  it("K4.11 et stoppet forslag kan ikke avgjøres", async () => {
+    const { grant, chain } = await kiSetup();
+    const request = polishRequest(
+      { type: "deviation", id: chain.deviationId, fieldKey: "cause_text" },
+      `membranen ${FAKE_ADD_TG_INPUT}`,
+    );
+    const result = await requestWithServerInput(grant, request);
+    expect(result.kind).toBe("stopped");
+    for (const decision of ["accepted", "edited", "rejected", "undo"]) {
+      await expect(recordDecision(grant, request.requestId, decision)).rejects.toThrow();
+    }
+  });
+
+  it.each(["   ", "\n\t ", "  ", ""])(
+    "K1.6 tom tekst %j til språkvask: ingen kall og ingen rad (T-0111)",
+    async (text) => {
+      const { grant, chain } = await kiSetup();
+      const spy = vi.spyOn(fakeAiProvider, "complete");
+      await expect(
+        requestWithServerInput(
+          grant,
+          polishRequest({ type: "deviation", id: chain.deviationId, fieldKey: "cause_text" }, text),
+        ),
+      ).rejects.toBeInstanceOf(AiRequestRejectedError);
+      expect(spy).not.toHaveBeenCalled();
+      expect(await aiRowCount()).toBe(0);
+    },
+  );
+
+  it("K4.11b plassholderne byttes tilbake for klienten; leverandøren og raden ser bare plassholdere", async () => {
+    const { organization, grant } = await aiOrganization();
+    const assignmentId = await seedKnownValues(organization.id, {
+      parties: [{ name: "Åse Testesen", phone: "12345678" }],
+      property: { address: "Testveien 1" },
+    });
+    const chain = await createAiReportChain(organization.id, { assignmentId });
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const text = "Åse Testesen i Testveien 1 opplyste om lekkasje";
+    const request = polishRequest(
+      { type: "deviation", id: chain.deviationId, fieldKey: "cause_text" },
+      text,
+    );
+
+    const result = await requestWithServerInput(grant, request);
+
+    expect(result.kind).toBe("suggestion");
+    if (result.kind !== "suggestion") return;
+    expect(result.text).toBe(`${text}.`);
+    const prompt = spy.mock.calls[0]![0].prompt;
+    expect(prompt).not.toContain("Testesen");
+    expect(prompt).not.toContain("Testveien");
+    const row = (await aiRow(request.requestId))!;
+    expect(row.output_text).toBe("[navn] i [adresse] opplyste om lekkasje.");
+    expect(row.redacted_count).toBe(2);
+  });
+
+  it("K4.11b plassholder fjernet av KI: placeholder_guard, ingen tekst ut", async () => {
+    const { organization, grant } = await aiOrganization();
+    const assignmentId = await seedKnownValues(organization.id, {
+      parties: [{ name: "Åse Testesen" }],
+    });
+    const chain = await createAiReportChain(organization.id, { assignmentId });
+    const request = polishRequest(
+      { type: "deviation", id: chain.deviationId, fieldKey: "cause_text" },
+      `Åse Testesen opplyste om lekkasje ${FAKE_DROP_PLACEHOLDER_INPUT}`,
+    );
+    const result = await requestWithServerInput(grant, request);
+    expect(result).toEqual({
+      kind: "stopped",
+      usageId: request.requestId,
+      guard: "placeholder_guard",
+    });
+    expect(JSON.stringify(result)).not.toContain("Testesen");
+  });
+});
+
+describe("KI i veien: requestSuggestionBatch (K4.11a, A460)", () => {
+  function deviationFields(chain: AiReportChain) {
+    return [
+      polishRequest({ type: "deviation", id: chain.deviationId, fieldKey: "deviation_text" }, "a"),
+      polishRequest({ type: "deviation", id: chain.deviationId, fieldKey: "cause_text" }, "b"),
+      polishRequest(
+        { type: "deviation", id: chain.deviationId, fieldKey: "consequence_text" },
+        `c ${FAKE_ADD_NUMBER_INPUT}`,
+      ),
+      polishRequest({ type: "deviation_measure", id: chain.measureId, fieldKey: "text" }, "d"),
+    ];
+  }
+
+  it("ett kall inn, ett leverandørkall og én rad per felt; et stoppet felt stopper ikke de andre", async () => {
+    const { grant, chain } = await kiSetup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const requests = deviationFields(chain);
+
+    const results = await requestSuggestionBatch(grant, requests);
+
+    expect(results.map((result) => result.kind)).toEqual([
+      "suggestion",
+      "suggestion",
+      "stopped",
+      "suggestion",
+    ]);
+    expect(spy).toHaveBeenCalledTimes(4);
+    expect(await aiRowCount()).toBe(4);
+    for (const [index, request] of requests.entries()) {
+      const row = (await aiRow(request.requestId))!;
+      expect(row.target_ref).toEqual(request.target);
+      expect(row.report_id).toBe(chain.reportId);
+      expect(
+        results[index]!.kind === "blocked" ? null : (results[index] as { usageId: string }).usageId,
+      ).toBe(request.requestId);
+    }
+  });
+
+  it("feil hos leverandøren på ett felt gir error for det feltet og forslag for de andre", async () => {
+    const { grant, chain } = await kiSetup();
+    const requests = deviationFields(chain).slice(0, 2);
+    requests[0]!.fields.text = `a ${FAKE_ERROR_INPUT}`;
+    const results = await requestSuggestionBatch(grant, requests);
+    expect(results.map((result) => result.kind)).toEqual(["error", "suggestion"]);
+  });
+
+  it.each([
+    {
+      name: "flere enn AI_BATCH_MAX_REQUESTS",
+      build: (chain: AiReportChain) =>
+        Array.from({ length: AI_BATCH_MAX_REQUESTS + 1 }, () =>
+          polishRequest({ type: "deviation", id: chain.deviationId, fieldKey: "cause_text" }, "x"),
+        ),
+    },
+    { name: "tom liste", build: () => [] },
+    {
+      name: "annen funksjon",
+      build: (chain: AiReportChain) => [phraseRequest(chain, "x")],
+    },
+    {
+      name: "samme requestId to ganger",
+      build: (chain: AiReportChain) => {
+        const [a, b] = deviationFields(chain);
+        return [a!, { ...b!, requestId: a!.requestId }];
+      },
+    },
+    {
+      name: "samme mål to ganger",
+      build: (chain: AiReportChain) => {
+        const [a] = deviationFields(chain);
+        return [a!, { ...a!, requestId: uuidv7() }];
+      },
+    },
+    {
+      name: "mål uten oppslag (field_answer)",
+      build: () => [validRequest() as never],
+    },
+  ])("$name: avslag uten rad og uten kall", async ({ build }) => {
+    const { grant, chain } = await kiSetup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    await expect(requestSuggestionBatch(grant, build(chain) as never)).rejects.toBeInstanceOf(
+      AiRequestRejectedError,
+    );
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it("mål fra to ulike rapporter: avslag uten rad og uten kall", async () => {
+    const { organization, grant, chain } = await kiSetup();
+    const second = await createAiReportChain(organization.id);
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    await expect(
+      requestSuggestionBatch(grant, [
+        polishRequest({ type: "deviation", id: chain.deviationId, fieldKey: "cause_text" }, "x"),
+        polishRequest({ type: "deviation", id: second.deviationId, fieldKey: "cause_text" }, "y"),
+      ]),
+    ).rejects.toBeInstanceOf(AiRequestRejectedError);
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+});
+
+describe("KI i veien: summary_draft (K1.21, K1.23, K4.11b, K4.17 i kjernen)", () => {
+  it("utkastet har kodens overskrifter, punktets navn først og TGIU-linjene fra koden", async () => {
+    const { grant, chain } = await kiSetup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const request = summaryRequest(chain);
+
+    const result = await requestWithServerInput(grant, request, {
+      summaryGroups: SUMMARY_GROUPS(),
+    });
+
+    expect(result.kind).toBe("suggestion");
+    if (result.kind !== "suggestion") return;
+    expect(result.text).toBe(
+      [
+        "TG3 Store eller alvorlige avvik",
+        "Membran: Fuktmåling viste 15 vekt-% ved sluket Skift membranen.",
+        "",
+        "TG2 Vesentlige avvik",
+        "Sluk: Klemringen mangler.",
+        "Ventilasjon: Avtrekket er svakt.",
+        "",
+        "TGIU Ikke undersøkt",
+        "Hulltaking: Eier tillot ikke hulltaking",
+      ].join("\n"),
+    );
+    // Overskriftene og TGIU-linjene sendes aldri; KI ser bare G- og F-merker
+    const input = sentInput(spy.mock.calls[0]![0].prompt);
+    expect(input).toBe(
+      [
+        "G1",
+        "F1: Membran | Fuktmåling viste 15 vekt-% ved sluket | Skift membranen",
+        "G2",
+        "F2: Sluk | Klemringen mangler",
+        "F3: Ventilasjon | Avtrekket er svakt",
+      ].join("\n"),
+    );
+    expect(input).not.toContain("TG3");
+    expect(input).not.toContain("Hulltaking");
+    const row = (await aiRow(request.requestId))!;
+    expect(row.output_text).toBe(result.text);
+    expect(row.input_summary).toMatchObject({ findings: 3, fixed_lines: 1 });
+    expect(row.prompt_version).toBe("summary_draft.v1");
+  });
+
+  it("KI som gjentar punktets navn og «:» får det tatt bort, så navnet står én gang", async () => {
+    const { grant, chain } = await kiSetup();
+    const answer = [
+      "G1",
+      "F1: Membran: Fuktmåling viste 15 vekt-% ved sluket.",
+      "G2",
+      "F2: sluk : Klemringen mangler.",
+      "F3: Ventilasjonen er svak, avtrekket må sjekkes.",
+    ].join("\n");
+    swap.provider = {
+      code: "fake",
+      model: "fake-v1",
+      complete: async () => ({
+        outcome: "ok",
+        text: answer,
+        tokensIn: 1,
+        tokensOut: 1,
+        cost: 0,
+        currency: "NOK",
+      }),
+    };
+    const request = summaryRequest(chain);
+
+    const result = await requestWithServerInput(grant, request, {
+      summaryGroups: SUMMARY_GROUPS(),
+    });
+
+    if (result.kind !== "suggestion") throw new Error(`fikk ${result.kind}`);
+    const lines = result.text.split("\n");
+    expect(lines).toContain("Membran: Fuktmåling viste 15 vekt-% ved sluket.");
+    expect(lines).toContain("Sluk: Klemringen mangler.");
+    // Et ord som bare begynner som navnet, røres ikke
+    expect(lines).toContain("Ventilasjon: Ventilasjonen er svak, avtrekket må sjekkes.");
+    expect((await aiRow(request.requestId))!.output_text).toBe(result.text);
+  });
+
+  it.each([
+    { name: "funn mangler", marker: FAKE_DROP_FINDING_INPUT, guard: "coverage_guard" },
+    { name: "TG lagt til", marker: FAKE_ADD_TG_INPUT, guard: "tg_guard" },
+    { name: "tall lagt til", marker: FAKE_ADD_NUMBER_INPUT, guard: "number_guard" },
+  ])("$name: hele utkastet stoppes ($guard)", async ({ marker, guard }) => {
+    const { grant, chain } = await kiSetup();
+    const groups = SUMMARY_GROUPS();
+    groups[1]!.findings[0]!.deviationText = `Klemringen mangler ${marker}`;
+    const request = summaryRequest(chain);
+    const result = await requestWithServerInput(grant, request, { summaryGroups: groups });
+    expect(result).toEqual({ kind: "stopped", usageId: request.requestId, guard });
+    const row = (await aiRow(request.requestId))!;
+    expect(row.outcome).toBe("stopped");
+    expect(row.error_code).toBe(guard);
+    expect(row.status).toBeNull();
+  });
+
+  it("K4.11b plassholdere per funn: tilbake i teksten til klienten, ikke i raden", async () => {
+    const { organization, grant } = await aiOrganization();
+    const assignmentId = await seedKnownValues(organization.id, {
+      parties: [{ name: "Åse Testesen" }],
+    });
+    const chain = await createAiReportChain(organization.id, { assignmentId });
+    const groups = SUMMARY_GROUPS();
+    groups[0]!.findings[0]!.deviationText = "Åse Testesen opplyste om lekkasje";
+    groups[2]!.fixedLines[0]!.text = "Åse Testesen tillot ikke hulltaking";
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const request = summaryRequest(chain);
+
+    const result = await requestWithServerInput(grant, request, { summaryGroups: groups });
+
+    expect(result.kind).toBe("suggestion");
+    if (result.kind !== "suggestion") return;
+    expect(result.text).toContain("Membran: Åse Testesen opplyste om lekkasje");
+    expect(result.text).toContain("Hulltaking: Åse Testesen tillot ikke hulltaking");
+    expect(spy.mock.calls[0]![0].prompt).not.toContain("Testesen");
+    const row = (await aiRow(request.requestId))!;
+    expect(row.output_text).not.toContain("Testesen");
+    expect(row.output_text).toContain("Membran: [navn] opplyste om lekkasje");
+    expect(row.output_text).toContain("Hulltaking: [navn] tillot ikke hulltaking");
+  });
+
+  it("K1.23 for mange funn gir too_many_findings uten kall og uten rad; ingen kutt", async () => {
+    const { grant, chain } = await kiSetup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const many: AiSummaryGroup[] = [
+      {
+        group: "tg2",
+        heading: "TG2",
+        findings: Array.from({ length: AI_SUMMARY_FINDINGS_MAX + 1 }, (_, index) =>
+          finding(`Punkt ${index}`, "Avvik"),
+        ),
+        fixedLines: [],
+      },
+    ];
+    const error = await captureError(() =>
+      requestWithServerInput(grant, summaryRequest(chain), { summaryGroups: many }),
+    );
+    expect(error).toBeInstanceOf(AiInputTooLargeError);
+    expect((error as AiInputTooLargeError).reason).toBe("too_many_findings");
+    const long: AiSummaryGroup[] = [
+      {
+        group: "tg2",
+        heading: "TG2",
+        findings: Array.from({ length: 10 }, () => finding("Punkt", "a".repeat(4999))),
+        fixedLines: [],
+      },
+    ];
+    const tooLong = await captureError(() =>
+      requestWithServerInput(grant, summaryRequest(chain), { summaryGroups: long }),
+    );
+    expect(tooLong).toBeInstanceOf(AiInputTooLargeError);
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+
+  it.each([
+    { name: "bare TGIU (koden setter utkastet sammen selv)", groups: () => [SUMMARY_GROUPS()[2]!] },
+    { name: "feil rekkefølge", groups: () => [SUMMARY_GROUPS()[1]!, SUMMARY_GROUPS()[0]!] },
+    {
+      name: "tom gruppe",
+      groups: () => [{ group: "tg2", heading: "TG2", findings: [], fixedLines: [] }],
+    },
+    {
+      name: "TGIU med funn til KI",
+      groups: () => [{ ...SUMMARY_GROUPS()[2]!, findings: [finding("Hulltaking", "x")] }],
+    },
+  ])("$name gir avslag uten rad og uten kall", async ({ groups }) => {
+    const { grant, chain } = await kiSetup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    await expect(
+      requestWithServerInput(grant, summaryRequest(chain), {
+        summaryGroups: groups() as AiSummaryGroup[],
+      }),
+    ).rejects.toBeInstanceOf(AiRequestRejectedError);
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+  });
+});
+
+describe("KI i veien: drift (K4.21a) og ekte leverandør (K4.7)", () => {
+  it("feil hos leverandøren gir error-rad for alle tre funksjonene, og samme requestId gir ikke nytt kall", async () => {
+    const { grant, chain } = await kiSetup();
+    const groups = SUMMARY_GROUPS();
+    groups[0]!.findings[0]!.deviationText = `Membran ${FAKE_ERROR_INPUT}`;
+    const calls: [ReturnType<typeof polishRequest>, AiServerInput | undefined][] = [
+      [
+        polishRequest(
+          { type: "deviation", id: chain.deviationId, fieldKey: "cause_text" },
+          `x ${FAKE_ERROR_INPUT}`,
+        ),
+        undefined,
+      ],
+      [phraseRequest(chain, `x ${FAKE_ERROR_INPUT}`) as never, { candidates: PHRASE_CANDIDATES() }],
+      [summaryRequest(chain) as never, { summaryGroups: groups }],
+    ];
+    for (const [request, serverInput] of calls) {
+      const result = await requestWithServerInput(grant, request, serverInput);
+      expect(result).toEqual({ kind: "error", usageId: request.requestId });
+      const row = (await aiRow(request.requestId))!;
+      expect(row.outcome).toBe("error");
+      expect(Number(row.cost)).toBe(0);
+      const spy = vi.spyOn(fakeAiProvider, "complete");
+      expect(await requestWithServerInput(grant, request, serverInput)).toEqual(result);
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+    }
+  });
+
+  it("phrase_suggest og summary_draft gir «KI er av» mot ekte leverandør til de står i settings.features", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", TEST_ANTHROPIC_KEY);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const organization = await createOrganization("Oppdiktet Takst A");
+    await enableAnthropic(organization.id);
+    const { grant } = await employeeWithGrant(organization.id, ["inspector"]);
+    const chain = await createAiReportChain(organization.id);
+
+    expect(
+      await requestWithServerInput(grant, phraseRequest(chain, "x"), {
+        candidates: PHRASE_CANDIDATES(),
+      }),
+    ).toEqual({ kind: "disabled" });
+    expect(
+      await requestWithServerInput(grant, summaryRequest(chain), {
+        summaryGroups: SUMMARY_GROUPS(),
+      }),
+    ).toEqual({ kind: "disabled" });
+    expect(await aiRowCount()).toBe(0);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
+
+  it("loggeren ser ingen persondata eller tekst i vanlig flyt for de tre funksjonene", async () => {
+    const { organization, grant } = await aiOrganization();
+    const assignmentId = await seedKnownValues(organization.id, {
+      parties: [{ name: "Åse Testesen", phone: "12345678" }],
+    });
+    const chain = await createAiReportChain(organization.id, { assignmentId });
+    const logSpies = spyOnLogger();
+    const groups = SUMMARY_GROUPS();
+    groups[0]!.findings[0]!.deviationText = "Åse Testesen ringte fra 12345678";
+    await requestWithServerInput(
+      grant,
+      polishRequest(
+        { type: "deviation", id: chain.deviationId, fieldKey: "cause_text" },
+        "Åse Testesen ringte fra 12345678",
+      ),
+    );
+    await requestWithServerInput(grant, phraseRequest(chain, "Åse Testesen sluk"), {
+      candidates: PHRASE_CANDIDATES(),
+    });
+    await requestWithServerInput(grant, summaryRequest(chain), { summaryGroups: groups });
+    const logged = loggedText(logSpies);
+    for (const value of ["Åse", "Testesen", "12345678", "Klemringen", "Membranen"]) {
+      expect(logged).not.toContain(value);
+    }
+  });
+});
+
+describe("KI i veien: tenant-isolasjon for oppslaget gjennom requestSuggestion (K5.12)", () => {
+  it("expectTenantIsolation: B kan ikke be om forslag på A sitt avvik", async () => {
+    const chains: AiReportChain[] = [];
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        await enableAi(grantA.organizationId);
+        await enableAi(grantB.organizationId);
+        const a = await createAiReportChain(grantA.organizationId);
+        const b = await createAiReportChain(grantB.organizationId);
+        chains.push(a, b);
+        return { a: [a.deviationId], b: [b.deviationId] };
+      },
+      query: async (actor, organizationId) => {
+        const grant = await requireOrganizationAccess(actor, organizationId, "report.edit");
+        const found: string[] = [];
+        for (const chain of chains) {
+          try {
+            await requestWithServerInput(
+              grant,
+              polishRequest(
+                { type: "deviation", id: chain.deviationId, fieldKey: "cause_text" },
+                "x",
+              ),
+            );
+            found.push(chain.deviationId);
+          } catch (error) {
+            if (!(error instanceof AiRequestRejectedError)) throw error;
+          }
+        }
+        return found;
+      },
+      idOf: (id) => id,
+    });
+  });
+});
+
+/*
+ * Samme requestId på nytt når teksten hadde kjente navn (gjennomgangen av KI i veien): de
+ * opprinnelige verdiene bak plassholderne holdes bare i minnet under første kall (A466). Andre
+ * gang gir kjernen `error` (prøv igjen), aldri teksten med plassholderne.
+ *
+ * Støtter hovedmål: færre reklamasjoner (et forslag med «[navn]» kommer aldri inn i rapporten)
+ * og best for de ansatte (de ser en tydelig «prøv igjen», ikke en ødelagt tekst).
+ */
+describe("KI i veien: samme requestId med kjent navn gir error, ikke plassholdere", () => {
+  const NAME = "Åse Testesen";
+  const knownName = async (): Promise<KnownValues> => ({
+    ...emptyKnownValues(),
+    personNames: [NAME],
+  });
+
+  it("språkvask: første svar har navnet, andre gir error, raden er uendret", async () => {
+    const { grant, chain } = await kiSetup();
+    swap.load = knownName;
+    const request = polishRequest(
+      { type: "deviation", id: chain.deviationId, fieldKey: "cause_text" },
+      `${NAME} sa at sluket lekker.`,
+    );
+    const first = await requestWithServerInput(grant, request);
+    if (first.kind !== "suggestion") throw new Error("forventet forslag");
+    expect(first.text).toContain(NAME);
+    const row = (await aiRow(request.requestId))!;
+    expect(Number(row.redacted_count)).toBeGreaterThan(0);
+    expect(String(row.output_text)).not.toContain(NAME);
+    const before = snapshot(row);
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+
+    const second = await requestWithServerInput(grant, request);
+
+    expect(second).toEqual({ kind: "error", usageId: request.requestId });
+    expect(spy).not.toHaveBeenCalled();
+    expect(snapshot(await aiRow(request.requestId))).toBe(before);
+  });
+
+  it("sammendrag: første svar har navnet, andre gir error, raden er uendret", async () => {
+    const { grant, chain } = await kiSetup();
+    swap.load = knownName;
+    const groups: AiSummaryGroup[] = [
+      {
+        group: "tg2",
+        heading: "TG2 Vesentlige avvik",
+        findings: [finding("Sluk", `${NAME} har meldt at sluket lekker`)],
+        fixedLines: [],
+      },
+    ];
+    const request = summaryRequest(chain);
+    const first = await requestWithServerInput(grant, request, { summaryGroups: groups });
+    if (first.kind !== "suggestion") throw new Error("forventet forslag");
+    expect(first.text).toContain(NAME);
+    const row = (await aiRow(request.requestId))!;
+    expect(Number(row.redacted_count)).toBeGreaterThan(0);
+    const before = snapshot(row);
+
+    const second = await requestWithServerInput(grant, request, { summaryGroups: groups });
+
+    expect(second).toEqual({ kind: "error", usageId: request.requestId });
+    expect(snapshot(await aiRow(request.requestId))).toBe(before);
+  });
+
+  it("sammendrag: navn bare i TGIU-linjen gir også error andre gang", async () => {
+    const { grant, chain } = await kiSetup();
+    swap.load = knownName;
+    const groups: AiSummaryGroup[] = [
+      {
+        group: "tg2",
+        heading: "TG2 Vesentlige avvik",
+        findings: [finding("Sluk", "Klemringen mangler")],
+        fixedLines: [],
+      },
+      {
+        group: "tgiu",
+        heading: "TGIU Ikke undersøkt",
+        findings: [],
+        fixedLines: [{ checkpointName: "Hulltaking", text: `${NAME} tillot ikke hulltaking` }],
+      },
+    ];
+    const request = summaryRequest(chain);
+    const first = await requestWithServerInput(grant, request, { summaryGroups: groups });
+    if (first.kind !== "suggestion") throw new Error("forventet forslag");
+    expect(first.text).toContain(NAME);
+    const row = (await aiRow(request.requestId))!;
+    expect(String(row.output_text)).not.toContain(NAME);
+
+    const second = await requestWithServerInput(grant, request, { summaryGroups: groups });
+
+    expect(second).toEqual({ kind: "error", usageId: request.requestId });
+  });
+
+  it("uten plassholdere gir samme requestId fortsatt samme forslag", async () => {
+    const { grant, chain } = await kiSetup();
+    swap.load = knownName;
+    const request = polishRequest(
+      { type: "deviation", id: chain.deviationId, fieldKey: "cause_text" },
+      "sluket lekker.",
+    );
+    const first = await requestWithServerInput(grant, request);
+    expect(first.kind).toBe("suggestion");
+    expect(await requestWithServerInput(grant, request)).toEqual(first);
   });
 });

@@ -153,10 +153,12 @@ export type AiQueueFailureReason = "invalid" | "no_access" | "unknown";
 /**
  * Det minste køen må vite om svaret fra `send`. Svaret fra serverhandlingen på siden har flere
  * felt (forslagsteksten, `usageId`); de går uendret tilbake til siden gjennom `onEvent`.
- * `blocked` vises av serverhandlingen som `disabled`.
+ * `blocked` vises av serverhandlingen som `disabled`. `stopped` har aldri tekst.
  */
 export type AiQueueSendResult =
   | { kind: "suggestion" | "no_match" | "error" | "disabled" }
+  /** En vakt stoppet svaret (A431). Ferdig: et nytt forsøk gir samme svar. Ingen tekst. */
+  | { kind: "stopped"; usageId: string }
   | { kind: "failed"; reason: AiQueueFailureReason };
 
 /** Gis inn fra siden, så kjernen ikke importerer app eller moduler. `signal` avbrytes ved tidsavbrudd. */

@@ -1,177 +1,102 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { EmployeeGrant } from "@/core/access";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { uuidv7 } from "@/shared/lib/uuid";
 import {
-  aiRow,
+  aiOrganization,
   aiRowCount,
-  allAiRows,
   auditCount,
   captureError,
+  enableAnthropic,
   employeeWithGrant,
-  enableAi,
   expectSameRejection,
   fakeAiProvider,
   neutralRequestRejection,
+  recordDecision,
   requestSuggestion,
   validRequest,
 } from "../../../tests/ai";
-import { createOrganization, resetDatabase } from "../../../tests/factories";
-import type { AiProvider } from "./providers/types";
+import { checkAiTextApproved, getSuggestionStatus } from "../../../tests/ai-pattern";
+import { createAiUsageLog, createOrganization, resetDatabase } from "../../../tests/factories";
+import { AI_FEATURES, AI_TRIAL_TARGET_TYPE, ARCHIVED_AI_TARGET_TYPES } from "./features";
+import { aiSuggestionRequestSchema } from "./request";
 
 /*
- * Vakten for prøvemålet `ai_trial` (docs/funksjoner/fase2a-forslagsmonster-testplan.md avsnitt 2,
- * kortet Omfang 4, A166). Målet godtas bare når organisasjonens leverandør på porten `ai` er den
- * falske. Ellers samme svar som «KI er av»: ingen rad, intet leverandørkall og ingen fetch.
- * Mot testdatabasen. Alle verdier er oppdiktet.
+ * Prøvemålet `ai_trial` er arkivert («KI i veien», docs/funksjoner/fase2a-ki-i-veien-testplan.md
+ * K1.31 og K3.5, A487). Prøvesiden `/prove/ki` er fjernet, og ingen funksjon godtar målet lenger.
+ * Gamle rader i `ai_usage_log` kan fortsatt leses. Mot testdatabasen. Alle verdier er oppdiktet.
  *
- * Støtter hovedmål: KI i bunnen (prøvesiden kan vise forslagsmønsteret fra første dag) og færre
- * reklamasjoner (fritekst uten vask kan aldri nå en ekte leverandør).
+ * Støtter hovedmål: KI i bunnen (all KI går til mål kjernen kan kontrollere) og færre
+ * reklamasjoner (fritekst uten mål i rapporten kan ikke lenger sendes).
  */
-
-/**
- * Lar én test late som om koden hadde en ekte adapter. Ellers brukes valget av leverandør slik
- * det er, så de andre testene prøver den ekte veien.
- */
-const override = vi.hoisted(() => ({ provider: null as AiProvider | null }));
-vi.mock("./provider-resolution", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./provider-resolution")>();
-  return {
-    ...actual,
-    resolveAiProvider: async (grant: EmployeeGrant) =>
-      override.provider
-        ? {
-            kind: "enabled" as const,
-            provider: override.provider,
-            model: "oppdiktet-modell",
-            features: null,
-          }
-        : actual.resolveAiProvider(grant),
-  };
-});
 
 beforeEach(resetDatabase);
-afterEach(() => {
-  override.provider = null;
-  vi.restoreAllMocks();
+
+const trialTarget = () => ({ type: "ai_trial", id: uuidv7(), fieldKey: "text" });
+
+describe("K1.31 ai_trial er arkivert", () => {
+  it("konstanten står igjen som arkivert, og ingen funksjon har målet", () => {
+    expect(AI_TRIAL_TARGET_TYPE).toBe("ai_trial");
+    expect(ARCHIVED_AI_TARGET_TYPES).toContain("ai_trial");
+    for (const definition of Object.values(AI_FEATURES)) {
+      expect(definition.allowedTargets.map((target) => target.type)).not.toContain("ai_trial");
+    }
+  });
+
+  it("Zod-skjemaet avviser målet", () => {
+    expect(aiSuggestionRequestSchema.safeParse(validRequest()).success).toBe(true);
+    expect(
+      aiSuggestionRequestSchema.safeParse(validRequest({ target: trialTarget() })).success,
+    ).toBe(false);
+  });
+
+  it("med falsk leverandør: nøytralt avslag, ingen rad, intet kall, ingen revisjonslogg", async () => {
+    const { grant } = await aiOrganization();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const baseline = await neutralRequestRejection(grant);
+    const auditBefore = await auditCount();
+    const error = await captureError(() =>
+      requestSuggestion(grant, validRequest({ target: trialTarget() })),
+    );
+    expectSameRejection(error, baseline);
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRowCount()).toBe(0);
+    expect(await auditCount()).toBe(auditBefore);
+    spy.mockRestore();
+  });
+
+  it("med ekte leverandør: samme avslag, ingen sperret rad", async () => {
+    const organization = await createOrganization("Oppdiktet Takst A");
+    await enableAnthropic(organization.id);
+    const { grant } = await employeeWithGrant(organization.id, ["inspector"]);
+    const baseline = await neutralRequestRejection(grant);
+    const error = await captureError(() =>
+      requestSuggestion(grant, validRequest({ target: trialTarget() })),
+    );
+    expectSameRejection(error, baseline);
+    expect(await aiRowCount()).toBe(0);
+  });
 });
 
-const trialTarget = (fieldKey = "text") => ({ type: "ai_trial", id: uuidv7(), fieldKey });
-
-type Setup = "fake" | "other_provider" | "no_connection" | "ai_disabled";
-
-async function organizationWith(setup: Setup, name = "Oppdiktet Takst A") {
-  const organization = await createOrganization(name);
-  if (setup === "fake") await enableAi(organization.id);
-  if (setup === "other_provider") await enableAi(organization.id, { provider: "unknown_vendor" });
-  if (setup === "no_connection") await enableAi(organization.id, { connection: false });
-  if (setup === "ai_disabled") await enableAi(organization.id, { enabled: false });
-  const inspector = await employeeWithGrant(organization.id, ["inspector"]);
-  return { organization, ...inspector };
-}
-
-describe("vakten for ai_trial: leverandør × mål (2)", () => {
-  it.each([
-    { name: "2.2 annen leverandørkode på porten ai", setup: "other_provider" as const },
-    { name: "2.3 ingen tilkobling", setup: "no_connection" as const },
-    { name: "2.4 ai.enabled = false med fake", setup: "ai_disabled" as const },
-  ])("$name + ai_trial: «KI er av», ingen rad, intet kall, ingen fetch", async ({ setup }) => {
-    const { grant } = await organizationWith(setup);
-    const complete = vi.spyOn(fakeAiProvider, "complete");
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    const auditBefore = await auditCount();
-
-    const result = await requestSuggestion(grant, validRequest({ target: trialTarget() }));
-
-    expect(result).toEqual({ kind: "disabled" });
-    expect(await aiRowCount()).toBe(0);
-    expect(complete).not.toHaveBeenCalled();
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(await auditCount()).toBe(auditBefore);
-  });
-
-  it("2.1 fake + ai_trial/text: forslag og én rad med målet, status suggested", async () => {
-    const { grant, organization } = await organizationWith("fake");
+describe("K3.5 gamle ai_trial-rader kan fortsatt leses", () => {
+  it("getSuggestionStatus, sperren og beslutningen virker på en gammel rad", async () => {
+    const { organization, grant } = await aiOrganization();
     const target = trialTarget();
-    const result = await requestSuggestion(grant, validRequest({ target }));
-    expect(result.kind).toBe("suggestion");
-    if (result.kind !== "suggestion") return;
-    const row = await aiRow(result.usageId);
-    expect(row!.target_ref).toEqual(target);
-    expect(row!.status).toBe("suggested");
-    expect(row!.outcome).toBe("ok");
-    expect(row!.organization_id).toBe(organization.id);
-  });
+    const old = await createAiUsageLog(organization.id, {
+      employeeId: grant.employeeId,
+      targetRef: target,
+    });
 
-  it.each(["title", "tg"])(
-    "2.5 ai_trial med feltet %s: nøytralt avslag, ingen rad",
-    async (fieldKey) => {
-      const { grant } = await organizationWith("fake");
-      const baseline = await neutralRequestRejection(grant);
-      const complete = vi.spyOn(fakeAiProvider, "complete");
-      const error = await captureError(() =>
-        requestSuggestion(grant, validRequest({ target: trialTarget(fieldKey) })),
-      );
-      expectSameRejection(error, baseline);
-      expect(error.name).toBe("AiRequestRejectedError");
-      expect(complete).not.toHaveBeenCalled();
-      expect(await aiRowCount()).toBe(0);
-    },
-  );
+    expect(await getSuggestionStatus(grant, old.id)).toEqual({
+      status: "suggested",
+      outcome: "ok",
+    });
+    const item = { aiUsageId: old.id, target };
+    expect(await checkAiTextApproved(grant, [item])).toEqual([item]);
 
-  it("2.6 answer/text med fake virker fortsatt", async () => {
-    const { grant } = await organizationWith("fake");
-    const result = await requestSuggestion(grant, validRequest());
-    expect(result.kind).toBe("suggestion");
-    const [row] = await allAiRows();
-    expect((row!.target_ref as { type: string }).type).toBe("field_answer");
-  });
-
-  it("2.7 vakten ligger i kjernen: en annen adapter enn fake får aldri ai_trial", async () => {
-    const { grant } = await organizationWith("fake");
-    const imagined: AiProvider = {
-      code: "oppdiktet_leverandor",
-      model: "oppdiktet-modell",
-      complete: vi.fn(async () => ({
-        outcome: "ok" as const,
-        text: "Oppdiktet svar",
-        tokensIn: 1,
-        tokensOut: 1,
-        cost: 0,
-        currency: "NOK",
-      })),
-    } as unknown as AiProvider;
-    override.provider = imagined;
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-
-    const result = await requestSuggestion(grant, validRequest({ target: trialTarget() }));
-
-    // Vask før KI (A171): sperret forespørsel gir `blocked` (én rad), ikke «KI er av»
-    expect(result).toEqual({ kind: "blocked" });
-    expect(imagined.complete).not.toHaveBeenCalled();
-    expect(fetchSpy).not.toHaveBeenCalled();
-    const rows = await allAiRows();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.outcome).toBe("blocked");
-
-    // Målet answer er også sperret mot en annen adapter til `answers` finnes (A173)
-    const answer = await requestSuggestion(grant, validRequest());
-    expect(answer).toEqual({ kind: "blocked" });
-    expect(imagined.complete).not.toHaveBeenCalled();
-  });
-
-  it("2.8 tenant: A har fake, B annen leverandør; B får «KI er av», A sin tilkobling brukes aldri", async () => {
-    const a = await organizationWith("fake", "Oppdiktet Takst A");
-    const b = await organizationWith("other_provider", "Oppdiktet Takst B");
-    const complete = vi.spyOn(fakeAiProvider, "complete");
-
-    const result = await requestSuggestion(b.grant, validRequest({ target: trialTarget() }));
-    expect(result).toEqual({ kind: "disabled" });
-    expect(complete).not.toHaveBeenCalled();
-    expect(await aiRowCount()).toBe(0);
-
-    const own = await requestSuggestion(a.grant, validRequest({ target: trialTarget() }));
-    expect(own.kind).toBe("suggestion");
-    const rows = await allAiRows();
-    expect(rows.map((row) => row.organization_id)).toEqual([a.organization.id]);
+    await recordDecision(grant, old.id, "accepted");
+    expect(await getSuggestionStatus(grant, old.id)).toEqual({
+      status: "accepted",
+      outcome: "ok",
+    });
+    expect(await checkAiTextApproved(grant, [item])).toEqual([]);
   });
 });

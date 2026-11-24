@@ -208,14 +208,35 @@ describe("B4.28 statisk", () => {
     expect(offenders).toEqual([]);
   });
 
-  // Gjelder til «KI i veien»: da skal rapportkjernen kalle KI gjennom `src/core/ai`, og denne
-  // testen fjernes med vilje i den oppgaven, ikke ved et uhell.
-  it("B4.28 src/core/reports importerer ikke src/core/ai og kaller ikke requestSuggestion", () => {
+  // B4.28 «src/core/reports importerer ikke src/core/ai» er fjernet med vilje i «KI i veien»
+  // (docs/funksjoner/fase2a-ki-i-veien.md Omfang): rapportkjernen kaller nå KI gjennom
+  // `src/core/ai`. Erstattet av K2.8: TG kommer bare fra regelmotoren og takstmannen.
+  it("K2.8 en fil i src/core/reports som kaller KI, skriver aldri TG", () => {
+    const writesTg =
+      /\.(?:set|values)\(\s*\{[^}]*\b(?:tg|tgDirect|chosenTg)\s*:|writeTgDirect\(|createDeviationFromOutcome\(|swapMeasuresForTg\(/s;
+    const callsAi = /\b(?:requestSuggestion|requestSuggestionBatch)\s*\(/;
+    const offenders = sourceFiles(REPORTS_DIR).filter((file) => {
+      const text = readFileSync(file, "utf8");
+      return callsAi.test(text) && writesTg.test(text);
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it("K2.8 KI-svaret brukes aldri som TG: ingen tg-verdi hentes fra et resultat fra KI", () => {
     for (const file of sourceFiles(REPORTS_DIR)) {
       const text = readFileSync(file, "utf8");
-      expect(text, file).not.toMatch(/from\s+["'](@\/core\/ai|(\.\.\/)+ai)(\/[^"']*)?["']/);
-      expect(text, file).not.toMatch(/import\(\s*["']@\/core\/ai/);
-      expect(text, file).not.toContain("requestSuggestion");
+      if (!/from\s+["']@\/core\/ai["']/.test(text)) continue;
+      // Et KI-svar har `text`, `candidates` eller `guard`, aldri TG. Ingen tg-felt leses fra det.
+      expect(text, file).not.toMatch(/\b(?:result|answer|suggestion|ai)\w*\.tg\b/i);
+    }
+  });
+
+  it("K2.8 src/core/ai importerer aldri @/core/reports eller @/core/templates", () => {
+    const aiDir = path.resolve(process.cwd(), "src/core/ai");
+    for (const file of sourceFiles(aiDir)) {
+      const text = readFileSync(file, "utf8");
+      expect(text, file).not.toMatch(/from\s+["']@\/core\/(reports|templates)(\/[^"']*)?["']/);
+      expect(text, file).not.toMatch(/import\(\s*["']@\/core\/(reports|templates)/);
     }
   });
 

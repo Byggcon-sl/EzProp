@@ -438,13 +438,16 @@ describe("tilgang per rolle: vask før KI (V7.4)", () => {
       const result = await requestSuggestion(person.grant, request);
       expect(result.kind).toBe("suggestion");
       if (result.kind !== "suggestion") return;
+      const row = (await aiRow(request.requestId))!;
       for (const value of ["Åse", "Testesen", "12345678"]) {
-        expect(result.text).not.toContain(value);
+        expect(row.output_text).not.toContain(value);
         expect(spy.mock.calls[0]![0].prompt).not.toContain(value);
       }
-      expect(result.text).toContain("[navn]");
-      expect(result.text).toContain("[telefon]");
-      expect((await aiRow(request.requestId))!.outcome).toBe("ok");
+      expect(row.output_text).toContain("[navn]");
+      expect(row.output_text).toContain("[telefon]");
+      // A466: teksten til klienten har verdiene tilbake; raden beholder plassholderne
+      expect(result.text).toBe(TEXT);
+      expect(row.outcome).toBe("ok");
       return;
     }
     const error = await captureError(() => requestSuggestion(person.grant, request));
@@ -461,7 +464,9 @@ describe("tilgang per rolle: vask før KI (V7.4)", () => {
     const request = validRequest({ assignmentId, fields: { text: TEXT } });
     const result = await requestSuggestion(person.grant, request);
     expect(result.kind).toBe("suggestion");
-    if (result.kind === "suggestion") expect(result.text).not.toContain("Testesen");
-    expect((await aiRow(request.requestId))!.outcome).toBe("ok");
+    // A466: raden beholder plassholderne; teksten til klienten har verdiene tilbake
+    const row = (await aiRow(request.requestId))!;
+    expect(row.output_text).not.toContain("Testesen");
+    expect(row.outcome).toBe("ok");
   });
 });

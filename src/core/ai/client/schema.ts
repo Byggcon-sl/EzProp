@@ -39,7 +39,7 @@ export function checkAiQueueFields(
   const keys = Object.getOwnPropertyNames(fields);
   // Ikke-tellbare nøkler er ikke en vanlig post.
   if (keys.length === 0 || keys.length !== Object.keys(fields).length) return "invalid";
-  const allowed = AI_QUEUE_ALLOWED_FIELDS[feature];
+  const allowed = AI_QUEUE_ALLOWED_FIELDS[feature] ?? [];
   let tooLong = false;
   for (const key of keys) {
     if (FORBIDDEN_KEYS.has(key) || !allowed.includes(key)) return "invalid";

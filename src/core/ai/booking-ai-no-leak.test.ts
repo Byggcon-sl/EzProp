@@ -179,9 +179,10 @@ describe("4.10.3 bestillingen på oppdraget når aldri Anthropic (falsk HTTP)", 
       }),
     );
 
-    // Vasket tekst går ut; ellers stopper lekkasjesjekken kallet. Begge er riktige, men et kall
-    // som gikk ut, skal aldri ha et merke.
-    expect(["suggestion", "blocked"]).toContain(result.kind);
+    // Vasket tekst går ut; ellers stopper lekkasjesjekken kallet. Svaret fra den falske HTTP-en
+    // har ingen plassholdere, så plassholdervakten stopper det når teksten hadde verdier (A466).
+    // Alle tre er riktige, men et kall som gikk ut, skal aldri ha et merke.
+    expect(["suggestion", "blocked", "stopped"]).toContain(result.kind);
     for (const call of http.calls) {
       expectNoMarks(call.body, "HTTP-kroppen");
       expectNoMarks(sentPromptText(call), "ledeteksten");
