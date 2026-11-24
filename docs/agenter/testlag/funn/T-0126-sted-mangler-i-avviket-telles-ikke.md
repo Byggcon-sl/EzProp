@@ -34,3 +34,4 @@ Ikke etterprøvd (forbedring).
 
 ## Logg
 - 2026-11-18: funnet
+- 2026-11-24: gjelder også plassholderne «[årstall mangler]» og «[måleverdi mangler]»: de telles ikke i «Å se over» (main 01fc9e4c, test-takstmann, bekreftet av funn-kontrolløren). Advarselen om tekst fra feil TG er eget funn (T-0135).

@@ -36,3 +36,4 @@ Ikke etterprøvd (forbedring).
 
 ## Logg
 - 2026-11-11: funnet
+- 2026-11-24: prøvesiden `/prove/ki` er fjernet (A487). Stegene gjelder nå «Språkvask avviket» på badsiden. test-ki så funnet igjen der (main 01fc9e4c), så det er fortsatt åpent. Gjelder også sammendraget: retter takstmannen teksten for hånd etter «Bruk», står loggraden som `accepted`, ikke `edited`, så godtaksandelen for KI blir for høy.

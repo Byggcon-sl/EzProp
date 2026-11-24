@@ -79,17 +79,17 @@ Kortlisten står i `docs/07-utviklingsplan.md` under «Venter på Ståle» (S4�
 
 ## Oppgaver fra testlaget
 
-Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 18.11.2026 på main 50fad3e4 (det som var nytt siden 2dc573c0: papirkurv, retting av T-0070/T-0071, rydding av innloggingsdata, badet på PC, Mine innlogginger).
+Funnene ligger som én fil per funn i `docs/agenter/testlag/funn/`. Rapporten til Ståle: `docs/agenter/testlag/rapport.md`. Siste kjøring: 24.11.2026 på main 01fc9e4c (det som var nytt siden 50fad3e4: «KI i veien», PR #232).
 
 - **Åpne alvorlige feil: 0.**
-- Åpne funn i alt: 118 (0 alvorlige, 39 middels, 79 små). Nye denne gangen: T-0113–T-0130 (10 middels, 8 små). Hevet til middels: T-0061 og T-0024. Lukket denne gangen: T-0071 (rettet bekreftet).
-- **Middels, nye, på badet (regelforslag og TGIU):** T-0113 (TG endres etter Godta uten grunn), T-0114 (TGIU fylles ut to ganger), T-0115 og T-0117 (godtatt forslag og fjernet avvik gir feil eller manglende advarsel; T-0117 er nær alvorlig), T-0116 (to faner gir to avvik), T-0126 og T-0127 (forbedringer i «Å se over»), og T-0061 (urimelig årstall). Tas med neste oppgave på badet, før publiseringssperren og PDF-en.
-- **Fra før, på badet (ikke meldt rettet selv om badet på PC er levert):** T-0051, T-0059, T-0060 og T-0014 (punkt 1 og 5). Fagtesteren så 18.11 at alle TG2-tiltak bruker «bør» og alle TG3-tiltak «må», så T-0060 kan være rettet: sett status «rettet», så prøver testlaget den. Det samme gjelder T-0031 og T-0075.
-- **Middels, nye, innlogging og fritekst:** T-0118 (ansatt som har sluttet, kan logge inn med kode; strider mot A217), T-0119 (sperren mot fødselsnummer stopper dato, beløp og målinger), T-0120 (utløpt innlogging på badet og ved Angre).
-- **Fortsatt feil etter retting:** T-0070 (forsøk 1): virker når informasjonskapselen er borte, men ikke når økten er slettet på serveren (utlogging fra annen enhet, «Har sluttet»), og ikke i «Endre bestillingen». Rettes sammen med T-0120. Fra før: T-0021 (forsøk 2) og T-0003 (forsøk 1).
-- **Plan og beslutninger:** T-0024 (nå middels: A-numre og spørsmålsnumre kolliderer mellom brancher), T-0103 (spørsmål 82, 85, 88 og 89 brukt to ganger), T-0102/T-0077/T-0079/T-0121 (plan, levert og forbedrerens liste ikke ryddet), T-0096, T-0124, T-0125, og fra før T-0072, T-0078, T-0098 og T-0101. Spørsmål til fagrådet fra testlaget: nr. 104.
-- **Må tas før ekte KI slås på:** T-0044, T-0046, T-0047, T-0034, T-0038, T-0094, T-0110 og T-0111.
-- Til testlagets oppsett: nattløkken 18.11.2026 kl. 02:17 stoppet på bruksgrensen etter 13 sekunder; begge rutinene er slått på.
+- Åpne funn i alt: 134 (0 alvorlige, 46 middels, 88 små). Nye denne gangen: T-0131–T-0150 (9 middels, 11 små). Lukket denne gangen: T-0046, T-0047 og T-0111 (rettet bekreftet) og T-0035 (foreldet, A487).
+- **Middels, nye, KI-vaktene (før ekte KI):** T-0132 (hull i TG-vakten), T-0144 (tall, enhet og bør/må), T-0131 (sammendraget stoppes av takstmannens egen tekst, feil melding).
+- **Middels, nye, badet og sammendraget:** T-0133 (tapt svar sier «Ingenting er lagret», dobbelt tiltak), T-0135 (advarsel om tekst fra feil TG forsvinner), T-0145 (navnesjekk for TG3 og TGIU uten grunn), T-0134 (skjermleser sier «brukt» når det feilet), T-0146 (tekstsøk uten nett). Fra før: T-0126 (gjelder nå også «[årstall mangler]» og «[måleverdi mangler]»), T-0113–T-0117, T-0061. Tas med neste oppgave på badet, før publiseringssperren.
+- **Middels, ny, kontor:** T-0149 (søk etter sammenslåing av kontakter).
+- **Dokumenter og plan:** T-0136 (domenemodellen om KI-loggen, rettes før publisering av badet), T-0137 (spørsmål 103 mangler i S8), T-0141, T-0142 (A434, A435, A462 og A470 merket lett), T-0143, og fra før T-0024 (middels), T-0079, T-0102, T-0121 og T-0124.
+- **Fortsatt feil etter retting:** T-0070 (forsøk 1), T-0021 (forsøk 2) og T-0003 (forsøk 1).
+- **Må tas før ekte KI slås på:** T-0131, T-0132, T-0144, T-0044, T-0034, T-0036, T-0038, T-0094 og T-0110, og svar på spørsmål 103 og 105.
+- Spørsmål fra testlaget i `docs/09-apne-sporsmal.md`: nr. 105 (fagrådet) og forslag nr. 106–110.
 
 ## Oppgaver fra nattløkken
 

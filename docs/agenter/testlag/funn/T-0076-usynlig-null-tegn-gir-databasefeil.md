@@ -34,3 +34,4 @@ Ikke etterprøvd (lite).
 
 ## Logg
 - 2026-11-14: funnet
+- 2026-11-24: U+0000 i sammendraget gir «Noe gikk galt» og `ReportStorageError` (main 01fc9e4c, test-robusthet).

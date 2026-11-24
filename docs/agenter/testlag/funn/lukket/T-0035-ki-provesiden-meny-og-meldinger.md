@@ -3,7 +3,7 @@ id: T-0035
 tittel: Prøvesiden for KI står ikke i menyen, og noen meldinger er feil eller kommer for sent
 type: forbedring
 alvor: lite
-status: ny
+status: lukket
 funnet: 2026-11-11
 rolle: test-ki, test-takstmann, test-kontor
 omrade: KI (prøveside)
@@ -37,3 +37,4 @@ Ikke etterprøvd (forbedring). Menyfunnet er meldt av tre testere og slått samm
 ## Logg
 - 2026-11-11: funnet
 - 2026-11-11: punkt 4 (teksten står igjen etter ny lasting) rettet i PR #143 (KI-kø). Resten står åpent.
+- 2026-11-24: Lukket som foreldet 24.11.2026: prøvesiden /prove/ki er fjernet (A487). Flyttet til `funn/lukket/`.
