@@ -1,6 +1,12 @@
 import { and, desc, eq, gt, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
-import { requireOrganizationAccess, type Actor } from "@/core/access";
+import {
+  AccessDeniedError,
+  grantHasPermission,
+  requireOrganizationAccess,
+  type Actor,
+  type EmployeeGrant,
+} from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
 import { db, type DbExecutor } from "@/db/client";
 import { employees, sessions } from "@/db/schema";
@@ -191,8 +197,8 @@ export async function listEmployeeSessions(
 /**
  * «Logg ut av alle enheter» for en ansatt i egen organisasjon. Bare admin (`organization.manage`).
  * Velger admin seg selv, kreves `confirmSelf: true` (regel 11: ingen logger seg ut ved et uhell).
- * Sletting og revisjonsrad skjer i samme transaksjon: `executor` når den er gitt (deaktivering),
- * ellers en egen. Revisjonsraden skrives også når antallet er 0, og har bare antall og årsak.
+ * Sletting og revisjonsrad skjer i samme transaksjon (ved deaktivering:
+ * `revokeAllEmployeeSessionsIn` i deaktiveringens transaksjon). Revisjonsraden skrives også når antallet er 0, og har bare antall og årsak.
  *
  * Kjent begrensning (A426): `sessions` har ingen organisasjon, så alle brukerens økter slettes,
  * også økter som brukes mot en annen organisasjon. Må vurderes før organisasjon nummer to.
@@ -202,37 +208,57 @@ export async function revokeAllEmployeeSessions(
   organizationId: string,
   employeeId: string,
   options: RevokeAllEmployeeSessionsOptions,
-  executor?: DbExecutor,
 ): Promise<RevokeAllEmployeeSessionsResult> {
-  const { confirmSelf, reason } = revokeAllOptionsSchema.parse(options);
+  const parsed = revokeAllOptionsSchema.parse(options);
   const grant = await requireOrganizationAccess(actor, organizationId, "organization.manage");
+  return db.transaction((tx) => revokeAll(tx, actor, grant, employeeId, parsed));
+}
 
-  const run = async (tx: DbExecutor): Promise<RevokeAllEmployeeSessionsResult> => {
-    const employee = await findEmployee(tx, grant.organizationId, employeeId);
-    if (!employee) return { ok: false, reason: "not_found" };
-    if (employee.userId === actor.id && confirmSelf !== true) {
-      return { ok: false, reason: "confirm_self_required" };
-    }
+/**
+ * Som `revokeAllEmployeeSessions`, i transaksjonen til den som kaller (deaktivering). Bruker
+ * tilgangen som alt er sjekket (`organization.manage`), og gjør ingen ny sjekk på en annen kobling,
+ * så transaksjonen aldri venter på en kobling til fra puljen (funn fra nattløkken 24.11.2026).
+ */
+export async function revokeAllEmployeeSessionsIn(
+  tx: DbExecutor,
+  actor: Actor,
+  grant: EmployeeGrant,
+  employeeId: string,
+  options: RevokeAllEmployeeSessionsOptions,
+): Promise<RevokeAllEmployeeSessionsResult> {
+  if (!grantHasPermission(grant, "organization.manage")) throw new AccessDeniedError();
+  return revokeAll(tx, actor, grant, employeeId, revokeAllOptionsSchema.parse(options));
+}
 
-    let sessionCount = 0;
-    if (employee.userId) {
-      const deleted = await tx
-        .delete(sessions)
-        .where(eq(sessions.userId, employee.userId))
-        .returning({ expiresAt: sessions.expiresAt });
-      // Antallet er aktive økter; utløpte som ryddes samtidig, telles ikke
-      const now = Date.now();
-      sessionCount = deleted.filter((row) => row.expiresAt.getTime() > now).length;
-    }
+async function revokeAll(
+  tx: DbExecutor,
+  actor: Actor,
+  grant: EmployeeGrant,
+  employeeId: string,
+  { confirmSelf, reason }: RevokeAllEmployeeSessionsOptions,
+): Promise<RevokeAllEmployeeSessionsResult> {
+  const employee = await findEmployee(tx, grant.organizationId, employeeId);
+  if (!employee) return { ok: false, reason: "not_found" };
+  if (employee.userId === actor.id && confirmSelf !== true) {
+    return { ok: false, reason: "confirm_self_required" };
+  }
 
-    await recordAuditEvent(tx, grant, {
-      entityType: "employee",
-      entityId: employee.id,
-      action: SESSIONS_REVOKED_ALL_ACTION,
-      changes: { sessionCount, reason },
-    });
-    return { ok: true, count: sessionCount };
-  };
+  let sessionCount = 0;
+  if (employee.userId) {
+    const deleted = await tx
+      .delete(sessions)
+      .where(eq(sessions.userId, employee.userId))
+      .returning({ expiresAt: sessions.expiresAt });
+    // Antallet er aktive økter; utløpte som ryddes samtidig, telles ikke
+    const now = Date.now();
+    sessionCount = deleted.filter((row) => row.expiresAt.getTime() > now).length;
+  }
 
-  return executor ? run(executor) : db.transaction(run);
+  await recordAuditEvent(tx, grant, {
+    entityType: "employee",
+    entityId: employee.id,
+    action: SESSIONS_REVOKED_ALL_ACTION,
+    changes: { sessionCount, reason },
+  });
+  return { ok: true, count: sessionCount };
 }

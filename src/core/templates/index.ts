@@ -45,6 +45,7 @@ export {
   createDraftVersion,
   createTemplateFamily,
   getTemplateVersion,
+  readTemplateVersionIn,
   isSameTemplateContent,
   listTemplateFamilies,
   publishVersion,
