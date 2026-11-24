@@ -1,11 +1,18 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { AccessDeniedError, permissions, type Actor } from "@/core/access";
+import {
+  AccessDeniedError,
+  permissions,
+  requireOrganizationAccess,
+  type Actor,
+} from "@/core/access";
 import {
   addDeviation,
   addMeasure,
+  changeSuggestedDeviationTg,
   decideSuggestion,
   getRoomView,
   removeDeviation,
@@ -16,9 +23,10 @@ import {
   setTgDirect,
   startReport,
 } from "@/core/reports";
-import type { EmployeeRole } from "@/db/schema";
+import { db } from "@/db/client";
+import { claims, deviations, employees, type EmployeeRole } from "@/db/schema";
 import { uuidv7 } from "@/shared/lib/uuid";
-import { grantPermission, resetDatabase } from "../../../tests/factories";
+import { createClaim, grantPermission, resetDatabase } from "../../../tests/factories";
 import {
   answerMembrane1990,
   CP,
@@ -154,7 +162,53 @@ const ACTIONS: [string, (actor: Actor, p: Prepared) => Promise<unknown>][] = [
     "Angre",
     (actor, p) => restoreDeviation(actor, p.organizationId, p.room, { deviationId: p.deviationId }),
   ],
+  // FA-I32: de nye svarene følger samme tilgang (rett-forslag-og-avvik-testplan.md 2e)
+  ["Godta på avgjort forslag (already_decided)", (actor, p) => decidedAgain(actor, p)],
+  ["Angre etter ny beslutning (newer_decision)", (actor, p) => restoreAfterNewDecision(actor, p)],
 ];
+
+/** Forslaget er godtatt av admin; så prøver `actor` Endre. Svaret skal være `already_decided`. */
+async function decidedAgain(actor: Actor, p: Prepared) {
+  await decideSuggestion(p.actor, p.organizationId, p.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "accepted",
+  });
+  const result = await decideSuggestion(actor, p.organizationId, p.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "changed",
+    chosenTg: "2",
+    overrideReasonCode: "measured_again",
+  });
+  if (result.status !== "already_decided") throw new Error(`ventet already_decided`);
+  return result;
+}
+
+/**
+ * Admin godtar, fjerner avviket og godtar på nytt; så prøver `actor` Angre på det gamle avviket.
+ * Svaret skal være `newer_decision`.
+ */
+async function restoreAfterNewDecision(actor: Actor, p: Prepared) {
+  const oldDeviationId = uuidv7();
+  await decideSuggestion(p.actor, p.organizationId, p.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "accepted",
+    deviationId: oldDeviationId,
+  });
+  await removeDeviation(p.actor, p.organizationId, p.room, oldDeviationId);
+  await decideSuggestion(p.actor, p.organizationId, p.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "accepted",
+  });
+  const result = await restoreDeviation(actor, p.organizationId, p.room, {
+    deviationId: oldDeviationId,
+  });
+  if (result.status !== "newer_decision") throw new Error(`ventet newer_decision`);
+  return result;
+}
 
 type Case = { role: EmployeeRole; editAll: boolean; single: boolean; allowed: boolean };
 
@@ -226,13 +280,25 @@ describe("B5.2 admin stenges aldri ute", () => {
       },
       { decision: "accepted" as const },
     ]) {
-      const result = await decideSuggestion(admin.actor, f.organizationId, f.room, {
+      // Hvert forslag avgjøres én gang (A493), så hver beslutning får sitt eget bad
+      const g = await startedBathroom({ organizationId: f.organizationId, roles: ["admin"] });
+      await answerMembrane1990(g);
+      const result = await decideSuggestion(admin.actor, f.organizationId, g.room, {
         id: uuidv7(),
         ruleKey: RULE.before2000,
         ...input,
       });
       expect(result.status).toBe("saved");
     }
+    expect(
+      (
+        await decideSuggestion(admin.actor, f.organizationId, f.room, {
+          id: uuidv7(),
+          ruleKey: RULE.before2000,
+          decision: "accepted",
+        })
+      ).status,
+    ).toBe("saved");
     const done = await setCheckpointDone(admin.actor, f.organizationId, f.room, {
       checkpointKey: CP.membrane,
       done: true,
@@ -243,8 +309,30 @@ describe("B5.2 admin stenges aldri ute", () => {
   });
 });
 
-describe("B5.7 ingen nye rettigheter", () => {
-  it("B5.7 listen i src/core/access er uendret, og report.read finnes ikke", () => {
+describe("rett-forslag-og-avvik 2e: tilgang", () => {
+  it("FA-I32 ansatt uten rolle får nei på already_decided og newer_decision", async () => {
+    for (const run of [decidedAgain, restoreAfterNewDecision]) {
+      const p = await prepare();
+      const { actor } = await createStaff(p.organizationId, []);
+      await expect(run(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+    }
+  });
+
+  it("FA-I35 mykt slettet ansatt får nei på already_decided og newer_decision", async () => {
+    for (const run of [decidedAgain, restoreAfterNewDecision]) {
+      const p = await prepare();
+      const { actor, employee } = await createStaff(p.organizationId, ["inspector"]);
+      await db
+        .update(employees)
+        .set({ deletedAt: new Date() })
+        .where(eq(employees.id, employee.id));
+      await expect(run(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+    }
+  });
+});
+
+describe("B5.7 og FA-I36 ingen nye rettigheter", () => {
+  it("B5.7 og FA-I36 listen i src/core/access er uendret, og report.read finnes ikke", () => {
     expect([...permissions]).toEqual([
       "organization.read",
       "organization.manage",
@@ -261,4 +349,177 @@ describe("B5.7 ingen nye rettigheter", () => {
     ]);
     expect(permissions as readonly string[]).not.toContain("report.read");
   });
+});
+
+// --- T-0113, A490: TG-bytte på avvik fra forslag (testplan 2e, FA-I32–FA-I35) -------------------
+
+/** Et startet bad med godtatt TG3-forslag, laget av admin. */
+async function prepareSuggested() {
+  const f = await startedBathroom({ roles: ["admin"] });
+  await answerMembrane1990(f);
+  const deviationId = uuidv7();
+  const accepted = await decideSuggestion(f.actor, f.organizationId, f.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "accepted",
+    deviationId,
+  });
+  if (accepted.status !== "saved") throw new Error("godta feilet");
+  return { ...f, deviationId };
+}
+
+function changeTgWithReason(actor: Actor, p: Awaited<ReturnType<typeof prepareSuggested>>) {
+  return changeSuggestedDeviationTg(actor, p.organizationId, p.room, {
+    id: uuidv7(),
+    deviationId: p.deviationId,
+    tg: 2,
+    base: 3,
+    overrideReasonCode: "visible_damage",
+  });
+}
+
+async function tgOf(deviationId: string) {
+  const [row] = await db
+    .select({ tg: deviations.tg })
+    .from(deviations)
+    .where(eq(deviations.id, deviationId));
+  return row?.tg;
+}
+
+describe("FA-I32 tilgangsmatrisen for TG-bytte med grunn", () => {
+  it.each(CASES)(
+    "FA-I32 $role, inspectors_edit_all $editAll, enkeltrettighet $single (lov: $allowed)",
+    async ({ role, editAll, single, allowed }) => {
+      const p = await prepareSuggested();
+      await setInspectorsEditAll(p.organizationId, editAll);
+      const { actor, employee } = await createStaff(p.organizationId, [role]);
+      if (single) await grantPermission(employee, "report.edit");
+      if (allowed) {
+        expect((await changeTgWithReason(actor, p)).status).toBe("saved");
+        expect(await tgOf(p.deviationId)).toBe(2);
+      } else {
+        await expect(changeTgWithReason(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+        expect(await tgOf(p.deviationId)).toBe(3);
+      }
+    },
+  );
+
+  it("FA-I32 ansatt uten rolle får nei", async () => {
+    const p = await prepareSuggested();
+    const { actor } = await createStaff(p.organizationId, []);
+    await expect(changeTgWithReason(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+    expect(await tgOf(p.deviationId)).toBe(3);
+  });
+});
+
+describe("FA-I33 admin stenges aldri ute fra TG-bytte", () => {
+  it("FA-I33 admin uten andre roller bytter TG med grunn når takstmenn er sperret", async () => {
+    const p = await prepareSuggested();
+    await setInspectorsEditAll(p.organizationId, false);
+    const inspector = await createStaff(p.organizationId, ["inspector"]);
+    const admin = await createStaff(p.organizationId, ["admin"]);
+    await expect(changeTgWithReason(inspector.actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+    expect((await changeTgWithReason(admin.actor, p)).status).toBe("saved");
+    expect(await tgOf(p.deviationId)).toBe(2);
+  });
+});
+
+describe("FA-I35 myk slettet ansatt", () => {
+  it("FA-I35 myk slettet ansatt får nei, og ingenting lagres", async () => {
+    const p = await prepareSuggested();
+    const { actor, employee } = await createStaff(p.organizationId, ["manager"]);
+    await db.update(employees).set({ deletedAt: new Date() }).where(eq(employees.id, employee.id));
+    await expect(changeTgWithReason(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+    expect(await tgOf(p.deviationId)).toBe(3);
+  });
+});
+
+// --- FA-I34: reklamasjonssak (testplan 2e, regel 12) ------------------------------------------
+//
+// En reklamasjonssak er en rad i `claims`, knyttet til oppdraget (domenemodellen, ordlisten, A125).
+// Regel 12 (Ståle 27.10.2026): bare leder og admin ser og fører sakene (`claims.read`,
+// `claims.manage`). Rapporten på et oppdrag med en åpen sak følger `report.edit` som før («som i
+// dag», kortet avsnitt Tilgang): leder og admin bytter TG, avgjør forslag og angrer; takstmannen får
+// nei på saken selv, også når innstillingen gir ham rett til å endre rapporten. Handlingene i
+// rapporten rører aldri saken. Oppdiktede data.
+
+async function claimRow(id: string) {
+  const [row] = await db.select().from(claims).where(eq(claims.id, id));
+  if (!row) throw new Error("fant ikke saken");
+  return row;
+}
+
+function rejectAgain(actor: Actor, p: Awaited<ReturnType<typeof prepareSuggested>>) {
+  return decideSuggestion(actor, p.organizationId, p.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "rejected",
+    overrideReasonCode: "visible_damage",
+  });
+}
+
+describe("FA-I34 reklamasjonssak", () => {
+  it.each(["manager", "admin"] as const)(
+    "FA-I34 %s bytter TG med grunn, avgjør og angrer på et oppdrag med åpen reklamasjonssak, og saken står urørt",
+    async (role) => {
+      const p = await prepareSuggested();
+      await setInspectorsEditAll(p.organizationId, false);
+      const claim = await createClaim(p.organizationId, { assignmentId: p.room.assignmentId });
+      const before = await claimRow(claim.id);
+      const { actor } = await createStaff(p.organizationId, [role]);
+
+      await expect(
+        requireOrganizationAccess(actor, p.organizationId, "claims.manage"),
+      ).resolves.toBeDefined();
+      expect((await changeTgWithReason(actor, p)).status).toBe("saved");
+      expect(await tgOf(p.deviationId)).toBe(2);
+      expect((await rejectAgain(actor, p)).status).toBe("already_decided");
+
+      await removeDeviation(actor, p.organizationId, p.room, p.deviationId);
+      expect((await rejectAgain(actor, p)).status).toBe("saved");
+      expect(
+        (await restoreDeviation(actor, p.organizationId, p.room, { deviationId: p.deviationId }))
+          .status,
+      ).toBe("newer_decision");
+
+      expect(await claimRow(claim.id)).toEqual(before);
+    },
+  );
+
+  it.each([true, false])(
+    "FA-I34 takstmann (inspectors_edit_all %s) får nei på reklamasjonssaken, og TG-bytte i rapporten gir ham ikke saken",
+    async (editAll) => {
+      const p = await prepareSuggested();
+      await setInspectorsEditAll(p.organizationId, editAll);
+      const claim = await createClaim(p.organizationId, { assignmentId: p.room.assignmentId });
+      const before = await claimRow(claim.id);
+      const { actor, employee } = await createStaff(p.organizationId, ["inspector"]);
+      // Enkeltrettighetene kan ikke gis (A21, A126); raden i databasen gir ingen rett
+      await grantPermission(employee, "claims.manage");
+      await grantPermission(employee, "claims.read");
+
+      for (const permission of ["claims.read", "claims.manage"] as const) {
+        await expect(
+          requireOrganizationAccess(actor, p.organizationId, permission),
+        ).rejects.toBeInstanceOf(AccessDeniedError);
+      }
+
+      if (editAll) {
+        // Rapporten følger report.edit som før (regel 12: takstmenn endrer alt unntatt sakene)
+        expect((await changeTgWithReason(actor, p)).status).toBe("saved");
+        expect(await tgOf(p.deviationId)).toBe(2);
+      } else {
+        await expect(changeTgWithReason(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+        await expect(rejectAgain(actor, p)).rejects.toBeInstanceOf(AccessDeniedError);
+        await expect(
+          restoreDeviation(actor, p.organizationId, p.room, { deviationId: p.deviationId }),
+        ).rejects.toBeInstanceOf(AccessDeniedError);
+        expect(await tgOf(p.deviationId)).toBe(3);
+      }
+      await expect(
+        requireOrganizationAccess(actor, p.organizationId, "claims.manage"),
+      ).rejects.toBeInstanceOf(AccessDeniedError);
+      expect(await claimRow(claim.id)).toEqual(before);
+    },
+  );
 });

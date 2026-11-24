@@ -312,6 +312,20 @@ export const decideSuggestionInputSchema = z.discriminatedUnion("decision", [
   z.object({ ...decisionCommon, decision: z.literal("rejected"), ...overrideFields }).strict(),
 ]);
 
+/**
+ * TG-bytte på et avvik fra et regelforslag (A490). TG og grunn kommer i ett kall. Om grunnen
+ * kreves, avgjør serveren (`suggestedTgChangeDecision` og `checkOverrideReason`), ikke klienten.
+ */
+export const changeSuggestedDeviationTgInputSchema = z
+  .object({
+    id: uuidSchema,
+    deviationId: uuidSchema,
+    tg: deviationTg.nullable(),
+    base: deviationTg.nullable(),
+    ...overrideFields,
+  })
+  .strict();
+
 // --- Lagring per felt ------------------------------------------------------------------------
 
 const answerValueSchema = z

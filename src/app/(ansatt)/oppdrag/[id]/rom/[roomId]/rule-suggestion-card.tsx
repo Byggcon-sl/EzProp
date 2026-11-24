@@ -13,6 +13,7 @@ import {
   SUGGESTION_KIND_TEXTS,
   SUGGESTION_OPEN_WITH_TG_DEVIATIONS_TEXT,
   SUGGESTION_STALE_TEXT,
+  suggestionTgLabel,
   type ReasonLine,
 } from "@/core/reports/logic";
 import type { OutcomeDoc } from "@/core/templates";
@@ -31,7 +32,12 @@ import { Warning } from "@/shared/ui/warning";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { decideSuggestionAction } from "./actions";
 import { useRoom } from "./room-context";
-import { isActionError, ROOM_ACTION_MESSAGES, ROOM_TEXTS } from "./room-messages";
+import {
+  isActionError,
+  ROOM_ACTION_MESSAGES,
+  ROOM_TEXTS,
+  SUGGESTION_MESSAGES,
+} from "./room-messages";
 import {
   answerKey,
   deviationHeadingId,
@@ -74,7 +80,9 @@ export const SUGGESTION_TEXTS = {
   inspectionYear: (year: number) => `Befaringsår ${year}`,
   source: "Kilde:",
   accepted: "Godtatt:",
-  changed: (from: string, to: string) => `Endret: forslag ${from}, du valgte ${to}.`,
+  /** «Forslag TG3, endret til TG2: Synlig skade». Grunnen er teksten for koden, aldri fritekst. */
+  changed: (from: string, to: string, reason: string | null) =>
+    `${from ? `Forslag ${from}, endret til` : "Endret til"} ${to}${reason ? `: ${reason}` : ""}`,
   rejected: "Avvist:",
   reason: "Grunn:",
   goToDeviation: (n: number) => `Gå til avvik ${n}`,
@@ -145,19 +153,38 @@ export function focusElementById(id: string): boolean {
   return true;
 }
 
+/** Id-en til meldingen i forslagskortet (`already_decided`). Står alltid i hovedkortet. */
+export const suggestionNoticeId = (ruleKey: string) => `${suggestionId(ruleKey)}-notice`;
+
+const noop = () => undefined;
+
 export function RuleSuggestionCard({
   suggestion,
   deviations,
   inspectionYear,
-  onStickyAccept,
+  onStickyAccept = noop,
+  variant = "full",
+  notice = null,
+  onNotice,
 }: {
   suggestion: SuggestionView;
   deviations: readonly DeviationView[];
   inspectionYear: InspectionYear;
-  /** Godta i nedre linje når kortet står utenfor skjermen (design avsnitt 8). */
-  onStickyAccept(ruleKey: string, accept: StickyAccept | null): void;
+  /** Godta i nedre linje når kortet står utenfor skjermen (design avsnitt 8). Bare `full`. */
+  onStickyAccept?(ruleKey: string, accept: StickyAccept | null): void;
+  /**
+   * `review`: kompakt kort i «Å se over» (A492): forslagets TG, kort grunn og de samme knappene.
+   * Vises bare mens forslaget er åpent; id-ene får egen ending, så de ikke kolliderer med
+   * hovedkortet.
+   */
+  variant?: "full" | "review";
+  /** Meldingen etter `already_decided` («Godtatt i et annet vindu kl. 10.42: TG3»). */
+  notice?: string | null;
+  /** Setter eller tømmer meldingen. Den vises i hovedkortet, også når svaret kom fra «Å se over». */
+  onNotice(ruleKey: string, text: string | null): void;
 }) {
   const { canEdit, doc, run, room, announce, focus, removeDeviation } = useRoom();
+  const review = variant === "review";
   const [mode, setMode] = useState<Mode>({ kind: "idle" });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -167,7 +194,10 @@ export function RuleSuggestionCard({
   const [reasonText, setReasonText] = useState("");
   const [showText, setShowText] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
-  const id = suggestionId(suggestion.ruleKey);
+  const id = review
+    ? `${suggestionId(suggestion.ruleKey)}-review`
+    : suggestionId(suggestion.ruleKey);
+  const noticeId = suggestionNoticeId(suggestion.ruleKey);
   const headingId = `${id}-heading`;
   const s = suggestion.suggestion;
   const outcome =
@@ -211,6 +241,7 @@ export function RuleSuggestionCard({
     const element = sectionRef.current;
     if (
       !element ||
+      review ||
       !showsButtons ||
       mode.kind !== "idle" ||
       typeof IntersectionObserver === "undefined"
@@ -239,11 +270,12 @@ export function RuleSuggestionCard({
       observer.disconnect();
       onStickyAccept(suggestion.ruleKey, null);
     };
-  }, [showsButtons, mode.kind, isChoose, onStickyAccept, suggestion.ruleKey]);
+  }, [review, showsButtons, mode.kind, isChoose, onStickyAccept, suggestion.ruleKey]);
 
   async function send(input: DecideSuggestionInput, tgLabel: string, button: string) {
     setBusy(button);
     setError(null);
+    onNotice(suggestion.ruleKey, null);
     const result = await run(() => decideSuggestionAction(room, input));
     setBusy(null);
     if (isActionError(result)) {
@@ -267,8 +299,21 @@ export function RuleSuggestionCard({
         focus(`${id}-conflict`);
         return;
       case "no_longer_applies":
+        // `run` har tatt inn ny visning; kortet kan være borte, så meldingen leses også opp.
         setMode({ kind: "idle" });
         setError(ROOM_ACTION_MESSAGES.noLongerApplies);
+        announce(ROOM_ACTION_MESSAGES.noLongerApplies);
+        return;
+      case "already_decided":
+        // Avgjort i et annet vindu (A493): ingenting er lagret, kortet viser det som gjelder
+        // (`refresh`), og meldingen sier hva og når, aldri hvem.
+        setMode({ kind: "idle" });
+        resetForm();
+        onNotice(
+          suggestion.ruleKey,
+          SUGGESTION_MESSAGES.alreadyDecided(result.decision, result.chosenTg, result.decidedAt),
+        );
+        focus(noticeId);
         return;
       case "saved":
         setMode({ kind: "idle" });
@@ -338,6 +383,16 @@ export function RuleSuggestionCard({
         {line.text}
       </li>
     );
+
+  // Meldingen etter `already_decided`. Står i hovedkortet uansett tilstand, og leses opp.
+  const noticeElement =
+    !review && notice ? (
+      <p id={noticeId} role="status" tabIndex={-1} className="font-medium text-slate-900">
+        {notice}
+      </p>
+    ) : null;
+
+  if (review && !showsButtons) return null;
 
   if (suggestion.state === "not_evaluated" && decision === null) {
     const lines = notEvaluatedLines(suggestionAsRuleResult(suggestion), doc.labels);
@@ -423,6 +478,7 @@ export function RuleSuggestionCard({
         >
           {SUGGESTION_STALE_TEXT}
         </Warning>
+        {noticeElement}
         {error && <FormMessage message={error} />}
       </section>
     );
@@ -461,19 +517,28 @@ export function RuleSuggestionCard({
         <div className="min-w-0 flex-1 space-y-1">
           <p>
             {decision.decision === "changed"
-              ? SUGGESTION_TEXTS.changed(tgText(tgs), chosenTgText(decision.chosenTg))
-              : `${decision.decision === "accepted" ? SUGGESTION_TEXTS.accepted : SUGGESTION_TEXTS.rejected} ${tgText(tgs)}${name ? ` – ${name}` : ""}`}
+              ? SUGGESTION_TEXTS.changed(
+                  decision.suggestionTg !== null
+                    ? suggestionTgLabel(decision.suggestionTg)
+                    : tgText(tgs),
+                  chosenTgText(decision.chosenTg),
+                  reasonLabel,
+                )
+              : decision.decision === "accepted"
+                ? `${SUGGESTION_TEXTS.accepted} ${decision.chosenTg !== null ? chosenTgText(decision.chosenTg) : tgText(tgs)}${name ? ` – ${name}` : ""}`
+                : `${SUGGESTION_TEXTS.rejected} ${tgText(tgs)}${name ? ` – ${name}` : ""}`}
           </p>
-          {decision.decision !== "accepted" && (reasonLabel || decision.overrideReason) && (
+          {decision.decision === "rejected" && reasonLabel && (
             <p>
-              {SUGGESTION_TEXTS.reason} {reasonLabel ?? ""}
-              {decision.overrideReason && (
-                <span className="line-clamp-2 block whitespace-pre-wrap text-slate-700">
-                  {decision.overrideReason}
-                </span>
-              )}
+              {SUGGESTION_TEXTS.reason} {reasonLabel}
             </p>
           )}
+          {decision.decision !== "accepted" && decision.overrideReason && (
+            <p className="line-clamp-2 whitespace-pre-wrap text-slate-700">
+              {decision.overrideReason}
+            </p>
+          )}
+          {noticeElement}
         </div>
         {n !== null && decision.deviationId && (
           <a
@@ -496,7 +561,9 @@ export function RuleSuggestionCard({
 
   // --- Forslaget som venter på beslutning ----------------------------------------------------
 
-  const why = reasonLines(suggestionAsRuleResult(suggestion), doc.labels);
+  const allWhy = reasonLines(suggestionAsRuleResult(suggestion), doc.labels);
+  // I «Å se over» står bare regelens korte grunn (første linje, målingen).
+  const why = review ? allWhy.slice(0, 1) : allWhy;
   const otherOutcomes = s.kind === "outcome" ? doc.outcomes(s.checkpoint_key, s.question_key) : [];
   const tgOptions: { value: ChosenTg; label: string }[] =
     s.kind === "outcome"
@@ -618,9 +685,11 @@ export function RuleSuggestionCard({
       id={id}
       tabIndex={-1}
       aria-labelledby={headingId}
-      className="space-y-3 rounded-card bg-sand p-5"
+      className={
+        review ? "space-y-3 rounded-xl bg-white p-4" : "space-y-3 rounded-card bg-sand p-5"
+      }
     >
-      <h3 id={headingId} className="text-sm text-stone">
+      <h3 id={headingId} className={review ? "sr-only" : "text-sm text-stone"}>
         {RULE_SUGGESTION_HEADING}
       </h3>
       <p className="flex flex-wrap items-center gap-2 text-base font-semibold text-slate-900">
@@ -636,10 +705,13 @@ export function RuleSuggestionCard({
           <ul className="space-y-0.5">{why.map(reasonLink)}</ul>
         </div>
       )}
-      <p className="text-sm text-stone">
-        {SUGGESTION_TEXTS.inspectionYear(inspectionYear.year)}
-        {suggestion.sourceRef ? ` · ${SUGGESTION_TEXTS.source} ${suggestion.sourceRef}` : ""}
-      </p>
+      {!review && (
+        <p className="text-sm text-stone">
+          {SUGGESTION_TEXTS.inspectionYear(inspectionYear.year)}
+          {suggestion.sourceRef ? ` · ${SUGGESTION_TEXTS.source} ${suggestion.sourceRef}` : ""}
+        </p>
+      )}
+      {noticeElement}
 
       {mode.kind === "kept_open" && (
         <p className="text-sm text-slate-900">{SUGGESTION_OPEN_WITH_TG_DEVIATIONS_TEXT}</p>

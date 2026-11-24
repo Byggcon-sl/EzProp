@@ -1,5 +1,7 @@
+import type { RuleResult } from "@/core/rules";
 import { CHECKPOINT_WARNING_CODES } from "./codes";
 import { checkCostAmount } from "./cost";
+import { isEffectiveDecision } from "./effective-decision";
 import { textsWrittenForOtherTg } from "./measures";
 import { computeCheckpointTg } from "./tg";
 import type {
@@ -7,8 +9,10 @@ import type {
   CheckpointWarning,
   CheckpointWarningCode,
   ComputeCheckpointWarnings,
+  DecisionState,
   DeviationState,
   SuggestionStillApplies,
+  SuggestionTg,
   TgiuRequirements,
   TgiuState,
   WarningMissingPart,
@@ -161,7 +165,7 @@ const CHECKPOINT_CHECKS: Partial<Record<CheckpointWarningCode, CheckpointCheck>>
   no_findings_with_reading_over_limit: (input) =>
     input.noFindingsWithReadingOverLimit ? [warning("no_findings_with_reading_over_limit")] : [],
   suggestion_no_longer_applies: (input) =>
-    input.decisions
+    effectiveDecisions(input)
       .filter((decision) => !suggestionStillApplies(decision, input.ruleResults))
       .map((decision) =>
         warning("suggestion_no_longer_applies", decision.deviationId, [], decision.ruleKey),
@@ -170,7 +174,70 @@ const CHECKPOINT_CHECKS: Partial<Record<CheckpointWarningCode, CheckpointCheck>>
     input.done && computeCheckpointTg(input) === null
       ? [warning("checkpoint_done_without_tg")]
       : [],
+  open_suggestion_on_done_checkpoint: (input) => {
+    if (!input.done) return [];
+    const decided = new Set(effectiveDecisions(input).map((d) => d.ruleKey));
+    return (
+      input.ruleResults
+        .filter(
+          (r) =>
+            r.state === "triggered" &&
+            (r.suggestion?.kind === "outcome" || r.suggestion?.kind === "tg0") &&
+            !decided.has(r.rule_key),
+        )
+        .map((r, index) => ({ r, index }))
+        // Utfall (TG2 eller TG3) står foran TG0 (FA-L23). Ellers regelsvarenes rekkefølge.
+        .sort((a, b) => kindRank(a.r) - kindRank(b.r) || a.index - b.index)
+        .map(({ r }) => warning("open_suggestion_on_done_checkpoint", null, [], r.rule_key))
+    );
+  },
 };
+
+/**
+ * Beslutningene som er gjeldende (`isEffectiveDecision`). Den som kaller, siler alt; her siles det
+ * én gang til, så en beslutning der avviket er fjernet eller TG på punktet er endret, aldri gir
+ * «gjelder ikke lenger» og aldri holder et forslag lukket.
+ */
+function effectiveDecisions(input: CheckpointState): readonly DecisionState[] {
+  return input.decisions.filter((decision) => isEffectiveDecision(decision, input));
+}
+
+/** Utfall foran TG0. Utfallets TG står i malen, ikke i regelsvaret. */
+function kindRank(result: RuleResult): number {
+  return result.suggestion?.kind === "outcome" ? 0 : 1;
+}
+
+/**
+ * Rangen til et forslags TG i «Å se over»: TG3 først, så «velg TG2 eller TG3», TG2, TG0 og TGIU.
+ * Ukjent TG (`null`) står sist.
+ */
+const SUGGESTION_TG_RANK: Record<string, number> = { "3": 0, choose: 1, "2": 2, "0": 3, IU: 4 };
+
+export function suggestionTgRank(tg: SuggestionTg | null): number {
+  return tg === null ? 5 : (SUGGESTION_TG_RANK[String(tg)] ?? 5);
+}
+
+/**
+ * Rekkefølgen i «Å se over» (forbedreren, FA-L23): åpne forslag på ferdige punkter står øverst,
+ * med TG3 foran TG2 og TG0. De andre advarslene følger etter i samme rekkefølge som før. Forslagets
+ * TG kommer fra den som kaller (malens TG for utfallet), siden regelsvaret bare har utfallets kode.
+ */
+export function sortReviewWarnings<T extends CheckpointWarning>(
+  warnings: readonly T[],
+  suggestionTgOf: (warning: T) => SuggestionTg | null,
+): T[] {
+  const open = warnings
+    .map((w, index) => ({ w, index }))
+    .filter(({ w }) => w.code === "open_suggestion_on_done_checkpoint")
+    .sort(
+      (a, b) =>
+        suggestionTgRank(suggestionTgOf(a.w)) - suggestionTgRank(suggestionTgOf(b.w)) ||
+        a.index - b.index,
+    )
+    .map(({ w }) => w);
+  const rest = warnings.filter((w) => w.code !== "open_suggestion_on_done_checkpoint");
+  return [...open, ...rest];
+}
 
 /**
  * Alle advarslene på punktet, i fast rekkefølge: først etter `CHECKPOINT_WARNING_CODES`, så etter

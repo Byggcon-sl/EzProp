@@ -56,6 +56,7 @@ import {
   warningText,
   type ReasonLabelLookup,
 } from "./labels";
+import type { CheckpointWarning, SuggestionTg } from "./types";
 
 /*
  * Oversettelsen av koder til norsk (testplanen B1.13 og akseptkriteriet om gjetteord og kopi).
@@ -84,6 +85,9 @@ const LOOKUP: ReasonLabelLookup = {
 
 // --- Alle tekstene i oversettelsesfilen -----------------------------------------------------------
 
+/** Alle TG-ene et regelforslag kan gjelde. */
+const SUGGESTION_TGS: SuggestionTg[] = [2, 3, "choose", "0", "IU"];
+
 /** Alle strenger i filen: konstanter og det funksjonene lager med eksempelverdier. */
 function allLabelTexts(): string[] {
   const out: string[] = [];
@@ -100,6 +104,8 @@ function allLabelTexts(): string[] {
     labels.costNotRoundedText(40000),
     labels.useRoundedAmountText(40000),
     labels.textsWrittenForTgText(3),
+    ...SUGGESTION_TGS.map((tg) => labels.openSuggestionOnDoneText(tg)),
+    ...CHECKPOINT_TG_VALUES.map((tg) => labels.suggestionNoLongerAppliesWithoutDeviationText(tg)),
     ...MERGE_FIELD_KEYS.flatMap((f) => [
       labels.mergeFieldMissingText(f),
       labels.mergeFieldWarningText(f),
@@ -279,6 +285,73 @@ describe("alle koder har norsk tekst", () => {
     expect(formatWholeNumber(999)).toBe("999");
     expect(formatDecimal(14.9)).toBe("14,9");
     expect(formatDecimal(20)).toBe("20");
+  });
+});
+
+describe("rett-forslag-og-avvik: tekstene for forslag og advarsler", () => {
+  const w = (overrides: Partial<CheckpointWarning>): CheckpointWarning => ({
+    code: "suggestion_no_longer_applies",
+    deviationId: null,
+    ruleKey: "rule.x",
+    missing: [],
+    ...overrides,
+  });
+
+  it("FA-L25 open_suggestion_on_done_checkpoint har norsk tekst uten gjetteord og uten {", () => {
+    const texts = [
+      WARNING_TEXTS.open_suggestion_on_done_checkpoint,
+      ...SUGGESTION_TGS.map((tg) => labels.openSuggestionOnDoneText(tg)),
+    ];
+    for (const text of texts) {
+      expect(text.trim()).toBeTruthy();
+      expect(text).not.toMatch(/[{}]/u);
+      expect(guessWordsAndReferencesIn(text)).toEqual([]);
+    }
+  });
+
+  it.each<[SuggestionTg, string]>([
+    [3, "Punktet er ferdig, men forslaget om TG3 er ikke avgjort."],
+    [2, "Punktet er ferdig, men forslaget om TG2 er ikke avgjort."],
+    ["0", "Punktet er ferdig, men forslaget om TG0 er ikke avgjort."],
+    ["choose", "Punktet er ferdig, men forslaget om TG2 eller TG3 er ikke avgjort."],
+  ])("FA-L16 åpent forslag om %s på ferdig punkt", (tg, expected) => {
+    expect(
+      warningText(w({ code: "open_suggestion_on_done_checkpoint" }), { suggestionTg: tg }),
+    ).toBe(expected);
+  });
+
+  it("åpent forslag uten kjent TG gir grunnteksten", () => {
+    expect(warningText(w({ code: "open_suggestion_on_done_checkpoint" }))).toBe(
+      "Punktet er ferdig, men et forslag fra reglene er ikke avgjort.",
+    );
+  });
+
+  it.each<["0" | "IU" | "1", string]>([
+    ["0", "TG0"],
+    ["IU", "TGIU"],
+    ["1", "TG1"],
+  ])("FA-L13 foreldet forslag uten avvik med valgt %s har egen tekst", (chosenTg, tg) => {
+    expect(warningText(w({ deviationId: null }), { chosenTg })).toBe(
+      `Forslaget gjelder ikke lenger. Punktet har fortsatt ${tg} fra forslaget. Sjekk at graden stemmer.`,
+    );
+  });
+
+  it("FA-L14 foreldet forslag med avvik har teksten som før, også med valgt TG", () => {
+    expect(warningText(w({ deviationId: "dev-1" }), { chosenTg: "3" })).toBe(
+      "Et forslag fra reglene gjelder ikke lenger.",
+    );
+    expect(warningText(w({ deviationId: "dev-1" }))).toBe(
+      "Et forslag fra reglene gjelder ikke lenger.",
+    );
+    expect(labels.SUGGESTION_STALE_TEXT).toBe(
+      "Forslaget gjelder ikke lenger. Feltet det bygde på er endret. Avviket du godtok, står fortsatt.",
+    );
+  });
+
+  it("de andre advarslene bryr seg ikke om TG i konteksten", () => {
+    expect(warningText(w({ code: "tg3_missing_cost" }), { suggestionTg: 2, chosenTg: "0" })).toBe(
+      "TG3 skal ha kostnad.",
+    );
   });
 });
 

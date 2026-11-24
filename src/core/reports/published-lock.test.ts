@@ -22,6 +22,7 @@ import * as reportsCore from "@/core/reports";
 import {
   addDeviation,
   addMeasure,
+  changeSuggestedDeviationTg,
   decideSuggestion,
   isReportPublishedForAssignment,
   removeDeviation,
@@ -46,6 +47,7 @@ import {
 } from "../../../tests/factories";
 import {
   answerHole,
+  answerMembrane1990,
   CP,
   createRoomOnNewAssignment,
   EMPTY,
@@ -97,6 +99,16 @@ async function lockFixture() {
   });
   await removeDeviation(f.actor, f.organizationId, f.room, removedDeviationId);
   await answerHole(f, "not_done");
+  // Godtatt TG3-forslag «før 2000» med avvik: TG-bytte med grunn (A490) trenger det
+  await answerMembrane1990(f);
+  const suggestedDeviationId = uuidv7();
+  const accepted = await decideSuggestion(f.actor, f.organizationId, f.room, {
+    id: uuidv7(),
+    ruleKey: RULE.before2000,
+    decision: "accepted",
+    deviationId: suggestedDeviationId,
+  });
+  if (accepted.status !== "saved") throw new Error("godta feilet");
 
   const extraBuilding = await createBuilding(f.organizationId, { assignmentId: f.assignmentId });
   const extraFloor = await createFloor(f.organizationId, { buildingId: extraBuilding.id });
@@ -120,6 +132,7 @@ async function lockFixture() {
     deviationId,
     measureId,
     removedDeviationId,
+    suggestedDeviationId,
     extraBuildingId: extraBuilding.id,
     extraFloorId: extraFloor.id,
     extraRoomId: extraRoom.id,
@@ -179,7 +192,7 @@ const REPORT_WRITES: [string, Write][] = [
         elementKey: "wet_room.membrane_year",
         field: "value",
         value: { ...EMPTY, number: 2005 },
-        base: EMPTY,
+        base: { ...EMPTY, number: 1990 },
       }),
   ],
   [
@@ -205,6 +218,17 @@ const REPORT_WRITES: [string, Write][] = [
         id: uuidv7(),
         ruleKey: RULE.notDone,
         decision: "accepted",
+      }),
+  ],
+  [
+    "changeSuggestedDeviationTg",
+    (l) =>
+      changeSuggestedDeviationTg(l.actor, l.organizationId, l.room, {
+        id: uuidv7(),
+        deviationId: l.suggestedDeviationId,
+        tg: 2,
+        base: 3,
+        overrideReasonCode: "documentation_present",
       }),
   ],
   [

@@ -38,3 +38,4 @@ Ikke etterprøvd (forbedring). Slått sammen fra tre små forbedringer.
 
 ## Logg
 - 2026-11-18: funnet
+- 2026-11-24: «Ikke vurdert: Fyll ut årstallet.» står fortsatt to ganger (main 01fc9e4c, test-takstmann).

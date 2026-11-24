@@ -1,6 +1,7 @@
 import type { ConditionReasonCode, RuleReason, RuleReasonCode, RuleResult } from "@/core/rules";
 import type {
   CAUSE_CRITERIA,
+  ChosenTg,
   ConstructionVulnerable,
   CostType,
   OverrideReasonCode,
@@ -17,6 +18,7 @@ import type {
   CheckpointWarningCode,
   MergeFieldKey,
   OverrideReasonCheck,
+  SuggestionTg,
   WarningFixKind,
   WarningMissingPart,
 } from "./types";
@@ -139,6 +141,37 @@ export const WARNING_TEXTS: Record<CheckpointWarningCode, string> = {
   checkpoint_done_without_tg: "Punktet er ferdig uten TG. Velg TG eller legg til avvik.",
   tg3_on_age_only:
     "TG3 er satt bare på grunn av alder. Se over om skade eller annen svikt er beskrevet, eller bruk TG2.",
+  open_suggestion_on_done_checkpoint:
+    "Punktet er ferdig, men et forslag fra reglene er ikke avgjort.",
+};
+
+/** «TG3», «TG0», «TGIU», «TG2 eller TG3» for et regelforslag. */
+export function suggestionTgLabel(tg: SuggestionTg): string {
+  if (tg === "choose") return `${TG_SHORT_LABELS["2"]} eller ${TG_SHORT_LABELS["3"]}`;
+  return TG_SHORT_LABELS[String(tg) as CheckpointTg];
+}
+
+/** «Punktet er ferdig, men forslaget om TG3 er ikke avgjort.» (A492) */
+export function openSuggestionOnDoneText(tg: SuggestionTg): string {
+  return `Punktet er ferdig, men forslaget om ${suggestionTgLabel(tg)} er ikke avgjort.`;
+}
+
+/**
+ * Foreldet forslag som ikke ga avvik (godtatt TG0, TG1 eller TGIU, T-0115): «Forslaget gjelder ikke
+ * lenger. Punktet har fortsatt TG0 fra forslaget. Sjekk at graden stemmer.»
+ */
+export function suggestionNoLongerAppliesWithoutDeviationText(chosenTg: ChosenTg): string {
+  return `Forslaget gjelder ikke lenger. Punktet har fortsatt ${TG_SHORT_LABELS[chosenTg]} fra forslaget. Sjekk at graden stemmer.`;
+}
+
+/**
+ * Det advarselsteksten trenger utover koden. Fylles av den som kaller fra rommets visning:
+ * forslagets TG (`open_suggestion_on_done_checkpoint`) og valgt TG i beslutningen
+ * (`suggestion_no_longer_applies` uten avvik). Uten verdi brukes grunnteksten.
+ */
+export type WarningTextContext = {
+  suggestionTg?: SuggestionTg | null;
+  chosenTg?: ChosenTg | null;
 };
 
 /** «årsak og konsekvens», «årsak, konsekvens og tiltak». Samme del nevnes én gang. */
@@ -149,7 +182,18 @@ function joinParts(parts: readonly WarningMissingPart[]): string {
 }
 
 /** Teksten for en advarsel, med det som mangler når advarselen sier hva. */
-export function warningText(warning: CheckpointWarning): string {
+export function warningText(warning: CheckpointWarning, context: WarningTextContext = {}): string {
+  if (warning.code === "open_suggestion_on_done_checkpoint" && context.suggestionTg) {
+    return openSuggestionOnDoneText(context.suggestionTg);
+  }
+  // Uten avvik gjelder advarselen TG på punktet; med avvik er teksten som før.
+  if (
+    warning.code === "suggestion_no_longer_applies" &&
+    warning.deviationId === null &&
+    context.chosenTg
+  ) {
+    return suggestionNoLongerAppliesWithoutDeviationText(context.chosenTg);
+  }
   if (warning.missing.length === 0) return WARNING_TEXTS[warning.code];
   switch (warning.code) {
     case "tg2_tg3_missing_cause_or_consequence":

@@ -34,3 +34,4 @@ Ikke etterprøvd (forbedring).
 
 ## Logg
 - 2026-11-18: funnet
+- 2026-11-24: et bad med 72 avvik gir en side på 932 kB, og hvert nytt avvik sender opptil 70 kB tilbake (main 01fc9e4c, test-robusthet).

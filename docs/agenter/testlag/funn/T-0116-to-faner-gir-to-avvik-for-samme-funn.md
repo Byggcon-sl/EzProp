@@ -3,14 +3,14 @@ id: T-0116
 tittel: Godta i én fane og Endre i en annen gir to avvik for samme funn (TG3 og TG2)
 type: feil
 alvor: middels
-status: ny
+status: rettet
 funnet: 2026-11-18
 rolle: test-robusthet
 omrade: badet, regelforslag
 maal: reklamasjoner
 commit: 50fad3e4
 forsok: 0
-pr:
+pr: 239
 ---
 
 ## Hva
@@ -35,3 +35,5 @@ I `decideSuggestion` hentes siste beslutning før «Endre» og «Avvis». Finnes
 
 ## Logg
 - 2026-11-18: funnet
+
+- 2026-11-24: rettet i PR #239 (branch `rett-forslag-og-avvik`, oppgavekort `docs/agenter/oppgaver/rett-forslag-og-avvik.md`). Testlaget prøver på nytt i neste kjøring.

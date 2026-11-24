@@ -35,3 +35,4 @@ Bruk samme håndtering som rettingen av T-0070 i alle handlinger på badet og i 
 
 ## Logg
 - 2026-11-18: funnet
+- 2026-11-24: gjelder også «Bruk» på et språkvasket felt: med utløpt innlogging sendes takstmannen til innloggingen uten melding, og forslaget forsvinner (main 01fc9e4c, test-robusthet).
