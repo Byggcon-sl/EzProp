@@ -163,8 +163,6 @@ Første punkt tas **før Byggcon-profilen**, fordi det retter reglene som alt er
 
 Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full produksjonskvalitet (ikke en prototype som bygges om senere). Da kan Ståle se og godkjenne fag og utseende tidlig, og feil i grunnstrukturen oppdages før de blir dyre.
 
-- [ ] **Badet på PC:** kontrollpunktene, avvikskort (TG, årsak, konsekvens, tiltak, kostnad) og TGIU på punktet. TG-forslag fra reglene kan godtas, endres eller avvises. *Skjermen levert i PR #224 (17.11.2026); punktet krysses av når testdata del 2 under er levert (A359).*
-  - **Testdata, del 2** (A300, fra «Testdata som ligner en ekte arbeidshverdag»): badene i testoppdragene fylles ut med funn, TG og målinger per kontrollpunkt og byggeåret for våtrommet, etter faste scenarioer (oppgavekort `docs/funksjoner/fase2a-testdata-del-2.md`). Bildene kommer med «Bilder på PC» (A501), og byggeår på eiendommen når kolonnen finnes (A502). TG og funn kommer fra regelmotoren og malens testsaker, aldri skrevet fritt i seed; tekstene merkes «utkast, ikke godkjent av fagrådet». TG3 har kostnadsanslag, TG2 og TG3 årsak og konsekvens, og el, rekkverk og HMS får ingen TG. ki-ansvarlig vurderer oppgaven på nytt.
 - [ ] **ADR: valg av PDF-motor,** og PDF-en av badet i Byggcons profil, i ferdig kvalitet. Krav til motoren: stående og liggende, **flere PDF-profiler av samme rapport** (ulik layout, design og farger fra de samme dataene, Ståle 16.11.2026), bilder med markering, innholdsfortegnelse, norsk orddeling og samme resultat hver gang. Testutskriften med 50 bilder kommer i bredden.
 
 **Fra forbedreren**
