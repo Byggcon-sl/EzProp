@@ -28,7 +28,7 @@ I tillegg 11 mindre ting, blant annet at feltet ikke viser at teksten kom fra KI
 |---|---|---|
 | 20 (0 alvorlige, 9 middels, 11 små) | 134 (0 alvorlige, 46 middels, 88 små) | 4 |
 
-En uavhengig kontrollør gjenskapte de bekreftede feilene. **Ikke bekreftet:** ingen.
+En uavhengig kontrollør gjenskapte de sju feilene som ble etterprøvd (middels og oppover). De små feilene er ikke etterprøvd. **Ikke bekreftet:** ingen.
 
 **Til deg:** fem forslag fra testlaget (nr. 106–110 i spørsmålsfilen), blant annet at forslag med samme TG som avviket står øverst. Fem spørsmål til fagrådet (nr. 105), blant annet om KI skal stoppes når «bør» blir «må». Ni nye rader i listen over dyre beslutninger, blant annet hva sammendraget tar med. Når ekte KI slås på, bør det prøves at telefonnumre og navn ikke bytter plass når KI flytter om på setninger.
 
