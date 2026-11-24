@@ -144,7 +144,7 @@ Ingen nye fagregler. Avviket som lages, får TG, årsak, konsekvens og tiltak fr
 - [ ] «Registrert fra før» vises på treff der rommet alt har avviket, og trykk åpner det eksisterende avviket.
 - [ ] `pnpm ai:eval outcome_match` kjører settet (30–50 saker, minst 6 «ingen passer» som over) og når kravet mot falsk leverandør.
 - [ ] Rapport som ikke er kladd, rom fra en annen rapport, fremmed rapport-id og slettet rom eller rapport gir avslag på alle tre inngangene.
-- [ ] Takstmann, kontor, leder og admin slipper inn (også med `inspectors_edit_all` av); ansatt uten rettigheten får avslag.
+- [ ] Tilgang som `saveField` og de andre KI-inngangene (matrisen i `ki-access.test.ts`): takstmann med `inspectors_edit_all` på eller enkeltrettighet `report.edit`, leder og admin slipper inn; admin også utenfor teamet med innstillingen av (regel 11). Kontor, takstmann uten rettigheten når innstillingen er av, og ansatt uten rettigheten får avslag uten loggrad (rettet av prosjektlederen 24.11.2026 etter funn fra test-leder).
 - [ ] Bruker i annen organisasjon får ikke tilgang (`expectTenantIsolation` for alle tre inngangene).
 - [ ] Virker på iPad-størrelse og PC (e2e), med tastatur og skjermleser, axe uten funn, og knappene er minst 56 punkter på iPad.
 - [ ] KI-forslag kan godtas og avvises, og logges (test mot falsk leverandør).
