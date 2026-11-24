@@ -32,6 +32,8 @@ import {
   yesNoUnknownLabel,
   type AssignmentProperty,
 } from "@/core/properties";
+import { getPublishCheck, listReleases, ReportValidationError } from "@/core/reports";
+import type { ReleaseView } from "@/core/reports/publish-types";
 import { logger } from "@/shared/lib/logger";
 import { todayInOslo } from "@/shared/lib/dates";
 import { isUuid } from "@/shared/lib/uuid";
@@ -74,6 +76,7 @@ import { CreatedFromOfferNotice } from "./created-from-offer-notice";
 import { PartyCard } from "./party-card";
 import { AddPartySection, type PartyRoleOption } from "./party-form";
 import { PropertyDetails, PropertyForm, type PropertyFormValues } from "./property-form";
+import { ReleasesCard } from "./releases-card";
 import { formatDueDate, formatInspectionAt, toDateTimeLocal } from "../../oslo-format";
 import { ScheduleCard } from "./schedule-card";
 import { StatusCard, type StatusOption } from "./status-card";
@@ -115,6 +118,33 @@ function commonAreasFormValues(data: AssignmentProperty): CommonAreasFormValues 
     maintenancePlanStatus: areas?.maintenancePlanStatus ?? "unknown",
     notes: areas?.notes ?? "",
   };
+}
+
+/**
+ * «Utgivelser» (docs/funksjoner/fase2a-publisering-badet.md Omfang 13): versjonene og, når
+ * rapporten er publisert og den ansatte har `report.edit`, «Lag ny versjon». Ren lesing i
+ * `@/core/reports`, som sjekker tilgangen og fjerner begrunnelsesteksten for kontor. Oppdrag uten
+ * rapport eller med en rapport som ikke kan publiseres, gir ingen utgivelser.
+ */
+async function loadReleases(
+  context: NonNullable<Awaited<ReturnType<typeof getEmployeeContext>>>,
+  assignmentId: string,
+): Promise<{ releases: ReleaseView[]; newVersion: { currentVersion: number } | null }> {
+  try {
+    const releases = await listReleases(context.actor, context.organizationId, assignmentId);
+    if (releases.length === 0) return { releases, newVersion: null };
+    const check = await getPublishCheck(context.actor, context.organizationId, assignmentId);
+    const newVersion =
+      check.state === "published" && check.canStartNewVersion
+        ? { currentVersion: check.versionNumber }
+        : null;
+    return { releases, newVersion };
+  } catch (error) {
+    if (error instanceof AccessDeniedError || error instanceof ReportValidationError) {
+      return { releases: [], newVersion: null };
+    }
+    throw error;
+  }
 }
 
 /**
@@ -330,14 +360,17 @@ export default async function AssignmentPage({
 
   const canEdit = context.canEditOrders;
   const now = new Date();
-  const [schedule, agreements, suggestion, claims, duplicates, trash] = await Promise.all([
-    loadSchedule(context, assignment),
-    listAgreements(context.actor, context.organizationId),
-    suggestAgreementForAssignment(context.actor, context.organizationId, assignment.id, now),
-    loadClaims(context, assignment.id),
-    loadDuplicates(context, assignment.id),
-    listTrash(context.actor, context.organizationId, assignment.id),
-  ]);
+  const [schedule, agreements, suggestion, claims, duplicates, trash, releases] = await Promise.all(
+    [
+      loadSchedule(context, assignment),
+      listAgreements(context.actor, context.organizationId),
+      suggestAgreementForAssignment(context.actor, context.organizationId, assignment.id, now),
+      loadClaims(context, assignment.id),
+      loadDuplicates(context, assignment.id),
+      listTrash(context.actor, context.organizationId, assignment.id),
+      loadReleases(context, assignment.id),
+    ],
+  );
   const partyTrash = toTrashEntries(
     trash.filter((line) => line.type === "party"),
     now,
@@ -514,6 +547,13 @@ export default async function AssignmentPage({
           <span aria-hidden="true">&nbsp;›</span>
         </Link>
       </p>
+
+      <ReleasesCard
+        assignmentId={assignment.id}
+        releases={releases.releases}
+        newVersion={releases.newVersion}
+        canSeeReasons={context.canSeeOverrideReasons}
+      />
 
       {/* Ankeret for pekeren etter omgjøring (A368). tabIndex=-1: lenken flytter fokus hit. */}
       <section

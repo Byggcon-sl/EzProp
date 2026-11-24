@@ -16,7 +16,21 @@ import { ROOM_ACTION_MESSAGES } from "./room-messages";
  */
 
 const DEVIATION = "0190a000-0000-7000-8000-0000000000d1";
-const REFRESH: RoomRefresh = { checkpoints: [], suggestions: [], progress: { done: 0, total: 8 } };
+const REFRESH: RoomRefresh = {
+  checkpoints: [],
+  suggestions: [],
+  progress: { done: 0, total: 8 },
+  publishRoom: {
+    roomId: "0190a000-0000-7000-8000-0000000000a1",
+    position: 0,
+    isWetRoom: true,
+    holeDrilling: "ok",
+    holeReadingMissing: false,
+    adjacentTgiuWithReason: false,
+    holeCheckpoint: null,
+    checkpoints: [],
+  },
+};
 
 const build: ChangeBuilder = (value, base) => ({
   table: "deviations",
@@ -282,6 +296,37 @@ describe("FieldSaveStore", () => {
     runTimers();
     expect(sent).toHaveLength(0);
     expect(store.hasUnsaved()).toBe(false);
+  });
+
+  it("publisert rapport: avvisningen tas ut av køen og prøves ikke igjen; resten lagres (ADR 0015, T-0001)", async () => {
+    const { store, sent, pending, settle } = setup();
+    const message = "Rapporten er publisert. Lag ny versjon for å rette.";
+    store.ensure("a", "", build);
+    store.ensure("b", "", build);
+    store.edit("a", "Første", 0);
+    store.edit("b", "Andre", 0);
+    pending[0]!.resolve({ status: "error", message, code: "report_published" });
+    pending[1]!.resolve(saved());
+    await settle();
+    expect(store.get("a")).toMatchObject({ status: "invalid", error: message, value: "Første" });
+    expect(store.get("b")?.status).toBe("saved");
+
+    // Verken «Prøv igjen» i toppen, nett tilbake eller «Ferdig» sender den avviste endringen på nytt
+    await store.retryAll();
+    const flushed = await store.flush();
+    expect(sent).toHaveLength(2);
+    expect(flushed).toEqual({ ok: false, failedKeys: ["a"] });
+  });
+
+  it("vanlig feil fra serveren står som «failed» og prøves igjen", async () => {
+    const { store, sent, pending, settle } = setup();
+    store.ensure("a", "", build);
+    store.edit("a", "Tekst", 0);
+    pending[0]!.resolve({ status: "error", message: "Prøv igjen." });
+    await settle();
+    expect(store.get("a")?.status).toBe("failed");
+    void store.retryAll();
+    expect(sent).toHaveLength(2);
   });
 
   it("markOffline flytter det som venter til «Uten nett»", () => {

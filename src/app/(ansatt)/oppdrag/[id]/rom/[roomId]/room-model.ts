@@ -8,6 +8,7 @@ import type {
   TemplateElementOptionDoc,
 } from "@/core/templates";
 import {
+  computePublishCheck,
   containsPiiPlaceholder,
   fillMergeFields,
   listPhraseCandidates,
@@ -17,8 +18,10 @@ import {
   phraseCandidateOtherTg,
   phraseCandidateText,
   searchPhraseCandidates,
+  summarizePublishCheck,
   warningFix,
   type CheckpointWarning,
+  type PublishCheckRoom,
   type DecisionState,
   type MergeFieldKey,
   type MergeFieldSources,
@@ -407,6 +410,27 @@ export function parseNumberInput(raw: string): { ok: true; value: number | null 
   if (compact === "") return { ok: true, value: null };
   if (!/^[-−]?\d+(\.\d+)?$/u.test(compact)) return { ok: false };
   return { ok: true, value: Number(compact.replace("−", "-")) };
+}
+
+// --- Tellemerket «Se over og publiser» (docs/funksjoner/fase2a-publisering-badet-design.md 14) --
+
+/** Tellemerket for hele rapporten: rommet regnet lokalt pluss resten fra serveren. */
+export function publishCounts(
+  publishRoom: PublishCheckRoom,
+  outside: { blockers: number; warnings: number },
+): { blockers: number; warnings: number } {
+  // Befaringsdatoen og KI-forslagene står i `outside`; her bare rommet.
+  const own = summarizePublishCheck(
+    computePublishCheck({
+      hasInspectionDate: true,
+      rooms: [publishRoom],
+      pendingAiSuggestions: [],
+    }),
+  );
+  return {
+    blockers: own.blockers + outside.blockers,
+    warnings: own.warnings + outside.warnings,
+  };
 }
 
 // --- KI i veien: forslag fra frasebanken (A485, A433, A437, A468) ------------------------------

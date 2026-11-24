@@ -251,11 +251,11 @@ describe("4c lagring og advarsler", () => {
       saveSummary(f.actor, f.organizationId, f.assignmentId, { text: "Mxq", baseRowVersion: 1 }),
     );
     expect(error).toBeInstanceOf(ReportValidationError);
-    expect((error as ReportValidationError).code).toBe("report_not_editable");
+    expect((error as ReportValidationError).code).toBe("report_published");
     const draft = await captureError(() =>
       draftSummary(f.actor, f.organizationId, f.assignmentId, { requestId: uuidv7() }),
     );
-    expect((draft as ReportValidationError).code).toBe("report_not_editable");
+    expect((draft as ReportValidationError).code).toBe("report_published");
   });
 
   it("K4.14 revisjonsloggen har feltkoden summary_text og aldri teksten", async () => {
