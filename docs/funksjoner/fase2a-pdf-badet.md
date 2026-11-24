@@ -59,23 +59,23 @@ Badet kan fylles ut på PC (PR #224), men det finnes ingen PDF. Uten PDF kan ikk
    - `getReportPdfData(actor, organizationId, reportId)` kaller selv `requireOrganizationAccess(..., "organization.read")` og `requireUuid`, og filtrerer alle ledd (rapport, oppdrag, bygning, etasje, rom, kontrollpunkt, avvik, tiltak, TGIU, selskap) på `grant.organizationId` og `deleted_at is null`. Selskapet hentes via oppdraget, aldri fra en id i adressen. Fremmed, slettet, erstattet (`superseded`) og ugyldig id gir samme 404.
    - `buildReportPdfData(rows)` er en ren funksjon atskilt fra databaselesingen.
    - Etiketter fra den låste malversjonen og oversettelsesfilen, aldri koder.
-   - Punktets TG kommer fra `computeCheckpointTg` (høyeste TG blant avvikene, ellers `tg_direct`). `src/core/pdf` regner aldri TG, og det lages ingen samlet TG for rommet (A487).
+   - Punktets TG kommer fra `computeCheckpointTg` (høyeste TG blant avvikene, ellers `tg_direct`). `src/core/pdf` regner aldri TG, og det lages ingen samlet TG for rommet (A537).
    - Kostnad fra `costDisplayText` som eneste kilde (hardt mellomrom som tusenskille finnes allerede i `formatWholeNumber`). `cost_type = none` gir ingen kostnadslinje. `cost_text` vises når den finnes. Kostnad på TG2 vises når den er satt.
    - Tekstene går gjennom `mergeFieldsText`; manglende verdi blir «[årstall mangler]» o.l., aldri `{…}`.
    - Årsakskriteriet vises med etiketten fra `CAUSE_CRITERION_LABELS` sammen med årsaksteksten; «Annet» vises ikke alene.
    - Tiltak i lagret rekkefølge; uten tiltak ingen overskrift.
    - HMS-avvik (`kind = hms`) har ingen TG: ingen TG-merke, men konsekvens og tiltak vises. Et punkt med bare HMS-avvik har ingen TG.
    - TGIU: alle utfylte felt i `tgiu_details`, med samme regel som skjermen (hva og hvorfor, risiko, hva som må til, annen fuktkontroll og resultat, skadeutsatt konstruksjon på `wet_room.adjacent`, at eier er informert om utvidet ansvar når eier nektet hulltaking). Etiketten er «TGIU», aldri «IU».
-   - **TG-forklaringen er innhold:** kodedata med tekststatus («utkast, ikke godkjent av fagrådet», A483) i `src/core/reports/tg-explanation.ts`, sendt i `ReportPdfData`. Den følger regelverk-krav.md avsnitt 2: TG0 normalt ingen avvik, tilnærmet ny og dokumentert utførelse (ordet «normalt» så F1 ikke motsies); TG1 mindre avvik og normal slitasje, eller ny uten dokumentasjon; TG2 vesentlige avvik, tegn på skade, behov for tiltak snart, eller usikker funksjon på grunn av alder; TG3 store eller alvorlige avvik, funksjonssvikt, fare for liv og helse, med kostnadsanslag; TGIU ikke undersøkt, og rapporten sier hva og hvorfor; én setning om at HMS-forhold beskrives uten TG. Egne ord, ingen henvisning til NS 3600, ingen gjetteord. Teksten tas med i gjetteord- og kopitesten. Merket «utkast» står i dataene, ikke i PDF-teksten.
+   - **TG-forklaringen er innhold:** kodedata med tekststatus («utkast, ikke godkjent av fagrådet», A533) i `src/core/reports/tg-explanation.ts`, sendt i `ReportPdfData`. Den følger regelverk-krav.md avsnitt 2: TG0 normalt ingen avvik, tilnærmet ny og dokumentert utførelse (ordet «normalt» så F1 ikke motsies); TG1 mindre avvik og normal slitasje, eller ny uten dokumentasjon; TG2 vesentlige avvik, tegn på skade, behov for tiltak snart, eller usikker funksjon på grunn av alder; TG3 store eller alvorlige avvik, funksjonssvikt, fare for liv og helse, med kostnadsanslag; TGIU ikke undersøkt, og rapporten sier hva og hvorfor; én setning om at HMS-forhold beskrives uten TG. Egne ord, ingen henvisning til NS 3600, ingen gjetteord. Teksten tas med i gjetteord- og kopitesten. Merket «utkast» står i dataene, ikke i PDF-teksten.
    - Aldri med i `ReportPdfData`: noe fra `claims`, ventende KI-forslag, regelforslag som ikke er godtatt, regelbegrunnelser (`reasons`), kilder (`TG_LABEL_SOURCE`, regelens kilde), overstyringsgrunner, `text_source`.
-   - Selskap mangler (`assignments.company_id` eller `companies.org_number` tom): utkastet lages, og bunnteksten sier «Juridisk selskap mangler på oppdraget». `organizations.brand_name` brukes aldri som juridisk selskap (A488).
+   - Selskap mangler (`assignments.company_id` eller `companies.org_number` tom): utkastet lages, og bunnteksten sier «Juridisk selskap mangler på oppdraget». `organizations.brand_name` brukes aldri som juridisk selskap (A538).
 
 5. **PDF-en av badet i Byggcons profil:**
    - **Forside:** «Tilstandsrapport», adresse og matrikkel, oppdragsnummer, befaringsdato, logoen fra profilen og selskapets navn. Ingen navn på eier, bestiller eller megler. Ingen bilder på forsiden før forsidebilde finnes (2a-3).
    - **Innholdsfortegnelse** med sidetall. Deler som ikke finnes, står ikke der.
    - **Forklaring av TG** (fra `ReportPdfData`, se 4).
    - **Badet:** romnavn og etasje, hvert kontrollpunkt med TG og beskrivelse, avvik med TG, avvikstekst, årsak, konsekvens, tiltak og kostnad, og TGIU. Deler uten innhold gir aldri egne sider eller tomme overskrifter.
-   - **Bare i utkastet** (A486): et punkt med innhold men uten TG viser «Ikke satt» (`TG_NOT_SET_LABEL`) på én linje; TG2/TG3 uten årsak eller konsekvens og TG3 uten kostnad viser «Mangler» der teksten skulle stått. Dette er en ren gjengivelse, ikke en sperre (sperren hører til `publisering-badet`).
+   - **Bare i utkastet** (A536): et punkt med innhold men uten TG viser «Ikke satt» (`TG_NOT_SET_LABEL`) på én linje; TG2/TG3 uten årsak eller konsekvens og TG3 uten kostnad viser «Mangler» der teksten skulle stått. Dette er en ren gjengivelse, ikke en sperre (sperren hører til `publisering-badet`).
    - **Bilder med markering når den finnes:** visningskopi, bildetekst, markering som vektorlag over bildet, rett under avviket bildet hører til. Badet har ingen bilder i databasen før «Bilder på PC» (2a-3), så bildedelen prøves med oppdiktede bilder i testene. Bare JPEG og PNG kjent på innholdet (ikke filnavn), største mål i punkter, og avvisning av EXIF (også PNG `eXIf`), XMP, IPTC og kommentarfelt før motoren. Tillatt-listen for JPEG (A12) flyttes fra `src/modules/offline-trial/server/photo-storage.ts` til `src/core/files` og brukes begge steder (ikke kopi). Markeringen går inn som tall og faste former (koordinater, type, farge fra profilen), aldri som SVG eller HTML fra klienten; ugyldige koordinater avvises.
    - **Bunntekst på hver side:** juridisk selskap (navn og organisasjonsnummer fra oppdragets selskap), oppdragsnummer og «side x av y».
    - **Utkast:** «UTKAST» som vannmerke på hver side. Ingen PDF og intet innhold lagres (Ståle 16.11.2026); bare hendelsesraden (se KI i bunnen).
@@ -88,7 +88,7 @@ Badet kan fylles ut på PC (PR #224), men det finnes ingen PDF. Uten PDF kan ikk
    - **Vern mot overbelastning:** høyst én pågående PDF per ansatt og et lite felles tak (verdien settes i ADR-en ut fra målingen), tidsavbrudd, grense for antall bilder og samlet størrelse inn i motoren. For mange gir 429 med «En PDF lages allerede. Vent litt og prøv igjen.»
    - Ruten kaller `getReportPdfData`, så `renderReportPdf`, så hendelsen.
 
-7. **Tilgang** via `src/core/access`: samme som å se badet på skjermen (`organization.read`, samme sjekk som `getRoomView`). PDF-en inneholder aldri reklamasjonsdata og gir samme svar med og uten reklamasjon på oppdraget (A481, endret, se Avgjørelser).
+7. **Tilgang** via `src/core/access`: samme som å se badet på skjermen (`organization.read`, samme sjekk som `getRoomView`). PDF-en inneholder aldri reklamasjonsdata og gir samme svar med og uten reklamasjon på oppdraget (A531, endret, se Avgjørelser).
 
 8. **Logging uten persondata:** feil i motoren logges bare med rapport-id, profilkode og egen feilkode eller feilnavn, aldri `error.message` eller stack fra motoren (de kan sitere rapporttekst).
 
@@ -102,7 +102,7 @@ Badet kan fylles ut på PC (PR #224), men det finnes ingen PDF. Uten PDF kan ikk
 - Hele rapporten (om Byggcon, sammendrag, arealer, dokumentasjon, forutsetninger, signatur) (2a-3).
 - Testutskriften med 50 bilder og kravet om under 8 MB (2a-3).
 - Bildetabellen `photos`, opplasting og markering på skjermen (2a-3, «Bilder på PC»).
-- Samlet TG for rommet (A487, spørsmål 92a).
+- Samlet TG for rommet (A537, spørsmål 92a).
 - Den levende forhåndsvisningen (eget planpunkt under «Fra forbedreren»).
 - Publiseringssperren (branch `publisering-badet`) og KI i veien (branch `ki-i-veien`). Ingen filer der røres; nye filer i `src/core/reports` i stedet for endringer i `types.ts`, `room-view.ts`, `reports.ts` og `write.ts`.
 - PDF på iPad uten nett (2b).
@@ -220,23 +220,23 @@ Ingen nye fagregler. Rene funksjoner med tabelltester:
 - [ ] CI viser at motoren og skriftene kommer med i zip-bygget (`deploy-azure.yml`); røyktest etter utrulling i testmiljøet føres i testrapporten. Ingen nye Azure-ressurser. `start.sh` oppdateres om oppsettet endres.
 
 ## Avgjørelser ved uenighet (prosjektleder 18.11.2026)
-- **Reklamasjon:** kortet sa «takstmann og kontor får ikke PDF av reklamasjonssak», og ux ville skjule knappen. Arkitekt og sikkerhet viser at reklamasjoner er egne rader i `claims`, at badet på skjermen ikke er sperret for slike oppdrag, og at en 404 ville røpe at saken finnes. **Valgt:** samme tilgang som skjermen, aldri reklamasjonsdata i PDF-en, samme svar med og uten reklamasjon. Regel 12 gjelder selve reklamasjonssaken, som ikke er i PDF-en. Ux punkt 4 faller bort. A481 endret.
+- **Reklamasjon:** kortet sa «takstmann og kontor får ikke PDF av reklamasjonssak», og ux ville skjule knappen. Arkitekt og sikkerhet viser at reklamasjoner er egne rader i `claims`, at badet på skjermen ikke er sperret for slike oppdrag, og at en 404 ville røpe at saken finnes. **Valgt:** samme tilgang som skjermen, aldri reklamasjonsdata i PDF-en, samme svar med og uten reklamasjon. Regel 12 gjelder selve reklamasjonssaken, som ikke er i PDF-en. Ux punkt 4 faller bort. A531 endret.
 - **`ReportPdfData` som KI-grunnlag i 2a-3:** ux og test-leder skrev det som gitt; arkitekten vil stryke det. **Valgt:** strøket som løfte. Det avgjøres med snapshotet (ADR 0015) for å unngå to «hele rapporten»-former.
-- **Tomme punkter:** fagansvarlig ville vise alle punkter i utkastet med «Ikke satt»; forbedreren ville ha egen side for punkter uten innhold. **Valgt:** begge, delt: punkt med noe innhold men uten TG får «Ikke satt» på sin plass; punkt helt uten innhold står på siden «Ikke med i PDF-en». Slik ser utkastet ut som kundens PDF, og ingenting glemmes (A486).
+- **Tomme punkter:** fagansvarlig ville vise alle punkter i utkastet med «Ikke satt»; forbedreren ville ha egen side for punkter uten innhold. **Valgt:** begge, delt: punkt med noe innhold men uten TG får «Ikke satt» på sin plass; punkt helt uten innhold står på siden «Ikke med i PDF-en». Slik ser utkastet ut som kundens PDF, og ingenting glemmes (A536).
 - **Kostnadseksempel og tusenskille:** fagansvarlig har rett, «kr 10 000–50 000» finnes ikke; `costDisplayText` er eneste kilde og bruker allerede hardt mellomrom. Forbedrerens krav om at beløpet ikke deles, løses i oppsettet uten egen formatering.
 - **Knapp som lenke eller knapp:** ux punkt 1 (vent på lagring) og punkt 2 (vanlig lenke) trekker hver sin vei. **Valgt:** lenke når ingenting venter; ellers fanen åpnet i samme trykk og adressen satt etter lagring.
 
 ## Beslutninger (autonom modus, ført i `docs/09-apne-sporsmal.md`)
-- **A480** Profilene er kodedata i `src/core/pdf` til «Flere PDF-utgaver» i 2a-3; med `version` og `orientation` fra første dag. Lett å endre.
-- **A481 (endret 18.11.2026)** Utkast-PDF krever `organization.read`, samme sjekk som badet på skjermen. Ingen reklamasjonsdata i PDF-en, og samme svar med og uten reklamasjon. Lett å endre.
-- **A482** Bildedelen prøves med oppdiktede bilder i testene til `photos` finnes; markering som vektorlag. Lett å endre.
-- **A483** TG-forklaringen er egen tekst, merket «utkast, ikke godkjent av fagrådet», i `src/core/reports` (innhold, ikke profil); TG0 med «normalt». Lett å endre.
-- **A484** Valg av PDF-motor (ADR 0016). Dyrt å endre.
-- **A485** Filnavnet har bare oppdragsnummeret. Lett å endre.
-- **A486** Utkastet viser det som mangler («Ikke satt», «Mangler») og siden «Ikke med i PDF-en»; endelig PDF viser bare det kunden skal ha. Lett å endre.
-- **A487** PDF-en viser TG per kontrollpunkt, ingen samlet TG for badet. Lett å endre (spørsmål 92a).
-- **A488** Mangler oppdraget juridisk selskap, lages utkastet med teksten «Juridisk selskap mangler på oppdraget»; `brand_name` brukes aldri som juridisk selskap. Lett å endre.
-- **A489** Vern mot overbelastning: én pågående PDF per ansatt, lite felles tak og tidsavbrudd (tallene i ADR 0016), 429 med forklaring. Lett å endre.
+- **A530** Profilene er kodedata i `src/core/pdf` til «Flere PDF-utgaver» i 2a-3; med `version` og `orientation` fra første dag. Lett å endre.
+- **A531 (endret 18.11.2026)** Utkast-PDF krever `organization.read`, samme sjekk som badet på skjermen. Ingen reklamasjonsdata i PDF-en, og samme svar med og uten reklamasjon. Lett å endre.
+- **A532** Bildedelen prøves med oppdiktede bilder i testene til `photos` finnes; markering som vektorlag. Lett å endre.
+- **A533** TG-forklaringen er egen tekst, merket «utkast, ikke godkjent av fagrådet», i `src/core/reports` (innhold, ikke profil); TG0 med «normalt». Lett å endre.
+- **A534** Valg av PDF-motor (ADR 0016). Dyrt å endre.
+- **A535** Filnavnet har bare oppdragsnummeret. Lett å endre.
+- **A536** Utkastet viser det som mangler («Ikke satt», «Mangler») og siden «Ikke med i PDF-en»; endelig PDF viser bare det kunden skal ha. Lett å endre.
+- **A537** PDF-en viser TG per kontrollpunkt, ingen samlet TG for badet. Lett å endre (spørsmål 92a).
+- **A538** Mangler oppdraget juridisk selskap, lages utkastet med teksten «Juridisk selskap mangler på oppdraget»; `brand_name` brukes aldri som juridisk selskap. Lett å endre.
+- **A539** Vern mot overbelastning: én pågående PDF per ansatt, lite felles tak og tidsavbrudd (tallene i ADR 0016), 429 med forklaring. Lett å endre.
 
 ## Roller
 - **arkitekt:** ADR 0016 med prøven fra `.next/standalone`, grensesnittet, lint-regelen og utrullingen i Azure.
@@ -247,5 +247,5 @@ Ingen nye fagregler. Rene funksjoner med tabelltester:
 - **sikkerhet-personvern:** lukket motor, GPS og EXIF, svarhoder, logging, tilgang; `/security-review` i gjennomgangen.
 
 ## Åpne spørsmål
-- Spørsmål 92 i `docs/09-apne-sporsmal.md` (fag, stopper ikke bygging): (a) samlet TG for badet, (b) ordlyden for TG0 når F1 gir TG0 på eldre bad, (c) om utkastet skal vise «Ikke satt»/«Mangler». Agentene har valgt A487, A483 og A486 til Ståle svarer.
+- Spørsmål 92 i `docs/09-apne-sporsmal.md` (fag, stopper ikke bygging): (a) samlet TG for badet, (b) ordlyden for TG0 når F1 gir TG0 på eldre bad, (c) om utkastet skal vise «Ikke satt»/«Mangler». Agentene har valgt A537, A533 og A536 til Ståle svarer.
 - Utseendet ser Ståle når 2a-2 er ferdig («Ståle har sett den»).

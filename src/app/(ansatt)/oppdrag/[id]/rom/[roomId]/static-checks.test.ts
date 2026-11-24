@@ -73,3 +73,34 @@ describe("skjermen for badet", () => {
     expect(source).not.toMatch(/AiSparkIcon|ai-text-mark|ai-suggestion|\bai-\d/);
   });
 });
+
+/*
+ * Beslutninger på KI-forslag (gjennomgangen av KI i veien): tilgangen og radsjekken ligger i
+ * rapportkjernen (`decideAiText`), aldri i siden. «Ingen treff» er ikke et forslag og avvises ikke,
+ * og «Angre» etter «Bruk» på et fraseforslag avviser forslaget.
+ */
+describe("KI-beslutninger fra rommet", () => {
+  it("decideAiSuggestionAction går til decideAiText uten egen tilgangslogikk", () => {
+    const source = code("actions.ts");
+    const start = source.indexOf("export async function decideAiSuggestionAction");
+    const body = source.slice(start, source.indexOf("\n}\n", start));
+    expect(start).toBeGreaterThan(-1);
+    expect(body).toContain("decideAiText(");
+    expect(body).not.toMatch(/requireOrganizationAccess|recordDecision|isUuid/u);
+  });
+
+  it("fraselisten avviser bare en rangert liste, og «Angre» avviser forslaget", () => {
+    const source = code("phrase-suggestions.tsx");
+    // Hvert kall til rejectQuietly: vilkåret rett før nevner aldri no_match
+    const calls = [...source.matchAll(/rejectQuietly\((?:open|result)\.usageId\)/gu)];
+    expect(calls.length).toBeGreaterThanOrEqual(4);
+    for (const call of calls) {
+      const before = source.slice(Math.max(0, call.index - 160), call.index);
+      expect(before.slice(before.lastIndexOf("if (")), "vilkåret før kallet").not.toContain(
+        "no_match",
+      );
+    }
+    expect(source).toContain('decision: "undo_and_reject"');
+    expect(source).not.toContain('decision: "undo" }');
+  });
+});

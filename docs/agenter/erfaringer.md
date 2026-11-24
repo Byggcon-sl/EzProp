@@ -2,6 +2,13 @@
 
 Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte tid. Nyeste øverst. Får Ståle stadig de samme kommentarene, legges de inn som regel i den aktuelle agentbeskrivelsen.
 
+## 24.11.2026 – PR #234 (Publisering av badet, overtatt etter en uke)
+
+- To brancher fra samme fase som bygges samtidig, må sjekkes mot hverandre når den siste flettes inn: de nye tjenestene fra den første (her «KI i veien») var verken med i låsen etter publisering eller riktig i listen over ventende KI-forslag. Testen «hver eksporterte skrivetjeneste står i listen» fanget låsen; fraseforslagene ble funnet ved å lese koden.
+- Migreringsnummer og A-numre kolliderer når branchen står lenge. Flytt dem ved flettingen og søk etter gamle numre i både kode og dokumenter, men bare i filene branchen eier.
+- Sikkerhet-personvern fant et alvorlig funn i kode som hadde stått «ferdig» i en uke: en handling i en side som kalte KI-kjernen direkte med bare en id. Alt som skriver i en rapport, også KI-avgjørelser, skal gå gjennom rapportkjernens skriveramme.
+- Etter automatisk fletting fra github-actions[bot] starter ikke CI; en liten ekte commit (her et lite funn) starter den.
+
 ## 17.11.2026 – PR #224 (Badet på PC, overtatt)
 
 - E2E-filer som legger egne oppdrag i prøveorganisasjonen, kan skyve testoppdragene ut av arbeidskøen (høyst 50 kort). Tester som leter etter ett bestemt oppdrag i køen, søker det opp på adressen.
@@ -312,3 +319,7 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - I e2e uten nett: vent på `data-sync-state="offline"` før utfylling, og bruk `expect.poll` for køen (den oppdateres litt etter at feltet er lagret lokalt).
 - Kort på adminsider er nå `section` med overskriften som navn (`EmployeeCard`); e2e kan finne dem med rollen `region`.
 
+**KI i veien (23.–24.11.2026), PR #232, overtatt av hovedløkken:**
+- Hele `pnpm test` tar nå over 30 minutter i skycontaineren og ble stoppet av tidsgrensen. Kjør testene for de berørte mappene lokalt (for eksempel `pnpm vitest run src/core/ai src/core/reports`, 2 038 tester) og la CI kjøre hele pakken.
+- CI kjører `pnpm format:check` før testene. Kjør den (eller `pnpm prettier --write` på endrede filer) før push; en uformatert linje kostet én CI-runde.
+- Tre kjøringer tok A-numre samtidig (A490–A491 er brukt av både `ki-i-veien` og `rett-forslag-og-avvik`). Sjekk de åpne branchene med `git diff origin/main...origin/<branch> -- docs/09-apne-sporsmal.md` før nye numre tas.

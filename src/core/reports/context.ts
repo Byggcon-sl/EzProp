@@ -1,7 +1,7 @@
 import { and, eq, isNull, ne } from "drizzle-orm";
 import { AccessDeniedError, type Actor, type EmployeeGrant } from "@/core/access";
 import { ROOM_TYPES } from "@/core/buildings";
-import { getTemplateVersion, type TemplateDocument, type TemplateKind } from "@/core/templates";
+import { readTemplateVersionIn, type TemplateDocument, type TemplateKind } from "@/core/templates";
 import type { DbExecutor } from "@/db/client";
 import {
   assignments,
@@ -152,6 +152,8 @@ export function refKey(...parts: string[]): string {
 
 export type LockedTemplate = {
   versionId: string;
+  familyId: string;
+  versionNumber: number;
   kind: TemplateKind;
   reportType: string;
   document: TemplateDocument;
@@ -182,7 +184,8 @@ export async function loadLockedTemplate(
   const orgId = grant.organizationId;
   const [detail, checkpointRows, elementRows, questionRows, outcomeRows, ruleRows] =
     await Promise.all([
-      getTemplateVersion(actor, orgId, versionId),
+      // Samme kobling som resten, uten ny tilgangssjekk (tilgangen er sjekket av den som kaller)
+      readTemplateVersionIn(ex, grant, versionId),
       ex
         .select({ id: checkpoints.id, key: checkpoints.key })
         .from(checkpoints)
@@ -279,6 +282,8 @@ export async function loadLockedTemplate(
   );
   return {
     versionId,
+    familyId: detail.familyId,
+    versionNumber: detail.versionNumber,
     kind: detail.kind,
     reportType: detail.reportType,
     document: detail.document,

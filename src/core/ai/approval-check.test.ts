@@ -473,3 +473,99 @@ describe("checkAiTextApproved: tilgang og tenant (4.23–4.24, 5.2)", () => {
     });
   });
 });
+
+/*
+ * «KI i veien» (docs/funksjoner/fase2a-ki-i-veien-testplan.md K4.20, ADR 0006, tillegg
+ * 17.11.2026, del 5): `phrase_suggest`-rader er ikke KI-tekst (teksten er malens egen), og et
+ * stoppet svar er ikke tekst i rapporten. Språkvask og sammendrag som står `suggested`, er ikke
+ * godkjent. Alle verdier er oppdiktet.
+ */
+describe("KI i veien: sperren og de nye funksjonene (K4.20)", () => {
+  async function owner() {
+    const organization = await createOrganization("Oppdiktet Takst A");
+    await enableAi(organization.id);
+    const person = await employeeWithGrant(organization.id, ["inspector"]);
+    return { organization, grant: person.grant };
+  }
+
+  it.each([
+    {
+      name: "phrase_suggest som står suggested",
+      overrides: { feature: "phrase_suggest", promptVersion: "phrase_suggest.v1" },
+      fieldKey: "cause_text",
+      type: "deviation",
+      flagged: false,
+    },
+    {
+      name: "phrase_suggest som er avvist",
+      overrides: { feature: "phrase_suggest", status: "rejected" },
+      fieldKey: "cause_text",
+      type: "deviation",
+      flagged: false,
+    },
+    {
+      name: "language_polish som står suggested",
+      overrides: {},
+      fieldKey: "cause_text",
+      type: "deviation",
+      flagged: true,
+    },
+    {
+      name: "summary_draft som står suggested",
+      overrides: { feature: "summary_draft", promptVersion: "summary_draft.v1" },
+      fieldKey: "summary_text",
+      type: "report",
+      flagged: true,
+    },
+    {
+      name: "summary_draft som er godtatt",
+      overrides: { feature: "summary_draft", status: "accepted" },
+      fieldKey: "summary_text",
+      type: "report",
+      flagged: false,
+    },
+    {
+      name: "stoppet svar (stopped)",
+      overrides: {
+        outcome: "stopped",
+        errorCode: "tg_guard",
+        status: null,
+        outputText: "Stoppet svar med TG3.",
+      },
+      fieldKey: "cause_text",
+      type: "deviation",
+      flagged: false,
+    },
+  ] as const)("$name: i svaret = $flagged", async ({ overrides, fieldKey, type, flagged }) => {
+    const { organization, grant } = await owner();
+    const target: AiTargetRef = { type, id: uuidv7(), fieldKey };
+    const row = await createAiUsageLog(organization.id, {
+      employeeId: grant.employeeId,
+      targetRef: target,
+      ...(overrides as AiUsageLogOverrides),
+    });
+    const item = { aiUsageId: row.id, target };
+    expect(await checkAiTextApproved(grant, [item])).toEqual(flagged ? [item] : []);
+  });
+
+  it("en fraseforslag-rad på et annet mål gjør ikke elementet godkjent", async () => {
+    const { organization, grant } = await owner();
+    const stored: AiTargetRef = { type: "deviation", id: uuidv7(), fieldKey: "cause_text" };
+    const row = await createAiUsageLog(organization.id, {
+      employeeId: grant.employeeId,
+      feature: "phrase_suggest",
+      targetRef: stored,
+    });
+    const item = { aiUsageId: row.id, target: { ...stored, fieldKey: "consequence_text" } };
+    expect(await checkAiTextApproved(grant, [item])).toEqual([item]);
+  });
+
+  it("en fraseforslag-rad fra en annen organisasjon gir ikke godkjenning", async () => {
+    const { grant } = await owner();
+    const other = await createOrganization("Oppdiktet Takst B");
+    const target: AiTargetRef = { type: "deviation", id: uuidv7(), fieldKey: "cause_text" };
+    const row = await createAiUsageLog(other.id, { feature: "phrase_suggest", targetRef: target });
+    const item = { aiUsageId: row.id, target };
+    expect(await checkAiTextApproved(grant, [item])).toEqual([item]);
+  });
+});

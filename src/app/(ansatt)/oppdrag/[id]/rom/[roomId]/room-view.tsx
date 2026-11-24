@@ -2,29 +2,38 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import type { MergeFieldSources, PublishCheckRoom } from "@/core/reports/logic";
 import type {
   AnswerView,
   CheckpointView,
+  ReportSummaryView,
   RoomRef,
   RoomRefresh,
   RoomReportView,
   SuggestionView,
 } from "@/core/reports/types";
+import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { FormMessage } from "@/shared/ui/form";
 import { Notice } from "@/shared/ui/notice";
 import { SaveState } from "@/shared/ui/save-state";
 import { uuidv7 } from "@/shared/lib/uuid";
+import { NewVersionButton } from "../../publiser/new-version-button";
+import { PUBLISH_LINK_TEXTS } from "../../publiser/publish-texts";
 import { removeDeviationAction, saveFieldAction, setCheckpointDoneAction } from "./actions";
+import { BackToPublishBar } from "./back-to-publish-bar";
 import { CheckpointList } from "./checkpoint-list";
 import { CheckpointPanel } from "./checkpoint-panel";
 import { FieldSaveStore } from "./field-save-store";
+import { ReportSummarySection } from "./report-summary-section";
 import { RoomContext, type RoomContextValue, type UndoLine } from "./room-context";
 import { isActionError, ROOM_ACTION_MESSAGES, ROOM_TEXTS, type ActionError } from "./room-messages";
 import {
   ALL_DONE_NOTICE_ID,
+  answerKey,
   CHECKPOINT_HEADING_ID,
+  clientMergeValues,
   deviationPrefix,
   domId,
   DONE_BUTTON_ID,
@@ -32,10 +41,12 @@ import {
   initialCheckpointKey,
   neighbours,
   nextUndoneCheckpoint,
+  publishCounts,
   SEARCH_INPUT_ID,
   undoButtonId,
   warningId,
 } from "./room-model";
+import { PublishLink } from "./publish-link";
 import { focusElementById, type StickyAccept } from "./rule-suggestion-card";
 import { isTextField, SHORTCUT_LIST, shortcutFor } from "./shortcuts";
 
@@ -52,6 +63,15 @@ import { isTextField, SHORTCUT_LIST, shortcutFor } from "./shortcuts";
  */
 
 type StartedView = Extract<RoomReportView, { state: "started" }>;
+
+/**
+ * Sjekken før publisering sett fra rommet (docs/funksjoner/fase2a-publisering-badet-design.md
+ * avsnitt 13 og 14). `outside` er funnene utenfor rommet (andre rom, befaringsdato, KI-forslag),
+ * regnet av serveren. Rommet selv regnes lokalt med `computePublishCheck`.
+ */
+export type RoomPublishState =
+  | { state: "draft"; nextVersionNumber: number; outside: { blockers: number; warnings: number } }
+  | { state: "published"; versionNumber: number; canStartNewVersion: boolean };
 
 function useOnline(): boolean {
   return useSyncExternalStore(
@@ -75,16 +95,28 @@ function checkpointFromLocation(): string | null {
 
 export function RoomView({
   view,
+  publish,
+  fromPublish,
   room,
   assignmentNumber,
   roomTitle,
   requestedCheckpoint,
+  summary: initialSummary,
+  mergeSources,
 }: {
   view: StartedView;
+  /** `null` når rapporten ikke kan publiseres herfra. */
+  publish: RoomPublishState | null;
+  /** Rommet er åpnet med «Gå til» fra publiser-siden (`?fra=publiser`). */
+  fromPublish: boolean;
   room: RoomRef;
   assignmentNumber: string | null;
   roomTitle: string;
   requestedCheckpoint: string | null;
+  /** Sammendraget for hele rapporten («KI i veien», A434). `null` når det ikke kunne leses. */
+  summary: ReportSummaryView | null;
+  /** Hvor flettefeltene henter verdien, per punkt (fra serveren, A396). */
+  mergeSources: Readonly<Record<string, MergeFieldSources>>;
 }) {
   const doc = useMemo(() => indexDocument(view.document), [view.document]);
   const order = useMemo(() => doc.checkpoints.map((c) => c.key), [doc]);
@@ -94,6 +126,7 @@ export function RoomView({
   const [checkpoints, setCheckpoints] = useState<CheckpointView[]>(view.checkpoints);
   const [suggestions, setSuggestions] = useState<SuggestionView[]>(view.suggestions);
   const [progress, setProgress] = useState(view.progress);
+  const [publishRoom, setPublishRoom] = useState<PublishCheckRoom>(view.publishRoom);
   const [currentKey, setCurrentKey] = useState(() =>
     initialCheckpointKey(order, requestedCheckpoint),
   );
@@ -128,6 +161,7 @@ export function RoomView({
     setCheckpoints(refresh.checkpoints);
     setSuggestions(refresh.suggestions);
     setProgress(refresh.progress);
+    setPublishRoom(refresh.publishRoom);
   }, []);
 
   const [store] = useState(
@@ -243,6 +277,20 @@ export function RoomView({
     [checkpoints, run, room, store, focus],
   );
 
+  const mergeValuesFor = useCallback(
+    (checkpointKey: string, measurementValue: number | null) =>
+      clientMergeValues({
+        sources: mergeSources[checkpointKey] ?? {},
+        answerOf: (elementKey) => {
+          const entry = store.get(answerKey(elementKey));
+          return entry ? entry.value : (answers.get(elementKey)?.value ?? null);
+        },
+        optionLabel: doc.labels.optionLabel,
+        measurementValue,
+      }),
+    [mergeSources, store, answers, doc],
+  );
+
   const contextValue: RoomContextValue = useMemo(
     () => ({
       room,
@@ -260,8 +308,27 @@ export function RoomView({
         setUndoLines((lines) => [...lines.filter((l) => l.id !== line.id), line]);
       },
       removeUndo: (id) => setUndoLines((lines) => lines.filter((l) => l.id !== id)),
+      online,
+      document: view.document,
+      phraseUsage: view.phraseUsage,
+      mergeValuesFor,
     }),
-    [room, canEdit, store, doc, run, announce, focus, openCheckpoint, removeDeviation, undoLines],
+    [
+      room,
+      canEdit,
+      store,
+      doc,
+      run,
+      announce,
+      focus,
+      openCheckpoint,
+      removeDeviation,
+      undoLines,
+      online,
+      view.document,
+      view.phraseUsage,
+      mergeValuesFor,
+    ],
   );
 
   const checkpointMap = useMemo(
@@ -340,6 +407,15 @@ export function RoomView({
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [order, requestFocus]);
+
+  // «Gå til» fra publiser-siden: fokus på punktet som ble åpnet (design avsnitt 14).
+  useEffect(() => {
+    if (!fromPublish) return;
+    const frame = requestAnimationFrame(() => focusElementById(CHECKPOINT_HEADING_ID));
+    return () => cancelAnimationFrame(frame);
+    // Bare ved første visning.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (currentName) document.title = `${currentName} – ${ROOM_TEXTS.listHeading}`;
@@ -433,6 +509,14 @@ export function RoomView({
 
   // --- Visning --------------------------------------------------------------------------------
 
+  const counts = useMemo(
+    () => (publish?.state === "draft" ? publishCounts(publishRoom, publish.outside) : null),
+    [publish, publishRoom],
+  );
+  const beforeNavigate = useCallback(async () => {
+    await store.flush();
+  }, [store]);
+
   const totalStatus = online ? summary.status : summary.status === "failed" ? "failed" : "offline";
   const list = (
     <CheckpointList
@@ -471,15 +555,28 @@ export function RoomView({
                 </h1>
               </div>
             </div>
-            {canEdit && (
-              <SaveState
-                scope="total"
-                status={totalStatus}
-                failedCount={summary.failedCount}
-                savedAt={summary.savedAt === null ? undefined : new Date(summary.savedAt)}
-                onRetry={() => void store.retryAll()}
-              />
-            )}
+            <div className="flex flex-wrap items-center gap-2 md:gap-3">
+              {counts && (
+                <PublishLink
+                  assignmentId={room.assignmentId}
+                  blockers={counts.blockers}
+                  warnings={counts.warnings}
+                  beforeNavigate={beforeNavigate}
+                />
+              )}
+              {publish?.state === "published" && (
+                <Badge>{PUBLISH_LINK_TEXTS.publishedBadge(publish.versionNumber)}</Badge>
+              )}
+              {canEdit && (
+                <SaveState
+                  scope="total"
+                  status={totalStatus}
+                  failedCount={summary.failedCount}
+                  savedAt={summary.savedAt === null ? undefined : new Date(summary.savedAt)}
+                  onRetry={() => void store.retryAll()}
+                />
+              )}
+            </div>
           </div>
           <p className="mt-1 text-sm text-stone">
             {view.inspectionYear.source === "assignment"
@@ -495,8 +592,29 @@ export function RoomView({
             </span>
           </div>
         </header>
-        {!canEdit && (
-          <p className="bg-sand px-5 py-3 text-sm text-slate-900 md:px-6">{ROOM_TEXTS.readOnly}</p>
+        {publish?.state === "published" ? (
+          <div className="flex flex-wrap items-center gap-3 bg-sand px-5 py-3 md:px-6">
+            <p className="text-sm text-slate-900">{PUBLISH_LINK_TEXTS.publishedLine}</p>
+            {publish.canStartNewVersion && (
+              <NewVersionButton
+                assignmentId={room.assignmentId}
+                currentVersion={publish.versionNumber}
+              />
+            )}
+          </div>
+        ) : (
+          <>
+            {!canEdit && (
+              <p className="bg-sand px-5 py-3 text-sm text-slate-900 md:px-6">
+                {ROOM_TEXTS.readOnly}
+              </p>
+            )}
+            {canEdit && publish?.state === "draft" && publish.nextVersionNumber > 1 && (
+              <p role="status" className="bg-sand px-5 py-3 text-sm text-slate-900 md:px-6">
+                {PUBLISH_LINK_TEXTS.revising(publish.nextVersionNumber)}
+              </p>
+            )}
+          </>
         )}
 
         <dialog
@@ -567,8 +685,18 @@ export function RoomView({
                   onStickyAccept={onStickyAccept}
                 />
               )}
+              {initialSummary && (
+                <ReportSummarySection initial={initialSummary} checkpoints={checkpoints} />
+              )}
             </main>
             <div className="sticky bottom-0 z-10 border-t border-line bg-white px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:px-6">
+              {fromPublish && counts && (
+                <BackToPublishBar
+                  assignmentId={room.assignmentId}
+                  remaining={counts.blockers}
+                  beforeNavigate={beforeNavigate}
+                />
+              )}
               <div className="mx-auto flex max-w-190 flex-wrap items-center justify-end gap-2 md:gap-3">
                 {doneError && (
                   <div className="basis-full">

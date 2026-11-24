@@ -7,7 +7,7 @@ import {
   type EmployeeGrant,
 } from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
-import { listEmployeeSessions, revokeAllEmployeeSessions } from "@/core/auth/sessions-list";
+import { listEmployeeSessions, revokeAllEmployeeSessionsIn } from "@/core/auth/sessions-list";
 import { db, type DbExecutor } from "@/db/client";
 import {
   companies,
@@ -534,13 +534,10 @@ export async function deactivateEmployee(actor: Actor, organizationId: string, e
       changes: { employeeId: row.id },
     });
 
-    const revoked = await revokeAllEmployeeSessions(
-      actor,
-      organizationId,
-      row.id,
-      { reason: "deactivated" },
-      tx,
-    );
+    // Samme transaksjon og samme kobling, med tilgangen som alt er sjekket
+    const revoked = await revokeAllEmployeeSessionsIn(tx, actor, grant, row.id, {
+      reason: "deactivated",
+    });
     if (!revoked.ok) throw new AccessDeniedError();
     return row;
   });

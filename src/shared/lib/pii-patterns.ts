@@ -142,10 +142,14 @@ export function normalizeForRedaction(text: string): string {
     .replace(INVISIBLE, "");
 }
 
-type Rule = { pattern: RegExp; placeholder: string; address?: boolean };
+export type PiiRedactionRule = {
+  readonly pattern: RegExp;
+  readonly placeholder: PiiPlaceholder;
+  readonly address?: boolean;
+};
 
 // Rekkefølgen er viktig: lange tall før korte, så elleve sifre ikke blir telefon pluss rest.
-const RULES: readonly Rule[] = [
+const RULES: readonly PiiRedactionRule[] = [
   { pattern: EMAIL, placeholder: PII_PLACEHOLDER.email },
   { pattern: NATIONAL_ID, placeholder: PII_PLACEHOLDER.nationalId },
   { pattern: ACCOUNT_NUMBER, placeholder: PII_PLACEHOLDER.accountNumber },
@@ -155,6 +159,16 @@ const RULES: readonly Rule[] = [
   { pattern: STREET, placeholder: PII_PLACEHOLDER.address, address: true },
   { pattern: POSTAL_PLACE, placeholder: PII_PLACEHOLDER.address, address: true },
 ];
+
+/**
+ * Reglene i fast rekkefølge, for vasken før KI som må vite hvor hver plassholder står
+ * (`src/core/ai/redact-text.ts`, A466). Mønstrene har flagget `g`; `String.replace` nullstiller
+ * `lastIndex`. Brukes bare med `String.replace`, slik som i `redactPii`.
+ */
+export const PII_REDACTION_RULES: readonly PiiRedactionRule[] = RULES;
+
+/** E-postmønsteret alene (samme som første regel), for vasken før de kjente verdiene. */
+export const PII_EMAIL_RULE: PiiRedactionRule = RULES[0] as PiiRedactionRule;
 
 /**
  * Bytter bare e-postadresser med plassholderen. Brukes av vasken før KI før de kjente verdiene,

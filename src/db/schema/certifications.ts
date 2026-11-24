@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { check, date, foreignKey, index, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  date,
+  foreignKey,
+  index,
+  pgTable,
+  text,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { baseColumns } from "./common";
 import { employees } from "./employees";
 
@@ -22,6 +31,8 @@ export const certifications = pgTable(
     validTo: date("valid_to", { mode: "string" }).notNull(),
   },
   (table) => [
+    // Mål for den sammensatte fremmednøkkelen fra utgivelsen (`report_releases`, ADR 0015)
+    uniqueIndex("certifications_organization_id_id_idx").on(table.organizationId, table.id),
     index("certifications_organization_id_employee_id_idx").on(
       table.organizationId,
       table.employeeId,

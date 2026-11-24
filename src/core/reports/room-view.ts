@@ -23,6 +23,7 @@ import {
   type DeviationMeasure,
   type FieldAnswer,
   type RuleSuggestionDecisionRow,
+  type TextStatus,
   type TgiuDetails,
 } from "@/db/schema";
 import {
@@ -32,6 +33,7 @@ import {
   countDoneCheckpoints,
   hasMeasuresForTg,
   suggestionStillApplies,
+  templateTextStatusMatcher,
   tgiuRequirementsFor,
   type CheckpointState,
   type DecisionState,
@@ -49,7 +51,8 @@ import {
   type RoomContext,
 } from "./context";
 import { guardReportErrors } from "./errors";
-import { NO_FINDINGS_OVER_LIMIT_SIGNAL, OWNER_REFUSED_SIGNAL } from "./signals";
+import { phraseUsageForDocument } from "./phrase-source";
+import { NO_FINDINGS_OVER_LIMIT_SIGNAL, OWNER_REFUSED_SIGNAL, publishCheckRoomOf } from "./signals";
 import type {
   AnswerValue,
   AnswerView,
@@ -319,7 +322,12 @@ function toTgiuView(row: TgiuDetails): TgiuDetailsView {
   };
 }
 
-export type RoomState = RoomRefresh & { answers: AnswerView[]; ruleResults: RuleResult[] };
+export type RoomState = RoomRefresh & {
+  answers: AnswerView[];
+  ruleResults: RuleResult[];
+  /** Tilstanden per punkt i malens rekkefølge. Sjekken før publisering bygger på den (ADR 0015). */
+  checkpointStates: { checkpointKey: string; state: CheckpointState }[];
+};
 
 /**
  * Regner hele rommet: punktene med TG, status og advarsler, forslagene og fremdriften. Ren
@@ -329,6 +337,7 @@ export type RoomState = RoomRefresh & { answers: AnswerView[]; ruleResults: Rule
 export function buildRoomState(input: {
   template: LockedTemplate;
   roomDoc: RoomTemplateDocument;
+  roomId: string;
   data: RoomData;
   inspectionYear: number;
 }): RoomState {
@@ -372,6 +381,24 @@ export function buildRoomState(input: {
         m.outcome_key === outcomeKey,
     );
 
+  // «Utkast»-merket per felt (D4): teksten er en av malens tekster for samme felttype i rommet
+  const statusOf = (texts: { text: string | null; textStatus: TextStatus }[]) =>
+    templateTextStatusMatcher(
+      texts.filter((t): t is { text: string; textStatus: TextStatus } => t.text !== null),
+    );
+  const deviationTextStatus = statusOf(
+    roomDoc.outcomes.map((o) => ({ text: o.deviation_text, textStatus: o.text_status })),
+  );
+  const causeTextStatus = statusOf(
+    roomDoc.outcomes.map((o) => ({ text: o.default_cause_text, textStatus: o.text_status })),
+  );
+  const consequenceTextStatus = statusOf(
+    roomDoc.outcomes.map((o) => ({ text: o.default_consequence_text, textStatus: o.text_status })),
+  );
+  const measureTextStatus = statusOf(
+    roomDoc.standard_measures.map((m) => ({ text: m.text, textStatus: m.text_status })),
+  );
+
   const measuresByDeviation = new Map<string, DeviationMeasure[]>();
   for (const measure of data.measures) {
     const list = measuresByDeviation.get(measure.deviationId) ?? [];
@@ -390,6 +417,7 @@ export function buildRoomState(input: {
     }));
 
   const checkpointViews: CheckpointView[] = [];
+  const checkpointStates: RoomState["checkpointStates"] = [];
   const latestDecisionByRule = new Map<string, DecisionView>();
 
   for (const checkpoint of roomDoc.checkpoints) {
@@ -455,6 +483,11 @@ export function buildRoomState(input: {
         measurementValue: row.measurementValue,
         measurementUnit: row.measurementUnit,
         textSource: row.textSource,
+        textStatus: {
+          deviationText: deviationTextStatus(row.deviationText),
+          causeText: causeTextStatus(row.causeText),
+          consequenceText: consequenceTextStatus(row.consequenceText),
+        },
         suggestedByRuleKey: row.suggestedByRuleId
           ? (template.ruleKeyById.get(row.suggestedByRuleId) ?? null)
           : null,
@@ -464,6 +497,7 @@ export function buildRoomState(input: {
           id: m.id,
           text: m.text,
           textSource: m.textSource,
+          textStatus: measureTextStatus(m.text),
           sortOrder: m.sortOrder,
           rowVersion: m.rowVersion,
         })),
@@ -523,6 +557,7 @@ export function buildRoomState(input: {
         ),
     };
 
+    checkpointStates.push({ checkpointKey: checkpoint.key, state });
     checkpointViews.push({
       checkpointKey: checkpoint.key,
       resultId: result?.id ?? null,
@@ -573,8 +608,17 @@ export function buildRoomState(input: {
       done: countDoneCheckpoints(checkpointViews),
       total: checkpointViews.length,
     },
+    publishRoom: publishCheckRoomOf({
+      template,
+      roomDoc,
+      roomId: input.roomId,
+      position: 0,
+      answers: data.answers,
+      checkpointStates,
+    }),
     answers: answersView,
     ruleResults,
+    checkpointStates,
   };
 }
 
@@ -591,6 +635,7 @@ export async function computeRoomRefresh(
   return buildRoomState({
     template,
     roomDoc,
+    roomId: context.room.id,
     data,
     inspectionYear: inspectionYearOf(context.inspectionAt, now).year,
   });
@@ -602,6 +647,7 @@ export function toRefresh(state: RoomState): RoomRefresh {
     checkpoints: state.checkpoints,
     suggestions: state.suggestions,
     progress: state.progress,
+    publishRoom: state.publishRoom,
   };
 }
 
@@ -630,8 +676,17 @@ async function readRoom(
   const template = await loadLockedTemplate(db, actor, grant, context.report.templateVersionId);
   const roomDoc = roomDocumentOf(template.document, context.room.group);
   const inspectionYear: InspectionYear = inspectionYearOf(context.inspectionAt);
-  const data = await loadRoomData(db, grant.organizationId, context.report.id, context.room.id);
-  const state = buildRoomState({ template, roomDoc, data, inspectionYear: inspectionYear.year });
+  const [data, phraseUsage] = await Promise.all([
+    loadRoomData(db, grant.organizationId, context.report.id, context.room.id),
+    phraseUsageForDocument(db, grant.organizationId, roomDoc),
+  ]);
+  const state = buildRoomState({
+    template,
+    roomDoc,
+    roomId: context.room.id,
+    data,
+    inspectionYear: inspectionYear.year,
+  });
 
   return {
     state: "started",
@@ -645,5 +700,8 @@ async function readRoom(
     checkpoints: state.checkpoints,
     suggestions: state.suggestions,
     progress: state.progress,
+    publishRoom: state.publishRoom,
+    // «Mest brukt» (A468): samme telling som `LoadPhraseUsage`, for rommets del av malen
+    phraseUsage,
   };
 }

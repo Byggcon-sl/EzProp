@@ -1,11 +1,18 @@
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
-import { requireOrganizationAccess, type Actor, type EmployeeGrant } from "@/core/access";
+import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
+import {
+  AccessDeniedError,
+  requireOrganizationAccess,
+  type Actor,
+  type EmployeeGrant,
+} from "@/core/access";
 import { recordAuditEvent } from "@/core/audit";
 import { db, type DbExecutor } from "@/db/client";
 import {
+  assignments,
   checkpointResults,
   deviationMeasures,
   deviations,
+  reports,
   tgiuDetails,
   type CheckpointResult,
   type TgDirect,
@@ -21,7 +28,13 @@ import {
 } from "./context";
 import { guardReportErrors, ReportValidationError } from "./errors";
 import { computeRoomRefresh, toRefresh } from "./room-view";
-import type { RoomRef, RoomRefresh, RoomTemplateDocument } from "./types";
+import type {
+  ReportWriteScope,
+  RoomRef,
+  RoomRefresh,
+  RoomTemplateDocument,
+  WithReportWrite,
+} from "./types";
 
 /*
  * Felles ramme for alt som skriver i rapporten (docs/funksjoner/fase2a-badet-pc.md Omfang 9 og 10):
@@ -59,6 +72,8 @@ export async function withRoomWrite<T>(
       const context = await loadRoomContext(tx, grant, room, { lock: true });
       const report = context.report;
       if (!report) throw new ReportValidationError("report_not_started");
+      // Låst etter publisering (ADR 0015 punkt 15): sjekket på den låste raden i transaksjonen
+      if (report.status === "published") throw new ReportValidationError("report_published");
       if (report.status !== "draft") throw new ReportValidationError("report_not_editable");
       const template = await loadLockedTemplate(tx, actor, grant, report.templateVersionId);
       if (template.kind !== "system" || template.reportType !== "condition_report") {
@@ -78,6 +93,66 @@ export async function withRoomWrite<T>(
     }),
   );
 }
+
+/**
+ * Skriverammen på rapportnivå (A469), for det som ikke hører til ett rom (sammendraget). Samme
+ * rekkefølge og samme feil som `withRoomWrite`: `report.edit` først, så id-en, så oppdraget og
+ * rapporten med `grant.organizationId` og `deleted_at is null`. Rapportraden låses (`for update`),
+ * så skrivinger i samme rapport går etter hverandre, også mot `withRoomWrite`. Låserekkefølgen er
+ * fast: rapportraden her, deretter KI-låsen i `recordDecisionIn`.
+ */
+export const withReportWrite: WithReportWrite = async (actor, organizationId, assignmentId, fn) => {
+  const grant = await requireOrganizationAccess(actor, organizationId, "report.edit");
+  requireUuid(assignmentId);
+  return guardReportErrors("write", () =>
+    db.transaction(async (tx) => {
+      const orgId = grant.organizationId;
+      const [assignment] = await tx
+        .select({ id: assignments.id })
+        .from(assignments)
+        .where(
+          and(
+            eq(assignments.organizationId, orgId),
+            eq(assignments.id, assignmentId),
+            isNull(assignments.deletedAt),
+          ),
+        );
+      if (!assignment) throw new AccessDeniedError();
+      const [report] = await tx
+        .select({
+          id: reports.id,
+          status: reports.status,
+          rowVersion: reports.rowVersion,
+          templateVersionId: reports.templateVersionId,
+        })
+        .from(reports)
+        .where(
+          and(
+            eq(reports.organizationId, orgId),
+            eq(reports.assignmentId, assignment.id),
+            isNull(reports.deletedAt),
+            ne(reports.status, "superseded"),
+          ),
+        )
+        .for("update");
+      if (!report) throw new ReportValidationError("report_not_started");
+      // Låst etter publisering (ADR 0015 punkt 15), samme feil som `withRoomWrite`
+      if (report.status === "published") throw new ReportValidationError("report_published");
+      if (report.status !== "draft") throw new ReportValidationError("report_not_editable");
+      const scope: ReportWriteScope = {
+        tx,
+        actor,
+        grant,
+        orgId,
+        reportId: report.id,
+        reportRowVersion: report.rowVersion,
+        templateVersionId: report.templateVersionId,
+        now: new Date(),
+      };
+      return fn(scope);
+    }),
+  );
+};
 
 /** Rommet regnet på nytt i samme transaksjon. */
 export async function refreshOf(scope: WriteScope): Promise<RoomRefresh> {

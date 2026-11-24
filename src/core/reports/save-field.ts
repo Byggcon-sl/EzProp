@@ -1,7 +1,9 @@
 import { and, eq, isNull, max } from "drizzle-orm";
 import { AccessDeniedError } from "@/core/access";
+import { recordDecisionIn } from "@/core/ai";
 import type { TemplateElementDoc } from "@/core/templates";
 import {
+  aiUsageLog,
   checkpointResults,
   deviationMeasures,
   deviations,
@@ -21,11 +23,13 @@ import {
   REPORT_ANSWER_TEXT_MAX,
   REPORT_NUMBER_MAX,
   reportFieldChangeSchema,
+  saveFieldAiDecisionSchema,
 } from "./schemas";
 import type {
   AnswerValue,
   DeviationCost,
   ReportFieldChange,
+  SaveFieldOptions,
   SaveFieldResult,
   SaveReportField,
 } from "./types";
@@ -267,7 +271,7 @@ async function saveDescription(
 // --- Avvik -----------------------------------------------------------------------------------
 
 /** Avviket (ikke slettet) på et punkt i rommet, med punktet. Ellers 404. */
-async function requireLiveRoomDeviation(scope: WriteScope, deviationId: string) {
+export async function requireLiveRoomDeviation(scope: WriteScope, deviationId: string) {
   const [row] = await scope.tx
     .select({ deviation: deviations, result: checkpointResults })
     .from(deviations)
@@ -620,22 +624,108 @@ async function saveTgiuField(
 
 // --- Tjenesten -------------------------------------------------------------------------------
 
+// --- «Bruk» på et språkvasket felt (A460, A469, A470) -----------------------------------------
+
+/** KI-målet for endringen, når feltet kan språkvaskes. Ellers `null`. */
+function polishTargetType(
+  change: Change,
+): "deviation" | "deviation_measure" | "checkpoint_result" | null {
+  if (change.table === "checkpoint_results") return "checkpoint_result";
+  if (change.table === "deviation_measures" && change.field === "text") return "deviation_measure";
+  if (
+    change.table === "deviations" &&
+    (change.field === "deviation_text" ||
+      change.field === "cause_text" ||
+      change.field === "consequence_text")
+  ) {
+    return "deviation";
+  }
+  return null;
+}
+
+/**
+ * Registrerer beslutningen på et språkvasket felt i samme transaksjon som teksten (A469). Loggraden
+ * må være `language_polish` i denne rapporten, og `target_ref` må være akkurat raden og feltet som
+ * ble lagret (A470). Ellers 404, og transaksjonen rulles tilbake.
+ */
+async function recordPolishDecision(
+  scope: WriteScope,
+  change: Change,
+  savedId: string,
+  decision: NonNullable<SaveFieldOptions["aiDecision"]>,
+): Promise<void> {
+  const type = polishTargetType(change);
+  if (type === null) throw new ReportValidationError("not_applicable");
+  const [row] = await scope.tx
+    .select({
+      feature: aiUsageLog.feature,
+      reportId: aiUsageLog.reportId,
+      targetRef: aiUsageLog.targetRef,
+      outputText: aiUsageLog.outputText,
+    })
+    .from(aiUsageLog)
+    .where(
+      and(
+        eq(aiUsageLog.organizationId, scope.orgId),
+        eq(aiUsageLog.id, decision.usageId),
+        isNull(aiUsageLog.deletedAt),
+      ),
+    );
+  const target = row?.targetRef;
+  if (
+    !row ||
+    row.feature !== "language_polish" ||
+    row.reportId !== scope.reportId ||
+    target?.type !== type ||
+    target.id !== savedId ||
+    target.fieldKey !== change.field
+  ) {
+    throw new AccessDeniedError();
+  }
+  // Serveren avgjør «godtatt» eller «endret» ut fra teksten som ble lagret, ikke nettleseren (A525)
+  const saved = typeof change.value === "string" ? change.value.trim() : "";
+  const suggested = (row.outputText ?? "").trim();
+  await recordDecisionIn(
+    scope.tx,
+    scope.grant,
+    decision.usageId,
+    saved === suggested ? "accepted" : "edited",
+  );
+}
+
+async function saveChange(scope: WriteScope, values: Change): Promise<SaveFieldResult> {
+  switch (values.table) {
+    case "field_answers":
+      return saveAnswer(scope, values);
+    case "checkpoint_results":
+      return saveDescription(scope, values);
+    case "deviations":
+      return saveDeviationField(scope, values);
+    case "deviation_measures":
+      return saveMeasureField(scope, values);
+    case "tgiu_details":
+      return saveTgiuField(scope, values);
+  }
+}
+
 /** Lagrer ett felt (`report.edit`). Se `SaveReportField` i `./types`. */
-export const saveField: SaveReportField = (actor, organizationId, room, change) =>
+export const saveField: SaveReportField = (actor, organizationId, room, change, options) =>
   withRoomWrite(actor, organizationId, room, async (scope) => {
     // Id-er før Zod: ugyldig id gir 404 (B5.6)
     if (change && typeof change === "object" && "id" in change) requireUuid(change.id);
     const values = parseOrThrow(reportFieldChangeSchema, change) as Change;
-    switch (values.table) {
-      case "field_answers":
-        return saveAnswer(scope, values);
-      case "checkpoint_results":
-        return saveDescription(scope, values);
-      case "deviations":
-        return saveDeviationField(scope, values);
-      case "deviation_measures":
-        return saveMeasureField(scope, values);
-      case "tgiu_details":
-        return saveTgiuField(scope, values);
+    let aiDecision: NonNullable<SaveFieldOptions["aiDecision"]> | undefined;
+    if (options?.aiDecision !== undefined) {
+      requireUuid(options.aiDecision?.usageId);
+      aiDecision = parseOrThrow(saveFieldAiDecisionSchema, options.aiDecision);
     }
+    if (aiDecision && polishTargetType(values) === null) {
+      throw new ReportValidationError("not_applicable");
+    }
+    const result = await saveChange(scope, values);
+    // «Endret av andre»: ingenting er lagret, og forslaget står åpent
+    if (aiDecision && result.status === "saved") {
+      await recordPolishDecision(scope, values, result.id, aiDecision);
+    }
+    return result;
   });

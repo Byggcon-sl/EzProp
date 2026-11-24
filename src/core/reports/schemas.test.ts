@@ -5,7 +5,13 @@ import { WET_ROOM_THRESHOLDS } from "@/core/rules/data/thresholds";
 import { parseTemplateDocument, type TemplateDocument } from "@/core/templates";
 import { RULE_REASONS_MAX_CHARS } from "@/db/schema";
 import { wetRoomTemplate } from "@/db/seed/templates/wet-room";
-import { ruleResultSchema } from "./schemas";
+import {
+  applyPhraseInputSchema,
+  ruleResultSchema,
+  saveSummaryInputSchema,
+  suggestPhrasesInputSchema,
+  summaryBasisEntrySchema,
+} from "./schemas";
 
 /*
  * B1.14 regelsvarets skjema (docs/funksjoner/fase2a-badet-pc-testplan.md avsnitt 1). Ren test uten
@@ -170,5 +176,69 @@ describe("B1.14 regelsvarets skjema", () => {
     expect(ruleResultSchema.safeParse(result).success).toBe(false);
     reason.value = "15";
     expect(ruleResultSchema.safeParse(result).success).toBe(false);
+  });
+});
+
+// --- KI i veien (docs/funksjoner/fase2a-ki-i-veien-testplan.md K1.32 og K4.17a) ----------------
+
+const UUID = "0190f2a4-0000-7000-8000-000000000001";
+
+describe("KI i veien: inndata fra nettleseren", () => {
+  const suggest = { requestId: UUID, deviationId: UUID, field: "cause_text", text: "" };
+
+  it("K1.32 fraseforslag tar bare requestId, avviket, feltet og egen tekst", () => {
+    expect(suggestPhrasesInputSchema.safeParse(suggest).success).toBe(true);
+    for (const extra of [
+      { candidates: [] },
+      { findings: [] },
+      { assignmentId: UUID },
+      { reportId: UUID },
+      { organizationId: UUID },
+    ]) {
+      expect(suggestPhrasesInputSchema.safeParse({ ...suggest, ...extra }).success).toBe(false);
+    }
+    expect(suggestPhrasesInputSchema.safeParse({ ...suggest, field: "tg" }).success).toBe(false);
+  });
+
+  it("K1.32 valgt kandidat har bare kilde og id, og kilden er en fast kode", () => {
+    const apply = {
+      usageId: UUID,
+      candidate: { source: "template_outcome", id: UUID },
+      base: null,
+    };
+    expect(applyPhraseInputSchema.safeParse(apply).success).toBe(true);
+    expect(
+      applyPhraseInputSchema.safeParse({ ...apply, candidate: { ...apply.candidate, text: "x" } })
+        .success,
+    ).toBe(false);
+    expect(
+      applyPhraseInputSchema.safeParse({ ...apply, candidate: { source: "fritekst", id: UUID } })
+        .success,
+    ).toBe(false);
+  });
+
+  it("K4.17a summary_basis er strengt: bare UUID, faste koder og heltall", () => {
+    const entry = { source: "deviation", id: UUID, group: "tg2", rowVersion: 1, parts: [] };
+    expect(summaryBasisEntrySchema.safeParse(entry).success).toBe(true);
+    for (const bad of [
+      { ...entry, text: "Mxq" },
+      { ...entry, id: "ikke-uuid" },
+      { ...entry, group: "tg1" },
+      { ...entry, source: "room" },
+      { ...entry, rowVersion: 1.5 },
+      { ...entry, rowVersion: -1 },
+      { ...entry, parts: [{ id: UUID, rowVersion: 1, text: "x" }] },
+      { ...entry, parts: Array.from({ length: 21 }, () => ({ id: UUID, rowVersion: 1 })) },
+    ]) {
+      expect(summaryBasisEntrySchema.safeParse(bad).success).toBe(false);
+    }
+  });
+
+  it("K1.26 sammendraget: tom tekst er lov og blir tom, ekstra nøkler avvises", () => {
+    const parsed = saveSummaryInputSchema.safeParse({ text: "", baseRowVersion: 1 });
+    expect(parsed.success && parsed.data.text).toBeNull();
+    expect(
+      saveSummaryInputSchema.safeParse({ text: "x", baseRowVersion: 1, reportId: UUID }).success,
+    ).toBe(false);
   });
 });

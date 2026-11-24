@@ -18,8 +18,12 @@ import { Card } from "./card";
 
 /** Statusen på et forslag, lest fra KI-loggen. */
 export type AiSuggestionCardStatus = "suggested" | "accepted" | "edited" | "rejected";
-/** Utfallet av siste forespørsel. */
-export type AiSuggestionCardOutcome = "ok" | "no_match" | "error";
+/**
+ * Utfallet av siste forespørsel. `stopped`: en vakt i kjernen stoppet svaret, og teksten vises
+ * aldri (A460). Meldingen kommer fra skjermen i `stoppedText`, fordi komponenten ikke kjenner
+ * vaktkodene.
+ */
+export type AiSuggestionCardOutcome = "ok" | "no_match" | "error" | "stopped";
 /** Hva som pågår: et nytt forslag, eller et valg (bruk, behold, angre). */
 export type AiSuggestionPending = "suggestion" | "decision" | null;
 
@@ -35,7 +39,10 @@ export const AI_SUGGESTION_TEXTS = {
   noMatch: "KI hadde ikke noe forslag. Teksten din er uendret.",
   error: "KI svarte ikke. Prøv igjen.",
   aiOff: "KI er av.",
-  offline: "Krever nett. Teksten din er lagret og kan skrives videre.",
+  /** Samme tekst i alle KI-kort uten nett (designvalg D1, A439). */
+  offline: "Trenger nett. Teksten din er lagret.",
+  /** Standardtekst for et stoppet svar når skjermen ikke har gitt egen tekst. */
+  stopped: "KI-svaret ble stoppet. Teksten din er uendret.",
   kept: "Du beholdt din tekst.",
   /** Forespørselen ligger i KI-køen på enheten (docs/funksjoner/fase2a-ki-ko.md Omfang 3). */
   queued: "Venter på KI. Forslaget kommer når nettet er tilbake.",
@@ -69,6 +76,8 @@ export type AiSuggestionState = {
   sourceText?: string | null;
   /** Teksten som står i feltet nå. */
   currentText?: string;
+  /** Meldingen ved utfallet `stopped`, valgt av skjermen etter vaktkoden. */
+  stoppedText?: string;
 };
 
 export type AiSuggestionBox =
@@ -172,9 +181,17 @@ export function suggestionView(state: AiSuggestionState): AiSuggestionView {
 
   if (state.outcome === "ok" && state.suggestionText !== null && state.status !== null) {
     shown = { text: state.suggestionText, status: state.status };
-  } else if (state.outcome === "no_match" || state.outcome === "error") {
+  } else if (
+    state.outcome === "no_match" ||
+    state.outcome === "error" ||
+    state.outcome === "stopped"
+  ) {
     const message =
-      state.outcome === "no_match" ? AI_SUGGESTION_TEXTS.noMatch : AI_SUGGESTION_TEXTS.error;
+      state.outcome === "no_match"
+        ? AI_SUGGESTION_TEXTS.noMatch
+        : state.outcome === "stopped"
+          ? (state.stoppedText ?? AI_SUGGESTION_TEXTS.stopped)
+          : AI_SUGGESTION_TEXTS.error;
     announcement = message;
     if (state.staleSuggestion) {
       shown = state.staleSuggestion;
@@ -408,7 +425,8 @@ export function AiSuggestion(props: AiSuggestionProps) {
   );
 }
 
-function SuggestionBox({ box }: { box: AiSuggestionBox }) {
+/** Boksen med forslaget eller meldingen. Brukes også av `AiSuggestionGroup`. */
+export function SuggestionBox({ box }: { box: AiSuggestionBox }) {
   if (box.kind === "suggestion") {
     return (
       <p

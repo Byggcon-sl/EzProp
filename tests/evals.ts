@@ -24,7 +24,8 @@ export type EvalCaseJson = {
   known?: Record<string, unknown>;
   mustPass?: boolean;
   expect: {
-    outcome: "ok" | "no_match";
+    outcome: "ok" | "no_match" | "stopped";
+    guard?: string;
     mustContain?: string[];
     mustNotContain?: string[];
     sameTg?: boolean;
