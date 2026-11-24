@@ -82,5 +82,8 @@ export const NEVER_FIELDS: readonly string[] = [
   "deviations.cost_amount",
   "deviations.cost_text",
   "deviations.cost_band_key",
+  // Utvidet med sporet (docs/funksjoner/fase2a-tg-spor.md): fritekstbegrunnelsen ved Endre og
+  // Avvis kan ha navn og opplysninger om eier. Bare koden og knappeteksten sendes.
+  "rule_suggestion_decisions.override_reason",
   // Bildetekster har ingen kolonne ennå (`files` har ingen tekst). Kommer de, føres de her.
 ];

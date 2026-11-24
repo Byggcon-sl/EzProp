@@ -10,6 +10,7 @@ import "server-only";
  * motsatt. Verken reglene eller KI setter TG.
  */
 export type * from "./publish-types";
+export type * from "./tg-trail-types";
 export type * from "./types";
 export { isReportPublishedForAssignment, REPORT_PUBLISHED_MESSAGE } from "./published-lock";
 export { startReport } from "./reports";

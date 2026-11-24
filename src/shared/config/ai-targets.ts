@@ -31,6 +31,19 @@ export type ReportAiTargetType = keyof typeof REPORT_AI_TARGET_FIELDS;
 export const DEVIATION_NEW_MEASURE_FIELD_KEY = "new_measure";
 
 /**
+ * Feltkoden for «forklaring av graden» på et kontrollpunkt (måltype `checkpoint_result`,
+ * docs/funksjoner/fase2a-tg-spor.md, ADR 0006 tillegg 24.11.2026). Ikke en kolonne: forklaringen
+ * lagres aldri i rapporten, bare som utkast og status i `ai_usage_log` (A590). Står derfor ikke i
+ * `REPORT_AI_TARGET_FIELDS.checkpoint_result`, som er listen over tekstfelt i rapporten som kan få
+ * KI-merke. Brukes bare av funksjonen `tg_explanation`. Fast kode (regel 6).
+ *
+ * Koden er `explanation`, ikke `tg_explanation` som funksjonen heter: en feltkode som er `tg`
+ * eller starter med `tg_`, regnes som et TG-felt og kan aldri være KI-mål (ADR 0006 del 7,
+ * kontrollen i `src/core/ai/features/features.test.ts`). Den kontrollen skal ikke svekkes.
+ */
+export const TG_EXPLANATION_FIELD_KEY = "explanation";
+
+/**
  * Måltypene der `@/core/ai` selv slår opp målraden og utleder rapport og oppdrag (ADR 0006,
  * tillegg 17.11.2026). `field_answer` og `tgiu_detail` kontrolleres ikke ennå og kan derfor ikke
  * gå til en ekte leverandør.

@@ -2,6 +2,7 @@ import type { Permission } from "@/core/access";
 import {
   DEVIATION_NEW_MEASURE_FIELD_KEY,
   REPORT_AI_TARGET_FIELDS,
+  TG_EXPLANATION_FIELD_KEY,
   type ReportAiTargetType,
 } from "@/shared/config/ai-targets";
 import { NEVER_FIELDS } from "./never-fields";
@@ -192,6 +193,45 @@ export const AI_FEATURES: Readonly<Record<AiFeatureCode, AiFeatureDefinition>> =
     },
     allowedTargets: reportTargets("report", ["summary_text"]),
     promptVersion: "summary_draft.v1",
+    evalPassRate: 0.9,
+  },
+  /*
+   * Forklaring av graden (docs/funksjoner/fase2a-tg-spor.md, ADR 0006 tillegg 24.11.2026).
+   * Ledeteksten `tg_explanation.v1` legges i `AI_PROMPTS` sammen med evalueringssettet; funksjonen
+   * kan ikke slås på for ekte leverandør før settet består.
+   */
+  tg_explanation: {
+    code: "tg_explanation",
+    // Kontor har ikke `report.edit`. Fra reklamasjonssaken kreves i tillegg `claims.read`, sjekket
+    // i `@/core/reports` (A599).
+    permission: "report.edit",
+    // Nettleseren sender ingen felt: sporet bygges av serveren (`AiServerInput.tgTrail`)
+    allowedFields: [],
+    fieldSources: {},
+    serverSources: {
+      tgTrail: [
+        "checkpoints.key",
+        "checkpoints.name",
+        "rooms.room_type",
+        "rule_suggestion_decisions.rule_key",
+        "rule_suggestion_decisions.suggestion",
+        "rule_suggestion_decisions.decision",
+        "rule_suggestion_decisions.chosen_tg",
+        "rule_suggestion_decisions.override_reason_code",
+        // Bare tolket måling (`ParseDecisionReasons`), aldri grenseverdien (A597)
+        "rule_suggestion_decisions.reasons",
+        "deviations.tg",
+        "checkpoint_results.tg_direct",
+        // Bare TG for punktet
+        "report_releases.snapshot",
+        // Etikettene for målt felt, enhet, materiale og kilden til byggeåret i den låste malen
+        "template_elements.label",
+        "template_element_options.label",
+      ],
+    },
+    // Eneste funksjon med dette målet. Målet velger grenen etter publisering i `resolveAiTarget`.
+    allowedTargets: [{ type: "checkpoint_result", fieldKey: TG_EXPLANATION_FIELD_KEY }],
+    promptVersion: "tg_explanation.v1",
     evalPassRate: 0.9,
   },
 };

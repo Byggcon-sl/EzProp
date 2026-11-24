@@ -447,3 +447,46 @@ KI-køen i `src/core/ai/client` beholdes til 2b, men kobles ikke til badskjermen
 - **Mål-id og oppdrag fra klienten, kontrollert av kalleren.** Hver ny kaller måtte gjenta kontrollen. Nå skjer den ett sted, i kjernen.
 - **`summary_basis` regnet på nytt ved «Bruk».** Funnene kan være endret mellom utkast og «Bruk», og da ville advarselen aldri kommet.
 - **Et tomt tiltak laget før «Forslag» på tiltak**, slik at målet kunne være `deviation_measure`. Lukker takstmannen listen, står et tomt tiltak igjen.
+
+## Tillegg 24.11.2026 – Forklaring av graden (`tg_explanation`)
+
+Status: vedtatt av agentene i autonom modus (A590, A596–A599). Oppgavekort: `docs/funksjoner/fase2a-tg-spor.md`. Ingen migrering. Grensesnittene står i `src/core/ai/types.ts` (`AiTgTrailInput`, `AiServerInput.tgTrail`) og `src/core/reports/tg-trail-types.ts` (`ExplainTg`, `DecideTgExplanation`). Sporet som forklares, er beskrevet i ADR 0013 punkt 9c. Resten av ADR-en gjelder som før.
+
+Støtter hovedmålene: **KI i bunnen** (KI skriver utkastet, den ansatte godtar, endrer eller avviser), **færre reklamasjoner** (svaret til en klager bygger på kjeden slik den står i loggene, og på graden kjøperen fikk) og **de ansatte** (leder slipper å ringe takstmannen og skrive forklaringen fra bunnen).
+
+### Beslutninger
+
+1. **Ny funksjon `tg_explanation`**, ledetekst `tg_explanation.v1`, rettighet `report.edit`, `allowedFields: []`, `evalPassRate: 0.9`. Nettleseren sender ingen tekst. Inndata er `AiServerInput.tgTrail`, som bare `src/core/reports` bygger fra sporet. `tg_explanation` krever `tgTrail` og ingen andre serverinndata; ingen annen funksjon tar `tgTrail`.
+2. **Inndata er en lukket type** (`AiTgTrailInput`): punktets kode og navn fra malen, romtypens kode, TG nå, avvikets TG, TG i siste utgivelse, og per regelforslag regelkode, foreslått TG (begge ved «velg TG2 eller TG3»), beslutning, valgt TG, grunnens kode og knappetekst, målingene, årstallet for aldersregler og TG-byttene. Typen har ikke felt for navn, adresse, romnavn, tid, dato, rolle, fritekst eller grenseverdi, så de kan ikke sendes ved en feil. Nytt felt i typen er en endring i tillatt-listen og krever gjennomgang av sikkerhet-personvern (A175).
+3. **`serverSources`** peker på kolonnene som finnes i skjemaet: `checkpoints.key`, `checkpoints.name`, `rooms.room_type`, `rule_suggestion_decisions.rule_key`, `.suggestion`, `.decision`, `.chosen_tg`, `.override_reason_code`, `.reasons`, `deviations.tg`, `checkpoint_results.tg_direct`, `report_releases.snapshot`, og etikettene `template_elements.label` og `template_element_options.label` (målt felt, enhet, materiale og kilden til byggeåret i den låste malen). Oppgavekortet skrev `room_types.key`; romtypen er kolonnen `rooms.room_type`, og kontrollen krever ekte kolonner. De to etikettkolonnene stod ikke i kortets liste, men kortet sender etikettene, så listen må si det.
+4. **Grenseverdier sendes ikke** (A597): `limit`, `comparator` og årene i alderstabellen er ikke i typen. Panelet viser dem; forklaringen sier høyst «på eller over grensen».
+5. **`rule_suggestion_decisions.override_reason` står i `NEVER_FIELDS`.** Bare koden og knappeteksten sendes.
+6. **Målet er `checkpoint_result` med feltkoden `explanation`** (`TG_EXPLANATION_FIELD_KEY` i `src/shared/config/ai-targets.ts`). Oppgavekortet foreslo feltkoden `tg_explanation`. Den er valgt bort: en feltkode som er `tg` eller starter med `tg_`, regnes som et TG-felt og kan aldri være KI-mål (del 7, kontrollen i `features.test.ts`). Den kontrollen skal ikke få et unntak. Funksjonskoden er fortsatt `tg_explanation`. Koden står ikke i `REPORT_AI_TARGET_FIELDS.checkpoint_result`, fordi forklaringen ikke er et tekstfelt i rapporten.
+7. **Eneste funksjon som virker etter publisering** (A599). `resolveAiTarget` får én gren: målet `checkpoint_result` / `explanation` godtar rapporten i `draft`, `published` og `superseded`. Grenen velges av målet, ikke av et argument, og bare `tg_explanation` har målet i `allowedTargets`. Alle andre mål krever fortsatt `draft`. Organisasjon og `deleted_at is null` sjekkes i alle ledd som før.
+8. **Egen avgjørelsestjeneste `decideTgExplanation` i `src/core/reports`**, ikke `decideAiText` (som går gjennom `withRoomWrite` og krever `draft`). Rapportraden låses med `for share` uten krav om `draft`, deretter tas KI-låsen: låserekkefølgen fra tillegget 17.11.2026 står fast. Loggraden bindes til funksjonen, rapporten, akkurat dette punktet, `grant.organizationId` og `grant.employeeId` før `recordDecisionIn` kalles i samme transaksjon. Alt annet gir samme nøytrale avslag, og ingenting endres.
+9. **Egne utkast** (A598). Et nytt utkast avviser bare samme ansattes åpne utkast på målet; de andre funksjonene avviser fortsatt alle åpne forslag på målet. Panelet viser bare utkast med `employee_id = grant.employeeId`. Slik ser ikke takstmannen at leder har laget en forklaring fra en reklamasjonssak, og loggraden har aldri en sak-id.
+10. **Teksten lagres ikke i rapporten eller saken** (A590). `ai_usage_log` har utkastet (`output_text`) og status. Beslutningen er `accepted` (kopiert urørt), `edited` (kopiert etter retting) eller `rejected` (forkastet). Den rettede teksten sendes aldri til serveren. Det finnes ingen `undo`.
+11. **Ikke KI-tekst i rapporten.** `tg_explanation` legges i `NOT_AI_TEXT_FEATURES` i `approval-check.ts`: et åpent utkast gir verken `ai_suggestion_pending` eller KI-merke, og stopper aldri publisering.
+12. **Vaktene** (A596). `tg_explanation` kjører `tg_guard`, `number_guard` og `placeholder_guard`. `tg_guard` får en egen gren under samme kode: hver TG-omtale i svaret må stå i `allowedTg` (alle TG-ene i inndata, regnet av kjernen fra `AiTgTrailInput`), og svaret må ha minst én TG-omtale. Mangler `allowedTg`, stopper vakten. Rekkefølgen i A471 er uendret: `tg_guard`, `coverage_guard` (bare `summary_draft`), `number_guard`, `placeholder_guard`. Ingen ny vaktkode og ingen migrering.
+13. **Gjetteord, standardhenvisninger, skyld og ansvar** prøves i evalueringssettet (`tg_explanation.cases.json`, minst 30 saker) og styres av ledeteksten, som for `summary_draft`.
+14. **Grenser** i `limits.ts`: høyst 20 forslag, 20 målinger per forslag og 60 TG-bytter i ett spor. Over grensen gir `AiInputTooLargeError`; kjernen kutter aldri selv.
+15. **Tilgang:** `report.edit` (kontor har den ikke). Fra reklamasjonssaken i tillegg `claims.read`, sjekket i `src/core/reports` gjennom `getClaim`. KI setter aldri TG og vurderer ikke om graden er riktig.
+
+### Forkastet
+
+- **Feltkoden `tg_explanation` på målet, med unntak i TG-kontrollen.** Kontrollen «ingen KI-mål er et TG-felt» er navnebasert og enkel. Et unntak gjør den svakere for alle senere funksjoner.
+- **Et argument til `resolveAiTarget` som slår av kravet om `draft`.** Da kunne en senere kaller be om det for språkvask eller fraseforslag. Når målet velger grenen, må en ny funksjon føres i `allowedTargets` og gjennom gjennomgangen først.
+- **`decideAiText` med et flagg for publisert rapport.** Samme svakhet, og `withRoomWrite` tar skrivelås på rapporten for noe som ikke skriver i den.
+- **Ny rettighet for forklaringen.** `report.edit` gir alt riktig svar for kontor, takstmann, leder og admin. Kravet om redigerbar rapport løses av målet, ikke av rettigheten.
+- **Ny vaktkode `wording_guard` med migrering.** `error_code` har CHECK, så en ny kode krever migrering, og en annen gren har neste migreringsnummer. Kan legges til senere med en liten migrering (A596).
+- **Sende grenseverdien.** Fuktgrensen og årene i alderstabellen er utkast som ikke er godkjent av fagrådet, og kan havne i et svar til en klager (spørsmål 125).
+- **Lagre godtatt forklaring på reklamasjonssaken.** Krever et nytt fritekstfelt med personopplysninger (spørsmål 124).
+- **Bygge inndata i nettleseren fra sporet som vises.** Nettleseren kunne da sende begrunnelsestekst eller romnavn. Serveren bygger alt fra kildene på tillatt-listen.
+- **Sende tidspunktene.** De hører til panelet. Uten dem har tallvakten færre tall å slippe gjennom, og utkastet kan ikke si noe om hvem som gjorde hva når.
+
+### Følger
+
+- `AiFeatureCode` har fått `tg_explanation`. Definisjonen står i `AI_FEATURES`; ledeteksten `tg_explanation.v1` og evalueringssettet lages av utvikleren, og funksjonen slås ikke på for ekte leverandør før settet består.
+- Testen som holder fast på listen over funksjonskoder (`features.test.ts` 2.2), er rød til funksjonen har fått testsakene sine. Det er meningen.
+- **Dyrt å endre:** feltkoden `explanation` og funksjonskoden `tg_explanation` når det først står rader i loggen (regel 6), og at funksjonen virker etter publisering. **Lett å endre:** hva som sendes (innenfor tillatt-listen), ledeteksten (ny versjon), grensene, og om teksten skal kunne lagres på saken.
+

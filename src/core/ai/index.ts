@@ -28,6 +28,9 @@ export {
   AI_CANDIDATE_TEXT_MAX_LENGTH,
   AI_SUMMARY_FINDINGS_MAX,
   AI_SUMMARY_INPUT_MAX_LENGTH,
+  AI_TG_TRAIL_CHANGES_MAX,
+  AI_TG_TRAIL_MEASUREMENTS_MAX,
+  AI_TG_TRAIL_SUGGESTIONS_MAX,
 } from "./limits";
 /** Høyeste antall kandidater i svaret. Samme tall som `candidate_refs` tåler (CHECK-regelen). */
 export { AI_CANDIDATE_REFS_MAX as AI_SUGGESTED_CANDIDATES_MAX } from "@/shared/config/ai-targets";
@@ -90,6 +93,11 @@ export {
   type AiSuggestionResult,
   type AiSuggestionStatus,
   type AiTargetRef,
+  type AiTgTrailInput,
+  type AiTgTrailMeasurement,
+  type AiTgTrailSuggestion,
+  type AiTgTrailTg,
+  type AiTgTrailYear,
   type RecordDecisionIn,
   type RequestSuggestionBatch,
 } from "./types";

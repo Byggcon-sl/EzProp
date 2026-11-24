@@ -9,6 +9,9 @@ import type {
   AiOutcome,
   AiSuggestionStatus,
   AiTargetRef,
+  ChosenTg,
+  OverrideReasonCode,
+  RuleSuggestionDecision,
   SummaryGroup,
 } from "@/db/schema";
 
@@ -30,9 +33,11 @@ export type {
 /**
  * Faste funksjonskoder (regel 6), én per KI-funksjon. Definisjonene (tillatt-liste, mål og
  * ledetekst) står i `features.ts`. `phrase_suggest` og `summary_draft` kom med «KI i veien»
- * (docs/funksjoner/fase2a-ki-i-veien.md).
+ * (docs/funksjoner/fase2a-ki-i-veien.md). `tg_explanation` kom med sporet
+ * (docs/funksjoner/fase2a-tg-spor.md, ADR 0006 tillegg 24.11.2026).
  */
-export type AiFeatureCode = "language_polish" | "phrase_suggest" | "summary_draft";
+export type AiFeatureCode =
+  "language_polish" | "phrase_suggest" | "summary_draft" | "tg_explanation";
 
 export type AiSuggestionRequest = {
   /** UUID laget på enheten. Blir id-en i `ai_usage_log`. */
@@ -99,6 +104,97 @@ export type AiSummaryGroup = {
 };
 
 /**
+ * En tilstandsgrad slik den sendes til KI i `tg_explanation`. Samme koder som `CheckpointTg` i
+ * `@/core/reports/logic` (som `@/core/ai` ikke kan importere).
+ */
+export type AiTgTrailTg = "0" | "1" | "2" | "3" | "IU";
+
+/**
+ * Én måling regelen leste da beslutningen ble tatt (`rule_suggestion_decisions.reasons`, tolket
+ * strengt av `ParseDecisionReasons` i `@/core/reports`). `label`, `unit` og `material` er
+ * etikettene i rapportens låste malversjon («Fukt i konstruksjonen», «vekt-%», «treverk») og
+ * vaskes som annen tekst. **Grenseverdien er aldri med** (A597): typen har ikke noe felt for den.
+ */
+export type AiTgTrailMeasurement = {
+  /** Feltets faste kode (`elements.key`). */
+  fieldKey: string;
+  label: string;
+  value: number;
+  unit: string | null;
+  material: string | null;
+};
+
+/**
+ * Årstallet en aldersregel leste. `source` sier om det er sjiktets eget årstall (`own`) eller
+ * byggeåret brukt som reserve (`build_year`). `sourceLabel` er etiketten for kilden til byggeåret
+ * i malen («anslått», «oppgitt av eier»), bare når `source = "build_year"` og kilden er valgt.
+ * Årene i alderstabellen sendes aldri (A597).
+ */
+export type AiTgTrailYear = {
+  year: number;
+  age: number | null;
+  source: "own" | "build_year";
+  sourceLabel: string | null;
+};
+
+/**
+ * Ett regelforslag på punktet med beslutningen og det som skjedde etterpå. Bare koder, TG, tall og
+ * etiketter fra malen. Aldri `override_reason` (fritekst), avvikstekst, tidspunkt eller hvem.
+ */
+export type AiTgTrailSuggestion = {
+  ruleKey: string;
+  /**
+   * TG-en reglene foreslo. «Velg TG2 eller TG3» gir begge (`["2", "3"]`). Tom liste når forslaget
+   * er et HMS-utfall (da tilbys ikke forklaring for avviket, men forslaget kan stå på punktet).
+   */
+  suggestedTg: readonly AiTgTrailTg[];
+  /** `null` = forslaget er åpent (ingen gjeldende beslutning). */
+  decision: RuleSuggestionDecision | null;
+  chosenTg: ChosenTg | null;
+  overrideReasonCode: OverrideReasonCode | null;
+  /** Knappeteksten for koden (`OVERRIDE_REASON_LABELS`). Aldri fritekstbegrunnelsen. */
+  overrideReasonLabel: string | null;
+  measurements: readonly AiTgTrailMeasurement[];
+  /** Satt når regelen er en aldersregel. `null` ellers. */
+  year: AiTgTrailYear | null;
+  /** Om avviket beslutningen laget, står. `null` når beslutningen ikke laget avvik. */
+  deviationStands: boolean | null;
+  /** TG-byttene på avviket etter beslutningen, eldst først. */
+  tgChanges: readonly { from: AiTgTrailTg | null; to: AiTgTrailTg | null }[];
+};
+
+/**
+ * Inndata til `tg_explanation` (docs/funksjoner/fase2a-tg-spor.md «KI i bunnen»). Bygges bare av
+ * `@/core/reports` (`BuildTgExplanationInput`) fra kildene i `AI_FEATURES.tg_explanation
+ * .serverSources`, med `grant.organizationId`. Kommer aldri fra nettleseren.
+ *
+ * Typen har med vilje ingen felt for navn, adresse, romnavn, etasje, bygning, ansatt, rolle,
+ * tid, dato, oppdragsnummer, fritekst eller noe fra `claims`. Et nytt felt her er en endring i
+ * tillatt-listen og krever gjennomgang av sikkerhet-personvern (A175).
+ */
+export type AiTgTrailInput = {
+  /** `checkpoints.key` og `checkpoints.name` i den låste malversjonen. */
+  checkpointKey: string;
+  checkpointName: string;
+  /** `room_types.key`. Aldri romnavnet. */
+  roomTypeKey: string;
+  /** Punktets TG nå (`computeCheckpointTg`). `null` = ingen TG ennå. */
+  currentCheckpointTg: AiTgTrailTg | null;
+  /**
+   * Avvikets TG når forklaringen gjelder ett avvik. Utelatt når den gjelder punktet. Et HMS-avvik
+   * gir aldri et kall (`ExplainTgResult.kind = "not_offered"`).
+   */
+  deviationTg?: AiTgTrailTg | null;
+  /** Punktets TG i siste utgivelse (`report_releases.snapshot`). `null` = ikke utgitt. */
+  publishedTg: AiTgTrailTg | null;
+  /** `true` når rapporten er utgitt og `publishedTg` er ulik `currentCheckpointTg`. */
+  changedAfterRelease: boolean;
+  /** TG satt direkte på punktet (`checkpoint_results.tg_direct`), eldst først. */
+  directTgChanges: readonly { from: AiTgTrailTg | null; to: AiTgTrailTg | null }[];
+  suggestions: readonly AiTgTrailSuggestion[];
+};
+
+/**
  * Det bare serveren kan gi inn (tredje argument til `requestSuggestion`). Kommer aldri fra
  * nettleseren: skjemaet for forespørselen har ikke disse nøklene, og serverinngangene i
  * `@/core/reports` bygger dem fra databasen med `grant.organizationId`.
@@ -106,7 +202,8 @@ export type AiSummaryGroup = {
  * `phrase_suggest` krever `candidates` (minst én, høyst `AI_CANDIDATES_MAX`) og ikke
  * `summaryGroups`. `summary_draft` krever `summaryGroups` (minst ett funn i `findings`, høyst
  * `AI_SUMMARY_FINDINGS_MAX` funn og faste linjer til sammen) og ikke `candidates`.
- * `language_polish` tar ingen av dem. Alt annet gir `AiRequestRejectedError`. Over grensen gir
+ * `language_polish` tar ingen av dem. `tg_explanation` krever `tgTrail` og ingen av de andre, og
+ * ingen annen funksjon tar `tgTrail`. Alt annet gir `AiRequestRejectedError`. Over grensen gir
  * `AiInputTooLargeError`; kjernen kutter aldri selv.
  */
 export type AiServerInput = {
@@ -117,6 +214,13 @@ export type AiServerInput = {
    */
   candidatesCut?: number;
   summaryGroups?: readonly AiSummaryGroup[];
+  /**
+   * Sporet `tg_explanation` skal forklare. Høyst `AI_TG_TRAIL_SUGGESTIONS_MAX` forslag,
+   * `AI_TG_TRAIL_MEASUREMENTS_MAX` målinger per forslag og `AI_TG_TRAIL_CHANGES_MAX` TG-bytter
+   * til sammen (`limits.ts`); over grensen gir `AiInputTooLargeError`. Etikettene vaskes hver for seg, og lekkasjesjekken dekker hele
+   * ledeteksten. `input_summary` får bare antall (forslag, målinger, TG-bytter), aldri verdier.
+   */
+  tgTrail?: AiTgTrailInput;
 };
 
 export type AiSuggestionResult =
@@ -187,6 +291,11 @@ export type AiDecisionOptions = { candidate?: AiCandidateRef };
  *   svaret er dette med opprinnelige verdier; `output_text` er det samme bygget av de vaskede
  *   delene.
  * - **Ekte leverandør**: en funksjon som ikke står i `settings.features`, gir `disabled` som før.
+ * - **Forklaring av graden** (`tg_explanation`, tillegg 24.11.2026): `fields` er tom, og inndata er
+ *   `serverInput.tgTrail`. Svaret er `{ kind: "suggestion" }` med ren tekst, eller `stopped`. Et
+ *   nytt utkast avviser bare **samme ansattes** åpne utkast på målet (`employee_id =
+ *   grant.employeeId`, A598), ikke andres; de andre funksjonene avviser som før alle åpne forslag
+ *   på målet. Raden får `report_id` og `assignment_id` fra målet som ellers, og aldri en sak-id.
  */
 export type RequestSuggestion = (
   grant: EmployeeGrant,
@@ -252,6 +361,12 @@ export type ResolvedAiTarget = { reportId: string; assignmentId: string };
  * `grant.organizationId` og `deleted_at is null` i alle ledd, og rapporten i `draft`. For
  * `deviation` / `new_measure` er målraden avviket. `null` når noe i kjeden mangler.
  * Leser aldri tekstkolonner og låser aldri rader (se låserekkefølgen i `RecordDecisionIn`).
+ *
+ * **Ett unntak fra `draft`** (A599, tillegg 24.11.2026): målet `checkpoint_result` med feltkoden
+ * `TG_EXPLANATION_FIELD_KEY` godtar rapporten i `draft`, `published` og `superseded`. Grenen
+ * velges av målet, ikke av et argument, så ingen annen funksjon kan be om den: `tg_explanation`
+ * er eneste funksjon med dette målet i `allowedTargets`, og ingen annen funksjon har det. Alt
+ * annet i kjeden er likt (organisasjon og `deleted_at is null` i alle ledd).
  */
 export type ResolveAiTarget = (
   grant: EmployeeGrant,
@@ -290,11 +405,21 @@ export type AiGuardAnswerPart = { label: string | null; text: string };
  *    byttes entydig tilbake.
  *
  * `phrase_suggest` har ingen tekst i svaret og kjører ikke vaktene.
+ *
+ * `tg_explanation` (A596, tillegg 24.11.2026) har én del med `label = null` og kjører vakt 1, 3 og
+ * 4. Vakt 1 har egen gren under samme kode `tg_guard`: hver TG-omtale i svaret må stå i
+ * `allowedTg`, og svaret må ha minst én TG-omtale. `allowedTg` er alle TG-ene i inndata
+ * (foreslått, begge ved «velg», valgt, alle fra og til i TG-byttene, gjeldende, avvikets og
+ * utgitt), regnet av kjernen fra `AiTgTrailInput`, aldri fra ledeteksten. Mangler `allowedTg` for
+ * `tg_explanation`, stopper vakten (feiler lukket). For tallvakten skrives TG-ene i ledeteksten
+ * som «TG2», slik at sifferet i en lovlig TG-omtale står i `texts`.
  */
 export type CheckAnswerGuards = (input: {
   feature: AiFeatureCode;
   sent: readonly AiGuardSentPart[];
   answer: readonly AiGuardAnswerPart[];
+  /** Bare for `tg_explanation`: TG-ene svaret kan nevne. */
+  allowedTg?: readonly AiTgTrailTg[];
 }) => AiGuardCode | null;
 
 /**

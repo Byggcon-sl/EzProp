@@ -31,3 +31,15 @@ export const AI_BATCH_MAX_REQUESTS = 23;
 export const AI_SUMMARY_FINDINGS_MAX = 60;
 /** Høyeste antall tegn i alle funnene til ett utkast, samlet og etter vask. */
 export const AI_SUMMARY_INPUT_MAX_LENGTH = 40000;
+
+/*
+ * Grensene under gjelder forklaringen av graden (`tg_explanation`,
+ * docs/funksjoner/fase2a-tg-spor.md). Over en grense gir kjernen `AiInputTooLargeError`.
+ */
+
+/** Høyeste antall regelforslag i ett spor som sendes til KI. Ett punkt har i dag høyst en håndfull. */
+export const AI_TG_TRAIL_SUGGESTIONS_MAX = 20;
+/** Høyeste antall TG-bytter til sammen i ett spor (på avvikene og direkte på punktet). */
+export const AI_TG_TRAIL_CHANGES_MAX = 60;
+/** Høyeste antall målinger per regelforslag. */
+export const AI_TG_TRAIL_MEASUREMENTS_MAX = 20;

@@ -28,3 +28,8 @@ export {
   type ClaimRule,
   type ClaimValues,
 } from "./schemas";
+export {
+  CLAIM_MATCH_CANDIDATES_MAX,
+  type ClaimMatchCandidate,
+  type MatchClaimBuildingPart,
+} from "./types";

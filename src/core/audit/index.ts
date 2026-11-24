@@ -3,6 +3,11 @@ import { requireOrganizationAccess, type Actor, type EmployeeGrant } from "@/cor
 import { db, type DbExecutor } from "@/db/client";
 import { auditLog, employees } from "@/db/schema";
 
+export type { EntityAuditEvent, EntityAuditEventFilter, ListEntityAuditEvents } from "./types";
+
+/** Høyeste antall rad-id-er i ett kall til `listEntityAuditEvents`. */
+export const ENTITY_AUDIT_EVENT_IDS_MAX = 200;
+
 export type AuditEventInput = {
   entityType: string;
   entityId: string;

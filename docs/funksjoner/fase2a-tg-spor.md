@@ -5,6 +5,11 @@
 - **Branch:** `tg-spor` (bygger på main)
 - **Status:** klar for bygging (forhåndsvurdering runde 1 innarbeidet 24.11.2026)
 - **A-numre:** A590–A599 (A527–A529 og A543–A549 holdes ledige; A530–A542 er tatt av `pdf-motor-badet`, A550–A563 av `skriv-det-du-ser`, A564–A577 av `overstyringer-leder`). **Spørsmål:** 124–128 (120–123 er tatt på andre brancher). **Versjon:** 0.19.8 (én patch over main, 0.19.7). **Migrering:** ingen (0039 er tatt av `overstyringer-leder`). **ADR:** tillegg i ADR 0006 og ADR 0013, ikke nytt nummer (0016 er tatt av `pdf-motor-badet`).
+- **Rettet av arkitekten 24.11.2026 (gjelder foran teksten under, se ADR 0006 tillegg 24.11.2026 og ADR 0013 punkt 9c):**
+  - Feltkoden på KI-målet er `explanation` (`TG_EXPLANATION_FIELD_KEY`), ikke `tg_explanation`. En feltkode som starter med `tg_`, regnes som TG-felt og kan aldri være KI-mål (kontrollen i `features.test.ts`). Funksjonskoden er fortsatt `tg_explanation`.
+  - `serverSources` bruker `rooms.room_type` (tabellen `room_types` finnes ikke) og har i tillegg `template_elements.label` og `template_element_options.label` for etikettene som sendes.
+  - Tolkingen av `reasons` beholder også `truth`, `code`, `year_element_key` og `year_source` (alle koder): uten dem kan ikke `unit_not_supported` skilles ut, og sporet kan ikke si om årstallet er byggeåret.
+  - KI-tjenesten heter `explainTg`. Grensesnittene: `src/core/reports/tg-trail-types.ts`, `src/core/reports/logic/tg-trail-types.ts`, `src/core/ai/types.ts`, `src/core/audit/types.ts`, `src/core/claims/types.ts`.
 - **Støtter hovedmål:**
   - **Reklamasjoner:** når en kjøper klager, ser leder med ett klikk hva rapporten sa da den ble utgitt, hva reglene foreslo, hva takstmannen valgte og grunnen. Svaret bygges på fakta, og på graden kjøperen faktisk fikk.
   - **De ansatte:** takstmannen ser på knappen hvilke punkter som avviker fra reglene før han publiserer. Leder slipper å ringe takstmannen.

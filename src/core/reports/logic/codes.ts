@@ -293,3 +293,68 @@ export const PHRASE_FIELDS = [
 
 /** Så mange ganger må en kandidat være valgt i organisasjonen for å få merket «Mest brukt» (A468). */
 export const PHRASE_MOST_USED_MIN_COUNT = 2;
+
+// --- Sporet («Hvorfor har dette punktet denne TG-en?», docs/funksjoner/fase2a-tg-spor.md) -----
+
+/**
+ * Linjetypene i sporet. Avledet ved lesing, lagres aldri (ADR 0013 punkt 9c). Nye typer legges til
+ * sist.
+ */
+export const TG_TRAIL_LINE_KINDS = [
+  /** «Reglene foreslo …». Uten tid (A594). */
+  "suggestion",
+  /** Godtatt, endret eller avvist (`rule_suggestion_decisions`). */
+  "decision",
+  /** Avvik lagt til uten regelforslag (revisjonsloggen, `create`). */
+  "deviation_added",
+  /** TG byttet på et avvik uten gjeldende beslutning (revisjonsloggen, `update` med `tg`). */
+  "deviation_tg_changed",
+  "deviation_removed",
+  "deviation_restored",
+  /** TG satt direkte på punktet (`tg_direct`: TG0, TG1, TGIU eller fjernet). */
+  "direct_tg_set",
+  /** «Utgitt versjon N: TGx i rapporten» (`report_releases`). */
+  "released",
+  /** «Forslaget er åpent igjen». Avledet med `isEffectiveDecision`, uten tid. */
+  "suggestion_reopened",
+] as const;
+
+/**
+ * Hvem som står på en linje: «Reglene», eller rollen den ansatte har i dag (A591, A593).
+ * `employee` = «Ansatt» (ingen rolle i organisasjonen nå). Aldri navn eller id.
+ */
+export const TG_TRAIL_ACTORS = [
+  "rules",
+  "admin",
+  "manager",
+  "inspector",
+  "office",
+  "employee",
+] as const;
+
+/** Fast rangering når den ansatte har flere roller: den første som finnes, vises (A593). */
+export const TG_TRAIL_ROLE_ORDER = ["admin", "manager", "inspector", "office"] as const;
+
+/** Hendelsene fra revisjonsloggen som sporet kan bruke. Alt annet kastes av `ParseTgTrailAuditEvent`. */
+export const TG_TRAIL_AUDIT_EVENT_KINDS = [
+  "deviation_created",
+  "deviation_removed",
+  "deviation_restored",
+  "deviation_tg_changed",
+  "direct_tg_set",
+] as const;
+
+/** Kortversjonen på Spor-knappen og merket «Endret fra forslag» i reklamasjonssaken. */
+export const TG_TRAIL_SUMMARY_KINDS = ["plain", "changed", "rejected"] as const;
+
+/** Hvorfor «Lag forklaring» ikke tilbys. Skjermen velger tekst etter koden. */
+export const TG_EXPLANATION_UNAVAILABLE_REASONS = [
+  /** Mangler `report.edit` (kontor): knappen vises ikke. */
+  "no_permission",
+  /** KI er ikke slått på for organisasjonen eller funksjonen: «KI er ikke slått på». */
+  "ai_disabled",
+  /** Sporet gjelder et HMS-avvik, som ikke har TG. */
+  "hms_deviation",
+  /** Punktet har verken TG, avvik med TG eller regelforslag å forklare. */
+  "nothing_to_explain",
+] as const;
