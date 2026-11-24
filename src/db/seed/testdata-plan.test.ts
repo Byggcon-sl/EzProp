@@ -33,6 +33,8 @@ import {
   TESTDATA_SEED,
   TESTDATA_SHARED_STORAGE_NAME,
 } from "./testdata.data";
+import { assignBathScenarios, bathCandidatesFromPlan } from "./testdata-bath";
+import { MANDATORY_BATH_SCENARIO_KEYS } from "./testdata-bath.data";
 import { buildTestdataPlan } from "./testdata-plan";
 import type { TestdataAssignment, TestdataPlan } from "./testdata.types";
 
@@ -335,6 +337,65 @@ describe("buildTestdataPlan: faget", () => {
     expect(bathYears.some((y) => year - y >= 0 && year - y <= 5)).toBe(true);
     expect(bathYears.some((y) => year - y >= 18 && year - y <= 22)).toBe(true);
   });
+
+  /** Våtrommene per status med år og befaringsår (testdata del 2, A504, A514). */
+  function bathsOf(p: TestdataPlan) {
+    return assignmentsOf(p).flatMap((a) =>
+      a.buildings.flatMap((b) =>
+        b.floors.flatMap((f) =>
+          f.rooms
+            .filter((r) =>
+              [
+                "bathroom",
+                "laundry",
+                "bathroom_laundry",
+                "room_with_drain",
+                "other_wet_room",
+              ].includes(r.roomType),
+            )
+            .map((r) => ({
+              status: a.status,
+              year: r.yearRenovated ?? a.property.buildYear,
+              inspectionYear: a.inspectionAt!.getUTCFullYear(),
+            })),
+        ),
+      ),
+    );
+  }
+
+  it.each([
+    ["2026-11-03T10:00:00Z", TESTDATA_SEED],
+    ["2027-01-10T10:00:00Z", TESTDATA_SEED],
+    ["2028-03-01T10:00:00Z", TESTDATA_SEED],
+    ["2026-11-03T10:00:00Z", 1],
+    ["2026-11-03T10:00:00Z", 99],
+    ["2026-11-03T10:00:00Z", 123456],
+  ])(
+    "ensureBathroomAges: anker %s og frø %s gir passende bad for de tolv pliktige scenarioene",
+    (anchor, seed) => {
+      const p = buildTestdataPlan({ seed, anchor: new Date(anchor) });
+      const baths = bathsOf(p);
+      const inProgress = baths.filter((b) => b.status === "in_progress");
+      const done = baths.filter((b) => b.status === "completed" || b.status === "invoiced");
+      expect(inProgress.filter((b) => b.year < 2000).length).toBeGreaterThanOrEqual(1);
+      expect(inProgress.filter((b) => b.year >= 2000).length).toBeGreaterThanOrEqual(2);
+      expect(done.filter((b) => b.year < 2000).length).toBeGreaterThanOrEqual(1);
+      expect(
+        done.filter((b) => b.year >= 2000 && b.inspectionYear - b.year >= 18).length,
+      ).toBeGreaterThanOrEqual(1);
+      expect(
+        done.filter((b) => b.year >= 2000 && b.inspectionYear - b.year <= 14).length,
+      ).toBeGreaterThanOrEqual(7);
+      // Og fordelingen finner et bad for hvert pliktige scenario
+      const distribution = assignBathScenarios({ baths: bathCandidatesFromPlan(p), seed });
+      for (const key of MANDATORY_BATH_SCENARIO_KEYS) {
+        expect(
+          distribution.some((a) => a.scenarioKey === key),
+          key,
+        ).toBe(true);
+      }
+    },
+  );
 
   it("har tid og team i riktig rekkefølge", () => {
     for (const a of assignments) {

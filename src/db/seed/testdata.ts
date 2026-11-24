@@ -32,16 +32,25 @@ import {
   firms,
   offices,
   orders,
-  organizations,
   properties,
   reportBuildings,
   users,
   workSessions,
 } from "@/db/schema";
-import { brand } from "@/shared/config/brand";
+import {
+  anchorFromCreatedAt,
+  findAnchorOrder,
+  findTestdataOrganization as findOrganization,
+} from "./testdata-anchor";
+import {
+  TESTDATA_BATH_TABLES,
+  TestdataBathError,
+  seedTestdataBaths,
+  type TestdataBathScenarioLine,
+} from "./testdata-bath";
+import type { BathScenario } from "./testdata-bath.data";
 import { assertTestdataAllowed } from "./testdata-guard";
 import { buildTestdataPlan } from "./testdata-plan";
-import { TESTDATA_ORDER_PREFIX } from "./testdata.data";
 import type {
   TestdataAssignment,
   TestdataContact,
@@ -53,6 +62,7 @@ import type {
 } from "./testdata.types";
 
 export { buildTestdataPlan } from "./testdata-plan";
+export { anchorFromCreatedAt, findAnchorOrder } from "./testdata-anchor";
 
 /*
  * `pnpm db:seed:testdata`: testdata som ligner en ekte arbeidshverdag i Byggcon-organisasjonen
@@ -136,6 +146,8 @@ export const TESTDATA_TABLES = [
   "statusChanges",
   "workSessions",
   "claims",
+  // Del 2: badene (docs/funksjoner/fase2a-testdata-del-2.md)
+  ...TESTDATA_BATH_TABLES,
 ] as const;
 export type TestdataTable = (typeof TESTDATA_TABLES)[number];
 
@@ -145,6 +157,16 @@ export type TestdataSummary = {
   existing: Record<TestdataTable, number>;
   /** Ordre som ble hoppet over: slettet, avvist, kansellert, eller aktøren er borte. */
   skippedOrders: string[];
+  /** Del 2: bad som ble fylt ut. */
+  bathsFilled: number;
+  /** Del 2: bad som alt hadde svar i rapporten og ble hoppet over (A508). */
+  bathsSkipped: number;
+  /** Del 2: bad der takstmannen på oppdraget ikke kan endre rapporter (A515). */
+  bathsWithoutAccess: number;
+  /** Del 2: `false` når Byggcon ikke har en publisert systemmal for tilstandsrapport (A516). */
+  bathTemplatePublished: boolean;
+  /** Del 2: én linje per pliktig scenario med oppdragsnummer og rom. */
+  bathScenarioMap: TestdataBathScenarioLine[];
 };
 
 function emptyCounts(): Record<TestdataTable, number> {
@@ -351,36 +373,6 @@ export async function findTestdataOrders(
     )
     .where(and(eq(orders.organizationId, organizationId), inArray(orders.externalRef, [...refs])))
     .orderBy(asc(orders.createdAt), asc(orders.id));
-}
-
-/** Ordren `TD-0001` i organisasjonen (også slettet). `created_at` er ankeret for datoene. */
-export async function findAnchorOrder(
-  db: Db,
-  organizationId: string,
-): Promise<{ id: string; createdAt: Date } | null> {
-  const [row] = await db
-    .select({ id: orders.id, createdAt: orders.createdAt })
-    .from(orders)
-    .where(
-      and(
-        eq(orders.organizationId, organizationId),
-        eq(orders.externalRef, `${TESTDATA_ORDER_PREFIX}0001`),
-      ),
-    )
-    .orderBy(asc(orders.createdAt), asc(orders.id))
-    .limit(1);
-  return row ?? null;
-}
-
-/** Byggcon-organisasjonen (som `runSeed`). */
-async function findOrganization(db: Db) {
-  const [row] = await db
-    .select({ id: organizations.id, settings: organizations.settings })
-    .from(organizations)
-    .where(and(eq(organizations.name, brand.companyName), isNull(organizations.deletedAt)))
-    .orderBy(asc(organizations.createdAt), asc(organizations.id))
-    .limit(1);
-  return row ?? null;
 }
 
 /**
@@ -1398,27 +1390,6 @@ async function alignRowTimes(
 // Inngangen
 // ---------------------------------------------------------------------------------------------
 
-const DAY_MS = 86_400_000;
-
-/**
- * Ankeret fra `created_at` på `TD-0001`. Den får mottatt-tiden fra planen rett etter at den er
- * laget, og den ligger alltid like langt fra midnatt (UTC) på ankerdagen, uansett anker. Derfor
- * gir `created_at` minus den avstanden ankerdagen. Er resultatet ikke midnatt, ble kjøringen
- * avbrutt før tiden ble flyttet, og `created_at` (tiden ordren ble laget) er ankeret.
- */
-export function anchorFromCreatedAt(createdAt: Date, seed: number): Date {
-  const probe = buildTestdataPlan({ seed, anchor: createdAt });
-  const first = probe.orders.find((order) => order.key === `${TESTDATA_ORDER_PREFIX}0001`);
-  if (!first) return createdAt;
-  const probeBase = Date.UTC(
-    createdAt.getUTCFullYear(),
-    createdAt.getUTCMonth(),
-    createdAt.getUTCDate(),
-  );
-  const base = createdAt.getTime() - (first.receivedAt.getTime() - probeBase);
-  return base % DAY_MS === 0 ? new Date(base) : createdAt;
-}
-
 /**
  * Legger testdataene i Byggcon-organisasjonen. `now` er dagens tid (ankeret når `TD-0001` ikke
  * finnes), `seed` frøet for planen. Kaster `TestdataNotAllowedError` (vakten),
@@ -1428,10 +1399,13 @@ export async function seedTestdata({
   db,
   now,
   seed,
+  bathScenarios,
 }: {
   db: Db;
   now: Date;
   seed: number;
+  /** Scenarioene for badene (del 2). Standard er datafilen; testene kan gi en variant. */
+  bathScenarios?: readonly BathScenario[];
 }): Promise<TestdataSummary> {
   // (a) Vakten før noe databasekall eller transaksjon
   assertTestdataAllowed();
@@ -1458,6 +1432,11 @@ export async function seedTestdata({
     created: emptyCounts(),
     existing: emptyCounts(),
     skippedOrders: [],
+    bathsFilled: 0,
+    bathsSkipped: 0,
+    bathsWithoutAccess: 0,
+    bathTemplatePublished: false,
+    bathScenarioMap: [],
   };
 
   // (f) Skrivingen
@@ -1535,6 +1514,23 @@ export async function seedTestdata({
   } catch (error) {
     if (error instanceof TestdataSetupError || error instanceof TestdataStepError) throw error;
     throw new TestdataStepError(currentKey, error);
+  }
+
+  // (g) Del 2: badene i testoppdragene. Feil i et scenario gir norsk melding (TestdataBathError).
+  try {
+    const baths = await seedTestdataBaths({ db, now, seed, scenarios: bathScenarios });
+    for (const table of TESTDATA_BATH_TABLES) {
+      summary.created[table] = baths.created[table];
+      summary.existing[table] = baths.existing[table];
+    }
+    summary.bathsFilled = baths.bathsFilled;
+    summary.bathsSkipped = baths.bathsSkipped;
+    summary.bathsWithoutAccess = baths.bathsWithoutAccess;
+    summary.bathTemplatePublished = baths.templatePublished;
+    summary.bathScenarioMap = baths.scenarioMap;
+  } catch (error) {
+    if (error instanceof TestdataBathError) throw error;
+    throw new TestdataStepError("badene", error);
   }
   return summary;
 }
