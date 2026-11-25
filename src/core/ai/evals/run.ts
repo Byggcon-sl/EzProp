@@ -626,7 +626,7 @@ async function runOutcomeCase(
   const serverInput: AiServerInput = {
     candidates: evalCase.candidates.map(({ source, id, text }) => ({ source, id, text })),
   };
-  const call = await promptAndCall(runner, evalCase.fields, null, serverInput, true);
+  const call = await promptAndCall(runner, { text: evalCase.note }, null, serverInput, true);
   if ("leak" in call) return { kind: "leak", types: call.leak };
   const answer = call.answer!;
   if (answer.outcome === "error") {
