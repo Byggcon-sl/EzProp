@@ -259,6 +259,10 @@ const NOT_ROOM_WRITES = new Set([
   "decideAiText",
   "draftSummary",
   "saveSummary",
+  // «Skriv det du ser»: låsen prøves i `published-lock.test.ts` (`AI_REPORT_WRITES`)
+  "findOutcomes",
+  "chooseOutcomeMatch",
+  "rejectOutcomeMatch",
 ]);
 
 async function expectLocked(action: () => Promise<unknown>) {
