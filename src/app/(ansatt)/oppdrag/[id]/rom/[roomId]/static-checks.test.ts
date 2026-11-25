@@ -159,3 +159,30 @@ describe("KI-beslutninger fra rommet", () => {
     expect(source).not.toContain('decision: "undo" }');
   });
 });
+
+/*
+ * «Skriv det du ser» (testplanen S9.4): handlingene for søk, valg og avvisning er tynne. Tilgangen
+ * ligger i kjernen og `src/core/access`, aldri i `actions.ts`.
+ */
+describe("«Skriv det du ser»: ingen tilgangslogikk i handlingene", () => {
+  it("actions.ts har ingen rolle- eller rettighetssjekk", () => {
+    const source = code("actions.ts");
+    expect(source).not.toMatch(
+      /requireOrganizationAccess|grantHasPermission|hasPermission|\.roles\b|\brole\b|"report\.edit"|canEditReports|canManage|permission/u,
+    );
+  });
+
+  it.each([
+    ["findOutcomesAction", "findOutcomes("],
+    ["chooseOutcomeMatchAction", "chooseOutcomeMatch("],
+    ["rejectOutcomeMatchAction", "rejectOutcomeMatch("],
+  ])("%s kaller kjernen og tar ikke organisasjon eller koder fra klienten", (name, core) => {
+    const source = code("actions.ts");
+    const start = source.indexOf(`export async function ${name}`);
+    expect(start).toBeGreaterThan(-1);
+    const body = source.slice(start, source.indexOf("\n}\n", start));
+    expect(body).toContain(core);
+    expect(body).toContain("context.organizationId");
+    expect(body).not.toMatch(/input\.organizationId|checkpointKey|outcomeKey/u);
+  });
+});
