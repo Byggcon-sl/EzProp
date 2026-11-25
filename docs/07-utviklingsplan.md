@@ -163,8 +163,6 @@ Første punkt tas **før Byggcon-profilen**, fordi det retter reglene som alt er
 
 Før bredden bygges, lages hele veien gjennom rapporten for ett våtrom, i full produksjonskvalitet (ikke en prototype som bygges om senere). Da kan Ståle se og godkjenne fag og utseende tidlig, og feil i grunnstrukturen oppdages før de blir dyre.
 
-- [x] **ADR: valg av PDF-motor,** og PDF-en av badet i Byggcons profil, i ferdig kvalitet. Krav til motoren: stående og liggende, **flere PDF-profiler av samme rapport** (ulik layout, design og farger fra de samme dataene, Ståle 16.11.2026), bilder med markering, innholdsfortegnelse, norsk orddeling og samme resultat hver gang. Testutskriften med 50 bilder kommer i bredden.
-
 **Fra forbedreren**
 
 - [ ] **Øvingsbad for nye takstmenn** (forbedreren 17.11.2026, fra testdata del 2): hver ansatt kan starte et øvingsoppdrag merket «Øving» med oppdiktet eiendom og bad, bygd på scenarioene i testdataene, med en ekte rapport låst til den publiserte systemmalen. Den ansatte fyller ut badet selv, og «Sammenlign» viser hvor svar og TG-valg skiller seg fra scenarioets fasit (for eksempel «du satte TG2, reglene foreslo TG3 fordi sjiktet er fra før 2000»). KI-funksjonene (tekstforslag og «KI i veien») kjører som vanlig, så den nye lærer å godta, endre og avvise; KI setter aldri TG. Øvingsoppdrag sendes aldri, faktureres aldri og telles ikke i tidsmålinger eller reklamasjonsstatistikk, og KI-bruken logges med øvingsmerke. Data: et flagg på oppdraget og scenariofilen. Bygges etter «KI i veien».

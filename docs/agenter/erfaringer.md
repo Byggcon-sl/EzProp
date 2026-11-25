@@ -332,3 +332,9 @@ Lærdom etter hver PR: feil som gikk igjen, ting Ståle avviste, det som sparte 
 - En spørring med to korrelerte `exists` per rad gikk ut på tid (60 s) i CI, men tok 32 ms lokalt på samme lille datasett. Planleggeren i CI har annen statistikk etter tusenvis av tester. Del heller opp i enkle spørringer med `inArray` og sett sammen i koden når datamengden er liten.
 - E2e som teller serverkall (`countServerActions`) må ikke telle lesekall som kommer på tid (sammendraget leses på nytt 400 ms etter en endring i rommet). Hjelperen hopper nå over rene lesekall for rommet.
 - Kjør aldri lange testkjøringer i samme mappe som en arbeidsflyt som bytter branch; bruk en egen `git worktree`.
+
+**PDF av badet (24.–25.11.2026), PR #244, overtatt av hovedløkken:**
+- `pnpm build` ble aldri kjørt før PR-en, og Turbopack sporet hele prosjektmappen inn i PDF-ruten fordi stien til arbeidstråden ble laget med `process.cwd()` og sendt til `new Worker(...)`. Merk slike dynamiske stier med `/* turbopackIgnore: true */`, og kjør `pnpm build` lokalt før PR når en ny rute leser filer eller starter tråder.
+- E2e som åpner en PDF i ny fane oppfører seg ulikt i full Chromium (innebygd viser: `response.body()` gir viserens HTML) og i headless shell i CI (nedlasting: `popup.url()` er tom og `response.finished()` henger). Les adressen og svaret fra fanens forespørsel og hent bytene med `page.request.get` (`e2e/pdf-tab.ts`). Kjør PDF-e2e lokalt med headless shell (`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`, uten `PLAYWRIGHT_CHROMIUM_EXECUTABLE`) for å se det CI ser.
+- En uhåndtert feil i en testfil (falsk cache uten `match`) gjør hele vitest-kjøringen rød selv om alle tester består. Se etter «Unhandled Errors» i utskriften.
+- `merge-klare-pr.sh --vent` gir opp etter 60 minutter, og e2e i CI tar nå over en time. Start ventingen på nytt når den gir opp.
