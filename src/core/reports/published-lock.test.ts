@@ -361,6 +361,14 @@ const AI_REPORT_WRITES: [string, Write][] = [
       }),
   ],
   [
+    // «Gå gjennom tekstene» (GT3.32): hele listen avvises før noe slås opp
+    "applyReviewedTexts",
+    (l) =>
+      reportsCore.applyReviewedTexts(l.actor, l.organizationId, l.room, {
+        choices: [{ usageId: uuidv7(), choice: "use", rowVersion: 1 }],
+      }),
+  ],
+  [
     "draftSummary",
     (l) =>
       reportsCore.draftSummary(l.actor, l.organizationId, l.assignmentId, { requestId: uuidv7() }),

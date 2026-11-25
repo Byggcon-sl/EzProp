@@ -9,10 +9,7 @@
 export { requestSuggestion, requestSuggestionBatch } from "./request-suggestion";
 export { recordDecision, recordDecisionIn } from "./record-decision";
 /** «Bruk» i «Gå gjennom tekstene»: forslaget med plassholderne byttet tilbake på serveren (A607). */
-export {
-  restorePolishSuggestion,
-  type RestorePolishSuggestionInput,
-} from "./restore-suggestion";
+export { restorePolishSuggestion, type RestorePolishSuggestionInput } from "./restore-suggestion";
 export { getSuggestionStatus, type AiSuggestionStatusResult } from "./suggestion-status";
 export { AI_APPROVAL_CHECK_MAX, checkAiTextApproved, type AiApprovalItem } from "./approval-check";
 export {

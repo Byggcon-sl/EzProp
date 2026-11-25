@@ -460,7 +460,7 @@ export const applyReviewedTexts: ApplyReviewedTexts = (actor, organizationId, ro
       const key = rowKey(plan.row.table, plan.row.id);
       await auditReport(scope, AUDIT_ENTITY[plan.row.table], plan.row.id, "ai_review", {
         field: plan.fieldKey,
-        aiUsageId: plan.usageId,
+        usageId: plan.usageId,
         choice: plan.choice,
         decision: plan.decision,
         textChanged: textsByRow.get(key)?.texts.has(plan.fieldKey) ?? false,

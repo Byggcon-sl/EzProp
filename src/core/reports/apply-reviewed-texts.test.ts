@@ -878,7 +878,7 @@ describe("GT3.30–GT3.34", () => {
     });
     const rows = await db.select().from(auditLog).where(eq(auditLog.action, "ai_review"));
     expect(rows).toHaveLength(3);
-    expect(rows.map((r) => (r.changes as { aiUsageId: string }).aiUsageId).sort()).toEqual(
+    expect(rows.map((r) => (r.changes as { usageId: string }).usageId).sort()).toEqual(
       [p.usage.cause_text, p.usage.consequence_text, p.usage.description].sort(),
     );
     const all = JSON.stringify(await db.select().from(auditLog));
