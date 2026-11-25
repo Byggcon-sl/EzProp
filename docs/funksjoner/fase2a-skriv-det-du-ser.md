@@ -1,11 +1,12 @@
 # Funksjon: «Skriv det du ser»: KI finner utfallet
 
 - **Fase:** 2a-2 Hele veien først, «Fra forbedreren» (A384)
-- **Modul:** kjerne (`src/core/ai`: ny funksjon `outcome_match`, ledetekst, tolking av svaret, falsk leverandør, evalueringssett; `src/core/reports`: én serverinngang som bygger kandidatene fra den låste malversjonen og kaller KI, én som lager avviket fra valgt treff med beslutningen i samme transaksjon, og én som avviser; den rene likhetsfunksjonen i `src/core/reports/logic`), skjermen `src/app/(ansatt)/oppdrag/[id]/rom/[roomId]/add-deviation-panel.tsx`
+- **Modul:** kjerne (`src/core/ai`: ny funksjon `outcome_match`, ledetekst, tolking av svaret, falsk leverandør, evalueringssett; `src/core/reports`: én serverinngang som bygger kandidatene fra den låste malversjonen og kaller KI, én som lager avviket fra valgt treff med beslutningen i samme transaksjon, og én som avviser; den rene likhetsfunksjonen i `src/shared/lib/text-similarity.ts` (A561) og rapportlogikken i `src/core/reports/logic`), skjermen `src/app/(ansatt)/oppdrag/[id]/rom/[roomId]/add-deviation-panel.tsx`
 - **Branch:** `skriv-det-du-ser` (bygger på `main`, etter PR #232 «KI i veien» og PR #239)
 - **Status:** klar til bygging etter forhåndsvurdering runde 1 og rettelsene fra arkitekt, fagansvarlig og sikkerhet (prosjektlederen 24.11.2026, A564–A567)
+- **Fremdrift 25.11.2026:** del A (likhetsfunksjonen, rapportlogikken, evalueringssettet), del B (KI-kjernen for `outcome_match`) og del C (serverinngangene `findOutcomes`, `chooseOutcomeMatch`, `rejectOutcomeMatch` og låsen etter publisering) er bygd og flettet inn. Gjenstår: skjermen i «+ Avvik», Next-serverhandlingene, manglende tester etter testplanen (Vitest og Playwright på PC og iPad-størrelse), rydde bort det midlertidige fra commit 508bad64, gjennomgang, PR og merge.
 - **Dato:** 24.11.2026
-- **Versjon:** 0.19.7 → 0.19.8 (én patch over main)
+- **Versjon:** 0.20.1 → 0.20.2 (én patch over main, rettet 25.11.2026 etter at main gikk videre)
 - **Støtter hovedmål:**
   - **KI i bunnen (hovedsaken):** takstmannen beskriver det han ser med egne ord, og KI finner de malutfallene som passer. KI forbereder valget, takstmannen velger. Samme grunnmur som «KI i veien»: vask, forslag, beslutning og logg.
   - **De ansatte:** ingen leting i punktlisten eller gjetting på søkeord. Ett notat inn, tre treff ut, ett trykk lager avviket med Byggcons standardtekst. Uten nett får han nesten samme hjelp fra det lokale likhetssøket.
