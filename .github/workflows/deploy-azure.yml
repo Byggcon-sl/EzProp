@@ -235,6 +235,10 @@ jobs:
           rm -rf .next/standalone
           mv .next/standalone-flat .next/standalone
           cd .next/standalone
+          # PDF-motoren (ADR 0016): arbeidstråden, WASM-filen, skriftene og logoen må ligge i pakken.
+          # Prøven kjører motoren fra pakken slik den rulles ut, og stopper utrullingen hvis noe mangler.
+          test -f src/core/pdf/typst-worker.mjs
+          node "$GITHUB_WORKSPACE/scripts/pdf-engine-trial.mjs"
           zip -qr "$GITHUB_WORKSPACE/app.zip" .
 
       - name: Rull ut til App Service

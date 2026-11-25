@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EVENT_TYPES, type EventType } from "@/core/events";
+import { EVENT_TYPES, PDF_EVENT_DATA_FIELDS, type EventType } from "@/core/events";
 
 /*
  * Hendelseskodene (docs/05-domenemodell.md 4.9) som faste koder.
@@ -56,6 +56,9 @@ const EXPECTED_EVENT_TYPES = [
   "report.published",
   "report.revised",
   "report.publish_override",
+  // PDF-utkast og PDF av utgivelse (docs/funksjoner/fase2a-pdf-badet-testplan.md 6.3.3 og 11.8)
+  "report.draft_pdf_created",
+  "report.release_pdf_created",
   "report.sent",
   "invoice.draft_created",
   "invoice.sent",
@@ -70,8 +73,8 @@ const EXPECTED_EVENT_TYPES = [
 ];
 
 describe("hendelseskodene", () => {
-  it("1. har nøyaktig de 56 kodene fra domenemodellen 4.9", () => {
-    expect(EXPECTED_EVENT_TYPES).toHaveLength(56);
+  it("1. har nøyaktig de 58 kodene fra domenemodellen 4.9", () => {
+    expect(EXPECTED_EVENT_TYPES).toHaveLength(58);
     expect([...EVENT_TYPES].sort()).toEqual([...EXPECTED_EVENT_TYPES].sort());
   });
 
@@ -111,4 +114,72 @@ describe("hendelseskodene", () => {
     expect(EVENT_TYPES).toContain(known);
     expect(EVENT_TYPES as readonly string[]).not.toContain(unknown);
   });
+});
+
+/*
+ * Feltene på PDF-hendelsene (testplan 6.3.3 og 11.8.1). Fasiten står her med vilje. Raden har
+ * `actor_id` fordi `recordEvent` alltid lagrer den; `data` har bare tall, profilkoden og
+ * rapport-id-en.
+ */
+describe("PDF-hendelsene: bare tillatte felt", () => {
+  const ALLOWED = {
+    "report.draft_pdf_created": [
+      "reportId",
+      "profileCode",
+      "pageCount",
+      "imageCount",
+      "durationMs",
+    ],
+    "report.release_pdf_created": [
+      "reportId",
+      "profileCode",
+      "pageCount",
+      "imageCount",
+      "durationMs",
+      "versionNumber",
+    ],
+  };
+  // Ord som aldri skal stå i et feltnavn: adresse, oppdragsnummer, filnavn, selskap, navn, tekst
+  const FORBIDDEN = [
+    /address/i,
+    /adresse/i,
+    /cadastr/i,
+    /matrikkel/i,
+    /assignmentnumber/i,
+    /number$/i,
+    /^file|filename/i,
+    /company/i,
+    /legal/i,
+    /org/i,
+    /name/i,
+    /text/i,
+    /caption/i,
+    /email/i,
+    /employee/i,
+    /actor/i,
+  ];
+
+  it("har nøyaktig de to PDF-hendelsene, og begge er kjente koder", () => {
+    expect(Object.keys(PDF_EVENT_DATA_FIELDS).sort()).toEqual(Object.keys(ALLOWED).sort());
+    for (const type of Object.keys(PDF_EVENT_DATA_FIELDS)) {
+      expect(EVENT_TYPES as readonly string[]).toContain(type);
+    }
+  });
+
+  it.each(Object.entries(ALLOWED))("%s har bare de tillatte feltene", (type, fields) => {
+    expect([...PDF_EVENT_DATA_FIELDS[type as keyof typeof PDF_EVENT_DATA_FIELDS]]).toEqual(fields);
+  });
+
+  it.each(Object.entries(PDF_EVENT_DATA_FIELDS))(
+    "%s har ingen felt for adresse, oppdragsnummer, filnavn, selskap eller navn",
+    (_type, fields) => {
+      for (const field of fields) {
+        // `versionNumber` er versjonen av utgivelsen (1, 2 …), ikke et oppdragsnummer
+        const forbidden = FORBIDDEN.filter(
+          (pattern) => pattern.test(field) && field !== "versionNumber",
+        );
+        expect(forbidden, field).toEqual([]);
+      }
+    },
+  );
 });

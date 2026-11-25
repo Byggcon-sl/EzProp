@@ -32,7 +32,12 @@ import {
   yesNoUnknownLabel,
   type AssignmentProperty,
 } from "@/core/properties";
-import { getPublishCheck, listReleases, ReportValidationError } from "@/core/reports";
+import {
+  getPublishCheck,
+  hasReportForPdf,
+  listReleases,
+  ReportValidationError,
+} from "@/core/reports";
 import type { ReleaseView } from "@/core/reports/publish-types";
 import { logger } from "@/shared/lib/logger";
 import { todayInOslo } from "@/shared/lib/dates";
@@ -74,6 +79,7 @@ import {
 } from "./created-from-offer";
 import { CreatedFromOfferNotice } from "./created-from-offer-notice";
 import { PartyCard } from "./party-card";
+import { DraftPdfButton } from "./pdf-draft-button";
 import { AddPartySection, type PartyRoleOption } from "./party-form";
 import { PropertyDetails, PropertyForm, type PropertyFormValues } from "./property-form";
 import { ReleasesCard } from "./releases-card";
@@ -143,6 +149,23 @@ async function loadReleases(
     if (error instanceof AccessDeniedError || error instanceof ReportValidationError) {
       return { releases: [], newVersion: null };
     }
+    throw error;
+  }
+}
+
+/**
+ * Om «Lag PDF (utkast)» skal vises: oppdraget har en rapport som ikke er erstattet
+ * (docs/funksjoner/fase2a-pdf-badet.md, Skjermer). Kjernen sjekker tilgangen; uten tilgang vises
+ * ingen knapp.
+ */
+async function loadPdfReady(
+  context: NonNullable<Awaited<ReturnType<typeof getEmployeeContext>>>,
+  assignmentId: string,
+): Promise<boolean> {
+  try {
+    return await hasReportForPdf(context.actor, context.organizationId, assignmentId);
+  } catch (error) {
+    if (error instanceof AccessDeniedError) return false;
     throw error;
   }
 }
@@ -360,8 +383,8 @@ export default async function AssignmentPage({
 
   const canEdit = context.canEditOrders;
   const now = new Date();
-  const [schedule, agreements, suggestion, claims, duplicates, trash, releases] = await Promise.all(
-    [
+  const [schedule, agreements, suggestion, claims, duplicates, trash, releases, pdfReady] =
+    await Promise.all([
       loadSchedule(context, assignment),
       listAgreements(context.actor, context.organizationId),
       suggestAgreementForAssignment(context.actor, context.organizationId, assignment.id, now),
@@ -369,8 +392,8 @@ export default async function AssignmentPage({
       loadDuplicates(context, assignment.id),
       listTrash(context.actor, context.organizationId, assignment.id),
       loadReleases(context, assignment.id),
-    ],
-  );
+      loadPdfReady(context, assignment.id),
+    ]);
   const partyTrash = toTrashEntries(
     trash.filter((line) => line.type === "party"),
     now,
@@ -538,7 +561,7 @@ export default async function AssignmentPage({
         email={context.actor.email}
       />
 
-      <p className="-mt-4 mb-8">
+      <div className="-mt-4 mb-8 flex flex-wrap items-start gap-x-4 gap-y-2">
         <Link
           href={`/oppdrag/${assignment.id}/bygninger`}
           className="inline-flex min-h-11 items-center font-medium text-brand-700 underline-offset-4 hover:underline"
@@ -546,7 +569,8 @@ export default async function AssignmentPage({
           Bygninger, areal og rom
           <span aria-hidden="true">&nbsp;›</span>
         </Link>
-      </p>
+        {pdfReady && <DraftPdfButton assignmentId={assignment.id} showSyncStatus />}
+      </div>
 
       <ReleasesCard
         assignmentId={assignment.id}

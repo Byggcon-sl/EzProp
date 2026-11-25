@@ -27,6 +27,7 @@ import { restoreDeviationAction, setTgDirectAction } from "./actions";
 import { AddDeviationPanel } from "./add-deviation-panel";
 import { AnswerField } from "./answer-field";
 import { DeviationCard } from "./deviation-card";
+import { checkpointAnchorId } from "../../pdf-texts";
 import { useRoom, type UndoLine } from "./room-context";
 import { isActionError, ROOM_TEXTS, SUGGESTION_MESSAGES } from "./room-messages";
 import {
@@ -66,6 +67,7 @@ import { TgiuSection } from "./tgiu-section";
  */
 
 export function CheckpointPanel({
+  anchorId,
   checkpoint,
   suggestions,
   answers,
@@ -85,6 +87,8 @@ export function CheckpointPanel({
   /** Øker når Ctrl/Cmd+K er trykket: avvikssøket åpnes. */
   searchOpenRequest: number;
   onStickyAccept(ruleKey: string, accept: StickyAccept | null): void;
+  /** Id-en til punktet i malversjonen, for ankeret `#punkt-<id>` fra PDF-utkastet (F4). */
+  anchorId: string | null;
 }) {
   const { canEdit, doc, announce, openCheckpoint, focus, undoLines } = useRoom();
   const cp = doc.checkpoint(checkpoint.checkpointKey);
@@ -150,7 +154,10 @@ export function CheckpointPanel({
   const ownUndo = undoLines;
 
   return (
-    <div className="space-y-4 xl:space-y-6">
+    <div
+      id={anchorId ? checkpointAnchorId(anchorId) : undefined}
+      className="scroll-mt-40 space-y-4 xl:space-y-6"
+    >
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <h2

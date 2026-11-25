@@ -33,6 +33,7 @@ import {
   removeMeasureAction,
   saveFieldAction,
 } from "./actions";
+import { deviationAnchorId } from "../../pdf-texts";
 import { CostField } from "./cost-field";
 import { FieldStatus } from "./field-status";
 import { useField, useRoom } from "./room-context";
@@ -251,7 +252,11 @@ export function DeviationCard({
 
   return (
     <Card>
-      <section aria-labelledby={headingId} className="space-y-5">
+      <section
+        id={deviationAnchorId(deviation.id)}
+        aria-labelledby={headingId}
+        className="scroll-mt-40 space-y-5"
+      >
         <div className="space-y-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <h3
@@ -955,7 +960,11 @@ function ReadOnlyDeviation({
   const measures = [...deviation.measures].sort((a, b) => a.sortOrder - b.sortOrder);
   return (
     <Card>
-      <section aria-labelledby={headingId} className="space-y-4">
+      <section
+        id={deviationAnchorId(deviation.id)}
+        aria-labelledby={headingId}
+        className="scroll-mt-40 space-y-4"
+      >
         <h3
           id={headingId}
           tabIndex={-1}

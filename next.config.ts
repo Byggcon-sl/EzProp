@@ -7,6 +7,22 @@ const nextConfig: NextConfig = {
   agentRules: false,
   // Selvstendig pakke med bare det serveren trenger (drift senere). `pnpm start` virker som før.
   output: "standalone",
+  // PDF-motoren (ADR 0016) lastes bare i arbeidstråden `src/core/pdf/typst-worker.mjs`, som
+  // startes med filsti og derfor ikke pakkes av Next. Pakkene holdes utenfor serverpakken, og
+  // arbeidstråden, motoren og WASM-filen tas med i `.next/standalone` for alle ruter.
+  // `scripts/pdf-engine-trial.mjs` og steget «Prøv PDF-motoren i pakken» i deploy-azure.yml
+  // viser at filene er med.
+  serverExternalPackages: ["@myriaddreamin/typst.ts", "@myriaddreamin/typst-ts-web-compiler"],
+  outputFileTracingIncludes: {
+    "/*": [
+      "./src/core/pdf/typst-worker.mjs",
+      "./node_modules/@myriaddreamin/typst.ts/package.json",
+      "./node_modules/@myriaddreamin/typst.ts/dist/cjs/**/*.cjs",
+      "./node_modules/@myriaddreamin/typst-ts-web-compiler/package.json",
+      "./node_modules/@myriaddreamin/typst-ts-web-compiler/pkg/*.mjs",
+      "./node_modules/@myriaddreamin/typst-ts-web-compiler/pkg/*.wasm",
+    ],
+  },
   // Sikkerhetshoder på alle svar (src/shared/config/security-headers.ts)
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
