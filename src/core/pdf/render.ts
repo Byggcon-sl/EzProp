@@ -1,14 +1,21 @@
 import { checkImage } from "@/shared/images";
+import { PDF_PAGE_HASH_LENGTH } from "./codes";
 import { PdfRenderError } from "./errors";
 import { layoutReportPdf, normalizeAppBaseUrl, type PdfLayout } from "./layout";
+import { buildPdfPageMap } from "./page-map-build";
+import { cleanPageSvg } from "./page-svg";
 import { REPORT_PDF_TEMPLATE } from "./template";
 import type {
+  CreateReportPagesRenderer,
   CreateReportPdfRenderer,
   PdfEngine,
   PdfEngineJob,
+  PdfEngineOutput,
   PdfImage,
   PdfLimits,
+  PdfPagesLimits,
   PdfProfile,
+  RenderedPage,
   RenderReportPdfOptions,
   ReportPdfData,
 } from "./types";
@@ -116,6 +123,7 @@ export function preparePdfJob(
   data: ReportPdfData,
   profile: PdfProfile,
   options: RenderReportPdfOptions,
+  output: PdfEngineOutput = "pdf",
 ): PreparedPdfJob {
   if (!(options.generatedAt instanceof Date) || Number.isNaN(options.generatedAt.getTime())) {
     throw new PdfRenderError("engine_failed");
@@ -144,13 +152,15 @@ export function preparePdfJob(
     appBaseUrl: normalizeAppBaseUrl(options.appBaseUrl),
     logoPath,
     imagePath: (image) => imagePaths.get(image) ?? "",
+    // Merkene for sidekartet skrives bare for sidene; PDF-en er byte for byte som før.
+    pageMap: output === "pages",
   });
 
   return {
     layout,
     imageCount: images.length,
     job: {
-      output: "pdf",
+      output,
       source: REPORT_PDF_TEMPLATE,
       inputs: { data: JSON.stringify(layout) },
       files,
@@ -169,6 +179,83 @@ export const createReportPdfRenderer: CreateReportPdfRenderer =
       return { bytes: result.bytes, pageCount: result.pageCount, imageCount: prepared.imageCount };
     } catch (error) {
       // Bare den faste koden går videre, aldri meldingen fra motoren.
+      if (error instanceof PdfRenderError) throw error;
+      throw new PdfRenderError("engine_failed");
+    }
+  };
+
+// --- Sidene som SVG og sidekartet (tillegget til ADR 0016, punkt 13–20) ------------------------
+
+const isPositiveInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+
+function checkPagesLimits(limits: PdfPagesLimits): void {
+  if (!isPositiveInteger(limits.maxPages) || !isPositiveInteger(limits.maxSvgBytesTotal)) {
+    throw new PdfRenderError("engine_failed");
+  }
+}
+
+/**
+ * De første `PDF_PAGE_HASH_LENGTH` heksadesimale tegnene av SHA-256. `crypto.subtle` finnes både i
+ * Node og i nettleseren, så filen trenger ingen `node:`-modul (ADR-tillegget punkt 19).
+ */
+async function pageHash(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  const digest = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes));
+  let hex = "";
+  for (const byte of digest) hex += byte.toString(16).padStart(2, "0");
+  return hex.slice(0, PDF_PAGE_HASH_LENGTH);
+}
+
+/**
+ * Samme data, profil og mal som PDF-en, men til én selvstendig SVG per side og sidekartet. Over
+ * taket på sider eller samlet størrelse gir `too_many_pages` eller `pages_too_large`, aldri et
+ * halvt svar. En side som ikke består sjekken, eller merker som ikke kan leses, gir
+ * `engine_failed`. Lagrer ingenting.
+ */
+export const createReportPagesRenderer: CreateReportPagesRenderer =
+  (engine: PdfEngine) => async (data, profile, options) => {
+    checkPagesLimits(options.limits);
+    const prepared = preparePdfJob(data, profile, options, "pages");
+    try {
+      const result = await engine(
+        { ...prepared.job, maxPages: options.limits.maxPages },
+        { timeoutMs: options.limits.timeoutMs },
+      );
+      if (result.output !== "pages" || result.pages.length === 0) {
+        throw new PdfRenderError("engine_failed");
+      }
+      if (result.pages.length > options.limits.maxPages) {
+        throw new PdfRenderError("too_many_pages");
+      }
+
+      const encoder = new TextEncoder();
+      const cleaned: {
+        svg: string;
+        bytes: Uint8Array<ArrayBuffer>;
+        widthPt: number;
+        heightPt: number;
+      }[] = [];
+      let total = 0;
+      for (const page of result.pages) {
+        const svg = cleanPageSvg(page.svg, page);
+        if (svg === null) throw new PdfRenderError("engine_failed");
+        const bytes = encoder.encode(svg);
+        total += bytes.byteLength;
+        if (total > options.limits.maxSvgBytesTotal) throw new PdfRenderError("pages_too_large");
+        cleaned.push({ svg, bytes, widthPt: page.widthPt, heightPt: page.heightPt });
+      }
+      const pageMap = buildPdfPageMap(result.marks, result.pages);
+      const pages: RenderedPage[] = await Promise.all(
+        cleaned.map(async (page) => ({
+          svg: page.svg,
+          hash: await pageHash(page.bytes),
+          widthPt: page.widthPt,
+          heightPt: page.heightPt,
+        })),
+      );
+      return { pages, pageMap, imageCount: prepared.imageCount };
+    } catch (error) {
+      // Bare den faste koden går videre, aldri meldingen fra motoren eller rapporttekst.
       if (error instanceof PdfRenderError) throw error;
       throw new PdfRenderError("engine_failed");
     }

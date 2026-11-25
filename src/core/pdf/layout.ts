@@ -1,13 +1,16 @@
 import { TG_BADGE_SHORT, tgBadgeFullText } from "@/shared/ui/tg-badge";
+import { PDF_PAGE_ANCHOR_ELEMENT_KEY_PATTERN, PDF_PAGE_ANCHOR_ID_PATTERN } from "./codes";
 import { PDF_TEXTS } from "./pdf-texts";
 import type {
   PdfAnswer,
   PdfCheckpoint,
   PdfColor,
   PdfDeviation,
+  PdfDraftMarkKind,
   PdfDraftNote,
   PdfImage,
   PdfMarking,
+  PdfPageAnchor,
   PdfProfile,
   PdfRoom,
   PdfTg,
@@ -22,6 +25,12 @@ import type {
  *
  * Tomme deler gir ingen overskrift og står ikke i innholdsfortegnelsen. Utkastdelene (merknader,
  * «Ikke satt», lenker og siden «Ikke med i PDF-en») er bare med når `draft` er sann.
+ *
+ * Sidekartet (tillegget til ADR 0016, punkt 17): bare når `pageMap` er sann får avsnittene et
+ * anker (`LayoutPageMark`), og malen skriver usynlige start- og sluttmerker rundt dem. Ellers er
+ * alle merkene `null`, og malen tegner nøyaktig det samme som før (fast SHA-256 i
+ * `render-unchanged.test.ts`). Ankrene bygges fra `checkpointId`, `deviationId` og `elementKey`,
+ * aldri fra `editPath` og aldri fra tellerne `a1`, `a2`.
  */
 
 // --- Modellen malen får (JSON i `sys.inputs.data`) ---------------------------------------------
@@ -40,6 +49,27 @@ export type LayoutLink = { url: string };
 export type LayoutNote = { kind: "missing" | "check"; text: string; link: LayoutLink | null };
 
 export type LayoutRow = { label: string; value: string };
+
+/** Et avsnitt i sidekartet: ankeret og utkastmerket. Bare id-er og faste koder, aldri tekst. */
+export type LayoutPageMark = { anchor: PdfPageAnchor; mark: PdfDraftMarkKind | null };
+
+/** Merkene for et avvikskort. `null` for deler som ikke står i kortet. */
+export type LayoutDeviationPageMarks = {
+  deviation: LayoutPageMark;
+  text: LayoutPageMark | null;
+  cause: LayoutPageMark | null;
+  consequence: LayoutPageMark | null;
+  measures: LayoutPageMark | null;
+  cost: LayoutPageMark | null;
+};
+
+/** Merkene for et kontrollpunkt. `answers` står i samme rekkefølge som radene i `answers`. */
+export type LayoutCheckpointPageMarks = {
+  checkpoint: LayoutPageMark;
+  description: LayoutPageMark | null;
+  answers: (LayoutPageMark | null)[];
+  tgiu: LayoutPageMark | null;
+};
 
 /** Mål i millimeter, regnet fra bildet og rammen. Markeringene er i samme mål, fra øverste venstre. */
 export type LayoutMarking =
@@ -71,6 +101,8 @@ export type LayoutDeviation = {
   /** To bilder per rad. */
   imageRows: LayoutImage[][];
   continued: string;
+  /** Bare med sidekart, ellers `null`. */
+  pageMarks: LayoutDeviationPageMarks | null;
 };
 
 export type LayoutTgiu = {
@@ -89,6 +121,8 @@ export type LayoutCheckpoint = {
   answers: LayoutRow[];
   deviations: LayoutDeviation[];
   tgiu: LayoutTgiu | null;
+  /** Bare med sidekart, ellers `null`. */
+  pageMarks: LayoutCheckpointPageMarks | null;
 };
 
 export type LayoutSection =
@@ -122,7 +156,7 @@ export type LayoutSection =
       intro: string;
       reportNotes: LayoutNote[];
       emptyHeading: string | null;
-      empty: { label: string; link: LayoutLink | null }[];
+      empty: { label: string; link: LayoutLink | null; pageMark: LayoutPageMark | null }[];
     };
 
 export type LayoutTocEntry = {
@@ -158,6 +192,8 @@ export type PdfLayout = {
   footer: LayoutFooterPart[];
   toc: LayoutTocEntry[];
   sections: LayoutSection[];
+  /** Sann gir usynlige merker for sidekartet (bare forhåndsvisningen). */
+  pageMap: boolean;
 };
 
 /** Et bilde som har bestått sjekken, med stien malen finner det under. */
@@ -172,6 +208,8 @@ export type LayoutOptions = {
   logoPath: string | null;
   /** Bildene etter sjekken, slått opp på `PdfImage.id` og rekkefølgen i avviket. */
   imagePath: (image: PdfImage) => string;
+  /** Sann gir ankere og merker for sidekartet (bare forhåndsvisningen). Utelatt er `false`. */
+  pageMap?: boolean;
 };
 
 // --- Faste mål (design avsnitt 2.4) --------------------------------------------------------------
@@ -284,10 +322,56 @@ function layoutNotes(
     }));
 }
 
+function shownAnswers(answers: readonly PdfAnswer[]): PdfAnswer[] {
+  return answers.filter(
+    (answer) => present(answer.label) !== null && present(answer.valueText) !== null,
+  );
+}
+
 function layoutAnswers(answers: readonly PdfAnswer[]): LayoutRow[] {
-  return answers
-    .filter((answer) => present(answer.label) !== null && present(answer.valueText) !== null)
-    .map((answer) => ({ label: answer.label, value: answer.valueText }));
+  return shownAnswers(answers).map((answer) => ({ label: answer.label, value: answer.valueText }));
+}
+
+// --- Ankere for sidekartet (A604) ---------------------------------------------------------------
+
+const isAnchorId = (value: unknown): value is string =>
+  typeof value === "string" && PDF_PAGE_ANCHOR_ID_PATTERN.test(value);
+
+const isElementKey = (value: unknown): value is string =>
+  typeof value === "string" && PDF_PAGE_ANCHOR_ELEMENT_KEY_PATTERN.test(value);
+
+/**
+ * Ankeret for et avsnitt, eller `null` når id-ene ikke har formen sidekartet godtar. Da får
+ * avsnittet ikke noe merke, og sidene lages likevel (resten av kartet er riktig).
+ */
+function pageMark(
+  kind: PdfPageAnchor["kind"],
+  ids: { checkpointId: string; deviationId?: string; elementKey?: string },
+  mark: PdfDraftMarkKind | null = null,
+): LayoutPageMark | null {
+  if (!isAnchorId(ids.checkpointId)) return null;
+  if (ids.deviationId !== undefined && !isAnchorId(ids.deviationId)) return null;
+  if (ids.elementKey !== undefined && !isElementKey(ids.elementKey)) return null;
+  return {
+    anchor: {
+      kind,
+      checkpointId: ids.checkpointId,
+      deviationId: ids.deviationId ?? null,
+      elementKey: ids.elementKey ?? null,
+    },
+    mark,
+  };
+}
+
+/** Utkastmerket for et kort: «Ikke satt» før «Mangler» før «Sjekk» (`PDF_DRAFT_MARK_KINDS`). */
+function draftMark(
+  badge: LayoutBadge | null,
+  notes: readonly LayoutNote[],
+): PdfDraftMarkKind | null {
+  if (badge?.style === "not_set") return "tg_not_set";
+  if (notes.some((note) => note.kind === "missing")) return "missing";
+  if (notes.some((note) => note.kind === "check")) return "check";
+  return null;
 }
 
 /** Avrundet til hundredels millimeter, så modellen (og PDF-en) blir lik på alle maskiner. */
@@ -373,6 +457,29 @@ function layoutDeviation(
   const costText = present(deviation.cost.text);
   const link = editLink(deviation.editPath, options);
   const fallbackAlt = PDF_TEXTS.deviation.imageAlt(checkpoint.label);
+  const notes = layoutNotes(deviation.notes, link, options.draft);
+  const text = present(deviation.text);
+  const consequence = present(deviation.consequenceText);
+  const measures = deviation.measures.filter((measure) => present(measure) !== null);
+  const cost = costDisplay || costText ? { display: costDisplay, text: costText } : null;
+
+  let pageMarks: LayoutDeviationPageMarks | null = null;
+  if (options.pageMap) {
+    const ids = { checkpointId: checkpoint.checkpointId, deviationId: deviation.deviationId };
+    const whole = pageMark("deviation", ids, draftMark(badge, notes));
+    const part = (kind: PdfPageAnchor["kind"], shown: boolean) =>
+      shown ? pageMark(kind, ids) : null;
+    if (whole) {
+      pageMarks = {
+        deviation: whole,
+        text: part("deviation.text", text !== null),
+        cause: part("deviation.cause", cause !== null),
+        consequence: part("deviation.consequence", consequence !== null),
+        measures: part("deviation.measures", measures.length > 0),
+        cost: part("deviation.cost", cost !== null),
+      };
+    }
+  }
 
   return {
     anchor,
@@ -382,18 +489,19 @@ function layoutDeviation(
         ? profile.colors.tg[deviation.tg].stroke
         : profile.colors.rule,
     link,
-    notes: layoutNotes(deviation.notes, link, options.draft),
-    text: present(deviation.text),
+    notes,
+    text,
     cause,
-    consequence: present(deviation.consequenceText),
-    measures: deviation.measures.filter((measure) => present(measure) !== null),
-    cost: costDisplay || costText ? { display: costDisplay, text: costText } : null,
+    consequence,
+    measures,
+    cost,
     imageRows: pairs(
       deviation.images.map((image) =>
         layoutImage({ image, path: options.imagePath(image) }, fallbackAlt),
       ),
     ),
     continued: PDF_TEXTS.deviation.continued(checkpoint.label),
+    pageMarks,
   };
 }
 
@@ -418,18 +526,40 @@ function layoutCheckpoint(
   if (checkpoint.tg) badge = tgBadge(checkpoint.tg, profile, "long");
   else if (options.draft && checkpoint.tgNotSet) badge = notSetBadge(profile);
   const link = editLink(checkpoint.editPath, options);
+  const notes = layoutNotes(checkpoint.notes, link, options.draft);
+  const description = present(checkpoint.descriptionText);
+  const answers = shownAnswers(checkpoint.answers);
+  const tgiu = layoutTgiu(checkpoint, profile);
+
+  let pageMarks: LayoutCheckpointPageMarks | null = null;
+  if (options.pageMap) {
+    const ids = { checkpointId: checkpoint.checkpointId };
+    const whole = pageMark("checkpoint", ids, draftMark(badge, notes));
+    if (whole) {
+      pageMarks = {
+        checkpoint: whole,
+        description: description !== null ? pageMark("checkpoint.description", ids) : null,
+        answers: answers.map((answer) =>
+          pageMark("checkpoint.answer", { ...ids, elementKey: answer.elementKey }),
+        ),
+        tgiu: tgiu !== null ? pageMark("tgiu", ids) : null,
+      };
+    }
+  }
+
   return {
     anchor: anchors(),
     title: checkpoint.label,
     badge,
     link,
-    notes: layoutNotes(checkpoint.notes, link, options.draft),
-    description: present(checkpoint.descriptionText),
-    answers: layoutAnswers(checkpoint.answers),
+    notes,
+    description,
+    answers: answers.map((answer) => ({ label: answer.label, value: answer.valueText })),
     deviations: checkpoint.deviations.map((deviation) =>
       layoutDeviation(deviation, checkpoint, profile, options, anchors()),
     ),
-    tgiu: layoutTgiu(checkpoint, profile),
+    tgiu,
+    pageMarks,
   };
 }
 
@@ -576,6 +706,10 @@ export function layoutReportPdf(
           .map((item) => ({
             label: present(item.roomTitle) ? `${item.label} (${item.roomTitle})` : item.label,
             link: editLink(item.editPath, options),
+            // Punktet står ikke i rommet; linjen her fører til det («Ikke med i PDF-en»).
+            pageMark: options.pageMap
+              ? pageMark("checkpoint", { checkpointId: item.checkpointId }, "missing")
+              : null,
           }));
         if (reportNotes.length === 0 && empty.length === 0) break;
         const anchor = nextAnchor();
@@ -637,5 +771,6 @@ export function layoutReportPdf(
     footer,
     toc,
     sections: withToc,
+    pageMap: options.pageMap === true,
   };
 }

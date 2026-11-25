@@ -76,16 +76,40 @@ export const REPORT_PDF_TEMPLATE = String.raw`
 
 #let notes(list) = for n in list { note-line(n) }
 
-// Fast tabell med etikett og verdi. En rad deles aldri.
-#let rows(items, label-width) = {
+// --- Usynlige merker for sidekartet (bare når oppsettet har pageMap: true) ---
+// Et merke er metadata uten mål, så det flytter aldri linje- eller sideskift. Uten sidekart er
+// alle merkene none, og malen tegner det samme som før.
+#let page-mark(edge, pm) = if pm != none {
+  [#metadata((edge: edge, anchor: pm.anchor, mark: pm.mark)) <pdf-page-mark>]
+}
+#let pm-of(marks, key) = if marks == none { none } else { marks.at(key) }
+
+// Fast tabell med etikett og verdi. En rad deles aldri. Med merker (ett per rad) står start-
+// merket øverst i etiketten; raden slutter der neste rad begynner, og den siste etter tabellen.
+#let rows(items, label-width, marks: none) = {
   if items.len() == 0 { return none }
-  grid(
-    columns: (label-width, 1fr), column-gutter: 8pt, row-gutter: 4pt,
-    ..items.map(r => (
-      text(size: 9.5pt, weight: 500, fill: c(col.muted), hyphenate: false, r.label),
-      text(r.value),
-    )).flatten(),
-  )
+  if marks == none {
+    grid(
+      columns: (label-width, 1fr), column-gutter: 8pt, row-gutter: 4pt,
+      ..items.map(r => (
+        text(size: 9.5pt, weight: 500, fill: c(col.muted), hyphenate: false, r.label),
+        text(r.value),
+      )).flatten(),
+    )
+  } else {
+    grid(
+      columns: (label-width, 1fr), column-gutter: 8pt, row-gutter: 4pt,
+      ..items.enumerate().map(((i, r)) => (
+        {
+          if i > 0 { page-mark("end", marks.at(i - 1)) }
+          page-mark("start", marks.at(i))
+          text(size: 9.5pt, weight: 500, fill: c(col.muted), hyphenate: false, r.label)
+        },
+        text(r.value),
+      )).flatten(),
+    )
+    page-mark("end", marks.at(items.len() - 1))
+  }
 }
 
 // --- Bilder med markering som vektorlag (design 2.4) ---
@@ -153,26 +177,45 @@ export const REPORT_PDF_TEMPLATE = String.raw`
 ))
 
 #let deviation-body(dev) = {
+  let pm = dev.pageMarks
   [#metadata((id: dev.anchor, text: dev.continued)) <pdf-card-start>]
+  page-mark("start", pm-of(pm, "deviation"))
   block(sticky: true, below: 6pt, grid(
     columns: (1fr, auto), align: (left + horizon, right + horizon),
     badge(dev.badge), draft-link(dev.link),
   ))
   notes(dev.notes)
-  if dev.text != none { block(above: 6pt, below: 0pt, par(dev.text)) }
-  if dev.cause != none { card-row(d.texts.cause, dev.cause) }
-  if dev.consequence != none { card-row(d.texts.consequence, dev.consequence) }
+  if dev.text != none {
+    page-mark("start", pm-of(pm, "text"))
+    block(above: 6pt, below: 0pt, par(dev.text))
+    page-mark("end", pm-of(pm, "text"))
+  }
+  if dev.cause != none {
+    page-mark("start", pm-of(pm, "cause"))
+    card-row(d.texts.cause, dev.cause)
+    page-mark("end", pm-of(pm, "cause"))
+  }
+  if dev.consequence != none {
+    page-mark("start", pm-of(pm, "consequence"))
+    card-row(d.texts.consequence, dev.consequence)
+    page-mark("end", pm-of(pm, "consequence"))
+  }
   if dev.measures.len() > 0 {
+    page-mark("start", pm-of(pm, "measures"))
     card-row(d.texts.measures, enum(tight: true, spacing: 4pt, ..dev.measures.map(m => [#m])))
+    page-mark("end", pm-of(pm, "measures"))
   }
   if dev.cost != none {
+    page-mark("start", pm-of(pm, "cost"))
     card-row(d.texts.cost, {
       if dev.cost.display != none { keep(dev.cost.display) }
       if dev.cost.display != none and dev.cost.text != none { linebreak() }
       if dev.cost.text != none { dev.cost.text }
     })
+    page-mark("end", pm-of(pm, "cost"))
   }
   photo-rows(dev.imageRows)
+  page-mark("end", pm-of(pm, "deviation"))
   [#metadata(dev.anchor) <pdf-card-end>]
 }
 
@@ -211,6 +254,8 @@ export const REPORT_PDF_TEMPLATE = String.raw`
   if not first {
     block(above: 18pt, below: 12pt, line(length: 100%, stroke: 0.5pt + c(col.rule)))
   }
+  let pm = cp.pageMarks
+  page-mark("start", pm-of(pm, "checkpoint"))
   block(sticky: true, below: 4pt, grid(
     columns: (1fr, auto), column-gutter: 8pt, align: (left + top, right + top),
     [#heading(level: 2, cp.title)#label(cp.anchor)],
@@ -218,10 +263,21 @@ export const REPORT_PDF_TEMPLATE = String.raw`
   ))
   if cp.link != none { block(sticky: true, above: 0pt, below: 4pt, draft-link(cp.link)) }
   notes(cp.notes)
-  if cp.description != none { block(above: 6pt, below: 0pt, par(cp.description)) }
-  if cp.answers.len() > 0 { block(above: 8pt, below: 0pt, rows(cp.answers, 60mm)) }
+  if cp.description != none {
+    page-mark("start", pm-of(pm, "description"))
+    block(above: 6pt, below: 0pt, par(cp.description))
+    page-mark("end", pm-of(pm, "description"))
+  }
+  if cp.answers.len() > 0 {
+    block(above: 8pt, below: 0pt, rows(cp.answers, 60mm, marks: pm-of(pm, "answers")))
+  }
   for dev in cp.deviations { deviation-card(dev) }
-  if cp.tgiu != none { tgiu-panel(cp.tgiu) }
+  if cp.tgiu != none {
+    page-mark("start", pm-of(pm, "tgiu"))
+    tgiu-panel(cp.tgiu)
+    page-mark("end", pm-of(pm, "tgiu"))
+  }
+  page-mark("end", pm-of(pm, "checkpoint"))
 }
 
 // --- Sidene ---
@@ -339,14 +395,22 @@ export const REPORT_PDF_TEMPLATE = String.raw`
     if s.emptyHeading != none {
       block(above: 16pt, below: 8pt, sticky: true, heading(level: 2, s.emptyHeading))
       for e in s.empty {
+        page-mark("start", e.pageMark)
         block(breakable: false, width: 100%, above: 4pt, below: 0pt, grid(
           columns: (1fr, auto), column-gutter: 8pt, align: (left + horizon, right + horizon),
           e.label, draft-link(e.link),
         ))
+        page-mark("end", e.pageMark)
       }
     }
   }
 }
 
 #context [#metadata(counter(page).final().first()) <pdf-page-count>]
+#if d.pageMap {
+  context [#metadata(query(<pdf-page-mark>).map(m => {
+    let p = m.location().position()
+    (..m.value, page: p.page, x: p.x / 1pt, y: p.y / 1pt)
+  })) <pdf-page-marks>]
+}
 `;

@@ -17,6 +17,7 @@ const LOGO_FILES: Readonly<Record<string, readonly string[]>> = {
   [BYGGCON_LOGO_KEY]: ["public", "brand", "byggcon-logo.png"],
 };
 const ENGINE_WASM = "@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm";
+const RENDERER_WASM = "@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm";
 
 async function readAssets(root: string): Promise<PdfAssets> {
   const fontDir = path.join(root, ...FONT_DIR);
@@ -60,4 +61,22 @@ export function loadPdfEngineModule(): Promise<WebAssembly.Module> {
     throw error;
   });
   return engineModule;
+}
+
+let rendererModule: Promise<WebAssembly.Module> | null = null;
+
+/**
+ * Rendererens WASM-fil for sidene som SVG (tillegget til ADR 0016, punkt 14), kompilert én gang
+ * per prosess, som motoren. Lastes først når en forhåndsvisning ber om sider.
+ */
+export function loadPdfRendererModule(): Promise<WebAssembly.Module> {
+  rendererModule ??= (async () => {
+    const requireFromRoot = createRequire(path.join(process.cwd(), "pdf-engine.js"));
+    const bytes = await readFile(requireFromRoot.resolve(RENDERER_WASM));
+    return WebAssembly.compile(bytes);
+  })().catch((error: unknown) => {
+    rendererModule = null;
+    throw error;
+  });
+  return rendererModule;
 }

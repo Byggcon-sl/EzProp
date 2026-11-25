@@ -1,5 +1,6 @@
-// Prøve av PDF-motoren (ADR 0016). Kjøres fra mappen appen rulles ut fra, slik at den viser at
-// motoren, WASM-filen og skriftene faktisk ligger i pakken:
+// Prøve av PDF-motoren (ADR 0016) og rendereren for sidene i forhåndsvisningen (tillegget til
+// ADR 0016). Kjøres fra mappen appen rulles ut fra, slik at den viser at motoren, rendereren,
+// WASM-filene og skriftene faktisk ligger i pakken:
 //
 //   pnpm build && cp -r public .next/standalone/public
 //   cd .next/standalone && node ../../scripts/pdf-engine-trial.mjs
@@ -11,7 +12,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import { crc32, deflateSync } from "node:zlib";
 
@@ -19,6 +20,8 @@ const ROOT = process.cwd();
 const requireFromRoot = createRequire(path.join(ROOT, "trial.js"));
 const ENGINE = "@myriaddreamin/typst.ts";
 const ENGINE_WASM = "@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm";
+const RENDERER = "@myriaddreamin/typst-ts-renderer";
+const RENDERER_WASM = `${RENDERER}/pkg/typst_ts_renderer_bg.wasm`;
 
 // --- Arbeidstråden: eneste sted motoren lastes ---------------------------------------------------
 if (!isMainThread) {
@@ -48,7 +51,36 @@ if (!isMainThread) {
       const options = { mainFilePath: "/main.typ", inputs: job.inputs, diagnostics: "full" };
       let bytes = null;
       let query = null;
-      if (job.query) {
+      let pages = null;
+      if (job.pages) {
+        // Sidene som SVG, slik appen lager dem: én ny økt i rendereren per side.
+        const vector = await compiler.runWithWorld(options, async (world) => {
+          await world.compile();
+          return (await world.vector()).result;
+        });
+        const { createTypstRenderer } = requireFromRoot(`${ENGINE}/renderer`);
+        const renderer = createTypstRenderer();
+        await renderer.init({
+          getWrapper: () => import(pathToFileURL(requireFromRoot.resolve(RENDERER)).href),
+          getModule: () => readFileSync(requireFromRoot.resolve(RENDERER_WASM)),
+        });
+        const session = { format: "vector", artifactContent: vector };
+        const infos = await renderer.runWithSession(session, async (s) => s.retrievePagesInfo());
+        pages = [];
+        let top = 0;
+        for (const { width, height } of infos) {
+          const svg = await renderer.runWithSession(session, async (s) =>
+            s.render_in_window(0.5, top + 0.5, width - 0.5, top + height - 0.5),
+          );
+          pages.push({
+            length: svg.length,
+            top,
+            pageTags: [...svg.matchAll(/<g class="typst-page"[^>]*>/g)].map((match) => match[0]),
+            hasScript: /<script/i.test(svg),
+          });
+          top += Math.ceil(height);
+        }
+      } else if (job.query) {
         query = await compiler.runWithWorld(options, async (world) => {
           await world.compile();
           return world.query({ selector: job.query, field: "value" });
@@ -63,6 +95,7 @@ if (!isMainThread) {
         ok: true,
         bytes,
         query,
+        pages,
         ms: performance.now() - t0,
         initMs,
         fetchCalls,
@@ -370,6 +403,33 @@ async function main() {
     ms: Math.round(fifty.ms),
     processRssMb: Math.round(fifty.rssMb),
   };
+
+  trace(7);
+  // 7. Sidene som SVG for forhåndsvisningen: rendereren finnes i pakken, lager én side per økt,
+  //    uten skript og uten nettkall. Ryddingen og den strenge sjekken prøves i testene.
+  const rendererWasm = requireFromRoot.resolve(RENDERER_WASM);
+  result.files.rendererWasmMb = Number((statSync(rendererWasm).size / 1e6).toFixed(2));
+  const svgPages = await first.run({ source: TEMPLATE, inputs: bath, files, pages: true });
+  const ownPage = (page) =>
+    page.pageTags.some(
+      (tag) => tag.includes(`translate(0, ${page.top})`) && !tag.includes("data-dummy"),
+    );
+  result.pages = {
+    count: svgPages.pages.length,
+    ms: Math.round(svgPages.ms),
+    kbTotal: Math.round(svgPages.pages.reduce((sum, page) => sum + page.length, 0) / 1024),
+    processRssMb: Math.round(svgPages.rssMb),
+  };
+  check("sidene som SVG finnes", svgPages.pages.length > 1);
+  check(
+    "hver SVG har sin egen side",
+    svgPages.pages.every((page) => ownPage(page)),
+  );
+  check(
+    "ingen skript i sidene",
+    svgPages.pages.every((page) => !page.hasScript),
+  );
+  check("ingen nettverkskall med rendereren", svgPages.fetchCalls === 0);
 
   await first.worker.terminate();
   await second.worker.terminate();

@@ -8,7 +8,9 @@ const { loadPdfAssets } = await import("./assets.node");
 const { createNodeWorkerEngine } = await import("./engine.node");
 const { PDF_DEFAULT_LIMITS } = await import("./codes");
 const { BYGGCON_STANDARD_PROFILE } = await import("./profiles");
-const { createReportPdfRenderer } = await import("./render");
+const { createReportPdfRenderer, preparePdfJob } = await import("./render");
+const { layoutReportPdf } = await import("./layout");
+const { REPORT_PDF_TEMPLATE } = await import("./template");
 type PdfAssets = import("./types").PdfAssets;
 
 /*
@@ -55,4 +57,72 @@ describe("LF2 utgivelsen og PDF-utkastet er byte for byte uendret", () => {
     });
     expect(sha(pdf.bytes)).toBe(DRAFT_SHA256);
   }, 30_000);
+});
+
+describe("LF2.3 merkene for sidekartet finnes bare med pageMap", () => {
+  const layoutOptions = {
+    draft: true,
+    generatedAt: GENERATED_AT,
+    appBaseUrl: BASE,
+    logoPath: "/assets/logo",
+    imagePath: () => "/assets/img/1.png",
+  };
+
+  it("uten pageMap har oppsettet ingen ankere og ingen merker", () => {
+    for (const pageMap of [undefined, false]) {
+      const layout = layoutReportPdf(bathroomPdfData("draft"), BYGGCON_STANDARD_PROFILE, {
+        ...layoutOptions,
+        pageMap,
+      });
+      expect(layout.pageMap).toBe(false);
+      const json = JSON.stringify(layout);
+      expect(json).not.toMatch(/"pageMarks":\{|"pageMark":\{|"checkpointId"|"kind":"checkpoint/);
+    }
+  });
+
+  it("med pageMap har punkter, avvik og punktene uten innhold et anker", () => {
+    const layout = layoutReportPdf(bathroomPdfData("draft"), BYGGCON_STANDARD_PROFILE, {
+      ...layoutOptions,
+      pageMap: true,
+    });
+    expect(layout.pageMap).toBe(true);
+    const room = layout.sections.find((section) => section.kind === "room");
+    if (room?.kind !== "room") throw new Error("ventet rom");
+    for (const checkpoint of room.checkpoints) {
+      expect(checkpoint.pageMarks?.checkpoint.anchor.kind).toBe("checkpoint");
+      for (const deviation of checkpoint.deviations) {
+        expect(deviation.pageMarks?.deviation.anchor.kind).toBe("deviation");
+      }
+    }
+    const missing = layout.sections.find((section) => section.kind === "missing");
+    if (missing?.kind !== "missing") throw new Error("ventet «Ikke med i PDF-en»");
+    expect(missing.empty.every((item) => item.pageMark?.mark === "missing")).toBe(true);
+  });
+
+  it("PDF-jobben har aldri sidekart; bare jobben for sidene har det", () => {
+    const options = {
+      draft: true,
+      generatedAt: GENERATED_AT,
+      appBaseUrl: BASE,
+      assets: { fonts: [], logos: {} },
+      limits: PDF_DEFAULT_LIMITS,
+    };
+    const pdfJob = preparePdfJob(bathroomPdfData("draft"), BYGGCON_STANDARD_PROFILE, options);
+    expect(pdfJob.job.output).toBe("pdf");
+    expect(pdfJob.layout.pageMap).toBe(false);
+    const pagesJob = preparePdfJob(
+      bathroomPdfData("draft"),
+      BYGGCON_STANDARD_PROFILE,
+      options,
+      "pages",
+    );
+    expect(pagesJob.job.output).toBe("pages");
+    expect(pagesJob.layout.pageMap).toBe(true);
+  });
+
+  it("malen skriver merkene bare gjennom page-mark, som ikke gir noe uten anker", () => {
+    expect(REPORT_PDF_TEMPLATE).toContain("#let page-mark(edge, pm) = if pm != none {");
+    expect(REPORT_PDF_TEMPLATE.match(/<pdf-page-mark>/g)).toHaveLength(2);
+    expect(REPORT_PDF_TEMPLATE).toContain("#if d.pageMap {");
+  });
 });
