@@ -86,7 +86,7 @@ function tgOfKind(kind: OutcomeSearchHit["outcomeKind"]): 2 | 3 | null {
 
 type Conflict =
   | { kind: "text"; hit: OutcomeSearchHit; input: AddDeviationInput }
-  | { kind: "ai"; hit: OutcomeMatchHit; input: ChooseOutcomeMatchInput };
+  | { kind: "match"; hit: OutcomeMatchHit; input: ChooseOutcomeMatchInput };
 
 export function AddDeviationPanel({
   checkpointKey,
@@ -310,7 +310,7 @@ export function AddDeviationPanel({
       return;
     }
     if (result.status === "tgiu_conflict") {
-      setConflict({ kind: "ai", hit, input: chosen });
+      setConflict({ kind: "match", hit, input: chosen });
       focus("add-deviation-conflict");
       return;
     }
@@ -406,8 +406,8 @@ export function AddDeviationPanel({
     </Button>
   );
 
-  /** Treffene som knapper. `ai` lager avviket fra KI-treffet, ellers som et manuelt valg. */
-  const hitList = (list: readonly OutcomeSearchHit[], source: "ai" | "text", stale = false) =>
+  /** Treffene som knapper. `match` lager avviket fra KI-treffet, ellers som et manuelt valg. */
+  const hitList = (list: readonly OutcomeSearchHit[], source: "match" | "text", stale = false) =>
     list.map((hit, index) => (
       <li key={`${hit.checkpointKey}/${hit.questionKey}/${hit.outcomeKey}`}>
         <OutcomeHitButton
@@ -416,7 +416,7 @@ export function AddDeviationPanel({
           registeredNumber={registeredOf(hit)?.number ?? null}
           disabled={busy}
           stale={stale}
-          onChoose={() => void (source === "ai" ? chooseAi(hit as OutcomeMatchHit) : add(hit))}
+          onChoose={() => void (source === "match" ? chooseAi(hit as OutcomeMatchHit) : add(hit))}
           onKeyDown={(event) => moveFocus(event, index)}
         />
       </li>
@@ -527,7 +527,7 @@ export function AddDeviationPanel({
               onClick={() => {
                 const pending = conflict;
                 setConflict(null);
-                if (pending.kind === "ai") {
+                if (pending.kind === "match") {
                   void chooseAi(pending.hit, { ...pending.input, tgiuChoice: "remove_tgiu" });
                 } else {
                   void add(pending.hit, { ...pending.input, tgiuChoice: "remove_tgiu" });
@@ -545,8 +545,8 @@ export function AddDeviationPanel({
 
       {showGroup && (
         <div ref={aiListRef} className="space-y-3">
-          <OutcomeMatchHits variant="ai" busy={busy} stale={view.hitsStale}>
-            {hitList(view.hits, "ai", view.hitsStale)}
+          <OutcomeMatchHits variant="match" busy={busy} stale={view.hitsStale}>
+            {hitList(view.hits, "match", view.hitsStale)}
           </OutcomeMatchHits>
           {findButton}
         </div>

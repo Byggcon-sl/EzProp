@@ -6,7 +6,7 @@ import { AiSparkIcon } from "@/shared/ui/ai-text-mark";
 import { OUTCOME_MATCH_TEXTS } from "./room-messages";
 
 /*
- * Gruppen med treff i «+ Avvik» (skisse for «Skriv det du ser», avsnitt 5 og 8). `ai` er «Forslag
+ * Gruppen med treff i «+ Avvik» (skisse for «Skriv det du ser», avsnitt 5 og 8). `match` er «Forslag
  * fra KI (velg ett)» med KI-tonen og spark-ikonet; ellers er det «Nærmeste treff (uten KI)» uten
  * KI-tone. Treffknappene kommer inn som barn i rekkefølgen de skal stå: ingen nummerering, ingen
  * «beste treff» og ingen poeng (spørsmål 120). Ren visning; tilstand og handlinger er panelets.
@@ -19,7 +19,7 @@ export function OutcomeMatchHits({
   stale = false,
   children,
 }: {
-  variant: "ai" | "nearest";
+  variant: "match" | "nearest";
   /** Et valg lagres: gruppen får `aria-busy`. */
   busy: boolean;
   /** Teksten er endret etter svaret: kanten blir grå (skisse 3.5). */
@@ -27,7 +27,7 @@ export function OutcomeMatchHits({
   /** Én `<li>` per treff. */
   children: ReactNode;
 }) {
-  const ai = variant === "ai";
+  const ai = variant === "match";
   const headingId = ai ? "outcome-match-heading" : "outcome-nearest-heading";
   return (
     <section
