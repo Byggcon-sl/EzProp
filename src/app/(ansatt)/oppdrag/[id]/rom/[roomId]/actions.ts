@@ -1,6 +1,7 @@
 "use server";
 
-import { ZodError } from "zod";
+import { revalidatePath } from "next/cache";
+import { z, ZodError } from "zod";
 import { AccessDeniedError } from "@/core/access";
 import {
   AI_FIELD_MAX_LENGTH,
@@ -14,12 +15,15 @@ import {
   addMeasure,
   changeSuggestedDeviationTg,
   applyPhrase,
+  chooseOutcomeMatch,
   decideAiText,
   decideSuggestion,
   draftSummary,
+  findOutcomes,
   getReportSummary,
   polishDescription,
   polishDeviation,
+  rejectOutcomeMatch,
   removeDeviation,
   removeMeasure,
   ReportTemplateMissingError,
@@ -39,12 +43,17 @@ import type {
   ChangeSuggestedDeviationTgResult,
   ApplyPhraseInput,
   ApplyPhraseResult,
+  ChooseOutcomeMatchInput,
+  ChooseOutcomeMatchResult,
   DecideAiTextInput,
   DecideSuggestionInput,
   DecideSuggestionResult,
   DraftSummaryResult,
+  FindOutcomesInput,
+  FindOutcomesResult,
   PolishDeviationInput,
   PolishResult,
+  RejectOutcomeMatchInput,
   ReportFieldChange,
   ReportSummaryView,
   RestoreDeviationInput,
@@ -391,5 +400,161 @@ export async function saveSummaryAction(
 ): Promise<SaveSummaryResult | ActionError> {
   return onRoom("summary_save", ref, (context, room) =>
     saveSummary(context.actor, context.organizationId, room.assignmentId, input),
+  );
+}
+
+// --- «Skriv det du ser» (docs/funksjoner/fase2a-skriv-det-du-ser.md, testplanen 9a) --------------
+//
+// Tre tynne handlinger. Organisasjonen kommer fra tilgangssjekken i økten, aldri fra klienten.
+// Klienten sender aldri `organizationId`, `checkpointKey` eller `outcomeKey`: skjemaene under er
+// `.strict()`, og ukjente nøkler avvises før kjernen kalles. Kjernen (`@/core/reports`) sjekker
+// tilgangen, utleder utfallet av kandidaten og validerer innholdet fullt ut. Notatet står aldri i
+// et svar, en feilmelding eller loggen (A566, S9.3). KI velger aldri utfall og setter aldri TG.
+// Hovedmål: KI i bunnen (all KI via kjernen) og færre reklamasjoner (samme avvik som manuelt valg).
+
+/** Meldingene i kortet (skissen avsnitt 3). Del C kan flytte dem til `room-messages.ts`. */
+const OUTCOME_MATCH_TEXTS = {
+  noMatch: "Ingen utfall passer. Bruk søket eller punktlisten.",
+  aiOff: "KI er av. Bruk søket.",
+  aiError: "KI svarte ikke. Bruk søket.",
+  noteTooLong: "Notatet er for langt for KI (høyst 500 tegn).",
+  tooManyCandidates: "For mange utfall i dette rommet for KI. Bruk søket.",
+  outdated: "Forslagene er utdatert. Trykk «Finn med KI» på nytt.",
+  alreadyDecided: "Forslaget er alt brukt. Ingenting er endret.",
+} as const;
+
+/** Bare formen og nøklene; kjernen validerer verdiene med sine egne skjemaer. */
+const findOutcomesActionSchema = z
+  .object({
+    requestId: z.string(),
+    note: z.string(),
+    openCheckpointKey: z.string().nullable(),
+  })
+  .strict();
+
+const chooseOutcomeMatchActionSchema = z
+  .object({
+    usageId: z.string(),
+    candidate: z.object({ source: z.string(), id: z.string() }).strict(),
+    deviationId: z.string(),
+    tg: z.number().nullable(),
+    tgiuChoice: z.string().optional(),
+  })
+  .strict();
+
+const rejectOutcomeMatchActionSchema = z.object({ usageId: z.string() }).strict();
+
+/** Svaret på «Finn med KI». Alt utenom treffene har en ferdig norsk melding. */
+export type FindOutcomesActionResult =
+  | Extract<FindOutcomesResult, { status: "ranked" }>
+  | (Exclude<FindOutcomesResult, { status: "ranked" }> & { message: string });
+
+/** Svaret på valg av et treff. `saved` har avviket og punktet; notatet har skjermen selv. */
+export type ChooseOutcomeMatchActionResult =
+  | Exclude<ChooseOutcomeMatchResult, { status: "suggestion_outdated" }>
+  | { status: "suggestion_outdated"; message: string };
+
+/** Svaret på avvisning av et søk. */
+export type RejectOutcomeMatchActionResult =
+  { status: "saved" } | { status: "already_decided"; message: string };
+
+const FIND_MESSAGES: Record<Exclude<FindOutcomesResult["status"], "ranked">, string> = {
+  no_match: OUTCOME_MATCH_TEXTS.noMatch,
+  ai_off: OUTCOME_MATCH_TEXTS.aiOff,
+  ai_error: OUTCOME_MATCH_TEXTS.aiError,
+  note_too_long: OUTCOME_MATCH_TEXTS.noteTooLong,
+  too_many_candidates: OUTCOME_MATCH_TEXTS.tooManyCandidates,
+};
+
+/**
+ * Felles ramme for «Skriv det du ser»: økten først (uten økt: «logget ut», uten kall til
+ * kjernen), så rom-id-ene og skjemaet, så kjernen. Feil blir en norsk melding uten innhold.
+ */
+async function onOutcomeMatch<I, T>(
+  action: string,
+  ref: RoomRef,
+  schema: z.ZodType<I>,
+  input: unknown,
+  run: (context: EmployeeContext, room: RoomRef, values: I) => Promise<T>,
+): Promise<T | ActionError | SignedOutError> {
+  const access = await getEmployeeContextForAction();
+  if (access.status === "signed_out") {
+    return { status: "error", message: SIGNED_OUT_MESSAGE, signedOut: true };
+  }
+  if (access.status !== "ok" || !isRoomRef(ref)) return errorOf(NO_ACCESS);
+  const parsed = schema.safeParse(input);
+  // Zod-feilen kan gjengi verdien, så den brukes aldri i svaret
+  if (!parsed.success) return errorOf(ROOM_ACTION_MESSAGES.invalid);
+  const { context } = access;
+  const room: RoomRef = { assignmentId: ref.assignmentId, roomId: ref.roomId };
+  try {
+    return await run(context, room, parsed.data);
+  } catch (error) {
+    return toActionError(error, { action, userId: context.actor.id, ...room });
+  }
+}
+
+/** «Finn med KI»: opptil tre treff, ingen forhåndsvalgt. Lagrer ikke notatet. */
+export async function findOutcomesAction(
+  ref: RoomRef,
+  input: FindOutcomesInput,
+): Promise<FindOutcomesActionResult | ActionError | SignedOutError> {
+  return onOutcomeMatch(
+    "outcome_match_find",
+    ref,
+    findOutcomesActionSchema,
+    input,
+    async (context, room, values): Promise<FindOutcomesActionResult> => {
+      const result = await findOutcomes(context.actor, context.organizationId, room, values);
+      return result.status === "ranked"
+        ? result
+        : { ...result, message: FIND_MESSAGES[result.status] };
+    },
+  );
+}
+
+/** Valgt treff lager avviket nøyaktig som «+ Avvik» for utfallet, med TG fra takstmannen. */
+export async function chooseOutcomeMatchAction(
+  ref: RoomRef,
+  input: ChooseOutcomeMatchInput,
+): Promise<ChooseOutcomeMatchActionResult | ActionError | SignedOutError> {
+  return onOutcomeMatch(
+    "outcome_match_choose",
+    ref,
+    chooseOutcomeMatchActionSchema,
+    input,
+    async (context, room, values): Promise<ChooseOutcomeMatchActionResult> => {
+      // Verdiene sjekkes av kjernens skjema; her bare videresendt uten ekstra nøkler
+      const result = await chooseOutcomeMatch(
+        context.actor,
+        context.organizationId,
+        room,
+        values as ChooseOutcomeMatchInput,
+      );
+      if (result.status === "suggestion_outdated") {
+        return { status: "suggestion_outdated", message: OUTCOME_MATCH_TEXTS.outdated };
+      }
+      if (result.status === "saved") revalidatePath(ROUTE, "page");
+      return result;
+    },
+  );
+}
+
+/** Lukket liste, «Avbryt», Escape eller valg fra tekstsøket: søket avvises. */
+export async function rejectOutcomeMatchAction(
+  ref: RoomRef,
+  input: RejectOutcomeMatchInput,
+): Promise<RejectOutcomeMatchActionResult | ActionError | SignedOutError> {
+  return onOutcomeMatch(
+    "outcome_match_reject",
+    ref,
+    rejectOutcomeMatchActionSchema,
+    input,
+    async (context, room, values): Promise<RejectOutcomeMatchActionResult> => {
+      const result = await rejectOutcomeMatch(context.actor, context.organizationId, room, values);
+      return result.status === "already_decided"
+        ? { status: "already_decided", message: OUTCOME_MATCH_TEXTS.alreadyDecided }
+        : { status: "saved" };
+    },
   );
 }

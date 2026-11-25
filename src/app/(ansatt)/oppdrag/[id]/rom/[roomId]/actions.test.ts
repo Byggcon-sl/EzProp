@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   getEmployeeContext: vi.fn(),
   getEmployeeContextForAction: vi.fn(),
   logError: vi.fn(),
+  revalidatePath: vi.fn(),
   core: {
     startReport: vi.fn(),
     saveField: vi.fn(),
@@ -43,10 +44,14 @@ const mocks = vi.hoisted(() => ({
     decideSuggestion: vi.fn(),
     setCheckpointDone: vi.fn(),
     changeSuggestedDeviationTg: vi.fn(),
+    findOutcomes: vi.fn(),
+    chooseOutcomeMatch: vi.fn(),
+    rejectOutcomeMatch: vi.fn(),
   },
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/shared/lib/logger", () => ({
   logger: { error: mocks.logError, warn: vi.fn(), info: vi.fn() },
 }));
@@ -409,5 +414,245 @@ describe("already_decided og newer_decision", () => {
       message: NO_ACCESS,
     });
     expect(mocks.logError).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * «Skriv det du ser», testplanen avsnitt 9a (S9.1–S9.3). Notatet har et merke som ikke kan
+ * forekomme i id-er eller tidsstempler, så et lekket notat blir synlig i svar og logg.
+ */
+describe("«Skriv det du ser»: findOutcomesAction, chooseOutcomeMatchAction, rejectOutcomeMatchAction", () => {
+  const NOTE_MARK = "Mxq-notat-ÆØ";
+  const note = `Oppdiktet: fuktig flis ved sluk ${NOTE_MARK}`;
+  const USAGE = "0190a000-0000-7000-8000-000000000090";
+  const OUTCOME = "0190a000-0000-7000-8000-0000000000a0";
+  const REQUEST = "0190a000-0000-7000-8000-0000000000b0";
+  const findInput = { requestId: REQUEST, note, openCheckpointKey: null };
+  const chooseInput = {
+    usageId: USAGE,
+    candidate: { source: "template_outcome" as const, id: OUTCOME },
+    deviationId: DEVIATION,
+    tg: null,
+  };
+  const rejectInput = { usageId: USAGE };
+  const roomRef = { assignmentId: ASSIGNMENT, roomId: ROOM };
+  const RANKED = {
+    status: "ranked",
+    usageId: USAGE,
+    hits: [{ checkpointKey: "wet_room.floor", ref: { source: "template_outcome", id: OUTCOME } }],
+  };
+  const CHOSEN = {
+    status: "saved",
+    checkpointKey: "wet_room.floor",
+    deviationId: DEVIATION,
+    refresh: SAVED.refresh,
+  };
+
+  type Call = () => Promise<unknown>;
+  const calls: [string, Call, keyof typeof mocks.core, unknown][] = [
+    [
+      "findOutcomesAction",
+      () => actions.findOutcomesAction(ref, findInput),
+      "findOutcomes",
+      findInput,
+    ],
+    [
+      "chooseOutcomeMatchAction",
+      () => actions.chooseOutcomeMatchAction(ref, chooseInput),
+      "chooseOutcomeMatch",
+      chooseInput,
+    ],
+    [
+      "rejectOutcomeMatchAction",
+      () => actions.rejectOutcomeMatchAction(ref, rejectInput),
+      "rejectOutcomeMatch",
+      rejectInput,
+    ],
+  ];
+
+  beforeEach(() => {
+    mocks.getEmployeeContextForAction.mockResolvedValue({
+      status: "ok",
+      context: { actor, organizationId: ORG },
+    });
+    mocks.core.findOutcomes.mockResolvedValue(RANKED);
+    mocks.core.chooseOutcomeMatch.mockResolvedValue(CHOSEN);
+    mocks.core.rejectOutcomeMatch.mockResolvedValue({ status: "saved" });
+  });
+
+  it.each(calls)(
+    "S9.1 %s bruker organisasjonen fra økten og bare rom-id-ene",
+    async (_name, call, core, input) => {
+      await call();
+      expect(mocks.core[core]).toHaveBeenCalledTimes(1);
+      expect(mocks.core[core]).toHaveBeenCalledWith(actor, ORG, roomRef, input);
+    },
+  );
+
+  it("S9.1 organisasjon i rom-referansen leses aldri", async () => {
+    const forged = { ...ref, organizationId: OTHER_ORG } as typeof ref;
+    await actions.chooseOutcomeMatchAction(forged, chooseInput);
+    expect(mocks.core.chooseOutcomeMatch).toHaveBeenCalledWith(actor, ORG, roomRef, chooseInput);
+  });
+
+  it.each([
+    ["organizationId", { organizationId: OTHER_ORG }],
+    ["checkpointKey", { checkpointKey: "wet_room.floor" }],
+    ["outcomeKey", { outcomeKey: "tg3" }],
+    ["questionKey", { questionKey: "q" }],
+    ["reportId", { reportId: USAGE }],
+  ])("S9.1 %s fra klienten avvises før kjernen", async (_name, extra) => {
+    const results = [
+      await actions.findOutcomesAction(ref, { ...findInput, ...extra } as typeof findInput),
+      await actions.chooseOutcomeMatchAction(ref, {
+        ...chooseInput,
+        ...extra,
+      } as typeof chooseInput),
+      await actions.rejectOutcomeMatchAction(ref, {
+        ...rejectInput,
+        ...extra,
+      } as typeof rejectInput),
+    ];
+    for (const result of results) {
+      expect(result).toEqual({ status: "error", message: ROOM_ACTION_MESSAGES.invalid });
+      expect(JSON.stringify(result)).not.toContain(NOTE_MARK);
+    }
+    expect(mocks.core.findOutcomes).not.toHaveBeenCalled();
+    expect(mocks.core.chooseOutcomeMatch).not.toHaveBeenCalled();
+    expect(mocks.core.rejectOutcomeMatch).not.toHaveBeenCalled();
+  });
+
+  it("S9.1 ukjent nøkkel i kandidaten avvises, og ugyldig rom gir ingen tilgang", async () => {
+    const forgedCandidate = {
+      ...chooseInput,
+      candidate: { ...chooseInput.candidate, outcomeKey: "tg3" },
+    } as typeof chooseInput;
+    expect(await actions.chooseOutcomeMatchAction(ref, forgedCandidate)).toEqual({
+      status: "error",
+      message: ROOM_ACTION_MESSAGES.invalid,
+    });
+    expect(
+      await actions.findOutcomesAction(
+        { assignmentId: "x", roomId: ROOM } as typeof ref,
+        findInput,
+      ),
+    ).toEqual({ status: "error", message: NO_ACCESS });
+    expect(mocks.core.chooseOutcomeMatch).not.toHaveBeenCalled();
+    expect(mocks.core.findOutcomes).not.toHaveBeenCalled();
+  });
+
+  it.each(calls)(
+    "S9.2 %s uten økt: logget ut, uten kall og uten logg",
+    async (_name, call, core) => {
+      mocks.getEmployeeContextForAction.mockResolvedValue({ status: "signed_out" });
+      expect(await call()).toEqual({
+        status: "error",
+        message: SIGNED_OUT_MESSAGE,
+        signedOut: true,
+      });
+      expect(mocks.core[core]).not.toHaveBeenCalled();
+      expect(mocks.logError).not.toHaveBeenCalled();
+      expect(mocks.revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(calls)("S9.2 %s uten ansatt: ingen tilgang, uten kall", async (_name, call, core) => {
+    mocks.getEmployeeContextForAction.mockResolvedValue({ status: "no_access" });
+    expect(await call()).toEqual({ status: "error", message: NO_ACCESS });
+    expect(mocks.core[core]).not.toHaveBeenCalled();
+  });
+
+  it("treff gis videre uendret, uten notatet", async () => {
+    const result = await actions.findOutcomesAction(ref, findInput);
+    expect(result).toEqual(RANKED);
+    expect(JSON.stringify(result)).not.toContain(NOTE_MARK);
+  });
+
+  it.each([
+    [
+      "no_match",
+      { status: "no_match", usageId: USAGE },
+      "Ingen utfall passer. Bruk søket eller punktlisten.",
+    ],
+    ["ai_off", { status: "ai_off" }, "KI er av. Bruk søket."],
+    ["ai_error", { status: "ai_error" }, "KI svarte ikke. Bruk søket."],
+    ["note_too_long", { status: "note_too_long" }, "Notatet er for langt for KI (høyst 500 tegn)."],
+    [
+      "too_many_candidates",
+      { status: "too_many_candidates" },
+      "For mange utfall i dette rommet for KI. Bruk søket.",
+    ],
+  ])("S9.3 søket %s gir norsk melding uten notatet", async (_name, coreResult, message) => {
+    mocks.core.findOutcomes.mockResolvedValue(coreResult);
+    const result = await actions.findOutcomesAction(ref, findInput);
+    expect(result).toEqual({ ...coreResult, message });
+    expect(JSON.stringify(result)).not.toContain(NOTE_MARK);
+  });
+
+  it("S9.3 fødselsnummer i notatet gir kjernens melding, aldri notatet eller sifrene", async () => {
+    const withId = { ...findInput, note: `${note} 01017012345` };
+    mocks.core.findOutcomes.mockRejectedValue(
+      Object.assign(new FakeReportValidationError("Fødselsnummer skal ikke lagres her."), {
+        code: "invalid_input",
+      }),
+    );
+    const result = await actions.findOutcomesAction(ref, withId);
+    expect(result).toEqual({ status: "error", message: "Fødselsnummer skal ikke lagres her." });
+    expect(JSON.stringify(result)).not.toContain(NOTE_MARK);
+    expect(JSON.stringify(result)).not.toContain("01017012345");
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it.each(calls)(
+    "S9.3 %s på publisert rapport gir koden report_published",
+    async (_name, call, core) => {
+      const message = "Rapporten er publisert. Lag ny versjon for å rette.";
+      mocks.core[core].mockRejectedValue(
+        Object.assign(new FakeReportValidationError(message), { code: "report_published" }),
+      );
+      expect(await call()).toEqual({ status: "error", message, code: "report_published" });
+      expect(mocks.revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+
+  it("S9.3 utdatert søk gir meldingen i kortet, og siden revalideres ikke", async () => {
+    mocks.core.chooseOutcomeMatch.mockResolvedValue({ status: "suggestion_outdated" });
+    expect(await actions.chooseOutcomeMatchAction(ref, chooseInput)).toEqual({
+      status: "suggestion_outdated",
+      message: "Forslagene er utdatert. Trykk «Finn med KI» på nytt.",
+    });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("S9.3 avvisning av et brukt søk gir already_decided med melding", async () => {
+    mocks.core.rejectOutcomeMatch.mockResolvedValue({ status: "already_decided" });
+    expect(await actions.rejectOutcomeMatchAction(ref, rejectInput)).toEqual({
+      status: "already_decided",
+      message: "Forslaget er alt brukt. Ingenting er endret.",
+    });
+  });
+
+  it("valgt treff gir avviket og punktet, og rom-siden revalideres", async () => {
+    expect(await actions.chooseOutcomeMatchAction(ref, chooseInput)).toEqual(CHOSEN);
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/oppdrag/[id]/rom/[roomId]", "page");
+  });
+
+  it("TGIU på punktet gis videre, uten revalidering", async () => {
+    mocks.core.chooseOutcomeMatch.mockResolvedValue({ status: "tgiu_conflict" });
+    expect(await actions.chooseOutcomeMatchAction(ref, chooseInput)).toEqual({
+      status: "tgiu_conflict",
+    });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("S9.3 ukjent feil logges uten notatet, og svaret gjengir det ikke", async () => {
+    mocks.core.findOutcomes.mockRejectedValue(new Error(`uventet: ${note}`));
+    const result = await actions.findOutcomesAction(ref, findInput);
+    expect(result).toEqual({ status: "error", message: UNKNOWN_ERROR });
+    expect(JSON.stringify(result)).not.toContain(NOTE_MARK);
+    expect(mocks.logError).toHaveBeenCalledTimes(1);
+    const logged = JSON.stringify(mocks.logError.mock.calls[0]);
+    expect(logged).not.toContain(NOTE_MARK);
+    expect(logged).toContain("outcome_match_find");
   });
 });
