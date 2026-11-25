@@ -75,6 +75,61 @@ describe("skjermen for badet", () => {
 });
 
 /*
+ * «Skriv det du ser» (skissen avsnitt 1, 10 og 11, testplanen S1.33, S5.6, S7.17): ingen
+ * forhåndsvalgt treff, ingen mikrofonknapp, ingen tilgangslogikk i skjermen, og grensene leses fra
+ * `@/shared`.
+ */
+describe("«Skriv det du ser» i skjermen", () => {
+  const outcomeFiles = [
+    "add-deviation-panel.tsx",
+    "outcome-match-hits.tsx",
+    "outcome-hit-button.tsx",
+    "note-offer.tsx",
+    "outcome-match-model.ts",
+  ];
+
+  it.each(outcomeFiles)(
+    "%s har ingen forhåndsvalg, ingen mikrofon og ingen tilgangslogikk",
+    (file) => {
+      const source = code(file);
+      expect(source).not.toMatch(/aria-(pressed|selected|current|checked)|autoFocus/u);
+      expect(source).not.toMatch(/mikrofon|microphone|getUserMedia|SpeechRecognition|dikter/iu);
+      expect(source).not.toMatch(
+        /roles\.includes|permissions\.includes|requireOrganizationAccess/u,
+      );
+    },
+  );
+
+  it("grensene leses fra @/shared, aldri fra KI-kjernen", () => {
+    for (const file of ["add-deviation-panel.tsx", "room-model.ts", "outcome-match-model.ts"]) {
+      expect(read(file)).not.toMatch(/OUTCOME_MATCH_CANDIDATES_MAX/u);
+    }
+    expect(read("room-model.ts")).toMatch(
+      /import \{[^}]*OUTCOME_MATCH_MAX[^}]*\} from "@\/shared\/config\/ai-targets"/u,
+    );
+  });
+
+  it("de faste målene for e2e finnes (skissen avsnitt 11)", () => {
+    const all = outcomeFiles.map(read).join("\n");
+    for (const id of [
+      "outcome-match-find",
+      "outcome-match-group",
+      "outcome-match-hit",
+      "outcome-match-message",
+      "outcome-nearest-group",
+      "note-offer",
+      "note-offer-add",
+      "note-offer-only",
+      "note-offer-undo",
+    ]) {
+      expect(all, id).toContain(`"${id}"`);
+    }
+    expect(read("outcome-hit-button.tsx")).toMatch(/data-checkpoint=/u);
+    expect(read("outcome-hit-button.tsx")).toMatch(/data-registered=/u);
+  });
+});
+
+/*
  * Beslutninger på KI-forslag (gjennomgangen av KI i veien): tilgangen og radsjekken ligger i
  * rapportkjernen (`decideAiText`), aldri i siden. «Ingen treff» er ikke et forslag og avvises ikke,
  * og «Angre» etter «Bruk» på et fraseforslag avviser forslaget.

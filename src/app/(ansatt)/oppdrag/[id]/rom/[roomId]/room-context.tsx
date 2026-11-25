@@ -2,8 +2,9 @@
 
 import { createContext, useCallback, useContext, useEffect, useSyncExternalStore } from "react";
 import type { MergeValues, PhraseUsageCount, SuggestionTg } from "@/core/reports/logic";
-import type { RoomRef, RoomTemplateDocument } from "@/core/reports/types";
+import type { CheckpointView, RoomRef, RoomTemplateDocument } from "@/core/reports/types";
 import type { ChangeBuilder, FieldEntry, FieldSaveStore, FieldValidator } from "./field-save-store";
+import type { RoomOutcomeNote, RoomOutcomeNoteEvent } from "./outcome-match-model";
 import type { ActionError } from "./room-messages";
 import type { RoomDocumentIndex } from "./room-model";
 
@@ -61,6 +62,14 @@ export type RoomContextValue = {
   phraseUsage: readonly PhraseUsageCount[];
   /** Flettefeltene for et avvik på punktet, fra svarene slik de står nå. */
   mergeValuesFor(checkpointKey: string, measurementValue: number | null): MergeValues;
+  /** Punktene med avvikene slik de står nå, for «Registrert fra før» (A559). */
+  checkpoints: readonly CheckpointView[];
+  /**
+   * «Skriv det du ser» (A566): notatet i «+ Avvik» og tilbudet i avvikskortet. Bare i minnet til
+   * rommet; tømmes når rommet forlates og ved utlogging.
+   */
+  outcomeNote: RoomOutcomeNote;
+  dispatchOutcomeNote(event: RoomOutcomeNoteEvent): void;
 };
 
 export const RoomContext = createContext<RoomContextValue | null>(null);

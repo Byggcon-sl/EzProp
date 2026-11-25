@@ -51,6 +51,7 @@ import {
   REPORT_TEXT_LIMITS,
 } from "./room-model";
 import { usePhraseSuggestions } from "./phrase-suggestions";
+import { NoteOffer } from "./note-offer";
 import { usePolishDeviation, type PolishField } from "./polish-deviation";
 import { ReportTextField, type ReportTextFieldProps } from "./report-text-field";
 
@@ -134,7 +135,10 @@ export function DeviationCard({
   number: number;
   checkpointKey: string;
 }) {
-  const { canEdit, doc, announce, removeDeviation, store } = useRoom();
+  const { canEdit, doc, announce, removeDeviation, store, outcomeNote } = useRoom();
+  // «Skriv det du ser»: tilbudet om notatet står bare i kortet til avviket det ble laget for.
+  const noteOffer = outcomeNote.offer?.deviationId === deviation.id ? outcomeNote.offer : null;
+  const polishMoved = noteOffer?.phase === "added" || noteOffer?.phase === "used";
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const headingId = deviationHeadingId(deviation.id);
@@ -271,7 +275,11 @@ export function DeviationCard({
                 <TgBadge tg={String(tg) as "2" | "3"} long />
               ) : null}
             </h3>
-            <div className="max-md:flex max-md:basis-full max-md:justify-end">{polish.button}</div>
+            {!polishMoved && (
+              <div className="max-md:flex max-md:basis-full max-md:justify-end">
+                {polish.button}
+              </div>
+            )}
           </div>
           {polish.message}
           {outcome && (
@@ -333,6 +341,16 @@ export function DeviationCard({
           serverValue={deviation.deviationText}
           draft={deviation.textStatus.deviationText}
         />
+
+        {noteOffer && (
+          <NoteOffer
+            offer={noteOffer}
+            deviationId={deviation.id}
+            templateDeviationText={outcome?.deviation_text ?? null}
+            serverValue={deviation.deviationText}
+            polishButton={polish.button}
+          />
+        )}
 
         <div className="space-y-3">
           <div className="space-y-1.5">

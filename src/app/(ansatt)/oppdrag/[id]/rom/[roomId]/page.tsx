@@ -152,7 +152,7 @@ export default async function RoomPage({
   ]);
   return (
     <RoomView
-      key={`${view.reportId}-${view.reportStatus}`}
+      key={`${view.reportId}-${roomId}-${view.reportStatus}`}
       view={view}
       publish={publish}
       fromPublish={query.fra === "publiser"}

@@ -234,6 +234,50 @@ export const AI_ROOM_TEXTS = {
   placeholder: "Teksten har en plassholder fra KI, for eksempel [adresse]. Skriv inn riktig verdi.",
 } as const;
 
+// --- Skriv det du ser (docs/funksjoner/fase2a-skriv-det-du-ser-skisse.md avsnitt 7) -------------
+
+/**
+ * Tekstene i «+ Avvik» når takstmannen skriver hva han ser. Ingen tekst nevner diktering, mikrofon
+ * eller tale (spørsmål 121): iPadens eget tastatur virker som i alle andre felt.
+ */
+export const OUTCOME_MATCH_TEXTS = {
+  fieldLabel: "Skriv hva du ser, eller søk",
+  find: "Finn med KI",
+  finding: "Finner …",
+  findAgain: "Finn på nytt",
+  retry: "Prøv igjen",
+  groupHeading: "Forslag fra KI (velg ett)",
+  groupHelp: "KI foreslår, du velger. Ingen er valgt på forhånd.",
+  ranked: (n: number) => (n === 1 ? "1 forslag fra KI." : `${n} forslag fra KI. Ingen er valgt.`),
+  noMatch: "Ingen utfall passer. Bruk søket eller punktlisten.",
+  aiError: "KI svarte ikke. Bruk søket.",
+  aiOff: "KI er av. Bruk søket.",
+  offline: "Uten nett: bare tekstsøk.",
+  noteTooLong: "Notatet er for langt for KI (høyst 500 tegn).",
+  noteCount: (n: number, max: number) => `${n} av ${max} tegn`,
+  nationalId: "Notatet ser ut til å ha et fødselsnummer. Ta det bort før du bruker KI.",
+  tooManyCandidates: "For mange utfall i dette rommet for KI. Bruk søket.",
+  stale: "Teksten er endret – finn på nytt",
+  outdated: "Forslagene er utdatert. Trykk «Finn med KI» på nytt.",
+  /** Avvisning av et søk som alt er brukt (`already_decided`). Vises ikke på skjermen. */
+  alreadyDecided: "Forslaget er alt brukt. Ingenting er endret.",
+  searchHeading: "Søketreff",
+  nearestHeading: "Nærmeste treff (uten KI)",
+  registered: "Registrert fra før",
+  registeredLabel: (n: number) => `Registrert fra før, åpner avvik ${n}.`,
+  otherCheckpoint: "Annet punkt.",
+  chooseTg: "Velg TG2 eller TG3",
+  hms: "HMS",
+  noteHeading: "Notatet ditt",
+  addNote: "Legg notatet til",
+  useNoteOnly: "Bruk bare notatet",
+  noteOnlyBlocked: "Malens tekst har en måling eller et årstall, så notatet kan bare legges til.",
+  noteAdded: "Notatet er lagt til.",
+  noteUsed: "Notatet er brukt som avvikstekst.",
+  undo: "Angre",
+  templateRestored: "Malens tekst er satt tilbake.",
+} as const;
+
 /** Meldingen ved feltet når en vakt stoppet språkvasken (A460). Teksten fra KI vises aldri. */
 export function polishStoppedText(guard: AiGuardCode): string {
   if (guard === "placeholder_guard") {

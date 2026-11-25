@@ -677,9 +677,9 @@ const SWITCHES: { name: string; pcOnly?: boolean; run(page: Page): Promise<void>
     name: "søketreff på annet punkt",
     run: async (page) => {
       await page.getByRole("button", { name: "+ Avvik" }).click();
-      await page.getByLabel("Søk etter avvik i badet").fill("ventilasjon");
+      await page.getByLabel("Skriv hva du ser, eller søk").fill("ventilasjon");
       await page
-        .getByRole("button", { name: /· Ventilasjon$/ })
+        .getByRole("button", { name: /^Ventilasjon: / })
         .first()
         .click();
     },
@@ -995,7 +995,7 @@ test("B6.13a snarveier: Ctrl/Cmd+Enter, Alt+pil, Ctrl/Cmd+K og «?», ingen tast
 
   // Ctrl/Cmd+K: fokus i avvikssøket.
   await page.keyboard.press("ControlOrMeta+k");
-  await expect(page.getByLabel("Søk etter avvik i badet")).toBeFocused();
+  await expect(page.getByLabel("Skriv hva du ser, eller søk")).toBeFocused();
 
   // Ctrl/Cmd+Enter fra et tekstfelt: punktet er ferdig.
   await page.getByLabel("Beskrivelse av punktet (valgfri)").focus();
@@ -1011,7 +1011,7 @@ test("B6.13b avvikssøk: pil og Enter på treff fra annet punkt åpner punktet o
   await logInAsInspector(page);
   await openBathroom(page, bath, "wet_room.general");
   await page.getByRole("button", { name: "+ Avvik" }).click();
-  const search = page.getByLabel("Søk etter avvik i badet");
+  const search = page.getByLabel("Skriv hva du ser, eller søk");
   await expect(search).toBeFocused();
   await search.fill("finnes ikke i noen mal xyz");
   await expect(page.getByText("Ingen avvik passer.")).toBeVisible();
@@ -1108,7 +1108,7 @@ test("B6.14 axe uten feil: forslag, avvikskort, advarsler, Endre-flaten, søket 
   await expect(deviationCard(page, 1)).toBeVisible();
   await expectNoAxeViolations(page, "avvikskort og advarsler");
   await page.getByRole("button", { name: "+ Avvik" }).click();
-  await page.getByLabel("Søk etter avvik i badet").fill("fukt");
+  await page.getByLabel("Skriv hva du ser, eller søk").fill("fukt");
   await expectNoAxeViolations(page, "avvikssøket");
   if (testInfo.project.name === "pc") {
     await checkpointHeading(page).focus();

@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { MergeFieldSources, PublishCheckRoom } from "@/core/reports/logic";
 import type {
   AnswerView,
@@ -29,6 +37,7 @@ import { BackToPublishBar } from "./back-to-publish-bar";
 import { CheckpointList } from "./checkpoint-list";
 import { CheckpointPanel } from "./checkpoint-panel";
 import { FieldSaveStore } from "./field-save-store";
+import { EMPTY_ROOM_OUTCOME_NOTE, roomOutcomeNoteReducer } from "./outcome-match-model";
 import { ReportSummarySection } from "./report-summary-section";
 import { RoomContext, type RoomContextValue, type UndoLine } from "./room-context";
 import { isActionError, ROOM_ACTION_MESSAGES, ROOM_TEXTS, type ActionError } from "./room-messages";
@@ -146,6 +155,11 @@ export function RoomView({
   const listDialog = useRef<HTMLDialogElement>(null);
   const helpButton = useRef<HTMLElement | null>(null);
   const online = useOnline();
+  // «Skriv det du ser» (A566): bare i minnet, så det forsvinner når rommet forlates.
+  const [outcomeNote, dispatchOutcomeNote] = useReducer(
+    roomOutcomeNoteReducer,
+    EMPTY_ROOM_OUTCOME_NOTE,
+  );
 
   const answers = useMemo(
     () => new Map<string, AnswerView>(view.answers.map((a) => [a.elementKey, a])),
@@ -323,6 +337,9 @@ export function RoomView({
       document: view.document,
       phraseUsage: view.phraseUsage,
       mergeValuesFor,
+      checkpoints,
+      outcomeNote,
+      dispatchOutcomeNote,
     }),
     [
       room,
@@ -339,6 +356,8 @@ export function RoomView({
       view.document,
       view.phraseUsage,
       mergeValuesFor,
+      checkpoints,
+      outcomeNote,
     ],
   );
 

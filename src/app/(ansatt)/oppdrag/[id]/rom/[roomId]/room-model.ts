@@ -46,7 +46,13 @@ import type {
   TgiuDetailsView,
 } from "@/core/reports/types";
 import type { AiCandidateRef, DeviationTg } from "@/db/schema";
-import { AI_CANDIDATE_REFS_MAX } from "@/shared/config/ai-targets";
+import {
+  AI_CANDIDATE_REFS_MAX,
+  OUTCOME_MATCH_MAX,
+  OUTCOME_MATCH_NOTE_MAX,
+} from "@/shared/config/ai-targets";
+import { TG_BADGE_SHORT, tgBadgeFullText } from "@/shared/ui/tg-badge";
+import { OUTCOME_MATCH_TEXTS } from "./room-messages";
 
 /*
  * Rene hjelpere for skjermen for badet: rekkefølge, oppslag i maldokumentet, nøkler i
@@ -156,6 +162,33 @@ export function outcomeName(outcome: Pick<OutcomeDoc, "deviation_text">): string
     .map((segment) => (segment.type === "missing" ? "…" : segment.text))
     .join("");
 }
+
+/**
+ * Teksten i TG-merket på et treff i «+ Avvik» (skisse for «Skriv det du ser», avsnitt 4.3), og
+ * lang form for skjermleseren. TG står alltid med tekst; «Velg TG2 eller TG3» og «HMS» har ingen
+ * TG-farge (`tg` er `null`), fordi ingen TG er valgt.
+ */
+export function outcomeTgLabel(kind: OutcomeDoc["kind"]): {
+  text: string;
+  long: string;
+  tg: "2" | "3" | null;
+} {
+  switch (kind) {
+    case "tg2":
+      return { text: TG_BADGE_SHORT["2"], long: tgBadgeFullText("2"), tg: "2" };
+    case "tg3":
+      return { text: TG_BADGE_SHORT["3"], long: tgBadgeFullText("3"), tg: "3" };
+    case "choose_tg2_tg3":
+      return { text: OUTCOME_MATCH_TEXTS.chooseTg, long: OUTCOME_MATCH_TEXTS.chooseTg, tg: null };
+    case "hms":
+      return { text: OUTCOME_MATCH_TEXTS.hms, long: OUTCOME_MATCH_TEXTS.hms, tg: null };
+  }
+}
+
+/** Høyst så mange treff fra KI og i «Nærmeste treff (uten KI)» (samme grense som serveren). */
+export const OUTCOME_HITS_MAX = OUTCOME_MATCH_MAX;
+/** Høyst så mange tegn i notatet til «Finn med KI» (A560). */
+export const OUTCOME_NOTE_MAX = OUTCOME_MATCH_NOTE_MAX;
 
 /** Regelsvaret i formen de rene funksjonene for begrunnelsen leser. */
 export function suggestionAsRuleResult(suggestion: SuggestionView): RuleResult {
