@@ -404,8 +404,10 @@ export function parseCasesFile(json: unknown, fileName: string): ParseCasesResul
   if (!parsed.success) return { ok: false, errors: issuesToErrors(parsed.error, fileName) };
 
   const errors: string[] = [];
-  const definition = isFeatureKind(feature) ? getFeatureDefinition(parsed.data.feature) : null;
-  if (definition === null) errors.push(`${fileName}: feature: ukjent KI-funksjon.`);
+  // Settet for en funksjon kan finnes før funksjonen er registrert i kjernen (`outcome_match` har
+  // ingen felt å sjekke). Ukjent er bare en `feature` uten eget skjema.
+  if (!isFeatureKind(feature)) errors.push(`${fileName}: feature: ukjent KI-funksjon.`);
+  const definition = getFeatureDefinition(parsed.data.feature);
 
   const seen = new Set<string>();
   parsed.data.cases.forEach((evalCase, index) => {
