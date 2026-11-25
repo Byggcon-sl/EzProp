@@ -131,7 +131,7 @@ TG står alltid med tekst (`TgBadge`, kort form med `aria-label` i lang form):
 
 - Merket `Badge` med tonen `neutral` og teksten «Registrert fra før», foran TG-merket.
 - Knappen åpner det eksisterende avvikskortet (fokus på overskriften «Avvik N») i stedet for å lage nytt. Er treffet fra KI, kalles avvisningen.
-- Skjermleser: knappens tilgjengelige navn bygges slik, i én `aria-label`: «{punktnavn}: {avvikstekst}. {TG lang form}. [Annet punkt.] [Registrert fra før, åpner avvik N.]». Merkene inni har `aria-hidden` når `aria-label` er satt, så ingenting leses to ganger.
+- Skjermleser: knappens tilgjengelige navn bygges slik, i én `aria-label`: «{punktnavn}: {avvikstekst}. [Registrert fra før.] {TG lang form}. [Annet punkt.] [Åpner avvik N.]». Merkene inni har `aria-hidden` når `aria-label` er satt, så ingenting leses to ganger. Synlig tekst står i samme rekkefølge i koden (punkt, avvikstekst, merkene; rutenettet legger merkene øverst til høyre), så navnet inneholder det som står på knappen (WCAG 2.5.3; rettet 25.11.2026 etter axe i e2e).
 
 ### 4.5 Etter trykk
 
@@ -205,7 +205,7 @@ Tilbudet vises i avvikskortet rett under avviksteksten, bare for avviket som net
 | `searchHeading` | Søketreff |
 | `nearestHeading` | Nærmeste treff (uten KI) |
 | `registered` | Registrert fra før |
-| `registeredLabel(n)` | `Registrert fra før, åpner avvik ${n}.` |
+| `opensDeviation(n)` | `Åpner avvik ${n}.` |
 | `otherCheckpoint` | Annet punkt. |
 | `chooseTg` | Velg TG2 eller TG3 |
 | `hms` | HMS |

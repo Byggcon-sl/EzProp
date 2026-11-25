@@ -29,22 +29,25 @@ export type OutcomeHitButtonProps = {
   onKeyDown?(event: KeyboardEvent<HTMLButtonElement>): void;
 };
 
-/** Tilgjengelig navn i én streng (skisse 4.4), så ingenting leses to ganger. */
+/**
+ * Tilgjengelig navn i én streng (skisse 4.4), så ingenting leses to ganger. Synlig tekst står i
+ * samme rekkefølge inne i navnet (punkt, avvikstekst, «Registrert fra før», TG), slik at den som
+ * styrer med tale kan si det han ser (WCAG 2.5.3, axe `label-content-name-mismatch`).
+ */
 export function outcomeHitLabel(input: {
   hit: OutcomeSearchHit;
   openCheckpointKey: string;
   registeredNumber: number | null;
 }): string {
   const text = outcomeName({ deviation_text: input.hit.deviationText });
-  const parts = [
-    `${input.hit.checkpointName}: ${/[.!?…]$/u.test(text) ? text : `${text}.`}`,
-    `${outcomeTgLabel(input.hit.outcomeKind).long}.`,
-  ];
+  const parts = [`${input.hit.checkpointName}: ${/[.!?…]$/u.test(text) ? text : `${text}.`}`];
+  if (input.registeredNumber !== null) parts.push(`${OUTCOME_MATCH_TEXTS.registered}.`);
+  parts.push(`${outcomeTgLabel(input.hit.outcomeKind).long}.`);
   if (input.hit.checkpointKey !== input.openCheckpointKey) {
     parts.push(OUTCOME_MATCH_TEXTS.otherCheckpoint);
   }
   if (input.registeredNumber !== null) {
-    parts.push(OUTCOME_MATCH_TEXTS.registeredLabel(input.registeredNumber));
+    parts.push(OUTCOME_MATCH_TEXTS.opensDeviation(input.registeredNumber));
   }
   return parts.join(" ");
 }
@@ -70,26 +73,30 @@ export function OutcomeHitButton({
       onClick={onChoose}
       onKeyDown={onKeyDown}
       className={cn(
-        "flex min-h-14 w-full flex-col items-stretch gap-1 rounded-card border bg-white px-4 py-3 text-left hover:bg-snow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fjord disabled:text-slate-500",
+        "grid min-h-14 w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 rounded-card border bg-white px-4 py-3 text-left hover:bg-snow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fjord disabled:text-slate-500",
         stale ? "border-line text-slate-500" : "border-line",
       )}
     >
-      <span className="flex flex-wrap items-center gap-2">
-        <span className={cn("text-sm font-semibold", stale ? "text-slate-500" : "text-slate-900")}>
-          {hit.checkpointName}
-        </span>
-        <span aria-hidden="true" className="ml-auto flex flex-wrap gap-2">
-          {registeredNumber !== null && <Badge>{OUTCOME_MATCH_TEXTS.registered}</Badge>}
-          {tg.tg !== null ? <TgBadge tg={tg.tg} /> : <Badge>{tg.text}</Badge>}
-        </span>
-      </span>
+      {/* Rekkefølgen i koden er rekkefølgen i navnet; rutenettet legger merkene øverst til høyre. */}
       <span
         className={cn(
-          "text-base leading-snug break-words",
+          "col-start-1 row-start-1 self-center text-sm font-semibold",
+          stale ? "text-slate-500" : "text-slate-900",
+        )}
+      >
+        {hit.checkpointName}
+      </span>{" "}
+      <span
+        className={cn(
+          "col-span-2 row-start-2 text-base leading-snug break-words",
           stale ? "text-slate-500" : "text-slate-900",
         )}
       >
         {outcomeName({ deviation_text: hit.deviationText })}
+      </span>{" "}
+      <span aria-hidden="true" className="col-start-2 row-start-1 flex flex-wrap justify-end gap-2">
+        {registeredNumber !== null && <Badge>{OUTCOME_MATCH_TEXTS.registered}</Badge>}
+        {tg.tg !== null ? <TgBadge tg={tg.tg} /> : <Badge>{tg.text}</Badge>}
       </span>
     </button>
   );

@@ -769,6 +769,24 @@ describe("4d notatet i avviket og text_source", () => {
     expect((await deviationRow(original.id)).textSource).toBe("template");
   });
 
+  it.each([
+    ["deviation_text", "deviationText"],
+    ["cause_text", "causeText"],
+    ["consequence_text", "consequenceText"],
+  ] as const)(
+    "S1.21 text_source: endret %s gir edited, tilbake til malens tekst gir template",
+    async (field, column) => {
+      const f = await kiBathroom();
+      const original = await chosenDeviation(f);
+      expect(original.textSource).toBe("template");
+      const changed = `${original[column] ?? ""} Mxq egen tekst.`;
+      await saveText(f, original.id, field, changed, original[column]);
+      expect((await deviationRow(original.id)).textSource).toBe("edited");
+      await saveText(f, original.id, field, original[column], changed);
+      expect((await deviationRow(original.id)).textSource).toBe("template");
+    },
+  );
+
   it("S4.18 «Angre» gir edited når årsaken er endret av takstmannen", async () => {
     const f = await kiBathroom();
     const original = await chosenDeviation(f);

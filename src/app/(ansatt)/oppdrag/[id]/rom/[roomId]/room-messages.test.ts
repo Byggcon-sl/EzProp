@@ -98,7 +98,7 @@ describe("tekstene for «Skriv det du ser»", () => {
       "Forslagene er utdatert. Trykk «Finn med KI» på nytt.",
     );
     expect(OUTCOME_MATCH_TEXTS.nearestHeading).toBe("Nærmeste treff (uten KI)");
-    expect(OUTCOME_MATCH_TEXTS.registeredLabel(2)).toBe("Registrert fra før, åpner avvik 2.");
+    expect(OUTCOME_MATCH_TEXTS.opensDeviation(2)).toBe("Åpner avvik 2.");
     expect(OUTCOME_MATCH_TEXTS.noteCount(412, 500)).toBe("412 av 500 tegn");
     expect(OUTCOME_MATCH_TEXTS.addNote).toBe("Legg notatet til");
     expect(OUTCOME_MATCH_TEXTS.useNoteOnly).toBe("Bruk bare notatet");

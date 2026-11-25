@@ -78,6 +78,7 @@ export const ADD_DEVIATION_TEXTS = {
 } as const;
 
 const COUNTER_ID = "outcome-note-counter";
+const FIND_BUTTON_ID = "outcome-match-find-button";
 const FIELD_ERROR_ID = "outcome-note-error";
 
 function tgOfKind(kind: OutcomeSearchHit["outcomeKind"]): 2 | 3 | null {
@@ -118,6 +119,8 @@ export function AddDeviationPanel({
   const [settling, setSettling] = useState(false);
   const [nearestNote, setNearestNote] = useState(query);
   const deviationIds = useRef(new Map<string, string>());
+  /** «Finn med KI» hadde fokus da søket startet: fokus settes tilbake når svaret er vist. */
+  const refocusFind = useRef(false);
   const searchListRef = useRef<HTMLUListElement>(null);
   const aiListRef = useRef<HTMLDivElement>(null);
 
@@ -332,6 +335,9 @@ export function AddDeviationPanel({
   const find = async () => {
     if (!view.button || view.button.disabled) return;
     const note = normalizeOutcomeNote(query);
+    // Knappen sperres mens søket går og flyttes under KI-gruppen når treffene kommer. Da mister
+    // nettleseren fokuset; det settes tilbake på knappen (skisse avsnitt 5: fokus flyttes ikke).
+    refocusFind.current = window.document.activeElement?.id === FIND_BUTTON_ID;
     const requestId = nextOutcomeRequestId(matchRef.current, note, uuidv7);
     setError(null);
     setConflict(null);
@@ -429,10 +435,17 @@ export function AddDeviationPanel({
       .filter(Boolean)
       .join(" ") || undefined;
 
+  useEffect(() => {
+    if (view.state === "pending" || !refocusFind.current) return;
+    refocusFind.current = false;
+    window.document.getElementById(FIND_BUTTON_ID)?.focus();
+  }, [view.state]);
+
   const findButton = view.button && (
     <Button
       variant="secondary"
       size="lg"
+      id={FIND_BUTTON_ID}
       data-testid="outcome-match-find"
       disabled={view.button.disabled}
       aria-busy={view.button.busy || undefined}

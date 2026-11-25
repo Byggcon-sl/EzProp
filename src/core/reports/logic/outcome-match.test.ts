@@ -15,6 +15,7 @@ import {
   type OutcomeSearchDocument,
   type OutcomeSearchHit,
 } from "@/core/reports/logic";
+import { REPORT_LONG_TEXT_MAX, reportFieldChangeSchema } from "@/core/reports/schemas";
 import { wetRoomTemplate } from "@/db/seed/templates/wet-room";
 import { rankBySimilarity } from "@/shared/lib/text-similarity";
 
@@ -362,7 +363,32 @@ describe("«Registrert fra før» (S1.17)", () => {
   });
 });
 
-describe("notatet som avvikstekst (S1.18–S1.20)", () => {
+describe("S1.18 flettefelt avgjøres av malens data", () => {
+  it("S1.18 flettefelt avgjøres av malens data: de fem utfallene i badmalen gir usann", () => {
+    const withMergeFields = wetRoomTemplate.outcomes
+      .filter((o) => !canReplaceDeviationTextWithNote(o.deviation_text))
+      .map((o) => o.question_key.replace(/^wet_room\./u, ""))
+      .sort();
+    expect(withMergeFields).toEqual([
+      "adjacent.elevated_moisture",
+      "floor.insufficient_fall",
+      "membrane_drain.low_threshold_height",
+      "membrane_drain.membrane_before_2000",
+      "membrane_drain.membrane_past_lifespan",
+    ]);
+    expect(canReplaceDeviationTextWithNote("Det er sprukne fliser på gulvet.")).toBe(true);
+    expect(canReplaceDeviationTextWithNote(null)).toBe(true);
+  });
+
+  it("S1.18 statisk: ingen fast liste med utfallskoder i koden", () => {
+    const source = readFileSync(join(__dirname, "deviation-note.ts"), "utf8");
+    expect(source).not.toMatch(
+      /insufficient_fall|low_threshold_height|elevated_moisture|membrane_/u,
+    );
+  });
+});
+
+describe("S1.19 «Legg notatet til» (deviation-note.ts, A556)", () => {
   it("S1.19 «Legg notatet til»: malens tekst, mellomrom, notatet med stor forbokstav og punktum", () => {
     expect(
       appendNoteToDeviationText("Det er sprukne fliser på gulvet.", "sprekk ved sluket, litt løs"),
@@ -393,7 +419,9 @@ describe("notatet som avvikstekst (S1.18–S1.20)", () => {
   it("S1.19 tomt notat gir malens tekst uendret", () => {
     expect(appendNoteToDeviationText("Mxq.", "   ")).toBe("Mxq.");
   });
+});
 
+describe("S1.20 «Bruk bare notatet» (deviation-note.ts, A556)", () => {
   it("S1.20 «Bruk bare notatet» gir notatet med samme formatering", () => {
     expect(replaceDeviationTextWithNote("Det er sprukne fliser.", "løs flis ved sluket")).toBe(
       "Løs flis ved sluket.",
@@ -405,28 +433,65 @@ describe("notatet som avvikstekst (S1.18–S1.20)", () => {
   it("S1.20 nekter når malens tekst har flettefelt", () => {
     expect(replaceDeviationTextWithNote("Fra {årstall}.", "membran fra 1994")).toBeNull();
   });
+});
 
-  it("S1.18 flettefelt avgjøres av malens data: de fem utfallene i badmalen gir usann", () => {
-    const withMergeFields = wetRoomTemplate.outcomes
-      .filter((o) => !canReplaceDeviationTextWithNote(o.deviation_text))
-      .map((o) => o.question_key.replace(/^wet_room\./u, ""))
-      .sort();
-    expect(withMergeFields).toEqual([
-      "adjacent.elevated_moisture",
-      "floor.insufficient_fall",
-      "membrane_drain.low_threshold_height",
-      "membrane_drain.membrane_before_2000",
-      "membrane_drain.membrane_past_lifespan",
-    ]);
-    expect(canReplaceDeviationTextWithNote("Det er sprukne fliser på gulvet.")).toBe(true);
-    expect(canReplaceDeviationTextWithNote(null)).toBe(true);
+describe("S1.21 text_source settes av serveren, ikke av notatfunksjonene (A562)", () => {
+  // Hvilken verdi `text_source` får når avvik, årsak eller konsekvens endres, prøves mot
+  // databasen med `it.each` over de tre feltene i src/core/reports/outcome-match.test.ts
+  // (`textSourceAfter` i save-field.ts leser malens tekster for avviket).
+  it("S1.21 statisk: deviation-note.ts setter ikke text_source og har ingen fast liste med felt", () => {
+    const source = readFileSync(join(__dirname, "deviation-note.ts"), "utf8");
+    expect(source).not.toMatch(/textSource|text_source|"template"|"edited"/u);
   });
 
-  it("S1.18 statisk: ingen fast liste med utfallskoder i koden", () => {
-    const source = readFileSync(join(__dirname, "deviation-note.ts"), "utf8");
-    expect(source).not.toMatch(
-      /insufficient_fall|low_threshold_height|elevated_moisture|membrane_/u,
-    );
+  it("S1.21 statisk: serveren sammenligner alle tre tekstene med malens før den gir template", () => {
+    const source = readFileSync(join(ROOT, "src/core/reports/save-field.ts"), "utf8");
+    const fn = source.slice(source.indexOf("export async function textSourceAfter"));
+    const body = fn.slice(0, fn.indexOf("\n}\n"));
+    for (const column of ["deviationText", "causeText", "consequenceText"]) {
+      expect(body).toContain(`sameText(next.${column}, template.${column})`);
+    }
+    expect(body).toContain('return "edited"');
+  });
+});
+
+describe("S1.22 lengde: notatet kuttes aldri, for lang tekst gir norsk melding", () => {
+  const field = (value: string) =>
+    reportFieldChangeSchema.safeParse({
+      table: "deviations",
+      id: "01a21340-fa72-7750-b1c9-57db380df204",
+      field: "deviation_text",
+      value,
+      base: null,
+    });
+
+  it("S1.22 «Legg notatet til» og «Bruk bare notatet» gir hele teksten, også når den er lang", () => {
+    const template = `${"Mxq ".repeat(2_400).trim()}.`;
+    const note = "løs flis ved sluket ".repeat(30).trim();
+    const added = appendNoteToDeviationText(template, note);
+    expect(added.startsWith(template)).toBe(true);
+    expect(added.endsWith(`${note.slice(1)}.`)).toBe(true);
+    expect(added.length).toBe(template.length + 1 + note.length + 1);
+    expect(replaceDeviationTextWithNote("Mxq.", note)).toHaveLength(note.length + 1);
+  });
+
+  it("S1.22 over grensen for avviksteksten avvises med norsk melding, aldri kuttet", () => {
+    const template = "Mxq ".repeat(REPORT_LONG_TEXT_MAX / 4).trim();
+    const added = appendNoteToDeviationText(template, "løs flis ved sluket");
+    expect(added.length).toBeGreaterThan(REPORT_LONG_TEXT_MAX);
+    const result = field(added);
+    expect(result.success).toBe(false);
+    const message = result.success ? "" : (result.error.issues[0]?.message ?? "");
+    expect(message).toMatch(/^Teksten kan ha høyst .+ tegn\.$/u);
+    expect(message).not.toContain("Mxq");
+  });
+
+  it("S1.22 akkurat på grensen er lov", () => {
+    const note = "løs flis";
+    const template = "M".repeat(REPORT_LONG_TEXT_MAX - (note.length + 2));
+    const added = appendNoteToDeviationText(template, note);
+    expect(added).toHaveLength(REPORT_LONG_TEXT_MAX);
+    expect(field(added).success).toBe(true);
   });
 });
 

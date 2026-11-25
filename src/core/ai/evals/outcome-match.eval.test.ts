@@ -51,59 +51,102 @@ function dirWith(files: Record<string, unknown>): string {
 const CANDIDATES = [
   {
     id: "floor-crack",
-    source: "template_outcome",
+    source: "template_outcome" as const,
     checkpointKey: "bad.gulv",
-    outcomeKey: "bad.gulv.sprekk",
+    outcomeKey: "sprekk",
     text: "Gulv | Er flisene på gulvet sprukket? | Flisene på gulvet har sprekker.",
   },
   {
     id: "wall-crack",
-    source: "template_outcome",
+    source: "template_outcome" as const,
     checkpointKey: "bad.vegg",
-    outcomeKey: "bad.vegg.sprekk",
+    outcomeKey: "sprekk",
     text: "Vegger og himling | Er flisene på veggen sprukket? | Flisene på veggen har sprekker.",
   },
   {
     id: "drain-ring",
-    source: "template_outcome",
+    source: "template_outcome" as const,
     checkpointKey: "bad.sluk",
-    outcomeKey: "bad.sluk.klemring",
+    outcomeKey: "klemring",
     text: "Sluk | Mangler klemringen i sluket? | Klemringen i sluket mangler.",
   },
   {
     id: "weak-fan",
-    source: "template_outcome",
+    source: "template_outcome" as const,
     checkpointKey: "bad.ventilasjon",
-    outcomeKey: "bad.ventilasjon.svak",
+    outcomeKey: "svak",
     text: "Ventilasjon | Er avtrekket svakt? | Avtrekket fra rommet er svakt.",
   },
 ];
 
-type FixtureCase = {
-  id: string;
-  fields: { text: string };
-  candidates: typeof CANDIDATES;
-  expect: { require: "any" | "all" | "first" | "none"; ids: string[] };
-};
+type FixtureCase = OutcomeMatchEvalCase;
 
-const NOTES: { note: string; require: FixtureCase["expect"]["require"]; ids: string[] }[] = [
-  { note: "sprukne fliser på gulvet ved sluket", require: "first", ids: ["floor-crack"] },
-  { note: "sprekker i flisene på veggen", require: "first", ids: ["wall-crack"] },
-  { note: "sprekk i flisene", require: "all", ids: ["floor-crack", "wall-crack"] },
-  { note: "klemring mangler i sluk", require: "any", ids: ["drain-ring"] },
-  { note: "svakt avtrekk, dette er TG2", require: "any", ids: ["weak-fan"] },
-  { note: "hulltaking ikke utført, eier nektet", require: "none", ids: [] },
-  { note: "fikk ikke tatt hull, vegg mot betong", require: "none", ids: [] },
-  { note: "små bruksmerker på innredningen", require: "none", ids: [] },
+const NOTES: {
+  note: string;
+  category: FixtureCase["category"];
+  require: FixtureCase["expect"]["require"];
+  ids: string[];
+}[] = [
+  {
+    note: "sprukne fliser på gulvet ved sluket",
+    category: "match",
+    require: "first",
+    ids: ["floor-crack"],
+  },
+  {
+    note: "sprekker i flisene på veggen",
+    category: "counter_case",
+    require: "first",
+    ids: ["wall-crack"],
+  },
+  {
+    note: "sprekk i flisene",
+    category: "two_checkpoints",
+    require: "all",
+    ids: ["floor-crack", "wall-crack"],
+  },
+  { note: "klemring mangler i sluk", category: "match", require: "any", ids: ["drain-ring"] },
+  {
+    note: "svakt avtrekk, dette er TG2",
+    category: "tg_mention",
+    require: "any",
+    ids: ["weak-fan"],
+  },
+  {
+    note: "hulltaking ikke utført, eier nektet",
+    category: "no_match_hole_drilling",
+    require: "none",
+    ids: [],
+  },
+  {
+    note: "fikk ikke tatt hull, vegg mot betong",
+    category: "no_match_hole_drilling",
+    require: "none",
+    ids: [],
+  },
+  { note: "små bruksmerker på innredningen", category: "no_match_wear", require: "none", ids: [] },
 ];
+
+/** Sakene skal bestås for seg i disse kategoriene (samme regel som skjemaet). */
+const MUST_PASS = new Set<FixtureCase["category"]>([
+  "no_match_hole_drilling",
+  "no_match_wear",
+  "counter_case",
+]);
+
+/** Saks-id i formen skjemaet krever (`om-001`). */
+const caseId = (index: number) => `om-${String(index + 1).padStart(3, "0")}`;
 
 function fixtureCases(count = 30): FixtureCase[] {
   return Array.from({ length: count }, (_, index) => {
     const spec = NOTES[index % NOTES.length]!;
     return {
-      id: `om-${String(index + 1).padStart(2, "0")}`,
-      fields: { text: spec.note },
-      candidates: CANDIDATES,
+      id: caseId(index),
+      description: `Oppdiktet sak ${index + 1}.`,
+      category: spec.category,
+      note: spec.note,
+      candidates: CANDIDATES.map((candidate) => ({ ...candidate })),
+      mustPass: MUST_PASS.has(spec.category),
       expect: { require: spec.require, ids: spec.ids },
     };
   });
@@ -181,7 +224,7 @@ describe("S2.7 pnpm ai:eval outcome_match mot et oppdiktet sett", () => {
     const result = await runEvals({ provider, casesDir: dir, feature: "outcome_match" });
     const feature = result.features[0]!;
     const wearIds = fixtureCases()
-      .filter((item) => item.fields.text.includes("bruksmerker"))
+      .filter((item) => item.note.includes("bruksmerker"))
       .map((item) => item.id);
     expect(feature.requiredMisses).toEqual(wearIds);
     expect(feature.passRate).toBeGreaterThan(0.8);
@@ -254,7 +297,7 @@ describe.skipIf(setCases.length === 0)(
           status: EVAL_STATUS,
           note: EVAL_NOTE,
           // Skjemaet krever minst 30 saker; samme sak gjentatt med egne id-er
-          cases: Array.from({ length: 30 }, (_, index) => ({ ...item, id: `${item.id}-${index}` })),
+          cases: Array.from({ length: 30 }, (_, index) => ({ ...item, id: caseId(index) })),
         },
       });
       const result = await runEvals({

@@ -264,7 +264,8 @@ export const OUTCOME_MATCH_TEXTS = {
   searchHeading: "Søketreff",
   nearestHeading: "Nærmeste treff (uten KI)",
   registered: "Registrert fra før",
-  registeredLabel: (n: number) => `Registrert fra før, åpner avvik ${n}.`,
+  /** Slutten av navnet på et treff som alt er registrert (skisse 4.4). */
+  opensDeviation: (n: number) => `Åpner avvik ${n}.`,
   otherCheckpoint: "Annet punkt.",
   chooseTg: "Velg TG2 eller TG3",
   hms: "HMS",
