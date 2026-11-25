@@ -3,6 +3,7 @@
 Sist oppdatert: 18.11.2026
 Sist oppdatert: 23.11.2026
 Sist oppdatert: 24.11.2026
+Sist oppdatert: 25.11.2026
 
 Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.2026, se «Forbedreren» i `CLAUDE.md`). Listen er til for Ståle: mot slutten av utviklingen går han gjennom den og beholder, justerer eller fjerner.
 
@@ -10,6 +11,12 @@ Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.
 
 | Dato | Tillegg (det den ansatte merker) | Hvorfor | Type | Hvor (PR, oppgavekort, kode) | Slik fjernes det | Ståle |
 |---|---|---|---|---|---|---|
+| 25.11.2026 | Fyll hullene i badet: KI-utkast til tom årsak, konsekvens og tiltak på avvik med TG2 og TG3, som «Ny tekst» i gjennomgangslisten, godkjent ett og ett | Manglende konsekvens og tiltak er typiske svakheter som gir reklamasjoner; KI lager teksten der den ansatte allerede står | nytt planpunkt | `docs/07-utviklingsplan.md` 2a-2 «Fra forbedreren»; `docs/funksjoner/fase2a-ga-gjennom-tekstene.md` | Stryk punktet i planen før det bygges | |
+| 25.11.2026 | Antall på knappen: «Gå gjennom tekstene · 4 nye», «Fortsett gjennomgangen (6 igjen)» eller «Alle tekster gjennomgått» | Takstmannen ser at avviket som ble lagt til sist, ikke er vasket | i oppgaven | `docs/funksjoner/fase2a-ga-gjennom-tekstene.md` (A614); PR fylles inn | Vis fast knappetekst | |
+| 25.11.2026 | Sammenheng i gjennomgangen: TG til lesing og «Vis i badet» per kontrollpunkt, levende ordmarkering ved «Rett før bruk», og «Alle tekster er gjennomgått» med neste steg | Takstmannen ser hvor alvorlig avviket er mens han leser, og vet hva som kommer etterpå | i oppgaven | `docs/funksjoner/fase2a-ga-gjennom-tekstene.md`; PR fylles inn | Ta elementene ut av panelkomponenten | |
+| 25.11.2026 | Tastaturflyt i gjennomgangen: fokus til neste felt etter hvert valg, og snarveiene B, H, R og U med fokus på et felt | Et bad med 15 felt kan gås gjennom uten mus på under ett minutt | i oppgaven | `docs/funksjoner/fase2a-ga-gjennom-tekstene.md` (A611), `shortcuts.ts`; PR fylles inn | Ta snarveiene ut av panelet og `SHORTCUT_LIST` | |
+| 25.11.2026 | Forslag uten endring skjules i «Allerede i orden (N)», uten valg og uten beslutning | Listen viser bare det som er verdt å vurdere | i oppgaven | `docs/funksjoner/fase2a-ga-gjennom-tekstene.md` (A609); PR fylles inn | Vis dem som vanlige felt med valg | |
+| 25.11.2026 | Fortsett gjennomgangen der du slapp: åpne forslag for uendrede felt gjenbrukes uten nye KI-kall | Avbryt, rett et avvik og kom tilbake uten å miste noe; færre kall med ekte KI | i oppgaven | `docs/funksjoner/fase2a-ga-gjennom-tekstene.md` (A608); PR fylles inn | Ta ut gjenbruket i `reviewRoomTexts` | |
 | 24.11.2026 | «Åpne PDF» på hver utgivelse (utgivelseskortet og skjermen etter publisering): PDF-en fra utgivelsens lagrede innhold, uten UTKAST, lik hver gang | Ferdig-kriteriet for 2a-2 er at badet publiseres og blir til en PDF; ved en reklamasjon kan leder vise nøyaktig hva kunden fikk | i oppgaven | `docs/funksjoner/fase2a-pdf-badet.md` F7 (A541); `src/core/reports/release-pdf.ts`, ruten `oppdrag/[id]/utgivelser/[releaseId]/pdf`, `releases-card.tsx`, `publiser/`; PR fylles inn | Ta ut lenken i `releases-card.tsx` og `publiser/`, og ruten | |
 | 24.11.2026 | «Mangler» og «Ikke satt» i PDF-utkastet hentes fra publiseringssjekken, med samme tekst som publiseringsskjermen | Utkastet og sperren sier alltid det samme; takstmannen ser i PDF-en nøyaktig det som stopper publiseringen | i oppgaven | `docs/funksjoner/fase2a-pdf-badet.md` F8 (A536 endret); `src/core/reports/pdf-data-build.ts`; PR fylles inn | Send `findings: null` til `buildReportPdfData` (da viser utkastet ingen mangler) | |
 | 24.11.2026 | Én rapportform: PDF-dataene bygges fra det samme innholdet som låses ved publisering (snapshotet), både for utkast og utgivelse | Bare én strukturert form for «hele rapporten» som KI senere kan lese; utkast og utgivelse kan ikke vise ulike ting | i oppgaven | `docs/funksjoner/fase2a-pdf-badet.md` F6; `src/core/reports/pdf-data-build.ts`; PR fylles inn | La `buildReportPdfData` lese radene fra `PublishSource` direkte | |
