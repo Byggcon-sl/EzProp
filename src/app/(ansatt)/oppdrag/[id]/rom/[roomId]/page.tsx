@@ -7,7 +7,9 @@ import {
   getPublishCheck,
   getReportSummary,
   getRoomView,
+  listCheckpointAnchors,
   ReportValidationError,
+  type CheckpointAnchor,
   type ReportSummaryView,
   type RoomReportView,
 } from "@/core/reports";
@@ -71,6 +73,22 @@ async function loadPublishState(
   }
 }
 
+/**
+ * Id-ene til punktene, så lenkene fra PDF-utkastet (`#punkt-<id>`, F4) åpner riktig punkt. Uten
+ * tilgang vises rommet uten ankrene for punktene (avvikene har ankeret uansett).
+ */
+async function loadCheckpointAnchors(
+  context: NonNullable<Awaited<ReturnType<typeof getEmployeeContext>>>,
+  assignmentId: string,
+): Promise<CheckpointAnchor[]> {
+  try {
+    return await listCheckpointAnchors(context.actor, context.organizationId, assignmentId);
+  } catch (error) {
+    if (error instanceof AccessDeniedError) return [];
+    throw error;
+  }
+}
+
 export default async function RoomPage({
   params,
   searchParams,
@@ -128,7 +146,10 @@ export default async function RoomPage({
   );
 
   const punkt = typeof query.punkt === "string" ? query.punkt : null;
-  const publish = await loadPublishState(context, id, roomId);
+  const [publish, checkpointAnchors] = await Promise.all([
+    loadPublishState(context, id, roomId),
+    loadCheckpointAnchors(context, id),
+  ]);
   return (
     <RoomView
       key={`${view.reportId}-${view.reportStatus}`}
@@ -141,6 +162,7 @@ export default async function RoomPage({
       requestedCheckpoint={punkt}
       summary={summary}
       mergeSources={mergeSources}
+      checkpointAnchors={checkpointAnchors}
     />
   );
 }

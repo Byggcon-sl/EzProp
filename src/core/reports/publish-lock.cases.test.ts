@@ -263,6 +263,13 @@ const NOT_ROOM_WRITES = new Set([
   "findOutcomes",
   "chooseOutcomeMatch",
   "rejectOutcomeMatch",
+  // Leser bare: rapportdataene til PDF-en (utkast og utgivelse, også av publisert rapport)
+  "buildReportPdfData",
+  "getReportDraftPdfData",
+  "getReleasePdfData",
+  // Leser bare (PDF-knappene på skjermen, fase2a-pdf-badet)
+  "hasReportForPdf",
+  "listCheckpointAnchors",
 ]);
 
 async function expectLocked(action: () => Promise<unknown>) {

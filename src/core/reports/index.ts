@@ -9,6 +9,7 @@ import "server-only";
  * Fra «KI i veien» kaller fraseforslag, språkvask og sammendrag KI gjennom `@/core/ai`, aldri
  * motsatt. Verken reglene eller KI setter TG.
  */
+export type * from "./pdf-types";
 export type * from "./publish-types";
 export type * from "./types";
 export { isReportPublishedForAssignment, REPORT_PUBLISHED_MESSAGE } from "./published-lock";
@@ -40,6 +41,11 @@ export {
   startNewVersion,
 } from "./publish";
 export { HOLE_DRILLING_SIGNAL } from "./signals";
+export { buildReportPdfData } from "./pdf-data-build";
+export { getReportDraftPdfData } from "./pdf-data";
+export { getReleasePdfData } from "./release-pdf";
+export { TG_EXPLANATION } from "./tg-explanation";
+export { hasReportForPdf, listCheckpointAnchors, type CheckpointAnchor } from "./pdf-screen";
 export {
   REPORT_VALIDATION_CODES,
   ReportStorageError,

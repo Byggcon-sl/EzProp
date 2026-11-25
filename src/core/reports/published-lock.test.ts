@@ -419,6 +419,13 @@ const NOT_REPORT_WRITES = new Set([
   "listReleases",
   "listPendingAiSuggestions",
   "guardReportErrors",
+  // Leser bare: rapportdataene til PDF-en (utkast og utgivelse, også av publisert rapport)
+  "buildReportPdfData",
+  "getReportDraftPdfData",
+  "getReleasePdfData",
+  // PDF-knappene på skjermen (fase2a-pdf-badet): bare lesing
+  "hasReportForPdf",
+  "listCheckpointAnchors",
 ]);
 
 describe("låsen etter publisering i rapportkjernen", () => {
