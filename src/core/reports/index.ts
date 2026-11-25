@@ -30,6 +30,15 @@ export { decideAiText } from "./decide-ai";
 export { loadPhraseCandidates, loadPhraseUsage } from "./phrase-source";
 export { polishDescription, polishDeviation } from "./polish";
 export { draftSummary, getReportSummary, saveSummary } from "./summary";
+export {
+  buildOverrideStats,
+  decideOverrideSummary,
+  getOverrideSummary,
+  listPublishOverrides,
+  OverrideSummaryTextError,
+  requestOverrideSummary,
+  saveOverrideSummary,
+} from "./overrides";
 export { setCheckpointDone, setTgDirect } from "./tgiu";
 export {
   getPublishCheck,
