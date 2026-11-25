@@ -269,7 +269,7 @@ Treff erstattes med faste merker: `[navn]`, `[e-post]`, `[telefon]`, `[adresse]`
 
 ### 9. Evalueringssett
 
-- Ligger i repoet: `src/core/ai/evals/<funksjon>.cases.json`, 30–50 eksempler per funksjon. Filen leses og valideres med Zod (ukjente nøkler avvises). Toppfelt: `feature`, `status: "utkast, ikke godkjent av fagrådet"` (påkrevd til fagrådet har godkjent eksemplene, A185) og `note` med regelen om oppdiktet tekst.
+- Ligger i repoet: `src/core/ai/evals/<funksjon>.cases.json`, 30–60 eksempler per funksjon (taket hevet fra 50 for flerfeltssakene i `room_review`, 25.11.2026). Filen leses og valideres med Zod (ukjente nøkler avvises). Toppfelt: `feature`, `status: "utkast, ikke godkjent av fagrådet"` (påkrevd til fagrådet har godkjent eksemplene, A185) og `note` med regelen om oppdiktet tekst.
 - **Bare oppdiktede eksempler.** Aldri ekte rapporttekst eller kundedata, aldri kopi eller omskriving av ekte rapporttekst eller av `ai_usage_log`, og ingen tekst fra NS 3600, IVIT eller SmartTakst. Eksemplene er prøvedata for KI og brukes aldri som avvikstekst, seed-data eller mal. Kjente verdier (navn, telefon, e-post, adresse, matrikkel) i `known` er tydelig falske.
 - Hvert eksempel har fast `id` (endres aldri), valgfri `description`, inndata `fields` (bare koder fra funksjonens tillatt-liste), valgfritt `known` (formen til `KnownValues`, alle felt valgfrie), valgfri `mustPass` (standard nei) og fasiten `expect`. Fasittypene i 2a-1 er de `language_polish` trenger:
   - `outcome`: `ok` eller `no_match` (`no_match` kan ikke ha `mustContain`).

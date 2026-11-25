@@ -26,12 +26,15 @@ import type {
 } from "../types";
 import {
   EVAL_CASES_FILE_SUFFIX,
+  EVAL_POLISH_GROUPS,
   PHRASE_TOP_N,
+  isKnownUnguarded,
   parseCasesFile,
   toKnownValues,
   type EvalCase,
   type EvalCasesFile,
   type EvalExpectation,
+  type EvalPolishGroup,
   type EvalVerdict,
   type PhraseEvalCase,
   type SummaryEvalCase,
@@ -84,6 +87,21 @@ export class EvalProviderNotAllowedError extends Error {
 }
 
 export type EvalMiss = { id: string; reason: string };
+
+/** En kjent sak uten vakt (`expect.guard: null`). Telles aldri som bestått. */
+export type EvalKnownUnguarded = { id: string; openQuestion: number | null };
+
+/** Treffet for én gruppe i settet (bare `language_polish`, f.eks. `room_review`). */
+export type EvalGroupResult = {
+  group: EvalPolishGroup;
+  total: number;
+  passed: number;
+  /** Andel treff, 0–1. Kjente saker uten vakt er med i `total`, aldri i `passed`. */
+  passRate: number;
+  mustPassTotal: number;
+  mustPassPassed: number;
+  knownUnguarded: string[];
+};
 export type EvalLeak = { id: string; types: LeakType[] };
 
 export type EvalFeatureResult = {
@@ -98,6 +116,13 @@ export type EvalFeatureResult = {
   mustPassTotal: number;
   mustPassPassed: number;
   misses: EvalMiss[];
+  /**
+   * Kjente saker uten vakt (som K1.6c). De er med i `total`, men aldri i `passed`, og de er ikke
+   * bom: svaret er feil, og ingen vakt stopper det ennå (spørsmål 103).
+   */
+  knownUnguarded: EvalKnownUnguarded[];
+  /** Treffet per gruppe, i rekkefølgen i `EVAL_POLISH_GROUPS`. Bare grupper med saker. */
+  groups: EvalGroupResult[];
   leaks: EvalLeak[];
   /** Id-ene der kjøringen kastet (leverandøren, vasken eller vaktene). */
   crashes: string[];
@@ -414,6 +439,7 @@ function inputTextOf(definition: AiFeatureDefinition, fields: Record<string, str
 /** Det én sak gir: treff/bom, persondata i ledeteksten, eller krasj. */
 type CaseOutcome =
   | { kind: "evaluated"; evaluation: EvalCaseEvaluation }
+  | { kind: "known_unguarded" }
   | { kind: "leak"; types: LeakType[] }
   | { kind: "crash" };
 
@@ -503,6 +529,7 @@ async function runPolishCase(runner: Runner, evalCase: EvalCase): Promise<CaseOu
     // Oppdiktet svar: står i stedet for leverandørens, uten kall
     { outcome: "ok", text: simulated ?? "", tokensIn: 0, tokensOut: 0, cost: 0, currency: "NOK" };
   const expect = evalCase.expect;
+  if (isKnownUnguarded(evalCase)) return knownUnguardedOutcome(call, answer);
   if (answer.outcome === "ok") {
     // Som i kjernen: et tomt svar er ingen endring
     if (isBlankText(answer.text)) {
@@ -511,7 +538,10 @@ async function runPolishCase(runner: Runner, evalCase: EvalCase): Promise<CaseOu
     } else if (call.sent.kind === "fields") {
       const guard = polishAnswerGuard(call.sent.prepared, answer.text);
       if (expect.outcome === "stopped") {
-        return { kind: "evaluated", evaluation: stoppedEvaluation(expect.guard, guard) };
+        return {
+          kind: "evaluated",
+          evaluation: stoppedEvaluation(expect.guard ?? undefined, guard),
+        };
       }
       if (guard !== null) {
         const evaluation = { passed: false, reasons: [`stoppet av ${guard}`] };
@@ -521,6 +551,29 @@ async function runPolishCase(runner: Runner, evalCase: EvalCase): Promise<CaseOu
   }
   const evaluation = evaluateCase(expect, inputTextOf(runner.definition, evalCase.fields), answer);
   return { kind: "evaluated", evaluation: applyVerdict(expect.verdict, evaluation) };
+}
+
+/**
+ * En kjent sak uten vakt telles aldri som bestått, uansett hva vurderingen sier om teksten. Stopper
+ * en vakt i kjernen svaret nå, er saken ikke lenger uten vakt: da er det bom, så fasiten rettes.
+ */
+function knownUnguardedOutcome(
+  call: { sent: Sent; answer: AiProviderResult | null },
+  answer: AiProviderResult,
+): CaseOutcome {
+  if (answer.outcome === "ok" && call.sent.kind === "fields") {
+    const guard = polishAnswerGuard(call.sent.prepared, answer.text);
+    if (guard !== null) {
+      return {
+        kind: "evaluated",
+        evaluation: {
+          passed: false,
+          reasons: [`kjent sak uten vakt stoppes nå av ${guard}; rett fasiten (guard)`],
+        },
+      };
+    }
+  }
+  return { kind: "known_unguarded" };
 }
 
 /** Fasiten venter at en vakt stopper svaret. Uten `expected` holder det at en vakt stoppet det. */
@@ -662,10 +715,31 @@ async function runFeature(
     mustPassTotal: cases.filter((evalCase) => evalCase.mustPass).length,
     mustPassPassed: 0,
     misses: [],
+    knownUnguarded: [],
+    groups: [],
     leaks: [],
     crashes: [],
   };
   const runCase = runCaseFor(file);
+  const groups = new Map<EvalPolishGroup, EvalGroupResult>();
+  const groupOf = (evalCase: AnyCase): EvalGroupResult | null => {
+    const group = "group" in evalCase ? evalCase.group : undefined;
+    if (group === undefined) return null;
+    let entry = groups.get(group);
+    if (entry === undefined) {
+      entry = {
+        group,
+        total: 0,
+        passed: 0,
+        passRate: 0,
+        mustPassTotal: 0,
+        mustPassPassed: 0,
+        knownUnguarded: [],
+      };
+      groups.set(group, entry);
+    }
+    return entry;
+  };
   const runner: Runner = { provider, definition };
 
   for (const evalCase of cases) {
@@ -676,19 +750,38 @@ async function runFeature(
       // Også feil fra mønstrene i sjekkene: eksempelet føres som krasj, uten feilteksten
       outcome = { kind: "crash" };
     }
+    const group = groupOf(evalCase);
+    if (group !== null) {
+      group.total += 1;
+      if (evalCase.mustPass) group.mustPassTotal += 1;
+    }
     if (outcome.kind === "crash") {
       result.crashes.push(evalCase.id);
     } else if (outcome.kind === "leak") {
       result.leaks.push({ id: evalCase.id, types: outcome.types });
+    } else if (outcome.kind === "known_unguarded") {
+      const openQuestion = "openQuestion" in evalCase ? (evalCase.openQuestion ?? null) : null;
+      result.knownUnguarded.push({ id: evalCase.id, openQuestion });
+      group?.knownUnguarded.push(evalCase.id);
     } else if (outcome.evaluation.passed) {
       result.passed += 1;
       if (evalCase.mustPass) result.mustPassPassed += 1;
+      if (group !== null) {
+        group.passed += 1;
+        if (evalCase.mustPass) group.mustPassPassed += 1;
+      }
     } else {
       result.misses.push({ id: evalCase.id, reason: outcome.evaluation.reasons.join("; ") });
     }
   }
 
   result.passRate = passRate(result.passed, result.total);
+  for (const code of EVAL_POLISH_GROUPS) {
+    const group = groups.get(code);
+    if (group === undefined) continue;
+    group.passRate = passRate(group.passed, group.total);
+    result.groups.push(group);
+  }
   return result;
 }
 
@@ -792,7 +885,21 @@ function featureLines(feature: EvalFeatureResult): string[] {
       `treffprosent ${formatPercent(feature.passRate)}, grense ${formatPercent(feature.threshold)}, ` +
       `mustPass ${feature.mustPassPassed} av ${feature.mustPassTotal}`,
   ];
+  for (const group of feature.groups) {
+    lines.push(
+      `  Gruppe ${group.group}: ${group.total} eksempler, ${group.passed} treff, ` +
+        `treffprosent ${formatPercent(group.passRate)}, ` +
+        `mustPass ${group.mustPassPassed} av ${group.mustPassTotal}, ` +
+        `kjente saker uten vakt ${group.knownUnguarded.length}`,
+    );
+  }
   for (const miss of feature.misses) lines.push(`  Bom ${miss.id}: ${miss.reason}`);
+  for (const known of feature.knownUnguarded) {
+    const question = known.openQuestion === null ? "" : ` (spørsmål ${known.openQuestion})`;
+    lines.push(
+      `  Kjent sak uten vakt ${known.id}: telles ikke som bestått, ingen vakt stopper svaret ennå${question}.`,
+    );
+  }
   for (const crash of feature.crashes) {
     lines.push(`  Krasj ${crash}: kjøringen stoppet med en feil.`);
   }

@@ -6,8 +6,11 @@ import {
   EVAL_CANDIDATE_SOURCES,
   EVAL_CASES_STATUS,
   EVAL_GUARD_CODES,
+  EVAL_POLISH_GROUPS,
   EVAL_SUMMARY_GROUPS,
+  isKnownUnguarded,
   parseCasesFile,
+  type EvalCase,
 } from "./schema";
 
 /*
@@ -112,11 +115,12 @@ describe("evalueringssett: skjemaet (E1)", () => {
     expect(errors.join("\n")).toContain("t-dobbel");
   });
 
-  it.each([29, 51])("E1.5 %i eksempler avvises", (count) => {
+  // Taket ble hevet fra 50 til 60 for flerfeltssakene i room_review (Gå gjennom tekstene)
+  it.each([29, 61])("E1.5 %i eksempler avvises", (count) => {
     expectRejected(validFile(count));
   });
 
-  it.each([30, 50])("E1.5 %i eksempler godtas", (count) => {
+  it.each([30, 60])("E1.5 %i eksempler godtas", (count) => {
     expectAccepted(validFile(count));
   });
 
@@ -454,5 +458,103 @@ describe("evalueringssett: skjemaet for phrase_suggest og summary_draft (K2.5)",
     expect([...EVAL_CANDIDATE_SOURCES]).toEqual([...AI_CANDIDATE_SOURCES]);
     expect([...EVAL_GUARD_CODES]).toEqual([...AI_GUARD_CODES]);
     expect([...EVAL_SUMMARY_GROUPS]).toEqual([...SUMMARY_GROUPS]);
+  });
+});
+
+/*
+ * GT2.1 (docs/funksjoner/fase2a-ga-gjennom-tekstene-testplan.md): gruppen `room_review` og kjente
+ * saker uten vakt i settet for `language_polish`. Støtter hovedmål: KI i bunnen (flerfeltssakene
+ * fra ett bad måles for seg før ekte KI slås på) og færre reklamasjoner (en sak uten vakt kan ikke
+ * se bestått ut).
+ */
+describe("evalueringssett: gruppen room_review og kjente saker uten vakt (GT2.1)", () => {
+  const knownUnguarded = (overrides: Json = {}): Json =>
+    validCase(1, {
+      openQuestion: 103,
+      simulatedAnswer: "Oppdiktet tekst om taket må skiftes.",
+      expect: { outcome: "ok", guard: null, mustContain: ["taket"], verdict: "fail" },
+      ...overrides,
+    });
+
+  it("GT2.1 gruppen room_review godtas og leses inn", () => {
+    expect([...EVAL_POLISH_GROUPS]).toContain("room_review");
+    const result = expectAccepted(withCase(0, validCase(1, { group: "room_review" })));
+    const first = result.file.cases[0] as EvalCase;
+    expect(first.group).toBe("room_review");
+  });
+
+  it.each(["ukjent_gruppe", "ROOM_REVIEW", "", 1, null])(
+    "GT2.1 ukjent gruppe %j avvises",
+    (group) => {
+      const errors = expectRejected(withCase(0, validCase(1, { group })));
+      expect(errors.join("\n")).toContain("cases[0].group");
+    },
+  );
+
+  it("GT2.1 saker uten gruppe er gyldige som før", () => {
+    const result = expectAccepted(validFile());
+    expect(result.file.cases.every((item) => !("group" in item) || item.group === undefined)).toBe(
+      true,
+    );
+  });
+
+  it("GT2.1 gruppe gjelder bare language_polish: phrase_suggest og summary_draft avviser den", () => {
+    rejected(
+      withFirst(fileOf("phrase_suggest", phraseCase), phraseCase(1, { group: "room_review" })),
+      PHRASE_FILE,
+    );
+    rejected(
+      withFirst(fileOf("summary_draft", summaryCase), summaryCase(1, { group: "room_review" })),
+      SUMMARY_FILE,
+    );
+  });
+
+  it("GT2.1 en kjent sak uten vakt (guard null) med spørsmålsnummer godtas", () => {
+    const result = expectAccepted(withCase(0, knownUnguarded()));
+    expect(isKnownUnguarded(result.file.cases[0] as EvalCase)).toBe(true);
+    expect(isKnownUnguarded(result.file.cases[1] as EvalCase)).toBe(false);
+  });
+
+  it.each([
+    ["uten spørsmålsnummer", { openQuestion: undefined }, "openQuestion"],
+    ["uten oppdiktet svar", { simulatedAnswer: undefined }, "simulatedAnswer"],
+    ["som mustPass", { mustPass: true }, "mustPass"],
+    [
+      "uten verdict fail",
+      { expect: { outcome: "ok", guard: null, mustContain: ["taket"] } },
+      "verdict fail",
+    ],
+    ["med utfallet stopped", { expect: { outcome: "stopped", guard: null } }, "stopped"],
+  ])("GT2.1 kjent sak uten vakt %s avvises", (_name, overrides, message) => {
+    const item = knownUnguarded(overrides);
+    for (const [key, value] of Object.entries(overrides)) if (value === undefined) delete item[key];
+    const errors = expectRejected(withCase(0, item));
+    expect(errors.join("\n")).toContain(message);
+  });
+
+  it("GT2.1 spørsmålsnummer uten guard null avvises", () => {
+    const errors = expectRejected(withCase(0, validCase(1, { openQuestion: 103 })));
+    expect(errors.join("\n")).toContain("openQuestion");
+  });
+
+  it("GT2.1 oppdiktet svar med utfallet stopped godtas (tallvakten), men ikke med no_match", () => {
+    expectAccepted(
+      withCase(
+        0,
+        validCase(1, {
+          simulatedAnswer: "Oppdiktet tekst om taket, målt 12 mm.",
+          expect: { outcome: "stopped", guard: "number_guard" },
+        }),
+      ),
+    );
+    expectRejected(
+      withCase(
+        0,
+        validCase(1, {
+          simulatedAnswer: "Oppdiktet tekst om taket.",
+          expect: { outcome: "no_match" },
+        }),
+      ),
+    );
   });
 });

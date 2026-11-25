@@ -30,7 +30,8 @@ import type { AiCandidateSource, AiGuardCode } from "../types";
 
 export const EVAL_CASES_STATUS = "utkast, ikke godkjent av fagrådet";
 export const EVAL_CASES_MIN = 30;
-export const EVAL_CASES_MAX = 50;
+/** Hevet fra 50 til 60 for flerfeltssakene fra ett bad (docs/funksjoner/fase2a-ga-gjennom-tekstene.md). */
+export const EVAL_CASES_MAX = 60;
 export const EVAL_CASES_FILE_SUFFIX = ".cases.json";
 
 /** Hvor mange av de beste kandidatene som teller for `phrase_suggest`. */
@@ -101,10 +102,23 @@ export type EvalVerdict = z.infer<typeof verdictSchema>;
 
 // --- language_polish ---------------------------------------------------------------------------
 
+/**
+ * Grupper i settet for `language_polish`. Kjøreren viser treffet for hver gruppe for seg.
+ * `room_review`: saker fra samme bad, som «Gå gjennom tekstene» sender ett felt om gangen
+ * (docs/funksjoner/fase2a-ga-gjennom-tekstene.md, «Evalueringssettet»).
+ */
+export const EVAL_POLISH_GROUPS = ["room_review"] as const;
+export type EvalPolishGroup = (typeof EVAL_POLISH_GROUPS)[number];
+
 const expectSchema = z.strictObject({
   /** `stopped`: en vakt skal stoppe svaret, som i kjernen. `guard` sier hvilken. */
   outcome: z.enum(["ok", "no_match", "stopped"]),
-  guard: z.enum(EVAL_GUARD_CODES).optional(),
+  /**
+   * Vakten som skal stoppe svaret. `null` er en kjent sak uten vakt (som K1.6c i
+   * `../guard-cases.ts`): svaret er feil, men ingen vakt stopper det ennå. Slike saker telles
+   * aldri som bestått, og de krever `openQuestion`.
+   */
+  guard: z.enum(EVAL_GUARD_CODES).nullable().optional(),
   mustContain: z.array(z.string().min(1)).optional(),
   mustNotContain: z.array(z.string().min(1)).optional(),
   sameTg: z.boolean().optional(),
@@ -119,6 +133,10 @@ const caseSchema = z.strictObject({
   fields: z.record(z.string(), z.string()),
   known: knownSchema.optional(),
   mustPass: z.boolean().default(false),
+  /** Gruppen saken hører til. Uten gruppe telles saken bare i hele settet. */
+  group: z.enum(EVAL_POLISH_GROUPS).optional(),
+  /** Nummeret på det åpne spørsmålet i docs/09-apne-sporsmal.md. Bare for kjente saker uten vakt. */
+  openQuestion: z.number().int().positive().optional(),
   simulatedAnswer: nonEmpty.optional(),
   expect: expectSchema,
 });
@@ -353,10 +371,36 @@ function checkPolishCase(evalCase: EvalCase, where: string): string[] {
   if (evalCase.expect.verdict === "fail" && evalCase.simulatedAnswer === undefined) {
     errors.push(`${where}.expect: verdict fail krever simulatedAnswer.`);
   }
-  if (evalCase.simulatedAnswer !== undefined && evalCase.expect.outcome !== "ok") {
-    errors.push(`${where}.simulatedAnswer: kan bare brukes med utfallet ok.`);
+  if (evalCase.simulatedAnswer !== undefined && evalCase.expect.outcome === "no_match") {
+    errors.push(`${where}.simulatedAnswer: kan bare brukes med utfallet ok eller stopped.`);
+  }
+  if (evalCase.expect.outcome === "stopped" && evalCase.expect.guard === null) {
+    errors.push(`${where}.expect: utfallet stopped krever en vaktkode, ikke null.`);
+  }
+  if (isKnownUnguarded(evalCase)) {
+    if (evalCase.expect.outcome !== "ok" || evalCase.expect.verdict !== "fail") {
+      errors.push(`${where}.expect: en kjent sak uten vakt krever utfallet ok og verdict fail.`);
+    }
+    if (evalCase.simulatedAnswer === undefined) {
+      errors.push(`${where}.expect: en kjent sak uten vakt krever simulatedAnswer.`);
+    }
+    if (evalCase.openQuestion === undefined) {
+      errors.push(`${where}.openQuestion: en kjent sak uten vakt krever spørsmålsnummeret.`);
+    }
+    if (evalCase.mustPass) {
+      errors.push(`${where}.mustPass: en kjent sak uten vakt kan ikke være mustPass.`);
+    }
+  } else if (evalCase.openQuestion !== undefined) {
+    errors.push(`${where}.openQuestion: kan bare brukes på en kjent sak uten vakt (guard null).`);
   }
   return errors;
+}
+
+/**
+ * Om saken er en kjent sak uten vakt (`expect.guard` er `null`). Den telles aldri som bestått.
+ */
+export function isKnownUnguarded(evalCase: EvalCase): boolean {
+  return evalCase.expect.guard === null;
 }
 
 function checkPhraseCase(evalCase: PhraseEvalCase, where: string): string[] {

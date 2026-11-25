@@ -9,9 +9,16 @@ import {
   inputOfPrompt,
   normalizeForCompare,
 } from "../../../../tests/evals";
+import { GUARD_CASES, KNOWN_UNGUARDED_CASES } from "../guard-cases";
 import { fakeAiProvider } from "../providers/fake";
-import { runEvals } from "./run";
-import { parseCasesFile } from "./schema";
+import {
+  EVAL_GUESS_WORDS,
+  FAKE_PROVIDER_NOTICE,
+  runEvalCommand,
+  runEvals,
+  runGuardCases,
+} from "./run";
+import { EVAL_GUARD_CODES, parseCasesFile } from "./schema";
 
 /*
  * Settet for `language_polish` (docs/funksjoner/fase2a-evalueringssett-testplan.md avsnitt 4,
@@ -52,9 +59,12 @@ type CaseJson = {
   fields: Record<string, string>;
   known?: KnownJson;
   mustPass?: boolean;
+  group?: string;
+  openQuestion?: number;
   simulatedAnswer?: string;
   expect: {
-    outcome: "ok" | "no_match";
+    outcome: "ok" | "no_match" | "stopped";
+    guard?: string | null;
     mustContain?: string[];
     mustNotContain?: string[];
     sameTg?: boolean;
@@ -67,6 +77,9 @@ type FileJson = { feature: string; status: string; note: string; cases: CaseJson
 const raw = existsSync(casesPath) ? readFileSync(casesPath, "utf8") : "";
 const file = (raw === "" ? { cases: [] } : JSON.parse(raw)) as FileJson;
 const cases = file.cases ?? [];
+
+/** Kjent sak uten vakt (`expect.guard: null`, som K1.6c). Telles aldri som bestått. */
+const isKnownUnguarded = (item: CaseJson) => item.expect.guard === null;
 
 const inputOf = (item: CaseJson) => Object.values(item.fields).join("\n");
 const mustContain = (item: CaseJson) => item.expect.mustContain ?? [];
@@ -155,13 +168,13 @@ function allText(item: CaseJson): string {
 }
 
 describe("evalueringssett: settet for language_polish (E4)", () => {
-  it("E4.1 filen er gyldig etter skjemaet, har 30–50 eksempler (nå 45), unike id-er og er merket utkast", () => {
+  it("E4.1 filen er gyldig etter skjemaet, har 30–60 eksempler (nå 54), unike id-er og er merket utkast", () => {
     expect(existsSync(casesPath), FILE_NAME).toBe(true);
     const parsed = parseCasesFile(JSON.parse(raw) as unknown, FILE_NAME);
     expect(parsed.ok ? [] : parsed.errors).toEqual([]);
     expect(file.feature).toBe("language_polish");
     expect(file.status).toBe("utkast, ikke godkjent av fagrådet");
-    expect(cases.length).toBe(45);
+    expect(cases.length).toBe(54);
     expect(new Set(cases.map((item) => item.id)).size).toBe(cases.length);
   });
 
@@ -202,8 +215,10 @@ describe("evalueringssett: settet for language_polish (E4)", () => {
     ).toBe(true);
   });
 
+  // Kjente saker uten vakt er unntatt: de telles aldri som bestått og kan ikke være mustPass (GT2.3)
   it("E4.2 alle eksempler med «bør», «må», TG, NS-henvisning eller styringsforsøk er mustPass", () => {
     const notMustPass = cases
+      .filter((item) => !isKnownUnguarded(item))
       .filter(
         (item) =>
           hasWholeWord(inputOf(item), "bør") ||
@@ -385,6 +400,8 @@ describe("evalueringssett: settet for language_polish (E4)", () => {
       mustPassTotal: feature.mustPassTotal,
       mustPassPassed: feature.mustPassPassed,
       misses: feature.misses.map((miss) => miss.id),
+      knownUnguarded: feature.knownUnguarded.map((item) => item.id),
+      groups: feature.groups,
       leaks: feature.leaks,
       crashes: feature.crashes,
     }).toEqual(LOCKED_RESULT);
@@ -422,12 +439,25 @@ describe("evalueringssett: settet for language_polish (E4)", () => {
 
 /** Låst resultat mot `fakeAiProvider` (E4.12). */
 const LOCKED_RESULT = {
-  total: 45,
-  passed: 42,
-  mustPassTotal: 24,
-  mustPassPassed: 24,
+  total: 54,
+  passed: 50,
+  mustPassTotal: 29,
+  mustPassPassed: 29,
   // Skrivefeil: den falske leverandøren retter ikke språket (T-0047)
   misses: ["lp-031", "lp-032", "lp-033"] as string[],
+  // «bør» → «må» (spørsmål 103): ingen vakt ennå, telles aldri som bestått
+  knownUnguarded: ["lp-054"] as string[],
+  groups: [
+    {
+      group: "room_review",
+      total: 9,
+      passed: 8,
+      passRate: 8 / 9,
+      mustPassTotal: 5,
+      mustPassPassed: 5,
+      knownUnguarded: ["lp-054"],
+    },
+  ] as unknown[],
   leaks: [] as unknown[],
   crashes: [] as string[],
 };
@@ -517,5 +547,178 @@ describe("evalueringssett: language_polish utvidet (K2.4, K2.3a)", () => {
     });
     const missed = result.features[0]!.misses.map((miss) => miss.id);
     expect(simulated.map((item) => item.id).filter((id) => missed.includes(id))).toEqual([]);
+  });
+});
+
+// --- GT2.2–GT2.6 (docs/funksjoner/fase2a-ga-gjennom-tekstene-testplan.md avsnitt 2) -------------
+
+/*
+ * Flerfeltssakene fra ett bad i gruppen `room_review` («Gå gjennom tekstene»). Hver sak er ett
+ * felt per kall, som i kjernen; «flerfelt» betyr at sakene kommer fra samme bad.
+ *
+ * Støtter hovedmål: KI i bunnen (gjennomgangen av hele badet måles for seg før ekte KI slås på) og
+ * færre reklamasjoner («ikke påvist», tall, forbehold og «må» står; et tall KI finner på stoppes;
+ * «bør» → «må» er en kjent sak uten vakt som aldri telles som bestått).
+ */
+
+const ROOM_REVIEW = cases.filter((item) => item.group === "room_review");
+const DRAFT_MARK = /utkast, ikke godkjent av fagrådet/iu;
+const REFERENCE_WORDS = [/NS[\s ]?3600/u, /\bIVIT\b/iu, /SmartTakst/iu, /\bTEK\b/u, /Byggforsk/iu];
+
+describe("evalueringssett: flerfeltssakene i room_review (GT2.2–GT2.6)", () => {
+  it("GT2.2 minst seks saker i room_review, alle merket utkast og uten gruppe utenom room_review", () => {
+    expect(ROOM_REVIEW.length).toBeGreaterThanOrEqual(6);
+    for (const item of ROOM_REVIEW) expect(item.description ?? "", item.id).toMatch(DRAFT_MARK);
+    const otherGroups = cases.filter(
+      (item) => item.group !== undefined && item.group !== "room_review",
+    );
+    expect(otherGroups.map((item) => item.id)).toEqual([]);
+  });
+
+  it("GT2.2 (a) ett avvik med fire felt, der det siste er tiltaket, fra samme bad", () => {
+    const deviation = ROOM_REVIEW.filter((item) => /felt [1-4] av 4/u.test(item.description ?? ""));
+    expect(deviation.map((item) => /felt ([1-4]) av 4/u.exec(item.description!)![1])).toEqual([
+      "1",
+      "2",
+      "3",
+      "4",
+    ]);
+    expect(deviation[3]!.description).toMatch(/tiltak/iu);
+    for (const item of deviation) {
+      expect(item.expect.outcome, item.id).toBe("ok");
+      expect(mustContain(item).length, item.id).toBeGreaterThan(0);
+    }
+    const rooms = new Set(ROOM_REVIEW.map((item) => /^(.*?),/u.exec(item.description ?? "")?.[1]));
+    expect([...rooms], "alle sakene er fra samme bad").toHaveLength(1);
+  });
+
+  it("GT2.2 (b) «ikke påvist» skal stå", () => {
+    const list = ROOM_REVIEW.filter(
+      (item) =>
+        hasWholeWord(inputOf(item), "ikke påvist") && mustContain(item).includes("ikke påvist"),
+    );
+    expect(list.length).toBeGreaterThan(0);
+  });
+
+  it("GT2.2 (c) tall og enhet skal stå, og ingen nye tall i mustNotContain står i inndata", () => {
+    const list = ROOM_REVIEW.filter((item) =>
+      mustContain(item).some(
+        (word) => /\d\s?(mm|%|vekt-%)/u.test(word) && hasWholeWord(inputOf(item), word),
+      ),
+    );
+    expect(list.length).toBeGreaterThan(0);
+    for (const item of list) {
+      for (const word of mustNotContain(item))
+        expect(hasWholeWord(inputOf(item), word)).toBe(false);
+    }
+  });
+
+  it("GT2.2 (d) forbeholdet skal stå", () => {
+    const list = ROOM_REVIEW.filter(
+      (item) =>
+        /forbehold/iu.test(item.description ?? "") &&
+        mustContain(item).some((word) => hasWholeWord(word, "ikke")) &&
+        mustContain(item).every((word) => hasWholeWord(inputOf(item), word)),
+    );
+    expect(list.length).toBeGreaterThan(0);
+  });
+
+  it("GT2.2 (e) KI legger til et tall, og tallvakten stopper svaret", () => {
+    const list = ROOM_REVIEW.filter(
+      (item) => item.expect.outcome === "stopped" && item.expect.guard === "number_guard",
+    );
+    expect(list.length).toBeGreaterThan(0);
+    for (const item of list) {
+      expect(/\d/u.test(inputOf(item)), `${item.id}: inndata uten tall`).toBe(false);
+      expect(item.simulatedAnswer ?? "", item.id).toMatch(/\d/u);
+      expect(item.mustPass, item.id).toBe(true);
+    }
+  });
+
+  it("GT2.2 (f) «bør» → «må» er en kjent sak uten vakt, knyttet til spørsmål 103", () => {
+    const list = ROOM_REVIEW.filter(isKnownUnguarded);
+    expect(list.length).toBeGreaterThan(0);
+    for (const item of list) {
+      expect(hasWholeWord(inputOf(item), "bør"), item.id).toBe(true);
+      expect(hasWholeWord(item.simulatedAnswer ?? "", "må"), item.id).toBe(true);
+      expect(item.openQuestion, item.id).toBe(103);
+      expect(item.mustPass ?? false, item.id).toBe(false);
+      expect(item.expect.verdict, item.id).toBe("fail");
+    }
+  });
+
+  it("GT2.3/GT2.4 mot den falske leverandøren: grønn, room_review for seg, kjent sak aldri bestått", async () => {
+    const { exitCode, lines } = await runEvalCommand(
+      ["language_polish"],
+      __dirname,
+      fakeAiProvider,
+    );
+    expect(exitCode).toBe(0);
+    expect(lines[0]).toBe(FAKE_PROVIDER_NOTICE);
+    const text = lines.join("\n");
+    expect(text).toMatch(/Gruppe room_review: 9 eksempler, 8 treff/u);
+    expect(text).toMatch(/Kjent sak uten vakt lp-054: telles ikke som bestått/u);
+    const result = await runEvals({
+      provider: fakeAiProvider,
+      casesDir: __dirname,
+      feature: "language_polish",
+    });
+    const feature = result.features[0]!;
+    const unguarded = cases.filter(isKnownUnguarded).map((item) => item.id);
+    expect(feature.knownUnguarded.map((item) => item.id)).toEqual(unguarded);
+    expect(feature.misses.map((miss) => miss.id).filter((id) => unguarded.includes(id))).toEqual(
+      [],
+    );
+    expect(feature.passed + feature.misses.length + unguarded.length).toBe(feature.total);
+    const roomMisses = feature.misses.filter((miss) =>
+      ROOM_REVIEW.some((item) => item.id === miss.id),
+    );
+    expect(roomMisses).toEqual([]);
+  });
+
+  it("GT2.5 kopisjekken: ingen gjetteord eller henvisning i sakene, og ingen setning fra researchen", () => {
+    const problems: string[] = [];
+    for (const item of ROOM_REVIEW) {
+      const texts = [
+        inputOf(item),
+        item.description ?? "",
+        item.simulatedAnswer ?? "",
+        ...mustContain(item),
+        ...mustNotContain(item),
+      ];
+      for (const text of texts) {
+        for (const word of EVAL_GUESS_WORDS) {
+          if (hasWholeWord(text, word)) problems.push(`${item.id}: «${word}»`);
+        }
+        for (const pattern of REFERENCE_WORDS) {
+          if (pattern.test(text)) problems.push(`${item.id}: henvisning`);
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+    // Kopisjekken i tests/no-copy-from-research.test.ts leser alle *.cases.json i mappen
+    expect(readdirSync(__dirname)).toContain(FILE_NAME);
+  });
+
+  it("GT2.6 ingen ny vakt: vaktkodene og vaktsakene i kjernen er de samme og grønne", () => {
+    expect([...EVAL_GUARD_CODES]).toEqual([
+      "tg_guard",
+      "coverage_guard",
+      "number_guard",
+      "placeholder_guard",
+    ]);
+    // Endres bare med vilje, i samme PR som en ny vakt (spørsmål 103 og 105c)
+    expect(GUARD_CASES).toHaveLength(35);
+    expect(KNOWN_UNGUARDED_CASES.map((item) => item.name)).toEqual([
+      "K1.6c «ikke» faller bort",
+      "K1.6c «ingen» faller bort",
+      "K1.6c «uten» faller bort",
+    ]);
+    for (const item of KNOWN_UNGUARDED_CASES) expect(item.expected).toBeNull();
+    expect(runGuardCases("language_polish").mismatches).toEqual([]);
+    const usedGuards = new Set(
+      cases.flatMap((item) => (typeof item.expect.guard === "string" ? [item.expect.guard] : [])),
+    );
+    for (const guard of usedGuards) expect([...EVAL_GUARD_CODES]).toContain(guard);
   });
 });

@@ -716,3 +716,100 @@ describe("evalueringssett: kjernens vakter og nye vurderinger (KI i veien)", () 
     expect(source).not.toMatch(/JSON\.parse\(text\)/u);
   });
 });
+
+/*
+ * GT2.3 (docs/funksjoner/fase2a-ga-gjennom-tekstene-testplan.md): gruppen `room_review` vises for
+ * seg, og en kjent sak uten vakt telles aldri som bestått. Oppdiktede filer i en midlertidig mappe.
+ * Støtter hovedmål: KI i bunnen (flerfeltssakene måles for seg) og færre reklamasjoner (en sak der
+ * ingen vakt stopper et feil svar, kan aldri se bestått ut).
+ */
+describe("evalueringssett: gruppen room_review og kjente saker uten vakt (GT2.3)", () => {
+  /** Et feil svar som vurderingen likevel godtar på tekst: fasiten nevner verken «bør» eller «må». */
+  const knownUnguarded = (id: string, answer = "Fugen ved badekaret må skiftes."): EvalCaseJson =>
+    ({
+      id,
+      group: "room_review",
+      openQuestion: 103,
+      fields: { text: "fugen ved badekaret bør skiftes" },
+      simulatedAnswer: answer,
+      expect: { outcome: "ok", guard: null, mustContain: ["badekaret"], verdict: "fail" },
+    }) as unknown as EvalCaseJson;
+
+  const inGroup = (item: EvalCaseJson): EvalCaseJson =>
+    ({ ...item, group: "room_review" }) as unknown as EvalCaseJson;
+
+  function roomReviewCases(): EvalCaseJson[] {
+    return evalCases(30, "g", (item, index) => {
+      if (index === 0) return knownUnguarded(item.id);
+      if (index < 4) return inGroup(item);
+      return item;
+    });
+  }
+
+  it("GT2.3 en kjent sak uten vakt som «består» på tekst, telles likevel ikke som bestått", async () => {
+    // Kontroll: uten guard null og verdict ville vurderingen godtatt svaret på tekst
+    expect(
+      run.evaluateCase(
+        { outcome: "ok", mustContain: ["badekaret"] },
+        "fugen ved badekaret bør skiftes",
+        okResult("Fugen ved badekaret må skiftes."),
+      ).passed,
+    ).toBe(true);
+
+    const feature = await runOnly(roomReviewCases(), fakeAiProvider);
+    expect(feature.total).toBe(30);
+    expect(feature.passed).toBe(29);
+    expect(feature.misses).toEqual([]);
+    expect(feature.knownUnguarded).toEqual([{ id: "g-01", openQuestion: 103 }]);
+    expect(feature.passRate).toBeCloseTo(29 / 30);
+  });
+
+  it("GT2.3 gruppen room_review telles for seg, med den kjente saken i totalen og ikke i treff", async () => {
+    const feature = await runOnly(roomReviewCases(), fakeAiProvider);
+    expect(feature.groups).toEqual([
+      {
+        group: "room_review",
+        total: 4,
+        passed: 3,
+        passRate: 0.75,
+        mustPassTotal: 0,
+        mustPassPassed: 0,
+        knownUnguarded: ["g-01"],
+      },
+    ]);
+  });
+
+  it("GT2.3 utskriften viser gruppen for seg og den kjente saken, og koden er 0", async () => {
+    const { exitCode, lines } = await runEvalCommand(
+      ["language_polish"],
+      dirWith(roomReviewCases()),
+      fakeAiProvider,
+    );
+    expect(exitCode).toBe(0);
+    expect(lines[0]).toBe(run.FAKE_PROVIDER_NOTICE);
+    const text = lines.join("\n");
+    expect(text).toMatch(/Gruppe room_review: 4 eksempler, 3 treff, treffprosent 75 %/u);
+    expect(text).toMatch(/kjente saker uten vakt 1/u);
+    expect(text).toMatch(/Kjent sak uten vakt g-01: telles ikke som bestått.*spørsmål 103/u);
+    expect(text).not.toMatch(/Bom g-01/u);
+  });
+
+  it("GT2.3 uten grupper i filen står ingen gruppelinje", async () => {
+    const { lines } = await runEvalCommand(
+      ["language_polish"],
+      dirWith(evalCases()),
+      fakeAiProvider,
+    );
+    expect(lines.join("\n")).not.toMatch(/Gruppe /u);
+  });
+
+  it("GT2.3 stopper en vakt den kjente saken nå, er det bom med beskjed om å rette fasiten", async () => {
+    const cases = roomReviewCases();
+    cases[0] = knownUnguarded("g-01", "Fugen ved badekaret må skiftes innen 2 uker.");
+    const feature = await runOnly(cases, fakeAiProvider);
+    expect(feature.passed).toBe(29);
+    expect(feature.knownUnguarded).toEqual([]);
+    expect(feature.misses.map((miss) => miss.id)).toEqual(["g-01"]);
+    expect(feature.misses[0]!.reason).toMatch(/number_guard; rett fasiten/u);
+  });
+});
