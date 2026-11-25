@@ -303,6 +303,13 @@ export const GUARD_CASES: readonly GuardCase[] = [
     answer: [{ label: null, text: "K1, K2 TG3 4711" }],
     expected: null,
   },
+  {
+    name: "S1.29 outcome_match kjører ikke vaktene (svaret er bare merker, aldri tekst)",
+    feature: "outcome_match",
+    sent: [{ label: null, texts: ["Sprekk i flis ved sluket"] }],
+    answer: [{ label: null, text: "K2, K1 TG3 4711" }],
+    expected: null,
+  },
 ];
 
 /**

@@ -6,10 +6,13 @@ vi.mock("server-only", () => ({}));
 import { AccessDeniedError, effectivePermissions, type Actor } from "@/core/access";
 import {
   applyPhrase,
+  chooseOutcomeMatch,
   draftSummary,
+  findOutcomes,
   getReportSummary,
   polishDescription,
   polishDeviation,
+  rejectOutcomeMatch,
   saveField,
   saveSummary,
   suggestPhrases,
@@ -32,6 +35,8 @@ beforeEach(resetDatabase);
 
 type Prepared = Awaited<ReturnType<typeof prepare>>;
 
+const OUTCOME_NOTE = "sprekk i flis ved sluket, litt løs";
+
 /** Bad med KI på, et avvik med tiltak, en beskrivelse og et forslag fra admin. */
 async function prepare() {
   const f = await kiBathroom({ roles: ["admin"] });
@@ -50,7 +55,24 @@ async function prepare() {
     text: "",
   });
   if (suggestion.status !== "ranked") throw new Error(`fikk ${suggestion.status}`);
-  return { ...f, deviationId, adminSuggestion: suggestion };
+  // «Skriv det du ser»: et åpent søk fra admin, til dem som ikke kan søke selv
+  const adminOutcomeSearch = await findOutcomes(f.actor, f.organizationId, f.room, {
+    requestId: uuidv7(),
+    note: OUTCOME_NOTE,
+    openCheckpointKey: null,
+  });
+  if (adminOutcomeSearch.status !== "ranked") throw new Error(`fikk ${adminOutcomeSearch.status}`);
+  return { ...f, deviationId, adminSuggestion: suggestion, adminOutcomeSearch };
+}
+
+/** Eget søk når tilgangen er der, ellers det åpne søket fra admin (uten ny rad). */
+async function outcomeSearch(actor: Actor, p: Prepared) {
+  const own = await findOutcomes(actor, p.organizationId, p.room, {
+    requestId: uuidv7(),
+    note: OUTCOME_NOTE,
+    openCheckpointKey: null,
+  }).catch(() => null);
+  return own?.status === "ranked" ? own : p.adminOutcomeSearch;
 }
 
 /** Handlingene som krever `report.edit`. Hver gir et svar når tilgangen er der. */
@@ -83,6 +105,36 @@ const ACTIONS: [string, (actor: Actor, p: Prepared) => Promise<unknown>][] = [
         base: null,
         measureId: uuidv7(),
       });
+    },
+  ],
+  [
+    "finn utfall med KI",
+    (actor, p) =>
+      findOutcomes(actor, p.organizationId, p.room, {
+        requestId: uuidv7(),
+        note: OUTCOME_NOTE,
+        openCheckpointKey: null,
+      }),
+  ],
+  [
+    "velg KI-treff",
+    async (actor, p) => {
+      const search = await outcomeSearch(actor, p);
+      const hit = search.hits[0];
+      if (!hit) throw new Error("mangler treff");
+      return chooseOutcomeMatch(actor, p.organizationId, p.room, {
+        usageId: search.usageId,
+        candidate: hit.ref,
+        deviationId: uuidv7(),
+        tg: null,
+      });
+    },
+  ],
+  [
+    "avvis KI-treff",
+    async (actor, p) => {
+      const search = await outcomeSearch(actor, p);
+      return rejectOutcomeMatch(actor, p.organizationId, p.room, { usageId: search.usageId });
     },
   ],
   [

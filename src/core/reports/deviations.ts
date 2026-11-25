@@ -80,6 +80,11 @@ export type CreateDeviationParams = {
   tgiuChoice?: TgiuChoice;
   suggestedByRuleId?: string | null;
   measurement?: { value: number | null; unit: string | null } | null;
+  /**
+   * KI-søket avviket ble valgt fra («Skriv det du ser»). Står bare i revisjonsloggen, så avviket
+   * kan spores til loggraden. Aldri notatet.
+   */
+  usageId?: string;
 };
 
 export type CreateDeviationResult =
@@ -172,6 +177,49 @@ export async function mergeValuesFor(
 /** Teksten med flettefeltene fylt inn. `null` forblir `null`. */
 function merged(text: string | null, values: MergeValues): string | null {
   return text === null ? null : mergeFieldsText(text, values).text;
+}
+
+/**
+ * Malens avvikstekst, årsak og konsekvens for avvikets utfall, laget på nytt slik
+ * `createDeviationFromOutcome` lager dem: med flettefeltene fylt fra rommets svar nå og avvikets
+ * måling (A557, A562). `null` når avviket ikke kommer fra et utfall i rommets del av malen.
+ */
+export async function templateTextsFor(
+  scope: WriteScope,
+  deviation: Pick<Deviation, "outcomeId" | "measurementValue" | "measurementUnit">,
+): Promise<{
+  deviationText: string | null;
+  causeText: string | null;
+  consequenceText: string | null;
+} | null> {
+  if (deviation.outcomeId === null) return null;
+  const ref = scope.template.outcomeRefById.get(deviation.outcomeId);
+  const outcome = ref
+    ? scope.roomDoc.outcomes.find(
+        (o) =>
+          o.checkpoint_key === ref.checkpointKey &&
+          o.question_key === ref.questionKey &&
+          o.key === ref.outcomeKey,
+      )
+    : undefined;
+  if (!ref || !outcome) return null;
+  const raw = [
+    outcome.deviation_text,
+    outcome.default_cause_text,
+    outcome.default_consequence_text,
+  ];
+  // Flettefeltene leses bare når malens tekst har dem (ingen ekstra spørringer ellers)
+  const values = raw.some((text) => text !== null && text.includes("{"))
+    ? await mergeValuesFor(scope, ref.checkpointKey, {
+        value: deviation.measurementValue,
+        unit: deviation.measurementUnit,
+      })
+    : {};
+  return {
+    deviationText: merged(outcome.deviation_text, values),
+    causeText: merged(outcome.default_cause_text, values),
+    consequenceText: merged(outcome.default_consequence_text, values),
+  };
 }
 
 /** Avviket og punktet det står på, når punktet er i rommet. Ellers 404. */
@@ -309,6 +357,7 @@ export async function createDeviationFromOutcome(
     kind,
     tg,
     suggestedByRuleId: params.suggestedByRuleId ?? null,
+    ...(params.usageId === undefined ? {} : { usageId: params.usageId }),
   });
   return { status: "created", deviation: inserted, result };
 }

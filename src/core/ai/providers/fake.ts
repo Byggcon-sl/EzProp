@@ -1,5 +1,7 @@
 import type { AiErrorCode } from "@/db/schema";
+import { OUTCOME_MATCH_MAX } from "@/shared/config/ai-targets";
 import { PII_PLACEHOLDERS } from "@/shared/lib/pii-patterns";
+import { rankBySimilarity, SIMILARITY_MIN_SCORE } from "@/shared/lib/text-similarity";
 import { PROMPT_INPUT_SEPARATOR } from "../features";
 import type { AiProvider, AiProviderRequest, AiProviderResult } from "./types";
 
@@ -14,6 +16,10 @@ import type { AiProvider, AiProviderRequest, AiProviderResult } from "./types";
  *   den ansatte har skrevet, med en fast grense for «ingen passer» (svarer «INGEN»). Tomt felt gir
  *   kandidatene i rekkefølgen de kom (kandidatkilden har allerede sortert dem).
  * - `summary_draft`: én linje per F-merke, satt sammen av funnets egne tekster.
+ * - `outcome_match`: leser notatet og merkene K1…Kn fra ledeteksten og rangerer med den samme
+ *   rene likhetsfunksjonen og grensen som «Nærmeste treff (uten KI)» (`rankBySimilarity` og
+ *   `SIMILARITY_MIN_SCORE` fra `@/shared/lib/text-similarity`, A561). Høyst `OUTCOME_MATCH_MAX`
+ *   merker, ellers «ingen». TG i notatet endrer aldri rekkefølgen.
  *
  * Faste prøveverdier gir «ingen treff», feil, og svar som vaktene i kjernen skal stoppe, slik at
  * testene kan provosere hvert utfall. Prøveverdiene har ingen sifre og ingen TG, så de ikke selv
@@ -121,6 +127,27 @@ function rankCandidates(input: string): string {
   return ranked.join(", ");
 }
 
+/** Rangering for `outcome_match`: høyst tre merker etter likhet med notatet, eller «ingen». */
+function matchOutcomes(input: string): string {
+  const lines = input.split("\n");
+  const noteLine = lines.find((line) => line.startsWith("text: "));
+  const note = noteLine ? noteLine.slice("text: ".length) : "";
+  const candidates: { label: string; text: string }[] = [];
+  for (const line of lines) {
+    const match = /^(K[1-9]\d*): (.*)$/u.exec(line);
+    if (match) candidates.push({ label: match[1] as string, text: match[2] ?? "" });
+  }
+  const ranked = rankBySimilarity(note, candidates, (candidate) => candidate.text, {
+    limit: OUTCOME_MATCH_MAX,
+    minScore: SIMILARITY_MIN_SCORE,
+  }).map((match) => match.item.label);
+  if (ranked.length === 0) return "ingen";
+  if (input.includes(FAKE_BAD_LABELS_INPUT)) {
+    return [...ranked, "K99", ranked[0], "tekst"].join(", ");
+  }
+  return ranked.join(", ");
+}
+
 /** Utkast for `summary_draft`: én linje per F-merke med funnets egne tekster. */
 function draftSummary(input: string): string {
   const out: string[] = [];
@@ -150,6 +177,7 @@ export const fakeAiProvider: AiProvider = {
     let text: string;
     if (request.feature === "phrase_suggest") text = rankCandidates(input);
     else if (request.feature === "summary_draft") text = draftSummary(input);
+    else if (request.feature === "outcome_match") text = matchOutcomes(input);
     else text = withTriggers(polish(input), input);
     return {
       outcome: "ok",

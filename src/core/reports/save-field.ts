@@ -17,6 +17,7 @@ import {
 } from "@/db/schema";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { requireUuid } from "./context";
+import { templateTextsFor } from "./deviations";
 import { ReportValidationError } from "./errors";
 import { checkCostAmount, COST_BANDS, isEffectiveDecision } from "./logic";
 import { answerValueOf } from "./room-view";
@@ -479,6 +480,44 @@ const DEVIATION_TEXT_COLUMNS = {
   consequence_text: "consequenceText",
 } as const;
 
+/** Lik tekst for `text_source`: tom tekst og ingen tekst er det samme. */
+function sameText(a: string | null, b: string | null): boolean {
+  return (a === "" ? null : a) === (b === "" ? null : b);
+}
+
+/**
+ * `text_source` etter en lagring av avvik, årsak eller konsekvens (A557, A562). Settes bare av
+ * serveren, aldri av klienten: `free` står alltid; ellers er den `template` når alle tre tekstene
+ * er lik malens tekster laget på nytt for avviket (gjeldende flettefelt og måling), og `edited`
+ * ellers. Slik setter «Angre» på notatet i «Skriv det du ser» `template` tilbake.
+ */
+export async function textSourceAfter(
+  scope: WriteScope,
+  deviation: Deviation,
+  column: (typeof DEVIATION_TEXT_COLUMNS)[keyof typeof DEVIATION_TEXT_COLUMNS],
+  value: string | null,
+): Promise<Deviation["textSource"]> {
+  if (deviation.textSource === "free") return "free";
+  const next = {
+    deviationText: deviation.deviationText,
+    causeText: deviation.causeText,
+    consequenceText: deviation.consequenceText,
+    [column]: value,
+  };
+  // Avvik uten utfall har ingen malens tekst å gå tilbake til
+  if (deviation.outcomeId === null) return "edited";
+  const template = await templateTextsFor(scope, deviation);
+  if (
+    template !== null &&
+    sameText(next.deviationText, template.deviationText) &&
+    sameText(next.causeText, template.causeText) &&
+    sameText(next.consequenceText, template.consequenceText)
+  ) {
+    return "template";
+  }
+  return "edited";
+}
+
 async function saveDeviationField(
   scope: WriteScope,
   change: Extract<Change, { table: "deviations" }>,
@@ -529,10 +568,7 @@ async function saveDeviationField(
       if (current !== base) return conflict(deviation.id, deviation.rowVersion, current);
       if (current === value) return saved(scope, deviation.id, deviation.rowVersion);
       return write(
-        {
-          [column]: value,
-          textSource: deviation.textSource === "template" ? "edited" : deviation.textSource,
-        },
+        { [column]: value, textSource: await textSourceAfter(scope, deviation, column, value) },
         {},
       );
     }

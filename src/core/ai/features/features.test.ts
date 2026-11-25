@@ -18,7 +18,7 @@ import {
  */
 
 /** Alle funksjonskodene som finnes. Ny funksjon uten testsak gjør testen rød. */
-const FEATURE_CODES = ["language_polish", "phrase_suggest", "summary_draft"];
+const FEATURE_CODES = ["language_polish", "phrase_suggest", "summary_draft", "outcome_match"];
 
 /**
  * Sperrelisten fra ADR 0006 del 6 («aldri på tillatt-liste»), fast i testen. Hver kolonne
@@ -113,7 +113,7 @@ describe("funksjonsdefinisjonene (2)", () => {
     ]);
   });
 
-  it("2.2 kodene er faste: listen er nøyaktig language_polish, phrase_suggest og summary_draft", () => {
+  it("2.2 kodene er faste: listen er nøyaktig language_polish, phrase_suggest, summary_draft og outcome_match", () => {
     expect(
       featureDefinitions()
         .map((definition) => definition.code)
@@ -415,7 +415,7 @@ describe("KI i veien: funksjonsdefinisjonene (K1.27–K1.31)", () => {
     return out;
   }
 
-  it("K1.27 rettighet, ledetekst og egne kilder per tabell.kolonne (ingen free_text for de nye)", async () => {
+  it("K1.27 rettighet, ledetekst og egne kilder per tabell.kolonne (free_text bare for notatet til outcome_match)", async () => {
     const { AI_FEATURES } = await load();
     expect(AI_FEATURES.phrase_suggest.permission).toBe("report.edit");
     expect(AI_FEATURES.summary_draft.permission).toBe("report.edit");
@@ -462,7 +462,10 @@ describe("KI i veien: funksjonsdefinisjonene (K1.27–K1.31)", () => {
         ),
         ...Object.values(definition.serverSources).flat(),
       ];
+      // Notatet til `outcome_match` er takstmannens egen tekst (S1.26); alle andre kilder er kolonner
+      const freeTextAllowed = definition.code === "outcome_match";
       for (const source of sources) {
+        if (freeTextAllowed && source === "free_text") continue;
         expect(source, `${definition.code}: free_text`).not.toBe("free_text");
         expect(columns.has(source), `${definition.code}: ${source} finnes ikke i skjemaet`).toBe(
           true,
@@ -519,6 +522,7 @@ describe("KI i veien: funksjonsdefinisjonene (K1.27–K1.31)", () => {
     expect(targets("summary_draft")).toEqual(["report/summary_text"]);
     expect(targets("language_polish")).not.toContain("deviation/new_measure");
     expect(targets("language_polish")).not.toContain("report/summary_text");
+    expect(targets("outcome_match")).toEqual(["report/new_deviation"]);
   });
 
   it("K1.29 ledetekstene har skillet, forbudene og ingen modellnavn", async () => {
@@ -563,5 +567,95 @@ describe("KI i veien: funksjonsdefinisjonene (K1.27–K1.31)", () => {
     for (const definition of Object.values(AI_FEATURES)) {
       expect(definition.allowedTargets.map((target) => target.type)).not.toContain("tgiu_detail");
     }
+  });
+});
+
+/*
+ * «Skriv det du ser» (`outcome_match`): definisjonen, målet og de felles listene
+ * (docs/funksjoner/fase2a-skriv-det-du-ser-testplan.md S1.26, S1.29–S1.31 og S1.33). Fasiten er
+ * skrevet inn her (regel 6). Støtter hovedmål: KI i bunnen (samme tillatt-liste, vask og logg som
+ * de andre funksjonene; KI ser og setter aldri TG).
+ */
+describe("Skriv det du ser: outcome_match i definisjonene", () => {
+  async function load() {
+    return import("../features");
+  }
+
+  it("S1.26 tillatt-listen er nøyaktig notatet (free_text) og de tre malkolonnene", async () => {
+    const { AI_FEATURES, findFieldSourceViolations } = await load();
+    const definition = AI_FEATURES.outcome_match;
+    expect([...definition.allowedFields]).toEqual(["text"]);
+    expect({ ...definition.fieldSources }).toEqual({ text: "free_text" });
+    expect({ ...definition.serverSources }).toEqual({
+      candidates: ["checkpoints.name", "deviation_questions.text", "outcomes.deviation_text"],
+    });
+    expect(findFieldSourceViolations([definition])).toEqual([]);
+    // Ingen kolonne som røper TG, utfallstype, kildehenvisning eller rommet (A552)
+    const sources = Object.values(definition.serverSources).flat();
+    for (const forbidden of [
+      "outcomes.key",
+      "outcomes.kind",
+      "outcomes.source_ref",
+      "rooms.name",
+      "report_buildings.name",
+    ]) {
+      expect(sources).not.toContain(forbidden);
+    }
+  });
+
+  it("S1.29 rettighet report.edit, ledetekst outcome_match.v1, og målet new_deviation bare her", async () => {
+    const { AI_FEATURES, AI_PROMPTS } = await load();
+    const { REPORT_AI_TARGET_FIELDS, REPORT_NEW_DEVIATION_FIELD_KEY } =
+      await import("@/shared/config/ai-targets");
+    expect(REPORT_NEW_DEVIATION_FIELD_KEY).toBe("new_deviation");
+    expect(AI_FEATURES.outcome_match.permission).toBe("report.edit");
+    expect(AI_FEATURES.outcome_match.promptVersion).toBe("outcome_match.v1");
+    expect(AI_PROMPTS["outcome_match.v1"]?.length ?? 0).toBeGreaterThan(0);
+    expect([...AI_FEATURES.outcome_match.allowedTargets]).toEqual([
+      { type: "report", fieldKey: "new_deviation" },
+    ]);
+    // Ikke en kolonne som kan få forslag
+    expect([...REPORT_AI_TARGET_FIELDS.report]).not.toContain("new_deviation");
+    for (const definition of Object.values(AI_FEATURES)) {
+      if (definition.code === "outcome_match") continue;
+      expect(
+        definition.allowedTargets.map((target) => target.fieldKey),
+        definition.code,
+      ).not.toContain("new_deviation");
+    }
+    for (const target of AI_FEATURES.outcome_match.allowedTargets) {
+      expect(isTgField(target.fieldKey)).toBe(false);
+    }
+  });
+
+  it("S1.30 én felles liste over funksjoner uten KI-tekst: phrase_suggest og outcome_match", async () => {
+    const { AI_FEATURES, AI_FEATURES_WITHOUT_AI_TEXT } = await load();
+    expect([...AI_FEATURES_WITHOUT_AI_TEXT].sort()).toEqual(["outcome_match", "phrase_suggest"]);
+    for (const code of AI_FEATURES_WITHOUT_AI_TEXT) {
+      expect(Object.keys(AI_FEATURES), code).toContain(code);
+    }
+    const index = await import("../index");
+    expect(index.AI_FEATURES_WITHOUT_AI_TEXT).toBe(AI_FEATURES_WITHOUT_AI_TEXT);
+  });
+
+  it("S1.31 FAKE_ONLY_FEATURES er nøyaktig outcome_match, og hver kode er en AiFeatureCode", async () => {
+    const { AI_FEATURES, FAKE_ONLY_FEATURES } = await load();
+    expect([...FAKE_ONLY_FEATURES]).toEqual(["outcome_match"]);
+    for (const code of FAKE_ONLY_FEATURES) {
+      expect(Object.keys(AI_FEATURES), code).toContain(code);
+    }
+  });
+
+  it("S1.33 grensene står i @/shared og er de samme som @/core/ai eksporterer", async () => {
+    const shared = await import("@/shared/config/ai-targets");
+    const index = await import("../index");
+    expect(shared.OUTCOME_MATCH_MAX).toBe(3);
+    expect(shared.OUTCOME_MATCH_NOTE_MAX).toBe(500);
+    expect(index.OUTCOME_MATCH_MAX).toBe(shared.OUTCOME_MATCH_MAX);
+    expect(index.OUTCOME_MATCH_NOTE_MAX).toBe(shared.OUTCOME_MATCH_NOTE_MAX);
+    expect(shared.OUTCOME_MATCH_MAX).toBeLessThanOrEqual(shared.AI_CANDIDATE_REFS_MAX);
+    const limits = await import("../limits");
+    expect(limits.OUTCOME_MATCH_CANDIDATES_MAX).toBeLessThanOrEqual(limits.AI_CANDIDATES_MAX);
+    expect(Object.keys(shared)).not.toContain("OUTCOME_MATCH_CANDIDATES_MAX");
   });
 });

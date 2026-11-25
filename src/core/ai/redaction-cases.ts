@@ -360,6 +360,13 @@ export const REDACTION_CASES: readonly RedactionCase[] = [
     mustKeep: ["om nøklene"],
   },
   {
+    name: "matrikkel med nuller foran («Skriv det du ser», S1.25)",
+    input: "Bad i 0012/34 og gnr. 012 bnr. 0034, sprekker i flisene.",
+    knownValues: S,
+    mustRemove: ["0012/34", "012", "0034"],
+    mustKeep: ["sprekker i flisene"],
+  },
+  {
     name: "telefon i par",
     input: "Bjørn ringte fra 87 65 43 21 i formiddag.",
     knownValues: S,

@@ -265,9 +265,15 @@ function addAddressPart(alternatives: Alternative[], part: string): void {
   }
 }
 
+/**
+ * Mønster for ett matrikkeltall. Rene sifre tåler nuller foran, i begge retninger: «12» treffer
+ * også «0012», og «0012» lagret i registeret treffer også «12» («Skriv det du ser», S1.25).
+ */
 function cadastralValue(value: string | null): string | null {
   const cleaned = clean(value, 1);
-  return cleaned && /^[\p{L}\p{N}]+$/u.test(cleaned) ? escapeRegExp(cleaned) : null;
+  if (!cleaned || !/^[\p{L}\p{N}]+$/u.test(cleaned)) return null;
+  if (/^\d+$/u.test(cleaned)) return `0*${cleaned.replace(/^0+(?=\d)/u, "")}`;
+  return escapeRegExp(cleaned);
 }
 
 function addCadastral(

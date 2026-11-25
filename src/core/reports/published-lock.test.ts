@@ -360,6 +360,30 @@ const AI_REPORT_WRITES: [string, Write][] = [
         decision: "rejected",
       }),
   ],
+  // «Skriv det du ser» (A550–A567)
+  [
+    "findOutcomes",
+    (l) =>
+      reportsCore.findOutcomes(l.actor, l.organizationId, l.room, {
+        requestId: uuidv7(),
+        note: "Oppdiktet sprekk i flis",
+        openCheckpointKey: null,
+      }),
+  ],
+  [
+    "chooseOutcomeMatch",
+    (l) =>
+      reportsCore.chooseOutcomeMatch(l.actor, l.organizationId, l.room, {
+        usageId: uuidv7(),
+        candidate: { source: "template_outcome", id: uuidv7() },
+        deviationId: uuidv7(),
+        tg: null,
+      }),
+  ],
+  [
+    "rejectOutcomeMatch",
+    (l) => reportsCore.rejectOutcomeMatch(l.actor, l.organizationId, l.room, { usageId: uuidv7() }),
+  ],
   [
     "draftSummary",
     (l) =>

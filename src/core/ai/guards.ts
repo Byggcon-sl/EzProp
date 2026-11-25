@@ -141,10 +141,10 @@ function placeholdersDiffer(sentTexts: readonly string[], answerText: string): b
 /**
  * Vaktene i fast rekkefølge (A471): `tg_guard`, `coverage_guard`, `number_guard`,
  * `placeholder_guard`. Den første som slår til, er svaret; `null` betyr at svaret kan vises.
- * `phrase_suggest` har ingen tekst i svaret og kjører ikke vaktene.
+ * `phrase_suggest` og `outcome_match` har ingen tekst i svaret og kjører ikke vaktene.
  */
 export const checkAnswerGuards: CheckAnswerGuards = ({ feature, sent, answer }) => {
-  if (feature === "phrase_suggest") return null;
+  if (feature === "phrase_suggest" || feature === "outcome_match") return null;
   const summary = feature === "summary_draft";
 
   // 1. TG: sammendraget nevner aldri TG; språkvasken har samme TG-omtaler som det som ble sendt

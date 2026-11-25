@@ -811,6 +811,8 @@ describe("4.4 KI", () => {
     await aiRow(f, { status: "accepted", decidedBy: f.employeeId, decidedAt: new Date() });
     // Fraseforslag er en rekkefølge på frasebanken, ikke KI-tekst som venter (A524)
     await aiRow(f, { feature: "phrase_suggest", outputText: null });
+    // «Skriv det du ser» lager avviket med malens tekst; raden er ikke KI-tekst (S1.30)
+    await aiRow(f, { feature: "outcome_match", outputText: null });
     const other = await createPublishableBathroom({ organizationId: f.organizationId });
     await aiRow(other);
 

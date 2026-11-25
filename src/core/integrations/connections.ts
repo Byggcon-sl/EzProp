@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 import { requireOrganizationAccess, type Actor } from "@/core/access";
-import { getFeatureDefinition } from "@/core/ai/features";
+import { FAKE_ONLY_FEATURES, getFeatureDefinition } from "@/core/ai/features";
 import { ANTHROPIC_PROVIDER_CODE, ANTHROPIC_SECRET_REF } from "@/core/ai/providers/anthropic";
 import { recordAuditEvent } from "@/core/audit";
 import { isUniqueViolation } from "@/core/organization/errors";
@@ -88,14 +88,22 @@ const emptySettingsSchema = z.object({}).strict();
 /**
  * `settings` for `anthropic` (docs/funksjoner/fase2a-ki-leverandor.md Omfang 3). Strengt: ingen
  * andre nøkler, ingen adresse. `model` er modell-id-en (står bare her, aldri i koden). `features`
- * er funksjonene som er slått på mot leverandøren; tom liste betyr at alt er av (A194). `pricing`
+ * er funksjonene som er slått på mot leverandøren; tom liste betyr at alt er av (A194), og en kode
+ * fra `FAKE_ONLY_FEATURES` avvises (A565). `pricing`
  * er påkrevd, lagt inn av admin; mangler den, er KI av (A196). Samme skjema brukes når
  * leverandøren velges (`src/core/ai/provider-resolution.ts`).
  */
 export const anthropicSettingsSchema = z
   .object({
     model: z.string().regex(/^[A-Za-z0-9._:-]{1,100}$/),
-    features: z.array(z.string().refine((code) => getFeatureDefinition(code) !== null)).default([]),
+    // Funksjonene som bare går til den falske leverandøren (A565), kan ikke slås på her
+    features: z
+      .array(
+        z
+          .string()
+          .refine((code) => getFeatureDefinition(code) !== null && !FAKE_ONLY_FEATURES.has(code)),
+      )
+      .default([]),
     pricing: z
       .object({
         inputPerMillion: z.number().min(0),

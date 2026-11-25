@@ -504,6 +504,20 @@ describe("KI i veien: sperren og de nye funksjonene (K4.20)", () => {
       flagged: false,
     },
     {
+      name: "S1.30 outcome_match som står suggested (avviket har malens tekst)",
+      overrides: { feature: "outcome_match", promptVersion: "outcome_match.v1", outputText: null },
+      fieldKey: "new_deviation",
+      type: "report",
+      flagged: false,
+    },
+    {
+      name: "S1.30 outcome_match som er godtatt",
+      overrides: { feature: "outcome_match", status: "accepted", outputText: null },
+      fieldKey: "new_deviation",
+      type: "report",
+      flagged: false,
+    },
+    {
       name: "language_polish som står suggested",
       overrides: {},
       fieldKey: "cause_text",

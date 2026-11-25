@@ -37,11 +37,17 @@ const NO_MATCH_TOKEN = /^ingen$/iu;
  * Tolker svaret fra leverandøren. `answer` er rå tekst («K3, K1»); alt som ikke er tekst, gir tom
  * liste. Merkene leses fra venstre mot høyre, skilt med komma, semikolon, punktum, kolon eller
  * mellomrom.
+ *
+ * `max` er høyeste antall som beholdes: `AI_CANDIDATE_REFS_MAX` for `phrase_suggest`,
+ * `OUTCOME_MATCH_MAX` for `outcome_match`. Gyldige merker ut over grensen tas bort uten å telles
+ * som ukjente; doble telles fortsatt som doble.
  */
 export function parseCandidateAnswer(
   answer: unknown,
   labeled: readonly LabeledCandidate[],
+  max: number = AI_CANDIDATE_REFS_MAX,
 ): ParsedCandidateAnswer {
+  const limit = Math.max(0, Math.min(Math.floor(max), AI_CANDIDATE_REFS_MAX));
   const result: ParsedCandidateAnswer = { refs: [], unknownLabels: 0, duplicateLabels: 0 };
   if (typeof answer !== "string") return result;
   const byLabel = new Map(labeled.map((entry) => [entry.label, entry.candidate]));
@@ -64,7 +70,7 @@ export function parseCandidateAnswer(
       continue;
     }
     seen.add(label);
-    if (result.refs.length < AI_CANDIDATE_REFS_MAX) {
+    if (result.refs.length < limit) {
       result.refs.push({ source: candidate.source, id: candidate.id.toLowerCase() });
     }
   }
