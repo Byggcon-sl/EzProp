@@ -18,6 +18,7 @@ vi.mock("@/core/ai", async (importOriginal) => ({
 import {
   addDeviation,
   addMeasure,
+  applyReviewedTexts,
   decideSuggestion,
   removeDeviation,
   ReportStorageError,
@@ -27,10 +28,10 @@ import {
   type ReportFieldChange,
 } from "@/core/reports";
 import { db } from "@/db/client";
-import { aiUsageLog, auditLog, deviations, ruleSuggestionDecisions } from "@/db/schema";
+import { aiUsageLog, auditLog, deviations, reports, ruleSuggestionDecisions } from "@/db/schema";
 import { logger } from "@/shared/lib/logger";
 import { uuidv7 } from "@/shared/lib/uuid";
-import { resetDatabase } from "../../../tests/factories";
+import { createAiUsageLog, resetDatabase } from "../../../tests/factories";
 import {
   answer,
   answerHole,
@@ -285,6 +286,76 @@ function sourceFiles(dir: string): string[] {
     return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [full] : [];
   });
 }
+
+describe("GT3.36 applyReviewedTexts: ingen tekst i logg, feil eller revisjonslogg", () => {
+  /** Oppdiktet merke i før- og ettertekstene. Skal aldri stå i noen logg eller feilmelding. */
+  const MERKE = "Mxq-merke-ÆØ";
+
+  it("lagring, avslag og feil gir bare id-er, feltkoder og antall", async () => {
+    const spies = spyLogger();
+    const f = await startedBathroom();
+    const deviationId = uuidv7();
+    await addDeviation(f.actor, f.organizationId, f.room, {
+      id: deviationId,
+      checkpointKey: "wet_room.ventilation",
+      questionKey: "wet_room.ventilation.missing_ventilation",
+      outcomeKey: "tg3",
+      tg: null,
+    });
+    await db
+      .update(deviations)
+      .set({ causeText: `før ${MERKE}`, consequenceText: `før ${MERKE}` })
+      .where(eq(deviations.id, deviationId));
+    const [deviation] = await db.select().from(deviations).where(eq(deviations.id, deviationId));
+    const rowVersion = deviation!.rowVersion;
+    const row = (fieldKey: string) =>
+      createAiUsageLog(f.organizationId, {
+        employeeId: f.employeeId,
+        assignmentId: f.assignmentId,
+        reportId: f.reportId,
+        targetRef: { type: "deviation", id: deviationId, fieldKey },
+        outputText: `Etter ${MERKE}.`,
+      });
+    const cause = await row("cause_text");
+    const consequence = await row("consequence_text");
+    const errors: Error[] = [];
+    const attempt = async (input: Parameters<typeof applyReviewedTexts>[3]) => {
+      try {
+        await applyReviewedTexts(f.actor, f.organizationId, f.room, input);
+      } catch (error) {
+        errors.push(error as Error);
+      }
+    };
+
+    // Avslag: elleve sifre i teksten, fremmed id og publisert rapport
+    await attempt({
+      choices: [{ usageId: cause.id, choice: "edit", text: `${MERKE} 010190 12345`, rowVersion }],
+    });
+    await attempt({ choices: [{ usageId: uuidv7(), choice: "use", rowVersion }] });
+    // Lagret: «Bruk» og «Rett før bruk»
+    await attempt({
+      choices: [
+        { usageId: cause.id, choice: "use", rowVersion },
+        { usageId: consequence.id, choice: "edit", text: `Egen ${MERKE}`, rowVersion },
+      ],
+    });
+    await db.update(reports).set({ status: "published" }).where(eq(reports.id, f.reportId));
+    await attempt({
+      choices: [{ usageId: cause.id, choice: "undo", text: `før ${MERKE}`, rowVersion }],
+    });
+
+    expect(errors).toHaveLength(3);
+    for (const error of errors) expect(error.message).not.toContain(MERKE);
+    expect(logged(spies)).not.toContain(MERKE);
+    const audit = await db.select().from(auditLog);
+    expect(audit.filter((a) => a.action === "ai_review")).toHaveLength(2);
+    expect(JSON.stringify(audit)).not.toContain(MERKE);
+    expect((await db.select().from(aiUsageLog)).map((r) => r.status).sort()).toEqual([
+      "accepted",
+      "edited",
+    ]);
+  });
+});
 
 describe("B4.28 statisk", () => {
   it("B4.28 ingen tjeneste i src/core/reports kjører delete", () => {

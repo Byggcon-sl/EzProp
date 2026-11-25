@@ -27,6 +27,7 @@ import type {
   PublishCheckPendingAiSuggestion,
   PublishCheckRoom,
 } from "./logic";
+import { isSameIgnoringWhitespace } from "./logic/review-text-equal";
 import { buildRoomState, loadRoomData, type RoomData, type RoomState } from "./room-view";
 import type { RoomTemplateDocument } from "./types";
 
@@ -457,19 +458,73 @@ export function aiTargetKey(target: AiTargetRef): string {
   return `${target.type}|${target.id}`;
 }
 
+/** Nøkkelen for feltet et KI-forslag gjelder: type, rad og felt (A608). */
+function aiFieldKey(target: AiTargetRef): string {
+  return `${target.type}|${target.id}|${target.fieldKey}`;
+}
+
+/**
+ * Teksten som står i hvert felt KI kan skrive i (`REPORT_AI_TARGET_FIELDS`), fra radene som er
+ * lest. Bare til sammenligningen i `pendingAiSuggestionsOf`; teksten går aldri videre. Tomme felt
+ * er tom tekst.
+ */
+function aiFieldTexts(source: PublishSource): Map<string, string> {
+  const texts = new Map<string, string>();
+  const put = (type: string, id: string, fieldKey: string, value: string | null) =>
+    texts.set(`${type}|${id}|${fieldKey}`, value ?? "");
+  for (const room of source.rooms) {
+    for (const r of room.data.results)
+      put("checkpoint_result", r.id, "description_text", r.descriptionText);
+    for (const t of room.data.tgiu) {
+      put("tgiu_detail", t.id, "reason", t.reason);
+      put("tgiu_detail", t.id, "risk_assessment", t.riskAssessment);
+      put("tgiu_detail", t.id, "how_to_examine", t.howToExamine);
+    }
+    for (const d of room.data.deviations) {
+      put("deviation", d.id, "deviation_text", d.deviationText);
+      put("deviation", d.id, "cause_text", d.causeText);
+      put("deviation", d.id, "consequence_text", d.consequenceText);
+    }
+    for (const m of room.data.measures) put("deviation_measure", m.id, "text", m.text);
+  }
+  return texts;
+}
+
 /**
  * KI-forslagene som venter (A454): `status = 'suggested'`, laget etter forrige utgivelse (alle når
  * ingen utgivelse finnes), på et mål som står i rapporten. Et forslag på en rad som er slettet,
  * kan ikke komme med i rapporten, og telles ikke. Sortert etter når de kom.
+ *
+ * «Gå gjennom tekstene» (A608, A609): bare det nyeste åpne forslaget per felt (type, rad og felt)
+ * telles, og ikke et forslag som er likt teksten i feltet når mellomrom ikke regnes med («Allerede
+ * i orden»). Eldre forslag avvises ikke på vegne av takstmannen: sjekken skriver aldri.
  */
 export function pendingAiSuggestionsOf(
   source: PublishSource,
 ): (PublishCheckPendingAiSuggestion & { outputText: string; field: AiTargetRef })[] {
   const places = aiPlaces(source);
   const after = source.latestRelease?.releasedAt ?? null;
-  return source.aiRows.flatMap((row) => {
-    if (row.status !== "suggested") return [];
-    if (after && row.createdAt <= after) return [];
+  const open = source.aiRows.filter(
+    (row) =>
+      row.status === "suggested" &&
+      !(after && row.createdAt <= after) &&
+      places.has(aiTargetKey(row.targetRef)),
+  );
+  // Radene er sortert etter når de kom, så den siste per felt er den nyeste
+  const newest = new Map<string, ReportAiRow>();
+  for (const row of open) newest.set(aiFieldKey(row.targetRef), row);
+  const texts = aiFieldTexts(source);
+  return open.flatMap((row) => {
+    const key = aiFieldKey(row.targetRef);
+    if (newest.get(key) !== row) return [];
+    const current = texts.get(key);
+    if (
+      row.outputText !== null &&
+      current !== undefined &&
+      isSameIgnoringWhitespace(row.outputText, current)
+    ) {
+      return [];
+    }
     const place = places.get(aiTargetKey(row.targetRef));
     if (!place) return [];
     const { id: aiUsageId, outputText } = row;

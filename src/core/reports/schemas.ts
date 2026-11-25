@@ -26,6 +26,7 @@ import {
   TEXT_STATUSES,
   TG_DIRECT_VALUES,
 } from "@/db/schema";
+import { ROOM_TEXT_REVIEW_MAX_FIELDS } from "@/core/ai";
 import { isUuid } from "@/shared/lib/uuid";
 import { containsNationalId, NATIONAL_ID_MESSAGE } from "@/shared/validation/free-text";
 import {
@@ -553,6 +554,46 @@ export const saveSummaryInputSchema = z
   .strict();
 
 export const draftSummaryInputSchema = z.object({ requestId: uuidSchema }).strict();
+
+// --- «Gå gjennom tekstene»: lagringen (docs/funksjoner/fase2a-ga-gjennom-tekstene.md) ---------
+
+/**
+ * Teksten ved «Rett før bruk» og ved «Angre»: samme kontroll som `saveField` gir avvik, årsak,
+ * konsekvens, tiltak og beskrivelse (lengde, elleve sifre, plassholder fra vasken).
+ */
+export const reviewTextSchema = requiredFreeTextSchema(REPORT_LONG_TEXT_MAX);
+
+/**
+ * Valgene fra gjennomgangslisten (GT1.22). Strengt: ingen mål, tabell, felt eller beslutning fra
+ * nettleseren. `text` kreves for `edit` og `undo` og avvises for `use` og `keep`. Høyst
+ * `ROOM_TEXT_REVIEW_MAX_FIELDS` valg, og minst ett.
+ */
+export const applyReviewedTextsInputSchema = z
+  .object({
+    choices: z
+      .array(
+        z.discriminatedUnion("choice", [
+          z
+            .object({
+              usageId: uuidSchema,
+              choice: z.enum(["use", "keep"]),
+              rowVersion: rowVersionSchema,
+            })
+            .strict(),
+          z
+            .object({
+              usageId: uuidSchema,
+              choice: z.enum(["edit", "undo"]),
+              text: reviewTextSchema,
+              rowVersion: rowVersionSchema,
+            })
+            .strict(),
+        ]),
+      )
+      .min(1)
+      .max(ROOM_TEXT_REVIEW_MAX_FIELDS),
+  })
+  .strict();
 
 // --- Felles kjøring ----------------------------------------------------------------------------
 

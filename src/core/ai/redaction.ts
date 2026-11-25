@@ -16,7 +16,7 @@
 
 import { and, eq, inArray, or } from "drizzle-orm";
 import type { EmployeeGrant } from "@/core/access";
-import { db } from "@/db/client";
+import { db, type DbExecutor } from "@/db/client";
 import {
   assignmentParties,
   assignmentTeamMembers,
@@ -54,10 +54,14 @@ function nonNull(values: (string | null | undefined)[]): string[] {
  * Mykt slettede parter, kontakter, firma, teammedlemmer, matrikkel og fellesareal tas med (A170).
  * Finnes ikke oppdraget i organisasjonen, kastes en feil (feil skal stenge, A176), så teksten
  * aldri sendes vasket bare med mønstrene når et oppdrag er oppgitt.
+ *
+ * `ex` er kallerens transaksjon når oppslaget skjer inne i en skriving med låst rapport («Bruk» i
+ * «Gå gjennom tekstene»), så det ikke trengs en ny kobling fra puljen mens låsen holdes.
  */
 export async function loadKnownValues(
   grant: EmployeeGrant,
   assignmentId: string,
+  ex: DbExecutor = db,
 ): Promise<KnownValues> {
   const organizationId = grant.organizationId;
   const known = emptyKnownValues();
@@ -65,7 +69,7 @@ export async function loadKnownValues(
   // Oppdraget eier bestillingsopplysningene (ADR 0011, A292): de leses herfra også når
   // `order_id` og `property_id` er tomme. Ordren og eiendommen er ekstra kilder (en ordre som er
   // rettet etter omgjøring kan ha andre verdier enn oppdraget).
-  const [assignment] = await db
+  const [assignment] = await ex
     .select({
       orderId: assignments.orderId,
       propertyId: assignments.propertyId,
@@ -88,7 +92,7 @@ export async function loadKnownValues(
     ? or(eq(orders.id, assignment.orderId), eq(orders.assignmentId, assignmentId))
     : eq(orders.assignmentId, assignmentId);
   const [orderRows, partyRows, teamRows, propertyRows, commonAreaRows] = await Promise.all([
-    db
+    ex
       .select({
         orderedByText: orders.orderedByText,
         orderedByContactId: orders.orderedByContactId,
@@ -102,7 +106,7 @@ export async function loadKnownValues(
       })
       .from(orders)
       .where(and(eq(orders.organizationId, organizationId), orderMatch)),
-    db
+    ex
       .select({
         name: assignmentParties.name,
         firmName: assignmentParties.firmName,
@@ -118,7 +122,7 @@ export async function loadKnownValues(
           eq(assignmentParties.assignmentId, assignmentId),
         ),
       ),
-    db
+    ex
       .select({ name: employees.name })
       .from(assignmentTeamMembers)
       .innerJoin(
@@ -135,7 +139,7 @@ export async function loadKnownValues(
         ),
       ),
     assignment.propertyId
-      ? db
+      ? ex
           .select({
             address: properties.address,
             postalCode: properties.postalCode,
@@ -151,7 +155,7 @@ export async function loadKnownValues(
             ),
           )
       : Promise.resolve([]),
-    db
+    ex
       .select({ managingAgent: commonAreas.managingAgent })
       .from(commonAreas)
       .where(
@@ -169,7 +173,7 @@ export async function loadKnownValues(
   ]);
   const contactRows =
     contactIds.length > 0
-      ? await db
+      ? await ex
           .select({
             firstName: contacts.firstName,
             lastName: contacts.lastName,
@@ -188,14 +192,14 @@ export async function loadKnownValues(
   ]);
   const firmRows =
     firmIds.length > 0
-      ? await db
+      ? await ex
           .select({ name: firms.name, orgNumber: firms.orgNumber })
           .from(firms)
           .where(and(eq(firms.organizationId, organizationId), inArray(firms.id, firmIds)))
       : [];
 
   const cadastralRows = assignment.propertyId
-    ? await db
+    ? await ex
         .select({
           gnr: cadastralUnits.gnr,
           bnr: cadastralUnits.bnr,

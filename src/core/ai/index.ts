@@ -8,6 +8,11 @@
 
 export { requestSuggestion, requestSuggestionBatch } from "./request-suggestion";
 export { recordDecision, recordDecisionIn } from "./record-decision";
+/** «Bruk» i «Gå gjennom tekstene»: forslaget med plassholderne byttet tilbake på serveren (A607). */
+export {
+  restorePolishSuggestion,
+  type RestorePolishSuggestionInput,
+} from "./restore-suggestion";
 export { getSuggestionStatus, type AiSuggestionStatusResult } from "./suggestion-status";
 export { AI_APPROVAL_CHECK_MAX, checkAiTextApproved, type AiApprovalItem } from "./approval-check";
 export {
@@ -28,6 +33,7 @@ export {
   AI_CANDIDATE_TEXT_MAX_LENGTH,
   AI_SUMMARY_FINDINGS_MAX,
   AI_SUMMARY_INPUT_MAX_LENGTH,
+  ROOM_TEXT_REVIEW_MAX_FIELDS,
 } from "./limits";
 /** Høyeste antall kandidater i svaret. Samme tall som `candidate_refs` tåler (CHECK-regelen). */
 export { AI_CANDIDATE_REFS_MAX as AI_SUGGESTED_CANDIDATES_MAX } from "@/shared/config/ai-targets";

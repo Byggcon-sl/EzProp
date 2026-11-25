@@ -780,6 +780,62 @@ describe("KI-forslag", () => {
     expect(general?.description_ai).toEqual({ ai_usage_id: accepted.id, status: "accepted" });
   });
 
+  it("GT3.35 nyeste åpne forslag per felt telles, «Allerede i orden» telles ikke, og ingenting avvises", async () => {
+    const f = await publishableBathroom();
+    const results = await db
+      .select({ id: checkpointResults.id })
+      .from(checkpointResults)
+      .where(eq(checkpointResults.reportId, f.reportId));
+    const [first, second] = results;
+    if (!first || !second) throw new Error("mangler to punkter");
+    await db
+      .update(checkpointResults)
+      .set({ descriptionText: "Mxq  fliser er hele." })
+      .where(eq(checkpointResults.id, second.id));
+    const base = { employeeId: f.employeeId, reportId: f.reportId, assignmentId: f.assignmentId };
+    const field = (id: string, fieldKey = "description_text") => ({
+      type: "checkpoint_result",
+      id,
+      fieldKey,
+    });
+    const t0 = Date.now() - 60_000;
+    // To åpne forslag på samme felt: bare det nyeste telles
+    await createAiUsageLog(f.organizationId, {
+      ...base,
+      targetRef: field(first.id),
+      outputText: "Eldre forslag.",
+      createdAt: new Date(t0),
+    });
+    const newest = await createAiUsageLog(f.organizationId, {
+      ...base,
+      targetRef: field(first.id),
+      outputText: "Nyere forslag.",
+      createdAt: new Date(t0 + 1000),
+    });
+    // Forslag lik teksten i feltet når mellomrom ikke regnes med: «Allerede i orden»
+    await createAiUsageLog(f.organizationId, {
+      ...base,
+      targetRef: field(second.id),
+      outputText: "Mxq fliser er hele. ",
+      createdAt: new Date(t0 + 2000),
+    });
+    const statusBefore = (await db.select().from(aiUsageLog)).map((r) => [r.id, r.status]);
+    const auditBefore = await db.select({ n: count() }).from(auditLog);
+
+    const view = await draftCheck(f.actor, f.organizationId, f.assignmentId);
+    const aiFindings = view.findings.filter((x) => x.checkCode === "ai_suggestion_pending");
+    expect(aiFindings.map((x) => x.target.aiUsageId)).toEqual([newest.id]);
+    expect(view.pendingAiSuggestions.map((s) => s.aiUsageId)).toEqual([newest.id]);
+    expect(
+      (await listPendingAiSuggestions(f.actor, f.organizationId, f.assignmentId)).map(
+        (s) => s.aiUsageId,
+      ),
+    ).toEqual([newest.id]);
+    // Sjekken skriver aldri beslutninger: eldre forslag står åpne
+    expect((await db.select().from(aiUsageLog)).map((r) => [r.id, r.status])).toEqual(statusBefore);
+    expect(await db.select({ n: count() }).from(auditLog)).toEqual(auditBefore);
+  });
+
   it("publiseringstjenesten importerer ikke KI-modulen", () => {
     const dir = path.join(process.cwd(), "src/core/reports");
     for (const file of ["publish.ts", "snapshot.ts", "signals.ts"]) {

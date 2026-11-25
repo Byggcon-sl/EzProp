@@ -1146,3 +1146,46 @@ export type PolishDescription = (
   room: RoomRef,
   input: { requestId: string; checkpointKey: string; text: string },
 ) => Promise<PolishResult>;
+
+// --- «Gå gjennom tekstene»: lagringen (docs/funksjoner/fase2a-ga-gjennom-tekstene.md) ---------
+
+/** Valget per felt i gjennomgangen. Serveren avgjør selv beslutningen i `ai_usage_log` (A607). */
+export type ReviewChoice = "use" | "edit" | "keep" | "undo";
+
+/**
+ * Valgene fra gjennomgangslisten. Nettleseren sender aldri mål, tabell, felt eller beslutning.
+ * `text` følger med «Rett før bruk» (`edit`) og «Angre» (`undo`: teksten før, som bare står i
+ * panelet), aldri med `use` og `keep`. `rowVersion` er radens versjon da feltet ble vist (A605).
+ */
+export type ApplyReviewedTextsInput = {
+  choices: { usageId: string; choice: ReviewChoice; text?: string; rowVersion: number }[];
+};
+
+/**
+ * Svaret: det som ble lagret, med beslutningen og radens versjon etterpå, og feltene som ble
+ * hoppet over fordi raden var endret av andre etter gjennomgangen. Etter `undo` er beslutningen
+ * `rejected`, og `text` er teksten før.
+ */
+export type ApplyReviewedTextsResult = {
+  saved: {
+    usageId: string;
+    decision: "accepted" | "edited" | "rejected";
+    text: string;
+    rowVersion: number;
+  }[];
+  skippedChanged: { usageId: string; fieldLabel: string }[];
+};
+
+/**
+ * Lagrer valgene i gjennomgangen i én transaksjon (`report.edit`, rapporten i `draft`). Serveren
+ * slår opp loggraden med `grant.organizationId` og utleder selv tabell, rad og felt fra
+ * `target_ref`. Ethvert avslag (fremmed eller dobbel `usageId`, annen funksjon, rapport eller rom,
+ * feil status, slettet mål, publisert rapport) avviser hele listen, og ingenting lagres. TG røres
+ * aldri.
+ */
+export type ApplyReviewedTexts = (
+  actor: Actor,
+  organizationId: string,
+  room: RoomRef,
+  input: ApplyReviewedTextsInput,
+) => Promise<ApplyReviewedTextsResult>;

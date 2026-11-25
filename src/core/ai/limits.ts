@@ -31,3 +31,5 @@ export const AI_BATCH_MAX_REQUESTS = 23;
 export const AI_SUMMARY_FINDINGS_MAX = 60;
 /** Høyeste antall tegn i alle funnene til ett utkast, samlet og etter vask. */
 export const AI_SUMMARY_INPUT_MAX_LENGTH = 40000;
+/** Høyeste antall felt i én gjennomgang av tekstene i et rom (A604). */
+export const ROOM_TEXT_REVIEW_MAX_FIELDS = 120;

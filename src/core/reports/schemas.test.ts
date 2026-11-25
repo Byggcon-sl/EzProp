@@ -5,8 +5,10 @@ import { WET_ROOM_THRESHOLDS } from "@/core/rules/data/thresholds";
 import { parseTemplateDocument, type TemplateDocument } from "@/core/templates";
 import { RULE_REASONS_MAX_CHARS } from "@/db/schema";
 import { wetRoomTemplate } from "@/db/seed/templates/wet-room";
+import { ROOM_TEXT_REVIEW_MAX_FIELDS } from "@/core/ai";
 import {
   applyPhraseInputSchema,
+  applyReviewedTextsInputSchema,
   ruleResultSchema,
   saveSummaryInputSchema,
   suggestPhrasesInputSchema,
@@ -240,5 +242,57 @@ describe("KI i veien: inndata fra nettleseren", () => {
     expect(
       saveSummaryInputSchema.safeParse({ text: "x", baseRowVersion: 1, reportId: UUID }).success,
     ).toBe(false);
+  });
+});
+
+describe("GT1.22 applyReviewedTexts: valgene fra gjennomgangen", () => {
+  const ID = "0190a3b4-1c2d-7e8f-9a0b-1c2d3e4f5a6b";
+  const parse = (choices: unknown[]) => applyReviewedTextsInputSchema.safeParse({ choices });
+  const use = { usageId: ID, choice: "use", rowVersion: 1 };
+
+  it("godtar de fire valgene; text bare med edit og undo", () => {
+    expect(parse([use]).success).toBe(true);
+    expect(parse([{ ...use, choice: "keep" }]).success).toBe(true);
+    expect(parse([{ ...use, choice: "edit", text: "Mxq rettet." }]).success).toBe(true);
+    expect(parse([{ ...use, choice: "undo", text: "mxq før" }]).success).toBe(true);
+    expect(parse([{ ...use, choice: "undo", text: "" }]).success).toBe(true);
+  });
+
+  it.each([
+    ["ukjent valg", { ...use, choice: "accept" }],
+    ["edit uten text", { ...use, choice: "edit" }],
+    ["undo uten text", { ...use, choice: "undo" }],
+    ["use med text", { ...use, text: "Mxq" }],
+    ["keep med text", { ...use, choice: "keep", text: "Mxq" }],
+    ["rowVersion som desimaltall", { ...use, rowVersion: 1.5 }],
+    ["negativ rowVersion", { ...use, rowVersion: -1 }],
+    ["rowVersion som tekst", { ...use, rowVersion: "1" }],
+    ["usageId som ikke er en UUID", { ...use, usageId: "ikke-uuid" }],
+    ["target fra nettleseren", { ...use, target: { type: "deviation", id: ID } }],
+    ["table fra nettleseren", { ...use, table: "deviations" }],
+    ["field fra nettleseren", { ...use, field: "cause_text" }],
+    ["decision fra nettleseren", { ...use, decision: "accepted" }],
+    ["accepted fra nettleseren", { ...use, accepted: true }],
+  ])("avviser %s", (_name, choice) => {
+    expect(parse([choice]).success).toBe(false);
+  });
+
+  it("tom liste og mer enn taket avvises; taket selv er lov; ukjent nøkkel på toppen avvises", () => {
+    expect(parse([]).success).toBe(false);
+    const many = (n: number) =>
+      Array.from({ length: n }, () => ({ usageId: ID, choice: "keep", rowVersion: 0 }));
+    expect(parse(many(ROOM_TEXT_REVIEW_MAX_FIELDS)).success).toBe(true);
+    expect(parse(many(ROOM_TEXT_REVIEW_MAX_FIELDS + 1)).success).toBe(false);
+    expect(applyReviewedTextsInputSchema.safeParse({ choices: [use], roomId: ID }).success).toBe(
+      false,
+    );
+  });
+
+  it("teksten har samme kontroll som saveField: lengde, elleve sifre og plassholder", () => {
+    const edit = (text: string) => parse([{ ...use, choice: "edit", text }]).success;
+    expect(edit("x".repeat(10_000))).toBe(true);
+    expect(edit("x".repeat(10_001))).toBe(false);
+    expect(edit("Mxq 010190 12345")).toBe(false);
+    expect(edit("Mxq [adresse]")).toBe(false);
   });
 });
