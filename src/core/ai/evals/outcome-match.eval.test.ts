@@ -53,57 +53,99 @@ const CANDIDATES = [
     id: "floor-crack",
     source: "template_outcome",
     checkpointKey: "bad.gulv",
-    outcomeKey: "bad.gulv.sprekk",
+    outcomeKey: "sprekk",
     text: "Gulv | Er flisene på gulvet sprukket? | Flisene på gulvet har sprekker.",
   },
   {
     id: "wall-crack",
     source: "template_outcome",
     checkpointKey: "bad.vegg",
-    outcomeKey: "bad.vegg.sprekk",
+    outcomeKey: "sprekk",
     text: "Vegger og himling | Er flisene på veggen sprukket? | Flisene på veggen har sprekker.",
   },
   {
     id: "drain-ring",
     source: "template_outcome",
     checkpointKey: "bad.sluk",
-    outcomeKey: "bad.sluk.klemring",
+    outcomeKey: "klemring",
     text: "Sluk | Mangler klemringen i sluket? | Klemringen i sluket mangler.",
   },
   {
     id: "weak-fan",
     source: "template_outcome",
     checkpointKey: "bad.ventilasjon",
-    outcomeKey: "bad.ventilasjon.svak",
+    outcomeKey: "svak",
     text: "Ventilasjon | Er avtrekket svakt? | Avtrekket fra rommet er svakt.",
   },
 ];
 
+// Samme form som `outcome_match.cases.json` (skjemaet i `./schema`, S2.1 og S2.2)
 type FixtureCase = {
   id: string;
-  fields: { text: string };
+  description: string;
+  category: OutcomeMatchEvalCase["category"];
+  note: string;
   candidates: typeof CANDIDATES;
+  mustPass: boolean;
   expect: { require: "any" | "all" | "first" | "none"; ids: string[] };
 };
 
-const NOTES: { note: string; require: FixtureCase["expect"]["require"]; ids: string[] }[] = [
-  { note: "sprukne fliser på gulvet ved sluket", require: "first", ids: ["floor-crack"] },
-  { note: "sprekker i flisene på veggen", require: "first", ids: ["wall-crack"] },
-  { note: "sprekk i flisene", require: "all", ids: ["floor-crack", "wall-crack"] },
-  { note: "klemring mangler i sluk", require: "any", ids: ["drain-ring"] },
-  { note: "svakt avtrekk, dette er TG2", require: "any", ids: ["weak-fan"] },
-  { note: "hulltaking ikke utført, eier nektet", require: "none", ids: [] },
-  { note: "fikk ikke tatt hull, vegg mot betong", require: "none", ids: [] },
-  { note: "små bruksmerker på innredningen", require: "none", ids: [] },
+const NOTES: {
+  note: string;
+  category: FixtureCase["category"];
+  require: FixtureCase["expect"]["require"];
+  ids: string[];
+}[] = [
+  {
+    note: "sprukne fliser på gulvet ved sluket",
+    category: "match",
+    require: "first",
+    ids: ["floor-crack"],
+  },
+  {
+    note: "sprekker i flisene på veggen",
+    category: "match",
+    require: "first",
+    ids: ["wall-crack"],
+  },
+  {
+    note: "sprekk i flisene",
+    category: "two_checkpoints",
+    require: "all",
+    ids: ["floor-crack", "wall-crack"],
+  },
+  { note: "klemring mangler i sluk", category: "match", require: "any", ids: ["drain-ring"] },
+  {
+    note: "svakt avtrekk, dette er TG2",
+    category: "tg_mention",
+    require: "any",
+    ids: ["weak-fan"],
+  },
+  {
+    note: "hulltaking ikke utført, eier nektet",
+    category: "no_match_hole_drilling",
+    require: "none",
+    ids: [],
+  },
+  {
+    note: "fikk ikke tatt hull, vegg mot betong",
+    category: "no_match_hole_drilling",
+    require: "none",
+    ids: [],
+  },
+  { note: "små bruksmerker på innredningen", category: "no_match_wear", require: "none", ids: [] },
 ];
 
 function fixtureCases(count = 30): FixtureCase[] {
   return Array.from({ length: count }, (_, index) => {
     const spec = NOTES[index % NOTES.length]!;
     return {
-      id: `om-${String(index + 1).padStart(2, "0")}`,
-      fields: { text: spec.note },
+      id: `om-${String(index + 1).padStart(3, "0")}`,
+      description: "Oppdiktet sak for kjøreren.",
+      category: spec.category,
+      note: spec.note,
       candidates: CANDIDATES,
+      mustPass: spec.require === "none",
       expect: { require: spec.require, ids: spec.ids },
     };
   });
@@ -181,7 +223,7 @@ describe("S2.7 pnpm ai:eval outcome_match mot et oppdiktet sett", () => {
     const result = await runEvals({ provider, casesDir: dir, feature: "outcome_match" });
     const feature = result.features[0]!;
     const wearIds = fixtureCases()
-      .filter((item) => item.fields.text.includes("bruksmerker"))
+      .filter((item) => item.note.includes("bruksmerker"))
       .map((item) => item.id);
     expect(feature.requiredMisses).toEqual(wearIds);
     expect(feature.passRate).toBeGreaterThan(0.8);
@@ -254,7 +296,10 @@ describe.skipIf(setCases.length === 0)(
           status: EVAL_STATUS,
           note: EVAL_NOTE,
           // Skjemaet krever minst 30 saker; samme sak gjentatt med egne id-er
-          cases: Array.from({ length: 30 }, (_, index) => ({ ...item, id: `${item.id}-${index}` })),
+          cases: Array.from({ length: 30 }, (_, index) => ({
+            ...item,
+            id: `om-${String(index + 1).padStart(3, "0")}`,
+          })),
         },
       });
       const result = await runEvals({
@@ -265,5 +310,70 @@ describe.skipIf(setCases.length === 0)(
       expect(result.errors).toEqual([]);
       expect(result.features[0]!.requiredMisses).toEqual([]);
     });
+  },
+);
+
+/** Kjører én sak alene mot den falske leverandøren (gjentatt til skjemaets minste antall). */
+async function runAlone(item: OutcomeMatchEvalCase) {
+  const dir = dirWith({
+    "outcome_match.cases.json": {
+      feature: "outcome_match",
+      status: EVAL_STATUS,
+      note: EVAL_NOTE,
+      cases: Array.from({ length: 30 }, (_, index) => ({
+        ...item,
+        id: `om-${String(index + 1).padStart(3, "0")}`,
+      })),
+    },
+  });
+  return runEvals({ provider: fakeAiProvider, casesDir: dir, feature: "outcome_match" });
+}
+
+// S2.3a, S2.4, S2.4a og S2.5: hver motsak, hvert par og hver TG-sak er en egen test mot den
+// falske leverandøren (det lokale søket har sine i `src/core/reports/logic/outcome-match.test.ts`).
+describe.skipIf(setCases.length === 0)(
+  "S2.3a–S2.5 settet: motsaker, par og TG i notatet består for seg mot den falske leverandøren",
+  () => {
+    const byCategory = (category: OutcomeMatchEvalCase["category"]) =>
+      setCases.filter((item) => item.category === category);
+
+    it("settet har sakene testplanen krever", () => {
+      expect(byCategory("no_match_hole_drilling").length).toBeGreaterThanOrEqual(3);
+      expect(byCategory("no_match_wear").length).toBeGreaterThanOrEqual(3);
+      // S2.3a: minst to motsaker med hull tatt og forhøyet fukt, og «riss i fuge på gulvet»
+      const counters = byCategory("counter_case");
+      expect(
+        counters.filter((item) => item.expect.ids.some((id) => id.endsWith("elevated_moisture")))
+          .length,
+      ).toBeGreaterThanOrEqual(2);
+      expect(counters.some((item) => /riss i fuge/u.test(item.note))).toBe(true);
+      // S2.4: de tre parene som bare skiller seg i alvor, og aldersparet med årstall i notatet
+      expect(byCategory("severity_pair").length).toBeGreaterThanOrEqual(3);
+      const age = byCategory("age_pair");
+      expect(age.length).toBeGreaterThanOrEqual(1);
+      for (const item of age) {
+        expect(item.note).toMatch(/\b(19|20)\d{2}\b/u);
+        expect(item.expect.ids.some((id) => id.endsWith("membrane_before_2000"))).toBe(true);
+        expect(item.expect.ids.some((id) => id.endsWith("membrane_past_lifespan"))).toBe(true);
+      }
+      // S2.4a: samme utfall på to punkter
+      expect(byCategory("two_checkpoints").length).toBeGreaterThanOrEqual(2);
+      expect(byCategory("tg_mention").length).toBeGreaterThanOrEqual(1);
+    });
+
+    const others = setCases.filter((item) =>
+      ["counter_case", "severity_pair", "age_pair", "two_checkpoints", "tg_mention"].includes(
+        item.category,
+      ),
+    );
+    it.each(others.map((item) => [item.id, item.category, item.note, item] as const))(
+      "%s (%s) «%s»",
+      async (_id, _category, _note, item) => {
+        const result = await runAlone(item);
+        expect(result.errors).toEqual([]);
+        expect(result.features[0]!.misses).toEqual([]);
+        expect(result.features[0]!.requiredMisses).toEqual([]);
+      },
+    );
   },
 );
