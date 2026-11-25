@@ -3,6 +3,7 @@
 Sist oppdatert: 18.11.2026
 Sist oppdatert: 23.11.2026
 Sist oppdatert: 24.11.2026
+Sist oppdatert: 25.11.2026
 
 Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.2026, se «Forbedreren» i `CLAUDE.md`). Listen er til for Ståle: mot slutten av utviklingen går han gjennom den og beholder, justerer eller fjerner.
 
@@ -10,6 +11,10 @@ Her står alt forbedreren har fått bygget som ikke stod i planen (Ståle 14.11.
 
 | Dato | Tillegg (det den ansatte merker) | Hvorfor | Type | Hvor (PR, oppgavekort, kode) | Slik fjernes det | Ståle |
 |---|---|---|---|---|---|---|
+| 25.11.2026 | «Les som kjøperen»: en knapp i forhåndsvisningen lar KI lese rapporten som en kjøper eller megler uten fagbakgrunn, og setter korte spørsmål i margen ved avsnittet; ett klikk til feltet gir KI-forslag til tydeligere tekst | Uklar tekst for leseren ender ofte som reklamasjon; ses mens rapporten skrives | nytt planpunkt | `docs/07-utviklingsplan.md` 2a-2 «Fra forbedreren»; fra `docs/funksjoner/fase2a-levende-forhandsvisning.md`; ikke bygget | Stryk punktet i planen før det bygges | |
+| 25.11.2026 | Rolig oppdatering av forhåndsvisningen: bare endrede sider byttes, rulleposisjonen står, det lagrede avsnittet markeres kort, og «Teksten gikk over til side 4» leses opp; 150 ms venting slår sammen lagringer, og ruten følger bare ved fokusbytte | Ingen blinking eller hopp mens hun skriver; tåler hele rapporten i 2a-3 | i oppgaven | `docs/funksjoner/fase2a-levende-forhandsvisning.md` Omfang 7 (A605); PR fylles inn | Bytt alle sider ved hver oppdatering og ta ut markeringen | |
+| 25.11.2026 | «Neste mangel» i forhåndsvisningen: «3 ting å se på» med Forrige og Neste, gjennom utkastmerkene og ventende KI-forslag | Ett trykk per mangel i stedet for å bla og lete; færre feil i sendte rapporter | i oppgaven | `docs/funksjoner/fase2a-levende-forhandsvisning.md` Omfang 6; PR fylles inn | Ta ut telleren og knappene øverst i ruten | |
+| 25.11.2026 | Forhåndsvisningen bare fra 1280 px med mus, romlisten foldes inn mens ruten er på, og skillet kan dras med bredden husket | Skjemaet og siden blir lesbare, og iPaden får ingen endring | i oppgaven | `docs/funksjoner/fase2a-levende-forhandsvisning.md` Omfang 1 (A609); PR fylles inn | Vis bryteren fra `lg` og la romlisten stå | |
 | 24.11.2026 | «Åpne PDF» på hver utgivelse (utgivelseskortet og skjermen etter publisering): PDF-en fra utgivelsens lagrede innhold, uten UTKAST, lik hver gang | Ferdig-kriteriet for 2a-2 er at badet publiseres og blir til en PDF; ved en reklamasjon kan leder vise nøyaktig hva kunden fikk | i oppgaven | `docs/funksjoner/fase2a-pdf-badet.md` F7 (A541); `src/core/reports/release-pdf.ts`, ruten `oppdrag/[id]/utgivelser/[releaseId]/pdf`, `releases-card.tsx`, `publiser/`; PR fylles inn | Ta ut lenken i `releases-card.tsx` og `publiser/`, og ruten | |
 | 24.11.2026 | «Mangler» og «Ikke satt» i PDF-utkastet hentes fra publiseringssjekken, med samme tekst som publiseringsskjermen | Utkastet og sperren sier alltid det samme; takstmannen ser i PDF-en nøyaktig det som stopper publiseringen | i oppgaven | `docs/funksjoner/fase2a-pdf-badet.md` F8 (A536 endret); `src/core/reports/pdf-data-build.ts`; PR fylles inn | Send `findings: null` til `buildReportPdfData` (da viser utkastet ingen mangler) | |
 | 24.11.2026 | Én rapportform: PDF-dataene bygges fra det samme innholdet som låses ved publisering (snapshotet), både for utkast og utgivelse | Bare én strukturert form for «hele rapporten» som KI senere kan lese; utkast og utgivelse kan ikke vise ulike ting | i oppgaven | `docs/funksjoner/fase2a-pdf-badet.md` F6; `src/core/reports/pdf-data-build.ts`; PR fylles inn | La `buildReportPdfData` lese radene fra `PublishSource` direkte | |
