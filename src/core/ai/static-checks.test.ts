@@ -616,3 +616,52 @@ describe("KI i veien, statiske kontroller (K2.8, K5.16, K5.18)", () => {
     }
   });
 });
+
+/*
+ * «Overstyringer for leder» (docs/funksjoner/fase2a-overstyringer-leder-testplan.md O1.14, ADR
+ * 0006 tillegg 24.11.2026). `override_summary` får tallene som `AiServerInput` og leser aldri
+ * rapport- eller reklamasjonskjernen selv.
+ */
+describe("Overstyringer for leder, statiske kontroller (O1.14)", () => {
+  const importsOf = (source: string) =>
+    [...source.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)].map((match) => match[1]);
+
+  it("O1.14 src/core/ai importerer aldri @/core/reports eller @/core/claims", () => {
+    const pattern = /^@\/core\/(reports|claims)(\/|$)/;
+    const offenders = productFiles(aiDir)
+      .flatMap((file) =>
+        importsOf(read(file))
+          .filter((spec) => pattern.test(spec ?? ""))
+          .map((spec) => `${rel(file)}: ${spec}`),
+      )
+      .sort();
+    expect(offenders).toEqual([]);
+    expect(
+      importsOf('import { x } from "@/core/claims";').filter((spec) => pattern.test(spec ?? "")),
+    ).toHaveLength(1);
+  });
+
+  it("O1.14 oppslaget av override_summary filtrerer på organisasjonen og deleted_at", () => {
+    const resolve = read(join(aiDir, "resolve-target.ts"));
+    expect(resolve).toMatch(/eq\(overrideSummaries\.organizationId, organizationId\)/u);
+    expect(resolve).toMatch(/isNull\(overrideSummaries\.deletedAt\)/u);
+    // Leser bare id-en, aldri teksten
+    expect(resolve).not.toMatch(/overrideSummaries\.text/u);
+  });
+
+  it("O1.14 isBlocked slipper bare organisasjonsmål med tom tillatt-liste gjennom (A568)", () => {
+    const source = read(join(aiDir, "request-suggestion.ts"));
+    const body = source.slice(source.indexOf("function isBlocked("));
+    const blocked = body.slice(0, body.indexOf("\n}\n"));
+    expect(blocked).toMatch(/FAKE_ONLY_TARGET_TYPES\.has\(targetType\)\) return true/u);
+    expect(blocked).toMatch(/!isOrganizationTargetAllowed\(definition, targetType\)/u);
+    expect(source).toMatch(/new Set\(\["override_stats"\]\)/u);
+  });
+
+  it("O1.14 ledeteksten for override_summary står bare i features.ts", () => {
+    const files = productFiles(aiDir).filter((file) =>
+      read(file).includes('"override_summary.v1": ['),
+    );
+    expect(files.map(rel)).toEqual(["src/core/ai/features.ts"]);
+  });
+});

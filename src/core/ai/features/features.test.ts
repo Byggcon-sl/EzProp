@@ -625,9 +625,8 @@ describe("Overstyringer for leder: funksjonsdefinisjonen override_summary (O1.11
   });
 
   it("O1.13 måltypen hører til organisasjonen, slås opp av kjernen og er ikke bare for den falske leverandøren", async () => {
-    const { ORGANIZATION_AI_TARGET_FIELDS, REPORT_AI_TARGET_FIELDS } = await import(
-      "@/shared/config/ai-targets"
-    );
+    const { ORGANIZATION_AI_TARGET_FIELDS, REPORT_AI_TARGET_FIELDS } =
+      await import("@/shared/config/ai-targets");
     expect({ ...ORGANIZATION_AI_TARGET_FIELDS }).toEqual({ override_summary: ["text"] });
     expect(Object.keys(REPORT_AI_TARGET_FIELDS)).not.toContain("override_summary");
     const { isOrganizationTargetType, isResolvedTargetType } = await import("../request");

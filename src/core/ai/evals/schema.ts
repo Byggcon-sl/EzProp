@@ -465,12 +465,18 @@ function checkOverrideCase(evalCase: OverrideEvalCase, where: string): string[] 
       errors.push(`${where}.simulatedAnswer: kan ikke brukes med utfallet not_called.`);
     }
   } else if (!valid) {
-    errors.push(`${where}.stats: grunnlaget består ikke kontrollen (ukjent nøkkel, kode eller tall).`);
+    errors.push(
+      `${where}.stats: grunnlaget består ikke kontrollen (ukjent nøkkel, kode eller tall).`,
+    );
   }
   if (expect.outcome === "error" && evalCase.simulatedAnswer !== undefined) {
     errors.push(`${where}.simulatedAnswer: kan ikke brukes med utfallet error.`);
   }
-  if (expect.outcome === "ok" && expect.verdict === "fail" && evalCase.simulatedAnswer === undefined) {
+  if (
+    expect.outcome === "ok" &&
+    expect.verdict === "fail" &&
+    evalCase.simulatedAnswer === undefined
+  ) {
     errors.push(`${where}.expect: verdict fail krever simulatedAnswer.`);
   }
   return errors;

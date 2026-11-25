@@ -1,7 +1,11 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseCandidateAnswer } from "../candidates";
-import { getFeatureDefinition, type AiFeatureDefinition } from "../features";
+import {
+  getFeatureDefinition,
+  PROMPT_INPUT_SEPARATOR,
+  type AiFeatureDefinition,
+} from "../features";
 import { GUARD_CASES } from "../guard-cases";
 import { GUESS_WORDS } from "../guess-words";
 import { checkAnswerGuards, extractTgMentions, isBlankText } from "../guards";
@@ -674,8 +678,14 @@ async function runOverrideCase(runner: Runner, evalCase: OverrideEvalCase): Prom
   const personNames = evalCase.personNames ?? [];
   const known = personNames.length > 0 ? toKnownValues({ personNames }) : null;
   const prepared = prepareOverridePrompt(runner.definition, stats, evalCase.statsCut ?? 0, known);
-  // Lekkasjesjekken før kallet: en ledetekst med persondata sendes aldri til leverandøren
-  const leaked = findPromptLeaks(prepared.prompt, known);
+  // Lekkasjesjekken før kallet: en ledetekst med persondata sendes aldri til leverandøren. Som i
+  // kjernen sjekkes innholdet etter skillet (de kjente verdiene er navnene på alle ansatte, og
+  // korte navneord kan stå i den faste instruksen).
+  const contentOf = (text: string) => {
+    const at = text.lastIndexOf(PROMPT_INPUT_SEPARATOR);
+    return at === -1 ? text : text.slice(at + PROMPT_INPUT_SEPARATOR.length);
+  };
+  const leaked = findPromptLeaks(contentOf(prepared.prompt), known);
   if (leaked.length > 0) return { kind: "leak", types: leaked };
 
   let answer: string;
@@ -691,7 +701,7 @@ async function runOverrideCase(runner: Runner, evalCase: OverrideEvalCase): Prom
     });
     const leakedAfter = new Set<LeakType>();
     for (const text of captured)
-      for (const type of findPromptLeaks(text, known)) leakedAfter.add(type);
+      for (const type of findPromptLeaks(contentOf(text), known)) leakedAfter.add(type);
     if (leakedAfter.size > 0) return { kind: "leak", types: Array.from(leakedAfter) };
     if (result.outcome === "error" || expect.outcome === "error") {
       return {

@@ -88,8 +88,10 @@ import {
  *     med grensene i `limits.ts` (for mye gir `AiInputTooLargeError`; kjernen kutter aldri)
  *  3. målet: for måltypene kjernen kontrollerer, slås målraden opp (`resolveAiTarget`) og
  *     rapport og oppdrag utledes; ellers kontrolleres oppdraget fra forespørselen
- *  4. samme `requestId` → «KI er av» (ingen rad) → sperret (`blocked`-rad, intet kall) →
- *     funksjonen er ikke slått på for leverandøren (`settings.features`, ingen rad)
+ *  4. samme `requestId` → «KI er av» (ingen rad) → åpent forslag på et organisasjonsmål
+ *     gjenbrukes (ingen rad) → grensene per funksjon (`AiRateLimitError`, ingen rad) → sperret
+ *     (`blocked`-rad, intet kall) → funksjonen er ikke slått på for leverandøren
+ *     (`settings.features`, ingen rad)
  *  5. vask (hvert felt, hver kandidat og hvert funn for seg) → ledetekst → lekkasjesjekk for
  *     ekte leverandør (`blocked`-rad, intet kall) → kall leverandøren
  *  6. tolk svaret: kandidatmerkene strengt (`phrase_suggest`), vaktene (`language_polish` og
@@ -351,8 +353,7 @@ function checkServerInput(
 ): CheckedServerInput {
   const parsed = serverInputSchema.safeParse(serverInput ?? {});
   if (!parsed.success) throw new AiRequestRejectedError();
-  const { candidates, candidatesCut, summaryGroups, overrideStats, overrideStatsCut } =
-    parsed.data;
+  const { candidates, candidatesCut, summaryGroups, overrideStats, overrideStatsCut } = parsed.data;
 
   if (definition.code === "override_summary") {
     if (candidates !== undefined || candidatesCut !== undefined || summaryGroups !== undefined) {
@@ -816,7 +817,11 @@ export const requestSuggestion: RequestSuggestion = async (grant, request, serve
 
   // Lekkasjesjekken på den ferdige ledeteksten (A195), også kandidater og funn: siste vern før
   // tekst forlater oss. Treff gir `blocked`-rad uten kall. Typen eller verdien logges ikke.
-  if (isRealProvider(provider) && findPromptLeaks(prompt, known).length > 0) {
+  // For et organisasjonsmål er de kjente verdiene navnene på alle ansatte, og korte navneord
+  // («To», «Leder») står i den faste instruksen. Der sjekkes derfor innholdet etter skillet, alt
+  // som ikke er vår egen faste tekst.
+  const leakText = prepared.kind === "override" ? prepared.prepared.texts.join("\n") : prompt;
+  if (isRealProvider(provider) && findPromptLeaks(leakText, known).length > 0) {
     return blockedRow();
   }
 

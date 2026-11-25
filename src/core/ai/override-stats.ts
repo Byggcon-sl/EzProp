@@ -47,12 +47,7 @@ const rowSchema = z
     checkCode: code,
     checkLabel: label,
     checkpointKey: code.nullable(),
-    checkpointName: z
-      .string()
-      .trim()
-      .min(1)
-      .max(AI_OVERRIDE_CHECKPOINT_NAME_MAX_LENGTH)
-      .nullable(),
+    checkpointName: z.string().trim().min(1).max(AI_OVERRIDE_CHECKPOINT_NAME_MAX_LENGTH).nullable(),
     reasonCode: code,
     reasonLabel: label,
     count: z.number().int().min(1),

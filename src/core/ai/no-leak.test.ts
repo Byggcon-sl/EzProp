@@ -5,6 +5,8 @@ import {
   aiRow,
   allAuditRows,
   captureError,
+  employeeWithGrant,
+  enableAi,
   fakeAiProvider,
   fakeErrorInputs,
   recordDecision,
@@ -12,7 +14,15 @@ import {
   validRequest,
 } from "../../../tests/ai";
 import { candidate, createAiReportChain } from "../../../tests/ai-report";
-import { createAiUsageLog, resetDatabase } from "../../../tests/factories";
+import {
+  createAiUsageLog,
+  createAssignment,
+  createClaim,
+  createOrganization,
+  createOverrideSummaryRow,
+  createPublishCheckResultRow,
+  resetDatabase,
+} from "../../../tests/factories";
 import { seedKnownValues } from "../../../tests/known-values";
 import { uuidv7 } from "@/shared/lib/uuid";
 import { AI_FEATURES, findFieldSourceViolations, PROMPT_INPUT_SEPARATOR } from "./features";
@@ -21,6 +31,7 @@ import { extractPlaceholders } from "./guards";
 import { findPromptLeaks } from "./prompt-leaks";
 import { loadKnownValues } from "./redaction";
 import { requestSuggestion as requestWithServerInput } from "./request-suggestion";
+import type { AiOverrideStats } from "./types";
 
 /*
  * Ingen innhold på avveie (docs/funksjoner/fase2a-ki-modul-logg-testplan.md avsnitt 11, ADR 0006
@@ -401,5 +412,150 @@ describe("KI i veien: vask av kandidater og funn (K4.22–K4.24)", () => {
     ]) {
       expect(NEVER_FIELDS, column).toContain(column);
     }
+  });
+});
+
+/*
+ * «Overstyringer for leder» (docs/funksjoner/fase2a-overstyringer-leder-testplan.md O4.25 og
+ * O4.14, A573). Kjente markører ligger i begrunnelsen for overstyringen, i reklamasjonstekstene,
+ * i navnet på den ansatte og i oppdraget. Ingen av dem finnes i det leverandøren fikk, i raden i
+ * `ai_usage_log`, i `audit_log` eller i `logger`. Et grunnlag som prøver å bære dem med, avvises
+ * før kallet.
+ */
+describe("O4.25 override_summary: fritekst, navn og id-er når aldri leverandøren", () => {
+  const MARKERS = {
+    reason: "Mxq-grunn-ÆØ",
+    description: "Mxq-krav-ÆØ",
+    claimant: "Mxq-kjoper-ÆØ",
+    buildingPart: "Mxq-del-ÆØ",
+    name: "Mxqline Testesen",
+  };
+
+  async function setup() {
+    const organization = await createOrganization("Oppdiktet Takst A");
+    await enableAi(organization.id);
+    const leader = await employeeWithGrant(organization.id, ["manager"], MARKERS.name);
+    const assignment = await createAssignment(organization.id);
+    const claim = await createClaim(organization.id, {
+      assignmentId: assignment.id,
+      description: MARKERS.description,
+      claimantText: MARKERS.claimant,
+      buildingPartText: MARKERS.buildingPart,
+      checkpointKey: "wet_room.hole_moisture",
+      createdBy: leader.employee.id,
+    });
+    const check = await createPublishCheckResultRow(organization.id, {
+      checkCode: "wet_or_below_ground_missing_hole",
+      severity: "blocker",
+      overridden: true,
+      overriddenBy: leader.employee.id,
+      overriddenAt: new Date(),
+      overrideReasonCode: "other",
+      overrideReason: MARKERS.reason,
+    });
+    const summary = await createOverrideSummaryRow(organization.id, { month: "2026-10" });
+    const ids = [assignment.id, assignment.number, claim.id, check.id];
+    return { leader, summary, ids };
+  }
+
+  /** Grunnlaget slik rapportkjernen bygger det: bare koder, etiketter, punktnavn og tall. */
+  function stats(): AiOverrideStats {
+    return {
+      month: "2026-10",
+      reportCount: 6,
+      previousMonth: { reportCount: 5 },
+      rows: [
+        {
+          checkCode: "wet_or_below_ground_missing_hole",
+          checkLabel: "Hulltaking mangler svar eller grunn",
+          checkpointKey: "wet_room.hole_moisture",
+          checkpointName: "Hulltaking i våtrom",
+          reasonCode: "other",
+          reasonLabel: "Annet",
+          count: 1,
+          sharePercent: 17,
+          claimCount: 1,
+          previousCount: 0,
+          previousSharePercent: 0,
+          deltaCount: 1,
+          deltaPoints: 17,
+        },
+      ],
+    };
+  }
+
+  function request(summaryId: string) {
+    return {
+      requestId: uuidv7(),
+      feature: "override_summary" as const,
+      assignmentId: null,
+      reportId: null,
+      target: { type: "override_summary", id: summaryId, fieldKey: "text" },
+      fields: {},
+    };
+  }
+
+  it("ingen markør eller id i ledeteksten, raden, audit_log eller logger", async () => {
+    const { leader, summary, ids } = await setup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const logSpies = spyOnLogger();
+    const req = request(summary.id);
+    const result = await requestWithServerInput(leader.grant, req, { overrideStats: stats() });
+    expect(result.kind).toBe("suggestion");
+    await recordDecision(leader.grant, req.requestId, "accepted");
+    const prompt = (spy.mock.calls[0]![0] as { prompt: string }).prompt;
+    const row = JSON.stringify(await aiRow(req.requestId));
+    const audit = JSON.stringify(await allAuditRows());
+    const logged = loggedText(logSpies);
+    for (const value of [...Object.values(MARKERS), "Mxqline", "Testesen", ...ids]) {
+      expect(prompt, value).not.toContain(value);
+      expect(row, value).not.toContain(value);
+      expect(audit, value).not.toContain(value);
+      expect(logged, value).not.toContain(value);
+    }
+    // Hvem som ba om og avgjorde forslaget står i raden (employee_id, decided_by), aldri i det
+    // leverandøren fikk
+    expect(prompt).not.toContain(leader.employee.id);
+  });
+
+  it.each([
+    ["begrunnelsen", { overrideReason: "Mxq-grunn-ÆØ" }],
+    ["hvem som krysset bort", { overriddenBy: uuidv7() }],
+    ["reklamasjonsteksten", { description: "Mxq-krav-ÆØ" }],
+    ["kjøperens tekst", { claimantText: "Mxq-kjoper-ÆØ" }],
+    ["bygningsdelen", { buildingPartText: "Mxq-del-ÆØ" }],
+    ["navnet", { employeeName: "Mxqline Testesen" }],
+    ["oppdrags-id", { assignmentId: uuidv7() }],
+    ["oppdragsnummer", { assignmentNumber: "TEST-00001" }],
+  ])("et grunnlag med %s avvises før kallet, uten rad", async (_name, extra) => {
+    const { leader, summary } = await setup();
+    const spy = vi.spyOn(fakeAiProvider, "complete");
+    const base = stats();
+    const withExtra = { ...base, rows: [{ ...base.rows[0]!, ...extra }] };
+    await expect(
+      requestWithServerInput(leader.grant, request(summary.id), {
+        overrideStats: withExtra as unknown as AiOverrideStats,
+      }),
+    ).rejects.toThrow();
+    expect(spy).not.toHaveBeenCalled();
+    expect(await aiRow(summary.id)).toBeUndefined();
+  });
+
+  it("«aldri»-listen har kolonnene fra kortet, og ingen av dem er kilde for override_summary", () => {
+    for (const column of [
+      "publish_check_results.override_reason",
+      "publish_check_results.overridden_by",
+      "claims.created_by",
+      "claims.description",
+      "claims.claimant_text",
+      "claims.building_part_text",
+      "employees.name",
+      "assignments.number",
+    ]) {
+      expect(NEVER_FIELDS, column).toContain(column);
+    }
+    const sources = Object.values(AI_FEATURES.override_summary.serverSources).flat();
+    for (const source of sources) expect(NEVER_FIELDS, source).not.toContain(source);
+    expect(findFieldSourceViolations(Object.values(AI_FEATURES))).toEqual([]);
   });
 });

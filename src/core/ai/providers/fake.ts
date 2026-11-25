@@ -208,8 +208,7 @@ export const fakeAiProvider: AiProvider = {
     else if (request.feature === "summary_draft") text = draftSummary(input);
     else if (request.feature === "override_summary") {
       text = withTriggers(overrideSummary(input), input);
-    }
-    else text = withTriggers(polish(input), input);
+    } else text = withTriggers(polish(input), input);
     return {
       outcome: "ok",
       text,

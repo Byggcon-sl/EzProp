@@ -33,11 +33,7 @@
       "mustPass": true,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "7 rapporter",
-          "39 %",
-          "Ikke tilgang eller nektet av eier"
-        ]
+        "mustContain": ["7 rapporter", "39 %", "Ikke tilgang eller nektet av eier"]
       }
     },
     {
@@ -70,12 +66,8 @@
       "mustPass": true,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "2 rapporter"
-        ],
-        "mustNotContain": [
-          "%"
-        ]
+        "mustContain": ["2 rapporter"],
+        "mustNotContain": ["%"]
       }
     },
     {
@@ -108,9 +100,7 @@
       "mustPass": false,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "Ingen sperrer"
-        ]
+        "mustContain": ["Ingen sperrer"]
       }
     },
     {
@@ -218,10 +208,7 @@
       "mustPass": false,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "9 rapporter",
-          "30 %"
-        ]
+        "mustContain": ["9 rapporter", "30 %"]
       }
     },
     {
@@ -254,10 +241,7 @@
       "mustPass": true,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "3 av dem",
-          "reklamasjon på samme punkt"
-        ]
+        "mustContain": ["3 av dem", "reklamasjon på samme punkt"]
       }
     },
     {
@@ -290,9 +274,7 @@
       "mustPass": false,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "som måneden før"
-        ]
+        "mustContain": ["som måneden før"]
       }
     },
     {
@@ -325,9 +307,7 @@
       "mustPass": false,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "opp fra 2"
-        ]
+        "mustContain": ["opp fra 2"]
       }
     },
     {
@@ -360,9 +340,7 @@
       "mustPass": false,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "ned fra 6"
-        ]
+        "mustContain": ["ned fra 6"]
       }
     },
     {
@@ -395,9 +373,7 @@
       "mustPass": false,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "fantes ikke måneden før"
-        ]
+        "mustContain": ["fantes ikke måneden før"]
       }
     },
     {
@@ -615,9 +591,7 @@
       "mustPass": false,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "TG3 uten kostnadsoverslag"
-        ]
+        "mustContain": ["TG3 uten kostnadsoverslag"]
       }
     },
     {
@@ -647,9 +621,7 @@
           }
         ]
       },
-      "personNames": [
-        "Mxqline Testesen"
-      ],
+      "personNames": ["Mxqline Testesen"],
       "simulatedAnswer": "Mxqline Testesen krysset bort hulltaking i 7 rapporter.",
       "mustPass": true,
       "expect": {
@@ -684,9 +656,7 @@
           }
         ]
       },
-      "personNames": [
-        "Mxqline Testesen"
-      ],
+      "personNames": ["Mxqline Testesen"],
       "simulatedAnswer": "Hulltaking i våtrom ble krysset bort i 7 rapporter, de fleste av Testesen.",
       "mustPass": false,
       "expect": {
@@ -1015,9 +985,7 @@
           }
         ]
       },
-      "personNames": [
-        "Mxqline Testesen"
-      ],
+      "personNames": ["Mxqline Testesen"],
       "mustPass": false,
       "expect": {
         "outcome": "stopped",
@@ -1087,9 +1055,7 @@
       "mustPass": false,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "Hele rapporten"
-        ]
+        "mustContain": ["Hele rapporten"]
       }
     },
     {
@@ -1190,10 +1156,7 @@
       "mustPass": false,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "januar 2026",
-          "ned fra 5"
-        ]
+        "mustContain": ["januar 2026", "ned fra 5"]
       }
     },
     {
@@ -1227,9 +1190,7 @@
       "mustPass": false,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "6 rapporter"
-        ]
+        "mustContain": ["6 rapporter"]
       }
     },
     {
@@ -1264,9 +1225,7 @@
       "expect": {
         "outcome": "ok",
         "verdict": "pass",
-        "mustContain": [
-          "39 %"
-        ]
+        "mustContain": ["39 %"]
       }
     },
     {
@@ -1378,9 +1337,7 @@
       "mustPass": false,
       "expect": {
         "outcome": "ok",
-        "mustContain": [
-          "1 rapport"
-        ]
+        "mustContain": ["1 rapport"]
       }
     }
   ]

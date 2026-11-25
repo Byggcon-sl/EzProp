@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  ORGANIZATION_AI_TARGET_TYPES,
-  RESOLVED_AI_TARGET_TYPES,
-} from "@/shared/config/ai-targets";
+import { ORGANIZATION_AI_TARGET_TYPES, RESOLVED_AI_TARGET_TYPES } from "@/shared/config/ai-targets";
 import { isUuid } from "@/shared/lib/uuid";
 import {
   AI_FEATURES,

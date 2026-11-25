@@ -8,7 +8,11 @@ import {
   setReportStatus,
   softDelete,
 } from "../../../tests/ai-report";
-import { createOrganization, resetDatabase } from "../../../tests/factories";
+import {
+  createOrganization,
+  createOverrideSummaryRow,
+  resetDatabase,
+} from "../../../tests/factories";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { resolveAiTarget } from "./resolve-target";
 
@@ -163,5 +167,63 @@ describe("K5.12 tenant-isolasjon for oppslaget av målet", () => {
     for (const { name, target } of resolvedTargets(chainB)) {
       expect(await resolveAiTarget(grant, target), name).toBe(null);
     }
+  });
+});
+
+/*
+ * Organisasjonsmålet `override_summary` (docs/funksjoner/fase2a-overstyringer-leder-testplan.md
+ * O6.5, ADR 0006 tillegg 24.11.2026 punkt 2). Raden i `override_summaries` slås opp på
+ * `grant.organizationId` og `deleted_at is null`; svaret har verken rapport eller oppdrag.
+ */
+describe("O6.5 resolveAiTarget for override_summary", () => {
+  const target = (id: string, fieldKey = "text") => ({ type: "override_summary", id, fieldKey });
+
+  it("raden i organisasjonen gir rapport og oppdrag lik null; id med store bokstaver likt", async () => {
+    const { organization, grant } = await aiOrganization();
+    const row = await createOverrideSummaryRow(organization.id);
+    expect(await resolveAiTarget(grant, target(row.id))).toEqual({
+      reportId: null,
+      assignmentId: null,
+    });
+    expect(await resolveAiTarget(grant, target(row.id.toUpperCase()))).toEqual({
+      reportId: null,
+      assignmentId: null,
+    });
+  });
+
+  it("ukjent id, slettet rad, annen organisasjon og annen feltkode gir samme svar (null)", async () => {
+    const { organization, grant } = await aiOrganization();
+    const other = await createOrganization("Oppdiktet Takst B");
+    const foreign = await createOverrideSummaryRow(other.id);
+    const deleted = await createOverrideSummaryRow(organization.id, {
+      month: "2026-09",
+      deletedAt: new Date(),
+    });
+    const own = await createOverrideSummaryRow(organization.id, { month: "2026-08" });
+    expect(await resolveAiTarget(grant, target(uuidv7()))).toBe(null);
+    expect(await resolveAiTarget(grant, target(deleted.id))).toBe(null);
+    expect(await resolveAiTarget(grant, target(foreign.id))).toBe(null);
+    expect(await resolveAiTarget(grant, target(own.id, "summary_text"))).toBe(null);
+  });
+
+  it("expectTenantIsolation: hver organisasjon finner bare sin egen oppsummering", async () => {
+    const ids: string[] = [];
+    await expectTenantIsolation({
+      seed: async (grantA, grantB) => {
+        const a = await createOverrideSummaryRow(grantA.organizationId);
+        const b = await createOverrideSummaryRow(grantB.organizationId);
+        ids.push(a.id, b.id);
+        return { a: [a.id], b: [b.id] };
+      },
+      query: async (actor, organizationId) => {
+        const grant = await requireOrganizationAccess(actor, organizationId, "claims.read");
+        const found: string[] = [];
+        for (const id of ids) {
+          if (await resolveAiTarget(grant, target(id))) found.push(id);
+        }
+        return found;
+      },
+      idOf: (id) => id,
+    });
   });
 });
