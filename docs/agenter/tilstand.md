@@ -136,6 +136,7 @@ Ingen.
 
 ## Pågår
 
+- 25.11.2026 kl. 11 UTC: `ga-gjennom-tekstene` (oppgavekort `docs/funksjoner/fase2a-ga-gjennom-tekstene.md`) er i arbeid i hovedløkken. Bruker A603–A606; neste ledige A-nummer er A607.
 - 25.11.2026 kl. 00:30 UTC: `pdf-motor-badet` og `worktree-wf_90b62038-ddb-15`–`18` og `worktree-wf_195a1c8b-8e5-19` er merget (#244) og overflødige. I arbeid i andre kjøringer (stod stille ved siste sjekk 24.11 kl. 21 UTC): `tg-spor` (18:24), `skriv-det-du-ser` (14:52), `overstyringer-leder` (14:17). A600–A602 er tatt av `pdf-motor-badet`; andre brancher bruker A543 og A549–A599.
 - 24.11.2026 kl. 14 UTC: `testdata-del-2` og `worktree-wf_ee26afa6-fac-*` er merget (#240) og overflødige. `skriv-det-du-ser` (reservert 07:50 UTC, oppgavekort og testplan) er i arbeid i en annen kjøring. `pdf-motor-badet` er i arbeid i hovedløkken (`worktree-wf_195a1c8b-8e5-19` er tatt inn i den).
 - 24.11.2026 kl. 08 UTC: `rett-forslag-og-avvik` og `worktree-wf_3922febc-cf5-18`–`20` er merget (#239) og overflødige. `testdata-del-2` har PR #240.
