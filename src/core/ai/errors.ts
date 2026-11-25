@@ -64,3 +64,27 @@ export class AiRetentionValidationError extends Error {
     this.fieldErrors = fieldErrors;
   }
 }
+
+/**
+ * For mange forespørsler etter grensene i `limits.ts` (`override_summary`, A575): per ansatt per
+ * time eller per organisasjon per døgn. Ingen rad og intet kall. `reason` er fast kode, meldingen
+ * har ingen tekst fra inndata.
+ */
+export const AI_RATE_LIMIT_REASONS = ["employee_hour", "organization_day"] as const;
+export type AiRateLimitReason = (typeof AI_RATE_LIMIT_REASONS)[number];
+
+export const AI_RATE_LIMIT_MESSAGES: Readonly<Record<AiRateLimitReason, string>> = {
+  employee_hour:
+    "Du har bedt om mange oppsummeringer den siste timen. Vent litt, eller skriv oppsummeringen selv.",
+  organization_day:
+    "Grensen for oppsummeringer i dag er nådd. Prøv igjen i morgen, eller skriv oppsummeringen selv.",
+};
+
+export class AiRateLimitError extends Error {
+  readonly reason: AiRateLimitReason;
+  constructor(reason: AiRateLimitReason) {
+    super(AI_RATE_LIMIT_MESSAGES[reason]);
+    this.name = "AiRateLimitError";
+    this.reason = reason;
+  }
+}

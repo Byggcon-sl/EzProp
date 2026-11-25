@@ -32,7 +32,12 @@ export type {
  * ledetekst) står i `features.ts`. `phrase_suggest` og `summary_draft` kom med «KI i veien»
  * (docs/funksjoner/fase2a-ki-i-veien.md).
  */
-export type AiFeatureCode = "language_polish" | "phrase_suggest" | "summary_draft";
+export type AiFeatureCode =
+  | "language_polish"
+  | "phrase_suggest"
+  | "summary_draft"
+  /** Lederens månedsoppsummering av overstyrte sperrer (ADR 0006, tillegg 24.11.2026). */
+  | "override_summary";
 
 export type AiSuggestionRequest = {
   /** UUID laget på enheten. Blir id-en i `ai_usage_log`. */
@@ -364,11 +369,22 @@ export type AiGuardAnswerPart = { label: string | null; text: string };
  *    byttes entydig tilbake.
  *
  * `phrase_suggest` har ingen tekst i svaret og kjører ikke vaktene.
+ *
+ * `override_summary` (ADR 0006, tillegg 24.11.2026) har egen rekkefølge: `tg_guard` (en TG-omtale
+ * i svaret som ikke står i grunnlaget, for eksempel i etiketten til en sperre), `number_guard`,
+ * `guess_guard` (et gjetteord som ikke står i grunnlaget), `name_guard` (navnet eller et navneord
+ * på minst tre bokstaver fra `personNames` som ikke står i grunnlaget) og `placeholder_guard`
+ * (enhver plassholder i svaret: teksten er kort, og et vasket punktnavn skal ikke gjentas).
  */
 export type CheckAnswerGuards = (input: {
   feature: AiFeatureCode;
   sent: readonly AiGuardSentPart[];
   answer: readonly AiGuardAnswerPart[];
+  /**
+   * Navnene på de ansatte i organisasjonen (`name_guard`, bare `override_summary`). Holdes bare i
+   * minnet under kallet. Uten listen kan navnevakten ikke slå til.
+   */
+  personNames?: readonly string[];
 }) => AiGuardCode | null;
 
 /**

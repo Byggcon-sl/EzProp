@@ -267,3 +267,19 @@ export async function loadKnownValues(
 
   return known;
 }
+
+/**
+ * Kjente verdier for et mål som hører til organisasjonen (`override_summary`, ADR 0006 tillegg
+ * 24.11.2026): navnene på alle ansatte i organisasjonen til `grant`, også deaktiverte og mykt
+ * slettede. Brukes til å vaske punktnavnene, til lekkasjesjekken før kallet og til navnevakten på
+ * svaret. Navnene sendes aldri til leverandøren og holdes bare i minnet under kallet.
+ */
+export async function loadOrganizationKnownValues(grant: EmployeeGrant): Promise<KnownValues> {
+  const known = emptyKnownValues();
+  const rows = await db
+    .select({ name: employees.name })
+    .from(employees)
+    .where(eq(employees.organizationId, grant.organizationId));
+  for (const row of rows) pushValue(known.personNames, row.name);
+  return known;
+}

@@ -1,5 +1,6 @@
 import { PII_PLACEHOLDERS } from "@/shared/lib/pii-patterns";
-import { normalizeSpaces, WORD_END, WORD_START } from "./prompt-leaks";
+import { GUESS_WORDS } from "./guess-words";
+import { normalizeSpaces, wholeWordPattern, WORD_END, WORD_START } from "./prompt-leaks";
 import type { AiGuardAnswerPart, AiGuardCode, AiGuardSentPart, CheckAnswerGuards } from "./types";
 
 /*
@@ -138,13 +139,77 @@ function placeholdersDiffer(sentTexts: readonly string[], answerText: string): b
   return !sameList(sentTexts.flatMap(extractPlaceholders), extractPlaceholders(answerText));
 }
 
+// --- override_summary (ADR 0006, tillegg 24.11.2026) -------------------------------------------
+
+function containsWord(text: string, word: string): boolean {
+  return normalizeSpaces(word) !== "" && wholeWordPattern(word).test(normalizeSpaces(text));
+}
+
+/** Korteste navneord som telles alene. Kortere ord («Li», «Bo») gir for mange falske treff. */
+const NAME_PART_MIN_LENGTH = 3;
+
+/** Hele navnet og hvert navneord på minst tre bokstaver. */
+function namePartsOf(name: string): string[] {
+  const whole = normalizeSpaces(name);
+  if (whole === "") return [];
+  const parts = whole.split(" ").filter((part) => part.length >= NAME_PART_MIN_LENGTH);
+  return [whole, ...parts];
+}
+
+/** En TG-omtale i svaret som ikke står i det som ble sendt (for eksempel i en etikett). */
+function hasNewTgMention(sentTexts: readonly string[], answerText: string): boolean {
+  const known = new Set(sentTexts.flatMap((text) => extractTgMentions(text).map(canonicalTg)));
+  return extractTgMentions(answerText)
+    .map(canonicalTg)
+    .some((mention) => !known.has(mention));
+}
+
+/** Et gjetteord i svaret som ikke står i det som ble sendt. */
+function hasNewGuessWord(sentTexts: readonly string[], answerText: string): boolean {
+  const sent = sentTexts.join("\n");
+  return GUESS_WORDS.some((word) => containsWord(answerText, word) && !containsWord(sent, word));
+}
+
+/**
+ * Navnet på en ansatt i svaret: hele navnet eller et navneord, som hele ord. Et ord som står i
+ * det som ble sendt (for eksempel i navnet på et kontrollpunkt), regnes ikke: det er grunnlaget,
+ * ikke noe KI har lagt til.
+ */
+function hasPersonName(
+  sentTexts: readonly string[],
+  answerText: string,
+  personNames: readonly string[],
+): boolean {
+  const sent = sentTexts.join("\n");
+  return personNames
+    .flatMap(namePartsOf)
+    .some((part) => containsWord(answerText, part) && !containsWord(sent, part));
+}
+
+function overrideSummaryGuard(
+  sent: readonly AiGuardSentPart[],
+  answer: readonly AiGuardAnswerPart[],
+  personNames: readonly string[],
+): AiGuardCode | null {
+  const sentTexts = sent.flatMap((part) => part.texts);
+  const answerText = answer.map((part) => part.text).join("\n");
+  if (hasNewTgMention(sentTexts, answerText)) return "tg_guard";
+  if (hasNewNumber(sentTexts, answerText)) return "number_guard";
+  if (hasNewGuessWord(sentTexts, answerText)) return "guess_guard";
+  if (hasPersonName(sentTexts, answerText, personNames)) return "name_guard";
+  if (extractPlaceholders(answerText).length > 0) return "placeholder_guard";
+  return null;
+}
+
 /**
  * Vaktene i fast rekkefølge (A471): `tg_guard`, `coverage_guard`, `number_guard`,
  * `placeholder_guard`. Den første som slår til, er svaret; `null` betyr at svaret kan vises.
- * `phrase_suggest` har ingen tekst i svaret og kjører ikke vaktene.
+ * `phrase_suggest` har ingen tekst i svaret og kjører ikke vaktene. `override_summary` har egen
+ * rekkefølge med `guess_guard` og `name_guard` (se `CheckAnswerGuards` i types.ts).
  */
-export const checkAnswerGuards: CheckAnswerGuards = ({ feature, sent, answer }) => {
+export const checkAnswerGuards: CheckAnswerGuards = ({ feature, sent, answer, personNames }) => {
   if (feature === "phrase_suggest") return null;
+  if (feature === "override_summary") return overrideSummaryGuard(sent, answer, personNames ?? []);
   const summary = feature === "summary_draft";
 
   // 1. TG: sammendraget nevner aldri TG; språkvasken har samme TG-omtaler som det som ble sendt
@@ -182,6 +247,8 @@ export function isGuardCode(value: unknown): value is AiGuardCode {
     value === "tg_guard" ||
     value === "coverage_guard" ||
     value === "number_guard" ||
-    value === "placeholder_guard"
+    value === "placeholder_guard" ||
+    value === "guess_guard" ||
+    value === "name_guard"
   );
 }

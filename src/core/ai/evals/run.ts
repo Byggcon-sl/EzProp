@@ -3,11 +3,14 @@ import { join } from "node:path";
 import { parseCandidateAnswer } from "../candidates";
 import { getFeatureDefinition, type AiFeatureDefinition } from "../features";
 import { GUARD_CASES } from "../guard-cases";
+import { GUESS_WORDS } from "../guess-words";
 import { checkAnswerGuards, extractTgMentions, isBlankText } from "../guards";
+import { parseOverrideStats } from "../override-stats";
 import { PlaceholderRestoreError, restorePlaceholders } from "../placeholders";
 import {
   parseSummaryAnswer,
   prepareCandidatePrompt,
+  prepareOverridePrompt,
   preparePrompt,
   prepareSummaryPrompt,
   type PreparedCandidatePrompt,
@@ -33,6 +36,7 @@ import {
   type EvalCasesFile,
   type EvalExpectation,
   type EvalVerdict,
+  type OverrideEvalCase,
   type PhraseEvalCase,
   type SummaryEvalCase,
 } from "./schema";
@@ -119,25 +123,11 @@ export type EvalCaseEvaluation = { passed: boolean; reasons: string[] };
 // Ordlistene vurderingen bruker
 
 /**
- * Gjetteordene (regel 7). Samme liste som maltesten (`src/db/seed/templates/wet-room.test.ts`);
- * `tests/no-copy-from-research.test.ts` holder dem like.
+ * Gjetteordene (regel 7). Listen står i `../guess-words.ts`, slik at vakten `guess_guard` i
+ * kjernen og vurderingen her bruker den samme. Samme liste som maltesten
+ * (`src/db/seed/templates/wet-room.test.ts`); `tests/no-copy-from-research.test.ts` holder dem like.
  */
-export const EVAL_GUESS_WORDS: readonly string[] = [
-  "antas",
-  "trolig",
-  "sannsynligvis",
-  "antagelig",
-  "muligens",
-  "formentlig",
-  "ser ut til",
-  "antar",
-  "antakelig",
-  "sannsynlig",
-  "kanskje",
-  "tyder på",
-  "virker som",
-  "tilsynelatende",
-];
+export const EVAL_GUESS_WORDS: readonly string[] = GUESS_WORDS;
 
 /**
  * Graderingsord som i praksis er TG-ord (A464). KI kan bruke dem i sammendraget bare når de står
@@ -630,7 +620,126 @@ async function runSummaryCase(runner: Runner, evalCase: SummaryEvalCase): Promis
   return { kind: "evaluated", evaluation: applyVerdict(expect.verdict, evaluation) };
 }
 
-type AnyCase = EvalCase | PhraseEvalCase | SummaryEvalCase;
+// --- override_summary ----------------------------------------------------------------------------
+
+/** Ord som gjør andelen feil: andelen er av rapportene som ble publisert, ikke av rom (A570). */
+export const OVERRIDE_WRONG_SHARE_PHRASES: readonly string[] = [
+  "av badene",
+  "av rommene",
+  "av våtrommene",
+];
+
+/**
+ * Vurderer et svar for `override_summary` som vaktene har sluppet gjennom: ingen prosent når
+ * måneden har for få rapporter til at andelen er regnet (A570), ingen andel av bad eller rom, og
+ * ordene fasiten krever.
+ */
+export function evaluateOverrideAnswer(
+  expectation: Extract<OverrideEvalCase["expect"], { outcome: "ok" }>,
+  sharesComputed: boolean,
+  answer: string,
+): EvalCaseEvaluation {
+  const reasons: string[] = [];
+  if (!sharesComputed && /%|prosent/iu.test(answer)) {
+    reasons.push("prosent i en måned med for få rapporter");
+  }
+  for (const phrase of OVERRIDE_WRONG_SHARE_PHRASES) {
+    if (containsWholeWord(answer, phrase)) reasons.push(`andel skrevet som «${phrase}»`);
+  }
+  for (const word of expectation.mustContain ?? []) {
+    if (!containsWholeWord(answer, word)) reasons.push(`mangler «${word}» (mustContain)`);
+  }
+  for (const word of expectation.mustNotContain ?? []) {
+    if (containsWholeWord(answer, word)) reasons.push(`har «${word}» (mustNotContain)`);
+  }
+  return { passed: reasons.length === 0, reasons };
+}
+
+async function runOverrideCase(runner: Runner, evalCase: OverrideEvalCase): Promise<CaseOutcome> {
+  const expect = evalCase.expect;
+  // Samme strenge kontroll som kjernen, rett før ledeteksten bygges
+  const stats = parseOverrideStats(evalCase.stats);
+  if (expect.outcome === "not_called") {
+    return {
+      kind: "evaluated",
+      evaluation:
+        stats === null
+          ? { passed: true, reasons: [] }
+          : { passed: false, reasons: ["grunnlaget ble godtatt, KI ville blitt kalt"] },
+    };
+  }
+  if (stats === null) {
+    return { kind: "evaluated", evaluation: { passed: false, reasons: ["grunnlaget ble avvist"] } };
+  }
+  const personNames = evalCase.personNames ?? [];
+  const known = personNames.length > 0 ? toKnownValues({ personNames }) : null;
+  const prepared = prepareOverridePrompt(runner.definition, stats, evalCase.statsCut ?? 0, known);
+  // Lekkasjesjekken før kallet: en ledetekst med persondata sendes aldri til leverandøren
+  const leaked = findPromptLeaks(prepared.prompt, known);
+  if (leaked.length > 0) return { kind: "leak", types: leaked };
+
+  let answer: string;
+  if (evalCase.simulatedAnswer !== undefined) {
+    answer = evalCase.simulatedAnswer;
+  } else {
+    const captured: string[] = [];
+    const result = await completeCaptured(runner.provider, captured, {
+      feature: runner.definition.code,
+      promptVersion: runner.definition.promptVersion,
+      prompt: prepared.prompt,
+      model: runner.provider.model,
+    });
+    const leakedAfter = new Set<LeakType>();
+    for (const text of captured)
+      for (const type of findPromptLeaks(text, known)) leakedAfter.add(type);
+    if (leakedAfter.size > 0) return { kind: "leak", types: Array.from(leakedAfter) };
+    if (result.outcome === "error" || expect.outcome === "error") {
+      return {
+        kind: "evaluated",
+        evaluation:
+          result.outcome === "error" && expect.outcome === "error"
+            ? { passed: true, reasons: [] }
+            : {
+                passed: false,
+                reasons: [`fasiten venter utfallet ${expect.outcome}, fikk ${result.outcome}`],
+              },
+      };
+    }
+    if (result.outcome !== "ok") {
+      return {
+        kind: "evaluated",
+        evaluation: { passed: false, reasons: [`fasiten venter en tekst, fikk ${result.outcome}`] },
+      };
+    }
+    answer = result.text;
+  }
+  if (expect.outcome === "error") {
+    return {
+      kind: "evaluated",
+      evaluation: { passed: false, reasons: ["fasiten venter feil fra leverandøren"] },
+    };
+  }
+
+  // Samme vakter som kjernen (`interpretAnswer` i request-suggestion.ts)
+  const guard = checkAnswerGuards({
+    feature: "override_summary",
+    sent: [{ label: null, texts: prepared.texts }],
+    answer: [{ label: null, text: answer }],
+    personNames,
+  });
+  if (expect.outcome === "stopped") {
+    return { kind: "evaluated", evaluation: stoppedEvaluation(expect.guard, guard) };
+  }
+  if (guard !== null) {
+    const evaluation = { passed: false, reasons: [`stoppet av ${guard}`] };
+    return { kind: "evaluated", evaluation: applyVerdict(expect.verdict, evaluation) };
+  }
+  const sharesComputed = stats.rows.some((row) => row.sharePercent !== null);
+  const evaluation = evaluateOverrideAnswer(expect, sharesComputed, answer);
+  return { kind: "evaluated", evaluation: applyVerdict(expect.verdict, evaluation) };
+}
+
+type AnyCase = EvalCase | PhraseEvalCase | SummaryEvalCase | OverrideEvalCase;
 
 function runCaseFor(
   file: EvalCasesFile,
@@ -640,6 +749,8 @@ function runCaseFor(
       return (runner, evalCase) => runPhraseCase(runner, evalCase as PhraseEvalCase);
     case "summary_draft":
       return (runner, evalCase) => runSummaryCase(runner, evalCase as SummaryEvalCase);
+    case "override_summary":
+      return (runner, evalCase) => runOverrideCase(runner, evalCase as OverrideEvalCase);
     default:
       return (runner, evalCase) => runPolishCase(runner, evalCase as EvalCase);
   }
@@ -712,7 +823,12 @@ export function runGuardCases(feature?: string): EvalGuardCasesResult {
   for (const item of cases) {
     let got: AiGuardCode | null | "krasj";
     try {
-      got = checkAnswerGuards({ feature: item.feature, sent: item.sent, answer: item.answer });
+      got = checkAnswerGuards({
+        feature: item.feature,
+        sent: item.sent,
+        answer: item.answer,
+        personNames: item.personNames,
+      });
     } catch {
       got = "krasj";
     }

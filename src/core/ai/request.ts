@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { RESOLVED_AI_TARGET_TYPES } from "@/shared/config/ai-targets";
+import {
+  ORGANIZATION_AI_TARGET_TYPES,
+  RESOLVED_AI_TARGET_TYPES,
+} from "@/shared/config/ai-targets";
 import { isUuid } from "@/shared/lib/uuid";
 import {
   AI_FEATURES,
@@ -19,8 +22,9 @@ import type { AiFeatureCode } from "./types";
  * - `candidates` med innhold og `findings`/`summaryGroups`: kommer bare fra serveren, i
  *   `AiServerInput` (tredje argument).
  * - `reportId`: utledes alltid av kjernen fra målet.
- * - `assignmentId` for måltypene kjernen slår opp selv (`RESOLVED_AI_TARGET_TYPES`): oppdraget
- *   utledes fra målet.
+ * - `assignmentId` for måltypene kjernen slår opp selv (`RESOLVED_AI_TARGET_TYPES` og
+ *   organisasjonsmålene i `ORGANIZATION_AI_TARGET_TYPES`): oppdraget utledes fra målet, eller
+ *   finnes ikke.
  * - En arkivert måltype (`ARCHIVED_AI_TARGET_TYPES`).
  */
 
@@ -29,7 +33,13 @@ export { AI_FIELD_MAX_LENGTH };
 
 const uuidSchema = z.string().refine(isUuid);
 const featureCodes = Object.keys(AI_FEATURES) as [AiFeatureCode, ...AiFeatureCode[]];
-const resolvedTypes: ReadonlySet<string> = new Set(RESOLVED_AI_TARGET_TYPES);
+// Organisasjonsmålene slås også opp av kjernen (ADR 0006, tillegg 24.11.2026), men gir verken
+// rapport eller oppdrag
+const resolvedTypes: ReadonlySet<string> = new Set([
+  ...RESOLVED_AI_TARGET_TYPES,
+  ...ORGANIZATION_AI_TARGET_TYPES,
+]);
+const organizationTypes: ReadonlySet<string> = new Set(ORGANIZATION_AI_TARGET_TYPES);
 
 const targetSchema = z
   .object({
@@ -42,6 +52,11 @@ const targetSchema = z
 /** Om kjernen selv slår opp målraden og utleder rapport og oppdrag. */
 export function isResolvedTargetType(type: string): boolean {
   return resolvedTypes.has(type);
+}
+
+/** Om målet hører til organisasjonen, ikke til en rapport eller et oppdrag. */
+export function isOrganizationTargetType(type: string): boolean {
+  return organizationTypes.has(type);
 }
 
 /**

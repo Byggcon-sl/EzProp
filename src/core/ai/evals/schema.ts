@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getFeatureDefinition } from "../features";
 import { AI_CANDIDATES_MAX } from "../limits";
+import { parseOverrideStats } from "../override-stats";
 import { emptyKnownValues, type KnownValues } from "../redact-text";
 import type { AiCandidateSource, AiGuardCode } from "../types";
 
@@ -15,6 +16,9 @@ import type { AiCandidateSource, AiGuardCode } from "../types";
  *   er settet av riktige id-er eller `no_match`. Bestått = minst én riktig blant de 3 beste.
  * - `summary_draft`: funnene i gruppene TG3, TG2, TGIU og HMS inn, fasit er `ok` eller stoppet
  *   av en bestemt vakt.
+ * - `override_summary`: tallgrunnlaget (`AiOverrideStats`) inn, eventuelt navnene på de ansatte
+ *   (til navnevakten), fasit er `ok`, stoppet av en bestemt vakt, `error` fra leverandøren, eller
+ *   `not_called` når grunnlaget skal avvises før KI (null rapporter, ukjente nøkler, fritekst).
  *
  * `simulatedAnswer` er et oppdiktet KI-svar som brukes i stedet for leverandørens. Det prøver at
  * vaktene og vurderingen fanger et svar som er feil (byttet TG, flyttet tall, gjetteord). Med
@@ -52,6 +56,8 @@ export const EVAL_GUARD_CODES = [
   "coverage_guard",
   "number_guard",
   "placeholder_guard",
+  "guess_guard",
+  "name_guard",
 ] as const satisfies readonly AiGuardCode[];
 /** Rekkefølgen i sammendraget: TG3, TG2, TGIU, HMS. */
 export const EVAL_SUMMARY_GROUPS = ["tg3", "tg2", "tgiu", "hms"] as const;
@@ -221,6 +227,40 @@ const summaryCaseSchema = z.strictObject({
 
 export type SummaryEvalCase = z.infer<typeof summaryCaseSchema>;
 
+// --- override_summary --------------------------------------------------------------------------
+
+const overrideExpectSchema = z.discriminatedUnion("outcome", [
+  z.strictObject({
+    outcome: z.literal("ok"),
+    mustContain: z.array(z.string().min(1)).optional(),
+    mustNotContain: z.array(z.string().min(1)).optional(),
+    verdict: verdictSchema.optional(),
+  }),
+  z.strictObject({ outcome: z.literal("stopped"), guard: z.enum(EVAL_GUARD_CODES) }),
+  z.strictObject({ outcome: z.literal("error") }),
+  /** Grunnlaget skal avvises av kjernen før leverandøren kalles. */
+  z.strictObject({ outcome: z.literal("not_called") }),
+]);
+
+const overrideCaseSchema = z.strictObject({
+  id: caseId,
+  description: z.string().optional(),
+  /**
+   * Tallgrunnlaget slik `BuildOverrideStats` gir det. Kontrolleres av `parseOverrideStats` i
+   * `parseCasesFile`: må bestå, unntatt for `not_called`, der det ikke skal bestå.
+   */
+  stats: z.unknown(),
+  statsCut: z.number().int().min(0).optional(),
+  /** Oppdiktede navn på ansatte i organisasjonen (navnevakten og lekkasjesjekken). */
+  personNames: z.array(nonEmpty).optional(),
+  mustPass: z.boolean().default(false),
+  /** Oppdiktet KI-svar som brukes i stedet for leverandørens. */
+  simulatedAnswer: nonEmpty.optional(),
+  expect: overrideExpectSchema,
+});
+
+export type OverrideEvalCase = z.infer<typeof overrideCaseSchema>;
+
 // --- Filen -------------------------------------------------------------------------------------
 
 function fileSchema<T extends z.ZodType>(cases: T) {
@@ -236,6 +276,7 @@ const FILE_SCHEMAS = {
   language_polish: fileSchema(caseSchema),
   phrase_suggest: fileSchema(phraseCaseSchema),
   summary_draft: fileSchema(summaryCaseSchema),
+  override_summary: fileSchema(overrideCaseSchema),
 } as const;
 
 type EvalFeatureKind = keyof typeof FILE_SCHEMAS;
@@ -244,7 +285,8 @@ type FileHeader = { status: typeof EVAL_CASES_STATUS; note: string };
 export type EvalCasesFile =
   | (FileHeader & { feature: "language_polish"; cases: EvalCase[] })
   | (FileHeader & { feature: "phrase_suggest"; cases: PhraseEvalCase[] })
-  | (FileHeader & { feature: "summary_draft"; cases: SummaryEvalCase[] });
+  | (FileHeader & { feature: "summary_draft"; cases: SummaryEvalCase[] })
+  | (FileHeader & { feature: "override_summary"; cases: OverrideEvalCase[] });
 
 export type ParseCasesResult = { ok: true; file: EvalCasesFile } | { ok: false; errors: string[] };
 
@@ -341,6 +383,11 @@ export function parseCasesFile(json: unknown, fileName: string): ParseCasesResul
     case "summary_draft":
       file.cases.forEach((c, i) => errors.push(...checkSummaryCase(c, `${fileName}: cases[${i}]`)));
       break;
+    case "override_summary":
+      file.cases.forEach((c, i) =>
+        errors.push(...checkOverrideCase(c, `${fileName}: cases[${i}]`)),
+      );
+      break;
   }
   return errors.length > 0 ? { ok: false, errors } : { ok: true, file };
 }
@@ -403,6 +450,27 @@ function checkSummaryCase(evalCase: SummaryEvalCase, where: string): string[] {
     expect.verdict === "fail" &&
     evalCase.simulatedAnswer === undefined
   ) {
+    errors.push(`${where}.expect: verdict fail krever simulatedAnswer.`);
+  }
+  return errors;
+}
+
+function checkOverrideCase(evalCase: OverrideEvalCase, where: string): string[] {
+  const errors: string[] = [];
+  const expect = evalCase.expect;
+  const valid = parseOverrideStats(evalCase.stats) !== null;
+  if (expect.outcome === "not_called") {
+    if (valid) errors.push(`${where}.stats: utfallet not_called krever et grunnlag som avvises.`);
+    if (evalCase.simulatedAnswer !== undefined) {
+      errors.push(`${where}.simulatedAnswer: kan ikke brukes med utfallet not_called.`);
+    }
+  } else if (!valid) {
+    errors.push(`${where}.stats: grunnlaget består ikke kontrollen (ukjent nøkkel, kode eller tall).`);
+  }
+  if (expect.outcome === "error" && evalCase.simulatedAnswer !== undefined) {
+    errors.push(`${where}.simulatedAnswer: kan ikke brukes med utfallet error.`);
+  }
+  if (expect.outcome === "ok" && expect.verdict === "fail" && evalCase.simulatedAnswer === undefined) {
     errors.push(`${where}.expect: verdict fail krever simulatedAnswer.`);
   }
   return errors;

@@ -16,6 +16,8 @@ export type GuardCase = {
   answer: AiGuardAnswerPart[];
   /** Vakten som skal slå til, eller `null` når svaret kan vises. */
   expected: AiGuardCode | null;
+  /** Navnene på de ansatte (bare `override_summary`, navnevakten). */
+  personNames?: string[];
 };
 
 const polish = (
@@ -44,6 +46,32 @@ const summary = (
   expected,
 });
 
+/** Grunnlaget til `override_summary` slik kjernen sender det: én linje per sperre, punkt og grunn. */
+const OVERRIDE_SENT = [
+  "Måned: oktober 2026",
+  "Rapporter publisert: 18",
+  "Rapporter publisert måneden før: 12",
+  "- Sperre: Hulltaking mangler svar eller grunn | Punkt: Hulltaking i våtrom | Grunn: Ikke tilgang eller nektet av eier | Rapporter: 7 | Andel: 39 % | Reklamasjon på samme punkt: 2 | Rapporter måneden før: 2 | Andel måneden før: 17 % | Endring i rapporter: opp 5 | Endring i andel: opp 22 prosentpoeng",
+  "- Sperre: TG3 uten kostnadsoverslag | Punkt: Membran | Grunn: Beskrevet et annet sted i rapporten | Rapporter: 3 | Andel: 17 % | Reklamasjon på samme punkt: 0 | Rapporter måneden før: 3 | Andel måneden før: 25 % | Endring i rapporter: uendret | Endring i andel: ned 8 prosentpoeng",
+];
+
+const override = (
+  name: string,
+  answer: string,
+  expected: AiGuardCode | null,
+  personNames: string[] = [],
+): GuardCase => ({
+  name,
+  feature: "override_summary",
+  sent: [{ label: null, texts: OVERRIDE_SENT }],
+  answer: [{ label: null, text: answer }],
+  expected,
+  personNames,
+});
+
+/** Oppdiktet navn på en ansatt. */
+const EMPLOYEE = "Mxqline Testesen";
+
 /** Tre funn som brukes i flere saker. Punktets navn står først, som kjernen sender det. */
 const THREE_FINDINGS = {
   F1: ["Membran", "Fuktmåling viste 15 vekt-% ved sluket", "Tettesjiktet har sprekker"],
@@ -52,6 +80,77 @@ const THREE_FINDINGS = {
 };
 
 export const GUARD_CASES: readonly GuardCase[] = [
+  // --- override_summary (ADR 0006 tillegg 24.11.2026) ----------------------------------------
+  override(
+    "OS-V1 svar med bare tall, etiketter og punktnavn fra grunnlaget slipper gjennom",
+    "I oktober 2026 ble 18 rapporter publisert. Hulltaking i våtrom ble krysset bort med «Ikke tilgang eller nektet av eier» i 7 rapporter, 39 % av rapportene som ble publisert, opp fra 2 måneden før. 2 av dem fikk reklamasjon på samme punkt.",
+    null,
+    [EMPLOYEE],
+  ),
+  override(
+    "OS-V2 TG fra etiketten til sperren er lov å gjenta",
+    "TG3 uten kostnadsoverslag ble krysset bort i 3 rapporter, som måneden før.",
+    null,
+  ),
+  override(
+    "OS-V3 TG som ikke står i grunnlaget stoppes",
+    "Hulltaking i våtrom ble krysset bort i 7 rapporter. Badene bør få TG2.",
+    "tg_guard",
+  ),
+  override(
+    "OS-V4 tilstandsgrad som ikke står i grunnlaget stoppes",
+    "Hulltaking ble krysset bort i 7 rapporter, uten at tilstandsgraden ble satt.",
+    "tg_guard",
+  ),
+  override(
+    "OS-V5 avrundet andel er et nytt tall og stoppes",
+    "Hulltaking i våtrom ble krysset bort i 7 rapporter, omtrent 40 % av rapportene.",
+    "number_guard",
+  ),
+  override(
+    "OS-V6 tall lagt sammen stoppes",
+    "Til sammen ble 10 sperrer krysset bort i oktober 2026.",
+    "number_guard",
+  ),
+  override(
+    "OS-V7 gjetteord stoppes",
+    "Hulltaking i våtrom ble krysset bort i 7 rapporter, sannsynligvis fordi eier nektet.",
+    "guess_guard",
+  ),
+  override(
+    "OS-V8 «ser ut til» stoppes",
+    "Det ser ut til at hulltaking i våtrom ble krysset bort oftere enn før.",
+    "guess_guard",
+  ),
+  override(
+    "OS-V9 hele navnet på en ansatt stoppes",
+    `${EMPLOYEE} krysset bort hulltaking i 7 rapporter.`,
+    "name_guard",
+    [EMPLOYEE],
+  ),
+  override(
+    "OS-V10 ett navneord stoppes, også med små bokstaver",
+    "De fleste av de 7 rapportene var skrevet av testesen.",
+    "name_guard",
+    [EMPLOYEE],
+  ),
+  override(
+    "OS-V11 et navneord som også står i grunnlaget (punktnavnet) er ikke et navn",
+    "Membran ble krysset bort i 3 rapporter.",
+    null,
+    ["Kari Membran"],
+  ),
+  override(
+    "OS-V12 en plassholder i svaret stoppes",
+    "Hulltaking i [navn] ble krysset bort i 7 rapporter.",
+    "placeholder_guard",
+  ),
+  override(
+    "OS-V13 TG-vakten kommer før tallvakten",
+    "Hulltaking ble krysset bort i 99 rapporter med TG2.",
+    "tg_guard",
+  ),
+
   // --- K1.2 TG-vakt, language_polish ---------------------------------------------------------
   polish(
     "K1.2 TG som sto i inndata og står uendret, slipper gjennom",

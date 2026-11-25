@@ -67,12 +67,19 @@ export type AiErrorCode = (typeof AI_ERROR_CODES)[number];
  *   som ikke ble sendt.
  * - `number_guard`: svaret hadde tall som ikke ble sendt.
  * - `placeholder_guard`: plassholderne fra vasken kunne ikke byttes entydig tilbake.
+ * - `guess_guard`: svaret la til et gjetteord (`override_summary`, ADR 0006 tillegg 24.11.2026).
+ * - `name_guard`: svaret hadde navnet på en ansatt i organisasjonen (`override_summary`).
+ *
+ * For `override_summary` kjøres vaktene i rekkefølgen `tg_guard`, `number_guard`, `guess_guard`,
+ * `name_guard`, `placeholder_guard`.
  */
 export const AI_GUARD_CODES = [
   "tg_guard",
   "coverage_guard",
   "number_guard",
   "placeholder_guard",
+  "guess_guard",
+  "name_guard",
 ] as const;
 export type AiGuardCode = (typeof AI_GUARD_CODES)[number];
 

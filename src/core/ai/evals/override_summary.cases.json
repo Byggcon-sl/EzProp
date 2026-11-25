@@ -1,0 +1,1387 @@
+{
+  "feature": "override_summary",
+  "status": "utkast, ikke godkjent av fagrådet",
+  "note": "Bare oppdiktede tall, etiketter og punktnavn. Eksemplene er aldri kopi av ekte overstyringer, reklamasjoner eller ai_usage_log. Navnene og markørene (Mxq-…) er oppdiktet og skal aldri nå leverandøren. Serveren regner alle tall og prosenter; KI skriver bare 2–5 korte setninger og kan bare bruke tallene som står.",
+  "cases": [
+    {
+      "id": "os-001",
+      "description": "Én grunn dominerer: antall og andel står som i grunnlaget.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "7 rapporter",
+          "39 %",
+          "Ikke tilgang eller nektet av eier"
+        ]
+      }
+    },
+    {
+      "id": "os-002",
+      "description": "Under fem rapporter: bare antall, ingen prosent.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 4,
+        "previousMonth": {
+          "reportCount": 3
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 2,
+            "sharePercent": null,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": null,
+            "deltaCount": 1,
+            "deltaPoints": null
+          }
+        ]
+      },
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "2 rapporter"
+        ],
+        "mustNotContain": [
+          "%"
+        ]
+      }
+    },
+    {
+      "id": "os-003",
+      "description": "Null rapporter i måneden: grunnlaget avvises, KI kalles ikke.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 0,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": []
+      },
+      "mustPass": true,
+      "expect": {
+        "outcome": "not_called"
+      }
+    },
+    {
+      "id": "os-004",
+      "description": "Rapporter, men ingen sperrer krysset bort.",
+      "stats": {
+        "month": "2026-09",
+        "reportCount": 10,
+        "previousMonth": {
+          "reportCount": 8
+        },
+        "rows": []
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "Ingen sperrer"
+        ]
+      }
+    },
+    {
+      "id": "os-005",
+      "description": "Mange koder: seks linjer, svaret bruker bare tall fra grunnlaget.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 30,
+        "previousMonth": {
+          "reportCount": 25
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 9,
+            "sharePercent": 30,
+            "claimCount": 0,
+            "previousCount": 4,
+            "previousSharePercent": 16,
+            "deltaCount": 5,
+            "deltaPoints": 14
+          },
+          {
+            "checkCode": "mandatory_without_tg",
+            "checkLabel": "Pliktig punkt uten vurdering",
+            "checkpointKey": "wet_room.ventilation",
+            "checkpointName": "Ventilasjon i våtrom",
+            "reasonCode": "not_applicable_to_room",
+            "reasonLabel": "Gjelder ikke dette rommet",
+            "count": 6,
+            "sharePercent": 20,
+            "claimCount": 0,
+            "previousCount": 6,
+            "previousSharePercent": 24,
+            "deltaCount": 0,
+            "deltaPoints": -4
+          },
+          {
+            "checkCode": "tg3_missing_cost",
+            "checkLabel": "TG3 uten kostnadsoverslag",
+            "checkpointKey": "wet_room.membrane",
+            "checkpointName": "Membran",
+            "reasonCode": "described_elsewhere",
+            "reasonLabel": "Beskrevet et annet sted i rapporten",
+            "count": 4,
+            "sharePercent": 13,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": 4,
+            "deltaCount": 3,
+            "deltaPoints": 9
+          },
+          {
+            "checkCode": "bra_missing",
+            "checkLabel": "Bruksareal mangler",
+            "checkpointKey": null,
+            "checkpointName": null,
+            "reasonCode": "other",
+            "reasonLabel": "Annet",
+            "count": 3,
+            "sharePercent": 10,
+            "claimCount": 0,
+            "previousCount": 0,
+            "previousSharePercent": 0,
+            "deltaCount": 3,
+            "deltaPoints": 10
+          },
+          {
+            "checkCode": "electrical_missing",
+            "checkLabel": "Elektrisk anlegg ikke vurdert",
+            "checkpointKey": null,
+            "checkpointName": null,
+            "reasonCode": "described_elsewhere",
+            "reasonLabel": "Beskrevet et annet sted i rapporten",
+            "count": 2,
+            "sharePercent": 7,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 8,
+            "deltaCount": 0,
+            "deltaPoints": -1
+          },
+          {
+            "checkCode": "inspection_date_missing",
+            "checkLabel": "Befaringsdato mangler",
+            "checkpointKey": null,
+            "checkpointName": null,
+            "reasonCode": "other",
+            "reasonLabel": "Annet",
+            "count": 1,
+            "sharePercent": 3,
+            "claimCount": 0,
+            "previousCount": 3,
+            "previousSharePercent": 12,
+            "deltaCount": -2,
+            "deltaPoints": -9
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "9 rapporter",
+          "30 %"
+        ]
+      }
+    },
+    {
+      "id": "os-006",
+      "description": "Mange røde: reklamasjon på samme punkt nevnes med tallet fra grunnlaget.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 20,
+        "previousMonth": {
+          "reportCount": 15
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 4,
+            "sharePercent": 20,
+            "claimCount": 3,
+            "previousCount": 3,
+            "previousSharePercent": 20,
+            "deltaCount": 1,
+            "deltaPoints": 0
+          }
+        ]
+      },
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "3 av dem",
+          "reklamasjon på samme punkt"
+        ]
+      }
+    },
+    {
+      "id": "os-007",
+      "description": "Nøytrale tall: samme antall som måneden før.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 10,
+        "previousMonth": {
+          "reportCount": 10
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "not_applicable_to_room",
+            "reasonLabel": "Gjelder ikke dette rommet",
+            "count": 3,
+            "sharePercent": 30,
+            "claimCount": 0,
+            "previousCount": 3,
+            "previousSharePercent": 30,
+            "deltaCount": 0,
+            "deltaPoints": 0
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "som måneden før"
+        ]
+      }
+    },
+    {
+      "id": "os-008",
+      "description": "Økning fra måneden før.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "opp fra 2"
+        ]
+      }
+    },
+    {
+      "id": "os-009",
+      "description": "Nedgang fra måneden før.",
+      "stats": {
+        "month": "2026-11",
+        "reportCount": 15,
+        "previousMonth": {
+          "reportCount": 16
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 2,
+            "sharePercent": 13,
+            "claimCount": 0,
+            "previousCount": 6,
+            "previousSharePercent": 38,
+            "deltaCount": -4,
+            "deltaPoints": -25
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "ned fra 6"
+        ]
+      }
+    },
+    {
+      "id": "os-010",
+      "description": "Ny kode som ikke fantes måneden før.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 12,
+        "previousMonth": {
+          "reportCount": 9
+        },
+        "rows": [
+          {
+            "checkCode": "tg3_missing_cost",
+            "checkLabel": "TG3 uten kostnadsoverslag",
+            "checkpointKey": "wet_room.membrane",
+            "checkpointName": "Membran",
+            "reasonCode": "described_elsewhere",
+            "reasonLabel": "Beskrevet et annet sted i rapporten",
+            "count": 2,
+            "sharePercent": 17,
+            "claimCount": 0,
+            "previousCount": 0,
+            "previousSharePercent": 0,
+            "deltaCount": 2,
+            "deltaPoints": 17
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "fantes ikke måneden før"
+        ]
+      }
+    },
+    {
+      "id": "os-011",
+      "description": "Tallet må stå uendret: avrundet andel (40 % for 39 %) stoppes.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "simulatedAnswer": "Hulltaking i våtrom ble krysset bort i 7 rapporter, omtrent 40 % av rapportene som ble publisert.",
+      "mustPass": true,
+      "expect": {
+        "outcome": "stopped",
+        "guard": "number_guard"
+      }
+    },
+    {
+      "id": "os-012",
+      "description": "KI legger sammen tall som ikke står i grunnlaget: stoppes.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 20,
+        "previousMonth": {
+          "reportCount": 15
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 4,
+            "sharePercent": 20,
+            "claimCount": 0,
+            "previousCount": 3,
+            "previousSharePercent": 20,
+            "deltaCount": 1,
+            "deltaPoints": 0
+          },
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "other",
+            "reasonLabel": "Annet",
+            "count": 5,
+            "sharePercent": 25,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": 7,
+            "deltaCount": 4,
+            "deltaPoints": 18
+          }
+        ]
+      },
+      "simulatedAnswer": "Hulltaking i våtrom ble krysset bort i til sammen 9 rapporter.",
+      "mustPass": true,
+      "expect": {
+        "outcome": "stopped",
+        "guard": "number_guard"
+      }
+    },
+    {
+      "id": "os-013",
+      "description": "Gjetteord i svaret stoppes.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "simulatedAnswer": "Hulltaking i våtrom ble krysset bort i 7 rapporter, trolig fordi eier nektet.",
+      "mustPass": true,
+      "expect": {
+        "outcome": "stopped",
+        "guard": "guess_guard"
+      }
+    },
+    {
+      "id": "os-014",
+      "description": "Annet gjetteord i svaret stoppes.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "simulatedAnswer": "I oktober 2026 ble 18 rapporter publisert. Det ser ut til at hulltaking ble krysset bort i 7 av dem.",
+      "mustPass": false,
+      "expect": {
+        "outcome": "stopped",
+        "guard": "guess_guard"
+      }
+    },
+    {
+      "id": "os-015",
+      "description": "Ingen TG: en TG som ikke står i grunnlaget stoppes.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "simulatedAnswer": "Hulltaking i våtrom ble krysset bort i 7 rapporter. Disse badene bør få TG2.",
+      "mustPass": true,
+      "expect": {
+        "outcome": "stopped",
+        "guard": "tg_guard"
+      }
+    },
+    {
+      "id": "os-016",
+      "description": "TG i etiketten til sperren er lov å gjenta.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 12,
+        "previousMonth": {
+          "reportCount": 10
+        },
+        "rows": [
+          {
+            "checkCode": "tg3_missing_cost",
+            "checkLabel": "TG3 uten kostnadsoverslag",
+            "checkpointKey": "wet_room.membrane",
+            "checkpointName": "Membran",
+            "reasonCode": "described_elsewhere",
+            "reasonLabel": "Beskrevet et annet sted i rapporten",
+            "count": 3,
+            "sharePercent": 25,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": 10,
+            "deltaCount": 2,
+            "deltaPoints": 15
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "TG3 uten kostnadsoverslag"
+        ]
+      }
+    },
+    {
+      "id": "os-017",
+      "description": "Ingen navn: navnet på en ansatt i svaret stoppes.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "personNames": [
+        "Mxqline Testesen"
+      ],
+      "simulatedAnswer": "Mxqline Testesen krysset bort hulltaking i 7 rapporter.",
+      "mustPass": true,
+      "expect": {
+        "outcome": "stopped",
+        "guard": "name_guard"
+      }
+    },
+    {
+      "id": "os-018",
+      "description": "Ingen navn: etternavnet alene stoppes også.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "personNames": [
+        "Mxqline Testesen"
+      ],
+      "simulatedAnswer": "Hulltaking i våtrom ble krysset bort i 7 rapporter, de fleste av Testesen.",
+      "mustPass": false,
+      "expect": {
+        "outcome": "stopped",
+        "guard": "name_guard"
+      }
+    },
+    {
+      "id": "os-019",
+      "description": "Falsk leverandør legger til et tall: stoppes av tallvakten.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "[fake: legg til tall]",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "mustPass": true,
+      "expect": {
+        "outcome": "stopped",
+        "guard": "number_guard"
+      }
+    },
+    {
+      "id": "os-020",
+      "description": "Falsk leverandør legger til TG: stoppes av TG-vakten.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "[fake: legg til TG]",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "mustPass": true,
+      "expect": {
+        "outcome": "stopped",
+        "guard": "tg_guard"
+      }
+    },
+    {
+      "id": "os-021",
+      "description": "Falsk leverandør svarer med feil.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "[fake: feil]",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "error"
+      }
+    },
+    {
+      "id": "os-022",
+      "description": "Fritekst lekker ikke: begrunnelsen for «Annet» i grunnlaget avvises før KI.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "other",
+            "reasonLabel": "Annet",
+            "count": 2,
+            "sharePercent": 11,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": 8,
+            "deltaCount": 1,
+            "deltaPoints": 3,
+            "overrideReason": "Mxq-grunn-ÆØ"
+          }
+        ]
+      },
+      "mustPass": true,
+      "expect": {
+        "outcome": "not_called"
+      }
+    },
+    {
+      "id": "os-023",
+      "description": "Fritekst lekker ikke: reklamasjonsteksten i grunnlaget avvises før KI.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "other",
+            "reasonLabel": "Annet",
+            "count": 2,
+            "sharePercent": 11,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": 8,
+            "deltaCount": 1,
+            "deltaPoints": 3,
+            "claimDescription": "Mxq-krav-ÆØ"
+          }
+        ]
+      },
+      "mustPass": true,
+      "expect": {
+        "outcome": "not_called"
+      }
+    },
+    {
+      "id": "os-024",
+      "description": "Ingen navn eller id: navn og oppdrags-id i grunnlaget avvises før KI.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "other",
+            "reasonLabel": "Annet",
+            "count": 2,
+            "sharePercent": 11,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": 8,
+            "deltaCount": 1,
+            "deltaPoints": 3,
+            "employeeName": "Mxqline Testesen",
+            "assignmentId": "Mxq-oppdrag-1"
+          }
+        ]
+      },
+      "mustPass": true,
+      "expect": {
+        "outcome": "not_called"
+      }
+    },
+    {
+      "id": "os-025",
+      "description": "En kode utenfor nøkkelformatet kan ikke bære tekst: avvises før KI.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "Hull i våtrom, Mxq-del-ÆØ",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "other",
+            "reasonLabel": "Annet",
+            "count": 2,
+            "sharePercent": 11,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": 8,
+            "deltaCount": 1,
+            "deltaPoints": 3
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "not_called"
+      }
+    },
+    {
+      "id": "os-026",
+      "description": "Desimaltall avvises: alle tall er heltall.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "other",
+            "reasonLabel": "Annet",
+            "count": 2.5,
+            "sharePercent": 11,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": 8,
+            "deltaCount": 1,
+            "deltaPoints": 3
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "not_called"
+      }
+    },
+    {
+      "id": "os-027",
+      "description": "Andel med under fem rapporter avvises: bare antall (A570).",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 4,
+        "previousMonth": {
+          "reportCount": 3
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "other",
+            "reasonLabel": "Annet",
+            "count": 2,
+            "sharePercent": 50,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": null,
+            "deltaCount": 1,
+            "deltaPoints": null
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "not_called"
+      }
+    },
+    {
+      "id": "os-028",
+      "description": "Navn i punktnavnet vaskes bort; gjentar svaret plassholderen, stoppes det.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Bad hos Mxqline Testesen",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "personNames": [
+        "Mxqline Testesen"
+      ],
+      "mustPass": false,
+      "expect": {
+        "outcome": "stopped",
+        "guard": "placeholder_guard"
+      }
+    },
+    {
+      "id": "os-029",
+      "description": "Telefonnummer i punktnavnet vaskes bort; gjentar svaret plassholderen, stoppes det.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Bad ring 12345678",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "stopped",
+        "guard": "placeholder_guard"
+      }
+    },
+    {
+      "id": "os-030",
+      "description": "Sperre for hele rapporten (uten kontrollpunkt).",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 14,
+        "previousMonth": {
+          "reportCount": 11
+        },
+        "rows": [
+          {
+            "checkCode": "bra_missing",
+            "checkLabel": "Bruksareal mangler",
+            "checkpointKey": null,
+            "checkpointName": null,
+            "reasonCode": "other",
+            "reasonLabel": "Annet",
+            "count": 3,
+            "sharePercent": 21,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": 9,
+            "deltaCount": 2,
+            "deltaPoints": 12
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "Hele rapporten"
+        ]
+      }
+    },
+    {
+      "id": "os-031",
+      "description": "Andel skrevet som andel av bad fanges av vurderingen.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 0,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "simulatedAnswer": "Hulltaking i våtrom ble krysset bort i 39 % av badene, 7 rapporter i oktober 2026.",
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "verdict": "fail"
+      }
+    },
+    {
+      "id": "os-032",
+      "description": "Prosent i en måned med under fem rapporter fanges av vurderingen.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 4,
+        "previousMonth": {
+          "reportCount": 3
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 2,
+            "sharePercent": null,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": null,
+            "deltaCount": 1,
+            "deltaPoints": null
+          }
+        ]
+      },
+      "simulatedAnswer": "Hulltaking i våtrom ble krysset bort i 2 av 4 rapporter, altså 4 % av rapportene.",
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "verdict": "fail"
+      }
+    },
+    {
+      "id": "os-033",
+      "description": "Måned over årsskiftet: januar sammenlignes med desember.",
+      "stats": {
+        "month": "2026-01",
+        "reportCount": 8,
+        "previousMonth": {
+          "reportCount": 11
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 3,
+            "sharePercent": 38,
+            "claimCount": 0,
+            "previousCount": 5,
+            "previousSharePercent": 45,
+            "deltaCount": -2,
+            "deltaPoints": -7
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "januar 2026",
+          "ned fra 5"
+        ]
+      }
+    },
+    {
+      "id": "os-034",
+      "description": "Linjer kuttet av kalleren: antallet står i grunnlaget og gir ingen feil.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 25,
+        "previousMonth": {
+          "reportCount": 20
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 6,
+            "sharePercent": 24,
+            "claimCount": 0,
+            "previousCount": 4,
+            "previousSharePercent": 20,
+            "deltaCount": 2,
+            "deltaPoints": 4
+          }
+        ]
+      },
+      "statsCut": 3,
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "6 rapporter"
+        ]
+      }
+    },
+    {
+      "id": "os-035",
+      "description": "Et godt svar med bare tall fra grunnlaget slipper gjennom.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 7,
+            "sharePercent": 39,
+            "claimCount": 1,
+            "previousCount": 2,
+            "previousSharePercent": 17,
+            "deltaCount": 5,
+            "deltaPoints": 22
+          }
+        ]
+      },
+      "simulatedAnswer": "I oktober 2026 ble 18 rapporter publisert. Hulltaking i våtrom ble krysset bort med «Ikke tilgang eller nektet av eier» i 7 rapporter, 39 % av rapportene som ble publisert, opp fra 2 måneden før. 1 av dem fikk reklamasjon på samme punkt.",
+      "mustPass": true,
+      "expect": {
+        "outcome": "ok",
+        "verdict": "pass",
+        "mustContain": [
+          "39 %"
+        ]
+      }
+    },
+    {
+      "id": "os-036",
+      "description": "Endringen stemmer ikke med antallene: avvises før KI.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "other",
+            "reasonLabel": "Annet",
+            "count": 2,
+            "sharePercent": 11,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": 8,
+            "deltaCount": 4,
+            "deltaPoints": 3
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "not_called"
+      }
+    },
+    {
+      "id": "os-037",
+      "description": "Samme kombinasjon to ganger: avvises før KI.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 18,
+        "previousMonth": {
+          "reportCount": 12
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "other",
+            "reasonLabel": "Annet",
+            "count": 2,
+            "sharePercent": 11,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": 8,
+            "deltaCount": 1,
+            "deltaPoints": 3
+          },
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "other",
+            "reasonLabel": "Annet",
+            "count": 2,
+            "sharePercent": 11,
+            "claimCount": 0,
+            "previousCount": 1,
+            "previousSharePercent": 8,
+            "deltaCount": 1,
+            "deltaPoints": 3
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "not_called"
+      }
+    },
+    {
+      "id": "os-038",
+      "description": "Én rapport: entall.",
+      "stats": {
+        "month": "2026-10",
+        "reportCount": 6,
+        "previousMonth": {
+          "reportCount": 5
+        },
+        "rows": [
+          {
+            "checkCode": "wet_or_below_ground_missing_hole",
+            "checkLabel": "Hulltaking mangler svar eller grunn",
+            "checkpointKey": "wet_room.hole_moisture",
+            "checkpointName": "Hulltaking i våtrom",
+            "reasonCode": "no_access_or_refused",
+            "reasonLabel": "Ikke tilgang eller nektet av eier",
+            "count": 1,
+            "sharePercent": 17,
+            "claimCount": 0,
+            "previousCount": 0,
+            "previousSharePercent": 0,
+            "deltaCount": 1,
+            "deltaPoints": 17
+          }
+        ]
+      },
+      "mustPass": false,
+      "expect": {
+        "outcome": "ok",
+        "mustContain": [
+          "1 rapport"
+        ]
+      }
+    }
+  ]
+}

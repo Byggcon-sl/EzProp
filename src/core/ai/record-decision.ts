@@ -35,7 +35,9 @@ import {
  * 1. Før noe leses: uten rettigheten til minst én KI-funksjon gir `AccessDeniedError`, også for
  *    ugyldig og ukjent id.
  * 2. Etter lesing: manglende rettighet for akkurat funksjonen på raden gir samme nøytrale avslag
- *    som «finnes ikke», så svaret ikke røper hva raden gjelder.
+ *    som «finnes ikke», så svaret ikke røper hva raden gjelder. Rettigheten er
+ *    `decisionPermission` når funksjonen har den (`override_summary`: `claims.manage`), ellers
+ *    `permission`.
  * Ved avslag endres verken raden eller `audit_log`. Admin har alle rettigheter.
  *
  * Rangerte kandidater (`phrase_suggest`, A432): på en rad med `candidate_refs` krever `accepted`
@@ -118,7 +120,10 @@ export const recordDecisionIn: RecordDecisionIn = async (
 
   const definition = getFeatureDefinition(found.feature);
   if (!definition) throw new AiRequestRejectedError();
-  if (!grantHasPermission(grant, definition.permission)) throw new AiRequestRejectedError();
+  // Beslutningen kan kreve en strengere rettighet enn forslaget (`override_summary`:
+  // `claims.manage`, ADR 0006 tillegg 24.11.2026). Mangler den, samme avslag som ukjent id.
+  const decisionPermission = definition.decisionPermission ?? definition.permission;
+  if (!grantHasPermission(grant, decisionPermission)) throw new AiRequestRejectedError();
 
   // Samme lås som nytt forslag på samme mål, så angre og nytt forslag ikke krysser hverandre
   await lockTarget(tx, grant.organizationId, found.feature, found.targetRef);

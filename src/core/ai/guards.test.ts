@@ -48,7 +48,16 @@ describe("K1.2–K1.6b og K2.1 vaktene som data", () => {
       expect(expected.has(code as never), String(code)).toBe(true);
     }
     const features = new Set(GUARD_CASES.map((guardCase) => guardCase.feature));
-    expect([...features].sort()).toEqual(["language_polish", "phrase_suggest", "summary_draft"]);
+    expect([...features].sort()).toEqual([
+      "language_polish",
+      "override_summary",
+      "phrase_suggest",
+      "summary_draft",
+    ]);
+    // `override_summary` har egne vakter for gjetteord og navn (ADR 0006 tillegg 24.11.2026)
+    for (const code of ["guess_guard", "name_guard"]) {
+      expect(expected.has(code as never), code).toBe(true);
+    }
   });
 
   it.each(GUARD_CASES.map((guardCase) => [guardCase.name, guardCase] as const))(
@@ -59,6 +68,7 @@ describe("K1.2–K1.6b og K2.1 vaktene som data", () => {
           feature: guardCase.feature,
           sent: guardCase.sent,
           answer: guardCase.answer,
+          personNames: guardCase.personNames,
         }),
       ).toBe(guardCase.expected);
     },

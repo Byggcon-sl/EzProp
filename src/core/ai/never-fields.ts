@@ -82,5 +82,23 @@ export const NEVER_FIELDS: readonly string[] = [
   "deviations.cost_amount",
   "deviations.cost_text",
   "deviations.cost_band_key",
+  // Utvidet i 2a-2 «Overstyringer for leder» (ADR 0006 tillegg 24.11.2026, A573): til
+  // `override_summary` går bare faste koder, etiketter, punktnavn og tall. Begrunnelsen for en
+  // overstyring, hvem som krysset bort, hvem som registrerte reklamasjonen, hvem som avgjorde
+  // oppsummeringen, og id-ene som peker på oppdrag, rapport, utgivelse og ansatt sendes aldri.
+  // Navn, oppdragsnummer, adresse og matrikkel står over. Reklamasjonstekstene står under
+  // «claims» over.
+  "publish_check_results.override_reason",
+  "publish_check_results.overridden_by",
+  "publish_check_results.report_id",
+  "publish_check_results.release_id",
+  "claims.created_by",
+  "claims.assignment_id",
+  "claims.claimant_party_id",
+  "override_summaries.text",
+  "override_summaries.decided_by",
+  "report_releases.released_by",
+  "assignments.id",
+  "employees.id",
   // Bildetekster har ingen kolonne ennå (`files` har ingen tekst). Kommer de, føres de her.
 ];

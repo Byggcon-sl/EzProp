@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { AccessDeniedError, grantHasPermission, type EmployeeGrant } from "@/core/access";
 import { db } from "@/db/client";
@@ -17,40 +17,48 @@ import { logger } from "@/shared/lib/logger";
 import { PII_PLACEHOLDERS } from "@/shared/lib/pii-patterns";
 import { isUuid } from "@/shared/lib/uuid";
 import { parseCandidateAnswer } from "./candidates";
-import { AiInputTooLargeError, AiRequestRejectedError } from "./errors";
+import { AiInputTooLargeError, AiRateLimitError, AiRequestRejectedError } from "./errors";
 import { getFeatureDefinition, type AiFeatureDefinition } from "./features";
 import { checkAnswerGuards, isBlankText } from "./guards";
 import {
   AI_BATCH_MAX_REQUESTS,
   AI_CANDIDATES_MAX,
   AI_CANDIDATE_TEXT_MAX_LENGTH,
+  AI_OVERRIDE_SUMMARY_MAX_PER_EMPLOYEE_PER_HOUR,
+  AI_OVERRIDE_SUMMARY_MAX_PER_ORGANIZATION_PER_DAY,
   AI_SUMMARY_FINDINGS_MAX,
   AI_SUMMARY_INPUT_MAX_LENGTH,
 } from "./limits";
+import { overrideStatsCutSchema, parseOverrideStats } from "./override-stats";
 import { PlaceholderRestoreError, restorePlaceholders } from "./placeholders";
 import {
   assembleSummary,
   parseSummaryAnswer,
   prepareCandidatePrompt,
+  prepareOverridePrompt,
   preparePrompt,
   prepareSummaryPrompt,
   type PreparedCandidatePrompt,
+  type PreparedOverridePrompt,
   type PreparedPrompt,
   type PreparedSummaryPrompt,
 } from "./prompt";
 import { findPromptLeaks } from "./prompt-leaks";
 import { resolveAiProvider } from "./provider-resolution";
 import type { AiProvider, AiProviderResult } from "./providers/types";
-import { loadKnownValues } from "./redaction";
+import { loadKnownValues, loadOrganizationKnownValues, type KnownValues } from "./redaction";
 import {
   aiSuggestionRequestShapeSchema,
   hasOnlyAllowedFields,
+  isOrganizationTargetType,
   isResolvedTargetType,
 } from "./request";
 import { resolveAiTarget } from "./resolve-target";
 import { loadRejectedRetentionYears, retainUntilFor } from "./retention";
 import type {
   AiCandidate,
+  AiFeatureCode,
+  AiOverrideStats,
   AiServerInput,
   AiSuggestionRequest,
   AiSuggestionResult,
@@ -123,13 +131,97 @@ function isRealProvider(provider: AiProvider): boolean {
 }
 
 /**
- * Om forespørselen sperres (ad-1): bare den falske leverandøren får mål som ikke kontrolleres, og
- * ingen tekst går til en ekte leverandør uten oppdrag (spørsmål 58).
+ * Kildene i `serverSources` som bare har faste koder, faste etiketter, punktnavn fra malversjonen
+ * og tall, bygget av serveren (ADR 0006, tillegg 24.11.2026, A568). Bare disse kan gå til en ekte
+ * leverandør uten oppdrag. Ny nøkkel her krever gjennomgang av sikkerhet-personvern (A175).
  */
-function isBlocked(provider: AiProvider, targetType: string, assignmentId: string | null): boolean {
+const ORGANIZATION_SERVER_SOURCE_KEYS: ReadonlySet<string> = new Set(["override_stats"]);
+
+/**
+ * Om et mål uten oppdrag kan gå til en ekte leverandør (ADR 0006, tillegg 24.11.2026, A568).
+ * Alle vilkårene må holde: målet hører til organisasjonen (slått opp av kjernen), nettleseren kan
+ * ikke sende én eneste verdi (tom `allowedFields` og `fieldSources`), og alt funksjonen sender,
+ * kommer fra serveren gjennom kilder med bare faste koder, etiketter og tall.
+ */
+export function isOrganizationTargetAllowed(
+  definition: Pick<AiFeatureDefinition, "allowedFields" | "fieldSources" | "serverSources">,
+  targetType: string,
+): boolean {
+  if (!isOrganizationTargetType(targetType)) return false;
+  if (definition.allowedFields.length > 0) return false;
+  if (Object.keys(definition.fieldSources).length > 0) return false;
+  const serverKeys = Object.keys(definition.serverSources);
+  return (
+    serverKeys.length > 0 && serverKeys.every((key) => ORGANIZATION_SERVER_SOURCE_KEYS.has(key))
+  );
+}
+
+/**
+ * Om forespørselen sperres (ad-1): bare den falske leverandøren får mål som ikke kontrolleres, og
+ * ingen tekst går til en ekte leverandør uten oppdrag (spørsmål 58). Eneste unntak er et
+ * organisasjonsmål for en funksjon som bare sender faste koder, etiketter og tall
+ * (`isOrganizationTargetAllowed`).
+ */
+function isBlocked(
+  provider: AiProvider,
+  definition: AiFeatureDefinition,
+  targetType: string,
+  assignmentId: string | null,
+): boolean {
   if (!isRealProvider(provider)) return false;
   if (FAKE_ONLY_TARGET_TYPES.has(targetType)) return true;
-  return assignmentId === null;
+  if (assignmentId !== null) return false;
+  return !isOrganizationTargetAllowed(definition, targetType);
+}
+
+/**
+ * Grensene per funksjon (A575). Bare funksjoner som står her, telles. Talt i `ai_usage_log` på
+ * organisasjon, funksjon og tid; sperrede rader (`blocked`) telles ikke, de har ikke kalt noen.
+ * To samtidige kall kan i verste fall slippe én over grensen; grensen er et vern mot kostnad, ikke
+ * en lås.
+ */
+const RATE_LIMITS: Partial<
+  Record<AiFeatureCode, { perEmployeePerHour: number; perOrganizationPerDay: number }>
+> = {
+  override_summary: {
+    perEmployeePerHour: AI_OVERRIDE_SUMMARY_MAX_PER_EMPLOYEE_PER_HOUR,
+    perOrganizationPerDay: AI_OVERRIDE_SUMMARY_MAX_PER_ORGANIZATION_PER_DAY,
+  },
+};
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+async function countCalls(
+  grant: EmployeeGrant,
+  feature: AiFeatureCode,
+  since: Date,
+  employeeOnly: boolean,
+): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(aiUsageLog)
+    .where(
+      and(
+        eq(aiUsageLog.organizationId, grant.organizationId),
+        eq(aiUsageLog.feature, feature),
+        gte(aiUsageLog.createdAt, since),
+        ne(aiUsageLog.outcome, "blocked"),
+        employeeOnly ? eq(aiUsageLog.employeeId, grant.employeeId) : undefined,
+      ),
+    );
+  return row?.count ?? 0;
+}
+
+/** Kaster `AiRateLimitError` når en grense er nådd. Ingen rad, intet kall. */
+async function checkRateLimits(grant: EmployeeGrant, feature: AiFeatureCode): Promise<void> {
+  const limits = RATE_LIMITS[feature];
+  if (!limits) return;
+  const now = Date.now();
+  const lastHour = await countCalls(grant, feature, new Date(now - HOUR_MS), true);
+  if (lastHour >= limits.perEmployeePerHour) throw new AiRateLimitError("employee_hour");
+  const lastDay = await countCalls(grant, feature, new Date(now - DAY_MS), false);
+  if (lastDay >= limits.perOrganizationPerDay) throw new AiRateLimitError("organization_day");
 }
 
 const resultColumns = {
@@ -240,11 +332,15 @@ const serverInputSchema = z
     candidates: z.array(candidateSchema).optional(),
     candidatesCut: z.number().int().min(0).optional(),
     summaryGroups: z.array(summaryGroupSchema).optional(),
+    // Kontrolleres strengt for seg (`parseOverrideStats`) rett før ledeteksten bygges
+    overrideStats: z.unknown().optional(),
+    overrideStatsCut: overrideStatsCutSchema.optional(),
   })
   .strict();
 
 type CheckedServerInput =
   | { kind: "none" }
+  | { kind: "override"; stats: AiOverrideStats; cut: number }
   | { kind: "candidates"; candidates: AiCandidate[]; cut: number }
   | { kind: "summary"; groups: AiSummaryGroup[]; findingCount: number; fixedLineCount: number };
 
@@ -255,7 +351,22 @@ function checkServerInput(
 ): CheckedServerInput {
   const parsed = serverInputSchema.safeParse(serverInput ?? {});
   if (!parsed.success) throw new AiRequestRejectedError();
-  const { candidates, candidatesCut, summaryGroups } = parsed.data;
+  const { candidates, candidatesCut, summaryGroups, overrideStats, overrideStatsCut } =
+    parsed.data;
+
+  if (definition.code === "override_summary") {
+    if (candidates !== undefined || candidatesCut !== undefined || summaryGroups !== undefined) {
+      throw new AiRequestRejectedError();
+    }
+    // Ukjente nøkler, koder utenfor nøkkelformatet, tall som ikke er heltall, og null rapporter
+    // (da skal KI ikke kalles) gir samme avslag
+    const stats = parseOverrideStats(overrideStats);
+    if (stats === null) throw new AiRequestRejectedError();
+    return { kind: "override", stats, cut: overrideStatsCut ?? 0 };
+  }
+  if (overrideStats !== undefined || overrideStatsCut !== undefined) {
+    throw new AiRequestRejectedError();
+  }
 
   if (definition.code === "phrase_suggest") {
     if (summaryGroups !== undefined || candidates === undefined) throw new AiRequestRejectedError();
@@ -417,7 +528,8 @@ type Interpreted = {
 type Prepared =
   | { kind: "fields"; prepared: PreparedPrompt }
   | { kind: "candidates"; prepared: PreparedCandidatePrompt; cut: number }
-  | { kind: "summary"; prepared: PreparedSummaryPrompt };
+  | { kind: "summary"; prepared: PreparedSummaryPrompt }
+  | { kind: "override"; prepared: PreparedOverridePrompt };
 
 function stopped(guard: AiGuardCode, answer: string): Interpreted {
   return {
@@ -441,8 +553,35 @@ function noMatch(extra: Record<string, number> = {}): Interpreted {
   };
 }
 
-/** Tolker et svar med utfallet `ok` for funksjonen. Vaktene kjøres her. */
-function interpretAnswer(prepared: Prepared, answer: string): Interpreted {
+/**
+ * Tolker et svar med utfallet `ok` for funksjonen. Vaktene kjøres her. `known` er de kjente
+ * verdiene fra oppslaget; navnevakten for `override_summary` bruker navnene derfra.
+ */
+function interpretAnswer(
+  prepared: Prepared,
+  answer: string,
+  known: KnownValues | null,
+): Interpreted {
+  if (prepared.kind === "override") {
+    if (isBlankText(answer)) return noMatch();
+    const guard = checkAnswerGuards({
+      feature: "override_summary",
+      sent: [{ label: null, texts: prepared.prepared.texts }],
+      answer: [{ label: null, text: answer }],
+      personNames: known?.personNames ?? [],
+    });
+    if (guard !== null) return stopped(guard, answer);
+    // Ingen plassholdere i svaret (vakten over), så teksten til klienten er den samme
+    return {
+      outcome: "ok",
+      errorCode: null,
+      outputText: answer,
+      clientText: answer,
+      candidateRefs: null,
+      summaryExtra: {},
+    };
+  }
+
   if (prepared.kind === "candidates") {
     const parsed = parseCandidateAnswer(answer, prepared.prepared.labeled);
     const extra = {
@@ -529,6 +668,10 @@ function inputSummaryFor(
   fieldKeys: readonly string[],
   extra: Record<string, number>,
 ): Record<string, number> {
+  if (prepared.kind === "override") {
+    // Bare antall linjer og hvor mange kalleren kuttet (ADR 0006 tillegg 24.11.2026, del 5)
+    return { rows: prepared.prepared.rows, rows_cut: prepared.prepared.cut, ...extra };
+  }
   if (prepared.kind === "summary") {
     const summary = prepared.prepared;
     return {
@@ -589,6 +732,27 @@ export const requestSuggestion: RequestSuggestion = async (grant, request, serve
   const { provider, model } = resolved;
   const fieldKeys = Object.keys(fields).sort();
 
+  // Organisasjonsmål: et åpent forslag på målet gjenbrukes for hele organisasjonen, uansett hvem
+  // som ba om det (ADR 0006 tillegg 24.11.2026, del 8). Ingen ny rad, intet kall.
+  if (isOrganizationTargetType(target.type)) {
+    const [open] = await db
+      .select(resultColumns)
+      .from(aiUsageLog)
+      .where(
+        and(
+          sameTargetWhere(grant.organizationId, definition.code, target),
+          eq(aiUsageLog.outcome, "ok"),
+          eq(aiUsageLog.status, "suggested"),
+        ),
+      )
+      .orderBy(desc(aiUsageLog.createdAt))
+      .limit(1);
+    if (open) return replayedResult(open);
+  }
+
+  // Grensene per funksjon (A575): ingen rad, intet kall
+  await checkRateLimits(grant, definition.code);
+
   const blockedRow = () =>
     insertBlockedRow(grant, {
       requestId,
@@ -603,7 +767,7 @@ export const requestSuggestion: RequestSuggestion = async (grant, request, serve
     });
 
   // Sperret: rad med utfallet `blocked`, ingen vask, intet kall
-  if (isBlocked(provider, target.type, scope.assignmentId)) return blockedRow();
+  if (isBlocked(provider, definition, target.type, scope.assignmentId)) return blockedRow();
 
   // Funksjonen er ikke slått på for leverandøren (`settings.features`, A194): som «KI er av»,
   // ingen rad, ingen vask, intet kall. `null` betyr alle (bare `fake`); tom liste betyr ingen.
@@ -611,12 +775,27 @@ export const requestSuggestion: RequestSuggestion = async (grant, request, serve
     return { kind: "disabled" };
   }
 
-  // 5. Kjente verdier for oppdraget. Kaster oppslaget eller vasken, kalles leverandøren aldri.
+  // 5. Kjente verdier for oppdraget, eller navnene på de ansatte for et organisasjonsmål. Kaster
+  // oppslaget eller vasken, kalles leverandøren aldri.
   const known =
-    scope.assignmentId === null ? null : await loadKnownValues(grant, scope.assignmentId);
+    scope.assignmentId !== null
+      ? await loadKnownValues(grant, scope.assignmentId)
+      : isOrganizationTargetType(target.type)
+        ? await loadOrganizationKnownValues(grant)
+        : null;
 
   let prepared: Prepared;
-  if (validated.server.kind === "candidates") {
+  if (validated.server.kind === "override") {
+    prepared = {
+      kind: "override",
+      prepared: prepareOverridePrompt(
+        definition,
+        validated.server.stats,
+        validated.server.cut,
+        known,
+      ),
+    };
+  } else if (validated.server.kind === "candidates") {
     prepared = {
       kind: "candidates",
       prepared: prepareCandidatePrompt(definition, fields, validated.server.candidates, known),
@@ -653,7 +832,7 @@ export const requestSuggestion: RequestSuggestion = async (grant, request, serve
   // 6. Tolk svaret. Samme rensede tekst i `ai_usage_log` som det vaktene så.
   let interpreted: Interpreted;
   if (providerResult.outcome === "ok") {
-    interpreted = interpretAnswer(prepared, stripUnstorableChars(providerResult.text));
+    interpreted = interpretAnswer(prepared, stripUnstorableChars(providerResult.text), known);
   } else if (providerResult.outcome === "no_match") {
     interpreted = noMatch();
   } else {

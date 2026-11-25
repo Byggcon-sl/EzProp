@@ -15,7 +15,14 @@ import {
   type KnownValues,
   type RedactedOriginal,
 } from "./redact-text";
-import type { AiCandidate, AiGuardAnswerPart, AiSummaryGroup } from "./types";
+import { monthLabel } from "./override-stats";
+import type {
+  AiCandidate,
+  AiGuardAnswerPart,
+  AiOverrideStats,
+  AiOverrideStatsRow,
+  AiSummaryGroup,
+} from "./types";
 
 /*
  * Felles ledetekst (docs/funksjoner/fase2a-evalueringssett.md Omfang 2, og «KI i veien»). Både
@@ -340,4 +347,94 @@ export function assembleSummary(
       return lines.join("\n");
     })
     .join("\n\n");
+}
+
+// --- override_summary ---------------------------------------------------------------------------
+
+/** Teksten for en sperre som gjelder hele rapporten (ikke ett kontrollpunkt). */
+export const OVERRIDE_WHOLE_REPORT_TEXT = "Hele rapporten";
+/** Teksten der en andel ikke er regnet (for få rapporter, A570). Har ingen sifre. */
+export const OVERRIDE_SHARE_NOT_COMPUTED_TEXT = "ikke regnet, for få rapporter";
+
+/** Linjeoverskriftene i innholdet. Den falske leverandøren leser linjene med disse. */
+export const OVERRIDE_PROMPT_LINES = {
+  month: "Måned",
+  reportCount: "Rapporter publisert",
+  previousReportCount: "Rapporter publisert måneden før",
+  cut: "Linjer som ikke er tatt med",
+  none: "Ingen sperrer ble krysset bort.",
+} as const;
+
+export type PreparedOverridePrompt = {
+  prompt: string;
+  redactedCount: number;
+  /** Linjene i innholdet etter skillet, vasket. Det tallvakten og de andre vaktene ser. */
+  texts: string[];
+  rows: number;
+  cut: number;
+};
+
+function shareText(value: number | null): string {
+  return value === null ? OVERRIDE_SHARE_NOT_COMPUTED_TEXT : `${value} %`;
+}
+
+/** Endring uten minustegn: «opp 5», «ned 3», «uendret». */
+function changeText(value: number | null, unit: string): string {
+  if (value === null) return OVERRIDE_SHARE_NOT_COMPUTED_TEXT;
+  if (value === 0) return "uendret";
+  return `${value > 0 ? "opp" : "ned"} ${Math.abs(value)}${unit}`;
+}
+
+function overrideRowLine(row: AiOverrideStatsRow, clean: (text: string) => string): string {
+  return [
+    `- Sperre: ${clean(row.checkLabel)}`,
+    `Punkt: ${row.checkpointName === null ? OVERRIDE_WHOLE_REPORT_TEXT : clean(row.checkpointName)}`,
+    `Grunn: ${clean(row.reasonLabel)}`,
+    `Rapporter: ${row.count}`,
+    `Andel: ${shareText(row.sharePercent)}`,
+    `Reklamasjon på samme punkt: ${row.claimCount}`,
+    `Rapporter måneden før: ${row.previousCount}`,
+    `Andel måneden før: ${shareText(row.previousSharePercent)}`,
+    `Endring i rapporter: ${changeText(row.deltaCount, "")}`,
+    `Endring i andel: ${changeText(row.deltaPoints, " prosentpoeng")}`,
+  ].join(" | ");
+}
+
+/**
+ * Ledeteksten for `override_summary`: måneden, antall rapporter og én linje per kombinasjon av
+ * sperre, kontrollpunkt og grunn med tallene serveren har regnet. Bare etikettene, punktnavnet og
+ * tallene sendes; kodene sendes ikke (de er grunnlaget for etikettene). Etikettene og punktnavnet
+ * gjøres om til én linje og vaskes (mønstrene og de kjente verdiene). Linjene har ingen nummererte
+ * merker, så tallvakten bare godtar tall som står i grunnlaget. Grunnlaget må ha bestått
+ * `parseOverrideStats` først.
+ */
+export function prepareOverridePrompt(
+  definition: AiFeatureDefinition,
+  stats: AiOverrideStats,
+  cut: number,
+  known: KnownValues | null,
+): PreparedOverridePrompt {
+  const instructions = instructionsFor(definition);
+  const matcher = matcherFor(known);
+  let count = 0;
+  const clean = (text: string): string => {
+    const result = redactTextTracked(toOneLine(text), matcher);
+    count += result.count;
+    return result.text;
+  };
+  const texts = [
+    `${OVERRIDE_PROMPT_LINES.month}: ${monthLabel(stats.month)}`,
+    `${OVERRIDE_PROMPT_LINES.reportCount}: ${stats.reportCount}`,
+    `${OVERRIDE_PROMPT_LINES.previousReportCount}: ${stats.previousMonth.reportCount}`,
+  ];
+  if (cut > 0) texts.push(`${OVERRIDE_PROMPT_LINES.cut}: ${cut}`);
+  if (stats.rows.length === 0) texts.push(OVERRIDE_PROMPT_LINES.none);
+  for (const row of stats.rows) texts.push(overrideRowLine(row, clean));
+  return {
+    prompt: `${instructions}${PROMPT_INPUT_SEPARATOR}${texts.join("\n")}`,
+    redactedCount: count,
+    texts,
+    rows: stats.rows.length,
+    cut,
+  };
 }

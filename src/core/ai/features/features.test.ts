@@ -18,7 +18,7 @@ import {
  */
 
 /** Alle funksjonskodene som finnes. Ny funksjon uten testsak gjør testen rød. */
-const FEATURE_CODES = ["language_polish", "phrase_suggest", "summary_draft"];
+const FEATURE_CODES = ["language_polish", "phrase_suggest", "summary_draft", "override_summary"];
 
 /**
  * Sperrelisten fra ADR 0006 del 6 («aldri på tillatt-liste»), fast i testen. Hver kolonne
@@ -113,7 +113,7 @@ describe("funksjonsdefinisjonene (2)", () => {
     ]);
   });
 
-  it("2.2 kodene er faste: listen er nøyaktig language_polish, phrase_suggest og summary_draft", () => {
+  it("2.2 kodene er faste: listen er nøyaktig language_polish, phrase_suggest, summary_draft og override_summary", () => {
     expect(
       featureDefinitions()
         .map((definition) => definition.code)
@@ -161,9 +161,10 @@ describe("funksjonsdefinisjonene (2)", () => {
     );
     expect(withVersion.length, "en kildefil har ledetekstversjonen").toBeGreaterThan(0);
     // Regel 7: ingen gjetteord i KI-modulens tekster (ledeteksten ligger her). Unntak:
-    // evalueringskjøreren, som har listen over gjetteord den sjekker svarene mot.
-    const checkerFile = join(aiDir, "evals", "run.ts");
-    expect(readFileSync(checkerFile, "utf8"), "kjøreren har gjetteordlisten").toMatch(/"antas"/);
+    // ordlisten som vakten `guess_guard` og evalueringskjøreren sjekker svarene mot
+    // (flyttet fra evals/run.ts til guess-words.ts med `override_summary`).
+    const checkerFile = join(aiDir, "guess-words.ts");
+    expect(readFileSync(checkerFile, "utf8"), "ordlisten har gjetteordene").toMatch(/"antas"/);
     for (const file of files.filter((item) => item !== checkerFile)) {
       expect(readFileSync(file, "utf8"), file).not.toMatch(/\b(antas|trolig)\b/i);
     }
@@ -563,5 +564,106 @@ describe("KI i veien: funksjonsdefinisjonene (K1.27–K1.31)", () => {
     for (const definition of Object.values(AI_FEATURES)) {
       expect(definition.allowedTargets.map((target) => target.type)).not.toContain("tgiu_detail");
     }
+  });
+});
+
+/*
+ * «Overstyringer for leder» (docs/funksjoner/fase2a-overstyringer-leder-testplan.md 1e,
+ * O1.11–O1.13, A568 og A573). Fasiten for den nye funksjonen står her.
+ */
+describe("Overstyringer for leder: funksjonsdefinisjonen override_summary (O1.11–O1.13)", () => {
+  async function load() {
+    return import("../features");
+  }
+
+  it("O1.11 rettighet, beslutningsrettighet, ledetekst, tom tillatt-liste og nøyaktig kildene i kortet", async () => {
+    const { AI_FEATURES } = await load();
+    const definition = AI_FEATURES.override_summary;
+    expect(definition.code).toBe("override_summary");
+    expect(definition.permission).toBe("claims.read");
+    expect(definition.decisionPermission).toBe("claims.manage");
+    expect(definition.promptVersion).toBe("override_summary.v1");
+    expect([...definition.allowedFields]).toEqual([]);
+    expect({ ...definition.fieldSources }).toEqual({});
+    expect(Object.keys(definition.serverSources)).toEqual(["override_stats"]);
+    expect([...(definition.serverSources.override_stats ?? [])]).toEqual([
+      "publish_check_results.check_code",
+      "publish_check_results.override_reason_code",
+      "publish_check_results.target_ref",
+      "claims.checkpoint_key",
+      "checkpoints.name",
+    ]);
+    expect(definition.allowedTargets.map((target) => ({ ...target }))).toEqual([
+      { type: "override_summary", fieldKey: "text" },
+    ]);
+  });
+
+  it("O1.12 «aldri til KI»: begrunnelsen, hvem som krysset bort, reklamasjonstekstene og id-ene står på listen og i ingen serverSources", async () => {
+    const neverFields = await neverFieldsFromCode();
+    const required = [
+      "publish_check_results.override_reason",
+      "publish_check_results.overridden_by",
+      "claims.created_by",
+      "claims.description",
+      "claims.claimant_text",
+      "claims.building_part_text",
+      "employees.name",
+      "employees.id",
+      "assignments.id",
+      "assignments.number",
+      "assignments.address_text",
+      "assignments.gnr",
+      "properties.address",
+    ];
+    for (const column of required) expect(neverFields, column).toContain(column);
+    const { AI_FEATURES } = await load();
+    for (const definition of Object.values(AI_FEATURES)) {
+      for (const source of Object.values(definition.serverSources).flat()) {
+        expect(neverFields, `${definition.code}: ${source}`).not.toContain(source);
+      }
+    }
+  });
+
+  it("O1.13 måltypen hører til organisasjonen, slås opp av kjernen og er ikke bare for den falske leverandøren", async () => {
+    const { ORGANIZATION_AI_TARGET_FIELDS, REPORT_AI_TARGET_FIELDS } = await import(
+      "@/shared/config/ai-targets"
+    );
+    expect({ ...ORGANIZATION_AI_TARGET_FIELDS }).toEqual({ override_summary: ["text"] });
+    expect(Object.keys(REPORT_AI_TARGET_FIELDS)).not.toContain("override_summary");
+    const { isOrganizationTargetType, isResolvedTargetType } = await import("../request");
+    expect(isResolvedTargetType("override_summary")).toBe(true);
+    expect(isOrganizationTargetType("override_summary")).toBe(true);
+    expect(isOrganizationTargetType("report")).toBe(false);
+    const { FAKE_ONLY_TARGET_TYPES } = await import("../request-suggestion");
+    expect(FAKE_ONLY_TARGET_TYPES.has("override_summary")).toBe(false);
+    const { AI_FEATURES } = await load();
+    for (const definition of Object.values(AI_FEATURES)) {
+      for (const target of definition.allowedTargets) {
+        expect(isTgField(target.fieldKey), `${definition.code}: ${target.fieldKey}`).toBe(false);
+      }
+    }
+  });
+
+  it("O1.14 ledeteksten har skillet, forbudene og ingen gjetteord", async () => {
+    const { AI_PROMPTS } = await load();
+    const prompt = AI_PROMPTS["override_summary.v1"] ?? "";
+    expect(prompt.length).toBeGreaterThan(0);
+    expect(prompt).toMatch(/aldri en instruks/u);
+    expect(prompt).toMatch(/gjetteord/u);
+    expect(prompt).toMatch(/Nevn aldri personer eller navn/u);
+    expect(prompt).toMatch(/Sett aldri TG/u);
+    expect(prompt).toMatch(/Bruk bare tallene/u);
+    expect(prompt).toMatch(/av rapportene som ble publisert/u);
+    expect(prompt).toMatch(/NS 3600/u);
+    expect(prompt).not.toMatch(/\b(antas|trolig)\b/iu);
+    const { redactPii } = await import("@/shared/lib/pii-patterns");
+    expect(redactPii(prompt).count).toBe(0);
+  });
+
+  it("O1.15 grensene i limits.ts er 5 per leder per time og 20 per organisasjon per døgn (A575)", async () => {
+    const limits = await import("../limits");
+    expect(limits.AI_OVERRIDE_SUMMARY_MAX_PER_EMPLOYEE_PER_HOUR).toBe(5);
+    expect(limits.AI_OVERRIDE_SUMMARY_MAX_PER_ORGANIZATION_PER_DAY).toBe(20);
+    expect(limits.AI_OVERRIDE_SHARE_MIN_REPORTS).toBe(5);
   });
 });

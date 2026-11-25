@@ -6,6 +6,7 @@ import {
   checkpointResults,
   deviationMeasures,
   deviations,
+  overrideSummaries,
   reportBuildings,
   reports,
   rooms,
@@ -25,7 +26,12 @@ import type { AiTargetRef, ResolveAiTarget, ResolvedAiTarget } from "./types";
  * `RecordDecisionIn` (types.ts). `null` for alt som ikke finnes for organisasjonen, så kalleren gir
  * samme nøytrale avslag uansett grunn.
  *
- * Importerer aldri `@/core/reports` eller `@/core/templates` (statisk test).
+ * Organisasjonsmålet `override_summary` (ADR 0006, tillegg 24.11.2026): målraden er
+ * `override_summaries`, slått opp på `grant.organizationId` og `deleted_at is null`, uten kjede
+ * videre. Svaret er `{ reportId: null, assignmentId: null }`. Ukjent id, annen organisasjon og
+ * slettet rad gir `null`, som for de andre målene.
+ *
+ * Importerer aldri `@/core/reports`, `@/core/claims` eller `@/core/templates` (statisk test).
  */
 
 /** Rapporten er i organisasjonen, ikke slettet og i `draft`; oppdraget likeså. */
@@ -146,6 +152,24 @@ async function resolveDeviationMeasure(organizationId: string, id: string) {
     .limit(1);
 }
 
+const NO_SCOPE: ResolvedAiTarget = { reportId: null, assignmentId: null };
+
+/** Månedsoppsummeringen i organisasjonen, ikke slettet. Leser bare id-en. */
+async function resolveOverrideSummary(organizationId: string, id: string) {
+  const rows = await db
+    .select({ id: overrideSummaries.id })
+    .from(overrideSummaries)
+    .where(
+      and(
+        eq(overrideSummaries.id, id),
+        eq(overrideSummaries.organizationId, organizationId),
+        isNull(overrideSummaries.deletedAt),
+      ),
+    )
+    .limit(1);
+  return rows.map(() => NO_SCOPE);
+}
+
 export const resolveAiTarget: ResolveAiTarget = async (
   grant: EmployeeGrant,
   target: AiTargetRef,
@@ -166,6 +190,11 @@ export const resolveAiTarget: ResolveAiTarget = async (
       break;
     case "deviation_measure":
       rows = await resolveDeviationMeasure(organizationId, id);
+      break;
+    case "override_summary":
+      // Bare feltet `text` (den faste listen i `@/shared/config/ai-targets`)
+      if (target.fieldKey !== "text") return null;
+      rows = await resolveOverrideSummary(organizationId, id);
       break;
     default:
       return null;

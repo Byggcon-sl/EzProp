@@ -9638,7 +9638,7 @@
         },
         "ai_usage_log_error_code_check": {
           "name": "ai_usage_log_error_code_check",
-          "value": "\"ai_usage_log\".\"error_code\" is null or (\"ai_usage_log\".\"outcome\" = 'error' and \"ai_usage_log\".\"error_code\" in ('timeout', 'rate_limited', 'unavailable', 'rejected', 'unknown')) or (\"ai_usage_log\".\"outcome\" = 'stopped' and \"ai_usage_log\".\"error_code\" in ('tg_guard', 'coverage_guard', 'number_guard', 'placeholder_guard'))"
+          "value": "\"ai_usage_log\".\"error_code\" is null or (\"ai_usage_log\".\"outcome\" = 'error' and \"ai_usage_log\".\"error_code\" in ('timeout', 'rate_limited', 'unavailable', 'rejected', 'unknown')) or (\"ai_usage_log\".\"outcome\" = 'stopped' and \"ai_usage_log\".\"error_code\" in ('tg_guard', 'coverage_guard', 'number_guard', 'placeholder_guard', 'guess_guard', 'name_guard'))"
         },
         "ai_usage_log_outcome_status_check": {
           "name": "ai_usage_log_outcome_status_check",

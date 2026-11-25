@@ -14,6 +14,8 @@ import type { AiProvider, AiProviderRequest, AiProviderResult } from "./types";
  *   den ansatte har skrevet, med en fast grense for «ingen passer» (svarer «INGEN»). Tomt felt gir
  *   kandidatene i rekkefølgen de kom (kandidatkilden har allerede sortert dem).
  * - `summary_draft`: én linje per F-merke, satt sammen av funnets egne tekster.
+ * - `override_summary`: et fast svar laget av tallene i grunnlaget (måneden, antall rapporter og
+ *   de to første linjene), bare med tall, etiketter og punktnavn som står der.
  *
  * Faste prøveverdier gir «ingen treff», feil, og svar som vaktene i kjernen skal stoppe, slik at
  * testene kan provosere hvert utfall. Prøveverdiene har ingen sifre og ingen TG, så de ikke selv
@@ -135,6 +137,60 @@ function draftSummary(input: string): string {
   return out.join("\n");
 }
 
+// --- override_summary ----------------------------------------------------------------------------
+
+/** Verdien etter «Navn: » i en linje fra grunnlaget, eller `null`. */
+function headerValue(lines: readonly string[], name: string): string | null {
+  const prefix = `${name}: `;
+  const line = lines.find((entry) => entry.startsWith(prefix));
+  return line === undefined ? null : line.slice(prefix.length).trim();
+}
+
+/** Linjen for én sperre, kontrollpunkt og grunn som felt («Rapporter» → «7»). */
+function rowFields(line: string): Map<string, string> {
+  const fields = new Map<string, string>();
+  for (const part of line.replace(/^- /u, "").split(" | ")) {
+    const at = part.indexOf(": ");
+    if (at > 0) fields.set(part.slice(0, at), part.slice(at + 2));
+  }
+  return fields;
+}
+
+function reports(count: string): string {
+  return count === "1" ? "1 rapport" : `${count} rapporter`;
+}
+
+/** Én setning per linje: antall, andel når den er regnet, endring og reklamasjoner. */
+function overrideSentence(fields: Map<string, string>): string {
+  const check = fields.get("Sperre") ?? "";
+  const point = fields.get("Punkt") ?? "";
+  const reason = fields.get("Grunn") ?? "";
+  const count = fields.get("Rapporter") ?? "";
+  const share = fields.get("Andel") ?? "";
+  const previous = fields.get("Rapporter måneden før") ?? "";
+  const change = fields.get("Endring i rapporter") ?? "";
+  const claims = fields.get("Reklamasjon på samme punkt") ?? "0";
+  let sentence = `${check} (${point}) ble krysset bort med «${reason}» i ${reports(count)}`;
+  if (/^\d+ %$/u.test(share)) sentence += `, ${share} av rapportene som ble publisert`;
+  if (previous === "0") sentence += ", og fantes ikke måneden før";
+  else if (change.startsWith("opp")) sentence += `, opp fra ${previous} måneden før`;
+  else if (change.startsWith("ned")) sentence += `, ned fra ${previous} måneden før`;
+  else sentence += ", som måneden før";
+  if (claims !== "0") sentence += `. ${claims} av dem fikk reklamasjon på samme punkt`;
+  return `${sentence}.`;
+}
+
+/** Fast svar for `override_summary`: høyst fem setninger, bare med det som står i grunnlaget. */
+function overrideSummary(input: string): string {
+  const lines = input.split("\n");
+  const month = headerValue(lines, "Måned") ?? "";
+  const count = headerValue(lines, "Rapporter publisert") ?? "";
+  const rows = lines.filter((line) => line.startsWith("- Sperre: ")).slice(0, 2);
+  const opening = `I ${month} ble ${reports(count)} publisert.`;
+  if (rows.length === 0) return `${opening} Ingen sperrer ble krysset bort.`;
+  return [opening, ...rows.map((line) => overrideSentence(rowFields(line)))].join(" ");
+}
+
 export const fakeAiProvider: AiProvider = {
   code: "fake",
   model: FAKE_MODEL,
@@ -150,6 +206,9 @@ export const fakeAiProvider: AiProvider = {
     let text: string;
     if (request.feature === "phrase_suggest") text = rankCandidates(input);
     else if (request.feature === "summary_draft") text = draftSummary(input);
+    else if (request.feature === "override_summary") {
+      text = withTriggers(overrideSummary(input), input);
+    }
     else text = withTriggers(polish(input), input);
     return {
       outcome: "ok",
