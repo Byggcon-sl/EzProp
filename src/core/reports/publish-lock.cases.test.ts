@@ -257,6 +257,8 @@ const NOT_ROOM_WRITES = new Set([
   "suggestPhrases",
   "applyPhrase",
   "decideAiText",
+  // Gå gjennom tekstene: låsen prøves i `published-lock.test.ts` og GT3.32
+  "applyReviewedTexts",
   "draftSummary",
   "saveSummary",
   // Leser bare: rapportdataene til PDF-en (utkast og utgivelse, også av publisert rapport)
