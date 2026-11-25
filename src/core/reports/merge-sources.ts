@@ -29,3 +29,11 @@ export function mergeSourcesFor(checkpointKey: string): MergeFieldSources {
   const own = Object.prototype.hasOwnProperty.call(BY_CHECKPOINT, checkpointKey);
   return { årstall: YEAR, ...(own ? BY_CHECKPOINT[checkpointKey] : {}) };
 }
+
+/**
+ * Tallfelt der enheten er et eget valgfelt i malen (A540): PDF-en skriver tallet med enheten,
+ * for eksempel «12,4 Vekt-%», i stedet for to linjer.
+ */
+export const UNIT_ELEMENT_OF: Readonly<Record<string, string>> = {
+  "wet_room.hole_moisture_reading": "wet_room.hole_moisture_unit",
+};

@@ -14,6 +14,7 @@ import { and, eq, isNull, ne } from "drizzle-orm";
 import { requireOrganizationAccess, type Actor } from "@/core/access";
 import { db } from "@/db/client";
 import { trialForms, trialPhotos } from "@/db/schema";
+import { hasMetadataSegment } from "@/shared/images";
 import { isUuid } from "@/shared/lib/uuid";
 import { requireTrialField } from "./apply-changes";
 import { trialNameSchema } from "./change-schema";
@@ -188,48 +189,10 @@ export const storeTrialPhoto: StoreTrialPhoto = async (
 const DISPLAY_COPY_CONTENT_TYPE = "image/jpeg";
 
 /**
- * Merker som er lov før `FF DA`: APP0 (JFIF), APP2 (ICC-fargeprofil), APP14 (Adobe-fargeinfo),
- * `C0`–`CF` (bildeoppsett og tabeller), `DB` (DQT) og `DD` (DRI). TEM og RST0–RST7 har ikke
- * lengdefelt og håndteres for seg.
+ * Tillatt-listen for visningskopien står i `src/shared/images` (A12), sammen med PNG-sjekken,
+ * og brukes også av PDF-gjengivelsen. Eksporteres videre her for prøvens tester.
  */
-function isAllowedMarker(marker: number): boolean {
-  if (marker === 0xe0 || marker === 0xe2 || marker === 0xee) return true;
-  if (marker >= 0xc0 && marker <= 0xcf) return true;
-  return marker === 0xdb || marker === 0xdd;
-}
-
-/**
- * Sjekker om en JPEG har felt som ikke er lov i visningskopien. `true` betyr avvis.
- * Går gjennom merkene fra `FF D8` fram til `FF DA` (starten på bildedataene) og ser ikke lenger.
- * Bare en liste over lovlige merker slipper gjennom (`isAllowedMarker`, TEM og RST0–RST7). Alt
- * annet avvises, blant annet APP1 (EXIF, XMP), APP3–APP13 (blant annet IPTC), APP15, COM
- * (kommentar), JPGn (`F0`–`FD`), `DE` og `DF`. APP2 (ICC-fargeprofil) kan ha korte tekstfelt som
- * beskrivelse og opphavsrett, men ikke posisjon eller takstmannens notater; Chromium skriver bare
- * en standard sRGB-profil. En ødelagt fil gir også `true`. Indeksen øker i hver runde, så
- * funksjonen henger aldri.
- */
-export function hasMetadataSegment(bytes: Uint8Array): boolean {
-  if (bytes.length < 2 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return true;
-  let index = 2;
-  while (index < bytes.length) {
-    if (bytes[index] !== 0xff) return true;
-    // Fyllbytes FF foran merket hoppes over
-    while (index < bytes.length && bytes[index] === 0xff) index += 1;
-    if (index >= bytes.length) return true;
-    const marker = bytes[index]!;
-    index += 1;
-    if (marker === 0xda) return false;
-    // Merker uten lengdefelt (TEM og RST0–RST7)
-    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
-    // Alt som ikke står på listen avvises, også nye start- og sluttmerker og 00
-    if (!isAllowedMarker(marker)) return true;
-    if (index + 1 >= bytes.length) return true;
-    const length = (bytes[index]! << 8) | bytes[index + 1]!;
-    if (length < 2 || index + length > bytes.length) return true;
-    index += length;
-  }
-  return true;
-}
+export { hasMetadataSegment };
 
 /**
  * Krever at bildet finnes i organisasjonen og ikke er slettet. Med `requireOriginal` må også

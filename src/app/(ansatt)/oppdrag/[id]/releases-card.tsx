@@ -1,16 +1,20 @@
 import { PUBLISH_OVERRIDE_REASON_LABELS, publishFindingText } from "@/core/reports/logic";
 import type { ReleaseView } from "@/core/reports/publish-types";
 import { Card } from "@/shared/ui/card";
+import { PdfOfflineNote } from "./pdf-draft-button";
+import { RELEASE_PDF_TEXTS } from "./pdf-texts";
 import { NewVersionButton } from "./publiser/new-version-button";
 import { formatDate } from "./publiser/publish-model";
 import { RELEASES_TEXTS } from "./publiser/publish-texts";
+import { ReleasePdfLink } from "./release-pdf-link";
 
 /*
  * «Utgivelser» på oppdraget (docs/funksjoner/fase2a-publisering-badet.md Omfang 13,
  * designet avsnitt 15). Hver versjon med hvem som publiserte, når, og hvilke sperrer som ble
  * krysset bort med grunn. Begrunnelsesteksten fjernes i kjernen for den som ikke har
  * `canSeeOverrideReasons` (kontor), så den aldri når nettleseren. Ingen knapper for endring
- * eller sletting; utgivelser endres aldri.
+ * eller sletting; utgivelser endres aldri. Hver versjon har «Åpne PDF» (F7 i
+ * docs/funksjoner/fase2a-pdf-badet.md), som lager PDF-en fra utgivelsen på nytt hver gang.
  * Støtter hovedmål: færre reklamasjoner (leder ser hvem som krysset bort hva og hvorfor).
  */
 
@@ -30,6 +34,7 @@ function formatWhen(iso: string): string {
 }
 
 export const RELEASES_ANCHOR = "utgivelser";
+const PDF_OFFLINE_NOTE_ID = "releases-pdf-offline";
 
 export function ReleasesCard({
   assignmentId,
@@ -57,10 +62,17 @@ export function ReleasesCard({
         {RELEASES_TEXTS.heading}
       </h2>
       <Card className="space-y-2 p-0">
+        <div className="space-y-2 px-6 pt-4">
+          <p className="text-sm text-slate-700">{RELEASE_PDF_TEXTS.hint}</p>
+          <PdfOfflineNote id={PDF_OFFLINE_NOTE_ID} showSyncStatus />
+        </div>
         <ul>
           {releases.map((release) => (
-            <li key={release.id} className="border-t border-line first:border-t-0">
-              <details className="group">
+            <li
+              key={release.id}
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-start border-t border-line"
+            >
+              <details className="group min-w-0">
                 <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-6 py-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fjord">
                   <span className="font-medium text-slate-900">
                     {RELEASES_TEXTS.version(release.versionNumber)}
@@ -125,6 +137,14 @@ export function ReleasesCard({
                   )}
                 </div>
               </details>
+              <div className="pt-1.5 pr-6">
+                <ReleasePdfLink
+                  assignmentId={assignmentId}
+                  releaseId={release.id}
+                  versionNumber={release.versionNumber}
+                  offlineNoteId={PDF_OFFLINE_NOTE_ID}
+                />
+              </div>
             </li>
           ))}
         </ul>

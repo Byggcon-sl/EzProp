@@ -451,3 +451,64 @@ tsRuleTester.run("module-boundaries: src/core/reports/logic", rule, {
     })),
   ],
 });
+
+// PDF-gjengivelsen er et rent blad (ADR 0016).
+const PDF_FILE = "/repo/src/core/pdf/render.ts";
+const PDF_NODE_FILE = "/repo/src/core/pdf/assets.node.ts";
+
+tsRuleTester.run("module-boundaries: PDF-gjengivelsen er et rent blad", rule, {
+  valid: [
+    { filename: PDF_FILE, code: 'import { PDF_TG_VALUES } from "./codes";' },
+    { filename: PDF_FILE, code: 'import type { ReportPdfData } from "@/core/pdf/types";' },
+    { filename: PDF_FILE, code: 'import { isAllowedImage } from "@/shared/images";' },
+    { filename: PDF_NODE_FILE, code: 'import { readFile } from "node:fs/promises";' },
+    { filename: PDF_NODE_FILE, code: 'import "server-only";' },
+    {
+      filename: "/repo/src/core/pdf/engine.node.ts",
+      code: 'import { Worker } from "node:worker_threads";',
+    },
+    // Testfiler er unntatt
+    { filename: "/repo/src/core/pdf/render.test.ts", code: 'import { it } from "vitest";' },
+    // Rapportkjernen bruker bare typene, ruten kaller gjengivelsen
+    {
+      filename: "/repo/src/core/reports/pdf-data-build.ts",
+      code: 'import type { ReportPdfData } from "@/core/pdf";',
+    },
+    { filename: "/repo/src/core/reports/pdf-types.ts", code: 'export type * from "@/core/pdf";' },
+    { filename: "/repo/src/app/x/route.ts", code: 'import { renderReportPdf } from "@/core/pdf";' },
+  ],
+  invalid: [
+    ...[
+      'import { db } from "@/db/client";',
+      'import type { CostType } from "@/db/schema";',
+      'import { x } from "@/core/reports";',
+      'import type { ReportSnapshot } from "@/core/reports";',
+      'import { costDisplayText } from "@/core/reports/logic";',
+      'import { x } from "@/core/access";',
+      'import { x } from "@/core/files";',
+      'import { x } from "@/core/ai";',
+      'import type { AiFeature } from "@/core/ai";',
+      'import { z } from "zod";',
+      'import { readFile } from "node:fs";',
+      'import "server-only";',
+      'import { createTypstCompiler } from "@myriaddreamin/typst.ts/compiler";',
+      'const m = import("@myriaddreamin/typst.ts/compiler");',
+    ].map((code) => ({ filename: PDF_FILE, code, errors: [{ messageId: "pdfLeaf" }] })),
+    ...[
+      'import { db } from "@/db/client";',
+      'import { x } from "@/core/files";',
+      'import { createTypstCompiler } from "@myriaddreamin/typst.ts/compiler";',
+      'import { z } from "zod";',
+    ].map((code) => ({ filename: PDF_NODE_FILE, code, errors: [{ messageId: "pdfLeaf" }] })),
+    ...[
+      'import { renderReportPdf } from "@/core/pdf";',
+      'import { PDF_TG_VALUES } from "@/core/pdf/codes";',
+      'export * from "@/core/pdf";',
+      'const m = import("@/core/pdf");',
+    ].map((code) => ({
+      filename: "/repo/src/core/reports/pdf-data.ts",
+      code,
+      errors: [{ messageId: "reportsToPdfTypeOnly" }],
+    })),
+  ],
+});

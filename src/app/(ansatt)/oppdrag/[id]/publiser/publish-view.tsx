@@ -40,6 +40,7 @@ import {
 import { PublishSummary } from "./publish-summary";
 import { PUBLISH_TEXTS } from "./publish-texts";
 import { QuickFix, type QuickFixResult } from "./quick-fix";
+import { ReleasePdfLink } from "../release-pdf-link";
 
 /*
  * Publiser-siden (docs/funksjoner/fase2a-publisering-badet.md Omfang 5–7, F1–F5, designet
@@ -101,6 +102,7 @@ function focusSoon(id: string, attempts = 10): void {
 }
 
 type Published = {
+  releaseId: string;
   versionNumber: number;
   validUntil: string | null;
   when: string;
@@ -344,6 +346,7 @@ export function PublishView({
       });
       if (result.status === "published") {
         setPublished({
+          releaseId: result.releaseId,
           versionNumber: result.versionNumber,
           validUntil: result.validUntil,
           when: formatWhen(new Date()),
@@ -511,6 +514,11 @@ export function PublishView({
                 {PUBLISH_TEXTS.seeBathroom}
               </Link>
             )}
+            <ReleasePdfLink
+              assignmentId={assignmentId}
+              releaseId={published.releaseId}
+              versionNumber={published.versionNumber}
+            />
           </div>
         </section>
       </div>
