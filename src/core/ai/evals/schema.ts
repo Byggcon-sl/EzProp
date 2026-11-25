@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { getFeatureDefinition } from "../features";
-import { AI_CANDIDATES_MAX, OUTCOME_MATCH_CANDIDATES_MAX } from "../limits";
+import { OUTCOME_MATCH_MAX, OUTCOME_MATCH_NOTE_MAX } from "@/shared/config/ai-targets";
+import {
+  AI_CANDIDATE_TEXT_MAX_LENGTH,
+  AI_CANDIDATES_MAX,
+  OUTCOME_MATCH_CANDIDATES_MAX,
+} from "../limits";
 import { emptyKnownValues, type KnownValues } from "../redact-text";
 import type { AiCandidateSource, AiGuardCode } from "../types";
 
@@ -15,6 +20,8 @@ import type { AiCandidateSource, AiGuardCode } from "../types";
  *   er settet av riktige id-er eller `no_match`. Bestått = minst én riktig blant de 3 beste.
  * - `summary_draft`: funnene i gruppene TG3, TG2, TGIU og HMS inn, fasit er `ok` eller stoppet
  *   av en bestemt vakt.
+ * - `outcome_match`: notatet og utfallene for romtypen inn, fasit er hvilke utfall som skal vises
+ *   blant de 3 første, eller «ingen passer» (se avsnittet om `outcome_match` under).
  *
  * `simulatedAnswer` er et oppdiktet KI-svar som brukes i stedet for leverandørens. Det prøver at
  * vaktene og vurderingen fanger et svar som er feil (byttet TG, flyttet tall, gjetteord). Med
@@ -170,42 +177,6 @@ const phraseCaseSchema = z.strictObject({
 
 export type PhraseEvalCase = z.infer<typeof phraseCaseSchema>;
 
-// --- outcome_match -----------------------------------------------------------------------------
-
-/**
- * Hva fasiten krever av de tre første treffene (`OUTCOME_MATCH_MAX`):
- * - `any`: minst én av `ids` blant dem;
- * - `all`: alle `ids` blant dem (parene som bare skiller seg i alvor, og aldersparet);
- * - `first`: det første treffet er en av `ids` (riktig punkt når notatet sier hvor);
- * - `none`: ingen treff («ingen passer»). `ids` er tom. Hver slik sak må bestå for seg.
- */
-export const OUTCOME_MATCH_REQUIREMENTS = ["any", "all", "first", "none"] as const;
-export type OutcomeMatchRequirement = (typeof OUTCOME_MATCH_REQUIREMENTS)[number];
-
-const outcomeCandidateSchema = z.strictObject({
-  id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/u),
-  source: z.literal("template_outcome"),
-  checkpointKey: nonEmpty,
-  outcomeKey: nonEmpty,
-  text: nonEmpty,
-});
-
-export type OutcomeEvalCandidate = z.infer<typeof outcomeCandidateSchema>;
-
-const outcomeCaseSchema = z.strictObject({
-  id: caseId,
-  description: z.string().optional(),
-  fields: z.record(z.string(), z.string()),
-  candidates: z.array(outcomeCandidateSchema).min(1).max(OUTCOME_MATCH_CANDIDATES_MAX),
-  mustPass: z.boolean().default(false),
-  expect: z.strictObject({
-    require: z.enum(OUTCOME_MATCH_REQUIREMENTS),
-    ids: z.array(z.string().min(1)),
-  }),
-});
-
-export type OutcomeMatchEvalCase = z.infer<typeof outcomeCaseSchema>;
-
 // --- summary_draft -----------------------------------------------------------------------------
 
 const findingSchema = z.strictObject({
@@ -257,6 +228,92 @@ const summaryCaseSchema = z.strictObject({
 
 export type SummaryEvalCase = z.infer<typeof summaryCaseSchema>;
 
+// --- outcome_match («Skriv det du ser») --------------------------------------------------------
+
+/*
+ * Sakene for `outcome_match` (docs/funksjoner/fase2a-skriv-det-du-ser.md, «KI i bunnen» om
+ * evalueringssettet, testplanen avsnitt 2). Notatet er takstmannens egne ord; kandidatene er
+ * utfallene for rommets romtype i malen, med den ferdige kandidatteksten KI får (punktnavn,
+ * spørsmål og avvikstekst med flettefeltene uutfylt, slik `outcomeMatchCandidateText` lager den).
+ *
+ * `checkpointKey` er punktets faste kode (`wet_room.floor`), og `outcomeKey` er utfallet slik
+ * fagfolk navngir det, uten punktets prefiks (`cracked_tiles_or_joints`, spørsmålet
+ * `wet_room.floor.cracked_tiles_or_joints` i malen). Kandidat-id-en er punkt og utfall uten
+ * romtypen (`floor.cracked_tiles_or_joints`), så fasiten kan leses.
+ *
+ * Fasiten (`expect`) gjelder de høyst `OUTCOME_MATCH_MAX` (3) treffene som vises:
+ * - `any`: minst én av `ids` er blant treffene;
+ * - `all`: alle `ids` er blant treffene (alvorspar, aldersparet, samme utfall på to punkter);
+ * - `first`: det første treffet er en av `ids` (sted i notatet, motsaker);
+ * - `none`: ingen treff («ingen passer»). `ids` er da tom.
+ * Hver sak bestås for seg; sakene for hulltaking og slitasje kan ikke gå tapt i en samlet prosent.
+ */
+
+/** Hva saken prøver. Kravene fra fagansvarlig står i kortet. */
+export const OUTCOME_MATCH_CASE_CATEGORIES = [
+  "match",
+  "no_match_hole_drilling",
+  "no_match_wear",
+  "counter_case",
+  "severity_pair",
+  "age_pair",
+  "two_checkpoints",
+  "tg_mention",
+] as const;
+export type OutcomeMatchCaseCategory = (typeof OUTCOME_MATCH_CASE_CATEGORIES)[number];
+
+export const OUTCOME_MATCH_REQUIREMENTS = ["any", "all", "first", "none"] as const;
+export type OutcomeMatchRequirement = (typeof OUTCOME_MATCH_REQUIREMENTS)[number];
+
+/** Kategoriene der fasit alltid er «ingen passer». */
+const NO_MATCH_CATEGORIES: ReadonlySet<OutcomeMatchCaseCategory> = new Set([
+  "no_match_hole_drilling",
+  "no_match_wear",
+]);
+/** Kategoriene der hver sak må bestås for seg (`mustPass`), aldri bare i en samlet prosent. */
+const MUST_PASS_CATEGORIES: ReadonlySet<OutcomeMatchCaseCategory> = new Set([
+  "no_match_hole_drilling",
+  "no_match_wear",
+  "counter_case",
+]);
+/** Kategoriene der fasit er to utfall som begge skal vises. */
+const PAIR_CATEGORIES: ReadonlySet<OutcomeMatchCaseCategory> = new Set([
+  "severity_pair",
+  "age_pair",
+]);
+/** En omtale av TG i notatet («TG3», «TG 2», «TGIU»). */
+const TG_MENTION = /\btg\s*-?\s*(?:[0-3]|iu)\b/iu;
+
+const outcomeMatchCandidateSchema = z.strictObject({
+  id: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/u),
+  source: z.literal("template_outcome"),
+  checkpointKey: z.string().regex(/^[a-z0-9][a-z0-9._]*$/u),
+  outcomeKey: z.string().regex(/^[a-z0-9][a-z0-9_]*$/u),
+  text: nonEmpty.max(AI_CANDIDATE_TEXT_MAX_LENGTH),
+});
+
+export type OutcomeMatchEvalCandidate = z.infer<typeof outcomeMatchCandidateSchema>;
+
+const outcomeMatchCaseSchema = z.strictObject({
+  id: z.string().regex(/^om-\d{3}$/u),
+  description: nonEmpty,
+  category: z.enum(OUTCOME_MATCH_CASE_CATEGORIES),
+  /** Notatet slik takstmannen skriver det. */
+  note: nonEmpty.max(OUTCOME_MATCH_NOTE_MAX),
+  candidates: z.array(outcomeMatchCandidateSchema).min(1).max(OUTCOME_MATCH_CANDIDATES_MAX),
+  /**
+   * Saken må bestås for seg, uansett samlet treffprosent. Sant for hulltaking, slitasje og
+   * motsakene (fagansvarlig 24.11.2026); kontrolleres av `checkOutcomeMatchCase`.
+   */
+  mustPass: z.boolean().default(false),
+  expect: z.strictObject({
+    require: z.enum(OUTCOME_MATCH_REQUIREMENTS),
+    ids: z.array(z.string().min(1)).max(OUTCOME_MATCH_MAX),
+  }),
+});
+
+export type OutcomeMatchEvalCase = z.infer<typeof outcomeMatchCaseSchema>;
+
 // --- Filen -------------------------------------------------------------------------------------
 
 function fileSchema<T extends z.ZodType>(cases: T) {
@@ -272,7 +329,7 @@ const FILE_SCHEMAS = {
   language_polish: fileSchema(caseSchema),
   phrase_suggest: fileSchema(phraseCaseSchema),
   summary_draft: fileSchema(summaryCaseSchema),
-  outcome_match: fileSchema(outcomeCaseSchema),
+  outcome_match: fileSchema(outcomeMatchCaseSchema),
 } as const;
 
 type EvalFeatureKind = keyof typeof FILE_SCHEMAS;
@@ -380,7 +437,9 @@ export function parseCasesFile(json: unknown, fileName: string): ParseCasesResul
       file.cases.forEach((c, i) => errors.push(...checkSummaryCase(c, `${fileName}: cases[${i}]`)));
       break;
     case "outcome_match":
-      file.cases.forEach((c, i) => errors.push(...checkOutcomeCase(c, `${fileName}: cases[${i}]`)));
+      file.cases.forEach((c, i) =>
+        errors.push(...checkOutcomeMatchCase(c, `${fileName}: cases[${i}]`)),
+      );
       break;
   }
   return errors.length > 0 ? { ok: false, errors } : { ok: true, file };
@@ -426,30 +485,6 @@ function checkPhraseCase(evalCase: PhraseEvalCase, where: string): string[] {
   return errors;
 }
 
-function checkOutcomeCase(evalCase: OutcomeMatchEvalCase, where: string): string[] {
-  const errors: string[] = [];
-  const ids = new Set<string>();
-  evalCase.candidates.forEach((candidate, index) => {
-    if (ids.has(candidate.id)) {
-      errors.push(`${where}.candidates[${index}]: kandidat-id-en ${candidate.id} er brukt før.`);
-    }
-    ids.add(candidate.id);
-  });
-  const expected = evalCase.expect.ids;
-  if (evalCase.expect.require === "none") {
-    if (expected.length > 0) errors.push(`${where}.expect.ids: skal være tom for none.`);
-    return errors;
-  }
-  if (expected.length === 0) errors.push(`${where}.expect.ids: mangler fasit.`);
-  if (new Set(expected).size !== expected.length) {
-    errors.push(`${where}.expect.ids: samme kandidat-id står to ganger.`);
-  }
-  for (const id of expected) {
-    if (!ids.has(id)) errors.push(`${where}.expect.ids: ukjent kandidat-id ${id}.`);
-  }
-  return errors;
-}
-
 function checkSummaryCase(evalCase: SummaryEvalCase, where: string): string[] {
   const errors: string[] = [];
   const order = evalCase.groups.map((group) => EVAL_SUMMARY_GROUPS.indexOf(group.group));
@@ -469,6 +504,52 @@ function checkSummaryCase(evalCase: SummaryEvalCase, where: string): string[] {
     evalCase.simulatedAnswer === undefined
   ) {
     errors.push(`${where}.expect: verdict fail krever simulatedAnswer.`);
+  }
+  return errors;
+}
+
+function checkOutcomeMatchCase(evalCase: OutcomeMatchEvalCase, where: string): string[] {
+  const errors: string[] = [];
+  const ids = new Set<string>();
+  const outcomes = new Set<string>();
+  evalCase.candidates.forEach((candidate, index) => {
+    if (ids.has(candidate.id)) {
+      errors.push(`${where}.candidates[${index}]: kandidat-id-en ${candidate.id} er brukt før.`);
+    }
+    ids.add(candidate.id);
+    const outcome = `${candidate.checkpointKey}|${candidate.outcomeKey}`;
+    if (outcomes.has(outcome)) {
+      errors.push(`${where}.candidates[${index}]: samme utfall står to ganger.`);
+    }
+    outcomes.add(outcome);
+  });
+  const { require, ids: expected } = evalCase.expect;
+  if (new Set(expected).size !== expected.length) {
+    errors.push(`${where}.expect.ids: samme kandidat-id står to ganger.`);
+  }
+  for (const id of expected) {
+    if (!ids.has(id)) errors.push(`${where}.expect.ids: ukjent kandidat-id ${id}.`);
+  }
+  if (require === "none" && expected.length > 0) {
+    errors.push(`${where}.expect: fasit none kan ikke ha kandidat-id-er.`);
+  }
+  if (require !== "none" && expected.length === 0) {
+    errors.push(`${where}.expect: fasit ${require} krever minst én kandidat-id.`);
+  }
+  if (NO_MATCH_CATEGORIES.has(evalCase.category) && require !== "none") {
+    errors.push(`${where}.expect: kategorien ${evalCase.category} krever fasit none.`);
+  }
+  if (evalCase.category === "counter_case" && require === "none") {
+    errors.push(`${where}.expect: en motsak skal treffe, ikke ha fasit none.`);
+  }
+  if (MUST_PASS_CATEGORIES.has(evalCase.category) && !evalCase.mustPass) {
+    errors.push(`${where}.mustPass: kategorien ${evalCase.category} må bestås for seg.`);
+  }
+  if (PAIR_CATEGORIES.has(evalCase.category) && (require !== "all" || expected.length !== 2)) {
+    errors.push(`${where}.expect: kategorien ${evalCase.category} krever fasit all med to utfall.`);
+  }
+  if (evalCase.category === "tg_mention" && !TG_MENTION.test(evalCase.note)) {
+    errors.push(`${where}.note: kategorien tg_mention krever at notatet nevner TG.`);
   }
   return errors;
 }

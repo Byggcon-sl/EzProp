@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { AI_CANDIDATE_SOURCES, AI_GUARD_CODES, SUMMARY_GROUPS } from "@/db/schema";
+import { EVAL_GUESS_WORDS } from "./run";
 import {
   EVAL_CANDIDATE_SOURCES,
   EVAL_CASES_STATUS,
@@ -454,5 +455,284 @@ describe("evalueringssett: skjemaet for phrase_suggest og summary_draft (K2.5)",
     expect([...EVAL_CANDIDATE_SOURCES]).toEqual([...AI_CANDIDATE_SOURCES]);
     expect([...EVAL_GUARD_CODES]).toEqual([...AI_GUARD_CODES]);
     expect([...EVAL_SUMMARY_GROUPS]).toEqual([...SUMMARY_GROUPS]);
+  });
+});
+
+// --- «Skriv det du ser»: outcome_match (docs/funksjoner/fase2a-skriv-det-du-ser-testplan.md 2) ---
+
+/*
+ * Støtter hovedmål: KI i bunnen (settet for `outcome_match` har fasit som kan måles før ekte KI
+ * slås på) og færre reklamasjoner (sakene for hulltaking og slitasje må bestås hver for seg, og
+ * alvorsparene viser alltid begge utfallene).
+ */
+
+const OUTCOME_FILE = "outcome_match.cases.json";
+
+function outcomeCandidate(id: string): Json {
+  const [checkpoint, outcome] = id.split(".");
+  return {
+    id,
+    source: "template_outcome",
+    checkpointKey: `wet_room.${checkpoint}`,
+    outcomeKey: outcome,
+    text: `Oppdiktet punkt: Oppdiktet spørsmål om ${outcome}? Oppdiktet tekst.`,
+  };
+}
+
+const OUTCOME_CANDIDATES = [
+  outcomeCandidate("floor.cracked_tiles_or_joints"),
+  outcomeCandidate("floor.moisture_damage"),
+  outcomeCandidate("walls_ceiling.cracked_tiles_or_joints"),
+];
+
+function outcomeCase(index: number, overrides: Json = {}): Json {
+  return {
+    id: `om-${String(index).padStart(3, "0")}`,
+    description: "Oppdiktet sak.",
+    category: "match",
+    note: "oppdiktet notat om sprekk i flis",
+    candidates: OUTCOME_CANDIDATES,
+    expect: { require: "any", ids: ["floor.cracked_tiles_or_joints"] },
+    ...overrides,
+  };
+}
+
+function outcomeRejected(replacement: Json): string {
+  return rejected(withFirst(fileOf("outcome_match", outcomeCase), replacement), OUTCOME_FILE);
+}
+
+type OutcomeCaseJson = {
+  id: string;
+  category: string;
+  note: string;
+  description: string;
+  mustPass?: boolean;
+  candidates: { id: string; text: string }[];
+  expect: { require: string; ids: string[] };
+};
+
+const outcomeJson = JSON.parse(readFileSync(join(__dirname, OUTCOME_FILE), "utf8")) as {
+  feature: string;
+  status: string;
+  note: string;
+  cases: OutcomeCaseJson[];
+};
+
+describe("evalueringssett: skjemaet for outcome_match (S2.1, S2.2)", () => {
+  it("S2.1 den ekte filen er gyldig, merket utkast og har 30–50 saker", () => {
+    expect(errorsOf(parseCasesFile(outcomeJson, OUTCOME_FILE))).toEqual([]);
+    expect(outcomeJson.feature).toBe("outcome_match");
+    expect(outcomeJson.status).toBe(EVAL_CASES_STATUS);
+    expect(outcomeJson.cases.length).toBeGreaterThanOrEqual(30);
+    expect(outcomeJson.cases.length).toBeLessThanOrEqual(50);
+  });
+
+  it("S2.1 kravene fra fagansvarlig er med", () => {
+    const of = (category: string) => outcomeJson.cases.filter((c) => c.category === category);
+    const notes = (category: string) => of(category).map((c) => c.note);
+    expect(of("no_match_hole_drilling").length).toBeGreaterThanOrEqual(3);
+    expect(of("no_match_wear").length).toBeGreaterThanOrEqual(3);
+    for (const c of [...of("no_match_hole_drilling"), ...of("no_match_wear")]) {
+      expect(c.expect).toEqual({ require: "none", ids: [] });
+      expect(c.mustPass).toBe(true);
+    }
+    expect(notes("no_match_wear")).toContain("litt slitt fuge");
+
+    const moistureCounter = of("counter_case").filter((c) =>
+      c.expect.ids.includes("adjacent.elevated_moisture"),
+    );
+    expect(moistureCounter.length).toBeGreaterThanOrEqual(2);
+    expect(
+      of("counter_case").some(
+        (c) =>
+          /riss i fuge/u.test(c.note) && c.expect.ids.includes("floor.cracked_tiles_or_joints"),
+      ),
+    ).toBe(true);
+
+    const pairs = of("severity_pair").map((c) => [...c.expect.ids].sort().join("+"));
+    for (const pair of [
+      ["walls_ceiling.moisture_marks", "walls_ceiling.mould_or_rot"],
+      ["floor.cracked_tiles_or_joints", "floor.moisture_damage"],
+      ["ventilation.weak_extract", "ventilation.missing_ventilation"],
+    ]) {
+      expect(pairs).toContain([...pair].sort().join("+"));
+    }
+    for (const c of of("severity_pair")) expect(c.expect.require).toBe("all");
+
+    const age = of("age_pair");
+    expect(age.length).toBeGreaterThanOrEqual(2);
+    for (const c of age) {
+      expect(c.note).toMatch(/\b(?:19|20)\d\d\b/u);
+      expect(c.expect.require).toBe("all");
+    }
+    expect(age.some((c) => /\b19\d\d\b/u.test(c.note))).toBe(true);
+    expect(age.some((c) => /\b20\d\d\b/u.test(c.note))).toBe(true);
+
+    const two = of("two_checkpoints");
+    const floor = "floor.cracked_tiles_or_joints";
+    const walls = "walls_ceiling.cracked_tiles_or_joints";
+    expect(
+      two.some(
+        (c) =>
+          c.expect.require === "all" &&
+          c.expect.ids.includes(floor) &&
+          c.expect.ids.includes(walls),
+      ),
+    ).toBe(true);
+    expect(
+      two.some(
+        (c) =>
+          c.expect.require === "first" &&
+          c.expect.ids[0] === floor &&
+          /ved sluket|på gulvet/u.test(c.note),
+      ),
+    ).toBe(true);
+    expect(
+      two.some(
+        (c) =>
+          c.expect.require === "first" &&
+          c.expect.ids[0] === walls &&
+          /på veggen|over badekaret/u.test(c.note),
+      ),
+    ).toBe(true);
+
+    expect(notes("tg_mention").some((note) => /dette er TG3/u.test(note))).toBe(true);
+  });
+
+  it("S2.1 notatene har ingen gjetteord, navn, telefonnumre eller e-post", () => {
+    for (const c of outcomeJson.cases) {
+      const lower = c.note.toLocaleLowerCase("nb");
+      for (const word of EVAL_GUESS_WORDS) {
+        expect(lower, c.id).not.toMatch(new RegExp(`(?<![\\p{L}])${word}(?![\\p{L}])`, "u"));
+      }
+      expect(c.note, c.id).not.toMatch(/\d{8}|@|\bgnr\b|\bbnr\b/iu);
+      expect(c.note, c.id).not.toMatch(/NS ?3600|IVIT|SmartTakst/iu);
+    }
+  });
+
+  it("S2.2 en gyldig minimal fil godtas, også med fasit none", () => {
+    const file = fileOf("outcome_match", (i) =>
+      i === 1
+        ? outcomeCase(i, {
+            category: "no_match_wear",
+            mustPass: true,
+            expect: { require: "none", ids: [] },
+          })
+        : outcomeCase(i),
+    );
+    expect(errorsOf(parseCasesFile(file, OUTCOME_FILE))).toEqual([]);
+  });
+
+  it("S2.2 fil uten utkast-merke avvises", () => {
+    const file = fileOf("outcome_match", outcomeCase);
+    file.status = "godkjent";
+    expect(rejected(file, OUTCOME_FILE)).toMatch(/status/u);
+  });
+
+  it("S2.2 sak uten fasit avvises", () => {
+    const { expect: _omitted, ...rest } = outcomeCase(1);
+    expect(outcomeRejected(rest)).toMatch(/expect/u);
+  });
+
+  it("S2.2 fasit med ukjent utfall avvises, og meldingen nevner id-en", () => {
+    const text = outcomeRejected(
+      outcomeCase(1, { expect: { require: "any", ids: ["floor.finnes_ikke"] } }),
+    );
+    expect(text).toMatch(/ukjent kandidat-id floor\.finnes_ikke/u);
+  });
+
+  it.each([
+    ["none med id-er", { require: "none", ids: ["floor.cracked_tiles_or_joints"] }, /fasit none/u],
+    ["any uten id-er", { require: "any", ids: [] }, /krever minst én/u],
+    [
+      "samme id to ganger",
+      { require: "all", ids: ["floor.moisture_damage", "floor.moisture_damage"] },
+      /to ganger/u,
+    ],
+    ["ukjent krav", { require: "some", ids: ["floor.moisture_damage"] }, /require/u],
+    [
+      "flere enn tre",
+      { require: "all", ids: ["a.b", "floor.moisture_damage", "c.d", "e.f"] },
+      /for mange/u,
+    ],
+  ])("S2.2 fasit %s avvises", (_name, expectation, message) => {
+    expect(outcomeRejected(outcomeCase(1, { expect: expectation }))).toMatch(message);
+  });
+
+  it("S2.2 hulltaking og slitasje krever fasit none og mustPass", () => {
+    expect(
+      outcomeRejected(outcomeCase(1, { category: "no_match_hole_drilling", mustPass: true })),
+    ).toMatch(/krever fasit none/u);
+    expect(
+      outcomeRejected(
+        outcomeCase(1, { category: "no_match_wear", expect: { require: "none", ids: [] } }),
+      ),
+    ).toMatch(/må bestås for seg/u);
+  });
+
+  it("S2.2 en motsak med fasit none avvises", () => {
+    expect(
+      outcomeRejected(
+        outcomeCase(1, {
+          category: "counter_case",
+          mustPass: true,
+          expect: { require: "none", ids: [] },
+        }),
+      ),
+    ).toMatch(/motsak/u);
+  });
+
+  it("S2.2 alvorspar og aldersparet krever all med to utfall", () => {
+    expect(outcomeRejected(outcomeCase(1, { category: "severity_pair" }))).toMatch(/to utfall/u);
+    expect(
+      outcomeRejected(
+        outcomeCase(1, {
+          category: "age_pair",
+          expect: {
+            require: "any",
+            ids: ["floor.moisture_damage", "floor.cracked_tiles_or_joints"],
+          },
+        }),
+      ),
+    ).toMatch(/to utfall/u);
+  });
+
+  it("S2.2 tg_mention krever at notatet nevner TG", () => {
+    expect(outcomeRejected(outcomeCase(1, { category: "tg_mention" }))).toMatch(/nevner TG/u);
+    const ok = fileOf("outcome_match", (i) =>
+      outcomeCase(i, { category: "tg_mention", note: "sprekk i flis, dette er TG3" }),
+    );
+    expect(errorsOf(parseCasesFile(ok, OUTCOME_FILE))).toEqual([]);
+  });
+
+  it("S2.2 kandidat med annen kilde, for lang tekst eller samme id to ganger avvises", () => {
+    expect(
+      outcomeRejected(
+        outcomeCase(1, { candidates: [{ ...OUTCOME_CANDIDATES[0], source: "phrase" }] }),
+      ),
+    ).toMatch(/candidates\[0\]\.source/u);
+    expect(
+      outcomeRejected(
+        outcomeCase(1, { candidates: [{ ...OUTCOME_CANDIDATES[0], text: "x".repeat(2001) }] }),
+      ),
+    ).toMatch(/for lang/u);
+    expect(
+      outcomeRejected(
+        outcomeCase(1, { candidates: [OUTCOME_CANDIDATES[0], OUTCOME_CANDIDATES[0]] }),
+      ),
+    ).toMatch(/brukt før/u);
+  });
+
+  it("S2.2 notat over 500 tegn, tomt notat og ukjent nøkkel avvises", () => {
+    expect(outcomeRejected(outcomeCase(1, { note: "a".repeat(501) }))).toMatch(/for lang/u);
+    expect(outcomeRejected(outcomeCase(1, { note: "   " }))).toMatch(/note/u);
+    expect(outcomeRejected(outcomeCase(1, { fields: { text: "x" } }))).toMatch(/ukjent nøkkel/u);
+  });
+
+  it("S2.2 feilmeldingene gjentar aldri notatet", () => {
+    const text = outcomeRejected(
+      outcomeCase(1, { note: "Hemmeligsen ".repeat(50), category: "tg_mention" }),
+    );
+    expect(text).not.toContain("Hemmeligsen");
   });
 });
