@@ -200,6 +200,22 @@ describe("kopisjekken for evalueringssettene (K2.6, regel 7)", () => {
     expect(counts.summary_draft).toBeGreaterThan(100);
   });
 
+  it("S2.6 sjekken leser outcome_match-settet: kandidatene og notatene", () => {
+    expect(caseFiles).toContain("outcome_match.cases.json");
+    const file = readCases("outcome_match.cases.json") as {
+      feature: string;
+      cases: (CaseLike & { note: string })[];
+    };
+    expect(file.feature).toBe("outcome_match");
+    expect(file.cases.flatMap(reportLikeTexts).length).toBeGreaterThan(100);
+    // Notatene er takstmannens ord: ingen gjetteord, ingen henvisning, ingen 8 ord fra researchen
+    const problems = file.cases.flatMap((evalCase) => [
+      ...guessWordsAndReferencesIn(evalCase.note).map((word) => `${evalCase.id}: «${word}»`),
+      ...(copiedRun(evalCase.note) === null ? [] : [`${evalCase.id}: kopiert`]),
+    ]);
+    expect(problems).toEqual([]);
+  });
+
   it("K2.6 gjetteordlisten i evalueringen er den samme som i maltesten", () => {
     const source = readFileSync(TEMPLATE_TEST, "utf8");
     const block = /const GUESS_WORDS = \[([\s\S]*?)\];/u.exec(source)?.[1];

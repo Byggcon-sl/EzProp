@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { AccessDeniedError, type Actor } from "@/core/access";
+import { AccessDeniedError, requireOrganizationAccess, type Actor } from "@/core/access";
 import {
+  checkAiTextApproved,
   OUTCOME_MATCH_CANDIDATES_MAX,
   OUTCOME_MATCH_NOTE_MAX,
   type AiCandidateRef,
@@ -13,6 +14,8 @@ import {
   addDeviation,
   chooseOutcomeMatch,
   findOutcomes,
+  getPublishCheck,
+  listPendingAiSuggestions,
   rejectOutcomeMatch,
   saveField,
   setTgDirect,
@@ -52,16 +55,24 @@ import {
   type Place,
 } from "../../../tests/report-ki-fixtures";
 import {
+  answerHole,
+  answerMembrane1990,
+  checkpointOf,
+  CP,
   createBathroomFixture,
   createRoomOnNewAssignment,
+  RULE,
   startedBathroom,
+  startedView,
 } from "../../../tests/report-fixtures";
 import { expectTenantIsolation } from "../../../tests/tenant-isolation";
 import { ReportValidationError } from "./errors";
+import { appendNoteToDeviationText, replaceDeviationTextWithNote } from "./logic";
 import {
   chooseOutcomeMatchInputSchema,
   findOutcomesInputSchema,
   rejectOutcomeMatchInputSchema,
+  REPORT_LONG_TEXT_MAX,
 } from "./schemas";
 
 /*
@@ -964,6 +975,373 @@ describe("5b tenant-isolasjon", () => {
   });
 });
 
+// --- Tillegg fra testskriveren 25.11.2026 (testplanen S1.21, S1.22, S2.8, S3.2, S4.13, S4.15,
+// S4.17 og S5.14). Samme oppsett og hjelpere som over. Alt er oppdiktet.
+
+async function chooseHit(f: KiBathroom, place: Place, note = NOTE, tg: 2 | 3 | null = null) {
+  const result = await ranked(f, note);
+  const deviationId = uuidv7();
+  const chosen = await chooseOutcomeMatch(f.actor, f.organizationId, f.room, {
+    usageId: result.usageId,
+    candidate: hitFor(result, place).ref,
+    deviationId,
+    tg,
+  });
+  expect(chosen.status).toBe("saved");
+  return { result, deviationId, row: await deviationRow(deviationId) };
+}
+
+async function saveDeviationText(
+  f: KiBathroom,
+  id: string,
+  field: "deviation_text" | "cause_text" | "consequence_text",
+  value: string | null,
+  base: string | null,
+) {
+  return saveField(f.actor, f.organizationId, f.room, {
+    table: "deviations",
+    id,
+    field,
+    value,
+    base,
+  });
+}
+
+async function auditLinesFor(entityId: string): Promise<number> {
+  const rows = await db.execute<{ count: number }>(
+    sql`select count(*)::int as count from audit_log where entity_id = ${entityId}`,
+  );
+  return Number(rows[0]?.count ?? 0);
+}
+
+describe("S1.21 text_source for hver av de tre tekstene", () => {
+  const FIELDS = [
+    ["deviation_text", "deviationText"],
+    ["cause_text", "causeText"],
+    ["consequence_text", "consequenceText"],
+  ] as const;
+
+  it.each(FIELDS)(
+    "S1.21 endret %s gir edited; satt tilbake til malens gir template",
+    async (field, column) => {
+      const f = await kiBathroom();
+      const { row } = await chooseHit(f, FLOOR_TILES);
+      expect(row.textSource).toBe("template");
+      const original = row[column];
+      const own = "Mxq egen tekst fra takstmannen.";
+      expect((await saveDeviationText(f, row.id, field, own, original)).status).toBe("saved");
+      expect((await deviationRow(row.id)).textSource).toBe("edited");
+      expect((await saveDeviationText(f, row.id, field, original, own)).status).toBe("saved");
+      expect((await deviationRow(row.id)).textSource).toBe("template");
+    },
+  );
+
+  it.each(FIELDS)(
+    "S1.21 er %s endret, gir «Angre» på en annen tekst fortsatt edited",
+    async (field, column) => {
+      const f = await kiBathroom();
+      const { row } = await chooseHit(f, FLOOR_TILES);
+      const own = "Mxq egen tekst fra takstmannen.";
+      await saveDeviationText(f, row.id, field, own, row[column]);
+      // En annen av de tre endres og settes tilbake («Angre» på notatet)
+      const [otherField, otherColumn] = FIELDS.find(([name]) => name !== field)!;
+      const withNote = `${row[otherColumn] ?? ""} Løs flis ved sluket.`.trim();
+      await saveDeviationText(f, row.id, otherField, withNote, row[otherColumn]);
+      await saveDeviationText(f, row.id, otherField, row[otherColumn], withNote);
+      expect((await deviationRow(row.id)).textSource).toBe("edited");
+    },
+  );
+});
+
+describe("S1.22 lengden: aldri kuttet tekst", () => {
+  it("S1.22 «Legg notatet til» kutter aldri, og over grensen gir serveren norsk melding", async () => {
+    const f = await kiBathroom();
+    const { row } = await chooseHit(f, FLOOR_TILES);
+    const note = "x".repeat(OUTCOME_MATCH_NOTE_MAX - 1);
+    // Takstmannen har alt skrevet en lang tekst; notatet legges til uten å kutte noe
+    const long = `${row.deviationText} ${"Mxq lang egen tekst. ".repeat(500)}`.slice(
+      0,
+      REPORT_LONG_TEXT_MAX - 10,
+    );
+    const appended = appendNoteToDeviationText(long, note);
+    expect(appended.startsWith(long.trimEnd())).toBe(true);
+    expect(appended.length).toBeGreaterThan(REPORT_LONG_TEXT_MAX);
+    expect(appended).toContain(`X${"x".repeat(OUTCOME_MATCH_NOTE_MAX - 2)}.`);
+
+    const error = await captureError(() =>
+      saveDeviationText(f, row.id, "deviation_text", appended, row.deviationText),
+    );
+    expect(error).toBeInstanceOf(ReportValidationError);
+    expect(error.message).toMatch(/[æøåÆØÅ]|tegn|lang/u);
+    expect(error.message).not.toContain(note);
+    const after = await deviationRow(row.id);
+    expect(after.deviationText).toBe(row.deviationText);
+    expect(after.rowVersion).toBe(row.rowVersion);
+  });
+});
+
+describe("S4.13 rom mot rapport (tillegg)", () => {
+  it("S4.13 rom fra en annen rapport, slettet rom og slettet rapport gir avslag på alle tre", async () => {
+    const f = await kiBathroom();
+    const result = await ranked(f);
+    const hit = hitFor(result, FLOOR_TILES);
+    const other = await createRoomOnNewAssignment(f.organizationId);
+    const runs = (room: RoomRef) => [
+      () =>
+        findOutcomes(f.actor, f.organizationId, room, {
+          requestId: uuidv7(),
+          note: NOTE,
+          openCheckpointKey: null,
+        }),
+      () =>
+        chooseOutcomeMatch(f.actor, f.organizationId, room, {
+          usageId: result.usageId,
+          candidate: hit.ref,
+          deviationId: uuidv7(),
+          tg: null,
+        }),
+      () => rejectOutcomeMatch(f.actor, f.organizationId, room, { usageId: result.usageId }),
+    ];
+    const rows = await aiRowCount();
+    const before = await aiRow(result.usageId);
+    // Rapportens oppdrag med et rom fra et annet oppdrag
+    for (const run of runs({ assignmentId: f.assignmentId, roomId: other.roomId })) {
+      expect(await captureError(run)).toBeInstanceOf(AccessDeniedError);
+    }
+    // Slettet rom
+    await db.execute(sql`update rooms set deleted_at = now() where id = ${f.roomId}`);
+    for (const run of runs(f.room)) {
+      expect(await captureError(run)).toBeInstanceOf(AccessDeniedError);
+    }
+    await db.execute(sql`update rooms set deleted_at = null where id = ${f.roomId}`);
+    // Slettet rapport
+    await db.update(reports).set({ deletedAt: new Date() }).where(eq(reports.id, f.reportId));
+    for (const run of runs(f.room)) {
+      const error = await captureError(run);
+      expect(
+        error instanceof AccessDeniedError || error instanceof ReportValidationError,
+        `${error.name}: ${error.message}`,
+      ).toBe(true);
+    }
+    expect(await aiRowCount()).toBe(rows);
+    expect(await aiRow(result.usageId)).toEqual(before);
+    expect(await liveDeviations(f.reportId)).toHaveLength(0);
+  });
+
+  it("S4.13 rapport som er erstattet (superseded) gir avslag uten rad og avvik", async () => {
+    const f = await kiBathroom();
+    const result = await ranked(f);
+    const hit = hitFor(result, FLOOR_TILES);
+    await db.update(reports).set({ status: "superseded" }).where(eq(reports.id, f.reportId));
+    const rows = await aiRowCount();
+    for (const run of [
+      () => search(f),
+      () =>
+        chooseOutcomeMatch(f.actor, f.organizationId, f.room, {
+          usageId: result.usageId,
+          candidate: hit.ref,
+          deviationId: uuidv7(),
+          tg: null,
+        }),
+      () => rejectOutcomeMatch(f.actor, f.organizationId, f.room, { usageId: result.usageId }),
+    ]) {
+      const error = await captureError(run);
+      expect(
+        error instanceof AccessDeniedError || error instanceof ReportValidationError,
+        `${error.name}: ${error.message}`,
+      ).toBe(true);
+    }
+    expect(await aiRowCount()).toBe(rows);
+    expect(await liveDeviations(f.reportId)).toHaveLength(0);
+  });
+});
+
+describe("S4.15 rader som blir stående suggested", () => {
+  it("S4.15 avvises ved neste søk, stopper ikke publiseringen og vises ikke som ventende", async () => {
+    const f = await kiBathroom();
+    const first = await ranked(f);
+    expect((await aiRow(first.usageId))?.status).toBe("suggested");
+    const second = await ranked(f);
+    expect((await aiRow(first.usageId))?.status).toBe("rejected");
+    expect((await aiRow(second.usageId))?.status).toBe("suggested");
+
+    // Publiseringssperren: raden er ikke KI-tekst som venter
+    const grant = await requireOrganizationAccess(f.actor, f.organizationId, "report.edit");
+    const target = { type: "report", id: f.reportId, fieldKey: REPORT_NEW_DEVIATION_FIELD_KEY };
+    expect(await checkAiTextApproved(grant, [{ aiUsageId: second.usageId, target }])).toEqual([]);
+    const check = await getPublishCheck(f.actor, f.organizationId, f.assignmentId);
+    if (check.state !== "draft") throw new Error(`fikk ${check.state}`);
+    expect(check.findings.filter((x) => x.target.aiUsageId === second.usageId)).toEqual([]);
+    expect(check.pendingAiSuggestions.map((s) => s.aiUsageId)).not.toContain(second.usageId);
+    // Signalene: ikke et ventende KI-forslag
+    const pending = await listPendingAiSuggestions(f.actor, f.organizationId, f.assignmentId);
+    expect(pending.map((s) => s.aiUsageId)).not.toContain(second.usageId);
+    expect(pending.map((s) => s.aiUsageId)).not.toContain(first.usageId);
+  });
+});
+
+describe("S4.17 «Bruk bare notatet»", () => {
+  it("S4.17 notatet erstatter teksten gjennom feltlagringen, med revisjonslogg", async () => {
+    const f = await kiBathroom();
+    const { row } = await chooseHit(f, FLOOR_TILES);
+    const template = await db
+      .select({ text: sql<string | null>`o.deviation_text` })
+      .from(sql`outcomes o`)
+      .where(sql`o.id = ${row.outcomeId}`);
+    const only = replaceDeviationTextWithNote(template[0]?.text ?? null, NOTE);
+    expect(only).toBe("Sprekk i flis ved sluket, litt løs.");
+    const auditBefore = await auditLinesFor(row.id);
+    expect(
+      (await saveDeviationText(f, row.id, "deviation_text", only, row.deviationText)).status,
+    ).toBe("saved");
+    const after = await deviationRow(row.id);
+    expect(after.deviationText).toBe(only);
+    expect(after.textSource).toBe("edited");
+    expect(after.rowVersion).toBeGreaterThan(row.rowVersion);
+    expect(await auditLinesFor(row.id)).toBe(auditBefore + 1);
+  });
+
+  // Testplanen S4.17: «på et utfall med flettefelt avviser serveren (ikke bare skjermen)».
+  // Kortet sier «Ingen egen inngang»: notatet lagres med den vanlige feltlagringen, som ikke
+  // vet at teksten kom fra «Bruk bare notatet». Testen krever det testplanen sier: lagres bare
+  // notatet på et utfall med flettefelt, skal serveren avvise det, så målingen ikke forsvinner.
+  it("S4.17 på et utfall med flettefelt avviser serveren å erstatte malens tekst med bare notatet", async () => {
+    const f = await kiBathroom();
+    const id = await addPlaceDeviation(f, PLACE.membraneTg2);
+    const row = await deviationRow(id);
+    const [template] = await db
+      .select({ text: sql<string | null>`o.deviation_text` })
+      .from(sql`outcomes o`)
+      .where(sql`o.id = ${row.outcomeId}`);
+    expect(template?.text ?? "").toMatch(/\{[^{}]+\}/u);
+    expect(replaceDeviationTextWithNote(template?.text ?? null, "membran fra 1994")).toBeNull();
+    const result = await saveDeviationText(
+      f,
+      id,
+      "deviation_text",
+      "Membran fra 1994.",
+      row.deviationText,
+    ).catch((error: unknown) => error);
+    expect(
+      result instanceof ReportValidationError ||
+        (typeof result === "object" &&
+          result !== null &&
+          "status" in result &&
+          result.status !== "saved"),
+    ).toBe(true);
+    expect((await deviationRow(id)).deviationText).toBe(row.deviationText);
+  });
+});
+
+describe("S2.8 regelmotoren er uendret etter et KI-treff", () => {
+  type View = Awaited<ReturnType<typeof startedView>>;
+  const rules = (view: View) =>
+    view.suggestions
+      .map((s) => ({
+        ruleKey: s.ruleKey,
+        checkpointKey: s.checkpointKey,
+        state: s.state,
+        suggestion: s.suggestion,
+        code: s.code,
+        stale: s.stale,
+        decision: s.latestDecision?.decision ?? null,
+      }))
+      .sort((a, b) => a.ruleKey.localeCompare(b.ruleKey));
+
+  it.each([
+    ["membrane_past_lifespan med årstall før 2000", PLACE.membraneTg2, 1994, "membran fra 1994"],
+    [
+      "membrane_before_2000 med årstall etter 2000",
+      PLACE.membraneTg3,
+      2006,
+      "smøremembran fra 2006, ingen papirer",
+    ],
+  ] as const)("S2.8 %s: samme regelresultat som manuelt valg", async (_name, place, year, note) => {
+    const manual = await kiBathroom();
+    await answerMembrane1990(manual, year);
+    await addPlaceDeviation(manual, place);
+    const f = await kiBathroom();
+    await answerMembrane1990(f, year);
+    await chooseHit(f, place, note);
+
+    const manualView = await startedView(manual);
+    const aiView = await startedView(f);
+    expect(rules(aiView)).toEqual(rules(manualView));
+    expect(checkpointOf(aiView, CP.membrane).tg).toBe(checkpointOf(manualView, CP.membrane).tg);
+    // Regelen som følger årstallet står som forslag (ikke avgjort av KI-treffet)
+    const expected = year < 2000 ? RULE.before2000 : RULE.pastLifespan;
+    const rule = aiView.suggestions.find((s) => s.ruleKey === expected);
+    expect(rule?.latestDecision ?? null).toBeNull();
+  });
+
+  it("S2.8 TGIU for hulltaking kommer fra feltet og regelen, aldri fra et treff", async () => {
+    const f = await kiBathroom();
+    await answerHole(f, "not_done");
+    const before = rules(await startedView(f));
+    expect(before.some((r) => r.ruleKey === RULE.notDone)).toBe(true);
+    const result = await search(f, "hulltaking ikke utført, eier nektet");
+    expect(result.status).toBe("no_match");
+    const view = await startedView(f);
+    expect(rules(view)).toEqual(before);
+    expect(checkpointOf(view, CP.adjacent).deviations).toHaveLength(0);
+    expect(await liveDeviations(f.reportId)).toHaveLength(0);
+  });
+});
+
+describe("S3.2 CHECK-ene tåler de nye radene", () => {
+  it("S3.2 ranked-rad med 1–3 kandidater og no_match-rad med tom liste er lagret; valgt utenfor listen avvises", async () => {
+    const f = await kiBathroom();
+    const result = await ranked(f);
+    const row = await aiRow(result.usageId);
+    const refs = row?.candidate_refs as AiCandidateRef[];
+    expect(refs.length).toBeGreaterThanOrEqual(1);
+    expect(refs.length).toBeLessThanOrEqual(3);
+    expect(refs.every((r) => r.source === "template_outcome")).toBe(true);
+
+    const none = await search(f, "qqq zzz xyv");
+    if (none.status !== "no_match" || none.usageId === null) throw new Error("mangler rad");
+    const noneRow = await aiRow(none.usageId);
+    expect(noneRow?.outcome).toBe("no_match");
+    expect((noneRow?.candidate_refs as unknown[] | null) ?? []).toEqual([]);
+
+    const outside = { source: "template_outcome", id: uuidv7() };
+    await expect(
+      db.execute(
+        sql`update ai_usage_log set status = 'accepted', chosen_candidate = ${JSON.stringify(
+          outside,
+        )}::jsonb, decided_at = now() where id = ${result.usageId}`,
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe("S5.14 myk sletting", () => {
+  it("S5.14 mykt slettet utfall er aldri kandidat eller treff", async () => {
+    const f = await kiBathroom();
+    const before = await ranked(f);
+    const hit = hitFor(before, FLOOR_TILES);
+    await db.execute(sql`update outcomes set deleted_at = now() where id = ${hit.ref.id}`);
+    const after = await search(f);
+    if (after.status === "ranked") {
+      expect(after.hits.map((h) => h.ref.id)).not.toContain(hit.ref.id);
+    }
+    const row = after.status === "ranked" ? await aiRow(after.usageId) : null;
+    expect(JSON.stringify(row?.candidate_refs ?? [])).not.toContain(hit.ref.id);
+  });
+
+  it("S5.14 mykt slettet avvik merker ikke, og et nytt valg av samme utfall lager et nytt avvik", async () => {
+    const f = await kiBathroom();
+    const { deviationId } = await chooseHit(f, FLOOR_TILES);
+    await db
+      .update(deviations)
+      .set({ deletedAt: new Date() })
+      .where(eq(deviations.id, deviationId));
+    const { row } = await chooseHit(f, FLOOR_TILES);
+    expect(row.id).not.toBe(deviationId);
+    expect(await liveDeviations(f.reportId)).toHaveLength(1);
+  });
+});
+
 describe("S5.13 og S5.15 statisk", () => {
   it("de nye filene filtrerer på organisasjonen fra tilgangen og sletter aldri", async () => {
     const { readFileSync } = await import("node:fs");
@@ -973,5 +1351,83 @@ describe("S5.13 og S5.15 statisk", () => {
       expect(text, name).not.toMatch(/\.delete\(|\bdelete\s+from\b/i);
       expect(text, name).not.toMatch(/eq\([^)]*,\s*(?:input|values)\.organizationId\)/);
     }
+  });
+});
+
+describe("S3.1 og S9.5: ingen migrering og ingenting midlertidig", () => {
+  /** Filene i oppgaven (kortets modulliste). */
+  const FEATURE_FILES = [
+    "src/shared/lib/text-similarity.ts",
+    "src/shared/config/ai-targets.ts",
+    "src/core/reports/logic/outcome-match.ts",
+    "src/core/reports/logic/deviation-note.ts",
+    "src/core/reports/logic/phrase-candidates.ts",
+    "src/core/reports/outcome-match.ts",
+    "src/core/reports/outcome-match-choice.ts",
+    "src/core/reports/save-field.ts",
+    "src/core/reports/schemas.ts",
+    "src/core/reports/types.ts",
+    "src/core/ai/features.ts",
+    "src/core/ai/limits.ts",
+    "src/core/ai/providers/fake.ts",
+    "src/core/ai/request-suggestion.ts",
+    "src/core/ai/evals/schema.ts",
+    "src/core/ai/evals/run.ts",
+    "src/core/ai/evals/outcome_match.cases.json",
+    "src/app/(ansatt)/oppdrag/[id]/rom/[roomId]/actions.ts",
+    "src/app/(ansatt)/oppdrag/[id]/rom/[roomId]/add-deviation-panel.tsx",
+    "src/app/(ansatt)/oppdrag/[id]/rom/[roomId]/note-offer.tsx",
+    "src/app/(ansatt)/oppdrag/[id]/rom/[roomId]/outcome-hit-button.tsx",
+    "src/app/(ansatt)/oppdrag/[id]/rom/[roomId]/outcome-match-hits.tsx",
+    "src/app/(ansatt)/oppdrag/[id]/rom/[roomId]/outcome-match-model.ts",
+    "src/app/(ansatt)/oppdrag/[id]/rom/[roomId]/room-model.ts",
+    "src/app/(ansatt)/oppdrag/[id]/rom/[roomId]/room-messages.ts",
+  ];
+
+  it("S9.5 ingen TEMP, «midlertidig» eller TODO(skriv i filene i oppgaven", async () => {
+    const { existsSync, readFileSync } = await import("node:fs");
+    const path = await import("node:path");
+    const hits: string[] = [];
+    for (const file of FEATURE_FILES) {
+      const full = path.resolve(process.cwd(), file);
+      expect(existsSync(full), file).toBe(true);
+      readFileSync(full, "utf8")
+        .split("\n")
+        .forEach((line, index) => {
+          if (/\bTEMP\b|TODO\(skriv|midlertidig/iu.test(line)) {
+            hits.push(`${file}:${index + 1}: ${line.trim()}`);
+          }
+        });
+    }
+    expect(hits).toEqual([]);
+  });
+
+  /** Felles forfar med main, eller `null` når historikken ikke finnes (grunn kloning). */
+  async function mergeBase(): Promise<string | null> {
+    const { execFileSync } = await import("node:child_process");
+    for (const ref of ["origin/main", "main"]) {
+      try {
+        return execFileSync("git", ["merge-base", ref, "HEAD"], {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        }).trim();
+      } catch {
+        // prøver neste
+      }
+    }
+    return null;
+  }
+
+  it("S3.1 ingen ny migrering og ingen endring i journalen mot main", async (context) => {
+    const base = await mergeBase();
+    // Grunn kloning uten main: vises som hoppet over, aldri stille grønn
+    if (base === null) context.skip();
+    const { execFileSync } = await import("node:child_process");
+    const changed = execFileSync(
+      "git",
+      ["diff", "--name-only", `${base}...HEAD`, "--", "src/db/migrations"],
+      { encoding: "utf8" },
+    ).trim();
+    expect(changed).toBe("");
   });
 });
