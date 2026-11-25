@@ -1,4 +1,5 @@
 import type { PublishCheckCode, PublishOverrideReasonCode } from "@/db/schema";
+import { PUBLISH_OVERRIDE_REASON_LABELS as REASON_LABELS } from "@/shared/config/publish-check-labels";
 import { WARNING_MISSING_PARTS } from "./codes";
 import { formatWholeNumber, WARNING_MISSING_PART_LABELS, warningText } from "./labels";
 import type {
@@ -129,12 +130,8 @@ export function publishFindingText(
 }
 
 /** Grunnene når en sperre krysses bort, i rekkefølgen i `PUBLISH_OVERRIDE_REASON_CODES` (F1). */
-export const PUBLISH_OVERRIDE_REASON_LABELS: Record<PublishOverrideReasonCode, string> = {
-  no_access_or_refused: "Ikke tilgang eller nektet av eier",
-  not_applicable_to_room: "Gjelder ikke dette rommet",
-  described_elsewhere: "Beskrevet et annet sted i rapporten",
-  other: "Annet",
-};
+export const PUBLISH_OVERRIDE_REASON_LABELS: Record<PublishOverrideReasonCode, string> =
+  REASON_LABELS;
 
 /** Meldingene fra `checkPublishOverrideReason`. `ok` har ingen melding. */
 export const PUBLISH_OVERRIDE_REASON_CHECK_MESSAGES: Record<
