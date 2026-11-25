@@ -475,6 +475,38 @@ export const decideAiTextInputSchema = z
   })
   .strict();
 
+// --- «Skriv det du ser» (docs/funksjoner/fase2a-skriv-det-du-ser.md) ------------------------------
+
+/**
+ * «Finn med KI». Notatet avvises med fødselsnummer (A567), med samme sjekk og melding som
+ * avviksteksten, før rommet leses. Lengden er med vilje ingen skjemafeil: den gir svaret
+ * `note_too_long`, så skjermen kan vise sin egen melding.
+ */
+export const findOutcomesInputSchema = z
+  .object({
+    requestId: uuidSchema,
+    note: z.string().refine((value) => !containsNationalId(value), { error: NATIONAL_ID_MESSAGE }),
+    openCheckpointKey: keySchema.nullable(),
+  })
+  .strict();
+
+/**
+ * Valgt KI-treff. Punkt, spørsmål og utfall utledes av serveren fra kandidaten; klienten sender
+ * aldri `checkpointKey`, `outcomeKey`, organisasjon eller rapport (ukjente nøkler avvises).
+ */
+export const chooseOutcomeMatchInputSchema = z
+  .object({
+    usageId: uuidSchema,
+    candidate: aiCandidateRefSchema,
+    deviationId: uuidSchema,
+    tg: deviationTg.nullable(),
+    tgiuChoice: z.literal("remove_tgiu").optional(),
+  })
+  .strict();
+
+/** Avvisning av et søk. Bare `rejected`, så verken `decision` eller annet er lov her. */
+export const rejectOutcomeMatchInputSchema = z.object({ usageId: uuidSchema }).strict();
+
 /** Feltene i avvikskortet som kan språkvaskes (A350, A356). */
 export const POLISH_DEVIATION_FIELDS = [
   "deviation_text",

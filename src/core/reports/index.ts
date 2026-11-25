@@ -26,6 +26,7 @@ export { decideSuggestion } from "./suggestions";
 export { changeSuggestedDeviationTg } from "./suggested-tg";
 export { applyPhrase, suggestPhrases } from "./phrase-suggest";
 export { decideAiText } from "./decide-ai";
+export { chooseOutcomeMatch, findOutcomes, rejectOutcomeMatch } from "./outcome-match";
 export { loadPhraseCandidates, loadPhraseUsage } from "./phrase-source";
 export { polishDescription, polishDeviation } from "./polish";
 export { draftSummary, getReportSummary, saveSummary } from "./summary";
