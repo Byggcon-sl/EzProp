@@ -88,7 +88,7 @@ export function createNodeWorkerEngine(workerPath: string = PDF_WORKER_PATH): Pd
       worker.once("message", (message: unknown) => {
         finish(() => {
           if (isReply(message) && message.ok) {
-            resolve({ bytes: message.bytes, pageCount: message.pageCount });
+            resolve({ output: "pdf", bytes: message.bytes, pageCount: message.pageCount });
           } else {
             reject(new PdfRenderError("engine_failed"));
           }

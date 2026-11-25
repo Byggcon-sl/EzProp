@@ -5,9 +5,11 @@ import type { EventType } from "./types";
 
 export {
   EVENT_TYPES,
+  LIVE_PREVIEW_EVENT_DATA_FIELDS,
   PDF_EVENT_DATA_FIELDS,
   type DraftPdfEventData,
   type EventType,
+  type LivePreviewOpenedEventData,
   type ReleasePdfEventData,
 } from "./types";
 

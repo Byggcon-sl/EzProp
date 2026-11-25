@@ -1,9 +1,12 @@
 import type {
+  PDF_DRAFT_MARK_KINDS,
   PDF_DRAFT_NOTE_KINDS,
+  PDF_ENGINE_OUTPUTS,
   PDF_FOOTER_PARTS,
   PDF_IMAGE_FORMATS,
   PDF_MARKING_TYPES,
   PDF_ORIENTATIONS,
+  PDF_PAGE_ANCHOR_KINDS,
   PDF_RENDER_ERROR_CODES,
   PDF_SECTION_CODES,
   PDF_TG_VALUES,
@@ -34,6 +37,9 @@ export type PdfDraftNoteKind = (typeof PDF_DRAFT_NOTE_KINDS)[number];
 export type PdfImageFormat = (typeof PDF_IMAGE_FORMATS)[number];
 export type PdfMarkingType = (typeof PDF_MARKING_TYPES)[number];
 export type PdfRenderErrorCode = (typeof PDF_RENDER_ERROR_CODES)[number];
+export type PdfEngineOutput = (typeof PDF_ENGINE_OUTPUTS)[number];
+export type PdfPageAnchorKind = (typeof PDF_PAGE_ANCHOR_KINDS)[number];
+export type PdfDraftMarkKind = (typeof PDF_DRAFT_MARK_KINDS)[number];
 
 // --- Rapportdata -----------------------------------------------------------------------------
 
@@ -299,25 +305,161 @@ export type GetPdfProfile = (code: string) => PdfProfile | null;
 /** `assets.node.ts`: leser `public/fonts` og `public/brand` én gang per prosess. */
 export type LoadPdfAssets = () => Promise<PdfAssets>;
 
+// --- Sidene som SVG og sidekartet (levende forhåndsvisning, tillegget til ADR 0016) -------------
+
+/**
+ * Hvilket avsnitt i siden, som struktur (A604). Bare faste koder og id-er, aldri tekst. Bygges i
+ * `layout.ts` fra `checkpointId`, `deviationId` og `elementKey` i `ReportPdfData`, aldri fra
+ * `editPath` og aldri fra interne tellere.
+ *
+ * | `kind` | `deviationId` | `elementKey` |
+ * |---|---|---|
+ * | `checkpoint`, `checkpoint.description`, `tgiu` | `null` | `null` |
+ * | `checkpoint.answer` | `null` | feltets `field_key` |
+ * | `deviation` og `deviation.*` | avvikets id | `null` |
+ *
+ * Svar på rommet uten kontrollpunkt (`PdfRoom.answers`) har ikke noe anker nå.
+ */
+export type PdfPageAnchor = {
+  kind: PdfPageAnchorKind;
+  checkpointId: string;
+  deviationId: string | null;
+  elementKey: string | null;
+};
+
+/**
+ * Én rad i sidekartet: hvor avsnittet står på én side. Et avsnitt som går over to sider, har én
+ * rad per side med samme anker. `page` teller fra 1. `x`, `y`, `w` og `h` er punkter (pt) fra
+ * øverste venstre hjørne av siden, samme enhet som `RenderedPage.widthPt`. Radene står i sidens
+ * leserekkefølge.
+ */
+export type PdfPageMapEntry = {
+  anchor: PdfPageAnchor;
+  page: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Utkastmerket på avsnittet («Ikke satt», «Mangler», «Sjekk»), ellers `null`. */
+  mark: PdfDraftMarkKind | null;
+};
+
+/**
+ * Én side som selvstendig SVG: ingen eksterne referanser, `<script>`, `on*`-attributter,
+ * `foreignObject` eller lenker. Teksten er omriss, så SVG-en har ingen tekst som kan kopieres.
+ * `hash` er de første `PDF_PAGE_HASH_LENGTH` heksadesimale tegnene av SHA-256 av `svg`.
+ */
+export type RenderedPage = { svg: string; hash: string; widthPt: number; heightPt: number };
+
+export type RenderedPages = {
+  pages: RenderedPage[];
+  pageMap: PdfPageMapEntry[];
+  imageCount: number;
+};
+
+/** `PdfLimits` pluss takene som bare gjelder sidene (`PDF_PREVIEW_LIMITS`). */
+export type PdfPagesLimits = PdfLimits & { maxPages: number; maxSvgBytesTotal: number };
+
+export type RenderReportPagesOptions = Omit<RenderReportPdfOptions, "limits"> & {
+  limits: PdfPagesLimits;
+};
+
+/**
+ * Samme data, profil og mal som `renderReportPdf`, men til sider og sidekart. Like sider som
+ * PDF-en for samme inndata (samme antall sider, samme linje- og sideskift). Ren: samme inndata gir
+ * samme `svg` og `hash`. Lagrer ingenting. Avviser med `PdfRenderError`.
+ */
+export type RenderReportPages = (
+  data: ReportPdfData,
+  profile: PdfProfile,
+  options: RenderReportPagesOptions,
+) => Promise<RenderedPages>;
+
+/** `renderReportPages` er `createReportPagesRenderer(nodeWorkerEngine)`. */
+export type CreateReportPagesRenderer = (engine: PdfEngine) => RenderReportPages;
+
+/**
+ * Rydder én side fra motoren (`page-svg.ts`, ren): setter `viewBox`, bredde og høyde til siden, og
+ * tar bort markeringslaget for tekst (`foreignObject`) og lenkene. Gir `null` når resultatet ikke
+ * består `isSafePageSvg`. Da avvises hele gjengivelsen med `engine_failed` (lukket ved feil).
+ */
+export type CleanPageSvg = (svg: string, page: PdfEnginePage) => string | null;
+
+/**
+ * Sann bare når SVG-en har kjente elementer og attributter, ingen `<script>`, `<style>` med
+ * innhold, `on*`, `foreignObject` eller `<a>`, og hver `href` enten peker inn i samme SVG (`#…`)
+ * eller er et innebygd bilde (`data:image/jpeg` eller `data:image/png`).
+ */
+export type IsSafePageSvg = (svg: string) => boolean;
+
+/**
+ * Sidekartet fra merkene til motoren (`page-map-build.ts`, ren). Par av `start` og `end` blir én
+ * rad per side avsnittet står på. Merker som mangler makker, har ukjent form eller peker utenfor
+ * siden, gir `engine_failed`, aldri et halvt kart.
+ */
+export type BuildPdfPageMap = (
+  marks: readonly PdfEnginePageMark[],
+  pages: readonly PdfEnginePage[],
+) => PdfPageMapEntry[];
+
+/**
+ * Verdier klienten kan bruke (`page-map.ts`, uten importer av verdier, så filen kan lastes i
+ * nettleseren uten `server-only`). Klienten importerer aldri verdier fra `@/core/pdf`.
+ */
+export type IsPdfPageAnchor = (value: unknown) => value is PdfPageAnchor;
+/** Fast tekstnøkkel for et anker, til sammenligning og React-nøkler. Aldri i en selector eller adresse. */
+export type PdfPageAnchorKey = (anchor: PdfPageAnchor) => string;
+export type SamePdfPageAnchor = (a: PdfPageAnchor, b: PdfPageAnchor) => boolean;
+
 // --- Motoren bak grensesnittet -----------------------------------------------------------------
 
 /**
  * Én jobb til motoren. `source` er alltid en fast mal fra repoet, aldri bygget av rapporttekst.
  * `inputs.data` er JSON. `files` er bildene og logoen, med stier under `/assets/`.
+ * `output` velger hva motoren lager; malen og inndataene er de samme, bortsett fra at oppsettet
+ * har `pageMap: true` for `pages` (da skriver malen de usynlige merkene).
  */
 export type PdfEngineJob = {
+  output: PdfEngineOutput;
   source: string;
   inputs: Readonly<Record<string, string>>;
   files: readonly (readonly [path: string, bytes: Uint8Array])[];
   fonts: readonly Uint8Array[];
+  /** Bare for `pages`: motoren stopper med `too_many_pages` før sidene lages som SVG. */
+  maxPages?: number;
 };
 
-export type PdfEngineResult = { bytes: Uint8Array; pageCount: number };
+/** Én side rett fra motoren, før `CleanPageSvg`. `offsetYPt` er sidens plass i motorens dokument. */
+export type PdfEnginePage = { svg: string; widthPt: number; heightPt: number; offsetYPt: number };
+
+/**
+ * Et usynlig merke fra malen, lest med `world.query` i samme kjøring som sidene. `anchor` og
+ * `mark` er det `layout.ts` la i oppsettet; de sjekkes mot formkravene før de brukes.
+ */
+export type PdfEnginePageMark = {
+  edge: "start" | "end";
+  anchor: PdfPageAnchor;
+  mark: PdfDraftMarkKind | null;
+  /** Teller fra 1. */
+  page: number;
+  x: number;
+  y: number;
+};
+
+export type PdfEnginePdfResult = { output: "pdf"; bytes: Uint8Array; pageCount: number };
+export type PdfEnginePagesResult = {
+  output: "pages";
+  pages: PdfEnginePage[];
+  marks: PdfEnginePageMark[];
+};
+export type PdfEngineResult = PdfEnginePdfResult | PdfEnginePagesResult;
 
 /**
  * Motoren. På serveren: `engine.node.ts`, som kjører `typst-worker.mjs` i en arbeidstråd og
  * avslutter tråden ved tidsavbrudd (avviser med koden `timeout`). I nettleseren (2b) og i
- * testene kan en annen motor settes inn med `createReportPdfRenderer`.
+ * testene kan en annen motor settes inn med `createReportPdfRenderer` og
+ * `createReportPagesRenderer`. Svaret har alltid samme `output` som jobben; noe annet er
+ * `engine_failed`.
  */
 export type PdfEngine = (
   job: PdfEngineJob,

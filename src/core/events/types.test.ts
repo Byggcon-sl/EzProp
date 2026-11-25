@@ -59,6 +59,8 @@ const EXPECTED_EVENT_TYPES = [
   // PDF-utkast og PDF av utgivelse (docs/funksjoner/fase2a-pdf-badet-testplan.md 6.3.3 og 11.8)
   "report.draft_pdf_created",
   "report.release_pdf_created",
+  // Levende forhåndsvisning slått på (docs/funksjoner/fase2a-levende-forhandsvisning.md, A608)
+  "report.live_preview_opened",
   "report.sent",
   "invoice.draft_created",
   "invoice.sent",
@@ -73,8 +75,8 @@ const EXPECTED_EVENT_TYPES = [
 ];
 
 describe("hendelseskodene", () => {
-  it("1. har nøyaktig de 58 kodene fra domenemodellen 4.9", () => {
-    expect(EXPECTED_EVENT_TYPES).toHaveLength(58);
+  it("1. har nøyaktig de 59 kodene fra domenemodellen 4.9", () => {
+    expect(EXPECTED_EVENT_TYPES).toHaveLength(59);
     expect([...EVENT_TYPES].sort()).toEqual([...EXPECTED_EVENT_TYPES].sort());
   });
 

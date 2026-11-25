@@ -150,6 +150,7 @@ export function preparePdfJob(
     layout,
     imageCount: images.length,
     job: {
+      output: "pdf",
       source: REPORT_PDF_TEMPLATE,
       inputs: { data: JSON.stringify(layout) },
       files,
@@ -163,6 +164,8 @@ export const createReportPdfRenderer: CreateReportPdfRenderer =
     const prepared = preparePdfJob(data, profile, options);
     try {
       const result = await engine(prepared.job, { timeoutMs: options.limits.timeoutMs });
+      // Motoren skal svare med det jobben ba om. Noe annet er en feil i motoren.
+      if (result.output !== "pdf") throw new PdfRenderError("engine_failed");
       return { bytes: result.bytes, pageCount: result.pageCount, imageCount: prepared.imageCount };
     } catch (error) {
       // Bare den faste koden går videre, aldri meldingen fra motoren.

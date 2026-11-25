@@ -109,6 +109,22 @@ Før: skriv i feltet → «Lag PDF (utkast)» → vent → ny fane → bla til a
 
 **Senere (2a-3):** bilder blir base64 inne i SVG-en, så JSON-svaret kan bli titalls MB med bilder. Før «Bilder på PC» må forhåndsvisningen få egen grense eller nedskalerte bilder.
 
+## Grensesnitt fra arkitekten (25.11.2026)
+Utvikleren bygger mot disse. Begrunnelse og prøve står i tillegget til ADR 0016 (punkt 13–23).
+
+- `src/core/pdf/codes.ts`: `PDF_ENGINE_OUTPUTS`, `PDF_PAGE_ANCHOR_KINDS`, `PDF_DRAFT_MARK_KINDS`, formkravene til et anker, `PDF_PAGE_HASH_LENGTH`, `PDF_PREVIEW_LIMITS`, `PDF_PREVIEW_MAX_CONCURRENT`, og feilkodene `too_many_pages` og `pages_too_large`.
+- `src/core/pdf/types.ts`: `PdfPageAnchor`, `PdfPageMapEntry`, `RenderedPage`, `RenderedPages`, `RenderReportPages`, `CreateReportPagesRenderer`, `CleanPageSvg`, `IsSafePageSvg`, `BuildPdfPageMap`, `IsPdfPageAnchor`, `PdfEngineJob.output` og unionen `PdfEngineResult`.
+- `src/app/(ansatt)/oppdrag/[id]/forhandsvisning/preview-contract.ts`: svaret, feilkodene, rekkefølgen i ruten, køen i nettleseren og nøkkelen i `localStorage`.
+- `src/app/(ansatt)/oppdrag/[id]/rom/[roomId]/page-anchor-types.ts`: fra anker til felt, og fra KI-mål til anker.
+- `src/core/events/types.ts`: `report.live_preview_opened` med `LIVE_PREVIEW_EVENT_DATA_FIELDS`.
+
+**Avvik fra teksten over, funnet i prøven:**
+- Typene for ankeret står i `types.ts` (kodene i `codes.ts`), som resten av `src/core/pdf`.
+- `renderReportPages` tar `RenderReportPagesOptions` (som `RenderReportPdfOptions`, men med `PdfPagesLimits`), så taket på sider og størrelse sjekkes i gjengivelsen.
+- Rendereren gir ikke selvstendige sider av seg selv, og legger alltid ved `foreignObject` og lenker. Sidene lages med en ny økt per side og ryddes og sjekkes etterpå (ADR-tillegget punkt 15 og 16). Består ikke en side sjekken, gir det `engine_failed`.
+- Motoren gir rå merker (`PdfEnginePageMark`); sidekartet bygges av en ren funksjon i TypeScript, ikke i arbeidstråden.
+- KI-forslaget i svaret har `featureCode` og `fieldKey` ved siden av `aiUsageId` og `anchor`.
+
 ## Tilgang
 Samme som å se badet og lage PDF-utkastet (`organization.read` gjennom `getReportDraftPdfData`). Rapport-id finnes alltid fra oppdraget med `grant.organizationId`, aldri fra adressen. Ingen tilgangslogikk i ruten.
 

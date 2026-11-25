@@ -587,6 +587,8 @@ Egne kontrollpunkter per avtale kommer senere. Da får avtalen en kobling til en
 
 **Nå (2a-2, A530, ADR 0016):** tabellen finnes ikke ennå. Profilene er kodedata i `src/core/pdf` (`PdfProfile`): `code` (fast kode, `byggcon_standard` er standard og kobles mot `client_agreements.report_profile_code`), `version`, `name`, `orientation`, `colors` (tekst, dempet, aksent, linje, TG-farger med bakgrunn og tekst per TG, markering, vannmerke), `fonts` (overskrift og brødtekst), `logo` (fast fil i `public/brand`), `coverLayout`, `sections` (rekkefølgen på delene `cover`, `toc`, `summary`, `tg_explanation`, `room`, `missing`; `summary` er reservert til 2a-3) og `footer` (faste deler: `legal_company`, `assignment_number`, `page_of_pages`). Profilen har aldri selskapsnavn eller fagtekst. Tabellen og valg av profil kommer med «Flere PDF-utgaver» i 2a-3, med de samme kodene.
 
+**Ankerkodene i sidekartet (2a-2, A604, tillegget til ADR 0016):** den levende forhåndsvisningen får et sidekart fra samme gjengivelse som sidene. Hvert avsnitt har et anker (`PdfPageAnchor`): en fast kode (`PDF_PAGE_ANCHOR_KINDS` i `src/core/pdf/codes.ts`) sammen med `checkpointId`, `deviationId` og `elementKey` (feltets `field_key`). Kodene: `checkpoint`, `checkpoint.description`, `checkpoint.answer`, `deviation`, `deviation.text`, `deviation.cause`, `deviation.consequence`, `deviation.measures`, `deviation.cost`, `tgiu`. De endres aldri og tas aldri bort, de arkiveres (regel 6). Utkastmerket på et avsnitt har kodene `tg_not_set`, `missing` og `check` (`PDF_DRAFT_MARK_KINDS`). Sidekartet har bare koder og id-er, aldri tekst, og lagres ikke. Ingen tabell og ingen kolonne.
+
 ---
 
 ### 4.4 Eiendom og bygg
@@ -1490,6 +1492,7 @@ Gyldig verdi er et heltall fra 1 til og med 100 (år). Mangler nøkkelen, brukes
 | `report.sent` | Rapport sendt (per mottaker). **Setter status «Ferdig»** (innspill D16, statuslisten fra 27.10.2026). |
 | `report.draft_pdf_created` | PDF-utkast laget (ADR 0016). `data`: bare `reportId`, `profileCode`, `pageCount`, `imageCount`, `durationMs`. Telles aldri per ansatt, bare samlet. |
 | `report.release_pdf_created` | PDF av en utgivelse laget (ADR 0016, F7). Som over, pluss `versionNumber`. |
+| `report.live_preview_opened` | Den ansatte slo på den levende forhåndsvisningen (A608). Én per trykk på bryteren, aldri per gjengivelse. `data`: bare `reportId`, `profileCode`. Telles aldri per ansatt, bare samlet. |
 | `invoice.draft_created` | Fakturagrunnlag laget |
 | `invoice.sent` | **Faktura sendt** (fra eAccounting) |
 | `invoice.paid` | **Faktura betalt** (fra eAccounting) |
@@ -2406,6 +2409,11 @@ Bare det fase 0b–2a trenger. Flere kommer når funksjonene kommer. Admin har a
 | TG-forklaring | `TgExplanation` (`PdfTgExplanation`) | Forklaringen av TG0–TG3 og TGIU i PDF-en. Innhold med tekststatus, ikke en del av profilen (A533) |
 | Merknad i utkast | `PdfDraftNote` | «Mangler: …» eller «Sjekk: …» i PDF-utkastet, med teksten fra publiseringssjekken (A536) |
 | Teller per nøkkel | `KeyedLimiter` (`src/shared/lib/keyed-limiter.ts`) | Høyst én pågående PDF per ansatt og et felles tak per prosess (A539) |
+| Levende forhåndsvisning | `live preview` (`/oppdrag/[id]/forhandsvisning`) | Rute ved siden av skjemaet på PC som viser sidene slik leseren får dem, stemplet UTKAST. Lagres aldri (A603) |
+| Sider som SVG | `RenderedPages` (`renderReportPages`) | Sidene fra samme mal og data som PDF-en, én selvstendig SVG per side med fingeravtrykk (`hash`), pluss sidekartet |
+| Sidekart | `page map` (`PdfPageMapEntry`) | Hvor hvert avsnitt står: anker, side og plass i punkter. Kommer fra gjengivelsen, bare koder og id-er (A604) |
+| Anker | `page anchor` (`PdfPageAnchor`) | Hvilket avsnitt i siden: fast kode (`PDF_PAGE_ANCHOR_KINDS`) med punkt-id, avvik-id og feltkode. Peker på ett felt i skjemaet |
+| Utkastmerke | `draft mark` (`PDF_DRAFT_MARK_KINDS`) | «Ikke satt», «Mangler» eller «Sjekk» på et avsnitt i sidekartet. Brukes av «Neste mangel» |
 | Opprinnelig dato | `original_release_date` | |
 | Gyldig til | `valid_until` | |
 | Sperre / advarsel | `blocker` / `warning` | |
@@ -2676,3 +2684,4 @@ Ståle svarte på de fleste spørsmålene 27.10.2026 (`svar-fra-stale-2026-10-27
 | 17.11.2026 | KI i veien (fase 2a-2, ADR 0006 med tillegg): migrering `0037_ki-i-veien` med `reports.summary_text` og `reports.summary_basis`, `ai_usage_log.candidate_refs` og `chosen_candidate`, utfallet `stopped` med vaktkodene `tg_guard` og `number_guard`, og indeksen `ai_usage_log (organization_id, feature, target_ref)` for ikke-slettede rader. KI-målene flyttet til `src/shared/config/ai-targets.ts` med `report` / `summary_text` og `deviation` / `new_measure`. Ingen ny tabell. Ordlisten: fraseforslag, utkast til sammendrag, kandidat, vakter, grunnlaget for sammendraget. | A482–A442, `docs/funksjoner/fase2a-ki-i-veien.md` |
 | 17.11.2026 | KI i veien, runde 2 (A460–A472): migrering `0037_ki-i-veien` rettet før merge med vaktkodene `coverage_guard` og `placeholder_guard`, strengere CHECK på `chosen_candidate` (objekt med `source` og `id`, kjent kilde) og indeksen `ai_usage_log_chosen_candidate_idx` for «Mest brukt». `AI_CANDIDATE_REFS_MAX` flyttet til `src/shared/config/ai-targets.ts`. Grensesnitt: `recordDecisionIn`, `withReportWrite`, `PhraseUsageCount`, `AiSummaryFixedLine`, valideringskoden `text_has_placeholder`. Ordlisten: dekningsvakt, plassholdervakt, plassholder, mest brukt, fast linje, skriveramme for rapporten. | A460–A472, `docs/funksjoner/fase2a-ki-i-veien.md` |
 | 17.11.2026 | Mine innlogginger (fase 2a-3, fra forbedreren): `sessions` beskrevet; øktene vises for den ansatte og kan tilbakekalles, admin kan logge ut alle enheter. Ingen nye felt og ingen migrering. Ny revisjonshandling `employee.sessions_revoked_all` med `{ sessionCount, reason }`. Ordlisten: innlogging (økt), logge ut en økt, logget ut av alle enheter. | `docs/funksjoner/fase2a-mine-innlogginger.md` |
+| 25.11.2026 | Levende forhåndsvisning (fase 2a-2, fra forbedreren): ingen nye tabeller eller kolonner og ingen migrering. Ny hendelseskode `report.live_preview_opened` (4.9). Nye faste koder i `src/core/pdf/codes.ts`: ankerkodene `PDF_PAGE_ANCHOR_KINDS` og utkastmerkene `PDF_DRAFT_MARK_KINDS` (4.3, under PDF-profilen). Ordlisten: levende forhåndsvisning, sider som SVG, sidekart, anker, utkastmerke. | A603–A612, tillegget til ADR 0016, `docs/funksjoner/fase2a-levende-forhandsvisning.md` |

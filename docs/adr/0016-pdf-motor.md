@@ -127,3 +127,71 @@ De to andre motorene og den ferdigbygde Typst-motoren ble kjørt på samme maski
 - Oppsett skrives i Typst-språket, ikke HTML og CSS. Designsystemets farger og skrifter føres inn i profilen for hånd.
 - Oppgradering av motoren kan endre bytene i PDF-en av en gammel utgivelse. Versjonen er låst, og oppgradering er en egen oppgave med sammenligning av en fast prøve-PDF. Fra 2a-3 lagres endelig PDF, så det kunden fikk, endres aldri.
 - Typst 0.14 lager tagget PDF, men full PDF/UA er ikke prøvd. Det vurderes med endelig PDF i 2a-3.
+
+---
+
+## Tillegg 25.11.2026 – Levende forhåndsvisning: sider som SVG og sidekart
+
+Status: vedtatt av agentene i autonom modus (A603–A612 i `docs/09-apne-sporsmal.md`); Ståle kan endre. **Dyrt å endre:** SVG per side (2b bygger på det) og ankerkodene (faste koder, regel 6). Oppgavekort: `docs/funksjoner/fase2a-levende-forhandsvisning.md`.
+
+Støtter hovedmålene: **de ansatte** (siden vises mens det skrives, og ett klikk fører til feltet), **færre reklamasjoner** (feil som bare synes i den ferdige siden, ses før sending) og **KI i bunnen** (ingen KI i gjengivelsen; sidekartet er en stabil kobling fra avsnitt til felt, med bare koder og id-er, som senere KI kan bygge på).
+
+### Beslutninger
+
+13. **Sidene lages som én selvstendig SVG per side, av samme motor, mal og data som PDF-en.** Nytt grensesnitt i `src/core/pdf/types.ts`: `renderReportPages(data, profile, options)` gir `RenderedPages` (`pages` med `svg`, `hash`, `widthPt`, `heightPt`, og `pageMap`). `PdfEngineJob` har `output: "pdf" | "pages"`, og `PdfEngineResult` er en union på samme felt. Det er fortsatt én mal og én vei til motoren. Sidene vises som `<img>`, aldri som SVG i DOM-en, så ingenting i siden kan kjøre.
+14. **Ny avhengighet (regel 9): `@myriaddreamin/typst-ts-renderer` 0.7.0,** låst til nøyaktig versjon. De to pakkene vi har, gir bare `vector` og `pdf`. Pakken er valgfri peer-avhengighet til `typst.ts`, samme utgiver, Apache-2.0, uten installasjonsskript og uten egne avhengigheter. Vilkår: den lastes bare i `typst-worker.mjs`; WASM-modulen kompileres i hovedtråden og sendes inn som `WebAssembly.Module`, som for motoren; den føres i `serverExternalPackages` og `outputFileTracingIncludes`; `scripts/pdf-engine-trial.mjs` og steget i `deploy-azure.yml` prøver også sidene.
+15. **Slik lages én side (målt, se prøven):** dokumentet kompileres én gang til `vector`. For hver side åpnes en ny økt i rendereren, og siden tegnes med et vindu som ligger like innenfor sidens rektangel. Da har SVG-en bare den ene sidens innhold og egne skriftomriss, uten referanser til andre sider. `renderSvg` med `window` gir hele dokumentet hver gang i Node, og flere vinduer i samme økt gir bare endringer fra forrige vindu. Ingen av dem gir selvstendige sider.
+16. **SVG-en fra rendereren ryddes og sjekkes, lukket ved feil** (`CleanPageSvg` og `IsSafePageSvg`, rene funksjoner i `src/core/pdf`). Rendereren legger alltid ved et markeringslag for tekst (`foreignObject` med teksten som HTML) og lenker (`<a xlink:href>`, også lenkene «Rett i skjemaet» i utkast). Ryddingen tar dem bort og setter `viewBox`, bredde og høyde til siden. Etterpå må siden bestå en streng sjekk: bare kjente elementer og attributter, ingen `<script>`, `on*`, `foreignObject` eller `<a>`, og `href` bare inn i samme SVG eller til et innebygd JPEG- eller PNG-bilde. Består ikke en side, avvises hele gjengivelsen med `engine_failed`. Vi stoler altså ikke på ryddingen, vi sjekker resultatet. Teksten i siden er omriss, så SVG-en har ingen tekst som kan kopieres ut.
+17. **Sidekartet kommer fra samme kjøring.** `layout.ts` gir hvert avsnitt et anker (`PdfPageAnchor`: fast kode fra `PDF_PAGE_ANCHOR_KINDS` med `checkpointId`, `deviationId` og `elementKey`), bygd fra `ReportPdfData`, aldri fra `editPath` eller interne tellere. Malen skriver et usynlig start- og sluttmerke rundt avsnittet, bare når oppsettet har `pageMap: true`. Arbeidstråden leser merkene med `world.query` (side og plass) i samme kjøring som sidene. `BuildPdfPageMap` (ren) gjør parene om til én rad per side avsnittet står på. Merker uten makker eller med ukjent form gir `engine_failed`, aldri et halvt kart. Kartet har bare koder og id-er.
+18. **Utgivelsens PDF er urørt.** Uten `pageMap: true` skriver malen ingen merker, og PDF-jobben er byte for byte som før. Det holdes av en test med fast SHA-256 for en fast utgivelsesprøve, tatt fra `main` før malen endres, og av en test som krever samme antall sider i forhåndsvisningen som i PDF-utkastet for samme data og profil.
+19. **`hash` er de første 32 heksadesimale tegnene av SHA-256 av SVG-en.** Regnes i gjengivelsen med `crypto.subtle`, som finnes både i Node og i nettleseren, så `src/core/pdf` fortsatt er et rent blad uten `node:`-moduler utenfor `*.node.ts`. Klienten bruker den til å bytte bare sidene som er endret.
+20. **Tak og grenser (A606, A612), i `codes.ts`:** forhåndsvisningen har sitt eget tak på 1 pågående per prosess (`PDF_PREVIEW_MAX_CONCURRENT`, nøkkel `preview:<employeeId>`), tatt før datalesingen og før plassen i det felles taket på 2. Da er det alltid minst én plass til PDF-ene. `PDF_PREVIEW_LIMITS` legger til høyst 80 sider og 12 MB SVG til sammen; over grensen gir `too_many_pages` eller `pages_too_large` (413), aldri et halvt svar. Sidetaket sjekkes i arbeidstråden før sidene tegnes. Tallene er foreløpige til «Bilder på PC» i 2a-3.
+21. **Én ny arbeidstråd per gjengivelse, som punkt 2.** Kravet er median under 1000 ms fra «lagret» til nytt bilde, målt i e2e (A605). Prøven under tyder på at det holder uten varm tråd. Holder det ikke, kan en varm tråd tas i bruk bare på vilkårene i oppgavekortet («Avgjort ved uenighet»): bundet til én ansatt og én organisasjon, egne inndata per jobb, samme grenser, avsluttet ved feil, tidsavbrudd, tomgang og etter et fast antall gjengivelser, og talt i taket. Det føres da her med målte tall, og sikkerhet-personvern ser på det før merge.
+22. **Kontrakten mot nettleseren står ett sted:** `src/app/(ansatt)/oppdrag/[id]/forhandsvisning/preview-contract.ts` (svaret, feilkodene, rekkefølgen i ruten, køen i nettleseren og den ene nøkkelen i `localStorage`). Klienten bruker `import type` fra `@/core/pdf` og verdier bare fra filer uten importer (`codes.ts`, `page-map.ts`), fordi inngangen til `@/core/pdf` er `server-only`. Fra anker til felt: `rom/[roomId]/page-anchor-types.ts`.
+23. **Ingenting lagres.** Verken sider, SVG eller sidekart lagres på serveren eller i nettleseren, og ruten går alltid til nettet i service workeren. Ingen ny tabell og ingen migrering. Ny hendelseskode `report.live_preview_opened` (A608).
+
+### Prøven (25.11.2026)
+
+Kjørt på linux-x64, Node 22, i en egen mappe utenfor prosjektet, med `typst.ts`, `typst-ts-web-compiler` og `typst-ts-renderer` 0.7.0 og skriftene fra `public/fonts`. Innholdet var oppdiktet fylltekst, ikke rapportmalen. Alle `fetch` var sperret og telt.
+
+| Måling | Resultat |
+|---|---|
+| Oppstart av rendereren | 9 ms (motoren 90 ms, som før) |
+| Kompilering til `vector` etter `compile` | 18 ms |
+| Sider som SVG, ny økt per side | 4 sider på 27 ms, 28 sider på 86 ms |
+| Selvstendig side | Ja: hver SVG har bare den ene sidens innhold; de andre sidene er tomme plassholdere |
+| `renderSvg` med `window` | Ga hele dokumentet for hver side (forkastet) |
+| Flere vinduer i samme økt | Første svar har alt, de neste bare endringer (forkastet) |
+| `<script>` i SVG-en | Ingen. Tekst som `<script>` i innholdet blir omriss |
+| `foreignObject` og `<a>` | Finnes alltid fra rendereren (36–61 `foreignObject` per side med tekst). Borte etter rydding; da er eneste `href` interne (`#…`) |
+| Merker lest med `world.query` | Side, x og y per start- og sluttmerke, i samme kjøring |
+| Nettverkskall | 0 |
+| Minne (hele prosessen, én tråd) | 185–205 MB |
+| Størrelse i pakken | WASM 0,97 MB + 0,1 MB JavaScript (1,1 MB utpakket) |
+| Installasjonsskript og avhengigheter | Ingen |
+
+### Det som ikke er målt ennå
+
+Føres her av arkitekten i samme PR før merge, når funksjonen er bygget:
+
+- tid og minne for badet med den ekte malen, fra `.next/standalone` slik `deploy-azure.yml` bygger den;
+- medianen fra «lagret» til nytt bilde i e2e (kravet er under 1000 ms);
+- at siden som `<img>` ser lik ut som PDF-utkastet (farger, TG-merker, vannmerket «UTKAST», bilder med markering). Prøven så på oppbygningen av SVG-en, ikke på bildet;
+- størrelsen på svaret med bilder (2a-3).
+
+### Forkastet
+
+- **PDF i innebygd visning (`<iframe>` eller `<embed>`):** kan ikke gi klikk til felt eller hopp til avsnitt, og nettleserens PDF-visning kan ikke styres likt på PC og iPad.
+- **Én SVG for hele dokumentet, vist med utsnitt per side:** enklere på serveren, men da kan ikke bare endrede sider byttes, og hver side må tolke hele dokumentet.
+- **SVG satt rett inn i DOM-en:** ville gitt klikk uten sidekart, men da kan innhold i SVG-en kjøre og påvirke siden. `<img>` er tryggere.
+- **Sidekart fra `editPath` eller fra tekstsøk i siden:** `editPath` er `null` i utgivelser, og tekstsøk er ustabilt og ville lagt tekst i kartet.
+- **Bokser rundt avsnittene for å måle dem:** kan flytte linje- og sideskift, så forhåndsvisningen ikke lenger viser det PDF-en viser.
+- **Rydding uten sjekk etterpå:** en ny versjon av rendereren kunne da slippe gjennom noe nytt uten at noen merket det.
+- **Motoren i nettleseren nå:** hører til 2b. Grensesnittet (`createReportPagesRenderer(engine)`) er laget for det.
+- **Varm arbeidstråd fra start:** se punkt 21.
+
+### Konsekvenser
+
+- Én ny avhengighet, 1,1 MB i pakken.
+- Oppgradering av motoren må også prøve sidene: sjekken i punkt 16 stopper forhåndsvisningen hvis rendereren begynner å lage noe nytt. PDF-ene påvirkes ikke.
+- Ryddingen er knyttet til hvordan rendereren 0.7.0 skriver SVG. Versjonen er låst (statisk test).

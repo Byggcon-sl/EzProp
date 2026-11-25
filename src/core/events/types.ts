@@ -62,6 +62,12 @@ export const EVENT_TYPES = [
   "report.draft_pdf_created",
   /** PDF av en utgivelse laget (ADR 0016, F7). Som over, pluss `versionNumber`. */
   "report.release_pdf_created",
+  /**
+   * Den ansatte slo på den levende forhåndsvisningen (A608). Én per trykk på bryteren, aldri per
+   * gjengivelse eller innlasting. `data` har bare feltene i `LIVE_PREVIEW_EVENT_DATA_FIELDS`.
+   * Vises og telles aldri per ansatt, bare samlet bak `statistics.read`.
+   */
+  "report.live_preview_opened",
   "invoice.draft_created",
   "invoice.sent",
   "invoice.paid",
@@ -102,3 +108,11 @@ export type DraftPdfEventData = {
 };
 
 export type ReleasePdfEventData = DraftPdfEventData & { versionNumber: number };
+
+/**
+ * De eneste feltene i `data` på `report.live_preview_opened` (A608). Begge slås opp på serveren
+ * med `grant.organizationId`, aldri fra klienten.
+ */
+export const LIVE_PREVIEW_EVENT_DATA_FIELDS = ["reportId", "profileCode"] as const;
+
+export type LivePreviewOpenedEventData = { reportId: string; profileCode: string };

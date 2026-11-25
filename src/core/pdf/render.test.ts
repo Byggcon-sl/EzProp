@@ -596,7 +596,7 @@ describe("4.6 malinjeksjon og lukket motor", () => {
     ["bilde fra nettet", '#image("https://example.invalid/x.png")'],
   ])("motoren avviser %s", async (_name, source) => {
     const error = await engine(
-      { source, inputs: {}, files: [], fonts: assets.fonts },
+      { output: "pdf", source, inputs: {}, files: [], fonts: assets.fonts },
       { timeoutMs: 10_000 },
     ).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(PdfRenderError);
@@ -608,6 +608,7 @@ describe("4.6 malinjeksjon og lukket motor", () => {
     const started = performance.now();
     const error = await engine(
       {
+        output: "pdf",
         source: "#range(30000).map(i => range(30000).map(j => i * j).sum()).sum()",
         inputs: {},
         files: [],
