@@ -175,5 +175,25 @@ PC (1280×800) og iPad Pro-størrelse (1024×1366 stående og 1366×1024 liggend
 - Hvert akseptkriterium i kortet har minst ett testnummer over (tabell i rapporten).
 - Avvisning hvis 5a (alle tre inngangene i matrisen), 5b (`expectTenantIsolation` for søk, valg og avvisning) eller S4.12 (overlappende søk) mangler.
 - T-0146 satt til «rettet» med PR-nummeret.
-- Versjon 0.19.8 i `package.json` og i `/api/helse` (én patch over main).
+- Versjon 0.20.2 i `package.json` og i `/api/helse` (én patch over main, som står på 0.20.1 per 25.11.2026).
 - `sikkerhet-personvern` har gjennomgått tillatt-listen i PR-en (A175).
+
+## 9. Tillegg 25.11.2026 (test-leder, før skjermen bygges)
+
+Del A, B og C er bygd. Planen over gjelder uendret; dette tillegget sier hvor testene for det som gjenstår skal ligge, og legger til tre sjekker.
+
+**Filplassering (rettet etter koden som finnes):** S1.1–S1.11 ligger i `src/shared/lib/text-similarity.test.ts` (A561, ikke `outcome-similarity.test.ts`); S1.12–S1.22 i `src/core/reports/logic/outcome-match.test.ts`. S1.19–S1.22 (`deviation-note.ts`) skal ha egne `describe`-blokker der; mangler de, er det et funn.
+
+### 9a Next-serverhandlingene (`src/app/(ansatt)/oppdrag/[id]/rom/[roomId]/actions.test.ts`)
+1. **S9.1 tynne handlinger:** handlingene for søk, valg og avvisning tar ikke `organizationId`, `checkpointKey` eller `outcomeKey` fra klienten; organisasjonen kommer fra økten (samme mønster som de andre handlingene i filen). Ukjente nøkler avvises.
+2. **S9.2 uten økt:** ingen innlogget bruker gir samme avslag som de andre handlingene, uten kall til kjernen og uten loggrad.
+3. **S9.3 feilsvar:** kjernens feilkoder (`suggestion_outdated`, `report_published`, `already_decided`, for langt notat, fødselsnummer) blir de norske meldingene i kortet; feilsvaret gjengir aldri notatet (merket «Mxq-notat-ÆØ»).
+4. **S9.4 ingen tilgangslogikk:** `actions.ts` inneholder ingen rolle- eller rettighetssjekk (grep i `static-checks.test.ts`).
+
+### 9b Ingenting midlertidig etter commit 508bad64
+1. **S9.5** `git grep -n -i "TEMP\|midlertidig\|TODO(skriv"` i filene som er endret mot `main` gir ingen treff i kode; diff mot `main` har ingen filer utenfor kortets modulliste (eller de er forklart i PR-en). `outcome_match.cases.json` og `evals/schema.ts` er de endelige versjonene (S2.1, S2.2 grønne).
+
+### 9c Diktat
+1. **S9.6** «diktat» i oppgaveteksten betyr iPadens eget tastatur. S7.17 står: ingen mikrofonknapp og ingen tekst som oppfordrer til diktering før spørsmål 121 er besvart.
+
+**Avvisning i tillegg:** S9.1 og S9.2 mangler.
